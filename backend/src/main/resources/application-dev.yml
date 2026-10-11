@@ -1,0 +1,4 @@
+# Perfil de desarrollo local: carga datos de demo (2 ferreterias, usuarios con contrasena demo1234).
+spring:
+  flyway:
+    locations: classpath:db/migration,classpath:db/dev-data

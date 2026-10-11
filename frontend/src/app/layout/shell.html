@@ -1,0 +1,15 @@
+<header class="barra">
+  <div class="marca">
+    <strong>{{ auth.sesion()?.ferreteriaNombre ?? 'Panel de administración' }}</strong>
+  </div>
+  <nav>
+    <a routerLink="/rubros" routerLinkActive="activo">Rubros</a>
+  </nav>
+  <div class="usuario">
+    <span>{{ auth.sesion()?.nombre }}</span>
+    <button type="button" class="secundario" (click)="salir()">Salir</button>
+  </div>
+</header>
+<main class="contenido">
+  <router-outlet />
+</main>

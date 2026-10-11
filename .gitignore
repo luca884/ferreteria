@@ -1,0 +1,21 @@
+# Backend
+backend/target/
+*.class
+*.log
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/.angular/
+
+# IDE / SO
+.idea/
+*.iml
+.vscode/
+.DS_Store
+
+# Secretos
+.env
+*.key
+*.pem
+*.p12

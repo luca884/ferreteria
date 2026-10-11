@@ -1,0 +1,15 @@
+.barra {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  padding: 12px 24px;
+  background: var(--superficie);
+  border-bottom: 1px solid var(--borde);
+  flex-wrap: wrap;
+}
+.marca { font-size: 1.1rem; }
+nav { display: flex; gap: 16px; flex: 1; }
+nav a { color: var(--texto-suave); text-decoration: none; font-weight: 600; }
+nav a.activo { color: var(--acento); }
+.usuario { display: flex; align-items: center; gap: 12px; }
+.contenido { max-width: 960px; margin: 0 auto; padding: 24px 16px; }

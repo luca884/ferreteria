@@ -1,0 +1,39 @@
+spring:
+  application:
+    name: ferreteria-api
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:dev}
+  datasource:
+    url: ${DB_URL:jdbc:mysql://localhost:3307/ferreteria?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC}
+    username: ${DB_USER:ferreteria}
+    password: ${DB_PASSWORD:ferreteria}
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+
+server:
+  port: ${PORT:8080}
+  error:
+    include-message: never
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+
+app:
+  jwt:
+    # En produccion JWT_SECRET es obligatorio (minimo 32 bytes). Este default es solo para dev.
+    secret: ${JWT_SECRET:dev-secret-ferreteria-cambiar-en-produccion-0123456789}
+    expiration-ms: ${JWT_EXPIRATION_MS:43200000}
+  cors:
+    allowed-origins: ${CORS_ORIGINS:http://localhost:4200}

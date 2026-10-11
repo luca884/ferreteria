@@ -1,0 +1,43 @@
+<h1>Rubros</h1>
+<p class="ayuda">El margen del rubro es el que usan los artículos que no tienen uno propio.</p>
+
+@if (auth.esDueno()) {
+  <form class="alta" [formGroup]="form" (ngSubmit)="crear()" novalidate>
+    <div class="campo">
+      <label for="nombre">Nombre</label>
+      <input id="nombre" formControlName="nombre" placeholder="Ej: Bulonería" />
+    </div>
+    <div class="campo margen">
+      <label for="margen">Margen %</label>
+      <input id="margen" type="number" step="0.01" min="0" formControlName="margenPorcentaje" />
+    </div>
+    <button type="submit" [disabled]="guardando()">Agregar</button>
+  </form>
+}
+
+@if (error(); as mensaje) {
+  <p class="error" role="alert">{{ mensaje }}</p>
+}
+
+@if (cargando()) {
+  <p class="ayuda">Cargando…</p>
+} @else if (rubros().length === 0) {
+  <p class="ayuda">Todavía no hay rubros.</p>
+} @else {
+  <table>
+    <thead>
+      <tr>
+        <th>Nombre</th>
+        <th class="num">Margen</th>
+      </tr>
+    </thead>
+    <tbody>
+      @for (rubro of rubros(); track rubro.id) {
+        <tr>
+          <td>{{ rubro.nombre }}</td>
+          <td class="num">{{ rubro.margenPorcentaje | number: '1.0-2' }} %</td>
+        </tr>
+      }
+    </tbody>
+  </table>
+}
