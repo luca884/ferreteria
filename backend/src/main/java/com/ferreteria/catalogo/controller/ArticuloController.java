@@ -1,0 +1,71 @@
+package com.ferreteria.catalogo.controller;
+
+import com.ferreteria.auth.security.AuthUser;
+import com.ferreteria.catalogo.dto.ArticuloRequest;
+import com.ferreteria.catalogo.dto.ArticuloResponse;
+import com.ferreteria.catalogo.service.ArticuloService;
+import com.ferreteria.common.PageResponse;
+import jakarta.validation.Valid;
+import org.springframework.http.HttpStatus;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.ResponseStatus;
+import org.springframework.web.bind.annotation.RestController;
+
+/** Lectura para Dueno y Vendedor (ambos ven costo y margen); las escrituras solo para el Dueno. */
+@RestController
+@RequestMapping("/api/articulos")
+public class ArticuloController {
+
+    private final ArticuloService articuloService;
+
+    public ArticuloController(ArticuloService articuloService) {
+        this.articuloService = articuloService;
+    }
+
+    /** Pagina de 20 por defecto (el servicio la acota entre 1 y 100), solo activos salvo incluirInactivos. */
+    @GetMapping
+    public PageResponse<ArticuloResponse> listar(
+            @RequestParam(required = false) String q,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size,
+            @RequestParam(defaultValue = "false") boolean incluirInactivos) {
+        return articuloService.listar(q, page, size, incluirInactivos);
+    }
+
+    /** Tambien devuelve los articulos dados de baja. */
+    @GetMapping("/{id}")
+    public ArticuloResponse obtener(@PathVariable Long id) {
+        return articuloService.obtener(id);
+    }
+
+    @PostMapping
+    @ResponseStatus(HttpStatus.CREATED)
+    @PreAuthorize("hasRole('DUENO')")
+    public ArticuloResponse crear(@Valid @RequestBody ArticuloRequest request, @AuthenticationPrincipal AuthUser authUser) {
+        return articuloService.crear(request, authUser.userId());
+    }
+
+    @PutMapping("/{id}")
+    @PreAuthorize("hasRole('DUENO')")
+    public ArticuloResponse actualizar(
+            @PathVariable Long id, @Valid @RequestBody ArticuloRequest request, @AuthenticationPrincipal AuthUser authUser) {
+        return articuloService.actualizar(id, request, authUser.userId());
+    }
+
+    /** Baja logica: el articulo queda inactivo y su historial de precios se conserva. */
+    @DeleteMapping("/{id}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    @PreAuthorize("hasRole('DUENO')")
+    public void desactivar(@PathVariable Long id) {
+        articuloService.desactivar(id);
+    }
+}

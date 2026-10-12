@@ -17,8 +17,11 @@ public class RubroService {
 
     private final RubroRepository rubroRepository;
 
-    public RubroService(RubroRepository rubroRepository) {
+    private final RecalculoPreciosService recalculoPreciosService;
+
+    public RubroService(RubroRepository rubroRepository, RecalculoPreciosService recalculoPreciosService) {
         this.rubroRepository = rubroRepository;
+        this.recalculoPreciosService = recalculoPreciosService;
     }
 
     @Transactional(readOnly = true)
@@ -42,14 +45,23 @@ public class RubroService {
         return RubroResponse.from(rubroRepository.save(rubro));
     }
 
+    /**
+     * Si cambia el margen, recalcula en la misma transaccion los articulos que lo heredan (con
+     * historial MASIVO a nombre de usuarioId); si falla, se revierte tambien el cambio del rubro.
+     */
     @Transactional
-    public RubroResponse actualizar(Long id, RubroRequest request) {
+    public RubroResponse actualizar(Long id, RubroRequest request, Long usuarioId) {
         Rubro rubro = buscar(id);
         String nombre = request.nombre().trim();
         if (rubroRepository.existeOtroConNombreScoped(nombre, id)) {
             throw new ConflictException("Ya existe un rubro llamado " + nombre);
         }
+        // compareTo y no equals: 35 y 35.00 son el mismo margen. El margen del rubro nunca es null.
+        boolean cambioElMargen = rubro.getMargenPorcentaje().compareTo(request.margenPorcentaje()) != 0;
         rubro.actualizar(nombre, request.margenPorcentaje());
+        if (cambioElMargen) {
+            recalculoPreciosService.porCambioDeMargenDeRubro(rubro, usuarioId);
+        }
         return RubroResponse.from(rubro);
     }
 

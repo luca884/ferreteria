@@ -1,0 +1,19 @@
+h1 { margin: 0 0 4px; }
+.ayuda { color: var(--texto-suave); margin: 0 0 16px; }
+.alta {
+  display: flex;
+  gap: 12px;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  margin-bottom: 24px;
+}
+.campo { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 180px; }
+.campo.cuit { flex: 0 0 200px; min-width: 200px; }
+label { font-weight: 600; }
+table { width: 100%; border-collapse: collapse; background: var(--superficie); }
+th, td { padding: 10px 12px; border-bottom: 1px solid var(--borde); text-align: left; }
+th { font-size: 0.85rem; color: var(--texto-suave); text-transform: uppercase; }
+.acciones { text-align: right; white-space: nowrap; }
+.acciones button + button { margin-left: 8px; }
+
+.errores-campos { padding-left: 20px; }
