@@ -2,6 +2,7 @@ import { HttpErrorResponse } from '@angular/common/http';
 import { Component, OnInit, inject, signal } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { Observable } from 'rxjs';
+import { erroresDeCampos } from '../../core/api/api-error';
 import { AuthService } from '../../core/auth/auth.service';
 import { Proveedor, ProveedorRequest } from './proveedor.models';
 import { ProveedoresService } from './proveedores.service';
@@ -19,6 +20,8 @@ export class Proveedores implements OnInit {
   protected readonly proveedores = signal<Proveedor[]>([]);
   protected readonly cargando = signal(true);
   protected readonly error = signal<string | null>(null);
+  /** Mensajes por campo de un 400 de validación del backend; si hay, se muestran en vez de `error`. */
+  protected readonly erroresCampos = signal<string[]>([]);
   protected readonly guardando = signal(false);
   /** Id del proveedor que se está editando; null mientras se da de alta uno nuevo. */
   protected readonly editandoId = signal<number | null>(null);
@@ -48,7 +51,7 @@ export class Proveedores implements OnInit {
       id === null ? this.service.crear(request) : this.service.actualizar(id, request);
 
     this.guardando.set(true);
-    this.error.set(null);
+    this.limpiarErrores();
     llamada.subscribe({
       next: (proveedor) => {
         this.proveedores.update((lista) =>
@@ -61,19 +64,20 @@ export class Proveedores implements OnInit {
       },
       error: (err: unknown) => {
         this.guardando.set(false);
+        this.erroresCampos.set(erroresDeCampos(err));
         this.error.set(mensajeDe(err, 'No se pudo guardar el proveedor.'));
       },
     });
   }
 
   protected editar(proveedor: Proveedor): void {
-    this.error.set(null);
+    this.limpiarErrores();
     this.editandoId.set(proveedor.id);
     this.form.reset({ nombre: proveedor.nombre, cuit: proveedor.cuit ?? '' });
   }
 
   protected cancelar(): void {
-    this.error.set(null);
+    this.limpiarErrores();
     this.vaciarFormulario();
   }
 
@@ -81,7 +85,7 @@ export class Proveedores implements OnInit {
     if (!confirm(`¿Dar de baja a ${proveedor.nombre}? Sus artículos conservan la referencia.`)) {
       return;
     }
-    this.error.set(null);
+    this.limpiarErrores();
     this.service.desactivar(proveedor.id).subscribe({
       next: () => {
         this.proveedores.update((lista) => lista.filter((p) => p.id !== proveedor.id));
@@ -91,6 +95,11 @@ export class Proveedores implements OnInit {
         this.error.set(mensajeDe(err, 'No se pudo dar de baja el proveedor.'));
       },
     });
+  }
+
+  private limpiarErrores(): void {
+    this.error.set(null);
+    this.erroresCampos.set([]);
   }
 
   private vaciarFormulario(): void {

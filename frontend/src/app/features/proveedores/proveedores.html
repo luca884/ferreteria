@@ -23,7 +23,13 @@
   </form>
 }
 
-@if (error(); as mensaje) {
+@if (erroresCampos().length > 0) {
+  <ul class="error errores-campos" role="alert">
+    @for (mensaje of erroresCampos(); track $index) {
+      <li>{{ mensaje }}</li>
+    }
+  </ul>
+} @else if (error(); as mensaje) {
   <p class="error" role="alert">{{ mensaje }}</p>
 }
 

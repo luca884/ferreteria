@@ -53,7 +53,9 @@ public class ProveedorService {
         if (proveedorRepository.existeOtroConNombreScoped(nombre, id)) {
             throw new ConflictException(mensajeDuplicado(nombre));
         }
-        proveedor.actualizar(nombre, request.cuit(), !Boolean.FALSE.equals(request.activo()));
+        // Sin activo en el pedido se conserva el estado actual: un PUT no reactiva por omision.
+        boolean activo = request.activo() == null ? proveedor.isActivo() : request.activo();
+        proveedor.actualizar(nombre, request.cuit(), activo);
         return ProveedorResponse.from(proveedor);
     }
 

@@ -50,11 +50,16 @@ public class ArticuloService {
         this.configuracionPreciosService = configuracionPreciosService;
     }
 
-    /** Pagina ordenada por descripcion; q busca sin distinguir mayusculas en codigos y descripcion. */
+    /**
+     * Pagina ordenada por descripcion y, para desempatar, por id: con descripciones repetidas el orden
+     * tiene que ser total o un articulo puede repetirse o perderse entre dos paginas. q busca sin
+     * distinguir mayusculas en codigos y descripcion.
+     */
     @Transactional(readOnly = true)
     public PageResponse<ArticuloResponse> listar(String q, int page, int size, boolean incluirInactivos) {
         PageRequest pageable = PageRequest.of(
-                Math.max(page, 0), Math.min(Math.max(size, 1), TAMANO_MAXIMO), Sort.by("descripcion"));
+                Math.max(page, 0), Math.min(Math.max(size, 1), TAMANO_MAXIMO),
+                Sort.by(Sort.Order.asc("descripcion"), Sort.Order.asc("id")));
         return PageResponse.from(
                 articuloRepository.buscarScoped(patronDeBusqueda(q), incluirInactivos, pageable),
                 ArticuloResponse::from);
@@ -83,7 +88,8 @@ public class ArticuloService {
     @Transactional
     public ArticuloResponse actualizar(Long id, ArticuloRequest request, Long usuarioId) {
         Articulo articulo = buscar(id);
-        DatosArticulo datos = request.toDatos();
+        // Sin activo en el pedido se conserva el estado actual: un PUT no reactiva por omision.
+        DatosArticulo datos = request.toDatos(articulo.isActivo());
         validarUnicidad(datos, id);
         ContextoPrecio ctx = contextoDePrecio(datos);
 

@@ -37,3 +37,5 @@ select:focus { outline: 2px solid var(--acento); outline-offset: 1px; }
   align-items: center;
 }
 .cancelar { color: var(--texto); }
+
+.errores-campos { padding-left: 20px; }

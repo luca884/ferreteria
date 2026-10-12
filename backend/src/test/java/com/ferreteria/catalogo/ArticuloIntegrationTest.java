@@ -132,6 +132,29 @@ class ArticuloIntegrationTest extends IntegrationTestBase {
     }
 
     @Test
+    void conLaMismaDescripcionLasPaginasNoRepitenNiPierdenArticulosYSiguenElOrdenDeId() throws Exception {
+        String marca = unico("EMP");
+        List<Long> idsCreados = new ArrayList<>();
+        for (int i = 1; i <= 7; i++) {
+            ObjectNode p = pedido(marca + "-" + i);
+            p.put("descripcion", marca); // la misma para todos: solo el id los desempata
+            idsCreados.add(crear(duenoA, p).get("id").asLong());
+        }
+
+        for (int size : new int[] {1, 2, 3}) {
+            List<Long> ids = new ArrayList<>();
+            int totalPages = Integer.MAX_VALUE;
+            for (int page = 0; page < totalPages; page++) {
+                JsonNode pagina = getJson("/api/articulos?q=" + marca + "&page=" + page + "&size=" + size, duenoA);
+                totalPages = pagina.get("totalPages").asInt();
+                pagina.get("items").forEach(n -> ids.add(n.get("id").asLong()));
+            }
+            // Cada id una sola vez y en orden ascendente (idsCreados ya viene ascendente: ids de identidad).
+            assertThat(ids).as("size=%d", size).containsExactlyElementsOf(idsCreados);
+        }
+    }
+
+    @Test
     void sinParametrosElTamanoPorDefectoEs20YElMaximoEs100() throws Exception {
         String marca = unico("TAM");
         for (int i = 1; i <= 22; i++) {
@@ -510,6 +533,73 @@ class ArticuloIntegrationTest extends IntegrationTestBase {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.rubroId").doesNotExist())
                 .andExpect(jsonPath("$.precioFinal", is(160.0)));
+    }
+
+    @Test
+    void cambiarDeRubroAUnoConOtroMargenRecalculaElPrecioYGuardaUnaEntradaManual() throws Exception {
+        long rubroDel35 = crearRubro(duenoA, unico("RubR35"), "35.00");
+        long rubroDel50 = crearRubro(duenoA, unico("RubR50"), "50.00");
+        ObjectNode p = pedido(unico("CAMRUB"));
+        p.put("rubroId", rubroDel35); // sin margen propio: hereda el del rubro
+        JsonNode creado = crear(duenoA, p);
+        long id = creado.get("id").asLong();
+        assertThat(precioFinal(creado)).isEqualByComparingTo("170.00");
+        p.put("rubroId", rubroDel50);
+
+        // 100 x 1,50 x 1,21 = 181,50 que sube a 190.
+        putJson("/api/articulos/" + id, duenoA, texto(p))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.rubroId", is((int) rubroDel50)))
+                .andExpect(jsonPath("$.precioFinal", is(190.0)));
+
+        List<Map<String, Object>> filas = historial(id);
+        assertThat(filas).hasSize(2);
+        Map<String, Object> cambio = filas.get(1);
+        assertThat(cambio.get("origen")).isEqualTo("MANUAL");
+        assertThat((BigDecimal) cambio.get("costo_anterior")).isEqualByComparingTo("100");
+        assertThat((BigDecimal) cambio.get("costo_nuevo")).isEqualByComparingTo("100");
+        assertThat((BigDecimal) cambio.get("precio_anterior")).isEqualByComparingTo("170");
+        assertThat((BigDecimal) cambio.get("precio_nuevo")).isEqualByComparingTo("190");
+        assertThat(cambio.get("usuario_id")).isEqualTo(usuarioId("dueno@tornillo.demo"));
+    }
+
+    // --- PUT sin "activo" (S4): conserva el estado actual ---
+
+    @Test
+    void unPutSinActivoConservaElEstadoYConActivoExplicitoSeAplica() throws Exception {
+        ObjectNode p = pedido(unico("ACT"));
+        long id = crear(duenoA, p).get("id").asLong();
+        delete("/api/articulos/" + id, duenoA).andExpect(status().isNoContent());
+        p.put("descripcion", "Editado dado de baja"); // el pedido no trae "activo"
+
+        putJson("/api/articulos/" + id, duenoA, texto(p))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.activo", is(false)))
+                .andExpect(jsonPath("$.descripcion", is("Editado dado de baja")));
+        assertThat(filaDeArticulo(id).get("activo")).isIn(false, 0);
+
+        p.put("activo", true);
+        putJson("/api/articulos/" + id, duenoA, texto(p))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.activo", is(true)));
+        assertThat(filaDeArticulo(id).get("activo")).isIn(true, 1);
+
+        // Activo y sin "activo": sigue activo. Con false explicito, se da de baja.
+        p.remove("activo");
+        putJson("/api/articulos/" + id, duenoA, texto(p))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.activo", is(true)));
+        p.put("activo", false);
+        putJson("/api/articulos/" + id, duenoA, texto(p))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.activo", is(false)));
+    }
+
+    @Test
+    void unAltaSinActivoSigueQuedandoActiva() throws Exception {
+        JsonNode creado = crear(duenoA, pedido(unico("ALTAACT")));
+
+        assertThat(creado.get("activo").asBoolean()).isTrue();
     }
 
     // --- Unicidades (R-007, R-008, R-009) ---

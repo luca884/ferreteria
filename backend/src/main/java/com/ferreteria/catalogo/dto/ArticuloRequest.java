@@ -60,11 +60,19 @@ public record ArticuloRequest(
         @Size(max = 60, message = "La ubicación no puede superar 60 caracteres")
         String ubicacion,
 
-        /** null significa activo. */
+        /** null significa activo en el alta y "conservar el estado actual" en la edicion. */
         Boolean activo) {
 
-    /** Normaliza el pedido: sin espacios sobrantes, textos en blanco como null y los defectos aplicados. */
+    /** Para el alta: sin espacios sobrantes, textos en blanco como null y los defectos aplicados (activo = true). */
     public DatosArticulo toDatos() {
+        return toDatos(true);
+    }
+
+    /**
+     * Para la edicion: igual que {@link #toDatos()}, pero si el pedido no trae activo se conserva el
+     * estado actual del articulo (un PUT sin activo no reactiva uno dado de baja).
+     */
+    public DatosArticulo toDatos(boolean activoActual) {
         return new DatosArticulo(
                 codigoInterno == null ? null : codigoInterno.trim(),
                 blancoANull(codigoBarras),
@@ -78,7 +86,7 @@ public record ArticuloRequest(
                 unidad,
                 stockMinimo == null ? BigDecimal.ZERO : stockMinimo,
                 blancoANull(ubicacion),
-                !Boolean.FALSE.equals(activo));
+                activo == null ? activoActual : activo);
     }
 
     private static String blancoANull(String texto) {

@@ -146,6 +146,36 @@ class ProveedorIntegrationTest extends IntegrationTestBase {
     }
 
     @Test
+    void unPutSinActivoConservaElEstadoYConActivoExplicitoSeAplica() throws Exception {
+        String nombre = unico("ConservaEstado");
+        long id = crear(duenoA, nombre).get("id").asLong();
+        delete("/api/proveedores/" + id, duenoA).andExpect(status().isNoContent());
+        assertThat(activo(id)).isFalse();
+
+        // json(...) no manda "activo": el proveedor dado de baja no se reactiva.
+        putJson("/api/proveedores/" + id, duenoA, json(nombre, "30-12345678-9"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.activo", is(false)))
+                .andExpect(jsonPath("$.cuit", is("30-12345678-9")));
+        assertThat(activo(id)).isFalse();
+
+        var conActivo = objectMapper.createObjectNode().put("nombre", nombre).put("activo", true);
+        putJson("/api/proveedores/" + id, duenoA, objectMapper.writeValueAsString(conActivo))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.activo", is(true)));
+        assertThat(activo(id)).isTrue();
+
+        // Activo y sin "activo": sigue activo. Con false explicito, se da de baja.
+        putJson("/api/proveedores/" + id, duenoA, json(nombre, null))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.activo", is(true)));
+        var sinActivo = objectMapper.createObjectNode().put("nombre", nombre).put("activo", false);
+        putJson("/api/proveedores/" + id, duenoA, objectMapper.writeValueAsString(sinActivo))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.activo", is(false)));
+    }
+
+    @Test
     void renombrarAUnNombreOcupadoPorOtroProveedorDa409() throws Exception {
         String ocupado = unico("Ocupado");
         crear(duenoA, ocupado);

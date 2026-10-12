@@ -443,6 +443,58 @@ class ArticuloServiceTest {
     }
 
     @Test
+    @DisplayName("actualizar: sin activo en el pedido conserva el estado actual (uno de baja sigue de baja)")
+    void actualizarSinActivoConservaElEstadoInactivo() throws Exception {
+        configuracionPorDefecto();
+        proveedorExiste(7L);
+        Articulo articulo = existente(55L);
+        articulo.desactivar();
+        when(articuloRepository.findScoped(55L)).thenReturn(Optional.of(articulo));
+        when(rubroRepository.findScoped(4L)).thenReturn(Optional.of(rubro(4L, "35.00")));
+        ArticuloRequest sinActivo = new ArticuloRequest("TORN-001", "7790001000012", "AB-12", "Tornillo hexagonal 1/4",
+                4L, 7L, bd("100"), bd("35"), AlicuotaIva.IVA_21, Unidad.UNIDAD, bd("5"), "Estante 3", null);
+
+        ArticuloResponse respuesta = service.actualizar(55L, sinActivo, USUARIO);
+
+        assertThat(articulo.isActivo()).isFalse();
+        assertThat(respuesta.activo()).isFalse();
+        // Sigue de baja: no revalida el codigo de barras como si se reactivara.
+        verify(articuloRepository, never()).existeCodigoBarrasActivoScoped(any(), any());
+    }
+
+    @Test
+    @DisplayName("actualizar: sin activo en el pedido conserva el estado actual (uno activo sigue activo)")
+    void actualizarSinActivoConservaElEstadoActivo() throws Exception {
+        configuracionPorDefecto();
+        proveedorExiste(7L);
+        Articulo articulo = existente(55L);
+        when(articuloRepository.findScoped(55L)).thenReturn(Optional.of(articulo));
+        when(rubroRepository.findScoped(4L)).thenReturn(Optional.of(rubro(4L, "35.00")));
+        ArticuloRequest sinActivo = new ArticuloRequest("TORN-001", "7790001000012", "AB-12", "Tornillo hexagonal 1/4",
+                4L, 7L, bd("100"), bd("35"), AlicuotaIva.IVA_21, Unidad.UNIDAD, bd("5"), "Estante 3", null);
+
+        ArticuloResponse respuesta = service.actualizar(55L, sinActivo, USUARIO);
+
+        assertThat(respuesta.activo()).isTrue();
+    }
+
+    @Test
+    @DisplayName("actualizar: activo=true explicito reactiva y revalida el codigo de barras")
+    void actualizarActivoTrueReactiva() throws Exception {
+        configuracionPorDefecto();
+        proveedorExiste(7L);
+        Articulo articulo = existente(55L);
+        articulo.desactivar();
+        when(articuloRepository.findScoped(55L)).thenReturn(Optional.of(articulo));
+        when(rubroRepository.findScoped(4L)).thenReturn(Optional.of(rubro(4L, "35.00")));
+
+        ArticuloResponse respuesta = service.actualizar(55L, request(4L, 7L, "100", "35"), USUARIO);
+
+        assertThat(respuesta.activo()).isTrue();
+        verify(articuloRepository).existeCodigoBarrasActivoScoped("7790001000012", 55L);
+    }
+
+    @Test
     @DisplayName("actualizar: el stock actual queda intacto")
     void actualizarNoTocaElStockActual() throws Exception {
         configuracionPorDefecto();
@@ -565,7 +617,8 @@ class ArticuloServiceTest {
 
         assertThat(pageable.getPageNumber()).isEqualTo(1);
         assertThat(pageable.getPageSize()).isEqualTo(20);
-        assertThat(pageable.getSort()).isEqualTo(Sort.by("descripcion"));
+        // El id desempata: sin el, dos articulos con la misma descripcion pueden cambiar de pagina.
+        assertThat(pageable.getSort()).isEqualTo(Sort.by(Sort.Order.asc("descripcion"), Sort.Order.asc("id")));
     }
 
     @Test

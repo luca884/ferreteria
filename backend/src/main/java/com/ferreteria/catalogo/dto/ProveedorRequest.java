@@ -12,6 +12,6 @@ public record ProveedorRequest(
         @Pattern(regexp = "\\d{2}-\\d{8}-\\d", message = "El CUIT debe tener el formato 30-12345678-9")
         String cuit,
 
-        /** null significa activo. */
+        /** null significa activo en el alta y "conservar el estado actual" en la edicion. */
         Boolean activo) {
 }

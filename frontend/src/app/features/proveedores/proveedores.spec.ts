@@ -181,6 +181,30 @@ describe('Proveedores', () => {
       expect(textoFilas()).toHaveLength(2);
     });
 
+    it('muestra los errores de validación del backend por campo en vez del mensaje genérico', async () => {
+      await crearComponente(true);
+      servicio.crear.mockReturnValue(
+        throwError(
+          () =>
+            new HttpErrorResponse({
+              status: 400,
+              error: {
+                status: 400,
+                message: 'Datos invalidos',
+                errors: { nombre: 'El nombre no puede superar 100 caracteres' },
+              },
+            }),
+        ),
+      );
+
+      await escribir('#nombre', 'Sinteplast');
+      await enviarFormulario();
+
+      const alerta = el().querySelector('[role="alert"]')!;
+      expect(alerta.textContent).toContain('El nombre no puede superar 100 caracteres');
+      expect(alerta.textContent).not.toContain('Datos invalidos');
+    });
+
     it('muestra un mensaje genérico si el error no trae mensaje', async () => {
       await crearComponente(true);
       servicio.crear.mockReturnValue(throwError(() => new Error('caído')));

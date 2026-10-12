@@ -141,14 +141,40 @@ class ProveedorServiceTest {
     }
 
     @Test
-    @DisplayName("actualizar sin activo lo deja activo")
-    void actualizarActivoNuloEsTrue() {
+    @DisplayName("actualizar sin activo conserva el estado actual: uno dado de baja sigue de baja")
+    void actualizarActivoNuloConservaElEstadoInactivo() {
         Proveedor proveedor = new Proveedor(FERRETERIA, "Tersuave", null);
         proveedor.desactivar();
         when(proveedorRepository.findScoped(5L)).thenReturn(Optional.of(proveedor));
         when(proveedorRepository.existeOtroConNombreScoped("Tersuave", 5L)).thenReturn(false);
 
+        ProveedorResponse respuesta = service.actualizar(5L, new ProveedorRequest("Tersuave", null, null));
+
+        assertThat(proveedor.isActivo()).isFalse();
+        assertThat(respuesta.activo()).isFalse();
+    }
+
+    @Test
+    @DisplayName("actualizar sin activo conserva el estado actual: uno activo sigue activo")
+    void actualizarActivoNuloConservaElEstadoActivo() {
+        Proveedor proveedor = new Proveedor(FERRETERIA, "Tersuave", null);
+        when(proveedorRepository.findScoped(5L)).thenReturn(Optional.of(proveedor));
+        when(proveedorRepository.existeOtroConNombreScoped("Tersuave", 5L)).thenReturn(false);
+
         service.actualizar(5L, new ProveedorRequest("Tersuave", null, null));
+
+        assertThat(proveedor.isActivo()).isTrue();
+    }
+
+    @Test
+    @DisplayName("actualizar con activo=true reactiva a uno dado de baja")
+    void actualizarActivoTrueReactiva() {
+        Proveedor proveedor = new Proveedor(FERRETERIA, "Tersuave", null);
+        proveedor.desactivar();
+        when(proveedorRepository.findScoped(5L)).thenReturn(Optional.of(proveedor));
+        when(proveedorRepository.existeOtroConNombreScoped("Tersuave", 5L)).thenReturn(false);
+
+        service.actualizar(5L, new ProveedorRequest("Tersuave", null, true));
 
         assertThat(proveedor.isActivo()).isTrue();
     }

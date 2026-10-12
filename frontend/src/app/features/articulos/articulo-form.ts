@@ -10,6 +10,7 @@ import {
 } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { forkJoin, of } from 'rxjs';
+import { erroresDeCampos } from '../../core/api/api-error';
 import { AuthService } from '../../core/auth/auth.service';
 import { Proveedor } from '../proveedores/proveedor.models';
 import { ProveedoresService } from '../proveedores/proveedores.service';
@@ -63,6 +64,8 @@ export class ArticuloForm implements OnInit {
   protected readonly cargando = signal(true);
   protected readonly guardando = signal(false);
   protected readonly error = signal<string | null>(null);
+  /** Mensajes por campo de un 400 de validación del backend; si hay, se muestran en vez de `error`. */
+  protected readonly erroresCampos = signal<string[]>([]);
   /** Si falló la carga del artículo no hay nada que editar. */
   protected readonly sinFormulario = signal(false);
 
@@ -109,6 +112,7 @@ export class ArticuloForm implements OnInit {
     }
     this.guardando.set(true);
     this.error.set(null);
+    this.erroresCampos.set([]);
     const request = this.armarRequest();
     const guardado =
       this.id === null ? this.service.crear(request) : this.service.actualizar(this.id, request);
@@ -119,6 +123,7 @@ export class ArticuloForm implements OnInit {
       },
       error: (err: unknown) => {
         this.guardando.set(false);
+        this.erroresCampos.set(erroresDeCampos(err));
         this.error.set(mensajeDe(err, 'No se pudo guardar el artículo.'));
       },
     });

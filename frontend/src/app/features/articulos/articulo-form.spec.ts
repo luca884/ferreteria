@@ -333,6 +333,55 @@ describe('ArticuloForm', () => {
       );
     });
 
+    it('muestra los errores de validación del backend por campo en vez del mensaje genérico', async () => {
+      await crearComponente();
+      await completarMinimos();
+      servicio.crear.mockReturnValue(
+        throwError(
+          () =>
+            new HttpErrorResponse({
+              status: 400,
+              error: {
+                status: 400,
+                message: 'Datos invalidos',
+                errors: {
+                  costo: 'El costo no puede ser negativo',
+                  descripcion: 'La descripción no puede superar 200 caracteres',
+                },
+              },
+            }),
+        ),
+      );
+
+      await enviar();
+
+      const alerta = el().querySelector('.error')!;
+      expect(alerta.textContent).toContain('El costo no puede ser negativo');
+      expect(alerta.textContent).toContain('La descripción no puede superar 200 caracteres');
+      expect(alerta.textContent).not.toContain('Datos invalidos');
+      expect(el().querySelectorAll('.error li').length).toBe(2);
+      expect(navigate).not.toHaveBeenCalled();
+    });
+
+    it('también los muestra al editar y los limpia al volver a guardar', async () => {
+      await crearComponente({ id: '5' });
+      servicio.actualizar.mockReturnValueOnce(
+        throwError(
+          () =>
+            new HttpErrorResponse({
+              status: 400,
+              error: { message: 'Datos invalidos', errors: { costo: 'El costo no puede ser negativo' } },
+            }),
+        ),
+      );
+      await enviar();
+      expect(el().querySelector('.error')?.textContent).toContain('El costo no puede ser negativo');
+
+      await enviar();
+
+      expect(el().querySelector('.error')).toBeNull();
+    });
+
     it('muestra el mensaje del backend ante un 404 (rubro o proveedor ajeno)', async () => {
       await crearComponente();
       await completarMinimos();
