@@ -2,6 +2,8 @@
 backend/target/
 *.class
 *.log
+# mvnw lo descarga solo desde wrapperUrl (maven-wrapper.properties)
+backend/.mvn/wrapper/maven-wrapper.jar
 
 # Frontend
 frontend/node_modules/
@@ -13,6 +15,9 @@ frontend/.angular/
 *.iml
 .vscode/
 .DS_Store
+
+# Herramientas locales de agentes (registro de skills de cada dev)
+.atl/
 
 # Secretos
 .env
