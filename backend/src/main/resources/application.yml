@@ -7,6 +7,10 @@ spring:
     url: ${DB_URL:jdbc:mysql://localhost:3307/ferreteria?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC}
     username: ${DB_USER:ferreteria}
     password: ${DB_PASSWORD:ferreteria}
+  jackson:
+    deserialization:
+      # Sin esto Jackson acepta el ordinal de un enum: "alicuotaIva": 5 se guardaba como IVA_27.
+      fail-on-numbers-for-enums: true
   jpa:
     open-in-view: false
     hibernate:

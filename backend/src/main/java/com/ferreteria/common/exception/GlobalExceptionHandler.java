@@ -1,5 +1,6 @@
 package com.ferreteria.common.exception;
 
+import com.fasterxml.jackson.databind.exc.InvalidFormatException;
 import com.ferreteria.auth.service.CredencialesInvalidasException;
 import com.ferreteria.common.ApiError;
 import com.ferreteria.tenant.MissingTenantException;
@@ -18,13 +19,20 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
+import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
     private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
+
+    /** Mensajes propios para los campos enumerados del articulo; el resto usa el mensaje generico. */
+    private static final Map<String, String> MENSAJES_ENUM_POR_CAMPO = Map.of(
+            "alicuotaIva", "La alícuota de IVA no es válida. Usá 0, 2,5, 5, 10,5, 21 o 27.",
+            "unidad", "La unidad no es válida. Usá UNIDAD, METRO, KILO o LITRO.");
 
     @ExceptionHandler(ResourceNotFoundException.class)
     public ResponseEntity<ApiError> notFound(ResourceNotFoundException ex) {
@@ -63,7 +71,26 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(HttpMessageNotReadableException.class)
     public ResponseEntity<ApiError> unreadable(HttpMessageNotReadableException ex) {
+        if (ex.getCause() instanceof InvalidFormatException formato
+                && formato.getTargetType() != null && formato.getTargetType().isEnum()) {
+            return enumInvalido(formato);
+        }
         return build(HttpStatus.BAD_REQUEST, "El cuerpo del pedido no es valido");
+    }
+
+    /** Un valor que no es de la enumeracion del campo (alicuota de IVA, unidad...): el mensaje nombra el campo. */
+    private ResponseEntity<ApiError> enumInvalido(InvalidFormatException ex) {
+        String campo = ex.getPath().isEmpty() ? "valor" : ex.getPath().get(ex.getPath().size() - 1).getFieldName();
+        String mensaje = MENSAJES_ENUM_POR_CAMPO.getOrDefault(campo, mensajeGenericoDeEnum(campo, ex));
+        return ResponseEntity.badRequest()
+                .body(ApiError.of(HttpStatus.BAD_REQUEST.value(), mensaje, Map.of(campo, mensaje)));
+    }
+
+    private static String mensajeGenericoDeEnum(String campo, InvalidFormatException ex) {
+        String validos = Arrays.stream(ex.getTargetType().getEnumConstants())
+                .map(Object::toString)
+                .collect(Collectors.joining(", "));
+        return "El valor de " + campo + " no es válido. Usá uno de estos: " + validos + ".";
     }
 
     @ExceptionHandler(NoResourceFoundException.class)

@@ -1,11 +1,13 @@
 package com.ferreteria.catalogo.controller;
 
+import com.ferreteria.auth.security.AuthUser;
 import com.ferreteria.catalogo.dto.RubroRequest;
 import com.ferreteria.catalogo.dto.RubroResponse;
 import com.ferreteria.catalogo.service.RubroService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -46,7 +48,8 @@ public class RubroController {
 
     @PutMapping("/{id}")
     @PreAuthorize("hasRole('DUENO')")
-    public RubroResponse actualizar(@PathVariable Long id, @Valid @RequestBody RubroRequest request) {
-        return rubroService.actualizar(id, request);
+    public RubroResponse actualizar(
+            @PathVariable Long id, @Valid @RequestBody RubroRequest request, @AuthenticationPrincipal AuthUser authUser) {
+        return rubroService.actualizar(id, request, authUser.userId());
     }
 }

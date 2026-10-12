@@ -1,0 +1,90 @@
+package com.ferreteria.catalogo.dto;
+
+import com.ferreteria.catalogo.model.AlicuotaIva;
+import com.ferreteria.catalogo.model.DatosArticulo;
+import com.ferreteria.catalogo.model.Unidad;
+import jakarta.validation.constraints.DecimalMax;
+import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.Digits;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
+
+import java.math.BigDecimal;
+
+/**
+ * Alta y edicion de un articulo. No tiene stock actual ni precio final: el primero lo mueve CU-09
+ * y el segundo lo calcula el backend, asi que si el cliente los manda se ignoran.
+ */
+public record ArticuloRequest(
+        @NotBlank(message = "El código interno es obligatorio")
+        @Size(max = 30, message = "El código interno no puede superar 30 caracteres")
+        String codigoInterno,
+
+        @Size(max = 30, message = "El código de barras no puede superar 30 caracteres")
+        String codigoBarras,
+
+        @Size(max = 40, message = "El código del proveedor no puede superar 40 caracteres")
+        String codigoProveedor,
+
+        @NotBlank(message = "La descripción es obligatoria")
+        @Size(max = 200, message = "La descripción no puede superar 200 caracteres")
+        String descripcion,
+
+        Long rubroId,
+
+        Long proveedorId,
+
+        @NotNull(message = "El costo es obligatorio")
+        @DecimalMin(value = "0.00", message = "El costo no puede ser negativo")
+        @Digits(integer = 13, fraction = 2, message = "El costo admite hasta 2 decimales")
+        BigDecimal costo,
+
+        /** null significa que hereda el margen del rubro o el de la ferreteria. */
+        @DecimalMin(value = "0.00", message = "El margen no puede ser negativo")
+        @DecimalMax(value = "1000.00", message = "El margen no puede superar 1000 %")
+        @Digits(integer = 4, fraction = 2, message = "El margen admite hasta 2 decimales")
+        BigDecimal margenPorcentaje,
+
+        /** null significa IVA 21 %. */
+        AlicuotaIva alicuotaIva,
+
+        @NotNull(message = "La unidad es obligatoria")
+        Unidad unidad,
+
+        /** null significa 0. */
+        @DecimalMin(value = "0", message = "El stock mínimo no puede ser negativo")
+        @Digits(integer = 12, fraction = 3, message = "El stock mínimo admite hasta 3 decimales")
+        BigDecimal stockMinimo,
+
+        @Size(max = 60, message = "La ubicación no puede superar 60 caracteres")
+        String ubicacion,
+
+        /** null significa activo. */
+        Boolean activo) {
+
+    /** Normaliza el pedido: sin espacios sobrantes, textos en blanco como null y los defectos aplicados. */
+    public DatosArticulo toDatos() {
+        return new DatosArticulo(
+                codigoInterno == null ? null : codigoInterno.trim(),
+                blancoANull(codigoBarras),
+                blancoANull(codigoProveedor),
+                descripcion == null ? null : descripcion.trim(),
+                rubroId,
+                proveedorId,
+                costo,
+                margenPorcentaje,
+                alicuotaIva == null ? AlicuotaIva.IVA_21 : alicuotaIva,
+                unidad,
+                stockMinimo == null ? BigDecimal.ZERO : stockMinimo,
+                blancoANull(ubicacion),
+                !Boolean.FALSE.equals(activo));
+    }
+
+    private static String blancoANull(String texto) {
+        if (texto == null || texto.isBlank()) {
+            return null;
+        }
+        return texto.trim();
+    }
+}
