@@ -1,0 +1,29 @@
+h1 { margin: 0 0 4px; }
+.ayuda { color: var(--texto-suave); margin: 0 0 16px; }
+.barra-herramientas {
+  display: flex;
+  gap: 16px;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  margin-bottom: 24px;
+}
+.busqueda { display: flex; gap: 12px; align-items: flex-end; flex: 1; min-width: 280px; }
+.campo { display: flex; flex-direction: column; gap: 4px; flex: 1; }
+label { font-weight: 600; }
+.inactivos { display: flex; align-items: center; gap: 8px; font-weight: normal; padding-bottom: 10px; }
+.nuevo {
+  padding: 10px 16px;
+  border-radius: 8px;
+  background: var(--acento);
+  color: var(--acento-texto);
+  font-weight: 600;
+  text-decoration: none;
+}
+table { width: 100%; border-collapse: collapse; background: var(--superficie); }
+th, td { padding: 10px 12px; border-bottom: 1px solid var(--borde); text-align: left; }
+th { font-size: 0.85rem; color: var(--texto-suave); text-transform: uppercase; }
+.num { text-align: right; font-variant-numeric: tabular-nums; }
+tr.inactivo td { color: var(--texto-suave); }
+.acciones { text-align: right; white-space: nowrap; }
+.acciones .editar { margin-right: 12px; color: var(--acento); font-weight: 600; }
+.paginacion { display: flex; gap: 16px; align-items: center; justify-content: center; margin-top: 16px; }

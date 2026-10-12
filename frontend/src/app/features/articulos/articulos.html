@@ -1,0 +1,108 @@
+<h1>Artículos</h1>
+<p class="ayuda">Buscá por descripción, código interno, código de barras o código del proveedor.</p>
+
+<div class="barra-herramientas">
+  <form class="busqueda" [formGroup]="form" (ngSubmit)="buscar()">
+    <div class="campo">
+      <label for="q">Buscar</label>
+      <input id="q" type="search" formControlName="q" placeholder="Ej: tornillo, TOR-001, 7790001000012" />
+    </div>
+    <button type="submit">Buscar</button>
+  </form>
+  <label class="inactivos" for="inactivos">
+    <input
+      id="inactivos"
+      type="checkbox"
+      [checked]="incluirInactivos()"
+      (change)="cambiarInactivos($any($event.target).checked)"
+    />
+    Mostrar dados de baja
+  </label>
+  @if (auth.esDueno()) {
+    <a class="nuevo" routerLink="/articulos/nuevo">Nuevo artículo</a>
+  }
+</div>
+
+@if (error(); as mensaje) {
+  <p class="error" role="alert">{{ mensaje }}</p>
+}
+
+@if (cargando() && !pagina()) {
+  <p class="ayuda">Cargando…</p>
+} @else if (pagina(); as resultado) {
+  @if (resultado.items.length === 0) {
+    @if (busquedaAplicada() !== '') {
+      <p class="ayuda">No hay artículos que coincidan con «{{ busquedaAplicada() }}».</p>
+    } @else {
+      <p class="ayuda">Todavía no hay artículos.</p>
+    }
+  } @else {
+    <table>
+      <thead>
+        <tr>
+          <th>Código</th>
+          <th>Descripción</th>
+          <th class="num">Costo</th>
+          <th class="num">Margen</th>
+          <th>IVA</th>
+          <th class="num">Precio final</th>
+          <th class="num">Stock</th>
+          <th>Estado</th>
+          @if (auth.esDueno()) {
+            <th class="acciones">Acciones</th>
+          }
+        </tr>
+      </thead>
+      <tbody>
+        @for (articulo of resultado.items; track articulo.id) {
+          <tr [class.inactivo]="!articulo.activo">
+            <td class="codigo">{{ articulo.codigoInterno }}</td>
+            <td class="descripcion">{{ articulo.descripcion }}</td>
+            <td class="num costo">{{ articulo.costo | number: '1.2-2' }}</td>
+            <td class="num margen">
+              @if (articulo.margenPorcentaje === null) {
+                Heredado
+              } @else {
+                {{ articulo.margenPorcentaje | number: '1.0-2' }} %
+              }
+            </td>
+            <td class="iva">{{ alicuotaLabels[articulo.alicuotaIva] }}</td>
+            <td class="num precio">{{ articulo.precioFinal | number: '1.2-2' }}</td>
+            <td class="num stock">
+              {{ articulo.stockActual | number: '1.0-3' }} {{ unidadLabels[articulo.unidad] }}
+            </td>
+            <td class="estado">{{ articulo.activo ? 'Activo' : 'De baja' }}</td>
+            @if (auth.esDueno()) {
+              <td class="acciones">
+                <a class="editar" [routerLink]="['/articulos', articulo.id]">Editar</a>
+                @if (articulo.activo) {
+                  <button type="button" class="secundario desactivar" (click)="desactivar(articulo)">
+                    Dar de baja
+                  </button>
+                }
+              </td>
+            }
+          </tr>
+        }
+      </tbody>
+    </table>
+
+    <nav class="paginacion" aria-label="Paginación">
+      <button type="button" class="secundario anterior" [disabled]="resultado.page === 0" (click)="anterior()">
+        Anterior
+      </button>
+      <span>
+        Página {{ resultado.page + 1 }} de {{ resultado.totalPages }} · {{ resultado.totalElements }}
+        artículos
+      </span>
+      <button
+        type="button"
+        class="secundario siguiente"
+        [disabled]="resultado.page + 1 >= resultado.totalPages"
+        (click)="siguiente()"
+      >
+        Siguiente
+      </button>
+    </nav>
+  }
+}
