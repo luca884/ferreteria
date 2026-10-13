@@ -12,6 +12,7 @@ import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDateTime;
 import java.util.Optional;
 
@@ -80,6 +81,13 @@ public class Articulo {
     @Column(length = 60)
     private String ubicacion;
 
+    /**
+     * Precio de lista tal como vino en el archivo del proveedor (con IVA si la lista lo trae, sin
+     * bonificar). Lo fija solo la importacion de listas; actualizar no lo toca.
+     */
+    @Column(name = "precio_lista_proveedor", precision = 15, scale = 2)
+    private BigDecimal precioListaProveedor;
+
     @Column(nullable = false)
     private boolean activo = true;
 
@@ -127,6 +135,34 @@ public class Articulo {
         return CambioPrecio.entre(this.costo, this.costo, precioAnterior, this.precioFinal);
     }
 
+    /**
+     * Importacion de listas: cambia el costo (sin IVA) y el precio de lista del proveedor, y
+     * recalcula el precio final. No toca descripcion, rubro, margen, IVA, stock ni si esta activo.
+     */
+    public Optional<CambioPrecio> actualizarCosto(BigDecimal costoNuevo, BigDecimal precioLista, ContextoPrecio ctx) {
+        if (costoNuevo == null || costoNuevo.signum() < 0) {
+            throw new IllegalArgumentException("El costo debe ser un valor mayor o igual a 0.");
+        }
+        BigDecimal costoAnterior = this.costo;
+        BigDecimal precioAnterior = this.precioFinal;
+
+        this.costo = costoNuevo;
+        registrarPrecioLista(precioLista);
+        calcularPrecio(ctx);
+        return CambioPrecio.entre(costoAnterior, this.costo, precioAnterior, this.precioFinal);
+    }
+
+    /**
+     * Fija solo el precio de lista del proveedor (filas "sin cambio" y altas). Se guarda a escala 2,
+     * HALF_UP; no genera cambio de precio.
+     */
+    public void registrarPrecioLista(BigDecimal precioLista) {
+        if (precioLista == null) {
+            throw new IllegalArgumentException("El precio de lista es obligatorio.");
+        }
+        this.precioListaProveedor = precioLista.setScale(2, RoundingMode.HALF_UP);
+    }
+
     /** Baja logica: el articulo y su historial de precios se conservan. */
     public void desactivar() {
         this.activo = false;
@@ -153,6 +189,7 @@ public class Articulo {
     public BigDecimal getStockActual() { return stockActual; }
     public BigDecimal getStockMinimo() { return stockMinimo; }
     public String getUbicacion() { return ubicacion; }
+    public BigDecimal getPrecioListaProveedor() { return precioListaProveedor; }
     public boolean isActivo() { return activo; }
     public LocalDateTime getCreadoEn() { return creadoEn; }
 }

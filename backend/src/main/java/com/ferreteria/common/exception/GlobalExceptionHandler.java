@@ -17,11 +17,16 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
+import org.springframework.web.multipart.MultipartException;
+import org.springframework.web.multipart.support.MissingServletRequestPartException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
+import java.math.BigDecimal;
 import java.util.Arrays;
-import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 @RestControllerAdvice
@@ -33,6 +38,8 @@ public class GlobalExceptionHandler {
     private static final Map<String, String> MENSAJES_ENUM_POR_CAMPO = Map.of(
             "alicuotaIva", "La alícuota de IVA no es válida. Usá 0, 2,5, 5, 10,5, 21 o 27.",
             "unidad", "La unidad no es válida. Usá UNIDAD, METRO, KILO o LITRO.");
+
+    private static final Pattern BONIFICACION = Pattern.compile("bonificacion([123])");
 
     @ExceptionHandler(ResourceNotFoundException.class)
     public ResponseEntity<ApiError> notFound(ResourceNotFoundException ex) {
@@ -62,28 +69,51 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ApiError> validation(MethodArgumentNotValidException ex) {
-        Map<String, String> errors = new LinkedHashMap<>();
+        // Dos violaciones en un mismo campo: el rango (DecimalMin/DecimalMax) gana sobre Digits y, si no,
+        // gana la primera. Ver ErroresDeValidacion.
+        ErroresDeValidacion errores = new ErroresDeValidacion();
         ex.getBindingResult().getFieldErrors()
-                .forEach(e -> errors.putIfAbsent(e.getField(), e.getDefaultMessage()));
+                .forEach(e -> errores.agregar(e.getField(), e.getCode(), e.getDefaultMessage()));
         return ResponseEntity.badRequest()
-                .body(ApiError.of(HttpStatus.BAD_REQUEST.value(), "Datos invalidos", errors));
+                .body(ApiError.of(HttpStatus.BAD_REQUEST.value(), "Datos invalidos", errores.mensajes()));
+    }
+
+    /** Datos validados en el servicio: mismo formato que la validacion del cuerpo. */
+    @ExceptionHandler(DatosInvalidosException.class)
+    public ResponseEntity<ApiError> datosInvalidos(DatosInvalidosException ex) {
+        return ResponseEntity.badRequest()
+                .body(ApiError.of(HttpStatus.BAD_REQUEST.value(), "Datos invalidos", ex.errors()));
     }
 
     @ExceptionHandler(HttpMessageNotReadableException.class)
     public ResponseEntity<ApiError> unreadable(HttpMessageNotReadableException ex) {
-        if (ex.getCause() instanceof InvalidFormatException formato
-                && formato.getTargetType() != null && formato.getTargetType().isEnum()) {
-            return enumInvalido(formato);
+        if (ex.getCause() instanceof InvalidFormatException formato) {
+            if (formato.getTargetType() != null && formato.getTargetType().isEnum()) {
+                return enumInvalido(formato);
+            }
+            Matcher bonificacion = BONIFICACION.matcher(ultimoCampo(formato));
+            if (BigDecimal.class.equals(formato.getTargetType()) && bonificacion.matches()) {
+                String mensaje = "La bonificación " + bonificacion.group(1) + " no es un número válido.";
+                return ResponseEntity.badRequest().body(ApiError.of(
+                        HttpStatus.BAD_REQUEST.value(), mensaje, Map.of(ultimoCampo(formato), mensaje)));
+            }
         }
         return build(HttpStatus.BAD_REQUEST, "El cuerpo del pedido no es valido");
     }
 
     /** Un valor que no es de la enumeracion del campo (alicuota de IVA, unidad...): el mensaje nombra el campo. */
     private ResponseEntity<ApiError> enumInvalido(InvalidFormatException ex) {
-        String campo = ex.getPath().isEmpty() ? "valor" : ex.getPath().get(ex.getPath().size() - 1).getFieldName();
+        String campo = ultimoCampo(ex);
         String mensaje = MENSAJES_ENUM_POR_CAMPO.getOrDefault(campo, mensajeGenericoDeEnum(campo, ex));
         return ResponseEntity.badRequest()
                 .body(ApiError.of(HttpStatus.BAD_REQUEST.value(), mensaje, Map.of(campo, mensaje)));
+    }
+
+    private static String ultimoCampo(InvalidFormatException ex) {
+        if (ex.getPath().isEmpty() || ex.getPath().get(ex.getPath().size() - 1).getFieldName() == null) {
+            return "valor";
+        }
+        return ex.getPath().get(ex.getPath().size() - 1).getFieldName();
     }
 
     private static String mensajeGenericoDeEnum(String campo, InvalidFormatException ex) {
@@ -91,6 +121,30 @@ public class GlobalExceptionHandler {
                 .map(Object::toString)
                 .collect(Collectors.joining(", "));
         return "El valor de " + campo + " no es válido. Usá uno de estos: " + validos + ".";
+    }
+
+    @ExceptionHandler(BadRequestException.class)
+    public ResponseEntity<ApiError> badRequest(BadRequestException ex) {
+        return build(HttpStatus.BAD_REQUEST, ex.getMessage());
+    }
+
+    /** Mas especifico que MultipartException (su padre), asi que Spring lo elige primero. */
+    @ExceptionHandler(MaxUploadSizeExceededException.class)
+    public ResponseEntity<ApiError> archivoDemasiadoGrande(MaxUploadSizeExceededException ex) {
+        return build(HttpStatus.PAYLOAD_TOO_LARGE, "El archivo es demasiado grande. El máximo es 10 MB.");
+    }
+
+    @ExceptionHandler(MissingServletRequestPartException.class)
+    public ResponseEntity<ApiError> parteFaltante(MissingServletRequestPartException ex) {
+        String mensaje = "archivo".equals(ex.getRequestPartName())
+                ? "Falta el archivo de la lista."
+                : "Faltan los datos de la importación.";
+        return build(HttpStatus.BAD_REQUEST, mensaje);
+    }
+
+    @ExceptionHandler(MultipartException.class)
+    public ResponseEntity<ApiError> multipartInvalido(MultipartException ex) {
+        return build(HttpStatus.BAD_REQUEST, "No se pudo leer el archivo. Verificá que no esté dañado.");
     }
 
     @ExceptionHandler(NoResourceFoundException.class)

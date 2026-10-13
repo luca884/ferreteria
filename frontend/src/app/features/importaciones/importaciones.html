@@ -1,0 +1,435 @@
+<h1>Importar lista de precios</h1>
+
+@if (!auth.esDueno()) {
+  <p class="ayuda" role="status">Solo el Dueño puede importar listas de precios.</p>
+} @else {
+  <p class="ayuda">
+    Subí la lista del proveedor (Excel o CSV), indicá en qué columnas están el código y el costo, y
+    revisá los cambios antes de confirmar.
+  </p>
+
+  @if (erroresCampos().length > 0) {
+    <ul class="error errores-campos" role="alert">
+      @for (mensaje of erroresCampos(); track $index) {
+        <li>{{ mensaje }}</li>
+      }
+    </ul>
+  } @else if (error(); as mensaje) {
+    <p class="error" role="alert">{{ mensaje }}</p>
+  }
+
+  @if (conflicto()) {
+    <button type="button" class="regenerar" [disabled]="generando()" (click)="generarVistaPrevia()">
+      Volver a generar la vista previa
+    </button>
+  }
+
+  @if (resumen(); as r) {
+    <section class="resumen" role="status">
+      <h2>Importación aplicada</h2>
+      <p class="ayuda">Archivo {{ r.archivo }}. Los precios ya están actualizados.</p>
+      <div class="tarjetas">
+        @for (t of tarjetasDe(r.conteos); track t.etiqueta) {
+          <div class="tarjeta">{{ t.etiqueta }} <strong>{{ t.valor }}</strong></div>
+        }
+      </div>
+    </section>
+  }
+
+  <section class="paso">
+    <h2>1. Proveedor y archivo</h2>
+    <div class="fila">
+      <div class="campo">
+        <label for="proveedor">Proveedor</label>
+        <select id="proveedor" (change)="elegirProveedor($any($event.target).value)">
+          <option value="" [selected]="proveedorId() === null">Elegí un proveedor</option>
+          @for (proveedor of proveedores(); track proveedor.id) {
+            <option [value]="proveedor.id" [selected]="proveedor.id === proveedorId()">
+              {{ proveedor.nombre }}
+            </option>
+          }
+        </select>
+      </div>
+      <div class="campo">
+        <label for="archivo">Archivo de la lista</label>
+        <input
+          id="archivo"
+          type="file"
+          accept=".xlsx,.xls,.csv"
+          (change)="elegirArchivo($any($event.target))"
+        />
+        <span class="ayuda">Excel (.xlsx, .xls) o CSV, hasta 10 MB.</span>
+      </div>
+    </div>
+  </section>
+
+  @if (cargandoMuestra()) {
+    <p class="ayuda">Leyendo la lista…</p>
+  }
+
+  @if (muestra(); as m) {
+    <section class="paso">
+      <h2>2. Columnas de la lista</h2>
+      <p class="ayuda">
+        Este es el contenido del archivo: desplazate hacia los costados y hacia abajo, y usá el zoom para
+        ver más o menos celdas. Indicá qué columna es cada dato.
+      </p>
+
+      @if (m.hojas.length > 1) {
+        <div class="navegacion-hojas">
+          <button
+            type="button"
+            aria-label="Hoja anterior"
+            [disabled]="cargandoMuestra() || hoja() <= 0"
+            (click)="moverHoja(-1)"
+          >
+            ◀
+          </button>
+          <span class="hoja-actual" aria-live="polite">
+            Hoja {{ hoja() + 1 }} de {{ m.hojas.length }} · {{ m.hojas[hoja()] }}
+          </span>
+          <button
+            type="button"
+            aria-label="Hoja siguiente"
+            [disabled]="cargandoMuestra() || hoja() >= m.hojas.length - 1"
+            (click)="moverHoja(1)"
+          >
+            ▶
+          </button>
+        </div>
+      }
+
+      <div class="zoom" role="group" aria-label="Zoom de la lista">
+        <button type="button" aria-label="Alejar" [disabled]="zoomEnMinimo()" (click)="alejar()">−</button>
+        <button type="button" class="zoom-actual" aria-label="Restablecer zoom" (click)="restablecerZoom()">
+          {{ zoom() }} %
+        </button>
+        <button type="button" aria-label="Acercar" [disabled]="zoomEnMaximo()" (click)="acercar()">+</button>
+      </div>
+
+      <div
+        class="visor"
+        role="table"
+        aria-label="Contenido de la lista"
+        [attr.aria-rowcount]="m.filas.length + 1"
+        [attr.aria-colcount]="columnas().length + 1"
+        [style.--alto-fila]="altoFila() + 'px'"
+        [style.--ancho-columna]="anchoColumna() + 'px'"
+        [style.--ancho-numero]="anchoNumero() + 'px'"
+        [style.--fuente]="fuente() + 'px'"
+        [style.--alto-marco]="altoMarco + 'px'"
+      >
+        <div #encabezadoVisor class="visor-encabezado" role="row">
+          <div class="visor-encabezado-fila" [style.width]="anchoTotal() + 'px'">
+            <span class="esquina" role="columnheader">Fila</span>
+            @for (c of columnas(); track c) {
+              <span
+                class="columna"
+                role="columnheader"
+                [class]="claseDeColumna(c)"
+                [attr.title]="tituloDeColumna(c)"
+                >{{ letra(c) }}</span
+              >
+            }
+          </div>
+        </div>
+        <cdk-virtual-scroll-viewport
+          class="visor-cuerpo"
+          role="rowgroup"
+          tabindex="0"
+          [itemSize]="altoFila()"
+          (scroll)="sincronizarEncabezado($event)"
+        >
+          <div
+            *cdkVirtualFor="let fila of m.filas; trackBy: porNumero; let i = index"
+            class="visor-fila"
+            role="row"
+            [class.previa]="esPrevia(fila.numero)"
+            [attr.aria-rowindex]="i + 2"
+            [style.width]="anchoTotal() + 'px'"
+          >
+            <span class="numero" role="rowheader">{{ fila.numero }}</span>
+            @for (celda of fila.celdas; track $index) {
+              <span
+                role="cell"
+                class="celda"
+                [class]="claseDeColumna($index)"
+                [attr.title]="celda === '' ? null : celda"
+                >{{ celda }}</span
+              >
+            }
+          </div>
+        </cdk-virtual-scroll-viewport>
+      </div>
+      <p class="visor-conteo ayuda">
+        {{ m.filas.length | number }} {{ m.filas.length === 1 ? 'fila' : 'filas' }} ·
+        {{ m.columnas | number }} {{ m.columnas === 1 ? 'columna' : 'columnas' }}
+      </p>
+
+      <form class="mapeo" [formGroup]="form" novalidate>
+        <div class="fila">
+          <div class="campo">
+            <label for="filaDesde">Primera fila de datos</label>
+            <input id="filaDesde" type="number" min="1" formControlName="filaDesde" />
+            @if (form.controls.filaDesde.invalid) {
+              <span class="campo-error">Indicá la primera fila de datos (1 o más).</span>
+            }
+          </div>
+          <div class="campo">
+            <label for="columnaCodigo">Columna del código</label>
+            <select id="columnaCodigo" formControlName="columnaCodigo">
+              <option [ngValue]="null">Elegí la columna</option>
+              @for (c of columnas(); track c) {
+                <option [ngValue]="c">{{ letra(c) }}</option>
+              }
+            </select>
+          </div>
+          <div class="campo">
+            <label for="columnaDescripcion">Columna de la descripción (opcional)</label>
+            <select id="columnaDescripcion" formControlName="columnaDescripcion">
+              <option [ngValue]="null">Sin descripción</option>
+              @for (c of columnas(); track c) {
+                <option [ngValue]="c">{{ letra(c) }}</option>
+              }
+            </select>
+          </div>
+          <div class="campo">
+            <label for="columnaCosto">Columna del costo</label>
+            <select id="columnaCosto" formControlName="columnaCosto">
+              <option [ngValue]="null">Elegí la columna</option>
+              @for (c of columnas(); track c) {
+                <option [ngValue]="c">{{ letra(c) }}</option>
+              }
+            </select>
+          </div>
+        </div>
+
+        <div class="fila">
+          <label class="casilla" for="listaIncluyeIva">
+            <input id="listaIncluyeIva" type="checkbox" formControlName="listaIncluyeIva" />
+            La lista incluye IVA
+          </label>
+        </div>
+
+        <div class="fila">
+          <div class="campo">
+            <label for="bonificacion1">Bonificación 1 (%)</label>
+            <input id="bonificacion1" type="number" min="0" max="100" step="0.01" formControlName="bonificacion1" />
+            @if (form.controls.bonificacion1.invalid) {
+              <span class="campo-error">La bonificación 1 tiene que estar entre 0 y 100.</span>
+            }
+          </div>
+          <div class="campo">
+            <label for="bonificacion2">Bonificación 2 (%)</label>
+            <input id="bonificacion2" type="number" min="0" max="100" step="0.01" formControlName="bonificacion2" />
+            @if (form.controls.bonificacion2.invalid) {
+              <span class="campo-error">La bonificación 2 tiene que estar entre 0 y 100.</span>
+            }
+          </div>
+          <div class="campo">
+            <label for="bonificacion3">Bonificación 3 (%)</label>
+            <input id="bonificacion3" type="number" min="0" max="100" step="0.01" formControlName="bonificacion3" />
+            @if (form.controls.bonificacion3.invalid) {
+              <span class="campo-error">La bonificación 3 tiene que estar entre 0 y 100.</span>
+            }
+          </div>
+        </div>
+        <p class="ayuda ayuda-bonificaciones">
+          Las bonificaciones se aplican en cascada, una sobre otra, y se guardan en el proveedor recién
+          al confirmar la importación. Dejá vacía la que no corresponda.
+        </p>
+        <button type="button" class="generar" [disabled]="generando()" (click)="generarVistaPrevia()">
+          Ver vista previa
+        </button>
+      </form>
+    </section>
+  }
+
+  @if (vistaPrevia(); as vp) {
+    <section class="paso vista-previa">
+      <h2>3. Vista previa</h2>
+      <p class="ayuda">Todavía no se cambió nada. Revisá lo que va a pasar antes de confirmar.</p>
+
+      <div class="tarjetas">
+        @for (t of tarjetasDe(vp.conteos); track t.etiqueta) {
+          <div class="tarjeta">{{ t.etiqueta }} <strong>{{ t.valor }}</strong></div>
+        }
+      </div>
+
+      @if (vp.detalleRecortado) {
+        <p class="ayuda recortado">
+          Se muestran solo las primeras 1.000 filas de cada detalle; los contadores incluyen todas las
+          filas.
+        </p>
+      }
+
+      @if (vp.advertencias.length > 0) {
+        <h3>Advertencias</h3>
+        <ul class="advertencias">
+          @for (a of vp.advertencias; track $index) {
+            <li>
+              @if (a.fila !== null) {
+                <strong>Fila {{ a.fila }}{{ a.codigo ? ' (' + a.codigo + ')' : '' }}:</strong>
+              }
+              {{ a.mensaje }}
+            </li>
+          }
+        </ul>
+      }
+
+      @if (vp.cambios.length > 0) {
+        <h3>Cambios de costo</h3>
+        <div class="grilla-contenedor">
+          <table class="cambios">
+            <thead>
+              <tr>
+                <th>Fila</th>
+                <th>Código</th>
+                <th>Descripción</th>
+                <th class="num">Precio de lista</th>
+                <th class="num">Costo anterior</th>
+                <th class="num">Costo nuevo</th>
+                <th class="num">Precio anterior</th>
+                <th class="num">Precio nuevo</th>
+                <th>Cambio</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (c of vp.cambios; track c.fila) {
+                <tr [class.fuerte]="c.variacionFuerte">
+                  <td>{{ c.fila }}</td>
+                  <td>{{ c.codigoProveedor }}</td>
+                  <td>
+                    {{ c.descripcion }}
+                    @if (!c.activo) {
+                      <span class="etiqueta">Inactivo</span>
+                    }
+                  </td>
+                  <td class="num">{{ c.precioLista | number: '1.2-2' }}</td>
+                  <td class="num">{{ c.costoAnterior | number: '1.2-2' }}</td>
+                  <td class="num">
+                    {{ c.costoNuevo | number: '1.2-2' }}
+                    @if (c.variacionFuerte) {
+                      <span class="etiqueta etiqueta-fuerte">Variación fuerte</span>
+                    }
+                  </td>
+                  <td class="num">{{ c.precioAnterior | number: '1.2-2' }}</td>
+                  <td class="num">{{ c.precioNuevo | number: '1.2-2' }}</td>
+                  <td>
+                    @if (tipoDeCambio(c) === 'Sube') {
+                      <span class="etiqueta etiqueta-sube">Sube</span>
+                    } @else {
+                      <span class="etiqueta etiqueta-baja">Baja</span>
+                    }
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+
+      @if (vp.nuevos.length > 0) {
+        <h3>Artículos nuevos</h3>
+        <div class="grilla-contenedor">
+          <table class="nuevos">
+            <thead>
+              <tr>
+                <th>Fila</th>
+                <th>Código</th>
+                <th>Descripción</th>
+                <th class="num">Precio de lista</th>
+                <th class="num">Costo</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (n of vp.nuevos; track n.fila) {
+                <tr>
+                  <td>{{ n.fila }}</td>
+                  <td>{{ n.codigo }}</td>
+                  <td>{{ n.descripcion }}</td>
+                  <td class="num">{{ n.precioLista | number: '1.2-2' }}</td>
+                  <td class="num">{{ n.costo | number: '1.2-2' }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+
+      @if (vp.errores.length > 0) {
+        <h3>Filas con error (no se importan)</h3>
+        <div class="grilla-contenedor">
+          <table class="errores">
+            <thead>
+              <tr>
+                <th>Fila</th>
+                <th>Código</th>
+                <th>Motivo</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (e of vp.errores; track $index) {
+                <tr>
+                  <td>{{ e.fila ?? '—' }}</td>
+                  <td>{{ e.codigo ?? '—' }}</td>
+                  <td>{{ e.mensaje }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+
+      @if (vp.noEstan.length > 0) {
+        <details class="no-estan">
+          <summary>No están en la lista ({{ vp.noEstan.length }})</summary>
+          <p class="ayuda">Artículos activos del proveedor que no figuran en el archivo. No se tocan.</p>
+          <table>
+            <thead>
+              <tr>
+                <th>Código interno</th>
+                <th>Código del proveedor</th>
+                <th>Descripción</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (a of vp.noEstan; track a.id) {
+                <tr>
+                  <td>{{ a.codigoInterno }}</td>
+                  <td>{{ a.codigoProveedor ?? '—' }}</td>
+                  <td>{{ a.descripcion }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </details>
+      }
+
+      <h2>4. Confirmar</h2>
+      <div class="fila">
+        <label class="casilla" for="crearNuevos">
+          <input
+            id="crearNuevos"
+            type="checkbox"
+            [checked]="crearNuevos()"
+            (change)="cambiarCrearNuevos($any($event.target).checked)"
+          />
+          Crear los artículos nuevos
+        </label>
+        <div class="campo">
+          <label for="rubro">Rubro de los artículos nuevos</label>
+          <select id="rubro" [disabled]="!crearNuevos()" (change)="elegirRubro($any($event.target).value)">
+            <option value="" [selected]="rubroId() === null">Sin rubro (margen por defecto)</option>
+            @for (rubro of rubros(); track rubro.id) {
+              <option [value]="rubro.id" [selected]="rubro.id === rubroId()">{{ rubro.nombre }}</option>
+            }
+          </select>
+        </div>
+      </div>
+      <button type="button" class="confirmar" [disabled]="aplicando()" (click)="confirmar()">
+        Confirmar importación
+      </button>
+    </section>
+  }
+}

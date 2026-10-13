@@ -23,7 +23,8 @@ public record ArticuloResponse(
         BigDecimal stockActual,
         BigDecimal stockMinimo,
         String ubicacion,
-        boolean activo) {
+        boolean activo,
+        BigDecimal precioListaProveedor) {
 
     public static ArticuloResponse from(Articulo articulo) {
         return new ArticuloResponse(
@@ -42,6 +43,7 @@ public record ArticuloResponse(
                 articulo.getStockActual(),
                 articulo.getStockMinimo(),
                 articulo.getUbicacion(),
-                articulo.isActivo());
+                articulo.isActivo(),
+                articulo.getPrecioListaProveedor());
     }
 }

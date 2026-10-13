@@ -6,6 +6,9 @@
     <a routerLink="/rubros" routerLinkActive="activo">Rubros</a>
     <a routerLink="/articulos" routerLinkActive="activo">Artículos</a>
     <a routerLink="/proveedores" routerLinkActive="activo">Proveedores</a>
+    @if (auth.esDueno()) {
+      <a routerLink="/importaciones" routerLinkActive="activo">Importar lista</a>
+    }
   </nav>
   <div class="usuario">
     <span>{{ auth.sesion()?.nombre }}</span>

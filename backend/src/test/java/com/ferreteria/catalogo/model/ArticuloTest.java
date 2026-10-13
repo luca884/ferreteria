@@ -1,6 +1,7 @@
 package com.ferreteria.catalogo.model;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.lang.reflect.Field;
 import java.math.BigDecimal;
@@ -312,5 +313,157 @@ class ArticuloTest {
         articulo.actualizar(datos("100", "35", AlicuotaIva.IVA_21), ctx(null));
 
         assertThat(articulo.isActivo()).isTrue();
+    }
+
+    // --- importacion de listas: actualizarCosto / registrarPrecioLista ---
+
+    @Test
+    @DisplayName("actualizarCosto 100 -> 120 con margen 35: el precio pasa de 170 a 200")
+    void actualizarCostoRecalculaElPrecio() {
+        Articulo articulo = articuloCon("100", "35");
+
+        Optional<CambioPrecio> cambio = articulo.actualizarCosto(bd("120"), bd("150"), ctx(null));
+
+        assertThat(articulo.getCosto()).isEqualByComparingTo("120");
+        assertThat(articulo.getPrecioFinal()).isEqualTo(bd("200.00"));
+        assertThat(cambio).isPresent();
+        assertThat(cambio.get().costoAnterior()).isEqualByComparingTo("100");
+        assertThat(cambio.get().costoNuevo()).isEqualByComparingTo("120");
+        assertThat(cambio.get().precioAnterior()).isEqualByComparingTo("170");
+        assertThat(cambio.get().precioNuevo()).isEqualByComparingTo("200");
+    }
+
+    @Test
+    @DisplayName("actualizarCosto con margen propio 50: costo 120 da precio 220")
+    void actualizarCostoConMargenPropio() {
+        Articulo articulo = articuloCon("100", "50");
+
+        articulo.actualizarCosto(bd("120"), bd("150"), ctx(null));
+
+        assertThat(articulo.getPrecioFinal()).isEqualTo(bd("220.00"));
+    }
+
+    @Test
+    @DisplayName("actualizarCosto usa el margen del rubro del contexto cuando no hay margen propio")
+    void actualizarCostoHeredaMargenDelRubro() {
+        Articulo articulo = new Articulo(FERRETERIA);
+        articulo.actualizar(datos("100", null, AlicuotaIva.IVA_21), ctx("35"));
+
+        articulo.actualizarCosto(bd("120"), bd("150"), ctx("35"));
+
+        assertThat(articulo.getMargenPorcentaje()).isNull();
+        assertThat(articulo.getPrecioFinal()).isEqualTo(bd("200.00"));
+    }
+
+    @Test
+    @DisplayName("actualizarCosto 100 -> 100,50: el precio sigue en 170 y devuelve el cambio de costo")
+    void actualizarCostoQueNoMueveElPrecioDevuelveCambio() {
+        Articulo articulo = articuloCon("100", "35");
+
+        Optional<CambioPrecio> cambio = articulo.actualizarCosto(bd("100.50"), bd("120"), ctx(null));
+
+        assertThat(articulo.getPrecioFinal()).isEqualTo(bd("170.00"));
+        assertThat(cambio).isPresent();
+        assertThat(cambio.get().costoAnterior()).isEqualByComparingTo("100");
+        assertThat(cambio.get().costoNuevo()).isEqualByComparingTo("100.50");
+        assertThat(cambio.get().precioAnterior()).isEqualByComparingTo("170");
+        assertThat(cambio.get().precioNuevo()).isEqualByComparingTo("170");
+    }
+
+    @Test
+    @DisplayName("actualizarCosto con el mismo costo (100 y 100.00) no devuelve cambio pero fija el precio de lista")
+    void actualizarCostoIgualNoDaCambio() {
+        Articulo articulo = articuloCon("100", "35");
+
+        Optional<CambioPrecio> cambio = articulo.actualizarCosto(bd("100.00"), bd("1210"), ctx(null));
+
+        assertThat(cambio).isEmpty();
+        assertThat(articulo.getPrecioFinal()).isEqualTo(bd("170.00"));
+        assertThat(articulo.getPrecioListaProveedor()).isEqualByComparingTo("1210");
+    }
+
+    @Test
+    @DisplayName("actualizarCosto sobre un articulo inactivo lo deja inactivo")
+    void actualizarCostoConservaInactivo() {
+        Articulo articulo = articuloCon("100", "35");
+        articulo.desactivar();
+
+        articulo.actualizarCosto(bd("120"), bd("150"), ctx(null));
+
+        assertThat(articulo.isActivo()).isFalse();
+        assertThat(articulo.getPrecioFinal()).isEqualTo(bd("200.00"));
+    }
+
+    @Test
+    @DisplayName("actualizarCosto no toca descripcion, rubro, margen, IVA, unidad, stock ni ubicacion")
+    void actualizarCostoNoTocaLosDemasDatos() throws Exception {
+        Articulo articulo = articuloCon("100", "35");
+        fijarStockActual(articulo, "12");
+
+        articulo.actualizarCosto(bd("120"), bd("150"), ctx(null));
+
+        assertThat(articulo.getCodigoInterno()).isEqualTo("TORN-001");
+        assertThat(articulo.getCodigoBarras()).isEqualTo("7790001000012");
+        assertThat(articulo.getCodigoProveedor()).isEqualTo("AB-12");
+        assertThat(articulo.getDescripcion()).isEqualTo("Tornillo hexagonal 1/4");
+        assertThat(articulo.getRubroId()).isEqualTo(10L);
+        assertThat(articulo.getProveedorId()).isEqualTo(20L);
+        assertThat(articulo.getMargenPorcentaje()).isEqualByComparingTo("35");
+        assertThat(articulo.getAlicuotaIva()).isEqualTo(AlicuotaIva.IVA_21);
+        assertThat(articulo.getUnidad()).isEqualTo(Unidad.UNIDAD);
+        assertThat(articulo.getStockMinimo()).isEqualByComparingTo("5");
+        assertThat(articulo.getStockActual()).isEqualByComparingTo("12");
+        assertThat(articulo.getUbicacion()).isEqualTo("Estante 3");
+    }
+
+    @Test
+    @DisplayName("actualizarCosto guarda el precio de lista a escala 2 HALF_UP")
+    void actualizarCostoGuardaPrecioListaRedondeado() {
+        Articulo articulo = articuloCon("100", "35");
+
+        articulo.actualizarCosto(bd("120"), bd("1210.005"), ctx(null));
+
+        assertThat(articulo.getPrecioListaProveedor()).isEqualTo(bd("1210.01"));
+    }
+
+    @Test
+    @DisplayName("actualizarCosto con costo negativo o null lanza IllegalArgumentException")
+    void actualizarCostoInvalido() {
+        Articulo articulo = articuloCon("100", "35");
+
+        assertThatThrownBy(() -> articulo.actualizarCosto(bd("-1"), bd("150"), ctx(null)))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> articulo.actualizarCosto(null, bd("150"), ctx(null)))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    @DisplayName("registrarPrecioLista guarda a escala 2 HALF_UP y no genera cambio de precio")
+    void registrarPrecioListaSoloGuardaElPrecioDeLista() {
+        Articulo articulo = articuloCon("100", "35");
+
+        articulo.registrarPrecioLista(bd("99.995"));
+
+        assertThat(articulo.getPrecioListaProveedor()).isEqualTo(bd("100.00"));
+        assertThat(articulo.getCosto()).isEqualByComparingTo("100");
+        assertThat(articulo.getPrecioFinal()).isEqualTo(bd("170.00"));
+    }
+
+    @Test
+    @DisplayName("un articulo nuevo tiene precioListaProveedor null")
+    void precioListaNuloPorDefecto() {
+        assertThat(articuloCon("100", "35").getPrecioListaProveedor()).isNull();
+    }
+
+    @Test
+    @DisplayName("actualizar (edicion de CU-03) no toca el precio de lista del proveedor")
+    void actualizarNoTocaElPrecioDeLista() {
+        Articulo articulo = articuloCon("100", "35");
+        articulo.registrarPrecioLista(bd("1210"));
+
+        articulo.actualizar(datos("200", "50", AlicuotaIva.IVA_21), ctx(null));
+        articulo.recalcularPrecio(ctx("40"));
+
+        assertThat(articulo.getPrecioListaProveedor()).isEqualByComparingTo("1210");
     }
 }

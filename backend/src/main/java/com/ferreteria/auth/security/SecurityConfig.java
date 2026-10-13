@@ -38,13 +38,24 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, "/api/auth/login").permitAll()
                         .requestMatchers("/actuator/health").permitAll()
                         .requestMatchers("/error").permitAll()
+                        // El rol se exige ANTES de leer el multipart o el cuerpo: un Vendedor recibe 403 aunque
+                        // mande datos invalidos. El @PreAuthorize de cada metodo queda como defensa en profundidad.
+                        .requestMatchers("/api/importaciones/**").hasRole("DUENO")
                         .anyRequest().authenticated())
-                .exceptionHandling(e -> e.authenticationEntryPoint((request, response, ex) -> {
-                    response.setStatus(401);
-                    response.setContentType(MediaType.APPLICATION_JSON_VALUE);
-                    response.setCharacterEncoding("UTF-8");
-                    response.getWriter().write("{\"status\":401,\"message\":\"No autenticado\"}");
-                }))
+                .exceptionHandling(e -> e
+                        .authenticationEntryPoint((request, response, ex) -> {
+                            response.setStatus(401);
+                            response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+                            response.setCharacterEncoding("UTF-8");
+                            response.getWriter().write("{\"status\":401,\"message\":\"No autenticado\"}");
+                        })
+                        // Mismo cuerpo que el 403 de @PreAuthorize (GlobalExceptionHandler.accessDenied).
+                        .accessDeniedHandler((request, response, ex) -> {
+                            response.setStatus(403);
+                            response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+                            response.setCharacterEncoding("UTF-8");
+                            response.getWriter().write("{\"status\":403,\"message\":\"No tenes permiso para hacer esto\"}");
+                        }))
                 .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class)
                 .addFilterAfter(new TenantFilter(), JwtAuthenticationFilter.class);
 

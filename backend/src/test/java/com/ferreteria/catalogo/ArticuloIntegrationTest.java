@@ -77,6 +77,12 @@ class ArticuloIntegrationTest extends IntegrationTestBase {
         return articulo.get("precioFinal").decimalValue();
     }
 
+    /** El campo no viene o viene en null (la serializacion no deja claro cual de las dos). */
+    private static boolean sinValor(JsonNode nodo, String campo) {
+        JsonNode valor = nodo.path(campo);
+        return valor.isMissingNode() || valor.isNull();
+    }
+
     private long usuarioId(String email) {
         return jdbc.queryForObject("select id from usuario where email = ?", Long.class, email);
     }
@@ -782,6 +788,61 @@ class ArticuloIntegrationTest extends IntegrationTestBase {
                 .andExpect(jsonPath("$.stockActual", is(12.0)));
 
         assertThat((BigDecimal) filaDeArticulo(id).get("stock_actual")).isEqualByComparingTo("12");
+    }
+
+    // --- Precio de lista del proveedor (CU-04, R-036) ---
+
+    @Test
+    void unArticuloCargadoAManoNoTienePrecioDeListaDelProveedor() throws Exception {
+        JsonNode creado = crear(duenoA, pedido(unico("PLN")));
+        long id = creado.get("id").asLong();
+
+        assertThat(sinValor(creado, "precioListaProveedor")).isTrue();
+        getResult("/api/articulos/" + id, duenoA)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.precioListaProveedor").doesNotExist());
+    }
+
+    @Test
+    void laRespuestaMuestraElPrecioDeListaFijadoPorLaImportacion() throws Exception {
+        long id = crear(duenoA, pedido(unico("PLV"))).get("id").asLong();
+        jdbc.update("update articulo set precio_lista_proveedor = 1210.00 where id = ?", id);
+
+        getResult("/api/articulos/" + id, duenoA)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.precioListaProveedor", is(1210.0)));
+        getResult("/api/articulos/" + id, vendedorA)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.precioListaProveedor", is(1210.0)));
+    }
+
+    @Test
+    void unPutConservaElPrecioDeListaConYSinCambioDeCostoAunqueElCuerpoLoTraiga() throws Exception {
+        ObjectNode p = pedido(unico("PLP"));
+        long id = crear(duenoA, p).get("id").asLong();
+        jdbc.update("update articulo set precio_lista_proveedor = 1210.00 where id = ?", id);
+
+        p.put("descripcion", "Solo descripcion").put("precioListaProveedor", new BigDecimal("1"));
+        putJson("/api/articulos/" + id, duenoA, texto(p))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.precioListaProveedor", is(1210.0)));
+        assertThat((BigDecimal) filaDeArticulo(id).get("precio_lista_proveedor")).isEqualByComparingTo("1210.00");
+
+        p.put("costo", new BigDecimal("200")).put("precioListaProveedor", new BigDecimal("2"));
+        putJson("/api/articulos/" + id, duenoA, texto(p))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.precioListaProveedor", is(1210.0)));
+        assertThat((BigDecimal) filaDeArticulo(id).get("precio_lista_proveedor")).isEqualByComparingTo("1210.00");
+    }
+
+    @Test
+    void laApiNoAceptaPrecioDeListaEnElAlta() throws Exception {
+        ObjectNode p = pedido(unico("PLA")).put("precioListaProveedor", new BigDecimal("500"));
+
+        JsonNode creado = crear(duenoA, p);
+
+        assertThat(sinValor(creado, "precioListaProveedor")).isTrue();
+        assertThat(filaDeArticulo(creado.get("id").asLong()).get("precio_lista_proveedor")).isNull();
     }
 
     // --- Aislamiento de escrituras (R-010, R-011) ---
