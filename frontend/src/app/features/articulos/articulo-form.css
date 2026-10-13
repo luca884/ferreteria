@@ -20,15 +20,6 @@ h1 { margin: 0 0 4px; }
 .campo { display: flex; flex-direction: column; gap: 4px; }
 .campo.ancho { grid-column: span 2; }
 label { font-weight: 600; }
-select {
-  font: inherit;
-  padding: 10px 12px;
-  border: 1px solid var(--borde);
-  border-radius: 8px;
-  background: var(--superficie);
-  color: var(--texto);
-}
-select:focus { outline: 2px solid var(--acento); outline-offset: 1px; }
 .pista { color: var(--texto-suave); font-size: 0.85rem; }
 .acciones-form {
   grid-column: 1 / -1;

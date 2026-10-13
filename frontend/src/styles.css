@@ -21,7 +21,7 @@ body {
   line-height: 1.4;
 }
 
-input {
+input, select {
   font: inherit;
   padding: 10px 12px;
   border: 1px solid var(--borde);
@@ -29,7 +29,11 @@ input {
   background: var(--superficie);
   color: var(--texto);
 }
-input:focus { outline: 2px solid var(--acento); outline-offset: 1px; }
+input:focus, select:focus { outline: 2px solid var(--acento); outline-offset: 1px; }
+
+table { width: 100%; border-collapse: collapse; background: var(--superficie); }
+th, td { padding: 10px 12px; border-bottom: 1px solid var(--borde); text-align: left; }
+th { font-size: 0.85rem; color: var(--texto-suave); text-transform: uppercase; }
 
 button {
   font: inherit;
