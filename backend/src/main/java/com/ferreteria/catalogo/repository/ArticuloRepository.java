@@ -1,10 +1,12 @@
 package com.ferreteria.catalogo.repository;
 
 import com.ferreteria.catalogo.model.Articulo;
+import com.ferreteria.catalogo.model.ConsultaMostrador;
 import com.ferreteria.catalogo.model.FiltroArticulos;
 import com.ferreteria.tenant.TenantContext;
 import com.ferreteria.tenant.TenantScopedRepository;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -95,6 +97,48 @@ public interface ArticuloRepository extends TenantScopedRepository<Articulo, Lon
     @Query("select a.codigoInterno from Articulo a where a.ferreteriaId = :fid and a.codigoInterno in :codigos")
     List<String> codigosInternosEn(@Param("fid") Long ferreteriaId, @Param("codigos") Collection<String> codigos);
 
+    /**
+     * Mostrador (CU-06): los activos cuyo codigo de barras o codigo interno es exactamente codigo. La
+     * coleccion ai_ci hace la igualdad insensible a mayusculas y tildes. El de proveedor no cuenta.
+     */
+    @Query("select a from Articulo a where a.ferreteriaId = :fid and a.activo = true "
+            + "and (a.codigoBarras = :codigo or a.codigoInterno = :codigo) order by a.descripcion, a.id")
+    List<Articulo> exactosActivos(@Param("fid") Long ferreteriaId, @Param("codigo") String codigo, Pageable limite);
+
+    /** Mostrador (CU-06): true si un articulo dado de baja tiene exactamente ese codigo de barras o interno. */
+    @Query("select count(a) > 0 from Articulo a where a.ferreteriaId = :fid and a.activo = false "
+            + "and (a.codigoBarras = :codigo or a.codigoInterno = :codigo)")
+    boolean hayDadoDeBajaConCodigo(@Param("fid") Long ferreteriaId, @Param("codigo") String codigo);
+
+    /**
+     * Mostrador (CU-06): los activos que contienen TODAS las palabras (p1 a p5, ya como patron LIKE; null
+     * es un slot sin usar y no filtra), cada una en la descripcion o en cualquiera de los tres codigos.
+     * Los cinco bloques van escritos a mano para que la consulta siga siendo una constante.
+     */
+    @Query("""
+            select a from Articulo a
+            where a.ferreteriaId = :fid and a.activo = true
+              and (:p1 is null or a.descripcion like :p1 escape '\\' or a.codigoInterno like :p1 escape '\\'
+                   or a.codigoBarras like :p1 escape '\\' or a.codigoProveedor like :p1 escape '\\')
+              and (:p2 is null or a.descripcion like :p2 escape '\\' or a.codigoInterno like :p2 escape '\\'
+                   or a.codigoBarras like :p2 escape '\\' or a.codigoProveedor like :p2 escape '\\')
+              and (:p3 is null or a.descripcion like :p3 escape '\\' or a.codigoInterno like :p3 escape '\\'
+                   or a.codigoBarras like :p3 escape '\\' or a.codigoProveedor like :p3 escape '\\')
+              and (:p4 is null or a.descripcion like :p4 escape '\\' or a.codigoInterno like :p4 escape '\\'
+                   or a.codigoBarras like :p4 escape '\\' or a.codigoProveedor like :p4 escape '\\')
+              and (:p5 is null or a.descripcion like :p5 escape '\\' or a.codigoInterno like :p5 escape '\\'
+                   or a.codigoBarras like :p5 escape '\\' or a.codigoProveedor like :p5 escape '\\')
+            order by a.descripcion, a.id
+            """)
+    List<Articulo> coincidenciasMostrador(
+            @Param("fid") Long ferreteriaId,
+            @Param("p1") String p1,
+            @Param("p2") String p2,
+            @Param("p3") String p3,
+            @Param("p4") String p4,
+            @Param("p5") String p5,
+            Pageable limite);
+
     /** Tamano de lote del IN de codigosInternosOcupadosScoped. */
     int LOTE_CODIGOS_INTERNOS = 1000;
 
@@ -132,6 +176,23 @@ public interface ArticuloRepository extends TenantScopedRepository<Articulo, Lon
     default long contarScoped(FiltroArticulos filtro) {
         return contar(TenantContext.requireFerreteriaId(), filtro.proveedorId(), filtro.rubroId(),
                 filtro.patron(), filtro.incluirInactivos());
+    }
+
+    /** Hasta limite activos con ese codigo exacto, por descripcion y luego id (CU-06). */
+    default List<Articulo> exactosActivosScoped(String codigo, int limite) {
+        return exactosActivos(TenantContext.requireFerreteriaId(), codigo, PageRequest.of(0, limite));
+    }
+
+    /** True si la ferreteria tiene un articulo dado de baja con ese codigo exacto (CU-06). */
+    default boolean hayDadoDeBajaConCodigoScoped(String codigo) {
+        return hayDadoDeBajaConCodigo(TenantContext.requireFerreteriaId(), codigo);
+    }
+
+    /** Hasta limite activos que contienen todas las palabras de la consulta, por descripcion y luego id (CU-06). */
+    default List<Articulo> coincidenciasMostradorScoped(ConsultaMostrador consulta, int limite) {
+        return coincidenciasMostrador(TenantContext.requireFerreteriaId(),
+                consulta.patron(0), consulta.patron(1), consulta.patron(2), consulta.patron(3), consulta.patron(4),
+                PageRequest.of(0, limite));
     }
 
     /** Incluye los dados de baja. idPropio excluye al articulo que se esta editando (null en el alta). */
