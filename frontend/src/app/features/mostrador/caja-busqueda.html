@@ -1,0 +1,15 @@
+<input
+  #campo
+  type="text"
+  class="caja"
+  placeholder="Escaneá un código o escribí una descripción"
+  autocomplete="off"
+  spellcheck="false"
+  aria-label="Buscar artículo"
+  [attr.aria-controls]="controla()"
+  [attr.aria-activedescendant]="opcionActiva()"
+  [value]="texto()"
+  (input)="texto.set($any($event.target).value)"
+  (keydown)="alTeclear($event)"
+  (blur)="alPerderFoco($event)"
+/>

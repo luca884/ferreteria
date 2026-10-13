@@ -1,9 +1,14 @@
-import { Route } from '@angular/router';
+import { TestBed } from '@angular/core/testing';
+import { signal } from '@angular/core';
+import { Route, Router, provideRouter } from '@angular/router';
 import { authGuard } from './core/auth/auth.guard';
+import { AuthService } from './core/auth/auth.service';
+import { inicioPorRol } from './core/auth/inicio-por-rol';
 import { ActualizacionMasiva } from './features/actualizacion-masiva/actualizacion-masiva';
 import { ArticuloForm } from './features/articulos/articulo-form';
 import { Articulos } from './features/articulos/articulos';
 import { Importaciones } from './features/importaciones/importaciones';
+import { Mostrador } from './features/mostrador/mostrador';
 import { Proveedores } from './features/proveedores/proveedores';
 import { routes } from './app.routes';
 
@@ -63,5 +68,49 @@ describe('rutas', () => {
 
     expect(paths.indexOf('articulos/nuevo')).toBeGreaterThanOrEqual(0);
     expect(paths.indexOf('articulos/nuevo')).toBeLessThan(paths.indexOf('articulos/:id'));
+  });
+
+  it('la ruta mostrador carga el componente Mostrador', async () => {
+    const ruta = hijas().find((r) => r.path === 'mostrador');
+
+    expect(ruta).toBeDefined();
+    expect(await (ruta!.loadComponent as () => Promise<unknown>)()).toBe(Mostrador);
+  });
+
+  it('la ruta mostrador no tiene guard de rol: solo el authGuard del padre', () => {
+    const padre = routes.find((r) => r.path === '');
+    const mostrador = hijas().find((r) => r.path === 'mostrador');
+
+    expect(mostrador).toBeDefined();
+    expect(mostrador!.canActivate).toBeUndefined();
+    expect(padre!.canActivate).toEqual([authGuard]);
+  });
+
+  it('la ruta por defecto redirige según el rol con inicioPorRol', () => {
+    const inicio = hijas().find((r) => r.path === '');
+
+    expect(inicio).toBeDefined();
+    expect(inicio!.pathMatch).toBe('full');
+    expect(inicio!.redirectTo).toBe(inicioPorRol);
+  });
+
+  it('cualquier ruta desconocida vuelve a la raíz', () => {
+    const comodin = routes.find((r) => r.path === '**');
+
+    expect(comodin?.redirectTo).toBe('');
+  });
+
+  it('sin sesión, /mostrador redirige al login', async () => {
+    TestBed.configureTestingModule({
+      providers: [
+        provideRouter(routes),
+        { provide: AuthService, useValue: { autenticado: signal(false) } },
+      ],
+    });
+    const router = TestBed.inject(Router);
+
+    await router.navigateByUrl('/mostrador');
+
+    expect(router.url).toBe('/login');
   });
 });

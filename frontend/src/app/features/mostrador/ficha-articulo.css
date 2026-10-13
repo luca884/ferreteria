@@ -1,0 +1,31 @@
+.ficha {
+  background: var(--superficie);
+  border: 1px solid var(--borde);
+  border-radius: 8px;
+  padding: 20px 24px;
+}
+.descripcion {
+  margin: 0;
+  font-size: 1.5rem;
+}
+.precio {
+  margin: 8px 0 16px;
+  font-size: 3rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.datos {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 16px;
+  margin: 0;
+}
+dt {
+  font-size: 0.85rem;
+  color: var(--texto-suave);
+  text-transform: uppercase;
+}
+dd {
+  margin: 2px 0 0;
+  font-size: 1.25rem;
+}

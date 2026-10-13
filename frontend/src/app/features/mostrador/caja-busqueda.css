@@ -1,0 +1,8 @@
+:host {
+  display: block;
+}
+.caja {
+  width: 100%;
+  font-size: 1.4rem;
+  padding: 14px 16px;
+}

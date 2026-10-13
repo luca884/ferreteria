@@ -1,0 +1,24 @@
+<article class="ficha">
+  <h2 class="descripcion">{{ articulo().descripcion }}</h2>
+  <p class="precio">{{ articulo().precioFinal | number: '1.2-2' }}</p>
+  <dl class="datos">
+    <div>
+      <dt>Stock</dt>
+      <dd class="stock" [attr.data-stock]="estadoStock(articulo())">
+        {{ articulo().stockActual | number: '1.0-3' }} {{ unidadLabels[articulo().unidad] }}
+      </dd>
+    </div>
+    <div>
+      <dt>Ubicación</dt>
+      <dd class="ubicacion">{{ articulo().ubicacion ?? '—' }}</dd>
+    </div>
+    <div>
+      <dt>Código interno</dt>
+      <dd class="codigo-interno">{{ articulo().codigoInterno }}</dd>
+    </div>
+    <div>
+      <dt>Código de barras</dt>
+      <dd class="codigo-barras">{{ articulo().codigoBarras ?? '—' }}</dd>
+    </div>
+  </dl>
+</article>

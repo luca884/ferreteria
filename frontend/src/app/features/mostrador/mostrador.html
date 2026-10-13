@@ -1,0 +1,27 @@
+<h1>Mostrador</h1>
+<app-caja-busqueda
+  [texto]="texto()"
+  [controla]="listaVisible() ? listaId : null"
+  [opcionActiva]="listaVisible() ? filaId(seleccionado()) : null"
+  (textoChange)="alCambiarTexto($event)"
+  (enter)="alEnter()"
+  (mover)="alMover($event)"
+/>
+<p class="atajos">F2 buscar · Esc limpiar · ↑↓ elegir · Enter abrir</p>
+
+@if (mensaje(); as aviso) {
+  <p class="mensaje" [class.error]="aviso.grave" role="alert">{{ aviso.texto }}</p>
+}
+
+@if (ficha(); as articulo) {
+  <app-ficha-articulo [articulo]="articulo" />
+} @else if (resultado(); as r) {
+  @if (r.tipo === 'LISTA') {
+    <app-lista-resultados
+      [items]="r.items"
+      [seleccionado]="seleccionado()"
+      [hayMas]="r.hayMas"
+      (elegir)="elegir($event)"
+    />
+  }
+}

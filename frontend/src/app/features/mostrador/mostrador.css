@@ -1,0 +1,13 @@
+h1 {
+  margin: 0 0 12px;
+}
+.atajos {
+  color: var(--texto-suave);
+  font-size: 0.85rem;
+  margin: 6px 0 16px;
+}
+.mensaje {
+  font-size: 1.2rem;
+  font-weight: 600;
+  margin: 16px 0;
+}
