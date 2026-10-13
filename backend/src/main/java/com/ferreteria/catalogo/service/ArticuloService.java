@@ -6,6 +6,7 @@ import com.ferreteria.catalogo.model.Articulo;
 import com.ferreteria.catalogo.model.CambioPrecio;
 import com.ferreteria.catalogo.model.ContextoPrecio;
 import com.ferreteria.catalogo.model.DatosArticulo;
+import com.ferreteria.catalogo.model.FiltroArticulos;
 import com.ferreteria.catalogo.model.HistorialPrecio;
 import com.ferreteria.catalogo.model.OrigenPrecio;
 import com.ferreteria.catalogo.model.Rubro;
@@ -61,7 +62,7 @@ public class ArticuloService {
                 Math.max(page, 0), Math.min(Math.max(size, 1), TAMANO_MAXIMO),
                 Sort.by(Sort.Order.asc("descripcion"), Sort.Order.asc("id")));
         return PageResponse.from(
-                articuloRepository.buscarScoped(patronDeBusqueda(q), incluirInactivos, pageable),
+                articuloRepository.buscarScoped(FiltroArticulos.patronDeBusqueda(q), incluirInactivos, pageable),
                 ArticuloResponse::from);
     }
 
@@ -153,17 +154,5 @@ public class ArticuloService {
     private void guardarHistorial(Articulo articulo, Optional<CambioPrecio> cambio, Long usuarioId) {
         cambio.ifPresent(c -> historialPrecioRepository.save(
                 HistorialPrecio.de(articulo, c, OrigenPrecio.MANUAL, usuarioId)));
-    }
-
-    /** null si q esta vacia; si no, %q% con \, % y _ escapados para que se busquen como texto. */
-    private static String patronDeBusqueda(String q) {
-        if (q == null || q.isBlank()) {
-            return null;
-        }
-        String escapado = q.trim()
-                .replace("\\", "\\\\")
-                .replace("%", "\\%")
-                .replace("_", "\\_");
-        return "%" + escapado + "%";
     }
 }

@@ -1,16 +1,13 @@
 package com.ferreteria.catalogo.model;
 
+import com.ferreteria.catalogo.model.VariacionFuerte.Sujeto;
 import java.math.BigDecimal;
-import java.math.RoundingMode;
-import java.text.DecimalFormat;
-import java.text.DecimalFormatSymbols;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -27,9 +24,8 @@ import java.util.Set;
 public final class PlanificadorImportacion {
 
     /** Una variacion de costo mayor a este porcentaje (hacia arriba o abajo) genera una advertencia. */
-    public static final BigDecimal UMBRAL_VARIACION_PORCENTAJE = new BigDecimal("50");
+    public static final BigDecimal UMBRAL_VARIACION_PORCENTAJE = VariacionFuerte.UMBRAL_PORCENTAJE;
 
-    private static final BigDecimal CIEN = BigDecimal.valueOf(100);
     private static final int LARGO_MAXIMO_CODIGO_PROVEEDOR = 40;
     private static final int LARGO_MAXIMO_CODIGO_INTERNO = 30;
     private static final int LARGO_MAXIMO_DESCRIPCION = 200;
@@ -149,7 +145,7 @@ public final class PlanificadorImportacion {
             acumulado.sinCambio.add(new PrecioListaPlaneado(articulo.id(), d.precioLista()));
             return;
         }
-        Optional<String> variacion = variacionFuerte(articulo.costo(), costoNuevo, comparacion > 0);
+        Optional<String> variacion = VariacionFuerte.mensaje(Sujeto.COSTO, articulo.costo(), costoNuevo);
         variacion.ifPresent(mensaje -> acumulado.advertencias.add(aviso(d, mensaje)));
         acumulado.cambios.add(new CambioPlaneado(d.numero(), articulo.id(), d.codigo(), articulo.descripcion(),
             d.precioLista(), articulo.costo(), costoNuevo, articulo.precioFinal(),
@@ -201,38 +197,6 @@ public final class PlanificadorImportacion {
         BigDecimal margen = PrecioCalculator.margenEfectivo(
             articulo.margenPorcentaje(), ctx.margenRubro(), ctx.margenDefecto());
         return PrecioCalculator.precioFinal(costoNuevo, margen, articulo.alicuotaIva(), ctx.redondeoMultiplo());
-    }
-
-    /**
-     * Mensaje de advertencia si el costo varia mas que el umbral: |nuevo - actual| x 100 > umbral x
-     * actual, comparado en forma exacta (el limite justo no advierte). Con costo actual 0 no se puede
-     * medir la variacion.
-     */
-    private static Optional<String> variacionFuerte(BigDecimal actual, BigDecimal nuevo, boolean sube) {
-        if (actual.signum() <= 0) {
-            return Optional.empty();
-        }
-        BigDecimal diferenciaPorCien = nuevo.subtract(actual).abs().multiply(CIEN);
-        if (diferenciaPorCien.compareTo(UMBRAL_VARIACION_PORCENTAJE.multiply(actual)) <= 0) {
-            return Optional.empty();
-        }
-        String porcentaje = formatoArgentino(diferenciaPorCien.divide(actual, 2, RoundingMode.HALF_UP), "#,##0.##");
-        return Optional.of("El costo " + (sube ? "sube" : "baja") + " un " + porcentaje + " % (de " + dinero(actual)
-            + " a " + dinero(nuevo) + "). Revisá que sea correcto.");
-    }
-
-    private static String dinero(BigDecimal valor) {
-        return formatoArgentino(valor, "#,##0.00");
-    }
-
-    /** Punto de miles y coma decimal ("1.234,56"). DecimalFormat no es thread-safe: uno por llamada. */
-    private static String formatoArgentino(BigDecimal valor, String patron) {
-        DecimalFormatSymbols simbolos = new DecimalFormatSymbols(Locale.ROOT);
-        simbolos.setDecimalSeparator(',');
-        simbolos.setGroupingSeparator('.');
-        DecimalFormat formato = new DecimalFormat(patron, simbolos);
-        formato.setRoundingMode(RoundingMode.HALF_UP);
-        return formato.format(valor);
     }
 
     /** Indice por clave del codigo del proveedor; si dos comparten clave gana el primero. */

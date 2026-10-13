@@ -18,6 +18,7 @@ import com.ferreteria.catalogo.model.CambioPrecio;
 import com.ferreteria.catalogo.model.Celda;
 import com.ferreteria.catalogo.model.ConteosImportacion;
 import com.ferreteria.catalogo.model.ContextoPrecio;
+import com.ferreteria.catalogo.model.ContextosDePrecio;
 import com.ferreteria.catalogo.model.DatosArticulo;
 import com.ferreteria.catalogo.model.EntradaPlan;
 import com.ferreteria.catalogo.model.FilaLeida;
@@ -235,11 +236,8 @@ public class ImportacionService {
 
         List<Articulo> articulos = articuloRepository.deProveedorScoped(proveedor.getId());
         ConfiguracionPrecios configuracion = configuracionPreciosService.actual();
-        Map<Long, ContextoPrecio> contextoPorRubro = new HashMap<>();
-        for (Rubro rubro : rubroRepository.listarScoped()) {
-            contextoPorRubro.put(rubro.getId(), contextoDe(rubro.getMargenPorcentaje(), configuracion));
-        }
-        ContextoPrecio contextoSinRubro = contextoDe(null, configuracion);
+        ContextosDePrecio contextos = ContextosDePrecio.armar(
+                rubroRepository.listarScoped(), configuracion.margenDefectoPorcentaje(), configuracion.redondeoMultiplo());
 
         // La base devuelve los codigos como estan guardados: se normalizan igual que los del archivo.
         Set<String> ocupados = new HashSet<>();
@@ -259,32 +257,24 @@ public class ImportacionService {
         PlanImportacion plan = PlanificadorImportacion.planificar(new EntradaPlan(
                 lectura.filas(), mapeo, listaIncluyeIva, bonificaciones,
                 articulos.stream().map(ArticuloVigente::de).toList(),
-                contextoPorRubro, contextoSinRubro, ocupados, proveedor.getMapeoLista(), encabezado));
-        return new Preparacion(plan, articulos, contextoPorRubro, contextoSinRubro, encabezado);
+                contextos.porRubro(), contextos.sinRubro(), ocupados, proveedor.getMapeoLista(), encabezado));
+        return new Preparacion(plan, articulos, contextos, encabezado);
     }
 
     /** Lo que sale de preparar: el plan y lo necesario para aplicarlo sobre las entidades ya cargadas. */
     private record Preparacion(
             PlanImportacion plan,
             List<Articulo> articulos,
-            Map<Long, ContextoPrecio> contextoPorRubro,
-            ContextoPrecio contextoSinRubro,
+            ContextosDePrecio contextos,
             FilaLeida encabezado) {
 
         /** Contexto de precio de un articulo: el de su rubro, o el de los articulos sin rubro. */
         ContextoPrecio contextoDe(Articulo articulo) {
-            return contextoDeRubro(articulo.getRubroId());
+            return contextos.de(articulo.getRubroId());
         }
 
         ContextoPrecio contextoDeRubro(Long rubroId) {
-            if (rubroId == null) {
-                return contextoSinRubro;
-            }
-            ContextoPrecio contexto = contextoPorRubro.get(rubroId);
-            if (contexto == null) {
-                throw new IllegalStateException("Falta el contexto de precio del rubro " + rubroId);
-            }
-            return contexto;
+            return contextos.de(rubroId);
         }
     }
 
@@ -313,10 +303,6 @@ public class ImportacionService {
     private Proveedor buscarProveedor(Long id) {
         return proveedorRepository.findScoped(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Proveedor no encontrado"));
-    }
-
-    private static ContextoPrecio contextoDe(BigDecimal margenRubro, ConfiguracionPrecios configuracion) {
-        return new ContextoPrecio(margenRubro, configuracion.margenDefectoPorcentaje(), configuracion.redondeoMultiplo());
     }
 
     private static List<String> celdasComoTexto(FilaLeida fila) {
