@@ -50,3 +50,7 @@ button.secundario { background: transparent; color: var(--texto); border: 1px so
 
 .error { color: var(--error); margin: 8px 0; }
 .campo-error { color: var(--error); font-size: 0.85rem; }
+
+/* Estado del stock en el mostrador: rojo sin stock, amarillo bajo el mínimo (lo decide estadoStock). */
+[data-stock='sin-stock'] { color: var(--error); font-weight: 700; }
+[data-stock='bajo-minimo'] { color: #92400e; font-weight: 700; background: #fef3c7; border-radius: 4px; padding: 0 6px; }

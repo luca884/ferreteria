@@ -29,6 +29,7 @@ describe('Shell', () => {
     const el = await render(true);
 
     expect(enlaces(el)).toEqual([
+      'Mostrador',
       'Rubros',
       'Artículos',
       'Proveedores',
@@ -51,7 +52,18 @@ describe('Shell', () => {
   it('el Vendedor no ve "Importar lista" ni "Actualizar precios"', async () => {
     const el = await render(false);
 
-    expect(enlaces(el)).toEqual(['Rubros', 'Artículos', 'Proveedores']);
+    expect(enlaces(el)).toEqual(['Mostrador', 'Rubros', 'Artículos', 'Proveedores']);
     expect(el.querySelector('a[href="/actualizacion-masiva"]')).toBeNull();
+  });
+
+  it('"Mostrador" es el primer enlace y lleva a /mostrador, para el Vendedor y para el Dueño', async () => {
+    for (const dueno of [false, true]) {
+      TestBed.resetTestingModule();
+      const el = await render(dueno);
+
+      const primero = el.querySelector('nav a');
+      expect(primero?.textContent?.trim()).toBe('Mostrador');
+      expect(primero?.getAttribute('href')).toBe('/mostrador');
+    }
   });
 });

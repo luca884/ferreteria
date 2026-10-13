@@ -1,0 +1,52 @@
+.lista {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  background: var(--superficie);
+  border: 1px solid var(--borde);
+  border-radius: 8px;
+}
+.fila {
+  display: grid;
+  grid-template-columns: 1fr auto 8rem 10rem;
+  gap: 16px;
+  align-items: center;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--borde);
+  cursor: pointer;
+}
+.fila:last-child {
+  border-bottom: 0;
+}
+.fila[aria-selected='true'] {
+  background: #fff1e8;
+  box-shadow: inset 4px 0 0 var(--acento);
+}
+.datos {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.descripcion {
+  font-weight: 600;
+}
+.codigos {
+  color: var(--texto-suave);
+  font-size: 0.85rem;
+}
+.precio {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+.stock {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+.ubicacion {
+  color: var(--texto-suave);
+}
+.ayuda {
+  color: var(--texto-suave);
+  margin: 8px 0 0;
+}

@@ -1,5 +1,6 @@
 import { Routes } from '@angular/router';
 import { authGuard } from './core/auth/auth.guard';
+import { inicioPorRol } from './core/auth/inicio-por-rol';
 
 export const routes: Routes = [
   { path: 'login', loadComponent: () => import('./features/login/login').then((m) => m.Login) },
@@ -8,7 +9,12 @@ export const routes: Routes = [
     canActivate: [authGuard],
     loadComponent: () => import('./layout/shell').then((m) => m.Shell),
     children: [
-      { path: '', pathMatch: 'full', redirectTo: 'rubros' },
+      { path: '', pathMatch: 'full', redirectTo: inicioPorRol },
+      // Sin guard de rol: lo usan el Vendedor y el Dueño.
+      {
+        path: 'mostrador',
+        loadComponent: () => import('./features/mostrador/mostrador').then((m) => m.Mostrador),
+      },
       { path: 'rubros', loadComponent: () => import('./features/rubros/rubros').then((m) => m.Rubros) },
       {
         path: 'articulos',

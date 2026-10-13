@@ -1,0 +1,34 @@
+<ul
+  class="lista"
+  role="listbox"
+  [id]="listaId"
+  aria-label="Resultados de la búsqueda"
+  (mousedown)="$event.preventDefault()"
+>
+  @for (articulo of items(); track articulo.id; let i = $index) {
+    <li
+      #fila
+      role="option"
+      class="fila"
+      [id]="filaId(i)"
+      [attr.aria-selected]="i === seleccionado()"
+      (click)="elegir.emit(i)"
+    >
+      <div class="datos">
+        <span class="descripcion">{{ articulo.descripcion }}</span>
+        <span class="codigos"
+          >{{ articulo.codigoInterno
+          }}{{ articulo.codigoBarras ? ' · ' + articulo.codigoBarras : '' }}</span
+        >
+      </div>
+      <span class="precio">{{ articulo.precioFinal | number: '1.2-2' }}</span>
+      <span class="stock" [attr.data-stock]="estadoStock(articulo)">
+        {{ articulo.stockActual | number: '1.0-3' }} {{ unidadLabels[articulo.unidad] }}
+      </span>
+      <span class="ubicacion">{{ articulo.ubicacion ?? '—' }}</span>
+    </li>
+  }
+</ul>
+@if (hayMas()) {
+  <p class="ayuda">Hay más resultados. Escribí más para afinar la búsqueda.</p>
+}

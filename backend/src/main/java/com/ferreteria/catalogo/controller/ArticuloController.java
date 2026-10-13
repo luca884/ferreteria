@@ -3,7 +3,9 @@ package com.ferreteria.catalogo.controller;
 import com.ferreteria.auth.security.AuthUser;
 import com.ferreteria.catalogo.dto.ArticuloRequest;
 import com.ferreteria.catalogo.dto.ArticuloResponse;
+import com.ferreteria.catalogo.dto.BusquedaMostradorResponse;
 import com.ferreteria.catalogo.service.ArticuloService;
+import com.ferreteria.catalogo.service.BusquedaMostradorService;
 import com.ferreteria.common.PageResponse;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
@@ -20,15 +22,20 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
-/** Lectura para Dueno y Vendedor (ambos ven costo y margen); las escrituras solo para el Dueno. */
+/**
+ * Lectura para Dueno y Vendedor (ambos ven costo y margen); las escrituras solo para el Dueno. La busqueda
+ * del mostrador (/mostrador) tambien es para los dos, pero con un DTO fino: sin costo ni margen.
+ */
 @RestController
 @RequestMapping("/api/articulos")
 public class ArticuloController {
 
     private final ArticuloService articuloService;
+    private final BusquedaMostradorService busquedaMostradorService;
 
-    public ArticuloController(ArticuloService articuloService) {
+    public ArticuloController(ArticuloService articuloService, BusquedaMostradorService busquedaMostradorService) {
         this.articuloService = articuloService;
+        this.busquedaMostradorService = busquedaMostradorService;
     }
 
     /** Pagina de 20 por defecto (el servicio la acota entre 1 y 100), solo activos salvo incluirInactivos. */
@@ -39,6 +46,12 @@ public class ArticuloController {
             @RequestParam(defaultValue = "20") int size,
             @RequestParam(defaultValue = "false") boolean incluirInactivos) {
         return articuloService.listar(q, page, size, incluirInactivos);
+    }
+
+    /** CU-06. La ruta literal le gana a /{id}. Un q ausente o en blanco da SIN_RESULTADOS, no el catalogo. */
+    @GetMapping("/mostrador")
+    public BusquedaMostradorResponse buscarEnMostrador(@RequestParam(required = false) String q) {
+        return busquedaMostradorService.buscar(q);
     }
 
     /** Tambien devuelve los articulos dados de baja. */
