@@ -27,6 +27,11 @@ export const routes: Routes = [
         path: 'proveedores',
         loadComponent: () => import('./features/proveedores/proveedores').then((m) => m.Proveedores),
       },
+      {
+        path: 'importaciones',
+        loadComponent: () =>
+          import('./features/importaciones/importaciones').then((m) => m.Importaciones),
+      },
     ],
   },
   { path: '**', redirectTo: '' },

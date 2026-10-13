@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.ferreteria.catalogo.model.Articulo;
 import com.ferreteria.catalogo.repository.ArticuloRepository;
 import com.ferreteria.tenant.TenantContext;
+import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -230,5 +231,96 @@ class ArticuloRepositoryQueriesTest {
         assertThat(herederos).extracting(Articulo::getCodigoInterno).containsExactlyInAnyOrder("HER-1", "HER-2");
         // Aunque se pida el rubro de B, el scope del tenant lo deja afuera.
         assertThat(articuloRepository.heredanMargenDeRubroScoped(rubroB)).isEmpty();
+    }
+
+    // --- Importacion de listas (CU-04): artefactos de un proveedor y codigos internos ocupados ---
+
+    @Test
+    void deProveedorTraeActivosEInactivosSoloDeEseProveedorYEsaFerreteria() {
+        Long a = ferreteria("30-71000023-3");
+        Long b = ferreteria("30-71000024-4");
+        Long provA1 = proveedor(a, "Proveedor 1");
+        Long provA2 = proveedor(a, "Proveedor 2");
+        Long provB = proveedor(b, "Proveedor 1");
+        articulo(a, "P1-ACT", "Activo del 1", null, provA1, "C-1", null, null, true);
+        articulo(a, "P1-INA", "Inactivo del 1", null, provA1, "C-2", null, null, false);
+        articulo(a, "P1-SIN", "Del 1 sin codigo de proveedor", null, provA1, null, null, null, true);
+        articulo(a, "P2-ACT", "Activo del 2", null, provA2, "C-1", null, null, true);
+        articulo(a, "SIN-PROV", "Sin proveedor", null, null, null, null, null, true);
+        articulo(b, "B-ACT", "De B", null, provB, "C-1", null, null, true);
+        TenantContext.setCurrentFerreteriaId(a);
+
+        List<Articulo> delProveedor = articuloRepository.deProveedorScoped(provA1);
+
+        assertThat(delProveedor).extracting(Articulo::getCodigoInterno)
+                .containsExactlyInAnyOrder("P1-ACT", "P1-INA", "P1-SIN");
+        assertThat(articuloRepository.deProveedorScoped(provA2))
+                .extracting(Articulo::getCodigoInterno).containsExactly("P2-ACT");
+        // El proveedor de B pedido desde A no devuelve nada: el scope del tenant lo deja afuera.
+        assertThat(articuloRepository.deProveedorScoped(provB)).isEmpty();
+    }
+
+    @Test
+    void deProveedorDeUnProveedorSinArticulosDevuelveListaVacia() {
+        Long a = ferreteria("30-71000025-5");
+        Long vacio = proveedor(a, "Sin articulos");
+        TenantContext.setCurrentFerreteriaId(a);
+
+        assertThat(articuloRepository.deProveedorScoped(vacio)).isEmpty();
+    }
+
+    @Test
+    void codigosInternosOcupadosDevuelveLosExistentesIncluidosLosInactivosComoEstanGuardados() {
+        Long a = ferreteria("30-71000026-6");
+        articulo(a, "VALV-1", "Valvula", null, null, null, null, null, true);
+        articulo(a, "VALV-2", "Valvula baja", null, null, null, null, null, false);
+        TenantContext.setCurrentFerreteriaId(a);
+
+        List<String> ocupados = articuloRepository.codigosInternosOcupadosScoped(
+                List.of("VALV-1", "VALV-2", "VALV-3"));
+
+        assertThat(ocupados).containsExactlyInAnyOrder("VALV-1", "VALV-2");
+    }
+
+    @Test
+    void codigosInternosOcupadosNoDistingueMayusculasNiAcentos() {
+        Long a = ferreteria("30-71000027-7");
+        articulo(a, "TÉE-10", "Te de 10", null, null, null, null, null, true);
+        articulo(a, "ABC-1", "Abc", null, null, null, null, null, true);
+        TenantContext.setCurrentFerreteriaId(a);
+
+        List<String> ocupados = articuloRepository.codigosInternosOcupadosScoped(List.of("tee-10", "abc-1", "xyz-9"));
+
+        // Vuelven tal como estan guardados.
+        assertThat(ocupados).containsExactlyInAnyOrder("TÉE-10", "ABC-1");
+    }
+
+    @Test
+    void codigosInternosOcupadosPartePorLotesDe1000() {
+        Long a = ferreteria("30-71000028-8");
+        articulo(a, "LOTE-0005", "Primer lote", null, null, null, null, null, true);
+        articulo(a, "LOTE-1500", "Segundo lote", null, null, null, null, null, true);
+        articulo(a, "LOTE-2499", "Tercer lote", null, null, null, null, null, true);
+        articulo(a, "LOTE-FUERA", "No se pide", null, null, null, null, null, true);
+        TenantContext.setCurrentFerreteriaId(a);
+        List<String> pedidos = new ArrayList<>();
+        for (int i = 0; i < 2500; i++) {
+            pedidos.add(String.format("LOTE-%04d", i));
+        }
+
+        List<String> ocupados = articuloRepository.codigosInternosOcupadosScoped(pedidos);
+
+        assertThat(ocupados).containsExactlyInAnyOrder("LOTE-0005", "LOTE-1500", "LOTE-2499");
+    }
+
+    @Test
+    void codigosInternosOcupadosEstaAcotadoAlTenantYAceptaListaVacia() {
+        Long a = ferreteria("30-71000029-9");
+        Long b = ferreteria("30-71000030-0");
+        articulo(b, "SOLO-DE-B", "De B", null, null, null, null, null, true);
+        TenantContext.setCurrentFerreteriaId(a);
+
+        assertThat(articuloRepository.codigosInternosOcupadosScoped(List.of("SOLO-DE-B"))).isEmpty();
+        assertThat(articuloRepository.codigosInternosOcupadosScoped(List.of())).isEmpty();
     }
 }

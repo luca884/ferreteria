@@ -19,6 +19,15 @@ spring:
       hibernate:
         jdbc:
           time_zone: UTC
+          # Las actualizaciones de la importacion de listas se agrupan; los INSERT con IDENTITY no.
+          batch_size: 50
+        order_inserts: true
+        order_updates: true
+  servlet:
+    multipart:
+      # Listas de proveedores: 10 MB de archivo y lugar para la parte "datos" (JSON).
+      max-file-size: 10MB
+      max-request-size: 11MB
   flyway:
     enabled: true
     locations: classpath:db/migration
@@ -27,6 +36,11 @@ server:
   port: ${PORT:8080}
   error:
     include-message: never
+  compression:
+    # La muestra de una hoja de 20.000 filas pesa varios MB de JSON; comprimido baja ~10 veces.
+    enabled: true
+    mime-types: application/json
+    min-response-size: 2KB
 
 management:
   endpoints:

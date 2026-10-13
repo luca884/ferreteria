@@ -8,9 +8,11 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
+import org.springframework.test.web.servlet.request.MockMultipartHttpServletRequestBuilder;
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders;
 import org.testcontainers.containers.MySQLContainer;
 
@@ -83,6 +85,25 @@ public abstract class IntegrationTestBase {
                 .header("Authorization", "Bearer " + token)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(json));
+    }
+
+    /**
+     * POST multipart: la parte "archivo" y, si no es null, la parte "datos" como JSON. Se llama
+     * postMultipart y no multipart para no tapar al builder estatico de MockMvcRequestBuilders.
+     */
+    protected ResultActions postMultipart(String url, String token, MockMultipartFile archivo, Object datos)
+            throws Exception {
+        MockMultipartHttpServletRequestBuilder pedido = MockMvcRequestBuilders.multipart(url).file(archivo);
+        if (datos != null) {
+            byte[] json = datos instanceof byte[] crudo ? crudo : objectMapper.writeValueAsBytes(datos);
+            pedido.file(new MockMultipartFile("datos", "", MediaType.APPLICATION_JSON_VALUE, json));
+        }
+        return mvc.perform(pedido.header("Authorization", "Bearer " + token));
+    }
+
+    /** La parte "archivo" de una importacion. */
+    protected static MockMultipartFile archivo(String nombre, byte[] contenido) {
+        return new MockMultipartFile("archivo", nombre, MediaType.APPLICATION_OCTET_STREAM_VALUE, contenido);
     }
 
     protected ResultActions putJson(String url, String token, String json) throws Exception {

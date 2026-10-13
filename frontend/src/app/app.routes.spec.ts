@@ -1,6 +1,7 @@
 import { Route } from '@angular/router';
 import { ArticuloForm } from './features/articulos/articulo-form';
 import { Articulos } from './features/articulos/articulos';
+import { Importaciones } from './features/importaciones/importaciones';
 import { Proveedores } from './features/proveedores/proveedores';
 import { routes } from './app.routes';
 
@@ -12,6 +13,13 @@ describe('rutas', () => {
 
     expect(ruta).toBeDefined();
     expect(await (ruta!.loadComponent as () => Promise<unknown>)()).toBe(Proveedores);
+  });
+
+  it('la ruta importaciones carga el componente Importaciones', async () => {
+    const ruta = hijas().find((r) => r.path === 'importaciones');
+
+    expect(ruta).toBeDefined();
+    expect(await (ruta!.loadComponent as () => Promise<unknown>)()).toBe(Importaciones);
   });
 
   it('la ruta articulos carga el componente Articulos', async () => {

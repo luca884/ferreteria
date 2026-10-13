@@ -5,6 +5,8 @@ import com.ferreteria.support.IntegrationTestBase;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.math.BigDecimal;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.is;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -279,6 +281,118 @@ class ProveedorIntegrationTest extends IntegrationTestBase {
         assertThat(jdbc.queryForObject(
                 "select proveedor_id from articulo where ferreteria_id = ? and codigo_interno = ?",
                 Long.class, ferreteriaId, codigo)).isEqualTo(id);
+    }
+
+    // --- Configuracion de la lista (CU-04): solo la fija una importacion aplicada ---
+
+    private static final String MAPEO_JSON = "{\"hoja\":0,\"filaDesde\":2,\"columnaCodigo\":0,"
+            + "\"columnaDescripcion\":1,\"columnaCosto\":2,"
+            + "\"encabezados\":{\"codigo\":\"Codigo\",\"descripcion\":\"Detalle\",\"costo\":\"Precio\"}}";
+
+    /** Carga a mano lo que despues dejaria una importacion: mapeo, IVA incluido y bonificacion 40 + 10. */
+    private void cargarLista(long id) {
+        jdbc.update("update proveedor set mapeo_lista = ?, lista_incluye_iva = true, "
+                + "bonificacion1 = 40.00, bonificacion2 = 10.00 where id = ?", MAPEO_JSON, id);
+    }
+
+    @Test
+    void unProveedorNuevoNoTieneListaConfigurada() throws Exception {
+        long id = crear(duenoA, unico("SinLista")).get("id").asLong();
+
+        getResult("/api/proveedores/" + id, duenoA)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.mapeoLista").doesNotExist())
+                .andExpect(jsonPath("$.listaIncluyeIva", is(false)))
+                .andExpect(jsonPath("$.bonificacion1").doesNotExist())
+                .andExpect(jsonPath("$.bonificacion2").doesNotExist())
+                .andExpect(jsonPath("$.bonificacion3").doesNotExist());
+    }
+
+    @Test
+    void elAltaIgnoraLosCamposDeLaListaDelCuerpo() throws Exception {
+        var body = objectMapper.createObjectNode()
+                .put("nombre", unico("AltaConLista"))
+                .put("listaIncluyeIva", true)
+                .put("bonificacion1", 25);
+
+        long id = objectMapper.readTree(postJson("/api/proveedores", duenoA, objectMapper.writeValueAsString(body))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.listaIncluyeIva", is(false)))
+                .andExpect(jsonPath("$.bonificacion1").doesNotExist())
+                .andReturn().getResponse().getContentAsString()).get("id").asLong();
+
+        assertThat(jdbc.queryForObject("select lista_incluye_iva from proveedor where id = ?", Boolean.class, id))
+                .isFalse();
+        assertThat(jdbc.queryForObject("select bonificacion1 from proveedor where id = ?", BigDecimal.class, id))
+                .isNull();
+    }
+
+    @Test
+    void elPutIgnoraLosCamposDeLaListaYConservaLoGuardado() throws Exception {
+        String nombre = unico("PutConLista");
+        long id = crear(duenoA, nombre).get("id").asLong();
+        cargarLista(id);
+        var body = objectMapper.createObjectNode()
+                .put("nombre", nombre)
+                .put("bonificacion1", 99)
+                .put("listaIncluyeIva", false);
+
+        putJson("/api/proveedores/" + id, duenoA, objectMapper.writeValueAsString(body))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.bonificacion1", is(40.0)))
+                .andExpect(jsonPath("$.listaIncluyeIva", is(true)))
+                .andExpect(jsonPath("$.mapeoLista.columnaCosto", is(2)));
+
+        assertThat(jdbc.queryForObject("select bonificacion1 from proveedor where id = ?", BigDecimal.class, id))
+                .isEqualByComparingTo("40.00");
+        assertThat(objectMapper.readTree(
+                jdbc.queryForObject("select mapeo_lista from proveedor where id = ?", String.class, id)))
+                .isEqualTo(objectMapper.readTree(MAPEO_JSON));
+    }
+
+    @Test
+    void elVendedorLeeTodosLosCamposDeLaLista() throws Exception {
+        long id = crear(duenoA, unico("VendedorLista")).get("id").asLong();
+        cargarLista(id);
+
+        getResult("/api/proveedores/" + id, vendedorA)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.mapeoLista.hoja", is(0)))
+                .andExpect(jsonPath("$.mapeoLista.filaDesde", is(2)))
+                .andExpect(jsonPath("$.mapeoLista.columnaCodigo", is(0)))
+                .andExpect(jsonPath("$.mapeoLista.columnaDescripcion", is(1)))
+                .andExpect(jsonPath("$.mapeoLista.columnaCosto", is(2)))
+                .andExpect(jsonPath("$.mapeoLista.encabezados.costo", is("Precio")))
+                .andExpect(jsonPath("$.listaIncluyeIva", is(true)))
+                .andExpect(jsonPath("$.bonificacion1", is(40.0)))
+                .andExpect(jsonPath("$.bonificacion2", is(10.0)))
+                .andExpect(jsonPath("$.bonificacion3").doesNotExist());
+    }
+
+    @Test
+    void laListaDeUnProveedorDeOtraFerreteriaDa404() throws Exception {
+        long idDeB = crear(duenoB, unico("ListaAjena")).get("id").asLong();
+        cargarLista(idDeB);
+
+        getResult("/api/proveedores/" + idDeB, duenoA)
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.mapeoLista").doesNotExist());
+    }
+
+    @Test
+    void laBajaLogicaConservaElMapeoYLasBonificaciones() throws Exception {
+        long id = crear(duenoA, unico("BajaConLista")).get("id").asLong();
+        cargarLista(id);
+
+        delete("/api/proveedores/" + id, duenoA).andExpect(status().isNoContent());
+
+        assertThat(activo(id)).isFalse();
+        assertThat(jdbc.queryForObject("select mapeo_lista is not null from proveedor where id = ?", Boolean.class, id))
+                .isTrue();
+        assertThat(jdbc.queryForObject("select bonificacion1 from proveedor where id = ?", BigDecimal.class, id))
+                .isEqualByComparingTo("40.00");
+        assertThat(jdbc.queryForObject("select bonificacion2 from proveedor where id = ?", BigDecimal.class, id))
+                .isEqualByComparingTo("10.00");
     }
 
     // --- Permisos por rol ---

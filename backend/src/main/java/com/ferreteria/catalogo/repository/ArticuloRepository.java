@@ -8,6 +8,8 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 
 public interface ArticuloRepository extends TenantScopedRepository<Articulo, Long> {
@@ -71,6 +73,35 @@ public interface ArticuloRepository extends TenantScopedRepository<Articulo, Lon
 
     List<Articulo> findAllByFerreteriaIdAndRubroIdAndMargenPorcentajeIsNullAndActivoTrue(
             Long ferreteriaId, Long rubroId);
+
+    @Query("select a from Articulo a where a.ferreteriaId = :fid and a.proveedorId = :proveedorId")
+    List<Articulo> deProveedor(@Param("fid") Long ferreteriaId, @Param("proveedorId") Long proveedorId);
+
+    @Query("select a.codigoInterno from Articulo a where a.ferreteriaId = :fid and a.codigoInterno in :codigos")
+    List<String> codigosInternosEn(@Param("fid") Long ferreteriaId, @Param("codigos") Collection<String> codigos);
+
+    /** Tamano de lote del IN de codigosInternosOcupadosScoped. */
+    int LOTE_CODIGOS_INTERNOS = 1000;
+
+    /** UNA consulta: todos los articulos del proveedor, activos e inactivos (importacion de listas). */
+    default List<Articulo> deProveedorScoped(Long proveedorId) {
+        return deProveedor(TenantContext.requireFerreteriaId(), proveedorId);
+    }
+
+    /**
+     * Codigos internos de la ferreteria que ya existen (activos o no), tal como estan guardados. La
+     * coleccion ai_ci hace el IN insensible a mayusculas y acentos. Parte la lista en lotes de 1.000.
+     */
+    default List<String> codigosInternosOcupadosScoped(Collection<String> codigos) {
+        Long ferreteriaId = TenantContext.requireFerreteriaId();
+        List<String> pedidos = List.copyOf(codigos);
+        List<String> ocupados = new ArrayList<>();
+        for (int desde = 0; desde < pedidos.size(); desde += LOTE_CODIGOS_INTERNOS) {
+            int hasta = Math.min(desde + LOTE_CODIGOS_INTERNOS, pedidos.size());
+            ocupados.addAll(codigosInternosEn(ferreteriaId, pedidos.subList(desde, hasta)));
+        }
+        return ocupados;
+    }
 
     default Page<Articulo> buscarScoped(String q, boolean incluirInactivos, Pageable pageable) {
         return buscar(TenantContext.requireFerreteriaId(), q, incluirInactivos, pageable);
