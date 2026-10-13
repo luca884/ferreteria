@@ -466,4 +466,242 @@ class ArticuloTest {
 
         assertThat(articulo.getPrecioListaProveedor()).isEqualByComparingTo("1210");
     }
+
+    // --- actualizacion masiva (CU-05): ajustarCosto ---
+
+    private static void fijarCampo(Articulo articulo, String campo, Object valor) throws Exception {
+        Field f = Articulo.class.getDeclaredField(campo);
+        f.setAccessible(true);
+        f.set(articulo, valor);
+    }
+
+    @Test
+    @DisplayName("ajustarCosto 100 -> 110 con margen por defecto 30: el precio sube de 160 a 180 (173,03 al multiplo)")
+    void ajustarCostoRecalculaYRedondeaHaciaArriba() {
+        Articulo articulo = articuloCon("100", null);
+
+        Optional<CambioPrecio> cambio = articulo.ajustarCosto(bd("110.00"), ctx(null));
+
+        assertThat(articulo.getCosto()).isEqualByComparingTo("110");
+        assertThat(articulo.getPrecioFinal()).isEqualTo(bd("180.00"));
+        assertThat(cambio).isPresent();
+        assertThat(cambio.get().costoAnterior()).isEqualByComparingTo("100");
+        assertThat(cambio.get().costoNuevo()).isEqualByComparingTo("110");
+        assertThat(cambio.get().precioAnterior()).isEqualByComparingTo("160");
+        assertThat(cambio.get().precioNuevo()).isEqualByComparingTo("180");
+    }
+
+    @Test
+    @DisplayName("ajustarCosto conserva el margen propio 50 y el margen propio nulo")
+    void ajustarCostoConservaElMargenPropio() {
+        Articulo conPropio = articuloCon("100", "50");
+        Articulo sinPropio = articuloCon("100", null);
+
+        conPropio.ajustarCosto(bd("110.00"), ctx(null));
+        sinPropio.ajustarCosto(bd("110.00"), ctx(null));
+
+        assertThat(conPropio.getMargenPorcentaje()).isEqualByComparingTo("50");
+        assertThat(conPropio.getPrecioFinal()).isEqualTo(bd("200.00"));
+        assertThat(sinPropio.getMargenPorcentaje()).isNull();
+    }
+
+    @Test
+    @DisplayName("ajustarCosto usa el margen del rubro del contexto: 110 con margen 40 da 190")
+    void ajustarCostoHeredaElMargenDelRubro() {
+        Articulo articulo = articuloCon("100", null);
+
+        articulo.ajustarCosto(bd("110.00"), ctx("40"));
+
+        assertThat(articulo.getPrecioFinal()).isEqualTo(bd("190.00"));
+    }
+
+    @Test
+    @DisplayName("ajustarCosto devuelve vacio si ni el costo ni el precio cambian")
+    void ajustarCostoSinCambio() {
+        Articulo articulo = articuloCon("100", null);
+
+        Optional<CambioPrecio> cambio = articulo.ajustarCosto(bd("100.00"), ctx(null));
+
+        assertThat(cambio).isEmpty();
+        assertThat(articulo.getPrecioFinal()).isEqualTo(bd("160.00"));
+    }
+
+    @Test
+    @DisplayName("ajustarCosto recalcula un precio desactualizado aunque el costo no cambie (0.04: 20.00 -> 10.00)")
+    void ajustarCostoRecalculaPrecioDesactualizado() throws Exception {
+        Articulo articulo = articuloCon("0.04", null);
+        fijarCampo(articulo, "precioFinal", bd("20.00"));
+
+        Optional<CambioPrecio> cambio = articulo.ajustarCosto(bd("0.04"), ctx(null));
+
+        assertThat(articulo.getPrecioFinal()).isEqualTo(bd("10.00"));
+        assertThat(cambio).isPresent();
+        assertThat(cambio.get().precioAnterior()).isEqualByComparingTo("20");
+        assertThat(cambio.get().precioNuevo()).isEqualByComparingTo("10");
+    }
+
+    @Test
+    @DisplayName("ajustarCosto no toca precio de lista, descripcion, IVA, stock, ubicacion ni activo")
+    void ajustarCostoNoTocaLosDemasDatos() throws Exception {
+        Articulo articulo = articuloCon("100", "35");
+        articulo.registrarPrecioLista(bd("1210"));
+        fijarStockActual(articulo, "12");
+
+        articulo.ajustarCosto(bd("110.00"), ctx(null));
+
+        assertThat(articulo.getPrecioListaProveedor()).isEqualByComparingTo("1210");
+        assertThat(articulo.getDescripcion()).isEqualTo("Tornillo hexagonal 1/4");
+        assertThat(articulo.getAlicuotaIva()).isEqualTo(AlicuotaIva.IVA_21);
+        assertThat(articulo.getStockActual()).isEqualByComparingTo("12");
+        assertThat(articulo.getStockMinimo()).isEqualByComparingTo("5");
+        assertThat(articulo.getUbicacion()).isEqualTo("Estante 3");
+        assertThat(articulo.getRubroId()).isEqualTo(10L);
+        assertThat(articulo.getProveedorId()).isEqualTo(20L);
+        assertThat(articulo.getUnidad()).isEqualTo(Unidad.UNIDAD);
+        assertThat(articulo.isActivo()).isTrue();
+    }
+
+    @Test
+    @DisplayName("ajustarCosto no necesita precio de lista: con precio de lista nulo sigue nulo")
+    void ajustarCostoConPrecioListaNulo() {
+        Articulo articulo = articuloCon("100", null);
+
+        articulo.ajustarCosto(bd("110.00"), ctx(null));
+
+        assertThat(articulo.getPrecioListaProveedor()).isNull();
+    }
+
+    @Test
+    @DisplayName("ajustarCosto sobre un articulo inactivo lo deja inactivo")
+    void ajustarCostoConservaInactivo() {
+        Articulo articulo = articuloCon("100", null);
+        articulo.desactivar();
+
+        articulo.ajustarCosto(bd("110.00"), ctx(null));
+
+        assertThat(articulo.isActivo()).isFalse();
+    }
+
+    @Test
+    @DisplayName("ajustarCosto con costo negativo o null lanza IllegalArgumentException con el mensaje del costo")
+    void ajustarCostoInvalido() {
+        Articulo articulo = articuloCon("100", null);
+
+        assertThatThrownBy(() -> articulo.ajustarCosto(bd("-0.01"), ctx(null)))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("El costo debe ser un valor mayor o igual a 0.");
+        assertThatThrownBy(() -> articulo.ajustarCosto(null, ctx(null)))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("El costo debe ser un valor mayor o igual a 0.");
+        assertThat(articulo.getCosto()).isEqualByComparingTo("100");
+    }
+
+    // --- actualizacion masiva (CU-05): fijarMargen ---
+
+    @Test
+    @DisplayName("fijarMargen 50 sobre costo 100 que heredaba el 30: margen propio 50 y precio 160 -> 190")
+    void fijarMargenFijaElMargenPropioYRecalcula() {
+        Articulo articulo = articuloCon("100", null);
+
+        Optional<CambioPrecio> cambio = articulo.fijarMargen(bd("50.00"), ctx(null));
+
+        assertThat(articulo.getMargenPorcentaje()).isEqualByComparingTo("50");
+        assertThat(articulo.getPrecioFinal()).isEqualTo(bd("190.00"));
+        assertThat(cambio).isPresent();
+        assertThat(cambio.get().costoAnterior()).isEqualByComparingTo("100");
+        assertThat(cambio.get().costoNuevo()).isEqualByComparingTo("100");
+        assertThat(cambio.get().precioAnterior()).isEqualByComparingTo("160");
+        assertThat(cambio.get().precioNuevo()).isEqualByComparingTo("190");
+    }
+
+    @Test
+    @DisplayName("fijarMargen pisa el margen del rubro: con rubro al 40, margen 50 da 190 y queda propio")
+    void fijarMargenPisaElMargenDelRubro() {
+        Articulo articulo = articuloCon("100", null);
+
+        articulo.fijarMargen(bd("50"), ctx("40"));
+
+        assertThat(articulo.getMargenPorcentaje()).isEqualByComparingTo("50");
+        assertThat(articulo.getPrecioFinal()).isEqualTo(bd("190.00"));
+    }
+
+    @Test
+    @DisplayName("fijarMargen 0 se respeta (no es null): costo 100 da precio 130")
+    void fijarMargenCeroSeRespeta() {
+        Articulo articulo = articuloCon("100", null);
+
+        articulo.fijarMargen(bd("0"), ctx(null));
+
+        assertThat(articulo.getMargenPorcentaje()).isNotNull();
+        assertThat(articulo.getMargenPorcentaje()).isEqualByComparingTo("0");
+        assertThat(articulo.getPrecioFinal()).isEqualTo(bd("130.00"));
+    }
+
+    @Test
+    @DisplayName("fijarMargen 1000 es valido")
+    void fijarMargenMil() {
+        Articulo articulo = articuloCon("100", null);
+
+        articulo.fijarMargen(bd("1000"), ctx(null));
+
+        assertThat(articulo.getMargenPorcentaje()).isEqualByComparingTo("1000");
+    }
+
+    @Test
+    @DisplayName("fijarMargen fuera de 0..1000 o null lanza IllegalArgumentException y no cambia nada")
+    void fijarMargenInvalido() {
+        Articulo articulo = articuloCon("100", "35");
+
+        assertThatThrownBy(() -> articulo.fijarMargen(bd("-0.01"), ctx(null)))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("El margen debe estar entre 0 y 1000.");
+        assertThatThrownBy(() -> articulo.fijarMargen(bd("1000.01"), ctx(null)))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("El margen debe estar entre 0 y 1000.");
+        assertThatThrownBy(() -> articulo.fijarMargen(null, ctx(null)))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("El margen debe estar entre 0 y 1000.");
+        assertThat(articulo.getMargenPorcentaje()).isEqualByComparingTo("35");
+        assertThat(articulo.getPrecioFinal()).isEqualTo(bd("170.00"));
+    }
+
+    @Test
+    @DisplayName("fijarMargen no cambia el costo")
+    void fijarMargenNoCambiaElCosto() {
+        Articulo articulo = articuloCon("123.45", null);
+
+        articulo.fijarMargen(bd("50"), ctx(null));
+
+        assertThat(articulo.getCosto()).isEqualTo(bd("123.45"));
+    }
+
+    @Test
+    @DisplayName("fijarMargen que cambia solo el margen propio (35 -> 36, precio 170 igual) devuelve vacio")
+    void fijarMargenQueNoMueveElPrecioDevuelveVacio() {
+        Articulo articulo = articuloCon("100", "35");
+
+        Optional<CambioPrecio> cambio = articulo.fijarMargen(bd("36"), ctx(null));
+
+        assertThat(articulo.getMargenPorcentaje()).isEqualByComparingTo("36");
+        assertThat(articulo.getPrecioFinal()).isEqualTo(bd("170.00"));
+        assertThat(cambio).isEmpty();
+    }
+
+    @Test
+    @DisplayName("fijarMargen no toca el precio de lista ni los demas datos")
+    void fijarMargenNoTocaLosDemasDatos() throws Exception {
+        Articulo articulo = articuloCon("100", null);
+        articulo.registrarPrecioLista(bd("1210"));
+        fijarStockActual(articulo, "12");
+        articulo.desactivar();
+
+        articulo.fijarMargen(bd("50"), ctx(null));
+
+        assertThat(articulo.getPrecioListaProveedor()).isEqualByComparingTo("1210");
+        assertThat(articulo.getDescripcion()).isEqualTo("Tornillo hexagonal 1/4");
+        assertThat(articulo.getAlicuotaIva()).isEqualTo(AlicuotaIva.IVA_21);
+        assertThat(articulo.getStockActual()).isEqualByComparingTo("12");
+        assertThat(articulo.getUbicacion()).isEqualTo("Estante 3");
+        assertThat(articulo.isActivo()).isFalse();
+    }
 }

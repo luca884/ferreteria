@@ -1,0 +1,36 @@
+h1 { margin: 0 0 4px; }
+h2 { font-size: 1.1rem; margin: 0 0 8px; }
+h3 { font-size: 1rem; margin: 20px 0 8px; }
+.ayuda { color: var(--texto-suave); margin: 0 0 16px; }
+.paso { margin-bottom: 28px; }
+.fila { display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap; margin-bottom: 12px; }
+.campo { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 180px; }
+label { font-weight: 600; }
+.casilla { display: flex; align-items: center; gap: 8px; }
+.errores-campos { padding-left: 20px; }
+.resumen { margin-bottom: 20px; font-weight: 600; }
+.num { text-align: right; font-variant-numeric: tabular-nums; }
+.tarjetas { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
+.tarjeta {
+  flex: 1;
+  min-width: 120px;
+  padding: 12px 16px;
+  background: var(--superficie);
+  border: 1px solid var(--borde);
+  border-radius: 8px;
+  color: var(--texto-suave);
+}
+.tarjeta strong { display: block; font-size: 1.6rem; color: var(--texto); }
+.aviso { margin: 0 0 16px; padding: 8px 12px; border: 1px solid var(--acento); border-radius: 6px; }
+tr.fuerte td { background: #fff4e5; }
+.advertencia { margin: 4px 0 0; color: var(--acento); font-size: 0.85rem; font-weight: 600; }
+.confirmacion-total {
+  margin-top: 8px;
+  padding: 16px;
+  border: 2px solid var(--acento);
+  border-radius: 8px;
+  background: #fff4e5;
+}
+.confirmacion-total h3 { margin: 0 0 8px; }
+.confirmacion-total p { margin: 0 0 12px; }
+.sin-cambios { margin-top: 8px; }

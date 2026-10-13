@@ -1,4 +1,6 @@
 import { Route } from '@angular/router';
+import { authGuard } from './core/auth/auth.guard';
+import { ActualizacionMasiva } from './features/actualizacion-masiva/actualizacion-masiva';
 import { ArticuloForm } from './features/articulos/articulo-form';
 import { Articulos } from './features/articulos/articulos';
 import { Importaciones } from './features/importaciones/importaciones';
@@ -20,6 +22,24 @@ describe('rutas', () => {
 
     expect(ruta).toBeDefined();
     expect(await (ruta!.loadComponent as () => Promise<unknown>)()).toBe(Importaciones);
+  });
+
+  it('la ruta actualizacion-masiva carga el componente ActualizacionMasiva', async () => {
+    const ruta = hijas().find((r) => r.path === 'actualizacion-masiva');
+
+    expect(ruta).toBeDefined();
+    expect(await (ruta!.loadComponent as () => Promise<unknown>)()).toBe(ActualizacionMasiva);
+  });
+
+  it('la ruta actualizacion-masiva no tiene guard propio: solo el authGuard del padre, como importaciones', () => {
+    const padre = routes.find((r) => r.path === '');
+    const masiva = hijas().find((r) => r.path === 'actualizacion-masiva');
+    const importaciones = hijas().find((r) => r.path === 'importaciones');
+
+    expect(masiva).toBeDefined();
+    expect(masiva!.canActivate).toBeUndefined();
+    expect(masiva!.canActivate).toEqual(importaciones!.canActivate);
+    expect(padre!.canActivate).toEqual([authGuard]);
   });
 
   it('la ruta articulos carga el componente Articulos', async () => {

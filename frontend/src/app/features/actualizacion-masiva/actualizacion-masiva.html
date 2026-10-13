@@ -1,0 +1,220 @@
+<h1>Actualizar precios</h1>
+
+@if (!auth.esDueno()) {
+  <p class="ayuda" role="status">Solo el Dueño puede actualizar precios.</p>
+} @else {
+  <p class="ayuda">
+    Elegí qué artículos querés actualizar y qué cambio hacer, y revisá la vista previa antes de
+    confirmar.
+  </p>
+
+  @if (erroresCampos().length > 0) {
+    <ul class="error errores-campos" role="alert">
+      @for (mensaje of erroresCampos(); track $index) {
+        <li>{{ mensaje }}</li>
+      }
+    </ul>
+  } @else if (error(); as mensaje) {
+    <p class="error" role="alert">{{ mensaje }}</p>
+  }
+
+  @if (resultado(); as r) {
+    <section class="resumen" role="status">
+      @if (r.conteos.modificados === 1) {
+        Se actualizó 1 artículo.
+      } @else {
+        Se actualizaron {{ r.conteos.modificados | number }} artículos.
+      }
+    </section>
+  }
+
+  <form class="paso" [formGroup]="form" novalidate>
+    <h2>1. Qué artículos</h2>
+    <div class="fila">
+      <div class="campo">
+        <label for="proveedor">Proveedor</label>
+        <select id="proveedor" formControlName="proveedorId">
+          <option [ngValue]="null">Todos los proveedores</option>
+          @for (proveedor of proveedores(); track proveedor.id) {
+            <option [ngValue]="proveedor.id">{{ proveedor.nombre }}</option>
+          }
+        </select>
+      </div>
+      <div class="campo">
+        <label for="rubro">Rubro</label>
+        <select id="rubro" formControlName="rubroId">
+          <option [ngValue]="null">Todos los rubros</option>
+          @for (rubro of rubros(); track rubro.id) {
+            <option [ngValue]="rubro.id">{{ rubro.nombre }}</option>
+          }
+        </select>
+      </div>
+      <div class="campo">
+        <label for="q">Buscar por código o descripción</label>
+        <input id="q" type="text" formControlName="q" />
+      </div>
+    </div>
+    <div class="fila">
+      <label class="casilla" for="incluirInactivos">
+        <input id="incluirInactivos" type="checkbox" formControlName="incluirInactivos" />
+        Incluir dados de baja
+      </label>
+    </div>
+
+    <h2>2. Qué cambio</h2>
+    <div class="fila">
+      <div class="campo">
+        <label for="modo">Operación</label>
+        <select id="modo" formControlName="modo">
+          <option [ngValue]="null">Elegí qué querés hacer</option>
+          <option ngValue="COSTO_PORCENTAJE">Cambiar el costo en %</option>
+          <option ngValue="MARGEN">Fijar el margen</option>
+        </select>
+      </div>
+      <div class="campo">
+        <label for="valor">{{ etiquetaDelValor() }}</label>
+        <input id="valor" type="text" inputmode="decimal" formControlName="valor" />
+      </div>
+    </div>
+    <button type="button" class="generar" [disabled]="!puedeGenerar()" (click)="generarVistaPrevia()">
+      @if (generando()) {
+        Generando vista previa…
+      } @else {
+        Ver vista previa
+      }
+    </button>
+  </form>
+
+  @if (vistaPrevia(); as vp) {
+    <section class="paso vista-previa">
+      <h2>3. Vista previa</h2>
+
+      @if (vp.conteos.total === 0) {
+        <p class="ayuda sin-articulos">No hay artículos con ese filtro.</p>
+      } @else {
+        <p class="ayuda">Todavía no se cambió nada. Revisá lo que va a pasar antes de confirmar.</p>
+
+        <div class="tarjetas">
+          @for (t of tarjetasDe(vp.conteos); track t.etiqueta) {
+            <div class="tarjeta">{{ t.etiqueta }} <strong>{{ t.valor | number }}</strong></div>
+          }
+        </div>
+
+        @if (vp.conteos.pasanAMargenPropio > 0) {
+          <p class="aviso pasan-a-margen-propio">
+            {{ vp.conteos.pasanAMargenPropio | number }}
+            {{ plural(vp.conteos.pasanAMargenPropio, 'artículo deja', 'artículos dejan') }} de heredar el
+            margen (del rubro o de la ferretería) y
+            {{ plural(vp.conteos.pasanAMargenPropio, 'pasa', 'pasan') }} a tener margen propio.
+          </p>
+        }
+
+        @if (vp.detalleRecortado) {
+          <p class="aviso recortado">
+            Se muestran solo los primeros 1.000 artículos. Los totales incluyen todos los que se van a
+            modificar.
+          </p>
+        }
+
+        @if (vp.cambios.length > 0) {
+          <div class="grilla-contenedor">
+            <table class="cambios">
+              <thead>
+                <tr>
+                  <th>Código</th>
+                  <th>Descripción</th>
+                  <th class="num">Costo</th>
+                  <th class="num">Margen (%)</th>
+                  <th class="num">Precio</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (c of vp.cambios; track c.articuloId) {
+                  <tr [class.fuerte]="c.advertencia !== null">
+                    <td>{{ c.codigo }}</td>
+                    <td>
+                      {{ c.descripcion }}
+                      @if (c.advertencia !== null) {
+                        <p class="advertencia">{{ c.advertencia }}</p>
+                      }
+                    </td>
+                    <td class="num">
+                      {{ c.costoAnterior | number: '1.2-2' }} → {{ c.costoNuevo | number: '1.2-2' }}
+                    </td>
+                    <td class="num">
+                      {{ c.margenAnterior | number: '1.2-2' }} → {{ c.margenNuevo | number: '1.2-2' }}
+                    </td>
+                    <td class="num">
+                      {{ c.precioAnterior | number: '1.2-2' }} → {{ c.precioNuevo | number: '1.2-2' }}
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        }
+
+        @if (vp.errores.length > 0) {
+          <h3 class="titulo-errores">Artículos que no se van a actualizar</h3>
+          <div class="grilla-contenedor">
+            <table class="errores">
+              <thead>
+                <tr>
+                  <th>Código</th>
+                  <th>Descripción</th>
+                  <th>Motivo</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (e of vp.errores; track e.articuloId) {
+                  <tr>
+                    <td>{{ e.codigo }}</td>
+                    <td>{{ e.descripcion }}</td>
+                    <td>{{ e.motivo }}</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        }
+
+        <h2>4. Confirmar</h2>
+        @if (confirmandoTodo()) {
+          <section class="confirmacion-total" role="alertdialog" aria-labelledby="titulo-confirmacion">
+            <h3 id="titulo-confirmacion">
+              Vas a modificar {{ vp.conteos.modificados | number }}
+              {{ plural(vp.conteos.modificados, 'artículo', 'artículos') }}
+            </h3>
+            <p>
+              No elegiste ningún filtro: el cambio alcanza a todo el catálogo. Revisá la vista previa antes
+              de seguir.
+            </p>
+            <div class="fila">
+              <button type="button" class="confirmar-todo" (click)="confirmar()">Sí, modificar todo</button>
+              <button type="button" class="secundario cancelar" (click)="cancelarConfirmacion()">
+                Cancelar
+              </button>
+            </div>
+          </section>
+        } @else {
+          <button
+            type="button"
+            class="confirmar"
+            [disabled]="aplicando() || vp.conteos.modificados === 0"
+            (click)="confirmar()"
+          >
+            @if (aplicando()) {
+              Actualizando…
+            } @else {
+              Actualizar {{ vp.conteos.modificados | number }}
+              {{ plural(vp.conteos.modificados, 'artículo', 'artículos') }}
+            }
+          </button>
+          @if (vp.conteos.modificados === 0) {
+            <p class="ayuda sin-cambios">Con esta operación no cambia ningún artículo.</p>
+          }
+        }
+      }
+    </section>
+  }
+}

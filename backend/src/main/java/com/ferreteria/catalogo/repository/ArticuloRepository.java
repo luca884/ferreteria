@@ -1,6 +1,7 @@
 package com.ferreteria.catalogo.repository;
 
 import com.ferreteria.catalogo.model.Articulo;
+import com.ferreteria.catalogo.model.FiltroArticulos;
 import com.ferreteria.tenant.TenantContext;
 import com.ferreteria.tenant.TenantScopedRepository;
 import org.springframework.data.domain.Page;
@@ -15,34 +16,48 @@ import java.util.List;
 public interface ArticuloRepository extends TenantScopedRepository<Articulo, Long> {
 
     /**
-     * Busqueda paginada. q ya viene como patron LIKE (con % y los comodines escapados con \); null
-     * no filtra. La coleccion utf8mb4_0900_ai_ci hace que el LIKE no distinga mayusculas ni tildes.
+     * Unica definicion de "que articulos cumplen el filtro". proveedorId y rubroId son opcionales (null
+     * no filtra). q ya viene como patron LIKE (con % y los comodines escapados con \); null no filtra.
+     * La coleccion utf8mb4_0900_ai_ci hace que el LIKE no distinga mayusculas ni tildes.
      */
-    @Query(value = """
-            select a from Articulo a
+    String FILTRO_ARTICULOS = """
+            from Articulo a
             where a.ferreteriaId = :fid
               and (:incluirInactivos = true or a.activo = true)
+              and (:proveedorId is null or a.proveedorId = :proveedorId)
+              and (:rubroId is null or a.rubroId = :rubroId)
               and (:q is null
                    or a.descripcion like :q escape '\\'
                    or a.codigoInterno like :q escape '\\'
                    or a.codigoBarras like :q escape '\\'
                    or a.codigoProveedor like :q escape '\\')
-            """,
-            countQuery = """
-            select count(a) from Articulo a
-            where a.ferreteriaId = :fid
-              and (:incluirInactivos = true or a.activo = true)
-              and (:q is null
-                   or a.descripcion like :q escape '\\'
-                   or a.codigoInterno like :q escape '\\'
-                   or a.codigoBarras like :q escape '\\'
-                   or a.codigoProveedor like :q escape '\\')
-            """)
+            """;
+
+    @Query(value = "select a " + FILTRO_ARTICULOS, countQuery = "select count(a) " + FILTRO_ARTICULOS)
     Page<Articulo> buscar(
             @Param("fid") Long ferreteriaId,
+            @Param("proveedorId") Long proveedorId,
+            @Param("rubroId") Long rubroId,
             @Param("q") String q,
             @Param("incluirInactivos") boolean incluirInactivos,
             Pageable pageable);
+
+    /** Los articulos del filtro (actualizacion masiva), todos y en orden ascendente de id. */
+    @Query("select a " + FILTRO_ARTICULOS + " order by a.id")
+    List<Articulo> filtrar(
+            @Param("fid") Long ferreteriaId,
+            @Param("proveedorId") Long proveedorId,
+            @Param("rubroId") Long rubroId,
+            @Param("q") String q,
+            @Param("incluirInactivos") boolean incluirInactivos);
+
+    @Query("select count(a) " + FILTRO_ARTICULOS)
+    long contar(
+            @Param("fid") Long ferreteriaId,
+            @Param("proveedorId") Long proveedorId,
+            @Param("rubroId") Long rubroId,
+            @Param("q") String q,
+            @Param("incluirInactivos") boolean incluirInactivos);
 
     @Query("""
             select count(a) > 0 from Articulo a
@@ -104,7 +119,19 @@ public interface ArticuloRepository extends TenantScopedRepository<Articulo, Lon
     }
 
     default Page<Articulo> buscarScoped(String q, boolean incluirInactivos, Pageable pageable) {
-        return buscar(TenantContext.requireFerreteriaId(), q, incluirInactivos, pageable);
+        return buscar(TenantContext.requireFerreteriaId(), null, null, q, incluirInactivos, pageable);
+    }
+
+    /** Los articulos de la ferreteria que cumplen el filtro, por id ascendente (CU-05). */
+    default List<Articulo> filtrarScoped(FiltroArticulos filtro) {
+        return filtrar(TenantContext.requireFerreteriaId(), filtro.proveedorId(), filtro.rubroId(),
+                filtro.patron(), filtro.incluirInactivos());
+    }
+
+    /** Cuantos articulos de la ferreteria cumplen el filtro, sin cargarlos (CU-05). */
+    default long contarScoped(FiltroArticulos filtro) {
+        return contar(TenantContext.requireFerreteriaId(), filtro.proveedorId(), filtro.rubroId(),
+                filtro.patron(), filtro.incluirInactivos());
     }
 
     /** Incluye los dados de baja. idPropio excluye al articulo que se esta editando (null en el alta). */

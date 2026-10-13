@@ -19,9 +19,6 @@ label { font-weight: 600; }
   font-weight: 600;
   text-decoration: none;
 }
-table { width: 100%; border-collapse: collapse; background: var(--superficie); }
-th, td { padding: 10px 12px; border-bottom: 1px solid var(--borde); text-align: left; }
-th { font-size: 0.85rem; color: var(--texto-suave); text-transform: uppercase; }
 .num { text-align: right; font-variant-numeric: tabular-nums; }
 tr.inactivo td { color: var(--texto-suave); }
 .acciones { text-align: right; white-space: nowrap; }

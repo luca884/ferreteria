@@ -32,6 +32,14 @@ export const routes: Routes = [
         loadComponent: () =>
           import('./features/importaciones/importaciones').then((m) => m.Importaciones),
       },
+      // Sin guard de rol, como importaciones: el Vendedor ve el aviso de la pantalla y el backend responde 403.
+      {
+        path: 'actualizacion-masiva',
+        loadComponent: () =>
+          import('./features/actualizacion-masiva/actualizacion-masiva').then(
+            (m) => m.ActualizacionMasiva,
+          ),
+      },
     ],
   },
   { path: '**', redirectTo: '' },
