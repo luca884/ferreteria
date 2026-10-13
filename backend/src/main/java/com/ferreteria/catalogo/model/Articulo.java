@@ -25,6 +25,8 @@ import java.util.Optional;
 @Table(name = "articulo")
 public class Articulo {
 
+    private static final BigDecimal MARGEN_MAXIMO = BigDecimal.valueOf(1000);
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -150,6 +152,39 @@ public class Articulo {
         registrarPrecioLista(precioLista);
         calcularPrecio(ctx);
         return CambioPrecio.entre(costoAnterior, this.costo, precioAnterior, this.precioFinal);
+    }
+
+    /**
+     * Actualizacion masiva (CU-05): cambia solo el costo y recalcula el precio final. No toca el
+     * precio de lista del proveedor, el margen, el IVA, el stock ni si esta activo. El precio se
+     * recalcula siempre, aunque el costo no cambie.
+     */
+    public Optional<CambioPrecio> ajustarCosto(BigDecimal costoNuevo, ContextoPrecio ctx) {
+        if (costoNuevo == null || costoNuevo.signum() < 0) {
+            throw new IllegalArgumentException("El costo debe ser un valor mayor o igual a 0.");
+        }
+        BigDecimal costoAnterior = this.costo;
+        BigDecimal precioAnterior = this.precioFinal;
+
+        this.costo = costoNuevo;
+        calcularPrecio(ctx);
+        return CambioPrecio.entre(costoAnterior, this.costo, precioAnterior, this.precioFinal);
+    }
+
+    /**
+     * Actualizacion masiva (CU-05): fija el margen propio (de 0 a 1000, el cero se respeta) aunque el
+     * articulo heredara el del rubro, y recalcula el precio final. El costo no cambia. Un cambio solo
+     * del margen, con el mismo precio, devuelve vacio.
+     */
+    public Optional<CambioPrecio> fijarMargen(BigDecimal margen, ContextoPrecio ctx) {
+        if (margen == null || margen.signum() < 0 || margen.compareTo(MARGEN_MAXIMO) > 0) {
+            throw new IllegalArgumentException("El margen debe estar entre 0 y 1000.");
+        }
+        BigDecimal precioAnterior = this.precioFinal;
+
+        this.margenPorcentaje = margen;
+        calcularPrecio(ctx);
+        return CambioPrecio.entre(this.costo, this.costo, precioAnterior, this.precioFinal);
     }
 
     /**

@@ -40,7 +40,9 @@ public class SecurityConfig {
                         .requestMatchers("/error").permitAll()
                         // El rol se exige ANTES de leer el multipart o el cuerpo: un Vendedor recibe 403 aunque
                         // mande datos invalidos. El @PreAuthorize de cada metodo queda como defensa en profundidad.
+                        // Vale para la importacion de listas (CU-04) y la actualizacion masiva de precios (CU-05).
                         .requestMatchers("/api/importaciones/**").hasRole("DUENO")
+                        .requestMatchers("/api/actualizacion-masiva/**").hasRole("DUENO")
                         .anyRequest().authenticated())
                 .exceptionHandling(e -> e
                         .authenticationEntryPoint((request, response, ex) -> {
