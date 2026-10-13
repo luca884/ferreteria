@@ -840,7 +840,7 @@ class PlanificadorImportacionTest {
                 .planificar();
 
             assertThat(plan.advertencias()).containsExactly(
-                new AvisoDeFila(5, "A-1", "El costo sube un 60 % (de 100.00 a 160.00). Revisá que sea correcto."));
+                new AvisoDeFila(5, "A-1", "El costo sube un 60 % (de 100,00 a 160,00). Revisá que sea correcto."));
             assertThat(plan.cambios().get(0).variacionFuerte()).isTrue();
             assertThat(plan.conteos()).isEqualTo(new ConteosImportacion(1, 0, 0, 0, 0, 0));
         }
@@ -854,7 +854,7 @@ class PlanificadorImportacionTest {
                 .planificar();
 
             assertThat(plan.advertencias()).containsExactly(
-                new AvisoDeFila(5, "A-1", "El costo baja un 60 % (de 100.00 a 40.00). Revisá que sea correcto."));
+                new AvisoDeFila(5, "A-1", "El costo baja un 60 % (de 100,00 a 40,00). Revisá que sea correcto."));
             assertThat(plan.cambios().get(0).variacionFuerte()).isTrue();
             assertThat(plan.conteos()).isEqualTo(new ConteosImportacion(0, 1, 0, 0, 0, 0));
         }
@@ -880,8 +880,8 @@ class PlanificadorImportacionTest {
                 .planificar();
 
             assertThat(mensajes(plan.advertencias())).containsExactly(
-                "El costo sube un 50.01 % (de 100.00 a 150.01). Revisá que sea correcto.",
-                "El costo baja un 50.01 % (de 100.00 a 49.99). Revisá que sea correcto.");
+                "El costo sube un 50,01 % (de 100,00 a 150,01). Revisá que sea correcto.",
+                "El costo baja un 50,01 % (de 100,00 a 49,99). Revisá que sea correcto.");
         }
 
         @Test
@@ -895,7 +895,7 @@ class PlanificadorImportacionTest {
 
             assertThat(plan.cambios().get(0).costoNuevo()).isEqualByComparingTo("200.00");
             assertThat(mensajes(plan.advertencias())).containsExactly(
-                "El costo sube un 100 % (de 100.00 a 200.00). Revisá que sea correcto.");
+                "El costo sube un 100 % (de 100,00 a 200,00). Revisá que sea correcto.");
         }
 
         @Test
@@ -922,7 +922,7 @@ class PlanificadorImportacionTest {
         }
 
         @Test
-        @DisplayName("el porcentaje se muestra con hasta 2 decimales: 100 a 33,33 baja un 66.67 %")
+        @DisplayName("el porcentaje se muestra con hasta 2 decimales: 100 a 33,33 baja un 66,67 %")
         void porcentajeConDecimales() {
             PlanImportacion plan = escenario()
                 .articulos(Art.art(1, "A-1", "100"))
@@ -930,7 +930,19 @@ class PlanificadorImportacionTest {
                 .planificar();
 
             assertThat(mensajes(plan.advertencias())).containsExactly(
-                "El costo baja un 66.67 % (de 100.00 a 33.33). Revisá que sea correcto.");
+                "El costo baja un 66,67 % (de 100,00 a 33,33). Revisá que sea correcto.");
+        }
+
+        @Test
+        @DisplayName("los importes usan punto de miles y coma decimal: 1000 a 2500,50 sube un 150,05 %")
+        void importesConMiles() {
+            PlanImportacion plan = escenario()
+                .articulos(Art.art(1, "A-1", "1000"))
+                .filas(fila(2, "A-1", "x", "2500,50"))
+                .planificar();
+
+            assertThat(mensajes(plan.advertencias())).containsExactly(
+                "El costo sube un 150,05 % (de 1.000,00 a 2.500,50). Revisá que sea correcto.");
         }
 
         @Test

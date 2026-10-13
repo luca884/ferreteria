@@ -2,12 +2,15 @@ package com.ferreteria.catalogo.model;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.text.DecimalFormat;
+import java.text.DecimalFormatSymbols;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -213,14 +216,23 @@ public final class PlanificadorImportacion {
         if (diferenciaPorCien.compareTo(UMBRAL_VARIACION_PORCENTAJE.multiply(actual)) <= 0) {
             return Optional.empty();
         }
-        String porcentaje = diferenciaPorCien.divide(actual, 2, RoundingMode.HALF_UP)
-            .stripTrailingZeros().toPlainString();
+        String porcentaje = formatoArgentino(diferenciaPorCien.divide(actual, 2, RoundingMode.HALF_UP), "#,##0.##");
         return Optional.of("El costo " + (sube ? "sube" : "baja") + " un " + porcentaje + " % (de " + dinero(actual)
             + " a " + dinero(nuevo) + "). Revisá que sea correcto.");
     }
 
     private static String dinero(BigDecimal valor) {
-        return valor.setScale(2, RoundingMode.HALF_UP).toPlainString();
+        return formatoArgentino(valor, "#,##0.00");
+    }
+
+    /** Punto de miles y coma decimal ("1.234,56"). DecimalFormat no es thread-safe: uno por llamada. */
+    private static String formatoArgentino(BigDecimal valor, String patron) {
+        DecimalFormatSymbols simbolos = new DecimalFormatSymbols(Locale.ROOT);
+        simbolos.setDecimalSeparator(',');
+        simbolos.setGroupingSeparator('.');
+        DecimalFormat formato = new DecimalFormat(patron, simbolos);
+        formato.setRoundingMode(RoundingMode.HALF_UP);
+        return formato.format(valor);
     }
 
     /** Indice por clave del codigo del proveedor; si dos comparten clave gana el primero. */

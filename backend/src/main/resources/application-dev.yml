@@ -2,3 +2,6 @@
 spring:
   flyway:
     locations: classpath:db/migration,classpath:db/dev-data
+    # Los datos demo (V1000+) quedan aplicados antes que las migraciones nuevas del esquema (V4, V5...).
+    # Sin esto, Flyway rechaza en una base dev existente toda migración con número menor al último aplicado.
+    out-of-order: true
