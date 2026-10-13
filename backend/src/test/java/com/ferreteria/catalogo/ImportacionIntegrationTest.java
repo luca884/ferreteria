@@ -170,7 +170,7 @@ class ImportacionIntegrationTest extends IntegrationTestBase {
             conBonificacionInvalida.put("bonificacion1", new BigDecimal("150"));
             postMultipart(url, vendedorA, lista("V-1", "100"), conBonificacionInvalida)
                     .andExpect(status().isForbidden())
-                    .andExpect(jsonPath("$.message", is("No tenes permiso para hacer esto")));
+                    .andExpect(jsonPath("$.message", is("No tenés permiso para hacer esto")));
 
             ObjectNode conMapeoInvalido = datosPara(url, proveedor);
             ((ObjectNode) conMapeoInvalido.get("mapeo")).put("columnaCosto", 0);
@@ -251,7 +251,7 @@ class ImportacionIntegrationTest extends IntegrationTestBase {
 
             postMultipart(url, duenoA, lista("X-1", "100"), datos)
                     .andExpect(status().isBadRequest())
-                    .andExpect(jsonPath("$.message", is("Datos invalidos")))
+                    .andExpect(jsonPath("$.message", is("Datos inválidos")))
                     .andExpect(jsonPath("$.errors.bonificacion1", is("La bonificación 1 debe estar entre 0 y 100.")))
                     .andExpect(jsonPath("$.errors.bonificacion3",
                             is("La bonificación 3 puede tener como máximo 2 decimales.")));

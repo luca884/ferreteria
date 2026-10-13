@@ -54,7 +54,7 @@ public class SecurityConfig {
                             response.setStatus(403);
                             response.setContentType(MediaType.APPLICATION_JSON_VALUE);
                             response.setCharacterEncoding("UTF-8");
-                            response.getWriter().write("{\"status\":403,\"message\":\"No tenes permiso para hacer esto\"}");
+                            response.getWriter().write("{\"status\":403,\"message\":\"No tenés permiso para hacer esto\"}");
                         }))
                 .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class)
                 .addFilterAfter(new TenantFilter(), JwtAuthenticationFilter.class);

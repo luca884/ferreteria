@@ -190,7 +190,7 @@ describe('Proveedores', () => {
               status: 400,
               error: {
                 status: 400,
-                message: 'Datos invalidos',
+                message: 'Datos inválidos',
                 errors: { nombre: 'El nombre no puede superar 100 caracteres' },
               },
             }),
@@ -202,7 +202,7 @@ describe('Proveedores', () => {
 
       const alerta = el().querySelector('[role="alert"]')!;
       expect(alerta.textContent).toContain('El nombre no puede superar 100 caracteres');
-      expect(alerta.textContent).not.toContain('Datos invalidos');
+      expect(alerta.textContent).not.toContain('Datos inválidos');
     });
 
     it('muestra un mensaje genérico si el error no trae mensaje', async () => {

@@ -95,7 +95,7 @@ class GlobalExceptionHandlerImportacionTest {
         ResponseEntity<ApiError> respuesta = handler.unreadable(noLegible("{\"proveedorId\":\"zzz\"}", VistaPreviaRequest.class));
 
         assertThat(respuesta.getStatusCode().value()).isEqualTo(400);
-        assertThat(respuesta.getBody().message()).isEqualTo("El cuerpo del pedido no es valido");
+        assertThat(respuesta.getBody().message()).isEqualTo("El cuerpo del pedido no es válido");
     }
 
     @Test
@@ -169,7 +169,7 @@ class GlobalExceptionHandlerImportacionTest {
                 new DatosInvalidosException(Map.of("bonificacion1", RANGO)));
 
         assertThat(respuesta.getStatusCode().value()).isEqualTo(400);
-        assertThat(respuesta.getBody().message()).isEqualTo("Datos invalidos");
+        assertThat(respuesta.getBody().message()).isEqualTo("Datos inválidos");
         assertThat(respuesta.getBody().errors()).containsOnly(Map.entry("bonificacion1", RANGO));
     }
 

@@ -487,7 +487,7 @@ class ArticuloIntegrationTest extends IntegrationTestBase {
     void unCuerpoQueNoEsJsonSigueDandoElMensajeGenerico() throws Exception {
         postJson("/api/articulos", duenoA, "{esto no es json")
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.message", is("El cuerpo del pedido no es valido")));
+                .andExpect(jsonPath("$.message", is("El cuerpo del pedido no es válido")));
     }
 
     // --- Rubro y proveedor por tenant (R-006) ---

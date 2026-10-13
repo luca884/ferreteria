@@ -8,7 +8,7 @@ describe('erroresDeCampos', () => {
   it('devuelve los mensajes de cada campo del 400 de validación, en orden', () => {
     const err = http400({
       status: 400,
-      message: 'Datos invalidos',
+      message: 'Datos inválidos',
       errors: { costo: 'El costo no puede ser negativo', descripcion: 'La descripción es obligatoria' },
     });
 

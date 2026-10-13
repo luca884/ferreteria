@@ -58,13 +58,13 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(AccessDeniedException.class)
     public ResponseEntity<ApiError> accessDenied(AccessDeniedException ex) {
-        return build(HttpStatus.FORBIDDEN, "No tenes permiso para hacer esto");
+        return build(HttpStatus.FORBIDDEN, "No tenés permiso para hacer esto");
     }
 
     /** Un usuario sin ferreteria (super admin) pidiendo datos de una ferreteria. */
     @ExceptionHandler(MissingTenantException.class)
     public ResponseEntity<ApiError> missingTenant(MissingTenantException ex) {
-        return build(HttpStatus.FORBIDDEN, "Este recurso requiere una ferreteria");
+        return build(HttpStatus.FORBIDDEN, "Este recurso requiere una ferretería");
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
@@ -75,14 +75,14 @@ public class GlobalExceptionHandler {
         ex.getBindingResult().getFieldErrors()
                 .forEach(e -> errores.agregar(e.getField(), e.getCode(), e.getDefaultMessage()));
         return ResponseEntity.badRequest()
-                .body(ApiError.of(HttpStatus.BAD_REQUEST.value(), "Datos invalidos", errores.mensajes()));
+                .body(ApiError.of(HttpStatus.BAD_REQUEST.value(), "Datos inválidos", errores.mensajes()));
     }
 
     /** Datos validados en el servicio: mismo formato que la validacion del cuerpo. */
     @ExceptionHandler(DatosInvalidosException.class)
     public ResponseEntity<ApiError> datosInvalidos(DatosInvalidosException ex) {
         return ResponseEntity.badRequest()
-                .body(ApiError.of(HttpStatus.BAD_REQUEST.value(), "Datos invalidos", ex.errors()));
+                .body(ApiError.of(HttpStatus.BAD_REQUEST.value(), "Datos inválidos", ex.errors()));
     }
 
     @ExceptionHandler(HttpMessageNotReadableException.class)
@@ -98,7 +98,7 @@ public class GlobalExceptionHandler {
                         HttpStatus.BAD_REQUEST.value(), mensaje, Map.of(ultimoCampo(formato), mensaje)));
             }
         }
-        return build(HttpStatus.BAD_REQUEST, "El cuerpo del pedido no es valido");
+        return build(HttpStatus.BAD_REQUEST, "El cuerpo del pedido no es válido");
     }
 
     /** Un valor que no es de la enumeracion del campo (alicuota de IVA, unidad...): el mensaje nombra el campo. */
@@ -154,12 +154,12 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
     public ResponseEntity<ApiError> methodNotAllowed(HttpRequestMethodNotSupportedException ex) {
-        return build(HttpStatus.METHOD_NOT_ALLOWED, "Metodo no permitido");
+        return build(HttpStatus.METHOD_NOT_ALLOWED, "Método no permitido");
     }
 
     @ExceptionHandler(MethodArgumentTypeMismatchException.class)
     public ResponseEntity<ApiError> typeMismatch(MethodArgumentTypeMismatchException ex) {
-        return build(HttpStatus.BAD_REQUEST, "Parametro invalido: " + ex.getName());
+        return build(HttpStatus.BAD_REQUEST, "Parámetro inválido: " + ex.getName());
     }
 
     @ExceptionHandler(HttpMediaTypeNotSupportedException.class)

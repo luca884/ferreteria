@@ -12,7 +12,7 @@ public class DatosInvalidosException extends RuntimeException {
     private final Map<String, String> errors;
 
     public DatosInvalidosException(Map<String, String> errors) {
-        super("Datos invalidos");
+        super("Datos inválidos");
         this.errors = Map.copyOf(errors);
     }
 

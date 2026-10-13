@@ -343,7 +343,7 @@ describe('ArticuloForm', () => {
               status: 400,
               error: {
                 status: 400,
-                message: 'Datos invalidos',
+                message: 'Datos inválidos',
                 errors: {
                   costo: 'El costo no puede ser negativo',
                   descripcion: 'La descripción no puede superar 200 caracteres',
@@ -358,7 +358,7 @@ describe('ArticuloForm', () => {
       const alerta = el().querySelector('.error')!;
       expect(alerta.textContent).toContain('El costo no puede ser negativo');
       expect(alerta.textContent).toContain('La descripción no puede superar 200 caracteres');
-      expect(alerta.textContent).not.toContain('Datos invalidos');
+      expect(alerta.textContent).not.toContain('Datos inválidos');
       expect(el().querySelectorAll('.error li').length).toBe(2);
       expect(navigate).not.toHaveBeenCalled();
     });
@@ -370,7 +370,7 @@ describe('ArticuloForm', () => {
           () =>
             new HttpErrorResponse({
               status: 400,
-              error: { message: 'Datos invalidos', errors: { costo: 'El costo no puede ser negativo' } },
+              error: { message: 'Datos inválidos', errors: { costo: 'El costo no puede ser negativo' } },
             }),
         ),
       );

@@ -1043,7 +1043,7 @@ describe('Importaciones', () => {
               status: 400,
               error: {
                 status: 400,
-                message: 'Datos invalidos',
+                message: 'Datos inválidos',
                 errors: { bonificacion1: 'La bonificación 1 debe estar entre 0 y 100.' },
               },
             }),
@@ -1055,7 +1055,7 @@ describe('Importaciones', () => {
 
       const alerta = q('[role="alert"]');
       expect(alerta.textContent).toContain('La bonificación 1 debe estar entre 0 y 100.');
-      expect(alerta.textContent).not.toContain('Datos invalidos');
+      expect(alerta.textContent).not.toContain('Datos inválidos');
     });
 
     it('un error que no es HTTP muestra un mensaje genérico', async () => {
@@ -1301,7 +1301,7 @@ describe('Importaciones', () => {
               status: 400,
               error: {
                 status: 400,
-                message: 'Datos invalidos',
+                message: 'Datos inválidos',
                 errors: {
                   bonificacion2: 'La bonificación 2 debe estar entre 0 y 100.',
                   'conteosEsperados.suben': 'Faltan los contadores de la vista previa.',
@@ -1316,7 +1316,7 @@ describe('Importaciones', () => {
       const alerta = q('[role="alert"]');
       expect(alerta.textContent).toContain('La bonificación 2 debe estar entre 0 y 100.');
       expect(alerta.textContent).toContain('Faltan los contadores de la vista previa.');
-      expect(alerta.textContent).not.toContain('Datos invalidos');
+      expect(alerta.textContent).not.toContain('Datos inválidos');
       expect(el().querySelector('.vista-previa')).not.toBeNull();
     });
 
