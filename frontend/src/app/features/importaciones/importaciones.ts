@@ -2,7 +2,7 @@ import { ScrollingModule } from '@angular/cdk/scrolling';
 import { DecimalPipe } from '@angular/common';
 import { MontoPipe } from '../../core/formato/monto';
 import { HttpErrorResponse } from '@angular/common/http';
-import { Component, ElementRef, OnInit, computed, inject, signal, viewChild } from '@angular/core';
+import { Component, ElementRef, OnInit, computed, effect, inject, signal, viewChild } from '@angular/core';
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { FormControl, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
 import { erroresDeCampos } from '../../core/api/api-error';
@@ -20,6 +20,8 @@ import {
   VistaPreviaRequest,
 } from './importacion.models';
 import { ImportacionesService } from './importaciones.service';
+import { filaDeEncabezado, primeraFilaDeDatos } from './encabezado-lista';
+import { SelectorArchivo } from './selector-archivo';
 
 /** El backend rechaza más de 10 MB; se controla antes de subir para no gastar el pedido. */
 const MAX_BYTES = 10 * 1024 * 1024;
@@ -44,7 +46,7 @@ const ZOOM_INICIAL = 100;
 
 @Component({
   selector: 'app-importaciones',
-  imports: [ReactiveFormsModule, DecimalPipe, MontoPipe, ScrollingModule],
+  imports: [ReactiveFormsModule, DecimalPipe, MontoPipe, ScrollingModule, SelectorArchivo],
   templateUrl: './importaciones.html',
   styleUrl: './importaciones.css',
 })
@@ -86,6 +88,13 @@ export class Importaciones implements OnInit {
     Array.from({ length: this.muestra()?.columnas ?? 0 }, (_, i) => i),
   );
 
+  /** Textos de la fila de encabezado detectada (vacío si la lista no tiene), para rotular las columnas. */
+  private readonly textosDeEncabezado = computed(() => {
+    const m = this.muestra();
+    const numero = filaDeEncabezado(m);
+    return m?.filas.find((f) => f.numero === numero)?.celdas ?? [];
+  });
+
   /** Mapeo, IVA y bonificaciones: arrancan con lo guardado en el proveedor. */
   protected readonly form = new FormGroup({
     filaDesde: new FormControl<number | null>(1, [Validators.required, Validators.min(1)]),
@@ -119,10 +128,18 @@ export class Importaciones implements OnInit {
   );
 
   private readonly encabezado = viewChild<ElementRef<HTMLElement>>('encabezadoVisor');
+  private readonly resumenEl = viewChild<ElementRef<HTMLElement>>('resumenEl');
 
   constructor() {
     // Cualquier cambio del mapeo, el IVA o las bonificaciones deja la vista previa vieja sin efecto.
     this.form.valueChanges.pipe(takeUntilDestroyed()).subscribe(() => this.invalidar());
+    // El resultado aparece donde está el Dueño: se lo lleva a la vista y se le da el foco.
+    effect(() => {
+      const el = this.resumenEl()?.nativeElement;
+      if (!el) return;
+      el.focus({ preventScroll: true });
+      el.scrollIntoView?.({ block: 'start', behavior: 'smooth' });
+    });
   }
 
   ngOnInit(): void {
@@ -151,6 +168,13 @@ export class Importaciones implements OnInit {
   /** Un cambio está en la lista porque el costo se movió: sube si el nuevo es mayor, baja si es menor. */
   protected tipoDeCambio(cambio: CambioPlaneado): 'Sube' | 'Baja' {
     return cambio.costoNuevo > cambio.costoAnterior ? 'Sube' : 'Baja';
+  }
+
+  /** «A · Código»: la letra de la planilla y el texto del encabezado de esa columna, si lo hay. */
+  protected etiquetaColumna(indice: number): string {
+    const texto = (this.textosDeEncabezado()[indice] ?? '').trim();
+    if (texto === '') return this.letra(indice);
+    return `${this.letra(indice)} · ${texto.length > 28 ? texto.slice(0, 27) + '…' : texto}`;
   }
 
   protected letra(indice: number): string {
@@ -222,8 +246,7 @@ export class Importaciones implements OnInit {
     }
   }
 
-  protected elegirArchivo(input: HTMLInputElement): void {
-    const archivo = input.files?.[0] ?? null;
+  protected elegirArchivo(archivo: File | null): void {
     this.invalidar();
     this.muestra.set(null);
     if (archivo === null) {
@@ -231,13 +254,24 @@ export class Importaciones implements OnInit {
       return;
     }
     if (archivo.size > MAX_BYTES) {
-      input.value = '';
       this.archivo.set(null);
       this.error.set('El archivo supera el máximo de 10 MB.');
       return;
     }
     this.archivo.set(archivo);
     this.cargarMuestra(this.hojaGuardada());
+  }
+
+  /** Vuelve al paso 1 sin nada cargado, para importar la lista de otro proveedor. */
+  protected importarOtra(): void {
+    this.invalidar();
+    this.archivo.set(null);
+    this.muestra.set(null);
+    this.hoja.set(0);
+    this.proveedorId.set(null);
+    this.crearNuevos.set(false);
+    this.rubroId.set(null);
+    this.precargar();
   }
 
   /** Mueve la grilla a la hoja anterior (−1) o a la siguiente (+1); en los extremos no hace nada. */
@@ -383,7 +417,7 @@ export class Importaciones implements OnInit {
     const proveedor = this.proveedor();
     const mapeo = proveedor?.mapeoLista;
     this.form.reset({
-      filaDesde: mapeo?.filaDesde ?? 1,
+      filaDesde: mapeo?.filaDesde ?? primeraFilaDeDatos(this.muestra()),
       columnaCodigo: mapeo?.columnaCodigo ?? null,
       columnaDescripcion: mapeo?.columnaDescripcion ?? null,
       columnaCosto: mapeo?.columnaCosto ?? null,
@@ -404,6 +438,10 @@ export class Importaciones implements OnInit {
         if (this.archivo() !== archivo) return;
         this.muestra.set(muestra);
         this.hoja.set(muestra.hoja);
+        // Sin mapeo guardado se propone la fila siguiente al encabezado; con mapeo guardado se respeta.
+        if (!this.proveedor()?.mapeoLista) {
+          this.form.controls.filaDesde.setValue(primeraFilaDeDatos(muestra));
+        }
         this.cargandoMuestra.set(false);
       },
       error: (err: unknown) => {

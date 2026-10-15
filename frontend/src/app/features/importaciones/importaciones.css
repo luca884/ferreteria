@@ -86,7 +86,8 @@
 }
 .visor-cuerpo {
   width: 100%;
-  height: var(--alto-marco);
+  height: min(var(--alto-marco), 40vh);
+  min-height: 150px;
 }
 .visor-fila {
   border-bottom: 1px solid var(--borde);

@@ -31,7 +31,7 @@
   }
 
   @if (resumen(); as r) {
-    <section class="resumen panel" role="status">
+    <section #resumenEl class="resumen panel" role="status" tabindex="-1">
       <h2>Importación aplicada</h2>
       <p class="ayuda">Archivo {{ r.archivo }}. Los precios ya están actualizados.</p>
       <div class="tarjetas">
@@ -39,9 +39,9 @@
           <div class="tarjeta">{{ t.etiqueta }} <strong>{{ t.valor }}</strong></div>
         }
       </div>
+      <button type="button" class="primario" (click)="importarOtra()">Importar otra lista</button>
     </section>
-  }
-
+  } @else {
   <section class="paso panel">
     <h2>1. Proveedor y archivo</h2>
     <div class="fila">
@@ -56,16 +56,7 @@
           }
         </select>
       </div>
-      <div class="campo">
-        <label for="archivo">Archivo de la lista</label>
-        <input
-          id="archivo"
-          type="file"
-          accept=".xlsx,.xls,.csv"
-          (change)="elegirArchivo($any($event.target))"
-        />
-        <span class="ayuda">Excel (.xlsx, .xls) o CSV, hasta 10 MB.</span>
-      </div>
+      <app-selector-archivo [archivo]="archivo()" (elegido)="elegirArchivo($event)" />
     </div>
   </section>
 
@@ -190,7 +181,7 @@
             <select id="columnaCodigo" formControlName="columnaCodigo">
               <option [ngValue]="null">Elegí la columna</option>
               @for (c of columnas(); track c) {
-                <option [ngValue]="c">{{ letra(c) }}</option>
+                <option [ngValue]="c">{{ etiquetaColumna(c) }}</option>
               }
             </select>
           </div>
@@ -199,7 +190,7 @@
             <select id="columnaDescripcion" formControlName="columnaDescripcion">
               <option [ngValue]="null">Sin descripción</option>
               @for (c of columnas(); track c) {
-                <option [ngValue]="c">{{ letra(c) }}</option>
+                <option [ngValue]="c">{{ etiquetaColumna(c) }}</option>
               }
             </select>
           </div>
@@ -208,7 +199,7 @@
             <select id="columnaCosto" formControlName="columnaCosto">
               <option [ngValue]="null">Elegí la columna</option>
               @for (c of columnas(); track c) {
-                <option [ngValue]="c">{{ letra(c) }}</option>
+                <option [ngValue]="c">{{ etiquetaColumna(c) }}</option>
               }
             </select>
           </div>
@@ -443,5 +434,6 @@
         Confirmar importación
       </button>
     </section>
+  }
   }
 }
