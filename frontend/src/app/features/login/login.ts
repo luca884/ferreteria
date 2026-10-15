@@ -3,6 +3,7 @@ import { Component, inject, signal } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import { AuthService } from '../../core/auth/auth.service';
+import { esRutaPropia } from '../../core/auth/ruta-propia';
 
 @Component({
   selector: 'app-login',
@@ -29,8 +30,7 @@ export class Login {
    */
   private destino(): string {
     const pedida = this.route.snapshot.queryParamMap.get('returnUrl');
-    const propia = pedida !== null && pedida.startsWith('/') && !pedida.startsWith('//') && !pedida.startsWith('/login');
-    return propia ? pedida : '/';
+    return esRutaPropia(pedida) ? pedida : '/';
   }
 
   protected ingresar(): void {
