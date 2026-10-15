@@ -1461,13 +1461,12 @@ describe('Mostrador', () => {
     it.each([
       ['un error de red', 0],
       ['un 500', 500],
-      ['un 400', 400],
     ])('%s conserva ticket y clave, avisa en el diálogo y el reintento usa la misma clave', async (_n, status) => {
       await conMartillos();
       await tecla('F4');
       await tecla('Enter');
 
-      await fallarCobro(0, status, status === 400 ? { message: 'Datos inválidos' } : null);
+      await fallarCobro(0, status, null);
 
       expect(dialogo()).not.toBeNull();
       expect(normal(dialogo()!.textContent)).toContain('No se pudo cobrar. Probá de nuevo.');
@@ -1475,6 +1474,68 @@ describe('Mostrador', () => {
       await tecla('Enter');
       expect(cobros).toHaveLength(2);
       expect(cobros[1].pedido.clave).toBe('clave-1');
+    });
+
+    it('un 400 por un renglón muestra el mensaje del servidor, marca ese renglón y conserva ticket y clave', async () => {
+      await crear();
+      await escanear('M', martillo());
+      await escanear('S', articulo(2, { descripcion: 'Serrucho', precioFinal: 100 }));
+      await tecla('F4');
+      await tecla('Enter');
+
+      await fallarCobro(0, 400, {
+        status: 400,
+        message: 'Datos inválidos',
+        errors: { 'renglones[1].cantidad': 'La cantidad debe ser mayor a 0' },
+      });
+
+      expect(dialogo()).toBeNull();
+      expect(renglonesTicket()).toHaveLength(2);
+      expect(avisos()).toBe('La cantidad debe ser mayor a 0');
+      expect(el().querySelector('.aviso')!.getAttribute('role')).toBe('alert');
+      expect(normal(renglonesTicket()[1].textContent)).toContain('La cantidad debe ser mayor a 0');
+      expect(renglonesTicket()[0].querySelector('.problema')).toBeNull();
+
+      await tecla('F4');
+      await tecla('Enter');
+      expect(cobros[1].pedido.clave).toBe('clave-1');
+    });
+
+    it('un 400 que no es de un renglón muestra los mensajes del servidor en el diálogo', async () => {
+      await conMartillos();
+      await tecla('F4');
+      await tecla('Enter');
+
+      await fallarCobro(0, 400, {
+        status: 400,
+        message: 'Datos inválidos',
+        errors: { medioPago: 'El medio de pago no es válido.' },
+      });
+
+      expect(dialogo()).not.toBeNull();
+      expect(normal(dialogo()!.textContent)).toContain('El medio de pago no es válido.');
+      expect(normal(dialogo()!.textContent)).not.toContain('No se pudo cobrar');
+      expect(renglonesTicket()[0].querySelector('.problema')).toBeNull();
+    });
+
+    it('un 400 sin errores por campo muestra el mensaje del servidor', async () => {
+      await conMartillos();
+      await tecla('F4');
+      await tecla('Enter');
+
+      await fallarCobro(0, 400, { status: 400, message: 'El cuerpo del pedido no es válido' });
+
+      expect(normal(dialogo()!.textContent)).toContain('El cuerpo del pedido no es válido');
+    });
+
+    it('un 400 con un cuerpo que no se entiende cae al mensaje genérico', async () => {
+      await conMartillos();
+      await tecla('F4');
+      await tecla('Enter');
+
+      await fallarCobro(0, 400, null);
+
+      expect(normal(dialogo()!.textContent)).toContain('No se pudo cobrar. Probá de nuevo.');
     });
 
     it('cancelar el diálogo después de un error deja el ticket para volver a intentar', async () => {

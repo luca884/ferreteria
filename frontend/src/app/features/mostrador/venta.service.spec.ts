@@ -2,7 +2,7 @@ import { HttpErrorResponse, provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 import { ConfirmarVentaRequest, VentaCobrada, VentaRechazada, VentaResponse } from './venta.models';
-import { VentaService, rechazoDe } from './venta.service';
+import { VentaService, invalidaDe, rechazoDe } from './venta.service';
 
 describe('VentaService', () => {
   let service: VentaService;
@@ -138,6 +138,29 @@ describe('VentaService', () => {
         rechazoDe(new HttpErrorResponse({ status: 400, error: { status: 400, message: 'Datos inválidos' } })),
       ).toBeNull();
       expect(rechazoDe(new HttpErrorResponse({ status: 404, error: 'texto' }))).toBeNull();
+    });
+  });
+
+  describe('invalidaDe', () => {
+    it('devuelve el cuerpo de un 400 con message y errors por campo', () => {
+      const cuerpo = { status: 400, message: 'Datos inválidos', errors: { 'renglones[0].cantidad': 'Mal' } };
+      expect(invalidaDe(new HttpErrorResponse({ status: 400, error: cuerpo }))).toEqual(cuerpo);
+    });
+
+    it('acepta un 400 sin errors', () => {
+      const cuerpo = { status: 400, message: 'El cuerpo del pedido no es válido' };
+      expect(invalidaDe(new HttpErrorResponse({ status: 400, error: cuerpo }))).toEqual(cuerpo);
+    });
+
+    it('devuelve null si no es un 400 con cuerpo reconocible', () => {
+      expect(invalidaDe(new Error('x'))).toBeNull();
+      expect(invalidaDe(new HttpErrorResponse({ status: 500, error: { message: 'x' } }))).toBeNull();
+      expect(invalidaDe(new HttpErrorResponse({ status: 400, error: null }))).toBeNull();
+      expect(invalidaDe(new HttpErrorResponse({ status: 400, error: 'texto' }))).toBeNull();
+      expect(invalidaDe(new HttpErrorResponse({ status: 400, error: { status: 400 } }))).toBeNull();
+      expect(
+        invalidaDe(new HttpErrorResponse({ status: 400, error: { message: 'x', errors: 'mal' } })),
+      ).toBeNull();
     });
   });
 });

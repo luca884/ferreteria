@@ -17,8 +17,8 @@ import { formatearMonto } from '../../core/formato/monto';
 import { aRequest } from './ticket';
 import { TicketLista } from './ticket-lista';
 import { TicketStore } from './ticket.store';
-import { ConfirmarVentaRequest, VentaCobrada, VentaRechazada } from './venta.models';
-import { VentaService, rechazoDe } from './venta.service';
+import { ConfirmarVentaRequest, VentaCobrada, VentaInvalida, VentaRechazada } from './venta.models';
+import { VentaService, invalidaDe, rechazoDe } from './venta.service';
 
 const ESPERA_MS = 250;
 /** Cuánto queda a la vista el aviso de venta cobrada. */
@@ -333,7 +333,9 @@ export class Mostrador {
     this.enVuelo.set(false);
     const rechazo = rechazoDe(err);
     if (!rechazo) {
-      this.avisoCobro.set(MENSAJE_COBRO_FALLIDO);
+      const invalida = invalidaDe(err);
+      if (invalida) this.alVentaInvalida(invalida);
+      else this.avisoCobro.set(MENSAJE_COBRO_FALLIDO);
       return;
     }
     switch (rechazo.motivo) {
@@ -363,6 +365,27 @@ export class Mostrador {
         this.rechazarTicket(rechazo.message);
         return;
     }
+  }
+
+  /**
+   * Un 400: reintentar no sirve porque los datos son inválidos. Se muestran los mensajes del servidor; si
+   * alguno es de un renglón (`renglones[i].…`) se marca ese renglón para corregirlo o quitarlo.
+   */
+  private alVentaInvalida(invalida: VentaInvalida): void {
+    const entradas = Object.entries(invalida.errors ?? {});
+    const texto = entradas.length > 0 ? [...new Set(entradas.map(([, m]) => m))].join(' ') : invalida.message;
+    const renglones = this.ticket.ticket().renglones;
+    const problemas = entradas.flatMap(([campo, mensaje]) => {
+      const indice = /^renglones\[(\d+)\]\./.exec(campo)?.[1];
+      const renglon = indice === undefined ? undefined : renglones[Number(indice)];
+      return renglon ? [{ articuloId: renglon.articuloId, mensaje }] : [];
+    });
+    if (problemas.length === 0) {
+      this.avisoCobro.set(texto);
+      return;
+    }
+    this.ticket.marcarProblemas(problemas);
+    this.rechazarTicket(texto);
   }
 
   /** El ticket no se vende como está: se cierra el cobro, se conserva el ticket y se explica por qué. */

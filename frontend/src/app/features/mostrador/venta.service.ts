@@ -2,7 +2,7 @@ import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable, map } from 'rxjs';
 import { environment } from '../../../environments/environment';
-import { ConfirmarVentaRequest, VentaCobrada, VentaRechazada, VentaResponse } from './venta.models';
+import { ConfirmarVentaRequest, VentaCobrada, VentaInvalida, VentaRechazada, VentaResponse } from './venta.models';
 
 @Injectable({ providedIn: 'root' })
 export class VentaService {
@@ -35,4 +35,15 @@ export function rechazoDe(err: unknown): VentaRechazada | null {
   if (typeof cuerpo !== 'object' || cuerpo === null) return null;
   if (typeof cuerpo.motivo !== 'string' || !MOTIVOS.includes(cuerpo.motivo)) return null;
   return cuerpo as VentaRechazada;
+}
+
+/** El cuerpo de un 400 de venta (`message` y, si hay, `errors` por campo), o null si no se reconoce. */
+export function invalidaDe(err: unknown): VentaInvalida | null {
+  if (!(err instanceof HttpErrorResponse) || err.status !== 400) return null;
+  const cuerpo = err.error as Partial<VentaInvalida> | null;
+  if (typeof cuerpo !== 'object' || cuerpo === null) return null;
+  if (typeof cuerpo.message !== 'string') return null;
+  const errors = cuerpo.errors;
+  if (errors !== undefined && (typeof errors !== 'object' || errors === null)) return null;
+  return cuerpo as VentaInvalida;
 }
