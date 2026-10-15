@@ -142,6 +142,7 @@ class PlanificadorMasivoTest {
             assertThat(plan.cambios().get(0).precioNuevo()).isEqualTo(bd("190.00"));
             assertThat(plan.cambios().get(0).margenAnterior()).isEqualByComparingTo("40");
             assertThat(plan.cambios().get(0).margenNuevo()).isEqualByComparingTo("40");
+            assertThat(plan.cambios().get(0).margenHeredado()).isTrue();
         }
 
         @Test
@@ -152,6 +153,7 @@ class PlanificadorMasivoTest {
 
             assertThat(plan.cambios().get(0).precioNuevo()).isEqualTo(bd("200.00"));
             assertThat(plan.cambios().get(0).margenAnterior()).isEqualByComparingTo("50");
+            assertThat(plan.cambios().get(0).margenHeredado()).isFalse();
         }
 
         @Test
@@ -295,6 +297,7 @@ class PlanificadorMasivoTest {
             assertThat(cambio.margenNuevo()).isEqualByComparingTo("50");
             assertThat(cambio.precioAnterior()).isEqualByComparingTo("160");
             assertThat(cambio.precioNuevo()).isEqualTo(bd("190.00"));
+            assertThat(cambio.margenHeredado()).as("en modo MARGEN el margen nuevo ya es propio").isFalse();
         }
 
         @Test

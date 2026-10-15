@@ -445,6 +445,7 @@ describe('ActualizacionMasiva', () => {
       margenNuevo: 30,
       precioAnterior: 160,
       precioNuevo: 180,
+      margenHeredado: false,
       advertencia: null,
       ...sobre,
     });
@@ -694,6 +695,7 @@ describe('ActualizacionMasiva', () => {
       margenNuevo: 30,
       precioAnterior: 160,
       precioNuevo: 180,
+      margenHeredado: false,
       advertencia: null,
     };
     const conCambios: VistaPreviaMasiva = { ...vistaPreviaBase, cambios: [unCambio] };
@@ -830,6 +832,7 @@ describe('ActualizacionMasiva', () => {
       margenNuevo: 30,
       precioAnterior: 160,
       precioNuevo: 180,
+      margenHeredado: false,
       advertencia: null,
     };
     const vistaPrevia = (modificados: number, total = modificados): VistaPreviaMasiva => ({
@@ -1207,6 +1210,7 @@ describe('ActualizacionMasiva', () => {
           margenNuevo: 30,
           precioAnterior: 160,
           precioNuevo: 180,
+          margenHeredado: false,
           advertencia: null,
         },
       ],
@@ -1476,6 +1480,7 @@ describe('ActualizacionMasiva', () => {
       margenNuevo: 30,
       precioAnterior: 160,
       precioNuevo: 180,
+      margenHeredado: false,
       advertencia: null,
     };
     const resultado: ResultadoMasivo = {
@@ -1591,6 +1596,18 @@ describe('ActualizacionMasiva', () => {
       const c = await conCambio({ margenAnterior: 35, margenNuevo: 35, margenHeredado: true });
 
       expect(c[3]).toBe('Heredado 35 %');
+    });
+
+    it('el margen propio no se rotula como heredado', async () => {
+      const c = await conCambio({ margenAnterior: 50, margenNuevo: 50, margenHeredado: false });
+
+      expect(c[3]).toBe('50 %');
+    });
+
+    it('si el margen cambia se muestra la flecha aunque el anterior fuera heredado', async () => {
+      const c = await conCambio({ margenAnterior: 35, margenNuevo: 50, margenHeredado: false });
+
+      expect(c[3]).toBe('35 % → 50 %');
     });
   });
 });

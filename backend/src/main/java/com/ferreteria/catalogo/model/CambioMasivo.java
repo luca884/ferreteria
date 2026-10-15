@@ -6,6 +6,8 @@ import java.math.BigDecimal;
  * Un articulo modificado por una actualizacion masiva, antes y despues. Los margenes son los
  * efectivos (propio, o del rubro, o por defecto).
  *
+ * @param margenHeredado true si, despues de la operacion, el articulo no tiene margen propio y usa el
+ *                      del rubro o el de la ferreteria
  * @param advertencia texto de la variacion fuerte, o null
  */
 public record CambioMasivo(
@@ -18,5 +20,6 @@ public record CambioMasivo(
         BigDecimal margenNuevo,
         BigDecimal precioAnterior,
         BigDecimal precioNuevo,
+        boolean margenHeredado,
         String advertencia) {
 }
