@@ -1,5 +1,19 @@
 <app-barra-acciones>
   <h1>Rubros</h1>
+  @if (auth.esDueno()) {
+    <button type="button" class="accion-barra primario nuevo" (click)="nuevo()">
+      <svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+        <path d="M8 3v10M3 8h10" />
+      </svg>
+      Nuevo
+    </button>
+    <button type="button" class="accion-barra editar" [disabled]="!elegido()" (click)="editar()">
+      <svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+        <path d="M3 13l1-3 7-7 2 2-7 7z" />
+      </svg>
+      Editar
+    </button>
+  }
 </app-barra-acciones>
 
 <p class="ayuda">El margen del rubro es el que usan los artículos que no tienen uno propio.</p>
@@ -19,32 +33,38 @@
       <p class="ayuda estado-vacio">Todavía no hay rubros.</p>
     } @else {
       <div class="grilla-marco">
-        <table>
+        <table [attr.role]="auth.esDueno() ? 'grid' : null" aria-label="Rubros">
           <thead>
             <tr>
               <th>Nombre</th>
               <th class="num">Margen</th>
-              @if (auth.esDueno()) {
-                <th class="acciones">Acciones</th>
-              }
             </tr>
           </thead>
           <tbody>
-            @for (rubro of rubros(); track rubro.id) {
-              <tr [class.editando]="rubro.id === editando()?.id">
+            @for (rubro of rubros(); track rubro.id; let i = $index) {
+              <tr
+                [class.editando]="rubro.id === editando()?.id"
+                [class.elegible]="auth.esDueno()"
+                [attr.aria-selected]="auth.esDueno() ? rubro.id === elegidoId() : null"
+                [attr.tabindex]="auth.esDueno() ? (esFilaTabulable(rubro, i) ? 0 : -1) : null"
+                (click)="elegir(rubro)"
+                (focus)="elegir(rubro)"
+                (dblclick)="editar(rubro)"
+                (keydown)="alTeclearFila($event, rubro, i)"
+              >
                 <td class="nombre">{{ rubro.nombre }}</td>
-                <td class="num">{{ rubro.margenPorcentaje | number: '1.0-2' }} %</td>
-                @if (auth.esDueno()) {
-                  <td class="acciones">
-                    <button type="button" class="secundario chico editar" (click)="editar(rubro)">Editar</button>
-                  </td>
-                }
+                <td class="num">{{ rubro.margenPorcentaje | number: '1.0-2' }}&nbsp;%</td>
               </tr>
             }
           </tbody>
         </table>
       </div>
-      <p class="barra-estado">{{ rubros().length }} {{ rubros().length === 1 ? 'rubro' : 'rubros' }}</p>
+      <p class="barra-estado">
+        <span>{{ rubros().length }} {{ rubros().length === 1 ? 'rubro' : 'rubros' }}</span>
+        @if (elegido(); as actual) {
+          <span class="elegido">· Elegido: <strong>{{ actual.nombre }}</strong> · Enter edita</span>
+        }
+      </p>
     }
   </div>
 
@@ -53,9 +73,18 @@
       <h2>{{ editando() === null ? 'Nuevo rubro' : 'Editar rubro' }}</h2>
       <div class="campo nombre">
         <label for="nombre">Nombre</label>
-        <input id="nombre" formControlName="nombre" placeholder="Ej: Bulonería" />
-        @if (form.controls.nombre.touched && form.controls.nombre.invalid) {
-          <span class="campo-error">
+        <input
+          id="nombre"
+          name="nombre"
+          formControlName="nombre"
+          autocomplete="off"
+          spellcheck="false"
+          placeholder="Ej: Bulonería…"
+          [attr.aria-invalid]="invalido('nombre') ? 'true' : null"
+          [attr.aria-describedby]="invalido('nombre') ? 'nombre-error' : null"
+        />
+        @if (invalido('nombre')) {
+          <span id="nombre-error" class="campo-error">
             {{
               form.controls.nombre.errors?.['maxlength']
                 ? 'El nombre no puede superar 80 caracteres.'
@@ -66,20 +95,37 @@
       </div>
       <div class="campo margen">
         <label for="margen">Margen %</label>
-        <input id="margen" type="number" step="0.01" min="0" formControlName="margenPorcentaje" />
-        @if (form.controls.margenPorcentaje.touched && form.controls.margenPorcentaje.errors; as errores) {
-          <span class="campo-error">
+        <input
+          id="margen"
+          name="margenPorcentaje"
+          type="number"
+          inputmode="decimal"
+          step="0.01"
+          min="0"
+          autocomplete="off"
+          formControlName="margenPorcentaje"
+          [attr.aria-invalid]="invalido('margenPorcentaje') ? 'true' : null"
+          [attr.aria-describedby]="
+            invalido('margenPorcentaje')
+              ? 'margen-error'
+              : editando() !== null
+                ? 'margen-pista'
+                : null
+          "
+        />
+        @if (invalido('margenPorcentaje') && form.controls.margenPorcentaje.errors; as errores) {
+          <span id="margen-error" class="campo-error">
             @if (errores['required']) {
               El margen es obligatorio.
             } @else if (errores['min']) {
               El margen no puede ser negativo.
             } @else {
-              El margen no puede superar 1000 %.
+              El margen no puede superar 1000&nbsp;%.
             }
           </span>
         }
         @if (editando() !== null) {
-          <span class="pista">Si cambiás el margen, se recalcula el precio de los artículos que lo usan.</span>
+          <span id="margen-pista" class="pista">Si cambiás el margen, se recalcula el precio de los artículos que lo usan.</span>
         }
       </div>
       <div class="acciones-alta">
