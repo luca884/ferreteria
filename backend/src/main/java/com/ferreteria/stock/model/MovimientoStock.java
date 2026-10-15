@@ -70,6 +70,25 @@ public class MovimientoStock {
         return movimiento;
     }
 
+    /** Ajuste manual (CU-09): la diferencia lleva signo y el motivo es obligatorio. Sin comprobante. */
+    public static MovimientoStock ajuste(
+            Long ferreteriaId, Long articuloId, BigDecimal diferencia, String motivo, Long usuarioId) {
+        if (diferencia == null || diferencia.signum() == 0) {
+            throw new IllegalArgumentException("Un ajuste tiene que cambiar el stock.");
+        }
+        if (motivo == null || motivo.isBlank() || motivo.length() > 200) {
+            throw new IllegalArgumentException("Un ajuste necesita un motivo de hasta 200 caracteres.");
+        }
+        MovimientoStock movimiento = new MovimientoStock();
+        movimiento.ferreteriaId = ferreteriaId;
+        movimiento.articuloId = articuloId;
+        movimiento.tipo = TipoMovimiento.AJUSTE;
+        movimiento.cantidad = diferencia;
+        movimiento.motivo = motivo;
+        movimiento.usuarioId = usuarioId;
+        return movimiento;
+    }
+
     public Long getId() { return id; }
     public Long getFerreteriaId() { return ferreteriaId; }
     public Long getArticuloId() { return articuloId; }
