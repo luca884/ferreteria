@@ -1,0 +1,78 @@
+.renglones {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  background: var(--superficie);
+  border: 1px solid var(--borde);
+  border-radius: 8px;
+}
+.renglon {
+  display: grid;
+  grid-template-columns: 1fr 8rem 9rem 9rem;
+  gap: 16px;
+  align-items: center;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--borde);
+}
+.renglon:last-child {
+  border-bottom: 0;
+}
+.renglon.elegido {
+  background: #fff1e8;
+  box-shadow: inset 4px 0 0 var(--acento);
+}
+.datos {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.descripcion {
+  font-weight: 600;
+}
+.sin-stock {
+  color: #b00020;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+.problema {
+  color: #b00020;
+  font-size: 0.85rem;
+}
+.cantidad,
+.precio,
+.total-renglon {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.total-renglon {
+  font-weight: 700;
+}
+.vacio {
+  color: var(--texto-suave);
+  margin: 0;
+  padding: 16px 0;
+}
+.pie {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 12px;
+}
+.total {
+  margin: 0;
+  font-size: 2.4rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.vaciar {
+  padding: 8px 14px;
+  border: 1px solid var(--borde);
+  border-radius: 6px;
+  background: var(--superficie);
+  font: inherit;
+  cursor: pointer;
+}
+.vaciar:disabled {
+  opacity: 0.5;
+  cursor: default;
+}

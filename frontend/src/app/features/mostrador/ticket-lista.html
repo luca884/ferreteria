@@ -1,0 +1,39 @@
+@if (renglones().length === 0) {
+  <p class="vacio">El ticket está vacío. Escaneá un artículo para empezar.</p>
+} @else {
+  <ol class="renglones" aria-label="Ticket">
+    @for (r of renglones(); track r.articuloId; let i = $index) {
+      <li
+        #fila
+        class="renglon"
+        [class.elegido]="i === elegido()"
+        [attr.aria-current]="i === elegido() ? 'true' : null"
+      >
+        <div class="datos">
+          <span class="descripcion">{{ r.descripcion }}</span>
+          @if (sinStock(r)) {
+            <span class="sin-stock">Sin stock suficiente</span>
+          }
+          @if (r.problema) {
+            <span class="problema" role="alert">{{ r.problema }}</span>
+          }
+        </div>
+        <span class="cantidad">{{ r.cantidadMilesimas / 1000 | number: '1.0-3' }}{{ sufijo[r.unidad] }}</span>
+        <span class="precio">{{ r.precioCentavos / 100 | monto }}</span>
+        <span class="total-renglon">{{ totalRenglon(r.precioCentavos, r.cantidadMilesimas) / 100 | monto }}</span>
+      </li>
+    }
+  </ol>
+}
+<div class="pie">
+  <button
+    type="button"
+    class="vaciar"
+    [disabled]="renglones().length === 0"
+    (mousedown)="$event.preventDefault()"
+    (click)="vaciar.emit()"
+  >
+    Vaciar…
+  </button>
+  <p class="total" aria-label="Total del ticket">{{ totalCentavos() / 100 | monto }}</p>
+</div>
