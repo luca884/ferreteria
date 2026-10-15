@@ -1,0 +1,25 @@
+{
+  "descripcion": "Precio final = costo x (1 + margen) x (1 + IVA), redondeado hacia arriba al multiplo (sin multiplo, al centavo). Lo leen CasosCompartidosPrecioTest (backend) y precio-final.spec.ts (frontend). Importes como string para no pasar por double.",
+  "casos": [
+    { "nombre": "caso base", "costo": "100", "margen": "35", "alicuota": "IVA_21", "multiplo": "10", "precio": "170.00" },
+    { "nombre": "multiplo 1", "costo": "100", "margen": "35", "alicuota": "IVA_21", "multiplo": "1", "precio": "164.00" },
+    { "nombre": "multiplo 50", "costo": "100", "margen": "35", "alicuota": "IVA_21", "multiplo": "50", "precio": "200.00" },
+    { "nombre": "multiplo 0 es sin multiplo", "costo": "100", "margen": "35", "alicuota": "IVA_21", "multiplo": "0", "precio": "163.35" },
+    { "nombre": "multiplo null es sin multiplo", "costo": "100", "margen": "35", "alicuota": "IVA_21", "multiplo": null, "precio": "163.35" },
+    { "nombre": "sin multiplo sube al centavo", "costo": "100.01", "margen": "0.01", "alicuota": "IVA_0", "multiplo": null, "precio": "100.03" },
+    { "nombre": "valor exacto de dos decimales", "costo": "100", "margen": "20", "alicuota": "IVA_0", "multiplo": null, "precio": "120.00" },
+    { "nombre": "ya es multiplo exacto", "costo": "30000", "margen": "30", "alicuota": "IVA_21", "multiplo": "10", "precio": "47190.00" },
+    { "nombre": "multiplo exacto sin IVA", "costo": "100", "margen": "20", "alicuota": "IVA_0", "multiplo": "10", "precio": "120.00" },
+    { "nombre": "siempre hacia arriba", "costo": "1020", "margen": "0", "alicuota": "IVA_21", "multiplo": "10", "precio": "1240.00" },
+    { "nombre": "IVA 10,5", "costo": "200", "margen": "30", "alicuota": "IVA_10_5", "multiplo": "10", "precio": "290.00" },
+    { "nombre": "IVA 10,5 con neto 135", "costo": "100", "margen": "35", "alicuota": "IVA_10_5", "multiplo": "10", "precio": "150.00" },
+    { "nombre": "IVA 27", "costo": "100", "margen": "20", "alicuota": "IVA_27", "multiplo": "10", "precio": "160.00" },
+    { "nombre": "IVA 2,5", "costo": "100", "margen": "0", "alicuota": "IVA_2_5", "multiplo": null, "precio": "102.50" },
+    { "nombre": "IVA 5", "costo": "1234.56", "margen": "42.5", "alicuota": "IVA_5", "multiplo": "10", "precio": "1850.00" },
+    { "nombre": "costo 0", "costo": "0", "margen": "35", "alicuota": "IVA_21", "multiplo": "10", "precio": "0.00" },
+    { "nombre": "precision completa hasta el final", "costo": "0.07", "margen": "0.50", "alicuota": "IVA_0", "multiplo": null, "precio": "0.08" },
+    { "nombre": "margen con decimales que en double falla", "costo": "0.1", "margen": "0.2", "alicuota": "IVA_0", "multiplo": null, "precio": "0.11" },
+    { "nombre": "costo grande", "costo": "9999999.99", "margen": "1000", "alicuota": "IVA_27", "multiplo": "10", "precio": "139700000.00" },
+    { "nombre": "demo taladro", "costo": "8000", "margen": "40", "alicuota": "IVA_21", "multiplo": "10", "precio": "13560.00" }
+  ]
+}

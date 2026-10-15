@@ -68,6 +68,11 @@ public class Proveedor {
         this.activo = false;
     }
 
+    /** Vuelve a activarlo despues de una baja logica. */
+    public void reactivar() {
+        this.activo = true;
+    }
+
     /**
      * Fija el mapeo, el IVA y las bonificaciones de la lista. Solo lo llama una importacion aplicada:
      * actualizar (el PUT del proveedor) no los toca.

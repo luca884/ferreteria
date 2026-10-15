@@ -13,6 +13,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -29,9 +30,17 @@ public class ProveedorController {
         this.proveedorService = proveedorService;
     }
 
+    /** Solo los activos, salvo incluirInactivos (para ver y reactivar los dados de baja). */
     @GetMapping
-    public List<ProveedorResponse> listar() {
-        return proveedorService.listar();
+    public List<ProveedorResponse> listar(@RequestParam(defaultValue = "false") boolean incluirInactivos) {
+        return proveedorService.listar(incluirInactivos);
+    }
+
+    /** Vuelve a activar un proveedor dado de baja. No toca nombre, CUIT ni la configuracion de la lista. */
+    @PostMapping("/{id}/reactivacion")
+    @PreAuthorize("hasRole('DUENO')")
+    public ProveedorResponse reactivar(@PathVariable Long id) {
+        return proveedorService.reactivar(id);
     }
 
     @GetMapping("/{id}")

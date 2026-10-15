@@ -96,6 +96,8 @@ public interface ArticuloRepository extends TenantScopedRepository<Articulo, Lon
     List<Articulo> findAllByFerreteriaIdAndRubroIdAndMargenPorcentajeIsNullAndActivoTrue(
             Long ferreteriaId, Long rubroId);
 
+    long countByFerreteriaIdAndRubroIdAndMargenPorcentajeIsNullAndActivoTrue(Long ferreteriaId, Long rubroId);
+
     @Query("select a from Articulo a where a.ferreteriaId = :fid and a.proveedorId = :proveedorId")
     List<Articulo> deProveedor(@Param("fid") Long ferreteriaId, @Param("proveedorId") Long proveedorId);
 
@@ -246,6 +248,12 @@ public interface ArticuloRepository extends TenantScopedRepository<Articulo, Lon
     /** Articulos activos del rubro sin margen propio: los que heredan su margen (cascada de CU-03). */
     default List<Articulo> heredanMargenDeRubroScoped(Long rubroId) {
         return findAllByFerreteriaIdAndRubroIdAndMargenPorcentajeIsNullAndActivoTrue(
+                TenantContext.requireFerreteriaId(), rubroId);
+    }
+
+    /** Cuantos articulos heredan el margen del rubro, sin cargarlos (aviso antes de cambiar el margen). */
+    default long contarHeredanMargenDeRubroScoped(Long rubroId) {
+        return countByFerreteriaIdAndRubroIdAndMargenPorcentajeIsNullAndActivoTrue(
                 TenantContext.requireFerreteriaId(), rubroId);
     }
 

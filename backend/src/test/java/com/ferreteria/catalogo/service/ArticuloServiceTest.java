@@ -35,6 +35,7 @@ import com.ferreteria.tenant.TenantContext;
 import java.lang.reflect.Field;
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -255,6 +256,67 @@ class ArticuloServiceTest {
 
         verify(articuloRepository, never()).save(any());
         verifyNoInteractions(historialPrecioRepository);
+    }
+
+    @Test
+    @DisplayName("crear: con varios codigos repetidos el 409 trae todos juntos, cada uno en su campo")
+    void crearVariosCodigosDuplicados() {
+        when(articuloRepository.existeCodigoInternoScoped("TORN-001", null)).thenReturn(true);
+        when(articuloRepository.existeCodigoBarrasActivoScoped("7790001000012", null)).thenReturn(true);
+
+        assertThatThrownBy(() -> service.crear(request(null, null, "100", null), USUARIO))
+                .isInstanceOfSatisfying(ConflictException.class, e -> {
+                    assertThat(e.getMessage()).isEqualTo("Ya existe un artículo con el código interno TORN-001. "
+                            + "Ya existe un artículo activo con el código de barras 7790001000012.");
+                    assertThat(e.errors()).containsOnly(
+                            Map.entry("codigoInterno", "Ya existe un artículo con el código interno TORN-001."),
+                            Map.entry("codigoBarras",
+                                    "Ya existe un artículo activo con el código de barras 7790001000012."));
+                });
+        verify(articuloRepository, never()).save(any());
+    }
+
+    // ---- reactivar ----
+
+    @Test
+    @DisplayName("reactivar: vuelve a activar el articulo y revalida el codigo de barras entre los activos")
+    void reactivar() throws Exception {
+        Articulo articulo = existente(55L);
+        articulo.desactivar();
+        when(articuloRepository.findScoped(55L)).thenReturn(Optional.of(articulo));
+        when(articuloRepository.stockVigenteScoped(55L)).thenReturn(Optional.of(bd("12")));
+
+        ArticuloResponse respuesta = service.reactivar(55L);
+
+        assertThat(articulo.isActivo()).isTrue();
+        assertThat(respuesta.activo()).isTrue();
+        assertThat(respuesta.stockActual()).isEqualByComparingTo("12");
+        verify(articuloRepository).existeCodigoBarrasActivoScoped("7790001000012", 55L);
+        verifyNoInteractions(historialPrecioRepository);
+    }
+
+    @Test
+    @DisplayName("reactivar: si otro activo ya usa el codigo de barras da 409 y sigue de baja")
+    void reactivarCodigoBarrasOcupado() throws Exception {
+        Articulo articulo = existente(55L);
+        articulo.desactivar();
+        when(articuloRepository.findScoped(55L)).thenReturn(Optional.of(articulo));
+        when(articuloRepository.existeCodigoBarrasActivoScoped("7790001000012", 55L)).thenReturn(true);
+
+        assertThatThrownBy(() -> service.reactivar(55L))
+                .isInstanceOf(ConflictException.class)
+                .hasMessage("Ya existe un artículo activo con el código de barras 7790001000012.");
+        assertThat(articulo.isActivo()).isFalse();
+    }
+
+    @Test
+    @DisplayName("reactivar: un articulo ajeno da 404")
+    void reactivarAjeno() {
+        when(articuloRepository.findScoped(77L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.reactivar(77L))
+                .isInstanceOf(ResourceNotFoundException.class)
+                .hasMessage("Artículo no encontrado");
     }
 
     @Test

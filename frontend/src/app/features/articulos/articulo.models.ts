@@ -43,6 +43,35 @@ export interface Articulo {
   activo: boolean;
 }
 
+export const MOTIVOS_AJUSTE = ['INGRESO_MERCADERIA', 'ROTURA', 'CONTEO', 'OTRO'] as const;
+export type MotivoAjuste = (typeof MOTIVOS_AJUSTE)[number];
+
+export const MOTIVO_AJUSTE_LABELS: Record<MotivoAjuste, string> = {
+  INGRESO_MERCADERIA: 'Ingreso de mercadería',
+  ROTURA: 'Rotura',
+  CONTEO: 'Conteo',
+  OTRO: 'Otro',
+};
+
+/** Ajuste manual de stock (CU-09): el stock real contado, no la diferencia. */
+export interface AjusteStockRequest {
+  stockReal: number;
+  motivo: MotivoAjuste;
+  detalle: string | null;
+}
+
+export interface AjusteStockResponse {
+  articuloId: number;
+  stockAnterior: number;
+  diferencia: number;
+  stockActual: number;
+}
+
+export interface ConfiguracionPrecios {
+  margenDefectoPorcentaje: number;
+  redondeoMultiplo: number;
+}
+
 /** Alta y edición. No lleva stock actual ni precio final: los resuelve el backend. */
 export interface ArticuloRequest {
   codigoInterno: string;

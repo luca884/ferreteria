@@ -5,6 +5,9 @@
   </div>
 </header>
 
+@if (aviso(); as mensaje) {
+  <p class="alerta exito" role="status">{{ mensaje }}</p>
+}
 @if (error(); as mensaje) {
   <p class="error" role="alert">{{ mensaje }}</p>
 }
@@ -22,13 +25,21 @@
             <tr>
               <th>Nombre</th>
               <th class="num">Margen</th>
+              @if (auth.esDueno()) {
+                <th class="acciones">Acciones</th>
+              }
             </tr>
           </thead>
           <tbody>
             @for (rubro of rubros(); track rubro.id) {
-              <tr>
+              <tr [class.editando]="rubro.id === editando()?.id">
                 <td class="nombre">{{ rubro.nombre }}</td>
                 <td class="num">{{ rubro.margenPorcentaje | number: '1.0-2' }} %</td>
+                @if (auth.esDueno()) {
+                  <td class="acciones">
+                    <button type="button" class="secundario chico editar" (click)="editar(rubro)">Editar</button>
+                  </td>
+                }
               </tr>
             }
           </tbody>
@@ -39,17 +50,58 @@
   </div>
 
   @if (auth.esDueno()) {
-    <form class="alta panel" [formGroup]="form" (ngSubmit)="crear()" novalidate>
-      <h2>Nuevo rubro</h2>
-      <div class="campo">
+    <form class="alta panel" [formGroup]="form" (ngSubmit)="guardar()" novalidate>
+      <h2>{{ editando() === null ? 'Nuevo rubro' : 'Editar rubro' }}</h2>
+      <div class="campo nombre">
         <label for="nombre">Nombre</label>
         <input id="nombre" formControlName="nombre" placeholder="Ej: Bulonería" />
+        @if (form.controls.nombre.touched && form.controls.nombre.invalid) {
+          <span class="campo-error">
+            {{
+              form.controls.nombre.errors?.['maxlength']
+                ? 'El nombre no puede superar 80 caracteres.'
+                : 'El nombre es obligatorio.'
+            }}
+          </span>
+        }
       </div>
       <div class="campo margen">
         <label for="margen">Margen %</label>
         <input id="margen" type="number" step="0.01" min="0" formControlName="margenPorcentaje" />
+        @if (form.controls.margenPorcentaje.touched && form.controls.margenPorcentaje.errors; as errores) {
+          <span class="campo-error">
+            @if (errores['required']) {
+              El margen es obligatorio.
+            } @else if (errores['min']) {
+              El margen no puede ser negativo.
+            } @else {
+              El margen no puede superar 1000 %.
+            }
+          </span>
+        }
+        @if (editando() !== null) {
+          <span class="pista">Si cambiás el margen, se recalcula el precio de los artículos que lo usan.</span>
+        }
       </div>
-      <button type="submit" [disabled]="guardando()">Agregar</button>
+      <div class="acciones-alta">
+        <button type="submit" [disabled]="guardando()">
+          {{ editando() === null ? 'Agregar' : 'Guardar cambios' }}
+        </button>
+        @if (editando() !== null) {
+          <button type="button" class="secundario cancelar" (click)="cancelar()">Cancelar</button>
+        }
+      </div>
     </form>
   }
 </div>
+
+@if (cambioDeMargen(); as cambio) {
+  <app-confirmacion
+    [titulo]="tituloCambio(cambio)"
+    [mensaje]="mensajeCambio(cambio)"
+    textoConfirmar="Cambiar el margen"
+    foco="confirmar"
+    (confirmar)="confirmarCambioDeMargen()"
+    (cancelar)="cambioDeMargen.set(null)"
+  />
+}

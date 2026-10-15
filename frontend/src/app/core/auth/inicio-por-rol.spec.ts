@@ -21,15 +21,15 @@ describe('inicioPorRol', () => {
     return TestBed.runInInjectionContext(() => (inicioPorRol as (...args: never[]) => string)());
   }
 
-  it('el Vendedor aterriza en el mostrador', () => {
-    expect(destino(sesion('VENDEDOR'))).toBe('mostrador');
+  it.each<Rol>(['VENDEDOR', 'DUENO'])('%s aterriza en el mostrador', (rol) => {
+    expect(destino(sesion(rol))).toBe('mostrador');
   });
 
-  it.each<Rol>(['DUENO', 'SUPER_ADMIN'])('%s aterriza en rubros', (rol) => {
-    expect(destino(sesion(rol))).toBe('rubros');
+  it('el administrador (sin ferretería) aterriza en rubros', () => {
+    expect(destino(sesion('SUPER_ADMIN'))).toBe('rubros');
   });
 
-  it('sin sesión va a rubros', () => {
-    expect(destino(null)).toBe('rubros');
+  it('sin sesión va directo al login (sin returnUrl: no quería ir a ningún lado en particular)', () => {
+    expect(destino(null)).toBe('/login');
   });
 });

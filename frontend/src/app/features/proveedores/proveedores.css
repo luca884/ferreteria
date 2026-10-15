@@ -4,6 +4,23 @@
 tr.editando td {
   background: var(--acento-suave);
 }
+tr.inactivo td {
+  color: var(--texto-tenue);
+}
+.etiqueta.de-baja {
+  margin-left: var(--e-2);
+  background: var(--superficie-3);
+}
+.inactivos {
+  min-height: var(--alto-control);
+}
+.error.con-accion {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--e-3);
+  flex-wrap: wrap;
+}
 .acciones {
   width: 1%;
   text-align: right;

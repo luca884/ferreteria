@@ -3,8 +3,20 @@
     <h1>Proveedores</h1>
     <p class="ayuda">Los proveedores se asignan a los artículos. Al darlos de baja, los artículos conservan la referencia.</p>
   </div>
+  <label class="casilla inactivos" for="inactivos">
+    <input
+      id="inactivos"
+      type="checkbox"
+      [checked]="incluirInactivos()"
+      (change)="cambiarInactivos($any($event.target).checked)"
+    />
+    Mostrar dados de baja
+  </label>
 </header>
 
+@if (aviso(); as mensaje) {
+  <p class="alerta exito" role="status">{{ mensaje }}</p>
+}
 @if (erroresCampos().length > 0) {
   <ul class="error errores-campos" role="alert">
     @for (mensaje of erroresCampos(); track $index) {
@@ -12,7 +24,14 @@
     }
   </ul>
 } @else if (error(); as mensaje) {
-  <p class="error" role="alert">{{ mensaje }}</p>
+  <div class="error con-accion" role="alert">
+    <span>{{ mensaje }}</span>
+    @if (reactivable(); as existente) {
+      <button type="button" class="secundario chico reactivar-existente" (click)="reactivar(existente)">
+        Reactivar «{{ existente.nombre }}»
+      </button>
+    }
+  </div>
 }
 
 <div class="listado" [class.con-alta]="auth.esDueno()">
@@ -35,15 +54,26 @@
           </thead>
           <tbody>
             @for (proveedor of proveedores(); track proveedor.id) {
-              <tr [class.editando]="proveedor.id === editandoId()">
-                <td class="nombre">{{ proveedor.nombre }}</td>
+              <tr [class.editando]="proveedor.id === editandoId()" [class.inactivo]="!proveedor.activo">
+                <td class="nombre">
+                  {{ proveedor.nombre }}
+                  @if (!proveedor.activo) {
+                    <span class="etiqueta de-baja">De baja</span>
+                  }
+                </td>
                 <td class="mono">{{ proveedor.cuit ?? '—' }}</td>
                 @if (auth.esDueno()) {
                   <td class="acciones">
                     <button type="button" class="secundario chico editar" (click)="editar(proveedor)">Editar</button>
-                    <button type="button" class="chico peligro desactivar" (click)="desactivar(proveedor)">
-                      Dar de baja
-                    </button>
+                    @if (proveedor.activo) {
+                      <button type="button" class="chico peligro desactivar" (click)="pedirBaja(proveedor)">
+                        Dar de baja
+                      </button>
+                    } @else {
+                      <button type="button" class="chico secundario reactivar" (click)="reactivar(proveedor)">
+                        Reactivar
+                      </button>
+                    }
                   </td>
                 }
               </tr>
@@ -52,7 +82,9 @@
         </table>
       </div>
       <p class="barra-estado">
-        {{ proveedores().length }} {{ proveedores().length === 1 ? 'proveedor' : 'proveedores' }}
+        {{ activos() }} {{ activos() === 1 ? 'proveedor' : 'proveedores' }}@if (deBaja() > 0) {
+          · {{ deBaja() }} de baja
+        }
       </p>
     }
   </div>
@@ -60,15 +92,25 @@
   @if (auth.esDueno()) {
     <form class="alta panel" [formGroup]="form" (ngSubmit)="guardar()" novalidate>
       <h2>{{ editandoId() === null ? 'Nuevo proveedor' : 'Editar proveedor' }}</h2>
-      <div class="campo">
+      <div class="campo nombre-campo">
         <label for="nombre">Nombre</label>
         <input id="nombre" formControlName="nombre" placeholder="Ej: Sinteplast" />
+        @if (form.controls.nombre.touched && form.controls.nombre.invalid) {
+          <span class="campo-error">
+            {{
+              form.controls.nombre.errors?.['maxlength']
+                ? 'El nombre no puede superar 100 caracteres.'
+                : 'El nombre es obligatorio.'
+            }}
+          </span>
+        }
       </div>
       <div class="campo cuit">
         <label for="cuit">CUIT (opcional)</label>
-        <input id="cuit" formControlName="cuit" placeholder="30-12345678-9" />
-        @if (form.controls.cuit.touched && form.controls.cuit.invalid) {
-          <span class="campo-error">El CUIT debe tener el formato 30-12345678-9.</span>
+        <input id="cuit" formControlName="cuit" placeholder="30-12345678-1" inputmode="numeric" (blur)="formatearCuit()" />
+        <span class="pista">Con o sin guiones.</span>
+        @if (form.controls.cuit.touched && form.controls.cuit.errors?.['cuit']; as mensaje) {
+          <span class="campo-error">{{ mensaje }}</span>
         }
       </div>
       <div class="acciones-alta">
@@ -82,3 +124,14 @@
     </form>
   }
 </div>
+
+@if (aDarDeBaja(); as proveedor) {
+  <app-confirmacion
+    [titulo]="'¿Dar de baja a ' + proveedor.nombre + '?'"
+    mensaje="Sus artículos conservan la referencia. Lo podés reactivar desde «Mostrar dados de baja»."
+    textoConfirmar="Dar de baja"
+    [peligro]="true"
+    (confirmar)="desactivar()"
+    (cancelar)="aDarDeBaja.set(null)"
+  />
+}

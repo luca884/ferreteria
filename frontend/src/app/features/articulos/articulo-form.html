@@ -1,6 +1,6 @@
 <header class="pagina-encabezado">
   <div>
-    <h1>
+    <h1 class="titulo">
       @if (!auth.esDueno()) {
         Artículo
       } @else if (esEdicion) {
@@ -8,20 +8,33 @@
       } @else {
         Nuevo artículo
       }
+      @if (articulo(); as actual) {
+        @if (!actual.activo) {
+          <span class="etiqueta de-baja">De baja</span>
+        }
+      }
     </h1>
-    <p class="ayuda">
-      El precio final lo calcula el sistema con el costo, el margen y la alícuota de IVA. El stock se mueve
-      desde las compras y las ventas.
-    </p>
+    <p class="ayuda">El precio final lo calcula el sistema con el costo, el margen y la alícuota de IVA.</p>
   </div>
+  @if (articulo(); as actual) {
+    @if (!actual.activo && auth.esDueno()) {
+      <button type="button" class="secundario reactivar" (click)="reactivar()">Reactivar</button>
+    }
+  }
 </header>
 
+@if (aviso(); as mensaje) {
+  <p class="alerta exito" role="status">{{ mensaje }}</p>
+}
 @if (erroresCampos().length > 0) {
-  <ul class="error errores-campos" role="alert">
-    @for (mensaje of erroresCampos(); track $index) {
-      <li>{{ mensaje }}</li>
-    }
-  </ul>
+  <div class="error errores-campos" role="alert">
+    <strong>Revisá estos datos:</strong>
+    <ul>
+      @for (mensaje of erroresCampos(); track $index) {
+        <li>{{ mensaje }}</li>
+      }
+    </ul>
+  </div>
 } @else if (error(); as mensaje) {
   <p class="error" role="alert">{{ mensaje }}</p>
 }
@@ -29,16 +42,21 @@
 @if (cargando()) {
   <p class="ayuda estado-vacio">Cargando…</p>
 } @else if (sinFormulario()) {
-  <a class="btn secundario cancelar" routerLink="/articulos">Volver al listado</a>
+  <a class="btn secundario cancelar" href="/articulos" (click)="cancelar($event)">Volver al listado</a>
 } @else {
   @if (articulo(); as actual) {
     <dl class="solo-lectura">
       <div class="dato stock-actual">
         <dt>Stock actual</dt>
-        <dd>{{ actual.stockActual | number: '1.0-3' }} {{ unidadLabels[actual.unidad] }}</dd>
+        <dd [class.negativo]="actual.stockActual < 0">{{ cantidadConUnidad(actual.stockActual, actual.unidad) }}</dd>
+        @if (auth.esDueno()) {
+          <button type="button" class="secundario chico ajustar-stock" (click)="ajustandoStock.set(true)">
+            Ajustar stock
+          </button>
+        }
       </div>
       <div class="dato precio-final">
-        <dt>Precio final</dt>
+        <dt>Precio final guardado</dt>
         <dd>{{ actual.precioFinal | monto }}</dd>
       </div>
     </dl>
@@ -49,7 +67,13 @@
       <legend>Identificación</legend>
       <div class="campo">
         <label for="codigoInterno">Código interno</label>
-        <input id="codigoInterno" formControlName="codigoInterno" placeholder="Ej: TOR-001" />
+        <input
+          id="codigoInterno"
+          formControlName="codigoInterno"
+          placeholder="Ej: TOR-001"
+          [attr.aria-invalid]="errorServidor('codigoInterno') ? 'true' : null"
+          (input)="limpiarErrorDe('codigoInterno')"
+        />
         @if (form.controls.codigoInterno.touched && form.controls.codigoInterno.invalid) {
           <span class="campo-error">
             {{
@@ -59,11 +83,20 @@
             }}
           </span>
         }
+        @if (errorServidor('codigoInterno'); as mensaje) {
+          <span class="campo-error" data-error-de="codigoInterno">{{ mensaje }}</span>
+        }
       </div>
 
       <div class="campo ancho">
         <label for="descripcion">Descripción</label>
-        <input id="descripcion" formControlName="descripcion" placeholder="Ej: Tornillo hexagonal 1/4" />
+        <input
+          id="descripcion"
+          formControlName="descripcion"
+          placeholder="Ej: Tornillo hexagonal 1/4"
+          [attr.aria-invalid]="errorServidor('descripcion') ? 'true' : null"
+          (input)="limpiarErrorDe('descripcion')"
+        />
         @if (form.controls.descripcion.touched && form.controls.descripcion.invalid) {
           <span class="campo-error">
             {{
@@ -73,15 +106,21 @@
             }}
           </span>
         }
+        @if (errorServidor('descripcion'); as mensaje) {
+          <span class="campo-error" data-error-de="descripcion">{{ mensaje }}</span>
+        }
       </div>
 
       <div class="campo">
         <label for="unidad">Unidad</label>
-        <select id="unidad" formControlName="unidad">
+        <select id="unidad" formControlName="unidad" (change)="limpiarErrorDe('unidad')">
           @for (unidad of unidades; track unidad) {
             <option [ngValue]="unidad">{{ unidadLabels[unidad] }}</option>
           }
         </select>
+        @if (errorServidor('unidad'); as mensaje) {
+          <span class="campo-error" data-error-de="unidad">{{ mensaje }}</span>
+        }
       </div>
     </fieldset>
 
@@ -89,7 +128,15 @@
       <legend>Precio</legend>
       <div class="campo">
         <label for="costo">Costo (sin IVA)</label>
-        <input id="costo" type="number" step="0.01" min="0" formControlName="costo" />
+        <input
+          id="costo"
+          type="number"
+          step="0.01"
+          min="0"
+          formControlName="costo"
+          [attr.aria-invalid]="errorServidor('costo') ? 'true' : null"
+          (input)="limpiarErrorDe('costo')"
+        />
         @if (form.controls.costo.touched && form.controls.costo.invalid) {
           <span class="campo-error">
             {{
@@ -99,57 +146,111 @@
             }}
           </span>
         }
+        @if (errorServidor('costo'); as mensaje) {
+          <span class="campo-error" data-error-de="costo">{{ mensaje }}</span>
+        }
       </div>
 
       <div class="campo">
         <label for="margen">Margen % (opcional)</label>
-        <input id="margen" type="number" step="0.01" min="0" formControlName="margenPorcentaje" />
+        <input
+          id="margen"
+          type="number"
+          step="0.01"
+          min="0"
+          formControlName="margenPorcentaje"
+          [attr.aria-invalid]="errorServidor('margenPorcentaje') ? 'true' : null"
+          (input)="limpiarErrorDe('margenPorcentaje')"
+        />
         <span class="pista">Vacío = usa el margen del rubro o de la ferretería</span>
+        @if (herencia(); as texto) {
+          <span class="pista herencia">{{ texto }}</span>
+        }
         @if (form.controls.margenPorcentaje.touched && form.controls.margenPorcentaje.invalid) {
           <span class="campo-error">El margen tiene que estar entre 0 y 1000.</span>
+        }
+        @if (errorServidor('margenPorcentaje'); as mensaje) {
+          <span class="campo-error" data-error-de="margenPorcentaje">{{ mensaje }}</span>
         }
       </div>
 
       <div class="campo">
         <label for="alicuotaIva">Alícuota de IVA</label>
-        <select id="alicuotaIva" formControlName="alicuotaIva">
+        <select id="alicuotaIva" formControlName="alicuotaIva" (change)="limpiarErrorDe('alicuotaIva')">
           @for (alicuota of alicuotas; track alicuota) {
             <option [ngValue]="alicuota">{{ alicuotaLabels[alicuota] }}</option>
           }
         </select>
+        @if (errorServidor('alicuotaIva'); as mensaje) {
+          <span class="campo-error" data-error-de="alicuotaIva">{{ mensaje }}</span>
+        }
       </div>
+
+      @if (configuracion()) {
+        <div class="precio-en-vivo" aria-live="polite">
+          <span class="precio-en-vivo-etiqueta">Precio final</span>
+          @if (precioEnVivo() !== null) {
+            <strong>{{ precioEnVivo() | monto }}</strong>
+          } @else {
+            <span class="pista">Completá el costo para ver el precio.</span>
+          }
+        </div>
+      }
     </fieldset>
 
     <fieldset class="seccion">
       <legend>Clasificación y códigos</legend>
       <div class="campo">
         <label for="rubro">Rubro</label>
-        <select id="rubro" formControlName="rubroId">
+        <select id="rubro" formControlName="rubroId" (change)="limpiarErrorDe('rubroId')">
           <option [ngValue]="null">Sin rubro</option>
           @for (rubro of rubros(); track rubro.id) {
             <option [ngValue]="rubro.id">{{ rubro.nombre }}</option>
           }
         </select>
+        @if (errorServidor('rubroId'); as mensaje) {
+          <span class="campo-error" data-error-de="rubroId">{{ mensaje }}</span>
+        }
       </div>
 
       <div class="campo">
         <label for="proveedor">Proveedor</label>
-        <select id="proveedor" formControlName="proveedorId">
+        <select id="proveedor" formControlName="proveedorId" (change)="limpiarErrorDe('proveedorId')">
           <option [ngValue]="null">Sin proveedor</option>
           @for (proveedor of proveedores(); track proveedor.id) {
             <option [ngValue]="proveedor.id">{{ proveedor.nombre }}</option>
           }
         </select>
+        @if (errorServidor('proveedorId'); as mensaje) {
+          <span class="campo-error" data-error-de="proveedorId">{{ mensaje }}</span>
+        }
       </div>
 
       <div class="campo">
         <label for="codigoBarras">Código de barras (opcional)</label>
-        <input id="codigoBarras" formControlName="codigoBarras" placeholder="7790001000012" />
+        <input
+          id="codigoBarras"
+          formControlName="codigoBarras"
+          placeholder="7790001000012"
+          [attr.aria-invalid]="errorServidor('codigoBarras') ? 'true' : null"
+          (input)="limpiarErrorDe('codigoBarras')"
+        />
+        @if (errorServidor('codigoBarras'); as mensaje) {
+          <span class="campo-error" data-error-de="codigoBarras">{{ mensaje }}</span>
+        }
       </div>
 
       <div class="campo">
         <label for="codigoProveedor">Código del proveedor (opcional)</label>
-        <input id="codigoProveedor" formControlName="codigoProveedor" />
+        <input
+          id="codigoProveedor"
+          formControlName="codigoProveedor"
+          [attr.aria-invalid]="errorServidor('codigoProveedor') ? 'true' : null"
+          (input)="limpiarErrorDe('codigoProveedor')"
+        />
+        @if (errorServidor('codigoProveedor'); as mensaje) {
+          <span class="campo-error" data-error-de="codigoProveedor">{{ mensaje }}</span>
+        }
       </div>
     </fieldset>
 
@@ -157,15 +258,28 @@
       <legend>Stock</legend>
       <div class="campo">
         <label for="stockMinimo">Stock mínimo</label>
-        <input id="stockMinimo" type="number" step="0.001" min="0" formControlName="stockMinimo" />
+        <input
+          id="stockMinimo"
+          type="number"
+          step="0.001"
+          min="0"
+          formControlName="stockMinimo"
+          (input)="limpiarErrorDe('stockMinimo')"
+        />
         @if (form.controls.stockMinimo.touched && form.controls.stockMinimo.invalid) {
           <span class="campo-error">El stock mínimo no puede ser negativo.</span>
+        }
+        @if (errorServidor('stockMinimo'); as mensaje) {
+          <span class="campo-error" data-error-de="stockMinimo">{{ mensaje }}</span>
         }
       </div>
 
       <div class="campo">
         <label for="ubicacion">Ubicación (opcional)</label>
-        <input id="ubicacion" formControlName="ubicacion" placeholder="Ej: Pasillo 2" />
+        <input id="ubicacion" formControlName="ubicacion" placeholder="Ej: Pasillo 2" (input)="limpiarErrorDe('ubicacion')" />
+        @if (errorServidor('ubicacion'); as mensaje) {
+          <span class="campo-error" data-error-de="ubicacion">{{ mensaje }}</span>
+        }
       </div>
     </fieldset>
 
@@ -173,9 +287,31 @@
       @if (auth.esDueno()) {
         <button type="submit" [disabled]="guardando()">Guardar</button>
       }
-      <a class="btn secundario cancelar" routerLink="/articulos">
+      <a class="btn secundario cancelar" href="/articulos" (click)="cancelar($event)">
         {{ auth.esDueno() ? 'Cancelar' : 'Volver al listado' }}
       </a>
     </div>
   </form>
+}
+
+@if (confirmandoDescarte()) {
+  <app-confirmacion
+    titulo="¿Descartar los cambios?"
+    mensaje="Hay cambios sin guardar en este artículo."
+    textoConfirmar="Descartar"
+    textoCancelar="Seguir editando"
+    [peligro]="true"
+    (confirmar)="descartar()"
+    (cancelar)="confirmandoDescarte.set(false)"
+  />
+}
+
+@if (ajustandoStock()) {
+  @if (articulo(); as actual) {
+    <app-dialogo-ajuste-stock
+      [articulo]="{ id: actual.id, descripcion: actual.descripcion, unidad: actual.unidad, stockActual: actual.stockActual }"
+      (ajustado)="stockAjustado($event)"
+      (cancelar)="ajustandoStock.set(false)"
+    />
+  }
 }

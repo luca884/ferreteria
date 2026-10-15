@@ -114,7 +114,7 @@ describe('rutas', () => {
     expect(titulo(hijas(), 'actualizacion-masiva')).toBe('Actualizar precios · Ferretería');
   });
 
-  it('sin sesión, /mostrador redirige al login', async () => {
+  it('sin sesión, /mostrador redirige al login recordando adónde quería ir', async () => {
     TestBed.configureTestingModule({
       providers: [
         provideRouter(routes),
@@ -124,6 +124,34 @@ describe('rutas', () => {
     const router = TestBed.inject(Router);
 
     await router.navigateByUrl('/mostrador');
+
+    expect(router.url).toBe('/login?returnUrl=%2Fmostrador');
+  });
+
+  it('sin sesión, una URL con id y parámetros vuelve entera después del login', async () => {
+    TestBed.configureTestingModule({
+      providers: [
+        provideRouter(routes),
+        { provide: AuthService, useValue: { autenticado: signal(false) } },
+      ],
+    });
+    const router = TestBed.inject(Router);
+
+    await router.navigateByUrl('/articulos/5');
+
+    expect(router.parseUrl(router.url).queryParams['returnUrl']).toBe('/articulos/5');
+  });
+
+  it('sin sesión, la raíz va al login sin returnUrl', async () => {
+    TestBed.configureTestingModule({
+      providers: [
+        provideRouter(routes),
+        { provide: AuthService, useValue: { autenticado: signal(false), sesion: signal(null) } },
+      ],
+    });
+    const router = TestBed.inject(Router);
+
+    await router.navigateByUrl('/');
 
     expect(router.url).toBe('/login');
   });

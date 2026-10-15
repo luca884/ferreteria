@@ -16,6 +16,7 @@ import org.springframework.test.web.servlet.request.MockMultipartHttpServletRequ
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders;
 import org.testcontainers.containers.MySQLContainer;
 
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -69,9 +70,10 @@ public abstract class IntegrationTestBase {
 
     /** GET que espera 200 y devuelve el cuerpo como JSON. */
     protected JsonNode getJson(String url, String token) throws Exception {
+        // UTF-8 explicito: sin charset en el Content-Type, MockMvc decodifica en ISO-8859-1 y rompe las tildes.
         String body = getResult(url, token)
                 .andExpect(status().isOk())
-                .andReturn().getResponse().getContentAsString();
+                .andReturn().getResponse().getContentAsString(StandardCharsets.UTF_8);
         return objectMapper.readTree(body);
     }
 

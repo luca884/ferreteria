@@ -13,6 +13,7 @@ import java.math.BigDecimal;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.TreeMap;
 
 @Service
@@ -47,6 +48,12 @@ public class ArticulosParaVentaService implements ArticulosParaVenta {
             }
         });
         return articuloRepository.stockDeScoped(ordenados.keySet());
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public Optional<BigDecimal> stockVigente(Long id) {
+        return articuloRepository.stockVigenteScoped(id);
     }
 
     private static ArticuloVendible vendible(Articulo articulo) {

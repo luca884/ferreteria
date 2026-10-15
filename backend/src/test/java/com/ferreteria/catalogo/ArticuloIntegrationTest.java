@@ -886,4 +886,78 @@ class ArticuloIntegrationTest extends IntegrationTestBase {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.activo", is(false)));
     }
+
+    // --- Codigos repetidos: todos juntos y por campo ---
+
+    @Test
+    void conVariosCodigosRepetidosEl409TraeUnErrorPorCampo() throws Exception {
+        String codigo = unico("REP");
+        String barras = unico("779");
+        ObjectNode original = pedido(codigo);
+        original.put("codigoBarras", barras);
+        crear(duenoA, original);
+
+        ObjectNode repetido = pedido(codigo);
+        repetido.put("codigoBarras", barras);
+        postJson("/api/articulos", duenoA, texto(repetido))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.errors.codigoInterno", is("Ya existe un artículo con el código interno " + codigo + ".")))
+                .andExpect(jsonPath("$.errors.codigoBarras",
+                        is("Ya existe un artículo activo con el código de barras " + barras + ".")));
+    }
+
+    // --- Reactivacion ---
+
+    @Test
+    void reactivarUnArticuloDadoDeBajaLoVuelveAlListado() throws Exception {
+        String codigo = unico("REA");
+        long id = crear(duenoA, pedido(codigo)).get("id").asLong();
+        delete("/api/articulos/" + id, duenoA).andExpect(status().isNoContent());
+
+        postJson("/api/articulos/" + id + "/reactivacion", duenoA, "")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.activo", is(true)))
+                .andExpect(jsonPath("$.codigoInterno", is(codigo)));
+
+        assertThat(filaDeArticulo(id).get("activo")).isEqualTo(true);
+        assertThat(codigos(getJson("/api/articulos?q=" + codigo, duenoA))).contains(codigo);
+    }
+
+    @Test
+    void reactivarConElCodigoDeBarrasTomadoPorOtroActivoDa409YSigueDeBaja() throws Exception {
+        String barras = unico("779");
+        ObjectNode viejo = pedido(unico("VIE"));
+        viejo.put("codigoBarras", barras);
+        long idViejo = crear(duenoA, viejo).get("id").asLong();
+        delete("/api/articulos/" + idViejo, duenoA).andExpect(status().isNoContent());
+        ObjectNode nuevo = pedido(unico("NUE"));
+        nuevo.put("codigoBarras", barras);
+        crear(duenoA, nuevo);
+
+        postJson("/api/articulos/" + idViejo + "/reactivacion", duenoA, "")
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.message", is("Ya existe un artículo activo con el código de barras " + barras + ".")));
+
+        assertThat(filaDeArticulo(idViejo).get("activo")).isEqualTo(false);
+    }
+
+    @Test
+    void reactivarUnArticuloDeOtraFerreteriaDa404YNoLoCambia() throws Exception {
+        long idDeB = crear(duenoB, pedido(unico("REB"))).get("id").asLong();
+        delete("/api/articulos/" + idDeB, duenoB).andExpect(status().isNoContent());
+
+        postJson("/api/articulos/" + idDeB + "/reactivacion", duenoA, "").andExpect(status().isNotFound());
+
+        assertThat(filaDeArticulo(idDeB).get("activo")).isEqualTo(false);
+    }
+
+    @Test
+    void elVendedorNoPuedeReactivar() throws Exception {
+        long id = crear(duenoA, pedido(unico("REV"))).get("id").asLong();
+        delete("/api/articulos/" + id, duenoA).andExpect(status().isNoContent());
+
+        postJson("/api/articulos/" + id + "/reactivacion", vendedorA, "").andExpect(status().isForbidden());
+
+        assertThat(filaDeArticulo(id).get("activo")).isEqualTo(false);
+    }
 }

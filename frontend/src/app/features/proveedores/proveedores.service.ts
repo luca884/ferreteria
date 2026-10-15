@@ -1,4 +1,4 @@
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import { environment } from '../../../environments/environment';
@@ -9,8 +9,14 @@ export class ProveedoresService {
   private readonly http = inject(HttpClient);
   private readonly url = `${environment.apiUrl}/proveedores`;
 
-  listar(): Observable<Proveedor[]> {
-    return this.http.get<Proveedor[]>(this.url);
+  /** Solo los activos, salvo `incluirInactivos` (para ver y reactivar los dados de baja). */
+  listar(incluirInactivos = false): Observable<Proveedor[]> {
+    const params = incluirInactivos ? new HttpParams().set('incluirInactivos', true) : undefined;
+    return this.http.get<Proveedor[]>(this.url, { params });
+  }
+
+  reactivar(id: number): Observable<Proveedor> {
+    return this.http.post<Proveedor>(`${this.url}/${id}/reactivacion`, null);
   }
 
   crear(request: ProveedorRequest): Observable<Proveedor> {
