@@ -11,6 +11,7 @@ import { ProveedoresService } from './proveedores.service';
 describe('Proveedores', () => {
   const sinteplast: Proveedor = { id: 1, nombre: 'Sinteplast', cuit: null, activo: true };
   const tersuave: Proveedor = { id: 2, nombre: 'Tersuave', cuit: '30-12345678-9', activo: true };
+  const viejo: Proveedor = { id: 9, nombre: 'Pinturas Viejas', cuit: null, activo: false };
 
   let fixture: ComponentFixture<Proveedores>;
   let esDueno: ReturnType<typeof signal<boolean>>;
@@ -19,6 +20,7 @@ describe('Proveedores', () => {
     crear: ReturnType<typeof vi.fn>;
     actualizar: ReturnType<typeof vi.fn>;
     desactivar: ReturnType<typeof vi.fn>;
+    reactivar: ReturnType<typeof vi.fn>;
   };
 
   const errorHttp = (status: number, message: string) =>
@@ -27,10 +29,11 @@ describe('Proveedores', () => {
   async function crearComponente(dueno: boolean, lista: Proveedor[] = [sinteplast, tersuave]) {
     esDueno = signal(dueno);
     servicio = {
-      listar: vi.fn(() => of(lista)),
+      listar: vi.fn((incluirInactivos = false) => of(incluirInactivos ? [...lista, viejo] : lista)),
       crear: vi.fn(),
       actualizar: vi.fn(),
       desactivar: vi.fn(),
+      reactivar: vi.fn((id: number) => of({ ...viejo, id, activo: true })),
     };
     await TestBed.configureTestingModule({
       imports: [Proveedores],
@@ -104,6 +107,7 @@ describe('Proveedores', () => {
       crear: vi.fn(),
       actualizar: vi.fn(),
       desactivar: vi.fn(),
+      reactivar: vi.fn(),
     };
     await TestBed.configureTestingModule({
       imports: [Proveedores],
@@ -230,19 +234,19 @@ describe('Proveedores', () => {
   describe('edición', () => {
     it('precarga el formulario, guarda con PUT y reemplaza la fila', async () => {
       await crearComponente(true);
-      const editado: Proveedor = { id: 1, nombre: 'Sinteplast SA', cuit: '30-11111111-1', activo: true };
+      const editado: Proveedor = { id: 1, nombre: 'Sinteplast SA', cuit: '30-12345678-1', activo: true };
       servicio.actualizar.mockReturnValue(of(editado));
 
       await clickEn('button.editar', 0);
       expect(el().querySelector<HTMLInputElement>('#nombre')!.value).toBe('Sinteplast');
 
       await escribir('#nombre', 'Sinteplast SA');
-      await escribir('#cuit', '30-11111111-1');
+      await escribir('#cuit', '30-12345678-1');
       await enviarFormulario();
 
       expect(servicio.actualizar).toHaveBeenCalledWith(1, {
         nombre: 'Sinteplast SA',
-        cuit: '30-11111111-1',
+        cuit: '30-12345678-1',
         activo: true,
       });
       expect(servicio.crear).not.toHaveBeenCalled();
@@ -279,42 +283,178 @@ describe('Proveedores', () => {
   });
 
   describe('baja', () => {
-    it('desactiva el proveedor confirmado y lo saca de la lista', async () => {
+    async function darDeBaja(fila: number, boton: 'confirmar' | 'cancelar' = 'confirmar') {
+      await clickEn('button.desactivar', fila);
+      await clickEn(`app-confirmacion button.${boton}`);
+    }
+
+    it('desactiva el proveedor confirmado con el diálogo propio y lo saca de la lista', async () => {
       await crearComponente(true);
-      vi.spyOn(window, 'confirm').mockReturnValue(true);
+      const nativo = vi.spyOn(window, 'confirm');
       servicio.desactivar.mockReturnValue(of(undefined) as Observable<void>);
 
       await clickEn('button.desactivar', 0);
+      expect(el().querySelector('app-confirmacion h2')?.textContent).toContain('¿Dar de baja a Sinteplast?');
+      await clickEn('app-confirmacion button.confirmar');
 
+      expect(nativo).not.toHaveBeenCalled();
       expect(servicio.desactivar).toHaveBeenCalledWith(1);
       const textos = textoFilas();
       expect(textos).toHaveLength(1);
       expect(textos[0]).toContain('Tersuave');
+      expect(el().querySelector('app-confirmacion')).toBeNull();
     });
 
-    it('no hace nada si el Dueño no confirma', async () => {
+    it('no hace nada si el Dueño cancela el diálogo', async () => {
       await crearComponente(true);
-      vi.spyOn(window, 'confirm').mockReturnValue(false);
 
-      await clickEn('button.desactivar', 0);
+      await darDeBaja(0, 'cancelar');
 
       expect(servicio.desactivar).not.toHaveBeenCalled();
       expect(textoFilas()).toHaveLength(2);
     });
 
+    it('con «Mostrar dados de baja» tildado, la fila queda marcada De baja en vez de desaparecer', async () => {
+      await crearComponente(true);
+      await clickEn('#inactivos');
+      servicio.desactivar.mockReturnValue(of(undefined) as Observable<void>);
+
+      const sinteplastIdx = () => filas().findIndex((f) => f.textContent?.includes('Sinteplast'));
+      await darDeBaja(sinteplastIdx());
+
+      expect(textoFilas()).toHaveLength(3);
+      const fila = filas()[sinteplastIdx()];
+      expect(fila.querySelector('.etiqueta.de-baja')).not.toBeNull();
+      expect(fila.querySelector('button.reactivar')).not.toBeNull();
+    });
+
     it('muestra el mensaje del backend si la baja falla', async () => {
       await crearComponente(true);
-      vi.spyOn(window, 'confirm').mockReturnValue(true);
       servicio.desactivar.mockReturnValue(
         throwError(() => errorHttp(404, 'Proveedor no encontrado')),
       );
 
-      await clickEn('button.desactivar', 0);
+      await darDeBaja(0);
 
       expect(el().querySelector('[role="alert"]')?.textContent).toContain(
         'Proveedor no encontrado',
       );
       expect(textoFilas()).toHaveLength(2);
+    });
+  });
+
+  describe('dados de baja', () => {
+    it('«Mostrar dados de baja» los trae marcados y con Reactivar en vez de Dar de baja', async () => {
+      await crearComponente(true);
+
+      await clickEn('#inactivos');
+
+      expect(servicio.listar).toHaveBeenLastCalledWith(true);
+      const fila = filas().find((f) => f.textContent?.includes('Pinturas Viejas'))!;
+      expect(fila.classList).toContain('inactivo');
+      expect(fila.querySelector('.etiqueta.de-baja')?.textContent?.trim()).toBe('De baja');
+      expect(fila.querySelector('button.reactivar')).not.toBeNull();
+      expect(fila.querySelector('button.desactivar')).toBeNull();
+      expect(el().querySelector('.barra-estado')?.textContent).toContain('1 de baja');
+    });
+
+    it('al destildar vuelve a pedir solo los activos', async () => {
+      await crearComponente(true);
+      await clickEn('#inactivos');
+
+      await clickEn('#inactivos');
+
+      expect(servicio.listar).toHaveBeenLastCalledWith(false);
+      expect(textoFilas().some((t) => t.includes('Pinturas Viejas'))).toBe(false);
+    });
+
+    it('Reactivar lo vuelve a activo y avisa', async () => {
+      await crearComponente(true);
+      await clickEn('#inactivos');
+      const indice = filas().findIndex((f) => f.textContent?.includes('Pinturas Viejas'));
+
+      await clickEn('button.reactivar', 0);
+
+      expect(servicio.reactivar).toHaveBeenCalledWith(9);
+      expect(filas()[indice].querySelector('.etiqueta.de-baja')).toBeNull();
+      expect(el().querySelector('.alerta.exito')?.textContent).toContain('Se reactivó «Pinturas Viejas».');
+    });
+
+    it('el Vendedor no ve Reactivar', async () => {
+      await crearComponente(false);
+      await clickEn('#inactivos');
+
+      expect(el().querySelector('button.reactivar')).toBeNull();
+    });
+
+    it('si el alta choca con uno dado de baja, ofrece reactivarlo desde el aviso', async () => {
+      await crearComponente(true);
+      servicio.crear.mockReturnValue(
+        throwError(() =>
+          errorHttp(
+            409,
+            'Ya existe un proveedor llamado Pinturas Viejas, pero está dado de baja. Reactivalo para volver a usarlo.',
+          ),
+        ),
+      );
+      await escribir('#nombre', 'pinturas viejas');
+
+      await enviarFormulario();
+
+      expect(el().querySelector('[role="alert"]')?.textContent).toContain('está dado de baja');
+      const boton = el().querySelector<HTMLButtonElement>('button.reactivar-existente')!;
+      expect(boton.textContent).toContain('Reactivar «Pinturas Viejas»');
+
+      await clickEn('button.reactivar-existente');
+
+      expect(servicio.reactivar).toHaveBeenCalledWith(9);
+      expect(textoFilas().some((t) => t.includes('Pinturas Viejas'))).toBe(true);
+      expect(el().querySelector('[role="alert"]')).toBeNull();
+      expect(el().querySelector<HTMLInputElement>('#nombre')!.value).toBe('');
+    });
+  });
+
+  describe('CUIT', () => {
+    it('acepta el CUIT sin guiones y lo manda con guiones', async () => {
+      await crearComponente(true);
+      servicio.crear.mockReturnValue(of({ id: 3, nombre: 'Alba', cuit: '30-12345678-1', activo: true }));
+      await escribir('#nombre', 'Alba');
+      await escribir('#cuit', '30123456781');
+
+      await enviarFormulario();
+
+      expect(servicio.crear).toHaveBeenCalledWith({ nombre: 'Alba', cuit: '30-12345678-1', activo: true });
+    });
+
+    it('al salir del campo le pone los guiones', async () => {
+      await crearComponente(true);
+      await escribir('#cuit', '30123456781');
+
+      el().querySelector('#cuit')!.dispatchEvent(new Event('blur'));
+      fixture.detectChanges();
+
+      expect(el().querySelector<HTMLInputElement>('#cuit')!.value).toBe('30-12345678-1');
+    });
+
+    it('con el dígito verificador mal no manda nada y lo explica junto al campo', async () => {
+      await crearComponente(true);
+      await escribir('#nombre', 'Alba');
+      await escribir('#cuit', '30-12345678-9');
+
+      await enviarFormulario();
+
+      expect(servicio.crear).not.toHaveBeenCalled();
+      expect(el().querySelector('.cuit .campo-error')?.textContent).toContain(
+        'El CUIT no es válido: revisá los números, el último no coincide.',
+      );
+    });
+
+    it('el nombre vacío se marca junto al campo', async () => {
+      await crearComponente(true);
+
+      await enviarFormulario();
+
+      expect(el().querySelector('.nombre-campo .campo-error')?.textContent).toContain('El nombre es obligatorio.');
     });
   });
 });
