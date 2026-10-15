@@ -14,7 +14,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * Criterio de terminado de la fase 2 (docs/spec.md): un usuario de cada una de dos
  * ferreterias entra y no ve nada de la otra. Corre contra MySQL real con Testcontainers
  * (el contenedor y los helpers estan en IntegrationTestBase).
- * Datos de db/dev-data: El Tornillo (Buloneria, Herramientas) y La Tuerca (Pintureria).
+ * Datos de db/dev-data: El Tornillo (Bulonería, Herramientas) y La Tuerca (Pinturería).
  */
 class TenantIsolationIntegrationTest extends IntegrationTestBase {
 
@@ -26,8 +26,8 @@ class TenantIsolationIntegrationTest extends IntegrationTestBase {
         JsonNode rubrosTornillo = getJson("/api/rubros", tornillo);
         JsonNode rubrosTuerca = getJson("/api/rubros", tuerca);
 
-        assertThat(nombres(rubrosTornillo)).contains("Buloneria", "Herramientas").doesNotContain("Pintureria");
-        assertThat(nombres(rubrosTuerca)).contains("Pintureria").doesNotContain("Buloneria", "Herramientas");
+        assertThat(nombres(rubrosTornillo)).contains("Bulonería", "Herramientas").doesNotContain("Pinturería");
+        assertThat(nombres(rubrosTuerca)).contains("Pinturería").doesNotContain("Bulonería", "Herramientas");
     }
 
     @Test

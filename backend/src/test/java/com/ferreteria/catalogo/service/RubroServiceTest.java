@@ -13,6 +13,7 @@ import static org.mockito.Mockito.when;
 import com.ferreteria.catalogo.dto.RubroRequest;
 import com.ferreteria.catalogo.dto.RubroResponse;
 import com.ferreteria.catalogo.model.Rubro;
+import com.ferreteria.catalogo.repository.ArticuloRepository;
 import com.ferreteria.catalogo.repository.RubroRepository;
 import com.ferreteria.common.exception.ConflictException;
 import com.ferreteria.common.exception.ResourceNotFoundException;
@@ -42,6 +43,9 @@ class RubroServiceTest {
 
     @Mock
     RecalculoPreciosService recalculoPreciosService;
+
+    @Mock
+    ArticuloRepository articuloRepository;
 
     @InjectMocks
     RubroService service;
@@ -130,7 +134,7 @@ class RubroServiceTest {
 
         assertThatThrownBy(() -> service.actualizar(RUBRO_ID, new RubroRequest("Electricidad", bd("50.00")), USUARIO))
                 .isInstanceOf(ConflictException.class)
-                .hasMessage("Ya existe un rubro llamado Electricidad");
+                .hasMessage("Ya existe un rubro llamado Electricidad.");
 
         assertThat(rubro.getMargenPorcentaje()).isEqualByComparingTo("35");
         verifyNoInteractions(recalculoPreciosService);

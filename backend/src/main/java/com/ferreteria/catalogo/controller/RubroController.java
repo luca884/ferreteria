@@ -18,6 +18,7 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/rubros")
@@ -37,6 +38,12 @@ public class RubroController {
     @GetMapping("/{id}")
     public RubroResponse obtener(@PathVariable Long id) {
         return rubroService.obtener(id);
+    }
+
+    /** Cuantos articulos activos heredan el margen del rubro: los que se recalculan si el margen cambia. */
+    @GetMapping("/{id}/articulos-que-heredan")
+    public Map<String, Long> articulosQueHeredan(@PathVariable Long id) {
+        return Map.of("cantidad", rubroService.contarArticulosQueHeredan(id));
     }
 
     @PostMapping

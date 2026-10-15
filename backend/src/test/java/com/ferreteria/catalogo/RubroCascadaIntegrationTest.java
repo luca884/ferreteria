@@ -292,7 +292,7 @@ class RubroCascadaIntegrationTest extends IntegrationTestBase {
 
         putJson("/api/rubros/" + rubro, duenoA, json(ocupado, "50"))
                 .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.message", is("Ya existe un rubro llamado " + ocupado)));
+                .andExpect(jsonPath("$.message", is("Ya existe un rubro llamado " + ocupado + ".")));
 
         Map<String, Object> fila = filaDeRubro(rubro);
         assertThat(fila.get("nombre")).isEqualTo(nombre);
