@@ -7,7 +7,11 @@
   (enter)="alEnter()"
   (mover)="alMover($event)"
 />
-<p class="atajos">F2 buscar · Esc limpiar · ↑↓ elegir · Enter abrir</p>
+<app-botonera [habilitadas]="habilitadas()" (accion)="alBotonera($event)" />
+
+@if (aviso(); as nota) {
+  <p class="aviso" [class.error]="nota.grave" [attr.role]="nota.grave ? 'alert' : 'status'">{{ nota.texto }}</p>
+}
 
 @if (mensaje(); as aviso) {
   <p class="mensaje" [class.error]="aviso.grave" role="alert">{{ aviso.texto }}</p>
@@ -23,5 +27,52 @@
       [hayMas]="r.hayMas"
       (elegir)="elegir($event)"
     />
+  }
+}
+
+<app-ticket-lista [renglones]="ticket.ticket().renglones" [elegido]="ticket.elegido()" />
+
+@if (dialogo(); as abierto) {
+  @switch (abierto.tipo) {
+    @case ('cantidad') {
+      @if (renglonDe(abierto.indice); as r) {
+        <app-dialogo-cantidad
+          [descripcion]="r.descripcion"
+          [unidad]="r.unidad"
+          [cantidadMilesimas]="r.cantidadMilesimas"
+          (confirmar)="cambiarCantidad(abierto.indice, $event)"
+          (cancelar)="cerrarDialogo()"
+          (escaneoDescartado)="escaneoDescartado()"
+        />
+      }
+    }
+    @case ('quitar') {
+      <app-dialogo-confirmacion
+        modo="quitar"
+        [descripcion]="renglonDe(abierto.indice)?.descripcion ?? ''"
+        (confirmar)="quitar(abierto.indice)"
+        (cancelar)="cerrarDialogo()"
+        (escaneoDescartado)="escaneoDescartado()"
+      />
+    }
+    @case ('vaciar') {
+      <app-dialogo-confirmacion
+        modo="vaciar"
+        [renglones]="ticket.ticket().renglones.length"
+        (confirmar)="vaciarTicket()"
+        (cancelar)="cerrarDialogo()"
+        (escaneoDescartado)="escaneoDescartado()"
+      />
+    }
+    @case ('cobro') {
+      <app-dialogo-cobro
+        [totalCentavos]="ticket.total()"
+        [enVuelo]="enVuelo()"
+        [aviso]="avisoCobro()"
+        (confirmar)="cobrar($event)"
+        (cancelar)="cerrarDialogo()"
+        (escaneoDescartado)="escaneoDescartado()"
+      />
+    }
   }
 }

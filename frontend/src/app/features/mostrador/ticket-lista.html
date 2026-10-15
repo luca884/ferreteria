@@ -26,14 +26,5 @@
   </ol>
 }
 <div class="pie">
-  <button
-    type="button"
-    class="vaciar"
-    [disabled]="renglones().length === 0"
-    (mousedown)="$event.preventDefault()"
-    (click)="vaciar.emit()"
-  >
-    Vaciar…
-  </button>
   <p class="total" aria-label="Total del ticket">{{ totalCentavos() / 100 | monto }}</p>
 </div>

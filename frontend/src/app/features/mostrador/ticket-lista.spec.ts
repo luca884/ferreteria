@@ -27,7 +27,6 @@ function renglon(parcial: Partial<RenglonTicket> = {}): RenglonTicket {
 
 describe('TicketLista', () => {
   let fixture: ComponentFixture<TicketLista>;
-  let vaciados: number;
 
   const el = () => fixture.nativeElement as HTMLElement;
   const filas = () => Array.from(el().querySelectorAll('.renglon'));
@@ -41,8 +40,6 @@ describe('TicketLista', () => {
       providers: [{ provide: LOCALE_ID, useValue: 'es-AR' }],
     }).compileComponents();
     fixture = TestBed.createComponent(TicketLista);
-    vaciados = 0;
-    fixture.componentInstance.vaciar.subscribe(() => vaciados++);
     fixture.componentRef.setInput('renglones', renglones);
     fixture.componentRef.setInput('elegido', elegido);
     fixture.detectChanges();
@@ -113,32 +110,19 @@ describe('TicketLista', () => {
     expect(total()).toBe(`$${NBSP}4.463,33`);
   });
 
-  it('vacío: total $ 0,00, mensaje de ticket vacío y Vaciar deshabilitado', async () => {
+  it('vacío: total $ 0,00 y mensaje de ticket vacío', async () => {
     await crear([]);
 
     expect(total()).toBe(`$${NBSP}0,00`);
     expect(el().textContent).toContain('El ticket está vacío.');
     expect(filas().length).toBe(0);
-    expect((el().querySelector('button.vaciar') as HTMLButtonElement).disabled).toBe(true);
   });
 
-  it('el botón «Vaciar…» emite vaciar', async () => {
+  it('no tiene botón Vaciar: «Vaciar» vive solo en la botonera (R-038)', async () => {
     await crear([renglon()]);
-    const boton = el().querySelector('button.vaciar') as HTMLButtonElement;
 
-    boton.click();
-
-    expect(boton.textContent!.trim()).toBe('Vaciar…');
-    expect(vaciados).toBe(1);
-  });
-
-  it('el botón no le roba el foco a la caja', async () => {
-    await crear([renglon()]);
-    const evento = new MouseEvent('mousedown', { bubbles: true, cancelable: true });
-
-    el().querySelector('button.vaciar')!.dispatchEvent(evento);
-
-    expect(evento.defaultPrevented).toBe(true);
+    expect(el().querySelector('button')).toBeNull();
+    expect(el().textContent).not.toContain('Vaciar');
   });
 
   it('no muestra costo ni margen', async () => {

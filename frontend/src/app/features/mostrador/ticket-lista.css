@@ -55,7 +55,7 @@
 .pie {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   margin-top: 12px;
 }
 .total {
@@ -63,16 +63,4 @@
   font-size: 2.4rem;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
-}
-.vaciar {
-  padding: 8px 14px;
-  border: 1px solid var(--borde);
-  border-radius: 6px;
-  background: var(--superficie);
-  font: inherit;
-  cursor: pointer;
-}
-.vaciar:disabled {
-  opacity: 0.5;
-  cursor: default;
 }

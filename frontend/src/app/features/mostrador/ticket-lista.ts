@@ -5,7 +5,6 @@ import {
   afterRenderEffect,
   computed,
   input,
-  output,
   viewChildren,
 } from '@angular/core';
 import { MontoPipe } from '../../core/formato/monto';
@@ -31,7 +30,6 @@ const SUFIJO_UNIDAD: Record<Unidad, string> = {
 export class TicketLista {
   readonly renglones = input.required<readonly RenglonTicket[]>();
   readonly elegido = input<number | null>(null);
-  readonly vaciar = output<void>();
 
   protected readonly sufijo = SUFIJO_UNIDAD;
   protected readonly sinStock = sinStock;
