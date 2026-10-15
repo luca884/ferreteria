@@ -1,9 +1,13 @@
 import { HttpErrorResponse } from '@angular/common/http';
-import { Component, inject, signal } from '@angular/core';
+import { Component, ElementRef, inject, signal } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import { AuthService } from '../../core/auth/auth.service';
 import { esRutaPropia } from '../../core/auth/ruta-propia';
+
+/** Los campos en el orden de la pantalla: al enviar con errores se enfoca el primero que falla. */
+const CAMPOS = ['email', 'password'] as const;
+type Campo = (typeof CAMPOS)[number];
 
 @Component({
   selector: 'app-login',
@@ -15,6 +19,7 @@ export class Login {
   private readonly auth = inject(AuthService);
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef).nativeElement;
 
   protected readonly form = inject(FormBuilder).nonNullable.group({
     email: ['', [Validators.required, Validators.email]],
@@ -33,9 +38,22 @@ export class Login {
     return esRutaPropia(pedida) ? pedida : '/';
   }
 
+  protected invalido(campo: Campo): boolean {
+    const control = this.form.controls[campo];
+    return control.touched && control.invalid;
+  }
+
+  /** El error del campo y, si lo hay, el del servidor (vale para los dos: email o contraseña). */
+  protected descripcion(campo: Campo): string | null {
+    const ids = [this.invalido(campo) ? `${campo}-error` : null, this.error() ? 'login-error' : null];
+    return ids.filter(Boolean).join(' ') || null;
+  }
+
   protected ingresar(): void {
     if (this.form.invalid) {
       this.form.markAllAsTouched();
+      const primero = CAMPOS.find((campo) => this.form.controls[campo].invalid);
+      if (primero) this.host.querySelector<HTMLElement>(`#${primero}`)?.focus();
       return;
     }
     this.enviando.set(true);
