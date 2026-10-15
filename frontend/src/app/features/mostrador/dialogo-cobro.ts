@@ -11,6 +11,7 @@ import {
   viewChildren,
 } from '@angular/core';
 import { MontoPipe } from '../../core/formato/monto';
+import { TrampaFoco } from '../../shared/trampa-foco';
 import { desdeTexto } from './centavos';
 import { GuardaLector } from './guarda-lector';
 import { MEDIOS_PAGO, MEDIO_PAGO_LABELS, MedioPago } from './venta.models';
@@ -32,7 +33,7 @@ const centavosATexto = (c: number) => `${Math.floor(c / 100)},${String(c % 100).
  */
 @Component({
   selector: 'app-dialogo-cobro',
-  imports: [MontoPipe],
+  imports: [MontoPipe, TrampaFoco],
   template: `
     <div class="dialogo-fondo">
       <div
@@ -40,6 +41,7 @@ const centavosATexto = (c: number) => `${Math.floor(c / 100)},${String(c % 100).
         role="dialog"
         aria-modal="true"
         aria-labelledby="dialogo-cobro-titulo"
+        appTrampaFoco
         (keydown)="alTeclear($event)"
       >
         <div class="cabecera">
@@ -81,17 +83,21 @@ const centavosATexto = (c: number) => `${Math.floor(c / 100)},${String(c % 100).
                 type="text"
                 inputmode="decimal"
                 autocomplete="off"
+                spellcheck="false"
+                [attr.aria-invalid]="errorRecibido() ? 'true' : null"
+                [attr.aria-describedby]="errorRecibido() ? 'dialogo-cobro-error' : null"
                 [value]="textoRecibido()"
                 (input)="escrito.set($any($event.target).value)"
               />
             </label>
             @if (faltaCentavos() > 0) {
-              <p class="falta" role="status">Faltan <strong>{{ faltaCentavos() / 100 | monto }}</strong></p>
+              <!-- Sin role="status": ese rol es atómico y re-leería todo el renglón en cada tecla. -->
+              <p class="falta" aria-live="polite">Faltan <strong>{{ faltaCentavos() / 100 | monto }}</strong></p>
             } @else if (recibido() !== null && errorRecibido() === null) {
               <p class="vuelto">Vuelto <strong>{{ vueltoCentavos() / 100 | monto }}</strong></p>
             }
             @if (errorRecibido(); as mensaje) {
-              <p class="error" role="alert">{{ mensaje }}</p>
+              <p id="dialogo-cobro-error" class="error" role="alert">{{ mensaje }}</p>
             }
           </div>
         }

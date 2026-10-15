@@ -143,6 +143,43 @@ describe('DialogoCobro', () => {
     expect(confirmadas).toEqual([]);
   });
 
+  it('«Faltan» se anuncia con aria-live polite y no como role="status" (no se re-lee entero en cada tecla)', async () => {
+    await abrir();
+    escribir('3000');
+
+    const falta = el().querySelector('.falta')!;
+    expect(falta.hasAttribute('role')).toBe(false);
+    expect(falta.getAttribute('aria-live')).toBe('polite');
+  });
+
+  it('un recibido inválido queda marcado y enlazado a su error', async () => {
+    await abrir();
+    expect(importe().hasAttribute('aria-invalid')).toBe(false);
+    expect(importe().getAttribute('spellcheck')).toBe('false');
+
+    escribir('abc');
+
+    expect(importe().getAttribute('aria-invalid')).toBe('true');
+    const id = importe().getAttribute('aria-describedby')!;
+    expect(el().querySelector(`[id="${id}"]`)!.textContent!.trim()).toBe('Escribí el importe recibido.');
+  });
+
+  it('atrapa el foco: Tab en «Cobrar» vuelve al medio elegido y Shift+Tab desde ahí va a «Cobrar»', async () => {
+    await abrir();
+    const cobrar = el().querySelector('button.cobrar') as HTMLButtonElement;
+    cobrar.focus();
+
+    const evento = new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true });
+    cobrar.dispatchEvent(evento);
+    expect(document.activeElement).toBe(medio('Efectivo'));
+    expect(evento.defaultPrevented).toBe(true);
+
+    medio('Efectivo').dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Tab', shiftKey: true, bubbles: true, cancelable: true }),
+    );
+    expect(document.activeElement).toBe(cobrar);
+  });
+
   it('mientras falta plata no hay otro mensaje de error: solo el «Faltan»', async () => {
     await abrir();
     escribir('1495');
