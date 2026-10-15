@@ -5,6 +5,7 @@ import { Observable } from 'rxjs';
 import { erroresDeCampos } from '../../core/api/api-error';
 import { AuthService } from '../../core/auth/auth.service';
 import { normalizarCuit, validarCuit } from '../../core/formato/cuit';
+import { BarraAcciones } from '../../shared/barra-acciones';
 import { Confirmacion } from '../../shared/confirmacion';
 import { Proveedor, ProveedorRequest } from './proveedor.models';
 import { ProveedoresService } from './proveedores.service';
@@ -15,7 +16,7 @@ const mismoNombre = (a: string, b: string) => a.trim().localeCompare(b.trim(), '
 
 @Component({
   selector: 'app-proveedores',
-  imports: [ReactiveFormsModule, Confirmacion],
+  imports: [ReactiveFormsModule, Confirmacion, BarraAcciones],
   templateUrl: './proveedores.html',
   styleUrl: './proveedores.css',
 })

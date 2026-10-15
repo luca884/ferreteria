@@ -4,6 +4,7 @@ import { Component, DestroyRef, OnInit, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { AuthService } from '../../core/auth/auth.service';
+import { BarraAcciones } from '../../shared/barra-acciones';
 import { Confirmacion } from '../../shared/confirmacion';
 import { Rubro, RubroRequest } from './rubro.models';
 import { RubrosService } from './rubros.service';
@@ -21,7 +22,7 @@ interface CambioDeMargen {
 
 @Component({
   selector: 'app-rubros',
-  imports: [ReactiveFormsModule, DecimalPipe, Confirmacion],
+  imports: [ReactiveFormsModule, DecimalPipe, Confirmacion, BarraAcciones],
   templateUrl: './rubros.html',
   styleUrl: './rubros.css',
 })

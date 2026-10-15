@@ -4,7 +4,7 @@
   min-height: 100vh;
   padding: var(--e-4);
   background:
-    linear-gradient(180deg, var(--barra) 0 38vh, transparent 38vh),
+    linear-gradient(180deg, var(--acento-profundo) 0 38vh, transparent 38vh),
     var(--fondo);
 }
 .card {

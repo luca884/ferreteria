@@ -1,9 +1,8 @@
-<header class="pagina-encabezado">
-  <div>
-    <h1>Artículos</h1>
-    <p class="ayuda">Buscá por descripción, código interno, código de barras o código del proveedor.</p>
-  </div>
-</header>
+<app-barra-acciones>
+  <h1>Artículos</h1>
+</app-barra-acciones>
+
+<p class="ayuda">Buscá por descripción, código interno, código de barras o código del proveedor.</p>
 
 <div class="toolbar">
   <form class="busqueda" [formGroup]="form" (ngSubmit)="buscar()">

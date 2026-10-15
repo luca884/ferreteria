@@ -1,23 +1,32 @@
-import { TestBed } from '@angular/core/testing';
-import { signal } from '@angular/core';
-import { provideRouter } from '@angular/router';
+import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { Component, signal } from '@angular/core';
+import { Router, Routes, provideRouter } from '@angular/router';
 import { Sesion } from '../core/auth/auth.models';
 import { AuthService } from '../core/auth/auth.service';
 import { Shell } from './shell';
 
+@Component({ template: '' })
+class Vacia {}
+
 describe('Shell', () => {
-  async function render(dueno: boolean, sesion: Sesion | null = null): Promise<HTMLElement> {
+  let fixture: ComponentFixture<Shell>;
+
+  async function render(
+    dueno: boolean,
+    sesion: Sesion | null = null,
+    rutas: Routes = [],
+  ): Promise<HTMLElement> {
     await TestBed.configureTestingModule({
       imports: [Shell],
       providers: [
-        provideRouter([]),
+        provideRouter(rutas),
         {
           provide: AuthService,
           useValue: { esDueno: signal(dueno), sesion: signal(sesion), logout: () => undefined },
         },
       ],
     }).compileComponents();
-    const fixture = TestBed.createComponent(Shell);
+    fixture = TestBed.createComponent(Shell);
     fixture.detectChanges();
     await fixture.whenStable();
     return fixture.nativeElement as HTMLElement;
@@ -26,17 +35,26 @@ describe('Shell', () => {
   const enlaces = (el: HTMLElement) =>
     Array.from(el.querySelectorAll('nav a')).map((a) => a.textContent?.trim());
 
-  it('el Dueño ve "Importar lista" después de Proveedores', async () => {
+  it('las secciones van en el menú lateral', async () => {
+    const el = await render(true);
+
+    const nav = el.querySelector('aside nav[aria-label="Secciones"]');
+    expect(nav).not.toBeNull();
+    expect(nav!.querySelectorAll('a').length).toBe(6);
+  });
+
+  it('el Dueño ve Mostrador, Artículos, Rubros, Proveedores y, bajo «Precios», Importar lista y Actualizar precios', async () => {
     const el = await render(true);
 
     expect(enlaces(el)).toEqual([
       'Mostrador',
-      'Rubros',
       'Artículos',
+      'Rubros',
       'Proveedores',
       'Importar lista',
       'Actualizar precios',
     ]);
+    expect(el.querySelector('nav .grupo')?.textContent?.trim()).toBe('Precios');
     expect(el.querySelector('a[href="/importaciones"]')).not.toBeNull();
   });
 
@@ -50,14 +68,26 @@ describe('Shell', () => {
     expect(enlace!.textContent?.trim()).toBe('Actualizar precios');
   });
 
-  it('el Vendedor no ve "Importar lista" ni "Actualizar precios"', async () => {
+  it('el Vendedor no ve "Importar lista", "Actualizar precios" ni el grupo «Precios»', async () => {
     const el = await render(false);
 
-    expect(enlaces(el)).toEqual(['Mostrador', 'Rubros', 'Artículos', 'Proveedores']);
+    expect(enlaces(el)).toEqual(['Mostrador', 'Artículos', 'Rubros', 'Proveedores']);
     expect(el.querySelector('a[href="/actualizacion-masiva"]')).toBeNull();
+    expect(el.querySelector('nav .grupo')).toBeNull();
   });
 
-  it('muestra la ferretería, el usuario y su rol', async () => {
+  it('la sección abierta se marca con aria-current="page"', async () => {
+    const el = await render(true, null, [{ path: 'rubros', component: Vacia }]);
+
+    await TestBed.inject(Router).navigateByUrl('/rubros');
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    expect(el.querySelector('nav a[href="/rubros"]')!.getAttribute('aria-current')).toBe('page');
+    expect(el.querySelector('nav a[href="/mostrador"]')!.hasAttribute('aria-current')).toBe(false);
+  });
+
+  it('muestra la ferretería, el usuario, sus iniciales y su rol', async () => {
     const el = await render(false, {
       userId: 2,
       nombre: 'Juan Pérez',
@@ -70,6 +100,22 @@ describe('Shell', () => {
     expect(el.querySelector('.ferreteria')?.textContent?.trim()).toBe('El Tornillo');
     expect(el.querySelector('.usuario-nombre')?.textContent?.trim()).toBe('Juan Pérez');
     expect(el.querySelector('.usuario-rol')?.textContent?.trim()).toBe('Vendedor');
+    const avatar = el.querySelector('.avatar');
+    expect(avatar?.textContent?.trim()).toBe('JP');
+    expect(avatar?.getAttribute('aria-hidden')).toBe('true');
+  });
+
+  it('con un solo nombre las iniciales son una letra', async () => {
+    const el = await render(false, {
+      userId: 1,
+      nombre: 'ana',
+      email: 'a@demo',
+      rol: 'VENDEDOR',
+      ferreteriaId: 1,
+      ferreteriaNombre: 'El Tornillo',
+    });
+
+    expect(el.querySelector('.avatar')?.textContent?.trim()).toBe('A');
   });
 
   it.each([

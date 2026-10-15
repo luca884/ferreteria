@@ -1,6 +1,9 @@
 :host {
   display: block;
   width: 100%;
+}
+/* La barra de acciones va a todo el ancho; el formulario no se estira de más. */
+:host > :not(app-barra-acciones) {
   max-width: 1040px;
 }
 

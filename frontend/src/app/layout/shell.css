@@ -1,122 +1,162 @@
+/* Menú lateral blanco a la izquierda; a la derecha, la pantalla (con su barra de acciones arriba). */
 :host {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: var(--ancho-menu) minmax(0, 1fr);
   height: 100vh;
+  height: 100dvh;
 }
 
-.barra {
+.lateral {
   display: flex;
-  align-items: center;
-  gap: var(--e-5);
-  height: 48px;
-  flex: 0 0 48px;
-  padding: 0 var(--e-5);
-  background: var(--barra);
-  color: var(--barra-texto);
+  flex-direction: column;
+  gap: 2px;
+  min-height: 0;
+  padding: 14px 10px;
+  overflow-y: auto;
+  border-right: 1px solid var(--borde);
+  background: var(--superficie);
 }
 
 .marca {
   display: flex;
   align-items: center;
-  gap: var(--e-2);
-  min-width: 0;
+  gap: 10px;
+  padding: 4px 8px 16px;
 }
 .logo {
   flex: 0 0 auto;
-  width: 26px;
-  height: 26px;
-  fill: var(--acento);
-  stroke: none;
+  width: 28px;
+  height: 28px;
 }
-.logo circle {
-  fill: var(--barra);
+.logo rect {
+  fill: var(--acento);
+}
+.logo path {
+  fill: none;
+  stroke: var(--acento-texto);
+  stroke-width: 2.4;
+  stroke-linecap: round;
+}
+.marca-texto {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.2;
 }
 .ferreteria {
   overflow: hidden;
-  color: #fff;
-  font-size: 1rem;
+  font-size: var(--texto-base);
+  font-weight: 700;
   white-space: nowrap;
   text-overflow: ellipsis;
+}
+.producto {
+  color: var(--texto-tenue);
+  font-size: var(--texto-xs);
 }
 
 nav {
   display: flex;
-  align-self: stretch;
+  flex-direction: column;
   gap: 2px;
-  flex: 1;
-  min-width: 0;
-  overflow-x: auto;
 }
 nav a {
   display: flex;
   align-items: center;
-  padding: 0 var(--e-3);
-  border-bottom: 3px solid transparent;
-  border-top: 3px solid transparent;
-  color: var(--barra-texto);
-  font-weight: 600;
+  gap: 10px;
+  min-height: 38px;
+  padding: 9px 10px;
+  border-radius: var(--radio);
+  color: var(--texto-menu);
+  font-size: var(--texto-base);
+  font-weight: 500;
   text-decoration: none;
-  white-space: nowrap;
+  transition:
+    background-color var(--transicion),
+    color var(--transicion);
+}
+nav a svg {
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
 }
 nav a:hover {
-  background: rgb(255 255 255 / 0.06);
-  color: #fff;
+  background: var(--superficie-3);
+  color: var(--texto);
 }
 nav a.activo {
-  border-bottom-color: var(--acento);
-  color: #fff;
+  background: var(--acento-suave);
+  color: var(--acento-fuerte);
+  font-weight: 600;
 }
 nav a:focus-visible {
-  outline: 2px solid #fdba74;
-  outline-offset: -4px;
+  outline-offset: -2px;
+}
+.grupo {
+  padding: 16px 10px 6px;
+  color: var(--texto-tenue);
+  font-size: var(--texto-2xs);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
 }
 
 .usuario {
   display: flex;
   align-items: center;
-  gap: var(--e-3);
+  gap: 10px;
+  margin-top: auto;
+  padding: 12px 4px 0 8px;
+  border-top: 1px solid var(--borde);
+}
+.avatar {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radio);
+  background: var(--acento-anillo);
+  color: var(--acento-profundo);
+  font-size: var(--texto-xs);
+  font-weight: 700;
 }
 .usuario-datos {
   display: flex;
   flex-direction: column;
-  align-items: flex-end;
-  line-height: 1.15;
+  flex: 1;
+  min-width: 0;
+  line-height: 1.25;
 }
 .usuario-nombre {
-  color: #fff;
+  overflow: hidden;
   font-size: var(--texto-sm);
   font-weight: 600;
   white-space: nowrap;
+  text-overflow: ellipsis;
 }
 .usuario-rol {
-  color: var(--barra-tenue);
+  color: var(--texto-tenue);
   font-size: var(--texto-xs);
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
 }
 .salir {
   min-height: 30px;
-  padding: 2px 12px;
-  border-color: rgb(255 255 255 / 0.25);
-  background: transparent;
-  color: var(--barra-texto);
-}
-.salir:hover:not(:disabled) {
-  border-color: rgb(255 255 255 / 0.5);
-  background: rgb(255 255 255 / 0.08);
-  color: #fff;
-}
-.salir:focus-visible {
-  box-shadow: 0 0 0 3px rgb(253 186 116 / 0.6);
+  padding: 2px 10px;
+  border-color: var(--borde);
+  color: var(--texto-suave);
+  font-size: var(--texto-xs);
 }
 
-/* Las pantallas operativas usan todo el ancho; el contenido scrollea debajo de la barra. */
+/* La pantalla scrollea acá; su barra de acciones anula este padding a los costados y queda fija arriba. */
 .contenido {
   display: flex;
   flex-direction: column;
-  flex: 1;
+  min-width: 0;
   min-height: 0;
   overflow: auto;
-  padding: var(--e-4) var(--e-5);
+  padding: 0 var(--pantalla-x) var(--pantalla-y);
 }

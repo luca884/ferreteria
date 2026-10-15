@@ -74,6 +74,12 @@ describe('Proveedores', () => {
 
   afterEach(() => vi.restoreAllMocks());
 
+  it('el título va en la barra de acciones de arriba', async () => {
+    await crearComponente(false);
+
+    expect(el().querySelector('app-barra-acciones h1')?.textContent?.trim()).toBe('Proveedores');
+  });
+
   it('lista los proveedores al iniciar', async () => {
     await crearComponente(true);
 

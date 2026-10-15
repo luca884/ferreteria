@@ -271,7 +271,7 @@ function leerNumero(texto: string): { valor: number; decimales: number } | null 
       box-shadow: var(--sombra-1);
     }
     .modo:focus-visible {
-      box-shadow: 0 0 0 3px #fdba74;
+      box-shadow: var(--foco);
     }
     #stock-real,
     #cantidad {

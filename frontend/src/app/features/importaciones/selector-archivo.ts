@@ -43,7 +43,7 @@ import { Component, ElementRef, input, output, signal, viewChild } from '@angula
       border-radius: 8px;
       background: var(--superficie);
     }
-    .zona-archivo.arrastrando { border-color: var(--acento); background: #fff4e5; }
+    .zona-archivo.arrastrando { border-color: var(--acento); background: var(--acento-suave); }
     .nombre-archivo { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   `,
 })

@@ -131,6 +131,14 @@ describe('Importaciones', () => {
 
   afterEach(() => vi.restoreAllMocks());
 
+  it('el título va en la barra de acciones de arriba', async () => {
+    await crearComponente(true);
+
+    expect(el().querySelector('app-barra-acciones h1')?.textContent?.trim()).toBe(
+      'Importar lista de precios',
+    );
+  });
+
   describe('permisos', () => {
     it('el Dueño ve el formulario y la lista de proveedores', async () => {
       await crearComponente(true);

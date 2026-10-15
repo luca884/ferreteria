@@ -160,7 +160,7 @@ describe('ArticuloForm', () => {
     it('arranca con IVA 21 %, unidad Unidad, stock mínimo 0 y sin datos de solo lectura', async () => {
       await crearComponente();
 
-      expect(el().querySelector('h1')?.textContent).toContain('Nuevo artículo');
+      expect(el().querySelector('app-barra-acciones h1')?.textContent).toContain('Nuevo artículo');
       expect(elegida('alicuotaIva')).toBe('21 %');
       expect(elegida('unidad')).toBe('Unidad');
       expect(input('stockMinimo').value).toBe('0');
@@ -451,7 +451,7 @@ describe('ArticuloForm', () => {
       await crearComponente({ id: '5' });
 
       expect(servicio.obtener).toHaveBeenCalledWith(5);
-      expect(el().querySelector('h1')?.textContent).toContain('Editar artículo');
+      expect(el().querySelector('app-barra-acciones h1')?.textContent).toContain('Editar artículo');
       expect(input('codigoInterno').value).toBe('TOR-001');
       expect(input('codigoBarras').value).toBe('7790001000012');
       expect(input('codigoProveedor').value).toBe('AB-12');
@@ -599,8 +599,8 @@ describe('ArticuloForm', () => {
     it('ve el artículo en solo lectura: campos deshabilitados y sin botón Guardar', async () => {
       await crearComponente({ dueno: false, id: '5' });
 
-      expect(el().querySelector('h1')?.textContent).toContain('Artículo');
-      expect(el().querySelector('h1')?.textContent).not.toContain('Editar');
+      expect(el().querySelector('app-barra-acciones h1')?.textContent).toContain('Artículo');
+      expect(el().querySelector('app-barra-acciones h1')?.textContent).not.toContain('Editar');
       expect(input('codigoInterno').value).toBe('TOR-001');
       expect(input('costo').value).toBe('100');
       expect(elegida('rubro')).toBe('Bulonería');

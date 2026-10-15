@@ -1,19 +1,22 @@
+<app-barra-acciones>
+  <h1 class="titulo">
+    @if (!auth.esDueno()) {
+      Artículo
+    } @else if (esEdicion) {
+      Editar artículo
+    } @else {
+      Nuevo artículo
+    }
+    @if (articulo(); as actual) {
+      @if (!actual.activo) {
+        <span class="etiqueta de-baja">De baja</span>
+      }
+    }
+  </h1>
+</app-barra-acciones>
+
 <header class="pagina-encabezado">
   <div>
-    <h1 class="titulo">
-      @if (!auth.esDueno()) {
-        Artículo
-      } @else if (esEdicion) {
-        Editar artículo
-      } @else {
-        Nuevo artículo
-      }
-      @if (articulo(); as actual) {
-        @if (!actual.activo) {
-          <span class="etiqueta de-baja">De baja</span>
-        }
-      }
-    </h1>
     <p class="ayuda">El precio final lo calcula el sistema con el costo, el margen y la alícuota de IVA.</p>
   </div>
   @if (articulo(); as actual) {

@@ -40,7 +40,7 @@
 }
 .aviso.recortado {
   border-color: var(--advertencia-borde);
-  border-left-color: #d97706;
+  border-left-color: var(--advertencia-marca);
   background: var(--advertencia-fondo);
 }
 tr.fuerte td {

@@ -16,6 +16,7 @@ import { Avisos } from '../../core/avisos/avisos';
 import { MontoPipe } from '../../core/formato/monto';
 import { margenEfectivo, precioFinal } from '../../core/formato/precio-final';
 import { cantidadConUnidad } from '../../core/formato/unidad';
+import { BarraAcciones } from '../../shared/barra-acciones';
 import { Confirmacion } from '../../shared/confirmacion';
 import { Proveedor } from '../proveedores/proveedor.models';
 import { ProveedoresService } from '../proveedores/proveedores.service';
@@ -63,7 +64,7 @@ type CampoArticulo =
 
 @Component({
   selector: 'app-articulo-form',
-  imports: [ReactiveFormsModule, MontoPipe, Confirmacion, DialogoAjusteStock],
+  imports: [ReactiveFormsModule, MontoPipe, Confirmacion, DialogoAjusteStock, BarraAcciones],
   templateUrl: './articulo-form.html',
   styleUrl: './articulo-form.css',
 })

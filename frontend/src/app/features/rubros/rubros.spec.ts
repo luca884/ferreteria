@@ -67,6 +67,12 @@ describe('Rubros', () => {
     await refrescar();
   }
 
+  it('el título va en la barra de acciones de arriba', async () => {
+    await crear([buloneria]);
+
+    expect(el().querySelector('app-barra-acciones h1')?.textContent?.trim()).toBe('Rubros');
+  });
+
   it('lista los rubros con su margen', async () => {
     await crear([buloneria, pinturas]);
 

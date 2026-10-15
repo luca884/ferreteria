@@ -1,14 +1,13 @@
-<header class="pagina-encabezado">
-  <div>
-    <h1>Importar lista de precios</h1>
-    @if (auth.esDueno()) {
-      <p class="ayuda">
-        Subí la lista del proveedor (Excel o CSV), indicá en qué columnas están el código y el costo, y
-        revisá los cambios antes de confirmar.
-      </p>
-    }
-  </div>
-</header>
+<app-barra-acciones>
+  <h1>Importar lista de precios</h1>
+</app-barra-acciones>
+
+@if (auth.esDueno()) {
+  <p class="ayuda">
+    Subí la lista del proveedor (Excel o CSV), indicá en qué columnas están el código y el costo, y
+    revisá los cambios antes de confirmar.
+  </p>
+}
 
 @if (!auth.esDueno()) {
   <p class="ayuda estado-vacio" role="status">Solo el Dueño puede importar listas de precios.</p>

@@ -127,6 +127,14 @@ describe('ActualizacionMasiva', () => {
 
   afterEach(() => vi.restoreAllMocks());
 
+  it('el título va en la barra de acciones de arriba', async () => {
+    await crearComponente(true);
+
+    expect(el().querySelector('app-barra-acciones h1')?.textContent?.trim()).toBe(
+      'Actualizar precios',
+    );
+  });
+
   describe('permisos (R-023)', () => {
     it('el Vendedor ve el aviso y ni el formulario ni el botón', async () => {
       await crearComponente(false);

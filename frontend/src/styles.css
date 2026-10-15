@@ -1,51 +1,60 @@
 /*
- * Sistema de diseño de la app. Moderno, con la densidad de un programa de mostrador: grillas tipo planilla,
+ * Sistema de diseño de la app. Claro, con la densidad de un programa de mostrador: grillas tipo planilla,
  * números tabulares y teclas visibles. Los componentes usan estos tokens y clases; no repiten colores sueltos.
  */
 :root {
-  /* Neutros cálidos */
-  --fondo: #f3f3f1;
-  --superficie: #ffffff;
-  --superficie-2: #f9f9f7;
-  --superficie-3: #efeeeb;
-  --borde: #dad8d4;
-  --borde-fuerte: #b7b3ad;
-  --texto: #1c1917;
-  --texto-suave: #57534e;
-  --texto-tenue: #78716c;
-
-  /* Acento (naranja ferretería): 5,2:1 sobre blanco */
-  --acento: #c2410c;
-  --acento-hover: #9a3412;
-  --acento-suave: #fff3eb;
-  --acento-borde: #fbc9a8;
+  /*
+   * Acento. Cambiar la paleta es tocar este bloque: el resto de los colores de marca derivan de acá.
+   * --acento (#2563eb) da 5,2:1 sobre blanco; --acento-profundo es el fondo del TOTAL y del cobro.
+   */
+  --acento: #2563eb;
+  --acento-fuerte: #1d4ed8;
+  --acento-profundo: #1e3a8a;
+  --acento-suave: #eff6ff;
+  --acento-anillo: #dbeafe;
+  --acento-borde: #bfdbfe;
   --acento-texto: #ffffff;
+  --acento-hover: var(--acento-fuerte);
+  /* Texto secundario sobre el azul profundo */
+  --profundo-texto-tenue: #bfdbfe;
 
-  /* Barra superior */
-  --barra: #1f1c1a;
-  --barra-texto: #e7e5e4;
-  --barra-tenue: #a8a29e;
+  /* Neutros fríos (una sola familia de grises) */
+  --fondo: #f4f6fa;
+  --superficie: #ffffff;
+  --superficie-2: #f8fafc;
+  --superficie-3: #f1f5f9;
+  --borde: #e2e8f0;
+  --borde-suave: #f1f5f9;
+  --borde-fuerte: #cbd5e1;
+  --texto: #0f172a;
+  --texto-menu: #334155;
+  --texto-suave: #475569;
+  --texto-tenue: #64748b;
+  --texto-deshabilitado: #94a3b8;
 
   /* Estados */
-  --error: #b42318;
-  --error-fondo: #fef2f1;
-  --error-borde: #f7c4bf;
-  --exito: #15803d;
-  --exito-fondo: #effaf2;
-  --exito-borde: #b5e3c2;
+  --error: #b91c1c;
+  --error-fondo: #fef2f2;
+  --error-borde: #fecaca;
+  --exito: #047857;
+  --exito-fondo: #ecfdf5;
+  --exito-borde: #a7f3d0;
   --advertencia: #92400e;
-  --advertencia-fondo: #fef6e0;
-  --advertencia-borde: #f5d48a;
-  --info: #1d4ed8;
-  --info-fondo: #eff4ff;
-  --info-borde: #c3d4fb;
+  --advertencia-fondo: #fffbeb;
+  --advertencia-insignia: #fef3c7;
+  --advertencia-borde: #fde68a;
+  --advertencia-marca: #d97706;
+  --info: var(--acento-fuerte);
+  --info-fondo: var(--acento-suave);
+  --info-borde: var(--acento-borde);
 
-  /* Tipografía: Segoe UI en Windows, la del sistema en el resto */
-  --fuente: 'Segoe UI Variable Text', 'Segoe UI', system-ui, -apple-system, Roboto, 'Helvetica Neue', Arial,
-    sans-serif;
-  --fuente-mono: 'Cascadia Mono', Consolas, 'SFMono-Regular', Menlo, monospace;
+  /* Tipografía: Geist (Google Fonts, en index.html) con respaldo del sistema */
+  --fuente: 'Geist', system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --fuente-mono: 'Geist Mono', ui-monospace, 'Cascadia Mono', Consolas, 'SFMono-Regular', Menlo, monospace;
+  --texto-2xs: 0.6875rem;
   --texto-xs: 0.75rem;
   --texto-sm: 0.8125rem;
+  --texto-base: 0.875rem;
   --texto-md: 0.9375rem;
   --texto-lg: 1.125rem;
   --texto-xl: 1.375rem;
@@ -59,20 +68,37 @@
   --e-6: 24px;
   --e-8: 32px;
 
-  /* Radios y sombras */
+  /* Radios: más cerrados adentro, más abiertos en contenedores */
   --radio-sm: 4px;
-  --radio: 6px;
+  --radio: 8px;
   --radio-lg: 10px;
-  --sombra-1: 0 1px 2px rgb(28 25 23 / 0.06);
-  --sombra-2: 0 4px 12px rgb(28 25 23 / 0.1);
-  --sombra-3: 0 18px 48px rgb(28 25 23 / 0.28);
+  --radio-xl: 14px;
+
+  /* Sombras teñidas con el gris de la paleta */
+  --sombra-1: 0 1px 2px rgb(15 23 42 / 0.05);
+  --sombra-2: 0 8px 24px rgb(15 23 42 / 0.1);
+  --sombra-3: 0 24px 60px rgb(15 23 42 / 0.3);
+  --velo: rgb(15 23 42 / 0.45);
+
+  /* Marco de la app */
+  --ancho-menu: 212px;
+  --pantalla-x: 16px;
+  --pantalla-y: 14px;
+  --alto-barra: 58px;
+
+  /* Capas */
+  --z-fijo: 1;
+  --z-desplegable: 5;
+  --z-barra: 20;
+  --z-dialogo: 50;
 
   /* Densidad */
   --alto-control: 36px;
-  --celda-y: 6px;
-  --celda-x: 10px;
+  --celda-y: 10px;
+  --celda-x: 12px;
 
-  --foco: 0 0 0 3px rgb(194 65 12 / 0.35);
+  --foco: 0 0 0 3px color-mix(in srgb, var(--acento) 35%, transparent);
+  --transicion: 150ms ease;
   color-scheme: light;
 }
 
@@ -92,8 +118,9 @@ body {
   background: var(--fondo);
   color: var(--texto);
   font-family: var(--fuente);
-  font-size: var(--texto-md);
+  font-size: var(--texto-base);
   line-height: 1.45;
+  font-variant-numeric: tabular-nums;
   -webkit-font-smoothing: antialiased;
 }
 
@@ -102,6 +129,7 @@ h2,
 h3 {
   line-height: 1.2;
   letter-spacing: -0.01em;
+  text-wrap: balance;
 }
 h1 {
   margin: 0;
@@ -111,19 +139,19 @@ h1 {
 h2 {
   margin: 0 0 var(--e-2);
   font-size: var(--texto-lg);
-  font-weight: 650;
+  font-weight: 600;
 }
 h3 {
   margin: var(--e-5) 0 var(--e-2);
   font-size: 1rem;
-  font-weight: 650;
+  font-weight: 600;
 }
 
 a {
-  color: var(--acento);
+  color: var(--acento-fuerte);
 }
 a:hover {
-  color: var(--acento-hover);
+  color: var(--acento-profundo);
 }
 
 :focus-visible {
@@ -143,6 +171,9 @@ textarea {
   border-radius: var(--radio);
   background: var(--superficie);
   color: var(--texto);
+  transition:
+    border-color var(--transicion),
+    box-shadow var(--transicion);
 }
 input:focus,
 select:focus,
@@ -150,6 +181,10 @@ textarea:focus {
   outline: none;
   border-color: var(--acento);
   box-shadow: var(--foco);
+}
+input::placeholder,
+textarea::placeholder {
+  color: var(--texto-tenue);
 }
 input:disabled,
 select:disabled {
@@ -200,7 +235,7 @@ label {
   display: inline-flex;
   align-items: center;
   gap: var(--e-2);
-  font-size: var(--texto-md);
+  font-size: var(--texto-base);
   font-weight: 500;
   color: var(--texto);
   cursor: pointer;
@@ -226,26 +261,31 @@ button,
   background: var(--superficie);
   color: var(--texto);
   font: inherit;
-  font-weight: 600;
+  font-weight: 500;
   line-height: 1.2;
   text-decoration: none;
   white-space: nowrap;
   cursor: pointer;
   transition:
-    background-color 0.12s,
-    border-color 0.12s,
-    color 0.12s;
+    background-color var(--transicion),
+    border-color var(--transicion),
+    color var(--transicion),
+    box-shadow var(--transicion),
+    transform var(--transicion);
 }
 button:hover:not(:disabled),
 .btn:hover {
   background: var(--superficie-3);
   color: var(--texto);
 }
+button:active:not(:disabled),
+.btn:active {
+  transform: translateY(1px);
+}
 button:focus-visible,
 .btn:focus-visible {
-  outline: none;
-  box-shadow: var(--foco);
-  border-color: var(--acento);
+  outline: 2px solid var(--acento);
+  outline-offset: 2px;
 }
 
 button[type='submit'],
@@ -254,6 +294,7 @@ button.primario,
   background: var(--acento);
   border-color: var(--acento);
   color: var(--acento-texto);
+  font-weight: 600;
 }
 button[type='submit']:hover:not(:disabled),
 button.primario:hover:not(:disabled),
@@ -287,23 +328,23 @@ button.peligro:hover:not(:disabled) {
 
 button.chico,
 .btn.chico {
-  min-height: 28px;
-  padding: 2px 10px;
+  min-height: 30px;
+  padding: 2px 12px;
   font-size: var(--texto-sm);
 }
 
 button:disabled,
 button[type='submit']:disabled,
-button.primario:disabled {
+button.primario:disabled,
+button.peligro:disabled {
   background: var(--superficie-3);
   border-color: var(--borde);
-  color: var(--texto-tenue);
+  color: var(--texto-deshabilitado);
   cursor: not-allowed;
 }
 
-/* Tecla visible al lado de la etiqueta. En botones de diálogo va por CSS (data-tecla) para no tocar el texto. */
-kbd,
-[data-tecla]::after {
+/* Tecla visible: keycap para las pistas sueltas. */
+kbd {
   display: inline-block;
   min-width: 1.9em;
   padding: 1px 6px;
@@ -314,19 +355,95 @@ kbd,
   color: var(--texto-suave);
   font-family: var(--fuente-mono);
   font-size: 0.78em;
-  font-weight: 700;
+  font-weight: 600;
   line-height: 1.4;
   text-align: center;
 }
+/* En botones de diálogo la tecla va por CSS (data-tecla) para no tocar el texto: mono y discreta. */
 [data-tecla]::after {
   content: attr(data-tecla);
   margin-left: 2px;
+  color: var(--texto-tenue);
+  font-family: var(--fuente-mono);
+  font-size: 0.8em;
+  font-weight: 500;
 }
 button.primario[data-tecla]::after,
 button[type='submit'][data-tecla]::after {
-  border-color: rgb(255 255 255 / 0.45);
-  background: rgb(255 255 255 / 0.16);
   color: var(--acento-texto);
+  opacity: 0.8;
+}
+button:disabled[data-tecla]::after {
+  color: var(--texto-deshabilitado);
+  opacity: 1;
+}
+
+/* ---------- Barra superior de cada pantalla ---------- */
+
+/*
+ * <app-barra-acciones>: la pantalla la pone primera en su plantilla con su <h1> y sus acciones adentro.
+ * Ocupa todo el ancho del área de contenido (anula el padding del shell) y queda fija arriba al scrollear.
+ */
+app-barra-acciones {
+  position: sticky;
+  top: 0;
+  z-index: var(--z-barra);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  min-height: var(--alto-barra);
+  margin: 0 calc(-1 * var(--pantalla-x)) var(--pantalla-y);
+  padding: 8px var(--pantalla-x);
+  border-bottom: 1px solid var(--borde);
+  background: var(--superficie);
+}
+app-barra-acciones h1 {
+  margin-right: var(--e-3);
+  font-size: var(--texto-lg);
+  font-weight: 600;
+}
+
+/* Botón de la barra: tecla (o ícono) arriba y nombre abajo, como en un programa de mostrador. */
+.accion-barra {
+  flex-direction: column;
+  gap: 4px;
+  width: 92px;
+  min-height: 54px;
+  padding: 7px 4px 6px;
+  border-color: var(--borde);
+  border-radius: 9px;
+  font-size: var(--texto-sm);
+  font-weight: 500;
+}
+.accion-barra:hover:not(:disabled) {
+  border-color: var(--borde-fuerte);
+}
+.accion-barra kbd {
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--acento-fuerte);
+  font-size: var(--texto-sm);
+  font-weight: 600;
+  line-height: 1.2;
+}
+.accion-barra.primario {
+  width: 120px;
+}
+.accion-barra.primario kbd {
+  color: var(--acento-texto);
+  font-weight: 700;
+}
+.accion-barra.peligro {
+  border-color: var(--error-borde);
+}
+.accion-barra:disabled {
+  border-color: var(--borde);
+}
+.accion-barra:disabled kbd {
+  color: var(--texto-deshabilitado);
 }
 
 /* ---------- Grillas ---------- */
@@ -341,26 +458,29 @@ table {
 th,
 td {
   padding: var(--celda-y) var(--celda-x);
-  border-bottom: 1px solid var(--borde);
+  border-bottom: 1px solid var(--borde-suave);
   text-align: left;
   vertical-align: middle;
 }
 th {
   position: sticky;
   top: 0;
-  z-index: 1;
-  background: var(--superficie-3);
-  border-bottom: 1px solid var(--borde-fuerte);
-  color: var(--texto-suave);
-  font-size: var(--texto-sm);
-  font-weight: 700;
+  z-index: var(--z-fijo);
+  padding-block: 9px;
+  background: var(--superficie-2);
+  border-bottom: 1px solid var(--borde);
+  color: var(--texto-tenue);
+  font-size: var(--texto-2xs);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
   white-space: nowrap;
 }
-tbody tr:nth-child(even) td {
-  background: var(--superficie-2);
+tbody tr td {
+  transition: background-color var(--transicion);
 }
 tbody tr:hover td {
-  background: var(--acento-suave);
+  background: var(--superficie-2);
 }
 tbody tr:last-child td {
   border-bottom: 0;
@@ -383,7 +503,6 @@ tbody tr:last-child td {
   border: 1px solid var(--borde);
   border-radius: var(--radio-lg);
   background: var(--superficie);
-  box-shadow: var(--sombra-1);
 }
 .grilla-contenedor {
   max-height: 420px;
@@ -401,12 +520,14 @@ tbody tr:last-child td {
   margin-bottom: var(--e-4);
 }
 .pagina-encabezado .ayuda {
-  margin: var(--e-1) 0 0;
+  margin: 0;
 }
 
 .ayuda {
+  max-width: 75ch;
   margin: 0 0 var(--e-4);
   color: var(--texto-suave);
+  text-wrap: pretty;
 }
 
 /* Barra de herramientas arriba de un listado: buscar a la izquierda, acciones a la derecha. */
@@ -420,7 +541,6 @@ tbody tr:last-child td {
   border: 1px solid var(--borde);
   border-radius: var(--radio-lg);
   background: var(--superficie);
-  box-shadow: var(--sombra-1);
 }
 .toolbar .separador {
   flex: 1;
@@ -432,11 +552,8 @@ tbody tr:last-child td {
   align-items: center;
   gap: var(--e-3);
   margin-top: var(--e-2);
-  padding: var(--e-2) var(--e-3);
-  border: 1px solid var(--borde);
-  border-radius: var(--radio-lg);
-  background: var(--superficie);
-  color: var(--texto-suave);
+  padding: var(--e-2) 2px;
+  color: var(--texto-tenue);
   font-size: var(--texto-sm);
   font-variant-numeric: tabular-nums;
 }
@@ -455,7 +572,7 @@ tbody tr:last-child td {
 }
 .listado .alta {
   position: sticky;
-  top: 0;
+  top: calc(var(--alto-barra) + var(--pantalla-y));
   display: flex;
   flex-direction: column;
   gap: var(--e-3);
@@ -480,6 +597,7 @@ tbody tr:last-child td {
 
 /* Cargando, vacío: un recuadro tranquilo donde iría la grilla. */
 .estado-vacio {
+  max-width: none;
   margin: 0;
   padding: var(--e-8) var(--e-4);
   border: 1px dashed var(--borde-fuerte);
@@ -489,11 +607,10 @@ tbody tr:last-child td {
 }
 
 .panel {
-  padding: var(--e-4) var(--e-5);
+  padding: var(--e-4) var(--e-5) var(--e-5);
   border: 1px solid var(--borde);
   border-radius: var(--radio-lg);
   background: var(--superficie);
-  box-shadow: var(--sombra-1);
 }
 
 /* Indicadores (conteos de una vista previa) */
@@ -511,7 +628,7 @@ tbody tr:last-child td {
   border: 1px solid var(--borde);
   border-radius: var(--radio-lg);
   background: var(--superficie);
-  color: var(--texto-suave);
+  color: var(--texto-tenue);
   font-size: var(--texto-sm);
   font-weight: 600;
 }
@@ -522,18 +639,18 @@ tbody tr:last-child td {
   font-size: 1.6rem;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
 }
 
-/* Etiquetas chicas dentro de una celda */
+/* Etiquetas chicas dentro de una celda: rectangulares, no píldoras. */
 .etiqueta {
   display: inline-block;
-  padding: 1px 8px;
-  border: 1px solid var(--borde);
-  border-radius: 999px;
-  background: var(--superficie-2);
+  padding: 2px 6px;
+  border-radius: var(--radio-sm);
+  background: var(--superficie-3);
   color: var(--texto-suave);
-  font-size: var(--texto-xs);
-  font-weight: 700;
+  font-size: var(--texto-2xs);
+  font-weight: 600;
   white-space: nowrap;
 }
 
@@ -556,7 +673,7 @@ tbody tr:last-child td {
 }
 .alerta.advertencia {
   border-color: var(--advertencia-borde);
-  border-left-color: #d97706;
+  border-left-color: var(--advertencia-marca);
   background: var(--advertencia-fondo);
 }
 .alerta.error,
@@ -591,11 +708,11 @@ ul.error {
 .dialogo-fondo {
   position: fixed;
   inset: 0;
-  z-index: 50;
+  z-index: var(--z-dialogo);
   display: grid;
   place-items: center;
   padding: var(--e-4);
-  background: rgb(28 25 23 / 0.5);
+  background: var(--velo);
 }
 .dialogo {
   display: flex;
@@ -603,7 +720,7 @@ ul.error {
   gap: var(--e-4);
   width: min(440px, 100%);
   padding: var(--e-6);
-  border-radius: var(--radio-lg);
+  border-radius: var(--radio-xl);
   background: var(--superficie);
   box-shadow: var(--sombra-3);
 }
@@ -620,12 +737,14 @@ ul.error {
 .dialogo-acciones {
   display: flex;
   justify-content: flex-end;
-  gap: var(--e-2);
-  padding-top: var(--e-2);
+  gap: 10px;
+  padding-top: var(--e-1);
 }
 .dialogo-acciones button {
-  min-height: 42px;
+  min-height: 44px;
   padding: 8px 18px;
+  border-radius: var(--radio-lg);
+  font-size: var(--texto-md);
 }
 
 /* Estado del stock: rojo sin stock, amarillo bajo el mínimo (lo decide estadoStock). */
@@ -636,7 +755,7 @@ ul.error {
 [data-stock='bajo-minimo'] {
   padding: 0 6px;
   border-radius: var(--radio-sm);
-  background: var(--advertencia-fondo);
+  background: var(--advertencia-insignia);
   color: var(--advertencia);
   font-weight: 700;
 }

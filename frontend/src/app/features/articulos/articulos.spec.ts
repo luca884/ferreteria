@@ -114,6 +114,12 @@ describe('Articulos', () => {
     await refrescar();
   }
 
+  it('el título va en la barra de acciones de arriba', async () => {
+    await crearComponente(false);
+
+    expect(el().querySelector('app-barra-acciones h1')?.textContent?.trim()).toBe('Artículos');
+  });
+
   it('carga la primera página al iniciar, sin búsqueda ni inactivos', async () => {
     await crearComponente(true);
 

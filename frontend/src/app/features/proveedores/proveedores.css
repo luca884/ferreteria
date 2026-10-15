@@ -1,3 +1,6 @@
+:host {
+  display: block;
+}
 .nombre {
   font-weight: 600;
 }

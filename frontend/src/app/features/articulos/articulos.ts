@@ -8,6 +8,7 @@ import { AuthService } from '../../core/auth/auth.service';
 import { Avisos } from '../../core/avisos/avisos';
 import { MontoPipe } from '../../core/formato/monto';
 import { cantidadConUnidad } from '../../core/formato/unidad';
+import { BarraAcciones } from '../../shared/barra-acciones';
 import { Confirmacion } from '../../shared/confirmacion';
 import { ALICUOTA_IVA_LABELS, AjusteStockResponse, Articulo } from './articulo.models';
 import { ArticulosService } from './articulos.service';
@@ -17,7 +18,15 @@ const TAMANO_PAGINA = 20;
 
 @Component({
   selector: 'app-articulos',
-  imports: [ReactiveFormsModule, RouterLink, DecimalPipe, MontoPipe, Confirmacion, DialogoAjusteStock],
+  imports: [
+    ReactiveFormsModule,
+    RouterLink,
+    DecimalPipe,
+    MontoPipe,
+    Confirmacion,
+    DialogoAjusteStock,
+    BarraAcciones,
+  ],
   templateUrl: './articulos.html',
   styleUrl: './articulos.css',
 })

@@ -7,6 +7,7 @@ import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { FormControl, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
 import { erroresDeCampos } from '../../core/api/api-error';
 import { AuthService } from '../../core/auth/auth.service';
+import { BarraAcciones } from '../../shared/barra-acciones';
 import { Proveedor } from '../proveedores/proveedor.models';
 import { ProveedoresService } from '../proveedores/proveedores.service';
 import { Rubro } from '../rubros/rubro.models';
@@ -46,7 +47,14 @@ const ZOOM_INICIAL = 100;
 
 @Component({
   selector: 'app-importaciones',
-  imports: [ReactiveFormsModule, DecimalPipe, MontoPipe, ScrollingModule, SelectorArchivo],
+  imports: [
+    ReactiveFormsModule,
+    DecimalPipe,
+    MontoPipe,
+    ScrollingModule,
+    SelectorArchivo,
+    BarraAcciones,
+  ],
   templateUrl: './importaciones.html',
   styleUrl: './importaciones.css',
 })
