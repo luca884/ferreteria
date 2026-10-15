@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Prueba de teclas F</title>
+<style>
+  body { font-family: system-ui, sans-serif; margin: 24px auto; max-width: 900px; padding: 0 16px; color: #222; background: #fff; }
+  h1 { font-size: 22px; }
+  table { border-collapse: collapse; width: 100%; margin: 12px 0; }
+  th, td { border: 1px solid #ccc; padding: 6px 8px; text-align: left; }
+  tr.ok td { background: #dcf5dc; }
+  tr.mal td { background: #f8d7d7; }
+  tr.pendiente td.estado { color: #888; }
+  input[type=text] { font-size: 18px; padding: 6px; width: 320px; max-width: 100%; }
+  button { cursor: pointer; }
+  #log { font-family: monospace; font-size: 12px; height: 140px; overflow: auto; border: 1px solid #ccc; padding: 6px; white-space: pre; }
+  #salida { width: 100%; height: 160px; font-family: monospace; font-size: 12px; }
+  .ayuda { background: #f4f4f4; padding: 8px 12px; border-left: 4px solid #888; }
+</style>
+</head>
+<body>
+<h1>Prueba de teclas F1 a F12 en el navegador</h1>
+
+<div class="ayuda">
+  <p>1. Abrí este archivo en la PC del mostrador, con Chrome. El foco queda en el buscador, igual que en el mostrador.</p>
+  <p>2. Apretá cada tecla, de F1 a F12, de a una. Esperá 2 segundos entre tecla y tecla.</p>
+  <p>3. Si el navegador hace algo (recarga, ayuda, pantalla completa, herramientas, barra de direcciones), cerralo, volvé a esta pestaña y seguí. La página lo detecta sola en la mayoría de los casos.</p>
+  <p>4. Si la detección se equivoca, corregí la fila con los botones. Al final tocá "Copiar resultados" y pasame el texto.</p>
+</div>
+
+<p><label>Buscador: <input type="text" id="buscador" autofocus placeholder="El foco tiene que quedar acá"></label></p>
+<p><label><input type="checkbox" id="bloquear" checked> Bloquear con <code>preventDefault</code></label></p>
+
+<table>
+  <thead><tr><th>Tecla</th><th>Resultado</th><th>Detalle</th><th>Corregir</th></tr></thead>
+  <tbody id="filas"></tbody>
+</table>
+
+<p>
+  <button id="copiar">Copiar resultados</button>
+  <button id="reiniciar">Empezar de nuevo</button>
+</p>
+<textarea id="salida" readonly></textarea>
+
+<h2>Registro de teclas</h2>
+<div id="log"></div>
+
+<script>
+  const TECLAS = Array.from({ length: 12 }, (_, i) => 'F' + (i + 1));
+  const CLAVE_ESTADO = 'prueba-teclas-f';
+  const CLAVE_ULTIMA = 'prueba-teclas-f-ultima';
+  const ESPERA_MS = 1500;
+
+  function leer(clave) {
+    try { return JSON.parse(sessionStorage.getItem(clave)); } catch { return null; }
+  }
+  function guardar(clave, valor) {
+    try { sessionStorage.setItem(clave, JSON.stringify(valor)); } catch { /* sin storage */ }
+  }
+  function borrar(clave) {
+    try { sessionStorage.removeItem(clave); } catch { /* sin storage */ }
+  }
+
+  let estado = leer(CLAVE_ESTADO) || {};
+  let observando = null;
+
+  // Si la última tecla recargó la página, se marca como no bloqueada.
+  const ultima = leer(CLAVE_ULTIMA);
+  if (ultima && Date.now() - ultima.t < 5000) {
+    estado[ultima.tecla] = { resultado: 'mal', detalle: 'Recargó la página' };
+    guardar(CLAVE_ESTADO, estado);
+  }
+  borrar(CLAVE_ULTIMA);
+
+  function marcar(tecla, resultado, detalle) {
+    estado[tecla] = { resultado, detalle };
+    guardar(CLAVE_ESTADO, estado);
+    pintar();
+  }
+
+  function pintar() {
+    const filas = document.getElementById('filas');
+    filas.innerHTML = '';
+    for (const tecla of TECLAS) {
+      const e = estado[tecla];
+      const tr = document.createElement('tr');
+      tr.className = e ? e.resultado : 'pendiente';
+      const texto = !e ? 'Sin probar' : e.resultado === 'ok' ? 'Bloqueada: el navegador no hizo nada' : 'El navegador actuó';
+      tr.innerHTML = `<td><strong>${tecla}</strong></td><td class="estado">${texto}</td><td>${e ? e.detalle : ''}</td>
+        <td><button data-t="${tecla}" data-r="ok">Anduvo</button> <button data-t="${tecla}" data-r="mal">Falló</button></td>`;
+      filas.appendChild(tr);
+    }
+    document.getElementById('salida').value = resumen();
+  }
+
+  function resumen() {
+    const lineas = [navigator.userAgent, ''];
+    for (const tecla of TECLAS) {
+      const e = estado[tecla];
+      lineas.push(`${tecla}: ${!e ? 'sin probar' : e.resultado === 'ok' ? 'BLOQUEADA' : 'NO BLOQUEADA'}${e && e.detalle ? ' (' + e.detalle + ')' : ''}`);
+    }
+    return lineas.join('\n');
+  }
+
+  function registrar(texto) {
+    const log = document.getElementById('log');
+    log.textContent += new Date().toLocaleTimeString() + '  ' + texto + '\n';
+    log.scrollTop = log.scrollHeight;
+  }
+
+  function detectar(motivo) {
+    if (!observando || Date.now() > observando.hasta) return;
+    clearTimeout(observando.timer);
+    const tecla = observando.tecla;
+    observando = null;
+    marcar(tecla, 'mal', motivo);
+  }
+
+  function bloquear() {
+    return document.getElementById('bloquear').checked;
+  }
+
+  window.addEventListener('keydown', (ev) => {
+    registrar(`keydown key=${ev.key} code=${ev.code}${ev.repeat ? ' (repetida)' : ''}`);
+    if (!TECLAS.includes(ev.key)) return;
+    if (bloquear()) ev.preventDefault();
+    if (ev.repeat) return;
+
+    guardar(CLAVE_ULTIMA, { tecla: ev.key, t: Date.now() });
+    if (observando) clearTimeout(observando.timer);
+    const tecla = ev.key;
+    observando = {
+      tecla,
+      hasta: Date.now() + ESPERA_MS,
+      timer: setTimeout(() => {
+        observando = null;
+        borrar(CLAVE_ULTIMA);
+        marcar(tecla, 'ok', document.activeElement && document.activeElement.id === 'buscador'
+          ? 'El foco siguió en el buscador'
+          : 'El foco salió del buscador');
+      }, ESPERA_MS),
+    };
+  }, true);
+
+  // Algunas teclas actúan al soltarse (por ejemplo F10 en Windows).
+  window.addEventListener('keyup', (ev) => {
+    if (TECLAS.includes(ev.key) && bloquear()) ev.preventDefault();
+  }, true);
+
+  window.addEventListener('blur', () => detectar('La ventana perdió el foco (barra de direcciones, menú, ayuda o herramientas)'));
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) detectar('Se abrió otra pestaña o ventana');
+  });
+  window.addEventListener('resize', () => detectar('Cambió el tamaño de la ventana (pantalla completa o herramientas)'));
+
+  document.getElementById('filas').addEventListener('click', (ev) => {
+    const b = ev.target.closest('button');
+    if (!b) return;
+    marcar(b.dataset.t, b.dataset.r, 'Corregido a mano');
+    document.getElementById('buscador').focus();
+  });
+
+  document.getElementById('copiar').addEventListener('click', async () => {
+    const salida = document.getElementById('salida');
+    try {
+      await navigator.clipboard.writeText(salida.value);
+    } catch {
+      salida.select();
+      document.execCommand('copy');
+    }
+    registrar('Resultados copiados');
+    document.getElementById('buscador').focus();
+  });
+
+  document.getElementById('reiniciar').addEventListener('click', () => {
+    estado = {};
+    borrar(CLAVE_ESTADO);
+    document.getElementById('log').textContent = '';
+    pintar();
+    document.getElementById('buscador').focus();
+  });
+
+  pintar();
+</script>
+</body>
+</html>
