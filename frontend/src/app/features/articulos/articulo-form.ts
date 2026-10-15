@@ -1,5 +1,5 @@
 import { HttpErrorResponse } from '@angular/common/http';
-import { Component, OnInit, computed, inject, signal } from '@angular/core';
+import { Component, ElementRef, Injector, OnInit, afterNextRender, computed, inject, signal } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import {
   AbstractControl,
@@ -62,6 +62,9 @@ type CampoArticulo =
   | 'alicuotaIva'
   | 'stockMinimo';
 
+/** Al guardar o cancelar se vuelve al listado con la búsqueda, la página y los inactivos de la dirección. */
+const VOLVER_AL_LISTADO = { queryParamsHandling: 'preserve' } as const;
+
 @Component({
   selector: 'app-articulo-form',
   imports: [ReactiveFormsModule, MontoPipe, Confirmacion, DialogoAjusteStock, BarraAcciones],
@@ -75,6 +78,8 @@ export class ArticuloForm implements OnInit {
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
   private readonly avisos = inject(Avisos);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+  private readonly injector = inject(Injector);
   protected readonly auth = inject(AuthService);
 
   protected readonly alicuotas = ALICUOTAS_IVA;
@@ -176,10 +181,29 @@ export class ArticuloForm implements OnInit {
     this.erroresServidor.update(({ [campo]: _, ...resto }) => resto);
   }
 
+  /** Error de validación propio visible (el campo ya se tocó). */
+  protected errorLocal(campo: CampoArticulo): boolean {
+    const control = this.form.controls[campo];
+    return control.touched && control.invalid;
+  }
+
+  protected invalido(campo: CampoArticulo): boolean {
+    return this.errorLocal(campo) || this.errorServidor(campo) !== null;
+  }
+
+  /** Ids para aria-describedby: las pistas del campo y sus errores visibles (propio y del backend). */
+  protected describir(campo: CampoArticulo, ...pistas: string[]): string | null {
+    const ids = [...pistas];
+    if (this.errorLocal(campo)) ids.push(`${campo}-error`);
+    if (this.errorServidor(campo)) ids.push(`${campo}-error-servidor`);
+    return ids.length > 0 ? ids.join(' ') : null;
+  }
+
   protected guardar(): void {
     if (!this.auth.esDueno()) return;
     if (this.form.invalid) {
       this.form.markAllAsTouched();
+      this.enfocarPrimerInvalido();
       return;
     }
     this.guardando.set(true);
@@ -193,12 +217,13 @@ export class ArticuloForm implements OnInit {
       next: () => {
         this.guardando.set(false);
         this.avisos.dejar(`Se guardó «${request.descripcion}».`);
-        void this.router.navigate(['/articulos']);
+        void this.router.navigate(['/articulos'], VOLVER_AL_LISTADO);
       },
       error: (err: unknown) => {
         this.guardando.set(false);
         this.erroresServidor.set(erroresPorCampo(err));
         this.error.set(mensajeDe(err, 'No se pudo guardar el artículo.'));
+        this.enfocarPrimerInvalido();
       },
     });
   }
@@ -210,12 +235,20 @@ export class ArticuloForm implements OnInit {
       this.confirmandoDescarte.set(true);
       return;
     }
-    void this.router.navigate(['/articulos']);
+    void this.router.navigate(['/articulos'], VOLVER_AL_LISTADO);
   }
 
   protected descartar(): void {
     this.confirmandoDescarte.set(false);
-    void this.router.navigate(['/articulos']);
+    void this.router.navigate(['/articulos'], VOLVER_AL_LISTADO);
+  }
+
+  /** Después de pintar los errores, el foco va al primer campo marcado (en el orden del formulario). */
+  private enfocarPrimerInvalido(): void {
+    afterNextRender(
+      () => this.host.nativeElement.querySelector<HTMLElement>('form.articulo [aria-invalid="true"]')?.focus(),
+      { injector: this.injector },
+    );
   }
 
   protected reactivar(): void {
