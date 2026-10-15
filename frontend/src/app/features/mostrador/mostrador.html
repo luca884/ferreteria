@@ -7,6 +7,7 @@
       [texto]="texto()"
       [controla]="listaVisible() ? listaId : null"
       [opcionActiva]="listaVisible() ? filaId(seleccionado()) : null"
+      [puedeRecuperarFoco]="sinDialogo"
       (textoChange)="alCambiarTexto($event)"
       (enter)="alEnter()"
       (mover)="alMover($event)"

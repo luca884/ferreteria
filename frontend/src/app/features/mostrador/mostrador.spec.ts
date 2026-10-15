@@ -999,6 +999,37 @@ describe('Mostrador', () => {
       expect(document.activeElement).toBe(campo());
     });
 
+    it('el foco que el buscador recupera con retraso no le roba el foco al diálogo recién abierto (H-18)', async () => {
+      await conTicket();
+      // El buscador pierde el foco sin destino: programa recuperarlo en el próximo turno.
+      campo().blur();
+      await tecla('F10');
+      expect(dentroDelDialogo()).toBe(true);
+
+      await avanzar(5);
+
+      expect(dentroDelDialogo()).toBe(true);
+      expect(document.activeElement).not.toBe(campo());
+      await tecla('Enter');
+      expect(dialogo()).toBeNull();
+      expect(descripciones()).toEqual(['Artículo 1']);
+    });
+
+    it('Esc, ↓ y F10 seguidos dejan el foco en el diálogo y Enter confirma (H-18)', async () => {
+      await conTicket();
+      await tecla('ArrowUp', campo());
+
+      await tecla('Escape', campo());
+      await tecla('ArrowDown', campo());
+      await tecla('F10');
+      await avanzar(5);
+
+      expect(dentroDelDialogo()).toBe(true);
+      await tecla('Enter');
+      expect(dialogo()).toBeNull();
+      expect(descripciones()).toEqual(['Artículo 1']);
+    });
+
     it('un escaneo con un diálogo abierto se descarta y avisa', async () => {
       await conTicket();
       await tecla('F3');

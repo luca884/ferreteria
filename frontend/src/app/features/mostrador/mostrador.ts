@@ -128,6 +128,8 @@ export class Mostrador {
   private ocultarAviso: ReturnType<typeof setTimeout> | undefined;
 
   protected readonly dialogo = signal<Dialogo | null>(null);
+  /** Para el buscador: con un diálogo abierto no recupera el foco diferido. */
+  protected readonly sinDialogo = () => this.dialogo() === null;
   protected readonly aviso = signal<Aviso | null>(null);
   /** Hay un POST de venta en curso: el diálogo de cobro ignora Enter y no se cierra. */
   protected readonly enVuelo = signal(false);
