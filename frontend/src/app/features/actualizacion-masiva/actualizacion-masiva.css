@@ -24,6 +24,17 @@
   flex: 1;
   min-width: 180px;
 }
+/* «Ver vista previa» y, si está apagado, qué falta para pedirla. */
+.fila-generar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--e-3);
+}
+/* La segunda confirmación toma el foco por código: no lleva el anillo de un control. */
+.confirmacion-total:focus {
+  outline: none;
+}
 .paso .ayuda {
   margin-bottom: var(--e-3);
 }

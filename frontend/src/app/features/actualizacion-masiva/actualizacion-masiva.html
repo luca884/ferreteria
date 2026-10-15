@@ -37,7 +37,7 @@
       </div>
       <div class="campo">
         <label for="q">Buscar por código o descripción</label>
-        <input id="q" type="text" formControlName="q" />
+        <input id="q" name="q" type="text" formControlName="q" autocomplete="off" spellcheck="false" />
       </div>
     </div>
     <div class="fila">
@@ -61,23 +61,39 @@
         <label for="valor">{{ etiquetaDelValor() }}</label>
         <input
           id="valor"
+          name="valor"
           type="text"
           inputmode="decimal"
+          autocomplete="off"
+          spellcheck="false"
           formControlName="valor"
+          [attr.aria-invalid]="errorDelValor() ? 'true' : null"
+          [attr.aria-describedby]="errorDelValor() ? 'valor-error' : null"
           (keydown.enter)="alEnter($event)"
         />
         @if (errorDelValor(); as mensaje) {
-          <span class="campo-error">{{ mensaje }}</span>
+          <span id="valor-error" class="campo-error">{{ mensaje }}</span>
         }
       </div>
     </div>
-    <button type="button" class="generar primario" [disabled]="!puedeGenerar()" (click)="generarVistaPrevia()">
-      @if (generando()) {
-        Generando vista previa…
-      } @else {
-        Ver vista previa
+    <div class="fila-generar">
+      <button
+        type="button"
+        class="generar primario"
+        [disabled]="!puedeGenerar()"
+        [attr.aria-describedby]="motivoSinVistaPrevia() ? 'motivo-vista-previa' : null"
+        (click)="generarVistaPrevia()"
+      >
+        @if (generando()) {
+          Generando vista previa…
+        } @else {
+          Ver vista previa
+        }
+      </button>
+      @if (motivoSinVistaPrevia(); as motivo) {
+        <span id="motivo-vista-previa" class="pista">{{ motivo }}</span>
       }
-    </button>
+    </div>
   </form>
 
   @if (erroresCampos().length > 0) {
@@ -157,23 +173,23 @@
                       @if (c.costoAnterior === c.costoNuevo) {
                         {{ c.costoNuevo | monto }}
                       } @else {
-                        {{ c.costoAnterior | monto }} → {{ c.costoNuevo | monto }}
+                        {{ c.costoAnterior | monto }}&nbsp;→ {{ c.costoNuevo | monto }}
                       }
                     </td>
                     <td class="num">
                       @if (c.margenAnterior !== c.margenNuevo) {
-                        {{ c.margenAnterior | number: '1.0-2' }} % → {{ c.margenNuevo | number: '1.0-2' }} %
+                        {{ c.margenAnterior | number: '1.0-2' }}&nbsp;%&nbsp;→ {{ c.margenNuevo | number: '1.0-2' }}&nbsp;%
                       } @else if (c.margenHeredado) {
-                        Heredado {{ c.margenNuevo | number: '1.0-2' }} %
+                        Heredado {{ c.margenNuevo | number: '1.0-2' }}&nbsp;%
                       } @else {
-                        {{ c.margenNuevo | number: '1.0-2' }} %
+                        {{ c.margenNuevo | number: '1.0-2' }}&nbsp;%
                       }
                     </td>
                     <td class="num">
                       @if (c.precioAnterior === c.precioNuevo) {
                         {{ c.precioNuevo | monto }}
                       } @else {
-                        {{ c.precioAnterior | monto }} → {{ c.precioNuevo | monto }}
+                        {{ c.precioAnterior | monto }}&nbsp;→ {{ c.precioNuevo | monto }}
                       }
                     </td>
                   </tr>
@@ -209,12 +225,21 @@
 
         <h2 class="titulo-confirmar">4. Confirmar</h2>
         @if (confirmandoTodo()) {
-          <section class="confirmacion-total" role="alertdialog" aria-labelledby="titulo-confirmacion">
+          <!-- No modal: toma el foco al abrirse y Esc la cancela, devolviéndolo al botón de actualizar. -->
+          <section
+            #confirmacionEl
+            class="confirmacion-total"
+            role="alertdialog"
+            aria-labelledby="titulo-confirmacion"
+            aria-describedby="detalle-confirmacion"
+            tabindex="-1"
+            (keydown.escape)="cancelarConfirmacion()"
+          >
             <h3 id="titulo-confirmacion">
               Vas a modificar {{ vp.conteos.modificados | number }}
               {{ plural(vp.conteos.modificados, 'artículo', 'artículos') }}
             </h3>
-            <p>
+            <p id="detalle-confirmacion">
               No elegiste ningún filtro: el cambio alcanza a todo el catálogo. Revisá la vista previa antes
               de seguir.
             </p>
@@ -227,6 +252,7 @@
           </section>
         } @else {
           <button
+            #confirmarEl
             type="button"
             class="confirmar primario"
             [disabled]="aplicando() || vp.conteos.modificados === 0"
