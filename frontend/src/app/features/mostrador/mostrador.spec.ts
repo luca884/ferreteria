@@ -139,7 +139,7 @@ describe('Mostrador', () => {
   afterEach(() => vi.useRealTimers());
 
   const renglonesTicket = () =>
-    Array.from(el().querySelectorAll<HTMLElement>('app-ticket-lista li.renglon'));
+    Array.from(el().querySelectorAll<HTMLElement>('app-ticket-lista .renglon'));
 
   describe('búsqueda', () => {
     it('tiene el foco en el campo al abrir la pantalla', async () => {
@@ -743,6 +743,18 @@ describe('Mostrador', () => {
 
       expect(el().querySelector('.total')!.textContent!.replace(/\s/g, ' ')).toContain(
         '$ 2.420,00',
+      );
+    });
+
+    it('debajo del total cuenta artículos y renglones, como GDS', async () => {
+      await crear();
+
+      await escanear('A', exacto(articulo(1)));
+      await escanear('A', exacto(articulo(1)));
+      await escanear('B', exacto(articulo(2)));
+
+      expect(el().querySelector('.conteo')!.textContent!.replace(/\s+/g, ' ').trim()).toBe(
+        '3 artículos · 2 renglones',
       );
     });
   });

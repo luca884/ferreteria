@@ -1,12 +1,18 @@
-<h1>Importar lista de precios</h1>
+<header class="pagina-encabezado">
+  <div>
+    <h1>Importar lista de precios</h1>
+    @if (auth.esDueno()) {
+      <p class="ayuda">
+        Subí la lista del proveedor (Excel o CSV), indicá en qué columnas están el código y el costo, y
+        revisá los cambios antes de confirmar.
+      </p>
+    }
+  </div>
+</header>
 
 @if (!auth.esDueno()) {
-  <p class="ayuda" role="status">Solo el Dueño puede importar listas de precios.</p>
+  <p class="ayuda estado-vacio" role="status">Solo el Dueño puede importar listas de precios.</p>
 } @else {
-  <p class="ayuda">
-    Subí la lista del proveedor (Excel o CSV), indicá en qué columnas están el código y el costo, y
-    revisá los cambios antes de confirmar.
-  </p>
 
   @if (erroresCampos().length > 0) {
     <ul class="error errores-campos" role="alert">
@@ -19,13 +25,13 @@
   }
 
   @if (conflicto()) {
-    <button type="button" class="regenerar" [disabled]="generando()" (click)="generarVistaPrevia()">
+    <button type="button" class="regenerar primario" [disabled]="generando()" (click)="generarVistaPrevia()">
       Volver a generar la vista previa
     </button>
   }
 
   @if (resumen(); as r) {
-    <section class="resumen" role="status">
+    <section class="resumen panel" role="status">
       <h2>Importación aplicada</h2>
       <p class="ayuda">Archivo {{ r.archivo }}. Los precios ya están actualizados.</p>
       <div class="tarjetas">
@@ -36,7 +42,7 @@
     </section>
   }
 
-  <section class="paso">
+  <section class="paso panel">
     <h2>1. Proveedor y archivo</h2>
     <div class="fila">
       <div class="campo">
@@ -68,17 +74,19 @@
   }
 
   @if (muestra(); as m) {
-    <section class="paso">
+    <section class="paso panel">
       <h2>2. Columnas de la lista</h2>
       <p class="ayuda">
         Este es el contenido del archivo: desplazate hacia los costados y hacia abajo, y usá el zoom para
         ver más o menos celdas. Indicá qué columna es cada dato.
       </p>
 
+      <div class="herramientas-visor">
       @if (m.hojas.length > 1) {
         <div class="navegacion-hojas">
           <button
             type="button"
+            class="chico"
             aria-label="Hoja anterior"
             [disabled]="cargandoMuestra() || hoja() <= 0"
             (click)="moverHoja(-1)"
@@ -90,6 +98,7 @@
           </span>
           <button
             type="button"
+            class="chico"
             aria-label="Hoja siguiente"
             [disabled]="cargandoMuestra() || hoja() >= m.hojas.length - 1"
             (click)="moverHoja(1)"
@@ -100,11 +109,12 @@
       }
 
       <div class="zoom" role="group" aria-label="Zoom de la lista">
-        <button type="button" aria-label="Alejar" [disabled]="zoomEnMinimo()" (click)="alejar()">−</button>
-        <button type="button" class="zoom-actual" aria-label="Restablecer zoom" (click)="restablecerZoom()">
+        <button type="button" class="chico" aria-label="Alejar" [disabled]="zoomEnMinimo()" (click)="alejar()">−</button>
+        <button type="button" class="chico zoom-actual" aria-label="Restablecer zoom" (click)="restablecerZoom()">
           {{ zoom() }} %
         </button>
-        <button type="button" aria-label="Acercar" [disabled]="zoomEnMaximo()" (click)="acercar()">+</button>
+        <button type="button" class="chico" aria-label="Acercar" [disabled]="zoomEnMaximo()" (click)="acercar()">+</button>
+      </div>
       </div>
 
       <div
@@ -238,7 +248,7 @@
           Las bonificaciones se aplican en cascada, una sobre otra, y se guardan en el proveedor recién
           al confirmar la importación. Dejá vacía la que no corresponda.
         </p>
-        <button type="button" class="generar" [disabled]="generando()" (click)="generarVistaPrevia()">
+        <button type="button" class="generar primario" [disabled]="generando()" (click)="generarVistaPrevia()">
           Ver vista previa
         </button>
       </form>
@@ -246,7 +256,7 @@
   }
 
   @if (vistaPrevia(); as vp) {
-    <section class="paso vista-previa">
+    <section class="paso panel vista-previa">
       <h2>3. Vista previa</h2>
       <p class="ayuda">Todavía no se cambió nada. Revisá lo que va a pasar antes de confirmar.</p>
 
@@ -385,28 +395,30 @@
         <details class="no-estan">
           <summary>No están en la lista ({{ vp.noEstan.length }})</summary>
           <p class="ayuda">Artículos activos del proveedor que no figuran en el archivo. No se tocan.</p>
-          <table>
-            <thead>
-              <tr>
-                <th>Código interno</th>
-                <th>Código del proveedor</th>
-                <th>Descripción</th>
-              </tr>
-            </thead>
-            <tbody>
-              @for (a of vp.noEstan; track a.id) {
+          <div class="grilla-contenedor">
+            <table>
+              <thead>
                 <tr>
-                  <td>{{ a.codigoInterno }}</td>
-                  <td>{{ a.codigoProveedor ?? '—' }}</td>
-                  <td>{{ a.descripcion }}</td>
+                  <th>Código interno</th>
+                  <th>Código del proveedor</th>
+                  <th>Descripción</th>
                 </tr>
-              }
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                @for (a of vp.noEstan; track a.id) {
+                  <tr>
+                    <td class="codigo">{{ a.codigoInterno }}</td>
+                    <td class="codigo">{{ a.codigoProveedor ?? '—' }}</td>
+                    <td>{{ a.descripcion }}</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
         </details>
       }
 
-      <h2>4. Confirmar</h2>
+      <h2 class="titulo-confirmar">4. Confirmar</h2>
       <div class="fila">
         <label class="casilla" for="crearNuevos">
           <input
@@ -427,7 +439,7 @@
           </select>
         </div>
       </div>
-      <button type="button" class="confirmar" [disabled]="aplicando()" (click)="confirmar()">
+      <button type="button" class="confirmar primario" [disabled]="aplicando()" (click)="confirmar()">
         Confirmar importación
       </button>
     </section>

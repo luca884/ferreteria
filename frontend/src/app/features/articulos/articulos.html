@@ -1,15 +1,19 @@
-<h1>Artículos</h1>
-<p class="ayuda">Buscá por descripción, código interno, código de barras o código del proveedor.</p>
+<header class="pagina-encabezado">
+  <div>
+    <h1>Artículos</h1>
+    <p class="ayuda">Buscá por descripción, código interno, código de barras o código del proveedor.</p>
+  </div>
+</header>
 
-<div class="barra-herramientas">
+<div class="toolbar">
   <form class="busqueda" [formGroup]="form" (ngSubmit)="buscar()">
     <div class="campo">
       <label for="q">Buscar</label>
       <input id="q" type="search" formControlName="q" placeholder="Ej: tornillo, TOR-001, 7790001000012" />
     </div>
-    <button type="submit">Buscar</button>
+    <button type="submit" class="secundario">Buscar</button>
   </form>
-  <label class="inactivos" for="inactivos">
+  <label class="casilla inactivos" for="inactivos">
     <input
       id="inactivos"
       type="checkbox"
@@ -18,8 +22,9 @@
     />
     Mostrar dados de baja
   </label>
+  <span class="separador"></span>
   @if (auth.esDueno()) {
-    <a class="nuevo" routerLink="/articulos/nuevo">Nuevo artículo</a>
+    <a class="btn primario nuevo" routerLink="/articulos/nuevo">Nuevo artículo</a>
   }
 </div>
 
@@ -28,76 +33,83 @@
 }
 
 @if (cargando() && !pagina()) {
-  <p class="ayuda">Cargando…</p>
+  <p class="ayuda estado-vacio">Cargando…</p>
 } @else if (pagina(); as resultado) {
   @if (resultado.items.length === 0) {
     @if (busquedaAplicada() !== '') {
-      <p class="ayuda">No hay artículos que coincidan con «{{ busquedaAplicada() }}».</p>
+      <p class="ayuda estado-vacio">No hay artículos que coincidan con «{{ busquedaAplicada() }}».</p>
     } @else {
-      <p class="ayuda">Todavía no hay artículos.</p>
+      <p class="ayuda estado-vacio">Todavía no hay artículos.</p>
     }
   } @else {
-    <table>
-      <thead>
-        <tr>
-          <th>Código</th>
-          <th>Descripción</th>
-          <th class="num">Costo</th>
-          <th class="num">Margen</th>
-          <th>IVA</th>
-          <th class="num">Precio final</th>
-          <th class="num">Stock</th>
-          <th>Estado</th>
-          @if (auth.esDueno()) {
-            <th class="acciones">Acciones</th>
-          }
-        </tr>
-      </thead>
-      <tbody>
-        @for (articulo of resultado.items; track articulo.id) {
-          <tr [class.inactivo]="!articulo.activo">
-            <td class="codigo">{{ articulo.codigoInterno }}</td>
-            <td class="descripcion">{{ articulo.descripcion }}</td>
-            <td class="num costo">{{ articulo.costo | monto }}</td>
-            <td class="num margen">
-              @if (articulo.margenPorcentaje === null) {
-                Heredado
-              } @else {
-                {{ articulo.margenPorcentaje | number: '1.0-2' }} %
-              }
-            </td>
-            <td class="iva">{{ alicuotaLabels[articulo.alicuotaIva] }}</td>
-            <td class="num precio">{{ articulo.precioFinal | monto }}</td>
-            <td class="num stock">
-              {{ articulo.stockActual | number: '1.0-3' }} {{ unidadLabels[articulo.unidad] }}
-            </td>
-            <td class="estado">{{ articulo.activo ? 'Activo' : 'De baja' }}</td>
+    <div class="grilla-marco">
+      <table>
+        <thead>
+          <tr>
+            <th>Código</th>
+            <th>Descripción</th>
+            <th class="num">Costo</th>
+            <th class="num">Margen</th>
+            <th>IVA</th>
+            <th class="num">Precio final</th>
+            <th class="num">Stock</th>
+            <th>Estado</th>
             @if (auth.esDueno()) {
-              <td class="acciones">
-                <a class="editar" [routerLink]="['/articulos', articulo.id]">Editar</a>
-                @if (articulo.activo) {
-                  <button type="button" class="secundario desactivar" (click)="desactivar(articulo)">
-                    Dar de baja
-                  </button>
-                }
-              </td>
+              <th class="acciones">Acciones</th>
             }
           </tr>
-        }
-      </tbody>
-    </table>
+        </thead>
+        <tbody>
+          @for (articulo of resultado.items; track articulo.id) {
+            <tr [class.inactivo]="!articulo.activo">
+              <td class="codigo">{{ articulo.codigoInterno }}</td>
+              <td class="descripcion">{{ articulo.descripcion }}</td>
+              <td class="num costo">{{ articulo.costo | monto }}</td>
+              <td class="num margen">
+                @if (articulo.margenPorcentaje === null) {
+                  <span class="heredado">Heredado</span>
+                } @else {
+                  {{ articulo.margenPorcentaje | number: '1.0-2' }} %
+                }
+              </td>
+              <td class="iva">{{ alicuotaLabels[articulo.alicuotaIva] }}</td>
+              <td class="num precio">{{ articulo.precioFinal | monto }}</td>
+              <td class="num stock">
+                {{ articulo.stockActual | number: '1.0-3' }} {{ unidadLabels[articulo.unidad] }}
+              </td>
+              <td class="estado">
+                <span class="etiqueta" [class.de-baja]="!articulo.activo">{{
+                  articulo.activo ? 'Activo' : 'De baja'
+                }}</span>
+              </td>
+              @if (auth.esDueno()) {
+                <td class="acciones">
+                  <a class="btn chico editar" [routerLink]="['/articulos', articulo.id]">Editar</a>
+                  @if (articulo.activo) {
+                    <button type="button" class="chico peligro desactivar" (click)="desactivar(articulo)">
+                      Dar de baja
+                    </button>
+                  }
+                </td>
+              }
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
 
-    <nav class="paginacion" aria-label="Paginación">
-      <button type="button" class="secundario anterior" [disabled]="resultado.page === 0" (click)="anterior()">
-        Anterior
-      </button>
+    <nav class="paginacion barra-estado" aria-label="Paginación">
       <span>
         Página {{ resultado.page + 1 }} de {{ resultado.totalPages }} · {{ resultado.totalElements }}
         artículos
       </span>
+      <span class="separador"></span>
+      <button type="button" class="secundario chico anterior" [disabled]="resultado.page === 0" (click)="anterior()">
+        Anterior
+      </button>
       <button
         type="button"
-        class="secundario siguiente"
+        class="secundario chico siguiente"
         [disabled]="resultado.page + 1 >= resultado.totalPages"
         (click)="siguiente()"
       >

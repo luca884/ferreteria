@@ -1,16 +1,20 @@
-<h1>
-  @if (!auth.esDueno()) {
-    Artículo
-  } @else if (esEdicion) {
-    Editar artículo
-  } @else {
-    Nuevo artículo
-  }
-</h1>
-<p class="ayuda">
-  El precio final lo calcula el sistema con el costo, el margen y la alícuota de IVA. El stock se mueve
-  desde las compras y las ventas.
-</p>
+<header class="pagina-encabezado">
+  <div>
+    <h1>
+      @if (!auth.esDueno()) {
+        Artículo
+      } @else if (esEdicion) {
+        Editar artículo
+      } @else {
+        Nuevo artículo
+      }
+    </h1>
+    <p class="ayuda">
+      El precio final lo calcula el sistema con el costo, el margen y la alícuota de IVA. El stock se mueve
+      desde las compras y las ventas.
+    </p>
+  </div>
+</header>
 
 @if (erroresCampos().length > 0) {
   <ul class="error errores-campos" role="alert">
@@ -23,9 +27,9 @@
 }
 
 @if (cargando()) {
-  <p class="ayuda">Cargando…</p>
+  <p class="ayuda estado-vacio">Cargando…</p>
 } @else if (sinFormulario()) {
-  <a class="cancelar" routerLink="/articulos">Volver al listado</a>
+  <a class="btn secundario cancelar" routerLink="/articulos">Volver al listado</a>
 } @else {
   @if (articulo(); as actual) {
     <dl class="solo-lectura">
@@ -41,123 +45,135 @@
   }
 
   <form class="articulo" [formGroup]="form" (ngSubmit)="guardar()" novalidate>
-    <div class="campo">
-      <label for="codigoInterno">Código interno</label>
-      <input id="codigoInterno" formControlName="codigoInterno" placeholder="Ej: TOR-001" />
-      @if (form.controls.codigoInterno.touched && form.controls.codigoInterno.invalid) {
-        <span class="campo-error">
-          {{
-            form.controls.codigoInterno.errors?.['maxlength']
-              ? 'El código interno no puede superar 30 caracteres.'
-              : 'El código interno es obligatorio.'
-          }}
-        </span>
-      }
-    </div>
-
-    <div class="campo ancho">
-      <label for="descripcion">Descripción</label>
-      <input id="descripcion" formControlName="descripcion" placeholder="Ej: Tornillo hexagonal 1/4" />
-      @if (form.controls.descripcion.touched && form.controls.descripcion.invalid) {
-        <span class="campo-error">
-          {{
-            form.controls.descripcion.errors?.['maxlength']
-              ? 'La descripción no puede superar 200 caracteres.'
-              : 'La descripción es obligatoria.'
-          }}
-        </span>
-      }
-    </div>
-
-    <div class="campo">
-      <label for="unidad">Unidad</label>
-      <select id="unidad" formControlName="unidad">
-        @for (unidad of unidades; track unidad) {
-          <option [ngValue]="unidad">{{ unidadLabels[unidad] }}</option>
+    <fieldset class="seccion">
+      <legend>Identificación</legend>
+      <div class="campo">
+        <label for="codigoInterno">Código interno</label>
+        <input id="codigoInterno" formControlName="codigoInterno" placeholder="Ej: TOR-001" />
+        @if (form.controls.codigoInterno.touched && form.controls.codigoInterno.invalid) {
+          <span class="campo-error">
+            {{
+              form.controls.codigoInterno.errors?.['maxlength']
+                ? 'El código interno no puede superar 30 caracteres.'
+                : 'El código interno es obligatorio.'
+            }}
+          </span>
         }
-      </select>
-    </div>
+      </div>
 
-    <div class="campo">
-      <label for="costo">Costo (sin IVA)</label>
-      <input id="costo" type="number" step="0.01" min="0" formControlName="costo" />
-      @if (form.controls.costo.touched && form.controls.costo.invalid) {
-        <span class="campo-error">
-          {{
-            form.controls.costo.errors?.['min']
-              ? 'El costo no puede ser negativo.'
-              : 'El costo es obligatorio.'
-          }}
-        </span>
-      }
-    </div>
-
-    <div class="campo">
-      <label for="margen">Margen % (opcional)</label>
-      <input id="margen" type="number" step="0.01" min="0" formControlName="margenPorcentaje" />
-      <span class="pista">Vacío = usa el margen del rubro o de la ferretería</span>
-      @if (form.controls.margenPorcentaje.touched && form.controls.margenPorcentaje.invalid) {
-        <span class="campo-error">El margen tiene que estar entre 0 y 1000.</span>
-      }
-    </div>
-
-    <div class="campo">
-      <label for="alicuotaIva">Alícuota de IVA</label>
-      <select id="alicuotaIva" formControlName="alicuotaIva">
-        @for (alicuota of alicuotas; track alicuota) {
-          <option [ngValue]="alicuota">{{ alicuotaLabels[alicuota] }}</option>
+      <div class="campo ancho">
+        <label for="descripcion">Descripción</label>
+        <input id="descripcion" formControlName="descripcion" placeholder="Ej: Tornillo hexagonal 1/4" />
+        @if (form.controls.descripcion.touched && form.controls.descripcion.invalid) {
+          <span class="campo-error">
+            {{
+              form.controls.descripcion.errors?.['maxlength']
+                ? 'La descripción no puede superar 200 caracteres.'
+                : 'La descripción es obligatoria.'
+            }}
+          </span>
         }
-      </select>
-    </div>
+      </div>
 
-    <div class="campo">
-      <label for="rubro">Rubro</label>
-      <select id="rubro" formControlName="rubroId">
-        <option [ngValue]="null">Sin rubro</option>
-        @for (rubro of rubros(); track rubro.id) {
-          <option [ngValue]="rubro.id">{{ rubro.nombre }}</option>
+      <div class="campo">
+        <label for="unidad">Unidad</label>
+        <select id="unidad" formControlName="unidad">
+          @for (unidad of unidades; track unidad) {
+            <option [ngValue]="unidad">{{ unidadLabels[unidad] }}</option>
+          }
+        </select>
+      </div>
+    </fieldset>
+
+    <fieldset class="seccion">
+      <legend>Precio</legend>
+      <div class="campo">
+        <label for="costo">Costo (sin IVA)</label>
+        <input id="costo" type="number" step="0.01" min="0" formControlName="costo" />
+        @if (form.controls.costo.touched && form.controls.costo.invalid) {
+          <span class="campo-error">
+            {{
+              form.controls.costo.errors?.['min']
+                ? 'El costo no puede ser negativo.'
+                : 'El costo es obligatorio.'
+            }}
+          </span>
         }
-      </select>
-    </div>
+      </div>
 
-    <div class="campo">
-      <label for="proveedor">Proveedor</label>
-      <select id="proveedor" formControlName="proveedorId">
-        <option [ngValue]="null">Sin proveedor</option>
-        @for (proveedor of proveedores(); track proveedor.id) {
-          <option [ngValue]="proveedor.id">{{ proveedor.nombre }}</option>
+      <div class="campo">
+        <label for="margen">Margen % (opcional)</label>
+        <input id="margen" type="number" step="0.01" min="0" formControlName="margenPorcentaje" />
+        <span class="pista">Vacío = usa el margen del rubro o de la ferretería</span>
+        @if (form.controls.margenPorcentaje.touched && form.controls.margenPorcentaje.invalid) {
+          <span class="campo-error">El margen tiene que estar entre 0 y 1000.</span>
         }
-      </select>
-    </div>
+      </div>
 
-    <div class="campo">
-      <label for="codigoBarras">Código de barras (opcional)</label>
-      <input id="codigoBarras" formControlName="codigoBarras" placeholder="7790001000012" />
-    </div>
+      <div class="campo">
+        <label for="alicuotaIva">Alícuota de IVA</label>
+        <select id="alicuotaIva" formControlName="alicuotaIva">
+          @for (alicuota of alicuotas; track alicuota) {
+            <option [ngValue]="alicuota">{{ alicuotaLabels[alicuota] }}</option>
+          }
+        </select>
+      </div>
+    </fieldset>
 
-    <div class="campo">
-      <label for="codigoProveedor">Código del proveedor (opcional)</label>
-      <input id="codigoProveedor" formControlName="codigoProveedor" />
-    </div>
+    <fieldset class="seccion">
+      <legend>Clasificación y códigos</legend>
+      <div class="campo">
+        <label for="rubro">Rubro</label>
+        <select id="rubro" formControlName="rubroId">
+          <option [ngValue]="null">Sin rubro</option>
+          @for (rubro of rubros(); track rubro.id) {
+            <option [ngValue]="rubro.id">{{ rubro.nombre }}</option>
+          }
+        </select>
+      </div>
 
-    <div class="campo">
-      <label for="stockMinimo">Stock mínimo</label>
-      <input id="stockMinimo" type="number" step="0.001" min="0" formControlName="stockMinimo" />
-      @if (form.controls.stockMinimo.touched && form.controls.stockMinimo.invalid) {
-        <span class="campo-error">El stock mínimo no puede ser negativo.</span>
-      }
-    </div>
+      <div class="campo">
+        <label for="proveedor">Proveedor</label>
+        <select id="proveedor" formControlName="proveedorId">
+          <option [ngValue]="null">Sin proveedor</option>
+          @for (proveedor of proveedores(); track proveedor.id) {
+            <option [ngValue]="proveedor.id">{{ proveedor.nombre }}</option>
+          }
+        </select>
+      </div>
 
-    <div class="campo">
-      <label for="ubicacion">Ubicación (opcional)</label>
-      <input id="ubicacion" formControlName="ubicacion" placeholder="Ej: Pasillo 2" />
-    </div>
+      <div class="campo">
+        <label for="codigoBarras">Código de barras (opcional)</label>
+        <input id="codigoBarras" formControlName="codigoBarras" placeholder="7790001000012" />
+      </div>
+
+      <div class="campo">
+        <label for="codigoProveedor">Código del proveedor (opcional)</label>
+        <input id="codigoProveedor" formControlName="codigoProveedor" />
+      </div>
+    </fieldset>
+
+    <fieldset class="seccion">
+      <legend>Stock</legend>
+      <div class="campo">
+        <label for="stockMinimo">Stock mínimo</label>
+        <input id="stockMinimo" type="number" step="0.001" min="0" formControlName="stockMinimo" />
+        @if (form.controls.stockMinimo.touched && form.controls.stockMinimo.invalid) {
+          <span class="campo-error">El stock mínimo no puede ser negativo.</span>
+        }
+      </div>
+
+      <div class="campo">
+        <label for="ubicacion">Ubicación (opcional)</label>
+        <input id="ubicacion" formControlName="ubicacion" placeholder="Ej: Pasillo 2" />
+      </div>
+    </fieldset>
 
     <div class="acciones-form">
       @if (auth.esDueno()) {
         <button type="submit" [disabled]="guardando()">Guardar</button>
       }
-      <a class="cancelar" routerLink="/articulos">
+      <a class="btn secundario cancelar" routerLink="/articulos">
         {{ auth.esDueno() ? 'Cancelar' : 'Volver al listado' }}
       </a>
     </div>

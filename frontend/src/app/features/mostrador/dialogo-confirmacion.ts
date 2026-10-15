@@ -8,7 +8,7 @@ import { GuardaLector } from './guarda-lector';
 @Component({
   selector: 'app-dialogo-confirmacion',
   template: `
-    <div class="fondo">
+    <div class="dialogo-fondo">
       <div
         class="dialogo"
         role="dialog"
@@ -17,42 +17,23 @@ import { GuardaLector } from './guarda-lector';
         (keydown)="alTeclear($event)"
       >
         <h2 id="dialogo-confirmacion-titulo">{{ mensaje() }}</h2>
-        <div class="acciones">
-          <button #cancelarBtn type="button" class="cancelar" (click)="cancelar.emit()">Cancelar</button>
-          <button #confirmarBtn type="button" class="confirmar" (click)="confirmar.emit()">
+        <div class="dialogo-acciones">
+          <button
+            #cancelarBtn
+            type="button"
+            class="cancelar"
+            data-tecla="Esc"
+            aria-keyshortcuts="Escape"
+            (click)="cancelar.emit()"
+          >
+            Cancelar
+          </button>
+          <button #confirmarBtn type="button" class="confirmar peligro" (click)="confirmar.emit()">
             {{ modo() === 'quitar' ? 'Quitar' : 'Vaciar' }}
           </button>
         </div>
       </div>
     </div>
-  `,
-  styles: `
-    .fondo {
-      position: fixed;
-      inset: 0;
-      display: grid;
-      place-items: center;
-      background: rgb(0 0 0 / 0.4);
-      z-index: 20;
-    }
-    .dialogo {
-      background: var(--superficie);
-      border-radius: 10px;
-      padding: 20px;
-      min-width: 320px;
-      display: flex;
-      flex-direction: column;
-      gap: 16px;
-    }
-    h2 {
-      margin: 0;
-      font-size: 1.1rem;
-    }
-    .acciones {
-      display: flex;
-      justify-content: flex-end;
-      gap: 8px;
-    }
   `,
 })
 export class DialogoConfirmacion {

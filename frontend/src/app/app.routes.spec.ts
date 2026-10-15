@@ -100,6 +100,20 @@ describe('rutas', () => {
     expect(comodin?.redirectTo).toBe('');
   });
 
+  it('cada pantalla pone su nombre y el del producto en la pestaña', () => {
+    const titulo = (lista: Route[], path: string) => lista.find((r) => r.path === path)?.title;
+
+    expect(titulo(routes, 'login')).toBe('Ingresar · Ferretería');
+    expect(titulo(hijas(), 'mostrador')).toBe('Mostrador · Ferretería');
+    expect(titulo(hijas(), 'rubros')).toBe('Rubros · Ferretería');
+    expect(titulo(hijas(), 'articulos')).toBe('Artículos · Ferretería');
+    expect(titulo(hijas(), 'articulos/nuevo')).toBe('Nuevo artículo · Ferretería');
+    expect(titulo(hijas(), 'articulos/:id')).toBe('Artículo · Ferretería');
+    expect(titulo(hijas(), 'proveedores')).toBe('Proveedores · Ferretería');
+    expect(titulo(hijas(), 'importaciones')).toBe('Importar lista · Ferretería');
+    expect(titulo(hijas(), 'actualizacion-masiva')).toBe('Actualizar precios · Ferretería');
+  });
+
   it('sin sesión, /mostrador redirige al login', async () => {
     TestBed.configureTestingModule({
       providers: [

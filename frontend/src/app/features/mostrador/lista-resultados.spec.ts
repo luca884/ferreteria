@@ -66,6 +66,20 @@ describe('ListaResultados', () => {
     expect(filas().map((f) => f.getAttribute('aria-selected'))).toEqual(['false', 'true', 'false']);
   });
 
+  it('tiene encabezados de columnas, fuera del listbox y ocultos al lector de pantalla', async () => {
+    await crear([articulo(1)]);
+
+    const encabezado = el().querySelector('.encabezado')!;
+    expect(Array.from(encabezado.children).map((c) => c.textContent!.trim())).toEqual([
+      'Descripción',
+      'Precio',
+      'Stock',
+      'Ubicación',
+    ]);
+    expect(encabezado.getAttribute('aria-hidden')).toBe('true');
+    expect(el().querySelector('[role="listbox"]')!.contains(encabezado)).toBe(false);
+  });
+
   it('cada fila tiene un id para aria-activedescendant', async () => {
     await crear([articulo(1), articulo(2)]);
 

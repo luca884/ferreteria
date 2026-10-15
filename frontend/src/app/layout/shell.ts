@@ -1,8 +1,9 @@
 import { Component, inject } from '@angular/core';
 import { Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
+import { ROL_LABELS } from '../core/auth/auth.models';
 import { AuthService } from '../core/auth/auth.service';
 
-/** Marco de la app logueada: barra con la ferreteria y el usuario, y el contenido. */
+/** Marco de la app logueada: barra con la ferretería, las secciones y el usuario con su rol, y el contenido. */
 @Component({
   selector: 'app-shell',
   imports: [RouterOutlet, RouterLink, RouterLinkActive],
@@ -12,6 +13,7 @@ import { AuthService } from '../core/auth/auth.service';
 export class Shell {
   protected readonly auth = inject(AuthService);
   private readonly router = inject(Router);
+  protected readonly rolLabels = ROL_LABELS;
 
   protected salir(): void {
     this.auth.logout();

@@ -10,7 +10,7 @@ import { GuardaLector } from './guarda-lector';
 @Component({
   selector: 'app-dialogo-cantidad',
   template: `
-    <div class="fondo">
+    <div class="dialogo-fondo">
       <div
         class="dialogo"
         role="dialog"
@@ -31,50 +31,24 @@ import { GuardaLector } from './guarda-lector';
         @if (error(); as mensaje) {
           <p class="error" role="alert">{{ mensaje }}</p>
         }
-        <div class="acciones">
-          <button type="button" class="cancelar" (click)="cancelar.emit()">Cancelar</button>
-          <button type="button" class="aceptar" (click)="aceptar()">Aceptar</button>
+        <div class="dialogo-acciones">
+          <button type="button" class="cancelar" data-tecla="Esc" aria-keyshortcuts="Escape" (click)="cancelar.emit()">
+            Cancelar
+          </button>
+          <button type="button" class="aceptar primario" data-tecla="Enter" aria-keyshortcuts="Enter" (click)="aceptar()">
+            Aceptar
+          </button>
         </div>
       </div>
     </div>
   `,
   styles: `
-    .fondo {
-      position: fixed;
-      inset: 0;
-      display: grid;
-      place-items: center;
-      background: rgb(0 0 0 / 0.4);
-      z-index: 20;
-    }
-    .dialogo {
-      background: var(--superficie);
-      border-radius: 10px;
-      padding: 20px;
-      min-width: 320px;
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-    }
-    h2 {
-      margin: 0;
-      font-size: 1.1rem;
-    }
     input {
-      font: inherit;
-      font-size: 1.4rem;
-      padding: 8px;
+      height: 60px;
+      font-size: 2rem;
+      font-weight: 700;
       text-align: right;
       font-variant-numeric: tabular-nums;
-    }
-    .error {
-      margin: 0;
-      color: #b00020;
-    }
-    .acciones {
-      display: flex;
-      justify-content: flex-end;
-      gap: 8px;
     }
   `,
 })

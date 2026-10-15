@@ -1,15 +1,8 @@
 import { DecimalPipe } from '@angular/common';
-import {
-  Component,
-  ElementRef,
-  afterRenderEffect,
-  computed,
-  input,
-  viewChildren,
-} from '@angular/core';
+import { Component, ElementRef, afterRenderEffect, input, viewChildren } from '@angular/core';
 import { MontoPipe } from '../../core/formato/monto';
 import { Unidad } from '../articulos/articulo.models';
-import { totalRenglon, totalTicket } from './centavos';
+import { totalRenglon } from './centavos';
 import { RenglonTicket, sinStock } from './ticket';
 
 /** Abreviaturas del ticket: «2,5 m», «1,25 kg». La unidad por pieza no lleva sufijo. */
@@ -20,7 +13,10 @@ const SUFIJO_UNIDAD: Record<Unidad, string> = {
   LITRO: ' l',
 };
 
-/** Ticket en curso: renglones, el elegido resaltado y el total. Presentacional: no muestra costo ni margen. */
+/**
+ * Grilla del ticket en curso (Cant. | Código | Descripción | P. unit. | Total), con el renglón elegido
+ * resaltado. El total va aparte, en `TotalesTicket`. Presentacional: no muestra costo ni margen.
+ */
 @Component({
   selector: 'app-ticket-lista',
   imports: [DecimalPipe, MontoPipe],
@@ -34,7 +30,6 @@ export class TicketLista {
   protected readonly sufijo = SUFIJO_UNIDAD;
   protected readonly sinStock = sinStock;
   protected readonly totalRenglon = totalRenglon;
-  protected readonly totalCentavos = computed(() => totalTicket(this.renglones()));
 
   private readonly filas = viewChildren<ElementRef<HTMLElement>>('fila');
 

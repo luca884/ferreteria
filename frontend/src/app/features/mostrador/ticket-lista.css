@@ -1,66 +1,116 @@
-.renglones {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  background: var(--superficie);
+:host {
+  display: block;
+  overflow: auto;
   border: 1px solid var(--borde);
-  border-radius: 8px;
+  border-radius: var(--radio-lg);
+  background: var(--superficie);
+  box-shadow: var(--sombra-1);
+  /* Que el renglón elegido no quede debajo del encabezado fijo al hacer scroll. */
+  scroll-padding-top: 40px;
 }
-.renglon {
-  display: grid;
-  grid-template-columns: 1fr 8rem 9rem 9rem;
-  gap: 16px;
-  align-items: center;
-  padding: 10px 12px;
-  border-bottom: 1px solid var(--borde);
+
+.grilla-ticket {
+  table-layout: fixed;
+  font-size: 1.0625rem;
 }
-.renglon:last-child {
-  border-bottom: 0;
+.col-cantidad {
+  width: 7.5rem;
 }
-.renglon.elegido {
-  background: #fff1e8;
+.col-codigo {
+  width: 9.5rem;
+}
+.col-precio {
+  width: 9.5rem;
+}
+.col-total {
+  width: 10.5rem;
+}
+
+th {
+  padding-block: 8px;
+  font-size: var(--texto-sm);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+td {
+  padding: 9px var(--celda-x);
+}
+
+.renglon td {
+  background: var(--superficie);
+}
+.renglon:nth-child(even) td {
+  background: var(--superficie-2);
+}
+.renglon:hover td {
+  background: var(--superficie-3);
+}
+.renglon.con-faltante td {
+  background: var(--advertencia-fondo);
+}
+.renglon.con-problema td {
+  background: var(--error-fondo);
+}
+/* El renglón elegido (↑/↓, F3, F10) se ve fuerte: barra de acento y fondo propio. */
+.renglon.elegido td {
+  background: var(--acento-suave);
+  border-bottom-color: var(--acento-borde);
+}
+.renglon.elegido td:first-child {
   box-shadow: inset 4px 0 0 var(--acento);
 }
-.datos {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
+
+.cantidad {
+  font-weight: 700;
+}
+.codigo {
+  overflow: hidden;
+  color: var(--texto-suave);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.detalle {
+  overflow: hidden;
 }
 .descripcion {
+  display: block;
+  overflow: hidden;
   font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sin-stock,
+.problema {
+  display: inline-block;
+  margin: 3px 6px 0 0;
+  padding: 0 8px;
+  border-radius: 999px;
+  font-size: var(--texto-xs);
+  font-weight: 700;
 }
 .sin-stock {
-  color: #b00020;
-  font-size: 0.85rem;
-  font-weight: 600;
+  border: 1px solid var(--advertencia-borde);
+  background: #fff;
+  color: var(--advertencia);
 }
 .problema {
-  color: #b00020;
-  font-size: 0.85rem;
-}
-.cantidad,
-.precio,
-.total-renglon {
-  text-align: right;
-  font-variant-numeric: tabular-nums;
+  border: 1px solid var(--error-borde);
+  background: #fff;
+  color: var(--error);
 }
 .total-renglon {
   font-weight: 700;
+}
+
+.fila-vacia td,
+.fila-vacia:hover td {
+  background: var(--superficie);
+  border-bottom: 0;
 }
 .vacio {
+  margin: 0;
+  padding: var(--e-8) 0;
   color: var(--texto-suave);
-  margin: 0;
-  padding: 16px 0;
-}
-.pie {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  margin-top: 12px;
-}
-.total {
-  margin: 0;
-  font-size: 2.4rem;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
+  font-size: var(--texto-lg);
+  text-align: center;
 }

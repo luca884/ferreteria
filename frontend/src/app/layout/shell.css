@@ -1,15 +1,122 @@
+:host {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+
 .barra {
   display: flex;
   align-items: center;
-  gap: 24px;
-  padding: 12px 24px;
-  background: var(--superficie);
-  border-bottom: 1px solid var(--borde);
-  flex-wrap: wrap;
+  gap: var(--e-5);
+  height: 48px;
+  flex: 0 0 48px;
+  padding: 0 var(--e-5);
+  background: var(--barra);
+  color: var(--barra-texto);
 }
-.marca { font-size: 1.1rem; }
-nav { display: flex; gap: 16px; flex: 1; }
-nav a { color: var(--texto-suave); text-decoration: none; font-weight: 600; }
-nav a.activo { color: var(--acento); }
-.usuario { display: flex; align-items: center; gap: 12px; }
-.contenido { max-width: 960px; margin: 0 auto; padding: 24px 16px; }
+
+.marca {
+  display: flex;
+  align-items: center;
+  gap: var(--e-2);
+  min-width: 0;
+}
+.logo {
+  flex: 0 0 auto;
+  width: 26px;
+  height: 26px;
+  fill: var(--acento);
+  stroke: none;
+}
+.logo circle {
+  fill: var(--barra);
+}
+.ferreteria {
+  overflow: hidden;
+  color: #fff;
+  font-size: 1rem;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+nav {
+  display: flex;
+  align-self: stretch;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+  overflow-x: auto;
+}
+nav a {
+  display: flex;
+  align-items: center;
+  padding: 0 var(--e-3);
+  border-bottom: 3px solid transparent;
+  border-top: 3px solid transparent;
+  color: var(--barra-texto);
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+}
+nav a:hover {
+  background: rgb(255 255 255 / 0.06);
+  color: #fff;
+}
+nav a.activo {
+  border-bottom-color: var(--acento);
+  color: #fff;
+}
+nav a:focus-visible {
+  outline: 2px solid #fdba74;
+  outline-offset: -4px;
+}
+
+.usuario {
+  display: flex;
+  align-items: center;
+  gap: var(--e-3);
+}
+.usuario-datos {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  line-height: 1.15;
+}
+.usuario-nombre {
+  color: #fff;
+  font-size: var(--texto-sm);
+  font-weight: 600;
+  white-space: nowrap;
+}
+.usuario-rol {
+  color: var(--barra-tenue);
+  font-size: var(--texto-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.salir {
+  min-height: 30px;
+  padding: 2px 12px;
+  border-color: rgb(255 255 255 / 0.25);
+  background: transparent;
+  color: var(--barra-texto);
+}
+.salir:hover:not(:disabled) {
+  border-color: rgb(255 255 255 / 0.5);
+  background: rgb(255 255 255 / 0.08);
+  color: #fff;
+}
+.salir:focus-visible {
+  box-shadow: 0 0 0 3px rgb(253 186 116 / 0.6);
+}
+
+/* Las pantallas operativas usan todo el ancho; el contenido scrollea debajo de la barra. */
+.contenido {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: var(--e-4) var(--e-5);
+}

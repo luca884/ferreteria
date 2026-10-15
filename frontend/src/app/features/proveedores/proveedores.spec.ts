@@ -82,6 +82,15 @@ describe('Proveedores', () => {
     expect(textos[1]).toContain('30-12345678-9');
   });
 
+  it('la barra de estado cuenta los proveedores', async () => {
+    await crearComponente(false);
+    expect(el().querySelector('.barra-estado')?.textContent?.trim()).toBe('2 proveedores');
+
+    TestBed.resetTestingModule();
+    await crearComponente(false, [sinteplast]);
+    expect(el().querySelector('.barra-estado')?.textContent?.trim()).toBe('1 proveedor');
+  });
+
   it('muestra un aviso si no hay proveedores', async () => {
     await crearComponente(true, []);
 

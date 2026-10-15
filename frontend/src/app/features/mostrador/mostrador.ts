@@ -17,6 +17,7 @@ import { formatearMonto } from '../../core/formato/monto';
 import { aRequest } from './ticket';
 import { TicketLista } from './ticket-lista';
 import { TicketStore } from './ticket.store';
+import { TotalesTicket } from './totales-ticket';
 import { ConfirmarVentaRequest, VentaCobrada, VentaInvalida, VentaRechazada } from './venta.models';
 import { VentaService, invalidaDe, rechazoDe } from './venta.service';
 
@@ -63,6 +64,7 @@ interface Escaneo {
     ListaResultados,
     FichaArticulo,
     TicketLista,
+    TotalesTicket,
   ],
   templateUrl: './mostrador.html',
   styleUrl: './mostrador.css',

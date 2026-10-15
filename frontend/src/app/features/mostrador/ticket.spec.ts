@@ -5,6 +5,7 @@ import {
   aRequest,
   actualizarPrecios,
   cambiarCantidad,
+  conteoTicket,
   descontarVendido,
   marcarProblemas,
   moverElegido,
@@ -192,6 +193,24 @@ describe('ticket (puro)', () => {
       const t = agregar(ticketVacio('k'), art({ unidad: 'KILO', stockActual: 0.3 }));
       const r = cambiarCantidad(t, 0, 300).ticket!;
       expect(sinStock(r.renglones[0])).toBe(false);
+    });
+  });
+
+  describe('conteoTicket (pie de totales, como GDS)', () => {
+    it('ticket vacío: 0 artículos y 0 renglones', () => {
+      expect(conteoTicket(ticketVacio('k').renglones)).toEqual({ articulos: 0, renglones: 0 });
+    });
+
+    it('por unidad suma la cantidad; por metro, kilo o litro cada renglón es 1 artículo', () => {
+      let t = agregar(agregar(agregar(ticketVacio('k'), art()), art()), art()); // 3 tornillos
+      t = agregar(t, cable());
+      t = cambiarCantidad(t, 1, 2500).ticket!; // 2,5 m de cable
+
+      expect(conteoTicket(t.renglones)).toEqual({ articulos: 4, renglones: 2 });
+    });
+
+    it('cuenta un renglón por artículo distinto', () => {
+      expect(conteoTicket(conTres().renglones)).toEqual({ articulos: 3, renglones: 3 });
     });
   });
 

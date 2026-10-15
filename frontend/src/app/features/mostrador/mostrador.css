@@ -1,27 +1,133 @@
-h1 {
-  margin: 0 0 12px;
+/*
+ * Distribución de GDS (f413): código arriba, grilla del ticket a la izquierda, ficha y TOTAL a la derecha,
+ * botonera abajo. Ocupa todo el alto disponible; la grilla es lo único que scrollea.
+ */
+:host {
+  display: grid;
+  flex: 1 1 auto;
+  min-height: 520px;
+  grid-template-columns: minmax(0, 1fr) clamp(300px, 27vw, 420px);
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-areas:
+    'busqueda panel'
+    'ticket panel'
+    'botonera botonera';
+  gap: var(--e-3) var(--e-4);
 }
-app-botonera {
-  display: block;
-  margin: 8px 0 16px;
+
+.zona-busqueda {
+  grid-area: busqueda;
+  display: flex;
+  flex-direction: column;
+  gap: var(--e-2);
+  min-width: 0;
 }
-.aviso {
-  margin: 0 0 16px;
-  padding: 10px 12px;
-  border-radius: 6px;
-  background: #e8f5e9;
+.fila-codigo {
+  display: flex;
+  align-items: center;
+  gap: var(--e-3);
+}
+.rotulo {
+  font-size: var(--texto-xl);
+  font-weight: 700;
+}
+app-caja-busqueda {
+  flex: 1;
+  min-width: 0;
+}
+
+/* Avisos debajo del campo: nunca lo tapan. */
+.aviso,
+.mensaje {
+  margin: 0;
+  padding: var(--e-2) var(--e-3);
+  border: 1px solid var(--exito-borde);
+  border-left: 4px solid var(--exito);
+  border-radius: var(--radio);
+  background: var(--exito-fondo);
+  color: var(--texto);
+  font-size: 1.0625rem;
   font-weight: 600;
-}
-.aviso.error {
-  background: #fdecea;
-  color: #b00020;
-}
-app-ticket-lista {
-  display: block;
-  margin-top: 16px;
 }
 .mensaje {
-  font-size: 1.2rem;
-  font-weight: 600;
-  margin: 16px 0;
+  border-color: var(--borde);
+  border-left-color: var(--texto-tenue);
+  background: var(--superficie);
+}
+.aviso.error,
+.mensaje.error {
+  border-color: var(--error-borde);
+  border-left-color: var(--error);
+  background: var(--error-fondo);
+  color: var(--error);
+}
+
+.zona-ticket {
+  grid-area: ticket;
+  position: relative;
+  display: flex;
+  min-height: 0;
+}
+app-ticket-lista {
+  flex: 1;
+  min-width: 0;
+}
+/* Resultados de la búsqueda por descripción: desplegable sobre el ticket, pegado al campo. */
+.resultados {
+  position: absolute;
+  inset: 0 0 auto;
+  z-index: 5;
+  display: flex;
+  max-height: 100%;
+}
+app-lista-resultados {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+
+.panel-derecho {
+  grid-area: panel;
+  display: flex;
+  flex-direction: column;
+  gap: var(--e-3);
+  min-height: 0;
+}
+/* La ficha mide lo que su contenido; el TOTAL queda siempre abajo, como en GDS. */
+app-ficha-articulo {
+  flex: 0 1 auto;
+  min-height: 0;
+}
+app-totales-ticket {
+  margin-top: auto;
+}
+.ficha-vacia {
+  display: flex;
+  flex: 0 1 auto;
+  min-height: 200px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--e-3);
+  padding: var(--e-6);
+  border: 1px dashed var(--borde-fuerte);
+  border-radius: var(--radio-lg);
+  color: var(--texto-suave);
+  text-align: center;
+}
+.ficha-vacia svg {
+  width: 48px;
+  height: 48px;
+  fill: none;
+  stroke: var(--borde-fuerte);
+  stroke-width: 1.6;
+}
+.ficha-vacia p {
+  margin: 0;
+  max-width: 26ch;
+}
+
+app-botonera {
+  grid-area: botonera;
 }

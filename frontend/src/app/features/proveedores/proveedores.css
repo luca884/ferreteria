@@ -1,16 +1,14 @@
-h1 { margin: 0 0 4px; }
-.ayuda { color: var(--texto-suave); margin: 0 0 16px; }
-.alta {
-  display: flex;
-  gap: 12px;
-  align-items: flex-end;
-  flex-wrap: wrap;
-  margin-bottom: 24px;
+.nombre {
+  font-weight: 600;
 }
-.campo { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 180px; }
-.campo.cuit { flex: 0 0 200px; min-width: 200px; }
-label { font-weight: 600; }
-.acciones { text-align: right; white-space: nowrap; }
-.acciones button + button { margin-left: 8px; }
-
-.errores-campos { padding-left: 20px; }
+tr.editando td {
+  background: var(--acento-suave);
+}
+.acciones {
+  width: 1%;
+  text-align: right;
+  white-space: nowrap;
+}
+.acciones button + button {
+  margin-left: var(--e-2);
+}

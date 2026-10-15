@@ -32,7 +32,6 @@ describe('TicketLista', () => {
   const filas = () => Array.from(el().querySelectorAll('.renglon'));
   const texto = (selector: string, fila = 0) =>
     filas()[fila].querySelector(selector)!.textContent!.trim();
-  const total = () => el().querySelector('.total')!.textContent!.trim();
 
   async function crear(renglones: RenglonTicket[], elegido: number | null = null) {
     await TestBed.configureTestingModule({
@@ -44,6 +43,26 @@ describe('TicketLista', () => {
     fixture.componentRef.setInput('elegido', elegido);
     fixture.detectChanges();
   }
+
+  it('la grilla tiene encabezados Cant. | Código | Descripción | P. unit. | Total', async () => {
+    await crear([renglon()]);
+
+    const encabezados = Array.from(el().querySelectorAll('thead th')).map((th) => th.textContent!.trim());
+    expect(encabezados).toEqual(['Cant.', 'Código', 'Descripción', 'P. unit.', 'Total']);
+  });
+
+  it('los encabezados se ven también con el ticket vacío', async () => {
+    await crear([]);
+
+    expect(el().querySelectorAll('thead th').length).toBe(5);
+  });
+
+  it('muestra el código interno de cada renglón', async () => {
+    await crear([renglon(), renglon({ articuloId: 2, codigoInterno: 'PIN-002', descripcion: 'Pinza' })]);
+
+    expect(texto('.codigo', 0)).toBe('MAR-001');
+    expect(texto('.codigo', 1)).toBe('PIN-002');
+  });
 
   it('muestra descripción, cantidad, precio y total del renglón con monto', async () => {
     await crear([renglon()]);
@@ -101,19 +120,9 @@ describe('TicketLista', () => {
     expect(texto('.problema')).toBe('"Martillo" fue dado de baja. Sacalo del ticket para seguir.');
   });
 
-  it('el total grande es la suma de los renglones', async () => {
-    await crear([
-      renglon({ precioCentavos: 121000, cantidadMilesimas: 3000 }),
-      renglon({ articuloId: 2, unidad: 'METRO', precioCentavos: 33333, cantidadMilesimas: 2500 }),
-    ]);
-
-    expect(total()).toBe(`$${NBSP}4.463,33`);
-  });
-
-  it('vacío: total $ 0,00 y mensaje de ticket vacío', async () => {
+  it('vacío: mensaje de ticket vacío (el total vive en TotalesTicket)', async () => {
     await crear([]);
 
-    expect(total()).toBe(`$${NBSP}0,00`);
     expect(el().textContent).toContain('El ticket está vacío.');
     expect(filas().length).toBe(0);
   });

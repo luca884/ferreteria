@@ -1,36 +1,61 @@
-<h1>Mostrador</h1>
-<app-caja-busqueda
-  [texto]="texto()"
-  [controla]="listaVisible() ? listaId : null"
-  [opcionActiva]="listaVisible() ? filaId(seleccionado()) : null"
-  (textoChange)="alCambiarTexto($event)"
-  (enter)="alEnter()"
-  (mover)="alMover($event)"
-/>
-<app-botonera [habilitadas]="habilitadas()" (accion)="alBotonera($event)" />
+<h1 class="sr-only">Mostrador</h1>
 
-@if (aviso(); as nota) {
-  <p class="aviso" [class.error]="nota.grave" [attr.role]="nota.grave ? 'alert' : 'status'">{{ nota.texto }}</p>
-}
-
-@if (mensaje(); as aviso) {
-  <p class="mensaje" [class.error]="aviso.grave" role="alert">{{ aviso.texto }}</p>
-}
-
-@if (ficha(); as articulo) {
-  <app-ficha-articulo [articulo]="articulo" />
-} @else if (resultado(); as r) {
-  @if (r.tipo === 'LISTA') {
-    <app-lista-resultados
-      [items]="r.items"
-      [seleccionado]="seleccionado()"
-      [hayMas]="r.hayMas"
-      (elegir)="elegir($event)"
+<div class="zona-busqueda">
+  <div class="fila-codigo">
+    <span class="rotulo" aria-hidden="true">Código</span>
+    <app-caja-busqueda
+      [texto]="texto()"
+      [controla]="listaVisible() ? listaId : null"
+      [opcionActiva]="listaVisible() ? filaId(seleccionado()) : null"
+      (textoChange)="alCambiarTexto($event)"
+      (enter)="alEnter()"
+      (mover)="alMover($event)"
     />
-  }
-}
+  </div>
 
-<app-ticket-lista [renglones]="ticket.ticket().renglones" [elegido]="ticket.elegido()" />
+  @if (aviso(); as nota) {
+    <p class="aviso" [class.error]="nota.grave" [attr.role]="nota.grave ? 'alert' : 'status'">{{ nota.texto }}</p>
+  }
+
+  @if (mensaje(); as aviso) {
+    <p class="mensaje" [class.error]="aviso.grave" role="alert">{{ aviso.texto }}</p>
+  }
+</div>
+
+<div class="zona-ticket">
+  <app-ticket-lista [renglones]="ticket.ticket().renglones" [elegido]="ticket.elegido()" />
+
+  @if (!ficha()) {
+    @if (resultado(); as r) {
+      @if (r.tipo === 'LISTA') {
+        <div class="resultados">
+          <app-lista-resultados
+            [items]="r.items"
+            [seleccionado]="seleccionado()"
+            [hayMas]="r.hayMas"
+            (elegir)="elegir($event)"
+          />
+        </div>
+      }
+    }
+  }
+</div>
+
+<aside class="panel-derecho" aria-label="Artículo y totales">
+  @if (ficha(); as articulo) {
+    <app-ficha-articulo [articulo]="articulo" />
+  } @else {
+    <div class="ficha-vacia">
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M3 5v14M6 5v14M9 5v14M13 5v14M16 5v14M21 5v14M18.5 5v14" />
+      </svg>
+      <p>Escaneá o buscá un artículo para ver su precio, stock y ubicación.</p>
+    </div>
+  }
+  <app-totales-ticket [renglones]="ticket.ticket().renglones" />
+</aside>
+
+<app-botonera [habilitadas]="habilitadas()" (accion)="alBotonera($event)" />
 
 @if (dialogo(); as abierto) {
   @switch (abierto.tipo) {

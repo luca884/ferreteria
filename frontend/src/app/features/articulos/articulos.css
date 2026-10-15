@@ -1,26 +1,56 @@
-h1 { margin: 0 0 4px; }
-.ayuda { color: var(--texto-suave); margin: 0 0 16px; }
-.barra-herramientas {
+/* Listado a todo el alto: toolbar arriba, grilla con scroll propio y barra de estado abajo. */
+:host {
   display: flex;
-  gap: 16px;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+}
+.grilla-marco {
+  flex: 0 1 auto;
+  min-height: 160px;
+}
+.busqueda {
+  display: flex;
+  flex: 0 1 560px;
   align-items: flex-end;
-  flex-wrap: wrap;
-  margin-bottom: 24px;
+  gap: var(--e-2);
+  min-width: 280px;
 }
-.busqueda { display: flex; gap: 12px; align-items: flex-end; flex: 1; min-width: 280px; }
-.campo { display: flex; flex-direction: column; gap: 4px; flex: 1; }
-label { font-weight: 600; }
-.inactivos { display: flex; align-items: center; gap: 8px; font-weight: normal; padding-bottom: 10px; }
-.nuevo {
-  padding: 10px 16px;
-  border-radius: 8px;
-  background: var(--acento);
-  color: var(--acento-texto);
+.busqueda .campo {
+  flex: 1;
+}
+.inactivos {
+  min-height: var(--alto-control);
+}
+.descripcion {
+  min-width: 16rem;
   font-weight: 600;
-  text-decoration: none;
 }
-.num { text-align: right; font-variant-numeric: tabular-nums; }
-tr.inactivo td { color: var(--texto-suave); }
-.acciones { text-align: right; white-space: nowrap; }
-.acciones .editar { margin-right: 12px; color: var(--acento); font-weight: 600; }
-.paginacion { display: flex; gap: 16px; align-items: center; justify-content: center; margin-top: 16px; }
+.precio {
+  font-weight: 700;
+}
+.heredado {
+  color: var(--texto-tenue);
+  font-style: italic;
+}
+tr.inactivo td {
+  color: var(--texto-tenue);
+}
+.etiqueta {
+  border-color: var(--exito-borde);
+  background: var(--exito-fondo);
+  color: var(--exito);
+}
+.etiqueta.de-baja {
+  border-color: var(--borde);
+  background: var(--superficie-3);
+  color: var(--texto-suave);
+}
+.acciones {
+  width: 1%;
+  text-align: right;
+  white-space: nowrap;
+}
+.acciones > * + * {
+  margin-left: var(--e-2);
+}

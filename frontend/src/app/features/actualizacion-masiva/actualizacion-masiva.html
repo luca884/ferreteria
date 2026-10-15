@@ -1,12 +1,18 @@
-<h1>Actualizar precios</h1>
+<header class="pagina-encabezado">
+  <div>
+    <h1>Actualizar precios</h1>
+    @if (auth.esDueno()) {
+      <p class="ayuda">
+        Elegí qué artículos querés actualizar y qué cambio hacer, y revisá la vista previa antes de
+        confirmar.
+      </p>
+    }
+  </div>
+</header>
 
 @if (!auth.esDueno()) {
-  <p class="ayuda" role="status">Solo el Dueño puede actualizar precios.</p>
+  <p class="ayuda estado-vacio" role="status">Solo el Dueño puede actualizar precios.</p>
 } @else {
-  <p class="ayuda">
-    Elegí qué artículos querés actualizar y qué cambio hacer, y revisá la vista previa antes de
-    confirmar.
-  </p>
 
   @if (erroresCampos().length > 0) {
     <ul class="error errores-campos" role="alert">
@@ -19,7 +25,7 @@
   }
 
   @if (resultado(); as r) {
-    <section class="resumen" role="status">
+    <section class="resumen alerta exito" role="status">
       @if (r.conteos.modificados === 1) {
         Se actualizó 1 artículo.
       } @else {
@@ -28,7 +34,7 @@
     </section>
   }
 
-  <form class="paso" [formGroup]="form" novalidate>
+  <form class="paso panel" [formGroup]="form" novalidate>
     <h2>1. Qué artículos</h2>
     <div class="fila">
       <div class="campo">
@@ -61,7 +67,7 @@
       </label>
     </div>
 
-    <h2>2. Qué cambio</h2>
+    <h2 class="segundo">2. Qué cambio</h2>
     <div class="fila">
       <div class="campo">
         <label for="modo">Operación</label>
@@ -76,7 +82,7 @@
         <input id="valor" type="text" inputmode="decimal" formControlName="valor" />
       </div>
     </div>
-    <button type="button" class="generar" [disabled]="!puedeGenerar()" (click)="generarVistaPrevia()">
+    <button type="button" class="generar primario" [disabled]="!puedeGenerar()" (click)="generarVistaPrevia()">
       @if (generando()) {
         Generando vista previa…
       } @else {
@@ -86,7 +92,7 @@
   </form>
 
   @if (vistaPrevia(); as vp) {
-    <section class="paso vista-previa">
+    <section class="paso panel vista-previa">
       <h2>3. Vista previa</h2>
 
       @if (vp.conteos.total === 0) {
@@ -178,7 +184,7 @@
           </div>
         }
 
-        <h2>4. Confirmar</h2>
+        <h2 class="titulo-confirmar">4. Confirmar</h2>
         @if (confirmandoTodo()) {
           <section class="confirmacion-total" role="alertdialog" aria-labelledby="titulo-confirmacion">
             <h3 id="titulo-confirmacion">
@@ -190,7 +196,7 @@
               de seguir.
             </p>
             <div class="fila">
-              <button type="button" class="confirmar-todo" (click)="confirmar()">Sí, modificar todo</button>
+              <button type="button" class="confirmar-todo primario" (click)="confirmar()">Sí, modificar todo</button>
               <button type="button" class="secundario cancelar" (click)="cancelarConfirmacion()">
                 Cancelar
               </button>
@@ -199,7 +205,7 @@
         } @else {
           <button
             type="button"
-            class="confirmar"
+            class="confirmar primario"
             [disabled]="aplicando() || vp.conteos.modificados === 0"
             (click)="confirmar()"
           >

@@ -1,27 +1,9 @@
-<h1>Proveedores</h1>
-<p class="ayuda">Los proveedores se asignan a los artículos. Al darlos de baja, los artículos conservan la referencia.</p>
-
-@if (auth.esDueno()) {
-  <form class="alta" [formGroup]="form" (ngSubmit)="guardar()" novalidate>
-    <div class="campo">
-      <label for="nombre">Nombre</label>
-      <input id="nombre" formControlName="nombre" placeholder="Ej: Sinteplast" />
-    </div>
-    <div class="campo cuit">
-      <label for="cuit">CUIT (opcional)</label>
-      <input id="cuit" formControlName="cuit" placeholder="30-12345678-9" />
-      @if (form.controls.cuit.touched && form.controls.cuit.invalid) {
-        <span class="campo-error">El CUIT debe tener el formato 30-12345678-9.</span>
-      }
-    </div>
-    <button type="submit" [disabled]="guardando()">
-      {{ editandoId() === null ? 'Agregar' : 'Guardar cambios' }}
-    </button>
-    @if (editandoId() !== null) {
-      <button type="button" class="secundario cancelar" (click)="cancelar()">Cancelar</button>
-    }
-  </form>
-}
+<header class="pagina-encabezado">
+  <div>
+    <h1>Proveedores</h1>
+    <p class="ayuda">Los proveedores se asignan a los artículos. Al darlos de baja, los artículos conservan la referencia.</p>
+  </div>
+</header>
 
 @if (erroresCampos().length > 0) {
   <ul class="error errores-campos" role="alert">
@@ -33,36 +15,70 @@
   <p class="error" role="alert">{{ mensaje }}</p>
 }
 
-@if (cargando()) {
-  <p class="ayuda">Cargando…</p>
-} @else if (proveedores().length === 0) {
-  <p class="ayuda">Todavía no hay proveedores.</p>
-} @else {
-  <table>
-    <thead>
-      <tr>
-        <th>Nombre</th>
-        <th>CUIT</th>
-        @if (auth.esDueno()) {
-          <th class="acciones">Acciones</th>
+<div class="listado" [class.con-alta]="auth.esDueno()">
+  <div class="principal">
+    @if (cargando()) {
+      <p class="ayuda estado-vacio">Cargando…</p>
+    } @else if (proveedores().length === 0) {
+      <p class="ayuda estado-vacio">Todavía no hay proveedores.</p>
+    } @else {
+      <div class="grilla-marco">
+        <table>
+          <thead>
+            <tr>
+              <th>Nombre</th>
+              <th>CUIT</th>
+              @if (auth.esDueno()) {
+                <th class="acciones">Acciones</th>
+              }
+            </tr>
+          </thead>
+          <tbody>
+            @for (proveedor of proveedores(); track proveedor.id) {
+              <tr [class.editando]="proveedor.id === editandoId()">
+                <td class="nombre">{{ proveedor.nombre }}</td>
+                <td class="mono">{{ proveedor.cuit ?? '—' }}</td>
+                @if (auth.esDueno()) {
+                  <td class="acciones">
+                    <button type="button" class="secundario chico editar" (click)="editar(proveedor)">Editar</button>
+                    <button type="button" class="chico peligro desactivar" (click)="desactivar(proveedor)">
+                      Dar de baja
+                    </button>
+                  </td>
+                }
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+      <p class="barra-estado">
+        {{ proveedores().length }} {{ proveedores().length === 1 ? 'proveedor' : 'proveedores' }}
+      </p>
+    }
+  </div>
+
+  @if (auth.esDueno()) {
+    <form class="alta panel" [formGroup]="form" (ngSubmit)="guardar()" novalidate>
+      <h2>{{ editandoId() === null ? 'Nuevo proveedor' : 'Editar proveedor' }}</h2>
+      <div class="campo">
+        <label for="nombre">Nombre</label>
+        <input id="nombre" formControlName="nombre" placeholder="Ej: Sinteplast" />
+      </div>
+      <div class="campo cuit">
+        <label for="cuit">CUIT (opcional)</label>
+        <input id="cuit" formControlName="cuit" placeholder="30-12345678-9" />
+        @if (form.controls.cuit.touched && form.controls.cuit.invalid) {
+          <span class="campo-error">El CUIT debe tener el formato 30-12345678-9.</span>
         }
-      </tr>
-    </thead>
-    <tbody>
-      @for (proveedor of proveedores(); track proveedor.id) {
-        <tr>
-          <td>{{ proveedor.nombre }}</td>
-          <td>{{ proveedor.cuit ?? '—' }}</td>
-          @if (auth.esDueno()) {
-            <td class="acciones">
-              <button type="button" class="secundario editar" (click)="editar(proveedor)">Editar</button>
-              <button type="button" class="secundario desactivar" (click)="desactivar(proveedor)">
-                Dar de baja
-              </button>
-            </td>
-          }
-        </tr>
-      }
-    </tbody>
-  </table>
-}
+      </div>
+      <div class="acciones-alta">
+        <button type="submit" [disabled]="guardando()">
+          {{ editandoId() === null ? 'Agregar' : 'Guardar cambios' }}
+        </button>
+        @if (editandoId() !== null) {
+          <button type="button" class="secundario cancelar" (click)="cancelar()">Cancelar</button>
+        }
+      </div>
+    </form>
+  }
+</div>

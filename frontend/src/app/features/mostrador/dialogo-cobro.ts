@@ -31,133 +31,203 @@ const centavosATexto = (c: number) => `${Math.floor(c / 100)},${String(c % 100).
   selector: 'app-dialogo-cobro',
   imports: [MontoPipe],
   template: `
-    <div class="fondo">
+    <div class="dialogo-fondo">
       <div
-        class="dialogo"
+        class="dialogo cobro"
         role="dialog"
         aria-modal="true"
         aria-labelledby="dialogo-cobro-titulo"
         (keydown)="alTeclear($event)"
       >
-        <h2 id="dialogo-cobro-titulo">Cobrar</h2>
-        <p class="total">{{ totalCentavos() / 100 | monto }}</p>
+        <div class="cabecera">
+          <h2 id="dialogo-cobro-titulo">Cobrar</h2>
+          <p class="total">{{ totalCentavos() / 100 | monto }}</p>
+        </div>
         @if (aviso(); as texto) {
           <p class="aviso" role="status">{{ texto }}</p>
         }
-        <div class="medios" role="radiogroup" aria-label="Medio de pago">
-          @for (m of medios; track m) {
-            <button
-              #botonMedio
-              type="button"
-              role="radio"
-              class="medio"
-              [attr.aria-checked]="m === medio()"
-              [tabindex]="m === medio() ? 0 : -1"
-              (click)="elegir(m)"
-            >
-              {{ etiquetas[m] }}
-            </button>
-          }
+        <div class="bloque">
+          <span class="rotulo" aria-hidden="true">
+            Medio de pago
+            <span class="pista"><kbd>←</kbd> <kbd>→</kbd></span>
+          </span>
+          <div class="medios" role="radiogroup" aria-label="Medio de pago">
+            @for (m of medios; track m) {
+              <button
+                #botonMedio
+                type="button"
+                role="radio"
+                class="medio"
+                [attr.aria-checked]="m === medio()"
+                [tabindex]="m === medio() ? 0 : -1"
+                (click)="elegir(m)"
+              >
+                {{ etiquetas[m] }}
+              </button>
+            }
+          </div>
         </div>
         @if (medio() === 'EFECTIVO') {
-          <label class="recibido">
-            Recibido
-            <input
-              #importe
-              type="text"
-              inputmode="decimal"
-              autocomplete="off"
-              [value]="textoRecibido()"
-              (input)="escrito.set($any($event.target).value)"
-            />
-          </label>
-          @if (recibido() !== null && recibido()! >= totalCentavos()) {
-            <p class="vuelto">Vuelto {{ vueltoCentavos() / 100 | monto }}</p>
-          }
-          @if (errorRecibido(); as mensaje) {
-            <p class="error" role="alert">{{ mensaje }}</p>
-          }
+          <div class="efectivo">
+            <label class="recibido">
+              Recibido
+              <input
+                #importe
+                type="text"
+                inputmode="decimal"
+                autocomplete="off"
+                [value]="textoRecibido()"
+                (input)="escrito.set($any($event.target).value)"
+              />
+            </label>
+            @if (recibido() !== null && recibido()! >= totalCentavos()) {
+              <p class="vuelto">Vuelto <strong>{{ vueltoCentavos() / 100 | monto }}</strong></p>
+            }
+            @if (errorRecibido(); as mensaje) {
+              <p class="error" role="alert">{{ mensaje }}</p>
+            }
+          </div>
         }
-        <div class="acciones">
-          <button type="button" class="cancelar" (click)="cancelar.emit()">Cancelar</button>
-          <button type="button" class="cobrar" (click)="confirmarCobro()">Cobrar</button>
+        <div class="dialogo-acciones">
+          <button type="button" class="cancelar" data-tecla="Esc" aria-keyshortcuts="Escape" (click)="cancelar.emit()">
+            Cancelar
+          </button>
+          <button type="button" class="cobrar primario" data-tecla="Enter" aria-keyshortcuts="Enter" (click)="confirmarCobro()">
+            Cobrar
+          </button>
         </div>
       </div>
     </div>
   `,
   styles: `
-    .fondo {
-      position: fixed;
-      inset: 0;
-      display: grid;
-      place-items: center;
-      background: rgb(0 0 0 / 0.4);
-      z-index: 20;
+    .cobro {
+      width: min(540px, 100%);
+      gap: var(--e-4);
     }
-    .dialogo {
-      background: var(--superficie);
-      border-radius: 10px;
-      padding: 20px;
-      min-width: 360px;
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
+    /* Total grande arriba, como el diálogo de cobro de GDS (f414). */
+    .cabecera {
+      margin: calc(var(--e-6) * -1) calc(var(--e-6) * -1) 0;
+      padding: var(--e-4) var(--e-6) var(--e-5);
+      border-radius: var(--radio-lg) var(--radio-lg) 0 0;
+      background: var(--barra);
+      color: #fff;
     }
-    h2,
-    p {
-      margin: 0;
+    .cabecera h2 {
+      color: #fdba74;
+      font-size: var(--texto-sm);
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
     }
     .total {
-      font-size: 2rem;
+      margin: var(--e-1) 0 0;
+      font-size: 3.25rem;
       font-weight: 700;
+      line-height: 1.05;
+      text-align: right;
       font-variant-numeric: tabular-nums;
+      letter-spacing: -0.02em;
     }
-    .medios {
+    .aviso {
+      padding: var(--e-2) var(--e-3);
+      border: 1px solid var(--advertencia-borde);
+      border-left: 4px solid #d97706;
+      border-radius: var(--radio);
+      background: var(--advertencia-fondo);
+      font-weight: 600;
+    }
+    .bloque {
       display: flex;
-      gap: 6px;
+      flex-direction: column;
+      gap: var(--e-2);
+    }
+    .rotulo {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      color: var(--texto-suave);
+      font-size: var(--texto-sm);
+      font-weight: 600;
+    }
+    /* Selector segmentado: un solo bloque, el medio elegido relleno con el acento. */
+    .medios {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      padding: 3px;
+      gap: 3px;
+      border: 1px solid var(--borde-fuerte);
+      border-radius: var(--radio-lg);
+      background: var(--superficie-3);
     }
     .medio {
-      flex: 1;
-      padding: 8px;
-      border: 1px solid var(--borde);
-      border-radius: 6px;
-      background: var(--superficie);
-      font: inherit;
-      cursor: pointer;
+      min-height: 44px;
+      padding: 6px 8px;
+      border: 0;
+      border-radius: var(--radio);
+      background: transparent;
+      color: var(--texto);
+      font-size: 1rem;
     }
-    .medio[aria-checked='true'] {
-      border-color: var(--acento);
-      box-shadow: inset 0 0 0 2px var(--acento);
-      font-weight: 700;
+    .medio:hover:not(:disabled) {
+      background: var(--superficie);
+    }
+    .medio[aria-checked='true'],
+    .medio[aria-checked='true']:hover {
+      background: var(--acento);
+      color: var(--acento-texto);
+      box-shadow: var(--sombra-1);
+    }
+    .medio:focus-visible {
+      box-shadow: 0 0 0 3px #fdba74;
+    }
+    .efectivo {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      gap: var(--e-3);
+      align-items: end;
+    }
+    .pista kbd {
+      font-size: 0.95rem;
     }
     .recibido {
       display: flex;
       flex-direction: column;
-      gap: 4px;
+      gap: var(--e-1);
     }
     .recibido input {
-      font: inherit;
-      font-size: 1.4rem;
-      padding: 8px;
+      width: 100%;
+      min-width: 0;
+      height: 56px;
+      font-size: 1.75rem;
+      font-weight: 700;
       text-align: right;
       font-variant-numeric: tabular-nums;
     }
     .vuelto {
-      font-size: 1.3rem;
-      font-weight: 600;
-    }
-    .error {
-      color: #b00020;
-    }
-    .aviso {
-      background: #fff1e8;
-      padding: 8px;
-      border-radius: 6px;
-    }
-    .acciones {
       display: flex;
-      justify-content: flex-end;
-      gap: 8px;
+      flex-direction: column;
+      justify-content: center;
+      min-height: 56px;
+      padding: 4px var(--e-3);
+      border: 1px solid var(--exito-borde);
+      border-radius: var(--radio);
+      background: var(--exito-fondo);
+      color: var(--texto-suave);
+      font-size: var(--texto-sm);
+      font-weight: 600;
+      text-align: right;
+    }
+    .vuelto strong {
+      color: var(--exito);
+      font-size: 1.75rem;
+      line-height: 1.1;
+      font-variant-numeric: tabular-nums;
+    }
+    .efectivo .error {
+      grid-column: 1 / -1;
+    }
+    .dialogo-acciones button {
+      min-height: 48px;
+      font-size: 1.0625rem;
     }
   `,
 })

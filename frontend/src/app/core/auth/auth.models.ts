@@ -1,5 +1,12 @@
 export type Rol = 'SUPER_ADMIN' | 'DUENO' | 'VENDEDOR';
 
+/** Cómo se nombra cada rol en pantalla. */
+export const ROL_LABELS: Record<Rol, string> = {
+  SUPER_ADMIN: 'Administrador',
+  DUENO: 'Dueño',
+  VENDEDOR: 'Vendedor',
+};
+
 export interface Sesion {
   userId: number;
   nombre: string;

@@ -16,7 +16,9 @@ export type AccionBotonera = Exclude<AccionMostrador, 'cerrar'>;
         <button
           type="button"
           class="boton"
+          [class]="variantes[atajo.accion] ?? ''"
           [disabled]="!habilitada(atajo.accion)"
+          [attr.aria-keyshortcuts]="atajo.tecla"
           (mousedown)="$event.preventDefault()"
           (click)="emitir(atajo.accion)"
         >
@@ -29,30 +31,48 @@ export type AccionBotonera = Exclude<AccionMostrador, 'cerrar'>;
     </div>
   `,
   styles: `
+    :host {
+      display: block;
+    }
     .botonera {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: var(--e-2);
+      padding: var(--e-2);
+      border: 1px solid var(--borde);
+      border-radius: var(--radio-lg);
+      background: var(--superficie);
+      box-shadow: var(--sombra-1);
     }
     .boton {
+      justify-content: flex-start;
+      gap: var(--e-3);
+      min-height: 52px;
       padding: 8px 14px;
-      border: 1px solid var(--borde);
-      border-radius: 6px;
-      background: var(--superficie);
-      font: inherit;
-      cursor: pointer;
-    }
-    .boton:disabled {
-      opacity: 0.5;
-      cursor: default;
+      font-size: 1.0625rem;
     }
     kbd {
-      font-weight: 700;
-      color: var(--texto-suave);
+      min-width: 2.6em;
+      font-size: 0.85rem;
+    }
+    .boton.primario kbd {
+      border-color: rgb(255 255 255 / 0.45);
+      background: rgb(255 255 255 / 0.16);
+      color: var(--acento-texto);
+    }
+    .boton:disabled kbd {
+      border-color: var(--borde);
+      background: var(--superficie-2);
+      color: var(--texto-tenue);
     }
   `,
 })
 export class Botonera {
+  /** Cobrar es la acción principal (como «Aceptar» en GDS); Vaciar se marca como peligrosa. */
+  protected readonly variantes: Partial<Record<AccionMostrador, string>> = {
+    cobrar: 'primario',
+    vaciar: 'peligro',
+  };
   readonly atajos = input<readonly Atajo[]>(atajosDeBotonera());
   /** Acciones apagadas; las que no figuran están habilitadas. */
   readonly habilitadas = input<Partial<Record<AccionBotonera, boolean>>>({});

@@ -1,8 +1,23 @@
 :host {
   display: block;
 }
+/* Campo de código grande, como en GDS: el foco vive acá. */
 .caja {
   width: 100%;
-  font-size: 1.4rem;
-  padding: 14px 16px;
+  height: 56px;
+  padding: 0 var(--e-4);
+  border: 2px solid var(--borde-fuerte);
+  border-radius: var(--radio-lg);
+  background: var(--superficie);
+  font-size: 1.5rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+.caja::placeholder {
+  color: var(--texto-tenue);
+  font-weight: 400;
+}
+.caja:focus {
+  border-color: var(--acento);
+  box-shadow: 0 0 0 4px rgb(194 65 12 / 0.18);
 }
