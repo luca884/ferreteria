@@ -100,14 +100,17 @@ export class Mostrador {
   protected readonly ficha = signal<ArticuloMostrador | null>(null);
   protected readonly error = signal(false);
 
-  /** Lo que se le avisa al vendedor cuando no hay nada para mostrar. `grave` va en rojo. */
+  /**
+   * Lo que se le avisa al vendedor cuando no hay nada para mostrar. `grave` va en rojo; `urgente` se anuncia
+   * como alert. «No encontramos» no es urgente: llega mientras tipea y un alert lo interrumpiría.
+   */
   protected readonly mensaje = computed(() => {
-    if (this.error()) return { texto: MENSAJE_ERROR, grave: true };
+    if (this.error()) return { texto: MENSAJE_ERROR, grave: true, urgente: true };
     switch (this.resultado()?.tipo) {
       case 'DADO_DE_BAJA':
-        return { texto: MENSAJE_DADO_DE_BAJA, grave: true };
+        return { texto: MENSAJE_DADO_DE_BAJA, grave: true, urgente: true };
       case 'SIN_RESULTADOS':
-        return { texto: MENSAJE_SIN_RESULTADOS, grave: true };
+        return { texto: MENSAJE_SIN_RESULTADOS, grave: true, urgente: false };
       default:
         return null;
     }

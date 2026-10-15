@@ -71,6 +71,25 @@ describe('CajaBusqueda', () => {
     expect(campo().getAttribute('aria-activedescendant')).toBe('resultado-2');
   });
 
+  it('es un combobox con autocompletado en lista, expandido solo con la lista a la vista', async () => {
+    await crear();
+
+    expect(campo().getAttribute('role')).toBe('combobox');
+    expect(campo().getAttribute('aria-autocomplete')).toBe('list');
+    expect(campo().getAttribute('aria-expanded')).toBe('false');
+
+    fixture.componentRef.setInput('controla', 'resultados');
+    fixture.detectChanges();
+
+    expect(campo().getAttribute('aria-expanded')).toBe('true');
+  });
+
+  it('el placeholder termina en «…»', async () => {
+    await crear();
+
+    expect(campo().getAttribute('placeholder')).toMatch(/…$/);
+  });
+
   it('refleja el texto del model y lo actualiza al tipear', async () => {
     await crear();
     fixture.componentRef.setInput('texto', 'tornillo');

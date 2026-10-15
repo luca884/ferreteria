@@ -23,7 +23,7 @@ export type AccionBotonera = Exclude<AccionMostrador, 'cerrar'>;
           (click)="emitir(atajo.accion)"
         >
           @if (atajo.tecla) {
-            <kbd>{{ atajo.tecla }}</kbd>
+            <kbd aria-hidden="true">{{ atajo.tecla }}</kbd>
           }
           {{ atajo.etiqueta }}
         </button>

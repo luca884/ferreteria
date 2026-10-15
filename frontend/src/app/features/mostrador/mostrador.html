@@ -32,7 +32,9 @@
   }
 
   @if (mensaje(); as aviso) {
-    <p class="mensaje" [class.error]="aviso.grave" role="alert">{{ aviso.texto }}</p>
+    <p class="mensaje" [class.error]="aviso.grave" [attr.role]="aviso.urgente ? 'alert' : 'status'">
+      {{ aviso.texto }}
+    </p>
   }
 </div>
 

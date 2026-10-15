@@ -1967,7 +1967,8 @@ describe('Mostrador', () => {
       enlace.remove();
     });
 
-    const mensaje = () => el().querySelector('[role="alert"]')?.textContent?.trim() ?? null;
+    const mensaje = () => el().querySelector('.mensaje')?.textContent?.trim() ?? null;
+    const rolDelMensaje = () => el().querySelector('.mensaje')?.getAttribute('role') ?? null;
     const errorHttp = (status: number) => new HttpErrorResponse({ status });
 
     async function fallar(indice: number, status = 500) {
@@ -2008,6 +2009,21 @@ describe('Mostrador', () => {
 
       expect(mensaje()).toBe('No encontramos ningún artículo con ese código o descripción.');
       expect(el().textContent).not.toContain('Artículo dado de baja');
+    });
+
+    it('«no encontrado» se anuncia como status (no interrumpe al que tipea); baja y error de red, como alert', async () => {
+      await crear();
+      await buscar('martillo');
+      await responder(0, { tipo: 'SIN_RESULTADOS', items: [], hayMas: false });
+      expect(rolDelMensaje()).toBe('status');
+
+      await buscar('baja');
+      await responder(1, { tipo: 'DADO_DE_BAJA', items: [], hayMas: false });
+      expect(rolDelMensaje()).toBe('alert');
+
+      await buscar('red');
+      await fallar(2);
+      expect(rolDelMensaje()).toBe('alert');
     });
 
     it('un mensaje desaparece cuando la búsqueda siguiente trae resultados', async () => {

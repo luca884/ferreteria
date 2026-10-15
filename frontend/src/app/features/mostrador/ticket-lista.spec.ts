@@ -120,6 +120,16 @@ describe('TicketLista', () => {
     expect(texto('.problema')).toBe('"Martillo" fue dado de baja. Sacalo del ticket para seguir.');
   });
 
+  it('el problema de un renglón no es un role="alert" propio: lo anuncia el aviso del mostrador', async () => {
+    await crear([
+      renglon({ problema: 'Artículo dado de baja' }),
+      renglon({ articuloId: 2, problema: 'Ya no está disponible' }),
+    ]);
+
+    expect(el().querySelectorAll('[role="alert"]')).toHaveLength(0);
+    expect(el().querySelectorAll('[aria-live]')).toHaveLength(0);
+  });
+
   it('vacío: mensaje de ticket vacío (el total vive en TotalesTicket)', async () => {
     await crear([]);
 

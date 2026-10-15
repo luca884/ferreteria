@@ -48,7 +48,16 @@ describe('TotalesTicket', () => {
     ]);
 
     expect(el().querySelector('.total')!.textContent!.trim()).toBe(`$${NBSP}4.463,33`);
-    expect(el().querySelector('.total')!.getAttribute('aria-label')).toBe('Total del ticket');
+  });
+
+  it('el total es un <output> con nombre «Total» (un aria-label en un <p> se ignora)', async () => {
+    await crear([renglon()]);
+
+    const total = el().querySelector('.total')!;
+    expect(total.tagName).toBe('OUTPUT');
+    expect(total.hasAttribute('aria-label')).toBe(false);
+    const etiqueta = el().querySelector(`[id="${total.getAttribute('aria-labelledby')}"]`);
+    expect(etiqueta?.textContent?.trim()).toBe('Total');
   });
 
   it('vacío: total $ 0,00 y 0 renglones', async () => {
