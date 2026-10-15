@@ -6,7 +6,10 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { ActivatedRoute, Router, convertToParamMap, provideRouter } from '@angular/router';
 import { of, throwError } from 'rxjs';
 import { vi } from 'vitest';
+import { By } from '@angular/platform-browser';
 import { AuthService } from '../../core/auth/auth.service';
+import { Avisos } from '../../core/avisos/avisos';
+import { DialogoAjusteStock } from './dialogo-ajuste-stock';
 import { Proveedor } from '../proveedores/proveedor.models';
 import { ProveedoresService } from '../proveedores/proveedores.service';
 import { Rubro } from '../rubros/rubro.models';
@@ -55,6 +58,9 @@ describe('ArticuloForm', () => {
     obtener: ReturnType<typeof vi.fn>;
     crear: ReturnType<typeof vi.fn>;
     actualizar: ReturnType<typeof vi.fn>;
+    reactivar: ReturnType<typeof vi.fn>;
+    ajustarStock: ReturnType<typeof vi.fn>;
+    configuracionPrecios: ReturnType<typeof vi.fn>;
   };
   let navigate: ReturnType<typeof vi.spyOn>;
 
@@ -62,15 +68,27 @@ describe('ArticuloForm', () => {
     new HttpErrorResponse({ status, error: { status, message } });
 
   async function crearComponente(
-    opciones: { dueno?: boolean; id?: string | null; articulo?: Articulo | HttpErrorResponse } = {},
+    opciones: {
+      dueno?: boolean;
+      id?: string | null;
+      articulo?: Articulo | HttpErrorResponse;
+      sinConfiguracion?: boolean;
+    } = {},
   ) {
-    const { dueno = true, id = null, articulo = articuloGuardado() } = opciones;
+    const { dueno = true, id = null, articulo = articuloGuardado(), sinConfiguracion = false } = opciones;
     servicio = {
       obtener: vi.fn(() =>
         articulo instanceof HttpErrorResponse ? throwError(() => articulo) : of(articulo),
       ),
       crear: vi.fn(() => of(articuloGuardado())),
       actualizar: vi.fn(() => of(articuloGuardado())),
+      reactivar: vi.fn(() => of(articuloGuardado({ activo: true }))),
+      ajustarStock: vi.fn(),
+      configuracionPrecios: vi.fn(() =>
+        sinConfiguracion
+          ? throwError(() => errorHttp(500, 'Error interno'))
+          : of({ margenDefectoPorcentaje: 30, redondeoMultiplo: 10 }),
+      ),
     };
     await TestBed.configureTestingModule({
       imports: [ArticuloForm],
@@ -451,8 +469,7 @@ describe('ArticuloForm', () => {
     it('muestra stock actual y precio final del backend, solo de lectura', async () => {
       await crearComponente({ id: '5' });
 
-      expect(el().querySelector('.stock-actual')?.textContent).toContain('12,5');
-      expect(el().querySelector('.stock-actual')?.textContent).toContain('Metro');
+      expect(el().querySelector('.stock-actual dd')?.textContent).toContain('12,5 metros');
       expect(el().querySelector('.precio-final')?.textContent).toContain(`$${NBSP}1.234,50`);
       expect(el().querySelector('input#stockActual')).toBeNull();
       expect(el().querySelector('input#precioFinal')).toBeNull();
@@ -619,6 +636,268 @@ describe('ArticuloForm', () => {
 
       expect(el().querySelector('button[type=submit]')?.textContent).toContain('Guardar');
       expect(input('codigoInterno').disabled).toBe(false);
+    });
+  });
+
+  describe('precio final en vivo', () => {
+    const enVivo = () => (el().querySelector('.precio-en-vivo')?.textContent ?? '').replace(/[ \n\t]+/g, ' ').trim();
+    const herencia = () => (el().querySelector('.herencia')?.textContent ?? '').trim();
+
+    it('sin costo todavía no hay precio', async () => {
+      await crearComponente();
+
+      expect(enVivo()).toContain('Completá el costo');
+    });
+
+    it('se recalcula mientras se cargan costo, rubro, margen e IVA, con el redondeo del backend', async () => {
+      await crearComponente();
+
+      await escribir('costo', '100');
+      expect(enVivo()).toContain(`$${NBSP}160,00`);
+
+      await elegir('rubro', 'Bulonería');
+      expect(enVivo()).toContain(`$${NBSP}170,00`);
+
+      await escribir('margen', '50');
+      expect(enVivo()).toContain(`$${NBSP}190,00`);
+
+      await elegir('alicuotaIva', '10,5 %');
+      expect(enVivo()).toContain(`$${NBSP}170,00`);
+
+      await escribir('costo', '1020');
+      await escribir('margen', '0');
+      await elegir('alicuotaIva', '21 %');
+      expect(enVivo()).toContain(`$${NBSP}1.240,00`);
+    });
+
+    it('con el margen vacío dice de dónde lo hereda', async () => {
+      await crearComponente();
+
+      expect(herencia()).toBe('Hereda 30 % de la ferretería');
+
+      await elegir('rubro', 'Bulonería');
+      expect(herencia()).toBe('Hereda 35 % de Bulonería');
+
+      await escribir('margen', '20');
+      expect(el().querySelector('.herencia')).toBeNull();
+    });
+
+    it('en la edición parte del artículo guardado', async () => {
+      await crearComponente({ id: '5', articulo: articuloGuardado({ alicuotaIva: 'IVA_21', margenPorcentaje: null }) });
+
+      expect(enVivo()).toContain(`$${NBSP}170,00`);
+      expect(herencia()).toBe('Hereda 35 % de Bulonería');
+    });
+
+    it('si no se pudo leer la configuración, el formulario funciona igual sin precio en vivo', async () => {
+      await crearComponente({ sinConfiguracion: true });
+
+      expect(el().querySelector('.precio-en-vivo')).toBeNull();
+      expect(el().querySelector('.error')).toBeNull();
+      await completarMinimos();
+      await enviar();
+      expect(servicio.crear).toHaveBeenCalled();
+    });
+  });
+
+  describe('errores', () => {
+    const errorDe = (campo: string) =>
+      (el().querySelector(`[data-error-de="${campo}"]`)?.textContent ?? '').trim();
+
+    it('los errores del backend aparecen junto a cada campo y todos juntos arriba', async () => {
+      await crearComponente();
+      await completarMinimos();
+      servicio.crear.mockReturnValue(
+        throwError(
+          () =>
+            new HttpErrorResponse({
+              status: 400,
+              error: {
+                message: 'Datos inválidos',
+                errors: { costo: 'El costo admite hasta 2 decimales', descripcion: 'La descripción es obligatoria' },
+              },
+            }),
+        ),
+      );
+
+      await enviar();
+
+      expect(errorDe('costo')).toBe('El costo admite hasta 2 decimales');
+      expect(errorDe('descripcion')).toBe('La descripción es obligatoria');
+      expect(el().querySelectorAll('.error li').length).toBe(2);
+    });
+
+    it('un 409 con códigos repetidos marca cada campo', async () => {
+      await crearComponente();
+      await completarMinimos();
+      servicio.crear.mockReturnValue(
+        throwError(
+          () =>
+            new HttpErrorResponse({
+              status: 409,
+              error: {
+                message: 'Ya existe... Ya existe...',
+                errors: {
+                  codigoInterno: 'Ya existe un artículo con el código interno TOR-001.',
+                  codigoBarras: 'Ya existe un artículo activo con el código de barras 779.',
+                },
+              },
+            }),
+        ),
+      );
+
+      await enviar();
+
+      expect(errorDe('codigoInterno')).toBe('Ya existe un artículo con el código interno TOR-001.');
+      expect(errorDe('codigoBarras')).toBe('Ya existe un artículo activo con el código de barras 779.');
+    });
+
+    it('al corregir un campo se borra su error del backend', async () => {
+      await crearComponente();
+      await completarMinimos();
+      servicio.crear.mockReturnValue(
+        throwError(
+          () =>
+            new HttpErrorResponse({
+              status: 409,
+              error: { message: 'x', errors: { codigoInterno: 'Ya existe un artículo con el código interno TOR-001.' } },
+            }),
+        ),
+      );
+      await enviar();
+
+      await escribir('codigoInterno', 'TOR-002');
+
+      expect(el().querySelector('[data-error-de="codigoInterno"]')).toBeNull();
+    });
+
+    it('sin datos marca todos los campos obligatorios a la vez', async () => {
+      await crearComponente();
+
+      await enviar();
+
+      const mensajes = Array.from(el().querySelectorAll('.campo-error')).map((e) => e.textContent?.trim());
+      expect(mensajes).toEqual(
+        expect.arrayContaining([
+          'El código interno es obligatorio.',
+          'La descripción es obligatoria.',
+          'El costo es obligatorio.',
+        ]),
+      );
+    });
+  });
+
+  describe('guardar y cancelar', () => {
+    it('al guardar deja un aviso de éxito para el listado', async () => {
+      await crearComponente();
+      await completarMinimos();
+
+      await enviar();
+
+      expect(TestBed.inject(Avisos).tomar()).toBe('Se guardó «Tornillo».');
+      expect(navigate).toHaveBeenCalledWith(['/articulos']);
+    });
+
+    it('cancelar sin cambios vuelve directo al listado', async () => {
+      await crearComponente({ id: '5' });
+
+      el().querySelector<HTMLAnchorElement>('a.cancelar')!.click();
+      await refrescar();
+
+      expect(el().querySelector('app-confirmacion')).toBeNull();
+      expect(navigate).toHaveBeenCalledWith(['/articulos']);
+    });
+
+    it('cancelar con cambios pregunta con el diálogo propio', async () => {
+      await crearComponente({ id: '5' });
+      await escribir('descripcion', 'Tornillo cambiado');
+
+      el().querySelector<HTMLAnchorElement>('a.cancelar')!.click();
+      await refrescar();
+
+      expect(el().querySelector('app-confirmacion h2')?.textContent).toContain('¿Descartar los cambios?');
+      expect(navigate).not.toHaveBeenCalled();
+
+      el().querySelector<HTMLButtonElement>('app-confirmacion button.cancelar')!.click();
+      await refrescar();
+      expect(el().querySelector('app-confirmacion')).toBeNull();
+      expect(navigate).not.toHaveBeenCalled();
+      expect(input('descripcion').value).toBe('Tornillo cambiado');
+
+      el().querySelector<HTMLAnchorElement>('a.cancelar')!.click();
+      await refrescar();
+      el().querySelector<HTMLButtonElement>('app-confirmacion button.confirmar')!.click();
+      await refrescar();
+      expect(navigate).toHaveBeenCalledWith(['/articulos']);
+    });
+  });
+
+  describe('stock y estado', () => {
+    it('ya no promete que el stock se mueve con las compras', async () => {
+      await crearComponente();
+
+      expect(el().textContent).not.toContain('El stock se mueve desde las compras');
+    });
+
+    it('el Dueño ajusta el stock desde el formulario y ve el stock nuevo', async () => {
+      await crearComponente({ id: '5' });
+
+      await (async () => {
+        el().querySelector<HTMLButtonElement>('button.ajustar-stock')!.click();
+        await refrescar();
+      })();
+      const dialogo = fixture.debugElement.query(By.directive(DialogoAjusteStock));
+      expect((dialogo.componentInstance as DialogoAjusteStock).articulo()).toEqual({
+        id: 5,
+        descripcion: 'Tornillo hexagonal 1/4',
+        unidad: 'METRO',
+        stockActual: 12.5,
+      });
+
+      (dialogo.componentInstance as DialogoAjusteStock).ajustado.emit({
+        articuloId: 5,
+        stockAnterior: 12.5,
+        diferencia: 37.5,
+        stockActual: 50,
+      });
+      await refrescar();
+
+      expect(fixture.debugElement.query(By.directive(DialogoAjusteStock))).toBeNull();
+      expect(el().querySelector('.stock-actual dd')?.textContent).toContain('50 metros');
+      expect(el().querySelector('.alerta.exito')?.textContent).toContain('Stock ajustado: ahora hay 50 metros.');
+    });
+
+    it('en el alta y para el Vendedor no hay «Ajustar stock»', async () => {
+      await crearComponente();
+      expect(el().querySelector('button.ajustar-stock')).toBeNull();
+
+      TestBed.resetTestingModule();
+      await crearComponente({ dueno: false, id: '5' });
+      expect(el().querySelector('button.ajustar-stock')).toBeNull();
+    });
+
+    it('un artículo dado de baja muestra la etiqueta «De baja» y se puede reactivar', async () => {
+      await crearComponente({ id: '5', articulo: articuloGuardado({ activo: false }) });
+
+      expect(el().querySelector('.etiqueta.de-baja')?.textContent?.trim()).toBe('De baja');
+      el().querySelector<HTMLButtonElement>('button.reactivar')!.click();
+      await refrescar();
+
+      expect(servicio.reactivar).toHaveBeenCalledWith(5);
+      expect(el().querySelector('.etiqueta.de-baja')).toBeNull();
+      expect(el().querySelector('button.reactivar')).toBeNull();
+      expect(el().querySelector('.alerta.exito')?.textContent).toContain('Se reactivó el artículo.');
+    });
+
+    it('un activo no muestra la etiqueta ni Reactivar; el Vendedor ve la etiqueta pero no Reactivar', async () => {
+      await crearComponente({ id: '5' });
+      expect(el().querySelector('.etiqueta.de-baja')).toBeNull();
+      expect(el().querySelector('button.reactivar')).toBeNull();
+
+      TestBed.resetTestingModule();
+      await crearComponente({ dueno: false, id: '5', articulo: articuloGuardado({ activo: false }) });
+      expect(el().querySelector('.etiqueta.de-baja')).not.toBeNull();
+      expect(el().querySelector('button.reactivar')).toBeNull();
     });
   });
 });
