@@ -106,18 +106,6 @@ export function moverElegido(t: Ticket, delta: -1 | 1): Ticket {
   return { ...t, elegido };
 }
 
-/**
- * Pie del ticket, como «N Artículos · M Renglones» de GDS. Por unidad suma la cantidad (3 tornillos son 3);
- * lo que se vende por metro, kilo o litro cuenta 1 por renglón (2,5 m de cable es 1 artículo).
- */
-export function conteoTicket(renglones: readonly RenglonTicket[]): { articulos: number; renglones: number } {
-  const articulos = renglones.reduce(
-    (suma, r) => suma + (r.unidad === 'UNIDAD' ? Math.round(r.cantidadMilesimas / 1000) : 1),
-    0,
-  );
-  return { articulos, renglones: renglones.length };
-}
-
 /** La cantidad supera el stock visto. Justo en 0 no advierte. */
 export function sinStock(r: RenglonTicket): boolean {
   return r.cantidadMilesimas > aMilesimas(r.stockActual);
@@ -134,17 +122,21 @@ export function actualizarPrecios(
   return { ...t, renglones };
 }
 
-/** Marca los renglones rechazados y limpia las marcas anteriores del resto. */
+/**
+ * Marca los renglones rechazados y limpia las marcas anteriores del resto. Deja elegido el primer renglón
+ * con problema, para que F10 / F3 actúen sobre el que hay que arreglar.
+ */
 export function marcarProblemas(
   t: Ticket,
   problemas: readonly { articuloId: number; mensaje: string }[],
 ): Ticket {
   const porId = new Map(problemas.map((p) => [p.articuloId, p.mensaje]));
-  const renglones = t.renglones.map(({ problema: _anterior, ...r }) => {
+  const renglones: RenglonTicket[] = t.renglones.map(({ problema: _anterior, ...r }) => {
     const mensaje = porId.get(r.articuloId);
     return mensaje === undefined ? r : { ...r, problema: mensaje };
   });
-  return { ...t, renglones };
+  const primero = renglones.findIndex((r) => r.problema !== undefined);
+  return { ...t, renglones, elegido: primero >= 0 ? primero : t.elegido };
 }
 
 /** Cuerpo del POST. El recibido y el vuelto son del diálogo de cobro y no viajan. */

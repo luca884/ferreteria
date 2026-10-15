@@ -26,6 +26,8 @@ const SUFIJO_UNIDAD: Record<Unidad, string> = {
 export class TicketLista {
   readonly renglones = input.required<readonly RenglonTicket[]>();
   readonly elegido = input<number | null>(null);
+  /** Con la lista de resultados encima, el aviso de ticket vacío asomaría por debajo: se oculta. */
+  readonly conMensajeVacio = input(true);
 
   protected readonly sufijo = SUFIJO_UNIDAD;
   protected readonly sinStock = sinStock;

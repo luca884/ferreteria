@@ -413,7 +413,8 @@ describe('Mostrador', () => {
       expect(filas()[0].textContent).toContain('1.234,50');
       expect(filas()[0].textContent).toContain('2,5 Metro');
       expect(filas()[0].textContent).toContain('Pasillo 2');
-      expect(ficha()).toBeNull();
+      // La ficha acompaña a la fila resaltada (H-17).
+      expect(ficha()).not.toBeNull();
     });
 
     it('flecha abajo dos veces y Enter abren la ficha de la tercera fila', async () => {
@@ -451,7 +452,7 @@ describe('Mostrador', () => {
       expect(filas()).toHaveLength(1);
       expect(resaltada()).toBe(0);
       expect(filas()[0].textContent).toContain('Estante 3');
-      expect(ficha()).toBeNull();
+      expect(ficha()).not.toBeNull();
       await enter();
 
       expect(ficha()!.textContent).toContain('Martillo');
@@ -465,7 +466,9 @@ describe('Mostrador', () => {
       await enter();
 
       expect(llamadas.map((l) => l.q)).toEqual(['tor', 'torn']);
-      expect(ficha()).toBeNull();
+      // No abrió ninguna fila: sigue la lista (con su resaltada en la ficha) y nada entró al ticket.
+      expect(filas()).toHaveLength(2);
+      expect(renglonesTicket()).toHaveLength(0);
     });
 
     it('con la ficha abierta las flechas no mueven nada', async () => {
@@ -746,7 +749,7 @@ describe('Mostrador', () => {
       );
     });
 
-    it('debajo del total cuenta artículos y renglones, como GDS', async () => {
+    it('debajo del total cuenta renglones (no «artículos»: 2 unidades + 2,5 m no son 3 de nada)', async () => {
       await crear();
 
       await escanear('A', exacto(articulo(1)));
@@ -754,7 +757,7 @@ describe('Mostrador', () => {
       await escanear('B', exacto(articulo(2)));
 
       expect(el().querySelector('.conteo')!.textContent!.replace(/\s+/g, ' ').trim()).toBe(
-        '3 artículos · 2 renglones',
+        '2 renglones',
       );
     });
   });
@@ -997,6 +1000,37 @@ describe('Mostrador', () => {
       await tecla('Escape');
 
       expect(document.activeElement).toBe(campo());
+    });
+
+    it('el foco que el buscador recupera con retraso no le roba el foco al diálogo recién abierto (H-18)', async () => {
+      await conTicket();
+      // El buscador pierde el foco sin destino: programa recuperarlo en el próximo turno.
+      campo().blur();
+      await tecla('F10');
+      expect(dentroDelDialogo()).toBe(true);
+
+      await avanzar(5);
+
+      expect(dentroDelDialogo()).toBe(true);
+      expect(document.activeElement).not.toBe(campo());
+      await tecla('Enter');
+      expect(dialogo()).toBeNull();
+      expect(descripciones()).toEqual(['Artículo 1']);
+    });
+
+    it('Esc, ↓ y F10 seguidos dejan el foco en el diálogo y Enter confirma (H-18)', async () => {
+      await conTicket();
+      await tecla('ArrowUp', campo());
+
+      await tecla('Escape', campo());
+      await tecla('ArrowDown', campo());
+      await tecla('F10');
+      await avanzar(5);
+
+      expect(dentroDelDialogo()).toBe(true);
+      await tecla('Enter');
+      expect(dialogo()).toBeNull();
+      expect(descripciones()).toEqual(['Artículo 1']);
     });
 
     it('un escaneo con un diálogo abierto se descarta y avisa', async () => {
@@ -1282,6 +1316,99 @@ describe('Mostrador', () => {
       });
     });
 
+    describe('vuelto en el aviso de venta cobrada (H-05)', () => {
+      async function cobrarRecibiendo(recibido: string | null, numero = 2) {
+        await tecla('F4');
+        if (recibido !== null) {
+          const input = dialogo()!.querySelector('input')!;
+          input.value = recibido;
+          input.dispatchEvent(new Event('input'));
+          await refrescar();
+        }
+        await tecla('Enter');
+        await cobrarOk(0, venta(numero, 3000));
+      }
+
+      it('con vuelto muestra «Venta N.º 2 cobrada · Vuelto $ 565,00» con el vuelto destacado', async () => {
+        await conMartillos();
+
+        await cobrarRecibiendo('3565');
+
+        expect(avisos()).toBe('Venta N.º 2 cobrada · Vuelto $ 565,00');
+        expect(normal(el().querySelector('.aviso .vuelto')?.textContent)).toBe('$ 565,00');
+      });
+
+      it('con vuelto el aviso no se oculta a los 5 s: queda hasta el próximo escaneo', async () => {
+        await conMartillos();
+        await cobrarRecibiendo('3565');
+
+        await avanzar(60000);
+        expect(avisos()).toBe('Venta N.º 2 cobrada · Vuelto $ 565,00');
+
+        await escanear('S', articulo(2, { descripcion: 'Serrucho', precioFinal: 100 }));
+        expect(el().querySelector('.aviso')).toBeNull();
+      });
+
+      it('con vuelto, Esc despeja el aviso', async () => {
+        await conMartillos();
+        await cobrarRecibiendo('3565');
+
+        await tecla('Escape', campo());
+
+        expect(el().querySelector('.aviso')).toBeNull();
+      });
+
+      it('con el importe exacto no hay vuelto y el aviso se oculta a los 5 s', async () => {
+        await conMartillos();
+        await cobrarRecibiendo(null);
+
+        expect(avisos()).toBe('Venta N.º 2 cobrada: $ 3.000,00');
+        expect(el().querySelector('.aviso .vuelto')).toBeNull();
+        await avanzar(5000);
+        expect(el().querySelector('.aviso')).toBeNull();
+      });
+
+      it('con otro medio de pago no hay vuelto', async () => {
+        await conMartillos();
+        await tecla('F4');
+        await tecla('ArrowRight');
+        await tecla('Enter');
+        await cobrarOk(0, venta(2, 3000));
+
+        expect(avisos()).toBe('Venta N.º 2 cobrada: $ 3.000,00');
+      });
+    });
+
+    describe('aviso de sin stock (H-17)', () => {
+      async function cobrarSinStock() {
+        await conMartillos();
+        await tecla('F4');
+        await tecla('Enter');
+        await cobrarOk(
+          0,
+          venta(12, 3000, [{ articuloId: 1, descripcion: 'Taladro', stockActual: -4 }]),
+        );
+      }
+
+      it('va aparte de la venta, como advertencia y no como éxito', async () => {
+        await cobrarSinStock();
+
+        const advertencia = el().querySelector('.aviso.advertencia');
+        expect(normal(advertencia?.textContent)).toBe('Sin stock: "Taladro" quedó en -4.');
+        expect(avisos()).toBe('Venta N.º 12 cobrada: $ 3.000,00');
+      });
+
+      it('no se oculta solo a los 5 s: queda hasta el próximo escaneo', async () => {
+        await cobrarSinStock();
+
+        await avanzar(60000);
+        expect(el().querySelector('.aviso.advertencia')).not.toBeNull();
+
+        await escanear('S', articulo(2, { descripcion: 'Serrucho', precioFinal: 100 }));
+        expect(el().querySelector('.aviso')).toBeNull();
+      });
+    });
+
     it('el aviso no bloquea el siguiente escaneo y el ticket nuevo usa otra clave', async () => {
       await conMartillos();
       await tecla('F4');
@@ -1319,7 +1446,7 @@ describe('Mostrador', () => {
       );
 
       expect(avisos()).toContain('Venta N.º 12 cobrada: $ 3.000,00');
-      expect(avisos()).toContain('Sin stock: "Martillo" quedó en -3.');
+      expect(normal(el().textContent)).toContain('Sin stock: "Martillo" quedó en -3.');
     });
 
     it('un doble Enter envía un solo POST', async () => {
@@ -1430,10 +1557,24 @@ describe('Mostrador', () => {
       expect(renglonesTicket()[1].querySelector('.problema')).toBeNull();
       expect(document.activeElement).toBe(campo());
 
-      await tecla('ArrowUp', campo());
+      // El renglón con problema quedó elegido: F10 propone quitar ese, sin tocar las flechas (H-06).
       await tecla('F10');
+      expect(dialogo()!.textContent).toContain('¿Quitar "Martillo" del ticket?');
       await tecla('Enter');
       expect(descripciones()).toEqual(['Serrucho']);
+    });
+
+    it('un 404 también deja elegido el renglón inexistente (H-06)', async () => {
+      await crear();
+      await escanear('M', martillo());
+      await escanear('S', articulo(2, { descripcion: 'Serrucho', precioFinal: 100 }));
+      await tecla('F4');
+      await tecla('Enter');
+
+      await fallarCobro(0, 404, rechazo(404, 'ARTICULO_INEXISTENTE', [{ articuloId: 1 }]));
+
+      await tecla('F10');
+      expect(dialogo()!.textContent).toContain('¿Quitar "Martillo" del ticket?');
     });
 
     it('un 404 ubica el renglón por id y lo nombra con la descripción del ticket', async () => {
@@ -1813,6 +1954,15 @@ describe('Mostrador', () => {
       expect(filas()).toHaveLength(0);
     });
 
+    it('SIN_RESULTADOS se ve como advertencia roja, para que se note con el lector (H-17)', async () => {
+      await crear();
+      await buscar('martillo');
+
+      await responder(0, { tipo: 'SIN_RESULTADOS', items: [], hayMas: false });
+
+      expect(el().querySelector('.mensaje')!.classList.contains('error')).toBe(true);
+    });
+
     it('SIN_RESULTADOS con texto muestra el mensaje de no encontrado', async () => {
       await crear();
       await buscar('martillo');
@@ -1936,6 +2086,77 @@ describe('Mostrador', () => {
       await avanzar(0);
 
       expect(document.activeElement).toBe(destino());
+    });
+  });
+
+  describe('la ficha sigue lo que el vendedor tiene elegido (H-17, H-19)', () => {
+    const exacto = (a: ArticuloMostrador): BusquedaMostrador => ({
+      tipo: 'EXACTO',
+      items: [a],
+      hayMas: false,
+    });
+    const nombreFicha = () =>
+      el().querySelector('app-ficha-articulo .descripcion')?.textContent?.trim() ?? null;
+    const flecha = async (key: 'ArrowDown' | 'ArrowUp') => {
+      campo().dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }));
+      await refrescar();
+    };
+
+    async function escanear(codigo: string, a: ArticuloMostrador) {
+      await escribir(codigo);
+      await enter();
+      await responder(llamadas.length - 1, exacto(a));
+    }
+
+    async function buscarLista(items: ArticuloMostrador[]) {
+      await escribir('tor');
+      await enter();
+      await responder(llamadas.length - 1, lista(items));
+    }
+
+    it('↑ y ↓ sobre el ticket cambian la ficha al renglón elegido', async () => {
+      await crear();
+      await escanear('A', articulo(1, { ubicacion: 'Pasillo 9' }));
+      await escanear('B', articulo(2));
+      expect(nombreFicha()).toBe('Artículo 2');
+
+      await flecha('ArrowUp');
+      expect(nombreFicha()).toBe('Artículo 1');
+      expect(el().querySelector('app-ficha-articulo .ubicacion')!.textContent).toContain('Pasillo 9');
+
+      await flecha('ArrowDown');
+      expect(nombreFicha()).toBe('Artículo 2');
+    });
+
+    it('con la lista de resultados abierta, la ficha muestra el resultado resaltado', async () => {
+      await crear();
+      await buscarLista([articulo(1), articulo(2), articulo(3)]);
+      expect(nombreFicha()).toBe('Artículo 1');
+
+      await flecha('ArrowDown');
+
+      expect(nombreFicha()).toBe('Artículo 2');
+      expect(renglonesTicket()).toHaveLength(0);
+    });
+
+    it('al elegir de la lista la ficha queda en el artículo agregado', async () => {
+      await crear();
+      await buscarLista([articulo(1), articulo(2)]);
+      await flecha('ArrowDown');
+
+      await enter();
+
+      expect(nombreFicha()).toBe('Artículo 2');
+      expect(filas()).toHaveLength(0);
+    });
+
+    it('con el ticket vacío y la lista abierta no asoma «El ticket está vacío» debajo', async () => {
+      await crear();
+      expect(el().querySelector('app-ticket-lista .vacio')).not.toBeNull();
+
+      await buscarLista([articulo(1), articulo(2)]);
+
+      expect(el().querySelector('app-ticket-lista .vacio')).toBeNull();
     });
   });
 });

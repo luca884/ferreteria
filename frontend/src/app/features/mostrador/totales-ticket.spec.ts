@@ -51,26 +51,26 @@ describe('TotalesTicket', () => {
     expect(el().querySelector('.total')!.getAttribute('aria-label')).toBe('Total del ticket');
   });
 
-  it('vacío: total $ 0,00 y 0 artículos · 0 renglones', async () => {
+  it('vacío: total $ 0,00 y 0 renglones', async () => {
     await crear([]);
 
     expect(el().querySelector('.total')!.textContent!.trim()).toBe(`$${NBSP}0,00`);
-    expect(texto('.conteo')).toBe('0 artículos · 0 renglones');
+    expect(texto('.conteo')).toBe('0 renglones');
   });
 
-  it('cuenta artículos y renglones como GDS', async () => {
+  it('cuenta solo renglones: mezclar unidades y metros no da un número que confunda (H-19)', async () => {
     await crear([
       renglon({ cantidadMilesimas: 3000 }),
       renglon({ articuloId: 2, unidad: 'METRO', cantidadMilesimas: 2500 }),
     ]);
 
-    expect(texto('.conteo')).toBe('4 artículos · 2 renglones');
+    expect(texto('.conteo')).toBe('2 renglones');
   });
 
-  it('en singular: 1 artículo · 1 renglón', async () => {
+  it('en singular: 1 renglón', async () => {
     await crear([renglon({ cantidadMilesimas: 1000 })]);
 
-    expect(texto('.conteo')).toBe('1 artículo · 1 renglón');
+    expect(texto('.conteo')).toBe('1 renglón');
   });
 
   it('no muestra costo ni margen', async () => {

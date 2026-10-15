@@ -13,7 +13,8 @@ import { ArticuloMostrador, BusquedaMostrador } from './mostrador.models';
 import { accionDeTecla } from './mostrador.atajos';
 import { MostradorService } from './mostrador.service';
 import { AVISO_ESCANEO_CON_DIALOGO } from './guarda-lector';
-import { formatearMonto } from '../../core/formato/monto';
+import { MontoPipe, formatearMonto } from '../../core/formato/monto';
+import { aCentavos } from './centavos';
 import { aRequest } from './ticket';
 import { TicketLista } from './ticket-lista';
 import { TicketStore } from './ticket.store';
@@ -39,11 +40,18 @@ type Dialogo =
   | { tipo: 'vaciar' }
   | { tipo: 'cobro' };
 
-/** Aviso del contenedor, aparte del mensaje de la búsqueda. `vacio` se va con el próximo renglón. */
+/**
+ * Aviso del contenedor, aparte del mensaje de la búsqueda. `vacio` y `persistente` se van con el próximo
+ * renglón (o con Esc); `otro` se queda hasta que lo reemplace otro aviso o venza su plazo.
+ */
 interface Aviso {
   texto: string;
   grave: boolean;
-  tipo: 'vacio' | 'otro';
+  tipo: 'vacio' | 'persistente' | 'otro';
+  /** Vuelto de la venta en efectivo, en centavos: se muestra grande al lado del número de venta. */
+  vueltoCentavos?: number;
+  /** Advertencia aparte (sin stock): en color de aviso, no de éxito. */
+  advertencia?: string;
 }
 
 /** Un escaneo (Enter): `seq` dice si sigue siendo lo último que hizo el vendedor. */
@@ -57,6 +65,7 @@ interface Escaneo {
   selector: 'app-mostrador',
   imports: [
     Botonera,
+    MontoPipe,
     CajaBusqueda,
     DialogoCantidad,
     DialogoCobro,
@@ -96,10 +105,38 @@ export class Mostrador {
       case 'DADO_DE_BAJA':
         return { texto: MENSAJE_DADO_DE_BAJA, grave: true };
       case 'SIN_RESULTADOS':
-        return { texto: MENSAJE_SIN_RESULTADOS, grave: false };
+        return { texto: MENSAJE_SIN_RESULTADOS, grave: true };
       default:
         return null;
     }
+  });
+
+  /** Lo último que se vio de cada artículo del ticket (ubicación, código de barras): la ficha lo reusa. */
+  private readonly vistos = new Map<number, ArticuloMostrador>();
+  /** Tras ↑/↓ (o quitar, cobrar) la ficha sigue al renglón elegido en vez de al último escaneo. */
+  private readonly siguiendoTicket = signal(false);
+
+  /** La ficha de la derecha: el resultado resaltado, el renglón elegido o el último artículo mostrado. */
+  protected readonly fichaMostrada = computed<ArticuloMostrador | null>(() => {
+    const r = this.resultado();
+    if (this.listaVisible() && r) return r.items[this.seleccionado()] ?? null;
+    if (!this.siguiendoTicket()) return this.ficha();
+    const { renglones, elegido } = this.ticket.ticket();
+    const renglon = elegido === null ? undefined : renglones[elegido];
+    if (!renglon) return null;
+    return {
+      codigoBarras: null,
+      codigoProveedor: null,
+      ubicacion: null,
+      ...this.vistos.get(renglon.articuloId),
+      id: renglon.articuloId,
+      codigoInterno: renglon.codigoInterno,
+      descripcion: renglon.descripcion,
+      precioFinal: renglon.precioCentavos / 100,
+      unidad: renglon.unidad,
+      stockActual: renglon.stockActual,
+      stockMinimo: renglon.stockMinimo,
+    };
   });
 
   /** La lista visible es la que el campo controla (aria-controls / aria-activedescendant). */
@@ -119,11 +156,15 @@ export class Mostrador {
   private ocultarAviso: ReturnType<typeof setTimeout> | undefined;
 
   protected readonly dialogo = signal<Dialogo | null>(null);
+  /** Para el buscador: con un diálogo abierto no recupera el foco diferido. */
+  protected readonly sinDialogo = () => this.dialogo() === null;
   protected readonly aviso = signal<Aviso | null>(null);
   /** Hay un POST de venta en curso: el diálogo de cobro ignora Enter y no se cierra. */
   protected readonly enVuelo = signal(false);
   /** Mensaje dentro del diálogo de cobro (precio cambiado, error de red, escaneo descartado). */
   protected readonly avisoCobro = signal<string | null>(null);
+  /** Lo recibido en el POST en curso (solo efectivo): el backend no guarda el vuelto, se calcula acá. */
+  private recibidoEnVuelo: number | null = null;
 
   /** Lo que la botonera puede disparar ahora: nada con un diálogo abierto; sin renglones, solo buscar. */
   protected readonly habilitadas = computed(() => {
@@ -196,8 +237,10 @@ export class Mostrador {
   }
 
   private agregar(articulo: ArticuloMostrador): void {
+    this.vistos.set(articulo.id, articulo);
     this.ticket.agregar(articulo);
-    if (this.aviso()?.tipo === 'vacio') this.avisar(null);
+    const tipo = this.aviso()?.tipo;
+    if (tipo === 'vacio' || tipo === 'persistente') this.avisar(null);
   }
 
   private mostrar(q: string, resultado: BusquedaMostrador, inmediata: boolean): void {
@@ -205,6 +248,7 @@ export class Mostrador {
     this.resultado.set(resultado);
     this.consultaMostrada.set(q);
     this.seleccionado.set(0);
+    this.siguiendoTicket.set(false);
     this.ficha.set(resultado.tipo === 'EXACTO' ? resultado.items[0] : null);
     // Tras escanear, el próximo código tiene que reemplazar al anterior, no sumarse.
     if (inmediata) this.caja().seleccionarTodo();
@@ -283,11 +327,13 @@ export class Mostrador {
 
   protected quitar(indice: number): void {
     this.ticket.quitar(indice);
+    this.siguiendoTicket.set(true);
     this.cerrarDialogo();
   }
 
   protected vaciarTicket(): void {
     this.ticket.vaciar();
+    this.siguiendoTicket.set(true);
     this.cerrarDialogo();
   }
 
@@ -301,6 +347,7 @@ export class Mostrador {
   protected cobrar(confirmacion: ConfirmacionCobro): void {
     if (this.enVuelo()) return;
     const pedido = aRequest(this.ticket.ticket(), confirmacion.medioPago);
+    this.recibidoEnVuelo = confirmacion.recibidoCentavos;
     this.enVuelo.set(true);
     this.avisoCobro.set(null);
     this.ventas
@@ -316,18 +363,31 @@ export class Mostrador {
     this.enVuelo.set(false);
     // Solo sale lo que viajó en el POST: un escaneo que volvió en el medio queda para la próxima venta.
     this.ticket.descontarVendido(pedido);
+    this.siguiendoTicket.set(true);
     const sinStock = venta.sinStock
       .map((s) => `"${s.descripcion}" quedó en ${String(s.stockActual).replace('.', ',')}`)
       .join('; ');
-    const texto = `Venta N.º ${venta.numero} cobrada: ${formatearMonto(venta.total)}`;
-    this.avisar(
-      {
-        texto: sinStock ? `${texto}. Sin stock: ${sinStock}.` : texto,
-        grave: false,
-        tipo: 'otro',
-      },
-      AVISO_COBRADA_MS,
-    );
+    const vuelto = this.recibidoEnVuelo === null ? 0 : this.recibidoEnVuelo - aCentavos(venta.total);
+    this.recibidoEnVuelo = null;
+    const aviso: Aviso =
+      vuelto > 0
+        ? {
+            texto: `Venta N.º ${venta.numero} cobrada`,
+            grave: false,
+            tipo: 'persistente',
+            vueltoCentavos: vuelto,
+          }
+        : {
+            texto: `Venta N.º ${venta.numero} cobrada: ${formatearMonto(venta.total)}`,
+            grave: false,
+            tipo: 'otro',
+          };
+    if (sinStock) {
+      aviso.advertencia = `Sin stock: ${sinStock}.`;
+      aviso.tipo = 'persistente';
+    }
+    // El vuelto y el sin stock se necesitan después del plazo habitual: quedan hasta el próximo renglón.
+    this.avisar(aviso, aviso.tipo === 'persistente' ? undefined : AVISO_COBRADA_MS);
     this.cerrarDialogo();
   }
 
@@ -461,6 +521,7 @@ export class Mostrador {
     // Sin lista a la vista, las flechas eligen el renglón del ticket.
     if (actual?.tipo !== 'LISTA' || this.ficha()) {
       this.ticket.moverElegido(direccion);
+      if (this.ticket.ticket().renglones.length > 0) this.siguiendoTicket.set(true);
       return;
     }
     const ultimo = actual.items.length - 1;
@@ -472,6 +533,7 @@ export class Mostrador {
     const articulo = this.resultado()?.items[indice];
     if (!articulo) return;
     this.agregar(articulo);
+    this.siguiendoTicket.set(false);
     this.ficha.set(articulo);
     this.caja().seleccionarTodo();
     this.caja().enfocar();
@@ -482,11 +544,13 @@ export class Mostrador {
     this.seq++;
     this.busquedas.next(null);
     this.texto.set('');
+    if (this.aviso()?.tipo === 'persistente') this.avisar(null);
     this.vaciar();
     this.caja().enfocar();
   }
 
   private vaciar(): void {
+    this.siguiendoTicket.set(false);
     this.resultado.set(null);
     this.consultaMostrada.set('');
     this.seleccionado.set(0);

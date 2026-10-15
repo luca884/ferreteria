@@ -5,7 +5,6 @@ import {
   aRequest,
   actualizarPrecios,
   cambiarCantidad,
-  conteoTicket,
   descontarVendido,
   marcarProblemas,
   moverElegido,
@@ -196,24 +195,6 @@ describe('ticket (puro)', () => {
     });
   });
 
-  describe('conteoTicket (pie de totales, como GDS)', () => {
-    it('ticket vacío: 0 artículos y 0 renglones', () => {
-      expect(conteoTicket(ticketVacio('k').renglones)).toEqual({ articulos: 0, renglones: 0 });
-    });
-
-    it('por unidad suma la cantidad; por metro, kilo o litro cada renglón es 1 artículo', () => {
-      let t = agregar(agregar(agregar(ticketVacio('k'), art()), art()), art()); // 3 tornillos
-      t = agregar(t, cable());
-      t = cambiarCantidad(t, 1, 2500).ticket!; // 2,5 m de cable
-
-      expect(conteoTicket(t.renglones)).toEqual({ articulos: 4, renglones: 2 });
-    });
-
-    it('cuenta un renglón por artículo distinto', () => {
-      expect(conteoTicket(conTres().renglones)).toEqual({ articulos: 3, renglones: 3 });
-    });
-  });
-
   describe('actualizarPrecios y marcarProblemas', () => {
     it('actualizarPrecios cambia solo los artículos indicados', () => {
       const t = actualizarPrecios(conTres(), [{ articuloId: 3, precioActual: 1650 }]);
@@ -225,6 +206,20 @@ describe('ticket (puro)', () => {
       expect(t.renglones.map((r) => r.problema)).toEqual([undefined, 'Dado de baja', undefined]);
       t = marcarProblemas(t, [{ articuloId: 1, mensaje: 'Ya no existe' }]);
       expect(t.renglones.map((r) => r.problema)).toEqual(['Ya no existe', undefined, undefined]);
+    });
+
+    it('marcarProblemas elige el primer renglón con problema (H-06)', () => {
+      const t = marcarProblemas(conTres(), [
+        { articuloId: 3, mensaje: 'x' },
+        { articuloId: 2, mensaje: 'y' },
+      ]);
+      expect(t.elegido).toBe(1);
+    });
+
+    it('marcarProblemas sin ningún renglón coincidente no mueve el elegido', () => {
+      const antes = conTres();
+      const t = marcarProblemas(antes, [{ articuloId: 99, mensaje: 'x' }]);
+      expect(t.elegido).toBe(antes.elegido);
     });
 
     it('quitar un renglón con problema no deja marcas en los demás', () => {

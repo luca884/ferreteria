@@ -21,6 +21,7 @@ describe('DialogoCobro', () => {
       b.textContent!.trim(),
     );
   const vuelto = () => el().querySelector('.vuelto')?.textContent?.replace(/[ \t\r\n]+/g, ' ').trim() ?? null;
+  const faltante = () => el().querySelector('.falta')?.textContent?.replace(/[ \t\r\n]+/g, ' ').trim() ?? null;
   const error = () => el().querySelector('[role="alert"]')?.textContent?.trim() ?? null;
 
   function tecla(key: string, destino: Element = document.activeElement ?? el()): KeyboardEvent {
@@ -122,9 +123,39 @@ describe('DialogoCobro', () => {
     tecla('Enter');
     fixture.detectChanges();
 
-    expect(error()).toBe('El importe recibido no alcanza.');
+    expect(faltante()).toBe(`Faltan $${NBSP}630,00`);
     expect(vuelto()).toBeNull();
     expect(confirmadas).toEqual([]);
+  });
+
+  it('mientras falta plata no hay otro mensaje de error: solo el «Faltan»', async () => {
+    await abrir();
+    escribir('1495');
+
+    expect(faltante()).toBe(`Faltan $${NBSP}2.135,00`);
+    expect(error()).toBeNull();
+  });
+
+  it('con un recibido de más de $ 1.000.000 sobre el total no deja cobrar (tope)', async () => {
+    await abrir();
+    escribir('50002395');
+
+    tecla('Enter');
+    fixture.detectChanges();
+
+    expect(error()).toBe('El importe recibido es demasiado alto.');
+    expect(vuelto()).toBeNull();
+    expect(confirmadas).toEqual([]);
+  });
+
+  it('el tope es inclusivo: total + $ 1.000.000,00 todavía se cobra', async () => {
+    await abrir();
+    escribir('1003630');
+
+    tecla('Enter');
+
+    expect(error()).toBeNull();
+    expect(confirmadas).toEqual([{ medioPago: 'EFECTIVO', recibidoCentavos: 100363000 }]);
   });
 
   it('un recibido que no es un número no confirma', async () => {

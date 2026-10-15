@@ -31,6 +31,12 @@ export class CajaBusqueda {
   /** Id de la fila resaltada (aria-activedescendant). */
   readonly opcionActiva = input<string | null>(null);
 
+  /**
+   * Se consulta justo antes de recuperar el foco (que se difiere un turno): es una función, no un booleano,
+   * porque debe leer el estado de ese instante y no el del último render.
+   */
+  readonly puedeRecuperarFoco = input<() => boolean>(() => true);
+
   readonly enter = output<void>();
   readonly mover = output<1 | -1>();
 
@@ -88,6 +94,9 @@ export class CajaBusqueda {
   protected alPerderFoco(evento: FocusEvent): void {
     const destino = evento.relatedTarget;
     if (destino instanceof Element && destino.closest(INTERACTIVOS)) return;
-    setTimeout(() => this.enfocar(), 0);
+    // Con el timeout pendiente puede haberse abierto un diálogo: el foco ya es suyo (H-18).
+    setTimeout(() => {
+      if (this.puedeRecuperarFoco()()) this.enfocar();
+    }, 0);
   }
 }
