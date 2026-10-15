@@ -26,6 +26,15 @@ public record ArticuloResponse(
         boolean activo,
         BigDecimal precioListaProveedor) {
 
+    /** Igual que {@link #from(Articulo)} pero con el stock indicado (el vigente en la base, no el de la entidad leida). */
+    public static ArticuloResponse from(Articulo articulo, BigDecimal stockActual) {
+        ArticuloResponse base = from(articulo);
+        return new ArticuloResponse(base.id(), base.codigoInterno(), base.codigoBarras(), base.codigoProveedor(),
+                base.descripcion(), base.rubroId(), base.proveedorId(), base.costo(), base.margenPorcentaje(),
+                base.alicuotaIva(), base.precioFinal(), base.unidad(), stockActual, base.stockMinimo(),
+                base.ubicacion(), base.activo(), base.precioListaProveedor());
+    }
+
     public static ArticuloResponse from(Articulo articulo) {
         return new ArticuloResponse(
                 articulo.getId(),

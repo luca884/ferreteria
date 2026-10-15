@@ -25,6 +25,7 @@ import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.util.Optional;
 
 @Service
@@ -97,7 +98,10 @@ public class ArticuloService {
         // El articulo ya esta administrado por JPA: los cambios se escriben al terminar la transaccion.
         Optional<CambioPrecio> cambio = articulo.actualizar(datos, ctx);
         guardarHistorial(articulo, cambio, usuarioId);
-        return ArticuloResponse.from(articulo);
+        // El stock no se escribe aca (updatable=false) y la entidad pudo leerse antes de una venta: la
+        // respuesta muestra el que esta confirmado en la base, sin tocarlo.
+        BigDecimal stockVigente = articuloRepository.stockVigenteScoped(id).orElse(articulo.getStockActual());
+        return ArticuloResponse.from(articulo, stockVigente);
     }
 
     /** Baja logica: el articulo y su historial de precios se conservan. No escribe historial. */

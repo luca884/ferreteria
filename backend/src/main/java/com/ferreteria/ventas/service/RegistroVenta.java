@@ -9,6 +9,7 @@ import com.ferreteria.tenant.TenantContext;
 import com.ferreteria.ventas.model.CantidadVendible;
 import com.ferreteria.ventas.model.Comprobante;
 import com.ferreteria.ventas.model.ItemComprobante;
+import com.ferreteria.ventas.model.LimitesVenta;
 import com.ferreteria.ventas.model.Pago;
 import com.ferreteria.ventas.model.RenglonVenta;
 import com.ferreteria.ventas.model.TotalesVenta;
@@ -170,6 +171,7 @@ public class RegistroVenta {
         validarQueExistan(pedido.renglones(), articulos);
         validarQueEstenActivos(pedido.renglones(), articulos);
         validarCantidades(pedido.renglones(), articulos);
+        validarImportes(pedido.renglones(), articulos);
         validarPrecios(pedido, articulos);
         validarMedioDePago(pedido);
         return articulos;
@@ -229,6 +231,31 @@ public class RegistroVenta {
             int indice = i;
             CantidadVendible.validar(articulo.descripcion(), renglon.cantidad(), articulo.admiteDecimales())
                     .ifPresent(mensaje -> errores.put("renglones[" + indice + "].cantidad", mensaje));
+        }
+        if (!errores.isEmpty()) {
+            throw new DatosInvalidosException(errores);
+        }
+    }
+
+    /**
+     * Tope de DECIMAL(15,2): cada dato entra solo (lo frena el request) pero cantidad x precio del
+     * servidor, o la suma de los renglones, puede no entrar. Se corta con un 400 antes de escribir.
+     */
+    private static void validarImportes(List<Renglon> renglones, Map<Long, ArticuloVendible> articulos) {
+        Map<String, String> errores = new LinkedHashMap<>();
+        BigDecimal total = BigDecimal.ZERO;
+        for (int i = 0; i < renglones.size(); i++) {
+            Renglon renglon = renglones.get(i);
+            ArticuloVendible articulo = articulos.get(renglon.articuloId());
+            RenglonVenta calculado = RenglonVenta.de(articulo.precioFinal(), renglon.cantidad(), articulo.porcentajeIva());
+            if (calculado.total().compareTo(LimitesVenta.IMPORTE_MAXIMO) > 0) {
+                errores.put("renglones[" + i + "].cantidad", "El importe de \"" + articulo.descripcion()
+                        + "\" es demasiado grande: el máximo por renglón es $ 9.999.999.999.999,99.");
+            }
+            total = total.add(calculado.total());
+        }
+        if (errores.isEmpty() && total.compareTo(LimitesVenta.IMPORTE_MAXIMO) > 0) {
+            errores.put("totalMostrado", "El total de la venta es demasiado grande: el máximo es $ 9.999.999.999.999,99.");
         }
         if (!errores.isEmpty()) {
             throw new DatosInvalidosException(errores);

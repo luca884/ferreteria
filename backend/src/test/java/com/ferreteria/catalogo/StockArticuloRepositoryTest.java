@@ -233,6 +233,24 @@ class StockArticuloRepositoryTest extends IntegrationTestBase {
     }
 
     @Test
+    @DisplayName("ArticuloService.actualizar: la respuesta trae el stock vigente en la base, no el de la lectura vieja")
+    void articuloServiceActualizarRespondeConElStockVigente() {
+        Datos f = ferreteriaConArticulo("10");
+        TenantContext.setCurrentFerreteriaId(f.ferreteriaId());
+
+        com.ferreteria.catalogo.dto.ArticuloResponse respuesta = enTransaccion(() -> {
+            articuloRepository.findScoped(f.articuloId()).orElseThrow();
+            descontarEnOtraTransaccion(f, "3");
+            return articuloService.actualizar(f.articuloId(), requestDeEdicion(f, "Editado durante la venta"),
+                    f.usuarioId());
+        });
+
+        assertThat(respuesta.stockActual()).isEqualByComparingTo("7");
+        assertThat(respuesta.descripcion()).isEqualTo("Editado durante la venta");
+        assertThat(stockEnBase(f.articuloId())).isEqualByComparingTo("7");
+    }
+
+    @Test
     @DisplayName("ArticuloService.desactivar: dar de baja mientras se vende no pisa el stock")
     void articuloServiceDesactivarNoPisaElStock() {
         Datos f = ferreteriaConArticulo("10");

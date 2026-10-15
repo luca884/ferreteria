@@ -18,6 +18,7 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 public interface ArticuloRepository extends TenantScopedRepository<Articulo, Long> {
 
@@ -162,6 +163,16 @@ public interface ArticuloRepository extends TenantScopedRepository<Articulo, Lon
     @Query("select a.id, a.stockActual from Articulo a where a.ferreteriaId = :fid and a.id in :ids")
     List<Object[]> stockDe(@Param("fid") Long ferreteriaId, @Param("ids") Collection<Long> ids);
 
+    /**
+     * Stock del articulo tal como esta confirmado HOY en la base. A diferencia de {@code stockDe}, es una
+     * lectura con lock ({@code FOR UPDATE}): una lectura comun de MySQL (REPEATABLE READ) devuelve la foto
+     * que tomo la transaccion en su primera lectura, o sea el stock viejo si una venta confirmo en el medio.
+     * Exige una transaccion abierta. Vacio si el id no existe o es de otra ferreteria.
+     */
+    @Query(value = "select stock_actual from articulo where id = :id and ferreteria_id = :fid for update",
+            nativeQuery = true)
+    Optional<BigDecimal> stockVigente(@Param("fid") Long ferreteriaId, @Param("id") Long id);
+
     /** Tamano de lote del IN de codigosInternosOcupadosScoped. */
     int LOTE_CODIGOS_INTERNOS = 1000;
 
@@ -246,6 +257,11 @@ public interface ArticuloRepository extends TenantScopedRepository<Articulo, Lon
     /** Los articulos de la ferreteria con esos ids (activos o no), por id ascendente. */
     default List<Articulo> porIdsScoped(Collection<Long> ids) {
         return porIds(TenantContext.requireFerreteriaId(), ids);
+    }
+
+    /** Stock confirmado hoy en la base (lectura con lock) del articulo de la ferreteria del request. */
+    default Optional<BigDecimal> stockVigenteScoped(Long id) {
+        return stockVigente(TenantContext.requireFerreteriaId(), id);
     }
 
     /** Stock actual de cada id de la ferreteria que existe; los ids ajenos o inexistentes no figuran. */

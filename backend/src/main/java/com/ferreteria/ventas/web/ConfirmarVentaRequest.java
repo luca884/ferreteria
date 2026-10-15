@@ -2,7 +2,9 @@ package com.ferreteria.ventas.web;
 
 import com.ferreteria.ventas.model.MedioPago;
 import com.ferreteria.ventas.service.ConfirmarVenta;
+import com.ferreteria.ventas.model.LimitesVenta;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.DecimalMax;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
@@ -29,6 +31,8 @@ public record ConfirmarVentaRequest(
 
         @NotNull(message = "Falta el total.")
         @DecimalMin(value = "0.00", message = "El total no puede ser negativo.")
+        @DecimalMax(value = LimitesVenta.IMPORTE_MAXIMO_TEXTO,
+                message = "El total es demasiado grande: el máximo es $ 9.999.999.999.999,99.")
         BigDecimal totalMostrado,
 
         @NotNull(message = "Elegí un medio de pago: EFECTIVO, DEBITO, CREDITO o TRANSFERENCIA.")
@@ -40,10 +44,14 @@ public record ConfirmarVentaRequest(
             Long articuloId,
 
             @NotNull(message = "Falta la cantidad.")
+            @DecimalMax(value = LimitesVenta.CANTIDAD_MAXIMA_TEXTO,
+                    message = "La cantidad es demasiado grande: el máximo es 999.999.999.999,999.")
             BigDecimal cantidad,
 
             @NotNull(message = "Falta el precio que se mostró.")
             @DecimalMin(value = "0.00", message = "El precio no puede ser negativo.")
+            @DecimalMax(value = LimitesVenta.IMPORTE_MAXIMO_TEXTO,
+                    message = "El precio es demasiado grande: el máximo es $ 9.999.999.999.999,99.")
             BigDecimal precioUnitario) {}
 
     public ConfirmarVenta aPedido() {
