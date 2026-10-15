@@ -8,12 +8,16 @@ import com.ferreteria.tenant.TenantScopedRepository;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 public interface ArticuloRepository extends TenantScopedRepository<Articulo, Long> {
 
@@ -139,6 +143,25 @@ public interface ArticuloRepository extends TenantScopedRepository<Articulo, Lon
             @Param("p5") String p5,
             Pageable limite);
 
+    /**
+     * Ventas (CU-07): suma delta al stock con un UPDATE relativo y atomico, acotado a la ferreteria. Es
+     * nativo a proposito: stock_actual es updatable=false en la entidad (ningun guardado de un articulo
+     * viejo lo pisa), y asi no depende de como Hibernate trate ese atributo en un UPDATE de HQL. Devuelve
+     * las filas afectadas: 0 si el id no existe o es de otra ferreteria. Exige una transaccion abierta.
+     */
+    @Modifying
+    @Query(value = "update articulo set stock_actual = stock_actual + :delta where id = :id and ferreteria_id = :fid",
+            nativeQuery = true)
+    int sumarStock(@Param("fid") Long ferreteriaId, @Param("id") Long id, @Param("delta") BigDecimal delta);
+
+    /** Los articulos de la ferreteria con esos ids, activos o no, por id ascendente. Los ajenos no vienen. */
+    @Query("select a from Articulo a where a.ferreteriaId = :fid and a.id in :ids order by a.id")
+    List<Articulo> porIds(@Param("fid") Long ferreteriaId, @Param("ids") Collection<Long> ids);
+
+    /** Pares (id, stock actual) leidos de la base, sin pasar por el contexto de persistencia. */
+    @Query("select a.id, a.stockActual from Articulo a where a.ferreteriaId = :fid and a.id in :ids")
+    List<Object[]> stockDe(@Param("fid") Long ferreteriaId, @Param("ids") Collection<Long> ids);
+
     /** Tamano de lote del IN de codigosInternosOcupadosScoped. */
     int LOTE_CODIGOS_INTERNOS = 1000;
 
@@ -213,5 +236,24 @@ public interface ArticuloRepository extends TenantScopedRepository<Articulo, Lon
     default List<Articulo> heredanMargenDeRubroScoped(Long rubroId) {
         return findAllByFerreteriaIdAndRubroIdAndMargenPorcentajeIsNullAndActivoTrue(
                 TenantContext.requireFerreteriaId(), rubroId);
+    }
+
+    /** Suma delta al stock del articulo de la ferreteria del request (atomico). Devuelve las filas afectadas. */
+    default int sumarStockScoped(Long id, BigDecimal delta) {
+        return sumarStock(TenantContext.requireFerreteriaId(), id, delta);
+    }
+
+    /** Los articulos de la ferreteria con esos ids (activos o no), por id ascendente. */
+    default List<Articulo> porIdsScoped(Collection<Long> ids) {
+        return porIds(TenantContext.requireFerreteriaId(), ids);
+    }
+
+    /** Stock actual de cada id de la ferreteria que existe; los ids ajenos o inexistentes no figuran. */
+    default Map<Long, BigDecimal> stockDeScoped(Collection<Long> ids) {
+        Map<Long, BigDecimal> stock = new HashMap<>();
+        for (Object[] fila : stockDe(TenantContext.requireFerreteriaId(), ids)) {
+            stock.put((Long) fila[0], (BigDecimal) fila[1]);
+        }
+        return stock;
     }
 }

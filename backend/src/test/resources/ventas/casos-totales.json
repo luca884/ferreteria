@@ -1,0 +1,18 @@
+{
+  "descripcion": "Casos canonicos de totales de una venta (R-043). Los leen CasosCompartidosTotalesTest (Java: total, neto, iva) y centavos.spec.ts (Vitest: solo total). Importes como string.",
+  "renglones": [
+    { "nombre": "tornillo-3u", "precio": "170.00", "cantidad": "3", "alicuota": "21.00", "total": "510.00", "neto": "421.49", "iva": "88.51" },
+    { "nombre": "cable-2-5m", "precio": "790.00", "cantidad": "2.5", "alicuota": "21.00", "total": "1975.00", "neto": "1632.23", "iva": "342.77" },
+    { "nombre": "redondeo-arriba", "precio": "33.33", "cantidad": "0.015", "alicuota": "21.00", "total": "0.50", "neto": "0.41", "iva": "0.09" },
+    { "nombre": "half-up-en-el-medio", "precio": "0.05", "cantidad": "0.1", "alicuota": "21.00", "total": "0.01", "neto": "0.01", "iva": "0.00" },
+    { "nombre": "iva-10-5", "precio": "80.00", "cantidad": "1", "alicuota": "10.50", "total": "80.00", "neto": "72.40", "iva": "7.60" },
+    { "nombre": "c1", "precio": "1210.00", "cantidad": "3", "alicuota": "21.00", "total": "3630.00", "neto": "3000.00", "iva": "630.00" },
+    { "nombre": "c3", "precio": "333.33", "cantidad": "2.5", "alicuota": "21.00", "total": "833.33", "neto": "688.70", "iva": "144.63" },
+    { "nombre": "cien", "precio": "100.00", "cantidad": "1", "alicuota": "21.00", "total": "100.00", "neto": "82.64", "iva": "17.36" }
+  ],
+  "tickets": [
+    { "nombre": "tres-primeros", "renglones": ["tornillo-3u", "cable-2-5m", "redondeo-arriba"], "total": "2485.50", "neto": "2054.13", "iva": "431.37" },
+    { "nombre": "c2", "renglones": ["cien", "cien"], "total": "200.00", "neto": "165.28", "iva": "34.72" },
+    { "nombre": "c1-mas-c3", "renglones": ["c1", "c3"], "total": "4463.33", "neto": "3688.70", "iva": "774.63" }
+  ]
+}

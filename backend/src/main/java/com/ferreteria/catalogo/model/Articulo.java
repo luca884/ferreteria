@@ -73,8 +73,12 @@ public class Articulo {
     @Column(nullable = false, length = 10)
     private Unidad unidad = Unidad.UNIDAD;
 
-    /** Se mueve solo con movimientos de stock (CU-09), no se edita desde el articulo. */
-    @Column(name = "stock_actual", nullable = false, precision = 15, scale = 3)
+    /**
+     * Cache de la suma de movimientos de stock. Se mueve solo con un UPDATE relativo (ArticuloRepository.sumarStock),
+     * nunca desde la entidad: updatable=false evita que guardar un articulo leido antes de una venta pise el
+     * descuento con el valor viejo. Sigue siendo insertable (el alta inserta 0).
+     */
+    @Column(name = "stock_actual", nullable = false, updatable = false, precision = 15, scale = 3)
     private BigDecimal stockActual = BigDecimal.ZERO;
 
     @Column(name = "stock_minimo", nullable = false, precision = 15, scale = 3)
