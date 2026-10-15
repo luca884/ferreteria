@@ -18,6 +18,7 @@ frontend/.angular/
 
 # Herramientas locales de agentes (registro de skills de cada dev)
 .atl/
+.claude/worktrees/
 
 # Listas reales de proveedores (datos de terceros, no se versionan)
 Lista/
