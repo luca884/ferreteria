@@ -47,7 +47,7 @@ describe('FichaArticulo', () => {
     expect(texto('.codigo-interno')).toBe('TOR-001');
     expect(texto('.codigo-barras')).toBe('7790001');
     expect(texto('.precio')).toBe(`$${NBSP}1.234,50`);
-    expect(texto('.stock')).toBe('2,5 Metro');
+    expect(texto('.stock')).toBe('2,5 metros');
     expect(texto('.ubicacion')).toBe('Pasillo 2');
   });
 

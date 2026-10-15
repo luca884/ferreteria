@@ -5,7 +5,7 @@
     <div>
       <dt>Stock</dt>
       <dd class="stock" [attr.data-stock]="estadoStock(articulo())">
-        {{ articulo().stockActual | number: '1.0-3' }} {{ unidadLabels[articulo().unidad] }}
+        {{ cantidadConUnidad(articulo().stockActual, articulo().unidad) }}
       </dd>
     </div>
     <div>

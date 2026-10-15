@@ -65,16 +65,15 @@
   min-width: 0;
   line-height: 1.2;
 }
+/* Hasta dos líneas: el nombre de la ferretería entra entero casi siempre. */
 .ferreteria {
+  display: -webkit-box;
   overflow: hidden;
   font-size: var(--texto-base);
   font-weight: 700;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
-.producto {
-  color: var(--texto-tenue);
-  font-size: var(--texto-xs);
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
 }
 
 nav {
@@ -155,11 +154,13 @@ nav a:focus-visible {
   line-height: 1.25;
 }
 .usuario-nombre {
+  display: -webkit-box;
   overflow: hidden;
   font-size: var(--texto-sm);
   font-weight: 600;
-  white-space: nowrap;
-  text-overflow: ellipsis;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
 }
 .usuario-rol {
   color: var(--texto-tenue);

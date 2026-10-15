@@ -422,7 +422,7 @@ describe('Mostrador', () => {
       expect(filas()).toHaveLength(3);
       expect(resaltada()).toBe(0);
       expect(filas()[0].textContent).toContain('1.234,50');
-      expect(filas()[0].textContent).toContain('2,5 Metro');
+      expect(filas()[0].textContent).toContain('2,5 metros');
       expect(filas()[0].textContent).toContain('Pasillo 2');
       // La ficha acompaña a la fila resaltada (H-17).
       expect(ficha()).not.toBeNull();

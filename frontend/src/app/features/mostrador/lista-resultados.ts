@@ -1,4 +1,3 @@
-import { DecimalPipe } from '@angular/common';
 import { MontoPipe } from '../../core/formato/monto';
 import {
   Component,
@@ -8,7 +7,7 @@ import {
   output,
   viewChildren,
 } from '@angular/core';
-import { UNIDAD_LABELS } from '../articulos/articulo.models';
+import { cantidadConUnidad } from '../../core/formato/unidad';
 import { ArticuloMostrador, estadoStock } from './mostrador.models';
 
 /** Ids que usa el campo de búsqueda para aria-controls y aria-activedescendant. */
@@ -18,7 +17,7 @@ export const filaId = (indice: number) => `resultado-${indice}`;
 /** Resultados de una búsqueda con varias coincidencias. El foco queda siempre en el campo. */
 @Component({
   selector: 'app-lista-resultados',
-  imports: [DecimalPipe, MontoPipe],
+  imports: [MontoPipe],
   templateUrl: './lista-resultados.html',
   styleUrl: './lista-resultados.css',
 })
@@ -30,7 +29,7 @@ export class ListaResultados {
 
   protected readonly listaId = LISTA_ID;
   protected readonly filaId = filaId;
-  protected readonly unidadLabels = UNIDAD_LABELS;
+  protected readonly cantidadConUnidad = cantidadConUnidad;
   protected readonly estadoStock = estadoStock;
 
   private readonly filas = viewChildren<ElementRef<HTMLElement>>('fila');

@@ -29,7 +29,7 @@
       </div>
       <span class="precio">{{ articulo.precioFinal | monto }}</span>
       <span class="stock" [attr.data-stock]="estadoStock(articulo)">
-        {{ articulo.stockActual | number: '1.0-3' }} {{ unidadLabels[articulo.unidad] }}
+        {{ cantidadConUnidad(articulo.stockActual, articulo.unidad) }}
       </span>
       <span class="ubicacion">{{ articulo.ubicacion ?? '—' }}</span>
     </li>
