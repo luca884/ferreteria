@@ -74,9 +74,9 @@ class ProveedorIntegrationTest extends IntegrationTestBase {
     void altaGuardaElCuitYLaFerreteriaDelToken() throws Exception {
         String nombre = unico("Tersuave");
 
-        JsonNode creado = objectMapper.readTree(postJson("/api/proveedores", duenoB, json(nombre, "30-12345678-9"))
+        JsonNode creado = objectMapper.readTree(postJson("/api/proveedores", duenoB, json(nombre, "30-12345678-1"))
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.cuit", is("30-12345678-9")))
+                .andExpect(jsonPath("$.cuit", is("30-12345678-1")))
                 .andReturn().getResponse().getContentAsString());
 
         Long ferreteriaId = jdbc.queryForObject(
@@ -118,7 +118,96 @@ class ProveedorIntegrationTest extends IntegrationTestBase {
     @Test
     void cuitConFormatoInvalidoDa400() throws Exception {
         postJson("/api/proveedores", duenoA, json(unico("CuitMalo"), "123"))
-                .andExpect(status().isBadRequest());
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors.cuit", is("El CUIT tiene que tener 11 números, por ejemplo 30-12345678-1.")));
+    }
+
+    @Test
+    void cuitConDigitoVerificadorInvalidoDa400YNoCreaNada() throws Exception {
+        String nombre = unico("CuitDv");
+
+        postJson("/api/proveedores", duenoA, json(nombre, "30-12345678-9"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors.cuit", is("El CUIT no es válido: revisá los números, el último no coincide.")));
+
+        assertThat(jdbc.queryForObject("select count(*) from proveedor where nombre = ?", Long.class, nombre)).isZero();
+    }
+
+    @Test
+    void cuitSinGuionesSeGuardaConGuiones() throws Exception {
+        postJson("/api/proveedores", duenoA, json(unico("CuitSinGuiones"), "30876543210"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.cuit", is("30-87654321-0")));
+    }
+
+    @Test
+    void nombreDuplicadoDeUnoDadoDeBajaLoDiceEnElMensaje() throws Exception {
+        String nombre = unico("DeBaja");
+        long id = crear(duenoA, nombre).get("id").asLong();
+        delete("/api/proveedores/" + id, duenoA).andExpect(status().isNoContent());
+
+        postJson("/api/proveedores", duenoA, json(nombre.toLowerCase(), null))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.message", is("Ya existe un proveedor llamado " + nombre
+                        + ", pero está dado de baja. Reactivalo para volver a usarlo.")));
+    }
+
+    // --- Dados de baja y reactivacion ---
+
+    @Test
+    void conIncluirInactivosElListadoTraeLosDadosDeBajaSoloDeLaFerreteriaDelToken() throws Exception {
+        String bajaA = unico("InactivoA");
+        String activoA = unico("ActivoA");
+        String bajaB = unico("InactivoB");
+        long idA = crear(duenoA, bajaA).get("id").asLong();
+        crear(duenoA, activoA);
+        long idB = crear(duenoB, bajaB).get("id").asLong();
+        delete("/api/proveedores/" + idA, duenoA).andExpect(status().isNoContent());
+        delete("/api/proveedores/" + idB, duenoB).andExpect(status().isNoContent());
+
+        JsonNode lista = getJson("/api/proveedores?incluirInactivos=true", duenoA);
+
+        assertThat(nombres(lista)).contains(bajaA, activoA).doesNotContain(bajaB);
+        lista.forEach(p -> {
+            if (p.get("nombre").asText().equals(bajaA)) assertThat(p.get("activo").asBoolean()).isFalse();
+        });
+    }
+
+    @Test
+    void reactivarUnProveedorDadoDeBajaLoVuelveAlListado() throws Exception {
+        String nombre = unico("Reactivable");
+        long id = crear(duenoA, nombre).get("id").asLong();
+        delete("/api/proveedores/" + id, duenoA).andExpect(status().isNoContent());
+
+        postJson("/api/proveedores/" + id + "/reactivacion", duenoA, "")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.activo", is(true)))
+                .andExpect(jsonPath("$.nombre", is(nombre)));
+
+        assertThat(activo(id)).isTrue();
+        assertThat(nombres(getJson("/api/proveedores", duenoA))).contains(nombre);
+    }
+
+    @Test
+    void reactivarUnProveedorDeOtraFerreteriaDa404YNoLoCambia() throws Exception {
+        long idDeB = crear(duenoB, unico("ReactivarAjeno")).get("id").asLong();
+        delete("/api/proveedores/" + idDeB, duenoB).andExpect(status().isNoContent());
+
+        postJson("/api/proveedores/" + idDeB + "/reactivacion", duenoA, "")
+                .andExpect(status().isNotFound());
+
+        assertThat(activo(idDeB)).isFalse();
+    }
+
+    @Test
+    void elVendedorNoPuedeReactivar() throws Exception {
+        long id = crear(duenoA, unico("ReactivarVendedor")).get("id").asLong();
+        delete("/api/proveedores/" + id, duenoA).andExpect(status().isNoContent());
+
+        postJson("/api/proveedores/" + id + "/reactivacion", vendedorA, "")
+                .andExpect(status().isForbidden());
+
+        assertThat(activo(id)).isFalse();
     }
 
     // --- Edicion ---
@@ -129,10 +218,10 @@ class ProveedorIntegrationTest extends IntegrationTestBase {
         String nuevo = unico("EditableSA");
         long id = crear(duenoA, original).get("id").asLong();
 
-        putJson("/api/proveedores/" + id, duenoA, json(nuevo, "30-12345678-9"))
+        putJson("/api/proveedores/" + id, duenoA, json(nuevo, "30-12345678-1"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.nombre", is(nuevo)))
-                .andExpect(jsonPath("$.cuit", is("30-12345678-9")));
+                .andExpect(jsonPath("$.cuit", is("30-12345678-1")));
 
         assertThat(nombreEnBase(id)).isEqualTo(nuevo);
     }
@@ -155,10 +244,10 @@ class ProveedorIntegrationTest extends IntegrationTestBase {
         assertThat(activo(id)).isFalse();
 
         // json(...) no manda "activo": el proveedor dado de baja no se reactiva.
-        putJson("/api/proveedores/" + id, duenoA, json(nombre, "30-12345678-9"))
+        putJson("/api/proveedores/" + id, duenoA, json(nombre, "30-12345678-1"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.activo", is(false)))
-                .andExpect(jsonPath("$.cuit", is("30-12345678-9")));
+                .andExpect(jsonPath("$.cuit", is("30-12345678-1")));
         assertThat(activo(id)).isFalse();
 
         var conActivo = objectMapper.createObjectNode().put("nombre", nombre).put("activo", true);
