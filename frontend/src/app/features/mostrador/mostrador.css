@@ -54,6 +54,24 @@ app-caja-busqueda {
   border-left-color: var(--texto-tenue);
   background: var(--superficie);
 }
+/* Venta cobrada con vuelto: el vuelto es lo que el vendedor necesita al dar el cambio. */
+.aviso .vuelto {
+  margin-left: var(--e-1);
+  font-size: 1.75rem;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+.aviso .separador {
+  margin: 0 var(--e-1);
+  color: var(--texto-suave);
+}
+.aviso.advertencia,
+.mensaje.advertencia {
+  border-color: var(--advertencia-borde);
+  border-left-color: #d97706;
+  background: var(--advertencia-fondo);
+  color: var(--advertencia);
+}
 .aviso.error,
 .mensaje.error {
   border-color: var(--error-borde);

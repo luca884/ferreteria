@@ -14,7 +14,16 @@
   </div>
 
   @if (aviso(); as nota) {
-    <p class="aviso" [class.error]="nota.grave" [attr.role]="nota.grave ? 'alert' : 'status'">{{ nota.texto }}</p>
+    <p class="aviso" [class.error]="nota.grave" [attr.role]="nota.grave ? 'alert' : 'status'">
+      {{ nota.texto }}
+      @if (nota.vueltoCentavos !== undefined) {
+        <span class="separador" aria-hidden="true">·</span> Vuelto
+        <strong class="vuelto">{{ nota.vueltoCentavos / 100 | monto }}</strong>
+      }
+    </p>
+    @if (nota.advertencia) {
+      <p class="aviso advertencia" role="status">{{ nota.advertencia }}</p>
+    }
   }
 
   @if (mensaje(); as aviso) {

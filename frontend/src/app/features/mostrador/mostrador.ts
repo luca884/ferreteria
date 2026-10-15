@@ -13,7 +13,8 @@ import { ArticuloMostrador, BusquedaMostrador } from './mostrador.models';
 import { accionDeTecla } from './mostrador.atajos';
 import { MostradorService } from './mostrador.service';
 import { AVISO_ESCANEO_CON_DIALOGO } from './guarda-lector';
-import { formatearMonto } from '../../core/formato/monto';
+import { MontoPipe, formatearMonto } from '../../core/formato/monto';
+import { aCentavos } from './centavos';
 import { aRequest } from './ticket';
 import { TicketLista } from './ticket-lista';
 import { TicketStore } from './ticket.store';
@@ -39,11 +40,18 @@ type Dialogo =
   | { tipo: 'vaciar' }
   | { tipo: 'cobro' };
 
-/** Aviso del contenedor, aparte del mensaje de la búsqueda. `vacio` se va con el próximo renglón. */
+/**
+ * Aviso del contenedor, aparte del mensaje de la búsqueda. `vacio` y `persistente` se van con el próximo
+ * renglón (o con Esc); `otro` se queda hasta que lo reemplace otro aviso o venza su plazo.
+ */
 interface Aviso {
   texto: string;
   grave: boolean;
-  tipo: 'vacio' | 'otro';
+  tipo: 'vacio' | 'persistente' | 'otro';
+  /** Vuelto de la venta en efectivo, en centavos: se muestra grande al lado del número de venta. */
+  vueltoCentavos?: number;
+  /** Advertencia aparte (sin stock): en color de aviso, no de éxito. */
+  advertencia?: string;
 }
 
 /** Un escaneo (Enter): `seq` dice si sigue siendo lo último que hizo el vendedor. */
@@ -57,6 +65,7 @@ interface Escaneo {
   selector: 'app-mostrador',
   imports: [
     Botonera,
+    MontoPipe,
     CajaBusqueda,
     DialogoCantidad,
     DialogoCobro,
@@ -124,6 +133,8 @@ export class Mostrador {
   protected readonly enVuelo = signal(false);
   /** Mensaje dentro del diálogo de cobro (precio cambiado, error de red, escaneo descartado). */
   protected readonly avisoCobro = signal<string | null>(null);
+  /** Lo recibido en el POST en curso (solo efectivo): el backend no guarda el vuelto, se calcula acá. */
+  private recibidoEnVuelo: number | null = null;
 
   /** Lo que la botonera puede disparar ahora: nada con un diálogo abierto; sin renglones, solo buscar. */
   protected readonly habilitadas = computed(() => {
@@ -197,7 +208,8 @@ export class Mostrador {
 
   private agregar(articulo: ArticuloMostrador): void {
     this.ticket.agregar(articulo);
-    if (this.aviso()?.tipo === 'vacio') this.avisar(null);
+    const tipo = this.aviso()?.tipo;
+    if (tipo === 'vacio' || tipo === 'persistente') this.avisar(null);
   }
 
   private mostrar(q: string, resultado: BusquedaMostrador, inmediata: boolean): void {
@@ -301,6 +313,7 @@ export class Mostrador {
   protected cobrar(confirmacion: ConfirmacionCobro): void {
     if (this.enVuelo()) return;
     const pedido = aRequest(this.ticket.ticket(), confirmacion.medioPago);
+    this.recibidoEnVuelo = confirmacion.recibidoCentavos;
     this.enVuelo.set(true);
     this.avisoCobro.set(null);
     this.ventas
@@ -319,15 +332,27 @@ export class Mostrador {
     const sinStock = venta.sinStock
       .map((s) => `"${s.descripcion}" quedó en ${String(s.stockActual).replace('.', ',')}`)
       .join('; ');
-    const texto = `Venta N.º ${venta.numero} cobrada: ${formatearMonto(venta.total)}`;
-    this.avisar(
-      {
-        texto: sinStock ? `${texto}. Sin stock: ${sinStock}.` : texto,
-        grave: false,
-        tipo: 'otro',
-      },
-      AVISO_COBRADA_MS,
-    );
+    const vuelto = this.recibidoEnVuelo === null ? 0 : this.recibidoEnVuelo - aCentavos(venta.total);
+    this.recibidoEnVuelo = null;
+    const aviso: Aviso =
+      vuelto > 0
+        ? {
+            texto: `Venta N.º ${venta.numero} cobrada`,
+            grave: false,
+            tipo: 'persistente',
+            vueltoCentavos: vuelto,
+          }
+        : {
+            texto: `Venta N.º ${venta.numero} cobrada: ${formatearMonto(venta.total)}`,
+            grave: false,
+            tipo: 'otro',
+          };
+    if (sinStock) {
+      aviso.advertencia = `Sin stock: ${sinStock}.`;
+      aviso.tipo = 'persistente';
+    }
+    // El vuelto y el sin stock se necesitan después del plazo habitual: quedan hasta el próximo renglón.
+    this.avisar(aviso, aviso.tipo === 'persistente' ? undefined : AVISO_COBRADA_MS);
     this.cerrarDialogo();
   }
 
@@ -482,6 +507,7 @@ export class Mostrador {
     this.seq++;
     this.busquedas.next(null);
     this.texto.set('');
+    if (this.aviso()?.tipo === 'persistente') this.avisar(null);
     this.vaciar();
     this.caja().enfocar();
   }

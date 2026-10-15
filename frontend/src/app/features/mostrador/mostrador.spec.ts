@@ -1282,6 +1282,99 @@ describe('Mostrador', () => {
       });
     });
 
+    describe('vuelto en el aviso de venta cobrada (H-05)', () => {
+      async function cobrarRecibiendo(recibido: string | null, numero = 2) {
+        await tecla('F4');
+        if (recibido !== null) {
+          const input = dialogo()!.querySelector('input')!;
+          input.value = recibido;
+          input.dispatchEvent(new Event('input'));
+          await refrescar();
+        }
+        await tecla('Enter');
+        await cobrarOk(0, venta(numero, 3000));
+      }
+
+      it('con vuelto muestra «Venta N.º 2 cobrada · Vuelto $ 565,00» con el vuelto destacado', async () => {
+        await conMartillos();
+
+        await cobrarRecibiendo('3565');
+
+        expect(avisos()).toBe('Venta N.º 2 cobrada · Vuelto $ 565,00');
+        expect(normal(el().querySelector('.aviso .vuelto')?.textContent)).toBe('$ 565,00');
+      });
+
+      it('con vuelto el aviso no se oculta a los 5 s: queda hasta el próximo escaneo', async () => {
+        await conMartillos();
+        await cobrarRecibiendo('3565');
+
+        await avanzar(60000);
+        expect(avisos()).toBe('Venta N.º 2 cobrada · Vuelto $ 565,00');
+
+        await escanear('S', articulo(2, { descripcion: 'Serrucho', precioFinal: 100 }));
+        expect(el().querySelector('.aviso')).toBeNull();
+      });
+
+      it('con vuelto, Esc despeja el aviso', async () => {
+        await conMartillos();
+        await cobrarRecibiendo('3565');
+
+        await tecla('Escape', campo());
+
+        expect(el().querySelector('.aviso')).toBeNull();
+      });
+
+      it('con el importe exacto no hay vuelto y el aviso se oculta a los 5 s', async () => {
+        await conMartillos();
+        await cobrarRecibiendo(null);
+
+        expect(avisos()).toBe('Venta N.º 2 cobrada: $ 3.000,00');
+        expect(el().querySelector('.aviso .vuelto')).toBeNull();
+        await avanzar(5000);
+        expect(el().querySelector('.aviso')).toBeNull();
+      });
+
+      it('con otro medio de pago no hay vuelto', async () => {
+        await conMartillos();
+        await tecla('F4');
+        await tecla('ArrowRight');
+        await tecla('Enter');
+        await cobrarOk(0, venta(2, 3000));
+
+        expect(avisos()).toBe('Venta N.º 2 cobrada: $ 3.000,00');
+      });
+    });
+
+    describe('aviso de sin stock (H-17)', () => {
+      async function cobrarSinStock() {
+        await conMartillos();
+        await tecla('F4');
+        await tecla('Enter');
+        await cobrarOk(
+          0,
+          venta(12, 3000, [{ articuloId: 1, descripcion: 'Taladro', stockActual: -4 }]),
+        );
+      }
+
+      it('va aparte de la venta, como advertencia y no como éxito', async () => {
+        await cobrarSinStock();
+
+        const advertencia = el().querySelector('.aviso.advertencia');
+        expect(normal(advertencia?.textContent)).toBe('Sin stock: "Taladro" quedó en -4.');
+        expect(avisos()).toBe('Venta N.º 12 cobrada: $ 3.000,00');
+      });
+
+      it('no se oculta solo a los 5 s: queda hasta el próximo escaneo', async () => {
+        await cobrarSinStock();
+
+        await avanzar(60000);
+        expect(el().querySelector('.aviso.advertencia')).not.toBeNull();
+
+        await escanear('S', articulo(2, { descripcion: 'Serrucho', precioFinal: 100 }));
+        expect(el().querySelector('.aviso')).toBeNull();
+      });
+    });
+
     it('el aviso no bloquea el siguiente escaneo y el ticket nuevo usa otra clave', async () => {
       await conMartillos();
       await tecla('F4');
@@ -1319,7 +1412,7 @@ describe('Mostrador', () => {
       );
 
       expect(avisos()).toContain('Venta N.º 12 cobrada: $ 3.000,00');
-      expect(avisos()).toContain('Sin stock: "Martillo" quedó en -3.');
+      expect(normal(el().textContent)).toContain('Sin stock: "Martillo" quedó en -3.');
     });
 
     it('un doble Enter envía un solo POST', async () => {
