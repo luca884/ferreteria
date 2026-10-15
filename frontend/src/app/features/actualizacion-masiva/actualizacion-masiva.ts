@@ -1,7 +1,7 @@
 import { HttpErrorResponse } from '@angular/common/http';
 import { DecimalPipe } from '@angular/common';
 import { MontoPipe } from '../../core/formato/monto';
-import { Component, OnInit, computed, inject, signal } from '@angular/core';
+import { Component, ElementRef, OnInit, computed, effect, inject, signal, viewChild } from '@angular/core';
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { FormControl, FormGroup, ReactiveFormsModule } from '@angular/forms';
 import { erroresDeCampos } from '../../core/api/api-error';
@@ -79,10 +79,26 @@ export class ActualizacionMasiva implements OnInit {
     return (
       (f.modo ?? null) !== null &&
       parsearValor(f.valor ?? '') !== null &&
+      this.errorDelValor() === null &&
       !this.generando() &&
       !this.aplicando()
     );
   });
+
+  /** Mensaje junto al campo cuando el número escrito está fuera de rango (lo mismo que valida el backend). */
+  protected readonly errorDelValor = computed(() => {
+    const f = this.formulario();
+    const valor = parsearValor(f.valor ?? '');
+    if (valor === null || f.modo === null || f.modo === undefined) return null;
+    if (f.modo === 'MARGEN') {
+      return valor < 0 || valor > 1000 ? 'El margen tiene que estar entre 0 y 1.000.' : null;
+    }
+    return valor < -99.99 || valor > 1000
+      ? 'El porcentaje tiene que estar entre -99,99 y 1.000.'
+      : null;
+  });
+
+  private readonly resumenEl = viewChild<ElementRef<HTMLElement>>('resumenEl');
 
   /** Sube con cada cambio: una respuesta en vuelo de un pedido viejo se descarta. */
   private version = 0;
@@ -90,6 +106,19 @@ export class ActualizacionMasiva implements OnInit {
   constructor() {
     // Cualquier cambio del filtro, el modo o el valor deja la vista previa vieja sin efecto.
     this.form.valueChanges.pipe(takeUntilDestroyed()).subscribe(() => this.invalidar());
+    // El resultado aparece donde está el Dueño: se lo lleva a la vista y se le da el foco.
+    effect(() => {
+      const el = this.resumenEl()?.nativeElement;
+      if (!el) return;
+      el.focus({ preventScroll: true });
+      el.scrollIntoView?.({ block: 'nearest', behavior: 'smooth' });
+    });
+  }
+
+  /** Enter en el valor pide la vista previa (no hace nada si todavía falta algo). */
+  protected alEnter(evento: Event): void {
+    evento.preventDefault();
+    if (this.puedeGenerar()) this.generarVistaPrevia();
   }
 
   ngOnInit(): void {
@@ -155,6 +184,9 @@ export class ActualizacionMasiva implements OnInit {
       next: (resultado) => {
         this.aplicando.set(false);
         this.descartarVistaPrevia();
+        // Operación y porcentaje se limpian (el filtro queda): no se puede aplicar dos veces por error.
+        // El cambio del formulario limpia los mensajes; el resultado se muestra recién después.
+        this.form.patchValue({ modo: null, valor: '' });
         this.resultado.set(resultado);
       },
       error: (err: unknown) => {

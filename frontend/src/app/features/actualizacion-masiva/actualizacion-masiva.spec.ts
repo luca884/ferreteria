@@ -531,7 +531,7 @@ describe('ActualizacionMasiva', () => {
         'A1',
         'Tornillo 8mm',
         `$ 100,00 → $ 110,00`,
-        '30,00 → 30,00',
+        '30 %',
         `$ 160,00 → $ 180,00`,
       ]);
     });
@@ -559,7 +559,7 @@ describe('ActualizacionMasiva', () => {
         'A2',
         'Taladro',
         `$ 12.345,60 → $ 13.580,16`,
-        '30,00 → 50,00',
+        '30 % → 50 %',
         `$ 20.000,00 → $ 25.670,00`,
       ]);
     });
@@ -1462,6 +1462,135 @@ describe('ActualizacionMasiva', () => {
 
         expect(alerta().textContent).toContain(MENSAJE_GENERICO);
       });
+    });
+  });
+
+  describe('pulido de la pantalla (H-08, H-15, H-19)', () => {
+    const cambioBase: CambioMasivo = {
+      articuloId: 1,
+      codigo: 'A1',
+      descripcion: 'Tornillo',
+      costoAnterior: 100,
+      costoNuevo: 110,
+      margenAnterior: 30,
+      margenNuevo: 30,
+      precioAnterior: 160,
+      precioNuevo: 180,
+      advertencia: null,
+    };
+    const resultado: ResultadoMasivo = {
+      conteos: { ...conteosBase, modificados: 3 },
+      entradasDeHistorial: 3,
+    };
+    const despues = (a: Element, b: Element) =>
+      Boolean(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
+    const celdasDe = (fila: Element) =>
+      Array.from(fila.querySelectorAll('td')).map((c) => c.textContent?.replace(/\s+/g, ' ').trim());
+
+    async function aplicado() {
+      await crearComponente();
+      servicio.vistaPrevia.mockReturnValue(of({ ...vistaPreviaBase, cambios: [cambioBase] }));
+      servicio.aplicar.mockReturnValue(of(resultado));
+      await elegir('#proveedor', 'Sinteplast');
+      await completar('Cambiar el costo en %', '10');
+      await generar();
+      q<HTMLButtonElement>('button.confirmar').click();
+      await asentar();
+    }
+
+    it('al confirmar limpia la operación y el porcentaje, pero conserva el filtro', async () => {
+      await aplicado();
+
+      expect(seleccionado('#modo')).toBe('Elegí qué querés hacer');
+      expect(q<HTMLInputElement>('#valor').value).toBe('');
+      expect(seleccionado('#proveedor')).toBe('Sinteplast');
+      expect(boton().disabled).toBe(true);
+      expect(texto('.resumen')).toBe('Se actualizaron 3 artículos.');
+    });
+
+    it('el resultado recibe el foco para que se vea', async () => {
+      await aplicado();
+
+      expect(document.activeElement).toBe(q('.resumen'));
+    });
+
+    it('los avisos van debajo del botón, para que no muevan el formulario', async () => {
+      await aplicado();
+      expect(despues(boton(), q('.resumen'))).toBe(true);
+
+      servicio.vistaPrevia.mockReturnValue(throwError(() => errorHttp(400, 'Mal pedido')));
+      await completar('Cambiar el costo en %', '10');
+      await generar();
+      expect(despues(boton(), q('[role="alert"]'))).toBe(true);
+    });
+
+    it('Enter en el porcentaje genera la vista previa', async () => {
+      await crearComponente();
+      await completar('Cambiar el costo en %', '10');
+
+      q('#valor').dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+      await asentar();
+
+      expect(servicio.vistaPrevia).toHaveBeenCalledTimes(1);
+    });
+
+    it('Enter con el valor incompleto no genera nada', async () => {
+      await crearComponente();
+      await elegir('#modo', 'Cambiar el costo en %');
+
+      q('#valor').dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+      await asentar();
+
+      expect(servicio.vistaPrevia).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      ['Cambiar el costo en %', '1001', 'El porcentaje tiene que estar entre -99,99 y 1.000.'],
+      ['Cambiar el costo en %', '-100', 'El porcentaje tiene que estar entre -99,99 y 1.000.'],
+      ['Fijar el margen', '1001', 'El margen tiene que estar entre 0 y 1.000.'],
+      ['Fijar el margen', '-1', 'El margen tiene que estar entre 0 y 1.000.'],
+    ])('%s con %s muestra el error junto al campo y no deja generar', async (modo, valor, mensaje) => {
+      await crearComponente();
+      await completar(modo, valor);
+
+      expect(texto('.campo:has(#valor) .campo-error')).toBe(mensaje);
+      expect(boton().disabled).toBe(true);
+    });
+
+    it('un valor válido no muestra error en el campo', async () => {
+      await crearComponente();
+      await completar('Cambiar el costo en %', '-99,99');
+
+      expect(el().querySelector('.campo:has(#valor) .campo-error')).toBeNull();
+      expect(boton().disabled).toBe(false);
+    });
+
+    async function conCambio(sobre: Partial<CambioMasivo>) {
+      await crearComponente();
+      servicio.vistaPrevia.mockReturnValue(
+        of({ ...vistaPreviaBase, cambios: [{ ...cambioBase, ...sobre }] }),
+      );
+      await completar();
+      await generar();
+      return celdasDe(el().querySelector('table.cambios tbody tr')!);
+    }
+
+    it('el costo que no cambia se muestra sin flecha', async () => {
+      const c = await conCambio({ costoAnterior: 119.35, costoNuevo: 119.35, margenNuevo: 35 });
+
+      expect(c[2]).toBe('$ 119,35');
+    });
+
+    it('el margen se muestra con % y sin flecha cuando no cambia', async () => {
+      const c = await conCambio({ margenAnterior: 45.5, margenNuevo: 45.5 });
+
+      expect(c[3]).toBe('45,5 %');
+    });
+
+    it('el margen heredado se rotula como tal', async () => {
+      const c = await conCambio({ margenAnterior: 35, margenNuevo: 35, margenHeredado: true });
+
+      expect(c[3]).toBe('Heredado 35 %');
     });
   });
 });

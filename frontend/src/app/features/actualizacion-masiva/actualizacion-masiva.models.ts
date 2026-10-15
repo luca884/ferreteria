@@ -44,6 +44,8 @@ export interface CambioMasivo {
   margenNuevo: number;
   precioAnterior: number;
   precioNuevo: number;
+  /** Opcional: el backend todavía no lo manda. true si el margen sale del rubro o de la ferretería. */
+  margenHeredado?: boolean;
   advertencia: string | null;
 }
 

@@ -14,25 +14,6 @@
   <p class="ayuda estado-vacio" role="status">Solo el Dueño puede actualizar precios.</p>
 } @else {
 
-  @if (erroresCampos().length > 0) {
-    <ul class="error errores-campos" role="alert">
-      @for (mensaje of erroresCampos(); track $index) {
-        <li>{{ mensaje }}</li>
-      }
-    </ul>
-  } @else if (error(); as mensaje) {
-    <p class="error" role="alert">{{ mensaje }}</p>
-  }
-
-  @if (resultado(); as r) {
-    <section class="resumen alerta exito" role="status">
-      @if (r.conteos.modificados === 1) {
-        Se actualizó 1 artículo.
-      } @else {
-        Se actualizaron {{ r.conteos.modificados | number }} artículos.
-      }
-    </section>
-  }
 
   <form class="paso panel" [formGroup]="form" novalidate>
     <h2>1. Qué artículos</h2>
@@ -79,7 +60,16 @@
       </div>
       <div class="campo">
         <label for="valor">{{ etiquetaDelValor() }}</label>
-        <input id="valor" type="text" inputmode="decimal" formControlName="valor" />
+        <input
+          id="valor"
+          type="text"
+          inputmode="decimal"
+          formControlName="valor"
+          (keydown.enter)="alEnter($event)"
+        />
+        @if (errorDelValor(); as mensaje) {
+          <span class="campo-error">{{ mensaje }}</span>
+        }
       </div>
     </div>
     <button type="button" class="generar primario" [disabled]="!puedeGenerar()" (click)="generarVistaPrevia()">
@@ -90,6 +80,26 @@
       }
     </button>
   </form>
+
+  @if (erroresCampos().length > 0) {
+    <ul class="error errores-campos" role="alert">
+      @for (mensaje of erroresCampos(); track $index) {
+        <li>{{ mensaje }}</li>
+      }
+    </ul>
+  } @else if (error(); as mensaje) {
+    <p class="error" role="alert">{{ mensaje }}</p>
+  }
+
+  @if (resultado(); as r) {
+    <section #resumenEl class="resumen alerta exito" role="status" tabindex="-1">
+      @if (r.conteos.modificados === 1) {
+        Se actualizó 1 artículo.
+      } @else {
+        Se actualizaron {{ r.conteos.modificados | number }} artículos.
+      }
+    </section>
+  }
 
   @if (vistaPrevia(); as vp) {
     <section class="paso panel vista-previa">
@@ -145,13 +155,27 @@
                       }
                     </td>
                     <td class="num">
-                      {{ c.costoAnterior | monto }} → {{ c.costoNuevo | monto }}
+                      @if (c.costoAnterior === c.costoNuevo) {
+                        {{ c.costoNuevo | monto }}
+                      } @else {
+                        {{ c.costoAnterior | monto }} → {{ c.costoNuevo | monto }}
+                      }
                     </td>
                     <td class="num">
-                      {{ c.margenAnterior | number: '1.2-2' }} → {{ c.margenNuevo | number: '1.2-2' }}
+                      @if (c.margenAnterior !== c.margenNuevo) {
+                        {{ c.margenAnterior | number: '1.0-2' }} % → {{ c.margenNuevo | number: '1.0-2' }} %
+                      } @else if (c.margenHeredado) {
+                        Heredado {{ c.margenNuevo | number: '1.0-2' }} %
+                      } @else {
+                        {{ c.margenNuevo | number: '1.0-2' }} %
+                      }
                     </td>
                     <td class="num">
-                      {{ c.precioAnterior | monto }} → {{ c.precioNuevo | monto }}
+                      @if (c.precioAnterior === c.precioNuevo) {
+                        {{ c.precioNuevo | monto }}
+                      } @else {
+                        {{ c.precioAnterior | monto }} → {{ c.precioNuevo | monto }}
+                      }
                     </td>
                   </tr>
                 }
