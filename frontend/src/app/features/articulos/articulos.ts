@@ -1,8 +1,8 @@
 import { DecimalPipe } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
-import { Component, OnInit, inject, signal } from '@angular/core';
+import { Component, ElementRef, Injector, OnInit, afterNextRender, computed, inject, signal } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule } from '@angular/forms';
-import { Router, RouterLink } from '@angular/router';
+import { ActivatedRoute, Params, Router, RouterLink } from '@angular/router';
 import { PageResponse } from '../../core/api/page.models';
 import { AuthService } from '../../core/auth/auth.service';
 import { Avisos } from '../../core/avisos/avisos';
@@ -33,7 +33,10 @@ const TAMANO_PAGINA = 20;
 export class Articulos implements OnInit {
   private readonly service = inject(ArticulosService);
   private readonly router = inject(Router);
+  private readonly route = inject(ActivatedRoute);
   private readonly avisos = inject(Avisos);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+  private readonly injector = inject(Injector);
   protected readonly auth = inject(AuthService);
 
   protected readonly alicuotaLabels = ALICUOTA_IVA_LABELS;
@@ -47,18 +50,30 @@ export class Articulos implements OnInit {
   /** Búsqueda ya aplicada: la que se manda al servidor, no lo que se está tipeando. */
   protected readonly busquedaAplicada = signal('');
   protected readonly incluirInactivos = signal(false);
+  /** Fila elegida (por id, para que siga elegida si la página se recarga y el artículo sigue ahí). */
+  protected readonly elegidoId = signal<number | null>(null);
+  protected readonly elegido = computed(
+    () => this.pagina()?.items.find((a) => a.id === this.elegidoId()) ?? null,
+  );
   /** Artículo que se está por dar de baja (diálogo de confirmación abierto). */
   protected readonly aDarDeBaja = signal<Articulo | null>(null);
-  /** Artículo cuyo stock se está ajustando (diálogo abierto). */
+  /** Artículo cuyo stock se está ajustando (panel abierto). */
   protected readonly aAjustar = signal<Articulo | null>(null);
 
   protected readonly form = inject(FormBuilder).nonNullable.group({ q: [''] });
 
   ngOnInit(): void {
-    this.cargar(0);
+    // Al volver de Editar la dirección trae la búsqueda, la página y los inactivos: se retoma donde estaba.
+    const params = this.route.snapshot.queryParamMap;
+    const q = (params.get('q') ?? '').trim();
+    const pagina = Number(params.get('pagina'));
+    this.busquedaAplicada.set(q);
+    this.form.setValue({ q });
+    this.incluirInactivos.set(params.get('inactivos') === '1');
+    this.cargar(Number.isInteger(pagina) && pagina > 1 ? pagina - 1 : 0);
   }
 
-  /** Enter o el botón Buscar: aplica el texto y vuelve a la primera página. */
+  /** Enter en el buscador: aplica el texto y vuelve a la primera página. */
   protected buscar(): void {
     this.busquedaAplicada.set(this.form.getRawValue().q.trim());
     this.cargar(0);
@@ -84,13 +99,44 @@ export class Articulos implements OnInit {
     if (actual && actual.page + 1 < actual.totalPages) this.cargar(actual.page + 1);
   }
 
-  /** Clic o Enter en la fila: abre Editar (solo el Dueño). */
-  protected abrir(articulo: Articulo): void {
-    if (this.auth.esDueno()) void this.router.navigate(['/articulos', articulo.id]);
+  /** Clic o foco en una fila: la elige (solo el Dueño, que es quien tiene acciones). */
+  protected elegir(articulo: Articulo): void {
+    if (this.auth.esDueno()) this.elegidoId.set(articulo.id);
   }
 
-  protected pedirBaja(articulo: Articulo): void {
-    this.aDarDeBaja.set(articulo);
+  /** La fila que entra en el orden de Tab: la elegida o, si no hay, la primera. */
+  protected esFilaTabulable(articulo: Articulo, indice: number): boolean {
+    return this.elegido() ? articulo.id === this.elegidoId() : indice === 0;
+  }
+
+  /** ↑/↓ mueven la elección y el foco; Enter abre Editar. */
+  protected alTeclearFila(evento: KeyboardEvent, articulo: Articulo, indice: number): void {
+    if (!this.auth.esDueno()) return;
+    if (evento.key === 'Enter') {
+      evento.preventDefault();
+      this.editar(articulo);
+      return;
+    }
+    const paso = evento.key === 'ArrowDown' ? 1 : evento.key === 'ArrowUp' ? -1 : 0;
+    if (paso === 0) return;
+    evento.preventDefault();
+    const items = this.pagina()?.items ?? [];
+    const destino = Math.min(Math.max(indice + paso, 0), items.length - 1);
+    this.elegidoId.set(items[destino].id);
+    afterNextRender(
+      () => this.host.nativeElement.querySelectorAll<HTMLElement>('tbody tr')[destino]?.focus(),
+      { injector: this.injector },
+    );
+  }
+
+  /** Editar (barra, Enter o doble clic): la dirección del listado viaja al formulario para poder volver. */
+  protected editar(articulo: Articulo | null = this.elegido()): void {
+    if (!articulo || !this.auth.esDueno()) return;
+    void this.router.navigate(['/articulos', articulo.id], { queryParamsHandling: 'preserve' });
+  }
+
+  protected pedirBaja(): void {
+    this.aDarDeBaja.set(this.elegido());
   }
 
   protected desactivar(): void {
@@ -106,7 +152,9 @@ export class Articulos implements OnInit {
     });
   }
 
-  protected reactivar(articulo: Articulo): void {
+  protected reactivar(): void {
+    const articulo = this.elegido();
+    if (!articulo) return;
     this.limpiarMensajes();
     this.service.reactivar(articulo.id).subscribe({
       next: () => {
@@ -119,12 +167,14 @@ export class Articulos implements OnInit {
     });
   }
 
-  protected ajustarStock(articulo: Articulo): void {
+  protected ajustarStock(): void {
+    const articulo = this.elegido();
+    if (!articulo?.activo) return;
     this.limpiarMensajes();
     this.aAjustar.set(articulo);
   }
 
-  /** El diálogo confirmó: la fila muestra el stock nuevo sin recargar la página. */
+  /** El panel confirmó: la fila muestra el stock nuevo sin recargar la página. */
   protected stockAjustado(ajuste: AjusteStockResponse): void {
     const articulo = this.aAjustar();
     this.aAjustar.set(null);
@@ -160,12 +210,22 @@ export class Articulos implements OnInit {
           }
           this.pagina.set(resultado);
           this.cargando.set(false);
+          this.guardarEnLaDireccion(resultado.page);
         },
         error: (err: unknown) => {
           this.cargando.set(false);
           this.error.set(mensajeDe(err, 'No se pudieron cargar los artículos.'));
         },
       });
+  }
+
+  /** Búsqueda, página (desde 1) e inactivos en la dirección, solo los que no son los de entrada. */
+  private guardarEnLaDireccion(page: number): void {
+    const queryParams: Params = {};
+    if (this.busquedaAplicada() !== '') queryParams['q'] = this.busquedaAplicada();
+    if (page > 0) queryParams['pagina'] = page + 1;
+    if (this.incluirInactivos()) queryParams['inactivos'] = 1;
+    void this.router.navigate([], { relativeTo: this.route, queryParams, replaceUrl: true });
   }
 }
 

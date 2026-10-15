@@ -1,4 +1,4 @@
-/* Listado a todo el alto: toolbar arriba, grilla con scroll propio y barra de estado abajo. */
+/* Listado a todo el alto: barra arriba, grilla con scroll propio y barra de estado abajo. */
 :host {
   display: flex;
   flex: 1 1 auto;
@@ -9,25 +9,77 @@
   flex: 0 1 auto;
   min-height: 160px;
 }
+
+/* Acciones de la barra con ícono arriba y nombre abajo; el enlace Nuevo se ve igual que los botones. */
+a.accion-barra {
+  flex-direction: column;
+}
+.accion-barra svg {
+  flex-shrink: 0;
+}
+.accion-barra.peligro:not(:disabled) {
+  color: var(--error);
+}
+.separador-barra {
+  align-self: stretch;
+  width: 1px;
+  margin: 4px 6px;
+  background: var(--borde);
+}
+
+/* Buscador de la barra: caja con lupa, el input sin borde propio. */
 .busqueda {
   display: flex;
-  flex: 0 1 560px;
-  align-items: flex-end;
-  gap: var(--e-2);
-  min-width: 280px;
+  flex: 1 1 280px;
+  max-width: 460px;
+  min-width: 0;
 }
-.busqueda .campo {
+.caja-busqueda {
+  display: flex;
   flex: 1;
+  align-items: center;
+  gap: var(--e-2);
+  height: 40px;
+  padding: 0 var(--e-3);
+  border: 1px solid var(--borde);
+  border-radius: 9px;
+  background: var(--superficie-2);
+  color: var(--texto-tenue);
+  font-weight: 400;
+  cursor: text;
+  transition:
+    border-color var(--transicion),
+    box-shadow var(--transicion);
+}
+.caja-busqueda:focus-within {
+  border-color: var(--acento);
+  box-shadow: var(--foco);
+}
+.caja-busqueda input {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font-size: var(--texto-base);
+}
+.caja-busqueda input:focus {
+  border: 0;
+  box-shadow: none;
 }
 .inactivos {
-  min-height: var(--alto-control);
+  margin-left: var(--e-2);
+  color: var(--texto-suave);
+  font-size: var(--texto-sm);
 }
+
 .descripcion {
   min-width: 16rem;
-  font-weight: 600;
+  font-weight: 500;
 }
 .precio {
-  font-weight: 700;
+  font-weight: 600;
 }
 .heredado {
   color: var(--texto-tenue);
@@ -36,19 +88,27 @@
 tr.inactivo td {
   color: var(--texto-tenue);
 }
-tr.abrible {
-  cursor: pointer;
+
+/* Fila elegida: fondo azul suave y una marca a la izquierda, como en el diseño. */
+tr.elegible {
+  cursor: default;
+  user-select: none;
 }
-tr.abrible:focus-visible {
+tr.elegible:focus-visible {
   outline: 2px solid var(--acento);
   outline-offset: -2px;
 }
-tr.abrible:focus-visible td {
+tr[aria-selected='true'] td,
+tbody tr[aria-selected='true']:hover td {
   background: var(--acento-suave);
 }
+tr[aria-selected='true'] td:first-child {
+  box-shadow: inset 3px 0 0 var(--acento);
+}
+
 .stock.negativo {
   color: var(--error);
-  font-weight: 700;
+  font-weight: 600;
 }
 .etiqueta {
   border-color: var(--exito-borde);
@@ -60,11 +120,13 @@ tr.abrible:focus-visible td {
   background: var(--superficie-3);
   color: var(--texto-suave);
 }
-.acciones {
-  width: 1%;
-  text-align: right;
-  white-space: nowrap;
+
+.paginacion {
+  flex-wrap: wrap;
 }
-.acciones > * + * {
-  margin-left: var(--e-2);
+.paginacion .separador {
+  flex: 1;
+}
+.elegido strong {
+  color: var(--texto);
 }
