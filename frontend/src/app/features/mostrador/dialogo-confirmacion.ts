@@ -1,22 +1,30 @@
 import { Component, ElementRef, afterNextRender, computed, input, output, viewChild } from '@angular/core';
+import { TrampaFoco } from '../../shared/trampa-foco';
 import { GuardaLector } from './guarda-lector';
 
 /**
  * Confirma quitar un renglón (F10) o vaciar el ticket. Presentacional. El foco arranca en «Quitar» (F10 +
  * Enter es rápido) y, para vaciar, en «Cancelar» (el default seguro). Enter activa el botón enfocado.
+ * Las dos acciones son destructivas: es un alertdialog.
  */
 @Component({
   selector: 'app-dialogo-confirmacion',
+  imports: [TrampaFoco],
   template: `
     <div class="dialogo-fondo">
       <div
         class="dialogo"
-        role="dialog"
+        role="alertdialog"
         aria-modal="true"
         aria-labelledby="dialogo-confirmacion-titulo"
+        [attr.aria-describedby]="detalle() ? 'dialogo-confirmacion-detalle' : null"
+        appTrampaFoco
         (keydown)="alTeclear($event)"
       >
-        <h2 id="dialogo-confirmacion-titulo">{{ mensaje() }}</h2>
+        <h2 id="dialogo-confirmacion-titulo">{{ titulo() }}</h2>
+        @if (detalle(); as texto) {
+          <p id="dialogo-confirmacion-detalle">{{ texto }}</p>
+        }
         <div class="dialogo-acciones">
           <button
             #cancelarBtn
@@ -52,10 +60,15 @@ export class DialogoConfirmacion {
   private readonly cancelarBtn = viewChild.required<ElementRef<HTMLButtonElement>>('cancelarBtn');
   private readonly guarda = new GuardaLector();
 
-  protected readonly mensaje = computed(() => {
-    if (this.modo() === 'quitar') return `¿Quitar "${this.descripcion()}" del ticket?`;
+  protected readonly titulo = computed(() =>
+    this.modo() === 'quitar' ? `¿Quitar «${this.descripcion()}» del ticket?` : '¿Vaciar el ticket?',
+  );
+
+  /** Lo que se pierde al vaciar; quitar no tiene detalle: el título ya nombra el renglón. */
+  protected readonly detalle = computed(() => {
+    if (this.modo() === 'quitar') return null;
     const n = this.renglones();
-    return `¿Vaciar el ticket? ${n === 1 ? 'Se pierde 1 renglón.' : `Se pierden ${n} renglones.`}`;
+    return n === 1 ? 'Se pierde 1 renglón.' : `Se pierden ${n} renglones.`;
   });
 
   constructor() {

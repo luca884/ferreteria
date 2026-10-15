@@ -780,7 +780,7 @@ describe('Mostrador', () => {
       hayMas: false,
     });
 
-    const dialogo = () => el().querySelector<HTMLElement>('[role="dialog"]');
+    const dialogo = () => el().querySelector<HTMLElement>('[role="dialog"], [role="alertdialog"]');
     const dentroDelDialogo = () => !!dialogo()?.contains(document.activeElement);
     const total = () => el().querySelector('.total')!.textContent!.replace(/\s/g, ' ').trim();
     const descripciones = () =>
@@ -891,7 +891,7 @@ describe('Mostrador', () => {
 
       const evento = await tecla('F10');
       expect(evento.defaultPrevented).toBe(true);
-      expect(dialogo()!.textContent).toContain('¿Quitar "Artículo 2" del ticket?');
+      expect(dialogo()!.textContent).toContain('¿Quitar «Artículo 2» del ticket?');
       expect(dentroDelDialogo()).toBe(true);
       await tecla('Enter');
 
@@ -925,7 +925,8 @@ describe('Mostrador', () => {
       botonera('Vaciar').click();
       await refrescar();
 
-      expect(dialogo()!.textContent).toContain('¿Vaciar el ticket? Se pierden 2 renglones.');
+      expect(dialogo()!.querySelector('h2')!.textContent).toContain('¿Vaciar el ticket?');
+      expect(dialogo()!.textContent).toContain('Se pierden 2 renglones.');
       expect(document.activeElement).toBe(botonDelDialogo('Cancelar'));
       botonDelDialogo('Cancelar').click();
       await refrescar();
@@ -998,7 +999,7 @@ describe('Mostrador', () => {
         expect(evento.defaultPrevented).toBe(true);
       }
 
-      expect(el().querySelectorAll('[role="dialog"]')).toHaveLength(1);
+      expect(el().querySelectorAll('[role="dialog"], [role="alertdialog"]')).toHaveLength(1);
       expect(dialogo()!.textContent).toContain('Cantidad de Artículo 2');
       expect(dentroDelDialogo()).toBe(true);
     });
@@ -1087,7 +1088,7 @@ describe('Mostrador', () => {
 
       botonera('F10').click();
       await refrescar();
-      expect(dialogo()!.textContent).toContain('¿Quitar "Artículo 2" del ticket?');
+      expect(dialogo()!.textContent).toContain('¿Quitar «Artículo 2» del ticket?');
       await tecla('Escape');
 
       botonera('F4').click();
@@ -1097,6 +1098,23 @@ describe('Mostrador', () => {
 
       botonera('F2').click();
       await refrescar();
+      expect(document.activeElement).toBe(campo());
+    });
+
+    it('con un diálogo abierto Tab no sale de él, y al cerrarlo el foco vuelve al código y no al botón que lo abrió', async () => {
+      await conTicket();
+      botonera('F4').focus();
+      botonera('F4').click();
+      await refrescar();
+
+      const cobrar = botonDelDialogo('Cobrar');
+      cobrar.focus();
+      await tecla('Tab');
+      expect(dentroDelDialogo()).toBe(true);
+
+      await tecla('Escape');
+
+      expect(dialogo()).toBeNull();
       expect(document.activeElement).toBe(campo());
     });
 
@@ -1118,7 +1136,7 @@ describe('Mostrador', () => {
       hayMas: false,
     });
 
-    const dialogo = () => el().querySelector<HTMLElement>('[role="dialog"]');
+    const dialogo = () => el().querySelector<HTMLElement>('[role="dialog"], [role="alertdialog"]');
     const normal = (t: string | null | undefined) => (t ?? '').replace(/\s+/g, ' ').trim();
     const avisos = () => normal(el().querySelector('.aviso')?.textContent);
     const descripciones = () =>
@@ -1578,7 +1596,7 @@ describe('Mostrador', () => {
 
       // El renglón con problema quedó elegido: F10 propone quitar ese, sin tocar las flechas (H-06).
       await tecla('F10');
-      expect(dialogo()!.textContent).toContain('¿Quitar "Martillo" del ticket?');
+      expect(dialogo()!.textContent).toContain('¿Quitar «Martillo» del ticket?');
       await tecla('Enter');
       expect(descripciones()).toEqual(['Serrucho']);
     });
@@ -1593,7 +1611,7 @@ describe('Mostrador', () => {
       await fallarCobro(0, 404, rechazo(404, 'ARTICULO_INEXISTENTE', [{ articuloId: 1 }]));
 
       await tecla('F10');
-      expect(dialogo()!.textContent).toContain('¿Quitar "Martillo" del ticket?');
+      expect(dialogo()!.textContent).toContain('¿Quitar «Martillo» del ticket?');
     });
 
     it('un 404 ubica el renglón por id y lo nombra con la descripción del ticket', async () => {
@@ -1926,7 +1944,7 @@ describe('Mostrador', () => {
 
       expect(evento.defaultPrevented).toBe(true);
       expect(el().textContent).toContain('El ticket está vacío.');
-      expect(el().querySelector('[role="dialog"]')).toBeNull();
+      expect(el().querySelector('[role="dialog"], [role="alertdialog"]')).toBeNull();
       expect(campo().value).toBe('tor');
       expect(filas()).toHaveLength(1);
       expect(llamadas).toHaveLength(1);
@@ -1949,7 +1967,8 @@ describe('Mostrador', () => {
       enlace.remove();
     });
 
-    const mensaje = () => el().querySelector('[role="alert"]')?.textContent?.trim() ?? null;
+    const mensaje = () => el().querySelector('.mensaje')?.textContent?.trim() ?? null;
+    const rolDelMensaje = () => el().querySelector('.mensaje')?.getAttribute('role') ?? null;
     const errorHttp = (status: number) => new HttpErrorResponse({ status });
 
     async function fallar(indice: number, status = 500) {
@@ -1990,6 +2009,21 @@ describe('Mostrador', () => {
 
       expect(mensaje()).toBe('No encontramos ningún artículo con ese código o descripción.');
       expect(el().textContent).not.toContain('Artículo dado de baja');
+    });
+
+    it('«no encontrado» se anuncia como status (no interrumpe al que tipea); baja y error de red, como alert', async () => {
+      await crear();
+      await buscar('martillo');
+      await responder(0, { tipo: 'SIN_RESULTADOS', items: [], hayMas: false });
+      expect(rolDelMensaje()).toBe('status');
+
+      await buscar('baja');
+      await responder(1, { tipo: 'DADO_DE_BAJA', items: [], hayMas: false });
+      expect(rolDelMensaje()).toBe('alert');
+
+      await buscar('red');
+      await fallar(2);
+      expect(rolDelMensaje()).toBe('alert');
     });
 
     it('un mensaje desaparece cuando la búsqueda siguiente trae resultados', async () => {

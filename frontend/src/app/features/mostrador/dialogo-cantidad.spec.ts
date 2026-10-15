@@ -169,6 +169,49 @@ describe('DialogoCantidad', () => {
     expect(confirmadas).toEqual([]);
   });
 
+  describe('accesibilidad', () => {
+    const describe = () =>
+      (campo().getAttribute('aria-describedby') ?? '')
+        .split(' ')
+        .filter(Boolean)
+        .map((id) => el().querySelector(`[id="${id}"]`)?.textContent?.trim());
+
+    it('el campo no corrige ortografía y se describe con la ayuda de la unidad', async () => {
+      await abrir('METRO');
+
+      expect(campo().getAttribute('spellcheck')).toBe('false');
+      expect(describe()).toEqual(['Metros — acepta hasta 3 decimales']);
+      expect(campo().hasAttribute('aria-invalid')).toBe(false);
+    });
+
+    it('con error el campo queda inválido, enlazado al mensaje y con el foco', async () => {
+      await abrir();
+      escribir('0');
+      (el().querySelector('button.aceptar') as HTMLButtonElement).focus();
+
+      (el().querySelector('button.aceptar') as HTMLButtonElement).click();
+      fixture.detectChanges();
+
+      expect(campo().getAttribute('aria-invalid')).toBe('true');
+      expect(describe()).toEqual(['Unidades — solo números enteros', 'La cantidad tiene que ser mayor que 0.']);
+      expect(document.activeElement).toBe(campo());
+    });
+
+    it('atrapa el foco: Tab en «Aceptar» vuelve al campo y Shift+Tab en el campo va a «Aceptar»', async () => {
+      await abrir();
+      const aceptar = el().querySelector('button.aceptar') as HTMLButtonElement;
+      aceptar.focus();
+
+      const evento = new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true });
+      aceptar.dispatchEvent(evento);
+      expect(document.activeElement).toBe(campo());
+      expect(evento.defaultPrevented).toBe(true);
+
+      tecla('Tab', { shiftKey: true });
+      expect(document.activeElement).toBe(aceptar);
+    });
+  });
+
   it('corregir el valor después de un error confirma', async () => {
     await abrir();
     escribir('0');

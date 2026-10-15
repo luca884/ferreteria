@@ -33,7 +33,8 @@
             <span class="sin-stock">Sin stock suficiente</span>
           }
           @if (r.problema) {
-            <span class="problema" role="alert">{{ r.problema }}</span>
+            <!-- Sin role="alert": el aviso del mostrador ya anuncia el rechazo una vez, no uno por renglón. -->
+            <span class="problema">{{ r.problema }}</span>
           }
         </td>
         <td class="num precio">{{ r.precioCentavos / 100 | monto }}</td>

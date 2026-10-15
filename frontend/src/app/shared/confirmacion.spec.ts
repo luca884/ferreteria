@@ -92,6 +92,30 @@ describe('Confirmacion', () => {
     expect(canceladas).toBe(1);
   });
 
+  it('atrapa el foco: Tab en el último botón vuelve al primero', async () => {
+    await baja();
+    boton('confirmar').focus();
+
+    const evento = new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true });
+    boton('confirmar').dispatchEvent(evento);
+
+    expect(document.activeElement).toBe(boton('cancelar'));
+    expect(evento.defaultPrevented).toBe(true);
+  });
+
+  it('al cerrarse devuelve el foco al botón que lo abrió', async () => {
+    const abridor = document.createElement('button');
+    document.body.appendChild(abridor);
+    abridor.focus();
+    await baja();
+    expect(document.activeElement).toBe(boton('cancelar'));
+
+    fixture.destroy();
+
+    expect(document.activeElement).toBe(abridor);
+    abridor.remove();
+  });
+
   it('se puede cambiar el texto de Cancelar', async () => {
     await abrir({ titulo: '¿Descartar?', textoConfirmar: 'Descartar', textoCancelar: 'Seguir editando' });
 

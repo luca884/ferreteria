@@ -18,7 +18,7 @@ import { Component, ElementRef, input, output, signal, viewChild } from '@angula
       (drop)="soltar($event)"
     >
       <button type="button" class="elegir-archivo secundario" (click)="abrir()">Elegir archivo…</button>
-      <span class="nombre-archivo">{{ archivo()?.name ?? 'Ningún archivo elegido' }}</span>
+      <span class="nombre-archivo" aria-live="polite">{{ archivo()?.name ?? 'Ningún archivo elegido' }}</span>
       <input
         #entrada
         id="archivo"
@@ -28,7 +28,7 @@ import { Component, ElementRef, input, output, signal, viewChild } from '@angula
         (change)="elegir()"
       />
     </div>
-    <span class="ayuda">Excel (.xlsx, .xls) o CSV, hasta 10 MB. También podés arrastrarlo hasta acá.</span>
+    <span class="ayuda">Excel (.xlsx, .xls) o CSV, hasta 10&nbsp;MB. También podés arrastrarlo hasta acá.</span>
   `,
   styles: `
     :host { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 180px; }

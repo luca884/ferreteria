@@ -29,7 +29,8 @@
   --texto: #0f172a;
   --texto-menu: #334155;
   --texto-suave: #475569;
-  --texto-tenue: #64748b;
+  /* Texto chico secundario: ≥ 4,9:1 sobre blanco, --fondo y --superficie-3 (el #64748b anterior daba 4,3:1). */
+  --texto-tenue: #5b6b82;
   --texto-deshabilitado: #94a3b8;
 
   /* Estados */
@@ -178,7 +179,10 @@ textarea {
 input:focus,
 select:focus,
 textarea:focus {
-  outline: none;
+  /* Transparente y no `none`: en modo de alto contraste (forced-colors) el box-shadow desaparece y el
+     contorno se pinta con el color del sistema, así el foco sigue viéndose. */
+  outline: 2px solid transparent;
+  outline-offset: 0;
   border-color: var(--acento);
   box-shadow: var(--foco);
 }

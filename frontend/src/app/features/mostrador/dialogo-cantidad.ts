@@ -1,6 +1,7 @@
 import { Component, ElementRef, afterNextRender, computed, input, output, signal, viewChild } from '@angular/core';
 import { Unidad } from '../articulos/articulo.models';
 import { parsearCantidad } from './ticket';
+import { TrampaFoco } from '../../shared/trampa-foco';
 import { GuardaLector } from './guarda-lector';
 
 const UNIDADES_PLURAL: Record<Unidad, string> = {
@@ -16,6 +17,7 @@ const UNIDADES_PLURAL: Record<Unidad, string> = {
  */
 @Component({
   selector: 'app-dialogo-cantidad',
+  imports: [TrampaFoco],
   template: `
     <div class="dialogo-fondo">
       <div
@@ -23,6 +25,7 @@ const UNIDADES_PLURAL: Record<Unidad, string> = {
         role="dialog"
         aria-modal="true"
         aria-labelledby="dialogo-cantidad-titulo"
+        appTrampaFoco
         (keydown)="alTeclear($event)"
       >
         <h2 id="dialogo-cantidad-titulo">Cantidad de {{ descripcion() }}</h2>
@@ -31,13 +34,16 @@ const UNIDADES_PLURAL: Record<Unidad, string> = {
           type="text"
           inputmode="decimal"
           autocomplete="off"
+          spellcheck="false"
           aria-label="Cantidad"
+          [attr.aria-describedby]="error() ? 'dialogo-cantidad-ayuda dialogo-cantidad-error' : 'dialogo-cantidad-ayuda'"
+          [attr.aria-invalid]="error() ? 'true' : null"
           [value]="texto()"
           (input)="alEscribir($any($event.target).value)"
         />
-        <p class="ayuda">{{ ayuda() }}</p>
+        <p id="dialogo-cantidad-ayuda" class="ayuda">{{ ayuda() }}</p>
         @if (error(); as mensaje) {
-          <p class="error" role="alert">{{ mensaje }}</p>
+          <p id="dialogo-cantidad-error" class="error" role="alert">{{ mensaje }}</p>
         }
         <div class="dialogo-acciones">
           <button type="button" class="cancelar" data-tecla="Esc" aria-keyshortcuts="Escape" (click)="cancelar.emit()">
@@ -126,7 +132,7 @@ export class DialogoCantidad {
     const texto = this.campo().nativeElement.value;
     const milesimas = parsearCantidad(texto);
     if (milesimas === null) {
-      this.error.set(
+      this.rechazar(
         /^\s*\d+[.,]\d{4,}\s*$/.test(texto)
           ? 'Usá hasta 3 decimales.'
           : 'Escribí una cantidad, por ejemplo 2 o 1,5.',
@@ -134,14 +140,20 @@ export class DialogoCantidad {
       return;
     }
     if (!(milesimas > 0)) {
-      this.error.set('La cantidad tiene que ser mayor que 0.');
+      this.rechazar('La cantidad tiene que ser mayor que 0.');
       return;
     }
     if (this.unidad() === 'UNIDAD' && milesimas % 1000 !== 0) {
-      this.error.set('Este artículo se vende por unidad: usá un número entero.');
+      this.rechazar('Este artículo se vende por unidad: usá un número entero.');
       return;
     }
     this.error.set(null);
     this.confirmar.emit(milesimas);
+  }
+
+  /** Muestra el error y deja el foco en el campo (con el botón «Aceptar» estaba afuera). */
+  private rechazar(mensaje: string): void {
+    this.error.set(mensaje);
+    this.campo().nativeElement.focus();
   }
 }

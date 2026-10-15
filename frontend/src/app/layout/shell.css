@@ -6,6 +6,28 @@
   height: 100dvh;
 }
 
+/* Saltar al contenido: fuera de la vista hasta que recibe el foco con Tab. */
+.saltar {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: var(--z-dialogo);
+  padding: 8px 14px;
+  border-radius: var(--radio);
+  background: var(--acento);
+  color: var(--acento-texto);
+  font-weight: 600;
+  text-decoration: none;
+  transform: translateY(-200%);
+}
+.saltar:focus {
+  transform: none;
+}
+/* El contenido recibe el foco del salto pero no se marca: no es un control. */
+.contenido:focus {
+  outline: none;
+}
+
 .lateral {
   display: flex;
   flex-direction: column;

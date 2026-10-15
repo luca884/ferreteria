@@ -2,7 +2,17 @@ import { ScrollingModule } from '@angular/cdk/scrolling';
 import { DecimalPipe } from '@angular/common';
 import { MontoPipe } from '../../core/formato/monto';
 import { HttpErrorResponse } from '@angular/common/http';
-import { Component, ElementRef, OnInit, computed, effect, inject, signal, viewChild } from '@angular/core';
+import {
+  Component,
+  ElementRef,
+  OnInit,
+  afterRenderEffect,
+  computed,
+  effect,
+  inject,
+  signal,
+  viewChild,
+} from '@angular/core';
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { FormControl, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
 import { erroresDeCampos } from '../../core/api/api-error';
@@ -44,6 +54,16 @@ const ZOOM_MINIMO = 50;
 const ZOOM_MAXIMO = 200;
 const ZOOM_PASO = 10;
 const ZOOM_INICIAL = 100;
+
+/** Los campos con validación, en el orden de la pantalla: al fallar se enfoca el primero con error. */
+const CAMPOS_EN_ORDEN = [
+  'filaDesde',
+  'columnaCodigo',
+  'columnaCosto',
+  'bonificacion1',
+  'bonificacion2',
+  'bonificacion3',
+] as const;
 
 @Component({
   selector: 'app-importaciones',
@@ -137,8 +157,16 @@ export class Importaciones implements OnInit {
 
   private readonly encabezado = viewChild<ElementRef<HTMLElement>>('encabezadoVisor');
   private readonly resumenEl = viewChild<ElementRef<HTMLElement>>('resumenEl');
+  private readonly cuerpoVisor = viewChild('cuerpoVisor', { read: ElementRef<HTMLElement> });
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef).nativeElement;
 
   constructor() {
+    // El scroll virtual mete un div propio entre el rowgroup y las filas: se lo saca del árbol accesible.
+    afterRenderEffect(() => {
+      this.cuerpoVisor()
+        ?.nativeElement.querySelector('.cdk-virtual-scroll-content-wrapper')
+        ?.setAttribute('role', 'presentation');
+    });
     // Cualquier cambio del mapeo, el IVA o las bonificaciones deja la vista previa vieja sin efecto.
     this.form.valueChanges.pipe(takeUntilDestroyed()).subscribe(() => this.invalidar());
     // El resultado aparece donde está el Dueño: se lo lleva a la vista y se le da el foco.
@@ -377,6 +405,18 @@ export class Importaciones implements OnInit {
     this.error.set(mensajeDe(err, porDefecto));
   }
 
+  /** Una columna obligatoria sin elegir, después de intentar seguir. */
+  protected falta(campo: 'columnaCodigo' | 'columnaCosto'): boolean {
+    const control = this.form.controls[campo];
+    return control.touched && control.invalid;
+  }
+
+  /** Lleva el foco al primer campo con error, en el orden de la pantalla. */
+  private enfocarPrimerInvalido(): void {
+    const primero = CAMPOS_EN_ORDEN.find((campo) => this.form.controls[campo].invalid);
+    if (primero) this.host.querySelector<HTMLElement>(`#${primero}`)?.focus();
+  }
+
   /** El pedido de la vista previa; null (con el aviso en pantalla) si falta o está mal algo. */
   private armarDatos(): VistaPreviaRequest | null {
     const proveedorId = this.proveedorId();
@@ -392,11 +432,13 @@ export class Importaciones implements OnInit {
     if (f.columnaCodigo.invalid || f.columnaCosto.invalid) {
       this.form.markAllAsTouched();
       this.error.set('Elegí las columnas del código y del costo.');
+      this.enfocarPrimerInvalido();
       return null;
     }
     if (this.form.invalid) {
       this.form.markAllAsTouched();
       this.error.set('Revisá los datos marcados en rojo.');
+      this.enfocarPrimerInvalido();
       return null;
     }
     const v = this.form.getRawValue();

@@ -13,12 +13,13 @@ import { RenglonTicket } from './ticket';
   template: `
     <section class="totales" aria-label="Totales">
       <div class="cabecera">
-        <span class="etiqueta-total">Total</span>
+        <span id="totales-etiqueta" class="etiqueta-total">Total</span>
         <p class="conteo">
           {{ renglones().length }} {{ renglones().length === 1 ? 'renglón' : 'renglones' }}
         </p>
       </div>
-      <p class="total" aria-label="Total del ticket">{{ totalCentavos() / 100 | monto }}</p>
+      <!-- <output>: un resultado calculado que admite nombre (un aria-label en un <p> se ignora). -->
+      <output class="total" aria-labelledby="totales-etiqueta">{{ totalCentavos() / 100 | monto }}</output>
     </section>
   `,
   styles: `
@@ -49,6 +50,7 @@ import { RenglonTicket } from './ticket';
       font-variant-numeric: tabular-nums;
     }
     .total {
+      display: block;
       margin: var(--e-1) 0 0;
       font-size: clamp(2rem, 2.9vw, 2.625rem);
       font-weight: 700;

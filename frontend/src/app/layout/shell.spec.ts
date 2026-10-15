@@ -87,6 +87,24 @@ describe('Shell', () => {
     expect(el.querySelector('nav a[href="/mostrador"]')!.hasAttribute('aria-current')).toBe(false);
   });
 
+  it('el primer elemento es el enlace «Saltar al contenido», que lleva el foco al contenido', async () => {
+    const el = await render(true);
+
+    const saltar = el.querySelector('a') as HTMLAnchorElement;
+    expect(saltar.textContent?.trim()).toBe('Saltar al contenido');
+    expect(saltar.getAttribute('href')).toBe('#contenido');
+
+    const evento = new MouseEvent('click', { bubbles: true, cancelable: true });
+    saltar.dispatchEvent(evento);
+
+    const main = el.querySelector('main') as HTMLElement;
+    expect(main.id).toBe('contenido');
+    expect(main.getAttribute('tabindex')).toBe('-1');
+    expect(document.activeElement).toBe(main);
+    // Lo resuelve el enlace: el router no navega a un fragmento.
+    expect(evento.defaultPrevented).toBe(true);
+  });
+
   it('muestra la ferretería, el usuario, sus iniciales y su rol', async () => {
     const el = await render(false, {
       userId: 2,

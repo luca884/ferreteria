@@ -1,4 +1,5 @@
 import { Component, ElementRef, afterNextRender, input, output, viewChild } from '@angular/core';
+import { TrampaFoco } from './trampa-foco';
 
 let siguienteId = 0;
 
@@ -9,12 +10,14 @@ let siguienteId = 0;
  */
 @Component({
   selector: 'app-confirmacion',
+  imports: [TrampaFoco],
   template: `
     <div class="dialogo-fondo">
       <div
         class="dialogo"
         role="alertdialog"
         aria-modal="true"
+        appTrampaFoco
         [attr.aria-labelledby]="id + '-titulo'"
         [attr.aria-describedby]="mensaje() ? id + '-mensaje' : null"
         (keydown)="alTeclear($event)"

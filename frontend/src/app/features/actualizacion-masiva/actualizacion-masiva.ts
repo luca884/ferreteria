@@ -1,7 +1,18 @@
 import { HttpErrorResponse } from '@angular/common/http';
 import { DecimalPipe } from '@angular/common';
 import { MontoPipe } from '../../core/formato/monto';
-import { Component, ElementRef, OnInit, computed, effect, inject, signal, viewChild } from '@angular/core';
+import {
+  Component,
+  ElementRef,
+  Injector,
+  OnInit,
+  afterNextRender,
+  computed,
+  effect,
+  inject,
+  signal,
+  viewChild,
+} from '@angular/core';
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { FormControl, FormGroup, ReactiveFormsModule } from '@angular/forms';
 import { erroresDeCampos } from '../../core/api/api-error';
@@ -99,7 +110,20 @@ export class ActualizacionMasiva implements OnInit {
       : null;
   });
 
+  /** Por qué «Ver vista previa» está apagado, para decirlo al lado del botón; null si se puede pedir. */
+  protected readonly motivoSinVistaPrevia = computed(() => {
+    if (this.puedeGenerar() || this.generando() || this.aplicando()) return null;
+    const f = this.formulario();
+    if ((f.modo ?? null) === null) return 'Para ver la vista previa, elegí la operación.';
+    const nombre = f.modo === 'MARGEN' ? 'el margen' : 'el porcentaje';
+    if (this.errorDelValor() !== null) return `Para ver la vista previa, corregí ${nombre}.`;
+    return `Para ver la vista previa, escribí ${nombre}.`;
+  });
+
   private readonly resumenEl = viewChild<ElementRef<HTMLElement>>('resumenEl');
+  private readonly confirmacionEl = viewChild<ElementRef<HTMLElement>>('confirmacionEl');
+  private readonly confirmarEl = viewChild<ElementRef<HTMLButtonElement>>('confirmarEl');
+  private readonly injector = inject(Injector);
 
   /** Sube con cada cambio: una respuesta en vuelo de un pedido viejo se descarta. */
   private version = 0;
@@ -114,6 +138,8 @@ export class ActualizacionMasiva implements OnInit {
       el.focus({ preventScroll: true });
       el.scrollIntoView?.({ block: 'nearest', behavior: 'smooth' });
     });
+    // La segunda confirmación se anuncia y se contesta con el teclado sin buscarla.
+    effect(() => this.confirmacionEl()?.nativeElement.focus());
   }
 
   /** Enter en el valor pide la vista previa (no hace nada si todavía falta algo). */
@@ -199,8 +225,10 @@ export class ActualizacionMasiva implements OnInit {
     });
   }
 
+  /** Cierra la segunda confirmación y el foco vuelve al botón que la abrió (reaparece en el próximo render). */
   protected cancelarConfirmacion(): void {
     this.confirmandoTodo.set(false);
+    afterNextRender(() => this.confirmarEl()?.nativeElement.focus(), { injector: this.injector });
   }
 
   /** Deja sin efecto la vista previa y lo que dependía de ella: solo se puede confirmar lo que se ve. */

@@ -23,6 +23,13 @@ describe('Botonera', () => {
     expect(textos()).toEqual(['F2 Buscar', 'F3 Cantidad', 'F4 Cobrar', 'F10 Quitar', 'Vaciar']);
   });
 
+  it('la tecla visible no forma parte del nombre: va en aria-keyshortcuts', () => {
+    const kbds = Array.from(el().querySelectorAll('kbd'));
+    expect(kbds.length).toBeGreaterThan(0);
+    expect(kbds.every((k) => k.getAttribute('aria-hidden') === 'true')).toBe(true);
+    expect(boton('F4').getAttribute('aria-keyshortcuts')).toBe('F4');
+  });
+
   it('no muestra F7, F8 ni F9', () => {
     const todo = textos().join(' ');
     expect(todo).not.toMatch(/F7|F8|F9/);

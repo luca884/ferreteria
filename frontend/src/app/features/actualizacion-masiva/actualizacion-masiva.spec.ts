@@ -135,6 +135,53 @@ describe('ActualizacionMasiva', () => {
     );
   });
 
+  describe('accesibilidad del formulario', () => {
+    const descripciones = (selector: string) =>
+      (q(selector).getAttribute('aria-describedby') ?? '')
+        .split(' ')
+        .filter(Boolean)
+        .map((id) => el().querySelector(`[id="${id}"]`)?.textContent?.replace(/\s+/g, ' ').trim());
+
+    it('la búsqueda tiene name y no autocompleta ni corrige; el valor tampoco autocompleta', async () => {
+      await crearComponente();
+
+      expect(q('#q').getAttribute('name')).toBe('q');
+      expect(q('#q').getAttribute('autocomplete')).toBe('off');
+      expect(q('#q').getAttribute('spellcheck')).toBe('false');
+      expect(q('#valor').getAttribute('autocomplete')).toBe('off');
+    });
+
+    it('un valor fuera de rango queda inválido y enlazado a su error', async () => {
+      await crearComponente();
+      await completar('Fijar el margen', '5');
+      expect(q('#valor').hasAttribute('aria-invalid')).toBe(false);
+
+      await escribir('#valor', '1001');
+
+      expect(q('#valor').getAttribute('aria-invalid')).toBe('true');
+      expect(descripciones('#valor')).toEqual(['El margen tiene que estar entre 0 y 1.000.']);
+    });
+
+    it('«Ver vista previa» deshabilitado dice qué falta', async () => {
+      await crearComponente();
+      expect(boton().disabled).toBe(true);
+      expect(descripciones('button.generar')).toEqual(['Para ver la vista previa, elegí la operación.']);
+
+      await elegir('#modo', 'Cambiar el costo en %');
+      expect(descripciones('button.generar')).toEqual(['Para ver la vista previa, escribí el porcentaje.']);
+
+      await elegir('#modo', 'Fijar el margen');
+      expect(descripciones('button.generar')).toEqual(['Para ver la vista previa, escribí el margen.']);
+
+      await escribir('#valor', '1001');
+      expect(descripciones('button.generar')).toEqual(['Para ver la vista previa, corregí el margen.']);
+
+      await escribir('#valor', '40');
+      expect(boton().disabled).toBe(false);
+      expect(boton().hasAttribute('aria-describedby')).toBe(false);
+    });
+  });
+
   describe('permisos (R-023)', () => {
     it('el Vendedor ve el aviso y ni el formulario ni el botón', async () => {
       await crearComponente(false);
@@ -543,6 +590,10 @@ describe('ActualizacionMasiva', () => {
         '30 %',
         `$ 160,00 → $ 180,00`,
       ]);
+      // La flecha y el «%» no quedan solos al principio de un renglón.
+      const tds = filasDeCambios()[0].querySelectorAll('td');
+      expect(tds[2].textContent).toContain(' → ');
+      expect(tds[3].textContent).toContain('30 %');
     });
 
     it('cada artículo tiene su fila, con miles con punto y decimales con coma', async () => {
@@ -1141,6 +1192,31 @@ describe('ActualizacionMasiva', () => {
         expect(hayConfirmacion()).toBe(false);
         expect(el().querySelector('.vista-previa')).not.toBeNull();
         expect(botonConfirmar().textContent?.trim()).toBe('Actualizar 120 artículos');
+      });
+
+      it('al abrirse la confirmación toma el foco y se describe con su explicación', async () => {
+        await conVistaPrevia(vistaPrevia(120), sinFiltro);
+
+        await confirmar();
+
+        const seccion = q('.confirmacion-total');
+        expect(document.activeElement).toBe(seccion);
+        const id = seccion.getAttribute('aria-describedby')!;
+        expect(el().querySelector(`[id="${id}"]`)!.textContent).toContain('No elegiste ningún filtro');
+      });
+
+      it('Esc cancela la confirmación y el foco vuelve al botón de actualizar', async () => {
+        await conVistaPrevia(vistaPrevia(120), sinFiltro);
+        await confirmar();
+
+        q('.confirmacion-total').dispatchEvent(
+          new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }),
+        );
+        await asentar();
+
+        expect(hayConfirmacion()).toBe(false);
+        expect(servicio.aplicar).not.toHaveBeenCalled();
+        expect(document.activeElement).toBe(botonConfirmar());
       });
 
       it('después de cancelar, un nuevo clic vuelve a pedir la confirmación', async () => {

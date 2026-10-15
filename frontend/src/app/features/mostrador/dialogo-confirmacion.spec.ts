@@ -31,6 +31,17 @@ describe('DialogoConfirmacion', () => {
     await fixture.whenStable();
   }
 
+  /** Quitar y vaciar son destructivos: alertdialog, como `app-confirmacion`. */
+  const dialogo = () => el().querySelector('[role="alertdialog"]') as HTMLElement;
+  const titulo = () => {
+    const id = dialogo().getAttribute('aria-labelledby')!;
+    return el().querySelector(`[id="${id}"]`)?.textContent?.trim() ?? null;
+  };
+  const descripcion = () => {
+    const id = dialogo().getAttribute('aria-describedby');
+    return id ? (el().querySelector(`[id="${id}"]`)?.textContent?.trim() ?? null) : null;
+  };
+
   const quitarMartillo = () => abrir({ modo: 'quitar', descripcion: 'Martillo', renglones: 3 });
   const vaciar3 = () => abrir({ modo: 'vaciar', renglones: 3 });
 
@@ -43,11 +54,11 @@ describe('DialogoConfirmacion', () => {
   });
 
   describe('quitar', () => {
-    it('nombra el renglón y enfoca «Quitar»', async () => {
+    it('nombra el renglón entre comillas «…» y enfoca «Quitar»', async () => {
       await quitarMartillo();
 
-      expect(el().querySelector('[role="dialog"]')!.getAttribute('aria-modal')).toBe('true');
-      expect(el().textContent).toContain('¿Quitar "Martillo" del ticket?');
+      expect(dialogo().getAttribute('aria-modal')).toBe('true');
+      expect(titulo()).toBe('¿Quitar «Martillo» del ticket?');
       expect(document.activeElement).toBe(boton('confirmar'));
       expect(boton('confirmar').textContent!.trim()).toBe('Quitar');
     });
@@ -86,7 +97,8 @@ describe('DialogoConfirmacion', () => {
     it('cuenta los renglones y enfoca «Cancelar»', async () => {
       await vaciar3();
 
-      expect(el().textContent).toContain('¿Vaciar el ticket? Se pierden 3 renglones.');
+      expect(titulo()).toBe('¿Vaciar el ticket?');
+      expect(descripcion()).toBe('Se pierden 3 renglones.');
       expect(document.activeElement).toBe(boton('cancelar'));
       expect(boton('confirmar').textContent!.trim()).toBe('Vaciar');
     });
@@ -94,7 +106,7 @@ describe('DialogoConfirmacion', () => {
     it('con un solo renglón usa el singular', async () => {
       await abrir({ modo: 'vaciar', renglones: 1 });
 
-      expect(el().textContent).toContain('¿Vaciar el ticket? Se pierde 1 renglón.');
+      expect(descripcion()).toBe('Se pierde 1 renglón.');
     });
 
     it('Enter con el foco en «Cancelar» no vacía', async () => {
@@ -123,6 +135,27 @@ describe('DialogoConfirmacion', () => {
       expect(canceladas).toBe(1);
       expect(confirmadas).toBe(0);
     });
+  });
+
+  it('atrapa el foco: Tab en «Quitar» vuelve a «Cancelar» y Shift+Tab hace la vuelta inversa', async () => {
+    await quitarMartillo();
+
+    const ida = tecla('Tab');
+    expect(document.activeElement).toBe(boton('cancelar'));
+    expect(ida.defaultPrevented).toBe(true);
+
+    const evento = new KeyboardEvent('keydown', { key: 'Tab', shiftKey: true, bubbles: true, cancelable: true });
+    boton('cancelar').dispatchEvent(evento);
+    expect(document.activeElement).toBe(boton('confirmar'));
+  });
+
+  it('Tab no cuenta como corte de un escaneo ni confirma nada', async () => {
+    await quitarMartillo();
+
+    tecla('Tab');
+
+    expect(confirmadas).toBe(0);
+    expect(canceladas).toBe(0);
   });
 
   it('una ráfaga del lector que termina en Enter no confirma y avisa', async () => {
