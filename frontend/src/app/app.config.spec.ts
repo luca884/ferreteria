@@ -63,7 +63,7 @@ describe('appConfig: locale es-AR', () => {
 
     expect(celda('.precio')).toBe(`$${NBSP}170,00`);
     expect(celda('.costo')).toBe(`$${NBSP}1.234,50`);
-    expect(celda('.margen')).toBe('35,5 %');
+    expect(celda('.margen')).toBe(`35,5${NBSP}%`);
     expect(celda('.stock')).toBe('12,5 metros');
   });
 
@@ -83,6 +83,6 @@ describe('appConfig: locale es-AR', () => {
 
     const fila = (fixture.nativeElement as HTMLElement).querySelector('tbody tr')!;
     expect(fila.textContent).toContain('Bulonería');
-    expect(fila.textContent).toContain('32,5 %');
+    expect(fila.textContent).toContain(`32,5${NBSP}%`);
   });
 });
