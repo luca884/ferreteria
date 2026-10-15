@@ -64,7 +64,7 @@ describe('appConfig: locale es-AR', () => {
     expect(celda('.precio')).toBe(`$${NBSP}170,00`);
     expect(celda('.costo')).toBe(`$${NBSP}1.234,50`);
     expect(celda('.margen')).toBe('35,5 %');
-    expect(celda('.stock')).toBe('12,5 Metro');
+    expect(celda('.stock')).toBe('12,5 metros');
   });
 
   it('el listado de rubros sigue mostrando el margen en es-AR', async () => {
