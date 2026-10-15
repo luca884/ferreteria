@@ -74,6 +74,13 @@ public class ArticuloController {
         return articuloService.actualizar(id, request, authUser.userId());
     }
 
+    /** Vuelve a activar un articulo dado de baja; no toca precios ni stock. */
+    @PostMapping("/{id}/reactivacion")
+    @PreAuthorize("hasRole('DUENO')")
+    public ArticuloResponse reactivar(@PathVariable Long id) {
+        return articuloService.reactivar(id);
+    }
+
     /** Baja logica: el articulo queda inactivo y su historial de precios se conserva. */
     @DeleteMapping("/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)

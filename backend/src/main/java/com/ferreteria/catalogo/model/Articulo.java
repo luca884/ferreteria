@@ -207,6 +207,11 @@ public class Articulo {
         this.activo = false;
     }
 
+    /** Vuelve a activarlo despues de una baja logica. No toca precios ni stock. */
+    public void reactivar() {
+        this.activo = true;
+    }
+
     private void calcularPrecio(ContextoPrecio ctx) {
         BigDecimal margen = PrecioCalculator.margenEfectivo(margenPorcentaje, ctx.margenRubro(), ctx.margenDefecto());
         this.precioFinal = PrecioCalculator.precioFinal(costo, margen, alicuotaIva, ctx.redondeoMultiplo());

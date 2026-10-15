@@ -26,6 +26,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.Optional;
 
 @Service
@@ -104,6 +106,22 @@ public class ArticuloService {
         return ArticuloResponse.from(articulo, stockVigente);
     }
 
+    /**
+     * Vuelve a activar un articulo dado de baja. Revalida el codigo de barras (unico entre los activos); no
+     * toca precios, no escribe historial y la respuesta trae el stock confirmado en la base.
+     */
+    @Transactional
+    public ArticuloResponse reactivar(Long id) {
+        Articulo articulo = buscar(id);
+        if (articulo.getCodigoBarras() != null
+                && articuloRepository.existeCodigoBarrasActivoScoped(articulo.getCodigoBarras(), id)) {
+            throw new ConflictException(mensajeCodigoBarras(articulo.getCodigoBarras()));
+        }
+        articulo.reactivar();
+        BigDecimal stockVigente = articuloRepository.stockVigenteScoped(id).orElse(articulo.getStockActual());
+        return ArticuloResponse.from(articulo, stockVigente);
+    }
+
     /** Baja logica: el articulo y su historial de precios se conservan. No escribe historial. */
     @Transactional
     public void desactivar(Long id) {
@@ -119,21 +137,30 @@ public class ArticuloService {
      * Codigo interno: unico por ferreteria, contando los dados de baja. Codigo de barras: unico solo
      * entre activos, asi que un articulo inactivo no lo valida (reactivar si lo revalida). Codigo del
      * proveedor: unico por proveedor, y solo si hay proveedor. idPropio excluye al articulo editado.
+     * Junta todos los repetidos en un solo 409, con un mensaje por campo.
      */
     private void validarUnicidad(DatosArticulo datos, Long idPropio) {
+        Map<String, String> repetidos = new LinkedHashMap<>();
         if (articuloRepository.existeCodigoInternoScoped(datos.codigoInterno(), idPropio)) {
-            throw new ConflictException("Ya existe un artículo con el código interno " + datos.codigoInterno() + ".");
+            repetidos.put("codigoInterno",
+                    "Ya existe un artículo con el código interno " + datos.codigoInterno() + ".");
         }
         if (datos.activo() && datos.codigoBarras() != null
                 && articuloRepository.existeCodigoBarrasActivoScoped(datos.codigoBarras(), idPropio)) {
-            throw new ConflictException(
-                    "Ya existe un artículo activo con el código de barras " + datos.codigoBarras() + ".");
+            repetidos.put("codigoBarras", mensajeCodigoBarras(datos.codigoBarras()));
         }
         if (datos.proveedorId() != null && datos.codigoProveedor() != null
                 && articuloRepository.existeCodigoProveedorScoped(datos.proveedorId(), datos.codigoProveedor(), idPropio)) {
-            throw new ConflictException(
+            repetidos.put("codigoProveedor",
                     "Ya existe un artículo de este proveedor con el código " + datos.codigoProveedor() + ".");
         }
+        if (!repetidos.isEmpty()) {
+            throw new ConflictException(String.join(" ", repetidos.values()), repetidos);
+        }
+    }
+
+    private static String mensajeCodigoBarras(String codigoBarras) {
+        return "Ya existe un artículo activo con el código de barras " + codigoBarras + ".";
     }
 
     /**

@@ -50,7 +50,11 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(ConflictException.class)
     public ResponseEntity<ApiError> conflict(ConflictException ex) {
-        return build(HttpStatus.CONFLICT, ex.getMessage());
+        if (ex.errors().isEmpty()) {
+            return build(HttpStatus.CONFLICT, ex.getMessage());
+        }
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ApiError.of(HttpStatus.CONFLICT.value(), ex.getMessage(), ex.errors()));
     }
 
     @ExceptionHandler(CredencialesInvalidasException.class)
