@@ -19,6 +19,9 @@ frontend/.angular/
 # Herramientas locales de agentes (registro de skills de cada dev)
 .atl/
 
+# Listas reales de proveedores (datos de terceros, no se versionan)
+Lista/
+
 # Secretos
 .env
 *.key
