@@ -9,7 +9,13 @@
   <form class="busqueda" [formGroup]="form" (ngSubmit)="buscar()">
     <div class="campo">
       <label for="q">Buscar</label>
-      <input id="q" type="search" formControlName="q" placeholder="Ej: tornillo, TOR-001, 7790001000012" />
+      <input
+        id="q"
+        type="search"
+        formControlName="q"
+        placeholder="Ej: tornillo, TOR-001, 7790001000012"
+        (input)="alEscribirBusqueda($any($event.target).value)"
+      />
     </div>
     <button type="submit" class="secundario">Buscar</button>
   </form>
@@ -28,6 +34,9 @@
   }
 </div>
 
+@if (aviso(); as mensaje) {
+  <p class="alerta exito" role="status">{{ mensaje }}</p>
+}
 @if (error(); as mensaje) {
   <p class="error" role="alert">{{ mensaje }}</p>
 }
@@ -61,7 +70,14 @@
         </thead>
         <tbody>
           @for (articulo of resultado.items; track articulo.id) {
-            <tr [class.inactivo]="!articulo.activo">
+            <tr
+              [class.inactivo]="!articulo.activo"
+              [class.abrible]="auth.esDueno()"
+              [attr.tabindex]="auth.esDueno() ? 0 : null"
+              [attr.title]="auth.esDueno() ? 'Enter o clic para editar' : null"
+              (click)="abrir(articulo)"
+              (keydown.enter)="abrir(articulo)"
+            >
               <td class="codigo">{{ articulo.codigoInterno }}</td>
               <td class="descripcion">{{ articulo.descripcion }}</td>
               <td class="num costo">{{ articulo.costo | monto }}</td>
@@ -74,8 +90,8 @@
               </td>
               <td class="iva">{{ alicuotaLabels[articulo.alicuotaIva] }}</td>
               <td class="num precio">{{ articulo.precioFinal | monto }}</td>
-              <td class="num stock">
-                {{ articulo.stockActual | number: '1.0-3' }} {{ unidadLabels[articulo.unidad] }}
+              <td class="num stock" [class.negativo]="articulo.stockActual < 0">
+                {{ cantidadConUnidad(articulo.stockActual, articulo.unidad) }}
               </td>
               <td class="estado">
                 <span class="etiqueta" [class.de-baja]="!articulo.activo">{{
@@ -83,11 +99,18 @@
                 }}</span>
               </td>
               @if (auth.esDueno()) {
-                <td class="acciones">
+                <td class="acciones" (click)="$event.stopPropagation()" (keydown.enter)="$event.stopPropagation()">
+                  <button type="button" class="secundario chico ajustar-stock" (click)="ajustarStock(articulo)">
+                    Ajustar stock
+                  </button>
                   <a class="btn chico editar" [routerLink]="['/articulos', articulo.id]">Editar</a>
                   @if (articulo.activo) {
-                    <button type="button" class="chico peligro desactivar" (click)="desactivar(articulo)">
+                    <button type="button" class="chico peligro desactivar" (click)="pedirBaja(articulo)">
                       Dar de baja
+                    </button>
+                  } @else {
+                    <button type="button" class="chico secundario reactivar" (click)="reactivar(articulo)">
+                      Reactivar
                     </button>
                   }
                 </td>
@@ -117,4 +140,23 @@
       </button>
     </nav>
   }
+}
+
+@if (aDarDeBaja(); as articulo) {
+  <app-confirmacion
+    [titulo]="'¿Dar de baja ' + articulo.descripcion + '?'"
+    mensaje="Deja de aparecer en el listado y en el mostrador, pero conserva su historial de precios. La podés reactivar cuando quieras."
+    textoConfirmar="Dar de baja"
+    [peligro]="true"
+    (confirmar)="desactivar()"
+    (cancelar)="aDarDeBaja.set(null)"
+  />
+}
+
+@if (aAjustar(); as articulo) {
+  <app-dialogo-ajuste-stock
+    [articulo]="{ id: articulo.id, descripcion: articulo.descripcion, unidad: articulo.unidad, stockActual: articulo.stockActual }"
+    (ajustado)="stockAjustado($event)"
+    (cancelar)="aAjustar.set(null)"
+  />
 }

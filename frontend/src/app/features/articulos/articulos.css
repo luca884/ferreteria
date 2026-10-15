@@ -36,6 +36,20 @@
 tr.inactivo td {
   color: var(--texto-tenue);
 }
+tr.abrible {
+  cursor: pointer;
+}
+tr.abrible:focus-visible {
+  outline: 2px solid var(--acento);
+  outline-offset: -2px;
+}
+tr.abrible:focus-visible td {
+  background: var(--acento-suave);
+}
+.stock.negativo {
+  color: var(--error);
+  font-weight: 700;
+}
 .etiqueta {
   border-color: var(--exito-borde);
   background: var(--exito-fondo);

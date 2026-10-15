@@ -7,10 +7,14 @@ import { provideRouter } from '@angular/router';
 import { of, throwError } from 'rxjs';
 import { vi } from 'vitest';
 import { PageResponse } from '../../core/api/page.models';
+import { By } from '@angular/platform-browser';
+import { Router } from '@angular/router';
+import { Avisos } from '../../core/avisos/avisos';
 import { AuthService } from '../../core/auth/auth.service';
 import { Articulo } from './articulo.models';
 import { Articulos } from './articulos';
 import { ArticulosService } from './articulos.service';
+import { DialogoAjusteStock } from './dialogo-ajuste-stock';
 
 registerLocaleData(localeEsAr);
 
@@ -49,16 +53,25 @@ describe('Articulos', () => {
   let servicio: {
     buscar: ReturnType<typeof vi.fn>;
     desactivar: ReturnType<typeof vi.fn>;
+    reactivar: ReturnType<typeof vi.fn>;
+    ajustarStock: ReturnType<typeof vi.fn>;
   };
+  let avisos: Avisos;
 
   const errorHttp = (status: number, message: string) =>
     new HttpErrorResponse({ status, error: { status, message } });
 
-  async function crearComponente(dueno: boolean, primera = pagina([articulo(1), articulo(2)])) {
+  async function crearComponente(
+    dueno: boolean,
+    primera = pagina([articulo(1), articulo(2)]),
+    avisoPendiente: string | null = null,
+  ) {
     esDueno = signal(dueno);
     servicio = {
       buscar: vi.fn(() => of(primera)),
       desactivar: vi.fn(() => of(undefined)),
+      reactivar: vi.fn((id: number) => of(articulo(id, { activo: true }))),
+      ajustarStock: vi.fn(),
     };
     await TestBed.configureTestingModule({
       imports: [Articulos],
@@ -69,6 +82,8 @@ describe('Articulos', () => {
         { provide: AuthService, useValue: { esDueno } },
       ],
     }).compileComponents();
+    avisos = TestBed.inject(Avisos);
+    if (avisoPendiente) avisos.dejar(avisoPendiente);
     fixture = TestBed.createComponent(Articulos);
     fixture.detectChanges();
     await fixture.whenStable();
@@ -130,7 +145,26 @@ describe('Articulos', () => {
     expect(texto('.margen')).toBe('35 %');
     expect(texto('.iva')).toBe('10,5 %');
     expect(texto('.precio')).toBe(`$${NBSP}170,00`);
-    expect(texto('.stock')).toBe('12,5 Metro');
+    expect(texto('.stock')).toBe('12,5 metros');
+  });
+
+  it('el stock lleva la unidad en singular o plural y el negativo va en rojo', async () => {
+    await crearComponente(
+      true,
+      pagina([
+        articulo(1, { stockActual: 1 }),
+        articulo(2, { stockActual: 497 }),
+        articulo(3, { stockActual: -3 }),
+        articulo(4, { stockActual: 2, unidad: 'KILO' }),
+      ]),
+    );
+
+    expect(texto('.stock', 0)).toBe('1 unidad');
+    expect(texto('.stock', 1)).toBe('497 unidades');
+    expect(texto('.stock', 2)).toBe('-3 unidades');
+    expect(texto('.stock', 3)).toBe('2 kilos');
+    expect(filas()[2].querySelector('.stock')!.classList).toContain('negativo');
+    expect(filas()[1].querySelector('.stock')!.classList).not.toContain('negativo');
   });
 
   it('indica que hereda el margen cuando el artículo no tiene uno propio', async () => {
@@ -273,41 +307,51 @@ describe('Articulos', () => {
     expect(el().textContent).not.toContain('Acciones');
   });
 
-  it('da de baja con confirmación y recarga la página actual', async () => {
+  /** Clic en «Dar de baja» de la fila y, en el diálogo propio, en el botón indicado. */
+  async function darDeBaja(fila: number, boton: 'confirmar' | 'cancelar' = 'confirmar') {
+    await clickEn('button.desactivar', fila);
+    el().querySelector<HTMLButtonElement>(`app-confirmacion button.${boton}`)!.click();
+    await refrescar();
+  }
+
+  it('da de baja con el diálogo propio (no el confirm del navegador) y recarga la página actual', async () => {
     await crearComponente(true);
-    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    const nativo = vi.spyOn(window, 'confirm');
     servicio.buscar.mockReturnValue(of(pagina([articulo(2)], 0, 1, 1)));
 
     await clickEn('button.desactivar', 0);
+    expect(el().querySelector('app-confirmacion h2')?.textContent).toContain('¿Dar de baja Artículo 1?');
+    el().querySelector<HTMLButtonElement>('app-confirmacion button.confirmar')!.click();
+    await refrescar();
 
-    expect(window.confirm).toHaveBeenCalledWith(expect.stringContaining('Artículo 1'));
+    expect(nativo).not.toHaveBeenCalled();
     expect(servicio.desactivar).toHaveBeenCalledWith(1);
     expect(servicio.buscar).toHaveBeenLastCalledWith('', 0, 20, false);
+    expect(el().querySelector('app-confirmacion')).toBeNull();
     expect(filas()).toHaveLength(1);
     expect(texto('.codigo')).toBe('COD-2');
   });
 
-  it('no da de baja si se cancela la confirmación', async () => {
+  it('no da de baja si se cancela el diálogo', async () => {
     await crearComponente(true);
-    vi.spyOn(window, 'confirm').mockReturnValue(false);
 
-    await clickEn('button.desactivar', 0);
+    await darDeBaja(0, 'cancelar');
 
     expect(servicio.desactivar).not.toHaveBeenCalled();
     expect(servicio.buscar).toHaveBeenCalledTimes(1);
+    expect(el().querySelector('app-confirmacion')).toBeNull();
   });
 
   it('si la baja deja vacía la última página, vuelve a la anterior', async () => {
     await crearComponente(true, pagina([articulo(1)], 0, 2, 21));
     servicio.buscar.mockReturnValue(of(pagina([articulo(21)], 1, 2, 21)));
     await clickEn('button.siguiente');
-    vi.spyOn(window, 'confirm').mockReturnValue(true);
     servicio.buscar.mockReset();
     servicio.buscar
       .mockReturnValueOnce(of(pagina([], 1, 1, 20)))
       .mockReturnValueOnce(of(pagina([articulo(1)], 0, 1, 20)));
 
-    await clickEn('button.desactivar', 0);
+    await darDeBaja(0);
 
     expect(servicio.buscar).toHaveBeenNthCalledWith(1, '', 1, 20, false);
     expect(servicio.buscar).toHaveBeenNthCalledWith(2, '', 0, 20, false);
@@ -316,10 +360,9 @@ describe('Articulos', () => {
 
   it('muestra el mensaje del backend si falla la baja', async () => {
     await crearComponente(true);
-    vi.spyOn(window, 'confirm').mockReturnValue(true);
     servicio.desactivar.mockReturnValue(throwError(() => errorHttp(404, 'Artículo no encontrado')));
 
-    await clickEn('button.desactivar', 0);
+    await darDeBaja(0);
 
     expect(el().querySelector('.error')?.textContent).toContain('Artículo no encontrado');
     expect(filas()).toHaveLength(2);
@@ -327,14 +370,172 @@ describe('Articulos', () => {
 
   it('usa un mensaje genérico si la baja falla sin mensaje del backend', async () => {
     await crearComponente(true);
-    vi.spyOn(window, 'confirm').mockReturnValue(true);
     servicio.desactivar.mockReturnValue(throwError(() => new HttpErrorResponse({ status: 0 })));
 
-    await clickEn('button.desactivar', 0);
+    await darDeBaja(0);
 
     expect(el().querySelector('.error')?.textContent).toContain(
       'No se pudo dar de baja el artículo.',
     );
+  });
+
+  describe('reactivar', () => {
+    it('un dado de baja tiene «Reactivar»; al reactivarlo recarga y avisa', async () => {
+      await crearComponente(true, pagina([articulo(1), articulo(2, { activo: false })]));
+      expect(filas()[0].querySelector('button.reactivar')).toBeNull();
+      servicio.buscar.mockReturnValue(of(pagina([articulo(1), articulo(2)])));
+
+      await clickEn('button.reactivar', 0);
+
+      expect(servicio.reactivar).toHaveBeenCalledWith(2);
+      expect(servicio.buscar).toHaveBeenCalledTimes(2);
+      expect(el().querySelector('.alerta.exito')?.textContent).toContain('Se reactivó «Artículo 2».');
+    });
+
+    it('si el código de barras ya lo usa otro activo, muestra el mensaje del backend', async () => {
+      await crearComponente(true, pagina([articulo(2, { activo: false })]));
+      servicio.reactivar.mockReturnValue(
+        throwError(() => errorHttp(409, 'Ya existe un artículo activo con el código de barras 779.')),
+      );
+
+      await clickEn('button.reactivar', 0);
+
+      expect(el().querySelector('.error')?.textContent).toContain('Ya existe un artículo activo');
+    });
+
+    it('el Vendedor no ve Reactivar', async () => {
+      await crearComponente(false, pagina([articulo(2, { activo: false })]));
+
+      expect(el().querySelector('button.reactivar')).toBeNull();
+    });
+  });
+
+  describe('ajustar stock', () => {
+    it('el Dueño abre el diálogo desde la fila y, al confirmar, la grilla muestra el stock nuevo', async () => {
+      await crearComponente(true, pagina([articulo(1, { stockActual: 5 }), articulo(2)]));
+
+      await clickEn('button.ajustar-stock', 0);
+      const dialogo = fixture.debugElement.query(By.directive(DialogoAjusteStock));
+      expect(dialogo).not.toBeNull();
+      expect((dialogo.componentInstance as DialogoAjusteStock).articulo()).toEqual({
+        id: 1,
+        descripcion: 'Artículo 1',
+        unidad: 'UNIDAD',
+        stockActual: 5,
+      });
+
+      (dialogo.componentInstance as DialogoAjusteStock).ajustado.emit({
+        articuloId: 1,
+        stockAnterior: 5,
+        diferencia: 45,
+        stockActual: 50,
+      });
+      await refrescar();
+
+      expect(fixture.debugElement.query(By.directive(DialogoAjusteStock))).toBeNull();
+      expect(texto('.stock', 0)).toBe('50 unidades');
+      expect(el().querySelector('.alerta.exito')?.textContent).toContain(
+        'Stock de «Artículo 1» ajustado: ahora hay 50 unidades.',
+      );
+      expect(servicio.buscar).toHaveBeenCalledTimes(1);
+    });
+
+    it('cancelar cierra el diálogo sin cambiar nada', async () => {
+      await crearComponente(true);
+      await clickEn('button.ajustar-stock', 0);
+
+      (fixture.debugElement.query(By.directive(DialogoAjusteStock)).componentInstance as DialogoAjusteStock).cancelar.emit();
+      await refrescar();
+
+      expect(fixture.debugElement.query(By.directive(DialogoAjusteStock))).toBeNull();
+      expect(texto('.stock', 0)).toBe('5 unidades');
+    });
+
+    it('el Vendedor no ve «Ajustar stock»', async () => {
+      await crearComponente(false);
+
+      expect(el().querySelector('button.ajustar-stock')).toBeNull();
+    });
+  });
+
+  describe('teclado y mouse en la grilla', () => {
+    it('clic en la fila abre Editar', async () => {
+      await crearComponente(true, pagina([articulo(7)]));
+      const navegar = vi.spyOn(TestBed.inject(Router), 'navigate').mockResolvedValue(true);
+
+      (filas()[0].querySelector('.descripcion') as HTMLElement).click();
+
+      expect(navegar).toHaveBeenCalledWith(['/articulos', 7]);
+    });
+
+    it('Enter con la fila enfocada abre Editar', async () => {
+      await crearComponente(true, pagina([articulo(7)]));
+      const navegar = vi.spyOn(TestBed.inject(Router), 'navigate').mockResolvedValue(true);
+
+      expect(filas()[0].getAttribute('tabindex')).toBe('0');
+      filas()[0].dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+
+      expect(navegar).toHaveBeenCalledWith(['/articulos', 7]);
+    });
+
+    it('los botones de la fila no abren Editar', async () => {
+      await crearComponente(true, pagina([articulo(7)]));
+      const navegar = vi.spyOn(TestBed.inject(Router), 'navigate').mockResolvedValue(true);
+
+      await clickEn('button.ajustar-stock', 0);
+      await clickEn('button.desactivar', 0);
+
+      expect(navegar).not.toHaveBeenCalled();
+    });
+
+    it('para el Vendedor la fila no es un enlace', async () => {
+      await crearComponente(false, pagina([articulo(7)]));
+      const navegar = vi.spyOn(TestBed.inject(Router), 'navigate').mockResolvedValue(true);
+
+      (filas()[0].querySelector('.descripcion') as HTMLElement).click();
+
+      expect(filas()[0].getAttribute('tabindex')).toBeNull();
+      expect(navegar).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('buscador', () => {
+    it('la × del buscador (o borrar todo) vuelve a mostrar todos los artículos', async () => {
+      await crearComponente(true);
+      servicio.buscar.mockReturnValue(of(pagina([], 0, 0, 0)));
+      await buscarTexto('zzzz');
+      expect(el().textContent).toContain('No hay artículos que coincidan con «zzzz».');
+      servicio.buscar.mockReturnValue(of(pagina([articulo(1)])));
+
+      const input = el().querySelector<HTMLInputElement>('#q')!;
+      input.value = '';
+      input.dispatchEvent(new Event('input'));
+      await refrescar();
+
+      expect(servicio.buscar).toHaveBeenLastCalledWith('', 0, 20, false);
+      expect(el().textContent).not.toContain('No hay artículos que coincidan');
+      expect(filas()).toHaveLength(1);
+    });
+
+    it('borrar letras de una búsqueda no busca hasta Enter', async () => {
+      await crearComponente(true);
+      await buscarTexto('torni');
+      const llamadas = servicio.buscar.mock.calls.length;
+
+      const input = el().querySelector<HTMLInputElement>('#q')!;
+      input.value = 'tor';
+      input.dispatchEvent(new Event('input'));
+      await refrescar();
+
+      expect(servicio.buscar.mock.calls.length).toBe(llamadas);
+    });
+  });
+
+  it('muestra el aviso que dejó el formulario al guardar', async () => {
+    await crearComponente(true, undefined, 'Se guardó «Tornillo».');
+
+    expect(el().querySelector('.alerta.exito')?.textContent).toContain('Se guardó «Tornillo».');
+    expect(avisos.tomar()).toBeNull();
   });
 
   it('muestra el mensaje del backend si falla la carga', async () => {
@@ -342,6 +543,8 @@ describe('Articulos', () => {
     servicio = {
       buscar: vi.fn(() => throwError(() => errorHttp(500, 'Error interno'))),
       desactivar: vi.fn(),
+      reactivar: vi.fn(),
+      ajustarStock: vi.fn(),
     };
     await TestBed.configureTestingModule({
       imports: [Articulos],
@@ -364,6 +567,8 @@ describe('Articulos', () => {
     servicio = {
       buscar: vi.fn(() => throwError(() => new HttpErrorResponse({ status: 0 }))),
       desactivar: vi.fn(),
+      reactivar: vi.fn(),
+      ajustarStock: vi.fn(),
     };
     await TestBed.configureTestingModule({
       imports: [Articulos],

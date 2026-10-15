@@ -3,7 +3,13 @@ import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import { PageResponse } from '../../core/api/page.models';
-import { Articulo, ArticuloRequest } from './articulo.models';
+import {
+  AjusteStockRequest,
+  AjusteStockResponse,
+  Articulo,
+  ArticuloRequest,
+  ConfiguracionPrecios,
+} from './articulo.models';
 
 @Injectable({ providedIn: 'root' })
 export class ArticulosService {
@@ -39,5 +45,19 @@ export class ArticulosService {
 
   desactivar(id: number): Observable<void> {
     return this.http.delete<void>(`${this.url}/${id}`);
+  }
+
+  reactivar(id: number): Observable<Articulo> {
+    return this.http.post<Articulo>(`${this.url}/${id}/reactivacion`, null);
+  }
+
+  /** CU-09: se manda el stock real contado; el backend calcula la diferencia y deja el movimiento. */
+  ajustarStock(id: number, ajuste: AjusteStockRequest): Observable<AjusteStockResponse> {
+    return this.http.post<AjusteStockResponse>(`${this.url}/${id}/ajustes-stock`, ajuste);
+  }
+
+  /** Margen por defecto y múltiplo de redondeo de la ferretería: para el precio final en vivo. */
+  configuracionPrecios(): Observable<ConfiguracionPrecios> {
+    return this.http.get<ConfiguracionPrecios>(`${environment.apiUrl}/configuracion-precios`);
   }
 }

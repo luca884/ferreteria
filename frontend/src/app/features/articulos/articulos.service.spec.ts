@@ -131,6 +131,43 @@ describe('ArticulosService', () => {
     expect(actualizado?.precioFinal).toBe(330);
   });
 
+  it('reactiva un artículo con POST /articulos/{id}/reactivacion', () => {
+    let reactivado: Articulo | undefined;
+    service.reactivar(1).subscribe((a) => (reactivado = a));
+
+    const req = http.expectOne((r) => r.url.endsWith('/articulos/1/reactivacion'));
+    expect(req.request.method).toBe('POST');
+    req.flush(tornillo);
+
+    expect(reactivado).toEqual(tornillo);
+  });
+
+  it('ajusta el stock con POST /articulos/{id}/ajustes-stock mandando el stock real y el motivo', () => {
+    const respuesta = { articuloId: 1, stockAnterior: 0, diferencia: 50, stockActual: 50 };
+    let ajuste: unknown;
+    service
+      .ajustarStock(1, { stockReal: 50, motivo: 'INGRESO_MERCADERIA', detalle: 'remito 12' })
+      .subscribe((r) => (ajuste = r));
+
+    const req = http.expectOne((r) => r.url.endsWith('/articulos/1/ajustes-stock'));
+    expect(req.request.method).toBe('POST');
+    expect(req.request.body).toEqual({ stockReal: 50, motivo: 'INGRESO_MERCADERIA', detalle: 'remito 12' });
+    req.flush(respuesta);
+
+    expect(ajuste).toEqual(respuesta);
+  });
+
+  it('lee la configuración de precios con GET /configuracion-precios', () => {
+    let configuracion: unknown;
+    service.configuracionPrecios().subscribe((c) => (configuracion = c));
+
+    const req = http.expectOne((r) => r.url.endsWith('/configuracion-precios'));
+    expect(req.request.method).toBe('GET');
+    req.flush({ margenDefectoPorcentaje: 30, redondeoMultiplo: 10 });
+
+    expect(configuracion).toEqual({ margenDefectoPorcentaje: 30, redondeoMultiplo: 10 });
+  });
+
   it('desactiva un artículo con DELETE /articulos/{id}', () => {
     let terminado = false;
     service.desactivar(1).subscribe(() => (terminado = true));

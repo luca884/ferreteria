@@ -64,6 +64,27 @@ describe('ProveedoresService', () => {
     expect(actualizado).toEqual(editado);
   });
 
+  it('sin parámetros lista solo los activos y con incluirInactivos pide también los dados de baja', () => {
+    service.listar().subscribe();
+    service.listar(true).subscribe();
+
+    const pedidos = http.match((r) => r.url.endsWith('/proveedores'));
+    expect(pedidos[0].request.params.has('incluirInactivos')).toBe(false);
+    expect(pedidos[1].request.params.get('incluirInactivos')).toBe('true');
+    pedidos.forEach((p) => p.flush([]));
+  });
+
+  it('reactiva un proveedor con POST /proveedores/{id}/reactivacion', () => {
+    let reactivado: Proveedor | undefined;
+    service.reactivar(1).subscribe((p) => (reactivado = p));
+
+    const req = http.expectOne((r) => r.url.endsWith('/proveedores/1/reactivacion'));
+    expect(req.request.method).toBe('POST');
+    req.flush(sinteplast);
+
+    expect(reactivado).toEqual(sinteplast);
+  });
+
   it('desactiva un proveedor con DELETE /proveedores/{id}', () => {
     let terminado = false;
     service.desactivar(1).subscribe(() => (terminado = true));
