@@ -42,6 +42,8 @@ app-barra-acciones {
     box-shadow var(--transicion);
 }
 .fila-codigo:focus-within {
+  /* Visible en forced-colors, donde el box-shadow no se pinta. */
+  outline: 2px solid transparent;
   border-color: var(--acento);
   box-shadow: 0 0 0 4px var(--acento-anillo);
 }

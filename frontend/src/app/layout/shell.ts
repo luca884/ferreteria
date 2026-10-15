@@ -30,6 +30,12 @@ export class Shell {
 
   protected readonly iniciales = computed(() => iniciales(this.auth.sesion()?.nombre ?? ''));
 
+  /** Lo resuelve el enlace y no el navegador: un `#contenido` en la URL lo tomaría el router. */
+  protected saltarAlContenido(evento: Event, contenido: HTMLElement): void {
+    evento.preventDefault();
+    contenido.focus();
+  }
+
   protected salir(): void {
     this.auth.logout();
     this.router.navigate(['/login']);

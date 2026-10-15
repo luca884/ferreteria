@@ -1,3 +1,4 @@
+<a class="saltar" href="#contenido" (click)="saltarAlContenido($event, contenido)">Saltar al contenido</a>
 <aside class="lateral">
   <div class="marca">
     <svg class="logo" viewBox="0 0 28 28" aria-hidden="true">
@@ -59,6 +60,6 @@
     <button type="button" class="salir" (click)="salir()">Salir</button>
   </div>
 </aside>
-<main class="contenido">
+<main #contenido id="contenido" class="contenido" tabindex="-1">
   <router-outlet />
 </main>
