@@ -305,16 +305,16 @@
                       <span class="etiqueta">Inactivo</span>
                     }
                   </td>
-                  <td class="num">{{ c.precioLista | number: '1.2-2' }}</td>
-                  <td class="num">{{ c.costoAnterior | number: '1.2-2' }}</td>
+                  <td class="num">{{ c.precioLista | monto }}</td>
+                  <td class="num">{{ c.costoAnterior | monto }}</td>
                   <td class="num">
-                    {{ c.costoNuevo | number: '1.2-2' }}
+                    {{ c.costoNuevo | monto }}
                     @if (c.variacionFuerte) {
                       <span class="etiqueta etiqueta-fuerte">Variación fuerte</span>
                     }
                   </td>
-                  <td class="num">{{ c.precioAnterior | number: '1.2-2' }}</td>
-                  <td class="num">{{ c.precioNuevo | number: '1.2-2' }}</td>
+                  <td class="num">{{ c.precioAnterior | monto }}</td>
+                  <td class="num">{{ c.precioNuevo | monto }}</td>
                   <td>
                     @if (tipoDeCambio(c) === 'Sube') {
                       <span class="etiqueta etiqueta-sube">Sube</span>
@@ -348,8 +348,8 @@
                   <td>{{ n.fila }}</td>
                   <td>{{ n.codigo }}</td>
                   <td>{{ n.descripcion }}</td>
-                  <td class="num">{{ n.precioLista | number: '1.2-2' }}</td>
-                  <td class="num">{{ n.costo | number: '1.2-2' }}</td>
+                  <td class="num">{{ n.precioLista | monto }}</td>
+                  <td class="num">{{ n.costo | monto }}</td>
                 </tr>
               }
             </tbody>

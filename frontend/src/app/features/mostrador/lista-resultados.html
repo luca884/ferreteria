@@ -21,7 +21,7 @@
           }}{{ articulo.codigoBarras ? ' · ' + articulo.codigoBarras : '' }}</span
         >
       </div>
-      <span class="precio">{{ articulo.precioFinal | number: '1.2-2' }}</span>
+      <span class="precio">{{ articulo.precioFinal | monto }}</span>
       <span class="stock" [attr.data-stock]="estadoStock(articulo)">
         {{ articulo.stockActual | number: '1.0-3' }} {{ unidadLabels[articulo.unidad] }}
       </span>

@@ -14,6 +14,8 @@ import { ArticulosService } from './articulos.service';
 
 registerLocaleData(localeEsAr);
 
+const NBSP = '\u00a0';
+
 describe('Articulos', () => {
   const articulo = (id: number, cambios: Partial<Articulo> = {}): Articulo => ({
     id,
@@ -124,10 +126,10 @@ describe('Articulos', () => {
 
     expect(texto('.codigo')).toBe('TOR-001');
     expect(texto('.descripcion')).toBe('Tornillo hexagonal 1/4');
-    expect(texto('.costo')).toBe('100,00');
+    expect(texto('.costo')).toBe(`$${NBSP}100,00`);
     expect(texto('.margen')).toBe('35 %');
     expect(texto('.iva')).toBe('10,5 %');
-    expect(texto('.precio')).toBe('170,00');
+    expect(texto('.precio')).toBe(`$${NBSP}170,00`);
     expect(texto('.stock')).toBe('12,5 Metro');
   });
 
@@ -142,7 +144,7 @@ describe('Articulos', () => {
 
     expect(el().textContent).toContain('Costo');
     expect(el().textContent).toContain('Margen');
-    expect(texto('.costo')).toBe('100,00');
+    expect(texto('.costo')).toBe(`$${NBSP}100,00`);
     expect(texto('.margen')).toBe('35 %');
   });
 

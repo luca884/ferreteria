@@ -1,6 +1,6 @@
 <article class="ficha">
   <h2 class="descripcion">{{ articulo().descripcion }}</h2>
-  <p class="precio">{{ articulo().precioFinal | number: '1.2-2' }}</p>
+  <p class="precio">{{ articulo().precioFinal | monto }}</p>
   <dl class="datos">
     <div>
       <dt>Stock</dt>

@@ -1,4 +1,5 @@
 import { DecimalPipe } from '@angular/common';
+import { MontoPipe } from '../../core/formato/monto';
 import { HttpErrorResponse } from '@angular/common/http';
 import { Component, OnInit, inject, signal } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule } from '@angular/forms';
@@ -12,7 +13,7 @@ const TAMANO_PAGINA = 20;
 
 @Component({
   selector: 'app-articulos',
-  imports: [ReactiveFormsModule, RouterLink, DecimalPipe],
+  imports: [ReactiveFormsModule, RouterLink, DecimalPipe, MontoPipe],
   templateUrl: './articulos.html',
   styleUrl: './articulos.css',
 })

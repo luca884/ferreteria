@@ -58,7 +58,7 @@
           <tr [class.inactivo]="!articulo.activo">
             <td class="codigo">{{ articulo.codigoInterno }}</td>
             <td class="descripcion">{{ articulo.descripcion }}</td>
-            <td class="num costo">{{ articulo.costo | number: '1.2-2' }}</td>
+            <td class="num costo">{{ articulo.costo | monto }}</td>
             <td class="num margen">
               @if (articulo.margenPorcentaje === null) {
                 Heredado
@@ -67,7 +67,7 @@
               }
             </td>
             <td class="iva">{{ alicuotaLabels[articulo.alicuotaIva] }}</td>
-            <td class="num precio">{{ articulo.precioFinal | number: '1.2-2' }}</td>
+            <td class="num precio">{{ articulo.precioFinal | monto }}</td>
             <td class="num stock">
               {{ articulo.stockActual | number: '1.0-3' }} {{ unidadLabels[articulo.unidad] }}
             </td>

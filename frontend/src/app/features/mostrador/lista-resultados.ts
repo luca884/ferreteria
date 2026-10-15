@@ -1,4 +1,5 @@
 import { DecimalPipe } from '@angular/common';
+import { MontoPipe } from '../../core/formato/monto';
 import {
   Component,
   ElementRef,
@@ -17,7 +18,7 @@ export const filaId = (indice: number) => `resultado-${indice}`;
 /** Resultados de una búsqueda con varias coincidencias. El foco queda siempre en el campo. */
 @Component({
   selector: 'app-lista-resultados',
-  imports: [DecimalPipe],
+  imports: [DecimalPipe, MontoPipe],
   templateUrl: './lista-resultados.html',
   styleUrl: './lista-resultados.css',
 })

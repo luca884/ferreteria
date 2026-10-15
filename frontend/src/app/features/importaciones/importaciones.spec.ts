@@ -883,16 +883,16 @@ describe('Importaciones', () => {
         '2',
         'A-1',
         'Tornillo 6mm',
-        '1.234,56',
-        '1.000,00',
-        '1.111,10',
-        '1.300,00',
-        '1.444,43',
+        '$ 1.234,56',
+        '$ 1.000,00',
+        '$ 1.111,10',
+        '$ 1.300,00',
+        '$ 1.444,43',
         'Sube',
       ]);
       expect(filas[1][1]).toBe('A-2');
       expect(filas[1][2]).toContain('Tuerca 6mm');
-      expect(filas[1].slice(6)).toEqual(['130,00', '650,00', 'Sube']);
+      expect(filas[1].slice(6)).toEqual(['$ 130,00', '$ 650,00', 'Sube']);
     });
 
     it('los encabezados de los cambios incluyen el precio anterior y el precio nuevo', async () => {
@@ -930,7 +930,7 @@ describe('Importaciones', () => {
 
       const filas = filasDe('table.cambios');
       expect(filas[0][8]).toBe('Sube');
-      expect(filas[1].slice(4)).toEqual(['200,00', '150,50', '260,00', '195,65', 'Baja']);
+      expect(filas[1].slice(4)).toEqual(['$ 200,00', '$ 150,50', '$ 260,00', '$ 195,65', 'Baja']);
       const etiquetas = el().querySelectorAll('table.cambios tbody tr:nth-child(2) .etiqueta-baja');
       expect(etiquetas).toHaveLength(1);
     });
@@ -956,7 +956,7 @@ describe('Importaciones', () => {
 
       await generar();
 
-      expect(filasDe('table.nuevos')).toEqual([['4', 'N-9', 'Arandela', '20,00', '18,00']]);
+      expect(filasDe('table.nuevos')).toEqual([['4', 'N-9', 'Arandela', '$ 20,00', '$ 18,00']]);
       expect(filasDe('table.errores')).toEqual([
         ['5', 'X-1', 'El costo es cero o está vacío.'],
       ]);

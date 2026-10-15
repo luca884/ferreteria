@@ -139,13 +139,13 @@
                       }
                     </td>
                     <td class="num">
-                      {{ c.costoAnterior | number: '1.2-2' }} → {{ c.costoNuevo | number: '1.2-2' }}
+                      {{ c.costoAnterior | monto }} → {{ c.costoNuevo | monto }}
                     </td>
                     <td class="num">
                       {{ c.margenAnterior | number: '1.2-2' }} → {{ c.margenNuevo | number: '1.2-2' }}
                     </td>
                     <td class="num">
-                      {{ c.precioAnterior | number: '1.2-2' }} → {{ c.precioNuevo | number: '1.2-2' }}
+                      {{ c.precioAnterior | monto }} → {{ c.precioNuevo | monto }}
                     </td>
                   </tr>
                 }

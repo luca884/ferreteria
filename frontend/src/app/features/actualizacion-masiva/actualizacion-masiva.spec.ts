@@ -530,9 +530,9 @@ describe('ActualizacionMasiva', () => {
       expect(celdas(filasDeCambios()[0])).toEqual([
         'A1',
         'Tornillo 8mm',
-        '100,00 → 110,00',
+        `$ 100,00 → $ 110,00`,
         '30,00 → 30,00',
-        '160,00 → 180,00',
+        `$ 160,00 → $ 180,00`,
       ]);
     });
 
@@ -558,9 +558,9 @@ describe('ActualizacionMasiva', () => {
       expect(celdas(filasDeCambios()[1])).toEqual([
         'A2',
         'Taladro',
-        '12.345,60 → 13.580,16',
+        `$ 12.345,60 → $ 13.580,16`,
         '30,00 → 50,00',
-        '20.000,00 → 25.670,00',
+        `$ 20.000,00 → $ 25.670,00`,
       ]);
     });
 

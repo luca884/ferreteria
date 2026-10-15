@@ -1,5 +1,6 @@
 import { ScrollingModule } from '@angular/cdk/scrolling';
 import { DecimalPipe } from '@angular/common';
+import { MontoPipe } from '../../core/formato/monto';
 import { HttpErrorResponse } from '@angular/common/http';
 import { Component, ElementRef, OnInit, computed, inject, signal, viewChild } from '@angular/core';
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
@@ -43,7 +44,7 @@ const ZOOM_INICIAL = 100;
 
 @Component({
   selector: 'app-importaciones',
-  imports: [ReactiveFormsModule, DecimalPipe, ScrollingModule],
+  imports: [ReactiveFormsModule, DecimalPipe, MontoPipe, ScrollingModule],
   templateUrl: './importaciones.html',
   styleUrl: './importaciones.css',
 })

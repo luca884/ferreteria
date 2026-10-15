@@ -1,5 +1,6 @@
 import { HttpErrorResponse } from '@angular/common/http';
 import { DecimalPipe } from '@angular/common';
+import { MontoPipe } from '../../core/formato/monto';
 import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { FormControl, FormGroup, ReactiveFormsModule } from '@angular/forms';
@@ -30,7 +31,7 @@ const NUMERO = /^[+-]?\d+(?:[.,]\d+)?$/;
 
 @Component({
   selector: 'app-actualizacion-masiva',
-  imports: [ReactiveFormsModule, DecimalPipe],
+  imports: [ReactiveFormsModule, DecimalPipe, MontoPipe],
   templateUrl: './actualizacion-masiva.html',
   styleUrl: './actualizacion-masiva.css',
 })

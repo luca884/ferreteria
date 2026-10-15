@@ -8,6 +8,8 @@ import { ListaResultados } from './lista-resultados';
 
 registerLocaleData(localeEsAr);
 
+const NBSP = '\u00a0';
+
 describe('ListaResultados', () => {
   const articulo = (id: number, cambios: Partial<ArticuloMostrador> = {}): ArticuloMostrador => ({
     id,
@@ -86,7 +88,7 @@ describe('ListaResultados', () => {
 
     expect(texto('.descripcion')).toBe('Tornillo hexagonal 1/4');
     expect(texto('.codigos')).toBe('TOR-001 · 7790001');
-    expect(texto('.precio')).toBe('1.234,50');
+    expect(texto('.precio')).toBe(`$${NBSP}1.234,50`);
     expect(texto('.stock')).toBe('2,5 Metro');
     expect(texto('.ubicacion')).toBe('Pasillo 2');
   });

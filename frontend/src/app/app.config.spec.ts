@@ -11,6 +11,8 @@ import { Rubros } from './features/rubros/rubros';
 import { RubrosService } from './features/rubros/rubros.service';
 
 /** Con la configuración real de la app (no la de test por defecto): los números van en es-AR. */
+const NBSP = '\u00a0';
+
 describe('appConfig: locale es-AR', () => {
   const articulo: Articulo = {
     id: 1,
@@ -59,8 +61,8 @@ describe('appConfig: locale es-AR', () => {
     const el = fixture.nativeElement as HTMLElement;
     const celda = (selector: string) => (el.querySelector(selector)?.textContent ?? '').trim();
 
-    expect(celda('.precio')).toBe('170,00');
-    expect(celda('.costo')).toBe('1.234,50');
+    expect(celda('.precio')).toBe(`$${NBSP}170,00`);
+    expect(celda('.costo')).toBe(`$${NBSP}1.234,50`);
     expect(celda('.margen')).toBe('35,5 %');
     expect(celda('.stock')).toBe('12,5 Metro');
   });

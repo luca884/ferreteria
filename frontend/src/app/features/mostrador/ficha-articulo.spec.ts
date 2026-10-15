@@ -7,6 +7,8 @@ import { FichaArticulo } from './ficha-articulo';
 
 registerLocaleData(localeEsAr);
 
+const NBSP = '\u00a0';
+
 describe('FichaArticulo', () => {
   const tornillo: ArticuloMostrador = {
     id: 1,
@@ -44,7 +46,7 @@ describe('FichaArticulo', () => {
     expect(texto('.descripcion')).toBe('Tornillo hexagonal 1/4');
     expect(texto('.codigo-interno')).toBe('TOR-001');
     expect(texto('.codigo-barras')).toBe('7790001');
-    expect(texto('.precio')).toBe('1.234,50');
+    expect(texto('.precio')).toBe(`$${NBSP}1.234,50`);
     expect(texto('.stock')).toBe('2,5 Metro');
     expect(texto('.ubicacion')).toBe('Pasillo 2');
   });

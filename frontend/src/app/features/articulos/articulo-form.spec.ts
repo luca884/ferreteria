@@ -17,6 +17,8 @@ import { ArticulosService } from './articulos.service';
 
 registerLocaleData(localeEsAr);
 
+const NBSP = '\u00a0';
+
 describe('ArticuloForm', () => {
   const rubros: Rubro[] = [
     { id: 1, nombre: 'Bulonería', margenPorcentaje: 35 },
@@ -451,7 +453,7 @@ describe('ArticuloForm', () => {
 
       expect(el().querySelector('.stock-actual')?.textContent).toContain('12,5');
       expect(el().querySelector('.stock-actual')?.textContent).toContain('Metro');
-      expect(el().querySelector('.precio-final')?.textContent).toContain('1.234,50');
+      expect(el().querySelector('.precio-final')?.textContent).toContain(`$${NBSP}1.234,50`);
       expect(el().querySelector('input#stockActual')).toBeNull();
       expect(el().querySelector('input#precioFinal')).toBeNull();
     });
@@ -589,7 +591,7 @@ describe('ArticuloForm', () => {
       expect(campos.length).toBeGreaterThan(5);
       expect(campos.every((c) => (c as HTMLInputElement).disabled)).toBe(true);
       expect(el().querySelector('button[type=submit]')).toBeNull();
-      expect(el().querySelector('.precio-final')?.textContent).toContain('1.234,50');
+      expect(el().querySelector('.precio-final')?.textContent).toContain(`$${NBSP}1.234,50`);
       expect(el().querySelector('a.cancelar')).not.toBeNull();
     });
 

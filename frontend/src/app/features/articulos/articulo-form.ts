@@ -1,4 +1,5 @@
 import { DecimalPipe } from '@angular/common';
+import { MontoPipe } from '../../core/formato/monto';
 import { HttpErrorResponse } from '@angular/common/http';
 import { Component, OnInit, inject, signal } from '@angular/core';
 import {
@@ -40,7 +41,7 @@ function textoONull(valor: string): string | null {
 
 @Component({
   selector: 'app-articulo-form',
-  imports: [ReactiveFormsModule, RouterLink, DecimalPipe],
+  imports: [ReactiveFormsModule, RouterLink, DecimalPipe, MontoPipe],
   templateUrl: './articulo-form.html',
   styleUrl: './articulo-form.css',
 })
