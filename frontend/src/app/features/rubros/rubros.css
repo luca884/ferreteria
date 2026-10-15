@@ -1,6 +1,14 @@
 .nombre {
   font-weight: 600;
 }
-.alta button[type='submit'] {
-  align-self: flex-start;
+.campo.nombre {
+  font-weight: normal;
+}
+tr.editando td {
+  background: var(--acento-suave);
+}
+.acciones {
+  width: 1%;
+  text-align: right;
+  white-space: nowrap;
 }
