@@ -1,5 +1,5 @@
 import { HttpErrorResponse } from '@angular/common/http';
-import { Component, OnInit, computed, inject, signal } from '@angular/core';
+import { Component, ElementRef, Injector, OnInit, afterNextRender, computed, inject, signal } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { Observable } from 'rxjs';
 import { erroresDeCampos } from '../../core/api/api-error';
@@ -22,9 +22,16 @@ const mismoNombre = (a: string, b: string) => a.trim().localeCompare(b.trim(), '
 })
 export class Proveedores implements OnInit {
   private readonly service = inject(ProveedoresService);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+  private readonly injector = inject(Injector);
   protected readonly auth = inject(AuthService);
 
   protected readonly proveedores = signal<Proveedor[]>([]);
+  /** Fila elegida en la grilla: la barra actúa sobre ella. */
+  protected readonly elegidoId = signal<number | null>(null);
+  protected readonly elegido = computed(
+    () => this.proveedores().find((p) => p.id === this.elegidoId()) ?? null,
+  );
   protected readonly cargando = signal(true);
   protected readonly error = signal<string | null>(null);
   protected readonly aviso = signal<string | null>(null);
@@ -64,6 +71,7 @@ export class Proveedores implements OnInit {
   protected guardar(): void {
     if (this.form.invalid) {
       this.form.markAllAsTouched();
+      this.enfocar('form.alta [aria-invalid="true"]');
       return;
     }
     const { nombre, cuit } = this.form.getRawValue();
@@ -96,8 +104,11 @@ export class Proveedores implements OnInit {
     });
   }
 
-  protected editar(proveedor: Proveedor): void {
+  /** Editar (barra, Enter o doble clic): precarga el proveedor en el formulario de al lado. */
+  protected editar(proveedor: Proveedor | null = this.elegido()): void {
+    if (!proveedor || !this.auth.esDueno()) return;
     this.limpiarMensajes();
+    this.elegidoId.set(proveedor.id);
     this.editandoId.set(proveedor.id);
     this.form.reset({ nombre: proveedor.nombre, cuit: proveedor.cuit ?? '' });
   }
@@ -107,8 +118,45 @@ export class Proveedores implements OnInit {
     this.vaciarFormulario();
   }
 
-  protected pedirBaja(proveedor: Proveedor): void {
-    this.aDarDeBaja.set(proveedor);
+  /** Nuevo: el formulario vuelve al alta y queda listo para escribir. */
+  protected nuevo(): void {
+    this.cancelar();
+    this.enfocar('#nombre');
+  }
+
+  protected pedirBaja(): void {
+    this.aDarDeBaja.set(this.elegido());
+  }
+
+  /** Clic o foco en una fila: la elige (solo el Dueño, que es quien tiene acciones). */
+  protected elegir(proveedor: Proveedor): void {
+    if (this.auth.esDueno()) this.elegidoId.set(proveedor.id);
+  }
+
+  /** La fila que entra en el orden de Tab: la elegida o, si no hay, la primera. */
+  protected esFilaTabulable(proveedor: Proveedor, indice: number): boolean {
+    return this.elegido() ? proveedor.id === this.elegidoId() : indice === 0;
+  }
+
+  /** ↑/↓ mueven la elección y el foco; Enter edita. */
+  protected alTeclearFila(evento: KeyboardEvent, proveedor: Proveedor, indice: number): void {
+    if (!this.auth.esDueno()) return;
+    if (evento.key === 'Enter') {
+      evento.preventDefault();
+      this.editar(proveedor);
+      return;
+    }
+    const paso = evento.key === 'ArrowDown' ? 1 : evento.key === 'ArrowUp' ? -1 : 0;
+    if (paso === 0) return;
+    evento.preventDefault();
+    const destino = Math.min(Math.max(indice + paso, 0), this.proveedores().length - 1);
+    this.elegidoId.set(this.proveedores()[destino].id);
+    this.enfocar(`tbody tr:nth-child(${destino + 1})`);
+  }
+
+  protected invalido(campo: 'nombre' | 'cuit'): boolean {
+    const control = this.form.controls[campo];
+    return control.touched && control.invalid;
   }
 
   protected desactivar(): void {
@@ -128,7 +176,8 @@ export class Proveedores implements OnInit {
     });
   }
 
-  protected reactivar(proveedor: Proveedor): void {
+  protected reactivar(proveedor: Proveedor | null = this.elegido()): void {
+    if (!proveedor) return;
     this.limpiarMensajes();
     this.service.reactivar(proveedor.id).subscribe({
       next: (reactivado) => {
@@ -149,6 +198,13 @@ export class Proveedores implements OnInit {
         this.reactivable.set(todos.find((p) => !p.activo && mismoNombre(p.nombre, nombre)) ?? null);
       },
       error: () => this.reactivable.set(null),
+    });
+  }
+
+  /** Después de pintar, enfoca el primer elemento que coincida. */
+  private enfocar(selector: string): void {
+    afterNextRender(() => this.host.nativeElement.querySelector<HTMLElement>(selector)?.focus(), {
+      injector: this.injector,
     });
   }
 

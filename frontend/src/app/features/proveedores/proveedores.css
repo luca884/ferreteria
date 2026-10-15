@@ -4,9 +4,6 @@
 .nombre {
   font-weight: 600;
 }
-tr.editando td {
-  background: var(--acento-suave);
-}
 tr.inactivo td {
   color: var(--texto-tenue);
 }
@@ -14,21 +11,54 @@ tr.inactivo td {
   margin-left: var(--e-2);
   background: var(--superficie-3);
 }
-.inactivos {
-  min-height: var(--alto-control);
+
+/* Fila elegida (la barra actúa sobre ella) y la que está en el formulario. */
+tr.elegible {
+  cursor: default;
+  user-select: none;
 }
+tr.elegible:focus-visible {
+  outline: 2px solid var(--acento);
+  outline-offset: -2px;
+}
+tr[aria-selected='true'] td,
+tbody tr[aria-selected='true']:hover td,
+tr.editando td {
+  background: var(--acento-suave);
+}
+tr[aria-selected='true'] td:first-child {
+  box-shadow: inset 3px 0 0 var(--acento);
+}
+.elegido {
+  margin-left: var(--e-1);
+}
+.elegido strong {
+  color: var(--texto);
+}
+
+/* Barra: íconos de las acciones, separador y la casilla de dados de baja. */
+.accion-barra svg {
+  flex-shrink: 0;
+}
+.accion-barra.peligro:not(:disabled) {
+  color: var(--error);
+}
+.separador-barra {
+  align-self: stretch;
+  width: 1px;
+  margin: 4px 6px;
+  background: var(--borde);
+}
+.inactivos {
+  margin-left: var(--e-2);
+  color: var(--texto-suave);
+  font-size: var(--texto-sm);
+}
+
 .error.con-accion {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--e-3);
   flex-wrap: wrap;
-}
-.acciones {
-  width: 1%;
-  text-align: right;
-  white-space: nowrap;
-}
-.acciones button + button {
-  margin-left: var(--e-2);
 }
