@@ -1,18 +1,23 @@
 /*
- * Distribución de GDS (f413): código arriba, grilla del ticket a la izquierda, ficha y TOTAL a la derecha,
- * botonera abajo. Ocupa todo el alto disponible; la grilla es lo único que scrollea.
+ * Barra con las teclas F arriba; debajo, el código grande y la grilla del ticket a la izquierda, y la ficha
+ * con el TOTAL a la derecha. Ocupa todo el alto disponible; la grilla es lo único que scrollea.
  */
 :host {
   display: grid;
   flex: 1 1 auto;
   min-height: 520px;
-  grid-template-columns: minmax(0, 1fr) clamp(300px, 27vw, 420px);
-  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  grid-template-rows: auto auto minmax(0, 1fr);
   grid-template-areas:
+    'barra barra'
     'busqueda panel'
-    'ticket panel'
-    'botonera botonera';
-  gap: var(--e-3) var(--e-4);
+    'ticket panel';
+  gap: 10px 14px;
+}
+
+app-barra-acciones {
+  grid-area: barra;
+  margin-bottom: 4px;
 }
 
 .zona-busqueda {
@@ -22,18 +27,37 @@
   gap: var(--e-2);
   min-width: 0;
 }
+/* El recuadro del código es el campo: el borde y el anillo de foco van acá, no en el input. */
 .fila-codigo {
   display: flex;
   align-items: center;
   gap: var(--e-3);
+  height: 52px;
+  padding: 0 var(--e-4);
+  border: 2px solid var(--borde-fuerte);
+  border-radius: var(--radio-lg);
+  background: var(--superficie);
+  transition:
+    border-color var(--transicion),
+    box-shadow var(--transicion);
+}
+.fila-codigo:focus-within {
+  border-color: var(--acento);
+  box-shadow: 0 0 0 4px var(--acento-anillo);
 }
 .rotulo {
-  font-size: var(--texto-xl);
-  font-weight: 700;
+  color: var(--texto-suave);
+  font-size: var(--texto-sm);
+  font-weight: 600;
 }
 app-caja-busqueda {
   flex: 1;
   min-width: 0;
+}
+.pista-codigo {
+  color: var(--texto-tenue);
+  font-size: var(--texto-xs);
+  white-space: nowrap;
 }
 
 /* Avisos debajo del campo: nunca lo tapan. */
@@ -46,7 +70,7 @@ app-caja-busqueda {
   border-radius: var(--radio);
   background: var(--exito-fondo);
   color: var(--texto);
-  font-size: 1.0625rem;
+  font-size: var(--texto-md);
   font-weight: 600;
 }
 .mensaje {
@@ -57,18 +81,20 @@ app-caja-busqueda {
 /* Venta cobrada con vuelto: el vuelto es lo que el vendedor necesita al dar el cambio. */
 .aviso .vuelto {
   margin-left: var(--e-1);
+  color: var(--exito);
   font-size: 1.75rem;
   line-height: 1.1;
   font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
 }
 .aviso .separador {
   margin: 0 var(--e-1);
-  color: var(--texto-suave);
+  color: var(--texto-tenue);
 }
 .aviso.advertencia,
 .mensaje.advertencia {
   border-color: var(--advertencia-borde);
-  border-left-color: #d97706;
+  border-left-color: var(--advertencia-marca);
   background: var(--advertencia-fondo);
   color: var(--advertencia);
 }
@@ -94,7 +120,7 @@ app-ticket-lista {
 .resultados {
   position: absolute;
   inset: 0 0 auto;
-  z-index: 5;
+  z-index: var(--z-desplegable);
   display: flex;
   max-height: 100%;
 }
@@ -112,7 +138,7 @@ app-lista-resultados {
   gap: var(--e-3);
   min-height: 0;
 }
-/* La ficha mide lo que su contenido; el TOTAL queda siempre abajo, como en GDS. */
+/* La ficha mide lo que su contenido; el TOTAL queda siempre abajo. */
 app-ficha-articulo {
   flex: 0 1 auto;
   min-height: 0;
@@ -131,12 +157,13 @@ app-totales-ticket {
   padding: var(--e-6);
   border: 1px dashed var(--borde-fuerte);
   border-radius: var(--radio-lg);
-  color: var(--texto-suave);
+  background: var(--superficie);
+  color: var(--texto-tenue);
   text-align: center;
 }
 .ficha-vacia svg {
-  width: 48px;
-  height: 48px;
+  width: 44px;
+  height: 44px;
   fill: none;
   stroke: var(--borde-fuerte);
   stroke-width: 1.6;
@@ -144,8 +171,5 @@ app-totales-ticket {
 .ficha-vacia p {
   margin: 0;
   max-width: 26ch;
-}
-
-app-botonera {
-  grid-area: botonera;
+  text-wrap: balance;
 }

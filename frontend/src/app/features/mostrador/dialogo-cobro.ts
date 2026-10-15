@@ -43,17 +43,18 @@ const centavosATexto = (c: number) => `${Math.floor(c / 100)},${String(c % 100).
         (keydown)="alTeclear($event)"
       >
         <div class="cabecera">
-          <h2 id="dialogo-cobro-titulo">Cobrar</h2>
+          <div class="titulo">
+            <h2 id="dialogo-cobro-titulo">Cobrar</h2>
+            @if (renglones(); as n) {
+              <p class="conteo">{{ n }} {{ n === 1 ? 'renglón' : 'renglones' }}</p>
+            }
+          </div>
           <p class="total">{{ totalCentavos() / 100 | monto }}</p>
         </div>
         @if (aviso(); as texto) {
           <p class="aviso" role="status">{{ texto }}</p>
         }
         <div class="bloque">
-          <span class="rotulo" aria-hidden="true">
-            Medio de pago
-            <span class="pista"><kbd>←</kbd> <kbd>→</kbd></span>
-          </span>
           <div class="medios" role="radiogroup" aria-label="Medio de pago">
             @for (m of medios; track m) {
               <button
@@ -69,6 +70,7 @@ const centavosATexto = (c: number) => `${Math.floor(c / 100)},${String(c % 100).
               </button>
             }
           </div>
+          <p class="pista-medios" aria-hidden="true"><kbd>←</kbd> <kbd>→</kbd> cambian el medio</p>
         </div>
         @if (medio() === 'EFECTIVO') {
           <div class="efectivo">
@@ -107,35 +109,47 @@ const centavosATexto = (c: number) => `${Math.floor(c / 100)},${String(c % 100).
   styles: `
     .cobro {
       width: min(540px, 100%);
-      gap: var(--e-4);
+      gap: 18px;
+      overflow: hidden;
     }
-    /* Total grande arriba, como el diálogo de cobro de GDS (f414). */
+    /* Cabecera azul profunda con el TOTAL grande a la derecha. */
     .cabecera {
-      margin: calc(var(--e-6) * -1) calc(var(--e-6) * -1) 0;
-      padding: var(--e-4) var(--e-6) var(--e-5);
-      border-radius: var(--radio-lg) var(--radio-lg) 0 0;
-      background: var(--barra);
-      color: #fff;
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: var(--e-4);
+      margin: calc(var(--e-6) * -1) calc(var(--e-6) * -1) 2px;
+      padding: 18px var(--e-6) var(--e-5);
+      background: var(--acento-profundo);
+      color: var(--acento-texto);
+    }
+    .titulo {
+      line-height: 1.5;
     }
     .cabecera h2 {
-      color: #fdba74;
+      color: var(--acento-texto);
       font-size: var(--texto-sm);
-      letter-spacing: 0.12em;
+      font-weight: 700;
+      letter-spacing: 0.08em;
       text-transform: uppercase;
     }
+    .conteo {
+      color: var(--profundo-texto-tenue);
+      font-size: var(--texto-sm);
+    }
     .total {
-      margin: var(--e-1) 0 0;
-      font-size: 3.25rem;
+      font-size: clamp(2.25rem, 6vw, 2.875rem);
       font-weight: 700;
       line-height: 1.05;
       text-align: right;
+      white-space: nowrap;
       font-variant-numeric: tabular-nums;
-      letter-spacing: -0.02em;
+      letter-spacing: -0.03em;
     }
     .aviso {
       padding: var(--e-2) var(--e-3);
       border: 1px solid var(--advertencia-borde);
-      border-left: 4px solid #d97706;
+      border-left: 4px solid var(--advertencia-marca);
       border-radius: var(--radio);
       background: var(--advertencia-fondo);
       font-weight: 600;
@@ -145,96 +159,96 @@ const centavosATexto = (c: number) => `${Math.floor(c / 100)},${String(c % 100).
       flex-direction: column;
       gap: var(--e-2);
     }
-    .rotulo {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      color: var(--texto-suave);
-      font-size: var(--texto-sm);
-      font-weight: 600;
-    }
-    /* Selector segmentado: un solo bloque, el medio elegido relleno con el acento. */
+    /* Cuatro botones sueltos; el elegido con borde de acento y fondo suave. */
     .medios {
       display: grid;
-      grid-template-columns: repeat(4, 1fr);
-      padding: 3px;
-      gap: 3px;
-      border: 1px solid var(--borde-fuerte);
-      border-radius: var(--radio-lg);
-      background: var(--superficie-3);
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: var(--e-2);
     }
     .medio {
-      min-height: 44px;
+      min-height: 54px;
       padding: 6px 8px;
-      border: 0;
-      border-radius: var(--radio);
-      background: transparent;
+      border: 1px solid var(--borde);
+      border-radius: var(--radio-lg);
+      background: var(--superficie);
       color: var(--texto);
-      font-size: 1rem;
+      font-size: var(--texto-base);
+      font-weight: 500;
     }
     .medio:hover:not(:disabled) {
-      background: var(--superficie);
+      border-color: var(--borde-fuerte);
+      background: var(--superficie-2);
     }
     .medio[aria-checked='true'],
     .medio[aria-checked='true']:hover {
-      background: var(--acento);
-      color: var(--acento-texto);
-      box-shadow: var(--sombra-1);
+      border-color: var(--acento);
+      background: var(--acento-suave);
+      color: var(--acento-profundo);
+      font-weight: 700;
+      box-shadow: inset 0 0 0 1px var(--acento);
     }
-    .medio:focus-visible {
-      box-shadow: 0 0 0 3px #fdba74;
+    .pista-medios {
+      color: var(--texto-tenue);
+      font-size: var(--texto-xs);
+    }
+    .pista-medios kbd {
+      font-size: 0.9em;
     }
     .efectivo {
       display: grid;
-      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: var(--e-3);
       align-items: end;
-    }
-    .pista kbd {
-      font-size: 0.95rem;
     }
     .recibido {
       display: flex;
       flex-direction: column;
-      gap: var(--e-1);
+      gap: 6px;
     }
     .recibido input {
       width: 100%;
       min-width: 0;
-      height: 56px;
-      font-size: 1.75rem;
-      font-weight: 700;
+      height: 58px;
+      padding: 0 14px;
+      border-width: 2px;
+      border-radius: var(--radio-lg);
+      font-family: var(--fuente-mono);
+      font-size: 1.625rem;
+      font-weight: 600;
       text-align: right;
-      font-variant-numeric: tabular-nums;
     }
+    /* Vuelto (o lo que falta): el rótulo arriba, como «Recibido», y el importe en su recuadro. */
     .vuelto,
     .falta {
       display: flex;
       flex-direction: column;
-      justify-content: center;
-      min-height: 56px;
-      padding: 4px var(--e-3);
-      border: 1px solid var(--exito-borde);
-      border-radius: var(--radio);
-      background: var(--exito-fondo);
+      gap: 6px;
       color: var(--texto-suave);
       font-size: var(--texto-sm);
       font-weight: 600;
-      text-align: right;
     }
     .vuelto strong,
     .falta strong {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      height: 58px;
+      padding: 0 14px;
+      overflow: hidden;
+      border: 1px solid var(--exito-borde);
+      border-radius: var(--radio-lg);
+      background: var(--exito-fondo);
       color: var(--exito);
-      font-size: 1.75rem;
-      line-height: 1.1;
+      font-size: 1.875rem;
+      font-weight: 700;
+      white-space: nowrap;
       font-variant-numeric: tabular-nums;
+      letter-spacing: -0.02em;
     }
     /* Falta plata: mismo lugar y tamaño que el vuelto, en rojo para que no se confunda. */
-    .falta {
+    .falta strong {
       border-color: var(--error-borde);
       background: var(--error-fondo);
-    }
-    .falta strong {
       color: var(--error);
     }
     .efectivo .error {
@@ -242,12 +256,16 @@ const centavosATexto = (c: number) => `${Math.floor(c / 100)},${String(c % 100).
     }
     .dialogo-acciones button {
       min-height: 48px;
-      font-size: 1.0625rem;
+    }
+    .dialogo-acciones .cobrar {
+      padding-inline: var(--e-6);
     }
   `,
 })
 export class DialogoCobro {
   readonly totalCentavos = input.required<number>();
+  /** Cuántos renglones se cobran, para la cabecera. Sin dato no se muestra. */
+  readonly renglones = input<number | null>(null);
   /** El contenedor lo prende mientras el POST está en curso. */
   readonly enVuelo = input(false);
   /** Mensaje del contenedor (por ejemplo, un precio que cambió en el servidor). */

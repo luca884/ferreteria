@@ -72,6 +72,21 @@ describe('DialogoCobro', () => {
     expect(document.activeElement).toBe(importe());
   });
 
+  it('la cabecera dice cuántos renglones se cobran', async () => {
+    await abrir();
+    const conteo = () => el().querySelector('.conteo')?.textContent?.trim() ?? null;
+
+    expect(conteo()).toBeNull();
+
+    fixture.componentRef.setInput('renglones', 3);
+    await estabilizar();
+    expect(conteo()).toBe('3 renglones');
+
+    fixture.componentRef.setInput('renglones', 1);
+    await estabilizar();
+    expect(conteo()).toBe('1 renglón');
+  });
+
   it('muestra los 4 medios en orden', async () => {
     await abrir();
 

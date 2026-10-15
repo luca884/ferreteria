@@ -4,46 +4,43 @@
   border: 1px solid var(--borde);
   border-radius: var(--radio-lg);
   background: var(--superficie);
-  box-shadow: var(--sombra-1);
   /* Que el renglón elegido no quede debajo del encabezado fijo al hacer scroll. */
-  scroll-padding-top: 40px;
+  scroll-padding-top: 36px;
 }
 
 .grilla-ticket {
   table-layout: fixed;
-  font-size: 1.0625rem;
 }
 .col-cantidad {
-  width: 7.5rem;
+  width: 6.5rem;
 }
 .col-codigo {
-  width: 9.5rem;
+  width: 8.5rem;
 }
 .col-precio {
-  width: 9.5rem;
+  width: 8.5rem;
 }
 .col-total {
-  width: 10.5rem;
+  width: 9.5rem;
 }
 
-th {
-  padding-block: 8px;
-  font-size: var(--texto-sm);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
+th:first-child,
+td:first-child {
+  padding-left: var(--e-4);
+}
+th:last-child,
+td:last-child {
+  padding-right: var(--e-4);
 }
 td {
-  padding: 9px var(--celda-x);
+  padding-block: 12px;
 }
 
 .renglon td {
   background: var(--superficie);
 }
-.renglon:nth-child(even) td {
-  background: var(--superficie-2);
-}
 .renglon:hover td {
-  background: var(--superficie-3);
+  background: var(--superficie-2);
 }
 .renglon.con-faltante td {
   background: var(--advertencia-fondo);
@@ -51,21 +48,22 @@ td {
 .renglon.con-problema td {
   background: var(--error-fondo);
 }
-/* El renglón elegido (↑/↓, F3, F10) se ve fuerte: barra de acento y fondo propio. */
+/* El renglón elegido (↑/↓, F3, F10) se ve fuerte: barra de acento a la izquierda y fondo propio. */
 .renglon.elegido td {
   background: var(--acento-suave);
-  border-bottom-color: var(--acento-borde);
 }
 .renglon.elegido td:first-child {
-  box-shadow: inset 4px 0 0 var(--acento);
+  box-shadow: inset 3px 0 0 var(--acento);
 }
 
 .cantidad {
-  font-weight: 700;
+  font-size: 1rem;
+  font-weight: 600;
 }
 .codigo {
   overflow: hidden;
   color: var(--texto-suave);
+  font-size: var(--texto-sm);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -75,31 +73,34 @@ td {
 .descripcion {
   display: block;
   overflow: hidden;
-  font-weight: 600;
+  font-size: var(--texto-md);
+  font-weight: 500;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .sin-stock,
 .problema {
   display: inline-block;
-  margin: 3px 6px 0 0;
-  padding: 0 8px;
-  border-radius: 999px;
-  font-size: var(--texto-xs);
-  font-weight: 700;
+  margin: 4px 6px 0 0;
+  padding: 2px 6px;
+  border-radius: var(--radio-sm);
+  font-size: var(--texto-2xs);
+  font-weight: 600;
 }
 .sin-stock {
-  border: 1px solid var(--advertencia-borde);
-  background: #fff;
+  background: var(--advertencia-insignia);
   color: var(--advertencia);
 }
 .problema {
-  border: 1px solid var(--error-borde);
-  background: #fff;
+  background: var(--error-borde);
   color: var(--error);
 }
+.precio {
+  color: var(--texto-suave);
+}
 .total-renglon {
-  font-weight: 700;
+  font-size: var(--texto-md);
+  font-weight: 600;
 }
 
 .fila-vacia td,
@@ -110,7 +111,7 @@ td {
 .vacio {
   margin: 0;
   padding: var(--e-8) 0;
-  color: var(--texto-suave);
-  font-size: var(--texto-lg);
+  color: var(--texto-tenue);
+  font-size: var(--texto-md);
   text-align: center;
 }

@@ -15,7 +15,7 @@ export type AccionBotonera = Exclude<AccionMostrador, 'cerrar'>;
       @for (atajo of atajos(); track atajo.accion) {
         <button
           type="button"
-          class="boton"
+          class="accion-barra"
           [class]="variantes[atajo.accion] ?? ''"
           [disabled]="!habilitada(atajo.accion)"
           [attr.aria-keyshortcuts]="atajo.tecla"
@@ -30,40 +30,29 @@ export type AccionBotonera = Exclude<AccionMostrador, 'cerrar'>;
       }
     </div>
   `,
+  /* Los botones usan la clase global .accion-barra (styles.css); acá solo la fila y el separador. */
   styles: `
     :host {
       display: block;
     }
     .botonera {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-      gap: var(--e-2);
-      padding: var(--e-2);
-      border: 1px solid var(--borde);
-      border-radius: var(--radio-lg);
-      background: var(--superficie);
-      box-shadow: var(--sombra-1);
+      display: flex;
+      align-items: stretch;
+      gap: 6px;
     }
-    .boton {
-      justify-content: flex-start;
-      gap: var(--e-3);
-      min-height: 52px;
-      padding: 8px 14px;
-      font-size: 1.0625rem;
+    /* Vaciar queda aparte de las acciones de la venta, detrás de una línea. */
+    .peligro {
+      position: relative;
+      margin-left: 13px;
     }
-    kbd {
-      min-width: 2.6em;
-      font-size: 0.85rem;
-    }
-    .boton.primario kbd {
-      border-color: rgb(255 255 255 / 0.45);
-      background: rgb(255 255 255 / 0.16);
-      color: var(--acento-texto);
-    }
-    .boton:disabled kbd {
-      border-color: var(--borde);
-      background: var(--superficie-2);
-      color: var(--texto-tenue);
+    .peligro::before {
+      content: '';
+      position: absolute;
+      top: 4px;
+      bottom: 4px;
+      left: -11px;
+      width: 1px;
+      background: var(--borde);
     }
   `,
 })

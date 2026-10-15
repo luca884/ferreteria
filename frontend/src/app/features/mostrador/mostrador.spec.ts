@@ -158,6 +158,17 @@ describe('Mostrador', () => {
       expect(el().textContent).not.toContain('F2 buscar · Esc limpiar');
     });
 
+    it('la botonera va en la barra de acciones de arriba, con el título de la pantalla', async () => {
+      await crear();
+
+      const barra = el().querySelector('app-barra-acciones')!;
+      expect(barra).not.toBeNull();
+      expect(barra.querySelector('h1')?.textContent?.trim()).toBe('Mostrador');
+      expect(barra.querySelector('app-botonera [role="toolbar"]')?.getAttribute('aria-label')).toBe(
+        'Acciones del mostrador',
+      );
+    });
+
     it('al tipear busca tras 250 ms sin teclear, una sola vez y con el último texto', async () => {
       await crear();
 
@@ -1186,6 +1197,14 @@ describe('Mostrador', () => {
         totalMostrado: 3000,
         medioPago: 'EFECTIVO',
       });
+    });
+
+    it('el diálogo de cobro muestra cuántos renglones tiene el ticket', async () => {
+      await conMartillos();
+
+      await tecla('F4');
+
+      expect(normal(dialogo()!.querySelector('.conteo')?.textContent)).toBe('1 renglón');
     });
 
     it('F4, → y Enter venden con DÉBITO', async () => {

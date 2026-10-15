@@ -1,4 +1,7 @@
-<h1 class="sr-only">Mostrador</h1>
+<app-barra-acciones>
+  <h1 class="sr-only">Mostrador</h1>
+  <app-botonera [habilitadas]="habilitadas()" (accion)="alBotonera($event)" />
+</app-barra-acciones>
 
 <div class="zona-busqueda">
   <div class="fila-codigo">
@@ -12,6 +15,7 @@
       (enter)="alEnter()"
       (mover)="alMover($event)"
     />
+    <span class="pista-codigo" aria-hidden="true">Enter agrega · ↑↓ elige</span>
   </div>
 
   @if (aviso(); as nota) {
@@ -69,8 +73,6 @@
   <app-totales-ticket [renglones]="ticket.ticket().renglones" />
 </aside>
 
-<app-botonera [habilitadas]="habilitadas()" (accion)="alBotonera($event)" />
-
 @if (dialogo(); as abierto) {
   @switch (abierto.tipo) {
     @case ('cantidad') {
@@ -106,6 +108,7 @@
     @case ('cobro') {
       <app-dialogo-cobro
         [totalCentavos]="ticket.total()"
+        [renglones]="ticket.ticket().renglones.length"
         [enVuelo]="enVuelo()"
         [aviso]="avisoCobro()"
         (confirmar)="cobrar($event)"

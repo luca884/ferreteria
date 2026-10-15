@@ -14,6 +14,7 @@ import { accionDeTecla } from './mostrador.atajos';
 import { MostradorService } from './mostrador.service';
 import { AVISO_ESCANEO_CON_DIALOGO } from './guarda-lector';
 import { MontoPipe, formatearMonto } from '../../core/formato/monto';
+import { BarraAcciones } from '../../shared/barra-acciones';
 import { aCentavos } from './centavos';
 import { aRequest } from './ticket';
 import { TicketLista } from './ticket-lista';
@@ -64,6 +65,7 @@ interface Escaneo {
 @Component({
   selector: 'app-mostrador',
   imports: [
+    BarraAcciones,
     Botonera,
     MontoPipe,
     CajaBusqueda,

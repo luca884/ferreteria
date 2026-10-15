@@ -1,23 +1,24 @@
 :host {
   display: block;
 }
-/* Campo de código grande, como en GDS: el foco vive acá. */
-.caja {
+/* Campo de código grande. El borde y el foco los dibuja el recuadro del mostrador (.fila-codigo). */
+.caja,
+.caja:focus {
   width: 100%;
-  height: 56px;
-  padding: 0 var(--e-4);
-  border: 2px solid var(--borde-fuerte);
-  border-radius: var(--radio-lg);
-  background: var(--superficie);
-  font-size: 1.5rem;
-  font-weight: 600;
-  letter-spacing: 0.01em;
+  height: 46px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  outline: none;
+  box-shadow: none;
+  background: transparent;
+  font-family: var(--fuente-mono);
+  font-size: 1.375rem;
+  font-weight: 500;
 }
 .caja::placeholder {
   color: var(--texto-tenue);
+  font-family: var(--fuente);
+  font-size: 1.0625rem;
   font-weight: 400;
-}
-.caja:focus {
-  border-color: var(--acento);
-  box-shadow: 0 0 0 4px rgb(194 65 12 / 0.18);
 }
