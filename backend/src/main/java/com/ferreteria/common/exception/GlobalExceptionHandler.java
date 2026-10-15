@@ -39,13 +39,19 @@ public class GlobalExceptionHandler {
             "alicuotaIva", "La alícuota de IVA no es válida. Usá 0, 2,5, 5, 10,5, 21 o 27.",
             "unidad", "La unidad no es válida. Usá UNIDAD, METRO, KILO o LITRO.",
             "medioPago", "El medio de pago no es válido. Usá EFECTIVO, DEBITO, CREDITO o TRANSFERENCIA.",
-            "motivo", "El motivo no es válido. Usá INGRESO_MERCADERIA, ROTURA, CONTEO u OTRO.");
+            "motivo", "El motivo no es válido. Usá INGRESO_MERCADERIA, ROTURA, CONTEO u OTRO.",
+            "modo", "El modo no es válido. Usá STOCK_REAL o CANTIDAD.");
 
     private static final Pattern BONIFICACION = Pattern.compile("bonificacion([123])");
 
     @ExceptionHandler(ResourceNotFoundException.class)
     public ResponseEntity<ApiError> notFound(ResourceNotFoundException ex) {
         return build(HttpStatus.NOT_FOUND, ex.getMessage());
+    }
+
+    @ExceptionHandler(ReglaDeNegocioException.class)
+    public ResponseEntity<ApiError> reglaDeNegocio(ReglaDeNegocioException ex) {
+        return build(HttpStatus.UNPROCESSABLE_ENTITY, ex.getMessage());
     }
 
     @ExceptionHandler(ConflictException.class)

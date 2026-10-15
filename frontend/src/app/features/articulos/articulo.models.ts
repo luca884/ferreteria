@@ -53,12 +53,16 @@ export const MOTIVO_AJUSTE_LABELS: Record<MotivoAjuste, string> = {
   OTRO: 'Otro',
 };
 
-/** Ajuste manual de stock (CU-09): el stock real contado, no la diferencia. */
-export interface AjusteStockRequest {
-  stockReal: number;
-  motivo: MotivoAjuste;
-  detalle: string | null;
-}
+export type ModoAjuste = 'STOCK_REAL' | 'CANTIDAD';
+
+/**
+ * Ajuste manual de stock (CU-09). STOCK_REAL manda el total contado; CANTIDAD manda lo que entra (+) o sale (-),
+ * que el backend suma al stock vigente al confirmar.
+ */
+export type AjusteStockRequest = { motivo: MotivoAjuste; detalle: string | null } & (
+  | { modo?: 'STOCK_REAL'; stockReal: number }
+  | { modo: 'CANTIDAD'; cantidad: number }
+);
 
 export interface AjusteStockResponse {
   articuloId: number;

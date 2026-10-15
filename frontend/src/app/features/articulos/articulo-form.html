@@ -50,7 +50,13 @@
         <dt>Stock actual</dt>
         <dd [class.negativo]="actual.stockActual < 0">{{ cantidadConUnidad(actual.stockActual, actual.unidad) }}</dd>
         @if (auth.esDueno()) {
-          <button type="button" class="secundario chico ajustar-stock" (click)="ajustandoStock.set(true)">
+          <button
+            type="button"
+            class="secundario chico ajustar-stock"
+            [disabled]="!actual.activo"
+            [attr.title]="actual.activo ? null : '&quot;' + actual.descripcion + '&quot; está dado de baja. Reactivalo para ajustar el stock.'"
+            (click)="ajustandoStock.set(true)"
+          >
             Ajustar stock
           </button>
         }

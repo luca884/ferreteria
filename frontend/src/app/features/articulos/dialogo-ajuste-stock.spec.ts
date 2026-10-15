@@ -50,6 +50,20 @@ describe('DialogoAjusteStock', () => {
     await fixture.whenStable();
   }
 
+  async function elegirModo(modo: 'STOCK_REAL' | 'CANTIDAD') {
+    el().querySelector<HTMLButtonElement>(`[data-modo="${modo}"]`)!.click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+  }
+
+  async function elegirSigno(signo: 'ENTRA' | 'SALE') {
+    el().querySelector<HTMLButtonElement>(`[data-signo="${signo}"]`)!.click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+  }
+
+  const marcado = (selector: string) => el().querySelector(selector)!.getAttribute('aria-checked') === 'true';
+
   async function confirmar() {
     el().querySelector('form')!.dispatchEvent(new Event('submit', { cancelable: true }));
     fixture.detectChanges();
@@ -102,14 +116,15 @@ describe('DialogoAjusteStock', () => {
   it('con datos válidos manda el stock real, el motivo y el detalle, y avisa el resultado', async () => {
     await abrir(tornillo(10));
     await escribir('#stock-real', '12');
-    await escribir('#motivo', 'INGRESO_MERCADERIA');
+    await escribir('#motivo', 'CONTEO');
     await escribir('#detalle', '  remito 123 ');
 
     await confirmar();
 
     expect(servicio.ajustarStock).toHaveBeenCalledWith(7, {
+      modo: 'STOCK_REAL',
       stockReal: 12,
-      motivo: 'INGRESO_MERCADERIA',
+      motivo: 'CONTEO',
       detalle: 'remito 123',
     });
     expect(ajustados).toEqual([{ articuloId: 7, stockAnterior: 10, diferencia: 2, stockActual: 12 }]);
@@ -118,17 +133,23 @@ describe('DialogoAjusteStock', () => {
   it('sin detalle manda null', async () => {
     await abrir(tornillo(10));
     await escribir('#stock-real', '8');
-    await escribir('#motivo', 'ROTURA');
+    await escribir('#motivo', 'CONTEO');
 
     await confirmar();
 
-    expect(servicio.ajustarStock).toHaveBeenCalledWith(7, { stockReal: 8, motivo: 'ROTURA', detalle: null });
+    expect(servicio.ajustarStock).toHaveBeenCalledWith(7, {
+      modo: 'STOCK_REAL',
+      stockReal: 8,
+      motivo: 'CONTEO',
+      detalle: null,
+    });
   });
 
   it('muestra todos los errores juntos, cada uno junto a su campo, y no manda nada', async () => {
     await abrir(tornillo(10));
-    await escribir('#stock-real', '2,5');
     await escribir('#motivo', 'OTRO');
+    await elegirModo('STOCK_REAL');
+    await escribir('#stock-real', '2,5');
 
     await confirmar();
 
@@ -220,6 +241,144 @@ describe('DialogoAjusteStock', () => {
     await confirmar();
 
     expect(texto('.error[role="alert"]')).toBe('Artículo no encontrado');
+  });
+
+  describe('modo sumar o restar', () => {
+    it('el motivo elige el modo por defecto y el selector lo deja cambiar', async () => {
+      await abrir(tornillo(10));
+      expect(marcado('[data-modo="STOCK_REAL"]')).toBe(true);
+
+      await escribir('#motivo', 'INGRESO_MERCADERIA');
+      expect(marcado('[data-modo="CANTIDAD"]')).toBe(true);
+      expect(marcado('[data-signo="ENTRA"]')).toBe(true);
+      expect(el().querySelector('#cantidad')).not.toBeNull();
+      expect(el().querySelector('#stock-real')).toBeNull();
+
+      await escribir('#motivo', 'ROTURA');
+      expect(marcado('[data-modo="CANTIDAD"]')).toBe(true);
+      expect(marcado('[data-signo="SALE"]')).toBe(true);
+
+      await escribir('#motivo', 'CONTEO');
+      expect(marcado('[data-modo="STOCK_REAL"]')).toBe(true);
+
+      await escribir('#motivo', 'OTRO');
+      expect(marcado('[data-modo="CANTIDAD"]')).toBe(true);
+      expect(marcado('[data-signo="ENTRA"]')).toBe(true);
+
+      await elegirModo('STOCK_REAL');
+      expect(el().querySelector('#stock-real')).not.toBeNull();
+    });
+
+    it('muestra en vivo cuánto quedará: «Stock actual 10 → quedará 35»', async () => {
+      await abrir(tornillo(10));
+      await elegirModo('CANTIDAD');
+
+      await escribir('#cantidad', '25');
+      expect(texto('.quedara dd')).toBe('35 unidades');
+      expect(texto('.stock-actual dd')).toBe('10 unidades');
+
+      await elegirSigno('SALE');
+      expect(texto('.quedara dd')).toBe('-15 unidades');
+      expect(el().querySelector('.quedara dd')!.classList).toContain('baja');
+    });
+
+    it('manda la cantidad con signo según entre o salga', async () => {
+      await abrir(tornillo(10));
+      await escribir('#motivo', 'ROTURA');
+      await escribir('#cantidad', '3');
+
+      await confirmar();
+
+      expect(servicio.ajustarStock).toHaveBeenCalledWith(7, {
+        modo: 'CANTIDAD',
+        cantidad: -3,
+        motivo: 'ROTURA',
+        detalle: null,
+      });
+
+      await elegirSigno('ENTRA');
+      await confirmar();
+      expect(servicio.ajustarStock).toHaveBeenLastCalledWith(7, {
+        modo: 'CANTIDAD',
+        cantidad: 3,
+        motivo: 'ROTURA',
+        detalle: null,
+      });
+    });
+
+    it('acepta coma decimal en metros', async () => {
+      await abrir(tornillo(150, 'METRO'));
+      await escribir('#motivo', 'INGRESO_MERCADERIA');
+
+      await escribir('#cantidad', '2,5');
+
+      expect(texto('.quedara dd')).toBe('152,5 metros');
+    });
+
+    it('valida cantidad vacía, cero, con signo, decimales en UNIDAD y que no quede negativo', async () => {
+      await abrir(tornillo(3));
+      await escribir('#motivo', 'ROTURA');
+
+      await confirmar();
+      expect(texto('#cantidad-error')).toBe('Escribí la cantidad que entra o sale.');
+
+      await escribir('#cantidad', '0');
+      await confirmar();
+      expect(texto('#cantidad-error')).toBe('La cantidad no puede ser cero.');
+
+      await escribir('#cantidad', '-2');
+      await confirmar();
+      expect(texto('#cantidad-error')).toBe('Escribí la cantidad sin signo y elegí si entra o sale.');
+
+      await escribir('#cantidad', '1,5');
+      await confirmar();
+      expect(texto('#cantidad-error')).toBe(
+        'Este artículo se cuenta por unidad: la cantidad tiene que ser un número entero.',
+      );
+
+      await escribir('#cantidad', '5');
+      await confirmar();
+      expect(texto('#cantidad-error')).toBe('No podés sacar 5: hay 3 unidades.');
+      expect(servicio.ajustarStock).not.toHaveBeenCalled();
+    });
+
+    it('muestra el error por campo cantidad que devuelve el backend', async () => {
+      await abrir(tornillo(10));
+      servicio.ajustarStock.mockReturnValue(
+        throwError(
+          () =>
+            new HttpErrorResponse({
+              status: 400,
+              error: { message: 'Datos inválidos', errors: { cantidad: 'No podés sacar 5: hay 3 unidades.' } },
+            }),
+        ),
+      );
+      await escribir('#motivo', 'ROTURA');
+      await escribir('#cantidad', '5');
+
+      await confirmar();
+
+      expect(texto('#cantidad-error')).toBe('No podés sacar 5: hay 3 unidades.');
+    });
+
+    it('el 422 de un artículo dado de baja se muestra arriba de los botones', async () => {
+      await abrir(tornillo(10));
+      servicio.ajustarStock.mockReturnValue(
+        throwError(
+          () =>
+            new HttpErrorResponse({
+              status: 422,
+              error: { message: '"Tornillo" está dado de baja. Reactivalo para ajustar el stock.' },
+            }),
+        ),
+      );
+      await escribir('#motivo', 'INGRESO_MERCADERIA');
+      await escribir('#cantidad', '5');
+
+      await confirmar();
+
+      expect(texto('.error[role="alert"]')).toBe('"Tornillo" está dado de baja. Reactivalo para ajustar el stock.');
+    });
   });
 
   it('Esc y Cancelar cancelan sin ajustar', async () => {

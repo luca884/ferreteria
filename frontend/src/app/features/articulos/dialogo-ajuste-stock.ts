@@ -2,6 +2,7 @@ import { HttpErrorResponse } from '@angular/common/http';
 import {
   Component,
   ElementRef,
+  Injector,
   afterNextRender,
   computed,
   inject,
@@ -15,6 +16,7 @@ import {
   AjusteStockResponse,
   MOTIVOS_AJUSTE,
   MOTIVO_AJUSTE_LABELS,
+  ModoAjuste,
   MotivoAjuste,
   Unidad,
 } from './articulo.models';
@@ -28,7 +30,16 @@ export interface ArticuloAAjustar {
   stockActual: number;
 }
 
-type Campo = 'stockReal' | 'motivo' | 'detalle';
+type Campo = 'stockReal' | 'cantidad' | 'motivo' | 'detalle';
+type Signo = 'ENTRA' | 'SALE';
+
+/** El motivo elige el modo por defecto (el usuario lo puede cambiar): conteo cuenta, el resto suma o resta. */
+const MODO_POR_MOTIVO: Record<MotivoAjuste, ModoAjuste> = {
+  INGRESO_MERCADERIA: 'CANTIDAD',
+  ROTURA: 'CANTIDAD',
+  CONTEO: 'STOCK_REAL',
+  OTRO: 'CANTIDAD',
+};
 
 /** DECIMAL(15, 3) del backend. */
 const MAXIMO = 999_999_999_999.999;
@@ -68,31 +79,77 @@ function leerNumero(texto: string): { valor: number; decimales: number } | null 
             <dt>Stock actual</dt>
             <dd>{{ conUnidad(articulo().stockActual) }}</dd>
           </div>
-          <div class="diferencia">
-            <dt>Diferencia</dt>
-            <dd [class.sube]="diferencia() !== null && diferencia()! > 0" [class.baja]="diferencia() !== null && diferencia()! < 0">
-              {{ textoDiferencia() }}
-            </dd>
-          </div>
+          @if (modo() === 'STOCK_REAL') {
+            <div class="diferencia">
+              <dt>Diferencia</dt>
+              <dd [class.sube]="diferencia() !== null && diferencia()! > 0" [class.baja]="diferencia() !== null && diferencia()! < 0">
+                {{ textoDiferencia() }}
+              </dd>
+            </div>
+          } @else {
+            <div class="quedara">
+              <dt>Quedará</dt>
+              <dd [class.sube]="queda() !== null && queda()! > articulo().stockActual" [class.baja]="queda() !== null && queda()! < articulo().stockActual">
+                {{ textoQuedara() }}
+              </dd>
+            </div>
+          }
         </dl>
 
-        <div class="campo">
-          <label for="stock-real">Stock real (lo que contaste)</label>
-          <input
-            #stockReal
-            id="stock-real"
-            type="text"
-            inputmode="decimal"
-            autocomplete="off"
-            [value]="stockRealTexto()"
-            [attr.aria-invalid]="errores()['stockReal'] ? 'true' : null"
-            [attr.aria-describedby]="errores()['stockReal'] ? 'stock-real-error' : null"
-            (input)="cambiar('stockReal', $any($event.target).value)"
-          />
-          @if (errores()['stockReal']; as mensaje) {
-            <span id="stock-real-error" class="campo-error">{{ mensaje }}</span>
-          }
+        <div class="modos" role="radiogroup" aria-label="Cómo cargar el ajuste">
+          <button type="button" role="radio" class="modo" data-modo="STOCK_REAL" [attr.aria-checked]="modo() === 'STOCK_REAL'" (click)="elegirModo('STOCK_REAL')">
+            Conteo: stock real
+          </button>
+          <button type="button" role="radio" class="modo" data-modo="CANTIDAD" [attr.aria-checked]="modo() === 'CANTIDAD'" (click)="elegirModo('CANTIDAD')">
+            Ingreso / egreso: sumar o restar
+          </button>
         </div>
+
+        @if (modo() === 'STOCK_REAL') {
+          <div class="campo">
+            <label for="stock-real">Stock real (lo que contaste)</label>
+            <input
+              #numero
+              id="stock-real"
+              type="text"
+              inputmode="decimal"
+              autocomplete="off"
+              [value]="valorTexto()"
+              [attr.aria-invalid]="errores()['stockReal'] ? 'true' : null"
+              [attr.aria-describedby]="errores()['stockReal'] ? 'stock-real-error' : null"
+              (input)="cambiar('stockReal', $any($event.target).value)"
+            />
+            @if (errores()['stockReal']; as mensaje) {
+              <span id="stock-real-error" class="campo-error">{{ mensaje }}</span>
+            }
+          </div>
+        } @else {
+          <div class="campo">
+            <label for="cantidad">Cantidad que {{ signo() === 'ENTRA' ? 'entra' : 'sale' }}</label>
+            <div class="signos" role="radiogroup" aria-label="Entra o sale">
+              <button type="button" role="radio" class="modo" data-signo="ENTRA" [attr.aria-checked]="signo() === 'ENTRA'" (click)="elegirSigno('ENTRA')">
+                Entra (+)
+              </button>
+              <button type="button" role="radio" class="modo" data-signo="SALE" [attr.aria-checked]="signo() === 'SALE'" (click)="elegirSigno('SALE')">
+                Sale (−)
+              </button>
+            </div>
+            <input
+              #numero
+              id="cantidad"
+              type="text"
+              inputmode="decimal"
+              autocomplete="off"
+              [value]="valorTexto()"
+              [attr.aria-invalid]="errores()['cantidad'] ? 'true' : null"
+              [attr.aria-describedby]="errores()['cantidad'] ? 'cantidad-error' : null"
+              (input)="cambiar('cantidad', $any($event.target).value)"
+            />
+            @if (errores()['cantidad']; as mensaje) {
+              <span id="cantidad-error" class="campo-error">{{ mensaje }}</span>
+            }
+          </div>
+        }
 
         <div class="campo">
           <label for="motivo">Motivo</label>
@@ -181,7 +238,43 @@ function leerNumero(texto: string): { valor: number; decimales: number } | null 
     dd.baja {
       color: var(--error);
     }
-    #stock-real {
+    /* Selectores segmentados, como el de medios de pago del cobro. */
+    .modos,
+    .signos {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      padding: 3px;
+      gap: 3px;
+      border: 1px solid var(--borde-fuerte);
+      border-radius: var(--radio-lg);
+      background: var(--superficie-3);
+    }
+    .signos {
+      margin-bottom: var(--e-2);
+    }
+    .modo {
+      min-height: 44px;
+      padding: 6px 8px;
+      border: 0;
+      border-radius: var(--radio);
+      background: transparent;
+      color: var(--texto);
+      font-size: 1rem;
+    }
+    .modo:hover {
+      background: var(--superficie);
+    }
+    .modo[aria-checked='true'],
+    .modo[aria-checked='true']:hover {
+      background: var(--acento);
+      color: var(--acento-texto);
+      box-shadow: var(--sombra-1);
+    }
+    .modo:focus-visible {
+      box-shadow: 0 0 0 3px #fdba74;
+    }
+    #stock-real,
+    #cantidad {
       height: 48px;
       font-size: 1.5rem;
       font-weight: 700;
@@ -200,20 +293,44 @@ export class DialogoAjusteStock {
   protected readonly motivos = MOTIVOS_AJUSTE;
   protected readonly motivoLabels = MOTIVO_AJUSTE_LABELS;
 
-  protected readonly stockRealTexto = signal('');
+  private readonly injector = inject(Injector);
+
+  /** Lo escrito en el campo numérico: el stock real o la cantidad, según el modo. */
+  protected readonly valorTexto = signal('');
+  protected readonly modo = signal<ModoAjuste>('STOCK_REAL');
+  protected readonly signo = signal<Signo>('ENTRA');
   protected readonly motivo = signal<MotivoAjuste | null>(null);
   protected readonly detalle = signal('');
   protected readonly errores = signal<Partial<Record<Campo, string>>>({});
   protected readonly errorGeneral = signal<string | null>(null);
   protected readonly guardando = signal(false);
 
-  private readonly campoStock = viewChild.required<ElementRef<HTMLInputElement>>('stockReal');
+  private readonly campoNumero = viewChild<ElementRef<HTMLInputElement>>('numero');
 
   /** Diferencia (con signo) contra el stock actual, en vivo; null si lo escrito no es un número. */
   protected readonly diferencia = computed(() => {
-    const leido = leerNumero(this.stockRealTexto());
+    const leido = leerNumero(this.valorTexto());
     if (!leido) return null;
     return (Math.round(leido.valor * 1000) - Math.round(this.articulo().stockActual * 1000)) / 1000;
+  });
+
+  /** Cantidad con signo del modo sumar o restar; null si lo escrito no es un número sin signo. */
+  private readonly delta = computed(() => {
+    const leido = leerNumero(this.valorTexto());
+    if (!leido || leido.valor < 0) return null;
+    return this.signo() === 'SALE' ? -leido.valor : leido.valor;
+  });
+
+  /** Stock resultante en vivo en el modo sumar o restar. */
+  protected readonly queda = computed(() => {
+    const d = this.delta();
+    if (d === null) return null;
+    return (Math.round(this.articulo().stockActual * 1000) + Math.round(d * 1000)) / 1000;
+  });
+
+  protected readonly textoQuedara = computed(() => {
+    const q = this.queda();
+    return q === null ? '—' : this.conUnidad(q);
   });
 
   protected readonly textoDiferencia = computed(() => {
@@ -224,7 +341,23 @@ export class DialogoAjusteStock {
   });
 
   constructor() {
-    afterNextRender(() => this.campoStock().nativeElement.focus());
+    afterNextRender(() => this.campoNumero()?.nativeElement.focus());
+  }
+
+  /** Cambia de modo a mano. Lo escrito significa otra cosa en el otro modo, así que se borra. */
+  protected elegirModo(modo: ModoAjuste, enfocar = true): void {
+    if (modo === this.modo()) return;
+    this.modo.set(modo);
+    this.valorTexto.set('');
+    this.errores.update(({ stockReal: _s, cantidad: _c, ...resto }) => resto);
+    this.errorGeneral.set(null);
+    if (enfocar) afterNextRender(() => this.campoNumero()?.nativeElement.focus(), { injector: this.injector });
+  }
+
+  protected elegirSigno(signo: Signo): void {
+    this.signo.set(signo);
+    this.errores.update(({ cantidad: _, ...resto }) => resto);
+    this.errorGeneral.set(null);
   }
 
   protected conUnidad(cantidad: number): string {
@@ -232,9 +365,13 @@ export class DialogoAjusteStock {
   }
 
   protected cambiar(campo: Campo, valor: string): void {
-    if (campo === 'stockReal') this.stockRealTexto.set(valor);
-    else if (campo === 'motivo') this.motivo.set(valor as MotivoAjuste);
-    else this.detalle.set(valor);
+    if (campo === 'stockReal' || campo === 'cantidad') this.valorTexto.set(valor);
+    else if (campo === 'motivo') {
+      const motivo = valor as MotivoAjuste;
+      this.motivo.set(motivo);
+      this.signo.set(motivo === 'ROTURA' ? 'SALE' : 'ENTRA');
+      this.elegirModo(MODO_POR_MOTIVO[motivo], false);
+    } else this.detalle.set(valor);
     this.errores.update(({ [campo]: _, ...resto }) => resto);
     this.errorGeneral.set(null);
   }
@@ -256,11 +393,17 @@ export class DialogoAjusteStock {
     const detalle = this.detalle().trim();
     this.guardando.set(true);
     this.service
-      .ajustarStock(this.articulo().id, {
-        stockReal: leerNumero(this.stockRealTexto())!.valor,
-        motivo: this.motivo()!,
-        detalle: detalle === '' ? null : detalle,
-      })
+      .ajustarStock(
+        this.articulo().id,
+        this.modo() === 'CANTIDAD'
+          ? { modo: 'CANTIDAD', cantidad: this.delta()!, motivo: this.motivo()!, detalle: detalle === '' ? null : detalle }
+          : {
+              modo: 'STOCK_REAL',
+              stockReal: leerNumero(this.valorTexto())!.valor,
+              motivo: this.motivo()!,
+              detalle: detalle === '' ? null : detalle,
+            },
+      )
       .subscribe({
         next: (respuesta) => {
           this.guardando.set(false);
@@ -285,9 +428,21 @@ export class DialogoAjusteStock {
   /** Las mismas reglas que AjusteStock.java y MotivoAjuste.java, todas juntas. */
   private validar(): Partial<Record<Campo, string>> {
     const errores: Partial<Record<Campo, string>> = {};
-    const texto = this.stockRealTexto().trim();
+    const texto = this.valorTexto().trim();
     const leido = leerNumero(texto);
-    if (texto === '') errores.stockReal = 'Escribí el stock real que contaste.';
+    if (this.modo() === 'CANTIDAD') {
+      if (texto === '') errores.cantidad = 'Escribí la cantidad que entra o sale.';
+      else if (!leido) errores.cantidad = 'Escribí un número, por ejemplo 12 o 2,5.';
+      else if (leido.valor < 0) errores.cantidad = 'Escribí la cantidad sin signo y elegí si entra o sale.';
+      else if (leido.valor === 0) errores.cantidad = 'La cantidad no puede ser cero.';
+      else if (leido.valor > MAXIMO)
+        errores.cantidad = 'La cantidad es demasiado grande: el máximo es 999.999.999.999,999.';
+      else if (this.articulo().unidad === 'UNIDAD' && leido.decimales > 0)
+        errores.cantidad = 'Este artículo se cuenta por unidad: la cantidad tiene que ser un número entero.';
+      else if (leido.decimales > 3) errores.cantidad = 'La cantidad admite hasta 3 decimales.';
+      else if (this.queda()! < 0)
+        errores.cantidad = `No podés sacar ${String(leido.valor).replace('.', ',')}: hay ${this.conUnidad(this.articulo().stockActual)}.`;
+    } else if (texto === '') errores.stockReal = 'Escribí el stock real que contaste.';
     else if (!leido) errores.stockReal = 'Escribí un número, por ejemplo 12 o 145,5.';
     else if (leido.valor < 0) errores.stockReal = 'El stock real no puede ser negativo.';
     else if (leido.valor > MAXIMO)

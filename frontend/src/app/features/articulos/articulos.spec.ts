@@ -451,6 +451,18 @@ describe('Articulos', () => {
       expect(texto('.stock', 0)).toBe('5 unidades');
     });
 
+    it('un artículo dado de baja no se puede ajustar: el botón queda deshabilitado y explica por qué', async () => {
+      await crearComponente(true, pagina([articulo(1), articulo(2, { activo: false, descripcion: 'Tuerca vieja' })]));
+
+      const botones = el().querySelectorAll<HTMLButtonElement>('button.ajustar-stock');
+      expect(botones[0].disabled).toBe(false);
+      expect(botones[1].disabled).toBe(true);
+      expect(botones[1].title).toBe('"Tuerca vieja" está dado de baja. Reactivalo para ajustar el stock.');
+      botones[1].click();
+      fixture.detectChanges();
+      expect(fixture.debugElement.query(By.directive(DialogoAjusteStock))).toBeNull();
+    });
+
     it('el Vendedor no ve «Ajustar stock»', async () => {
       await crearComponente(false);
 

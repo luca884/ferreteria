@@ -876,6 +876,17 @@ describe('ArticuloForm', () => {
       expect(el().querySelector('button.ajustar-stock')).toBeNull();
     });
 
+    it('un artículo dado de baja tiene «Ajustar stock» deshabilitado con la ayuda', async () => {
+      await crearComponente({
+        id: '5',
+        articulo: articuloGuardado({ activo: false, descripcion: 'Tuerca vieja' }),
+      });
+
+      const boton = el().querySelector<HTMLButtonElement>('button.ajustar-stock')!;
+      expect(boton.disabled).toBe(true);
+      expect(boton.title).toBe('"Tuerca vieja" está dado de baja. Reactivalo para ajustar el stock.');
+    });
+
     it('un artículo dado de baja muestra la etiqueta «De baja» y se puede reactivar', async () => {
       await crearComponente({ id: '5', articulo: articuloGuardado({ activo: false }) });
 

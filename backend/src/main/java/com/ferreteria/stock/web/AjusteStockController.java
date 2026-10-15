@@ -1,6 +1,7 @@
 package com.ferreteria.stock.web;
 
 import com.ferreteria.auth.security.AuthUser;
+import com.ferreteria.stock.model.ModoAjuste;
 import com.ferreteria.stock.service.StockService;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -31,6 +32,10 @@ public class AjusteStockController {
     @PreAuthorize("hasRole('DUENO')")
     public AjusteStockResponse ajustar(
             @PathVariable Long id, @RequestBody AjusteStockRequest request, @AuthenticationPrincipal AuthUser authUser) {
+        if (request.modo() == ModoAjuste.CANTIDAD) {
+            return AjusteStockResponse.de(stockService.ajustarPorCantidad(
+                    id, request.cantidad(), request.motivo(), request.detalle(), authUser.userId()));
+        }
         return AjusteStockResponse.de(stockService.ajustar(
                 id, request.stockReal(), request.motivo(), request.detalle(), authUser.userId()));
     }

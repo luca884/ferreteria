@@ -48,4 +48,53 @@ public final class AjusteStock {
         }
         return diferencia;
     }
+
+    /** Valida la cantidad a sumar (+) o restar (-) del modo CANTIDAD. Lanza IllegalArgumentException con el mensaje al usuario. */
+    public static void validarCantidad(BigDecimal cantidad, boolean admiteDecimales) {
+        if (cantidad == null) {
+            throw new IllegalArgumentException("La cantidad es obligatoria.");
+        }
+        if (cantidad.signum() == 0) {
+            throw new IllegalArgumentException("La cantidad no puede ser cero.");
+        }
+        if (cantidad.abs().compareTo(MAXIMO) > 0) {
+            throw new IllegalArgumentException("La cantidad es demasiado grande: el máximo es 999.999.999.999,999.");
+        }
+        int decimales = Math.max(cantidad.stripTrailingZeros().scale(), 0);
+        if (!admiteDecimales && decimales > 0) {
+            throw new IllegalArgumentException(
+                    "Este artículo se cuenta por unidad: la cantidad tiene que ser un número entero.");
+        }
+        if (decimales > 3) {
+            throw new IllegalArgumentException("La cantidad admite hasta 3 decimales.");
+        }
+    }
+
+    /**
+     * Stock que quedaria al aplicar la cantidad (con signo) al stock vigente. Nunca puede quedar negativo:
+     * sacar de mas lanza IllegalArgumentException ("No podés sacar 5: hay 3 unidades.").
+     */
+    public static BigDecimal stockResultante(BigDecimal stockVigente, BigDecimal cantidad, String unidad) {
+        BigDecimal resultante = stockVigente.add(cantidad);
+        if (resultante.signum() < 0) {
+            throw new IllegalArgumentException("No podés sacar " + texto(cantidad.negate()) + ": hay "
+                    + texto(stockVigente) + " " + nombreDeUnidad(unidad, stockVigente) + ".");
+        }
+        return resultante;
+    }
+
+    private static String texto(BigDecimal valor) {
+        BigDecimal limpio = valor.stripTrailingZeros();
+        return (limpio.signum() == 0 ? "0" : limpio.toPlainString()).replace('.', ',');
+    }
+
+    private static String nombreDeUnidad(String unidad, BigDecimal cantidad) {
+        boolean singular = cantidad.compareTo(BigDecimal.ONE) == 0;
+        return switch (unidad) {
+            case "METRO" -> singular ? "metro" : "metros";
+            case "KILO" -> singular ? "kilo" : "kilos";
+            case "LITRO" -> singular ? "litro" : "litros";
+            default -> singular ? "unidad" : "unidades";
+        };
+    }
 }

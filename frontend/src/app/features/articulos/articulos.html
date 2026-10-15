@@ -100,7 +100,13 @@
               </td>
               @if (auth.esDueno()) {
                 <td class="acciones" (click)="$event.stopPropagation()" (keydown.enter)="$event.stopPropagation()">
-                  <button type="button" class="secundario chico ajustar-stock" (click)="ajustarStock(articulo)">
+                  <button
+                    type="button"
+                    class="secundario chico ajustar-stock"
+                    [disabled]="!articulo.activo"
+                    [attr.title]="articulo.activo ? null : '&quot;' + articulo.descripcion + '&quot; está dado de baja. Reactivalo para ajustar el stock.'"
+                    (click)="ajustarStock(articulo)"
+                  >
                     Ajustar stock
                   </button>
                   <a class="btn chico editar" [routerLink]="['/articulos', articulo.id]">Editar</a>
