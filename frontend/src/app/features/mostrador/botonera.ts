@@ -1,8 +1,8 @@
 import { Component, input, output } from '@angular/core';
 import { AccionMostrador, Atajo, atajosDeBotonera } from './mostrador.atajos';
 
-/** «Vaciar» no tiene tecla (se evita vaciar por error): solo existe como botón. */
-export type AccionBotonera = Exclude<AccionMostrador, 'cerrar'> | 'vaciar';
+/** Acciones que emite la botonera: todas las del mapa menos Esc. */
+export type AccionBotonera = Exclude<AccionMostrador, 'cerrar'>;
 
 /**
  * Botonera del mostrador. Presentacional: las teclas y etiquetas salen de `ATAJOS` y emite la misma acción
@@ -12,7 +12,7 @@ export type AccionBotonera = Exclude<AccionMostrador, 'cerrar'> | 'vaciar';
   selector: 'app-botonera',
   template: `
     <div class="botonera" role="toolbar" aria-label="Acciones del mostrador">
-      @for (atajo of atajos(); track atajo.tecla) {
+      @for (atajo of atajos(); track atajo.accion) {
         <button
           type="button"
           class="boton"
@@ -20,18 +20,12 @@ export type AccionBotonera = Exclude<AccionMostrador, 'cerrar'> | 'vaciar';
           (mousedown)="$event.preventDefault()"
           (click)="emitir(atajo.accion)"
         >
-          <kbd>{{ atajo.tecla }}</kbd> {{ atajo.etiqueta }}
+          @if (atajo.tecla) {
+            <kbd>{{ atajo.tecla }}</kbd>
+          }
+          {{ atajo.etiqueta }}
         </button>
       }
-      <button
-        type="button"
-        class="boton"
-        [disabled]="!habilitada('vaciar')"
-        (mousedown)="$event.preventDefault()"
-        (click)="emitir('vaciar')"
-      >
-        Vaciar
-      </button>
     </div>
   `,
   styles: `
@@ -64,11 +58,11 @@ export class Botonera {
   readonly habilitadas = input<Partial<Record<AccionBotonera, boolean>>>({});
   readonly accion = output<AccionBotonera>();
 
-  protected habilitada(accion: AccionBotonera | AccionMostrador): boolean {
+  protected habilitada(accion: AccionMostrador): boolean {
     return this.habilitadas()[accion as AccionBotonera] !== false;
   }
 
-  protected emitir(accion: AccionMostrador | 'vaciar'): void {
+  protected emitir(accion: AccionMostrador): void {
     if (accion === 'cerrar') return;
     this.accion.emit(accion);
   }

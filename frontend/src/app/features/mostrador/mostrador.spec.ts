@@ -1167,6 +1167,109 @@ describe('Mostrador', () => {
       expect(document.activeElement).toBe(campo());
     });
 
+    it('un escaneo que vuelve con el POST en vuelo queda en el ticket con clave nueva (W-1)', async () => {
+      await conMartillos();
+      await escribir('S');
+      await enter();
+      await tecla('F4');
+      await tecla('Enter');
+      expect(cobros).toHaveLength(1);
+
+      await responder(
+        llamadas.length - 1,
+        exacto(articulo(2, { descripcion: 'Serrucho', precioFinal: 100 })),
+      );
+      await cobrarOk(0, venta(12, 3000));
+
+      expect(descripciones()).toEqual(['Serrucho']);
+      expect(avisos()).toBe('Venta N.º 12 cobrada: $ 3.000,00');
+      const guardado = JSON.parse(localStorage.getItem('ticket:3:7')!);
+      expect(guardado.clave).toBe('clave-2');
+      expect(guardado.renglones.map((r: { articuloId: number }) => r.articuloId)).toEqual([2]);
+    });
+
+    it('si el escaneo en vuelo era del mismo artículo, queda solo la unidad de más (W-1)', async () => {
+      await conMartillos();
+      await escribir('M');
+      await enter();
+      await tecla('F4');
+      await tecla('Enter');
+
+      await responder(llamadas.length - 1, exacto(martillo()));
+      await cobrarOk(0, venta(12, 3000));
+
+      expect(descripciones()).toEqual(['Martillo']);
+      expect(el().querySelector('app-ticket-lista .cantidad')!.textContent!.trim()).toBe('1');
+      await tecla('F4');
+      await tecla('Enter');
+      expect(cobros[1].pedido.clave).toBe('clave-2');
+      expect(cobros[1].pedido.renglones[0].cantidad).toBe(1);
+    });
+
+    describe('aviso de venta cobrada (se oculta a los 5 s)', () => {
+      async function cobrarYa(indice: number, numero: number) {
+        await tecla('F4');
+        await tecla('Enter');
+        await cobrarOk(indice, venta(numero, 3000));
+      }
+
+      it('se oculta a los 5 segundos y no antes', async () => {
+        await conMartillos();
+        await cobrarYa(0, 12);
+
+        await avanzar(4999);
+        expect(avisos()).toBe('Venta N.º 12 cobrada: $ 3.000,00');
+        await avanzar(1);
+        expect(el().querySelector('.aviso')).toBeNull();
+      });
+
+      it('escanear no lo borra antes de tiempo', async () => {
+        await conMartillos();
+        await cobrarYa(0, 12);
+
+        await escanear('S', articulo(2, { descripcion: 'Serrucho', precioFinal: 100 }));
+        await avanzar(2000);
+
+        expect(avisos()).toBe('Venta N.º 12 cobrada: $ 3.000,00');
+      });
+
+      it('una venta nueva antes de los 5 s arranca su propio plazo', async () => {
+        await conMartillos();
+        await cobrarYa(0, 12);
+        await avanzar(3000);
+        await escanear('M', martillo());
+        await cobrarYa(1, 13);
+
+        await avanzar(3000);
+        expect(avisos()).toBe('Venta N.º 13 cobrada: $ 3.000,00');
+        await avanzar(2000);
+        expect(el().querySelector('.aviso')).toBeNull();
+      });
+
+      it('el temporizador viejo no borra un aviso distinto que apareció después', async () => {
+        await conMartillos();
+        await cobrarYa(0, 12);
+        await avanzar(2000);
+        await tecla('F4');
+        expect(avisos()).toBe('El ticket está vacío.');
+
+        await avanzar(3500);
+
+        expect(avisos()).toBe('El ticket está vacío.');
+      });
+
+      it('al destruir el componente no queda el temporizador', async () => {
+        await conMartillos();
+        await cobrarYa(0, 12);
+
+        const pendientes = vi.getTimerCount();
+
+        fixture.destroy();
+
+        expect(vi.getTimerCount()).toBe(pendientes - 1);
+      });
+    });
+
     it('el aviso no bloquea el siguiente escaneo y el ticket nuevo usa otra clave', async () => {
       await conMartillos();
       await tecla('F4');

@@ -2,7 +2,7 @@ import { ATAJOS, atajosDeBotonera, accionDeTecla } from './mostrador.atajos';
 
 describe('mapa de atajos del mostrador', () => {
   it('las teclas son únicas', () => {
-    const teclas = ATAJOS.map((a) => a.tecla);
+    const teclas = ATAJOS.flatMap((a) => (a.tecla === null ? [] : [a.tecla]));
     expect(new Set(teclas).size).toBe(teclas.length);
   });
 
@@ -34,18 +34,22 @@ describe('mapa de atajos del mostrador', () => {
       for (const k of ['F5', 'F7', 'Delete', 'Enter', 'a', '']) expect(accionDeTecla(k)).toBeNull();
     });
 
-    it('no hay ningún atajo que vacíe el ticket', () => {
-      expect(ATAJOS.map((a) => a.accion as string)).not.toContain('vaciar');
+    it('Vaciar está en el mapa pero sin tecla, y ninguna tecla lo devuelve (R-030, R-038)', () => {
+      const vaciar = ATAJOS.find((a) => a.accion === 'vaciar')!;
+      expect(vaciar).toMatchObject({ tecla: null, etiqueta: 'Vaciar', enBotonera: true });
+      for (const k of ['F1', 'F2', 'F3', 'F4', 'F10', 'Escape', 'Delete', 'Backspace', 'Vaciar', 'vaciar', ''])
+        expect(accionDeTecla(k)).not.toBe('vaciar');
     });
   });
 
   describe('botonera', () => {
-    it('muestra Buscar, Cantidad, Cobrar y Quitar con su tecla, y no Esc', () => {
-      expect(atajosDeBotonera().map((a) => `${a.tecla} ${a.etiqueta}`)).toEqual([
+    it('muestra Buscar, Cantidad, Cobrar, Quitar y Vaciar (sin tecla), y no Esc', () => {
+      expect(atajosDeBotonera().map((a) => `${a.tecla ?? ''} ${a.etiqueta}`.trim())).toEqual([
         'F2 Buscar',
         'F3 Cantidad',
         'F4 Cobrar',
         'F10 Quitar',
+        'Vaciar',
       ]);
     });
 
@@ -58,7 +62,7 @@ describe('mapa de atajos del mostrador', () => {
         expect(accionDeTecla('F4')).toBeNull();
         expect(atajosDeBotonera().find((a) => a.accion === 'cobrar')!.tecla).toBe('F12');
       } finally {
-        (cobrar as { tecla: string }).tecla = original;
+        (cobrar as { tecla: string | null }).tecla = original;
       }
     });
   });

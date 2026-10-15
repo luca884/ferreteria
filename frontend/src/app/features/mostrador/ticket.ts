@@ -148,3 +148,26 @@ export function aRequest(t: Ticket, medioPago: MedioPago): ConfirmarVentaRequest
     medioPago,
   };
 }
+
+/**
+ * Saca del ticket solo lo que viajó en el POST (por artículo y cantidad). Lo que se agregó mientras la venta
+ * estaba en vuelo queda, con clave nueva porque la venta enviada ya se cerró. Sin sobrante: ticket vacío.
+ */
+export function descontarVendido(
+  t: Ticket,
+  pedido: ConfirmarVentaRequest,
+  claveNueva: () => string,
+): Ticket {
+  const vendido = new Map<number, number>();
+  for (const r of pedido.renglones) {
+    vendido.set(r.articuloId, (vendido.get(r.articuloId) ?? 0) + Math.round(r.cantidad * 1000));
+  }
+  const renglones = t.renglones.flatMap((r) => {
+    const resta = r.cantidadMilesimas - (vendido.get(r.articuloId) ?? 0);
+    return resta > 0 ? [{ ...r, cantidadMilesimas: resta }] : [];
+  });
+  if (renglones.length === 0) return ticketVacio('');
+  const elegidoId = t.elegido === null ? undefined : t.renglones[t.elegido]?.articuloId;
+  const i = renglones.findIndex((r) => r.articuloId === elegidoId);
+  return { v: 1, clave: claveNueva(), renglones, elegido: i >= 0 ? i : renglones.length - 1 };
+}

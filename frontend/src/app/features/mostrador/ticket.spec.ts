@@ -5,6 +5,7 @@ import {
   aRequest,
   actualizarPrecios,
   cambiarCantidad,
+  descontarVendido,
   marcarProblemas,
   moverElegido,
   parsearCantidad,
@@ -234,6 +235,70 @@ describe('ticket (puro)', () => {
         totalMostrado: 2145,
         medioPago: 'DEBITO',
       });
+    });
+  });
+
+  describe('descontarVendido (W-1)', () => {
+    const nueva = () => 'nueva';
+
+    it('si se vendió todo, el ticket queda vacío y sin clave', () => {
+      const t = conTres();
+      const r = descontarVendido(t, aRequest(t, 'EFECTIVO'), nueva);
+      expect(r).toEqual(ticketVacio(''));
+    });
+
+    it('un renglón agregado después del request queda, con clave nueva', () => {
+      const t = agregar(ticketVacio('k'), art());
+      const pedido = aRequest(t, 'EFECTIVO');
+      const conEscaneo = agregar(t, martillo());
+
+      const r = descontarVendido(conEscaneo, pedido, nueva);
+
+      expect(r.clave).toBe('nueva');
+      expect(r.renglones.map((x) => x.articuloId)).toEqual([3]);
+      expect(r.renglones[0].cantidadMilesimas).toBe(1000);
+      expect(r.elegido).toBe(0);
+    });
+
+    it('si a un renglón enviado se le sumó cantidad, queda la diferencia', () => {
+      const t = agregar(agregar(ticketVacio('k'), art()), art());
+      const pedido = aRequest(t, 'EFECTIVO');
+      const conEscaneo = agregar(t, art());
+
+      const r = descontarVendido(conEscaneo, pedido, nueva);
+
+      expect(r.renglones).toHaveLength(1);
+      expect(r.renglones[0].articuloId).toBe(1);
+      expect(r.renglones[0].cantidadMilesimas).toBe(1000);
+      expect(r.clave).toBe('nueva');
+    });
+
+    it('descuenta fraccionarios en milésimas exactas', () => {
+      const base = agregar(ticketVacio('k'), cable());
+      const t = cambiarCantidad(base, 0, 2500).ticket!;
+      const pedido = aRequest(t, 'EFECTIVO');
+      const conMas = cambiarCantidad(t, 0, 3700).ticket!;
+
+      const r = descontarVendido(conMas, pedido, nueva);
+
+      expect(r.renglones[0].cantidadMilesimas).toBe(1200);
+    });
+
+    it('conserva el resto de los renglones y la marca de problema', () => {
+      const t = agregar(ticketVacio('k'), art());
+      const pedido = aRequest(t, 'EFECTIVO');
+      const conOtro = marcarProblemas(agregar(t, martillo()), [{ articuloId: 3, mensaje: 'x' }]);
+
+      const r = descontarVendido(conOtro, pedido, nueva);
+
+      expect(r.renglones[0].problema).toBe('x');
+    });
+
+    it('no genera clave si no sobra nada', () => {
+      const t = conTres();
+      let llamadas = 0;
+      descontarVendido(t, aRequest(t, 'EFECTIVO'), () => `c${++llamadas}`);
+      expect(llamadas).toBe(0);
     });
   });
 });

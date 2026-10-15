@@ -2,12 +2,14 @@ import { Injectable, InjectionToken, computed, effect, inject, signal } from '@a
 import { AuthService } from '../../core/auth/auth.service';
 import { UNIDADES } from '../articulos/articulo.models';
 import { ArticuloMostrador } from './mostrador.models';
+import { ConfirmarVentaRequest } from './venta.models';
 import {
   RenglonTicket,
   Ticket,
   actualizarPrecios,
   agregar,
   cambiarCantidad,
+  descontarVendido,
   marcarProblemas,
   moverElegido,
   quitar,
@@ -74,6 +76,11 @@ export class TicketStore {
 
   marcarProblemas(problemas: readonly { articuloId: number; mensaje: string }[]): void {
     this._ticket.update((t) => marcarProblemas(t, problemas));
+  }
+
+  /** Tras cobrar: saca lo enviado; lo agregado durante el POST queda con una clave nueva. */
+  descontarVendido(pedido: ConfirmarVentaRequest): void {
+    this._ticket.update((t) => descontarVendido(t, pedido, this.generarClave));
   }
 
   /** Tras cobrar o vaciar: ticket vacío y sin clave (el próximo primer renglón genera una nueva). */

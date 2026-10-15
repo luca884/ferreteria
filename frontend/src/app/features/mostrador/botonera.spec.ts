@@ -29,8 +29,27 @@ describe('Botonera', () => {
   });
 
   it('las etiquetas salen del mapa de atajos, sin duplicarlas', () => {
-    const esperadas = ATAJOS.filter((a) => a.enBotonera).map((a) => `${a.tecla} ${a.etiqueta}`);
-    expect(textos().slice(0, esperadas.length)).toEqual(esperadas);
+    const esperadas = ATAJOS.filter((a) => a.enBotonera).map((a) =>
+      `${a.tecla ?? ''} ${a.etiqueta}`.trim(),
+    );
+    expect(textos()).toEqual(esperadas);
+  });
+
+  it('Vaciar viene del mapa: si cambia su etiqueta, cambia el botón', () => {
+    const vaciar = ATAJOS.find((a) => a.accion === 'vaciar')!;
+    const original = vaciar.etiqueta;
+    try {
+      (vaciar as { etiqueta: string }).etiqueta = 'Borrar todo';
+      const f = TestBed.createComponent(Botonera);
+      f.detectChanges();
+      const t = Array.from((f.nativeElement as HTMLElement).querySelectorAll('button')).map((b) =>
+        b.textContent!.trim(),
+      );
+      expect(t).toContain('Borrar todo');
+      expect(t).not.toContain('Vaciar');
+    } finally {
+      (vaciar as { etiqueta: string }).etiqueta = original;
+    }
   });
 
   it('el clic emite la acción', () => {

@@ -17,10 +17,12 @@ import { formatearMonto } from '../../core/formato/monto';
 import { aRequest } from './ticket';
 import { TicketLista } from './ticket-lista';
 import { TicketStore } from './ticket.store';
-import { VentaCobrada, VentaRechazada } from './venta.models';
+import { ConfirmarVentaRequest, VentaCobrada, VentaRechazada } from './venta.models';
 import { VentaService, rechazoDe } from './venta.service';
 
 const ESPERA_MS = 250;
+/** Cuánto queda a la vista el aviso de venta cobrada. */
+const AVISO_COBRADA_MS = 5000;
 const MENSAJE_ERROR = 'No se pudo buscar. Probá de nuevo.';
 const MENSAJE_DADO_DE_BAJA = 'Artículo dado de baja';
 const MENSAJE_SIN_RESULTADOS = 'No encontramos ningún artículo con ese código o descripción.';
@@ -111,6 +113,8 @@ export class Mostrador {
   private readonly escaneos = new Subject<Escaneo>();
   /** Número del último gesto del vendedor (tipear, Enter, Esc): decide quién puede tocar la pantalla. */
   private seq = 0;
+  /** Temporizador que oculta el aviso de venta cobrada; cada aviso nuevo arranca el suyo. */
+  private ocultarAviso: ReturnType<typeof setTimeout> | undefined;
 
   protected readonly dialogo = signal<Dialogo | null>(null);
   protected readonly aviso = signal<Aviso | null>(null);
@@ -133,6 +137,7 @@ export class Mostrador {
   });
 
   constructor() {
+    this.destroyRef.onDestroy(() => clearTimeout(this.ocultarAviso));
     this.busquedas
       .pipe(
         switchMap((q) =>
@@ -178,9 +183,19 @@ export class Mostrador {
       });
   }
 
+  /** Todo cambio del aviso pasa por acá: un aviso nuevo (o ninguno) cancela el plazo del anterior. */
+  private avisar(aviso: Aviso | null, ocultarEnMs?: number): void {
+    clearTimeout(this.ocultarAviso);
+    this.ocultarAviso = undefined;
+    this.aviso.set(aviso);
+    if (aviso && ocultarEnMs !== undefined) {
+      this.ocultarAviso = setTimeout(() => this.avisar(null), ocultarEnMs);
+    }
+  }
+
   private agregar(articulo: ArticuloMostrador): void {
     this.ticket.agregar(articulo);
-    if (this.aviso()?.tipo === 'vacio') this.aviso.set(null);
+    if (this.aviso()?.tipo === 'vacio') this.avisar(null);
   }
 
   private mostrar(q: string, resultado: BusquedaMostrador, inmediata: boolean): void {
@@ -227,15 +242,15 @@ export class Mostrador {
         return;
       case 'cobrar':
         if (renglones.length === 0) {
-          this.aviso.set({ texto: MENSAJE_TICKET_VACIO, grave: false, tipo: 'vacio' });
+          this.avisar({ texto: MENSAJE_TICKET_VACIO, grave: false, tipo: 'vacio' });
           return;
         }
-        this.aviso.set(null);
+        this.avisar(null);
         this.dialogo.set({ tipo: 'cobro' });
         return;
       case 'vaciar':
         if (renglones.length === 0) return;
-        this.aviso.set(null);
+        this.avisar(null);
         this.dialogo.set({ tipo: 'vaciar' });
         return;
       case 'cantidad':
@@ -243,7 +258,7 @@ export class Mostrador {
         // Sin renglón elegido, el último agregado.
         const indice = this.ticket.ticket().elegido ?? renglones.length - 1;
         if (!renglones[indice]) return;
-        this.aviso.set(null);
+        this.avisar(null);
         this.dialogo.set({ tipo: accion, indice });
         return;
       }
@@ -260,7 +275,7 @@ export class Mostrador {
 
   protected cambiarCantidad(indice: number, milesimas: number): void {
     const error = this.ticket.cambiarCantidad(indice, milesimas);
-    if (error) this.aviso.set({ texto: error, grave: true, tipo: 'otro' });
+    if (error) this.avisar({ texto: error, grave: true, tipo: 'otro' });
     this.cerrarDialogo();
   }
 
@@ -277,7 +292,7 @@ export class Mostrador {
   /** Un escaneo llegó con un diálogo abierto: el diálogo lo descartó y acá se avisa. */
   protected escaneoDescartado(): void {
     if (this.dialogo()?.tipo === 'cobro') this.avisoCobro.set(AVISO_ESCANEO_CON_DIALOGO);
-    else this.aviso.set({ texto: AVISO_ESCANEO_CON_DIALOGO, grave: false, tipo: 'otro' });
+    else this.avisar({ texto: AVISO_ESCANEO_CON_DIALOGO, grave: false, tipo: 'otro' });
   }
 
   /** Enter en el diálogo de cobro: manda la venta con la clave del ticket (la misma en cada reintento). */
@@ -290,23 +305,27 @@ export class Mostrador {
       .cobrar(pedido)
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
-        next: (cobrada) => this.alCobrar(cobrada),
+        next: (cobrada) => this.alCobrar(cobrada, pedido),
         error: (err: unknown) => this.alFallarCobro(err),
       });
   }
 
-  private alCobrar({ venta }: VentaCobrada): void {
+  private alCobrar({ venta }: VentaCobrada, pedido: ConfirmarVentaRequest): void {
     this.enVuelo.set(false);
-    this.ticket.vaciar();
+    // Solo sale lo que viajó en el POST: un escaneo que volvió en el medio queda para la próxima venta.
+    this.ticket.descontarVendido(pedido);
     const sinStock = venta.sinStock
       .map((s) => `"${s.descripcion}" quedó en ${String(s.stockActual).replace('.', ',')}`)
       .join('; ');
     const texto = `Venta N.º ${venta.numero} cobrada: ${formatearMonto(venta.total)}`;
-    this.aviso.set({
-      texto: sinStock ? `${texto}. Sin stock: ${sinStock}.` : texto,
-      grave: false,
-      tipo: 'otro',
-    });
+    this.avisar(
+      {
+        texto: sinStock ? `${texto}. Sin stock: ${sinStock}.` : texto,
+        grave: false,
+        tipo: 'otro',
+      },
+      AVISO_COBRADA_MS,
+    );
     this.cerrarDialogo();
   }
 
@@ -348,7 +367,7 @@ export class Mostrador {
 
   /** El ticket no se vende como está: se cierra el cobro, se conserva el ticket y se explica por qué. */
   private rechazarTicket(texto: string): void {
-    this.aviso.set({ texto, grave: true, tipo: 'otro' });
+    this.avisar({ texto, grave: true, tipo: 'otro' });
     this.cerrarDialogo();
   }
 
