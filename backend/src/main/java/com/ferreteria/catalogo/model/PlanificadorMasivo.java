@@ -70,7 +70,7 @@ public final class PlanificadorMasivo {
             if (fila.modificado()) {
                 cambios.add(new CambioMasivo(articulo.id(), articulo.codigoInterno(), articulo.descripcion(),
                     articulo.costo(), fila.costoNuevo(), fila.margenAnterior(), fila.margenNuevo(),
-                    articulo.precioFinal(), fila.precioNuevo(), fila.advertencia()));
+                    articulo.precioFinal(), fila.precioNuevo(), fila.margenPropioNuevo() == null, fila.advertencia()));
             }
         }
 

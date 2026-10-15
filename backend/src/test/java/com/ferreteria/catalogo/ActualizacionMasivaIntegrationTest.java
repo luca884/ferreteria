@@ -375,6 +375,21 @@ class ActualizacionMasivaIntegrationTest extends IntegrationTestBase {
     // --- Caminos felices (R-007..R-013, R-016, R-017, R-020) ---
 
     @Test
+    void laVistaPreviaMarcaMargenHeredadoSoloEnElArticuloSinMargenPropio() throws Exception {
+        Tenant t = crearTenant();
+        long heredado = insertarArticulo(t, "100.00", "160.00");
+        long propio = insertarArticulo(t, null, null, "100.00", "50.00", "181.50", true);
+
+        JsonNode cambios = vistaPrevia(t.dueno(), pedido("COSTO_PORCENTAJE", "10")).get("cambios");
+
+        assertThat(cambios).hasSize(2);
+        assertThat(cambios.get(0).get("articuloId").asLong()).isEqualTo(heredado);
+        assertThat(cambios.get(0).get("margenHeredado").asBoolean()).isTrue();
+        assertThat(cambios.get(1).get("articuloId").asLong()).isEqualTo(propio);
+        assertThat(cambios.get(1).get("margenHeredado").asBoolean()).isFalse();
+    }
+
+    @Test
     void laVistaPreviaDelEscenarioA1AA5InformaTodoYNoEscribeNada() throws Exception {
         Tenant t = crearTenant();
         long a1 = insertarArticulo(t, "100.00", "160.00");
