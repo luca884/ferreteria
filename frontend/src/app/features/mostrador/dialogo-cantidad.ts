@@ -3,6 +3,13 @@ import { Unidad } from '../articulos/articulo.models';
 import { parsearCantidad } from './ticket';
 import { GuardaLector } from './guarda-lector';
 
+const UNIDADES_PLURAL: Record<Unidad, string> = {
+  UNIDAD: 'Unidades',
+  METRO: 'Metros',
+  KILO: 'Kilos',
+  LITRO: 'Litros',
+};
+
 /**
  * Cambia la cantidad de un renglón (F3). Presentacional: recibe el renglón y emite la cantidad en
  * milésimas. Tiene el foco propio; la validación es la de R-007.
@@ -28,6 +35,7 @@ import { GuardaLector } from './guarda-lector';
           [value]="texto()"
           (input)="alEscribir($any($event.target).value)"
         />
+        <p class="ayuda">{{ ayuda() }}</p>
         @if (error(); as mensaje) {
           <p class="error" role="alert">{{ mensaje }}</p>
         }
@@ -43,6 +51,11 @@ import { GuardaLector } from './guarda-lector';
     </div>
   `,
   styles: `
+    .ayuda {
+      margin: 0;
+      color: var(--texto-suave);
+      font-weight: 600;
+    }
     input {
       height: 60px;
       font-size: 2rem;
@@ -66,6 +79,9 @@ export class DialogoCantidad {
   private readonly guarda = new GuardaLector();
   private readonly escrito = signal<string | null>(null);
   protected readonly error = signal<string | null>(null);
+
+  /** En qué se mide el renglón y qué cantidades acepta, para no tener que probar y fallar. */
+  protected readonly ayuda = computed(() => `${UNIDADES_PLURAL[this.unidad()]} — ${this.unidad() === 'UNIDAD' ? 'solo números enteros' : 'acepta hasta 3 decimales'}`);
 
   protected readonly inicial = computed(() => String(this.cantidadMilesimas() / 1000).replace('.', ','));
   protected readonly texto = computed(() => this.escrito() ?? this.inicial());

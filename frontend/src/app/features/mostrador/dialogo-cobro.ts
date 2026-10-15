@@ -21,6 +21,9 @@ export interface ConfirmacionCobro {
   recibidoCentavos: number | null;
 }
 
+/** Tope del vuelto: $ 1.000.000. Un recibido que supere el total en más que eso es un error de tipeo. */
+const VUELTO_MAXIMO_CENTAVOS = 100_000_000;
+
 const centavosATexto = (c: number) => `${Math.floor(c / 100)},${String(c % 100).padStart(2, '0')}`;
 
 /**
@@ -80,7 +83,9 @@ const centavosATexto = (c: number) => `${Math.floor(c / 100)},${String(c % 100).
                 (input)="escrito.set($any($event.target).value)"
               />
             </label>
-            @if (recibido() !== null && recibido()! >= totalCentavos()) {
+            @if (faltaCentavos() > 0) {
+              <p class="falta" role="status">Faltan <strong>{{ faltaCentavos() / 100 | monto }}</strong></p>
+            } @else if (recibido() !== null && errorRecibido() === null) {
               <p class="vuelto">Vuelto <strong>{{ vueltoCentavos() / 100 | monto }}</strong></p>
             }
             @if (errorRecibido(); as mensaje) {
@@ -202,7 +207,8 @@ const centavosATexto = (c: number) => `${Math.floor(c / 100)},${String(c % 100).
       text-align: right;
       font-variant-numeric: tabular-nums;
     }
-    .vuelto {
+    .vuelto,
+    .falta {
       display: flex;
       flex-direction: column;
       justify-content: center;
@@ -216,11 +222,20 @@ const centavosATexto = (c: number) => `${Math.floor(c / 100)},${String(c % 100).
       font-weight: 600;
       text-align: right;
     }
-    .vuelto strong {
+    .vuelto strong,
+    .falta strong {
       color: var(--exito);
       font-size: 1.75rem;
       line-height: 1.1;
       font-variant-numeric: tabular-nums;
+    }
+    /* Falta plata: mismo lugar y tamaño que el vuelto, en rojo para que no se confunda. */
+    .falta {
+      border-color: var(--error-borde);
+      background: var(--error-fondo);
+    }
+    .falta strong {
+      color: var(--error);
     }
     .efectivo .error {
       grid-column: 1 / -1;
@@ -267,10 +282,17 @@ export class DialogoCobro {
 
   protected readonly vueltoCentavos = computed(() => Math.max(0, (this.recibido() ?? 0) - this.totalCentavos()));
 
+  /** Lo que falta para llegar al total; mientras sea mayor que 0 no se puede cobrar. */
+  protected readonly faltaCentavos = computed(() => {
+    const recibido = this.recibido();
+    return recibido !== null && recibido < this.totalCentavos() ? this.totalCentavos() - recibido : 0;
+  });
+
   protected readonly errorRecibido = computed(() => {
     const recibido = this.recibido();
     if (recibido === null) return this.escrito() === null ? null : 'Escribí el importe recibido.';
-    return recibido < this.totalCentavos() ? 'El importe recibido no alcanza.' : null;
+    // Un error de tipeo (un cero de más) no debe terminar en un vuelto absurdo.
+    return recibido - this.totalCentavos() > VUELTO_MAXIMO_CENTAVOS ? 'El importe recibido es demasiado alto.' : null;
   });
 
   constructor() {
@@ -334,7 +356,7 @@ export class DialogoCobro {
   protected confirmarCobro(): void {
     if (this.enVuelo() || this.bloqueado()) return;
     const efectivo = this.medio() === 'EFECTIVO';
-    if (efectivo && (this.recibido() === null || this.errorRecibido() !== null)) return;
+    if (efectivo && (this.recibido() === null || this.errorRecibido() !== null || this.faltaCentavos() > 0)) return;
     this.bloqueado.set(true);
     this.confirmar.emit({ medioPago: this.medio(), recibidoCentavos: efectivo ? this.recibido() : null });
   }

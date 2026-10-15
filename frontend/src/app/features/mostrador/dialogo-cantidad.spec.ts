@@ -10,6 +10,7 @@ describe('DialogoCantidad', () => {
 
   const el = () => fixture.nativeElement as HTMLElement;
   const campo = () => el().querySelector('input')!;
+  const ayuda = () => el().querySelector('.ayuda')?.textContent?.trim() ?? null;
   const error = () => el().querySelector('[role="alert"]')?.textContent?.trim() ?? null;
 
   function tecla(key: string, init: KeyboardEventInit = {}): KeyboardEvent {
@@ -55,6 +56,17 @@ describe('DialogoCantidad', () => {
     expect(campo().value).toBe('2,5');
     expect(campo().selectionStart).toBe(0);
     expect(campo().selectionEnd).toBe(3);
+  });
+
+  it.each([
+    ['UNIDAD', 'Unidades — solo números enteros'],
+    ['METRO', 'Metros — acepta hasta 3 decimales'],
+    ['KILO', 'Kilos — acepta hasta 3 decimales'],
+    ['LITRO', 'Litros — acepta hasta 3 decimales'],
+  ])('dice la unidad del artículo (%s) y qué cantidades acepta (H-17)', async (unidad, texto) => {
+    await abrir(unidad);
+
+    expect(ayuda()).toBe(texto);
   });
 
   it('es un diálogo modal que nombra el artículo', async () => {
