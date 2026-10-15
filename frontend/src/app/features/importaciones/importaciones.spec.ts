@@ -1570,4 +1570,130 @@ describe('Importaciones', () => {
       });
     });
   });
+
+  describe('accesibilidad', () => {
+    const vistaPrevia: VistaPrevia = {
+      conteos: { suben: 1, bajan: 0, nuevos: 0, sinCambio: 0, noEstan: 0, conError: 0 },
+      cambios: [],
+      nuevos: [],
+      errores: [],
+      advertencias: [],
+      noEstan: [],
+      detalleRecortado: false,
+    };
+
+    const descripciones = (selector: string) =>
+      (q(selector).getAttribute('aria-describedby') ?? '')
+        .split(' ')
+        .filter(Boolean)
+        .map((id) => el().querySelector(`[id="${id}"]`)?.textContent?.trim());
+
+    async function conMuestra() {
+      await crearComponente();
+      await elegir('#proveedor', 'Sinteplast');
+      await elegirArchivo(lista());
+    }
+
+    it('«Leyendo la lista…» es un status', async () => {
+      await crearComponente();
+      servicio.muestra.mockReturnValue(new Subject<Muestra>());
+      await elegir('#proveedor', 'Sinteplast');
+      await elegirArchivo(lista());
+
+      const leyendo = Array.from(el().querySelectorAll('[role="status"]')).find((p) =>
+        p.textContent?.includes('Leyendo la lista…'),
+      );
+      expect(leyendo).toBeDefined();
+    });
+
+    it('el archivo elegido se anuncia y el tope dice «10 MB» sin cortar', async () => {
+      await crearComponente();
+
+      expect(q('.nombre-archivo').getAttribute('aria-live')).toBe('polite');
+      expect(q('app-selector-archivo').textContent).toContain('10 MB');
+    });
+
+    it('el contenedor interno del scroll virtual no corta la relación entre rowgroup y row', async () => {
+      await conMuestra();
+
+      const envoltorio = q('.visor-cuerpo .cdk-virtual-scroll-content-wrapper');
+      expect(envoltorio.getAttribute('role')).toBe('presentation');
+    });
+
+    it('los números abren el teclado numérico', async () => {
+      await conMuestra();
+
+      expect(q('#filaDesde').getAttribute('inputmode')).toBe('numeric');
+      for (const id of ['#bonificacion1', '#bonificacion2', '#bonificacion3']) {
+        expect(q(id).getAttribute('inputmode')).toBe('decimal');
+      }
+    });
+
+    it('un campo con error queda inválido y enlazado a su mensaje', async () => {
+      await conMuestra();
+      expect(q('#filaDesde').hasAttribute('aria-invalid')).toBe(false);
+
+      await escribir('#filaDesde', '0');
+      await escribir('#bonificacion2', '150');
+
+      expect(q('#filaDesde').getAttribute('aria-invalid')).toBe('true');
+      expect(descripciones('#filaDesde')).toEqual(['Indicá la primera fila de datos (1 o más).']);
+      expect(q('#bonificacion2').getAttribute('aria-invalid')).toBe('true');
+      expect(descripciones('#bonificacion2')).toEqual(['La bonificación 2 tiene que estar entre 0 y 100.']);
+      expect(q('#bonificacion1').hasAttribute('aria-invalid')).toBe(false);
+    });
+
+    it('pedir la vista previa sin columnas marca la del código y le da el foco', async () => {
+      await conMuestra();
+
+      q<HTMLButtonElement>('button.generar').click();
+      await asentar();
+
+      expect(q('#columnaCodigo').getAttribute('aria-invalid')).toBe('true');
+      expect(q('#columnaCosto').getAttribute('aria-invalid')).toBe('true');
+      expect(document.activeElement).toBe(q('#columnaCodigo'));
+    });
+
+    it('con las columnas elegidas y una bonificación mal, el foco va a esa bonificación', async () => {
+      await conMuestra();
+      await elegir('#columnaCodigo', 'A');
+      await elegir('#columnaCosto', 'C');
+      await escribir('#bonificacion3', '-1');
+
+      q<HTMLButtonElement>('button.generar').click();
+      await asentar();
+
+      expect(servicio.vistaPrevia).not.toHaveBeenCalled();
+      expect(document.activeElement).toBe(q('#bonificacion3'));
+    });
+
+    it('mientras se genera la vista previa el botón lo dice', async () => {
+      await conMuestra();
+      servicio.vistaPrevia.mockReturnValue(new Subject<VistaPrevia>());
+      await elegir('#columnaCodigo', 'A');
+      await elegir('#columnaCosto', 'C');
+
+      q<HTMLButtonElement>('button.generar').click();
+      await asentar();
+
+      expect(q('button.generar').textContent?.trim()).toBe('Generando vista previa…');
+      expect(q<HTMLButtonElement>('button.generar').disabled).toBe(true);
+    });
+
+    it('mientras se aplica la importación el botón lo dice', async () => {
+      await conMuestra();
+      servicio.vistaPrevia.mockReturnValue(of(vistaPrevia));
+      servicio.aplicar.mockReturnValue(new Subject<Importacion>());
+      await elegir('#columnaCodigo', 'A');
+      await elegir('#columnaCosto', 'C');
+      q<HTMLButtonElement>('button.generar').click();
+      await asentar();
+
+      q<HTMLButtonElement>('button.confirmar').click();
+      await asentar();
+
+      expect(q('button.confirmar').textContent?.trim()).toBe('Importando…');
+      expect(q<HTMLButtonElement>('button.confirmar').disabled).toBe(true);
+    });
+  });
 });

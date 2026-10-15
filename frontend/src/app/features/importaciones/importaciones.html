@@ -60,7 +60,7 @@
   </section>
 
   @if (cargandoMuestra()) {
-    <p class="ayuda">Leyendo la lista…</p>
+    <p class="ayuda" role="status">Leyendo la lista…</p>
   }
 
   @if (muestra(); as m) {
@@ -134,6 +134,7 @@
           </div>
         </div>
         <cdk-virtual-scroll-viewport
+          #cuerpoVisor
           class="visor-cuerpo"
           role="rowgroup"
           tabindex="0"
@@ -170,14 +171,26 @@
         <div class="fila">
           <div class="campo">
             <label for="filaDesde">Primera fila de datos</label>
-            <input id="filaDesde" type="number" min="1" formControlName="filaDesde" />
+            <input
+              id="filaDesde"
+              type="number"
+              inputmode="numeric"
+              min="1"
+              formControlName="filaDesde"
+              [attr.aria-invalid]="form.controls.filaDesde.invalid ? 'true' : null"
+              [attr.aria-describedby]="form.controls.filaDesde.invalid ? 'filaDesde-error' : null"
+            />
             @if (form.controls.filaDesde.invalid) {
-              <span class="campo-error">Indicá la primera fila de datos (1 o más).</span>
+              <span id="filaDesde-error" class="campo-error">Indicá la primera fila de datos (1 o más).</span>
             }
           </div>
           <div class="campo">
             <label for="columnaCodigo">Columna del código</label>
-            <select id="columnaCodigo" formControlName="columnaCodigo">
+            <select
+              id="columnaCodigo"
+              formControlName="columnaCodigo"
+              [attr.aria-invalid]="falta('columnaCodigo') ? 'true' : null"
+            >
               <option [ngValue]="null">Elegí la columna</option>
               @for (c of columnas(); track c) {
                 <option [ngValue]="c">{{ etiquetaColumna(c) }}</option>
@@ -195,7 +208,11 @@
           </div>
           <div class="campo">
             <label for="columnaCosto">Columna del costo</label>
-            <select id="columnaCosto" formControlName="columnaCosto">
+            <select
+              id="columnaCosto"
+              formControlName="columnaCosto"
+              [attr.aria-invalid]="falta('columnaCosto') ? 'true' : null"
+            >
               <option [ngValue]="null">Elegí la columna</option>
               @for (c of columnas(); track c) {
                 <option [ngValue]="c">{{ etiquetaColumna(c) }}</option>
@@ -214,23 +231,53 @@
         <div class="fila">
           <div class="campo">
             <label for="bonificacion1">Bonificación 1 (%)</label>
-            <input id="bonificacion1" type="number" min="0" max="100" step="0.01" formControlName="bonificacion1" />
+            <input
+              id="bonificacion1"
+              type="number"
+              inputmode="decimal"
+              min="0"
+              max="100"
+              step="0.01"
+              formControlName="bonificacion1"
+              [attr.aria-invalid]="form.controls.bonificacion1.invalid ? 'true' : null"
+              [attr.aria-describedby]="form.controls.bonificacion1.invalid ? 'bonificacion1-error' : null"
+            />
             @if (form.controls.bonificacion1.invalid) {
-              <span class="campo-error">La bonificación 1 tiene que estar entre 0 y 100.</span>
+              <span id="bonificacion1-error" class="campo-error">La bonificación 1 tiene que estar entre 0 y 100.</span>
             }
           </div>
           <div class="campo">
             <label for="bonificacion2">Bonificación 2 (%)</label>
-            <input id="bonificacion2" type="number" min="0" max="100" step="0.01" formControlName="bonificacion2" />
+            <input
+              id="bonificacion2"
+              type="number"
+              inputmode="decimal"
+              min="0"
+              max="100"
+              step="0.01"
+              formControlName="bonificacion2"
+              [attr.aria-invalid]="form.controls.bonificacion2.invalid ? 'true' : null"
+              [attr.aria-describedby]="form.controls.bonificacion2.invalid ? 'bonificacion2-error' : null"
+            />
             @if (form.controls.bonificacion2.invalid) {
-              <span class="campo-error">La bonificación 2 tiene que estar entre 0 y 100.</span>
+              <span id="bonificacion2-error" class="campo-error">La bonificación 2 tiene que estar entre 0 y 100.</span>
             }
           </div>
           <div class="campo">
             <label for="bonificacion3">Bonificación 3 (%)</label>
-            <input id="bonificacion3" type="number" min="0" max="100" step="0.01" formControlName="bonificacion3" />
+            <input
+              id="bonificacion3"
+              type="number"
+              inputmode="decimal"
+              min="0"
+              max="100"
+              step="0.01"
+              formControlName="bonificacion3"
+              [attr.aria-invalid]="form.controls.bonificacion3.invalid ? 'true' : null"
+              [attr.aria-describedby]="form.controls.bonificacion3.invalid ? 'bonificacion3-error' : null"
+            />
             @if (form.controls.bonificacion3.invalid) {
-              <span class="campo-error">La bonificación 3 tiene que estar entre 0 y 100.</span>
+              <span id="bonificacion3-error" class="campo-error">La bonificación 3 tiene que estar entre 0 y 100.</span>
             }
           </div>
         </div>
@@ -239,7 +286,7 @@
           al confirmar la importación. Dejá vacía la que no corresponda.
         </p>
         <button type="button" class="generar primario" [disabled]="generando()" (click)="generarVistaPrevia()">
-          Ver vista previa
+          {{ generando() ? 'Generando vista previa…' : 'Ver vista previa' }}
         </button>
       </form>
     </section>
@@ -430,7 +477,7 @@
         </div>
       </div>
       <button type="button" class="confirmar primario" [disabled]="aplicando()" (click)="confirmar()">
-        Confirmar importación
+        {{ aplicando() ? 'Importando…' : 'Confirmar importación' }}
       </button>
     </section>
   }
