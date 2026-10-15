@@ -37,7 +37,8 @@ public class GlobalExceptionHandler {
     /** Mensajes propios para los campos enumerados del articulo; el resto usa el mensaje generico. */
     private static final Map<String, String> MENSAJES_ENUM_POR_CAMPO = Map.of(
             "alicuotaIva", "La alícuota de IVA no es válida. Usá 0, 2,5, 5, 10,5, 21 o 27.",
-            "unidad", "La unidad no es válida. Usá UNIDAD, METRO, KILO o LITRO.");
+            "unidad", "La unidad no es válida. Usá UNIDAD, METRO, KILO o LITRO.",
+            "medioPago", "El medio de pago no es válido. Usá EFECTIVO, DEBITO, CREDITO o TRANSFERENCIA.");
 
     private static final Pattern BONIFICACION = Pattern.compile("bonificacion([123])");
 
