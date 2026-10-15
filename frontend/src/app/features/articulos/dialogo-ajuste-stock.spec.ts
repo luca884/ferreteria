@@ -501,6 +501,25 @@ describe('DialogoAjusteStock', () => {
       expect(texto('#cantidad-error')).toBe('No podés sacar 5: hay 3 unidades.');
     });
 
+    it('el error de un campo que no está a la vista se muestra arriba de los botones', async () => {
+      await abrir(tornillo(10));
+      servicio.ajustarStock.mockReturnValue(
+        throwError(
+          () =>
+            new HttpErrorResponse({
+              status: 400,
+              error: { message: 'Datos inválidos', errors: { stockReal: 'Indicá el stock real.' } },
+            }),
+        ),
+      );
+      await escribir('#motivo', 'INGRESO_MERCADERIA');
+      await escribir('#cantidad', '5');
+
+      await confirmar();
+
+      expect(texto('.error[role="alert"]')).toBe('Indicá el stock real.');
+    });
+
     it('el 422 de un artículo dado de baja se muestra arriba de los botones', async () => {
       await abrir(tornillo(10));
       servicio.ajustarStock.mockReturnValue(

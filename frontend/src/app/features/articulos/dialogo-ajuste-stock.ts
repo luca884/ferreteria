@@ -627,7 +627,13 @@ export class DialogoAjusteStock {
           this.guardando.set(false);
           const delServidor = err instanceof HttpErrorResponse ? err.error?.errors : null;
           if (delServidor && typeof delServidor === 'object' && Object.keys(delServidor).length > 0) {
-            this.errores.set(delServidor as Partial<Record<Campo, string>>);
+            // Cada error va junto a su campo; el de un campo que no está a la vista (el otro modo) va arriba de
+            // los botones, para que no se pierda.
+            const visibles: string[] = ['motivo', 'detalle', this.modo() === 'CANTIDAD' ? 'cantidad' : 'stockReal'];
+            const entradas = Object.entries(delServidor as Record<string, string>);
+            this.errores.set(Object.fromEntries(entradas.filter(([campo]) => visibles.includes(campo))));
+            const ocultos = entradas.filter(([campo]) => !visibles.includes(campo)).map(([, mensaje]) => mensaje);
+            this.errorGeneral.set(ocultos.length > 0 ? ocultos.join(' ') : null);
           } else {
             this.errorGeneral.set(
               err instanceof HttpErrorResponse && err.error?.message
