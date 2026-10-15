@@ -1,9 +1,12 @@
 import { Component, computed, input } from '@angular/core';
 import { MontoPipe } from '../../core/formato/monto';
 import { totalTicket } from './centavos';
-import { RenglonTicket, conteoTicket } from './ticket';
+import { RenglonTicket } from './ticket';
 
-/** Totales del ticket, al pie del panel derecho como en GDS: el TOTAL grande y el conteo. Presentacional. */
+/**
+ * Totales del ticket, al pie del panel derecho como en GDS: el TOTAL grande y la cantidad de renglones.
+ * No se cuentan «artículos»: 2 unidades + 2,5 m daría un número que no significa nada. Presentacional.
+ */
 @Component({
   selector: 'app-totales-ticket',
   imports: [MontoPipe],
@@ -12,8 +15,7 @@ import { RenglonTicket, conteoTicket } from './ticket';
       <span class="etiqueta-total">Total</span>
       <p class="total" aria-label="Total del ticket">{{ totalCentavos() / 100 | monto }}</p>
       <p class="conteo">
-        {{ conteo().articulos }} {{ conteo().articulos === 1 ? 'artículo' : 'artículos' }} ·
-        {{ conteo().renglones }} {{ conteo().renglones === 1 ? 'renglón' : 'renglones' }}
+        {{ renglones().length }} {{ renglones().length === 1 ? 'renglón' : 'renglones' }}
       </p>
     </section>
   `,
@@ -58,5 +60,4 @@ export class TotalesTicket {
   readonly renglones = input.required<readonly RenglonTicket[]>();
 
   protected readonly totalCentavos = computed(() => totalTicket(this.renglones()));
-  protected readonly conteo = computed(() => conteoTicket(this.renglones()));
 }

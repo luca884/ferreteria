@@ -105,10 +105,38 @@ export class Mostrador {
       case 'DADO_DE_BAJA':
         return { texto: MENSAJE_DADO_DE_BAJA, grave: true };
       case 'SIN_RESULTADOS':
-        return { texto: MENSAJE_SIN_RESULTADOS, grave: false };
+        return { texto: MENSAJE_SIN_RESULTADOS, grave: true };
       default:
         return null;
     }
+  });
+
+  /** Lo último que se vio de cada artículo del ticket (ubicación, código de barras): la ficha lo reusa. */
+  private readonly vistos = new Map<number, ArticuloMostrador>();
+  /** Tras ↑/↓ (o quitar, cobrar) la ficha sigue al renglón elegido en vez de al último escaneo. */
+  private readonly siguiendoTicket = signal(false);
+
+  /** La ficha de la derecha: el resultado resaltado, el renglón elegido o el último artículo mostrado. */
+  protected readonly fichaMostrada = computed<ArticuloMostrador | null>(() => {
+    const r = this.resultado();
+    if (this.listaVisible() && r) return r.items[this.seleccionado()] ?? null;
+    if (!this.siguiendoTicket()) return this.ficha();
+    const { renglones, elegido } = this.ticket.ticket();
+    const renglon = elegido === null ? undefined : renglones[elegido];
+    if (!renglon) return null;
+    return {
+      codigoBarras: null,
+      codigoProveedor: null,
+      ubicacion: null,
+      ...this.vistos.get(renglon.articuloId),
+      id: renglon.articuloId,
+      codigoInterno: renglon.codigoInterno,
+      descripcion: renglon.descripcion,
+      precioFinal: renglon.precioCentavos / 100,
+      unidad: renglon.unidad,
+      stockActual: renglon.stockActual,
+      stockMinimo: renglon.stockMinimo,
+    };
   });
 
   /** La lista visible es la que el campo controla (aria-controls / aria-activedescendant). */
@@ -209,6 +237,7 @@ export class Mostrador {
   }
 
   private agregar(articulo: ArticuloMostrador): void {
+    this.vistos.set(articulo.id, articulo);
     this.ticket.agregar(articulo);
     const tipo = this.aviso()?.tipo;
     if (tipo === 'vacio' || tipo === 'persistente') this.avisar(null);
@@ -219,6 +248,7 @@ export class Mostrador {
     this.resultado.set(resultado);
     this.consultaMostrada.set(q);
     this.seleccionado.set(0);
+    this.siguiendoTicket.set(false);
     this.ficha.set(resultado.tipo === 'EXACTO' ? resultado.items[0] : null);
     // Tras escanear, el próximo código tiene que reemplazar al anterior, no sumarse.
     if (inmediata) this.caja().seleccionarTodo();
@@ -297,11 +327,13 @@ export class Mostrador {
 
   protected quitar(indice: number): void {
     this.ticket.quitar(indice);
+    this.siguiendoTicket.set(true);
     this.cerrarDialogo();
   }
 
   protected vaciarTicket(): void {
     this.ticket.vaciar();
+    this.siguiendoTicket.set(true);
     this.cerrarDialogo();
   }
 
@@ -331,6 +363,7 @@ export class Mostrador {
     this.enVuelo.set(false);
     // Solo sale lo que viajó en el POST: un escaneo que volvió en el medio queda para la próxima venta.
     this.ticket.descontarVendido(pedido);
+    this.siguiendoTicket.set(true);
     const sinStock = venta.sinStock
       .map((s) => `"${s.descripcion}" quedó en ${String(s.stockActual).replace('.', ',')}`)
       .join('; ');
@@ -488,6 +521,7 @@ export class Mostrador {
     // Sin lista a la vista, las flechas eligen el renglón del ticket.
     if (actual?.tipo !== 'LISTA' || this.ficha()) {
       this.ticket.moverElegido(direccion);
+      if (this.ticket.ticket().renglones.length > 0) this.siguiendoTicket.set(true);
       return;
     }
     const ultimo = actual.items.length - 1;
@@ -499,6 +533,7 @@ export class Mostrador {
     const articulo = this.resultado()?.items[indice];
     if (!articulo) return;
     this.agregar(articulo);
+    this.siguiendoTicket.set(false);
     this.ficha.set(articulo);
     this.caja().seleccionarTodo();
     this.caja().enfocar();
@@ -515,6 +550,7 @@ export class Mostrador {
   }
 
   private vaciar(): void {
+    this.siguiendoTicket.set(false);
     this.resultado.set(null);
     this.consultaMostrada.set('');
     this.seleccionado.set(0);

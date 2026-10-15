@@ -33,7 +33,11 @@
 </div>
 
 <div class="zona-ticket">
-  <app-ticket-lista [renglones]="ticket.ticket().renglones" [elegido]="ticket.elegido()" />
+  <app-ticket-lista
+    [renglones]="ticket.ticket().renglones"
+    [elegido]="ticket.elegido()"
+    [conMensajeVacio]="!listaVisible()"
+  />
 
   @if (!ficha()) {
     @if (resultado(); as r) {
@@ -52,7 +56,7 @@
 </div>
 
 <aside class="panel-derecho" aria-label="Artículo y totales">
-  @if (ficha(); as articulo) {
+  @if (fichaMostrada(); as articulo) {
     <app-ficha-articulo [articulo]="articulo" />
   } @else {
     <div class="ficha-vacia">

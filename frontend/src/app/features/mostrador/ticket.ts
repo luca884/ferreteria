@@ -106,18 +106,6 @@ export function moverElegido(t: Ticket, delta: -1 | 1): Ticket {
   return { ...t, elegido };
 }
 
-/**
- * Pie del ticket, como «N Artículos · M Renglones» de GDS. Por unidad suma la cantidad (3 tornillos son 3);
- * lo que se vende por metro, kilo o litro cuenta 1 por renglón (2,5 m de cable es 1 artículo).
- */
-export function conteoTicket(renglones: readonly RenglonTicket[]): { articulos: number; renglones: number } {
-  const articulos = renglones.reduce(
-    (suma, r) => suma + (r.unidad === 'UNIDAD' ? Math.round(r.cantidadMilesimas / 1000) : 1),
-    0,
-  );
-  return { articulos, renglones: renglones.length };
-}
-
 /** La cantidad supera el stock visto. Justo en 0 no advierte. */
 export function sinStock(r: RenglonTicket): boolean {
   return r.cantidadMilesimas > aMilesimas(r.stockActual);

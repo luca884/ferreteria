@@ -40,11 +40,13 @@
         <td class="num total-renglon">{{ totalRenglon(r.precioCentavos, r.cantidadMilesimas) / 100 | monto }}</td>
       </tr>
     } @empty {
-      <tr class="fila-vacia">
-        <td colspan="5">
-          <p class="vacio">El ticket está vacío. Escaneá un artículo para empezar.</p>
-        </td>
-      </tr>
+      @if (conMensajeVacio()) {
+        <tr class="fila-vacia">
+          <td colspan="5">
+            <p class="vacio">El ticket está vacío. Escaneá un artículo para empezar.</p>
+          </td>
+        </tr>
+      }
     }
   </tbody>
 </table>
