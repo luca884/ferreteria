@@ -3,7 +3,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { registerLocaleData } from '@angular/common';
 import localeEsAr from '@angular/common/locales/es-AR';
 import { LOCALE_ID, signal } from '@angular/core';
-import { provideRouter } from '@angular/router';
+import { ActivatedRoute, provideRouter } from '@angular/router';
 import { of, throwError } from 'rxjs';
 import { vi } from 'vitest';
 import { PageResponse } from '../../core/api/page.models';
@@ -18,7 +18,7 @@ import { DialogoAjusteStock } from './dialogo-ajuste-stock';
 
 registerLocaleData(localeEsAr);
 
-const NBSP = '\u00a0';
+const NBSP = ' ';
 
 describe('Articulos', () => {
   const articulo = (id: number, cambios: Partial<Articulo> = {}): Articulo => ({
@@ -57,14 +57,17 @@ describe('Articulos', () => {
     ajustarStock: ReturnType<typeof vi.fn>;
   };
   let avisos: Avisos;
+  let navegar: ReturnType<typeof vi.spyOn>;
 
   const errorHttp = (status: number, message: string) =>
     new HttpErrorResponse({ status, error: { status, message } });
 
+  /** `url` simula volver al listado con la búsqueda, la página y los inactivos en la dirección. */
   async function crearComponente(
     dueno: boolean,
     primera = pagina([articulo(1), articulo(2)]),
     avisoPendiente: string | null = null,
+    url = '/',
   ) {
     esDueno = signal(dueno);
     servicio = {
@@ -82,6 +85,9 @@ describe('Articulos', () => {
         { provide: AuthService, useValue: { esDueno } },
       ],
     }).compileComponents();
+    const router = TestBed.inject(Router);
+    await router.navigateByUrl(url);
+    navegar = vi.spyOn(router, 'navigate').mockResolvedValue(true);
     avisos = TestBed.inject(Avisos);
     if (avisoPendiente) avisos.dejar(avisoPendiente);
     fixture = TestBed.createComponent(Articulos);
@@ -91,9 +97,10 @@ describe('Articulos', () => {
   }
 
   const el = () => fixture.nativeElement as HTMLElement;
-  const filas = () => Array.from(el().querySelectorAll('tbody tr'));
+  const filas = () => Array.from(el().querySelectorAll<HTMLTableRowElement>('tbody tr'));
   const texto = (selector: string, fila = 0) =>
     (filas()[fila].querySelector(selector)?.textContent ?? '').trim();
+  const barra = (selector: string) => el().querySelector<HTMLButtonElement>(`app-barra-acciones ${selector}`);
 
   async function refrescar() {
     fixture.detectChanges();
@@ -113,6 +120,19 @@ describe('Articulos', () => {
     el().querySelectorAll<HTMLButtonElement>(selector)[indice].click();
     await refrescar();
   }
+
+  /** Clic en una celda de la fila: la elige. */
+  async function elegir(fila: number) {
+    (filas()[fila].querySelector('.descripcion') as HTMLElement).click();
+    await refrescar();
+  }
+
+  async function teclaEnFila(fila: number, key: string) {
+    filas()[fila].dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }));
+    await refrescar();
+  }
+
+  const elegidas = () => filas().filter((f) => f.getAttribute('aria-selected') === 'true');
 
   it('el título va en la barra de acciones de arriba', async () => {
     await crearComponente(false);
@@ -148,7 +168,7 @@ describe('Articulos', () => {
     expect(texto('.codigo')).toBe('TOR-001');
     expect(texto('.descripcion')).toBe('Tornillo hexagonal 1/4');
     expect(texto('.costo')).toBe(`$${NBSP}100,00`);
-    expect(texto('.margen')).toBe('35 %');
+    expect(texto('.margen')).toBe(`35${NBSP}%`);
     expect(texto('.iva')).toBe('10,5 %');
     expect(texto('.precio')).toBe(`$${NBSP}170,00`);
     expect(texto('.stock')).toBe('12,5 metros');
@@ -185,7 +205,7 @@ describe('Articulos', () => {
     expect(el().textContent).toContain('Costo');
     expect(el().textContent).toContain('Margen');
     expect(texto('.costo')).toBe(`$${NBSP}100,00`);
-    expect(texto('.margen')).toBe('35 %');
+    expect(texto('.margen')).toBe(`35${NBSP}%`);
   });
 
   it('avisa cuando no hay artículos', async () => {
@@ -215,6 +235,16 @@ describe('Articulos', () => {
 
     expect(servicio.buscar).toHaveBeenLastCalledWith('torni', 0, 20, false);
     expect(texto('.codigo')).toBe('COD-9');
+  });
+
+  it('el buscador no autocompleta ni corrige y su ejemplo termina en «…»', async () => {
+    await crearComponente(true);
+
+    const input = el().querySelector<HTMLInputElement>('#q')!;
+    expect(input.name).toBe('q');
+    expect(input.getAttribute('autocomplete')).toBe('off');
+    expect(input.getAttribute('spellcheck')).toBe('false');
+    expect(input.placeholder.endsWith('…')).toBe(true);
   });
 
   it('pagina hacia adelante y hacia atrás conservando la búsqueda', async () => {
@@ -252,6 +282,13 @@ describe('Articulos', () => {
     expect(siguiente().disabled).toBe(true);
   });
 
+  it('un solo artículo va en singular', async () => {
+    await crearComponente(true, pagina([articulo(1)], 0, 1, 1));
+
+    expect(el().querySelector('.paginacion')?.textContent).toContain('1 artículo');
+    expect(el().querySelector('.paginacion')?.textContent).not.toContain('1 artículos');
+  });
+
   it('no muestra la paginación cuando no hay artículos', async () => {
     await crearComponente(true, pagina([], 0, 0, 0));
 
@@ -272,50 +309,212 @@ describe('Articulos', () => {
     expect(servicio.buscar).toHaveBeenLastCalledWith('', 0, 20, true);
     expect(texto('.estado', 0)).toBe('Activo');
     expect(texto('.estado', 1)).toBe('De baja');
-    expect(filas()[1].querySelector('button.desactivar')).toBeNull();
-    expect(filas()[0].querySelector('button.desactivar')).not.toBeNull();
   });
 
-  it('el Dueño ve el botón Nuevo y la acción Dar de baja', async () => {
-    await crearComponente(true);
+  describe('búsqueda, página e inactivos en la dirección', () => {
+    it('al entrar los lee de la dirección (volver de editar conserva el contexto)', async () => {
+      await crearComponente(true, pagina([articulo(41)], 2, 3, 45), null, '/?q=torni&pagina=3&inactivos=1');
 
-    const nuevo = el().querySelector<HTMLAnchorElement>('a.nuevo');
-    expect(nuevo).not.toBeNull();
-    expect(nuevo!.textContent).toContain('Nuevo artículo');
-    expect(nuevo!.getAttribute('href')).toBe('/articulos/nuevo');
-    expect(el().querySelectorAll('button.desactivar')).toHaveLength(2);
-    expect(el().textContent).toContain('Dar de baja');
+      expect(servicio.buscar).toHaveBeenCalledWith('torni', 2, 20, true);
+      expect(el().querySelector<HTMLInputElement>('#q')!.value).toBe('torni');
+      expect(el().querySelector<HTMLInputElement>('#inactivos')!.checked).toBe(true);
+    });
+
+    it('una página que no es un número arranca en la primera', async () => {
+      await crearComponente(true, undefined, null, '/?pagina=abc');
+
+      expect(servicio.buscar).toHaveBeenCalledWith('', 0, 20, false);
+    });
+
+    it('al buscar, paginar o tildar inactivos los deja en la dirección', async () => {
+      await crearComponente(true, pagina([articulo(1)], 0, 3, 45));
+      const route = TestBed.inject(ActivatedRoute);
+
+      servicio.buscar.mockReturnValue(of(pagina([articulo(5)], 0, 3, 45)));
+      await buscarTexto('torni');
+      expect(navegar).toHaveBeenLastCalledWith([], {
+        relativeTo: route,
+        queryParams: { q: 'torni' },
+        replaceUrl: true,
+      });
+
+      servicio.buscar.mockReturnValue(of(pagina([articulo(21)], 1, 3, 45)));
+      await clickEn('button.siguiente');
+      expect(navegar).toHaveBeenLastCalledWith([], {
+        relativeTo: route,
+        queryParams: { q: 'torni', pagina: 2 },
+        replaceUrl: true,
+      });
+
+      servicio.buscar.mockReturnValue(of(pagina([articulo(5)], 0, 3, 45)));
+      const check = el().querySelector<HTMLInputElement>('#inactivos')!;
+      check.checked = true;
+      check.dispatchEvent(new Event('change'));
+      await refrescar();
+      expect(servicio.buscar).toHaveBeenLastCalledWith('torni', 0, 20, true);
+      expect(navegar).toHaveBeenLastCalledWith([], {
+        relativeTo: route,
+        queryParams: { q: 'torni', inactivos: 1 },
+        replaceUrl: true,
+      });
+    });
   });
 
-  it('el Dueño ve Editar en cada fila, con el enlace al formulario del artículo', async () => {
-    await crearComponente(true, pagina([articulo(7), articulo(8, { activo: false })]));
+  describe('barra de acciones sobre la fila elegida', () => {
+    it('el Dueño ve Nuevo, Editar, Ajustar stock y Dar de baja en la barra, no en las filas', async () => {
+      await crearComponente(true);
 
-    const editar = Array.from(el().querySelectorAll<HTMLAnchorElement>('a.editar'));
-    expect(editar).toHaveLength(2);
-    expect(editar[0].textContent).toContain('Editar');
-    expect(editar[0].getAttribute('href')).toBe('/articulos/7');
-    expect(editar[1].getAttribute('href')).toBe('/articulos/8');
+      const nuevo = el().querySelector<HTMLAnchorElement>('app-barra-acciones a.nuevo');
+      expect(nuevo).not.toBeNull();
+      expect(nuevo!.textContent).toContain('Nuevo');
+      expect(nuevo!.getAttribute('href')).toBe('/articulos/nuevo');
+      expect(barra('button.editar')).not.toBeNull();
+      expect(barra('button.ajustar-stock')).not.toBeNull();
+      expect(barra('button.desactivar')?.textContent).toContain('Dar de baja');
+      expect(el().querySelectorAll('tbody button, tbody a')).toHaveLength(0);
+    });
+
+    it('sin fila elegida, Editar, Ajustar stock y Dar de baja quedan deshabilitados', async () => {
+      await crearComponente(true);
+
+      expect(elegidas()).toHaveLength(0);
+      expect(barra('button.editar')!.disabled).toBe(true);
+      expect(barra('button.ajustar-stock')!.disabled).toBe(true);
+      expect(barra('button.desactivar')!.disabled).toBe(true);
+    });
+
+    it('clic en una fila la elige: resaltada, aria-selected, habilita las acciones y no navega', async () => {
+      await crearComponente(true);
+
+      await elegir(1);
+
+      expect(elegidas()).toEqual([filas()[1]]);
+      expect(filas()[0].getAttribute('aria-selected')).toBe('false');
+      expect(barra('button.editar')!.disabled).toBe(false);
+      expect(barra('button.ajustar-stock')!.disabled).toBe(false);
+      expect(barra('button.desactivar')!.disabled).toBe(false);
+      expect(navegar).not.toHaveBeenCalledWith(['/articulos', 2], expect.anything());
+    });
+
+    it('la barra de estado dice cuál está elegido', async () => {
+      await crearComponente(true);
+
+      await elegir(1);
+
+      expect(el().querySelector('.elegido')?.textContent?.replace(/\s+/g, ' ')).toContain('Elegido: Artículo 2');
+    });
+
+    it('Editar de la barra abre el formulario del elegido conservando la dirección', async () => {
+      await crearComponente(true, pagina([articulo(7), articulo(8)]));
+      await elegir(1);
+
+      await clickEn('app-barra-acciones button.editar');
+
+      expect(navegar).toHaveBeenCalledWith(['/articulos', 8], { queryParamsHandling: 'preserve' });
+    });
+
+    it('elegido de baja: Reactivar en vez de Dar de baja y Ajustar stock deshabilitado con el motivo a la vista', async () => {
+      await crearComponente(true, pagina([articulo(1), articulo(2, { activo: false, descripcion: 'Tuerca vieja' })]));
+
+      await elegir(1);
+
+      expect(barra('button.desactivar')).toBeNull();
+      expect(barra('button.reactivar')).not.toBeNull();
+      const ajustar = barra('button.ajustar-stock')!;
+      expect(ajustar.disabled).toBe(true);
+      const motivo = el().querySelector(`#${ajustar.getAttribute('aria-describedby')}`);
+      expect(motivo?.textContent?.trim()).toBe('«Tuerca vieja» está dado de baja. Reactivalo para ajustar el stock.');
+
+      await elegir(0);
+      expect(barra('button.desactivar')).not.toBeNull();
+      expect(barra('button.reactivar')).toBeNull();
+      expect(barra('button.ajustar-stock')!.disabled).toBe(false);
+    });
+
+    it('el Vendedor no ve ninguna acción ni elige filas', async () => {
+      await crearComponente(false, pagina([articulo(7)]));
+
+      expect(el().querySelector('a.nuevo')).toBeNull();
+      expect(el().querySelector('button.editar')).toBeNull();
+      expect(el().querySelector('button.desactivar')).toBeNull();
+      expect(el().querySelector('button.ajustar-stock')).toBeNull();
+      expect(el().textContent).not.toContain('Dar de baja');
+      expect(el().textContent).not.toContain('Acciones');
+
+      await elegir(0);
+      expect(filas()[0].getAttribute('tabindex')).toBeNull();
+      expect(filas()[0].getAttribute('aria-selected')).toBeNull();
+    });
   });
 
-  it('el Vendedor no ve Editar', async () => {
-    await crearComponente(false);
+  describe('teclado y mouse en la grilla', () => {
+    it('la primera fila es la que recibe el foco con Tab si no hay ninguna elegida', async () => {
+      await crearComponente(true);
 
-    expect(el().querySelector('a.editar')).toBeNull();
-    expect(el().textContent).not.toContain('Editar');
+      expect(filas().map((f) => f.getAttribute('tabindex'))).toEqual(['0', '-1']);
+
+      await elegir(1);
+      expect(filas().map((f) => f.getAttribute('tabindex'))).toEqual(['-1', '0']);
+    });
+
+    it('enfocar una fila (Tab) la elige', async () => {
+      await crearComponente(true);
+
+      filas()[0].focus();
+      await refrescar();
+
+      expect(elegidas()).toEqual([filas()[0]]);
+    });
+
+    it('↓ y ↑ mueven la fila elegida y el foco, sin pasarse de los extremos', async () => {
+      await crearComponente(true, pagina([articulo(1), articulo(2), articulo(3)]));
+      filas()[0].focus();
+      await refrescar();
+
+      await teclaEnFila(0, 'ArrowDown');
+      expect(elegidas()).toEqual([filas()[1]]);
+      expect(document.activeElement).toBe(filas()[1]);
+
+      await teclaEnFila(1, 'ArrowDown');
+      await teclaEnFila(2, 'ArrowDown');
+      expect(elegidas()).toEqual([filas()[2]]);
+
+      await teclaEnFila(2, 'ArrowUp');
+      expect(elegidas()).toEqual([filas()[1]]);
+      expect(document.activeElement).toBe(filas()[1]);
+    });
+
+    it('Enter en una fila abre Editar', async () => {
+      await crearComponente(true, pagina([articulo(7)]));
+
+      await teclaEnFila(0, 'Enter');
+
+      expect(navegar).toHaveBeenCalledWith(['/articulos', 7], { queryParamsHandling: 'preserve' });
+    });
+
+    it('doble clic en la fila abre Editar', async () => {
+      await crearComponente(true, pagina([articulo(7)]));
+
+      filas()[0].querySelector('.descripcion')!.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
+      await refrescar();
+
+      expect(navegar).toHaveBeenCalledWith(['/articulos', 7], { queryParamsHandling: 'preserve' });
+    });
+
+    it('para el Vendedor Enter y doble clic no hacen nada', async () => {
+      await crearComponente(false, pagina([articulo(7)]));
+
+      await teclaEnFila(0, 'Enter');
+      filas()[0].dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
+
+      expect(navegar).not.toHaveBeenCalledWith(['/articulos', 7], expect.anything());
+    });
   });
 
-  it('el Vendedor no ve Nuevo ni Dar de baja', async () => {
-    await crearComponente(false);
-
-    expect(el().querySelector('a.nuevo')).toBeNull();
-    expect(el().querySelector('button.desactivar')).toBeNull();
-    expect(el().textContent).not.toContain('Dar de baja');
-    expect(el().textContent).not.toContain('Acciones');
-  });
-
-  /** Clic en «Dar de baja» de la fila y, en el diálogo propio, en el botón indicado. */
+  /** Elige la fila, toca «Dar de baja» en la barra y, en el diálogo propio, el botón indicado. */
   async function darDeBaja(fila: number, boton: 'confirmar' | 'cancelar' = 'confirmar') {
-    await clickEn('button.desactivar', fila);
+    await elegir(fila);
+    await clickEn('app-barra-acciones button.desactivar');
     el().querySelector<HTMLButtonElement>(`app-confirmacion button.${boton}`)!.click();
     await refrescar();
   }
@@ -325,7 +524,8 @@ describe('Articulos', () => {
     const nativo = vi.spyOn(window, 'confirm');
     servicio.buscar.mockReturnValue(of(pagina([articulo(2)], 0, 1, 1)));
 
-    await clickEn('button.desactivar', 0);
+    await elegir(0);
+    await clickEn('app-barra-acciones button.desactivar');
     expect(el().querySelector('app-confirmacion h2')?.textContent).toContain('¿Dar de baja Artículo 1?');
     el().querySelector<HTMLButtonElement>('app-confirmacion button.confirmar')!.click();
     await refrescar();
@@ -336,6 +536,7 @@ describe('Articulos', () => {
     expect(el().querySelector('app-confirmacion')).toBeNull();
     expect(filas()).toHaveLength(1);
     expect(texto('.codigo')).toBe('COD-2');
+    expect(elegidas()).toHaveLength(0);
   });
 
   it('no da de baja si se cancela el diálogo', async () => {
@@ -386,16 +587,18 @@ describe('Articulos', () => {
   });
 
   describe('reactivar', () => {
-    it('un dado de baja tiene «Reactivar»; al reactivarlo recarga y avisa', async () => {
+    it('Reactivar de la barra recarga, avisa y deja el artículo elegido', async () => {
       await crearComponente(true, pagina([articulo(1), articulo(2, { activo: false })]));
-      expect(filas()[0].querySelector('button.reactivar')).toBeNull();
       servicio.buscar.mockReturnValue(of(pagina([articulo(1), articulo(2)])));
 
-      await clickEn('button.reactivar', 0);
+      await elegir(1);
+      await clickEn('app-barra-acciones button.reactivar');
 
       expect(servicio.reactivar).toHaveBeenCalledWith(2);
       expect(servicio.buscar).toHaveBeenCalledTimes(2);
       expect(el().querySelector('.alerta.exito')?.textContent).toContain('Se reactivó «Artículo 2».');
+      expect(elegidas()).toEqual([filas()[1]]);
+      expect(barra('button.desactivar')).not.toBeNull();
     });
 
     it('si el código de barras ya lo usa otro activo, muestra el mensaje del backend', async () => {
@@ -404,7 +607,8 @@ describe('Articulos', () => {
         throwError(() => errorHttp(409, 'Ya existe un artículo activo con el código de barras 779.')),
       );
 
-      await clickEn('button.reactivar', 0);
+      await elegir(0);
+      await clickEn('app-barra-acciones button.reactivar');
 
       expect(el().querySelector('.error')?.textContent).toContain('Ya existe un artículo activo');
     });
@@ -417,14 +621,16 @@ describe('Articulos', () => {
   });
 
   describe('ajustar stock', () => {
-    it('el Dueño abre el diálogo desde la fila y, al confirmar, la grilla muestra el stock nuevo', async () => {
+    it('el Dueño abre el panel desde la barra y, al confirmar, la grilla muestra el stock nuevo', async () => {
       await crearComponente(true, pagina([articulo(1, { stockActual: 5 }), articulo(2)]));
 
-      await clickEn('button.ajustar-stock', 0);
+      await elegir(0);
+      await clickEn('app-barra-acciones button.ajustar-stock');
       const dialogo = fixture.debugElement.query(By.directive(DialogoAjusteStock));
       expect(dialogo).not.toBeNull();
       expect((dialogo.componentInstance as DialogoAjusteStock).articulo()).toEqual({
         id: 1,
+        codigoInterno: 'COD-1',
         descripcion: 'Artículo 1',
         unidad: 'UNIDAD',
         stockActual: 5,
@@ -446,74 +652,16 @@ describe('Articulos', () => {
       expect(servicio.buscar).toHaveBeenCalledTimes(1);
     });
 
-    it('cancelar cierra el diálogo sin cambiar nada', async () => {
+    it('cancelar cierra el panel sin cambiar nada', async () => {
       await crearComponente(true);
-      await clickEn('button.ajustar-stock', 0);
+      await elegir(0);
+      await clickEn('app-barra-acciones button.ajustar-stock');
 
       (fixture.debugElement.query(By.directive(DialogoAjusteStock)).componentInstance as DialogoAjusteStock).cancelar.emit();
       await refrescar();
 
       expect(fixture.debugElement.query(By.directive(DialogoAjusteStock))).toBeNull();
       expect(texto('.stock', 0)).toBe('5 unidades');
-    });
-
-    it('un artículo dado de baja no se puede ajustar: el botón queda deshabilitado y explica por qué', async () => {
-      await crearComponente(true, pagina([articulo(1), articulo(2, { activo: false, descripcion: 'Tuerca vieja' })]));
-
-      const botones = el().querySelectorAll<HTMLButtonElement>('button.ajustar-stock');
-      expect(botones[0].disabled).toBe(false);
-      expect(botones[1].disabled).toBe(true);
-      expect(botones[1].title).toBe('"Tuerca vieja" está dado de baja. Reactivalo para ajustar el stock.');
-      botones[1].click();
-      fixture.detectChanges();
-      expect(fixture.debugElement.query(By.directive(DialogoAjusteStock))).toBeNull();
-    });
-
-    it('el Vendedor no ve «Ajustar stock»', async () => {
-      await crearComponente(false);
-
-      expect(el().querySelector('button.ajustar-stock')).toBeNull();
-    });
-  });
-
-  describe('teclado y mouse en la grilla', () => {
-    it('clic en la fila abre Editar', async () => {
-      await crearComponente(true, pagina([articulo(7)]));
-      const navegar = vi.spyOn(TestBed.inject(Router), 'navigate').mockResolvedValue(true);
-
-      (filas()[0].querySelector('.descripcion') as HTMLElement).click();
-
-      expect(navegar).toHaveBeenCalledWith(['/articulos', 7]);
-    });
-
-    it('Enter con la fila enfocada abre Editar', async () => {
-      await crearComponente(true, pagina([articulo(7)]));
-      const navegar = vi.spyOn(TestBed.inject(Router), 'navigate').mockResolvedValue(true);
-
-      expect(filas()[0].getAttribute('tabindex')).toBe('0');
-      filas()[0].dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
-
-      expect(navegar).toHaveBeenCalledWith(['/articulos', 7]);
-    });
-
-    it('los botones de la fila no abren Editar', async () => {
-      await crearComponente(true, pagina([articulo(7)]));
-      const navegar = vi.spyOn(TestBed.inject(Router), 'navigate').mockResolvedValue(true);
-
-      await clickEn('button.ajustar-stock', 0);
-      await clickEn('button.desactivar', 0);
-
-      expect(navegar).not.toHaveBeenCalled();
-    });
-
-    it('para el Vendedor la fila no es un enlace', async () => {
-      await crearComponente(false, pagina([articulo(7)]));
-      const navegar = vi.spyOn(TestBed.inject(Router), 'navigate').mockResolvedValue(true);
-
-      (filas()[0].querySelector('.descripcion') as HTMLElement).click();
-
-      expect(filas()[0].getAttribute('tabindex')).toBeNull();
-      expect(navegar).not.toHaveBeenCalled();
     });
   });
 

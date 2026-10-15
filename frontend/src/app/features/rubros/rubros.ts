@@ -1,6 +1,16 @@
 import { DecimalPipe } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
-import { Component, DestroyRef, OnInit, inject, signal } from '@angular/core';
+import {
+  Component,
+  DestroyRef,
+  ElementRef,
+  Injector,
+  OnInit,
+  afterNextRender,
+  computed,
+  inject,
+  signal,
+} from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { AuthService } from '../../core/auth/auth.service';
@@ -28,9 +38,14 @@ interface CambioDeMargen {
 })
 export class Rubros implements OnInit {
   private readonly service = inject(RubrosService);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+  private readonly injector = inject(Injector);
   protected readonly auth = inject(AuthService);
 
   protected readonly rubros = signal<Rubro[]>([]);
+  /** Fila elegida en la grilla: la barra actúa sobre ella. */
+  protected readonly elegidoId = signal<number | null>(null);
+  protected readonly elegido = computed(() => this.rubros().find((r) => r.id === this.elegidoId()) ?? null);
   protected readonly cargando = signal(true);
   protected readonly error = signal<string | null>(null);
   protected readonly aviso = signal<string | null>(null);
@@ -59,6 +74,7 @@ export class Rubros implements OnInit {
   protected guardar(): void {
     if (this.form.invalid) {
       this.form.markAllAsTouched();
+      this.enfocar('form.alta [aria-invalid="true"]');
       return;
     }
     const { nombre, margenPorcentaje } = this.form.getRawValue();
@@ -106,8 +122,11 @@ export class Rubros implements OnInit {
       : `Se recalcula el precio de ${cambio.articulos} artículos que usan el margen del rubro.`;
   }
 
-  protected editar(rubro: Rubro): void {
+  /** Editar (barra, Enter o doble clic): precarga el rubro en el formulario de al lado. */
+  protected editar(rubro: Rubro | null = this.elegido()): void {
+    if (!rubro || !this.auth.esDueno()) return;
     this.aviso.set(null);
+    this.elegidoId.set(rubro.id);
     this.editando.set(rubro);
     this.form.reset({ nombre: rubro.nombre, margenPorcentaje: rubro.margenPorcentaje });
     this.error.set(null);
@@ -116,6 +135,51 @@ export class Rubros implements OnInit {
   protected cancelar(): void {
     this.vaciarFormulario();
     this.error.set(null);
+  }
+
+  /** Nuevo: el formulario vuelve al alta y queda listo para escribir. */
+  protected nuevo(): void {
+    this.aviso.set(null);
+    this.cancelar();
+    this.enfocar('#nombre');
+  }
+
+  /** Clic o foco en una fila: la elige (solo el Dueño, que es quien tiene acciones). */
+  protected elegir(rubro: Rubro): void {
+    if (this.auth.esDueno()) this.elegidoId.set(rubro.id);
+  }
+
+  /** La fila que entra en el orden de Tab: la elegida o, si no hay, la primera. */
+  protected esFilaTabulable(rubro: Rubro, indice: number): boolean {
+    return this.elegido() ? rubro.id === this.elegidoId() : indice === 0;
+  }
+
+  /** ↑/↓ mueven la elección y el foco; Enter edita. */
+  protected alTeclearFila(evento: KeyboardEvent, rubro: Rubro, indice: number): void {
+    if (!this.auth.esDueno()) return;
+    if (evento.key === 'Enter') {
+      evento.preventDefault();
+      this.editar(rubro);
+      return;
+    }
+    const paso = evento.key === 'ArrowDown' ? 1 : evento.key === 'ArrowUp' ? -1 : 0;
+    if (paso === 0) return;
+    evento.preventDefault();
+    const destino = Math.min(Math.max(indice + paso, 0), this.rubros().length - 1);
+    this.elegidoId.set(this.rubros()[destino].id);
+    this.enfocar(`tbody tr:nth-child(${destino + 1})`);
+  }
+
+  protected invalido(campo: 'nombre' | 'margenPorcentaje'): boolean {
+    const control = this.form.controls[campo];
+    return control.touched && control.invalid;
+  }
+
+  /** Después de pintar, enfoca el primer elemento que coincida. */
+  private enfocar(selector: string): void {
+    afterNextRender(() => this.host.nativeElement.querySelector<HTMLElement>(selector)?.focus(), {
+      injector: this.injector,
+    });
   }
 
   /** Crea o actualiza; `recalculados` es para el aviso (null: no se sabe cuántos). */

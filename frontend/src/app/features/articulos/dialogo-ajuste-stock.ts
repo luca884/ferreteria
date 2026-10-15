@@ -1,6 +1,8 @@
+import { DOCUMENT } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
 import {
   Component,
+  DestroyRef,
   ElementRef,
   Injector,
   afterNextRender,
@@ -28,6 +30,8 @@ export interface ArticuloAAjustar {
   descripcion: string;
   unidad: Unidad;
   stockActual: number;
+  /** Se muestra debajo del nombre si viene (el listado lo tiene a mano). */
+  codigoInterno?: string;
 }
 
 type Campo = 'stockReal' | 'cantidad' | 'motivo' | 'detalle';
@@ -41,8 +45,27 @@ const MODO_POR_MOTIVO: Record<MotivoAjuste, ModoAjuste> = {
   OTRO: 'CANTIDAD',
 };
 
+/** En el orden en que se ven: primero sumar o restar, después el conteo. */
+const MODOS: readonly ModoAjuste[] = ['CANTIDAD', 'STOCK_REAL'];
+const SIGNOS: readonly Signo[] = ['ENTRA', 'SALE'];
+
+const ETIQUETAS_MODO: Record<ModoAjuste, { titulo: string; detalle: string }> = {
+  CANTIDAD: { titulo: 'Sumar o restar', detalle: 'Entra o sale mercadería' },
+  STOCK_REAL: { titulo: 'Conteo', detalle: 'Cargás lo que contaste' },
+};
+
+/** Flechas de un grupo de opciones: → y ↓ avanzan, ← y ↑ retroceden. */
+const PASO_POR_TECLA: Partial<Record<string, 1 | -1>> = {
+  ArrowRight: 1,
+  ArrowDown: 1,
+  ArrowLeft: -1,
+  ArrowUp: -1,
+};
+
 /** DECIMAL(15, 3) del backend. */
 const MAXIMO = 999_999_999_999.999;
+
+const NUMERO = new Intl.NumberFormat('es-AR', { maximumFractionDigits: 3 });
 
 /** «145,5» o «145.5» → número y cuántos decimales se escribieron; null si no es un número. */
 function leerNumero(texto: string): { valor: number; decimales: number } | null {
@@ -52,57 +75,65 @@ function leerNumero(texto: string): { valor: number; decimales: number } | null 
 }
 
 /**
- * CU-09 Ajustar stock: el Dueño escribe el stock REAL que contó y el diálogo muestra la diferencia en vivo.
- * Valida como el backend (UNIDAD enteros, el resto hasta 3 decimales, motivo obligatorio, detalle con OTRO)
- * y muestra todos los errores juntos, cada uno junto a su campo. Hace el pedido y avisa el resultado.
+ * CU-09 Ajustar stock, como panel lateral derecho. El Dueño suma o resta lo que entra o sale, o carga el stock
+ * real que contó, y ve en vivo cómo queda («25 → 49 unidades»). Valida como el backend (UNIDAD enteros, el resto
+ * hasta 3 decimales, motivo obligatorio, detalle con OTRO) y muestra todos los errores juntos, cada uno junto a su
+ * campo. Es un <dialog> nativo abierto con showModal(): el navegador encierra el foco y Esc lo cancela; al
+ * cerrarse el foco vuelve a quien lo abrió.
  */
 @Component({
   selector: 'app-dialogo-ajuste-stock',
   template: `
-    <div class="dialogo-fondo">
-      <form
-        class="dialogo ajuste"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="ajuste-titulo"
-        novalidate
-        (keydown)="alTeclear($event)"
-        (submit)="$event.preventDefault(); confirmar()"
-      >
-        <div>
-          <h2 id="ajuste-titulo">Ajustar stock</h2>
-          <p class="articulo">{{ articulo().descripcion }}</p>
+    <dialog
+      #dialogo
+      class="panel-lateral"
+      aria-labelledby="ajuste-titulo ajuste-articulo"
+      (cancel)="alCancelar($event)"
+    >
+      <form class="ajuste" novalidate (submit)="$event.preventDefault(); confirmar()">
+        <header>
+          <h2 id="ajuste-titulo" class="sobretitulo">Ajustar stock</h2>
+          <p id="ajuste-articulo" class="articulo">{{ articulo().descripcion }}</p>
+          <p class="referencia">
+            @if (articulo().codigoInterno; as codigo) {<span class="codigo">{{ codigo }}</span> · hoy } @else {Hoy hay }<span class="stock-actual">{{ conUnidad(articulo().stockActual) }}</span>
+          </p>
+        </header>
+
+        <div class="campo">
+          <label for="motivo">Motivo</label>
+          <select
+            id="motivo"
+            name="motivo"
+            [value]="motivo() ?? ''"
+            [attr.aria-invalid]="errores()['motivo'] ? 'true' : null"
+            [attr.aria-describedby]="errores()['motivo'] ? 'motivo-error' : null"
+            (change)="cambiar('motivo', $any($event.target).value)"
+          >
+            <option value="" disabled>Elegí un motivo…</option>
+            @for (m of motivos; track m) {
+              <option [value]="m">{{ motivoLabels[m] }}</option>
+            }
+          </select>
+          @if (errores()['motivo']; as mensaje) {
+            <span id="motivo-error" class="campo-error">{{ mensaje }}</span>
+          }
         </div>
 
-        <dl class="resumen">
-          <div class="stock-actual">
-            <dt>Stock actual</dt>
-            <dd>{{ conUnidad(articulo().stockActual) }}</dd>
-          </div>
-          @if (modo() === 'STOCK_REAL') {
-            <div class="diferencia">
-              <dt>Diferencia</dt>
-              <dd [class.sube]="diferencia() !== null && diferencia()! > 0" [class.baja]="diferencia() !== null && diferencia()! < 0">
-                {{ textoDiferencia() }}
-              </dd>
-            </div>
-          } @else {
-            <div class="quedara">
-              <dt>Quedará</dt>
-              <dd [class.sube]="queda() !== null && queda()! > articulo().stockActual" [class.baja]="queda() !== null && queda()! < articulo().stockActual">
-                {{ textoQuedara() }}
-              </dd>
-            </div>
+        <div class="modos" role="radiogroup" aria-label="Cómo cargar el ajuste" (keydown)="alTeclearModo($event)">
+          @for (m of modos; track m) {
+            <button
+              type="button"
+              role="radio"
+              class="modo"
+              [attr.data-modo]="m"
+              [attr.aria-checked]="modo() === m"
+              [attr.tabindex]="modo() === m ? 0 : -1"
+              (click)="elegirModo(m)"
+            >
+              <span>{{ etiquetasModo[m].titulo }}</span>
+              <span class="modo-detalle">{{ etiquetasModo[m].detalle }}</span>
+            </button>
           }
-        </dl>
-
-        <div class="modos" role="radiogroup" aria-label="Cómo cargar el ajuste">
-          <button type="button" role="radio" class="modo" data-modo="STOCK_REAL" [attr.aria-checked]="modo() === 'STOCK_REAL'" (click)="elegirModo('STOCK_REAL')">
-            Conteo: stock real
-          </button>
-          <button type="button" role="radio" class="modo" data-modo="CANTIDAD" [attr.aria-checked]="modo() === 'CANTIDAD'" (click)="elegirModo('CANTIDAD')">
-            Ingreso / egreso: sumar o restar
-          </button>
         </div>
 
         @if (modo() === 'STOCK_REAL') {
@@ -111,9 +142,12 @@ function leerNumero(texto: string): { valor: number; decimales: number } | null 
             <input
               #numero
               id="stock-real"
+              name="stockReal"
+              class="numero"
               type="text"
               inputmode="decimal"
               autocomplete="off"
+              spellcheck="false"
               [value]="valorTexto()"
               [attr.aria-invalid]="errores()['stockReal'] ? 'true' : null"
               [attr.aria-describedby]="errores()['stockReal'] ? 'stock-real-error' : null"
@@ -124,60 +158,81 @@ function leerNumero(texto: string): { valor: number; decimales: number } | null 
             }
           </div>
         } @else {
-          <div class="campo">
-            <label for="cantidad">Cantidad que {{ signo() === 'ENTRA' ? 'entra' : 'sale' }}</label>
-            <div class="signos" role="radiogroup" aria-label="Entra o sale">
-              <button type="button" role="radio" class="modo" data-signo="ENTRA" [attr.aria-checked]="signo() === 'ENTRA'" (click)="elegirSigno('ENTRA')">
-                Entra (+)
-              </button>
-              <button type="button" role="radio" class="modo" data-signo="SALE" [attr.aria-checked]="signo() === 'SALE'" (click)="elegirSigno('SALE')">
-                Sale (−)
-              </button>
+          <div class="carga">
+            <div class="signos" role="radiogroup" aria-label="Entra o sale" (keydown)="alTeclearSigno($event)">
+              @for (s of signos; track s) {
+                <button
+                  type="button"
+                  role="radio"
+                  class="signo"
+                  [class.entra]="s === 'ENTRA'"
+                  [class.sale]="s === 'SALE'"
+                  [attr.data-signo]="s"
+                  [attr.aria-checked]="signo() === s"
+                  [attr.tabindex]="signo() === s ? 0 : -1"
+                  (click)="elegirSigno(s)"
+                >
+                  {{ s === 'ENTRA' ? '+ Entra' : '− Sale' }}
+                </button>
+              }
             </div>
-            <input
-              #numero
-              id="cantidad"
-              type="text"
-              inputmode="decimal"
-              autocomplete="off"
-              [value]="valorTexto()"
-              [attr.aria-invalid]="errores()['cantidad'] ? 'true' : null"
-              [attr.aria-describedby]="errores()['cantidad'] ? 'cantidad-error' : null"
-              (input)="cambiar('cantidad', $any($event.target).value)"
-            />
+            <div class="campo">
+              <label for="cantidad">Cantidad que {{ signo() === 'ENTRA' ? 'entra' : 'sale' }}</label>
+              <input
+                #numero
+                id="cantidad"
+                name="cantidad"
+                class="numero"
+                type="text"
+                inputmode="decimal"
+                autocomplete="off"
+                spellcheck="false"
+                [value]="valorTexto()"
+                [attr.aria-invalid]="errores()['cantidad'] ? 'true' : null"
+                [attr.aria-describedby]="errores()['cantidad'] ? 'cantidad-error' : null"
+                (input)="cambiar('cantidad', $any($event.target).value)"
+              />
+            </div>
             @if (errores()['cantidad']; as mensaje) {
-              <span id="cantidad-error" class="campo-error">{{ mensaje }}</span>
+              <span id="cantidad-error" class="campo-error error-carga">{{ mensaje }}</span>
             }
           </div>
         }
 
-        <div class="campo">
-          <label for="motivo">Motivo</label>
-          <select
-            id="motivo"
-            [value]="motivo() ?? ''"
-            [attr.aria-invalid]="errores()['motivo'] ? 'true' : null"
-            [attr.aria-describedby]="errores()['motivo'] ? 'motivo-error' : null"
-            (change)="cambiar('motivo', $any($event.target).value)"
-          >
-            <option value="" disabled>Elegí un motivo</option>
-            @for (m of motivos; track m) {
-              <option [value]="m">{{ motivoLabels[m] }}</option>
+        <div class="vista-previa">
+          <span class="desde">{{ numero(articulo().stockActual) }}&nbsp;<span aria-hidden="true">→</span></span>&ngsp;
+          <span class="resultado">
+            <strong
+              class="quedara"
+              [class.sube]="queda() !== null && queda()! > articulo().stockActual"
+              [class.baja]="queda() !== null && queda()! < articulo().stockActual"
+              >{{ textoQuedara() }}</strong
+            >
+            @if (modo() === 'STOCK_REAL') {
+              <span
+                class="diferencia"
+                [class.sube]="diferencia() !== null && diferencia()! > 0"
+                [class.baja]="diferencia() !== null && diferencia()! < 0"
+                >{{ textoDiferencia() }}</span
+              >
             }
-          </select>
-          @if (errores()['motivo']; as mensaje) {
-            <span id="motivo-error" class="campo-error">{{ mensaje }}</span>
-          }
+          </span>
         </div>
 
         <div class="campo">
-          <label for="detalle">Detalle {{ motivo() === 'OTRO' ? '' : '(opcional)' }}</label>
+          <label for="detalle">
+            Detalle
+            @if (motivo() !== 'OTRO') {
+              <span class="opcional">opcional</span>
+            }
+          </label>
           <input
             id="detalle"
+            name="detalle"
             type="text"
             maxlength="150"
             autocomplete="off"
-            placeholder="Ej: remito 0001-123, se cayó la caja"
+            placeholder="Ej: remito 0001-123…"
             [value]="detalle()"
             [attr.aria-invalid]="errores()['detalle'] ? 'true' : null"
             [attr.aria-describedby]="errores()['detalle'] ? 'detalle-error' : null"
@@ -192,94 +247,216 @@ function leerNumero(texto: string): { valor: number; decimales: number } | null 
           <p class="error" role="alert">{{ mensaje }}</p>
         }
 
-        <div class="dialogo-acciones">
+        <div class="acciones-panel">
           <button type="button" class="cancelar secundario" data-tecla="Esc" aria-keyshortcuts="Escape" (click)="cancelar.emit()">
             Cancelar
           </button>
-          <button type="submit" class="confirmar" data-tecla="Enter" [disabled]="guardando()">Ajustar stock</button>
+          <button type="submit" class="confirmar" data-tecla="Enter" [disabled]="guardando()">Guardar ajuste</button>
         </div>
       </form>
-    </div>
+    </dialog>
   `,
   styles: `
-    .articulo {
-      margin-top: var(--e-1);
-      color: var(--texto-suave);
-      font-weight: 600;
-    }
-    .resumen {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: var(--e-3);
+    /* Panel lateral derecho de 460 px a todo el alto, sobre el velo del ::backdrop. */
+    .panel-lateral {
+      box-sizing: border-box;
+      position: fixed;
+      inset: 0 0 0 auto;
+      width: min(460px, 100vw);
+      max-width: 100vw;
+      height: 100dvh;
+      max-height: none;
       margin: 0;
+      padding: var(--e-6);
+      border: 0;
+      background: var(--superficie);
+      color: var(--texto);
+      box-shadow: -16px 0 40px rgb(15 23 42 / 0.2);
+      overflow-y: auto;
+      overscroll-behavior: contain;
     }
-    .resumen > div {
-      padding: var(--e-2) var(--e-3);
-      border: 1px solid var(--borde);
-      border-radius: var(--radio);
-      background: var(--superficie-2);
+    .panel-lateral::backdrop {
+      background: var(--velo, rgb(15 23 42 / 0.45));
     }
-    dt {
-      color: var(--texto-suave);
+    .panel-lateral[open] {
+      animation: entrar 180ms ease-out;
+    }
+    @keyframes entrar {
+      from {
+        transform: translateX(24px);
+        opacity: 0;
+      }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .panel-lateral[open] {
+        animation: none;
+      }
+    }
+    .ajuste {
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+      min-height: 100%;
+    }
+    .sobretitulo {
+      margin: 0;
+      color: var(--texto-tenue);
       font-size: var(--texto-xs);
-      font-weight: 700;
+      font-weight: 600;
       letter-spacing: 0.04em;
       text-transform: uppercase;
     }
-    dd {
-      margin: 2px 0 0;
-      font-size: var(--texto-lg);
+    .articulo {
+      margin: var(--e-1) 0 0;
+      font-size: 1.25rem;
       font-weight: 700;
-      font-variant-numeric: tabular-nums;
+      line-height: 1.25;
+      text-wrap: balance;
     }
-    dd.sube {
-      color: var(--exito);
+    .referencia {
+      margin: 2px 0 0;
+      color: var(--texto-tenue);
+      font-family: var(--fuente-mono);
+      font-size: var(--texto-sm);
     }
-    dd.baja {
-      color: var(--error);
+    .opcional {
+      margin-left: var(--e-1);
+      color: var(--texto-tenue);
+      font-weight: 400;
     }
-    /* Selectores segmentados, como el de medios de pago del cobro. */
-    .modos,
-    .signos {
+    /* Modo: dos tarjetas con título y explicación. */
+    .modos {
       display: grid;
-      grid-template-columns: 1fr 1fr;
-      padding: 3px;
-      gap: 3px;
-      border: 1px solid var(--borde-fuerte);
-      border-radius: var(--radio-lg);
-      background: var(--superficie-3);
-    }
-    .signos {
-      margin-bottom: var(--e-2);
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: var(--e-2);
     }
     .modo {
-      min-height: 44px;
-      padding: 6px 8px;
-      border: 0;
-      border-radius: var(--radio);
-      background: transparent;
-      color: var(--texto);
-      font-size: 1rem;
-    }
-    .modo:hover {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 2px;
+      min-height: 0;
+      padding: 10px 12px;
+      border: 1px solid var(--borde);
+      border-radius: var(--radio-lg);
       background: var(--superficie);
+      color: var(--texto);
+      font-size: var(--texto-base);
+      font-weight: 600;
+      text-align: left;
+      white-space: normal;
     }
     .modo[aria-checked='true'],
     .modo[aria-checked='true']:hover {
-      background: var(--acento);
-      color: var(--acento-texto);
-      box-shadow: var(--sombra-1);
+      border-color: var(--acento);
+      background: var(--acento-suave);
+      box-shadow: inset 0 0 0 1px var(--acento);
+      color: var(--acento-profundo);
     }
-    .modo:focus-visible {
-      box-shadow: var(--foco);
+    .modo-detalle {
+      color: var(--texto-suave);
+      font-size: var(--texto-xs);
+      font-weight: 400;
     }
-    #stock-real,
-    #cantidad {
-      height: 48px;
-      font-size: 1.5rem;
-      font-weight: 700;
+    /* Sumar o restar: Entra / Sale a la izquierda, la cantidad grande a la derecha. */
+    .carga {
+      display: grid;
+      grid-template-columns: 140px minmax(0, 1fr);
+      gap: 6px 10px;
+    }
+    .signos {
+      display: grid;
+      grid-template-rows: 1fr 1fr;
+      gap: 6px;
+    }
+    .signo {
+      min-height: 0;
+      border-color: var(--borde);
+      color: var(--texto-suave);
+    }
+    .signo.entra[aria-checked='true'],
+    .signo.entra[aria-checked='true']:hover {
+      border-color: var(--exito-borde);
+      background: var(--exito-fondo);
+      color: var(--exito);
+      font-weight: 600;
+    }
+    .signo.sale[aria-checked='true'],
+    .signo.sale[aria-checked='true']:hover {
+      border-color: var(--error-borde);
+      background: var(--error-fondo);
+      color: var(--error);
+      font-weight: 600;
+    }
+    .error-carga {
+      grid-column: 1 / -1;
+    }
+    .numero {
+      height: 64px;
+      padding: 0 14px;
+      border-width: 2px;
+      border-radius: var(--radio-lg);
+      font-family: var(--fuente-mono);
+      font-size: 1.875rem;
+      font-weight: 600;
       text-align: right;
       font-variant-numeric: tabular-nums;
+    }
+    /* «25 → 49 unidades». */
+    .vista-previa {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: var(--e-3);
+      padding: 14px 16px;
+      border-radius: var(--radio-lg);
+      background: var(--superficie-2);
+      font-size: var(--texto-md);
+      font-variant-numeric: tabular-nums;
+    }
+    .desde {
+      color: var(--texto-suave);
+      white-space: nowrap;
+    }
+    .resultado {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      min-width: 0;
+    }
+    .quedara {
+      font-size: 1.625rem;
+      font-weight: 700;
+      line-height: 1.2;
+    }
+    .diferencia {
+      color: var(--texto-suave);
+      font-size: var(--texto-sm);
+      font-weight: 600;
+    }
+    .diferencia.sube {
+      color: var(--exito);
+    }
+    .diferencia.baja {
+      color: var(--error);
+    }
+    .ajuste .error {
+      margin: 0;
+    }
+    .acciones-panel {
+      display: flex;
+      gap: 10px;
+      margin-top: auto;
+    }
+    .acciones-panel button {
+      min-height: 48px;
+      border-radius: var(--radio-lg);
+      font-size: var(--texto-md);
+    }
+    .acciones-panel .cancelar {
+      flex: 1;
+    }
+    .acciones-panel .confirmar {
+      flex: 2;
     }
   `,
 })
@@ -292,8 +469,12 @@ export class DialogoAjusteStock {
 
   protected readonly motivos = MOTIVOS_AJUSTE;
   protected readonly motivoLabels = MOTIVO_AJUSTE_LABELS;
+  protected readonly modos = MODOS;
+  protected readonly signos = SIGNOS;
+  protected readonly etiquetasModo = ETIQUETAS_MODO;
 
   private readonly injector = inject(Injector);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
 
   /** Lo escrito en el campo numérico: el stock real o la cantidad, según el modo. */
   protected readonly valorTexto = signal('');
@@ -305,6 +486,7 @@ export class DialogoAjusteStock {
   protected readonly errorGeneral = signal<string | null>(null);
   protected readonly guardando = signal(false);
 
+  private readonly dialogo = viewChild.required<ElementRef<HTMLDialogElement>>('dialogo');
   private readonly campoNumero = viewChild<ElementRef<HTMLInputElement>>('numero');
 
   /** Diferencia (con signo) contra el stock actual, en vivo; null si lo escrito no es un número. */
@@ -321,8 +503,9 @@ export class DialogoAjusteStock {
     return this.signo() === 'SALE' ? -leido.valor : leido.valor;
   });
 
-  /** Stock resultante en vivo en el modo sumar o restar. */
+  /** Stock resultante en vivo: lo contado en el conteo, o el actual más o menos la cantidad. */
   protected readonly queda = computed(() => {
+    if (this.modo() === 'STOCK_REAL') return leerNumero(this.valorTexto())?.valor ?? null;
     const d = this.delta();
     if (d === null) return null;
     return (Math.round(this.articulo().stockActual * 1000) + Math.round(d * 1000)) / 1000;
@@ -341,7 +524,20 @@ export class DialogoAjusteStock {
   });
 
   constructor() {
-    afterNextRender(() => this.campoNumero()?.nativeElement.focus());
+    // Quien abrió el panel (el botón «Ajustar stock»): recupera el foco al cerrarse.
+    const abridor = inject(DOCUMENT).activeElement as HTMLElement | null;
+    let abierto: HTMLDialogElement | null = null;
+    afterNextRender(() => {
+      abierto = this.dialogo().nativeElement;
+      // jsdom no tiene showModal: ahí queda abierto como diálogo común.
+      if (typeof abierto.showModal === 'function') abierto.showModal();
+      else abierto.setAttribute('open', '');
+      this.campoNumero()?.nativeElement.focus();
+    });
+    inject(DestroyRef).onDestroy(() => {
+      if (abierto?.open && typeof abierto.close === 'function') abierto.close();
+      abridor?.focus?.();
+    });
   }
 
   /** Cambia de modo a mano. Lo escrito significa otra cosa en el otro modo, así que se borra. */
@@ -360,8 +556,33 @@ export class DialogoAjusteStock {
     this.errorGeneral.set(null);
   }
 
+  /** Roving tabindex: las flechas mueven la elección dentro del grupo y el foco la acompaña. */
+  protected alTeclearModo(evento: KeyboardEvent): void {
+    const siguiente = this.vecino(evento, MODOS, this.modo());
+    if (!siguiente) return;
+    this.elegirModo(siguiente, false);
+    this.enfocarOpcion(`[data-modo="${siguiente}"]`);
+  }
+
+  protected alTeclearSigno(evento: KeyboardEvent): void {
+    const siguiente = this.vecino(evento, SIGNOS, this.signo());
+    if (!siguiente) return;
+    this.elegirSigno(siguiente);
+    this.enfocarOpcion(`[data-signo="${siguiente}"]`);
+  }
+
+  protected alCancelar(evento: Event): void {
+    // El padre saca el panel; si el navegador lo cerrara solo, quedaría abierto en el estado del padre.
+    evento.preventDefault();
+    this.cancelar.emit();
+  }
+
   protected conUnidad(cantidad: number): string {
     return cantidadConUnidad(cantidad, this.articulo().unidad);
+  }
+
+  protected numero(cantidad: number): string {
+    return NUMERO.format(cantidad);
   }
 
   protected cambiar(campo: Campo, valor: string): void {
@@ -374,13 +595,6 @@ export class DialogoAjusteStock {
     } else this.detalle.set(valor);
     this.errores.update(({ [campo]: _, ...resto }) => resto);
     this.errorGeneral.set(null);
-  }
-
-  protected alTeclear(evento: KeyboardEvent): void {
-    if (evento.key !== 'Escape') return;
-    evento.preventDefault();
-    evento.stopPropagation();
-    this.cancelar.emit();
   }
 
   protected confirmar(): void {
@@ -423,6 +637,18 @@ export class DialogoAjusteStock {
           }
         },
       });
+  }
+
+  /** La opción vecina según la flecha apretada (en ronda); null si no es una flecha. */
+  private vecino<T>(evento: KeyboardEvent, opciones: readonly T[], actual: T): T | null {
+    const paso = PASO_POR_TECLA[evento.key];
+    if (!paso) return null;
+    evento.preventDefault();
+    return opciones[(opciones.indexOf(actual) + paso + opciones.length) % opciones.length];
+  }
+
+  private enfocarOpcion(selector: string): void {
+    this.host.nativeElement.querySelector<HTMLElement>(selector)?.focus();
   }
 
   /** Las mismas reglas que AjusteStock.java y MotivoAjuste.java, todas juntas. */

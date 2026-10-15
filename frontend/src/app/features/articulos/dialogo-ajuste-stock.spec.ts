@@ -19,6 +19,24 @@ describe('DialogoAjusteStock', () => {
     stockActual,
   });
 
+  // jsdom no implementa showModal ni close de <dialog>: se simulan para ver que el panel los use.
+  let showModal: ReturnType<typeof vi.fn>;
+  let cerrar: ReturnType<typeof vi.fn>;
+  beforeEach(() => {
+    showModal = vi.fn(function (this: HTMLDialogElement) {
+      this.setAttribute('open', '');
+    });
+    cerrar = vi.fn(function (this: HTMLDialogElement) {
+      this.removeAttribute('open');
+    });
+    Object.assign(HTMLDialogElement.prototype, { showModal, close: cerrar });
+  });
+  afterEach(() => {
+    const proto = HTMLDialogElement.prototype as unknown as Record<string, unknown>;
+    delete proto['showModal'];
+    delete proto['close'];
+  });
+
   async function abrir(articulo: ArticuloAAjustar) {
     servicio = {
       ajustarStock: vi.fn(() =>
@@ -74,27 +92,149 @@ describe('DialogoAjusteStock', () => {
   it('muestra el artículo y su stock actual con la unidad, y arranca en el stock real', async () => {
     await abrir(tornillo(497));
 
-    expect(el().querySelector('[role="dialog"]')!.getAttribute('aria-modal')).toBe('true');
     expect(texto('h2')).toBe('Ajustar stock');
     expect(el().textContent).toContain('Tornillo hexagonal 1/4');
-    expect(texto('.stock-actual dd')).toBe('497 unidades');
+    expect(texto('.stock-actual')).toBe('497 unidades');
     expect(document.activeElement).toBe(el().querySelector('#stock-real'));
+  });
+
+  describe('panel lateral con <dialog> nativo', () => {
+    const dialogo = () => el().querySelector<HTMLDialogElement>('dialog')!;
+
+    it('se abre como modal nativo (trampa de foco y Esc del navegador) con el artículo como nombre', async () => {
+      await abrir(tornillo(10));
+
+      expect(dialogo()).not.toBeNull();
+      expect(dialogo().classList).toContain('panel-lateral');
+      expect(showModal).toHaveBeenCalledTimes(1);
+      expect(dialogo().open).toBe(true);
+      const nombre = (dialogo().getAttribute('aria-labelledby') ?? '')
+        .split(' ')
+        .map((id) => el().querySelector(`#${id}`)?.textContent?.trim())
+        .join(' ');
+      expect(nombre).toBe('Ajustar stock Tornillo hexagonal 1/4');
+    });
+
+    it('muestra el código interno y el stock de hoy debajo del nombre', async () => {
+      await abrir({ ...tornillo(25), codigoInterno: 'PIN-104' });
+
+      expect(texto('.referencia').replace(/\s+/g, ' ')).toBe('PIN-104 · hoy 25 unidades');
+    });
+
+    it('Esc (evento cancel del <dialog>) cancela sin que el navegador lo cierre por su cuenta', async () => {
+      await abrir(tornillo(10));
+      const evento = new Event('cancel', { cancelable: true });
+
+      dialogo().dispatchEvent(evento);
+
+      expect(evento.defaultPrevented).toBe(true);
+      expect(canceladas).toBe(1);
+    });
+
+    it('al cerrarse devuelve el foco al botón que lo abrió', async () => {
+      const abridor = document.createElement('button');
+      document.body.appendChild(abridor);
+      abridor.focus();
+
+      await abrir(tornillo(10));
+      expect(document.activeElement).not.toBe(abridor);
+      fixture.destroy();
+
+      expect(cerrar).toHaveBeenCalled();
+      expect(document.activeElement).toBe(abridor);
+      abridor.remove();
+    });
+
+    it('vista previa «25 → 49 unidades» al sumar', async () => {
+      await abrir(tornillo(25));
+      await escribir('#motivo', 'INGRESO_MERCADERIA');
+
+      await escribir('#cantidad', '24');
+
+      expect(texto('.vista-previa').replace(/\s+/g, ' ')).toBe('25 → 49 unidades');
+    });
+
+    it('vista previa del conteo: «10 → 12 unidades» y la diferencia', async () => {
+      await abrir(tornillo(10));
+
+      await escribir('#stock-real', '12');
+
+      expect(texto('.vista-previa .desde').replace(/\s+/g, ' ')).toBe('10 →');
+      expect(texto('.vista-previa .quedara')).toBe('12 unidades');
+      expect(texto('.vista-previa .diferencia')).toBe('+2 unidades');
+    });
+  });
+
+  describe('grupos de opciones con flechas (roving tabindex)', () => {
+    const tecla = (selector: string, key: string) => {
+      el().querySelector(selector)!.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }));
+      fixture.detectChanges();
+    };
+    const tabindex = (selector: string) => el().querySelector(selector)!.getAttribute('tabindex');
+
+    it('solo la opción marcada de cada grupo entra en el orden de tabulación', async () => {
+      await abrir(tornillo(10));
+      expect(tabindex('[data-modo="STOCK_REAL"]')).toBe('0');
+      expect(tabindex('[data-modo="CANTIDAD"]')).toBe('-1');
+
+      await elegirModo('CANTIDAD');
+
+      expect(tabindex('[data-modo="CANTIDAD"]')).toBe('0');
+      expect(tabindex('[data-modo="STOCK_REAL"]')).toBe('-1');
+      expect(tabindex('[data-signo="ENTRA"]')).toBe('0');
+      expect(tabindex('[data-signo="SALE"]')).toBe('-1');
+    });
+
+    it('← y → cambian el modo y llevan el foco a la opción elegida', async () => {
+      await abrir(tornillo(10));
+
+      tecla('[data-modo="STOCK_REAL"]', 'ArrowRight');
+      expect(marcado('[data-modo="CANTIDAD"]')).toBe(true);
+      expect(document.activeElement).toBe(el().querySelector('[data-modo="CANTIDAD"]'));
+
+      tecla('[data-modo="CANTIDAD"]', 'ArrowLeft');
+      expect(marcado('[data-modo="STOCK_REAL"]')).toBe(true);
+      expect(document.activeElement).toBe(el().querySelector('[data-modo="STOCK_REAL"]'));
+
+      tecla('[data-modo="STOCK_REAL"]', 'ArrowLeft');
+      expect(marcado('[data-modo="CANTIDAD"]')).toBe(true);
+    });
+
+    it('← y → cambian entre Entra y Sale', async () => {
+      await abrir(tornillo(10));
+      await elegirModo('CANTIDAD');
+
+      tecla('[data-signo="ENTRA"]', 'ArrowRight');
+      expect(marcado('[data-signo="SALE"]')).toBe(true);
+      expect(document.activeElement).toBe(el().querySelector('[data-signo="SALE"]'));
+
+      tecla('[data-signo="SALE"]', 'ArrowLeft');
+      expect(marcado('[data-signo="ENTRA"]')).toBe(true);
+    });
+
+    it('las flechas en los campos de texto no cambian el modo', async () => {
+      await abrir(tornillo(10));
+
+      tecla('#stock-real', 'ArrowRight');
+
+      expect(marcado('[data-modo="STOCK_REAL"]')).toBe(true);
+    });
   });
 
   it('calcula la diferencia en vivo mientras se escribe el stock real', async () => {
     await abrir(tornillo(10));
-    expect(texto('.diferencia dd')).toBe('—');
+    expect(texto('.diferencia')).toBe('—');
 
     await escribir('#stock-real', '12');
-    expect(texto('.diferencia dd')).toBe('+2 unidades');
-    expect(el().querySelector('.diferencia dd')!.classList).toContain('sube');
+    expect(texto('.diferencia')).toBe('+2 unidades');
+    expect(el().querySelector('.diferencia')!.classList).toContain('sube');
 
     await escribir('#stock-real', '9');
-    expect(texto('.diferencia dd')).toBe('-1 unidad');
-    expect(el().querySelector('.diferencia dd')!.classList).toContain('baja');
+    expect(texto('.diferencia')).toBe('-1 unidad');
+    expect(el().querySelector('.diferencia')!.classList).toContain('baja');
 
     await escribir('#stock-real', '10');
-    expect(texto('.diferencia dd')).toBe('Sin diferencia');
+    expect(texto('.diferencia')).toBe('Sin diferencia');
   });
 
   it('acepta coma decimal en los artículos por metro', async () => {
@@ -102,7 +242,7 @@ describe('DialogoAjusteStock', () => {
 
     await escribir('#stock-real', '145,5');
 
-    expect(texto('.diferencia dd')).toBe('-4,5 metros');
+    expect(texto('.diferencia')).toBe('-4,5 metros');
   });
 
   it('desde un stock negativo, contar 0 suma lo que faltaba', async () => {
@@ -110,7 +250,7 @@ describe('DialogoAjusteStock', () => {
 
     await escribir('#stock-real', '0');
 
-    expect(texto('.diferencia dd')).toBe('+3 unidades');
+    expect(texto('.diferencia')).toBe('+3 unidades');
   });
 
   it('con datos válidos manda el stock real, el motivo y el detalle, y avisa el resultado', async () => {
@@ -274,12 +414,12 @@ describe('DialogoAjusteStock', () => {
       await elegirModo('CANTIDAD');
 
       await escribir('#cantidad', '25');
-      expect(texto('.quedara dd')).toBe('35 unidades');
-      expect(texto('.stock-actual dd')).toBe('10 unidades');
+      expect(texto('.quedara')).toBe('35 unidades');
+      expect(texto('.stock-actual')).toBe('10 unidades');
 
       await elegirSigno('SALE');
-      expect(texto('.quedara dd')).toBe('-15 unidades');
-      expect(el().querySelector('.quedara dd')!.classList).toContain('baja');
+      expect(texto('.quedara')).toBe('-15 unidades');
+      expect(el().querySelector('.quedara')!.classList).toContain('baja');
     });
 
     it('manda la cantidad con signo según entre o salga', async () => {
@@ -312,7 +452,7 @@ describe('DialogoAjusteStock', () => {
 
       await escribir('#cantidad', '2,5');
 
-      expect(texto('.quedara dd')).toBe('152,5 metros');
+      expect(texto('.quedara')).toBe('152,5 metros');
     });
 
     it('valida cantidad vacía, cero, con signo, decimales en UNIDAD y que no quede negativo', async () => {
@@ -384,9 +524,7 @@ describe('DialogoAjusteStock', () => {
   it('Esc y Cancelar cancelan sin ajustar', async () => {
     await abrir(tornillo(10));
 
-    el().querySelector('[role="dialog"]')!.dispatchEvent(
-      new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }),
-    );
+    el().querySelector('dialog')!.dispatchEvent(new Event('cancel', { cancelable: true }));
     el().querySelector<HTMLButtonElement>('button.cancelar')!.click();
 
     expect(canceladas).toBe(2);

@@ -48,7 +48,7 @@ describe('Rubros', () => {
   }
 
   const el = () => fixture.nativeElement as HTMLElement;
-  const filas = () => Array.from(el().querySelectorAll('tbody tr'));
+  const filas = () => Array.from(el().querySelectorAll<HTMLTableRowElement>('tbody tr'));
   const input = (id: string) => el().querySelector<HTMLInputElement>(`#${id}`)!;
 
   async function escribir(id: string, valor: string) {
@@ -67,6 +67,34 @@ describe('Rubros', () => {
     await refrescar();
   }
 
+  const barra = (selector: string) => el().querySelector<HTMLButtonElement>(`app-barra-acciones ${selector}`);
+  const elegidas = () => filas().filter((f) => f.getAttribute('aria-selected') === 'true');
+
+  /** Clic en la fila: la elige. */
+  async function elegir(fila: number) {
+    (filas()[fila].querySelector('td') as HTMLElement).click();
+    await refrescar();
+  }
+
+  /** Elige la fila y toca Editar en la barra. */
+  async function editarFila(fila: number) {
+    await elegir(fila);
+    barra('button.editar')!.click();
+    await refrescar();
+  }
+
+  async function teclaEnFila(fila: number, key: string) {
+    filas()[fila].dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }));
+    await refrescar();
+  }
+
+  /** Los textos a los que apunta el aria-describedby del campo. */
+  const descripciones = (id: string) =>
+    (input(id).getAttribute('aria-describedby') ?? '')
+      .split(' ')
+      .filter((ref) => ref !== '')
+      .map((ref) => el().querySelector(`#${ref}`)?.textContent?.trim());
+
   it('el título va en la barra de acciones de arriba', async () => {
     await crear([buloneria]);
 
@@ -79,7 +107,7 @@ describe('Rubros', () => {
     const textos = filas().map((f) => f.textContent ?? '');
     expect(textos).toHaveLength(2);
     expect(textos[0]).toContain('Bulonería');
-    expect(textos[0]).toContain('35 %');
+    expect(textos[0]).toContain('35 %');
   });
 
   it('la barra de estado cuenta los rubros', async () => {
@@ -91,11 +119,112 @@ describe('Rubros', () => {
     expect(el().querySelector('.barra-estado')?.textContent?.trim()).toBe('1 rubro');
   });
 
-  it('el Vendedor no ve el alta ni Editar', async () => {
+  it('el Vendedor no ve el alta ni Editar, y las filas no se eligen', async () => {
     await crear([buloneria]);
 
     expect(el().querySelector('form')).toBeNull();
     expect(el().querySelector('button.editar')).toBeNull();
+    expect(el().querySelector('button.nuevo')).toBeNull();
+    await elegir(0);
+    expect(filas()[0].getAttribute('aria-selected')).toBeNull();
+    expect(filas()[0].getAttribute('tabindex')).toBeNull();
+  });
+
+  describe('barra de acciones sobre la fila elegida', () => {
+    it('el Dueño ve Nuevo y Editar en la barra y ningún botón en las filas', async () => {
+      await crear([buloneria, pinturas], true);
+
+      expect(barra('button.nuevo')).not.toBeNull();
+      expect(barra('button.editar')).not.toBeNull();
+      expect(el().querySelectorAll('tbody button')).toHaveLength(0);
+    });
+
+    it('sin fila elegida Editar está deshabilitado; al elegir una se habilita y queda marcada', async () => {
+      await crear([buloneria, pinturas], true);
+      expect(barra('button.editar')!.disabled).toBe(true);
+
+      await elegir(1);
+
+      expect(elegidas()).toEqual([filas()[1]]);
+      expect(barra('button.editar')!.disabled).toBe(false);
+    });
+
+    it('Enter o doble clic en la fila la editan', async () => {
+      await crear([buloneria, pinturas], true);
+
+      await teclaEnFila(1, 'Enter');
+      expect(input('nombre').value).toBe('Pinturas');
+
+      filas()[0].dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
+      await refrescar();
+      expect(input('nombre').value).toBe('Bulonería');
+    });
+
+    it('↓ y ↑ mueven la fila elegida y el foco; Tab entra por la elegida', async () => {
+      await crear([buloneria, pinturas], true);
+      expect(filas().map((f) => f.getAttribute('tabindex'))).toEqual(['0', '-1']);
+      filas()[0].focus();
+      await refrescar();
+      expect(elegidas()).toEqual([filas()[0]]);
+
+      await teclaEnFila(0, 'ArrowDown');
+      expect(elegidas()).toEqual([filas()[1]]);
+      expect(document.activeElement).toBe(filas()[1]);
+      expect(filas().map((f) => f.getAttribute('tabindex'))).toEqual(['-1', '0']);
+
+      await teclaEnFila(1, 'ArrowUp');
+      expect(elegidas()).toEqual([filas()[0]]);
+    });
+
+    it('Nuevo deja el formulario en alta y enfoca el nombre', async () => {
+      await crear([buloneria], true);
+      await editarFila(0);
+      expect(el().querySelector('form h2')?.textContent).toContain('Editar rubro');
+
+      barra('button.nuevo')!.click();
+      await refrescar();
+
+      expect(el().querySelector('form h2')?.textContent).toContain('Nuevo rubro');
+      expect(input('nombre').value).toBe('');
+      expect(document.activeElement).toBe(input('nombre'));
+    });
+  });
+
+  describe('campos', () => {
+    it('no autocompletan ni corrigen, tienen nombre y el ejemplo termina en «…»', async () => {
+      await crear([], true);
+
+      for (const id of ['nombre', 'margen']) {
+        expect(input(id).getAttribute('autocomplete')).toBe('off');
+        expect(input(id).name).not.toBe('');
+      }
+      expect(input('nombre').getAttribute('spellcheck')).toBe('false');
+      expect(input('nombre').placeholder.endsWith('…')).toBe(true);
+      expect(input('margen').getAttribute('inputmode')).toBe('decimal');
+    });
+
+    it('al enviar con errores marca los inválidos, enlaza sus mensajes y enfoca el primero', async () => {
+      await crear([], true);
+      await escribir('margen', '-5');
+
+      await enviar();
+
+      expect(input('nombre').getAttribute('aria-invalid')).toBe('true');
+      expect(descripciones('nombre')).toEqual(['El nombre es obligatorio.']);
+      expect(input('margen').getAttribute('aria-invalid')).toBe('true');
+      expect(descripciones('margen')).toEqual(['El margen no puede ser negativo.']);
+      expect(document.activeElement).toBe(input('nombre'));
+    });
+
+    it('al editar, la pista del margen queda enlazada al campo', async () => {
+      await crear([buloneria], true);
+
+      await editarFila(0);
+
+      expect(descripciones('margen')).toEqual([
+        'Si cambiás el margen, se recalcula el precio de los artículos que lo usan.',
+      ]);
+    });
   });
 
   describe('validaciones', () => {
@@ -122,7 +251,7 @@ describe('Rubros', () => {
 
       await escribir('margen', '1001');
       expect(el().querySelector('.campo.margen .campo-error')?.textContent?.trim()).toBe(
-        'El margen no puede superar 1000 %.',
+        'El margen no puede superar 1000 %.',
       );
       expect(servicio.crear).not.toHaveBeenCalled();
     });
@@ -144,7 +273,7 @@ describe('Rubros', () => {
     it('Editar precarga el rubro; guardar solo el nombre no pregunta nada', async () => {
       await crear([buloneria, pinturas], true);
 
-      await clickEn('button.editar', 0);
+      await editarFila(0);
       expect(el().querySelector('form h2')?.textContent).toContain('Editar rubro');
       expect(input('nombre').value).toBe('Bulonería');
       expect(input('margen').value).toBe('35');
@@ -161,7 +290,7 @@ describe('Rubros', () => {
 
     it('si cambia el margen avisa cuántos artículos cambian de precio antes de guardar', async () => {
       await crear([buloneria], true);
-      await clickEn('button.editar', 0);
+      await editarFila(0);
       await escribir('margen', '40');
 
       await enviar();
@@ -177,13 +306,13 @@ describe('Rubros', () => {
       await clickEn('app-confirmacion button.confirmar');
 
       expect(servicio.actualizar).toHaveBeenCalledWith(1, { nombre: 'Bulonería', margenPorcentaje: 40 });
-      expect(filas()[0].textContent).toContain('40 %');
+      expect(filas()[0].textContent).toContain('40 %');
       expect(el().querySelector('.alerta.exito')?.textContent).toContain('Se recalcularon 23 precios.');
     });
 
     it('cancelar el aviso no guarda y deja el formulario como estaba', async () => {
       await crear([buloneria], true);
-      await clickEn('button.editar', 0);
+      await editarFila(0);
       await escribir('margen', '40');
       await enviar();
 
@@ -197,7 +326,7 @@ describe('Rubros', () => {
     it('si ningún artículo hereda el margen guarda sin preguntar', async () => {
       await crear([buloneria], true);
       servicio.articulosQueHeredan.mockReturnValue(of(0));
-      await clickEn('button.editar', 0);
+      await editarFila(0);
       await escribir('margen', '40');
 
       await enviar();
@@ -209,7 +338,7 @@ describe('Rubros', () => {
     it('un solo artículo va en singular', async () => {
       await crear([buloneria], true);
       servicio.articulosQueHeredan.mockReturnValue(of(1));
-      await clickEn('button.editar', 0);
+      await editarFila(0);
       await escribir('margen', '40');
 
       await enviar();
@@ -222,7 +351,7 @@ describe('Rubros', () => {
     it('si no se puede contar, igual avisa con un texto claro', async () => {
       await crear([buloneria], true);
       servicio.articulosQueHeredan.mockReturnValue(throwError(() => errorHttp(500, 'x')));
-      await clickEn('button.editar', 0);
+      await editarFila(0);
       await escribir('margen', '40');
 
       await enviar();
@@ -234,7 +363,7 @@ describe('Rubros', () => {
 
     it('Cancelar la edición vuelve al alta', async () => {
       await crear([buloneria], true);
-      await clickEn('button.editar', 0);
+      await editarFila(0);
 
       await clickEn('button.cancelar');
 
@@ -246,7 +375,7 @@ describe('Rubros', () => {
     it('muestra el mensaje del backend si la edición falla', async () => {
       await crear([buloneria, pinturas], true);
       servicio.actualizar.mockReturnValue(throwError(() => errorHttp(409, 'Ya existe un rubro llamado Pinturas.')));
-      await clickEn('button.editar', 0);
+      await editarFila(0);
       await escribir('nombre', 'Pinturas');
 
       await enviar();

@@ -48,8 +48,42 @@ describe('Proveedores', () => {
   }
 
   const el = () => fixture.nativeElement as HTMLElement;
-  const filas = () => Array.from(el().querySelectorAll('tbody tr'));
+  const filas = () => Array.from(el().querySelectorAll<HTMLTableRowElement>('tbody tr'));
   const textoFilas = () => filas().map((f) => f.textContent ?? '');
+  const barra = (selector: string) => el().querySelector<HTMLButtonElement>(`app-barra-acciones ${selector}`);
+  const elegidas = () => filas().filter((f) => f.getAttribute('aria-selected') === 'true');
+  const indiceDe = (nombre: string) => filas().findIndex((f) => f.textContent?.includes(nombre));
+
+  async function refrescar() {
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+  }
+
+  /** Clic en la fila: la elige. */
+  async function elegir(fila: number) {
+    (filas()[fila].querySelector('td') as HTMLElement).click();
+    await refrescar();
+  }
+
+  /** Elige la fila y toca el botón de la barra. */
+  async function enBarra(fila: number, boton: string) {
+    await elegir(fila);
+    barra(`button.${boton}`)!.click();
+    await refrescar();
+  }
+
+  async function teclaEnFila(fila: number, key: string) {
+    filas()[fila].dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }));
+    await refrescar();
+  }
+
+  /** Los textos a los que apunta el aria-describedby del campo. */
+  const descripciones = (selector: string) =>
+    (el().querySelector(selector)!.getAttribute('aria-describedby') ?? '')
+      .split(' ')
+      .filter((ref) => ref !== '')
+      .map((ref) => el().querySelector(`#${ref}`)?.textContent?.trim());
 
   async function escribir(selector: string, valor: string) {
     const input = el().querySelector<HTMLInputElement>(selector)!;
@@ -133,21 +167,125 @@ describe('Proveedores', () => {
   });
 
   describe('permisos', () => {
-    it('el Dueño ve el formulario y las acciones', async () => {
+    it('el Dueño ve el formulario y las acciones en la barra, ninguna en las filas', async () => {
       await crearComponente(true);
 
       expect(el().querySelector('form')).not.toBeNull();
-      expect(el().querySelectorAll('button.editar')).toHaveLength(2);
-      expect(el().querySelectorAll('button.desactivar')).toHaveLength(2);
+      expect(barra('button.nuevo')).not.toBeNull();
+      expect(barra('button.editar')).not.toBeNull();
+      expect(barra('button.desactivar')).not.toBeNull();
+      expect(el().querySelectorAll('tbody button')).toHaveLength(0);
     });
 
-    it('el Vendedor solo ve la lista, sin formulario ni acciones', async () => {
+    it('el Vendedor solo ve la lista, sin formulario ni acciones, y no elige filas', async () => {
       await crearComponente(false);
 
       expect(textoFilas()).toHaveLength(2);
       expect(el().querySelector('form')).toBeNull();
       expect(el().querySelectorAll('button.editar')).toHaveLength(0);
       expect(el().querySelectorAll('button.desactivar')).toHaveLength(0);
+      await elegir(0);
+      expect(filas()[0].getAttribute('aria-selected')).toBeNull();
+      expect(filas()[0].getAttribute('tabindex')).toBeNull();
+    });
+  });
+
+  describe('barra de acciones sobre la fila elegida', () => {
+    it('sin fila elegida, Editar y Dar de baja están deshabilitados', async () => {
+      await crearComponente(true);
+
+      expect(barra('button.editar')!.disabled).toBe(true);
+      expect(barra('button.desactivar')!.disabled).toBe(true);
+    });
+
+    it('clic en una fila la elige, la marca y habilita las acciones', async () => {
+      await crearComponente(true);
+
+      await elegir(1);
+
+      expect(elegidas()).toEqual([filas()[1]]);
+      expect(barra('button.editar')!.disabled).toBe(false);
+      expect(barra('button.desactivar')!.disabled).toBe(false);
+      expect(el().querySelector('.elegido')?.textContent).toContain('Tersuave');
+    });
+
+    it('Enter o doble clic en la fila la editan', async () => {
+      await crearComponente(true);
+
+      await teclaEnFila(1, 'Enter');
+      expect(el().querySelector<HTMLInputElement>('#nombre')!.value).toBe('Tersuave');
+
+      filas()[0].dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
+      await refrescar();
+      expect(el().querySelector<HTMLInputElement>('#nombre')!.value).toBe('Sinteplast');
+    });
+
+    it('↓ y ↑ mueven la fila elegida y el foco', async () => {
+      await crearComponente(true);
+      expect(filas().map((f) => f.getAttribute('tabindex'))).toEqual(['0', '-1']);
+      filas()[0].focus();
+      await refrescar();
+
+      await teclaEnFila(0, 'ArrowDown');
+      expect(elegidas()).toEqual([filas()[1]]);
+      expect(document.activeElement).toBe(filas()[1]);
+
+      await teclaEnFila(1, 'ArrowUp');
+      expect(elegidas()).toEqual([filas()[0]]);
+    });
+
+    it('Nuevo deja el formulario en alta y enfoca el nombre', async () => {
+      await crearComponente(true);
+      await enBarra(0, 'editar');
+
+      barra('button.nuevo')!.click();
+      await refrescar();
+
+      expect(el().querySelector('form h2')?.textContent).toContain('Nuevo proveedor');
+      expect(el().querySelector<HTMLInputElement>('#nombre')!.value).toBe('');
+      expect(document.activeElement).toBe(el().querySelector('#nombre'));
+    });
+
+    it('«Mostrar dados de baja» está en la barra', async () => {
+      await crearComponente(true);
+
+      expect(el().querySelector('app-barra-acciones #inactivos')).not.toBeNull();
+    });
+  });
+
+  describe('campos', () => {
+    it('tienen nombre, no autocompletan ni corrigen y el ejemplo termina en «…»', async () => {
+      await crearComponente(true);
+
+      for (const id of ['nombre', 'cuit']) {
+        const campo = el().querySelector<HTMLInputElement>(`#${id}`)!;
+        expect(campo.name).toBe(id);
+        expect(campo.getAttribute('autocomplete')).toBe('off');
+        expect(campo.getAttribute('spellcheck')).toBe('false');
+        expect(campo.placeholder.endsWith('…')).toBe(true);
+      }
+    });
+
+    it('al enviar con errores marca los inválidos, enlaza sus mensajes y enfoca el primero', async () => {
+      await crearComponente(true);
+      await escribir('#cuit', '123');
+
+      await enviarFormulario();
+
+      const nombre = el().querySelector<HTMLInputElement>('#nombre')!;
+      expect(nombre.getAttribute('aria-invalid')).toBe('true');
+      expect(descripciones('#nombre')).toEqual(['El nombre es obligatorio.']);
+      expect(el().querySelector('#cuit')!.getAttribute('aria-invalid')).toBe('true');
+      expect(descripciones('#cuit')).toHaveLength(2);
+      expect(descripciones('#cuit')[0]).toBe('Con o sin guiones.');
+      expect(document.activeElement).toBe(nombre);
+    });
+
+    it('sin errores el CUIT solo se describe con su pista', async () => {
+      await crearComponente(true);
+
+      expect(descripciones('#cuit')).toEqual(['Con o sin guiones.']);
+      expect(el().querySelector('#cuit')!.getAttribute('aria-invalid')).toBeNull();
     });
   });
 
@@ -243,7 +381,7 @@ describe('Proveedores', () => {
       const editado: Proveedor = { id: 1, nombre: 'Sinteplast SA', cuit: '30-12345678-1', activo: true };
       servicio.actualizar.mockReturnValue(of(editado));
 
-      await clickEn('button.editar', 0);
+      await enBarra(0, 'editar');
       expect(el().querySelector<HTMLInputElement>('#nombre')!.value).toBe('Sinteplast');
 
       await escribir('#nombre', 'Sinteplast SA');
@@ -265,7 +403,7 @@ describe('Proveedores', () => {
     it('cancelar vuelve al alta sin llamar al servicio', async () => {
       await crearComponente(true);
 
-      await clickEn('button.editar', 1);
+      await enBarra(1, 'editar');
       await clickEn('button.cancelar');
 
       expect(el().querySelector<HTMLInputElement>('#nombre')!.value).toBe('');
@@ -278,7 +416,7 @@ describe('Proveedores', () => {
         throwError(() => errorHttp(409, 'Ya existe un proveedor llamado Tersuave.')),
       );
 
-      await clickEn('button.editar', 0);
+      await enBarra(0, 'editar');
       await escribir('#nombre', 'Tersuave');
       await enviarFormulario();
 
@@ -290,7 +428,7 @@ describe('Proveedores', () => {
 
   describe('baja', () => {
     async function darDeBaja(fila: number, boton: 'confirmar' | 'cancelar' = 'confirmar') {
-      await clickEn('button.desactivar', fila);
+      await enBarra(fila, 'desactivar');
       await clickEn(`app-confirmacion button.${boton}`);
     }
 
@@ -299,7 +437,7 @@ describe('Proveedores', () => {
       const nativo = vi.spyOn(window, 'confirm');
       servicio.desactivar.mockReturnValue(of(undefined) as Observable<void>);
 
-      await clickEn('button.desactivar', 0);
+      await enBarra(0, 'desactivar');
       expect(el().querySelector('app-confirmacion h2')?.textContent).toContain('¿Dar de baja a Sinteplast?');
       await clickEn('app-confirmacion button.confirmar');
 
@@ -331,7 +469,9 @@ describe('Proveedores', () => {
       expect(textoFilas()).toHaveLength(3);
       const fila = filas()[sinteplastIdx()];
       expect(fila.querySelector('.etiqueta.de-baja')).not.toBeNull();
-      expect(fila.querySelector('button.reactivar')).not.toBeNull();
+      expect(fila.getAttribute('aria-selected')).toBe('true');
+      expect(barra('button.reactivar')).not.toBeNull();
+      expect(barra('button.desactivar')).toBeNull();
     });
 
     it('muestra el mensaje del backend si la baja falla', async () => {
@@ -359,9 +499,11 @@ describe('Proveedores', () => {
       const fila = filas().find((f) => f.textContent?.includes('Pinturas Viejas'))!;
       expect(fila.classList).toContain('inactivo');
       expect(fila.querySelector('.etiqueta.de-baja')?.textContent?.trim()).toBe('De baja');
-      expect(fila.querySelector('button.reactivar')).not.toBeNull();
-      expect(fila.querySelector('button.desactivar')).toBeNull();
       expect(el().querySelector('.barra-estado')?.textContent).toContain('1 de baja');
+
+      await elegir(indiceDe('Pinturas Viejas'));
+      expect(barra('button.reactivar')).not.toBeNull();
+      expect(barra('button.desactivar')).toBeNull();
     });
 
     it('al destildar vuelve a pedir solo los activos', async () => {
@@ -379,7 +521,7 @@ describe('Proveedores', () => {
       await clickEn('#inactivos');
       const indice = filas().findIndex((f) => f.textContent?.includes('Pinturas Viejas'));
 
-      await clickEn('button.reactivar', 0);
+      await enBarra(indice, 'reactivar');
 
       expect(servicio.reactivar).toHaveBeenCalledWith(9);
       expect(filas()[indice].querySelector('.etiqueta.de-baja')).toBeNull();

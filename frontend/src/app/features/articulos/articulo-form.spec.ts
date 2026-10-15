@@ -21,6 +21,8 @@ import { ArticulosService } from './articulos.service';
 registerLocaleData(localeEsAr);
 
 const NBSP = '\u00a0';
+/** Vuelve al listado con la b\u00fasqueda, la p\u00e1gina y los inactivos que tra\u00eda la direcci\u00f3n. */
+const VOLVER_AL_LISTADO = { queryParamsHandling: 'preserve' };
 
 describe('ArticuloForm', () => {
   const rubros: Rubro[] = [
@@ -268,7 +270,7 @@ describe('ArticuloForm', () => {
 
       await enviar();
 
-      expect(navigate).toHaveBeenCalledWith(['/articulos']);
+      expect(navigate).toHaveBeenCalledWith(['/articulos'], VOLVER_AL_LISTADO);
     });
 
     it('no manda stock actual ni precio final', async () => {
@@ -434,7 +436,7 @@ describe('ArticuloForm', () => {
       await enviar();
 
       expect(el().querySelector('.error')).toBeNull();
-      expect(navigate).toHaveBeenCalledWith(['/articulos']);
+      expect(navigate).toHaveBeenCalledWith(['/articulos'], VOLVER_AL_LISTADO);
     });
 
     it('tiene un enlace para volver al listado sin guardar', async () => {
@@ -523,7 +525,7 @@ describe('ArticuloForm', () => {
       });
       expect(enviado).not.toHaveProperty('stockActual');
       expect(enviado).not.toHaveProperty('precioFinal');
-      expect(navigate).toHaveBeenCalledWith(['/articulos']);
+      expect(navigate).toHaveBeenCalledWith(['/articulos'], VOLVER_AL_LISTADO);
     });
 
     it('puede quitar el margen propio para volver a heredar', async () => {
@@ -787,6 +789,112 @@ describe('ArticuloForm', () => {
     });
   });
 
+  describe('accesibilidad de los campos', () => {
+    /** Los textos a los que apunta el aria-describedby del campo. */
+    const descripciones = (id: string) =>
+      (el().querySelector(`#${id}`)!.getAttribute('aria-describedby') ?? '')
+        .split(' ')
+        .filter((ref) => ref !== '')
+        .map((ref) => el().querySelector(`#${ref}`)?.textContent?.trim());
+
+    it('al enviar con errores enfoca el primer campo inválido', async () => {
+      await crearComponente();
+
+      await enviar();
+      expect(document.activeElement).toBe(input('codigoInterno'));
+
+      await escribir('codigoInterno', 'TOR-001');
+      await enviar();
+      expect(document.activeElement).toBe(input('descripcion'));
+    });
+
+    it('si el backend marca campos, enfoca el primero', async () => {
+      await crearComponente();
+      await completarMinimos();
+      servicio.crear.mockReturnValue(
+        throwError(
+          () =>
+            new HttpErrorResponse({
+              status: 409,
+              error: { message: 'x', errors: { codigoBarras: 'Ya existe un artículo activo con el código de barras 779.' } },
+            }),
+        ),
+      );
+
+      await enviar();
+
+      expect(document.activeElement).toBe(input('codigoBarras'));
+    });
+
+    it('los campos inválidos llevan aria-invalid y su error enlazado con aria-describedby', async () => {
+      await crearComponente();
+
+      await enviar();
+
+      expect(input('codigoInterno').getAttribute('aria-invalid')).toBe('true');
+      expect(descripciones('codigoInterno')).toEqual(['El código interno es obligatorio.']);
+      expect(input('costo').getAttribute('aria-invalid')).toBe('true');
+      expect(descripciones('costo')).toEqual(['El costo es obligatorio.']);
+      expect(input('codigoBarras').getAttribute('aria-invalid')).toBeNull();
+    });
+
+    it('el error del backend también queda enlazado al campo', async () => {
+      await crearComponente();
+      await completarMinimos();
+      servicio.crear.mockReturnValue(
+        throwError(
+          () =>
+            new HttpErrorResponse({
+              status: 400,
+              error: { message: 'x', errors: { costo: 'El costo admite hasta 2 decimales' } },
+            }),
+        ),
+      );
+
+      await enviar();
+
+      expect(input('costo').getAttribute('aria-invalid')).toBe('true');
+      expect(descripciones('costo')).toEqual(['El costo admite hasta 2 decimales']);
+    });
+
+    it('las pistas del margen quedan enlazadas al campo', async () => {
+      await crearComponente();
+
+      expect(descripciones('margen')).toEqual([
+        'Vacío = usa el margen del rubro o de la ferretería',
+        'Hereda 30 % de la ferretería',
+      ]);
+    });
+
+    it('los códigos no autocompletan ni corrigen la ortografía', async () => {
+      await crearComponente();
+
+      for (const id of ['codigoInterno', 'codigoBarras', 'codigoProveedor']) {
+        expect(input(id).getAttribute('autocomplete')).toBe('off');
+        expect(input(id).getAttribute('spellcheck')).toBe('false');
+        expect(input(id).name).toBe(id);
+      }
+    });
+
+    it('costo, margen y stock mínimo abren el teclado decimal', async () => {
+      await crearComponente();
+
+      for (const id of ['costo', 'margen', 'stockMinimo']) {
+        expect(input(id).getAttribute('inputmode')).toBe('decimal');
+      }
+    });
+
+    it('los ejemplos de los campos terminan en «…»', async () => {
+      await crearComponente();
+
+      const placeholders = Array.from(el().querySelectorAll<HTMLInputElement>('input[placeholder]')).map(
+        (i) => i.placeholder,
+      );
+      expect(placeholders.length).toBeGreaterThan(2);
+      expect(placeholders.every((p) => p.endsWith('…'))).toBe(true);
+    });
+  });
+
   describe('guardar y cancelar', () => {
     it('al guardar deja un aviso de éxito para el listado', async () => {
       await crearComponente();
@@ -795,7 +903,7 @@ describe('ArticuloForm', () => {
       await enviar();
 
       expect(TestBed.inject(Avisos).tomar()).toBe('Se guardó «Tornillo».');
-      expect(navigate).toHaveBeenCalledWith(['/articulos']);
+      expect(navigate).toHaveBeenCalledWith(['/articulos'], VOLVER_AL_LISTADO);
     });
 
     it('cancelar sin cambios vuelve directo al listado', async () => {
@@ -805,7 +913,7 @@ describe('ArticuloForm', () => {
       await refrescar();
 
       expect(el().querySelector('app-confirmacion')).toBeNull();
-      expect(navigate).toHaveBeenCalledWith(['/articulos']);
+      expect(navigate).toHaveBeenCalledWith(['/articulos'], VOLVER_AL_LISTADO);
     });
 
     it('cancelar con cambios pregunta con el diálogo propio', async () => {
@@ -828,7 +936,7 @@ describe('ArticuloForm', () => {
       await refrescar();
       el().querySelector<HTMLButtonElement>('app-confirmacion button.confirmar')!.click();
       await refrescar();
-      expect(navigate).toHaveBeenCalledWith(['/articulos']);
+      expect(navigate).toHaveBeenCalledWith(['/articulos'], VOLVER_AL_LISTADO);
     });
   });
 
@@ -849,6 +957,7 @@ describe('ArticuloForm', () => {
       const dialogo = fixture.debugElement.query(By.directive(DialogoAjusteStock));
       expect((dialogo.componentInstance as DialogoAjusteStock).articulo()).toEqual({
         id: 5,
+        codigoInterno: 'TOR-001',
         descripcion: 'Tornillo hexagonal 1/4',
         unidad: 'METRO',
         stockActual: 12.5,
@@ -884,14 +993,15 @@ describe('ArticuloForm', () => {
 
       const boton = el().querySelector<HTMLButtonElement>('button.ajustar-stock')!;
       expect(boton.disabled).toBe(true);
-      expect(boton.title).toBe('"Tuerca vieja" está dado de baja. Reactivalo para ajustar el stock.');
+      const motivo = el().querySelector(`#${boton.getAttribute('aria-describedby')}`);
+      expect(motivo?.textContent?.trim()).toBe('«Tuerca vieja» está dado de baja. Reactivalo para ajustar el stock.');
     });
 
-    it('un artículo dado de baja muestra la etiqueta «De baja» y se puede reactivar', async () => {
+    it('un artículo dado de baja muestra la etiqueta «De baja» y se puede reactivar desde la barra', async () => {
       await crearComponente({ id: '5', articulo: articuloGuardado({ activo: false }) });
 
       expect(el().querySelector('.etiqueta.de-baja')?.textContent?.trim()).toBe('De baja');
-      el().querySelector<HTMLButtonElement>('button.reactivar')!.click();
+      el().querySelector<HTMLButtonElement>('app-barra-acciones button.reactivar')!.click();
       await refrescar();
 
       expect(servicio.reactivar).toHaveBeenCalledWith(5);
