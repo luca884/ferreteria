@@ -1523,10 +1523,24 @@ describe('Mostrador', () => {
       expect(renglonesTicket()[1].querySelector('.problema')).toBeNull();
       expect(document.activeElement).toBe(campo());
 
-      await tecla('ArrowUp', campo());
+      // El renglón con problema quedó elegido: F10 propone quitar ese, sin tocar las flechas (H-06).
       await tecla('F10');
+      expect(dialogo()!.textContent).toContain('¿Quitar "Martillo" del ticket?');
       await tecla('Enter');
       expect(descripciones()).toEqual(['Serrucho']);
+    });
+
+    it('un 404 también deja elegido el renglón inexistente (H-06)', async () => {
+      await crear();
+      await escanear('M', martillo());
+      await escanear('S', articulo(2, { descripcion: 'Serrucho', precioFinal: 100 }));
+      await tecla('F4');
+      await tecla('Enter');
+
+      await fallarCobro(0, 404, rechazo(404, 'ARTICULO_INEXISTENTE', [{ articuloId: 1 }]));
+
+      await tecla('F10');
+      expect(dialogo()!.textContent).toContain('¿Quitar "Martillo" del ticket?');
     });
 
     it('un 404 ubica el renglón por id y lo nombra con la descripción del ticket', async () => {

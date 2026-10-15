@@ -134,17 +134,21 @@ export function actualizarPrecios(
   return { ...t, renglones };
 }
 
-/** Marca los renglones rechazados y limpia las marcas anteriores del resto. */
+/**
+ * Marca los renglones rechazados y limpia las marcas anteriores del resto. Deja elegido el primer renglón
+ * con problema, para que F10 / F3 actúen sobre el que hay que arreglar.
+ */
 export function marcarProblemas(
   t: Ticket,
   problemas: readonly { articuloId: number; mensaje: string }[],
 ): Ticket {
   const porId = new Map(problemas.map((p) => [p.articuloId, p.mensaje]));
-  const renglones = t.renglones.map(({ problema: _anterior, ...r }) => {
+  const renglones: RenglonTicket[] = t.renglones.map(({ problema: _anterior, ...r }) => {
     const mensaje = porId.get(r.articuloId);
     return mensaje === undefined ? r : { ...r, problema: mensaje };
   });
-  return { ...t, renglones };
+  const primero = renglones.findIndex((r) => r.problema !== undefined);
+  return { ...t, renglones, elegido: primero >= 0 ? primero : t.elegido };
 }
 
 /** Cuerpo del POST. El recibido y el vuelto son del diálogo de cobro y no viajan. */

@@ -227,6 +227,20 @@ describe('ticket (puro)', () => {
       expect(t.renglones.map((r) => r.problema)).toEqual(['Ya no existe', undefined, undefined]);
     });
 
+    it('marcarProblemas elige el primer renglón con problema (H-06)', () => {
+      const t = marcarProblemas(conTres(), [
+        { articuloId: 3, mensaje: 'x' },
+        { articuloId: 2, mensaje: 'y' },
+      ]);
+      expect(t.elegido).toBe(1);
+    });
+
+    it('marcarProblemas sin ningún renglón coincidente no mueve el elegido', () => {
+      const antes = conTres();
+      const t = marcarProblemas(antes, [{ articuloId: 99, mensaje: 'x' }]);
+      expect(t.elegido).toBe(antes.elegido);
+    });
+
     it('quitar un renglón con problema no deja marcas en los demás', () => {
       const t = quitar(marcarProblemas(conTres(), [{ articuloId: 2, mensaje: 'x' }]), 1);
       expect(t.renglones.every((r) => r.problema === undefined)).toBe(true);
