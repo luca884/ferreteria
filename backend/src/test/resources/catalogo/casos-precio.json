@@ -1,5 +1,5 @@
 {
-  "descripcion": "Precio final = costo x (1 + margen) x (1 + IVA), redondeado hacia arriba al multiplo (sin multiplo, al centavo). Lo leen CasosCompartidosPrecioTest (backend) y precio-final.spec.ts (frontend). Importes como string para no pasar por double.",
+  "descripcion": "Precio final = costo x (1 + margen) x (1 + IVA), redondeado hacia arriba al multiplo (sin multiplo, al centavo). Lo leen CasosCompartidosPrecioTest (backend) y precio-final.spec.ts (frontend). Importes como string para no pasar por double. El campo opcional cotizacion (pesos por dolar) vale 1 si falta.",
   "casos": [
     { "nombre": "caso base", "costo": "100", "margen": "35", "alicuota": "IVA_21", "multiplo": "10", "precio": "170.00" },
     { "nombre": "multiplo 1", "costo": "100", "margen": "35", "alicuota": "IVA_21", "multiplo": "1", "precio": "164.00" },
@@ -20,6 +20,10 @@
     { "nombre": "precision completa hasta el final", "costo": "0.07", "margen": "0.50", "alicuota": "IVA_0", "multiplo": null, "precio": "0.08" },
     { "nombre": "margen con decimales que en double falla", "costo": "0.1", "margen": "0.2", "alicuota": "IVA_0", "multiplo": null, "precio": "0.11" },
     { "nombre": "costo grande", "costo": "9999999.99", "margen": "1000", "alicuota": "IVA_27", "multiplo": "10", "precio": "139700000.00" },
-    { "nombre": "demo taladro", "costo": "8000", "margen": "40", "alicuota": "IVA_21", "multiplo": "10", "precio": "13560.00" }
+    { "nombre": "demo taladro", "costo": "8000", "margen": "40", "alicuota": "IVA_21", "multiplo": "10", "precio": "13560.00" },
+    { "nombre": "USD con dolar a 1000", "costo": "10", "margen": "30", "alicuota": "IVA_21", "multiplo": "10", "cotizacion": "1000", "precio": "15730.00" },
+    { "nombre": "USD con dolar a 1100", "costo": "10", "margen": "30", "alicuota": "IVA_21", "multiplo": "10", "cotizacion": "1100", "precio": "17310.00" },
+    { "nombre": "USD con dolar a 950", "costo": "10", "margen": "30", "alicuota": "IVA_21", "multiplo": "10", "cotizacion": "950", "precio": "14950.00" },
+    { "nombre": "USD con cotizacion de 4 decimales", "costo": "10", "margen": "0", "alicuota": "IVA_0", "multiplo": null, "cotizacion": "1000.5000", "precio": "10005.00" }
   ]
 }

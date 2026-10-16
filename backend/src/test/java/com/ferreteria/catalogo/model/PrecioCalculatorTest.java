@@ -167,6 +167,61 @@ class PrecioCalculatorTest {
     }
 
     @Test
+    @DisplayName("con cotizacion: 10 USD x 1000 + 30 % + IVA 21 % a multiplo 10 da 15730.00")
+    void conCotizacion1000() {
+        assertPrecio(PrecioCalculator.precioFinal(bd("10"), bd("30"), AlicuotaIva.IVA_21, bd("10"), bd("1000")), "15730.00");
+    }
+
+    @Test
+    @DisplayName("con cotizacion 1100 el mismo articulo sube a 17310.00")
+    void conCotizacion1100() {
+        assertPrecio(PrecioCalculator.precioFinal(bd("10"), bd("30"), AlicuotaIva.IVA_21, bd("10"), bd("1100")), "17310.00");
+    }
+
+    @Test
+    @DisplayName("con cotizacion 950 el mismo articulo baja a 14950.00")
+    void conCotizacion950() {
+        assertPrecio(PrecioCalculator.precioFinal(bd("10"), bd("30"), AlicuotaIva.IVA_21, bd("10"), bd("950")), "14950.00");
+    }
+
+    @Test
+    @DisplayName("la cotizacion con 4 decimales entra exacta, sin punto flotante: 10 x 1000.5000 = 10005.00")
+    void cotizacionConCuatroDecimales() {
+        assertPrecio(PrecioCalculator.precioFinal(bd("10"), BigDecimal.ZERO, AlicuotaIva.IVA_0, null, bd("1000.5000")), "10005.00");
+    }
+
+    @Test
+    @DisplayName("la cotizacion se multiplica antes del unico redondeo: 0.01 x 1000.3333 sube a 10.01")
+    void cotizacionNoRedondeaAntes() {
+        // 0.01 x 1000.3333 = 10.003333, que sube a 10.01 (si se redondeara antes a 10.00 daria 10.00).
+        assertPrecio(PrecioCalculator.precioFinal(bd("0.01"), BigDecimal.ZERO, AlicuotaIva.IVA_0, null, bd("1000.3333")), "10.01");
+    }
+
+    @Test
+    @DisplayName("cotizacion 1 (pesos) da lo mismo que la sobrecarga sin cotizacion: costo 1000 -> 1580.00")
+    void cotizacionUnoEsPesos() {
+        assertPrecio(PrecioCalculator.precioFinal(bd("1000"), bd("30"), AlicuotaIva.IVA_21, bd("10"), BigDecimal.ONE), "1580.00");
+        assertPrecio(PrecioCalculator.precioFinal(bd("1000"), bd("30"), AlicuotaIva.IVA_21, bd("10")), "1580.00");
+    }
+
+    @Test
+    @DisplayName("cotizacion null lanza IllegalArgumentException")
+    void cotizacionNull() {
+        assertThatThrownBy(() -> PrecioCalculator.precioFinal(bd("10"), bd("30"), AlicuotaIva.IVA_21, bd("10"), null))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("La cotización debe ser un valor mayor a 0.");
+    }
+
+    @Test
+    @DisplayName("cotizacion 0 o negativa lanza IllegalArgumentException")
+    void cotizacionCeroONegativa() {
+        assertThatThrownBy(() -> PrecioCalculator.precioFinal(bd("10"), bd("30"), AlicuotaIva.IVA_21, bd("10"), BigDecimal.ZERO))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> PrecioCalculator.precioFinal(bd("10"), bd("30"), AlicuotaIva.IVA_21, bd("10"), bd("-1")))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
     @DisplayName("margen efectivo: el propio del articulo gana sobre rubro y ferreteria")
     void margenPropioGana() {
         assertThat(PrecioCalculator.margenEfectivo(bd("50"), bd("35"), bd("30"))).isEqualByComparingTo("50");

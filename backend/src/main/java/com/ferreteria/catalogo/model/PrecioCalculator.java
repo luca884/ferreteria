@@ -37,6 +37,20 @@ public final class PrecioCalculator {
      * se redondea hacia arriba al centavo.
      */
     public static BigDecimal precioFinal(BigDecimal costo, BigDecimal margenPorcentaje, AlicuotaIva iva, BigDecimal multiplo) {
+        return precioFinal(costo, margenPorcentaje, iva, multiplo, BigDecimal.ONE);
+    }
+
+    /**
+     * Igual que la de cuatro parametros, para un costo en otra moneda: costo x cotizacion x (1 + margen/100) x
+     * (1 + iva/100), redondeado hacia arriba al multiplo. La cotizacion (pesos por unidad de la moneda del
+     * costo, por ejemplo 1000.5000) entra como un factor exacto mas, antes del unico redondeo. Para un costo
+     * en pesos vale 1.
+     */
+    public static BigDecimal precioFinal(
+            BigDecimal costo, BigDecimal margenPorcentaje, AlicuotaIva iva, BigDecimal multiplo, BigDecimal cotizacion) {
+        if (cotizacion == null || cotizacion.signum() <= 0) {
+            throw new IllegalArgumentException("La cotización debe ser un valor mayor a 0.");
+        }
         if (costo == null || costo.signum() < 0) {
             throw new IllegalArgumentException("El costo debe ser un valor mayor o igual a 0.");
         }
@@ -49,6 +63,7 @@ public final class PrecioCalculator {
 
         // Exacto: multiplicar nunca pierde precision, y no hay division hasta el redondeo final.
         BigDecimal bruto = costo
+                .multiply(cotizacion)
                 .multiply(CIEN.add(margenPorcentaje))
                 .multiply(CIEN.add(iva.porcentaje()))
                 .movePointLeft(4);

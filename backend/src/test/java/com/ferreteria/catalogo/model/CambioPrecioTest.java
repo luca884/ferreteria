@@ -73,4 +73,28 @@ class CambioPrecioTest {
     void precioAnteriorNull() {
         assertThat(CambioPrecio.entre(bd("100.00"), bd("100.00"), null, bd("170.00"))).isPresent();
     }
+
+    @Test
+    @DisplayName("recalculo por cotizacion: si el precio en pesos no cambia (15730 y 15730) no hay cambio")
+    void recalculoSinCambioDeCotizacion() {
+        assertThat(CambioPrecio.entre(bd("10.00"), bd("10.00"), bd("15730.00"), bd("15730.00"))).isEmpty();
+    }
+
+    @Test
+    @DisplayName("recalculo por cotizacion: si el precio pasa de 15730 a 17310 hay cambio con el costo en dolares igual")
+    void recalculoConCambioDeCotizacion() {
+        Optional<CambioPrecio> cambio = CambioPrecio.entre(bd("10.00"), bd("10.00"), bd("15730.00"), bd("17310.00"));
+
+        assertThat(cambio).isPresent();
+        assertThat(cambio.get().costoNuevo()).isEqualByComparingTo("10");
+        assertThat(cambio.get().precioAnterior()).isEqualByComparingTo("15730");
+        assertThat(cambio.get().precioNuevo()).isEqualByComparingTo("17310");
+    }
+
+    @Test
+    @DisplayName("el origen COTIZACION existe y su nombre cabe en origen VARCHAR(20)")
+    void origenCotizacion() {
+        assertThat(OrigenPrecio.valueOf("COTIZACION")).isEqualTo(OrigenPrecio.COTIZACION);
+        assertThat(OrigenPrecio.COTIZACION.name().length()).isLessThanOrEqualTo(20);
+    }
 }

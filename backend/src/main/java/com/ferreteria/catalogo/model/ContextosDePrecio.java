@@ -20,12 +20,20 @@ public record ContextosDePrecio(Map<Long, ContextoPrecio> porRubro, ContextoPrec
         porRubro = Map.copyOf(porRubro);
     }
 
+    /** Contextos sin cotizacion del dolar: solo sirven para calcular articulos en pesos. */
     public static ContextosDePrecio armar(List<Rubro> rubros, BigDecimal margenDefecto, BigDecimal redondeoMultiplo) {
+        return armar(rubros, margenDefecto, redondeoMultiplo, null);
+    }
+
+    /** Con el dolar vigente de la ferreteria, para calcular tambien los articulos en USD. */
+    public static ContextosDePrecio armar(
+            List<Rubro> rubros, BigDecimal margenDefecto, BigDecimal redondeoMultiplo, BigDecimal cotizacionUsd) {
         Map<Long, ContextoPrecio> porRubro = new HashMap<>();
         for (Rubro rubro : rubros) {
-            porRubro.put(rubro.getId(), new ContextoPrecio(rubro.getMargenPorcentaje(), margenDefecto, redondeoMultiplo));
+            porRubro.put(rubro.getId(),
+                    new ContextoPrecio(rubro.getMargenPorcentaje(), margenDefecto, redondeoMultiplo, cotizacionUsd));
         }
-        return new ContextosDePrecio(porRubro, new ContextoPrecio(null, margenDefecto, redondeoMultiplo));
+        return new ContextosDePrecio(porRubro, new ContextoPrecio(null, margenDefecto, redondeoMultiplo, cotizacionUsd));
     }
 
     /** El contexto del rubro, o el de los articulos sin rubro si {@code rubroId} es null. */

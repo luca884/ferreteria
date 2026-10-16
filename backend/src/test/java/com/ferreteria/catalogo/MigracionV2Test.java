@@ -159,9 +159,10 @@ class MigracionV2Test {
     }
 
     @Test
-    void elOrigenDelPrecioTieneLosTresValores() {
+    void elOrigenDelPrecioTieneLosCuatroValores() {
+        // COTIZACION se suma con el corte de moneda y cotizacion (V5): origen es VARCHAR(20), sin CHECK.
         assertThat(OrigenPrecio.values()).extracting(Enum::name)
-                .containsExactly("IMPORTACION", "MASIVO", "MANUAL");
+                .containsExactly("IMPORTACION", "MASIVO", "MANUAL", "COTIZACION");
     }
 
     @Test

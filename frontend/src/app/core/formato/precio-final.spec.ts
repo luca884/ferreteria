@@ -10,7 +10,10 @@ describe('precioFinal', () => {
     expect(datos.casos.length).toBeGreaterThanOrEqual(20);
   });
 
-  it.each(datos.casos.map((c) => [c.nombre, c] as const))('%s', (_nombre, caso) => {
+  // Los casos con `cotizacion` (artículos en dólares) los cubre el espejo con cotización (T-039); acá van los de pesos.
+  const casosEnPesos = datos.casos.filter((c) => !('cotizacion' in c));
+
+  it.each(casosEnPesos.map((c) => [c.nombre, c] as const))('%s', (_nombre, caso) => {
     expect(
       precioFinal(caso.costo, caso.margen, caso.alicuota as Parameters<typeof precioFinal>[2], caso.multiplo),
     ).toBe(Number(caso.precio));

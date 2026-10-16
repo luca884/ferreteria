@@ -34,12 +34,26 @@ class CasosCompartidosPrecioTest {
     }
 
     @Test
+    @DisplayName("el JSON trae los casos en dolares con su cotizacion")
+    void hayCasosEnDolares() {
+        long conCotizacion = 0;
+        for (JsonNode caso : casos) {
+            if (caso.has("cotizacion")) {
+                conCotizacion++;
+            }
+        }
+        assertThat(conCotizacion).isGreaterThanOrEqualTo(4);
+    }
+
+    @Test
     @DisplayName("cada caso del JSON da el precio esperado, con escala 2")
     void cadaCaso() {
         assertThat(casos.size()).isGreaterThanOrEqualTo(20);
         for (JsonNode caso : casos) {
+            // La cotizacion es opcional: si el caso no la trae, vale 1 (pesos).
+            BigDecimal cotizacion = caso.has("cotizacion") ? bd(caso, "cotizacion") : BigDecimal.ONE;
             BigDecimal precio = PrecioCalculator.precioFinal(bd(caso, "costo"), bd(caso, "margen"),
-                    AlicuotaIva.valueOf(caso.get("alicuota").asText()), bd(caso, "multiplo"));
+                    AlicuotaIva.valueOf(caso.get("alicuota").asText()), bd(caso, "multiplo"), cotizacion);
 
             assertThat(precio).as(caso.get("nombre").asText()).isEqualTo(bd(caso, "precio"));
         }

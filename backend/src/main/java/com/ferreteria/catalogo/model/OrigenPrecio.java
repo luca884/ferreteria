@@ -4,5 +4,7 @@ package com.ferreteria.catalogo.model;
 public enum OrigenPrecio {
     IMPORTACION,
     MASIVO,
-    MANUAL
+    MANUAL,
+    /** El precio de un articulo en dolares cambio porque cambio la cotizacion (recalculo diario o manual). */
+    COTIZACION
 }
