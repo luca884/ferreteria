@@ -288,7 +288,7 @@
       @if (vp.advertencias.length > 0) {
         <h3>Advertencias</h3>
         <ul class="advertencias">
-          @for (a of vp.advertencias; track $index) {
+          @for (a of advertenciasVisibles(); track $index) {
             <li>
               @if (prefijoDeAviso(a); as prefijo) {
                 <strong>{{ prefijo }}:</strong>
@@ -297,6 +297,17 @@
             </li>
           }
         </ul>
+        @if (vp.advertencias.length > advertenciasVisibles().length) {
+          <p class="ayuda advertencias-conteo">
+            Se muestran {{ advertenciasVisibles().length | number }} de {{ vp.advertencias.length | number }}
+            advertencias.
+          </p>
+          <button type="button" class="chico" (click)="verMasAdvertencias()">Ver más</button>
+        }
+      }
+
+      @if (avisoDePerdidas(); as aviso) {
+        <p class="ayuda aviso-perdidas" role="status">{{ aviso }}</p>
       }
 
       <app-vista-previa-tabla
@@ -307,29 +318,48 @@
       />
 
       @if (vp.noEstan.length > 0) {
-        <details class="no-estan">
+        <details class="no-estan" [open]="noEstanAbierto()" (toggle)="alternarNoEstan($any($event.target).open)">
           <summary>No están en la lista ({{ vp.noEstan.length }})</summary>
           <p class="ayuda">Artículos activos del proveedor que no figuran en el archivo. No se tocan.</p>
-          <div class="grilla-contenedor">
-            <table>
-              <thead>
-                <tr>
-                  <th>Código interno</th>
-                  <th>Código del proveedor</th>
-                  <th>Descripción</th>
-                </tr>
-              </thead>
-              <tbody>
-                @for (a of vp.noEstan; track a.id) {
+          @if (noEstanAbierto()) {
+            <div class="grilla-contenedor">
+              <table>
+                <thead>
                   <tr>
-                    <td class="codigo">{{ a.codigoInterno }}</td>
-                    <td class="codigo">{{ a.codigoProveedor ?? '—' }}</td>
-                    <td>{{ a.descripcion }}</td>
+                    <th>Código interno</th>
+                    <th>Código del proveedor</th>
+                    <th>Descripción</th>
                   </tr>
-                }
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  @for (a of noEstanVisibles(); track a.id) {
+                    <tr>
+                      <td class="codigo">{{ a.codigoInterno }}</td>
+                      <td class="codigo">{{ a.codigoProveedor ?? '—' }}</td>
+                      <td>{{ a.descripcion }}</td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+            <nav class="paginado" aria-label="Páginas de los artículos que no están">
+              <button type="button" class="chico" [disabled]="paginaNoEstan() === 0" (click)="anteriorNoEstan()">
+                Anterior
+              </button>
+              <span class="paginado-texto" aria-live="polite">
+                Página {{ paginaNoEstan() + 1 | number }} de {{ totalPaginasNoEstan() | number }} · filas
+                {{ desdeNoEstan() | number }} a {{ hastaNoEstan() | number }} de {{ vp.noEstan.length | number }}
+              </span>
+              <button
+                type="button"
+                class="chico"
+                [disabled]="paginaNoEstan() >= totalPaginasNoEstan() - 1"
+                (click)="siguienteNoEstan()"
+              >
+                Siguiente
+              </button>
+            </nav>
+          }
         </details>
       }
 

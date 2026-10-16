@@ -177,8 +177,19 @@
   border-radius: var(--radio);
   background: var(--advertencia-fondo);
 }
+.advertencias-conteo {
+  margin: 0 0 var(--e-2);
+}
 details.no-estan {
   margin: var(--e-5) 0;
+}
+details.no-estan .paginado {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: var(--e-3);
+  margin-top: var(--e-3);
 }
 details.no-estan summary {
   margin-bottom: var(--e-2);
@@ -194,7 +205,8 @@ details.no-estan summary {
 }
 
 .salteadas,
-.aviso-errores {
+.aviso-errores,
+.aviso-perdidas {
   margin-bottom: var(--e-3);
 }
 .de-total {

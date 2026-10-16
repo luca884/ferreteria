@@ -37,18 +37,23 @@ import {
 } from './mapeo-lista';
 import { SelectorArchivo } from './selector-archivo';
 import {
+  FilaDeVista,
   Seleccion,
+  cantidadDeAplicadas,
+  conservarSeleccion,
   conteosConSeleccion,
   filasElegidas,
   marcarNinguna,
   seleccionInicial,
   unirFilas,
 } from './seleccion-filas';
-import { VistaPreviaTabla } from './vista-previa-tabla';
+import { FILAS_POR_PAGINA, VistaPreviaTabla } from './vista-previa-tabla';
 
 /** El backend rechaza más de 25 MB; se controla antes de subir para no gastar el pedido. */
 const MAX_BYTES = 25 * 1024 * 1024;
 const EXTENSIONES = ['.xlsx', '.xls', '.csv'];
+/** Las advertencias se muestran de a tandas; «Ver más» suma otra. */
+const ADVERTENCIAS_POR_TANDA = 100;
 
 /**
  * Medidas del visor al 100 %. Son múltiplos de 10 / 3 para que, con el zoom en pasos de 10 %, la altura
@@ -141,6 +146,14 @@ export class Importaciones implements OnInit {
   protected readonly conflicto = signal(false);
   protected readonly rubros = signal<Rubro[]>([]);
   protected readonly crearNuevos = signal(false);
+  /** Cuántas filas elegidas antes de un 409 ya no están en la vista previa nueva; 0 si no hay nada que avisar. */
+  protected readonly filasPerdidas = signal(0);
+  protected readonly advertenciasMostradas = signal(ADVERTENCIAS_POR_TANDA);
+  protected readonly noEstanAbierto = signal(false);
+  private readonly paginaNoEstanPedida = signal(0);
+
+  /** La selección y las filas que había cuando el backend respondió 409: la vista previa nueva parte de ahí. */
+  private porConservar: { seleccion: Seleccion; filas: FilaDeVista[] } | null = null;
 
   /** Sube con cada cambio de datos: una vista previa en vuelo de datos viejos se descarta. */
   private version = 0;
@@ -211,9 +224,36 @@ export class Importaciones implements OnInit {
     const vp = this.vistaPrevia();
     return vp ? conteosConSeleccion(vp.conteos, this.filasDeVista(), this.seleccion()) : null;
   });
+  /** Como el backend: con «Crear los artículos nuevos» apagado, las filas nuevas elegidas no se aplican. */
   protected readonly sinFilasElegidas = computed(
-    () => filasElegidas(this.seleccion(), this.filasDeVista()).length === 0,
+    () => cantidadDeAplicadas(this.seleccion(), this.filasDeVista(), this.crearNuevos()) === 0,
   );
+  protected readonly advertenciasVisibles = computed(
+    () => this.vistaPrevia()?.advertencias.slice(0, this.advertenciasMostradas()) ?? [],
+  );
+  protected readonly totalPaginasNoEstan = computed(() =>
+    Math.max(1, Math.ceil((this.vistaPrevia()?.noEstan.length ?? 0) / FILAS_POR_PAGINA)),
+  );
+  protected readonly paginaNoEstan = computed(() =>
+    Math.min(this.paginaNoEstanPedida(), this.totalPaginasNoEstan() - 1),
+  );
+  /** Solo se arman las filas de la página y solo con el bloque abierto. */
+  protected readonly noEstanVisibles = computed(() => {
+    if (!this.noEstanAbierto()) return [];
+    const desde = this.paginaNoEstan() * FILAS_POR_PAGINA;
+    return this.vistaPrevia()?.noEstan.slice(desde, desde + FILAS_POR_PAGINA) ?? [];
+  });
+  protected readonly desdeNoEstan = computed(() => this.paginaNoEstan() * FILAS_POR_PAGINA + 1);
+  protected readonly hastaNoEstan = computed(
+    () => this.paginaNoEstan() * FILAS_POR_PAGINA + this.noEstanVisibles().length,
+  );
+  protected readonly avisoDePerdidas = computed(() => {
+    const n = this.filasPerdidas();
+    if (n === 0) return null;
+    return n === 1
+      ? '1 fila que habías elegido ya no está en la lista nueva.'
+      : `${n} filas que habías elegido ya no están en la lista nueva.`;
+  });
   protected readonly tarjetasDeLaVistaPrevia = computed(() => {
     const vp = this.vistaPrevia();
     const elegidos = this.conteosElegidos();
@@ -441,6 +481,22 @@ export class Importaciones implements OnInit {
     this.seleccion.set(seleccion);
   }
 
+  protected verMasAdvertencias(): void {
+    this.advertenciasMostradas.update((n) => n + ADVERTENCIAS_POR_TANDA);
+  }
+
+  protected alternarNoEstan(abierto: boolean): void {
+    this.noEstanAbierto.set(abierto);
+  }
+
+  protected anteriorNoEstan(): void {
+    this.paginaNoEstanPedida.set(Math.max(0, this.paginaNoEstan() - 1));
+  }
+
+  protected siguienteNoEstan(): void {
+    this.paginaNoEstanPedida.set(Math.min(this.totalPaginasNoEstan() - 1, this.paginaNoEstan() + 1));
+  }
+
   protected generarVistaPrevia(): void {
     this.pedirVistaPrevia(false);
   }
@@ -453,6 +509,7 @@ export class Importaciones implements OnInit {
     if (archivo === null || vistaPrevia === null || conteosEsperados === null || datos === null) return;
     if (this.sinFilasElegidas()) return;
     const filas = filasElegidas(this.seleccion(), this.filasDeVista());
+    const antes = { seleccion: this.seleccion(), filas: this.filasDeVista() };
     this.limpiarMensajes();
     this.aplicando.set(true);
     this.service
@@ -476,6 +533,7 @@ export class Importaciones implements OnInit {
             // La lista cambió: lo que se estaba viendo ya no vale. Se muestra el aviso y se pide la vista previa nueva.
             this.vistaPrevia.set(null);
             this.conflicto.set(true);
+            this.porConservar = antes;
             this.mostrarError(err, 'No se pudo aplicar la importación.');
             this.pedirVistaPrevia(true);
             return;
@@ -499,8 +557,22 @@ export class Importaciones implements OnInit {
         this.generando.set(false);
         this.conflicto.set(false);
         this.vistaPrevia.set(vistaPrevia);
-        // Al abrir están elegidas todas las filas que se pueden aplicar.
-        this.seleccion.set(seleccionInicial(unirFilas(vistaPrevia)));
+        const filas = unirFilas(vistaPrevia);
+        const previa = this.porConservar;
+        this.porConservar = null;
+        if (previa === null) {
+          // Al abrir están elegidas todas las filas que se pueden aplicar.
+          this.seleccion.set(seleccionInicial(filas));
+          this.filasPerdidas.set(0);
+        } else {
+          // Después de un 409: lo que el Dueño había desmarcado sigue desmarcado y lo que aparece recién entra marcado.
+          const conservada = conservarSeleccion(previa.seleccion, previa.filas, filas);
+          this.seleccion.set(conservada.seleccion);
+          this.filasPerdidas.set(conservada.perdidas);
+        }
+        this.advertenciasMostradas.set(ADVERTENCIAS_POR_TANDA);
+        this.noEstanAbierto.set(false);
+        this.paginaNoEstanPedida.set(0);
       },
       error: (err: unknown) => {
         if (version !== this.version) return;
@@ -516,6 +588,8 @@ export class Importaciones implements OnInit {
     this.generando.set(false);
     this.vistaPrevia.set(null);
     this.seleccion.set(marcarNinguna());
+    this.porConservar = null;
+    this.filasPerdidas.set(0);
     this.resumen.set(null);
     this.conflicto.set(false);
     this.limpiarMensajes();

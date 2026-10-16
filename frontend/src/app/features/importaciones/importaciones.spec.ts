@@ -426,7 +426,7 @@ describe('Importaciones', () => {
         await elegirArchivo(lista());
       }
 
-      const muestraDeUnaHoja = (hoja: HojaDeMuestra): Muestra => ({ hojas: [hoja], propuesta: null });
+      const muestraDeUnaHoja = (hoja: HojaDeMuestra): Muestra => ({ hojas: [hoja], propuesta: SIN_PROPUESTA });
 
       const muestraGrande = (filas: number, columnas: number): Muestra =>
         muestraDeUnaHoja({
@@ -520,7 +520,7 @@ describe('Importaciones', () => {
       it('los selectores ofrecen las columnas de la hoja más ancha', async () => {
         await conMuestra({
           hojas: [hojaDe(0, 'Angosta', 2, [['a', 'b']]), hojaDe(1, 'Ancha', 5, [['a', 'b', 'c', 'd', 'e']])],
-          propuesta: null,
+          propuesta: SIN_PROPUESTA,
         });
 
         expect(textosDe('#columnaCodigo')).toEqual(['Elegí la columna', 'A', 'B', 'C', 'D', 'E']);
@@ -1044,7 +1044,7 @@ describe('Importaciones', () => {
       it('sin fila de encabezado quedan solo las letras', async () => {
         await crearComponente();
         servicio.muestra.mockReturnValue(
-          of({ hojas: [hojaDe(0, 'Lista', 3, [['A-1', 'Tornillo', '1.234,56']], null)], propuesta: null }),
+          of({ hojas: [hojaDe(0, 'Lista', 3, [['A-1', 'Tornillo', '1.234,56']], null)], propuesta: SIN_PROPUESTA }),
         );
 
         await elegirArchivo(lista());
@@ -1055,7 +1055,7 @@ describe('Importaciones', () => {
       it('una celda de encabezado vacía queda solo con la letra', async () => {
         await crearComponente();
         servicio.muestra.mockReturnValue(
-          of({ hojas: [hojaDe(0, 'Lista', 3, [['Codigo', '', 'Precio'], ['A-1', 'x', '1']], 1)], propuesta: null }),
+          of({ hojas: [hojaDe(0, 'Lista', 3, [['Codigo', '', 'Precio'], ['A-1', 'x', '1']], 1)], propuesta: SIN_PROPUESTA }),
         );
 
         await elegirArchivo(lista());
@@ -1286,7 +1286,7 @@ describe('Importaciones', () => {
       servicio.muestra.mockReturnValue(
         of({
           hojas: [hojaDe(0, 'Lista', 13, [Array(13).fill('x'), Array(13).fill('1')], 1)],
-          propuesta: null,
+          propuesta: SIN_PROPUESTA,
         }),
       );
       servicio.vistaPrevia.mockReturnValue(of(vistaPrevia));
@@ -1507,14 +1507,199 @@ describe('Importaciones', () => {
       expect(filasDeTabla()).toHaveLength(0);
     });
 
-    it('"No están en la lista" es un bloque colapsable', async () => {
+    /** Abre el bloque como lo hace el navegador: cambia `open` y dispara `toggle`. */
+    async function abrirNoEstan() {
+      const detalle = q<HTMLDetailsElement>('details.no-estan');
+      detalle.open = true;
+      detalle.dispatchEvent(new Event('toggle'));
+      await asentar();
+    }
+
+    const filasNoEstan = () => Array.from(el().querySelectorAll('details.no-estan tbody tr'));
+    const noEstanDe = (cantidad: number) =>
+      Array.from({ length: cantidad }, (_, i) => ({
+        id: 1000 + i,
+        codigoInterno: `INT-${i + 1}`,
+        codigoProveedor: `Z-${i + 1}`,
+        descripcion: `Artículo ${i + 1}`,
+      }));
+
+    it('"No están en la lista" es un bloque colapsable, cerrado al abrir la vista previa', async () => {
       await conVistaPrevia();
 
       const detalle = q<HTMLDetailsElement>('details.no-estan');
       expect(detalle.open).toBe(false);
       expect(detalle.querySelector('summary')?.textContent).toContain('No están en la lista');
+    });
+
+    it('abierto, "No están" muestra el código y la descripción de cada artículo', async () => {
+      await conVistaPrevia();
+
+      await abrirNoEstan();
+
+      const detalle = q<HTMLDetailsElement>('details.no-estan');
       expect(detalle.textContent).toContain('INT-20');
+      expect(detalle.textContent).toContain('Z-1');
       expect(detalle.textContent).toContain('Clavo largo');
+    });
+
+    describe('«No están» con muchos artículos', () => {
+      async function conNoEstan(cantidad: number) {
+        await conVistaPrevia({
+          ...vistaPreviaDe({}),
+          conteos: { ...CONTEOS_VACIOS, noEstan: cantidad },
+          noEstan: noEstanDe(cantidad),
+        });
+      }
+
+      it('cerrado no arma ninguna fila, aunque haya 250 artículos', async () => {
+        await conNoEstan(250);
+
+        expect(q('details.no-estan summary').textContent).toContain('250');
+        expect(filasNoEstan()).toHaveLength(0);
+      });
+
+      it('al abrirlo arma las primeras 100 y las páginas', async () => {
+        await conNoEstan(250);
+
+        await abrirNoEstan();
+
+        expect(filasNoEstan()).toHaveLength(100);
+        expect(texto(filasNoEstan()[0].querySelectorAll('td')[0])).toBe('INT-1');
+        expect(texto(filasNoEstan()[99].querySelectorAll('td')[0])).toBe('INT-100');
+        expect(texto(q('details.no-estan nav.paginado'))).toContain('Página 1 de 3');
+      });
+
+      it('«Siguiente» pasa a las 100 que siguen y la última página trae el resto', async () => {
+        await conNoEstan(250);
+        await abrirNoEstan();
+
+        q<HTMLButtonElement>('details.no-estan nav.paginado button:last-of-type').click();
+        await asentar();
+        expect(filasNoEstan()).toHaveLength(100);
+        expect(texto(filasNoEstan()[0].querySelectorAll('td')[0])).toBe('INT-101');
+
+        q<HTMLButtonElement>('details.no-estan nav.paginado button:last-of-type').click();
+        await asentar();
+        expect(filasNoEstan()).toHaveLength(50);
+        expect(texto(filasNoEstan()[49].querySelectorAll('td')[0])).toBe('INT-250');
+        expect(q<HTMLButtonElement>('details.no-estan nav.paginado button:last-of-type').disabled).toBe(true);
+      });
+
+      it('«Anterior» vuelve a la página previa y en la primera está deshabilitado', async () => {
+        await conNoEstan(250);
+        await abrirNoEstan();
+        expect(q<HTMLButtonElement>('details.no-estan nav.paginado button:first-of-type').disabled).toBe(true);
+
+        q<HTMLButtonElement>('details.no-estan nav.paginado button:last-of-type').click();
+        await asentar();
+        q<HTMLButtonElement>('details.no-estan nav.paginado button:first-of-type').click();
+        await asentar();
+
+        expect(texto(filasNoEstan()[0].querySelectorAll('td')[0])).toBe('INT-1');
+      });
+
+      it('si cierra el bloque las filas se sueltan, y al volver a abrirlo siguen en la página donde estaba', async () => {
+        await conNoEstan(250);
+        await abrirNoEstan();
+        q<HTMLButtonElement>('details.no-estan nav.paginado button:last-of-type').click();
+        await asentar();
+
+        const detalle = q<HTMLDetailsElement>('details.no-estan');
+        detalle.open = false;
+        detalle.dispatchEvent(new Event('toggle'));
+        await asentar();
+        expect(filasNoEstan()).toHaveLength(0);
+
+        await abrirNoEstan();
+        expect(texto(filasNoEstan()[0].querySelectorAll('td')[0])).toBe('INT-101');
+      });
+
+      it('con 100 artículos o menos hay una sola página', async () => {
+        await conNoEstan(100);
+
+        await abrirNoEstan();
+
+        expect(filasNoEstan()).toHaveLength(100);
+        expect(texto(q('details.no-estan nav.paginado'))).toContain('Página 1 de 1');
+      });
+
+      it('una vista previa nueva vuelve a mostrar el bloque cerrado y en la primera página', async () => {
+        await conNoEstan(250);
+        await abrirNoEstan();
+        q<HTMLButtonElement>('details.no-estan nav.paginado button:last-of-type').click();
+        await asentar();
+
+        await generar();
+
+        expect(q<HTMLDetailsElement>('details.no-estan').open).toBe(false);
+        expect(filasNoEstan()).toHaveLength(0);
+        await abrirNoEstan();
+        expect(texto(filasNoEstan()[0].querySelectorAll('td')[0])).toBe('INT-1');
+      });
+    });
+
+    describe('advertencias con tope', () => {
+      const advertenciasDe = (cantidad: number) =>
+        Array.from({ length: cantidad }, (_, i) => ({
+          hoja: null,
+          fila: null,
+          codigo: null,
+          mensaje: `Aviso ${i + 1}.`,
+        }));
+      const items = () => Array.from(el().querySelectorAll('.advertencias li')).map((li) => texto(li));
+      const verMas = () =>
+        Array.from(el().querySelectorAll<HTMLButtonElement>('button')).find(
+          (b) => b.textContent?.trim() === 'Ver más',
+        );
+
+      async function conAdvertencias(cantidad: number) {
+        await conVistaPrevia({ ...vistaPreviaDe({}), advertencias: advertenciasDe(cantidad) });
+      }
+
+      it('muestra las primeras 100 y un «Ver más»', async () => {
+        await conAdvertencias(250);
+
+        expect(items()).toHaveLength(100);
+        expect(items()[0]).toBe('Aviso 1.');
+        expect(items()[99]).toBe('Aviso 100.');
+        expect(verMas()).toBeDefined();
+        expect(texto(q('.advertencias-conteo'))).toContain('100 de 250');
+      });
+
+      it('«Ver más» suma de a 100 y desaparece cuando ya están todas', async () => {
+        await conAdvertencias(250);
+
+        verMas()!.click();
+        await asentar();
+        expect(items()).toHaveLength(200);
+        expect(verMas()).toBeDefined();
+
+        verMas()!.click();
+        await asentar();
+        expect(items()).toHaveLength(250);
+        expect(items()[249]).toBe('Aviso 250.');
+        expect(verMas()).toBeUndefined();
+      });
+
+      it('con 100 advertencias o menos no hay «Ver más» ni conteo', async () => {
+        await conAdvertencias(100);
+
+        expect(items()).toHaveLength(100);
+        expect(verMas()).toBeUndefined();
+        expect(el().querySelector('.advertencias-conteo')).toBeNull();
+      });
+
+      it('una vista previa nueva vuelve a las primeras 100', async () => {
+        await conAdvertencias(250);
+        verMas()!.click();
+        await asentar();
+        expect(items()).toHaveLength(200);
+
+        await generar();
+
+        expect(items()).toHaveLength(100);
+      });
     });
 
     it('no avisa de ningún recorte: las filas se ven todas, por páginas', async () => {
@@ -1626,6 +1811,58 @@ describe('Importaciones', () => {
           'Con error 1',
           'Salteadas 42',
         ]);
+      });
+    });
+
+    describe('una respuesta vieja que llega tarde se descarta', () => {
+      it('si cambia una columna mientras se genera, la vista previa vieja no aparece', async () => {
+        await crearComponente();
+        const enVuelo = new Subject<VistaPrevia>();
+        servicio.vistaPrevia.mockReturnValue(enVuelo);
+        await prepararMapeo();
+        await generar();
+        expect(q('button.generar').textContent).toContain('Generando vista previa…');
+
+        await elegir('#columnaCosto', 'B');
+        enVuelo.next(vistaPrevia);
+        enVuelo.complete();
+        await asentar();
+
+        expect(el().querySelector('.vista-previa')).toBeNull();
+        expect(q('button.generar').textContent).toContain('Ver vista previa');
+        expect(q<HTMLButtonElement>('button.generar').disabled).toBe(false);
+      });
+
+      it('lo mismo si la respuesta vieja es un error: no se muestra', async () => {
+        await crearComponente();
+        const enVuelo = new Subject<VistaPrevia>();
+        servicio.vistaPrevia.mockReturnValue(enVuelo);
+        await prepararMapeo();
+        await generar();
+
+        await elegir('#columnaCosto', 'B');
+        enVuelo.error(errorHttp(500, 'Falló la vista previa vieja'));
+        await asentar();
+
+        expect(el().querySelector('[role="alert"]')).toBeNull();
+      });
+
+      it('la respuesta nueva sí aparece aunque la vieja llegue después', async () => {
+        await crearComponente();
+        const vieja = new Subject<VistaPrevia>();
+        const nueva = new Subject<VistaPrevia>();
+        servicio.vistaPrevia.mockReturnValueOnce(vieja).mockReturnValueOnce(nueva);
+        await prepararMapeo();
+        await generar();
+        await elegir('#columnaCosto', 'B');
+        await generar();
+
+        nueva.next(vistaPreviaDe({ conteos: { ...CONTEOS_VACIOS, suben: 1 }, cambios: [cambioDe({})] }));
+        vieja.next(vistaPrevia);
+        await asentar();
+
+        expect(tarjetas()[0]).toBe('Suben 1');
+        expect(filasDeTabla()).toHaveLength(1);
       });
     });
 
@@ -1941,16 +2178,229 @@ describe('Importaciones', () => {
       expect(el().querySelector('button.regenerar')).toBeNull();
     });
 
-    it('la vista previa nueva después de un 409 vuelve a abrir con todas las filas marcadas', async () => {
-      await conVistaPrevia();
-      casillaDeLaFila(3).click();
-      await asentar();
-      servicio.aplicar.mockReturnValue(throwError(() => errorHttp(409, 'La lista cambió.')));
+    describe('después de un 409 la selección se conserva', () => {
+      const MENSAJE = 'La lista cambió.';
+      const aviso = () => el().querySelector('.aviso-perdidas');
+      const marcada = (numero: number) => casillaDeLaFila(numero).checked;
 
-      await confirmar();
+      it('lo que el Dueño había desmarcado sigue desmarcado en la vista previa nueva', async () => {
+        await conVistaPrevia();
+        casillaDeLaFila(3).click();
+        await asentar();
+        servicio.aplicar.mockReturnValue(throwError(() => errorHttp(409, MENSAJE)));
 
-      expect(casillaDeLaFila(3).checked).toBe(true);
-      expect(q<HTMLButtonElement>('button.confirmar').disabled).toBe(false);
+        await confirmar();
+
+        expect(marcada(3)).toBe(false);
+        expect(marcada(2)).toBe(true);
+        expect(marcada(6)).toBe(true);
+        expect(q<HTMLButtonElement>('button.confirmar').disabled).toBe(false);
+        expect(aviso()).toBeNull();
+      });
+
+      it('lo que se desmarcó en varias hojas también se conserva y lo aplicado sale con esa selección', async () => {
+        await conVistaPrevia();
+        casillaDeLaFila(3).click();
+        await asentar();
+        casillaDeLaFila(9).click();
+        await asentar();
+        servicio.aplicar.mockReturnValueOnce(throwError(() => errorHttp(409, MENSAJE)));
+        await confirmar();
+        servicio.aplicar.mockReturnValue(of(importacion));
+
+        await confirmar();
+
+        const [, datos] = servicio.aplicar.mock.calls[1];
+        expect(datos.filasElegidas).toEqual([
+          { hoja: 0, fila: 2 },
+          { hoja: 0, fila: 4 },
+          { hoja: 0, fila: 6 },
+          { hoja: 1, fila: 7 },
+          { hoja: 1, fila: 8 },
+        ]);
+      });
+
+      it('las filas que aparecen recién entran marcadas y se avisa de la elegida que ya no está', async () => {
+        await conVistaPrevia();
+        casillaDeLaFila(3).click();
+        await asentar();
+        servicio.aplicar.mockReturnValue(throwError(() => errorHttp(409, MENSAJE)));
+        // La lista nueva: la fila 6 ya no está y aparece la 12.
+        servicio.vistaPrevia.mockReturnValue(
+          of({
+            ...vistaPrevia,
+            cambios: [
+              cambioDe({ fila: 2, codigoProveedor: 'A-1' }),
+              cambioDe({ fila: 3, codigoProveedor: 'A-2' }),
+              cambioDe({ fila: 12, codigoProveedor: 'A-9' }),
+            ],
+          }),
+        );
+
+        await confirmar();
+
+        expect(marcada(2)).toBe(true);
+        expect(marcada(3)).toBe(false);
+        expect(marcada(12)).toBe(true);
+        expect(texto(aviso())).toBe('1 fila que habías elegido ya no está en la lista nueva.');
+      });
+
+      it('con varias filas elegidas que ya no están, el aviso va en plural', async () => {
+        await conVistaPrevia();
+        servicio.aplicar.mockReturnValue(throwError(() => errorHttp(409, MENSAJE)));
+        servicio.vistaPrevia.mockReturnValue(
+          of({
+            ...vistaPrevia,
+            cambios: [cambioDe({ fila: 2, codigoProveedor: 'A-1' })],
+            cambiosDeMoneda: [],
+            correcciones: [],
+          }),
+        );
+
+        await confirmar();
+
+        expect(texto(aviso())).toBe('4 filas que habías elegido ya no están en la lista nueva.');
+      });
+
+      it('una fila desmarcada que ya no está no se cuenta en el aviso', async () => {
+        await conVistaPrevia();
+        casillaDeLaFila(6).click();
+        await asentar();
+        servicio.aplicar.mockReturnValue(throwError(() => errorHttp(409, MENSAJE)));
+        servicio.vistaPrevia.mockReturnValue(
+          of({ ...vistaPrevia, cambios: vistaPrevia.cambios.filter((c) => c.fila !== 6) }),
+        );
+
+        await confirmar();
+
+        expect(aviso()).toBeNull();
+      });
+
+      it('si pedir de nuevo la vista previa falla, «Volver a generar» también conserva la selección', async () => {
+        await conVistaPrevia();
+        casillaDeLaFila(3).click();
+        await asentar();
+        servicio.aplicar.mockReturnValue(throwError(() => errorHttp(409, MENSAJE)));
+        servicio.vistaPrevia.mockReturnValue(throwError(() => errorHttp(500, 'Falló')));
+        await confirmar();
+
+        servicio.vistaPrevia.mockReturnValue(of(vistaPrevia));
+        q<HTMLButtonElement>('button.regenerar').click();
+        await asentar();
+
+        expect(marcada(3)).toBe(false);
+        expect(marcada(2)).toBe(true);
+      });
+
+      it('si antes de volver a generar cambia un dato de la lista, la vista previa abre con todo marcado', async () => {
+        await conVistaPrevia();
+        casillaDeLaFila(3).click();
+        await asentar();
+        servicio.aplicar.mockReturnValue(throwError(() => errorHttp(409, MENSAJE)));
+        servicio.vistaPrevia.mockReturnValue(throwError(() => errorHttp(500, 'Falló')));
+        await confirmar();
+
+        await escribir('#bonificacion1', '5');
+        servicio.vistaPrevia.mockReturnValue(of(vistaPrevia));
+        q<HTMLButtonElement>('button.generar').click();
+        await asentar();
+
+        expect(marcada(3)).toBe(true);
+        expect(aviso()).toBeNull();
+      });
+
+      it('una vista previa pedida a mano después del 409 abre con todo marcado', async () => {
+        await conVistaPrevia();
+        casillaDeLaFila(3).click();
+        await asentar();
+        servicio.aplicar.mockReturnValue(throwError(() => errorHttp(409, MENSAJE)));
+        await confirmar();
+        expect(marcada(3)).toBe(false);
+
+        q<HTMLButtonElement>('button.generar').click();
+        await asentar();
+
+        expect(marcada(3)).toBe(true);
+      });
+    });
+
+    describe('«Crear los artículos nuevos» y las filas que se aplican', () => {
+      const desmarcarTodas = async () => {
+        Array.from(el().querySelectorAll('button'))
+          .find((b) => b.textContent?.trim() === 'Desmarcar todas' && b.closest('app-vista-previa-tabla'))!
+          .click();
+        await asentar();
+      };
+      const tarjetas = () => Array.from(el().querySelectorAll('.tarjeta')).map((t) => texto(t));
+
+      it('con crear nuevos apagado, si solo quedan filas nuevas Confirmar se deshabilita con el aviso', async () => {
+        await conVistaPrevia();
+        await desmarcarTodas();
+
+        casillaDeLaFila(4).click();
+        await asentar();
+
+        expect(q<HTMLButtonElement>('button.confirmar').disabled).toBe(true);
+        expect(q('#sin-filas-elegidas').textContent).toContain('Elegí al menos una fila.');
+        expect(q('button.confirmar').getAttribute('aria-describedby')).toContain('sin-filas-elegidas');
+      });
+
+      it('las tarjetas siguen contando la nueva elegida: el backend la cuenta para la deriva', async () => {
+        await conVistaPrevia();
+        await desmarcarTodas();
+
+        casillaDeLaFila(4).click();
+        await asentar();
+
+        expect(tarjetas()).toContain('Nuevos 1');
+        expect(tarjetas()).toContain('Suben 0 de 2');
+      });
+
+      it('al encender crear nuevos la nueva elegida se aplica y Confirmar se habilita', async () => {
+        await conVistaPrevia();
+        await desmarcarTodas();
+        casillaDeLaFila(4).click();
+        await asentar();
+
+        q<HTMLInputElement>('#crearNuevos').click();
+        await asentar();
+
+        expect(q<HTMLButtonElement>('button.confirmar').disabled).toBe(false);
+        expect(el().querySelector('#sin-filas-elegidas')).toBeNull();
+        servicio.aplicar.mockReturnValue(of(importacion));
+        await confirmar();
+        const [, datos] = servicio.aplicar.mock.calls[0];
+        expect(datos.crearNuevos).toBe(true);
+        expect(datos.filasElegidas).toEqual([{ hoja: 0, fila: 4 }]);
+      });
+
+      it('al volver a apagarlo, vuelve el aviso y Confirmar no hace nada', async () => {
+        await conVistaPrevia();
+        await desmarcarTodas();
+        casillaDeLaFila(4).click();
+        await asentar();
+        q<HTMLInputElement>('#crearNuevos').click();
+        await asentar();
+
+        q<HTMLInputElement>('#crearNuevos').click();
+        await asentar();
+
+        expect(q<HTMLButtonElement>('button.confirmar').disabled).toBe(true);
+        expect(q('#sin-filas-elegidas')).not.toBeNull();
+        expect(servicio.aplicar).not.toHaveBeenCalled();
+      });
+
+      it('si junto a la nueva hay otra fila elegida, Confirmar queda habilitado aun con crear nuevos apagado', async () => {
+        await conVistaPrevia();
+        await desmarcarTodas();
+
+        casillaDeLaFila(4).click();
+        casillaDeLaFila(2).click();
+        await asentar();
+
+        expect(q<HTMLButtonElement>('button.confirmar').disabled).toBe(false);
+        expect(el().querySelector('#sin-filas-elegidas')).toBeNull();
+      });
     });
 
     it('si pedir de nuevo la vista previa falla, ofrece «Volver a generar la vista previa»', async () => {

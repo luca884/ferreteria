@@ -207,6 +207,45 @@ export function filasElegidas(seleccion: Seleccion, filas: readonly FilaDeVista[
 }
 
 /**
+ * Cuántas de las filas elegidas se aplican de verdad. Es la regla del backend (`SeleccionDeFilas.cantidadDeAplicadas`):
+ * con «Crear los artículos nuevos» apagado, las filas nuevas no cuentan. Si da 0, el backend responde 400.
+ */
+export function cantidadDeAplicadas(
+  seleccion: Seleccion,
+  filas: readonly FilaDeVista[],
+  crearNuevos: boolean,
+): number {
+  return filasElegidas(seleccion, filas).length - (crearNuevos ? 0 : elegidasDelTipo(seleccion, filas, 'nuevos'));
+}
+
+function elegidasDelTipo(seleccion: Seleccion, filas: readonly FilaDeVista[], tipo: TipoFila): number {
+  return filas.filter((f) => f.tipo === tipo && esElegible(f) && seleccion.has(f.clave)).length;
+}
+
+/**
+ * La selección para una vista previa nueva (después de un 409) a partir de la que había: lo que estaba marcado o
+ * desmarcado y sigue estando conserva su estado, y lo que aparece recién entra marcado, como en la primera vista
+ * previa. `perdidas` cuenta las filas que estaban elegidas y ya no se pueden elegir (no están o pasaron a error).
+ */
+export function conservarSeleccion(
+  anterior: Seleccion,
+  filasAnteriores: readonly FilaDeVista[],
+  filasNuevas: readonly FilaDeVista[],
+): { seleccion: Seleccion; perdidas: number } {
+  const conocidas = new Set(filasAnteriores.filter(esElegible).map((f) => f.clave));
+  const elegiblesNuevas = new Set(filasNuevas.filter(esElegible).map((f) => f.clave));
+  const seleccion = new Set<string>();
+  for (const clave of elegiblesNuevas) {
+    if (!conocidas.has(clave) || anterior.has(clave)) seleccion.add(clave);
+  }
+  let perdidas = 0;
+  for (const clave of anterior) {
+    if (!elegiblesNuevas.has(clave)) perdidas++;
+  }
+  return { seleccion, perdidas };
+}
+
+/**
  * Los contadores que el cliente confirma al aplicar (C-109): los de lo elegido —suben, bajan, cambian de moneda,
  * corrigen, nuevos y sin cambio— y los del archivo —no están, con error y salteadas—, que no dependen de la selección.
  */

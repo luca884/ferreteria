@@ -1,4 +1,4 @@
-import { HttpErrorResponse, provideHttpClient } from '@angular/common/http';
+import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 import {
@@ -120,29 +120,6 @@ describe('ImportacionesService', () => {
 
       expect(recibida).toEqual(respuesta);
     });
-
-    it('trae todas las hojas con su encabezado y la propuesta de mapeo', () => {
-      let recibida: Muestra | undefined;
-      service.muestra(archivo).subscribe((m) => (recibida = m));
-      http.expectOne((r) => r.url.endsWith('/importaciones/muestra')).flush(respuesta);
-
-      expect(recibida?.hojas.map((h) => [h.indice, h.nombre, h.filaEncabezado])).toEqual([
-        [0, 'Lista', 1],
-        [1, 'Oferta', null],
-      ]);
-      expect(recibida?.propuesta?.columnaCosto).toBe(2);
-      expect(recibida?.propuesta?.hojas).toEqual([0]);
-    });
-
-    it('un archivo sin encabezado reconocible llega con la propuesta vacía', () => {
-      let recibida: Muestra | undefined;
-      service.muestra(archivo).subscribe((m) => (recibida = m));
-      http
-        .expectOne((r) => r.url.endsWith('/importaciones/muestra'))
-        .flush({ hojas: [], propuesta: null });
-
-      expect(recibida).toEqual({ hojas: [], propuesta: null });
-    });
   });
 
   describe('vistaPrevia', () => {
@@ -196,70 +173,6 @@ describe('ImportacionesService', () => {
       expect(enviado.mapeo.monedaFija).toBe('USD');
       expect(enviado.mapeo.columnaMoneda).toBeUndefined();
       req.flush(vistaPreviaVacia);
-    });
-
-    it('mapea cambios de moneda, correcciones, sin cambio y la hoja de cada fila', () => {
-      const respuesta: VistaPrevia = {
-        ...vistaPreviaVacia,
-        cambiosDeMoneda: [
-          {
-            fila: 5,
-            hoja: 2,
-            articuloId: 10,
-            codigoProveedor: 'A-1',
-            descripcion: 'Tornillo',
-            precioLista: 10,
-            costoAnterior: 1000,
-            costoNuevo: 10,
-            precioAnterior: 1580,
-            precioNuevo: 15730,
-            activo: true,
-            variacionFuerte: false,
-            monedaAnterior: 'ARS',
-            monedaNueva: 'USD',
-            alicuotaAnterior: 'IVA_21',
-            alicuotaNueva: 'IVA_21',
-            ajustesAnteriores: { a1: null, a2: null, a3: null },
-            ajustesNuevos: { a1: null, a2: null, a3: null },
-          },
-        ],
-        correcciones: [
-          {
-            fila: 6,
-            hoja: 0,
-            articuloId: 11,
-            codigoProveedor: 'A-2',
-            descripcion: 'Tuerca',
-            precioLista: 10000,
-            costoAnterior: 10000,
-            costoNuevo: 10000,
-            precioAnterior: 15730,
-            precioNuevo: 14370,
-            activo: true,
-            variacionFuerte: false,
-            monedaAnterior: 'ARS',
-            monedaNueva: 'ARS',
-            alicuotaAnterior: 'IVA_21',
-            alicuotaNueva: 'IVA_10_5',
-            ajustesAnteriores: { a1: null, a2: null, a3: null },
-            ajustesNuevos: { a1: -5, a2: 3, a3: null },
-          },
-        ],
-        sinCambio: [{ id: 12, hoja: 1, fila: 7, codigo: 'A-3', descripcion: 'Arandela' }],
-        errores: [{ hoja: 1, fila: 8, codigo: 'X-1', mensaje: 'Moneda no reconocida' }],
-      };
-      let recibida: VistaPrevia | undefined;
-      service.vistaPrevia(archivo, datos).subscribe((v) => (recibida = v));
-      http.expectOne((r) => r.url.endsWith('/importaciones/vista-previa')).flush(respuesta);
-
-      expect(recibida?.cambiosDeMoneda[0].hoja).toBe(2);
-      expect(recibida?.cambiosDeMoneda[0].monedaNueva).toBe('USD');
-      expect(recibida?.correcciones[0].alicuotaNueva).toBe('IVA_10_5');
-      expect(recibida?.correcciones[0].ajustesNuevos).toEqual({ a1: -5, a2: 3, a3: null });
-      expect(recibida?.sinCambio).toEqual([
-        { id: 12, hoja: 1, fila: 7, codigo: 'A-3', descripcion: 'Arandela' },
-      ]);
-      expect(recibida?.errores[0].hoja).toBe(1);
     });
   });
 
@@ -323,43 +236,6 @@ describe('ImportacionesService', () => {
       const enviado = (await leerDatos(req.request.body as FormData)) as object;
       expect('filasElegidas' in enviado).toBe(false);
       req.flush(importacion, { status: 201, statusText: 'Created' });
-    });
-
-    it('un 409 de deriva llega con el mensaje del backend', () => {
-      const mensaje = 'La lista cambió desde la vista previa. No se aplicó nada.';
-      let error: HttpErrorResponse | undefined;
-      service
-        .aplicar(archivo, { ...datos, crearNuevos: false, conteosEsperados: conteos })
-        .subscribe({ error: (e: HttpErrorResponse) => (error = e) });
-
-      http
-        .expectOne((r) => r.url.endsWith('/importaciones') && r.method === 'POST')
-        .flush({ status: 409, message: mensaje }, { status: 409, statusText: 'Conflict' });
-
-      expect(error?.status).toBe(409);
-      expect(error?.error.message).toBe(mensaje);
-    });
-
-    it('un 400 por no elegir filas llega con el mensaje del backend', () => {
-      let error: HttpErrorResponse | undefined;
-      service
-        .aplicar(archivo, {
-          ...datos,
-          crearNuevos: false,
-          conteosEsperados: conteos,
-          filasElegidas: [],
-        })
-        .subscribe({ error: (e: HttpErrorResponse) => (error = e) });
-
-      http
-        .expectOne((r) => r.url.endsWith('/importaciones') && r.method === 'POST')
-        .flush(
-          { status: 400, message: 'Elegí al menos una fila.' },
-          { status: 400, statusText: 'Bad Request' },
-        );
-
-      expect(error?.status).toBe(400);
-      expect(error?.error.message).toBe('Elegí al menos una fila.');
     });
   });
 

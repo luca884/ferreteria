@@ -9,7 +9,9 @@ import {
 import {
   FilaDeVista,
   TIPOS_ELEGIBLES,
+  cantidadDeAplicadas,
   claveDe,
+  conservarSeleccion,
   conteosConSeleccion,
   esElegible,
   estadoDeSeleccion,
@@ -431,6 +433,105 @@ describe('seleccion-filas', () => {
       expect([conteos.suben, conteos.bajan, conteos.nuevos, conteos.sinCambio]).toEqual([0, 0, 0, 0]);
       expect([conteos.cambianMoneda, conteos.corrigen]).toEqual([0, 0]);
       expect([conteos.noEstan, conteos.conError, conteos.salteadas]).toEqual([4, 1, 42]);
+    });
+  });
+
+  describe('cantidadDeAplicadas (regla del backend: con «crear nuevos» apagado, las nuevas no cuentan)', () => {
+    it('con crear nuevos encendido cuenta todas las elegidas, las nuevas incluidas', () => {
+      const filas = unirFilas(unaDeCadaTipo());
+
+      expect(cantidadDeAplicadas(seleccionInicial(filas), filas, true)).toBe(6);
+    });
+
+    it('con crear nuevos apagado no cuenta las filas nuevas', () => {
+      const filas = unirFilas(unaDeCadaTipo());
+
+      expect(cantidadDeAplicadas(seleccionInicial(filas), filas, false)).toBe(5);
+    });
+
+    it('si solo quedan elegidas filas nuevas y no se crean, no hay nada para aplicar', () => {
+      const filas = unirFilas(unaDeCadaTipo());
+      const soloNuevas = marcarTipo(marcarNinguna(), filas, 'nuevos', true);
+
+      expect(cantidadDeAplicadas(soloNuevas, filas, false)).toBe(0);
+      expect(cantidadDeAplicadas(soloNuevas, filas, true)).toBe(1);
+    });
+
+    it('sin nada elegido es 0 con o sin crear nuevos', () => {
+      const filas = unirFilas(unaDeCadaTipo());
+
+      expect(cantidadDeAplicadas(marcarNinguna(), filas, true)).toBe(0);
+      expect(cantidadDeAplicadas(marcarNinguna(), filas, false)).toBe(0);
+    });
+  });
+
+  describe('conservarSeleccion (vista previa nueva después de un 409)', () => {
+    const anteriores = () => unirFilas(unaDeCadaTipo());
+
+    it('lo que estaba desmarcado y sigue estando, sigue desmarcado', () => {
+      const antes = anteriores();
+      const elegida = marcarFila(seleccionInicial(antes), antes[1], false);
+
+      const { seleccion, perdidas } = conservarSeleccion(elegida, antes, anteriores());
+
+      expect(seleccion.has('0:4')).toBe(false);
+      expect(seleccion.size).toBe(5);
+      expect(perdidas).toBe(0);
+    });
+
+    it('lo que estaba marcado y sigue estando, sigue marcado', () => {
+      const antes = anteriores();
+      const elegida = marcarNinguna();
+      const unaSola = marcarFila(elegida, antes[0], true);
+
+      const { seleccion } = conservarSeleccion(unaSola, antes, anteriores());
+
+      expect([...seleccion]).toEqual(['0:2']);
+    });
+
+    it('las filas que aparecen recién entran marcadas', () => {
+      const antes = anteriores();
+      const elegida = marcarNinguna();
+      const despues = unirFilas(
+        vistaPrevia({ cambios: [cambio(0, 2, 100, 120), cambio(0, 40, 100, 130)], errores: [error(0, 8)] }),
+      );
+
+      const { seleccion, perdidas } = conservarSeleccion(elegida, antes, despues);
+
+      expect(seleccion.has('0:2')).toBe(false);
+      expect(seleccion.has('0:40')).toBe(true);
+      expect(seleccion.has('0:8')).toBe(false);
+      expect(perdidas).toBe(0);
+    });
+
+    it('cuenta las filas elegidas que ya no están en la vista previa nueva', () => {
+      const antes = anteriores();
+      const despues = unirFilas(vistaPrevia({ cambios: [cambio(0, 2, 100, 120)] }));
+
+      const { seleccion, perdidas } = conservarSeleccion(seleccionInicial(antes), antes, despues);
+
+      expect([...seleccion]).toEqual(['0:2']);
+      expect(perdidas).toBe(5);
+    });
+
+    it('una fila desmarcada que ya no está no cuenta como perdida', () => {
+      const antes = anteriores();
+      const sinLaSegunda = marcarFila(seleccionInicial(antes), antes[1], false);
+      const despues = unirFilas(vistaPrevia({ cambios: [cambio(0, 2, 100, 120)] }));
+
+      const { perdidas } = conservarSeleccion(sinLaSegunda, antes, despues);
+
+      expect(perdidas).toBe(4);
+    });
+
+    it('una fila elegida que ahora viene con error se cuenta como perdida y no queda marcada', () => {
+      const antes = anteriores();
+      const despues = unirFilas(vistaPrevia({ errores: [error(0, 2)] }));
+
+      const { seleccion, perdidas } = conservarSeleccion(seleccionInicial(antes), antes, despues);
+
+      expect(seleccion.size).toBe(0);
+      expect(perdidas).toBe(6);
     });
   });
 

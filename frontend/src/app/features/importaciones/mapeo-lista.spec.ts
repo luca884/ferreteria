@@ -42,7 +42,7 @@ const PROPUESTA_336: PropuestaDeMapeo = {
   hojas: [0, 1, 2],
 };
 
-function archivoDe(cantidadDeHojas: number, propuesta: PropuestaDeMapeo | null): Muestra {
+function archivoDe(cantidadDeHojas: number, propuesta: PropuestaDeMapeo): Muestra {
   return {
     hojas: Array.from({ length: cantidadDeHojas }, (_, indice) => ({
       indice,
@@ -95,7 +95,7 @@ describe('mapeo-lista', () => {
         columnaAjuste1: 9,
       };
 
-      const precarga = precargarMapeo(guardado, archivoDe(3, null));
+      const precarga = precargarMapeo(guardado, archivoDe(3, SIN_PROPUESTA));
 
       expect(precarga.hojas).toEqual([0, 2]);
       expect(precarga.valores.columnaMoneda).toBe(4);
@@ -109,7 +109,7 @@ describe('mapeo-lista', () => {
     it('la moneda fija guardada se vuelve a proponer', () => {
       const guardado: MapeoLista = { ...GUARDADO_VIEJO, hoja: 0, monedaFija: 'USD' };
 
-      const precarga = precargarMapeo(guardado, archivoDe(1, null));
+      const precarga = precargarMapeo(guardado, archivoDe(1, SIN_PROPUESTA));
 
       expect(precarga.valores.monedaFija).toBe('USD');
       expect(precarga.valores.columnaMoneda).toBeNull();
@@ -148,15 +148,12 @@ describe('mapeo-lista', () => {
     });
 
     it('un archivo sin encabezado reconocible deja todo para elegir a mano, sin propuesta', () => {
-      const vacia = precargarMapeo(undefined, archivoDe(2, SIN_PROPUESTA));
-      const sinPropuesta = precargarMapeo(undefined, archivoDe(2, null));
+      const precarga = precargarMapeo(undefined, archivoDe(2, SIN_PROPUESTA));
 
-      for (const precarga of [vacia, sinPropuesta]) {
-        expect(precarga.desdePropuesta).toBe(false);
-        expect(precarga.valores).toEqual(mapeoVacio());
-        expect(precarga.hoja).toBe(0);
-        expect(precarga.hojas).toEqual([0]);
-      }
+      expect(precarga.desdePropuesta).toBe(false);
+      expect(precarga.valores).toEqual(mapeoVacio());
+      expect(precarga.hoja).toBe(0);
+      expect(precarga.hojas).toEqual([0]);
       expect(mapeoVacio().filaDesde).toBe(1);
       expect(mapeoVacio().columnaCodigo).toBeNull();
     });
