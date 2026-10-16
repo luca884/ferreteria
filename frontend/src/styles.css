@@ -449,6 +449,24 @@ app-barra-acciones h1 {
 .accion-barra:disabled kbd {
   color: var(--texto-deshabilitado);
 }
+.accion-barra svg {
+  flex-shrink: 0;
+}
+.accion-barra.peligro:not(:disabled) {
+  color: var(--error);
+}
+/* Separador vertical entre grupos de acciones y la casilla «Mostrar dados de baja». */
+.separador-barra {
+  align-self: stretch;
+  width: 1px;
+  margin: 4px 6px;
+  background: var(--borde);
+}
+app-barra-acciones .inactivos {
+  margin-left: var(--e-2);
+  color: var(--texto-suave);
+  font-size: var(--texto-sm);
+}
 
 /* ---------- Grillas ---------- */
 
@@ -488,6 +506,32 @@ tbody tr:hover td {
 }
 tbody tr:last-child td {
   border-bottom: 0;
+}
+
+/*
+ * Fila elegible (Artículos, Rubros, Proveedores): la barra de arriba actúa sobre la elegida.
+ * La elegida y la que está en el formulario de al lado se ven con fondo suave; la elegida, además, con una marca a la izquierda.
+ */
+tr.elegible {
+  cursor: default;
+  user-select: none;
+}
+tr.elegible:focus-visible {
+  outline: 2px solid var(--acento);
+  outline-offset: -2px;
+}
+tr.elegible[aria-selected='true'] td,
+tr.elegible.editando td {
+  background: var(--acento-suave);
+}
+tr.elegible[aria-selected='true'] td:first-child {
+  box-shadow: inset 3px 0 0 var(--acento);
+}
+tr.inactivo td {
+  color: var(--texto-tenue);
+}
+.barra-estado .elegido strong {
+  color: var(--texto);
 }
 .num {
   text-align: right;
@@ -700,6 +744,14 @@ tbody tr:last-child td {
 }
 ul.error {
   padding-left: var(--e-8);
+}
+/* Error con un botón al lado (Reintentar, Reactivar «…»). */
+.error.con-accion {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--e-3);
+  flex-wrap: wrap;
 }
 .campo-error {
   color: var(--error);

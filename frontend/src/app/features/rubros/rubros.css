@@ -7,26 +7,3 @@
 .campo.nombre {
   font-weight: normal;
 }
-/* Fila elegida (la barra actúa sobre ella) y la que está en el formulario. */
-tr.elegible {
-  cursor: default;
-  user-select: none;
-}
-tr.elegible:focus-visible {
-  outline: 2px solid var(--acento);
-  outline-offset: -2px;
-}
-tr[aria-selected='true'] td,
-tbody tr[aria-selected='true']:hover td,
-tr.editando td {
-  background: var(--acento-suave);
-}
-tr[aria-selected='true'] td:first-child {
-  box-shadow: inset 3px 0 0 var(--acento);
-}
-.elegido strong {
-  color: var(--texto);
-}
-.accion-barra svg {
-  flex-shrink: 0;
-}

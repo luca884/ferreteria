@@ -10,21 +10,9 @@
   min-height: 160px;
 }
 
-/* Acciones de la barra con ícono arriba y nombre abajo; el enlace Nuevo se ve igual que los botones. */
+/* El enlace Nuevo se ve igual que los botones de la barra. */
 a.accion-barra {
   flex-direction: column;
-}
-.accion-barra svg {
-  flex-shrink: 0;
-}
-.accion-barra.peligro:not(:disabled) {
-  color: var(--error);
-}
-.separador-barra {
-  align-self: stretch;
-  width: 1px;
-  margin: 4px 6px;
-  background: var(--borde);
 }
 
 /* Buscador de la barra: caja con lupa, el input sin borde propio. */
@@ -68,11 +56,6 @@ a.accion-barra {
   border: 0;
   box-shadow: none;
 }
-.inactivos {
-  margin-left: var(--e-2);
-  color: var(--texto-suave);
-  font-size: var(--texto-sm);
-}
 
 .descripcion {
   min-width: 16rem;
@@ -84,26 +67,6 @@ a.accion-barra {
 .heredado {
   color: var(--texto-tenue);
   font-style: italic;
-}
-tr.inactivo td {
-  color: var(--texto-tenue);
-}
-
-/* Fila elegida: fondo azul suave y una marca a la izquierda, como en el diseño. */
-tr.elegible {
-  cursor: default;
-  user-select: none;
-}
-tr.elegible:focus-visible {
-  outline: 2px solid var(--acento);
-  outline-offset: -2px;
-}
-tr[aria-selected='true'] td,
-tbody tr[aria-selected='true']:hover td {
-  background: var(--acento-suave);
-}
-tr[aria-selected='true'] td:first-child {
-  box-shadow: inset 3px 0 0 var(--acento);
 }
 
 .stock.negativo {
@@ -126,7 +89,4 @@ tr[aria-selected='true'] td:first-child {
 }
 .paginacion .separador {
   flex: 1;
-}
-.elegido strong {
-  color: var(--texto);
 }

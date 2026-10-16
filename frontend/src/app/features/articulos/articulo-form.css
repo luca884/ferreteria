@@ -52,9 +52,6 @@
   max-width: 34ch;
   margin: var(--e-2) 0 0;
 }
-.accion-barra svg {
-  flex-shrink: 0;
-}
 .titulo {
   display: flex;
   align-items: center;
