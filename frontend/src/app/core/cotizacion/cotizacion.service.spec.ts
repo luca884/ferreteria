@@ -87,6 +87,40 @@ describe('CotizacionService', () => {
     expect(resultado).toEqual({ cotizacion: 1100, articulosRecalculados: 3 });
   });
 
+  describe('aviso de refresco para el menú lateral', () => {
+    let avisos: number;
+
+    beforeEach(() => {
+      avisos = 0;
+      service.refrescos$.subscribe(() => avisos++);
+    });
+
+    it('refrescar() avisa una vez a quien escucha', () => {
+      service.refrescar();
+
+      expect(avisos).toBe(1);
+    });
+
+    it('un recálculo exitoso avisa, recién cuando llega la respuesta', () => {
+      service.recalcular().subscribe();
+      expect(avisos).toBe(0);
+
+      http.expectOne((r) => r.url.endsWith('/cotizacion/recalculo')).flush({ cotizacion: 1100, articulosRecalculados: 3 });
+
+      expect(avisos).toBe(1);
+    });
+
+    it('un recálculo que falla no avisa', () => {
+      service.recalcular().subscribe({ error: () => undefined });
+
+      http
+        .expectOne((r) => r.url.endsWith('/cotizacion/recalculo'))
+        .flush({ message: 'apagada' }, { status: 409, statusText: 'Conflict' });
+
+      expect(avisos).toBe(0);
+    });
+  });
+
   it('un 409 al recalcular llega como error con el mensaje del backend', () => {
     let error: unknown;
     service.recalcular().subscribe({ error: (e: unknown) => (error = e) });

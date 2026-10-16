@@ -2,6 +2,7 @@ import { HttpErrorResponse, provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 import { erroresDeCampos } from '../../core/api/api-error';
+import { CotizacionService } from '../../core/cotizacion/cotizacion.service';
 import { ConfiguracionCotizacion, ConfiguracionCotizacionRequest } from './configuracion-cotizacion.models';
 import { ConfiguracionCotizacionService } from './configuracion-cotizacion.service';
 
@@ -81,6 +82,41 @@ describe('ConfiguracionCotizacionService', () => {
       'El dólar de los precios tiene que ser un tipo de dólar. El euro y el real son solo para mostrar.',
       'La hora tiene que tener el formato HH:mm, por ejemplo 08:00.',
     ]);
+  });
+
+  describe('aviso de refresco para el menú lateral', () => {
+    const pedido: ConfiguracionCotizacionRequest = {
+      activa: true,
+      dolarPrecios: 'USD:oficial',
+      ladoPrecios: 'VENTA',
+      visibles: ['USD:oficial', 'USD:blue'],
+      horaRecalculo: '08:00',
+    };
+    let avisos: number;
+
+    beforeEach(() => {
+      avisos = 0;
+      TestBed.inject(CotizacionService).refrescos$.subscribe(() => avisos++);
+    });
+
+    it('guardar con éxito avisa, recién cuando llega la respuesta', () => {
+      service.guardar(pedido).subscribe();
+      expect(avisos).toBe(0);
+
+      http.expectOne((r) => r.url.endsWith('/configuracion-cotizacion')).flush({ ...configuracion, ...pedido });
+
+      expect(avisos).toBe(1);
+    });
+
+    it('guardar que falla no avisa', () => {
+      service.guardar(pedido).subscribe({ error: () => undefined });
+
+      http
+        .expectOne((r) => r.url.endsWith('/configuracion-cotizacion'))
+        .flush({ message: 'x' }, { status: 500, statusText: 'Server Error' });
+
+      expect(avisos).toBe(0);
+    });
   });
 
   it('un 403 del Vendedor llega como error HTTP', () => {

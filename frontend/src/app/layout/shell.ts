@@ -1,7 +1,7 @@
 import { Component, computed, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
-import { EMPTY, catchError, interval, startWith, switchMap } from 'rxjs';
+import { EMPTY, catchError, interval, merge, startWith, switchMap } from 'rxjs';
 import { ROL_LABELS } from '../core/auth/auth.models';
 import { AuthService } from '../core/auth/auth.service';
 import { Cotizacion } from '../core/cotizacion/cotizacion.models';
@@ -42,9 +42,9 @@ export class Shell {
   protected readonly cotizacion = signal<Cotizacion | null>(null);
 
   constructor() {
-    interval(INTERVALO_COTIZACION_MS)
+    // Se lee al abrir, cada 5 minutos y cuando la configuración o un recálculo avisan que la cotización cambió.
+    merge(interval(INTERVALO_COTIZACION_MS).pipe(startWith(0)), this.cotizaciones.refrescos$)
       .pipe(
-        startWith(0),
         // Un pedido nuevo deja sin efecto a uno anterior que siga en camino.
         switchMap(() => this.cotizaciones.obtener().pipe(catchError(() => EMPTY))),
         takeUntilDestroyed(),

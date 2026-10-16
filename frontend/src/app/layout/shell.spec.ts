@@ -51,7 +51,7 @@ describe('Shell', () => {
           provide: AuthService,
           useValue: { esDueno: signal(dueno), sesion: signal(sesion), logout: () => undefined },
         },
-        { provide: CotizacionService, useValue: { obtener } },
+        { provide: CotizacionService, useValue: { obtener, refrescos$: refrescos } },
       ],
     }).compileComponents();
     fixture = TestBed.createComponent(Shell);
@@ -60,8 +60,11 @@ describe('Shell', () => {
     return fixture.nativeElement as HTMLElement;
   }
 
+  let refrescos: Subject<void>;
+
   beforeEach(() => {
     obtener = vi.fn(() => of(COTIZACION));
+    refrescos = new Subject<void>();
   });
 
   const enlaces = (el: HTMLElement) =>
@@ -337,6 +340,55 @@ describe('Shell', () => {
       await mostrar(el);
 
       expect(texto(el.querySelector('app-cotizacion-lateral'))).toContain('Oficial venta 1.000,00');
+    });
+
+    it('cuando el servicio avisa que algo cambió vuelve a pedir enseguida, sin esperar los 5 minutos', async () => {
+      vi.useFakeTimers();
+      const actualizada: Cotizacion = {
+        ...COTIZACION,
+        visibles: [{ ...COTIZACION.visibles[0], venta: 1100 }],
+      };
+      obtener = vi.fn().mockReturnValueOnce(of(COTIZACION)).mockReturnValue(of(actualizada));
+      const el = await mostrar(await render(true));
+      expect(obtener).toHaveBeenCalledTimes(1);
+
+      refrescos.next();
+      await mostrar(el);
+
+      expect(obtener).toHaveBeenCalledTimes(2);
+      expect(texto(el.querySelector('app-cotizacion-lateral'))).toContain('Oficial venta 1.100,00');
+    });
+
+    it('tras un aviso sigue pidiendo cada 5 minutos', async () => {
+      vi.useFakeTimers();
+      await render(true);
+
+      refrescos.next();
+      expect(obtener).toHaveBeenCalledTimes(2);
+
+      vi.advanceTimersByTime(5 * MINUTO);
+      expect(obtener).toHaveBeenCalledTimes(3);
+    });
+
+    it('si el pedido del aviso falla conserva lo que se veía', async () => {
+      vi.useFakeTimers();
+      obtener = vi.fn().mockReturnValueOnce(of(COTIZACION)).mockReturnValue(throwError(() => new Error('sin red')));
+      const el = await mostrar(await render(true));
+
+      refrescos.next();
+      await mostrar(el);
+
+      expect(texto(el.querySelector('app-cotizacion-lateral'))).toContain('Oficial venta 1.000,00');
+    });
+
+    it('al destruir el shell deja de escuchar los avisos', async () => {
+      vi.useFakeTimers();
+      await render(true);
+
+      fixture.destroy();
+      refrescos.next();
+
+      expect(obtener).toHaveBeenCalledTimes(1);
     });
 
     it('un pedido lento no pisa a uno más nuevo: se descarta el que quedó atrás', async () => {
