@@ -137,7 +137,10 @@ class PlanificadorImportacionTest {
         }
     }
 
-    /** Articulo vigente de prueba: IVA_21, activo, sin rubro ni margen propio. */
+    /**
+     * Articulo vigente de prueba: IVA_21, activo, sin rubro ni margen propio. Si no se le da {@link #precio}, queda con
+     * el precio que da su costo con el contexto del escenario (al dia): asi no es una "correccion" por precio viejo.
+     */
     private static final class Art {
         private final long id;
         private final String codigoProveedor;
@@ -146,7 +149,7 @@ class PlanificadorImportacionTest {
         private boolean activo = true;
         private String margen;
         private Long rubroId;
-        private String precioFinal = "0.00";
+        private String precioFinal;
         private Moneda moneda = Moneda.ARS;
         private Ajustes ajustes = Ajustes.NINGUNO;
 
@@ -195,21 +198,37 @@ class PlanificadorImportacionTest {
             return this;
         }
 
-        ArticuloVigente vigente() {
-            return new ArticuloVigente(id, "INT-" + id, codigoProveedor, "Articulo " + id, bd(costo), bd(precioFinal),
-                margen == null ? null : bd(margen), rubroId, iva, activo, moneda, ajustes);
+        /** El articulo; sin precio explicito, el que corresponde a su costo con el contexto dado (el de su rubro). */
+        ArticuloVigente vigente(Map<Long, ContextoPrecio> contextoPorRubro, ContextoPrecio contextoSinRubro) {
+            BigDecimal margenPropio = margen == null ? null : bd(margen);
+            return new ArticuloVigente(id, "INT-" + id, codigoProveedor, "Articulo " + id, bd(costo),
+                precioFinal != null ? bd(precioFinal) : alDia(margenPropio, contextoPorRubro, contextoSinRubro),
+                margenPropio, rubroId, iva, activo, moneda, ajustes);
+        }
+
+        private BigDecimal alDia(BigDecimal margenPropio, Map<Long, ContextoPrecio> contextoPorRubro,
+                                 ContextoPrecio contextoSinRubro) {
+            ContextoPrecio ctx = rubroId == null ? contextoSinRubro : contextoPorRubro.get(rubroId);
+            // Sin contexto del rubro o sin dolar no hay precio que calcular: el planificador falla o da error por su cuenta.
+            if (ctx == null || (moneda == Moneda.USD && ctx.cotizacionUsd() == null)) {
+                return bd("0.00");
+            }
+            return PrecioCalculator.precioFinal(bd(costo),
+                PrecioCalculator.margenEfectivo(margenPropio, ctx.margenRubro(), ctx.margenDefecto()), iva,
+                ctx.redondeoMultiplo(), ctx.cotizacionPara(moneda));
         }
     }
 
     /** Arma una EntradaPlan con valores por defecto razonables y permite cambiarlos. */
     private static final class Escenario {
         private final List<FilaLeida> filas = new ArrayList<>();
-        private final List<ArticuloVigente> articulos = new ArrayList<>();
+        private final List<Art> articulos = new ArrayList<>();
         private final Map<Long, String> margenesDeRubro = new HashMap<>();
         private final Set<String> codigosInternosOcupados = new HashSet<>();
         private final Map<String, Long> rubrosPorNombre = new HashMap<>();
         private final Set<String> barrasOcupadas = new HashSet<>();
         private List<String> hojas = List.of();
+        private Long rubroElegido;
         private BigDecimal cotizacion;
         private boolean cotizacionActiva = true;
         private MapeoLista mapeo = MAPEO;
@@ -224,9 +243,7 @@ class PlanificadorImportacionTest {
         }
 
         Escenario articulos(Art... valores) {
-            for (Art valor : valores) {
-                articulos.add(valor.vigente());
-            }
+            articulos.addAll(List.of(valores));
             return this;
         }
 
@@ -284,6 +301,12 @@ class PlanificadorImportacionTest {
             return this;
         }
 
+        /** El rubro que se elegiria al importar: respaldo de los nuevos que no nombran rubro en la fila. */
+        Escenario rubroElegido(long rubroId) {
+            this.rubroElegido = rubroId;
+            return this;
+        }
+
         Escenario barrasOcupadas(String... codigos) {
             barrasOcupadas.addAll(List.of(codigos));
             return this;
@@ -294,10 +317,12 @@ class PlanificadorImportacionTest {
             margenesDeRubro.forEach((id, margen) ->
                 contextoPorRubro.put(id, new ContextoPrecio(bd(margen), bd("30.00"), bd("10"), cotizacion)));
             ContextoPrecio contextoSinRubro = new ContextoPrecio(null, bd("30.00"), bd("10"), cotizacion);
+            List<ArticuloVigente> vigentes = articulos.stream()
+                .map(art -> art.vigente(contextoPorRubro, contextoSinRubro)).toList();
             return PlanificadorImportacion.planificar(new EntradaPlan(
-                filas, mapeo, incluyeIva, bonificaciones, articulos, contextoPorRubro, contextoSinRubro,
+                filas, mapeo, incluyeIva, bonificaciones, vigentes, contextoPorRubro, contextoSinRubro,
                 codigosInternosOcupados, mapeoGuardado, encabezado, hojas, cotizacionActiva, rubrosPorNombre,
-                barrasOcupadas));
+                barrasOcupadas, rubroElegido));
         }
     }
 
@@ -2271,6 +2296,138 @@ class PlanificadorImportacionTest {
                 List.of(fila(2, de30, "x", "10"), fila(3, de31, "x", "10")), MAPEO);
 
             assertThat(codigos).containsExactly(de30);
+        }
+    }
+
+    // ------------------------------------------------------------------ precio guardado desactualizado (revision lotes 4 y 5)
+
+    @Nested
+    @DisplayName("Revision 4-5, arreglo 1: el precio guardado desactualizado es 'Corrige', no 'sin cambio'")
+    class PrecioDesactualizado {
+
+        @Test
+        @DisplayName("mismo costo, IVA y ajustes pero el precio guardado (1,00) difiere del que da la lista (1.580): corrige")
+        void precioDesactualizadoCorrige() {
+            PlanImportacion plan = escenario()
+                .articulos(Art.art(1, "A-1", "1000").precio("1.00"))
+                .filas(fila(2, "A-1", "x", "1000"))
+                .planificar();
+
+            assertThat(plan.sinCambio()).isEmpty();
+            assertThat(plan.cambios()).isEmpty();
+            assertThat(plan.correcciones()).hasSize(1);
+            CambioPlaneado corrige = plan.correcciones().get(0);
+            assertThat(corrige.precioAnterior()).isEqualByComparingTo("1.00");
+            assertThat(corrige.precioNuevo()).isEqualByComparingTo("1580.00");
+            assertThat(plan.conteos()).isEqualTo(new ConteosImportacion(0, 0, 0, 0, 0, 0, 0, 1, 0));
+        }
+
+        @Test
+        @DisplayName("mismo costo y precio guardado al dia (1.580): sigue siendo sin cambio")
+        void precioAlDiaEsSinCambio() {
+            PlanImportacion plan = escenario()
+                .articulos(Art.art(1, "A-1", "1000").precio("1580.00"))
+                .filas(fila(2, "A-1", "x", "1000"))
+                .planificar();
+
+            assertThat(plan.correcciones()).isEmpty();
+            assertThat(plan.sinCambio()).hasSize(1);
+            assertThat(plan.conteos().corrigen()).isZero();
+            assertThat(plan.conteos().sinCambio()).isEqualTo(1);
+        }
+
+        @Test
+        @DisplayName("precio desactualizado y ademas otra alicuota: corrige, con la alicuota nueva")
+        void precioDesactualizadoYOtroIva() {
+            PlanImportacion plan = escenario().mapeo(M.mapeo().iva().build())
+                .articulos(Art.art(1, "A-1", "1000").precio("1.00"))
+                .filas(filaDe(2, "A-1", "x", "1000", "", "", "", "10,5"))
+                .planificar();
+
+            assertThat(plan.sinCambio()).isEmpty();
+            assertThat(plan.correcciones()).hasSize(1);
+            assertThat(plan.correcciones().get(0).alicuotaNueva()).isEqualTo(AlicuotaIva.IVA_10_5);
+        }
+
+        @Test
+        @DisplayName("articulo en dolares con el precio en pesos viejo: corrige con el precio del dolar vigente")
+        void enDolaresDesactualizado() {
+            // 10 x 1,30 x 1,21 = 15,73 USD x 1.000 = 15.730 pesos.
+            PlanImportacion plan = escenario().dolar("1000")
+                .articulos(Art.art(1, "U-1", "10").enDolares().precio("14000.00"))
+                .filas(fila(2, "U-1", "x", "10"))
+                .planificar();
+
+            assertThat(plan.sinCambio()).isEmpty();
+            assertThat(plan.correcciones()).hasSize(1);
+            assertThat(plan.correcciones().get(0).precioNuevo()).isEqualByComparingTo("15730.00");
+        }
+    }
+
+    // ------------------------------------------------------------------ rubro elegido (revision lotes 4 y 5)
+
+    @Nested
+    @DisplayName("Revision 4-5, arreglo 2: los nuevos sin rubro propio usan el rubro elegido para su precio")
+    class RubroElegido {
+
+        @Test
+        @DisplayName("sin rubro elegido el nuevo se calcula con el margen por defecto (30): 100 da 160")
+        void sinRubroElegido() {
+            PlanImportacion plan = escenario().contextoRubro(5, "40")
+                .filas(fila(2, "N-1", "Nuevo", "100"))
+                .planificar();
+
+            assertThat(plan.altas().get(0).precioNuevo()).isEqualByComparingTo("160");
+            assertThat(plan.altas().get(0).rubroId()).isNull();
+        }
+
+        @Test
+        @DisplayName("con el rubro 5 elegido (margen 40) el nuevo sin rubro propio da 170, y su rubroId sigue siendo el de la fila (null)")
+        void conRubroElegido() {
+            PlanImportacion plan = escenario().contextoRubro(5, "40").rubroElegido(5)
+                .filas(fila(2, "N-1", "Nuevo", "100"))
+                .planificar();
+
+            assertThat(plan.altas().get(0).precioNuevo()).isEqualByComparingTo("170");
+            assertThat(plan.altas().get(0).rubroId()).isNull();
+        }
+
+        @Test
+        @DisplayName("el rubro propio de la fila gana sobre el elegido: rubro 6 (margen 50) da 190 aunque se eligio el 5")
+        void ganaElDeLaFila() {
+            PlanImportacion plan = escenario().contextoRubro(5, "40").contextoRubro(6, "50")
+                .rubroPorNombre("Bulones", 6).rubroElegido(5).mapeo(M.mapeo().rubro().build())
+                .filas(filaDe(2, "N-1", "Nuevo", "100", "", "", "", "", "", "", "", "", "", "Bulones"),
+                    filaDe(3, "N-2", "Nuevo", "100"))
+                .planificar();
+
+            assertThat(plan.altas()).hasSize(2);
+            assertThat(plan.altas().get(0).rubroId()).isEqualTo(6L);
+            assertThat(plan.altas().get(0).precioNuevo()).isEqualByComparingTo("190");
+            assertThat(plan.altas().get(1).precioNuevo()).isEqualByComparingTo("170");
+        }
+
+        @Test
+        @DisplayName("un rubro elegido sin contexto cae al de los articulos sin rubro, como el rubro propio de la fila")
+        void rubroElegidoSinContexto() {
+            PlanImportacion plan = escenario().rubroElegido(99)
+                .filas(fila(2, "N-1", "Nuevo", "100"))
+                .planificar();
+
+            assertThat(plan.altas().get(0).precioNuevo()).isEqualByComparingTo("160");
+        }
+
+        @Test
+        @DisplayName("el rubro elegido no cambia la clasificacion ni el precio de los articulos existentes")
+        void noTocaALosExistentes() {
+            PlanImportacion plan = escenario().contextoRubro(5, "40").rubroElegido(5)
+                .articulos(Art.art(1, "A-1", "100"))
+                .filas(fila(2, "A-1", "x", "120"))
+                .planificar();
+
+            assertThat(plan.cambios()).hasSize(1);
+            // Sin rubro propio: 120 x 1,30 x 1,21 = 188,76 -> 190.
+            assertThat(plan.cambios().get(0).precioNuevo()).isEqualByComparingTo("190");
         }
     }
 

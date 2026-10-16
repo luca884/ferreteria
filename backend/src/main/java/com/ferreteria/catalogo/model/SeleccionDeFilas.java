@@ -19,7 +19,8 @@ import java.util.function.Predicate;
  *       archivo (no estan, con error y salteadas) contra los que el cliente vio dan {@link ListaCambioException}
  *       (409). Un cambio en una fila no elegida que no mueve esos contadores no frena nada;</li>
  *   <li>una clave elegida que es una fila con error da 400;</li>
- *   <li>si se paso una seleccion y no queda ninguna fila, 400 "Elegi al menos una fila".</li>
+ *   <li>si se paso una seleccion y no queda ninguna fila que se aplique, 400 "Elegi al menos una fila". Las filas
+ *       nuevas no cuentan cuando no se piden crear los nuevos: no se escribe nada de ellas.</li>
  * </ol>
  * {@code elegidas == null} equivale a todas las filas que se pueden aplicar (el cliente de CU-04, sin seleccion).
  */
@@ -34,14 +35,21 @@ public final class SeleccionDeFilas {
     /** El tipo de cada fila de datos del plan. */
     private enum Tipo { SUBE, BAJA, MONEDA, CORRIGE, NUEVO, SIN_CAMBIO, ERROR }
 
+    /** Lo mismo creando los articulos nuevos: las filas nuevas elegidas cuentan como aplicables. */
+    public static PlanImportacion aplicar(PlanImportacion plan, List<ClaveFila> elegidas, ConteosImportacion esperados) {
+        return aplicar(plan, elegidas, esperados, true);
+    }
+
     /**
      * @param plan     el plan completo del archivo
      * @param elegidas las filas elegidas, o null para todas las que se pueden aplicar
      * @param esperados los contadores que el cliente vio para lo elegido y para el archivo
+     * @param crearNuevos si se van a crear los articulos nuevos; si no, las filas nuevas no cuentan como aplicables
      * @return el plan de lo elegido: sus listas son las de las filas elegidas y sus contadores, los de lo aplicado
      *         (los de no estan, con error y salteadas siguen siendo los del archivo)
      */
-    public static PlanImportacion aplicar(PlanImportacion plan, List<ClaveFila> elegidas, ConteosImportacion esperados) {
+    public static PlanImportacion aplicar(
+            PlanImportacion plan, List<ClaveFila> elegidas, ConteosImportacion esperados, boolean crearNuevos) {
         Map<ClaveFila, Tipo> tipos = tiposDelPlan(plan);
 
         Set<ClaveFila> claves = elegidas == null ? aplicables(tipos) : new LinkedHashSet<>(elegidas);
@@ -64,7 +72,7 @@ public final class SeleccionDeFilas {
                     + " tiene un error y no se puede aplicar.");
             }
         }
-        if (elegidas != null && cantidadDeAplicadas(aplicado) == 0) {
+        if (elegidas != null && cantidadDeAplicadas(aplicado, crearNuevos) == 0) {
             throw new SeleccionInvalidaException("Elegí al menos una fila.");
         }
         return aplicado;
@@ -111,9 +119,9 @@ public final class SeleccionDeFilas {
             plan.noEstan(), monedas, correcciones, plan.salteadas());
     }
 
-    private static int cantidadDeAplicadas(PlanImportacion aplicado) {
+    private static int cantidadDeAplicadas(PlanImportacion aplicado, boolean crearNuevos) {
         return aplicado.cambios().size() + aplicado.cambiosDeMoneda().size() + aplicado.correcciones().size()
-            + aplicado.altas().size() + aplicado.sinCambio().size();
+            + (crearNuevos ? aplicado.altas().size() : 0) + aplicado.sinCambio().size();
     }
 
     private static <T> List<T> filtrados(List<T> lista, Predicate<T> criterio) {

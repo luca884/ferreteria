@@ -131,13 +131,19 @@ public class ImportacionService {
         return new MuestraResponse(hojas, reconocimiento.propuesta());
     }
 
-    /** Lo que pasaria al aplicar. No escribe nada: ni articulos, ni historial, ni el proveedor. */
+    /**
+     * Lo que pasaria al aplicar. No escribe nada: ni articulos, ni historial, ni el proveedor. Con {@code rubroId} los
+     * nuevos sin rubro propio se calculan con el margen de ese rubro, igual que al aplicar con el mismo rubro; uno ajeno
+     * da 404 antes de leer el archivo, como en aplicar.
+     */
     @Transactional(readOnly = true)
     public VistaPreviaResponse vistaPrevia(ArchivoLista archivo, VistaPreviaRequest request) {
         Proveedor proveedor = buscarProveedor(request.proveedorId());
+        Rubro rubro = buscarRubro(request.rubroId());
         validarBonificaciones(request);
         Preparacion preparacion = preparar(
-                proveedor, archivo, request.mapeo().toMapeo(), request.listaIncluyeIva(), request.toBonificaciones());
+                proveedor, archivo, request.mapeo().toMapeo(), request.listaIncluyeIva(), request.toBonificaciones(),
+                rubro == null ? null : rubro.getId());
         return respuestaDe(preparacion.plan());
     }
 
@@ -153,14 +159,12 @@ public class ImportacionService {
     public ImportacionResponse aplicar(ArchivoLista archivo, AplicarRequest request, Long usuarioId) {
         Proveedor proveedor = buscarProveedor(request.proveedorId());
         // El rubro solo importa si se crean articulos; uno ajeno da 404 antes de leer el archivo.
-        Rubro rubro = request.crearNuevos() && request.rubroId() != null
-                ? rubroRepository.findScoped(request.rubroId())
-                        .orElseThrow(() -> new ResourceNotFoundException("Rubro no encontrado"))
-                : null;
+        Rubro rubro = request.crearNuevos() ? buscarRubro(request.rubroId()) : null;
         validarBonificaciones(request);
         MapeoLista mapeo = request.mapeo().toMapeo();
         Bonificaciones bonificaciones = request.toBonificaciones();
-        Preparacion preparacion = preparar(proveedor, archivo, mapeo, request.listaIncluyeIva(), bonificaciones);
+        Preparacion preparacion = preparar(proveedor, archivo, mapeo, request.listaIncluyeIva(), bonificaciones,
+                rubro == null ? null : rubro.getId());
 
         // Seleccion y deriva: ANTES de la primera escritura.
         PlanImportacion plan = elegir(preparacion.plan(), request);
@@ -233,7 +237,8 @@ public class ImportacionService {
     /** La seleccion de filas sobre el plan: 400 si no se puede aplicar y 409 si la lista cambio. */
     private static PlanImportacion elegir(PlanImportacion plan, AplicarRequest request) {
         try {
-            return SeleccionDeFilas.aplicar(plan, request.clavesElegidas(), request.conteosEsperados().toConteos());
+            return SeleccionDeFilas.aplicar(
+                    plan, request.clavesElegidas(), request.conteosEsperados().toConteos(), request.crearNuevos());
         } catch (SeleccionInvalidaException e) {
             throw new BadRequestException(e.getMessage());
         } catch (ListaCambioException e) {
@@ -279,10 +284,11 @@ public class ImportacionService {
      * (UNA lectura), los articulos del proveedor en una consulta, un contexto de precio por rubro y otro sin rubro
      * (con el dolar vigente de la ferreteria), los rubros por nombre, y los codigos internos y de barras ocupados. Las
      * bonificaciones son las de la solicitud. El tope de 20.000 filas cuenta las filas de datos de las hojas elegidas.
+     * {@code rubroElegidoId} es el rubro de respaldo del precio de los nuevos sin rubro propio (null: sin rubro).
      */
     private Preparacion preparar(
             Proveedor proveedor, ArchivoLista archivo, MapeoLista mapeo, boolean listaIncluyeIva,
-            Bonificaciones bonificaciones) {
+            Bonificaciones bonificaciones, Long rubroElegidoId) {
         LecturaLista lectura = lector.leer(archivo.contenido());
         for (int hoja : mapeo.hojasElegidas()) {
             if (hoja >= lectura.hojas().size()) {
@@ -333,7 +339,7 @@ public class ImportacionService {
                 lectura.filas(), mapeo, listaIncluyeIva, bonificaciones,
                 articulos.stream().map(ArticuloVigente::de).toList(),
                 contextos.porRubro(), contextos.sinRubro(), ocupados, proveedor.getMapeoLista(), encabezado,
-                lectura.hojas(), dolarDePrecios.activa(), rubrosPorNombre, barrasOcupadas));
+                lectura.hojas(), dolarDePrecios.activa(), rubrosPorNombre, barrasOcupadas, rubroElegidoId));
         return new Preparacion(plan, articulos, contextos, encabezado);
     }
 
@@ -374,6 +380,15 @@ public class ImportacionService {
                     violacion.getMessage());
         }
         throw new DatosInvalidosException(errores.mensajes());
+    }
+
+    /** El rubro de la ferreteria, o null si no se pidio ninguno; uno ajeno o inexistente es 404. */
+    private Rubro buscarRubro(Long id) {
+        if (id == null) {
+            return null;
+        }
+        return rubroRepository.findScoped(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Rubro no encontrado"));
     }
 
     private Proveedor buscarProveedor(Long id) {

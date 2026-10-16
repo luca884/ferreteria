@@ -15,8 +15,9 @@ import java.util.Set;
 /**
  * Planifica una importacion de lista de precios: clasifica cada fila (sube, baja, sin cambio, nueva
  * o con error) sin tocar nada. Dominio puro y determinista: el mismo input da siempre el mismo plan,
- * y la verificacion de deriva del aplicar depende de eso. No mira {@code crearNuevos} ni
- * {@code rubroId}: la clasificacion es la misma con o sin la opcion de crear.
+ * y la verificacion de deriva del aplicar depende de eso. No mira {@code crearNuevos}: la clasificacion es la misma con
+ * o sin la opcion de crear. El rubro elegido ({@link EntradaPlan#rubroElegidoId()}) solo cambia el precio que se muestra
+ * de los nuevos sin rubro propio, nunca la clasificacion.
  *
  * <p>Orden de validacion de cada fila (se informa solo el primer error): codigo, codigo repetido,
  * costo, costo calculado en cero y, para las que no coinciden con ningun articulo, si se puede crear.
@@ -219,10 +220,12 @@ public final class PlanificadorImportacion {
         boolean cambianLosAjustes = !ajustes.equals(articulo.ajustes());
         boolean cambiaLaAlicuota = alicuota != articulo.alicuotaIva();
         boolean cambiaElPrecio = precioNuevo.compareTo(articulo.precioFinal()) != 0;
-        if (cambianLosAjustes || (cambiaLaAlicuota && cambiaElPrecio)) {
+        // "Corrige" = cambian los ajustes o cambia el precio (aunque el costo sea el mismo, p. ej. un precio guardado
+        // desactualizado): aplicar recalcula el precio y deja historial, y la vista previa lo tiene que mostrar.
+        if (cambianLosAjustes || cambiaElPrecio) {
             acumulado.correcciones.add(cambio);
         } else {
-            // Un IVA que no mueve el precio por el redondeo no es una correccion, pero igual se guarda.
+            // Un IVA que no mueve el precio por el redondeo no es una correccion, pero igual se guarda sin historial.
             acumulado.sinCambio.add(new PrecioListaPlaneado(articulo.id(), d.precioLista(), d.hoja(), d.numero(),
                 d.codigo(), articulo.descripcion(), costoNuevo, cambiaLaAlicuota ? alicuota : null, null));
         }
@@ -312,9 +315,11 @@ public final class PlanificadorImportacion {
                 aviso(d, "La descripción tenía más de 200 caracteres y se cortó a 200."));
         }
         Long rubroId = rubroDeLaFila(d, entrada, acumulado);
-        ContextoPrecio contexto = rubroId == null
+        // El precio usa el rubro de la fila o, si no lo trae, el elegido al importar (como al crear el articulo).
+        Long rubroDelPrecio = rubroId != null ? rubroId : entrada.rubroElegidoId();
+        ContextoPrecio contexto = rubroDelPrecio == null
             ? entrada.contextoSinRubro()
-            : entrada.contextoPorRubro().getOrDefault(rubroId, entrada.contextoSinRubro());
+            : entrada.contextoPorRubro().getOrDefault(rubroDelPrecio, entrada.contextoSinRubro());
         BigDecimal precio = precioDelAlta(costo, alicuota, moneda, contexto);
         if (barras.esValor()) {
             acumulado.barrasEnUso.add(NormalizadorCodigo.clave(barras.codigo()));

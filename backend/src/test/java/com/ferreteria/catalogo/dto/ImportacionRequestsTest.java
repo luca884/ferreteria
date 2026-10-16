@@ -439,5 +439,32 @@ class ImportacionRequestsTest {
             assertThat(pedido.listaIncluyeIva()).isTrue();
             assertThat(pedido.toBonificaciones()).isEqualTo(new Bonificaciones(bd("40"), bd("10"), null));
         }
+
+        @Test
+        @DisplayName("la vista previa acepta un rubroId opcional: el pedido de antes (sin rubro) queda con null")
+        void vistaPreviaConRubroOpcional() {
+            VistaPreviaRequest conRubro = new VistaPreviaRequest(7L, mapeo(), false, null, null, null, 3L);
+            VistaPreviaRequest deAntes = new VistaPreviaRequest(7L, mapeo(), false, null, null, null);
+
+            assertThat(errores(conRubro)).isEmpty();
+            assertThat(conRubro.rubroId()).isEqualTo(3L);
+            assertThat(errores(deAntes)).isEmpty();
+            assertThat(deAntes.rubroId()).isNull();
+        }
+
+        @Test
+        @DisplayName("el JSON de la vista previa sin rubroId (cliente viejo) se lee con rubroId null; con rubroId, con su valor")
+        void vistaPreviaDesdeJson() throws Exception {
+            com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+            String base = "{\"proveedorId\":7,\"listaIncluyeIva\":false,\"mapeo\":{\"hoja\":0,\"filaDesde\":2,"
+                    + "\"columnaCodigo\":0,\"columnaDescripcion\":1,\"columnaCosto\":2}";
+
+            VistaPreviaRequest viejo = mapper.readValue(base + "}", VistaPreviaRequest.class);
+            VistaPreviaRequest nuevo = mapper.readValue(base + ",\"rubroId\":5}", VistaPreviaRequest.class);
+
+            assertThat(viejo.rubroId()).isNull();
+            assertThat(viejo.proveedorId()).isEqualTo(7L);
+            assertThat(nuevo.rubroId()).isEqualTo(5L);
+        }
     }
 }

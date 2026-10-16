@@ -21,6 +21,8 @@ import java.util.Set;
  *                                  dolares ni se pasa uno de pesos a dolares
  * @param rubrosPorNombre           id de cada rubro de la ferreteria por su nombre, con {@link NormalizadorCodigo#clave}
  * @param codigosBarrasOcupados     codigos de barras de los articulos activos de la ferreteria
+ * @param rubroElegidoId            el rubro elegido al importar: respaldo de los nuevos que no nombran un rubro en la
+ *                                  fila, para calcular su precio con el margen de ese rubro; null los deja sin rubro
  */
 public record EntradaPlan(
         List<FilaLeida> filas,
@@ -36,7 +38,29 @@ public record EntradaPlan(
         List<String> hojas,
         boolean cotizacionActiva,
         Map<String, Long> rubrosPorNombre,
-        Set<String> codigosBarrasOcupados) {
+        Set<String> codigosBarrasOcupados,
+        Long rubroElegidoId) {
+
+    /** La entrada sin rubro elegido: los nuevos sin rubro propio se calculan sin rubro. */
+    public EntradaPlan(
+            List<FilaLeida> filas,
+            MapeoLista mapeo,
+            boolean listaIncluyeIva,
+            Bonificaciones bonificaciones,
+            List<ArticuloVigente> articulosDelProveedor,
+            Map<Long, ContextoPrecio> contextoPorRubro,
+            ContextoPrecio contextoSinRubro,
+            Set<String> codigosInternosOcupados,
+            MapeoLista mapeoGuardado,
+            FilaLeida encabezado,
+            List<String> hojas,
+            boolean cotizacionActiva,
+            Map<String, Long> rubrosPorNombre,
+            Set<String> codigosBarrasOcupados) {
+        this(filas, mapeo, listaIncluyeIva, bonificaciones, articulosDelProveedor, contextoPorRubro, contextoSinRubro,
+            codigosInternosOcupados, mapeoGuardado, encabezado, hojas, cotizacionActiva, rubrosPorNombre,
+            codigosBarrasOcupados, null);
+    }
 
     /** La entrada de antes del corte 2: sin nombres de hoja, cotizacion activa, sin rubros por nombre ni barras. */
     public EntradaPlan(

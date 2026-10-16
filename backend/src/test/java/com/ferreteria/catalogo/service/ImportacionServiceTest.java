@@ -566,6 +566,83 @@ class ImportacionServiceTest {
         }
 
         @Test
+        @DisplayName("rubroId de otra ferreteria: 404 'Rubro no encontrado' (el mismo de aplicar) y no lee el archivo")
+        void rubroAjeno() throws Exception {
+            when(proveedorRepository.findScoped(PROVEEDOR)).thenReturn(Optional.of(proveedor()));
+            when(rubroRepository.findScoped(RUBRO)).thenReturn(Optional.empty());
+
+            assertThatThrownBy(() -> service.vistaPrevia(ARCHIVO,
+                    new VistaPreviaRequest(PROVEEDOR, mapeo(), false, null, null, null, RUBRO)))
+                    .isInstanceOf(ResourceNotFoundException.class)
+                    .hasMessage("Rubro no encontrado");
+            verifyNoInteractions(lector, articuloRepository);
+        }
+
+        @Test
+        @DisplayName("rubro ajeno con bonificaciones invalidas: 404 (la validacion va despues)")
+        void rubroAjenoConBonificacionesInvalidas() throws Exception {
+            when(proveedorRepository.findScoped(PROVEEDOR)).thenReturn(Optional.of(proveedor()));
+            when(rubroRepository.findScoped(RUBRO)).thenReturn(Optional.empty());
+
+            assertThatThrownBy(() -> service.vistaPrevia(ARCHIVO,
+                    new VistaPreviaRequest(PROVEEDOR, mapeo(), false, bd("150"), null, null, RUBRO)))
+                    .isInstanceOf(ResourceNotFoundException.class);
+        }
+
+        @Test
+        @DisplayName("sin rubroId no busca ningun rubro y el nuevo se calcula con el margen por defecto: 100 da 160")
+        void sinRubroId() throws Exception {
+            escenario(proveedor(), List.of(), lectura(encabezado(), fila(2, "N-1", "Tuerca", "100")), rubro("35"));
+
+            VistaPreviaResponse respuesta = service.vistaPrevia(ARCHIVO, vistaPreviaRequest());
+
+            verify(rubroRepository, never()).findScoped(any());
+            assertThat(respuesta.nuevos().get(0).precioNuevo()).isEqualByComparingTo("160");
+        }
+
+        @Test
+        @DisplayName("con rubroId el nuevo sin rubro propio se calcula con el margen del rubro (35 %): 100 da 170")
+        void conRubroId() throws Exception {
+            Rubro rubro = rubro("35");
+            escenario(proveedor(), List.of(), lectura(encabezado(), fila(2, "N-1", "Tuerca", "100")), rubro);
+            when(rubroRepository.findScoped(RUBRO)).thenReturn(Optional.of(rubro));
+
+            VistaPreviaResponse respuesta = service.vistaPrevia(ARCHIVO,
+                    new VistaPreviaRequest(PROVEEDOR, mapeo(), false, null, null, null, RUBRO));
+
+            assertThat(respuesta.nuevos().get(0).precioNuevo()).isEqualByComparingTo("170");
+            verificarSinEscrituras();
+        }
+
+        @Test
+        @DisplayName("lo que muestra la vista previa con un rubro es lo que crea aplicar con el mismo rubro: mismo precio y misma deriva")
+        void vistaPreviaYAplicarCoinciden() throws Exception {
+            Rubro rubro = rubro("35");
+            escenario(proveedor(), List.of(), lectura(encabezado(), fila(2, "N-1", "Tuerca", "100")), rubro);
+            when(rubroRepository.findScoped(RUBRO)).thenReturn(Optional.of(rubro));
+            when(articuloRepository.saveAll(any())).thenAnswer(inv -> {
+                long id = 100;
+                for (Object articulo : (Iterable<?>) inv.getArgument(0)) {
+                    fijar(articulo, "id", id++);
+                }
+                return inv.getArgument(0);
+            });
+            guardaImportacion();
+
+            VistaPreviaResponse previa = service.vistaPrevia(ARCHIVO,
+                    new VistaPreviaRequest(PROVEEDOR, mapeo(), false, null, null, null, RUBRO));
+            service.aplicar(ARCHIVO, new AplicarRequest(
+                    PROVEEDOR, mapeo(), false, null, null, null, true, RUBRO, conteos(0, 0, 1, 0, 0, 0)), USUARIO);
+
+            ArgumentCaptor<Iterable<Articulo>> captor = ArgumentCaptor.captor();
+            verify(articuloRepository).saveAll(captor.capture());
+            List<Articulo> creados = new ArrayList<>();
+            captor.getValue().forEach(creados::add);
+            assertThat(creados.get(0).getPrecioFinal()).isEqualByComparingTo(previa.nuevos().get(0).precioNuevo());
+            assertThat(creados.get(0).getPrecioFinal()).isEqualByComparingTo("170");
+        }
+
+        @Test
         @DisplayName("usa las bonificaciones de la SOLICITUD, no las guardadas en el proveedor")
         void bonificacionesDeLaSolicitud() throws Exception {
             Proveedor proveedor = proveedor();
@@ -2002,13 +2079,56 @@ class ImportacionServiceTest {
         }
 
         @Test
-        @DisplayName("con crearNuevos apagado los nuevos elegidos no se crean")
+        @DisplayName("con crearNuevos apagado el nuevo elegido junto con uno que sube no se crea; el que sube si se aplica")
         void crearNuevosApagado() throws Exception {
-            escenario(proveedor(), tresQueSuben(), listaDeCuatro());
+            List<Articulo> articulos = tresQueSuben();
+            escenario(proveedor(), articulos, listaDeCuatro());
             guardaImportacionConId();
 
-            service.aplicar(ARCHIVO, pedido(false, conteos9(0, 0, 1, 0, 0, 0, 0, 0, 0), new FilaElegida(0, 5)), USUARIO);
+            service.aplicar(ARCHIVO,
+                    pedido(false, conteos9(1, 0, 1, 0, 0, 0, 0, 0, 0), new FilaElegida(0, 2), new FilaElegida(0, 5)),
+                    USUARIO);
 
+            verify(articuloRepository, never()).saveAll(any());
+            assertThat(articulos.get(0).getCosto()).isEqualByComparingTo("120.00");
+        }
+
+        @Test
+        @DisplayName("con crearNuevos apagado, elegir solo filas nuevas es 400 'Elegí al menos una fila.' y no se escribe NADA (ni el mapeo)")
+        void soloNuevasSinCrearNuevosNoEscribeNada() throws Exception {
+            Proveedor proveedor = proveedor();
+            escenario(proveedor, tresQueSuben(), listaDeCuatro());
+
+            assertThatThrownBy(() -> service.aplicar(ARCHIVO,
+                    pedido(false, conteos9(0, 0, 1, 0, 0, 0, 0, 0, 0), new FilaElegida(0, 5)), USUARIO))
+                    .isInstanceOf(BadRequestException.class)
+                    .hasMessage("Elegí al menos una fila.");
+
+            verificarSinEscrituras();
+            assertThat(proveedor.getMapeoLista()).isNull();
+        }
+
+        @Test
+        @DisplayName("con crearNuevos prendido las mismas filas nuevas se crean (no es 400)")
+        void soloNuevasCreandoNuevos() throws Exception {
+            escenario(proveedor(), tresQueSuben(), listaDeCuatro());
+            guardaImportacionConId();
+            when(articuloRepository.saveAll(any())).thenAnswer(inv -> inv.getArgument(0));
+
+            service.aplicar(ARCHIVO, pedido(true, conteos9(0, 0, 1, 0, 0, 0, 0, 0, 0), new FilaElegida(0, 5)), USUARIO);
+
+            verify(articuloRepository).saveAll(any());
+        }
+
+        @Test
+        @DisplayName("sin seleccion (cliente viejo) y sin crear nuevos, con solo filas nuevas en la lista, sigue sin ser 400")
+        void sinSeleccionSinCrearNuevosEsCompatible() throws Exception {
+            escenario(proveedor(), List.of(), lectura(encabezado(), fila(2, "N-1", "Nuevo", "10")));
+            guardaImportacionConId();
+
+            ImportacionResponse respuesta = service.aplicar(ARCHIVO, aplicarRequest(conteos(0, 0, 1, 0, 0, 0)), USUARIO);
+
+            assertThat(respuesta.conteos().nuevos()).isZero();
             verify(articuloRepository, never()).saveAll(any());
         }
 

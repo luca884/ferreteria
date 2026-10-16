@@ -236,6 +236,67 @@ class SeleccionDeFilasTest {
             .hasMessage("Elegí al menos una fila.");
     }
 
+    // ------------------------------------------------------------------ sin crear nuevos (revision lotes 4 y 5)
+
+    @Test
+    @DisplayName("sin crear nuevos, elegir solo filas nuevas es 'Elegí al menos una fila.': las nuevas no se aplican")
+    void soloNuevasSinCrearNuevos() {
+        assertThatThrownBy(() -> SeleccionDeFilas.aplicar(
+                planChico(), claves(0, 5, 1, 4), esperados(0, 0, 2, 0, 0, 0), false))
+            .isInstanceOf(SeleccionInvalidaException.class)
+            .hasMessage("Elegí al menos una fila.");
+    }
+
+    @Test
+    @DisplayName("creando nuevos, las mismas filas nuevas se aplican (2 altas)")
+    void soloNuevasCreandoNuevos() {
+        PlanImportacion aplicado = SeleccionDeFilas.aplicar(
+            planChico(), claves(0, 5, 1, 4), esperados(0, 0, 2, 0, 0, 0), true);
+
+        assertThat(aplicado.altas()).hasSize(2);
+        assertThat(aplicado.cambios()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("sin crear nuevos, una nueva junto con una que sube aplica: las nuevas no cuentan pero la otra si")
+    void nuevaMasUnaQueSubeSinCrearNuevos() {
+        PlanImportacion aplicado = SeleccionDeFilas.aplicar(
+            planChico(), claves(0, 5, 0, 2), esperados(1, 0, 1, 0, 0, 0), false);
+
+        assertThat(aplicado.cambios()).hasSize(1);
+        assertThat(aplicado.altas()).hasSize(1);
+    }
+
+    @Test
+    @DisplayName("sin crear nuevos, una nueva junto con una sin cambio aplica (la sin cambio cuenta)")
+    void nuevaMasSinCambioSinCrearNuevos() {
+        PlanImportacion aplicado = SeleccionDeFilas.aplicar(
+            planChico(), claves(0, 5, 0, 6), esperados(0, 0, 1, 1, 0, 0), false);
+
+        assertThat(aplicado.sinCambio()).hasSize(1);
+    }
+
+    @Test
+    @DisplayName("sin seleccion (null) y sin crear nuevos no es 400 aunque solo haya filas nuevas (cliente de CU-04)")
+    void seleccionNullSinCrearNuevosEsCompatible() {
+        PlanImportacion soloNuevas = plan(
+            List.of(), List.of(), List.of(), List.of(alta(0, 5)), List.of(), List.of(), 0, 0);
+
+        PlanImportacion aplicado = SeleccionDeFilas.aplicar(
+            soloNuevas, null, new ConteosImportacion(0, 0, 1, 0, 0, 0, 0, 0, 0), false);
+
+        assertThat(aplicado.altas()).hasSize(1);
+    }
+
+    @Test
+    @DisplayName("la forma de tres argumentos sigue contando las nuevas como aplicables (se crean)")
+    void tresArgumentosCuentaLasNuevas() {
+        PlanImportacion aplicado = SeleccionDeFilas.aplicar(
+            planChico(), claves(0, 5), esperados(0, 0, 1, 0, 0, 0));
+
+        assertThat(aplicado.altas()).hasSize(1);
+    }
+
     // ------------------------------------------------------------------ deriva
 
     @Test

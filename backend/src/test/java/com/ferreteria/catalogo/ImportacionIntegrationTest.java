@@ -1743,8 +1743,14 @@ class ImportacionIntegrationTest extends CotizacionTestBase {
         aplicarCon(dueA, lista, vacia).andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message", is("Elegí al menos una fila.")));
         // Una fila que no existe, y una hoja que no existe.
-        aplicarCon(dueA, lista, datosAplicarCon(datos, conteos, false, null, 0, 4000)).andExpect(status().isBadRequest());
-        aplicarCon(dueA, lista, datosAplicarCon(datos, conteos, false, null, 5, 2)).andExpect(status().isBadRequest());
+        aplicarCon(dueA, lista, datosAplicarCon(datos, conteos, false, null, 0, 4000))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message",
+                        is("La fila 4000 de la hoja 1 no está en la lista. Volvé a generar la vista previa.")));
+        aplicarCon(dueA, lista, datosAplicarCon(datos, conteos, false, null, 5, 2))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message",
+                        is("La fila 2 de la hoja 6 no está en la lista. Volvé a generar la vista previa.")));
         // Una fila con error (la 3), con los contadores de lo elegido.
         aplicarCon(dueA, lista, datosAplicarCon(datos, conteos9(0, 0, 0, 0, 0, 1, 0, 0, 0), false, null, 0, 3))
                 .andExpect(status().isBadRequest())
@@ -2143,6 +2149,176 @@ class ImportacionIntegrationTest extends CotizacionTestBase {
         assertThat(previa.get("errores").get(0).get("mensaje").asText())
                 .isEqualTo("Todavía no hay cotización del dólar. Probá en unos minutos");
         assertThat(previa.get("nuevos").get(0).get("codigo").asText()).isEqualTo("ARS" + s);
+    }
+
+    // --- Revision de los lotes 4 y 5: precio desactualizado, rubro en la vista previa y solo nuevas sin crear ---
+
+    @Test
+    void unPrecioGuardadoDesactualizadoEsUnaCorreccionYAplicarLoCorrigeCon1DeHistorial() throws Exception {
+        sembrarAyB();
+        long proveedor = crearProveedor(dueA, unico("P"));
+        String codigo = unico("OBS");
+        long articulo = articuloDe(dueA, proveedor, codigo, "100");
+        jdbc.update("update articulo set precio_final = 1.00 where id = ?", articulo);
+        MockMultipartFile lista = xlsx(List.of(ENCABEZADO, fila(codigo, "x", n("100"))));
+        ObjectNode datos = datosVistaPrevia(proveedor);
+        long historialAntes = contar("select count(*) from historial_precio where articulo_id = ?", articulo);
+
+        JsonNode previa = vistaPreviaDe(dueA, lista, datos);
+
+        assertThat(previa.get("conteos").get("corrigen").asInt()).isEqualTo(1);
+        assertThat(previa.get("conteos").get("sinCambio").asInt()).isZero();
+        assertThat(previa.get("correcciones")).hasSize(1);
+        assertThat(previa.get("correcciones").get(0).get("precioAnterior").decimalValue()).isEqualByComparingTo("1");
+        assertThat(previa.get("correcciones").get(0).get("precioNuevo").decimalValue()).isEqualByComparingTo("160");
+        assertThat(decimal(articulo, "precio_final")).isEqualByComparingTo("1");
+
+        aplicarCon(dueA, lista, datosAplicarCon(datos, previa.get("conteos"), false, null))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.conteos.corrigen", is(1)))
+                .andExpect(jsonPath("$.conteos.sinCambio", is(0)));
+
+        assertThat(decimal(articulo, "precio_final")).isEqualByComparingTo("160");
+        assertThat(contar("select count(*) from historial_precio where articulo_id = ?", articulo))
+                .isEqualTo(historialAntes + 1);
+        Map<String, Object> historial = jdbc.queryForMap(
+                "select * from historial_precio where origen = 'IMPORTACION' and articulo_id = ?", articulo);
+        assertThat((BigDecimal) historial.get("precio_anterior")).isEqualByComparingTo("1");
+        assertThat((BigDecimal) historial.get("precio_nuevo")).isEqualByComparingTo("160");
+    }
+
+    @Test
+    void unaFilaSinCambioNuncaDejaHistorialNiMueveElPrecioFinalAlAplicar() throws Exception {
+        sembrarAyB();
+        long proveedor = crearProveedor(dueA, unico("P"));
+        String s = unico("");
+        long igual = articuloDe(dueA, proveedor, "IGU" + s, "100");
+        // 1 x 1,30 x 1,21 = 1,573 y 1 x 1,30 x 1,105 = 1,4365: los dos redondean a 10, asi que el cambio de IVA no mueve el precio.
+        long ivaSinEfecto = articuloDe(dueA, proveedor, "IVA" + s, "1");
+        MockMultipartFile lista = archivo("lista.xlsx", ListasDePrueba.xlsx(List.of(
+                filaExtra("Codigo", "Descripcion", "Costo", "IVA"),
+                filaExtra("IGU" + s, "x", n("100"), null),
+                filaExtra("IVA" + s, "x", n("1"), n("10.5")))));
+        ObjectNode datos = datosCon(proveedor, mapeoNode(null, 3, null, null, null, null));
+        BigDecimal precioIgual = decimal(igual, "precio_final");
+        BigDecimal precioIva = decimal(ivaSinEfecto, "precio_final");
+        long historialAntes = contar("select count(*) from historial_precio where articulo_id in (?, ?)", igual, ivaSinEfecto);
+
+        JsonNode previa = vistaPreviaDe(dueA, lista, datos);
+        assertThat(previa.get("conteos").get("sinCambio").asInt()).isEqualTo(2);
+        assertThat(previa.get("conteos").get("corrigen").asInt()).isZero();
+
+        aplicarCon(dueA, lista, datosAplicarCon(datos, previa.get("conteos"), false, null))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.conteos.sinCambio", is(2)));
+
+        assertThat(contar("select count(*) from historial_precio where articulo_id in (?, ?)", igual, ivaSinEfecto))
+                .isEqualTo(historialAntes);
+        assertThat(decimal(igual, "precio_final")).isEqualByComparingTo(precioIgual);
+        assertThat(decimal(ivaSinEfecto, "precio_final")).isEqualByComparingTo(precioIva);
+        assertThat(precioIva).isEqualByComparingTo("10");
+        // La alicuota nueva si se guarda, sin historial.
+        assertThat(filaDeArticulo(ivaSinEfecto).get("alicuota_iva")).isEqualTo("IVA_10_5");
+        assertThat(filaDeArticulo(igual).get("alicuota_iva")).isEqualTo("IVA_21");
+    }
+
+    @Test
+    void laVistaPreviaConRubroCalculaElPrecioDeLosNuevosConSuMargenYAplicarCreaLoMismo() throws Exception {
+        sembrarAyB();
+        long proveedor = crearProveedor(dueA, unico("P"));
+        long rubro = crearRubro(dueA, unico("R"), "40");
+        String codigo = unico("NRU");
+        MockMultipartFile lista = xlsx(List.of(ENCABEZADO, fila(codigo, "Nuevo", n("100"))));
+        ObjectNode sinRubro = datosVistaPrevia(proveedor);
+        ObjectNode conRubro = datosVistaPrevia(proveedor);
+        conRubro.put("rubroId", rubro);
+
+        JsonNode previaSinRubro = vistaPreviaDe(dueA, lista, sinRubro);
+        JsonNode previaConRubro = vistaPreviaDe(dueA, lista, conRubro);
+
+        // 100 x 1,30 x 1,21 = 157,3 -> 160 con el margen por defecto; 100 x 1,40 x 1,21 = 169,4 -> 170 con el del rubro.
+        assertThat(previaSinRubro.get("nuevos").get(0).get("precioNuevo").decimalValue()).isEqualByComparingTo("160");
+        assertThat(previaConRubro.get("nuevos").get(0).get("precioNuevo").decimalValue()).isEqualByComparingTo("170");
+        assertThat(previaConRubro.get("conteos")).isEqualTo(previaSinRubro.get("conteos"));
+
+        aplicarCon(dueA, lista, datosAplicarCon(sinRubro, previaConRubro.get("conteos"), true, rubro))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.conteos.nuevos", is(1)));
+
+        Map<String, Object> creado = jdbc.queryForMap("select * from articulo where codigo_interno = ?", codigo);
+        assertThat((BigDecimal) creado.get("precio_final")).isEqualByComparingTo("170");
+        assertThat(((Number) creado.get("rubro_id")).longValue()).isEqualTo(rubro);
+    }
+
+    @Test
+    void laVistaPreviaConRubroYLaDeAntesSinRubroIdDanLoMismoParaLosExistentes() throws Exception {
+        sembrarAyB();
+        long proveedor = crearProveedor(dueA, unico("P"));
+        long rubro = crearRubro(dueA, unico("R"), "40");
+        String codigo = unico("EXI");
+        articuloDe(dueA, proveedor, codigo, "100");
+        MockMultipartFile lista = xlsx(List.of(ENCABEZADO, fila(codigo, "x", n("120"))));
+        ObjectNode conRubro = datosVistaPrevia(proveedor);
+        conRubro.put("rubroId", rubro);
+
+        JsonNode sinRubroId = vistaPreviaDe(dueA, lista, datosVistaPrevia(proveedor));
+        JsonNode conRubroId = vistaPreviaDe(dueA, lista, conRubro);
+
+        assertThat(conRubroId.get("cambios")).isEqualTo(sinRubroId.get("cambios"));
+        assertThat(sinRubroId.get("cambios").get(0).get("precioNuevo").decimalValue()).isEqualByComparingTo("190");
+    }
+
+    @Test
+    void laVistaPreviaConUnRubroDeOtraFerreteriaDa404ComoAplicarYNoEscribeNada() throws Exception {
+        sembrarAyB();
+        long proveedorA = crearProveedor(dueA, unico("PA"));
+        long rubroB = crearRubro(dueB, unico("RB"), "40");
+        String codigo = unico("AJE");
+        articuloDe(dueA, proveedorA, codigo, "100");
+        MockMultipartFile lista = xlsx(List.of(ENCABEZADO, fila(codigo, "x", n("120"))));
+        ObjectNode datos = datosVistaPrevia(proveedorA);
+        datos.put("rubroId", rubroB);
+        Map<String, Object> antes = instantanea(proveedorA);
+
+        postMultipart(VISTA_PREVIA, dueA, lista, datos)
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.message", is("Rubro no encontrado")));
+        // Aplicar con el mismo rubro ajeno responde igual.
+        aplicarCon(dueA, lista, datosAplicarCon(datosVistaPrevia(proveedorA), conteos9(1, 0, 0, 0, 0, 0, 0, 0, 0), true, rubroB))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.message", is("Rubro no encontrado")));
+
+        assertThat(instantanea(proveedorA)).isEqualTo(antes);
+    }
+
+    @Test
+    void sinCrearNuevosElegirSoloFilasNuevasDa400SinRegistrarImportacionNiPisarElMapeo() throws Exception {
+        sembrarAyB();
+        long proveedor = crearProveedor(dueA, unico("P"));
+        String s = unico("");
+        articuloDe(dueA, proveedor, "A" + s, "100");
+        MockMultipartFile lista = xlsx(List.of(ENCABEZADO, fila("A" + s, "x", n("120")), fila("N" + s, "Nuevo", n("50"))));
+        ObjectNode datos = datosVistaPrevia(proveedor);
+        JsonNode previa = vistaPreviaDe(dueA, lista, datos);
+        assertThat(previa.get("conteos").get("nuevos").asInt()).isEqualTo(1);
+        Map<String, Object> antes = instantanea(proveedor);
+
+        // Solo la fila 3 (la nueva) y sin crear los nuevos: nada para aplicar.
+        ObjectNode soloLaNueva = datosAplicarCon(datos, conteos9(0, 0, 1, 0, 0, 0, 0, 0, 0), false, null, 0, 3);
+        aplicarCon(dueA, lista, soloLaNueva)
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message", is("Elegí al menos una fila.")));
+
+        assertThat(instantanea(proveedor)).isEqualTo(antes);
+        assertThat(contar("select count(*) from importacion_lista where proveedor_id = ?", proveedor)).isZero();
+        assertThat(jdbc.queryForMap("select * from proveedor where id = ?", proveedor).get("mapeo_lista")).isNull();
+
+        // Con la misma seleccion pero creando los nuevos si se aplica, y la nueva se crea.
+        aplicarCon(dueA, lista, datosAplicarCon(datos, conteos9(0, 0, 1, 0, 0, 0, 0, 0, 0), true, null, 0, 3))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.conteos.nuevos", is(1)));
+        assertThat(contar("select count(*) from articulo where proveedor_id = ? and codigo_interno = ?", proveedor, "N" + s))
+                .isEqualTo(1);
     }
 
     private static boolean sinValor(JsonNode nodo, String campo) {
