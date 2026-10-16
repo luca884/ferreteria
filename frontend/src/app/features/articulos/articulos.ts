@@ -61,15 +61,23 @@ export class Articulos implements OnInit {
   protected readonly aAjustar = signal<Articulo | null>(null);
 
   protected readonly form = inject(FormBuilder).nonNullable.group({ q: [''] });
+  /** Se vuelve de editar un artículo: la primera carga le pone el foco a su fila. */
+  private enfocarElegidaAlCargar = false;
 
   ngOnInit(): void {
-    // Al volver de Editar la dirección trae la búsqueda, la página y los inactivos: se retoma donde estaba.
+    // Al volver de Editar la dirección trae la búsqueda, la página, los inactivos y el artículo editado:
+    // se retoma donde estaba, con esa fila elegida y con el foco.
     const params = this.route.snapshot.queryParamMap;
     const q = (params.get('q') ?? '').trim();
     const pagina = Number(params.get('pagina'));
+    const elegido = Number(params.get('elegido'));
     this.busquedaAplicada.set(q);
     this.form.setValue({ q });
     this.incluirInactivos.set(params.get('inactivos') === '1');
+    if (Number.isInteger(elegido) && elegido > 0) {
+      this.filas.elegidoId.set(elegido);
+      this.enfocarElegidaAlCargar = true;
+    }
     this.cargar(Number.isInteger(pagina) && pagina > 1 ? pagina - 1 : 0);
   }
 
@@ -99,10 +107,16 @@ export class Articulos implements OnInit {
     if (actual && actual.page + 1 < actual.totalPages) this.cargar(actual.page + 1);
   }
 
-  /** Editar (barra, Enter o doble clic): la dirección del listado viaja al formulario para poder volver. */
+  /**
+   * Editar (barra, Enter o doble clic): la dirección del listado viaja al formulario para poder volver, con el
+   * artículo como `elegido` para que al volver siga elegido.
+   */
   protected editar(articulo: Articulo | null = this.filas.elegido()): void {
     if (!articulo || !this.auth.esDueno()) return;
-    void this.router.navigate(['/articulos', articulo.id], { queryParamsHandling: 'preserve' });
+    void this.router.navigate(['/articulos', articulo.id], {
+      queryParams: { elegido: articulo.id },
+      queryParamsHandling: 'merge',
+    });
   }
 
   protected pedirBaja(): void {
@@ -179,6 +193,10 @@ export class Articulos implements OnInit {
             return;
           }
           this.pagina.set(resultado);
+          if (this.enfocarElegidaAlCargar) {
+            this.enfocarElegidaAlCargar = false;
+            this.filas.enfocarElegida();
+          }
           this.cargando.set(false);
           this.guardarEnLaDireccion(resultado.page);
         },

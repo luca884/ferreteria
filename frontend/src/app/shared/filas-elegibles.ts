@@ -49,8 +49,19 @@ export class FilasElegibles<T extends { id: number }> {
     const filas = this.lista();
     const destino = Math.min(Math.max(indice + paso, 0), filas.length - 1);
     this.elegidoId.set(filas[destino].id);
+    this.enfocar(destino);
+  }
+
+  /** Pone el foco en la elegida (por ejemplo, al volver de editarla); sin elegida no hace nada. */
+  enfocarElegida(): void {
+    const indice = this.lista().findIndex((fila) => fila.id === this.elegidoId());
+    if (indice >= 0) this.enfocar(indice);
+  }
+
+  /** Después de pintar, enfoca la fila del índice. */
+  private enfocar(indice: number): void {
     afterNextRender(
-      () => this.host.nativeElement.querySelectorAll<HTMLElement>('tbody tr')[destino]?.focus(),
+      () => this.host.nativeElement.querySelectorAll<HTMLElement>('tbody tr')[indice]?.focus(),
       { injector: this.injector },
     );
   }

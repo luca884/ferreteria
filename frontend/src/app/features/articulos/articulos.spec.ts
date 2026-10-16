@@ -320,6 +320,27 @@ describe('Articulos', () => {
       expect(el().querySelector<HTMLInputElement>('#inactivos')!.checked).toBe(true);
     });
 
+    it('al volver de editar, la fila editada queda elegida y con el foco, y el elegido sale de la dirección', async () => {
+      await crearComponente(true, pagina([articulo(7), articulo(8)], 1, 2, 22), null, '/?pagina=2&elegido=8');
+      await refrescar();
+
+      expect(elegidas()).toEqual([filas()[1]]);
+      expect(document.activeElement).toBe(filas()[1]);
+      expect(el().querySelector('.elegido')?.textContent?.replace(/\s+/g, ' ')).toContain('Elegido: Artículo 8');
+      expect(navegar).toHaveBeenLastCalledWith([], {
+        relativeTo: TestBed.inject(ActivatedRoute),
+        queryParams: { pagina: 2 },
+        replaceUrl: true,
+      });
+    });
+
+    it('un elegido que no está en la página no elige ninguna fila', async () => {
+      await crearComponente(true, pagina([articulo(7), articulo(8)]), null, '/?elegido=99');
+
+      expect(elegidas()).toEqual([]);
+      expect(filas().map((f) => f.getAttribute('tabindex'))).toEqual(['0', '-1']);
+    });
+
     it('una página que no es un número arranca en la primera', async () => {
       await crearComponente(true, undefined, null, '/?pagina=abc');
 
@@ -410,7 +431,10 @@ describe('Articulos', () => {
 
       await clickEn('app-barra-acciones button.editar');
 
-      expect(navegar).toHaveBeenCalledWith(['/articulos', 8], { queryParamsHandling: 'preserve' });
+      expect(navegar).toHaveBeenCalledWith(['/articulos', 8], {
+        queryParams: { elegido: 8 },
+        queryParamsHandling: 'merge',
+      });
     });
 
     it('elegido de baja: Reactivar en vez de Dar de baja y Ajustar stock deshabilitado con el motivo a la vista', async () => {
@@ -489,7 +513,10 @@ describe('Articulos', () => {
 
       await teclaEnFila(0, 'Enter');
 
-      expect(navegar).toHaveBeenCalledWith(['/articulos', 7], { queryParamsHandling: 'preserve' });
+      expect(navegar).toHaveBeenCalledWith(['/articulos', 7], {
+        queryParams: { elegido: 7 },
+        queryParamsHandling: 'merge',
+      });
     });
 
     it('doble clic en la fila abre Editar', async () => {
@@ -498,7 +525,10 @@ describe('Articulos', () => {
       filas()[0].querySelector('.descripcion')!.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
       await refrescar();
 
-      expect(navegar).toHaveBeenCalledWith(['/articulos', 7], { queryParamsHandling: 'preserve' });
+      expect(navegar).toHaveBeenCalledWith(['/articulos', 7], {
+        queryParams: { elegido: 7 },
+        queryParamsHandling: 'merge',
+      });
     });
 
     it('para el Vendedor Enter y doble clic no hacen nada', async () => {

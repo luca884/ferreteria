@@ -116,6 +116,18 @@ describe('FilasElegibles', () => {
     expect(anfitrion().alEnter).not.toHaveBeenCalled();
   });
 
+  it('enfocarElegida pone el foco en la fila elegida; sin elegida no hace nada', async () => {
+    anfitrion().filas.enfocarElegida();
+    await refrescar();
+    expect(document.activeElement).toBe(document.body);
+
+    anfitrion().filas.elegidoId.set(9);
+    anfitrion().filas.enfocarElegida();
+    await refrescar();
+
+    expect(document.activeElement).toBe(filas()[2]);
+  });
+
   it('la elegida que ya no está en la lista deja de estar elegida', async () => {
     filas()[2].click();
     anfitrion().lista.set([{ id: 7, nombre: 'Uno' }]);
