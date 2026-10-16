@@ -159,6 +159,20 @@ class ZonaDeDatosTest {
     }
 
     @Test
+    @DisplayName("un texto en la celda del costo, sin descripcion y con codigo, no es un titulo: es de datos (el planificador la marca como error)")
+    void costoDeTextoSinDescripcionEsDeDatos() {
+        LecturaLista lectura = unaHoja(List.of(
+            encabezado336(),
+            fila("A-1", null, null, null, "ARG", "abc", null, null, null),
+            fila("RUBRO FIJACIONES")));
+
+        ZonaDeDatos.Resultado resultado = ZonaDeDatos.clasificar(lectura, mapeo336(null));
+
+        assertThat(codigos(resultado)).containsExactly("A-1");
+        assertThat(resultado.salteadas()).isEqualTo(1);
+    }
+
+    @Test
     @DisplayName("una fila con costo numerico es de datos aunque no tenga descripcion")
     void costoSinDescripcionEsDeDatos() {
         LecturaLista lectura = unaHoja(List.of(

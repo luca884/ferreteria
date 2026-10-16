@@ -11,8 +11,8 @@ import java.util.List;
  * <p>Dentro de la zona, cada fila es una de tres cosas:
  * <ul>
  *   <li><b>ignorada</b>: todas las columnas mapeadas estan vacias. No suma a nada;</li>
- *   <li><b>salteada</b>: un titulo, como los "Familia: NNN - Nombre" de M-S (texto en el codigo, sin descripcion ni
- *       costo) o los de LISTA 336 (texto en la moneda, sin codigo ni costo), o un encabezado repetido. No es un
+ *   <li><b>salteada</b>: un titulo, como los "Familia: NNN - Nombre" de M-S (texto en el codigo, sin descripcion y con
+ *       la celda del costo vacia) o los de LISTA 336 (texto en la moneda, sin codigo ni costo), o un encabezado repetido. No es un
  *       error ni un articulo: solo se cuenta;</li>
  *   <li><b>de datos</b>: cualquier otra. Una fila con codigo y descripcion pero sin costo sigue siendo de datos: el
  *       planificador la marca como error, como en CU-04.</li>
@@ -102,7 +102,8 @@ public final class ZonaDeDatos {
 
     /** Sin costo numerico ni descripcion, y texto en el codigo (M-S) o en la moneda de una fila sin codigo (LISTA 336). */
     private static boolean esTitulo(FilaLeida fila, MapeoLista mapeo) {
-        boolean sinCosto = ParserImporte.parsear(fila.celda(mapeo.columnaCosto())).isEmpty();
+        // Un texto en el costo, aunque no sea un numero, es una fila con un costo mal cargado: no es un titulo.
+        boolean sinCosto = fila.celda(mapeo.columnaCosto()).vacia();
         boolean descripcionMapeada = mapeo.columnaDescripcion() != null;
         boolean sinDescripcion = !descripcionMapeada || fila.celda(mapeo.columnaDescripcion()).vacia();
         if (!sinCosto || !sinDescripcion) {

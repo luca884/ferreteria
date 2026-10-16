@@ -33,6 +33,110 @@ class PlanificadorImportacionTest {
         return new BigDecimal(valor);
     }
 
+    /**
+     * Una fila con mas columnas que las de siempre: codigo (0), descripcion (1), costo (2) y despues, en este orden,
+     * moneda (3), precio sin IVA (4), precio con IVA (5), % IVA (6), ajustes 1 a 3 (7 a 9), codigo de barras (10),
+     * unidad (11) y rubro (12). Lo que no se pasa queda vacio.
+     */
+    private static FilaLeida filaDe(int numero, String... textos) {
+        return filaEnHoja(0, numero, textos);
+    }
+
+    private static FilaLeida filaEnHoja(int hoja, int numero, String... textos) {
+        List<Celda> celdas = new ArrayList<>();
+        for (String texto : textos) {
+            celdas.add(celda(texto));
+        }
+        return new FilaLeida(hoja, numero, celdas);
+    }
+
+    /** Mapeo con las columnas de {@link #filaDe}, de a una. */
+    private static final class M {
+        private Integer moneda;
+        private Integer sinIva;
+        private Integer conIva;
+        private Integer iva;
+        private Integer ajuste1;
+        private Integer ajuste2;
+        private Integer ajuste3;
+        private Integer barras;
+        private Integer unidad;
+        private Integer rubro;
+        private Moneda monedaFija;
+        private List<Integer> hojas;
+        private int filaDesde = 2;
+
+        static M mapeo() {
+            return new M();
+        }
+
+        M moneda() {
+            moneda = 3;
+            return this;
+        }
+
+        M monedaFija(Moneda valor) {
+            monedaFija = valor;
+            return this;
+        }
+
+        M parDeIva() {
+            sinIva = 4;
+            conIva = 5;
+            return this;
+        }
+
+        M iva() {
+            iva = 6;
+            return this;
+        }
+
+        M ajuste1() {
+            ajuste1 = 7;
+            return this;
+        }
+
+        M ajuste2() {
+            ajuste2 = 8;
+            return this;
+        }
+
+        M ajuste3() {
+            ajuste3 = 9;
+            return this;
+        }
+
+        M barras() {
+            barras = 10;
+            return this;
+        }
+
+        M unidad() {
+            unidad = 11;
+            return this;
+        }
+
+        M rubro() {
+            rubro = 12;
+            return this;
+        }
+
+        M hojas(Integer... indices) {
+            hojas = List.of(indices);
+            return this;
+        }
+
+        M filaDesde(int valor) {
+            filaDesde = valor;
+            return this;
+        }
+
+        MapeoLista build() {
+            return new MapeoLista(0, filaDesde, 0, 1, 2, null, hojas, moneda, monedaFija, sinIva, conIva, iva,
+                ajuste1, ajuste2, ajuste3, barras, unidad, rubro);
+        }
+    }
+
     /** Articulo vigente de prueba: IVA_21, activo, sin rubro ni margen propio. */
     private static final class Art {
         private final long id;
@@ -44,6 +148,7 @@ class PlanificadorImportacionTest {
         private Long rubroId;
         private String precioFinal = "0.00";
         private Moneda moneda = Moneda.ARS;
+        private Ajustes ajustes = Ajustes.NINGUNO;
 
         private Art(long id, String codigoProveedor, String costo) {
             this.id = id;
@@ -85,9 +190,14 @@ class PlanificadorImportacionTest {
             return this;
         }
 
+        Art ajustes(String a1, String a2, String a3) {
+            this.ajustes = new Ajustes(a1 == null ? null : bd(a1), a2 == null ? null : bd(a2), a3 == null ? null : bd(a3));
+            return this;
+        }
+
         ArticuloVigente vigente() {
             return new ArticuloVigente(id, "INT-" + id, codigoProveedor, "Articulo " + id, bd(costo), bd(precioFinal),
-                margen == null ? null : bd(margen), rubroId, iva, activo, moneda);
+                margen == null ? null : bd(margen), rubroId, iva, activo, moneda, ajustes);
         }
     }
 
@@ -95,9 +205,13 @@ class PlanificadorImportacionTest {
     private static final class Escenario {
         private final List<FilaLeida> filas = new ArrayList<>();
         private final List<ArticuloVigente> articulos = new ArrayList<>();
-        private final Map<Long, ContextoPrecio> contextoPorRubro = new HashMap<>();
+        private final Map<Long, String> margenesDeRubro = new HashMap<>();
         private final Set<String> codigosInternosOcupados = new HashSet<>();
-        private ContextoPrecio contextoSinRubro = new ContextoPrecio(null, bd("30.00"), bd("10"));
+        private final Map<String, Long> rubrosPorNombre = new HashMap<>();
+        private final Set<String> barrasOcupadas = new HashSet<>();
+        private List<String> hojas = List.of();
+        private BigDecimal cotizacion;
+        private boolean cotizacionActiva = true;
         private MapeoLista mapeo = MAPEO;
         private boolean incluyeIva;
         private Bonificaciones bonificaciones = Bonificaciones.NINGUNA;
@@ -133,7 +247,7 @@ class PlanificadorImportacionTest {
         }
 
         Escenario contextoRubro(long rubroId, String margenRubro) {
-            contextoPorRubro.put(rubroId, new ContextoPrecio(bd(margenRubro), bd("30.00"), bd("10")));
+            margenesDeRubro.put(rubroId, margenRubro);
             return this;
         }
 
@@ -148,10 +262,42 @@ class PlanificadorImportacionTest {
             return this;
         }
 
+        /** El dolar vigente de la ferreteria: sin llamarlo no hay ninguna cotizacion. */
+        Escenario dolar(String valor) {
+            this.cotizacion = bd(valor);
+            return this;
+        }
+
+        Escenario cotizacionApagada() {
+            this.cotizacionActiva = false;
+            return this;
+        }
+
+        /** Nombres de las hojas del libro: con ellos los avisos llevan la hoja. */
+        Escenario hojas(String... nombres) {
+            this.hojas = List.of(nombres);
+            return this;
+        }
+
+        Escenario rubroPorNombre(String nombre, long rubroId) {
+            rubrosPorNombre.put(NormalizadorCodigo.clave(nombre), rubroId);
+            return this;
+        }
+
+        Escenario barrasOcupadas(String... codigos) {
+            barrasOcupadas.addAll(List.of(codigos));
+            return this;
+        }
+
         PlanImportacion planificar() {
+            Map<Long, ContextoPrecio> contextoPorRubro = new HashMap<>();
+            margenesDeRubro.forEach((id, margen) ->
+                contextoPorRubro.put(id, new ContextoPrecio(bd(margen), bd("30.00"), bd("10"), cotizacion)));
+            ContextoPrecio contextoSinRubro = new ContextoPrecio(null, bd("30.00"), bd("10"), cotizacion);
             return PlanificadorImportacion.planificar(new EntradaPlan(
                 filas, mapeo, incluyeIva, bonificaciones, articulos, contextoPorRubro, contextoSinRubro,
-                codigosInternosOcupados, mapeoGuardado, encabezado));
+                codigosInternosOcupados, mapeoGuardado, encabezado, hojas, cotizacionActiva, rubrosPorNombre,
+                barrasOcupadas));
         }
     }
 
@@ -163,51 +309,123 @@ class PlanificadorImportacionTest {
         return avisos.stream().map(AvisoDeFila::mensaje).toList();
     }
 
-    // ------------------------------------------------------------------ articulos en dolares
+    // ------------------------------------------------------------------ moneda por fila (T-125)
 
     @Nested
-    @DisplayName("guarda: un articulo existente en dolares no se actualiza desde la lista (hasta el corte de importacion)")
-    class ArticuloEnDolares {
+    @DisplayName("T-125: moneda por fila, sin la guarda de dolares")
+    class MonedaPorFila {
+
+        private static final String COSTO_USD_12 = "12";
 
         @Test
-        @DisplayName("la fila de un articulo en USD es un error en espanol y no es cambio, alta ni sin cambio")
-        void filaDeUnArticuloEnDolares() {
-            PlanImportacion plan = escenario()
+        @DisplayName("un articulo en USD con costo 10 y la fila USD 12 sube y su precio es 18.880 (12 x 1.000 x 1,30 x 1,21 = 18.876)")
+        void articuloEnDolaresSube() {
+            PlanImportacion plan = escenario().dolar("1000").mapeo(M.mapeo().moneda().build())
                 .articulos(Art.art(1, "USD-1", "10").enDolares().precio("15730.00"))
-                .filas(fila(2, "USD-1", "x", "200"))
+                .filas(filaDe(2, "USD-1", "x", COSTO_USD_12, "USD"))
                 .planificar();
 
-            assertThat(plan.errores()).containsExactly(new AvisoDeFila(2, "USD-1",
-                "El artículo está en dólares: por ahora su costo no se actualiza desde una lista. Cargalo a mano."));
+            assertThat(plan.errores()).isEmpty();
+            assertThat(plan.cambios()).hasSize(1);
+            CambioPlaneado cambio = plan.cambios().get(0);
+            assertThat(cambio.costoAnterior()).isEqualByComparingTo("10");
+            assertThat(cambio.costoNuevo()).isEqualByComparingTo("12.00");
+            assertThat(cambio.precioAnterior()).isEqualByComparingTo("15730");
+            assertThat(cambio.precioNuevo()).isEqualByComparingTo("18880");
+            assertThat(cambio.monedaAnterior()).isEqualTo(Moneda.USD);
+            assertThat(cambio.monedaNueva()).isEqualTo(Moneda.USD);
+            assertThat(plan.conteos()).isEqualTo(new ConteosImportacion(1, 0, 0, 0, 0, 0));
+        }
+
+        @Test
+        @DisplayName("la fila USD 10 de un articulo en USD con costo 10 es sin cambio y no es un error")
+        void articuloEnDolaresSinCambio() {
+            PlanImportacion plan = escenario().dolar("1000").mapeo(M.mapeo().moneda().build())
+                .articulos(Art.art(1, "USD-1", "10").enDolares().precio("15730.00"))
+                .filas(filaDe(2, "USD-1", "x", "10", "USD"))
+                .planificar();
+
+            assertThat(plan.errores()).isEmpty();
             assertThat(plan.cambios()).isEmpty();
-            assertThat(plan.altas()).isEmpty();
-            assertThat(plan.sinCambio()).isEmpty();
-            assertThat(plan.conteos().conError()).isEqualTo(1);
+            assertThat(plan.sinCambio()).extracting(PrecioListaPlaneado::articuloId).containsExactly(1L);
+            assertThat(plan.conteos()).isEqualTo(new ConteosImportacion(0, 0, 0, 1, 0, 0));
         }
 
         @Test
-        @DisplayName("aunque el costo de la lista coincida, sigue siendo error (no se sincroniza el precio de lista)")
-        void tambienConElMismoCosto() {
-            PlanImportacion plan = escenario()
-                .articulos(Art.art(1, "USD-1", "100").enDolares())
-                .filas(fila(2, "USD-1", "x", "121"))
+        @DisplayName("un articulo en pesos con costo 1.000 y la fila USD 10 cambia de moneda: costo 10, precio 15.730, ni sube ni baja")
+        void deArsAUsd() {
+            PlanImportacion plan = escenario().dolar("1000").mapeo(M.mapeo().moneda().build())
+                .articulos(Art.art(1, "A-1", "1000").precio("1580.00"))
+                .filas(filaDe(2, "A-1", "x", "10", "USD"))
                 .planificar();
 
-            assertThat(plan.errores()).extracting(AvisoDeFila::fila).containsExactly(2);
-            assertThat(plan.sinCambio()).isEmpty();
+            assertThat(plan.cambios()).isEmpty();
+            assertThat(plan.cambiosDeMoneda()).hasSize(1);
+            CambioPlaneado cambio = plan.cambiosDeMoneda().get(0);
+            assertThat(cambio.monedaAnterior()).isEqualTo(Moneda.ARS);
+            assertThat(cambio.monedaNueva()).isEqualTo(Moneda.USD);
+            assertThat(cambio.costoAnterior()).isEqualByComparingTo("1000");
+            assertThat(cambio.costoNuevo()).isEqualByComparingTo("10.00");
+            assertThat(cambio.precioAnterior()).isEqualByComparingTo("1580");
+            assertThat(cambio.precioNuevo()).isEqualByComparingTo("15730");
+            assertThat(plan.conteos()).isEqualTo(new ConteosImportacion(0, 0, 0, 0, 0, 0, 1, 0, 0));
         }
 
         @Test
-        @DisplayName("las filas de articulos en pesos de la misma lista se clasifican como siempre")
-        void lasFilasEnPesosNoCambian() {
-            PlanImportacion plan = escenario()
-                .articulos(Art.art(1, "USD-1", "10").enDolares(), Art.art(2, "ARS-1", "50"))
-                .filas(fila(2, "USD-1", "x", "200"), fila(3, "ARS-1", "x", "121"))
+        @DisplayName("un articulo en USD con costo 10 y la fila ARG 12.000 pasa a pesos: costo 12.000 y precio 18.880")
+        void deUsdAArs() {
+            PlanImportacion plan = escenario().dolar("1000").mapeo(M.mapeo().moneda().build())
+                .articulos(Art.art(1, "A-1", "10").enDolares().precio("15730.00"))
+                .filas(filaDe(2, "A-1", "x", "12000", "ARG"))
                 .planificar();
 
-            assertThat(plan.errores()).extracting(AvisoDeFila::fila).containsExactly(2);
-            assertThat(plan.cambios()).extracting(CambioPlaneado::fila).containsExactly(3);
-            assertThat(plan.cambios().get(0).costoNuevo()).isEqualByComparingTo("121");
+            assertThat(plan.cambiosDeMoneda()).hasSize(1);
+            CambioPlaneado cambio = plan.cambiosDeMoneda().get(0);
+            assertThat(cambio.monedaAnterior()).isEqualTo(Moneda.USD);
+            assertThat(cambio.monedaNueva()).isEqualTo(Moneda.ARS);
+            assertThat(cambio.costoNuevo()).isEqualByComparingTo("12000.00");
+            assertThat(cambio.precioNuevo()).isEqualByComparingTo("18880");
+        }
+
+        @Test
+        @DisplayName("100 pesos contra 100 USD no se comparan: cambian de moneda = 1 y suben = 0")
+        void cienPesosContraCienDolares() {
+            PlanImportacion plan = escenario().dolar("1000").mapeo(M.mapeo().moneda().build())
+                .articulos(Art.art(1, "A-1", "100"))
+                .filas(filaDe(2, "A-1", "x", "100", "USD"))
+                .planificar();
+
+            assertThat(plan.conteos().cambianMoneda()).isEqualTo(1);
+            assertThat(plan.conteos().suben()).isZero();
+            assertThat(plan.conteos().bajan()).isZero();
+            assertThat(plan.conteos().sinCambio()).isZero();
+        }
+
+        @Test
+        @DisplayName("con la misma moneda se compara como siempre: sube, baja y sin cambio, en pesos con la columna mapeada")
+        void mismaMonedaSeCompara() {
+            PlanImportacion plan = escenario().mapeo(M.mapeo().moneda().build())
+                .articulos(Art.art(1, "A-1", "100"), Art.art(2, "A-2", "100"), Art.art(3, "A-3", "100"))
+                .filas(filaDe(2, "A-1", "x", "120", "ARG"), filaDe(3, "A-2", "x", "80", "ARS"),
+                    filaDe(4, "A-3", "x", "100", "ARG"))
+                .planificar();
+
+            assertThat(plan.conteos()).isEqualTo(new ConteosImportacion(1, 1, 0, 1, 0, 0));
+            assertThat(plan.cambiosDeMoneda()).isEmpty();
+        }
+
+        @Test
+        @DisplayName("sin columna de moneda el articulo existente conserva la suya: un USD sigue en USD")
+        void sinColumnaConservaLaMoneda() {
+            PlanImportacion plan = escenario().dolar("1000")
+                .articulos(Art.art(1, "USD-1", "10").enDolares().precio("15730.00"), Art.art(2, "ARS-1", "50"))
+                .filas(fila(2, "USD-1", "x", "12"), fila(3, "ARS-1", "x", "121"))
+                .planificar();
+
+            assertThat(plan.errores()).isEmpty();
+            assertThat(plan.cambiosDeMoneda()).isEmpty();
+            assertThat(plan.cambios()).extracting(CambioPlaneado::monedaNueva).containsExactly(Moneda.USD, Moneda.ARS);
+            assertThat(plan.cambios().get(0).precioNuevo()).isEqualByComparingTo("18880");
         }
 
         @Test
@@ -219,6 +437,719 @@ class PlanificadorImportacionTest {
                 .planificar();
 
             assertThat(plan.noEstan()).extracting(ArticuloVigente::id).containsExactly(1L);
+        }
+
+        @Test
+        @DisplayName("una moneda que no se reconoce o vacia es un error de esa fila y las demas siguen")
+        void monedaConError() {
+            PlanImportacion plan = escenario().dolar("1000").mapeo(M.mapeo().moneda().build())
+                .articulos(Art.art(1, "A-1", "100"), Art.art(2, "A-2", "100"), Art.art(3, "A-3", "100"))
+                .filas(filaDe(2, "A-1", "x", "120", "EUR"), filaDe(3, "A-2", "x", "120", ""),
+                    filaDe(4, "A-3", "x", "120", "ARG"))
+                .planificar();
+
+            assertThat(plan.errores()).extracting(AvisoDeFila::fila).containsExactly(2, 3);
+            assertThat(mensajes(plan.errores())).containsExactly("Moneda no reconocida: «EUR»", "Falta la moneda");
+            assertThat(plan.cambios()).extracting(CambioPlaneado::fila).containsExactly(4);
+        }
+
+        @Test
+        @DisplayName("con moneda fija USD todas las filas son dolares")
+        void monedaFija() {
+            PlanImportacion plan = escenario().dolar("1000").mapeo(M.mapeo().monedaFija(Moneda.USD).build())
+                .articulos(Art.art(1, "A-1", "1000").precio("1580.00"))
+                .filas(fila(2, "A-1", "x", "10"))
+                .planificar();
+
+            assertThat(plan.cambiosDeMoneda()).extracting(CambioPlaneado::monedaNueva).containsExactly(Moneda.USD);
+        }
+    }
+
+    // ------------------------------------------------------------------ cotizacion por fila (T-126)
+
+    @Nested
+    @DisplayName("T-126: reglas de cotizacion por fila")
+    class CotizacionPorFila {
+
+        private static final String APAGADA = "Activá la cotización para cargar artículos en dólares";
+        private static final String SIN_COTIZACION = "Todavía no hay cotización del dólar. Probá en unos minutos";
+
+        @Test
+        @DisplayName("cotizacion apagada y fila USD de un articulo nuevo: error en esa fila y las demas son normales")
+        void apagadaYNuevoEnDolares() {
+            PlanImportacion plan = escenario().dolar("1000").cotizacionApagada().mapeo(M.mapeo().moneda().build())
+                .articulos(Art.art(1, "A-1", "100"))
+                .filas(filaDe(2, "N-USD", "Nuevo", "10", "USD"), filaDe(3, "N-ARS", "Nuevo", "10", "ARG"),
+                    filaDe(4, "A-1", "x", "120", "ARG"))
+                .planificar();
+
+            assertThat(plan.errores()).containsExactly(new AvisoDeFila(2, "N-USD", APAGADA));
+            assertThat(plan.altas()).extracting(AltaPlaneada::codigo).containsExactly("N-ARS");
+            assertThat(plan.cambios()).extracting(CambioPlaneado::fila).containsExactly(4);
+        }
+
+        @Test
+        @DisplayName("cotizacion apagada y un articulo en pesos que pasaria a USD: el mismo error, y no cambia de moneda")
+        void apagadaYDeArsAUsd() {
+            PlanImportacion plan = escenario().dolar("1000").cotizacionApagada().mapeo(M.mapeo().moneda().build())
+                .articulos(Art.art(1, "A-1", "1000"))
+                .filas(filaDe(2, "A-1", "x", "10", "USD"))
+                .planificar();
+
+            assertThat(plan.errores()).containsExactly(new AvisoDeFila(2, "A-1", APAGADA));
+            assertThat(plan.cambiosDeMoneda()).isEmpty();
+            assertThat(plan.conteos()).isEqualTo(new ConteosImportacion(0, 0, 0, 0, 0, 1));
+        }
+
+        @Test
+        @DisplayName("cotizacion apagada y un articulo que ya es USD con la fila USD 12: se actualiza con el dolar vigente")
+        void apagadaYYaEsUsd() {
+            PlanImportacion plan = escenario().dolar("1000").cotizacionApagada().mapeo(M.mapeo().moneda().build())
+                .articulos(Art.art(1, "A-1", "10").enDolares().precio("15730.00"))
+                .filas(filaDe(2, "A-1", "x", "12", "USD"))
+                .planificar();
+
+            assertThat(plan.errores()).isEmpty();
+            assertThat(plan.cambios()).hasSize(1);
+            assertThat(plan.cambios().get(0).costoNuevo()).isEqualByComparingTo("12");
+            assertThat(plan.cambios().get(0).precioNuevo()).isEqualByComparingTo("18880");
+        }
+
+        @Test
+        @DisplayName("sin ninguna cotizacion guardada: la fila que queda en USD da error y las filas en pesos se importan")
+        void sinNingunaCotizacion() {
+            PlanImportacion plan = escenario().mapeo(M.mapeo().moneda().build())
+                .articulos(Art.art(1, "U-1", "10").enDolares(), Art.art(2, "A-1", "100"))
+                .filas(filaDe(2, "N-USD", "Nuevo", "10", "USD"), filaDe(3, "U-1", "x", "12", "USD"),
+                    filaDe(4, "A-1", "x", "120", "ARG"), filaDe(5, "N-ARS", "Nuevo", "10", "ARG"))
+                .planificar();
+
+            assertThat(plan.errores()).containsExactly(
+                new AvisoDeFila(2, "N-USD", SIN_COTIZACION), new AvisoDeFila(3, "U-1", SIN_COTIZACION));
+            assertThat(plan.cambios()).extracting(CambioPlaneado::fila).containsExactly(4);
+            assertThat(plan.altas()).extracting(AltaPlaneada::codigo).containsExactly("N-ARS");
+        }
+
+        @Test
+        @DisplayName("con cotizacion apagada y sin ningun valor, un nuevo en USD da primero el error de la cotizacion apagada")
+        void apagadaGanaSobreSinCotizacion() {
+            PlanImportacion plan = escenario().cotizacionApagada().mapeo(M.mapeo().moneda().build())
+                .filas(filaDe(2, "N-USD", "Nuevo", "10", "USD"))
+                .planificar();
+
+            assertThat(mensajes(plan.errores())).containsExactly(APAGADA);
+        }
+
+        @Test
+        @DisplayName("una fila en pesos no se ve afectada por la cotizacion apagada ni por no tener ninguna")
+        void filasEnPesosSinEfecto() {
+            PlanImportacion plan = escenario().cotizacionApagada().mapeo(M.mapeo().moneda().build())
+                .articulos(Art.art(1, "A-1", "100"))
+                .filas(filaDe(2, "A-1", "x", "120", "ARG"), filaDe(3, "N-1", "Nuevo", "10", "ARS"))
+                .planificar();
+
+            assertThat(plan.errores()).isEmpty();
+            assertThat(plan.cambios()).hasSize(1);
+            assertThat(plan.altas()).hasSize(1);
+        }
+    }
+
+    // ------------------------------------------------------------------ alicuota de la fila y "Corrige" (T-127)
+
+    @Nested
+    @DisplayName("T-127: alicuota de la fila y tipo 'Corrige'")
+    class AlicuotaDeLaFila {
+
+        private static final String IVA_19 =
+            "El IVA 19 no es válido. Las alícuotas válidas son 0, 2,5, 5, 10,5, 21 y 27.";
+
+        @Test
+        @DisplayName("IVA_21, costo 10.000 y la fila con 10,5 % y la misma lista: corrige, el costo no cambia y el precio baja de 15.730 a 14.370")
+        void corrigeElIva() {
+            PlanImportacion plan = escenario().mapeo(M.mapeo().iva().build())
+                .articulos(Art.art(1, "A-1", "10000").precio("15730.00"))
+                .filas(filaDe(2, "A-1", "x", "10000", "", "", "", "10,5"))
+                .planificar();
+
+            assertThat(plan.cambios()).isEmpty();
+            assertThat(plan.sinCambio()).isEmpty();
+            assertThat(plan.correcciones()).hasSize(1);
+            CambioPlaneado corrige = plan.correcciones().get(0);
+            assertThat(corrige.costoAnterior()).isEqualByComparingTo("10000");
+            assertThat(corrige.costoNuevo()).isEqualByComparingTo("10000");
+            assertThat(corrige.precioAnterior()).isEqualByComparingTo("15730");
+            assertThat(corrige.precioNuevo()).isEqualByComparingTo("14370");
+            assertThat(corrige.alicuotaAnterior()).isEqualTo(AlicuotaIva.IVA_21);
+            assertThat(corrige.alicuotaNueva()).isEqualTo(AlicuotaIva.IVA_10_5);
+            assertThat(plan.conteos()).isEqualTo(new ConteosImportacion(0, 0, 0, 0, 0, 0, 0, 1, 0));
+        }
+
+        @Test
+        @DisplayName("una lista que incluye IVA, precio 1.105 y alicuota 10,5 sobre un articulo en IVA_21: el costo es 1.000,00 con la alicuota NUEVA")
+        void elCostoUsaLaAlicuotaNueva() {
+            PlanImportacion plan = escenario().incluyeIva().mapeo(M.mapeo().iva().build())
+                .articulos(Art.art(1, "A-1", "900"))
+                .filas(filaDe(2, "A-1", "x", "1105", "", "", "", "10,5"))
+                .planificar();
+
+            assertThat(plan.cambios()).hasSize(1);
+            assertThat(plan.cambios().get(0).costoNuevo()).isEqualByComparingTo("1000.00");
+            assertThat(plan.cambios().get(0).alicuotaNueva()).isEqualTo(AlicuotaIva.IVA_10_5);
+        }
+
+        @Test
+        @DisplayName("sin la columna de IVA, ese mismo 1.105 se divide por la alicuota del articulo (1,21): 913,22")
+        void sinColumnaUsaLaDelArticulo() {
+            PlanImportacion plan = escenario().incluyeIva()
+                .articulos(Art.art(1, "A-1", "900"))
+                .filas(fila(2, "A-1", "x", "1105"))
+                .planificar();
+
+            assertThat(plan.cambios().get(0).costoNuevo()).isEqualByComparingTo("913.22");
+            assertThat(plan.cambios().get(0).alicuotaNueva()).isEqualTo(AlicuotaIva.IVA_21);
+        }
+
+        @Test
+        @DisplayName("una fila que sube y ademas cambia la alicuota es 'sube' y muestra la alicuota anterior y la nueva")
+        void subeYCambiaLaAlicuota() {
+            PlanImportacion plan = escenario().mapeo(M.mapeo().iva().build())
+                .articulos(Art.art(1, "A-1", "10000").precio("15730.00"))
+                .filas(filaDe(2, "A-1", "x", "12000", "", "", "", "10,5"))
+                .planificar();
+
+            assertThat(plan.correcciones()).isEmpty();
+            assertThat(plan.cambios()).hasSize(1);
+            assertThat(plan.cambios().get(0).alicuotaAnterior()).isEqualTo(AlicuotaIva.IVA_21);
+            assertThat(plan.cambios().get(0).alicuotaNueva()).isEqualTo(AlicuotaIva.IVA_10_5);
+            assertThat(plan.conteos()).isEqualTo(new ConteosImportacion(1, 0, 0, 0, 0, 0));
+        }
+
+        @Test
+        @DisplayName("costo, IVA y ajustes iguales: sin cambio, sin alicuota ni ajustes que corregir")
+        void todoIgualEsSinCambio() {
+            PlanImportacion plan = escenario().mapeo(M.mapeo().iva().build())
+                .articulos(Art.art(1, "A-1", "10000").precio("15730.00"))
+                .filas(filaDe(2, "A-1", "x", "10000", "", "", "", "21"))
+                .planificar();
+
+            assertThat(plan.correcciones()).isEmpty();
+            assertThat(plan.sinCambio()).hasSize(1);
+            assertThat(plan.sinCambio().get(0).alicuotaNueva()).isNull();
+            assertThat(plan.conteos()).isEqualTo(new ConteosImportacion(0, 0, 0, 1, 0, 0));
+        }
+
+        @Test
+        @DisplayName("una correccion de IVA que no mueve el precio final (redondeo) es 'sin cambio' y guarda la alicuota nueva")
+        void correccionQueNoMueveElPrecio() {
+            // 1 x 1,30 x 1,21 = 1,573 y 1 x 1,30 x 1,105 = 1,4365: los dos suben a 10 con multiplo 10.
+            PlanImportacion plan = escenario().mapeo(M.mapeo().iva().build())
+                .articulos(Art.art(1, "A-1", "1").precio("10.00"))
+                .filas(filaDe(2, "A-1", "x", "1", "", "", "", "10,5"))
+                .planificar();
+
+            assertThat(plan.correcciones()).isEmpty();
+            assertThat(plan.sinCambio()).hasSize(1);
+            assertThat(plan.sinCambio().get(0).alicuotaNueva()).isEqualTo(AlicuotaIva.IVA_10_5);
+            assertThat(plan.conteos().corrigen()).isZero();
+        }
+
+        @Test
+        @DisplayName("sin datos de IVA en la fila (celda vacia) el existente conserva la suya y el nuevo entra con IVA_21")
+        void sinDatoDeIva() {
+            PlanImportacion plan = escenario().mapeo(M.mapeo().iva().parDeIva().build())
+                .articulos(Art.art(1, "A-1", "100").iva(AlicuotaIva.IVA_10_5))
+                .filas(filaDe(2, "A-1", "x", "120", "", "", "", ""), filaDe(3, "N-1", "Nuevo", "10", "", "", "", ""))
+                .planificar();
+
+            assertThat(plan.cambios().get(0).alicuotaNueva()).isEqualTo(AlicuotaIva.IVA_10_5);
+            assertThat(plan.altas().get(0).alicuotaIva()).isEqualTo(AlicuotaIva.IVA_21);
+        }
+
+        @Test
+        @DisplayName("un articulo nuevo toma la alicuota de la fila: 10,5 es IVA_10_5 y el costo usa esa alicuota")
+        void nuevoConAlicuota() {
+            PlanImportacion plan = escenario().incluyeIva().mapeo(M.mapeo().iva().build())
+                .filas(filaDe(2, "N-1", "Nuevo", "1105", "", "", "", "10,5"))
+                .planificar();
+
+            assertThat(plan.altas()).hasSize(1);
+            assertThat(plan.altas().get(0).alicuotaIva()).isEqualTo(AlicuotaIva.IVA_10_5);
+            assertThat(plan.altas().get(0).costo()).isEqualByComparingTo("1000.00");
+            assertThat(plan.altas().get(0).precioNuevo()).isEqualByComparingTo("1440");
+        }
+
+        @Test
+        @DisplayName("un IVA de 19 es un error con las validas y no se crea ni se actualiza nada de esa fila")
+        void ivaInvalido() {
+            PlanImportacion plan = escenario().mapeo(M.mapeo().iva().build())
+                .articulos(Art.art(1, "A-1", "100"))
+                .filas(filaDe(2, "A-1", "x", "120", "", "", "", "19"), filaDe(3, "N-1", "Nuevo", "10", "", "", "", "19"),
+                    filaDe(4, "N-2", "Nuevo", "10", "", "", "", "21"))
+                .planificar();
+
+            assertThat(plan.errores()).containsExactly(
+                new AvisoDeFila(2, "A-1", IVA_19), new AvisoDeFila(3, "N-1", IVA_19));
+            assertThat(plan.cambios()).isEmpty();
+            assertThat(plan.altas()).extracting(AltaPlaneada::codigo).containsExactly("N-2");
+        }
+
+        @Test
+        @DisplayName("el IVA sale del par sin IVA / con IVA: 1.000 y 1.105 dan 10,5 sin advertencia; 1.000 y 1.190 dan 21 con advertencia")
+        void ivaDelPar() {
+            PlanImportacion plan = escenario().mapeo(M.mapeo().parDeIva().build())
+                .articulos(Art.art(1, "A-1", "100"), Art.art(2, "A-2", "100"))
+                .filas(filaDe(2, "A-1", "x", "120", "", "1000", "1105"), filaDe(3, "A-2", "x", "120", "", "1000", "1190"))
+                .planificar();
+
+            assertThat(plan.cambios()).extracting(CambioPlaneado::alicuotaNueva)
+                .containsExactly(AlicuotaIva.IVA_10_5, AlicuotaIva.IVA_21);
+            assertThat(plan.advertencias()).hasSize(1);
+            assertThat(plan.advertencias().get(0).fila()).isEqualTo(3);
+            assertThat(plan.advertencias().get(0).mensaje()).contains("19").contains("21");
+        }
+
+        @Test
+        @DisplayName("una fila con error de IVA no deja la advertencia del par")
+        void filaConErrorNoAdvierte() {
+            PlanImportacion plan = escenario().mapeo(M.mapeo().parDeIva().build())
+                .articulos(Art.art(1, "A-1", "100"))
+                .filas(filaDe(2, "A-1", "x", "0", "", "1000", "1190"))
+                .planificar();
+
+            assertThat(plan.errores()).hasSize(1);
+            assertThat(plan.advertencias()).isEmpty();
+        }
+    }
+
+    // ------------------------------------------------------------------ ajustes por posicion (T-128)
+
+    @Nested
+    @DisplayName("T-128: descuentos y recargos por posicion (conservar o borrar)")
+    class AjustesPorPosicion {
+
+        @Test
+        @DisplayName("sin columnas de ajuste el articulo conserva su ajuste 1 de -5 y el costo es 950,00")
+        void sinColumnasSeConservan() {
+            PlanImportacion plan = escenario()
+                .articulos(Art.art(1, "A-1", "900").ajustes("-5", null, null))
+                .filas(fila(2, "A-1", "x", "1000"))
+                .planificar();
+
+            assertThat(plan.cambios()).hasSize(1);
+            assertThat(plan.cambios().get(0).costoNuevo()).isEqualByComparingTo("950.00");
+            assertThat(plan.cambios().get(0).ajustesNuevos()).isEqualTo(new Ajustes(bd("-5"), null, null));
+            assertThat(plan.cambios().get(0).ajustesAnteriores()).isEqualTo(new Ajustes(bd("-5"), null, null));
+        }
+
+        @Test
+        @DisplayName("con la columna 1 mapeada y la celda vacia el ajuste se borra y el costo es 1.000,00")
+        void celdaVaciaBorra() {
+            PlanImportacion plan = escenario().mapeo(M.mapeo().ajuste1().build())
+                .articulos(Art.art(1, "A-1", "950").ajustes("-5", null, null))
+                .filas(filaDe(2, "A-1", "x", "1000", "", "", "", "", ""))
+                .planificar();
+
+            assertThat(plan.cambios()).hasSize(1);
+            assertThat(plan.cambios().get(0).costoNuevo()).isEqualByComparingTo("1000.00");
+            assertThat(plan.cambios().get(0).ajustesNuevos()).isEqualTo(Ajustes.NINGUNO);
+        }
+
+        @Test
+        @DisplayName("ajuste 1 de -5, ajuste 2 de +3 y solo la columna 2 mapeada con +4: el 1 se conserva y el 2 pasa a +4")
+        void unaColumnaPorPosicion() {
+            PlanImportacion plan = escenario().mapeo(M.mapeo().ajuste2().build())
+                .articulos(Art.art(1, "A-1", "900").ajustes("-5", "3", null))
+                .filas(filaDe(2, "A-1", "x", "1000", "", "", "", "", "", "+4"))
+                .planificar();
+
+            assertThat(plan.cambios().get(0).ajustesNuevos()).isEqualTo(new Ajustes(bd("-5"), bd("4"), null));
+            // 1000 x 0,95 x 1,04
+            assertThat(plan.cambios().get(0).costoNuevo()).isEqualByComparingTo("988.00");
+        }
+
+        @Test
+        @DisplayName("la fila con -5 igual al del articulo y la misma lista es sin cambio")
+        void mismoAjusteEsSinCambio() {
+            PlanImportacion plan = escenario().mapeo(M.mapeo().ajuste1().build())
+                .articulos(Art.art(1, "A-1", "950").ajustes("-5", null, null))
+                .filas(filaDe(2, "A-1", "x", "1000", "", "", "", "", "-5"))
+                .planificar();
+
+            assertThat(plan.sinCambio()).hasSize(1);
+            assertThat(plan.correcciones()).isEmpty();
+            assertThat(plan.sinCambio().get(0).ajustesNuevos()).isNull();
+        }
+
+        @Test
+        @DisplayName("un articulo sin ajustes y la celda vacia: sin cambio")
+        void sinAjustesYCeldaVacia() {
+            PlanImportacion plan = escenario().mapeo(M.mapeo().ajuste1().build())
+                .articulos(Art.art(1, "A-1", "1000"))
+                .filas(filaDe(2, "A-1", "x", "1000", "", "", "", "", ""))
+                .planificar();
+
+            assertThat(plan.sinCambio()).hasSize(1);
+            assertThat(plan.correcciones()).isEmpty();
+        }
+
+        @Test
+        @DisplayName("mismo costo pero otro ajuste: corrige (el ajuste se guarda aunque el costo no cambie)")
+        void mismoCostoOtroAjuste() {
+            // La lista bajo a 950 y ya no trae el descuento: el costo es 950 en los dos casos.
+            PlanImportacion plan = escenario().mapeo(M.mapeo().ajuste1().build())
+                .articulos(Art.art(1, "A-1", "950").ajustes("-5", null, null))
+                .filas(filaDe(2, "A-1", "x", "950", "", "", "", "", ""))
+                .planificar();
+
+            assertThat(plan.correcciones()).hasSize(1);
+            assertThat(plan.correcciones().get(0).ajustesAnteriores()).isEqualTo(new Ajustes(bd("-5"), null, null));
+            assertThat(plan.correcciones().get(0).ajustesNuevos()).isEqualTo(Ajustes.NINGUNO);
+            assertThat(plan.conteos().corrigen()).isEqualTo(1);
+        }
+
+        @Test
+        @DisplayName("un articulo nuevo con la celda vacia se crea sin ese ajuste; con -5 se crea con el ajuste y costo 950,00")
+        void nuevoConAjustes() {
+            PlanImportacion plan = escenario().mapeo(M.mapeo().ajuste1().build())
+                .filas(filaDe(2, "N-1", "Nuevo", "1000", "", "", "", "", ""),
+                    filaDe(3, "N-2", "Nuevo", "1000", "", "", "", "", "-5"))
+                .planificar();
+
+            assertThat(plan.altas()).hasSize(2);
+            assertThat(plan.altas().get(0).ajustes()).isEqualTo(Ajustes.NINGUNO);
+            assertThat(plan.altas().get(0).costo()).isEqualByComparingTo("1000.00");
+            assertThat(plan.altas().get(1).ajustes()).isEqualTo(new Ajustes(bd("-5"), null, null));
+            assertThat(plan.altas().get(1).costo()).isEqualByComparingTo("950.00");
+        }
+
+        @Test
+        @DisplayName("un ajuste fuera de rango, que no es un numero o de -100 es un error de esa fila y las demas siguen")
+        void ajusteInvalido() {
+            PlanImportacion plan = escenario().mapeo(M.mapeo().ajuste1().build())
+                .articulos(Art.art(1, "A-1", "100"), Art.art(2, "A-2", "100"), Art.art(3, "A-3", "100"),
+                    Art.art(4, "A-4", "100"), Art.art(5, "A-5", "100"))
+                .filas(filaDe(2, "A-1", "x", "1000", "", "", "", "", "abc"),
+                    filaDe(3, "A-2", "x", "1000", "", "", "", "", "-100"),
+                    filaDe(4, "A-3", "x", "1000", "", "", "", "", "1000,01"),
+                    filaDe(5, "A-4", "x", "1000", "", "", "", "", "-150"),
+                    filaDe(6, "A-5", "x", "1000", "", "", "", "", "-99,99"))
+                .planificar();
+
+            assertThat(mensajes(plan.errores())).containsExactly(
+                "El descuento o recargo 1 no es un número.",
+                "El descuento o recargo 1 tiene que estar entre -99,99 y 1000.",
+                "El descuento o recargo 1 tiene que estar entre -99,99 y 1000.",
+                "El descuento o recargo 1 tiene que estar entre -99,99 y 1000.");
+            assertThat(plan.cambios()).extracting(CambioPlaneado::articuloId).containsExactly(5L);
+        }
+
+        @Test
+        @DisplayName("una fila con error de ajuste no cambia al articulo ni lo marca como 'no esta'")
+        void filaConErrorNoCambia() {
+            PlanImportacion plan = escenario().mapeo(M.mapeo().ajuste1().build())
+                .articulos(Art.art(1, "A-1", "100"))
+                .filas(filaDe(2, "A-1", "x", "1000", "", "", "", "", "abc"))
+                .planificar();
+
+            assertThat(plan.cambios()).isEmpty();
+            assertThat(plan.sinCambio()).isEmpty();
+            assertThat(plan.correcciones()).isEmpty();
+            assertThat(plan.noEstan()).isEmpty();
+            assertThat(plan.conteos().conError()).isEqualTo(1);
+        }
+
+        @Test
+        @DisplayName("bonificacion 10 %, ajustes -5 y +3 sobre 1.000: costo 880,65 y precio 1.390")
+        void bonificacionYAjustes() {
+            PlanImportacion plan = escenario().bonificaciones("10", null, null)
+                .mapeo(M.mapeo().ajuste1().ajuste2().build())
+                .articulos(Art.art(1, "A-1", "100"))
+                .filas(filaDe(2, "A-1", "x", "1000", "", "", "", "", "-5", "+3"))
+                .planificar();
+
+            assertThat(plan.cambios().get(0).costoNuevo()).isEqualByComparingTo("880.65");
+            assertThat(plan.cambios().get(0).precioNuevo()).isEqualByComparingTo("1390");
+        }
+    }
+
+    // ------------------------------------------------------------------ repetidos y "no estan" en todo el libro (T-129)
+
+    @Nested
+    @DisplayName("T-129: repetidos y 'no estan' sobre todo el libro")
+    class VariasHojas {
+
+        private static final String HOJA_1 = "TORNILLOS";
+        private static final String HOJA_2 = "TUERCAS";
+        private static final String HOJA_3 = "ARANDELAS";
+
+        @Test
+        @DisplayName("el mismo codigo en dos hojas es error en las dos filas y el mensaje nombra hoja y fila de cada una")
+        void repetidoEntreHojas() {
+            PlanImportacion plan = escenario().hojas(HOJA_1, HOJA_2).mapeo(M.mapeo().hojas(0, 1).build())
+                .filas(filaEnHoja(0, 5, "A-1", "x", "10"), filaEnHoja(1, 9, "a-1", "x", "10"))
+                .planificar();
+
+            String mensaje = "El código aparece repetido en la lista (TORNILLOS fila 5 y TUERCAS fila 9).";
+            assertThat(plan.errores()).containsExactly(
+                new AvisoDeFila(0, 5, "A-1", mensaje), new AvisoDeFila(1, 9, "a-1", mensaje));
+            assertThat(plan.altas()).isEmpty();
+            assertThat(plan.conteos().conError()).isEqualTo(2);
+        }
+
+        @Test
+        @DisplayName("el mismo codigo dos veces dentro de una hoja da el error de siempre, aunque el libro tenga varias hojas")
+        void repetidoDentroDeUnaHoja() {
+            PlanImportacion plan = escenario().hojas(HOJA_1, HOJA_2).mapeo(M.mapeo().hojas(0, 1).build())
+                .filas(filaEnHoja(1, 4, "A-1", "x", "10"), filaEnHoja(1, 9, "A-1", "x", "10"))
+                .planificar();
+
+            assertThat(plan.errores()).containsExactly(
+                new AvisoDeFila(1, 4, "A-1", "El código aparece repetido en la lista (filas 4 y 9)."),
+                new AvisoDeFila(1, 9, "A-1", "El código aparece repetido en la lista (filas 4 y 9)."));
+        }
+
+        @Test
+        @DisplayName("tres apariciones en dos hojas se listan todas con su hoja")
+        void tresApariciones() {
+            PlanImportacion plan = escenario().hojas(HOJA_1, HOJA_2).mapeo(M.mapeo().hojas(0, 1).build())
+                .filas(filaEnHoja(0, 3, "A-1", "x", "10"), filaEnHoja(0, 7, "A-1", "x", "10"),
+                    filaEnHoja(1, 2, "A-1", "x", "10"))
+                .planificar();
+
+            assertThat(mensajes(plan.errores())).containsOnly(
+                "El código aparece repetido en la lista (TORNILLOS fila 3, TORNILLOS fila 7 y TUERCAS fila 2).");
+        }
+
+        @Test
+        @DisplayName("un activo del proveedor presente en una hoja intermedia no esta en 'no estan'; el que no figura en ninguna sale una vez")
+        void noEstanSobreTodoElLibro() {
+            PlanImportacion plan = escenario().hojas(HOJA_1, HOJA_2, HOJA_3).mapeo(M.mapeo().hojas(0, 1, 2).build())
+                .articulos(Art.art(1, "T-100", "100"), Art.art(2, "Z-999", "100"))
+                .filas(filaEnHoja(0, 2, "A-1", "x", "10"), filaEnHoja(1, 2, "T-100", "x", "100"),
+                    filaEnHoja(2, 2, "A-2", "x", "10"))
+                .planificar();
+
+            assertThat(plan.noEstan()).extracting(ArticuloVigente::codigoProveedor).containsExactly("Z-999");
+            assertThat(plan.conteos().noEstan()).isEqualTo(1);
+        }
+
+        @Test
+        @DisplayName("con una sola hoja elegida los articulos de las otras hojas si salen en 'no estan'")
+        void noEstanSobreLasHojasElegidas() {
+            PlanImportacion plan = escenario().hojas(HOJA_1, HOJA_2).mapeo(M.mapeo().hojas(0).build())
+                .articulos(Art.art(1, "T-100", "100"))
+                .filas(filaEnHoja(0, 2, "A-1", "x", "10"), filaEnHoja(1, 2, "T-100", "x", "100"))
+                .planificar();
+
+            assertThat(plan.noEstan()).extracting(ArticuloVigente::codigoProveedor).containsExactly("T-100");
+            assertThat(plan.altas()).extracting(AltaPlaneada::codigo).containsExactly("A-1");
+        }
+
+        @Test
+        @DisplayName("las filas de una hoja no elegida no son errores ni altas ni repetidos")
+        void hojaNoElegidaNoCuenta() {
+            PlanImportacion plan = escenario().hojas(HOJA_1, HOJA_2).mapeo(M.mapeo().hojas(1).build())
+                .filas(filaEnHoja(0, 2, "A-1", "x", "10"), filaEnHoja(1, 2, "A-1", "x", "10"))
+                .planificar();
+
+            assertThat(plan.errores()).isEmpty();
+            assertThat(plan.altas()).extracting(AltaPlaneada::hoja).containsExactly(1);
+        }
+
+        @Test
+        @DisplayName("las filas de titulo se cuentan como salteadas y no aportan codigos ni errores")
+        void salteadasNoAportanCodigos() {
+            PlanImportacion plan = escenario().hojas(HOJA_1)
+                .articulos(Art.art(1, "Familia: 001 - Pasadores", "100"))
+                .filas(filaDe(2, "Familia: 001 - Pasadores"), filaDe(3, "A-1", "Tornillo", "10"),
+                    filaDe(4, "Familia: 002 - Bulones"))
+                .planificar();
+
+            assertThat(plan.salteadas()).isEqualTo(2);
+            assertThat(plan.conteos().salteadas()).isEqualTo(2);
+            assertThat(plan.errores()).isEmpty();
+            assertThat(plan.altas()).extracting(AltaPlaneada::codigo).containsExactly("A-1");
+            // Un titulo con el mismo texto que el codigo de un articulo no lo marca como presente.
+            assertThat(plan.noEstan()).extracting(ArticuloVigente::id).containsExactly(1L);
+        }
+
+        @Test
+        @DisplayName("los errores y las advertencias salen ordenados por hoja y fila")
+        void ordenadosPorHojaYFila() {
+            PlanImportacion plan = escenario().hojas(HOJA_1, HOJA_2).mapeo(M.mapeo().hojas(0, 1).build())
+                .filas(filaEnHoja(0, 8, "", "x", "10"), filaEnHoja(0, 3, "", "x", "10"),
+                    filaEnHoja(1, 2, "", "x", "10"))
+                .planificar();
+
+            assertThat(plan.errores()).extracting(AvisoDeFila::hoja, AvisoDeFila::fila)
+                .containsExactly(org.assertj.core.api.Assertions.tuple(0, 3), org.assertj.core.api.Assertions.tuple(0, 8),
+                    org.assertj.core.api.Assertions.tuple(1, 2));
+        }
+    }
+
+    // ------------------------------------------------------------------ altas con moneda, IVA, unidad, barras y rubro (T-130)
+
+    @Nested
+    @DisplayName("T-130: altas con moneda, unidad, codigo de barras y rubro por nombre")
+    class AltasConCamposDeLaLista {
+
+        @Test
+        @DisplayName("un nuevo con Mon. = ARG y lista 1.000 se crea en pesos con costo 1.000; con USD y lista 10 y dolar 1.000, en dolares con costo 10,00 y precio 15.730")
+        void monedaDelAlta() {
+            PlanImportacion plan = escenario().dolar("1000").mapeo(M.mapeo().moneda().build())
+                .filas(filaDe(2, "N-1", "Nuevo", "1000", "ARG"), filaDe(3, "N-2", "Importado", "10", "USD"))
+                .planificar();
+
+            assertThat(plan.altas()).extracting(AltaPlaneada::moneda).containsExactly(Moneda.ARS, Moneda.USD);
+            assertThat(plan.altas().get(0).costo()).isEqualByComparingTo("1000");
+            assertThat(plan.altas().get(0).precioNuevo()).isEqualByComparingTo("1580");
+            assertThat(plan.altas().get(1).costo()).isEqualByComparingTo("10.00");
+            assertThat(plan.altas().get(1).precioNuevo()).isEqualByComparingTo("15730");
+        }
+
+        @Test
+        @DisplayName("sin columna ni moneda fija el alta es en pesos; con moneda fija USD, en dolares")
+        void sinColumnaYMonedaFija() {
+            PlanImportacion enPesos = escenario().dolar("1000").filas(fila(2, "N-1", "Nuevo", "10")).planificar();
+            PlanImportacion enDolares = escenario().dolar("1000").mapeo(M.mapeo().monedaFija(Moneda.USD).build())
+                .filas(fila(2, "N-1", "Nuevo", "10")).planificar();
+
+            assertThat(enPesos.altas().get(0).moneda()).isEqualTo(Moneda.ARS);
+            assertThat(enDolares.altas().get(0).moneda()).isEqualTo(Moneda.USD);
+            assertThat(enDolares.altas().get(0).precioNuevo()).isEqualByComparingTo("15730");
+        }
+
+        @Test
+        @DisplayName("barras, unidad y un rubro existente van al alta, y el precio usa el margen de ese rubro")
+        void barrasUnidadYRubro() {
+            PlanImportacion plan = escenario().contextoRubro(4, "35.00").rubroPorNombre("Tornillería", 4)
+                .mapeo(M.mapeo().barras().unidad().rubro().build())
+                .filas(filaDe(2, "N-1", "Tornillo", "1000", "", "", "", "", "", "", "", " 7791234567890 ", "metro",
+                    "tornilleria"))
+                .planificar();
+
+            assertThat(plan.errores()).isEmpty();
+            AltaPlaneada alta = plan.altas().get(0);
+            assertThat(alta.codigoBarras()).isEqualTo("7791234567890");
+            assertThat(alta.unidad()).isEqualTo(Unidad.METRO);
+            assertThat(alta.rubroId()).isEqualTo(4L);
+            // 1.000 x 1,35 x 1,21 = 1.633,50 sube a 1.640
+            assertThat(alta.precioNuevo()).isEqualByComparingTo("1640");
+        }
+
+        @Test
+        @DisplayName("un rubro que no existe da una advertencia, el alta queda sin rubro de la columna (usa el elegido) y no se crea ningun rubro")
+        void rubroInexistente() {
+            PlanImportacion plan = escenario().rubroPorNombre("Tornillería", 4).mapeo(M.mapeo().rubro().build())
+                .filas(filaDe(2, "N-1", "Pintura", "1000", "", "", "", "", "", "", "", "", "", "Pinturas"))
+                .planificar();
+
+            assertThat(plan.errores()).isEmpty();
+            assertThat(plan.altas()).hasSize(1);
+            assertThat(plan.altas().get(0).rubroId()).isNull();
+            assertThat(mensajes(plan.advertencias())).hasSize(1);
+            assertThat(plan.advertencias().get(0).mensaje()).contains("El rubro «Pinturas» no existe");
+            assertThat(plan.advertencias().get(0).fila()).isEqualTo(2);
+        }
+
+        @Test
+        @DisplayName("una celda de rubro vacia no advierte ni asigna rubro")
+        void rubroVacio() {
+            PlanImportacion plan = escenario().rubroPorNombre("Tornillería", 4).mapeo(M.mapeo().rubro().build())
+                .filas(filaDe(2, "N-1", "Pintura", "1000", "", "", "", "", "", "", "", "", "", ""))
+                .planificar();
+
+            assertThat(plan.altas().get(0).rubroId()).isNull();
+            assertThat(plan.advertencias()).isEmpty();
+        }
+
+        @Test
+        @DisplayName("el nombre de la hoja nunca es el rubro: sin columna de rubro el alta no lleva rubro aunque exista uno con ese nombre")
+        void laHojaNoEsRubro() {
+            PlanImportacion plan = escenario().hojas("TORNILLERIA").rubroPorNombre("Tornilleria", 4)
+                .filas(filaDe(2, "N-1", "Tornillo", "1000"))
+                .planificar();
+
+            assertThat(plan.altas().get(0).rubroId()).isNull();
+            assertThat(plan.advertencias()).isEmpty();
+        }
+
+        @Test
+        @DisplayName("una unidad que no se reconoce (caja) es un error de la fila y las demas siguen")
+        void unidadInvalida() {
+            PlanImportacion plan = escenario().mapeo(M.mapeo().unidad().build())
+                .filas(filaDe(2, "N-1", "Caja de tornillos", "100", "", "", "", "", "", "", "", "", "caja"),
+                    filaDe(3, "N-2", "Tornillo", "100", "", "", "", "", "", "", "", "", "kg"))
+                .planificar();
+
+            assertThat(plan.errores()).hasSize(1);
+            assertThat(plan.errores().get(0).fila()).isEqualTo(2);
+            assertThat(plan.errores().get(0).mensaje()).contains("Unidad no reconocida");
+            assertThat(plan.altas()).extracting(AltaPlaneada::unidad).containsExactly(Unidad.KILO);
+        }
+
+        @Test
+        @DisplayName("un codigo de barras de mas de 30 caracteres es un error de la fila")
+        void barrasMuyLargo() {
+            PlanImportacion plan = escenario().mapeo(M.mapeo().barras().build())
+                .filas(filaDe(2, "N-1", "Tornillo", "100", "", "", "", "", "", "", "", "9".repeat(31)))
+                .planificar();
+
+            assertThat(mensajes(plan.errores())).containsExactly("El código de barras no puede superar 30 caracteres");
+            assertThat(plan.altas()).isEmpty();
+        }
+
+        @Test
+        @DisplayName("un codigo de barras de otro articulo activo no se puede crear")
+        void barrasOcupadas() {
+            PlanImportacion plan = escenario().barrasOcupadas("7791234567890").mapeo(M.mapeo().barras().build())
+                .filas(filaDe(2, "N-1", "Tornillo", "100", "", "", "", "", "", "", "", "7791234567890"),
+                    filaDe(3, "N-2", "Tuerca", "100", "", "", "", "", "", "", "", "7790000000001"))
+                .planificar();
+
+            assertThat(plan.errores()).containsExactly(new AvisoDeFila(2, "N-1",
+                "Ya existe un artículo activo con el código de barras 7791234567890."));
+            assertThat(plan.altas()).extracting(AltaPlaneada::codigo).containsExactly("N-2");
+        }
+
+        @Test
+        @DisplayName("un codigo de barras repetido dentro del archivo: se crea el primero y el segundo no")
+        void barrasRepetidasEnElArchivo() {
+            PlanImportacion plan = escenario().mapeo(M.mapeo().barras().build())
+                .filas(filaDe(2, "N-1", "Tornillo", "100", "", "", "", "", "", "", "", "7791234567890"),
+                    filaDe(3, "N-2", "Tuerca", "100", "", "", "", "", "", "", "", "7791234567890"))
+                .planificar();
+
+            assertThat(plan.altas()).extracting(AltaPlaneada::codigo).containsExactly("N-1");
+            assertThat(plan.errores()).extracting(AvisoDeFila::fila).containsExactly(3);
+            assertThat(plan.errores().get(0).mensaje()).contains("Ya existe un artículo activo con el código de barras");
+        }
+
+        @Test
+        @DisplayName("los existentes no cambian de barras, unidad ni rubro: una unidad mala o unas barras ocupadas no son error")
+        void losExistentesNoCambian() {
+            PlanImportacion plan = escenario().barrasOcupadas("7791234567890").rubroPorNombre("Tornillería", 4)
+                .mapeo(M.mapeo().barras().unidad().rubro().build())
+                .articulos(Art.art(1, "A-1", "100"))
+                .filas(filaDe(2, "A-1", "x", "120", "", "", "", "", "", "", "", "7791234567890", "caja", "Pinturas"))
+                .planificar();
+
+            assertThat(plan.errores()).isEmpty();
+            assertThat(plan.advertencias()).isEmpty();
+            assertThat(plan.cambios()).hasSize(1);
+        }
+
+        @Test
+        @DisplayName("sin columnas de barras, unidad ni rubro los nuevos entran con UNIDAD, sin barras y sin rubro")
+        void sinColumnas() {
+            PlanImportacion plan = escenario().filas(fila(2, "N-1", "Tornillo", "100")).planificar();
+
+            AltaPlaneada alta = plan.altas().get(0);
+            assertThat(alta.unidad()).isEqualTo(Unidad.UNIDAD);
+            assertThat(alta.codigoBarras()).isNull();
+            assertThat(alta.rubroId()).isNull();
+            assertThat(alta.alicuotaIva()).isEqualTo(AlicuotaIva.IVA_21);
+            assertThat(alta.ajustes()).isEqualTo(Ajustes.NINGUNO);
         }
     }
 

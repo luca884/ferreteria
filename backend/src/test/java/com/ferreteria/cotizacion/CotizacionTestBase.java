@@ -126,11 +126,13 @@ public abstract class CotizacionTestBase extends IntegrationTestBase {
                 ferreteriaId);
     }
 
-    /** Borra lo que los tests siembran de esas ferreterias (historial, articulos, configuracion, usuarios y rubros). */
+    /** Borra lo que los tests siembran de esas ferreterias (historial, articulos, importaciones, proveedores, rubros, configuracion y usuarios). */
     protected void borrarDatosDe(Long... ferreteriaIds) {
         for (Long id : ferreteriaIds) {
             jdbc.update("delete from historial_precio where ferreteria_id = ?", id);
             jdbc.update("delete from articulo where ferreteria_id = ?", id);
+            jdbc.update("delete from importacion_lista where ferreteria_id = ?", id);
+            jdbc.update("delete from proveedor where ferreteria_id = ?", id);
             jdbc.update("delete from rubro where ferreteria_id = ?", id);
             jdbc.update("delete from configuracion_cotizacion where ferreteria_id = ?", id);
             jdbc.update("delete from usuario where ferreteria_id = ?", id);

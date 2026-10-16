@@ -47,6 +47,7 @@ import com.ferreteria.common.exception.BadRequestException;
 import com.ferreteria.common.exception.ConflictException;
 import com.ferreteria.common.exception.DatosInvalidosException;
 import com.ferreteria.common.exception.ResourceNotFoundException;
+import com.ferreteria.cotizacion.api.DolarDePrecios;
 import com.ferreteria.ferreteria.model.ConfiguracionPrecios;
 import com.ferreteria.ferreteria.service.ConfiguracionPreciosService;
 import com.ferreteria.tenant.TenantContext;
@@ -103,6 +104,9 @@ class ImportacionServiceTest {
     @Mock
     ConfiguracionPreciosService configuracionPreciosService;
 
+    @Mock
+    DolarDePrecios dolarDePrecios;
+
     private static ValidatorFactory fabricaDeValidadores;
 
     ImportacionService service;
@@ -122,7 +126,8 @@ class ImportacionServiceTest {
         TenantContext.setCurrentFerreteriaId(FERRETERIA);
         service = new ImportacionService(
                 lector, proveedorRepository, rubroRepository, articuloRepository, historialPrecioRepository,
-                importacionListaRepository, configuracionPreciosService, fabricaDeValidadores.getValidator());
+                importacionListaRepository, configuracionPreciosService, dolarDePrecios,
+                fabricaDeValidadores.getValidator());
     }
 
     @AfterEach

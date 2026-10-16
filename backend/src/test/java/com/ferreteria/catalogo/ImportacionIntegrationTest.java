@@ -2,8 +2,10 @@ package com.ferreteria.catalogo;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import com.ferreteria.support.IntegrationTestBase;
+import com.ferreteria.cotizacion.CotizacionTestBase;
+import com.ferreteria.cotizacion.model.LadoCotizacion;
 import com.ferreteria.support.ListasDePrueba;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -13,6 +15,7 @@ import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import com.ferreteria.catalogo.repository.ArticuloRepository;
 import com.ferreteria.catalogo.repository.ImportacionListaRepository;
 
@@ -34,7 +37,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * ferreterias, archivos y datos invalidos. A = El Tornillo, B = La Tuerca. La base se comparte y no
  * se revierte: cada test crea su proveedor y sus articulos con codigos unicos.
  */
-class ImportacionIntegrationTest extends IntegrationTestBase {
+class ImportacionIntegrationTest extends CotizacionTestBase {
 
     private static final String MUESTRA = "/api/importaciones/muestra";
     private static final String VISTA_PREVIA = "/api/importaciones/vista-previa";
@@ -1011,37 +1014,66 @@ class ImportacionIntegrationTest extends IntegrationTestBase {
         assertThat(contar("select count(*) from articulo")).isEqualTo(articulosAntes);
     }
 
-    // --- Articulos en dolares: guarda hasta el corte 2 (T-038) ---
+    // --- Articulos en dolares: la guarda del corte 1 ya no existe (T-125, T-145) ---
+
+    private static final String CASA_DE_PRUEBA = "t78-oficial";
+    private static final Instant HACE_UN_RATO = Instant.parse("2026-10-16T11:00:00Z");
+
+    /** La ferreteria de los tests con dolar: nunca la de los demos, porque la configuracion y la cotizacion se reemplazan. */
+    private Long ferreteriaConDolar;
+
+    @AfterEach
+    void limpiarFerreteriaConDolar() {
+        borrarCotizaciones("t78-");
+        if (ferreteriaConDolar != null) {
+            borrarDatosDe(ferreteriaConDolar);
+            ferreteriaConDolar = null;
+        }
+    }
+
+    /** Una ferreteria propia con el dolar vigente en 1.000 (margen 30 %, multiplo 10) y un Dueno; devuelve su token. */
+    private String duenoConDolar(String valor) throws Exception {
+        ferreteriaConDolar = ferreteria("30-78150001-1", "Importacion con dolar");
+        borrarCotizaciones("t78-");
+        cotizacion("USD", CASA_DE_PRUEBA, "1090", "1100", HACE_UN_RATO);
+        configuracion(ferreteriaConDolar, c -> {
+            c.setCasaPrecios(CASA_DE_PRUEBA);
+            c.fijarVigente(new BigDecimal(valor), CASA_DE_PRUEBA, LadoCotizacion.VENTA, HACE_UN_RATO);
+        });
+        return login(usuario(ferreteriaConDolar, "dueno-t78@test.local", "DUENO"));
+    }
 
     @Test
-    void laFilaDeUnArticuloEnDolaresSaleConErrorYNoSeAplicaMientrasLasDePesosSiSeAplican() throws Exception {
-        long proveedor = crearProveedor(duenoA, unico("P"));
+    void laFilaDeUnArticuloEnDolaresSeActualizaComoLasDePesos() throws Exception {
+        String dueno = duenoConDolar("1000.0000");
+        long proveedor = crearProveedor(dueno, unico("P"));
         String s = unico("");
-        long enDolares = crearArticulo(duenoA, proveedor, "USD" + s, "100");
-        long enPesos = crearArticulo(duenoA, proveedor, "ARS" + s, "100");
-        // El de dolares: 10 USD, precio 15.730 en pesos (como lo dejaria el alta en USD con el dolar en 1000).
-        jdbc.update("update articulo set moneda = 'USD', costo = 10.00, precio_final = 15730.00 where id = ?", enDolares);
+        long enDolares = crearArticulo(dueno, proveedor, "USD" + s, "100");
+        long enPesos = crearArticulo(dueno, proveedor, "ARS" + s, "100");
+        // El de dolares: 10 USD y precio 16.340 con su margen de 35 % (10 x 1.000 x 1,35 x 1,21 = 16.335).
+        jdbc.update("update articulo set moneda = 'USD', costo = 10.00, precio_final = 16340.00 where id = ?", enDolares);
         ObjectNode datos = datosVistaPrevia(proveedor);
-        MockMultipartFile archivo = xlsx(conEncabezado(fila("USD" + s, "x", n("500")), fila("ARS" + s, "x", n("120"))));
+        MockMultipartFile archivo = xlsx(conEncabezado(fila("USD" + s, "x", n("12")), fila("ARS" + s, "x", n("120"))));
 
-        JsonNode previa = vistaPrevia(archivo, datos);
+        JsonNode previa = objectMapper.readTree(postMultipart(VISTA_PREVIA, dueno, archivo, datos)
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString(StandardCharsets.UTF_8));
 
-        assertConteos(previa.get("conteos"), 1, 0, 0, 0, 0, 1);
-        assertThat(previa.get("errores")).hasSize(1);
-        assertThat(previa.get("errores").get(0).get("codigo").asText()).isEqualTo("USD" + s);
-        assertThat(previa.get("errores").get(0).get("mensaje").asText())
-                .startsWith("El artículo está en dólares");
+        assertConteos(previa.get("conteos"), 2, 0, 0, 0, 0, 0);
+        assertThat(previa.get("errores")).isEmpty();
 
-        postMultipart(APLICAR, duenoA, archivo, datosDeAplicar(datos, previa.get("conteos"), false, null))
+        postMultipart(APLICAR, dueno, archivo, datosDeAplicar(datos, previa.get("conteos"), false, null))
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.conteos.suben", is(1)))
-                .andExpect(jsonPath("$.conteos.conError", is(1)));
+                .andExpect(jsonPath("$.conteos.suben", is(2)))
+                .andExpect(jsonPath("$.conteos.conError", is(0)));
 
-        assertThat(decimal(enDolares, "costo")).isEqualByComparingTo("10.00");
-        assertThat(decimal(enDolares, "precio_final")).isEqualByComparingTo("15730.00");
+        assertThat(decimal(enDolares, "costo")).isEqualByComparingTo("12.00");
+        // 12 x 1.000 x 1,35 x 1,21 = 19.602 -> 19.610
+        assertThat(decimal(enDolares, "precio_final")).isEqualByComparingTo("19610.00");
         assertThat(filaDeArticulo(enDolares).get("moneda")).isEqualTo("USD");
-        assertThat(contar("select count(*) from historial_precio where origen = 'IMPORTACION' and articulo_id = ?", enDolares))
-                .isZero();
+        // La entrada de alta (MANUAL, en pesos) y la de la importacion, ya en USD.
+        assertThat(historialDe(enDolares)).hasSize(2);
+        assertThat(historialDe(enDolares).get(1).get("origen")).isEqualTo("IMPORTACION");
+        assertThat(historialDe(enDolares).get(1).get("moneda")).isEqualTo("USD");
         assertThat(decimal(enPesos, "costo")).isEqualByComparingTo("120");
         assertThat(contar("select count(*) from historial_precio where origen = 'IMPORTACION' and articulo_id = ?", enPesos))
                 .isEqualTo(1);

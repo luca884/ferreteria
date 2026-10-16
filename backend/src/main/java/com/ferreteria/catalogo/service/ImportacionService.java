@@ -46,6 +46,7 @@ import com.ferreteria.common.exception.ConflictException;
 import com.ferreteria.common.exception.DatosInvalidosException;
 import com.ferreteria.common.exception.ErroresDeValidacion;
 import com.ferreteria.common.exception.ResourceNotFoundException;
+import com.ferreteria.cotizacion.api.DolarDePrecios;
 import com.ferreteria.ferreteria.model.ConfiguracionPrecios;
 import com.ferreteria.ferreteria.service.ConfiguracionPreciosService;
 import com.ferreteria.tenant.TenantContext;
@@ -80,6 +81,7 @@ public class ImportacionService {
     private final HistorialPrecioRepository historialPrecioRepository;
     private final ImportacionListaRepository importacionListaRepository;
     private final ConfiguracionPreciosService configuracionPreciosService;
+    private final DolarDePrecios dolarDePrecios;
     private final Validator validator;
 
     public ImportacionService(
@@ -90,6 +92,7 @@ public class ImportacionService {
             HistorialPrecioRepository historialPrecioRepository,
             ImportacionListaRepository importacionListaRepository,
             ConfiguracionPreciosService configuracionPreciosService,
+            DolarDePrecios dolarDePrecios,
             Validator validator) {
         this.validator = validator;
         this.lector = lector;
@@ -99,6 +102,7 @@ public class ImportacionService {
         this.historialPrecioRepository = historialPrecioRepository;
         this.importacionListaRepository = importacionListaRepository;
         this.configuracionPreciosService = configuracionPreciosService;
+        this.dolarDePrecios = dolarDePrecios;
     }
 
     /**
@@ -236,8 +240,10 @@ public class ImportacionService {
 
         List<Articulo> articulos = articuloRepository.deProveedorScoped(proveedor.getId());
         ConfiguracionPrecios configuracion = configuracionPreciosService.actual();
+        // El dolar vigente de la ferreteria: con el se calculan las filas en dolares (nunca el de la API en este momento).
         ContextosDePrecio contextos = ContextosDePrecio.armar(
-                rubroRepository.listarScoped(), configuracion.margenDefectoPorcentaje(), configuracion.redondeoMultiplo());
+                rubroRepository.listarScoped(), configuracion.margenDefectoPorcentaje(), configuracion.redondeoMultiplo(),
+                dolarDePrecios.vigente().orElse(null));
 
         // La base devuelve los codigos como estan guardados: se normalizan igual que los del archivo.
         Set<String> ocupados = new HashSet<>();
@@ -257,7 +263,8 @@ public class ImportacionService {
         PlanImportacion plan = PlanificadorImportacion.planificar(new EntradaPlan(
                 lectura.filas(), mapeo, listaIncluyeIva, bonificaciones,
                 articulos.stream().map(ArticuloVigente::de).toList(),
-                contextos.porRubro(), contextos.sinRubro(), ocupados, proveedor.getMapeoLista(), encabezado));
+                contextos.porRubro(), contextos.sinRubro(), ocupados, proveedor.getMapeoLista(), encabezado,
+                List.of(), dolarDePrecios.activa(), Map.of(), Set.of()));
         return new Preparacion(plan, articulos, contextos, encabezado);
     }
 
