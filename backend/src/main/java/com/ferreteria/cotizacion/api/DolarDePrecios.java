@@ -10,6 +10,9 @@ import java.util.Optional;
  */
 public interface DolarDePrecios {
 
+    /** Mensaje (409) cuando hay que calcular un precio en dolares y no hay ninguna cotizacion guardada (decision 23). */
+    String SIN_COTIZACION = "Todavía no hay cotización del dólar. Probá en unos minutos";
+
     /** True si la cotizacion de la ferreteria esta activada (decision 17). */
     boolean activa();
 

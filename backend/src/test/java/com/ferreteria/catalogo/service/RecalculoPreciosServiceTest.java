@@ -1,9 +1,11 @@
 package com.ferreteria.catalogo.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.ferreteria.catalogo.model.AlicuotaIva;
@@ -18,12 +20,15 @@ import com.ferreteria.catalogo.model.Unidad;
 import com.ferreteria.catalogo.repository.ArticuloRepository;
 import com.ferreteria.catalogo.repository.HistorialPrecioRepository;
 import com.ferreteria.catalogo.repository.RubroRepository;
+import com.ferreteria.common.exception.ConflictException;
+import com.ferreteria.cotizacion.api.DolarDePrecios;
 import com.ferreteria.ferreteria.model.ConfiguracionPrecios;
 import com.ferreteria.ferreteria.service.ConfiguracionPreciosService;
 import com.ferreteria.tenant.TenantContext;
 import java.lang.reflect.Field;
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Optional;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -54,6 +59,9 @@ class RecalculoPreciosServiceTest {
 
     @Mock
     RubroRepository rubroRepository;
+
+    @Mock
+    DolarDePrecios dolarDePrecios;
 
     @InjectMocks
     RecalculoPreciosService service;
@@ -346,5 +354,80 @@ class RecalculoPreciosServiceTest {
         service.porCotizacion(bd("1100"), USUARIO);
 
         assertThat(historialGuardado()).singleElement().satisfies(h -> assertThat(h.getUsuarioId()).isEqualTo(USUARIO));
+    }
+
+    // ---- la cascada de rubro con articulos en dolares (T-036) ----
+
+    /** Articulo del rubro 4, en USD, sin margen propio, que ya vale 16.340 con el margen viejo de 35 y el dolar en 1000. */
+    private static Articulo usdHeredero(long id) throws Exception {
+        Articulo articulo = new Articulo(FERRETERIA);
+        articulo.actualizar(new DatosArticulo("USD-" + id, null, null, "Articulo USD " + id, RUBRO_ID, null,
+                        bd("10.00"), null, AlicuotaIva.IVA_21, Unidad.UNIDAD, BigDecimal.ZERO, null, true, Moneda.USD),
+                new ContextoPrecio(bd("35.00"), bd("30.00"), bd("10.00"), bd("1000")));
+        fijar(articulo, "id", id);
+        return articulo;
+    }
+
+    @Test
+    @DisplayName("la cascada recalcula un heredero USD con el dolar vigente: rubro de 35 a 50 % con 10 USD a 1000 pasa de 16.340 a 18.150")
+    void cascadaConUnArticuloEnDolares() throws Exception {
+        configuracionPorDefecto();
+        when(dolarDePrecios.vigente()).thenReturn(Optional.of(bd("1000")));
+        Articulo usd = usdHeredero(61L);
+        assertThat(usd.getPrecioFinal()).isEqualByComparingTo("16340");
+        when(articuloRepository.heredanMargenDeRubroScoped(RUBRO_ID)).thenReturn(List.of(usd));
+
+        service.porCambioDeMargenDeRubro(rubro("50.00"), USUARIO);
+
+        // 10 x 1000 = 10000; x 1,50 = 15000; x 1,21 = 18150
+        assertThat(usd.getPrecioFinal()).isEqualByComparingTo("18150");
+        assertThat(usd.getCosto()).isEqualByComparingTo("10");
+        assertThat(historialGuardado()).singleElement().satisfies(h -> {
+            assertThat(h.getOrigen()).isEqualTo(OrigenPrecio.MASIVO);
+            assertThat(h.getMoneda()).isEqualTo(Moneda.USD);
+            assertThat(h.getUsuarioId()).isEqualTo(USUARIO);
+            assertThat(h.getPrecioAnterior()).isEqualByComparingTo("16340");
+            assertThat(h.getPrecioNuevo()).isEqualByComparingTo("18150");
+        });
+    }
+
+    @Test
+    @DisplayName("la cascada con herederos en pesos y en dolares calcula cada uno con lo suyo")
+    void cascadaConMezclaDeMonedas() throws Exception {
+        configuracionPorDefecto();
+        when(dolarDePrecios.vigente()).thenReturn(Optional.of(bd("1000")));
+        Articulo ars = heredero(11L, "100.00");
+        Articulo usd = usdHeredero(61L);
+        when(articuloRepository.heredanMargenDeRubroScoped(RUBRO_ID)).thenReturn(List.of(ars, usd));
+
+        service.porCambioDeMargenDeRubro(rubro("50.00"), USUARIO);
+
+        assertThat(ars.getPrecioFinal()).isEqualByComparingTo("190");
+        assertThat(usd.getPrecioFinal()).isEqualByComparingTo("18150");
+        assertThat(historialGuardado()).extracting(HistorialPrecio::getArticuloId).containsExactly(11L, 61L);
+    }
+
+    @Test
+    @DisplayName("sin herederos en USD la cascada no consulta el dolar")
+    void cascadaSinUsdNoConsultaElDolar() throws Exception {
+        configuracionPorDefecto();
+        when(articuloRepository.heredanMargenDeRubroScoped(RUBRO_ID)).thenReturn(List.of(heredero(11L, "100.00")));
+
+        service.porCambioDeMargenDeRubro(rubro("50.00"), USUARIO);
+
+        verifyNoInteractions(dolarDePrecios);
+    }
+
+    @Test
+    @DisplayName("con un heredero USD y ninguna cotizacion: 409 claro (no IllegalStateException) y no se guarda historial")
+    void cascadaSinCotizacionDa409() throws Exception {
+        configuracionPorDefecto();
+        when(dolarDePrecios.vigente()).thenReturn(Optional.empty());
+        when(articuloRepository.heredanMargenDeRubroScoped(RUBRO_ID)).thenReturn(List.of(usdHeredero(61L)));
+
+        assertThatThrownBy(() -> service.porCambioDeMargenDeRubro(rubro("50.00"), USUARIO))
+                .isInstanceOf(ConflictException.class)
+                .hasMessage("Todavía no hay cotización del dólar. Probá en unos minutos");
+        verify(historialPrecioRepository, never()).saveAll(anyList());
     }
 }

@@ -1010,6 +1010,60 @@ class ImportacionIntegrationTest extends IntegrationTestBase {
         assertThat(contar("select count(*) from articulo")).isEqualTo(articulosAntes);
     }
 
+    // --- Articulos en dolares: guarda hasta el corte 2 (T-038) ---
+
+    @Test
+    void laFilaDeUnArticuloEnDolaresSaleConErrorYNoSeAplicaMientrasLasDePesosSiSeAplican() throws Exception {
+        long proveedor = crearProveedor(duenoA, unico("P"));
+        String s = unico("");
+        long enDolares = crearArticulo(duenoA, proveedor, "USD" + s, "100");
+        long enPesos = crearArticulo(duenoA, proveedor, "ARS" + s, "100");
+        // El de dolares: 10 USD, precio 15.730 en pesos (como lo dejaria el alta en USD con el dolar en 1000).
+        jdbc.update("update articulo set moneda = 'USD', costo = 10.00, precio_final = 15730.00 where id = ?", enDolares);
+        ObjectNode datos = datosVistaPrevia(proveedor);
+        MockMultipartFile archivo = xlsx(conEncabezado(fila("USD" + s, "x", n("500")), fila("ARS" + s, "x", n("120"))));
+
+        JsonNode previa = vistaPrevia(archivo, datos);
+
+        assertConteos(previa.get("conteos"), 1, 0, 0, 0, 0, 1);
+        assertThat(previa.get("errores")).hasSize(1);
+        assertThat(previa.get("errores").get(0).get("codigo").asText()).isEqualTo("USD" + s);
+        assertThat(previa.get("errores").get(0).get("mensaje").asText())
+                .startsWith("El artículo está en dólares");
+
+        postMultipart(APLICAR, duenoA, archivo, datosDeAplicar(datos, previa.get("conteos"), false, null))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.conteos.suben", is(1)))
+                .andExpect(jsonPath("$.conteos.conError", is(1)));
+
+        assertThat(decimal(enDolares, "costo")).isEqualByComparingTo("10.00");
+        assertThat(decimal(enDolares, "precio_final")).isEqualByComparingTo("15730.00");
+        assertThat(filaDeArticulo(enDolares).get("moneda")).isEqualTo("USD");
+        assertThat(contar("select count(*) from historial_precio where origen = 'IMPORTACION' and articulo_id = ?", enDolares))
+                .isZero();
+        assertThat(decimal(enPesos, "costo")).isEqualByComparingTo("120");
+        assertThat(contar("select count(*) from historial_precio where origen = 'IMPORTACION' and articulo_id = ?", enPesos))
+                .isEqualTo(1);
+    }
+
+    @Test
+    void unaListaSinArticulosEnDolaresSigueIgual() throws Exception {
+        long proveedor = crearProveedor(duenoA, unico("P"));
+        String codigo = unico("SOLOARS");
+        long articulo = crearArticulo(duenoA, proveedor, codigo, "100");
+        ObjectNode datos = datosVistaPrevia(proveedor);
+        MockMultipartFile archivo = xlsx(conEncabezado(fila(codigo, "x", n("120"))));
+
+        JsonNode previa = vistaPrevia(archivo, datos);
+
+        assertConteos(previa.get("conteos"), 1, 0, 0, 0, 0, 0);
+        assertThat(previa.get("errores")).isEmpty();
+        postMultipart(APLICAR, duenoA, archivo, datosDeAplicar(datos, previa.get("conteos"), false, null))
+                .andExpect(status().isCreated());
+        assertThat(decimal(articulo, "costo")).isEqualByComparingTo("120");
+        assertThat(filaDeArticulo(articulo).get("moneda")).isEqualTo("ARS");
+    }
+
     private static boolean sinValor(JsonNode nodo, String campo) {
         JsonNode valor = nodo.path(campo);
         return valor.isMissingNode() || valor.isNull();

@@ -15,6 +15,7 @@ import com.ferreteria.catalogo.model.ContextosDePrecio;
 import com.ferreteria.catalogo.model.FiltroArticulos;
 import com.ferreteria.catalogo.model.HistorialPrecio;
 import com.ferreteria.catalogo.model.ModoMasivo;
+import com.ferreteria.catalogo.model.Moneda;
 import com.ferreteria.catalogo.model.OperacionMasiva;
 import com.ferreteria.catalogo.model.OrigenPrecio;
 import com.ferreteria.catalogo.model.PlanMasivo;
@@ -28,6 +29,7 @@ import com.ferreteria.common.exception.ConflictException;
 import com.ferreteria.common.exception.DatosInvalidosException;
 import com.ferreteria.common.exception.ErroresDeValidacion;
 import com.ferreteria.common.exception.ResourceNotFoundException;
+import com.ferreteria.cotizacion.api.DolarDePrecios;
 import com.ferreteria.ferreteria.model.ConfiguracionPrecios;
 import com.ferreteria.ferreteria.service.ConfiguracionPreciosService;
 import jakarta.validation.ConstraintViolation;
@@ -35,6 +37,7 @@ import jakarta.validation.Validator;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.text.DecimalFormat;
 import java.text.DecimalFormatSymbols;
 import java.util.ArrayList;
@@ -64,6 +67,7 @@ public class ActualizacionMasivaService {
     private final HistorialPrecioRepository historialPrecioRepository;
     private final ConfiguracionPreciosService configuracionPreciosService;
     private final Validator validator;
+    private final DolarDePrecios dolarDePrecios;
 
     public ActualizacionMasivaService(
             ArticuloRepository articuloRepository,
@@ -71,13 +75,15 @@ public class ActualizacionMasivaService {
             RubroRepository rubroRepository,
             HistorialPrecioRepository historialPrecioRepository,
             ConfiguracionPreciosService configuracionPreciosService,
-            Validator validator) {
+            Validator validator,
+            DolarDePrecios dolarDePrecios) {
         this.articuloRepository = articuloRepository;
         this.proveedorRepository = proveedorRepository;
         this.rubroRepository = rubroRepository;
         this.historialPrecioRepository = historialPrecioRepository;
         this.configuracionPreciosService = configuracionPreciosService;
         this.validator = validator;
+        this.dolarDePrecios = dolarDePrecios;
     }
 
     /** Lo que pasaria al aplicar. No escribe nada: ni articulos ni historial. */
@@ -165,10 +171,22 @@ public class ActualizacionMasivaService {
         List<Articulo> articulos = articuloRepository.filtrarScoped(filtro);
         ConfiguracionPrecios configuracion = configuracionPreciosService.actual();
         ContextosDePrecio contextos = ContextosDePrecio.armar(
-                rubroRepository.listarScoped(), configuracion.margenDefectoPorcentaje(), configuracion.redondeoMultiplo());
+                rubroRepository.listarScoped(), configuracion.margenDefectoPorcentaje(), configuracion.redondeoMultiplo(),
+                dolarVigenteSiHayArticulosEnDolares(articulos));
         PlanMasivo plan = PlanificadorMasivo.planificar(
                 articulos.stream().map(ArticuloVigente::de).toList(), filtro, operacion, contextos);
         return new Preparacion(plan, articulos, contextos, operacion);
+    }
+
+    /**
+     * El dolar vigente de la ferreteria (no el valor de la API en ese momento), solo si el alcance tiene algun articulo
+     * en USD: con todo en pesos no se consulta. Sin ninguna cotizacion guardada no se puede calcular su precio: 409.
+     */
+    private BigDecimal dolarVigenteSiHayArticulosEnDolares(List<Articulo> articulos) {
+        if (articulos.stream().noneMatch(articulo -> articulo.getMoneda() == Moneda.USD)) {
+            return null;
+        }
+        return dolarDePrecios.vigente().orElseThrow(() -> new ConflictException(DolarDePrecios.SIN_COTIZACION));
     }
 
     /** Lo que sale de preparar: el plan y lo necesario para aplicarlo sobre las entidades ya cargadas. */

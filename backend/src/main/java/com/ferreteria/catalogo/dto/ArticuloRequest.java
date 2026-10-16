@@ -2,6 +2,7 @@ package com.ferreteria.catalogo.dto;
 
 import com.ferreteria.catalogo.model.AlicuotaIva;
 import com.ferreteria.catalogo.model.DatosArticulo;
+import com.ferreteria.catalogo.model.Moneda;
 import com.ferreteria.catalogo.model.Unidad;
 import jakarta.validation.constraints.DecimalMax;
 import jakarta.validation.constraints.DecimalMin;
@@ -61,7 +62,22 @@ public record ArticuloRequest(
         String ubicacion,
 
         /** null significa activo en el alta y "conservar el estado actual" en la edicion. */
-        Boolean activo) {
+        Boolean activo,
+
+        /**
+         * Moneda del costo: ARS o USD. null significa ARS. Un valor que no es de la enumeracion da 400 (lo resuelve el
+         * manejador global de errores). Cambiar la moneda NO convierte el costo: se toma tal cual en la moneda nueva.
+         */
+        Moneda moneda) {
+
+    /** Pedido sin moneda: el articulo es en pesos. */
+    public ArticuloRequest(
+            String codigoInterno, String codigoBarras, String codigoProveedor, String descripcion, Long rubroId,
+            Long proveedorId, BigDecimal costo, BigDecimal margenPorcentaje, AlicuotaIva alicuotaIva, Unidad unidad,
+            BigDecimal stockMinimo, String ubicacion, Boolean activo) {
+        this(codigoInterno, codigoBarras, codigoProveedor, descripcion, rubroId, proveedorId, costo, margenPorcentaje,
+                alicuotaIva, unidad, stockMinimo, ubicacion, activo, null);
+    }
 
     /** Para el alta: sin espacios sobrantes, textos en blanco como null y los defectos aplicados (activo = true). */
     public DatosArticulo toDatos() {
@@ -86,7 +102,8 @@ public record ArticuloRequest(
                 unidad,
                 stockMinimo == null ? BigDecimal.ZERO : stockMinimo,
                 blancoANull(ubicacion),
-                activo == null ? activoActual : activo);
+                activo == null ? activoActual : activo,
+                moneda == null ? Moneda.ARS : moneda);
     }
 
     private static String blancoANull(String texto) {

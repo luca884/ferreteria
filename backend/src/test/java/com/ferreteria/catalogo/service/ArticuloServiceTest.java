@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -18,6 +19,7 @@ import com.ferreteria.catalogo.model.Articulo;
 import com.ferreteria.catalogo.model.ContextoPrecio;
 import com.ferreteria.catalogo.model.DatosArticulo;
 import com.ferreteria.catalogo.model.HistorialPrecio;
+import com.ferreteria.catalogo.model.Moneda;
 import com.ferreteria.catalogo.model.OrigenPrecio;
 import com.ferreteria.catalogo.model.Proveedor;
 import com.ferreteria.catalogo.model.Rubro;
@@ -29,6 +31,7 @@ import com.ferreteria.catalogo.repository.RubroRepository;
 import com.ferreteria.common.PageResponse;
 import com.ferreteria.common.exception.ConflictException;
 import com.ferreteria.common.exception.ResourceNotFoundException;
+import com.ferreteria.cotizacion.api.DolarDePrecios;
 import com.ferreteria.ferreteria.model.ConfiguracionPrecios;
 import com.ferreteria.ferreteria.service.ConfiguracionPreciosService;
 import com.ferreteria.tenant.TenantContext;
@@ -72,6 +75,9 @@ class ArticuloServiceTest {
 
     @Mock
     ConfiguracionPreciosService configuracionPreciosService;
+
+    @Mock
+    DolarDePrecios dolarDePrecios;
 
     @InjectMocks
     ArticuloService service;
@@ -740,5 +746,267 @@ class ArticuloServiceTest {
         assertThat(respuesta.size()).isEqualTo(20);
         assertThat(respuesta.totalElements()).isEqualTo(21);
         assertThat(respuesta.totalPages()).isEqualTo(2);
+    }
+
+    // ---- moneda: articulos en dolares (T-035) ----
+
+    private static final String COTIZACION_APAGADA = "Activá la cotización para cargar artículos en dólares";
+    private static final String SIN_COTIZACION = "Todavía no hay cotización del dólar. Probá en unos minutos";
+
+    /** Estado del dolar de la ferreteria: si la cotizacion esta activada y cual es su dolar vigente (null = ninguno). */
+    private void dolar(boolean activa, String vigente) {
+        lenient().when(dolarDePrecios.activa()).thenReturn(activa);
+        lenient().when(dolarDePrecios.vigente())
+                .thenReturn(vigente == null ? Optional.empty() : Optional.of(bd(vigente)));
+    }
+
+    private static ArticuloRequest requestEn(Moneda moneda, String costo, String margen) {
+        return new ArticuloRequest("TORN-001", null, null, "Tornillo", null, null, bd(costo),
+                margen == null ? null : bd(margen), AlicuotaIva.IVA_21, Unidad.UNIDAD, null, null, true, moneda);
+    }
+
+    /** Articulo ya guardado en dolares: costo 10, margen de la ferreteria (30), IVA 21, calculado con ese dolar. */
+    private static Articulo existenteEnDolares(long id, String dolarConElQueSeCalculo) throws Exception {
+        Articulo articulo = new Articulo(FERRETERIA);
+        articulo.actualizar(requestEn(Moneda.USD, "10.00", null).toDatos(),
+                new ContextoPrecio(null, bd("30.00"), bd("10.00"), bd(dolarConElQueSeCalculo)));
+        fijar(articulo, "id", id);
+        return articulo;
+    }
+
+    @Test
+    @DisplayName("crear en pesos con costo 1000 da 1.580 y no consulta el dolar")
+    void crearEnPesosNoConsultaElDolar() {
+        configuracionPorDefecto();
+        guardarAsignandoId(55L);
+
+        ArticuloResponse respuesta = service.crear(requestEn(Moneda.ARS, "1000", null), USUARIO);
+
+        assertThat(respuesta.moneda()).isEqualTo(Moneda.ARS);
+        assertThat(respuesta.precioFinal()).isEqualByComparingTo("1580");
+        verifyNoInteractions(dolarDePrecios);
+    }
+
+    @Test
+    @DisplayName("crear sin moneda es en pesos y tampoco consulta el dolar")
+    void crearSinMonedaEsEnPesos() {
+        configuracionPorDefecto();
+        guardarAsignandoId(55L);
+
+        ArticuloResponse respuesta = service.crear(requestMinimo(), USUARIO);
+
+        assertThat(respuesta.moneda()).isEqualTo(Moneda.ARS);
+        verifyNoInteractions(dolarDePrecios);
+    }
+
+    @Test
+    @DisplayName("crear en USD con costo 10 y vigente 1000: costo 10,00 USD y precio 15.730 en pesos, historial MANUAL en USD")
+    void crearEnDolares() {
+        configuracionPorDefecto();
+        dolar(true, "1000");
+        guardarAsignandoId(55L);
+
+        ArticuloResponse respuesta = service.crear(requestEn(Moneda.USD, "10", null), USUARIO);
+
+        assertThat(respuesta.moneda()).isEqualTo(Moneda.USD);
+        assertThat(respuesta.costo()).isEqualByComparingTo("10.00");
+        assertThat(respuesta.precioFinal()).isEqualByComparingTo("15730");
+        ArgumentCaptor<HistorialPrecio> historial = ArgumentCaptor.forClass(HistorialPrecio.class);
+        verify(historialPrecioRepository).save(historial.capture());
+        assertThat(historial.getValue().getOrigen()).isEqualTo(OrigenPrecio.MANUAL);
+        assertThat(historial.getValue().getMoneda()).isEqualTo(Moneda.USD);
+        assertThat(historial.getValue().getUsuarioId()).isEqualTo(USUARIO);
+        assertThat(historial.getValue().getPrecioNuevo()).isEqualByComparingTo("15730");
+    }
+
+    @Test
+    @DisplayName("crear en USD usa el vigente de la ferreteria, no uno fijo: con 1100 el mismo articulo vale 17.310")
+    void crearEnDolaresUsaElVigente() {
+        configuracionPorDefecto();
+        dolar(true, "1100");
+        guardarAsignandoId(55L);
+
+        ArticuloResponse respuesta = service.crear(requestEn(Moneda.USD, "10", null), USUARIO);
+
+        assertThat(respuesta.precioFinal()).isEqualByComparingTo("17310");
+    }
+
+    @Test
+    @DisplayName("crear en USD sin ninguna cotizacion da 409 y no guarda nada; el mismo articulo en pesos se guarda normal (R-003)")
+    void crearEnDolaresSinCotizacion() {
+        configuracionPorDefecto();
+        dolar(true, null);
+        guardarAsignandoId(55L);
+
+        assertThatThrownBy(() -> service.crear(requestEn(Moneda.USD, "10", null), USUARIO))
+                .isInstanceOf(ConflictException.class)
+                .hasMessage(SIN_COTIZACION);
+        verify(articuloRepository, never()).save(any());
+        verifyNoInteractions(historialPrecioRepository);
+
+        ArticuloResponse enPesos = service.crear(requestEn(Moneda.ARS, "10", null), USUARIO);
+        assertThat(enPesos.moneda()).isEqualTo(Moneda.ARS);
+        verify(articuloRepository).save(any(Articulo.class));
+    }
+
+    @Test
+    @DisplayName("crear en USD con la cotizacion apagada da 409 «Activá la cotización…» y no guarda nada")
+    void crearEnDolaresConCotizacionApagada() {
+        configuracionPorDefecto();
+        dolar(false, "1000");
+
+        assertThatThrownBy(() -> service.crear(requestEn(Moneda.USD, "10", null), USUARIO))
+                .isInstanceOf(ConflictException.class)
+                .hasMessage(COTIZACION_APAGADA);
+        verify(articuloRepository, never()).save(any());
+        verifyNoInteractions(historialPrecioRepository);
+    }
+
+    @Test
+    @DisplayName("crear en pesos con la cotizacion apagada se guarda normal")
+    void crearEnPesosConCotizacionApagada() {
+        configuracionPorDefecto();
+        dolar(false, null);
+        guardarAsignandoId(55L);
+
+        ArticuloResponse respuesta = service.crear(requestEn(Moneda.ARS, "1000", null), USUARIO);
+
+        assertThat(respuesta.precioFinal()).isEqualByComparingTo("1580");
+    }
+
+    @Test
+    @DisplayName("actualizar de pesos a USD con la cotizacion apagada da 409 y el articulo sigue en pesos")
+    void pasarAUsdConCotizacionApagada() throws Exception {
+        configuracionPorDefecto();
+        dolar(false, "1000");
+        Articulo articulo = existente(55L);
+        when(articuloRepository.findScoped(55L)).thenReturn(Optional.of(articulo));
+
+        assertThatThrownBy(() -> service.actualizar(55L, requestEn(Moneda.USD, "10", null), USUARIO))
+                .isInstanceOf(ConflictException.class)
+                .hasMessage(COTIZACION_APAGADA);
+
+        assertThat(articulo.getMoneda()).isEqualTo(Moneda.ARS);
+        assertThat(articulo.getCosto()).isEqualByComparingTo("100");
+        assertThat(articulo.getPrecioFinal()).isEqualByComparingTo("170");
+        verifyNoInteractions(historialPrecioRepository);
+    }
+
+    @Test
+    @DisplayName("actualizar de pesos a USD toma el costo tal cual (sin convertir) y recalcula con el vigente (R-004)")
+    void pasarAUsdTomaElCostoTalCual() throws Exception {
+        configuracionPorDefecto();
+        dolar(true, "1000");
+        Articulo articulo = existente(55L);
+        when(articuloRepository.findScoped(55L)).thenReturn(Optional.of(articulo));
+
+        ArticuloResponse respuesta = service.actualizar(55L, requestEn(Moneda.USD, "10", null), USUARIO);
+
+        assertThat(respuesta.moneda()).isEqualTo(Moneda.USD);
+        assertThat(respuesta.costo()).isEqualByComparingTo("10");
+        assertThat(respuesta.precioFinal()).isEqualByComparingTo("15730");
+        ArgumentCaptor<HistorialPrecio> historial = ArgumentCaptor.forClass(HistorialPrecio.class);
+        verify(historialPrecioRepository).save(historial.capture());
+        assertThat(historial.getValue().getOrigen()).isEqualTo(OrigenPrecio.MANUAL);
+        assertThat(historial.getValue().getMoneda()).isEqualTo(Moneda.USD);
+        assertThat(historial.getValue().getCostoAnterior()).isEqualByComparingTo("100");
+        assertThat(historial.getValue().getCostoNuevo()).isEqualByComparingTo("10");
+        assertThat(historial.getValue().getPrecioAnterior()).isEqualByComparingTo("170");
+        assertThat(historial.getValue().getPrecioNuevo()).isEqualByComparingTo("15730");
+    }
+
+    @Test
+    @DisplayName("actualizar de pesos a USD sin ninguna cotizacion da 409 y no cambia nada")
+    void pasarAUsdSinCotizacion() throws Exception {
+        configuracionPorDefecto();
+        dolar(true, null);
+        Articulo articulo = existente(55L);
+        when(articuloRepository.findScoped(55L)).thenReturn(Optional.of(articulo));
+
+        assertThatThrownBy(() -> service.actualizar(55L, requestEn(Moneda.USD, "10", null), USUARIO))
+                .isInstanceOf(ConflictException.class)
+                .hasMessage(SIN_COTIZACION);
+
+        assertThat(articulo.getMoneda()).isEqualTo(Moneda.ARS);
+        verifyNoInteractions(historialPrecioRepository);
+    }
+
+    @Test
+    @DisplayName("editar uno que YA es USD con la cotizacion apagada se permite y calcula con el vigente congelado: margen 40 % = 16.940 con 1000")
+    void editarUnoEnDolaresConCotizacionApagada() throws Exception {
+        configuracionPorDefecto();
+        // El dolar de la API puede ir por 1100: el servicio solo conoce el vigente de la ferreteria.
+        dolar(false, "1000");
+        Articulo articulo = existenteEnDolares(55L, "1000");
+        assertThat(articulo.getPrecioFinal()).isEqualByComparingTo("15730");
+        when(articuloRepository.findScoped(55L)).thenReturn(Optional.of(articulo));
+
+        ArticuloResponse respuesta = service.actualizar(55L, requestEn(Moneda.USD, "10", "40"), USUARIO);
+
+        // 10 x 1000 = 10000; x 1,40 = 14000; x 1,21 = 16940
+        assertThat(respuesta.precioFinal()).isEqualByComparingTo("16940");
+        assertThat(respuesta.moneda()).isEqualTo(Moneda.USD);
+        ArgumentCaptor<HistorialPrecio> historial = ArgumentCaptor.forClass(HistorialPrecio.class);
+        verify(historialPrecioRepository).save(historial.capture());
+        assertThat(historial.getValue().getPrecioAnterior()).isEqualByComparingTo("15730");
+        assertThat(historial.getValue().getPrecioNuevo()).isEqualByComparingTo("16940");
+    }
+
+    @Test
+    @DisplayName("editar uno en USD con la cotizacion activa tambien usa el vigente (14:00 con vigente 1000: sigue en 15.730)")
+    void editarUnoEnDolaresUsaElVigenteNoElDeLaApi() throws Exception {
+        configuracionPorDefecto();
+        dolar(true, "1000");
+        Articulo articulo = existenteEnDolares(55L, "1000");
+        when(articuloRepository.findScoped(55L)).thenReturn(Optional.of(articulo));
+
+        ArticuloResponse respuesta = service.actualizar(55L, requestEn(Moneda.USD, "10", null), USUARIO);
+
+        assertThat(respuesta.precioFinal()).isEqualByComparingTo("15730");
+        verifyNoInteractions(historialPrecioRepository);
+    }
+
+    @Test
+    @DisplayName("editar uno en USD cuando no hay ninguna cotizacion ni vigente da 409 y no cambia nada")
+    void editarUnoEnDolaresSinCotizacion() throws Exception {
+        configuracionPorDefecto();
+        dolar(true, null);
+        Articulo articulo = existenteEnDolares(55L, "1000");
+        when(articuloRepository.findScoped(55L)).thenReturn(Optional.of(articulo));
+
+        assertThatThrownBy(() -> service.actualizar(55L, requestEn(Moneda.USD, "10", "40"), USUARIO))
+                .isInstanceOf(ConflictException.class)
+                .hasMessage(SIN_COTIZACION);
+
+        assertThat(articulo.getPrecioFinal()).isEqualByComparingTo("15730");
+    }
+
+    @Test
+    @DisplayName("pasar de USD a pesos no necesita el dolar (ni siquiera con la cotizacion apagada): el costo queda tal cual")
+    void pasarAPesosNoNecesitaElDolar() throws Exception {
+        configuracionPorDefecto();
+        dolar(false, null);
+        Articulo articulo = existenteEnDolares(55L, "1000");
+        when(articuloRepository.findScoped(55L)).thenReturn(Optional.of(articulo));
+
+        ArticuloResponse respuesta = service.actualizar(55L, requestEn(Moneda.ARS, "1000", null), USUARIO);
+
+        assertThat(respuesta.moneda()).isEqualTo(Moneda.ARS);
+        assertThat(respuesta.costo()).isEqualByComparingTo("1000");
+        assertThat(respuesta.precioFinal()).isEqualByComparingTo("1580");
+        verifyNoInteractions(dolarDePrecios);
+    }
+
+    @Test
+    @DisplayName("un PUT sin moneda sobre un articulo en USD lo pasa a pesos (la moneda ausente significa ARS)")
+    void putSinMonedaEsPesos() throws Exception {
+        configuracionPorDefecto();
+        Articulo articulo = existenteEnDolares(55L, "1000");
+        when(articuloRepository.findScoped(55L)).thenReturn(Optional.of(articulo));
+
+        ArticuloResponse respuesta = service.actualizar(55L, requestEn(null, "1000", null), USUARIO);
+
+        assertThat(respuesta.moneda()).isEqualTo(Moneda.ARS);
+        assertThat(respuesta.precioFinal()).isEqualByComparingTo("1580");
     }
 }

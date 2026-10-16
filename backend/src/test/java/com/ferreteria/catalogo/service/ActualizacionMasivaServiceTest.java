@@ -24,6 +24,7 @@ import com.ferreteria.catalogo.model.ContextoPrecio;
 import com.ferreteria.catalogo.model.DatosArticulo;
 import com.ferreteria.catalogo.model.FiltroArticulos;
 import com.ferreteria.catalogo.model.HistorialPrecio;
+import com.ferreteria.catalogo.model.Moneda;
 import com.ferreteria.catalogo.model.OrigenPrecio;
 import com.ferreteria.catalogo.model.Proveedor;
 import com.ferreteria.catalogo.model.Rubro;
@@ -36,6 +37,7 @@ import com.ferreteria.common.exception.BadRequestException;
 import com.ferreteria.common.exception.ConflictException;
 import com.ferreteria.common.exception.DatosInvalidosException;
 import com.ferreteria.common.exception.ResourceNotFoundException;
+import com.ferreteria.cotizacion.api.DolarDePrecios;
 import com.ferreteria.ferreteria.model.ConfiguracionPrecios;
 import com.ferreteria.ferreteria.service.ConfiguracionPreciosService;
 import com.ferreteria.tenant.TenantContext;
@@ -82,6 +84,9 @@ class ActualizacionMasivaServiceTest {
     @Mock
     ConfiguracionPreciosService configuracionPreciosService;
 
+    @Mock
+    DolarDePrecios dolarDePrecios;
+
     private static ValidatorFactory fabricaDeValidadores;
 
     ActualizacionMasivaService service;
@@ -101,7 +106,7 @@ class ActualizacionMasivaServiceTest {
         TenantContext.setCurrentFerreteriaId(FERRETERIA);
         service = new ActualizacionMasivaService(
                 articuloRepository, proveedorRepository, rubroRepository, historialPrecioRepository,
-                configuracionPreciosService, fabricaDeValidadores.getValidator());
+                configuracionPreciosService, fabricaDeValidadores.getValidator(), dolarDePrecios);
     }
 
     @AfterEach
@@ -842,6 +847,128 @@ class ActualizacionMasivaServiceTest {
                     .isInstanceOf(IllegalStateException.class);
 
             verify(historialPrecioRepository, never()).saveAll(any());
+        }
+    }
+
+    // ---- articulos en dolares (T-036) ----
+
+    @Nested
+    @DisplayName("articulos en USD: el plan y el aplicar usan el dolar vigente de la ferreteria")
+    class ArticulosEnDolares {
+
+        private final FiltroArticulos vacio = new FiltroArticulos(null, null, null, false);
+
+        /** Articulo en USD sin rubro ni margen propio (margen de la ferreteria 30, IVA 21), calculado con ese dolar. */
+        private Articulo enDolares(long id, String costo, String dolarConElQueSeCalculo) throws Exception {
+            Articulo articulo = new Articulo(FERRETERIA);
+            articulo.actualizar(new DatosArticulo(
+                            "INT-" + id, null, "PROV-" + id, "Articulo USD " + id, null, PROVEEDOR, bd(costo), null,
+                            AlicuotaIva.IVA_21, Unidad.UNIDAD, BigDecimal.ZERO, null, true, Moneda.USD),
+                    new ContextoPrecio(null, bd("30.00"), bd("10.00"), bd(dolarConElQueSeCalculo)));
+            fijar(articulo, "id", id);
+            return articulo;
+        }
+
+        private void vigente(String dolar) {
+            when(dolarDePrecios.vigente()).thenReturn(dolar == null ? Optional.empty() : Optional.of(bd(dolar)));
+        }
+
+        @Test
+        @DisplayName("vista previa: 10 USD +10 % de costo con el vigente 1000 pasa de 15.730 a 17.310 (11 x 1000 x 1,30 x 1,21 = 17.303)")
+        void vistaPreviaUsaElVigente() throws Exception {
+            alcance(vacio, List.of(enDolares(1, "10.00", "1000")));
+            vigente("1000");
+
+            VistaPreviaMasivaResponse respuesta = service.vistaPrevia(pedidoMasDiez());
+
+            assertThat(respuesta.errores()).isEmpty();
+            assertThat(respuesta.cambios()).hasSize(1);
+            assertThat(respuesta.cambios().get(0).costoNuevo()).isEqualByComparingTo("11.00");
+            assertThat(respuesta.cambios().get(0).precioAnterior()).isEqualByComparingTo("15730");
+            assertThat(respuesta.cambios().get(0).precioNuevo()).isEqualByComparingTo("17310");
+        }
+
+        @Test
+        @DisplayName("el dolar es el vigente de la ferreteria, no uno fijo: con 950 el mismo ajuste da 16.440")
+        void otroVigenteOtroPrecio() throws Exception {
+            alcance(vacio, List.of(enDolares(1, "10.00", "1000")));
+            vigente("950");
+
+            VistaPreviaMasivaResponse respuesta = service.vistaPrevia(pedidoMasDiez());
+
+            // 11 x 950 = 10450; x 1,30 = 13585; x 1,21 = 16437,85 -> 16440
+            assertThat(respuesta.cambios().get(0).precioNuevo()).isEqualByComparingTo("16440");
+        }
+
+        @Test
+        @DisplayName("aplicar: el articulo USD queda con costo 11 USD y precio 17.310, con un MASIVO en USD")
+        void aplicarUsaElVigente() throws Exception {
+            Articulo usd = enDolares(1, "10.00", "1000");
+            alcance(vacio, List.of(usd));
+            vigente("1000");
+            String huella = huellaDe(pedidoMasDiez());
+
+            service.aplicar(aplicarMasDiez(huella), USUARIO);
+
+            assertThat(usd.getCosto()).isEqualByComparingTo("11.00");
+            assertThat(usd.getMoneda()).isEqualTo(Moneda.USD);
+            assertThat(usd.getPrecioFinal()).isEqualByComparingTo("17310");
+            assertThat(historialGuardado()).singleElement().satisfies(h -> {
+                assertThat(h.getOrigen()).isEqualTo(OrigenPrecio.MASIVO);
+                assertThat(h.getMoneda()).isEqualTo(Moneda.USD);
+                assertThat(h.getPrecioAnterior()).isEqualByComparingTo("15730");
+                assertThat(h.getPrecioNuevo()).isEqualByComparingTo("17310");
+            });
+        }
+
+        @Test
+        @DisplayName("MARGEN sobre un USD: fijar 40 % con el vigente 1000 da 16.940")
+        void margenSobreUnUsd() throws Exception {
+            Articulo usd = enDolares(1, "10.00", "1000");
+            alcance(vacio, List.of(usd));
+            vigente("1000");
+            ActualizacionMasivaRequest vistaPrevia = pedido(null, null, null, false, "MARGEN", "40");
+            String huella = huellaDe(vistaPrevia);
+
+            service.aplicar(aplicarPedido(null, null, null, false, "MARGEN", "40", huella), USUARIO);
+
+            assertThat(usd.getPrecioFinal()).isEqualByComparingTo("16940");
+            assertThat(usd.getCosto()).isEqualByComparingTo("10.00");
+        }
+
+        @Test
+        @DisplayName("un alcance con pesos y dolares calcula cada uno con lo suyo: ARS 160 -> 180 y USD 15.730 -> 17.310")
+        void mezclaDeMonedas() throws Exception {
+            alcance(vacio, List.of(articulo(1, "100.00"), enDolares(2, "10.00", "1000")));
+            vigente("1000");
+
+            VistaPreviaMasivaResponse respuesta = service.vistaPrevia(pedidoMasDiez());
+
+            assertThat(respuesta.cambios()).hasSize(2);
+            assertThat(respuesta.cambios().get(0).precioNuevo()).isEqualByComparingTo("180");
+            assertThat(respuesta.cambios().get(1).precioNuevo()).isEqualByComparingTo("17310");
+        }
+
+        @Test
+        @DisplayName("si no hay ningun articulo en USD en el alcance no se consulta el dolar")
+        void sinUsdNoConsultaElDolar() throws Exception {
+            alcance(vacio, List.of(articulo(1, "100.00")));
+
+            service.vistaPrevia(pedidoMasDiez());
+
+            verifyNoInteractions(dolarDePrecios);
+        }
+
+        @Test
+        @DisplayName("con un USD en el alcance y ninguna cotizacion guardada: 409 claro (nunca IllegalStateException) y no se escribe nada")
+        void sinCotizacionDa409() throws Exception {
+            alcance(vacio, List.of(enDolares(1, "10.00", "1000")));
+            vigente(null);
+
+            assertThatThrownBy(() -> service.vistaPrevia(pedidoMasDiez()))
+                    .isInstanceOf(ConflictException.class)
+                    .hasMessage("Todavía no hay cotización del dólar. Probá en unos minutos");
+            verificarSinEscrituras();
         }
     }
 }

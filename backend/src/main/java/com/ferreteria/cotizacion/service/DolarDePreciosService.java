@@ -26,7 +26,6 @@ import java.util.Optional;
 public class DolarDePreciosService implements DolarDePrecios {
 
     static final String COTIZACION_APAGADA = "La cotización está apagada";
-    static final String SIN_COTIZACION = "Todavía no hay cotización del dólar. Probá en unos minutos";
 
     private final ConfiguracionCotizacionService configuracionService;
     private final ConfiguracionCotizacionRepository configuraciones;

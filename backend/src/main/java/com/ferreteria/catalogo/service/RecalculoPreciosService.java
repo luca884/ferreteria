@@ -4,11 +4,14 @@ import com.ferreteria.catalogo.model.Articulo;
 import com.ferreteria.catalogo.model.ContextoPrecio;
 import com.ferreteria.catalogo.model.ContextosDePrecio;
 import com.ferreteria.catalogo.model.HistorialPrecio;
+import com.ferreteria.catalogo.model.Moneda;
 import com.ferreteria.catalogo.model.OrigenPrecio;
 import com.ferreteria.catalogo.model.Rubro;
 import com.ferreteria.catalogo.repository.ArticuloRepository;
 import com.ferreteria.catalogo.repository.HistorialPrecioRepository;
 import com.ferreteria.catalogo.repository.RubroRepository;
+import com.ferreteria.common.exception.ConflictException;
+import com.ferreteria.cotizacion.api.DolarDePrecios;
 import com.ferreteria.ferreteria.model.ConfiguracionPrecios;
 import com.ferreteria.ferreteria.service.ConfiguracionPreciosService;
 import org.springframework.stereotype.Service;
@@ -30,16 +33,19 @@ public class RecalculoPreciosService {
     private final HistorialPrecioRepository historialPrecioRepository;
     private final ConfiguracionPreciosService configuracionPreciosService;
     private final RubroRepository rubroRepository;
+    private final DolarDePrecios dolarDePrecios;
 
     public RecalculoPreciosService(
             ArticuloRepository articuloRepository,
             HistorialPrecioRepository historialPrecioRepository,
             ConfiguracionPreciosService configuracionPreciosService,
-            RubroRepository rubroRepository) {
+            RubroRepository rubroRepository,
+            DolarDePrecios dolarDePrecios) {
         this.articuloRepository = articuloRepository;
         this.historialPrecioRepository = historialPrecioRepository;
         this.configuracionPreciosService = configuracionPreciosService;
         this.rubroRepository = rubroRepository;
+        this.dolarDePrecios = dolarDePrecios;
     }
 
     /**
@@ -51,10 +57,12 @@ public class RecalculoPreciosService {
     @Transactional(propagation = Propagation.MANDATORY)
     public void porCambioDeMargenDeRubro(Rubro rubro, Long usuarioId) {
         ConfiguracionPrecios configuracion = configuracionPreciosService.actual();
+        List<Articulo> herederos = articuloRepository.heredanMargenDeRubroScoped(rubro.getId());
         ContextoPrecio ctx = new ContextoPrecio(
-                rubro.getMargenPorcentaje(), configuracion.margenDefectoPorcentaje(), configuracion.redondeoMultiplo());
+                rubro.getMargenPorcentaje(), configuracion.margenDefectoPorcentaje(), configuracion.redondeoMultiplo(),
+                dolarVigenteSiHayArticulosEnDolares(herederos));
 
-        List<HistorialPrecio> historial = articuloRepository.heredanMargenDeRubroScoped(rubro.getId()).stream()
+        List<HistorialPrecio> historial = herederos.stream()
                 .flatMap(articulo -> recalcular(articulo, ctx, usuarioId))
                 .toList();
         if (!historial.isEmpty()) {
@@ -84,6 +92,18 @@ public class RecalculoPreciosService {
             historialPrecioRepository.saveAll(historial);
         }
         return historial.size();
+    }
+
+    /**
+     * El dolar vigente de la ferreteria (no el valor de la API en ese momento), solo si algun heredero esta en USD: con
+     * todo en pesos no se consulta. Sin ninguna cotizacion guardada no se puede calcular su precio: 409, y se revierte
+     * tambien el cambio del rubro.
+     */
+    private BigDecimal dolarVigenteSiHayArticulosEnDolares(List<Articulo> articulos) {
+        if (articulos.stream().noneMatch(articulo -> articulo.getMoneda() == Moneda.USD)) {
+            return null;
+        }
+        return dolarDePrecios.vigente().orElseThrow(() -> new ConflictException(DolarDePrecios.SIN_COTIZACION));
     }
 
     private Stream<HistorialPrecio> recalcular(Articulo articulo, ContextoPrecio ctx, Long usuarioId) {

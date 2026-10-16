@@ -2,6 +2,7 @@ package com.ferreteria.catalogo.dto;
 
 import com.ferreteria.catalogo.model.AlicuotaIva;
 import com.ferreteria.catalogo.model.Articulo;
+import com.ferreteria.catalogo.model.Moneda;
 import com.ferreteria.catalogo.model.Unidad;
 
 import java.math.BigDecimal;
@@ -16,6 +17,8 @@ public record ArticuloResponse(
         Long rubroId,
         Long proveedorId,
         BigDecimal costo,
+        /** Moneda del costo; el precio final siempre esta en pesos. */
+        Moneda moneda,
         BigDecimal margenPorcentaje,
         AlicuotaIva alicuotaIva,
         BigDecimal precioFinal,
@@ -30,7 +33,7 @@ public record ArticuloResponse(
     public static ArticuloResponse from(Articulo articulo, BigDecimal stockActual) {
         ArticuloResponse base = from(articulo);
         return new ArticuloResponse(base.id(), base.codigoInterno(), base.codigoBarras(), base.codigoProveedor(),
-                base.descripcion(), base.rubroId(), base.proveedorId(), base.costo(), base.margenPorcentaje(),
+                base.descripcion(), base.rubroId(), base.proveedorId(), base.costo(), base.moneda(), base.margenPorcentaje(),
                 base.alicuotaIva(), base.precioFinal(), base.unidad(), stockActual, base.stockMinimo(),
                 base.ubicacion(), base.activo(), base.precioListaProveedor());
     }
@@ -45,6 +48,7 @@ public record ArticuloResponse(
                 articulo.getRubroId(),
                 articulo.getProveedorId(),
                 articulo.getCosto(),
+                articulo.getMoneda(),
                 articulo.getMargenPorcentaje(),
                 articulo.getAlicuotaIva(),
                 articulo.getPrecioFinal(),

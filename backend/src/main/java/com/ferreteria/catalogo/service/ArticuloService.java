@@ -8,6 +8,7 @@ import com.ferreteria.catalogo.model.ContextoPrecio;
 import com.ferreteria.catalogo.model.DatosArticulo;
 import com.ferreteria.catalogo.model.FiltroArticulos;
 import com.ferreteria.catalogo.model.HistorialPrecio;
+import com.ferreteria.catalogo.model.Moneda;
 import com.ferreteria.catalogo.model.OrigenPrecio;
 import com.ferreteria.catalogo.model.Rubro;
 import com.ferreteria.catalogo.repository.ArticuloRepository;
@@ -17,6 +18,7 @@ import com.ferreteria.catalogo.repository.RubroRepository;
 import com.ferreteria.common.PageResponse;
 import com.ferreteria.common.exception.ConflictException;
 import com.ferreteria.common.exception.ResourceNotFoundException;
+import com.ferreteria.cotizacion.api.DolarDePrecios;
 import com.ferreteria.ferreteria.model.ConfiguracionPrecios;
 import com.ferreteria.ferreteria.service.ConfiguracionPreciosService;
 import com.ferreteria.tenant.TenantContext;
@@ -34,24 +36,28 @@ import java.util.Optional;
 public class ArticuloService {
 
     static final int TAMANO_MAXIMO = 100;
+    static final String COTIZACION_APAGADA = "Activá la cotización para cargar artículos en dólares";
 
     private final ArticuloRepository articuloRepository;
     private final RubroRepository rubroRepository;
     private final ProveedorRepository proveedorRepository;
     private final HistorialPrecioRepository historialPrecioRepository;
     private final ConfiguracionPreciosService configuracionPreciosService;
+    private final DolarDePrecios dolarDePrecios;
 
     public ArticuloService(
             ArticuloRepository articuloRepository,
             RubroRepository rubroRepository,
             ProveedorRepository proveedorRepository,
             HistorialPrecioRepository historialPrecioRepository,
-            ConfiguracionPreciosService configuracionPreciosService) {
+            ConfiguracionPreciosService configuracionPreciosService,
+            DolarDePrecios dolarDePrecios) {
         this.articuloRepository = articuloRepository;
         this.rubroRepository = rubroRepository;
         this.proveedorRepository = proveedorRepository;
         this.historialPrecioRepository = historialPrecioRepository;
         this.configuracionPreciosService = configuracionPreciosService;
+        this.dolarDePrecios = dolarDePrecios;
     }
 
     /**
@@ -79,7 +85,7 @@ public class ArticuloService {
     public ArticuloResponse crear(ArticuloRequest request, Long usuarioId) {
         DatosArticulo datos = request.toDatos();
         validarUnicidad(datos, null);
-        ContextoPrecio ctx = contextoDePrecio(datos);
+        ContextoPrecio ctx = contextoDePrecio(datos, false);
 
         Articulo articulo = new Articulo(TenantContext.requireFerreteriaId());
         Optional<CambioPrecio> cambio = articulo.actualizar(datos, ctx);
@@ -95,7 +101,7 @@ public class ArticuloService {
         // Sin activo en el pedido se conserva el estado actual: un PUT no reactiva por omision.
         DatosArticulo datos = request.toDatos(articulo.isActivo());
         validarUnicidad(datos, id);
-        ContextoPrecio ctx = contextoDePrecio(datos);
+        ContextoPrecio ctx = contextoDePrecio(datos, articulo.getMoneda() == Moneda.USD);
 
         // El articulo ya esta administrado por JPA: los cambios se escriben al terminar la transaccion.
         Optional<CambioPrecio> cambio = articulo.actualizar(datos, ctx);
@@ -165,9 +171,13 @@ public class ArticuloService {
 
     /**
      * Resuelve rubro y proveedor con findScoped (un id ajeno da 404, nunca se enlaza a otra ferreteria)
-     * y arma lo que necesita el calculo del precio. Sin rubro, margenRubro es null.
+     * y arma lo que necesita el calculo del precio. Sin rubro, margenRubro es null. Un articulo en pesos no consulta
+     * el dolar; uno en dolares se calcula con el dolar VIGENTE de la ferreteria (el que fijo su ultimo recalculo), no
+     * con el valor de la API en ese momento.
+     *
+     * @param yaEraEnDolares true si el articulo que se edita ya estaba en USD antes de este cambio (false en el alta)
      */
-    private ContextoPrecio contextoDePrecio(DatosArticulo datos) {
+    private ContextoPrecio contextoDePrecio(DatosArticulo datos, boolean yaEraEnDolares) {
         Rubro rubro = datos.rubroId() == null ? null : rubroRepository.findScoped(datos.rubroId())
                 .orElseThrow(() -> new ResourceNotFoundException("Rubro no encontrado"));
         if (datos.proveedorId() != null) {
@@ -178,7 +188,20 @@ public class ArticuloService {
         return new ContextoPrecio(
                 rubro == null ? null : rubro.getMargenPorcentaje(),
                 configuracion.margenDefectoPorcentaje(),
-                configuracion.redondeoMultiplo());
+                configuracion.redondeoMultiplo(),
+                datos.moneda() == Moneda.USD ? dolarParaArticulosEnDolares(yaEraEnDolares) : null);
+    }
+
+    /**
+     * El dolar vigente de la ferreteria. Dar de alta un articulo en USD o pasar uno de pesos a USD exige la cotizacion
+     * activada (409); editar uno que ya esta en USD se permite con la cotizacion apagada, con el dolar vigente congelado.
+     * Sin ningun valor guardado el precio no se puede calcular (409).
+     */
+    private BigDecimal dolarParaArticulosEnDolares(boolean yaEraEnDolares) {
+        if (!yaEraEnDolares && !dolarDePrecios.activa()) {
+            throw new ConflictException(COTIZACION_APAGADA);
+        }
+        return dolarDePrecios.vigente().orElseThrow(() -> new ConflictException(DolarDePrecios.SIN_COTIZACION));
     }
 
     /** Solo se escribe historial si cambio el costo o el precio final. */
