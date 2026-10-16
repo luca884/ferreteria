@@ -165,13 +165,13 @@ class MigracionV6Test extends IntegrationTestBase {
     // ---- aditiva ----
 
     @Test
-    @DisplayName("aditiva: los articulos que ya existian (demo) quedan con NULL en las cuatro columnas nuevas")
+    @DisplayName("aditiva: los articulos que ya existian (los 8 de demo, ids 1 a 8) quedan con NULL en las cuatro columnas nuevas")
     void losExistentesQuedanEnNull() {
-        // La base se comparte y no se revierte: se excluyen los que insertan los tests de esta clase (V6-*).
-        Integer total = jdbc.queryForObject(
-            "select count(*) from articulo where codigo_interno not like 'V6-%'", Integer.class);
+        // La base se comparte y no se revierte: las importaciones de otros tests marcan sus propios articulos, asi que
+        // solo se miran los de db/dev-data/V1001 (ids 1 a 8), que son los que ya existian cuando corrio V6.
+        Integer total = jdbc.queryForObject("select count(*) from articulo where id <= 8", Integer.class);
         Integer conAlgunValor = jdbc.queryForObject(
-            "select count(*) from articulo where codigo_interno not like 'V6-%' and (ajuste1 is not null "
+            "select count(*) from articulo where id <= 8 and (ajuste1 is not null "
                 + "or ajuste2 is not null or ajuste3 is not null or ultima_importacion_id is not null)", Integer.class);
 
         assertThat(total).isPositive();

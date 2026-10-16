@@ -25,11 +25,6 @@ public class LectorDeListas {
         return lectorPara(contenido).leer(contenido);
     }
 
-    /** Solo las filas de la hoja pedida (base 0); se borra cuando el servicio lea el libro entero. */
-    public LecturaLista leer(byte[] contenido, int hoja) {
-        return lectorPara(contenido).leer(contenido, hoja);
-    }
-
     private LectorDeLista lectorPara(byte[] contenido) {
         return switch (DetectorDeFormato.detectar(contenido)) {
             case XLSX, XLS -> lectorExcel;

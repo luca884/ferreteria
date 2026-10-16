@@ -15,7 +15,6 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
@@ -26,7 +25,7 @@ import java.io.IOException;
 import static org.springframework.http.MediaType.MULTIPART_FORM_DATA_VALUE;
 
 /**
- * Importacion de listas de precios de un proveedor (CU-04). Solo el Dueno. Los tres pedidos son
+ * Importacion de listas de precios de un proveedor (CU-04). Solo el Dueno. Los tres pedidos que suben un archivo son
  * multipart: la parte "archivo" y, salvo en la muestra, la parte "datos" (JSON).
  */
 @RestController
@@ -39,12 +38,11 @@ public class ImportacionController {
         this.importacionService = importacionService;
     }
 
-    /** Las primeras filas crudas de una hoja, para armar el mapeo de columnas. */
+    /** Todas las hojas del archivo con sus filas crudas y la propuesta de mapeo de columnas. */
     @PostMapping(path = "/muestra", consumes = MULTIPART_FORM_DATA_VALUE)
     @PreAuthorize("hasRole('DUENO')")
-    public MuestraResponse muestra(
-            @RequestPart("archivo") MultipartFile archivo, @RequestParam(defaultValue = "0") int hoja) {
-        return importacionService.muestra(aArchivoLista(archivo), hoja);
+    public MuestraResponse muestra(@RequestPart("archivo") MultipartFile archivo) {
+        return importacionService.muestra(aArchivoLista(archivo));
     }
 
     /** Lo que pasaria al aplicar la lista; no escribe nada. */

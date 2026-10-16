@@ -116,14 +116,19 @@ public final class PlanificadorImportacion {
     /**
      * Los codigos (con trim) de las filas de datos que podrian ser codigo interno de un articulo
      * nuevo, es decir de 30 caracteres o menos, sin repetir segun la clave. El servicio los usa para
-     * preguntar de una vez cuales ya estan ocupados.
+     * preguntar de una vez cuales ya estan ocupados. Las filas anteriores a {@code filaDesde} no cuentan.
      */
     public static List<String> codigosCandidatos(List<FilaLeida> filas, MapeoLista mapeo) {
+        return codigosCandidatosDeLaZona(filas.stream().filter(fila -> fila.numero() >= mapeo.filaDesde()).toList(), mapeo);
+    }
+
+    /**
+     * Lo mismo para las filas de la zona de datos ({@link ZonaDeDatos}), donde cada hoja arranca en su encabezado:
+     * aca no se mira {@code filaDesde}.
+     */
+    public static List<String> codigosCandidatosDeLaZona(List<FilaLeida> filasDeDatos, MapeoLista mapeo) {
         Map<String, String> porClave = new LinkedHashMap<>();
-        for (FilaLeida fila : filas) {
-            if (fila.numero() < mapeo.filaDesde()) {
-                continue;
-            }
+        for (FilaLeida fila : filasDeDatos) {
             String codigo = recortar(fila.celda(mapeo.columnaCodigo()).texto());
             if (!codigo.isEmpty() && largo(codigo) <= LARGO_MAXIMO_CODIGO_INTERNO) {
                 porClave.putIfAbsent(NormalizadorCodigo.clave(codigo), codigo);
@@ -132,10 +137,29 @@ public final class PlanificadorImportacion {
         return new ArrayList<>(porClave.values());
     }
 
+    /**
+     * Los codigos de barras (sin espacios sobrantes) de las filas de datos, sin repetir y en el orden del archivo,
+     * para preguntar de una vez cuales ya usa un articulo activo. Los que no se pueden leer (de mas de 30
+     * caracteres) no se consultan: la fila ya da error por su cuenta.
+     */
+    public static List<String> codigosDeBarras(List<FilaLeida> filasDeDatos, MapeoLista mapeo) {
+        if (mapeo.columnaCodigoBarras() == null) {
+            return List.of();
+        }
+        Map<String, String> porClave = new LinkedHashMap<>();
+        for (FilaLeida fila : filasDeDatos) {
+            CodigoBarrasDeLista.ResultadoBarras barras = CodigoBarrasDeLista.interpretar(fila.celda(mapeo.columnaCodigoBarras()));
+            if (barras.esValor()) {
+                porClave.putIfAbsent(NormalizadorCodigo.clave(barras.codigo()), barras.codigo());
+            }
+        }
+        return new ArrayList<>(porClave.values());
+    }
+
     private static List<AvisoDeFila> advertenciasDeEncabezado(EntradaPlan entrada) {
         return entrada.mapeo().conEncabezados(entrada.encabezado()).advertenciasContra(entrada.mapeoGuardado())
             .stream()
-            .map(mensaje -> new AvisoDeFila(null, null, mensaje))
+            .map(mensaje -> new AvisoDeFila(entrada.hojas().isEmpty() ? null : entrada.mapeo().hoja(), null, null, mensaje))
             .toList();
     }
 

@@ -183,6 +183,9 @@ public interface ArticuloRepository extends TenantScopedRepository<Articulo, Lon
     /** Tamano de lote del IN de codigosInternosOcupadosScoped. */
     int LOTE_CODIGOS_INTERNOS = 1000;
 
+    /** Tamano de lote del IN de codigosBarrasActivosOcupadosScoped. */
+    int LOTE_CODIGOS_DE_BARRAS = 1000;
+
     /** UNA consulta: todos los articulos del proveedor, activos e inactivos (importacion de listas). */
     default List<Articulo> deProveedorScoped(Long proveedorId) {
         return deProveedor(TenantContext.requireFerreteriaId(), proveedorId);
@@ -202,6 +205,28 @@ public interface ArticuloRepository extends TenantScopedRepository<Articulo, Lon
         }
         return ocupados;
     }
+
+    /**
+     * Codigos de barras de la ferreteria que ya usa un articulo ACTIVO, tal como estan guardados (como en el alta
+     * manual, uno inactivo no ocupa el codigo). La coleccion ai_ci hace el IN insensible a mayusculas. Parte la
+     * lista en lotes de 1.000.
+     */
+    default List<String> codigosBarrasActivosOcupadosScoped(Collection<String> codigos) {
+        Long ferreteriaId = TenantContext.requireFerreteriaId();
+        List<String> pedidos = List.copyOf(codigos);
+        List<String> ocupados = new ArrayList<>();
+        for (int desde = 0; desde < pedidos.size(); desde += LOTE_CODIGOS_DE_BARRAS) {
+            int hasta = Math.min(desde + LOTE_CODIGOS_DE_BARRAS, pedidos.size());
+            ocupados.addAll(codigosBarrasActivosEn(ferreteriaId, pedidos.subList(desde, hasta)));
+        }
+        return ocupados;
+    }
+
+    @Query("""
+            select a.codigoBarras from Articulo a
+            where a.ferreteriaId = :fid and a.activo = true and a.codigoBarras in :codigos
+            """)
+    List<String> codigosBarrasActivosEn(@Param("fid") Long ferreteriaId, @Param("codigos") List<String> codigos);
 
     default Page<Articulo> buscarScoped(String q, boolean incluirInactivos, Pageable pageable) {
         return buscar(TenantContext.requireFerreteriaId(), null, null, q, incluirInactivos, pageable);

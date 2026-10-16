@@ -329,6 +329,62 @@ class ArticuloRepositoryQueriesTest {
         assertThat(articuloRepository.codigosInternosOcupadosScoped(List.of())).isEmpty();
     }
 
+    // --- Importacion (corte 2): codigos de barras ocupados por articulos activos (bloque 30-7814xxxx) ---
+
+    @Test
+    void codigosDeBarrasOcupadosDevuelveSoloLosDeArticulosActivosDeLaFerreteria() {
+        Long a = ferreteria("30-78140011-1");
+        Long b = ferreteria("30-78140012-2");
+        articulo(a, "BAR-1", "Activo", "7791000000011", null, null, null, null, true);
+        articulo(a, "BAR-2", "Inactivo", "7791000000028", null, null, null, null, false);
+        articulo(a, "BAR-3", "Sin barras", null, null, null, null, null, true);
+        articulo(b, "BAR-B", "De B", "7791000000035", null, null, null, null, true);
+        TenantContext.setCurrentFerreteriaId(a);
+
+        List<String> ocupados = articuloRepository.codigosBarrasActivosOcupadosScoped(
+                List.of("7791000000011", "7791000000028", "7791000000035", "7791000000042"));
+
+        // El inactivo no cuenta (igual que en el alta manual), el de B tampoco y el que nadie tiene, menos.
+        assertThat(ocupados).containsExactly("7791000000011");
+    }
+
+    @Test
+    void codigosDeBarrasOcupadosAceptaListaVaciaYNoVeLosDeOtraFerreteria() {
+        Long a = ferreteria("30-78140013-3");
+        Long b = ferreteria("30-78140014-4");
+        articulo(b, "BAR-B", "De B", "7791000000066", null, null, null, null, true);
+        TenantContext.setCurrentFerreteriaId(a);
+
+        assertThat(articuloRepository.codigosBarrasActivosOcupadosScoped(List.of("7791000000066"))).isEmpty();
+        assertThat(articuloRepository.codigosBarrasActivosOcupadosScoped(List.of())).isEmpty();
+    }
+
+    @Test
+    void codigosDeBarrasOcupadosPartePorLotesDe1000() {
+        Long a = ferreteria("30-78140015-5");
+        articulo(a, "LOTE-B-5", "Primer lote", "9000000000005", null, null, null, null, true);
+        articulo(a, "LOTE-B-1500", "Segundo lote", "9000000001500", null, null, null, null, true);
+        articulo(a, "LOTE-B-2499", "Tercer lote", "9000000002499", null, null, null, null, true);
+        articulo(a, "LOTE-B-FUERA", "No se pide", "8999999999999", null, null, null, null, true);
+        TenantContext.setCurrentFerreteriaId(a);
+        List<String> pedidos = new ArrayList<>();
+        for (int i = 0; i < 2500; i++) {
+            pedidos.add(String.format("9%012d", i));
+        }
+
+        List<String> ocupados = articuloRepository.codigosBarrasActivosOcupadosScoped(pedidos);
+
+        assertThat(ocupados).containsExactlyInAnyOrder("9000000000005", "9000000001500", "9000000002499");
+    }
+
+    @Test
+    void codigosDeBarrasOcupadosSinTenantFalla() {
+        TenantContext.clear();
+
+        assertThatThrownBy(() -> articuloRepository.codigosBarrasActivosOcupadosScoped(List.of("7791000000011")))
+                .isInstanceOf(MissingTenantException.class);
+    }
+
     // --- Actualizacion masiva (CU-05): filtrarScoped / contarScoped con el filtro compartido ---
 
     /** Ids de los articulos de las dos ferreterias del catalogo de filtro, para armar los filtros. */

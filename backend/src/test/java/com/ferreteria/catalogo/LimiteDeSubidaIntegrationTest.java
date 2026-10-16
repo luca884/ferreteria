@@ -150,7 +150,7 @@ class LimiteDeSubidaIntegrationTest extends IntegrationTestBase {
             plano = gzip.readAllBytes();
         }
         JsonNode cuerpo = objectMapper.readTree(plano);
-        assertThat(cuerpo.get("filas")).hasSize(20_001);
+        assertThat(cuerpo.get("hojas").get(0).get("filas")).hasSize(20_001);
         assertThat(respuesta.body().length).isLessThan(plano.length / 2);
     }
 

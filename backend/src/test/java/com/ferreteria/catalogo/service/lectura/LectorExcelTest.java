@@ -36,7 +36,7 @@ class LectorExcelTest {
         "xls", ListasDePrueba::xls);
 
     private LecturaLista leer(String formato, List<List<Object>> filas) {
-        return lector.leer(FORMATOS.get(formato).apply(filas), 0);
+        return lector.leer(FORMATOS.get(formato).apply(filas));
     }
 
     private static List<Object> fila(Object... valores) {
@@ -142,29 +142,18 @@ class LectorExcelTest {
 
     @ParameterizedTest
     @ValueSource(strings = {"xlsx", "xls"})
-    void leeLaHojaElegidaYInformaLosNombresDeTodas(String formato) {
+    void leeCadaHojaConSusFilasYInformaLosNombresDeTodas(String formato) {
         Map<String, List<List<Object>>> hojas = new LinkedHashMap<>();
         hojas.put("Portada", List.of(fila("nada")));
         hojas.put("Precios", List.of(fila("X-1", 5), fila("X-2", 6)));
         byte[] bytes = formato.equals("xlsx") ? ListasDePrueba.xlsxHojas(hojas) : ListasDePrueba.xlsHojas(hojas);
 
-        LecturaLista segunda = lector.leer(bytes, 1);
-        LecturaLista primera = lector.leer(bytes, 0);
+        LecturaLista libro = lector.leer(bytes);
 
-        assertThat(segunda.hojas()).containsExactly("Portada", "Precios");
-        assertThat(segunda.filas()).hasSize(2);
-        assertThat(segunda.filas().get(0).celda(0).texto()).isEqualTo("X-1");
-        assertThat(primera.filas()).hasSize(1);
-    }
-
-    @ParameterizedTest
-    @ValueSource(ints = {1, 5, -1})
-    void unaHojaInexistenteEsUn400(int hoja) {
-        byte[] bytes = ListasDePrueba.xlsx(List.of(fila("a")));
-
-        assertThatThrownBy(() -> lector.leer(bytes, hoja))
-            .isInstanceOf(BadRequestException.class)
-            .hasMessage("La hoja elegida no existe en el archivo.");
+        assertThat(libro.hojas()).containsExactly("Portada", "Precios");
+        assertThat(libro.filasDeHoja(1)).hasSize(2);
+        assertThat(libro.filasDeHoja(1).get(0).celda(0).texto()).isEqualTo("X-1");
+        assertThat(libro.filasDeHoja(0)).hasSize(1);
     }
 
     @Test
@@ -177,7 +166,7 @@ class LectorExcelTest {
         byte[] truncado = Arrays.copyOf(valido, valido.length / 2);
 
         for (byte[] malo : List.of(zipConBasura, oleConBasura, truncado, new byte[0], "texto".getBytes())) {
-            assertThatThrownBy(() -> lector.leer(malo, 0))
+            assertThatThrownBy(() -> lector.leer(malo))
                 .isInstanceOf(BadRequestException.class)
                 .hasMessage("No se pudo leer el archivo. Verificá que no esté dañado.");
         }
@@ -185,7 +174,7 @@ class LectorExcelTest {
 
     @Test
     void unZipQueNoEsUnXlsxComoUnDocxEsUn400() {
-        assertThatThrownBy(() -> lector.leer(ListasDePrueba.docx(), 0))
+        assertThatThrownBy(() -> lector.leer(ListasDePrueba.docx()))
             .isInstanceOf(BadRequestException.class)
             .hasMessage("No se pudo leer el archivo. Verificá que no esté dañado.");
     }
@@ -206,7 +195,7 @@ class LectorExcelTest {
     void unXlsxProtegidoConContrasenaEsUn400() {
         byte[] protegido = ListasDePrueba.xlsxProtegido(List.of(fila("a", 1)), "secreto");
 
-        assertThatThrownBy(() -> lector.leer(protegido, 0))
+        assertThatThrownBy(() -> lector.leer(protegido))
             .isInstanceOf(BadRequestException.class)
             .hasMessage("El archivo está protegido con contraseña.");
     }
@@ -272,20 +261,6 @@ class LectorExcelTest {
 
         assertThat(lectura.hojas()).containsExactly("Primera", "Vacia", "Tercera");
         assertThat(lectura.filas()).extracting(FilaLeida::hoja).containsExactly(0, 2);
-    }
-
-    @Test
-    void leerConHojaFiltraLaSobrecargaVieja() {
-        Map<String, List<List<Object>>> hojas = new LinkedHashMap<>();
-        hojas.put("Portada", List.of(fila("nada")));
-        hojas.put("Precios", List.of(fila("X-1", 5), fila("X-2", 6)));
-        byte[] bytes = ListasDePrueba.xlsxHojas(hojas);
-
-        LecturaLista segunda = lector.leer(bytes, 1);
-
-        assertThat(segunda.hojas()).containsExactly("Portada", "Precios");
-        assertThat(segunda.filas()).extracting(FilaLeida::hoja).containsOnly(1);
-        assertThat(segunda.filas()).extracting(FilaLeida::numero).containsExactly(1, 2);
     }
 
     // ---- corte 2: Celda.porcentaje desde el formato de Excel ----

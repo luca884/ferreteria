@@ -2196,6 +2196,22 @@ class PlanificadorImportacionTest {
         }
 
         @Test
+        @DisplayName("con los nombres de hoja conocidos la advertencia de encabezado lleva la hoja del mapeo")
+        void advertenciaDeEncabezadoConHoja() {
+            MapeoLista guardado = new MapeoLista(0, 2, 0, 1, 2,
+                new MapeoLista.Encabezados("Codigo", "Detalle", "Precio"));
+
+            PlanImportacion plan = escenario().hojas("Lista")
+                .guardado(guardado, fila(1, "Codigo", "Detalle", "Costo"))
+                .articulos(Art.art(1, "A-1", "100"))
+                .filas(fila(2, "A-1", "x", "100"))
+                .planificar();
+
+            assertThat(plan.advertencias()).containsExactly(new AvisoDeFila(0, null, null,
+                "El encabezado de la columna del costo cambió: antes decía «Precio» y ahora dice «Costo». Revisá el mapeo."));
+        }
+
+        @Test
         @DisplayName("sin mapeo guardado o sin fila de encabezado no hay advertencias de encabezado")
         void sinAdvertenciasDeEncabezado() {
             MapeoLista guardado = new MapeoLista(0, 2, 0, 1, 2,
@@ -2255,6 +2271,42 @@ class PlanificadorImportacionTest {
                 List.of(fila(2, de30, "x", "10"), fila(3, de31, "x", "10")), MAPEO);
 
             assertThat(codigos).containsExactly(de30);
+        }
+    }
+
+    // ------------------------------------------------------------------ candidatos para las consultas del servicio (T-134)
+
+    @Nested
+    @DisplayName("T-134: codigos candidatos de la zona de datos")
+    class CandidatosDeLaZona {
+
+        @Test
+        @DisplayName("los codigos de la zona no miran filaDesde: la hoja que arranca antes tambien aporta los suyos")
+        void sinFilaDesde() {
+            List<FilaLeida> zona = List.of(
+                filaEnHoja(0, 4, "A-1", "x", "10"), filaEnHoja(1, 2, "B-1", "x", "10"),
+                filaEnHoja(1, 3, " a-1 ", "x", "10"), filaEnHoja(1, 4, "C".repeat(31), "x", "10"),
+                filaEnHoja(1, 5, "", "x", "10"));
+
+            List<String> codigos = PlanificadorImportacion.codigosCandidatosDeLaZona(zona, MAPEO);
+
+            assertThat(codigos).containsExactly("A-1", "B-1");
+        }
+
+        @Test
+        @DisplayName("los codigos de barras salen sin repetir, recortados y en el orden del archivo; sin columna no hay ninguno")
+        void codigosDeBarras() {
+            MapeoLista conBarras = M.mapeo().barras().build();
+            List<FilaLeida> filas = List.of(
+                filaDe(2, "N-1", "x", "10", "", "", "", "", "", "", "", " 7791234567890 "),
+                filaDe(3, "N-2", "x", "10", "", "", "", "", "", "", "", ""),
+                filaDe(4, "N-3", "x", "10", "", "", "", "", "", "", "", "7790000000001"),
+                filaDe(5, "N-4", "x", "10", "", "", "", "", "", "", "", "7791234567890"),
+                filaDe(6, "N-5", "x", "10", "", "", "", "", "", "", "", "9".repeat(31)));
+
+            assertThat(PlanificadorImportacion.codigosDeBarras(filas, conBarras))
+                .containsExactly("7791234567890", "7790000000001");
+            assertThat(PlanificadorImportacion.codigosDeBarras(filas, MAPEO)).isEmpty();
         }
     }
 }

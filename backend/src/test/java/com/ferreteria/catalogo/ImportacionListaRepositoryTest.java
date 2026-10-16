@@ -10,6 +10,7 @@ import com.ferreteria.catalogo.repository.ImportacionListaRepository;
 import com.ferreteria.support.IntegrationTestBase;
 import com.ferreteria.tenant.MissingTenantException;
 import com.ferreteria.tenant.TenantContext;
+import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -179,5 +180,93 @@ class ImportacionListaRepositoryTest extends IntegrationTestBase {
         assertThat(leida.getCambianMoneda()).isZero();
         assertThat(leida.getCorrigen()).isZero();
         assertThat(leida.getSalteadas()).isZero();
+    }
+
+    // ---- corte 2: el listado de importaciones (GET), con ferreterias propias (bloque 30-7814xxxx) ----
+
+    private static final String HASH_DEMO = "$2a$10$ElilOUcrECf1crPXSQ9j3eXlR8GWOg4usWY6nWK.XHsCTXJ.3Q4.i";
+
+    private Long ferreteriaPropia(String cuit) {
+        jdbc.update("insert into ferreteria (razon_social, cuit, condicion_iva) "
+                + "values (?, ?, 'RESPONSABLE_INSCRIPTO')", "Listado " + cuit, cuit);
+        return jdbc.queryForObject("select id from ferreteria where cuit = ?", Long.class, cuit);
+    }
+
+    private Long usuarioPropio(Long ferreteriaId, String email) {
+        jdbc.update("insert into usuario (ferreteria_id, email, password_hash, nombre, rol) "
+                + "values (?, ?, ?, 'Dueno', 'DUENO')", ferreteriaId, email, HASH_DEMO);
+        return jdbc.queryForObject("select id from usuario where email = ?", Long.class, email);
+    }
+
+    private Long importacion(Long ferreteriaId, Long usuarioId, Long proveedorId, String archivo, String fecha) {
+        TenantContext.setCurrentFerreteriaId(ferreteriaId);
+        Long id = repository.save(ImportacionLista.aplicada(ferreteriaId, proveedorId, usuarioId, archivo, CONTEOS)).getId();
+        jdbc.update("update importacion_lista set fecha = ? where id = ?", fecha, id);
+        return id;
+    }
+
+    @Test
+    void listarScopedDevuelveLasDeLaFerreteriaDeLaMasNuevaALaMasVieja() {
+        Long a = ferreteriaPropia("30-78140001-1");
+        Long usuarioA = usuarioPropio(a, "listado-t78a@test.local");
+        Long proveedor = proveedor(a);
+        Long vieja = importacion(a, usuarioA, proveedor, "vieja.xlsx", "2026-10-01 09:00:00");
+        Long nuevaPrimera = importacion(a, usuarioA, proveedor, "nueva-1.xlsx", "2026-10-15 10:00:00");
+        Long nuevaSegunda = importacion(a, usuarioA, proveedor, "nueva-2.xlsx", "2026-10-15 10:00:00");
+        Long media = importacion(a, usuarioA, proveedor, "media.xlsx", "2026-10-10 12:00:00");
+        TenantContext.setCurrentFerreteriaId(a);
+
+        List<ImportacionLista> listado = repository.listarScoped(null);
+
+        // Por fecha descendente y, con la misma fecha, por id descendente.
+        assertThat(listado).extracting(ImportacionLista::getId)
+                .containsExactly(nuevaSegunda, nuevaPrimera, media, vieja);
+        assertThat(listado).extracting(ImportacionLista::getArchivo)
+                .containsExactly("nueva-2.xlsx", "nueva-1.xlsx", "media.xlsx", "vieja.xlsx");
+    }
+
+    @Test
+    void listarScopedConProveedorFiltraPorEseProveedor() {
+        Long a = ferreteriaPropia("30-78140002-2");
+        Long usuarioA = usuarioPropio(a, "listado-t78b@test.local");
+        Long proveedor1 = proveedor(a);
+        Long proveedor2 = proveedor(a);
+        Long deUno = importacion(a, usuarioA, proveedor1, "uno.xlsx", "2026-10-01 09:00:00");
+        Long deDos = importacion(a, usuarioA, proveedor2, "dos.xlsx", "2026-10-02 09:00:00");
+        Long otraDeUno = importacion(a, usuarioA, proveedor1, "uno-bis.xlsx", "2026-10-03 09:00:00");
+        TenantContext.setCurrentFerreteriaId(a);
+
+        assertThat(repository.listarScoped(proveedor1)).extracting(ImportacionLista::getId)
+                .containsExactly(otraDeUno, deUno);
+        assertThat(repository.listarScoped(proveedor2)).extracting(ImportacionLista::getId).containsExactly(deDos);
+        assertThat(repository.listarScoped(null)).hasSize(3);
+    }
+
+    @Test
+    void listarScopedNoVeLasDeOtraFerreteriaNiConElProveedorDeEsta() {
+        Long a = ferreteriaPropia("30-78140003-3");
+        Long b = ferreteriaPropia("30-78140004-4");
+        Long usuarioA = usuarioPropio(a, "listado-t78c@test.local");
+        Long usuarioB = usuarioPropio(b, "listado-t78d@test.local");
+        Long proveedorA = proveedor(a);
+        Long proveedorB = proveedor(b);
+        Long deA = importacion(a, usuarioA, proveedorA, "de-a.xlsx", "2026-10-01 09:00:00");
+        Long deB = importacion(b, usuarioB, proveedorB, "de-b.xlsx", "2026-10-02 09:00:00");
+
+        TenantContext.setCurrentFerreteriaId(a);
+        assertThat(repository.listarScoped(null)).extracting(ImportacionLista::getId).containsExactly(deA);
+        assertThat(repository.listarScoped(proveedorB)).isEmpty();
+
+        TenantContext.setCurrentFerreteriaId(b);
+        assertThat(repository.listarScoped(null)).extracting(ImportacionLista::getId).containsExactly(deB);
+        assertThat(repository.listarScoped(proveedorA)).isEmpty();
+    }
+
+    @Test
+    void listarScopedSinTenantFalla() {
+        TenantContext.clear();
+
+        assertThatThrownBy(() -> repository.listarScoped(null)).isInstanceOf(MissingTenantException.class);
+        assertThatThrownBy(() -> repository.listarScoped(1L)).isInstanceOf(MissingTenantException.class);
     }
 }

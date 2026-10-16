@@ -353,33 +353,25 @@ class ImportacionIntegrationTest extends CotizacionTestBase {
                     .andExpect(status().isBadRequest())
                     .andExpect(jsonPath("$.message", is("La hoja elegida no existe en el archivo.")));
         }
-        postMultipart(MUESTRA + "?hoja=7", duenoA, lista("H-1", "100"), null)
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.message", is("La hoja elegida no existe en el archivo.")));
     }
 
     @Test
-    void laMuestraDeUnArchivoConDosHojasListaAmbosNombresYDevuelveLasFilasDeLaHojaPedida() throws Exception {
+    void laMuestraDeUnArchivoConDosHojasDevuelveLasDosConSusFilas() throws Exception {
         Map<String, List<List<Object>>> hojas = new LinkedHashMap<>();
         hojas.put("Lista", List.of(List.<Object>of("Codigo", "Descripcion", "Costo"), List.<Object>of("A-1", "Tornillo", "10")));
         hojas.put("Oferta", List.of(List.<Object>of("Cod", "Detalle"), List.<Object>of("Z-9", "Arandela")));
         MockMultipartFile archivo = archivo("lista.xlsx", ListasDePrueba.xlsxHojas(hojas));
 
-        // Sin el parametro, la hoja 0.
         postMultipart(MUESTRA, duenoA, archivo, null)
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.hojas[0]", is("Lista")))
-                .andExpect(jsonPath("$.hojas[1]", is("Oferta")))
-                .andExpect(jsonPath("$.hoja", is(0)))
-                .andExpect(jsonPath("$.filas[1].celdas[0]", is("A-1")));
-
-        // hoja=1: los mismos nombres y las filas de la segunda hoja.
-        postMultipart(MUESTRA + "?hoja=1", duenoA, archivo, null)
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.hojas[0]", is("Lista")))
-                .andExpect(jsonPath("$.hojas[1]", is("Oferta")))
-                .andExpect(jsonPath("$.hoja", is(1)))
-                .andExpect(jsonPath("$.filas[1].celdas[0]", is("Z-9")));
+                .andExpect(jsonPath("$.hojas[0].indice", is(0)))
+                .andExpect(jsonPath("$.hojas[0].nombre", is("Lista")))
+                .andExpect(jsonPath("$.hojas[0].columnas", is(3)))
+                .andExpect(jsonPath("$.hojas[0].filas[1].celdas[0]", is("A-1")))
+                .andExpect(jsonPath("$.hojas[1].indice", is(1)))
+                .andExpect(jsonPath("$.hojas[1].nombre", is("Oferta")))
+                .andExpect(jsonPath("$.hojas[1].columnas", is(2)))
+                .andExpect(jsonPath("$.hojas[1].filas[1].celdas[0]", is("Z-9")));
     }
 
     // --- Limite de filas (R-025) ---
@@ -420,7 +412,8 @@ class ImportacionIntegrationTest extends CotizacionTestBase {
         postMultipart(VISTA_PREVIA, duenoA, csvDe(4, 20_000), datos)
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.conteos.nuevos", is(20_000)))
-                .andExpect(jsonPath("$.detalleRecortado", is(true)));
+                .andExpect(jsonPath("$.nuevos.length()", is(20_000)))
+                .andExpect(jsonPath("$.detalleRecortado", is(false)));
     }
 
     @Test

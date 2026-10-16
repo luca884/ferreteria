@@ -4,6 +4,7 @@ import com.ferreteria.catalogo.dto.AplicarRequest;
 import com.ferreteria.catalogo.dto.ArticuloAusente;
 import com.ferreteria.catalogo.dto.ImportacionResponse;
 import com.ferreteria.catalogo.dto.MuestraResponse;
+import com.ferreteria.catalogo.dto.FilaSinCambio;
 import com.ferreteria.catalogo.dto.ValidacionBonificaciones;
 import com.ferreteria.catalogo.dto.VistaPreviaRequest;
 import com.ferreteria.catalogo.dto.VistaPreviaResponse;
@@ -25,6 +26,7 @@ import com.ferreteria.catalogo.model.FilaLeida;
 import com.ferreteria.catalogo.model.HistorialPrecio;
 import com.ferreteria.catalogo.model.ImportacionLista;
 import com.ferreteria.catalogo.model.LecturaLista;
+import com.ferreteria.catalogo.model.ListaCambioException;
 import com.ferreteria.catalogo.model.MapeoLista;
 import com.ferreteria.catalogo.model.NormalizadorCodigo;
 import com.ferreteria.catalogo.model.OrigenPrecio;
@@ -32,8 +34,12 @@ import com.ferreteria.catalogo.model.PlanImportacion;
 import com.ferreteria.catalogo.model.PlanificadorImportacion;
 import com.ferreteria.catalogo.model.PrecioListaPlaneado;
 import com.ferreteria.catalogo.model.Proveedor;
+import com.ferreteria.catalogo.model.ReconocedorDeColumnas;
 import com.ferreteria.catalogo.model.Rubro;
+import com.ferreteria.catalogo.model.SeleccionDeFilas;
+import com.ferreteria.catalogo.model.SeleccionInvalidaException;
 import com.ferreteria.catalogo.model.Unidad;
+import com.ferreteria.catalogo.model.ZonaDeDatos;
 import com.ferreteria.catalogo.repository.ArticuloRepository;
 import com.ferreteria.catalogo.repository.HistorialPrecioRepository;
 import com.ferreteria.catalogo.repository.ImportacionListaRepository;
@@ -72,8 +78,6 @@ import java.util.Set;
 @Service
 public class ImportacionService {
 
-    static final int MAXIMO_DETALLE = 1000;
-
     private final LectorDeListas lector;
     private final ProveedorRepository proveedorRepository;
     private final RubroRepository rubroRepository;
@@ -106,19 +110,25 @@ public class ImportacionService {
     }
 
     /**
-     * TODAS las filas leidas de una hoja (con su numero original) y todas sus celdas, tal como vienen,
-     * para que el Dueno vea la hoja completa y arme el mapeo. El archivo no se guarda en el servidor
-     * (se vuelve a subir en cada pedido), asi que no se pagina. Las filas las acota el tope del lector
-     * ({@link LimitesDeLista#MAXIMO_FILAS_LEIDAS}) y las columnas, {@link LimitesDeLista#MAXIMO_COLUMNAS_DE_MUESTRA}.
-     * No toca la base.
+     * El archivo ENTERO para armar el mapeo: todas las hojas, cada una con TODAS sus filas leidas (con su numero
+     * original) y todas sus celdas tal como vienen, mas la propuesta de mapeo que reconoce los encabezados. El archivo
+     * no se guarda en el servidor (se vuelve a subir en cada pedido), asi que no se pagina. Las filas las acota el tope
+     * del lector ({@link LimitesDeLista#MAXIMO_FILAS_LEIDAS}) y las columnas, {@link LimitesDeLista#MAXIMO_COLUMNAS_DE_MUESTRA}.
+     * El libro se lee una sola vez y no se toca la base: la propuesta sale solo del archivo.
      */
-    public MuestraResponse muestra(ArchivoLista archivo, int hoja) {
-        LecturaLista lectura = lector.leer(archivo.contenido(), hoja);
-        List<MuestraResponse.FilaMuestra> filas = lectura.filas().stream()
-                .map(fila -> new MuestraResponse.FilaMuestra(fila.numero(), celdasComoTexto(fila)))
-                .toList();
-        int columnas = filas.stream().mapToInt(fila -> fila.celdas().size()).max().orElse(0);
-        return new MuestraResponse(lectura.hojas(), hoja, columnas, filas);
+    public MuestraResponse muestra(ArchivoLista archivo) {
+        LecturaLista lectura = lector.leer(archivo.contenido());
+        ReconocedorDeColumnas.Reconocimiento reconocimiento = ReconocedorDeColumnas.reconocer(lectura);
+        List<MuestraResponse.HojaMuestra> hojas = new ArrayList<>();
+        for (ReconocedorDeColumnas.HojaReconocida hoja : reconocimiento.hojas()) {
+            List<MuestraResponse.FilaMuestra> filas = lectura.filasDeHoja(hoja.indice()).stream()
+                    .map(fila -> new MuestraResponse.FilaMuestra(fila.numero(), celdasComoTexto(fila)))
+                    .toList();
+            int columnas = filas.stream().mapToInt(fila -> fila.celdas().size()).max().orElse(0);
+            hojas.add(new MuestraResponse.HojaMuestra(
+                    hoja.indice(), hoja.nombre(), columnas, hoja.filaEncabezado(), filas));
+        }
+        return new MuestraResponse(hojas, reconocimiento.propuesta());
     }
 
     /** Lo que pasaria al aplicar. No escribe nada: ni articulos, ni historial, ni el proveedor. */
@@ -132,10 +142,12 @@ public class ImportacionService {
     }
 
     /**
-     * Aplica la lista en UNA transaccion. Primero lee y planifica; si los contadores no coinciden con
-     * los que el cliente vio (deriva) responde 409 SIN haber escrito nada. Recien despues cambia los
-     * articulos (ya administrados por JPA, se escriben al terminar la transaccion) y guarda el historial
-     * y el registro de la importacion. Cualquier falla revierte todo.
+     * Aplica la lista en UNA transaccion. Primero lee y planifica; despues aplica la seleccion de filas: una fila que
+     * no existe o con error es un 400 y si los contadores de lo elegido no coinciden con los que el cliente vio
+     * (deriva) un 409, los dos SIN haber escrito nada. Recien despues escribe: guarda el registro de la importacion (para
+     * tener su id), cambia los articulos elegidos (ya administrados por JPA, se escriben al terminar la transaccion),
+     * crea los nuevos elegidos, y guarda el historial y el mapeo del proveedor. Cualquier falla revierte todo. Lo que
+     * no se eligio no se toca.
      */
     @Transactional
     public ImportacionResponse aplicar(ArchivoLista archivo, AplicarRequest request, Long usuarioId) {
@@ -149,30 +161,45 @@ public class ImportacionService {
         MapeoLista mapeo = request.mapeo().toMapeo();
         Bonificaciones bonificaciones = request.toBonificaciones();
         Preparacion preparacion = preparar(proveedor, archivo, mapeo, request.listaIncluyeIva(), bonificaciones);
-        PlanImportacion plan = preparacion.plan();
 
-        // Deriva: se compara ANTES de la primera escritura.
-        if (!plan.conteos().equals(request.conteosEsperados().toConteos())) {
-            throw new ConflictException(
-                    "La lista cambió desde la vista previa. Volvé a generar la vista previa y confirmá de nuevo.");
-        }
+        // Seleccion y deriva: ANTES de la primera escritura.
+        PlanImportacion plan = elegir(preparacion.plan(), request);
 
         Map<Long, Articulo> articulosPorId = new HashMap<>();
         preparacion.articulos().forEach(articulo -> articulosPorId.put(articulo.getId(), articulo));
 
+        // Primero el registro de la importacion, con los contadores de lo aplicado: hace falta su id para marcar cada articulo.
+        int creados = request.crearNuevos() ? plan.altas().size() : 0;
+        ConteosImportacion conteos = new ConteosImportacion(
+                plan.conteos().suben(), plan.conteos().bajan(), creados, plan.conteos().sinCambio(),
+                plan.conteos().noEstan(), plan.conteos().conError(), plan.conteos().cambianMoneda(),
+                plan.conteos().corrigen(), plan.conteos().salteadas());
+        ImportacionLista importacion = importacionListaRepository.save(ImportacionLista.aplicada(
+                TenantContext.requireFerreteriaId(), proveedor.getId(), usuarioId, archivo.nombre(), conteos));
+        Long importacionId = importacion.getId();
+
         List<HistorialPrecio> historial = new ArrayList<>();
-        for (CambioPlaneado cambio : plan.cambios()) {
-            Articulo articulo = articulosPorId.get(cambio.articuloId());
-            articulo.actualizarCosto(cambio.costoNuevo(), cambio.precioLista(), preparacion.contextoDe(articulo))
-                    .ifPresent(c -> historial.add(HistorialPrecio.de(articulo, c, OrigenPrecio.IMPORTACION, usuarioId)));
+        for (List<CambioPlaneado> cambios : List.of(plan.cambios(), plan.cambiosDeMoneda(), plan.correcciones())) {
+            for (CambioPlaneado cambio : cambios) {
+                Articulo articulo = articulosPorId.get(cambio.articuloId());
+                articulo.aplicarLista(cambio.costoNuevo(), cambio.precioLista(), cambio.monedaNueva(),
+                                cambio.alicuotaNueva(), cambio.ajustesNuevos(), importacionId,
+                                preparacion.contextoDe(articulo))
+                        .ifPresent(c -> historial.add(HistorialPrecio.de(
+                                articulo, c.cambio(), OrigenPrecio.IMPORTACION, usuarioId, c.monedaAnterior())));
+            }
         }
         for (PrecioListaPlaneado sinCambio : plan.sinCambio()) {
-            articulosPorId.get(sinCambio.articuloId()).registrarPrecioLista(sinCambio.precioLista());
+            // El costo y el precio no cambian, pero la fila puede traer otro IVA: se guarda sin dejar historial.
+            Articulo articulo = articulosPorId.get(sinCambio.articuloId());
+            articulo.aplicarLista(sinCambio.costo(), sinCambio.precioLista(), null, sinCambio.alicuotaNueva(),
+                            articulo.getAjustes(), importacionId, preparacion.contextoDe(articulo))
+                    .ifPresent(c -> historial.add(HistorialPrecio.de(
+                            articulo, c.cambio(), OrigenPrecio.IMPORTACION, usuarioId, c.monedaAnterior())));
         }
 
-        int creados = 0;
         if (request.crearNuevos() && !plan.altas().isEmpty()) {
-            creados = crearNuevos(plan.altas(), rubro, proveedor, preparacion, usuarioId, historial);
+            crearNuevos(plan.altas(), rubro, proveedor, preparacion, importacionId, usuarioId, historial);
         }
 
         // Unico lugar donde se guardan el mapeo, el IVA y las bonificaciones (solo si todo salio bien).
@@ -182,32 +209,60 @@ public class ImportacionService {
         if (!historial.isEmpty()) {
             historialPrecioRepository.saveAll(historial);
         }
-        ConteosImportacion conteos = new ConteosImportacion(
-                plan.conteos().suben(), plan.conteos().bajan(), creados, plan.conteos().sinCambio(),
-                plan.conteos().noEstan(), plan.conteos().conError());
-        ImportacionLista importacion = importacionListaRepository.save(ImportacionLista.aplicada(
-                TenantContext.requireFerreteriaId(), proveedor.getId(), usuarioId, archivo.nombre(), conteos));
-        return ImportacionResponse.from(importacion);
+        return ImportacionResponse.from(importacion, proveedor.getNombre());
     }
 
     /**
-     * Crea los articulos nuevos con los defaults de la importacion (codigo interno = codigo del
-     * proveedor, UNIDAD, IVA_21, activo, stock minimo 0, sin margen propio). Se guardan TODOS antes de
-     * armar su historial, que necesita los ids que genera la base. Devuelve cuantos se crearon.
+     * El historial de importaciones de la ferreteria, de la mas reciente a la mas vieja y sin paginar. Con
+     * {@code proveedorId} solo las de ese proveedor, que tiene que ser de la ferreteria (si no, 404).
      */
-    private int crearNuevos(
-            List<AltaPlaneada> altas, Rubro rubro, Proveedor proveedor, Preparacion preparacion, Long usuarioId,
-            List<HistorialPrecio> historial) {
-        Long rubroId = rubro == null ? null : rubro.getId();
-        ContextoPrecio contexto = preparacion.contextoDeRubro(rubroId);
+    @Transactional(readOnly = true)
+    public List<ImportacionResponse> listar(Long proveedorId) {
+        Map<Long, String> nombres = new HashMap<>();
+        if (proveedorId != null) {
+            Proveedor proveedor = buscarProveedor(proveedorId);
+            nombres.put(proveedor.getId(), proveedor.getNombre());
+        } else {
+            proveedorRepository.findAllScoped().forEach(proveedor -> nombres.put(proveedor.getId(), proveedor.getNombre()));
+        }
+        return importacionListaRepository.listarScoped(proveedorId).stream()
+                .map(importacion -> ImportacionResponse.from(importacion, nombres.get(importacion.getProveedorId())))
+                .toList();
+    }
+
+    /** La seleccion de filas sobre el plan: 400 si no se puede aplicar y 409 si la lista cambio. */
+    private static PlanImportacion elegir(PlanImportacion plan, AplicarRequest request) {
+        try {
+            return SeleccionDeFilas.aplicar(plan, request.clavesElegidas(), request.conteosEsperados().toConteos());
+        } catch (SeleccionInvalidaException e) {
+            throw new BadRequestException(e.getMessage());
+        } catch (ListaCambioException e) {
+            throw new ConflictException(e.getMessage());
+        }
+    }
+
+    /**
+     * Crea los articulos nuevos con los defaults de la importacion (codigo interno = codigo del proveedor, activo,
+     * stock minimo 0, sin margen propio) y los datos de la fila: moneda, IVA, ajustes, unidad y codigo de barras. El
+     * rubro es el de la columna de rubro o, si la fila no lo nombra o no existe, el elegido al importar. Cada alta usa el
+     * contexto de SU rubro. Se guardan TODOS antes de armar su historial, que necesita los ids que genera la base.
+     */
+    private void crearNuevos(
+            List<AltaPlaneada> altas, Rubro rubroElegido, Proveedor proveedor, Preparacion preparacion,
+            Long importacionId, Long usuarioId, List<HistorialPrecio> historial) {
+        Long rubroElegidoId = rubroElegido == null ? null : rubroElegido.getId();
         List<Articulo> nuevos = new ArrayList<>();
         List<CambioPrecio> cambios = new ArrayList<>();
         for (AltaPlaneada alta : altas) {
+            Long rubroId = alta.rubroId() != null ? alta.rubroId() : rubroElegidoId;
             Articulo nuevo = new Articulo(TenantContext.requireFerreteriaId());
             Optional<CambioPrecio> cambio = nuevo.actualizar(new DatosArticulo(
-                    alta.codigo(), null, alta.codigo(), alta.descripcion(), rubroId, proveedor.getId(), alta.costo(),
-                    null, AlicuotaIva.IVA_21, Unidad.UNIDAD, BigDecimal.ZERO, null, true), contexto);
+                    alta.codigo(), alta.codigoBarras(), alta.codigo(), alta.descripcion(), rubroId, proveedor.getId(),
+                    alta.costo(), null, alta.alicuotaIva(), alta.unidad(), BigDecimal.ZERO, null, true, alta.moneda()),
+                    preparacion.contextoDeRubro(rubroId));
+            nuevo.fijarAjustes(alta.ajustes());
             nuevo.registrarPrecioLista(alta.precioLista());
+            nuevo.marcarImportacion(importacionId);
             nuevos.add(nuevo);
             cambios.add(cambio.orElseThrow());
         }
@@ -215,56 +270,70 @@ public class ImportacionService {
         for (int i = 0; i < nuevos.size(); i++) {
             historial.add(HistorialPrecio.de(nuevos.get(i), cambios.get(i), OrigenPrecio.IMPORTACION, usuarioId));
         }
-        return nuevos.size();
     }
 
     // ---- preparar ----
 
     /**
-     * Todo lo que se lee, ANTES de mutar nada (asi Hibernate no hace flush a mitad del recorrido): el
-     * archivo, los articulos del proveedor en una consulta, un contexto de precio por rubro y otro
-     * sin rubro, y los codigos internos ocupados. Las bonificaciones son las de la solicitud.
+     * Todo lo que se lee, ANTES de mutar nada (asi Hibernate no hace flush a mitad del recorrido): el libro entero
+     * (UNA lectura), los articulos del proveedor en una consulta, un contexto de precio por rubro y otro sin rubro
+     * (con el dolar vigente de la ferreteria), los rubros por nombre, y los codigos internos y de barras ocupados. Las
+     * bonificaciones son las de la solicitud. El tope de 20.000 filas cuenta las filas de datos de las hojas elegidas.
      */
     private Preparacion preparar(
             Proveedor proveedor, ArchivoLista archivo, MapeoLista mapeo, boolean listaIncluyeIva,
             Bonificaciones bonificaciones) {
-        LecturaLista lectura = lector.leer(archivo.contenido(), mapeo.hoja());
-        // Filas de datos = las no vacias desde la primera fila elegida; los titulos y el encabezado no cuentan.
-        long filasDeDatos = lectura.filas().stream().filter(fila -> fila.numero() >= mapeo.filaDesde()).count();
-        if (filasDeDatos == 0) {
+        LecturaLista lectura = lector.leer(archivo.contenido());
+        for (int hoja : mapeo.hojasElegidas()) {
+            if (hoja >= lectura.hojas().size()) {
+                throw new BadRequestException("La hoja elegida no existe en el archivo.");
+            }
+        }
+        // Los textos del encabezado salen de la fila anterior a la primera de datos de la hoja de referencia.
+        FilaLeida encabezado = lectura.filas().stream()
+                .filter(fila -> fila.hoja() == mapeo.hoja() && mapeo.filaDesde() > 1
+                        && fila.numero() == mapeo.filaDesde() - 1)
+                .findFirst()
+                .orElse(null);
+        ZonaDeDatos.Resultado zona = ZonaDeDatos.clasificar(lectura, mapeo.conEncabezados(encabezado));
+        if (zona.filas().isEmpty()) {
             throw new BadRequestException("No hay filas de datos desde la fila " + mapeo.filaDesde() + ".");
         }
-        if (filasDeDatos > LimitesDeLista.MAXIMO_FILAS_DE_DATOS) {
+        if (zona.filas().size() > LimitesDeLista.MAXIMO_FILAS_DE_DATOS) {
             throw LimitesDeLista.demasiadasFilas();
         }
 
         List<Articulo> articulos = articuloRepository.deProveedorScoped(proveedor.getId());
         ConfiguracionPrecios configuracion = configuracionPreciosService.actual();
+        List<Rubro> rubros = rubroRepository.listarScoped();
         // El dolar vigente de la ferreteria: con el se calculan las filas en dolares (nunca el de la API en este momento).
         ContextosDePrecio contextos = ContextosDePrecio.armar(
-                rubroRepository.listarScoped(), configuracion.margenDefectoPorcentaje(), configuracion.redondeoMultiplo(),
+                rubros, configuracion.margenDefectoPorcentaje(), configuracion.redondeoMultiplo(),
                 dolarDePrecios.vigente().orElse(null));
+        Map<String, Long> rubrosPorNombre = new HashMap<>();
+        for (Rubro rubro : rubros) {
+            rubrosPorNombre.putIfAbsent(NormalizadorCodigo.clave(rubro.getNombre()), rubro.getId());
+        }
 
         // La base devuelve los codigos como estan guardados: se normalizan igual que los del archivo.
         Set<String> ocupados = new HashSet<>();
         for (String codigo : articuloRepository.codigosInternosOcupadosScoped(
-                PlanificadorImportacion.codigosCandidatos(lectura.filas(), mapeo))) {
+                PlanificadorImportacion.codigosCandidatosDeLaZona(zona.filas(), mapeo))) {
             String clave = NormalizadorCodigo.clave(codigo);
             if (clave != null) {
                 ocupados.add(clave);
             }
         }
-
-        FilaLeida encabezado = lectura.filas().stream()
-                .filter(fila -> mapeo.filaDesde() > 1 && fila.numero() == mapeo.filaDesde() - 1)
-                .findFirst()
-                .orElse(null);
+        List<String> barrasCandidatas = PlanificadorImportacion.codigosDeBarras(zona.filas(), mapeo);
+        Set<String> barrasOcupadas = barrasCandidatas.isEmpty()
+                ? Set.of()
+                : new HashSet<>(articuloRepository.codigosBarrasActivosOcupadosScoped(barrasCandidatas));
 
         PlanImportacion plan = PlanificadorImportacion.planificar(new EntradaPlan(
                 lectura.filas(), mapeo, listaIncluyeIva, bonificaciones,
                 articulos.stream().map(ArticuloVigente::de).toList(),
                 contextos.porRubro(), contextos.sinRubro(), ocupados, proveedor.getMapeoLista(), encabezado,
-                List.of(), dolarDePrecios.activa(), Map.of(), Set.of()));
+                lectura.hojas(), dolarDePrecios.activa(), rubrosPorNombre, barrasOcupadas));
         return new Preparacion(plan, articulos, contextos, encabezado);
     }
 
@@ -317,22 +386,16 @@ public class ImportacionService {
     }
 
     private static VistaPreviaResponse respuestaDe(PlanImportacion plan) {
-        boolean recortado = plan.cambios().size() > MAXIMO_DETALLE
-                || plan.altas().size() > MAXIMO_DETALLE
-                || plan.errores().size() > MAXIMO_DETALLE
-                || plan.advertencias().size() > MAXIMO_DETALLE
-                || plan.noEstan().size() > MAXIMO_DETALLE;
         return new VistaPreviaResponse(
                 plan.conteos(),
-                recortar(plan.cambios()),
-                recortar(plan.altas()),
-                recortar(plan.errores()),
-                recortar(plan.advertencias()),
-                recortar(plan.noEstan()).stream().map(ArticuloAusente::de).toList(),
-                recortado);
-    }
-
-    private static <T> List<T> recortar(List<T> lista) {
-        return lista.size() <= MAXIMO_DETALLE ? lista : List.copyOf(lista.subList(0, MAXIMO_DETALLE));
+                plan.cambios(),
+                plan.altas(),
+                plan.errores(),
+                plan.advertencias(),
+                plan.noEstan().stream().map(ArticuloAusente::de).toList(),
+                false,
+                plan.cambiosDeMoneda(),
+                plan.correcciones(),
+                plan.sinCambio().stream().map(FilaSinCambio::de).toList());
     }
 }
