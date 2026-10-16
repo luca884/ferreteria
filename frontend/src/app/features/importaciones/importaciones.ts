@@ -1,6 +1,5 @@
 import { ScrollingModule } from '@angular/cdk/scrolling';
 import { DecimalPipe } from '@angular/common';
-import { MontoPipe } from '../../core/formato/monto';
 import { HttpErrorResponse } from '@angular/common/http';
 import {
   Component,
@@ -15,6 +14,7 @@ import {
 } from '@angular/core';
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { FormControl, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
+import { map } from 'rxjs';
 import { erroresDeCampos } from '../../core/api/api-error';
 import { AuthService } from '../../core/auth/auth.service';
 import { BarraAcciones } from '../../shared/barra-acciones';
@@ -22,20 +22,33 @@ import { Proveedor } from '../proveedores/proveedor.models';
 import { ProveedoresService } from '../proveedores/proveedores.service';
 import { Rubro } from '../rubros/rubro.models';
 import { RubrosService } from '../rubros/rubros.service';
-import {
-  CambioPlaneado,
-  Conteos,
-  Importacion,
-  Muestra,
-  VistaPrevia,
-  VistaPreviaRequest,
-} from './importacion.models';
+import { AvisoDeFila, Conteos, Importacion, Muestra, PropuestaDeMapeo, VistaPrevia, VistaPreviaRequest } from './importacion.models';
 import { ImportacionesService } from './importaciones.service';
-import { filaDeEncabezado, primeraFilaDeDatos } from './encabezado-lista';
+import { HojasLista } from './hojas-lista';
+import { MapeoColumnas, OpcionColumna } from './mapeo-columnas';
+import {
+  CAMPOS_DE_COLUMNA,
+  TITULO_DE_COLUMNA,
+  armarMapeo,
+  camposReconocidos,
+  crearFormMapeo,
+  mapeoVacio,
+  precargarMapeo,
+} from './mapeo-lista';
 import { SelectorArchivo } from './selector-archivo';
+import {
+  Seleccion,
+  conteosConSeleccion,
+  filasElegidas,
+  marcarNinguna,
+  seleccionInicial,
+  unirFilas,
+} from './seleccion-filas';
+import { VistaPreviaTabla } from './vista-previa-tabla';
 
-/** El backend rechaza más de 10 MB; se controla antes de subir para no gastar el pedido. */
-const MAX_BYTES = 10 * 1024 * 1024;
+/** El backend rechaza más de 25 MB; se controla antes de subir para no gastar el pedido. */
+const MAX_BYTES = 25 * 1024 * 1024;
+const EXTENSIONES = ['.xlsx', '.xls', '.csv'];
 
 /**
  * Medidas del visor al 100 %. Son múltiplos de 10 / 3 para que, con el zoom en pasos de 10 %, la altura
@@ -57,23 +70,39 @@ const ZOOM_INICIAL = 100;
 
 /** Los campos con validación, en el orden de la pantalla: al fallar se enfoca el primero con error. */
 const CAMPOS_EN_ORDEN = [
-  'filaDesde',
-  'columnaCodigo',
-  'columnaCosto',
-  'bonificacion1',
-  'bonificacion2',
-  'bonificacion3',
+  ['mapeo', 'filaDesde'],
+  ['mapeo', 'columnaCodigo'],
+  ['mapeo', 'columnaCosto'],
+  ['lista', 'bonificacion1'],
+  ['lista', 'bonificacion2'],
+  ['lista', 'bonificacion3'],
 ] as const;
+
+const TARJETAS: { etiqueta: string; clave: keyof Conteos }[] = [
+  { etiqueta: 'Suben', clave: 'suben' },
+  { etiqueta: 'Bajan', clave: 'bajan' },
+  { etiqueta: 'Cambian de moneda', clave: 'cambianMoneda' },
+  { etiqueta: 'Corrigen IVA o ajustes', clave: 'corrigen' },
+  { etiqueta: 'Nuevos', clave: 'nuevos' },
+  { etiqueta: 'Sin cambio', clave: 'sinCambio' },
+  { etiqueta: 'No están', clave: 'noEstan' },
+  { etiqueta: 'Con error', clave: 'conError' },
+  { etiqueta: 'Salteadas', clave: 'salteadas' },
+];
+
+const rango = (cantidad: number) => Array.from({ length: cantidad }, (_, i) => i);
 
 @Component({
   selector: 'app-importaciones',
   imports: [
     ReactiveFormsModule,
     DecimalPipe,
-    MontoPipe,
     ScrollingModule,
     SelectorArchivo,
     BarraAcciones,
+    MapeoColumnas,
+    HojasLista,
+    VistaPreviaTabla,
   ],
   templateUrl: './importaciones.html',
   styleUrl: './importaciones.css',
@@ -87,22 +116,31 @@ export class Importaciones implements OnInit {
   protected readonly proveedores = signal<Proveedor[]>([]);
   protected readonly proveedorId = signal<number | null>(null);
   protected readonly archivo = signal<File | null>(null);
+  /** El archivo entero: todas las hojas con todas sus filas, y la propuesta de mapeo. Se pide una sola vez. */
   protected readonly muestra = signal<Muestra | null>(null);
-  protected readonly hoja = signal(0);
+  /** La hoja que se ve en la grilla. Cambiarla no toca ningún dato ni vuelve a llamar al servicio. */
+  protected readonly hojaVista = signal(0);
   protected readonly cargandoMuestra = signal(false);
   protected readonly error = signal<string | null>(null);
   /** Mensajes por campo de un 400 de validación del backend; si hay, se muestran en vez de `error`. */
   protected readonly erroresCampos = signal<string[]>([]);
 
+  /** Hoja de la que salen el encabezado y la primera fila de datos (el mapeo es uno solo para todas). */
+  private readonly hojaDeReferencia = signal(0);
+  /** Las hojas que se importan. */
+  protected readonly hojasElegidas = signal<number[]>([0]);
+  /** La propuesta del servidor, mientras el mapeo que se muestra viene de ella (y no del guardado del proveedor). */
+  private readonly propuestaVigente = signal<PropuestaDeMapeo | null>(null);
+
   protected readonly vistaPrevia = signal<VistaPrevia | null>(null);
+  protected readonly seleccion = signal<Seleccion>(marcarNinguna());
   protected readonly generando = signal(false);
   protected readonly aplicando = signal(false);
   protected readonly resumen = signal<Importacion | null>(null);
-  /** El backend detectó que la lista cambió desde la vista previa (409): hay que volver a generarla. */
+  /** El backend detectó que la lista cambió desde la vista previa (409) y no se pudo pedir la nueva. */
   protected readonly conflicto = signal(false);
   protected readonly rubros = signal<Rubro[]>([]);
   protected readonly crearNuevos = signal(false);
-  protected readonly rubroId = signal<number | null>(null);
 
   /** Sube con cada cambio de datos: una vista previa en vuelo de datos viejos se descarta. */
   private version = 0;
@@ -111,33 +149,75 @@ export class Importaciones implements OnInit {
     () => this.proveedores().find((p) => p.id === this.proveedorId()) ?? null,
   );
 
-  /** Una letra por columna de la grilla (A, B, C…), que es como las ve el Dueño en su planilla. */
-  protected readonly columnas = computed(() =>
-    Array.from({ length: this.muestra()?.columnas ?? 0 }, (_, i) => i),
-  );
+  /** Mapeo de columnas: la primera fila de datos, qué columna es cada dato y la moneda fija. */
+  protected readonly mapeoForm = crearFormMapeo();
 
-  /** Textos de la fila de encabezado detectada (vacío si la lista no tiene), para rotular las columnas. */
-  private readonly textosDeEncabezado = computed(() => {
-    const m = this.muestra();
-    const numero = filaDeEncabezado(m);
-    return m?.filas.find((f) => f.numero === numero)?.celdas ?? [];
-  });
-
-  /** Mapeo, IVA y bonificaciones: arrancan con lo guardado en el proveedor. */
-  protected readonly form = new FormGroup({
-    filaDesde: new FormControl<number | null>(1, [Validators.required, Validators.min(1)]),
-    columnaCodigo: new FormControl<number | null>(null, [Validators.required]),
-    columnaDescripcion: new FormControl<number | null>(null),
-    columnaCosto: new FormControl<number | null>(null, [Validators.required]),
+  /** Lista del proveedor: IVA, bonificaciones y el rubro de los artículos nuevos (define su precio en la vista previa). */
+  protected readonly listaForm = new FormGroup({
     listaIncluyeIva: new FormControl(false, { nonNullable: true }),
     bonificacion1: new FormControl<number | null>(null, [Validators.min(0), Validators.max(100)]),
     bonificacion2: new FormControl<number | null>(null, [Validators.min(0), Validators.max(100)]),
     bonificacion3: new FormControl<number | null>(null, [Validators.min(0), Validators.max(100)]),
+    rubroId: new FormControl<number | null>(null),
   });
 
-  /** El mapeo que se está armando, para resaltar en el visor las columnas elegidas y atenuar el encabezado. */
-  private readonly mapeo = toSignal(this.form.valueChanges, {
-    initialValue: this.form.getRawValue(),
+  /** El mapeo que se está armando, para resaltar en la grilla las columnas elegidas y atenuar el encabezado. */
+  private readonly valoresMapeo = toSignal(
+    this.mapeoForm.valueChanges.pipe(map(() => this.mapeoForm.getRawValue())),
+    { initialValue: this.mapeoForm.getRawValue() },
+  );
+
+  protected readonly reconocidos = computed(() =>
+    camposReconocidos(this.propuestaVigente(), this.valoresMapeo()),
+  );
+
+  protected readonly hojaActual = computed(() => this.muestra()?.hojas[this.hojaVista()] ?? null);
+  protected readonly nombresDeHojas = computed(() => this.muestra()?.hojas.map((h) => h.nombre) ?? []);
+  protected readonly hojasParaLista = computed(
+    () => this.muestra()?.hojas.map((h) => ({ indice: h.indice, nombre: h.nombre })) ?? [],
+  );
+
+  /** La hoja de referencia que se va a mandar: la guardada si está entre las elegidas; si no, la primera elegida. */
+  private readonly referenciaEfectiva = computed(() => {
+    const elegidas = [...this.hojasElegidas()].sort((a, b) => a - b);
+    return elegidas.includes(this.hojaDeReferencia()) ? this.hojaDeReferencia() : (elegidas[0] ?? this.hojaDeReferencia());
+  });
+  protected readonly nombreDeReferencia = computed(
+    () => this.muestra()?.hojas[this.referenciaEfectiva()]?.nombre ?? '',
+  );
+
+  /** Una letra por columna de la grilla (A, B, C…), que es como las ve el Dueño en su planilla. */
+  protected readonly columnas = computed(() => rango(this.hojaActual()?.columnas ?? 0));
+
+  /** Textos de la fila de encabezado que reconoció el servidor en la hoja de referencia, para rotular las columnas. */
+  private readonly textosDeEncabezado = computed(() => {
+    const hoja = this.muestra()?.hojas[this.referenciaEfectiva()];
+    if (!hoja || hoja.filaEncabezado === null) return [];
+    return hoja.filas.find((f) => f.numero === hoja.filaEncabezado)?.celdas ?? [];
+  });
+
+  /** Las columnas que se pueden elegir: las de la hoja más ancha, rotuladas con su encabezado. */
+  protected readonly opciones = computed<OpcionColumna[]>(() => {
+    const ancho = Math.max(0, ...(this.muestra()?.hojas.map((h) => h.columnas) ?? []));
+    return rango(ancho).map((indice) => ({ indice, etiqueta: this.etiquetaColumna(indice) }));
+  });
+
+  protected readonly filasDeVista = computed(() => {
+    const vp = this.vistaPrevia();
+    return vp ? unirFilas(vp) : [];
+  });
+  /** Los contadores de lo elegido y los del archivo (C-109): alimentan las tarjetas y lo que se confirma al aplicar. */
+  protected readonly conteosElegidos = computed(() => {
+    const vp = this.vistaPrevia();
+    return vp ? conteosConSeleccion(vp.conteos, this.filasDeVista(), this.seleccion()) : null;
+  });
+  protected readonly sinFilasElegidas = computed(
+    () => filasElegidas(this.seleccion(), this.filasDeVista()).length === 0,
+  );
+  protected readonly tarjetasDeLaVistaPrevia = computed(() => {
+    const vp = this.vistaPrevia();
+    const elegidos = this.conteosElegidos();
+    return vp && elegidos ? this.tarjetasDe(elegidos, vp.conteos) : [];
   });
 
   /** Zoom del visor en porcentaje (50–200, de a 10). Escala la fuente, el alto de fila y el ancho de columna. */
@@ -167,8 +247,9 @@ export class Importaciones implements OnInit {
         ?.nativeElement.querySelector('.cdk-virtual-scroll-content-wrapper')
         ?.setAttribute('role', 'presentation');
     });
-    // Cualquier cambio del mapeo, el IVA o las bonificaciones deja la vista previa vieja sin efecto.
-    this.form.valueChanges.pipe(takeUntilDestroyed()).subscribe(() => this.invalidar());
+    // Cualquier cambio del mapeo, el IVA, las bonificaciones o el rubro deja la vista previa vieja sin efecto.
+    this.mapeoForm.valueChanges.pipe(takeUntilDestroyed()).subscribe(() => this.invalidar());
+    this.listaForm.valueChanges.pipe(takeUntilDestroyed()).subscribe(() => this.invalidar());
     // El resultado aparece donde está el Dueño: se lo lleva a la vista y se le da el foco.
     effect(() => {
       const el = this.resumenEl()?.nativeElement;
@@ -190,20 +271,26 @@ export class Importaciones implements OnInit {
     });
   }
 
-  protected tarjetasDe(conteos: Conteos): { etiqueta: string; valor: number }[] {
-    return [
-      { etiqueta: 'Suben', valor: conteos.suben },
-      { etiqueta: 'Bajan', valor: conteos.bajan },
-      { etiqueta: 'Nuevos', valor: conteos.nuevos },
-      { etiqueta: 'Sin cambio', valor: conteos.sinCambio },
-      { etiqueta: 'No están', valor: conteos.noEstan },
-      { etiqueta: 'Con error', valor: conteos.conError },
-    ];
+  /** Las tarjetas de contadores. Con `totales`, lo elegido aclara «de N» cuando es menos que lo que trae el archivo. */
+  protected tarjetasDe(valores: Conteos, totales?: Conteos): { etiqueta: string; valor: number; total: number | null }[] {
+    return TARJETAS.map(({ etiqueta, clave }) => ({
+      etiqueta,
+      valor: valores[clave],
+      total: totales && totales[clave] !== valores[clave] ? totales[clave] : null,
+    }));
   }
 
-  /** Un cambio está en la lista porque el costo se movió: sube si el nuevo es mayor, baja si es menor. */
-  protected tipoDeCambio(cambio: CambioPlaneado): 'Sube' | 'Baja' {
-    return cambio.costoNuevo > cambio.costoAnterior ? 'Sube' : 'Baja';
+  /** «Hoja «Lista», fila 3 (A-2): mensaje»; las advertencias generales llevan solo la hoja, o nada. */
+  protected prefijoDeAviso(aviso: AvisoDeFila): string | null {
+    const partes: string[] = [];
+    if (aviso.hoja !== null && aviso.hoja !== undefined) {
+      partes.push(`Hoja «${this.muestra()?.hojas[aviso.hoja]?.nombre ?? aviso.hoja + 1}»`);
+    }
+    if (aviso.fila !== null) {
+      const fila = `fila ${aviso.fila}${aviso.codigo ? ` (${aviso.codigo})` : ''}`;
+      partes.push(partes.length === 0 ? fila.charAt(0).toUpperCase() + fila.slice(1) : fila);
+    }
+    return partes.length > 0 ? partes.join(', ') : null;
   }
 
   /** «A · Código»: la letra de la planilla y el texto del encabezado de esa columna, si lo hay. */
@@ -241,45 +328,56 @@ export class Importaciones implements OnInit {
     if (encabezado) encabezado.nativeElement.scrollLeft = (evento.target as HTMLElement).scrollLeft;
   }
 
+  /** El campo del mapeo que eligió esta columna, para resaltarla; el código, la descripción y el costo tienen su color. */
+  private campoDeColumna(indice: number) {
+    const mapeo = this.valoresMapeo();
+    return CAMPOS_DE_COLUMNA.find((campo) => mapeo[campo] === indice) ?? null;
+  }
+
   /** Clase de resaltado de una columna según el rol que le dio el Dueño en el mapeo. */
   protected claseDeColumna(indice: number): string {
-    const mapeo = this.mapeo();
-    if (mapeo.columnaCodigo === indice) return 'col-codigo';
-    if (mapeo.columnaDescripcion === indice) return 'col-descripcion';
-    if (mapeo.columnaCosto === indice) return 'col-costo';
-    return '';
+    switch (this.campoDeColumna(indice)) {
+      case null:
+        return '';
+      case 'columnaCodigo':
+        return 'col-codigo';
+      case 'columnaDescripcion':
+        return 'col-descripcion';
+      case 'columnaCosto':
+        return 'col-costo';
+      default:
+        return 'col-otra';
+    }
   }
 
   protected tituloDeColumna(indice: number): string | null {
-    switch (this.claseDeColumna(indice)) {
-      case 'col-codigo':
-        return 'Columna del código';
-      case 'col-descripcion':
-        return 'Columna de la descripción';
-      case 'col-costo':
-        return 'Columna del costo';
-      default:
-        return null;
-    }
+    const campo = this.campoDeColumna(indice);
+    return campo === null ? null : TITULO_DE_COLUMNA[campo];
   }
 
   protected porNumero(_indice: number, fila: { numero: number }): number {
     return fila.numero;
   }
 
-  /** Las filas anteriores a la primera fila de datos (títulos, encabezados) se ven atenuadas. */
+  /**
+   * Las filas anteriores a la primera fila de datos (títulos, encabezados) se ven atenuadas. En la hoja de referencia
+   * vale la primera fila de datos del formulario; en las demás, el encabezado que reconoció el servidor.
+   */
   protected esPrevia(numeroDeFila: number): boolean {
-    const desde = this.mapeo().filaDesde;
-    return desde !== null && desde !== undefined && numeroDeFila < desde;
+    const hoja = this.hojaActual();
+    if (hoja === null) return false;
+    if (hoja.indice === this.referenciaEfectiva()) {
+      const desde = this.valoresMapeo().filaDesde;
+      return desde !== null && desde !== undefined && numeroDeFila < desde;
+    }
+    return hoja.filaEncabezado !== null && numeroDeFila <= hoja.filaEncabezado;
   }
 
   protected elegirProveedor(valor: string): void {
     this.invalidar();
     this.proveedorId.set(valor === '' ? null : Number(valor));
-    this.precargar();
-    if (this.archivo() && this.hojaGuardada() !== this.hoja()) {
-      this.cargarMuestra(this.hojaGuardada());
-    }
+    this.precargarLista();
+    this.precargarMapeo();
   }
 
   protected elegirArchivo(archivo: File | null): void {
@@ -289,13 +387,18 @@ export class Importaciones implements OnInit {
       this.archivo.set(null);
       return;
     }
+    if (!EXTENSIONES.some((extension) => archivo.name.toLowerCase().endsWith(extension))) {
+      this.archivo.set(null);
+      this.error.set('El archivo tiene que ser una planilla de Excel (.xlsx o .xls) o un CSV.');
+      return;
+    }
     if (archivo.size > MAX_BYTES) {
       this.archivo.set(null);
-      this.error.set('El archivo supera el máximo de 10 MB.');
+      this.error.set('El archivo supera el máximo de 25 MB.');
       return;
     }
     this.archivo.set(archivo);
-    this.cargarMuestra(this.hojaGuardada());
+    this.cargarMuestra();
   }
 
   /** Vuelve al paso 1 sin nada cargado, para importar la lista de otro proveedor. */
@@ -303,66 +406,61 @@ export class Importaciones implements OnInit {
     this.invalidar();
     this.archivo.set(null);
     this.muestra.set(null);
-    this.hoja.set(0);
+    this.hojaVista.set(0);
+    this.hojaDeReferencia.set(0);
+    this.hojasElegidas.set([0]);
+    this.propuestaVigente.set(null);
     this.proveedorId.set(null);
     this.crearNuevos.set(false);
-    this.rubroId.set(null);
-    this.precargar();
+    this.mapeoForm.reset(mapeoVacio());
+    this.listaForm.reset({ listaIncluyeIva: false });
   }
 
   /** Mueve la grilla a la hoja anterior (−1) o a la siguiente (+1); en los extremos no hace nada. */
   protected moverHoja(paso: -1 | 1): void {
-    const destino = this.hoja() + paso;
+    const destino = this.hojaVista() + paso;
     const cantidad = this.muestra()?.hojas.length ?? 0;
-    if (this.cargandoMuestra() || destino < 0 || destino >= cantidad) return;
+    if (destino < 0 || destino >= cantidad) return;
+    this.hojaVista.set(destino);
+  }
+
+  protected elegirHojaVista(valor: string): void {
+    this.hojaVista.set(Number(valor));
+  }
+
+  protected elegirHojas(hojas: number[]): void {
     this.invalidar();
-    this.cargarMuestra(destino);
+    this.hojasElegidas.set(hojas);
   }
 
   protected cambiarCrearNuevos(crear: boolean): void {
     this.crearNuevos.set(crear);
-    if (!crear) this.rubroId.set(null);
   }
 
-  protected elegirRubro(valor: string): void {
-    this.rubroId.set(valor === '' ? null : Number(valor));
+  protected cambiarSeleccion(seleccion: Seleccion): void {
+    this.seleccion.set(seleccion);
   }
 
   protected generarVistaPrevia(): void {
-    const archivo = this.archivo();
-    const datos = this.armarDatos();
-    if (archivo === null || datos === null) return;
-    this.limpiarMensajes();
-    const version = this.version;
-    this.generando.set(true);
-    this.service.vistaPrevia(archivo, datos).subscribe({
-      next: (vistaPrevia) => {
-        if (version !== this.version) return;
-        this.generando.set(false);
-        this.vistaPrevia.set(vistaPrevia);
-      },
-      error: (err: unknown) => {
-        if (version !== this.version) return;
-        this.generando.set(false);
-        this.mostrarError(err, 'No se pudo generar la vista previa.');
-      },
-    });
+    this.pedirVistaPrevia(false);
   }
 
   protected confirmar(): void {
     const archivo = this.archivo();
     const vistaPrevia = this.vistaPrevia();
+    const conteosEsperados = this.conteosElegidos();
     const datos = this.armarDatos();
-    if (archivo === null || vistaPrevia === null || datos === null) return;
-    const crearNuevos = this.crearNuevos();
+    if (archivo === null || vistaPrevia === null || conteosEsperados === null || datos === null) return;
+    if (this.sinFilasElegidas()) return;
+    const filas = filasElegidas(this.seleccion(), this.filasDeVista());
     this.limpiarMensajes();
     this.aplicando.set(true);
     this.service
       .aplicar(archivo, {
         ...datos,
-        crearNuevos,
-        rubroId: crearNuevos ? this.rubroId() : null,
-        conteosEsperados: vistaPrevia.conteos,
+        crearNuevos: this.crearNuevos(),
+        conteosEsperados,
+        filasElegidas: filas,
       })
       .subscribe({
         next: (importacion) => {
@@ -375,12 +473,41 @@ export class Importaciones implements OnInit {
         error: (err: unknown) => {
           this.aplicando.set(false);
           if (err instanceof HttpErrorResponse && err.status === 409) {
+            // La lista cambió: lo que se estaba viendo ya no vale. Se muestra el aviso y se pide la vista previa nueva.
             this.vistaPrevia.set(null);
             this.conflicto.set(true);
+            this.mostrarError(err, 'No se pudo aplicar la importación.');
+            this.pedirVistaPrevia(true);
+            return;
           }
           this.mostrarError(err, 'No se pudo aplicar la importación.');
         },
       });
+  }
+
+  /** Pide la vista previa. Con `conservarMensaje` deja a la vista el aviso que motivó el pedido (el 409). */
+  private pedirVistaPrevia(conservarMensaje: boolean): void {
+    const archivo = this.archivo();
+    const datos = this.armarDatos();
+    if (archivo === null || datos === null) return;
+    if (!conservarMensaje) this.limpiarMensajes();
+    const version = this.version;
+    this.generando.set(true);
+    this.service.vistaPrevia(archivo, datos).subscribe({
+      next: (vistaPrevia) => {
+        if (version !== this.version) return;
+        this.generando.set(false);
+        this.conflicto.set(false);
+        this.vistaPrevia.set(vistaPrevia);
+        // Al abrir están elegidas todas las filas que se pueden aplicar.
+        this.seleccion.set(seleccionInicial(unirFilas(vistaPrevia)));
+      },
+      error: (err: unknown) => {
+        if (version !== this.version) return;
+        this.generando.set(false);
+        this.mostrarError(err, 'No se pudo generar la vista previa.');
+      },
+    });
   }
 
   /** Deja sin efecto la vista previa y lo que dependía de ella. */
@@ -388,6 +515,7 @@ export class Importaciones implements OnInit {
     this.version++;
     this.generando.set(false);
     this.vistaPrevia.set(null);
+    this.seleccion.set(marcarNinguna());
     this.resumen.set(null);
     this.conflicto.set(false);
     this.limpiarMensajes();
@@ -405,16 +533,16 @@ export class Importaciones implements OnInit {
     this.error.set(mensajeDe(err, porDefecto));
   }
 
-  /** Una columna obligatoria sin elegir, después de intentar seguir. */
-  protected falta(campo: 'columnaCodigo' | 'columnaCosto'): boolean {
-    const control = this.form.controls[campo];
-    return control.touched && control.invalid;
-  }
-
   /** Lleva el foco al primer campo con error, en el orden de la pantalla. */
   private enfocarPrimerInvalido(): void {
-    const primero = CAMPOS_EN_ORDEN.find((campo) => this.form.controls[campo].invalid);
-    if (primero) this.host.querySelector<HTMLElement>(`#${primero}`)?.focus();
+    const primero = CAMPOS_EN_ORDEN.find(([formulario, campo]) =>
+      formulario === 'mapeo' ? this.mapeoForm.controls[campo].invalid : this.listaForm.controls[campo].invalid,
+    );
+    if (primero) this.enfocar(primero[1]);
+  }
+
+  private enfocar(id: string): void {
+    this.host.querySelector<HTMLElement>(`#${id}`)?.focus();
   }
 
   /** El pedido de la vista previa; null (con el aviso en pantalla) si falta o está mal algo. */
@@ -428,49 +556,48 @@ export class Importaciones implements OnInit {
       this.error.set('Elegí el proveedor.');
       return null;
     }
-    const f = this.form.controls;
+    const f = this.mapeoForm.controls;
     if (f.columnaCodigo.invalid || f.columnaCosto.invalid) {
-      this.form.markAllAsTouched();
+      this.mapeoForm.markAllAsTouched();
       this.error.set('Elegí las columnas del código y del costo.');
       this.enfocarPrimerInvalido();
       return null;
     }
-    if (this.form.invalid) {
-      this.form.markAllAsTouched();
+    if (this.mapeoForm.hasError('ivaEnPar')) {
+      this.mapeoForm.markAllAsTouched();
+      this.error.set(
+        'Elegí las dos columnas del IVA: el precio sin IVA y el precio con IVA, o ninguna de las dos.',
+      );
+      this.enfocar(f.columnaSinIva.value === null ? 'columnaSinIva' : 'columnaConIva');
+      return null;
+    }
+    if (this.hojasElegidas().length === 0) {
+      this.error.set('Elegí al menos una hoja.');
+      return null;
+    }
+    if (this.mapeoForm.invalid || this.listaForm.invalid) {
+      this.mapeoForm.markAllAsTouched();
+      this.listaForm.markAllAsTouched();
       this.error.set('Revisá los datos marcados en rojo.');
       this.enfocarPrimerInvalido();
       return null;
     }
-    const v = this.form.getRawValue();
+    const v = this.listaForm.getRawValue();
     return {
       proveedorId,
-      mapeo: {
-        hoja: this.hoja(),
-        filaDesde: v.filaDesde!,
-        columnaCodigo: v.columnaCodigo!,
-        columnaDescripcion: v.columnaDescripcion,
-        columnaCosto: v.columnaCosto!,
-      },
+      mapeo: armarMapeo(this.mapeoForm.getRawValue(), this.referenciaEfectiva(), this.hojasElegidas()),
       listaIncluyeIva: v.listaIncluyeIva,
       bonificacion1: v.bonificacion1,
       bonificacion2: v.bonificacion2,
       bonificacion3: v.bonificacion3,
+      rubroId: v.rubroId,
     };
   }
 
-  /** Hoja que usa el mapeo guardado del proveedor elegido; la primera si no tiene. */
-  private hojaGuardada(): number {
-    return this.proveedor()?.mapeoLista?.hoja ?? 0;
-  }
-
-  private precargar(): void {
+  /** IVA y bonificaciones guardados en el proveedor elegido (el rubro de los nuevos no es del proveedor: no se toca). */
+  private precargarLista(): void {
     const proveedor = this.proveedor();
-    const mapeo = proveedor?.mapeoLista;
-    this.form.reset({
-      filaDesde: mapeo?.filaDesde ?? primeraFilaDeDatos(this.muestra()),
-      columnaCodigo: mapeo?.columnaCodigo ?? null,
-      columnaDescripcion: mapeo?.columnaDescripcion ?? null,
-      columnaCosto: mapeo?.columnaCosto ?? null,
+    this.listaForm.patchValue({
       listaIncluyeIva: proveedor?.listaIncluyeIva ?? false,
       bonificacion1: proveedor?.bonificacion1 ?? null,
       bonificacion2: proveedor?.bonificacion2 ?? null,
@@ -478,20 +605,28 @@ export class Importaciones implements OnInit {
     });
   }
 
-  private cargarMuestra(hoja: number): void {
+  /** El mapeo guardado del proveedor si sirve para este archivo; si no, lo que reconoció el servidor; si no, vacío. */
+  private precargarMapeo(): void {
+    const muestra = this.muestra();
+    if (muestra === null) return;
+    const precarga = precargarMapeo(this.proveedor()?.mapeoLista, muestra);
+    this.mapeoForm.reset(precarga.valores);
+    this.hojaDeReferencia.set(precarga.hoja);
+    this.hojasElegidas.set(precarga.hojas);
+    this.hojaVista.set(Math.min(precarga.hoja, Math.max(0, muestra.hojas.length - 1)));
+    this.propuestaVigente.set(precarga.desdePropuesta ? muestra.propuesta : null);
+  }
+
+  private cargarMuestra(): void {
     const archivo = this.archivo();
     if (archivo === null) return;
     this.limpiarMensajes();
     this.cargandoMuestra.set(true);
-    this.service.muestra(archivo, hoja).subscribe({
+    this.service.muestra(archivo).subscribe({
       next: (muestra) => {
         if (this.archivo() !== archivo) return;
         this.muestra.set(muestra);
-        this.hoja.set(muestra.hoja);
-        // Sin mapeo guardado se propone la fila siguiente al encabezado; con mapeo guardado se respeta.
-        if (!this.proveedor()?.mapeoLista) {
-          this.form.controls.filaDesde.setValue(primeraFilaDeDatos(muestra));
-        }
+        this.precargarMapeo();
         this.cargandoMuestra.set(false);
       },
       error: (err: unknown) => {

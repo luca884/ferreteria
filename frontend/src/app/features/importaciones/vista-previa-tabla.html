@@ -1,0 +1,117 @@
+<div class="filtros">
+  @if (variasHojas()) {
+    <div class="campo">
+      <label for="filtroHoja">Hoja</label>
+      <select id="filtroHoja" (change)="filtrarPorHoja($any($event.target).value)">
+        <option value="" [selected]="hojaFiltrada() === null">Todas las hojas</option>
+        @for (nombre of hojas(); track $index) {
+          <option [value]="$index" [selected]="hojaFiltrada() === $index">{{ nombre }}</option>
+        }
+      </select>
+    </div>
+  }
+  <div class="campo">
+    <label for="filtroTipo">Tipo</label>
+    <select id="filtroTipo" (change)="filtrarPorTipo($any($event.target).value)">
+      <option value="" [selected]="tipoFiltrado() === null">Todos los tipos</option>
+      @for (tipo of tipos; track tipo) {
+        <option [value]="tipo" [selected]="tipoFiltrado() === tipo">
+          {{ nombreDeTipo(tipo) }} ({{ cantidadPorTipo()[tipo] | number }})
+        </option>
+      }
+    </select>
+  </div>
+  <p class="cuenta-elegidas" aria-live="polite">
+    {{ elegidas() | number }} de {{ elegibles() | number }} filas elegidas
+  </p>
+</div>
+
+<div class="acciones">
+  <button type="button" class="chico" (click)="marcarTodas()">Marcar todas</button>
+  <button type="button" class="chico" (click)="desmarcarTodas()">Desmarcar todas</button>
+  @if (hayFiltro()) {
+    <button type="button" class="chico" (click)="marcarElFiltro(true)">Marcar las filas del filtro</button>
+    <button type="button" class="chico" (click)="marcarElFiltro(false)">Desmarcar las filas del filtro</button>
+  }
+</div>
+
+<div class="grilla-contenedor">
+  <table class="filas-vista-previa" aria-label="Filas de la vista previa">
+    <thead>
+      <tr>
+        <th class="casilla-columna"><span class="sr-only">Elegir</span></th>
+        @if (variasHojas()) {
+          <th>Hoja</th>
+        }
+        <th>Fila</th>
+        <th>Código</th>
+        <th>Descripción</th>
+        <th>Tipo</th>
+        <th class="num">Costo anterior</th>
+        <th class="num">Costo nuevo</th>
+        <th class="num">Precio anterior</th>
+        <th class="num">Precio nuevo</th>
+        <th>Detalle</th>
+      </tr>
+    </thead>
+    <tbody>
+      @for (f of visibles(); track f.clave) {
+        <tr [class.fuerte]="f.cambio?.variacionFuerte" [class.con-error]="f.tipo === 'conError'">
+          <td class="casilla-columna">
+            @if (esElegible(f)) {
+              <input
+                type="checkbox"
+                [checked]="estaMarcada(f)"
+                [attr.aria-label]="etiquetaDeCasilla(f)"
+                (change)="alternar(f, $any($event.target).checked)"
+              />
+            }
+          </td>
+          @if (variasHojas()) {
+            <td>{{ nombreDeHoja(f.hoja) }}</td>
+          }
+          <td>{{ f.fila }}</td>
+          <td class="codigo">{{ f.codigo }}</td>
+          <td>
+            {{ f.descripcion }}
+            @if (f.cambio && !f.cambio.activo) {
+              <span class="etiqueta">Inactivo</span>
+            }
+          </td>
+          <td>
+            <span class="etiqueta etiqueta-{{ f.tipo }}">{{ etiqueta(f.tipo) }}</span>
+          </td>
+          <td class="num">{{ costoAnterior(f) }}</td>
+          <td class="num">
+            {{ costoNuevo(f) }}
+            @if (f.cambio?.variacionFuerte) {
+              <span class="etiqueta etiqueta-fuerte">Variación fuerte</span>
+            }
+          </td>
+          <td class="num">{{ precioAnterior(f) }}</td>
+          <td class="num">{{ precioNuevo(f) }}</td>
+          <td class="detalle">
+            @for (linea of detalle(f); track $index) {
+              <div>{{ linea }}</div>
+            }
+          </td>
+        </tr>
+      }
+    </tbody>
+  </table>
+</div>
+
+@if (filtradas().length === 0) {
+  <p class="sin-filas ayuda">No hay filas de ese tipo en esta vista.</p>
+} @else {
+  <nav class="paginado" aria-label="Páginas de la vista previa">
+    <button type="button" class="chico" [disabled]="pagina() === 0" (click)="anterior()">Anterior</button>
+    <span class="paginado-texto" aria-live="polite">
+      Página {{ pagina() + 1 | number }} de {{ totalPaginas() | number }} · filas {{ desde() | number }} a
+      {{ hasta() | number }} de {{ filtradas().length | number }}
+    </span>
+    <button type="button" class="chico" [disabled]="pagina() >= totalPaginas() - 1" (click)="siguiente()">
+      Siguiente
+    </button>
+  </nav>
+}

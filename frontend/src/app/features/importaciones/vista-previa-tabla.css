@@ -1,0 +1,86 @@
+:host {
+  display: block;
+}
+.filtros {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--e-3);
+  margin-bottom: var(--e-2);
+}
+.filtros .campo {
+  min-width: 200px;
+}
+.cuenta-elegidas {
+  margin: 0 0 0 auto;
+  font-weight: 600;
+}
+.acciones {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--e-2);
+  margin-bottom: var(--e-3);
+}
+.casilla-columna {
+  width: 1%;
+  text-align: center;
+}
+.detalle div {
+  min-width: 160px;
+  font-size: var(--texto-sm);
+}
+tr.fuerte td {
+  background: var(--advertencia-fondo);
+}
+tr.con-error td {
+  color: var(--error);
+}
+td .etiqueta {
+  margin-left: var(--e-2);
+}
+td .etiqueta-suben,
+td .etiqueta-bajan,
+td .etiqueta-nuevos,
+td .etiqueta-sinCambio,
+td .etiqueta-cambianMoneda,
+td .etiqueta-corrigen,
+td .etiqueta-conError {
+  margin-left: 0;
+}
+.etiqueta-fuerte {
+  border-color: var(--acento-borde);
+  background: var(--acento-suave);
+  color: var(--acento);
+}
+.etiqueta-suben {
+  background: var(--advertencia-fondo);
+  color: var(--advertencia);
+}
+.etiqueta-bajan {
+  background: var(--info-fondo);
+  color: var(--info);
+}
+.etiqueta-cambianMoneda,
+.etiqueta-corrigen {
+  background: var(--acento-suave);
+  color: var(--acento);
+}
+.etiqueta-nuevos {
+  background: var(--exito-fondo);
+  color: var(--exito);
+}
+.etiqueta-conError {
+  background: var(--error-fondo);
+  color: var(--error);
+}
+.paginado {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: var(--e-3);
+  margin-bottom: var(--e-4);
+}
+.sin-filas {
+  margin: var(--e-3) 0;
+}

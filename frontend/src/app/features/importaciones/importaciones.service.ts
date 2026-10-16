@@ -1,4 +1,4 @@
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import { environment } from '../../../environments/environment';
@@ -11,18 +11,18 @@ import {
 } from './importacion.models';
 
 /**
- * Los tres pedidos son multipart: la parte `archivo` y, salvo en la muestra, la parte `datos` (JSON).
- * No se setea Content-Type a mano: el navegador agrega el boundary.
+ * Los tres pedidos que suben el archivo son multipart: la parte `archivo` y, salvo en la muestra, la parte `datos`
+ * (JSON). No se setea Content-Type a mano: el navegador agrega el boundary.
  */
 @Injectable({ providedIn: 'root' })
 export class ImportacionesService {
   private readonly http = inject(HttpClient);
   private readonly url = `${environment.apiUrl}/importaciones`;
 
-  muestra(archivo: File, hoja = 0): Observable<Muestra> {
+  /** Todas las hojas del archivo, con sus filas, y la propuesta de mapeo. */
+  muestra(archivo: File): Observable<Muestra> {
     const form = new FormData();
     form.append('archivo', archivo, archivo.name);
-    form.append('hoja', String(hoja));
     return this.http.post<Muestra>(`${this.url}/muestra`, form);
   }
 
@@ -32,6 +32,13 @@ export class ImportacionesService {
 
   aplicar(archivo: File, datos: AplicarRequest): Observable<Importacion> {
     return this.http.post<Importacion>(this.url, conDatos(archivo, datos));
+  }
+
+  /** El historial de importaciones (solo el Dueño), la más reciente primero; con `proveedorId`, las de ese proveedor. */
+  listar(proveedorId?: number): Observable<Importacion[]> {
+    const params =
+      proveedorId === undefined ? new HttpParams() : new HttpParams().set('proveedorId', proveedorId);
+    return this.http.get<Importacion[]>(this.url, { params });
   }
 }
 

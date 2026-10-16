@@ -1,0 +1,37 @@
+:host {
+  display: block;
+}
+fieldset {
+  min-width: 0;
+  margin: 0 0 var(--e-4);
+  padding: var(--e-3) var(--e-4) var(--e-1);
+  border: 1px solid var(--borde);
+  border-radius: var(--radio-lg);
+}
+legend {
+  padding: 0 var(--e-2);
+  color: var(--texto-suave);
+  font-size: var(--texto-sm);
+  font-weight: 700;
+}
+.fila {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--e-3);
+  margin-bottom: var(--e-3);
+}
+.fila .campo {
+  flex: 1;
+  min-width: 180px;
+}
+.ayuda {
+  margin: 0 0 var(--e-3);
+  font-size: var(--texto-sm);
+}
+.reconocida {
+  align-self: flex-start;
+  border: 1px solid var(--exito-borde);
+  background: var(--exito-fondo);
+  color: var(--exito);
+}

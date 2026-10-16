@@ -1,0 +1,113 @@
+<ng-template #selector let-s>
+  <div class="campo">
+    <label [for]="s.control">{{ s.etiqueta }}</label>
+    <select
+      [id]="s.control"
+      [formControl]="control(s.control)"
+      [attr.aria-invalid]="invalido(s.control) ? 'true' : null"
+      [attr.aria-describedby]="descripcion(s.control)"
+    >
+      <option [ngValue]="null">{{ s.vacio }}</option>
+      @for (o of opciones(); track o.indice) {
+        <option [ngValue]="o.indice">{{ o.etiqueta }}</option>
+      }
+    </select>
+    @if (esReconocido(s.control)) {
+      <span class="etiqueta reconocida" [id]="s.control + '-reconocida'">Reconocida</span>
+    }
+  </div>
+</ng-template>
+
+<fieldset>
+  <legend>{{ datos.leyenda }}</legend>
+  <div class="fila">
+    <div class="campo">
+      <label for="filaDesde">Primera fila de datos</label>
+      <input
+        id="filaDesde"
+        type="number"
+        inputmode="numeric"
+        min="1"
+        [formControl]="grupo().controls.filaDesde"
+        [attr.aria-invalid]="filaDesdeInvalida() ? 'true' : null"
+        [attr.aria-describedby]="descripcionDeFilaDesde()"
+      />
+      @if (filaDesdeInvalida()) {
+        <span id="filaDesde-error" class="campo-error">Indicá la primera fila de datos (1 o más).</span>
+      }
+      @if (esReconocido('filaDesde')) {
+        <span class="etiqueta reconocida" id="filaDesde-reconocida">Reconocida</span>
+      }
+    </div>
+    @for (s of datos.selectores; track s.control) {
+      <ng-container *ngTemplateOutlet="selector; context: { $implicit: s }" />
+    }
+  </div>
+</fieldset>
+
+<fieldset>
+  <legend>Moneda</legend>
+  <div class="fila">
+    <ng-container *ngTemplateOutlet="selector; context: { $implicit: moneda }" />
+    <div class="campo">
+      <label for="monedaFija">Moneda de todas las filas (opcional)</label>
+      <select id="monedaFija" [formControl]="grupo().controls.monedaFija">
+        <option [ngValue]="null">Sin moneda fija</option>
+        @for (m of monedas; track m.valor) {
+          <option [ngValue]="m.valor">{{ m.etiqueta }}</option>
+        }
+      </select>
+    </div>
+  </div>
+  <p class="ayuda" id="moneda-ayuda">
+    Si la lista tiene una columna con la moneda de cada fila, elegila arriba. Si no la tiene, elegí una moneda para
+    todas las filas. Se usa una o la otra, no las dos.
+  </p>
+</fieldset>
+
+<fieldset>
+  <legend>{{ iva.leyenda }}</legend>
+  <div class="fila">
+    @for (s of iva.selectores; track s.control) {
+      <ng-container *ngTemplateOutlet="selector; context: { $implicit: s }" />
+    }
+  </div>
+  @if (ivaIncompleto()) {
+    <p id="iva-par-error" class="campo-error">
+      Elegí las dos columnas: el precio sin IVA y el precio con IVA, o ninguna de las dos.
+    </p>
+  }
+  <p class="ayuda" id="iva-ayuda">
+    Si la lista trae el % de IVA, se toma tal cual (tiene que ser 0, 2,5, 5, 10,5, 21 o 27). Si trae el precio sin IVA
+    y el precio con IVA, el sistema calcula la alícuota más cercana; las dos columnas tienen que estar en la misma
+    base. El precio sin IVA solo sirve para calcular el IVA: el costo sale de la columna del costo.
+  </p>
+</fieldset>
+
+<fieldset>
+  <legend>{{ ajustes.leyenda }}</legend>
+  <div class="fila">
+    @for (s of ajustes.selectores; track s.control) {
+      <ng-container *ngTemplateOutlet="selector; context: { $implicit: s }" />
+    }
+  </div>
+  <p class="ayuda" id="ajustes-ayuda">
+    El número lleva signo: negativo es descuento (−5 es un descuento del 5 %) y positivo es recargo (+3 es un recargo
+    del 3 %). Se aplican en orden, uno sobre otro, después de las bonificaciones del proveedor. Si la columna está
+    elegida y la celda de un artículo viene vacía, se le borra ese descuento o recargo; si no elegís la columna, se
+    conservan los que ya tiene.
+  </p>
+</fieldset>
+
+<fieldset>
+  <legend>{{ otros.leyenda }}</legend>
+  <div class="fila">
+    @for (s of otros.selectores; track s.control) {
+      <ng-container *ngTemplateOutlet="selector; context: { $implicit: s }" />
+    }
+  </div>
+  <p class="ayuda" id="otros-ayuda">
+    El código de barras, la unidad y el rubro se cargan solo en los artículos nuevos: los que ya existen no cambian.
+    Si el rubro de una fila no existe, el artículo entra en el rubro elegido para los nuevos.
+  </p>
+</fieldset>

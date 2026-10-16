@@ -23,7 +23,7 @@
     <p class="error" role="alert">{{ mensaje }}</p>
   }
 
-  @if (conflicto()) {
+  @if (conflicto() && !generando()) {
     <button type="button" class="regenerar primario" [disabled]="generando()" (click)="generarVistaPrevia()">
       Volver a generar la vista previa
     </button>
@@ -35,7 +35,7 @@
       <p class="ayuda">Archivo {{ r.archivo }}. Los precios ya están actualizados.</p>
       <div class="tarjetas">
         @for (t of tarjetasDe(r.conteos); track t.etiqueta) {
-          <div class="tarjeta">{{ t.etiqueta }} <strong>{{ t.valor }}</strong></div>
+          <div class="tarjeta">{{ t.etiqueta }} <strong>{{ t.valor | number }}</strong></div>
         }
       </div>
       <button type="button" class="primario" (click)="importarOtra()">Importar otra lista</button>
@@ -65,162 +65,132 @@
 
   @if (muestra(); as m) {
     <section class="paso panel">
-      <h2>2. Columnas de la lista</h2>
+      <h2>2. Hojas y columnas de la lista</h2>
       <p class="ayuda">
         Este es el contenido del archivo: desplazate hacia los costados y hacia abajo, y usá el zoom para
-        ver más o menos celdas. Indicá qué columna es cada dato.
+        ver más o menos celdas. Indicá qué columna es cada dato; lo que el sistema reconoció solo viene
+        marcado como «Reconocida».
       </p>
 
-      <div class="herramientas-visor">
-      @if (m.hojas.length > 1) {
-        <div class="navegacion-hojas">
-          <button
-            type="button"
-            class="chico"
-            aria-label="Hoja anterior"
-            [disabled]="cargandoMuestra() || hoja() <= 0"
-            (click)="moverHoja(-1)"
-          >
-            ◀
-          </button>
-          <span class="hoja-actual" aria-live="polite">
-            Hoja {{ hoja() + 1 }} de {{ m.hojas.length }} · {{ m.hojas[hoja()] }}
-          </span>
-          <button
-            type="button"
-            class="chico"
-            aria-label="Hoja siguiente"
-            [disabled]="cargandoMuestra() || hoja() >= m.hojas.length - 1"
-            (click)="moverHoja(1)"
-          >
-            ▶
-          </button>
+      @if (hojaActual(); as hoja) {
+        <div class="herramientas-visor">
+          @if (m.hojas.length > 1) {
+            <div class="navegacion-hojas">
+              <button
+                type="button"
+                class="chico"
+                aria-label="Hoja anterior"
+                [disabled]="hojaVista() <= 0"
+                (click)="moverHoja(-1)"
+              >
+                ◀
+              </button>
+              <span class="hoja-actual" aria-live="polite">
+                Hoja {{ hojaVista() + 1 }} de {{ m.hojas.length }} · {{ hoja.nombre }}
+              </span>
+              <button
+                type="button"
+                class="chico"
+                aria-label="Hoja siguiente"
+                [disabled]="hojaVista() >= m.hojas.length - 1"
+                (click)="moverHoja(1)"
+              >
+                ▶
+              </button>
+              <label for="hojaVista">Ver la hoja</label>
+              <select id="hojaVista" (change)="elegirHojaVista($any($event.target).value)">
+                @for (nombre of nombresDeHojas(); track $index) {
+                  <option [value]="$index" [selected]="$index === hojaVista()">{{ nombre }}</option>
+                }
+              </select>
+            </div>
+          }
+
+          <div class="zoom" role="group" aria-label="Zoom de la lista">
+            <button type="button" class="chico" aria-label="Alejar" [disabled]="zoomEnMinimo()" (click)="alejar()">−</button>
+            <button type="button" class="chico zoom-actual" aria-label="Restablecer zoom" (click)="restablecerZoom()">
+              {{ zoom() }} %
+            </button>
+            <button type="button" class="chico" aria-label="Acercar" [disabled]="zoomEnMaximo()" (click)="acercar()">+</button>
+          </div>
         </div>
+
+        <div
+          class="visor"
+          role="table"
+          aria-label="Contenido de la lista"
+          [attr.aria-rowcount]="hoja.filas.length + 1"
+          [attr.aria-colcount]="columnas().length + 1"
+          [style.--alto-fila]="altoFila() + 'px'"
+          [style.--ancho-columna]="anchoColumna() + 'px'"
+          [style.--ancho-numero]="anchoNumero() + 'px'"
+          [style.--fuente]="fuente() + 'px'"
+          [style.--alto-marco]="altoMarco + 'px'"
+        >
+          <div #encabezadoVisor class="visor-encabezado" role="row">
+            <div class="visor-encabezado-fila" [style.width]="anchoTotal() + 'px'">
+              <span class="esquina" role="columnheader">Fila</span>
+              @for (c of columnas(); track c) {
+                <span
+                  class="columna"
+                  role="columnheader"
+                  [class]="claseDeColumna(c)"
+                  [attr.title]="tituloDeColumna(c)"
+                  >{{ letra(c) }}</span
+                >
+              }
+            </div>
+          </div>
+          <cdk-virtual-scroll-viewport
+            #cuerpoVisor
+            class="visor-cuerpo"
+            role="rowgroup"
+            tabindex="0"
+            [itemSize]="altoFila()"
+            (scroll)="sincronizarEncabezado($event)"
+          >
+            <div
+              *cdkVirtualFor="let fila of hoja.filas; trackBy: porNumero; let i = index"
+              class="visor-fila"
+              role="row"
+              [class.previa]="esPrevia(fila.numero)"
+              [attr.aria-rowindex]="i + 2"
+              [style.width]="anchoTotal() + 'px'"
+            >
+              <span class="numero" role="rowheader">{{ fila.numero }}</span>
+              @for (celda of fila.celdas; track $index) {
+                <span
+                  role="cell"
+                  class="celda"
+                  [class]="claseDeColumna($index)"
+                  [attr.title]="celda === '' ? null : celda"
+                  >{{ celda }}</span
+                >
+              }
+            </div>
+          </cdk-virtual-scroll-viewport>
+        </div>
+        <p class="visor-conteo ayuda">
+          {{ hoja.filas.length | number }} {{ hoja.filas.length === 1 ? 'fila' : 'filas' }} ·
+          {{ hoja.columnas | number }} {{ hoja.columnas === 1 ? 'columna' : 'columnas' }}
+        </p>
       }
 
-      <div class="zoom" role="group" aria-label="Zoom de la lista">
-        <button type="button" class="chico" aria-label="Alejar" [disabled]="zoomEnMinimo()" (click)="alejar()">−</button>
-        <button type="button" class="chico zoom-actual" aria-label="Restablecer zoom" (click)="restablecerZoom()">
-          {{ zoom() }} %
-        </button>
-        <button type="button" class="chico" aria-label="Acercar" [disabled]="zoomEnMaximo()" (click)="acercar()">+</button>
-      </div>
-      </div>
+      @if (m.hojas.length > 1) {
+        <app-hojas-lista
+          [hojas]="hojasParaLista()"
+          [elegidas]="hojasElegidas()"
+          (elegidasCambian)="elegirHojas($event)"
+        />
+        <p class="hoja-de-referencia ayuda">
+          Las columnas valen para todas las hojas. La primera fila de datos se toma de la hoja
+          «{{ nombreDeReferencia() }}»; en las demás hojas el sistema busca el encabezado solo.
+        </p>
+      }
 
-      <div
-        class="visor"
-        role="table"
-        aria-label="Contenido de la lista"
-        [attr.aria-rowcount]="m.filas.length + 1"
-        [attr.aria-colcount]="columnas().length + 1"
-        [style.--alto-fila]="altoFila() + 'px'"
-        [style.--ancho-columna]="anchoColumna() + 'px'"
-        [style.--ancho-numero]="anchoNumero() + 'px'"
-        [style.--fuente]="fuente() + 'px'"
-        [style.--alto-marco]="altoMarco + 'px'"
-      >
-        <div #encabezadoVisor class="visor-encabezado" role="row">
-          <div class="visor-encabezado-fila" [style.width]="anchoTotal() + 'px'">
-            <span class="esquina" role="columnheader">Fila</span>
-            @for (c of columnas(); track c) {
-              <span
-                class="columna"
-                role="columnheader"
-                [class]="claseDeColumna(c)"
-                [attr.title]="tituloDeColumna(c)"
-                >{{ letra(c) }}</span
-              >
-            }
-          </div>
-        </div>
-        <cdk-virtual-scroll-viewport
-          #cuerpoVisor
-          class="visor-cuerpo"
-          role="rowgroup"
-          tabindex="0"
-          [itemSize]="altoFila()"
-          (scroll)="sincronizarEncabezado($event)"
-        >
-          <div
-            *cdkVirtualFor="let fila of m.filas; trackBy: porNumero; let i = index"
-            class="visor-fila"
-            role="row"
-            [class.previa]="esPrevia(fila.numero)"
-            [attr.aria-rowindex]="i + 2"
-            [style.width]="anchoTotal() + 'px'"
-          >
-            <span class="numero" role="rowheader">{{ fila.numero }}</span>
-            @for (celda of fila.celdas; track $index) {
-              <span
-                role="cell"
-                class="celda"
-                [class]="claseDeColumna($index)"
-                [attr.title]="celda === '' ? null : celda"
-                >{{ celda }}</span
-              >
-            }
-          </div>
-        </cdk-virtual-scroll-viewport>
-      </div>
-      <p class="visor-conteo ayuda">
-        {{ m.filas.length | number }} {{ m.filas.length === 1 ? 'fila' : 'filas' }} ·
-        {{ m.columnas | number }} {{ m.columnas === 1 ? 'columna' : 'columnas' }}
-      </p>
+      <app-mapeo-columnas [grupo]="mapeoForm" [opciones]="opciones()" [reconocidos]="reconocidos()" />
 
-      <form class="mapeo" [formGroup]="form" novalidate>
-        <div class="fila">
-          <div class="campo">
-            <label for="filaDesde">Primera fila de datos</label>
-            <input
-              id="filaDesde"
-              type="number"
-              inputmode="numeric"
-              min="1"
-              formControlName="filaDesde"
-              [attr.aria-invalid]="form.controls.filaDesde.invalid ? 'true' : null"
-              [attr.aria-describedby]="form.controls.filaDesde.invalid ? 'filaDesde-error' : null"
-            />
-            @if (form.controls.filaDesde.invalid) {
-              <span id="filaDesde-error" class="campo-error">Indicá la primera fila de datos (1 o más).</span>
-            }
-          </div>
-          <div class="campo">
-            <label for="columnaCodigo">Columna del código</label>
-            <select
-              id="columnaCodigo"
-              formControlName="columnaCodigo"
-              [attr.aria-invalid]="falta('columnaCodigo') ? 'true' : null"
-            >
-              <option [ngValue]="null">Elegí la columna</option>
-              @for (c of columnas(); track c) {
-                <option [ngValue]="c">{{ etiquetaColumna(c) }}</option>
-              }
-            </select>
-          </div>
-          <div class="campo">
-            <label for="columnaDescripcion">Columna de la descripción (opcional)</label>
-            <select id="columnaDescripcion" formControlName="columnaDescripcion">
-              <option [ngValue]="null">Sin descripción</option>
-              @for (c of columnas(); track c) {
-                <option [ngValue]="c">{{ etiquetaColumna(c) }}</option>
-              }
-            </select>
-          </div>
-          <div class="campo">
-            <label for="columnaCosto">Columna del costo</label>
-            <select
-              id="columnaCosto"
-              formControlName="columnaCosto"
-              [attr.aria-invalid]="falta('columnaCosto') ? 'true' : null"
-            >
-              <option [ngValue]="null">Elegí la columna</option>
-              @for (c of columnas(); track c) {
-                <option [ngValue]="c">{{ etiquetaColumna(c) }}</option>
-              }
-            </select>
-          </div>
-        </div>
-
+      <form class="mapeo" [formGroup]="listaForm" novalidate>
         <div class="fila">
           <label class="casilla" for="listaIncluyeIva">
             <input id="listaIncluyeIva" type="checkbox" formControlName="listaIncluyeIva" />
@@ -229,62 +199,49 @@
         </div>
 
         <div class="fila">
-          <div class="campo">
-            <label for="bonificacion1">Bonificación 1 (%)</label>
-            <input
-              id="bonificacion1"
-              type="number"
-              inputmode="decimal"
-              min="0"
-              max="100"
-              step="0.01"
-              formControlName="bonificacion1"
-              [attr.aria-invalid]="form.controls.bonificacion1.invalid ? 'true' : null"
-              [attr.aria-describedby]="form.controls.bonificacion1.invalid ? 'bonificacion1-error' : null"
-            />
-            @if (form.controls.bonificacion1.invalid) {
-              <span id="bonificacion1-error" class="campo-error">La bonificación 1 tiene que estar entre 0 y 100.</span>
-            }
-          </div>
-          <div class="campo">
-            <label for="bonificacion2">Bonificación 2 (%)</label>
-            <input
-              id="bonificacion2"
-              type="number"
-              inputmode="decimal"
-              min="0"
-              max="100"
-              step="0.01"
-              formControlName="bonificacion2"
-              [attr.aria-invalid]="form.controls.bonificacion2.invalid ? 'true' : null"
-              [attr.aria-describedby]="form.controls.bonificacion2.invalid ? 'bonificacion2-error' : null"
-            />
-            @if (form.controls.bonificacion2.invalid) {
-              <span id="bonificacion2-error" class="campo-error">La bonificación 2 tiene que estar entre 0 y 100.</span>
-            }
-          </div>
-          <div class="campo">
-            <label for="bonificacion3">Bonificación 3 (%)</label>
-            <input
-              id="bonificacion3"
-              type="number"
-              inputmode="decimal"
-              min="0"
-              max="100"
-              step="0.01"
-              formControlName="bonificacion3"
-              [attr.aria-invalid]="form.controls.bonificacion3.invalid ? 'true' : null"
-              [attr.aria-describedby]="form.controls.bonificacion3.invalid ? 'bonificacion3-error' : null"
-            />
-            @if (form.controls.bonificacion3.invalid) {
-              <span id="bonificacion3-error" class="campo-error">La bonificación 3 tiene que estar entre 0 y 100.</span>
-            }
-          </div>
+          @for (n of [1, 2, 3]; track n) {
+            <div class="campo">
+              <label [for]="'bonificacion' + n">Bonificación {{ n }} (%)</label>
+              <input
+                [id]="'bonificacion' + n"
+                type="number"
+                inputmode="decimal"
+                min="0"
+                max="100"
+                step="0.01"
+                [formControlName]="'bonificacion' + n"
+                [attr.aria-invalid]="listaForm.get('bonificacion' + n)?.invalid ? 'true' : null"
+                [attr.aria-describedby]="listaForm.get('bonificacion' + n)?.invalid ? 'bonificacion' + n + '-error' : null"
+              />
+              @if (listaForm.get('bonificacion' + n)?.invalid) {
+                <span [id]="'bonificacion' + n + '-error'" class="campo-error">
+                  La bonificación {{ n }} tiene que estar entre 0 y 100.
+                </span>
+              }
+            </div>
+          }
         </div>
         <p class="ayuda ayuda-bonificaciones">
           Las bonificaciones se aplican en cascada, una sobre otra, y se guardan en el proveedor recién
           al confirmar la importación. Dejá vacía la que no corresponda.
         </p>
+
+        <div class="fila">
+          <div class="campo">
+            <label for="rubro">Rubro de los artículos nuevos</label>
+            <select id="rubro" formControlName="rubroId" aria-describedby="rubro-ayuda">
+              <option [ngValue]="null">Sin rubro (margen por defecto)</option>
+              @for (rubro of rubros(); track rubro.id) {
+                <option [ngValue]="rubro.id">{{ rubro.nombre }}</option>
+              }
+            </select>
+            <span id="rubro-ayuda" class="ayuda">
+              Define el margen con el que se calcula el precio de los artículos nuevos en la vista previa. Si
+              lo cambiás, hay que volver a generarla.
+            </span>
+          </div>
+        </div>
+
         <button type="button" class="generar primario" [disabled]="generando()" (click)="generarVistaPrevia()">
           {{ generando() ? 'Generando vista previa…' : 'Ver vista previa' }}
         </button>
@@ -295,18 +252,36 @@
   @if (vistaPrevia(); as vp) {
     <section class="paso panel vista-previa">
       <h2>3. Vista previa</h2>
-      <p class="ayuda">Todavía no se cambió nada. Revisá lo que va a pasar antes de confirmar.</p>
+      <p class="ayuda">
+        Todavía no se cambió nada. Revisá lo que va a pasar y elegí qué filas aplicar: al abrir están
+        todas marcadas. Las tarjetas cuentan lo elegido.
+      </p>
 
       <div class="tarjetas">
-        @for (t of tarjetasDe(vp.conteos); track t.etiqueta) {
-          <div class="tarjeta">{{ t.etiqueta }} <strong>{{ t.valor }}</strong></div>
+        @for (t of tarjetasDeLaVistaPrevia(); track t.etiqueta) {
+          <div class="tarjeta">
+            {{ t.etiqueta }} <strong>{{ t.valor | number }}</strong>
+            @if (t.total !== null) {
+              <span class="de-total"> de {{ t.total | number }}</span>
+            }
+          </div>
         }
       </div>
 
-      @if (vp.detalleRecortado) {
-        <p class="ayuda recortado">
-          Se muestran solo las primeras 1.000 filas de cada detalle; los contadores incluyen todas las
-          filas.
+      @if (vp.conteos.salteadas > 0) {
+        <p class="ayuda salteadas">
+          {{ vp.conteos.salteadas === 1 ? 'Se salteó' : 'Se saltearon' }}
+          {{ vp.conteos.salteadas | number }}
+          {{ vp.conteos.salteadas === 1 ? 'fila de título o de rubro' : 'filas de título o de rubro' }}: no se
+          importan ni tienen detalle.
+        </p>
+      }
+
+      @if (vp.conteos.conError > 0) {
+        <p class="ayuda aviso-errores">
+          Hay {{ vp.conteos.conError | number }}
+          {{ vp.conteos.conError === 1 ? 'fila con error: no se importa' : 'filas con error: no se importan' }}.
+          Filtrá por el tipo «Con error» para {{ vp.conteos.conError === 1 ? 'verla' : 'verlas' }}.
         </p>
       }
 
@@ -315,8 +290,8 @@
         <ul class="advertencias">
           @for (a of vp.advertencias; track $index) {
             <li>
-              @if (a.fila !== null) {
-                <strong>Fila {{ a.fila }}{{ a.codigo ? ' (' + a.codigo + ')' : '' }}:</strong>
+              @if (prefijoDeAviso(a); as prefijo) {
+                <strong>{{ prefijo }}:</strong>
               }
               {{ a.mensaje }}
             </li>
@@ -324,109 +299,12 @@
         </ul>
       }
 
-      @if (vp.cambios.length > 0) {
-        <h3>Cambios de costo</h3>
-        <div class="grilla-contenedor">
-          <table class="cambios">
-            <thead>
-              <tr>
-                <th>Fila</th>
-                <th>Código</th>
-                <th>Descripción</th>
-                <th class="num">Precio de lista</th>
-                <th class="num">Costo anterior</th>
-                <th class="num">Costo nuevo</th>
-                <th class="num">Precio anterior</th>
-                <th class="num">Precio nuevo</th>
-                <th>Cambio</th>
-              </tr>
-            </thead>
-            <tbody>
-              @for (c of vp.cambios; track c.fila) {
-                <tr [class.fuerte]="c.variacionFuerte">
-                  <td>{{ c.fila }}</td>
-                  <td>{{ c.codigoProveedor }}</td>
-                  <td>
-                    {{ c.descripcion }}
-                    @if (!c.activo) {
-                      <span class="etiqueta">Inactivo</span>
-                    }
-                  </td>
-                  <td class="num">{{ c.precioLista | monto }}</td>
-                  <td class="num">{{ c.costoAnterior | monto }}</td>
-                  <td class="num">
-                    {{ c.costoNuevo | monto }}
-                    @if (c.variacionFuerte) {
-                      <span class="etiqueta etiqueta-fuerte">Variación fuerte</span>
-                    }
-                  </td>
-                  <td class="num">{{ c.precioAnterior | monto }}</td>
-                  <td class="num">{{ c.precioNuevo | monto }}</td>
-                  <td>
-                    @if (tipoDeCambio(c) === 'Sube') {
-                      <span class="etiqueta etiqueta-sube">Sube</span>
-                    } @else {
-                      <span class="etiqueta etiqueta-baja">Baja</span>
-                    }
-                  </td>
-                </tr>
-              }
-            </tbody>
-          </table>
-        </div>
-      }
-
-      @if (vp.nuevos.length > 0) {
-        <h3>Artículos nuevos</h3>
-        <div class="grilla-contenedor">
-          <table class="nuevos">
-            <thead>
-              <tr>
-                <th>Fila</th>
-                <th>Código</th>
-                <th>Descripción</th>
-                <th class="num">Precio de lista</th>
-                <th class="num">Costo</th>
-              </tr>
-            </thead>
-            <tbody>
-              @for (n of vp.nuevos; track n.fila) {
-                <tr>
-                  <td>{{ n.fila }}</td>
-                  <td>{{ n.codigo }}</td>
-                  <td>{{ n.descripcion }}</td>
-                  <td class="num">{{ n.precioLista | monto }}</td>
-                  <td class="num">{{ n.costo | monto }}</td>
-                </tr>
-              }
-            </tbody>
-          </table>
-        </div>
-      }
-
-      @if (vp.errores.length > 0) {
-        <h3>Filas con error (no se importan)</h3>
-        <div class="grilla-contenedor">
-          <table class="errores">
-            <thead>
-              <tr>
-                <th>Fila</th>
-                <th>Código</th>
-                <th>Motivo</th>
-              </tr>
-            </thead>
-            <tbody>
-              @for (e of vp.errores; track $index) {
-                <tr>
-                  <td>{{ e.fila ?? '—' }}</td>
-                  <td>{{ e.codigo ?? '—' }}</td>
-                  <td>{{ e.mensaje }}</td>
-                </tr>
-              }
-            </tbody>
-          </table>
-        </div>
-      }
+      <app-vista-previa-tabla
+        [filas]="filasDeVista()"
+        [hojas]="nombresDeHojas()"
+        [seleccion]="seleccion()"
+        (seleccionCambia)="cambiarSeleccion($event)"
+      />
 
       @if (vp.noEstan.length > 0) {
         <details class="no-estan">
@@ -466,17 +344,17 @@
           />
           Crear los artículos nuevos
         </label>
-        <div class="campo">
-          <label for="rubro">Rubro de los artículos nuevos</label>
-          <select id="rubro" [disabled]="!crearNuevos()" (change)="elegirRubro($any($event.target).value)">
-            <option value="" [selected]="rubroId() === null">Sin rubro (margen por defecto)</option>
-            @for (rubro of rubros(); track rubro.id) {
-              <option [value]="rubro.id" [selected]="rubro.id === rubroId()">{{ rubro.nombre }}</option>
-            }
-          </select>
-        </div>
       </div>
-      <button type="button" class="confirmar primario" [disabled]="aplicando()" (click)="confirmar()">
+      @if (sinFilasElegidas()) {
+        <p id="sin-filas-elegidas" class="ayuda sin-filas-elegidas">Elegí al menos una fila.</p>
+      }
+      <button
+        type="button"
+        class="confirmar primario"
+        [disabled]="aplicando() || sinFilasElegidas()"
+        [attr.aria-describedby]="sinFilasElegidas() ? 'sin-filas-elegidas' : null"
+        (click)="confirmar()"
+      >
         {{ aplicando() ? 'Importando…' : 'Confirmar importación' }}
       </button>
     </section>

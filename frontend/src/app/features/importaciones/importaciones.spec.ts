@@ -11,11 +11,127 @@ import { AuthService } from '../../core/auth/auth.service';
 import { Proveedor } from '../proveedores/proveedor.models';
 import { ProveedoresService } from '../proveedores/proveedores.service';
 import { RubrosService } from '../rubros/rubros.service';
-import { Importacion, Muestra, VistaPrevia } from './importacion.models';
+import {
+  AltaPlaneada,
+  CambioPlaneado,
+  Conteos,
+  HojaDeMuestra,
+  Importacion,
+  Muestra,
+  PropuestaDeMapeo,
+  VistaPrevia,
+} from './importacion.models';
 import { Importaciones } from './importaciones';
 import { ImportacionesService } from './importaciones.service';
 
 registerLocaleData(localeEsAr);
+
+const SIN_AJUSTES = { a1: null, a2: null, a3: null };
+
+const CONTEOS_VACIOS: Conteos = {
+  suben: 0,
+  bajan: 0,
+  nuevos: 0,
+  sinCambio: 0,
+  noEstan: 0,
+  conError: 0,
+  cambianMoneda: 0,
+  corrigen: 0,
+  salteadas: 0,
+};
+
+const SIN_PROPUESTA: PropuestaDeMapeo = {
+  hoja: null,
+  filaDesde: null,
+  columnaCodigo: null,
+  columnaDescripcion: null,
+  columnaCosto: null,
+  columnaMoneda: null,
+  columnaSinIva: null,
+  columnaConIva: null,
+  columnaIva: null,
+  columnaAjuste1: null,
+  columnaAjuste2: null,
+  columnaAjuste3: null,
+  columnaCodigoBarras: null,
+  columnaUnidad: null,
+  columnaRubro: null,
+  hojas: [],
+};
+
+function cambioDe(parcial: Partial<CambioPlaneado>): CambioPlaneado {
+  return {
+    fila: 2,
+    hoja: 0,
+    articuloId: 10,
+    codigoProveedor: 'A-1',
+    descripcion: 'Tornillo 6mm',
+    precioLista: 1234.56,
+    costoAnterior: 1000,
+    costoNuevo: 1111.1,
+    precioAnterior: 1300,
+    precioNuevo: 1444.43,
+    activo: true,
+    variacionFuerte: false,
+    monedaAnterior: 'ARS',
+    monedaNueva: 'ARS',
+    alicuotaAnterior: 'IVA_21',
+    alicuotaNueva: 'IVA_21',
+    ajustesAnteriores: SIN_AJUSTES,
+    ajustesNuevos: SIN_AJUSTES,
+    ...parcial,
+  };
+}
+
+function altaDe(parcial: Partial<AltaPlaneada>): AltaPlaneada {
+  return {
+    fila: 4,
+    hoja: 0,
+    codigo: 'N-9',
+    descripcion: 'Arandela',
+    precioLista: 20,
+    costo: 18,
+    moneda: 'ARS',
+    alicuotaIva: 'IVA_21',
+    ajustes: SIN_AJUSTES,
+    unidad: 'UNIDAD',
+    codigoBarras: null,
+    rubroId: null,
+    precioNuevo: 30,
+    ...parcial,
+  };
+}
+
+function vistaPreviaDe(parcial: Partial<VistaPrevia>): VistaPrevia {
+  return {
+    conteos: CONTEOS_VACIOS,
+    cambios: [],
+    nuevos: [],
+    errores: [],
+    advertencias: [],
+    noEstan: [],
+    cambiosDeMoneda: [],
+    correcciones: [],
+    sinCambio: [],
+    ...parcial,
+  };
+}
+
+function hojaDe(
+  indice: number,
+  nombre: string,
+  columnas: number,
+  filas: string[][],
+  filaEncabezado: number | null = null,
+): HojaDeMuestra {
+  return {
+    indice,
+    nombre,
+    columnas,
+    filaEncabezado,
+    filas: filas.map((celdas, i) => ({ numero: i + 1, celdas })),
+  };
+}
 
 describe('Importaciones', () => {
   const sinteplast: Proveedor = { id: 1, nombre: 'Sinteplast', cuit: null, activo: true };
@@ -40,15 +156,25 @@ describe('Importaciones', () => {
 
   const pinturas = { id: 1, nombre: 'Pinturas', margenPorcentaje: 30 };
 
+  const encabezado = ['Codigo', 'Descripcion', 'Precio'];
+  /** Dos hojas con el encabezado en la fila 1; el servidor reconoció código A, descripción B y costo C. */
   const muestra: Muestra = {
-    hojas: ['Lista', 'Oferta'],
-    hoja: 0,
-    columnas: 3,
-    filas: [
-      { numero: 1, celdas: ['Codigo', 'Descripcion', 'Precio'] },
-      { numero: 2, celdas: ['A-1', 'Tornillo', '1.234,56'] },
+    hojas: [
+      hojaDe(0, 'Lista', 3, [encabezado, ['A-1', 'Tornillo', '1.234,56']], 1),
+      hojaDe(1, 'Oferta', 3, [encabezado, ['B-1', 'Clavo', '50']], 1),
     ],
+    propuesta: {
+      ...SIN_PROPUESTA,
+      hoja: 0,
+      filaDesde: 2,
+      columnaCodigo: 0,
+      columnaDescripcion: 1,
+      columnaCosto: 2,
+      hojas: [0],
+    },
   };
+  /** Lo mismo, pero el servidor no reconoció nada: hay que elegir a mano. */
+  const muestraSinReconocer: Muestra = { hojas: muestra.hojas, propuesta: SIN_PROPUESTA };
 
   let fixture: ComponentFixture<Importaciones>;
   let servicio: {
@@ -86,6 +212,7 @@ describe('Importaciones', () => {
 
   const el = () => fixture.nativeElement as HTMLElement;
   const q = <T extends Element = HTMLElement>(selector: string) => el().querySelector<T>(selector)!;
+  const texto = (e: Element | null | undefined) => e?.textContent?.replace(/\s+/g, ' ').trim();
 
   async function asentar() {
     fixture.detectChanges();
@@ -157,40 +284,76 @@ describe('Importaciones', () => {
   });
 
   describe('paso 1: proveedor y archivo', () => {
+    const MB = 1024 * 1024;
+    const conTamano = (bytes: number, nombre = 'lista.xlsx') => {
+      const archivo = new File(['x'], nombre);
+      Object.defineProperty(archivo, 'size', { value: bytes });
+      return archivo;
+    };
+
     it('el input de archivo acepta xlsx, xls y csv', async () => {
       await crearComponente();
 
       expect(q('#archivo').getAttribute('accept')).toBe('.xlsx,.xls,.csv');
     });
 
-    it('un archivo de más de 10 MB muestra el aviso y no llama al servicio', async () => {
+    it('un archivo de más de 25 MB muestra el aviso y no llama al servicio', async () => {
       await crearComponente();
-      const grande = lista();
-      Object.defineProperty(grande, 'size', { value: 10 * 1024 * 1024 + 1 });
 
-      await elegirArchivo(grande);
+      await elegirArchivo(conTamano(25 * MB + 1));
 
-      expect(q('[role="alert"]').textContent).toContain('El archivo supera el máximo de 10 MB.');
+      expect(q('[role="alert"]').textContent).toContain('El archivo supera el máximo de 25 MB.');
       expect(servicio.muestra).not.toHaveBeenCalled();
     });
 
-    it('un archivo de exactamente 10 MB se acepta', async () => {
+    it('un archivo de exactamente 25 MB se acepta', async () => {
       await crearComponente();
-      const justo = lista();
-      Object.defineProperty(justo, 'size', { value: 10 * 1024 * 1024 });
 
-      await elegirArchivo(justo);
+      await elegirArchivo(conTamano(25 * MB));
+
+      expect(servicio.muestra).toHaveBeenCalledTimes(1);
+      expect(el().querySelector('[role="alert"]')).toBeNull();
+    });
+
+    it('uno de 10,5 MB, que con el tope de antes se rechazaba, se acepta', async () => {
+      await crearComponente();
+
+      await elegirArchivo(conTamano(10.5 * MB));
 
       expect(servicio.muestra).toHaveBeenCalledTimes(1);
     });
 
-    it('al elegir el archivo trae la muestra de la hoja 0', async () => {
+    it('.xlsx, .xls y .csv se aceptan, sin importar mayúsculas', async () => {
+      for (const nombre of ['lista.xlsx', 'lista.xls', 'lista.csv', 'LISTA.XLSX']) {
+        TestBed.resetTestingModule();
+        await crearComponente();
+
+        await elegirArchivo(conTamano(1000, nombre));
+
+        expect(servicio.muestra, nombre).toHaveBeenCalledTimes(1);
+      }
+    });
+
+    it('un PDF se rechaza con el aviso y no llama al servicio', async () => {
+      await crearComponente();
+
+      await elegirArchivo(conTamano(1000, 'lista.pdf'));
+
+      expect(q('[role="alert"]').textContent).toContain(
+        'El archivo tiene que ser una planilla de Excel (.xlsx o .xls) o un CSV.',
+      );
+      expect(servicio.muestra).not.toHaveBeenCalled();
+      expect(q('.nombre-archivo').textContent?.trim()).toBe('Ningún archivo elegido');
+    });
+
+    it('al elegir el archivo trae la muestra, que ya no depende de la hoja', async () => {
       await crearComponente();
       const archivo = lista();
 
       await elegirArchivo(archivo);
 
-      expect(servicio.muestra).toHaveBeenCalledWith(archivo, 0);
+      expect(servicio.muestra).toHaveBeenCalledTimes(1);
+      expect(servicio.muestra).toHaveBeenCalledWith(archivo);
     });
 
     it('muestra el error del backend si no se puede leer el archivo', async () => {
@@ -263,15 +426,19 @@ describe('Importaciones', () => {
         await elegirArchivo(lista());
       }
 
-      const muestraGrande = (filas: number, columnas: number): Muestra => ({
-        hojas: ['Lista'],
-        hoja: 0,
-        columnas,
-        filas: Array.from({ length: filas }, (_, i) => ({
-          numero: i + 1,
-          celdas: Array.from({ length: columnas }, (_, c) => `r${i + 1}c${c}`),
-        })),
-      });
+      const muestraDeUnaHoja = (hoja: HojaDeMuestra): Muestra => ({ hojas: [hoja], propuesta: null });
+
+      const muestraGrande = (filas: number, columnas: number): Muestra =>
+        muestraDeUnaHoja({
+          indice: 0,
+          nombre: 'Lista',
+          columnas,
+          filaEncabezado: null,
+          filas: Array.from({ length: filas }, (_, i) => ({
+            numero: i + 1,
+            celdas: Array.from({ length: columnas }, (_, c) => `r${i + 1}c${c}`),
+          })),
+        });
 
       it('arma el marco con una letra por columna en el encabezado fijo', async () => {
         await crearComponente();
@@ -297,12 +464,11 @@ describe('Importaciones', () => {
       });
 
       it('el texto largo va en una línea y se ve completo en el tooltip', async () => {
-        await conMuestra({
-          hojas: ['Lista'],
-          hoja: 0,
-          columnas: 1,
-          filas: [{ numero: 1, celdas: ['Tornillo hexagonal galvanizado de 1/4 por 2 pulgadas'] }],
-        });
+        await conMuestra(
+          muestraDeUnaHoja(
+            hojaDe(0, 'Lista', 1, [['Tornillo hexagonal galvanizado de 1/4 por 2 pulgadas']]),
+          ),
+        );
 
         await asentar(); // el scroll virtual mide el marco un ciclo después
 
@@ -318,7 +484,7 @@ describe('Importaciones', () => {
       });
 
       it('usa singular con una fila y una columna', async () => {
-        await conMuestra({ hojas: ['Lista'], hoja: 0, columnas: 1, filas: [{ numero: 1, celdas: ['x'] }] });
+        await conMuestra(muestraDeUnaHoja(hojaDe(0, 'Lista', 1, [['x']])));
 
         expect(q('.visor-conteo').textContent?.trim()).toBe('1 fila · 1 columna');
       });
@@ -349,6 +515,15 @@ describe('Importaciones', () => {
         expect(codigo[45]).toBe('AS');
         expect(textosDe('#columnaDescripcion')).toHaveLength(46);
         expect(textosDe('#columnaCosto')).toHaveLength(46);
+      });
+
+      it('los selectores ofrecen las columnas de la hoja más ancha', async () => {
+        await conMuestra({
+          hojas: [hojaDe(0, 'Angosta', 2, [['a', 'b']]), hojaDe(1, 'Ancha', 5, [['a', 'b', 'c', 'd', 'e']])],
+          propuesta: null,
+        });
+
+        expect(textosDe('#columnaCodigo')).toEqual(['Elegí la columna', 'A', 'B', 'C', 'D', 'E']);
       });
 
       describe('zoom', () => {
@@ -451,10 +626,6 @@ describe('Importaciones', () => {
           await crearComponente();
           await elegirArchivo(lista());
 
-          await elegir('#columnaCodigo', 'A');
-          await elegir('#columnaDescripcion', 'B');
-          await elegir('#columnaCosto', 'C');
-
           const [a, b, c] = columnas();
           expect(a.classList).toContain('col-codigo');
           expect(b.classList).toContain('col-descripcion');
@@ -463,6 +634,7 @@ describe('Importaciones', () => {
 
         it('sin mapeo ninguna columna está resaltada', async () => {
           await crearComponente();
+          servicio.muestra.mockReturnValue(of(muestraSinReconocer));
           await elegirArchivo(lista());
 
           for (const columna of columnas()) {
@@ -475,7 +647,7 @@ describe('Importaciones', () => {
         it('al cambiar la elección el resaltado se mueve de columna', async () => {
           await crearComponente();
           await elegirArchivo(lista());
-          await elegir('#columnaCosto', 'C');
+          await elegir('#columnaDescripcion', 'Sin descripción');
 
           await elegir('#columnaCosto', 'B');
 
@@ -484,19 +656,58 @@ describe('Importaciones', () => {
           expect(c.classList).not.toContain('col-costo');
         });
 
+        it('las columnas de los otros campos (moneda, IVA, ajustes…) también se resaltan, con su nombre', async () => {
+          await crearComponente();
+          servicio.muestra.mockReturnValue(
+            of({
+              hojas: [hojaDe(0, 'Lista', 5, [['a', 'b', 'c', 'd', 'e']], 1)],
+              propuesta: { ...SIN_PROPUESTA, hoja: 0, filaDesde: 2, columnaCodigo: 0, columnaCosto: 2, hojas: [0] },
+            }),
+          );
+          await elegirArchivo(lista());
+          expect(columnas()[3].classList).not.toContain('col-otra');
+
+          await elegir('#columnaMoneda', 'D');
+
+          expect(columnas()[3].classList).toContain('col-otra');
+          expect(columnas()[3].getAttribute('title')).toBe('Columna de la moneda');
+          await elegir('#columnaSinIva', 'E');
+          expect(columnas()[4].getAttribute('title')).toBe('Columna del precio sin IVA');
+        });
+
         it('atenúa las filas anteriores a la primera fila de datos', async () => {
           await crearComponente();
           await elegirArchivo(lista());
           await escribir('#filaDesde', '2');
 
-          const [encabezado, datos] = Array.from(el().querySelectorAll('.visor-fila'));
-          expect(encabezado.classList).toContain('previa');
+          const [encabezadoFila, datos] = Array.from(el().querySelectorAll('.visor-fila'));
+          expect(encabezadoFila.classList).toContain('previa');
           expect(datos.classList).not.toContain('previa');
+        });
+
+        it('en otra hoja atenúa hasta el encabezado que reconoció el servidor', async () => {
+          await crearComponente();
+          servicio.muestra.mockReturnValue(
+            of({
+              ...muestra,
+              hojas: [
+                muestra.hojas[0],
+                hojaDe(1, 'Oferta', 3, [['Titulo'], encabezado, ['B-1', 'Clavo', '50']], 2),
+              ],
+            }),
+          );
+          await elegirArchivo(lista());
+
+          q<HTMLButtonElement>('button[aria-label="Hoja siguiente"]').click();
+          await asentar();
+
+          const filas = Array.from(el().querySelectorAll('.visor-fila'));
+          expect(filas.map((f) => f.classList.contains('previa'))).toEqual([true, true, false]);
         });
       });
     });
 
-    it('ofrece las columnas por letra; la descripción es opcional', async () => {
+    it('ofrece las columnas por letra con el texto del encabezado que reconoció el servidor', async () => {
       await crearComponente();
       await elegirArchivo(lista());
 
@@ -506,70 +717,72 @@ describe('Importaciones', () => {
       expect(textosDe('#columnaDescripcion')).toEqual(['Sin descripción', ...letras]);
     });
 
-    describe('navegación de hojas', () => {
+    describe('navegación de hojas: todo el archivo viene en una sola muestra', () => {
       const anterior = () => q<HTMLButtonElement>('button[aria-label="Hoja anterior"]');
       const siguiente = () => q<HTMLButtonElement>('button[aria-label="Hoja siguiente"]');
       const etiqueta = () => q('.navegacion-hojas .hoja-actual').textContent?.trim();
 
-      const hojas3 = ['Lista', 'Oferta', 'Histórico'];
-      /** El backend devuelve siempre los nombres de todas las hojas y las filas de la pedida. */
-      const muestraDe = (hojas: string[]) => (_archivo: File, hoja: number): unknown =>
-        of({
-          hojas,
-          hoja,
-          columnas: hoja === 0 ? 3 : 2,
-          filas: [{ numero: 1, celdas: hoja === 0 ? ['Codigo', 'Descripcion', 'Precio'] : ['Z', 'Y'] }],
-        });
+      const tres: Muestra = {
+        hojas: [
+          hojaDe(0, 'Lista', 3, [encabezado], 1),
+          hojaDe(1, 'Oferta', 2, [['Z', 'Y']]),
+          hojaDe(2, 'Histórico', 3, [['H', 'I', 'J']]),
+        ],
+        propuesta: { ...SIN_PROPUESTA, hoja: 0, filaDesde: 2, columnaCodigo: 0, columnaCosto: 2, hojas: [0] },
+      };
 
       async function conArchivoDeTresHojas() {
         await crearComponente();
-        servicio.muestra.mockImplementation(muestraDe(hojas3));
+        servicio.muestra.mockReturnValue(of(tres));
         const archivo = lista();
         await elegirArchivo(archivo);
+        servicio.muestra.mockClear();
         return archivo;
       }
 
       it('al cargar muestra la primera hoja con "Hoja 1 de N" y su nombre', async () => {
-        const archivo = await conArchivoDeTresHojas();
+        await conArchivoDeTresHojas();
 
-        expect(servicio.muestra).toHaveBeenCalledWith(archivo, 0);
         expect(etiqueta()).toBe('Hoja 1 de 3 · Lista');
-        expect(el().querySelector('#hoja')).toBeNull();
       });
 
-      it('la flecha siguiente carga la hoja 1 y actualiza la grilla y la etiqueta', async () => {
-        const archivo = await conArchivoDeTresHojas();
+      it('la flecha siguiente cambia la grilla y la etiqueta SIN volver a llamar al servicio', async () => {
+        await conArchivoDeTresHojas();
 
         siguiente().click();
         await asentar();
 
-        expect(servicio.muestra).toHaveBeenLastCalledWith(archivo, 1);
+        expect(servicio.muestra).not.toHaveBeenCalled();
         expect(etiqueta()).toBe('Hoja 2 de 3 · Oferta');
         expect(el().querySelectorAll('.visor-encabezado .columna')).toHaveLength(2);
       });
 
       it('la flecha anterior vuelve a la hoja previa', async () => {
-        const archivo = await conArchivoDeTresHojas();
+        await conArchivoDeTresHojas();
         siguiente().click();
         await asentar();
 
         anterior().click();
         await asentar();
 
-        expect(servicio.muestra).toHaveBeenLastCalledWith(archivo, 0);
+        expect(servicio.muestra).not.toHaveBeenCalled();
         expect(etiqueta()).toBe('Hoja 1 de 3 · Lista');
       });
 
-      it('en la primera hoja la flecha anterior está deshabilitada y no llama al servicio', async () => {
+      it('se puede elegir la hoja de una lista, sin llamar al servicio', async () => {
         await conArchivoDeTresHojas();
-        servicio.muestra.mockClear();
+
+        await elegir('#hojaVista', 'Histórico');
+
+        expect(etiqueta()).toBe('Hoja 3 de 3 · Histórico');
+        expect(servicio.muestra).not.toHaveBeenCalled();
+      });
+
+      it('en la primera hoja la flecha anterior está deshabilitada', async () => {
+        await conArchivoDeTresHojas();
 
         expect(anterior().disabled).toBe(true);
         expect(siguiente().disabled).toBe(false);
-        anterior().click();
-        await asentar();
-
-        expect(servicio.muestra).not.toHaveBeenCalled();
       });
 
       it('en la última hoja la flecha siguiente está deshabilitada', async () => {
@@ -584,46 +797,29 @@ describe('Importaciones', () => {
         expect(anterior().disabled).toBe(false);
       });
 
-      it('las flechas se deshabilitan mientras se lee la hoja', async () => {
+      it('ver otra hoja no deja sin efecto la vista previa: no cambia ningún dato', async () => {
         await conArchivoDeTresHojas();
-        const respuesta = new Subject<Muestra>();
-        servicio.muestra.mockReturnValue(respuesta);
+        servicio.vistaPrevia.mockReturnValue(of(vistaPreviaDe({ conteos: CONTEOS_VACIOS })));
+        await elegir('#proveedor', 'Sinteplast');
+        q<HTMLButtonElement>('button.generar').click();
+        await asentar();
+        expect(el().querySelector('.vista-previa')).not.toBeNull();
 
         siguiente().click();
-        fixture.detectChanges();
-
-        expect(siguiente().disabled).toBe(true);
-        expect(anterior().disabled).toBe(true);
-        respuesta.next({ hojas: hojas3, hoja: 1, columnas: 2, filas: [] });
         await asentar();
-        expect(etiqueta()).toBe('Hoja 2 de 3 · Oferta');
-        expect(siguiente().disabled).toBe(false);
+
+        expect(el().querySelector('.vista-previa')).not.toBeNull();
       });
 
-      it('un archivo de una sola hoja no muestra la navegación', async () => {
+      it('un archivo de una sola hoja no muestra la navegación ni la lista de hojas', async () => {
         await crearComponente();
-        servicio.muestra.mockImplementation(muestraDe(['Hoja1']));
+        servicio.muestra.mockReturnValue(of({ hojas: [tres.hojas[0]], propuesta: tres.propuesta }));
 
         await elegirArchivo(lista());
 
         expect(el().querySelector('.navegacion-hojas')).toBeNull();
-        expect(el().querySelector('button[aria-label="Hoja anterior"]')).toBeNull();
-        expect(el().querySelector('button[aria-label="Hoja siguiente"]')).toBeNull();
+        expect(el().querySelector('app-hojas-lista')).toBeNull();
         expect(el().querySelector('.visor')).not.toBeNull();
-      });
-
-      it('con un proveedor que guardó otra hoja, abre esa hoja y las flechas parten de ahí', async () => {
-        await crearComponente();
-        servicio.muestra.mockImplementation(muestraDe(hojas3));
-        await elegir('#proveedor', 'Tersuave');
-        const archivo = lista();
-
-        await elegirArchivo(archivo);
-
-        expect(servicio.muestra).toHaveBeenCalledWith(archivo, 1);
-        expect(etiqueta()).toBe('Hoja 2 de 3 · Oferta');
-        expect(anterior().disabled).toBe(false);
-        expect(siguiente().disabled).toBe(false);
       });
 
       it('la navegación es accesible: botones con nombre y la etiqueta anuncia los cambios', async () => {
@@ -632,65 +828,249 @@ describe('Importaciones', () => {
         expect(anterior().getAttribute('type')).toBe('button');
         expect(siguiente().getAttribute('type')).toBe('button');
         expect(q('.navegacion-hojas .hoja-actual').getAttribute('aria-live')).toBe('polite');
+        expect(q('label[for="hojaVista"]').textContent?.trim()).toBe('Ver la hoja');
       });
     });
 
-    it('sin proveedor con mapeo guardado, los valores arrancan vacíos', async () => {
-      await crearComponente();
-      await elegir('#proveedor', 'Sinteplast');
-      await elegirArchivo(lista());
+    describe('hojas que se importan', () => {
+      const hojasChecks = () =>
+        Array.from(el().querySelectorAll<HTMLInputElement>('app-hojas-lista input[type="checkbox"]'));
 
-      expect(seleccionado('#columnaCodigo')).toBe('Elegí la columna');
-      expect(seleccionado('#columnaDescripcion')).toBe('Sin descripción');
-      expect(seleccionado('#columnaCosto')).toBe('Elegí la columna');
-      expect(q<HTMLInputElement>('#filaDesde').value).toBe('2');
-      expect(q<HTMLInputElement>('#listaIncluyeIva').checked).toBe(false);
-      expect(q<HTMLInputElement>('#bonificacion1').value).toBe('');
-      expect(q<HTMLInputElement>('#bonificacion2').value).toBe('');
-      expect(q<HTMLInputElement>('#bonificacion3').value).toBe('');
+      it('las hojas con encabezado reconocido vienen marcadas y una hoja nueva sin marcar', async () => {
+        await crearComponente();
+        servicio.muestra.mockReturnValue(
+          of({ ...muestra, propuesta: { ...muestra.propuesta!, hojas: [0] } }),
+        );
+
+        await elegirArchivo(lista());
+
+        expect(hojasChecks().map((c) => c.checked)).toEqual([true, false]);
+      });
+
+      it('del mapeo guardado vienen las hojas guardadas', async () => {
+        await crearComponente();
+        await elegir('#proveedor', 'Tersuave');
+
+        await elegirArchivo(lista());
+
+        expect(hojasChecks().map((c) => c.checked)).toEqual([false, true]);
+      });
+
+      it('marcar una hoja la suma a lo que se manda en la vista previa', async () => {
+        await crearComponente();
+        servicio.vistaPrevia.mockReturnValue(of(vistaPreviaDe({})));
+        await elegir('#proveedor', 'Sinteplast');
+        await elegirArchivo(lista());
+
+        hojasChecks()[1].click();
+        await asentar();
+        q<HTMLButtonElement>('button.generar').click();
+        await asentar();
+
+        expect(servicio.vistaPrevia.mock.calls[0][1].mapeo.hojas).toEqual([0, 1]);
+      });
+
+      it('sin ninguna hoja marcada no llama al servicio y lo avisa', async () => {
+        await crearComponente();
+        await elegir('#proveedor', 'Sinteplast');
+        await elegirArchivo(lista());
+        hojasChecks()[0].click();
+        await asentar();
+
+        q<HTMLButtonElement>('button.generar').click();
+        await asentar();
+
+        expect(servicio.vistaPrevia).not.toHaveBeenCalled();
+        expect(q('[role="alert"]').textContent).toContain('Elegí al menos una hoja.');
+      });
+
+      it('cambiar las hojas deja sin efecto la vista previa', async () => {
+        await crearComponente();
+        servicio.vistaPrevia.mockReturnValue(of(vistaPreviaDe({})));
+        await elegir('#proveedor', 'Sinteplast');
+        await elegirArchivo(lista());
+        q<HTMLButtonElement>('button.generar').click();
+        await asentar();
+        expect(el().querySelector('.vista-previa')).not.toBeNull();
+
+        hojasChecks()[1].click();
+        await asentar();
+
+        expect(el().querySelector('.vista-previa')).toBeNull();
+      });
+
+      it('con varias hojas aclara de cuál sale la primera fila de datos', async () => {
+        await crearComponente();
+        await elegirArchivo(lista());
+
+        expect(q('.hoja-de-referencia').textContent).toContain('«Lista»');
+      });
     });
 
-    it('precarga mapeo, IVA y bonificaciones del proveedor elegido antes del archivo', async () => {
-      await crearComponente();
-      const archivo = lista();
-      await elegir('#proveedor', 'Tersuave');
+    describe('precarga del mapeo', () => {
+      it('con un proveedor sin mapeo guardado usa la propuesta del servidor y la marca como «Reconocida»', async () => {
+        await crearComponente();
+        await elegir('#proveedor', 'Sinteplast');
+        await elegirArchivo(lista());
 
-      await elegirArchivo(archivo);
+        expect(seleccionado('#columnaCodigo')).toBe('A · Codigo');
+        expect(seleccionado('#columnaDescripcion')).toBe('B · Descripcion');
+        expect(seleccionado('#columnaCosto')).toBe('C · Precio');
+        expect(q<HTMLInputElement>('#filaDesde').value).toBe('2');
+        expect(q<HTMLInputElement>('#listaIncluyeIva').checked).toBe(false);
+        const marcas = Array.from(el().querySelectorAll('.reconocida')).map((m) => m.id);
+        expect(marcas).toEqual([
+          'filaDesde-reconocida',
+          'columnaCodigo-reconocida',
+          'columnaDescripcion-reconocida',
+          'columnaCosto-reconocida',
+        ]);
+      });
 
-      expect(servicio.muestra).toHaveBeenCalledWith(archivo, 1);
-      expect(seleccionado('#columnaCodigo')).toBe('B · Descripcion');
-      expect(seleccionado('#columnaDescripcion')).toBe('A · Codigo');
-      expect(seleccionado('#columnaCosto')).toBe('C · Precio');
-      expect(q<HTMLInputElement>('#filaDesde').value).toBe('3');
-      expect(q<HTMLInputElement>('#listaIncluyeIva').checked).toBe(true);
-      expect(q<HTMLInputElement>('#bonificacion1').value).toBe('40');
-      expect(q<HTMLInputElement>('#bonificacion2').value).toBe('10');
-      expect(q<HTMLInputElement>('#bonificacion3').value).toBe('');
-    });
+      it('con el mapeo guardado del proveedor usa ese y NO lo marca como reconocido', async () => {
+        await crearComponente();
+        const archivo = lista();
+        await elegir('#proveedor', 'Tersuave');
 
-    it('si el proveedor se elige después del archivo, precarga y recarga la hoja guardada', async () => {
-      await crearComponente();
-      const archivo = lista();
-      await elegirArchivo(archivo);
-      servicio.muestra.mockClear();
+        await elegirArchivo(archivo);
 
-      await elegir('#proveedor', 'Tersuave');
+        expect(servicio.muestra).toHaveBeenCalledTimes(1);
+        expect(seleccionado('#columnaCodigo')).toBe('B · Descripcion');
+        expect(seleccionado('#columnaDescripcion')).toBe('A · Codigo');
+        expect(seleccionado('#columnaCosto')).toBe('C · Precio');
+        expect(q<HTMLInputElement>('#filaDesde').value).toBe('3');
+        expect(q<HTMLInputElement>('#listaIncluyeIva').checked).toBe(true);
+        expect(q<HTMLInputElement>('#bonificacion1').value).toBe('40');
+        expect(q<HTMLInputElement>('#bonificacion2').value).toBe('10');
+        expect(q<HTMLInputElement>('#bonificacion3').value).toBe('');
+        expect(el().querySelectorAll('.reconocida')).toHaveLength(0);
+      });
 
-      expect(servicio.muestra).toHaveBeenCalledWith(archivo, 1);
-      expect(seleccionado('#columnaCodigo')).toBe('B · Descripcion');
-      expect(q<HTMLInputElement>('#bonificacion1').value).toBe('40');
-    });
+      it('el mapeo guardado abre la grilla en su hoja de referencia', async () => {
+        await crearComponente();
+        await elegir('#proveedor', 'Tersuave');
 
-    it('al cambiar a un proveedor sin configuración, limpia lo precargado', async () => {
-      await crearComponente();
-      await elegir('#proveedor', 'Tersuave');
-      await elegirArchivo(lista());
+        await elegirArchivo(lista());
 
-      await elegir('#proveedor', 'Sinteplast');
+        expect(q('.navegacion-hojas .hoja-actual').textContent?.trim()).toBe('Hoja 2 de 2 · Oferta');
+      });
 
-      expect(seleccionado('#columnaCodigo')).toBe('Elegí la columna');
-      expect(q<HTMLInputElement>('#listaIncluyeIva').checked).toBe(false);
-      expect(q<HTMLInputElement>('#bonificacion1').value).toBe('');
+      it('si una hoja del mapeo guardado no existe en el archivo, usa la propuesta', async () => {
+        await crearComponente();
+        const sinSegundaHoja: Muestra = { ...muestra, hojas: [muestra.hojas[0]] };
+        servicio.muestra.mockReturnValue(of(sinSegundaHoja));
+        await elegir('#proveedor', 'Tersuave');
+
+        await elegirArchivo(lista());
+
+        expect(seleccionado('#columnaCodigo')).toBe('A · Codigo');
+        expect(q<HTMLInputElement>('#filaDesde').value).toBe('2');
+        expect(el().querySelectorAll('.reconocida').length).toBeGreaterThan(0);
+        expect(q<HTMLInputElement>('#bonificacion1').value).toBe('40');
+      });
+
+      it('si el proveedor se elige después del archivo, precarga SIN volver a pedir la muestra', async () => {
+        await crearComponente();
+        await elegirArchivo(lista());
+        servicio.muestra.mockClear();
+
+        await elegir('#proveedor', 'Tersuave');
+
+        expect(servicio.muestra).not.toHaveBeenCalled();
+        expect(seleccionado('#columnaCodigo')).toBe('B · Descripcion');
+        expect(q<HTMLInputElement>('#bonificacion1').value).toBe('40');
+        expect(el().querySelectorAll('.reconocida')).toHaveLength(0);
+      });
+
+      it('al cambiar a un proveedor sin mapeo guardado vuelve a la propuesta y limpia IVA y bonificaciones', async () => {
+        await crearComponente();
+        await elegir('#proveedor', 'Tersuave');
+        await elegirArchivo(lista());
+
+        await elegir('#proveedor', 'Sinteplast');
+
+        expect(seleccionado('#columnaCodigo')).toBe('A · Codigo');
+        expect(q<HTMLInputElement>('#listaIncluyeIva').checked).toBe(false);
+        expect(q<HTMLInputElement>('#bonificacion1').value).toBe('');
+      });
+
+      it('un archivo sin encabezado reconocible deja elegir a mano, sin error', async () => {
+        await crearComponente();
+        servicio.muestra.mockReturnValue(of(muestraSinReconocer));
+        await elegir('#proveedor', 'Sinteplast');
+
+        await elegirArchivo(lista());
+
+        expect(el().querySelector('[role="alert"]')).toBeNull();
+        expect(seleccionado('#columnaCodigo')).toBe('Elegí la columna');
+        expect(seleccionado('#columnaDescripcion')).toBe('Sin descripción');
+        expect(seleccionado('#columnaCosto')).toBe('Elegí la columna');
+        expect(q<HTMLInputElement>('#filaDesde').value).toBe('1');
+        expect(el().querySelectorAll('.reconocida')).toHaveLength(0);
+        expect(el().querySelector('#columnaCodigo')).not.toBeNull();
+      });
+
+      it('si el Dueño cambia un campo reconocido, ese campo pierde la marca y los demás la conservan', async () => {
+        await crearComponente();
+        await elegirArchivo(lista());
+
+        await elegir('#columnaCosto', 'B');
+
+        const marcas = Array.from(el().querySelectorAll('.reconocida')).map((m) => m.id);
+        expect(marcas).not.toContain('columnaCosto-reconocida');
+        expect(marcas).toContain('columnaCodigo-reconocida');
+      });
+
+      it('los rótulos de las columnas salen de la fila de encabezado que dice el servidor', async () => {
+        await crearComponente();
+        servicio.muestra.mockReturnValue(
+          of({
+            hojas: [hojaDe(0, 'Lista', 3, [['Lista de precios', '', ''], ['Código', 'Descripción', 'Precio'], ['A-1', 'x', '1']], 2)],
+            propuesta: { ...SIN_PROPUESTA, hoja: 0, filaDesde: 3, columnaCodigo: 0, columnaCosto: 2, hojas: [0] },
+          }),
+        );
+
+        await elegirArchivo(lista());
+
+        expect(textosDe('#columnaCodigo')).toEqual([
+          'Elegí la columna',
+          'A · Código',
+          'B · Descripción',
+          'C · Precio',
+        ]);
+        expect(q<HTMLInputElement>('#filaDesde').value).toBe('3');
+      });
+
+      it('sin fila de encabezado quedan solo las letras', async () => {
+        await crearComponente();
+        servicio.muestra.mockReturnValue(
+          of({ hojas: [hojaDe(0, 'Lista', 3, [['A-1', 'Tornillo', '1.234,56']], null)], propuesta: null }),
+        );
+
+        await elegirArchivo(lista());
+
+        expect(textosDe('#columnaCodigo')).toEqual(['Elegí la columna', 'A', 'B', 'C']);
+      });
+
+      it('una celda de encabezado vacía queda solo con la letra', async () => {
+        await crearComponente();
+        servicio.muestra.mockReturnValue(
+          of({ hojas: [hojaDe(0, 'Lista', 3, [['Codigo', '', 'Precio'], ['A-1', 'x', '1']], 1)], propuesta: null }),
+        );
+
+        await elegirArchivo(lista());
+
+        expect(textosDe('#columnaCodigo')).toEqual(['Elegí la columna', 'A · Codigo', 'B', 'C · Precio']);
+      });
+
+      it('la primera fila de datos sigue siendo editable', async () => {
+        await crearComponente();
+        await elegirArchivo(lista());
+
+        await escribir('#filaDesde', '5');
+
+        expect(q<HTMLInputElement>('#filaDesde').value).toBe('5');
+      });
     });
 
     it('explica que las bonificaciones se aplican en cascada y se guardan al confirmar', async () => {
@@ -707,7 +1087,7 @@ describe('Importaciones', () => {
 
       const rotulos = Array.from(el().querySelectorAll('label')).map((l) => l.textContent?.trim());
       for (const esperado of [
-        'Columna del código',
+        'Columna del código del proveedor',
         'Columna de la descripción (opcional)',
         'Columna del costo',
         'Primera fila de datos',
@@ -715,6 +1095,7 @@ describe('Importaciones', () => {
         'Bonificación 1 (%)',
         'Bonificación 2 (%)',
         'Bonificación 3 (%)',
+        'Rubro de los artículos nuevos',
       ]) {
         expect(rotulos, esperado).toContain(esperado);
       }
@@ -728,27 +1109,34 @@ describe('Importaciones', () => {
 
       expect(el().textContent).toContain('La bonificación 1 tiene que estar entre 0 y 100.');
     });
+
+    it('el rubro de los artículos nuevos se elige antes de la vista previa, porque define su precio', async () => {
+      await crearComponente();
+      await elegirArchivo(lista());
+
+      expect(textosDe('#rubro')).toEqual(['Sin rubro (margen por defecto)', 'Pinturas']);
+      expect(seleccionado('#rubro')).toBe('Sin rubro (margen por defecto)');
+      expect(q('#rubro-ayuda').textContent).toContain('precio de los artículos nuevos');
+    });
   });
 
   describe('paso 3: vista previa', () => {
-    const conteos = { suben: 2, bajan: 1, nuevos: 1, sinCambio: 3, noEstan: 1, conError: 1 };
+    const conteos: Conteos = {
+      suben: 2,
+      bajan: 1,
+      nuevos: 1,
+      sinCambio: 3,
+      noEstan: 1,
+      conError: 1,
+      cambianMoneda: 1,
+      corrigen: 1,
+      salteadas: 42,
+    };
     const vistaPrevia: VistaPrevia = {
       conteos,
       cambios: [
-        {
-          fila: 2,
-          articuloId: 10,
-          codigoProveedor: 'A-1',
-          descripcion: 'Tornillo 6mm',
-          precioLista: 1234.56,
-          costoAnterior: 1000,
-          costoNuevo: 1111.1,
-          precioAnterior: 1300,
-          precioNuevo: 1444.43,
-          activo: true,
-          variacionFuerte: false,
-        },
-        {
+        cambioDe({}),
+        cambioDe({
           fila: 3,
           articuloId: 11,
           codigoProveedor: 'A-2',
@@ -760,26 +1148,67 @@ describe('Importaciones', () => {
           precioNuevo: 650,
           activo: false,
           variacionFuerte: true,
-        },
+        }),
+        cambioDe({
+          fila: 6,
+          articuloId: 12,
+          codigoProveedor: 'A-4',
+          descripcion: 'Clavo',
+          costoAnterior: 200,
+          costoNuevo: 150.5,
+          precioAnterior: 260,
+          precioNuevo: 195.65,
+        }),
       ],
-      nuevos: [{ fila: 4, codigo: 'N-9', descripcion: 'Arandela', precioLista: 20, costo: 18 }],
-      errores: [{ fila: 5, codigo: 'X-1', mensaje: 'El costo es cero o está vacío.' }],
+      cambiosDeMoneda: [
+        cambioDe({
+          fila: 7,
+          hoja: 1,
+          articuloId: 13,
+          codigoProveedor: 'M-1',
+          descripcion: 'Cable',
+          costoAnterior: 1000,
+          costoNuevo: 10,
+          precioAnterior: 1580,
+          precioNuevo: 15730,
+          monedaAnterior: 'ARS',
+          monedaNueva: 'USD',
+        }),
+      ],
+      correcciones: [
+        cambioDe({
+          fila: 8,
+          hoja: 1,
+          articuloId: 14,
+          codigoProveedor: 'K-1',
+          descripcion: 'Caño',
+          costoAnterior: 10000,
+          costoNuevo: 10000,
+          precioAnterior: 15730,
+          precioNuevo: 14370,
+          alicuotaAnterior: 'IVA_21',
+          alicuotaNueva: 'IVA_10_5',
+        }),
+      ],
+      nuevos: [altaDe({})],
+      sinCambio: [
+        { id: 15, hoja: 1, fila: 9, codigo: 'S-1', descripcion: 'Igual 1' },
+        { id: 16, hoja: 1, fila: 10, codigo: 'S-2', descripcion: 'Igual 2' },
+        { id: 17, hoja: 1, fila: 11, codigo: 'S-3', descripcion: 'Igual 3' },
+      ],
+      errores: [{ hoja: 0, fila: 5, codigo: 'X-1', mensaje: 'El costo es cero o está vacío.' }],
       advertencias: [
-        { fila: null, codigo: null, mensaje: 'El encabezado de la columna del costo cambió.' },
-        { fila: 3, codigo: 'A-2', mensaje: 'El costo varía 400 % respecto del actual.' },
+        { hoja: 0, fila: null, codigo: null, mensaje: 'El encabezado de la columna del costo cambió.' },
+        { hoja: 1, fila: 3, codigo: 'A-2', mensaje: 'El costo varía 400 % respecto del actual.' },
+        { hoja: null, fila: null, codigo: null, mensaje: 'Aviso general.' },
       ],
-      noEstan: [
-        { id: 20, codigoInterno: 'INT-20', codigoProveedor: 'Z-1', descripcion: 'Clavo largo' },
-      ],
-      detalleRecortado: false,
+      noEstan: [{ id: 20, codigoInterno: 'INT-20', codigoProveedor: 'Z-1', descripcion: 'Clavo largo' }],
     };
 
-    /** Deja el formulario listo: Sinteplast, archivo, código en A, costo en C. */
+    /** Deja el formulario listo: Sinteplast y el archivo (la propuesta elige código A, descripción B y costo C). */
     async function prepararMapeo() {
       await elegir('#proveedor', 'Sinteplast');
       await elegirArchivo(lista());
-      await elegir('#columnaCodigo', 'A');
-      await elegir('#columnaCosto', 'C');
     }
 
     async function generar() {
@@ -788,13 +1217,16 @@ describe('Importaciones', () => {
     }
 
     const tarjetas = () =>
-      Array.from(el().querySelectorAll('.tarjeta')).map((t) =>
-        t.textContent?.replace(/\s+/g, ' ').trim(),
-      );
-    const filasDe = (selector: string) =>
-      Array.from(el().querySelectorAll(`${selector} tbody tr`)).map((tr) =>
-        Array.from(tr.querySelectorAll('td')).map((td) => td.textContent?.replace(/\s+/g, ' ').trim()),
-      );
+      Array.from(el().querySelectorAll('.tarjeta')).map((t) => texto(t));
+    const filasDeTabla = () => Array.from(el().querySelectorAll('app-vista-previa-tabla tbody tr'));
+    const celdas = (tr: Element) => Array.from(tr.querySelectorAll('td')).map((td) => texto(td));
+
+    async function conVistaPrevia(vp: VistaPrevia = vistaPrevia) {
+      await crearComponente();
+      servicio.vistaPrevia.mockReturnValue(of(vp));
+      await prepararMapeo();
+      await generar();
+    }
 
     it('no se ve la vista previa hasta pedirla', async () => {
       await crearComponente();
@@ -804,7 +1236,7 @@ describe('Importaciones', () => {
       expect(q('button.generar').textContent).toContain('Ver vista previa');
     });
 
-    it('manda archivo, proveedor, mapeo, IVA y bonificaciones', async () => {
+    it('manda archivo, proveedor, mapeo con hojas, IVA, bonificaciones y el rubro de los nuevos', async () => {
       await crearComponente();
       servicio.vistaPrevia.mockReturnValue(of(vistaPrevia));
       const archivo = lista();
@@ -817,24 +1249,98 @@ describe('Importaciones', () => {
       q<HTMLInputElement>('#listaIncluyeIva').click();
       await escribir('#bonificacion1', '40');
       await escribir('#bonificacion2', '10');
+      await elegir('#rubro', 'Pinturas');
 
       await generar();
 
       expect(servicio.vistaPrevia).toHaveBeenCalledWith(archivo, {
         proveedorId: 1,
-        mapeo: { hoja: 0, filaDesde: 2, columnaCodigo: 0, columnaDescripcion: 1, columnaCosto: 2 },
+        mapeo: {
+          hoja: 0,
+          filaDesde: 2,
+          columnaCodigo: 0,
+          columnaDescripcion: 1,
+          columnaCosto: 2,
+          hojas: [0],
+        },
         listaIncluyeIva: true,
         bonificacion1: 40,
         bonificacion2: 10,
         bonificacion3: null,
+        rubroId: 1,
       });
+    });
+
+    it('sin rubro elegido manda rubroId nulo', async () => {
+      await crearComponente();
+      servicio.vistaPrevia.mockReturnValue(of(vistaPrevia));
+      await prepararMapeo();
+
+      await generar();
+
+      expect(servicio.vistaPrevia.mock.calls[0][1].rubroId).toBeNull();
+    });
+
+    it('manda los campos nuevos del mapeo: moneda, IVA, ajustes, barras, unidad y rubro', async () => {
+      await crearComponente();
+      servicio.muestra.mockReturnValue(
+        of({
+          hojas: [hojaDe(0, 'Lista', 13, [Array(13).fill('x'), Array(13).fill('1')], 1)],
+          propuesta: null,
+        }),
+      );
+      servicio.vistaPrevia.mockReturnValue(of(vistaPrevia));
+      await elegir('#proveedor', 'Sinteplast');
+      await elegirArchivo(lista());
+      await elegir('#columnaCodigo', 'A');
+      await elegir('#columnaCosto', 'C');
+      await elegir('#columnaMoneda', 'D');
+      await elegir('#columnaConIva', 'E');
+      await elegir('#columnaSinIva', 'F');
+      await elegir('#columnaIva', 'G');
+      await elegir('#columnaAjuste1', 'H');
+      await elegir('#columnaAjuste3', 'I');
+      await elegir('#columnaCodigoBarras', 'J');
+      await elegir('#columnaUnidad', 'K');
+      await elegir('#columnaRubro', 'L');
+
+      await generar();
+
+      expect(servicio.vistaPrevia.mock.calls[0][1].mapeo).toEqual({
+        hoja: 0,
+        filaDesde: 1,
+        columnaCodigo: 0,
+        columnaDescripcion: null,
+        columnaCosto: 2,
+        hojas: [0],
+        columnaMoneda: 3,
+        columnaConIva: 4,
+        columnaSinIva: 5,
+        columnaIva: 6,
+        columnaAjuste1: 7,
+        columnaAjuste3: 8,
+        columnaCodigoBarras: 9,
+        columnaUnidad: 10,
+        columnaRubro: 11,
+      });
+    });
+
+    it('con moneda fija manda la moneda y no la columna', async () => {
+      await crearComponente();
+      servicio.vistaPrevia.mockReturnValue(of(vistaPrevia));
+      await prepararMapeo();
+      await elegir('#monedaFija', 'Dólares (USD)');
+
+      await generar();
+
+      const mapeo = servicio.vistaPrevia.mock.calls[0][1].mapeo;
+      expect(mapeo.monedaFija).toBe('USD');
+      expect('columnaMoneda' in mapeo).toBe(false);
     });
 
     it('sin proveedor no llama al servicio y lo avisa', async () => {
       await crearComponente();
       await elegirArchivo(lista());
-      await elegir('#columnaCodigo', 'A');
-      await elegir('#columnaCosto', 'C');
 
       await generar();
 
@@ -844,15 +1350,26 @@ describe('Importaciones', () => {
 
     it('sin columna de código o de costo no llama al servicio y lo avisa', async () => {
       await crearComponente();
+      servicio.muestra.mockReturnValue(of(muestraSinReconocer));
       await elegir('#proveedor', 'Sinteplast');
       await elegirArchivo(lista());
 
       await generar();
 
       expect(servicio.vistaPrevia).not.toHaveBeenCalled();
-      expect(q('[role="alert"]').textContent).toContain(
-        'Elegí las columnas del código y del costo.',
-      );
+      expect(q('[role="alert"]').textContent).toContain('Elegí las columnas del código y del costo.');
+    });
+
+    it('con el precio sin IVA y sin el precio con IVA no llama al servicio y lo avisa', async () => {
+      await crearComponente();
+      await prepararMapeo();
+      await elegir('#columnaSinIva', 'C');
+
+      await generar();
+
+      expect(servicio.vistaPrevia).not.toHaveBeenCalled();
+      expect(q('[role="alert"]').textContent).toContain('Elegí las dos columnas del IVA');
+      expect(document.activeElement).toBe(q('#columnaConIva'));
     });
 
     it('con una bonificación inválida no llama al servicio', async () => {
@@ -865,153 +1382,133 @@ describe('Importaciones', () => {
       expect(servicio.vistaPrevia).not.toHaveBeenCalled();
     });
 
-    it('muestra las tarjetas con los seis contadores', async () => {
-      await crearComponente();
-      servicio.vistaPrevia.mockReturnValue(of(vistaPrevia));
-      await prepararMapeo();
-
-      await generar();
+    it('muestra las nueve tarjetas con los contadores del archivo entero', async () => {
+      await conVistaPrevia();
 
       expect(tarjetas()).toEqual([
         'Suben 2',
         'Bajan 1',
+        'Cambian de moneda 1',
+        'Corrigen IVA o ajustes 1',
         'Nuevos 1',
         'Sin cambio 3',
         'No están 1',
         'Con error 1',
+        'Salteadas 42',
       ]);
     });
 
-    it('lista los cambios con precio de lista, costos, precios y tipo de cambio en es-AR', async () => {
-      await crearComponente();
-      servicio.vistaPrevia.mockReturnValue(of(vistaPrevia));
-      await prepararMapeo();
+    it('las salteadas son solo una cantidad, sin detalle', async () => {
+      await conVistaPrevia();
 
-      await generar();
-
-      const filas = filasDe('table.cambios');
-      expect(filas).toHaveLength(2);
-      expect(filas[0]).toEqual([
-        '2',
-        'A-1',
-        'Tornillo 6mm',
-        '$ 1.234,56',
-        '$ 1.000,00',
-        '$ 1.111,10',
-        '$ 1.300,00',
-        '$ 1.444,43',
-        'Sube',
-      ]);
-      expect(filas[1][1]).toBe('A-2');
-      expect(filas[1][2]).toContain('Tuerca 6mm');
-      expect(filas[1].slice(6)).toEqual(['$ 130,00', '$ 650,00', 'Sube']);
+      expect(q('.salteadas').textContent).toContain('42 filas de título o de rubro');
+      expect(q('.salteadas').textContent).toContain('no se importan');
     });
 
-    it('los encabezados de los cambios incluyen el precio anterior y el precio nuevo', async () => {
-      await crearComponente();
-      servicio.vistaPrevia.mockReturnValue(of(vistaPrevia));
-      await prepararMapeo();
+    it('sin salteadas no hay aviso', async () => {
+      await conVistaPrevia({ ...vistaPrevia, conteos: { ...conteos, salteadas: 0 } });
 
-      await generar();
+      expect(el().querySelector('.salteadas')).toBeNull();
+    });
 
-      const encabezados = Array.from(el().querySelectorAll('table.cambios thead th')).map((th) =>
-        th.textContent?.trim(),
+    it('lista todas las filas, ordenadas por hoja y fila, con su tipo', async () => {
+      await conVistaPrevia();
+
+      const filas = filasDeTabla().map((tr) => {
+        const c = celdas(tr);
+        return [c[1], c[2], c[3], c[5]];
+      });
+      expect(filas).toEqual([
+        ['Lista', '2', 'A-1', 'Sube'],
+        ['Lista', '3', 'A-2', 'Sube'],
+        ['Lista', '4', 'N-9', 'Nuevo'],
+        ['Lista', '5', 'X-1', 'Con error'],
+        ['Lista', '6', 'A-4', 'Baja'],
+        ['Oferta', '7', 'M-1', 'Cambia de moneda'],
+        ['Oferta', '8', 'K-1', 'Corrige IVA o ajustes'],
+        ['Oferta', '9', 'S-1', 'Sin cambio'],
+        ['Oferta', '10', 'S-2', 'Sin cambio'],
+        ['Oferta', '11', 'S-3', 'Sin cambio'],
+      ]);
+    });
+
+    it('un cambio de moneda se ve como ARS → USD con el costo en cada moneda y el precio en pesos', async () => {
+      await conVistaPrevia();
+
+      const fila = celdas(filasDeTabla().find((tr) => texto(tr)?.includes('M-1'))!);
+      expect(fila.slice(6, 11)).toEqual(['$ 1.000,00', 'US$ 10,00', '$ 1.580,00', '$ 15.730,00', 'Moneda: ARS → USD']);
+    });
+
+    it('una corrección de IVA muestra la alícuota anterior y la nueva', async () => {
+      await conVistaPrevia();
+
+      const fila = celdas(filasDeTabla().find((tr) => texto(tr)?.includes('K-1'))!);
+      expect(fila[10]).toBe('IVA: 21 % → 10,5 %');
+    });
+
+    it('los ajustes se muestran como descuento o recargo, con palabras', async () => {
+      await conVistaPrevia(
+        {
+          ...vistaPrevia,
+          correcciones: [
+            cambioDe({
+              fila: 8,
+              hoja: 1,
+              codigoProveedor: 'K-1',
+              ajustesNuevos: { a1: -5, a2: 3, a3: null },
+            }),
+          ],
+        },
       );
-      expect(encabezados).toEqual([
-        'Fila',
-        'Código',
-        'Descripción',
-        'Precio de lista',
-        'Costo anterior',
-        'Costo nuevo',
-        'Precio anterior',
-        'Precio nuevo',
-        'Cambio',
+
+      const fila = celdas(filasDeTabla().find((tr) => texto(tr)?.includes('K-1'))!);
+      expect(fila[10]).toBe('Descuentos y recargos: ninguno → descuento 5 % y recargo 3 %');
+    });
+
+    it('las filas con error no tienen casilla; todas las demás sí', async () => {
+      await conVistaPrevia();
+
+      const conCasilla = filasDeTabla().map((tr) => tr.querySelector('input[type="checkbox"]') !== null);
+      expect(conCasilla.filter(Boolean)).toHaveLength(9);
+      const error = filasDeTabla().find((tr) => texto(tr)?.includes('X-1'))!;
+      expect(error.querySelector('input[type="checkbox"]')).toBeNull();
+    });
+
+    it('avisa cuántas filas tienen error y cómo verlas', async () => {
+      await conVistaPrevia();
+
+      expect(q('.aviso-errores').textContent).toContain('Hay 1 fila con error');
+      expect(q('.aviso-errores').textContent).toContain('Con error');
+    });
+
+    it('sin filas con error no hay aviso', async () => {
+      await conVistaPrevia({ ...vistaPrevia, errores: [], conteos: { ...conteos, conError: 0 } });
+
+      expect(el().querySelector('.aviso-errores')).toBeNull();
+    });
+
+    it('lista las advertencias con la hoja y la fila', async () => {
+      await conVistaPrevia();
+
+      const items = Array.from(el().querySelectorAll('.advertencias li')).map((li) => texto(li));
+      expect(items).toEqual([
+        'Hoja «Lista»: El encabezado de la columna del costo cambió.',
+        'Hoja «Oferta», fila 3 (A-2): El costo varía 400 % respecto del actual.',
+        'Aviso general.',
       ]);
-    });
-
-    it('un cambio que baja el costo se marca como Baja y uno que lo sube como Sube', async () => {
-      await crearComponente();
-      const baja = { ...vistaPrevia.cambios[0], fila: 6, costoAnterior: 200, costoNuevo: 150.5, precioAnterior: 260, precioNuevo: 195.65 };
-      servicio.vistaPrevia.mockReturnValue(
-        of({ ...vistaPrevia, cambios: [vistaPrevia.cambios[0], baja] }),
-      );
-      await prepararMapeo();
-
-      await generar();
-
-      const filas = filasDe('table.cambios');
-      expect(filas[0][8]).toBe('Sube');
-      expect(filas[1].slice(4)).toEqual(['$ 200,00', '$ 150,50', '$ 260,00', '$ 195,65', 'Baja']);
-      const etiquetas = el().querySelectorAll('table.cambios tbody tr:nth-child(2) .etiqueta-baja');
-      expect(etiquetas).toHaveLength(1);
-    });
-
-    it('resalta las filas con variación fuerte y marca los artículos inactivos', async () => {
-      await crearComponente();
-      servicio.vistaPrevia.mockReturnValue(of(vistaPrevia));
-      await prepararMapeo();
-
-      await generar();
-
-      const filas = el().querySelectorAll('table.cambios tbody tr');
-      expect(filas[0].classList.contains('fuerte')).toBe(false);
-      expect(filas[1].classList.contains('fuerte')).toBe(true);
-      expect(filas[1].textContent).toContain('Inactivo');
-      expect(filas[0].textContent).not.toContain('Inactivo');
-    });
-
-    it('lista los artículos nuevos, los errores y las advertencias', async () => {
-      await crearComponente();
-      servicio.vistaPrevia.mockReturnValue(of(vistaPrevia));
-      await prepararMapeo();
-
-      await generar();
-
-      expect(filasDe('table.nuevos')).toEqual([['4', 'N-9', 'Arandela', '$ 20,00', '$ 18,00']]);
-      expect(filasDe('table.errores')).toEqual([
-        ['5', 'X-1', 'El costo es cero o está vacío.'],
-      ]);
-      const advertencias = q('.advertencias').textContent ?? '';
-      expect(advertencias).toContain('El encabezado de la columna del costo cambió.');
-      expect(advertencias).toContain('Fila 3');
-      expect(advertencias).toContain('A-2');
-      expect(advertencias).toContain('El costo varía 400 % respecto del actual.');
     });
 
     it('no pinta las secciones vacías', async () => {
-      await crearComponente();
-      servicio.vistaPrevia.mockReturnValue(
-        of({
-          ...vistaPrevia,
-          cambios: [],
-          nuevos: [],
-          errores: [],
-          advertencias: [],
-          noEstan: [],
-        }),
-      );
-      await prepararMapeo();
+      await conVistaPrevia({ ...vistaPreviaDe({}), conteos: CONTEOS_VACIOS });
 
-      await generar();
-
-      for (const selector of [
-        'table.cambios',
-        'table.nuevos',
-        'table.errores',
-        '.advertencias',
-        'details.no-estan',
-      ]) {
+      for (const selector of ['.advertencias', 'details.no-estan', '.aviso-errores', '.salteadas']) {
         expect(el().querySelector(selector), selector).toBeNull();
       }
+      expect(filasDeTabla()).toHaveLength(0);
     });
 
     it('"No están en la lista" es un bloque colapsable', async () => {
-      await crearComponente();
-      servicio.vistaPrevia.mockReturnValue(of(vistaPrevia));
-      await prepararMapeo();
-
-      await generar();
+      await conVistaPrevia();
 
       const detalle = q<HTMLDetailsElement>('details.no-estan');
       expect(detalle.open).toBe(false);
@@ -1020,17 +1517,34 @@ describe('Importaciones', () => {
       expect(detalle.textContent).toContain('Clavo largo');
     });
 
-    it('avisa si el detalle está recortado, y no si no lo está', async () => {
-      await crearComponente();
-      servicio.vistaPrevia.mockReturnValue(of(vistaPrevia));
-      await prepararMapeo();
-      await generar();
+    it('no avisa de ningún recorte: las filas se ven todas, por páginas', async () => {
+      await conVistaPrevia();
+
       expect(el().querySelector('.recortado')).toBeNull();
+      expect(el().textContent).not.toContain('Se muestran solo las primeras 1.000 filas');
+    });
 
-      servicio.vistaPrevia.mockReturnValue(of({ ...vistaPrevia, detalleRecortado: true }));
-      await generar();
+    it('con 4.139 filas los contadores son los del archivo y se llega a la última para desmarcarla', async () => {
+      const cambios = Array.from({ length: 4139 }, (_, i) =>
+        cambioDe({ fila: i + 2, hoja: 0, codigoProveedor: `C-${i + 2}`, costoNuevo: 1200 }),
+      );
+      await conVistaPrevia({
+        ...vistaPreviaDe({ cambios }),
+        conteos: { ...CONTEOS_VACIOS, suben: 4139 },
+      });
+      expect(tarjetas()[0]).toBe('Suben 4.139');
+      expect(filasDeTabla()).toHaveLength(100);
 
-      expect(q('.recortado').textContent).toContain('Se muestran solo las primeras 1.000 filas');
+      for (let i = 0; i < 41; i++) {
+        q<HTMLButtonElement>('nav.paginado button:last-of-type').click();
+        await asentar();
+      }
+      const ultima = filasDeTabla().at(-1)!;
+      expect(celdas(ultima)[2]).toBe('4140');
+      ultima.querySelector<HTMLInputElement>('input[type="checkbox"]')!.click();
+      await asentar();
+
+      expect(tarjetas()[0]).toBe('Suben 4.138 de 4.139');
     });
 
     it('muestra el mensaje del backend si la vista previa falla', async () => {
@@ -1080,22 +1594,60 @@ describe('Importaciones', () => {
       expect(q('[role="alert"]').textContent).toContain('No se pudo generar la vista previa.');
     });
 
+    describe('elegir filas actualiza las tarjetas', () => {
+      it('desmarcar una fila baja el contador de su tipo y muestra cuántas había', async () => {
+        await conVistaPrevia();
+
+        filasDeTabla()[2].querySelector<HTMLInputElement>('input[type="checkbox"]')!.click();
+        await asentar();
+
+        expect(tarjetas()).toContain('Nuevos 0 de 1');
+        expect(tarjetas()).toContain('Suben 2');
+        expect(tarjetas()).toContain('No están 1');
+        expect(tarjetas()).toContain('Con error 1');
+      });
+
+      it('«Desmarcar todas» deja todos los contadores de lo elegido en 0 y los del archivo como están', async () => {
+        await conVistaPrevia();
+
+        Array.from(el().querySelectorAll('button'))
+          .find((b) => b.textContent?.trim() === 'Desmarcar todas' && b.closest('app-vista-previa-tabla'))!
+          .click();
+        await asentar();
+
+        expect(tarjetas()).toEqual([
+          'Suben 0 de 2',
+          'Bajan 0 de 1',
+          'Cambian de moneda 0 de 1',
+          'Corrigen IVA o ajustes 0 de 1',
+          'Nuevos 0 de 1',
+          'Sin cambio 0 de 3',
+          'No están 1',
+          'Con error 1',
+          'Salteadas 42',
+        ]);
+      });
+    });
+
     describe('una vista previa vieja nunca se confirma', () => {
       const cambios: [string, () => Promise<void>][] = [
         ['el proveedor', () => elegir('#proveedor', 'Tersuave')],
         ['el archivo', () => elegirArchivo(new File(['y'], 'otra.xlsx'))],
-        [
-          'la hoja (flecha siguiente)',
-          async () => q<HTMLButtonElement>('button[aria-label="Hoja siguiente"]').click(),
-        ],
         ['la columna del código', () => elegir('#columnaCodigo', 'B')],
-        ['la columna de la descripción', () => elegir('#columnaDescripcion', 'B')],
+        ['la columna de la descripción', () => elegir('#columnaDescripcion', 'C')],
         ['la columna del costo', () => elegir('#columnaCosto', 'B')],
+        ['la columna de la moneda', () => elegir('#columnaMoneda', 'B')],
+        ['la moneda fija', () => elegir('#monedaFija', 'Dólares (USD)')],
+        ['la columna del IVA', () => elegir('#columnaIva', 'B')],
+        ['una columna de ajuste', () => elegir('#columnaAjuste1', 'B')],
+        ['la columna del código de barras', () => elegir('#columnaCodigoBarras', 'B')],
         ['la primera fila de datos', () => escribir('#filaDesde', '5')],
         ['la casilla de IVA', async () => q<HTMLInputElement>('#listaIncluyeIva').click()],
         ['la bonificación 1', () => escribir('#bonificacion1', '5')],
         ['la bonificación 2', () => escribir('#bonificacion2', '5')],
         ['la bonificación 3', () => escribir('#bonificacion3', '5')],
+        ['el rubro de los artículos nuevos', () => elegir('#rubro', 'Pinturas')],
+        ['las hojas que se importan', async () => q<HTMLInputElement>('#hoja-1').click()],
       ];
 
       it.each(cambios)('cambiar %s limpia la vista previa', async (_nombre, cambiar) => {
@@ -1115,31 +1667,50 @@ describe('Importaciones', () => {
   });
 
   describe('paso 4: confirmar', () => {
-    const conteos = { suben: 2, bajan: 1, nuevos: 1, sinCambio: 3, noEstan: 1, conError: 1 };
+    const conteos: Conteos = {
+      suben: 2,
+      bajan: 1,
+      nuevos: 1,
+      sinCambio: 1,
+      noEstan: 1,
+      conError: 1,
+      cambianMoneda: 1,
+      corrigen: 1,
+      salteadas: 42,
+    };
     const vistaPrevia: VistaPrevia = {
       conteos,
-      cambios: [],
-      nuevos: [{ fila: 4, codigo: 'N-9', descripcion: 'Arandela', precioLista: 20, costo: 18 }],
-      errores: [],
+      cambios: [
+        cambioDe({ fila: 2, codigoProveedor: 'A-1' }),
+        cambioDe({ fila: 3, codigoProveedor: 'A-2' }),
+        cambioDe({ fila: 6, codigoProveedor: 'A-4', costoNuevo: 800 }),
+      ],
+      cambiosDeMoneda: [cambioDe({ fila: 7, hoja: 1, codigoProveedor: 'M-1', monedaNueva: 'USD' })],
+      correcciones: [cambioDe({ fila: 8, hoja: 1, codigoProveedor: 'K-1', alicuotaNueva: 'IVA_10_5' })],
+      nuevos: [altaDe({ fila: 4, hoja: 0 })],
+      sinCambio: [{ id: 15, hoja: 1, fila: 9, codigo: 'S-1', descripcion: 'Igual' }],
+      errores: [{ hoja: 0, fila: 5, codigo: 'X-1', mensaje: 'Moneda no reconocida' }],
       advertencias: [],
       noEstan: [],
-      detalleRecortado: false,
     };
+    const aplicadas: Conteos = { ...conteos, noEstan: 1 };
     const importacion: Importacion = {
       id: 9,
       proveedorId: 1,
+      proveedorNombre: 'Sinteplast',
+      usuarioId: 3,
       archivo: 'lista.xlsx',
       fecha: '2026-10-12T10:00:00',
-      conteos: { suben: 2, bajan: 1, nuevos: 1, sinCambio: 3, noEstan: 1, conError: 1 },
+      conteos: aplicadas,
       estado: 'APLICADA',
     };
-    // La muestra de prueba trae el encabezado en la fila 1: la primera fila de datos se propone en la 2.
     const mapeoEsperado = {
       hoja: 0,
       filaDesde: 2,
       columnaCodigo: 0,
-      columnaDescripcion: null,
+      columnaDescripcion: 1,
       columnaCosto: 2,
+      hojas: [0],
     };
     const datosBase = {
       proveedorId: 1,
@@ -1148,15 +1719,24 @@ describe('Importaciones', () => {
       bonificacion1: null,
       bonificacion2: null,
       bonificacion3: null,
+      rubroId: null,
     };
+    /** Las 7 filas elegibles en el orden del archivo (hoja, fila). */
+    const todasLasFilas = [
+      { hoja: 0, fila: 2 },
+      { hoja: 0, fila: 3 },
+      { hoja: 0, fila: 4 },
+      { hoja: 0, fila: 6 },
+      { hoja: 1, fila: 7 },
+      { hoja: 1, fila: 8 },
+      { hoja: 1, fila: 9 },
+    ];
 
     async function conVistaPrevia() {
       await crearComponente();
       servicio.vistaPrevia.mockReturnValue(of(vistaPrevia));
       await elegir('#proveedor', 'Sinteplast');
       await elegirArchivo(archivoActual);
-      await elegir('#columnaCodigo', 'A');
-      await elegir('#columnaCosto', 'C');
       q<HTMLButtonElement>('button.generar').click();
       await asentar();
     }
@@ -1165,6 +1745,12 @@ describe('Importaciones', () => {
       q<HTMLButtonElement>('button.confirmar').click();
       await asentar();
     }
+
+    const filasDeTabla = () => Array.from(el().querySelectorAll('app-vista-previa-tabla tbody tr'));
+    const casillaDeLaFila = (numero: number) =>
+      filasDeTabla()
+        .find((tr) => tr.querySelectorAll('td')[2]?.textContent?.trim() === String(numero))!
+        .querySelector<HTMLInputElement>('input[type="checkbox"]')!;
 
     let archivoActual: File;
     beforeEach(() => (archivoActual = lista()));
@@ -1181,20 +1767,13 @@ describe('Importaciones', () => {
       expect(el().querySelector('button.confirmar')).toBeNull();
     });
 
-    it('"Crear los artículos nuevos" habilita el select de rubro, con la opción sin rubro', async () => {
+    it('"Crear los artículos nuevos" arranca apagado', async () => {
       await conVistaPrevia();
+
       expect(q<HTMLInputElement>('#crearNuevos').checked).toBe(false);
-      expect(q<HTMLSelectElement>('#rubro').disabled).toBe(true);
-
-      q<HTMLInputElement>('#crearNuevos').click();
-      await asentar();
-
-      expect(q<HTMLSelectElement>('#rubro').disabled).toBe(false);
-      expect(textosDe('#rubro')).toEqual(['Sin rubro (margen por defecto)', 'Pinturas']);
-      expect(seleccionado('#rubro')).toBe('Sin rubro (margen por defecto)');
     });
 
-    it('confirma con los conteos de la vista previa y sin crear artículos por defecto', async () => {
+    it('confirma mandando las filas elegidas y los contadores de lo elegido', async () => {
       await conVistaPrevia();
       servicio.aplicar.mockReturnValue(of(importacion));
 
@@ -1203,66 +1782,137 @@ describe('Importaciones', () => {
       expect(servicio.aplicar).toHaveBeenCalledWith(archivoActual, {
         ...datosBase,
         crearNuevos: false,
-        rubroId: null,
         conteosEsperados: conteos,
+        filasElegidas: todasLasFilas,
       });
     });
 
-    it('confirma creando los nuevos con el rubro elegido', async () => {
+    it('si se desmarcan filas, manda solo las marcadas y los contadores recalculados', async () => {
       await conVistaPrevia();
       servicio.aplicar.mockReturnValue(of(importacion));
-      q<HTMLInputElement>('#crearNuevos').click();
+      casillaDeLaFila(3).click();
       await asentar();
-      await elegir('#rubro', 'Pinturas');
+      casillaDeLaFila(9).click();
+      await asentar();
 
       await confirmar();
 
+      const [, datos] = servicio.aplicar.mock.calls[0];
+      expect(datos.filasElegidas).toEqual([
+        { hoja: 0, fila: 2 },
+        { hoja: 0, fila: 4 },
+        { hoja: 0, fila: 6 },
+        { hoja: 1, fila: 7 },
+        { hoja: 1, fila: 8 },
+      ]);
+      expect(datos.conteosEsperados).toEqual({ ...conteos, suben: 1, sinCambio: 0 });
+    });
+
+    it('sin ninguna fila marcada «Confirmar» queda deshabilitado con el aviso «Elegí al menos una fila»', async () => {
+      await conVistaPrevia();
+
+      Array.from(el().querySelectorAll('button'))
+        .find((b) => b.textContent?.trim() === 'Desmarcar todas' && b.closest('app-vista-previa-tabla'))!
+        .click();
+      await asentar();
+
+      expect(q<HTMLButtonElement>('button.confirmar').disabled).toBe(true);
+      expect(q('#sin-filas-elegidas').textContent).toContain('Elegí al menos una fila');
+      expect(q('button.confirmar').getAttribute('aria-describedby')).toContain('sin-filas-elegidas');
+    });
+
+    it('con al menos una fila marcada vuelve a habilitarse y el aviso desaparece', async () => {
+      await conVistaPrevia();
+      Array.from(el().querySelectorAll('button'))
+        .find((b) => b.textContent?.trim() === 'Desmarcar todas' && b.closest('app-vista-previa-tabla'))!
+        .click();
+      await asentar();
+
+      casillaDeLaFila(2).click();
+      await asentar();
+
+      expect(q<HTMLButtonElement>('button.confirmar').disabled).toBe(false);
+      expect(el().querySelector('#sin-filas-elegidas')).toBeNull();
+    });
+
+    it('un 400 del backend por no haber filas se muestra', async () => {
+      await conVistaPrevia();
+      servicio.aplicar.mockReturnValue(throwError(() => errorHttp(400, 'Elegí al menos una fila.')));
+
+      await confirmar();
+
+      expect(q('[role="alert"]').textContent).toContain('Elegí al menos una fila.');
+      expect(el().querySelector('.vista-previa')).not.toBeNull();
+    });
+
+    it('confirma creando los nuevos con el rubro elegido antes de la vista previa', async () => {
+      await crearComponente();
+      servicio.vistaPrevia.mockReturnValue(of(vistaPrevia));
+      await elegir('#proveedor', 'Sinteplast');
+      await elegirArchivo(archivoActual);
+      await elegir('#rubro', 'Pinturas');
+      q<HTMLButtonElement>('button.generar').click();
+      await asentar();
+      servicio.aplicar.mockReturnValue(of(importacion));
+      q<HTMLInputElement>('#crearNuevos').click();
+      await asentar();
+
+      await confirmar();
+
+      expect(servicio.vistaPrevia.mock.calls[0][1].rubroId).toBe(1);
       expect(servicio.aplicar).toHaveBeenCalledWith(archivoActual, {
         ...datosBase,
-        crearNuevos: true,
         rubroId: 1,
+        crearNuevos: true,
         conteosEsperados: conteos,
+        filasElegidas: todasLasFilas,
       });
     });
 
-    it('crear los nuevos sin rubro manda rubroId nulo', async () => {
-      await conVistaPrevia();
-      servicio.aplicar.mockReturnValue(of(importacion));
-      q<HTMLInputElement>('#crearNuevos').click();
-      await asentar();
-
-      await confirmar();
-
-      expect(servicio.aplicar.mock.calls[0][1]).toMatchObject({ crearNuevos: true, rubroId: null });
-    });
-
-    it('si se destilda "crear nuevos" no manda el rubro que había elegido', async () => {
-      await conVistaPrevia();
-      servicio.aplicar.mockReturnValue(of(importacion));
-      q<HTMLInputElement>('#crearNuevos').click();
-      await asentar();
+    it('confirma el mismo rubro que usó la vista previa, aunque no se creen los nuevos', async () => {
+      await crearComponente();
+      servicio.vistaPrevia.mockReturnValue(of(vistaPrevia));
+      await elegir('#proveedor', 'Sinteplast');
+      await elegirArchivo(archivoActual);
       await elegir('#rubro', 'Pinturas');
-      q<HTMLInputElement>('#crearNuevos').click();
+      q<HTMLButtonElement>('button.generar').click();
       await asentar();
+      servicio.aplicar.mockReturnValue(of(importacion));
 
       await confirmar();
 
-      expect(servicio.aplicar.mock.calls[0][1]).toMatchObject({ crearNuevos: false, rubroId: null });
+      expect(servicio.aplicar.mock.calls[0][1]).toMatchObject({ crearNuevos: false, rubroId: 1 });
     });
 
-    it('con 201 muestra el resumen y retira la vista previa', async () => {
+    it('con 201 muestra el resumen con los contadores de lo aplicado, incluidos los nuevos, y retira la vista previa', async () => {
       await conVistaPrevia();
       servicio.aplicar.mockReturnValue(of(importacion));
 
       await confirmar();
 
-      const resumen = q('.resumen').textContent?.replace(/\s+/g, ' ') ?? '';
+      const resumen = texto(q('.resumen')) ?? '';
       expect(resumen).toContain('Importación aplicada');
       expect(resumen).toContain('lista.xlsx');
       expect(resumen).toContain('Suben 2');
+      expect(resumen).toContain('Cambian de moneda 1');
+      expect(resumen).toContain('Corrigen IVA o ajustes 1');
       expect(resumen).toContain('Nuevos 1');
+      expect(resumen).toContain('Salteadas 42');
       expect(el().querySelector('.vista-previa')).toBeNull();
       expect(el().querySelector('button.confirmar')).toBeNull();
+    });
+
+    it('el resumen muestra los contadores que devolvió el backend, no los de la pantalla', async () => {
+      await conVistaPrevia();
+      servicio.aplicar.mockReturnValue(
+        of({ ...importacion, conteos: { ...aplicadas, suben: 1, nuevos: 0 } }),
+      );
+
+      await confirmar();
+
+      const resumen = texto(q('.resumen')) ?? '';
+      expect(resumen).toContain('Suben 1');
+      expect(resumen).toContain('Nuevos 0');
     });
 
     it('tras aplicar recarga los proveedores para traer lo que se guardó', async () => {
@@ -1275,34 +1925,50 @@ describe('Importaciones', () => {
       expect(proveedoresServicio.listar).toHaveBeenCalledTimes(1);
     });
 
-    it('con 409 muestra el mensaje del backend, limpia la vista previa y ofrece regenerarla', async () => {
+    it('con 409 muestra el mensaje del backend y vuelve a pedir la vista previa', async () => {
       await conVistaPrevia();
       const mensaje =
         'La lista cambió desde la vista previa. No se aplicó nada: volvé a generar la vista previa.';
       servicio.aplicar.mockReturnValue(throwError(() => errorHttp(409, mensaje)));
+      servicio.vistaPrevia.mockClear();
 
       await confirmar();
 
       expect(q('[role="alert"]').textContent).toContain(mensaje);
-      expect(el().querySelector('.vista-previa')).toBeNull();
-      expect(el().querySelector('button.confirmar')).toBeNull();
-      expect(q('button.regenerar').textContent).toContain('Volver a generar la vista previa');
-    });
-
-    it('"Volver a generar la vista previa" la pide de nuevo con los mismos datos', async () => {
-      await conVistaPrevia();
-      servicio.aplicar.mockReturnValue(throwError(() => errorHttp(409, 'La lista cambió.')));
-      await confirmar();
-      servicio.vistaPrevia.mockClear();
-
-      q<HTMLButtonElement>('button.regenerar').click();
-      await asentar();
-
       expect(servicio.vistaPrevia).toHaveBeenCalledTimes(1);
       expect(servicio.vistaPrevia.mock.calls[0][1]).toEqual(datosBase);
       expect(el().querySelector('.vista-previa')).not.toBeNull();
       expect(el().querySelector('button.regenerar')).toBeNull();
-      expect(el().querySelector('[role="alert"]')).toBeNull();
+    });
+
+    it('la vista previa nueva después de un 409 vuelve a abrir con todas las filas marcadas', async () => {
+      await conVistaPrevia();
+      casillaDeLaFila(3).click();
+      await asentar();
+      servicio.aplicar.mockReturnValue(throwError(() => errorHttp(409, 'La lista cambió.')));
+
+      await confirmar();
+
+      expect(casillaDeLaFila(3).checked).toBe(true);
+      expect(q<HTMLButtonElement>('button.confirmar').disabled).toBe(false);
+    });
+
+    it('si pedir de nuevo la vista previa falla, ofrece «Volver a generar la vista previa»', async () => {
+      await conVistaPrevia();
+      servicio.aplicar.mockReturnValue(throwError(() => errorHttp(409, 'La lista cambió.')));
+      servicio.vistaPrevia.mockReturnValue(throwError(() => errorHttp(500, 'Falló')));
+
+      await confirmar();
+
+      expect(el().querySelector('.vista-previa')).toBeNull();
+      expect(q('button.regenerar').textContent).toContain('Volver a generar la vista previa');
+
+      servicio.vistaPrevia.mockReturnValue(of(vistaPrevia));
+      q<HTMLButtonElement>('button.regenerar').click();
+      await asentar();
+
+      expect(el().querySelector('.vista-previa')).not.toBeNull();
+      expect(el().querySelector('button.regenerar')).toBeNull();
     });
 
     it('con 400 por campo muestra los mensajes de cada campo', async () => {
@@ -1364,112 +2030,20 @@ describe('Importaciones', () => {
   });
 
   describe('pulido de la pantalla (H-07, H-16)', () => {
-    const vistaPrevia: VistaPrevia = {
-      conteos: { suben: 2, bajan: 1, nuevos: 1, sinCambio: 3, noEstan: 1, conError: 1 },
-      cambios: [],
-      nuevos: [],
-      errores: [],
-      advertencias: [],
-      noEstan: [],
-      detalleRecortado: false,
-    };
+    const vistaPrevia = vistaPreviaDe({
+      conteos: { ...CONTEOS_VACIOS, suben: 1 },
+      cambios: [cambioDe({})],
+    });
     const importacion: Importacion = {
       id: 9,
       proveedorId: 1,
+      proveedorNombre: 'Sinteplast',
+      usuarioId: 3,
       archivo: 'lista.xlsx',
       fecha: '2026-10-12T10:00:00',
       conteos: vistaPrevia.conteos,
       estado: 'APLICADA',
     };
-    const conMuestra = (filas: string[][]): Muestra => ({
-      hojas: ['Lista'],
-      hoja: 0,
-      columnas: filas[0].length,
-      filas: filas.map((celdas, i) => ({ numero: i + 1, celdas })),
-    });
-
-    async function conFilas(filas: string[][], proveedor = 'Sinteplast') {
-      await crearComponente();
-      servicio.muestra.mockReturnValue(of(conMuestra(filas)));
-      await elegir('#proveedor', proveedor);
-      await elegirArchivo(lista());
-    }
-    const filaDesde = () => q<HTMLInputElement>('#filaDesde').value;
-
-    describe('fila de encabezado', () => {
-      it('propone la fila siguiente al encabezado como primera fila de datos', async () => {
-        await conFilas([['Codigo', 'Descripcion', 'Precio'], ['A-1', 'Tornillo', '1.234,56']]);
-
-        expect(filaDesde()).toBe('2');
-      });
-
-      it('salta un título suelto antes del encabezado', async () => {
-        await conFilas([
-          ['Lista de precios Sinteplast', '', ''],
-          ['Codigo', 'Descripcion', 'Precio'],
-          ['A-1', 'Tornillo', '1234,56'],
-        ]);
-
-        expect(filaDesde()).toBe('3');
-      });
-
-      it('sin encabezado (la fila 1 ya tiene un precio) deja 1', async () => {
-        await conFilas([['A-1', 'Tornillo', '1.234,56'], ['A-2', 'Tuerca', '500']]);
-
-        expect(filaDesde()).toBe('1');
-      });
-
-      it('respeta el mapeo guardado del proveedor', async () => {
-        await conFilas([['Codigo', 'Descripcion', 'Precio'], ['A-1', 'Tornillo', '1']], 'Tersuave');
-
-        expect(filaDesde()).toBe('3');
-      });
-
-      it('si se elige el proveedor después del archivo, también la propone', async () => {
-        await crearComponente();
-        servicio.muestra.mockReturnValue(
-          of(conMuestra([['Codigo', 'Descripcion', 'Precio'], ['A-1', 'Tornillo', '1']])),
-        );
-        await elegirArchivo(lista());
-        await elegir('#proveedor', 'Sinteplast');
-
-        expect(filaDesde()).toBe('2');
-      });
-
-      it('sigue siendo editable', async () => {
-        await conFilas([['Codigo', 'Descripcion', 'Precio'], ['A-1', 'Tornillo', '1']]);
-        await escribir('#filaDesde', '5');
-
-        expect(filaDesde()).toBe('5');
-      });
-    });
-
-    describe('columnas con el texto del encabezado', () => {
-      it('las opciones dicen "A · Código"', async () => {
-        await conFilas([['Código', 'Descripción', 'Precio'], ['A-1', 'Tornillo', '1']]);
-
-        expect(textosDe('#columnaCodigo')).toEqual([
-          'Elegí la columna',
-          'A · Código',
-          'B · Descripción',
-          'C · Precio',
-        ]);
-        expect(textosDe('#columnaCosto')[3]).toBe('C · Precio');
-        expect(textosDe('#columnaDescripcion')[2]).toBe('B · Descripción');
-      });
-
-      it('sin encabezado detectado quedan solo las letras', async () => {
-        await conFilas([['A-1', 'Tornillo', '1.234,56']]);
-
-        expect(textosDe('#columnaCodigo')).toEqual(['Elegí la columna', 'A', 'B', 'C']);
-      });
-
-      it('una celda de encabezado vacía queda solo con la letra', async () => {
-        await conFilas([['Codigo', '', 'Precio'], ['A-1', 'x', '1']]);
-
-        expect(textosDe('#columnaCodigo')).toEqual(['Elegí la columna', 'A · Codigo', 'B', 'C · Precio']);
-      });
-    });
 
     describe('selector de archivo propio', () => {
       it('no muestra el "Choose File" nativo: hay un botón "Elegir archivo…"', async () => {
@@ -1508,22 +2082,35 @@ describe('Importaciones', () => {
         q('.zona-archivo').dispatchEvent(soltar);
         await asentar();
 
-        expect(servicio.muestra).toHaveBeenCalledWith(archivo, 0);
+        expect(servicio.muestra).toHaveBeenCalledWith(archivo);
         expect(q('.nombre-archivo').textContent?.trim()).toBe('lista.xlsx');
       });
 
-      it('un archivo de más de 10 MB soltado se rechaza con el aviso', async () => {
+      it('un archivo de más de 25 MB soltado se rechaza con el aviso', async () => {
         await crearComponente();
         const grande = lista();
-        Object.defineProperty(grande, 'size', { value: 10 * 1024 * 1024 + 1 });
+        Object.defineProperty(grande, 'size', { value: 25 * 1024 * 1024 + 1 });
         const soltar = new Event('drop', { bubbles: true, cancelable: true });
         Object.defineProperty(soltar, 'dataTransfer', { value: { files: [grande] } });
 
         q('.zona-archivo').dispatchEvent(soltar);
         await asentar();
 
-        expect(q('[role="alert"]').textContent).toContain('El archivo supera el máximo de 10 MB.');
+        expect(q('[role="alert"]').textContent).toContain('El archivo supera el máximo de 25 MB.');
         expect(q('.nombre-archivo').textContent?.trim()).toBe('Ningún archivo elegido');
+        expect(servicio.muestra).not.toHaveBeenCalled();
+      });
+
+      it('un PDF soltado se rechaza', async () => {
+        await crearComponente();
+        const soltar = new Event('drop', { bubbles: true, cancelable: true });
+        Object.defineProperty(soltar, 'dataTransfer', { value: { files: [new File(['x'], 'lista.pdf')] } });
+
+        q('.zona-archivo').dispatchEvent(soltar);
+        await asentar();
+
+        expect(q('[role="alert"]').textContent).toContain('El archivo tiene que ser una planilla de Excel');
+        expect(servicio.muestra).not.toHaveBeenCalled();
       });
     });
 
@@ -1534,8 +2121,6 @@ describe('Importaciones', () => {
         servicio.aplicar.mockReturnValue(of(importacion));
         await elegir('#proveedor', 'Sinteplast');
         await elegirArchivo(lista());
-        await elegir('#columnaCodigo', 'A');
-        await elegir('#columnaCosto', 'C');
         q<HTMLButtonElement>('button.generar').click();
         await asentar();
         q<HTMLButtonElement>('button.confirmar').click();
@@ -1568,19 +2153,28 @@ describe('Importaciones', () => {
         expect(el().querySelector('.visor')).toBeNull();
         expect(el().querySelector('button.generar')).toBeNull();
       });
+
+      it('al importar otra lista, el mapeo vuelve a empezar desde la propuesta del archivo nuevo', async () => {
+        await importada();
+        Array.from(el().querySelectorAll('button'))
+          .find((b) => b.textContent?.trim() === 'Importar otra lista')!
+          .click();
+        await asentar();
+
+        await elegir('#proveedor', 'Sinteplast');
+        await elegirArchivo(lista());
+
+        expect(seleccionado('#columnaCodigo')).toBe('A · Codigo');
+        expect(seleccionado('#rubro')).toBe('Sin rubro (margen por defecto)');
+      });
     });
   });
 
   describe('accesibilidad', () => {
-    const vistaPrevia: VistaPrevia = {
-      conteos: { suben: 1, bajan: 0, nuevos: 0, sinCambio: 0, noEstan: 0, conError: 0 },
-      cambios: [],
-      nuevos: [],
-      errores: [],
-      advertencias: [],
-      noEstan: [],
-      detalleRecortado: false,
-    };
+    const vistaPrevia = vistaPreviaDe({
+      conteos: { ...CONTEOS_VACIOS, suben: 1 },
+      cambios: [cambioDe({})],
+    });
 
     const descripciones = (selector: string) =>
       (q(selector).getAttribute('aria-describedby') ?? '')
@@ -1606,11 +2200,12 @@ describe('Importaciones', () => {
       expect(leyendo).toBeDefined();
     });
 
-    it('el archivo elegido se anuncia y el tope dice «10 MB» sin cortar', async () => {
+    it('el archivo elegido se anuncia y el tope dice «25 MB» sin cortar', async () => {
       await crearComponente();
 
       expect(q('.nombre-archivo').getAttribute('aria-live')).toBe('polite');
-      expect(q('app-selector-archivo').textContent).toContain('10 MB');
+      expect(q('app-selector-archivo').textContent).toContain('25 MB');
+      expect(q('app-selector-archivo').textContent).not.toContain('10');
     });
 
     it('el contenedor interno del scroll virtual no corta la relación entre rowgroup y row', async () => {
@@ -1637,14 +2232,17 @@ describe('Importaciones', () => {
       await escribir('#bonificacion2', '150');
 
       expect(q('#filaDesde').getAttribute('aria-invalid')).toBe('true');
-      expect(descripciones('#filaDesde')).toEqual(['Indicá la primera fila de datos (1 o más).']);
+      expect(descripciones('#filaDesde')).toContain('Indicá la primera fila de datos (1 o más).');
       expect(q('#bonificacion2').getAttribute('aria-invalid')).toBe('true');
       expect(descripciones('#bonificacion2')).toEqual(['La bonificación 2 tiene que estar entre 0 y 100.']);
       expect(q('#bonificacion1').hasAttribute('aria-invalid')).toBe(false);
     });
 
     it('pedir la vista previa sin columnas marca la del código y le da el foco', async () => {
-      await conMuestra();
+      await crearComponente();
+      servicio.muestra.mockReturnValue(of(muestraSinReconocer));
+      await elegir('#proveedor', 'Sinteplast');
+      await elegirArchivo(lista());
 
       q<HTMLButtonElement>('button.generar').click();
       await asentar();
@@ -1656,8 +2254,6 @@ describe('Importaciones', () => {
 
     it('con las columnas elegidas y una bonificación mal, el foco va a esa bonificación', async () => {
       await conMuestra();
-      await elegir('#columnaCodigo', 'A');
-      await elegir('#columnaCosto', 'C');
       await escribir('#bonificacion3', '-1');
 
       q<HTMLButtonElement>('button.generar').click();
@@ -1670,8 +2266,6 @@ describe('Importaciones', () => {
     it('mientras se genera la vista previa el botón lo dice', async () => {
       await conMuestra();
       servicio.vistaPrevia.mockReturnValue(new Subject<VistaPrevia>());
-      await elegir('#columnaCodigo', 'A');
-      await elegir('#columnaCosto', 'C');
 
       q<HTMLButtonElement>('button.generar').click();
       await asentar();
@@ -1684,8 +2278,6 @@ describe('Importaciones', () => {
       await conMuestra();
       servicio.vistaPrevia.mockReturnValue(of(vistaPrevia));
       servicio.aplicar.mockReturnValue(new Subject<Importacion>());
-      await elegir('#columnaCodigo', 'A');
-      await elegir('#columnaCosto', 'C');
       q<HTMLButtonElement>('button.generar').click();
       await asentar();
 
