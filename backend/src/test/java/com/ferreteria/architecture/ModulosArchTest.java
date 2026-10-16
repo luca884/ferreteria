@@ -7,6 +7,7 @@ import org.junit.jupiter.api.Test;
 
 import static com.tngtech.archunit.base.DescribedPredicate.not;
 import static com.tngtech.archunit.core.domain.JavaClass.Predicates.resideInAPackage;
+import static com.tngtech.archunit.core.domain.JavaClass.Predicates.resideInAnyPackage;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 
 /**
@@ -14,6 +15,10 @@ import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
  * {@code catalogo.api} (tipos del JDK): nunca por sus entidades, repositorios o servicios. {@code stock} no
  * conoce a {@code ventas}. Y todavia no existe {@code facturacion}: solo ese modulo hablara con ARCA y llega
  * en la fase 5.
+ *
+ * El modulo {@code cotizacion} (R-024) no conoce a catalogo, ventas ni stock; {@code catalogo} lo usa SOLO por
+ * {@code cotizacion.api} (tipos del JDK). Y {@code ventas} y {@code stock} ni lo nombran: el mostrador y las ventas
+ * leen el precio final en pesos guardado (R-021).
  *
  * Las reglas con {@code that()} fallan si no hay clases que cumplan el filtro (ArchUnit 1.x), asi que si
  * alguien renombra o borra {@code ventas} o {@code stock} el test se pone rojo en vez de pasar en vacio.
@@ -44,6 +49,29 @@ class ModulosArchTest {
     void stockNoDependeDeVentas() {
         noClasses().that().resideInAPackage("com.ferreteria.stock..")
                 .should().dependOnClassesThat(resideInAPackage("com.ferreteria.ventas.."))
+                .check(clases);
+    }
+
+    @Test
+    void cotizacionNoDependeDeCatalogoVentasNiStock() {
+        noClasses().that().resideInAPackage("com.ferreteria.cotizacion..")
+                .should().dependOnClassesThat(resideInAnyPackage(
+                        "com.ferreteria.catalogo..", "com.ferreteria.ventas..", "com.ferreteria.stock.."))
+                .check(clases);
+    }
+
+    @Test
+    void catalogoUsaCotizacionSoloPorSuPuerto() {
+        noClasses().that().resideInAPackage("com.ferreteria.catalogo..")
+                .should().dependOnClassesThat(resideInAPackage("com.ferreteria.cotizacion..")
+                        .and(not(resideInAPackage("com.ferreteria.cotizacion.api.."))))
+                .check(clases);
+    }
+
+    @Test
+    void ventasYStockNoConocenLaCotizacion() {
+        noClasses().that().resideInAnyPackage("com.ferreteria.ventas..", "com.ferreteria.stock..")
+                .should().dependOnClassesThat(resideInAPackage("com.ferreteria.cotizacion.."))
                 .check(clases);
     }
 
