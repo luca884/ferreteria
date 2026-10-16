@@ -20,11 +20,20 @@ public class LectorDeListas {
         this.lectorCsv = lectorCsv;
     }
 
+    /** Todas las hojas del archivo, en una sola lectura. */
+    public LecturaLista leer(byte[] contenido) {
+        return lectorPara(contenido).leer(contenido);
+    }
+
+    /** Solo las filas de la hoja pedida (base 0); se borra cuando el servicio lea el libro entero. */
     public LecturaLista leer(byte[] contenido, int hoja) {
-        LectorDeLista lector = switch (DetectorDeFormato.detectar(contenido)) {
+        return lectorPara(contenido).leer(contenido, hoja);
+    }
+
+    private LectorDeLista lectorPara(byte[] contenido) {
+        return switch (DetectorDeFormato.detectar(contenido)) {
             case XLSX, XLS -> lectorExcel;
             case CSV -> lectorCsv;
         };
-        return lector.leer(contenido, hoja);
     }
 }

@@ -7,6 +7,7 @@ import java.io.UncheckedIOException;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.zip.ZipEntry;
@@ -17,6 +18,7 @@ import org.apache.poi.poifs.crypt.EncryptionMode;
 import org.apache.poi.poifs.crypt.Encryptor;
 import org.apache.poi.poifs.filesystem.POIFSFileSystem;
 import org.apache.poi.ss.usermodel.Cell;
+import org.apache.poi.ss.usermodel.CellStyle;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
@@ -24,13 +26,20 @@ import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 
 /**
  * Arma archivos de lista de proveedor para los tests. En Excel, un {@code String} es una celda de texto,
- * un {@code Number} una celda numerica, un {@link Formula} una formula (se evalua para dejar el valor
- * cacheado) y {@code null} una celda sin crear.
+ * un {@code Number} una celda numerica, un {@link ConFormato} una celda numerica con formato, un {@link Formula}
+ * una formula (se evalua para dejar el valor cacheado) y {@code null} una celda sin crear.
  */
 public final class ListasDePrueba {
 
     /** Formula de Excel sin el signo igual, por ejemplo {@code new Formula("B2*1.1")}. */
     public record Formula(String expresion) {
+    }
+
+    /**
+     * Una celda numerica con formato de numero de Excel, por ejemplo {@code new ConFormato(0.21, "0%")} (se ve 21 %).
+     * Sirve para probar que el lector avisa cuando el formato es de porcentaje.
+     */
+    public record ConFormato(Number valor, String formato) {
     }
 
     private ListasDePrueba() {
@@ -128,13 +137,14 @@ public final class ListasDePrueba {
     }
 
     private static byte[] escribir(Workbook libro, Map<String, List<List<Object>>> hojas) throws IOException {
+        Map<String, CellStyle> estilos = new HashMap<>();
         hojas.forEach((nombre, filas) -> {
             Sheet hoja = libro.createSheet(nombre);
             for (int r = 0; r < filas.size(); r++) {
                 Row fila = hoja.createRow(r);
                 List<Object> valores = filas.get(r);
                 for (int c = 0; c < valores.size(); c++) {
-                    escribirCelda(fila, c, valores.get(c));
+                    escribirCelda(libro, estilos, fila, c, valores.get(c));
                 }
             }
         });
@@ -144,12 +154,21 @@ public final class ListasDePrueba {
         return salida.toByteArray();
     }
 
-    private static void escribirCelda(Row fila, int columna, Object valor) {
+    private static void escribirCelda(Workbook libro, Map<String, CellStyle> estilos, Row fila, int columna,
+                                      Object valor) {
         if (valor == null) {
             return;
         }
         Cell celda = fila.createCell(columna);
-        if (valor instanceof Formula formula) {
+        if (valor instanceof ConFormato conFormato) {
+            celda.setCellValue(conFormato.valor().doubleValue());
+            // Un estilo por formato y libro: Excel admite pocos miles de estilos.
+            celda.setCellStyle(estilos.computeIfAbsent(conFormato.formato(), formato -> {
+                CellStyle estilo = libro.createCellStyle();
+                estilo.setDataFormat(libro.createDataFormat().getFormat(formato));
+                return estilo;
+            }));
+        } else if (valor instanceof Formula formula) {
             celda.setCellFormula(formula.expresion());
         } else if (valor instanceof Number numero) {
             celda.setCellValue(numero.doubleValue());

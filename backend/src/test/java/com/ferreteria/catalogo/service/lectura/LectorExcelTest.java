@@ -3,18 +3,25 @@ package com.ferreteria.catalogo.service.lectura;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.ferreteria.catalogo.model.AlicuotaIva;
 import com.ferreteria.catalogo.model.Celda;
 import com.ferreteria.catalogo.model.FilaLeida;
 import com.ferreteria.catalogo.model.LecturaLista;
+import com.ferreteria.catalogo.model.ParserPorcentaje;
+import com.ferreteria.catalogo.model.AlicuotaDeFila;
 import com.ferreteria.common.exception.BadRequestException;
 import com.ferreteria.support.ListasDePrueba;
+import com.ferreteria.support.ListasDePrueba.ConFormato;
 import com.ferreteria.support.ListasDePrueba.Formula;
+import com.ferreteria.support.ListasReales;
+import java.io.IOException;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
 import org.apache.poi.openxml4j.util.ZipSecureFile;
+import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.util.IOUtils;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -191,8 +198,8 @@ class LectorExcelTest {
         assertThat(ZipSecureFile.getMaxEntrySize()).isEqualTo(LimitesDeLista.MAXIMO_ENTRADA_ZIP_BYTES);
         assertThat(IOUtils.getByteArrayMaxOverride()).isEqualTo(LimitesDeLista.MAXIMO_ARREGLO_POI_BYTES);
         assertThat(LimitesDeLista.MAXIMO_ENTRADA_ZIP_BYTES).isLessThanOrEqualTo(256L * 1024 * 1024);
-        // Una lista legitima de 10 MB (comprimida) tiene que seguir entrando: al menos 10 veces su tamano.
-        assertThat(LimitesDeLista.MAXIMO_ENTRADA_ZIP_BYTES).isGreaterThanOrEqualTo(10L * 10 * 1024 * 1024);
+        // Una lista legitima de 25 MB (comprimida) tiene que seguir entrando: al menos 10 veces su tamano.
+        assertThat(LimitesDeLista.MAXIMO_ENTRADA_ZIP_BYTES).isGreaterThanOrEqualTo(10L * 25 * 1024 * 1024);
     }
 
     @Test
@@ -202,5 +209,126 @@ class LectorExcelTest {
         assertThatThrownBy(() -> lector.leer(protegido, 0))
             .isInstanceOf(BadRequestException.class)
             .hasMessage("El archivo está protegido con contraseña.");
+    }
+
+    // ---- corte 2: todas las hojas con una sola apertura ----
+
+    /** Un lector que cuenta cuantas veces se abre el libro. */
+    private static final class LectorQueCuentaAperturas extends LectorExcel {
+        int aperturas;
+
+        @Override
+        Workbook abrir(byte[] contenido) throws IOException {
+            aperturas++;
+            return super.abrir(contenido);
+        }
+    }
+
+    private static byte[] libro(String formato, Map<String, List<List<Object>>> hojas) {
+        return formato.equals("xlsx") ? ListasDePrueba.xlsxHojas(hojas) : ListasDePrueba.xlsHojas(hojas);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"xlsx", "xls"})
+    void leerSinHojaDevuelveLasFilasDeTodasLasHojasConLaHojaDeCadaUna(String formato) {
+        Map<String, List<List<Object>>> hojas = new LinkedHashMap<>();
+        hojas.put("TORNILLOS", List.of(fila("T-1", 10), fila(), fila("T-2", 20)));
+        hojas.put("TUERCAS", List.of(fila("U-1", 30)));
+        hojas.put("ARANDELAS", List.of(fila("A-1", 40), fila("A-2", 50), fila("A-3", 60)));
+
+        LecturaLista lectura = lector.leer(libro(formato, hojas));
+
+        assertThat(lectura.hojas()).containsExactly("TORNILLOS", "TUERCAS", "ARANDELAS");
+        assertThat(lectura.filas()).extracting(FilaLeida::hoja).containsExactly(0, 0, 1, 2, 2, 2);
+        assertThat(lectura.filas()).extracting(FilaLeida::numero).containsExactly(1, 3, 1, 1, 2, 3);
+        assertThat(lectura.filas()).extracting(f -> f.celda(0).texto())
+            .containsExactly("T-1", "T-2", "U-1", "A-1", "A-2", "A-3");
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"xlsx", "xls"})
+    void abreElLibroUnaSolaVezAunqueTengaSetentaHojas(String formato) {
+        LectorQueCuentaAperturas contador = new LectorQueCuentaAperturas();
+        Map<String, List<List<Object>>> setentaHojas = ListasReales.lista336HojasFilas(70, 2);
+
+        LecturaLista lectura = contador.leer(libro(formato, setentaHojas));
+
+        assertThat(contador.aperturas).isEqualTo(1);
+        assertThat(lectura.hojas()).hasSize(70);
+        assertThat(lectura.filas()).hasSize(70 * 3);
+        assertThat(lectura.filasDeHoja(69).get(1).celda(0).texto()).isEqualTo("H70-001");
+        assertThat(lectura.filas().get(lectura.filas().size() - 1).hoja()).isEqualTo(69);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"xlsx", "xls"})
+    void unaHojaVaciaNoRompeLaLectura(String formato) {
+        Map<String, List<List<Object>>> hojas = new LinkedHashMap<>();
+        hojas.put("Primera", List.of(fila("A-1", 1)));
+        hojas.put("Vacia", List.of());
+        hojas.put("Tercera", List.of(fila("C-1", 3)));
+
+        LecturaLista lectura = lector.leer(libro(formato, hojas));
+
+        assertThat(lectura.hojas()).containsExactly("Primera", "Vacia", "Tercera");
+        assertThat(lectura.filas()).extracting(FilaLeida::hoja).containsExactly(0, 2);
+    }
+
+    @Test
+    void leerConHojaFiltraLaSobrecargaVieja() {
+        Map<String, List<List<Object>>> hojas = new LinkedHashMap<>();
+        hojas.put("Portada", List.of(fila("nada")));
+        hojas.put("Precios", List.of(fila("X-1", 5), fila("X-2", 6)));
+        byte[] bytes = ListasDePrueba.xlsxHojas(hojas);
+
+        LecturaLista segunda = lector.leer(bytes, 1);
+
+        assertThat(segunda.hojas()).containsExactly("Portada", "Precios");
+        assertThat(segunda.filas()).extracting(FilaLeida::hoja).containsOnly(1);
+        assertThat(segunda.filas()).extracting(FilaLeida::numero).containsExactly(1, 2);
+    }
+
+    // ---- corte 2: Celda.porcentaje desde el formato de Excel ----
+
+    @ParameterizedTest
+    @ValueSource(strings = {"xlsx", "xls"})
+    void unaCeldaNumericaConFormatoDePorcentajeLlegaConPorcentajeTrue(String formato) {
+        LecturaLista lectura = lector.leer(libro(formato, Map.of("Hoja1", List.of(
+            fila(new ConFormato(0.21, "0%"), new ConFormato(0.105, "0.00%"), new ConFormato(0.21, "0.00"), 21)))));
+
+        FilaLeida fila = lectura.filas().get(0);
+        assertThat(fila.celda(0).porcentaje()).isTrue();
+        assertThat(fila.celda(0).numero()).isEqualByComparingTo("0.21");
+        assertThat(fila.celda(1).porcentaje()).isTrue();
+        assertThat(fila.celda(1).numero()).isEqualByComparingTo("0.105");
+        // Con otro formato, o sin formato, no es un porcentaje.
+        assertThat(fila.celda(2).porcentaje()).isFalse();
+        assertThat(fila.celda(2).numero()).isEqualByComparingTo("0.21");
+        assertThat(fila.celda(3).porcentaje()).isFalse();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"xlsx", "xls"})
+    void unaCeldaDeTextoVeintiunoPorCientoLlegaConPorcentajeFalse(String formato) {
+        LecturaLista lectura = lector.leer(libro(formato, Map.of("Hoja1", List.of(fila("21 %", "21%")))));
+
+        assertThat(lectura.filas().get(0).celda(0).porcentaje()).isFalse();
+        assertThat(lectura.filas().get(0).celda(0).numero()).isNull();
+        assertThat(lectura.filas().get(0).celda(1).porcentaje()).isFalse();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"xlsx", "xls"})
+    void elCeroVeintiunoConFormatoPorcentajeSeLeeComoVeintiunoYEsIva21(String formato) {
+        LecturaLista lectura = lector.leer(libro(formato, Map.of("Hoja1", List.of(
+            fila(new ConFormato(0.21, "0%"), new ConFormato(0.21, "0.00"))))));
+        Celda conFormato = lectura.filas().get(0).celda(0);
+        Celda sinFormato = lectura.filas().get(0).celda(1);
+
+        assertThat(ParserPorcentaje.parsear(conFormato).valor()).isEqualByComparingTo("21");
+        assertThat(AlicuotaDeFila.interpretar(conFormato, null, null).alicuota()).isEqualTo(AlicuotaIva.IVA_21);
+        // El mismo 0,21 sin formato % no se adivina: no es una alicuota legal.
+        assertThat(ParserPorcentaje.parsear(sinFormato).valor()).isEqualByComparingTo("0.21");
+        assertThat(AlicuotaDeFila.interpretar(sinFormato, null, null).esError()).isTrue();
     }
 }

@@ -120,4 +120,22 @@ class ListasDePruebaTest {
 
         assertThat(new String(bytes, StandardCharsets.UTF_8)).isEqualTo("a\tb\n");
     }
+
+    @Test
+    void unNumeroConFormatoQuedaConEseFormatoEnXlsxYXls() throws Exception {
+        List<List<Object>> filas = List.of(java.util.Arrays.asList(
+            new ListasDePrueba.ConFormato(0.21, "0%"), new ListasDePrueba.ConFormato(0.21, "0.00"), 21));
+
+        for (byte[] bytes : List.of(ListasDePrueba.xlsx(filas), ListasDePrueba.xls(filas))) {
+            try (Workbook libro = WorkbookFactory.create(new ByteArrayInputStream(bytes))) {
+                var fila = libro.getSheetAt(0).getRow(0);
+                assertThat(fila.getCell(0).getCellType()).isEqualTo(CellType.NUMERIC);
+                assertThat(fila.getCell(0).getNumericCellValue()).isEqualTo(0.21);
+                assertThat(fila.getCell(0).getCellStyle().getDataFormatString()).isEqualTo("0%");
+                assertThat(fila.getCell(1).getNumericCellValue()).isEqualTo(0.21);
+                assertThat(fila.getCell(1).getCellStyle().getDataFormatString()).isEqualTo("0.00");
+                assertThat(fila.getCell(2).getCellStyle().getDataFormatString()).isEqualTo("General");
+            }
+        }
+    }
 }

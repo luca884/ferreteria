@@ -31,10 +31,10 @@ class GlobalExceptionHandlerImportacionTest {
 
     @Test
     void unArchivoQueSuperaElMaximoEs413() {
-        ResponseEntity<ApiError> respuesta = handler.archivoDemasiadoGrande(new MaxUploadSizeExceededException(10L * 1024 * 1024));
+        ResponseEntity<ApiError> respuesta = handler.archivoDemasiadoGrande(new MaxUploadSizeExceededException(25L * 1024 * 1024));
 
         assertThat(respuesta.getStatusCode().value()).isEqualTo(413);
-        assertThat(respuesta.getBody().message()).isEqualTo("El archivo es demasiado grande. El máximo es 10 MB.");
+        assertThat(respuesta.getBody().message()).isEqualTo("El archivo es demasiado grande. El máximo es 25 MB.");
     }
 
     @Test

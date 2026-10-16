@@ -167,4 +167,33 @@ class LectorCsvTest {
         assertThat(lectura.hojas()).containsExactly("CSV");
         assertThat(lectura.filas()).isEmpty();
     }
+
+    // ---- corte 2: una sola hoja, la 0, sin pedirla ----
+
+    @Test
+    void leerSinHojaDevuelveElCsvComoUnaSolaHojaLaCero() {
+        LecturaLista lectura = lector.leer(ListasDePrueba.csv(LISTA, ';', StandardCharsets.UTF_8, false));
+
+        assertThat(lectura.hojas()).containsExactly("CSV");
+        assertThat(lectura.filas()).hasSize(3);
+        assertThat(lectura.filas()).extracting(FilaLeida::hoja).containsOnly(0);
+        assertThat(lectura.filas()).extracting(FilaLeida::numero).containsExactly(1, 2, 3);
+        assertThat(textos(lectura.filas().get(2))).containsExactly("A-2", "Tuerca", "100");
+    }
+
+    @Test
+    void leerSinHojaDaLoMismoQueLeerLaHojaCero() {
+        byte[] csv = ListasDePrueba.csv(LISTA, ',', StandardCharsets.UTF_8, true);
+
+        assertThat(lector.leer(csv)).isEqualTo(lector.leer(csv, 0));
+    }
+
+    @Test
+    void laSobrecargaVieja_siPideOtraHojaEsUn400() {
+        byte[] csv = ListasDePrueba.csv(LISTA, ';', StandardCharsets.UTF_8, false);
+
+        assertThatThrownBy(() -> lector.leer(csv, 1))
+            .isInstanceOf(BadRequestException.class)
+            .hasMessage("La hoja elegida no existe en el archivo.");
+    }
 }

@@ -19,13 +19,13 @@ class ConfiguracionImportacionTest extends IntegrationTestBase {
     Environment environment;
 
     @Test
-    void elArchivoPuedePesarComoMaximo10MB() {
-        assertThat(multipart.getMaxFileSize()).isEqualTo(DataSize.ofMegabytes(10));
+    void elArchivoPuedePesarComoMaximo25MB() {
+        assertThat(multipart.getMaxFileSize()).isEqualTo(DataSize.ofMegabytes(25));
     }
 
     @Test
     void elPedidoDejaLugarParaLaParteDeDatos() {
-        assertThat(multipart.getMaxRequestSize()).isEqualTo(DataSize.ofMegabytes(11));
+        assertThat(multipart.getMaxRequestSize()).isEqualTo(DataSize.ofMegabytes(27));
     }
 
     @Test

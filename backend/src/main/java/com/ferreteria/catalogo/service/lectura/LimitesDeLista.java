@@ -3,23 +3,26 @@ package com.ferreteria.catalogo.service.lectura;
 import com.ferreteria.common.exception.BadRequestException;
 
 /**
- * Topes de lo que se acepta de una lista (R-025). El tope exacto (20.000 filas de datos, las que estan
- * desde la primera fila de datos del mapeo) lo aplica el servicio, que conoce el mapeo. Los lectores
- * aplican uno grueso, {@link #MAXIMO_FILAS_LEIDAS}, para cortar la lectura antes de armar toda la lista
- * en memoria: tolera titulos y encabezados por encima de las filas de datos.
+ * Topes de lo que se acepta de una lista (R-025 y R-101). El tope exacto (20.000 filas de datos, las de las
+ * hojas elegidas desde su primera fila de datos) lo aplica el servicio, que conoce el mapeo. Los lectores
+ * aplican uno grueso, {@link #MAXIMO_FILAS_LEIDAS}, que cuenta el LIBRO entero (todas sus hojas), para cortar la
+ * lectura antes de armar toda la lista en memoria: tolera los titulos y encabezados de un libro de muchas hojas.
  */
 public final class LimitesDeLista {
 
     public static final int MAXIMO_FILAS_DE_DATOS = 20_000;
 
-    /** Filas no vacias que un lector arma como mucho: los datos mas un margen para titulos y encabezado. */
-    public static final int MAXIMO_FILAS_LEIDAS = MAXIMO_FILAS_DE_DATOS + 1_000;
+    /**
+     * Filas no vacias que un lector arma como mucho en TODO el libro: los datos mas un margen para los titulos y
+     * encabezados de las hojas (LISTA 336 tiene 70).
+     */
+    public static final int MAXIMO_FILAS_LEIDAS = 25_000;
 
     /**
      * Lo mas que POI infla de una sola parte de un .xlsx (hoja, cadenas compartidas...). Una lista de
-     * 10 MB comprimida cabe con holgura; el valor por defecto de POI es 4 GB.
+     * 25 MB comprimida cabe con holgura (XML comprime ~10 veces); el valor por defecto de POI es 4 GB.
      */
-    public static final long MAXIMO_ENTRADA_ZIP_BYTES = 128L * 1024 * 1024;
+    public static final long MAXIMO_ENTRADA_ZIP_BYTES = 256L * 1024 * 1024;
 
     /** Lo mas grande que POI reserva para un arreglo de bytes (por defecto 100 MB). */
     public static final int MAXIMO_ARREGLO_POI_BYTES = 50_000_000;

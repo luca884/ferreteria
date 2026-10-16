@@ -25,7 +25,8 @@ import org.springframework.stereotype.Component;
 
 /**
  * Lee .xlsx y .xls con el mismo codigo (POI usermodel). Las formulas usan el valor cacheado y los numeros
- * se convierten con {@link NumberToTextConverter}, nunca con {@code new BigDecimal(double)}.
+ * se convierten con {@link NumberToTextConverter}, nunca con {@code new BigDecimal(double)}. Una celda numerica
+ * con formato de porcentaje lo avisa ({@code Celda.porcentaje}).
  */
 @Component
 public class LectorExcel implements LectorDeLista {
@@ -39,10 +40,14 @@ public class LectorExcel implements LectorDeLista {
         IOUtils.setByteArrayMaxOverride(LimitesDeLista.MAXIMO_ARREGLO_POI_BYTES);
     }
 
+    /**
+     * Todas las hojas con una sola apertura del libro: las filas llevan su hoja (base 0). El tope grueso cuenta las
+     * filas no vacias de TODO el libro.
+     */
     @Override
-    public LecturaLista leer(byte[] contenido, int hoja) {
-        try (Workbook libro = WorkbookFactory.create(new ByteArrayInputStream(contenido))) {
-            return leerLibro(libro, hoja);
+    public LecturaLista leer(byte[] contenido) {
+        try (Workbook libro = abrir(contenido)) {
+            return leerLibro(libro);
         } catch (BadRequestException e) {
             throw e;
         } catch (EncryptedDocumentException e) {
@@ -54,28 +59,32 @@ public class LectorExcel implements LectorDeLista {
         }
     }
 
-    private LecturaLista leerLibro(Workbook libro, int indiceHoja) {
+    /** Abre el libro; es el unico lugar donde se abre, asi un test puede contar las aperturas. */
+    Workbook abrir(byte[] contenido) throws IOException {
+        return WorkbookFactory.create(new ByteArrayInputStream(contenido));
+    }
+
+    private LecturaLista leerLibro(Workbook libro) {
         List<String> nombres = new ArrayList<>();
         for (int i = 0; i < libro.getNumberOfSheets(); i++) {
             nombres.add(libro.getSheetName(i));
         }
-        if (indiceHoja < 0 || indiceHoja >= nombres.size()) {
-            throw new BadRequestException("La hoja elegida no existe en el archivo.");
-        }
-        Sheet hoja = libro.getSheetAt(indiceHoja);
         List<FilaLeida> filas = new ArrayList<>();
-        for (int r = hoja.getFirstRowNum(); r <= hoja.getLastRowNum(); r++) {
-            Row row = hoja.getRow(r);
-            if (row == null) {
-                continue;
-            }
-            FilaLeida fila = new FilaLeida(r + 1, celdas(row));
-            if (!fila.vacia()) {
-                // Tope grueso: no se sigue armando la lista una vez pasado.
-                if (filas.size() >= LimitesDeLista.MAXIMO_FILAS_LEIDAS) {
-                    throw LimitesDeLista.demasiadasFilas();
+        for (int indiceHoja = 0; indiceHoja < nombres.size(); indiceHoja++) {
+            Sheet hoja = libro.getSheetAt(indiceHoja);
+            for (int r = Math.max(hoja.getFirstRowNum(), 0); r <= hoja.getLastRowNum(); r++) {
+                Row row = hoja.getRow(r);
+                if (row == null) {
+                    continue;
                 }
-                filas.add(fila);
+                FilaLeida fila = new FilaLeida(indiceHoja, r + 1, celdas(row));
+                if (!fila.vacia()) {
+                    // Tope grueso: no se sigue armando la lista una vez pasado.
+                    if (filas.size() >= LimitesDeLista.MAXIMO_FILAS_LEIDAS) {
+                        throw LimitesDeLista.demasiadasFilas();
+                    }
+                    filas.add(fila);
+                }
             }
         }
         return new LecturaLista(nombres, filas);
@@ -96,7 +105,7 @@ public class LectorExcel implements LectorDeLista {
         }
         CellType tipo = cell.getCellType() == CellType.FORMULA ? cell.getCachedFormulaResultType() : cell.getCellType();
         return switch (tipo) {
-            case NUMERIC -> numerica(cell.getNumericCellValue());
+            case NUMERIC -> numerica(cell.getNumericCellValue(), conFormatoDePorcentaje(cell));
             case STRING -> new Celda(cell.getStringCellValue().strip(), null);
             case BOOLEAN -> new Celda(cell.getBooleanCellValue() ? "TRUE" : "FALSE", null);
             case ERROR -> new Celda(FormulaError.forInt(cell.getErrorCellValue()).getString(), null);
@@ -104,12 +113,18 @@ public class LectorExcel implements LectorDeLista {
         };
     }
 
-    private Celda numerica(double valor) {
+    private Celda numerica(double valor, boolean porcentaje) {
         String texto = NumberToTextConverter.toText(valor);
         try {
-            return new Celda(texto, new BigDecimal(texto));
+            return new Celda(texto, new BigDecimal(texto), porcentaje);
         } catch (NumberFormatException e) {
             return new Celda(texto, null);
         }
+    }
+
+    /** El formato de la celda tiene un %: 21 % se guarda como 0,21 y en pantalla se ve 21. */
+    private static boolean conFormatoDePorcentaje(Cell cell) {
+        String formato = cell.getCellStyle() == null ? null : cell.getCellStyle().getDataFormatString();
+        return formato != null && formato.contains("%");
     }
 }

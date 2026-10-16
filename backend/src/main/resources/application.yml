@@ -25,9 +25,10 @@ spring:
         order_updates: true
   servlet:
     multipart:
-      # Listas de proveedores: 10 MB de archivo y lugar para la parte "datos" (JSON).
-      max-file-size: 10MB
-      max-request-size: 11MB
+      # Listas de proveedores: 25 MB de archivo y lugar para la parte "datos" (JSON), que con 20.000 filas elegidas
+      # pesa unos 450 KB.
+      max-file-size: 25MB
+      max-request-size: 27MB
   flyway:
     enabled: true
     locations: classpath:db/migration

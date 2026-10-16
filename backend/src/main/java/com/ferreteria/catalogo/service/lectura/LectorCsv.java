@@ -31,11 +31,9 @@ public class LectorCsv implements LectorDeLista {
     private static final Charset WINDOWS_1252 = Charset.forName("windows-1252");
     private static final byte[] BOM ={(byte) 0xEF, (byte) 0xBB, (byte) 0xBF};
 
+    /** Un CSV es una sola hoja, la 0: todas sus filas llevan hoja 0. */
     @Override
-    public LecturaLista leer(byte[] contenido, int hoja) {
-        if (hoja != 0) {
-            throw new BadRequestException("La hoja elegida no existe en el archivo.");
-        }
+    public LecturaLista leer(byte[] contenido) {
         String texto = decodificar(contenido);
         CSVFormat formato = CSVFormat.DEFAULT.builder()
             .setDelimiter(detectarDelimitador(texto))

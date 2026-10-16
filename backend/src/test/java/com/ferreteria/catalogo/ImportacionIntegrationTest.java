@@ -422,7 +422,8 @@ class ImportacionIntegrationTest extends IntegrationTestBase {
 
     @Test
     void conMuchasMasDeVeinteMilFilasTambienLaMuestraDa400() throws Exception {
-        postMultipart(MUESTRA, duenoA, csvDe(0, 25_000), null)
+        // El tope grueso de lectura es de 25.000 filas por libro (corte 2): 25.000 pasan, 25.001 dan 400.
+        postMultipart(MUESTRA, duenoA, csvDe(0, 25_001), null)
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message", is(MENSAJE_LIMITE)));
     }

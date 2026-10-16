@@ -144,7 +144,7 @@ public class GlobalExceptionHandler {
     /** Mas especifico que MultipartException (su padre), asi que Spring lo elige primero. */
     @ExceptionHandler(MaxUploadSizeExceededException.class)
     public ResponseEntity<ApiError> archivoDemasiadoGrande(MaxUploadSizeExceededException ex) {
-        return build(HttpStatus.PAYLOAD_TOO_LARGE, "El archivo es demasiado grande. El máximo es 10 MB.");
+        return build(HttpStatus.PAYLOAD_TOO_LARGE, "El archivo es demasiado grande. El máximo es 25 MB.");
     }
 
     @ExceptionHandler(MissingServletRequestPartException.class)
