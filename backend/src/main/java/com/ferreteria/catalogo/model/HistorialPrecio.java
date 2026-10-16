@@ -51,15 +51,31 @@ public class HistorialPrecio {
     @Column(nullable = false, updatable = false, length = 20)
     private OrigenPrecio origen;
 
+    /**
+     * Moneda de los costos de esta entrada (la del articulo al momento del cambio). Los precios son siempre en
+     * pesos.
+     */
+    @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
+    @Column(nullable = false, updatable = false, length = 3)
+    private Moneda moneda = Moneda.ARS;
+
     @Column(nullable = false, updatable = false)
     private LocalDateTime fecha = LocalDateTime.now();
 
-    @Column(name = "usuario_id", nullable = false, updatable = false)
+    /**
+     * Quien hizo el cambio. Null en el recalculo diario automatico por cotizacion: cuando alguna pantalla muestre
+     * el historial, null se mapea a "Automatico" (hoy ninguna lo muestra).
+     */
+    @Column(name = "usuario_id", updatable = false)
     private Long usuarioId;
 
     protected HistorialPrecio() {}
 
-    /** Arma la entrada de un cambio del articulo; la ferreteria sale del propio articulo. */
+    /**
+     * Arma la entrada de un cambio del articulo; la ferreteria y la moneda salen del propio articulo.
+     * {@code usuarioId} puede ser null solo en el recalculo automatico por cotizacion.
+     */
     public static HistorialPrecio de(Articulo articulo, CambioPrecio cambio, OrigenPrecio origen, Long usuarioId) {
         HistorialPrecio historial = new HistorialPrecio();
         historial.ferreteriaId = articulo.getFerreteriaId();
@@ -69,6 +85,7 @@ public class HistorialPrecio {
         historial.precioAnterior = cambio.precioAnterior();
         historial.precioNuevo = cambio.precioNuevo();
         historial.origen = origen;
+        historial.moneda = articulo.getMoneda();
         historial.usuarioId = usuarioId;
         return historial;
     }
@@ -81,6 +98,7 @@ public class HistorialPrecio {
     public BigDecimal getPrecioAnterior() { return precioAnterior; }
     public BigDecimal getPrecioNuevo() { return precioNuevo; }
     public OrigenPrecio getOrigen() { return origen; }
+    public Moneda getMoneda() { return moneda; }
     public LocalDateTime getFecha() { return fecha; }
     public Long getUsuarioId() { return usuarioId; }
 }

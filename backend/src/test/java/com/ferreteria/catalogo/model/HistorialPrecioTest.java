@@ -78,4 +78,43 @@ class HistorialPrecioTest {
 
         assertThat(historial.getFecha()).isBetween(antes, LocalDateTime.now());
     }
+
+    @Test
+    @DisplayName("de(): el recalculo automatico por cotizacion no tiene usuario")
+    void sinUsuarioEnElRecalculoAutomatico() throws Exception {
+        Articulo articulo = articulo(7L, 55L);
+        CambioPrecio cambio = new CambioPrecio(bd("10.00"), bd("10.00"), bd("15730.00"), bd("17310.00"));
+
+        HistorialPrecio historial = HistorialPrecio.de(articulo, cambio, OrigenPrecio.COTIZACION, null);
+
+        assertThat(historial.getUsuarioId()).isNull();
+        assertThat(historial.getOrigen()).isEqualTo(OrigenPrecio.COTIZACION);
+        assertThat(historial.getPrecioAnterior()).isEqualByComparingTo("15730");
+        assertThat(historial.getPrecioNuevo()).isEqualByComparingTo("17310");
+    }
+
+    @Test
+    @DisplayName("de(): el recalculo manual por cotizacion queda a nombre del usuario")
+    void conUsuarioEnElRecalculoManual() throws Exception {
+        Articulo articulo = articulo(7L, 55L);
+        CambioPrecio cambio = new CambioPrecio(bd("10.00"), bd("10.00"), bd("15730.00"), bd("17310.00"));
+
+        HistorialPrecio historial = HistorialPrecio.de(articulo, cambio, OrigenPrecio.COTIZACION, 3L);
+
+        assertThat(historial.getUsuarioId()).isEqualTo(3L);
+    }
+
+    @Test
+    @DisplayName("de(): guarda la moneda del articulo: USD para uno en dolares, ARS para uno en pesos")
+    void guardaLaMonedaDelArticulo() throws Exception {
+        Articulo enPesos = articulo(7L, 55L);
+        Articulo enDolares = articulo(7L, 56L);
+        enDolares.actualizar(new DatosArticulo("USD-001", null, null, "En dolares", null, null, bd("10"), null,
+                AlicuotaIva.IVA_21, Unidad.UNIDAD, bd("0"), null, true, Moneda.USD),
+                new ContextoPrecio(null, bd("30"), bd("10"), bd("1000")));
+        CambioPrecio cambio = new CambioPrecio(null, bd("10.00"), null, bd("15730.00"));
+
+        assertThat(HistorialPrecio.de(enPesos, cambio, OrigenPrecio.MANUAL, 3L).getMoneda()).isEqualTo(Moneda.ARS);
+        assertThat(HistorialPrecio.de(enDolares, cambio, OrigenPrecio.MANUAL, 3L).getMoneda()).isEqualTo(Moneda.USD);
+    }
 }

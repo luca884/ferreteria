@@ -704,4 +704,135 @@ class ArticuloTest {
         assertThat(articulo.getUbicacion()).isEqualTo("Estante 3");
         assertThat(articulo.isActivo()).isFalse();
     }
+
+    // --- moneda ---
+
+    /** Contexto con margen por defecto 30, multiplo 10 y el dolar indicado. */
+    private static ContextoPrecio ctxConDolar(String dolar) {
+        return new ContextoPrecio(null, bd("30"), bd("10"), dolar == null ? null : bd(dolar));
+    }
+
+    private static DatosArticulo datosEn(Moneda moneda, String costo) {
+        return new DatosArticulo("USD-001", null, null, "Articulo en dolares",
+                null, null, bd(costo), null, AlicuotaIva.IVA_21, Unidad.UNIDAD,
+                bd("0"), null, true, moneda);
+    }
+
+    @Test
+    @DisplayName("moneda: un articulo nuevo esta en pesos")
+    void articuloNuevoEsEnPesos() {
+        assertThat(new Articulo(FERRETERIA).getMoneda()).isEqualTo(Moneda.ARS);
+        assertThat(articuloCon("100", "35").getMoneda()).isEqualTo(Moneda.ARS);
+    }
+
+    @Test
+    @DisplayName("moneda: 10 USD con margen 30, IVA 21 y multiplo 10 a 1000 pesos por dolar da 15730")
+    void articuloEnDolaresConDolarA1000() {
+        Articulo articulo = new Articulo(FERRETERIA);
+
+        Optional<CambioPrecio> cambio = articulo.actualizar(datosEn(Moneda.USD, "10"), ctxConDolar("1000"));
+
+        assertThat(articulo.getMoneda()).isEqualTo(Moneda.USD);
+        assertThat(articulo.getCosto()).isEqualByComparingTo("10");
+        assertThat(articulo.getPrecioFinal()).isEqualByComparingTo("15730.00");
+        assertThat(cambio).isPresent();
+        assertThat(cambio.get().costoNuevo()).isEqualByComparingTo("10");
+        assertThat(cambio.get().precioNuevo()).isEqualByComparingTo("15730.00");
+    }
+
+    @Test
+    @DisplayName("moneda: el mismo articulo con el dolar a 1100 recalcula a 17310 y el costo en dolares no se toca")
+    void articuloEnDolaresConDolarA1100() {
+        Articulo articulo = new Articulo(FERRETERIA);
+        articulo.actualizar(datosEn(Moneda.USD, "10"), ctxConDolar("1000"));
+
+        Optional<CambioPrecio> cambio = articulo.recalcularPrecio(ctxConDolar("1100"));
+
+        assertThat(articulo.getCosto()).isEqualByComparingTo("10");
+        assertThat(articulo.getPrecioFinal()).isEqualByComparingTo("17310.00");
+        assertThat(cambio).isPresent();
+        assertThat(cambio.get().precioAnterior()).isEqualByComparingTo("15730.00");
+        assertThat(cambio.get().precioNuevo()).isEqualByComparingTo("17310.00");
+    }
+
+    @Test
+    @DisplayName("moneda: con el dolar sin cambio el recalculo no devuelve cambio")
+    void recalculoSinCambioDeDolar() {
+        Articulo articulo = new Articulo(FERRETERIA);
+        articulo.actualizar(datosEn(Moneda.USD, "10"), ctxConDolar("1000"));
+
+        assertThat(articulo.recalcularPrecio(ctxConDolar("1000"))).isEmpty();
+        assertThat(articulo.getPrecioFinal()).isEqualByComparingTo("15730.00");
+    }
+
+    @Test
+    @DisplayName("moneda: un articulo en dolares con un contexto sin dolar lanza IllegalStateException")
+    void articuloEnDolaresSinDolar() {
+        Articulo articulo = new Articulo(FERRETERIA);
+
+        assertThatThrownBy(() -> articulo.actualizar(datosEn(Moneda.USD, "10"), ctxConDolar(null)))
+                .isInstanceOf(IllegalStateException.class);
+    }
+
+    @Test
+    @DisplayName("moneda: un articulo en pesos no usa la cotizacion: costo 1000 da 1580 con o sin dolar")
+    void articuloEnPesosNoUsaElDolar() {
+        Articulo conDolar = new Articulo(FERRETERIA);
+        conDolar.actualizar(datosEn(Moneda.ARS, "1000"), ctxConDolar("1000"));
+        Articulo sinDolar = new Articulo(FERRETERIA);
+        sinDolar.actualizar(datosEn(Moneda.ARS, "1000"), ctxConDolar(null));
+
+        assertThat(conDolar.getPrecioFinal()).isEqualByComparingTo("1580.00");
+        assertThat(sinDolar.getPrecioFinal()).isEqualByComparingTo("1580.00");
+    }
+
+    @Test
+    @DisplayName("moneda: pasar de pesos a dolares deja el costo tal cual, sin convertir, y recalcula")
+    void cambiarLaMonedaNoConvierteElCosto() {
+        Articulo articulo = new Articulo(FERRETERIA);
+        articulo.actualizar(datosEn(Moneda.ARS, "10"), ctxConDolar("1000"));
+        assertThat(articulo.getPrecioFinal()).isEqualByComparingTo("20.00");
+
+        Optional<CambioPrecio> cambio = articulo.actualizar(datosEn(Moneda.USD, "10"), ctxConDolar("1000"));
+
+        assertThat(articulo.getMoneda()).isEqualTo(Moneda.USD);
+        assertThat(articulo.getCosto()).isEqualByComparingTo("10");
+        assertThat(articulo.getPrecioFinal()).isEqualByComparingTo("15730.00");
+        assertThat(cambio).isPresent();
+        assertThat(cambio.get().precioAnterior()).isEqualByComparingTo("20.00");
+        assertThat(cambio.get().precioNuevo()).isEqualByComparingTo("15730.00");
+    }
+
+    @Test
+    @DisplayName("moneda: el constructor de 13 campos de DatosArticulo deja la moneda en pesos")
+    void datosArticuloSinMonedaEsEnPesos() {
+        assertThat(datos("100", "35", AlicuotaIva.IVA_21).moneda()).isEqualTo(Moneda.ARS);
+    }
+
+    @Test
+    @DisplayName("moneda: un DatosArticulo con moneda null queda en pesos")
+    void datosArticuloConMonedaNull() {
+        Articulo articulo = new Articulo(FERRETERIA);
+
+        articulo.actualizar(datosEn(null, "100"), ctxConDolar(null));
+
+        assertThat(articulo.getMoneda()).isEqualTo(Moneda.ARS);
+        assertThat(articulo.getPrecioFinal()).isEqualByComparingTo("160.00");
+    }
+
+    @Test
+    @DisplayName("moneda: ajustarCosto, fijarMargen y actualizarCosto de un USD usan el dolar del contexto")
+    void ajustesDeUnArticuloEnDolares() {
+        Articulo articulo = new Articulo(FERRETERIA);
+        articulo.actualizar(datosEn(Moneda.USD, "10"), ctxConDolar("1000"));
+
+        articulo.ajustarCosto(bd("11"), ctxConDolar("1000"));
+        assertThat(articulo.getPrecioFinal()).isEqualByComparingTo("17310.00");
+        articulo.fijarMargen(bd("40"), ctxConDolar("1000"));
+        // 11 x 1000 x 1.4 x 1.21 = 18634 -> 18640
+        assertThat(articulo.getPrecioFinal()).isEqualByComparingTo("18640.00");
+        articulo.actualizarCosto(bd("10"), bd("12.10"), ctxConDolar("1100"));
+        // 10 x 1100 x 1.4 x 1.21 = 18634 -> 18640
+        assertThat(articulo.getPrecioFinal()).isEqualByComparingTo("18640.00");
+    }
 }

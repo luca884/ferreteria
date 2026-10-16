@@ -101,7 +101,8 @@ public final class PlanificadorMasivo {
         BigDecimal margenPropioNuevo = enMargen ? operacion.valor() : articulo.margenPorcentaje();
         BigDecimal margenNuevo = enMargen ? operacion.valor() : margenAnterior;
         BigDecimal precioNuevo = PrecioCalculator.precioFinal(
-            costoNuevo, margenNuevo, articulo.alicuotaIva(), contexto.redondeoMultiplo());
+            costoNuevo, margenNuevo, articulo.alicuotaIva(), contexto.redondeoMultiplo(),
+            contexto.cotizacionPara(articulo.moneda()));
         if (digitosEnteros(costoNuevo) > MAXIMO_DIGITOS_ENTEROS || digitosEnteros(precioNuevo) > MAXIMO_DIGITOS_ENTEROS) {
             return Fila.conError(MOTIVO_DEMASIADO_GRANDE);
         }

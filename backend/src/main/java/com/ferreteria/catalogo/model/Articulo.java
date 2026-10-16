@@ -52,9 +52,18 @@ public class Articulo {
     @Column(name = "proveedor_id")
     private Long proveedorId;
 
-    /** Costo del proveedor, sin IVA. */
+    /** Costo del proveedor, sin IVA, en la moneda del articulo. */
     @Column(nullable = false, precision = 15, scale = 2)
     private BigDecimal costo;
+
+    /**
+     * Moneda del costo. El precio final siempre se calcula y se guarda en pesos: para un articulo en USD,
+     * costo x dolar vigente x margen x IVA.
+     */
+    @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
+    @Column(nullable = false, length = 3)
+    private Moneda moneda = Moneda.ARS;
 
     /** Margen propio en porcentaje; si es null hereda el del rubro o el de la ferreteria. */
     @Column(name = "margen_porcentaje", precision = 6, scale = 2)
@@ -122,6 +131,8 @@ public class Articulo {
         this.rubroId = datos.rubroId();
         this.proveedorId = datos.proveedorId();
         this.costo = datos.costo();
+        // Cambiar la moneda no convierte el costo: queda tal cual y el precio se recalcula con la moneda nueva.
+        this.moneda = datos.moneda();
         this.margenPorcentaje = datos.margenPorcentaje();
         this.alicuotaIva = datos.alicuotaIva();
         this.unidad = datos.unidad();
@@ -214,7 +225,8 @@ public class Articulo {
 
     private void calcularPrecio(ContextoPrecio ctx) {
         BigDecimal margen = PrecioCalculator.margenEfectivo(margenPorcentaje, ctx.margenRubro(), ctx.margenDefecto());
-        this.precioFinal = PrecioCalculator.precioFinal(costo, margen, alicuotaIva, ctx.redondeoMultiplo());
+        this.precioFinal = PrecioCalculator.precioFinal(
+                costo, margen, alicuotaIva, ctx.redondeoMultiplo(), ctx.cotizacionPara(moneda));
     }
 
     public Long getId() { return id; }
@@ -226,6 +238,7 @@ public class Articulo {
     public Long getRubroId() { return rubroId; }
     public Long getProveedorId() { return proveedorId; }
     public BigDecimal getCosto() { return costo; }
+    public Moneda getMoneda() { return moneda; }
     public BigDecimal getMargenPorcentaje() { return margenPorcentaje; }
     public AlicuotaIva getAlicuotaIva() { return alicuotaIva; }
     public BigDecimal getPrecioFinal() { return precioFinal; }

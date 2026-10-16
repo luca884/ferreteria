@@ -35,6 +35,7 @@ class PlanificadorMasivoTest {
         private Long rubroId;
         private AlicuotaIva iva = AlicuotaIva.IVA_21;
         private boolean activo = true;
+        private Moneda moneda = Moneda.ARS;
 
         private Art(long id, String costo) {
             this.id = id;
@@ -65,9 +66,14 @@ class PlanificadorMasivoTest {
             return this;
         }
 
+        Art enDolares() {
+            this.moneda = Moneda.USD;
+            return this;
+        }
+
         ArticuloVigente vigente() {
             return new ArticuloVigente(id, "INT-" + id, "PROV-" + id, "Articulo " + id, bd(costo), bd(precioFinal),
-                margen == null ? null : bd(margen), rubroId, iva, activo);
+                margen == null ? null : bd(margen), rubroId, iva, activo, moneda);
         }
     }
 
@@ -92,6 +98,65 @@ class PlanificadorMasivoTest {
     private static PlanMasivo planificar(ModoMasivo modo, String valor, ContextosDePrecio contextos, Art... articulos) {
         List<ArticuloVigente> vigentes = java.util.Arrays.stream(articulos).map(Art::vigente).toList();
         return PlanificadorMasivo.planificar(vigentes, FILTRO, new OperacionMasiva(modo, bd(valor)), contextos);
+    }
+
+    /** Ferreteria con el dolar vigente en 1000 pesos. */
+    private static ContextosDePrecio contextosConDolar() {
+        return new ContextosDePrecio(Map.of(), new ContextoPrecio(null, bd("30.00"), bd("10"), bd("1000")));
+    }
+
+    // ------------------------------------------------------------------ articulos en dolares
+
+    @Nested
+    @DisplayName("articulos en dolares")
+    class EnDolares {
+
+        @Test
+        @DisplayName("costo +10 %: un USD de 10 pasa a 11 USD y su precio en pesos usa el dolar (17310); el ARS sigue igual (180)")
+        void costoPorcentajeUsaElDolarSoloParaLosUsd() {
+            PlanMasivo plan = planificar(ModoMasivo.COSTO_PORCENTAJE, "10", contextosConDolar(),
+                Art.art(1, "10.00").enDolares().precio("15730.00"), Art.art(2, "100.00").precio("170.00"));
+
+            assertThat(plan.cambios()).hasSize(2);
+            CambioMasivo usd = plan.cambios().get(0);
+            assertThat(usd.costoNuevo()).isEqualTo(bd("11.00"));
+            assertThat(usd.precioNuevo()).isEqualTo(bd("17310.00"));
+            CambioMasivo ars = plan.cambios().get(1);
+            assertThat(ars.costoNuevo()).isEqualTo(bd("110.00"));
+            assertThat(ars.precioNuevo()).isEqualTo(bd("180.00"));
+        }
+
+        @Test
+        @DisplayName("margen 40: un USD de 10 da 10 x 1000 x 1,4 x 1,21 = 16940")
+        void margenUsaElDolar() {
+            PlanMasivo plan = planificar(ModoMasivo.MARGEN, "40", contextosConDolar(),
+                Art.art(1, "10.00").enDolares().precio("15730.00"));
+
+            assertThat(plan.cambios()).hasSize(1);
+            assertThat(plan.cambios().get(0).precioNuevo()).isEqualTo(bd("16940.00"));
+            assertThat(plan.cambios().get(0).costoNuevo()).isEqualByComparingTo("10");
+        }
+
+        @Test
+        @DisplayName("un USD con el dolar en 1100 en lugar de 1000 da otro precio: 17310 en vez de 15730")
+        void elPrecioDependeDelDolarDelContexto() {
+            ContextosDePrecio con1100 = new ContextosDePrecio(Map.of(),
+                new ContextoPrecio(null, bd("30.00"), bd("10"), bd("1100")));
+
+            PlanMasivo plan = planificar(ModoMasivo.MARGEN, "30", con1100,
+                Art.art(1, "10.00").enDolares().precio("15730.00"));
+
+            assertThat(plan.cambios()).hasSize(1);
+            assertThat(plan.cambios().get(0).precioNuevo()).isEqualTo(bd("17310.00"));
+        }
+
+        @Test
+        @DisplayName("un USD en un contexto sin dolar es un error de programacion: IllegalStateException")
+        void sinDolarEnElContexto() {
+            org.assertj.core.api.Assertions.assertThatThrownBy(() -> planificar(ModoMasivo.MARGEN, "40", contextos(),
+                Art.art(1, "10.00").enDolares().precio("15730.00")))
+                .isInstanceOf(IllegalStateException.class);
+        }
     }
 
     // ------------------------------------------------------------------ COSTO_PORCENTAJE

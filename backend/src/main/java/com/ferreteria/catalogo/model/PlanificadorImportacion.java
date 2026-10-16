@@ -20,6 +20,7 @@ import java.util.Set;
  *
  * <p>Orden de validacion de cada fila (se informa solo el primer error): codigo, codigo repetido,
  * costo, costo calculado en cero y, para las que no coinciden con ningun articulo, si se puede crear.
+ * La fila de un articulo existente que esta en dolares es siempre un error: por ahora la lista no lo actualiza.
  */
 public final class PlanificadorImportacion {
 
@@ -31,6 +32,9 @@ public final class PlanificadorImportacion {
     private static final int LARGO_MAXIMO_DESCRIPCION = 200;
     private static final String NO_CREABLE = "No se puede crear como artículo nuevo: ";
     private static final int MAXIMO_DIGITOS_ENTEROS = 10;
+    /** Guarda hasta que la importacion maneje la moneda de cada articulo (corte 2). */
+    private static final String MENSAJE_EN_DOLARES =
+        "El artículo está en dólares: por ahora su costo no se actualiza desde una lista. Cargalo a mano.";
     private static final String MENSAJE_COSTO_CERO =
         "El costo calculado es 0. Revisá el precio de lista y las bonificaciones.";
 
@@ -65,7 +69,9 @@ public final class PlanificadorImportacion {
                 continue;
             }
             ArticuloVigente articulo = articulosPorClave.get(d.clave());
-            if (articulo != null) {
+            if (articulo != null && articulo.moneda() == Moneda.USD) {
+                acumulado.errores.add(aviso(d, MENSAJE_EN_DOLARES));
+            } else if (articulo != null) {
                 clasificar(d, articulo, entrada, acumulado);
             } else {
                 planificarNuevo(d, entrada, acumulado);

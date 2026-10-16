@@ -43,6 +43,7 @@ class PlanificadorImportacionTest {
         private String margen;
         private Long rubroId;
         private String precioFinal = "0.00";
+        private Moneda moneda = Moneda.ARS;
 
         private Art(long id, String codigoProveedor, String costo) {
             this.id = id;
@@ -79,9 +80,14 @@ class PlanificadorImportacionTest {
             return this;
         }
 
+        Art enDolares() {
+            this.moneda = Moneda.USD;
+            return this;
+        }
+
         ArticuloVigente vigente() {
             return new ArticuloVigente(id, "INT-" + id, codigoProveedor, "Articulo " + id, bd(costo), bd(precioFinal),
-                margen == null ? null : bd(margen), rubroId, iva, activo);
+                margen == null ? null : bd(margen), rubroId, iva, activo, moneda);
         }
     }
 
@@ -155,6 +161,65 @@ class PlanificadorImportacionTest {
 
     private static List<String> mensajes(List<AvisoDeFila> avisos) {
         return avisos.stream().map(AvisoDeFila::mensaje).toList();
+    }
+
+    // ------------------------------------------------------------------ articulos en dolares
+
+    @Nested
+    @DisplayName("guarda: un articulo existente en dolares no se actualiza desde la lista (hasta el corte de importacion)")
+    class ArticuloEnDolares {
+
+        @Test
+        @DisplayName("la fila de un articulo en USD es un error en espanol y no es cambio, alta ni sin cambio")
+        void filaDeUnArticuloEnDolares() {
+            PlanImportacion plan = escenario()
+                .articulos(Art.art(1, "USD-1", "10").enDolares().precio("15730.00"))
+                .filas(fila(2, "USD-1", "x", "200"))
+                .planificar();
+
+            assertThat(plan.errores()).containsExactly(new AvisoDeFila(2, "USD-1",
+                "El artículo está en dólares: por ahora su costo no se actualiza desde una lista. Cargalo a mano."));
+            assertThat(plan.cambios()).isEmpty();
+            assertThat(plan.altas()).isEmpty();
+            assertThat(plan.sinCambio()).isEmpty();
+            assertThat(plan.conteos().conError()).isEqualTo(1);
+        }
+
+        @Test
+        @DisplayName("aunque el costo de la lista coincida, sigue siendo error (no se sincroniza el precio de lista)")
+        void tambienConElMismoCosto() {
+            PlanImportacion plan = escenario()
+                .articulos(Art.art(1, "USD-1", "100").enDolares())
+                .filas(fila(2, "USD-1", "x", "121"))
+                .planificar();
+
+            assertThat(plan.errores()).extracting(AvisoDeFila::fila).containsExactly(2);
+            assertThat(plan.sinCambio()).isEmpty();
+        }
+
+        @Test
+        @DisplayName("las filas de articulos en pesos de la misma lista se clasifican como siempre")
+        void lasFilasEnPesosNoCambian() {
+            PlanImportacion plan = escenario()
+                .articulos(Art.art(1, "USD-1", "10").enDolares(), Art.art(2, "ARS-1", "50"))
+                .filas(fila(2, "USD-1", "x", "200"), fila(3, "ARS-1", "x", "121"))
+                .planificar();
+
+            assertThat(plan.errores()).extracting(AvisoDeFila::fila).containsExactly(2);
+            assertThat(plan.cambios()).extracting(CambioPlaneado::fila).containsExactly(3);
+            assertThat(plan.cambios().get(0).costoNuevo()).isEqualByComparingTo("121");
+        }
+
+        @Test
+        @DisplayName("un articulo en USD que no esta en la lista cuenta como 'no esta', igual que uno en pesos")
+        void noEstaEnLaLista() {
+            PlanImportacion plan = escenario()
+                .articulos(Art.art(1, "USD-1", "10").enDolares())
+                .filas(fila(2, "OTRO", "x", "121"))
+                .planificar();
+
+            assertThat(plan.noEstan()).extracting(ArticuloVigente::id).containsExactly(1L);
+        }
     }
 
     // ------------------------------------------------------------------ T-16
