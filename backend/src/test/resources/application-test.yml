@@ -5,3 +5,11 @@ spring:
 app:
   jwt:
     secret: test-secret-ferreteria-solo-para-tests-0123456789
+  # Ningun test toca la red ni corre tareas solas: sin scheduler y con las fuentes apuntando a un puerto donde no escucha nadie.
+  programacion:
+    habilitada: false
+  cotizacion:
+    dolarapi:
+      url: http://127.0.0.1:9
+    bluelytics:
+      url: http://127.0.0.1:9

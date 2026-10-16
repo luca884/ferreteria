@@ -55,3 +55,9 @@ app:
     expiration-ms: ${JWT_EXPIRATION_MS:43200000}
   cors:
     allowed-origins: ${CORS_ORIGINS:http://localhost:4200}
+  cotizacion:
+    # Fuente principal y respaldo de la cotizacion. Los tests apuntan las dos a 127.0.0.1:9 (application-test.yml).
+    dolarapi:
+      url: ${DOLARAPI_URL:https://dolarapi.com}
+    bluelytics:
+      url: ${BLUELYTICS_URL:https://api.bluelytics.com.ar}

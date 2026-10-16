@@ -1,0 +1,7 @@
+{
+  "oficial": {"value_avg": 973, "value_sell": 998, "value_buy": 948},
+  "blue": {"value_avg": 1188.25, "value_sell": 1198.5, "value_buy": 1178},
+  "oficial_euro": {"value_avg": 1115, "value_sell": 1140, "value_buy": 1090},
+  "blue_euro": {"value_avg": 1300, "value_sell": 1320, "value_buy": 1280},
+  "last_update": "2026-10-16T08:06:30.456789-03:00"
+}
