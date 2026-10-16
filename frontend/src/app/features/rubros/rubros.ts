@@ -7,7 +7,6 @@ import {
   Injector,
   OnInit,
   afterNextRender,
-  computed,
   inject,
   signal,
 } from '@angular/core';
@@ -16,6 +15,7 @@ import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { AuthService } from '../../core/auth/auth.service';
 import { BarraAcciones } from '../../shared/barra-acciones';
 import { Confirmacion } from '../../shared/confirmacion';
+import { FilasElegibles } from '../../shared/filas-elegibles';
 import { Rubro, RubroRequest } from './rubro.models';
 import { RubrosService } from './rubros.service';
 
@@ -43,9 +43,8 @@ export class Rubros implements OnInit {
   protected readonly auth = inject(AuthService);
 
   protected readonly rubros = signal<Rubro[]>([]);
-  /** Fila elegida en la grilla: la barra actúa sobre ella. */
-  protected readonly elegidoId = signal<number | null>(null);
-  protected readonly elegido = computed(() => this.rubros().find((r) => r.id === this.elegidoId()) ?? null);
+  /** Fila elegida en la grilla (solo el Dueño, que es quien tiene acciones): la barra actúa sobre ella; Enter edita. */
+  protected readonly filas = new FilasElegibles(this.rubros, () => this.auth.esDueno(), (r) => this.editar(r));
   protected readonly cargando = signal(true);
   /** La lista no se pudo traer: se avisa con Reintentar en lugar de «Todavía no hay rubros». */
   protected readonly cargaFallida = signal(false);
@@ -125,10 +124,10 @@ export class Rubros implements OnInit {
   }
 
   /** Editar (barra, Enter o doble clic): precarga el rubro en el formulario de al lado. */
-  protected editar(rubro: Rubro | null = this.elegido()): void {
+  protected editar(rubro: Rubro | null = this.filas.elegido()): void {
     if (!rubro || !this.auth.esDueno()) return;
     this.aviso.set(null);
-    this.elegidoId.set(rubro.id);
+    this.filas.elegidoId.set(rubro.id);
     this.editando.set(rubro);
     this.form.reset({ nombre: rubro.nombre, margenPorcentaje: rubro.margenPorcentaje });
     this.error.set(null);
@@ -144,32 +143,6 @@ export class Rubros implements OnInit {
     this.aviso.set(null);
     this.cancelar();
     this.enfocar('#nombre');
-  }
-
-  /** Clic o foco en una fila: la elige (solo el Dueño, que es quien tiene acciones). */
-  protected elegir(rubro: Rubro): void {
-    if (this.auth.esDueno()) this.elegidoId.set(rubro.id);
-  }
-
-  /** La fila que entra en el orden de Tab: la elegida o, si no hay, la primera. */
-  protected esFilaTabulable(rubro: Rubro, indice: number): boolean {
-    return this.elegido() ? rubro.id === this.elegidoId() : indice === 0;
-  }
-
-  /** ↑/↓ mueven la elección y el foco; Enter edita. */
-  protected alTeclearFila(evento: KeyboardEvent, rubro: Rubro, indice: number): void {
-    if (!this.auth.esDueno()) return;
-    if (evento.key === 'Enter') {
-      evento.preventDefault();
-      this.editar(rubro);
-      return;
-    }
-    const paso = evento.key === 'ArrowDown' ? 1 : evento.key === 'ArrowUp' ? -1 : 0;
-    if (paso === 0) return;
-    evento.preventDefault();
-    const destino = Math.min(Math.max(indice + paso, 0), this.rubros().length - 1);
-    this.elegidoId.set(this.rubros()[destino].id);
-    this.enfocar(`tbody tr:nth-child(${destino + 1})`);
   }
 
   protected invalido(campo: 'nombre' | 'margenPorcentaje'): boolean {

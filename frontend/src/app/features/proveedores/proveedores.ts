@@ -7,6 +7,7 @@ import { AuthService } from '../../core/auth/auth.service';
 import { normalizarCuit, validarCuit } from '../../core/formato/cuit';
 import { BarraAcciones } from '../../shared/barra-acciones';
 import { Confirmacion } from '../../shared/confirmacion';
+import { FilasElegibles } from '../../shared/filas-elegibles';
 import { Proveedor, ProveedorRequest } from './proveedor.models';
 import { ProveedoresService } from './proveedores.service';
 
@@ -27,11 +28,8 @@ export class Proveedores implements OnInit {
   protected readonly auth = inject(AuthService);
 
   protected readonly proveedores = signal<Proveedor[]>([]);
-  /** Fila elegida en la grilla: la barra actúa sobre ella. */
-  protected readonly elegidoId = signal<number | null>(null);
-  protected readonly elegido = computed(
-    () => this.proveedores().find((p) => p.id === this.elegidoId()) ?? null,
-  );
+  /** Fila elegida en la grilla (solo el Dueño, que es quien tiene acciones): la barra actúa sobre ella; Enter edita. */
+  protected readonly filas = new FilasElegibles(this.proveedores, () => this.auth.esDueno(), (p) => this.editar(p));
   protected readonly cargando = signal(true);
   /** La lista no se pudo traer: se avisa con Reintentar en lugar de «Todavía no hay proveedores». */
   protected readonly cargaFallida = signal(false);
@@ -107,10 +105,10 @@ export class Proveedores implements OnInit {
   }
 
   /** Editar (barra, Enter o doble clic): precarga el proveedor en el formulario de al lado. */
-  protected editar(proveedor: Proveedor | null = this.elegido()): void {
+  protected editar(proveedor: Proveedor | null = this.filas.elegido()): void {
     if (!proveedor || !this.auth.esDueno()) return;
     this.limpiarMensajes();
-    this.elegidoId.set(proveedor.id);
+    this.filas.elegidoId.set(proveedor.id);
     this.editandoId.set(proveedor.id);
     this.form.reset({ nombre: proveedor.nombre, cuit: proveedor.cuit ?? '' });
   }
@@ -127,33 +125,7 @@ export class Proveedores implements OnInit {
   }
 
   protected pedirBaja(): void {
-    this.aDarDeBaja.set(this.elegido());
-  }
-
-  /** Clic o foco en una fila: la elige (solo el Dueño, que es quien tiene acciones). */
-  protected elegir(proveedor: Proveedor): void {
-    if (this.auth.esDueno()) this.elegidoId.set(proveedor.id);
-  }
-
-  /** La fila que entra en el orden de Tab: la elegida o, si no hay, la primera. */
-  protected esFilaTabulable(proveedor: Proveedor, indice: number): boolean {
-    return this.elegido() ? proveedor.id === this.elegidoId() : indice === 0;
-  }
-
-  /** ↑/↓ mueven la elección y el foco; Enter edita. */
-  protected alTeclearFila(evento: KeyboardEvent, proveedor: Proveedor, indice: number): void {
-    if (!this.auth.esDueno()) return;
-    if (evento.key === 'Enter') {
-      evento.preventDefault();
-      this.editar(proveedor);
-      return;
-    }
-    const paso = evento.key === 'ArrowDown' ? 1 : evento.key === 'ArrowUp' ? -1 : 0;
-    if (paso === 0) return;
-    evento.preventDefault();
-    const destino = Math.min(Math.max(indice + paso, 0), this.proveedores().length - 1);
-    this.elegidoId.set(this.proveedores()[destino].id);
-    this.enfocar(`tbody tr:nth-child(${destino + 1})`);
+    this.aDarDeBaja.set(this.filas.elegido());
   }
 
   protected invalido(campo: 'nombre' | 'cuit'): boolean {
@@ -178,7 +150,7 @@ export class Proveedores implements OnInit {
     });
   }
 
-  protected reactivar(proveedor: Proveedor | null = this.elegido()): void {
+  protected reactivar(proveedor: Proveedor | null = this.filas.elegido()): void {
     if (!proveedor) return;
     this.limpiarMensajes();
     this.service.reactivar(proveedor.id).subscribe({

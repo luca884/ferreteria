@@ -1,6 +1,6 @@
 import { DecimalPipe } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
-import { Component, ElementRef, Injector, OnInit, afterNextRender, computed, inject, signal } from '@angular/core';
+import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule } from '@angular/forms';
 import { ActivatedRoute, Params, Router, RouterLink } from '@angular/router';
 import { PageResponse } from '../../core/api/page.models';
@@ -10,6 +10,7 @@ import { MontoPipe } from '../../core/formato/monto';
 import { cantidadConUnidad } from '../../core/formato/unidad';
 import { BarraAcciones } from '../../shared/barra-acciones';
 import { Confirmacion } from '../../shared/confirmacion';
+import { FilasElegibles } from '../../shared/filas-elegibles';
 import { ALICUOTA_IVA_LABELS, AjusteStockResponse, Articulo } from './articulo.models';
 import { ArticulosService } from './articulos.service';
 import { DialogoAjusteStock } from './dialogo-ajuste-stock';
@@ -35,8 +36,6 @@ export class Articulos implements OnInit {
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
   private readonly avisos = inject(Avisos);
-  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
-  private readonly injector = inject(Injector);
   protected readonly auth = inject(AuthService);
 
   protected readonly alicuotaLabels = ALICUOTA_IVA_LABELS;
@@ -50,10 +49,11 @@ export class Articulos implements OnInit {
   /** Búsqueda ya aplicada: la que se manda al servidor, no lo que se está tipeando. */
   protected readonly busquedaAplicada = signal('');
   protected readonly incluirInactivos = signal(false);
-  /** Fila elegida (por id, para que siga elegida si la página se recarga y el artículo sigue ahí). */
-  protected readonly elegidoId = signal<number | null>(null);
-  protected readonly elegido = computed(
-    () => this.pagina()?.items.find((a) => a.id === this.elegidoId()) ?? null,
+  /** Fila elegida en la página (solo el Dueño, que es quien tiene acciones): la barra actúa sobre ella; Enter edita. */
+  protected readonly filas = new FilasElegibles(
+    computed(() => this.pagina()?.items ?? []),
+    () => this.auth.esDueno(),
+    (a) => this.editar(a),
   );
   /** Artículo que se está por dar de baja (diálogo de confirmación abierto). */
   protected readonly aDarDeBaja = signal<Articulo | null>(null);
@@ -99,44 +99,14 @@ export class Articulos implements OnInit {
     if (actual && actual.page + 1 < actual.totalPages) this.cargar(actual.page + 1);
   }
 
-  /** Clic o foco en una fila: la elige (solo el Dueño, que es quien tiene acciones). */
-  protected elegir(articulo: Articulo): void {
-    if (this.auth.esDueno()) this.elegidoId.set(articulo.id);
-  }
-
-  /** La fila que entra en el orden de Tab: la elegida o, si no hay, la primera. */
-  protected esFilaTabulable(articulo: Articulo, indice: number): boolean {
-    return this.elegido() ? articulo.id === this.elegidoId() : indice === 0;
-  }
-
-  /** ↑/↓ mueven la elección y el foco; Enter abre Editar. */
-  protected alTeclearFila(evento: KeyboardEvent, articulo: Articulo, indice: number): void {
-    if (!this.auth.esDueno()) return;
-    if (evento.key === 'Enter') {
-      evento.preventDefault();
-      this.editar(articulo);
-      return;
-    }
-    const paso = evento.key === 'ArrowDown' ? 1 : evento.key === 'ArrowUp' ? -1 : 0;
-    if (paso === 0) return;
-    evento.preventDefault();
-    const items = this.pagina()?.items ?? [];
-    const destino = Math.min(Math.max(indice + paso, 0), items.length - 1);
-    this.elegidoId.set(items[destino].id);
-    afterNextRender(
-      () => this.host.nativeElement.querySelectorAll<HTMLElement>('tbody tr')[destino]?.focus(),
-      { injector: this.injector },
-    );
-  }
-
   /** Editar (barra, Enter o doble clic): la dirección del listado viaja al formulario para poder volver. */
-  protected editar(articulo: Articulo | null = this.elegido()): void {
+  protected editar(articulo: Articulo | null = this.filas.elegido()): void {
     if (!articulo || !this.auth.esDueno()) return;
     void this.router.navigate(['/articulos', articulo.id], { queryParamsHandling: 'preserve' });
   }
 
   protected pedirBaja(): void {
-    this.aDarDeBaja.set(this.elegido());
+    this.aDarDeBaja.set(this.filas.elegido());
   }
 
   protected desactivar(): void {
@@ -153,7 +123,7 @@ export class Articulos implements OnInit {
   }
 
   protected reactivar(): void {
-    const articulo = this.elegido();
+    const articulo = this.filas.elegido();
     if (!articulo) return;
     this.limpiarMensajes();
     this.service.reactivar(articulo.id).subscribe({
@@ -168,7 +138,7 @@ export class Articulos implements OnInit {
   }
 
   protected ajustarStock(): void {
-    const articulo = this.elegido();
+    const articulo = this.filas.elegido();
     if (!articulo?.activo) return;
     this.limpiarMensajes();
     this.aAjustar.set(articulo);

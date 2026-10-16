@@ -7,13 +7,13 @@
       </svg>
       Nuevo
     </button>
-    <button type="button" class="accion-barra editar" [disabled]="!elegido()" (click)="editar()">
+    <button type="button" class="accion-barra editar" [disabled]="!filas.elegido()" (click)="editar()">
       <svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
         <path d="M3 13l1-3 7-7 2 2-7 7z" />
       </svg>
       Editar
     </button>
-    @if (elegido()?.activo === false) {
+    @if (filas.elegido()?.activo === false) {
       <button type="button" class="accion-barra reactivar" (click)="reactivar()">
         <svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
           <path d="M3 8a5 5 0 1 0 1.5-3.5M3 2.5V5h2.5" />
@@ -21,7 +21,7 @@
         Reactivar
       </button>
     } @else {
-      <button type="button" class="accion-barra peligro desactivar" [disabled]="!elegido()" (click)="pedirBaja()">
+      <button type="button" class="accion-barra peligro desactivar" [disabled]="!filas.elegido()" (click)="pedirBaja()">
         <svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
           <path d="M3 4h10M6 4V2.5h4V4M4.5 4l.7 9.5h5.6l.7-9.5" />
         </svg>
@@ -90,12 +90,12 @@
                 [class.editando]="proveedor.id === editandoId()"
                 [class.inactivo]="!proveedor.activo"
                 [class.elegible]="auth.esDueno()"
-                [attr.aria-selected]="auth.esDueno() ? proveedor.id === elegidoId() : null"
-                [attr.tabindex]="auth.esDueno() ? (esFilaTabulable(proveedor, i) ? 0 : -1) : null"
-                (click)="elegir(proveedor)"
-                (focus)="elegir(proveedor)"
+                [attr.aria-selected]="auth.esDueno() ? proveedor.id === filas.elegidoId() : null"
+                [attr.tabindex]="auth.esDueno() ? (filas.esTabulable(proveedor, i) ? 0 : -1) : null"
+                (click)="filas.elegir(proveedor)"
+                (focus)="filas.elegir(proveedor)"
                 (dblclick)="editar(proveedor)"
-                (keydown)="alTeclearFila($event, proveedor, i)"
+                (keydown)="filas.alTeclear($event, proveedor, i)"
               >
                 <td class="nombre">
                   {{ proveedor.nombre }}
@@ -115,7 +115,7 @@
             · {{ deBaja() }} de baja
           }</span
         >
-        @if (elegido(); as actual) {
+        @if (filas.elegido(); as actual) {
           <span class="elegido">· Elegido: <strong>{{ actual.nombre }}</strong> · Enter edita</span>
         }
       </p>
