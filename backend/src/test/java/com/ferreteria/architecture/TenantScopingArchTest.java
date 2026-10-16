@@ -1,5 +1,6 @@
 package com.ferreteria.architecture;
 
+import com.ferreteria.catalogo.repository.ImportacionListaRepository;
 import com.ferreteria.catalogo.service.RecalculoDiarioJob;
 import com.ferreteria.cotizacion.model.Cotizacion;
 import com.ferreteria.cotizacion.repository.ConfiguracionCotizacionRepository;
@@ -15,6 +16,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.Set;
 
+import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.classes;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noFields;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noMethods;
@@ -92,6 +94,34 @@ class TenantScopingArchTest {
                 .should().beAnnotatedWith(UnscopedTenantAccess.class)
                 .check(clases);
         noMethods().that().areDeclaredIn(RecalculoDiarioJob.class)
+                .should().beAnnotatedWith(UnscopedTenantAccess.class)
+                .check(clases);
+    }
+
+    // ---- Importacion flexible (R-132): los repositorios del catalogo son todos de tenant y no hay excepciones ----
+
+    @Test
+    void todosLosRepositoriosDelCatalogoSonDeTenant() {
+        classes().that().resideInAPackage("com.ferreteria.catalogo.repository..")
+                .and().areInterfaces()
+                .should().beAssignableTo(TenantScopedRepository.class)
+                .check(clases);
+    }
+
+    @Test
+    void elRepositorioDeImportacionesNoDeclaraFindersSinScope() {
+        assertThat(TenantScopedRepository.class).isAssignableFrom(ImportacionListaRepository.class);
+        assertThat(ImportacionListaRepository.class.getDeclaredMethods())
+                .isNotEmpty()
+                .noneMatch(m -> FINDERS_SIN_SCOPE.contains(m.getName()));
+    }
+
+    @Test
+    void nadaDelCatalogoUsaUnscopedTenantAccess() {
+        noClasses().that().resideInAPackage("com.ferreteria.catalogo..")
+                .should().beAnnotatedWith(UnscopedTenantAccess.class)
+                .check(clases);
+        noMethods().that().areDeclaredInClassesThat().resideInAPackage("com.ferreteria.catalogo..")
                 .should().beAnnotatedWith(UnscopedTenantAccess.class)
                 .check(clases);
     }
