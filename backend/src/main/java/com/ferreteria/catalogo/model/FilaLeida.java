@@ -2,11 +2,19 @@ package com.ferreteria.catalogo.model;
 
 import java.util.List;
 
-/** Una fila de la lista con su numero original (1-based: fila de Excel o registro del CSV). */
-public record FilaLeida(int numero, List<Celda> celdas) {
+/**
+ * Una fila de la lista con su numero original (1-based: fila de Excel o registro del CSV) y la hoja de la que sale
+ * (base 0; un CSV tiene una sola, la 0).
+ */
+public record FilaLeida(int hoja, int numero, List<Celda> celdas) {
 
     public FilaLeida {
         celdas = List.copyOf(celdas);
+    }
+
+    /** Una fila de la hoja 0. */
+    public FilaLeida(int numero, List<Celda> celdas) {
+        this(0, numero, celdas);
     }
 
     /** La celda en la columna {@code indice} (0-based); fuera de rango es {@link Celda#VACIA}. */

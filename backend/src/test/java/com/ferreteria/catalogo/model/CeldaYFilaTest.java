@@ -65,6 +65,71 @@ class CeldaYFilaTest {
         assertThat(lectura.filas()).containsExactly(fila);
     }
 
+    // ---- varias hojas (corte 2) ----
+
+    @Test
+    @DisplayName("FilaLeida(hoja, numero, celdas) expone la hoja; el constructor viejo la deja en 0")
+    void filaConHoja() {
+        FilaLeida deLaTercera = new FilaLeida(2, 7, List.of(new Celda("x", null)));
+        FilaLeida vieja = new FilaLeida(7, List.of(new Celda("x", null)));
+
+        assertThat(deLaTercera.hoja()).isEqualTo(2);
+        assertThat(deLaTercera.numero()).isEqualTo(7);
+        assertThat(deLaTercera.celda(0).texto()).isEqualTo("x");
+        assertThat(vieja.hoja()).isZero();
+        assertThat(vieja.numero()).isEqualTo(7);
+    }
+
+    @Test
+    @DisplayName("AvisoDeFila(hoja, fila, codigo, mensaje) expone la hoja; el constructor viejo la deja en null")
+    void avisoConHoja() {
+        AvisoDeFila conHoja = new AvisoDeFila(3, 57, "A-1", "Falta el costo");
+        AvisoDeFila viejo = new AvisoDeFila(57, "A-1", "Falta el costo");
+
+        assertThat(conHoja.hoja()).isEqualTo(3);
+        assertThat(conHoja.fila()).isEqualTo(57);
+        assertThat(conHoja.codigo()).isEqualTo("A-1");
+        assertThat(conHoja.mensaje()).isEqualTo("Falta el costo");
+        assertThat(viejo.hoja()).isNull();
+        assertThat(viejo.fila()).isEqualTo(57);
+        assertThat(viejo.mensaje()).isEqualTo("Falta el costo");
+    }
+
+    @Test
+    @DisplayName("Celda trae porcentaje (false por defecto) sin romper los constructores existentes")
+    void celdaConPorcentaje() {
+        Celda comun = new Celda("0.21", new BigDecimal("0.21"));
+        Celda conFormatoPorcentaje = new Celda("0.21", new BigDecimal("0.21"), true);
+
+        assertThat(comun.porcentaje()).isFalse();
+        assertThat(conFormatoPorcentaje.porcentaje()).isTrue();
+        assertThat(conFormatoPorcentaje.numero()).isEqualByComparingTo("0.21");
+        assertThat(Celda.VACIA.porcentaje()).isFalse();
+        assertThat(new Celda(null, null, true).texto()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("una celda con formato porcentaje y sin valor sigue estando vacia")
+    void celdaPorcentajeVacia() {
+        assertThat(new Celda("", null, true).vacia()).isTrue();
+        assertThat(new Celda("21 %", null, false).vacia()).isFalse();
+    }
+
+    @Test
+    @DisplayName("LecturaLista lleva las filas de todas las hojas y se puede pedir las de una")
+    void lecturaConVariasHojas() {
+        FilaLeida primera = new FilaLeida(0, 1, List.of(new Celda("a", null)));
+        FilaLeida segunda = new FilaLeida(1, 1, List.of(new Celda("b", null)));
+        FilaLeida otraDeLaSegunda = new FilaLeida(1, 4, List.of(new Celda("c", null)));
+        LecturaLista lectura = new LecturaLista(List.of("TORNILLOS", "TUERCAS"),
+            List.of(primera, segunda, otraDeLaSegunda));
+
+        assertThat(lectura.filas()).containsExactly(primera, segunda, otraDeLaSegunda);
+        assertThat(lectura.filasDeHoja(0)).containsExactly(primera);
+        assertThat(lectura.filasDeHoja(1)).containsExactly(segunda, otraDeLaSegunda);
+        assertThat(lectura.filasDeHoja(2)).isEmpty();
+    }
+
     @Test
     @DisplayName("ArchivoLista quita la ruta del nombre, con barras comunes e invertidas")
     void archivoSinRuta() {

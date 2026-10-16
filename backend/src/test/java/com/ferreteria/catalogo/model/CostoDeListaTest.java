@@ -83,4 +83,55 @@ class CostoDeListaTest {
         assertThatThrownBy(() -> CostoDeLista.costo(null, AlicuotaIva.IVA_21, false, Bonificaciones.NINGUNA))
             .isInstanceOf(NullPointerException.class);
     }
+
+    // ---- ajustes del articulo (descuentos y recargos, decision 15) ----
+
+    private static Ajustes ajustes(String a1, String a2, String a3) {
+        return new Ajustes(valor(a1), valor(a2), valor(a3));
+    }
+
+    @ParameterizedTest(name = "lista {0} {1} incluyeIva={2} bonif {3}/{4}/{5} ajustes {6}/{7}/{8} -> {9}")
+    @CsvSource(delimiter = '|', nullValues = "-", value = {
+        // precio | alicuota | incluyeIva | b1 | b2 | b3 | a1 | a2 | a3 | costo
+        "1000 | IVA_21 | false | 10 | -  | - | -5 | 3  | -  | 880.65",
+        "1000 | IVA_21 | false | -  | -  | - | -5 | -  | -  | 950.00",
+        "1000 | IVA_21 | false | 10 | -  | - | -5 | -  | -  | 855.00",
+        "1210 | IVA_21 | true  | -  | -  | - | -10 | - | -  | 900.00",
+        "1000 | IVA_21 | false | -  | -  | - | 3  | 3  | -  | 1060.90",
+        "1000 | IVA_21 | false | -  | -  | - | 3.5 | - | -  | 1035.00",
+        "100.10 | IVA_21 | false | -  | -  | - | 3.5 | - | -  | 103.60",
+        "1 | IVA_21 | false | -  | -  | - | 0.5 | - | -  | 1.01",
+        "1532.4361 | IVA_21 | false | -  | -  | - | - | - | -  | 1532.44",
+        "1000 | IVA_21 | false | -  | -  | - | - | - | -5 | 950.00",
+        "1000 | IVA_21 | false | 40 | 10 | 10 | -5 | 3 | 1000 | 5231.06",
+    })
+    @DisplayName("tabla de costos con ajustes")
+    void tablaConAjustes(String precio, AlicuotaIva alicuota, boolean incluyeIva, String b1, String b2, String b3,
+                         String a1, String a2, String a3, String esperado) {
+        BigDecimal costo = CostoDeLista.costo(new BigDecimal(precio.trim()), alicuota, incluyeIva,
+            bonif(b1, b2, b3), ajustes(a1, a2, a3));
+
+        assertThat(costo).isEqualTo(new BigDecimal(esperado.trim()));
+        assertThat(costo.scale()).isEqualTo(2);
+    }
+
+    @Test
+    @DisplayName("el ajuste va despues de las bonificaciones y con una sola division: 1.000 x 0,90 x 0,95 x 1,03")
+    void unaSolaDivisionConAjustes() {
+        BigDecimal costo = CostoDeLista.costo(new BigDecimal("1000"), AlicuotaIva.IVA_21, false,
+            bonif("10", null, null), ajustes("-5", "3", null));
+
+        assertThat(costo).isEqualTo(new BigDecimal("880.65"));
+    }
+
+    @Test
+    @DisplayName("Ajustes.NINGUNO y ajustes null dan lo mismo que la firma sin ajustes")
+    void ningunoEquivaleALaFirmaVieja() {
+        BigDecimal sinAjustes = CostoDeLista.costo(new BigDecimal("10.05"), AlicuotaIva.IVA_21, false, bonif("10", "10", null));
+
+        assertThat(CostoDeLista.costo(new BigDecimal("10.05"), AlicuotaIva.IVA_21, false, bonif("10", "10", null),
+            Ajustes.NINGUNO)).isEqualTo(sinAjustes).isEqualTo(new BigDecimal("8.14"));
+        assertThat(CostoDeLista.costo(new BigDecimal("10.05"), AlicuotaIva.IVA_21, false, bonif("10", "10", null),
+            null)).isEqualTo(sinAjustes);
+    }
 }

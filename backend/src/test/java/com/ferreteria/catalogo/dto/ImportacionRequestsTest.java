@@ -1,16 +1,22 @@
 package com.ferreteria.catalogo.dto;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.ferreteria.catalogo.model.Bonificaciones;
 import com.ferreteria.catalogo.model.ConteosImportacion;
 import com.ferreteria.catalogo.model.MapeoLista;
+import com.ferreteria.catalogo.model.Moneda;
 import jakarta.validation.ConstraintViolation;
 import jakarta.validation.Validation;
 import jakarta.validation.Validator;
 import jakarta.validation.ValidatorFactory;
 import jakarta.validation.groups.Default;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.exc.InvalidFormatException;
 import java.math.BigDecimal;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
@@ -19,6 +25,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.springframework.http.converter.json.Jackson2ObjectMapperBuilder;
 
 /** Validacion de los pedidos de importacion (la parte "datos" del multipart), sin Spring. */
 class ImportacionRequestsTest {
@@ -149,6 +156,161 @@ class ImportacionRequestsTest {
         void aMapeoLista() {
             assertThat(new MapeoRequest(1, 3, 4, 5, 6).toMapeo()).isEqualTo(new MapeoLista(1, 3, 4, 5, 6, null));
             assertThat(new MapeoRequest(0, 2, 0, null, 2).toMapeo().columnaDescripcion()).isNull();
+        }
+    }
+
+    /** Como lo arma Spring MVC: sin fallar por propiedades desconocidas. */
+    private static final ObjectMapper JSON_DE_SPRING = Jackson2ObjectMapperBuilder.json().build();
+
+    /** Mapeo del corte 2: hoja 0, datos desde la 2, codigo 0, descripcion 1, costo 2 y los campos nuevos. */
+    private static MapeoRequest ampliado(List<Integer> hojas, Integer columnaMoneda, Moneda monedaFija,
+                                         Integer sinIva, Integer conIva, Integer iva,
+                                         Integer ajuste1, Integer ajuste2, Integer ajuste3,
+                                         Integer barras, Integer unidad, Integer rubro) {
+        return new MapeoRequest(0, 2, 0, 1, 2, hojas, columnaMoneda, monedaFija, sinIva, conIva, iva,
+                ajuste1, ajuste2, ajuste3, barras, unidad, rubro);
+    }
+
+    @Nested
+    @DisplayName("MapeoRequest del corte 2")
+    class MapeoAmpliado {
+
+        @Test
+        @DisplayName("el cuerpo viejo, sin hojas ni campos nuevos, es valido y llega al mapeo con todo en null")
+        void cuerpoViejo() throws Exception {
+            MapeoRequest pedido = JSON_DE_SPRING.readValue(
+                    "{\"hoja\":0,\"filaDesde\":2,\"columnaCodigo\":0,\"columnaDescripcion\":1,\"columnaCosto\":2}",
+                    MapeoRequest.class);
+
+            assertThat(errores(pedido)).isEmpty();
+            assertThat(pedido.toMapeo()).isEqualTo(new MapeoLista(0, 2, 0, 1, 2, null));
+        }
+
+        @Test
+        @DisplayName("un mapeo completo con todos los campos nuevos es valido y se copia entero al MapeoLista")
+        void completo() {
+            MapeoRequest pedido = ampliado(List.of(0, 2), 4, null, 7, 8, 9, 10, 11, 12, 13, 14, 15);
+
+            assertThat(errores(pedido)).isEmpty();
+            assertThat(pedido.toMapeo()).isEqualTo(new MapeoLista(0, 2, 0, 1, 2, null, List.of(0, 2), 4, null, 7, 8, 9,
+                    10, 11, 12, 13, 14, 15));
+        }
+
+        @Test
+        @DisplayName("la moneda fija viaja al mapeo")
+        void monedaFija() {
+            MapeoRequest pedido = ampliado(null, null, Moneda.USD, null, null, null, null, null, null, null, null, null);
+
+            assertThat(errores(pedido)).isEmpty();
+            assertThat(pedido.toMapeo().monedaFija()).isEqualTo(Moneda.USD);
+        }
+
+        @Test
+        @DisplayName("columna de moneda y moneda fija juntas: error en español")
+        void monedaColumnaYFija() {
+            MapeoRequest pedido = ampliado(null, 4, Moneda.USD, null, null, null, null, null, null, null, null, null);
+
+            assertThat(errores(pedido)).containsEntry("monedaUnica",
+                    "Elegí una columna de moneda o una moneda fija, no las dos.");
+        }
+
+        @Test
+        @DisplayName("moneda fija EUR no es una moneda: el cuerpo no se puede leer")
+        void monedaFijaEuro() {
+            assertThatThrownBy(() -> JSON_DE_SPRING.readValue(
+                    "{\"hoja\":0,\"filaDesde\":2,\"columnaCodigo\":0,\"columnaCosto\":2,\"monedaFija\":\"EUR\"}",
+                    MapeoRequest.class))
+                    .isInstanceOf(InvalidFormatException.class)
+                    .satisfies(e -> assertThat(((InvalidFormatException) e).getTargetType()).isEqualTo(Moneda.class));
+        }
+
+        @Test
+        @DisplayName("el costo sin IVA sin el con IVA, o al reves, es un error")
+        void parDeIvaIncompleto() {
+            String mensaje = "Para calcular el IVA elegí las dos columnas: el precio sin IVA y el precio con IVA.";
+
+            assertThat(errores(ampliado(null, null, null, 7, null, null, null, null, null, null, null, null)))
+                    .containsEntry("parDeIvaCompleto", mensaje);
+            assertThat(errores(ampliado(null, null, null, null, 8, null, null, null, null, null, null, null)))
+                    .containsEntry("parDeIvaCompleto", mensaje);
+            assertThat(errores(ampliado(null, null, null, 7, 8, null, null, null, null, null, null, null))).isEmpty();
+        }
+
+        @Test
+        @DisplayName("el costo sin IVA puede ser la misma columna que el costo")
+        void sinIvaIgualAlCosto() {
+            assertThat(errores(ampliado(null, null, null, 2, 8, null, null, null, null, null, null, null))).isEmpty();
+        }
+
+        @Test
+        @DisplayName("el costo sin IVA no puede repetir otra columna que no sea el costo")
+        void sinIvaRepetido() {
+            assertThat(errores(ampliado(null, null, null, 0, 8, null, null, null, null, null, null, null)))
+                    .containsKey("camposDistintos");
+            assertThat(errores(ampliado(null, null, null, 8, 8, null, null, null, null, null, null, null)))
+                    .containsKey("camposDistintos");
+        }
+
+        @Test
+        @DisplayName("columnas repetidas entre los campos nuevos o con los viejos: error")
+        void columnasRepetidas() {
+            Map<String, String> conMoneda = errores(
+                    ampliado(null, 1, null, null, null, null, null, null, null, null, null, null));
+            Map<String, String> ajustes = errores(
+                    ampliado(null, null, null, null, null, null, 10, 10, null, null, null, null));
+            Map<String, String> rubroConCosto = errores(
+                    ampliado(null, null, null, null, null, null, null, null, null, null, null, 2));
+
+            assertThat(conMoneda).containsEntry("camposDistintos", "Elegí columnas distintas para cada campo de la lista.");
+            assertThat(ajustes).containsKey("camposDistintos");
+            assertThat(rubroConCosto).containsKey("camposDistintos");
+        }
+
+        @Test
+        @DisplayName("si se repiten solo codigo, descripcion y costo, el error es el de siempre y no se duplica")
+        void soloLosViejos() {
+            Map<String, String> errores = errores(new MapeoRequest(0, 2, 2, 1, 2));
+
+            assertThat(errores).containsOnlyKeys("columnasDistintas");
+        }
+
+        @Test
+        @DisplayName("hojas con indices negativos o repetidos: error")
+        void hojasInvalidas() {
+            String mensaje = "Las hojas elegidas no son válidas: no pueden repetirse ni ser negativas.";
+
+            assertThat(errores(ampliado(List.of(0, -1), null, null, null, null, null, null, null, null, null, null, null)))
+                    .containsEntry("hojasValidas", mensaje);
+            assertThat(errores(ampliado(List.of(1, 1), null, null, null, null, null, null, null, null, null, null, null)))
+                    .containsEntry("hojasValidas", mensaje);
+            assertThat(errores(ampliado(List.of(0, 1, 69), null, null, null, null, null, null, null, null, null, null, null)))
+                    .isEmpty();
+        }
+
+        @Test
+        @DisplayName("los indices de las columnas nuevas no pueden ser negativos ni pasar de 255")
+        void indicesDeLasColumnasNuevas() {
+            Map<String, String> errores = errores(ampliado(null, -1, null, -1, 256, -2, -3, 256, -4, -5, -6, -7));
+
+            assertThat(errores).containsKeys("columnaMoneda", "columnaSinIva", "columnaConIva", "columnaIva",
+                    "columnaAjuste1", "columnaAjuste2", "columnaAjuste3", "columnaCodigoBarras", "columnaUnidad",
+                    "columnaRubro");
+            assertThat(errores.get("columnaIva")).isEqualTo("La columna del % de IVA no es válida.");
+        }
+
+        @Test
+        @DisplayName("un cuerpo con columnaStock o columnaMarca se ignora y no llega al mapeo")
+        void stockYMarcaSeIgnoran() throws Exception {
+            MapeoRequest pedido = JSON_DE_SPRING.readValue(
+                    "{\"hoja\":0,\"filaDesde\":2,\"columnaCodigo\":0,\"columnaDescripcion\":1,\"columnaCosto\":2,"
+                            + "\"columnaStock\":3,\"columnaMarca\":4}", MapeoRequest.class);
+
+            JsonNode mapeo = JSON_DE_SPRING.valueToTree(pedido.toMapeo());
+
+            assertThat(errores(pedido)).isEmpty();
+            assertThat(mapeo.has("columnaStock")).isFalse();
+            assertThat(mapeo.has("columnaMarca")).isFalse();
+            assertThat(pedido.toMapeo()).isEqualTo(new MapeoLista(0, 2, 0, 1, 2, null));
         }
     }
 
