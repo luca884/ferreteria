@@ -1,0 +1,93 @@
+package com.ferreteria.cotizacion;
+
+import com.ferreteria.cotizacion.model.ConfiguracionCotizacion;
+import com.ferreteria.cotizacion.model.Cotizacion;
+import com.ferreteria.cotizacion.repository.ConfiguracionCotizacionRepository;
+import com.ferreteria.cotizacion.repository.CotizacionRepository;
+import com.ferreteria.support.IntegrationTestBase;
+import com.ferreteria.tenant.TenantContext;
+import java.math.BigDecimal;
+import java.time.Instant;
+import java.util.function.Consumer;
+import org.junit.jupiter.api.AfterEach;
+import org.springframework.beans.factory.annotation.Autowired;
+
+/**
+ * Base de los tests de integracion de cotizacion. La base de datos se comparte entre clases y no se revierte, la tabla
+ * cotizacion es global y configuracion_cotizacion persiste: cada test siembra lo suyo y lo borra, con ferreterias y
+ * casas propias (los CUIT 30-745000xx y 30-741000xx son de este lote).
+ *
+ * <p>Las fechas se siembran con los repositorios (no con JDBC crudo) para que el huso horario sea el mismo que el de
+ * la aplicacion.
+ */
+public abstract class CotizacionTestBase extends IntegrationTestBase {
+
+    /** Hash de demo1234, el mismo de db/dev-data. */
+    protected static final String HASH_DEMO = "$2a$10$ElilOUcrECf1crPXSQ9j3eXlR8GWOg4usWY6nWK.XHsCTXJ.3Q4.i";
+
+    @Autowired
+    protected CotizacionRepository cotizaciones;
+
+    @Autowired
+    protected ConfiguracionCotizacionRepository configuraciones;
+
+    @AfterEach
+    protected void limpiarTenantDelTest() {
+        TenantContext.clear();
+    }
+
+    /** Crea la ferreteria (o reutiliza la del mismo CUIT) y devuelve su id. */
+    protected Long ferreteria(String cuit, String razonSocial) {
+        jdbc.update("insert into ferreteria (razon_social, cuit, condicion_iva) "
+                + "values (?, ?, 'RESPONSABLE_INSCRIPTO') on duplicate key update razon_social = razon_social",
+                razonSocial, cuit);
+        return jdbc.queryForObject("select id from ferreteria where cuit = ?", Long.class, cuit);
+    }
+
+    /** Crea un usuario (o reutiliza el del mismo email) de esa ferreteria con ese rol y devuelve su email. */
+    protected String usuario(Long ferreteriaId, String email, String rol) {
+        jdbc.update("insert into usuario (ferreteria_id, email, password_hash, nombre, rol) values (?, ?, ?, ?, ?) "
+                + "on duplicate key update nombre = nombre", ferreteriaId, email, HASH_DEMO, "Usuario " + email, rol);
+        return email;
+    }
+
+    /** Reemplaza la configuracion de la ferreteria por una por defecto con los cambios pedidos. */
+    protected ConfiguracionCotizacion configuracion(Long ferreteriaId, Consumer<ConfiguracionCotizacion> cambios) {
+        borrarConfiguracion(ferreteriaId);
+        TenantContext.setCurrentFerreteriaId(ferreteriaId);
+        try {
+            ConfiguracionCotizacion config = ConfiguracionCotizacion.porDefecto(ferreteriaId);
+            cambios.accept(config);
+            return configuraciones.saveAndFlush(config);
+        } finally {
+            TenantContext.clear();
+        }
+    }
+
+    protected void borrarConfiguracion(Long... ferreteriaIds) {
+        for (Long id : ferreteriaIds) {
+            jdbc.update("delete from configuracion_cotizacion where ferreteria_id = ?", id);
+        }
+    }
+
+    /** Guarda (o reemplaza) el ultimo valor de un tipo. */
+    protected void cotizacion(String moneda, String casa, String compra, String venta, Instant obtenidaEn) {
+        jdbc.update("delete from cotizacion where moneda = ? and casa = ?", moneda, casa);
+        cotizaciones.saveAndFlush(new Cotizacion(moneda, casa, "Prueba " + casa,
+                compra == null ? null : new BigDecimal(compra), venta == null ? null : new BigDecimal(venta),
+                "DOLARAPI", obtenidaEn, obtenidaEn));
+    }
+
+    protected void borrarCotizaciones(String prefijoDeCasa) {
+        jdbc.update("delete from cotizacion where casa like ?", prefijoDeCasa + "%");
+    }
+
+    protected ConfiguracionCotizacion configuracionDe(Long ferreteriaId) {
+        TenantContext.setCurrentFerreteriaId(ferreteriaId);
+        try {
+            return configuraciones.findPropiaScoped().orElseThrow();
+        } finally {
+            TenantContext.clear();
+        }
+    }
+}

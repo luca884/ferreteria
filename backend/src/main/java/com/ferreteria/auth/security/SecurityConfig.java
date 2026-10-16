@@ -43,6 +43,8 @@ public class SecurityConfig {
                         // Vale para la importacion de listas (CU-04) y la actualizacion masiva de precios (CU-05).
                         .requestMatchers("/api/importaciones/**").hasRole("DUENO")
                         .requestMatchers("/api/actualizacion-masiva/**").hasRole("DUENO")
+                        // La configuracion de cotizacion de la ferreteria es solo del Dueño.
+                        .requestMatchers("/api/configuracion-cotizacion/**").hasRole("DUENO")
                         .anyRequest().authenticated())
                 .exceptionHandling(e -> e
                         .authenticationEntryPoint((request, response, ex) -> {
