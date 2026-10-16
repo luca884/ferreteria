@@ -30,6 +30,7 @@ describe('Articulos', () => {
     rubroId: null,
     proveedorId: null,
     costo: 100,
+    moneda: 'ARS',
     margenPorcentaje: 35,
     alicuotaIva: 'IVA_21',
     precioFinal: 170,

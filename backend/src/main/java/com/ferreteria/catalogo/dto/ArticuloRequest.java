@@ -65,12 +65,13 @@ public record ArticuloRequest(
         Boolean activo,
 
         /**
-         * Moneda del costo: ARS o USD. null significa ARS. Un valor que no es de la enumeracion da 400 (lo resuelve el
-         * manejador global de errores). Cambiar la moneda NO convierte el costo: se toma tal cual en la moneda nueva.
+         * Moneda del costo: ARS o USD. null significa ARS en el alta y "conservar la moneda actual" en la edicion. Un
+         * valor que no es de la enumeracion da 400 (lo resuelve el manejador global de errores). Cambiar la moneda NO
+         * convierte el costo: se toma tal cual en la moneda nueva.
          */
         Moneda moneda) {
 
-    /** Pedido sin moneda: el articulo es en pesos. */
+    /** Pedido sin moneda: en el alta el articulo es en pesos; en la edicion conserva la que tenia. */
     public ArticuloRequest(
             String codigoInterno, String codigoBarras, String codigoProveedor, String descripcion, Long rubroId,
             Long proveedorId, BigDecimal costo, BigDecimal margenPorcentaje, AlicuotaIva alicuotaIva, Unidad unidad,
@@ -79,16 +80,20 @@ public record ArticuloRequest(
                 alicuotaIva, unidad, stockMinimo, ubicacion, activo, null);
     }
 
-    /** Para el alta: sin espacios sobrantes, textos en blanco como null y los defectos aplicados (activo = true). */
+    /**
+     * Para el alta: sin espacios sobrantes, textos en blanco como null y los defectos aplicados (activo = true,
+     * moneda = ARS).
+     */
     public DatosArticulo toDatos() {
-        return toDatos(true);
+        return toDatos(true, Moneda.ARS);
     }
 
     /**
-     * Para la edicion: igual que {@link #toDatos()}, pero si el pedido no trae activo se conserva el
-     * estado actual del articulo (un PUT sin activo no reactiva uno dado de baja).
+     * Para la edicion: igual que {@link #toDatos()}, pero si el pedido no trae activo ni moneda se conservan los
+     * actuales del articulo (un PUT sin activo no reactiva uno dado de baja y un PUT sin moneda no pasa a pesos uno
+     * que esta en dolares).
      */
-    public DatosArticulo toDatos(boolean activoActual) {
+    public DatosArticulo toDatos(boolean activoActual, Moneda monedaActual) {
         return new DatosArticulo(
                 codigoInterno == null ? null : codigoInterno.trim(),
                 blancoANull(codigoBarras),
@@ -103,7 +108,7 @@ public record ArticuloRequest(
                 stockMinimo == null ? BigDecimal.ZERO : stockMinimo,
                 blancoANull(ubicacion),
                 activo == null ? activoActual : activo,
-                moneda == null ? Moneda.ARS : moneda);
+                moneda == null ? monedaActual : moneda);
     }
 
     private static String blancoANull(String texto) {

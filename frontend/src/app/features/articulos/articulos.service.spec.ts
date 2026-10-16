@@ -45,6 +45,7 @@ describe('ArticulosService', () => {
     rubroId: null,
     proveedorId: null,
     costo: 100,
+    moneda: 'ARS',
     margenPorcentaje: null,
     alicuotaIva: 'IVA_21',
     unidad: 'UNIDAD',

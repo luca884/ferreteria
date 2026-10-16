@@ -29,7 +29,7 @@ export const MONEDA_LABELS: Record<Moneda, string> = {
   USD: 'Dólares (USD)',
 };
 
-/** La moneda del artículo; ARS si el backend no la manda (artículos de antes de la cotización). */
+/** La moneda del artículo; ARS si todavía no hay artículo (alta) o si por alguna razón no vino. */
 export function monedaDe(articulo: Pick<Articulo, 'moneda'> | null | undefined): Moneda {
   return articulo?.moneda ?? 'ARS';
 }
@@ -45,8 +45,8 @@ export interface Articulo {
   proveedorId: number | null;
   /** Sin IVA, en la moneda del artículo. */
   costo: number;
-  /** En qué moneda está el costo. Sin dato, ARS (ver `monedaDe`). */
-  moneda?: Moneda;
+  /** En qué moneda está el costo. */
+  moneda: Moneda;
   /** Porcentaje propio; null hereda el del rubro o el de la ferretería. */
   margenPorcentaje: number | null;
   alicuotaIva: AlicuotaIva;
@@ -101,8 +101,8 @@ export interface ArticuloRequest {
   rubroId: number | null;
   proveedorId: number | null;
   costo: number;
-  /** Sin dato el backend toma ARS. Cambiarla no convierte el costo: se carga de nuevo en la moneda nueva. */
-  moneda?: Moneda;
+  /** Siempre se manda: el backend conserva la actual si falta, pero el formulario la elige explícitamente. Cambiarla no convierte el costo. */
+  moneda: Moneda;
   margenPorcentaje: number | null;
   alicuotaIva: AlicuotaIva;
   unidad: Unidad;

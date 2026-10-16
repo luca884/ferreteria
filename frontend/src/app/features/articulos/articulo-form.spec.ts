@@ -46,6 +46,7 @@ describe('ArticuloForm', () => {
     rubroId: 1,
     proveedorId: 10,
     costo: 100,
+    moneda: 'ARS',
     margenPorcentaje: 35,
     alicuotaIva: 'IVA_10_5',
     precioFinal: 1234.5,

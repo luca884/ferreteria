@@ -23,6 +23,7 @@ describe('appConfig: locale es-AR', () => {
     rubroId: null,
     proveedorId: null,
     costo: 1234.5,
+    moneda: 'ARS',
     margenPorcentaje: 35.5,
     alicuotaIva: 'IVA_21',
     precioFinal: 170,

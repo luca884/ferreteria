@@ -6,7 +6,9 @@ import java.math.BigDecimal;
  * Campos editables de un articulo, ya normalizados por el servicio (sin espacios sobrantes y con
  * los textos en blanco convertidos en null). No incluye stock actual ni precio final.
  *
- * @param moneda moneda del costo; el precio final siempre se calcula y guarda en pesos
+ * @param moneda moneda del costo; el precio final siempre se calcula y guarda en pesos. Quien arma los datos de una
+ *               edicion resuelve la moneda ausente con la actual del articulo (ver {@code ArticuloRequest}); el null
+ *               que llega hasta aca solo es de un alta o de la importacion, y es pesos.
  */
 public record DatosArticulo(
         String codigoInterno,

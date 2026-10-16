@@ -998,15 +998,47 @@ class ArticuloServiceTest {
     }
 
     @Test
-    @DisplayName("un PUT sin moneda sobre un articulo en USD lo pasa a pesos (la moneda ausente significa ARS)")
-    void putSinMonedaEsPesos() throws Exception {
+    @DisplayName("un PUT sin moneda sobre un articulo en USD conserva USD: costo 10 y precio 15.730, sin tocar nada")
+    void putSinMonedaConservaUsd() throws Exception {
         configuracionPorDefecto();
+        dolar(true, "1000");
         Articulo articulo = existenteEnDolares(55L, "1000");
+        when(articuloRepository.findScoped(55L)).thenReturn(Optional.of(articulo));
+
+        ArticuloResponse respuesta = service.actualizar(55L, requestEn(null, "10", null), USUARIO);
+
+        assertThat(respuesta.moneda()).isEqualTo(Moneda.USD);
+        assertThat(respuesta.costo()).isEqualByComparingTo("10");
+        assertThat(respuesta.precioFinal()).isEqualByComparingTo("15730");
+        assertThat(articulo.getMoneda()).isEqualTo(Moneda.USD);
+        verifyNoInteractions(historialPrecioRepository);
+    }
+
+    @Test
+    @DisplayName("un PUT sin moneda sobre un articulo en USD con la cotizacion apagada tambien conserva USD (vigente congelado)")
+    void putSinMonedaConservaUsdConCotizacionApagada() throws Exception {
+        configuracionPorDefecto();
+        dolar(false, "1000");
+        Articulo articulo = existenteEnDolares(55L, "1000");
+        when(articuloRepository.findScoped(55L)).thenReturn(Optional.of(articulo));
+
+        ArticuloResponse respuesta = service.actualizar(55L, requestEn(null, "10", "40"), USUARIO);
+
+        assertThat(respuesta.moneda()).isEqualTo(Moneda.USD);
+        assertThat(respuesta.precioFinal()).isEqualByComparingTo("16940");
+    }
+
+    @Test
+    @DisplayName("un PUT sin moneda sobre un articulo en pesos sigue en pesos y no consulta el dolar")
+    void putSinMonedaSobreArticuloEnPesosSigueEnPesos() throws Exception {
+        configuracionPorDefecto();
+        Articulo articulo = existente(55L);
         when(articuloRepository.findScoped(55L)).thenReturn(Optional.of(articulo));
 
         ArticuloResponse respuesta = service.actualizar(55L, requestEn(null, "1000", null), USUARIO);
 
         assertThat(respuesta.moneda()).isEqualTo(Moneda.ARS);
         assertThat(respuesta.precioFinal()).isEqualByComparingTo("1580");
+        verifyNoInteractions(dolarDePrecios);
     }
 }

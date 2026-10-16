@@ -25,23 +25,31 @@ class ArticuloRequestTest {
     }
 
     @Test
-    @DisplayName("sin moneda el pedido es en pesos (el constructor de siempre y un null explicito)")
-    void sinMonedaEsArs() {
+    @DisplayName("en el alta, sin moneda el pedido es en pesos (el constructor de siempre y un null explicito)")
+    void sinMonedaEnElAltaEsArs() {
         ArticuloRequest sinCampo = new ArticuloRequest("TORN-001", null, null, "Tornillo", null, null, bd("10"), null,
                 null, Unidad.UNIDAD, null, null, null);
 
         assertThat(sinCampo.moneda()).isNull();
         assertThat(sinCampo.toDatos().moneda()).isEqualTo(Moneda.ARS);
         assertThat(pedido(null).toDatos().moneda()).isEqualTo(Moneda.ARS);
-        assertThat(pedido(null).toDatos(false).moneda()).isEqualTo(Moneda.ARS);
+    }
+
+    @Test
+    @DisplayName("en la edicion, sin moneda se conserva la que tenia el articulo (como activo): USD sigue USD y ARS sigue ARS")
+    void sinMonedaEnLaEdicionConservaLaActual() {
+        assertThat(pedido(null).toDatos(false, Moneda.USD).moneda()).isEqualTo(Moneda.USD);
+        assertThat(pedido(null).toDatos(true, Moneda.ARS).moneda()).isEqualTo(Moneda.ARS);
     }
 
     @Test
     @DisplayName("USD y ARS son validas y llegan tal cual a los datos del articulo, en el alta y en la edicion")
     void usdYArsSonValidas() {
         assertThat(pedido(Moneda.USD).toDatos().moneda()).isEqualTo(Moneda.USD);
-        assertThat(pedido(Moneda.USD).toDatos(false).moneda()).isEqualTo(Moneda.USD);
         assertThat(pedido(Moneda.ARS).toDatos().moneda()).isEqualTo(Moneda.ARS);
+        // Con moneda en el pedido manda el pedido, sea cual sea la actual.
+        assertThat(pedido(Moneda.USD).toDatos(false, Moneda.ARS).moneda()).isEqualTo(Moneda.USD);
+        assertThat(pedido(Moneda.ARS).toDatos(false, Moneda.USD).moneda()).isEqualTo(Moneda.ARS);
     }
 
     @Test

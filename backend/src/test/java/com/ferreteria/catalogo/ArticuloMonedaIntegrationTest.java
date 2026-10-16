@@ -306,6 +306,33 @@ class ArticuloMonedaIntegrationTest extends CotizacionTestBase {
                 .isEqualByComparingTo("17310");
     }
 
+    @Test
+    @DisplayName("un PUT sin moneda conserva la del articulo: uno en USD sigue en USD con costo 10 y precio 15.730; uno en pesos sigue en pesos")
+    void editarSinMonedaConservaLaActual() throws Exception {
+        ObjectNode usd = pedido(unico("SINMON"), "USD");
+        long idUsd = crear(duenoA, usd).get("id").asLong();
+        usd.remove("moneda");
+        usd.put("descripcion", "Editado sin moneda");
+
+        JsonNode editadoUsd = cuerpo(editar(duenoA, idUsd, usd).andExpect(status().isOk()));
+
+        assertThat(editadoUsd.get("moneda").asText()).isEqualTo("USD");
+        assertThat(editadoUsd.get("costo").decimalValue()).isEqualByComparingTo("10");
+        assertThat(editadoUsd.get("precioFinal").decimalValue()).isEqualByComparingTo("15730");
+        assertThat(monedaGuardada(idUsd)).isEqualTo("USD");
+        assertThat(precioDe(idUsd)).isEqualByComparingTo("15730");
+
+        ObjectNode pesos = pedido(unico("SINMONARS"), null);
+        long idPesos = crear(duenoA, pesos).get("id").asLong();
+        pesos.put("descripcion", "Editado sin moneda");
+
+        JsonNode editadoPesos = cuerpo(editar(duenoA, idPesos, pesos).andExpect(status().isOk()));
+
+        assertThat(editadoPesos.get("moneda").asText()).isEqualTo("ARS");
+        assertThat(editadoPesos.get("precioFinal").decimalValue()).isEqualByComparingTo("20");
+        assertThat(monedaGuardada(idPesos)).isEqualTo("ARS");
+    }
+
     // ---- T-037: aislamiento ----
 
     @Test

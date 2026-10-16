@@ -98,8 +98,8 @@ public class ArticuloService {
     @Transactional
     public ArticuloResponse actualizar(Long id, ArticuloRequest request, Long usuarioId) {
         Articulo articulo = buscar(id);
-        // Sin activo en el pedido se conserva el estado actual: un PUT no reactiva por omision.
-        DatosArticulo datos = request.toDatos(articulo.isActivo());
+        // Sin activo ni moneda en el pedido se conservan los actuales: un PUT no reactiva ni pasa a pesos por omision.
+        DatosArticulo datos = request.toDatos(articulo.isActivo(), articulo.getMoneda());
         validarUnicidad(datos, id);
         ContextoPrecio ctx = contextoDePrecio(datos, articulo.getMoneda() == Moneda.USD);
 
