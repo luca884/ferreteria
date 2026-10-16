@@ -13,14 +13,17 @@ import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import java.util.List;
 
 import static org.springframework.http.MediaType.MULTIPART_FORM_DATA_VALUE;
 
@@ -62,6 +65,13 @@ public class ImportacionController {
             @Valid @RequestPart("datos") AplicarRequest datos,
             @AuthenticationPrincipal AuthUser authUser) {
         return importacionService.aplicar(aArchivoLista(archivo), datos, authUser.userId());
+    }
+
+    /** El historial de importaciones de la ferreteria, la mas reciente primero; con {@code proveedorId}, las de ese proveedor. */
+    @GetMapping
+    @PreAuthorize("hasRole('DUENO')")
+    public List<ImportacionResponse> listar(@RequestParam(required = false) Long proveedorId) {
+        return importacionService.listar(proveedorId);
     }
 
     private static ArchivoLista aArchivoLista(MultipartFile archivo) {
