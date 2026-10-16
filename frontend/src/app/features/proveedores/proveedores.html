@@ -68,6 +68,11 @@
   <div class="principal">
     @if (cargando()) {
       <p class="ayuda estado-vacio">Cargando…</p>
+    } @else if (cargaFallida()) {
+      <div class="error con-accion" role="alert">
+        <span>No se pudieron cargar los proveedores.</span>
+        <button type="button" class="secundario chico reintentar" (click)="cargar()">Reintentar</button>
+      </div>
     } @else if (proveedores().length === 0) {
       <p class="ayuda estado-vacio">Todavía no hay proveedores.</p>
     } @else {

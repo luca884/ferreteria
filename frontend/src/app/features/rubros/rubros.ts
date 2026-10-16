@@ -47,6 +47,8 @@ export class Rubros implements OnInit {
   protected readonly elegidoId = signal<number | null>(null);
   protected readonly elegido = computed(() => this.rubros().find((r) => r.id === this.elegidoId()) ?? null);
   protected readonly cargando = signal(true);
+  /** La lista no se pudo traer: se avisa con Reintentar en lugar de «Todavía no hay rubros». */
+  protected readonly cargaFallida = signal(false);
   protected readonly error = signal<string | null>(null);
   protected readonly aviso = signal<string | null>(null);
   protected readonly guardando = signal(false);
@@ -213,15 +215,19 @@ export class Rubros implements OnInit {
     this.form.reset({ nombre: '', margenPorcentaje: MARGEN_INICIAL });
   }
 
-  private cargar(): void {
+  /** Carga la lista; también la usa Reintentar después de una carga fallida. */
+  protected cargar(): void {
+    this.cargando.set(true);
+    this.cargaFallida.set(false);
     this.service.listar().subscribe({
       next: (lista) => {
         this.rubros.set(lista);
         this.cargando.set(false);
       },
       error: () => {
+        this.rubros.set([]);
         this.cargando.set(false);
-        this.error.set('No se pudieron cargar los rubros.');
+        this.cargaFallida.set(true);
       },
     });
   }

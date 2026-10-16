@@ -33,6 +33,8 @@ export class Proveedores implements OnInit {
     () => this.proveedores().find((p) => p.id === this.elegidoId()) ?? null,
   );
   protected readonly cargando = signal(true);
+  /** La lista no se pudo traer: se avisa con Reintentar en lugar de «Todavía no hay proveedores». */
+  protected readonly cargaFallida = signal(false);
   protected readonly error = signal<string | null>(null);
   protected readonly aviso = signal<string | null>(null);
   /** Mensajes por campo de un 400 de validación del backend; si hay, se muestran en vez de `error`. */
@@ -226,15 +228,20 @@ export class Proveedores implements OnInit {
     this.form.reset({ nombre: '', cuit: '' });
   }
 
-  private cargar(): void {
+  /** Carga la lista; también la usa Reintentar después de una carga fallida. */
+  protected cargar(): void {
+    this.cargando.set(true);
+    this.cargaFallida.set(false);
     this.service.listar(this.incluirInactivos()).subscribe({
       next: (lista) => {
         this.proveedores.set(lista);
         this.cargando.set(false);
       },
       error: () => {
+        // La lista anterior no corresponde a la casilla de dados de baja que se acaba de cambiar.
+        this.proveedores.set([]);
         this.cargando.set(false);
-        this.error.set('No se pudieron cargar los proveedores.');
+        this.cargaFallida.set(true);
       },
     });
   }

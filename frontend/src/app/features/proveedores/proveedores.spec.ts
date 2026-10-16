@@ -164,6 +164,29 @@ describe('Proveedores', () => {
     expect(el().querySelector('[role="alert"]')?.textContent).toContain(
       'No se pudieron cargar los proveedores.',
     );
+    expect(el().textContent).not.toContain('Todavía no hay proveedores.');
+  });
+
+  it('Reintentar vuelve a pedir la lista después de una carga fallida', async () => {
+    await crearComponente(true);
+    servicio.listar.mockReturnValueOnce(throwError(() => errorHttp(500, 'Falló')));
+    (el().querySelector('#inactivos') as HTMLInputElement).click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    // La lista anterior no queda a la vista: no corresponde a la casilla marcada.
+    expect(filas()).toHaveLength(0);
+    expect(el().textContent).not.toContain('Todavía no hay proveedores.');
+
+    (el().querySelector('button.reintentar') as HTMLButtonElement).click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(servicio.listar).toHaveBeenLastCalledWith(true);
+    expect(el().textContent).not.toContain('No se pudieron cargar los proveedores.');
+    expect(filas()).toHaveLength(3);
   });
 
   describe('permisos', () => {

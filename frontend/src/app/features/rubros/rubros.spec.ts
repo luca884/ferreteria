@@ -23,9 +23,9 @@ describe('Rubros', () => {
   const errorHttp = (status: number, message: string) =>
     new HttpErrorResponse({ status, error: { status, message } });
 
-  async function crear(lista: Rubro[], dueno = false) {
+  async function crear(lista: Rubro[], dueno = false, listar = vi.fn(() => of(lista))) {
     servicio = {
-      listar: vi.fn(() => of(lista)),
+      listar,
       crear: vi.fn(),
       actualizar: vi.fn((id: number, r: { nombre: string; margenPorcentaje: number }) => of({ id, ...r })),
       articulosQueHeredan: vi.fn(() => of(23)),
@@ -117,6 +117,36 @@ describe('Rubros', () => {
     TestBed.resetTestingModule();
     await crear([buloneria]);
     expect(el().querySelector('.barra-estado')?.textContent?.trim()).toBe('1 rubro');
+  });
+
+  describe('carga fallida', () => {
+    const listarQueFalla = () =>
+      vi.fn().mockReturnValueOnce(throwError(() => errorHttp(500, 'Falló'))).mockReturnValue(of([buloneria]));
+
+    it('avisa que no se pudieron cargar, sin decir que no hay rubros', async () => {
+      await crear([], true, listarQueFalla());
+
+      expect(el().querySelector('[role="alert"]')?.textContent).toContain('No se pudieron cargar los rubros.');
+      expect(el().textContent).not.toContain('Todavía no hay rubros.');
+    });
+
+    it('Reintentar vuelve a pedir la lista y la muestra', async () => {
+      await crear([], true, listarQueFalla());
+
+      await clickEn('button.reintentar');
+
+      expect(servicio.listar).toHaveBeenCalledTimes(2);
+      expect(el().textContent).not.toContain('No se pudieron cargar los rubros.');
+      expect(filas()).toHaveLength(1);
+    });
+
+    it('escribir en el formulario no borra el aviso de carga fallida', async () => {
+      await crear([], true, listarQueFalla());
+
+      await escribir('nombre', 'Pinturas');
+
+      expect(el().querySelector('[role="alert"]')?.textContent).toContain('No se pudieron cargar los rubros.');
+    });
   });
 
   it('el Vendedor no ve el alta ni Editar, y las filas no se eligen', async () => {

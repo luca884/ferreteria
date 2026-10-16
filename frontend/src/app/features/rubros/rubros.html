@@ -29,6 +29,11 @@
   <div class="principal">
     @if (cargando()) {
       <p class="ayuda estado-vacio">Cargando…</p>
+    } @else if (cargaFallida()) {
+      <div class="error con-accion" role="alert">
+        <span>No se pudieron cargar los rubros.</span>
+        <button type="button" class="secundario chico reintentar" (click)="cargar()">Reintentar</button>
+      </div>
     } @else if (rubros().length === 0) {
       <p class="ayuda estado-vacio">Todavía no hay rubros.</p>
     } @else {
