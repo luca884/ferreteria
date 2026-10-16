@@ -1,0 +1,77 @@
+<app-barra-acciones>
+  <h1>Cotización</h1>
+</app-barra-acciones>
+
+@if (!auth.esDueno()) {
+  <p class="ayuda estado-vacio" role="status">Solo el Dueño puede configurar la cotización.</p>
+} @else {
+  <p class="ayuda">
+    Elegí qué cotizaciones se ven en el menú y en qué dólar se calculan los precios de los artículos cargados en dólares.
+  </p>
+
+  @if (aviso(); as mensaje) {
+    <p class="alerta exito" role="status">{{ mensaje }}</p>
+  }
+  @if (erroresGuardado().length > 0) {
+    <div class="error errores-campos" role="alert">
+      <strong>Revisá estos datos:</strong>
+      <ul>
+        @for (mensaje of erroresGuardado(); track $index) {
+          <li>{{ mensaje }}</li>
+        }
+      </ul>
+    </div>
+  } @else if (errorGuardado(); as mensaje) {
+    <p class="error" role="alert">{{ mensaje }}</p>
+  }
+
+  @if (cargando()) {
+    <p class="ayuda estado-vacio">Cargando…</p>
+  } @else if (cargaFallida()) {
+    <div class="error con-accion" role="alert">
+      <span>No se pudo cargar la configuración.</span>
+      <button type="button" class="secundario chico reintentar" (click)="cargar()">Reintentar</button>
+    </div>
+  } @else if (configuracion(); as actual) {
+    <div class="contenido">
+      <app-formulario-cotizacion
+        [configuracion]="actual"
+        [guardando]="guardando()"
+        (guardar)="guardar($event)"
+        (cambios)="hayCambios.set($event)"
+      />
+
+      <section class="recalculo panel" aria-labelledby="recalculo-titulo">
+        <h2 id="recalculo-titulo">Recalcular precios</h2>
+        <p class="vigente">{{ textoVigente(actual) }}</p>
+        <div class="recalculo-fila">
+          <p class="recalculo-texto">
+            El cambio se aplica en el próximo recálculo. Si no querés esperar, podés recalcular ahora.
+          </p>
+          <button
+            type="button"
+            class="primario recalcular"
+            [disabled]="recalculando() || motivoSinRecalculo() !== null"
+            [attr.aria-describedby]="motivoSinRecalculo() ? 'motivo-sin-recalculo' : null"
+            (click)="recalcular()"
+          >
+            @if (recalculando()) {
+              Recalculando…
+            } @else {
+              Recalcular ahora
+            }
+          </button>
+        </div>
+        @if (motivoSinRecalculo(); as motivo) {
+          <p id="motivo-sin-recalculo" class="pista">{{ motivo }}</p>
+        }
+        @if (resultado(); as mensaje) {
+          <p class="alerta exito resultado" role="status">{{ mensaje }}</p>
+        }
+        @if (errorRecalculo(); as mensaje) {
+          <p class="error" role="alert">{{ mensaje }}</p>
+        }
+      </section>
+    </div>
+  }
+}

@@ -7,6 +7,7 @@ import { inicioPorRol } from './core/auth/inicio-por-rol';
 import { ActualizacionMasiva } from './features/actualizacion-masiva/actualizacion-masiva';
 import { ArticuloForm } from './features/articulos/articulo-form';
 import { Articulos } from './features/articulos/articulos';
+import { PaginaConfiguracionCotizacion } from './features/configuracion-cotizacion/configuracion-cotizacion';
 import { Importaciones } from './features/importaciones/importaciones';
 import { Mostrador } from './features/mostrador/mostrador';
 import { Proveedores } from './features/proveedores/proveedores';
@@ -44,6 +45,24 @@ describe('rutas', () => {
     expect(masiva).toBeDefined();
     expect(masiva!.canActivate).toBeUndefined();
     expect(masiva!.canActivate).toEqual(importaciones!.canActivate);
+    expect(padre!.canActivate).toEqual([authGuard]);
+  });
+
+  it('la ruta configuracion/cotizacion carga la pantalla de configuración de cotización', async () => {
+    const ruta = hijas().find((r) => r.path === 'configuracion/cotizacion');
+
+    expect(ruta).toBeDefined();
+    expect(await (ruta!.loadComponent as () => Promise<unknown>)()).toBe(PaginaConfiguracionCotizacion);
+  });
+
+  it('configuracion/cotizacion no tiene guard propio, como las otras pantallas del Dueño: la pantalla le avisa al Vendedor', () => {
+    const padre = routes.find((r) => r.path === '');
+    const cotizacion = hijas().find((r) => r.path === 'configuracion/cotizacion');
+    const importaciones = hijas().find((r) => r.path === 'importaciones');
+
+    expect(cotizacion).toBeDefined();
+    expect(cotizacion!.canActivate).toBeUndefined();
+    expect(cotizacion!.canActivate).toEqual(importaciones!.canActivate);
     expect(padre!.canActivate).toEqual([authGuard]);
   });
 
@@ -112,6 +131,7 @@ describe('rutas', () => {
     expect(titulo(hijas(), 'proveedores')).toBe('Proveedores · Ferretería');
     expect(titulo(hijas(), 'importaciones')).toBe('Importar lista · Ferretería');
     expect(titulo(hijas(), 'actualizacion-masiva')).toBe('Actualizar precios · Ferretería');
+    expect(titulo(hijas(), 'configuracion/cotizacion')).toBe('Cotización · Ferretería');
   });
 
   it('sin sesión, /mostrador redirige al login recordando adónde quería ir', async () => {

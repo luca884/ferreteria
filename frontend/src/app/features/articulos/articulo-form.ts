@@ -13,7 +13,9 @@ import { catchError, forkJoin, map, of } from 'rxjs';
 import { erroresDeCampos } from '../../core/api/api-error';
 import { AuthService } from '../../core/auth/auth.service';
 import { Avisos } from '../../core/avisos/avisos';
-import { MontoPipe } from '../../core/formato/monto';
+import { Cotizacion } from '../../core/cotizacion/cotizacion.models';
+import { CotizacionService } from '../../core/cotizacion/cotizacion.service';
+import { MontoPipe, formatearCotizacion } from '../../core/formato/monto';
 import { margenEfectivo, precioFinal } from '../../core/formato/precio-final';
 import { cantidadConUnidad } from '../../core/formato/unidad';
 import { BarraAcciones } from '../../shared/barra-acciones';
@@ -30,9 +32,13 @@ import {
   Articulo,
   ArticuloRequest,
   ConfiguracionPrecios,
+  MONEDAS,
+  MONEDA_LABELS,
+  Moneda,
   UNIDADES,
   UNIDAD_LABELS,
   Unidad,
+  monedaDe,
 } from './articulo.models';
 import { ArticulosService } from './articulos.service';
 import { DialogoAjusteStock } from './dialogo-ajuste-stock';
@@ -53,6 +59,7 @@ type CampoArticulo =
   | 'descripcion'
   | 'unidad'
   | 'costo'
+  | 'moneda'
   | 'codigoBarras'
   | 'codigoProveedor'
   | 'ubicacion'
@@ -75,6 +82,7 @@ export class ArticuloForm implements OnInit {
   private readonly service = inject(ArticulosService);
   private readonly rubrosService = inject(RubrosService);
   private readonly proveedoresService = inject(ProveedoresService);
+  private readonly cotizaciones = inject(CotizacionService);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
   private readonly avisos = inject(Avisos);
@@ -86,12 +94,15 @@ export class ArticuloForm implements OnInit {
   protected readonly alicuotaLabels = ALICUOTA_IVA_LABELS;
   protected readonly unidades = UNIDADES;
   protected readonly unidadLabels = UNIDAD_LABELS;
+  protected readonly monedaLabels = MONEDA_LABELS;
   protected readonly cantidadConUnidad = cantidadConUnidad;
 
   protected readonly rubros = signal<Rubro[]>([]);
   protected readonly proveedores = signal<Proveedor[]>([]);
   /** Margen por defecto y múltiplo de la ferretería; null si no se pudo leer (no hay precio en vivo). */
   protected readonly configuracion = signal<ConfiguracionPrecios | null>(null);
+  /** La cotización de la ferretería; null si no se pudo leer (el backend valida igual al guardar). */
+  protected readonly cotizacion = signal<Cotizacion | null>(null);
   /** El artículo tal como lo devolvió el backend; null en el alta. */
   protected readonly articulo = signal<Articulo | null>(null);
   protected readonly cargando = signal(true);
@@ -114,6 +125,7 @@ export class ArticuloForm implements OnInit {
     descripcion: ['', [noVacio, Validators.maxLength(200)]],
     unidad: ['UNIDAD' as Unidad, [Validators.required]],
     costo: [null as number | null, [Validators.required, Validators.min(0)]],
+    moneda: ['ARS' as Moneda, [Validators.required]],
     codigoBarras: ['', [Validators.maxLength(30)]],
     codigoProveedor: ['', [Validators.maxLength(40)]],
     ubicacion: ['', [Validators.maxLength(60)]],
@@ -141,6 +153,26 @@ export class ArticuloForm implements OnInit {
       : `Hereda ${formatearPorcentaje(config.margenDefectoPorcentaje)} % de la ferretería`;
   });
 
+  protected readonly enDolares = computed(() => this.valores().moneda === 'USD');
+
+  /**
+   * USD se ofrece si la cotización está activada (o si no se pudo leer: el backend lo valida al guardar). Un artículo
+   * que ya está en dólares lo conserva aunque la cotización se apague: se puede seguir editando.
+   */
+  protected readonly dolaresDisponibles = computed(
+    () => this.cotizacion()?.activa !== false || monedaDe(this.articulo()) === 'USD',
+  );
+  protected readonly monedasOfrecidas = computed<readonly Moneda[]>(() =>
+    this.dolaresDisponibles() ? MONEDAS : ['ARS'],
+  );
+
+  /** El dólar con el que el backend calcula los precios en USD (el vigente); null si todavía no hay ninguno. */
+  private readonly dolarDePrecios = computed(() => this.cotizacion()?.precios.valor ?? null);
+  protected readonly dolarUsado = computed(() => formatearCotizacion(this.dolarDePrecios()));
+
+  /** En dólares, el precio en vivo necesita el dólar vigente: sin él no hay cuenta que hacer. */
+  protected readonly sinDolar = computed(() => this.enDolares() && this.dolarDePrecios() === null);
+
   /** Precio final con lo que hay cargado, con la misma cuenta y redondeo que el backend. */
   protected readonly precioEnVivo = computed(() => {
     const config = this.configuracion();
@@ -152,7 +184,9 @@ export class ArticuloForm implements OnInit {
       rubro?.margenPorcentaje ?? null,
       config.margenDefectoPorcentaje,
     );
-    return precioFinal(v.costo, margen, v.alicuotaIva, config.redondeoMultiplo);
+    // En pesos la cotización vale 1; en dólares es el vigente (null = sin precio).
+    const cotizacion = v.moneda === 'USD' ? this.dolarDePrecios() : undefined;
+    return precioFinal(v.costo, margen, v.alicuotaIva, config.redondeoMultiplo, cotizacion);
   });
 
   ngOnInit(): void {
@@ -197,6 +231,18 @@ export class ArticuloForm implements OnInit {
     if (this.errorLocal(campo)) ids.push(`${campo}-error`);
     if (this.errorServidor(campo)) ids.push(`${campo}-error-servidor`);
     return ids.length > 0 ? ids.join(' ') : null;
+  }
+
+  /** Cambiar la moneda borra el costo: hay que cargarlo de nuevo en la moneda nueva; no se convierte. */
+  protected alCambiarMoneda(): void {
+    this.form.controls.costo.reset(null);
+    this.limpiarErrorDe('costo');
+    this.limpiarErrorDe('moneda');
+  }
+
+  /** Ids para aria-describedby del selector de moneda: la pista y, con la cotización apagada, el motivo. */
+  protected describirMoneda(): string | null {
+    return this.describir('moneda', 'moneda-pista', ...(this.dolaresDisponibles() ? [] : ['moneda-apagada']));
   }
 
   protected guardar(): void {
@@ -278,11 +324,14 @@ export class ArticuloForm implements OnInit {
       articulo: this.id === null ? of(null) : this.service.obtener(this.id),
       // Sin configuración no hay precio en vivo, pero el formulario sirve igual.
       configuracion: this.service.configuracionPrecios().pipe(catchError(() => of(null))),
+      // Sin cotización tampoco: el precio en dólares no se calcula y el backend valida al guardar.
+      cotizacion: this.cotizaciones.obtener().pipe(catchError(() => of(null))),
     }).subscribe({
-      next: ({ rubros, proveedores, articulo, configuracion }) => {
+      next: ({ rubros, proveedores, articulo, configuracion, cotizacion }) => {
         this.rubros.set(rubros);
         this.proveedores.set(proveedores.filter((p) => p.activo));
         this.configuracion.set(configuracion);
+        this.cotizacion.set(cotizacion);
         if (articulo) {
           this.articulo.set(articulo);
           this.form.patchValue({
@@ -290,6 +339,7 @@ export class ArticuloForm implements OnInit {
             descripcion: articulo.descripcion,
             unidad: articulo.unidad,
             costo: articulo.costo,
+            moneda: monedaDe(articulo),
             codigoBarras: articulo.codigoBarras ?? '',
             codigoProveedor: articulo.codigoProveedor ?? '',
             ubicacion: articulo.ubicacion ?? '',
@@ -331,6 +381,7 @@ export class ArticuloForm implements OnInit {
       rubroId: v.rubroId,
       proveedorId: v.proveedorId,
       costo: v.costo ?? 0,
+      moneda: v.moneda,
       margenPorcentaje: v.margenPorcentaje,
       alicuotaIva: v.alicuotaIva,
       unidad: v.unidad,

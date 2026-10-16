@@ -13,3 +13,9 @@ export function erroresDeCampos(err: unknown): string[] {
     (mensaje): mensaje is string => typeof mensaje === 'string' && mensaje.trim() !== '',
   );
 }
+
+/** El `message` que manda el backend (409, 403…); `porDefecto` si el error no es HTTP o no trae mensaje. */
+export function mensajeDe(err: unknown, porDefecto: string): string {
+  const mensaje: unknown = err instanceof HttpErrorResponse ? err.error?.message : undefined;
+  return typeof mensaje === 'string' && mensaje.trim() !== '' ? mensaje : porDefecto;
+}

@@ -156,7 +156,30 @@
     <fieldset class="seccion">
       <legend>Precio</legend>
       <div class="campo">
-        <label for="costo">Costo (sin IVA)</label>
+        <label for="moneda">Moneda</label>
+        <select
+          id="moneda"
+          name="moneda"
+          formControlName="moneda"
+          [attr.aria-invalid]="invalido('moneda') ? 'true' : null"
+          [attr.aria-describedby]="describirMoneda()"
+          (change)="alCambiarMoneda()"
+        >
+          @for (moneda of monedasOfrecidas(); track moneda) {
+            <option [ngValue]="moneda">{{ monedaLabels[moneda] }}</option>
+          }
+        </select>
+        <span id="moneda-pista" class="pista">Si cambiás la moneda, el costo se borra y lo cargás de nuevo: no se convierte.</span>
+        @if (!dolaresDisponibles()) {
+          <span id="moneda-apagada" class="pista aviso-moneda">Activá la cotización para cargar artículos en dólares</span>
+        }
+        @if (errorServidor('moneda'); as mensaje) {
+          <span id="moneda-error-servidor" class="campo-error" data-error-de="moneda">{{ mensaje }}</span>
+        }
+      </div>
+
+      <div class="campo">
+        <label for="costo">{{ enDolares() ? 'Costo en dólares (sin IVA)' : 'Costo (sin IVA)' }}</label>
         <input
           id="costo"
           name="costo"
@@ -233,8 +256,13 @@
           <span class="precio-en-vivo-etiqueta">Precio final</span>
           @if (precioEnVivo() !== null) {
             <strong>{{ precioEnVivo() | monto }}</strong>
+          } @else if (sinDolar()) {
+            <span class="pista">Todavía no hay cotización del dólar para calcular el precio.</span>
           } @else {
             <span class="pista">Completá el costo para ver el precio.</span>
+          }
+          @if (enDolares() && !sinDolar()) {
+            <span id="precio-dolar" class="pista">Calculado con el dólar a {{ dolarUsado() }}</span>
           }
         </div>
       }

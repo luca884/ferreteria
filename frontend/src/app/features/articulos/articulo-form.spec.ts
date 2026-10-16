@@ -9,6 +9,8 @@ import { vi } from 'vitest';
 import { By } from '@angular/platform-browser';
 import { AuthService } from '../../core/auth/auth.service';
 import { Avisos } from '../../core/avisos/avisos';
+import { Cotizacion } from '../../core/cotizacion/cotizacion.models';
+import { CotizacionService } from '../../core/cotizacion/cotizacion.service';
 import { DialogoAjusteStock } from './dialogo-ajuste-stock';
 import { Proveedor } from '../proveedores/proveedor.models';
 import { ProveedoresService } from '../proveedores/proveedores.service';
@@ -55,6 +57,16 @@ describe('ArticuloForm', () => {
     ...cambios,
   });
 
+  /** Cotización activada con el dólar de los precios a 1.000 (el vigente del backend). */
+  const cotizacionActiva = (cambios: Partial<Cotizacion> = {}, valor: number | null = 1000): Cotizacion => ({
+    activa: true,
+    desactualizada: false,
+    ultimaRespuesta: '2026-10-16T12:30:00Z',
+    visibles: [],
+    precios: { codigo: 'USD:oficial', lado: 'VENTA', valor, desde: '2026-10-16T11:00:00Z' },
+    ...cambios,
+  });
+
   let fixture: ComponentFixture<ArticuloForm>;
   let servicio: {
     obtener: ReturnType<typeof vi.fn>;
@@ -75,9 +87,17 @@ describe('ArticuloForm', () => {
       id?: string | null;
       articulo?: Articulo | HttpErrorResponse;
       sinConfiguracion?: boolean;
+      /** Lo que responde GET /cotizacion; 'falla' si no se puede leer. */
+      cotizacion?: Cotizacion | 'falla';
     } = {},
   ) {
-    const { dueno = true, id = null, articulo = articuloGuardado(), sinConfiguracion = false } = opciones;
+    const {
+      dueno = true,
+      id = null,
+      articulo = articuloGuardado(),
+      sinConfiguracion = false,
+      cotizacion = cotizacionActiva(),
+    } = opciones;
     servicio = {
       obtener: vi.fn(() =>
         articulo instanceof HttpErrorResponse ? throwError(() => articulo) : of(articulo),
@@ -100,6 +120,14 @@ describe('ArticuloForm', () => {
         { provide: ArticulosService, useValue: servicio },
         { provide: RubrosService, useValue: { listar: vi.fn(() => of(rubros)) } },
         { provide: ProveedoresService, useValue: { listar: vi.fn(() => of(proveedores)) } },
+        {
+          provide: CotizacionService,
+          useValue: {
+            obtener: vi.fn(() =>
+              cotizacion === 'falla' ? throwError(() => errorHttp(500, 'Error interno')) : of(cotizacion),
+            ),
+          },
+        },
         { provide: AuthService, useValue: { esDueno: signal(dueno) } },
         {
           provide: ActivatedRoute,
@@ -210,6 +238,7 @@ describe('ArticuloForm', () => {
         rubroId: null,
         proveedorId: null,
         costo: 100,
+        moneda: 'ARS',
         margenPorcentaje: null,
         alicuotaIva: 'IVA_21',
         unidad: 'UNIDAD',
@@ -245,6 +274,7 @@ describe('ArticuloForm', () => {
         rubroId: 2,
         proveedorId: 11,
         costo: 99.5,
+        moneda: 'ARS',
         margenPorcentaje: 35,
         alicuotaIva: 'IVA_10_5',
         unidad: 'METRO',
@@ -516,6 +546,7 @@ describe('ArticuloForm', () => {
         rubroId: 1,
         proveedorId: 11,
         costo: 100,
+        moneda: 'ARS',
         margenPorcentaje: 35,
         alicuotaIva: 'IVA_10_5',
         unidad: 'METRO',
@@ -699,6 +730,259 @@ describe('ArticuloForm', () => {
       await completarMinimos();
       await enviar();
       expect(servicio.crear).toHaveBeenCalled();
+    });
+  });
+
+  describe('moneda del artículo', () => {
+    const enVivo = () => (el().querySelector('.precio-en-vivo')?.textContent ?? '').replace(/[ \n\t]+/g, ' ').trim();
+    const texto = (id: string) => (el().querySelector(`#${id}`)?.textContent ?? '').replace(/\s+/g, ' ').trim();
+    const etiqueta = (id: string) => (el().querySelector(`label[for="${id}"]`)?.textContent ?? '').trim();
+
+    it('el selector de moneda va junto al costo, con su etiqueta, y un alta arranca en pesos', async () => {
+      await crearComponente();
+
+      expect(etiqueta('moneda')).toBe('Moneda');
+      expect(opciones('moneda')).toEqual(['Pesos (ARS)', 'Dólares (USD)']);
+      expect(elegida('moneda')).toBe('Pesos (ARS)');
+      const seccion = select('moneda').closest('fieldset')!;
+      expect(seccion.querySelector('legend')?.textContent).toBe('Precio');
+      expect(seccion.contains(input('costo'))).toBe(true);
+    });
+
+    it('un alta en pesos manda moneda ARS', async () => {
+      await crearComponente();
+      await completarMinimos();
+
+      await enviar();
+
+      expect(servicio.crear.mock.calls[0][0].moneda).toBe('ARS');
+    });
+
+    it('un alta en dólares manda moneda USD y el costo cargado en dólares', async () => {
+      await crearComponente();
+      await escribir('codigoInterno', 'TOR-001');
+      await escribir('descripcion', 'Tornillo');
+      await elegir('moneda', 'Dólares (USD)');
+      await escribir('costo', '10');
+
+      await enviar();
+
+      expect(servicio.crear).toHaveBeenCalledTimes(1);
+      expect(servicio.crear.mock.calls[0][0]).toMatchObject({ moneda: 'USD', costo: 10 });
+    });
+
+    it('al cambiar la moneda el costo se borra y no se puede guardar sin cargarlo de nuevo', async () => {
+      await crearComponente();
+      await escribir('costo', '100');
+      expect(input('costo').value).toBe('100');
+
+      await elegir('moneda', 'Dólares (USD)');
+
+      expect(input('costo').value).toBe('');
+      await escribir('codigoInterno', 'TOR-001');
+      await escribir('descripcion', 'Tornillo');
+      await enviar();
+      expect(servicio.crear).not.toHaveBeenCalled();
+      expect(el().textContent).toContain('El costo es obligatorio.');
+    });
+
+    it('no convierte nada: al volver a pesos el costo también queda vacío', async () => {
+      await crearComponente({ id: '5', articulo: articuloGuardado({ moneda: 'USD', costo: 10 }) });
+      expect(input('costo').value).toBe('10');
+
+      await elegir('moneda', 'Pesos (ARS)');
+
+      expect(input('costo').value).toBe('');
+    });
+
+    it('al cargar un artículo existente el costo NO se borra', async () => {
+      await crearComponente({ id: '5', articulo: articuloGuardado({ moneda: 'USD', costo: 10 }) });
+
+      expect(elegida('moneda')).toBe('Dólares (USD)');
+      expect(input('costo').value).toBe('10');
+    });
+
+    it('avisa al lado del selector que cambiar la moneda borra el costo', async () => {
+      await crearComponente();
+
+      expect(texto('moneda-pista')).toBe('Si cambiás la moneda, el costo se borra y lo cargás de nuevo: no se convierte.');
+      expect(select('moneda').getAttribute('aria-describedby')).toContain('moneda-pista');
+    });
+
+    it('el costo en dólares lleva su propio rótulo', async () => {
+      await crearComponente();
+      expect(etiqueta('costo')).toBe('Costo (sin IVA)');
+
+      await elegir('moneda', 'Dólares (USD)');
+
+      expect(etiqueta('costo')).toBe('Costo en dólares (sin IVA)');
+    });
+
+    describe('con la cotización apagada', () => {
+      it('no se ofrece USD y se dice cómo cargar en dólares', async () => {
+        await crearComponente({ cotizacion: cotizacionActiva({ activa: false }) });
+
+        expect(opciones('moneda')).toEqual(['Pesos (ARS)']);
+        expect(texto('moneda-apagada')).toBe('Activá la cotización para cargar artículos en dólares');
+        expect(select('moneda').getAttribute('aria-describedby')).toContain('moneda-apagada');
+      });
+
+      it('un artículo que ya está en dólares sigue siendo editable y conserva USD', async () => {
+        await crearComponente({
+          id: '5',
+          articulo: articuloGuardado({ moneda: 'USD', costo: 10 }),
+          cotizacion: cotizacionActiva({ activa: false }),
+        });
+
+        expect(opciones('moneda')).toEqual(['Pesos (ARS)', 'Dólares (USD)']);
+        expect(elegida('moneda')).toBe('Dólares (USD)');
+        expect(el().querySelector('#moneda-apagada')).toBeNull();
+
+        await escribir('margen', '40');
+        await enviar();
+
+        expect(servicio.actualizar.mock.calls[0][1]).toMatchObject({ moneda: 'USD', costo: 10, margenPorcentaje: 40 });
+      });
+
+      it('un artículo en pesos no puede pasarse a dólares: sigue sin ofrecerse', async () => {
+        await crearComponente({ id: '5', cotizacion: cotizacionActiva({ activa: false }) });
+
+        expect(opciones('moneda')).toEqual(['Pesos (ARS)']);
+        expect(texto('moneda-apagada')).toBe('Activá la cotización para cargar artículos en dólares');
+      });
+    });
+
+    it('con la cotización activada no aparece el aviso de apagada', async () => {
+      await crearComponente();
+
+      expect(el().querySelector('#moneda-apagada')).toBeNull();
+    });
+
+    it('si no se puede leer la cotización el formulario funciona igual y no esconde USD', async () => {
+      await crearComponente({ cotizacion: 'falla' });
+
+      expect(opciones('moneda')).toEqual(['Pesos (ARS)', 'Dólares (USD)']);
+      expect(el().querySelector('#moneda-apagada')).toBeNull();
+      await completarMinimos();
+      await enviar();
+      expect(servicio.crear).toHaveBeenCalled();
+    });
+
+    describe('precio en vivo en dólares', () => {
+      it('10 USD con el dólar a 1.000 da $ 15.730, lo mismo que el backend', async () => {
+        await crearComponente();
+        await elegir('moneda', 'Dólares (USD)');
+
+        await escribir('costo', '10');
+        await escribir('margen', '30');
+        await elegir('alicuotaIva', '21 %');
+
+        expect(enVivo()).toContain(`$${NBSP}15.730,00`);
+      });
+
+      it('con el dólar a 1.100 da $ 17.310 y con 950, $ 14.950', async () => {
+        await crearComponente({ cotizacion: cotizacionActiva({}, 1100) });
+        await elegir('moneda', 'Dólares (USD)');
+        await escribir('costo', '10');
+        await escribir('margen', '30');
+        expect(enVivo()).toContain(`$${NBSP}17.310,00`);
+
+        TestBed.resetTestingModule();
+        await crearComponente({ cotizacion: cotizacionActiva({}, 950) });
+        await elegir('moneda', 'Dólares (USD)');
+        await escribir('costo', '10');
+        await escribir('margen', '30');
+        expect(enVivo()).toContain(`$${NBSP}14.950,00`);
+      });
+
+      it('dice con qué dólar se calcula', async () => {
+        await crearComponente();
+        await elegir('moneda', 'Dólares (USD)');
+        await escribir('costo', '10');
+
+        expect(texto('precio-dolar')).toBe('Calculado con el dólar a 1.000,00');
+      });
+
+      it('en pesos el dólar no entra en la cuenta ni se nombra', async () => {
+        await crearComponente({ cotizacion: cotizacionActiva({}, 1100) });
+
+        await escribir('costo', '100');
+
+        expect(enVivo()).toContain(`$${NBSP}160,00`);
+        expect(el().querySelector('#precio-dolar')).toBeNull();
+      });
+
+      it('en la edición de un artículo en dólares parte del dólar vigente', async () => {
+        await crearComponente({
+          id: '5',
+          articulo: articuloGuardado({ moneda: 'USD', costo: 10, margenPorcentaje: 30, alicuotaIva: 'IVA_21', precioFinal: 15730 }),
+        });
+
+        expect(enVivo()).toContain(`$${NBSP}15.730,00`);
+      });
+
+      it('sin ninguna cotización del dólar no hay precio y se explica por qué', async () => {
+        await crearComponente({ cotizacion: cotizacionActiva({}, null) });
+        await elegir('moneda', 'Dólares (USD)');
+
+        await escribir('costo', '10');
+
+        expect(enVivo()).toContain('Todavía no hay cotización del dólar para calcular el precio.');
+        expect(enVivo()).not.toContain('$');
+      });
+
+      it('si no se pudo leer la cotización, en dólares no hay precio en vivo', async () => {
+        await crearComponente({ cotizacion: 'falla' });
+        await elegir('moneda', 'Dólares (USD)');
+
+        await escribir('costo', '10');
+
+        expect(enVivo()).toContain('Todavía no hay cotización del dólar para calcular el precio.');
+      });
+    });
+
+    describe('errores del backend', () => {
+      it('un 409 por falta de cotización se muestra', async () => {
+        await crearComponente();
+        servicio.crear.mockReturnValue(
+          throwError(() => errorHttp(409, 'Todavía no hay cotización del dólar. Probá en unos minutos')),
+        );
+        await escribir('codigoInterno', 'TOR-001');
+        await escribir('descripcion', 'Tornillo');
+        await elegir('moneda', 'Dólares (USD)');
+        await escribir('costo', '10');
+
+        await enviar();
+
+        expect(el().querySelector('.error[role="alert"]')?.textContent).toContain(
+          'Todavía no hay cotización del dólar. Probá en unos minutos',
+        );
+        expect(navigate).not.toHaveBeenCalled();
+      });
+
+      it('un 409 por cotización apagada se muestra', async () => {
+        await crearComponente();
+        servicio.crear.mockReturnValue(
+          throwError(() => errorHttp(409, 'Activá la cotización para cargar artículos en dólares')),
+        );
+        await escribir('codigoInterno', 'TOR-001');
+        await escribir('descripcion', 'Tornillo');
+        await elegir('moneda', 'Dólares (USD)');
+        await escribir('costo', '10');
+
+        await enviar();
+
+        expect(el().querySelector('.error[role="alert"]')?.textContent).toContain(
+          'Activá la cotización para cargar artículos en dólares',
+        );
+      });
+    });
+
+    it('el Vendedor ve la moneda del artículo, pero no la puede cambiar', async () => {
+      await crearComponente({ dueno: false, id: '5', articulo: articuloGuardado({ moneda: 'USD', costo: 10 }) });
+
+      expect(elegida('moneda')).toBe('Dólares (USD)');
+      expect(select('moneda').disabled).toBe(true);
     });
   });
 

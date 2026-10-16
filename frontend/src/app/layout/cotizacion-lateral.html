@@ -1,0 +1,46 @@
+<section class="cotizacion" aria-labelledby="cotizacion-titulo">
+  <h2 id="cotizacion-titulo" class="titulo">Cotización</h2>
+
+  <div class="avisos" aria-live="polite">
+    @if (cotizacion(); as c) {
+      @if (!c.activa) {
+        <p class="aviso apagada">La cotización está apagada. Los artículos en USD no se actualizan.</p>
+      }
+      @if (c.desactualizada) {
+        <p class="aviso desactualizada">No se pudo actualizar la cotización. Se usa la del {{ desdeCuando() }}</p>
+      }
+    }
+  </div>
+
+  @if (cotizacion()) {
+    <ul class="tipos">
+      @for (tipo of tipos(); track tipo.codigo) {
+        <li class="tipo">
+          @if (tipo.lineas.length === 0) {
+            <span class="nombre">{{ tipo.nombre }}</span>
+            <span class="sin-datos">Todavía no hay datos</span>
+          } @else {
+            @for (linea of tipo.lineas; track linea.etiqueta) {
+              <div class="linea" [class.de-precios]="linea.dePrecios">
+                <span class="etiqueta">{{ linea.etiqueta }}</span>&ngsp;<strong class="valor">{{ linea.valor }}</strong>
+                @if (linea.dePrecios) {
+                  &ngsp;<span class="marca" title="Es el dólar en el que cotizan los precios">Precios</span>
+                }
+              </div>
+            }
+            <time class="fecha">{{ tipo.fecha }}</time>
+          }
+          @if (tipo.sinRenovarDesde) {
+            <span class="vieja">No se renueva desde el {{ tipo.sinRenovarDesde }}</span>
+          }
+        </li>
+      }
+    </ul>
+  } @else {
+    <p class="sin-datos">Sin datos de cotización por ahora.</p>
+  }
+
+  @if (esDueno()) {
+    <a class="configurar" routerLink="/configuracion/cotizacion">Configurar</a>
+  }
+</section>

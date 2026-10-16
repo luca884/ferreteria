@@ -1,6 +1,6 @@
 import { HttpErrorResponse } from '@angular/common/http';
 
-import { erroresDeCampos } from './api-error';
+import { erroresDeCampos, mensajeDe } from './api-error';
 
 describe('erroresDeCampos', () => {
   const http400 = (error: unknown) => new HttpErrorResponse({ status: 400, error });
@@ -31,5 +31,20 @@ describe('erroresDeCampos', () => {
     const err = http400({ errors: { a: 'Mensaje válido', b: 7, c: '  ', d: null } });
 
     expect(erroresDeCampos(err)).toEqual(['Mensaje válido']);
+  });
+});
+
+describe('mensajeDe', () => {
+  it('devuelve el mensaje que manda el backend', () => {
+    const err = new HttpErrorResponse({ status: 409, error: { message: 'La cotización está apagada' } });
+
+    expect(mensajeDe(err, 'No se pudo recalcular.')).toBe('La cotización está apagada');
+  });
+
+  it('usa el mensaje por defecto si el error no es HTTP o no trae mensaje', () => {
+    expect(mensajeDe(new HttpErrorResponse({ status: 0 }), 'No se pudo recalcular.')).toBe('No se pudo recalcular.');
+    expect(mensajeDe(new HttpErrorResponse({ status: 500, error: { message: '' } }), 'Falló.')).toBe('Falló.');
+    expect(mensajeDe(new Error('boom'), 'Falló.')).toBe('Falló.');
+    expect(mensajeDe(undefined, 'Falló.')).toBe('Falló.');
   });
 });

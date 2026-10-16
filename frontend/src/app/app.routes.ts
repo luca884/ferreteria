@@ -64,6 +64,15 @@ export const routes: Routes = [
             (m) => m.ActualizacionMasiva,
           ),
       },
+      // Sin guard de rol, como las otras pantallas del Dueño: al Vendedor la pantalla le avisa y el backend responde 403.
+      {
+        path: 'configuracion/cotizacion',
+        title: titulo('Cotización'),
+        loadComponent: () =>
+          import('./features/configuracion-cotizacion/configuracion-cotizacion').then(
+            (m) => m.PaginaConfiguracionCotizacion,
+          ),
+      },
     ],
   },
   { path: '**', redirectTo: '' },

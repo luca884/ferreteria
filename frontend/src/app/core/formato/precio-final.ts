@@ -36,19 +36,29 @@ const diez = (n: number) => 10n ** BigInt(n);
 const techo = (a: bigint, b: bigint) => (a + b - 1n) / b;
 
 /**
- * Precio final como lo calcula PrecioCalculator.java: costo × (1 + margen/100) × (1 + IVA/100), redondeado
- * hacia arriba al múltiplo (sin múltiplo, o con uno ≤ 0, hacia arriba al centavo). Cuenta exacta con BigInt,
- * sin errores de coma flotante. `null` si falta el costo o el margen, o si alguno es negativo.
+ * Precio final como lo calcula PrecioCalculator.java: costo × cotización × (1 + margen/100) × (1 + IVA/100),
+ * redondeado hacia arriba al múltiplo (sin múltiplo, o con uno ≤ 0, hacia arriba al centavo). Cuenta exacta con
+ * BigInt, sin errores de coma flotante; la cotización (pesos por dólar) es un factor más antes del único redondeo.
+ * Sin el parámetro vale 1 (artículo en pesos). `null` si falta el costo o el margen, si alguno es negativo, o si
+ * la cotización no es mayor que 0.
  */
-export function precioFinal(costo: Decimal, margen: Decimal, alicuota: Alicuota, multiplo: Decimal): number | null {
+export function precioFinal(
+  costo: Decimal,
+  margen: Decimal,
+  alicuota: Alicuota,
+  multiplo: Decimal,
+  cotizacion: Decimal = '1',
+): number | null {
   const c = exacto(costo);
   const m = exacto(margen);
   const iva = exacto(PORCENTAJE_IVA[alicuota]);
-  if (!c || !m || !iva || c.entero < 0n || m.entero < 0n) return null;
+  const cot = exacto(cotizacion);
+  if (!c || !m || !iva || !cot || c.entero < 0n || m.entero < 0n || cot.entero <= 0n) return null;
 
   // bruto = numerador / denominador, en pesos.
-  const numerador = c.entero * (100n * diez(m.escala) + m.entero) * (100n * diez(iva.escala) + iva.entero);
-  const denominador = diez(c.escala + m.escala + iva.escala) * 10_000n;
+  const numerador =
+    c.entero * cot.entero * (100n * diez(m.escala) + m.entero) * (100n * diez(iva.escala) + iva.entero);
+  const denominador = diez(c.escala + cot.escala + m.escala + iva.escala) * 10_000n;
 
   const mul = exacto(multiplo);
   let centavos: bigint;

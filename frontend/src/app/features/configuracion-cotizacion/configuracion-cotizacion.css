@@ -1,0 +1,45 @@
+:host {
+  display: block;
+  width: 100%;
+}
+/* La barra de acciones va a todo el ancho; el resto no se estira de más. */
+:host > :not(app-barra-acciones) {
+  max-width: 1040px;
+}
+
+.contenido {
+  display: grid;
+  gap: var(--e-4);
+}
+
+.errores-campos ul {
+  margin: var(--e-1) 0 0;
+  padding-left: var(--e-6);
+}
+
+.recalculo h2 {
+  margin-bottom: var(--e-1);
+}
+.vigente {
+  margin: 0 0 var(--e-3);
+  color: var(--texto-suave);
+}
+.recalculo-fila {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--e-3);
+}
+.recalculo-texto {
+  flex: 1 1 280px;
+  margin: 0;
+  font-weight: 500;
+}
+.recalculo .pista {
+  margin: var(--e-2) 0 0;
+}
+.recalculo .resultado,
+.recalculo .error {
+  margin: var(--e-3) 0 0;
+}

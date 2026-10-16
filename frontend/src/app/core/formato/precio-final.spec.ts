@@ -10,13 +10,41 @@ describe('precioFinal', () => {
     expect(datos.casos.length).toBeGreaterThanOrEqual(20);
   });
 
-  // Los casos con `cotizacion` (artículos en dólares) los cubre el espejo con cotización (T-039); acá van los de pesos.
-  const casosEnPesos = datos.casos.filter((c) => !('cotizacion' in c));
-
-  it.each(casosEnPesos.map((c) => [c.nombre, c] as const))('%s', (_nombre, caso) => {
+  // Todos los casos, también los de dólares: `cotizacion` (pesos por dólar) vale 1 si el caso no la trae.
+  it.each(datos.casos.map((c) => [c.nombre, c] as const))('%s', (_nombre, caso) => {
+    const cotizacion = 'cotizacion' in caso ? caso.cotizacion : undefined;
     expect(
-      precioFinal(caso.costo, caso.margen, caso.alicuota as Parameters<typeof precioFinal>[2], caso.multiplo),
+      precioFinal(caso.costo, caso.margen, caso.alicuota as Parameters<typeof precioFinal>[2], caso.multiplo, cotizacion),
     ).toBe(Number(caso.precio));
+  });
+
+  it('el JSON compartido trae los cuatro casos en dólares', () => {
+    const enDolares = datos.casos.filter((c) => 'cotizacion' in c);
+    expect(enDolares.map((c) => c.precio)).toEqual(['15730.00', '17310.00', '14950.00', '10005.00']);
+  });
+
+  it('un artículo en dólares: 10 USD con el dólar a 1000, a 1100 y a 950', () => {
+    expect(precioFinal(10, 30, 'IVA_21', 10, 1000)).toBe(15730);
+    expect(precioFinal(10, 30, 'IVA_21', 10, 1100)).toBe(17310);
+    expect(precioFinal(10, 30, 'IVA_21', 10, '950')).toBe(14950);
+  });
+
+  it('la cotización de cuatro decimales entra exacta, antes del único redondeo', () => {
+    expect(precioFinal(10, 0, 'IVA_0', null, '1000.5000')).toBe(10005);
+    expect(precioFinal(10, 0, 'IVA_0', null, '1000.5001')).toBe(10005.01);
+  });
+
+  it('sin el parámetro, o con cotización 1, es un artículo en pesos', () => {
+    expect(precioFinal(100, 35, 'IVA_21', 10)).toBe(170);
+    expect(precioFinal(100, 35, 'IVA_21', 10, undefined)).toBe(170);
+    expect(precioFinal(100, 35, 'IVA_21', 10, 1)).toBe(170);
+  });
+
+  it('una cotización que no sirve (faltante, cero, negativa o ilegible) no da precio', () => {
+    expect(precioFinal(10, 30, 'IVA_21', 10, null)).toBeNull();
+    expect(precioFinal(10, 30, 'IVA_21', 10, 0)).toBeNull();
+    expect(precioFinal(10, 30, 'IVA_21', 10, -1000)).toBeNull();
+    expect(precioFinal(10, 30, 'IVA_21', 10, 'abc')).toBeNull();
   });
 
   it('acepta números como los del formulario', () => {

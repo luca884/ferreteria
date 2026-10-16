@@ -20,6 +20,7 @@ describe('ArticulosService', () => {
     costo: 100,
     margenPorcentaje: null,
     alicuotaIva: 'IVA_21',
+    moneda: 'ARS',
     precioFinal: 170,
     unidad: 'UNIDAD',
     stockActual: 0,
@@ -166,6 +167,38 @@ describe('ArticulosService', () => {
     req.flush({ margenDefectoPorcentaje: 30, redondeoMultiplo: 10 });
 
     expect(configuracion).toEqual({ margenDefectoPorcentaje: 30, redondeoMultiplo: 10 });
+  });
+
+  it('el listado y el detalle traen la moneda de cada artículo', () => {
+    const enDolares: Articulo = { ...tornillo, id: 2, costo: 10, moneda: 'USD', precioFinal: 15730 };
+    let recibida: PageResponse<Articulo> | undefined;
+    let detalle: Articulo | undefined;
+    service.buscar('', 0, 20, false).subscribe((p) => (recibida = p));
+    http.expectOne((r) => r.url.endsWith('/articulos')).flush({ ...pagina, items: [tornillo, enDolares] });
+    service.obtener(2).subscribe((a) => (detalle = a));
+    http.expectOne((r) => r.url.endsWith('/articulos/2')).flush(enDolares);
+
+    expect(recibida?.items.map((a) => a.moneda)).toEqual(['ARS', 'USD']);
+    expect(detalle?.moneda).toBe('USD');
+  });
+
+  it('crea un artículo en dólares mandando la moneda en el POST', () => {
+    service.crear({ ...request, costo: 10, moneda: 'USD' }).subscribe();
+
+    const req = http.expectOne((r) => r.url.endsWith('/articulos'));
+    expect(req.request.method).toBe('POST');
+    expect(req.request.body.moneda).toBe('USD');
+    expect(req.request.body.costo).toBe(10);
+    req.flush({ ...tornillo, moneda: 'USD' });
+  });
+
+  it('actualiza la moneda de un artículo mandándola en el PUT', () => {
+    service.actualizar(1, { ...request, costo: 12, moneda: 'USD' }).subscribe();
+
+    const req = http.expectOne((r) => r.url.endsWith('/articulos/1'));
+    expect(req.request.method).toBe('PUT');
+    expect(req.request.body).toEqual({ ...request, costo: 12, moneda: 'USD' });
+    req.flush({ ...tornillo, moneda: 'USD' });
   });
 
   it('desactiva un artículo con DELETE /articulos/{id}', () => {

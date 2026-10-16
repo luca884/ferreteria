@@ -1,0 +1,107 @@
+/* Bloque de cotización del menú lateral: compacto, entre las secciones y el usuario. */
+:host {
+  display: block;
+  margin-top: var(--e-4);
+}
+
+.cotizacion {
+  display: flex;
+  flex-direction: column;
+  gap: var(--e-2);
+  padding: var(--e-3) var(--e-2) 0;
+  border-top: 1px solid var(--borde);
+}
+
+.titulo {
+  margin: 0;
+  padding: 0 var(--e-1);
+  color: var(--texto-tenue);
+  font-size: var(--texto-2xs);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.avisos {
+  display: flex;
+  flex-direction: column;
+  gap: var(--e-2);
+}
+.avisos:empty {
+  display: none;
+}
+.aviso {
+  margin: 0;
+  padding: var(--e-2);
+  border: 1px solid var(--advertencia-borde);
+  border-left: 3px solid var(--advertencia-marca);
+  border-radius: var(--radio);
+  background: var(--advertencia-fondo);
+  color: var(--advertencia);
+  font-size: var(--texto-xs);
+  font-weight: 500;
+  line-height: 1.35;
+}
+
+.tipos {
+  display: flex;
+  flex-direction: column;
+  gap: var(--e-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.tipo {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 0 var(--e-1);
+  font-size: var(--texto-sm);
+  line-height: 1.3;
+}
+.nombre {
+  font-weight: 600;
+}
+.linea {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 var(--e-1);
+  color: var(--texto-menu);
+}
+.valor {
+  margin-left: auto;
+  color: var(--texto);
+  font-weight: 600;
+}
+.marca {
+  padding: 0 5px;
+  border-radius: var(--radio-sm);
+  background: var(--acento-anillo);
+  color: var(--acento-profundo);
+  font-size: var(--texto-2xs);
+  font-weight: 700;
+}
+.fecha {
+  color: var(--texto-tenue);
+  font-size: var(--texto-xs);
+}
+.sin-datos,
+.vieja {
+  color: var(--texto-tenue);
+  font-size: var(--texto-xs);
+}
+.vieja {
+  color: var(--advertencia);
+  font-weight: 500;
+}
+.sin-datos {
+  margin: 0;
+}
+
+.configurar {
+  align-self: flex-start;
+  margin: 0 var(--e-1);
+  font-size: var(--texto-xs);
+  font-weight: 600;
+}

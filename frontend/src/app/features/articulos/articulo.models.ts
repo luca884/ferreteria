@@ -20,6 +20,20 @@ export const UNIDAD_LABELS: Record<Unidad, string> = {
   LITRO: 'Litro',
 };
 
+/** La moneda en que se carga el costo de un artículo. El precio final siempre está en pesos. */
+export const MONEDAS = ['ARS', 'USD'] as const;
+export type Moneda = (typeof MONEDAS)[number];
+
+export const MONEDA_LABELS: Record<Moneda, string> = {
+  ARS: 'Pesos (ARS)',
+  USD: 'Dólares (USD)',
+};
+
+/** La moneda del artículo; ARS si el backend no la manda (artículos de antes de la cotización). */
+export function monedaDe(articulo: Pick<Articulo, 'moneda'> | null | undefined): Moneda {
+  return articulo?.moneda ?? 'ARS';
+}
+
 /** Lo que devuelve el backend, igual para Dueño y Vendedor (ambos ven costo y margen). */
 export interface Articulo {
   id: number;
@@ -29,12 +43,14 @@ export interface Articulo {
   descripcion: string;
   rubroId: number | null;
   proveedorId: number | null;
-  /** Sin IVA. */
+  /** Sin IVA, en la moneda del artículo. */
   costo: number;
+  /** En qué moneda está el costo. Sin dato, ARS (ver `monedaDe`). */
+  moneda?: Moneda;
   /** Porcentaje propio; null hereda el del rubro o el de la ferretería. */
   margenPorcentaje: number | null;
   alicuotaIva: AlicuotaIva;
-  /** Lo calcula el backend; el cliente no lo manda. */
+  /** Lo calcula el backend, siempre en pesos; el cliente no lo manda. */
   precioFinal: number;
   unidad: Unidad;
   stockActual: number;
@@ -85,6 +101,8 @@ export interface ArticuloRequest {
   rubroId: number | null;
   proveedorId: number | null;
   costo: number;
+  /** Sin dato el backend toma ARS. Cambiarla no convierte el costo: se carga de nuevo en la moneda nueva. */
+  moneda?: Moneda;
   margenPorcentaje: number | null;
   alicuotaIva: AlicuotaIva;
   unidad: Unidad;

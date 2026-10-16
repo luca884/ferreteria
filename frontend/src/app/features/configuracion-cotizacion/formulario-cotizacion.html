@@ -1,0 +1,86 @@
+<form class="cotizacion" [formGroup]="form" (ngSubmit)="enviar()" novalidate>
+  <fieldset class="seccion">
+    <legend>Cotización del dólar</legend>
+
+    <div class="campo ancho">
+      <label class="casilla" for="activa">
+        <input id="activa" type="checkbox" formControlName="activa" aria-describedby="activa-pista" />
+        Cotización activada
+      </label>
+      <span id="activa-pista" class="pista">
+        Apagada, los artículos en dólares conservan su último precio y no se pueden cargar artículos nuevos en dólares.
+      </span>
+    </div>
+
+    <div class="campo">
+      <label for="dolarPrecios">Dólar en el que cotizan los precios</label>
+      <select id="dolarPrecios" formControlName="dolarPrecios" aria-describedby="dolarPrecios-pista">
+        @for (opcion of dolares; track opcion.codigo) {
+          <option [value]="opcion.codigo">{{ opcion.nombre }}</option>
+        }
+      </select>
+      <span id="dolarPrecios-pista" class="pista">Un solo tipo de dólar. Los artículos en USD usan este.</span>
+    </div>
+
+    <fieldset class="campo lado" aria-describedby="lado-pista">
+      <legend>Valor que usan los precios</legend>
+      @for (lado of lados; track lado) {
+        <label class="casilla" [for]="'lado-' + lado">
+          <input [id]="'lado-' + lado" type="radio" name="ladoPrecios" formControlName="ladoPrecios" [value]="lado" [attr.value]="lado" />
+          {{ ayudaLado[lado] }}
+        </label>
+      }
+      <span id="lado-pista" class="pista">Por defecto, el vendedor.</span>
+    </fieldset>
+
+    <div class="campo">
+      <label for="horaRecalculo">Hora del recálculo diario</label>
+      <input
+        id="horaRecalculo"
+        type="time"
+        formControlName="horaRecalculo"
+        [attr.aria-invalid]="errorHora ? 'true' : null"
+        [attr.aria-describedby]="errorHora ? 'horaRecalculo-pista horaRecalculo-error' : 'horaRecalculo-pista'"
+      />
+      <span id="horaRecalculo-pista" class="pista">
+        Hora de Buenos Aires. Una vez por día se recalculan los precios de los artículos en dólares.
+      </span>
+      @if (errorHora) {
+        <span id="horaRecalculo-error" class="campo-error">Indicá la hora del recálculo, por ejemplo 08:00.</span>
+      }
+    </div>
+  </fieldset>
+
+  <fieldset
+    class="seccion visibles"
+    formGroupName="visibles"
+    [attr.aria-invalid]="errorVisibles ? 'true' : null"
+    [attr.aria-describedby]="errorVisibles ? 'visibles-pista visibles-error' : 'visibles-pista'"
+  >
+    <legend>Qué cotizaciones se muestran</legend>
+    <p id="visibles-pista" class="pista ancho">
+      Se ven en el menú, para todos los usuarios. Podés mostrar varias a la vez. El euro y el real son solo para mostrar:
+      los precios siguen siendo en pesos o en dólares.
+    </p>
+    <div class="casillas ancho">
+      @for (opcion of opciones; track opcion.codigo) {
+        <label class="casilla" [for]="'visible-' + opcion.codigo">
+          <input
+            [id]="'visible-' + opcion.codigo"
+            type="checkbox"
+            [attr.value]="opcion.codigo"
+            [formControlName]="opcion.codigo"
+          />
+          {{ opcion.nombre }}
+        </label>
+      }
+    </div>
+    @if (errorVisibles) {
+      <span id="visibles-error" class="campo-error ancho">Elegí al menos una cotización para mostrar.</span>
+    }
+  </fieldset>
+
+  <div class="acciones-form">
+    <button type="submit" [disabled]="guardando()">Guardar</button>
+  </div>
+</form>

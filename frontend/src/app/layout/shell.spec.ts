@@ -1,9 +1,33 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { Component, signal } from '@angular/core';
 import { Router, Routes, provideRouter } from '@angular/router';
+import { Observable, Subject, of, throwError } from 'rxjs';
+import { vi } from 'vitest';
 import { Sesion } from '../core/auth/auth.models';
 import { AuthService } from '../core/auth/auth.service';
+import { Cotizacion } from '../core/cotizacion/cotizacion.models';
+import { CotizacionService } from '../core/cotizacion/cotizacion.service';
 import { Shell } from './shell';
+
+const COTIZACION: Cotizacion = {
+  activa: true,
+  desactualizada: false,
+  ultimaRespuesta: '2026-10-16T12:30:00Z',
+  visibles: [
+    {
+      codigo: 'USD:oficial',
+      nombre: 'Oficial',
+      compra: 950,
+      venta: 1000,
+      fuente: 'DOLARAPI',
+      actualizadaEn: '2026-10-16T11:00:00Z',
+      obtenidaEn: '2026-10-16T12:30:00Z',
+      desactualizada: false,
+      esDePrecios: true,
+    },
+  ],
+  precios: { codigo: 'USD:oficial', lado: 'VENTA', valor: 1000, desde: '2026-10-16T11:00:00Z' },
+};
 
 @Component({ template: '' })
 class Vacia {}
@@ -11,11 +35,14 @@ class Vacia {}
 describe('Shell', () => {
   let fixture: ComponentFixture<Shell>;
 
+  let obtener: ReturnType<typeof vi.fn<() => Observable<Cotizacion>>>;
+
   async function render(
     dueno: boolean,
     sesion: Sesion | null = null,
     rutas: Routes = [],
   ): Promise<HTMLElement> {
+    obtener ??= vi.fn(() => of(COTIZACION));
     await TestBed.configureTestingModule({
       imports: [Shell],
       providers: [
@@ -24,6 +51,7 @@ describe('Shell', () => {
           provide: AuthService,
           useValue: { esDueno: signal(dueno), sesion: signal(sesion), logout: () => undefined },
         },
+        { provide: CotizacionService, useValue: { obtener } },
       ],
     }).compileComponents();
     fixture = TestBed.createComponent(Shell);
@@ -31,6 +59,10 @@ describe('Shell', () => {
     await fixture.whenStable();
     return fixture.nativeElement as HTMLElement;
   }
+
+  beforeEach(() => {
+    obtener = vi.fn(() => of(COTIZACION));
+  });
 
   const enlaces = (el: HTMLElement) =>
     Array.from(el.querySelectorAll('nav a')).map((a) => a.textContent?.trim());
@@ -40,10 +72,10 @@ describe('Shell', () => {
 
     const nav = el.querySelector('aside nav[aria-label="Secciones"]');
     expect(nav).not.toBeNull();
-    expect(nav!.querySelectorAll('a').length).toBe(6);
+    expect(nav!.querySelectorAll('a').length).toBe(7);
   });
 
-  it('el Dueño ve Mostrador, Artículos, Rubros, Proveedores y, bajo «Precios», Importar lista y Actualizar precios', async () => {
+  it('el Dueño ve Mostrador, Artículos, Rubros, Proveedores y, bajo «Precios», Importar lista, Actualizar precios y Cotización', async () => {
     const el = await render(true);
 
     expect(enlaces(el)).toEqual([
@@ -53,6 +85,7 @@ describe('Shell', () => {
       'Proveedores',
       'Importar lista',
       'Actualizar precios',
+      'Cotización',
     ]);
     expect(el.querySelector('nav .grupo')?.textContent?.trim()).toBe('Precios');
     expect(el.querySelector('a[href="/importaciones"]')).not.toBeNull();
@@ -66,6 +99,24 @@ describe('Shell', () => {
     const enlace = el.querySelector('nav a[href="/actualizacion-masiva"]');
     expect(enlace).not.toBeNull();
     expect(enlace!.textContent?.trim()).toBe('Actualizar precios');
+  });
+
+  it('el Dueño ve «Cotización» al final del grupo «Precios» y lleva a /configuracion/cotizacion', async () => {
+    const el = await render(true);
+
+    const nombres = enlaces(el);
+    expect(nombres.at(-1)).toBe('Cotización');
+    const enlace = el.querySelector('nav a[href="/configuracion/cotizacion"]');
+    expect(enlace).not.toBeNull();
+    expect(enlace!.textContent?.trim()).toBe('Cotización');
+  });
+
+  it('el Vendedor no ve «Cotización» en el menú (sí ve el bloque de cotización)', async () => {
+    const el = await render(false);
+
+    expect(el.querySelector('nav a[href="/configuracion/cotizacion"]')).toBeNull();
+    expect(enlaces(el)).not.toContain('Cotización');
+    expect(el.querySelector('app-cotizacion-lateral')).not.toBeNull();
   });
 
   it('el Vendedor no ve "Importar lista", "Actualizar precios" ni el grupo «Precios»', async () => {
@@ -174,5 +225,133 @@ describe('Shell', () => {
       expect(primero?.textContent?.trim()).toBe('Mostrador');
       expect(primero?.getAttribute('href')).toBe('/mostrador');
     }
+  });
+  describe('cotización en el menú lateral', () => {
+    const MINUTO = 60_000;
+    const texto = (e: Element | null) => e?.textContent?.replace(/\s+/g, ' ').trim() ?? '';
+
+    async function mostrar(el: HTMLElement) {
+      fixture.detectChanges();
+      await fixture.whenStable();
+      fixture.detectChanges();
+      return el;
+    }
+
+    afterEach(() => vi.useRealTimers());
+
+    it('todos los roles ven el bloque de cotización, debajo de las secciones', async () => {
+      for (const dueno of [false, true]) {
+        TestBed.resetTestingModule();
+        obtener = vi.fn(() => of(COTIZACION));
+        const el = await mostrar(await render(dueno));
+
+        const lateral = el.querySelector('aside app-cotizacion-lateral');
+        expect(lateral, dueno ? 'Dueño' : 'Vendedor').not.toBeNull();
+        expect(texto(lateral)).toContain('Oficial venta 1.000,00');
+        const nav = el.querySelector('aside nav')!;
+        expect(nav.compareDocumentPosition(lateral!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+      }
+    });
+
+    it('el link «Configurar» es solo del Dueño', async () => {
+      const dueno = await mostrar(await render(true));
+      expect(texto(dueno.querySelector('app-cotizacion-lateral a'))).toBe('Configurar');
+
+      TestBed.resetTestingModule();
+      obtener = vi.fn(() => of(COTIZACION));
+      const vendedor = await mostrar(await render(false));
+      expect(vendedor.querySelector('app-cotizacion-lateral a')).toBeNull();
+      expect(texto(vendedor.querySelector('app-cotizacion-lateral'))).toContain('Oficial venta 1.000,00');
+    });
+
+    it('pide la cotización al abrir una vez, no a los 4 minutos y sí a los 5', async () => {
+      vi.useFakeTimers();
+      await render(true);
+      expect(obtener).toHaveBeenCalledTimes(1);
+
+      vi.advanceTimersByTime(4 * MINUTO);
+      expect(obtener).toHaveBeenCalledTimes(1);
+
+      vi.advanceTimersByTime(1 * MINUTO);
+      expect(obtener).toHaveBeenCalledTimes(2);
+
+      vi.advanceTimersByTime(5 * MINUTO);
+      expect(obtener).toHaveBeenCalledTimes(3);
+    });
+
+    it('lo nuevo que trae el pedido de los 5 minutos reemplaza lo que se ve', async () => {
+      vi.useFakeTimers();
+      const actualizada: Cotizacion = {
+        ...COTIZACION,
+        visibles: [{ ...COTIZACION.visibles[0], venta: 1100 }],
+      };
+      obtener = vi.fn().mockReturnValueOnce(of(COTIZACION)).mockReturnValue(of(actualizada));
+      const el = await mostrar(await render(false));
+      expect(texto(el.querySelector('app-cotizacion-lateral'))).toContain('Oficial venta 1.000,00');
+
+      vi.advanceTimersByTime(5 * MINUTO);
+      await mostrar(el);
+
+      expect(texto(el.querySelector('app-cotizacion-lateral'))).toContain('Oficial venta 1.100,00');
+    });
+
+    it('al destruir el shell se frena el intervalo: no vuelve a pedir', async () => {
+      vi.useFakeTimers();
+      await render(true);
+      expect(obtener).toHaveBeenCalledTimes(1);
+
+      fixture.destroy();
+      vi.advanceTimersByTime(30 * MINUTO);
+
+      expect(obtener).toHaveBeenCalledTimes(1);
+      expect(vi.getTimerCount()).toBe(0);
+    });
+
+    it('si falla un pedido conserva el último valor y sigue pidiendo a los 5 minutos', async () => {
+      vi.useFakeTimers();
+      obtener = vi
+        .fn()
+        .mockReturnValueOnce(of(COTIZACION))
+        .mockReturnValueOnce(throwError(() => new Error('sin red')))
+        .mockReturnValue(of({ ...COTIZACION, visibles: [{ ...COTIZACION.visibles[0], venta: 1200 }] }));
+      const el = await mostrar(await render(false));
+
+      vi.advanceTimersByTime(5 * MINUTO);
+      await mostrar(el);
+      expect(obtener).toHaveBeenCalledTimes(2);
+      expect(texto(el.querySelector('app-cotizacion-lateral'))).toContain('Oficial venta 1.000,00');
+
+      vi.advanceTimersByTime(5 * MINUTO);
+      await mostrar(el);
+      expect(obtener).toHaveBeenCalledTimes(3);
+      expect(texto(el.querySelector('app-cotizacion-lateral'))).toContain('Oficial venta 1.200,00');
+    });
+
+    it('si el primer pedido falla, el bloque dice que no hay datos y el siguiente lo corrige', async () => {
+      vi.useFakeTimers();
+      obtener = vi.fn().mockReturnValueOnce(throwError(() => new Error('sin red'))).mockReturnValue(of(COTIZACION));
+      const el = await mostrar(await render(false));
+      expect(texto(el.querySelector('app-cotizacion-lateral'))).toContain('Sin datos de cotización por ahora.');
+
+      vi.advanceTimersByTime(5 * MINUTO);
+      await mostrar(el);
+
+      expect(texto(el.querySelector('app-cotizacion-lateral'))).toContain('Oficial venta 1.000,00');
+    });
+
+    it('un pedido lento no pisa a uno más nuevo: se descarta el que quedó atrás', async () => {
+      vi.useFakeTimers();
+      const lento = new Subject<Cotizacion>();
+      obtener = vi.fn().mockReturnValueOnce(lento).mockReturnValue(of({ ...COTIZACION, visibles: [{ ...COTIZACION.visibles[0], venta: 1300 }] }));
+      const el = await mostrar(await render(false));
+
+      vi.advanceTimersByTime(5 * MINUTO);
+      await mostrar(el);
+      lento.next(COTIZACION);
+      lento.complete();
+      await mostrar(el);
+
+      expect(texto(el.querySelector('app-cotizacion-lateral'))).toContain('Oficial venta 1.300,00');
+    });
   });
 });
