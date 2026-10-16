@@ -835,4 +835,251 @@ class ArticuloTest {
         // 10 x 1100 x 1.4 x 1.21 = 18634 -> 18640
         assertThat(articulo.getPrecioFinal()).isEqualByComparingTo("18640.00");
     }
+
+    // --- corte 2: aplicarLista (moneda, IVA y ajustes desde la lista), ajustes y ultima importacion ---
+
+    /** Articulo ARS con costo 1.000, margen 30 %, IVA 21 %, multiplo 10: precio $ 1.580. */
+    private static Articulo articuloEnPesos(String costo) {
+        Articulo articulo = new Articulo(FERRETERIA);
+        articulo.actualizar(datos(costo, null, AlicuotaIva.IVA_21), ctx(null));
+        return articulo;
+    }
+
+    @Test
+    @DisplayName("aplicarLista: ARS a USD con costo 10 y dolar 1.000 da precio 15.730 y monedaAnterior ARS")
+    void aplicarListaCambiaDePesosADolares() {
+        Articulo articulo = articuloEnPesos("1000");
+        assertThat(articulo.getPrecioFinal()).isEqualByComparingTo("1580");
+
+        Optional<CambioDeLista> cambio = articulo.aplicarLista(bd("10"), bd("10"), Moneda.USD, null, Ajustes.NINGUNO,
+            7L, ctxConDolar("1000"));
+
+        assertThat(cambio).isPresent();
+        assertThat(cambio.get().monedaAnterior()).isEqualTo(Moneda.ARS);
+        assertThat(cambio.get().cambio().costoAnterior()).isEqualByComparingTo("1000");
+        assertThat(cambio.get().cambio().costoNuevo()).isEqualByComparingTo("10");
+        assertThat(cambio.get().cambio().precioAnterior()).isEqualByComparingTo("1580");
+        assertThat(cambio.get().cambio().precioNuevo()).isEqualByComparingTo("15730");
+        assertThat(articulo.getMoneda()).isEqualTo(Moneda.USD);
+        assertThat(articulo.getCosto()).isEqualByComparingTo("10");
+        assertThat(articulo.getPrecioFinal()).isEqualByComparingTo("15730");
+        assertThat(articulo.getUltimaImportacionId()).isEqualTo(7L);
+    }
+
+    @Test
+    @DisplayName("aplicarLista: de USD a ARS con lista 12.000 da precio 18.880 y monedaAnterior USD")
+    void aplicarListaCambiaDeDolaresAPesos() {
+        Articulo articulo = new Articulo(FERRETERIA);
+        articulo.actualizar(datosEn(Moneda.USD, "10"), ctxConDolar("1000"));
+
+        Optional<CambioDeLista> cambio = articulo.aplicarLista(bd("12000"), bd("12000"), Moneda.ARS, null,
+            Ajustes.NINGUNO, 7L, ctxConDolar("1000"));
+
+        assertThat(cambio.get().monedaAnterior()).isEqualTo(Moneda.USD);
+        assertThat(articulo.getMoneda()).isEqualTo(Moneda.ARS);
+        assertThat(articulo.getPrecioFinal()).isEqualByComparingTo("18880");
+    }
+
+    @Test
+    @DisplayName("aplicarLista: un cambio de moneda se fuerza aunque el costo y el precio queden iguales")
+    void aplicarListaForzaElCambioDeMoneda() {
+        Articulo articulo = articuloEnPesos("10");
+        BigDecimal precioAntes = articulo.getPrecioFinal();
+
+        // Con el dolar a 1 un costo de 10 USD da el mismo precio que 10 pesos: los numeros coinciden.
+        Optional<CambioDeLista> cambio = articulo.aplicarLista(bd("10"), bd("10"), Moneda.USD, null, Ajustes.NINGUNO,
+            7L, ctxConDolar("1"));
+
+        assertThat(articulo.getPrecioFinal()).isEqualByComparingTo(precioAntes);
+        assertThat(cambio).isPresent();
+        assertThat(cambio.get().monedaAnterior()).isEqualTo(Moneda.ARS);
+        assertThat(cambio.get().cambio().costoAnterior()).isEqualByComparingTo("10");
+        assertThat(cambio.get().cambio().costoNuevo()).isEqualByComparingTo("10");
+        assertThat(cambio.get().cambio().precioAnterior()).isEqualByComparingTo(precioAntes);
+        assertThat(cambio.get().cambio().precioNuevo()).isEqualByComparingTo(precioAntes);
+    }
+
+    @Test
+    @DisplayName("aplicarLista: de IVA_21 a IVA_10_5 con costo 10.000 el precio pasa de 15.730 a 14.370")
+    void aplicarListaCorrigeLaAlicuota() {
+        Articulo articulo = articuloEnPesos("10000");
+        assertThat(articulo.getPrecioFinal()).isEqualByComparingTo("15730");
+
+        Optional<CambioDeLista> cambio = articulo.aplicarLista(bd("10000"), bd("10000"), null, AlicuotaIva.IVA_10_5,
+            Ajustes.NINGUNO, 7L, ctx(null));
+
+        assertThat(cambio).isPresent();
+        assertThat(cambio.get().monedaAnterior()).isNull();
+        assertThat(cambio.get().cambio().costoAnterior()).isEqualByComparingTo("10000");
+        assertThat(cambio.get().cambio().costoNuevo()).isEqualByComparingTo("10000");
+        assertThat(cambio.get().cambio().precioAnterior()).isEqualByComparingTo("15730");
+        assertThat(cambio.get().cambio().precioNuevo()).isEqualByComparingTo("14370");
+        assertThat(articulo.getAlicuotaIva()).isEqualTo(AlicuotaIva.IVA_10_5);
+    }
+
+    @Test
+    @DisplayName("aplicarLista: sin moneda ni alicuota nuevas conserva las del articulo")
+    void aplicarListaConservaMonedaYAlicuota() {
+        Articulo articulo = new Articulo(FERRETERIA);
+        articulo.actualizar(datosEn(Moneda.USD, "10"), ctxConDolar("1000"));
+
+        Optional<CambioDeLista> cambio = articulo.aplicarLista(bd("12"), bd("12"), null, null, Ajustes.NINGUNO, 7L,
+            ctxConDolar("1000"));
+
+        assertThat(articulo.getMoneda()).isEqualTo(Moneda.USD);
+        assertThat(articulo.getAlicuotaIva()).isEqualTo(AlicuotaIva.IVA_21);
+        assertThat(cambio.get().monedaAnterior()).isNull();
+        // 12 x 1000 x 1,30 x 1,21 = 18.876 -> 18.880
+        assertThat(articulo.getPrecioFinal()).isEqualByComparingTo("18880");
+    }
+
+    @Test
+    @DisplayName("aplicarLista: la misma moneda con otro costo es un cambio normal, sin monedaAnterior")
+    void aplicarListaSube() {
+        Articulo articulo = articuloEnPesos("1000");
+
+        Optional<CambioDeLista> cambio = articulo.aplicarLista(bd("1200"), bd("1200"), Moneda.ARS, null,
+            Ajustes.NINGUNO, 7L, ctx(null));
+
+        assertThat(cambio).isPresent();
+        assertThat(cambio.get().monedaAnterior()).isNull();
+        assertThat(cambio.get().cambio().costoNuevo()).isEqualByComparingTo("1200");
+        assertThat(cambio.get().cambio().precioNuevo()).isEqualByComparingTo("1890");
+    }
+
+    @Test
+    @DisplayName("aplicarLista: si ni el costo ni el precio final cambian no hay cambio, pero igual marca la importacion")
+    void aplicarListaSinCambio() {
+        Articulo articulo = articuloEnPesos("1000");
+
+        Optional<CambioDeLista> cambio = articulo.aplicarLista(bd("1000.00"), bd("1210"), Moneda.ARS,
+            AlicuotaIva.IVA_21, Ajustes.NINGUNO, 7L, ctx(null));
+
+        assertThat(cambio).isEmpty();
+        assertThat(articulo.getPrecioListaProveedor()).isEqualByComparingTo("1210");
+        assertThat(articulo.getUltimaImportacionId()).isEqualTo(7L);
+    }
+
+    @Test
+    @DisplayName("aplicarLista: una correccion de IVA que no mueve el precio final redondeado no da cambio")
+    void aplicarListaCorreccionQueNoMueveElPrecio() {
+        Articulo articulo = articuloEnPesos("1");
+        BigDecimal precioAntes = articulo.getPrecioFinal();
+
+        // 1 x 1,30 x 1,21 = 1,573 y 1 x 1,30 x 1,105 = 1,4365: los dos suben a $ 10 con multiplo 10.
+        Optional<CambioDeLista> cambio = articulo.aplicarLista(bd("1"), bd("1"), null, AlicuotaIva.IVA_10_5,
+            Ajustes.NINGUNO, 7L, ctx(null));
+
+        assertThat(cambio).isEmpty();
+        assertThat(articulo.getPrecioFinal()).isEqualByComparingTo(precioAntes);
+        assertThat(articulo.getAlicuotaIva()).isEqualTo(AlicuotaIva.IVA_10_5);
+    }
+
+    @Test
+    @DisplayName("aplicarLista: fija los ajustes que le llegan (-5, +3, ninguno) y el precio de lista a escala 2")
+    void aplicarListaFijaLosAjustes() {
+        Articulo articulo = articuloEnPesos("1000");
+
+        articulo.aplicarLista(bd("880.65"), bd("1000.005"), null, null, new Ajustes(bd("-5"), bd("3"), null), 7L,
+            ctx(null));
+
+        assertThat(articulo.getAjuste1()).isEqualByComparingTo("-5");
+        assertThat(articulo.getAjuste2()).isEqualByComparingTo("3");
+        assertThat(articulo.getAjuste3()).isNull();
+        assertThat(articulo.getAjustes()).isEqualTo(new Ajustes(bd("-5"), bd("3"), null));
+        assertThat(articulo.getPrecioListaProveedor()).isEqualByComparingTo("1000.01");
+    }
+
+    @Test
+    @DisplayName("aplicarLista: Ajustes.NINGUNO borra los ajustes que el articulo tenia")
+    void aplicarListaBorraLosAjustes() {
+        Articulo articulo = articuloEnPesos("1000");
+        articulo.fijarAjustes(new Ajustes(bd("-5"), null, bd("2")));
+
+        articulo.aplicarLista(bd("1000"), bd("1000"), null, null, Ajustes.NINGUNO, 7L, ctx(null));
+
+        assertThat(articulo.getAjustes()).isEqualTo(Ajustes.NINGUNO);
+    }
+
+    @Test
+    @DisplayName("aplicarLista: costo negativo o null lanza IllegalArgumentException y no cambia nada")
+    void aplicarListaInvalido() {
+        Articulo articulo = articuloEnPesos("1000");
+
+        assertThatThrownBy(() -> articulo.aplicarLista(bd("-1"), bd("1"), null, null, Ajustes.NINGUNO, 7L, ctx(null)))
+            .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> articulo.aplicarLista(null, bd("1"), null, null, Ajustes.NINGUNO, 7L, ctx(null)))
+            .isInstanceOf(IllegalArgumentException.class);
+        assertThat(articulo.getCosto()).isEqualByComparingTo("1000");
+        assertThat(articulo.getUltimaImportacionId()).isNull();
+    }
+
+    @Test
+    @DisplayName("marcarImportacion(7) fija la ultima importacion; un articulo creado a mano la tiene en null")
+    void marcarImportacion() {
+        Articulo aMano = articuloEnPesos("1000");
+        assertThat(aMano.getUltimaImportacionId()).isNull();
+
+        aMano.marcarImportacion(7L);
+        assertThat(aMano.getUltimaImportacionId()).isEqualTo(7L);
+        aMano.marcarImportacion(9L);
+        assertThat(aMano.getUltimaImportacionId()).isEqualTo(9L);
+    }
+
+    @Test
+    @DisplayName("un articulo nuevo no tiene ajustes")
+    void sinAjustesPorDefecto() {
+        Articulo articulo = articuloEnPesos("1000");
+
+        assertThat(articulo.getAjuste1()).isNull();
+        assertThat(articulo.getAjuste2()).isNull();
+        assertThat(articulo.getAjuste3()).isNull();
+        assertThat(articulo.getAjustes()).isEqualTo(Ajustes.NINGUNO);
+    }
+
+    @Test
+    @DisplayName("alta desde la lista: barras y unidad por DatosArticulo, ajustes con fijarAjustes")
+    void altaConAjustesBarrasYUnidad() {
+        Articulo articulo = new Articulo(FERRETERIA);
+        DatosArticulo datos = new DatosArticulo("TORN-009", "7791234567890", "AB-12", "Tornillo por metro", null, 20L,
+            bd("880.65"), null, AlicuotaIva.IVA_10_5, Unidad.METRO, bd("0"), null, true, Moneda.ARS);
+
+        articulo.actualizar(datos, ctx(null));
+        articulo.fijarAjustes(new Ajustes(bd("-5"), bd("3"), null));
+        articulo.marcarImportacion(7L);
+
+        assertThat(articulo.getCodigoBarras()).isEqualTo("7791234567890");
+        assertThat(articulo.getUnidad()).isEqualTo(Unidad.METRO);
+        assertThat(articulo.getAlicuotaIva()).isEqualTo(AlicuotaIva.IVA_10_5);
+        assertThat(articulo.getAjuste1()).isEqualByComparingTo("-5");
+        assertThat(articulo.getAjuste2()).isEqualByComparingTo("3");
+        assertThat(articulo.getUltimaImportacionId()).isEqualTo(7L);
+        // 880,65 x 1,30 x 1,105 = 1.265,0... -> 1.270
+        assertThat(articulo.getPrecioFinal()).isEqualByComparingTo("1270");
+    }
+
+    @Test
+    @DisplayName("actualizar (el PUT) no toca los ajustes ni la ultima importacion")
+    void actualizarNoTocaLosAjustes() {
+        Articulo articulo = articuloEnPesos("1000");
+        articulo.fijarAjustes(new Ajustes(bd("-5"), bd("3"), bd("1.5")));
+        articulo.marcarImportacion(7L);
+
+        articulo.actualizar(datos("1200", "35", AlicuotaIva.IVA_21), ctx(null));
+
+        assertThat(articulo.getAjustes()).isEqualTo(new Ajustes(bd("-5"), bd("3"), bd("1.5")));
+        assertThat(articulo.getUltimaImportacionId()).isEqualTo(7L);
+    }
+
+    @Test
+    @DisplayName("actualizarCosto sigue andando y tampoco toca los ajustes")
+    void actualizarCostoNoTocaLosAjustes() {
+        Articulo articulo = articuloEnPesos("1000");
+        articulo.fijarAjustes(new Ajustes(bd("-5"), null, null));
+
+        Optional<CambioPrecio> cambio = articulo.actualizarCosto(bd("1100"), bd("1100"), ctx(null));
+
+        assertThat(cambio).isPresent();
+        assertThat(articulo.getAjuste1()).isEqualByComparingTo("-5");
+    }
 }

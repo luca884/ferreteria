@@ -58,6 +58,15 @@ public class ImportacionLista {
     @Column(name = "con_error", nullable = false, updatable = false)
     private int conError;
 
+    @Column(name = "cambian_moneda", nullable = false, updatable = false)
+    private int cambianMoneda;
+
+    @Column(nullable = false, updatable = false)
+    private int corrigen;
+
+    @Column(nullable = false, updatable = false)
+    private int salteadas;
+
     @Enumerated(EnumType.STRING)
     @JdbcTypeCode(SqlTypes.VARCHAR)
     @Column(nullable = false, updatable = false, length = 20)
@@ -78,6 +87,9 @@ public class ImportacionLista {
         importacion.sinCambio = conteos.sinCambio();
         importacion.noEstan = conteos.noEstan();
         importacion.conError = conteos.conError();
+        importacion.cambianMoneda = conteos.cambianMoneda();
+        importacion.corrigen = conteos.corrigen();
+        importacion.salteadas = conteos.salteadas();
         importacion.estado = EstadoImportacion.APLICADA;
         return importacion;
     }
@@ -94,5 +106,8 @@ public class ImportacionLista {
     public int getSinCambio() { return sinCambio; }
     public int getNoEstan() { return noEstan; }
     public int getConError() { return conError; }
+    public int getCambianMoneda() { return cambianMoneda; }
+    public int getCorrigen() { return corrigen; }
+    public int getSalteadas() { return salteadas; }
     public EstadoImportacion getEstado() { return estado; }
 }

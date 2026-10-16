@@ -51,4 +51,19 @@ class AjustesTest {
         assertThatThrownBy(() -> new Ajustes(null, bd("-150"), null)).isInstanceOf(IllegalArgumentException.class);
         assertThatThrownBy(() -> new Ajustes(null, null, bd("1000.01"))).isInstanceOf(IllegalArgumentException.class);
     }
+
+    @Test
+    @DisplayName("los ajustes quedan a escala 2, como la columna, asi -5 y -5,00 son el mismo Ajustes")
+    void seNormalizanAEscala2() {
+        Ajustes sinDecimales = new Ajustes(bd("-5"), bd("3.5"), null);
+        Ajustes conDecimales = new Ajustes(bd("-5.00"), bd("3.50"), null);
+
+        assertThat(sinDecimales).isEqualTo(conDecimales);
+        assertThat(sinDecimales.hashCode()).isEqualTo(conDecimales.hashCode());
+        assertThat(sinDecimales.a1().scale()).isEqualTo(2);
+        assertThat(sinDecimales.a2().scale()).isEqualTo(2);
+        assertThat(sinDecimales.a3()).isNull();
+        assertThat(new Ajustes(bd("3.5"), null, null)).isNotEqualTo(new Ajustes(bd("3.51"), null, null));
+        assertThat(sinDecimales.numerador()).isEqualByComparingTo("983250");
+    }
 }

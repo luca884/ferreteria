@@ -60,6 +60,16 @@ public class HistorialPrecio {
     @Column(nullable = false, updatable = false, length = 3)
     private Moneda moneda = Moneda.ARS;
 
+    /**
+     * Moneda del costo ANTERIOR, solo cuando esta entrada es un cambio de moneda (la lista pasa un articulo de pesos a
+     * dolares o al reves): asi el costo anterior y el nuevo no se leen como si fueran de la misma moneda. Null en el
+     * resto.
+     */
+    @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
+    @Column(name = "moneda_anterior", updatable = false, length = 3)
+    private Moneda monedaAnterior;
+
     @Column(nullable = false, updatable = false)
     private LocalDateTime fecha = LocalDateTime.now();
 
@@ -77,6 +87,15 @@ public class HistorialPrecio {
      * {@code usuarioId} puede ser null solo en el recalculo automatico por cotizacion.
      */
     public static HistorialPrecio de(Articulo articulo, CambioPrecio cambio, OrigenPrecio origen, Long usuarioId) {
+        return de(articulo, cambio, origen, usuarioId, null);
+    }
+
+    /**
+     * Como {@link #de(Articulo, CambioPrecio, OrigenPrecio, Long)} para un cambio de moneda: {@code monedaAnterior} es
+     * la que tenia el articulo antes (la nueva es la del articulo). Null si la moneda no cambio.
+     */
+    public static HistorialPrecio de(Articulo articulo, CambioPrecio cambio, OrigenPrecio origen, Long usuarioId,
+                                     Moneda monedaAnterior) {
         HistorialPrecio historial = new HistorialPrecio();
         historial.ferreteriaId = articulo.getFerreteriaId();
         historial.articuloId = articulo.getId();
@@ -86,6 +105,7 @@ public class HistorialPrecio {
         historial.precioNuevo = cambio.precioNuevo();
         historial.origen = origen;
         historial.moneda = articulo.getMoneda();
+        historial.monedaAnterior = monedaAnterior;
         historial.usuarioId = usuarioId;
         return historial;
     }
@@ -99,6 +119,7 @@ public class HistorialPrecio {
     public BigDecimal getPrecioNuevo() { return precioNuevo; }
     public OrigenPrecio getOrigen() { return origen; }
     public Moneda getMoneda() { return moneda; }
+    public Moneda getMonedaAnterior() { return monedaAnterior; }
     public LocalDateTime getFecha() { return fecha; }
     public Long getUsuarioId() { return usuarioId; }
 }

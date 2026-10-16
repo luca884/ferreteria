@@ -103,6 +103,23 @@ public class Articulo {
     @Column(name = "precio_lista_proveedor", precision = 15, scale = 2)
     private BigDecimal precioListaProveedor;
 
+    /**
+     * Descuentos o recargos propios en %, negativo es descuento (hasta tres, encadenados despues de las
+     * bonificaciones del proveedor). Los fija solo la importacion de listas: actualizar (el PUT) no los toca.
+     */
+    @Column(precision = 6, scale = 2)
+    private BigDecimal ajuste1;
+
+    @Column(precision = 6, scale = 2)
+    private BigDecimal ajuste2;
+
+    @Column(precision = 6, scale = 2)
+    private BigDecimal ajuste3;
+
+    /** La ultima importacion de lista que toco este articulo; null si nunca lo toco una (alta manual, por ejemplo). */
+    @Column(name = "ultima_importacion_id")
+    private Long ultimaImportacionId;
+
     @Column(nullable = false)
     private boolean activo = true;
 
@@ -170,6 +187,51 @@ public class Articulo {
     }
 
     /**
+     * Importacion de listas desde el corte 2: aplica una fila de la lista a este articulo. Fija el costo (ya con las
+     * bonificaciones y los ajustes aplicados), el precio de lista del proveedor, los ajustes, y la moneda y la
+     * alicuota de IVA si la fila las trae ({@code null} conserva las del articulo). Marca la importacion que lo
+     * toco y recalcula el precio final. No toca descripcion, rubro, margen, stock ni si esta activo.
+     *
+     * <p>Devuelve el cambio de costo y de precio, o vacio si ninguno de los dos cambio (sin historial). Si la moneda
+     * cambio el cambio SIEMPRE existe, aunque los numeros coincidan, y lleva la moneda anterior.
+     *
+     * @param ajustes los ajustes que quedan en el articulo, ya resueltos por posicion (conservar, borrar o valor)
+     * @throws IllegalArgumentException si el costo es null o negativo
+     */
+    public Optional<CambioDeLista> aplicarLista(BigDecimal costoNuevo, BigDecimal precioLista, Moneda monedaNueva,
+                                                AlicuotaIva alicuotaNueva, Ajustes ajustes, Long importacionId,
+                                                ContextoPrecio ctx) {
+        if (costoNuevo == null || costoNuevo.signum() < 0) {
+            throw new IllegalArgumentException("El costo debe ser un valor mayor o igual a 0.");
+        }
+        BigDecimal costoAnterior = this.costo;
+        BigDecimal precioAnterior = this.precioFinal;
+        Moneda monedaAnterior = this.moneda;
+
+        this.costo = costoNuevo;
+        if (monedaNueva != null) {
+            this.moneda = monedaNueva;
+        }
+        if (alicuotaNueva != null) {
+            this.alicuotaIva = alicuotaNueva;
+        }
+        fijarAjustes(ajustes);
+        registrarPrecioLista(precioLista);
+        marcarImportacion(importacionId);
+        calcularPrecio(ctx);
+
+        Moneda cambioDeMoneda = monedaAnterior != this.moneda ? monedaAnterior : null;
+        Optional<CambioPrecio> cambio = CambioPrecio.entre(costoAnterior, this.costo, precioAnterior, this.precioFinal);
+        if (cambioDeMoneda != null) {
+            // Se fuerza: un cambio de moneda siempre deja historial, aunque los numeros queden iguales.
+            return Optional.of(new CambioDeLista(
+                cambio.orElseGet(() -> new CambioPrecio(costoAnterior, this.costo, precioAnterior, this.precioFinal)),
+                cambioDeMoneda));
+        }
+        return cambio.map(c -> new CambioDeLista(c, null));
+    }
+
+    /**
      * Actualizacion masiva (CU-05): cambia solo el costo y recalcula el precio final. No toca el
      * precio de lista del proveedor, el margen, el IVA, el stock ni si esta activo. El precio se
      * recalcula siempre, aunque el costo no cambie.
@@ -213,6 +275,22 @@ public class Articulo {
         this.precioListaProveedor = precioLista.setScale(2, RoundingMode.HALF_UP);
     }
 
+    /**
+     * Fija los tres ajustes (null es "sin ajuste"). No recalcula nada: el costo ya viene con los ajustes aplicados
+     * ({@link CostoDeLista}).
+     */
+    public void fijarAjustes(Ajustes ajustes) {
+        Ajustes nuevos = ajustes == null ? Ajustes.NINGUNO : ajustes;
+        this.ajuste1 = nuevos.a1();
+        this.ajuste2 = nuevos.a2();
+        this.ajuste3 = nuevos.a3();
+    }
+
+    /** Anota la importacion de lista que toco este articulo por ultima vez. */
+    public void marcarImportacion(Long importacionId) {
+        this.ultimaImportacionId = importacionId;
+    }
+
     /** Baja logica: el articulo y su historial de precios se conservan. */
     public void desactivar() {
         this.activo = false;
@@ -247,6 +325,11 @@ public class Articulo {
     public BigDecimal getStockMinimo() { return stockMinimo; }
     public String getUbicacion() { return ubicacion; }
     public BigDecimal getPrecioListaProveedor() { return precioListaProveedor; }
+    public BigDecimal getAjuste1() { return ajuste1; }
+    public BigDecimal getAjuste2() { return ajuste2; }
+    public BigDecimal getAjuste3() { return ajuste3; }
+    public Ajustes getAjustes() { return new Ajustes(ajuste1, ajuste2, ajuste3); }
+    public Long getUltimaImportacionId() { return ultimaImportacionId; }
     public boolean isActivo() { return activo; }
     public LocalDateTime getCreadoEn() { return creadoEn; }
 }

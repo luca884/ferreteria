@@ -117,4 +117,67 @@ class ImportacionListaRepositoryTest extends IntegrationTestBase {
         assertThatThrownBy(() -> repository.findScoped(1L)).isInstanceOf(MissingTenantException.class);
         assertThatThrownBy(() -> repository.findAllScoped()).isInstanceOf(MissingTenantException.class);
     }
+
+    // ---- corte 2: contadores nuevos (V6) ----
+
+    @Test
+    void guardaYRelee_loQueSeAplico_conLosContadoresNuevos() {
+        Map<String, Object> usuario = usuario("dueno@tornillo.demo");
+        Long ferreteriaId = ((Number) usuario.get("ferreteria_id")).longValue();
+        Long usuarioId = ((Number) usuario.get("id")).longValue();
+        TenantContext.setCurrentFerreteriaId(ferreteriaId);
+        ConteosImportacion conteos = new ConteosImportacion(200, 0, 2700, 100, 5, 7, 3, 164, 42);
+
+        ImportacionLista guardada = repository.save(
+                ImportacionLista.aplicada(ferreteriaId, proveedor(ferreteriaId), usuarioId, "lista-336.xlsx", conteos));
+        ImportacionLista leida = repository.findScoped(guardada.getId()).orElseThrow();
+
+        assertThat(leida.getSuben()).isEqualTo(200);
+        assertThat(leida.getNuevos()).isEqualTo(2700);
+        assertThat(leida.getSinCambio()).isEqualTo(100);
+        assertThat(leida.getNoEstan()).isEqualTo(5);
+        assertThat(leida.getConError()).isEqualTo(7);
+        assertThat(leida.getCambianMoneda()).isEqualTo(3);
+        assertThat(leida.getCorrigen()).isEqualTo(164);
+        assertThat(leida.getSalteadas()).isEqualTo(42);
+        Map<String, Object> fila = jdbc.queryForMap(
+                "select cambian_moneda, corrigen, salteadas from importacion_lista where id = ?", guardada.getId());
+        assertThat(((Number) fila.get("cambian_moneda")).intValue()).isEqualTo(3);
+        assertThat(((Number) fila.get("corrigen")).intValue()).isEqualTo(164);
+        assertThat(((Number) fila.get("salteadas")).intValue()).isEqualTo(42);
+    }
+
+    @Test
+    void conElConstructorViejoDeConteosLosNuevosQuedanEnCero() {
+        ImportacionLista guardada = guardarComo("dueno@tornillo.demo", "vieja.xlsx");
+
+        ImportacionLista leida = repository.findScoped(guardada.getId()).orElseThrow();
+
+        assertThat(leida.getSuben()).isEqualTo(4);
+        assertThat(leida.getCambianMoneda()).isZero();
+        assertThat(leida.getCorrigen()).isZero();
+        assertThat(leida.getSalteadas()).isZero();
+    }
+
+    @Test
+    void unRegistroAnteriorAV6SeLeeConCeroEnLosTresContadores() {
+        Map<String, Object> usuario = usuario("dueno@tornillo.demo");
+        Long ferreteriaId = ((Number) usuario.get("ferreteria_id")).longValue();
+        Long usuarioId = ((Number) usuario.get("id")).longValue();
+        TenantContext.setCurrentFerreteriaId(ferreteriaId);
+        // Como lo escribia el codigo anterior: sin las columnas del corte 2.
+        jdbc.update("insert into importacion_lista (ferreteria_id, proveedor_id, usuario_id, archivo, suben, bajan, "
+                + "nuevos, sin_cambio, no_estan, con_error, estado) values (?, ?, ?, 'anterior-a-v6.csv', 9, 8, 7, 6, 5, "
+                + "4, 'APLICADA')", ferreteriaId, proveedor(ferreteriaId), usuarioId);
+        Long id = jdbc.queryForObject("select max(id) from importacion_lista where archivo = 'anterior-a-v6.csv' "
+                + "and ferreteria_id = ?", Long.class, ferreteriaId);
+
+        ImportacionLista leida = repository.findScoped(id).orElseThrow();
+
+        assertThat(leida.getSuben()).isEqualTo(9);
+        assertThat(leida.getConError()).isEqualTo(4);
+        assertThat(leida.getCambianMoneda()).isZero();
+        assertThat(leida.getCorrigen()).isZero();
+        assertThat(leida.getSalteadas()).isZero();
+    }
 }

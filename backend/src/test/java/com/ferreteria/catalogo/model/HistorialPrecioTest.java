@@ -117,4 +117,53 @@ class HistorialPrecioTest {
         assertThat(HistorialPrecio.de(enPesos, cambio, OrigenPrecio.MANUAL, 3L).getMoneda()).isEqualTo(Moneda.ARS);
         assertThat(HistorialPrecio.de(enDolares, cambio, OrigenPrecio.MANUAL, 3L).getMoneda()).isEqualTo(Moneda.USD);
     }
+
+    // --- corte 2: moneda anterior en un cambio de moneda ---
+
+    @Test
+    @DisplayName("de() con monedaAnterior guarda las dos monedas: la anterior ARS y la nueva USD")
+    void guardaLasDosMonedas() throws Exception {
+        Articulo enDolares = articulo(7L, 56L);
+        enDolares.actualizar(new DatosArticulo("USD-001", null, null, "En dolares", null, null, bd("10"), null,
+                AlicuotaIva.IVA_21, Unidad.UNIDAD, bd("0"), null, true, Moneda.USD),
+                new ContextoPrecio(null, bd("30"), bd("10"), bd("1000")));
+        CambioPrecio cambio = new CambioPrecio(bd("1000.00"), bd("10.00"), bd("1580.00"), bd("15730.00"));
+
+        HistorialPrecio historial = HistorialPrecio.de(enDolares, cambio, OrigenPrecio.IMPORTACION, 3L, Moneda.ARS);
+
+        assertThat(historial.getMonedaAnterior()).isEqualTo(Moneda.ARS);
+        assertThat(historial.getMoneda()).isEqualTo(Moneda.USD);
+        assertThat(historial.getCostoAnterior()).isEqualByComparingTo("1000");
+        assertThat(historial.getCostoNuevo()).isEqualByComparingTo("10");
+        assertThat(historial.getPrecioAnterior()).isEqualByComparingTo("1580");
+        assertThat(historial.getPrecioNuevo()).isEqualByComparingTo("15730");
+        assertThat(historial.getOrigen()).isEqualTo(OrigenPrecio.IMPORTACION);
+        assertThat(historial.getUsuarioId()).isEqualTo(3L);
+    }
+
+    @Test
+    @DisplayName("de() de siempre y de() con monedaAnterior null dejan la moneda anterior en null")
+    void sinCambioDeMonedaLaAnteriorEsNull() throws Exception {
+        Articulo articulo = articulo(7L, 55L);
+        CambioPrecio cambio = new CambioPrecio(bd("100.00"), bd("200.00"), bd("170.00"), bd("330.00"));
+
+        assertThat(HistorialPrecio.de(articulo, cambio, OrigenPrecio.MANUAL, 3L).getMonedaAnterior()).isNull();
+        assertThat(HistorialPrecio.de(articulo, cambio, OrigenPrecio.IMPORTACION, 3L, null).getMonedaAnterior())
+                .isNull();
+    }
+
+    @Test
+    @DisplayName("de() con monedaAnterior copia el resto igual que de() de siempre")
+    void conMonedaAnteriorCopiaElResto() throws Exception {
+        Articulo articulo = articulo(7L, 55L);
+        CambioPrecio cambio = new CambioPrecio(bd("100.00"), bd("200.00"), bd("170.00"), bd("330.00"));
+
+        HistorialPrecio historial = HistorialPrecio.de(articulo, cambio, OrigenPrecio.IMPORTACION, null, Moneda.USD);
+
+        assertThat(historial.getFerreteriaId()).isEqualTo(7L);
+        assertThat(historial.getArticuloId()).isEqualTo(55L);
+        assertThat(historial.getMoneda()).isEqualTo(Moneda.ARS);
+        assertThat(historial.getMonedaAnterior()).isEqualTo(Moneda.USD);
+        assertThat(historial.getUsuarioId()).isNull();
+    }
 }
