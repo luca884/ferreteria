@@ -175,6 +175,11 @@ public interface ArticuloRepository extends TenantScopedRepository<Articulo, Lon
             nativeQuery = true)
     Optional<BigDecimal> stockVigente(@Param("fid") Long ferreteriaId, @Param("id") Long id);
 
+    /** Todos los articulos en dolares de la ferreteria, activos o no, por id (recalculo por cotizacion). */
+    @Query("select a from Articulo a where a.ferreteriaId = :fid and a.moneda = com.ferreteria.catalogo.model.Moneda.USD "
+            + "order by a.id")
+    List<Articulo> enDolares(@Param("fid") Long ferreteriaId);
+
     /** Tamano de lote del IN de codigosInternosOcupadosScoped. */
     int LOTE_CODIGOS_INTERNOS = 1000;
 
@@ -249,6 +254,14 @@ public interface ArticuloRepository extends TenantScopedRepository<Articulo, Lon
     default List<Articulo> heredanMargenDeRubroScoped(Long rubroId) {
         return findAllByFerreteriaIdAndRubroIdAndMargenPorcentajeIsNullAndActivoTrue(
                 TenantContext.requireFerreteriaId(), rubroId);
+    }
+
+    /**
+     * Los articulos en dolares de la ferreteria, activos e inactivos: el recalculo por cotizacion los incluye a todos
+     * para que al reactivarse no se vendan a un precio viejo (la cascada de rubro, en cambio, solo toca los activos).
+     */
+    default List<Articulo> enDolaresScoped() {
+        return enDolares(TenantContext.requireFerreteriaId());
     }
 
     /** Cuantos articulos heredan el margen del rubro, sin cargarlos (aviso antes de cambiar el margen). */

@@ -45,6 +45,8 @@ public class SecurityConfig {
                         .requestMatchers("/api/actualizacion-masiva/**").hasRole("DUENO")
                         // La configuracion de cotizacion de la ferreteria es solo del Dueño.
                         .requestMatchers("/api/configuracion-cotizacion/**").hasRole("DUENO")
+                        // «Recalcular ahora» tambien: el GET de la cotizacion (/api/cotizacion) sigue siendo de todos.
+                        .requestMatchers(HttpMethod.POST, "/api/cotizacion/recalculo").hasRole("DUENO")
                         .anyRequest().authenticated())
                 .exceptionHandling(e -> e
                         .authenticationEntryPoint((request, response, ex) -> {

@@ -8,6 +8,8 @@ import com.ferreteria.support.IntegrationTestBase;
 import com.ferreteria.tenant.TenantContext;
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.List;
+import java.util.Map;
 import java.util.function.Consumer;
 import org.junit.jupiter.api.AfterEach;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -88,6 +90,50 @@ public abstract class CotizacionTestBase extends IntegrationTestBase {
             return configuraciones.findPropiaScoped().orElseThrow();
         } finally {
             TenantContext.clear();
+        }
+    }
+
+    /** Id del usuario con ese email. */
+    protected Long usuarioId(String email) {
+        return jdbc.queryForObject("select id from usuario where email = ?", Long.class, email);
+    }
+
+    /** Inserta un articulo sin rubro (IVA 21, margen de la ferreteria) con el precio final ya calculado que se indica. */
+    protected Long articulo(Long ferreteriaId, String codigo, String moneda, String costo, String precioFinal,
+                            boolean activo) {
+        jdbc.update("insert into articulo (ferreteria_id, codigo_interno, descripcion, costo, moneda, precio_final, activo) "
+                + "values (?, ?, ?, ?, ?, ?, ?)", ferreteriaId, codigo, "Articulo " + codigo, new BigDecimal(costo),
+                moneda, new BigDecimal(precioFinal), activo);
+        return jdbc.queryForObject("select id from articulo where ferreteria_id = ? and codigo_interno = ?",
+                Long.class, ferreteriaId, codigo);
+    }
+
+    protected Long articuloUsd(Long ferreteriaId, String codigo, String costo, String precioFinal) {
+        return articulo(ferreteriaId, codigo, "USD", costo, precioFinal, true);
+    }
+
+    protected BigDecimal precioDe(Long articuloId) {
+        return jdbc.queryForObject("select precio_final from articulo where id = ?", BigDecimal.class, articuloId);
+    }
+
+    protected List<Map<String, Object>> historialDe(Long articuloId) {
+        return jdbc.queryForList("select origen, moneda, usuario_id, costo_anterior, costo_nuevo, precio_anterior, "
+                + "precio_nuevo from historial_precio where articulo_id = ? order by id", articuloId);
+    }
+
+    protected long historialDeLaFerreteria(Long ferreteriaId) {
+        return jdbc.queryForObject("select count(*) from historial_precio where ferreteria_id = ?", Long.class,
+                ferreteriaId);
+    }
+
+    /** Borra lo que los tests siembran de esas ferreterias (historial, articulos, configuracion, usuarios y rubros). */
+    protected void borrarDatosDe(Long... ferreteriaIds) {
+        for (Long id : ferreteriaIds) {
+            jdbc.update("delete from historial_precio where ferreteria_id = ?", id);
+            jdbc.update("delete from articulo where ferreteria_id = ?", id);
+            jdbc.update("delete from rubro where ferreteria_id = ?", id);
+            jdbc.update("delete from configuracion_cotizacion where ferreteria_id = ?", id);
+            jdbc.update("delete from usuario where ferreteria_id = ?", id);
         }
     }
 }
