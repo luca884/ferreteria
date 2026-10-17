@@ -39,6 +39,20 @@ class ParserImporteTest {
             valor -> assertThat(valor).isEqualByComparingTo(esperado));
     }
 
+    @ParameterizedTest(name = "\"{0}\" -> {1}")
+    @CsvSource(delimiter = '|', value = {
+        "0.250|0.25",
+        "0.5|0.5",
+        "-0.250|-0.25",
+        "1.250|1250",
+        "10.500|10500",
+    })
+    @DisplayName("un numero que empieza con 0. no tiene separador de miles: 0.250 es 0,25, no 250")
+    void ceroPuntoEsDecimal(String entrada, String esperado) {
+        assertThat(ParserImporte.parsear(texto(entrada))).hasValueSatisfying(
+            valor -> assertThat(valor).isEqualByComparingTo(esperado));
+    }
+
     @Test
     @DisplayName("no redondea y conserva la escala: 12,3456 sigue siendo 12.3456")
     void sinRedondear() {

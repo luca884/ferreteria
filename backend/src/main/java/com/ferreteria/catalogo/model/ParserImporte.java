@@ -11,7 +11,8 @@ import java.util.regex.Pattern;
 public final class ParserImporte {
 
     private static final Pattern IGNORADOS = Pattern.compile("[\\s\\u00A0\\u202F$]");
-    private static final Pattern MILES_CON_PUNTO = Pattern.compile("^[+-]?\\d{1,3}(\\.\\d{3})+$");
+    /** El primer grupo no empieza con 0: "0.250" es decimal (0,25), no doscientos cincuenta. */
+    private static final Pattern MILES_CON_PUNTO = Pattern.compile("^[+-]?[1-9]\\d{0,2}(\\.\\d{3})+$");
     private static final Pattern NUMERO = Pattern.compile("^[+-]?(\\d+(\\.\\d*)?|\\.\\d+)$");
 
     private ParserImporte() {
