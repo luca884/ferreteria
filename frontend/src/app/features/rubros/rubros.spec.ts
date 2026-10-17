@@ -102,7 +102,7 @@ describe('Rubros', () => {
   });
 
   it('lista los rubros con su margen', async () => {
-    await crear([buloneria, pinturas]);
+    await crear([buloneria, pinturas], true);
 
     const textos = filas().map((f) => f.textContent ?? '');
     expect(textos).toHaveLength(2);
@@ -147,6 +147,16 @@ describe('Rubros', () => {
 
       expect(el().querySelector('[role="alert"]')?.textContent).toContain('No se pudieron cargar los rubros.');
     });
+  });
+
+  it('el Vendedor ve los rubros sin el margen (H07)', async () => {
+    await crear([{ id: 1, nombre: 'Bulonería' } as Rubro]);
+
+    const encabezados = [...el().querySelectorAll('th')].map((th) => th.textContent!.trim());
+    expect(encabezados).toEqual(['Nombre']);
+    expect(filas()[0].textContent).toContain('Bulonería');
+    expect(filas()[0].textContent).not.toContain('%');
+    expect(el().textContent).not.toContain('El margen del rubro');
   });
 
   it('el Vendedor no ve el alta ni Editar, y las filas no se eligen', async () => {

@@ -566,10 +566,15 @@ export class ArticuloForm implements OnInit {
       rubros: this.rubrosService.listar(),
       proveedores: this.proveedoresService.listar(),
       articulo: this.id === null ? of(null) : this.service.obtener(this.id),
-      // Sin configuración no hay precio en vivo, pero el formulario sirve igual.
+      // Sin configuración no hay precio en vivo, pero el formulario sirve igual. El desglose y la configuración
+      // muestran costo y margen: son solo del Dueño y para el Vendedor ni se piden (H07).
       desglose:
-        this.id === null ? of(null) : this.service.desglose(this.id).pipe(catchError(() => of(null))),
-      configuracion: this.service.configuracionPrecios().pipe(catchError(() => of(null))),
+        this.id === null || !this.auth.esDueno()
+          ? of(null)
+          : this.service.desglose(this.id).pipe(catchError(() => of(null))),
+      configuracion: this.auth.esDueno()
+        ? this.service.configuracionPrecios().pipe(catchError(() => of(null)))
+        : of(null),
       // Sin cotización tampoco: el precio en dólares no se calcula y el backend valida al guardar.
       cotizacion: this.cotizaciones.obtener().pipe(catchError(() => of(null))),
     }).subscribe({

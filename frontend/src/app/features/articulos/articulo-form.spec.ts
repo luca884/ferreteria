@@ -707,7 +707,6 @@ describe('ArticuloForm', () => {
       expect(el().querySelector('app-barra-acciones h1')?.textContent).toContain('Artículo');
       expect(el().querySelector('app-barra-acciones h1')?.textContent).not.toContain('Editar');
       expect(input('codigoInterno').value).toBe('TOR-001');
-      expect(input('costo').value).toBe('100');
       expect(elegida('rubro')).toBe('Bulonería');
       const campos = Array.from(el().querySelectorAll<HTMLElement>('input, select'));
       expect(campos.length).toBeGreaterThan(5);
@@ -732,6 +731,27 @@ describe('ArticuloForm', () => {
       expect(el().querySelector('button[type=submit]')).toBeNull();
       await enviar();
       expect(servicio.crear).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('Vendedor sin costo ni margen (H07)', () => {
+    it('no ve moneda, costo, margen ni el precio en vivo; sí el precio final', async () => {
+      await crearComponente({ dueno: false, id: '5' });
+
+      expect(el().querySelector('#moneda')).toBeNull();
+      expect(el().querySelector('#costo')).toBeNull();
+      expect(el().querySelector('#margen')).toBeNull();
+      expect(el().querySelector('.precio-en-vivo')).toBeNull();
+      expect(el().querySelector('#alicuotaIva')).not.toBeNull();
+      expect(el().querySelector('.precio-final')?.textContent).toContain(`$${NBSP}1.234,50`);
+    });
+
+    it('no pide el desglose ni la configuración de precios (son solo del Dueño)', async () => {
+      await crearComponente({ dueno: false, id: '5' });
+
+      expect(servicio.desglose).not.toHaveBeenCalled();
+      expect(servicio.configuracionPrecios).not.toHaveBeenCalled();
+      expect(el().querySelector('app-desglose-precio')).toBeNull();
     });
   });
 
@@ -1050,11 +1070,10 @@ describe('ArticuloForm', () => {
       });
     });
 
-    it('el Vendedor ve la moneda del artículo, pero no la puede cambiar', async () => {
+    it('el Vendedor no ve la moneda del costo (H07)', async () => {
       await crearComponente({ dueno: false, id: '5', articulo: articuloGuardado({ moneda: 'USD', costo: 10 }) });
 
-      expect(elegida('moneda')).toBe('Dólares (USD)');
-      expect(select('moneda').disabled).toBe(true);
+      expect(el().querySelector('#moneda')).toBeNull();
     });
   });
 
@@ -1751,10 +1770,10 @@ describe('ArticuloForm', () => {
     });
 
     describe('Vendedor (decisión 44)', () => {
-      it('ve el desglose sin campos de ajuste ni botón para guardarlos', async () => {
+      it('no ve el desglose (H07): ni los pasos ni los campos de ajuste', async () => {
         await crearComponente({ ...conLista(), dueno: false });
 
-        expect(importes().at(-1)).toBe('$ 1.390,00');
+        expect(el().querySelector('app-desglose-precio')).toBeNull();
         expect(el().querySelector('#ajuste1')).toBeNull();
         expect(el().querySelector('button.guardar-ajustes')).toBeNull();
       });

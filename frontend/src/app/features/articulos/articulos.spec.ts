@@ -151,7 +151,7 @@ describe('Articulos', () => {
 
   it('muestra código, descripción, costo, margen, IVA, precio final y stock con su unidad', async () => {
     await crearComponente(
-      false,
+      true,
       pagina([
         articulo(1, {
           codigoInterno: 'TOR-001',
@@ -201,25 +201,28 @@ describe('Articulos', () => {
   });
 
   it('muestra el costo de un artículo en dólares como US$ y el precio final siempre en pesos', async () => {
-    await crearComponente(false, pagina([articulo(1, { costo: 10.8, moneda: 'USD', precioFinal: 1744 })]));
+    await crearComponente(true, pagina([articulo(1, { costo: 10.8, moneda: 'USD', precioFinal: 1744 })]));
 
     expect(texto('.costo')).toBe(`US$${NBSP}10,80`);
     expect(texto('.precio')).toBe(`$${NBSP}1.744,00`);
   });
 
   it('muestra el costo de un artículo en pesos con $', async () => {
-    await crearComponente(false, pagina([articulo(1, { costo: 1744, moneda: 'ARS' })]));
+    await crearComponente(true, pagina([articulo(1, { costo: 1744, moneda: 'ARS' })]));
 
     expect(texto('.costo')).toBe(`$${NBSP}1.744,00`);
   });
 
-  it('el Vendedor ve costo y margen', async () => {
+  it('el Vendedor no ve las columnas de costo ni de margen (H07), sí el precio y el stock', async () => {
     await crearComponente(false);
 
-    expect(el().textContent).toContain('Costo');
-    expect(el().textContent).toContain('Margen');
-    expect(texto('.costo')).toBe(`$${NBSP}100,00`);
-    expect(texto('.margen')).toBe(`35${NBSP}%`);
+    const encabezados = [...el().querySelectorAll('th')].map((th) => th.textContent!.trim());
+    expect(encabezados).not.toContain('Costo');
+    expect(encabezados).not.toContain('Margen');
+    expect(el().querySelector('.costo')).toBeNull();
+    expect(el().querySelector('.margen')).toBeNull();
+    expect(el().querySelector('.precio')).not.toBeNull();
+    expect(el().querySelector('.stock')).not.toBeNull();
   });
 
   it('avisa cuando no hay artículos', async () => {

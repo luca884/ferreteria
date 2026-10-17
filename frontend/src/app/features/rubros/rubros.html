@@ -16,7 +16,9 @@
   }
 </app-barra-acciones>
 
-<p class="ayuda">El margen del rubro es el que usan los artículos que no tienen uno propio.</p>
+@if (auth.esDueno()) {
+  <p class="ayuda">El margen del rubro es el que usan los artículos que no tienen uno propio.</p>
+}
 
 @if (aviso(); as mensaje) {
   <p class="alerta exito" role="status">{{ mensaje }}</p>
@@ -42,7 +44,9 @@
           <thead>
             <tr>
               <th>Nombre</th>
-              <th class="num">Margen</th>
+              @if (auth.esDueno()) {
+                <th class="num">Margen</th>
+              }
             </tr>
           </thead>
           <tbody>
@@ -58,7 +62,9 @@
                 (keydown)="filas.alTeclear($event, rubro, i)"
               >
                 <td class="nombre">{{ rubro.nombre }}</td>
-                <td class="num">{{ rubro.margenPorcentaje | number: '1.0-2' }}&nbsp;%</td>
+                @if (auth.esDueno()) {
+                  <td class="num">{{ rubro.margenPorcentaje | number: '1.0-2' }}&nbsp;%</td>
+                }
               </tr>
             }
           </tbody>

@@ -96,8 +96,10 @@
           <tr>
             <th>Código</th>
             <th>Descripción</th>
-            <th class="num">Costo</th>
-            <th class="num">Margen</th>
+            @if (auth.esDueno()) {
+              <th class="num">Costo</th>
+              <th class="num">Margen</th>
+            }
             <th>IVA</th>
             <th class="num">Precio final</th>
             <th class="num">Stock</th>
@@ -118,14 +120,16 @@
             >
               <td class="codigo">{{ articulo.codigoInterno }}</td>
               <td class="descripcion">{{ articulo.descripcion }}</td>
-              <td class="num costo">{{ formatearCosto(articulo.costo, articulo.moneda) }}</td>
-              <td class="num margen">
-                @if (articulo.margenPorcentaje === null) {
-                  <span class="heredado">Heredado</span>
-                } @else {
-                  {{ articulo.margenPorcentaje | number: '1.0-2' }}&nbsp;%
-                }
-              </td>
+              @if (auth.esDueno()) {
+                <td class="num costo">{{ formatearCosto(articulo.costo, articulo.moneda) }}</td>
+                <td class="num margen">
+                  @if (articulo.margenPorcentaje === null) {
+                    <span class="heredado">Heredado</span>
+                  } @else {
+                    {{ articulo.margenPorcentaje | number: '1.0-2' }}&nbsp;%
+                  }
+                </td>
+              }
               <td class="iva">{{ alicuotaLabels[articulo.alicuotaIva] }}</td>
               <td class="num precio">{{ articulo.precioFinal | monto }}</td>
               <td class="num stock" [class.negativo]="articulo.stockActual < 0">

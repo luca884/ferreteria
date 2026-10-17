@@ -160,82 +160,86 @@
 
     <fieldset class="seccion">
       <legend>Precio</legend>
-      <div class="campo">
-        <label for="moneda">Moneda</label>
-        <select
-          id="moneda"
-          name="moneda"
-          formControlName="moneda"
-          [attr.aria-invalid]="invalido('moneda') ? 'true' : null"
-          [attr.aria-describedby]="describirMoneda()"
-          (change)="alCambiarMoneda()"
-        >
-          @for (moneda of monedasOfrecidas(); track moneda) {
-            <option [ngValue]="moneda">{{ monedaLabels[moneda] }}</option>
+      <!-- H07: el Vendedor no ve moneda, costo ni margen. -->
+      @if (auth.esDueno()) {
+        <div class="campo">
+          <label for="moneda">Moneda</label>
+          <select
+            id="moneda"
+            name="moneda"
+            formControlName="moneda"
+            [attr.aria-invalid]="invalido('moneda') ? 'true' : null"
+            [attr.aria-describedby]="describirMoneda()"
+            (change)="alCambiarMoneda()"
+          >
+            @for (moneda of monedasOfrecidas(); track moneda) {
+              <option [ngValue]="moneda">{{ monedaLabels[moneda] }}</option>
+            }
+          </select>
+          <span id="moneda-pista" class="pista">Si cambiás la moneda, el costo se borra y lo cargás de nuevo: no se convierte.</span>
+          @if (!dolaresDisponibles()) {
+            <span id="moneda-apagada" class="pista aviso-moneda">Activá la cotización para cargar artículos en dólares</span>
           }
-        </select>
-        <span id="moneda-pista" class="pista">Si cambiás la moneda, el costo se borra y lo cargás de nuevo: no se convierte.</span>
-        @if (!dolaresDisponibles()) {
-          <span id="moneda-apagada" class="pista aviso-moneda">Activá la cotización para cargar artículos en dólares</span>
-        }
-        @if (errorServidor('moneda'); as mensaje) {
-          <span id="moneda-error-servidor" class="campo-error" data-error-de="moneda">{{ mensaje }}</span>
-        }
-      </div>
+          @if (errorServidor('moneda'); as mensaje) {
+            <span id="moneda-error-servidor" class="campo-error" data-error-de="moneda">{{ mensaje }}</span>
+          }
+        </div>
 
-      <div class="campo">
-        <label for="costo">{{ enDolares() ? 'Costo en dólares (sin IVA)' : 'Costo (sin IVA)' }}</label>
-        <input
-          id="costo"
-          name="costo"
-          type="number"
-          inputmode="decimal"
-          step="0.01"
-          min="0"
-          formControlName="costo"
-          [attr.aria-invalid]="invalido('costo') ? 'true' : null"
-          [attr.aria-describedby]="describir('costo')"
-          (input)="limpiarErrorDe('costo')"
-        />
-        @if (errorLocal('costo')) {
-          <span id="costo-error" class="campo-error">
-            {{
-              form.controls.costo.errors?.['min']
-                ? 'El costo no puede ser negativo.'
-                : 'El costo es obligatorio.'
-            }}
-          </span>
-        }
-        @if (errorServidor('costo'); as mensaje) {
-          <span id="costo-error-servidor" class="campo-error" data-error-de="costo">{{ mensaje }}</span>
-        }
-      </div>
+        <div class="campo">
+          <label for="costo">{{ enDolares() ? 'Costo en dólares (sin IVA)' : 'Costo (sin IVA)' }}</label>
+          <input
+            id="costo"
+            name="costo"
+            type="number"
+            inputmode="decimal"
+            step="0.01"
+            min="0"
+            formControlName="costo"
+            [attr.aria-invalid]="invalido('costo') ? 'true' : null"
+            [attr.aria-describedby]="describir('costo')"
+            (input)="limpiarErrorDe('costo')"
+          />
+          @if (errorLocal('costo')) {
+            <span id="costo-error" class="campo-error">
+              {{
+                form.controls.costo.errors?.['min']
+                  ? 'El costo no puede ser negativo.'
+                  : 'El costo es obligatorio.'
+              }}
+            </span>
+          }
+          @if (errorServidor('costo'); as mensaje) {
+            <span id="costo-error-servidor" class="campo-error" data-error-de="costo">{{ mensaje }}</span>
+          }
+        </div>
 
-      <div class="campo">
-        <label for="margen">Margen % (opcional)</label>
-        <input
-          id="margen"
-          name="margenPorcentaje"
-          type="number"
-          inputmode="decimal"
-          step="0.01"
-          min="0"
-          formControlName="margenPorcentaje"
-          [attr.aria-invalid]="invalido('margenPorcentaje') ? 'true' : null"
-          [attr.aria-describedby]="herencia() ? describir('margenPorcentaje', 'margen-pista', 'margen-herencia') : describir('margenPorcentaje', 'margen-pista')"
-          (input)="limpiarErrorDe('margenPorcentaje')"
-        />
-        <span id="margen-pista" class="pista">Vacío = usa el margen del rubro o de la ferretería</span>
-        @if (herencia(); as texto) {
-          <span id="margen-herencia" class="pista herencia">{{ texto }}</span>
-        }
-        @if (errorLocal('margenPorcentaje')) {
-          <span id="margenPorcentaje-error" class="campo-error">El margen tiene que estar entre 0 y 1000.</span>
-        }
-        @if (errorServidor('margenPorcentaje'); as mensaje) {
-          <span id="margenPorcentaje-error-servidor" class="campo-error" data-error-de="margenPorcentaje">{{ mensaje }}</span>
-        }
-      </div>
+        <div class="campo">
+          <label for="margen">Margen % (opcional)</label>
+          <input
+            id="margen"
+            name="margenPorcentaje"
+            type="number"
+            inputmode="decimal"
+            step="0.01"
+            min="0"
+            formControlName="margenPorcentaje"
+            [attr.aria-invalid]="invalido('margenPorcentaje') ? 'true' : null"
+            [attr.aria-describedby]="herencia() ? describir('margenPorcentaje', 'margen-pista', 'margen-herencia') : describir('margenPorcentaje', 'margen-pista')"
+            (input)="limpiarErrorDe('margenPorcentaje')"
+          />
+          <span id="margen-pista" class="pista">Vacío = usa el margen del rubro o de la ferretería</span>
+          @if (herencia(); as texto) {
+            <span id="margen-herencia" class="pista herencia">{{ texto }}</span>
+          }
+          @if (errorLocal('margenPorcentaje')) {
+            <span id="margenPorcentaje-error" class="campo-error">El margen tiene que estar entre 0 y 1000.</span>
+          }
+          @if (errorServidor('margenPorcentaje'); as mensaje) {
+            <span id="margenPorcentaje-error-servidor" class="campo-error" data-error-de="margenPorcentaje">{{ mensaje }}</span>
+          }
+        </div>
+
+      }
 
       <div class="campo">
         <label for="alicuotaIva">Alícuota de IVA</label>
