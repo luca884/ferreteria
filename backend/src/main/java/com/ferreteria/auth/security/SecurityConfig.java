@@ -1,6 +1,7 @@
 package com.ferreteria.auth.security;
 
 import com.ferreteria.auth.service.JwtService;
+import com.ferreteria.auth.service.SesionVigente;
 import com.ferreteria.tenant.TenantFilter;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
@@ -26,8 +27,9 @@ import java.util.List;
 public class SecurityConfig {
 
     @Bean
-    public SecurityFilterChain securityFilterChain(HttpSecurity http, JwtService jwtService) throws Exception {
-        JwtAuthenticationFilter jwtFilter = new JwtAuthenticationFilter(jwtService);
+    public SecurityFilterChain securityFilterChain(HttpSecurity http, JwtService jwtService,
+                                                   SesionVigente sesionVigente) throws Exception {
+        JwtAuthenticationFilter jwtFilter = new JwtAuthenticationFilter(jwtService, sesionVigente);
 
         http
                 .csrf(AbstractHttpConfigurer::disable)
