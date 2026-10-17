@@ -4,9 +4,13 @@ import com.ferreteria.common.exception.ConflictException;
 import com.ferreteria.cotizacion.api.DolarDePrecios;
 import com.ferreteria.cotizacion.model.CatalogoCotizaciones;
 import com.ferreteria.cotizacion.model.ConfiguracionCotizacion;
+import com.ferreteria.cotizacion.model.DesvioDeCotizacion;
+import com.ferreteria.cotizacion.model.DolarAConfirmar;
 import com.ferreteria.cotizacion.model.LadoCotizacion;
 import com.ferreteria.cotizacion.repository.ConfiguracionCotizacionRepository;
 import com.ferreteria.cotizacion.repository.CotizacionRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -21,11 +25,17 @@ import java.util.Optional;
  * ultimo recalculo), no el valor de la API en ese momento: asi un articulo editado a las 14:00 sale con el mismo dolar
  * que los recalculados a las 08:00. Nunca se pasa solo a otro tipo de dolar: si el tipo elegido no tiene valor, no hay
  * vigente.
+ *
+ * <p>Un dolar que se aleja mas del 20 % del vigente ({@link DesvioDeCotizacion}) no se aplica solo: el recalculo diario
+ * lo saltea y «Recalcular ahora» da 409 hasta que el Dueno de ESA ferreteria lo confirme. La tabla cotizacion es global
+ * y no se toca: la comparacion es contra el vigente de cada ferreteria, asi una nunca confirma por otra.
  */
 @Service
 public class DolarDePreciosService implements DolarDePrecios {
 
     static final String COTIZACION_APAGADA = "La cotización está apagada";
+
+    private static final Logger log = LoggerFactory.getLogger(DolarDePreciosService.class);
 
     private final ConfiguracionCotizacionService configuracionService;
     private final ConfiguracionCotizacionRepository configuraciones;
@@ -60,13 +70,36 @@ public class DolarDePreciosService implements DolarDePrecios {
     @Override
     @Transactional
     public BigDecimal fijarUltima() {
+        return fijarUltima(false);
+    }
+
+    @Override
+    @Transactional
+    public BigDecimal fijarUltima(boolean confirmaDesvio) {
         ConfiguracionCotizacion configuracion = configuracionService.obtener();
         if (!configuracion.isActiva()) {
             throw new ConflictException(COTIZACION_APAGADA);
         }
         BigDecimal valor = ultimoGuardado(configuracion).orElseThrow(() -> new ConflictException(SIN_COTIZACION));
+        Optional<DolarAConfirmar> aConfirmar = aConfirmar(configuracion, valor);
+        if (aConfirmar.isPresent() && !confirmaDesvio) {
+            throw new ConflictException(aConfirmar.get().mensaje());
+        }
         fijar(configuracion, valor);
         return valor;
+    }
+
+    /**
+     * El dolar nuevo que el Dueno tiene que confirmar antes de que cambie los precios; vacio si no hay ninguno (dentro
+     * del 20 %, sin vigente fijado, con otro tipo o lado elegido despues, o con la cotizacion apagada).
+     */
+    @Transactional(readOnly = true)
+    public Optional<DolarAConfirmar> aConfirmar() {
+        ConfiguracionCotizacion configuracion = configuracionService.leer();
+        if (!configuracion.isActiva()) {
+            return Optional.empty();
+        }
+        return ultimoGuardado(configuracion).flatMap(valor -> aConfirmar(configuracion, valor));
     }
 
     @Override
@@ -76,6 +109,13 @@ public class DolarDePreciosService implements DolarDePrecios {
         Optional<BigDecimal> valor = ultimoGuardado(configuracion);
         if (valor.isEmpty()) {
             return Optional.empty(); // sin ningun valor no se marca el dia: se reintenta cuando llegue uno
+        }
+        Optional<DolarAConfirmar> aConfirmar = aConfirmar(configuracion, valor.get());
+        if (aConfirmar.isPresent()) {
+            // Tampoco se marca el dia: si llega un valor normal se aplica solo; si no, espera al Dueno.
+            log.warn("Recalculo de la ferreteria {} en espera: {}", configuracion.getFerreteriaId(),
+                    aConfirmar.get().mensaje());
+            return Optional.empty();
         }
         if (configuraciones.reclamarRecalculoDelDiaScoped(ahoraBuenosAires) == 0) {
             return Optional.empty();
@@ -89,6 +129,20 @@ public class DolarDePreciosService implements DolarDePrecios {
     private Optional<BigDecimal> ultimoGuardado(ConfiguracionCotizacion configuracion) {
         return cotizaciones.findByMonedaAndCasa(CatalogoCotizaciones.USD, configuracion.getCasaPrecios())
                 .map(c -> configuracion.getLadoPrecios() == LadoCotizacion.VENTA ? c.getVenta() : c.getCompra());
+    }
+
+    /**
+     * Solo compara contra un vigente del MISMO tipo y lado: si el Dueno eligio otro dolar, el salto es decision suya.
+     */
+    private static Optional<DolarAConfirmar> aConfirmar(ConfiguracionCotizacion configuracion, BigDecimal valor) {
+        BigDecimal vigente = configuracion.getVigente();
+        boolean mismoDolar = configuracion.getCasaPrecios().equals(configuracion.getVigenteCasa())
+                && configuracion.getLadoPrecios() == configuracion.getVigenteLado();
+        if (!mismoDolar || !DesvioDeCotizacion.hayQueConfirmar(vigente, valor)) {
+            return Optional.empty();
+        }
+        return Optional.of(DolarAConfirmar.de(configuracion.getCasaPrecios(), configuracion.getLadoPrecios(), vigente,
+                valor));
     }
 
     private void fijar(ConfiguracionCotizacion configuracion, BigDecimal valor) {

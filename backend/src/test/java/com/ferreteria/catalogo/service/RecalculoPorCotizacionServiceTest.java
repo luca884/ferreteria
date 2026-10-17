@@ -47,25 +47,25 @@ class RecalculoPorCotizacionServiceTest {
     @Test
     @DisplayName("recalcularAhora fija el ultimo dolar, recalcula con ese valor a nombre del Dueno y devuelve {cotizacion, cantidad}")
     void recalcularAhora() {
-        when(dolar.fijarUltima()).thenReturn(bd("1100"));
+        when(dolar.fijarUltima(false)).thenReturn(bd("1100"));
         when(recalculo.porCotizacion(bd("1100"), DUENO)).thenReturn(3);
 
-        RecalculoCotizacionResponse respuesta = service.recalcularAhora(DUENO);
+        RecalculoCotizacionResponse respuesta = service.recalcularAhora(DUENO, false);
 
         assertThat(respuesta.cotizacion()).isEqualByComparingTo("1100");
         assertThat(respuesta.articulosRecalculados()).isEqualTo(3);
         InOrder orden = inOrder(dolar, recalculo);
-        orden.verify(dolar).fijarUltima();
+        orden.verify(dolar).fijarUltima(false);
         orden.verify(recalculo).porCotizacion(bd("1100"), DUENO);
     }
 
     @Test
     @DisplayName("recalcularAhora usa el valor que fijo el puerto, no uno fijo: con 950 recalcula con 950 y a nombre de otro Dueno")
     void recalcularAhoraConOtroValor() {
-        when(dolar.fijarUltima()).thenReturn(bd("950"));
+        when(dolar.fijarUltima(false)).thenReturn(bd("950"));
         when(recalculo.porCotizacion(bd("950"), 12L)).thenReturn(0);
 
-        RecalculoCotizacionResponse respuesta = service.recalcularAhora(12L);
+        RecalculoCotizacionResponse respuesta = service.recalcularAhora(12L, false);
 
         assertThat(respuesta.cotizacion()).isEqualByComparingTo("950");
         assertThat(respuesta.articulosRecalculados()).isZero();
@@ -73,11 +73,23 @@ class RecalculoPorCotizacionServiceTest {
     }
 
     @Test
+    @DisplayName("con la confirmacion del Dueno se la pasa al puerto: acepta el dolar que se aleja mas del 20 % (H09)")
+    void recalcularAhoraConfirmandoElDesvio() {
+        when(dolar.fijarUltima(true)).thenReturn(bd("11"));
+        when(recalculo.porCotizacion(bd("11"), DUENO)).thenReturn(1);
+
+        RecalculoCotizacionResponse respuesta = service.recalcularAhora(DUENO, true);
+
+        assertThat(respuesta.cotizacion()).isEqualByComparingTo("11");
+        verify(dolar, never()).fijarUltima(false);
+    }
+
+    @Test
     @DisplayName("con la cotizacion apagada propaga el 409 y no toca ningun precio")
     void apagadaPropagaElConflicto() {
-        when(dolar.fijarUltima()).thenThrow(new ConflictException("La cotización está apagada"));
+        when(dolar.fijarUltima(false)).thenThrow(new ConflictException("La cotización está apagada"));
 
-        assertThatThrownBy(() -> service.recalcularAhora(DUENO))
+        assertThatThrownBy(() -> service.recalcularAhora(DUENO, false))
                 .isInstanceOf(ConflictException.class)
                 .hasMessage("La cotización está apagada");
         verifyNoInteractions(recalculo);
@@ -86,10 +98,10 @@ class RecalculoPorCotizacionServiceTest {
     @Test
     @DisplayName("sin ninguna cotizacion guardada propaga el 409 y no toca ningun precio")
     void sinValorPropagaElConflicto() {
-        when(dolar.fijarUltima())
+        when(dolar.fijarUltima(false))
                 .thenThrow(new ConflictException("Todavía no hay cotización del dólar. Probá en unos minutos"));
 
-        assertThatThrownBy(() -> service.recalcularAhora(DUENO))
+        assertThatThrownBy(() -> service.recalcularAhora(DUENO, false))
                 .isInstanceOf(ConflictException.class)
                 .hasMessage("Todavía no hay cotización del dólar. Probá en unos minutos");
         verify(recalculo, never()).porCotizacion(any(), anyLong());
@@ -141,7 +153,7 @@ class RecalculoPorCotizacionServiceTest {
     @Test
     @DisplayName("cada caso de uso corre en UNA transaccion (el reclamo y el recalculo se confirman o revierten juntos)")
     void sonTransaccionales() throws NoSuchMethodException {
-        assertThat(RecalculoPorCotizacionService.class.getMethod("recalcularAhora", Long.class)
+        assertThat(RecalculoPorCotizacionService.class.getMethod("recalcularAhora", Long.class, boolean.class)
                 .getAnnotation(Transactional.class)).isNotNull();
         assertThat(RecalculoPorCotizacionService.class.getMethod("recalcularDelDia", LocalDateTime.class)
                 .getAnnotation(Transactional.class)).isNotNull();

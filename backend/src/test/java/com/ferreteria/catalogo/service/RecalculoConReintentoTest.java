@@ -42,42 +42,42 @@ class RecalculoConReintentoTest {
     @Test
     @DisplayName("recalcularAhora: un choque y despues un exito: 2 llamadas y el resultado del segundo")
     void ahoraUnChoqueYUnExito() {
-        when(servicio.recalcularAhora(9L)).thenThrow(choque()).thenReturn(respuesta(2));
+        when(servicio.recalcularAhora(9L, false)).thenThrow(choque()).thenReturn(respuesta(2));
 
-        assertThat(reintento.recalcularAhora(9L)).isEqualTo(respuesta(2));
+        assertThat(reintento.recalcularAhora(9L, false)).isEqualTo(respuesta(2));
 
-        verify(servicio, times(2)).recalcularAhora(9L);
+        verify(servicio, times(2)).recalcularAhora(9L, false);
     }
 
     @Test
     @DisplayName("recalcularAhora: 3 choques seguidos: sale el OptimisticLockingFailureException despues de 3 llamadas")
     void ahoraTresChoques() {
-        when(servicio.recalcularAhora(9L)).thenThrow(choque());
+        when(servicio.recalcularAhora(9L, false)).thenThrow(choque());
 
-        assertThatThrownBy(() -> reintento.recalcularAhora(9L))
+        assertThatThrownBy(() -> reintento.recalcularAhora(9L, false))
                 .isInstanceOf(ObjectOptimisticLockingFailureException.class);
 
-        verify(servicio, times(3)).recalcularAhora(9L);
+        verify(servicio, times(3)).recalcularAhora(9L, false);
     }
 
     @Test
     @DisplayName("recalcularAhora: otra excepcion, por ejemplo el 409 de sin cotizacion, no se reintenta")
     void ahoraOtraExcepcionNoSeReintenta() {
-        when(servicio.recalcularAhora(9L)).thenThrow(new ConflictException(DolarDePrecios.SIN_COTIZACION));
+        when(servicio.recalcularAhora(9L, false)).thenThrow(new ConflictException(DolarDePrecios.SIN_COTIZACION));
 
-        assertThatThrownBy(() -> reintento.recalcularAhora(9L)).isInstanceOf(ConflictException.class);
+        assertThatThrownBy(() -> reintento.recalcularAhora(9L, false)).isInstanceOf(ConflictException.class);
 
-        verify(servicio, times(1)).recalcularAhora(9L);
+        verify(servicio, times(1)).recalcularAhora(9L, false);
     }
 
     @Test
     @DisplayName("recalcularAhora: sin choque, una sola llamada")
     void ahoraSinChoque() {
-        when(servicio.recalcularAhora(9L)).thenReturn(respuesta(1));
+        when(servicio.recalcularAhora(9L, false)).thenReturn(respuesta(1));
 
-        assertThat(reintento.recalcularAhora(9L)).isEqualTo(respuesta(1));
+        assertThat(reintento.recalcularAhora(9L, false)).isEqualTo(respuesta(1));
 
-        verify(servicio, times(1)).recalcularAhora(9L);
+        verify(servicio, times(1)).recalcularAhora(9L, false);
     }
 
     @Test
@@ -117,7 +117,7 @@ class RecalculoConReintentoTest {
     void noEsTransaccional() throws NoSuchMethodException {
         assertThat(RecalculoConReintento.class.getAnnotation(Transactional.class)).isNull();
         for (Method metodo : new Method[] {
-                RecalculoConReintento.class.getMethod("recalcularAhora", Long.class),
+                RecalculoConReintento.class.getMethod("recalcularAhora", Long.class, boolean.class),
                 RecalculoConReintento.class.getMethod("recalcularDelDia", LocalDateTime.class)}) {
             assertThat(metodo.getAnnotation(Transactional.class)).isNull();
         }
@@ -128,12 +128,12 @@ class RecalculoConReintentoTest {
     void dentroDeUnaTransaccionNoSePuedeUsar() {
         org.springframework.transaction.support.TransactionSynchronizationManager.setActualTransactionActive(true);
         try {
-            assertThatThrownBy(() -> reintento.recalcularAhora(9L)).isInstanceOf(IllegalStateException.class);
+            assertThatThrownBy(() -> reintento.recalcularAhora(9L, false)).isInstanceOf(IllegalStateException.class);
             assertThatThrownBy(() -> reintento.recalcularDelDia(LAS_OCHO)).isInstanceOf(IllegalStateException.class);
         } finally {
             org.springframework.transaction.support.TransactionSynchronizationManager.setActualTransactionActive(false);
         }
 
-        verify(servicio, times(0)).recalcularAhora(9L);
+        verify(servicio, times(0)).recalcularAhora(9L, false);
     }
 }

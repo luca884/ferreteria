@@ -14,7 +14,7 @@ describe('PaginaConfiguracionCotizacion', () => {
   let fixture: ComponentFixture<PaginaConfiguracionCotizacion>;
   let obtener: ReturnType<typeof vi.fn<() => Observable<ConfiguracionCotizacion>>>;
   let guardar: ReturnType<typeof vi.fn<(pedido: ConfiguracionCotizacionRequest) => Observable<ConfiguracionCotizacion>>>;
-  let recalcular: ReturnType<typeof vi.fn<() => Observable<RecalculoCotizacion>>>;
+  let recalcular: ReturnType<typeof vi.fn<(confirmaDesvio?: boolean) => Observable<RecalculoCotizacion>>>;
 
   const configuracion: ConfiguracionCotizacion = {
     activa: true,
@@ -24,6 +24,16 @@ describe('PaginaConfiguracionCotizacion', () => {
     horaRecalculo: '08:00',
     vigente: 1000,
     vigenteDesde: '2026-10-16T11:00:00Z',
+    aConfirmar: null,
+  };
+
+  const mensajeAConfirmar =
+    'El dólar oficial venta vino en $ 14,50, un 99 % distinto del anterior ($ 1.450,00). ' +
+    'Los precios siguen con $ 1.450,00 hasta que lo confirmes.';
+  const conDolarAConfirmar: ConfiguracionCotizacion = {
+    ...configuracion,
+    vigente: 1450,
+    aConfirmar: { nuevo: 14.5, vigente: 1450, desvioPorcentaje: 99, mensaje: mensajeAConfirmar },
   };
 
   const errorHttp = (status: number, error: unknown) => new HttpErrorResponse({ status, error });
@@ -192,6 +202,48 @@ describe('PaginaConfiguracionCotizacion', () => {
       (TestBed.inject(ConfiguracionCotizacionService) as unknown as { guardar: typeof guardar }).guardar = guardar;
       await enviarFormulario();
       expect(texto(q('[role="alert"]'))).toBe('No se pudo guardar la configuración.');
+    });
+  });
+
+  describe('dólar a confirmar (más del 20 % de diferencia)', () => {
+    it('sin dólar a confirmar no hay aviso ni botón «Confirmar»', async () => {
+      await crear();
+
+      expect(el().querySelector('.dolar-a-confirmar')).toBeNull();
+      expect(el().querySelector('button.confirmar-dolar')).toBeNull();
+    });
+
+    it('el Dueño ve el aviso con el valor nuevo, el desvío y el dólar con el que siguen los precios', async () => {
+      obtener = vi.fn(() => of(conDolarAConfirmar));
+      await crear();
+
+      const aviso = q('.recalculo .dolar-a-confirmar');
+      expect(aviso.getAttribute('role')).toBe('alert');
+      expect(texto(aviso.querySelector('p'))).toBe(mensajeAConfirmar);
+      expect(texto(q('button.confirmar-dolar'))).toBe('Confirmar');
+    });
+
+    it('«Confirmar» recalcula con confirmaDesvio y el aviso se va al releer la configuración', async () => {
+      obtener = vi.fn(() => of(conDolarAConfirmar));
+      await crear();
+      obtener.mockReturnValue(of({ ...configuracion, vigente: 14.5, aConfirmar: null }));
+      recalcular = vi.fn(() => of({ cotizacion: 14.5, articulosRecalculados: 2 }));
+      (TestBed.inject(CotizacionService) as unknown as { recalcular: typeof recalcular }).recalcular = recalcular;
+
+      await hacerClick(q('button.confirmar-dolar'));
+
+      expect(recalcular).toHaveBeenCalledExactlyOnceWith(true);
+      expect(texto(q('.resultado'))).toBe('Se recalcularon 2 artículos con el dólar a 14,50.');
+      expect(el().querySelector('.dolar-a-confirmar')).toBeNull();
+    });
+
+    it('«Recalcular ahora» no confirma: llama sin confirmaDesvio', async () => {
+      obtener = vi.fn(() => of(conDolarAConfirmar));
+      await crear();
+
+      await hacerClick(botonRecalcular());
+
+      expect(recalcular).toHaveBeenCalledExactlyOnceWith(false);
     });
   });
 

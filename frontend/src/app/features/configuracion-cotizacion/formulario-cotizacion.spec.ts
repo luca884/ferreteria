@@ -15,6 +15,7 @@ describe('FormularioCotizacion', () => {
     horaRecalculo: '08:00',
     vigente: 1000,
     vigenteDesde: '2026-10-16T11:00:00Z',
+    aConfirmar: null,
   };
 
   async function crear(valor: ConfiguracionCotizacion = configuracion, guardando = false): Promise<HTMLElement> {

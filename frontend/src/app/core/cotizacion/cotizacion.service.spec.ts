@@ -85,6 +85,16 @@ describe('CotizacionService', () => {
     req.flush({ cotizacion: 1100, articulosRecalculados: 3 });
 
     expect(resultado).toEqual({ cotizacion: 1100, articulosRecalculados: 3 });
+    expect(req.request.params.has('confirmaDesvio')).toBe(false);
+  });
+
+  it('confirmar un dólar que se aleja más del 20 % manda ?confirmaDesvio=true', () => {
+    service.recalcular(true).subscribe();
+
+    const req = http.expectOne((r) => r.url.endsWith('/cotizacion/recalculo'));
+    expect(req.request.method).toBe('POST');
+    expect(req.request.params.get('confirmaDesvio')).toBe('true');
+    req.flush({ cotizacion: 11, articulosRecalculados: 1 });
   });
 
   describe('aviso de refresco para el menú lateral', () => {

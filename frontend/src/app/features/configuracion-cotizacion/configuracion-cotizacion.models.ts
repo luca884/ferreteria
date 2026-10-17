@@ -13,10 +13,20 @@ export interface ConfiguracionCotizacion {
   /** El dólar con el que se calcularon los precios la última vez; null si todavía no se fijó ninguno. */
   vigente: number | null;
   vigenteDesde: string | null;
+  /** Un dólar nuevo que se aleja más del 20 % del vigente: los precios no cambian hasta que el Dueño lo confirme. */
+  aConfirmar: DolarAConfirmar | null;
 }
 
-/** Lo que manda `PUT /configuracion-cotizacion`: el vigente no se edita, lo fija el recálculo. */
-export type ConfiguracionCotizacionRequest = Omit<ConfiguracionCotizacion, 'vigente' | 'vigenteDesde'>;
+export interface DolarAConfirmar {
+  nuevo: number;
+  vigente: number;
+  desvioPorcentaje: number;
+  /** El aviso tal cual se muestra, armado por el backend. */
+  mensaje: string;
+}
+
+/** Lo que manda `PUT /configuracion-cotizacion`: el vigente no se edita, lo fija el recálculo; el aviso es solo lectura. */
+export type ConfiguracionCotizacionRequest = Omit<ConfiguracionCotizacion, 'vigente' | 'vigenteDesde' | 'aConfirmar'>;
 
 /** Los tipos que el sistema conoce, en el orden en que se ofrecen (los mismos que valida el backend). */
 export interface OpcionCotizacion {

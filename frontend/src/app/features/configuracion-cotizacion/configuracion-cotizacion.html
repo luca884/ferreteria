@@ -44,6 +44,19 @@
       <section class="recalculo panel" aria-labelledby="recalculo-titulo">
         <h2 id="recalculo-titulo">Recalcular precios</h2>
         <p class="vigente">{{ textoVigente(actual) }}</p>
+        @if (actual.aConfirmar; as aConfirmar) {
+          <div class="alerta advertencia dolar-a-confirmar" role="alert">
+            <p>{{ aConfirmar.mensaje }}</p>
+            <button
+              type="button"
+              class="confirmar-dolar"
+              [disabled]="recalculando() || motivoSinRecalculo() !== null"
+              (click)="recalcular(true)"
+            >
+              Confirmar
+            </button>
+          </div>
+        }
         <div class="recalculo-fila">
           <p class="recalculo-texto">
             El cambio se aplica en el próximo recálculo. Si no querés esperar, podés recalcular ahora.

@@ -49,7 +49,7 @@ class RecalculoPorCotizacionIntegrationTest extends CotizacionTestBase {
     private RecalculoCotizacionResponse recalcularAhora() {
         TenantContext.setCurrentFerreteriaId(a);
         try {
-            return servicio.recalcularAhora(dueno);
+            return servicio.recalcularAhora(dueno, false);
         } finally {
             TenantContext.clear();
         }
@@ -58,7 +58,7 @@ class RecalculoPorCotizacionIntegrationTest extends CotizacionTestBase {
     private void recalcularAhoraDebeFallarCon(String mensaje) {
         TenantContext.setCurrentFerreteriaId(a);
         try {
-            assertThatThrownBy(() -> servicio.recalcularAhora(dueno))
+            assertThatThrownBy(() -> servicio.recalcularAhora(dueno, false))
                     .isInstanceOf(ConflictException.class)
                     .hasMessage(mensaje);
         } finally {

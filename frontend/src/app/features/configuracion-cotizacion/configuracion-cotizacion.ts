@@ -81,12 +81,13 @@ export class PaginaConfiguracionCotizacion implements OnInit {
     });
   }
 
-  protected recalcular(): void {
+  /** `confirmaDesvio`: el botón «Confirmar» del aviso de un dólar que se aleja más del 20 % del vigente. */
+  protected recalcular(confirmaDesvio = false): void {
     if (this.recalculando() || this.motivoSinRecalculo() !== null) return;
     this.recalculando.set(true);
     this.resultado.set(null);
     this.errorRecalculo.set(null);
-    this.cotizaciones.recalcular().subscribe({
+    this.cotizaciones.recalcular(confirmaDesvio).subscribe({
       next: (recalculo) => {
         this.recalculando.set(false);
         this.resultado.set(describirRecalculo(recalculo));

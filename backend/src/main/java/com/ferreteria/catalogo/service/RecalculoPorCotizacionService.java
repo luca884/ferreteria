@@ -28,11 +28,12 @@ public class RecalculoPorCotizacionService {
     /**
      * «Recalcular ahora» (solo el Dueno): fija el ultimo dolar guardado como vigente y recalcula con el, con el historial
      * a nombre de {@code usuarioId}. Con la cotizacion apagada o sin ningun valor guardado responde 409 (la
-     * ConflictException del puerto) sin tocar nada.
+     * ConflictException del puerto) sin tocar nada. Un dolar que se aleja mas del 20 % del vigente tambien da 409 con el
+     * aviso, salvo que el Dueno lo confirme con {@code confirmaDesvio} (auditoria H09).
      */
     @Transactional
-    public RecalculoCotizacionResponse recalcularAhora(Long usuarioId) {
-        BigDecimal dolar = dolarDePrecios.fijarUltima();
+    public RecalculoCotizacionResponse recalcularAhora(Long usuarioId, boolean confirmaDesvio) {
+        BigDecimal dolar = dolarDePrecios.fijarUltima(confirmaDesvio);
         return new RecalculoCotizacionResponse(dolar, recalculoPreciosService.porCotizacion(dolar, usuarioId));
     }
 

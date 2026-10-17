@@ -1,6 +1,7 @@
 package com.ferreteria.cotizacion.web;
 
 import com.ferreteria.cotizacion.service.ConfiguracionCotizacionService;
+import com.ferreteria.cotizacion.service.DolarDePreciosService;
 import com.ferreteria.cotizacion.web.dto.ConfiguracionCotizacionRequest;
 import com.ferreteria.cotizacion.web.dto.ConfiguracionCotizacionResponse;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -19,21 +20,25 @@ import org.springframework.web.bind.annotation.RestController;
 public class ConfiguracionCotizacionController {
 
     private final ConfiguracionCotizacionService configuracionService;
+    private final DolarDePreciosService dolarDePrecios;
 
-    public ConfiguracionCotizacionController(ConfiguracionCotizacionService configuracionService) {
+    public ConfiguracionCotizacionController(ConfiguracionCotizacionService configuracionService,
+                                             DolarDePreciosService dolarDePrecios) {
         this.configuracionService = configuracionService;
+        this.dolarDePrecios = dolarDePrecios;
     }
 
     @GetMapping
     @PreAuthorize("hasRole('DUENO')")
     public ConfiguracionCotizacionResponse obtener() {
-        return ConfiguracionCotizacionResponse.de(configuracionService.obtener());
+        return ConfiguracionCotizacionResponse.de(configuracionService.obtener(), dolarDePrecios.aConfirmar().orElse(null));
     }
 
     /** Guardar no recalcula ningun precio: el cambio se aplica en el proximo recalculo. */
     @PutMapping
     @PreAuthorize("hasRole('DUENO')")
     public ConfiguracionCotizacionResponse actualizar(@RequestBody ConfiguracionCotizacionRequest pedido) {
-        return ConfiguracionCotizacionResponse.de(configuracionService.actualizar(pedido));
+        return ConfiguracionCotizacionResponse.de(configuracionService.actualizar(pedido),
+                dolarDePrecios.aConfirmar().orElse(null));
     }
 }

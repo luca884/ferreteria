@@ -5,13 +5,13 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.ferreteria.common.exception.ConflictException;
 import com.ferreteria.cotizacion.CotizacionTestBase;
-import com.ferreteria.cotizacion.api.DolarDePrecios;
 import com.ferreteria.cotizacion.model.ConfiguracionCotizacion;
 import com.ferreteria.cotizacion.model.LadoCotizacion;
 import com.ferreteria.cotizacion.web.dto.ConfiguracionCotizacionRequest;
 import com.ferreteria.tenant.TenantContext;
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.time.LocalDateTime;
 import java.util.List;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -28,7 +28,7 @@ class DolarDePreciosServiceTest extends CotizacionTestBase {
     private static final Instant HACE_UN_RATO = Instant.parse("2026-10-16T11:00:00Z");
 
     @Autowired
-    DolarDePrecios dolar;
+    DolarDePreciosService dolar;
 
     @Autowired
     ConfiguracionCotizacionService configuracionService;
@@ -150,7 +150,7 @@ class DolarDePreciosServiceTest extends CotizacionTestBase {
     void fijarUltima() {
         Instant antes = Instant.now();
 
-        BigDecimal fijado = como(a, dolar::fijarUltima);
+        BigDecimal fijado = como(a, () -> dolar.fijarUltima());
 
         assertThat(fijado).isEqualByComparingTo("1000");
         ConfiguracionCotizacion config = configuracionDe(a);
@@ -163,7 +163,7 @@ class DolarDePreciosServiceTest extends CotizacionTestBase {
     @Test
     @DisplayName("fijarUltima de B (oficial compra) fija 950 y deja intacta a A")
     void fijarUltimaPorFerreteria() {
-        BigDecimal fijado = como(b, dolar::fijarUltima);
+        BigDecimal fijado = como(b, () -> dolar.fijarUltima());
 
         assertThat(fijado).isEqualByComparingTo("950");
         assertThat(configuracionDe(b).getVigente()).isEqualByComparingTo("950");
@@ -178,7 +178,7 @@ class DolarDePreciosServiceTest extends CotizacionTestBase {
             c.setActiva(false);
         });
 
-        assertThatThrownBy(() -> como(a, dolar::fijarUltima)).isInstanceOf(ConflictException.class)
+        assertThatThrownBy(() -> como(a, () -> dolar.fijarUltima())).isInstanceOf(ConflictException.class)
                 .hasMessage("La cotización está apagada");
         assertThat(configuracionDe(a).getVigente()).isNull();
     }
@@ -188,7 +188,7 @@ class DolarDePreciosServiceTest extends CotizacionTestBase {
     void fijarUltimaSinValor() {
         configuracion(a, c -> c.setCasaPrecios("t18-mep"));
 
-        assertThatThrownBy(() -> como(a, dolar::fijarUltima)).isInstanceOf(ConflictException.class)
+        assertThatThrownBy(() -> como(a, () -> dolar.fijarUltima())).isInstanceOf(ConflictException.class)
                 .hasMessage("Todavía no hay cotización del dólar. Probá en unos minutos");
         assertThat(configuracionDe(a).getVigente()).isNull();
     }
@@ -196,7 +196,7 @@ class DolarDePreciosServiceTest extends CotizacionTestBase {
     @Test
     @DisplayName("un cambio de tipo en la configuracion no cambia vigente() hasta el proximo fijarUltima (R-028)")
     void cambioDeTipoSeAplicaAlProximoRecalculo() {
-        como(a, dolar::fijarUltima);
+        como(a, () -> dolar.fijarUltima());
         assertThat(como(a, dolar::vigente)).hasValueSatisfying(v -> assertThat(v).isEqualByComparingTo("1000"));
 
         como(a, () -> configuracionService.actualizar(new ConfiguracionCotizacionRequest(true, "USD:oficial",
@@ -210,7 +210,7 @@ class DolarDePreciosServiceTest extends CotizacionTestBase {
             c.setLadoPrecios(LadoCotizacion.COMPRA);
             c.fijarVigente(new BigDecimal("1000.0000"), "t18-oficial", LadoCotizacion.VENTA, HACE_UN_RATO);
         });
-        assertThat(como(a, dolar::fijarUltima)).isEqualByComparingTo("950");
+        assertThat(como(a, () -> dolar.fijarUltima())).isEqualByComparingTo("950");
         assertThat(como(a, dolar::vigente)).hasValueSatisfying(v -> assertThat(v).isEqualByComparingTo("950"));
     }
 
@@ -220,12 +220,108 @@ class DolarDePreciosServiceTest extends CotizacionTestBase {
         borrarConfiguracion(a);
         cotizacion("USD", "oficial", "950", "1000", HACE_UN_RATO);
         try {
-            BigDecimal fijado = como(a, dolar::fijarUltima);
+            BigDecimal fijado = como(a, () -> dolar.fijarUltima());
 
             assertThat(fijado).isEqualByComparingTo("1000");
             assertThat(configuracionDe(a).getVigenteCasa()).isEqualTo("oficial");
         } finally {
             jdbc.update("delete from cotizacion where moneda = 'USD' and casa = 'oficial'");
         }
+    }
+
+    // ---- dolar a confirmar (auditoria H09) ----
+
+    private static final LocalDateTime HOY_A_LAS_9 = LocalDateTime.of(2026, 10, 17, 9, 0);
+
+    /** A con vigente 1000 (oficial venta) y el mercado que vino en 14,5: un 98,55 % menos. */
+    private void aConVigente1000YElMercadoEn14Coma5() {
+        configuracion(a, c -> {
+            c.setCasaPrecios("t18-oficial");
+            c.fijarVigente(new BigDecimal("1000.0000"), "t18-oficial", LadoCotizacion.VENTA, HACE_UN_RATO);
+        });
+        cotizacion("USD", "t18-oficial", "14", "14.5", HACE_UN_RATO.plusSeconds(60));
+    }
+
+    @Test
+    @DisplayName("un dolar a mas del 20 % del vigente queda a confirmar, con el aviso armado")
+    void aConfirmar() {
+        aConVigente1000YElMercadoEn14Coma5();
+
+        assertThat(como(a, dolar::aConfirmar)).hasValueSatisfying(p -> {
+            assertThat(p.vigente()).isEqualByComparingTo("1000");
+            assertThat(p.nuevo()).isEqualByComparingTo("14.5");
+            assertThat(p.mensaje()).startsWith("El dólar t18-oficial venta vino en $ 14,50, un 98,55 % distinto");
+        });
+        assertThat(como(a, dolar::vigente)).hasValueSatisfying(v -> assertThat(v).isEqualByComparingTo("1000"));
+    }
+
+    @Test
+    @DisplayName("dentro del 20 %, sin vigente o con otro tipo elegido no hay nada que confirmar")
+    void nadaQueConfirmar() {
+        configuracion(a, c -> {
+            c.setCasaPrecios("t18-oficial");
+            c.fijarVigente(new BigDecimal("900.0000"), "t18-oficial", LadoCotizacion.VENTA, HACE_UN_RATO);
+        });
+        assertThat(como(a, dolar::aConfirmar)).isEmpty(); // 900 a 1000: 11 %
+
+        assertThat(como(b, dolar::aConfirmar)).isEmpty(); // B nunca fijo un vigente
+
+        configuracion(a, c -> {
+            c.setCasaPrecios("t18-bolsa"); // el Dueno eligio otro dolar: el salto es suyo, no de la fuente
+            c.fijarVigente(new BigDecimal("500.0000"), "t18-oficial", LadoCotizacion.VENTA, HACE_UN_RATO);
+        });
+        assertThat(como(a, dolar::aConfirmar)).isEmpty();
+    }
+
+    @Test
+    @DisplayName("Recalcular ahora sin confirmar un dolar sospechoso da 409 con el aviso y no fija nada")
+    void fijarUltimaSospechosaSinConfirmar() {
+        aConVigente1000YElMercadoEn14Coma5();
+
+        assertThatThrownBy(() -> como(a, () -> dolar.fijarUltima())).isInstanceOf(ConflictException.class)
+                .hasMessageStartingWith("El dólar t18-oficial venta vino en $ 14,50");
+        assertThat(configuracionDe(a).getVigente()).isEqualByComparingTo("1000");
+    }
+
+    @Test
+    @DisplayName("confirmado por el Dueno, el dolar sospechoso se fija y deja de estar a confirmar")
+    void fijarUltimaSospechosaConfirmada() {
+        aConVigente1000YElMercadoEn14Coma5();
+
+        assertThat(como(a, () -> dolar.fijarUltima(true))).isEqualByComparingTo("14.5");
+        assertThat(configuracionDe(a).getVigente()).isEqualByComparingTo("14.5");
+        assertThat(como(a, dolar::aConfirmar)).isEmpty();
+    }
+
+    @Test
+    @DisplayName("el recalculo diario no aplica un dolar sospechoso ni marca el dia: lo reintenta y espera al Dueno")
+    void recalculoDiarioNoAplicaLaSospechosa() {
+        aConVigente1000YElMercadoEn14Coma5();
+
+        assertThat(como(a, () -> dolar.reclamarRecalculoDelDia(HOY_A_LAS_9))).isEmpty();
+        assertThat(configuracionDe(a).getVigente()).isEqualByComparingTo("1000");
+        assertThat(configuracionDe(a).getUltimoRecalculoDia()).isNull();
+
+        // Llega un valor normal (dentro del 20 %): se aplica solo y la sospechosa queda superada.
+        cotizacion("USD", "t18-oficial", "1040", "1050", HACE_UN_RATO.plusSeconds(120));
+        assertThat(como(a, () -> dolar.reclamarRecalculoDelDia(HOY_A_LAS_9)))
+                .hasValueSatisfying(v -> assertThat(v).isEqualByComparingTo("1050"));
+        assertThat(como(a, dolar::aConfirmar)).isEmpty();
+    }
+
+    @Test
+    @DisplayName("la sospechosa de A no frena a B, que tiene otro vigente y la acepta dentro del 20 %")
+    void cadaFerreteriaConfirmaLaSuya() {
+        aConVigente1000YElMercadoEn14Coma5();
+        configuracion(b, c -> {
+            c.setCasaPrecios("t18-oficial");
+            c.setLadoPrecios(LadoCotizacion.COMPRA);
+            c.fijarVigente(new BigDecimal("13.0000"), "t18-oficial", LadoCotizacion.COMPRA, HACE_UN_RATO);
+        });
+
+        assertThat(como(a, dolar::aConfirmar)).isPresent();
+        assertThat(como(b, dolar::aConfirmar)).isEmpty(); // 13 a 14: 7,7 %
+        assertThat(como(b, () -> dolar.fijarUltima())).isEqualByComparingTo("14");
+        assertThat(configuracionDe(a).getVigente()).isEqualByComparingTo("1000");
     }
 }

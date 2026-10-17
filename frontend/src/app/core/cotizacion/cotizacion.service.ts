@@ -19,8 +19,12 @@ export class CotizacionService {
   }
 
   /** «Recalcular ahora» (solo el Dueño): 409 si la cotización está apagada o todavía no hay ningún valor. */
-  recalcular(): Observable<RecalculoCotizacion> {
-    return this.http.post<RecalculoCotizacion>(`${this.url}/recalculo`, null).pipe(tap(() => this.refrescar()));
+  /** Con `confirmaDesvio` el Dueño acepta un dólar que se aleja más del 20 % del vigente; sin eso, el backend da 409. */
+  recalcular(confirmaDesvio = false): Observable<RecalculoCotizacion> {
+    const params: Record<string, boolean> = confirmaDesvio ? { confirmaDesvio: true } : {};
+    return this.http
+      .post<RecalculoCotizacion>(`${this.url}/recalculo`, null, { params })
+      .pipe(tap(() => this.refrescar()));
   }
 
   /** Avisa que la cotización cambió en el servidor: el menú lateral la vuelve a leer sin esperar su ciclo. */

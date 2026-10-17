@@ -33,8 +33,8 @@ public class RecalculoConReintento {
     }
 
     /** «Recalcular ahora» (ver {@link RecalculoPorCotizacionService#recalcularAhora}). */
-    public RecalculoCotizacionResponse recalcularAhora(Long usuarioId) {
-        return conReintento(() -> recalculoPorCotizacionService.recalcularAhora(usuarioId));
+    public RecalculoCotizacionResponse recalcularAhora(Long usuarioId, boolean confirmaDesvio) {
+        return conReintento(() -> recalculoPorCotizacionService.recalcularAhora(usuarioId, confirmaDesvio));
     }
 
     /** El recalculo del dia (ver {@link RecalculoPorCotizacionService#recalcularDelDia}). */

@@ -2,6 +2,8 @@ package com.ferreteria.catalogo;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.is;
+import static org.hamcrest.Matchers.nullValue;
+import static org.hamcrest.Matchers.startsWith;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -206,5 +208,75 @@ class RecalculoCotizacionIntegrationTest extends CotizacionTestBase {
         assertThat(precioDe(usdA)).isEqualByComparingTo("17310");
         assertThat(precioDe(usdB)).isEqualByComparingTo("15730");
         assertThat(historialDeLaFerreteria(b)).isZero();
+    }
+
+    // ---- H09: dolar a confirmar ----
+
+    /** A ya calculo con 1100 (oficial venta) y la fuente trae 11: un 99 % menos. */
+    private void aConVigente1100YElMercadoEn11() {
+        configuracion(a, c -> {
+            c.setCasaPrecios("t29-oficial");
+            c.fijarVigente(new BigDecimal("1100.0000"), "t29-oficial",
+                    com.ferreteria.cotizacion.model.LadoCotizacion.VENTA, HACE_UN_RATO);
+        });
+        cotizacion("USD", "t29-oficial", "950", "11", HACE_UN_RATO.plusSeconds(60));
+    }
+
+    @Test
+    @DisplayName("H09: con un dolar a mas del 20 % del vigente, Recalcular ahora da 409 con el aviso y ningun precio cambia")
+    void sospechosaSinConfirmarDa409() throws Exception {
+        Long usd = articuloUsd(a, "T29-SOSP", "10.00", "17310.00");
+        aConVigente1100YElMercadoEn11();
+
+        postJson(URL, duenoA, "{}")
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.message", startsWith("El dólar t29-oficial venta vino en $ 11,00, un 99 % distinto")));
+
+        assertThat(precioDe(usd)).isEqualByComparingTo("17310");
+        assertThat(configuracionDe(a).getVigente()).isEqualByComparingTo("1100");
+    }
+
+    @Test
+    @DisplayName("H09: el Dueno de A confirma y recalcula A con el dolar nuevo; B no cambia")
+    void confirmarRecalculaSoloA() throws Exception {
+        Long usdA = articuloUsd(a, "T29-CONF-A", "10.00", "17310.00");
+        Long usdB = articuloUsd(b, "T29-CONF-B", "10.00", "14950.00");
+        aConVigente1100YElMercadoEn11();
+
+        postJson(URL + "?confirmaDesvio=true", duenoA, "{}")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.cotizacion", is(11.0)))
+                .andExpect(jsonPath("$.articulosRecalculados", is(1)));
+
+        assertThat(configuracionDe(a).getVigente()).isEqualByComparingTo("11");
+        assertThat(precioDe(usdA)).isLessThan(new BigDecimal("17310"));
+        assertThat(precioDe(usdB)).isEqualByComparingTo("14950");
+        assertThat(historialDeLaFerreteria(b)).isZero();
+    }
+
+    @Test
+    @DisplayName("H09: el Vendedor no puede confirmar (403) y nada cambia")
+    void vendedorNoConfirma() throws Exception {
+        aConVigente1100YElMercadoEn11();
+
+        postJson(URL + "?confirmaDesvio=true", vendedorA, "{}").andExpect(status().isForbidden());
+
+        assertThat(configuracionDe(a).getVigente()).isEqualByComparingTo("1100");
+    }
+
+    @Test
+    @DisplayName("H09: la configuracion de A trae el aviso a confirmar; la de B no, y el Vendedor recibe 403")
+    void avisoEnLaConfiguracion() throws Exception {
+        aConVigente1100YElMercadoEn11();
+
+        getResult("/api/configuracion-cotizacion", duenoA)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.aConfirmar.nuevo", is(11.0)))
+                .andExpect(jsonPath("$.aConfirmar.vigente", is(1100.0)))
+                .andExpect(jsonPath("$.aConfirmar.mensaje", startsWith("El dólar t29-oficial venta vino en $ 11,00")));
+        getResult("/api/configuracion-cotizacion", duenoB)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.aConfirmar", nullValue()));
+        getResult("/api/configuracion-cotizacion", vendedorA).andExpect(status().isForbidden());
     }
 }
