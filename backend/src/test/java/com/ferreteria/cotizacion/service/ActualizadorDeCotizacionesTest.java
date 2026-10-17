@@ -208,4 +208,41 @@ class ActualizadorDeCotizacionesTest {
         assertThat(previa.getObtenidaEn()).isEqualTo(AHORA);
         assertThat(almacen.get("USD:blue").getVenta()).isEqualByComparingTo("1200");
     }
+
+    @Test
+    @DisplayName("un valor que no entra en DECIMAL(15,4) invalida la fuente entera y se prueba el respaldo (H09)")
+    void valorQueNoEntraPasaAlRespaldo() {
+        FuenteFalsa principal = new FuenteFalsa("DOLARAPI", () -> List.of(
+                oficial("950", "1000"),
+                new CotizacionLeida("USD", "blue", "Blue", new BigDecimal("1180"), new BigDecimal("123456789012"),
+                        MERCADO)));
+        FuenteFalsa respaldo = new FuenteFalsa("BLUELYTICS", () -> List.of(oficial("948", "998")));
+
+        Optional<String> usada = actualizador(principal, respaldo).actualizar();
+
+        assertThat(usada).contains("BLUELYTICS");
+        assertThat(almacen).containsOnlyKeys("USD:oficial");
+        assertThat(almacen.get("USD:oficial").getVenta()).isEqualByComparingTo("998");
+        assertThat(respaldo.consultas).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("si las dos fuentes traen valores que no entran, no guarda nada")
+    void ningunaFuenteConValoresQueEntran() {
+        FuenteFalsa principal = new FuenteFalsa("DOLARAPI", () -> List.of(oficial("950", "999999999999")));
+        FuenteFalsa respaldo = new FuenteFalsa("BLUELYTICS", () -> List.of(oficial("-1E+20", "998")));
+
+        Optional<String> usada = actualizador(principal, respaldo).actualizar();
+
+        assertThat(usada).isEmpty();
+        assertThat(almacen).isEmpty();
+    }
+
+    @Test
+    @DisplayName("el maximo que entra (11 enteros) se guarda; los decimales de mas los redondea la base")
+    void elMaximoQueEntraSeGuarda() {
+        FuenteFalsa principal = new FuenteFalsa("DOLARAPI", () -> List.of(oficial("99999999999.9999", "1000.123456")));
+
+        assertThat(actualizador(principal).actualizar()).contains("DOLARAPI");
+    }
 }
