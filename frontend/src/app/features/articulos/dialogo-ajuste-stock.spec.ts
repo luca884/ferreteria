@@ -446,6 +446,23 @@ describe('DialogoAjusteStock', () => {
       });
     });
 
+    it('con stock negativo por ventas, un ingreso parcial se manda aunque no llegue a 0', async () => {
+      await abrir(tornillo(-4));
+      await escribir('#motivo', 'INGRESO_MERCADERIA');
+      await escribir('#cantidad', '2');
+
+      expect(texto('.quedara')).toBe('-2 unidades');
+      await confirmar();
+
+      expect(texto('#cantidad-error')).toBe('');
+      expect(servicio.ajustarStock).toHaveBeenCalledWith(7, {
+        modo: 'CANTIDAD',
+        cantidad: 2,
+        motivo: 'INGRESO_MERCADERIA',
+        detalle: null,
+      });
+    });
+
     it('acepta coma decimal en metros', async () => {
       await abrir(tornillo(150, 'METRO'));
       await escribir('#motivo', 'INGRESO_MERCADERIA');

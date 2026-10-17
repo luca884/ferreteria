@@ -672,7 +672,7 @@ export class DialogoAjusteStock {
       else if (this.articulo().unidad === 'UNIDAD' && leido.decimales > 0)
         errores.cantidad = 'Este artículo se cuenta por unidad: la cantidad tiene que ser un número entero.';
       else if (leido.decimales > 3) errores.cantidad = 'La cantidad admite hasta 3 decimales.';
-      else if (this.queda()! < 0)
+      else if (this.signo() === 'SALE' && this.queda()! < 0)
         errores.cantidad = `No podés sacar ${String(leido.valor).replace('.', ',')}: hay ${this.conUnidad(this.articulo().stockActual)}.`;
     } else if (texto === '') errores.stockReal = 'Escribí el stock real que contaste.';
     else if (!leido) errores.stockReal = 'Escribí un número, por ejemplo 12 o 145,5.';

@@ -42,6 +42,21 @@ class AjusteStockCantidadTest {
     }
 
     @Test
+    @DisplayName("con stock negativo por ventas, un ingreso se acepta aunque no llegue a 0")
+    void ingresoConStockNegativo() {
+        assertThat(AjusteStock.stockResultante(bd("-4"), bd("2"), "UNIDAD")).isEqualByComparingTo("-2");
+        assertThat(AjusteStock.stockResultante(bd("-4"), bd("4"), "UNIDAD")).isEqualByComparingTo("0");
+        assertThat(AjusteStock.stockResultante(bd("-1.500"), bd("0.25"), "METRO")).isEqualByComparingTo("-1.25");
+    }
+
+    @Test
+    @DisplayName("con stock negativo no se puede sacar nada")
+    void sacarConStockNegativo() {
+        assertThatThrownBy(() -> AjusteStock.stockResultante(bd("-4"), bd("-2"), "UNIDAD"))
+                .hasMessage("No podés sacar 2: hay -4 unidades.");
+    }
+
+    @Test
     @DisplayName("la cantidad es obligatoria y no puede ser cero")
     void obligatoriaYNoCero() {
         assertThatThrownBy(() -> AjusteStock.validarCantidad(null, false))

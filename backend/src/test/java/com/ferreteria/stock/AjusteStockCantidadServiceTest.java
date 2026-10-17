@@ -105,6 +105,20 @@ class AjusteStockCantidadServiceTest {
     }
 
     @Test
+    @DisplayName("con -4 por ventas, un ingreso de 2 se aplica y deja -2")
+    void ingresoConStockNegativo() {
+        existe("UNIDAD", "-4");
+        when(articulos.ajustarStock(Map.of(ARTICULO, bd("2")))).thenReturn(Map.of(ARTICULO, bd("-2")));
+
+        AjusteRegistrado ajuste =
+                service.ajustarPorCantidad(ARTICULO, bd("2"), MotivoAjuste.INGRESO_MERCADERIA, null, USUARIO);
+
+        assertThat(ajuste.stockAnterior()).isEqualByComparingTo("-4");
+        assertThat(ajuste.stockActual()).isEqualByComparingTo("-2");
+        verify(movimientoRepository).save(any());
+    }
+
+    @Test
     @DisplayName("sacar mas de lo que hay: 400 en cantidad y no toca nada")
     void noQuedaNegativo() {
         existe("UNIDAD", "3");

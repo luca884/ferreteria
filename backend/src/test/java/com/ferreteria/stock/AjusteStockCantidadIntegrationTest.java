@@ -121,6 +121,26 @@ class AjusteStockCantidadIntegrationTest extends IntegrationTestBase {
     }
 
     @Test
+    @DisplayName("con stock negativo por ventas, un ingreso parcial se registra y el cache cuadra")
+    void ingresoConStockNegativo() throws Exception {
+        long id = crearArticulo(duenoA, "UNIDAD");
+        // Se vendieron 4 sin stock: la venta lo permite y deja -4.
+        jdbc.update("update articulo set stock_actual = stock_actual - 4 where id = ?", id);
+        jdbc.update("insert into movimiento_stock (ferreteria_id, articulo_id, tipo, cantidad, motivo, usuario_id) "
+                + "select ferreteria_id, id, 'VENTA', -4, null, (select id from usuario where email = 'dueno@tornillo.demo') "
+                + "from articulo where id = ?", id);
+
+        postJson(url(id), duenoA, cantidad("2", "INGRESO_MERCADERIA", "pedido parcial"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.stockAnterior", is(-4.0)))
+                .andExpect(jsonPath("$.diferencia", is(2.0)))
+                .andExpect(jsonPath("$.stockActual", is(-2.0)));
+
+        assertThat(stockEnBase(id)).isEqualByComparingTo("-2");
+        assertThat(sumaDeMovimientos(id)).isEqualByComparingTo("-2");
+    }
+
+    @Test
     @DisplayName("sacar mas de lo que hay: 400 claro en cantidad y nada cambia")
     void noQuedaNegativo() throws Exception {
         long id = crearArticulo(duenoA, "UNIDAD");

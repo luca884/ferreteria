@@ -71,12 +71,13 @@ public final class AjusteStock {
     }
 
     /**
-     * Stock que quedaria al aplicar la cantidad (con signo) al stock vigente. Nunca puede quedar negativo:
-     * sacar de mas lanza IllegalArgumentException ("No podés sacar 5: hay 3 unidades.").
+     * Stock que quedaria al aplicar la cantidad (con signo) al stock vigente. Sacar nunca lo deja negativo:
+     * sacar de mas lanza IllegalArgumentException ("No podés sacar 5: hay 3 unidades."). Sumar siempre se acepta,
+     * aunque el stock siga negativo: la venta sin stock lo deja asi y un ingreso parcial tiene que poder cargarse.
      */
     public static BigDecimal stockResultante(BigDecimal stockVigente, BigDecimal cantidad, String unidad) {
         BigDecimal resultante = stockVigente.add(cantidad);
-        if (resultante.signum() < 0) {
+        if (cantidad.signum() < 0 && resultante.signum() < 0) {
             throw new IllegalArgumentException("No podés sacar " + texto(cantidad.negate()) + ": hay "
                     + texto(stockVigente) + " " + nombreDeUnidad(unidad, stockVigente) + ".");
         }
