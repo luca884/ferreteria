@@ -81,6 +81,9 @@ public final class AjusteStock {
             throw new IllegalArgumentException("No podés sacar " + texto(cantidad.negate()) + ": hay "
                     + texto(stockVigente) + " " + nombreDeUnidad(unidad, stockVigente) + ".");
         }
+        if (resultante.compareTo(MAXIMO) > 0) {
+            throw new IllegalArgumentException("El stock quedaría demasiado grande: el máximo es 999.999.999.999,999.");
+        }
         return resultante;
     }
 

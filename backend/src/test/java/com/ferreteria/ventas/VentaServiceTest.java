@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -119,6 +120,17 @@ class VentaServiceTest {
         when(registroVenta.repetida(pedido)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.cobrar(pedido, USUARIO)).isSameAs(error);
+    }
+
+    @Test
+    @DisplayName("un valor fuera de rango (1264) no es una carrera de clave: se relanza sin buscar la venta")
+    void fueraDeRangoNoEsCarrera() {
+        DataIntegrityViolationException error = new DataIntegrityViolationException("could not execute statement",
+                new java.sql.SQLException("Out of range value for column 'total'", "22003", 1264));
+        when(registroVenta.registrar(pedido, USUARIO)).thenThrow(error);
+
+        assertThatThrownBy(() -> service.cobrar(pedido, USUARIO)).isSameAs(error);
+        verify(registroVenta, never()).repetida(any());
     }
 
     @Test

@@ -373,6 +373,34 @@ class ArticuloIntegrationTest extends IntegrationTestBase {
     }
 
     @Test
+    void unPrecioQueNoEntraEnLaColumnaDa400EnCostoNo409() throws Exception {
+        long articulosAntes = cantidadArticulos();
+        ObjectNode p = pedido(unico("BIG"));
+        p.put("costo", new BigDecimal("999999999999")).put("margenPorcentaje", new BigDecimal("1000"));
+
+        postJson("/api/articulos", duenoA, texto(p))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors.costo").value("Con este costo y margen el precio queda demasiado grande."));
+
+        assertThat(cantidadArticulos()).isEqualTo(articulosAntes);
+    }
+
+    @Test
+    void editarHastaUnPrecioQueNoEntraDa400YNoCambiaNada() throws Exception {
+        JsonNode creado = crear(duenoA, pedido(unico("BIGE")));
+        long id = creado.get("id").asLong();
+        ObjectNode p = pedido(creado.get("codigoInterno").asText());
+        p.put("costo", new BigDecimal("999999999999")).put("margenPorcentaje", new BigDecimal("1000"))
+                .put("version", creado.get("version").asLong());
+
+        putJson("/api/articulos/" + id, duenoA, texto(p))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors.costo").value("Con este costo y margen el precio queda demasiado grande."));
+
+        assertThat(filaDeArticulo(id).get("costo").toString()).isEqualTo("100.00");
+    }
+
+    @Test
     void descripcionEnBlancoDa400() throws Exception {
         ObjectNode p = pedido(unico("BLA"));
         p.put("descripcion", "   ");

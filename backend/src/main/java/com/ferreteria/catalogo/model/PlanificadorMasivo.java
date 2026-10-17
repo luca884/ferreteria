@@ -19,9 +19,6 @@ import java.util.Optional;
  */
 public final class PlanificadorMasivo {
 
-    /** DECIMAL(15,2) admite hasta 13 digitos enteros. */
-    static final int MAXIMO_DIGITOS_ENTEROS = 13;
-
     private static final BigDecimal CIEN = BigDecimal.valueOf(100);
     private static final String MOTIVO_COSTO_CERO = "El costo nuevo da 0. Revisá el porcentaje.";
     private static final String MOTIVO_COSTO_CERO_O_MENOS = "El costo nuevo da 0 o menos. Revisá el monto.";
@@ -128,7 +125,7 @@ public final class PlanificadorMasivo {
         BigDecimal precioNuevo = PrecioCalculator.precioFinal(
             costoNuevo, margenNuevo, articulo.alicuotaIva(), contexto.redondeoMultiplo(),
             contexto.cotizacionPara(articulo.moneda()));
-        if (digitosEnteros(costoNuevo) > MAXIMO_DIGITOS_ENTEROS || digitosEnteros(precioNuevo) > MAXIMO_DIGITOS_ENTEROS) {
+        if (!TopeDeImporte.entra(costoNuevo) || !TopeDeImporte.entra(precioNuevo)) {
             return Fila.conError(MOTIVO_DEMASIADO_GRANDE);
         }
 
@@ -162,10 +159,5 @@ public final class PlanificadorMasivo {
             return anterior != nuevo;
         }
         return anterior.compareTo(nuevo) != 0;
-    }
-
-    /** Cantidad de digitos de la parte entera; un valor menor que 1 tiene 0. */
-    private static int digitosEnteros(BigDecimal valor) {
-        return Math.max(0, valor.precision() - valor.scale());
     }
 }

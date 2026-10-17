@@ -57,6 +57,16 @@ class AjusteStockCantidadTest {
     }
 
     @Test
+    @DisplayName("sumar hasta pasar el maximo de la columna se rechaza antes de llegar a la base")
+    void resultanteDemasiadoGrande() {
+        assertThatThrownBy(() -> AjusteStock.stockResultante(bd("999999999999"), bd("1"), "UNIDAD"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("El stock quedaría demasiado grande: el máximo es 999.999.999.999,999.");
+        assertThat(AjusteStock.stockResultante(bd("999999999998.999"), bd("1"), "METRO"))
+                .isEqualByComparingTo("999999999999.999");
+    }
+
+    @Test
     @DisplayName("la cantidad es obligatoria y no puede ser cero")
     void obligatoriaYNoCero() {
         assertThatThrownBy(() -> AjusteStock.validarCantidad(null, false))

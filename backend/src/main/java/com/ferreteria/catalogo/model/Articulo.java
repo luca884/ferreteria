@@ -1,5 +1,7 @@
 package com.ferreteria.catalogo.model;
 
+import com.ferreteria.common.HoraArgentina;
+import com.ferreteria.common.exception.DatosInvalidosException;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -14,8 +16,8 @@ import org.hibernate.type.SqlTypes;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import com.ferreteria.common.HoraArgentina;
 import java.time.LocalDateTime;
+import java.util.Map;
 import java.util.Optional;
 
 /**
@@ -28,6 +30,7 @@ import java.util.Optional;
 public class Articulo {
 
     private static final BigDecimal MARGEN_MAXIMO = BigDecimal.valueOf(1000);
+    static final String PRECIO_DEMASIADO_GRANDE = "Con este costo y margen el precio queda demasiado grande.";
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -387,10 +390,18 @@ public class Articulo {
         this.activo = true;
     }
 
+    /**
+     * El precio tiene que entrar en DECIMAL(15,2): un costo y un margen absurdos (un tipeo con ceros de mas) dan un
+     * 400 en {@code costo} antes de llegar a la base, que lo rechazaria como un "ya existe" engañoso.
+     */
     private void calcularPrecio(ContextoPrecio ctx) {
         BigDecimal margen = PrecioCalculator.margenEfectivo(margenPorcentaje, ctx.margenRubro(), ctx.margenDefecto());
-        this.precioFinal = PrecioCalculator.precioFinal(
+        BigDecimal precio = PrecioCalculator.precioFinal(
                 costo, margen, alicuotaIva, ctx.redondeoMultiplo(), ctx.cotizacionPara(moneda));
+        if (!TopeDeImporte.entra(precio)) {
+            throw new DatosInvalidosException(Map.of("costo", PRECIO_DEMASIADO_GRANDE));
+        }
+        this.precioFinal = precio;
     }
 
     public Long getId() { return id; }

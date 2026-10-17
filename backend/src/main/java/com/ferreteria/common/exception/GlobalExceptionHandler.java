@@ -184,6 +184,10 @@ public class GlobalExceptionHandler {
     /** Dos altas simultaneas que chocan contra una restriccion UNIQUE de la base. */
     @ExceptionHandler(DataIntegrityViolationException.class)
     public ResponseEntity<ApiError> integridad(DataIntegrityViolationException ex) {
+        // Un valor que no entra en la columna no es un duplicado: es un 400, no un "ya existe".
+        if (ErrorDeBase.es(ex, ErrorDeBase.FUERA_DE_RANGO)) {
+            return build(HttpStatus.BAD_REQUEST, "Hay un valor demasiado grande.");
+        }
         return build(HttpStatus.CONFLICT, "El dato ya existe o entra en conflicto con otro");
     }
 

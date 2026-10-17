@@ -1,5 +1,6 @@
 package com.ferreteria.ventas.service;
 
+import com.ferreteria.common.exception.ErrorDeBase;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.PessimisticLockingFailureException;
 import org.springframework.stereotype.Service;
@@ -33,6 +34,10 @@ public class VentaService {
                 }
                 intento++;
             } catch (DataIntegrityViolationException e) {
+                // Con un codigo de MySQL que no es un duplicado (un valor fuera de rango) no hubo carrera: se relanza.
+                if (ErrorDeBase.codigo(e).isPresent() && !ErrorDeBase.es(e, ErrorDeBase.DUPLICADO)) {
+                    throw e;
+                }
                 // Otra transaccion con la misma clave gano la carrera: la venta ya esta confirmada.
                 return registroVenta.repetida(pedido).orElseThrow(() -> e);
             }
