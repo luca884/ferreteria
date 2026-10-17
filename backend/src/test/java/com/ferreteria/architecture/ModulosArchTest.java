@@ -3,7 +3,16 @@ package com.ferreteria.architecture;
 import com.tngtech.archunit.core.domain.JavaClasses;
 import com.tngtech.archunit.core.importer.ClassFileImporter;
 import com.tngtech.archunit.core.importer.ImportOption;
+import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.List;
+import java.util.regex.Pattern;
+import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
+
+import static org.assertj.core.api.Assertions.assertThat;
 
 import static com.tngtech.archunit.base.DescribedPredicate.not;
 import static com.tngtech.archunit.core.domain.JavaClass.Predicates.resideInAPackage;
@@ -73,6 +82,46 @@ class ModulosArchTest {
         noClasses().that().resideInAnyPackage("com.ferreteria.ventas..", "com.ferreteria.stock..")
                 .should().dependOnClassesThat(resideInAPackage("com.ferreteria.cotizacion.."))
                 .check(clases);
+    }
+
+    /**
+     * {@code common} es la base que todos usan: no conoce a ningun modulo de negocio. Quedan fuera de la regla
+     * {@code auth} y {@code tenant}, que son infraestructura transversal (el manejador global de errores traduce
+     * {@code CredencialesInvalidasException} y {@code MissingTenantException}), no negocio.
+     */
+    @Test
+    void commonNoDependeDeLosModulosDeNegocio() {
+        noClasses().that().resideInAPackage("com.ferreteria.common..")
+                .should().dependOnClassesThat(resideInAnyPackage(
+                        "com.ferreteria.catalogo..", "com.ferreteria.ventas..", "com.ferreteria.stock..",
+                        "com.ferreteria.cotizacion..", "com.ferreteria.ferreteria.."))
+                .check(clases);
+    }
+
+    /**
+     * La regla de arriba no alcanza: javac copia las constantes {@code static final String} en el sitio de uso, asi que
+     * el bytecode de {@code common} no registra la dependencia con {@code ArticuloModificado} (lo comprobado al
+     * escribirla: daba verde con el import mal puesto). Por eso se revisan tambien los {@code import} del codigo fuente.
+     */
+    @Test
+    void commonNoImportaLosModulosDeNegocioEnElCodigoFuente() throws IOException {
+        Pattern prohibido = Pattern.compile(
+                "^import\\s+(static\\s+)?com\\.ferreteria\\.(catalogo|ventas|stock|cotizacion|ferreteria)\\.",
+                Pattern.MULTILINE);
+        try (Stream<Path> archivos = Files.walk(Path.of("src/main/java/com/ferreteria/common"))) {
+            List<String> infractores = archivos.filter(a -> a.toString().endsWith(".java"))
+                    .filter(a -> prohibido.matcher(leer(a)).find())
+                    .map(Path::toString).toList();
+            assertThat(infractores).isEmpty();
+        }
+    }
+
+    private static String leer(Path archivo) {
+        try {
+            return Files.readString(archivo);
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
     }
 
     @Test

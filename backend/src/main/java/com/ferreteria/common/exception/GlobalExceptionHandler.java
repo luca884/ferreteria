@@ -2,7 +2,6 @@ package com.ferreteria.common.exception;
 
 import com.fasterxml.jackson.databind.exc.InvalidFormatException;
 import com.ferreteria.auth.service.CredencialesInvalidasException;
-import com.ferreteria.catalogo.model.ArticuloModificado;
 import com.ferreteria.common.ApiError;
 import com.ferreteria.tenant.MissingTenantException;
 import org.slf4j.Logger;

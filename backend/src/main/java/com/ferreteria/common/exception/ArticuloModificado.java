@@ -1,4 +1,4 @@
-package com.ferreteria.catalogo.model;
+package com.ferreteria.common.exception;
 
 /**
  * El articulo cambio desde que se leyo (bloqueo optimista, lote 5b): otro cambio confirmo antes. Es el texto del 409
