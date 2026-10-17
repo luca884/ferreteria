@@ -212,14 +212,10 @@ class HuellaMasivaTest {
     }
 
     @Test
-    @DisplayName("una huella calculada con el formato v1 ya no coincide (el 409 aceptado al cambiar de version)")
-    void huellaV1YaNoCoincide() throws Exception {
-        String textoV1 = "v1\n"
-            + "op|COSTO_PORCENTAJE|10.00\n"
-            + "filtro|~|~|false|~\n"
-            + "a|1|true|100.00|~|160.00|110.00|~|180.00\n";
-        String huellaV1 = HexFormat.of().formatHex(
-            MessageDigest.getInstance("SHA-256").digest(textoV1.getBytes(StandardCharsets.UTF_8)));
+    @DisplayName("la huella v1 real de este alcance (SHA-256 del texto v1) ya no coincide con la v2")
+    void huellaV1YaNoCoincide() {
+        // SHA-256 de "v1\nop|COSTO_PORCENTAJE|10.00\nfiltro|~|~|false|~\na|1|true|100.00|~|160.00|110.00|~|180.00\n".
+        String huellaV1 = "9179ba7d2c17dae9206adc23d78720b5d5ff2939714bb033a419b53da372c08a";
 
         assertThat(huella(OPERACION, FILTRO)).isNotEqualTo(huellaV1);
     }

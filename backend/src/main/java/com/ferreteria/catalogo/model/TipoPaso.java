@@ -16,6 +16,8 @@ public enum TipoPaso {
     COTIZACION,
     MARGEN,
     IVA,
+    /** El redondeo hacia arriba al multiplo de la ferreteria; el importe del paso es el multiplo. */
+    REDONDEO,
     /** El precio final guardado en el articulo. */
     PRECIO_FINAL
 }

@@ -45,7 +45,7 @@ class CasosCompartidosCadenaTest {
     @Test
     @DisplayName("el JSON trae los siete casos de R-219, los de R-209 y los de R-212, con dolares incluidos")
     void hayCasos() {
-        assertThat(casos.size()).isGreaterThanOrEqualTo(17);
+        assertThat(casos.size()).isGreaterThanOrEqualTo(20);
         long enDolares = 0;
         for (JsonNode caso : casos) {
             if (caso.get("moneda").asText().equals("USD")) {
@@ -53,6 +53,19 @@ class CasosCompartidosCadenaTest {
             }
         }
         assertThat(enDolares).isGreaterThanOrEqualTo(2);
+    }
+
+    @Test
+    @DisplayName("hay casos de R-210 donde el costo guardado NO coincide con el de la lista")
+    void hayCasosQueNoCoinciden() {
+        long noCoinciden = 0;
+        for (JsonNode caso : casos) {
+            if (!caso.get("coincide").asBoolean()) {
+                noCoinciden++;
+                assertThat(bd(caso.get("costoGuardado"))).isNotEqualByComparingTo(bd(caso.get("costo")));
+            }
+        }
+        assertThat(noCoinciden).isGreaterThanOrEqualTo(3);
     }
 
     @Test
@@ -70,15 +83,17 @@ class CasosCompartidosCadenaTest {
 
             BigDecimal costo = CostoDeLista.costo(bd(caso.get("lista")), alicuota, caso.get("incluyeIva").asBoolean(),
                 laBonificacion, losAjustes);
+            // El costo guardado puede ser distinto del de la lista (a mano o por un masivo): el precio sale del guardado.
+            BigDecimal costoGuardado = caso.has("costoGuardado") ? bd(caso.get("costoGuardado")) : costo;
             BigDecimal precio = PrecioCalculator.precioFinal(
-                costo, bd(caso.get("margen")), alicuota, bd(caso.get("multiplo")), cotizacion);
+                costoGuardado, bd(caso.get("margen")), alicuota, bd(caso.get("multiplo")), cotizacion);
 
             assertThat(costo).as(nombre + ": costo").isEqualTo(bd(caso.get("costo")));
             assertThat(precio).as(nombre + ": precio").isEqualTo(bd(caso.get("precio")));
 
             CadenaDePrecio cadena = CadenaDePrecio.de(new EntradaCadena(true, bd(caso.get("lista")),
-                caso.get("incluyeIva").asBoolean(), alicuota, laBonificacion, losAjustes, costo,
-                usd ? Moneda.USD : Moneda.ARS, usd ? cotizacion : null, bd(caso.get("margen")), null, null,
+                caso.get("incluyeIva").asBoolean(), alicuota, laBonificacion, losAjustes, costoGuardado,
+                usd ? Moneda.USD : Moneda.ARS, usd ? cotizacion : null, false, bd(caso.get("margen")), null, null,
                 bd(caso.get("multiplo")), precio));
 
             JsonNode esperados = caso.get("pasos");
@@ -90,7 +105,7 @@ class CasosCompartidosCadenaTest {
                     .isEqualTo(bd(esperados.get(i).get("importe")));
             }
             assertThat(cadena.costoDeLista()).as(nombre + ": costo de la lista").isEqualTo(costo);
-            assertThat(cadena.coincide()).as(nombre + ": coincide").isTrue();
+            assertThat(cadena.coincide()).as(nombre + ": coincide").isEqualTo(caso.get("coincide").asBoolean());
         }
     }
 }

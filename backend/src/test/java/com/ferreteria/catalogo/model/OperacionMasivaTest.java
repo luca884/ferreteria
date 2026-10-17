@@ -53,9 +53,9 @@ class OperacionMasivaTest {
     void recordsDelPlan() {
         ConteosMasivos conteos = new ConteosMasivos(5, 2, 0, 2, 1, 0, 0, 3);
         CambioMasivo cambio = new CambioMasivo(1L, "INT-1", "Articulo 1", bd("100.00"), bd("110.00"),
-            bd("30.00"), bd("30.00"), bd("160.00"), bd("180.00"), true, null);
+            bd("30.00"), bd("30.00"), bd("160.00"), bd("180.00"), true, null, Moneda.ARS);
         ErrorMasivo error = new ErrorMasivo(4L, "INT-4", "Articulo 4", "El costo nuevo da 0. Revisá el porcentaje.");
-        PlanMasivo plan = new PlanMasivo(conteos, java.util.List.of(cambio), java.util.List.of(error), "abc");
+        PlanMasivo plan = new PlanMasivo(conteos, java.util.List.of(cambio), java.util.List.of(error), "abc", 5, 0, null);
 
         assertThat(plan.conteos().total()).isEqualTo(5);
         assertThat(plan.conteos().suben()).isEqualTo(2);
@@ -69,5 +69,31 @@ class OperacionMasivaTest {
         assertThat(plan.cambios().get(0).advertencia()).isNull();
         assertThat(plan.errores().get(0).motivo()).isEqualTo("El costo nuevo da 0. Revisá el porcentaje.");
         assertThat(plan.huella()).isEqualTo("abc");
+    }
+
+    @Test
+    @DisplayName("COSTO_MONTO con monto 0 o 0,00 se rechaza con una excepcion de dominio")
+    void montoCeroSeRechaza() {
+        for (String cero : new String[] {"0", "0.00"}) {
+            assertThatThrownBy(() -> new OperacionMasiva(ModoMasivo.COSTO_MONTO, bd(cero)))
+                .isInstanceOf(ValorMasivoInvalidoException.class)
+                .hasMessage("El monto no puede ser cero.");
+        }
+    }
+
+    @Test
+    @DisplayName("COSTO_MONTO con mas de 2 decimales se rechaza con una excepcion de dominio, no con ArithmeticException")
+    void montoConMasDeDosDecimales() {
+        assertThatThrownBy(() -> new OperacionMasiva(ModoMasivo.COSTO_MONTO, bd("10.555")))
+            .isInstanceOf(ValorMasivoInvalidoException.class)
+            .hasMessage("El valor puede tener como máximo 2 decimales.");
+    }
+
+    @Test
+    @DisplayName("COSTO_MONTO valido: 100, 100,50, -0,01 y 10,500 (ceros de mas no cuentan)")
+    void montoValido() {
+        assertThat(new OperacionMasiva(ModoMasivo.COSTO_MONTO, bd("100")).valor()).isEqualTo(bd("100.00"));
+        assertThat(new OperacionMasiva(ModoMasivo.COSTO_MONTO, bd("-0.01")).valor()).isEqualTo(bd("-0.01"));
+        assertThat(new OperacionMasiva(ModoMasivo.COSTO_MONTO, bd("10.500")).valor()).isEqualTo(bd("10.50"));
     }
 }

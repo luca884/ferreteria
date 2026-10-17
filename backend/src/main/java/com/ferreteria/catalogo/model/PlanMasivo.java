@@ -20,9 +20,4 @@ public record PlanMasivo(
         int enPesos,
         int enDolares,
         String advertenciaMezcla) {
-
-    /** Un plan sin datos de moneda: todo el alcance cuenta como pesos y sin advertencia. */
-    public PlanMasivo(ConteosMasivos conteos, List<CambioMasivo> cambios, List<ErrorMasivo> errores, String huella) {
-        this(conteos, cambios, errores, huella, conteos.total(), 0, null);
-    }
 }

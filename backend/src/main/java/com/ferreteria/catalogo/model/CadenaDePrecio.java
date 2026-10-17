@@ -17,6 +17,7 @@ import java.util.List;
  * @param costoDeLista el costo que sale de la lista con los ajustes y las bonificaciones guardadas; null sin lista
  * @param coincide     si el costo guardado es igual por valor al de la lista; null sin lista
  * @param cotizacion   la del desglose, o null si el articulo esta en pesos o no hay ninguna
+ * @param cotizacionCongelada true si el articulo esta en dolares y la cotizacion esta apagada (se usa la ultima)
  */
 public record CadenaDePrecio(
         List<PasoDePrecio> pasos,
@@ -24,7 +25,8 @@ public record CadenaDePrecio(
         Boolean coincide,
         BigDecimal margen,
         OrigenMargen origenMargen,
-        BigDecimal cotizacion) {
+        BigDecimal cotizacion,
+        boolean cotizacionCongelada) {
 
     private static final BigDecimal CIEN = BigDecimal.valueOf(100);
     private static final int ESCALA_MOSTRADA = 4;
@@ -54,7 +56,8 @@ public record CadenaDePrecio(
         if (entrada.moneda() == Moneda.ARS || cotizacion != null) {
             pasosDePrecio(entrada, margen, cotizacion, pasos);
         }
-        return new CadenaDePrecio(pasos, costoDeLista, coincide, margen, origen, cotizacion);
+        boolean congelada = entrada.moneda() == Moneda.USD && entrada.cotizacionCongelada();
+        return new CadenaDePrecio(pasos, costoDeLista, coincide, margen, origen, cotizacion, congelada);
     }
 
     /** LISTA, SIN_IVA, una BONIFICACION por cada una no nula y un AJUSTE por cada uno no nulo. */
@@ -83,7 +86,7 @@ public record CadenaDePrecio(
         }
     }
 
-    /** COTIZACION (solo USD), MARGEN, IVA y el PRECIO_FINAL guardado, siempre desde el costo guardado. */
+    /** COTIZACION (solo USD), MARGEN, IVA, REDONDEO (si hay multiplo) y el PRECIO_FINAL guardado, siempre desde el costo guardado. */
     private static void pasosDePrecio(EntradaCadena entrada, BigDecimal margen, BigDecimal cotizacion, List<PasoDePrecio> pasos) {
         BigDecimal numerador = entrada.costoGuardado();
         if (cotizacion != null) {
@@ -95,6 +98,9 @@ public record CadenaDePrecio(
         BigDecimal iva = entrada.alicuota().porcentaje();
         numerador = numerador.multiply(CIEN.add(iva));
         pasos.add(new PasoDePrecio(TipoPaso.IVA, iva, mostrado(numerador, CIEN.multiply(CIEN))));
+        if (entrada.multiplo() != null && entrada.multiplo().signum() > 0) {
+            pasos.add(new PasoDePrecio(TipoPaso.REDONDEO, null, entrada.multiplo()));
+        }
         pasos.add(new PasoDePrecio(TipoPaso.PRECIO_FINAL, null, entrada.precioGuardado()));
     }
 

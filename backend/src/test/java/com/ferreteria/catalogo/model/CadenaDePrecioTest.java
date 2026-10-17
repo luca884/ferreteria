@@ -28,6 +28,7 @@ class CadenaDePrecioTest {
         private String costoGuardado = "880.65";
         private Moneda moneda = Moneda.ARS;
         private String cotizacion;
+        private boolean congelada = false;
         private String margenPropio = "30";
         private String margenRubro;
         private String margenDefecto = "30";
@@ -69,6 +70,11 @@ class CadenaDePrecioTest {
             return this;
         }
 
+        Entrada congelada() {
+            this.congelada = true;
+            return this;
+        }
+
         Entrada margen(String propio, String rubro, String defecto) {
             this.margenPropio = propio;
             this.margenRubro = rubro;
@@ -83,7 +89,7 @@ class CadenaDePrecioTest {
 
         CadenaDePrecio cadena() {
             return CadenaDePrecio.de(new EntradaCadena(tieneLista, bd(lista), incluyeIva, iva, bonificaciones, ajustes,
-                bd(costoGuardado), moneda, cotizacion == null ? null : bd(cotizacion),
+                bd(costoGuardado), moneda, cotizacion == null ? null : bd(cotizacion), congelada,
                 margenPropio == null ? null : bd(margenPropio), margenRubro == null ? null : bd(margenRubro),
                 margenDefecto == null ? null : bd(margenDefecto), bd("10"), bd(precioGuardado)));
         }
@@ -103,12 +109,12 @@ class CadenaDePrecioTest {
         CadenaDePrecio cadena = new Entrada().cadena();
 
         assertThat(tipos(cadena)).containsExactly(TipoPaso.LISTA, TipoPaso.BONIFICACION, TipoPaso.AJUSTE, TipoPaso.AJUSTE,
-            TipoPaso.COSTO, TipoPaso.MARGEN, TipoPaso.IVA, TipoPaso.PRECIO_FINAL);
+            TipoPaso.COSTO, TipoPaso.MARGEN, TipoPaso.IVA, TipoPaso.REDONDEO, TipoPaso.PRECIO_FINAL);
         assertThat(importes(cadena)).containsExactly("1000.0000", "900.0000", "855.0000", "880.6500", "880.65",
-            "1144.8450", "1385.2625", "1390.00");
+            "1144.8450", "1385.2625", "10", "1390.00");
         assertThat(cadena.pasos()).extracting(PasoDePrecio::porcentaje)
             .usingComparatorForType(BigDecimal::compareTo, BigDecimal.class)
-            .containsExactly(null, bd("10"), bd("-5"), bd("3"), null, bd("30"), bd("21"), null);
+            .containsExactly(null, bd("10"), bd("-5"), bd("3"), null, bd("30"), bd("21"), null, null);
         assertThat(cadena.costoDeLista()).isEqualTo(bd("880.65"));
         assertThat(cadena.coincide()).isTrue();
         assertThat(cadena.cotizacion()).isNull();
@@ -121,10 +127,10 @@ class CadenaDePrecioTest {
             .costoGuardado("1100.00").precioGuardado("1740.00").cadena();
 
         assertThat(tipos(cadena)).containsExactly(TipoPaso.LISTA, TipoPaso.SIN_IVA, TipoPaso.AJUSTE, TipoPaso.COSTO,
-            TipoPaso.MARGEN, TipoPaso.IVA, TipoPaso.PRECIO_FINAL);
+            TipoPaso.MARGEN, TipoPaso.IVA, TipoPaso.REDONDEO, TipoPaso.PRECIO_FINAL);
         assertThat(importes(cadena).subList(0, 4)).containsExactly("1210.0000", "1000.0000", "1100.0000", "1100.00");
         assertThat(cadena.pasos().get(1).porcentaje()).isEqualByComparingTo("21");
-        assertThat(cadena.pasos().get(6).importe()).isEqualTo(bd("1740.00"));
+        assertThat(cadena.pasos().get(7).importe()).isEqualTo(bd("1740.00"));
     }
 
     @Test
@@ -133,7 +139,7 @@ class CadenaDePrecioTest {
         CadenaDePrecio cadena = new Entrada().lista("333.33").bonificaciones(null).ajustes("-10", null, null)
             .costoGuardado("300.00").precioGuardado("480.00").cadena();
 
-        assertThat(importes(cadena)).containsExactly("333.3300", "299.9970", "300.00", "390.0000", "471.9000", "480.00");
+        assertThat(importes(cadena)).containsExactly("333.3300", "299.9970", "300.00", "390.0000", "471.9000", "10", "480.00");
     }
 
     @Test
@@ -143,9 +149,9 @@ class CadenaDePrecioTest {
             .precioGuardado("13860.00").cadena();
 
         assertThat(tipos(cadena)).containsExactly(TipoPaso.LISTA, TipoPaso.BONIFICACION, TipoPaso.AJUSTE, TipoPaso.AJUSTE,
-            TipoPaso.COSTO, TipoPaso.COTIZACION, TipoPaso.MARGEN, TipoPaso.IVA, TipoPaso.PRECIO_FINAL);
+            TipoPaso.COSTO, TipoPaso.COTIZACION, TipoPaso.MARGEN, TipoPaso.IVA, TipoPaso.REDONDEO, TipoPaso.PRECIO_FINAL);
         assertThat(importes(cadena)).containsExactly("10.0000", "9.0000", "8.5500", "8.8065", "8.81", "8810.0000",
-            "11453.0000", "13858.1300", "13860.00");
+            "11453.0000", "13858.1300", "10", "13860.00");
         assertThat(cadena.cotizacion()).isEqualByComparingTo("1000");
         assertThat(cadena.costoDeLista()).isEqualTo(bd("8.81"));
     }
@@ -157,7 +163,7 @@ class CadenaDePrecioTest {
 
         assertThat(cadena.cotizacion()).isNull();
         assertThat(tipos(cadena)).endsWith(TipoPaso.COSTO).doesNotContain(TipoPaso.COTIZACION, TipoPaso.MARGEN,
-            TipoPaso.IVA, TipoPaso.PRECIO_FINAL);
+            TipoPaso.IVA, TipoPaso.REDONDEO, TipoPaso.PRECIO_FINAL);
     }
 
     @Test
@@ -165,8 +171,8 @@ class CadenaDePrecioTest {
     void sinLista() {
         CadenaDePrecio cadena = new Entrada().sinLista().costoGuardado("500.00").precioGuardado("790.00").cadena();
 
-        assertThat(tipos(cadena)).containsExactly(TipoPaso.COSTO, TipoPaso.MARGEN, TipoPaso.IVA, TipoPaso.PRECIO_FINAL);
-        assertThat(importes(cadena)).containsExactly("500.00", "650.0000", "786.5000", "790.00");
+        assertThat(tipos(cadena)).containsExactly(TipoPaso.COSTO, TipoPaso.MARGEN, TipoPaso.IVA, TipoPaso.REDONDEO, TipoPaso.PRECIO_FINAL);
+        assertThat(importes(cadena)).containsExactly("500.00", "650.0000", "786.5000", "10", "790.00");
         assertThat(cadena.costoDeLista()).isNull();
         assertThat(cadena.coincide()).isNull();
     }
@@ -246,5 +252,34 @@ class CadenaDePrecioTest {
 
         assertThat(tipos(cadena)).startsWith(TipoPaso.LISTA, TipoPaso.BONIFICACION, TipoPaso.AJUSTE, TipoPaso.COSTO);
         assertThat(importes(cadena).subList(0, 4)).containsExactly("1000.0000", "1000.0000", "1000.0000", "1000.00");
+    }
+
+    @Test
+    @DisplayName("el paso REDONDEO lleva el multiplo (10), va entre el IVA y el precio final y no tiene porcentaje")
+    void pasoDeRedondeo() {
+        CadenaDePrecio cadena = new Entrada().cadena();
+
+        PasoDePrecio redondeo = cadena.pasos().get(cadena.pasos().size() - 2);
+        assertThat(redondeo.tipo()).isEqualTo(TipoPaso.REDONDEO);
+        assertThat(redondeo.importe()).isEqualByComparingTo("10");
+        assertThat(redondeo.porcentaje()).isNull();
+        assertThat(tipos(cadena).get(cadena.pasos().size() - 3)).isEqualTo(TipoPaso.IVA);
+    }
+
+    @Test
+    @DisplayName("la cotizacion congelada (cotizacion apagada) de un articulo en dolares se marca en la cadena")
+    void cotizacionCongelada() {
+        CadenaDePrecio usd = new Entrada().lista("10.00").dolares("1000.00").costoGuardado("8.81").congelada().cadena();
+        assertThat(usd.cotizacionCongelada()).isTrue();
+        assertThat(usd.cotizacion()).isEqualByComparingTo("1000");
+
+        CadenaDePrecio vigente = new Entrada().lista("10.00").dolares("1000.00").costoGuardado("8.81").cadena();
+        assertThat(vigente.cotizacionCongelada()).isFalse();
+    }
+
+    @Test
+    @DisplayName("un articulo en pesos nunca marca cotizacion congelada, aunque la entrada lo diga")
+    void enPesosNoMarcaCongelada() {
+        assertThat(new Entrada().congelada().cadena().cotizacionCongelada()).isFalse();
     }
 }

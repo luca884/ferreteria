@@ -14,6 +14,19 @@ public record OperacionMasiva(ModoMasivo modo, BigDecimal valor) {
     public OperacionMasiva {
         Objects.requireNonNull(modo, "modo");
         Objects.requireNonNull(valor, "valor");
+        if (modo == ModoMasivo.COSTO_MONTO) {
+            validarMonto(valor);
+        }
         valor = valor.setScale(2, RoundingMode.UNNECESSARY);
+    }
+
+    /** El monto no puede ser cero (no cambiaria nada) ni tener mas de 2 decimales significativos. */
+    private static void validarMonto(BigDecimal monto) {
+        if (monto.signum() == 0) {
+            throw new ValorMasivoInvalidoException("El monto no puede ser cero.");
+        }
+        if (monto.stripTrailingZeros().scale() > 2) {
+            throw new ValorMasivoInvalidoException("El valor puede tener como máximo 2 decimales.");
+        }
     }
 }

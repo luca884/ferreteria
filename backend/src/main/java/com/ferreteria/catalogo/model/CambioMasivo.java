@@ -24,12 +24,4 @@ public record CambioMasivo(
         boolean margenHeredado,
         String advertencia,
         Moneda moneda) {
-
-    /** Un articulo en pesos. */
-    public CambioMasivo(Long articuloId, String codigo, String descripcion, BigDecimal costoAnterior,
-                        BigDecimal costoNuevo, BigDecimal margenAnterior, BigDecimal margenNuevo,
-                        BigDecimal precioAnterior, BigDecimal precioNuevo, boolean margenHeredado, String advertencia) {
-        this(articuloId, codigo, descripcion, costoAnterior, costoNuevo, margenAnterior, margenNuevo, precioAnterior,
-            precioNuevo, margenHeredado, advertencia, Moneda.ARS);
-    }
 }

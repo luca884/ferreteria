@@ -786,15 +786,6 @@ class PlanificadorMasivoTest {
             assertThat(plan.cambios()).extracting(CambioMasivo::moneda)
                 .containsExactly(Moneda.ARS, Moneda.ARS, Moneda.ARS, Moneda.USD, Moneda.USD);
         }
-
-        @Test
-        @DisplayName("el constructor de 11 argumentos de CambioMasivo pone pesos")
-        void constructorViejoEnPesos() {
-            CambioMasivo cambio = new CambioMasivo(1L, "INT-1", "A", bd("1.00"), bd("2.00"), bd("30.00"), bd("30.00"),
-                bd("3.00"), bd("4.00"), true, null);
-
-            assertThat(cambio.moneda()).isEqualTo(Moneda.ARS);
-        }
     }
 
     // ------------------------------------------------------------------ contadores, advertencias, huella
