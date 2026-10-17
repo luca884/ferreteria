@@ -124,7 +124,6 @@ class BusquedaMostradorServiceTest {
         assertThat(r.items().get(0).descripcion()).isEqualTo("Tornillo");
         assertThat(r.hayMas()).isFalse();
         verify(articuloRepository, never()).coincidenciasMostradorScoped(any(), anyInt());
-        verify(articuloRepository, never()).hayDadoDeBajaConCodigoScoped(anyString());
     }
 
     @Test
@@ -158,18 +157,19 @@ class BusquedaMostradorServiceTest {
         assertThat(a.stockActual()).isEqualByComparingTo("2.5");
         assertThat(a.stockMinimo()).isEqualByComparingTo("5");
         assertThat(a.ubicacion()).isEqualTo("Estante 3");
+        assertThat(a.activo()).isTrue();
     }
 
     @Test
-    @DisplayName("el DTO no tiene costo, margen, rubro, proveedor, IVA, precio de lista ni activo")
+    @DisplayName("el DTO no tiene costo, margen, rubro, proveedor, IVA ni precio de lista; si dice si esta activo")
     void elDtoNoExponeCostoNiMargen() {
         List<String> componentes = Arrays.stream(ArticuloMostradorResponse.class.getRecordComponents())
                 .map(RecordComponent::getName).toList();
 
         assertThat(componentes).containsExactly("id", "codigoInterno", "codigoBarras", "codigoProveedor",
-                "descripcion", "precioFinal", "unidad", "stockActual", "stockMinimo", "ubicacion");
+                "descripcion", "precioFinal", "unidad", "stockActual", "stockMinimo", "ubicacion", "activo");
         assertThat(componentes).doesNotContain("costo", "margen", "margenPorcentaje", "margenPropio",
-                "alicuotaIva", "precioListaProveedor", "rubro", "rubroId", "proveedor", "proveedorId", "activo");
+                "alicuotaIva", "precioListaProveedor", "rubro", "rubroId", "proveedor", "proveedorId");
     }
 
     // ---- varios exactos: LISTA (R-004) ----
@@ -186,58 +186,64 @@ class BusquedaMostradorServiceTest {
         assertThat(r.items()).extracting(ArticuloMostradorResponse::id).containsExactly(1L, 2L);
         assertThat(r.hayMas()).isFalse();
         verify(articuloRepository, never()).coincidenciasMostradorScoped(any(), anyInt());
-        verify(articuloRepository, never()).hayDadoDeBajaConCodigoScoped(anyString());
     }
 
-    // ---- DADO_DE_BAJA (R-005) ----
+    // ---- dados de baja: aparecen en la lista, marcados (H06) ----
 
     @Test
-    @DisplayName("sin exacto activo y con un dado de baja con ese codigo: DADO_DE_BAJA sin datos del articulo")
-    void dadoDeBaja() {
-        when(articuloRepository.exactosActivosScoped("7790003", 21)).thenReturn(List.of());
-        when(articuloRepository.hayDadoDeBajaConCodigoScoped("7790003")).thenReturn(true);
+    @DisplayName("sin exacto activo, un dado de baja con ese codigo sale en la LISTA de parciales con activo false")
+    void elDadoDeBajaSaleEnLaLista() {
+        sinExacto("7790003");
+        Articulo deBaja = articulo(3, "Taladro viejo");
+        ReflectionTestUtils.setField(deBaja, "activo", false);
+        when(articuloRepository.coincidenciasMostradorScoped(any(), eq(21))).thenReturn(List.of(deBaja));
 
         BusquedaMostradorResponse r = service.buscar("7790003");
 
-        assertThat(r.tipo()).isEqualTo(TipoResultadoMostrador.DADO_DE_BAJA);
-        assertThat(r.items()).isEmpty();
-        assertThat(r.hayMas()).isFalse();
+        assertThat(r.tipo()).isEqualTo(TipoResultadoMostrador.LISTA);
+        assertThat(r.items()).singleElement().satisfies(a -> {
+            assertThat(a.id()).isEqualTo(3L);
+            assertThat(a.activo()).isFalse();
+        });
     }
 
     @Test
-    @DisplayName("el dado de baja gana sobre las coincidencias parciales: no se consulta la parcial")
-    void dadoDeBajaGanaSobreLasParciales() {
-        when(articuloRepository.exactosActivosScoped("7790003", 21)).thenReturn(List.of());
-        when(articuloRepository.hayDadoDeBajaConCodigoScoped("7790003")).thenReturn(true);
+    @DisplayName("un dado de baja con codigo exacto no tapa a los activos que coinciden por palabra")
+    void elDadoDeBajaNoTapaLaBusqueda() {
+        sinExacto("tornillo");
+        Articulo deBaja = articulo(5, "Viejo");
+        ReflectionTestUtils.setField(deBaja, "activo", false);
+        when(articuloRepository.coincidenciasMostradorScoped(any(), eq(21)))
+                .thenReturn(List.of(articulo(1, "Tornillo hexagonal"), deBaja));
 
-        service.buscar("7790003");
+        BusquedaMostradorResponse r = service.buscar("tornillo");
 
-        verify(articuloRepository, never()).coincidenciasMostradorScoped(any(), anyInt());
+        assertThat(r.tipo()).isEqualTo(TipoResultadoMostrador.LISTA);
+        assertThat(r.items()).extracting(ArticuloMostradorResponse::activo).containsExactly(true, false);
     }
 
     @Test
-    @DisplayName("un exacto activo gana sobre un inactivo con el mismo codigo: no se consulta la baja")
+    @DisplayName("un exacto activo gana sobre un inactivo con el mismo codigo: no se consulta la parcial")
     void elActivoGanaSobreElInactivo() {
         when(articuloRepository.exactosActivosScoped("7790004", 21)).thenReturn(List.of(articulo(4, "Activo")));
 
         BusquedaMostradorResponse r = service.buscar("7790004");
 
         assertThat(r.tipo()).isEqualTo(TipoResultadoMostrador.EXACTO);
-        verify(articuloRepository, never()).hayDadoDeBajaConCodigoScoped(anyString());
+        verify(articuloRepository, never()).coincidenciasMostradorScoped(any(), anyInt());
     }
 
     // ---- parcial y limite (R-006, R-007) ----
 
-    /** Sin exacto activo ni dado de baja: la busqueda cae en la parcial. */
-    private void sinExactoNiBaja(String codigo) {
+    /** Sin exacto activo: la busqueda cae en la parcial. */
+    private void sinExacto(String codigo) {
         when(articuloRepository.exactosActivosScoped(codigo, 21)).thenReturn(List.of());
-        when(articuloRepository.hayDadoDeBajaConCodigoScoped(codigo)).thenReturn(false);
     }
 
     @Test
-    @DisplayName("sin exacto ni baja y con filas parciales: LISTA con esas filas")
+    @DisplayName("sin exacto y con filas parciales: LISTA con esas filas")
     void parcialConFilasEsLista() {
-        sinExactoNiBaja("tornillo 1/4");
+        sinExacto("tornillo 1/4");
         when(articuloRepository.coincidenciasMostradorScoped(any(), eq(21)))
                 .thenReturn(List.of(articulo(1, "Tornillo autoperforante 1/4"), articulo(2, "Tornillo 1/4 largo")));
 
@@ -251,7 +257,7 @@ class BusquedaMostradorServiceTest {
     @Test
     @DisplayName("sin filas parciales: SIN_RESULTADOS")
     void parcialSinFilasEsSinResultados() {
-        sinExactoNiBaja("martillo");
+        sinExacto("martillo");
         when(articuloRepository.coincidenciasMostradorScoped(any(), eq(21))).thenReturn(List.of());
 
         BusquedaMostradorResponse r = service.buscar("martillo");
@@ -265,7 +271,7 @@ class BusquedaMostradorServiceTest {
     @Test
     @DisplayName("la parcial se consulta con las palabras de q y con LIMITE + 1")
     void laParcialSeConsultaConLasPalabrasYElLimiteMasUno() {
-        sinExactoNiBaja("tornillo 1/4");
+        sinExacto("tornillo 1/4");
         when(articuloRepository.coincidenciasMostradorScoped(any(), anyInt())).thenReturn(List.of(articulo(1, "Tornillo")));
         ArgumentCaptor<ConsultaMostrador> consulta = ArgumentCaptor.forClass(ConsultaMostrador.class);
 
@@ -279,7 +285,7 @@ class BusquedaMostradorServiceTest {
     @Test
     @DisplayName("un solo resultado parcial es LISTA de una fila, no EXACTO")
     void unSoloParcialEsListaDeUnaFila() {
-        sinExactoNiBaja("torn");
+        sinExacto("torn");
         when(articuloRepository.coincidenciasMostradorScoped(any(), eq(21))).thenReturn(List.of(articulo(9, "Tornillo")));
 
         BusquedaMostradorResponse r = service.buscar("torn");
@@ -292,7 +298,7 @@ class BusquedaMostradorServiceTest {
     @Test
     @DisplayName("20 filas: las 20 y hayMas false")
     void veinteFilasNoTienenMas() {
-        sinExactoNiBaja("cable");
+        sinExacto("cable");
         when(articuloRepository.coincidenciasMostradorScoped(any(), eq(21))).thenReturn(articulos(20));
 
         BusquedaMostradorResponse r = service.buscar("cable");
@@ -304,7 +310,7 @@ class BusquedaMostradorServiceTest {
     @Test
     @DisplayName("21 filas: las primeras 20 y hayMas true")
     void veintiunaFilasRecortanAVeinteYAvisan() {
-        sinExactoNiBaja("cable");
+        sinExacto("cable");
         when(articuloRepository.coincidenciasMostradorScoped(any(), eq(21))).thenReturn(articulos(21));
 
         BusquedaMostradorResponse r = service.buscar("cable");
@@ -317,16 +323,13 @@ class BusquedaMostradorServiceTest {
     }
 
     @Test
-    @DisplayName("hayMas solo es true en LISTA: EXACTO, DADO_DE_BAJA y SIN_RESULTADOS lo traen en false")
+    @DisplayName("hayMas solo es true en LISTA: EXACTO y SIN_RESULTADOS lo traen en false")
     void hayMasSoloEnLista() {
         when(articuloRepository.exactosActivosScoped("A", 21)).thenReturn(List.of(articulo(1, "Uno")));
-        when(articuloRepository.exactosActivosScoped("B", 21)).thenReturn(List.of());
-        when(articuloRepository.hayDadoDeBajaConCodigoScoped("B")).thenReturn(true);
-        sinExactoNiBaja("C");
+        sinExacto("C");
         when(articuloRepository.coincidenciasMostradorScoped(any(), eq(21))).thenReturn(List.of());
 
         assertThat(service.buscar("A").hayMas()).isFalse();
-        assertThat(service.buscar("B").hayMas()).isFalse();
         assertThat(service.buscar("C").hayMas()).isFalse();
     }
 }

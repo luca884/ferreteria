@@ -28,6 +28,7 @@ describe('Mostrador', () => {
     stockActual: 10,
     stockMinimo: 5,
     ubicacion: 'Pasillo 1',
+    activo: true,
     ...cambios,
   });
 
@@ -685,15 +686,38 @@ describe('Mostrador', () => {
       expect(el().querySelector('app-ficha-articulo')).toBeNull();
     });
 
-    it('DADO_DE_BAJA no agrega y deja el ticket como estaba', async () => {
+    it('un dado de baja elegido de la lista no se agrega y avisa en rojo', async () => {
       await crear();
       await escanear('A', exacto(articulo(1)));
-      await escanear('B', exacto(articulo(2)));
 
-      await escanear('BAJA', { tipo: 'DADO_DE_BAJA', items: [], hayMas: false });
+      await escanear('BAJA', lista([articulo(9, { descripcion: 'Taladro viejo', activo: false })]));
+      await enter();
 
-      expect(renglonesTicket()).toHaveLength(2);
-      expect(mensaje()).toBe('Artículo dado de baja');
+      expect(renglonesTicket()).toHaveLength(1);
+      const aviso = el().querySelector('.aviso')!;
+      expect(aviso.textContent!.trim()).toBe('"Taladro viejo" está dado de baja.');
+      expect(aviso.classList.contains('error')).toBe(true);
+      expect(aviso.getAttribute('role')).toBe('alert');
+    });
+
+    it('un EXACTO dado de baja (no debería llegar) tampoco se agrega', async () => {
+      await crear();
+
+      await escanear('BAJA', exacto(articulo(9, { descripcion: 'Taladro viejo', activo: false })));
+
+      expect(renglonesTicket()).toHaveLength(0);
+      expect(el().querySelector('.aviso')!.textContent!.trim()).toBe('"Taladro viejo" está dado de baja.');
+    });
+
+    it('después del aviso de baja, agregar un activo lo saca', async () => {
+      await crear();
+      await escanear('BAJA', lista([articulo(9, { descripcion: 'Taladro viejo', activo: false })]));
+      await enter();
+
+      await escanear('A', exacto(articulo(1)));
+
+      expect(renglonesTicket()).toHaveLength(1);
+      expect(el().querySelector('.aviso')).toBeNull();
     });
 
     it('SIN_RESULTADOS no agrega y muestra el mensaje de no encontrado', async () => {
@@ -1981,17 +2005,6 @@ describe('Mostrador', () => {
       await enter();
     }
 
-    it('DADO_DE_BAJA muestra «Artículo dado de baja», no «no encontrado»', async () => {
-      await crear();
-      await buscar('7790003');
-
-      await responder(0, { tipo: 'DADO_DE_BAJA', items: [], hayMas: false });
-
-      expect(mensaje()).toBe('Artículo dado de baja');
-      expect(el().textContent).not.toContain('No encontramos');
-      expect(filas()).toHaveLength(0);
-    });
-
     it('SIN_RESULTADOS se ve como advertencia roja, para que se note con el lector (H-17)', async () => {
       await crear();
       await buscar('martillo');
@@ -2011,18 +2024,14 @@ describe('Mostrador', () => {
       expect(el().textContent).not.toContain('Artículo dado de baja');
     });
 
-    it('«no encontrado» se anuncia como status (no interrumpe al que tipea); baja y error de red, como alert', async () => {
+    it('«no encontrado» se anuncia como status (no interrumpe al que tipea); el error de red, como alert', async () => {
       await crear();
       await buscar('martillo');
       await responder(0, { tipo: 'SIN_RESULTADOS', items: [], hayMas: false });
       expect(rolDelMensaje()).toBe('status');
 
-      await buscar('baja');
-      await responder(1, { tipo: 'DADO_DE_BAJA', items: [], hayMas: false });
-      expect(rolDelMensaje()).toBe('alert');
-
       await buscar('red');
-      await fallar(2);
+      await fallar(1);
       expect(rolDelMensaje()).toBe('alert');
     });
 

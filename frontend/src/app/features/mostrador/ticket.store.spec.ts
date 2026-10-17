@@ -17,6 +17,7 @@ function art(id = 1, over: Partial<ArticuloMostrador> = {}): ArticuloMostrador {
     stockActual: 12,
     stockMinimo: 5,
     ubicacion: null,
+    activo: true,
     ...over,
   };
 }

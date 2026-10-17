@@ -27,7 +27,6 @@ const ESPERA_MS = 250;
 /** Cuánto queda a la vista el aviso de venta cobrada. */
 const AVISO_COBRADA_MS = 5000;
 const MENSAJE_ERROR = 'No se pudo buscar. Probá de nuevo.';
-const MENSAJE_DADO_DE_BAJA = 'Artículo dado de baja';
 const MENSAJE_SIN_RESULTADOS = 'No encontramos ningún artículo con ese código o descripción.';
 const MENSAJE_TICKET_VACIO = 'El ticket está vacío.';
 const MENSAJE_COBRO_FALLIDO = 'No se pudo cobrar. Probá de nuevo.';
@@ -107,8 +106,6 @@ export class Mostrador {
   protected readonly mensaje = computed(() => {
     if (this.error()) return { texto: MENSAJE_ERROR, grave: true, urgente: true };
     switch (this.resultado()?.tipo) {
-      case 'DADO_DE_BAJA':
-        return { texto: MENSAJE_DADO_DE_BAJA, grave: true, urgente: true };
       case 'SIN_RESULTADOS':
         return { texto: MENSAJE_SIN_RESULTADOS, grave: true, urgente: false };
       default:
@@ -133,6 +130,8 @@ export class Mostrador {
       codigoBarras: null,
       codigoProveedor: null,
       ubicacion: null,
+      // Al ticket solo entran activos.
+      activo: true,
       ...this.vistos.get(renglon.articuloId),
       id: renglon.articuloId,
       codigoInterno: renglon.codigoInterno,
@@ -241,7 +240,12 @@ export class Mostrador {
     }
   }
 
+  /** Agrega 1 unidad al ticket. Un dado de baja sale en la búsqueda pero no entra: se avisa en rojo. */
   private agregar(articulo: ArticuloMostrador): void {
+    if (!articulo.activo) {
+      this.avisar({ texto: `"${articulo.descripcion}" está dado de baja.`, grave: true, tipo: 'persistente' });
+      return;
+    }
     this.vistos.set(articulo.id, articulo);
     this.ticket.agregar(articulo);
     const tipo = this.aviso()?.tipo;

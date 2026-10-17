@@ -22,6 +22,7 @@ describe('MostradorService', () => {
         stockActual: 12,
         stockMinimo: 5,
         ubicacion: 'Pasillo 2',
+        activo: true,
       },
     ],
     hayMas: false,

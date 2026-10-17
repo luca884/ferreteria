@@ -149,9 +149,10 @@ class MostradorIntegrationTest extends IntegrationTestBase {
             assertThat(r.get("tipo").asText()).isEqualTo("EXACTO");
             JsonNode a = r.get("items").get(0);
             assertThat(campos(a)).containsExactlyInAnyOrder("id", "codigoInterno", "codigoBarras", "codigoProveedor",
-                    "descripcion", "precioFinal", "unidad", "stockActual", "stockMinimo", "ubicacion");
+                    "descripcion", "precioFinal", "unidad", "stockActual", "stockMinimo", "ubicacion", "activo");
             assertThat(campos(a)).doesNotContain("costo", "margen", "margenPorcentaje", "margenPropio",
-                    "precioListaProveedor", "alicuotaIva", "rubro", "rubroId", "proveedor", "proveedorId", "activo");
+                    "precioListaProveedor", "alicuotaIva", "rubro", "rubroId", "proveedor", "proveedorId");
+            assertThat(a.get("activo").asBoolean()).isTrue();
             assertThat(a.get("id").asLong()).isEqualTo(id);
             assertThat(a.get("codigoInterno").asText()).isEqualTo(codigo);
             assertThat(a.get("descripcion").asText()).isEqualTo("Cable fino");
@@ -184,7 +185,7 @@ class MostradorIntegrationTest extends IntegrationTestBase {
 
         assertThat(r.get("tipo").asText()).isEqualTo("LISTA");
         assertThat(r.get("items")).hasSize(2);
-        r.get("items").forEach(a -> assertThat(campos(a)).doesNotContain("costo", "margenPorcentaje", "activo"));
+        r.get("items").forEach(a -> assertThat(campos(a)).doesNotContain("costo", "margenPorcentaje"));
     }
 
     // --- Casos funcionales con base real (R-002 a R-007) ---
@@ -276,42 +277,41 @@ class MostradorIntegrationTest extends IntegrationTestBase {
         assertThat(r.get("hayMas").asBoolean()).isFalse();
     }
 
-    // --- Dado de baja ---
+    // --- Dado de baja: aparece en la lista, marcado (H06) ---
 
     @Test
-    void elCodigoExactoDeUnInactivoDaDadoDeBajaSinDatosDelArticulo() throws Exception {
+    void elCodigoExactoDeUnInactivoLoMuestraEnLaListaConActivoFalse() throws Exception {
         String barras = unico("7790003");
         articulo(ferreteriaA(), unico("I"), "Articulo viejo", barras, null, false);
 
         JsonNode r = buscar(vendedorA, barras);
-
-        assertThat(r.get("tipo").asText()).isEqualTo("DADO_DE_BAJA");
-        assertThat(r.get("items")).isEmpty();
-        assertThat(r.get("hayMas").asBoolean()).isFalse();
-    }
-
-    @Test
-    void elDadoDeBajaGanaSobreUnActivoQueTieneEseCodigoEnLaDescripcion() throws Exception {
-        String barras = unico("7790003");
-        articulo(ferreteriaA(), unico("I"), "Articulo viejo", barras, null, false);
-        articulo(ferreteriaA(), unico("I"), "Compatible con " + barras, null, null, true);
-
-        JsonNode r = buscar(vendedorA, barras);
-
-        assertThat(r.get("tipo").asText()).isEqualTo("DADO_DE_BAJA");
-        assertThat(r.get("items")).isEmpty();
-    }
-
-    @Test
-    void laDescripcionDeUnInactivoNoLoMuestraNiDisparaDadoDeBaja() throws Exception {
-        String token = unico("TOK");
-        articulo(ferreteriaA(), unico("I"), "Tornillo 1/4 " + token + " viejo", null, null, false);
-        articulo(ferreteriaA(), unico("I"), "Tornillo largo " + token, null, null, true);
-
-        JsonNode r = buscar(vendedorA, "tornillo " + token);
 
         assertThat(r.get("tipo").asText()).isEqualTo("LISTA");
-        assertThat(descripciones(r)).containsExactly("Tornillo largo " + token);
+        assertThat(descripciones(r)).containsExactly("Articulo viejo");
+        assertThat(r.get("items").get(0).get("activo").asBoolean()).isFalse();
+    }
+
+    @Test
+    void unInactivoConElCodigoBuscadoNoTapaALosActivosQueCoincidenPorPalabra() throws Exception {
+        // Caso de la auditoria: un inactivo con codigo interno TORNILLO tapaba a todos los tornillos activos.
+        String token = unico("TOK");
+        articulo(ferreteriaA(), token, "Articulo viejo", null, null, false);
+        articulo(ferreteriaA(), unico("I"), "Tornillo " + token, null, null, true);
+
+        JsonNode r = buscar(vendedorA, token);
+
+        assertThat(r.get("tipo").asText()).isEqualTo("LISTA");
+        assertThat(descripciones(r)).containsExactly("Tornillo " + token, "Articulo viejo");
+        assertThat(r.get("items").get(0).get("activo").asBoolean()).isTrue();
+        assertThat(r.get("items").get(1).get("activo").asBoolean()).isFalse();
+    }
+
+    @Test
+    void unCodigoQueNoExisteDaSinResultadosNuncaDadoDeBaja() throws Exception {
+        JsonNode r = buscar(vendedorA, unico("NOEXISTE"));
+
+        assertThat(r.get("tipo").asText()).isEqualTo("SIN_RESULTADOS");
+        assertThat(r.get("items")).isEmpty();
     }
 
     // --- Busqueda parcial por palabras ---
@@ -443,11 +443,11 @@ class MostradorIntegrationTest extends IntegrationTestBase {
     }
 
     @Test
-    void unInactivoDeLaFerreteriaADaDadoDeBajaSoloEnA() throws Exception {
+    void unInactivoDeLaFerreteriaASoloApareceEnA() throws Exception {
         String barras = unico("7790005");
         articulo(ferreteriaA(), unico("I"), "Viejo de A", barras, null, false);
 
-        assertThat(buscar(duenoA, barras).get("tipo").asText()).isEqualTo("DADO_DE_BAJA");
+        assertThat(descripciones(buscar(duenoA, barras))).containsExactly("Viejo de A");
         JsonNode deB = buscar(duenoB, barras);
 
         // Sin filtracion: B no se entera de que ese codigo existe en otra ferreteria.

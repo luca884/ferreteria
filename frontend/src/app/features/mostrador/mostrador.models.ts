@@ -1,6 +1,6 @@
 import { Unidad } from '../articulos/articulo.models';
 
-export type TipoResultadoMostrador = 'EXACTO' | 'LISTA' | 'DADO_DE_BAJA' | 'SIN_RESULTADOS';
+export type TipoResultadoMostrador = 'EXACTO' | 'LISTA' | 'SIN_RESULTADOS';
 
 /** Lo que ve el mostrador de un artículo: sin costo ni margen (el Vendedor no los ve). */
 export interface ArticuloMostrador {
@@ -14,6 +14,8 @@ export interface ArticuloMostrador {
   stockActual: number;
   stockMinimo: number;
   ubicacion: string | null;
+  /** Los dados de baja salen en la búsqueda, marcados, pero no se pueden agregar al ticket. */
+  activo: boolean;
 }
 
 export interface BusquedaMostrador {

@@ -22,6 +22,7 @@ describe('ListaResultados', () => {
     stockActual: 10,
     stockMinimo: 5,
     ubicacion: 'Pasillo 1',
+    activo: true,
     ...cambios,
   });
 
@@ -112,6 +113,15 @@ describe('ListaResultados', () => {
 
     expect(texto('.codigos')).toBe('MAR-007');
     expect(texto('.ubicacion')).toBe('—');
+  });
+
+  it('un dado de baja lleva la marca «Dado de baja» en texto, y un activo no', async () => {
+    await crear([articulo(1), articulo(2, { activo: false })]);
+
+    expect(filas()[0].querySelector('.baja')).toBeNull();
+    expect(filas()[0].classList.contains('inactivo')).toBe(false);
+    expect(texto('.baja', 1)).toBe('Dado de baja');
+    expect(filas()[1].classList.contains('inactivo')).toBe(true);
   });
 
   it('marca el estado del stock de cada fila según estadoStock', async () => {

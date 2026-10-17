@@ -16,8 +16,8 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 
 /**
- * Consultas del mostrador (CU-06) de ArticuloRepository contra MySQL real: coincidencia exacta, dado de
- * baja y busqueda parcial por palabras, siempre acotadas al tenant. Comparte el MySQL de
+ * Consultas del mostrador (CU-06) de ArticuloRepository contra MySQL real: coincidencia exacta (solo activos) y
+ * busqueda parcial por palabras (con los dados de baja al final), siempre acotadas al tenant. Comparte el MySQL de
  * IntegrationTestBase: cada test crea sus propias ferreterias con CUIT y codigos propios.
  */
 class ArticuloMostradorRepositoryTest extends IntegrationTestBase {
@@ -143,47 +143,6 @@ class ArticuloMostradorRepositoryTest extends IntegrationTestBase {
         assertThat(articuloRepository.exactosActivosScoped("7790007", 21)).hasSize(5);
     }
 
-    // --- hayDadoDeBajaConCodigoScoped (R-005) ---
-
-    @Test
-    void hayDadoDeBajaConCodigoDeBarrasOInternoDeUnInactivo() {
-        Long f = ferreteria();
-        articulo(f, "OLD-001", "Dado de baja", "7790010", null, false);
-        TenantContext.setCurrentFerreteriaId(f);
-
-        assertThat(articuloRepository.hayDadoDeBajaConCodigoScoped("7790010")).isTrue();
-        assertThat(articuloRepository.hayDadoDeBajaConCodigoScoped("old-001")).isTrue();
-    }
-
-    @Test
-    void noHayDadoDeBajaSiElCodigoSoloEstaEnActivosOEnUnaCoincidenciaParcial() {
-        Long f = ferreteria();
-        articulo(f, "ACT-001", "Activo", "7790011");
-        articulo(f, "OLD-001", "Tornillo 7790012", "7790013", "PROV-OLD", false);
-        TenantContext.setCurrentFerreteriaId(f);
-
-        assertThat(articuloRepository.hayDadoDeBajaConCodigoScoped("7790011")).isFalse();
-        // La descripcion y el codigo de proveedor de un inactivo no cuentan, ni tampoco un pedazo del codigo.
-        assertThat(articuloRepository.hayDadoDeBajaConCodigoScoped("7790012")).isFalse();
-        assertThat(articuloRepository.hayDadoDeBajaConCodigoScoped("PROV-OLD")).isFalse();
-        assertThat(articuloRepository.hayDadoDeBajaConCodigoScoped("77900")).isFalse();
-        // Control: el codigo entero del inactivo si cuenta.
-        assertThat(articuloRepository.hayDadoDeBajaConCodigoScoped("7790013")).isTrue();
-    }
-
-    @Test
-    void elDadoDeBajaDeOtraFerreteriaNoCuenta() {
-        Long a = ferreteria();
-        Long b = ferreteria();
-        articulo(b, "OLD-B", "Baja de B", "7790014", null, false);
-        TenantContext.setCurrentFerreteriaId(a);
-
-        assertThat(articuloRepository.hayDadoDeBajaConCodigoScoped("7790014")).isFalse();
-        assertThat(articuloRepository.hayDadoDeBajaConCodigoScoped("OLD-B")).isFalse();
-        TenantContext.setCurrentFerreteriaId(b);
-        assertThat(articuloRepository.hayDadoDeBajaConCodigoScoped("7790014")).isTrue();
-    }
-
     // --- coincidenciasMostradorScoped (R-006, R-007) ---
 
     private List<String> parcial(String q) {
@@ -260,15 +219,30 @@ class ArticuloMostradorRepositoryTest extends IntegrationTestBase {
     }
 
     @Test
-    void losDadosDeBajaNoAparecen() {
+    void losDadosDeBajaAparecenDespuesDeLosActivos() {
         Long f = ferreteria();
+        articulo(f, "OLD-01", "Arandela 1/4 vieja", "7790017", "PROV-OLD", false);
         articulo(f, "ACT-01", "Tornillo 1/4", null);
-        articulo(f, "OLD-01", "Tornillo 1/4 viejo", "7790017", "PROV-OLD", false);
         TenantContext.setCurrentFerreteriaId(f);
 
-        assertThat(parcial("tornillo 1/4")).containsExactly("ACT-01");
-        assertThat(parcial("7790017")).isEmpty();
-        assertThat(parcial("prov-old")).isEmpty();
+        // La arandela va antes por descripcion, pero los activos van primero.
+        assertThat(parcial("1/4")).containsExactly("ACT-01", "OLD-01");
+        assertThat(parcial("7790017")).containsExactly("OLD-01");
+        assertThat(parcial("prov-old")).containsExactly("OLD-01");
+    }
+
+    @Test
+    void unDadoDeBajaConElCodigoBuscadoNoTapaALosActivos() {
+        // Caso de la auditoria (H06): un inactivo con codigo interno TORNILLO y un tornillo activo.
+        Long f = ferreteria();
+        articulo(f, "TORNILLO", "Viejo", null, null, false);
+        articulo(f, "TOR-001", "Tornillo hexagonal", null);
+        TenantContext.setCurrentFerreteriaId(f);
+
+        List<Articulo> encontrados = articuloRepository.coincidenciasMostradorScoped(ConsultaMostrador.de("tornillo"), 21);
+
+        assertThat(codigos(encontrados)).containsExactly("TOR-001", "TORNILLO");
+        assertThat(encontrados).extracting(Articulo::isActivo).containsExactly(true, false);
     }
 
     @Test
@@ -338,37 +312,33 @@ class ArticuloMostradorRepositoryTest extends IntegrationTestBase {
     }
 
     @Test
-    void lasTresConsultasExcluyenLosArticulosDeOtraFerreteria() {
+    void lasConsultasExcluyenLosArticulosDeOtraFerreteria() {
         Long[] ferreterias = ferreteriasConLoMismo();
 
         // Exacto: el codigo de barras de B existe en A tambien, pero solo viene el de A.
         assertThat(codigos(articuloRepository.exactosActivosScoped("7790020", 21))).containsExactly("ACT-A");
         assertThat(articuloRepository.exactosActivosScoped("ACT-B", 21)).isEmpty();
-        // Dado de baja: el inactivo de B no cuenta para A.
-        assertThat(articuloRepository.hayDadoDeBajaConCodigoScoped("7790021")).isFalse();
-        assertThat(articuloRepository.hayDadoDeBajaConCodigoScoped("OLD-B")).isFalse();
-        // Parcial: por descripcion, codigo de proveedor y codigo de barras solo se ve lo de A.
+        // Parcial: por descripcion, codigo de proveedor y codigo de barras solo se ve lo de A, ni el inactivo de B.
         assertThat(parcial("martillo")).containsExactly("ACT-A");
         assertThat(parcial("de b")).isEmpty();
         assertThat(parcial("prov-b")).isEmpty();
         assertThat(parcial("taladro")).isEmpty();
+        assertThat(parcial("7790021")).isEmpty();
 
         // Control: con el tenant en B se ve lo de B, asi que los datos estaban.
         TenantContext.setCurrentFerreteriaId(ferreterias[1]);
         assertThat(codigos(articuloRepository.exactosActivosScoped("7790020", 21))).containsExactly("ACT-B");
-        assertThat(articuloRepository.hayDadoDeBajaConCodigoScoped("7790021")).isTrue();
         assertThat(parcial("prov-b")).containsExactly("ACT-B");
+        assertThat(parcial("taladro")).containsExactly("OLD-B");
     }
 
     @Test
-    void sinTenantEnElContextoLasTresConsultasFallan() {
+    void sinTenantEnElContextoLasConsultasFallan() {
         ferreteriasConLoMismo();
         TenantContext.clear();
         ConsultaMostrador consulta = ConsultaMostrador.de("martillo");
 
         assertThatThrownBy(() -> articuloRepository.exactosActivosScoped("7790020", 21))
-                .isInstanceOf(MissingTenantException.class);
-        assertThatThrownBy(() -> articuloRepository.hayDadoDeBajaConCodigoScoped("7790021"))
                 .isInstanceOf(MissingTenantException.class);
         assertThatThrownBy(() -> articuloRepository.coincidenciasMostradorScoped(consulta, 21))
                 .isInstanceOf(MissingTenantException.class);

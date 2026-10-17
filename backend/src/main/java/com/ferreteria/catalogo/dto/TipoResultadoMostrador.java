@@ -4,9 +4,7 @@ package com.ferreteria.catalogo.dto;
 public enum TipoResultadoMostrador {
     /** Un unico articulo activo con ese codigo exacto: la pantalla muestra su ficha. */
     EXACTO,
-    /** Varios articulos (o un solo resultado parcial): la pantalla muestra la lista. */
+    /** Varios articulos (o un solo resultado parcial, con los dados de baja al final): la pantalla muestra la lista. */
     LISTA,
-    /** El codigo exacto es de un articulo dado de baja y no hay ninguno activo con ese codigo. */
-    DADO_DE_BAJA,
     SIN_RESULTADOS
 }

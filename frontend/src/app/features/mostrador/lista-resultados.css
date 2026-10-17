@@ -49,6 +49,20 @@
   background: var(--acento-suave);
   box-shadow: inset 3px 0 0 var(--acento);
 }
+.fila.inactivo .descripcion,
+.fila.inactivo .precio,
+.fila.inactivo .stock,
+.fila.inactivo .ubicacion {
+  color: var(--texto-tenue);
+}
+.baja {
+  align-self: flex-start;
+  color: var(--error);
+  font-size: var(--texto-2xs);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
 .datos {
   display: flex;
   flex-direction: column;

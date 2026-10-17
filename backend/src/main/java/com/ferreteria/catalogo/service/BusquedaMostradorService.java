@@ -12,7 +12,10 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
-/** Buscar un articulo en el mostrador (CU-06): primero el codigo exacto, despues el dado de baja y al final las palabras. */
+/**
+ * Buscar un articulo en el mostrador (CU-06): primero el codigo exacto de un activo y despues las palabras. Los dados
+ * de baja salen en la lista, marcados y al final: el aviso de baja lo da el mostrador al querer agregarlos al ticket.
+ */
 @Service
 public class BusquedaMostradorService {
 
@@ -41,10 +44,6 @@ public class BusquedaMostradorService {
         // El codigo de barras no es unico: varios exactos van a la lista.
         if (!exactos.isEmpty()) {
             return lista(exactos);
-        }
-        // Un codigo exacto de un articulo dado de baja gana sobre las coincidencias parciales.
-        if (articuloRepository.hayDadoDeBajaConCodigoScoped(consulta.codigo())) {
-            return sinItems(TipoResultadoMostrador.DADO_DE_BAJA);
         }
         List<Articulo> parciales = articuloRepository.coincidenciasMostradorScoped(consulta, LIMITE + 1);
         if (parciales.isEmpty()) {

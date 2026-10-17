@@ -16,12 +16,16 @@
       #fila
       role="option"
       class="fila"
+      [class.inactivo]="!articulo.activo"
       [id]="filaId(i)"
       [attr.aria-selected]="i === seleccionado()"
       (click)="elegir.emit(i)"
     >
       <div class="datos">
         <span class="descripcion">{{ articulo.descripcion }}</span>
+        @if (!articulo.activo) {
+          <span class="baja">Dado de baja</span>
+        }
         <span class="codigos"
           >{{ articulo.codigoInterno
           }}{{ articulo.codigoBarras ? ' · ' + articulo.codigoBarras : '' }}</span

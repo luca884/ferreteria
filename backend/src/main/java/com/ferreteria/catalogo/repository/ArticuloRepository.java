@@ -118,19 +118,15 @@ public interface ArticuloRepository extends TenantScopedRepository<Articulo, Lon
             + "and (a.codigoBarras = :codigo or a.codigoInterno = :codigo) order by a.descripcion, a.id")
     List<Articulo> exactosActivos(@Param("fid") Long ferreteriaId, @Param("codigo") String codigo, Pageable limite);
 
-    /** Mostrador (CU-06): true si un articulo dado de baja tiene exactamente ese codigo de barras o interno. */
-    @Query("select count(a) > 0 from Articulo a where a.ferreteriaId = :fid and a.activo = false "
-            + "and (a.codigoBarras = :codigo or a.codigoInterno = :codigo)")
-    boolean hayDadoDeBajaConCodigo(@Param("fid") Long ferreteriaId, @Param("codigo") String codigo);
-
     /**
-     * Mostrador (CU-06): los activos que contienen TODAS las palabras (p1 a p5, ya como patron LIKE; null
-     * es un slot sin usar y no filtra), cada una en la descripcion o en cualquiera de los tres codigos.
+     * Mostrador (CU-06): los articulos que contienen TODAS las palabras (p1 a p5, ya como patron LIKE; null
+     * es un slot sin usar y no filtra), cada una en la descripcion o en cualquiera de los tres codigos. Incluye los
+     * dados de baja, despues de los activos: se ven en la busqueda y el mostrador avisa al querer agregarlos.
      * Los cinco bloques van escritos a mano para que la consulta siga siendo una constante.
      */
     @Query("""
             select a from Articulo a
-            where a.ferreteriaId = :fid and a.activo = true
+            where a.ferreteriaId = :fid
               and (:p1 is null or a.descripcion like :p1 escape '\\' or a.codigoInterno like :p1 escape '\\'
                    or a.codigoBarras like :p1 escape '\\' or a.codigoProveedor like :p1 escape '\\')
               and (:p2 is null or a.descripcion like :p2 escape '\\' or a.codigoInterno like :p2 escape '\\'
@@ -141,7 +137,7 @@ public interface ArticuloRepository extends TenantScopedRepository<Articulo, Lon
                    or a.codigoBarras like :p4 escape '\\' or a.codigoProveedor like :p4 escape '\\')
               and (:p5 is null or a.descripcion like :p5 escape '\\' or a.codigoInterno like :p5 escape '\\'
                    or a.codigoBarras like :p5 escape '\\' or a.codigoProveedor like :p5 escape '\\')
-            order by a.descripcion, a.id
+            order by a.activo desc, a.descripcion, a.id
             """)
     List<Articulo> coincidenciasMostrador(
             @Param("fid") Long ferreteriaId,
@@ -265,12 +261,7 @@ public interface ArticuloRepository extends TenantScopedRepository<Articulo, Lon
         return exactosActivos(TenantContext.requireFerreteriaId(), codigo, PageRequest.of(0, limite));
     }
 
-    /** True si la ferreteria tiene un articulo dado de baja con ese codigo exacto (CU-06). */
-    default boolean hayDadoDeBajaConCodigoScoped(String codigo) {
-        return hayDadoDeBajaConCodigo(TenantContext.requireFerreteriaId(), codigo);
-    }
-
-    /** Hasta limite activos que contienen todas las palabras de la consulta, por descripcion y luego id (CU-06). */
+    /** Hasta limite articulos con todas las palabras de la consulta: activos primero, despues por descripcion e id (CU-06). */
     default List<Articulo> coincidenciasMostradorScoped(ConsultaMostrador consulta, int limite) {
         return coincidenciasMostrador(TenantContext.requireFerreteriaId(),
                 consulta.patron(0), consulta.patron(1), consulta.patron(2), consulta.patron(3), consulta.patron(4),

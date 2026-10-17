@@ -21,6 +21,7 @@ describe('FichaArticulo', () => {
     stockActual: 2.5,
     stockMinimo: 1,
     ubicacion: 'Pasillo 2',
+    activo: true,
   };
 
   let fixture: ComponentFixture<FichaArticulo>;
