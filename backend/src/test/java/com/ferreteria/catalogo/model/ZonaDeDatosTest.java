@@ -201,6 +201,52 @@ class ZonaDeDatosTest {
     }
 
     @Test
+    @DisplayName("LISTA 336: un subrubro repetido en las 9 columnas (EZETA fila 3, 'AMBAR') es una salteada y no una fila con costo mal cargado")
+    void subrubroRepetidoEnTodasLasColumnas() {
+        LecturaLista lectura = unaHoja(List.of(
+            encabezado336(),
+            fila("A-1", "Tornillo", null, null, "ARG", 100, 1, 100, 121),
+            fila("AMBAR", "AMBAR", "AMBAR", "AMBAR", "AMBAR", "AMBAR", "AMBAR", "AMBAR", "AMBAR"),
+            fila("A-2", "Tuerca", null, null, "ARG", 200, 1, 200, 242)));
+
+        ZonaDeDatos.Resultado resultado = ZonaDeDatos.clasificar(lectura, mapeo336(null));
+
+        assertThat(codigos(resultado)).containsExactly("A-1", "A-2");
+        assertThat(resultado.salteadas()).isEqualTo(1);
+        assertThat(resultado.ignoradas()).isZero();
+    }
+
+    @Test
+    @DisplayName("el texto repetido se compara sin distinguir mayusculas ni espacios, y alcanzan dos celdas con valor")
+    void repetidoSinDistinguirMayusculasNiEspacios() {
+        LecturaLista lectura = unaHoja(List.of(
+            encabezado336(),
+            fila("ALEBA CARGADORES", null, null, null, null, " Aleba cargadores "),
+            fila("ALEBA CARGADORES", null, null, null, "aleba cargadores", " aleba cargadores", null, "ALEBA CARGADORES"),
+            fila("A-1", "Tornillo", null, null, "ARG", 100, 1, 100, 121)));
+
+        ZonaDeDatos.Resultado resultado = ZonaDeDatos.clasificar(lectura, mapeo336(null));
+
+        assertThat(codigos(resultado)).containsExactly("A-1");
+        assertThat(resultado.salteadas()).isEqualTo(2);
+    }
+
+    @Test
+    @DisplayName("un texto distinto en alguna celda con valor, o un numero repetido, no es un titulo: la fila con 'abc' en el costo sigue siendo de datos")
+    void textoRepetidoSoloSiTodasLasCeldasCoinciden() {
+        LecturaLista lectura = unaHoja(List.of(
+            encabezado336(),
+            fila("N-3", null, null, null, null, "abc"),
+            fila("AMBAR", "AMBAR", "AMBAR", "AMBAR", "AMBAR", "AMBAR", "AMBAR", "AMBAR", "OTRO"),
+            fila("100", null, null, null, null, 100)));
+
+        ZonaDeDatos.Resultado resultado = ZonaDeDatos.clasificar(lectura, mapeo336(null));
+
+        assertThat(codigos(resultado)).containsExactly("N-3", "AMBAR", "100");
+        assertThat(resultado.salteadas()).isZero();
+    }
+
+    @Test
     @DisplayName("texto en la columna de moneda sin que la moneda este mapeada: no hay donde ver un titulo, se ignora")
     void tituloEnMonedaSinMapear() {
         MapeoLista sinMoneda = new MapeoLista(0, 2, 0, 1, 5, ENCABEZADOS_336);

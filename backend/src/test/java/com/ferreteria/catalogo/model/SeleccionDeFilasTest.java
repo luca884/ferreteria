@@ -50,7 +50,7 @@ class SeleccionDeFilasTest {
 
     private static PrecioListaPlaneado sinCambio(int hoja, int fila) {
         return new PrecioListaPlaneado((long) hoja * 100_000 + fila, bd("100"), hoja, fila, "S-" + hoja + "-" + fila,
-            "x", bd("100.00"), null, null);
+            "x", bd("100.00"));
     }
 
     private static AvisoDeFila error(int hoja, int fila) {

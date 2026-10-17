@@ -1760,16 +1760,39 @@ class ImportacionServiceTest {
         }
 
         @Test
-        @DisplayName("un IVA que no mueve el precio se guarda en el articulo y no deja historial")
+        @DisplayName("decision 37: un IVA que no mueve el precio es 'Corrige': se guarda en el articulo, el precio queda igual y no deja historial")
         void ivaSinCambioDePrecio() throws Exception {
             Articulo articulo = existente(1L, "AB-1", "1.00", null, true);
+            BigDecimal precioAntes = articulo.getPrecioFinal();
             escenario(proveedor(), List.of(articulo), lectura(encabezado(), filaConColumnas(2, "AB-1", "x", "1", "", "10,5")));
+            guardaImportacionConId();
+
+            service.aplicar(ARCHIVO, pedidoCon(mapeoCon(null, 4, null, null), false, null,
+                    new ConteosRequest(0, 0, 0, 0, 0, 0, 0, 1, 0)), USUARIO);
+
+            assertThat(articulo.getAlicuotaIva()).isEqualTo(AlicuotaIva.IVA_10_5);
+            assertThat(articulo.getPrecioFinal()).isEqualByComparingTo(precioAntes);
+            assertThat(articulo.getUltimaImportacionId()).isEqualTo(IMPORTACION);
+            assertThat(importacionGuardada().getCorrigen()).isEqualTo(1);
+            assertThat(importacionGuardada().getSinCambio()).isZero();
+            verify(historialPrecioRepository, never()).saveAll(any());
+        }
+
+        @Test
+        @DisplayName("una fila 'sin cambio' solo anota la importacion y el precio de lista: ni alicuota, ni ajustes, ni precio, ni historial")
+        void sinCambioNoTocaElArticulo() throws Exception {
+            Articulo articulo = existente(1L, "AB-1", "100.00", null, true);
+            BigDecimal precioAntes = articulo.getPrecioFinal();
+            escenario(proveedor(), List.of(articulo), lectura(encabezado(), filaConColumnas(2, "AB-1", "x", "100", "", "21")));
             guardaImportacionConId();
 
             service.aplicar(ARCHIVO, pedidoCon(mapeoCon(null, 4, null, null), false, null,
                     new ConteosRequest(0, 0, 0, 1, 0, 0, 0, 0, 0)), USUARIO);
 
-            assertThat(articulo.getAlicuotaIva()).isEqualTo(AlicuotaIva.IVA_10_5);
+            assertThat(articulo.getAlicuotaIva()).isEqualTo(AlicuotaIva.IVA_21);
+            assertThat(articulo.getCosto()).isEqualByComparingTo("100.00");
+            assertThat(articulo.getPrecioFinal()).isEqualByComparingTo(precioAntes);
+            assertThat(articulo.getAjustes()).isEqualTo(Ajustes.NINGUNO);
             assertThat(articulo.getUltimaImportacionId()).isEqualTo(IMPORTACION);
             verify(historialPrecioRepository, never()).saveAll(any());
         }

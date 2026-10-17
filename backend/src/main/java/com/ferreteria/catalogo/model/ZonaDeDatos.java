@@ -1,7 +1,9 @@
 package com.ferreteria.catalogo.model;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 /**
  * La zona de datos de la lista: de las filas leidas de las hojas elegidas, cuales son de datos, cuales se
@@ -12,8 +14,9 @@ import java.util.List;
  * <ul>
  *   <li><b>ignorada</b>: todas las columnas mapeadas estan vacias. No suma a nada;</li>
  *   <li><b>salteada</b>: un titulo, como los "Familia: NNN - Nombre" de M-S (texto en el codigo, sin descripcion y con
- *       la celda del costo vacia) o los de LISTA 336 (texto en la moneda, sin codigo ni costo), o un encabezado repetido. No es un
- *       error ni un articulo: solo se cuenta;</li>
+ *       la celda del costo vacia), los de LISTA 336 (texto en la moneda, sin codigo ni costo), los subrubros que repiten el
+ *       mismo texto en todas las celdas con valor, o un encabezado repetido. No es un error ni un articulo: solo se
+ *       cuenta;</li>
  *   <li><b>de datos</b>: cualquier otra. Una fila con codigo y descripcion pero sin costo sigue siendo de datos: el
  *       planificador la marca como error, como en CU-04.</li>
  * </ul>
@@ -100,8 +103,36 @@ public final class ZonaDeDatos {
         return esTitulo(fila, mapeo) ? Tipo.SALTEADA : Tipo.DATOS;
     }
 
-    /** Sin costo numerico ni descripcion, y texto en el codigo (M-S) o en la moneda de una fila sin codigo (LISTA 336). */
+    /**
+     * Un titulo es una fila cuyas celdas con valor repiten todas el mismo texto (los subrubros de LISTA 336), o una
+     * sin costo ni descripcion con texto en el codigo (M-S) o en la moneda de una fila sin codigo (LISTA 336).
+     */
     private static boolean esTitulo(FilaLeida fila, MapeoLista mapeo) {
+        return repiteElMismoTexto(fila) || esTituloDeUnaCelda(fila, mapeo);
+    }
+
+    /**
+     * Dos o mas celdas con valor, todas de texto y todas iguales (sin distinguir mayusculas, tildes ni espacios).
+     * Una celda numerica descarta la fila: dos importes iguales no son un titulo.
+     */
+    private static boolean repiteElMismoTexto(FilaLeida fila) {
+        Set<String> textos = new HashSet<>();
+        int conValor = 0;
+        for (Celda celda : fila.celdas()) {
+            if (celda.vacia()) {
+                continue;
+            }
+            if (celda.numero() != null) {
+                return false;
+            }
+            conValor++;
+            textos.add(NormalizadorCodigo.clave(celda.texto()));
+        }
+        return conValor >= 2 && textos.size() == 1;
+    }
+
+    /** Sin costo numerico ni descripcion, y texto en el codigo (M-S) o en la moneda de una fila sin codigo (LISTA 336). */
+    private static boolean esTituloDeUnaCelda(FilaLeida fila, MapeoLista mapeo) {
         // Un texto en el costo, aunque no sea un numero, es una fila con un costo mal cargado: no es un titulo.
         boolean sinCosto = fila.celda(mapeo.columnaCosto()).vacia();
         boolean descripcionMapeada = mapeo.columnaDescripcion() != null;

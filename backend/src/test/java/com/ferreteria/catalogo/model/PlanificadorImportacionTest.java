@@ -658,13 +658,12 @@ class PlanificadorImportacionTest {
                 .planificar();
 
             assertThat(plan.correcciones()).isEmpty();
-            assertThat(plan.sinCambio()).hasSize(1);
-            assertThat(plan.sinCambio().get(0).alicuotaNueva()).isNull();
+            assertThat(plan.sinCambio()).extracting(PrecioListaPlaneado::articuloId).containsExactly(1L);
             assertThat(plan.conteos()).isEqualTo(new ConteosImportacion(0, 0, 0, 1, 0, 0));
         }
 
         @Test
-        @DisplayName("una correccion de IVA que no mueve el precio final (redondeo) es 'sin cambio' y guarda la alicuota nueva")
+        @DisplayName("decision 37: una correccion de IVA que no mueve el precio final (redondeo) tambien es 'Corrige', con la alicuota anterior y la nueva")
         void correccionQueNoMueveElPrecio() {
             // 1 x 1,30 x 1,21 = 1,573 y 1 x 1,30 x 1,105 = 1,4365: los dos suben a 10 con multiplo 10.
             PlanImportacion plan = escenario().mapeo(M.mapeo().iva().build())
@@ -672,10 +671,29 @@ class PlanificadorImportacionTest {
                 .filas(filaDe(2, "A-1", "x", "1", "", "", "", "10,5"))
                 .planificar();
 
-            assertThat(plan.correcciones()).isEmpty();
-            assertThat(plan.sinCambio()).hasSize(1);
-            assertThat(plan.sinCambio().get(0).alicuotaNueva()).isEqualTo(AlicuotaIva.IVA_10_5);
-            assertThat(plan.conteos().corrigen()).isZero();
+            assertThat(plan.sinCambio()).isEmpty();
+            assertThat(plan.correcciones()).hasSize(1);
+            CambioPlaneado corrige = plan.correcciones().get(0);
+            assertThat(corrige.alicuotaAnterior()).isEqualTo(AlicuotaIva.IVA_21);
+            assertThat(corrige.alicuotaNueva()).isEqualTo(AlicuotaIva.IVA_10_5);
+            assertThat(corrige.precioAnterior()).isEqualByComparingTo("10");
+            assertThat(corrige.precioNuevo()).isEqualByComparingTo("10");
+            assertThat(plan.conteos()).isEqualTo(new ConteosImportacion(0, 0, 0, 0, 0, 0, 0, 1, 0));
+        }
+
+        @Test
+        @DisplayName("la misma correccion de IVA con otros articulos: la que mueve el precio y la que no son 'Corrige'; la de IVA igual es 'sin cambio'")
+        void dosCorreccionesYUnSinCambio() {
+            PlanImportacion plan = escenario().mapeo(M.mapeo().iva().build())
+                .articulos(Art.art(1, "A-1", "1").precio("10.00"), Art.art(2, "A-2", "10000").precio("15730.00"),
+                    Art.art(3, "A-3", "1").precio("10.00"))
+                .filas(filaDe(2, "A-1", "x", "1", "", "", "", "10,5"), filaDe(3, "A-2", "x", "10000", "", "", "", "10,5"),
+                    filaDe(4, "A-3", "x", "1", "", "", "", "21"))
+                .planificar();
+
+            assertThat(plan.correcciones()).extracting(CambioPlaneado::articuloId).containsExactly(1L, 2L);
+            assertThat(plan.sinCambio()).extracting(PrecioListaPlaneado::articuloId).containsExactly(3L);
+            assertThat(plan.conteos()).isEqualTo(new ConteosImportacion(0, 0, 0, 1, 0, 0, 0, 2, 0));
         }
 
         @Test
@@ -800,9 +818,8 @@ class PlanificadorImportacionTest {
                 .filas(filaDe(2, "A-1", "x", "1000", "", "", "", "", "-5"))
                 .planificar();
 
-            assertThat(plan.sinCambio()).hasSize(1);
+            assertThat(plan.sinCambio()).extracting(PrecioListaPlaneado::articuloId).containsExactly(1L);
             assertThat(plan.correcciones()).isEmpty();
-            assertThat(plan.sinCambio().get(0).ajustesNuevos()).isNull();
         }
 
         @Test

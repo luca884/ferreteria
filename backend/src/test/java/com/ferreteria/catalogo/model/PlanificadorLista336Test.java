@@ -70,6 +70,39 @@ class PlanificadorLista336Test {
     }
 
     @Test
+    @DisplayName("38 subrubros repetidos en las 9 columnas son 38 salteadas y los 7 costos 0 son los unicos errores (no 45)")
+    void subrubrosRepetidosNoSonErrores() {
+        Map<String, List<List<Object>>> hojas = new LinkedHashMap<>();
+        List<List<Object>> ezeta = new ArrayList<>();
+        ezeta.add(Arrays.asList("Código", "Artículo", "Sinónimo", "Stock", "Mon.", "Lista (unidad)", "Bulto", "Sin IVA",
+            "Con IVA"));
+        int errores = 0;
+        for (int i = 1; i <= 38; i++) {
+            String subrubro = i % 2 == 0 ? "SUBRUBRO " + i : "Subrubro " + i + " ";
+            ezeta.add(Arrays.asList(subrubro, subrubro, subrubro, subrubro, subrubro, subrubro, subrubro, subrubro,
+                subrubro.toUpperCase()));
+            ezeta.add(Arrays.asList("E-" + i, "Articulo " + i, null, 10, "ARG", 100 * i, 1, 100 * i, 121 * i));
+            if (i % 5 == 0) {
+                errores++;
+                ezeta.add(Arrays.asList("Z-" + i, "Sin precio " + i, null, 10, "ARG", 0, 1, 0, 0));
+            }
+        }
+        for (int i = 1; i <= 7 - errores; i++) {
+            ezeta.add(Arrays.asList("Y-" + i, "Sin precio " + i, null, 10, "ARG", 0, 1, 0, 0));
+        }
+        hojas.put("EZETA", ezeta);
+
+        PlanImportacion plan = planificar(ListasReales.leida(hojas), mapeo336(List.of(0)), List.of());
+
+        assertThat(plan.salteadas()).isEqualTo(38);
+        assertThat(plan.errores()).hasSize(7);
+        assertThat(plan.errores()).extracting(AvisoDeFila::mensaje)
+            .containsOnly("El costo calculado es 0. Revisá el precio de lista y las bonificaciones.");
+        assertThat(plan.altas()).hasSize(38);
+        assertThat(plan.conteos()).isEqualTo(new ConteosImportacion(0, 0, 38, 0, 0, 7, 0, 0, 38));
+    }
+
+    @Test
     @DisplayName("el costo es F (por unidad), nunca H (por bulto): el articulo con bulto 10 queda con costo 150")
     void elCostoEsPorUnidad() {
         LecturaLista lectura = ListasReales.leida(ListasReales.lista336ChicaHojas());

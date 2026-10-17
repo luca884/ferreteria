@@ -220,14 +220,15 @@ public final class PlanificadorImportacion {
         boolean cambianLosAjustes = !ajustes.equals(articulo.ajustes());
         boolean cambiaLaAlicuota = alicuota != articulo.alicuotaIva();
         boolean cambiaElPrecio = precioNuevo.compareTo(articulo.precioFinal()) != 0;
-        // "Corrige" = cambian los ajustes o cambia el precio (aunque el costo sea el mismo, p. ej. un precio guardado
-        // desactualizado): aplicar recalcula el precio y deja historial, y la vista previa lo tiene que mostrar.
-        if (cambianLosAjustes || cambiaElPrecio) {
+        // "Corrige" = cambian los ajustes, la alicuota o el precio (aunque el costo sea el mismo, p. ej. un precio
+        // guardado desactualizado): la vista previa lo muestra y aplicar lo guarda. Con la alicuota se factura, asi que
+        // una correccion de IVA lo es aunque el redondeo deje el precio igual (decision 37); si el precio no cambia, no
+        // hay historial. "Sin cambio" no cambia nada del articulo.
+        if (cambianLosAjustes || cambiaLaAlicuota || cambiaElPrecio) {
             acumulado.correcciones.add(cambio);
         } else {
-            // Un IVA que no mueve el precio por el redondeo no es una correccion, pero igual se guarda sin historial.
             acumulado.sinCambio.add(new PrecioListaPlaneado(articulo.id(), d.precioLista(), d.hoja(), d.numero(),
-                d.codigo(), articulo.descripcion(), costoNuevo, cambiaLaAlicuota ? alicuota : null, null));
+                d.codigo(), articulo.descripcion(), costoNuevo));
         }
         return true;
     }

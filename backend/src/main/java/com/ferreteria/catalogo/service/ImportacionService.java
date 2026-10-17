@@ -194,12 +194,11 @@ public class ImportacionService {
             }
         }
         for (PrecioListaPlaneado sinCambio : plan.sinCambio()) {
-            // El costo y el precio no cambian, pero la fila puede traer otro IVA: se guarda sin dejar historial.
+            // No cambia nada del articulo: ni costo, ni precio, ni IVA, ni ajustes, y no deja historial. Solo se anota
+            // la importacion y el precio de lista del proveedor.
             Articulo articulo = articulosPorId.get(sinCambio.articuloId());
-            articulo.aplicarLista(sinCambio.costo(), sinCambio.precioLista(), null, sinCambio.alicuotaNueva(),
-                            articulo.getAjustes(), importacionId, preparacion.contextoDe(articulo))
-                    .ifPresent(c -> historial.add(HistorialPrecio.de(
-                            articulo, c.cambio(), OrigenPrecio.IMPORTACION, usuarioId, c.monedaAnterior())));
+            articulo.registrarPrecioLista(sinCambio.precioLista());
+            articulo.marcarImportacion(importacionId);
         }
 
         if (request.crearNuevos() && !plan.altas().isEmpty()) {

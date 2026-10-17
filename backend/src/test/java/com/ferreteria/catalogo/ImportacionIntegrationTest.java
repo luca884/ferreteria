@@ -2188,12 +2188,13 @@ class ImportacionIntegrationTest extends CotizacionTestBase {
     }
 
     @Test
-    void unaFilaSinCambioNuncaDejaHistorialNiMueveElPrecioFinalAlAplicar() throws Exception {
+    void unaFilaSinCambioYUnaCorreccionDeIvaNeutraNuncaDejanHistorialNiMuevenElPrecioFinalAlAplicar() throws Exception {
         sembrarAyB();
         long proveedor = crearProveedor(dueA, unico("P"));
         String s = unico("");
         long igual = articuloDe(dueA, proveedor, "IGU" + s, "100");
-        // 1 x 1,30 x 1,21 = 1,573 y 1 x 1,30 x 1,105 = 1,4365: los dos redondean a 10, asi que el cambio de IVA no mueve el precio.
+        // 1 x 1,30 x 1,21 = 1,573 y 1 x 1,30 x 1,105 = 1,4365: los dos redondean a 10, asi que el cambio de IVA no mueve el
+        // precio. Es "Corrige" igual (decision 37): con esa alicuota se factura, y el precio no cambia, asi que no hay historial.
         long ivaSinEfecto = articuloDe(dueA, proveedor, "IVA" + s, "1");
         MockMultipartFile lista = archivo("lista.xlsx", ListasDePrueba.xlsx(List.of(
                 filaExtra("Codigo", "Descripcion", "Costo", "IVA"),
@@ -2205,19 +2206,25 @@ class ImportacionIntegrationTest extends CotizacionTestBase {
         long historialAntes = contar("select count(*) from historial_precio where articulo_id in (?, ?)", igual, ivaSinEfecto);
 
         JsonNode previa = vistaPreviaDe(dueA, lista, datos);
-        assertThat(previa.get("conteos").get("sinCambio").asInt()).isEqualTo(2);
-        assertThat(previa.get("conteos").get("corrigen").asInt()).isZero();
+        assertThat(previa.get("conteos").get("sinCambio").asInt()).isEqualTo(1);
+        assertThat(previa.get("conteos").get("corrigen").asInt()).isEqualTo(1);
+        assertThat(previa.get("correcciones")).hasSize(1);
+        assertThat(previa.get("correcciones").get(0).get("alicuotaAnterior").asText()).isEqualTo("IVA_21");
+        assertThat(previa.get("correcciones").get(0).get("alicuotaNueva").asText()).isEqualTo("IVA_10_5");
+        assertThat(previa.get("sinCambio")).hasSize(1);
+        assertThat(previa.get("sinCambio").get(0).get("codigo").asText()).isEqualTo("IGU" + s);
 
         aplicarCon(dueA, lista, datosAplicarCon(datos, previa.get("conteos"), false, null))
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.conteos.sinCambio", is(2)));
+                .andExpect(jsonPath("$.conteos.sinCambio", is(1)))
+                .andExpect(jsonPath("$.conteos.corrigen", is(1)));
 
         assertThat(contar("select count(*) from historial_precio where articulo_id in (?, ?)", igual, ivaSinEfecto))
                 .isEqualTo(historialAntes);
         assertThat(decimal(igual, "precio_final")).isEqualByComparingTo(precioIgual);
         assertThat(decimal(ivaSinEfecto, "precio_final")).isEqualByComparingTo(precioIva);
         assertThat(precioIva).isEqualByComparingTo("10");
-        // La alicuota nueva si se guarda, sin historial.
+        // La alicuota nueva si se guarda (es una correccion), sin historial porque el precio no cambia.
         assertThat(filaDeArticulo(ivaSinEfecto).get("alicuota_iva")).isEqualTo("IVA_10_5");
         assertThat(filaDeArticulo(igual).get("alicuota_iva")).isEqualTo("IVA_21");
     }

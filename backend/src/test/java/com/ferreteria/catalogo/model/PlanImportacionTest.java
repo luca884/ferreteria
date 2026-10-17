@@ -160,18 +160,18 @@ class PlanImportacionTest {
     // ------------------------------------------------------------------ PrecioListaPlaneado
 
     @Test
-    @DisplayName("PrecioListaPlaneado suma hoja, fila, codigo, descripcion, costo y lo que se corrige sin cambiar el precio")
+    @DisplayName("PrecioListaPlaneado suma hoja, fila, codigo, descripcion y costo; no lleva alicuota ni ajustes que guardar")
     void precioListaPlaneadoCompleto() {
-        PrecioListaPlaneado sinCambio = new PrecioListaPlaneado(9L, bd("1000"), 1, 12, "A-9", "Arandela", bd("1000.00"),
-            AlicuotaIva.IVA_10_5, MENOS_CINCO);
+        PrecioListaPlaneado sinCambio = new PrecioListaPlaneado(9L, bd("1000"), 1, 12, "A-9", "Arandela", bd("1000.00"));
 
         assertThat(sinCambio.hoja()).isEqualTo(1);
         assertThat(sinCambio.fila()).isEqualTo(12);
         assertThat(sinCambio.codigoProveedor()).isEqualTo("A-9");
         assertThat(sinCambio.descripcion()).isEqualTo("Arandela");
         assertThat(sinCambio.costo()).isEqualByComparingTo("1000");
-        assertThat(sinCambio.alicuotaNueva()).isEqualTo(AlicuotaIva.IVA_10_5);
-        assertThat(sinCambio.ajustesNuevos()).isEqualTo(MENOS_CINCO);
+        assertThat(PrecioListaPlaneado.class.getRecordComponents())
+            .extracting(componente -> componente.getName())
+            .containsExactly("articuloId", "precioLista", "hoja", "fila", "codigoProveedor", "descripcion", "costo");
     }
 
     @Test
@@ -182,8 +182,7 @@ class PlanImportacionTest {
         assertThat(sinCambio.articuloId()).isEqualTo(9L);
         assertThat(sinCambio.precioLista()).isEqualByComparingTo("1000");
         assertThat(sinCambio.hoja()).isZero();
-        assertThat(sinCambio.alicuotaNueva()).isNull();
-        assertThat(sinCambio.ajustesNuevos()).isNull();
+        assertThat(sinCambio.costo()).isNull();
     }
 
     // ------------------------------------------------------------------ PlanImportacion
