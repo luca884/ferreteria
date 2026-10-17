@@ -1,11 +1,14 @@
 package com.ferreteria.catalogo.controller;
 
 import com.ferreteria.auth.security.AuthUser;
+import com.ferreteria.catalogo.dto.AjustesRequest;
 import com.ferreteria.catalogo.dto.ArticuloRequest;
 import com.ferreteria.catalogo.dto.ArticuloResponse;
 import com.ferreteria.catalogo.dto.BusquedaMostradorResponse;
+import com.ferreteria.catalogo.dto.DesglosePrecioResponse;
 import com.ferreteria.catalogo.service.ArticuloService;
 import com.ferreteria.catalogo.service.BusquedaMostradorService;
+import com.ferreteria.catalogo.service.DesglosePrecioService;
 import com.ferreteria.common.PageResponse;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
@@ -32,10 +35,15 @@ public class ArticuloController {
 
     private final ArticuloService articuloService;
     private final BusquedaMostradorService busquedaMostradorService;
+    private final DesglosePrecioService desglosePrecioService;
 
-    public ArticuloController(ArticuloService articuloService, BusquedaMostradorService busquedaMostradorService) {
+    public ArticuloController(
+            ArticuloService articuloService,
+            BusquedaMostradorService busquedaMostradorService,
+            DesglosePrecioService desglosePrecioService) {
         this.articuloService = articuloService;
         this.busquedaMostradorService = busquedaMostradorService;
+        this.desglosePrecioService = desglosePrecioService;
     }
 
     /** Pagina de 20 por defecto (el servicio la acota entre 1 y 100), solo activos salvo incluirInactivos. */
@@ -60,6 +68,12 @@ public class ArticuloController {
         return articuloService.obtener(id);
     }
 
+    /** De donde sale el precio, paso a paso. Lectura para Dueno y Vendedor; uno ajeno da 404. */
+    @GetMapping("/{id}/desglose")
+    public DesglosePrecioResponse desglosar(@PathVariable Long id) {
+        return desglosePrecioService.obtener(id);
+    }
+
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     @PreAuthorize("hasRole('DUENO')")
@@ -72,6 +86,17 @@ public class ArticuloController {
     public ArticuloResponse actualizar(
             @PathVariable Long id, @Valid @RequestBody ArticuloRequest request, @AuthenticationPrincipal AuthUser authUser) {
         return articuloService.actualizar(id, request, authUser.userId());
+    }
+
+    /**
+     * Edita los descuentos y recargos del articulo (solo Dueno). Sin @Valid: el servicio valida despues del 404. No
+     * recibe costo: el costo sale de la lista con la base guardada.
+     */
+    @PutMapping("/{id}/ajustes")
+    @PreAuthorize("hasRole('DUENO')")
+    public ArticuloResponse editarAjustes(
+            @PathVariable Long id, @RequestBody AjustesRequest request, @AuthenticationPrincipal AuthUser authUser) {
+        return articuloService.editarAjustes(id, request, authUser.userId());
     }
 
     /** Vuelve a activar un articulo dado de baja; no toca precios ni stock. */

@@ -1,13 +1,18 @@
 package com.ferreteria.catalogo.service;
 
+import com.ferreteria.catalogo.dto.AjustesRequest;
 import com.ferreteria.catalogo.dto.ArticuloRequest;
 import com.ferreteria.catalogo.dto.ArticuloResponse;
+import com.ferreteria.catalogo.dto.ValidacionAjustes;
+import com.ferreteria.catalogo.model.Ajustes;
 import com.ferreteria.catalogo.model.Articulo;
+import com.ferreteria.catalogo.model.ArticuloSinListaException;
 import com.ferreteria.catalogo.model.CambioPrecio;
 import com.ferreteria.catalogo.model.ContextoPrecio;
 import com.ferreteria.catalogo.model.DatosArticulo;
 import com.ferreteria.catalogo.model.FiltroArticulos;
 import com.ferreteria.catalogo.model.HistorialPrecio;
+import com.ferreteria.catalogo.model.ImporteArgentino;
 import com.ferreteria.catalogo.model.Moneda;
 import com.ferreteria.catalogo.model.OrigenPrecio;
 import com.ferreteria.catalogo.model.Rubro;
@@ -17,11 +22,15 @@ import com.ferreteria.catalogo.repository.ProveedorRepository;
 import com.ferreteria.catalogo.repository.RubroRepository;
 import com.ferreteria.common.PageResponse;
 import com.ferreteria.common.exception.ConflictException;
+import com.ferreteria.common.exception.DatosInvalidosException;
+import com.ferreteria.common.exception.ErroresDeValidacion;
 import com.ferreteria.common.exception.ResourceNotFoundException;
 import com.ferreteria.cotizacion.api.DolarDePrecios;
 import com.ferreteria.ferreteria.model.ConfiguracionPrecios;
 import com.ferreteria.ferreteria.service.ConfiguracionPreciosService;
 import com.ferreteria.tenant.TenantContext;
+import jakarta.validation.ConstraintViolation;
+import jakarta.validation.Validator;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
@@ -31,6 +40,7 @@ import java.math.BigDecimal;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 @Service
 public class ArticuloService {
@@ -44,6 +54,7 @@ public class ArticuloService {
     private final HistorialPrecioRepository historialPrecioRepository;
     private final ConfiguracionPreciosService configuracionPreciosService;
     private final DolarDePrecios dolarDePrecios;
+    private final Validator validator;
 
     public ArticuloService(
             ArticuloRepository articuloRepository,
@@ -51,13 +62,15 @@ public class ArticuloService {
             ProveedorRepository proveedorRepository,
             HistorialPrecioRepository historialPrecioRepository,
             ConfiguracionPreciosService configuracionPreciosService,
-            DolarDePrecios dolarDePrecios) {
+            DolarDePrecios dolarDePrecios,
+            Validator validator) {
         this.articuloRepository = articuloRepository;
         this.rubroRepository = rubroRepository;
         this.proveedorRepository = proveedorRepository;
         this.historialPrecioRepository = historialPrecioRepository;
         this.configuracionPreciosService = configuracionPreciosService;
         this.dolarDePrecios = dolarDePrecios;
+        this.validator = validator;
     }
 
     /**
@@ -134,6 +147,71 @@ public class ArticuloService {
         buscar(id).desactivar();
     }
 
+    /**
+     * Edita los tres ajustes de un articulo con lista (corte 3). Orden: 404, 400, 409 sin lista, 200 si no cambian,
+     * 409 sin cotizacion, 409 por pisar el costo y recien despues la escritura, con historial MANUAL solo si cambia
+     * el costo o el precio. El costo sale del precio de lista con la base GUARDADA en el articulo, nunca del proveedor
+     * de hoy. El 403 del Vendedor lo resuelve la seguridad antes de llegar aca.
+     */
+    @Transactional
+    public ArticuloResponse editarAjustes(Long id, AjustesRequest request, Long usuarioId) {
+        Articulo articulo = buscar(id);
+        validar(request);
+        if (!articulo.tieneLista()) {
+            throw new ConflictException(ArticuloSinListaException.MENSAJE);
+        }
+        Ajustes actuales = articulo.getAjustes();
+        Ajustes nuevos = request.toAjustes();
+        BigDecimal stockVigente = articuloRepository.stockVigenteScoped(id).orElse(articulo.getStockActual());
+        if (nuevos.equals(actuales)) {
+            return ArticuloResponse.from(articulo, stockVigente);
+        }
+        // Un articulo en dolares ya estaba en dolares: con la cotizacion apagada se permite, con el dolar congelado.
+        ContextoPrecio ctx = contextoDe(articulo.getRubroId(), articulo.getMoneda(), true);
+        avisarSiPisaElCosto(articulo, actuales, nuevos, request.confirmaPisarCosto());
+
+        Optional<CambioPrecio> cambio = articulo.editarAjustes(nuevos, ctx);
+        guardarHistorial(articulo, cambio, usuarioId);
+        return ArticuloResponse.from(articulo, stockVigente);
+    }
+
+    /**
+     * R-214: si el costo cambia y el guardado no es el que hoy sale de la lista, el costo se pisaria (lo cargaron a
+     * mano o lo movio un masivo). Sin la confirmacion es un 409 solo con mensaje.
+     */
+    private static void avisarSiPisaElCosto(Articulo articulo, Ajustes actuales, Ajustes nuevos, boolean confirmado) {
+        BigDecimal costoNuevo = articulo.costoDeLista(nuevos).orElseThrow(ArticuloSinListaException::new);
+        BigDecimal deLaListaHoy = articulo.costoDeLista(actuales).orElseThrow(ArticuloSinListaException::new);
+        BigDecimal guardado = articulo.getCosto();
+        boolean cambiaElCosto = costoNuevo.compareTo(guardado) != 0;
+        boolean noCoincide = guardado.compareTo(deLaListaHoy) != 0;
+        if (cambiaElCosto && noCoincide && !confirmado) {
+            Moneda moneda = articulo.getMoneda();
+            throw new ConflictException("El costo guardado (" + ImporteArgentino.formato(guardado, moneda)
+                    + ") no coincide con el que sale de la lista (" + ImporteArgentino.formato(deLaListaHoy, moneda)
+                    + "). Si guardás, el costo pasa a " + ImporteArgentino.formato(costoNuevo, moneda) + ".");
+        }
+    }
+
+    /**
+     * Valida con el grupo {@link ValidacionAjustes}, DESPUES de buscar el articulo (uno ajeno da 404 antes que 400).
+     * Mismo formato de error que la validacion del cuerpo: un mensaje por campo.
+     */
+    private void validar(AjustesRequest request) {
+        Set<ConstraintViolation<AjustesRequest>> violaciones = validator.validate(request, ValidacionAjustes.class);
+        if (violaciones.isEmpty()) {
+            return;
+        }
+        ErroresDeValidacion errores = new ErroresDeValidacion();
+        for (ConstraintViolation<AjustesRequest> violacion : violaciones) {
+            errores.agregar(
+                    violacion.getPropertyPath().toString(),
+                    violacion.getConstraintDescriptor().getAnnotation().annotationType().getSimpleName(),
+                    violacion.getMessage());
+        }
+        throw new DatosInvalidosException(errores.mensajes());
+    }
+
     private Articulo buscar(Long id) {
         return articuloRepository.findScoped(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Artículo no encontrado"));
@@ -178,18 +256,31 @@ public class ArticuloService {
      * @param yaEraEnDolares true si el articulo que se edita ya estaba en USD antes de este cambio (false en el alta)
      */
     private ContextoPrecio contextoDePrecio(DatosArticulo datos, boolean yaEraEnDolares) {
-        Rubro rubro = datos.rubroId() == null ? null : rubroRepository.findScoped(datos.rubroId())
-                .orElseThrow(() -> new ResourceNotFoundException("Rubro no encontrado"));
+        Rubro rubro = rubroScoped(datos.rubroId());
         if (datos.proveedorId() != null) {
             proveedorRepository.findScoped(datos.proveedorId())
                     .orElseThrow(() -> new ResourceNotFoundException("Proveedor no encontrado"));
         }
+        return contextoDe(rubro, datos.moneda(), yaEraEnDolares);
+    }
+
+    /** El contexto de un articulo ya guardado: su rubro (con findScoped) y su moneda; el proveedor no interviene. */
+    private ContextoPrecio contextoDe(Long rubroId, Moneda moneda, boolean yaEraEnDolares) {
+        return contextoDe(rubroScoped(rubroId), moneda, yaEraEnDolares);
+    }
+
+    private Rubro rubroScoped(Long rubroId) {
+        return rubroId == null ? null : rubroRepository.findScoped(rubroId)
+                .orElseThrow(() -> new ResourceNotFoundException("Rubro no encontrado"));
+    }
+
+    private ContextoPrecio contextoDe(Rubro rubro, Moneda moneda, boolean yaEraEnDolares) {
         ConfiguracionPrecios configuracion = configuracionPreciosService.actual();
         return new ContextoPrecio(
                 rubro == null ? null : rubro.getMargenPorcentaje(),
                 configuracion.margenDefectoPorcentaje(),
                 configuracion.redondeoMultiplo(),
-                datos.moneda() == Moneda.USD ? dolarParaArticulosEnDolares(yaEraEnDolares) : null);
+                moneda == Moneda.USD ? dolarParaArticulosEnDolares(yaEraEnDolares) : null);
     }
 
     /**

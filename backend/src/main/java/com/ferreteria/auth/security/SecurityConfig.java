@@ -47,6 +47,8 @@ public class SecurityConfig {
                         .requestMatchers("/api/configuracion-cotizacion/**").hasRole("DUENO")
                         // «Recalcular ahora» tambien: el GET de la cotizacion (/api/cotizacion) sigue siendo de todos.
                         .requestMatchers(HttpMethod.POST, "/api/cotizacion/recalculo").hasRole("DUENO")
+                        // Editar los ajustes de un articulo es solo del Dueño; el 403 va antes de leer el cuerpo.
+                        .requestMatchers(HttpMethod.PUT, "/api/articulos/*/ajustes").hasRole("DUENO")
                         .anyRequest().authenticated())
                 .exceptionHandling(e -> e
                         .authenticationEntryPoint((request, response, ex) -> {
