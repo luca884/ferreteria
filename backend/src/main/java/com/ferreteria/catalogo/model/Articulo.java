@@ -8,6 +8,7 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import jakarta.persistence.Version;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
@@ -30,6 +31,14 @@ public class Articulo {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+
+    /**
+     * Bloqueo optimista (V8): sube en 1 con cada escritura del articulo, menos el stock, que se mueve con un UPDATE
+     * nativo que no la nombra. Long y no long: un articulo nuevo tiene la version nula hasta que se inserta.
+     */
+    @Version
+    @Column(nullable = false)
+    private Long version;
 
     @Column(name = "ferreteria_id", nullable = false, updatable = false)
     private Long ferreteriaId;
@@ -384,6 +393,7 @@ public class Articulo {
     }
 
     public Long getId() { return id; }
+    public Long getVersion() { return version; }
     public Long getFerreteriaId() { return ferreteriaId; }
     public String getCodigoInterno() { return codigoInterno; }
     public String getCodigoBarras() { return codigoBarras; }

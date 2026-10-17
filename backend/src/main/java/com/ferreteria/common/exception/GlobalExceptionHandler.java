@@ -2,11 +2,13 @@ package com.ferreteria.common.exception;
 
 import com.fasterxml.jackson.databind.exc.InvalidFormatException;
 import com.ferreteria.auth.service.CredencialesInvalidasException;
+import com.ferreteria.catalogo.model.ArticuloModificado;
 import com.ferreteria.common.ApiError;
 import com.ferreteria.tenant.MissingTenantException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -184,6 +186,16 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(DataIntegrityViolationException.class)
     public ResponseEntity<ApiError> integridad(DataIntegrityViolationException ex) {
         return build(HttpStatus.CONFLICT, "El dato ya existe o entra en conflicto con otro");
+    }
+
+    /**
+     * Bloqueo optimista del articulo: otra escritura confirmo antes. Es la red de los choques que salen al confirmar
+     * (la cascada del rubro, la baja, la reactivacion, el tercer intento del recalculo); los servicios que hacen
+     * flush traducen el suyo antes de llegar aca.
+     */
+    @ExceptionHandler(OptimisticLockingFailureException.class)
+    public ResponseEntity<ApiError> versionChocada(OptimisticLockingFailureException ex) {
+        return build(HttpStatus.CONFLICT, ArticuloModificado.MENSAJE);
     }
 
     @ExceptionHandler(Exception.class)

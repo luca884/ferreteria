@@ -150,6 +150,75 @@ class ArticuloServiceTest {
         });
     }
 
+    // ---- version (lote 5b, T-241) ----
+
+    private static ArticuloRequest conVersion(ArticuloRequest r, Long version) {
+        return new ArticuloRequest(r.codigoInterno(), r.codigoBarras(), r.codigoProveedor(), r.descripcion(),
+                r.rubroId(), r.proveedorId(), r.costo(), r.margenPorcentaje(), r.alicuotaIva(), r.unidad(),
+                r.stockMinimo(), r.ubicacion(), r.activo(), r.moneda(), version);
+    }
+
+    private static Articulo existenteConVersion(long id, long version) throws Exception {
+        Articulo articulo = existente(id);
+        fijar(articulo, "version", version);
+        return articulo;
+    }
+
+    @Test
+    @DisplayName("actualizar con una version distinta da 409 ANTES de validar las unicidades: no consulta codigos ni guarda historial")
+    void actualizarConVersionViejaDa409AntesQueLaUnicidad() throws Exception {
+        when(articuloRepository.findScoped(55L)).thenReturn(Optional.of(existenteConVersion(55L, 6)));
+
+        assertThatThrownBy(() -> service.actualizar(55L, conVersion(request(4L, 7L, "200", null), 5L), USUARIO))
+                .isInstanceOf(ConflictException.class)
+                .hasMessage("Otro cambio modificó este artículo. Recargá y volvé a intentar.");
+
+        verify(articuloRepository, never()).existeCodigoInternoScoped(any(), any());
+        verify(articuloRepository, never()).flush();
+        verifyNoInteractions(historialPrecioRepository);
+    }
+
+    @Test
+    @DisplayName("actualizar con la version null sigue sin comparar (lote 5b, decision 48)")
+    void actualizarSinVersionNoCompara() throws Exception {
+        configuracionPorDefecto();
+        when(articuloRepository.findScoped(55L)).thenReturn(Optional.of(existenteConVersion(55L, 6)));
+        when(rubroRepository.findScoped(4L)).thenReturn(Optional.of(rubro(4L, "35.00")));
+
+        ArticuloResponse respuesta = service.actualizar(55L, conVersion(request(4L, null, "200", null), null), USUARIO);
+
+        assertThat(respuesta.precioFinal()).isEqualByComparingTo("330.00");
+    }
+
+    @Test
+    @DisplayName("actualizar con la version igual escribe y hace flush ANTES de pedir el stock vigente y de armar la respuesta")
+    void actualizarConVersionIgualHaceFlushAntesDelStock() throws Exception {
+        configuracionPorDefecto();
+        when(articuloRepository.findScoped(55L)).thenReturn(Optional.of(existenteConVersion(55L, 6)));
+        when(rubroRepository.findScoped(4L)).thenReturn(Optional.of(rubro(4L, "35.00")));
+
+        service.actualizar(55L, conVersion(request(4L, null, "200", null), 6L), USUARIO);
+
+        var orden = org.mockito.Mockito.inOrder(historialPrecioRepository, articuloRepository);
+        orden.verify(historialPrecioRepository).save(any(HistorialPrecio.class));
+        orden.verify(articuloRepository).flush();
+        orden.verify(articuloRepository).stockVigenteScoped(55L);
+    }
+
+    @Test
+    @DisplayName("actualizar: un choque de version al hacer flush sale como 409 con el mensaje de la version")
+    void actualizarTraduceElChoqueDelFlush() throws Exception {
+        configuracionPorDefecto();
+        when(articuloRepository.findScoped(55L)).thenReturn(Optional.of(existenteConVersion(55L, 6)));
+        when(rubroRepository.findScoped(4L)).thenReturn(Optional.of(rubro(4L, "35.00")));
+        org.mockito.Mockito.doThrow(new org.springframework.orm.ObjectOptimisticLockingFailureException(Articulo.class, 55L))
+                .when(articuloRepository).flush();
+
+        assertThatThrownBy(() -> service.actualizar(55L, conVersion(request(4L, null, "200", null), 6L), USUARIO))
+                .isInstanceOf(ConflictException.class)
+                .hasMessage("Otro cambio modificó este artículo. Recargá y volvé a intentar.");
+    }
+
     // ---- crear ----
 
     @Test

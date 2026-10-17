@@ -29,7 +29,18 @@ public record AjustesRequest(
         @Digits(integer = 4, fraction = 2, message = DECIMALES, groups = ValidacionAjustes.class)
         BigDecimal ajuste3,
 
-        boolean confirmaPisarCosto) {
+        boolean confirmaPisarCosto,
+
+        /**
+         * Version del articulo que el cliente leyo (bloqueo optimista): si no coincide con la vigente es un 409. null
+         * se acepta y no se compara (lote 5b).
+         */
+        Long version) {
+
+    /** Pedido sin version: no se compara con la vigente. */
+    public AjustesRequest(BigDecimal ajuste1, BigDecimal ajuste2, BigDecimal ajuste3, boolean confirmaPisarCosto) {
+        this(ajuste1, ajuste2, ajuste3, confirmaPisarCosto, null);
+    }
 
     static final String RANGO = "Cada descuento o recargo tiene que estar entre -99,99 y 1.000.";
     static final String DECIMALES = "Los descuentos y recargos admiten hasta 2 decimales.";

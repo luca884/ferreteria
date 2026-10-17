@@ -503,6 +503,101 @@ class AjustesArticuloIntegrationTest extends AjustesTestBase {
         assertThat(((BigDecimal) filaDe(id).get("bonificacion1"))).isEqualByComparingTo("20");
     }
 
+    // ---- version (lote 5b, T-242): el caso de #5438 en secuencia ----
+
+    private static String ajustesConVersion(String a1, Long version, boolean confirma) {
+        return "{\"ajuste1\":" + a1 + ",\"confirmaPisarCosto\":" + confirma
+                + (version == null ? "" : ",\"version\":" + version) + "}";
+    }
+
+    private void masivoPorcentaje(String valor) throws Exception {
+        String pedido = "{\"modo\":\"COSTO_PORCENTAJE\",\"valor\":" + valor + ",\"proveedorId\":" + proveedorA + "}";
+        String huella = objectMapper.readTree(postJson("/api/actualizacion-masiva/vista-previa", duenoA, pedido)
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString(StandardCharsets.UTF_8))
+                .get("huella").asText();
+        postJson("/api/actualizacion-masiva", duenoA, pedido.replaceFirst("}$", ",\"huella\":\"" + huella + "\"}"))
+                .andExpect(status().isCreated());
+    }
+
+    private Long listaMilSinNada(String codigo) {
+        Long id = importado(a, codigo, proveedorA, "1000.00", false, NADA, NADA, "1000.00", "1580.00");
+        jdbc.update("update articulo set version = 1 where id = ?", id);
+        return id;
+    }
+
+    private long version(Long id) {
+        return jdbc.queryForObject("select version from articulo where id = ?", Long.class, id);
+    }
+
+    @Test
+    @DisplayName("el masivo +10 deja costo 1.100 y version 2; el PUT de ajustes con la version 1 da 409 y no escribe nada")
+    void unaVersionViejaDespuesDeUnMasivoDa409() throws Exception {
+        Long id = listaMilSinNada("AJ-V1");
+        masivoPorcentaje("10");
+        assertThat((BigDecimal) filaDe(id).get("costo")).isEqualByComparingTo("1100.00");
+        assertThat(version(id)).isEqualTo(2);
+
+        editar(duenoA, id, ajustesConVersion("-5", 1L, false)).andExpect(status().isConflict())
+                .andExpect(jsonPath("$.message", is("Otro cambio modificó este artículo. Recargá y volvé a intentar.")))
+                .andExpect(jsonPath("$.errors").doesNotExist());
+
+        assertThat(filaDe(id).get("ajuste1")).isNull();
+        assertThat((BigDecimal) filaDe(id).get("costo")).isEqualByComparingTo("1100.00");
+        assertThat(version(id)).isEqualTo(2);
+    }
+
+    @Test
+    @DisplayName("con la version 2 da el 409 de pisar el costo (R-214) y con la confirmacion 200: costo 950, precio 1.500, version 3")
+    void conLaVersionVigenteSigueElFlujoDeSiempre() throws Exception {
+        Long id = listaMilSinNada("AJ-V2");
+        masivoPorcentaje("10");
+
+        editar(duenoA, id, ajustesConVersion("-5", 2L, false)).andExpect(status().isConflict())
+                .andExpect(jsonPath("$.message", is("El costo guardado ($ 1.100,00) no coincide con el que sale de la "
+                        + "lista ($ 1.000,00). Si guardás, el costo pasa a $ 950,00.")));
+        assertThat(version(id)).isEqualTo(2);
+
+        editar(duenoA, id, ajustesConVersion("-5", 2L, true)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.costo", is(950.0)))
+                .andExpect(jsonPath("$.precioFinal", is(1500.0)))
+                .andExpect(jsonPath("$.version", is(3)));
+        assertThat(version(id)).isEqualTo(3);
+    }
+
+    @Test
+    @DisplayName("los mismos ajustes con la version correcta dan 200 y la version no cambia")
+    void sinCambioConLaVersionCorrectaNoLaSube() throws Exception {
+        Long id = conDosAjustes(a, proveedorA, "AJ-V3");
+        jdbc.update("update articulo set version = 4 where id = ?", id);
+
+        editar(duenoA, id, "{\"ajuste1\":-5,\"ajuste2\":3,\"version\":4}").andExpect(status().isOk())
+                .andExpect(jsonPath("$.version", is(4)));
+
+        assertThat(version(id)).isEqualTo(4);
+    }
+
+    @Test
+    @DisplayName("un articulo ajeno con una version vieja da 404 y un Vendedor da 403")
+    void ajenoConVersionViejaYVendedor() throws Exception {
+        Long deB = conDosAjustes(b, proveedorB, "AJ-V4B");
+        Long deA = conDosAjustes(a, proveedorA, "AJ-V4A");
+
+        editar(duenoA, deB, ajustesConVersion("-5", 9L, false)).andExpect(status().isNotFound());
+        editar(vendedorA, deA, ajustesConVersion("-5", 9L, false)).andExpect(status().isForbidden());
+
+        assertThat(version(deB)).isZero();
+        assertThat(version(deA)).isZero();
+    }
+
+    @Test
+    @DisplayName("un pedido sin version se acepta como antes (decision 48) y la version sube")
+    void sinVersionSeAcepta() throws Exception {
+        Long id = conDosAjustes(a, proveedorA, "AJ-V5");
+
+        editar(duenoA, id, ajustesConVersion("-5", null, false)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.version", is(1)));
+    }
+
     private static void pausa(long milisegundos) {
         try {
             Thread.sleep(milisegundos);

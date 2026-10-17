@@ -177,6 +177,89 @@ class ArticuloServiceAjustesTest {
         return historial.getValue();
     }
 
+    // ---- version (lote 5b, T-242) ----
+
+    private static AjustesRequest conVersion(String a1, Long version) {
+        return new AjustesRequest(bd(a1), null, null, false, version);
+    }
+
+    private static Articulo conVersionGuardada(Articulo articulo, long version) throws Exception {
+        var campo = Articulo.class.getDeclaredField("version");
+        campo.setAccessible(true);
+        campo.set(articulo, version);
+        return articulo;
+    }
+
+    @Test
+    @DisplayName("el orden es 404, 400, 409 de version y 409 sin lista: una version vieja con -100 da 400")
+    void unaVersionViejaConUnAjusteInvalidoDa400() throws Exception {
+        encontrarSinStock(conVersionGuardada(importado(), 2));
+
+        assertThatThrownBy(() -> service.editarAjustes(ID, conVersion("-100", 1L), USUARIO))
+                .isInstanceOf(DatosInvalidosException.class);
+    }
+
+    @Test
+    @DisplayName("una version vieja sobre un articulo sin lista da el 409 de la version, no el de sin lista")
+    void unaVersionViejaSobreUnArticuloSinListaDaElDeLaVersion() throws Exception {
+        encontrarSinStock(conVersionGuardada(articulo("500.00", Moneda.ARS), 2));
+
+        assertThatThrownBy(() -> service.editarAjustes(ID, conVersion("-5", 1L), USUARIO))
+                .isInstanceOf(ConflictException.class)
+                .hasMessage("Otro cambio modificó este artículo. Recargá y volvé a intentar.");
+        verifyNoInteractions(historialPrecioRepository, configuracionPreciosService, dolarDePrecios);
+    }
+
+    @Test
+    @DisplayName("con una version vieja no escribe ni lee el stock; se sigue leyendo con findParaEditarScoped")
+    void unaVersionViejaNoEscribeNada() throws Exception {
+        encontrarSinStock(conVersionGuardada(importado(), 2));
+
+        assertThatThrownBy(() -> service.editarAjustes(ID, conVersion("-5", 1L), USUARIO))
+                .isInstanceOf(ConflictException.class);
+
+        verify(articuloRepository).findParaEditarScoped(ID);
+        verify(articuloRepository, never()).findScoped(any());
+        verify(articuloRepository, never()).stockVigenteScoped(any());
+        verify(articuloRepository, never()).flush();
+        verifyNoInteractions(historialPrecioRepository);
+    }
+
+    @Test
+    @DisplayName("con la version igual escribe, guarda el historial y hace flush antes de armar la respuesta")
+    void conLaVersionIgualHaceFlush() throws Exception {
+        configuracion();
+        encontrar(conVersionGuardada(importado(), 2));
+
+        service.editarAjustes(ID, conVersion("-5", 2L), USUARIO);
+
+        InOrder orden = inOrder(historialPrecioRepository, articuloRepository);
+        orden.verify(historialPrecioRepository).save(any(HistorialPrecio.class));
+        orden.verify(articuloRepository).flush();
+    }
+
+    @Test
+    @DisplayName("un choque de version al hacer flush sale como 409 con el mensaje de la version")
+    void traduceElChoqueDelFlush() throws Exception {
+        configuracion();
+        encontrar(conVersionGuardada(importado(), 2));
+        org.mockito.Mockito.doThrow(new org.springframework.orm.ObjectOptimisticLockingFailureException(Articulo.class, ID))
+                .when(articuloRepository).flush();
+
+        assertThatThrownBy(() -> service.editarAjustes(ID, conVersion("-5", 2L), USUARIO))
+                .isInstanceOf(ConflictException.class)
+                .hasMessage("Otro cambio modificó este artículo. Recargá y volvé a intentar.");
+    }
+
+    @Test
+    @DisplayName("sin version en el pedido no se compara (lote 5b, decision 48)")
+    void sinVersionNoCompara() throws Exception {
+        configuracion();
+        encontrar(conVersionGuardada(importado(), 2));
+
+        assertThatCode(() -> service.editarAjustes(ID, pedido("-5", null, null), USUARIO)).doesNotThrowAnyException();
+    }
+
     // ---- lock ----
 
     @Test

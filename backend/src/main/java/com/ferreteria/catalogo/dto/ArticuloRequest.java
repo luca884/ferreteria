@@ -69,7 +69,23 @@ public record ArticuloRequest(
          * valor que no es de la enumeracion da 400 (lo resuelve el manejador global de errores). Cambiar la moneda NO
          * convierte el costo: se toma tal cual en la moneda nueva.
          */
-        Moneda moneda) {
+        Moneda moneda,
+
+        /**
+         * Version del articulo que el cliente leyo (bloqueo optimista). Solo la usa el PUT: si no coincide con la
+         * vigente es un 409. null se acepta y no se compara (lote 5b); el alta la ignora. Un valor que no es un
+         * entero da 400 por el camino generico del cuerpo ilegible.
+         */
+        Long version) {
+
+    /** Pedido sin version: no se compara con la vigente. */
+    public ArticuloRequest(
+            String codigoInterno, String codigoBarras, String codigoProveedor, String descripcion, Long rubroId,
+            Long proveedorId, BigDecimal costo, BigDecimal margenPorcentaje, AlicuotaIva alicuotaIva, Unidad unidad,
+            BigDecimal stockMinimo, String ubicacion, Boolean activo, Moneda moneda) {
+        this(codigoInterno, codigoBarras, codigoProveedor, descripcion, rubroId, proveedorId, costo, margenPorcentaje,
+                alicuotaIva, unidad, stockMinimo, ubicacion, activo, moneda, null);
+    }
 
     /** Pedido sin moneda: en el alta el articulo es en pesos; en la edicion conserva la que tenia. */
     public ArticuloRequest(
@@ -77,7 +93,7 @@ public record ArticuloRequest(
             Long proveedorId, BigDecimal costo, BigDecimal margenPorcentaje, AlicuotaIva alicuotaIva, Unidad unidad,
             BigDecimal stockMinimo, String ubicacion, Boolean activo) {
         this(codigoInterno, codigoBarras, codigoProveedor, descripcion, rubroId, proveedorId, costo, margenPorcentaje,
-                alicuotaIva, unidad, stockMinimo, ubicacion, activo, null);
+                alicuotaIva, unidad, stockMinimo, ubicacion, activo, null, null);
     }
 
     /**

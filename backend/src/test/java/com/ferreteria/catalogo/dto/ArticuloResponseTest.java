@@ -87,7 +87,17 @@ class ArticuloResponseTest {
                 "proveedorId", "costo", "moneda", "margenPorcentaje", "alicuotaIva", "precioFinal", "unidad",
                 "stockActual", "stockMinimo", "ubicacion", "activo", "precioListaProveedor");
         assertThat(nombres).endsWith("ajuste1", "ajuste2", "ajuste3", "bonificacion1", "bonificacion2", "bonificacion3",
-                "listaIncluyeIva");
+                "listaIncluyeIva", "version");
+    }
+
+    @Test
+    @DisplayName("la respuesta trae la version del articulo, en los dos from (lote 5b, R-224)")
+    void traeLaVersion() {
+        Articulo articulo = articulo();
+        org.springframework.test.util.ReflectionTestUtils.setField(articulo, "version", 3L);
+
+        assertThat(ArticuloResponse.from(articulo).version()).isEqualTo(3L);
+        assertThat(ArticuloResponse.from(articulo, bd("7")).version()).isEqualTo(3L);
     }
 
     @Test

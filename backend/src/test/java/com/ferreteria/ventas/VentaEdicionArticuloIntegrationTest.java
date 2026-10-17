@@ -86,6 +86,10 @@ class VentaEdicionArticuloIntegrationTest extends VentasTestBase {
             String descripcion = "Tornillo v" + i;
             trabajos.add(() -> {
                 var respuesta = putJson("/api/articulos/" + a, dueno, ediciones(a, descripcion)).andReturn().getResponse();
+                // Una edicion que choca con otra del mismo articulo da 409 sin cuerpo de articulo (lote 5b, R-225).
+                if (respuesta.getStatus() != 200) {
+                    return new int[] {respuesta.getStatus(), -1};
+                }
                 BigDecimal visto = objectMapper.readTree(respuesta.getContentAsString(StandardCharsets.UTF_8))
                         .get("stockActual").decimalValue();
                 return new int[] {respuesta.getStatus(), visto.intValue()};
@@ -95,9 +99,12 @@ class VentaEdicionArticuloIntegrationTest extends VentasTestBase {
         List<int[]> resultados = enParalelo(trabajos);
 
         assertThat(resultados.subList(0, ventas)).extracting(r -> r[0]).containsOnly(201);
-        assertThat(resultados.subList(ventas, ventas + ediciones)).extracting(r -> r[0]).containsOnly(200);
-        // Cada edicion ve un stock real (entre lo que quedaria si todas las ventas ya entraron y el inicial).
-        assertThat(resultados.subList(ventas, ventas + ediciones)).extracting(r -> r[1])
+        // Seis ediciones simultaneas del MISMO articulo: una gana y las que chocan dan 409 (nunca se pisan). Las ventas
+        // no compiten con la version: todas dan 201 y el stock sale bien.
+        List<int[]> deLasEdiciones = resultados.subList(ventas, ventas + ediciones);
+        assertThat(deLasEdiciones).extracting(r -> r[0]).containsOnly(200, 409).contains(200);
+        // Cada edicion que se guardo ve un stock real (entre lo que quedaria si todas las ventas ya entraron y el inicial).
+        assertThat(deLasEdiciones).filteredOn(r -> r[0] == 200).extracting(r -> r[1])
                 .allSatisfy(visto -> assertThat(visto).isBetween(100 - ventas, 100));
         assertThat(stock(a)).isEqualByComparingTo(String.valueOf(100 - ventas));
         assertThat(jdbc.queryForObject("select coalesce(sum(cantidad), 0) from movimiento_stock where articulo_id = ?",

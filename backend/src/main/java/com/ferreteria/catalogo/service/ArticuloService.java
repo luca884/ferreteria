@@ -6,6 +6,7 @@ import com.ferreteria.catalogo.dto.ArticuloResponse;
 import com.ferreteria.catalogo.dto.ValidacionAjustes;
 import com.ferreteria.catalogo.model.Ajustes;
 import com.ferreteria.catalogo.model.Articulo;
+import com.ferreteria.catalogo.model.ArticuloModificado;
 import com.ferreteria.catalogo.model.ArticuloSinListaException;
 import com.ferreteria.catalogo.model.CambioPrecio;
 import com.ferreteria.catalogo.model.ContextoPrecio;
@@ -31,6 +32,7 @@ import com.ferreteria.ferreteria.service.ConfiguracionPreciosService;
 import com.ferreteria.tenant.TenantContext;
 import jakarta.validation.ConstraintViolation;
 import jakarta.validation.Validator;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
@@ -111,6 +113,8 @@ public class ArticuloService {
     @Transactional
     public ArticuloResponse actualizar(Long id, ArticuloRequest request, Long usuarioId) {
         Articulo articulo = buscar(id);
+        // Antes de cualquier otra validacion: una version vieja es el aviso mas importante (R-225).
+        verificarVersion(articulo, request.version());
         // Sin activo ni moneda en el pedido se conservan los actuales: un PUT no reactiva ni pasa a pesos por omision.
         DatosArticulo datos = request.toDatos(articulo.isActivo(), articulo.getMoneda());
         validarUnicidad(datos, id);
@@ -119,6 +123,8 @@ public class ArticuloService {
         // El articulo ya esta administrado por JPA: los cambios se escriben al terminar la transaccion.
         Optional<CambioPrecio> cambio = articulo.actualizar(datos, ctx);
         guardarHistorial(articulo, cambio, usuarioId);
+        // Escribe ahora: un choque con otra escritura sale como 409 y la respuesta trae la version NUEVA.
+        escribirOChocar();
         // El stock no se escribe aca (updatable=false) y la entidad pudo leerse antes de una venta: la
         // respuesta muestra el que esta confirmado en la base, sin tocarlo.
         BigDecimal stockVigente = articuloRepository.stockVigenteScoped(id).orElse(articulo.getStockActual());
@@ -160,6 +166,7 @@ public class ArticuloService {
         Articulo articulo = articuloRepository.findParaEditarScoped(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Artículo no encontrado"));
         validar(request);
+        verificarVersion(articulo, request.version());
         if (!articulo.tieneLista()) {
             throw new ConflictException(ArticuloSinListaException.MENSAJE);
         }
@@ -175,6 +182,7 @@ public class ArticuloService {
 
         Optional<CambioPrecio> cambio = articulo.editarAjustes(nuevos, ctx);
         guardarHistorial(articulo, cambio, usuarioId);
+        escribirOChocar();
         return ArticuloResponse.from(articulo, stockVigente);
     }
 
@@ -213,6 +221,28 @@ public class ArticuloService {
                     violacion.getMessage());
         }
         throw new DatosInvalidosException(errores.mensajes());
+    }
+
+    /**
+     * Bloqueo optimista entre pedidos (R-225): si el cliente mando la version que leyo y ya no es la vigente, otro
+     * cambio se confirmo antes y el formulario esta viejo. Sin version (lote 5b) no se compara.
+     */
+    private static void verificarVersion(Articulo articulo, Long versionDelCliente) {
+        if (versionDelCliente != null && !versionDelCliente.equals(articulo.getVersion())) {
+            throw new ConflictException(ArticuloModificado.MENSAJE);
+        }
+    }
+
+    /**
+     * Escribe el articulo ahora y no al terminar la transaccion: asi un choque con otra escritura que confirmo entre
+     * leer y escribir sale como 409 desde aca, y la version que devuelve la respuesta ya es la nueva.
+     */
+    private void escribirOChocar() {
+        try {
+            articuloRepository.flush();
+        } catch (OptimisticLockingFailureException e) {
+            throw new ConflictException(ArticuloModificado.MENSAJE);
+        }
     }
 
     private Articulo buscar(Long id) {

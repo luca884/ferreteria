@@ -152,6 +152,8 @@ class ActualizacionMasivaIntegrationTest extends IntegrationTestBase {
         Map<String, Object> copia = new java.util.LinkedHashMap<>(fila);
         copia.remove("costo");
         copia.remove("precio_final");
+        // La version sube en cada escritura del articulo (V8): no es un dato del articulo que la operacion tenga que respetar.
+        copia.remove("version");
         return copia;
     }
 

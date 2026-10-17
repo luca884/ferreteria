@@ -36,7 +36,9 @@ public record ArticuloResponse(
         BigDecimal bonificacion1,
         BigDecimal bonificacion2,
         BigDecimal bonificacion3,
-        Boolean listaIncluyeIva) {
+        Boolean listaIncluyeIva,
+        /** Version del articulo (bloqueo optimista): la que hay que mandar en el proximo guardado. */
+        Long version) {
 
     /** Igual que {@link #from(Articulo)} pero con el stock indicado (el vigente en la base, no el de la entidad leida). */
     public static ArticuloResponse from(Articulo articulo, BigDecimal stockActual) {
@@ -46,7 +48,7 @@ public record ArticuloResponse(
                 base.alicuotaIva(), base.precioFinal(), base.unidad(), stockActual, base.stockMinimo(),
                 base.ubicacion(), base.activo(), base.precioListaProveedor(), base.ajuste1(), base.ajuste2(),
                 base.ajuste3(), base.bonificacion1(), base.bonificacion2(), base.bonificacion3(),
-                base.listaIncluyeIva());
+                base.listaIncluyeIva(), base.version());
     }
 
     public static ArticuloResponse from(Articulo articulo) {
@@ -75,6 +77,7 @@ public record ArticuloResponse(
                 articulo.getBonificacion1(),
                 articulo.getBonificacion2(),
                 articulo.getBonificacion3(),
-                articulo.getListaIncluyeIva());
+                articulo.getListaIncluyeIva(),
+                articulo.getVersion());
     }
 }
