@@ -36,6 +36,19 @@
         </select>
       </div>
       <div class="campo">
+        <label for="importacion">Importación</label>
+        <select id="importacion" formControlName="importacionId">
+          @if (importacionesOfrecidas().length === 0) {
+            <option [ngValue]="null">{{ sinImportaciones() }}</option>
+          } @else {
+            <option [ngValue]="null">Todas las importaciones</option>
+            @for (importacion of importacionesOfrecidas(); track importacion.id) {
+              <option [ngValue]="importacion.id">{{ importacion.texto }}</option>
+            }
+          }
+        </select>
+      </div>
+      <div class="campo">
         <label for="q">Buscar por código o descripción</label>
         <input id="q" name="q" type="text" formControlName="q" autocomplete="off" spellcheck="false" />
       </div>
@@ -55,6 +68,7 @@
           <option [ngValue]="null">Elegí qué querés hacer</option>
           <option ngValue="COSTO_PORCENTAJE">Cambiar el costo en %</option>
           <option ngValue="MARGEN">Fijar el margen</option>
+          <option ngValue="COSTO_MONTO">Sumar o restar un monto al costo</option>
         </select>
       </div>
       <div class="campo">
@@ -68,9 +82,14 @@
           spellcheck="false"
           formControlName="valor"
           [attr.aria-invalid]="errorDelValor() ? 'true' : null"
-          [attr.aria-describedby]="errorDelValor() ? 'valor-error' : null"
+          [attr.aria-describedby]="describirValor()"
           (keydown.enter)="alEnter($event)"
         />
+        @if (esMonto()) {
+          <span id="valor-pista" class="pista">
+            Positivo sube el costo, negativo lo baja. Se suma en la moneda de cada artículo.
+          </span>
+        }
         @if (errorDelValor(); as mensaje) {
           <span id="valor-error" class="campo-error">{{ mensaje }}</span>
         }
@@ -129,7 +148,15 @@
           @for (t of tarjetasDe(vp.conteos); track t.etiqueta) {
             <div class="tarjeta">{{ t.etiqueta }} <strong>{{ t.valor | number }}</strong></div>
           }
+          @if ((vp.enDolares ?? 0) > 0) {
+            <div class="tarjeta">En pesos <strong>{{ vp.enPesos ?? 0 | number }}</strong></div>
+            <div class="tarjeta">En dólares <strong>{{ vp.enDolares ?? 0 | number }}</strong></div>
+          }
         </div>
+
+        @if (vp.advertenciaMezcla; as mezcla) {
+          <p class="aviso advertencia-mezcla" role="status">{{ mezcla }}</p>
+        }
 
         @if (vp.conteos.pasanAMargenPropio > 0) {
           <p class="aviso pasan-a-margen-propio">
@@ -171,9 +198,9 @@
                     </td>
                     <td class="num">
                       @if (c.costoAnterior === c.costoNuevo) {
-                        {{ c.costoNuevo | monto }}
+                        {{ costo(c.costoNuevo, c.moneda) }}
                       } @else {
-                        {{ c.costoAnterior | monto }}&nbsp;→ {{ c.costoNuevo | monto }}
+                        {{ costo(c.costoAnterior, c.moneda) }}&nbsp;→ {{ costo(c.costoNuevo, c.moneda) }}
                       }
                     </td>
                     <td class="num">

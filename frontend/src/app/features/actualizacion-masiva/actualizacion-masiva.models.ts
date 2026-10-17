@@ -1,5 +1,10 @@
-/** Qué hace la operación: `COSTO_PORCENTAJE` sube o baja el costo en %; `MARGEN` fija el margen propio. */
-export type ModoMasivo = 'COSTO_PORCENTAJE' | 'MARGEN';
+import { Moneda } from '../articulos/articulo.models';
+
+/**
+ * Qué hace la operación: `COSTO_PORCENTAJE` sube o baja el costo en %; `COSTO_MONTO` le suma o resta un monto
+ * (en la moneda de cada artículo); `MARGEN` fija el margen propio.
+ */
+export type ModoMasivo = 'COSTO_PORCENTAJE' | 'COSTO_MONTO' | 'MARGEN';
 
 /**
  * Filtro (todo opcional: vacío alcanza a todo el catálogo activo), modo y valor. El texto en blanco
@@ -8,6 +13,8 @@ export type ModoMasivo = 'COSTO_PORCENTAJE' | 'MARGEN';
 export interface PedidoMasivo {
   proveedorId: number | null;
   rubroId: number | null;
+  /** Solo los artículos que dejó esa importación (`ultima_importacion_id`); null o ausente no filtra. */
+  importacionId?: number | null;
   q: string | null;
   incluirInactivos: boolean;
   modo: ModoMasivo;
@@ -47,6 +54,8 @@ export interface CambioMasivo {
   /** true si el artículo no tiene margen propio y usa el del rubro o el de la ferretería. */
   margenHeredado: boolean;
   advertencia: string | null;
+  /** La moneda del artículo: los costos van en ella y los precios, siempre en pesos. Pesos si el servidor no la manda. */
+  moneda?: Moneda;
 }
 
 /** Un artículo del alcance que no se puede actualizar. */
@@ -64,6 +73,11 @@ export interface VistaPreviaMasiva {
   errores: ErrorMasivo[];
   detalleRecortado: boolean;
   huella: string;
+  /** Cuántos artículos de TODO el alcance están en pesos y cuántos en dólares (con o sin error). */
+  enPesos?: number;
+  enDolares?: number;
+  /** Solo con `COSTO_MONTO` y las dos monedas en el alcance: el monto se suma tal cual a cada costo. No bloquea. */
+  advertenciaMezcla?: string | null;
 }
 
 export interface ResultadoMasivo {

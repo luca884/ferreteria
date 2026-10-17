@@ -83,3 +83,12 @@ tr.fuerte td {
 .sin-cambios {
   margin-top: var(--e-2);
 }
+
+/* Mezcla de pesos y dólares con un monto: se avisa de forma destacada, pero no bloquea. */
+.aviso.advertencia-mezcla {
+  border-color: var(--advertencia-borde);
+  border-left-color: var(--advertencia-marca);
+  background: var(--advertencia-fondo);
+  color: var(--advertencia);
+  font-weight: 600;
+}

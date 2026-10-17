@@ -1,6 +1,7 @@
 import { HttpErrorResponse } from '@angular/common/http';
 import { DecimalPipe } from '@angular/common';
-import { MontoPipe } from '../../core/formato/monto';
+import { formatearFechaHora } from '../../core/formato/fecha-hora';
+import { MontoPipe, formatearCosto } from '../../core/formato/monto';
 import {
   Component,
   ElementRef,
@@ -11,6 +12,7 @@ import {
   effect,
   inject,
   signal,
+  untracked,
   viewChild,
 } from '@angular/core';
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
@@ -22,6 +24,9 @@ import { Proveedor } from '../proveedores/proveedor.models';
 import { ProveedoresService } from '../proveedores/proveedores.service';
 import { Rubro } from '../rubros/rubro.models';
 import { RubrosService } from '../rubros/rubros.service';
+import { Moneda } from '../articulos/articulo.models';
+import { Importacion } from '../importaciones/importacion.models';
+import { ImportacionesService } from '../importaciones/importaciones.service';
 import {
   ConteosMasivos,
   ModoMasivo,
@@ -51,10 +56,14 @@ export class ActualizacionMasiva implements OnInit {
   private readonly service = inject(ActualizacionMasivaService);
   private readonly proveedoresService = inject(ProveedoresService);
   private readonly rubrosService = inject(RubrosService);
+  private readonly importacionesService = inject(ImportacionesService);
   protected readonly auth = inject(AuthService);
 
   protected readonly proveedores = signal<Proveedor[]>([]);
   protected readonly rubros = signal<Rubro[]>([]);
+  /** El historial de importaciones, completo: se pide una vez y se filtra en el cliente por proveedor. */
+  private readonly importaciones = signal<Importacion[]>([]);
+  private readonly importacionesFallo = signal(false);
   protected readonly vistaPrevia = signal<VistaPreviaMasiva | null>(null);
   /** El pedido exacto que originó la vista previa: es el que se aplica, aunque el formulario se toque. */
   private readonly pedidoVigente = signal<PedidoMasivo | null>(null);
@@ -71,6 +80,7 @@ export class ActualizacionMasiva implements OnInit {
   protected readonly form = new FormGroup({
     proveedorId: new FormControl<number | null>(null),
     rubroId: new FormControl<number | null>(null),
+    importacionId: new FormControl<number | null>(null),
     q: new FormControl('', { nonNullable: true }),
     incluirInactivos: new FormControl(false, { nonNullable: true }),
     modo: new FormControl<ModoMasivo | null>(null),
@@ -81,9 +91,34 @@ export class ActualizacionMasiva implements OnInit {
     initialValue: this.form.getRawValue(),
   });
 
-  protected readonly etiquetaDelValor = computed(() =>
-    this.formulario().modo === 'MARGEN' ? 'Margen (%)' : 'Porcentaje (%)',
-  );
+  protected readonly etiquetaDelValor = computed(() => {
+    const modo = this.formulario().modo;
+    if (modo === 'MARGEN') return 'Margen (%)';
+    return modo === 'COSTO_MONTO' ? 'Monto' : 'Porcentaje (%)';
+  });
+
+  /** Las importaciones que se ofrecen, de la más reciente a la más vieja y, con proveedor elegido, solo las suyas. */
+  protected readonly importacionesOfrecidas = computed(() => {
+    const proveedorId = this.formulario().proveedorId ?? null;
+    return [...this.importaciones()]
+      .filter((i) => proveedorId === null || i.proveedorId === proveedorId)
+      .sort((a, b) => b.fecha.localeCompare(a.fecha) || b.id - a.id)
+      .map((i) => ({
+        id: i.id,
+        proveedorId: i.proveedorId,
+        texto: `${i.proveedorNombre ?? 'Proveedor'} · ${i.archivo} · ${formatearFechaHora(i.fecha)}`,
+      }));
+  });
+
+  /** Lo que dice el selector cuando no hay nada que elegir. */
+  protected readonly sinImportaciones = computed(() => {
+    if (this.importacionesFallo()) return 'No disponible';
+    return this.importaciones().length === 0
+      ? 'Todavía no importaste ninguna lista'
+      : 'Este proveedor no tiene importaciones';
+  });
+
+  protected readonly esMonto = computed(() => this.formulario().modo === 'COSTO_MONTO');
 
   /** Hace falta el modo y un valor numérico, y que no haya otra vista previa en camino ni se esté aplicando. */
   protected readonly puedeGenerar = computed(() => {
@@ -102,6 +137,7 @@ export class ActualizacionMasiva implements OnInit {
     const f = this.formulario();
     const valor = parsearValor(f.valor ?? '');
     if (valor === null || f.modo === null || f.modo === undefined) return null;
+    if (f.modo === 'COSTO_MONTO') return valor === 0 ? 'El monto no puede ser cero.' : null;
     if (f.modo === 'MARGEN') {
       return valor < 0 || valor > 1000 ? 'El margen tiene que estar entre 0 y 1.000.' : null;
     }
@@ -115,7 +151,8 @@ export class ActualizacionMasiva implements OnInit {
     if (this.puedeGenerar() || this.generando() || this.aplicando()) return null;
     const f = this.formulario();
     if ((f.modo ?? null) === null) return 'Para ver la vista previa, elegí la operación.';
-    const nombre = f.modo === 'MARGEN' ? 'el margen' : 'el porcentaje';
+    const nombre =
+      f.modo === 'MARGEN' ? 'el margen' : f.modo === 'COSTO_MONTO' ? 'el monto' : 'el porcentaje';
     if (this.errorDelValor() !== null) return `Para ver la vista previa, corregí ${nombre}.`;
     return `Para ver la vista previa, escribí ${nombre}.`;
   });
@@ -131,6 +168,25 @@ export class ActualizacionMasiva implements OnInit {
   constructor() {
     // Cualquier cambio del filtro, el modo o el valor deja la vista previa vieja sin efecto.
     this.form.valueChanges.pipe(takeUntilDestroyed()).subscribe(() => this.invalidar());
+    // Al cambiar el proveedor, una importación de otro proveedor deja de valer (sin invalidar dos veces).
+    this.form.controls.proveedorId.valueChanges
+      .pipe(takeUntilDestroyed())
+      .subscribe((proveedorId) => {
+        const elegida = this.importaciones().find(
+          (i) => i.id === this.form.controls.importacionId.value,
+        );
+        if (elegida && proveedorId !== null && elegida.proveedorId !== proveedorId) {
+          this.form.controls.importacionId.setValue(null, { emitEvent: false });
+        }
+      });
+    // Sin nada que elegir el selector queda apagado; el estado del control no es un cambio del filtro.
+    effect(() => {
+      const sinOpciones = this.importacionesOfrecidas().length === 0;
+      const control = this.form.controls.importacionId;
+      untracked(() =>
+        sinOpciones ? control.disable({ emitEvent: false }) : control.enable({ emitEvent: false }),
+      );
+    });
     // El resultado aparece donde está el Dueño: se lo lleva a la vista y se le da el foco.
     effect(() => {
       const el = this.resumenEl()?.nativeElement;
@@ -140,6 +196,20 @@ export class ActualizacionMasiva implements OnInit {
     });
     // La segunda confirmación se anuncia y se contesta con el teclado sin buscarla.
     effect(() => this.confirmacionEl()?.nativeElement.focus());
+  }
+
+  /** Ids para aria-describedby del valor: la pista del monto y, si hay, el error. */
+  protected describirValor(): string | null {
+    const ids = [
+      ...(this.esMonto() ? ['valor-pista'] : []),
+      ...(this.errorDelValor() ? ['valor-error'] : []),
+    ];
+    return ids.length > 0 ? ids.join(' ') : null;
+  }
+
+  /** Un costo en la moneda del artículo: `$ 100,00` o `US$ 10,00`. */
+  protected costo(valor: number, moneda: Moneda | undefined): string {
+    return formatearCosto(valor, moneda);
   }
 
   /** Enter en el valor pide la vista previa (no hace nada si todavía falta algo). */
@@ -261,6 +331,17 @@ export class ActualizacionMasiva implements OnInit {
       },
       error: () => this.avisar('No se pudieron cargar los rubros.'),
     });
+    this.importacionesService.listar().subscribe({
+      next: (lista) => {
+        this.importacionesFallo.set(false);
+        this.importaciones.set(lista);
+        soltarSiNoExiste(this.form.controls.importacionId, lista);
+      },
+      error: () => {
+        this.importacionesFallo.set(true);
+        this.avisar('No se pudieron cargar las importaciones.');
+      },
+    });
   }
 
   private avisar(mensaje: string): void {
@@ -288,6 +369,7 @@ export class ActualizacionMasiva implements OnInit {
     return {
       proveedorId: f.proveedorId,
       rubroId: f.rubroId,
+      importacionId: f.importacionId,
       q: f.q.trim() === '' ? null : f.q.trim(),
       incluirInactivos: f.incluirInactivos,
       modo: f.modo,
@@ -296,9 +378,14 @@ export class ActualizacionMasiva implements OnInit {
   }
 }
 
-/** Sin proveedor, sin rubro y sin texto: el cambio alcanza a todo el catálogo ("dados de baja" no cuenta). */
+/** Sin proveedor, rubro, importación ni texto: el cambio alcanza a todo el catálogo ("dados de baja" no cuenta). */
 function filtroVacio(pedido: PedidoMasivo): boolean {
-  return pedido.proveedorId === null && pedido.rubroId === null && pedido.q === null;
+  return (
+    pedido.proveedorId === null &&
+    pedido.rubroId === null &&
+    (pedido.importacionId ?? null) === null &&
+    pedido.q === null
+  );
 }
 
 /** El valor escrito como número (coma o punto decimal); null si no es un número. */

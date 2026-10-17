@@ -7,6 +7,8 @@ import { Router } from '@angular/router';
 import { Subject, of, throwError } from 'rxjs';
 import { vi } from 'vitest';
 import { AuthService } from '../../core/auth/auth.service';
+import { Importacion } from '../importaciones/importacion.models';
+import { ImportacionesService } from '../importaciones/importaciones.service';
 import { Proveedor } from '../proveedores/proveedor.models';
 import { ProveedoresService } from '../proveedores/proveedores.service';
 import { Rubro } from '../rubros/rubro.models';
@@ -51,21 +53,42 @@ describe('ActualizacionMasiva', () => {
   let servicio: { vistaPrevia: ReturnType<typeof vi.fn>; aplicar: ReturnType<typeof vi.fn> };
   let proveedoresServicio: { listar: ReturnType<typeof vi.fn> };
   let rubrosServicio: { listar: ReturnType<typeof vi.fn> };
+  let importacionesServicio: { listar: ReturnType<typeof vi.fn> };
   let router: Router;
 
   const errorHttp = (status: number, message: string) =>
     new HttpErrorResponse({ status, error: { status, message } });
 
-  async function crearComponente(dueno = true) {
+  const importacion = (id: number, proveedor: Proveedor, archivo: string, fecha: string): Importacion => ({
+    id,
+    proveedorId: proveedor.id,
+    proveedorNombre: proveedor.nombre,
+    usuarioId: 1,
+    archivo,
+    fecha,
+    conteos: { suben: 0, bajan: 0, nuevos: 0, sinCambio: 0, noEstan: 0, conError: 0, cambianMoneda: 0, corrigen: 0, salteadas: 0 },
+    estado: 'APLICADA',
+  });
+  /** Las importaciones 7 y 8 de Sinteplast y la 9 de Tersuave, como las manda el servidor: la más reciente primero. */
+  const importacion7 = importacion(7, sinteplast, 'lista-julio.xlsx', '2026-10-10T12:30:00Z');
+  const importacion8 = importacion(8, sinteplast, 'lista-agosto.xlsx', '2026-10-12T15:00:00Z');
+  const importacion9 = importacion(9, tersuave, 'tersuave.csv', '2026-10-14T18:45:00Z');
+  const importaciones = [importacion9, importacion8, importacion7];
+
+  async function crearComponente(dueno = true, historial: Importacion[] | 'falla' = []) {
     servicio = { vistaPrevia: vi.fn(() => of(vistaPreviaBase)), aplicar: vi.fn() };
     proveedoresServicio = { listar: vi.fn(() => of([sinteplast, tersuave])) };
     rubrosServicio = { listar: vi.fn(() => of([pinturas, herramientas])) };
+    importacionesServicio = {
+      listar: vi.fn(() => (historial === 'falla' ? throwError(() => errorHttp(500, 'Error')) : of(historial))),
+    };
     await TestBed.configureTestingModule({
       imports: [ActualizacionMasiva],
       providers: [
         { provide: ActualizacionMasivaService, useValue: servicio },
         { provide: ProveedoresService, useValue: proveedoresServicio },
         { provide: RubrosService, useValue: rubrosServicio },
+        { provide: ImportacionesService, useValue: importacionesServicio },
         { provide: AuthService, useValue: { esDueno: signal(dueno) } },
         { provide: LOCALE_ID, useValue: 'es-AR' },
       ],
@@ -241,13 +264,14 @@ describe('ActualizacionMasiva', () => {
       expect(boton().textContent).toContain('Ver vista previa');
     });
 
-    it('el selector de modo ofrece las dos operaciones', async () => {
+    it('el selector de modo ofrece las tres operaciones', async () => {
       await crearComponente();
 
       expect(textosDe('#modo')).toEqual([
         'Elegí qué querés hacer',
         'Cambiar el costo en %',
         'Fijar el margen',
+        'Sumar o restar un monto al costo',
       ]);
       expect(seleccionado('#modo')).toBe('Elegí qué querés hacer');
     });
@@ -309,6 +333,7 @@ describe('ActualizacionMasiva', () => {
       expect(servicio.vistaPrevia).toHaveBeenCalledWith({
         proveedorId: null,
         rubroId: null,
+        importacionId: null,
         q: null,
         incluirInactivos: false,
         modo: 'COSTO_PORCENTAJE',
@@ -359,6 +384,7 @@ describe('ActualizacionMasiva', () => {
       expect(servicio.vistaPrevia).toHaveBeenCalledWith({
         proveedorId: 2,
         rubroId: 2,
+        importacionId: null,
         q: 'cable',
         incluirInactivos: true,
         modo: 'MARGEN',
@@ -907,6 +933,7 @@ describe('ActualizacionMasiva', () => {
     const pedidoConProveedor = {
       proveedorId: 1,
       rubroId: null,
+      importacionId: null,
       q: null,
       incluirInactivos: false,
       modo: 'COSTO_PORCENTAJE',
@@ -999,6 +1026,7 @@ describe('ActualizacionMasiva', () => {
         expect(servicio.aplicar).toHaveBeenCalledWith({
           proveedorId: 2,
           rubroId: 2,
+          importacionId: null,
           q: 'cable',
           incluirInactivos: true,
           modo: 'MARGEN',
@@ -1156,6 +1184,7 @@ describe('ActualizacionMasiva', () => {
         expect(servicio.aplicar).toHaveBeenCalledWith({
           proveedorId: null,
           rubroId: null,
+          importacionId: null,
           q: null,
           incluirInactivos: false,
           modo: 'COSTO_PORCENTAJE',
@@ -1333,6 +1362,17 @@ describe('ActualizacionMasiva', () => {
         expect(el().querySelector('.vista-previa')).toBeNull();
         expect(el().querySelector('button.confirmar')).toBeNull();
         expect(el().querySelector('.resumen')).toBeNull();
+        formularioIntacto();
+      });
+
+      it('un 409 porque otro cambio modificó un artículo (versión) muestra el mensaje del servidor y pide otra vista previa', async () => {
+        await conVistaPrevia();
+        const mensaje = 'Otro cambio modificó este artículo. Recargá y volvé a intentar.';
+
+        await aplicarConError(errorHttp(409, mensaje));
+
+        expect(alerta().textContent).toContain(mensaje);
+        expect(el().querySelector('button.confirmar')).toBeNull();
         formularioIntacto();
       });
 
@@ -1692,6 +1732,429 @@ describe('ActualizacionMasiva', () => {
       const c = await conCambio({ margenAnterior: 35, margenNuevo: 50, margenHeredado: false });
 
       expect(c[3]).toBe('35 % → 50 %');
+    });
+  });
+  describe('modo «Sumar o restar un monto al costo» (R-207, R-208)', () => {
+    const MODO_MONTO = 'Sumar o restar un monto al costo';
+    const PISTA = 'Positivo sube el costo, negativo lo baja. Se suma en la moneda de cada artículo.';
+    const MEZCLA =
+      'La selección mezcla artículos en pesos y en dólares. El monto de 5 se suma tal cual a cada costo: $ 5 en los de pesos y US$ 5 en los de dólares.';
+
+    const cambioDolares: CambioMasivo = {
+      articuloId: 7,
+      codigo: 'USD-1',
+      descripcion: 'Bomba importada',
+      costoAnterior: 10,
+      costoNuevo: 15,
+      margenAnterior: 30,
+      margenNuevo: 30,
+      precioAnterior: 15730,
+      precioNuevo: 23600,
+      margenHeredado: false,
+      advertencia: null,
+      moneda: 'USD',
+    };
+    const cambioPesos: CambioMasivo = {
+      ...cambioDolares,
+      articuloId: 8,
+      codigo: 'ARS-1',
+      descripcion: 'Tornillo',
+      costoAnterior: 100,
+      costoNuevo: 105,
+      precioAnterior: 170,
+      precioNuevo: 180,
+      moneda: 'ARS',
+    };
+    const celdas = (fila: Element) =>
+      Array.from(fila.querySelectorAll('td')).map((c) => c.textContent?.replace(/\s+/g, ' ').trim());
+    const filas = () => Array.from(el().querySelectorAll('table.cambios tbody tr')).map(celdas);
+    const describedby = (selector: string) =>
+      (q(selector).getAttribute('aria-describedby') ?? '')
+        .split(' ')
+        .filter(Boolean)
+        .map((id) => el().querySelector(`[id="${id}"]`)?.textContent?.replace(/\s+/g, ' ').trim());
+
+    async function conVistaPreviaDeMonto(extra: Partial<VistaPreviaMasiva> = {}) {
+      await crearComponente();
+      servicio.vistaPrevia.mockReturnValue(
+        of({ ...vistaPreviaBase, cambios: [cambioDolares, cambioPesos], enPesos: 3, enDolares: 2, ...extra }),
+      );
+      await elegir('#proveedor', 'Sinteplast');
+      await completar(MODO_MONTO, '5');
+      await generar();
+    }
+
+    describe('el formulario', () => {
+      it('ofrece la tercera operación, después de las dos de siempre', async () => {
+        await crearComponente();
+
+        expect(textosDe('#modo')).toEqual([
+          'Elegí qué querés hacer',
+          'Cambiar el costo en %',
+          'Fijar el margen',
+          MODO_MONTO,
+        ]);
+      });
+
+      it('el campo se llama «Monto» y dice que positivo sube, negativo baja, en la moneda de cada artículo', async () => {
+        await crearComponente();
+        await completar(MODO_MONTO, '100');
+
+        expect(texto('label[for="valor"]')).toBe('Monto');
+        expect(describedby('#valor')).toEqual([PISTA]);
+      });
+
+      it('con las otras operaciones no aparece esa pista', async () => {
+        await crearComponente();
+        await completar('Cambiar el costo en %', '10');
+
+        expect(el().querySelector('#valor-pista')).toBeNull();
+        expect(q('#valor').hasAttribute('aria-describedby')).toBe(false);
+      });
+
+      it('pide la vista previa con modo COSTO_MONTO y el monto como número, también negativo', async () => {
+        await crearComponente();
+        await completar(MODO_MONTO, '-12,5');
+
+        await generar();
+
+        expect(servicio.vistaPrevia).toHaveBeenCalledWith(
+          expect.objectContaining({ modo: 'COSTO_MONTO', valor: -12.5 }),
+        );
+      });
+
+      it('el monto 0 muestra «El monto no puede ser cero.», enlazado al campo, y no se puede pedir', async () => {
+        await crearComponente();
+
+        await completar(MODO_MONTO, '0');
+
+        expect(texto('#valor-error')).toBe('El monto no puede ser cero.');
+        expect(q('#valor').getAttribute('aria-invalid')).toBe('true');
+        expect(describedby('#valor')).toEqual([PISTA, 'El monto no puede ser cero.']);
+        expect(boton().disabled).toBe(true);
+        expect(texto('#motivo-vista-previa')).toBe('Para ver la vista previa, corregí el monto.');
+        expect(servicio.vistaPrevia).not.toHaveBeenCalled();
+      });
+
+      it('«0,00» y «-0» también son cero', async () => {
+        await crearComponente();
+        await completar(MODO_MONTO, '0,00');
+        expect(texto('#valor-error')).toBe('El monto no puede ser cero.');
+
+        await escribir('#valor', '-0');
+        expect(texto('#valor-error')).toBe('El monto no puede ser cero.');
+
+        await escribir('#valor', '0,01');
+        expect(el().querySelector('#valor-error')).toBeNull();
+        expect(boton().disabled).toBe(false);
+      });
+
+      it('sin monto dice «escribí el monto»', async () => {
+        await crearComponente();
+        await elegir('#modo', MODO_MONTO);
+
+        expect(texto('#motivo-vista-previa')).toBe('Para ver la vista previa, escribí el monto.');
+      });
+
+      it('el rango del porcentaje y del margen no se le aplica al monto', async () => {
+        await crearComponente();
+
+        await completar(MODO_MONTO, '5000');
+
+        expect(el().querySelector('#valor-error')).toBeNull();
+        expect(boton().disabled).toBe(false);
+      });
+    });
+
+    describe('la vista previa', () => {
+      it('un artículo en dólares muestra «US$ 10,00 → US$ 15,00» y el precio en pesos', async () => {
+        await conVistaPreviaDeMonto();
+
+        const [dolares] = filas();
+        expect(dolares[2]).toBe('US$ 10,00 → US$ 15,00');
+        expect(dolares[4]).toBe('$ 15.730,00 → $ 23.600,00');
+      });
+
+      it('un artículo en pesos usa «$» en el costo', async () => {
+        await conVistaPreviaDeMonto();
+
+        const [, pesos] = filas();
+        expect(pesos[2]).toBe('$ 100,00 → $ 105,00');
+      });
+
+      it('un costo que no cambia muestra solo el valor, con su símbolo', async () => {
+        await conVistaPreviaDeMonto();
+        servicio.vistaPrevia.mockReturnValue(
+          of({ ...vistaPreviaBase, cambios: [{ ...cambioDolares, costoNuevo: 10 }] }),
+        );
+        await generar();
+
+        expect(filas()[0][2]).toBe('US$ 10,00');
+      });
+
+      it('una respuesta sin moneda (servidor anterior) se muestra en pesos', async () => {
+        await crearComponente();
+        const sinMoneda: Partial<CambioMasivo> = { ...cambioPesos };
+        delete sinMoneda.moneda;
+        servicio.vistaPrevia.mockReturnValue(of({ ...vistaPreviaBase, cambios: [sinMoneda as CambioMasivo] }));
+        await completar('Cambiar el costo en %', '5');
+        await generar();
+
+        expect(filas()[0][2]).toBe('$ 100,00 → $ 105,00');
+      });
+
+      it('la advertencia de mezcla va arriba del detalle, destacada, y «Aplicar» sigue habilitado', async () => {
+        await conVistaPreviaDeMonto({ advertenciaMezcla: MEZCLA });
+
+        const aviso = q('.advertencia-mezcla');
+        expect(texto('.advertencia-mezcla')).toBe(MEZCLA);
+        expect(aviso.compareDocumentPosition(q('table.cambios')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+        expect(aviso.getAttribute('role')).toBe('status');
+        expect(q<HTMLButtonElement>('button.confirmar').disabled).toBe(false);
+      });
+
+      it('sin advertencia de mezcla no aparece nada', async () => {
+        await conVistaPreviaDeMonto({ advertenciaMezcla: null });
+
+        expect(el().querySelector('.advertencia-mezcla')).toBeNull();
+      });
+
+      it('informa cuántos artículos están en pesos y cuántos en dólares', async () => {
+        await conVistaPreviaDeMonto();
+
+        const tarjetas = Array.from(el().querySelectorAll('.tarjeta')).map((t) =>
+          t.textContent?.replace(/\s+/g, ' ').trim(),
+        );
+        expect(tarjetas).toContain('En pesos 3');
+        expect(tarjetas).toContain('En dólares 2');
+      });
+
+      it('si no hay artículos en dólares no suma tarjetas de moneda', async () => {
+        await conVistaPreviaDeMonto({ enPesos: 5, enDolares: 0 });
+
+        const tarjetas = Array.from(el().querySelectorAll('.tarjeta')).map((t) => t.textContent ?? '');
+        expect(tarjetas.some((t) => t.includes('En pesos') || t.includes('En dólares'))).toBe(false);
+      });
+
+      it('las vistas previas de los otros modos no cambian', async () => {
+        await crearComponente();
+        servicio.vistaPrevia.mockReturnValue(of(vistaPreviaBase));
+        await completar('Cambiar el costo en %', '10');
+        await generar();
+
+        expect(Array.from(el().querySelectorAll('.tarjeta'))).toHaveLength(6);
+        expect(el().querySelector('.advertencia-mezcla')).toBeNull();
+      });
+
+      it('aplicar manda el modo y el monto de la vista previa, con su huella', async () => {
+        await conVistaPreviaDeMonto();
+        servicio.aplicar.mockReturnValue(of({ conteos: conteosBase, entradasDeHistorial: 3 }));
+
+        q<HTMLButtonElement>('button.confirmar').click();
+        await asentar();
+
+        expect(servicio.aplicar).toHaveBeenCalledWith(
+          expect.objectContaining({ modo: 'COSTO_MONTO', valor: 5, huella: 'huella-1' }),
+        );
+      });
+    });
+
+    describe('invalidación (R-026)', () => {
+      it('cambiar el monto descarta la vista previa', async () => {
+        await conVistaPreviaDeMonto();
+        expect(el().querySelector('.vista-previa')).not.toBeNull();
+
+        await escribir('#valor', '6');
+
+        expect(el().querySelector('.vista-previa')).toBeNull();
+        expect(el().querySelector('button.confirmar')).toBeNull();
+      });
+
+      it('cambiar de modo descarta la vista previa', async () => {
+        await conVistaPreviaDeMonto();
+
+        await elegir('#modo', 'Fijar el margen');
+
+        expect(el().querySelector('.vista-previa')).toBeNull();
+      });
+    });
+  });
+  describe('selector de importación (R-202, R-203)', () => {
+    const SIN_IMPORTACIONES = 'Todavía no importaste ninguna lista';
+    const opciones = () => textosDe('#importacion');
+
+    it('el control va junto a proveedor y rubro, con su etiqueta', async () => {
+      await crearComponente(true, importaciones);
+
+      expect(texto('label[for="importacion"]')).toBe('Importación');
+      const campos = Array.from(el().querySelectorAll('.fila .campo select')).map((n) => n.id);
+      expect(campos.slice(0, 3)).toEqual(['proveedor', 'rubro', 'importacion']);
+    });
+
+    it('se carga UNA vez con el historial de importaciones, aunque se cambie el proveedor', async () => {
+      await crearComponente(true, importaciones);
+      await elegir('#proveedor', 'Sinteplast');
+      await elegir('#proveedor', 'Tersuave');
+
+      expect(importacionesServicio.listar).toHaveBeenCalledTimes(1);
+      expect(importacionesServicio.listar).toHaveBeenCalledWith();
+    });
+
+    it('sin proveedor elegido muestra todas, de la más reciente a la más vieja, con proveedor, archivo, fecha y hora', async () => {
+      await crearComponente(true, importaciones);
+
+      expect(opciones()).toEqual([
+        'Todas las importaciones',
+        'Tersuave · tersuave.csv · 14/10 15:45',
+        'Sinteplast · lista-agosto.xlsx · 12/10 12:00',
+        'Sinteplast · lista-julio.xlsx · 10/10 09:30',
+      ]);
+      expect(seleccionado('#importacion')).toBe('Todas las importaciones');
+    });
+
+    it('si el servidor las manda desordenadas, igual van de la más reciente a la más vieja', async () => {
+      await crearComponente(true, [importacion7, importacion9, importacion8]);
+
+      expect(opciones().slice(1).map((o) => o?.split(' · ')[1])).toEqual([
+        'tersuave.csv',
+        'lista-agosto.xlsx',
+        'lista-julio.xlsx',
+      ]);
+    });
+
+    it('con un proveedor elegido solo muestra las de ese proveedor', async () => {
+      await crearComponente(true, importaciones);
+
+      await elegir('#proveedor', 'Sinteplast');
+
+      expect(opciones()).toEqual([
+        'Todas las importaciones',
+        'Sinteplast · lista-agosto.xlsx · 12/10 12:00',
+        'Sinteplast · lista-julio.xlsx · 10/10 09:30',
+      ]);
+    });
+
+    it('al cambiar el proveedor, la importación elegida se suelta si no es de ese proveedor', async () => {
+      await crearComponente(true, importaciones);
+      await elegir('#importacion', 'Tersuave · tersuave.csv · 14/10 15:45');
+      expect(seleccionado('#importacion')).toBe('Tersuave · tersuave.csv · 14/10 15:45');
+
+      await elegir('#proveedor', 'Sinteplast');
+
+      expect(seleccionado('#importacion')).toBe('Todas las importaciones');
+    });
+
+    it('al cambiar el proveedor, la importación elegida se conserva si es de ese proveedor', async () => {
+      await crearComponente(true, importaciones);
+      await elegir('#importacion', 'Sinteplast · lista-agosto.xlsx · 12/10 12:00');
+
+      await elegir('#proveedor', 'Sinteplast');
+
+      expect(seleccionado('#importacion')).toBe('Sinteplast · lista-agosto.xlsx · 12/10 12:00');
+    });
+
+    it('sin importaciones dice que todavía no importó ninguna lista y no ofrece opciones', async () => {
+      await crearComponente(true, []);
+
+      expect(opciones()).toEqual([SIN_IMPORTACIONES]);
+      expect(q<HTMLSelectElement>('#importacion').disabled).toBe(true);
+    });
+
+    it('un proveedor sin importaciones lo dice y deja el selector apagado', async () => {
+      await crearComponente(true, [importacion9]);
+
+      await elegir('#proveedor', 'Sinteplast');
+
+      expect(opciones()).toEqual(['Este proveedor no tiene importaciones']);
+      expect(q<HTMLSelectElement>('#importacion').disabled).toBe(true);
+    });
+
+    it('si no se pudo leer el historial lo dice y el resto de la pantalla funciona', async () => {
+      await crearComponente(true, 'falla');
+
+      expect(q('[role="alert"]').textContent).toContain('No se pudieron cargar las importaciones.');
+      expect(q<HTMLSelectElement>('#importacion').disabled).toBe(true);
+      await completar('Cambiar el costo en %', '10');
+      expect(boton().disabled).toBe(false);
+    });
+
+    it('el pedido manda la importación elegida (y null si no se eligió)', async () => {
+      await crearComponente(true, importaciones);
+      await completar('Cambiar el costo en %', '10');
+      await generar();
+      expect(servicio.vistaPrevia).toHaveBeenLastCalledWith(expect.objectContaining({ importacionId: null }));
+
+      await elegir('#importacion', 'Sinteplast · lista-agosto.xlsx · 12/10 12:00');
+      await generar();
+
+      expect(servicio.vistaPrevia).toHaveBeenLastCalledWith(
+        expect.objectContaining({ proveedorId: null, importacionId: 8 }),
+      );
+    });
+
+    it('elegir o cambiar la importación descarta la vista previa: «Aplicar» desaparece hasta pedir otra', async () => {
+      await crearComponente(true, importaciones);
+      await elegir('#proveedor', 'Sinteplast');
+      await completar('Cambiar el costo en %', '10');
+      await generar();
+      expect(el().querySelector('button.confirmar')).not.toBeNull();
+
+      await elegir('#importacion', 'Sinteplast · lista-agosto.xlsx · 12/10 12:00');
+      expect(el().querySelector('.vista-previa')).toBeNull();
+      expect(el().querySelector('button.confirmar')).toBeNull();
+
+      await generar();
+      expect(el().querySelector('button.confirmar')).not.toBeNull();
+
+      await elegir('#importacion', 'Sinteplast · lista-julio.xlsx · 10/10 09:30');
+      expect(el().querySelector('button.confirmar')).toBeNull();
+    });
+
+    it('con solo la importación elegida NO pide la segunda confirmación de «todo el catálogo»', async () => {
+      await crearComponente(true, importaciones);
+      await elegir('#importacion', 'Tersuave · tersuave.csv · 14/10 15:45');
+      await completar('Cambiar el costo en %', '10');
+      await generar();
+      servicio.aplicar.mockReturnValue(of({ conteos: conteosBase, entradasDeHistorial: 3 }));
+
+      q<HTMLButtonElement>('button.confirmar').click();
+      await asentar();
+
+      expect(el().querySelector('.confirmacion-total')).toBeNull();
+      expect(servicio.aplicar).toHaveBeenCalledWith(expect.objectContaining({ importacionId: 9, huella: 'huella-1' }));
+    });
+
+    it('sin ningún filtro, incluida la importación, sigue pidiendo la segunda confirmación', async () => {
+      await crearComponente(true, importaciones);
+      await completar('Cambiar el costo en %', '10');
+      await generar();
+
+      q<HTMLButtonElement>('button.confirmar').click();
+      await asentar();
+
+      expect(el().querySelector('.confirmacion-total')).not.toBeNull();
+      expect(servicio.aplicar).not.toHaveBeenCalled();
+    });
+
+    it('el Vendedor no ve el selector ni se pide el historial', async () => {
+      await crearComponente(false, importaciones);
+
+      expect(el().querySelector('#importacion')).toBeNull();
+      expect(importacionesServicio.listar).not.toHaveBeenCalled();
+    });
+
+    it('un 404 por una importación que ya no existe vuelve a pedir el historial y suelta la elegida', async () => {
+      await crearComponente(true, importaciones);
+      await elegir('#importacion', 'Tersuave · tersuave.csv · 14/10 15:45');
+      await completar('Cambiar el costo en %', '10');
+      servicio.vistaPrevia.mockReturnValue(throwError(() => errorHttp(404, 'Importación no encontrada')));
+      importacionesServicio.listar.mockReturnValue(of([importacion8, importacion7]));
+
+      await generar();
+
+      expect(q('[role="alert"]').textContent).toContain('Importación no encontrada');
+      expect(importacionesServicio.listar).toHaveBeenCalledTimes(2);
+      expect(seleccionado('#importacion')).toBe('Todas las importaciones');
     });
   });
 });
