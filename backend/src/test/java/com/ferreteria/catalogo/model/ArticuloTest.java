@@ -1082,4 +1082,297 @@ class ArticuloTest {
         assertThat(cambio).isPresent();
         assertThat(articulo.getAjuste1()).isEqualByComparingTo("-5");
     }
+
+    // --- base de lista guardada (corte 3, V7) ---
+
+    @Test
+    @DisplayName("registrarBaseDeLista: fija las tres bonificaciones (null cuando falta) y listaIncluyeIva")
+    void registrarBaseDeLista() {
+        Articulo articulo = articuloCon("100", null);
+        assertThat(articulo.getBonificacion1()).isNull();
+        assertThat(articulo.getListaIncluyeIva()).isNull();
+        assertThat(articulo.bonificacionesGuardadas()).isEqualTo(Bonificaciones.NINGUNA);
+
+        articulo.registrarBaseDeLista(new Bonificaciones(bd("10"), null, bd("2.5")), true);
+
+        assertThat(articulo.getBonificacion1()).isEqualByComparingTo("10");
+        assertThat(articulo.getBonificacion2()).isNull();
+        assertThat(articulo.getBonificacion3()).isEqualByComparingTo("2.5");
+        assertThat(articulo.getListaIncluyeIva()).isTrue();
+        assertThat(articulo.bonificacionesGuardadas()).isEqualTo(new Bonificaciones(bd("10"), null, bd("2.5")));
+    }
+
+    @Test
+    @DisplayName("registrarBaseDeLista: sin bonificaciones (null o NINGUNA) deja las tres en null y puede fijar false")
+    void registrarBaseDeListaSinBonificaciones() {
+        Articulo articulo = articuloCon("100", null);
+        articulo.registrarBaseDeLista(new Bonificaciones(bd("10"), bd("5"), bd("1")), true);
+
+        articulo.registrarBaseDeLista(null, false);
+
+        assertThat(articulo.bonificacionesGuardadas()).isEqualTo(Bonificaciones.NINGUNA);
+        assertThat(articulo.getListaIncluyeIva()).isFalse();
+    }
+
+    @Test
+    @DisplayName("actualizar (el PUT, tambien el que saca el proveedor), ajustarCosto y fijarMargen no tocan la base guardada")
+    void laBaseGuardadaSobreviveALasOtrasEdiciones() {
+        Articulo articulo = articuloCon("100", null);
+        articulo.registrarBaseDeLista(new Bonificaciones(bd("10"), bd("5"), null), true);
+
+        articulo.actualizar(new DatosArticulo("TORN-001", "7790001000012", "AB-12", "Otra descripcion",
+                10L, null, bd("120"), null, AlicuotaIva.IVA_21, Unidad.UNIDAD, bd("5"), "Estante 3", true), ctx(null));
+        articulo.ajustarCosto(bd("130"), ctx(null));
+        articulo.fijarMargen(bd("40"), ctx(null));
+
+        assertThat(articulo.getProveedorId()).isNull();
+        assertThat(articulo.bonificacionesGuardadas()).isEqualTo(new Bonificaciones(bd("10"), bd("5"), null));
+        assertThat(articulo.getListaIncluyeIva()).isTrue();
+    }
+
+    @Test
+    @DisplayName("aplicarLista conserva su firma y no toca la base guardada (la fija la importacion con registrarBaseDeLista)")
+    void aplicarListaNoTocaLaBase() {
+        Articulo articulo = articuloCon("100", null);
+        articulo.registrarBaseDeLista(new Bonificaciones(bd("10"), null, null), false);
+
+        articulo.aplicarLista(bd("1200"), bd("1200"), Moneda.ARS, null, Ajustes.NINGUNO, 7L, ctx(null));
+
+        assertThat(articulo.bonificacionesGuardadas()).isEqualTo(new Bonificaciones(bd("10"), null, null));
+        assertThat(articulo.getListaIncluyeIva()).isFalse();
+    }
+
+    // --- tieneLista y costoDeLista (corte 3) ---
+
+    /** Articulo que vino de una lista: proveedor 20, precio de lista, base guardada y costo ya calculado. */
+    private static Articulo importado(String lista, Bonificaciones bonificaciones, boolean incluyeIva, Ajustes ajustes,
+                                      AlicuotaIva iva) {
+        Articulo articulo = new Articulo(FERRETERIA);
+        articulo.actualizar(datos("1", null, iva), ctx(null));
+        BigDecimal costo = CostoDeLista.costo(bd(lista), iva, incluyeIva, bonificaciones, ajustes);
+        articulo.aplicarLista(costo, bd(lista), null, null, ajustes, 7L, ctx(null));
+        articulo.registrarBaseDeLista(bonificaciones, incluyeIva);
+        return articulo;
+    }
+
+    private static Articulo importado(String lista, Bonificaciones bonificaciones, Ajustes ajustes) {
+        return importado(lista, bonificaciones, false, ajustes, AlicuotaIva.IVA_21);
+    }
+
+    @Test
+    @DisplayName("tieneLista: true con precio de lista, proveedor y base guardada")
+    void tieneListaCompleta() {
+        assertThat(importado("1000", Bonificaciones.NINGUNA, Ajustes.NINGUNO).tieneLista()).isTrue();
+    }
+
+    @Test
+    @DisplayName("tieneLista: false en alta manual (sin precio de lista) aunque tenga proveedor")
+    void tieneListaFalsaEnAltaManual() {
+        Articulo articulo = articuloCon("100", null);
+        assertThat(articulo.getProveedorId()).isNotNull();
+        assertThat(articulo.tieneLista()).isFalse();
+        assertThat(articulo.costoDeLista(Ajustes.NINGUNO)).isEmpty();
+    }
+
+    @Test
+    @DisplayName("tieneLista (decision 46): false con precio de lista y base pero SIN proveedor")
+    void tieneListaFalsaSinProveedor() {
+        Articulo articulo = importado("1000", new Bonificaciones(bd("10"), null, null), Ajustes.NINGUNO);
+        articulo.actualizar(new DatosArticulo("TORN-001", "7790001000012", "AB-12", "Tornillo hexagonal 1/4",
+                10L, null, bd("900"), null, AlicuotaIva.IVA_21, Unidad.UNIDAD, bd("5"), "Estante 3", true), ctx(null));
+
+        assertThat(articulo.getPrecioListaProveedor()).isNotNull();
+        assertThat(articulo.tieneLista()).isFalse();
+        assertThat(articulo.costoDeLista(Ajustes.NINGUNO)).isEmpty();
+    }
+
+    @Test
+    @DisplayName("tieneLista: false con proveedor y precio de lista pero sin base guardada (anterior a V7 sin proveedor)")
+    void tieneListaFalsaSinBase() {
+        Articulo articulo = articuloCon("100", null);
+        articulo.registrarPrecioLista(bd("100"));
+
+        assertThat(articulo.getListaIncluyeIva()).isNull();
+        assertThat(articulo.tieneLista()).isFalse();
+    }
+
+    @Test
+    @DisplayName("tieneLista: al volver a poner el proveedor se habilita si hay base guardada y sigue en false si no")
+    void tieneListaAlVolverALePonerProveedor() {
+        Articulo conBase = importado("1000", new Bonificaciones(bd("10"), null, null), Ajustes.NINGUNO);
+        Articulo sinBase = articuloCon("100", null);
+        sinBase.registrarPrecioLista(bd("100"));
+        DatosArticulo sinProveedor = new DatosArticulo("TORN-001", "7790001000012", "AB-12", "Tornillo", 10L, null,
+                bd("900"), null, AlicuotaIva.IVA_21, Unidad.UNIDAD, bd("5"), "Estante 3", true);
+        DatosArticulo conProveedor = new DatosArticulo("TORN-001", "7790001000012", "AB-12", "Tornillo", 10L, 20L,
+                bd("900"), null, AlicuotaIva.IVA_21, Unidad.UNIDAD, bd("5"), "Estante 3", true);
+
+        conBase.actualizar(sinProveedor, ctx(null));
+        assertThat(conBase.tieneLista()).isFalse();
+        conBase.actualizar(conProveedor, ctx(null));
+        assertThat(conBase.tieneLista()).isTrue();
+
+        sinBase.actualizar(sinProveedor, ctx(null));
+        sinBase.actualizar(conProveedor, ctx(null));
+        assertThat(sinBase.tieneLista()).isFalse();
+    }
+
+    @Test
+    @DisplayName("costoDeLista: lista 1.000,00, bonificacion 10, ajustes -5 y +3 da 880,65")
+    void costoDeListaConAjustes() {
+        Articulo articulo = importado("1000", new Bonificaciones(bd("10"), null, null), Ajustes.NINGUNO);
+
+        assertThat(articulo.costoDeLista(new Ajustes(bd("-5"), bd("3"), null))).get()
+                .satisfies(c -> assertThat(c).isEqualByComparingTo("880.65"));
+        assertThat(articulo.costoDeLista(Ajustes.NINGUNO)).get()
+                .satisfies(c -> assertThat(c).isEqualByComparingTo("900.00"));
+    }
+
+    @Test
+    @DisplayName("costoDeLista: usa listaIncluyeIva GUARDADO (1.210,00 con IVA 21 y +10 da 1.100,00)")
+    void costoDeListaConIvaIncluidoGuardado() {
+        Articulo articulo = importado("1210", Bonificaciones.NINGUNA, true, Ajustes.NINGUNO, AlicuotaIva.IVA_21);
+
+        assertThat(articulo.costoDeLista(new Ajustes(bd("10"), null, null))).get()
+                .satisfies(c -> assertThat(c).isEqualByComparingTo("1100.00"));
+    }
+
+    @Test
+    @DisplayName("costoDeLista: usa las bonificaciones GUARDADAS (10) y no las del proveedor (12): 900,00")
+    void costoDeListaConBonificacionGuardada() {
+        Articulo articulo = importado("1000", new Bonificaciones(bd("10"), null, null), Ajustes.NINGUNO);
+
+        assertThat(articulo.costoDeLista(Ajustes.NINGUNO)).get()
+                .satisfies(c -> assertThat(c).isEqualByComparingTo("900.00"));
+    }
+
+    // --- editarAjustes (corte 3) ---
+
+    private static final Bonificaciones BONIF_10 = new Bonificaciones(bd("10"), null, null);
+
+    @Test
+    @DisplayName("editarAjustes: quitar el +3 (880,65 / 1.390) da 855,00 / 1.350 y el cambio de costo y precio")
+    void editarAjustesQuitarUno() {
+        Articulo articulo = importado("1000", BONIF_10, new Ajustes(bd("-5"), bd("3"), null));
+        assertThat(articulo.getCosto()).isEqualByComparingTo("880.65");
+        assertThat(articulo.getPrecioFinal()).isEqualByComparingTo("1390");
+
+        Optional<CambioPrecio> cambio = articulo.editarAjustes(new Ajustes(bd("-5"), null, null), ctx(null));
+
+        assertThat(articulo.getCosto()).isEqualByComparingTo("855.00");
+        assertThat(articulo.getPrecioFinal()).isEqualByComparingTo("1350");
+        assertThat(articulo.getAjustes()).isEqualTo(new Ajustes(bd("-5"), null, null));
+        assertThat(cambio).contains(new CambioPrecio(bd("880.65"), bd("855.00"), bd("1390.00"), bd("1350.00")));
+    }
+
+    @Test
+    @DisplayName("editarAjustes: sin ajustes (900,00 / 1.420) agregar -5 da 855,00 / 1.350")
+    void editarAjustesAgregar() {
+        Articulo articulo = importado("1000", BONIF_10, Ajustes.NINGUNO);
+        assertThat(articulo.getCosto()).isEqualByComparingTo("900.00");
+        assertThat(articulo.getPrecioFinal()).isEqualByComparingTo("1420");
+
+        articulo.editarAjustes(new Ajustes(bd("-5"), null, null), ctx(null));
+
+        assertThat(articulo.getCosto()).isEqualByComparingTo("855.00");
+        assertThat(articulo.getPrecioFinal()).isEqualByComparingTo("1350");
+    }
+
+    @Test
+    @DisplayName("editarAjustes: con -5 y +3, cambiar +3 por +5 da 897,75 y el precio sigue en 1.420")
+    void editarAjustesCambiarValor() {
+        Articulo articulo = importado("1000", BONIF_10, new Ajustes(bd("-5"), bd("3"), null));
+
+        Optional<CambioPrecio> cambio = articulo.editarAjustes(new Ajustes(bd("-5"), bd("5"), null), ctx(null));
+
+        assertThat(articulo.getCosto()).isEqualByComparingTo("897.75");
+        assertThat(articulo.getPrecioFinal()).isEqualByComparingTo("1420");
+        assertThat(cambio).isPresent();
+    }
+
+    @Test
+    @DisplayName("editarAjustes: -5 y +3 guardados como +3 y -5 dejan el mismo costo, sin cambio, pero guardan las posiciones")
+    void editarAjustesSoloPosicion() {
+        Articulo articulo = importado("1000", BONIF_10, new Ajustes(bd("-5"), bd("3"), null));
+
+        Optional<CambioPrecio> cambio = articulo.editarAjustes(new Ajustes(bd("3"), bd("-5"), null), ctx(null));
+
+        assertThat(cambio).isEmpty();
+        assertThat(articulo.getCosto()).isEqualByComparingTo("880.65");
+        assertThat(articulo.getAjuste1()).isEqualByComparingTo("3");
+        assertThat(articulo.getAjuste2()).isEqualByComparingTo("-5");
+    }
+
+    @Test
+    @DisplayName("editarAjustes: USD con lista 10,00 y -10 con el dolar en 1.000 da 9,00 / 14.160")
+    void editarAjustesEnDolares() {
+        Articulo articulo = new Articulo(FERRETERIA);
+        articulo.actualizar(datos("1", null, AlicuotaIva.IVA_21), ctx(null));
+        ContextoPrecio conDolar = new ContextoPrecio(null, bd("30"), bd("10"), bd("1000"));
+        articulo.aplicarLista(bd("10.00"), bd("10.00"), Moneda.USD, null, Ajustes.NINGUNO, 7L, conDolar);
+        articulo.registrarBaseDeLista(Bonificaciones.NINGUNA, false);
+
+        articulo.editarAjustes(new Ajustes(bd("-10"), null, null), conDolar);
+
+        assertThat(articulo.getCosto()).isEqualByComparingTo("9.00");
+        assertThat(articulo.getPrecioFinal()).isEqualByComparingTo("14160");
+        assertThat(articulo.getMoneda()).isEqualTo(Moneda.USD);
+    }
+
+    @Test
+    @DisplayName("editarAjustes: lista 0,01 con -99,99 da costo 0,00 y se guarda; -99,99 sobre 1.000,00 da 0,10 / 10")
+    void editarAjustesEnElLimite() {
+        Articulo centavo = importado("0.01", Bonificaciones.NINGUNA, Ajustes.NINGUNO);
+        centavo.editarAjustes(new Ajustes(bd("-99.99"), null, null), ctx(null));
+        assertThat(centavo.getCosto()).isEqualByComparingTo("0.00");
+        assertThat(centavo.getAjuste1()).isEqualByComparingTo("-99.99");
+
+        Articulo mil = importado("1000", Bonificaciones.NINGUNA, Ajustes.NINGUNO);
+        mil.editarAjustes(new Ajustes(bd("-99.99"), null, null), ctx(null));
+        assertThat(mil.getCosto()).isEqualByComparingTo("0.10");
+        assertThat(mil.getPrecioFinal()).isEqualByComparingTo("10");
+    }
+
+    @Test
+    @DisplayName("editarAjustes: sin lista lanza IllegalStateException y no cambia nada")
+    void editarAjustesSinLista() {
+        Articulo articulo = articuloCon("100", null);
+
+        assertThatThrownBy(() -> articulo.editarAjustes(new Ajustes(bd("-5"), null, null), ctx(null)))
+                .isInstanceOf(IllegalStateException.class);
+        assertThat(articulo.getCosto()).isEqualByComparingTo("100");
+        assertThat(articulo.getAjustes()).isEqualTo(Ajustes.NINGUNO);
+    }
+
+    @Test
+    @DisplayName("editarAjustes: no toca precio de lista, margen, IVA, moneda, importacion, stock, activo ni bonificaciones")
+    void editarAjustesNoTocaLoDemas() {
+        Articulo articulo = importado("1000", new Bonificaciones(bd("10"), bd("5"), null), true, Ajustes.NINGUNO,
+                AlicuotaIva.IVA_10_5);
+        articulo.fijarMargen(bd("40"), ctx(null));
+
+        articulo.editarAjustes(new Ajustes(bd("-5"), null, null), ctx(null));
+
+        assertThat(articulo.getPrecioListaProveedor()).isEqualByComparingTo("1000");
+        assertThat(articulo.getMargenPorcentaje()).isEqualByComparingTo("40");
+        assertThat(articulo.getAlicuotaIva()).isEqualTo(AlicuotaIva.IVA_10_5);
+        assertThat(articulo.getMoneda()).isEqualTo(Moneda.ARS);
+        assertThat(articulo.getUltimaImportacionId()).isEqualTo(7L);
+        assertThat(articulo.getStockMinimo()).isEqualByComparingTo("5");
+        assertThat(articulo.isActivo()).isTrue();
+        assertThat(articulo.bonificacionesGuardadas()).isEqualTo(new Bonificaciones(bd("10"), bd("5"), null));
+        assertThat(articulo.getListaIncluyeIva()).isTrue();
+    }
+
+    @Test
+    @DisplayName("editarAjustes: despues, un ajustarCosto (masivo) no cambia los ajustes")
+    void ajustarCostoNoTocaLosAjustes() {
+        Articulo articulo = importado("1000", BONIF_10, Ajustes.NINGUNO);
+        articulo.editarAjustes(new Ajustes(bd("-5"), bd("3"), null), ctx(null));
+
+        articulo.ajustarCosto(bd("990"), ctx(null));
+
+        assertThat(articulo.getAjustes()).isEqualTo(new Ajustes(bd("-5"), bd("3"), null));
+        assertThat(articulo.getCosto()).isEqualByComparingTo("990");
+    }
 }

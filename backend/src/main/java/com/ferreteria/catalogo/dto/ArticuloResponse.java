@@ -27,7 +27,16 @@ public record ArticuloResponse(
         BigDecimal stockMinimo,
         String ubicacion,
         boolean activo,
-        BigDecimal precioListaProveedor) {
+        BigDecimal precioListaProveedor,
+        /** Descuentos o recargos propios en % (negativo es descuento); null es "sin ajuste". Solo lectura. */
+        BigDecimal ajuste1,
+        BigDecimal ajuste2,
+        BigDecimal ajuste3,
+        /** Base con la que se calculo el costo en la ultima importacion; null si no hay base guardada. */
+        BigDecimal bonificacion1,
+        BigDecimal bonificacion2,
+        BigDecimal bonificacion3,
+        Boolean listaIncluyeIva) {
 
     /** Igual que {@link #from(Articulo)} pero con el stock indicado (el vigente en la base, no el de la entidad leida). */
     public static ArticuloResponse from(Articulo articulo, BigDecimal stockActual) {
@@ -35,7 +44,9 @@ public record ArticuloResponse(
         return new ArticuloResponse(base.id(), base.codigoInterno(), base.codigoBarras(), base.codigoProveedor(),
                 base.descripcion(), base.rubroId(), base.proveedorId(), base.costo(), base.moneda(), base.margenPorcentaje(),
                 base.alicuotaIva(), base.precioFinal(), base.unidad(), stockActual, base.stockMinimo(),
-                base.ubicacion(), base.activo(), base.precioListaProveedor());
+                base.ubicacion(), base.activo(), base.precioListaProveedor(), base.ajuste1(), base.ajuste2(),
+                base.ajuste3(), base.bonificacion1(), base.bonificacion2(), base.bonificacion3(),
+                base.listaIncluyeIva());
     }
 
     public static ArticuloResponse from(Articulo articulo) {
@@ -57,6 +68,13 @@ public record ArticuloResponse(
                 articulo.getStockMinimo(),
                 articulo.getUbicacion(),
                 articulo.isActivo(),
-                articulo.getPrecioListaProveedor());
+                articulo.getPrecioListaProveedor(),
+                articulo.getAjuste1(),
+                articulo.getAjuste2(),
+                articulo.getAjuste3(),
+                articulo.getBonificacion1(),
+                articulo.getBonificacion2(),
+                articulo.getBonificacion3(),
+                articulo.getListaIncluyeIva());
     }
 }

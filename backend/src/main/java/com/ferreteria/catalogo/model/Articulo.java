@@ -116,6 +116,24 @@ public class Articulo {
     @Column(precision = 6, scale = 2)
     private BigDecimal ajuste3;
 
+    /**
+     * Base con la que se calculo el costo en la ultima importacion: las tres bonificaciones del proveedor de ese
+     * momento y si la lista traia el IVA incluido (V7). Null es "sin base guardada". La fija solo la importacion
+     * (registrarBaseDeLista): actualizar, ajustarCosto y fijarMargen no la tocan, ni siquiera el PUT que saca el
+     * proveedor.
+     */
+    @Column(precision = 5, scale = 2)
+    private BigDecimal bonificacion1;
+
+    @Column(precision = 5, scale = 2)
+    private BigDecimal bonificacion2;
+
+    @Column(precision = 5, scale = 2)
+    private BigDecimal bonificacion3;
+
+    @Column(name = "lista_incluye_iva")
+    private Boolean listaIncluyeIva;
+
     /** La ultima importacion de lista que toco este articulo; null si nunca lo toco una (alta manual, por ejemplo). */
     @Column(name = "ultima_importacion_id")
     private Long ultimaImportacionId;
@@ -286,6 +304,64 @@ public class Articulo {
         this.ajuste3 = nuevos.a3();
     }
 
+    /**
+     * Guarda la base con la que se calculo el costo de lista: las bonificaciones (null es ninguna) y si la lista traia
+     * el IVA incluido. Lo llama solo la importacion, con las bonificaciones del proveedor de ese momento.
+     */
+    public void registrarBaseDeLista(Bonificaciones bonificaciones, boolean incluyeIva) {
+        Bonificaciones guardadas = bonificaciones == null ? Bonificaciones.NINGUNA : bonificaciones;
+        this.bonificacion1 = guardadas.b1();
+        this.bonificacion2 = guardadas.b2();
+        this.bonificacion3 = guardadas.b3();
+        this.listaIncluyeIva = incluyeIva;
+    }
+
+    /** Las bonificaciones guardadas (V7); {@link Bonificaciones#NINGUNA} si no hay base guardada. */
+    public Bonificaciones bonificacionesGuardadas() {
+        return new Bonificaciones(bonificacion1, bonificacion2, bonificacion3);
+    }
+
+    /**
+     * Si el articulo viene de una lista de proveedor y se puede recalcular su costo desde el precio de lista: tiene
+     * precio de lista, proveedor y base guardada. Sin proveedor es "sin lista" aunque tenga precio de lista
+     * (el PUT permite sacarlo y no borra el precio).
+     */
+    public boolean tieneLista() {
+        return precioListaProveedor != null && proveedorId != null && listaIncluyeIva != null;
+    }
+
+    /**
+     * Costo que sale del precio de lista con la base GUARDADA del articulo y los ajustes dados; vacio si no
+     * {@link #tieneLista()}. Es el unico lugar que arma esta cuenta para un articulo.
+     */
+    public Optional<BigDecimal> costoDeLista(Ajustes ajustes) {
+        if (!tieneLista()) {
+            return Optional.empty();
+        }
+        return Optional.of(CostoDeLista.costo(
+                precioListaProveedor, alicuotaIva, listaIncluyeIva, bonificacionesGuardadas(), ajustes));
+    }
+
+    /**
+     * Edicion de los ajustes (corte 3): fija los tres, deja el costo en el que sale del precio de lista con la base
+     * guardada y esos ajustes, y recalcula el precio. No toca el precio de lista, el margen, el IVA, la moneda, la
+     * importacion, el stock, si esta activo ni las bonificaciones. Devuelve vacio si ni el costo ni el precio cambian
+     * (por ejemplo, dos ajustes que solo cambian de posicion); las posiciones nuevas se guardan igual.
+     *
+     * @throws IllegalStateException si el articulo no {@link #tieneLista()}: el servicio lo valida antes
+     */
+    public Optional<CambioPrecio> editarAjustes(Ajustes nuevos, ContextoPrecio ctx) {
+        BigDecimal costoNuevo = costoDeLista(nuevos == null ? Ajustes.NINGUNO : nuevos)
+                .orElseThrow(() -> new IllegalStateException("El artículo no tiene lista de proveedor."));
+        BigDecimal costoAnterior = this.costo;
+        BigDecimal precioAnterior = this.precioFinal;
+
+        fijarAjustes(nuevos);
+        this.costo = costoNuevo;
+        calcularPrecio(ctx);
+        return CambioPrecio.entre(costoAnterior, this.costo, precioAnterior, this.precioFinal);
+    }
+
     /** Anota la importacion de lista que toco este articulo por ultima vez. */
     public void marcarImportacion(Long importacionId) {
         this.ultimaImportacionId = importacionId;
@@ -329,6 +405,10 @@ public class Articulo {
     public BigDecimal getAjuste2() { return ajuste2; }
     public BigDecimal getAjuste3() { return ajuste3; }
     public Ajustes getAjustes() { return new Ajustes(ajuste1, ajuste2, ajuste3); }
+    public BigDecimal getBonificacion1() { return bonificacion1; }
+    public BigDecimal getBonificacion2() { return bonificacion2; }
+    public BigDecimal getBonificacion3() { return bonificacion3; }
+    public Boolean getListaIncluyeIva() { return listaIncluyeIva; }
     public Long getUltimaImportacionId() { return ultimaImportacionId; }
     public boolean isActivo() { return activo; }
     public LocalDateTime getCreadoEn() { return creadoEn; }
