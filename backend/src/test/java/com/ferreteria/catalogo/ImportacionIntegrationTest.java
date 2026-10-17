@@ -2353,6 +2353,13 @@ class ImportacionIntegrationTest extends CotizacionTestBase {
                 + " lista_incluye_iva = ? where id = ?", b1 == null ? null : new BigDecimal(b1), incluyeIva, articulo);
     }
 
+    /** Como {@link #conBase}, pero tambien con la segunda y la tercera bonificacion de partida. */
+    private void conBaseCompleta(long articulo, String b1, String b2, String b3, Boolean incluyeIva) {
+        jdbc.update("update articulo set bonificacion1 = ?, bonificacion2 = ?, bonificacion3 = ?,"
+                + " lista_incluye_iva = ? where id = ?", new BigDecimal(b1), new BigDecimal(b2), new BigDecimal(b3),
+                incluyeIva, articulo);
+    }
+
     /** Vista previa y aplicar como el Dueno de A, con los contadores que devolvio la vista previa. */
     private ResultActions aplicarComoA(MockMultipartFile lista, ObjectNode datos, boolean crearNuevos) throws Exception {
         JsonNode previa = vistaPreviaDe(dueA, lista, datos);
@@ -2381,15 +2388,15 @@ class ImportacionIntegrationTest extends CotizacionTestBase {
         long proveedor = crearProveedor(dueA, unico("P"));
         String codigo = unico("NUE");
         ObjectNode datos = datosVistaPrevia(proveedor);
-        datos.put("bonificacion1", n("10")).put("bonificacion2", n("5"));
+        datos.put("bonificacion1", n("10")).put("bonificacion2", n("5")).put("bonificacion3", n("2"));
 
         aplicarComoA(xlsx(conEncabezado(fila(codigo, "Nuevo", n("1000")))), datos, true)
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.conteos.nuevos", is(1)));
 
         long articulo = idPorCodigo(proveedor, codigo);
-        assertBase(articulo, "10", "5", null, false);
-        assertThat(decimal(articulo, "costo")).isEqualByComparingTo("855.00");
+        assertBase(articulo, "10", "5", "2", false);
+        assertThat(decimal(articulo, "costo")).isEqualByComparingTo("837.90");
     }
 
     @Test
@@ -2417,7 +2424,7 @@ class ImportacionIntegrationTest extends CotizacionTestBase {
         long baja = articuloDe(dueA, proveedor, "BA" + s, "100");
         long moneda = articuloDe(dueA, proveedor, "MO" + s, "100");
         for (long articulo : List.of(sube, baja, moneda)) {
-            conBase(articulo, "10", true);
+            conBaseCompleta(articulo, "10", "8", "3", true);
         }
         MockMultipartFile lista = archivo("lista.xlsx", ListasDePrueba.xlsx(List.of(
                 filaExtra("Codigo", "Descripcion", "Costo", "Moneda"),
@@ -2475,6 +2482,37 @@ class ImportacionIntegrationTest extends CotizacionTestBase {
         jdbc.update("update proveedor set bonificacion1 = 12, lista_incluye_iva = true where id = ?", proveedor);
 
         assertBase(articulo, "10", null, null, false);
+    }
+
+    @Test
+    void elProveedorQuePasaDeIncluyeANoIncluyeIvaNoMueveElTrueDelArticulo() throws Exception {
+        sembrarAyB();
+        long proveedor = crearProveedor(dueA, unico("P"));
+        String codigo = unico("INV");
+        ObjectNode datos = datosVistaPrevia(proveedor);
+        datos.put("listaIncluyeIva", true);
+        aplicarComoA(xlsx(conEncabezado(fila(codigo, "Nuevo", n("1210")))), datos, true).andExpect(status().isCreated());
+        long articulo = idPorCodigo(proveedor, codigo);
+
+        jdbc.update("update proveedor set lista_incluye_iva = false where id = ?", proveedor);
+
+        assertBase(articulo, null, null, null, true);
+    }
+
+    @Test
+    void unArticuloEnFalseQuedaEnTrueSiLaImportacionDeclaraLaListaConIva() throws Exception {
+        sembrarAyB();
+        long proveedor = crearProveedor(dueA, unico("P"));
+        String codigo = unico("F2T");
+        long articulo = articuloDe(dueA, proveedor, codigo, "100");
+        conBase(articulo, "7", false);
+        ObjectNode datos = datosVistaPrevia(proveedor);
+        datos.put("listaIncluyeIva", true);
+
+        aplicarComoA(xlsx(conEncabezado(fila(codigo, "x", n("1210")))), datos, false).andExpect(status().isCreated());
+
+        assertBase(articulo, null, null, null, true);
+        assertThat(decimal(articulo, "costo")).isEqualByComparingTo("1000.00");
     }
 
     // --- T-215: sin cambio, filas sin tocar, rollback, aislamiento y otras operaciones ---
