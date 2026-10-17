@@ -21,6 +21,7 @@ import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.ss.usermodel.WorkbookFactory;
 import org.apache.poi.ss.util.NumberToTextConverter;
 import org.apache.poi.util.IOUtils;
+import org.apache.poi.util.RecordFormatException;
 import org.springframework.stereotype.Component;
 
 /**
@@ -34,8 +35,8 @@ public class LectorExcel implements LectorDeLista {
     private static final String ARCHIVO_DANADO = "No se pudo leer el archivo. Verificá que no esté dañado.";
 
     static {
-        // Limites globales de POI, mas bajos que los por defecto: un archivo que los pasa da IOException
-        // (que se informa como archivo danado) en lugar de agotar la memoria del servidor compartido.
+        // Limites globales de POI, mas bajos que los por defecto: un archivo que los pasa da un error (que se informa
+        // como lista demasiado grande, ver superaUnTope) en lugar de agotar la memoria del servidor compartido.
         ZipSecureFile.setMaxEntrySize(LimitesDeLista.MAXIMO_ENTRADA_ZIP_BYTES);
         IOUtils.setByteArrayMaxOverride(LimitesDeLista.MAXIMO_ARREGLO_POI_BYTES);
     }
@@ -55,8 +56,24 @@ public class LectorExcel implements LectorDeLista {
         } catch (OldExcelFormatException e) {
             throw new BadRequestException("Es un Excel muy viejo. Guardalo como .xlsx e intentá de nuevo.");
         } catch (IOException | RuntimeException e) {
-            throw new BadRequestException(ARCHIVO_DANADO);
+            throw superaUnTope(e) ? LimitesDeLista.demasiadoGrande() : new BadRequestException(ARCHIVO_DANADO);
         }
+    }
+
+    /**
+     * Un archivo valido pero enorme choca contra los topes de POI: la relacion de compresion o el tamano inflado
+     * ("Zip bomb detected", IOException a veces envuelta) o el arreglo maximo (RecordFormatException "Tried to
+     * allocate"). No es un archivo danado: decirlo manda al usuario a buscar un problema que no tiene.
+     */
+    private static boolean superaUnTope(Throwable error) {
+        for (Throwable t = error; t != null; t = t.getCause() == t ? null : t.getCause()) {
+            String mensaje = t.getMessage() == null ? "" : t.getMessage();
+            if (mensaje.contains("Zip bomb detected")
+                    || (t instanceof RecordFormatException && mensaje.startsWith("Tried to allocate"))) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /** Abre el libro; es el unico lugar donde se abre, asi un test puede contar las aperturas. */

@@ -172,6 +172,61 @@ class LectorExcelTest {
         }
     }
 
+    private static final String DEMASIADO_GRANDE =
+        "La lista es demasiado grande para leerla. Dividila en archivos más chicos.";
+
+    /** Copia el .xlsx metiendo un comentario enorme (muy comprimible) en la hoja: POI lo corta por la relacion de compresion. */
+    private static byte[] xlsxInflado(byte[] xlsx) throws IOException {
+        var salida = new java.io.ByteArrayOutputStream();
+        try (var entrada = new java.util.zip.ZipInputStream(new java.io.ByteArrayInputStream(xlsx));
+             var zip = new java.util.zip.ZipOutputStream(salida)) {
+            java.util.zip.ZipEntry entry;
+            while ((entry = entrada.getNextEntry()) != null) {
+                byte[] datos = entrada.readAllBytes();
+                if (entry.getName().equals("xl/worksheets/sheet1.xml")) {
+                    String xml = new String(datos, java.nio.charset.StandardCharsets.UTF_8);
+                    int fin = xml.indexOf("?>") + 2;
+                    datos = (xml.substring(0, fin) + "<!--" + "a".repeat(20_000_000) + "-->" + xml.substring(fin))
+                        .getBytes(java.nio.charset.StandardCharsets.UTF_8);
+                }
+                zip.putNextEntry(new java.util.zip.ZipEntry(entry.getName()));
+                zip.write(datos);
+                zip.closeEntry();
+            }
+        }
+        return salida.toByteArray();
+    }
+
+    @Test
+    void unXlsxValidoQuePasaElTopeDeCompresionDiceDemasiadoGrandeNoDanado() throws IOException {
+        byte[] inflado = xlsxInflado(ListasDePrueba.xlsx(List.of(fila("a", "b", "c"))));
+
+        assertThatThrownBy(() -> lector.leer(inflado))
+            .isInstanceOf(BadRequestException.class)
+            .hasMessage(DEMASIADO_GRANDE);
+    }
+
+    @Test
+    void losTopesDeMemoriaDePoiDicenDemasiadoGrandeNoDanado() {
+        List<Exception> topes = List.of(
+            new IOException("Zip bomb detected! The file would exceed the max size of the expanded data in the zip-file."),
+            new RuntimeException("envoltorio", new IOException("Zip bomb detected! The file would exceed the max. ratio")),
+            new org.apache.poi.util.RecordFormatException(
+                "Tried to allocate an array of length 60,000,000, but the maximum length for this record type is 50,000,000."));
+        for (Exception tope : topes) {
+            LectorExcel conTope = new LectorExcel() {
+                @Override
+                Workbook abrir(byte[] contenido) throws IOException {
+                    if (tope instanceof IOException io) throw io;
+                    throw (RuntimeException) tope;
+                }
+            };
+            assertThatThrownBy(() -> conTope.leer(new byte[] {1}))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessage(DEMASIADO_GRANDE);
+        }
+    }
+
     @Test
     void unZipQueNoEsUnXlsxComoUnDocxEsUn400() {
         assertThatThrownBy(() -> lector.leer(ListasDePrueba.docx()))

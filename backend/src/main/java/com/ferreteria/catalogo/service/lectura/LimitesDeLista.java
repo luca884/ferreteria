@@ -36,7 +36,15 @@ public final class LimitesDeLista {
 
     private static final String MENSAJE = "La lista tiene más de 20.000 filas. Dividila en archivos más chicos.";
 
+    private static final String MENSAJE_GRANDE =
+            "La lista es demasiado grande para leerla. Dividila en archivos más chicos.";
+
     private LimitesDeLista() {
+    }
+
+    /** Un archivo valido que pasa los topes de memoria de POI (MAXIMO_ENTRADA_ZIP_BYTES, MAXIMO_ARREGLO_POI_BYTES). */
+    public static BadRequestException demasiadoGrande() {
+        return new BadRequestException(MENSAJE_GRANDE);
     }
 
     public static BadRequestException demasiadasFilas() {
