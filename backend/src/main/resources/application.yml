@@ -2,7 +2,8 @@ spring:
   application:
     name: ferreteria-api
   profiles:
-    active: ${SPRING_PROFILES_ACTIVE:dev}
+    # Sin la variable arranca en prod (sin datos demo): el desarrollo local usa dev explícito (pom.xml, spring-boot:run).
+    active: ${SPRING_PROFILES_ACTIVE:prod}
   datasource:
     url: ${DB_URL:jdbc:mysql://localhost:3307/ferreteria?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC}
     username: ${DB_USER:ferreteria}
@@ -51,8 +52,8 @@ management:
 
 app:
   jwt:
-    # En produccion JWT_SECRET es obligatorio (minimo 32 bytes). Este default es solo para dev.
-    secret: ${JWT_SECRET:dev-secret-ferreteria-cambiar-en-produccion-0123456789}
+    # JWT_SECRET es obligatorio (minimo 32 bytes): sin la variable la app no arranca. El default de dev esta en application-dev.yml.
+    secret: ${JWT_SECRET}
     expiration-ms: ${JWT_EXPIRATION_MS:43200000}
   cors:
     allowed-origins: ${CORS_ORIGINS:http://localhost:4200}

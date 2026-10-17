@@ -5,3 +5,7 @@ spring:
     # Los datos demo (V1000+) quedan aplicados antes que las migraciones nuevas del esquema (V4, V5...).
     # Sin esto, Flyway rechaza en una base dev existente toda migración con número menor al último aplicado.
     out-of-order: true
+app:
+  jwt:
+    # Solo para desarrollo local: en prod JWT_SECRET es obligatorio y application.yml no trae default.
+    secret: ${JWT_SECRET:dev-secret-ferreteria-cambiar-en-produccion-0123456789}
