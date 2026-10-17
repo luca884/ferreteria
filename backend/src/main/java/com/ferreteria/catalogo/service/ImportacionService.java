@@ -58,6 +58,7 @@ import com.ferreteria.ferreteria.service.ConfiguracionPreciosService;
 import com.ferreteria.tenant.TenantContext;
 import jakarta.validation.ConstraintViolation;
 import jakarta.validation.Validator;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -216,7 +217,21 @@ public class ImportacionService {
         if (!historial.isEmpty()) {
             historialPrecioRepository.saveAll(historial);
         }
+        escribirOChocar();
         return ImportacionResponse.from(importacion, proveedor.getNombre());
+    }
+
+    /**
+     * Escribe los articulos ahora: si otra escritura confirmo un cambio en uno de los que esta importacion modifica
+     * (bloqueo optimista, R-226), la lista cambio y se responde 409 con el texto de la deriva. La excepcion revierte la
+     * transaccion entera: no queda ni el registro de la importacion, ni las altas, ni el historial, ni el mapeo.
+     */
+    private void escribirOChocar() {
+        try {
+            articuloRepository.flush();
+        } catch (OptimisticLockingFailureException e) {
+            throw new ConflictException(SeleccionDeFilas.LISTA_CAMBIO);
+        }
     }
 
     /**

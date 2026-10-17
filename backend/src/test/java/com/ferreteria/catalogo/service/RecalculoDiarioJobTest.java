@@ -34,7 +34,7 @@ class RecalculoDiarioJobTest {
     private static final LocalDateTime LAS_OCHO_EN_BUENOS_AIRES = LocalDateTime.of(2026, 10, 16, 8, 0);
 
     private final FerreteriaRepository ferreterias = mock(FerreteriaRepository.class);
-    private final RecalculoPorCotizacionService servicio = mock(RecalculoPorCotizacionService.class);
+    private final RecalculoConReintento servicio = mock(RecalculoConReintento.class);
 
     private RecalculoDiarioJob job(Instant instante) {
         return new RecalculoDiarioJob(ferreterias, servicio, Clock.fixed(instante, ZoneOffset.UTC));

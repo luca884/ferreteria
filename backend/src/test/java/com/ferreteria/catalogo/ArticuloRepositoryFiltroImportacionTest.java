@@ -5,10 +5,14 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.ferreteria.catalogo.model.Articulo;
 import com.ferreteria.catalogo.model.FiltroArticulos;
 import com.ferreteria.catalogo.repository.ArticuloRepository;
+import com.ferreteria.support.ExplainDelFiltro;
+import com.ferreteria.support.SqlCapturado;
 import com.ferreteria.tenant.TenantContext;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -214,18 +218,64 @@ class ArticuloRepositoryFiltroImportacionTest {
                 .containsExactly("A", "B", "C", "D");
     }
 
+    // ---- EXPLAIN sobre el SQL real (lote 5b, T-248, C-226) ----
+
+    private static FiltroArticulos filtroPorImportacion(Long importacionId) {
+        return new FiltroArticulos(null, null, null, false, importacionId);
+    }
+
+    private static Map<String, Object> valores(Long ferreteriaId, Long importacionId) {
+        Map<String, Object> valores = new HashMap<>();
+        valores.put("fid", ferreteriaId);
+        valores.put("proveedorId", null);
+        valores.put("rubroId", null);
+        valores.put("importacionId", importacionId);
+        valores.put("q", null);
+        valores.put("incluirInactivos", false);
+        return valores;
+    }
+
     @Test
-    void laConsultaUsaElIndiceDeFerreteriaEImportacion() {
+    @DisplayName("SqlCapturado devuelve el SQL real del filtro, con ultima_importacion_id y los ? is null")
+    void capturaElSqlRealDelFiltro() {
+        Escenario e = escenario("30-78406021-1", "30-78406022-2");
+        TenantContext.setCurrentFerreteriaId(e.ferreteriaId());
+
+        List<String> sql = SqlCapturado.durante(
+                () -> articuloRepository.filtrarScoped(filtroPorImportacion(e.i1())));
+
+        assertThat(sql).hasSize(1);
+        assertThat(sql.get(0)).startsWith("select").contains("from articulo")
+                .contains("ultima_importacion_id").contains("? is null");
+    }
+
+    @Test
+    @DisplayName("afuera de durante no captura nada")
+    void afueraDeDuranteNoCapturaNada() {
+        Escenario e = escenario("30-78406023-3", "30-78406024-4");
+        TenantContext.setCurrentFerreteriaId(e.ferreteriaId());
+        articuloRepository.filtrarScoped(filtroPorImportacion(e.i1()));
+
+        List<String> adentro = SqlCapturado.durante(() -> { });
+        articuloRepository.filtrarScoped(filtroPorImportacion(e.i1()));
+
+        assertThat(adentro).isEmpty();
+        assertThat(SqlCapturado.durante(() -> { })).isEmpty();
+    }
+
+    @Test
+    void laConsultaRealUsaUnIndicePorImportacion() {
         Escenario e = escenario("30-78406019-9", "30-78406020-0");
         // Volumen suficiente para que el optimizador no prefiera un recorrido completo.
         for (int i = 0; i < 300; i++) {
             articulo(e.ferreteriaId(), "R" + i, "Relleno " + i, e.proveedorP(), null, e.i2(), true);
         }
         jdbc.execute("analyze table articulo");
+        TenantContext.setCurrentFerreteriaId(e.ferreteriaId());
+        List<String> sql = SqlCapturado.durante(
+                () -> articuloRepository.filtrarScoped(filtroPorImportacion(e.i1())));
 
-        List<Map<String, Object>> plan = jdbc.queryForList(
-                "explain select a.id from articulo a where a.ferreteria_id = ? and (a.activo = true) "
-                        + "and a.ultima_importacion_id = ?", e.ferreteriaId(), e.i1());
+        List<Map<String, Object>> plan = ExplainDelFiltro.explain(jdbc, sql, valores(e.ferreteriaId(), e.i1()));
 
         assertThat(plan).hasSize(1);
         // El optimizador puede elegir este indice o el de la clave foranea (solo ultima_importacion_id): los dos

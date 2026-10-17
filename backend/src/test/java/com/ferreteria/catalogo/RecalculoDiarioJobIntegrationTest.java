@@ -6,7 +6,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import com.ferreteria.catalogo.service.RecalculoDiarioJob;
-import com.ferreteria.catalogo.service.RecalculoPorCotizacionService;
+import com.ferreteria.catalogo.service.RecalculoConReintento;
 import com.ferreteria.cotizacion.CotizacionTestBase;
 import com.ferreteria.cotizacion.model.LadoCotizacion;
 import com.ferreteria.ferreteria.repository.FerreteriaRepository;
@@ -37,7 +37,7 @@ class RecalculoDiarioJobIntegrationTest extends CotizacionTestBase {
     private static final Instant LAS_NUEVE_Y_MEDIA = Instant.parse("2026-10-16T12:30:00Z");
 
     @Autowired
-    RecalculoPorCotizacionService servicio;
+    RecalculoConReintento servicio;
 
     @Autowired
     RecalculoDiarioJob jobDelContexto;
@@ -70,7 +70,7 @@ class RecalculoDiarioJobIntegrationTest extends CotizacionTestBase {
         borrarDatosDe(a, b);
     }
 
-    private RecalculoDiarioJob job(RecalculoPorCotizacionService recalculo, Instant instante) {
+    private RecalculoDiarioJob job(RecalculoConReintento recalculo, Instant instante) {
         FerreteriaRepository ferreterias = mock(FerreteriaRepository.class);
         when(ferreterias.idsActivas()).thenReturn(List.of(a, b));
         return new RecalculoDiarioJob(ferreterias, recalculo, Clock.fixed(instante, ZoneOffset.UTC));
@@ -134,7 +134,7 @@ class RecalculoDiarioJobIntegrationTest extends CotizacionTestBase {
     @Test
     @DisplayName("si falla A, B se recalcula igual, el reclamo del dia de A se revierte y el TenantContext queda limpio")
     void unaFallaNoFrenaALaOtra() {
-        RecalculoPorCotizacionService quePierdeEnA = mock(RecalculoPorCotizacionService.class);
+        RecalculoConReintento quePierdeEnA = mock(RecalculoConReintento.class);
         when(quePierdeEnA.recalcularDelDia(any())).thenAnswer(invocacion -> {
             if (TenantContext.requireFerreteriaId().equals(a)) {
                 throw new IllegalStateException("fallo forzado en A");

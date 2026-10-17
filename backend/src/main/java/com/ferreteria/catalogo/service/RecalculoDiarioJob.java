@@ -24,13 +24,13 @@ public class RecalculoDiarioJob {
     private static final Logger log = LoggerFactory.getLogger(RecalculoDiarioJob.class);
 
     private final FerreteriaRepository ferreterias;
-    private final RecalculoPorCotizacionService recalculoPorCotizacionService;
+    private final RecalculoConReintento recalculoConReintento;
     private final Clock reloj;
 
     public RecalculoDiarioJob(
-            FerreteriaRepository ferreterias, RecalculoPorCotizacionService recalculoPorCotizacionService, Clock reloj) {
+            FerreteriaRepository ferreterias, RecalculoConReintento recalculoConReintento, Clock reloj) {
         this.ferreterias = ferreterias;
-        this.recalculoPorCotizacionService = recalculoPorCotizacionService;
+        this.recalculoConReintento = recalculoConReintento;
         this.reloj = reloj;
     }
 
@@ -51,7 +51,7 @@ public class RecalculoDiarioJob {
     private void recalcular(Long ferreteriaId, LocalDateTime ahora) {
         TenantContext.setCurrentFerreteriaId(ferreteriaId);
         try {
-            recalculoPorCotizacionService.recalcularDelDia(ahora).ifPresent(resultado -> log.info(
+            recalculoConReintento.recalcularDelDia(ahora).ifPresent(resultado -> log.info(
                     "Recalculo diario de la ferreteria {}: {} articulos con el dolar en {}",
                     ferreteriaId, resultado.articulosRecalculados(), resultado.cotizacion()));
         } catch (RuntimeException e) {

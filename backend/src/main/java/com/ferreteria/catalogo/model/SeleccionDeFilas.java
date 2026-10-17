@@ -26,7 +26,7 @@ import java.util.function.Predicate;
  */
 public final class SeleccionDeFilas {
 
-    private static final String LISTA_CAMBIO =
+    public static final String LISTA_CAMBIO =
         "La lista cambió desde la vista previa. Volvé a generar la vista previa y confirmá de nuevo.";
 
     private SeleccionDeFilas() {

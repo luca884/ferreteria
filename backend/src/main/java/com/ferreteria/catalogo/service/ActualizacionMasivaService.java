@@ -36,6 +36,7 @@ import com.ferreteria.ferreteria.model.ConfiguracionPrecios;
 import com.ferreteria.ferreteria.service.ConfiguracionPreciosService;
 import jakarta.validation.ConstraintViolation;
 import jakarta.validation.Validator;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -60,6 +61,10 @@ public class ActualizacionMasivaService {
 
     /** Tope de articulos por operacion. Mismo valor que el de filas de una lista (CU-04), pero propio. */
     public static final int MAXIMO_ARTICULOS = 20_000;
+
+    /** La deriva: el alcance cambio entre la vista previa y el aplicar (huella distinta o un choque de version). */
+    public static final String DERIVA = "Los artículos cambiaron desde la vista previa. "
+            + "Volvé a generar la vista previa y confirmá de nuevo.";
 
     static final int MAXIMO_DETALLE = 1_000;
 
@@ -114,8 +119,7 @@ public class ActualizacionMasivaService {
 
         // Deriva: se compara ANTES de la primera escritura.
         if (!plan.huella().equals(request.huella())) {
-            throw new ConflictException("Los artículos cambiaron desde la vista previa. "
-                    + "Volvé a generar la vista previa y confirmá de nuevo.");
+            throw new ConflictException(DERIVA);
         }
 
         Map<Long, Articulo> articulosPorId = new HashMap<>();
@@ -142,7 +146,21 @@ public class ActualizacionMasivaService {
         if (!historial.isEmpty()) {
             historialPrecioRepository.saveAll(historial);
         }
+        escribirOChocar();
         return new ActualizacionMasivaResponse(plan.conteos(), historial.size());
+    }
+
+    /**
+     * Escribe los articulos ahora: si otra escritura confirmo un cambio en uno de los que este masivo modifica (bloqueo
+     * optimista, R-227), los articulos cambiaron y se responde 409 con el texto de la deriva. La excepcion revierte la
+     * transaccion entera: ni articulos ni historial.
+     */
+    private void escribirOChocar() {
+        try {
+            articuloRepository.flush();
+        } catch (OptimisticLockingFailureException e) {
+            throw new ConflictException(DERIVA);
+        }
     }
 
     // ---- preparar ----
