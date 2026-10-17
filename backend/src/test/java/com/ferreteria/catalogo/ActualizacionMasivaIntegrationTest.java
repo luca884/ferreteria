@@ -256,7 +256,7 @@ class ActualizacionMasivaIntegrationTest extends IntegrationTestBase {
     void unModoDesconocidoOAusenteDa400ConElMensajeDelModoEnLosDosEndpoints() throws Exception {
         Tenant a = crearTenant();
         insertarArticulo(a, "100.00", "160.00");
-        String mensaje = "Elegí qué querés hacer: cambiar el costo en porcentaje o fijar el margen.";
+        String mensaje = "Elegí qué querés hacer: cambiar el costo en porcentaje, sumarle un monto al costo o fijar el margen.";
 
         for (String url : ENDPOINTS) {
             // "OTRO": modo es String, asi que no es el error de Jackson para enumeraciones.

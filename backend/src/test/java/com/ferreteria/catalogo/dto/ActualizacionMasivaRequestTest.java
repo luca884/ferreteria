@@ -29,9 +29,10 @@ import org.junit.jupiter.params.provider.ValueSource;
 class ActualizacionMasivaRequestTest {
 
     private static final String MENSAJE_MODO =
-            "Elegí qué querés hacer: cambiar el costo en porcentaje o fijar el margen.";
+            "Elegí qué querés hacer: cambiar el costo en porcentaje, sumarle un monto al costo o fijar el margen.";
     private static final String MENSAJE_VALOR_AUSENTE = "Ingresá un valor.";
     private static final String MENSAJE_CERO = "El porcentaje no puede ser cero.";
+    private static final String MENSAJE_MONTO_CERO = "El monto no puede ser cero.";
     private static final String MENSAJE_RANGO_PORCENTAJE = "El porcentaje tiene que estar entre -99,99 y 1.000.";
     private static final String MENSAJE_RANGO_MARGEN = "El margen tiene que estar entre 0 y 1.000.";
     private static final String MENSAJE_DECIMALES = "El valor puede tener como máximo 2 decimales.";
@@ -175,6 +176,110 @@ class ActualizacionMasivaRequestTest {
             assertThat(errores(vistaPrevia("MARGEN", "30.000")))
                     .containsOnly(Map.entry("valor", MENSAJE_DECIMALES));
             assertThat(errores(vistaPrevia("MARGEN", "30.00"))).isEmpty();
+        }
+    }
+
+    @Nested
+    @DisplayName("modo COSTO_MONTO")
+    class CostoMonto {
+
+        @ParameterizedTest(name = "{0} es valido")
+        @ValueSource(strings = {"100", "100.50", "-0.01", "0.01", "-50", "1000000", "99999999999999.99", "-12.5"})
+        void valoresValidos(String valor) {
+            assertThat(errores(vistaPrevia("COSTO_MONTO", valor))).isEmpty();
+            assertThat(errores(aplicar("COSTO_MONTO", valor, "abc"))).isEmpty();
+        }
+
+        @ParameterizedTest(name = "{0} es cero")
+        @ValueSource(strings = {"0", "0.00", "0.0"})
+        void ceroNoEsValido(String valor) {
+            assertThat(errores(vistaPrevia("COSTO_MONTO", valor)))
+                    .containsOnly(Map.entry("montoDistintoDeCero", MENSAJE_MONTO_CERO));
+            assertThat(errores(aplicar("COSTO_MONTO", valor, "abc")))
+                    .containsOnly(Map.entry("montoDistintoDeCero", MENSAJE_MONTO_CERO));
+        }
+
+        @Test
+        @DisplayName("el cero de un monto no dispara el mensaje del porcentaje, ni el del porcentaje el del monto")
+        void cadaModoConSuMensaje() {
+            assertThat(errores(vistaPrevia("COSTO_MONTO", "0"))).doesNotContainKey("porcentajeDistintoDeCero");
+            assertThat(errores(vistaPrevia("COSTO_PORCENTAJE", "0"))).doesNotContainKey("montoDistintoDeCero");
+            assertThat(errores(vistaPrevia("MARGEN", "0"))).isEmpty();
+        }
+
+        @Test
+        @DisplayName("sin rango propio: -5000 y 5000 pasan, el rango del porcentaje y del margen no aplica")
+        void sinRangoPropio() {
+            assertThat(errores(vistaPrevia("COSTO_MONTO", "-5000"))).isEmpty();
+            assertThat(errores(vistaPrevia("COSTO_MONTO", "5000"))).isEmpty();
+            assertThat(errores(vistaPrevia("COSTO_MONTO", "-100.50"))).isEmpty();
+        }
+
+        @ParameterizedTest(name = "{0} tiene mas de 2 decimales")
+        @ValueSource(strings = {"10.555", "-0.001", "100.500"})
+        void masDeDosDecimales(String valor) {
+            assertThat(errores(vistaPrevia("COSTO_MONTO", valor)))
+                    .containsOnly(Map.entry("valor", MENSAJE_DECIMALES));
+            assertThat(errores(aplicar("COSTO_MONTO", valor, "abc")))
+                    .containsOnly(Map.entry("valor", MENSAJE_DECIMALES));
+        }
+
+        @Test
+        @DisplayName("sin valor: Ingresá un valor.")
+        void sinValor() {
+            assertThat(errores(vistaPrevia("COSTO_MONTO", null)))
+                    .containsOnly(Map.entry("valor", MENSAJE_VALOR_AUSENTE));
+            assertThat(errores(aplicar("COSTO_MONTO", null, "abc")))
+                    .containsOnly(Map.entry("valor", MENSAJE_VALOR_AUSENTE));
+        }
+
+        @Test
+        @DisplayName("16 enteros: error de formato del valor (hasta 15 digitos enteros)")
+        void dieciseisEnteros() {
+            assertThat(errores(vistaPrevia("COSTO_MONTO", "1234567890123456")))
+                    .containsOnly(Map.entry("valor", MENSAJE_DECIMALES));
+            assertThat(errores(vistaPrevia("COSTO_MONTO", "123456789012345"))).isEmpty();
+        }
+
+        @Test
+        @DisplayName("toOperacion deja el monto a 2 decimales")
+        void aOperacion() {
+            assertThat(vistaPrevia("COSTO_MONTO", "100").toOperacion())
+                    .isEqualTo(new OperacionMasiva(ModoMasivo.COSTO_MONTO, bd("100.00")));
+            assertThat(aplicar("COSTO_MONTO", "-0.01", "abc").toOperacion().valor()).isEqualTo(bd("-0.01"));
+        }
+    }
+
+    @Nested
+    @DisplayName("filtro por importacion")
+    class PorImportacion {
+
+        @Test
+        @DisplayName("la vista previa y aplicar pasan el importacionId al filtro")
+        void pasaAlFiltro() {
+            ActualizacionMasivaRequest vista = new ActualizacionMasivaRequest(
+                    7L, 3L, 12L, " cable ", true, "COSTO_MONTO", bd("100"));
+            AplicarActualizacionMasivaRequest aplicar = new AplicarActualizacionMasivaRequest(
+                    7L, 3L, 12L, "cable", true, "COSTO_MONTO", bd("100"), "abc");
+
+            assertThat(vista.toFiltro()).isEqualTo(new FiltroArticulos(7L, 3L, "cable", true, 12L));
+            assertThat(aplicar.toFiltro()).isEqualTo(new FiltroArticulos(7L, 3L, "cable", true, 12L));
+            assertThat(vista.importacionId()).isEqualTo(12L);
+        }
+
+        @Test
+        @DisplayName("los constructores viejos no filtran por importacion")
+        void constructoresViejos() {
+            assertThat(vistaPrevia("MARGEN", "30").importacionId()).isNull();
+            assertThat(aplicar("MARGEN", "30", "abc").importacionId()).isNull();
+            assertThat(vistaPrevia("MARGEN", "30").toFiltro().importacionId()).isNull();
+        }
+
+        @Test
+        @DisplayName("un filtro con solo importacion no es vacio")
+        void soloImportacionNoEsVacio() {
+            assertThat(new ActualizacionMasivaRequest(null, null, 5L, null, false, "MARGEN", bd("30"))
+                    .toFiltro().vacio()).isFalse();
         }
     }
 

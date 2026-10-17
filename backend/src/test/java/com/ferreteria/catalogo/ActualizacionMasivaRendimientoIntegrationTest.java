@@ -93,4 +93,90 @@ class ActualizacionMasivaRendimientoIntegrationTest extends IntegrationTestBase 
                 + "and usuario_id = ?", ferreteriaId, usuarioId)).isEqualTo(ARTICULOS);
         assertThat(total).as("vista previa + aplicar de 5.000 articulos").isLessThan(LIMITE);
     }
+
+    /**
+     * Corte 3 (R-222): lo mismo con COSTO_MONTO +10 sobre 5.000 articulos que una misma importacion toco por ultima
+     * vez, filtrando por {@code importacionId}. Ferreteria propia, CUIT 30-78408001-1.
+     */
+    @Test
+    void cincoMilArticulosDeUnaImportacionConCostoMontoSeVenYSeAplicanEnMenosDeDosMinutos() throws Exception {
+        String cuit = "30-78408001-1";
+        String email = "dueno@rendimiento-monto.demo";
+        jdbc.update("insert into ferreteria (razon_social, cuit, condicion_iva) "
+                + "values (?, ?, 'RESPONSABLE_INSCRIPTO')", "Rendimiento monto " + cuit, cuit);
+        long ferreteriaId = jdbc.queryForObject("select id from ferreteria where cuit = ?", Long.class, cuit);
+        String hash = jdbc.queryForObject(
+                "select password_hash from usuario where email = 'dueno@tornillo.demo'", String.class);
+        jdbc.update("insert into usuario (ferreteria_id, email, password_hash, nombre, rol) "
+                + "values (?, ?, ?, 'Dueno Rendimiento monto', 'DUENO')", ferreteriaId, email, hash);
+        long usuarioId = jdbc.queryForObject("select id from usuario where email = ?", Long.class, email);
+        jdbc.update("insert into proveedor (ferreteria_id, nombre) values (?, 'Proveedor del monto')", ferreteriaId);
+        long proveedorId = jdbc.queryForObject(
+                "select id from proveedor where ferreteria_id = ?", Long.class, ferreteriaId);
+        jdbc.update("insert into importacion_lista (ferreteria_id, proveedor_id, usuario_id, archivo, suben, bajan, "
+                + "nuevos, sin_cambio, no_estan, con_error, estado) values (?, ?, ?, 'grande.xlsx', 0, 0, 0, 0, 0, 0, "
+                + "'APLICADA')", ferreteriaId, proveedorId, usuarioId);
+        long importacionId = jdbc.queryForObject(
+                "select id from importacion_lista where ferreteria_id = ?", Long.class, ferreteriaId);
+
+        // 5.000 articulos de la importacion y otros 5.000 de ninguna (alta manual) que el filtro tiene que dejar afuera.
+        List<Object[]> filas = new ArrayList<>(2 * ARTICULOS);
+        for (int i = 1; i <= ARTICULOS; i++) {
+            String codigo = String.format("I-%05d", i);
+            filas.add(new Object[] {ferreteriaId, codigo, "Articulo " + codigo, proveedorId, importacionId});
+        }
+        for (int i = 1; i <= ARTICULOS; i++) {
+            String codigo = String.format("N-%05d", i);
+            filas.add(new Object[] {ferreteriaId, codigo, "Articulo " + codigo, proveedorId, null});
+        }
+        jdbc.batchUpdate("insert into articulo (ferreteria_id, codigo_interno, descripcion, proveedor_id, costo, "
+                + "alicuota_iva, precio_final, unidad, ultima_importacion_id) "
+                + "values (?, ?, ?, ?, 100.00, 'IVA_21', 160.00, 'UNIDAD', ?)", filas);
+        assertThat(contar("select count(*) from articulo where ferreteria_id = ? and ultima_importacion_id = ?",
+                ferreteriaId, importacionId)).isEqualTo(ARTICULOS);
+        jdbc.execute("analyze table articulo");
+
+        // El filtro usa un indice por importacion (el de ferreteria + importacion o el de la clave foranea), no recorre la tabla.
+        List<java.util.Map<String, Object>> plan = jdbc.queryForList(
+                "explain select a.id from articulo a where a.ferreteria_id = ? and a.activo = true "
+                        + "and a.ultima_importacion_id = ? order by a.id", ferreteriaId, importacionId);
+        assertThat(plan).isNotEmpty();
+        assertThat(plan.get(0).get("key")).as("indice del filtro por importacion").isNotNull();
+        assertThat(plan.get(0).get("type")).isNotEqualTo("ALL");
+
+        String token = login(email);
+        ObjectNode pedido = objectMapper.createObjectNode()
+                .put("modo", "COSTO_MONTO").put("valor", new BigDecimal("10")).put("importacionId", importacionId);
+
+        long inicio = System.nanoTime();
+        String cuerpoVistaPrevia = postJson("/api/actualizacion-masiva/vista-previa", token, pedido.toString())
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString(StandardCharsets.UTF_8);
+        long trasVistaPrevia = System.nanoTime();
+        JsonNode vistaPrevia = objectMapper.readTree(cuerpoVistaPrevia);
+        ObjectNode aplicar = pedido.deepCopy().put("huella", vistaPrevia.get("huella").asText());
+        String cuerpoAplicada = postJson("/api/actualizacion-masiva", token, aplicar.toString())
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString(StandardCharsets.UTF_8);
+        long fin = System.nanoTime();
+
+        Duration total = Duration.ofNanos(fin - inicio);
+        LOG.info("RENDIMIENTO CORTE 3 (5.000 articulos de una importacion, COSTO_MONTO +10, los 5.000 cambian): "
+                        + "vista previa {} ms, aplicar {} ms, total {} ms (limite {} ms)",
+                Duration.ofNanos(trasVistaPrevia - inicio).toMillis(), Duration.ofNanos(fin - trasVistaPrevia).toMillis(),
+                total.toMillis(), LIMITE.toMillis());
+
+        JsonNode aplicada = objectMapper.readTree(cuerpoAplicada);
+        assertThat(vistaPrevia.get("conteos").get("total").asInt()).isEqualTo(ARTICULOS);
+        assertThat(vistaPrevia.get("conteos").get("modificados").asInt()).isEqualTo(ARTICULOS);
+        assertThat(vistaPrevia.get("enPesos").asInt()).isEqualTo(ARTICULOS);
+        assertThat(aplicada.get("entradasDeHistorial").asInt()).isEqualTo(ARTICULOS);
+        assertThat(contar("select count(*) from articulo where ferreteria_id = ? and costo = 110.00 "
+                + "and ultima_importacion_id = ?", ferreteriaId, importacionId)).isEqualTo(ARTICULOS);
+        assertThat(contar("select count(*) from articulo where ferreteria_id = ? and costo = 100.00 "
+                + "and ultima_importacion_id is null", ferreteriaId)).isEqualTo(ARTICULOS);
+        assertThat(contar("select count(*) from historial_precio where ferreteria_id = ? and origen = 'MASIVO' "
+                + "and usuario_id = ?", ferreteriaId, usuarioId)).isEqualTo(ARTICULOS);
+        assertThat(total).as("vista previa + aplicar de 5.000 articulos").isLessThan(LIMITE);
+    }
 }

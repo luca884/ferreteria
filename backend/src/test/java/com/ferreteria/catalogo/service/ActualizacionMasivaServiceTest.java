@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
@@ -24,6 +25,7 @@ import com.ferreteria.catalogo.model.ContextoPrecio;
 import com.ferreteria.catalogo.model.DatosArticulo;
 import com.ferreteria.catalogo.model.FiltroArticulos;
 import com.ferreteria.catalogo.model.HistorialPrecio;
+import com.ferreteria.catalogo.model.ImportacionLista;
 import com.ferreteria.catalogo.model.Moneda;
 import com.ferreteria.catalogo.model.OrigenPrecio;
 import com.ferreteria.catalogo.model.Proveedor;
@@ -31,6 +33,7 @@ import com.ferreteria.catalogo.model.Rubro;
 import com.ferreteria.catalogo.model.Unidad;
 import com.ferreteria.catalogo.repository.ArticuloRepository;
 import com.ferreteria.catalogo.repository.HistorialPrecioRepository;
+import com.ferreteria.catalogo.repository.ImportacionListaRepository;
 import com.ferreteria.catalogo.repository.ProveedorRepository;
 import com.ferreteria.catalogo.repository.RubroRepository;
 import com.ferreteria.common.exception.BadRequestException;
@@ -42,6 +45,7 @@ import com.ferreteria.ferreteria.model.ConfiguracionPrecios;
 import com.ferreteria.ferreteria.service.ConfiguracionPreciosService;
 import com.ferreteria.tenant.TenantContext;
 import jakarta.validation.Validation;
+import jakarta.validation.Validator;
 import jakarta.validation.ValidatorFactory;
 import java.lang.reflect.Field;
 import java.math.BigDecimal;
@@ -49,6 +53,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
@@ -82,6 +87,9 @@ class ActualizacionMasivaServiceTest {
     HistorialPrecioRepository historialPrecioRepository;
 
     @Mock
+    ImportacionListaRepository importacionListaRepository;
+
+    @Mock
     ConfiguracionPreciosService configuracionPreciosService;
 
     @Mock
@@ -106,7 +114,8 @@ class ActualizacionMasivaServiceTest {
         TenantContext.setCurrentFerreteriaId(FERRETERIA);
         service = new ActualizacionMasivaService(
                 articuloRepository, proveedorRepository, rubroRepository, historialPrecioRepository,
-                configuracionPreciosService, fabricaDeValidadores.getValidator(), dolarDePrecios);
+                configuracionPreciosService, fabricaDeValidadores.getValidator(), dolarDePrecios,
+                importacionListaRepository);
     }
 
     @AfterEach
@@ -245,7 +254,7 @@ class ActualizacionMasivaServiceTest {
 
             assertThatThrownBy(() -> service.vistaPrevia(pedido(null, RUBRO, null, false, "OTRO", null)))
                     .isInstanceOfSatisfying(DatosInvalidosException.class, e -> assertThat(e.errors()).containsOnly(
-                            Map.entry("modo", "Elegí qué querés hacer: cambiar el costo en porcentaje o fijar el margen."),
+                            Map.entry("modo", "Elegí qué querés hacer: cambiar el costo en porcentaje, sumarle un monto al costo o fijar el margen."),
                             Map.entry("valor", "Ingresá un valor.")));
 
             verifyNoInteractions(articuloRepository, configuracionPreciosService);
@@ -969,6 +978,378 @@ class ActualizacionMasivaServiceTest {
                     .isInstanceOf(ConflictException.class)
                     .hasMessage("Todavía no hay cotización del dólar. Probá en unos minutos");
             verificarSinEscrituras();
+        }
+    }
+
+    // ---- corte 3: filtro por importacion y modo COSTO_MONTO ----
+
+    private static final Long IMPORTACION_1 = 21L;
+    private static final Long IMPORTACION_2 = 22L;
+
+    private static ActualizacionMasivaRequest pedidoDeImportacion(Long importacionId, String modo, String valor) {
+        return new ActualizacionMasivaRequest(null, null, importacionId, null, false, modo, bd(valor));
+    }
+
+    private static AplicarActualizacionMasivaRequest aplicarDeImportacion(
+            Long importacionId, String modo, String valor, String huella) {
+        return new AplicarActualizacionMasivaRequest(
+                null, null, importacionId, null, false, modo, bd(valor), huella);
+    }
+
+    private static FiltroArticulos deImportacion(Long importacionId) {
+        return new FiltroArticulos(null, null, null, false, importacionId);
+    }
+
+    private void laImportacionExiste(Long id) {
+        when(importacionListaRepository.findScoped(id)).thenReturn(Optional.of(mock(ImportacionLista.class)));
+    }
+
+    private Articulo articuloEnDolares(long id, String costo, String dolarConElQueSeCalculo) throws Exception {
+        Articulo articulo = new Articulo(FERRETERIA);
+        articulo.actualizar(new DatosArticulo(
+                        "INT-" + id, null, "PROV-" + id, "Articulo USD " + id, null, PROVEEDOR, bd(costo), null,
+                        AlicuotaIva.IVA_21, Unidad.UNIDAD, BigDecimal.ZERO, null, true, Moneda.USD),
+                new ContextoPrecio(null, bd("30.00"), bd("10.00"), bd(dolarConElQueSeCalculo)));
+        fijar(articulo, "id", id);
+        return articulo;
+    }
+
+    @Nested
+    @DisplayName("filtro por importacion: 404, orden de validacion y huella")
+    class PorImportacion {
+
+        @Test
+        @DisplayName("importacion inexistente o ajena: 404 en la vista previa, sin leer articulos")
+        void vistaPreviaConImportacionAjena() {
+            when(importacionListaRepository.findScoped(IMPORTACION_1)).thenReturn(Optional.empty());
+
+            assertThatThrownBy(() -> service.vistaPrevia(pedidoDeImportacion(IMPORTACION_1, "COSTO_MONTO", "100")))
+                    .isInstanceOf(ResourceNotFoundException.class)
+                    .hasMessage("Importación no encontrada");
+
+            verifyNoInteractions(articuloRepository, configuracionPreciosService, historialPrecioRepository);
+        }
+
+        @Test
+        @DisplayName("importacion inexistente o ajena: 404 al aplicar, sin escribir")
+        void aplicarConImportacionAjena() {
+            when(importacionListaRepository.findScoped(IMPORTACION_1)).thenReturn(Optional.empty());
+
+            assertThatThrownBy(() -> service.aplicar(aplicarDeImportacion(IMPORTACION_1, "COSTO_MONTO", "100", "h"), USUARIO))
+                    .isInstanceOf(ResourceNotFoundException.class)
+                    .hasMessage("Importación no encontrada");
+
+            verifyNoInteractions(articuloRepository, configuracionPreciosService);
+            verificarSinEscrituras();
+        }
+
+        @Test
+        @DisplayName("importacion ajena con valor 0: gana el 404 al 400 del cero")
+        void elNotFoundGanaAlCero() {
+            when(importacionListaRepository.findScoped(IMPORTACION_1)).thenReturn(Optional.empty());
+
+            assertThatThrownBy(() -> service.vistaPrevia(pedidoDeImportacion(IMPORTACION_1, "COSTO_MONTO", "0")))
+                    .isInstanceOf(ResourceNotFoundException.class);
+            assertThatThrownBy(() -> service.aplicar(aplicarDeImportacion(IMPORTACION_1, "COSTO_MONTO", "0", "h"), USUARIO))
+                    .isInstanceOf(ResourceNotFoundException.class);
+        }
+
+        @Test
+        @DisplayName("el orden es proveedor, rubro, importacion: con rubro propio e importacion ajena, 404 de la importacion")
+        void importacionDespuesDelRubro() throws Exception {
+            when(proveedorRepository.findScoped(PROVEEDOR)).thenReturn(Optional.of(proveedor()));
+            when(rubroRepository.findScoped(RUBRO)).thenReturn(Optional.of(rubro()));
+            when(importacionListaRepository.findScoped(IMPORTACION_1)).thenReturn(Optional.empty());
+
+            assertThatThrownBy(() -> service.vistaPrevia(new ActualizacionMasivaRequest(
+                    PROVEEDOR, RUBRO, IMPORTACION_1, null, false, "COSTO_MONTO", bd("100"))))
+                    .isInstanceOf(ResourceNotFoundException.class)
+                    .hasMessage("Importación no encontrada");
+
+            when(rubroRepository.findScoped(RUBRO)).thenReturn(Optional.empty());
+            assertThatThrownBy(() -> service.vistaPrevia(new ActualizacionMasivaRequest(
+                    PROVEEDOR, RUBRO, IMPORTACION_1, null, false, "COSTO_MONTO", bd("100"))))
+                    .hasMessage("Rubro no encontrado");
+        }
+
+        @Test
+        @DisplayName("importacion propia con valor 0: 400 del cero, sin leer articulos")
+        void ceroConImportacionPropia() {
+            laImportacionExiste(IMPORTACION_1);
+
+            assertThatThrownBy(() -> service.vistaPrevia(pedidoDeImportacion(IMPORTACION_1, "COSTO_MONTO", "0")))
+                    .isInstanceOfSatisfying(DatosInvalidosException.class, e -> assertThat(e.errors())
+                            .containsEntry("montoDistintoDeCero", "El monto no puede ser cero."));
+
+            verifyNoInteractions(articuloRepository);
+        }
+
+        @Test
+        @DisplayName("sin importacionId no se consulta el repositorio de importaciones")
+        void sinImportacionNoConsulta() throws Exception {
+            alcance(new FiltroArticulos(null, null, null, false), List.of(articulo(1, "100.00")));
+
+            service.vistaPrevia(pedidoMasDiez());
+
+            verifyNoInteractions(importacionListaRepository);
+        }
+
+        @Test
+        @DisplayName("la vista previa usa el filtro con la importacion")
+        void usaElFiltroConLaImportacion() throws Exception {
+            laImportacionExiste(IMPORTACION_1);
+            alcance(deImportacion(IMPORTACION_1), List.of(articulo(1, "100.00")));
+
+            VistaPreviaMasivaResponse respuesta = service.vistaPrevia(pedidoDeImportacion(IMPORTACION_1, "COSTO_PORCENTAJE", "10"));
+
+            assertThat(respuesta.conteos().total()).isEqualTo(1);
+            verify(articuloRepository).contarScoped(deImportacion(IMPORTACION_1));
+            verify(articuloRepository).filtrarScoped(deImportacion(IMPORTACION_1));
+        }
+
+        @Test
+        @DisplayName("huella pedida con la importacion 1 y aplicada con la 2: 409 y no se escribe")
+        void huellaDeOtraImportacion() throws Exception {
+            laImportacionExiste(IMPORTACION_1);
+            laImportacionExiste(IMPORTACION_2);
+            Articulo articulo = articulo(1, "100.00");
+            alcance(deImportacion(IMPORTACION_1), List.of(articulo));
+            alcance(deImportacion(IMPORTACION_2), List.of(articulo));
+            String huella = huellaDe(pedidoDeImportacion(IMPORTACION_1, "COSTO_PORCENTAJE", "10"));
+
+            assertThatThrownBy(() -> service.aplicar(
+                    aplicarDeImportacion(IMPORTACION_2, "COSTO_PORCENTAJE", "10", huella), USUARIO))
+                    .isInstanceOf(ConflictException.class)
+                    .hasMessage("Los artículos cambiaron desde la vista previa. "
+                            + "Volvé a generar la vista previa y confirmá de nuevo.");
+
+            verificarSinEscrituras();
+        }
+
+        @Test
+        @DisplayName("otra importacion toca un articulo del alcance entre la vista previa y aplicar: 409")
+        void unArticuloSaleDelAlcance() throws Exception {
+            laImportacionExiste(IMPORTACION_1);
+            Articulo uno = articulo(1, "100.00");
+            Articulo dos = articulo(2, "100.00");
+            alcance(deImportacion(IMPORTACION_1), List.of(uno, dos));
+            String huella = huellaDe(pedidoDeImportacion(IMPORTACION_1, "COSTO_PORCENTAJE", "10"));
+            alcance(deImportacion(IMPORTACION_1), List.of(uno));
+
+            assertThatThrownBy(() -> service.aplicar(
+                    aplicarDeImportacion(IMPORTACION_1, "COSTO_PORCENTAJE", "10", huella), USUARIO))
+                    .isInstanceOf(ConflictException.class);
+
+            verificarSinEscrituras();
+        }
+
+        @Test
+        @DisplayName("alcance vacio de la importacion: aplicar da 400 y no se carga nada")
+        void alcanceVacio() {
+            laImportacionExiste(IMPORTACION_1);
+            when(articuloRepository.contarScoped(deImportacion(IMPORTACION_1))).thenReturn(0L);
+
+            assertThatThrownBy(() -> service.aplicar(
+                    aplicarDeImportacion(IMPORTACION_1, "COSTO_MONTO", "100", "h"), USUARIO))
+                    .isInstanceOf(BadRequestException.class)
+                    .hasMessage("No hay artículos para actualizar con ese filtro.");
+
+            verify(articuloRepository, never()).filtrarScoped(any());
+        }
+    }
+
+    @Nested
+    @DisplayName("COSTO_MONTO: costo, precio, monedas y errores")
+    class CostoMonto {
+
+        private final FiltroArticulos vacio = new FiltroArticulos(null, null, null, false);
+
+        private ActualizacionMasivaRequest monto(String valor) {
+            return pedido(null, null, null, false, "COSTO_MONTO", valor);
+        }
+
+        private AplicarActualizacionMasivaRequest aplicarMonto(String valor, String huella) {
+            return aplicarPedido(null, null, null, false, "COSTO_MONTO", valor, huella);
+        }
+
+        @Test
+        @DisplayName("+100 sobre 1.000,00 da costo 1.100,00 y precio 1.740; la vista previa no escribe")
+        void vistaPrevia() throws Exception {
+            alcance(vacio, List.of(articulo(1, "1000.00")));
+
+            VistaPreviaMasivaResponse respuesta = service.vistaPrevia(monto("100"));
+
+            assertThat(respuesta.cambios()).singleElement().satisfies(cambio -> {
+                assertThat(cambio.costoAnterior()).isEqualByComparingTo("1000.00");
+                assertThat(cambio.costoNuevo()).isEqualByComparingTo("1100.00");
+                assertThat(cambio.precioNuevo()).isEqualByComparingTo("1740");
+                assertThat(cambio.moneda()).isEqualTo(Moneda.ARS);
+            });
+            assertThat(respuesta.conteos()).isEqualTo(new ConteosMasivos(1, 1, 0, 0, 0, 0, 0, 1));
+            verifyNoInteractions(historialPrecioRepository);
+        }
+
+        @Test
+        @DisplayName("aplicar usa ajustarCosto con el costo nuevo (nunca fijarMargen) y una entrada MASIVO con el Dueno")
+        void aplicarUsaAjustarCosto() throws Exception {
+            Articulo articulo = spy(articulo(1, "1000.00"));
+            alcance(vacio, List.of(articulo));
+            String huella = huellaDe(monto("100"));
+
+            ActualizacionMasivaResponse respuesta = service.aplicar(aplicarMonto("100", huella), USUARIO);
+
+            verify(articulo).ajustarCosto(argThat(c -> c.compareTo(bd("1100.00")) == 0), any());
+            verify(articulo, never()).fijarMargen(any(), any());
+            assertThat(articulo.getCosto()).isEqualByComparingTo("1100.00");
+            assertThat(articulo.getPrecioFinal()).isEqualByComparingTo("1740");
+            assertThat(historialGuardado()).singleElement().satisfies(h -> {
+                assertThat(h.getOrigen()).isEqualTo(OrigenPrecio.MASIVO);
+                assertThat(h.getUsuarioId()).isEqualTo(USUARIO);
+                assertThat(h.getCostoNuevo()).isEqualByComparingTo("1100.00");
+            });
+            assertThat(respuesta.entradasDeHistorial()).isEqualTo(1);
+        }
+
+        @Test
+        @DisplayName("33,33 + 0,01: el costo cambia aunque el precio quede igual, y deja historial")
+        void soloCambiaElCosto() throws Exception {
+            Articulo articulo = articulo(1, "33.33");
+            BigDecimal precioAntes = articulo.getPrecioFinal();
+            alcance(vacio, List.of(articulo));
+            String huella = huellaDe(monto("0.01"));
+
+            service.aplicar(aplicarMonto("0.01", huella), USUARIO);
+
+            assertThat(articulo.getCosto()).isEqualByComparingTo("33.34");
+            assertThat(articulo.getPrecioFinal()).isEqualByComparingTo(precioAntes);
+            assertThat(historialGuardado()).hasSize(1);
+        }
+
+        @Test
+        @DisplayName("un costo que queda en 0 o negativo es error de esa fila: no se escribe y los demas se aplican")
+        void costoCeroONegativo() throws Exception {
+            Articulo cero = articulo(1, "50.00");
+            Articulo negativo = articulo(2, "30.00");
+            Articulo bien = articulo(3, "500.00");
+            alcance(vacio, List.of(cero, negativo, bien));
+            String huella = huellaDe(monto("-50"));
+
+            VistaPreviaMasivaResponse vista = service.vistaPrevia(monto("-50"));
+            service.aplicar(aplicarMonto("-50", huella), USUARIO);
+
+            assertThat(vista.errores()).extracting(e -> e.motivo())
+                    .containsOnly("El costo nuevo da 0 o menos. Revisá el monto.");
+            assertThat(vista.conteos().conError()).isEqualTo(2);
+            assertThat(cero.getCosto()).isEqualByComparingTo("50.00");
+            assertThat(negativo.getCosto()).isEqualByComparingTo("30.00");
+            assertThat(bien.getCosto()).isEqualByComparingTo("450.00");
+        }
+
+        @Test
+        @DisplayName("la vista previa informa enPesos y enDolares y la advertencia de mezcla con las dos monedas")
+        void mezclaDeMonedas() throws Exception {
+            alcance(vacio, List.of(articulo(1, "100.00"), articulo(2, "100.00"), articuloEnDolares(3, "10.00", "1000")));
+            when(dolarDePrecios.vigente()).thenReturn(Optional.of(bd("1000")));
+
+            VistaPreviaMasivaResponse respuesta = service.vistaPrevia(monto("100"));
+
+            assertThat(respuesta.enPesos()).isEqualTo(2);
+            assertThat(respuesta.enDolares()).isEqualTo(1);
+            assertThat(respuesta.advertenciaMezcla()).startsWith("La selección mezcla artículos en pesos y en dólares.");
+            assertThat(respuesta.cambios()).extracting(c -> c.moneda())
+                    .containsExactly(Moneda.ARS, Moneda.ARS, Moneda.USD);
+        }
+
+        @Test
+        @DisplayName("el aviso de mezcla no bloquea: aplicar con la huella escribe y el USD suma el monto en dolares")
+        void aplicarConMezcla() throws Exception {
+            Articulo pesos = articulo(1, "100.00");
+            Articulo dolares = articuloEnDolares(2, "10.00", "1000");
+            alcance(vacio, List.of(pesos, dolares));
+            when(dolarDePrecios.vigente()).thenReturn(Optional.of(bd("1000")));
+            String huella = huellaDe(monto("5"));
+
+            service.aplicar(aplicarMonto("5", huella), USUARIO);
+
+            assertThat(pesos.getCosto()).isEqualByComparingTo("105.00");
+            assertThat(dolares.getCosto()).isEqualByComparingTo("15.00");
+            assertThat(dolares.getPrecioFinal()).isEqualByComparingTo("23600");
+        }
+
+        @Test
+        @DisplayName("solo pesos o solo dolares: sin advertencia; con COSTO_PORCENTAJE y mezcla tampoco")
+        void sinMezclaNoAdvierte() throws Exception {
+            alcance(vacio, List.of(articuloEnDolares(1, "10.00", "1000"), articuloEnDolares(2, "10.00", "1000")));
+            when(dolarDePrecios.vigente()).thenReturn(Optional.of(bd("1000")));
+            assertThat(service.vistaPrevia(monto("5")).advertenciaMezcla()).isNull();
+
+            alcance(vacio, List.of(articulo(1, "100.00"), articuloEnDolares(2, "10.00", "1000")));
+            VistaPreviaMasivaResponse porcentaje = service.vistaPrevia(pedidoMasDiez());
+            assertThat(porcentaje.advertenciaMezcla()).isNull();
+            assertThat(porcentaje.enPesos()).isEqualTo(1);
+            assertThat(porcentaje.enDolares()).isEqualTo(1);
+        }
+
+        @Test
+        @DisplayName("alcance con un USD y sin cotizacion: 409 y no se escribe; con solo pesos no se consulta el dolar")
+        void sinCotizacion() throws Exception {
+            alcance(vacio, List.of(articuloEnDolares(1, "10.00", "1000")));
+            when(dolarDePrecios.vigente()).thenReturn(Optional.empty());
+
+            assertThatThrownBy(() -> service.vistaPrevia(monto("5")))
+                    .isInstanceOf(ConflictException.class)
+                    .hasMessage("Todavía no hay cotización del dólar. Probá en unos minutos");
+            verificarSinEscrituras();
+
+            alcance(vacio, List.of(articulo(1, "100.00")));
+            assertThat(service.vistaPrevia(monto("5")).cambios()).hasSize(1);
+        }
+
+    }
+
+    @Nested
+    @DisplayName("valores que el dominio rechaza: 400 en español y nunca 500")
+    class ValorInvalidoDelDominio {
+
+        /** Un validador que no ve nada, para llegar a toOperacion con lo que las anotaciones ya frenan. */
+        private ActualizacionMasivaService sinValidador() {
+            Validator permisivo = mock(Validator.class);
+            when(permisivo.validate(any(), any(Class[].class))).thenReturn(Set.of());
+            return new ActualizacionMasivaService(
+                    articuloRepository, proveedorRepository, rubroRepository, historialPrecioRepository,
+                    configuracionPreciosService, permisivo, dolarDePrecios, importacionListaRepository);
+        }
+
+        @Test
+        @DisplayName("COSTO_MONTO con 0 que llega al dominio: 400 con el mensaje del monto")
+        void montoCero() {
+            assertThatThrownBy(() -> sinValidador().vistaPrevia(
+                    pedido(null, null, null, false, "COSTO_MONTO", "0")))
+                    .isInstanceOf(BadRequestException.class)
+                    .hasMessage("El monto no puede ser cero.");
+            verifyNoInteractions(articuloRepository);
+        }
+
+        @Test
+        @DisplayName("COSTO_MONTO con 3 decimales que llega al dominio: 400 de decimales")
+        void montoConTresDecimales() {
+            assertThatThrownBy(() -> sinValidador().vistaPrevia(
+                    pedido(null, null, null, false, "COSTO_MONTO", "10.555")))
+                    .isInstanceOf(BadRequestException.class)
+                    .hasMessage("El valor puede tener como máximo 2 decimales.");
+        }
+
+        @Test
+        @DisplayName("COSTO_PORCENTAJE y MARGEN con 3 decimales que llegan al dominio: 400 de decimales, no ArithmeticException")
+        void porcentajeYMargenConTresDecimales() {
+            for (String modo : List.of("COSTO_PORCENTAJE", "MARGEN")) {
+                assertThatThrownBy(() -> sinValidador().vistaPrevia(pedido(null, null, null, false, modo, "10.555")))
+                        .isInstanceOf(BadRequestException.class)
+                        .hasMessage("El valor puede tener como máximo 2 decimales.");
+                assertThatThrownBy(() -> sinValidador().aplicar(
+                        aplicarPedido(null, null, null, false, modo, "10.555", "h"), USUARIO))
+                        .isInstanceOf(BadRequestException.class);
+            }
         }
     }
 }

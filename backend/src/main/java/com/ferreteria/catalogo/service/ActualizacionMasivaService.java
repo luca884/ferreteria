@@ -17,11 +17,13 @@ import com.ferreteria.catalogo.model.HistorialPrecio;
 import com.ferreteria.catalogo.model.ModoMasivo;
 import com.ferreteria.catalogo.model.Moneda;
 import com.ferreteria.catalogo.model.OperacionMasiva;
+import com.ferreteria.catalogo.model.ValorMasivoInvalidoException;
 import com.ferreteria.catalogo.model.OrigenPrecio;
 import com.ferreteria.catalogo.model.PlanMasivo;
 import com.ferreteria.catalogo.model.PlanificadorMasivo;
 import com.ferreteria.catalogo.repository.ArticuloRepository;
 import com.ferreteria.catalogo.repository.HistorialPrecioRepository;
+import com.ferreteria.catalogo.repository.ImportacionListaRepository;
 import com.ferreteria.catalogo.repository.ProveedorRepository;
 import com.ferreteria.catalogo.repository.RubroRepository;
 import com.ferreteria.common.exception.BadRequestException;
@@ -68,6 +70,7 @@ public class ActualizacionMasivaService {
     private final ConfiguracionPreciosService configuracionPreciosService;
     private final Validator validator;
     private final DolarDePrecios dolarDePrecios;
+    private final ImportacionListaRepository importacionListaRepository;
 
     public ActualizacionMasivaService(
             ArticuloRepository articuloRepository,
@@ -76,7 +79,8 @@ public class ActualizacionMasivaService {
             HistorialPrecioRepository historialPrecioRepository,
             ConfiguracionPreciosService configuracionPreciosService,
             Validator validator,
-            DolarDePrecios dolarDePrecios) {
+            DolarDePrecios dolarDePrecios,
+            ImportacionListaRepository importacionListaRepository) {
         this.articuloRepository = articuloRepository;
         this.proveedorRepository = proveedorRepository;
         this.rubroRepository = rubroRepository;
@@ -84,6 +88,7 @@ public class ActualizacionMasivaService {
         this.configuracionPreciosService = configuracionPreciosService;
         this.validator = validator;
         this.dolarDePrecios = dolarDePrecios;
+        this.importacionListaRepository = importacionListaRepository;
     }
 
     /** Lo que pasaria al aplicar. No escribe nada: ni articulos ni historial. */
@@ -92,7 +97,8 @@ public class ActualizacionMasivaService {
         PlanMasivo plan = preparar(request, false).plan();
         boolean recortado = plan.cambios().size() > MAXIMO_DETALLE || plan.errores().size() > MAXIMO_DETALLE;
         return new VistaPreviaMasivaResponse(
-                plan.conteos(), recortar(plan.cambios()), recortar(plan.errores()), recortado, plan.huella());
+                plan.conteos(), recortar(plan.cambios()), recortar(plan.errores()), recortado, plan.huella(),
+                plan.enPesos(), plan.enDolares(), plan.advertenciaMezcla());
     }
 
     /**
@@ -142,7 +148,7 @@ public class ActualizacionMasivaService {
     // ---- preparar ----
 
     /**
-     * Resuelve y valida en el orden de R-002 (404 del proveedor y del rubro, 400 del modo y el valor, 400
+     * Resuelve y valida en el orden de R-002 (404 del proveedor, del rubro y de la importacion, 400 del modo y el valor, 400
      * del tope contando ANTES de cargar, y al aplicar 400 si el alcance esta vacio), lee todo UNA vez
      * (alcance, rubros, configuracion) y planifica.
      */
@@ -155,9 +161,13 @@ public class ActualizacionMasivaService {
             rubroRepository.findScoped(pedido.rubroId())
                     .orElseThrow(() -> new ResourceNotFoundException("Rubro no encontrado"));
         }
+        if (pedido.importacionId() != null) {
+            importacionListaRepository.findScoped(pedido.importacionId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Importación no encontrada"));
+        }
         validar(pedido);
         FiltroArticulos filtro = pedido.toFiltro();
-        OperacionMasiva operacion = pedido.toOperacion();
+        OperacionMasiva operacion = operacionDe(pedido);
 
         long alcance = articuloRepository.contarScoped(filtro);
         if (alcance > MAXIMO_ARTICULOS) {
@@ -217,6 +227,20 @@ public class ActualizacionMasivaService {
                     violacion.getMessage());
         }
         throw new DatosInvalidosException(errores.mensajes());
+    }
+
+    /**
+     * La operacion del pedido ya validado. Si el dominio igual rechaza el valor (cero o decimales de mas) es un
+     * 400 con su mensaje, nunca un 500.
+     */
+    private static OperacionMasiva operacionDe(PedidoMasivo pedido) {
+        try {
+            return pedido.toOperacion();
+        } catch (ValorMasivoInvalidoException e) {
+            throw new BadRequestException(e.getMessage());
+        } catch (ArithmeticException e) {
+            throw new BadRequestException("El valor puede tener como máximo 2 decimales.");
+        }
     }
 
     /** Las primeras {@link #MAXIMO_DETALLE} filas (las de id mas bajo, que el plan ya trae ordenadas). */

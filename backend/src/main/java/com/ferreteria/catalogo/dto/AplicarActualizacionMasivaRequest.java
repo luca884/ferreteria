@@ -17,6 +17,8 @@ public record AplicarActualizacionMasivaRequest(
 
         Long rubroId,
 
+        Long importacionId,
+
         String q,
 
         boolean incluirInactivos,
@@ -32,4 +34,11 @@ public record AplicarActualizacionMasivaRequest(
         @NotBlank(message = "Falta la vista previa. Generala de nuevo antes de confirmar.",
                 groups = ValidacionActualizacionMasiva.class)
         String huella) implements PedidoMasivo {
+
+    /** Sin filtro por importacion. */
+    public AplicarActualizacionMasivaRequest(
+            Long proveedorId, Long rubroId, String q, boolean incluirInactivos, String modo, BigDecimal valor,
+            String huella) {
+        this(proveedorId, rubroId, null, q, incluirInactivos, modo, valor, huella);
+    }
 }

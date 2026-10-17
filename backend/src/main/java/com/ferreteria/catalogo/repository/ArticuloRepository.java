@@ -35,6 +35,7 @@ public interface ArticuloRepository extends TenantScopedRepository<Articulo, Lon
               and (:incluirInactivos = true or a.activo = true)
               and (:proveedorId is null or a.proveedorId = :proveedorId)
               and (:rubroId is null or a.rubroId = :rubroId)
+              and (:importacionId is null or a.ultimaImportacionId = :importacionId)
               and (:q is null
                    or a.descripcion like :q escape '\\'
                    or a.codigoInterno like :q escape '\\'
@@ -47,6 +48,7 @@ public interface ArticuloRepository extends TenantScopedRepository<Articulo, Lon
             @Param("fid") Long ferreteriaId,
             @Param("proveedorId") Long proveedorId,
             @Param("rubroId") Long rubroId,
+            @Param("importacionId") Long importacionId,
             @Param("q") String q,
             @Param("incluirInactivos") boolean incluirInactivos,
             Pageable pageable);
@@ -57,6 +59,7 @@ public interface ArticuloRepository extends TenantScopedRepository<Articulo, Lon
             @Param("fid") Long ferreteriaId,
             @Param("proveedorId") Long proveedorId,
             @Param("rubroId") Long rubroId,
+            @Param("importacionId") Long importacionId,
             @Param("q") String q,
             @Param("incluirInactivos") boolean incluirInactivos);
 
@@ -65,6 +68,7 @@ public interface ArticuloRepository extends TenantScopedRepository<Articulo, Lon
             @Param("fid") Long ferreteriaId,
             @Param("proveedorId") Long proveedorId,
             @Param("rubroId") Long rubroId,
+            @Param("importacionId") Long importacionId,
             @Param("q") String q,
             @Param("incluirInactivos") boolean incluirInactivos);
 
@@ -241,19 +245,19 @@ public interface ArticuloRepository extends TenantScopedRepository<Articulo, Lon
     List<String> codigosBarrasActivosEn(@Param("fid") Long ferreteriaId, @Param("codigos") List<String> codigos);
 
     default Page<Articulo> buscarScoped(String q, boolean incluirInactivos, Pageable pageable) {
-        return buscar(TenantContext.requireFerreteriaId(), null, null, q, incluirInactivos, pageable);
+        return buscar(TenantContext.requireFerreteriaId(), null, null, null, q, incluirInactivos, pageable);
     }
 
     /** Los articulos de la ferreteria que cumplen el filtro, por id ascendente (CU-05). */
     default List<Articulo> filtrarScoped(FiltroArticulos filtro) {
         return filtrar(TenantContext.requireFerreteriaId(), filtro.proveedorId(), filtro.rubroId(),
-                filtro.patron(), filtro.incluirInactivos());
+                filtro.importacionId(), filtro.patron(), filtro.incluirInactivos());
     }
 
     /** Cuantos articulos de la ferreteria cumplen el filtro, sin cargarlos (CU-05). */
     default long contarScoped(FiltroArticulos filtro) {
         return contar(TenantContext.requireFerreteriaId(), filtro.proveedorId(), filtro.rubroId(),
-                filtro.patron(), filtro.incluirInactivos());
+                filtro.importacionId(), filtro.patron(), filtro.incluirInactivos());
     }
 
     /** Hasta limite activos con ese codigo exacto, por descripcion y luego id (CU-06). */
