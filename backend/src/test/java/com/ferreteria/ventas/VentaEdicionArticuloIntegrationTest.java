@@ -36,6 +36,8 @@ class VentaEdicionArticuloIntegrationTest extends VentasTestBase {
         cuerpo.put("alicuotaIva", "IVA_21");
         cuerpo.put("unidad", "UNIDAD");
         cuerpo.put("stockMinimo", BigDecimal.ZERO);
+        // Como la pantalla: la version que se leyo (el PUT la exige).
+        cuerpo.put("version", jdbc.queryForObject("select version from articulo where id = ?", Long.class, articuloId));
         return objectMapper.writeValueAsString(cuerpo);
     }
 

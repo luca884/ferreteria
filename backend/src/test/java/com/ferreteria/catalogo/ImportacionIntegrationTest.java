@@ -971,7 +971,7 @@ class ImportacionIntegrationTest extends CotizacionTestBase {
                 .put("costo", n("333"))
                 .put("precioListaProveedor", n("1"));
 
-        putJson("/api/articulos/" + articulo, duenoA, objectMapper.writeValueAsString(pedido)).andExpect(status().isOk());
+        putJson("/api/articulos/" + articulo, duenoA, conLaVersionVigente(articulo, objectMapper.writeValueAsString(pedido))).andExpect(status().isOk());
 
         assertThat(decimal(articulo, "costo")).isEqualByComparingTo("333");
         assertThat(decimal(articulo, "precio_lista_proveedor")).isEqualByComparingTo("1210");
@@ -2636,14 +2636,14 @@ class ImportacionIntegrationTest extends CotizacionTestBase {
                 .put("proveedorId", proveedor)
                 .put("margenPorcentaje", new BigDecimal("30"))
                 .put("costo", new BigDecimal("700"));
-        putJson("/api/articulos/" + articulo, dueA, objectMapper.writeValueAsString(pedido)).andExpect(status().isOk());
+        putJson("/api/articulos/" + articulo, dueA, conLaVersionVigente(articulo, objectMapper.writeValueAsString(pedido))).andExpect(status().isOk());
         assertBase(articulo, "10", "5", null, false);
 
         pedido.put("proveedorId", otroProveedor);
-        putJson("/api/articulos/" + articulo, dueA, objectMapper.writeValueAsString(pedido)).andExpect(status().isOk());
+        putJson("/api/articulos/" + articulo, dueA, conLaVersionVigente(articulo, objectMapper.writeValueAsString(pedido))).andExpect(status().isOk());
         assertBase(articulo, "10", "5", null, false);
         pedido.putNull("proveedorId");
-        putJson("/api/articulos/" + articulo, dueA, objectMapper.writeValueAsString(pedido)).andExpect(status().isOk());
+        putJson("/api/articulos/" + articulo, dueA, conLaVersionVigente(articulo, objectMapper.writeValueAsString(pedido))).andExpect(status().isOk());
         assertBase(articulo, "10", "5", null, false);
     }
 

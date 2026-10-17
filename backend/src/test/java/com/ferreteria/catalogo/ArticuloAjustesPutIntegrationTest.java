@@ -66,7 +66,7 @@ class ArticuloAjustesPutIntegrationTest extends AjustesTestBase {
     }
 
     private ResultActions enviar(Long id, ObjectNode pedido) throws Exception {
-        return putJson(URL + "/" + id, duenoA, objectMapper.writeValueAsString(pedido));
+        return putJson(URL + "/" + id, duenoA, conLaVersionVigente(id, objectMapper.writeValueAsString(pedido)));
     }
 
     private JsonNode leer(ResultActions resultado) throws Exception {
@@ -74,7 +74,7 @@ class ArticuloAjustesPutIntegrationTest extends AjustesTestBase {
     }
 
     private ResultActions editarAjustes(Long id, String json) throws Exception {
-        return putJson(URL + "/" + id + "/ajustes", duenoA, json);
+        return putJson(URL + "/" + id + "/ajustes", duenoA, conLaVersionVigente(id, json));
     }
 
     // ---- R-216 ----

@@ -124,13 +124,96 @@ class ArticuloVersionIntegrationTest extends VersionTestBase {
         assertThat(versionDe(id)).isEqualTo(5);
     }
 
-    @Test
-    @DisplayName("sin version en el cuerpo se guarda como en CU-03 (200) y la version sube")
-    void sinVersionSeAcepta() throws Exception {
-        Long id = conVersion(a, "V241-SIN", "900.00", "1420.00", 5);
+    // ---- T-250: la version es obligatoria (decision 48) ----
 
-        putArticulo(duenoA, id, cuerpoDe(duenoA, id).put("descripcion", "Sin version")).andExpect(status().isOk())
-                .andExpect(jsonPath("$.version", is(6)));
+    private static final String FALTA_VERSION = "Falta la versión del artículo. Recargá y volvé a intentar.";
+
+    @Test
+    @DisplayName("un PUT del articulo sin version da 400 solo con el mensaje y la descripcion no cambia")
+    void putSinVersionDa400() throws Exception {
+        Long id = conVersion(a, "V250-SIN", "900.00", "1420.00", 5);
+        ObjectNode cuerpo = cuerpoDe(duenoA, id).put("descripcion", "Sin version");
+        cuerpo.remove("version");
+
+        putArticulo(duenoA, id, cuerpo).andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message", is(FALTA_VERSION)))
+                .andExpect(jsonPath("$.errors", nullValue()));
+
+        assertThat(articuloJson(duenoA, id).get("descripcion").asText()).isNotEqualTo("Sin version");
+        assertThat(versionDe(id)).isEqualTo(5);
+        assertThat(manuales(id)).isZero();
+    }
+
+    @Test
+    @DisplayName("un PUT con version null explicita da el mismo 400")
+    void putConVersionNullDa400() throws Exception {
+        Long id = conVersion(a, "V250-NUL", "900.00", "1420.00", 5);
+        ObjectNode cuerpo = cuerpoDe(duenoA, id).putNull("version");
+
+        putArticulo(duenoA, id, cuerpo).andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message", is(FALTA_VERSION)));
+    }
+
+    @Test
+    @DisplayName("un PUT de ajustes sin version da el mismo 400 y los ajustes no cambian")
+    void ajustesSinVersionDa400() throws Exception {
+        Long id = deLista(a, "V250-AJ", proveedorA);
+
+        putAjustes(duenoA, id, "{\"ajuste1\":-5}").andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message", is(FALTA_VERSION)))
+                .andExpect(jsonPath("$.errors", nullValue()));
+
+        assertThat(articuloJson(duenoA, id).get("ajuste1").isNull()).isTrue();
+        assertThat(versionDe(id)).isZero();
+    }
+
+    @Test
+    @DisplayName("un articulo ajeno sin version da 404, no el 400 (PUT y PUT de ajustes)")
+    void ajenoSinVersionDa404() throws Exception {
+        Long deB = conVersion(b, "V250-B", "900.00", "1420.00", 5);
+        ObjectNode cuerpo = cuerpoDe(duenoB, deB);
+        cuerpo.remove("version");
+
+        putArticulo(duenoA, deB, cuerpo).andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.message", is("Artículo no encontrado")));
+        putAjustes(duenoA, deB, "{\"ajuste1\":-5}").andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.message", is("Artículo no encontrado")));
+
+        assertThat(versionDe(deB)).isEqualTo(5);
+    }
+
+    @Test
+    @DisplayName("un Vendedor sin version da 403 (PUT y PUT de ajustes)")
+    void vendedorSinVersionDa403() throws Exception {
+        Long id = deLista(a, "V250-VEN", proveedorA);
+        ObjectNode cuerpo = cuerpoDe(duenoA, id);
+        cuerpo.remove("version");
+
+        putArticulo(vendedorA, id, cuerpo).andExpect(status().isForbidden());
+        putAjustes(vendedorA, id, "{\"ajuste1\":-5}").andExpect(status().isForbidden());
+    }
+
+    @Test
+    @DisplayName("el orden es 404, 400 de la version faltante y 409: sin version y con un codigo repetido gana el 400")
+    void sinVersionVaAntesQueLosCodigos() throws Exception {
+        Long id = conVersion(a, "V250-COD", "900.00", "1420.00", 5);
+        manual(a, "V250-OTRO", "100.00", "160.00");
+        ObjectNode cuerpo = cuerpoDe(duenoA, id).put("codigoInterno", "V250-OTRO");
+        cuerpo.remove("version");
+
+        putArticulo(duenoA, id, cuerpo).andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message", is(FALTA_VERSION)));
+    }
+
+    @Test
+    @DisplayName("un ajuste invalido sin version da el 400 de los ajustes (se valida primero) y con la version vieja y un ajuste valido, el 409")
+    void ajustesSinVersionConUnAjusteInvalidoYConVersionVieja() throws Exception {
+        Long id = deLista(a, "V250-ORD", proveedorA);
+
+        putAjustes(duenoA, id, "{\"ajuste1\":-100}").andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors").exists());
+        putAjustes(duenoA, id, "{\"ajuste1\":-5,\"version\":7}").andExpect(status().isConflict())
+                .andExpect(jsonPath("$.message", is(MENSAJE_VERSION)));
     }
 
     // ---- orden de los 409 y de los roles ----

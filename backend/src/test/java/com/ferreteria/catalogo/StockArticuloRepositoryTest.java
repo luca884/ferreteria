@@ -395,7 +395,7 @@ class StockArticuloRepositoryTest extends IntegrationTestBase {
 
     private ArticuloRequest requestDeEdicion(Datos f, String descripcion) {
         return new ArticuloRequest(f.codigoInterno(), null, null, descripcion, null, null, new BigDecimal("100.00"),
-                null, AlicuotaIva.IVA_21, Unidad.UNIDAD, BigDecimal.ZERO, null, null);
+                null, AlicuotaIva.IVA_21, Unidad.UNIDAD, BigDecimal.ZERO, null, null, null, 0L);
     }
 
     private static int indiceDe(String[] nombres, String nombre) {

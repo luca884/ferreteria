@@ -77,12 +77,15 @@ abstract class VersionTestBase extends AjustesTestBase {
         return getJson("/api/articulos/" + id, token);
     }
 
-    /** Un cuerpo de PUT con lo que el formulario manda, tomado del articulo tal como esta (sin version). */
+    /**
+     * Un cuerpo de PUT con lo que el formulario manda, tomado del articulo tal como esta, con la version que se leyo
+     * (el PUT la exige desde el lote 6, decision 48). Un test que la quiere distinta o ausente la cambia o la saca.
+     */
     protected ObjectNode cuerpoDe(JsonNode articulo) {
         ObjectNode cuerpo = objectMapper.createObjectNode();
         for (String campo : List.of("codigoInterno", "codigoBarras", "codigoProveedor", "descripcion", "rubroId",
                 "proveedorId", "costo", "margenPorcentaje", "alicuotaIva", "unidad", "stockMinimo", "ubicacion",
-                "activo", "moneda")) {
+                "activo", "moneda", "version")) {
             cuerpo.set(campo, articulo.get(campo));
         }
         return cuerpo;
@@ -98,6 +101,11 @@ abstract class VersionTestBase extends AjustesTestBase {
 
     protected ResultActions putAjustes(String token, Long id, String json) throws Exception {
         return putJson("/api/articulos/" + id + "/ajustes", token, json);
+    }
+
+    /** Como {@link #putAjustes}, con la version vigente si el JSON no trae la clave (lo que manda la pantalla). */
+    protected ResultActions putAjustesVigente(String token, Long id, String json) throws Exception {
+        return putAjustes(token, id, conLaVersionVigente(id, json));
     }
 
     // ---- siembra ----

@@ -8,6 +8,9 @@ public final class ArticuloModificado {
 
     public static final String MENSAJE = "Otro cambio modificó este artículo. Recargá y volvé a intentar.";
 
+    /** El 400 de un PUT del artículo o de ajustes que no trae la version que se leyo (decision 48, lote 6). */
+    public static final String FALTA_VERSION = "Falta la versión del artículo. Recargá y volvé a intentar.";
+
     private ArticuloModificado() {
     }
 }

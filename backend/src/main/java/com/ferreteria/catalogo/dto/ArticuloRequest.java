@@ -72,13 +72,13 @@ public record ArticuloRequest(
         Moneda moneda,
 
         /**
-         * Version del articulo que el cliente leyo (bloqueo optimista). Solo la usa el PUT: si no coincide con la
-         * vigente es un 409. null se acepta y no se compara (lote 5b); el alta la ignora. Un valor que no es un
-         * entero da 400 por el camino generico del cuerpo ilegible.
+         * Version del articulo que el cliente leyo (bloqueo optimista). Solo la usa el PUT, donde es OBLIGATORIA
+         * desde el lote 6 (decision 48): sin ella es un 400 y, si no coincide con la vigente, un 409. El alta la
+         * ignora. Un valor que no es un entero da 400 por el camino generico del cuerpo ilegible.
          */
         Long version) {
 
-    /** Pedido sin version: no se compara con la vigente. */
+    /** Pedido sin version: sirve para el alta, que no la usa; un PUT sin ella da 400. */
     public ArticuloRequest(
             String codigoInterno, String codigoBarras, String codigoProveedor, String descripcion, Long rubroId,
             Long proveedorId, BigDecimal costo, BigDecimal margenPorcentaje, AlicuotaIva alicuotaIva, Unidad unidad,

@@ -32,12 +32,12 @@ public record AjustesRequest(
         boolean confirmaPisarCosto,
 
         /**
-         * Version del articulo que el cliente leyo (bloqueo optimista): si no coincide con la vigente es un 409. null
-         * se acepta y no se compara (lote 5b).
+         * Version del articulo que el cliente leyo (bloqueo optimista). Es OBLIGATORIA desde el lote 6 (decision 48):
+         * sin ella es un 400 y, si no coincide con la vigente, un 409.
          */
         Long version) {
 
-    /** Pedido sin version: no se compara con la vigente. */
+    /** Pedido sin version: el servicio lo rechaza con 400; existe para los tests que no llegan al servicio. */
     public AjustesRequest(BigDecimal ajuste1, BigDecimal ajuste2, BigDecimal ajuste3, boolean confirmaPisarCosto) {
         this(ajuste1, ajuste2, ajuste3, confirmaPisarCosto, null);
     }

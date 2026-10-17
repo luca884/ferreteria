@@ -89,7 +89,7 @@ class ArticuloMonedaIntegrationTest extends CotizacionTestBase {
 
     private org.springframework.test.web.servlet.ResultActions editar(String token, long id, ObjectNode pedido)
             throws Exception {
-        return putJson(URL + "/" + id, token, objectMapper.writeValueAsString(pedido));
+        return putJson(URL + "/" + id, token, conLaVersionVigente(id, objectMapper.writeValueAsString(pedido)));
     }
 
     private long cantidadDeArticulos(Long ferreteriaId) {

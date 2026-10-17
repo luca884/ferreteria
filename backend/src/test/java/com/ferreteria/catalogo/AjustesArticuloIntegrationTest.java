@@ -78,7 +78,7 @@ class AjustesArticuloIntegrationTest extends AjustesTestBase {
     // ---- helpers ----
 
     private ResultActions editar(String token, Long id, String json) throws Exception {
-        return putJson("/api/articulos/" + id + "/ajustes", token, json);
+        return putJson("/api/articulos/" + id + "/ajustes", token, conLaVersionVigente(id, json));
     }
 
     private JsonNode editarOk(String token, Long id, String json) throws Exception {
@@ -223,7 +223,7 @@ class AjustesArticuloIntegrationTest extends AjustesTestBase {
         jdbc.update("update proveedor set bonificacion1 = 20, lista_incluye_iva = false where id = ?", otro);
         String put = "{\"codigoInterno\":\"AJ-OTROPROV\",\"descripcion\":\"Articulo AJ-OTROPROV\",\"unidad\":\"UNIDAD\","
                 + "\"costo\":1000.00,\"margenPorcentaje\":30.00,\"proveedorId\":" + otro + "}";
-        putJson("/api/articulos/" + id, duenoA, put).andExpect(status().isOk());
+        putJson("/api/articulos/" + id, duenoA, conLaVersionVigente(id, put)).andExpect(status().isOk());
 
         JsonNode r = editarOk(duenoA, id, ajustes("10", "null", "null"));
 
@@ -506,8 +506,7 @@ class AjustesArticuloIntegrationTest extends AjustesTestBase {
     // ---- version (lote 5b, T-242): el caso de #5438 en secuencia ----
 
     private static String ajustesConVersion(String a1, Long version, boolean confirma) {
-        return "{\"ajuste1\":" + a1 + ",\"confirmaPisarCosto\":" + confirma
-                + (version == null ? "" : ",\"version\":" + version) + "}";
+        return "{\"ajuste1\":" + a1 + ",\"confirmaPisarCosto\":" + confirma + ",\"version\":" + version + "}";
     }
 
     private void masivoPorcentaje(String valor) throws Exception {
@@ -590,12 +589,14 @@ class AjustesArticuloIntegrationTest extends AjustesTestBase {
     }
 
     @Test
-    @DisplayName("un pedido sin version se acepta como antes (decision 48) y la version sube")
-    void sinVersionSeAcepta() throws Exception {
+    @DisplayName("un pedido sin version da 400 (decision 48, lote 6) y los ajustes y la version no cambian")
+    void sinVersionDa400() throws Exception {
         Long id = conDosAjustes(a, proveedorA, "AJ-V5");
 
-        editar(duenoA, id, ajustesConVersion("-5", null, false)).andExpect(status().isOk())
-                .andExpect(jsonPath("$.version", is(1)));
+        editar(duenoA, id, ajustesConVersion("-5", null, false)).andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message", is("Falta la versión del artículo. Recargá y volvé a intentar.")));
+
+        assertThat(version(id)).isZero();
     }
 
     private static void pausa(long milisegundos) {

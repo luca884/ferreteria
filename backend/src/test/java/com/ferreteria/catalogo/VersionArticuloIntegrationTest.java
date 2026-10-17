@@ -83,10 +83,10 @@ class VersionArticuloIntegrationTest extends VersionTestBase {
     void elPutDeAjustesLaSubeYSinCambioNo() throws Exception {
         Long id = deLista(f, "V240-AJ", proveedor);
 
-        putAjustes(dueno, id, "{\"ajuste1\":-5}").andExpect(status().isOk());
+        putAjustesVigente(dueno, id, "{\"ajuste1\":-5}").andExpect(status().isOk());
         assertThat(articuloJson(dueno, id).get("version").asLong()).isEqualTo(1);
 
-        putAjustes(dueno, id, "{\"ajuste1\":-5}").andExpect(status().isOk());
+        putAjustesVigente(dueno, id, "{\"ajuste1\":-5}").andExpect(status().isOk());
         assertThat(articuloJson(dueno, id).get("version").asLong()).isEqualTo(1);
     }
 

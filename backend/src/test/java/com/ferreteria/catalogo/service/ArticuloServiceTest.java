@@ -29,6 +29,7 @@ import com.ferreteria.catalogo.repository.HistorialPrecioRepository;
 import com.ferreteria.catalogo.repository.ProveedorRepository;
 import com.ferreteria.catalogo.repository.RubroRepository;
 import com.ferreteria.common.PageResponse;
+import com.ferreteria.common.exception.BadRequestException;
 import com.ferreteria.common.exception.ConflictException;
 import com.ferreteria.common.exception.ResourceNotFoundException;
 import com.ferreteria.cotizacion.api.DolarDePrecios;
@@ -60,6 +61,8 @@ class ArticuloServiceTest {
 
     private static final Long FERRETERIA = 3L;
     private static final Long USUARIO = 9L;
+    /** La version con la que arrancan los articulos de estos tests y los pedidos: el PUT la exige (decision 48). */
+    private static final long VERSION = 0L;
 
     @Mock
     ArticuloRepository articuloRepository;
@@ -106,12 +109,12 @@ class ArticuloServiceTest {
     private static ArticuloRequest request(Long rubroId, Long proveedorId, String costo, String margen) {
         return new ArticuloRequest("TORN-001", "7790001000012", "AB-12", "Tornillo hexagonal 1/4",
                 rubroId, proveedorId, bd(costo), margen == null ? null : bd(margen),
-                AlicuotaIva.IVA_21, Unidad.UNIDAD, bd("5"), "Estante 3", true);
+                AlicuotaIva.IVA_21, Unidad.UNIDAD, bd("5"), "Estante 3", true, null, VERSION);
     }
 
     private static ArticuloRequest requestMinimo() {
         return new ArticuloRequest("TORN-001", null, null, "Tornillo", null, null, bd("100"), null,
-                null, Unidad.UNIDAD, null, null, null);
+                null, Unidad.UNIDAD, null, null, null, null, VERSION);
     }
 
     private void proveedorExiste(long id) {
@@ -138,6 +141,7 @@ class ArticuloServiceTest {
                 bd("35.00"), AlicuotaIva.IVA_21, Unidad.UNIDAD, bd("5"), "Estante 3", true),
                 new ContextoPrecio(bd("35.00"), bd("30.00"), bd("10.00")));
         fijar(articulo, "id", id);
+        fijar(articulo, "version", VERSION);
         return articulo;
     }
 
@@ -179,15 +183,26 @@ class ArticuloServiceTest {
     }
 
     @Test
-    @DisplayName("actualizar con la version null sigue sin comparar (lote 5b, decision 48)")
-    void actualizarSinVersionNoCompara() throws Exception {
-        configuracionPorDefecto();
+    @DisplayName("actualizar sin version da 400 (lote 6, decision 48) ANTES de validar las unicidades: no consulta codigos, no escribe ni guarda historial")
+    void actualizarSinVersionDa400() throws Exception {
         when(articuloRepository.findScoped(55L)).thenReturn(Optional.of(existenteConVersion(55L, 6)));
-        when(rubroRepository.findScoped(4L)).thenReturn(Optional.of(rubro(4L, "35.00")));
 
-        ArticuloResponse respuesta = service.actualizar(55L, conVersion(request(4L, null, "200", null), null), USUARIO);
+        assertThatThrownBy(() -> service.actualizar(55L, conVersion(request(4L, 7L, "200", null), null), USUARIO))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessage("Falta la versión del artículo. Recargá y volvé a intentar.");
 
-        assertThat(respuesta.precioFinal()).isEqualByComparingTo("330.00");
+        verify(articuloRepository, never()).existeCodigoInternoScoped(any(), any());
+        verify(articuloRepository, never()).flush();
+        verifyNoInteractions(historialPrecioRepository, configuracionPreciosService, dolarDePrecios);
+    }
+
+    @Test
+    @DisplayName("actualizar un articulo inexistente o ajeno sin version da 404, no el 400")
+    void actualizarInexistenteSinVersionDa404() {
+        when(articuloRepository.findScoped(55L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.actualizar(55L, conVersion(request(4L, 7L, "200", null), null), USUARIO))
+                .isInstanceOf(ResourceNotFoundException.class);
     }
 
     @Test
@@ -563,7 +578,7 @@ class ArticuloServiceTest {
         when(articuloRepository.findScoped(55L)).thenReturn(Optional.of(articulo));
         when(rubroRepository.findScoped(4L)).thenReturn(Optional.of(rubro(4L, "35.00")));
         ArticuloRequest nuevo = new ArticuloRequest("TORN-001", "7790001000012", "AB-12", "Tornillo hexagonal 5/16",
-                4L, 7L, bd("100"), bd("35"), AlicuotaIva.IVA_21, Unidad.UNIDAD, bd("5"), "Estante 3", true);
+                4L, 7L, bd("100"), bd("35"), AlicuotaIva.IVA_21, Unidad.UNIDAD, bd("5"), "Estante 3", true, null, VERSION);
 
         ArticuloResponse respuesta = service.actualizar(55L, nuevo, USUARIO);
 
@@ -580,7 +595,7 @@ class ArticuloServiceTest {
         when(articuloRepository.findScoped(55L)).thenReturn(Optional.of(articulo));
         // El articulo tiene margen propio 35; se lo saca para que herede, ahora de la ferreteria (30).
         ArticuloRequest sinRubro = new ArticuloRequest("TORN-001", "7790001000012", "AB-12", "Tornillo hexagonal 1/4",
-                null, 7L, bd("100"), null, AlicuotaIva.IVA_21, Unidad.UNIDAD, bd("5"), "Estante 3", true);
+                null, 7L, bd("100"), null, AlicuotaIva.IVA_21, Unidad.UNIDAD, bd("5"), "Estante 3", true, null, VERSION);
 
         ArticuloResponse respuesta = service.actualizar(55L, sinRubro, USUARIO);
 
@@ -603,7 +618,7 @@ class ArticuloServiceTest {
         when(articuloRepository.findScoped(55L)).thenReturn(Optional.of(articulo));
         when(rubroRepository.findScoped(4L)).thenReturn(Optional.of(rubro(4L, "35.00")));
         ArticuloRequest sinActivo = new ArticuloRequest("TORN-001", "7790001000012", "AB-12", "Tornillo hexagonal 1/4",
-                4L, 7L, bd("100"), bd("35"), AlicuotaIva.IVA_21, Unidad.UNIDAD, bd("5"), "Estante 3", null);
+                4L, 7L, bd("100"), bd("35"), AlicuotaIva.IVA_21, Unidad.UNIDAD, bd("5"), "Estante 3", null, null, VERSION);
 
         ArticuloResponse respuesta = service.actualizar(55L, sinActivo, USUARIO);
 
@@ -622,7 +637,7 @@ class ArticuloServiceTest {
         when(articuloRepository.findScoped(55L)).thenReturn(Optional.of(articulo));
         when(rubroRepository.findScoped(4L)).thenReturn(Optional.of(rubro(4L, "35.00")));
         ArticuloRequest sinActivo = new ArticuloRequest("TORN-001", "7790001000012", "AB-12", "Tornillo hexagonal 1/4",
-                4L, 7L, bd("100"), bd("35"), AlicuotaIva.IVA_21, Unidad.UNIDAD, bd("5"), "Estante 3", null);
+                4L, 7L, bd("100"), bd("35"), AlicuotaIva.IVA_21, Unidad.UNIDAD, bd("5"), "Estante 3", null, null, VERSION);
 
         ArticuloResponse respuesta = service.actualizar(55L, sinActivo, USUARIO);
 
@@ -845,7 +860,7 @@ class ArticuloServiceTest {
 
     private static ArticuloRequest requestEn(Moneda moneda, String costo, String margen) {
         return new ArticuloRequest("TORN-001", null, null, "Tornillo", null, null, bd(costo),
-                margen == null ? null : bd(margen), AlicuotaIva.IVA_21, Unidad.UNIDAD, null, null, true, moneda);
+                margen == null ? null : bd(margen), AlicuotaIva.IVA_21, Unidad.UNIDAD, null, null, true, moneda, VERSION);
     }
 
     /** Articulo ya guardado en dolares: costo 10, margen de la ferreteria (30), IVA 21, calculado con ese dolar. */
@@ -854,6 +869,7 @@ class ArticuloServiceTest {
         articulo.actualizar(requestEn(Moneda.USD, "10.00", null).toDatos(),
                 new ContextoPrecio(null, bd("30.00"), bd("10.00"), bd(dolarConElQueSeCalculo)));
         fijar(articulo, "id", id);
+        fijar(articulo, "version", VERSION);
         return articulo;
     }
 

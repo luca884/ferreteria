@@ -27,6 +27,7 @@ import com.ferreteria.catalogo.repository.ArticuloRepository;
 import com.ferreteria.catalogo.repository.HistorialPrecioRepository;
 import com.ferreteria.catalogo.repository.ProveedorRepository;
 import com.ferreteria.catalogo.repository.RubroRepository;
+import com.ferreteria.common.exception.BadRequestException;
 import com.ferreteria.common.exception.ConflictException;
 import com.ferreteria.common.exception.DatosInvalidosException;
 import com.ferreteria.common.exception.ResourceNotFoundException;
@@ -57,6 +58,8 @@ class ArticuloServiceAjustesTest {
     private static final Long FERRETERIA = 3L;
     private static final Long USUARIO = 9L;
     private static final Long ID = 11L;
+    /** La version con la que arrancan los articulos de estos tests y los pedidos: el PUT de ajustes la exige. */
+    private static final long VERSION = 0L;
     private static final String RANGO = "Cada descuento o recargo tiene que estar entre -99,99 y 1.000.";
     private static final String DECIMALES = "Los descuentos y recargos admiten hasta 2 decimales.";
 
@@ -116,7 +119,7 @@ class ArticuloServiceAjustesTest {
     }
 
     private static AjustesRequest pedido(String a1, String a2, String a3, boolean confirma) {
-        return new AjustesRequest(bd(a1), bd(a2), bd(a3), confirma);
+        return new AjustesRequest(bd(a1), bd(a2), bd(a3), confirma, VERSION);
     }
 
     private static AjustesRequest pedido(String a1, String a2, String a3) {
@@ -132,6 +135,9 @@ class ArticuloServiceAjustesTest {
         var id = Articulo.class.getDeclaredField("id");
         id.setAccessible(true);
         id.set(articulo, ID);
+        var version = Articulo.class.getDeclaredField("version");
+        version.setAccessible(true);
+        version.set(articulo, VERSION);
         return articulo;
     }
 
@@ -252,12 +258,44 @@ class ArticuloServiceAjustesTest {
     }
 
     @Test
-    @DisplayName("sin version en el pedido no se compara (lote 5b, decision 48)")
-    void sinVersionNoCompara() throws Exception {
-        configuracion();
-        encontrar(conVersionGuardada(importado(), 2));
+    @DisplayName("sin version en el pedido da 400 (lote 6, decision 48): no escribe, no lee el stock ni la configuracion")
+    void sinVersionDa400() throws Exception {
+        encontrarSinStock(conVersionGuardada(importado(), 2));
 
-        assertThatCode(() -> service.editarAjustes(ID, pedido("-5", null, null), USUARIO)).doesNotThrowAnyException();
+        assertThatThrownBy(() -> service.editarAjustes(ID, conVersion("-5", null), USUARIO))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessage("Falta la versión del artículo. Recargá y volvé a intentar.");
+
+        verify(articuloRepository, never()).stockVigenteScoped(any());
+        verify(articuloRepository, never()).flush();
+        verifyNoInteractions(historialPrecioRepository, configuracionPreciosService, dolarDePrecios);
+    }
+
+    @Test
+    @DisplayName("el orden es 404, 400 de los ajustes, 400 de la version faltante y 409: sin version y con -100 gana el 400 de los ajustes")
+    void sinVersionYConUnAjusteInvalidoGanaElDeLosAjustes() throws Exception {
+        encontrarSinStock(conVersionGuardada(importado(), 2));
+
+        assertThatThrownBy(() -> service.editarAjustes(ID, conVersion("-100", null), USUARIO))
+                .isInstanceOf(DatosInvalidosException.class);
+    }
+
+    @Test
+    @DisplayName("sin version sobre un articulo sin lista da el 400 de la version, no el 409 de sin lista")
+    void sinVersionSobreUnArticuloSinListaDa400() throws Exception {
+        encontrarSinStock(conVersionGuardada(articulo("500.00", Moneda.ARS), 2));
+
+        assertThatThrownBy(() -> service.editarAjustes(ID, conVersion("-5", null), USUARIO))
+                .isInstanceOf(BadRequestException.class);
+    }
+
+    @Test
+    @DisplayName("un articulo inexistente o ajeno sin version da 404, no el 400")
+    void inexistenteSinVersionDa404() {
+        when(articuloRepository.findParaEditarScoped(ID)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.editarAjustes(ID, conVersion("-5", null), USUARIO))
+                .isInstanceOf(ResourceNotFoundException.class);
     }
 
     @Test

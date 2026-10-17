@@ -115,6 +115,28 @@ public abstract class IntegrationTestBase {
                 .content(json));
     }
 
+    /**
+     * El JSON de un PUT del articulo (o de sus ajustes) con la version vigente en la base si no trae la clave
+     * {@code version}: lo que manda la pantalla, que la lee con el GET. Con la clave, aunque sea null, se respeta
+     * (para probar la version vieja o la que falta). Si el articulo no existe, el JSON queda como esta.
+     */
+    protected String conLaVersionVigente(Long articuloId, String json) throws Exception {
+        JsonNode cuerpo;
+        try {
+            cuerpo = objectMapper.readTree(json);
+        } catch (com.fasterxml.jackson.core.JsonProcessingException noEsJson) {
+            return json; // un cuerpo roto a proposito: se manda tal cual
+        }
+        if (!(cuerpo instanceof com.fasterxml.jackson.databind.node.ObjectNode objeto) || objeto.has("version")) {
+            return json;
+        }
+        List<Long> versiones = jdbc.queryForList("select version from articulo where id = ?", Long.class, articuloId);
+        if (versiones.isEmpty()) {
+            return json;
+        }
+        return objeto.put("version", versiones.get(0)).toString();
+    }
+
     protected ResultActions delete(String url, String token) throws Exception {
         // Calificado: un metodo propio llamado delete tapa al import static del mismo nombre.
         return mvc.perform(MockMvcRequestBuilders.delete(url).header("Authorization", "Bearer " + token));

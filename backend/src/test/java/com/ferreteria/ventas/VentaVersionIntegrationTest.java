@@ -50,13 +50,13 @@ class VentaVersionIntegrationTest extends VentasTestBase {
         return jdbc.queryForObject("select precio_final from articulo where id = ?", BigDecimal.class, articuloId);
     }
 
-    /** Un cuerpo de PUT con lo que el formulario manda, tomado del articulo tal como esta. */
+    /** Un cuerpo de PUT con lo que el formulario manda, tomado del articulo tal como esta, con la version que se leyo. */
     private ObjectNode cuerpoDe(String token, long id) throws Exception {
         JsonNode articulo = getJson("/api/articulos/" + id, token);
         ObjectNode cuerpo = objectMapper.createObjectNode();
         for (String campo : List.of("codigoInterno", "codigoBarras", "codigoProveedor", "descripcion", "rubroId",
                 "proveedorId", "costo", "margenPorcentaje", "alicuotaIva", "unidad", "stockMinimo", "ubicacion",
-                "activo", "moneda")) {
+                "activo", "moneda", "version")) {
             cuerpo.set(campo, articulo.get(campo));
         }
         return cuerpo;

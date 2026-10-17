@@ -22,6 +22,7 @@ import com.ferreteria.catalogo.repository.HistorialPrecioRepository;
 import com.ferreteria.catalogo.repository.ProveedorRepository;
 import com.ferreteria.catalogo.repository.RubroRepository;
 import com.ferreteria.common.PageResponse;
+import com.ferreteria.common.exception.BadRequestException;
 import com.ferreteria.common.exception.ConflictException;
 import com.ferreteria.common.exception.DatosInvalidosException;
 import com.ferreteria.common.exception.ErroresDeValidacion;
@@ -230,11 +231,15 @@ public class ArticuloService {
     }
 
     /**
-     * Bloqueo optimista entre pedidos (R-225): si el cliente mando la version que leyo y ya no es la vigente, otro
-     * cambio se confirmo antes y el formulario esta viejo. Sin version (lote 5b) no se compara.
+     * Bloqueo optimista entre pedidos (R-225): el cliente tiene que mandar la version que leyo (sin ella es un 400,
+     * decision 48) y, si ya no es la vigente, otro cambio se confirmo antes y el formulario esta viejo (409). Va
+     * despues del 404 y antes de cualquier otra validacion o 409.
      */
     private static void verificarVersion(Articulo articulo, Long versionDelCliente) {
-        if (versionDelCliente != null && !versionDelCliente.equals(articulo.getVersion())) {
+        if (versionDelCliente == null) {
+            throw new BadRequestException(ArticuloModificado.FALTA_VERSION);
+        }
+        if (!versionDelCliente.equals(articulo.getVersion())) {
             throw new ConflictException(ArticuloModificado.MENSAJE);
         }
     }

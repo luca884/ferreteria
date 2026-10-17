@@ -61,7 +61,7 @@ class ActualizacionMasivaVersionIntegrationTest extends VersionTestBase {
         Long id = listaMil("V244-A");
         ObjectNode pedido = pedidoMasivo("COSTO_PORCENTAJE", "10", proveedor);
         JsonNode previa = previaMasivo(dueno, pedido);
-        ganchoEnSaveAll(() -> putAjustes(dueno, id, "{\"ajuste1\":-5}").andExpect(status().isOk()));
+        ganchoEnSaveAll(() -> putAjustesVigente(dueno, id, "{\"ajuste1\":-5}").andExpect(status().isOk()));
 
         aplicarMasivo(dueno, pedido, previa).andExpect(status().isConflict())
                 .andExpect(jsonPath("$.message", is(DERIVA)));
