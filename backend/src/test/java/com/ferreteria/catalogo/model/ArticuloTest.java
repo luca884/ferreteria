@@ -1334,12 +1334,15 @@ class ArticuloTest {
     }
 
     @Test
-    @DisplayName("editarAjustes: sin lista lanza IllegalStateException y no cambia nada")
+    @DisplayName("editarAjustes: sin lista lanza ArticuloSinListaException con el texto unico y no cambia nada")
     void editarAjustesSinLista() {
         Articulo articulo = articuloCon("100", null);
 
         assertThatThrownBy(() -> articulo.editarAjustes(new Ajustes(bd("-5"), null, null), ctx(null)))
-                .isInstanceOf(IllegalStateException.class);
+                .isInstanceOf(ArticuloSinListaException.class)
+                .hasMessage("Este artículo no tiene lista de proveedor. "
+                        + "Los ajustes se usan solo con artículos que vienen de una lista.")
+                .hasMessage(ArticuloSinListaException.MENSAJE);
         assertThat(articulo.getCosto()).isEqualByComparingTo("100");
         assertThat(articulo.getAjustes()).isEqualTo(Ajustes.NINGUNO);
     }

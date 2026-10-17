@@ -348,11 +348,11 @@ public class Articulo {
      * importacion, el stock, si esta activo ni las bonificaciones. Devuelve vacio si ni el costo ni el precio cambian
      * (por ejemplo, dos ajustes que solo cambian de posicion); las posiciones nuevas se guardan igual.
      *
-     * @throws IllegalStateException si el articulo no {@link #tieneLista()}: el servicio lo valida antes
+     * @throws ArticuloSinListaException si el articulo no {@link #tieneLista()}: el servicio lo valida antes
      */
     public Optional<CambioPrecio> editarAjustes(Ajustes nuevos, ContextoPrecio ctx) {
         BigDecimal costoNuevo = costoDeLista(nuevos == null ? Ajustes.NINGUNO : nuevos)
-                .orElseThrow(() -> new IllegalStateException("El artículo no tiene lista de proveedor."));
+                .orElseThrow(ArticuloSinListaException::new);
         BigDecimal costoAnterior = this.costo;
         BigDecimal precioAnterior = this.precioFinal;
 

@@ -191,41 +191,94 @@ class MigracionV7Test {
     // ---- aditiva ----
 
     @Test
-    @DisplayName("aditiva: el indice (ferreteria_id, ultima_importacion_id) y ajuste1..3 del corte 2 siguen ahi")
+    @DisplayName("aditiva: ajuste1..3, ultima_importacion_id y el resto de la fila del corte 2 quedan identicos; el indice sigue ahi")
     void noQuitaNadaDelCorte2() {
+        Long f = ferreteria("30-78400010-0");
+        Long proveedor = proveedor(f, "Proveedor corte 2", false, "10.00", null, null);
+        jdbc.update("insert into usuario (ferreteria_id, email, password_hash, nombre, rol) "
+            + "values (?, 'v7-corte2@test.local', 'sin-login', 'Usuario', 'DUENO')", f);
+        Long usuario = jdbc.queryForObject("select id from usuario where email = 'v7-corte2@test.local'", Long.class);
+        jdbc.update("insert into importacion_lista (ferreteria_id, proveedor_id, usuario_id, archivo, suben, bajan, "
+            + "nuevos, sin_cambio, no_estan, con_error, estado) values (?, ?, ?, 'v7.xlsx', 0, 0, 0, 0, 0, 0, 'APLICADA')",
+            f, proveedor, usuario);
+        Long importacion = jdbc.queryForObject("select max(id) from importacion_lista where ferreteria_id = ?",
+            Long.class, f);
+        Long articulo = articulo(f, "C2-1", proveedor, "1000.00", "855.00", "1350.00", "-5.00", "3.00");
+        jdbc.update("update articulo set ajuste3 = 12.50, ultima_importacion_id = ?, moneda = 'USD' where id = ?",
+            importacion, articulo);
+        Map<String, Object> antes = jdbc.queryForMap("select * from articulo where id = ?", articulo);
+        assertThat(antes.get("ultima_importacion_id")).isNotNull();
+
         migrarALa7();
 
+        Map<String, Object> despues = new java.util.HashMap<>(jdbc.queryForMap("select * from articulo where id = ?", articulo));
+        for (String nueva : List.of("bonificacion1", "bonificacion2", "bonificacion3", "lista_incluye_iva")) {
+            assertThat(despues).containsKey(nueva);
+            despues.remove(nueva);
+        }
+        assertThat(despues).isEqualTo(antes);
         assertThat(jdbc.queryForList(
             "select column_name from information_schema.statistics where table_schema = database() "
                 + "and table_name = 'articulo' and index_name = 'ix_articulo_ultima_importacion' order by seq_in_index",
             String.class)).containsExactly("ferreteria_id", "ultima_importacion_id");
-        for (String columna : List.of("ajuste1", "ajuste2", "ajuste3", "ultima_importacion_id", "precio_lista_proveedor")) {
-            assertThat(tipoYNulabilidad("articulo", columna)).as(columna).isNotNull();
-        }
         assertThat(jdbc.queryForList(
             "select version from flyway_schema_history where success = 1 order by installed_rank", String.class))
             .containsExactly("1", "2", "3", "4", "5", "6", "7");
     }
 
     @Test
-    @DisplayName("datos demo: en una base dev existente V7 entra por out-of-order y no cambia costo, precio ni ajustes")
+    @DisplayName("datos demo: en una base dev existente (V1000+ ya aplicados) V7 entra por out-of-order, rellena los articulos con lista y no cambia costo, precio ni ajustes")
     void losDatosDemoNoCambian() {
         // Una base dev existente: V1..V6 y los datos demo (V1000+) ya aplicados, V7 todavia no.
         flyway("classpath:db/dev-data").ignoreMigrationPatterns("*:missing").load().migrate();
-        List<Map<String, Object>> antes = jdbc.queryForList(
-            "select id, costo, precio_final, ajuste1, ajuste2, ajuste3, precio_lista_proveedor from articulo order by id");
-        assertThat(antes).isNotEmpty();
+        Long f = ferreteria("30-78400010-9");
+        Long proveedor = proveedor(f, "Proveedor dev con lista", true, "10.00", "5.00", null);
+        Long conLista = articulo(f, "DEV-LISTA", proveedor, "1000.00", "855.00", "1350.00", "-5.00", null);
+        Long sinProveedor = articulo(f, "DEV-SIN-PROV", null, "1000.00", "900.00", "1420.00", null, null);
+        String consulta = "select id, costo, precio_final, ajuste1, ajuste2, ajuste3, precio_lista_proveedor "
+            + "from articulo order by id";
+        List<Map<String, Object>> antes = jdbc.queryForList(consulta);
+        assertThat(antes.size()).isGreaterThan(2);
 
         flyway("classpath:db/migration", "classpath:db/dev-data").outOfOrder(true).load().migrate();
 
-        List<Map<String, Object>> despues = jdbc.queryForList(
-            "select id, costo, precio_final, ajuste1, ajuste2, ajuste3, precio_lista_proveedor from articulo order by id");
-        assertThat(despues).isEqualTo(antes);
+        assertThat(jdbc.queryForList(consulta)).isEqualTo(antes);
+        Map<String, Object> relleno = jdbc.queryForMap(
+            "select bonificacion1, bonificacion2, bonificacion3, lista_incluye_iva from articulo where id = ?", conLista);
+        assertThat((BigDecimal) relleno.get("bonificacion1")).isEqualByComparingTo("10");
+        assertThat((BigDecimal) relleno.get("bonificacion2")).isEqualByComparingTo("5");
+        assertThat(relleno.get("bonificacion3")).isNull();
+        assertThat(relleno.get("lista_incluye_iva")).isIn(true, 1);
+        assertBaseNula(sinProveedor);
+        // Los demas (los demo, sin precio de lista) siguen sin base.
         assertThat(jdbc.queryForObject(
-            "select count(*) from articulo where bonificacion1 is not null or bonificacion2 is not null "
-                + "or bonificacion3 is not null or lista_incluye_iva is not null", Integer.class)).isZero();
+            "select count(*) from articulo where id not in (?, ?) and (bonificacion1 is not null "
+                + "or bonificacion2 is not null or bonificacion3 is not null or lista_incluye_iva is not null)",
+            Integer.class, conLista, sinProveedor)).isZero();
         assertThat(jdbc.queryForObject("select success from flyway_schema_history where version = '7'", Integer.class))
             .isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("documenta el rollback: con V1000+ el codigo anterior (sin V7) no valida; sin datos demo (prod) V7 queda como future y valida")
+    void versionSieteSinArchivo(@org.junit.jupiter.api.io.TempDir java.nio.file.Path sinV7) throws Exception {
+        java.nio.file.Path origen = java.nio.file.Path.of("src/main/resources/db/migration");
+        try (var archivos = java.nio.file.Files.list(origen)) {
+            for (java.nio.file.Path archivo : archivos.filter(a -> !a.getFileName().toString().startsWith("V7__")).toList()) {
+                java.nio.file.Files.copy(archivo, sinV7.resolve(archivo.getFileName()));
+            }
+        }
+        String codigoAnterior = "filesystem:" + sinV7;
+
+        // Prod: la ultima migracion es la V7, que para el codigo anterior es future (se ignora por defecto).
+        migrarALa7();
+        flyway(codigoAnterior).load().validate();
+
+        // Dev/test: hay V1000+ aplicados despues, asi que la V7 es "missing" y la validacion falla.
+        flyway("classpath:db/migration", "classpath:db/dev-data").outOfOrder(true).load().migrate();
+        assertThatThrownBy(() -> flyway(codigoAnterior, "classpath:db/dev-data").load().validate())
+            .isInstanceOf(org.flywaydb.core.api.exception.FlywayValidateException.class)
+            .hasMessageContaining("Detected applied migration not resolved locally: 7");
     }
 
     // ---- rollback ----
