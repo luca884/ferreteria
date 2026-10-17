@@ -1,0 +1,109 @@
+:host {
+  display: block;
+}
+.desglose {
+  display: grid;
+  gap: var(--e-3);
+  padding: var(--e-4) var(--e-5) var(--e-5);
+  border: 1px solid var(--borde);
+  border-radius: var(--radio-lg);
+  background: var(--superficie);
+  box-shadow: var(--sombra-1);
+}
+.desglose h2 {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 650;
+}
+.aviso-sin-lista {
+  margin: 0;
+  padding: var(--e-2) var(--e-3);
+  border: 1px solid var(--info-borde);
+  border-left: 4px solid var(--info);
+  border-radius: var(--radio);
+  background: var(--info-fondo);
+}
+.cotizacion {
+  margin: 0;
+}
+.congelada {
+  display: block;
+  color: var(--advertencia);
+  font-weight: 600;
+}
+.pasos {
+  display: grid;
+  gap: var(--e-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.paso {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--e-3);
+  padding: var(--e-1) var(--e-3);
+  border-bottom: 1px dashed var(--borde);
+}
+.paso-importe {
+  font-variant-numeric: tabular-nums;
+}
+.paso.final {
+  border: 1px solid var(--acento-borde);
+  border-radius: var(--radio);
+  background: var(--acento-suave);
+}
+.paso.final .paso-importe {
+  font-size: 1.25rem;
+}
+.no-coincide {
+  margin: 0;
+  padding: var(--e-2) var(--e-3);
+  border: 1px solid var(--advertencia-borde);
+  border-left: 4px solid var(--advertencia-marca);
+  border-radius: var(--radio);
+  background: var(--advertencia-fondo);
+}
+.no-coincide p {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--e-4);
+  margin: 0;
+}
+.bonificaciones,
+.ajustes-lectura {
+  margin: 0;
+}
+.bonificaciones dt,
+.ajustes-lectura dt {
+  color: var(--texto-suave);
+  font-size: var(--texto-sm);
+  font-weight: 700;
+}
+.bonificaciones dd,
+.ajustes-lectura dd {
+  margin: 0;
+}
+.ajustes {
+  min-width: 0;
+  margin: 0;
+  padding: var(--e-3) var(--e-4) var(--e-4);
+  border: 1px solid var(--borde);
+  border-radius: var(--radio);
+}
+.ajustes legend {
+  padding: 0 var(--e-1);
+  font-weight: 650;
+}
+.ajustes-campos {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--e-3);
+  margin: var(--e-2) 0;
+}
+@media (max-width: 700px) {
+  .ajustes-campos {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

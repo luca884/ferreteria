@@ -135,3 +135,26 @@ legend {
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+/* El desglose y los ajustes van debajo del formulario, con su propia acción de guardar. */
+.desglose {
+  margin-top: var(--e-4);
+}
+.acciones-ajustes {
+  display: flex;
+  gap: var(--e-3);
+  align-items: center;
+  margin-top: var(--e-2);
+}
+
+/* El aviso de «otro cambio modificó este artículo» lleva su acción al lado. */
+.error-con-accion {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--e-3);
+  align-items: center;
+}
+.error-con-accion .error {
+  flex: 1;
+  margin: 0;
+}

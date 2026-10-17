@@ -1,0 +1,97 @@
+<section class="desglose" aria-labelledby="desglose-titulo">
+  <h2 id="desglose-titulo">De dónde sale el precio</h2>
+
+  @if (!desglose().tieneLista) {
+    <p id="motivo-sin-lista" class="aviso-sin-lista">{{ desglose().motivoSinLista }}</p>
+  }
+
+  @if (desglose().moneda === 'USD') {
+    <p class="cotizacion">
+      @if (desglose().cotizacion !== null) {
+        Dólar a <strong>{{ dolar() }}</strong
+        >{{ dolarDesde() ? ', vigente desde el ' + dolarDesde() : '' }}.
+        @if (desglose().cotizacionCongelada) {
+          <span class="congelada"
+            >La cotización está apagada: se usa el último dólar guardado.</span
+          >
+        }
+      } @else {
+        Todavía no hay cotización del dólar.
+      }
+    </p>
+  }
+
+  <ol class="pasos">
+    @for (paso of pasos(); track $index) {
+      <li class="paso" [attr.data-tipo]="paso.tipo" [class.final]="paso.tipo === 'PRECIO_FINAL'">
+        <span class="paso-nombre">{{ paso.nombre }}</span>
+        @if (paso.importe !== null) {
+          <strong class="paso-importe">{{ paso.importe }}</strong>
+        }
+      </li>
+    }
+  </ol>
+
+  @if (sinGuardar()) {
+    <p class="sin-guardar pista" role="status">
+      Estos importes salen de los ajustes que escribiste. Todavía no se guardaron.
+    </p>
+  }
+
+  @if (noCoincide()) {
+    <div class="no-coincide aviso">
+      <p>
+        <span
+          >Costo de la lista <strong>{{ costoDeLaLista() }}</strong></span
+        >
+        <span
+          >Costo guardado <strong>{{ costoGuardado() }}</strong></span
+        >
+      </p>
+      <p>El costo guardado se cambió a mano o por una actualización masiva.</p>
+    </div>
+  }
+
+  @if (desglose().tieneLista) {
+    <dl class="bonificaciones">
+      <dt>Bonificación del proveedor (positivo descuenta)</dt>
+      <dd>{{ bonificaciones() }}</dd>
+    </dl>
+  }
+
+  @if (esDueno()) {
+    <fieldset class="ajustes">
+      <legend>Descuentos o recargos del artículo</legend>
+      <p id="ajustes-pista" class="pista">Negativo es descuento, positivo es recargo.</p>
+      <div class="ajustes-campos">
+        @for (nombre of nombres; track nombre; let i = $index) {
+          <div class="campo">
+            <label [for]="nombre">Ajuste {{ i + 1 }} (%)</label>
+            <input
+              [id]="nombre"
+              [name]="nombre"
+              type="number"
+              inputmode="decimal"
+              step="0.01"
+              min="-99.99"
+              max="1000"
+              [formControl]="ajustes().controls[nombre]"
+              [attr.aria-invalid]="errores()[i] ? 'true' : null"
+              [attr.aria-describedby]="describir(i)"
+            />
+            @if (errores()[i]; as mensaje) {
+              <span [id]="nombre + '-error'" class="campo-error">{{ mensaje }}</span>
+            }
+          </div>
+        }
+      </div>
+      <ng-content />
+    </fieldset>
+  } @else if (desglose().tieneLista) {
+    <dl class="ajustes-lectura">
+      <dt>Descuentos o recargos del artículo</dt>
+      <dd>{{ ajustesGuardadosTexto() }}</dd>
+      <dd class="pista">Negativo es descuento, positivo es recargo.</dd>
+    </dl>
+  }
+</section>

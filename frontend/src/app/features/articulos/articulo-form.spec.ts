@@ -4,7 +4,7 @@ import localeEsAr from '@angular/common/locales/es-AR';
 import { LOCALE_ID, signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { ActivatedRoute, Router, convertToParamMap, provideRouter } from '@angular/router';
-import { of, throwError } from 'rxjs';
+import { Subject, of, throwError } from 'rxjs';
 import { vi } from 'vitest';
 import { By } from '@angular/platform-browser';
 import { AuthService } from '../../core/auth/auth.service';
@@ -16,7 +16,7 @@ import { Proveedor } from '../proveedores/proveedor.models';
 import { ProveedoresService } from '../proveedores/proveedores.service';
 import { Rubro } from '../rubros/rubro.models';
 import { RubrosService } from '../rubros/rubros.service';
-import { Articulo } from './articulo.models';
+import { Articulo, DesglosePrecio } from './articulo.models';
 import { ArticuloForm } from './articulo-form';
 import { ArticulosService } from './articulos.service';
 
@@ -68,6 +68,68 @@ describe('ArticuloForm', () => {
     ...cambios,
   });
 
+  /** El artículo del ejemplo de R-209: lista 1.000,00, bonificación 10, ajustes -5 y +3, margen 30, IVA 21, múltiplo 10. */
+  const articuloConLista = (cambios: Partial<Articulo> = {}): Articulo =>
+    articuloGuardado({
+      costo: 880.65,
+      margenPorcentaje: 30,
+      alicuotaIva: 'IVA_21',
+      precioFinal: 1390,
+      precioListaProveedor: 1000,
+      ajuste1: -5,
+      ajuste2: 3,
+      ajuste3: null,
+      bonificacion1: 10,
+      bonificacion2: null,
+      bonificacion3: null,
+      listaIncluyeIva: false,
+      ...cambios,
+    });
+
+  const desgloseDe = (cambios: Partial<DesglosePrecio> = {}): DesglosePrecio => ({
+    articuloId: 5,
+    tieneLista: true,
+    motivoSinLista: null,
+    moneda: 'ARS',
+    precioLista: 1000,
+    listaIncluyeIva: false,
+    alicuotaIva: 'IVA_21',
+    bonificacion1: 10,
+    bonificacion2: null,
+    bonificacion3: null,
+    ajuste1: -5,
+    ajuste2: 3,
+    ajuste3: null,
+    pasos: [],
+    costoDeLista: 880.65,
+    costoGuardado: 880.65,
+    coincide: true,
+    margen: 30,
+    origenMargen: 'PROPIO',
+    cotizacion: null,
+    cotizacionCongelada: false,
+    multiplo: 10,
+    precioFinal: 1390,
+    ...cambios,
+  });
+
+  /** Sin lista de proveedor: lo que manda el servidor con el texto único de la decisión 46. */
+  const MOTIVO_SIN_LISTA =
+    'Este artículo no tiene lista de proveedor. Los ajustes se usan solo con artículos que vienen de una lista.';
+  const desgloseSinLista = (cambios: Partial<DesglosePrecio> = {}): DesglosePrecio =>
+    desgloseDe({
+      tieneLista: false,
+      motivoSinLista: MOTIVO_SIN_LISTA,
+      precioLista: null,
+      listaIncluyeIva: null,
+      bonificacion1: null,
+      ajuste1: null,
+      ajuste2: null,
+      costoDeLista: null,
+      coincide: null,
+      ...cambios,
+    });
+
   let fixture: ComponentFixture<ArticuloForm>;
   let servicio: {
     obtener: ReturnType<typeof vi.fn>;
@@ -75,6 +137,8 @@ describe('ArticuloForm', () => {
     actualizar: ReturnType<typeof vi.fn>;
     reactivar: ReturnType<typeof vi.fn>;
     ajustarStock: ReturnType<typeof vi.fn>;
+    desglose: ReturnType<typeof vi.fn>;
+    guardarAjustes: ReturnType<typeof vi.fn>;
     configuracionPrecios: ReturnType<typeof vi.fn>;
   };
   let navigate: ReturnType<typeof vi.spyOn>;
@@ -87,6 +151,8 @@ describe('ArticuloForm', () => {
       dueno?: boolean;
       id?: string | null;
       articulo?: Articulo | HttpErrorResponse;
+      /** Lo que responde GET /articulos/{id}/desglose; por defecto, un artículo sin lista. */
+      desglose?: DesglosePrecio | HttpErrorResponse;
       sinConfiguracion?: boolean;
       /** Lo que responde GET /cotizacion; 'falla' si no se puede leer. */
       cotizacion?: Cotizacion | 'falla';
@@ -96,6 +162,7 @@ describe('ArticuloForm', () => {
       dueno = true,
       id = null,
       articulo = articuloGuardado(),
+      desglose = desgloseSinLista(),
       sinConfiguracion = false,
       cotizacion = cotizacionActiva(),
     } = opciones;
@@ -107,6 +174,10 @@ describe('ArticuloForm', () => {
       actualizar: vi.fn(() => of(articuloGuardado())),
       reactivar: vi.fn(() => of(articuloGuardado({ activo: true }))),
       ajustarStock: vi.fn(),
+      desglose: vi.fn(() =>
+        desglose instanceof HttpErrorResponse ? throwError(() => desglose) : of(desglose),
+      ),
+      guardarAjustes: vi.fn(() => of(articuloConLista())),
       configuracionPrecios: vi.fn(() =>
         sinConfiguracion
           ? throwError(() => errorHttp(500, 'Error interno'))
@@ -1304,6 +1375,650 @@ describe('ArticuloForm', () => {
       await crearComponente({ dueno: false, id: '5', articulo: articuloGuardado({ activo: false }) });
       expect(el().querySelector('.etiqueta.de-baja')).not.toBeNull();
       expect(el().querySelector('button.reactivar')).toBeNull();
+    });
+  });
+  describe('desglose y ajustes del artículo (R-212 a R-219)', () => {
+    const limpio = (texto: string | null | undefined) => (texto ?? '').replace(/[\s ]+/g, ' ').trim();
+    const importes = () =>
+      Array.from(el().querySelectorAll('app-desglose-precio .paso-importe')).map((n) => limpio(n.textContent));
+    const botonAjustes = () => el().querySelector<HTMLButtonElement>('button.guardar-ajustes')!;
+    const banner = () => limpio(el().querySelector('[data-foco-ajustes]')?.textContent);
+
+    async function clicAjustes() {
+      botonAjustes().click();
+      await refrescar();
+    }
+    const conLista = (cambios: Partial<DesglosePrecio> = {}) => ({
+      id: '5',
+      articulo: articuloConLista(),
+      desglose: desgloseDe(cambios),
+    });
+
+    describe('carga', () => {
+      it('la edición pide el desglose del artículo y lo muestra', async () => {
+        await crearComponente(conLista());
+
+        expect(servicio.desglose).toHaveBeenCalledTimes(1);
+        expect(servicio.desglose).toHaveBeenCalledWith(5);
+        expect(el().querySelector('app-desglose-precio')).not.toBeNull();
+        expect(importes().at(-1)).toBe('$ 1.390,00');
+      });
+
+      it('la cadena arranca con los ajustes guardados en los tres campos', async () => {
+        await crearComponente(conLista());
+
+        expect(input('ajuste1').value).toBe('-5');
+        expect(input('ajuste2').value).toBe('3');
+        expect(input('ajuste3').value).toBe('');
+        expect(importes()).toEqual([
+          '$ 1.000,00', '$ 900,00', '$ 855,00', '$ 880,65', '$ 880,65', '$ 1.144,845', '$ 1.385,2625', '$ 1.390,00',
+        ]);
+      });
+
+      it('el alta no pide el desglose ni muestra campos de ajuste', async () => {
+        await crearComponente();
+
+        expect(servicio.desglose).not.toHaveBeenCalled();
+        expect(el().querySelector('app-desglose-precio')).toBeNull();
+        expect(el().querySelector('#ajuste1')).toBeNull();
+        expect(el().querySelector('button.guardar-ajustes')).toBeNull();
+      });
+
+      it('si el desglose no se puede leer, el formulario del artículo funciona igual', async () => {
+        await crearComponente({ id: '5', desglose: errorHttp(500, 'Error interno') });
+
+        expect(el().querySelector('app-desglose-precio')).toBeNull();
+        expect(input('descripcion').value).toBe('Tornillo hexagonal 1/4');
+      });
+    });
+
+    describe('el PUT del artículo no toca los ajustes (decisión 43)', () => {
+      it('guardar el artículo no manda ajustes ni llama al endpoint de ajustes', async () => {
+        await crearComponente(conLista());
+        await escribir('ajuste1', '10');
+        await escribir('descripcion', 'Otra descripción');
+
+        await enviar();
+
+        const [, enviado] = servicio.actualizar.mock.calls[0];
+        expect(Object.keys(enviado).filter((k) => /^(ajuste|bonificacion)/.test(k))).toEqual([]);
+        expect(servicio.guardarAjustes).not.toHaveBeenCalled();
+      });
+
+      it('escribir un ajuste no ensucia el formulario del artículo', async () => {
+        await crearComponente(conLista());
+
+        await escribir('ajuste1', '10');
+        el().querySelector<HTMLAnchorElement>('a.cancelar')!.click();
+        await refrescar();
+
+        expect(el().querySelector('app-confirmacion')).toBeNull();
+        expect(navigate).toHaveBeenCalledWith(['/articulos'], VOLVER_AL_LISTADO);
+      });
+    });
+
+    describe('en vivo', () => {
+      it('al borrar el +3 la pantalla muestra costo 855,00 y precio $ 1.350,00 antes de guardar', async () => {
+        await crearComponente(conLista());
+
+        await escribir('ajuste2', '');
+
+        expect(importes().slice(0, 4)).toEqual(['$ 1.000,00', '$ 900,00', '$ 855,00', '$ 855,00']);
+        expect(importes().at(-1)).toBe('$ 1.350,00');
+        expect(servicio.guardarAjustes).not.toHaveBeenCalled();
+      });
+    });
+
+    describe('guardar ajustes', () => {
+      it('está apagado mientras no haya cambios', async () => {
+        await crearComponente(conLista());
+
+        expect(botonAjustes().disabled).toBe(true);
+
+        await escribir('ajuste2', '');
+        expect(botonAjustes().disabled).toBe(false);
+
+        await escribir('ajuste2', '3');
+        expect(botonAjustes().disabled).toBe(true);
+      });
+
+      it('está apagado con un ajuste inválido', async () => {
+        await crearComponente(conLista());
+
+        await escribir('ajuste1', '-100');
+
+        expect(botonAjustes().disabled).toBe(true);
+      });
+
+      it('si el costo guardado coincide con el de la lista guarda directo, sin aviso ni confirmación', async () => {
+        await crearComponente(conLista());
+        await escribir('ajuste2', '');
+
+        await clicAjustes();
+
+        expect(el().querySelector('app-confirmacion')).toBeNull();
+        expect(servicio.guardarAjustes).toHaveBeenCalledTimes(1);
+        expect(servicio.guardarAjustes).toHaveBeenCalledWith(
+          5,
+          expect.objectContaining({ ajuste1: -5, ajuste2: null, ajuste3: null, confirmaPisarCosto: false }),
+        );
+        const pedido = servicio.guardarAjustes.mock.calls[0][1];
+        expect(pedido).not.toHaveProperty('costo');
+      });
+
+      it('manda también un ajuste nuevo y decimales exactos', async () => {
+        await crearComponente(conLista());
+        await escribir('ajuste3', '1.5');
+
+        await clicAjustes();
+
+        expect(servicio.guardarAjustes.mock.calls[0][1]).toEqual(
+          expect.objectContaining({ ajuste1: -5, ajuste2: 3, ajuste3: 1.5 }),
+        );
+      });
+
+      it('después de guardar vuelve a pedir el artículo y el desglose y muestra lo que devolvió el servidor', async () => {
+        await crearComponente(conLista());
+        await escribir('ajuste2', '');
+        const guardado = articuloConLista({ costo: 855, precioFinal: 1350, ajuste2: null });
+        servicio.guardarAjustes.mockReturnValue(of(guardado));
+        servicio.obtener.mockReturnValue(of(guardado));
+        // El servidor manda: acá difiere del cálculo en vivo (860 contra 855).
+        servicio.desglose.mockReturnValue(
+          of(desgloseDe({ ajuste2: null, costoDeLista: 855, costoGuardado: 860, coincide: false, precioFinal: 1360 })),
+        );
+
+        await clicAjustes();
+
+        expect(servicio.obtener).toHaveBeenCalledTimes(2);
+        expect(servicio.desglose).toHaveBeenCalledTimes(2);
+        expect(importes()).toContain('$ 860,00');
+        expect(limpio(el().querySelector('.precio-final dd')?.textContent)).toBe('$ 1.350,00');
+        expect(banner()).toBe('Se guardaron los ajustes.');
+      });
+
+      it('el costo nuevo pasa al campo costo del formulario, para no volver a pisarlo con el viejo', async () => {
+        await crearComponente(conLista());
+        await escribir('ajuste2', '');
+        const guardado = articuloConLista({ costo: 855, precioFinal: 1350, ajuste2: null });
+        servicio.guardarAjustes.mockReturnValue(of(guardado));
+        servicio.obtener.mockReturnValue(of(guardado));
+
+        await clicAjustes();
+
+        expect(input('costo').value).toBe('855');
+      });
+
+      it('lo escrito en el resto del formulario se conserva al guardar ajustes', async () => {
+        await crearComponente(conLista());
+        await escribir('descripcion', 'Cambio sin guardar');
+        await escribir('ajuste2', '');
+        const guardado = articuloConLista({ costo: 855, ajuste2: null });
+        servicio.guardarAjustes.mockReturnValue(of(guardado));
+        servicio.obtener.mockReturnValue(of(guardado));
+
+        await clicAjustes();
+
+        expect(input('descripcion').value).toBe('Cambio sin guardar');
+      });
+
+      it('un 409 (por ejemplo sin cotización) muestra el mensaje del servidor y conserva lo escrito', async () => {
+        await crearComponente(conLista());
+        await escribir('ajuste2', '7');
+        servicio.guardarAjustes.mockReturnValue(
+          throwError(() => errorHttp(409, 'Todavía no hay cotización del dólar. Probá en unos minutos')),
+        );
+
+        await clicAjustes();
+
+        expect(banner()).toBe('Todavía no hay cotización del dólar. Probá en unos minutos');
+        expect(input('ajuste2').value).toBe('7');
+        expect(input('ajuste1').value).toBe('-5');
+        expect(servicio.obtener).toHaveBeenCalledTimes(1);
+      });
+
+      it('un error del servidor sin mensaje usa un texto propio', async () => {
+        await crearComponente(conLista());
+        await escribir('ajuste2', '7');
+        servicio.guardarAjustes.mockReturnValue(throwError(() => new HttpErrorResponse({ status: 500 })));
+
+        await clicAjustes();
+
+        expect(banner()).toBe('No se pudieron guardar los ajustes.');
+      });
+
+      it('el aviso del resultado recibe el foco para que se anuncie', async () => {
+        await crearComponente(conLista());
+        await escribir('ajuste2', '7');
+        servicio.guardarAjustes.mockReturnValue(throwError(() => errorHttp(409, 'No se puede')));
+
+        await clicAjustes();
+
+        expect(document.activeElement).toBe(el().querySelector('[data-foco-ajustes]'));
+      });
+
+      it('mientras guarda, el botón está apagado', async () => {
+        await crearComponente(conLista());
+        await escribir('ajuste2', '');
+        const respuesta = new Subject<Articulo>();
+        servicio.guardarAjustes.mockReturnValue(respuesta);
+
+        await clicAjustes();
+
+        expect(botonAjustes().disabled).toBe(true);
+        respuesta.error(errorHttp(409, 'x'));
+        await refrescar();
+        expect(botonAjustes().disabled).toBe(false);
+      });
+    });
+
+    describe('aviso antes de pisar un costo cargado a mano (R-214)', () => {
+      const costoAMano = () =>
+        conLista({
+          bonificacion1: 10,
+          ajuste1: null,
+          ajuste2: null,
+          costoDeLista: 900,
+          costoGuardado: 950,
+          coincide: false,
+          precioFinal: 1500,
+        });
+
+      it('antes de enviar abre la confirmación con los dos costos y el que quedaría, sin pedido de prueba', async () => {
+        await crearComponente({ ...costoAMano(), articulo: articuloConLista({ costo: 950, ajuste1: null, ajuste2: null }) });
+        await escribir('ajuste1', '-5');
+
+        await clicAjustes();
+
+        expect(servicio.guardarAjustes).not.toHaveBeenCalled();
+        expect(limpio(el().querySelector('app-confirmacion p')?.textContent)).toBe(
+          'El costo guardado ($ 950,00) no coincide con el que sale de la lista ($ 900,00). Si guardás, el costo pasa a $ 855,00.',
+        );
+      });
+
+      it('confirmar envía confirmaPisarCosto: true', async () => {
+        await crearComponente({ ...costoAMano(), articulo: articuloConLista({ costo: 950, ajuste1: null, ajuste2: null }) });
+        await escribir('ajuste1', '-5');
+        await clicAjustes();
+
+        el().querySelector<HTMLButtonElement>('app-confirmacion button.confirmar')!.click();
+        await refrescar();
+
+        expect(servicio.guardarAjustes).toHaveBeenCalledTimes(1);
+        expect(servicio.guardarAjustes).toHaveBeenCalledWith(
+          5,
+          expect.objectContaining({ ajuste1: -5, confirmaPisarCosto: true }),
+        );
+        expect(el().querySelector('app-confirmacion')).toBeNull();
+      });
+
+      it('cancelar no envía nada, cierra el aviso y conserva lo escrito', async () => {
+        await crearComponente({ ...costoAMano(), articulo: articuloConLista({ costo: 950, ajuste1: null, ajuste2: null }) });
+        await escribir('ajuste1', '-5');
+        await clicAjustes();
+
+        el().querySelector<HTMLButtonElement>('app-confirmacion button.cancelar')!.click();
+        await refrescar();
+
+        expect(servicio.guardarAjustes).not.toHaveBeenCalled();
+        expect(el().querySelector('app-confirmacion')).toBeNull();
+        expect(input('ajuste1').value).toBe('-5');
+      });
+
+      it('en dólares los importes llevan «US$»', async () => {
+        await crearComponente({
+          id: '5',
+          articulo: articuloConLista({ moneda: 'USD', costo: 9.5, ajuste1: null, ajuste2: null }),
+          desglose: desgloseDe({
+            moneda: 'USD',
+            precioLista: 10,
+            bonificacion1: 10,
+            ajuste1: null,
+            ajuste2: null,
+            costoDeLista: 9,
+            costoGuardado: 9.5,
+            coincide: false,
+            cotizacion: 1000,
+          }),
+        });
+        await escribir('ajuste1', '-10');
+
+        await clicAjustes();
+
+        expect(limpio(el().querySelector('app-confirmacion p')?.textContent)).toBe(
+          'El costo guardado (US$ 9,50) no coincide con el que sale de la lista (US$ 9,00). Si guardás, el costo pasa a US$ 8,10.',
+        );
+      });
+
+      it('si el costo no cambia (el nuevo es igual al guardado) no hay aviso aunque no coincida con la lista', async () => {
+        // Guardado 855, la lista hoy da 900 y el ajuste -5 lleva el costo a 855: no hay nada que pisar.
+        await crearComponente({
+          id: '5',
+          articulo: articuloConLista({ costo: 855, ajuste1: null, ajuste2: null }),
+          desglose: desgloseDe({
+            bonificacion1: 10,
+            ajuste1: null,
+            ajuste2: null,
+            costoDeLista: 900,
+            costoGuardado: 855,
+            coincide: false,
+            precioFinal: 1350,
+          }),
+        });
+        await escribir('ajuste1', '-5');
+
+        await clicAjustes();
+
+        expect(el().querySelector('app-confirmacion')).toBeNull();
+        expect(servicio.guardarAjustes).toHaveBeenCalledWith(5, expect.objectContaining({ confirmaPisarCosto: false }));
+      });
+    });
+
+    describe('sin lista (R-213, decisión 46)', () => {
+      it('un artículo de alta manual tiene los campos de ajuste deshabilitados y el texto del servidor', async () => {
+        await crearComponente({ id: '5', articulo: articuloGuardado(), desglose: desgloseSinLista() });
+
+        for (const id of ['ajuste1', 'ajuste2', 'ajuste3']) expect(input(id).disabled).toBe(true);
+        expect(limpio(el().querySelector('#motivo-sin-lista')?.textContent)).toBe(MOTIVO_SIN_LISTA);
+        expect(botonAjustes().disabled).toBe(true);
+      });
+
+      it('con precio de lista pero sin proveedor se ve igual', async () => {
+        await crearComponente({
+          id: '5',
+          articulo: articuloConLista({ proveedorId: null }),
+          desglose: desgloseSinLista({ costoGuardado: 880.65 }),
+        });
+
+        for (const id of ['ajuste1', 'ajuste2', 'ajuste3']) expect(input(id).disabled).toBe(true);
+        expect(limpio(el().querySelector('#motivo-sin-lista')?.textContent)).toBe(MOTIVO_SIN_LISTA);
+      });
+
+      it('no se puede guardar ajustes aunque se dispare el clic', async () => {
+        await crearComponente({ id: '5', articulo: articuloGuardado(), desglose: desgloseSinLista() });
+
+        botonAjustes().click();
+        await refrescar();
+
+        expect(servicio.guardarAjustes).not.toHaveBeenCalled();
+      });
+
+      it('la cadena arranca en el costo', async () => {
+        await crearComponente({ id: '5', articulo: articuloGuardado(), desglose: desgloseSinLista({ costoGuardado: 500 }) });
+
+        expect(importes()[0]).toBe('$ 500,00');
+      });
+    });
+
+    describe('Vendedor (decisión 44)', () => {
+      it('ve el desglose sin campos de ajuste ni botón para guardarlos', async () => {
+        await crearComponente({ ...conLista(), dueno: false });
+
+        expect(importes().at(-1)).toBe('$ 1.390,00');
+        expect(el().querySelector('#ajuste1')).toBeNull();
+        expect(el().querySelector('button.guardar-ajustes')).toBeNull();
+      });
+
+      it('no puede guardar ajustes aunque llegue el método', async () => {
+        await crearComponente({ ...conLista(), dueno: false });
+
+        (fixture.componentInstance as unknown as { guardarAjustes: () => void }).guardarAjustes();
+        await refrescar();
+
+        expect(servicio.guardarAjustes).not.toHaveBeenCalled();
+      });
+    });
+
+    describe('accesibilidad', () => {
+      it('cada campo de ajuste tiene su etiqueta y la pista enlazada', async () => {
+        await crearComponente(conLista());
+
+        for (const [id, rotulo] of [['ajuste1', 'Ajuste 1 (%)'], ['ajuste2', 'Ajuste 2 (%)'], ['ajuste3', 'Ajuste 3 (%)']]) {
+          expect(limpio(el().querySelector(`label[for="${id}"]`)?.textContent)).toBe(rotulo);
+          expect(input(id).getAttribute('aria-describedby')).toContain('ajustes-pista');
+        }
+      });
+    });
+  });
+  describe('versión del artículo y aviso del 409 (R-224, R-225)', () => {
+    const MENSAJE_VERSION = 'Otro cambio modificó este artículo. Recargá y volvé a intentar.';
+    const limpio = (texto: string | null | undefined) => (texto ?? '').replace(/[\s ]+/g, ' ').trim();
+    const aviso = () => el().querySelector('[data-foco-ajustes]');
+    const botonRecargar = () => el().querySelector<HTMLButtonElement>('button.recargar');
+    const botonAjustes = () => el().querySelector<HTMLButtonElement>('button.guardar-ajustes')!;
+
+    const conVersion = (version: number, cambios: Partial<Articulo> = {}) => ({
+      id: '5',
+      articulo: articuloConLista({ version, ...cambios }),
+      desglose: desgloseDe(),
+    });
+
+    describe('lo que se manda', () => {
+      it('el PUT del artículo manda la versión que se cargó', async () => {
+        await crearComponente(conVersion(3));
+        await escribir('descripcion', 'Tornillo nuevo');
+
+        await enviar();
+
+        expect(servicio.actualizar.mock.calls[0][1]).toEqual(expect.objectContaining({ version: 3 }));
+      });
+
+      it('el alta no manda versión', async () => {
+        await crearComponente();
+        await completarMinimos();
+
+        await enviar();
+
+        expect(servicio.crear.mock.calls[0][0]).not.toHaveProperty('version');
+      });
+
+      it('el PUT de ajustes manda la versión junto con confirmaPisarCosto', async () => {
+        await crearComponente(conVersion(3));
+        await escribir('ajuste2', '');
+
+        botonAjustes().click();
+        await refrescar();
+
+        expect(servicio.guardarAjustes).toHaveBeenCalledWith(5, {
+          ajuste1: -5,
+          ajuste2: null,
+          ajuste3: null,
+          confirmaPisarCosto: false,
+          version: 3,
+        });
+      });
+
+      it('confirmar el aviso de pisar el costo también manda la versión', async () => {
+        await crearComponente({
+          id: '5',
+          articulo: articuloConLista({ version: 7, costo: 950, ajuste1: null, ajuste2: null }),
+          desglose: desgloseDe({ ajuste1: null, ajuste2: null, costoDeLista: 900, costoGuardado: 950, coincide: false }),
+        });
+        await escribir('ajuste1', '-5');
+        botonAjustes().click();
+        await refrescar();
+
+        el().querySelector<HTMLButtonElement>('app-confirmacion button.confirmar')!.click();
+        await refrescar();
+
+        expect(servicio.guardarAjustes.mock.calls[0][1]).toEqual(
+          expect.objectContaining({ confirmaPisarCosto: true, version: 7 }),
+        );
+      });
+
+      it('un artículo sin versión (servidor viejo) no manda un campo inventado', async () => {
+        await crearComponente({ id: '5', articulo: articuloConLista(), desglose: desgloseDe() });
+        await escribir('descripcion', 'Otra');
+
+        await enviar();
+
+        expect(servicio.actualizar.mock.calls[0][1].version).toBeUndefined();
+      });
+    });
+
+    describe('la versión de cada respuesta', () => {
+      it('después de guardar el artículo toma la versión de la respuesta: dos guardados seguidos no dan 409', async () => {
+        await crearComponente(conVersion(3));
+        servicio.actualizar.mockReturnValue(of(articuloConLista({ version: 4 })));
+        await escribir('descripcion', 'Primero');
+        await enviar();
+        await escribir('descripcion', 'Segundo');
+
+        await enviar();
+
+        expect(servicio.actualizar.mock.calls.map(([, pedido]) => pedido.version)).toEqual([3, 4]);
+      });
+
+      it('dos guardados de ajustes seguidos, sin recargar la página, mandan la versión nueva', async () => {
+        await crearComponente(conVersion(3));
+        const primero = articuloConLista({ version: 4, ajuste2: null });
+        servicio.guardarAjustes.mockReturnValue(of(primero));
+        servicio.obtener.mockReturnValue(of(primero));
+        servicio.desglose.mockReturnValue(of(desgloseDe({ ajuste2: null })));
+        await escribir('ajuste2', '');
+        botonAjustes().click();
+        await refrescar();
+
+        await escribir('ajuste3', '2');
+        botonAjustes().click();
+        await refrescar();
+
+        expect(servicio.guardarAjustes.mock.calls.map(([, pedido]) => pedido.version)).toEqual([3, 4]);
+      });
+
+      it('si el servidor devuelve la versión en el PUT de ajustes y el reintento de lectura falla, igual la usa', async () => {
+        await crearComponente(conVersion(3));
+        servicio.guardarAjustes.mockReturnValue(of(articuloConLista({ version: 4, ajuste2: null })));
+        servicio.obtener.mockReturnValue(throwError(() => errorHttp(500, 'Error interno')));
+        await escribir('ajuste2', '');
+        botonAjustes().click();
+        await refrescar();
+
+        await escribir('ajuste3', '2');
+        botonAjustes().click();
+        await refrescar();
+
+        expect(servicio.guardarAjustes.mock.calls[1][1].version).toBe(4);
+      });
+    });
+
+    describe('el 409 de versión', () => {
+      it('en el PUT del artículo muestra el aviso solo con el mensaje, no como errores de campo', async () => {
+        await crearComponente(conVersion(3));
+        servicio.actualizar.mockReturnValue(throwError(() => errorHttp(409, MENSAJE_VERSION)));
+        await escribir('descripcion', 'Mi cambio');
+
+        await enviar();
+
+        expect(limpio(aviso()?.textContent)).toBe(MENSAJE_VERSION);
+        expect(el().querySelector('.errores-campos')).toBeNull();
+        expect(navigate).not.toHaveBeenCalled();
+      });
+
+      it('conserva lo escrito y ofrece «Recargar»', async () => {
+        await crearComponente(conVersion(3));
+        servicio.actualizar.mockReturnValue(throwError(() => errorHttp(409, MENSAJE_VERSION)));
+        await escribir('descripcion', 'Mi cambio');
+
+        await enviar();
+
+        expect(input('descripcion').value).toBe('Mi cambio');
+        expect(limpio(botonRecargar()?.textContent)).toBe('Recargar');
+      });
+
+      it('«Recargar» vuelve a pedir el artículo y el desglose y deja el formulario con lo del servidor', async () => {
+        await crearComponente(conVersion(3));
+        servicio.actualizar.mockReturnValue(throwError(() => errorHttp(409, MENSAJE_VERSION)));
+        await escribir('descripcion', 'Mi cambio');
+        await enviar();
+        const nuevo = articuloConLista({ version: 6, descripcion: 'Lo que dejó la importación', costo: 990, precioFinal: 1560 });
+        servicio.obtener.mockReturnValue(of(nuevo));
+        servicio.desglose.mockReturnValue(of(desgloseDe({ costoGuardado: 990, coincide: false, precioFinal: 1560 })));
+
+        botonRecargar()!.click();
+        await refrescar();
+
+        expect(servicio.obtener).toHaveBeenCalledTimes(2);
+        expect(servicio.desglose).toHaveBeenCalledTimes(2);
+        expect(input('descripcion').value).toBe('Lo que dejó la importación');
+        expect(input('costo').value).toBe('990');
+        expect(botonRecargar()).toBeNull();
+        expect(limpio(aviso()?.textContent)).toBe('Se recargó el artículo con los últimos cambios.');
+        // y el próximo guardado ya manda la versión nueva
+        await escribir('descripcion', 'Ahora sí');
+        await enviar();
+        expect(servicio.actualizar.mock.calls.at(-1)![1].version).toBe(6);
+      });
+
+      it('en el PUT de ajustes también: aviso, lo escrito se conserva y «Recargar»', async () => {
+        await crearComponente(conVersion(3));
+        servicio.guardarAjustes.mockReturnValue(throwError(() => errorHttp(409, MENSAJE_VERSION)));
+        await escribir('ajuste2', '7');
+
+        botonAjustes().click();
+        await refrescar();
+
+        expect(limpio(aviso()?.textContent)).toBe(MENSAJE_VERSION);
+        expect(input('ajuste2').value).toBe('7');
+        expect(botonRecargar()).not.toBeNull();
+      });
+
+      it('«Recargar» después de un 409 de ajustes trae los ajustes del servidor', async () => {
+        await crearComponente(conVersion(3));
+        servicio.guardarAjustes.mockReturnValue(throwError(() => errorHttp(409, MENSAJE_VERSION)));
+        await escribir('ajuste2', '7');
+        botonAjustes().click();
+        await refrescar();
+        const nuevo = articuloConLista({ version: 5, ajuste1: null, ajuste2: 10 });
+        servicio.obtener.mockReturnValue(of(nuevo));
+        servicio.desglose.mockReturnValue(of(desgloseDe({ ajuste1: null, ajuste2: 10 })));
+
+        botonRecargar()!.click();
+        await refrescar();
+
+        expect(input('ajuste1').value).toBe('');
+        expect(input('ajuste2').value).toBe('10');
+      });
+
+      it('si «Recargar» falla lo dice y deja el aviso para reintentar', async () => {
+        await crearComponente(conVersion(3));
+        servicio.actualizar.mockReturnValue(throwError(() => errorHttp(409, MENSAJE_VERSION)));
+        await enviar();
+        servicio.obtener.mockReturnValue(throwError(() => errorHttp(500, 'Error interno')));
+
+        botonRecargar()!.click();
+        await refrescar();
+
+        expect(limpio(aviso()?.textContent)).toBe('No se pudo recargar el artículo.');
+        expect(botonRecargar()).not.toBeNull();
+      });
+
+      it('otro 409 (códigos repetidos, sin cotización) no ofrece «Recargar»', async () => {
+        await crearComponente(conVersion(3));
+        servicio.actualizar.mockReturnValue(throwError(() => errorHttp(409, 'Ya existe un artículo activo con el código TOR-001.')));
+
+        await enviar();
+
+        expect(botonRecargar()).toBeNull();
+      });
+
+      it('el aviso se anuncia: role alert y recibe el foco', async () => {
+        await crearComponente(conVersion(3));
+        servicio.guardarAjustes.mockReturnValue(throwError(() => errorHttp(409, MENSAJE_VERSION)));
+        await escribir('ajuste2', '7');
+
+        botonAjustes().click();
+        await refrescar();
+
+        expect(aviso()?.getAttribute('role')).toBe('alert');
+        expect(document.activeElement).toBe(aviso());
+      });
+
+      it('el Vendedor no tiene nada que recargar', async () => {
+        await crearComponente({ ...conVersion(3), dueno: false });
+
+        expect(botonRecargar()).toBeNull();
+      });
     });
   });
 });

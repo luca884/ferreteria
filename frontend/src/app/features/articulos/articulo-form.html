@@ -28,7 +28,7 @@
 <p class="ayuda">El precio final lo calcula el sistema con el costo, el margen y la alícuota de IVA.</p>
 
 @if (aviso(); as mensaje) {
-  <p class="alerta exito" role="status">{{ mensaje }}</p>
+  <p class="alerta exito" role="status" tabindex="-1" data-foco-ajustes>{{ mensaje }}</p>
 }
 @if (erroresCampos().length > 0) {
   <div class="error errores-campos" role="alert">
@@ -40,7 +40,12 @@
     </ul>
   </div>
 } @else if (error(); as mensaje) {
-  <p class="error" role="alert">{{ mensaje }}</p>
+  <div class="error-con-accion">
+    <p class="error" role="alert" tabindex="-1" data-foco-ajustes>{{ mensaje }}</p>
+    @if (versionVencida()) {
+      <button type="button" class="secundario recargar" (click)="recargar()">Recargar</button>
+    }
+  </div>
 }
 
 @if (cargando()) {
@@ -397,6 +402,28 @@
       </a>
     </div>
   </form>
+
+  @if (desglose(); as d) {
+    <app-desglose-precio
+      class="desglose"
+      [desglose]="d"
+      [ajustes]="ajustes"
+      [esDueno]="auth.esDueno()"
+      [cotizacionDesde]="cotizacion()?.precios.desde ?? null"
+    >
+      <div class="acciones-ajustes">
+        <button
+          type="button"
+          class="guardar-ajustes"
+          [disabled]="!puedeGuardarAjustes()"
+          [attr.aria-describedby]="d.tieneLista ? null : 'motivo-sin-lista'"
+          (click)="guardarAjustes()"
+        >
+          {{ guardandoAjustes() ? 'Guardando ajustes…' : 'Guardar ajustes' }}
+        </button>
+      </div>
+    </app-desglose-precio>
+  }
 }
 
 @if (confirmandoDescarte()) {
@@ -408,6 +435,18 @@
     [peligro]="true"
     (confirmar)="descartar()"
     (cancelar)="confirmandoDescarte.set(false)"
+  />
+}
+
+@if (confirmandoPisar(); as texto) {
+  <app-confirmacion
+    titulo="¿Pisar el costo guardado?"
+    [mensaje]="texto"
+    textoConfirmar="Guardar y pisar el costo"
+    textoCancelar="Cancelar"
+    [peligro]="true"
+    (confirmar)="confirmarPisar()"
+    (cancelar)="confirmandoPisar.set(null)"
   />
 }
 

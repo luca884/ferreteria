@@ -6,9 +6,11 @@ import { PageResponse } from '../../core/api/page.models';
 import {
   AjusteStockRequest,
   AjusteStockResponse,
+  AjustesRequest,
   Articulo,
   ArticuloRequest,
   ConfiguracionPrecios,
+  DesglosePrecio,
 } from './articulo.models';
 
 @Injectable({ providedIn: 'root' })
@@ -41,6 +43,16 @@ export class ArticulosService {
 
   actualizar(id: number, request: ArticuloRequest): Observable<Articulo> {
     return this.http.put<Articulo>(`${this.url}/${id}`, request);
+  }
+
+  /** De dónde sale el precio, paso a paso (Dueño y Vendedor, solo lectura). */
+  desglose(id: number): Observable<DesglosePrecio> {
+    return this.http.get<DesglosePrecio>(`${this.url}/${id}/desglose`);
+  }
+
+  /** Los tres ajustes del artículo (solo el Dueño); es un pedido propio, aparte del PUT del artículo. */
+  guardarAjustes(id: number, request: AjustesRequest): Observable<Articulo> {
+    return this.http.put<Articulo>(`${this.url}/${id}/ajustes`, request);
   }
 
   desactivar(id: number): Observable<void> {

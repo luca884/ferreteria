@@ -1,8 +1,8 @@
 /** Alícuotas de IVA (las mismas que el backend). */
 export type Alicuota = 'IVA_0' | 'IVA_2_5' | 'IVA_5' | 'IVA_10_5' | 'IVA_21' | 'IVA_27';
-type Decimal = number | string | null | undefined;
+export type Decimal = number | string | null | undefined;
 
-const PORCENTAJE_IVA: Record<Alicuota, string> = {
+export const PORCENTAJE_IVA: Record<Alicuota, string> = {
   IVA_0: '0',
   IVA_2_5: '2.5',
   IVA_5: '5',
@@ -12,12 +12,12 @@ const PORCENTAJE_IVA: Record<Alicuota, string> = {
 };
 
 /** Un decimal exacto: valor = entero / 10^escala. */
-interface Exacto {
+export interface Exacto {
   entero: bigint;
   escala: number;
 }
 
-function exacto(valor: Decimal): Exacto | null {
+export function exacto(valor: Decimal): Exacto | null {
   if (valor === null || valor === undefined || valor === '') return null;
   let texto = typeof valor === 'number' ? String(valor) : valor.trim();
   if (typeof valor === 'number') {

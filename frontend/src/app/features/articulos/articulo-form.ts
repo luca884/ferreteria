@@ -4,6 +4,8 @@ import { toSignal } from '@angular/core/rxjs-interop';
 import {
   AbstractControl,
   FormBuilder,
+  FormControl,
+  FormGroup,
   ReactiveFormsModule,
   ValidationErrors,
   Validators,
@@ -15,7 +17,7 @@ import { AuthService } from '../../core/auth/auth.service';
 import { Avisos } from '../../core/avisos/avisos';
 import { Cotizacion } from '../../core/cotizacion/cotizacion.models';
 import { CotizacionService } from '../../core/cotizacion/cotizacion.service';
-import { MontoPipe, formatearCotizacion } from '../../core/formato/monto';
+import { MontoPipe, formatearCosto, formatearCotizacion } from '../../core/formato/monto';
 import { margenEfectivo, precioFinal } from '../../core/formato/precio-final';
 import { cantidadConUnidad } from '../../core/formato/unidad';
 import { BarraAcciones } from '../../shared/barra-acciones';
@@ -32,6 +34,8 @@ import {
   Articulo,
   ArticuloRequest,
   ConfiguracionPrecios,
+  DesglosePrecio,
+  MENSAJE_ARTICULO_MODIFICADO,
   MONEDAS,
   MONEDA_LABELS,
   Moneda,
@@ -42,6 +46,14 @@ import {
 } from './articulo.models';
 import { ArticulosService } from './articulos.service';
 import { DialogoAjusteStock } from './dialogo-ajuste-stock';
+import {
+  DesglosePrecioVista,
+  GrupoAjustes,
+  ajustesEfectivos,
+  cadenaDelDesglose,
+  errorDeAjuste,
+  valoresDe,
+} from './desglose-precio';
 
 /** Un texto con solo espacios cuenta como vacío. */
 function noVacio(control: AbstractControl<string>): ValidationErrors | null {
@@ -74,7 +86,7 @@ const VOLVER_AL_LISTADO = { queryParamsHandling: 'preserve' } as const;
 
 @Component({
   selector: 'app-articulo-form',
-  imports: [ReactiveFormsModule, MontoPipe, Confirmacion, DialogoAjusteStock, BarraAcciones],
+  imports: [ReactiveFormsModule, MontoPipe, Confirmacion, DialogoAjusteStock, BarraAcciones, DesglosePrecioVista],
   templateUrl: './articulo-form.html',
   styleUrl: './articulo-form.css',
 })
@@ -116,6 +128,13 @@ export class ArticuloForm implements OnInit {
   protected readonly sinFormulario = signal(false);
   protected readonly confirmandoDescarte = signal(false);
   protected readonly ajustandoStock = signal(false);
+  /** El desglose del precio (solo en la edición); null en el alta o si no se pudo leer. */
+  protected readonly desglose = signal<DesglosePrecio | null>(null);
+  protected readonly guardandoAjustes = signal(false);
+  /** El texto del aviso de pisar el costo mientras espera que el Dueño confirme o cancele; null si no hay. */
+  protected readonly confirmandoPisar = signal<string | null>(null);
+  /** El servidor dijo que otro cambio modificó el artículo (409 de versión): hay que recargar. */
+  protected readonly versionVencida = signal(false);
 
   /** null en el alta; el id de la ruta en la edición. */
   private id: number | null = null;
@@ -135,6 +154,33 @@ export class ArticuloForm implements OnInit {
     margenPorcentaje: [null as number | null, [Validators.min(0), Validators.max(1000)]],
     alicuotaIva: ['IVA_21' as AlicuotaIva, [Validators.required]],
     stockMinimo: [0 as number | null, [Validators.min(0)]],
+  });
+
+  /**
+   * Los tres ajustes, con su propio grupo y fuera de `form`: `guardar` y el PUT del artículo nunca los mandan
+   * (decisión 43). Se guardan con su propia acción, hacia `PUT /articulos/{id}/ajustes`.
+   */
+  protected readonly ajustes: GrupoAjustes = new FormGroup({
+    ajuste1: new FormControl<number | null>(null),
+    ajuste2: new FormControl<number | null>(null),
+    ajuste3: new FormControl<number | null>(null),
+  });
+  private readonly ajustesEscritos = toSignal(this.ajustes.valueChanges.pipe(map(() => valoresDe(this.ajustes))), {
+    initialValue: valoresDe(this.ajustes),
+  });
+
+  /** Se puede guardar: Dueño, con lista, con ajustes distintos de los guardados y todos válidos. */
+  protected readonly puedeGuardarAjustes = computed(() => {
+    const d = this.desglose();
+    const escritos = this.ajustesEscritos();
+    return (
+      this.auth.esDueno() &&
+      d !== null &&
+      d.tieneLista &&
+      !this.guardandoAjustes() &&
+      escritos.every((a) => errorDeAjuste(a) === null) &&
+      ajustesEfectivos(d, escritos).cambiaron
+    );
   });
 
   /** Los valores del formulario como signal (incluso deshabilitado, para el Vendedor). */
@@ -253,15 +299,15 @@ export class ArticuloForm implements OnInit {
       return;
     }
     this.guardando.set(true);
-    this.error.set(null);
-    this.aviso.set(null);
-    this.erroresServidor.set({});
+    this.limpiarMensajes();
     const request = this.armarRequest();
     const guardado =
       this.id === null ? this.service.crear(request) : this.service.actualizar(this.id, request);
     guardado.subscribe({
-      next: () => {
+      next: (respuesta) => {
         this.guardando.set(false);
+        // La respuesta trae la versión nueva: la que hay que mandar en el próximo guardado.
+        if (this.id !== null) this.articulo.set(respuesta);
         this.avisos.dejar(`Se guardó «${request.descripcion}».`);
         void this.router.navigate(['/articulos'], VOLVER_AL_LISTADO);
       },
@@ -269,9 +315,143 @@ export class ArticuloForm implements OnInit {
         this.guardando.set(false);
         this.erroresServidor.set(erroresPorCampo(err));
         this.error.set(mensajeDe(err, 'No se pudo guardar el artículo.'));
-        this.enfocarPrimerInvalido();
+        this.versionVencida.set(esVersionVencida(err));
+        if (this.versionVencida()) this.enfocarAvisoDeAjustes();
+        else this.enfocarPrimerInvalido();
       },
     });
+  }
+
+  /**
+   * «Guardar ajustes» es una acción propia. Si guardar pisaría un costo cargado a mano (o movido por una actualización
+   * masiva), el aviso sale ANTES de enviar y sin pedido de prueba (R-214): lo calcula con el desglose y lo escrito.
+   */
+  protected guardarAjustes(): void {
+    const d = this.desglose();
+    if (this.id === null || d === null || !this.puedeGuardarAjustes()) return;
+    const aviso = this.avisoDePisar(d);
+    if (aviso !== null) {
+      this.confirmandoPisar.set(aviso);
+      return;
+    }
+    this.enviarAjustes(false);
+  }
+
+  protected confirmarPisar(): void {
+    this.confirmandoPisar.set(null);
+    if (this.puedeGuardarAjustes()) this.enviarAjustes(true);
+  }
+
+  private avisoDePisar(d: DesglosePrecio): string | null {
+    const costoNuevo = cadenaDelDesglose(d, this.ajustesEscritos()).costoDeLista;
+    if (d.coincide !== false || d.costoDeLista === null || costoNuevo === null) return null;
+    if (Number(costoNuevo) === d.costoGuardado) return null; // el costo no cambia: no hay nada que pisar
+    const en = (valor: number) => formatearCosto(valor, d.moneda);
+    return (
+      `El costo guardado (${en(d.costoGuardado)}) no coincide con el que sale de la lista (${en(d.costoDeLista)}). ` +
+      `Si guardás, el costo pasa a ${en(Number(costoNuevo))}.`
+    );
+  }
+
+  private enviarAjustes(confirmaPisarCosto: boolean): void {
+    const id = this.id;
+    if (id === null) return;
+    const [ajuste1, ajuste2, ajuste3] = this.ajustesEscritos();
+    this.guardandoAjustes.set(true);
+    this.limpiarMensajes();
+    const version = this.articulo()?.version;
+    this.service.guardarAjustes(id, { ajuste1, ajuste2, ajuste3, confirmaPisarCosto, version }).subscribe({
+      next: (guardado) => {
+        // La versión nueva viene en la respuesta, aunque después no se pueda releer el artículo.
+        this.articulo.update((actual) => actual && { ...actual, version: guardado.version });
+        this.recargarTrasAjustes(id);
+      },
+      error: (err: unknown) => {
+        this.guardandoAjustes.set(false);
+        this.error.set(mensajeDe(err, 'No se pudieron guardar los ajustes.'));
+        this.versionVencida.set(esVersionVencida(err));
+        this.enfocarAvisoDeAjustes();
+      },
+    });
+  }
+
+  /** Después de guardar, lo que manda es el servidor: se vuelven a pedir el artículo y el desglose. */
+  private recargarTrasAjustes(id: number): void {
+    forkJoin({
+      articulo: this.service.obtener(id),
+      desglose: this.service.desglose(id).pipe(catchError(() => of(null))),
+    }).subscribe({
+      next: ({ articulo, desglose }) => {
+        this.guardandoAjustes.set(false);
+        this.articulo.set(articulo);
+        this.desglose.set(desglose);
+        this.cargarAjustes(articulo, desglose);
+        // El costo cambió con los ajustes: el campo del formulario no puede quedar con el viejo, que se mandaría
+        // en el próximo guardado como si fuera un costo a mano. Lo demás que esté escrito se conserva.
+        this.form.controls.costo.setValue(articulo.costo);
+        this.aviso.set('Se guardaron los ajustes.');
+        this.enfocarAvisoDeAjustes();
+      },
+      error: () => {
+        this.guardandoAjustes.set(false);
+        this.error.set('Se guardaron los ajustes, pero no se pudo actualizar la pantalla. Recargá la página.');
+        this.enfocarAvisoDeAjustes();
+      },
+    });
+  }
+
+  /** Los ajustes del servidor (los del desglose, o los del artículo si no hay desglose) pasan a los tres campos. */
+  private cargarAjustes(articulo: Articulo, desglose: DesglosePrecio | null): void {
+    const fuente = desglose ?? articulo;
+    this.ajustes.setValue({
+      ajuste1: fuente.ajuste1 ?? null,
+      ajuste2: fuente.ajuste2 ?? null,
+      ajuste3: fuente.ajuste3 ?? null,
+    });
+  }
+
+  /** El resultado de una acción de ajustes recibe el foco: el botón está abajo y el aviso arriba. */
+  private enfocarAvisoDeAjustes(): void {
+    afterNextRender(
+      () => this.host.nativeElement.querySelector<HTMLElement>('[data-foco-ajustes]')?.focus(),
+      { injector: this.injector },
+    );
+  }
+
+  /**
+   * «Recargar» tras un 409 de versión: vuelve a pedir el artículo y el desglose y deja el formulario con lo que hay
+   * en el servidor. Hasta que se apreta, lo escrito se conserva.
+   */
+  protected recargar(): void {
+    const id = this.id;
+    if (id === null) return;
+    this.limpiarMensajes();
+    forkJoin({
+      articulo: this.service.obtener(id),
+      desglose: this.service.desglose(id).pipe(catchError(() => of(null))),
+    }).subscribe({
+      next: ({ articulo, desglose }) => {
+        this.articulo.set(articulo);
+        this.desglose.set(desglose);
+        this.llenarFormulario(articulo);
+        this.cargarAjustes(articulo, desglose);
+        this.form.markAsPristine();
+        this.aviso.set('Se recargó el artículo con los últimos cambios.');
+        this.enfocarAvisoDeAjustes();
+      },
+      error: () => {
+        this.error.set('No se pudo recargar el artículo.');
+        this.versionVencida.set(true);
+        this.enfocarAvisoDeAjustes();
+      },
+    });
+  }
+
+  private limpiarMensajes(): void {
+    this.versionVencida.set(false);
+    this.error.set(null);
+    this.aviso.set(null);
+    this.erroresServidor.set({});
   }
 
   /** Cancelar: con cambios sin guardar pregunta con el diálogo propio; si no, vuelve al listado. */
@@ -323,32 +503,22 @@ export class ArticuloForm implements OnInit {
       proveedores: this.proveedoresService.listar(),
       articulo: this.id === null ? of(null) : this.service.obtener(this.id),
       // Sin configuración no hay precio en vivo, pero el formulario sirve igual.
+      desglose:
+        this.id === null ? of(null) : this.service.desglose(this.id).pipe(catchError(() => of(null))),
       configuracion: this.service.configuracionPrecios().pipe(catchError(() => of(null))),
       // Sin cotización tampoco: el precio en dólares no se calcula y el backend valida al guardar.
       cotizacion: this.cotizaciones.obtener().pipe(catchError(() => of(null))),
     }).subscribe({
-      next: ({ rubros, proveedores, articulo, configuracion, cotizacion }) => {
+      next: ({ rubros, proveedores, articulo, desglose, configuracion, cotizacion }) => {
         this.rubros.set(rubros);
         this.proveedores.set(proveedores.filter((p) => p.activo));
         this.configuracion.set(configuracion);
         this.cotizacion.set(cotizacion);
         if (articulo) {
           this.articulo.set(articulo);
-          this.form.patchValue({
-            codigoInterno: articulo.codigoInterno,
-            descripcion: articulo.descripcion,
-            unidad: articulo.unidad,
-            costo: articulo.costo,
-            moneda: monedaDe(articulo),
-            codigoBarras: articulo.codigoBarras ?? '',
-            codigoProveedor: articulo.codigoProveedor ?? '',
-            ubicacion: articulo.ubicacion ?? '',
-            rubroId: articulo.rubroId,
-            proveedorId: articulo.proveedorId,
-            margenPorcentaje: articulo.margenPorcentaje,
-            alicuotaIva: articulo.alicuotaIva,
-            stockMinimo: articulo.stockMinimo,
-          });
+          this.llenarFormulario(articulo);
+          this.desglose.set(desglose);
+          this.cargarAjustes(articulo, desglose);
         }
         if (!this.auth.esDueno()) this.form.disable();
         this.cargando.set(false);
@@ -364,6 +534,25 @@ export class ArticuloForm implements OnInit {
     });
   }
 
+  /** Los campos del formulario con lo que devolvió el servidor. */
+  private llenarFormulario(articulo: Articulo): void {
+    this.form.patchValue({
+      codigoInterno: articulo.codigoInterno,
+      descripcion: articulo.descripcion,
+      unidad: articulo.unidad,
+      costo: articulo.costo,
+      moneda: monedaDe(articulo),
+      codigoBarras: articulo.codigoBarras ?? '',
+      codigoProveedor: articulo.codigoProveedor ?? '',
+      ubicacion: articulo.ubicacion ?? '',
+      rubroId: articulo.rubroId,
+      proveedorId: articulo.proveedorId,
+      margenPorcentaje: articulo.margenPorcentaje,
+      alicuotaIva: articulo.alicuotaIva,
+      stockMinimo: articulo.stockMinimo,
+    });
+  }
+
   private fallarCarga(mensaje: string): void {
     this.cargando.set(false);
     this.sinFormulario.set(true);
@@ -373,6 +562,7 @@ export class ArticuloForm implements OnInit {
   /** Solo lo editable: stock actual y precio final los resuelve el backend. */
   private armarRequest(): ArticuloRequest {
     const v = this.form.getRawValue();
+    const version = this.articulo()?.version;
     return {
       codigoInterno: v.codigoInterno.trim(),
       codigoBarras: textoONull(v.codigoBarras),
@@ -389,8 +579,15 @@ export class ArticuloForm implements OnInit {
       ubicacion: textoONull(v.ubicacion),
       // El formulario no reactiva ni da de baja: conserva el estado que ya tenía.
       activo: this.articulo()?.activo ?? true,
+      // Solo en la edición, y solo si el servidor la mandó: el alta no tiene versión que comparar.
+      ...(this.id !== null && version !== undefined ? { version } : {}),
     };
   }
+}
+
+/** El 409 en que otro cambio modificó el artículo después de cargarlo. */
+function esVersionVencida(err: unknown): boolean {
+  return err instanceof HttpErrorResponse && err.status === 409 && err.error?.message === MENSAJE_ARTICULO_MODIFICADO;
 }
 
 function mensajeDe(err: unknown, porDefecto: string): string {

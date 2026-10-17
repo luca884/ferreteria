@@ -2178,6 +2178,17 @@ describe('Importaciones', () => {
       expect(el().querySelector('button.regenerar')).toBeNull();
     });
 
+    it('con un 409 porque otro cambio modificó un artículo (versión) muestra el mensaje del servidor y no aplica nada', async () => {
+      await conVistaPrevia();
+      const mensaje = 'Otro cambio modificó este artículo. Recargá y volvé a intentar.';
+      servicio.aplicar.mockReturnValue(throwError(() => errorHttp(409, mensaje)));
+
+      await confirmar();
+
+      expect(q('[role="alert"]').textContent).toContain(mensaje);
+      expect(servicio.aplicar).toHaveBeenCalledTimes(1);
+    });
+
     describe('después de un 409 la selección se conserva', () => {
       const MENSAJE = 'La lista cambió.';
       const aviso = () => el().querySelector('.aviso-perdidas');

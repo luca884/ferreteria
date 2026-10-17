@@ -2,7 +2,13 @@ import { TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { PageResponse } from '../../core/api/page.models';
-import { Articulo, ArticuloRequest } from './articulo.models';
+import {
+  AjustesRequest,
+  Articulo,
+  ArticuloRequest,
+  DesglosePrecio,
+  MENSAJE_ARTICULO_MODIFICADO,
+} from './articulo.models';
 import { ArticulosService } from './articulos.service';
 
 describe('ArticulosService', () => {
@@ -211,5 +217,143 @@ describe('ArticulosService', () => {
     req.flush(null, { status: 204, statusText: 'No Content' });
 
     expect(terminado).toBe(true);
+  });
+  describe('desglose y ajustes (R-216, R-218)', () => {
+    const desglose: DesglosePrecio = {
+      articuloId: 1,
+      tieneLista: true,
+      motivoSinLista: null,
+      moneda: 'ARS',
+      precioLista: 1000,
+      listaIncluyeIva: false,
+      alicuotaIva: 'IVA_21',
+      bonificacion1: 10,
+      bonificacion2: null,
+      bonificacion3: null,
+      ajuste1: -5,
+      ajuste2: 3,
+      ajuste3: null,
+      pasos: [
+        { tipo: 'LISTA', porcentaje: null, importe: 1000 },
+        { tipo: 'COSTO', porcentaje: null, importe: 880.65 },
+      ],
+      costoDeLista: 880.65,
+      costoGuardado: 880.65,
+      coincide: true,
+      margen: 30,
+      origenMargen: 'PROPIO',
+      cotizacion: null,
+      cotizacionCongelada: false,
+      multiplo: 10,
+      precioFinal: 1390,
+    };
+
+    it('pide el desglose con GET /articulos/{id}/desglose', () => {
+      let recibido: DesglosePrecio | undefined;
+      service.desglose(1).subscribe((d) => (recibido = d));
+
+      const req = http.expectOne((r) => r.url.endsWith('/articulos/1/desglose'));
+      expect(req.request.method).toBe('GET');
+      req.flush(desglose);
+
+      expect(recibido).toEqual(desglose);
+    });
+
+    it('guarda los ajustes con PUT /articulos/{id}/ajustes, sin costo', () => {
+      const pedido: AjustesRequest = { ajuste1: -5, ajuste2: null, ajuste3: null, confirmaPisarCosto: false, version: 3 };
+      let guardado: Articulo | undefined;
+      service.guardarAjustes(1, pedido).subscribe((a) => (guardado = a));
+
+      const req = http.expectOne((r) => r.url.endsWith('/articulos/1/ajustes'));
+      expect(req.request.method).toBe('PUT');
+      expect(req.request.body).toEqual({
+        ajuste1: -5,
+        ajuste2: null,
+        ajuste3: null,
+        confirmaPisarCosto: false,
+        version: 3,
+      });
+      expect('costo' in req.request.body).toBe(false);
+      req.flush({ ...tornillo, costo: 855 });
+
+      expect(guardado?.costo).toBe(855);
+    });
+
+    it('el PUT del artículo no manda ajustes', () => {
+      service.actualizar(1, request).subscribe();
+
+      const req = http.expectOne((r) => r.url.endsWith('/articulos/1'));
+      const cuerpo = req.request.body as Record<string, unknown>;
+      expect(Object.keys(cuerpo).filter((k) => k.startsWith('ajuste') || k.startsWith('bonificacion'))).toEqual([]);
+      req.flush(tornillo);
+    });
+
+    it('la respuesta trae el precio de lista, los ajustes, las bonificaciones y si la lista incluye IVA', () => {
+      const conAjustes: Articulo = {
+        ...tornillo,
+        precioListaProveedor: 1000,
+        ajuste1: -5,
+        ajuste2: 3,
+        ajuste3: null,
+        bonificacion1: 10,
+        bonificacion2: null,
+        bonificacion3: null,
+        listaIncluyeIva: false,
+      };
+      let recibido: Articulo | undefined;
+      service.obtener(1).subscribe((a) => (recibido = a));
+      http.expectOne((r) => r.url.endsWith('/articulos/1')).flush(conAjustes);
+
+      expect(recibido?.ajuste1).toBe(-5);
+      expect(recibido?.bonificacion1).toBe(10);
+      expect(recibido?.listaIncluyeIva).toBe(false);
+      expect(recibido?.precioListaProveedor).toBe(1000);
+    });
+
+    it('una respuesta sin esos campos (cliente viejo) no rompe', () => {
+      let recibido: Articulo | undefined;
+      service.obtener(1).subscribe((a) => (recibido = a));
+      http.expectOne((r) => r.url.endsWith('/articulos/1')).flush(tornillo);
+
+      expect(recibido?.ajuste1).toBeUndefined();
+      expect(recibido?.costo).toBe(100);
+    });
+  });
+  describe('versión del artículo (R-224, R-225)', () => {
+    it('la respuesta trae la versión', () => {
+      let recibido: Articulo | undefined;
+      service.obtener(1).subscribe((a) => (recibido = a));
+      http.expectOne((r) => r.url.endsWith('/articulos/1')).flush({ ...tornillo, version: 3 });
+
+      expect(recibido?.version).toBe(3);
+    });
+
+    it('una respuesta sin versión (cliente viejo) no rompe', () => {
+      let recibido: Articulo | undefined;
+      service.obtener(1).subscribe((a) => (recibido = a));
+      http.expectOne((r) => r.url.endsWith('/articulos/1')).flush(tornillo);
+
+      expect(recibido?.version).toBeUndefined();
+    });
+
+    it('el PUT del artículo manda la versión que se leyó', () => {
+      service.actualizar(1, { ...request, version: 3 }).subscribe();
+
+      const req = http.expectOne((r) => r.url.endsWith('/articulos/1'));
+      expect(req.request.body).toEqual({ ...request, version: 3 });
+      req.flush({ ...tornillo, version: 4 });
+    });
+
+    it('el alta no manda versión', () => {
+      service.crear(request).subscribe();
+
+      const req = http.expectOne((r) => r.url.endsWith('/articulos'));
+      expect(req.request.body).not.toHaveProperty('version');
+      req.flush(tornillo);
+    });
+
+    it('el mensaje del 409 de versión es el del servidor', () => {
+      expect(MENSAJE_ARTICULO_MODIFICADO).toBe('Otro cambio modificó este artículo. Recargá y volvé a intentar.');
+    });
   });
 });
