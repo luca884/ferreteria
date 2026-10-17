@@ -200,6 +200,19 @@ describe('Articulos', () => {
     expect(texto('.margen')).toBe('Heredado');
   });
 
+  it('muestra el costo de un artículo en dólares como US$ y el precio final siempre en pesos', async () => {
+    await crearComponente(false, pagina([articulo(1, { costo: 10.8, moneda: 'USD', precioFinal: 1744 })]));
+
+    expect(texto('.costo')).toBe(`US$${NBSP}10,80`);
+    expect(texto('.precio')).toBe(`$${NBSP}1.744,00`);
+  });
+
+  it('muestra el costo de un artículo en pesos con $', async () => {
+    await crearComponente(false, pagina([articulo(1, { costo: 1744, moneda: 'ARS' })]));
+
+    expect(texto('.costo')).toBe(`$${NBSP}1.744,00`);
+  });
+
   it('el Vendedor ve costo y margen', async () => {
     await crearComponente(false);
 

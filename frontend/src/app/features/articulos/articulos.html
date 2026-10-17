@@ -118,7 +118,7 @@
             >
               <td class="codigo">{{ articulo.codigoInterno }}</td>
               <td class="descripcion">{{ articulo.descripcion }}</td>
-              <td class="num costo">{{ articulo.costo | monto }}</td>
+              <td class="num costo">{{ formatearCosto(articulo.costo, articulo.moneda) }}</td>
               <td class="num margen">
                 @if (articulo.margenPorcentaje === null) {
                   <span class="heredado">Heredado</span>

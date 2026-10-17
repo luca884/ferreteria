@@ -1,6 +1,7 @@
 import { DecimalPipe } from '@angular/common';
 import { Component, computed, input, output, signal } from '@angular/core';
-import { detalleDeFila, etiquetaDeTipo, formatearCosto } from './detalle-fila';
+import { formatearCosto } from '../../core/formato/monto';
+import { detalleDeFila, etiquetaDeTipo } from './detalle-fila';
 import {
   FilaDeVista,
   FiltroDeFilas,

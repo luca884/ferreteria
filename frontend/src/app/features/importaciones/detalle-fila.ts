@@ -3,8 +3,6 @@ import { Ajustes, CambioPlaneado } from './importacion.models';
 import { FilaDeVista, TipoFila } from './seleccion-filas';
 
 const PORCENTAJE = new Intl.NumberFormat('es-AR', { maximumFractionDigits: 2 });
-const PESOS = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' });
-const DOLARES = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'USD' });
 
 const ETIQUETAS: Record<TipoFila, string> = {
   suben: 'Sube',
@@ -34,11 +32,6 @@ export function textoAjustes(ajustes: Ajustes): string {
   if (textos.length === 0) return 'ninguno';
   if (textos.length === 1) return textos[0];
   return `${textos.slice(0, -1).join(', ')} y ${textos[textos.length - 1]}`;
-}
-
-/** Un costo en su moneda: $ 1.234,50 o US$ 10,00. Sin moneda, pesos. */
-export function formatearCosto(valor: number, moneda: 'ARS' | 'USD' | null | undefined): string {
-  return (moneda === 'USD' ? DOLARES : PESOS).format(valor);
 }
 
 function igualesLosAjustes(a: Ajustes, b: Ajustes): boolean {

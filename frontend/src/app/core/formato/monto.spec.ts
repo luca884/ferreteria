@@ -1,4 +1,4 @@
-import { formatearCotizacion, formatearMonto, MontoPipe } from './monto';
+import { formatearCosto, formatearCotizacion, formatearMonto, MontoPipe } from './monto';
 
 const NBSP = ' ';
 
@@ -22,6 +22,18 @@ describe('formatearMonto', () => {
   it('devuelve vacío con null o undefined', () => {
     expect(formatearMonto(null)).toBe('');
     expect(formatearMonto(undefined)).toBe('');
+  });
+});
+
+describe('formatearCosto', () => {
+  it('pesos con $ y dólares con US$, en formato argentino', () => {
+    expect(formatearCosto(1234.5, 'ARS')).toBe(`$${NBSP}1.234,50`);
+    expect(formatearCosto(10, 'USD')).toBe(`US$${NBSP}10,00`);
+  });
+
+  it('sin moneda se toma como pesos', () => {
+    expect(formatearCosto(10, null)).toBe(`$${NBSP}10,00`);
+    expect(formatearCosto(10, undefined)).toBe(`$${NBSP}10,00`);
   });
 });
 

@@ -6,7 +6,7 @@ import { ActivatedRoute, Params, Router, RouterLink } from '@angular/router';
 import { PageResponse } from '../../core/api/page.models';
 import { AuthService } from '../../core/auth/auth.service';
 import { Avisos } from '../../core/avisos/avisos';
-import { MontoPipe } from '../../core/formato/monto';
+import { MontoPipe, formatearCosto } from '../../core/formato/monto';
 import { cantidadConUnidad } from '../../core/formato/unidad';
 import { BarraAcciones } from '../../shared/barra-acciones';
 import { Confirmacion } from '../../shared/confirmacion';
@@ -40,6 +40,7 @@ export class Articulos implements OnInit {
 
   protected readonly alicuotaLabels = ALICUOTA_IVA_LABELS;
   protected readonly cantidadConUnidad = cantidadConUnidad;
+  protected readonly formatearCosto = formatearCosto;
 
   protected readonly pagina = signal<PageResponse<Articulo> | null>(null);
   protected readonly cargando = signal(true);

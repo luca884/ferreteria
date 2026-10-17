@@ -1,5 +1,5 @@
 import { AltaPlaneada, Ajustes, CambioPlaneado } from './importacion.models';
-import { detalleDeFila, etiquetaDeTipo, formatearCosto, textoAjuste, textoAjustes } from './detalle-fila';
+import { detalleDeFila, etiquetaDeTipo, textoAjuste, textoAjustes } from './detalle-fila';
 import { FilaDeVista } from './seleccion-filas';
 
 const NINGUNO: Ajustes = { a1: null, a2: null, a3: null };
@@ -87,17 +87,6 @@ describe('detalle-fila', () => {
 
     it('sin ajustes dice «ninguno»', () => {
       expect(textoAjustes(NINGUNO)).toBe('ninguno');
-    });
-  });
-
-  describe('formatearCosto', () => {
-    it('pesos con $ y dólares con US$, en formato argentino', () => {
-      expect(formatearCosto(1234.5, 'ARS').replace(/\s/g, ' ')).toBe('$ 1.234,50');
-      expect(formatearCosto(10, 'USD').replace(/\s/g, ' ')).toBe('US$ 10,00');
-    });
-
-    it('sin moneda se toma como pesos', () => {
-      expect(formatearCosto(10, null).replace(/\s/g, ' ')).toBe('$ 10,00');
     });
   });
 
