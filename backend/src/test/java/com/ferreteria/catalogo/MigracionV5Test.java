@@ -54,13 +54,14 @@ class MigracionV5Test extends IntegrationTestBase {
     @Test
     @DisplayName("los articulos que ya existian (demo) quedan en ARS")
     void losExistentesQuedanEnPesos() {
-        // Se excluyen los que insertan los tests de esta clase (codigo V5-*): la base se comparte y no se revierte.
+        // Solo los articulos demo (ids 1 a 8 de V1001): la base se comparte y no se revierte, y otros tests dejan
+        // articulos propios en USD. Contar toda la tabla hacia depender el resultado del orden de las clases.
         Integer total = jdbc.queryForObject(
-                "select count(*) from articulo where codigo_interno not like 'V5-%'", Integer.class);
+                "select count(*) from articulo where id between 1 and 8", Integer.class);
         Integer enPesos = jdbc.queryForObject(
-                "select count(*) from articulo where codigo_interno not like 'V5-%' and moneda = 'ARS'", Integer.class);
+                "select count(*) from articulo where id between 1 and 8 and moneda = 'ARS'", Integer.class);
 
-        assertThat(total).isPositive();
+        assertThat(total).isEqualTo(8);
         assertThat(enPesos).isEqualTo(total);
     }
 
