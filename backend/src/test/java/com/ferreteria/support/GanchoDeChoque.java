@@ -26,6 +26,10 @@ import org.springframework.data.jpa.repository.support.JpaRepositoryFactory;
  */
 public final class GanchoDeChoque {
 
+    /**
+     * Lo que se ejecuta en el otro hilo. Tiene que ser JDBC (o un pedido que no necesite una fila que la transaccion
+     * probada ya tenga bloqueada): si pide un lock que el pedido en curso retiene, el gancho espera y falla a los 10 s.
+     */
     @FunctionalInterface
     public interface Accion {
         void run() throws Exception;
@@ -34,6 +38,7 @@ public final class GanchoDeChoque {
     private final HistorialPrecioRepository espia;
     private final EntityManager entityManager;
     private HistorialPrecioRepository real;
+    private final AtomicBoolean ejecutando = new AtomicBoolean();
 
     public GanchoDeChoque(HistorialPrecioRepository espia, EntityManager entityManager) {
         this.espia = espia;
@@ -45,7 +50,7 @@ public final class GanchoDeChoque {
         AtomicBoolean yaCorrio = new AtomicBoolean();
         doAnswer(invocacion -> {
             if (yaCorrio.compareAndSet(false, true)) {
-                correrAparte(concurrente);
+                disparar(concurrente);
             }
             return llamarAlReal(invocacion);
         }).when(espia).saveAll(any());
@@ -56,7 +61,7 @@ public final class GanchoDeChoque {
         AtomicBoolean yaCorrio = new AtomicBoolean();
         doAnswer(invocacion -> {
             if (yaCorrio.compareAndSet(false, true)) {
-                correrAparte(concurrente);
+                disparar(concurrente);
             }
             return llamarAlReal(invocacion);
         }).when(espia).save(any());
@@ -65,9 +70,21 @@ public final class GanchoDeChoque {
     /** En CADA {@code saveAll}: choca siempre (cada intento del recalculo). */
     public void siempreEnSaveAll(Accion concurrente) {
         doAnswer(invocacion -> {
-            correrAparte(concurrente);
+            disparar(concurrente);
             return llamarAlReal(invocacion);
         }).when(espia).saveAll(any());
+    }
+
+    /** Guarda contra la reentrada: si la propia accion guarda historial por el espia, no se dispara otra vez. */
+    private void disparar(Accion accion) {
+        if (!ejecutando.compareAndSet(false, true)) {
+            return;
+        }
+        try {
+            correrAparte(accion);
+        } finally {
+            ejecutando.set(false);
+        }
     }
 
     /** Saca el gancho: el espia vuelve a pasar todo al repositorio real. */
@@ -95,9 +112,9 @@ public final class GanchoDeChoque {
             }
         });
         try {
-            otroHilo.get(60, TimeUnit.SECONDS);
+            otroHilo.get(10, TimeUnit.SECONDS);
         } catch (ExecutionException | TimeoutException e) {
-            throw new IllegalStateException("El hilo concurrente del gancho fallo", e);
+            throw new IllegalStateException("el gancho quedó bloqueado por un lock", e);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw new IllegalStateException(e);

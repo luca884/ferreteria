@@ -143,6 +143,8 @@ public class ArticuloService {
             throw new ConflictException(mensajeCodigoBarras(articulo.getCodigoBarras()));
         }
         articulo.reactivar();
+        // Escribe ahora: la respuesta trae la version NUEVA y un choque sale como 409 desde aca.
+        escribirOChocar();
         BigDecimal stockVigente = articuloRepository.stockVigenteScoped(id).orElse(articulo.getStockActual());
         return ArticuloResponse.from(articulo, stockVigente);
     }
@@ -172,9 +174,8 @@ public class ArticuloService {
         }
         Ajustes actuales = articulo.getAjustes();
         Ajustes nuevos = request.toAjustes();
-        BigDecimal stockVigente = articuloRepository.stockVigenteScoped(id).orElse(articulo.getStockActual());
         if (nuevos.equals(actuales)) {
-            return ArticuloResponse.from(articulo, stockVigente);
+            return ArticuloResponse.from(articulo, stockVigente(id, articulo));
         }
         // Un articulo en dolares ya estaba en dolares: con la cotizacion apagada se permite, con el dolar congelado.
         ContextoPrecio ctx = contextoDe(articulo.getRubroId(), articulo.getMoneda(), true);
@@ -183,7 +184,12 @@ public class ArticuloService {
         Optional<CambioPrecio> cambio = articulo.editarAjustes(nuevos, ctx);
         guardarHistorial(articulo, cambio, usuarioId);
         escribirOChocar();
-        return ArticuloResponse.from(articulo, stockVigente);
+        // Despues del flush (C-221): el stock confirmado se lee con la escritura ya hecha.
+        return ArticuloResponse.from(articulo, stockVigente(id, articulo));
+    }
+
+    private BigDecimal stockVigente(Long id, Articulo articulo) {
+        return articuloRepository.stockVigenteScoped(id).orElse(articulo.getStockActual());
     }
 
     /**

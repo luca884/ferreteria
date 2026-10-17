@@ -152,8 +152,6 @@ class ActualizacionMasivaIntegrationTest extends IntegrationTestBase {
         Map<String, Object> copia = new java.util.LinkedHashMap<>(fila);
         copia.remove("costo");
         copia.remove("precio_final");
-        // La version sube en cada escritura del articulo (V8): no es un dato del articulo que la operacion tenga que respetar.
-        copia.remove("version");
         return copia;
     }
 
@@ -479,7 +477,12 @@ class ActualizacionMasivaIntegrationTest extends IntegrationTestBase {
         assertThat(entradas(a4)).isEmpty();
         assertThat(entradas(a5)).isEmpty();
         // Lo que no es costo ni precio no cambia (precio de lista, margen, IVA, stock, ubicacion, activo...).
-        assertThat(sinCostoNiPrecio(fila(a1))).isEqualTo(sinCostoNiPrecio(a1Antes));
+        // La version sube en 1 en los que el masivo cambio (V8) y lo demas queda igual.
+        Map<String, Object> a1Esperado = sinCostoNiPrecio(a1Antes);
+        a1Esperado.put("version", (Long) a1Antes.get("version") + 1);
+        assertThat(sinCostoNiPrecio(fila(a1))).isEqualTo(a1Esperado);
+        assertThat(jdbc.queryForObject("select version from articulo where id = ?", Long.class, a2)).isEqualTo(1L);
+        assertThat(jdbc.queryForObject("select version from articulo where id = ?", Long.class, a3)).isEqualTo(1L);
         assertThat(decimal(a1, "precio_lista_proveedor")).isEqualByComparingTo("1210.00");
         assertThat(historial(t)).isEqualTo(3);
 

@@ -3,6 +3,7 @@ package com.ferreteria.catalogo.service;
 import com.ferreteria.catalogo.dto.RecalculoCotizacionResponse;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.time.LocalDateTime;
 import java.util.Optional;
@@ -42,6 +43,11 @@ public class RecalculoConReintento {
     }
 
     private static <T> T conReintento(Supplier<T> intento) {
+        // Dentro de una transaccion ajena un reintento no seria completo: el choque deja la sesion inutilizable.
+        if (TransactionSynchronizationManager.isActualTransactionActive()) {
+            throw new IllegalStateException(
+                    "RecalculoConReintento no puede llamarse dentro de una transaccion: cada intento abre la suya.");
+        }
         for (int numero = 1; ; numero++) {
             try {
                 return intento.get();

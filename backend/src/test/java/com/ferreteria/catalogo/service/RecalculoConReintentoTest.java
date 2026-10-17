@@ -122,4 +122,18 @@ class RecalculoConReintentoTest {
             assertThat(metodo.getAnnotation(Transactional.class)).isNull();
         }
     }
+
+    @Test
+    @DisplayName("dentro de una transaccion activa lanza IllegalStateException y no llama al servicio")
+    void dentroDeUnaTransaccionNoSePuedeUsar() {
+        org.springframework.transaction.support.TransactionSynchronizationManager.setActualTransactionActive(true);
+        try {
+            assertThatThrownBy(() -> reintento.recalcularAhora(9L)).isInstanceOf(IllegalStateException.class);
+            assertThatThrownBy(() -> reintento.recalcularDelDia(LAS_OCHO)).isInstanceOf(IllegalStateException.class);
+        } finally {
+            org.springframework.transaction.support.TransactionSynchronizationManager.setActualTransactionActive(false);
+        }
+
+        verify(servicio, times(0)).recalcularAhora(9L);
+    }
 }

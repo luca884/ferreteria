@@ -219,6 +219,20 @@ class ArticuloServiceTest {
                 .hasMessage("Otro cambio modificó este artículo. Recargá y volvé a intentar.");
     }
 
+    @Test
+    @DisplayName("reactivar hace flush ANTES de pedir el stock vigente y de armar la respuesta (version nueva explicita)")
+    void reactivarHaceFlushAntesDelStock() throws Exception {
+        Articulo articulo = existenteConVersion(55L, 6);
+        articulo.desactivar();
+        when(articuloRepository.findScoped(55L)).thenReturn(Optional.of(articulo));
+
+        service.reactivar(55L);
+
+        var orden = org.mockito.Mockito.inOrder(articuloRepository);
+        orden.verify(articuloRepository).flush();
+        orden.verify(articuloRepository).stockVigenteScoped(55L);
+    }
+
     // ---- crear ----
 
     @Test

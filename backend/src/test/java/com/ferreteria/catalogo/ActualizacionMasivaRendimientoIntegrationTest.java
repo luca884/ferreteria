@@ -2,16 +2,24 @@ package com.ferreteria.catalogo;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.ferreteria.catalogo.model.FiltroArticulos;
+import com.ferreteria.catalogo.repository.ArticuloRepository;
+import com.ferreteria.support.ExplainDelFiltro;
 import com.ferreteria.support.IntegrationTestBase;
+import com.ferreteria.support.SqlCapturado;
+import com.ferreteria.tenant.TenantContext;
 import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -28,6 +36,9 @@ class ActualizacionMasivaRendimientoIntegrationTest extends IntegrationTestBase 
 
     private static final Duration LIMITE = Duration.ofSeconds(120);
     private static final int ARTICULOS = 5_000;
+
+    @Autowired
+    ArticuloRepository articuloRepository;
 
     private long contar(String sql, Object... args) {
         return jdbc.queryForObject(sql, Long.class, args);
@@ -136,13 +147,31 @@ class ActualizacionMasivaRendimientoIntegrationTest extends IntegrationTestBase 
                 ferreteriaId, importacionId)).isEqualTo(ARTICULOS);
         jdbc.execute("analyze table articulo");
 
-        // El filtro usa un indice por importacion (el de ferreteria + importacion o el de la clave foranea), no recorre la tabla.
-        List<java.util.Map<String, Object>> plan = jdbc.queryForList(
-                "explain select a.id from articulo a where a.ferreteria_id = ? and a.activo = true "
-                        + "and a.ultima_importacion_id = ? order by a.id", ferreteriaId, importacionId);
-        assertThat(plan).isNotEmpty();
-        assertThat(plan.get(0).get("key")).as("indice del filtro por importacion").isNotNull();
-        assertThat(plan.get(0).get("type")).isNotEqualTo("ALL");
+        // El filtro usa un indice por importacion (el de ferreteria + importacion o el de la clave foranea), no recorre la
+        // tabla ni ordena aparte: EXPLAIN sobre el SQL REAL que genera Hibernate, con los valores de este caso.
+        TenantContext.setCurrentFerreteriaId(ferreteriaId);
+        List<String> sqlReal;
+        try {
+            sqlReal = SqlCapturado.durante(() -> articuloRepository.filtrarScoped(
+                    new FiltroArticulos(null, null, null, false, importacionId)));
+        } finally {
+            TenantContext.clear();
+        }
+        Map<String, Object> valores = new HashMap<>();
+        valores.put("fid", ferreteriaId);
+        valores.put("proveedorId", null);
+        valores.put("rubroId", null);
+        valores.put("importacionId", importacionId);
+        valores.put("q", null);
+        valores.put("incluirInactivos", false);
+        List<Map<String, Object>> plan = ExplainDelFiltro.explain(jdbc, sqlReal, valores);
+        assertThat(plan).hasSize(1);
+        // Con este volumen el optimizador oscila entre ref e index segun las estadisticas muestreadas (el order by a.id
+        // empuja a recorrer el indice): la prueba estricta del indice vive en ArticuloRepositoryFiltroImportacionTest.
+        // Aca solo se exige que no recorra la tabla entera.
+        assertThat(plan.get(0).get("type")).as("tipo de acceso. Plan: " + plan + "\nSQL: " + sqlReal)
+                .isNotEqualTo("ALL");
+        assertThat(plan.get(0).get("key")).as("usa algun indice").isNotNull();
 
         String token = login(email);
         ObjectNode pedido = objectMapper.createObjectNode()

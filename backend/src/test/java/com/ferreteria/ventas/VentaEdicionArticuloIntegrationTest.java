@@ -25,6 +25,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  */
 class VentaEdicionArticuloIntegrationTest extends VentasTestBase {
 
+    private static final String MENSAJE_VERSION = "Otro cambio modificó este artículo. Recargá y volvé a intentar.";
+
     private String ediciones(long articuloId, String descripcion) throws Exception {
         String codigo = jdbc.queryForObject("select codigo_interno from articulo where id = ?", String.class, articuloId);
         Map<String, Object> cuerpo = new LinkedHashMap<>();
@@ -88,7 +90,10 @@ class VentaEdicionArticuloIntegrationTest extends VentasTestBase {
                 var respuesta = putJson("/api/articulos/" + a, dueno, ediciones(a, descripcion)).andReturn().getResponse();
                 // Una edicion que choca con otra del mismo articulo da 409 sin cuerpo de articulo (lote 5b, R-225).
                 if (respuesta.getStatus() != 200) {
-                    return new int[] {respuesta.getStatus(), -1};
+                    String mensaje = objectMapper.readTree(respuesta.getContentAsString(StandardCharsets.UTF_8))
+                            .path("message").asText();
+                    boolean esDeVersion = respuesta.getStatus() == 409 && MENSAJE_VERSION.equals(mensaje);
+                    return new int[] {respuesta.getStatus(), esDeVersion ? -1 : -2};
                 }
                 BigDecimal visto = objectMapper.readTree(respuesta.getContentAsString(StandardCharsets.UTF_8))
                         .get("stockActual").decimalValue();
@@ -103,6 +108,10 @@ class VentaEdicionArticuloIntegrationTest extends VentasTestBase {
         // no compiten con la version: todas dan 201 y el stock sale bien.
         List<int[]> deLasEdiciones = resultados.subList(ventas, ventas + ediciones);
         assertThat(deLasEdiciones).extracting(r -> r[0]).containsOnly(200, 409).contains(200);
+        // Todo 409 es el de la version (-1), y los 200 mas los 409 son todas las ediciones.
+        assertThat(deLasEdiciones).extracting(r -> r[1]).doesNotContain(-2);
+        assertThat(deLasEdiciones.stream().filter(r -> r[0] == 200).count()
+                + deLasEdiciones.stream().filter(r -> r[0] == 409).count()).isEqualTo(ediciones);
         // Cada edicion que se guardo ve un stock real (entre lo que quedaria si todas las ventas ya entraron y el inicial).
         assertThat(deLasEdiciones).filteredOn(r -> r[0] == 200).extracting(r -> r[1])
                 .allSatisfy(visto -> assertThat(visto).isBetween(100 - ventas, 100));

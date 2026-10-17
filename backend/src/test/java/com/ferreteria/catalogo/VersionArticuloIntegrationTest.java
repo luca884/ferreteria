@@ -15,7 +15,7 @@ import org.junit.jupiter.api.Test;
 /**
  * La version del articulo (lote 5b, T-240) por HTTP contra MySQL: el alta responde 0, el GET y el listado la traen y
  * cada escritor la sube en 1 (PUT, PUT de ajustes, importacion, masivo, recalculo, cascada del rubro, baja y
- * reactivacion); una operacion que no cambia nada no la sube. CUIT 30-78401011-1; casa propia de cotizacion (t240-).
+ * reactivacion); una operacion que no toca el articulo no la sube. CUIT 30-78401011-1; casa propia de cotizacion (t240-).
  * Los 409 del PUT y del PUT de ajustes por version vieja estan en T-241 y T-242; el stock y las ventas, en T-246.
  */
 class VersionArticuloIntegrationTest extends VersionTestBase {

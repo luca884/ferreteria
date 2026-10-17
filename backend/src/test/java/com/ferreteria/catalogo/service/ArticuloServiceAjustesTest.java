@@ -242,7 +242,7 @@ class ArticuloServiceAjustesTest {
     @DisplayName("un choque de version al hacer flush sale como 409 con el mensaje de la version")
     void traduceElChoqueDelFlush() throws Exception {
         configuracion();
-        encontrar(conVersionGuardada(importado(), 2));
+        encontrarSinStock(conVersionGuardada(importado(), 2));
         org.mockito.Mockito.doThrow(new org.springframework.orm.ObjectOptimisticLockingFailureException(Articulo.class, ID))
                 .when(articuloRepository).flush();
 
@@ -260,6 +260,19 @@ class ArticuloServiceAjustesTest {
         assertThatCode(() -> service.editarAjustes(ID, pedido("-5", null, null), USUARIO)).doesNotThrowAnyException();
     }
 
+    @Test
+    @DisplayName("al escribir, el stock vigente se lee DESPUES del flush (C-221)")
+    void elStockSeLeeDespuesDelFlush() throws Exception {
+        configuracion();
+        encontrar(importado());
+
+        service.editarAjustes(ID, pedido("-5", null, null), USUARIO);
+
+        InOrder orden = inOrder(articuloRepository);
+        orden.verify(articuloRepository).flush();
+        orden.verify(articuloRepository).stockVigenteScoped(ID);
+    }
+
     // ---- lock ----
 
     @Test
@@ -273,9 +286,10 @@ class ArticuloServiceAjustesTest {
 
         InOrder orden = inOrder(articuloRepository, configuracionPreciosService, historialPrecioRepository);
         orden.verify(articuloRepository).findParaEditarScoped(ID);
-        orden.verify(articuloRepository).stockVigenteScoped(ID);
         orden.verify(configuracionPreciosService).actual();
         orden.verify(historialPrecioRepository).save(any());
+        orden.verify(articuloRepository).flush();
+        orden.verify(articuloRepository).stockVigenteScoped(ID);
         verify(articuloRepository, never()).findScoped(any());
     }
 
@@ -414,7 +428,7 @@ class ArticuloServiceAjustesTest {
         configuracion();
         when(dolarDePrecios.vigente()).thenReturn(Optional.empty());
         Articulo articulo = enDolares("10.00");
-        encontrar(articulo);
+        encontrarSinStock(articulo);
 
         assertThatThrownBy(() -> service.editarAjustes(ID, pedido("-10", null, null), USUARIO))
                 .isInstanceOf(ConflictException.class)
@@ -431,7 +445,7 @@ class ArticuloServiceAjustesTest {
     void avisaAntesDePisar() throws Exception {
         configuracion();
         Articulo articulo = sinAjustes("950.00");
-        encontrar(articulo);
+        encontrarSinStock(articulo);
 
         assertThatThrownBy(() -> service.editarAjustes(ID, pedido("-5", null, null), USUARIO))
                 .isInstanceOfSatisfying(ConflictException.class, e -> {
@@ -483,7 +497,7 @@ class ArticuloServiceAjustesTest {
         configuracion();
         Articulo articulo = sinAjustes("990.00");
         articulo.fijarAjustes(new Ajustes(bd("-5"), null, null));
-        encontrar(articulo);
+        encontrarSinStock(articulo);
 
         assertThatThrownBy(() -> service.editarAjustes(ID, pedido(null, null, null), USUARIO))
                 .isInstanceOf(ConflictException.class)
@@ -496,7 +510,7 @@ class ArticuloServiceAjustesTest {
     void avisoEnDolares() throws Exception {
         configuracion();
         when(dolarDePrecios.vigente()).thenReturn(Optional.of(bd("1000")));
-        encontrar(enDolares("9.50"));
+        encontrarSinStock(enDolares("9.50"));
 
         assertThatThrownBy(() -> service.editarAjustes(ID, pedido("-10", null, null), USUARIO))
                 .isInstanceOf(ConflictException.class)
