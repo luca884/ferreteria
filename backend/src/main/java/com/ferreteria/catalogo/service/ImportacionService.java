@@ -191,6 +191,8 @@ public class ImportacionService {
                                 preparacion.contextoDe(articulo))
                         .ifPresent(c -> historial.add(HistorialPrecio.de(
                                 articulo, c.cambio(), OrigenPrecio.IMPORTACION, usuarioId, c.monedaAnterior())));
+                // La base con la que se calculo el costo: las bonificaciones y el IVA del pedido (R-223).
+                articulo.registrarBaseDeLista(bonificaciones, request.listaIncluyeIva());
             }
         }
         for (PrecioListaPlaneado sinCambio : plan.sinCambio()) {
@@ -199,10 +201,12 @@ public class ImportacionService {
             Articulo articulo = articulosPorId.get(sinCambio.articuloId());
             articulo.registrarPrecioLista(sinCambio.precioLista());
             articulo.marcarImportacion(importacionId);
+            articulo.registrarBaseDeLista(bonificaciones, request.listaIncluyeIva());
         }
 
         if (request.crearNuevos() && !plan.altas().isEmpty()) {
-            crearNuevos(plan.altas(), rubro, proveedor, preparacion, importacionId, usuarioId, historial);
+            crearNuevos(plan.altas(), rubro, proveedor, preparacion, importacionId, usuarioId, historial, bonificaciones,
+                    request.listaIncluyeIva());
         }
 
         // Unico lugar donde se guardan el mapeo, el IVA y las bonificaciones (solo si todo salio bien).
@@ -253,7 +257,8 @@ public class ImportacionService {
      */
     private void crearNuevos(
             List<AltaPlaneada> altas, Rubro rubroElegido, Proveedor proveedor, Preparacion preparacion,
-            Long importacionId, Long usuarioId, List<HistorialPrecio> historial) {
+            Long importacionId, Long usuarioId, List<HistorialPrecio> historial, Bonificaciones bonificaciones,
+            boolean listaIncluyeIva) {
         Long rubroElegidoId = rubroElegido == null ? null : rubroElegido.getId();
         List<Articulo> nuevos = new ArrayList<>();
         List<CambioPrecio> cambios = new ArrayList<>();
@@ -267,6 +272,7 @@ public class ImportacionService {
             nuevo.fijarAjustes(alta.ajustes());
             nuevo.registrarPrecioLista(alta.precioLista());
             nuevo.marcarImportacion(importacionId);
+            nuevo.registrarBaseDeLista(bonificaciones, listaIncluyeIva);
             nuevos.add(nuevo);
             cambios.add(cambio.orElseThrow());
         }

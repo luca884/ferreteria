@@ -19,6 +19,7 @@ import org.springframework.test.web.servlet.request.MockMvcRequestBuilders;
 import java.math.BigDecimal;
 import java.time.Instant;
 import com.ferreteria.catalogo.repository.ArticuloRepository;
+import com.ferreteria.catalogo.repository.HistorialPrecioRepository;
 import com.ferreteria.catalogo.repository.ImportacionListaRepository;
 
 import java.nio.charset.StandardCharsets;
@@ -59,6 +60,9 @@ class ImportacionIntegrationTest extends CotizacionTestBase {
 
     @SpyBean
     LectorDeListas lector;
+
+    @SpyBean
+    HistorialPrecioRepository historialPrecioRepository;
 
     private String duenoA;
     private String duenoB;
@@ -2326,6 +2330,340 @@ class ImportacionIntegrationTest extends CotizacionTestBase {
                 .andExpect(jsonPath("$.conteos.nuevos", is(1)));
         assertThat(contar("select count(*) from articulo where proveedor_id = ? and codigo_interno = ?", proveedor, "N" + s))
                 .isEqualTo(1);
+    }
+
+    // =====================================================================================================
+    // Corte 3, lote 3 (T-214 a T-216): la importacion guarda en cada articulo la base con la que calculo el costo
+    // =====================================================================================================
+
+    private void assertBase(long articulo, String b1, String b2, String b3, Boolean incluyeIva) {
+        for (String[] columna : new String[][] {{"bonificacion1", b1}, {"bonificacion2", b2}, {"bonificacion3", b3}}) {
+            if (columna[1] == null) {
+                assertThat(decimal(articulo, columna[0])).as(columna[0]).isNull();
+            } else {
+                assertThat(decimal(articulo, columna[0])).as(columna[0]).isEqualByComparingTo(columna[1]);
+            }
+        }
+        assertThat(filaDeArticulo(articulo).get("lista_incluye_iva")).as("lista_incluye_iva").isEqualTo(incluyeIva);
+    }
+
+    /** Deja al articulo con una base guardada de partida (la que tendria de una importacion anterior). */
+    private void conBase(long articulo, String b1, Boolean incluyeIva) {
+        jdbc.update("update articulo set bonificacion1 = ?, bonificacion2 = NULL, bonificacion3 = NULL,"
+                + " lista_incluye_iva = ? where id = ?", b1 == null ? null : new BigDecimal(b1), incluyeIva, articulo);
+    }
+
+    /** Vista previa y aplicar como el Dueno de A, con los contadores que devolvio la vista previa. */
+    private ResultActions aplicarComoA(MockMultipartFile lista, ObjectNode datos, boolean crearNuevos) throws Exception {
+        JsonNode previa = vistaPreviaDe(dueA, lista, datos);
+        return aplicarCon(dueA, lista, datosAplicarCon(datos, previa.get("conteos"), crearNuevos, null));
+    }
+
+    private void masivoComoA(long proveedor, String modo, String valor) throws Exception {
+        ObjectNode pedido = objectMapper.createObjectNode()
+                .put("proveedorId", proveedor).put("modo", modo).put("valor", new BigDecimal(valor));
+        String huella = objectMapper.readTree(texto(postJson("/api/actualizacion-masiva/vista-previa", dueA,
+                objectMapper.writeValueAsString(pedido)).andExpect(status().isOk()))).get("huella").asText();
+        pedido.put("huella", huella);
+        postJson("/api/actualizacion-masiva", dueA, objectMapper.writeValueAsString(pedido))
+                .andExpect(status().isCreated());
+    }
+
+    private long idPorCodigo(long proveedor, String codigoProveedor) {
+        return contar("select id from articulo where proveedor_id = ? and codigo_proveedor = ?", proveedor, codigoProveedor);
+    }
+
+    // --- T-214: nuevos, actualizados, cambios de moneda y Corrige ---
+
+    @Test
+    void unArticuloNuevoQuedaConLasBonificacionesDelProveedorYLaListaSinIva() throws Exception {
+        sembrarAyB();
+        long proveedor = crearProveedor(dueA, unico("P"));
+        String codigo = unico("NUE");
+        ObjectNode datos = datosVistaPrevia(proveedor);
+        datos.put("bonificacion1", n("10")).put("bonificacion2", n("5"));
+
+        aplicarComoA(xlsx(conEncabezado(fila(codigo, "Nuevo", n("1000")))), datos, true)
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.conteos.nuevos", is(1)));
+
+        long articulo = idPorCodigo(proveedor, codigo);
+        assertBase(articulo, "10", "5", null, false);
+        assertThat(decimal(articulo, "costo")).isEqualByComparingTo("855.00");
+    }
+
+    @Test
+    void unArticuloNuevoConLaListaConIvaGuardaListaIncluyeIvaTrue() throws Exception {
+        sembrarAyB();
+        long proveedor = crearProveedor(dueA, unico("P"));
+        String codigo = unico("NIV");
+        ObjectNode datos = datosVistaPrevia(proveedor);
+        datos.put("listaIncluyeIva", true);
+
+        aplicarComoA(xlsx(conEncabezado(fila(codigo, "Nuevo", n("1210")))), datos, true)
+                .andExpect(status().isCreated());
+
+        long articulo = idPorCodigo(proveedor, codigo);
+        assertBase(articulo, null, null, null, true);
+        assertThat(decimal(articulo, "costo")).isEqualByComparingTo("1000.00");
+    }
+
+    @Test
+    void subeBajaYCambioDeMonedaQuedanConLasBonificacionesDelProveedorDeAhoraYNoLasViejas() throws Exception {
+        sembrarAyB();
+        long proveedor = crearProveedor(dueA, unico("P"));
+        String s = unico("");
+        long sube = articuloDe(dueA, proveedor, "SU" + s, "100");
+        long baja = articuloDe(dueA, proveedor, "BA" + s, "100");
+        long moneda = articuloDe(dueA, proveedor, "MO" + s, "100");
+        for (long articulo : List.of(sube, baja, moneda)) {
+            conBase(articulo, "10", true);
+        }
+        MockMultipartFile lista = archivo("lista.xlsx", ListasDePrueba.xlsx(List.of(
+                filaExtra("Codigo", "Descripcion", "Costo", "Moneda"),
+                filaExtra("SU" + s, "x", n("1000"), "ARS"),
+                filaExtra("BA" + s, "x", n("50"), "ARS"),
+                filaExtra("MO" + s, "x", n("10"), "USD"))));
+        ObjectNode datos = datosCon(proveedor, mapeoNode(3, null, null, null, null, null));
+        datos.put("bonificacion1", n("12"));
+
+        aplicarComoA(lista, datos, false)
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.conteos.suben", is(1)))
+                .andExpect(jsonPath("$.conteos.bajan", is(1)))
+                .andExpect(jsonPath("$.conteos.cambianMoneda", is(1)));
+
+        assertThat(decimal(sube, "costo")).isEqualByComparingTo("880.00");
+        assertThat(decimal(baja, "costo")).isEqualByComparingTo("44.00");
+        assertThat(decimal(moneda, "costo")).isEqualByComparingTo("8.80");
+        for (long articulo : List.of(sube, baja, moneda)) {
+            assertBase(articulo, "12", null, null, false);
+        }
+    }
+
+    @Test
+    void unaCorreccionDeIvaTambienGuardaLaBaseDelProveedorDeEseMomento() throws Exception {
+        sembrarAyB();
+        long proveedor = crearProveedor(dueA, unico("P"));
+        String codigo = unico("COR");
+        long articulo = articuloDe(dueA, proveedor, codigo, "100");
+        conBase(articulo, "7", true);
+        MockMultipartFile lista = archivo("lista.xlsx", ListasDePrueba.xlsx(List.of(
+                filaExtra("Codigo", "Descripcion", "Costo", "IVA"), filaExtra(codigo, "x", n("200"), n("10.5")))));
+        ObjectNode datos = datosCon(proveedor, mapeoNode(null, 3, null, null, null, null));
+        datos.put("bonificacion1", n("50"));
+
+        aplicarComoA(lista, datos, false)
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.conteos.corrigen", is(1)));
+
+        assertThat(decimal(articulo, "costo")).isEqualByComparingTo("100.00");
+        assertBase(articulo, "50", null, null, false);
+        assertThat(ultimaImportacion(articulo)).isNotNull();
+    }
+
+    @Test
+    void cambiarLaBaseDelProveedorSinImportarNoMueveLaDelArticulo() throws Exception {
+        sembrarAyB();
+        long proveedor = crearProveedor(dueA, unico("P"));
+        String codigo = unico("DER");
+        ObjectNode datos = datosVistaPrevia(proveedor);
+        datos.put("bonificacion1", n("10"));
+        aplicarComoA(xlsx(conEncabezado(fila(codigo, "Nuevo", n("1000")))), datos, true).andExpect(status().isCreated());
+        long articulo = idPorCodigo(proveedor, codigo);
+
+        jdbc.update("update proveedor set bonificacion1 = 12, lista_incluye_iva = true where id = ?", proveedor);
+
+        assertBase(articulo, "10", null, null, false);
+    }
+
+    // --- T-215: sin cambio, filas sin tocar, rollback, aislamiento y otras operaciones ---
+
+    @Test
+    void unaFilaSinCambioElegidaGuardaLaBaseYMarcaLaImportacion() throws Exception {
+        sembrarAyB();
+        long proveedor = crearProveedor(dueA, unico("P"));
+        String codigo = unico("SC");
+        long articulo = articuloDe(dueA, proveedor, codigo, "100");
+        ObjectNode datos = datosVistaPrevia(proveedor);
+        datos.put("bonificacion1", n("50"));
+
+        String cuerpo = texto(aplicarComoA(xlsx(conEncabezado(fila(codigo, "x", n("200")))), datos, false)
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.conteos.sinCambio", is(1))));
+
+        assertBase(articulo, "50", null, null, false);
+        assertThat(ultimaImportacion(articulo)).isEqualTo(objectMapper.readTree(cuerpo).get("id").asText());
+        assertThat(decimal(articulo, "costo")).isEqualByComparingTo("100");
+        assertThat(contar("select count(*) from historial_precio where origen = 'IMPORTACION' and articulo_id = ?", articulo))
+                .isZero();
+    }
+
+    @Test
+    void unaFilaConErrorOUnaNoElegidaNoTocanElArticuloNiSuBase() throws Exception {
+        sembrarAyB();
+        long proveedor = crearProveedor(dueA, unico("P"));
+        String s = unico("");
+        long elegida = articuloDe(dueA, proveedor, "EL" + s, "100");
+        long noElegida = articuloDe(dueA, proveedor, "NE" + s, "100");
+        long conError = articuloDe(dueA, proveedor, "ER" + s, "100");
+        for (long articulo : List.of(elegida, noElegida, conError)) {
+            conBase(articulo, "7", false);
+        }
+        Map<String, Object> noElegidaAntes = filaDeArticulo(noElegida);
+        Map<String, Object> conErrorAntes = filaDeArticulo(conError);
+        MockMultipartFile lista = xlsx(conEncabezado(
+                fila("EL" + s, "x", n("120")), fila("NE" + s, "x", n("120")), fila("ER" + s, "x", "abc")));
+        ObjectNode datos = datosVistaPrevia(proveedor);
+        datos.put("bonificacion1", n("12"));
+
+        aplicarCon(dueA, lista, datosAplicarCon(datos, conteos9(1, 0, 0, 0, 0, 1, 0, 0, 0), false, null, 0, 2))
+                .andExpect(status().isCreated());
+
+        assertBase(elegida, "12", null, null, false);
+        assertThat(filaDeArticulo(noElegida)).isEqualTo(noElegidaAntes);
+        assertThat(filaDeArticulo(conError)).isEqualTo(conErrorAntes);
+    }
+
+    @Test
+    void siFallaElHistorialNingunArticuloCambiaNiSuBase() throws Exception {
+        sembrarAyB();
+        long proveedor = crearProveedor(dueA, unico("P"));
+        String s = unico("");
+        List<List<Object>> filas = new ArrayList<>();
+        filas.add(ENCABEZADO);
+        for (String clave : List.of("U", "D", "T")) {
+            conBase(articuloDe(dueA, proveedor, clave + s, "100"), "7", true);
+            filas.add(fila(clave + s, "x", n("120")));
+        }
+        Map<String, Object> antes = instantanea(proveedor);
+        ObjectNode datos = datosVistaPrevia(proveedor);
+        datos.put("bonificacion1", n("12"));
+        MockMultipartFile lista = xlsx(filas);
+        JsonNode previa = vistaPreviaDe(dueA, lista, datos);
+        doThrow(new IllegalStateException("falla simulada")).when(historialPrecioRepository).saveAll(any());
+
+        aplicarCon(dueA, lista, datosAplicarCon(datos, previa.get("conteos"), false, null))
+                .andExpect(status().isInternalServerError());
+
+        assertThat(instantanea(proveedor)).isEqualTo(antes);
+        assertThat(contar("select count(*) from articulo where proveedor_id = ? and bonificacion1 = 7"
+                + " and lista_incluye_iva = true", proveedor)).isEqualTo(3);
+    }
+
+    @Test
+    void laImportacionDeUnaFerreteriaNoTocaLosArticulosDeOtraConElMismoProveedorLogico() throws Exception {
+        sembrarAyB();
+        String nombre = unico("P");
+        long proveedorA = crearProveedor(dueA, nombre);
+        long proveedorB = crearProveedor(dueB, nombre);
+        String codigo = unico("ISO");
+        articuloDe(dueA, proveedorA, codigo, "100");
+        long deB = articuloDe(dueB, proveedorB, codigo, "100");
+        conBase(deB, "7", true);
+        Map<String, Object> articuloBAntes = filaDeArticulo(deB);
+        Map<String, Object> proveedorBAntes = jdbc.queryForMap("select * from proveedor where id = ?", proveedorB);
+        ObjectNode datos = datosVistaPrevia(proveedorA);
+        datos.put("bonificacion1", n("12"));
+
+        aplicarComoA(xlsx(conEncabezado(fila(codigo, "x", n("1000")))), datos, false).andExpect(status().isCreated());
+
+        assertBase(idPorCodigo(proveedorA, codigo), "12", null, null, false);
+        assertThat(filaDeArticulo(deB)).isEqualTo(articuloBAntes);
+        assertThat(jdbc.queryForMap("select * from proveedor where id = ?", proveedorB)).isEqualTo(proveedorBAntes);
+    }
+
+    @Test
+    void elMasivoLaEdicionManualYElCambioDeProveedorDejanLaBaseGuardadaIntacta() throws Exception {
+        sembrarAyB();
+        long proveedor = crearProveedor(dueA, unico("P"));
+        long otroProveedor = crearProveedor(dueA, unico("P"));
+        String codigo = unico("OPE");
+        ObjectNode datos = datosVistaPrevia(proveedor);
+        datos.put("bonificacion1", n("10")).put("bonificacion2", n("5"));
+        aplicarComoA(xlsx(conEncabezado(fila(codigo, "Nuevo", n("1000")))), datos, true).andExpect(status().isCreated());
+        long articulo = idPorCodigo(proveedor, codigo);
+        assertBase(articulo, "10", "5", null, false);
+
+        masivoComoA(proveedor, "COSTO_PORCENTAJE", "10");
+        assertBase(articulo, "10", "5", null, false);
+        masivoComoA(proveedor, "MARGEN", "40");
+        assertBase(articulo, "10", "5", null, false);
+
+        ObjectNode pedido = objectMapper.createObjectNode()
+                .put("codigoInterno", (String) filaDeArticulo(articulo).get("codigo_interno"))
+                .put("codigoProveedor", codigo)
+                .put("descripcion", "Editado a mano")
+                .put("unidad", "UNIDAD")
+                .put("proveedorId", proveedor)
+                .put("margenPorcentaje", new BigDecimal("30"))
+                .put("costo", new BigDecimal("700"));
+        putJson("/api/articulos/" + articulo, dueA, objectMapper.writeValueAsString(pedido)).andExpect(status().isOk());
+        assertBase(articulo, "10", "5", null, false);
+
+        pedido.put("proveedorId", otroProveedor);
+        putJson("/api/articulos/" + articulo, dueA, objectMapper.writeValueAsString(pedido)).andExpect(status().isOk());
+        assertBase(articulo, "10", "5", null, false);
+        pedido.putNull("proveedorId");
+        putJson("/api/articulos/" + articulo, dueA, objectMapper.writeValueAsString(pedido)).andExpect(status().isOk());
+        assertBase(articulo, "10", "5", null, false);
+    }
+
+    // --- T-216: las importaciones siguientes usan los ajustes editados (R-119) ---
+
+    /** Articulo de lista 1.000, bonificacion 10 y un ajuste1 editado a mano; el costo ya es el de la lista. */
+    private long conAjusteEditado(long proveedor, String codigo, String ajuste1, String costo) throws Exception {
+        long articulo = articuloDe(dueA, proveedor, codigo, costo);
+        jdbc.update("update articulo set precio_lista_proveedor = 1000.00, ajuste1 = ?, bonificacion1 = 10,"
+                + " bonificacion2 = NULL, bonificacion3 = NULL, lista_incluye_iva = false where id = ?",
+                new BigDecimal(ajuste1), articulo);
+        return articulo;
+    }
+
+    @Test
+    void unaListaSinColumnasDeAjusteConservaElAjusteEditadoYLoAplicaAlCostoNuevo() throws Exception {
+        sembrarAyB();
+        long proveedor = crearProveedor(dueA, unico("P"));
+        String codigo = unico("AJC");
+        long articulo = conAjusteEditado(proveedor, codigo, "-5.00", "855");
+        ObjectNode datos = datosVistaPrevia(proveedor);
+        datos.put("bonificacion1", n("10"));
+
+        aplicarComoA(xlsx(conEncabezado(fila(codigo, "x", n("1100")))), datos, false).andExpect(status().isCreated());
+
+        assertThat(decimal(articulo, "costo")).isEqualByComparingTo("940.50");
+        assertThat(decimal(articulo, "ajuste1")).isEqualByComparingTo("-5");
+    }
+
+    @Test
+    void unaColumnaDeAjusteMapeadaConLaCeldaVaciaBorraElAjusteYElCostoSeRecalcula() throws Exception {
+        sembrarAyB();
+        long proveedor = crearProveedor(dueA, unico("P"));
+        String codigo = unico("AJV");
+        long articulo = conAjusteEditado(proveedor, codigo, "-5.00", "855");
+        MockMultipartFile lista = archivo("lista.xlsx", ListasDePrueba.xlsx(List.of(
+                filaExtra("Codigo", "Descripcion", "Costo", "Desc1"), filaExtra(codigo, "x", n("1100"), null))));
+        ObjectNode datos = datosCon(proveedor, mapeoNode(null, null, 3, null, null, null));
+        datos.put("bonificacion1", n("10"));
+
+        aplicarComoA(lista, datos, false).andExpect(status().isCreated());
+
+        assertThat(decimal(articulo, "ajuste1")).isNull();
+        assertThat(decimal(articulo, "costo")).isEqualByComparingTo("990.00");
+    }
+
+    @Test
+    void unMasivoSobreUnArticuloConAjusteNoLoCambiaYElCostoYaNoCoincideConElDeLaLista() throws Exception {
+        sembrarAyB();
+        long proveedor = crearProveedor(dueA, unico("P"));
+        long articulo = conAjusteEditado(proveedor, unico("AJM"), "-10.00", "810");
+
+        masivoComoA(proveedor, "COSTO_PORCENTAJE", "10");
+
+        assertThat(decimal(articulo, "ajuste1")).isEqualByComparingTo("-10");
+        assertThat(decimal(articulo, "costo")).isEqualByComparingTo("891.00");
+        // La lista (1.000 x 0,90 x 0,90) daria 810: el costo guardado ya no coincide.
+        assertThat(decimal(articulo, "costo")).isNotEqualByComparingTo("810");
     }
 
     private static boolean sinValor(JsonNode nodo, String campo) {
