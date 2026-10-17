@@ -14,6 +14,25 @@ export function formatearCosto(valor: number, moneda: 'ARS' | 'USD' | null | und
   return (moneda === 'USD' ? FORMATO_DOLARES : FORMATO).format(valor);
 }
 
+/**
+ * Un importe que viene como texto decimal exacto (`"880.65"`), formateado sin pasar por Number: `Intl` lee la cadena
+ * como decimal. Entre 2 y `maxDecimales` decimales; `$` o `US$` según la moneda (pesos si falta).
+ */
+export function formatearTexto(
+  valor: string,
+  moneda: 'ARS' | 'USD' | null | undefined,
+  maxDecimales = 2,
+): string {
+  const formato = new Intl.NumberFormat('es-AR', {
+    style: 'currency',
+    currency: moneda === 'USD' ? 'USD' : 'ARS',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: maxDecimales,
+  });
+  // Intl.NumberFormat v3 (Node 19+, navegadores actuales) lee la cadena como decimal exacto; los tipos de lib aún no lo declaran.
+  return formato.format(valor as unknown as number);
+}
+
 const FORMATO_COTIZACION = new Intl.NumberFormat('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 /** Una cotización como `1.000,00`, sin signo $: es un valor de mercado y no un importe de la caja. */

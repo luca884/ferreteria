@@ -535,7 +535,7 @@ class ArticuloIntegrationTest extends IntegrationTestBase {
         assertThat(precioFinal(creado)).isEqualByComparingTo("170.00");
         p.putNull("rubroId");
 
-        putJson("/api/articulos/" + creado.get("id").asLong(), duenoA, conLaVersionVigente(creado.get("id").asLong(), texto(p)))
+        editarComoLaPantalla(creado.get("id").asLong(), duenoA, p)
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.rubroId").doesNotExist())
                 .andExpect(jsonPath("$.precioFinal", is(160.0)));
@@ -553,7 +553,7 @@ class ArticuloIntegrationTest extends IntegrationTestBase {
         p.put("rubroId", rubroDel50);
 
         // 100 x 1,50 x 1,21 = 181,50 que sube a 190.
-        putJson("/api/articulos/" + id, duenoA, conLaVersionVigente(id, texto(p)))
+        editarComoLaPantalla(id, duenoA, p)
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.rubroId", is((int) rubroDel50)))
                 .andExpect(jsonPath("$.precioFinal", is(190.0)));
@@ -578,25 +578,25 @@ class ArticuloIntegrationTest extends IntegrationTestBase {
         delete("/api/articulos/" + id, duenoA).andExpect(status().isNoContent());
         p.put("descripcion", "Editado dado de baja"); // el pedido no trae "activo"
 
-        putJson("/api/articulos/" + id, duenoA, conLaVersionVigente(id, texto(p)))
+        editarComoLaPantalla(id, duenoA, p)
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.activo", is(false)))
                 .andExpect(jsonPath("$.descripcion", is("Editado dado de baja")));
         assertThat(filaDeArticulo(id).get("activo")).isIn(false, 0);
 
         p.put("activo", true);
-        putJson("/api/articulos/" + id, duenoA, conLaVersionVigente(id, texto(p)))
+        editarComoLaPantalla(id, duenoA, p)
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.activo", is(true)));
         assertThat(filaDeArticulo(id).get("activo")).isIn(true, 1);
 
         // Activo y sin "activo": sigue activo. Con false explicito, se da de baja.
         p.remove("activo");
-        putJson("/api/articulos/" + id, duenoA, conLaVersionVigente(id, texto(p)))
+        editarComoLaPantalla(id, duenoA, p)
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.activo", is(true)));
         p.put("activo", false);
-        putJson("/api/articulos/" + id, duenoA, conLaVersionVigente(id, texto(p)))
+        editarComoLaPantalla(id, duenoA, p)
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.activo", is(false)));
     }
@@ -648,10 +648,10 @@ class ArticuloIntegrationTest extends IntegrationTestBase {
         long id2 = crear(duenoA, p2).get("id").asLong();
 
         p2.put("descripcion", "Solo cambia la descripcion");
-        putJson("/api/articulos/" + id2, duenoA, conLaVersionVigente(id2, texto(p2))).andExpect(status().isOk());
+        editarComoLaPantalla(id2, duenoA, p2).andExpect(status().isOk());
 
         p2.put("codigoInterno", codigo1);
-        putJson("/api/articulos/" + id2, duenoA, conLaVersionVigente(id2, texto(p2))).andExpect(status().isConflict());
+        editarComoLaPantalla(id2, duenoA, p2).andExpect(status().isConflict());
     }
 
     @Test
@@ -681,7 +681,7 @@ class ArticuloIntegrationTest extends IntegrationTestBase {
         crear(duenoA, y);
 
         x.put("activo", true);
-        putJson("/api/articulos/" + idX, duenoA, conLaVersionVigente(idX, texto(x))).andExpect(status().isConflict());
+        editarComoLaPantalla(idX, duenoA, x).andExpect(status().isConflict());
         assertThat(filaDeArticulo(idX).get("activo")).isIn(false, 0);
     }
 
@@ -733,7 +733,7 @@ class ArticuloIntegrationTest extends IntegrationTestBase {
         long id = crear(duenoA, p).get("id").asLong();
         p.put("costo", new BigDecimal("200"));
 
-        putJson("/api/articulos/" + id, duenoA, conLaVersionVigente(id, texto(p)))
+        editarComoLaPantalla(id, duenoA, p)
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.precioFinal", is(330.0)));
 
@@ -755,7 +755,7 @@ class ArticuloIntegrationTest extends IntegrationTestBase {
         long id = crear(duenoA, p).get("id").asLong();
         p.put("descripcion", "Nueva descripcion");
 
-        putJson("/api/articulos/" + id, duenoA, conLaVersionVigente(id, texto(p)))
+        editarComoLaPantalla(id, duenoA, p)
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.descripcion", is("Nueva descripcion")));
 
@@ -769,7 +769,7 @@ class ArticuloIntegrationTest extends IntegrationTestBase {
         long id = crear(duenoA, p).get("id").asLong();
         p.put("margenPorcentaje", new BigDecimal("36"));
 
-        putJson("/api/articulos/" + id, duenoA, conLaVersionVigente(id, texto(p)))
+        editarComoLaPantalla(id, duenoA, p)
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.precioFinal", is(170.0)));
 
@@ -783,7 +783,7 @@ class ArticuloIntegrationTest extends IntegrationTestBase {
         jdbc.update("update articulo set stock_actual = 12 where id = ?", id);
         p.put("stockActual", 99).put("descripcion", "Con stock");
 
-        putJson("/api/articulos/" + id, duenoA, conLaVersionVigente(id, texto(p)))
+        editarComoLaPantalla(id, duenoA, p)
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.stockActual", is(12.0)));
 
@@ -823,13 +823,13 @@ class ArticuloIntegrationTest extends IntegrationTestBase {
         jdbc.update("update articulo set precio_lista_proveedor = 1210.00 where id = ?", id);
 
         p.put("descripcion", "Solo descripcion").put("precioListaProveedor", new BigDecimal("1"));
-        putJson("/api/articulos/" + id, duenoA, conLaVersionVigente(id, texto(p)))
+        editarComoLaPantalla(id, duenoA, p)
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.precioListaProveedor", is(1210.0)));
         assertThat((BigDecimal) filaDeArticulo(id).get("precio_lista_proveedor")).isEqualByComparingTo("1210.00");
 
         p.put("costo", new BigDecimal("200")).put("precioListaProveedor", new BigDecimal("2"));
-        putJson("/api/articulos/" + id, duenoA, conLaVersionVigente(id, texto(p)))
+        editarComoLaPantalla(id, duenoA, p)
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.precioListaProveedor", is(1210.0)));
         assertThat((BigDecimal) filaDeArticulo(id).get("precio_lista_proveedor")).isEqualByComparingTo("1210.00");
@@ -959,5 +959,16 @@ class ArticuloIntegrationTest extends IntegrationTestBase {
         postJson("/api/articulos/" + id + "/reactivacion", vendedorA, "").andExpect(status().isForbidden());
 
         assertThat(filaDeArticulo(id).get("activo")).isEqualTo(false);
+    }
+
+    /**
+     * Un PUT como el de la pantalla: con la version que devuelve el GET del articulo, no con una leida de la base. Los
+     * tests que escriben usan este; conLaVersionVigente queda para los que no dependen de la version.
+     */
+    private org.springframework.test.web.servlet.ResultActions editarComoLaPantalla(long id, String token, ObjectNode pedido)
+            throws Exception {
+        ObjectNode cuerpo = pedido.deepCopy();
+        cuerpo.set("version", getJson("/api/articulos/" + id, token).get("version"));
+        return putJson("/api/articulos/" + id, token, texto(cuerpo));
     }
 }

@@ -259,7 +259,16 @@
       @if (configuracion()) {
         <div class="precio-en-vivo" aria-live="polite">
           <span class="precio-en-vivo-etiqueta">Precio final</span>
-          @if (precioEnVivo() !== null) {
+          @if (vivoDeAjustes(); as vivo) {
+            @if (vivo.precio !== null) {
+              <strong>{{ vivo.precio }}</strong>
+            } @else {
+              <span class="pista">Todavía no hay cotización del dólar para calcular el precio.</span>
+            }
+            @if (vivo.costo !== null) {
+              <span class="costo-en-vivo pista">Costo con los ajustes: {{ vivo.costo }}</span>
+            }
+          } @else if (precioEnVivo() !== null) {
             <strong>{{ precioEnVivo() | monto }}</strong>
           } @else if (sinDolar()) {
             <span class="pista">Todavía no hay cotización del dólar para calcular el precio.</span>
@@ -416,11 +425,16 @@
           type="button"
           class="guardar-ajustes"
           [disabled]="!puedeGuardarAjustes()"
-          [attr.aria-describedby]="d.tieneLista ? null : 'motivo-sin-lista'"
+          [attr.aria-describedby]="
+            d.tieneLista ? (motivoSinGuardarAjustes() ? 'motivo-ajustes' : null) : 'motivo-sin-lista'
+          "
           (click)="guardarAjustes()"
         >
           {{ guardandoAjustes() ? 'Guardando ajustes…' : 'Guardar ajustes' }}
         </button>
+        @if (motivoSinGuardarAjustes(); as motivo) {
+          <span id="motivo-ajustes" class="pista">{{ motivo }}</span>
+        }
       </div>
     </app-desglose-precio>
   }
@@ -438,10 +452,10 @@
   />
 }
 
-@if (confirmandoPisar(); as texto) {
+@if (confirmandoPisar(); as aviso) {
   <app-confirmacion
     titulo="¿Pisar el costo guardado?"
-    [mensaje]="texto"
+    [mensaje]="aviso.texto"
     textoConfirmar="Guardar y pisar el costo"
     textoCancelar="Cancelar"
     [peligro]="true"

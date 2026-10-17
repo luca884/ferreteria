@@ -2,7 +2,7 @@ import { Component, computed, effect, input, signal, untracked } from '@angular/
 import { FormControl, FormGroup, ReactiveFormsModule } from '@angular/forms';
 import { CadenaDePrecio, cadenaDePrecio, costoDeLista } from '../../core/formato/cadena-de-precio';
 import { formatearFechaHora } from '../../core/formato/fecha-hora';
-import { formatearCosto, formatearCotizacion } from '../../core/formato/monto';
+import { formatearCotizacion, formatearTexto } from '../../core/formato/monto';
 import { Decimal, exacto } from '../../core/formato/precio-final';
 import { DesglosePrecio, Moneda } from './articulo.models';
 
@@ -69,6 +69,8 @@ export function cadenaDelDesglose(
       d.costoGuardado;
   }
   return cadenaDePrecio({
+    // Sin cambios en los ajustes el último paso es el precio GUARDADO (R-209); con cambios, el que saldría.
+    precioGuardado: cambiaron ? undefined : d.precioFinal,
     tieneLista: d.tieneLista,
     lista: d.precioLista,
     incluyeIva: d.listaIncluyeIva,
@@ -83,20 +85,6 @@ export function cadenaDelDesglose(
   });
 }
 
-const FORMATO_PASO: Record<Moneda, Intl.NumberFormat> = {
-  ARS: new Intl.NumberFormat('es-AR', {
-    style: 'currency',
-    currency: 'ARS',
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 4,
-  }),
-  USD: new Intl.NumberFormat('es-AR', {
-    style: 'currency',
-    currency: 'USD',
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 4,
-  }),
-};
 const FORMATO_PORCENTAJE = new Intl.NumberFormat('es-AR', { maximumFractionDigits: 2 });
 
 const porcentaje = (valor: number) => FORMATO_PORCENTAJE.format(valor);
@@ -155,8 +143,7 @@ export class DesglosePrecioVista {
     return this.cadena().pasos.map((paso) => {
       const moneda: Moneda = EN_MONEDA_DEL_ARTICULO.includes(paso.tipo) ? d.moneda : 'ARS';
       const pct = paso.porcentaje === null ? null : Number(paso.porcentaje);
-      const importe =
-        paso.tipo === 'REDONDEO' ? null : FORMATO_PASO[moneda].format(Number(paso.importe));
+      const importe = paso.tipo === 'REDONDEO' ? null : formatearTexto(paso.importe, moneda, 4);
       return { tipo: paso.tipo, nombre: this.nombreDe(paso.tipo, pct, paso.importe), importe };
     });
   });
@@ -164,12 +151,14 @@ export class DesglosePrecioVista {
   /** «Costo de la lista» de la comparación: el del servidor, o el que salga de los ajustes escritos. */
   protected readonly costoDeLaLista = computed(() => {
     const d = this.desglose();
-    const valor = this.sinGuardar() ? Number(this.cadena().costoDeLista) : d.costoDeLista;
-    return valor === null || Number.isNaN(valor) ? '' : formatearCosto(valor, d.moneda);
+    const valor = this.sinGuardar() ? this.cadena().costoDeLista : d.costoDeLista;
+    return valor === null ? '' : formatearTexto(String(valor), d.moneda);
   });
   protected readonly costoGuardado = computed(() =>
-    formatearCosto(this.desglose().costoGuardado, this.desglose().moneda),
+    formatearTexto(String(this.desglose().costoGuardado), this.desglose().moneda),
   );
+  /** Algún ajuste escrito no es válido: no entra en los importes. */
+  protected readonly hayAjusteInvalido = computed(() => this.errores().some((e) => e !== null));
   protected readonly noCoincide = computed(
     () => this.desglose().tieneLista && this.desglose().coincide === false,
   );

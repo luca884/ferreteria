@@ -1734,10 +1734,10 @@ describe('ArticuloForm', () => {
         expect(limpio(el().querySelector('#motivo-sin-lista')?.textContent)).toBe(MOTIVO_SIN_LISTA);
       });
 
-      it('no se puede guardar ajustes aunque se dispare el clic', async () => {
+      it('no se puede guardar ajustes aunque se llame a la acción directamente', async () => {
         await crearComponente({ id: '5', articulo: articuloGuardado(), desglose: desgloseSinLista() });
 
-        botonAjustes().click();
+        (fixture.componentInstance as unknown as { guardarAjustes: () => void }).guardarAjustes();
         await refrescar();
 
         expect(servicio.guardarAjustes).not.toHaveBeenCalled();
@@ -1886,19 +1886,55 @@ describe('ArticuloForm', () => {
         expect(servicio.guardarAjustes.mock.calls.map(([, pedido]) => pedido.version)).toEqual([3, 4]);
       });
 
-      it('si el servidor devuelve la versión en el PUT de ajustes y el reintento de lectura falla, igual la usa', async () => {
+      it('si el PUT de ajustes responde y la relectura falla, usa la respuesta: versión, costo, ajustes y bloquea guardar hasta «Recargar»', async () => {
         await crearComponente(conVersion(3));
-        servicio.guardarAjustes.mockReturnValue(of(articuloConLista({ version: 4, ajuste2: null })));
+        servicio.guardarAjustes.mockReturnValue(
+          of(articuloConLista({ version: 4, ajuste2: null, costo: 855, precioFinal: 1350 })),
+        );
         servicio.obtener.mockReturnValue(throwError(() => errorHttp(500, 'Error interno')));
         await escribir('ajuste2', '');
         botonAjustes().click();
         await refrescar();
 
+        // El costo del formulario es el de la respuesta, no el viejo.
+        expect(input('costo').value).toBe('855');
+        expect(input('ajuste2').value).toBe('');
+        expect(limpio(el().querySelector('[data-foco-ajustes]')?.textContent)).toContain('Se guardaron los ajustes');
+        expect(el().querySelector('button.recargar')).not.toBeNull();
+
+        // Guardar el artículo queda bloqueado: no manda nada hasta recargar.
+        await escribir('descripcion', 'Otra');
+        await enviar();
+        expect(servicio.actualizar).not.toHaveBeenCalled();
+
+        // Los ajustes siguientes usan la versión de la respuesta.
         await escribir('ajuste3', '2');
         botonAjustes().click();
         await refrescar();
-
         expect(servicio.guardarAjustes.mock.calls[1][1].version).toBe(4);
+      });
+
+      it('si falla solo la relectura del desglose, guardar() queda bloqueado y «Recargar» lo libera', async () => {
+        await crearComponente(conVersion(3));
+        const respuesta = articuloConLista({ version: 4, ajuste2: null, costo: 855, precioFinal: 1350 });
+        servicio.guardarAjustes.mockReturnValue(of(respuesta));
+        servicio.obtener.mockReturnValue(of(respuesta));
+        servicio.desglose.mockReturnValue(throwError(() => errorHttp(500, 'Error interno')));
+        await escribir('ajuste2', '');
+        botonAjustes().click();
+        await refrescar();
+
+        expect(input('costo').value).toBe('855');
+        await enviar();
+        expect(servicio.actualizar).not.toHaveBeenCalled();
+
+        servicio.desglose.mockReturnValue(of(desgloseDe({ ajuste2: null, costoGuardado: 855, costoDeLista: 855, precioFinal: 1350 })));
+        el().querySelector<HTMLButtonElement>('button.recargar')!.click();
+        await refrescar();
+        await enviar();
+
+        expect(servicio.actualizar).toHaveBeenCalledTimes(1);
+        expect(servicio.actualizar.mock.calls[0][1]).toEqual(expect.objectContaining({ costo: 855, version: 4 }));
       });
     });
 
@@ -2018,6 +2054,161 @@ describe('ArticuloForm', () => {
         await crearComponente({ ...conVersion(3), dueno: false });
 
         expect(botonRecargar()).toBeNull();
+      });
+    });
+  });
+  describe('arreglos de la revisión del lote 6', () => {
+    const limpio = (texto: string | null | undefined) => (texto ?? '').replace(/[\s ]+/g, ' ').trim();
+    const botonAjustes = () => el().querySelector<HTMLButtonElement>('button.guardar-ajustes')!;
+    const botonRecargar = () => el().querySelector<HTMLButtonElement>('button.recargar');
+    const conLista = (cambios: Partial<Articulo> = {}) => ({
+      id: '5',
+      articulo: articuloConLista({ version: 3, ...cambios }),
+      desglose: desgloseDe(),
+    });
+    const componente = () =>
+      fixture.componentInstance as unknown as { ajustes: { controls: Record<string, { setValue(v: number | null): void }> } };
+
+    describe('reactivar toma la versión nueva', () => {
+      it('después de reactivar, el próximo guardado manda la versión que devolvió el servidor', async () => {
+        await crearComponente({ id: '5', articulo: articuloGuardado({ activo: false, version: 3 }) });
+        servicio.reactivar.mockReturnValue(of(articuloGuardado({ activo: true, version: 4 })));
+
+        el().querySelector<HTMLButtonElement>('app-barra-acciones button.reactivar')!.click();
+        await refrescar();
+        await escribir('descripcion', 'Reactivado y editado');
+        await enviar();
+
+        expect(servicio.actualizar.mock.calls[0][1]).toEqual(expect.objectContaining({ version: 4, activo: true }));
+      });
+    });
+
+    describe('el precio en vivo de arriba sigue a los ajustes escritos (R-218)', () => {
+      it('sin ajustes cambiados muestra el precio del costo del formulario', async () => {
+        await crearComponente(conLista());
+
+        expect(limpio(el().querySelector('.precio-en-vivo strong')?.textContent)).toBe('$ 1.390,00');
+        expect(el().querySelector('.costo-en-vivo')).toBeNull();
+      });
+
+      it('con un ajuste escrito muestra el costo y el precio de la cadena: 855,00 y $ 1.350,00', async () => {
+        await crearComponente(conLista());
+
+        await escribir('ajuste2', '');
+
+        expect(limpio(el().querySelector('.precio-en-vivo strong')?.textContent)).toBe('$ 1.350,00');
+        expect(limpio(el().querySelector('.costo-en-vivo')?.textContent)).toContain('$ 855,00');
+      });
+    });
+
+    describe('el costo del formulario no se pisa si está sucio', () => {
+      it('con el campo costo editado, guardar ajustes no lo cambia', async () => {
+        await crearComponente(conLista());
+        await escribir('costo', '500');
+        await escribir('ajuste2', '');
+        const guardado = articuloConLista({ costo: 855, ajuste2: null, version: 4 });
+        servicio.guardarAjustes.mockReturnValue(of(guardado));
+        servicio.obtener.mockReturnValue(of(guardado));
+
+        botonAjustes().click();
+        await refrescar();
+
+        expect(input('costo').value).toBe('500');
+      });
+    });
+
+    describe('«Guardar ajustes» apagado dice por qué', () => {
+      const motivo = () => limpio(el().querySelector('#motivo-ajustes')?.textContent);
+
+      it('sin cambios: «Cambiá un ajuste para guardar», enlazado al botón', async () => {
+        await crearComponente(conLista());
+
+        expect(motivo()).toBe('Cambiá un ajuste para guardar');
+        expect(botonAjustes().getAttribute('aria-describedby')).toContain('motivo-ajustes');
+      });
+
+      it('con un ajuste inválido: «Corregí el ajuste N»', async () => {
+        await crearComponente(conLista());
+
+        await escribir('ajuste2', '-100');
+
+        expect(motivo()).toBe('Corregí el ajuste 2');
+      });
+
+      it('con un cambio válido el motivo desaparece', async () => {
+        await crearComponente(conLista());
+
+        await escribir('ajuste2', '');
+
+        expect(el().querySelector('#motivo-ajustes')).toBeNull();
+        expect(botonAjustes().hasAttribute('aria-describedby')).toBe(false);
+      });
+
+      it('sin lista conserva el motivo del servidor y no suma otro', async () => {
+        await crearComponente({ id: '5', articulo: articuloGuardado(), desglose: desgloseSinLista() });
+
+        expect(el().querySelector('#motivo-ajustes')).toBeNull();
+        expect(botonAjustes().getAttribute('aria-describedby')).toBe('motivo-sin-lista');
+      });
+    });
+
+    describe('«Recargar» también para el 400 de versión faltante', () => {
+      it('se ofrece cuando el servidor dice que falta la versión', async () => {
+        await crearComponente(conLista());
+        servicio.actualizar.mockReturnValue(
+          throwError(() => errorHttp(400, 'Falta la versión del artículo. Recargá y volvé a intentar.')),
+        );
+
+        await enviar();
+
+        expect(botonRecargar()).not.toBeNull();
+      });
+    });
+
+    describe('el aviso de pisar congela los ajustes', () => {
+      it('lo que se envía al confirmar es lo que se vio en el aviso, aunque el campo cambie mientras tanto', async () => {
+        await crearComponente({
+          id: '5',
+          articulo: articuloConLista({ version: 3, costo: 950, ajuste1: null, ajuste2: null }),
+          desglose: desgloseDe({ ajuste1: null, ajuste2: null, costoDeLista: 900, costoGuardado: 950, coincide: false }),
+        });
+        await escribir('ajuste1', '-5');
+        botonAjustes().click();
+        await refrescar();
+        expect(el().querySelector('app-confirmacion')).not.toBeNull();
+
+        componente().ajustes.controls['ajuste1'].setValue(-7);
+        el().querySelector<HTMLButtonElement>('app-confirmacion button.confirmar')!.click();
+        await refrescar();
+
+        expect(servicio.guardarAjustes.mock.calls[0][1]).toEqual(
+          expect.objectContaining({ ajuste1: -5, confirmaPisarCosto: true }),
+        );
+      });
+    });
+
+    describe('no se guarda ni se recarga dos veces a la vez', () => {
+      it('un segundo envío mientras guarda no repite el PUT', async () => {
+        await crearComponente(conLista());
+        servicio.actualizar.mockReturnValue(new Subject<Articulo>());
+
+        await enviar();
+        await enviar();
+
+        expect(servicio.actualizar).toHaveBeenCalledTimes(1);
+      });
+
+      it('«Recargar» mientras se guardan ajustes no hace nada', async () => {
+        await crearComponente(conLista());
+        servicio.guardarAjustes.mockReturnValue(new Subject<Articulo>());
+        await escribir('ajuste2', '');
+        botonAjustes().click();
+        await refrescar();
+        servicio.obtener.mockClear();
+
+        (fixture.componentInstance as unknown as { recargar: () => void }).recargar();
+
+        expect(servicio.obtener).not.toHaveBeenCalled();
       });
     });
   });

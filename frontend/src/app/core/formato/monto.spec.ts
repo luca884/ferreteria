@@ -1,4 +1,4 @@
-import { formatearCosto, formatearCotizacion, formatearMonto, MontoPipe } from './monto';
+import { formatearCosto, formatearCotizacion, formatearMonto, formatearTexto, MontoPipe } from './monto';
 
 const NBSP = ' ';
 
@@ -65,5 +65,18 @@ describe('formatearCotizacion', () => {
   it('devuelve vacío con null o undefined', () => {
     expect(formatearCotizacion(null)).toBe('');
     expect(formatearCotizacion(undefined)).toBe('');
+  });
+});
+
+describe('formatearTexto', () => {
+  it('formatea un decimal exacto en pesos o dólares, con hasta los decimales pedidos', () => {
+    expect(formatearTexto('1385.2625', 'ARS', 4)).toBe(`$${NBSP}1.385,2625`);
+    expect(formatearTexto('880.65', 'ARS')).toBe(`$${NBSP}880,65`);
+    expect(formatearTexto('8.81', 'USD')).toBe(`US$${NBSP}8,81`);
+    expect(formatearTexto('10', null)).toBe(`$${NBSP}10,00`);
+  });
+
+  it('no pasa por coma flotante: 2^53 + 1 se muestra entero', () => {
+    expect(formatearTexto('9007199254740993.00', 'ARS')).toBe(`$${NBSP}9.007.199.254.740.993,00`);
   });
 });

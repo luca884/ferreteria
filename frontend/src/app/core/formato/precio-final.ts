@@ -49,6 +49,21 @@ export function precioFinal(
   multiplo: Decimal,
   cotizacion: Decimal = '1',
 ): number | null {
+  const centavos = precioFinalCentavos(costo, margen, alicuota, multiplo, cotizacion);
+  return centavos === null ? null : Number(centavos) / 100;
+}
+
+/**
+ * Lo mismo que `precioFinal`, pero en centavos exactos como bigint, sin pasar por Number: de acá se formatea el
+ * precio cuando importa que no haya coma flotante.
+ */
+export function precioFinalCentavos(
+  costo: Decimal,
+  margen: Decimal,
+  alicuota: Alicuota,
+  multiplo: Decimal,
+  cotizacion: Decimal = '1',
+): bigint | null {
   const c = exacto(costo);
   const m = exacto(margen);
   const iva = exacto(PORCENTAJE_IVA[alicuota]);
@@ -69,7 +84,7 @@ export function precioFinal(
     // veces × múltiplo, en centavos; un múltiplo con más de 2 decimales sube al centavo, como setScale(2, CEILING).
     centavos = techo(veces * mul.entero * 100n, diez(mul.escala));
   }
-  return Number(centavos) / 100;
+  return centavos;
 }
 
 /** El margen que usa el precio: el propio; si no hay, el del rubro; si no, el de la ferretería. 0 se respeta. */

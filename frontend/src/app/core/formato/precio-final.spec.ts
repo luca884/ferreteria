@@ -1,5 +1,5 @@
 import datos from '../../../../../backend/src/test/resources/catalogo/casos-precio.json';
-import { margenEfectivo, precioFinal } from './precio-final';
+import { margenEfectivo, precioFinal, precioFinalCentavos } from './precio-final';
 
 /**
  * El formulario de artículo muestra el precio en vivo: tiene que dar exactamente lo mismo que PrecioCalculator.
@@ -57,6 +57,23 @@ describe('precioFinal', () => {
     expect(precioFinal(-1, 35, 'IVA_21', 10)).toBeNull();
     expect(precioFinal(100, -5, 'IVA_21', 10)).toBeNull();
     expect(precioFinal(100, null, 'IVA_21', 10)).toBeNull();
+  });
+});
+
+describe('precioFinalCentavos', () => {
+  it('da los centavos exactos como bigint, sin pasar por Number', () => {
+    expect(precioFinalCentavos(100, 35, 'IVA_21', 10)).toBe(17000n);
+    expect(precioFinalCentavos(10, 30, 'IVA_21', 10, 1000)).toBe(1573000n);
+    expect(precioFinalCentavos('9007199254740993', 0, 'IVA_0', null)).toBe(900719925474099300n);
+  });
+
+  it('sin precio (datos inválidos) da null, igual que precioFinal', () => {
+    expect(precioFinalCentavos(null, 35, 'IVA_21', 10)).toBeNull();
+    expect(precioFinalCentavos(10, 30, 'IVA_21', 10, 0)).toBeNull();
+  });
+
+  it('precioFinal sigue dando lo mismo que antes', () => {
+    expect(precioFinal(100, 35, 'IVA_21', 10)).toBe(170);
   });
 });
 

@@ -81,6 +81,9 @@ export interface Articulo {
 /** Lo que responde el servidor (409) cuando otro cambio modificó el artículo después de cargarlo. */
 export const MENSAJE_ARTICULO_MODIFICADO = 'Otro cambio modificó este artículo. Recargá y volvé a intentar.';
 
+/** Lo que responde el servidor (400) cuando un PUT no trae la versión del artículo. */
+export const MENSAJE_FALTA_VERSION = 'Falta la versión del artículo. Recargá y volvé a intentar.';
+
 export const MOTIVOS_AJUSTE = ['INGRESO_MERCADERIA', 'ROTURA', 'CONTEO', 'OTRO'] as const;
 export type MotivoAjuste = (typeof MOTIVOS_AJUSTE)[number];
 

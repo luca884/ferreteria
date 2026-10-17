@@ -1,5 +1,5 @@
 import datos from '../../../../../backend/src/test/resources/catalogo/casos-cadena-precio.json';
-import { EntradaCadena, cadenaDePrecio, costoDeLista } from './cadena-de-precio';
+import { EntradaCadena, cadenaDePrecio, costoDeLista, igualesPorValor } from './cadena-de-precio';
 import { Alicuota } from './precio-final';
 
 /**
@@ -162,6 +162,59 @@ describe('cadena de precio', () => {
       expect(cadena.costoDeLista).toBe('900.00');
       expect(cadena.coincide).toBe(false);
       expect(cadena.precio).toBe('1500.00');
+    });
+
+    it('el PRECIO_FINAL es el precio GUARDADO cuando se lo da (R-209); el recalculado queda en `precio`', () => {
+      const caso = datos.casos[0];
+      const cadena = cadenaDePrecio({ ...entradaDe(caso), precioGuardado: 1500 });
+
+      expect(cadena.pasos.at(-1)).toEqual({ tipo: 'PRECIO_FINAL', porcentaje: null, importe: '1500.00' });
+      expect(cadena.precio).toBe(caso.precio);
+    });
+
+    it('sin precio guardado, el PRECIO_FINAL es el recalculado', () => {
+      const caso = datos.casos[0];
+      const cadena = cadenaDePrecio(entradaDe(caso));
+
+      expect(cadena.pasos.at(-1)?.importe).toBe(caso.precio);
+    });
+
+    it('el precio guardado se normaliza a 2 decimales sin pasar por coma flotante', () => {
+      const caso = datos.casos[0];
+
+      expect(cadenaDePrecio({ ...entradaDe(caso), precioGuardado: '1390' }).pasos.at(-1)?.importe).toBe('1390.00');
+    });
+
+    it('el precio sale de los centavos exactos: 2^53 + 1 no se redondea por coma flotante', () => {
+      const cadena = cadenaDePrecio({
+        tieneLista: false,
+        lista: null,
+        incluyeIva: null,
+        alicuota: 'IVA_0',
+        bonificaciones: [],
+        ajustes: [],
+        costoGuardado: '9007199254740993',
+        moneda: 'ARS',
+        cotizacion: null,
+        margen: '0',
+        multiplo: null,
+      });
+
+      expect(cadena.precio).toBe('9007199254740993.00');
+    });
+  });
+
+  describe('igualesPorValor', () => {
+    it('compara decimales por valor, no por texto ni por coma flotante', () => {
+      expect(igualesPorValor('0.30', 0.3)).toBe(true);
+      expect(igualesPorValor('880.65', '880.650')).toBe(true);
+      expect(igualesPorValor('900.00', 950)).toBe(false);
+      expect(igualesPorValor('9007199254740993.00', '9007199254740992')).toBe(false);
+    });
+
+    it('un valor ilegible no es igual a nada', () => {
+      expect(igualesPorValor('abc', 1)).toBe(false);
+      expect(igualesPorValor(null, null)).toBe(false);
     });
   });
 });

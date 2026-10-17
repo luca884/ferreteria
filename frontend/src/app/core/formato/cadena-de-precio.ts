@@ -1,4 +1,4 @@
-import { Alicuota, Decimal, Exacto, PORCENTAJE_IVA, exacto, precioFinal } from './precio-final';
+import { Alicuota, Decimal, Exacto, PORCENTAJE_IVA, exacto, precioFinalCentavos } from './precio-final';
 
 /**
  * La cadena del desglose del precio, calculada en la pantalla con la misma cuenta que CostoDeLista.java y
@@ -43,6 +43,11 @@ export interface EntradaCadena {
   cotizacion: Decimal;
   margen: Decimal;
   multiplo: Decimal;
+  /**
+   * El precio final GUARDADO en el artículo: el desglose lo muestra tal cual en el último paso (R-209) y no lo
+   * recalcula. Sin él, el último paso es el precio recalculado (el precio en vivo).
+   */
+  precioGuardado?: Decimal;
 }
 
 export interface CadenaDePrecio {
@@ -180,6 +185,13 @@ function iguales(a: Exacto, b: Exacto): boolean {
   return a.entero * diez(b.escala) === b.entero * diez(a.escala);
 }
 
+/** Dos importes son iguales por valor (sin coma flotante); si alguno no se puede leer, no lo son. */
+export function igualesPorValor(a: Decimal, b: Decimal): boolean {
+  const x = exacto(a);
+  const y = exacto(b);
+  return x !== null && y !== null && iguales(x, y);
+}
+
 /**
  * Los pasos de C-204: lista → IVA de la lista → bonificaciones → ajustes → costo → cotización (USD) → margen → IVA →
  * redondeo → precio final. Después del costo todo parte del costo GUARDADO, que puede no ser el de la lista.
@@ -233,20 +245,19 @@ export function cadenaDePrecio(entrada: EntradaCadena): CadenaDePrecio {
     pasos.push({ tipo: 'REDONDEO', porcentaje: null, importe: String(entrada.multiplo).trim() });
   }
 
-  const precio = precioFinal(
+  const centavos = precioFinalCentavos(
     entrada.costoGuardado,
     entrada.margen,
     entrada.alicuota,
     entrada.multiplo,
     usd ? entrada.cotizacion : undefined,
   );
-  if (precio !== null) {
-    pasos.push({ tipo: 'PRECIO_FINAL', porcentaje: null, importe: precio.toFixed(2) });
+  const precio = centavos === null ? null : texto(centavos, 2);
+  // El último paso es el precio GUARDADO si se lo da (como el backend); el recalculado queda en `precio`.
+  const guardado = exacto(entrada.precioGuardado);
+  const ultimo = guardado ? texto(dividir(aFraccion(guardado), 2), 2) : precio;
+  if (ultimo !== null) {
+    pasos.push({ tipo: 'PRECIO_FINAL', porcentaje: null, importe: ultimo });
   }
-  return {
-    pasos,
-    costoDeLista: costoLista,
-    coincide,
-    precio: precio === null ? null : precio.toFixed(2),
-  };
+  return { pasos, costoDeLista: costoLista, coincide, precio };
 }

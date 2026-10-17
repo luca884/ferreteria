@@ -506,6 +506,35 @@ describe('DesglosePrecioVista', () => {
     });
   });
 
+  describe('el precio final del desglose es el guardado (R-209)', () => {
+    it('sin cambios en los ajustes muestra el precio guardado aunque el recalculado difiera', async () => {
+      await crear(desgloseBase({ precioFinal: 1400 }));
+
+      expect(textos('.paso-importe').at(-1)).toBe('$ 1.400,00');
+    });
+
+    it('con ajustes escritos distintos muestra el precio que saldría (el recalculado)', async () => {
+      await crear(desgloseBase({ precioFinal: 1400 }));
+
+      await escribir('ajuste2', '');
+
+      expect(textos('.paso-importe').at(-1)).toBe('$ 1.350,00');
+    });
+  });
+
+  describe('un ajuste inválido escrito', () => {
+    it('avisa que no se tiene en cuenta en los importes', async () => {
+      await crear(desgloseBase());
+      expect(el().querySelector('.ajuste-ignorado')).toBeNull();
+
+      await escribir('ajuste1', '-100');
+
+      expect(limpio(el().querySelector('.ajuste-ignorado')?.textContent)).toBe(
+        'Hay un ajuste inválido: no se tiene en cuenta en estos importes.',
+      );
+    });
+  });
+
   describe('cadenaDelDesglose', () => {
     it('sin cambios en los ajustes parte del costo guardado, que puede no ser el de la lista', () => {
       const cadena = cadenaDelDesglose(

@@ -15,7 +15,7 @@ import {
   untracked,
   viewChild,
 } from '@angular/core';
-import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormControl, FormGroup, ReactiveFormsModule } from '@angular/forms';
 import { erroresDeCampos } from '../../core/api/api-error';
 import { AuthService } from '../../core/auth/auth.service';
@@ -87,9 +87,15 @@ export class ActualizacionMasiva implements OnInit {
     valor: new FormControl('', { nonNullable: true }),
   });
 
-  private readonly formulario = toSignal(this.form.valueChanges, {
-    initialValue: this.form.getRawValue(),
-  });
+  /**
+   * El formulario como signal. Se lee con `getRawValue()` y se actualiza a mano: soltar una selección con
+   * `emitEvent: false` no pasa por `valueChanges` y los `computed` quedarían con el valor viejo.
+   */
+  private readonly formulario = signal(this.form.getRawValue());
+
+  private sincronizarFormulario(): void {
+    this.formulario.set(this.form.getRawValue());
+  }
 
   protected readonly etiquetaDelValor = computed(() => {
     const modo = this.formulario().modo;
@@ -167,7 +173,10 @@ export class ActualizacionMasiva implements OnInit {
 
   constructor() {
     // Cualquier cambio del filtro, el modo o el valor deja la vista previa vieja sin efecto.
-    this.form.valueChanges.pipe(takeUntilDestroyed()).subscribe(() => this.invalidar());
+    this.form.valueChanges.pipe(takeUntilDestroyed()).subscribe(() => {
+      this.sincronizarFormulario();
+      this.invalidar();
+    });
     // Al cambiar el proveedor, una importación de otro proveedor deja de valer (sin invalidar dos veces).
     this.form.controls.proveedorId.valueChanges
       .pipe(takeUntilDestroyed())
@@ -177,6 +186,7 @@ export class ActualizacionMasiva implements OnInit {
         );
         if (elegida && proveedorId !== null && elegida.proveedorId !== proveedorId) {
           this.form.controls.importacionId.setValue(null, { emitEvent: false });
+          this.sincronizarFormulario();
         }
       });
     // Sin nada que elegir el selector queda apagado; el estado del control no es un cambio del filtro.
@@ -321,6 +331,7 @@ export class ActualizacionMasiva implements OnInit {
       next: (lista) => {
         this.proveedores.set(lista);
         soltarSiNoExiste(this.form.controls.proveedorId, lista);
+        this.sincronizarFormulario();
       },
       error: () => this.avisar('No se pudieron cargar los proveedores.'),
     });
@@ -328,6 +339,7 @@ export class ActualizacionMasiva implements OnInit {
       next: (lista) => {
         this.rubros.set(lista);
         soltarSiNoExiste(this.form.controls.rubroId, lista);
+        this.sincronizarFormulario();
       },
       error: () => this.avisar('No se pudieron cargar los rubros.'),
     });
@@ -336,6 +348,7 @@ export class ActualizacionMasiva implements OnInit {
         this.importacionesFallo.set(false);
         this.importaciones.set(lista);
         soltarSiNoExiste(this.form.controls.importacionId, lista);
+        this.sincronizarFormulario();
       },
       error: () => {
         this.importacionesFallo.set(true);

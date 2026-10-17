@@ -38,6 +38,12 @@
     </p>
   }
 
+  @if (hayAjusteInvalido()) {
+    <p class="ajuste-ignorado pista" role="status">
+      Hay un ajuste inválido: no se tiene en cuenta en estos importes.
+    </p>
+  }
+
   @if (noCoincide()) {
     <div class="no-coincide aviso">
       <p>

@@ -17,7 +17,8 @@ import { AuthService } from '../../core/auth/auth.service';
 import { Avisos } from '../../core/avisos/avisos';
 import { Cotizacion } from '../../core/cotizacion/cotizacion.models';
 import { CotizacionService } from '../../core/cotizacion/cotizacion.service';
-import { MontoPipe, formatearCosto, formatearCotizacion } from '../../core/formato/monto';
+import { MontoPipe, formatearCotizacion, formatearTexto } from '../../core/formato/monto';
+import { igualesPorValor } from '../../core/formato/cadena-de-precio';
 import { margenEfectivo, precioFinal } from '../../core/formato/precio-final';
 import { cantidadConUnidad } from '../../core/formato/unidad';
 import { BarraAcciones } from '../../shared/barra-acciones';
@@ -36,6 +37,7 @@ import {
   ConfiguracionPrecios,
   DesglosePrecio,
   MENSAJE_ARTICULO_MODIFICADO,
+  MENSAJE_FALTA_VERSION,
   MONEDAS,
   MONEDA_LABELS,
   Moneda,
@@ -132,7 +134,12 @@ export class ArticuloForm implements OnInit {
   protected readonly desglose = signal<DesglosePrecio | null>(null);
   protected readonly guardandoAjustes = signal(false);
   /** El texto del aviso de pisar el costo mientras espera que el Dueño confirme o cancele; null si no hay. */
-  protected readonly confirmandoPisar = signal<string | null>(null);
+  protected readonly confirmandoPisar = signal<{ texto: string; ajustes: (number | null)[] } | null>(null);
+  /**
+   * Después de guardar ajustes no se pudo releer el artículo o el desglose: lo que hay en pantalla puede estar
+   * viejo. Guardar el artículo queda bloqueado hasta «Recargar».
+   */
+  protected readonly bloqueado = signal(false);
   /** El servidor dijo que otro cambio modificó el artículo (409 de versión): hay que recargar. */
   protected readonly versionVencida = signal(false);
 
@@ -181,6 +188,33 @@ export class ArticuloForm implements OnInit {
       escritos.every((a) => errorDeAjuste(a) === null) &&
       ajustesEfectivos(d, escritos).cambiaron
     );
+  });
+
+  /** Por qué «Guardar ajustes» está apagado, para decirlo al lado del botón; null si se puede guardar. */
+  protected readonly motivoSinGuardarAjustes = computed(() => {
+    const d = this.desglose();
+    if (!this.auth.esDueno() || d === null || !d.tieneLista || this.guardandoAjustes()) return null;
+    const escritos = this.ajustesEscritos();
+    const invalido = escritos.findIndex((a) => errorDeAjuste(a) !== null);
+    if (invalido >= 0) return `Corregí el ajuste ${invalido + 1}`;
+    return ajustesEfectivos(d, escritos).cambiaron ? null : 'Cambiá un ajuste para guardar';
+  });
+
+  /**
+   * Con ajustes escritos distintos de los guardados, el costo y el precio que saldrían (los de la cadena del
+   * desglose, R-218); null si no hay cambios y rige el precio del costo del formulario.
+   */
+  protected readonly vivoDeAjustes = computed(() => {
+    const d = this.desglose();
+    if (d === null || !d.tieneLista) return null;
+    const escritos = this.ajustesEscritos();
+    if (!ajustesEfectivos(d, escritos).cambiaron) return null;
+    const cadena = cadenaDelDesglose(d, escritos);
+    const costo = cadena.pasos.find((p) => p.tipo === 'COSTO')?.importe ?? null;
+    return {
+      costo: costo === null ? null : formatearTexto(costo, d.moneda),
+      precio: cadena.precio === null ? null : formatearTexto(cadena.precio, 'ARS'),
+    };
   });
 
   /** Los valores del formulario como signal (incluso deshabilitado, para el Vendedor). */
@@ -292,7 +326,14 @@ export class ArticuloForm implements OnInit {
   }
 
   protected guardar(): void {
-    if (!this.auth.esDueno()) return;
+    if (!this.auth.esDueno() || this.guardando()) return;
+    if (this.bloqueado()) {
+      if (!this.error()) {
+        this.error.set('Recargá el artículo antes de guardar: lo que ves puede estar desactualizado.');
+        this.versionVencida.set(true);
+      }
+      return;
+    }
     if (this.form.invalid) {
       this.form.markAllAsTouched();
       this.enfocarPrimerInvalido();
@@ -331,39 +372,43 @@ export class ArticuloForm implements OnInit {
     if (this.id === null || d === null || !this.puedeGuardarAjustes()) return;
     const aviso = this.avisoDePisar(d);
     if (aviso !== null) {
-      this.confirmandoPisar.set(aviso);
+      // Se congela lo que se vio en el aviso: es lo que se envía al confirmar.
+      this.confirmandoPisar.set({ texto: aviso, ajustes: [...this.ajustesEscritos()] });
       return;
     }
-    this.enviarAjustes(false);
+    this.enviarAjustes(false, this.ajustesEscritos());
   }
 
   protected confirmarPisar(): void {
+    const congelado = this.confirmandoPisar();
     this.confirmandoPisar.set(null);
-    if (this.puedeGuardarAjustes()) this.enviarAjustes(true);
+    if (congelado && this.auth.esDueno() && !this.guardandoAjustes()) this.enviarAjustes(true, congelado.ajustes);
   }
 
   private avisoDePisar(d: DesglosePrecio): string | null {
     const costoNuevo = cadenaDelDesglose(d, this.ajustesEscritos()).costoDeLista;
     if (d.coincide !== false || d.costoDeLista === null || costoNuevo === null) return null;
-    if (Number(costoNuevo) === d.costoGuardado) return null; // el costo no cambia: no hay nada que pisar
-    const en = (valor: number) => formatearCosto(valor, d.moneda);
+    if (igualesPorValor(costoNuevo, d.costoGuardado)) return null; // el costo no cambia: no hay nada que pisar
+    const en = (valor: string) => formatearTexto(valor, d.moneda);
     return (
-      `El costo guardado (${en(d.costoGuardado)}) no coincide con el que sale de la lista (${en(d.costoDeLista)}). ` +
-      `Si guardás, el costo pasa a ${en(Number(costoNuevo))}.`
+      `El costo guardado (${en(String(d.costoGuardado))}) no coincide con el que sale de la lista (${en(String(d.costoDeLista))}). ` +
+      `Si guardás, el costo pasa a ${en(costoNuevo)}.`
     );
   }
 
-  private enviarAjustes(confirmaPisarCosto: boolean): void {
+  private enviarAjustes(confirmaPisarCosto: boolean, valores: readonly (number | null)[]): void {
     const id = this.id;
     if (id === null) return;
-    const [ajuste1, ajuste2, ajuste3] = this.ajustesEscritos();
+    const [ajuste1, ajuste2, ajuste3] = valores;
     this.guardandoAjustes.set(true);
     this.limpiarMensajes();
     const version = this.articulo()?.version;
     this.service.guardarAjustes(id, { ajuste1, ajuste2, ajuste3, confirmaPisarCosto, version }).subscribe({
       next: (guardado) => {
-        // La versión nueva viene en la respuesta, aunque después no se pueda releer el artículo.
-        this.articulo.update((actual) => actual && { ...actual, version: guardado.version });
+        // La respuesta ya trae costo, precio, ajustes y versión nuevos: se usa YA, aunque después no se pueda releer.
+        this.articulo.set(guardado);
+        this.cargarAjustes(guardado, null);
+        this.traerCostoDelServidor(guardado);
         this.recargarTrasAjustes(id);
       },
       error: (err: unknown) => {
@@ -386,18 +431,35 @@ export class ArticuloForm implements OnInit {
         this.articulo.set(articulo);
         this.desglose.set(desglose);
         this.cargarAjustes(articulo, desglose);
-        // El costo cambió con los ajustes: el campo del formulario no puede quedar con el viejo, que se mandaría
-        // en el próximo guardado como si fuera un costo a mano. Lo demás que esté escrito se conserva.
-        this.form.controls.costo.setValue(articulo.costo);
+        this.traerCostoDelServidor(articulo);
+        if (desglose === null) {
+          this.fallaLaRelectura('Se guardaron los ajustes, pero no se pudo actualizar el desglose.');
+          return;
+        }
         this.aviso.set('Se guardaron los ajustes.');
         this.enfocarAvisoDeAjustes();
       },
       error: () => {
         this.guardandoAjustes.set(false);
-        this.error.set('Se guardaron los ajustes, pero no se pudo actualizar la pantalla. Recargá la página.');
-        this.enfocarAvisoDeAjustes();
+        this.fallaLaRelectura('Se guardaron los ajustes, pero no se pudo releer el artículo.');
       },
     });
+  }
+
+  /**
+   * El costo cambió con los ajustes: el campo del formulario no puede quedar con el viejo, que se mandaría en el
+   * próximo guardado como si fuera un costo a mano. Si el Dueño lo editó a mano en esta pantalla, se respeta.
+   */
+  private traerCostoDelServidor(articulo: Articulo): void {
+    if (!this.form.controls.costo.dirty) this.form.controls.costo.setValue(articulo.costo);
+  }
+
+  /** La relectura falló: lo que se ve puede estar viejo, así que guardar el artículo espera a «Recargar». */
+  private fallaLaRelectura(mensaje: string): void {
+    this.bloqueado.set(true);
+    this.versionVencida.set(true);
+    this.error.set(`${mensaje} Tocá «Recargar» antes de seguir.`);
+    this.enfocarAvisoDeAjustes();
   }
 
   /** Los ajustes del servidor (los del desglose, o los del artículo si no hay desglose) pasan a los tres campos. */
@@ -424,7 +486,7 @@ export class ArticuloForm implements OnInit {
    */
   protected recargar(): void {
     const id = this.id;
-    if (id === null) return;
+    if (id === null || this.guardando() || this.guardandoAjustes()) return;
     this.limpiarMensajes();
     forkJoin({
       articulo: this.service.obtener(id),
@@ -436,6 +498,7 @@ export class ArticuloForm implements OnInit {
         this.llenarFormulario(articulo);
         this.cargarAjustes(articulo, desglose);
         this.form.markAsPristine();
+        this.bloqueado.set(false);
         this.aviso.set('Se recargó el artículo con los últimos cambios.');
         this.enfocarAvisoDeAjustes();
       },
@@ -482,7 +545,8 @@ export class ArticuloForm implements OnInit {
     this.error.set(null);
     this.service.reactivar(this.id).subscribe({
       next: (articulo) => {
-        this.articulo.update((a) => a && { ...a, activo: articulo.activo });
+        // La reactivación también sube la versión: se toma la respuesta entera para que el próximo guardado no choque.
+        this.articulo.set(articulo);
         this.aviso.set('Se reactivó el artículo.');
       },
       error: (err: unknown) => this.error.set(mensajeDe(err, 'No se pudo reactivar el artículo.')),
@@ -587,7 +651,12 @@ export class ArticuloForm implements OnInit {
 
 /** El 409 en que otro cambio modificó el artículo después de cargarlo. */
 function esVersionVencida(err: unknown): boolean {
-  return err instanceof HttpErrorResponse && err.status === 409 && err.error?.message === MENSAJE_ARTICULO_MODIFICADO;
+  if (!(err instanceof HttpErrorResponse)) return false;
+  const mensaje: unknown = err.error?.message;
+  return (
+    (err.status === 409 && mensaje === MENSAJE_ARTICULO_MODIFICADO) ||
+    (err.status === 400 && mensaje === MENSAJE_FALTA_VERSION)
+  );
 }
 
 function mensajeDe(err: unknown, porDefecto: string): string {

@@ -2143,6 +2143,25 @@ describe('ActualizacionMasiva', () => {
       expect(importacionesServicio.listar).not.toHaveBeenCalled();
     });
 
+    it('un proveedor borrado (404): se suelta y el selector vuelve a ofrecer las importaciones de todos', async () => {
+      await crearComponente(true, importaciones);
+      await elegir('#proveedor', 'Sinteplast');
+      expect(opciones()).toHaveLength(3);
+      await completar('Cambiar el costo en %', '10');
+      servicio.vistaPrevia.mockReturnValue(throwError(() => errorHttp(404, 'Proveedor no encontrado')));
+      proveedoresServicio.listar.mockReturnValue(of([tersuave]));
+
+      await generar();
+
+      expect(seleccionado('#proveedor')).toBe('Todos los proveedores');
+      expect(opciones()).toEqual([
+        'Todas las importaciones',
+        'Tersuave · tersuave.csv · 14/10 15:45',
+        'Sinteplast · lista-agosto.xlsx · 12/10 12:00',
+        'Sinteplast · lista-julio.xlsx · 10/10 09:30',
+      ]);
+    });
+
     it('un 404 por una importación que ya no existe vuelve a pedir el historial y suelta la elegida', async () => {
       await crearComponente(true, importaciones);
       await elegir('#importacion', 'Tersuave · tersuave.csv · 14/10 15:45');
