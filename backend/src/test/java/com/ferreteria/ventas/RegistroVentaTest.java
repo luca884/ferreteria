@@ -225,6 +225,24 @@ class RegistroVentaTest {
     }
 
     @Test
+    @DisplayName("un articulo con precio $0 da 422, lo nombra y no escribe nada")
+    void articuloSinPrecio() {
+        catalogoDevuelve(tornillo(1L, "10.00"), vendible(6L, "Arandela suelta", "UNIDAD", "0.00", true));
+        when(comprobanteRepository.porClaveScoped(CLAVE)).thenReturn(Optional.empty());
+
+        VentaRechazadaException e = rechazo(
+                pedido("10.00", MedioPago.EFECTIVO, renglon(1L, "1", "10.00"), renglon(6L, "1", "0.00")));
+
+        assertThat(e.motivo()).isEqualTo(Motivo.ARTICULO_SIN_PRECIO);
+        assertThat(e.motivo().estadoHttp()).isEqualTo(422);
+        assertThat(e.getMessage()).isEqualTo(
+                "\"Arandela suelta\" no tiene precio. Sacalo del ticket y pedile al dueño que le cargue el costo.");
+        assertThat(e.articulos()).extracting(a -> a.articuloId()).containsExactly(6L);
+        assertThat(e.articulos().get(0).descripcion()).isEqualTo("Arandela suelta");
+        assertSinEscrituras();
+    }
+
+    @Test
     @DisplayName("dos articulos dados de baja: el mensaje nombra a los dos")
     void dosDadosDeBaja() {
         catalogoDevuelve(vendible(1L, "Martillo", "UNIDAD", "10.00", false),

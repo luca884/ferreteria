@@ -14,6 +14,8 @@ public class VentaRechazadaException extends RuntimeException {
         /** Inexistente o de otra ferreteria: indistinguibles a proposito. */
         ARTICULO_INEXISTENTE(404),
         ARTICULO_DADO_DE_BAJA(422),
+        /** Precio final $0: no se vende gratis por un costo sin cargar. */
+        ARTICULO_SIN_PRECIO(422),
         PRECIOS_CAMBIADOS(409),
         /** La misma clave ya registro otra venta, con otros datos. */
         CLAVE_CON_OTRO_CONTENIDO(422);

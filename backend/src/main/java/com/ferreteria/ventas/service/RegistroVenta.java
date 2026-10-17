@@ -170,6 +170,7 @@ public class RegistroVenta {
 
         validarQueExistan(pedido.renglones(), articulos);
         validarQueEstenActivos(pedido.renglones(), articulos);
+        validarQueTenganPrecio(pedido.renglones(), articulos);
         validarCantidades(pedido.renglones(), articulos);
         validarImportes(pedido.renglones(), articulos);
         validarPrecios(pedido, articulos);
@@ -220,6 +221,29 @@ public class RegistroVenta {
                         + ". Sacalos del ticket para seguir.";
         throw new VentaRechazadaException(Motivo.ARTICULO_DADO_DE_BAJA, mensaje,
                 dadosDeBaja.stream().map(a -> Articulo.conDescripcion(a.id(), a.descripcion())).toList());
+    }
+
+    /**
+     * Un articulo con precio final $0 (costo sin cargar) no se vende: se rechaza TODA la venta, como con los dados
+     * de baja. Mira el precio del servidor, no el que mando el cliente.
+     */
+    private static void validarQueTenganPrecio(List<Renglon> renglones, Map<Long, ArticuloVendible> articulos) {
+        List<ArticuloVendible> sinPrecio = renglones.stream()
+                .map(r -> articulos.get(r.articuloId()))
+                .filter(a -> a.precioFinal().signum() <= 0)
+                .toList();
+        if (sinPrecio.isEmpty()) {
+            return;
+        }
+        String mensaje = sinPrecio.size() == 1
+                ? "\"" + sinPrecio.get(0).descripcion() + "\" no tiene precio. Sacalo del ticket y pedile al dueño "
+                        + "que le cargue el costo."
+                : "Hay artículos sin precio: "
+                        + sinPrecio.stream().map(a -> "\"" + a.descripcion() + "\"")
+                                .collect(Collectors.joining(", "))
+                        + ". Sacalos del ticket y pedile al dueño que les cargue el costo.";
+        throw new VentaRechazadaException(Motivo.ARTICULO_SIN_PRECIO, mensaje,
+                sinPrecio.stream().map(a -> Articulo.conDescripcion(a.id(), a.descripcion())).toList());
     }
 
     /** R-007: la unidad la lee el servidor; cada renglon invalido queda con su mensaje. */

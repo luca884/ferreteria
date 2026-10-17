@@ -37,7 +37,7 @@ public record ArticuloRequest(
         Long proveedorId,
 
         @NotNull(message = "El costo es obligatorio")
-        @DecimalMin(value = "0.00", message = "El costo no puede ser negativo")
+        @DecimalMin(value = "0.00", inclusive = false, message = "El costo tiene que ser mayor que cero.")
         @Digits(integer = 13, fraction = 2, message = "El costo admite hasta 2 decimales")
         BigDecimal costo,
 

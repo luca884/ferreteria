@@ -341,6 +341,23 @@ class VentaIntegrationTest extends VentasTestBase {
     }
 
     @Test
+    void articuloConPrecioCeroDa422ConSuNombreYNoVende() throws Exception {
+        Tienda t = tienda();
+        long a = articulo(t, "Tornillo", "UNIDAD", "100.00", "10");
+        long cero = articulo(t, "Arandela suelta", "UNIDAD", "0.00", "10");
+
+        JsonNode rechazo = json(vender(login(t.emailVendedor()), clave(), "100.00",
+                linea(a, "1", "100.00"), linea(cero, "1", "0.00")).andExpect(status().is(422)));
+
+        assertThat(rechazo.get("motivo").asText()).isEqualTo("ARTICULO_SIN_PRECIO");
+        assertThat(rechazo.get("message").asText()).contains("Arandela suelta");
+        assertThat(rechazo.get("articulos").get(0).get("articuloId").asLong()).isEqualTo(cero);
+        assertThat(comprobantes(t)).isZero();
+        assertThat(stock(a)).isEqualByComparingTo("10");
+        assertThat(stock(cero)).isEqualByComparingTo("10");
+    }
+
+    @Test
     void articuloDadoDeBajaDa422ConSuNombreYDejaIntactoElOtro() throws Exception {
         Tienda t = tienda();
         long a = articulo(t, "Tornillo", "UNIDAD", "100.00", "10");
