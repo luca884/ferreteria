@@ -75,4 +75,30 @@ class FiltroArticulosTest {
         assertThat(FiltroArticulos.patronDeBusqueda(" torni ")).isEqualTo("%torni%");
         assertThat(FiltroArticulos.patronDeBusqueda("50%_a\\b")).isEqualTo("%50\\%\\_a\\\\b%");
     }
+
+    @Test
+    @DisplayName("el constructor de 4 argumentos deja importacionId en null")
+    void cuatroArgumentosSinImportacion() {
+        assertThat(new FiltroArticulos(1L, 2L, "cable", true).importacionId()).isNull();
+    }
+
+    @Test
+    @DisplayName("importacionId se guarda tal cual en el constructor de 5 argumentos")
+    void importacionId() {
+        assertThat(new FiltroArticulos(null, null, null, false, 9L).importacionId()).isEqualTo(9L);
+    }
+
+    @Test
+    @DisplayName("no vacio: un filtro con solo importacionId filtra, aunque no tenga proveedor, rubro ni texto")
+    void soloImportacionNoEsVacio() {
+        assertThat(new FiltroArticulos(null, null, null, false, 9L).vacio()).isFalse();
+        assertThat(new FiltroArticulos(null, null, null, true, 9L).vacio()).isFalse();
+    }
+
+    @Test
+    @DisplayName("vacio: con importacionId null y el resto sin filtros sigue siendo vacio")
+    void importacionNulaSigueVacio() {
+        assertThat(new FiltroArticulos(null, null, null, false, null).vacio()).isTrue();
+        assertThat(new FiltroArticulos(null, null, "   ", true, null).vacio()).isTrue();
+    }
 }

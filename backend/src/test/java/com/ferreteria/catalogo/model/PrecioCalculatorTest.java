@@ -279,4 +279,26 @@ class PrecioCalculatorTest {
         BigDecimal margen = PrecioCalculator.margenEfectivo(BigDecimal.ZERO, bd("35"), bd("30"));
         assertPrecio(PrecioCalculator.precioFinal(bd("100"), margen, AlicuotaIva.IVA_21, bd("10")), "130.00");
     }
+
+    @Test
+    @DisplayName("origen del margen: el propio manda, despues el del rubro, despues el de la ferreteria")
+    void origenDelMargen() {
+        assertThat(PrecioCalculator.origenMargen(bd("50"), bd("35"), bd("30"))).isEqualTo(OrigenMargen.PROPIO);
+        assertThat(PrecioCalculator.origenMargen(null, bd("35"), bd("30"))).isEqualTo(OrigenMargen.RUBRO);
+        assertThat(PrecioCalculator.origenMargen(null, null, bd("30"))).isEqualTo(OrigenMargen.FERRETERIA);
+    }
+
+    @Test
+    @DisplayName("origen del margen: un margen propio de 0 es PROPIO (el cero se respeta)")
+    void origenDelMargenCeroEsPropio() {
+        assertThat(PrecioCalculator.origenMargen(BigDecimal.ZERO, bd("35"), bd("30"))).isEqualTo(OrigenMargen.PROPIO);
+    }
+
+    @Test
+    @DisplayName("origen del margen: sin ningun margen lanza IllegalArgumentException, igual que margenEfectivo")
+    void origenDelMargenSinNinguno() {
+        assertThatThrownBy(() -> PrecioCalculator.origenMargen(null, null, null))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("No hay ningún margen para calcular el precio.");
+    }
 }

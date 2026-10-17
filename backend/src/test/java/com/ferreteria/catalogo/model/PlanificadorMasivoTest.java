@@ -21,6 +21,7 @@ class PlanificadorMasivoTest {
     private static final ContextoPrecio SIN_RUBRO = new ContextoPrecio(null, bd("30.00"), bd("10"));
     private static final String COSTO_CERO = "El costo nuevo da 0. Revisá el porcentaje.";
     private static final String DEMASIADO_GRANDE = "El costo o el precio nuevo es demasiado grande.";
+    private static final String COSTO_CERO_O_MENOS = "El costo nuevo da 0 o menos. Revisá el monto.";
 
     private static BigDecimal bd(String valor) {
         return new BigDecimal(valor);
@@ -89,6 +90,10 @@ class PlanificadorMasivoTest {
 
     private static PlanMasivo costoPorcentaje(String valor, Art... articulos) {
         return planificar(ModoMasivo.COSTO_PORCENTAJE, valor, contextos(), articulos);
+    }
+
+    private static PlanMasivo costoMonto(String valor, Art... articulos) {
+        return planificar(ModoMasivo.COSTO_MONTO, valor, contextos(), articulos);
     }
 
     private static PlanMasivo margen(String valor, Art... articulos) {
@@ -500,6 +505,295 @@ class PlanificadorMasivoTest {
             PlanMasivo plan = margen("50", Art.art(1, "100.00").precio("160.00").inactivo());
 
             assertThat(plan.cambios()).hasSize(1);
+        }
+    }
+
+    // ------------------------------------------------------------------ COSTO_MONTO
+
+    /** Los tres articulos en pesos del ejemplo de la spec (R-206): costos 1000, 500 y 50. */
+    private static Art[] tablaMonto() {
+        return new Art[] {
+            Art.art(1, "1000.00").precio("1580.00"),
+            Art.art(2, "500.00").precio("790.00"),
+            Art.art(4, "50.00").precio("80.00")
+        };
+    }
+
+    @Nested
+    @DisplayName("COSTO_MONTO")
+    class CostoMonto {
+
+        @Test
+        @DisplayName("ARS: costo 1000 con +100 da 1100 y precio 1740; costo 500 con -100 da 400 y precio 630")
+        void sumaYRestaEnPesos() {
+            CambioMasivo sube = costoMonto("100", Art.art(1, "1000.00").precio("1580.00")).cambios().get(0);
+            assertThat(sube.costoNuevo()).isEqualTo(bd("1100.00"));
+            assertThat(sube.precioNuevo()).isEqualTo(bd("1740.00"));
+
+            CambioMasivo baja = costoMonto("-100", Art.art(1, "500.00").precio("790.00")).cambios().get(0);
+            assertThat(baja.costoNuevo()).isEqualTo(bd("400.00"));
+            assertThat(baja.precioNuevo()).isEqualTo(bd("630.00"));
+        }
+
+        @Test
+        @DisplayName("USD: costo 10 con +5 da 15 y precio 23600 con el dolar en 1000 (el monto se suma tal cual)")
+        void sumaEnDolares() {
+            PlanMasivo plan = planificar(ModoMasivo.COSTO_MONTO, "5", contextosConDolar(),
+                Art.art(1, "10.00").enDolares().precio("15730.00"));
+
+            assertThat(plan.cambios().get(0).costoNuevo()).isEqualTo(bd("15.00"));
+            assertThat(plan.cambios().get(0).precioNuevo()).isEqualTo(bd("23600.00"));
+        }
+
+        @Test
+        @DisplayName("costo 33,33 con +0,01 da 33,34 y el precio sigue en 60: cuenta como modificado por el costo")
+        void cambiaSoloElCosto() {
+            PlanMasivo plan = costoMonto("0.01", Art.art(1, "33.33").precio("60.00"));
+
+            assertThat(plan.cambios()).hasSize(1);
+            assertThat(plan.cambios().get(0).costoNuevo()).isEqualTo(bd("33.34"));
+            assertThat(plan.cambios().get(0).precioNuevo()).isEqualTo(bd("60.00"));
+            assertThat(plan.conteos().sinCambioDePrecio()).isEqualTo(1);
+            assertThat(plan.conteos().modificados()).isEqualTo(1);
+        }
+
+        @Test
+        @DisplayName("la suma es exacta a escala 2: 0,20 + 0,10 da 0,30")
+        void sumaExacta() {
+            PlanMasivo plan = costoMonto("0.10", Art.art(1, "0.20").precio("10.00"));
+
+            assertThat(plan.cambios().get(0).costoNuevo()).isEqualTo(bd("0.30"));
+        }
+
+        @Test
+        @DisplayName("costo 50 con -50 da 0 y costo 30 con -50 da -20: error, conservan costo y precio, y no revienta")
+        void costoCeroONegativoEsError() {
+            PlanMasivo plan = costoMonto("-50", Art.art(1, "50.00").precio("80.00"), Art.art(2, "30.00").precio("50.00"));
+
+            assertThat(plan.cambios()).isEmpty();
+            assertThat(plan.errores()).extracting(ErrorMasivo::articuloId).containsExactly(1L, 2L);
+            assertThat(plan.errores()).extracting(ErrorMasivo::motivo).containsOnly(COSTO_CERO_O_MENOS);
+            assertThat(plan.conteos().conError()).isEqualTo(2);
+            assertThat(plan.conteos().modificados()).isZero();
+        }
+
+        @Test
+        @DisplayName("costo 9.999.999.999.999,00 con +1.000.000 es un error de tamano")
+        void demasiadoGrande() {
+            PlanMasivo plan = costoMonto("1000000", Art.art(1, "9999999999999.00").precio("10.00"));
+
+            assertThat(plan.errores()).extracting(ErrorMasivo::motivo).containsExactly(DEMASIADO_GRANDE);
+            assertThat(plan.cambios()).isEmpty();
+        }
+
+        @Test
+        @DisplayName("5 articulos con 1 que da 0: los otros 4 se actualizan, conError es 1 y el error entra en la huella")
+        void unErrorNoFrenaALosDemas() {
+            Art[] articulos = {
+                Art.art(1, "100.00").precio("160.00"), Art.art(2, "200.00").precio("320.00"),
+                Art.art(3, "50.00").precio("80.00"), Art.art(4, "300.00").precio("470.00"),
+                Art.art(5, "400.00").precio("630.00")
+            };
+            PlanMasivo plan = costoMonto("-50", articulos);
+
+            assertThat(plan.conteos().total()).isEqualTo(5);
+            assertThat(plan.conteos().conError()).isEqualTo(1);
+            assertThat(plan.conteos().modificados()).isEqualTo(4);
+            assertThat(plan.errores()).extracting(ErrorMasivo::articuloId).containsExactly(3L);
+
+            HuellaMasiva esperada = new HuellaMasiva(new OperacionMasiva(ModoMasivo.COSTO_MONTO, bd("-50")), FILTRO);
+            for (Art art : articulos) {
+                ArticuloVigente vigente = art.vigente();
+                if (vigente.id() == 3L) {
+                    esperada.agregarError(vigente);
+                } else {
+                    CambioMasivo cambio = plan.cambios().stream()
+                        .filter(c -> c.articuloId().equals(vigente.id())).findFirst().orElseThrow();
+                    esperada.agregar(vigente, cambio.costoNuevo(), vigente.margenPorcentaje(), cambio.precioNuevo());
+                }
+            }
+            assertThat(plan.huella()).isEqualTo(esperada.calcular());
+        }
+
+        @Test
+        @DisplayName("tres articulos con +100: suben 3, modificados 3 y una sola advertencia (el de costo 50, +200 %)")
+        void tablaConMasCien() {
+            PlanMasivo plan = costoMonto("100", tablaMonto());
+
+            assertThat(plan.cambios()).extracting(CambioMasivo::costoNuevo)
+                .containsExactly(bd("1100.00"), bd("600.00"), bd("150.00"));
+            assertThat(plan.cambios()).extracting(CambioMasivo::precioNuevo)
+                .containsExactly(bd("1740.00"), bd("950.00"), bd("240.00"));
+            ConteosMasivos c = plan.conteos();
+            assertThat(c.total()).isEqualTo(3);
+            assertThat(c.suben()).isEqualTo(3);
+            assertThat(c.bajan()).isZero();
+            assertThat(c.sinCambioDePrecio()).isZero();
+            assertThat(c.conError()).isZero();
+            assertThat(c.modificados()).isEqualTo(3);
+            assertThat(c.conAdvertencia()).isEqualTo(1);
+            assertThat(plan.cambios().get(2).advertencia()).startsWith("El costo sube un 200 %");
+            assertThat(plan.cambios().get(0).advertencia()).isNull();
+            assertThat(plan.cambios().get(1).advertencia()).isNull();
+        }
+
+        @Test
+        @DisplayName("esos tres con -50: A1 950 / 1500, A2 450 / 710 y A4 da error; bajan 2, conError 1, modificados 2")
+        void tablaConMenosCincuenta() {
+            PlanMasivo plan = costoMonto("-50", tablaMonto());
+
+            assertThat(plan.cambios()).extracting(CambioMasivo::articuloId).containsExactly(1L, 2L);
+            assertThat(plan.cambios()).extracting(CambioMasivo::costoNuevo).containsExactly(bd("950.00"), bd("450.00"));
+            assertThat(plan.cambios()).extracting(CambioMasivo::precioNuevo).containsExactly(bd("1500.00"), bd("710.00"));
+            assertThat(plan.errores()).extracting(ErrorMasivo::articuloId).containsExactly(4L);
+            ConteosMasivos c = plan.conteos();
+            assertThat(c.total()).isEqualTo(3);
+            assertThat(c.bajan()).isEqualTo(2);
+            assertThat(c.conError()).isEqualTo(1);
+            assertThat(c.modificados()).isEqualTo(2);
+        }
+
+        @Test
+        @DisplayName("la advertencia mide el COSTO: 100 + 50 (+50 % exacto) no advierte, 100 + 50,01 si")
+        void advertenciaSobreElCosto() {
+            assertThat(costoMonto("50", Art.art(1, "100.00").precio("160.00")).conteos().conAdvertencia()).isZero();
+            assertThat(costoMonto("50.01", Art.art(1, "100.00").precio("160.00")).conteos().conAdvertencia())
+                .isEqualTo(1);
+        }
+
+        @Test
+        @DisplayName("costo 10 con +100 advierte «El costo sube un 1.000 % (de 10,00 a 110,00). Revisá que sea correcto.»")
+        void textoDeLaAdvertencia() {
+            PlanMasivo plan = costoMonto("100", Art.art(1, "10.00").precio("16.00"));
+
+            assertThat(plan.cambios().get(0).advertencia())
+                .isEqualTo("El costo sube un 1.000 % (de 10,00 a 110,00). Revisá que sea correcto.");
+        }
+
+        @Test
+        @DisplayName("no toca el margen: pasanAMargenPropio es 0 y cada articulo conserva el suyo (propio, del rubro o nulo)")
+        void conservaElMargen() {
+            PlanMasivo plan = planificar(ModoMasivo.COSTO_MONTO, "100", contextos(7, "40", "10"),
+                Art.art(1, "100.00").precio("170.00").margen("50.00"),
+                Art.art(2, "100.00").precio("190.00").rubro(7),
+                Art.art(3, "100.00").precio("160.00"));
+
+            assertThat(plan.conteos().pasanAMargenPropio()).isZero();
+            assertThat(plan.cambios()).extracting(CambioMasivo::margenHeredado).containsExactly(false, true, true);
+            assertThat(plan.cambios()).extracting(CambioMasivo::margenNuevo)
+                .usingComparatorForType(BigDecimal::compareTo, BigDecimal.class)
+                .containsExactly(bd("50"), bd("40"), bd("30"));
+        }
+
+        @Test
+        @DisplayName("COSTO_PORCENTAJE sigue con su motivo de costo cero, sin cambios")
+        void costoPorcentajeNoCambia() {
+            assertThat(costoPorcentaje("-99.99", Art.art(1, "0.50").precio("10.00")).errores())
+                .extracting(ErrorMasivo::motivo).containsExactly(COSTO_CERO);
+        }
+    }
+
+    // ------------------------------------------------------------------ monedas del alcance
+
+    private static final String MEZCLA_100 = "La selección mezcla artículos en pesos y en dólares. "
+        + "El monto de 100 se suma tal cual a cada costo: $ 100 en los de pesos y US$ 100 en los de dólares.";
+
+    private static Art[] tresPesosYDosDolares() {
+        return new Art[] {
+            Art.art(1, "100.00").precio("160.00"), Art.art(2, "200.00").precio("320.00"),
+            Art.art(3, "300.00").precio("470.00"),
+            Art.art(4, "10.00").enDolares().precio("15730.00"), Art.art(5, "20.00").enDolares().precio("31460.00")
+        };
+    }
+
+    @Nested
+    @DisplayName("monedas del alcance y aviso de mezcla")
+    class MonedasDelAlcance {
+
+        @Test
+        @DisplayName("3 ARS y 2 USD con COSTO_MONTO +100: enPesos 3, enDolares 2 y la advertencia de mezcla")
+        void mezclaConMonto() {
+            PlanMasivo plan = planificar(ModoMasivo.COSTO_MONTO, "100", contextosConDolar(), tresPesosYDosDolares());
+
+            assertThat(plan.enPesos()).isEqualTo(3);
+            assertThat(plan.enDolares()).isEqualTo(2);
+            assertThat(plan.advertenciaMezcla()).isEqualTo(MEZCLA_100);
+        }
+
+        @Test
+        @DisplayName("el monto con decimales se muestra tal cual: 100,50 y un monto negativo con el signo delante")
+        void montoConDecimalesYNegativo() {
+            assertThat(planificar(ModoMasivo.COSTO_MONTO, "100.50", contextosConDolar(), tresPesosYDosDolares())
+                .advertenciaMezcla()).contains("El monto de 100,50 se suma").contains("$ 100,50 en los de pesos")
+                .contains("US$ 100,50 en los de dólares");
+            assertThat(planificar(ModoMasivo.COSTO_MONTO, "-5", contextosConDolar(), tresPesosYDosDolares())
+                .advertenciaMezcla()).contains("El monto de -5 se suma").contains("-$ 5 en los de pesos");
+        }
+
+        @Test
+        @DisplayName("4 USD con +5: enDolares 4, enPesos 0 y sin advertencia; solo pesos tampoco advierte")
+        void sinMezclaNoAdvierte() {
+            PlanMasivo soloDolares = planificar(ModoMasivo.COSTO_MONTO, "5", contextosConDolar(),
+                Art.art(1, "10.00").enDolares().precio("15730.00"), Art.art(2, "10.00").enDolares().precio("15730.00"),
+                Art.art(3, "10.00").enDolares().precio("15730.00"), Art.art(4, "10.00").enDolares().precio("15730.00"));
+            assertThat(soloDolares.enDolares()).isEqualTo(4);
+            assertThat(soloDolares.enPesos()).isZero();
+            assertThat(soloDolares.advertenciaMezcla()).isNull();
+
+            PlanMasivo soloPesos = costoMonto("100", Art.art(1, "100.00").precio("160.00"));
+            assertThat(soloPesos.enPesos()).isEqualTo(1);
+            assertThat(soloPesos.enDolares()).isZero();
+            assertThat(soloPesos.advertenciaMezcla()).isNull();
+        }
+
+        @Test
+        @DisplayName("COSTO_PORCENTAJE y MARGEN con mezcla informan los contadores y no advierten")
+        void otrosModosNoAdvierten() {
+            for (ModoMasivo modo : new ModoMasivo[] {ModoMasivo.COSTO_PORCENTAJE, ModoMasivo.MARGEN}) {
+                PlanMasivo plan = planificar(modo, "10", contextosConDolar(), tresPesosYDosDolares());
+
+                assertThat(plan.enPesos()).as(modo.name()).isEqualTo(3);
+                assertThat(plan.enDolares()).as(modo.name()).isEqualTo(2);
+                assertThat(plan.advertenciaMezcla()).as(modo.name()).isNull();
+            }
+        }
+
+        @Test
+        @DisplayName("un articulo con error cuenta igual en su moneda: son contadores del alcance, no de los modificados")
+        void elErrorCuentaEnSuMoneda() {
+            PlanMasivo plan = planificar(ModoMasivo.COSTO_MONTO, "-50", contextosConDolar(),
+                Art.art(1, "50.00").precio("80.00"), Art.art(2, "50.00").enDolares().precio("78650.00"));
+
+            assertThat(plan.conteos().conError()).isEqualTo(2);
+            assertThat(plan.enPesos()).isEqualTo(1);
+            assertThat(plan.enDolares()).isEqualTo(1);
+        }
+
+        @Test
+        @DisplayName("ConteosMasivos no cambia: sigue con sus 8 campos")
+        void conteosSinCambios() {
+            PlanMasivo plan = planificar(ModoMasivo.COSTO_MONTO, "100", contextosConDolar(), tresPesosYDosDolares());
+
+            assertThat(plan.conteos().total()).isEqualTo(5);
+            assertThat(ConteosMasivos.class.getRecordComponents()).hasSize(8);
+        }
+
+        @Test
+        @DisplayName("cada fila del detalle lleva la moneda de su articulo")
+        void filaConMoneda() {
+            PlanMasivo plan = planificar(ModoMasivo.COSTO_MONTO, "100", contextosConDolar(), tresPesosYDosDolares());
+
+            assertThat(plan.cambios()).extracting(CambioMasivo::moneda)
+                .containsExactly(Moneda.ARS, Moneda.ARS, Moneda.ARS, Moneda.USD, Moneda.USD);
+        }
+
+        @Test
+        @DisplayName("el constructor de 11 argumentos de CambioMasivo pone pesos")
+        void constructorViejoEnPesos() {
+            CambioMasivo cambio = new CambioMasivo(1L, "INT-1", "A", bd("1.00"), bd("2.00"), bd("30.00"), bd("30.00"),
+                bd("3.00"), bd("4.00"), true, null);
+
+            assertThat(cambio.moneda()).isEqualTo(Moneda.ARS);
         }
     }
 

@@ -12,12 +12,12 @@ import java.util.HexFormat;
  * del alcance, antes y despues. La vista previa la devuelve y aplicar la recalcula; si difiere, los
  * articulos cambiaron y se responde 409.
  *
- * <p>Formato v1, una linea por registro terminada en salto de linea y codificada en UTF-8. Los
+ * <p>Formato v2 (v1 no llevaba la importacion: una huella v1 pendiente da 409 al aplicar), una linea por registro terminada en salto de linea y codificada en UTF-8. Los
  * articulos van en el orden en que se agregan (el planificador los ordena por id):
  * <pre>
- * v1
+ * v2
  * op|COSTO_PORCENTAJE|10.00
- * filtro|proveedorId o ~|rubroId o ~|incluirInactivos|largo:q (o ~ si no hay q)
+ * filtro|proveedorId o ~|rubroId o ~|importacionId o ~|incluirInactivos|largo:q (o ~ si no hay q)
  * a|id|activo|costoAnt|margenPropioAnt o ~|precioAnt|costoNuevo|margenPropioNuevo o ~|precioNuevo
  * a|id|activo|costoAnt|margenPropioAnt o ~|precioAnt|E
  * </pre>
@@ -37,9 +37,10 @@ final class HuellaMasiva {
         } catch (NoSuchAlgorithmException e) {
             throw new IllegalStateException("SHA-256 no está disponible.", e);
         }
-        linea("v1");
+        linea("v2");
         linea("op|" + operacion.modo() + "|" + decimal(operacion.valor()));
-        linea("filtro|" + id(filtro.proveedorId()) + "|" + id(filtro.rubroId()) + "|" + filtro.incluirInactivos()
+        linea("filtro|" + id(filtro.proveedorId()) + "|" + id(filtro.rubroId()) + "|" + id(filtro.importacionId())
+            + "|" + filtro.incluirInactivos()
             + "|" + texto(filtro.q()));
     }
 

@@ -31,6 +31,20 @@ public final class PrecioCalculator {
         throw new IllegalArgumentException("No hay ningún margen para calcular el precio.");
     }
 
+    /** De donde sale {@link #margenEfectivo}: misma precedencia, un margen propio de 0 cuenta como propio. */
+    public static OrigenMargen origenMargen(BigDecimal margenArticulo, BigDecimal margenRubro, BigDecimal margenDefecto) {
+        if (margenArticulo != null) {
+            return OrigenMargen.PROPIO;
+        }
+        if (margenRubro != null) {
+            return OrigenMargen.RUBRO;
+        }
+        if (margenDefecto != null) {
+            return OrigenMargen.FERRETERIA;
+        }
+        throw new IllegalArgumentException("No hay ningún margen para calcular el precio.");
+    }
+
     /**
      * costo x (1 + margen/100) x (1 + iva/100), redondeado hacia arriba al multiplo. Escala 2.
      * El costo va sin IVA. Un multiplo null o menor o igual a 0 significa "sin multiplo":

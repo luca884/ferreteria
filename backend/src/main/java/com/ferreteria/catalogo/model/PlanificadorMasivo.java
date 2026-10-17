@@ -15,7 +15,7 @@ import java.util.Optional;
  *
  * <p>El precio nuevo se calcula con {@link PrecioCalculator}, igual que {@link Articulo#ajustarCosto} y
  * {@link Articulo#fijarMargen}; el servicio verifica que coincidan al aplicar. La variacion fuerte se
- * mide sobre el costo en {@code COSTO_PORCENTAJE} y sobre el precio final en {@code MARGEN}.
+ * mide sobre el costo en los dos modos de costo y sobre el precio final en {@code MARGEN}.
  */
 public final class PlanificadorMasivo {
 
@@ -24,6 +24,7 @@ public final class PlanificadorMasivo {
 
     private static final BigDecimal CIEN = BigDecimal.valueOf(100);
     private static final String MOTIVO_COSTO_CERO = "El costo nuevo da 0. Revisá el porcentaje.";
+    private static final String MOTIVO_COSTO_CERO_O_MENOS = "El costo nuevo da 0 o menos. Revisá el monto.";
     private static final String MOTIVO_DEMASIADO_GRANDE = "El costo o el precio nuevo es demasiado grande.";
 
     private PlanificadorMasivo() {
@@ -43,7 +44,14 @@ public final class PlanificadorMasivo {
         int sinCambioDePrecio = 0;
         int pasanAMargenPropio = 0;
         int conAdvertencia = 0;
+        int enPesos = 0;
+        int enDolares = 0;
         for (ArticuloVigente articulo : ordenados) {
+            if (articulo.moneda() == Moneda.USD) {
+                enDolares++;
+            } else {
+                enPesos++;
+            }
             Fila fila = evaluar(articulo, operacion, contextos.de(articulo.rubroId()));
             if (fila.motivoDeError() != null) {
                 errores.add(new ErrorMasivo(
@@ -70,13 +78,26 @@ public final class PlanificadorMasivo {
             if (fila.modificado()) {
                 cambios.add(new CambioMasivo(articulo.id(), articulo.codigoInterno(), articulo.descripcion(),
                     articulo.costo(), fila.costoNuevo(), fila.margenAnterior(), fila.margenNuevo(),
-                    articulo.precioFinal(), fila.precioNuevo(), fila.margenPropioNuevo() == null, fila.advertencia()));
+                    articulo.precioFinal(), fila.precioNuevo(), fila.margenPropioNuevo() == null, fila.advertencia(),
+                    articulo.moneda()));
             }
         }
 
         ConteosMasivos conteos = new ConteosMasivos(ordenados.size(), suben, bajan, sinCambioDePrecio,
             errores.size(), pasanAMargenPropio, conAdvertencia, cambios.size());
-        return new PlanMasivo(conteos, cambios, errores, huella.calcular());
+        return new PlanMasivo(conteos, cambios, errores, huella.calcular(), enPesos, enDolares,
+            advertenciaMezcla(operacion, enPesos, enDolares));
+    }
+
+    /** El monto se suma tal cual en cada moneda: con las dos presentes se avisa, sin bloquear. */
+    private static String advertenciaMezcla(OperacionMasiva operacion, int enPesos, int enDolares) {
+        if (operacion.modo() != ModoMasivo.COSTO_MONTO || enPesos == 0 || enDolares == 0) {
+            return null;
+        }
+        return "La selección mezcla artículos en pesos y en dólares. El monto de "
+            + ImporteArgentino.montoCompacto(operacion.valor()) + " se suma tal cual a cada costo: "
+            + ImporteArgentino.formatoCompacto(operacion.valor(), Moneda.ARS) + " en los de pesos y "
+            + ImporteArgentino.formatoCompacto(operacion.valor(), Moneda.USD) + " en los de dólares.";
     }
 
     /** Lo que la operacion hace con un articulo: o un error, o los valores nuevos. */
@@ -94,9 +115,13 @@ public final class PlanificadorMasivo {
             articulo.margenPorcentaje(), contexto.margenRubro(), contexto.margenDefecto());
         boolean enMargen = operacion.modo() == ModoMasivo.MARGEN;
 
-        BigDecimal costoNuevo = enMargen ? articulo.costo() : costoConPorcentaje(articulo.costo(), operacion.valor());
-        if (!enMargen && costoNuevo.signum() == 0) {
+        BigDecimal costoNuevo = costoNuevo(articulo.costo(), operacion);
+        // Antes del precio: PrecioCalculator lanza con un costo negativo, y un monto puede dejarlo asi.
+        if (operacion.modo() == ModoMasivo.COSTO_PORCENTAJE && costoNuevo.signum() == 0) {
             return Fila.conError(MOTIVO_COSTO_CERO);
+        }
+        if (operacion.modo() == ModoMasivo.COSTO_MONTO && costoNuevo.signum() <= 0) {
+            return Fila.conError(MOTIVO_COSTO_CERO_O_MENOS);
         }
         BigDecimal margenPropioNuevo = enMargen ? operacion.valor() : articulo.margenPorcentaje();
         BigDecimal margenNuevo = enMargen ? operacion.valor() : margenAnterior;
@@ -115,6 +140,15 @@ public final class PlanificadorMasivo {
             || distintos(articulo.margenPorcentaje(), margenPropioNuevo);
         return new Fila(null, costoNuevo, margenAnterior, margenNuevo, margenPropioNuevo, precioNuevo,
             advertencia.orElse(null), modificado);
+    }
+
+    /** El costo despues de la operacion: sin cambios en MARGEN, porcentual o con un monto sumado en los otros dos. */
+    private static BigDecimal costoNuevo(BigDecimal costo, OperacionMasiva operacion) {
+        return switch (operacion.modo()) {
+            case MARGEN -> costo;
+            case COSTO_PORCENTAJE -> costoConPorcentaje(costo, operacion.valor());
+            case COSTO_MONTO -> costo.add(operacion.valor());
+        };
     }
 
     /** costo x (100 + valor) / 100 con un solo redondeo HALF_UP a 2 decimales. */

@@ -52,11 +52,11 @@ class HuellaMasivaTest {
     }
 
     @Test
-    @DisplayName("el formato v1 es SHA-256 de las lineas op, filtro y a (una por articulo)")
-    void formatoV1() throws Exception {
-        String texto = "v1\n"
+    @DisplayName("el formato v2 es SHA-256 de las lineas op, filtro (con importacionId) y a (una por articulo)")
+    void formatoV2() throws Exception {
+        String texto = "v2\n"
             + "op|COSTO_PORCENTAJE|10.00\n"
-            + "filtro|7|~|true|5:cable\n"
+            + "filtro|7|~|~|true|5:cable\n"
             + "a|1|true|100.00|~|160.00|110.00|~|180.00\n"
             + "a|2|false|0.50|50.00|10.00|E\n";
         String esperado = HexFormat.of().formatHex(
@@ -181,5 +181,46 @@ class HuellaMasivaTest {
 
         assertThatThrownBy(() -> huella.agregar(a1(), bd("110.005"), null, bd("180.00")))
             .isInstanceOf(ArithmeticException.class);
+    }
+
+    @Test
+    @DisplayName("la importacion cambia la huella: con y sin importacionId, y una contra otra")
+    void importacion() {
+        String sin = huella(OPERACION, FILTRO);
+        String conI1 = huella(OPERACION, new FiltroArticulos(null, null, null, false, 1L));
+        String conI2 = huella(OPERACION, new FiltroArticulos(null, null, null, false, 2L));
+
+        assertThat(conI1).isNotEqualTo(sin);
+        assertThat(conI1).isNotEqualTo(conI2);
+        assertThat(huella(OPERACION, new FiltroArticulos(null, null, null, false, 1L))).isEqualTo(conI1);
+    }
+
+    @Test
+    @DisplayName("la linea de filtro lleva importacionId entre rubroId e incluirInactivos, con ~ si falta")
+    void lineaDeFiltroConImportacion() throws Exception {
+        String texto = "v2\n"
+            + "op|COSTO_PORCENTAJE|10.00\n"
+            + "filtro|~|3|12|false|~\n"
+            + "a|1|true|100.00|~|160.00|110.00|~|180.00\n";
+        String esperado = HexFormat.of().formatHex(
+            MessageDigest.getInstance("SHA-256").digest(texto.getBytes(StandardCharsets.UTF_8)));
+
+        HuellaMasiva huella = new HuellaMasiva(OPERACION, new FiltroArticulos(null, 3L, null, false, 12L));
+        huella.agregar(a1(), bd("110.00"), null, bd("180.00"));
+
+        assertThat(huella.calcular()).isEqualTo(esperado);
+    }
+
+    @Test
+    @DisplayName("una huella calculada con el formato v1 ya no coincide (el 409 aceptado al cambiar de version)")
+    void huellaV1YaNoCoincide() throws Exception {
+        String textoV1 = "v1\n"
+            + "op|COSTO_PORCENTAJE|10.00\n"
+            + "filtro|~|~|false|~\n"
+            + "a|1|true|100.00|~|160.00|110.00|~|180.00\n";
+        String huellaV1 = HexFormat.of().formatHex(
+            MessageDigest.getInstance("SHA-256").digest(textoV1.getBytes(StandardCharsets.UTF_8)));
+
+        assertThat(huella(OPERACION, FILTRO)).isNotEqualTo(huellaV1);
     }
 }

@@ -1,0 +1,882 @@
+{
+  "descripcion": "Costo de lista, precio final y pasos del desglose (CadenaDePrecio). Cada caso trae lista, si incluye IVA, bonificaciones, ajustes, margen, multiplo y moneda con su cotizacion; el costo, el precio y los importes de los pasos son los esperados, como string decimal para no pasar por double. Los pasos intermedios van a 4 decimales HALF_UP y el costo y el precio a 2. Los generan fracciones exactas en Python, no el codigo. Lo leen CasosCompartidosCadenaTest (backend) y cadena-de-precio.spec.ts (frontend).",
+  "casos": [
+    {
+      "nombre": "R-219: lista 1000, bonificacion 10, ajustes -5 y +3",
+      "lista": "1000.00",
+      "incluyeIva": false,
+      "alicuota": "IVA_21",
+      "bonificaciones": [
+        "10",
+        null,
+        null
+      ],
+      "ajustes": [
+        "-5",
+        "3",
+        null
+      ],
+      "margen": "30",
+      "multiplo": "10",
+      "moneda": "ARS",
+      "costo": "880.65",
+      "precio": "1390.00",
+      "pasos": [
+        {
+          "tipo": "LISTA",
+          "importe": "1000.0000"
+        },
+        {
+          "tipo": "BONIFICACION",
+          "importe": "900.0000"
+        },
+        {
+          "tipo": "AJUSTE",
+          "importe": "855.0000"
+        },
+        {
+          "tipo": "AJUSTE",
+          "importe": "880.6500"
+        },
+        {
+          "tipo": "COSTO",
+          "importe": "880.65"
+        },
+        {
+          "tipo": "MARGEN",
+          "importe": "1144.8450"
+        },
+        {
+          "tipo": "IVA",
+          "importe": "1385.2625"
+        },
+        {
+          "tipo": "PRECIO_FINAL",
+          "importe": "1390.00"
+        }
+      ]
+    },
+    {
+      "nombre": "R-219: lista 1000, bonificacion 10, ajuste -5 (sin el +3)",
+      "lista": "1000.00",
+      "incluyeIva": false,
+      "alicuota": "IVA_21",
+      "bonificaciones": [
+        "10",
+        null,
+        null
+      ],
+      "ajustes": [
+        "-5",
+        null,
+        null
+      ],
+      "margen": "30",
+      "multiplo": "10",
+      "moneda": "ARS",
+      "costo": "855.00",
+      "precio": "1350.00",
+      "pasos": [
+        {
+          "tipo": "LISTA",
+          "importe": "1000.0000"
+        },
+        {
+          "tipo": "BONIFICACION",
+          "importe": "900.0000"
+        },
+        {
+          "tipo": "AJUSTE",
+          "importe": "855.0000"
+        },
+        {
+          "tipo": "COSTO",
+          "importe": "855.00"
+        },
+        {
+          "tipo": "MARGEN",
+          "importe": "1111.5000"
+        },
+        {
+          "tipo": "IVA",
+          "importe": "1344.9150"
+        },
+        {
+          "tipo": "PRECIO_FINAL",
+          "importe": "1350.00"
+        }
+      ]
+    },
+    {
+      "nombre": "R-219: lista 1210 con IVA 21 incluido y +10",
+      "lista": "1210.00",
+      "incluyeIva": true,
+      "alicuota": "IVA_21",
+      "bonificaciones": [
+        null,
+        null,
+        null
+      ],
+      "ajustes": [
+        "10",
+        null,
+        null
+      ],
+      "margen": "30",
+      "multiplo": "10",
+      "moneda": "ARS",
+      "costo": "1100.00",
+      "precio": "1740.00",
+      "pasos": [
+        {
+          "tipo": "LISTA",
+          "importe": "1210.0000"
+        },
+        {
+          "tipo": "SIN_IVA",
+          "importe": "1000.0000"
+        },
+        {
+          "tipo": "AJUSTE",
+          "importe": "1100.0000"
+        },
+        {
+          "tipo": "COSTO",
+          "importe": "1100.00"
+        },
+        {
+          "tipo": "MARGEN",
+          "importe": "1430.0000"
+        },
+        {
+          "tipo": "IVA",
+          "importe": "1730.3000"
+        },
+        {
+          "tipo": "PRECIO_FINAL",
+          "importe": "1740.00"
+        }
+      ]
+    },
+    {
+      "nombre": "R-219: 333,33 con -10 (el redondeo es solo al final)",
+      "lista": "333.33",
+      "incluyeIva": false,
+      "alicuota": "IVA_21",
+      "bonificaciones": [
+        null,
+        null,
+        null
+      ],
+      "ajustes": [
+        "-10",
+        null,
+        null
+      ],
+      "margen": "30",
+      "multiplo": "10",
+      "moneda": "ARS",
+      "costo": "300.00",
+      "precio": "480.00",
+      "pasos": [
+        {
+          "tipo": "LISTA",
+          "importe": "333.3300"
+        },
+        {
+          "tipo": "AJUSTE",
+          "importe": "299.9970"
+        },
+        {
+          "tipo": "COSTO",
+          "importe": "300.00"
+        },
+        {
+          "tipo": "MARGEN",
+          "importe": "390.0000"
+        },
+        {
+          "tipo": "IVA",
+          "importe": "471.9000"
+        },
+        {
+          "tipo": "PRECIO_FINAL",
+          "importe": "480.00"
+        }
+      ]
+    },
+    {
+      "nombre": "R-219: USD 10, bonificacion 10, ajustes -5 y +3, dolar 1000",
+      "lista": "10.00",
+      "incluyeIva": false,
+      "alicuota": "IVA_21",
+      "bonificaciones": [
+        "10",
+        null,
+        null
+      ],
+      "ajustes": [
+        "-5",
+        "3",
+        null
+      ],
+      "margen": "30",
+      "multiplo": "10",
+      "moneda": "USD",
+      "cotizacion": "1000.00",
+      "costo": "8.81",
+      "precio": "13860.00",
+      "pasos": [
+        {
+          "tipo": "LISTA",
+          "importe": "10.0000"
+        },
+        {
+          "tipo": "BONIFICACION",
+          "importe": "9.0000"
+        },
+        {
+          "tipo": "AJUSTE",
+          "importe": "8.5500"
+        },
+        {
+          "tipo": "AJUSTE",
+          "importe": "8.8065"
+        },
+        {
+          "tipo": "COSTO",
+          "importe": "8.81"
+        },
+        {
+          "tipo": "COTIZACION",
+          "importe": "8810.0000"
+        },
+        {
+          "tipo": "MARGEN",
+          "importe": "11453.0000"
+        },
+        {
+          "tipo": "IVA",
+          "importe": "13858.1300"
+        },
+        {
+          "tipo": "PRECIO_FINAL",
+          "importe": "13860.00"
+        }
+      ]
+    },
+    {
+      "nombre": "R-219: +3,5 sobre 200 da 207,00 sin error de punto flotante",
+      "lista": "200.00",
+      "incluyeIva": false,
+      "alicuota": "IVA_21",
+      "bonificaciones": [
+        null,
+        null,
+        null
+      ],
+      "ajustes": [
+        "3.5",
+        null,
+        null
+      ],
+      "margen": "30",
+      "multiplo": "10",
+      "moneda": "ARS",
+      "costo": "207.00",
+      "precio": "330.00",
+      "pasos": [
+        {
+          "tipo": "LISTA",
+          "importe": "200.0000"
+        },
+        {
+          "tipo": "AJUSTE",
+          "importe": "207.0000"
+        },
+        {
+          "tipo": "COSTO",
+          "importe": "207.00"
+        },
+        {
+          "tipo": "MARGEN",
+          "importe": "269.1000"
+        },
+        {
+          "tipo": "IVA",
+          "importe": "325.6110"
+        },
+        {
+          "tipo": "PRECIO_FINAL",
+          "importe": "330.00"
+        }
+      ]
+    },
+    {
+      "nombre": "R-219: -99,99 sobre 1000 da 0,10",
+      "lista": "1000.00",
+      "incluyeIva": false,
+      "alicuota": "IVA_21",
+      "bonificaciones": [
+        null,
+        null,
+        null
+      ],
+      "ajustes": [
+        "-99.99",
+        null,
+        null
+      ],
+      "margen": "30",
+      "multiplo": "10",
+      "moneda": "ARS",
+      "costo": "0.10",
+      "precio": "10.00",
+      "pasos": [
+        {
+          "tipo": "LISTA",
+          "importe": "1000.0000"
+        },
+        {
+          "tipo": "AJUSTE",
+          "importe": "0.1000"
+        },
+        {
+          "tipo": "COSTO",
+          "importe": "0.10"
+        },
+        {
+          "tipo": "MARGEN",
+          "importe": "0.1300"
+        },
+        {
+          "tipo": "IVA",
+          "importe": "0.1573"
+        },
+        {
+          "tipo": "PRECIO_FINAL",
+          "importe": "10.00"
+        }
+      ]
+    },
+    {
+      "nombre": "R-209: lista 1210 con IVA incluido y +10, multiplo 1",
+      "lista": "1210.00",
+      "incluyeIva": true,
+      "alicuota": "IVA_21",
+      "bonificaciones": [
+        null,
+        null,
+        null
+      ],
+      "ajustes": [
+        "10",
+        null,
+        null
+      ],
+      "margen": "30",
+      "multiplo": "1",
+      "moneda": "ARS",
+      "costo": "1100.00",
+      "precio": "1731.00",
+      "pasos": [
+        {
+          "tipo": "LISTA",
+          "importe": "1210.0000"
+        },
+        {
+          "tipo": "SIN_IVA",
+          "importe": "1000.0000"
+        },
+        {
+          "tipo": "AJUSTE",
+          "importe": "1100.0000"
+        },
+        {
+          "tipo": "COSTO",
+          "importe": "1100.00"
+        },
+        {
+          "tipo": "MARGEN",
+          "importe": "1430.0000"
+        },
+        {
+          "tipo": "IVA",
+          "importe": "1730.3000"
+        },
+        {
+          "tipo": "PRECIO_FINAL",
+          "importe": "1731.00"
+        }
+      ]
+    },
+    {
+      "nombre": "R-209: sin ajustes ni bonificaciones, lista 500 sin IVA",
+      "lista": "500.00",
+      "incluyeIva": false,
+      "alicuota": "IVA_21",
+      "bonificaciones": [
+        null,
+        null,
+        null
+      ],
+      "ajustes": [
+        null,
+        null,
+        null
+      ],
+      "margen": "30",
+      "multiplo": "10",
+      "moneda": "ARS",
+      "costo": "500.00",
+      "precio": "790.00",
+      "pasos": [
+        {
+          "tipo": "LISTA",
+          "importe": "500.0000"
+        },
+        {
+          "tipo": "COSTO",
+          "importe": "500.00"
+        },
+        {
+          "tipo": "MARGEN",
+          "importe": "650.0000"
+        },
+        {
+          "tipo": "IVA",
+          "importe": "786.5000"
+        },
+        {
+          "tipo": "PRECIO_FINAL",
+          "importe": "790.00"
+        }
+      ]
+    },
+    {
+      "nombre": "R-209: tres bonificaciones y tres ajustes encadenados",
+      "lista": "1000.00",
+      "incluyeIva": false,
+      "alicuota": "IVA_21",
+      "bonificaciones": [
+        "10",
+        "5",
+        "2.5"
+      ],
+      "ajustes": [
+        "-5",
+        "3",
+        "1.5"
+      ],
+      "margen": "30",
+      "multiplo": "10",
+      "moneda": "ARS",
+      "costo": "827.94",
+      "precio": "1310.00",
+      "pasos": [
+        {
+          "tipo": "LISTA",
+          "importe": "1000.0000"
+        },
+        {
+          "tipo": "BONIFICACION",
+          "importe": "900.0000"
+        },
+        {
+          "tipo": "BONIFICACION",
+          "importe": "855.0000"
+        },
+        {
+          "tipo": "BONIFICACION",
+          "importe": "833.6250"
+        },
+        {
+          "tipo": "AJUSTE",
+          "importe": "791.9438"
+        },
+        {
+          "tipo": "AJUSTE",
+          "importe": "815.7021"
+        },
+        {
+          "tipo": "AJUSTE",
+          "importe": "827.9376"
+        },
+        {
+          "tipo": "COSTO",
+          "importe": "827.94"
+        },
+        {
+          "tipo": "MARGEN",
+          "importe": "1076.3220"
+        },
+        {
+          "tipo": "IVA",
+          "importe": "1302.3496"
+        },
+        {
+          "tipo": "PRECIO_FINAL",
+          "importe": "1310.00"
+        }
+      ]
+    },
+    {
+      "nombre": "R-212: sin ajustes, solo la bonificacion 10",
+      "lista": "1000.00",
+      "incluyeIva": false,
+      "alicuota": "IVA_21",
+      "bonificaciones": [
+        "10",
+        null,
+        null
+      ],
+      "ajustes": [
+        null,
+        null,
+        null
+      ],
+      "margen": "30",
+      "multiplo": "10",
+      "moneda": "ARS",
+      "costo": "900.00",
+      "precio": "1420.00",
+      "pasos": [
+        {
+          "tipo": "LISTA",
+          "importe": "1000.0000"
+        },
+        {
+          "tipo": "BONIFICACION",
+          "importe": "900.0000"
+        },
+        {
+          "tipo": "COSTO",
+          "importe": "900.00"
+        },
+        {
+          "tipo": "MARGEN",
+          "importe": "1170.0000"
+        },
+        {
+          "tipo": "IVA",
+          "importe": "1415.7000"
+        },
+        {
+          "tipo": "PRECIO_FINAL",
+          "importe": "1420.00"
+        }
+      ]
+    },
+    {
+      "nombre": "R-212: agregar -5 a una lista sin ajustes",
+      "lista": "1000.00",
+      "incluyeIva": false,
+      "alicuota": "IVA_21",
+      "bonificaciones": [
+        "10",
+        null,
+        null
+      ],
+      "ajustes": [
+        "-5",
+        null,
+        null
+      ],
+      "margen": "30",
+      "multiplo": "10",
+      "moneda": "ARS",
+      "costo": "855.00",
+      "precio": "1350.00",
+      "pasos": [
+        {
+          "tipo": "LISTA",
+          "importe": "1000.0000"
+        },
+        {
+          "tipo": "BONIFICACION",
+          "importe": "900.0000"
+        },
+        {
+          "tipo": "AJUSTE",
+          "importe": "855.0000"
+        },
+        {
+          "tipo": "COSTO",
+          "importe": "855.00"
+        },
+        {
+          "tipo": "MARGEN",
+          "importe": "1111.5000"
+        },
+        {
+          "tipo": "IVA",
+          "importe": "1344.9150"
+        },
+        {
+          "tipo": "PRECIO_FINAL",
+          "importe": "1350.00"
+        }
+      ]
+    },
+    {
+      "nombre": "R-212: cambiar +3 por +5",
+      "lista": "1000.00",
+      "incluyeIva": false,
+      "alicuota": "IVA_21",
+      "bonificaciones": [
+        "10",
+        null,
+        null
+      ],
+      "ajustes": [
+        "-5",
+        "5",
+        null
+      ],
+      "margen": "30",
+      "multiplo": "10",
+      "moneda": "ARS",
+      "costo": "897.75",
+      "precio": "1420.00",
+      "pasos": [
+        {
+          "tipo": "LISTA",
+          "importe": "1000.0000"
+        },
+        {
+          "tipo": "BONIFICACION",
+          "importe": "900.0000"
+        },
+        {
+          "tipo": "AJUSTE",
+          "importe": "855.0000"
+        },
+        {
+          "tipo": "AJUSTE",
+          "importe": "897.7500"
+        },
+        {
+          "tipo": "COSTO",
+          "importe": "897.75"
+        },
+        {
+          "tipo": "MARGEN",
+          "importe": "1167.0750"
+        },
+        {
+          "tipo": "IVA",
+          "importe": "1412.1608"
+        },
+        {
+          "tipo": "PRECIO_FINAL",
+          "importe": "1420.00"
+        }
+      ]
+    },
+    {
+      "nombre": "R-212: -5 y +3 cargados al reves (+3 y -5) dan el mismo costo",
+      "lista": "1000.00",
+      "incluyeIva": false,
+      "alicuota": "IVA_21",
+      "bonificaciones": [
+        "10",
+        null,
+        null
+      ],
+      "ajustes": [
+        "3",
+        "-5",
+        null
+      ],
+      "margen": "30",
+      "multiplo": "10",
+      "moneda": "ARS",
+      "costo": "880.65",
+      "precio": "1390.00",
+      "pasos": [
+        {
+          "tipo": "LISTA",
+          "importe": "1000.0000"
+        },
+        {
+          "tipo": "BONIFICACION",
+          "importe": "900.0000"
+        },
+        {
+          "tipo": "AJUSTE",
+          "importe": "927.0000"
+        },
+        {
+          "tipo": "AJUSTE",
+          "importe": "880.6500"
+        },
+        {
+          "tipo": "COSTO",
+          "importe": "880.65"
+        },
+        {
+          "tipo": "MARGEN",
+          "importe": "1144.8450"
+        },
+        {
+          "tipo": "IVA",
+          "importe": "1385.2625"
+        },
+        {
+          "tipo": "PRECIO_FINAL",
+          "importe": "1390.00"
+        }
+      ]
+    },
+    {
+      "nombre": "R-212: USD con -10 y dolar 1000",
+      "lista": "10.00",
+      "incluyeIva": false,
+      "alicuota": "IVA_21",
+      "bonificaciones": [
+        null,
+        null,
+        null
+      ],
+      "ajustes": [
+        "-10",
+        null,
+        null
+      ],
+      "margen": "30",
+      "multiplo": "10",
+      "moneda": "USD",
+      "cotizacion": "1000.00",
+      "costo": "9.00",
+      "precio": "14160.00",
+      "pasos": [
+        {
+          "tipo": "LISTA",
+          "importe": "10.0000"
+        },
+        {
+          "tipo": "AJUSTE",
+          "importe": "9.0000"
+        },
+        {
+          "tipo": "COSTO",
+          "importe": "9.00"
+        },
+        {
+          "tipo": "COTIZACION",
+          "importe": "9000.0000"
+        },
+        {
+          "tipo": "MARGEN",
+          "importe": "11700.0000"
+        },
+        {
+          "tipo": "IVA",
+          "importe": "14157.0000"
+        },
+        {
+          "tipo": "PRECIO_FINAL",
+          "importe": "14160.00"
+        }
+      ]
+    },
+    {
+      "nombre": "R-212: lista 0,01 con -99,99 da costo 0,00",
+      "lista": "0.01",
+      "incluyeIva": false,
+      "alicuota": "IVA_21",
+      "bonificaciones": [
+        null,
+        null,
+        null
+      ],
+      "ajustes": [
+        "-99.99",
+        null,
+        null
+      ],
+      "margen": "30",
+      "multiplo": "10",
+      "moneda": "ARS",
+      "costo": "0.00",
+      "precio": "0.00",
+      "pasos": [
+        {
+          "tipo": "LISTA",
+          "importe": "0.0100"
+        },
+        {
+          "tipo": "AJUSTE",
+          "importe": "0.0000"
+        },
+        {
+          "tipo": "COSTO",
+          "importe": "0.00"
+        },
+        {
+          "tipo": "MARGEN",
+          "importe": "0.0000"
+        },
+        {
+          "tipo": "IVA",
+          "importe": "0.0000"
+        },
+        {
+          "tipo": "PRECIO_FINAL",
+          "importe": "0.00"
+        }
+      ]
+    },
+    {
+      "nombre": "R-212: lista con IVA incluido sin bonificaciones y +10, multiplo 10",
+      "lista": "1210.00",
+      "incluyeIva": true,
+      "alicuota": "IVA_21",
+      "bonificaciones": [
+        null,
+        null,
+        null
+      ],
+      "ajustes": [
+        "10",
+        null,
+        null
+      ],
+      "margen": "30",
+      "multiplo": "10",
+      "moneda": "ARS",
+      "costo": "1100.00",
+      "precio": "1740.00",
+      "pasos": [
+        {
+          "tipo": "LISTA",
+          "importe": "1210.0000"
+        },
+        {
+          "tipo": "SIN_IVA",
+          "importe": "1000.0000"
+        },
+        {
+          "tipo": "AJUSTE",
+          "importe": "1100.0000"
+        },
+        {
+          "tipo": "COSTO",
+          "importe": "1100.00"
+        },
+        {
+          "tipo": "MARGEN",
+          "importe": "1430.0000"
+        },
+        {
+          "tipo": "IVA",
+          "importe": "1730.3000"
+        },
+        {
+          "tipo": "PRECIO_FINAL",
+          "importe": "1740.00"
+        }
+      ]
+    }
+  ]
+}
