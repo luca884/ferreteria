@@ -11,6 +11,7 @@ import jakarta.persistence.Table;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
+import com.ferreteria.common.HoraArgentina;
 import java.time.LocalDateTime;
 
 @Entity
@@ -43,7 +44,7 @@ public class Usuario {
     private boolean activo = true;
 
     @Column(name = "creado_en", nullable = false, updatable = false)
-    private LocalDateTime creadoEn = LocalDateTime.now();
+    private LocalDateTime creadoEn = HoraArgentina.ahora();
 
     protected Usuario() {}
 

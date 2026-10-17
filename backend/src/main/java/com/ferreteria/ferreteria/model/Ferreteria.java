@@ -12,6 +12,7 @@ import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
 import java.math.BigDecimal;
+import com.ferreteria.common.HoraArgentina;
 import java.time.LocalDateTime;
 
 /** La ferreteria es el tenant: la raiz de todos los datos de negocio. */
@@ -48,7 +49,7 @@ public class Ferreteria {
     private BigDecimal redondeoMultiplo = new BigDecimal("10.00");
 
     @Column(name = "creado_en", nullable = false, updatable = false)
-    private LocalDateTime creadoEn = LocalDateTime.now();
+    private LocalDateTime creadoEn = HoraArgentina.ahora();
 
     protected Ferreteria() {}
 

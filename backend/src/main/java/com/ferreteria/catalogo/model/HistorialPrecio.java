@@ -12,6 +12,7 @@ import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
 import java.math.BigDecimal;
+import com.ferreteria.common.HoraArgentina;
 import java.time.LocalDateTime;
 
 /**
@@ -71,7 +72,7 @@ public class HistorialPrecio {
     private Moneda monedaAnterior;
 
     @Column(nullable = false, updatable = false)
-    private LocalDateTime fecha = LocalDateTime.now();
+    private LocalDateTime fecha = HoraArgentina.ahora();
 
     /**
      * Quien hizo el cambio. Null en el recalculo diario automatico por cotizacion: cuando alguna pantalla muestre

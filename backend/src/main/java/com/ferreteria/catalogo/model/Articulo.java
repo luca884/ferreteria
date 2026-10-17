@@ -14,6 +14,7 @@ import org.hibernate.type.SqlTypes;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import com.ferreteria.common.HoraArgentina;
 import java.time.LocalDateTime;
 import java.util.Optional;
 
@@ -151,7 +152,7 @@ public class Articulo {
     private boolean activo = true;
 
     @Column(name = "creado_en", nullable = false, updatable = false)
-    private LocalDateTime creadoEn = LocalDateTime.now();
+    private LocalDateTime creadoEn = HoraArgentina.ahora();
 
     protected Articulo() {}
 

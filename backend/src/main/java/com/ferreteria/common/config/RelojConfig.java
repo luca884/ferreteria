@@ -1,5 +1,6 @@
 package com.ferreteria.common.config;
 
+import com.ferreteria.common.HoraArgentina;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -13,7 +14,7 @@ import java.time.ZoneId;
 @Configuration
 public class RelojConfig {
 
-    public static final ZoneId BUENOS_AIRES = ZoneId.of("America/Argentina/Buenos_Aires");
+    public static final ZoneId BUENOS_AIRES = HoraArgentina.ZONA;
 
     @Bean
     public Clock reloj() {

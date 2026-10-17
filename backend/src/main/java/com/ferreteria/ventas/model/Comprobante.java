@@ -12,6 +12,7 @@ import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
 import java.math.BigDecimal;
+import com.ferreteria.common.HoraArgentina;
 import java.time.LocalDateTime;
 
 /**
@@ -56,7 +57,7 @@ public class Comprobante {
     private Long usuarioId;
 
     @Column(nullable = false, updatable = false)
-    private LocalDateTime fecha = LocalDateTime.now();
+    private LocalDateTime fecha = HoraArgentina.ahora();
 
     @Column(nullable = false, updatable = false, precision = 15, scale = 2)
     private BigDecimal neto;
