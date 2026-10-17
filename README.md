@@ -4,7 +4,7 @@ Sistema web multi-tenant para ferreterías: mostrador, stock, listas de precios 
 
 ## Arrancar en local
 
-Necesitás Docker, Java 17+ y Node 22.22+ (o 24).
+Necesitás Docker, Java 17+ y Node 22.22.3+ (o 24.15+).
 
 ```bash
 docker compose up -d                       # MySQL en localhost:3307
@@ -20,6 +20,11 @@ Entrá con `dueno@tornillo.demo` / `demo1234`. Con `dueno@tuerca.demo` ves otra 
 cd backend && ./mvnw test                  # unitarios, ArchUnit y aislamiento con MySQL real (Testcontainers)
 cd frontend && npx ng test --watch=false
 ```
+
+## Deploy
+
+- **Backend (Railway)**: el jar arranca en el perfil `prod`, sin datos demo. Variables obligatorias: `JWT_SECRET` (32 bytes o más), `DB_URL`, `DB_USER`, `DB_PASSWORD` y `CORS_ORIGINS`. Sin `JWT_SECRET` no arranca.
+- **Frontend (Vercel)**: el front le pide la API a `/api` en su mismo origen. `frontend/vercel.json` reenvía `/api/*` a Railway: reemplazá `REEMPLAZAR-CON-URL-DE-RAILWAY` por la URL del backend. En local hace lo mismo el proxy de `ng serve` (`frontend/proxy.conf.json`).
 
 ## Documentación
 

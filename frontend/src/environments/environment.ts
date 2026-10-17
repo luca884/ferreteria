@@ -1,4 +1,5 @@
-// URL base del backend. En produccion se reemplaza por la del deploy (ver angular.json > fileReplacements).
+// URL base del backend, relativa al origen: el mismo build sirve en local y en el deploy.
+// En local la reenvía a localhost:8080 el proxy de ng serve (proxy.conf.json); en Vercel, el rewrite de vercel.json.
 export const environment = {
-  apiUrl: 'http://localhost:8080/api',
+  apiUrl: '/api',
 };
