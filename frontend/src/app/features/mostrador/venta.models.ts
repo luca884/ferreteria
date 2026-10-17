@@ -65,6 +65,7 @@ export interface VentaCobrada {
 export type MotivoRechazo =
   | 'ARTICULO_INEXISTENTE'
   | 'ARTICULO_DADO_DE_BAJA'
+  | 'ARTICULO_SIN_PRECIO'
   | 'PRECIOS_CAMBIADOS'
   | 'CLAVE_CON_OTRO_CONTENIDO';
 

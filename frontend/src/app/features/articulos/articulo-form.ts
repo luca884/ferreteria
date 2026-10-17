@@ -150,7 +150,8 @@ export class ArticuloForm implements OnInit {
     codigoInterno: ['', [noVacio, Validators.maxLength(30)]],
     descripcion: ['', [noVacio, Validators.maxLength(200)]],
     unidad: ['UNIDAD' as Unidad, [Validators.required]],
-    costo: [null as number | null, [Validators.required, Validators.min(0)]],
+    // Mayor que cero: un costo 0 deja el precio en $0 (H12). Admite 2 decimales, el mínimo es 0,01.
+    costo: [null as number | null, [Validators.required, Validators.min(0.01)]],
     moneda: ['ARS' as Moneda, [Validators.required]],
     codigoBarras: ['', [Validators.maxLength(30)]],
     codigoProveedor: ['', [Validators.maxLength(40)]],

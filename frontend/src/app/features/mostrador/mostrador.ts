@@ -32,6 +32,7 @@ const MENSAJE_TICKET_VACIO = 'El ticket está vacío.';
 const MENSAJE_COBRO_FALLIDO = 'No se pudo cobrar. Probá de nuevo.';
 const PROBLEMA_DADO_DE_BAJA = 'Artículo dado de baja';
 const PROBLEMA_INEXISTENTE = 'Ya no está disponible';
+const PROBLEMA_SIN_PRECIO = 'Sin precio';
 
 /** El diálogo abierto, si hay uno. `indice` es el renglón del ticket sobre el que actúa. */
 type Dialogo =
@@ -246,6 +247,10 @@ export class Mostrador {
       this.avisar({ texto: `"${articulo.descripcion}" está dado de baja.`, grave: true, tipo: 'persistente' });
       return;
     }
+    if (articulo.precioFinal <= 0) {
+      this.avisar({ texto: `"${articulo.descripcion}" no tiene precio.`, grave: true, tipo: 'persistente' });
+      return;
+    }
     this.vistos.set(articulo.id, articulo);
     this.ticket.agregar(articulo);
     const tipo = this.aviso()?.tipo;
@@ -423,6 +428,12 @@ export class Mostrador {
       case 'ARTICULO_DADO_DE_BAJA':
         this.ticket.marcarProblemas(
           rechazo.articulos.map((a) => ({ articuloId: a.articuloId, mensaje: PROBLEMA_DADO_DE_BAJA })),
+        );
+        this.rechazarTicket(rechazo.message);
+        return;
+      case 'ARTICULO_SIN_PRECIO':
+        this.ticket.marcarProblemas(
+          rechazo.articulos.map((a) => ({ articuloId: a.articuloId, mensaje: PROBLEMA_SIN_PRECIO })),
         );
         this.rechazarTicket(rechazo.message);
         return;

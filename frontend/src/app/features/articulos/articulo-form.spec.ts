@@ -427,6 +427,17 @@ describe('ArticuloForm', () => {
       expect(el().textContent).toContain('El stock mínimo no puede ser negativo');
     });
 
+    it('no envía un costo cero y lo explica junto al campo', async () => {
+      await crearComponente();
+      await completarMinimos();
+
+      await escribir('costo', '0');
+      await enviar();
+
+      expect(servicio.crear).not.toHaveBeenCalled();
+      expect(el().querySelector('#costo-error')?.textContent?.trim()).toBe('El costo tiene que ser mayor que cero.');
+    });
+
     it('muestra el mensaje del backend ante un 409 y se queda en el formulario', async () => {
       await crearComponente();
       await completarMinimos();

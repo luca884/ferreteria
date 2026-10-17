@@ -709,6 +709,18 @@ describe('Mostrador', () => {
       expect(el().querySelector('.aviso')!.textContent!.trim()).toBe('"Taladro viejo" está dado de baja.');
     });
 
+    it('un artículo a $0 no se agrega y avisa en rojo', async () => {
+      await crear();
+
+      await escanear('ARA', lista([articulo(8, { descripcion: 'Arandela suelta', precioFinal: 0 })]));
+      await enter();
+
+      expect(renglonesTicket()).toHaveLength(0);
+      const aviso = el().querySelector('.aviso')!;
+      expect(aviso.textContent!.trim()).toBe('"Arandela suelta" no tiene precio.');
+      expect(aviso.classList.contains('error')).toBe(true);
+    });
+
     it('después del aviso de baja, agregar un activo lo saca', async () => {
       await crear();
       await escanear('BAJA', lista([articulo(9, { descripcion: 'Taladro viejo', activo: false })]));
@@ -1623,6 +1635,25 @@ describe('Mostrador', () => {
       expect(dialogo()!.textContent).toContain('¿Quitar «Martillo» del ticket?');
       await tecla('Enter');
       expect(descripciones()).toEqual(['Serrucho']);
+    });
+
+    it('un 422 por artículo sin precio conserva el ticket y marca el renglón', async () => {
+      await crear();
+      await escanear('M', martillo());
+      await escanear('S', articulo(2, { descripcion: 'Serrucho', precioFinal: 100 }));
+      await tecla('F4');
+      await tecla('Enter');
+
+      await fallarCobro(0, 422, {
+        ...rechazo(422, 'ARTICULO_SIN_PRECIO', [{ articuloId: 1, descripcion: 'Martillo' }]),
+        message: '"Martillo" no tiene precio. Sacalo del ticket y pedile al dueño que le cargue el costo.',
+      });
+
+      expect(dialogo()).toBeNull();
+      expect(renglonesTicket()).toHaveLength(2);
+      expect(avisos()).toBe('"Martillo" no tiene precio. Sacalo del ticket y pedile al dueño que le cargue el costo.');
+      expect(normal(renglonesTicket()[0].textContent)).toContain('Sin precio');
+      expect(renglonesTicket()[1].querySelector('.problema')).toBeNull();
     });
 
     it('un 404 también deja elegido el renglón inexistente (H-06)', async () => {
