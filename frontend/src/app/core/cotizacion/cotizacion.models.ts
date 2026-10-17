@@ -30,6 +30,8 @@ export interface PreciosCotizacion {
   lado: LadoCotizacion;
   valor: number | null;
   desde: string | null;
+  /** Dólar nuevo que se aleja más del 20 % del vigente y espera que el Dueño lo confirme; null si no hay. */
+  aConfirmar: number | null;
 }
 
 /** Lo que devuelve `GET /cotizacion`, igual para todos los roles. */

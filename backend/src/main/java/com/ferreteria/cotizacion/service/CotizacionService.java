@@ -1,9 +1,9 @@
 package com.ferreteria.cotizacion.service;
 
-import com.ferreteria.cotizacion.api.DolarDePrecios;
 import com.ferreteria.cotizacion.model.CatalogoCotizaciones;
 import com.ferreteria.cotizacion.model.ConfiguracionCotizacion;
 import com.ferreteria.cotizacion.model.Cotizacion;
+import com.ferreteria.cotizacion.model.DolarAConfirmar;
 import com.ferreteria.cotizacion.repository.CotizacionRepository;
 import com.ferreteria.cotizacion.web.dto.CotizacionResponse;
 import com.ferreteria.cotizacion.web.dto.PreciosResponse;
@@ -31,11 +31,11 @@ public class CotizacionService {
 
     private final ConfiguracionCotizacionService configuracionService;
     private final CotizacionRepository cotizaciones;
-    private final DolarDePrecios dolar;
+    private final DolarDePreciosService dolar;
     private final Clock reloj;
 
     public CotizacionService(ConfiguracionCotizacionService configuracionService, CotizacionRepository cotizaciones,
-                             DolarDePrecios dolar, Clock reloj) {
+                             DolarDePreciosService dolar, Clock reloj) {
         this.configuracionService = configuracionService;
         this.cotizaciones = cotizaciones;
         this.dolar = dolar;
@@ -53,7 +53,8 @@ public class CotizacionService {
                 .map(codigo -> tipo(codigo, codigoDePrecios, ahora))
                 .toList();
         PreciosResponse precios = new PreciosResponse(codigoDePrecios, configuracion.getLadoPrecios(),
-                dolar.vigente().orElse(null), configuracion.getVigenteDesde());
+                dolar.vigente().orElse(null), configuracion.getVigenteDesde(),
+                dolar.aConfirmar().map(DolarAConfirmar::nuevo).orElse(null));
 
         return new CotizacionResponse(configuracion.isActiva(), desactualizada(ultimaRespuesta, ahora),
                 ultimaRespuesta, visibles, precios);

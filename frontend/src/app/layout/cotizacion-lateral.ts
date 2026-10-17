@@ -1,14 +1,19 @@
 import { Component, computed, input } from '@angular/core';
 import { RouterLink } from '@angular/router';
-import { Cotizacion, LADO_LABELS, LadoCotizacion, TipoCotizacion } from '../core/cotizacion/cotizacion.models';
+import { Cotizacion, LADO_LABELS, LadoCotizacion, PreciosCotizacion, TipoCotizacion } from '../core/cotizacion/cotizacion.models';
 import { formatearFechaHora } from '../core/formato/fecha-hora';
 import { formatearCotizacion } from '../core/formato/monto';
 
-/** Una línea del bloque: «Oficial venta 1.000,00», con marca si es el lado del dólar de los precios. */
+/**
+ * Una línea del bloque: «Oficial venta 1.000,00», con marca si es el lado del dólar de los precios. Esa línea muestra
+ * el dólar realmente aplicado a los precios (el vigente), no el último que trajo la fuente.
+ */
 interface Linea {
   etiqueta: string;
   valor: string;
   dePrecios: boolean;
+  /** «14,50»: el dólar nuevo que espera la confirmación del Dueño (solo en la línea de los precios); vacío si no hay. */
+  aConfirmar: string;
 }
 
 interface TipoVisible {
@@ -43,20 +48,26 @@ export class CotizacionLateral {
 
   protected readonly tipos = computed<TipoVisible[]>(() => {
     const c = this.cotizacion();
-    return c ? c.visibles.map((tipo) => tipoVisible(tipo, c.precios.lado)) : [];
+    return c ? c.visibles.map((tipo) => tipoVisible(tipo, c.precios)) : [];
   });
 
   /** «16/10 08:00»: la última vez que alguna API respondió, que es la cotización que se está usando. */
   protected readonly desdeCuando = computed(() => formatearFechaHora(this.cotizacion()?.ultimaRespuesta));
 }
 
-function tipoVisible(tipo: TipoCotizacion, ladoDePrecios: LadoCotizacion): TipoVisible {
+function tipoVisible(tipo: TipoCotizacion, precios: PreciosCotizacion): TipoVisible {
   const importes: Record<LadoCotizacion, number | null> = { COMPRA: tipo.compra, VENTA: tipo.venta };
-  const lineas = LADOS.filter((lado) => importes[lado] !== null).map((lado) => ({
-    etiqueta: `${tipo.nombre} ${LADO_LABELS[lado]}`,
-    valor: formatearCotizacion(importes[lado]),
-    dePrecios: tipo.esDePrecios && lado === ladoDePrecios,
-  }));
+  const lineas = LADOS.filter((lado) => importes[lado] !== null).map((lado) => {
+    const dePrecios = tipo.esDePrecios && lado === precios.lado;
+    // La línea de los precios muestra el vigente: con un dólar a confirmar, el crudo engañaría (auditoría H09).
+    const valor = dePrecios && precios.valor !== null ? precios.valor : importes[lado];
+    return {
+      etiqueta: `${tipo.nombre} ${LADO_LABELS[lado]}`,
+      valor: formatearCotizacion(valor),
+      dePrecios,
+      aConfirmar: dePrecios && precios.aConfirmar !== null ? formatearCotizacion(precios.aConfirmar) : '',
+    };
+  });
   return {
     codigo: tipo.codigo,
     nombre: tipo.nombre,

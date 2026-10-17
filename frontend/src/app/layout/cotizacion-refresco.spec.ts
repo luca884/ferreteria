@@ -47,7 +47,7 @@ describe('refresco del menú lateral desde Configuración › Cotización', () =
     desactualizada: false,
     ultimaRespuesta: '2026-10-16T12:30:00Z',
     visibles: [fila('USD:oficial', 'Oficial', 1000)],
-    precios: { codigo: 'USD:oficial', lado: 'VENTA', valor: 1000, desde: '2026-10-16T11:00:00Z' },
+    precios: { codigo: 'USD:oficial', lado: 'VENTA', valor: 1000, desde: '2026-10-16T11:00:00Z', aConfirmar: null },
   };
 
   const conBlueYEuro: Cotizacion = {

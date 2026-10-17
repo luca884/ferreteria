@@ -64,7 +64,7 @@ describe('ArticuloForm', () => {
     desactualizada: false,
     ultimaRespuesta: '2026-10-16T12:30:00Z',
     visibles: [],
-    precios: { codigo: 'USD:oficial', lado: 'VENTA', valor, desde: '2026-10-16T11:00:00Z' },
+    precios: { codigo: 'USD:oficial', lado: 'VENTA', valor, desde: '2026-10-16T11:00:00Z', aConfirmar: null },
     ...cambios,
   });
 

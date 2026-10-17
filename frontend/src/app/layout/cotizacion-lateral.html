@@ -26,6 +26,13 @@
                 @if (linea.dePrecios) {
                   &ngsp;<span class="marca" title="Es el dólar en el que cotizan los precios">Precios</span>
                 }
+                @if (linea.aConfirmar) {
+                  @if (esDueno()) {
+                    &ngsp;<a class="a-confirmar" routerLink="/configuracion/cotizacion" title="La fuente trajo un dólar muy distinto: confirmalo para que cambie los precios">{{ linea.aConfirmar }} a confirmar</a>
+                  } @else {
+                    &ngsp;<span class="a-confirmar" title="La fuente trajo un dólar muy distinto: los precios no cambian hasta que el Dueño lo confirme">{{ linea.aConfirmar }} a confirmar</span>
+                  }
+                }
               </div>
             }
             <time class="fecha">{{ tipo.fecha }}</time>

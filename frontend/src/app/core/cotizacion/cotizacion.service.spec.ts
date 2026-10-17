@@ -36,7 +36,7 @@ describe('CotizacionService', () => {
         esDePrecios: false,
       },
     ],
-    precios: { codigo: 'USD:oficial', lado: 'VENTA', valor: 1000, desde: '2026-10-16T11:00:00Z' },
+    precios: { codigo: 'USD:oficial', lado: 'VENTA', valor: 1000, desde: '2026-10-16T11:00:00Z', aConfirmar: null },
   };
 
   beforeEach(() => {
@@ -62,7 +62,7 @@ describe('CotizacionService', () => {
       ['USD:oficial', 950, 1000, true],
       ['EUR:oficial', null, null, false],
     ]);
-    expect(leida?.precios).toEqual({ codigo: 'USD:oficial', lado: 'VENTA', valor: 1000, desde: '2026-10-16T11:00:00Z' });
+    expect(leida?.precios).toEqual({ codigo: 'USD:oficial', lado: 'VENTA', valor: 1000, desde: '2026-10-16T11:00:00Z', aConfirmar: null });
   });
 
   it('distingue una cotización apagada y desactualizada de una activa', () => {

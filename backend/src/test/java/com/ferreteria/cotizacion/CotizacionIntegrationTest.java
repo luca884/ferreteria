@@ -128,7 +128,8 @@ class CotizacionIntegrationTest extends CotizacionTestBase {
         assertThat(oficial.get("desactualizada").asBoolean()).isFalse();
         assertThat(oficial.get("esDePrecios").asBoolean()).isTrue();
         JsonNode precios = r.get("precios");
-        assertThat(campos(precios)).containsExactlyInAnyOrder("codigo", "lado", "valor", "desde");
+        assertThat(campos(precios)).containsExactlyInAnyOrder("codigo", "lado", "valor", "desde", "aConfirmar");
+        assertThat(precios.get("aConfirmar").isNull()).isTrue();
         assertThat(precios.get("codigo").asText()).isEqualTo("USD:t21-oficial");
         assertThat(precios.get("lado").asText()).isEqualTo("VENTA");
         assertThat(precios.get("valor").decimalValue()).isEqualByComparingTo("1000");

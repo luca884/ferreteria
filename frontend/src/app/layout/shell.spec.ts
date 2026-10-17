@@ -26,7 +26,7 @@ const COTIZACION: Cotizacion = {
       esDePrecios: true,
     },
   ],
-  precios: { codigo: 'USD:oficial', lado: 'VENTA', valor: 1000, desde: '2026-10-16T11:00:00Z' },
+  precios: { codigo: 'USD:oficial', lado: 'VENTA', valor: 1000, desde: '2026-10-16T11:00:00Z', aConfirmar: null },
 };
 
 @Component({ template: '' })
@@ -286,7 +286,7 @@ describe('Shell', () => {
       vi.useFakeTimers();
       const actualizada: Cotizacion = {
         ...COTIZACION,
-        visibles: [{ ...COTIZACION.visibles[0], venta: 1100 }],
+        visibles: [{ ...COTIZACION.visibles[0], venta: 1100 }], precios: { ...COTIZACION.precios, valor: 1100 },
       };
       obtener = vi.fn().mockReturnValueOnce(of(COTIZACION)).mockReturnValue(of(actualizada));
       const el = await mostrar(await render(false));
@@ -316,7 +316,7 @@ describe('Shell', () => {
         .fn()
         .mockReturnValueOnce(of(COTIZACION))
         .mockReturnValueOnce(throwError(() => new Error('sin red')))
-        .mockReturnValue(of({ ...COTIZACION, visibles: [{ ...COTIZACION.visibles[0], venta: 1200 }] }));
+        .mockReturnValue(of({ ...COTIZACION, visibles: [{ ...COTIZACION.visibles[0], venta: 1200 }], precios: { ...COTIZACION.precios, valor: 1200 } }));
       const el = await mostrar(await render(false));
 
       vi.advanceTimersByTime(5 * MINUTO);
@@ -346,7 +346,7 @@ describe('Shell', () => {
       vi.useFakeTimers();
       const actualizada: Cotizacion = {
         ...COTIZACION,
-        visibles: [{ ...COTIZACION.visibles[0], venta: 1100 }],
+        visibles: [{ ...COTIZACION.visibles[0], venta: 1100 }], precios: { ...COTIZACION.precios, valor: 1100 },
       };
       obtener = vi.fn().mockReturnValueOnce(of(COTIZACION)).mockReturnValue(of(actualizada));
       const el = await mostrar(await render(true));
@@ -394,7 +394,7 @@ describe('Shell', () => {
     it('un pedido lento no pisa a uno más nuevo: se descarta el que quedó atrás', async () => {
       vi.useFakeTimers();
       const lento = new Subject<Cotizacion>();
-      obtener = vi.fn().mockReturnValueOnce(lento).mockReturnValue(of({ ...COTIZACION, visibles: [{ ...COTIZACION.visibles[0], venta: 1300 }] }));
+      obtener = vi.fn().mockReturnValueOnce(lento).mockReturnValue(of({ ...COTIZACION, visibles: [{ ...COTIZACION.visibles[0], venta: 1300 }], precios: { ...COTIZACION.precios, valor: 1300 } }));
       const el = await mostrar(await render(false));
 
       vi.advanceTimersByTime(5 * MINUTO);

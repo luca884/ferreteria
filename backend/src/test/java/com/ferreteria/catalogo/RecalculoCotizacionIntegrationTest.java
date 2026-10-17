@@ -279,4 +279,22 @@ class RecalculoCotizacionIntegrationTest extends CotizacionTestBase {
                 .andExpect(jsonPath("$.aConfirmar", nullValue()));
         getResult("/api/configuracion-cotizacion", vendedorA).andExpect(status().isForbidden());
     }
+
+    @Test
+    @DisplayName("H09: el menu de A muestra el dolar aplicado (1100) y aparte el valor a confirmar (11); el de B no cambia")
+    void menuMuestraElAplicadoYElAConfirmar() throws Exception {
+        aConVigente1100YElMercadoEn11();
+
+        for (String token : new String[] {duenoA, vendedorA}) {
+            getResult("/api/cotizacion", token)
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.precios.valor", is(1100.0)))
+                    .andExpect(jsonPath("$.precios.aConfirmar", is(11.0)))
+                    .andExpect(jsonPath("$.precios.desvioPorcentaje").doesNotExist())
+                    .andExpect(jsonPath("$.precios.mensaje").doesNotExist());
+        }
+        getResult("/api/cotizacion", duenoB)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.precios.aConfirmar", nullValue()));
+    }
 }

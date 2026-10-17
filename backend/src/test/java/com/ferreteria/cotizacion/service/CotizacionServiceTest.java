@@ -5,9 +5,9 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-import com.ferreteria.cotizacion.api.DolarDePrecios;
 import com.ferreteria.cotizacion.model.ConfiguracionCotizacion;
 import com.ferreteria.cotizacion.model.Cotizacion;
+import com.ferreteria.cotizacion.model.DolarAConfirmar;
 import com.ferreteria.cotizacion.model.LadoCotizacion;
 import com.ferreteria.cotizacion.repository.CotizacionRepository;
 import com.ferreteria.cotizacion.web.dto.CotizacionResponse;
@@ -35,7 +35,7 @@ class CotizacionServiceTest {
 
     private final ConfiguracionCotizacionService configuracionService = mock(ConfiguracionCotizacionService.class);
     private final CotizacionRepository cotizaciones = mock(CotizacionRepository.class);
-    private final DolarDePrecios dolar = mock(DolarDePrecios.class);
+    private final DolarDePreciosService dolar = mock(DolarDePreciosService.class);
     private final CotizacionService servicio = new CotizacionService(configuracionService, cotizaciones, dolar,
             Clock.fixed(AHORA, ZoneOffset.UTC));
 
@@ -60,6 +60,32 @@ class CotizacionServiceTest {
     private static TipoCotizacionResponse tipo(CotizacionResponse r, String codigo) {
         return r.visibles().stream().filter(t -> t.codigo().equals(codigo)).findFirst()
                 .orElseThrow(() -> new AssertionError("Falta " + codigo + " en " + r.visibles()));
+    }
+
+    // ---- dolar a confirmar (auditoria H09) ----
+
+    @Test
+    @DisplayName("con un dolar a confirmar, precios trae el vigente aplicado y aparte el valor nuevo")
+    void preciosConDolarAConfirmar() {
+        guardar("USD", "oficial", "14", "14.5", AHORA, AHORA);
+        when(dolar.vigente()).thenReturn(Optional.of(new BigDecimal("1535.0000")));
+        when(dolar.aConfirmar()).thenReturn(Optional.of(DolarAConfirmar.de("oficial", LadoCotizacion.VENTA,
+                new BigDecimal("1535.0000"), new BigDecimal("14.5000"))));
+
+        CotizacionResponse respuesta = servicio.obtener();
+
+        assertThat(respuesta.precios().valor()).isEqualByComparingTo("1535");
+        assertThat(respuesta.precios().aConfirmar()).isEqualByComparingTo("14.5");
+        assertThat(tipo(respuesta, "USD:oficial").venta()).isEqualByComparingTo("14.5");
+    }
+
+    @Test
+    @DisplayName("sin dolar a confirmar, aConfirmar viene vacio")
+    void preciosSinDolarAConfirmar() {
+        guardar("USD", "oficial", "950", "1000", AHORA, AHORA);
+        when(dolar.aConfirmar()).thenReturn(Optional.empty());
+
+        assertThat(servicio.obtener().precios().aConfirmar()).isNull();
     }
 
     // ---- desactualizada (R-007) ----

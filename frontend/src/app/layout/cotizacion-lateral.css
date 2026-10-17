@@ -82,6 +82,17 @@
   font-size: var(--texto-2xs);
   font-weight: 700;
 }
+.a-confirmar {
+  flex-basis: 100%;
+  color: var(--advertencia);
+  font-size: var(--texto-2xs);
+  font-weight: 600;
+  text-decoration: none;
+}
+a.a-confirmar:hover,
+a.a-confirmar:focus-visible {
+  text-decoration: underline;
+}
 .fecha {
   color: var(--texto-tenue);
   font-size: var(--texto-xs);

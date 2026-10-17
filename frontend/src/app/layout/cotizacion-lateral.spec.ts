@@ -36,7 +36,7 @@ describe('CotizacionLateral', () => {
     desactualizada: false,
     ultimaRespuesta: '2026-10-16T12:30:00Z',
     visibles: [oficial],
-    precios: { codigo: 'USD:oficial', lado: 'VENTA', valor: 1000, desde: '2026-10-16T11:00:00Z' },
+    precios: { codigo: 'USD:oficial', lado: 'VENTA', valor: 1000, desde: '2026-10-16T11:00:00Z', aConfirmar: null },
     ...cambios,
   });
 
@@ -60,6 +60,47 @@ describe('CotizacionLateral', () => {
     expect(texto(el.querySelector('.fecha'))).toBe('16/10 08:00');
   });
 
+  describe('dólar a confirmar (H09)', () => {
+    const aConfirmar = () =>
+      cotizacion({
+        visibles: [{ ...oficial, venta: 14.5 }],
+        precios: { codigo: 'USD:oficial', lado: 'VENTA', valor: 1535, desde: '2026-10-16T11:00:00Z', aConfirmar: 14.5 },
+      });
+
+    it('la línea de los precios muestra el dólar aplicado, no el crudo, y marca el nuevo «a confirmar»', async () => {
+      const el = await crear(aConfirmar());
+
+      expect(lineas(el)).toContain('Oficial venta 1.535,00 Precios 14,50 a confirmar');
+    });
+
+    it('la otra línea del mismo tipo sigue con su valor crudo y sin marca', async () => {
+      const el = await crear(aConfirmar());
+
+      expect(lineas(el)).toContain('Oficial compra 950,00');
+    });
+
+    it('sin valor a confirmar no hay marca', async () => {
+      const el = await crear(cotizacion());
+
+      expect(el.querySelector('.a-confirmar')).toBeNull();
+    });
+
+    it('el vendedor ve la marca pero no el porcentaje ni un botón para confirmar', async () => {
+      const el = await crear(aConfirmar(), false);
+
+      expect(texto(el.querySelector('.a-confirmar'))).toBe('14,50 a confirmar');
+      expect(el.textContent).not.toContain('%');
+      expect(el.querySelector('.a-confirmar a, .a-confirmar button, a.a-confirmar')).toBeNull();
+    });
+
+    it('para el dueño la marca lleva a la pantalla de Cotización para confirmarlo', async () => {
+      const el = await crear(aConfirmar(), true);
+
+      const enlace = el.querySelector<HTMLAnchorElement>('a.a-confirmar');
+      expect(enlace?.getAttribute('href')).toBe('/configuracion/cotizacion');
+    });
+  });
+
   it('muestra la compra y la venta de cada tipo', async () => {
     const el = await crear(cotizacion());
 
@@ -68,7 +109,7 @@ describe('CotizacionLateral', () => {
 
   it('marca el lado del dólar de los precios: con compra, la marca va en la compra', async () => {
     const el = await crear(
-      cotizacion({ precios: { codigo: 'USD:oficial', lado: 'COMPRA', valor: 950, desde: null } }),
+      cotizacion({ precios: { codigo: 'USD:oficial', lado: 'COMPRA', valor: 950, desde: null, aConfirmar: null } }),
     );
 
     expect(lineas(el)).toEqual(['Oficial compra 950,00 Precios', 'Oficial venta 1.000,00']);
