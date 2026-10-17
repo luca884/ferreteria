@@ -4,7 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -46,6 +46,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -97,7 +98,6 @@ class ArticuloServiceAjustesTest {
         service = new ArticuloService(articuloRepository, rubroRepository, proveedorRepository,
                 historialPrecioRepository, configuracionPreciosService, dolarDePrecios,
                 fabricaDeValidadores.getValidator());
-        lenient().when(articuloRepository.stockVigenteScoped(ID)).thenReturn(Optional.of(bd("4")));
     }
 
     @AfterEach
@@ -160,8 +160,15 @@ class ArticuloServiceAjustesTest {
         return articulo;
     }
 
+    /** El articulo se lee con lock para escribir; el 400 y el 409 sin lista salen antes de pedir el stock. */
+    private void encontrarSinStock(Articulo articulo) {
+        when(articuloRepository.findParaEditarScoped(ID)).thenReturn(Optional.of(articulo));
+    }
+
+    /** Como {@link #encontrarSinStock} y ademas el stock confirmado (stock 4) que lee antes de decidir. */
     private void encontrar(Articulo articulo) {
-        when(articuloRepository.findScoped(ID)).thenReturn(Optional.of(articulo));
+        encontrarSinStock(articulo);
+        when(articuloRepository.stockVigenteScoped(ID)).thenReturn(Optional.of(bd("4")));
     }
 
     private HistorialPrecio historialGuardado() {
@@ -170,12 +177,31 @@ class ArticuloServiceAjustesTest {
         return historial.getValue();
     }
 
+    // ---- lock ----
+
+    @Test
+    @DisplayName("el articulo se lee con lock para escribir ANTES de leer costo, base o ajustes; nunca con findScoped")
+    void elLockVaAntesDeCualquierLectura() throws Exception {
+        configuracion();
+        Articulo articulo = importado();
+        encontrar(articulo);
+
+        service.editarAjustes(ID, pedido("-5", null, null), USUARIO);
+
+        InOrder orden = inOrder(articuloRepository, configuracionPreciosService, historialPrecioRepository);
+        orden.verify(articuloRepository).findParaEditarScoped(ID);
+        orden.verify(articuloRepository).stockVigenteScoped(ID);
+        orden.verify(configuracionPreciosService).actual();
+        orden.verify(historialPrecioRepository).save(any());
+        verify(articuloRepository, never()).findScoped(any());
+    }
+
     // ---- 404 ----
 
     @Test
     @DisplayName("un articulo ajeno o inexistente da 404 antes que el 400, y no se lee nada mas")
     void ajenoDa404AntesQueElCuatrocientos() {
-        when(articuloRepository.findScoped(ID)).thenReturn(Optional.empty());
+        when(articuloRepository.findParaEditarScoped(ID)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.editarAjustes(ID, pedido("-100", null, null), USUARIO))
                 .isInstanceOf(ResourceNotFoundException.class)
@@ -188,7 +214,7 @@ class ArticuloServiceAjustesTest {
     @Test
     @DisplayName("fuera de rango (-100 y 1000,01) da 400 con el mensaje de rango, por campo, y nada se escribe")
     void fueraDeRango() throws Exception {
-        encontrar(importado());
+        encontrarSinStock(importado());
 
         assertThatThrownBy(() -> service.editarAjustes(ID, pedido("-100", "1000.01", "5"), USUARIO))
                 .isInstanceOfSatisfying(DatosInvalidosException.class, e -> {
@@ -201,7 +227,7 @@ class ArticuloServiceAjustesTest {
     @Test
     @DisplayName("3,555 da 400 por decimales (antes de que Ajustes lo redondee) y el rango gana si falla las dos cosas")
     void masDeDosDecimales() throws Exception {
-        encontrar(importado());
+        encontrarSinStock(importado());
 
         assertThatThrownBy(() -> service.editarAjustes(ID, pedido("3.555", "10000.555", null), USUARIO))
                 .isInstanceOfSatisfying(DatosInvalidosException.class, e -> {
@@ -212,7 +238,7 @@ class ArticuloServiceAjustesTest {
     @Test
     @DisplayName("un pedido invalido sobre un articulo sin lista da 400, no el 409")
     void invalidoAntesQueSinLista() throws Exception {
-        encontrar(articulo("500.00", Moneda.ARS));
+        encontrarSinStock(articulo("500.00", Moneda.ARS));
 
         assertThatThrownBy(() -> service.editarAjustes(ID, pedido("-100", null, null), USUARIO))
                 .isInstanceOf(DatosInvalidosException.class);
@@ -245,7 +271,7 @@ class ArticuloServiceAjustesTest {
         sinBase.registrarPrecioLista(bd("1000.00"));
 
         for (Articulo articulo : new Articulo[] {manual, sinProveedor, sinBase}) {
-            when(articuloRepository.findScoped(ID)).thenReturn(Optional.of(articulo));
+            when(articuloRepository.findParaEditarScoped(ID)).thenReturn(Optional.of(articulo));
 
             assertThatThrownBy(() -> service.editarAjustes(ID, pedido("-5", null, null, true), USUARIO))
                     .isInstanceOf(ConflictException.class)
@@ -257,7 +283,7 @@ class ArticuloServiceAjustesTest {
     @Test
     @DisplayName("el 409 sin lista lleva solo mensaje, sin errors")
     void sinListaSinErrors() throws Exception {
-        encontrar(articulo("500.00", Moneda.ARS));
+        encontrarSinStock(articulo("500.00", Moneda.ARS));
 
         assertThatThrownBy(() -> service.editarAjustes(ID, pedido("-5", null, null), USUARIO))
                 .isInstanceOfSatisfying(ConflictException.class, e -> assertThat(e.errors()).isEmpty());

@@ -8,6 +8,8 @@ import com.ferreteria.tenant.TenantScopedRepository;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import jakarta.persistence.LockModeType;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -175,6 +177,16 @@ public interface ArticuloRepository extends TenantScopedRepository<Articulo, Lon
             nativeQuery = true)
     Optional<BigDecimal> stockVigente(@Param("fid") Long ferreteriaId, @Param("id") Long id);
 
+    /**
+     * El articulo de la ferreteria leido con lock de escritura ({@code FOR UPDATE}), para editarlo sin perder lo que
+     * una importacion confirme en el medio: una lectura comun toma la foto de la primera lectura de la transaccion y
+     * el flush reescribiria costo, base y ajustes con valores viejos. Exige una transaccion abierta y que el
+     * articulo no se haya leido antes en ella. Vacio si el id no existe o es de otra ferreteria.
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select a from Articulo a where a.ferreteriaId = :fid and a.id = :id")
+    Optional<Articulo> findParaEditar(@Param("fid") Long ferreteriaId, @Param("id") Long id);
+
     /** Todos los articulos en dolares de la ferreteria, activos o no, por id (recalculo por cotizacion). */
     @Query("select a from Articulo a where a.ferreteriaId = :fid and a.moneda = com.ferreteria.catalogo.model.Moneda.USD "
             + "order by a.id")
@@ -303,6 +315,11 @@ public interface ArticuloRepository extends TenantScopedRepository<Articulo, Lon
     /** Los articulos de la ferreteria con esos ids (activos o no), por id ascendente. */
     default List<Articulo> porIdsScoped(Collection<Long> ids) {
         return porIds(TenantContext.requireFerreteriaId(), ids);
+    }
+
+    /** El articulo de la ferreteria del request con lock de escritura; ver {@link #findParaEditar}. */
+    default Optional<Articulo> findParaEditarScoped(Long id) {
+        return findParaEditar(TenantContext.requireFerreteriaId(), id);
     }
 
     /** Stock confirmado hoy en la base (lectura con lock) del articulo de la ferreteria del request. */

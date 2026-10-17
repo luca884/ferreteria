@@ -11,12 +11,17 @@ import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CountDownLatch;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * PUT /api/articulos/{id}/ajustes por HTTP contra MySQL (T-220 y T-221): los ejemplos de R-212, la base guardada
@@ -30,6 +35,9 @@ class AjustesArticuloIntegrationTest extends AjustesTestBase {
     private static final Instant HACE_UN_RATO = Instant.parse("2026-10-16T11:00:00Z");
     private static final String SIN_LISTA =
             "Este artículo no tiene lista de proveedor. Los ajustes se usan solo con artículos que vienen de una lista.";
+
+    @Autowired
+    private PlatformTransactionManager transacciones;
 
     private Long a;
     private Long b;
@@ -464,5 +472,42 @@ class AjustesArticuloIntegrationTest extends AjustesTestBase {
         // Y el Dueno de B sigue editando solo el suyo.
         editarOk(duenoB, deB, ajustes("-5", "null", "null"));
         assertThat(((BigDecimal) filaDe(deA).get("costo"))).isEqualByComparingTo("855.00");
+    }
+
+    // ---- concurrencia con una importacion ----
+
+    @Test
+    @DisplayName("una importacion que hace commit mientras se editan los ajustes no se pierde: el PUT espera el lock y calcula con la base nueva")
+    void unaImportacionConcurrenteNoSePierde() throws Exception {
+        Long id = conCosto("AJ-CONC", "900.00", "1420.00");
+        CountDownLatch importacionTieneElLock = new CountDownLatch(1);
+
+        // La "importacion": toma la fila, deja pasar al PUT y recien despues escribe la base nueva y hace commit.
+        CompletableFuture<Void> importacion = CompletableFuture.runAsync(() -> new TransactionTemplate(transacciones)
+                .executeWithoutResult(estado -> {
+                    jdbc.queryForObject("select costo from articulo where id = ? for update", BigDecimal.class, id);
+                    importacionTieneElLock.countDown();
+                    pausa(1500);
+                    jdbc.update("update articulo set bonificacion1 = 20.00, costo = 800.00, precio_final = 1260.00 "
+                            + "where id = ?", id);
+                }));
+        importacionTieneElLock.await();
+
+        JsonNode r = editarOk(duenoA, id, ajustes("-5", "null", "null"));
+        importacion.get();
+
+        // Con la base nueva (bonificacion 20, costo 800 que coincide con la lista): 1.000 x 0,80 x 0,95 = 760.
+        assertThat(r.get("costo").decimalValue()).isEqualByComparingTo("760.00");
+        assertThat(r.get("bonificacion1").decimalValue()).isEqualByComparingTo("20");
+        assertHistorialManual(id, "800.00", "760.00", "1260", "1200");
+        assertThat(((BigDecimal) filaDe(id).get("bonificacion1"))).isEqualByComparingTo("20");
+    }
+
+    private static void pausa(long milisegundos) {
+        try {
+            Thread.sleep(milisegundos);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
     }
 }

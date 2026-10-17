@@ -197,6 +197,17 @@ class DesglosePrecioServiceTest {
     }
 
     @Test
+    @DisplayName("un rubro que no se encuentra (o es de otra ferreteria) da 404 Rubro no encontrado y no se usa margen null")
+    void rubroInexistenteDa404() throws Exception {
+        when(rubroRepository.findScoped(4L)).thenReturn(Optional.empty());
+        encontrar(articulo("100.00", null, 4L, null, Moneda.ARS, "35.00", null));
+
+        assertThatThrownBy(() -> service.obtener(ID))
+                .isInstanceOf(ResourceNotFoundException.class)
+                .hasMessage("Rubro no encontrado");
+    }
+
+    @Test
     @DisplayName("un margen propio de 0 se respeta y es PROPIO")
     void margenPropioCero() throws Exception {
         configuracion();

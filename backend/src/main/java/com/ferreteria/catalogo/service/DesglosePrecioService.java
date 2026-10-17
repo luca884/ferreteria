@@ -50,7 +50,8 @@ public class DesglosePrecioService {
         Articulo articulo = articuloRepository.findScoped(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Artículo no encontrado"));
         BigDecimal margenRubro = articulo.getRubroId() == null ? null : rubroRepository.findScoped(articulo.getRubroId())
-                .map(rubro -> rubro.getMargenPorcentaje()).orElse(null);
+                .orElseThrow(() -> new ResourceNotFoundException("Rubro no encontrado"))
+                .getMargenPorcentaje();
         ConfiguracionPrecios configuracion = configuracionPreciosService.actual();
 
         // El dolar vigente (el del ultimo recalculo), no el de la API en este momento.

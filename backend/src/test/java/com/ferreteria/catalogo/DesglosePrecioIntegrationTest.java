@@ -321,10 +321,13 @@ class DesglosePrecioIntegrationTest extends AjustesTestBase {
         JsonNode vistoPorB = desglose(duenoB, deB);
 
         assertThat(vistoPorA.get("cotizacion").decimalValue()).isEqualByComparingTo("1000");
-        assertThat(vistoPorB.get("cotizacion").decimalValue()).isEqualByComparingTo("950");
-        assertThat(vistoPorB.get("margen").decimalValue()).isEqualByComparingTo("80");
+        assertThat(vistoPorA.get("precioFinal").decimalValue()).isEqualByComparingTo("15730");
         assertThat(vistoPorA.get("margen").decimalValue()).isEqualByComparingTo("30");
-        assertThat(getResult("/api/articulos/" + deB + "/desglose", duenoA)
-                .andReturn().getResponse().getContentAsString(StandardCharsets.UTF_8)).doesNotContain("950");
+        // B pide SU articulo en dolares y ve SU dolar (950) y su rubro (80), no los de A.
+        assertThat(vistoPorB.get("cotizacion").decimalValue()).isEqualByComparingTo("950");
+        assertThat(vistoPorB.get("precioFinal").decimalValue()).isEqualByComparingTo("14950");
+        assertThat(vistoPorB.get("margen").decimalValue()).isEqualByComparingTo("80");
+        assertThat(vistoPorB.get("origenMargen").asText()).isEqualTo("RUBRO");
+        assertThat(importe(vistoPorB, "COTIZACION")).isEqualByComparingTo("9500.0000");
     }
 }

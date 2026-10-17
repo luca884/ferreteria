@@ -151,11 +151,14 @@ public class ArticuloService {
      * Edita los tres ajustes de un articulo con lista (corte 3). Orden: 404, 400, 409 sin lista, 200 si no cambian,
      * 409 sin cotizacion, 409 por pisar el costo y recien despues la escritura, con historial MANUAL solo si cambia
      * el costo o el precio. El costo sale del precio de lista con la base GUARDADA en el articulo, nunca del proveedor
-     * de hoy. El 403 del Vendedor lo resuelve la seguridad antes de llegar aca.
+     * de hoy. Lee el articulo con lock de escritura. El 403 del Vendedor lo resuelve la seguridad antes de llegar aca.
      */
     @Transactional
     public ArticuloResponse editarAjustes(Long id, AjustesRequest request, Long usuarioId) {
-        Articulo articulo = buscar(id);
+        // Con lock ANTES de leer costo, base y ajustes: una importacion que confirma en el medio no se pierde, y el
+        // chequeo de R-214 compara contra el costo vigente y no contra uno viejo.
+        Articulo articulo = articuloRepository.findParaEditarScoped(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Artículo no encontrado"));
         validar(request);
         if (!articulo.tieneLista()) {
             throw new ConflictException(ArticuloSinListaException.MENSAJE);
