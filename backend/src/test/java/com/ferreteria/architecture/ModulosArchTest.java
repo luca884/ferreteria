@@ -79,4 +79,20 @@ class ModulosArchTest {
     void todaviaNoExisteElPaqueteFacturacion() {
         noClasses().should().resideInAPackage("com.ferreteria.facturacion..").check(clases);
     }
+
+    @Test
+    void catalogoNoDependeDeVentasNiStock() {
+        noClasses().that().resideInAPackage("com.ferreteria.catalogo..")
+                .should().dependOnClassesThat(resideInAnyPackage("com.ferreteria.ventas..", "com.ferreteria.stock.."))
+                .check(clases);
+    }
+
+    @Test
+    void elDominioDelCatalogoNoDependeDeLaWebNiDeLosDtos() {
+        noClasses().that().resideInAPackage("com.ferreteria.catalogo.model..")
+                .should().dependOnClassesThat(resideInAnyPackage(
+                        "com.ferreteria.catalogo.controller..", "com.ferreteria.catalogo.dto..",
+                        "org.springframework.web..", "jakarta.servlet.."))
+                .check(clases);
+    }
 }

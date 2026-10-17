@@ -8,15 +8,21 @@ import com.ferreteria.cotizacion.repository.CotizacionRepository;
 import com.ferreteria.tenant.TenantScopedRepository;
 import com.ferreteria.tenant.UnscopedTenantAccess;
 import com.tngtech.archunit.base.DescribedPredicate;
+import com.tngtech.archunit.core.domain.JavaClass;
 import com.tngtech.archunit.core.domain.JavaClasses;
+import com.tngtech.archunit.core.domain.JavaMethod;
 import com.tngtech.archunit.core.domain.JavaMethodCall;
 import com.tngtech.archunit.core.importer.ClassFileImporter;
 import com.tngtech.archunit.core.importer.ImportOption;
+import com.tngtech.archunit.lang.ArchCondition;
+import com.tngtech.archunit.lang.ConditionEvents;
+import com.tngtech.archunit.lang.SimpleConditionEvent;
 import org.junit.jupiter.api.Test;
 
 import java.util.Set;
 
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.classes;
+import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.methods;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noFields;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noMethods;
@@ -123,6 +129,58 @@ class TenantScopingArchTest {
                 .check(clases);
         noMethods().that().areDeclaredInClassesThat().resideInAPackage("com.ferreteria.catalogo..")
                 .should().beAnnotatedWith(UnscopedTenantAccess.class)
+                .check(clases);
+    }
+
+    // ---- Corte 3 (C-217): el filtro por importacion, findParaEditarScoped y los metodos con ferreteriaId explicito ----
+
+    /** Los metodos de consulta con el id de la ferreteria como parametro solo los llama el propio repositorio. */
+    @Test
+    void lasConsultasConFerreteriaIdExplicitoSoloLasLlamaElRepositorio() {
+        DescribedPredicate<JavaMethodCall> consultaCruda = new DescribedPredicate<>(
+                "una consulta abstracta declarada en un repositorio del catalogo, llamada desde afuera de el") {
+            @Override
+            public boolean test(JavaMethodCall call) {
+                JavaClass duenio = call.getTarget().getOwner();
+                if (!duenio.getPackageName().equals("com.ferreteria.catalogo.repository")) {
+                    return false;
+                }
+                boolean esConsultaPropia = call.getTarget().resolveMember()
+                        .map(m -> m.getOwner().getPackageName().equals("com.ferreteria.catalogo.repository")
+                                && m.getModifiers().contains(com.tngtech.archunit.core.domain.JavaModifier.ABSTRACT))
+                        .orElse(false);
+                boolean llamaDesdeElMismo = call.getOriginOwner().equals(duenio);
+                return esConsultaPropia && !llamaDesdeElMismo;
+            }
+        };
+
+        noClasses().should().callMethodWhere(consultaCruda).check(clases);
+    }
+
+    /** Todo metodo default de un repositorio del catalogo toma la ferreteria de TenantContext (o delega en otro default). */
+    @Test
+    void losMetodosScopedDelCatalogoTomanLaFerreteriaDelContexto() {
+        ArchCondition<JavaMethod> tomaLaFerreteriaDelContexto = new ArchCondition<>(
+                "llamar a TenantContext.requireFerreteriaId() o a otro metodo del mismo repositorio") {
+            @Override
+            public void check(JavaMethod metodo, ConditionEvents eventos) {
+                boolean ok = metodo.getMethodCallsFromSelf().stream().anyMatch(c ->
+                        (c.getTargetOwner().isEquivalentTo(com.ferreteria.tenant.TenantContext.class)
+                                && c.getName().equals("requireFerreteriaId"))
+                        || c.getTargetOwner().equals(metodo.getOwner()));
+                if (!ok) {
+                    eventos.add(SimpleConditionEvent.violated(metodo,
+                            metodo.getFullName() + " no toma la ferreteria de TenantContext"));
+                }
+            }
+        };
+
+        methods().that().areDeclaredInClassesThat().resideInAPackage("com.ferreteria.catalogo.repository..")
+                .and().areDeclaredInClassesThat().areInterfaces()
+                .and().doNotHaveModifier(com.tngtech.archunit.core.domain.JavaModifier.ABSTRACT)
+                .and().doNotHaveModifier(com.tngtech.archunit.core.domain.JavaModifier.SYNTHETIC)
+                .should(tomaLaFerreteriaDelContexto)
+                .allowEmptyShould(false)
                 .check(clases);
     }
 }
