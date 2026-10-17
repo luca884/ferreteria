@@ -280,12 +280,14 @@ class DesglosePrecioIntegrationTest extends AjustesTestBase {
     // ---- R-211: acceso y aislamiento ----
 
     @Test
-    @DisplayName("el Vendedor ve el mismo desglose que el Dueno (solo lectura)")
-    void elVendedorLoVe() throws Exception {
+    @DisplayName("el desglose es solo del Dueno: el Vendedor no ve costo ni margen (H07) y recibe 403")
+    void elVendedorNoLoVe() throws Exception {
         Long id = importado(a, "D-VEN", proveedorA, "1000.00", false, valores("10", null, null),
                 valores("-5", "3", null), "880.65", "1390.00");
 
-        assertThat(desglose(vendedorA, id)).isEqualTo(desglose(duenoA, id));
+        getResult("/api/articulos/" + id + "/desglose", vendedorA)
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.pasos").doesNotExist());
     }
 
     @Test
@@ -299,7 +301,8 @@ class DesglosePrecioIntegrationTest extends AjustesTestBase {
                 .andExpect(jsonPath("$.message", is("Artículo no encontrado")))
                 .andExpect(jsonPath("$.pasos").doesNotExist())
                 .andExpect(jsonPath("$.bonificacion1").doesNotExist());
-        getResult("/api/articulos/" + deB + "/desglose", vendedorA).andExpect(status().isNotFound());
+        // El rol se controla antes de buscar el articulo: el Vendedor recibe 403 aunque sea de otra ferreteria (H07).
+        getResult("/api/articulos/" + deB + "/desglose", vendedorA).andExpect(status().isForbidden());
         getResult("/api/articulos/999999999/desglose", duenoA).andExpect(status().isNotFound());
         mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
                         .get("/api/articulos/" + deB + "/desglose"))

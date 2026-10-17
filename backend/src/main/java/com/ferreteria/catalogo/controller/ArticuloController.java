@@ -2,8 +2,10 @@ package com.ferreteria.catalogo.controller;
 
 import com.ferreteria.auth.security.AuthUser;
 import com.ferreteria.catalogo.dto.AjustesRequest;
+import com.ferreteria.catalogo.dto.ArticuloLectura;
 import com.ferreteria.catalogo.dto.ArticuloRequest;
 import com.ferreteria.catalogo.dto.ArticuloResponse;
+import com.ferreteria.catalogo.dto.ArticuloVendedorResponse;
 import com.ferreteria.catalogo.dto.BusquedaMostradorResponse;
 import com.ferreteria.catalogo.dto.DesglosePrecioResponse;
 import com.ferreteria.catalogo.service.ArticuloService;
@@ -48,12 +50,15 @@ public class ArticuloController {
 
     /** Pagina de 20 por defecto (el servicio la acota entre 1 y 100), solo activos salvo incluirInactivos. */
     @GetMapping
-    public PageResponse<ArticuloResponse> listar(
+    public PageResponse<ArticuloLectura> listar(
             @RequestParam(required = false) String q,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size,
-            @RequestParam(defaultValue = "false") boolean incluirInactivos) {
-        return articuloService.listar(q, page, size, incluirInactivos);
+            @RequestParam(defaultValue = "false") boolean incluirInactivos,
+            @AuthenticationPrincipal AuthUser authUser) {
+        PageResponse<ArticuloResponse> pagina = articuloService.listar(q, page, size, incluirInactivos);
+        return new PageResponse<>(pagina.items().stream().map(a -> segunRol(a, authUser)).toList(),
+                pagina.page(), pagina.size(), pagina.totalElements(), pagina.totalPages());
     }
 
     /** CU-06. La ruta literal le gana a /{id}. Un q ausente o en blanco da SIN_RESULTADOS, no el catalogo. */
@@ -64,12 +69,18 @@ public class ArticuloController {
 
     /** Tambien devuelve los articulos dados de baja. */
     @GetMapping("/{id}")
-    public ArticuloResponse obtener(@PathVariable Long id) {
-        return articuloService.obtener(id);
+    public ArticuloLectura obtener(@PathVariable Long id, @AuthenticationPrincipal AuthUser authUser) {
+        return segunRol(articuloService.obtener(id), authUser);
     }
 
-    /** De donde sale el precio, paso a paso. Lectura para Dueno y Vendedor; uno ajeno da 404. */
+    /** El Dueno ve costo y margen; el Vendedor, el articulo sin nada de eso (H07). */
+    private static ArticuloLectura segunRol(ArticuloResponse articulo, AuthUser authUser) {
+        return authUser.veCostos() ? articulo : ArticuloVendedorResponse.from(articulo);
+    }
+
+    /** De donde sale el precio, paso a paso: costo, bonificaciones y margen, asi que solo el Dueno (H07). Uno ajeno da 404. */
     @GetMapping("/{id}/desglose")
+    @PreAuthorize("hasRole('DUENO')")
     public DesglosePrecioResponse desglosar(@PathVariable Long id) {
         return desglosePrecioService.obtener(id);
     }

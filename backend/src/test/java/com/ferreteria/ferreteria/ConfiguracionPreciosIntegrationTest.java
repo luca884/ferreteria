@@ -45,8 +45,9 @@ class ConfiguracionPreciosIntegrationTest extends IntegrationTestBase {
     }
 
     @Test
-    void elVendedorTambienLaLee() throws Exception {
-        getResult("/api/configuracion-precios", login("vendedor@tornillo.demo")).andExpect(status().isOk());
+    void elVendedorNoLaVe() throws Exception {
+        // H07: el margen por defecto es del Dueno.
+        getResult("/api/configuracion-precios", login("vendedor@tornillo.demo")).andExpect(status().isForbidden());
     }
 
     @Test

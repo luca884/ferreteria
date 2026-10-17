@@ -1,11 +1,15 @@
 package com.ferreteria.catalogo.controller;
 
+import com.ferreteria.auth.security.AuthUser;
+import com.ferreteria.catalogo.dto.ProveedorLectura;
 import com.ferreteria.catalogo.dto.ProveedorRequest;
 import com.ferreteria.catalogo.dto.ProveedorResponse;
+import com.ferreteria.catalogo.dto.ProveedorVendedorResponse;
 import com.ferreteria.catalogo.service.ProveedorService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -19,7 +23,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 
-/** Lectura para Dueno y Vendedor; las escrituras solo para el Dueno. */
+/** Lectura para Dueno y Vendedor (el Vendedor sin el mapeo ni las condiciones de la lista, H07); las escrituras solo para el Dueno. */
 @RestController
 @RequestMapping("/api/proveedores")
 public class ProveedorController {
@@ -32,8 +36,10 @@ public class ProveedorController {
 
     /** Solo los activos, salvo incluirInactivos (para ver y reactivar los dados de baja). */
     @GetMapping
-    public List<ProveedorResponse> listar(@RequestParam(defaultValue = "false") boolean incluirInactivos) {
-        return proveedorService.listar(incluirInactivos);
+    public List<ProveedorLectura> listar(
+            @RequestParam(defaultValue = "false") boolean incluirInactivos, @AuthenticationPrincipal AuthUser authUser) {
+        List<ProveedorResponse> proveedores = proveedorService.listar(incluirInactivos);
+        return proveedores.stream().map(p -> segunRol(p, authUser)).toList();
     }
 
     /** Vuelve a activar un proveedor dado de baja. No toca nombre, CUIT ni la configuracion de la lista. */
@@ -44,8 +50,12 @@ public class ProveedorController {
     }
 
     @GetMapping("/{id}")
-    public ProveedorResponse obtener(@PathVariable Long id) {
-        return proveedorService.obtener(id);
+    public ProveedorLectura obtener(@PathVariable Long id, @AuthenticationPrincipal AuthUser authUser) {
+        return segunRol(proveedorService.obtener(id), authUser);
+    }
+
+    private static ProveedorLectura segunRol(ProveedorResponse proveedor, AuthUser authUser) {
+        return authUser.veCostos() ? proveedor : ProveedorVendedorResponse.from(proveedor);
     }
 
     @PostMapping

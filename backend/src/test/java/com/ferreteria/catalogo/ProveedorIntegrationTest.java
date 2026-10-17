@@ -440,22 +440,24 @@ class ProveedorIntegrationTest extends IntegrationTestBase {
     }
 
     @Test
-    void elVendedorLeeTodosLosCamposDeLaLista() throws Exception {
+    void elVendedorNoVeLaListaDelProveedor() throws Exception {
         long id = crear(duenoA, unico("VendedorLista")).get("id").asLong();
         cargarLista(id);
 
+        // H07: el mapeo, el IVA y las bonificaciones de la lista son de donde sale el costo.
         getResult("/api/proveedores/" + id, vendedorA)
                 .andExpect(status().isOk())
+                .andExpect(jsonPath("$.nombre").exists())
+                .andExpect(jsonPath("$.mapeoLista").doesNotExist())
+                .andExpect(jsonPath("$.listaIncluyeIva").doesNotExist())
+                .andExpect(jsonPath("$.bonificacion1").doesNotExist())
+                .andExpect(jsonPath("$.bonificacion2").doesNotExist());
+        getResult("/api/proveedores/" + id, duenoA)
                 .andExpect(jsonPath("$.mapeoLista.hoja", is(0)))
-                .andExpect(jsonPath("$.mapeoLista.filaDesde", is(2)))
-                .andExpect(jsonPath("$.mapeoLista.columnaCodigo", is(0)))
-                .andExpect(jsonPath("$.mapeoLista.columnaDescripcion", is(1)))
-                .andExpect(jsonPath("$.mapeoLista.columnaCosto", is(2)))
                 .andExpect(jsonPath("$.mapeoLista.encabezados.costo", is("Precio")))
                 .andExpect(jsonPath("$.listaIncluyeIva", is(true)))
                 .andExpect(jsonPath("$.bonificacion1", is(40.0)))
-                .andExpect(jsonPath("$.bonificacion2", is(10.0)))
-                .andExpect(jsonPath("$.bonificacion3").doesNotExist());
+                .andExpect(jsonPath("$.bonificacion2", is(10.0)));
     }
 
     @Test

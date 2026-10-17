@@ -238,18 +238,20 @@ class ArticuloIntegrationTest extends IntegrationTestBase {
     // --- Permisos por rol (R-013) ---
 
     @Test
-    void elVendedorLeeListadoYDetalleConCostoYMargen() throws Exception {
+    void elVendedorLeeListadoYDetalleSinCostoNiMargen() throws Exception {
         ObjectNode p = pedido(unico("VEN"));
         p.put("margenPorcentaje", new BigDecimal("40"));
         long id = crear(duenoA, p).get("id").asLong();
 
+        // H07: el Vendedor ve el precio, no el costo ni el margen.
         getResult("/api/articulos?q=" + p.get("codigoInterno").asText(), vendedorA)
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.items[0].costo", is(100.0)));
+                .andExpect(jsonPath("$.items[0].precioFinal").exists())
+                .andExpect(jsonPath("$.items[0].costo").doesNotExist());
         getResult("/api/articulos/" + id, vendedorA)
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.costo", is(100.0)))
-                .andExpect(jsonPath("$.margenPorcentaje", is(40.0)));
+                .andExpect(jsonPath("$.costo").doesNotExist())
+                .andExpect(jsonPath("$.margenPorcentaje").doesNotExist());
     }
 
     @Test
@@ -841,7 +843,7 @@ class ArticuloIntegrationTest extends IntegrationTestBase {
                 .andExpect(jsonPath("$.precioListaProveedor", is(1210.0)));
         getResult("/api/articulos/" + id, vendedorA)
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.precioListaProveedor", is(1210.0)));
+                .andExpect(jsonPath("$.precioListaProveedor").doesNotExist());
     }
 
     @Test

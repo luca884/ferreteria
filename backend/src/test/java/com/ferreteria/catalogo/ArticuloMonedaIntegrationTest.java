@@ -159,15 +159,16 @@ class ArticuloMonedaIntegrationTest extends CotizacionTestBase {
     }
 
     @Test
-    @DisplayName("el detalle y el listado devuelven la moneda de cada articulo")
+    @DisplayName("el detalle y el listado devuelven la moneda de cada articulo al Dueno; al Vendedor no (H07)")
     void lecturaConMoneda() throws Exception {
         String codigo = unico("LEC");
         long id = crear(duenoA, pedido(codigo, "USD")).get("id").asLong();
 
-        assertThat(getJson(URL + "/" + id, vendedorA).get("moneda").asText()).isEqualTo("USD");
-        JsonNode pagina = getJson(URL + "?q=" + codigo, vendedorA);
+        assertThat(getJson(URL + "/" + id, duenoA).get("moneda").asText()).isEqualTo("USD");
+        JsonNode pagina = getJson(URL + "?q=" + codigo, duenoA);
         assertThat(pagina.get("items")).hasSize(1);
         assertThat(pagina.get("items").get(0).get("moneda").asText()).isEqualTo("USD");
+        assertThat(getJson(URL + "/" + id, vendedorA).has("moneda")).isFalse();
     }
 
     // ---- T-035: alta y edicion con el dolar vigente ----

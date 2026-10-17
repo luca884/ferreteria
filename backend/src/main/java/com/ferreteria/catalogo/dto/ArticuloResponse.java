@@ -7,7 +7,7 @@ import com.ferreteria.catalogo.model.Unidad;
 
 import java.math.BigDecimal;
 
-/** Un unico DTO para Dueno y Vendedor: ambos ven costo y margen. */
+/** Un articulo como lo ve el Dueno: con costo, margen y la lista del proveedor. El Vendedor recibe {@link ArticuloVendedorResponse} (H07). */
 public record ArticuloResponse(
         Long id,
         String codigoInterno,
@@ -38,7 +38,7 @@ public record ArticuloResponse(
         BigDecimal bonificacion3,
         Boolean listaIncluyeIva,
         /** Version del articulo (bloqueo optimista): la que hay que mandar en el proximo guardado. */
-        Long version) {
+        Long version) implements ArticuloLectura {
 
     /** Igual que {@link #from(Articulo)} pero con el stock indicado (el vigente en la base, no el de la entidad leida). */
     public static ArticuloResponse from(Articulo articulo, BigDecimal stockActual) {

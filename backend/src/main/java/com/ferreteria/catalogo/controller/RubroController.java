@@ -1,8 +1,10 @@
 package com.ferreteria.catalogo.controller;
 
 import com.ferreteria.auth.security.AuthUser;
+import com.ferreteria.catalogo.dto.RubroLectura;
 import com.ferreteria.catalogo.dto.RubroRequest;
 import com.ferreteria.catalogo.dto.RubroResponse;
+import com.ferreteria.catalogo.dto.RubroVendedorResponse;
 import com.ferreteria.catalogo.service.RubroService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
@@ -30,18 +32,25 @@ public class RubroController {
         this.rubroService = rubroService;
     }
 
+    /** El Dueno ve el margen de cada rubro; el Vendedor, solo el nombre (H07). */
     @GetMapping
-    public List<RubroResponse> listar() {
-        return rubroService.listar();
+    public List<RubroLectura> listar(@AuthenticationPrincipal AuthUser authUser) {
+        List<RubroResponse> rubros = rubroService.listar();
+        return rubros.stream().map(r -> segunRol(r, authUser)).toList();
     }
 
     @GetMapping("/{id}")
-    public RubroResponse obtener(@PathVariable Long id) {
-        return rubroService.obtener(id);
+    public RubroLectura obtener(@PathVariable Long id, @AuthenticationPrincipal AuthUser authUser) {
+        return segunRol(rubroService.obtener(id), authUser);
     }
 
-    /** Cuantos articulos activos heredan el margen del rubro: los que se recalculan si el margen cambia. */
+    private static RubroLectura segunRol(RubroResponse rubro, AuthUser authUser) {
+        return authUser.veCostos() ? rubro : RubroVendedorResponse.from(rubro);
+    }
+
+    /** Cuantos articulos activos heredan el margen del rubro: los que se recalculan si el margen cambia. Solo el Dueno. */
     @GetMapping("/{id}/articulos-que-heredan")
+    @PreAuthorize("hasRole('DUENO')")
     public Map<String, Long> articulosQueHeredan(@PathVariable Long id) {
         return Map.of("cantidad", rubroService.contarArticulosQueHeredan(id));
     }

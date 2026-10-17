@@ -15,7 +15,7 @@ public record ProveedorResponse(
         boolean listaIncluyeIva,
         BigDecimal bonificacion1,
         BigDecimal bonificacion2,
-        BigDecimal bonificacion3) {
+        BigDecimal bonificacion3) implements ProveedorLectura {
 
     public static ProveedorResponse from(Proveedor proveedor) {
         return new ProveedorResponse(

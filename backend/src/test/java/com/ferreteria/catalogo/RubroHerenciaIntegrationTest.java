@@ -67,9 +67,17 @@ class RubroHerenciaIntegrationTest extends IntegrationTestBase {
     void unRubroSinArticulosDaCero() throws Exception {
         long rubro = crearRubro(duenoA);
 
-        getResult("/api/rubros/" + rubro + "/articulos-que-heredan", vendedorA)
+        getResult("/api/rubros/" + rubro + "/articulos-que-heredan", duenoA)
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.cantidad", is(0)));
+    }
+
+    @Test
+    void elVendedorNoVeCuantosHeredanElMargen() throws Exception {
+        long rubro = crearRubro(duenoA);
+
+        // H07: es informacion del margen, solo del Dueno.
+        getResult("/api/rubros/" + rubro + "/articulos-que-heredan", vendedorA).andExpect(status().isForbidden());
     }
 
     @Test
