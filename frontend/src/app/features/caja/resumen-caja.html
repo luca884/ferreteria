@@ -1,0 +1,76 @@
+<section class="resumen panel" aria-labelledby="resumen-titulo">
+  <h2 id="resumen-titulo">Resumen de la caja</h2>
+  <p class="quien">
+    Abrió {{ detalle().abiertaPor }} · {{ fechaHora(detalle().fechaApertura) }}
+    @if (detalle().cerradaPor; as cerro) {
+      <span class="separador" aria-hidden="true">·</span> Cerró {{ cerro }} · {{ fechaHora(detalle().fechaCierre) }}
+    }
+  </p>
+
+  <ul class="lineas">
+    <li>
+      <span>Efectivo inicial</span>&ngsp;<strong>{{ detalle().efectivoInicial | monto }}</strong>
+    </li>
+    @if (diferenciaApertura(); as dif) {
+      <li class="nota">
+        <span>Diferencia de apertura</span>&ngsp;<strong>{{ dif }}</strong>
+      </li>
+    }
+    @for (medio of medios; track medio) {
+      <li>
+        <span>Ventas en {{ medioLabels[medio].toLowerCase() }}</span>&ngsp;<strong>{{ detalle().ventas[medio] | monto }}</strong>
+      </li>
+    }
+    <li class="subtotal">
+      <span>Total de ventas</span>&ngsp;<strong>{{ detalle().totalVentas | monto }}</strong>
+    </li>
+    <li>
+      <span>Ingresos</span>&ngsp;<strong>{{ detalle().ingresos | monto }}</strong>
+    </li>
+    <li>
+      <span>Gastos</span>&ngsp;<strong>{{ detalle().gastos | monto }}</strong>
+    </li>
+    <li>
+      <span>Retiros</span>&ngsp;<strong>{{ detalle().retiros | monto }}</strong>
+    </li>
+    <li class="subtotal">
+      <span>Efectivo esperado</span>&ngsp;<strong>{{ detalle().efectivoEsperado | monto }}</strong>
+    </li>
+    @if (detalle().efectivoContado !== null) {
+      <li class="subtotal">
+        <span>Efectivo contado</span>&ngsp;<strong>{{ detalle().efectivoContado | monto }}</strong>
+      </li>
+      <li class="diferencia" [class.falta]="(detalle().diferencia ?? 0) < 0" [class.sobra]="(detalle().diferencia ?? 0) > 0">
+        <span>Diferencia</span>&ngsp;<strong>{{ textoDiferencia() }}</strong>
+      </li>
+    }
+  </ul>
+
+  <h3>Movimientos</h3>
+  @if (detalle().movimientos.length === 0) {
+    <p class="pista">No hubo movimientos.</p>
+  } @else {
+    <table>
+      <thead>
+        <tr>
+          <th scope="col">Hora</th>
+          <th scope="col">Tipo</th>
+          <th scope="col">Motivo</th>
+          <th scope="col">Usuario</th>
+          <th scope="col" class="num">Importe</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (movimiento of detalle().movimientos; track movimiento.id) {
+          <tr>
+            <td>{{ fechaHora(movimiento.fecha) }}</td>
+            <td>{{ tipoLabels[movimiento.tipo] }}</td>
+            <td>{{ movimiento.motivo }}</td>
+            <td>{{ movimiento.usuario }}</td>
+            <td class="num">{{ movimiento.importe | monto }}</td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  }
+</section>

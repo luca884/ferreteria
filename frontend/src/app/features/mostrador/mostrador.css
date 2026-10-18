@@ -108,6 +108,23 @@ app-caja-busqueda {
   color: var(--error);
 }
 
+/* Sin caja del día no se vende: el aviso lleva directo a abrirla o cerrarla. */
+.aviso-caja {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--e-3);
+  padding: var(--e-2) var(--e-3);
+  border: 1px solid var(--advertencia-borde);
+  border-left: 4px solid var(--advertencia-marca);
+  border-radius: var(--radio);
+  background: var(--advertencia-fondo);
+  color: var(--advertencia);
+  font-size: var(--texto-md);
+  font-weight: 600;
+}
+
 .zona-ticket {
   grid-area: ticket;
   position: relative;

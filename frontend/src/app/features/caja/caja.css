@@ -1,0 +1,33 @@
+:host {
+  display: block;
+  width: 100%;
+}
+/* La barra de acciones va a todo el ancho; el resto no se estira de más. */
+:host > :not(app-barra-acciones) {
+  max-width: 880px;
+}
+:host > .panel,
+:host > app-resumen-caja {
+  margin-bottom: var(--e-4);
+}
+
+h2 {
+  margin-bottom: var(--e-2);
+}
+.quien {
+  margin: 0;
+  color: var(--texto-suave);
+}
+.estado .alerta {
+  margin: var(--e-3) 0 0;
+}
+
+.fila-campos {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--e-3);
+}
+.campo.motivo {
+  flex: 1 1 220px;
+}

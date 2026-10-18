@@ -1,0 +1,153 @@
+<app-barra-acciones>
+  <h1>Caja</h1>
+  @if (auth.esDueno()) {
+    <a class="btn accion-barra historial" routerLink="/caja/historial">Historial de cajas</a>
+  }
+</app-barra-acciones>
+
+@if (mensaje(); as texto) {
+  <p class="alerta exito" role="status">{{ texto }}</p>
+}
+@if (error(); as texto) {
+  <p class="error" role="alert">{{ texto }}</p>
+}
+
+@if (cargando()) {
+  <p class="ayuda estado-vacio">Cargando…</p>
+} @else if (cargaFallida()) {
+  <div class="error con-accion" role="alert">
+    <span>No se pudo cargar la caja.</span>
+    <button type="button" class="secundario chico reintentar" (click)="cargar()">Reintentar</button>
+  </div>
+} @else {
+  @if (cierre(); as cerrada) {
+    <app-resumen-caja [detalle]="cerrada" />
+  }
+
+  @if (caja(); as abierta) {
+    <section class="panel estado" aria-labelledby="estado-titulo">
+      <h2 id="estado-titulo">Caja abierta</h2>
+      <p class="quien">
+        Abrió {{ abierta.abiertaPor }} · {{ fechaHora(abierta.fechaApertura) }} · Efectivo inicial
+        <strong>{{ abierta.efectivoInicial | monto }}</strong>
+      </p>
+      @if (avisoOtroDia(); as aviso) {
+        <p class="alerta advertencia" role="alert">{{ aviso }}</p>
+      }
+    </section>
+
+    @if (!esDeOtroDia()) {
+      <form class="movimiento panel" (submit)="registrarMovimiento($event)" novalidate>
+        <h2>Ingresos, gastos y retiros</h2>
+        <div class="fila-campos">
+          <div class="campo">
+            <label for="tipo-movimiento">Tipo</label>
+            <select id="tipo-movimiento" (change)="tipo.set($any($event.target).value)">
+              @for (opcion of tipos(); track opcion.valor) {
+                <option [value]="opcion.valor" [selected]="opcion.valor === tipo()">{{ opcion.etiqueta }}</option>
+              }
+            </select>
+          </div>
+          <div class="campo">
+            <label for="importe-movimiento">Importe</label>
+            <input
+              id="importe-movimiento"
+              type="number"
+              min="0"
+              step="0.01"
+              inputmode="decimal"
+              [value]="importe()"
+              [attr.aria-invalid]="errorImporte() ? 'true' : null"
+              [attr.aria-describedby]="errorImporte() ? 'importe-movimiento-error' : null"
+              (input)="importe.set($any($event.target).value)"
+            />
+            @if (errorImporte(); as texto) {
+              <span id="importe-movimiento-error" class="campo-error">{{ texto }}</span>
+            }
+          </div>
+          <div class="campo motivo">
+            <label for="motivo-movimiento">Motivo</label>
+            <input
+              id="motivo-movimiento"
+              type="text"
+              maxlength="120"
+              autocomplete="off"
+              [value]="motivo()"
+              [attr.aria-invalid]="errorMotivo() ? 'true' : null"
+              [attr.aria-describedby]="errorMotivo() ? 'motivo-movimiento-error' : null"
+              (input)="motivo.set($any($event.target).value)"
+            />
+            @if (errorMotivo(); as texto) {
+              <span id="motivo-movimiento-error" class="campo-error">{{ texto }}</span>
+            }
+          </div>
+          <button type="submit" class="primario cargar" [disabled]="trabajando()">Cargar</button>
+        </div>
+      </form>
+    }
+
+    <form class="cierre panel" (submit)="pedirCierre($event)" novalidate>
+      <h2>Cerrar la caja</h2>
+      <p class="ayuda">Contá el efectivo y cargalo. Al cerrar se muestra el resumen del día.</p>
+      <div class="fila-campos">
+        <div class="campo">
+          <label for="efectivo-contado">Efectivo contado</label>
+          <input
+            id="efectivo-contado"
+            type="number"
+            min="0"
+            step="0.01"
+            inputmode="decimal"
+            [value]="contado()"
+            [attr.aria-invalid]="errorContado() ? 'true' : null"
+            [attr.aria-describedby]="errorContado() ? 'efectivo-contado-error' : null"
+            (input)="contado.set($any($event.target).value)"
+          />
+          @if (errorContado(); as texto) {
+            <span id="efectivo-contado-error" class="campo-error">{{ texto }}</span>
+          }
+        </div>
+        <button type="submit" class="secundario" [disabled]="trabajando()">Cerrar caja</button>
+      </div>
+    </form>
+
+    @if (enVivo(); as vivo) {
+      <app-resumen-caja [detalle]="vivo" />
+    }
+  } @else {
+    <form class="apertura panel" (submit)="abrir($event)" novalidate>
+      <h2>Abrir la caja</h2>
+      <p class="ayuda">Sin caja abierta no se puede vender. Se propone el efectivo contado en el último cierre.</p>
+      <div class="fila-campos">
+        <div class="campo">
+          <label for="efectivo-inicial">Efectivo inicial</label>
+          <input
+            id="efectivo-inicial"
+            type="number"
+            min="0"
+            step="0.01"
+            inputmode="decimal"
+            [value]="efectivoInicial()"
+            [attr.aria-invalid]="errorApertura() ? 'true' : null"
+            [attr.aria-describedby]="errorApertura() ? 'efectivo-inicial-error' : null"
+            (input)="efectivoInicial.set($any($event.target).value)"
+          />
+          @if (errorApertura(); as texto) {
+            <span id="efectivo-inicial-error" class="campo-error">{{ texto }}</span>
+          }
+        </div>
+        <button type="submit" class="primario" [disabled]="trabajando()">Abrir caja</button>
+      </div>
+    </form>
+  }
+}
+
+@if (tituloCierre(); as titulo) {
+  <app-confirmacion
+    [titulo]="titulo"
+    mensaje="Una vez cerrada no se puede reabrir ni editar."
+    textoConfirmar="Cerrar la caja"
+    (confirmar)="cerrar()"
+    (cancelar)="cancelarCierre()"
+  />
+}

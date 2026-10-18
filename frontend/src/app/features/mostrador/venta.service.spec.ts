@@ -130,6 +130,13 @@ describe('VentaService', () => {
   });
 
   describe('rechazoDe', () => {
+    it('reconoce los rechazos por caja (CU-10): sin caja abierta y caja de otro día', () => {
+      for (const motivo of ['CAJA_CERRADA', 'CAJA_DE_OTRO_DIA'] as const) {
+        const cuerpo = { status: 422, message: 'Abrí la caja para vender.', timestamp: 't', motivo, articulos: [] };
+        expect(rechazoDe(new HttpErrorResponse({ status: 422, error: cuerpo }))).toEqual(cuerpo);
+      }
+    });
+
     it('devuelve null para errores que no son un rechazo de venta', () => {
       expect(rechazoDe(new Error('x'))).toBeNull();
       expect(rechazoDe(new HttpErrorResponse({ status: 500, error: { message: 'Error interno' } }))).toBeNull();

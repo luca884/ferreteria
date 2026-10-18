@@ -22,6 +22,9 @@ import { TicketStore } from './ticket.store';
 import { TotalesTicket } from './totales-ticket';
 import { ConfirmarVentaRequest, VentaCobrada, VentaInvalida, VentaRechazada } from './venta.models';
 import { VentaService, invalidaDe, rechazoDe } from './venta.service';
+import { RouterLink } from '@angular/router';
+import { CajaVigente, avisoParaVender } from '../caja/caja.models';
+import { CajaService } from '../caja/caja.service';
 
 const ESPERA_MS = 250;
 /** Cuánto queda a la vista el aviso de venta cobrada. */
@@ -76,6 +79,7 @@ interface Escaneo {
     FichaArticulo,
     TicketLista,
     TotalesTicket,
+    RouterLink,
   ],
   templateUrl: './mostrador.html',
   styleUrl: './mostrador.css',
@@ -88,7 +92,23 @@ interface Escaneo {
 export class Mostrador {
   private readonly service = inject(MostradorService);
   private readonly ventas = inject(VentaService);
+  private readonly cajas = inject(CajaService);
   private readonly destroyRef = inject(DestroyRef);
+
+  /**
+   * La caja de la ferretería (CU-10): sin caja abierta del día no se vende. null mientras se lee o si no se pudo leer:
+   * en ese caso no se frena nada acá y la venta la valida el backend.
+   */
+  private readonly cajaVigente = signal<CajaVigente | null>(null);
+  /** Por qué no se puede vender ahora («Abrí la caja para vender.»…), o null si se puede. */
+  protected readonly avisoCaja = computed(() => {
+    const vigente = this.cajaVigente();
+    return vigente ? avisoParaVender(vigente) : null;
+  });
+  /** El botón de la caja del aviso: abrirla o cerrarla según el caso. */
+  protected readonly accionCaja = computed(() =>
+    this.cajaVigente()?.estado === 'DE_OTRO_DIA' ? 'Cerrar la caja' : 'Abrir la caja',
+  );
   protected readonly ticket = inject(TicketStore);
   private readonly caja = viewChild.required(CajaBusqueda);
 
@@ -178,7 +198,7 @@ export class Mostrador {
     return {
       buscar: !abierto,
       cantidad: conRenglones,
-      cobrar: conRenglones,
+      cobrar: conRenglones && this.avisoCaja() === null,
       quitar: conRenglones,
       vaciar: conRenglones,
     };
@@ -186,6 +206,7 @@ export class Mostrador {
 
   constructor() {
     this.destroyRef.onDestroy(() => clearTimeout(this.ocultarAviso));
+    this.leerCaja();
     this.busquedas
       .pipe(
         switchMap((q) =>
@@ -229,6 +250,14 @@ export class Mostrador {
           this.mostrar(escaneo.q, resultado, true);
         }
       });
+  }
+
+  /** Lee la caja de la ferretería. Si no se puede leer no se frena nada: la venta la valida el backend. */
+  private leerCaja(): void {
+    this.cajas
+      .actual()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({ next: (vigente) => this.cajaVigente.set(vigente), error: () => undefined });
   }
 
   /** Todo cambio del aviso pasa por acá: un aviso nuevo (o ninguno) cancela el plazo del anterior. */
@@ -300,14 +329,20 @@ export class Mostrador {
       case 'buscar':
         this.caja().enfocar();
         return;
-      case 'cobrar':
+      case 'cobrar': {
         if (renglones.length === 0) {
           this.avisar({ texto: MENSAJE_TICKET_VACIO, grave: false, tipo: 'vacio' });
+          return;
+        }
+        const sinCaja = this.avisoCaja();
+        if (sinCaja) {
+          this.avisar({ texto: sinCaja, grave: true, tipo: 'otro' });
           return;
         }
         this.avisar(null);
         this.dialogo.set({ tipo: 'cobro' });
         return;
+      }
       case 'vaciar':
         if (renglones.length === 0) return;
         this.avisar(null);
@@ -444,6 +479,12 @@ export class Mostrador {
         this.rechazarTicket(this.textoInexistentes(rechazo));
         return;
       case 'CLAVE_CON_OTRO_CONTENIDO':
+        this.rechazarTicket(rechazo.message);
+        return;
+      case 'CAJA_CERRADA':
+      case 'CAJA_DE_OTRO_DIA':
+        // Otro usuario cerró la caja (o cambió el día) mientras se armaba el ticket: el ticket se conserva.
+        this.leerCaja();
         this.rechazarTicket(rechazo.message);
         return;
     }

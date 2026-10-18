@@ -6,6 +6,8 @@ import { AuthService } from './core/auth/auth.service';
 import { inicioPorRol } from './core/auth/inicio-por-rol';
 import { ActualizacionMasiva } from './features/actualizacion-masiva/actualizacion-masiva';
 import { ArticuloForm } from './features/articulos/articulo-form';
+import { Caja } from './features/caja/caja';
+import { HistorialCajas } from './features/caja/historial-cajas';
 import { Articulos } from './features/articulos/articulos';
 import { PaginaConfiguracionCotizacion } from './features/configuracion-cotizacion/configuracion-cotizacion';
 import { Importaciones } from './features/importaciones/importaciones';
@@ -87,6 +89,16 @@ describe('rutas', () => {
 
     expect(paths.indexOf('articulos/nuevo')).toBeGreaterThanOrEqual(0);
     expect(paths.indexOf('articulos/nuevo')).toBeLessThan(paths.indexOf('articulos/:id'));
+  });
+
+  it('la ruta caja carga la pantalla Caja y caja/historial el historial, sin guard de rol (CU-10)', async () => {
+    const caja = hijas().find((r) => r.path === 'caja');
+    const historial = hijas().find((r) => r.path === 'caja/historial');
+
+    expect(await (caja!.loadComponent as () => Promise<unknown>)()).toBe(Caja);
+    expect(await (historial!.loadComponent as () => Promise<unknown>)()).toBe(HistorialCajas);
+    expect(caja!.canActivate).toBeUndefined();
+    expect(historial!.canActivate).toBeUndefined();
   });
 
   it('la ruta mostrador carga el componente Mostrador', async () => {

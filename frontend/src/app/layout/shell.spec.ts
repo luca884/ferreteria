@@ -75,7 +75,17 @@ describe('Shell', () => {
 
     const nav = el.querySelector('aside nav[aria-label="Secciones"]');
     expect(nav).not.toBeNull();
-    expect(nav!.querySelectorAll('a').length).toBe(7);
+    expect(nav!.querySelectorAll('a').length).toBe(8);
+  });
+
+  it('«Caja» va después de «Mostrador» y lleva a /caja, para el Vendedor y para el Dueño (CU-10)', async () => {
+    for (const dueno of [false, true]) {
+      TestBed.resetTestingModule();
+      const el = await render(dueno);
+
+      expect(enlaces(el).slice(0, 2)).toEqual(['Mostrador', 'Caja']);
+      expect(el.querySelector('nav a[href="/caja"]')).not.toBeNull();
+    }
   });
 
   it('el Dueño ve Mostrador, Artículos, Rubros, Proveedores y, bajo «Precios», Importar lista, Actualizar precios y Cotización', async () => {
@@ -83,6 +93,7 @@ describe('Shell', () => {
 
     expect(enlaces(el)).toEqual([
       'Mostrador',
+      'Caja',
       'Artículos',
       'Rubros',
       'Proveedores',
@@ -125,7 +136,7 @@ describe('Shell', () => {
   it('el Vendedor no ve "Importar lista", "Actualizar precios" ni el grupo «Precios»', async () => {
     const el = await render(false);
 
-    expect(enlaces(el)).toEqual(['Mostrador', 'Artículos', 'Rubros', 'Proveedores']);
+    expect(enlaces(el)).toEqual(['Mostrador', 'Caja', 'Artículos', 'Rubros', 'Proveedores']);
     expect(el.querySelector('a[href="/actualizacion-masiva"]')).toBeNull();
     expect(el.querySelector('nav .grupo')).toBeNull();
   });

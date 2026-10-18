@@ -23,6 +23,17 @@ export const routes: Routes = [
         title: titulo('Mostrador'),
         loadComponent: () => import('./features/mostrador/mostrador').then((m) => m.Mostrador),
       },
+      // Sin guard de rol: la caja la usan el Vendedor y el Dueño; el historial es del Dueño y el Vendedor ve el aviso de la pantalla.
+      {
+        path: 'caja',
+        title: titulo('Caja'),
+        loadComponent: () => import('./features/caja/caja').then((m) => m.Caja),
+      },
+      {
+        path: 'caja/historial',
+        title: titulo('Historial de cajas'),
+        loadComponent: () => import('./features/caja/historial-cajas').then((m) => m.HistorialCajas),
+      },
       {
         path: 'rubros',
         title: titulo('Rubros'),

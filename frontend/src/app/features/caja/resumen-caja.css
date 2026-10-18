@@ -1,0 +1,54 @@
+:host {
+  display: block;
+}
+
+.resumen h2 {
+  margin-bottom: var(--e-1);
+}
+.resumen h3 {
+  margin: var(--e-4) 0 var(--e-2);
+  font-size: var(--texto-md);
+}
+.quien {
+  margin: 0 0 var(--e-3);
+  color: var(--texto-suave);
+}
+.separador {
+  margin: 0 var(--e-1);
+  color: var(--texto-tenue);
+}
+
+.lineas {
+  display: grid;
+  gap: var(--e-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.lineas li {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--e-3);
+  padding: var(--e-1) 0;
+  border-bottom: 1px solid var(--borde);
+}
+.lineas strong {
+  font-variant-numeric: tabular-nums;
+}
+.lineas .subtotal {
+  font-weight: 700;
+}
+.lineas .nota {
+  color: var(--texto-suave);
+}
+.lineas .diferencia.falta strong {
+  color: var(--error);
+}
+.lineas .diferencia.sobra strong {
+  color: var(--exito);
+}
+
+.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}

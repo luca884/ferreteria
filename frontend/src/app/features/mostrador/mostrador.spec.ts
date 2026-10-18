@@ -4,9 +4,11 @@ import { HttpErrorResponse } from '@angular/common/http';
 import { LOCALE_ID, signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
-import { Subject } from 'rxjs';
+import { Subject, of } from 'rxjs';
 import { vi } from 'vitest';
 import { AuthService } from '../../core/auth/auth.service';
+import { CajaVigente } from '../caja/caja.models';
+import { CajaService } from '../caja/caja.service';
 import { ArticuloMostrador, BusquedaMostrador } from './mostrador.models';
 import { Mostrador } from './mostrador';
 import { MostradorService } from './mostrador.service';
@@ -54,8 +56,16 @@ describe('Mostrador', () => {
   let llamadas: Llamada[];
   let cobros: Cobro[];
   let claves: number;
+  let cajas: { actual: ReturnType<typeof vi.fn> };
 
-  async function crear() {
+  /** CU-10: por defecto la caja está abierta hoy, como la encuentra el vendedor al empezar. */
+  const cajaAbierta: CajaVigente = {
+    estado: 'ABIERTA',
+    caja: { id: 4, estado: 'ABIERTA', fechaApertura: '2026-10-16T08:00:00', abiertaPor: 'Ana', efectivoInicial: 0 },
+    efectivoPropuesto: 0,
+  };
+
+  async function crear(vigente: CajaVigente = cajaAbierta) {
     // jsdom no implementa scrollIntoView.
     Element.prototype.scrollIntoView =
       vi.fn() as unknown as typeof Element.prototype.scrollIntoView;
@@ -76,6 +86,7 @@ describe('Mostrador', () => {
         return respuesta;
       }),
     };
+    cajas = { actual: vi.fn(() => of(vigente)) };
     const sesion = signal({
       userId: 7,
       nombre: 'Ana',
@@ -91,6 +102,7 @@ describe('Mostrador', () => {
         { provide: LOCALE_ID, useValue: 'es-AR' },
         { provide: MostradorService, useValue: servicio },
         { provide: VentaService, useValue: ventas },
+        { provide: CajaService, useValue: cajas },
         { provide: AuthService, useValue: { sesion: sesion.asReadonly() } },
         { provide: GENERAR_CLAVE, useValue: () => `clave-${++claves}` },
       ],
@@ -2250,6 +2262,101 @@ describe('Mostrador', () => {
       await buscarLista([articulo(1), articulo(2)]);
 
       expect(el().querySelector('app-ticket-lista .vacio')).toBeNull();
+    });
+  });
+
+  describe('caja (CU-10)', () => {
+    const exacto = (a: ArticuloMostrador): BusquedaMostrador => ({ tipo: 'EXACTO', items: [a], hayMas: false });
+    const normal = (t: string | null | undefined) => (t ?? '').replace(/\s+/g, ' ').trim();
+    const avisoCaja = () => el().querySelector<HTMLElement>('.aviso-caja');
+    const dialogo = () => el().querySelector<HTMLElement>('[role="dialog"], [role="alertdialog"]');
+    const sinCaja: CajaVigente = { estado: 'SIN_CAJA', caja: null, efectivoPropuesto: 0 };
+    const deAyer: CajaVigente = {
+      estado: 'DE_OTRO_DIA',
+      caja: { id: 3, estado: 'DE_OTRO_DIA', fechaApertura: '2026-10-15T08:00:00', abiertaPor: 'Ana', efectivoInicial: 0 },
+      efectivoPropuesto: 0,
+    };
+
+    async function tecla(key: string) {
+      (document.activeElement as HTMLElement).dispatchEvent(
+        new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }),
+      );
+      await refrescar();
+    }
+
+    async function conUnArticulo(vigente: CajaVigente) {
+      await crear(vigente);
+      await escribir('M');
+      await enter();
+      await responder(llamadas.length - 1, exacto(articulo(1, { precioFinal: 1500 })));
+    }
+
+    it('con la caja abierta hoy no hay aviso de caja y se cobra como siempre', async () => {
+      await conUnArticulo(cajaAbierta);
+
+      expect(avisoCaja()).toBeNull();
+      await tecla('F4');
+      expect(dialogo()).not.toBeNull();
+    });
+
+    it('sin caja abierta avisa «Abrí la caja para vender» con un botón que lleva a abrirla', async () => {
+      await crear(sinCaja);
+
+      expect(normal(avisoCaja()?.textContent)).toContain('Abrí la caja para vender.');
+      const enlace = avisoCaja()!.querySelector<HTMLAnchorElement>('a')!;
+      expect(normal(enlace.textContent)).toBe('Abrir la caja');
+      expect(enlace.getAttribute('href')).toBe('/caja');
+    });
+
+    it('sin caja abierta F4 no abre el cobro: avisa y no manda nada', async () => {
+      await conUnArticulo(sinCaja);
+
+      await tecla('F4');
+
+      expect(dialogo()).toBeNull();
+      expect(cobros).toHaveLength(0);
+      expect(normal(el().querySelector('.aviso')?.textContent)).toBe('Abrí la caja para vender.');
+    });
+
+    it('con la caja de otro día avisa que hay que cerrarla y no deja cobrar', async () => {
+      await conUnArticulo(deAyer);
+
+      expect(normal(avisoCaja()?.textContent)).toContain(
+        'La caja del 15/10 sigue abierta. Cerrala antes de vender.',
+      );
+      expect(normal(avisoCaja()!.querySelector('a')!.textContent)).toBe('Cerrar la caja');
+      await tecla('F4');
+      expect(dialogo()).toBeNull();
+      expect(cobros).toHaveLength(0);
+    });
+
+    it('sin caja el botón Cobrar de la botonera queda deshabilitado', async () => {
+      await conUnArticulo(sinCaja);
+
+      const cobrar = Array.from(el().querySelectorAll<HTMLButtonElement>('app-botonera button')).find((b) =>
+        normal(b.textContent).includes('Cobrar'),
+      )!;
+      expect(cobrar.disabled).toBe(true);
+    });
+
+    it('si el backend rechaza por CAJA_CERRADA, cierra el cobro, conserva el ticket y muestra el aviso de caja', async () => {
+      await conUnArticulo(cajaAbierta);
+      await tecla('F4');
+      await tecla('Enter');
+      cajas.actual.mockReturnValue(of(sinCaja));
+
+      cobros[0].respuesta.error(
+        new HttpErrorResponse({
+          status: 422,
+          error: { status: 422, message: 'Abrí la caja para vender.', motivo: 'CAJA_CERRADA', articulos: [] },
+        }),
+      );
+      await refrescar();
+
+      expect(dialogo()).toBeNull();
+      expect(el().querySelectorAll('app-ticket-lista .descripcion')).toHaveLength(1);
+      expect(normal(el().querySelector('.aviso')?.textContent)).toBe('Abrí la caja para vender.');
+      expect(normal(avisoCaja()?.textContent)).toContain('Abrí la caja para vender.');
     });
   });
 });

@@ -18,6 +18,13 @@
     <span class="pista-codigo" aria-hidden="true">Enter agrega · ↑↓ elige</span>
   </div>
 
+  @if (avisoCaja(); as sinCaja) {
+    <div class="aviso-caja" role="status">
+      <span>{{ sinCaja }}</span>
+      <a class="btn primario" routerLink="/caja">{{ accionCaja() }}</a>
+    </div>
+  }
+
   @if (aviso(); as nota) {
     <p class="aviso" [class.error]="nota.grave" [attr.role]="nota.grave ? 'alert' : 'status'">
       {{ nota.texto }}

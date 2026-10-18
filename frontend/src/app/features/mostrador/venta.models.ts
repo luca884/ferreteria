@@ -67,7 +67,9 @@ export type MotivoRechazo =
   | 'ARTICULO_DADO_DE_BAJA'
   | 'ARTICULO_SIN_PRECIO'
   | 'PRECIOS_CAMBIADOS'
-  | 'CLAVE_CON_OTRO_CONTENIDO';
+  | 'CLAVE_CON_OTRO_CONTENIDO'
+  | 'CAJA_CERRADA'
+  | 'CAJA_DE_OTRO_DIA';
 
 /** Los campos null no se serializan: cada motivo trae solo los que le aplican. */
 export interface ArticuloRechazado {

@@ -26,6 +26,8 @@ const MOTIVOS = [
   'ARTICULO_SIN_PRECIO',
   'PRECIOS_CAMBIADOS',
   'CLAVE_CON_OTRO_CONTENIDO',
+  'CAJA_CERRADA',
+  'CAJA_DE_OTRO_DIA',
 ];
 
 /** El cuerpo de un 404, 409 o 422 de venta, o null si el error es otra cosa (red, 5xx, 400). */
