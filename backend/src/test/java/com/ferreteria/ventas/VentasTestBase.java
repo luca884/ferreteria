@@ -26,7 +26,19 @@ abstract class VentasTestBase extends IntegrationTestBase {
     /** Un renglon del pedido tal como lo manda el mostrador. */
     record Linea(long articuloId, String cantidad, String precio) {}
 
+    /**
+     * Una ferreteria lista para vender: con la caja abierta hoy (CU-10), como la abre el cajero al llegar. Sin caja no se
+     * vende; esa regla la prueban {@code VentaSinCajaIntegrationTest} y {@code CajaIntegrationTest} con
+     * {@link #tiendaSinCaja()}.
+     */
     protected Tienda tienda() {
+        Tienda tienda = tiendaSinCaja();
+        cajaAbiertaHoy(tienda.id());
+        return tienda;
+    }
+
+    /** Una ferreteria recien creada, sin ninguna caja. */
+    protected Tienda tiendaSinCaja() {
         String sufijo = UUID.randomUUID().toString().substring(0, 8);
         String cuit = "30-8%07d-%d".formatted(ThreadLocalRandom.current().nextInt(10_000_000),
                 ThreadLocalRandom.current().nextInt(10));

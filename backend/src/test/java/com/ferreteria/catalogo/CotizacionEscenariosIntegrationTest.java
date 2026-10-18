@@ -54,6 +54,7 @@ class CotizacionEscenariosIntegrationTest extends CotizacionTestBase {
         jdbc.update("delete from cotizacion where moneda = 'USD' and casa = 'oficial'");
         duenoA = login(usuario(a, "dueno-t33a@test.local", "DUENO"));
         vendedorA = login(usuario(a, "vendedor-t33a@test.local", "VENDEDOR"));
+        cajaAbiertaHoy(a); // CU-10: sin caja abierta no se vende
     }
 
     @AfterEach

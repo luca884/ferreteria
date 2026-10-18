@@ -16,7 +16,10 @@ import org.springframework.test.web.servlet.request.MockMultipartHttpServletRequ
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders;
 import org.testcontainers.containers.MySQLContainer;
 
+import com.ferreteria.common.HoraArgentina;
+
 import java.nio.charset.StandardCharsets;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -147,6 +150,29 @@ public abstract class IntegrationTestBase {
         List<String> nombres = new ArrayList<>();
         array.forEach(n -> nombres.add(n.get("nombre").asText()));
         return nombres;
+    }
+
+    /**
+     * Deja la ferreteria con una caja abierta hoy (CU-10: sin caja abierta no se vende), abierta por su primer usuario
+     * con $ 0. Si ya tiene una abierta la deja como esta. Devuelve el id de la caja abierta.
+     */
+    protected long cajaAbiertaHoy(long ferreteriaId) {
+        List<Long> abiertas = jdbc.queryForList(
+                "select id from caja where ferreteria_id = ? and abierta = true", Long.class, ferreteriaId);
+        if (!abiertas.isEmpty()) {
+            return abiertas.get(0);
+        }
+        return cajaAbiertaEl(ferreteriaId, LocalDateTime.now(HoraArgentina.ZONA));
+    }
+
+    /** Inserta una caja abierta en esa fecha y hora (de Buenos Aires): sirve para la caja que quedo abierta de otro dia. */
+    protected long cajaAbiertaEl(long ferreteriaId, LocalDateTime apertura) {
+        Long usuario = jdbc.queryForObject("select min(id) from usuario where ferreteria_id = ?", Long.class,
+                ferreteriaId);
+        jdbc.update("insert into caja (ferreteria_id, abierta, fecha_apertura, usuario_apertura_id, efectivo_inicial) "
+                + "values (?, true, ?, ?, 0.00)", ferreteriaId, apertura, usuario);
+        return jdbc.queryForObject("select id from caja where ferreteria_id = ? and abierta = true", Long.class,
+                ferreteriaId);
     }
 
     /** Prefijo + sufijo aleatorio: codigos y nombres que no chocan con los de otros tests. */

@@ -56,6 +56,10 @@ public class Comprobante {
     @Column(name = "usuario_id", nullable = false, updatable = false)
     private Long usuarioId;
 
+    /** La caja abierta en la que se cobro (CU-10). Null solo en las ventas anteriores a la caja. */
+    @Column(name = "caja_id", updatable = false)
+    private Long cajaId;
+
     @Column(nullable = false, updatable = false)
     private LocalDateTime fecha = HoraArgentina.ahora();
 
@@ -71,8 +75,10 @@ public class Comprobante {
     protected Comprobante() {}
 
     public static Comprobante venta(
-            Long ferreteriaId, long numero, String claveIdempotencia, Long usuarioId, TotalesVenta totales) {
+            Long ferreteriaId, long numero, String claveIdempotencia, Long usuarioId, TotalesVenta totales,
+            Long cajaId) {
         Comprobante comprobante = new Comprobante();
+        comprobante.cajaId = cajaId;
         comprobante.ferreteriaId = ferreteriaId;
         comprobante.tipo = TipoComprobante.VENTA;
         comprobante.estado = EstadoComprobante.SIN_FACTURAR;
@@ -93,6 +99,7 @@ public class Comprobante {
     public String getClaveIdempotencia() { return claveIdempotencia; }
     public Long getClienteId() { return clienteId; }
     public Long getUsuarioId() { return usuarioId; }
+    public Long getCajaId() { return cajaId; }
     public LocalDateTime getFecha() { return fecha; }
     public BigDecimal getNeto() { return neto; }
     public BigDecimal getIva() { return iva; }

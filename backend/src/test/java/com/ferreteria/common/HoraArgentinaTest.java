@@ -49,7 +49,7 @@ class HoraArgentinaTest {
     @DisplayName("la venta y el movimiento de stock se fechan con la hora de Buenos Aires")
     void ventaYMovimiento() {
         TotalesVenta totales = new TotalesVenta(new BigDecimal("121.00"), new BigDecimal("100.00"), new BigDecimal("21.00"));
-        esHoraDeBuenosAires(Comprobante.venta(1L, 1, "clave", 1L, totales).getFecha());
+        esHoraDeBuenosAires(Comprobante.venta(1L, 1, "clave", 1L, totales, null).getFecha());
         esHoraDeBuenosAires(MovimientoStock.ajuste(1L, 1L, BigDecimal.ONE, "Conteo", 1L).getFecha());
     }
 }

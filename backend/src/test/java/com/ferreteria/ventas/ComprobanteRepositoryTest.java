@@ -62,7 +62,7 @@ class ComprobanteRepositoryTest extends IntegrationTestBase {
 
         Long comprobanteId = new TransactionTemplate(transactionManager).execute(status -> {
             Comprobante guardado = comprobanteRepository.save(
-                    Comprobante.venta(e.ferreteriaId(), 7L, CLAVE, e.usuarioId(), totales));
+                    Comprobante.venta(e.ferreteriaId(), 7L, CLAVE, e.usuarioId(), totales, null));
             itemRepository.saveAll(List.of(ItemComprobante.de(e.ferreteriaId(), guardado.getId(), 1, e.articuloId(),
                     "Cable unipolar", "METRO", "IVA_21", renglon)));
             pagoRepository.save(Pago.de(e.ferreteriaId(), guardado.getId(), MedioPago.DEBITO, totales.total()));
@@ -103,7 +103,7 @@ class ComprobanteRepositoryTest extends IntegrationTestBase {
         Escenario b = escenario();
         TotalesVenta totales = TotalesVenta.de(List.of());
         new TransactionTemplate(transactionManager).execute(status ->
-                comprobanteRepository.save(Comprobante.venta(a.ferreteriaId(), 1L, CLAVE, a.usuarioId(), totales)));
+                comprobanteRepository.save(Comprobante.venta(a.ferreteriaId(), 1L, CLAVE, a.usuarioId(), totales, null)));
 
         TenantContext.setCurrentFerreteriaId(a.ferreteriaId());
         assertThat(comprobanteRepository.porClaveScoped(CLAVE)).isPresent();

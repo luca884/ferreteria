@@ -35,6 +35,8 @@ class MigracionV4Test extends IntegrationTestBase {
             Map.entry("comprobante.clave_idempotencia", "varchar(36) NOT NULL"),
             Map.entry("comprobante.cliente_id", "bigint NULL"),
             Map.entry("comprobante.usuario_id", "bigint NOT NULL"),
+            // V10 (CU-10): la caja de la venta; nula en las ventas anteriores a la caja.
+            Map.entry("comprobante.caja_id", "bigint NULL"),
             Map.entry("comprobante.fecha", "datetime(6) NOT NULL"),
             Map.entry("comprobante.neto", "decimal(15,2) NOT NULL"),
             Map.entry("comprobante.iva", "decimal(15,2) NOT NULL"),
@@ -186,12 +188,12 @@ class MigracionV4Test extends IntegrationTestBase {
     }
 
     @Test
-    @DisplayName("no existen caja_id, la tabla cliente ni campos de CAE")
-    void sinCajaClienteNiCae() {
+    @DisplayName("no existen la tabla cliente ni campos de CAE (caja_id llego con V10, CU-10)")
+    void sinClienteNiCae() {
         Integer cajaOCae = jdbc.queryForObject(
                 "select count(*) from information_schema.columns where table_schema = database() "
                         + "and table_name in ('comprobante','item_comprobante','pago','movimiento_stock','numerador_comprobante') "
-                        + "and (column_name = 'caja_id' or column_name like 'cae%')",
+                        + "and column_name like 'cae%'",
                 Integer.class);
         Integer tablaCliente = jdbc.queryForObject(
                 "select count(*) from information_schema.tables where table_schema = database() and table_name = 'cliente'",

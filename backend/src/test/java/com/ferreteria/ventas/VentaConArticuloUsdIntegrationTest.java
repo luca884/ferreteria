@@ -44,6 +44,7 @@ class VentaConArticuloUsdIntegrationTest extends CotizacionTestBase {
         borrarDatosDe(a);
         duenoA = login(usuario(a, "dueno-t50a@test.local", "DUENO"));
         vendedorA = login(usuario(a, "vendedor-t50a@test.local", "VENDEDOR"));
+        cajaAbiertaHoy(a); // CU-10: sin caja abierta no se vende
     }
 
     @AfterEach

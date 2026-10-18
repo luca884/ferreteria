@@ -135,6 +135,10 @@ public abstract class CotizacionTestBase extends IntegrationTestBase {
             jdbc.update("delete from proveedor where ferreteria_id = ?", id);
             jdbc.update("delete from rubro where ferreteria_id = ?", id);
             jdbc.update("delete from configuracion_cotizacion where ferreteria_id = ?", id);
+            // CU-10: la caja apunta a los usuarios; las ventas que quedaran se sueltan de la caja antes de borrarla.
+            jdbc.update("update comprobante set caja_id = null where ferreteria_id = ?", id);
+            jdbc.update("delete from movimiento_caja where ferreteria_id = ?", id);
+            jdbc.update("delete from caja where ferreteria_id = ?", id);
             jdbc.update("delete from usuario where ferreteria_id = ?", id);
         }
     }

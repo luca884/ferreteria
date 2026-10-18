@@ -38,7 +38,7 @@ import java.util.stream.Collectors;
 
 /**
  * Registra una venta en UNA transaccion (C-008). Primero valida todo sin escribir nada (R-007 a R-010) y
- * recien despues escribe, siempre en el mismo orden de locks: numerador, cabecera, articulos por id
+ * recien despues escribe, siempre en el mismo orden de locks: caja abierta (compartido, CU-10), numerador, cabecera, articulos por id
  * ascendente, y al final los hijos. El que llama (VentaService) no tiene transaccion: resuelve la carrera de
  * la clave y reintenta los deadlocks.
  */
@@ -53,17 +53,20 @@ public class RegistroVenta {
     private final ItemComprobanteRepository itemRepository;
     private final PagoRepository pagoRepository;
     private final NumeradorComprobanteRepository numeradorRepository;
+    private final CajaService cajaService;
 
     public RegistroVenta(
             ArticulosParaVenta articulosParaVenta, StockService stockService,
             ComprobanteRepository comprobanteRepository, ItemComprobanteRepository itemRepository,
-            PagoRepository pagoRepository, NumeradorComprobanteRepository numeradorRepository) {
+            PagoRepository pagoRepository, NumeradorComprobanteRepository numeradorRepository,
+            CajaService cajaService) {
         this.articulosParaVenta = articulosParaVenta;
         this.stockService = stockService;
         this.comprobanteRepository = comprobanteRepository;
         this.itemRepository = itemRepository;
         this.pagoRepository = pagoRepository;
         this.numeradorRepository = numeradorRepository;
+        this.cajaService = cajaService;
     }
 
     @Transactional
@@ -76,6 +79,10 @@ public class RegistroVenta {
             return yaRegistrada.get();
         }
 
+        // CU-10: sin caja abierta del dia no se vende. Va despues de la repetida (la venta ya hecha se devuelve igual
+        // aunque la caja se haya cerrado) y antes de mirar los articulos. Toma la caja compartida antes del numerador.
+        Long cajaId = cajaService.cajaParaVender();
+
         Map<Long, ArticuloVendible> articulos = validar(pedido);
 
         List<RenglonVenta> calculados = new ArrayList<>();
@@ -87,7 +94,7 @@ public class RegistroVenta {
 
         long numero = numeradorRepository.siguienteScoped();
         Comprobante comprobante = comprobanteRepository.save(
-                Comprobante.venta(ferreteriaId, numero, pedido.clave(), usuarioId, totales));
+                Comprobante.venta(ferreteriaId, numero, pedido.clave(), usuarioId, totales, cajaId));
 
         List<SalidaStock> salidas = pedido.renglones().stream()
                 .map(r -> new SalidaStock(r.articuloId(), r.cantidad()))

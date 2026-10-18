@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -31,6 +32,7 @@ import com.ferreteria.ventas.repository.ComprobanteRepository;
 import com.ferreteria.ventas.repository.ItemComprobanteRepository;
 import com.ferreteria.ventas.repository.NumeradorComprobanteRepository;
 import com.ferreteria.ventas.repository.PagoRepository;
+import com.ferreteria.ventas.service.CajaService;
 import com.ferreteria.ventas.service.ConfirmarVenta;
 import com.ferreteria.ventas.service.ConfirmarVenta.Renglon;
 import com.ferreteria.ventas.service.RegistroVenta;
@@ -81,14 +83,21 @@ class RegistroVentaTest {
     @Mock
     NumeradorComprobanteRepository numeradorRepository;
 
+    @Mock
+    CajaService cajaService;
+
     RegistroVenta registro;
+
+    static final Long CAJA = 77L;
 
     @BeforeEach
     void preparar() {
         TenantContext.setCurrentFerreteriaId(FERRETERIA);
         registro = new RegistroVenta(
                 articulosParaVenta, stockService, comprobanteRepository, itemRepository, pagoRepository,
-                numeradorRepository);
+                numeradorRepository, cajaService);
+        // CU-10: por defecto hay caja abierta hoy. Lenient: los rechazos previos a la caja no la consultan.
+        lenient().when(cajaService.cajaParaVender()).thenReturn(CAJA);
     }
 
     @AfterEach
@@ -131,6 +140,34 @@ class RegistroVentaTest {
         Throwable error = org.assertj.core.api.Assertions.catchThrowable(() -> registro.registrar(pedido, USUARIO));
         assertThat(error).isInstanceOf(VentaRechazadaException.class);
         return (VentaRechazadaException) error;
+    }
+
+    // ---------------------------------------------------------------- CU-10: caja
+
+    @Test
+    @DisplayName("sin caja abierta la venta se rechaza (CAJA_CERRADA) antes de consultar el catalogo y sin escribir")
+    void sinCajaAbierta() {
+        when(comprobanteRepository.porClaveScoped(CLAVE)).thenReturn(Optional.empty());
+        when(cajaService.cajaParaVender()).thenThrow(
+                new VentaRechazadaException(Motivo.CAJA_CERRADA, "Abrí la caja para vender.", List.of()));
+
+        VentaRechazadaException e = rechazo(pedido("10.00", MedioPago.EFECTIVO, renglon(1L, "1", "10.00")));
+
+        assertThat(e.motivo()).isEqualTo(Motivo.CAJA_CERRADA);
+        assertThat(e.motivo().estadoHttp()).isEqualTo(422);
+        verifyNoInteractions(articulosParaVenta);
+        assertSinEscrituras();
+    }
+
+    @Test
+    @DisplayName("la venta queda en la caja abierta")
+    void ventaEnLaCaja() {
+        catalogoC1C3();
+        escrituraLista(Map.of());
+
+        VentaRegistrada venta = registro.registrar(ventaC1C3(MedioPago.EFECTIVO), USUARIO);
+
+        assertThat(venta.comprobante().getCajaId()).isEqualTo(CAJA);
     }
 
     // ---------------------------------------------------------------- T-12: validaciones
@@ -543,7 +580,7 @@ class RegistroVentaTest {
 
     Comprobante ventaGuardada() {
         Comprobante c = Comprobante.venta(FERRETERIA, NUMERO, CLAVE, USUARIO,
-                TotalesVenta.de(List.of(RenglonVenta.de(bd("1210.00"), bd("3"), bd("21.00")))));
+                TotalesVenta.de(List.of(RenglonVenta.de(bd("1210.00"), bd("3"), bd("21.00")))), CAJA);
         ReflectionTestUtils.setField(c, "id", COMPROBANTE);
         return c;
     }

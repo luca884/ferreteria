@@ -42,7 +42,8 @@ public class GlobalExceptionHandler {
             "moneda", "La moneda no es válida. Usá ARS o USD.",
             "medioPago", "El medio de pago no es válido. Usá EFECTIVO, DEBITO, CREDITO o TRANSFERENCIA.",
             "motivo", "El motivo no es válido. Usá INGRESO_MERCADERIA, ROTURA, CONTEO u OTRO.",
-            "modo", "El modo no es válido. Usá STOCK_REAL o CANTIDAD.");
+            "modo", "El modo no es válido. Usá STOCK_REAL o CANTIDAD.",
+            "tipo", "El tipo de movimiento no es válido. Usá INGRESO, GASTO o RETIRO.");
 
     private static final Pattern BONIFICACION = Pattern.compile("bonificacion([123])");
 

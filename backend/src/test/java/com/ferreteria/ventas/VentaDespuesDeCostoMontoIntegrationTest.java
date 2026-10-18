@@ -48,6 +48,7 @@ class VentaDespuesDeCostoMontoIntegrationTest extends CotizacionTestBase {
         });
         dueno = login(usuario(f, "dueno-t236@test.local", "DUENO"));
         vendedor = login(usuario(f, "vendedor-t236@test.local", "VENDEDOR"));
+        cajaAbiertaHoy(f); // CU-10: sin caja abierta no se vende
     }
 
     @AfterEach

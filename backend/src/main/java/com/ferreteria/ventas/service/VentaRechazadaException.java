@@ -4,7 +4,8 @@ import java.math.BigDecimal;
 import java.util.List;
 
 /**
- * La venta no se hizo por algo del ticket que el cajero puede corregir (R-008, R-009, R-010, R-011). Lleva el
+ * La venta no se hizo por algo del ticket que el cajero puede corregir (R-008, R-009, R-010, R-011) o porque no hay
+ * caja abierta del dia (CU-10). Lleva el
  * motivo, su estado HTTP, el mensaje para el usuario y los articulos involucrados. Ningun rechazo guarda
  * nada ni consume la clave de idempotencia.
  */
@@ -18,7 +19,11 @@ public class VentaRechazadaException extends RuntimeException {
         ARTICULO_SIN_PRECIO(422),
         PRECIOS_CAMBIADOS(409),
         /** La misma clave ya registro otra venta, con otros datos. */
-        CLAVE_CON_OTRO_CONTENIDO(422);
+        CLAVE_CON_OTRO_CONTENIDO(422),
+        /** CU-10: no hay caja abierta en la ferreteria. */
+        CAJA_CERRADA(422),
+        /** CU-10: la caja abierta es de un dia anterior; hay que cerrarla y abrir otra. */
+        CAJA_DE_OTRO_DIA(422);
 
         private final int estadoHttp;
 

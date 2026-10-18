@@ -57,6 +57,7 @@ class VentaConArticuloImportadoEnUsdIntegrationTest extends CotizacionTestBase {
         });
         dueno = login(usuario(ferreteria, "dueno-t83v@test.local", "DUENO"));
         vendedor = login(usuario(ferreteria, "vendedor-t83v@test.local", "VENDEDOR"));
+        cajaAbiertaHoy(ferreteria); // CU-10: sin caja abierta no se vende
         usd = importarArticuloEnDolares();
     }
 
