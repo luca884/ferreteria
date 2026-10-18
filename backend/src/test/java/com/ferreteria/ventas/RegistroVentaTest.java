@@ -22,6 +22,7 @@ import com.ferreteria.tenant.MissingTenantException;
 import com.ferreteria.tenant.TenantContext;
 import com.ferreteria.ventas.model.Comprobante;
 import com.ferreteria.ventas.model.EstadoComprobante;
+import com.ferreteria.ventas.model.FormaPago;
 import com.ferreteria.ventas.model.ItemComprobante;
 import com.ferreteria.ventas.model.MedioPago;
 import com.ferreteria.ventas.model.Pago;
@@ -29,6 +30,7 @@ import com.ferreteria.ventas.model.RenglonVenta;
 import com.ferreteria.ventas.model.TipoComprobante;
 import com.ferreteria.ventas.model.TotalesVenta;
 import com.ferreteria.ventas.repository.ComprobanteRepository;
+import com.ferreteria.ventas.repository.FormaPagoRepository;
 import com.ferreteria.ventas.repository.ItemComprobanteRepository;
 import com.ferreteria.ventas.repository.NumeradorComprobanteRepository;
 import com.ferreteria.ventas.repository.PagoRepository;
@@ -86,18 +88,31 @@ class RegistroVentaTest {
     @Mock
     CajaService cajaService;
 
+    @Mock
+    FormaPagoRepository formaPagoRepository;
+
     RegistroVenta registro;
 
     static final Long CAJA = 77L;
+
+    /** Las formas de la ferreteria de prueba, por id: una por medio, activas y sin recargo (cada test las cambia). */
+    final Map<Long, FormaPago> formasEnLaBase = new java.util.HashMap<>();
 
     @BeforeEach
     void preparar() {
         TenantContext.setCurrentFerreteriaId(FERRETERIA);
         registro = new RegistroVenta(
                 articulosParaVenta, stockService, comprobanteRepository, itemRepository, pagoRepository,
-                numeradorRepository, cajaService);
+                numeradorRepository, cajaService, formaPagoRepository);
         // CU-10: por defecto hay caja abierta hoy. Lenient: los rechazos previos a la caja no la consultan.
         lenient().when(cajaService.cajaParaVender()).thenReturn(CAJA);
+        for (MedioPago medio : MedioPago.values()) {
+            formasEnLaBase.put(formaId(medio), forma(medio, "0.00", true));
+        }
+        lenient().when(formaPagoRepository.porIdsScoped(anyCollection())).thenAnswer(inv -> {
+            Collection<Long> ids = inv.getArgument(0);
+            return ids.stream().map(formasEnLaBase::get).filter(java.util.Objects::nonNull).toList();
+        });
     }
 
     @AfterEach
@@ -122,8 +137,33 @@ class RegistroVentaTest {
         return new Renglon(articuloId, bd(cantidad), bd(precio));
     }
 
+    /** El id de la forma de siempre de cada medio: Efectivo 1, Debito 2, Credito 3, Transferencia 4. */
+    static Long formaId(MedioPago medio) {
+        return medio == null ? null : (long) medio.ordinal() + 1;
+    }
+
+    static FormaPago forma(MedioPago medio, String recargo, boolean activa) {
+        FormaPago forma = FormaPago.de(FERRETERIA, nombreDe(medio), medio, bd(recargo), activa, medio.ordinal() + 1);
+        ReflectionTestUtils.setField(forma, "id", formaId(medio));
+        return forma;
+    }
+
+    static String nombreDe(MedioPago medio) {
+        return switch (medio) {
+            case EFECTIVO -> "Efectivo";
+            case DEBITO -> "Débito";
+            case CREDITO -> "Crédito";
+            case TRANSFERENCIA -> "Transferencia";
+        };
+    }
+
+    /** Un pago ya guardado con la forma de siempre de ese medio, sin recargo. */
+    Pago pagoGuardado(MedioPago medio, String monto) {
+        return Pago.de(FERRETERIA, COMPROBANTE, formasEnLaBase.get(formaId(medio)), bd(monto), BigDecimal.ZERO);
+    }
+
     static ConfirmarVenta pedido(String total, MedioPago medio, Renglon... renglones) {
-        return new ConfirmarVenta(CLAVE, List.of(renglones), bd(total), medio);
+        return new ConfirmarVenta(CLAVE, List.of(renglones), bd(total), formaId(medio));
     }
 
     void catalogoDevuelve(ArticuloVendible... articulos) {
@@ -382,14 +422,14 @@ class RegistroVentaTest {
     }
 
     @Test
-    @DisplayName("sin medio de pago da 400 en el campo medioPago")
-    void sinMedioDePago() {
+    @DisplayName("sin forma de pago ni lista de pagos da 400 en el campo formaPagoId")
+    void sinFormaDePago() {
         catalogoDevuelve(tornillo(1L, "10.00"));
         when(comprobanteRepository.porClaveScoped(CLAVE)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> registro.registrar(pedido("10.00", null, renglon(1L, "1", "10.00")), USUARIO))
                 .isInstanceOfSatisfying(DatosInvalidosException.class, e -> assertThat(e.errors())
-                        .containsKey("medioPago"));
+                        .containsEntry("formaPagoId", "Elegí una forma de pago."));
         assertSinEscrituras();
     }
 
@@ -436,6 +476,11 @@ class RegistroVentaTest {
         when(stockService.registrarVenta(eq(COMPROBANTE), eq(USUARIO), any())).thenReturn(stockResultante);
         when(itemRepository.saveAll(any())).thenAnswer(inv -> inv.getArgument(0));
         when(pagoRepository.save(any(Pago.class))).thenAnswer(inv -> inv.getArgument(0));
+    }
+
+    /** Las formas como las ve el servicio: la de ese medio, con su recargo. */
+    void conRecargo(MedioPago medio, String recargo) {
+        formasEnLaBase.put(formaId(medio), forma(medio, recargo, true));
     }
 
     /** C1 (3 u a 1.210,00) y C3 (2,5 m a 333,33): total 4.463,33. */
@@ -546,10 +591,10 @@ class RegistroVentaTest {
     // ---- pago mixto (GDS-07)
 
     static ConfirmarVenta.PagoPedido pagoDe(MedioPago medio, String monto) {
-        return new ConfirmarVenta.PagoPedido(medio, bd(monto));
+        return new ConfirmarVenta.PagoPedido(formaId(medio), bd(monto));
     }
 
-    /** El ticket C1 + C3 (4.463,33) pagado con la lista de pagos y sin medio unico. */
+    /** El ticket C1 + C3 (4.463,33) pagado con la lista de pagos y sin forma unica. */
     ConfirmarVenta ventaC1C3Mixta(ConfirmarVenta.PagoPedido... pagos) {
         return new ConfirmarVenta(CLAVE, List.of(renglon(1L, "3", "1210.00"), renglon(2L, "2.5", "333.33")),
                 bd("4463.33"), null, BigDecimal.ZERO, List.of(pagos));
@@ -603,29 +648,29 @@ class RegistroVentaTest {
     }
 
     @Test
-    @DisplayName("un medio repetido en los pagos da 400 en el pago repetido")
-    void medioRepetido() {
+    @DisplayName("una forma repetida en los pagos da 400 en el pago repetido")
+    void formaRepetida() {
         catalogoC1C3();
 
         assertThatThrownBy(() -> registro.registrar(ventaC1C3Mixta(
                 pagoDe(MedioPago.EFECTIVO, "1000.00"), pagoDe(MedioPago.EFECTIVO, "3463.33")), USUARIO))
                 .isInstanceOfSatisfying(DatosInvalidosException.class, e -> assertThat(e.errors())
-                        .containsEntry("pagos[1].medio", "Cada medio de pago va una sola vez."));
+                        .containsEntry("pagos[1].formaPagoId", "Cada forma de pago va una sola vez."));
         assertSinEscrituras();
     }
 
     @Test
-    @DisplayName("mandar el medio unico y la lista de pagos juntos da 400")
-    void medioUnicoYListaJuntos() {
+    @DisplayName("mandar la forma unica y la lista de pagos juntas da 400")
+    void formaUnicaYListaJuntas() {
         catalogoC1C3();
 
         ConfirmarVenta ambos = new ConfirmarVenta(CLAVE,
                 List.of(renglon(1L, "3", "1210.00"), renglon(2L, "2.5", "333.33")), bd("4463.33"),
-                MedioPago.EFECTIVO, BigDecimal.ZERO, List.of(pagoDe(MedioPago.EFECTIVO, "4463.33")));
+                formaId(MedioPago.EFECTIVO), BigDecimal.ZERO, List.of(pagoDe(MedioPago.EFECTIVO, "4463.33")));
 
         assertThatThrownBy(() -> registro.registrar(ambos, USUARIO))
                 .isInstanceOfSatisfying(DatosInvalidosException.class, e -> assertThat(e.errors())
-                        .containsEntry("pagos", "Mandá un solo medio de pago o la lista de pagos, no los dos."));
+                        .containsEntry("pagos", "Mandá una sola forma de pago o la lista de pagos, no las dos."));
         assertSinEscrituras();
     }
 
@@ -662,8 +707,7 @@ class RegistroVentaTest {
         when(comprobanteRepository.porClaveScoped(CLAVE)).thenReturn(Optional.of(ventaGuardadaC1C3()));
         when(itemRepository.deComprobanteScoped(COMPROBANTE)).thenReturn(itemsGuardadosC1C3());
         when(pagoRepository.deComprobanteScoped(COMPROBANTE)).thenReturn(List.of(
-                Pago.de(FERRETERIA, COMPROBANTE, MedioPago.EFECTIVO, bd("1000.00")),
-                Pago.de(FERRETERIA, COMPROBANTE, MedioPago.DEBITO, bd("3463.33"))));
+                pagoGuardado(MedioPago.EFECTIVO, "1000.00"), pagoGuardado(MedioPago.DEBITO, "3463.33")));
 
         VentaRegistrada igual = registro.registrar(ventaC1C3Mixta(
                 pagoDe(MedioPago.DEBITO, "3463.33"), pagoDe(MedioPago.EFECTIVO, "1000.00")), USUARIO);
@@ -700,7 +744,7 @@ class RegistroVentaTest {
     /** 2 u a 100,00 con 10 % en el renglon y 10 % global: 200 -> 180 -> 162. */
     ConfirmarVenta ventaConDescuentos(String total) {
         return new ConfirmarVenta(CLAVE, List.of(new Renglon(1L, bd("2"), bd("100.00"), bd("10.00"))), bd(total),
-                MedioPago.EFECTIVO, bd("10.00"));
+                formaId(MedioPago.EFECTIVO), bd("10.00"));
     }
 
     void catalogoDe100() {
@@ -770,10 +814,10 @@ class RegistroVentaTest {
 
         Throwable delRenglon = org.assertj.core.api.Assertions.catchThrowable(() -> registro.registrar(
                 new ConfirmarVenta(CLAVE, List.of(new Renglon(1L, bd("1"), bd("100.00"), bd("100.00"))), bd("0.00"),
-                        MedioPago.EFECTIVO, BigDecimal.ZERO), USUARIO));
+                        formaId(MedioPago.EFECTIVO), BigDecimal.ZERO), USUARIO));
         Throwable global = org.assertj.core.api.Assertions.catchThrowable(() -> registro.registrar(
                 new ConfirmarVenta(CLAVE, List.of(new Renglon(1L, bd("1"), bd("100.00"))), bd("100.00"),
-                        MedioPago.EFECTIVO, bd("-1")), USUARIO));
+                        formaId(MedioPago.EFECTIVO), bd("-1")), USUARIO));
 
         assertThat(delRenglon).isInstanceOf(DatosInvalidosException.class);
         assertThat(((DatosInvalidosException) delRenglon).errors()).containsKey("renglones[0].descuentoPorcentaje");
@@ -794,15 +838,15 @@ class RegistroVentaTest {
         when(comprobanteRepository.porClaveScoped(CLAVE)).thenReturn(Optional.of(comprobante));
         when(itemRepository.deComprobanteScoped(COMPROBANTE)).thenReturn(List.of(item));
         when(pagoRepository.deComprobanteScoped(COMPROBANTE))
-                .thenReturn(List.of(Pago.de(FERRETERIA, COMPROBANTE, MedioPago.EFECTIVO, bd("162.00"))));
+                .thenReturn(List.of(pagoGuardado(MedioPago.EFECTIVO, "162.00")));
 
         assertThat(registro.registrar(ventaConDescuentos("162.00"), USUARIO).repetida()).isTrue();
 
         ConfirmarVenta otroGlobal = new ConfirmarVenta(CLAVE,
-                List.of(new Renglon(1L, bd("2"), bd("100.00"), bd("10.00"))), bd("162.00"), MedioPago.EFECTIVO,
+                List.of(new Renglon(1L, bd("2"), bd("100.00"), bd("10.00"))), bd("162.00"), formaId(MedioPago.EFECTIVO),
                 bd("5.00"));
         ConfirmarVenta otroDelRenglon = new ConfirmarVenta(CLAVE,
-                List.of(new Renglon(1L, bd("2"), bd("100.00"), bd("5.00"))), bd("162.00"), MedioPago.EFECTIVO,
+                List.of(new Renglon(1L, bd("2"), bd("100.00"), bd("5.00"))), bd("162.00"), formaId(MedioPago.EFECTIVO),
                 bd("10.00"));
         for (ConfirmarVenta otro : List.of(otroGlobal, otroDelRenglon)) {
             assertThat(rechazo(otro).motivo()).isEqualTo(Motivo.CLAVE_CON_OTRO_CONTENIDO);
@@ -861,7 +905,7 @@ class RegistroVentaTest {
         when(comprobanteRepository.porClaveScoped(CLAVE)).thenReturn(Optional.of(ventaGuardada()));
         when(itemRepository.deComprobanteScoped(COMPROBANTE)).thenReturn(List.of(itemGuardado()));
         when(pagoRepository.deComprobanteScoped(COMPROBANTE))
-                .thenReturn(List.of(Pago.de(FERRETERIA, COMPROBANTE, MedioPago.EFECTIVO, bd("3630.00"))));
+                .thenReturn(List.of(pagoGuardado(MedioPago.EFECTIVO, "3630.00")));
     }
 
     void assertNadaNuevo() {
@@ -942,5 +986,173 @@ class RegistroVentaTest {
         assertThatThrownBy(() -> registro.repetida(pedido("3630.00", MedioPago.CREDITO, renglon(1L, "3", "1210.00"))))
                 .isInstanceOfSatisfying(VentaRechazadaException.class,
                         e -> assertThat(e.motivo()).isEqualTo(Motivo.CLAVE_CON_OTRO_CONTENIDO));
+    }
+
+    // ---- recargo de la forma de pago (GDS-11)
+
+    /** El C1 + C3 (4.463,33) pagado entero con credito al 10 %: recargo 446,33 y total 4.909,66. */
+    ConfirmarVenta ventaC1C3ConCredito10(String totalMostrado) {
+        return new ConfirmarVenta(CLAVE, List.of(renglon(1L, "3", "1210.00"), renglon(2L, "2.5", "333.33")),
+                bd(totalMostrado), formaId(MedioPago.CREDITO));
+    }
+
+    @Test
+    @DisplayName("una forma con recargo suma el recargo al total, lo reparte entre los renglones y lo guarda en el pago")
+    void formaConRecargo() {
+        catalogoC1C3();
+        escrituraLista(Map.of());
+        conRecargo(MedioPago.CREDITO, "10.00");
+
+        VentaRegistrada venta = registro.registrar(ventaC1C3ConCredito10("4909.66"), USUARIO);
+
+        assertThat(venta.comprobante().getTotal()).isEqualByComparingTo("4909.66");
+        assertThat(venta.comprobante().getRecargo()).isEqualByComparingTo("446.33");
+        assertThat(venta.comprobante().getSubtotal()).isEqualByComparingTo("4463.33");
+        assertThat(venta.items()).extracting(ItemComprobante::getRecargo)
+                .usingElementComparator(BigDecimal::compareTo).containsExactly(bd("363.00"), bd("83.33"));
+        assertThat(venta.items()).extracting(ItemComprobante::getTotal)
+                .usingElementComparator(BigDecimal::compareTo).containsExactly(bd("3993.00"), bd("916.66"));
+        assertThat(venta.pagos()).hasSize(1);
+        Pago pago = venta.pagos().get(0);
+        assertThat(pago.getFormaPagoId()).isEqualTo(formaId(MedioPago.CREDITO));
+        assertThat(pago.getFormaPagoNombre()).isEqualTo("Crédito");
+        assertThat(pago.getMedio()).isEqualTo(MedioPago.CREDITO);
+        assertThat(pago.getRecargoPorcentaje()).isEqualByComparingTo("10.00");
+        assertThat(pago.getRecargo()).isEqualByComparingTo("446.33");
+        assertThat(pago.getMonto()).isEqualByComparingTo("4909.66");
+        assertThat(pago.getParte()).isEqualByComparingTo("4463.33");
+    }
+
+    @Test
+    @DisplayName("el total sin el recargo es un 409 con el total que incluye el recargo")
+    void totalSinRecargoEsPreciosCambiados() {
+        catalogoC1C3();
+        when(comprobanteRepository.porClaveScoped(CLAVE)).thenReturn(Optional.empty());
+        conRecargo(MedioPago.CREDITO, "10.00");
+
+        VentaRechazadaException e = rechazo(ventaC1C3ConCredito10("4463.33"));
+
+        assertThat(e.motivo()).isEqualTo(Motivo.PRECIOS_CAMBIADOS);
+        assertThat(e.total()).isEqualByComparingTo("4909.66");
+        assertThat(e.articulos()).isEmpty();
+        assertSinEscrituras();
+    }
+
+    @Test
+    @DisplayName("en el pago mixto el recargo va solo sobre la parte de la forma que lo tiene")
+    void pagoMixtoConRecargoEnUnaParte() {
+        catalogoC1C3();
+        escrituraLista(Map.of());
+        conRecargo(MedioPago.CREDITO, "10.00");
+        ConfirmarVenta pedido = new ConfirmarVenta(CLAVE,
+                List.of(renglon(1L, "3", "1210.00"), renglon(2L, "2.5", "333.33")), bd("4809.66"), null,
+                BigDecimal.ZERO, List.of(pagoDe(MedioPago.EFECTIVO, "1000.00"), pagoDe(MedioPago.CREDITO, "3463.33")));
+
+        VentaRegistrada venta = registro.registrar(pedido, USUARIO);
+
+        assertThat(venta.comprobante().getTotal()).isEqualByComparingTo("4809.66");
+        assertThat(venta.comprobante().getRecargo()).isEqualByComparingTo("346.33");
+        assertThat(venta.pagos()).extracting(Pago::getMonto).usingElementComparator(BigDecimal::compareTo)
+                .containsExactly(bd("1000.00"), bd("3809.66"));
+        assertThat(venta.pagos()).extracting(Pago::getRecargo).usingElementComparator(BigDecimal::compareTo)
+                .containsExactly(bd("0.00"), bd("346.33"));
+        assertThat(venta.items().stream().map(ItemComprobante::getRecargo).reduce(BigDecimal.ZERO, BigDecimal::add))
+                .isEqualByComparingTo("346.33");
+    }
+
+    @Test
+    @DisplayName("las partes que no suman el total sin recargo dan 400 en pagos, aunque el recargo cambie el total")
+    void partesQueNoSumanConRecargo() {
+        catalogoC1C3();
+        conRecargo(MedioPago.CREDITO, "10.00");
+        ConfirmarVenta pedido = new ConfirmarVenta(CLAVE,
+                List.of(renglon(1L, "3", "1210.00"), renglon(2L, "2.5", "333.33")), bd("4763.33"), null,
+                BigDecimal.ZERO, List.of(pagoDe(MedioPago.EFECTIVO, "1000.00"), pagoDe(MedioPago.CREDITO, "3000.00")));
+
+        assertThatThrownBy(() -> registro.registrar(pedido, USUARIO))
+                .isInstanceOfSatisfying(DatosInvalidosException.class, e -> assertThat(e.errors())
+                        .containsEntry("pagos", "Los pagos tienen que sumar el total de la venta."));
+        assertSinEscrituras();
+    }
+
+    @Test
+    @DisplayName("una forma que no existe, es de otra ferreteria o esta inactiva da 400 «no es válida» en su campo")
+    void formaNoValida() {
+        catalogoC1C3();
+        when(comprobanteRepository.porClaveScoped(CLAVE)).thenReturn(Optional.empty());
+
+        ConfirmarVenta inexistente = new ConfirmarVenta(CLAVE,
+                List.of(renglon(1L, "3", "1210.00"), renglon(2L, "2.5", "333.33")), bd("4463.33"), 999L);
+        assertThatThrownBy(() -> registro.registrar(inexistente, USUARIO))
+                .isInstanceOfSatisfying(DatosInvalidosException.class, e -> assertThat(e.errors())
+                        .containsEntry("formaPagoId", "La forma de pago no es válida."));
+
+        formasEnLaBase.put(formaId(MedioPago.DEBITO), forma(MedioPago.DEBITO, "0.00", false));
+        assertThatThrownBy(() -> registro.registrar(ventaC1C3(MedioPago.DEBITO), USUARIO))
+                .isInstanceOfSatisfying(DatosInvalidosException.class, e -> assertThat(e.errors())
+                        .containsEntry("formaPagoId", "La forma de pago no es válida."));
+
+        ConfirmarVenta enLaLista = ventaC1C3Mixta(pagoDe(MedioPago.EFECTIVO, "1000.00"),
+                new ConfirmarVenta.PagoPedido(999L, bd("3463.33")));
+        assertThatThrownBy(() -> registro.registrar(enLaLista, USUARIO))
+                .isInstanceOfSatisfying(DatosInvalidosException.class, e -> assertThat(e.errors())
+                        .containsEntry("pagos[1].formaPagoId", "La forma de pago no es válida."));
+        assertSinEscrituras();
+    }
+
+    @Test
+    @DisplayName("un total que con el recargo pasa el maximo da 400 en totalMostrado, no un 409 sin salida")
+    void totalConRecargoMuyGrande() {
+        catalogoDevuelve(vendible(1L, "Oro", "UNIDAD", "9000000000000.00", true));
+        when(comprobanteRepository.porClaveScoped(CLAVE)).thenReturn(Optional.empty());
+        conRecargo(MedioPago.CREDITO, "200.00");
+
+        assertThatThrownBy(() -> registro.registrar(pedido("9000000000000.00", MedioPago.CREDITO,
+                renglon(1L, "1", "9000000000000.00")), USUARIO))
+                .isInstanceOfSatisfying(DatosInvalidosException.class, e -> assertThat(e.errors())
+                        .containsKey("totalMostrado"));
+        assertSinEscrituras();
+    }
+
+    /** La venta C1 + C3 ya guardada con credito al 10 %: recargo 446,33, total 4.909,66. */
+    void ventaYaGuardadaConCredito() {
+        List<RenglonVenta> sinRecargo = List.of(RenglonVenta.de(bd("1210.00"), bd("3"), bd("21.00")),
+                RenglonVenta.de(bd("333.33"), bd("2.5"), bd("21.00")));
+        List<RenglonVenta> repartidos = com.ferreteria.ventas.model.RecargoVenta.repartir(sinRecargo, bd("446.33"));
+        Comprobante c = Comprobante.venta(FERRETERIA, NUMERO, CLAVE, USUARIO, TotalesVenta.de(repartidos), CAJA);
+        ReflectionTestUtils.setField(c, "id", COMPROBANTE);
+        when(comprobanteRepository.porClaveScoped(CLAVE)).thenReturn(Optional.of(c));
+        when(itemRepository.deComprobanteScoped(COMPROBANTE)).thenReturn(List.of(
+                ItemComprobante.de(FERRETERIA, COMPROBANTE, 1, 1L, "Tornillo 1/4", "UNIDAD", "IVA_21", repartidos.get(0)),
+                ItemComprobante.de(FERRETERIA, COMPROBANTE, 2, 2L, "Cable 2,5 mm", "METRO", "IVA_21",
+                        repartidos.get(1))));
+        conRecargo(MedioPago.CREDITO, "10.00");
+        when(pagoRepository.deComprobanteScoped(COMPROBANTE)).thenReturn(List.of(
+                Pago.de(FERRETERIA, COMPROBANTE, formasEnLaBase.get(formaId(MedioPago.CREDITO)), bd("4463.33"),
+                        bd("446.33"))));
+    }
+
+    @Test
+    @DisplayName("repetir una venta con recargo: mismo pedido es la misma venta; otra forma o el total sin recargo, CLAVE_CON_OTRO_CONTENIDO")
+    void repetidaConRecargo() {
+        ventaYaGuardadaConCredito();
+
+        VentaRegistrada igual = registro.registrar(ventaC1C3ConCredito10("4909.66"), USUARIO);
+        assertThat(igual.repetida()).isTrue();
+
+        // el cobro entre dos pagos de la misma venta cuenta por la parte sin recargo: otra forma es otro contenido
+        for (ConfirmarVenta otro : List.of(ventaC1C3(MedioPago.DEBITO), ventaC1C3ConCredito10("4463.33"))) {
+            assertThat(rechazo(otro).motivo()).isEqualTo(Motivo.CLAVE_CON_OTRO_CONTENIDO);
+        }
+        assertNadaNuevo();
+    }
+
+    @Test
+    @DisplayName("repetir una venta cuya forma se desactivo despues devuelve la venta original: ya esta confirmada")
+    void repetidaConLaFormaDesactivada() {
+        ventaYaGuardadaConCredito();
+        formasEnLaBase.put(formaId(MedioPago.CREDITO), forma(MedioPago.CREDITO, "10.00", false));
+
+        assertThat(registro.registrar(ventaC1C3ConCredito10("4909.66"), USUARIO).repetida()).isTrue();
     }
 }

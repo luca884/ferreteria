@@ -71,6 +71,16 @@ public abstract class IntegrationTestBase {
         return objectMapper.readTree(body).get("token").asText();
     }
 
+    /** El id de la forma de pago de siempre de ese medio, de la ferreteria del token (la lista el servicio si hace falta). */
+    protected long formaDePago(String token, String medio) throws Exception {
+        for (JsonNode forma : getJson("/api/formas-pago", token)) {
+            if (forma.get("medio").asText().equals(medio)) {
+                return forma.get("id").asLong();
+            }
+        }
+        throw new AssertionError("La ferreteria no tiene una forma de pago en " + medio);
+    }
+
     /** GET que espera 200 y devuelve el cuerpo como JSON. */
     protected JsonNode getJson(String url, String token) throws Exception {
         // UTF-8 explicito: sin charset en el Content-Type, MockMvc decodifica en ISO-8859-1 y rompe las tildes.

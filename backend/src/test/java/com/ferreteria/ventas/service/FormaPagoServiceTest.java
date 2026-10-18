@@ -89,6 +89,31 @@ class FormaPagoServiceTest {
     }
 
     @Test
+    @DisplayName("siembra con la fila de la ferreteria bloqueada: dos pedidos a la vez no se pisan (deadlock del INSERT IGNORE)")
+    void siembraConLaFerreteriaBloqueada() {
+        when(repositorio.contarScoped()).thenReturn(0L);
+        when(repositorio.listarScoped()).thenReturn(List.of());
+
+        service.listar(false);
+
+        org.mockito.InOrder orden = org.mockito.Mockito.inOrder(repositorio);
+        orden.verify(repositorio).bloquearFerreteriaScoped();
+        orden.verify(repositorio, times(4)).sembrarScoped(anyString(), any(), anyInt());
+    }
+
+    @Test
+    @DisplayName("si mientras esperaba el candado otro pedido ya sembro, no siembra de nuevo")
+    void siOtroYaSembroNoSiembra() {
+        when(repositorio.contarScoped()).thenReturn(0L, 4L);
+        when(repositorio.listarScoped()).thenReturn(List.of());
+
+        service.listar(false);
+
+        verify(repositorio).bloquearFerreteriaScoped();
+        verify(repositorio, never()).sembrarScoped(anyString(), any(), anyInt());
+    }
+
+    @Test
     @DisplayName("listar: con formas ya cargadas no siembra nada, aunque el Dueno haya desactivado o renombrado las de siempre")
     void listarNoSiembraSiYaHay() {
         when(repositorio.contarScoped()).thenReturn(2L);
@@ -97,6 +122,17 @@ class FormaPagoServiceTest {
         service.listar(false);
 
         verify(repositorio, never()).sembrarScoped(anyString(), any(), anyInt());
+    }
+
+    @Test
+    @DisplayName("listar y crear leen lo ultimo confirmado (READ COMMITTED): con la foto de REPEATABLE READ un pedido que espero el candado no veria lo que sembro el otro")
+    void leenLoUltimoConfirmado() throws NoSuchMethodException {
+        for (String metodo : List.of("listar", "crear")) {
+            java.lang.reflect.Method m = java.util.Arrays.stream(FormaPagoService.class.getDeclaredMethods())
+                    .filter(x -> x.getName().equals(metodo)).findFirst().orElseThrow();
+            assertThat(m.getAnnotation(org.springframework.transaction.annotation.Transactional.class).isolation())
+                    .as(metodo).isEqualTo(org.springframework.transaction.annotation.Isolation.READ_COMMITTED);
+        }
     }
 
     @Test

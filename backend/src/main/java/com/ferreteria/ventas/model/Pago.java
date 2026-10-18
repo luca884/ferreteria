@@ -14,8 +14,10 @@ import org.hibernate.type.SqlTypes;
 import java.math.BigDecimal;
 
 /**
- * Un pago de la venta. La tabla es 1 a N desde ya (pago mixto, corte 5); el corte 1 crea siempre uno, por el
- * total y con el medio elegido. El importe recibido y el vuelto no se guardan.
+ * Un pago de la venta: uno por forma de pago (pago mixto, GDS-07). Guarda la forma, una copia de su nombre y su % del
+ * momento (cambiarlos despues no toca la venta), el medio, el recargo en importe y el monto: lo que se cobro con ese
+ * medio, que es la parte del total que cubre mas su recargo. La caja suma el monto por medio. El importe recibido y el
+ * vuelto no se guardan.
  */
 @Entity
 @Table(name = "pago")
@@ -36,23 +38,48 @@ public class Pago {
     @Column(nullable = false, updatable = false, length = 20)
     private MedioPago medio;
 
+    @Column(name = "forma_pago_id", nullable = false, updatable = false)
+    private Long formaPagoId;
+
+    @Column(name = "forma_pago_nombre", nullable = false, updatable = false, length = 60)
+    private String formaPagoNombre;
+
+    @Column(name = "recargo_porcentaje", nullable = false, updatable = false, precision = 5, scale = 2)
+    private BigDecimal recargoPorcentaje;
+
+    @Column(nullable = false, updatable = false, precision = 15, scale = 2)
+    private BigDecimal recargo;
+
     @Column(nullable = false, updatable = false, precision = 15, scale = 2)
     private BigDecimal monto;
 
     protected Pago() {}
 
-    public static Pago de(Long ferreteriaId, Long comprobanteId, MedioPago medio, BigDecimal monto) {
+    /** {@code parte} es lo que el pago cubre del total sin recargo; el monto guardado es la parte mas el recargo. */
+    public static Pago de(Long ferreteriaId, Long comprobanteId, FormaPago forma, BigDecimal parte,
+            BigDecimal recargo) {
         Pago pago = new Pago();
         pago.ferreteriaId = ferreteriaId;
         pago.comprobanteId = comprobanteId;
-        pago.medio = medio;
-        pago.monto = monto;
+        pago.medio = forma.getMedio();
+        pago.formaPagoId = forma.getId();
+        pago.formaPagoNombre = forma.getNombre();
+        pago.recargoPorcentaje = forma.getRecargoPorcentaje();
+        pago.recargo = recargo;
+        pago.monto = parte.add(recargo);
         return pago;
     }
+
+    /** Lo que el pago cubre del total sin recargo: el monto menos el recargo. */
+    public BigDecimal getParte() { return monto.subtract(recargo); }
 
     public Long getId() { return id; }
     public Long getFerreteriaId() { return ferreteriaId; }
     public Long getComprobanteId() { return comprobanteId; }
     public MedioPago getMedio() { return medio; }
+    public Long getFormaPagoId() { return formaPagoId; }
+    public String getFormaPagoNombre() { return formaPagoNombre; }
+    public BigDecimal getRecargoPorcentaje() { return recargoPorcentaje; }
+    public BigDecimal getRecargo() { return recargo; }
     public BigDecimal getMonto() { return monto; }
 }

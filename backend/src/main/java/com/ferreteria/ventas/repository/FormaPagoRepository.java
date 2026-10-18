@@ -8,6 +8,7 @@ import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.util.Collection;
 import java.util.List;
 
 public interface FormaPagoRepository extends TenantScopedRepository<FormaPago, Long> {
@@ -17,6 +18,9 @@ public interface FormaPagoRepository extends TenantScopedRepository<FormaPago, L
 
     @Query("select f from FormaPago f where f.ferreteriaId = :fid and f.activa = true order by f.orden, f.nombre")
     List<FormaPago> activasDeFerreteria(@Param("fid") Long ferreteriaId);
+
+    @Query("select f from FormaPago f where f.ferreteriaId = :fid and f.id in :ids")
+    List<FormaPago> porIds(@Param("fid") Long ferreteriaId, @Param("ids") Collection<Long> ids);
 
     @Query("select count(f) from FormaPago f where f.ferreteriaId = :fid")
     long contarDeFerreteria(@Param("fid") Long ferreteriaId);
@@ -33,6 +37,13 @@ public interface FormaPagoRepository extends TenantScopedRepository<FormaPago, L
     @Query("select coalesce(max(f.orden), 0) from FormaPago f where f.ferreteriaId = :fid")
     int maxOrden(@Param("fid") Long ferreteriaId);
 
+    /**
+     * Toma el candado de la fila de la ferreteria hasta el fin de la transaccion. Los INSERT IGNORE que chocan contra la
+     * clave unica se traban entre si (deadlock de InnoDB): quien siembra primero los serializa con este candado.
+     */
+    @Query(value = "select id from ferreteria where id = :fid for update", nativeQuery = true)
+    Long bloquearFerreteria(@Param("fid") Long ferreteriaId);
+
     /** INSERT IGNORE: si dos pedidos siembran a la vez, el segundo no rompe contra la clave unica del nombre. */
     @Modifying
     @Query(value = "insert ignore into forma_pago (ferreteria_id, nombre, medio, recargo_porcentaje, activa, orden) "
@@ -46,6 +57,11 @@ public interface FormaPagoRepository extends TenantScopedRepository<FormaPago, L
 
     default List<FormaPago> listarActivasScoped() {
         return activasDeFerreteria(TenantContext.requireFerreteriaId());
+    }
+
+    /** Las que existen en esta ferreteria entre esas ids (activas o no): las de otra ferreteria no vuelven. */
+    default List<FormaPago> porIdsScoped(Collection<Long> ids) {
+        return porIds(TenantContext.requireFerreteriaId(), ids);
     }
 
     default long contarScoped() {
@@ -67,6 +83,10 @@ public interface FormaPagoRepository extends TenantScopedRepository<FormaPago, L
 
     default int maxOrdenScoped() {
         return maxOrden(TenantContext.requireFerreteriaId());
+    }
+
+    default Long bloquearFerreteriaScoped() {
+        return bloquearFerreteria(TenantContext.requireFerreteriaId());
     }
 
     default int sembrarScoped(String nombre, MedioPago medio, int orden) {

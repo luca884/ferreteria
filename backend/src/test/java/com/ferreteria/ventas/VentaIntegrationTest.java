@@ -59,28 +59,27 @@ class VentaIntegrationTest extends VentasTestBase {
     }
 
     @Test
-    void medioDePagoInvalidoDa400ConMensajeEnEspanol() throws Exception {
+    void formaDePagoInexistenteDa400ConMensajeEnEspanol() throws Exception {
         Tienda t = tienda();
         long a = articulo(t, "Tornillo", "UNIDAD", "100.00", "10");
 
         JsonNode cuerpo = json(postJson("/api/ventas", login(t.emailVendedor()),
                 cuerpo(clave(), "CHEQUE", "100.00", linea(a, "1", "100.00"))).andExpect(status().isBadRequest()));
 
-        assertThat(cuerpo.get("errors").get("medioPago").asText())
-                .isEqualTo("El medio de pago no es válido. Usá EFECTIVO, DEBITO, CREDITO o TRANSFERENCIA.");
+        assertThat(cuerpo.get("errors").get("formaPagoId").asText()).isEqualTo("La forma de pago no es válida.");
         assertThat(comprobantes(t)).isZero();
         assertThat(stock(a)).isEqualByComparingTo("10");
     }
 
     @Test
-    void faltaElMedioDePagoDa400() throws Exception {
+    void faltaLaFormaDePagoDa400() throws Exception {
         Tienda t = tienda();
         long a = articulo(t, "Tornillo", "UNIDAD", "100.00", "10");
 
         JsonNode cuerpo = json(postJson("/api/ventas", login(t.emailVendedor()),
                 cuerpo(clave(), null, "100.00", linea(a, "1", "100.00"))).andExpect(status().isBadRequest()));
 
-        assertThat(cuerpo.get("errors").get("medioPago").asText()).isNotBlank();
+        assertThat(cuerpo.get("errors").get("formaPagoId").asText()).isEqualTo("Elegí una forma de pago.");
         assertThat(comprobantes(t)).isZero();
     }
 
@@ -141,6 +140,7 @@ class VentaIntegrationTest extends VentasTestBase {
         Tienda propia = tienda();
         Tienda ajena = tienda();
         long a = articulo(propia, "Tornillo", "UNIDAD", "100.00", "10");
+        ultimaTienda = propia;
         Map<String, Object> cuerpo = mapa(clave(), "EFECTIVO", "100.00", linea(a, "1", "100.00"));
         cuerpo.put("ferreteriaId", ajena.id());
         cuerpo.put("usuarioId", 1);
@@ -400,7 +400,8 @@ class VentaIntegrationTest extends VentasTestBase {
         Tienda t = tienda();
         long a = articulo(t, "Tornillo", "UNIDAD", "100.00", "10");
 
-        vender(login("admin@demo.local"), clave(), "100.00", linea(a, "1", "100.00")).andExpect(status().isForbidden());
+        postJson("/api/ventas", login("admin@demo.local"), cuerpo(clave(), "EFECTIVO", "100.00", linea(a, "1", "100.00")))
+                .andExpect(status().isForbidden());
 
         assertThat(comprobantes(t)).isZero();
     }

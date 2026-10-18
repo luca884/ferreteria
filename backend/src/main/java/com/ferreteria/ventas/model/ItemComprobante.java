@@ -70,6 +70,10 @@ public class ItemComprobante {
     @Column(nullable = false, updatable = false, precision = 15, scale = 2)
     private BigDecimal iva;
 
+    /** La parte del recargo de la forma de pago que le toca al renglon (GDS-11); ya esta sumada en el total. */
+    @Column(nullable = false, updatable = false, precision = 15, scale = 2)
+    private BigDecimal recargo;
+
     protected ItemComprobante() {}
 
     public static ItemComprobante de(
@@ -90,6 +94,7 @@ public class ItemComprobante {
         item.total = calculado.total();
         item.neto = calculado.neto();
         item.iva = calculado.iva();
+        item.recargo = calculado.recargo();
         return item;
     }
 
@@ -105,6 +110,7 @@ public class ItemComprobante {
     public String getAlicuotaIva() { return alicuotaIva; }
     public BigDecimal getBruto() { return bruto; }
     public BigDecimal getDescuentoPorcentaje() { return descuentoPorcentaje; }
+    public BigDecimal getRecargo() { return recargo; }
     public BigDecimal getTotal() { return total; }
     public BigDecimal getNeto() { return neto; }
     public BigDecimal getIva() { return iva; }

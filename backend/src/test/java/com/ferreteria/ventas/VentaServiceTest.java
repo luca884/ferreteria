@@ -9,7 +9,6 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.ferreteria.ventas.model.MedioPago;
 import com.ferreteria.ventas.service.ConfirmarVenta;
 import com.ferreteria.ventas.service.ConfirmarVenta.Renglon;
 import com.ferreteria.ventas.service.RegistroVenta;
@@ -44,7 +43,7 @@ class VentaServiceTest {
 
     ConfirmarVenta pedido = new ConfirmarVenta("7c9e6679-7425-40de-944b-e07fc1f90ae7",
             List.of(new Renglon(1L, BigDecimal.ONE, new BigDecimal("10.00"))), new BigDecimal("10.00"),
-            MedioPago.EFECTIVO);
+            1L);
 
     VentaRegistrada nueva = new VentaRegistrada(null, List.of(), null, List.of(), false);
     VentaRegistrada repetida = new VentaRegistrada(null, List.of(), null, List.of(), true);

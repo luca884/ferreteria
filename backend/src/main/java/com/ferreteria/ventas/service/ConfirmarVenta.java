@@ -1,17 +1,16 @@
 package com.ferreteria.ventas.service;
 
-import com.ferreteria.ventas.model.MedioPago;
-
 import java.math.BigDecimal;
 import java.util.List;
 
 /**
  * Lo que el mostrador pide cobrar (R-001), ya sin detalles HTTP: la clave de idempotencia del ticket, los
- * renglones tal como los vio el cajero (con el precio que se mostro y su descuento), el total que se mostro,
- * el descuento global (GDS-12) y como se paga: un medio unico (por el total) o una lista de pagos (GDS-07),
- * nunca los dos. La ferreteria y el usuario NO viajan aca: salen del JWT. Un descuento ausente es 0 %.
+ * renglones tal como los vio el cajero (con el precio que se mostro y su descuento), el total que se mostro (con el
+ * recargo de la forma de pago, GDS-11), el descuento global (GDS-12) y como se paga: una forma unica (por todo el total)
+ * o una lista de pagos (GDS-07), nunca las dos. Los montos de los pagos son la parte del total SIN recargo que cubre cada
+ * forma. La ferreteria y el usuario NO viajan aca: salen del JWT. Un descuento ausente es 0 %.
  */
-public record ConfirmarVenta(String clave, List<Renglon> renglones, BigDecimal totalMostrado, MedioPago medioPago,
+public record ConfirmarVenta(String clave, List<Renglon> renglones, BigDecimal totalMostrado, Long formaPagoId,
         BigDecimal descuentoPorcentaje, List<PagoPedido> pagos) {
 
     public ConfirmarVenta {
@@ -19,13 +18,13 @@ public record ConfirmarVenta(String clave, List<Renglon> renglones, BigDecimal t
         pagos = pagos == null ? List.of() : pagos;
     }
 
-    public ConfirmarVenta(String clave, List<Renglon> renglones, BigDecimal totalMostrado, MedioPago medioPago,
+    public ConfirmarVenta(String clave, List<Renglon> renglones, BigDecimal totalMostrado, Long formaPagoId,
             BigDecimal descuentoPorcentaje) {
-        this(clave, renglones, totalMostrado, medioPago, descuentoPorcentaje, List.of());
+        this(clave, renglones, totalMostrado, formaPagoId, descuentoPorcentaje, List.of());
     }
 
-    public ConfirmarVenta(String clave, List<Renglon> renglones, BigDecimal totalMostrado, MedioPago medioPago) {
-        this(clave, renglones, totalMostrado, medioPago, BigDecimal.ZERO, List.of());
+    public ConfirmarVenta(String clave, List<Renglon> renglones, BigDecimal totalMostrado, Long formaPagoId) {
+        this(clave, renglones, totalMostrado, formaPagoId, BigDecimal.ZERO, List.of());
     }
 
     /** Un renglon del ticket: articulo, cantidad, precio unitario mostrado (con IVA) y descuento propio en %. */
@@ -41,6 +40,6 @@ public record ConfirmarVenta(String clave, List<Renglon> renglones, BigDecimal t
         }
     }
 
-    /** Una parte del pago: el medio y cuanto se paga con el. */
-    public record PagoPedido(MedioPago medio, BigDecimal monto) {}
+    /** Una parte del pago: la forma y la parte del total, sin recargo, que se paga con ella. */
+    public record PagoPedido(Long formaPagoId, BigDecimal monto) {}
 }

@@ -186,7 +186,7 @@ class MigracionV6Test extends IntegrationTestBase {
                 + "and cast(version as unsigned) < 1000 order by installed_rank");
 
         assertThat(migraciones).extracting(m -> m.get("version"))
-                .containsExactly("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12");
+                .containsExactly("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13");
         assertThat(migraciones).allSatisfy(m -> assertThat(m.get("success")).isIn(true, 1));
     }
 

@@ -44,6 +44,9 @@ class MigracionV4Test extends IntegrationTestBase {
             // V11 (CU-07 corte 2): subtotal antes de descuentos y descuento global en %.
             Map.entry("comprobante.subtotal", "decimal(15,2) NOT NULL"),
             Map.entry("comprobante.descuento_porcentaje", "decimal(5,2) NOT NULL"),
+            // V13 (CU-07, GDS-11): el recargo de la forma de pago, en el comprobante, en cada renglon y en cada pago.
+            Map.entry("comprobante.recargo", "decimal(15,2) NOT NULL"),
+            Map.entry("item_comprobante.recargo", "decimal(15,2) NOT NULL"),
             Map.entry("item_comprobante.id", "bigint NOT NULL"),
             Map.entry("item_comprobante.ferreteria_id", "bigint NOT NULL"),
             Map.entry("item_comprobante.comprobante_id", "bigint NOT NULL"),
@@ -64,6 +67,10 @@ class MigracionV4Test extends IntegrationTestBase {
             Map.entry("pago.comprobante_id", "bigint NOT NULL"),
             Map.entry("pago.medio", "varchar(20) NOT NULL"),
             Map.entry("pago.monto", "decimal(15,2) NOT NULL"),
+            Map.entry("pago.forma_pago_id", "bigint NOT NULL"),
+            Map.entry("pago.forma_pago_nombre", "varchar(60) NOT NULL"),
+            Map.entry("pago.recargo_porcentaje", "decimal(5,2) NOT NULL"),
+            Map.entry("pago.recargo", "decimal(15,2) NOT NULL"),
             Map.entry("movimiento_stock.id", "bigint NOT NULL"),
             Map.entry("movimiento_stock.ferreteria_id", "bigint NOT NULL"),
             Map.entry("movimiento_stock.articulo_id", "bigint NOT NULL"),
@@ -99,13 +106,14 @@ class MigracionV4Test extends IntegrationTestBase {
     }
 
     @Test
-    @DisplayName("tipo, estado y medio son VARCHAR sin CHECK (la fase 5 suma valores); solo los descuentos de V11 tienen el suyo")
+    @DisplayName("tipo, estado y medio son VARCHAR sin CHECK (la fase 5 suma valores); solo los descuentos de V11 y los recargos de V13 tienen el suyo")
     void sinCheckEnTipoEstadoYMedio() {
         Integer checks = jdbc.queryForObject(
                 "select count(*) from information_schema.table_constraints "
                         + "where table_schema = database() and constraint_type = 'CHECK' and table_name in "
                         + "('comprobante','item_comprobante','pago','movimiento_stock','numerador_comprobante') "
-                        + "and constraint_name not in ('ck_comprobante_descuento','ck_item_comprobante_descuento')",
+                        + "and constraint_name not in ('ck_comprobante_descuento','ck_item_comprobante_descuento',"
+                        + "'ck_comprobante_recargo','ck_item_comprobante_recargo','ck_pago_recargo')",
                 Integer.class);
 
         assertThat(checks).isZero();

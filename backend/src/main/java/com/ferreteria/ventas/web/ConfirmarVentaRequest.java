@@ -1,6 +1,5 @@
 package com.ferreteria.ventas.web;
 
-import com.ferreteria.ventas.model.MedioPago;
 import com.ferreteria.ventas.service.ConfirmarVenta;
 import com.ferreteria.ventas.model.LimitesVenta;
 import jakarta.validation.Valid;
@@ -36,20 +35,20 @@ public record ConfirmarVentaRequest(
                 message = "El total es demasiado grande: el máximo es $ 9.999.999.999.999,99.")
         BigDecimal totalMostrado,
 
-        /** Un medio unico, por el total. O, en vez de este, la lista {@code pagos}. El servicio exige uno de los dos. */
-        MedioPago medioPago,
+        /** Una forma de pago unica, por todo el total. O, en vez de esta, la lista {@code pagos}. El servicio exige una de las dos. */
+        Long formaPagoId,
 
         /** Descuento global en % (GDS-12), aplicado a cada renglon. Ausente es 0. El rango lo valida el servicio. */
         @Digits(integer = 5, fraction = 2, message = "El descuento admite hasta 2 decimales.")
         BigDecimal descuentoPorcentaje,
 
-        /** Pago mixto (GDS-07): un pago por medio; tiene que sumar el total. Hasta uno por cada medio. */
-        @Size(max = 4, message = "Hay hasta 4 medios de pago.")
+        /** Pago mixto (GDS-07): un pago por forma; las partes (sin recargo) tienen que sumar el total sin recargo. */
+        @Size(max = 20, message = "Hay hasta 20 formas de pago en una venta.")
         List<@NotNull(message = "Hay un pago vacío.") @Valid PagoRequest> pagos) {
 
-    /** Una parte del pago mixto. El rango fino (medio repetido, suma) lo valida el servicio. */
+    /** Una parte del pago mixto: la forma y lo que cubre del total sin recargo. El rango fino lo valida el servicio. */
     public record PagoRequest(
-            MedioPago medio,
+            Long formaPagoId,
 
             @DecimalMax(value = LimitesVenta.IMPORTE_MAXIMO_TEXTO,
                     message = "El monto es demasiado grande: el máximo es $ 9.999.999.999.999,99.")
@@ -80,8 +79,8 @@ public record ConfirmarVentaRequest(
         return new ConfirmarVenta(clave, renglones.stream()
                 .map(r -> new ConfirmarVenta.Renglon(r.articuloId(), r.cantidad(), r.precioUnitario(),
                         r.descuentoPorcentaje()))
-                .toList(), totalMostrado, medioPago, descuentoPorcentaje,
+                .toList(), totalMostrado, formaPagoId, descuentoPorcentaje,
                 pagos == null ? List.of()
-                        : pagos.stream().map(p -> new ConfirmarVenta.PagoPedido(p.medio(), p.monto())).toList());
+                        : pagos.stream().map(p -> new ConfirmarVenta.PagoPedido(p.formaPagoId(), p.monto())).toList());
     }
 }

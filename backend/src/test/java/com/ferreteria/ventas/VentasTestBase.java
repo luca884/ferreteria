@@ -23,6 +23,12 @@ abstract class VentasTestBase extends IntegrationTestBase {
     /** Una ferreteria de prueba con su Dueno y su Vendedor. */
     record Tienda(long id, String emailDueno, String emailVendedor) {}
 
+    /**
+     * La ultima ferreteria que armo {@link #tiendaSinCaja()}: de ella sale la forma de pago de los cuerpos que se
+     * arman sin pasarle la tienda (cuerpo, mapa, vender). Un test con dos tiendas pasa la que corresponde a cada una.
+     */
+    protected Tienda ultimaTienda;
+
     /** Un renglon del pedido tal como lo manda el mostrador. */
     record Linea(long articuloId, String cantidad, String precio) {}
 
@@ -53,7 +59,26 @@ abstract class VentasTestBase extends IntegrationTestBase {
                 + "values (?, ?, ?, 'Dueno Ventas', 'DUENO')", id, dueno, hash);
         jdbc.update("insert into usuario (ferreteria_id, email, password_hash, nombre, rol) "
                 + "values (?, ?, ?, 'Vendedor Ventas', 'VENDEDOR')", id, vendedor, hash);
-        return new Tienda(id, dueno, vendedor);
+        ultimaTienda = new Tienda(id, dueno, vendedor);
+        return ultimaTienda;
+    }
+
+    /**
+     * La forma de pago de siempre de ese medio (Efectivo, Debito, Credito o Transferencia) de la tienda. Si la tienda
+     * todavia no tiene ninguna forma las carga, igual que el servicio la primera vez que las pide. Un medio que no existe
+     * (por ejemplo "CHEQUE") da el id de una forma que tampoco existe: sirve para probar el rechazo.
+     */
+    protected long formaDe(Tienda tienda, String medio) {
+        Long cargadas = jdbc.queryForObject("select count(*) from forma_pago where ferreteria_id = ?", Long.class,
+                tienda.id());
+        if (cargadas == 0) {
+            jdbc.update("insert ignore into forma_pago (ferreteria_id, nombre, medio, orden) values "
+                    + "(?, 'Efectivo', 'EFECTIVO', 1), (?, 'Débito', 'DEBITO', 2), (?, 'Crédito', 'CREDITO', 3), "
+                    + "(?, 'Transferencia', 'TRANSFERENCIA', 4)", tienda.id(), tienda.id(), tienda.id(), tienda.id());
+        }
+        Long id = jdbc.queryForObject("select min(id) from forma_pago where ferreteria_id = ? and medio = ?", Long.class,
+                tienda.id(), medio);
+        return id != null ? id : 999_999_999L;
     }
 
     protected long articulo(Tienda tienda, String descripcion, String unidad, String precio, String stock) {
@@ -97,12 +122,15 @@ abstract class VentasTestBase extends IntegrationTestBase {
         }
         cuerpo.put("renglones", renglones);
         cuerpo.put("totalMostrado", total == null ? null : new BigDecimal(total));
-        cuerpo.put("medioPago", medio);
+        cuerpo.put("formaPagoId", medio == null ? null : formaDe(ultimaTienda, medio));
         return cuerpo;
     }
 
+    /** Cobra en efectivo con la forma de siempre de la ferreteria del token (la que la API le lista a ese usuario). */
     protected ResultActions vender(String token, String clave, String total, Linea... lineas) throws Exception {
-        return postJson("/api/ventas", token, cuerpo(clave, "EFECTIVO", total, lineas));
+        Map<String, Object> cuerpo = mapa(clave, null, total, lineas);
+        cuerpo.put("formaPagoId", formaDePago(token, "EFECTIVO"));
+        return postJson("/api/ventas", token, objectMapper.writeValueAsString(cuerpo));
     }
 
     protected JsonNode json(ResultActions resultado) throws Exception {

@@ -8,13 +8,15 @@ import com.ferreteria.stock.service.StockService;
 import com.ferreteria.tenant.TenantContext;
 import com.ferreteria.ventas.model.CantidadVendible;
 import com.ferreteria.ventas.model.Comprobante;
+import com.ferreteria.ventas.model.FormaPago;
 import com.ferreteria.ventas.model.ItemComprobante;
 import com.ferreteria.ventas.model.LimitesVenta;
-import com.ferreteria.ventas.model.MedioPago;
 import com.ferreteria.ventas.model.Pago;
+import com.ferreteria.ventas.model.RecargoVenta;
 import com.ferreteria.ventas.model.RenglonVenta;
 import com.ferreteria.ventas.model.TotalesVenta;
 import com.ferreteria.ventas.repository.ComprobanteRepository;
+import com.ferreteria.ventas.repository.FormaPagoRepository;
 import com.ferreteria.ventas.repository.ItemComprobanteRepository;
 import com.ferreteria.ventas.repository.NumeradorComprobanteRepository;
 import com.ferreteria.ventas.repository.PagoRepository;
@@ -48,6 +50,8 @@ public class RegistroVenta {
 
     static final String MENSAJE_DESCUENTO = "El descuento tiene que estar entre 0 y 99,99 %.";
     static final String MENSAJE_INEXISTENTE = "Hay un artículo del ticket que ya no está disponible";
+    static final String MENSAJE_SIN_FORMA = "Elegí una forma de pago.";
+    static final String MENSAJE_FORMA_INVALIDA = "La forma de pago no es válida.";
 
     private final ArticulosParaVenta articulosParaVenta;
     private final StockService stockService;
@@ -56,12 +60,13 @@ public class RegistroVenta {
     private final PagoRepository pagoRepository;
     private final NumeradorComprobanteRepository numeradorRepository;
     private final CajaService cajaService;
+    private final FormaPagoRepository formaPagoRepository;
 
     public RegistroVenta(
             ArticulosParaVenta articulosParaVenta, StockService stockService,
             ComprobanteRepository comprobanteRepository, ItemComprobanteRepository itemRepository,
             PagoRepository pagoRepository, NumeradorComprobanteRepository numeradorRepository,
-            CajaService cajaService) {
+            CajaService cajaService, FormaPagoRepository formaPagoRepository) {
         this.articulosParaVenta = articulosParaVenta;
         this.stockService = stockService;
         this.comprobanteRepository = comprobanteRepository;
@@ -69,7 +74,11 @@ public class RegistroVenta {
         this.pagoRepository = pagoRepository;
         this.numeradorRepository = numeradorRepository;
         this.cajaService = cajaService;
+        this.formaPagoRepository = formaPagoRepository;
     }
+
+    /** Lo que sale de validar: los articulos del catalogo y las formas de pago del pedido, por id. */
+    private record Validado(Map<Long, ArticuloVendible> articulos, Map<Long, FormaPago> formas) {}
 
     @Transactional
     public VentaRegistrada registrar(ConfirmarVenta pedido, Long usuarioId) {
@@ -85,9 +94,13 @@ public class RegistroVenta {
         // aunque la caja se haya cerrado) y antes de mirar los articulos. Toma la caja compartida antes del numerador.
         Long cajaId = cajaService.cajaParaVender();
 
-        Map<Long, ArticuloVendible> articulos = validar(pedido);
+        Validado validado = validar(pedido);
+        Map<Long, ArticuloVendible> articulos = validado.articulos();
+        Map<Long, FormaPago> formas = validado.formas();
 
-        List<RenglonVenta> calculados = calcular(pedido, articulos);
+        List<RenglonVenta> sinRecargo = calcular(pedido, articulos);
+        List<ConfirmarVenta.PagoPedido> partes = pagosDe(pedido, TotalesVenta.de(sinRecargo).total());
+        List<RenglonVenta> calculados = RecargoVenta.repartir(sinRecargo, recargoDe(partes, formas));
         TotalesVenta totales = TotalesVenta.de(calculados);
 
         long numero = numeradorRepository.siguienteScoped();
@@ -108,8 +121,10 @@ public class RegistroVenta {
         }
         List<ItemComprobante> itemsGuardados = itemRepository.saveAll(items);
         List<Pago> pagos = new ArrayList<>();
-        for (ConfirmarVenta.PagoPedido pago : pagosDe(pedido, totales.total())) {
-            pagos.add(pagoRepository.save(Pago.de(ferreteriaId, comprobante.getId(), pago.medio(), pago.monto())));
+        for (ConfirmarVenta.PagoPedido parte : partes) {
+            FormaPago forma = formas.get(parte.formaPagoId());
+            pagos.add(pagoRepository.save(Pago.de(ferreteriaId, comprobante.getId(), forma, parte.monto(),
+                    RecargoVenta.deCobro(parte.monto(), forma.getRecargoPorcentaje()))));
         }
 
         return new VentaRegistrada(comprobante, itemsGuardados, pagos, sinStock(stockResultante, articulos), false);
@@ -161,29 +176,63 @@ public class RegistroVenta {
         return true;
     }
 
-    /** Los pagos del pedido contra los guardados: mismo medio y mismo monto, sin importar el orden. */
+    /**
+     * Los pagos del pedido contra los guardados: misma forma y misma parte del total (la sin recargo), sin importar el
+     * orden. La forma se compara por id: aunque despues se renombre, cambie su recargo o se desactive, la venta es la misma.
+     */
     private static boolean mismosPagos(ConfirmarVenta pedido, Comprobante comprobante, List<Pago> guardados) {
-        List<ConfirmarVenta.PagoPedido> pedidos = pagosDe(pedido, comprobante.getTotal());
+        List<ConfirmarVenta.PagoPedido> pedidos = pagosDe(pedido, comprobante.getTotal().subtract(comprobante.getRecargo()));
         if (pedidos.size() != guardados.size()) {
             return false;
         }
-        Map<MedioPago, BigDecimal> porMedio = new HashMap<>();
-        guardados.forEach(p -> porMedio.put(p.getMedio(), p.getMonto()));
+        Map<Long, BigDecimal> porForma = new HashMap<>();
+        guardados.forEach(p -> porForma.put(p.getFormaPagoId(), p.getParte()));
         for (ConfirmarVenta.PagoPedido pago : pedidos) {
-            BigDecimal monto = porMedio.get(pago.medio());
-            if (monto == null || monto.compareTo(pago.monto()) != 0) {
+            BigDecimal parte = porForma.get(pago.formaPagoId());
+            if (parte == null || pago.monto() == null || parte.compareTo(pago.monto()) != 0) {
                 return false;
             }
         }
         return true;
     }
 
-    /** Los pagos efectivos del pedido: la lista, o el medio unico por el total (que ya se valido). */
-    private static List<ConfirmarVenta.PagoPedido> pagosDe(ConfirmarVenta pedido, BigDecimal total) {
+    /**
+     * Los pagos del pedido tal como llegaron: la lista, o la forma unica por todo el total sin recargo. Todavia puede
+     * traer formas o montos invalidos: {@link #validarPagos} los rechaza.
+     */
+    private static List<ConfirmarVenta.PagoPedido> pagosDe(ConfirmarVenta pedido, BigDecimal totalSinRecargo) {
         if (!pedido.pagos().isEmpty()) {
             return pedido.pagos();
         }
-        return List.of(new ConfirmarVenta.PagoPedido(pedido.medioPago(), total));
+        if (pedido.formaPagoId() == null) {
+            return List.of();
+        }
+        return List.of(new ConfirmarVenta.PagoPedido(pedido.formaPagoId(), totalSinRecargo));
+    }
+
+    /**
+     * El recargo de esos pagos: la suma del de cada uno (su parte por el % de su forma). Un pago sin forma conocida o sin
+     * un monto positivo no suma nada: ese error lo da {@link #validarPagos}, despues del 409.
+     */
+    private static BigDecimal recargoDe(List<ConfirmarVenta.PagoPedido> pagos, Map<Long, FormaPago> formas) {
+        BigDecimal recargo = BigDecimal.ZERO;
+        for (ConfirmarVenta.PagoPedido pago : pagos) {
+            FormaPago forma = pago.formaPagoId() == null ? null : formas.get(pago.formaPagoId());
+            if (forma != null && pago.monto() != null && pago.monto().signum() > 0) {
+                recargo = recargo.add(RecargoVenta.deCobro(pago.monto(), forma.getRecargoPorcentaje()));
+            }
+        }
+        return recargo;
+    }
+
+    /** El total que se cobra con el recargo de los pagos tal como llegaron (sin repartirlo: la suma es la misma). */
+    private static BigDecimal totalConRecargo(ConfirmarVenta pedido, Map<Long, ArticuloVendible> articulos,
+            Map<Long, FormaPago> formas) {
+        BigDecimal totalSinRecargo = TotalesVenta.de(calcular(pedido, articulos)).total();
+        if (totalSinRecargo.signum() == 0) {
+            return totalSinRecargo;
+        }
+        return totalSinRecargo.add(recargoDe(pagosDe(pedido, totalSinRecargo), formas));
     }
 
     /** R-016: los articulos cuyo stock resultante quedo menor que 0 (justo en 0 no avisa), por id. */
@@ -196,8 +245,8 @@ public class RegistroVenta {
                 .toList();
     }
 
-    /** Pasos 3 y 4 de C-008: busca los articulos y valida en orden de precedencia, sin escribir. */
-    private Map<Long, ArticuloVendible> validar(ConfirmarVenta pedido) {
+    /** Pasos 3 y 4 de C-008: busca los articulos y las formas de pago y valida en orden de precedencia, sin escribir. */
+    private Validado validar(ConfirmarVenta pedido) {
         Set<Long> ids = pedido.renglones().stream().map(Renglon::articuloId)
                 .collect(Collectors.toCollection(LinkedHashSet::new));
         Map<Long, ArticuloVendible> articulos = new HashMap<>();
@@ -208,10 +257,26 @@ public class RegistroVenta {
         validarQueTenganPrecio(pedido.renglones(), articulos);
         validarCantidades(pedido.renglones(), articulos);
         validarDescuentos(pedido);
-        validarImportes(pedido, articulos);
-        validarPrecios(pedido, articulos);
-        validarPagos(pedido);
-        return articulos;
+        Map<Long, FormaPago> formas = formasDe(pedido);
+        validarImportes(pedido, articulos, formas);
+        validarPrecios(pedido, articulos, formas);
+        validarPagos(pedido, formas, TotalesVenta.de(calcular(pedido, articulos)).total());
+        return new Validado(articulos, formas);
+    }
+
+    /** Las formas de pago que nombra el pedido y existen en esta ferreteria, por id (activas o no). */
+    private Map<Long, FormaPago> formasDe(ConfirmarVenta pedido) {
+        Set<Long> ids = new LinkedHashSet<>();
+        if (pedido.formaPagoId() != null) {
+            ids.add(pedido.formaPagoId());
+        }
+        pedido.pagos().stream().map(ConfirmarVenta.PagoPedido::formaPagoId).filter(java.util.Objects::nonNull)
+                .forEach(ids::add);
+        Map<Long, FormaPago> formas = new HashMap<>();
+        if (!ids.isEmpty()) {
+            formaPagoRepository.porIdsScoped(ids).forEach(f -> formas.put(f.getId(), f));
+        }
+        return formas;
     }
 
     /** Un id repetido es un error del cliente que no depende de la base: se corta antes de consultar. */
@@ -301,7 +366,8 @@ public class RegistroVenta {
      * Tope de DECIMAL(15,2): cada dato entra solo (lo frena el request) pero cantidad x precio del
      * servidor, o la suma de los renglones, puede no entrar. Se corta con un 400 antes de escribir.
      */
-    private static void validarImportes(ConfirmarVenta pedido, Map<Long, ArticuloVendible> articulos) {
+    private static void validarImportes(ConfirmarVenta pedido, Map<Long, ArticuloVendible> articulos,
+            Map<Long, FormaPago> formas) {
         List<Renglon> renglones = pedido.renglones();
         Map<String, String> errores = new LinkedHashMap<>();
         BigDecimal total = BigDecimal.ZERO;
@@ -315,7 +381,8 @@ public class RegistroVenta {
             }
             total = total.add(calculado.bruto());
         }
-        if (errores.isEmpty() && total.compareTo(LimitesVenta.IMPORTE_MAXIMO) > 0) {
+        if (errores.isEmpty() && (total.compareTo(LimitesVenta.IMPORTE_MAXIMO) > 0
+                || totalConRecargo(pedido, articulos, formas).compareTo(LimitesVenta.IMPORTE_MAXIMO) > 0)) {
             errores.put("totalMostrado", "El total de la venta es demasiado grande: el máximo es $ 9.999.999.999.999,99.");
         }
         if (!errores.isEmpty()) {
@@ -327,7 +394,8 @@ public class RegistroVenta {
      * R-008: recalcula con el precio actual. Si algun precio mostrado difiere, o el total mostrado difiere del
      * recalculado, 409 con los renglones que cambiaron y el total actual.
      */
-    private static void validarPrecios(ConfirmarVenta pedido, Map<Long, ArticuloVendible> articulos) {
+    private static void validarPrecios(ConfirmarVenta pedido, Map<Long, ArticuloVendible> articulos,
+            Map<Long, FormaPago> formas) {
         List<RenglonVenta> actuales = calcular(pedido, articulos);
         List<Articulo> cambiados = new ArrayList<>();
         for (int i = 0; i < pedido.renglones().size(); i++) {
@@ -339,7 +407,7 @@ public class RegistroVenta {
                         articulo.precioFinal(), actual.total()));
             }
         }
-        BigDecimal totalActual = TotalesVenta.de(actuales).total();
+        BigDecimal totalActual = totalConRecargo(pedido, articulos, formas);
         if (cambiados.isEmpty() && pedido.totalMostrado().compareTo(totalActual) == 0) {
             return;
         }
@@ -387,31 +455,35 @@ public class RegistroVenta {
     }
 
     /**
-     * Como se paga: un medio unico por el total, o una lista de pagos (GDS-07) que suma exactamente el total. Un medio
-     * va una sola vez y cada monto es mayor que cero. Corre despues del 409 de precios: el total mostrado ya es el actual.
+     * Como se paga: una forma unica por el total o una lista de pagos (GDS-07) cuyas partes (sin recargo) suman
+     * exactamente el total sin recargo. Cada forma tiene que existir en la ferreteria y estar activa, va una sola vez y
+     * cada monto es mayor que cero. Corre despues del 409 de precios: el total mostrado ya es el actual.
      */
-    private static void validarPagos(ConfirmarVenta pedido) {
+    private static void validarPagos(ConfirmarVenta pedido, Map<Long, FormaPago> formas, BigDecimal totalSinRecargo) {
         if (pedido.pagos().isEmpty()) {
-            if (pedido.medioPago() == null) {
-                throw new DatosInvalidosException(Map.of("medioPago",
-                        "Elegí un medio de pago: EFECTIVO, DEBITO, CREDITO o TRANSFERENCIA."));
+            if (pedido.formaPagoId() == null) {
+                throw new DatosInvalidosException(Map.of("formaPagoId", MENSAJE_SIN_FORMA));
+            }
+            if (!esUtilizable(formas.get(pedido.formaPagoId()))) {
+                throw new DatosInvalidosException(Map.of("formaPagoId", MENSAJE_FORMA_INVALIDA));
             }
             return;
         }
-        if (pedido.medioPago() != null) {
+        if (pedido.formaPagoId() != null) {
             throw new DatosInvalidosException(
-                    Map.of("pagos", "Mandá un solo medio de pago o la lista de pagos, no los dos."));
+                    Map.of("pagos", "Mandá una sola forma de pago o la lista de pagos, no las dos."));
         }
         Map<String, String> errores = new LinkedHashMap<>();
-        Set<MedioPago> vistos = new HashSet<>();
+        Set<Long> vistas = new HashSet<>();
         BigDecimal suma = BigDecimal.ZERO;
         for (int i = 0; i < pedido.pagos().size(); i++) {
             ConfirmarVenta.PagoPedido pago = pedido.pagos().get(i);
-            if (pago.medio() == null) {
-                errores.put("pagos[" + i + "].medio",
-                        "Elegí un medio de pago: EFECTIVO, DEBITO, CREDITO o TRANSFERENCIA.");
-            } else if (!vistos.add(pago.medio())) {
-                errores.put("pagos[" + i + "].medio", "Cada medio de pago va una sola vez.");
+            if (pago.formaPagoId() == null) {
+                errores.put("pagos[" + i + "].formaPagoId", MENSAJE_SIN_FORMA);
+            } else if (!esUtilizable(formas.get(pago.formaPagoId()))) {
+                errores.put("pagos[" + i + "].formaPagoId", MENSAJE_FORMA_INVALIDA);
+            } else if (!vistas.add(pago.formaPagoId())) {
+                errores.put("pagos[" + i + "].formaPagoId", "Cada forma de pago va una sola vez.");
             }
             if (pago.monto() == null || pago.monto().signum() <= 0) {
                 errores.put("pagos[" + i + "].monto", "El monto del pago tiene que ser mayor a cero.");
@@ -419,11 +491,16 @@ public class RegistroVenta {
                 suma = suma.add(pago.monto());
             }
         }
-        if (errores.isEmpty() && suma.compareTo(pedido.totalMostrado()) != 0) {
+        if (errores.isEmpty() && suma.compareTo(totalSinRecargo) != 0) {
             errores.put("pagos", "Los pagos tienen que sumar el total de la venta.");
         }
         if (!errores.isEmpty()) {
             throw new DatosInvalidosException(errores);
         }
+    }
+
+    /** Una forma que no existe en la ferreteria (o es de otra) llega como null: es lo mismo que una inactiva. */
+    private static boolean esUtilizable(FormaPago forma) {
+        return forma != null && forma.isActiva();
     }
 }

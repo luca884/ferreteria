@@ -8,6 +8,7 @@ import com.ferreteria.ventas.model.FormaPago;
 import com.ferreteria.ventas.model.MedioPago;
 import com.ferreteria.ventas.repository.FormaPagoRepository;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
@@ -38,13 +39,13 @@ public class FormaPagoService {
     }
 
     /** Escribe (siembra) si la ferreteria no tiene ninguna, por eso la transaccion no es de solo lectura. */
-    @Transactional
+    @Transactional(isolation = Isolation.READ_COMMITTED)
     public List<FormaPago> listar(boolean soloActivas) {
         sembrarSiNoHayNinguna();
         return soloActivas ? repositorio.listarActivasScoped() : repositorio.listarScoped();
     }
 
-    @Transactional
+    @Transactional(isolation = Isolation.READ_COMMITTED)
     public FormaPago crear(DatosFormaPago datos) {
         sembrarSiNoHayNinguna();
         String nombre = datos.nombre().trim();
@@ -78,7 +79,16 @@ public class FormaPagoService {
         return forma;
     }
 
+    /**
+     * Con la fila de la ferreteria bloqueada y recontando despues: dos primeros pedidos a la vez no se traban entre si, el
+     * segundo espera, ve las cuatro y no siembra. Corre en READ COMMITTED (listar y crear): con REPEATABLE READ el segundo
+     * seguiria viendo la foto de antes de esperar y no veria lo que sembro el primero.
+     */
     private void sembrarSiNoHayNinguna() {
+        if (repositorio.contarScoped() > 0) {
+            return;
+        }
+        repositorio.bloquearFerreteriaScoped();
         if (repositorio.contarScoped() == 0) {
             DE_SIEMPRE.forEach(f -> repositorio.sembrarScoped(f.nombre(), f.medio(), f.orden()));
         }

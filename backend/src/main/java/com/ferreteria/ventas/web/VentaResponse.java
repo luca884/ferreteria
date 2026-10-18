@@ -11,29 +11,32 @@ import java.util.List;
 
 /**
  * La venta guardada (R-001). Sin costo ni margen. El subtotal es antes de descuentos; {@code descuento} es lo
- * descontado en toda la venta (subtotal menos total) y {@code descuentoPorcentaje} el global. {@code pagos} es un
- * pago por medio (GDS-07); {@code medioPago} solo viene si se pago con un unico medio. {@code sinStock} lista los articulos que quedaron con stock
- * negativo (R-016); en una venta repetida viene vacio.
+ * descontado en toda la venta y {@code descuentoPorcentaje} el global; {@code recargo} es el de las formas de pago
+ * (GDS-11) y ya esta sumado al total: subtotal - descuento + recargo = total. {@code pagos} es un pago por forma
+ * (GDS-07); {@code formaPagoId} y {@code medioPago} solo vienen si se pago con una unica forma. {@code sinStock} lista los
+ * articulos que quedaron con stock negativo (R-016); en una venta repetida viene vacio.
  */
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public record VentaResponse(
-        Long ventaId, Long numero, BigDecimal total, LocalDateTime fecha, MedioPago medioPago,
+        Long ventaId, Long numero, BigDecimal total, LocalDateTime fecha, Long formaPagoId, MedioPago medioPago,
         List<PagoResponse> pagos, List<RenglonResponse> renglones, List<SinStockResponse> sinStock, BigDecimal subtotal,
-        BigDecimal descuentoPorcentaje, BigDecimal descuento) {
+        BigDecimal descuentoPorcentaje, BigDecimal descuento, BigDecimal recargo) {
 
     public record RenglonResponse(
             Integer renglon, Long articuloId, String descripcion, String unidad, BigDecimal cantidad,
             BigDecimal precioUnitario, String alicuotaIva, BigDecimal total, BigDecimal neto, BigDecimal iva,
-            BigDecimal bruto, BigDecimal descuentoPorcentaje) {
+            BigDecimal bruto, BigDecimal descuentoPorcentaje, BigDecimal recargo) {
 
         static RenglonResponse de(ItemComprobante i) {
             return new RenglonResponse(i.getRenglon(), i.getArticuloId(), i.getDescripcion(), i.getUnidad(),
                     i.getCantidad(), i.getPrecioUnitario(), i.getAlicuotaIva(), i.getTotal(), i.getNeto(), i.getIva(),
-                    i.getBruto(), i.getDescuentoPorcentaje());
+                    i.getBruto(), i.getDescuentoPorcentaje(), i.getRecargo());
         }
     }
 
-    public record PagoResponse(MedioPago medio, BigDecimal monto) {}
+    /** {@code monto} es lo que se cobro con esa forma (la parte del total mas su recargo). */
+    public record PagoResponse(Long formaPagoId, String formaPago, MedioPago medio, BigDecimal recargoPorcentaje,
+            BigDecimal recargo, BigDecimal monto) {}
 
     public record SinStockResponse(Long articuloId, String descripcion, BigDecimal stockActual) {}
 
@@ -41,13 +44,17 @@ public record VentaResponse(
         return new VentaResponse(
                 venta.comprobante().getId(), venta.comprobante().getNumero(), venta.comprobante().getTotal(),
                 venta.comprobante().getFecha(),
+                venta.pagos().size() == 1 ? venta.pagos().get(0).getFormaPagoId() : null,
                 venta.pagos().size() == 1 ? venta.pagos().get(0).getMedio() : null,
-                venta.pagos().stream().map(p -> new PagoResponse(p.getMedio(), p.getMonto())).toList(),
+                venta.pagos().stream().map(p -> new PagoResponse(p.getFormaPagoId(), p.getFormaPagoNombre(), p.getMedio(),
+                        p.getRecargoPorcentaje(), p.getRecargo(), p.getMonto())).toList(),
                 venta.items().stream().map(RenglonResponse::de).toList(),
                 venta.sinStock().stream()
                         .map(s -> new SinStockResponse(s.articuloId(), s.descripcion(), s.stockActual()))
                         .toList(),
                 venta.comprobante().getSubtotal(), venta.comprobante().getDescuentoPorcentaje(),
-                venta.comprobante().getSubtotal().subtract(venta.comprobante().getTotal()));
+                venta.comprobante().getSubtotal()
+                        .subtract(venta.comprobante().getTotal().subtract(venta.comprobante().getRecargo())),
+                venta.comprobante().getRecargo());
     }
 }

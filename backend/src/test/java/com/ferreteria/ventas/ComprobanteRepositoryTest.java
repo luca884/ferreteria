@@ -6,6 +6,7 @@ import com.ferreteria.support.IntegrationTestBase;
 import com.ferreteria.tenant.TenantContext;
 import com.ferreteria.ventas.model.Comprobante;
 import com.ferreteria.ventas.model.EstadoComprobante;
+import com.ferreteria.ventas.model.FormaPago;
 import com.ferreteria.ventas.model.ItemComprobante;
 import com.ferreteria.ventas.model.MedioPago;
 import com.ferreteria.ventas.model.Pago;
@@ -13,6 +14,7 @@ import com.ferreteria.ventas.model.RenglonVenta;
 import com.ferreteria.ventas.model.TipoComprobante;
 import com.ferreteria.ventas.model.TotalesVenta;
 import com.ferreteria.ventas.repository.ComprobanteRepository;
+import com.ferreteria.ventas.repository.FormaPagoRepository;
 import com.ferreteria.ventas.repository.ItemComprobanteRepository;
 import com.ferreteria.ventas.repository.PagoRepository;
 import java.math.BigDecimal;
@@ -45,6 +47,9 @@ class ComprobanteRepositoryTest extends IntegrationTestBase {
     PagoRepository pagoRepository;
 
     @Autowired
+    FormaPagoRepository formaPagoRepository;
+
+    @Autowired
     PlatformTransactionManager transactionManager;
 
     @AfterEach
@@ -65,7 +70,9 @@ class ComprobanteRepositoryTest extends IntegrationTestBase {
                     Comprobante.venta(e.ferreteriaId(), 7L, CLAVE, e.usuarioId(), totales, null));
             itemRepository.saveAll(List.of(ItemComprobante.de(e.ferreteriaId(), guardado.getId(), 1, e.articuloId(),
                     "Cable unipolar", "METRO", "IVA_21", renglon)));
-            pagoRepository.save(Pago.de(e.ferreteriaId(), guardado.getId(), MedioPago.DEBITO, totales.total()));
+            FormaPago visa = formaPagoRepository.save(FormaPago.de(e.ferreteriaId(), "Visa débito", MedioPago.DEBITO,
+                    new BigDecimal("5.00"), true, 1));
+            pagoRepository.save(Pago.de(e.ferreteriaId(), guardado.getId(), visa, totales.total(), new BigDecimal("0.50")));
             return guardado.getId();
         });
 
@@ -85,7 +92,14 @@ class ComprobanteRepositoryTest extends IntegrationTestBase {
         assertThat(jdbc.queryForObject("select medio from pago where comprobante_id = ?", String.class, comprobanteId))
                 .isEqualTo("DEBITO");
         assertThat(jdbc.queryForObject("select monto from pago where comprobante_id = ?", BigDecimal.class, comprobanteId))
-                .isEqualByComparingTo("833.33");
+                .isEqualByComparingTo("833.83");
+        var pago = jdbc.queryForMap("select * from pago where comprobante_id = ?", comprobanteId);
+        assertThat(pago.get("FORMA_PAGO_NOMBRE")).isEqualTo("Visa débito");
+        assertThat((BigDecimal) pago.get("RECARGO_PORCENTAJE")).isEqualByComparingTo("5.00");
+        assertThat((BigDecimal) pago.get("RECARGO")).isEqualByComparingTo("0.50");
+        assertThat(pago.get("FORMA_PAGO_ID")).isNotNull();
+        assertThat(jdbc.queryForObject("select recargo from comprobante where id = ?", BigDecimal.class, comprobanteId))
+                .isEqualByComparingTo("0.00");
         var item = jdbc.queryForMap("select * from item_comprobante where comprobante_id = ?", comprobanteId);
         assertThat(item.get("DESCRIPCION")).isEqualTo("Cable unipolar");
         assertThat(item.get("UNIDAD")).isEqualTo("METRO");

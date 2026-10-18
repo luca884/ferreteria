@@ -78,7 +78,7 @@ class VentaConArticuloUsdIntegrationTest extends CotizacionTestBase {
         venta.put("clave", UUID.randomUUID().toString());
         venta.put("renglones", List.of(renglon));
         venta.put("totalMostrado", new BigDecimal(precioMostrado));
-        venta.put("medioPago", "EFECTIVO");
+        venta.put("formaPagoId", formaDePago(token, "EFECTIVO"));
         return postJson("/api/ventas", token, objectMapper.writeValueAsString(venta));
     }
 

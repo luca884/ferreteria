@@ -60,6 +60,35 @@ class FormaPagoIntegrationTest extends VentasTestBase {
     }
 
     @Test
+    @DisplayName("varios primeros pedidos a la vez de una ferreteria nueva dan todos 200 y las cuatro formas una sola vez")
+    void primerosPedidosEnParalelo() throws Exception {
+        Tienda t = tienda();
+        String dueno = login(t.emailDueno());
+        String vendedor = login(t.emailVendedor());
+        java.util.concurrent.ExecutorService pool = java.util.concurrent.Executors.newFixedThreadPool(8);
+        java.util.concurrent.CountDownLatch largada = new java.util.concurrent.CountDownLatch(1);
+        List<java.util.concurrent.Future<Integer>> pedidos = new java.util.ArrayList<>();
+        for (int i = 0; i < 8; i++) {
+            String token = i % 2 == 0 ? dueno : vendedor;
+            pedidos.add(pool.submit(() -> {
+                largada.await();
+                return getResult("/api/formas-pago", token).andReturn().getResponse().getStatus();
+            }));
+        }
+        largada.countDown();
+        try {
+            for (java.util.concurrent.Future<Integer> pedido : pedidos) {
+                assertThat(pedido.get(30, java.util.concurrent.TimeUnit.SECONDS)).isEqualTo(200);
+            }
+        } finally {
+            pool.shutdownNow();
+        }
+
+        assertThat(jdbc.queryForObject("select count(*) from forma_pago where ferreteria_id = ?", Long.class, t.id()))
+                .isEqualTo(4);
+    }
+
+    @Test
     @DisplayName("el Dueno crea una forma con su recargo y queda al final")
     void duenoCrea() throws Exception {
         Tienda t = tienda();

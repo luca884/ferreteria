@@ -80,6 +80,10 @@ public class Comprobante {
     @Column(name = "descuento_porcentaje", nullable = false, updatable = false, precision = 5, scale = 2)
     private BigDecimal descuentoPorcentaje;
 
+    /** El recargo de las formas de pago (GDS-11), ya sumado al total: subtotal - descuento + recargo = total. */
+    @Column(nullable = false, updatable = false, precision = 15, scale = 2)
+    private BigDecimal recargo;
+
     protected Comprobante() {}
 
     public static Comprobante venta(
@@ -104,6 +108,7 @@ public class Comprobante {
         comprobante.total = totales.total();
         comprobante.subtotal = totales.subtotal();
         comprobante.descuentoPorcentaje = descuentoPorcentaje;
+        comprobante.recargo = totales.recargo();
         return comprobante;
     }
 
@@ -122,4 +127,5 @@ public class Comprobante {
     public BigDecimal getTotal() { return total; }
     public BigDecimal getSubtotal() { return subtotal; }
     public BigDecimal getDescuentoPorcentaje() { return descuentoPorcentaje; }
+    public BigDecimal getRecargo() { return recargo; }
 }

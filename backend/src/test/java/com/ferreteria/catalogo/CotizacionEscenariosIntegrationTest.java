@@ -215,7 +215,7 @@ class CotizacionEscenariosIntegrationTest extends CotizacionTestBase {
         venta.put("renglones", List.of(Map.of(
                 "articuloId", usd, "cantidad", new BigDecimal("1"), "precioUnitario", new BigDecimal("15730.00"))));
         venta.put("totalMostrado", new BigDecimal("15730.00"));
-        venta.put("medioPago", "EFECTIVO");
+        venta.put("formaPagoId", formaDePago(vendedorA, "EFECTIVO"));
 
         String cuerpo = postJson("/api/ventas", vendedorA, objectMapper.writeValueAsString(venta))
                 .andExpect(status().isConflict())

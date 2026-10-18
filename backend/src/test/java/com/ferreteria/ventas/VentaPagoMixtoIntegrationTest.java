@@ -18,14 +18,17 @@ class VentaPagoMixtoIntegrationTest extends VentasTestBase {
 
     private record Parte(String medio, String monto) {}
 
-    /** El cuerpo con la lista de pagos y sin medio unico. */
+    /**
+     * El cuerpo con la lista de pagos y sin forma unica. Cada parte nombra el medio de la forma de siempre de la ultima
+     * tienda; "INEXISTENTE" manda un id que no existe.
+     */
     private String conPagos(String clave, String total, Linea linea, Parte... partes) throws Exception {
         Map<String, Object> cuerpo = mapa(clave, null, total, linea);
-        cuerpo.remove("medioPago");
+        cuerpo.remove("formaPagoId");
         List<Map<String, Object>> pagos = new ArrayList<>();
         for (Parte p : partes) {
             Map<String, Object> pago = new LinkedHashMap<>();
-            pago.put("medio", p.medio());
+            pago.put("formaPagoId", "INEXISTENTE".equals(p.medio()) ? 999_999_999L : formaDe(ultimaTienda, p.medio()));
             pago.put("monto", new BigDecimal(p.monto()));
             pagos.add(pago);
         }
@@ -34,7 +37,7 @@ class VentaPagoMixtoIntegrationTest extends VentasTestBase {
     }
 
     @Test
-    @DisplayName("el vendedor paga mitad en efectivo y mitad con débito: 201, dos pagos guardados y sin medioPago único")
+    @DisplayName("el vendedor paga mitad en efectivo y mitad con débito: 201, dos pagos guardados y sin forma única")
     void pagoMixto() throws Exception {
         Tienda t = tienda();
         long a = articulo(t, "Tornillo", "UNIDAD", "100.00", "10");
@@ -45,6 +48,7 @@ class VentaPagoMixtoIntegrationTest extends VentasTestBase {
                 .andExpect(status().isCreated()));
 
         assertThat(venta.has("medioPago")).isFalse();
+        assertThat(venta.has("formaPagoId")).isFalse();
         assertThat(venta.get("pagos")).hasSize(2);
         assertThat(venta.get("pagos").get(0).get("medio").asText()).isEqualTo("EFECTIVO");
         assertThat(venta.get("pagos").get(1).get("monto").decimalValue()).isEqualByComparingTo("200.00");
@@ -107,7 +111,7 @@ class VentaPagoMixtoIntegrationTest extends VentasTestBase {
     }
 
     @Test
-    @DisplayName("un monto en cero, un medio repetido o un medio inventado dan 400 y no guardan nada")
+    @DisplayName("un monto en cero, una forma repetida o una forma inexistente dan 400 y no guardan nada")
     void pagosInvalidos() throws Exception {
         Tienda t = tienda();
         long a = articulo(t, "Tornillo", "UNIDAD", "100.00", "10");
@@ -118,27 +122,28 @@ class VentaPagoMixtoIntegrationTest extends VentasTestBase {
         JsonNode repetido = json(postJson("/api/ventas", token, conPagos(clave(), "100.00", linea(a, "1", "100.00"),
                 new Parte("EFECTIVO", "40.00"), new Parte("EFECTIVO", "60.00"))).andExpect(status().isBadRequest()));
         JsonNode inventado = json(postJson("/api/ventas", token, conPagos(clave(), "100.00", linea(a, "1", "100.00"),
-                new Parte("CHEQUE", "100.00"))).andExpect(status().isBadRequest()));
+                new Parte("INEXISTENTE", "100.00"))).andExpect(status().isBadRequest()));
 
         assertThat(cero.get("errors").get("pagos[0].monto").asText()).isEqualTo("El monto del pago tiene que ser mayor a cero.");
-        assertThat(repetido.get("errors").get("pagos[1].medio").asText()).isEqualTo("Cada medio de pago va una sola vez.");
-        assertThat(inventado.get("errors").get("medio").asText())
-                .isEqualTo("El medio de pago no es válido. Usá EFECTIVO, DEBITO, CREDITO o TRANSFERENCIA.");
+        assertThat(repetido.get("errors").get("pagos[1].formaPagoId").asText())
+                .isEqualTo("Cada forma de pago va una sola vez.");
+        assertThat(inventado.get("errors").get("pagos[0].formaPagoId").asText())
+                .isEqualTo("La forma de pago no es válida.");
         assertThat(comprobantes(t)).isZero();
     }
 
     @Test
-    @DisplayName("sin medio de pago ni lista de pagos da 400 en medioPago")
-    void sinMedioNiPagos() throws Exception {
+    @DisplayName("sin forma de pago ni lista de pagos da 400 en formaPagoId")
+    void sinFormaNiPagos() throws Exception {
         Tienda t = tienda();
         long a = articulo(t, "Tornillo", "UNIDAD", "100.00", "10");
         Map<String, Object> cuerpo = mapa(clave(), null, "100.00", linea(a, "1", "100.00"));
-        cuerpo.remove("medioPago");
+        cuerpo.remove("formaPagoId");
 
         JsonNode error = json(postJson("/api/ventas", login(t.emailVendedor()), objectMapper.writeValueAsString(cuerpo))
                 .andExpect(status().isBadRequest()));
 
-        assertThat(error.get("errors").get("medioPago").asText()).isNotBlank();
+        assertThat(error.get("errors").get("formaPagoId").asText()).isEqualTo("Elegí una forma de pago.");
         assertThat(comprobantes(t)).isZero();
     }
 
@@ -167,7 +172,7 @@ class VentaPagoMixtoIntegrationTest extends VentasTestBase {
     }
 
     @Test
-    @DisplayName("un pago por el total con la lista es igual a un medio único: una sola fila y medioPago en la respuesta")
+    @DisplayName("un pago por el total con la lista es igual a una forma única: una sola fila, con formaPagoId y medioPago en la respuesta")
     void unSoloPagoEnLaLista() throws Exception {
         Tienda t = tienda();
         long a = articulo(t, "Tornillo", "UNIDAD", "100.00", "10");
@@ -177,6 +182,7 @@ class VentaPagoMixtoIntegrationTest extends VentasTestBase {
                 .andExpect(status().isCreated()));
 
         assertThat(venta.get("medioPago").asText()).isEqualTo("CREDITO");
+        assertThat(venta.get("formaPagoId").asLong()).isEqualTo(formaDe(t, "CREDITO"));
         assertThat(venta.get("pagos")).hasSize(1);
     }
 }
