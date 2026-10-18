@@ -11,14 +11,13 @@ describe('mapa de atajos del mostrador', () => {
     expect(new Set(acciones).size).toBe(acciones.length);
   });
 
-  it('están F2, F3, F4, F6, F7, F10 y Esc', () => {
+  it('están F2, F3, F4, F6, F7, F8, F10 y Esc', () => {
     const teclas = ATAJOS.map((a) => a.tecla);
-    for (const t of ['F2', 'F3', 'F4', 'F6', 'F7', 'F10', 'Escape']) expect(teclas).toContain(t);
+    for (const t of ['F2', 'F3', 'F4', 'F6', 'F7', 'F8', 'F10', 'Escape']) expect(teclas).toContain(t);
   });
 
-  it('F8 y F9 no están (son de los cortes del presupuesto y el cliente)', () => {
-    const teclas = ATAJOS.map((a) => a.tecla);
-    for (const t of ['F8', 'F9']) expect(teclas).not.toContain(t);
+  it('F9 no está (es del corte del cliente)', () => {
+    expect(ATAJOS.map((a) => a.tecla)).not.toContain('F9');
   });
 
   describe('accionDeTecla', () => {
@@ -29,11 +28,12 @@ describe('mapa de atajos del mostrador', () => {
       expect(accionDeTecla('F10')).toBe('quitar');
       expect(accionDeTecla('F7')).toBe('descuento');
       expect(accionDeTecla('F6')).toBe('descuentoTotal');
+      expect(accionDeTecla('F8')).toBe('presupuesto');
       expect(accionDeTecla('Escape')).toBe('cerrar');
     });
 
     it('una tecla sin atajo da null', () => {
-      for (const k of ['F5', 'F8', 'Delete', 'Enter', 'a', '']) expect(accionDeTecla(k)).toBeNull();
+      for (const k of ['F5', 'F9', 'Delete', 'Enter', 'a', '']) expect(accionDeTecla(k)).toBeNull();
     });
 
     it('Vaciar está en el mapa pero sin tecla, y ninguna tecla lo devuelve (R-030, R-038)', () => {
@@ -45,13 +45,14 @@ describe('mapa de atajos del mostrador', () => {
   });
 
   describe('botonera', () => {
-    it('muestra Buscar, Cantidad, los descuentos, Cobrar, Quitar y Vaciar (sin tecla), y no Esc', () => {
+    it('muestra Buscar, Cantidad, los descuentos, Cobrar, Presupuesto, Quitar y Vaciar (sin tecla), y no Esc', () => {
       expect(atajosDeBotonera().map((a) => `${a.tecla ?? ''} ${a.etiqueta}`.trim())).toEqual([
         'F2 Buscar',
         'F3 Cantidad',
         'F7 Descuento',
         'F6 Dto. total',
         'F4 Cobrar',
+        'F8 Presupuesto',
         'F10 Quitar',
         'Vaciar',
       ]);

@@ -8,6 +8,7 @@ import { DialogoCantidad } from './dialogo-cantidad';
 import { ConfirmacionCobro, DialogoCobro } from './dialogo-cobro';
 import { DialogoConfirmacion } from './dialogo-confirmacion';
 import { DialogoDescuento } from './dialogo-descuento';
+import { DialogoPresupuesto } from './dialogo-presupuesto';
 import { FichaArticulo } from './ficha-articulo';
 import { LISTA_ID, ListaResultados, filaId } from './lista-resultados';
 import { ArticuloMostrador, BusquedaMostrador } from './mostrador.models';
@@ -17,7 +18,7 @@ import { AVISO_ESCANEO_CON_DIALOGO } from './guarda-lector';
 import { MontoPipe, formatearMonto } from '../../core/formato/monto';
 import { BarraAcciones } from '../../shared/barra-acciones';
 import { aCentavos } from './centavos';
-import { aRequest } from './ticket';
+import { aPresupuestoRequest, aRequest } from './ticket';
 import { TicketLista } from './ticket-lista';
 import { TicketStore } from './ticket.store';
 import { TotalesTicket } from './totales-ticket';
@@ -28,6 +29,8 @@ import { CajaVigente, avisoParaVender } from '../caja/caja.models';
 import { CajaService } from '../caja/caja.service';
 import { FormaPago } from '../formas-pago/forma-pago.models';
 import { FormasPagoService } from '../formas-pago/formas-pago.service';
+import { DatosPresupuesto, PresupuestoResponse } from '../presupuestos/presupuesto.models';
+import { PresupuestosService } from '../presupuestos/presupuestos.service';
 
 const ESPERA_MS = 250;
 /** Cuánto queda a la vista el aviso de venta cobrada. */
@@ -36,6 +39,7 @@ const MENSAJE_ERROR = 'No se pudo buscar. Probá de nuevo.';
 const MENSAJE_SIN_RESULTADOS = 'No encontramos ningún artículo con ese código o descripción.';
 const MENSAJE_TICKET_VACIO = 'El ticket está vacío.';
 const MENSAJE_COBRO_FALLIDO = 'No se pudo cobrar. Probá de nuevo.';
+const MENSAJE_PRESUPUESTO_FALLIDO = 'No se pudo guardar el presupuesto. Probá de nuevo.';
 const MENSAJE_SIN_FORMAS = 'No se pudieron cargar las formas de pago. Probá de nuevo en un momento.';
 const PROBLEMA_DADO_DE_BAJA = 'Artículo dado de baja';
 const PROBLEMA_INEXISTENTE = 'Ya no está disponible';
@@ -48,7 +52,8 @@ type Dialogo =
   | { tipo: 'vaciar' }
   | { tipo: 'descuento'; indice: number }
   | { tipo: 'descuentoTotal' }
-  | { tipo: 'cobro' };
+  | { tipo: 'cobro' }
+  | { tipo: 'presupuesto' };
 
 /**
  * Aviso del contenedor, aparte del mensaje de la búsqueda. `vacio` y `persistente` se van con el próximo
@@ -82,6 +87,7 @@ interface Escaneo {
     DialogoCobro,
     DialogoConfirmacion,
     DialogoDescuento,
+    DialogoPresupuesto,
     ListaResultados,
     FichaArticulo,
     TicketLista,
@@ -99,6 +105,7 @@ interface Escaneo {
 export class Mostrador {
   private readonly service = inject(MostradorService);
   private readonly ventas = inject(VentaService);
+  private readonly presupuestos = inject(PresupuestosService);
   private readonly cajas = inject(CajaService);
   private readonly formas = inject(FormasPagoService);
   private readonly destroyRef = inject(DestroyRef);
@@ -199,9 +206,9 @@ export class Mostrador {
   /** Para el buscador: con un diálogo abierto no recupera el foco diferido. */
   protected readonly sinDialogo = () => this.dialogo() === null;
   protected readonly aviso = signal<Aviso | null>(null);
-  /** Hay un POST de venta en curso: el diálogo de cobro ignora Enter y no se cierra. */
+  /** Hay un POST de venta o de presupuesto en curso: su diálogo ignora Enter y no se cierra. */
   protected readonly enVuelo = signal(false);
-  /** Mensaje dentro del diálogo de cobro (precio cambiado, error de red, escaneo descartado). */
+  /** Mensaje dentro del diálogo de cobro o de presupuesto (precio cambiado, error de red, escaneo descartado). */
   protected readonly avisoCobro = signal<string | null>(null);
   /** Lo recibido en el POST en curso (solo efectivo): el backend no guarda el vuelto, se calcula acá. */
   private recibidoEnVuelo: number | null = null;
@@ -216,6 +223,8 @@ export class Mostrador {
       descuento: conRenglones,
       descuentoTotal: conRenglones,
       cobrar: conRenglones && this.avisoCaja() === null,
+      // El presupuesto no toca la caja ni el stock: se puede guardar aunque no haya caja abierta.
+      presupuesto: conRenglones,
       quitar: conRenglones,
       vaciar: conRenglones,
     };
@@ -375,6 +384,14 @@ export class Mostrador {
         this.dialogo.set({ tipo: 'cobro' });
         return;
       }
+      case 'presupuesto':
+        if (renglones.length === 0) {
+          this.avisar({ texto: MENSAJE_TICKET_VACIO, grave: false, tipo: 'vacio' });
+          return;
+        }
+        this.avisar(null);
+        this.dialogo.set({ tipo: 'presupuesto' });
+        return;
       case 'vaciar':
         if (renglones.length === 0) return;
         this.avisar(null);
@@ -443,7 +460,8 @@ export class Mostrador {
 
   /** Un escaneo llegó con un diálogo abierto: el diálogo lo descartó y acá se avisa. */
   protected escaneoDescartado(): void {
-    if (this.dialogo()?.tipo === 'cobro') this.avisoCobro.set(AVISO_ESCANEO_CON_DIALOGO);
+    const tipo = this.dialogo()?.tipo;
+    if (tipo === 'cobro' || tipo === 'presupuesto') this.avisoCobro.set(AVISO_ESCANEO_CON_DIALOGO);
     else this.avisar({ texto: AVISO_ESCANEO_CON_DIALOGO, grave: false, tipo: 'otro' });
   }
 
@@ -499,19 +517,58 @@ export class Mostrador {
     this.cerrarDialogo();
   }
 
+  /** Enter en el diálogo de presupuesto (F8): guarda el ticket con la clave del ticket (la misma en cada reintento). */
+  protected guardarPresupuesto(datos: DatosPresupuesto): void {
+    if (this.enVuelo()) return;
+    const pedido = aPresupuestoRequest(this.ticket.ticket(), datos);
+    this.enVuelo.set(true);
+    this.avisoCobro.set(null);
+    this.presupuestos
+      .emitir(pedido)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: ({ presupuesto }) => this.alGuardar(presupuesto),
+        error: (err: unknown) => this.alFallarEnvio(err, MENSAJE_PRESUPUESTO_FALLIDO, false),
+      });
+  }
+
+  /** El presupuesto quedó guardado: el ticket se vacía (no se vendió nada) y se avisa el número. */
+  private alGuardar(presupuesto: PresupuestoResponse): void {
+    this.enVuelo.set(false);
+    this.ticket.vaciar();
+    this.siguiendoTicket.set(true);
+    this.avisar(
+      {
+        texto: `Presupuesto N.º ${presupuesto.numero} guardado: ${formatearMonto(presupuesto.total)}`,
+        grave: false,
+        tipo: 'otro',
+      },
+      AVISO_COBRADA_MS,
+    );
+    this.cerrarDialogo();
+  }
+
   private alFallarCobro(err: unknown): void {
+    this.alFallarEnvio(err, MENSAJE_COBRO_FALLIDO, true);
+  }
+
+  /**
+   * Un POST del ticket (venta o presupuesto) falló. Los rechazos del ticket son los mismos; `esCobro` agrega lo que
+   * solo importa al vender: releer las formas de pago y la caja.
+   */
+  private alFallarEnvio(err: unknown, mensajeGenerico: string, esCobro: boolean): void {
     this.enVuelo.set(false);
     const rechazo = rechazoDe(err);
     if (!rechazo) {
       const invalida = invalidaDe(err);
       if (invalida) this.alVentaInvalida(invalida);
-      else this.avisoCobro.set(MENSAJE_COBRO_FALLIDO);
+      else this.avisoCobro.set(mensajeGenerico);
       return;
     }
     switch (rechazo.motivo) {
       case 'PRECIOS_CAMBIADOS':
         // También cambia el total si el Dueño tocó el recargo de la forma: se vuelven a leer.
-        this.leerFormas();
+        if (esCobro) this.leerFormas();
         this.ticket.actualizarPrecios(
           rechazo.articulos.flatMap((a) =>
             a.precioActual === undefined

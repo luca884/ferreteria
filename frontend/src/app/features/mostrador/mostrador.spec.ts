@@ -11,6 +11,8 @@ import { CajaVigente } from '../caja/caja.models';
 import { CajaService } from '../caja/caja.service';
 import { FormaPago } from '../formas-pago/forma-pago.models';
 import { FormasPagoService } from '../formas-pago/formas-pago.service';
+import { EmitirPresupuestoRequest, PresupuestoEmitido } from '../presupuestos/presupuesto.models';
+import { PresupuestosService } from '../presupuestos/presupuestos.service';
 import { ArticuloMostrador, BusquedaMostrador } from './mostrador.models';
 import { Mostrador } from './mostrador';
 import { MostradorService } from './mostrador.service';
@@ -71,9 +73,16 @@ describe('Mostrador', () => {
     respuesta: Subject<VentaCobrada>;
   }
 
+  /** Un POST de presupuesto al servicio falso: la respuesta la da el test cuando quiere. */
+  interface Guardado {
+    pedido: EmitirPresupuestoRequest;
+    respuesta: Subject<PresupuestoEmitido>;
+  }
+
   let fixture: ComponentFixture<Mostrador>;
   let llamadas: Llamada[];
   let cobros: Cobro[];
+  let guardados: Guardado[];
   let claves: number;
   let cajas: { actual: ReturnType<typeof vi.fn> };
   let formasApi: { listar: ReturnType<typeof vi.fn> };
@@ -91,6 +100,7 @@ describe('Mostrador', () => {
       vi.fn() as unknown as typeof Element.prototype.scrollIntoView;
     llamadas = [];
     cobros = [];
+    guardados = [];
     claves = 0;
     const servicio = {
       buscar: vi.fn((q: string) => {
@@ -103,6 +113,13 @@ describe('Mostrador', () => {
       cobrar: vi.fn((pedido: ConfirmarVentaRequest) => {
         const respuesta = new Subject<VentaCobrada>();
         cobros.push({ pedido, respuesta });
+        return respuesta;
+      }),
+    };
+    const presupuestosApi = {
+      emitir: vi.fn((pedido: EmitirPresupuestoRequest) => {
+        const respuesta = new Subject<PresupuestoEmitido>();
+        guardados.push({ pedido, respuesta });
         return respuesta;
       }),
     };
@@ -123,6 +140,7 @@ describe('Mostrador', () => {
         { provide: LOCALE_ID, useValue: 'es-AR' },
         { provide: MostradorService, useValue: servicio },
         { provide: VentaService, useValue: ventas },
+        { provide: PresupuestosService, useValue: presupuestosApi },
         { provide: CajaService, useValue: cajas },
         { provide: FormasPagoService, useValue: formasApi },
         { provide: AuthService, useValue: { sesion: sesion.asReadonly() } },
@@ -195,6 +213,7 @@ describe('Mostrador', () => {
         'F7 Descuento',
         'F6 Dto. total',
         'F4 Cobrar',
+        'F8 Presupuesto',
         'F10 Quitar',
         'Vaciar',
       ]);
@@ -2163,7 +2182,7 @@ describe('Mostrador', () => {
       expect(llamadas).toHaveLength(2);
     });
 
-    it('F8 no hace nada todavía (es del presupuesto)', async () => {
+    it('F8 con el ticket vacío avisa y anula la acción del navegador, como F4', async () => {
       await crear();
       await escribir('tor');
       await avanzar(250);
@@ -2172,10 +2191,11 @@ describe('Mostrador', () => {
       const evento = await tecla('F8');
       await avanzar(500);
 
-      expect(evento.defaultPrevented).toBe(false);
+      expect(evento.defaultPrevented).toBe(true);
+      expect(el().textContent).toContain('El ticket está vacío.');
+      expect(el().querySelector('[role="dialog"], [role="alertdialog"]')).toBeNull();
       expect(campo().value).toBe('tor');
-      expect(filas()).toHaveLength(1);
-      expect(llamadas).toHaveLength(1);
+      expect(guardados).toHaveLength(0);
     });
 
     it('F4 ya no es inerte: con el ticket vacío avisa y anula la acción del navegador (R-032)', async () => {
@@ -2702,6 +2722,290 @@ describe('Mostrador', () => {
       expect(el().querySelectorAll('app-ticket-lista .descripcion')).toHaveLength(1);
       expect(normal(el().querySelector('.aviso')?.textContent)).toBe('Abrí la caja para vender.');
       expect(normal(avisoCaja()?.textContent)).toContain('Abrí la caja para vender.');
+    });
+  });
+
+  describe('presupuesto (GDS-13, PP-007)', () => {
+    const exacto = (a: ArticuloMostrador): BusquedaMostrador => ({ tipo: 'EXACTO', items: [a], hayMas: false });
+    const normal = (t: string | null | undefined) => (t ?? '').replace(/\s+/g, ' ').trim();
+    const dialogo = () => el().querySelector<HTMLElement>('[role="dialog"], [role="alertdialog"]');
+    const dialogoPresupuesto = () => el().querySelector<HTMLElement>('app-dialogo-presupuesto [role="dialog"]');
+    const aviso = () => normal(el().querySelector('.aviso')?.textContent);
+    const totalGrande = () => normal(el().querySelector('app-totales-ticket .total')?.textContent);
+    const sinCaja: CajaVigente = { estado: 'SIN_CAJA', caja: null, efectivoPropuesto: 0 };
+
+    async function tecla(key: string, destino: HTMLElement = document.activeElement as HTMLElement) {
+      const evento = new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true });
+      destino.dispatchEvent(evento);
+      await refrescar();
+      return evento;
+    }
+
+    async function conMartillos(vigente: CajaVigente = cajaAbierta) {
+      await crear(vigente);
+      for (let i = 0; i < 2; i++) {
+        await escribir('M');
+        await enter();
+        await responder(llamadas.length - 1, exacto(articulo(1, { descripcion: 'Martillo', precioFinal: 1500 })));
+      }
+    }
+
+    function presupuestoGuardado(numero: number, total: number): PresupuestoEmitido {
+      return {
+        presupuesto: {
+          presupuestoId: 8,
+          numero,
+          estado: 'PENDIENTE',
+          fecha: '2026-10-18T10:00:00',
+          vence: '2026-11-02',
+          vencido: false,
+          subtotal: total,
+          descuentoPorcentaje: 0,
+          descuento: 0,
+          neto: 0,
+          iva: 0,
+          total,
+          renglones: [],
+        },
+        repetido: false,
+      };
+    }
+
+    async function guardarOk(indice: number, p: PresupuestoEmitido) {
+      guardados[indice].respuesta.next(p);
+      guardados[indice].respuesta.complete();
+      await refrescar();
+    }
+
+    async function fallarGuardado(indice: number, status: number, cuerpo: unknown = null) {
+      guardados[indice].respuesta.error(new HttpErrorResponse({ status, error: cuerpo }));
+      await refrescar();
+    }
+
+    const rechazo = (status: number, motivo: string, articulos: unknown[], message = 'rechazo') => ({
+      status,
+      message,
+      timestamp: '2026-10-18T10:00:00',
+      motivo,
+      articulos,
+    });
+
+    it('F8 con renglones abre «Guardar presupuesto», anula la acción del navegador y no manda nada todavía', async () => {
+      await conMartillos();
+
+      const evento = await tecla('F8');
+
+      expect(evento.defaultPrevented).toBe(true);
+      expect(normal(dialogoPresupuesto()?.querySelector('h2')?.textContent)).toBe('Guardar presupuesto');
+      expect(guardados).toHaveLength(0);
+    });
+
+    it('el botón F8 Presupuesto abre lo mismo, y está apagado con el ticket vacío', async () => {
+      await crear();
+      const boton = () =>
+        Array.from(el().querySelectorAll<HTMLButtonElement>('app-botonera button')).find((b) =>
+          normal(b.textContent).includes('Presupuesto'),
+        )!;
+      expect(boton().disabled).toBe(true);
+
+      await escribir('M');
+      await enter();
+      await responder(llamadas.length - 1, exacto(articulo(1)));
+      expect(boton().disabled).toBe(false);
+      boton().click();
+      await refrescar();
+
+      expect(dialogoPresupuesto()).not.toBeNull();
+    });
+
+    it('no exige caja abierta: sin caja F8 abre el diálogo y el botón está habilitado', async () => {
+      await conMartillos(sinCaja);
+
+      await tecla('F8');
+
+      expect(dialogoPresupuesto()).not.toBeNull();
+    });
+
+    it('Enter envía el presupuesto con la clave del ticket, el total sin recargo y 15 días', async () => {
+      await conMartillos();
+
+      await tecla('F8');
+      await tecla('Enter');
+
+      expect(guardados).toHaveLength(1);
+      expect(guardados[0].pedido).toEqual({
+        clave: 'clave-1',
+        renglones: [{ articuloId: 1, cantidad: 2, precioUnitario: 1500 }],
+        totalMostrado: 3000,
+        diasValidez: 15,
+      });
+    });
+
+    it('manda el cliente y las observaciones que se escribieron en el diálogo', async () => {
+      await conMartillos();
+      await tecla('F8');
+      const cliente = dialogoPresupuesto()!.querySelector<HTMLInputElement>('input[name="cliente"]')!;
+      cliente.value = 'Obra Perez';
+      cliente.dispatchEvent(new Event('input'));
+      const validez = dialogoPresupuesto()!.querySelector<HTMLInputElement>('input[name="validez"]')!;
+      validez.value = '30';
+      validez.dispatchEvent(new Event('input'));
+
+      await tecla('Enter');
+
+      expect(guardados[0].pedido).toMatchObject({ clienteNombre: 'Obra Perez', diasValidez: 30 });
+    });
+
+    it('el pedido lleva los descuentos del ticket y el total ya descontado', async () => {
+      await conMartillos();
+      await tecla('F6');
+      const campoDescuento = el().querySelector<HTMLInputElement>('app-dialogo-descuento input')!;
+      campoDescuento.value = '10';
+      campoDescuento.dispatchEvent(new Event('input'));
+      await refrescar();
+      await tecla('Enter');
+
+      await tecla('F8');
+      await tecla('Enter');
+
+      expect(guardados[0].pedido.descuentoPorcentaje).toBe(10);
+      expect(guardados[0].pedido.totalMostrado).toBe(2700);
+    });
+
+    it('al guardarse vacía el ticket, cierra el diálogo, avisa el número y devuelve el foco al buscador', async () => {
+      await conMartillos();
+      await tecla('F8');
+      await tecla('Enter');
+
+      await guardarOk(0, presupuestoGuardado(12, 3000));
+
+      expect(dialogo()).toBeNull();
+      expect(renglonesTicket()).toHaveLength(0);
+      expect(aviso()).toBe('Presupuesto N.º 12 guardado: $ 3.000,00');
+      expect(document.activeElement).toBe(campo());
+      expect(localStorage.getItem('ticket:3:7')).toBeNull();
+    });
+
+    it('el aviso de presupuesto guardado se va solo a los 5 segundos', async () => {
+      await conMartillos();
+      await tecla('F8');
+      await tecla('Enter');
+      await guardarOk(0, presupuestoGuardado(12, 3000));
+      expect(aviso()).toContain('Presupuesto N.º 12 guardado');
+
+      await avanzar(5000);
+
+      expect(aviso()).toBe('');
+    });
+
+    it('con el POST en curso Esc no cierra el diálogo y Enter no manda otro', async () => {
+      await conMartillos();
+      await tecla('F8');
+      await tecla('Enter');
+
+      await tecla('Escape');
+      await tecla('Enter');
+
+      expect(dialogoPresupuesto()).not.toBeNull();
+      expect(guardados).toHaveLength(1);
+    });
+
+    it('Esc cierra el diálogo sin guardar y conserva el ticket', async () => {
+      await conMartillos();
+      await tecla('F8');
+
+      await tecla('Escape');
+
+      expect(dialogo()).toBeNull();
+      expect(guardados).toHaveLength(0);
+      expect(renglonesTicket()).toHaveLength(1);
+    });
+
+    it('con otro diálogo abierto F8 no abre el del presupuesto', async () => {
+      await conMartillos();
+      await tecla('F4');
+
+      await tecla('F8');
+
+      expect(dialogoPresupuesto()).toBeNull();
+      expect(dialogo()).not.toBeNull();
+      expect(guardados).toHaveLength(0);
+    });
+
+    it('si cambió un precio: actualiza el ticket, avisa en el diálogo y al volver a guardar manda el total nuevo con la misma clave', async () => {
+      await conMartillos();
+      await tecla('F8');
+      await tecla('Enter');
+
+      await fallarGuardado(0, 409, {
+        ...rechazo(409, 'PRECIOS_CAMBIADOS', [{ articuloId: 1, descripcion: 'Martillo', precioMostrado: 1500, precioActual: 1800 }]),
+        total: 3600,
+      });
+
+      expect(dialogoPresupuesto()).not.toBeNull();
+      expect(normal(dialogoPresupuesto()!.querySelector('[role="status"]')?.textContent)).toBe(
+        'Cambió el precio de "Martillo": ahora $ 1.800,00.',
+      );
+      expect(totalGrande()).toBe('$ 3.600,00');
+      await tecla('Enter', dialogoPresupuesto()!.querySelector('input')!);
+      expect(guardados).toHaveLength(2);
+      expect(guardados[1].pedido.clave).toBe('clave-1');
+      expect(guardados[1].pedido.totalMostrado).toBe(3600);
+    });
+
+    it('si un artículo ya no se puede vender: cierra el diálogo, conserva el ticket, marca el renglón y avisa', async () => {
+      await conMartillos();
+      await tecla('F8');
+      await tecla('Enter');
+
+      await fallarGuardado(
+        0,
+        422,
+        rechazo(422, 'ARTICULO_DADO_DE_BAJA', [{ articuloId: 1, descripcion: 'Martillo' }], '"Martillo" fue dado de baja. Sacalo del ticket para seguir.'),
+      );
+
+      expect(dialogo()).toBeNull();
+      expect(renglonesTicket()).toHaveLength(1);
+      expect(renglonesTicket()[0].textContent).toContain('Artículo dado de baja');
+      expect(aviso()).toBe('"Martillo" fue dado de baja. Sacalo del ticket para seguir.');
+    });
+
+    it('si la clave ya se usó con otro contenido: cierra el diálogo y avisa con el mensaje del servidor', async () => {
+      await conMartillos();
+      await tecla('F8');
+      await tecla('Enter');
+
+      await fallarGuardado(0, 422, rechazo(422, 'CLAVE_CON_OTRO_CONTENIDO', [], 'Este presupuesto ya se emitió con otros datos'));
+
+      expect(dialogo()).toBeNull();
+      expect(aviso()).toBe('Este presupuesto ya se emitió con otros datos');
+    });
+
+    it('un 400 muestra el mensaje del servidor dentro del diálogo y se puede volver a intentar', async () => {
+      await conMartillos();
+      await tecla('F8');
+      await tecla('Enter');
+
+      await fallarGuardado(0, 400, { status: 400, message: 'Datos inválidos', errors: { clienteNombre: 'El nombre del cliente admite hasta 80 caracteres.' } });
+
+      expect(normal(dialogoPresupuesto()!.querySelector('[role="status"]')?.textContent)).toBe(
+        'El nombre del cliente admite hasta 80 caracteres.',
+      );
+      await tecla('Enter', dialogoPresupuesto()!.querySelector('input')!);
+      expect(guardados).toHaveLength(2);
+    });
+
+    it('un error de red deja el diálogo abierto con un aviso para reintentar y no pierde el ticket', async () => {
+      await conMartillos();
+      await tecla('F8');
+      await tecla('Enter');
+
+      await fallarGuardado(0, 500);
+
+      expect(normal(dialogoPresupuesto()!.querySelector('[role="status"]')?.textContent)).toBe(
+        'No se pudo guardar el presupuesto. Probá de nuevo.',
+      );
+      expect(renglonesTicket()).toHaveLength(1);
     });
   });
 });

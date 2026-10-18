@@ -19,13 +19,14 @@ describe('Botonera', () => {
     fixture.detectChanges();
   });
 
-  it('muestra F2 Buscar, F3 Cantidad, los descuentos F7 y F6, F4 Cobrar, F10 Quitar y Vaciar', () => {
+  it('muestra F2 Buscar, F3 Cantidad, los descuentos F7 y F6, F4 Cobrar, F8 Presupuesto, F10 Quitar y Vaciar', () => {
     expect(textos()).toEqual([
       'F2 Buscar',
       'F3 Cantidad',
       'F7 Descuento',
       'F6 Dto. total',
       'F4 Cobrar',
+      'F8 Presupuesto',
       'F10 Quitar',
       'Vaciar',
     ]);
@@ -38,9 +39,8 @@ describe('Botonera', () => {
     expect(boton('F4').getAttribute('aria-keyshortcuts')).toBe('F4');
   });
 
-  it('no muestra F8 ni F9', () => {
-    const todo = textos().join(' ');
-    expect(todo).not.toMatch(/F8|F9/);
+  it('no muestra F9 (es del corte del cliente)', () => {
+    expect(textos().join(' ')).not.toMatch(/F9/);
   });
 
   it('las etiquetas salen del mapa de atajos, sin duplicarlas', () => {
@@ -71,10 +71,11 @@ describe('Botonera', () => {
     boton('F4').click();
     boton('F3').click();
     boton('F2').click();
+    boton('F8').click();
     boton('F10').click();
     boton('Vaciar').click();
 
-    expect(emitidas).toEqual(['cobrar', 'cantidad', 'buscar', 'quitar', 'vaciar']);
+    expect(emitidas).toEqual(['cobrar', 'cantidad', 'buscar', 'presupuesto', 'quitar', 'vaciar']);
   });
 
   it('mousedown se cancela para no robarle el foco a la caja', () => {

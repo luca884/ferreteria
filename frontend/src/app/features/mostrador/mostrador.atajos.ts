@@ -1,6 +1,6 @@
 /**
  * Mapa único de atajos del mostrador. El manejador de teclas de `Mostrador` y la botonera leen de acá:
- * si Chrome no deja anular una tecla F, se cambia solo este archivo. F8 y F9 se suman en los cortes del presupuesto y el cliente.
+ * si Chrome no deja anular una tecla F, se cambia solo este archivo. F9 se suma en el corte del cliente.
  */
 export type AccionMostrador =
   | 'buscar'
@@ -8,6 +8,7 @@ export type AccionMostrador =
   | 'descuento'
   | 'descuentoTotal'
   | 'cobrar'
+  | 'presupuesto'
   | 'quitar'
   | 'vaciar'
   | 'cerrar';
@@ -26,6 +27,7 @@ export const ATAJOS: readonly Atajo[] = [
   { tecla: 'F7', accion: 'descuento', etiqueta: 'Descuento', enBotonera: true },
   { tecla: 'F6', accion: 'descuentoTotal', etiqueta: 'Dto. total', enBotonera: true },
   { tecla: 'F4', accion: 'cobrar', etiqueta: 'Cobrar', enBotonera: true },
+  { tecla: 'F8', accion: 'presupuesto', etiqueta: 'Presupuesto', enBotonera: true },
   { tecla: 'F10', accion: 'quitar', etiqueta: 'Quitar', enBotonera: true },
   { tecla: null, accion: 'vaciar', etiqueta: 'Vaciar', enBotonera: true },
   { tecla: 'Escape', accion: 'cerrar', etiqueta: 'Esc', enBotonera: false },
