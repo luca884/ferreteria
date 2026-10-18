@@ -79,6 +79,7 @@ Son 10 casos de uso, agrupados en cuatro módulos. Si algo no está en esta list
 **CU-07 Vender y facturar** (Vendedor)
 
 1. Agrega artículos al ticket escaneando o buscando; ajusta cantidades.
+   - Puede aplicar un **descuento en %** a un renglón (F7) o a todo el ticket (F6). Va de 0 a 99,99 %, con hasta 2 decimales; 0 lo saca. No hay tope por usuario por ahora. El descuento global se aplica a cada renglón (prorrateo), así el total es exactamente la suma de los renglones. El comprobante guarda el descuento de cada renglón, el global y el subtotal antes de descuentos; el que lo aplicó es el usuario de la venta.
 2. Elige el cliente: Consumidor Final por defecto, o busca por CUIT o DNI.
 3. El sistema decide el comprobante (A, B o C) según la condición de IVA de la ferretería y del cliente.
 4. Elige el medio de pago: efectivo, débito, crédito o transferencia.
@@ -155,8 +156,8 @@ Una sola base compartida y todas las tablas de negocio con `tenant_id`. Es el mi
 | ImportacionLista | archivo, fecha, cantidades (suben, bajan, nuevos), estado | N—1 Proveedor |
 | MovimientoStock | tipo, cantidad (decimal), motivo, fecha, usuario | N—1 Articulo, N—1 Comprobante (opcional) |
 | Cliente | nombre o razón social, tipo y número de documento, condición IVA, domicilio | 1—N Comprobante |
-| Comprobante | tipo (FA, FB, FC, NC, presupuesto), punto de venta, número, fecha, neto, IVA, total, CAE, vencimiento del CAE, estado (pendiente, autorizado, rechazado) | N—1 Cliente, N—1 Caja, 1—N Item, 1—N Pago |
-| ItemComprobante | descripción, cantidad, precio unitario, alícuota IVA, subtotal (copiados al momento de la venta) | N—1 Comprobante, N—1 Articulo |
+| Comprobante | tipo (FA, FB, FC, NC, presupuesto), punto de venta, número, fecha, neto, IVA, total, subtotal (antes de descuentos), descuento global %, CAE, vencimiento del CAE, estado (pendiente, autorizado, rechazado) | N—1 Cliente, N—1 Caja, 1—N Item, 1—N Pago |
+| ItemComprobante | descripción, cantidad, precio unitario, alícuota IVA, bruto, descuento % del renglón, subtotal (copiados al momento de la venta) | N—1 Comprobante, N—1 Articulo |
 | Pago | medio (efectivo, débito, crédito, transferencia), monto | N—1 Comprobante |
 | Caja | apertura (fecha y usuario que abre), cierre (fecha y usuario que cierra), efectivo inicial, efectivo contado, efectivo esperado, diferencia (contado − esperado), diferencia de apertura (inicial − contado del cierre anterior), abierta (una sola por ferretería) | N—1 Ferretería, N—1 Usuario (abre), N—1 Usuario (cierra), 1—N Comprobante, 1—N MovimientoCaja |
 | MovimientoCaja | tipo (ingreso, gasto, retiro), importe, motivo, fecha, usuario | N—1 Caja, N—1 Usuario |
