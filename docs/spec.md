@@ -40,7 +40,7 @@ Son 10 casos de uso, agrupados en cuatro módulos. Si algo no está en esta list
 2. Carga el punto de venta habilitado en ARCA para factura electrónica (web service).
 3. Sube el certificado (.crt) y la clave privada, o genera el CSR desde el sistema.
 4. El sistema prueba la conexión contra ARCA y muestra el último número de comprobante autorizado.
-   - Alternativo: el certificado vence o es inválido → se avisa y se bloquea la facturación (la venta en negro, presupuesto, sigue habilitada).
+   - Alternativo: el certificado vence o es inválido → se avisa y se bloquea la facturación (la venta sin factura sigue habilitada).
 
 **CU-02 Gestionar usuarios** (Dueño)
 
@@ -88,7 +88,11 @@ Son 10 casos de uso, agrupados en cuatro módulos. Si algo no está en esta list
    - El comprobante y cada renglón guardan el recargo; cada pago guarda la forma, su nombre y % del momento, el recargo y lo cobrado. Cambiar el % después no toca las ventas hechas.
 5. Confirma: se pide el CAE a ARCA, se descuenta el stock y se imprime o envía el comprobante en PDF.
    - Alternativo: ARCA no responde → la venta queda guardada como "pendiente de CAE" y se reintenta sola.
-   - Alternativo: venta sin factura → se registra como presupuesto o remito interno, sin pedir CAE.
+   - Alternativo: venta sin factura → se registra como remito interno, sin pedir CAE. (Todavía no está hecha: el presupuesto de abajo es otro documento.)
+   - Alternativo: **presupuesto** (F8): el ticket se guarda como una cotización en vez de cobrarse. No pide caja abierta, forma de pago ni CAE, y no toca el stock (se puede presupuestar sin stock suficiente). El diálogo pide el cliente (texto libre, opcional), la validez en días (15 por defecto, de 1 a 90) y observaciones (opcionales). Lleva su numeración propia por ferretería, los descuentos del ticket y el total sin recargo (el recargo depende de la forma de pago, que se elige al cobrar). Se puede guardar con los mismos precios que vio el cajero: si un precio cambió, se avisa como en el cobro.
+   - El presupuesto tiene **estados**: pendiente al emitirlo, aceptado y rechazado (se cambian a mano, en cualquier orden) y facturado, que solo lo pone la venta hecha desde él. «Vencido» no es un estado: es un pendiente o aceptado cuyo último día de validez ya pasó, y solo avisa.
+   - Vendedor y Dueño ven los presupuestos de su ferretería en `Presupuestos` (lista con filtros por estado, número y fecha, y detalle con renglones). **Pasar a venta** deja en el mostrador un ticket con las cantidades y los descuentos del presupuesto pero con los **precios de hoy** (el presupuesto no fija precios; se puede cobrar aunque haya vencido). Un artículo que ya no se puede vender (borrado, dado de baja o sin precio) queda marcado en el ticket para que el cajero lo quite. Si el mostrador ya tenía un ticket con renglones, se pregunta antes de reemplazarlo.
+   - Al cobrar, la venta lleva el presupuesto de origen y en la misma transacción lo deja facturado; un presupuesto rechazado o ya facturado no se puede cobrar (409) y uno de otra ferretería es un 404. Si la venta falla, el presupuesto no cambia. Si el cajero vacía el ticket, el presupuesto sigue como estaba. Como el presupuesto nunca descontó stock, no hay doble descuento.
 
 **CU-08 Anular una venta** (Dueño)
 
@@ -159,8 +163,10 @@ Una sola base compartida y todas las tablas de negocio con `tenant_id`. Es el mi
 | ImportacionLista | archivo, fecha, cantidades (suben, bajan, nuevos), estado | N—1 Proveedor |
 | MovimientoStock | tipo, cantidad (decimal), motivo, fecha, usuario | N—1 Articulo, N—1 Comprobante (opcional) |
 | Cliente | nombre o razón social, tipo y número de documento, condición IVA, domicilio | 1—N Comprobante |
-| Comprobante | tipo (FA, FB, FC, NC, presupuesto), punto de venta, número, fecha, neto, IVA, total, subtotal (antes de descuentos), descuento global %, recargo, CAE, vencimiento del CAE, estado (pendiente, autorizado, rechazado) | N—1 Cliente, N—1 Caja, 1—N Item, 1—N Pago |
+| Comprobante | tipo (FA, FB, FC, NC), punto de venta, número, fecha, neto, IVA, total, subtotal (antes de descuentos), descuento global %, recargo, presupuesto de origen (opcional), CAE, vencimiento del CAE, estado (pendiente, autorizado, rechazado) | N—1 Cliente, N—1 Caja, 1—N Item, 1—N Pago |
 | ItemComprobante | descripción, cantidad, precio unitario, alícuota IVA, bruto, descuento % del renglón, recargo, subtotal (copiados al momento de la venta) | N—1 Comprobante, N—1 Articulo |
+| Presupuesto | número propio por ferretería, fecha, vencimiento, estado (pendiente, aceptado, rechazado, facturado), cliente (texto libre, opcional), observaciones, neto, IVA, total, subtotal (antes de descuentos), descuento global %, usuario que lo emitió | N—1 Ferretería, N—1 Usuario, 1—N ItemPresupuesto, 0—1 Comprobante (la venta que lo facturó) |
+| ItemPresupuesto | descripción, unidad, cantidad, precio unitario, alícuota IVA, bruto, descuento % del renglón, subtotal (copiados al emitirlo) | N—1 Presupuesto, N—1 Articulo |
 | FormaPago | nombre (único por ferretería), medio (efectivo, débito, crédito, transferencia), recargo %, activa, orden | N—1 Ferretería, 1—N Pago |
 | Pago | forma de pago (con nombre y recargo % copiados al momento), medio, recargo, monto cobrado (parte + recargo) | N—1 Comprobante, N—1 FormaPago |
 | Caja | apertura (fecha y usuario que abre), cierre (fecha y usuario que cierra), efectivo inicial, efectivo contado, efectivo esperado, diferencia (contado − esperado), diferencia de apertura (inicial − contado del cierre anterior), abierta (una sola por ferretería) | N—1 Ferretería, N—1 Usuario (abre), N—1 Usuario (cierra), 1—N Comprobante, 1—N MovimientoCaja |
