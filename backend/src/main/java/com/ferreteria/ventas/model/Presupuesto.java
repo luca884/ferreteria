@@ -50,6 +50,7 @@ public class Presupuesto {
     @Column(nullable = false, updatable = false)
     private LocalDate vence;
 
+    /** Lo unico que cambia despues de emitirlo (PP-002). */
     @Enumerated(EnumType.STRING)
     @JdbcTypeCode(SqlTypes.VARCHAR)
     @Column(nullable = false, length = 20)
@@ -97,6 +98,10 @@ public class Presupuesto {
         presupuesto.iva = totales.iva();
         presupuesto.total = totales.total();
         return presupuesto;
+    }
+
+    public void cambiarEstado(EstadoPresupuesto nuevo) {
+        this.estado = nuevo;
     }
 
     /** Pendiente o aceptado cuyo ultimo dia de validez ya paso. Uno rechazado o facturado no esta "vencido". */
