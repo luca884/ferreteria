@@ -23,6 +23,12 @@ export const routes: Routes = [
         title: titulo('Mostrador'),
         loadComponent: () => import('./features/mostrador/mostrador').then((m) => m.Mostrador),
       },
+      // Sin guard de rol: los presupuestos los usan el Vendedor y el Dueño.
+      {
+        path: 'presupuestos',
+        title: titulo('Presupuestos'),
+        loadComponent: () => import('./features/presupuestos/presupuestos').then((m) => m.Presupuestos),
+      },
       // Sin guard de rol: la caja la usan el Vendedor y el Dueño; el historial es del Dueño y el Vendedor ve el aviso de la pantalla.
       {
         path: 'caja',

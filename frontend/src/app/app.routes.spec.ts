@@ -14,10 +14,21 @@ import { FormasPago } from './features/formas-pago/formas-pago';
 import { Importaciones } from './features/importaciones/importaciones';
 import { Mostrador } from './features/mostrador/mostrador';
 import { Proveedores } from './features/proveedores/proveedores';
+import { Presupuestos } from './features/presupuestos/presupuestos';
 import { routes } from './app.routes';
 
 describe('rutas', () => {
   const hijas = (): Route[] => routes.find((r) => r.path === '')?.children ?? [];
+
+  it('la ruta presupuestos carga la pantalla de presupuestos, sin guard de rol: la usan el Vendedor y el Dueño', async () => {
+    const padre = routes.find((r) => r.path === '');
+    const ruta = hijas().find((r) => r.path === 'presupuestos');
+
+    expect(ruta).toBeDefined();
+    expect(await (ruta!.loadComponent as () => Promise<unknown>)()).toBe(Presupuestos);
+    expect(ruta!.canActivate).toBeUndefined();
+    expect(padre!.canActivate).toEqual([authGuard]);
+  });
 
   it('la ruta proveedores carga el componente Proveedores', async () => {
     const ruta = hijas().find((r) => r.path === 'proveedores');

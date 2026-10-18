@@ -1,0 +1,124 @@
+:host {
+  display: block;
+  width: 100%;
+}
+:host > :not(app-barra-acciones) {
+  max-width: 1040px;
+}
+
+.filtros {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--e-3);
+  margin-bottom: var(--e-4);
+}
+.filtros label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-weight: 600;
+}
+.filtros input[name='numero'] {
+  width: 7rem;
+}
+
+.presupuestos {
+  margin-bottom: var(--e-4);
+}
+.presupuestos tbody tr {
+  cursor: pointer;
+}
+.presupuestos tbody tr.elegida {
+  background: var(--superficie-3);
+}
+.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.enlace {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--acento);
+  font-weight: 700;
+  text-decoration: underline;
+}
+.vencido {
+  color: var(--error);
+  font-weight: 600;
+}
+
+.paginas {
+  display: flex;
+  align-items: center;
+  gap: var(--e-3);
+  margin-bottom: var(--e-4);
+}
+
+.detalle {
+  display: flex;
+  flex-direction: column;
+  gap: var(--e-3);
+  margin-bottom: var(--e-6);
+  padding: var(--e-4);
+  border: 1px solid var(--borde);
+  border-radius: var(--radio-lg);
+  background: var(--superficie);
+}
+.detalle header {
+  display: flex;
+  align-items: baseline;
+  gap: var(--e-3);
+}
+.detalle h2 {
+  margin: 0;
+}
+.estado {
+  font-weight: 700;
+}
+.datos,
+.observaciones {
+  margin: 0;
+  color: var(--texto-suave);
+}
+.totales {
+  align-self: flex-end;
+  min-width: 16rem;
+}
+.totales p {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--e-4);
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+.totales .total {
+  font-size: 1.25rem;
+  font-weight: 700;
+}
+.nota-estado {
+  margin: 0;
+  font-weight: 600;
+  color: var(--texto-suave);
+}
+.acciones {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--e-2);
+}
+.reemplazo {
+  display: flex;
+  flex-direction: column;
+  gap: var(--e-3);
+  padding: var(--e-3);
+  border: 1px solid var(--advertencia-borde);
+  border-left: 4px solid var(--advertencia-marca);
+  border-radius: var(--radio);
+  background: var(--advertencia-fondo);
+}
+.reemplazo p {
+  margin: 0;
+  font-weight: 600;
+}

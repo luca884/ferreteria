@@ -6,6 +6,20 @@ import { RenglonVentaRequest } from '../mostrador/venta.models';
 export const ESTADOS_PRESUPUESTO = ['PENDIENTE', 'ACEPTADO', 'RECHAZADO', 'FACTURADO'] as const;
 export type EstadoPresupuesto = (typeof ESTADOS_PRESUPUESTO)[number];
 
+export const ETIQUETA_ESTADO: Record<EstadoPresupuesto, string> = {
+  PENDIENTE: 'Pendiente',
+  ACEPTADO: 'Aceptado',
+  RECHAZADO: 'Rechazado',
+  FACTURADO: 'Facturado',
+};
+
+/** «dd/MM/aaaa» de un día «aaaa-mm-dd», leído del texto: no pasa por la zona del navegador. */
+export function fechaDia(dia: string | null | undefined): string {
+  if (!dia) return '';
+  const [anio, mes, d] = dia.slice(0, 10).split('-');
+  return `${d}/${mes}/${anio}`;
+}
+
 /** Los días de validez que acepta el servidor: de 1 a 90, y 15 si no se manda. */
 export const DIAS_VALIDEZ_POR_DEFECTO = 15;
 export const DIAS_VALIDEZ_MAXIMOS = 90;
