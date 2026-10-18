@@ -19,7 +19,7 @@ describe('Botonera', () => {
     fixture.detectChanges();
   });
 
-  it('muestra F2 Buscar, F3 Cantidad, los descuentos F7 y F6, F4 Cobrar, F8 Presupuesto, F10 Quitar y Vaciar', () => {
+  it('muestra F2 Buscar, F3 Cantidad, los descuentos F7 y F6, F4 Cobrar, F8 Presupuesto, Remito (sin tecla), F10 Quitar y Vaciar', () => {
     expect(textos()).toEqual([
       'F2 Buscar',
       'F3 Cantidad',
@@ -27,6 +27,7 @@ describe('Botonera', () => {
       'F6 Dto. total',
       'F4 Cobrar',
       'F8 Presupuesto',
+      'Remito',
       'F10 Quitar',
       'Vaciar',
     ]);
@@ -72,10 +73,11 @@ describe('Botonera', () => {
     boton('F3').click();
     boton('F2').click();
     boton('F8').click();
+    boton('Remito').click();
     boton('F10').click();
     boton('Vaciar').click();
 
-    expect(emitidas).toEqual(['cobrar', 'cantidad', 'buscar', 'presupuesto', 'quitar', 'vaciar']);
+    expect(emitidas).toEqual(['cobrar', 'cantidad', 'buscar', 'presupuesto', 'remito', 'quitar', 'vaciar']);
   });
 
   it('mousedown se cancela para no robarle el foco a la caja', () => {

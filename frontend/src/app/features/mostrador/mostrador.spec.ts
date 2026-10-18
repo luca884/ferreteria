@@ -13,6 +13,8 @@ import { FormaPago } from '../formas-pago/forma-pago.models';
 import { FormasPagoService } from '../formas-pago/formas-pago.service';
 import { EmitirPresupuestoRequest, PresupuestoEmitido } from '../presupuestos/presupuesto.models';
 import { PresupuestosService } from '../presupuestos/presupuestos.service';
+import { EmitirRemitoRequest, RemitoEmitido } from '../remitos/remito.models';
+import { RemitosService } from '../remitos/remitos.service';
 import { ArticuloMostrador, BusquedaMostrador } from './mostrador.models';
 import { Mostrador } from './mostrador';
 import { MostradorService } from './mostrador.service';
@@ -79,10 +81,17 @@ describe('Mostrador', () => {
     respuesta: Subject<PresupuestoEmitido>;
   }
 
+  /** Un POST de remito al servicio falso: la respuesta la da el test cuando quiere. */
+  interface Emision {
+    pedido: EmitirRemitoRequest;
+    respuesta: Subject<RemitoEmitido>;
+  }
+
   let fixture: ComponentFixture<Mostrador>;
   let llamadas: Llamada[];
   let cobros: Cobro[];
   let guardados: Guardado[];
+  let emitidos: Emision[];
   let claves: number;
   let cajas: { actual: ReturnType<typeof vi.fn> };
   let formasApi: { listar: ReturnType<typeof vi.fn> };
@@ -101,6 +110,7 @@ describe('Mostrador', () => {
     llamadas = [];
     cobros = [];
     guardados = [];
+    emitidos = [];
     claves = 0;
     const servicio = {
       buscar: vi.fn((q: string) => {
@@ -123,6 +133,13 @@ describe('Mostrador', () => {
         return respuesta;
       }),
     };
+    const remitosApi = {
+      emitir: vi.fn((pedido: EmitirRemitoRequest) => {
+        const respuesta = new Subject<RemitoEmitido>();
+        emitidos.push({ pedido, respuesta });
+        return respuesta;
+      }),
+    };
     cajas = { actual: vi.fn(() => of(vigente)) };
     formasApi = { listar: vi.fn(() => of(formas)) };
     const sesion = signal({
@@ -141,6 +158,7 @@ describe('Mostrador', () => {
         { provide: MostradorService, useValue: servicio },
         { provide: VentaService, useValue: ventas },
         { provide: PresupuestosService, useValue: presupuestosApi },
+        { provide: RemitosService, useValue: remitosApi },
         { provide: CajaService, useValue: cajas },
         { provide: FormasPagoService, useValue: formasApi },
         { provide: AuthService, useValue: { sesion: sesion.asReadonly() } },
@@ -214,6 +232,7 @@ describe('Mostrador', () => {
         'F6 Dto. total',
         'F4 Cobrar',
         'F8 Presupuesto',
+        'Remito',
         'F10 Quitar',
         'Vaciar',
       ]);
@@ -3004,6 +3023,306 @@ describe('Mostrador', () => {
 
       expect(normal(dialogoPresupuesto()!.querySelector('[role="status"]')?.textContent)).toBe(
         'No se pudo guardar el presupuesto. Probá de nuevo.',
+      );
+      expect(renglonesTicket()).toHaveLength(1);
+    });
+  });
+
+  describe('remito (G55, RM-007)', () => {
+    const exacto = (a: ArticuloMostrador): BusquedaMostrador => ({ tipo: 'EXACTO', items: [a], hayMas: false });
+    const normal = (t: string | null | undefined) => (t ?? '').replace(/\s+/g, ' ').trim();
+    const dialogo = () => el().querySelector<HTMLElement>('[role="dialog"], [role="alertdialog"]');
+    const dialogoRemito = () => el().querySelector<HTMLElement>('app-dialogo-remito [role="dialog"]');
+    const aviso = () => normal(el().querySelector('.aviso')?.textContent);
+    const advertencia = () => normal(el().querySelector('.aviso.advertencia')?.textContent);
+    const totalGrande = () => normal(el().querySelector('app-totales-ticket .total')?.textContent);
+    const sinCaja: CajaVigente = { estado: 'SIN_CAJA', caja: null, efectivoPropuesto: 0 };
+    const botonRemito = () =>
+      Array.from(el().querySelectorAll<HTMLButtonElement>('app-botonera button')).find((b) =>
+        normal(b.textContent).includes('Remito'),
+      )!;
+
+    async function tecla(key: string, destino: HTMLElement = document.activeElement as HTMLElement) {
+      const evento = new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true });
+      destino.dispatchEvent(evento);
+      await refrescar();
+      return evento;
+    }
+
+    async function conMartillos(vigente: CajaVigente = cajaAbierta) {
+      await crear(vigente);
+      for (let i = 0; i < 2; i++) {
+        await escribir('M');
+        await enter();
+        await responder(llamadas.length - 1, exacto(articulo(1, { descripcion: 'Martillo', precioFinal: 1500 })));
+      }
+    }
+
+    async function abrirRemito() {
+      botonRemito().click();
+      await refrescar();
+    }
+
+    function remitoEmitido(numero: number, total: number, sinStock: RemitoEmitido['remito']['sinStock'] = []): RemitoEmitido {
+      return {
+        remito: {
+          remitoId: 8,
+          numero,
+          estado: 'EMITIDO',
+          fecha: '2026-10-18T10:00:00',
+          subtotal: total,
+          descuentoPorcentaje: 0,
+          descuento: 0,
+          neto: 0,
+          iva: 0,
+          total,
+          renglones: [],
+          sinStock,
+        },
+        repetido: false,
+      };
+    }
+
+    async function emitirOk(indice: number, r: RemitoEmitido) {
+      emitidos[indice].respuesta.next(r);
+      emitidos[indice].respuesta.complete();
+      await refrescar();
+    }
+
+    async function fallarEmision(indice: number, status: number, cuerpo: unknown = null) {
+      emitidos[indice].respuesta.error(new HttpErrorResponse({ status, error: cuerpo }));
+      await refrescar();
+    }
+
+    const rechazo = (status: number, motivo: string, articulos: unknown[], message = 'rechazo') => ({
+      status,
+      message,
+      timestamp: '2026-10-18T10:00:00',
+      motivo,
+      articulos,
+    });
+
+    it('el botón Remito abre «Emitir remito» y no manda nada todavía; está apagado con el ticket vacío', async () => {
+      await crear();
+      expect(botonRemito().disabled).toBe(true);
+
+      await escribir('M');
+      await enter();
+      await responder(llamadas.length - 1, exacto(articulo(1)));
+      expect(botonRemito().disabled).toBe(false);
+      await abrirRemito();
+
+      expect(normal(dialogoRemito()?.querySelector('h2')?.textContent)).toBe('Emitir remito');
+      expect(emitidos).toHaveLength(0);
+    });
+
+    it('F8 sigue siendo el presupuesto: ninguna tecla abre el remito', async () => {
+      await conMartillos();
+
+      await tecla('F8');
+
+      expect(dialogoRemito()).toBeNull();
+      expect(el().querySelector('app-dialogo-presupuesto')).not.toBeNull();
+    });
+
+    it('no exige caja abierta: sin caja el botón está habilitado y abre el diálogo', async () => {
+      await conMartillos(sinCaja);
+
+      await abrirRemito();
+
+      expect(dialogoRemito()).not.toBeNull();
+    });
+
+    it('Enter envía el remito con la clave del ticket y el total sin recargo, sin validez', async () => {
+      await conMartillos();
+
+      await abrirRemito();
+      await tecla('Enter');
+
+      expect(emitidos).toHaveLength(1);
+      expect(emitidos[0].pedido).toEqual({
+        clave: 'clave-1',
+        renglones: [{ articuloId: 1, cantidad: 2, precioUnitario: 1500 }],
+        totalMostrado: 3000,
+      });
+    });
+
+    it('manda el cliente y las observaciones que se escribieron en el diálogo', async () => {
+      await conMartillos();
+      await abrirRemito();
+      const cliente = dialogoRemito()!.querySelector<HTMLInputElement>('input[name="cliente"]')!;
+      cliente.value = 'Obra Perez';
+      cliente.dispatchEvent(new Event('input'));
+      const observaciones = dialogoRemito()!.querySelector<HTMLInputElement>('input[name="observaciones"]')!;
+      observaciones.value = 'Entrega el viernes';
+      observaciones.dispatchEvent(new Event('input'));
+
+      await tecla('Enter');
+
+      expect(emitidos[0].pedido).toMatchObject({ clienteNombre: 'Obra Perez', observaciones: 'Entrega el viernes' });
+    });
+
+    it('el pedido lleva los descuentos del ticket y el total ya descontado', async () => {
+      await conMartillos();
+      await tecla('F6');
+      const campoDescuento = el().querySelector<HTMLInputElement>('app-dialogo-descuento input')!;
+      campoDescuento.value = '10';
+      campoDescuento.dispatchEvent(new Event('input'));
+      await refrescar();
+      await tecla('Enter');
+
+      await abrirRemito();
+      await tecla('Enter');
+
+      expect(emitidos[0].pedido.descuentoPorcentaje).toBe(10);
+      expect(emitidos[0].pedido.totalMostrado).toBe(2700);
+    });
+
+    it('al emitirse vacía el ticket, cierra el diálogo, avisa el número y devuelve el foco al buscador', async () => {
+      await conMartillos();
+      await abrirRemito();
+      await tecla('Enter');
+
+      await emitirOk(0, remitoEmitido(5, 3000));
+
+      expect(dialogo()).toBeNull();
+      expect(renglonesTicket()).toHaveLength(0);
+      expect(aviso()).toBe('Remito N.º 5 emitido: $ 3.000,00');
+      expect(document.activeElement).toBe(campo());
+      expect(localStorage.getItem('ticket:3:7')).toBeNull();
+    });
+
+    it('el aviso de remito emitido se va solo a los 5 segundos', async () => {
+      await conMartillos();
+      await abrirRemito();
+      await tecla('Enter');
+      await emitirOk(0, remitoEmitido(5, 3000));
+      expect(aviso()).toContain('Remito N.º 5 emitido');
+
+      await avanzar(5000);
+
+      expect(aviso()).toBe('');
+    });
+
+    it('si quedó un artículo sin stock lo avisa aparte y el aviso queda hasta el próximo renglón', async () => {
+      await conMartillos();
+      await abrirRemito();
+      await tecla('Enter');
+
+      await emitirOk(0, remitoEmitido(5, 3000, [{ articuloId: 1, descripcion: 'Martillo', stockActual: -1.5 }]));
+      await avanzar(6000);
+
+      expect(aviso()).toContain('Remito N.º 5 emitido');
+      expect(advertencia()).toBe('Sin stock: "Martillo" quedó en -1,5.');
+    });
+
+    it('con el POST en curso Esc no cierra el diálogo y Enter no manda otro', async () => {
+      await conMartillos();
+      await abrirRemito();
+      await tecla('Enter');
+
+      await tecla('Escape');
+      await tecla('Enter');
+
+      expect(dialogoRemito()).not.toBeNull();
+      expect(emitidos).toHaveLength(1);
+    });
+
+    it('Esc cierra el diálogo sin emitir y conserva el ticket', async () => {
+      await conMartillos();
+      await abrirRemito();
+
+      await tecla('Escape');
+
+      expect(dialogo()).toBeNull();
+      expect(emitidos).toHaveLength(0);
+      expect(renglonesTicket()).toHaveLength(1);
+    });
+
+    it('con otro diálogo abierto el botón Remito no abre el del remito', async () => {
+      await conMartillos();
+      await tecla('F4');
+
+      botonRemito().click();
+      await refrescar();
+
+      expect(dialogoRemito()).toBeNull();
+      expect(dialogo()).not.toBeNull();
+      expect(emitidos).toHaveLength(0);
+    });
+
+    it('si cambió un precio: actualiza el ticket, avisa en el diálogo y al volver a emitir manda el total nuevo con la misma clave', async () => {
+      await conMartillos();
+      await abrirRemito();
+      await tecla('Enter');
+
+      await fallarEmision(0, 409, {
+        ...rechazo(409, 'PRECIOS_CAMBIADOS', [{ articuloId: 1, descripcion: 'Martillo', precioMostrado: 1500, precioActual: 1800 }]),
+        total: 3600,
+      });
+
+      expect(dialogoRemito()).not.toBeNull();
+      expect(normal(dialogoRemito()!.querySelector('[role="status"]')?.textContent)).toBe(
+        'Cambió el precio de "Martillo": ahora $ 1.800,00.',
+      );
+      expect(totalGrande()).toBe('$ 3.600,00');
+      await tecla('Enter', dialogoRemito()!.querySelector('input')!);
+      expect(emitidos).toHaveLength(2);
+      expect(emitidos[1].pedido.clave).toBe('clave-1');
+      expect(emitidos[1].pedido.totalMostrado).toBe(3600);
+    });
+
+    it('si un artículo ya no se puede vender: cierra el diálogo, conserva el ticket, marca el renglón y avisa', async () => {
+      await conMartillos();
+      await abrirRemito();
+      await tecla('Enter');
+
+      await fallarEmision(
+        0,
+        422,
+        rechazo(422, 'ARTICULO_DADO_DE_BAJA', [{ articuloId: 1, descripcion: 'Martillo' }], '"Martillo" fue dado de baja. Sacalo del ticket para seguir.'),
+      );
+
+      expect(dialogo()).toBeNull();
+      expect(renglonesTicket()).toHaveLength(1);
+      expect(renglonesTicket()[0].textContent).toContain('Artículo dado de baja');
+      expect(aviso()).toBe('"Martillo" fue dado de baja. Sacalo del ticket para seguir.');
+    });
+
+    it('si la clave ya se usó con otro contenido: cierra el diálogo y avisa con el mensaje del servidor', async () => {
+      await conMartillos();
+      await abrirRemito();
+      await tecla('Enter');
+
+      await fallarEmision(0, 422, rechazo(422, 'CLAVE_CON_OTRO_CONTENIDO', [], 'Este remito ya se emitió con otros datos'));
+
+      expect(dialogo()).toBeNull();
+      expect(aviso()).toBe('Este remito ya se emitió con otros datos');
+    });
+
+    it('un 400 muestra el mensaje del servidor dentro del diálogo y se puede volver a intentar', async () => {
+      await conMartillos();
+      await abrirRemito();
+      await tecla('Enter');
+
+      await fallarEmision(0, 400, { status: 400, message: 'Datos inválidos', errors: { clienteNombre: 'El nombre del cliente admite hasta 80 caracteres.' } });
+
+      expect(normal(dialogoRemito()!.querySelector('[role="status"]')?.textContent)).toBe(
+        'El nombre del cliente admite hasta 80 caracteres.',
+      );
+      await tecla('Enter', dialogoRemito()!.querySelector('input')!);
+      expect(emitidos).toHaveLength(2);
+    });
+
+    it('un error de red deja el diálogo abierto con un aviso para reintentar y no pierde el ticket', async () => {
+      await conMartillos();
+      await abrirRemito();
+      await tecla('Enter');
+
+      await fallarEmision(0, 500);
+
+      expect(normal(dialogoRemito()!.querySelector('[role="status"]')?.textContent)).toBe(
+        'No se pudo emitir el remito. Probá de nuevo.',
       );
       expect(renglonesTicket()).toHaveLength(1);
     });

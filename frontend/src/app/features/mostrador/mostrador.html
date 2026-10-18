@@ -149,6 +149,17 @@
         (escaneoDescartado)="escaneoDescartado()"
       />
     }
+    @case ('remito') {
+      <app-dialogo-remito
+        [totalCentavos]="ticket.total()"
+        [renglones]="ticket.ticket().renglones.length"
+        [enVuelo]="enVuelo()"
+        [aviso]="avisoCobro()"
+        (confirmar)="emitirRemito($event)"
+        (cancelar)="cerrarDialogo()"
+        (escaneoDescartado)="escaneoDescartado()"
+      />
+    }
     @case ('cobro') {
       <app-dialogo-cobro
         [totalCentavos]="ticket.total()"

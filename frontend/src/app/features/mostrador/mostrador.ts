@@ -9,6 +9,7 @@ import { ConfirmacionCobro, DialogoCobro } from './dialogo-cobro';
 import { DialogoConfirmacion } from './dialogo-confirmacion';
 import { DialogoDescuento } from './dialogo-descuento';
 import { DialogoPresupuesto } from './dialogo-presupuesto';
+import { DialogoRemito } from './dialogo-remito';
 import { FichaArticulo } from './ficha-articulo';
 import { LISTA_ID, ListaResultados, filaId } from './lista-resultados';
 import { ArticuloMostrador, BusquedaMostrador } from './mostrador.models';
@@ -24,6 +25,7 @@ import {
   PROBLEMA_INEXISTENTE,
   PROBLEMA_SIN_PRECIO,
   aPresupuestoRequest,
+  aRemitoRequest,
   aRequest,
 } from './ticket';
 import { TicketLista } from './ticket-lista';
@@ -38,6 +40,8 @@ import { FormaPago } from '../formas-pago/forma-pago.models';
 import { FormasPagoService } from '../formas-pago/formas-pago.service';
 import { DatosPresupuesto, PresupuestoResponse } from '../presupuestos/presupuesto.models';
 import { PresupuestosService } from '../presupuestos/presupuestos.service';
+import { DatosRemito, RemitoEmitido } from '../remitos/remito.models';
+import { RemitosService } from '../remitos/remitos.service';
 
 const ESPERA_MS = 250;
 /** Cuánto queda a la vista el aviso de venta cobrada. */
@@ -47,6 +51,7 @@ const MENSAJE_SIN_RESULTADOS = 'No encontramos ningún artículo con ese código
 const MENSAJE_TICKET_VACIO = 'El ticket está vacío.';
 const MENSAJE_COBRO_FALLIDO = 'No se pudo cobrar. Probá de nuevo.';
 const MENSAJE_PRESUPUESTO_FALLIDO = 'No se pudo guardar el presupuesto. Probá de nuevo.';
+const MENSAJE_REMITO_FALLIDO = 'No se pudo emitir el remito. Probá de nuevo.';
 const MENSAJE_SIN_FORMAS = 'No se pudieron cargar las formas de pago. Probá de nuevo en un momento.';
 
 /** El diálogo abierto, si hay uno. `indice` es el renglón del ticket sobre el que actúa. */
@@ -57,7 +62,8 @@ type Dialogo =
   | { tipo: 'descuento'; indice: number }
   | { tipo: 'descuentoTotal' }
   | { tipo: 'cobro' }
-  | { tipo: 'presupuesto' };
+  | { tipo: 'presupuesto' }
+  | { tipo: 'remito' };
 
 /**
  * Aviso del contenedor, aparte del mensaje de la búsqueda. `vacio` y `persistente` se van con el próximo
@@ -92,6 +98,7 @@ interface Escaneo {
     DialogoConfirmacion,
     DialogoDescuento,
     DialogoPresupuesto,
+    DialogoRemito,
     ListaResultados,
     FichaArticulo,
     TicketLista,
@@ -110,6 +117,7 @@ export class Mostrador {
   private readonly service = inject(MostradorService);
   private readonly ventas = inject(VentaService);
   private readonly presupuestos = inject(PresupuestosService);
+  private readonly remitos = inject(RemitosService);
   private readonly cajas = inject(CajaService);
   private readonly formas = inject(FormasPagoService);
   private readonly destroyRef = inject(DestroyRef);
@@ -229,6 +237,8 @@ export class Mostrador {
       cobrar: conRenglones && this.avisoCaja() === null,
       // El presupuesto no toca la caja ni el stock: se puede guardar aunque no haya caja abierta.
       presupuesto: conRenglones,
+      // El remito descuenta stock pero no toca la caja: se puede emitir aunque no haya caja abierta.
+      remito: conRenglones,
       quitar: conRenglones,
       vaciar: conRenglones,
     };
@@ -396,6 +406,14 @@ export class Mostrador {
         this.avisar(null);
         this.dialogo.set({ tipo: 'presupuesto' });
         return;
+      case 'remito':
+        if (renglones.length === 0) {
+          this.avisar({ texto: MENSAJE_TICKET_VACIO, grave: false, tipo: 'vacio' });
+          return;
+        }
+        this.avisar(null);
+        this.dialogo.set({ tipo: 'remito' });
+        return;
       case 'vaciar':
         if (renglones.length === 0) return;
         this.avisar(null);
@@ -465,7 +483,7 @@ export class Mostrador {
   /** Un escaneo llegó con un diálogo abierto: el diálogo lo descartó y acá se avisa. */
   protected escaneoDescartado(): void {
     const tipo = this.dialogo()?.tipo;
-    if (tipo === 'cobro' || tipo === 'presupuesto') this.avisoCobro.set(AVISO_ESCANEO_CON_DIALOGO);
+    if (tipo === 'cobro' || tipo === 'presupuesto' || tipo === 'remito') this.avisoCobro.set(AVISO_ESCANEO_CON_DIALOGO);
     else this.avisar({ texto: AVISO_ESCANEO_CON_DIALOGO, grave: false, tipo: 'otro' });
   }
 
@@ -549,6 +567,39 @@ export class Mostrador {
       },
       AVISO_COBRADA_MS,
     );
+    this.cerrarDialogo();
+  }
+
+  /** Enter en el diálogo del remito: lo emite con la clave del ticket (la misma en cada reintento). */
+  protected emitirRemito(datos: DatosRemito): void {
+    if (this.enVuelo()) return;
+    const pedido = aRemitoRequest(this.ticket.ticket(), datos);
+    this.enVuelo.set(true);
+    this.avisoCobro.set(null);
+    this.remitos
+      .emitir(pedido)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: ({ remito }) => this.alEmitir(remito),
+        error: (err: unknown) => this.alFallarEnvio(err, MENSAJE_REMITO_FALLIDO, false),
+      });
+  }
+
+  /** El remito quedó emitido (y descontó el stock): el ticket se vacía, se avisa el número y lo que quedó sin stock. */
+  private alEmitir(remito: RemitoEmitido['remito']): void {
+    this.enVuelo.set(false);
+    this.ticket.vaciar();
+    this.siguiendoTicket.set(true);
+    const sinStock = (remito.sinStock ?? [])
+      .map((s) => `"${s.descripcion}" quedó en ${String(s.stockActual).replace('.', ',')}`)
+      .join('; ');
+    const aviso: Aviso = {
+      texto: `Remito N.º ${remito.numero} emitido: ${formatearMonto(remito.total)}`,
+      grave: false,
+      tipo: sinStock ? 'persistente' : 'otro',
+      ...(sinStock ? { advertencia: `Sin stock: ${sinStock}.` } : {}),
+    };
+    this.avisar(aviso, sinStock ? undefined : AVISO_COBRADA_MS);
     this.cerrarDialogo();
   }
 
