@@ -4,6 +4,7 @@ import {
   Ticket,
   agregar,
   aPresupuestoRequest,
+  aRemitoRequest,
   aRequest,
   actualizarPrecios,
   cambiarCantidad,
@@ -330,6 +331,60 @@ describe('ticket (puro)', () => {
 
       expect(pedido['formaPagoId']).toBeUndefined();
       expect(pedido['pagos']).toBeUndefined();
+    });
+  });
+
+  describe('aRemitoRequest (G55)', () => {
+    it('arma clave, renglones y total sin recargo; sin cliente ni observaciones no los manda', () => {
+      let t = agregar(ticketVacio('clave-1'), cable());
+      t = cambiarCantidad(t, 0, 2500).ticket!;
+      t = agregar(t, art());
+
+      expect(aRemitoRequest(t, {})).toEqual({
+        clave: 'clave-1',
+        renglones: [
+          { articuloId: 2, cantidad: 2.5, precioUnitario: 790 },
+          { articuloId: 1, cantidad: 1, precioUnitario: 170 },
+        ],
+        totalMostrado: 2145,
+      });
+    });
+
+    it('manda el cliente y las observaciones, sin espacios de más', () => {
+      const t = agregar(ticketVacio('c'), art());
+
+      const pedido = aRemitoRequest(t, { clienteNombre: '  Obra Perez ', observaciones: ' Entrega el viernes ' });
+
+      expect(pedido.clienteNombre).toBe('Obra Perez');
+      expect(pedido.observaciones).toBe('Entrega el viernes');
+    });
+
+    it('un cliente o unas observaciones en blanco no viajan', () => {
+      const t = agregar(ticketVacio('c'), art());
+
+      const pedido = aRemitoRequest(t, { clienteNombre: '   ', observaciones: '' });
+
+      expect('clienteNombre' in pedido).toBe(false);
+      expect('observaciones' in pedido).toBe(false);
+    });
+
+    it('manda los descuentos como la venta y el total mostrado los incluye', () => {
+      const t = agregar(ticketVacio('c'), art());
+      const con = aplicarDescuentoGlobal(aplicarDescuentoRenglon(t, 0, 1050).ticket!, 500).ticket!;
+
+      const pedido = aRemitoRequest(con, {});
+
+      expect(pedido.renglones[0].descuentoPorcentaje).toBe(10.5);
+      expect(pedido.descuentoPorcentaje).toBe(5);
+      expect(pedido.totalMostrado).toBe(totalDelTicket(con) / 100);
+    });
+
+    it('no manda forma de pago, recargo ni validez', () => {
+      const pedido = aRemitoRequest(agregar(ticketVacio('c'), art()), {}) as unknown as Record<string, unknown>;
+
+      expect(pedido['formaPagoId']).toBeUndefined();
+      expect(pedido['pagos']).toBeUndefined();
+      expect(pedido['diasValidez']).toBeUndefined();
     });
   });
 

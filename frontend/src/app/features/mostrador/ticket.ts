@@ -1,6 +1,7 @@
 import { Unidad } from '../articulos/articulo.models';
 import { aCentavos, aMilesimas, desdeTexto, subtotalTicket, totalTicket } from './centavos';
 import { DatosPresupuesto, EmitirPresupuestoRequest, PresupuestoResponse } from '../presupuestos/presupuesto.models';
+import { DatosRemito, EmitirRemitoRequest } from '../remitos/remito.models';
 import { ArticuloMostrador } from './mostrador.models';
 import { ConfirmarVentaRequest, PagoCobro, RenglonVentaRequest } from './venta.models';
 
@@ -296,6 +297,24 @@ export function aPresupuestoRequest(t: Ticket, datos: DatosPresupuesto): EmitirP
     totalMostrado: totalDelTicket(t) / 100,
     ...(global ? { descuentoPorcentaje: global / 100 } : {}),
     diasValidez: datos.diasValidez,
+    ...(cliente ? { clienteNombre: cliente } : {}),
+    ...(observaciones ? { observaciones } : {}),
+  };
+}
+
+/**
+ * Cuerpo del POST de un remito (G55): los renglones y los descuentos del ticket, el total sin recargo (no hay forma de
+ * pago) y, si se completaron, el cliente y las observaciones.
+ */
+export function aRemitoRequest(t: Ticket, datos: DatosRemito): EmitirRemitoRequest {
+  const global = t.descuentoGlobalBp ?? 0;
+  const cliente = datos.clienteNombre?.trim();
+  const observaciones = datos.observaciones?.trim();
+  return {
+    clave: t.clave,
+    renglones: renglonesRequest(t),
+    totalMostrado: totalDelTicket(t) / 100,
+    ...(global ? { descuentoPorcentaje: global / 100 } : {}),
     ...(cliente ? { clienteNombre: cliente } : {}),
     ...(observaciones ? { observaciones } : {}),
   };
