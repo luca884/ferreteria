@@ -104,6 +104,40 @@ public class StockService {
         return stockResultante;
     }
 
+    /**
+     * Factura un remito (RM-006): el remito ya descontó lo que entregó, asi que la venta mueve solo la diferencia por
+     * articulo (vendido - entregado). Sale lo que se vendio de mas y vuelve lo que sobra o no se vendio; si es igual no
+     * mueve nada. Cada diferencia deja un movimiento VENTA con el comprobante, el remito y el motivo. Devuelve el stock
+     * resultante solo de los articulos que salen (los unicos que pueden quedar sin stock).
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public Map<Long, BigDecimal> facturarRemito(Long comprobanteId, Long remitoId, Long numeroRemito, Long usuarioId,
+            List<SalidaStock> vendidas, List<SalidaStock> entregadas) {
+        Map<Long, BigDecimal> deltas = new TreeMap<>();
+        sumarPorArticulo(entregadas).forEach(deltas::put);
+        sumarPorArticulo(vendidas).forEach((articuloId, vendido) -> deltas.merge(articuloId, vendido.negate(), BigDecimal::add));
+        deltas.values().removeIf(delta -> delta.signum() == 0);
+        if (deltas.isEmpty()) {
+            return Map.of();
+        }
+        Map<Long, BigDecimal> stockResultante = articulosParaVenta.ajustarStock(deltas);
+
+        Long ferreteriaId = TenantContext.requireFerreteriaId();
+        String motivo = "Diferencia con el remito N.º " + numeroRemito;
+        movimientoRepository.saveAll(deltas.entrySet().stream()
+                .map(e -> MovimientoStock.diferenciaConRemito(
+                        ferreteriaId, e.getKey(), e.getValue(), comprobanteId, remitoId, motivo, usuarioId))
+                .toList());
+
+        Map<Long, BigDecimal> resultanteDeLosQueSalen = new TreeMap<>();
+        deltas.forEach((articuloId, delta) -> {
+            if (delta.signum() < 0 && stockResultante.containsKey(articuloId)) {
+                resultanteDeLosQueSalen.put(articuloId, stockResultante.get(articuloId));
+            }
+        });
+        return resultanteDeLosQueSalen;
+    }
+
     /** Suma las cantidades de cada articulo, en orden de id (el orden de los locks). */
     private static Map<Long, BigDecimal> sumarPorArticulo(List<SalidaStock> salidas) {
         Map<Long, BigDecimal> porArticulo = new TreeMap<>();

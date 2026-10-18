@@ -245,6 +245,93 @@ class StockServiceTest {
     }
 
     @Test
+    @DisplayName("facturar un remito mueve solo la diferencia: sale lo que se vendio de mas y vuelve lo que sobra")
+    void facturarRemitoMueveSoloLaDiferencia() {
+        when(articulosParaVenta.ajustarStock(any())).thenReturn(Map.of(1L, bd("5"), 2L, bd("3")));
+
+        service.facturarRemito(COMPROBANTE, 70L, 5L, USUARIO,
+                List.of(new SalidaStock(1L, bd("12")), new SalidaStock(2L, bd("8")), new SalidaStock(3L, bd("4"))),
+                List.of(new SalidaStock(1L, bd("10")), new SalidaStock(2L, bd("10")), new SalidaStock(3L, bd("4"))));
+
+        Map<Long, BigDecimal> deltas = deltasEnviados();
+        assertThat(new ArrayList<>(deltas.keySet())).containsExactly(1L, 2L);
+        assertThat(deltas.get(1L)).isEqualByComparingTo("-2");
+        assertThat(deltas.get(2L)).isEqualByComparingTo("2");
+        List<MovimientoStock> movimientos = movimientosGuardados();
+        assertThat(movimientos).extracting(MovimientoStock::getArticuloId).containsExactly(1L, 2L);
+        assertThat(movimientos.get(0).getCantidad()).isEqualByComparingTo("-2");
+        assertThat(movimientos.get(1).getCantidad()).isEqualByComparingTo("2");
+        for (MovimientoStock m : movimientos) {
+            assertThat(m.getTipo()).isEqualTo(TipoMovimiento.VENTA);
+            assertThat(m.getComprobanteId()).isEqualTo(COMPROBANTE);
+            assertThat(m.getRemitoId()).isEqualTo(70L);
+            assertThat(m.getMotivo()).isEqualTo("Diferencia con el remito N.º 5");
+            assertThat(m.getUsuarioId()).isEqualTo(USUARIO);
+            assertThat(m.getFerreteriaId()).isEqualTo(FERRETERIA);
+        }
+    }
+
+    @Test
+    @DisplayName("un articulo del remito que no se vendio vuelve entero; uno que no estaba en el remito sale entero")
+    void articuloQueSeSumaOSeQuita() {
+        when(articulosParaVenta.ajustarStock(any())).thenReturn(Map.of());
+
+        service.facturarRemito(COMPROBANTE, 70L, 5L, USUARIO,
+                List.of(new SalidaStock(2L, bd("3"))),
+                List.of(new SalidaStock(1L, bd("4"))));
+
+        Map<Long, BigDecimal> deltas = deltasEnviados();
+        assertThat(deltas.get(1L)).isEqualByComparingTo("4");
+        assertThat(deltas.get(2L)).isEqualByComparingTo("-3");
+    }
+
+    @Test
+    @DisplayName("facturar un remito ajusta el stock ANTES de guardar los movimientos")
+    void facturarRemitoAjustaAntesDeGuardar() {
+        when(articulosParaVenta.ajustarStock(any())).thenReturn(Map.of());
+
+        service.facturarRemito(COMPROBANTE, 70L, 5L, USUARIO,
+                List.of(new SalidaStock(1L, bd("3"))), List.of(new SalidaStock(1L, bd("1"))));
+
+        InOrder orden = inOrder(articulosParaVenta, movimientoRepository);
+        orden.verify(articulosParaVenta).ajustarStock(any());
+        orden.verify(movimientoRepository).saveAll(any());
+    }
+
+    @Test
+    @DisplayName("sin diferencia no toca el stock ni guarda nada, y no hay articulos sin stock que avisar")
+    void facturarRemitoSinDiferencia() {
+        Map<Long, BigDecimal> resultante = service.facturarRemito(COMPROBANTE, 70L, 5L, USUARIO,
+                List.of(new SalidaStock(1L, bd("2.5")), new SalidaStock(2L, bd("1"))),
+                List.of(new SalidaStock(2L, bd("1.000")), new SalidaStock(1L, bd("2.5"))));
+
+        assertThat(resultante).isEmpty();
+        verify(articulosParaVenta, never()).ajustarStock(any());
+        verify(movimientoRepository, never()).saveAll(any());
+    }
+
+    @Test
+    @DisplayName("devuelve el stock resultante solo de los articulos que salen: los que vuelven al stock no se avisan")
+    void facturarRemitoDevuelveSoloLosQueSalen() {
+        when(articulosParaVenta.ajustarStock(any())).thenReturn(Map.of(1L, bd("-1"), 2L, bd("9")));
+
+        Map<Long, BigDecimal> resultante = service.facturarRemito(COMPROBANTE, 70L, 5L, USUARIO,
+                List.of(new SalidaStock(1L, bd("3")), new SalidaStock(2L, bd("1"))),
+                List.of(new SalidaStock(1L, bd("2")), new SalidaStock(2L, bd("3"))));
+
+        assertThat(resultante).containsOnlyKeys(1L);
+        assertThat(resultante.get(1L)).isEqualByComparingTo("-1");
+    }
+
+    @Test
+    @DisplayName("facturarRemito exige una transaccion abierta (MANDATORY)")
+    void facturarRemitoExigeTransaccion() throws NoSuchMethodException {
+        assertThat(StockService.class.getMethod("facturarRemito", Long.class, Long.class, Long.class, Long.class,
+                List.class, List.class).getAnnotation(Transactional.class).propagation())
+                .isEqualTo(Propagation.MANDATORY);
+    }
+
+    @Test
     @DisplayName("registrarVenta exige una transaccion abierta (MANDATORY)")
     void exigeTransaccion() throws NoSuchMethodException {
         Transactional anotacion = StockService.class
