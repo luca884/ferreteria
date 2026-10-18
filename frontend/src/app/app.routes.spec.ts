@@ -15,6 +15,7 @@ import { Importaciones } from './features/importaciones/importaciones';
 import { Mostrador } from './features/mostrador/mostrador';
 import { Proveedores } from './features/proveedores/proveedores';
 import { Presupuestos } from './features/presupuestos/presupuestos';
+import { Remitos } from './features/remitos/remitos';
 import { routes } from './app.routes';
 
 describe('rutas', () => {
@@ -28,6 +29,14 @@ describe('rutas', () => {
     expect(await (ruta!.loadComponent as () => Promise<unknown>)()).toBe(Presupuestos);
     expect(ruta!.canActivate).toBeUndefined();
     expect(padre!.canActivate).toEqual([authGuard]);
+  });
+
+  it('la ruta remitos carga la pantalla de remitos, sin guard de rol: la usan el Vendedor y el Dueño (anular lo valida el servidor)', async () => {
+    const ruta = hijas().find((r) => r.path === 'remitos');
+
+    expect(ruta).toBeDefined();
+    expect(await (ruta!.loadComponent as () => Promise<unknown>)()).toBe(Remitos);
+    expect(ruta!.canActivate).toBeUndefined();
   });
 
   it('la ruta proveedores carga el componente Proveedores', async () => {

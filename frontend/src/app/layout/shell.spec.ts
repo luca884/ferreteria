@@ -75,7 +75,7 @@ describe('Shell', () => {
 
     const nav = el.querySelector('aside nav[aria-label="Secciones"]');
     expect(nav).not.toBeNull();
-    expect(nav!.querySelectorAll('a').length).toBe(10);
+    expect(nav!.querySelectorAll('a').length).toBe(11);
   });
 
   it('«Presupuestos» va después de «Mostrador» y lleva a /presupuestos, para el Vendedor y para el Dueño (GDS-13)', async () => {
@@ -88,12 +88,22 @@ describe('Shell', () => {
     }
   });
 
-  it('«Caja» va después de «Presupuestos» y lleva a /caja, para el Vendedor y para el Dueño (CU-10)', async () => {
+  it('«Remitos» va después de «Presupuestos» y lleva a /remitos, para el Vendedor y para el Dueño (G55)', async () => {
     for (const dueno of [false, true]) {
       TestBed.resetTestingModule();
       const el = await render(dueno);
 
-      expect(enlaces(el).slice(1, 3)).toEqual(['Presupuestos', 'Caja']);
+      expect(enlaces(el).slice(1, 3)).toEqual(['Presupuestos', 'Remitos']);
+      expect(el.querySelector('nav a[href="/remitos"]')).not.toBeNull();
+    }
+  });
+
+  it('«Caja» va después de «Remitos» y lleva a /caja, para el Vendedor y para el Dueño (CU-10)', async () => {
+    for (const dueno of [false, true]) {
+      TestBed.resetTestingModule();
+      const el = await render(dueno);
+
+      expect(enlaces(el).slice(2, 4)).toEqual(['Remitos', 'Caja']);
       expect(el.querySelector('nav a[href="/caja"]')).not.toBeNull();
     }
   });
@@ -104,6 +114,7 @@ describe('Shell', () => {
     expect(enlaces(el)).toEqual([
       'Mostrador',
       'Presupuestos',
+      'Remitos',
       'Caja',
       'Artículos',
       'Rubros',
@@ -160,7 +171,7 @@ describe('Shell', () => {
   it('el Vendedor no ve "Importar lista", "Actualizar precios" ni el grupo «Precios»', async () => {
     const el = await render(false);
 
-    expect(enlaces(el)).toEqual(['Mostrador', 'Presupuestos', 'Caja', 'Artículos', 'Rubros', 'Proveedores']);
+    expect(enlaces(el)).toEqual(['Mostrador', 'Presupuestos', 'Remitos', 'Caja', 'Artículos', 'Rubros', 'Proveedores']);
     expect(el.querySelector('a[href="/actualizacion-masiva"]')).toBeNull();
     expect(el.querySelector('nav .grupo')).toBeNull();
   });
