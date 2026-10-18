@@ -42,17 +42,23 @@ const MENSAJE_VALIDEZ = `La validez va de 1 a ${DIAS_VALIDEZ_MAXIMOS} días.`;
         @if (aviso(); as texto) {
           <p class="aviso" role="status">{{ texto }}</p>
         }
-        <label class="campo">
-          Cliente <small>(opcional)</small>
-          <input
-            #cliente
-            name="cliente"
-            type="text"
-            autocomplete="off"
-            spellcheck="false"
-            [maxLength]="clienteMaximo"
-          />
-        </label>
+        @if (clienteElegido(); as nombre) {
+          <p class="cliente-elegido">
+            Cliente: <strong>{{ nombre }}</strong>
+          </p>
+        } @else {
+          <label class="campo">
+            Cliente <small>(opcional)</small>
+            <input
+              #cliente
+              name="cliente"
+              type="text"
+              autocomplete="off"
+              spellcheck="false"
+              [maxLength]="clienteMaximo"
+            />
+          </label>
+        }
         <label class="campo corto">
           Validez en días
           <input
@@ -132,6 +138,10 @@ const MENSAJE_VALIDEZ = `La validez va de 1 a ${DIAS_VALIDEZ_MAXIMOS} días.`;
       color: var(--texto-tenue);
       font-weight: 500;
     }
+    .cliente-elegido {
+      margin: 0;
+      color: var(--texto-suave);
+    }
     .corto input {
       max-width: 8rem;
       text-align: right;
@@ -148,6 +158,8 @@ export class DialogoPresupuesto {
   readonly enVuelo = input(false);
   /** Mensaje del contenedor (por ejemplo, un precio que cambió en el servidor). */
   readonly aviso = input<string | null>(null);
+  /** El cliente que el ticket ya tiene (F9, CL-005): si hay uno, reemplaza al texto libre y viaja con el ticket. */
+  readonly clienteElegido = input<string | null>(null);
 
   readonly confirmar = output<DatosPresupuesto>();
   readonly cancelar = output<void>();
@@ -159,7 +171,8 @@ export class DialogoPresupuesto {
   protected readonly diasPorDefecto = String(DIAS_VALIDEZ_POR_DEFECTO);
   protected readonly error = signal<string | null>(null);
 
-  private readonly cliente = viewChild.required<ElementRef<HTMLInputElement>>('cliente');
+  /** El campo de texto libre: no está si el ticket ya tiene un cliente elegido. */
+  private readonly cliente = viewChild<ElementRef<HTMLInputElement>>('cliente');
   private readonly validez = viewChild.required<ElementRef<HTMLInputElement>>('validez');
   private readonly observaciones = viewChild.required<ElementRef<HTMLInputElement>>('observaciones');
   private readonly guarda = new GuardaLector();
@@ -167,7 +180,7 @@ export class DialogoPresupuesto {
   private estuvoEnVuelo = false;
 
   constructor() {
-    afterNextRender(() => this.cliente().nativeElement.focus());
+    afterNextRender(() => (this.cliente() ?? this.validez()).nativeElement.focus());
     // Si el POST termina con un error el diálogo sigue abierto: se puede volver a guardar.
     effect(() => {
       if (this.enVuelo()) this.estuvoEnVuelo = true;
@@ -214,7 +227,7 @@ export class DialogoPresupuesto {
       return;
     }
     this.error.set(null);
-    const clienteNombre = this.cliente().nativeElement.value.trim();
+    const clienteNombre = this.cliente()?.nativeElement.value.trim() ?? '';
     const observaciones = this.observaciones().nativeElement.value.trim();
     this.bloqueado.set(true);
     this.confirmar.emit({

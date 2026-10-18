@@ -25,6 +25,13 @@
     </div>
   }
 
+  @if (ticket.ticket().clienteNombre; as cliente) {
+    <p class="cliente-ticket">
+      Cliente: <strong>{{ cliente }}</strong>
+      <button type="button" class="enlace" (click)="quitarCliente()">Quitar</button>
+    </p>
+  }
+
   @if (ticket.ticket().presupuestoNumero; as numero) {
     <p class="origen">Venta del presupuesto N.º {{ numero }}</p>
   }
@@ -142,8 +149,17 @@
         (escaneoDescartado)="escaneoDescartado()"
       />
     }
+    @case ('cliente') {
+      <app-dialogo-cliente
+        [actual]="ticket.ticket().clienteNombre ?? null"
+        (elegir)="elegirCliente($event)"
+        (quitar)="quitarCliente()"
+        (cancelar)="cerrarDialogo()"
+      />
+    }
     @case ('presupuesto') {
       <app-dialogo-presupuesto
+        [clienteElegido]="ticket.ticket().clienteNombre ?? null"
         [totalCentavos]="ticket.total()"
         [renglones]="ticket.ticket().renglones.length"
         [enVuelo]="enVuelo()"
@@ -155,6 +171,7 @@
     }
     @case ('remito') {
       <app-dialogo-remito
+        [clienteElegido]="ticket.ticket().clienteNombre ?? null"
         [totalCentavos]="ticket.total()"
         [renglones]="ticket.ticket().renglones.length"
         [enVuelo]="enVuelo()"

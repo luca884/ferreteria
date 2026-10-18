@@ -80,6 +80,27 @@ app-caja-busqueda {
   border-left-color: var(--texto-tenue);
   background: var(--superficie);
 }
+/* El cliente elegido con F9: se ve siempre, y se saca con «Quitar». */
+.cliente-ticket {
+  display: flex;
+  align-items: center;
+  gap: var(--e-2);
+  margin: 0;
+  padding: var(--e-2) var(--e-3);
+  border: 1px solid var(--borde);
+  border-left: 4px solid var(--texto-tenue);
+  border-radius: var(--radio);
+  background: var(--superficie);
+}
+.cliente-ticket .enlace {
+  margin-left: auto;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--acento);
+  font-weight: 700;
+  text-decoration: underline;
+}
 /* El ticket sale de un presupuesto: se cobra con lo que dice el mostrador, y la venta lo deja facturado. */
 .origen {
   margin: 0;

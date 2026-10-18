@@ -30,7 +30,7 @@ describe('DialogoRemito', () => {
     fixture.detectChanges();
   }
 
-  async function abrir(entradas: { total?: number; renglones?: number | null } = {}) {
+  async function abrir(entradas: { total?: number; renglones?: number | null; clienteElegido?: string | null } = {}) {
     await TestBed.configureTestingModule({
       imports: [DialogoRemito],
       providers: [{ provide: LOCALE_ID, useValue: 'es-AR' }],
@@ -41,6 +41,7 @@ describe('DialogoRemito', () => {
     descartados = 0;
     fixture.componentRef.setInput('totalCentavos', entradas.total ?? 51000);
     fixture.componentRef.setInput('renglones', entradas.renglones === undefined ? 2 : entradas.renglones);
+    fixture.componentRef.setInput('clienteElegido', entradas.clienteElegido ?? null);
     fixture.componentInstance.confirmar.subscribe((datos) => confirmados.push(datos));
     fixture.componentInstance.cancelar.subscribe(() => cancelados++);
     fixture.componentInstance.escaneoDescartado.subscribe(() => descartados++);
@@ -176,5 +177,38 @@ describe('DialogoRemito', () => {
     fixture.detectChanges();
 
     expect(el().querySelector('[role="status"]')!.textContent).toContain('Cambió el precio de "Tornillo"');
+  });
+
+  describe('con un cliente elegido con F9 (CL-005)', () => {
+    it('muestra el cliente en vez del campo de texto libre', async () => {
+      await abrir({ clienteElegido: 'Ferretería Norte SRL' });
+
+      expect(el().querySelector('input[name="cliente"]')).toBeNull();
+      expect(el().querySelector('.cliente-elegido')!.textContent!.replace(/\s+/g, ' ').trim()).toBe(
+        'Cliente: Ferretería Norte SRL',
+      );
+    });
+
+    it('el foco va al primer campo que queda', async () => {
+      await abrir({ clienteElegido: 'Ferretería Norte SRL' });
+
+      expect(document.activeElement).toBe(el().querySelector('input[name="observaciones"]'));
+    });
+
+    it('Enter confirma sin clienteNombre: el cliente lo manda el ticket', async () => {
+      await abrir({ clienteElegido: 'Ferretería Norte SRL' });
+
+      tecla(el().querySelector('input[name="observaciones"]')!, 'Enter');
+
+      expect(confirmados).toHaveLength(1);
+      expect('clienteNombre' in confirmados[0]).toBe(false);
+    });
+
+    it('sin cliente elegido sigue el campo de texto libre', async () => {
+      await abrir();
+
+      expect(cliente()).not.toBeNull();
+      expect(el().querySelector('.cliente-elegido')).toBeNull();
+    });
   });
 });

@@ -16,8 +16,8 @@ describe('mapa de atajos del mostrador', () => {
     for (const t of ['F2', 'F3', 'F4', 'F6', 'F7', 'F8', 'F10', 'Escape']) expect(teclas).toContain(t);
   });
 
-  it('F9 no está (es del corte del cliente)', () => {
-    expect(ATAJOS.map((a) => a.tecla)).not.toContain('F9');
+  it('F9 es el selector de cliente (CL-005) y está en la botonera', () => {
+    expect(ATAJOS.find((a) => a.tecla === 'F9')).toMatchObject({ accion: 'cliente', etiqueta: 'Cliente', enBotonera: true });
   });
 
   describe('accionDeTecla', () => {
@@ -29,11 +29,12 @@ describe('mapa de atajos del mostrador', () => {
       expect(accionDeTecla('F7')).toBe('descuento');
       expect(accionDeTecla('F6')).toBe('descuentoTotal');
       expect(accionDeTecla('F8')).toBe('presupuesto');
+      expect(accionDeTecla('F9')).toBe('cliente');
       expect(accionDeTecla('Escape')).toBe('cerrar');
     });
 
     it('una tecla sin atajo da null', () => {
-      for (const k of ['F5', 'F9', 'Delete', 'Enter', 'a', '']) expect(accionDeTecla(k)).toBeNull();
+      for (const k of ['F5', 'F11', 'Delete', 'Enter', 'a', '']) expect(accionDeTecla(k)).toBeNull();
     });
 
     it('Remito está en la botonera pero sin tecla: F5 y F11 no sirven en el navegador, F8 y F9 ya son otras (RM-007)', () => {
@@ -52,7 +53,7 @@ describe('mapa de atajos del mostrador', () => {
   });
 
   describe('botonera', () => {
-    it('muestra Buscar, Cantidad, los descuentos, Cobrar, Presupuesto, Remito (sin tecla), Quitar y Vaciar (sin tecla), y no Esc', () => {
+    it('muestra Buscar, Cantidad, los descuentos, Cobrar, Presupuesto, Remito (sin tecla), Cliente, Quitar y Vaciar (sin tecla), y no Esc', () => {
       expect(atajosDeBotonera().map((a) => `${a.tecla ?? ''} ${a.etiqueta}`.trim())).toEqual([
         'F2 Buscar',
         'F3 Cantidad',
@@ -61,6 +62,7 @@ describe('mapa de atajos del mostrador', () => {
         'F4 Cobrar',
         'F8 Presupuesto',
         'Remito',
+        'F9 Cliente',
         'F10 Quitar',
         'Vaciar',
       ]);

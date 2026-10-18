@@ -19,7 +19,7 @@ describe('Botonera', () => {
     fixture.detectChanges();
   });
 
-  it('muestra F2 Buscar, F3 Cantidad, los descuentos F7 y F6, F4 Cobrar, F8 Presupuesto, Remito (sin tecla), F10 Quitar y Vaciar', () => {
+  it('muestra F2 Buscar, F3 Cantidad, los descuentos F7 y F6, F4 Cobrar, F8 Presupuesto, Remito (sin tecla), F9 Cliente, F10 Quitar y Vaciar', () => {
     expect(textos()).toEqual([
       'F2 Buscar',
       'F3 Cantidad',
@@ -28,6 +28,7 @@ describe('Botonera', () => {
       'F4 Cobrar',
       'F8 Presupuesto',
       'Remito',
+      'F9 Cliente',
       'F10 Quitar',
       'Vaciar',
     ]);
@@ -40,8 +41,9 @@ describe('Botonera', () => {
     expect(boton('F4').getAttribute('aria-keyshortcuts')).toBe('F4');
   });
 
-  it('no muestra F9 (es del corte del cliente)', () => {
-    expect(textos().join(' ')).not.toMatch(/F9/);
+  it('F9 Cliente va en la botonera con su tecla en aria-keyshortcuts', () => {
+    expect(boton('F9').textContent).toContain('Cliente');
+    expect(boton('F9').getAttribute('aria-keyshortcuts')).toBe('F9');
   });
 
   it('las etiquetas salen del mapa de atajos, sin duplicarlas', () => {
@@ -74,10 +76,11 @@ describe('Botonera', () => {
     boton('F2').click();
     boton('F8').click();
     boton('Remito').click();
+    boton('F9').click();
     boton('F10').click();
     boton('Vaciar').click();
 
-    expect(emitidas).toEqual(['cobrar', 'cantidad', 'buscar', 'presupuesto', 'remito', 'quitar', 'vaciar']);
+    expect(emitidas).toEqual(['cobrar', 'cantidad', 'buscar', 'presupuesto', 'remito', 'cliente', 'quitar', 'vaciar']);
   });
 
   it('mousedown se cancela para no robarle el foco a la caja', () => {

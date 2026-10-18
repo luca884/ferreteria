@@ -35,17 +35,23 @@ import { GuardaLector } from './guarda-lector';
         @if (aviso(); as texto) {
           <p class="aviso" role="status">{{ texto }}</p>
         }
-        <label class="campo">
-          Cliente <small>(opcional)</small>
-          <input
-            #cliente
-            name="cliente"
-            type="text"
-            autocomplete="off"
-            spellcheck="false"
-            [maxLength]="clienteMaximo"
-          />
-        </label>
+        @if (clienteElegido(); as nombre) {
+          <p class="cliente-elegido">
+            Cliente: <strong>{{ nombre }}</strong>
+          </p>
+        } @else {
+          <label class="campo">
+            Cliente <small>(opcional)</small>
+            <input
+              #cliente
+              name="cliente"
+              type="text"
+              autocomplete="off"
+              spellcheck="false"
+              [maxLength]="clienteMaximo"
+            />
+          </label>
+        }
         <label class="campo">
           Observaciones <small>(opcional)</small>
           <input
@@ -111,6 +117,10 @@ import { GuardaLector } from './guarda-lector';
       color: var(--texto-tenue);
       font-weight: 500;
     }
+    .cliente-elegido {
+      margin: 0;
+      color: var(--texto-suave);
+    }
   `,
 })
 export class DialogoRemito {
@@ -122,6 +132,8 @@ export class DialogoRemito {
   readonly enVuelo = input(false);
   /** Mensaje del contenedor (por ejemplo, un precio que cambió en el servidor). */
   readonly aviso = input<string | null>(null);
+  /** El cliente que el ticket ya tiene (F9, CL-005): si hay uno, reemplaza al texto libre y viaja con el ticket. */
+  readonly clienteElegido = input<string | null>(null);
 
   readonly confirmar = output<DatosRemito>();
   readonly cancelar = output<void>();
@@ -131,14 +143,15 @@ export class DialogoRemito {
   protected readonly clienteMaximo = CLIENTE_REMITO_MAXIMO;
   protected readonly observacionesMaximo = OBSERVACIONES_REMITO_MAXIMO;
 
-  private readonly cliente = viewChild.required<ElementRef<HTMLInputElement>>('cliente');
+  /** El campo de texto libre: no está si el ticket ya tiene un cliente elegido. */
+  private readonly cliente = viewChild<ElementRef<HTMLInputElement>>('cliente');
   private readonly observaciones = viewChild.required<ElementRef<HTMLInputElement>>('observaciones');
   private readonly guarda = new GuardaLector();
   private readonly bloqueado = signal(false);
   private estuvoEnVuelo = false;
 
   constructor() {
-    afterNextRender(() => this.cliente().nativeElement.focus());
+    afterNextRender(() => (this.cliente() ?? this.observaciones()).nativeElement.focus());
     // Si el POST termina con un error el diálogo sigue abierto: se puede volver a emitir.
     effect(() => {
       if (this.enVuelo()) this.estuvoEnVuelo = true;
@@ -170,7 +183,7 @@ export class DialogoRemito {
 
   protected emitir(): void {
     if (this.enVuelo() || this.bloqueado()) return;
-    const clienteNombre = this.cliente().nativeElement.value.trim();
+    const clienteNombre = this.cliente()?.nativeElement.value.trim() ?? '';
     const observaciones = this.observaciones().nativeElement.value.trim();
     this.bloqueado.set(true);
     this.confirmar.emit({

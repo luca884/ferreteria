@@ -8,6 +8,8 @@ import { DialogoCantidad } from './dialogo-cantidad';
 import { ConfirmacionCobro, DialogoCobro } from './dialogo-cobro';
 import { DialogoConfirmacion } from './dialogo-confirmacion';
 import { DialogoDescuento } from './dialogo-descuento';
+import { Cliente } from '../clientes/cliente.models';
+import { DialogoCliente } from './dialogo-cliente';
 import { DialogoPresupuesto } from './dialogo-presupuesto';
 import { DialogoRemito } from './dialogo-remito';
 import { FichaArticulo } from './ficha-articulo';
@@ -63,7 +65,8 @@ type Dialogo =
   | { tipo: 'descuentoTotal' }
   | { tipo: 'cobro' }
   | { tipo: 'presupuesto' }
-  | { tipo: 'remito' };
+  | { tipo: 'remito' }
+  | { tipo: 'cliente' };
 
 /**
  * Aviso del contenedor, aparte del mensaje de la búsqueda. `vacio` y `persistente` se van con el próximo
@@ -97,6 +100,7 @@ interface Escaneo {
     DialogoCobro,
     DialogoConfirmacion,
     DialogoDescuento,
+    DialogoCliente,
     DialogoPresupuesto,
     DialogoRemito,
     ListaResultados,
@@ -239,6 +243,8 @@ export class Mostrador {
       presupuesto: conRenglones,
       // El remito descuenta stock pero no toca la caja: se puede emitir aunque no haya caja abierta.
       remito: conRenglones,
+      // El cliente se elige con el ticket vacío también: la venta, el presupuesto y el remito lo llevan.
+      cliente: !abierto,
       quitar: conRenglones,
       vaciar: conRenglones,
     };
@@ -414,6 +420,10 @@ export class Mostrador {
         this.avisar(null);
         this.dialogo.set({ tipo: 'remito' });
         return;
+      case 'cliente':
+        this.avisar(null);
+        this.dialogo.set({ tipo: 'cliente' });
+        return;
       case 'vaciar':
         if (renglones.length === 0) return;
         this.avisar(null);
@@ -458,6 +468,18 @@ export class Mostrador {
   protected aplicarDescuentoRenglon(indice: number, bp: number): void {
     const error = this.ticket.aplicarDescuentoRenglon(indice, bp);
     if (error) this.avisar({ texto: error, grave: true, tipo: 'otro' });
+    this.cerrarDialogo();
+  }
+
+  /** F9: el cliente de la venta, del presupuesto o del remito. */
+  protected elegirCliente(cliente: Cliente): void {
+    this.ticket.elegirCliente(cliente);
+    this.cerrarDialogo();
+  }
+
+  /** Vuelve a Consumidor Final (desde el diálogo o desde el ticket). */
+  protected quitarCliente(): void {
+    this.ticket.quitarCliente();
     this.cerrarDialogo();
   }
 

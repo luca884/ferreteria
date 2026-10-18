@@ -445,6 +445,23 @@ describe('Remitos', () => {
       await click(boton('Pasar a venta', detalle()!));
     }
 
+    it('si el documento tiene un cliente de la tabla, lo trae al ticket (CL-005)', async () => {
+      await crear();
+      api.obtener.mockReturnValue(of(detalleDe(5, { clienteId: 7, clienteNombre: 'Ferretería Norte SRL' })));
+      await abrirDetalle(0);
+
+      await click(boton('Pasar a venta', detalle()!));
+
+      expect(ticketGuardado()).toMatchObject({ clienteId: 7, clienteNombre: 'Ferretería Norte SRL' });
+    });
+
+    it('con el cliente de texto libre (sin clienteId) el ticket queda sin cliente: Consumidor Final', async () => {
+      await pasar();
+
+      expect(ticketGuardado().clienteId).toBeUndefined();
+      expect(ticketGuardado().clienteNombre).toBeUndefined();
+    });
+
     it('lee el precio de hoy de cada artículo, deja el ticket guardado con el remito y abre el mostrador', async () => {
       await pasar();
 

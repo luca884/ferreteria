@@ -11,6 +11,9 @@ import { CajaVigente } from '../caja/caja.models';
 import { CajaService } from '../caja/caja.service';
 import { FormaPago } from '../formas-pago/forma-pago.models';
 import { FormasPagoService } from '../formas-pago/formas-pago.service';
+import { PageResponse } from '../../core/api/page.models';
+import { Cliente } from '../clientes/cliente.models';
+import { ClientesService } from '../clientes/clientes.service';
 import { EmitirPresupuestoRequest, PresupuestoEmitido } from '../presupuestos/presupuesto.models';
 import { PresupuestosService } from '../presupuestos/presupuestos.service';
 import { EmitirRemitoRequest, RemitoEmitido } from '../remitos/remito.models';
@@ -40,6 +43,23 @@ const FORMAS_BASE: FormaPago[] = [
   formaDe(3, 'Crédito', 'CREDITO'),
   formaDe(4, 'Transferencia', 'TRANSFERENCIA'),
 ];
+
+const CLIENTE_ANA: Cliente = {
+  id: 1,
+  razonSocial: 'Ana Gómez',
+  tipoDocumento: 'DNI',
+  numeroDocumento: '12345678',
+  condicionIva: 'CONSUMIDOR_FINAL',
+  activo: true,
+};
+const CLIENTE_NORTE: Cliente = {
+  id: 2,
+  razonSocial: 'Ferretería Norte SRL',
+  tipoDocumento: 'CUIT',
+  numeroDocumento: '30712345671',
+  condicionIva: 'RESPONSABLE_INSCRIPTO',
+  activo: true,
+};
 
 describe('Mostrador', () => {
   const articulo = (id: number, cambios: Partial<ArticuloMostrador> = {}): ArticuloMostrador => ({
@@ -95,6 +115,7 @@ describe('Mostrador', () => {
   let claves: number;
   let cajas: { actual: ReturnType<typeof vi.fn> };
   let formasApi: { listar: ReturnType<typeof vi.fn> };
+  let clientesApi: { buscar: ReturnType<typeof vi.fn>; crear: ReturnType<typeof vi.fn> };
 
   /** CU-10: por defecto la caja está abierta hoy, como la encuentra el vendedor al empezar. */
   const cajaAbierta: CajaVigente = {
@@ -142,6 +163,12 @@ describe('Mostrador', () => {
     };
     cajas = { actual: vi.fn(() => of(vigente)) };
     formasApi = { listar: vi.fn(() => of(formas)) };
+    clientesApi = {
+      buscar: vi.fn(() =>
+        of({ items: [CLIENTE_ANA, CLIENTE_NORTE], page: 0, size: 8, totalElements: 2, totalPages: 1 } as PageResponse<Cliente>),
+      ),
+      crear: vi.fn(),
+    };
     const sesion = signal({
       userId: 7,
       nombre: 'Ana',
@@ -161,6 +188,7 @@ describe('Mostrador', () => {
         { provide: RemitosService, useValue: remitosApi },
         { provide: CajaService, useValue: cajas },
         { provide: FormasPagoService, useValue: formasApi },
+        { provide: ClientesService, useValue: clientesApi },
         { provide: AuthService, useValue: { sesion: sesion.asReadonly() } },
         { provide: GENERAR_CLAVE, useValue: () => `clave-${++claves}` },
       ],
@@ -233,6 +261,7 @@ describe('Mostrador', () => {
         'F4 Cobrar',
         'F8 Presupuesto',
         'Remito',
+        'F9 Cliente',
         'F10 Quitar',
         'Vaciar',
       ]);
@@ -3673,6 +3702,165 @@ describe('Mostrador', () => {
 
       expect(dialogo()).not.toBeNull();
       expect(el().textContent).toContain('No se pudo cobrar. Probá de nuevo.');
+    });
+  });
+
+  describe('cliente (F9, CL-005)', () => {
+    const exacto = (a: ArticuloMostrador): BusquedaMostrador => ({ tipo: 'EXACTO', items: [a], hayMas: false });
+    const normal = (t: string | null | undefined) => (t ?? '').replace(/\s+/g, ' ').trim();
+    const dialogoCliente = () => el().querySelector<HTMLElement>('app-dialogo-cliente [role="dialog"]');
+    const clienteDelTicket = () => normal(el().querySelector('.cliente-ticket')?.textContent);
+
+    async function tecla(key: string, destino: HTMLElement = document.activeElement as HTMLElement) {
+      const evento = new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true });
+      destino.dispatchEvent(evento);
+      await refrescar();
+      return evento;
+    }
+
+    async function conMartillos() {
+      await crear();
+      for (let i = 0; i < 2; i++) {
+        await escribir('M');
+        await enter();
+        await responder(llamadas.length - 1, exacto(articulo(1, { descripcion: 'Martillo', precioFinal: 1500 })));
+      }
+    }
+
+    /** Abre F9 y elige al segundo de la lista (Ferretería Norte SRL) con ↓ y Enter. */
+    async function elegirNorte() {
+      await tecla('F9');
+      await tecla('ArrowDown');
+      await tecla('Enter');
+    }
+
+    it('F9 abre «Cliente», anula la acción del navegador y también sirve con el ticket vacío', async () => {
+      await crear();
+
+      const evento = await tecla('F9');
+
+      expect(evento.defaultPrevented).toBe(true);
+      expect(normal(dialogoCliente()?.querySelector('h2')?.textContent)).toBe('Cliente');
+    });
+
+    it('el botón F9 Cliente abre lo mismo y está siempre habilitado', async () => {
+      await crear();
+      const boton = Array.from(el().querySelectorAll<HTMLButtonElement>('app-botonera button')).find((b) =>
+        normal(b.textContent).includes('Cliente'),
+      )!;
+      expect(boton.disabled).toBe(false);
+
+      boton.click();
+      await refrescar();
+
+      expect(dialogoCliente()).not.toBeNull();
+    });
+
+    it('con un diálogo abierto, F9 no abre otro', async () => {
+      await conMartillos();
+      await tecla('F4');
+      expect(el().querySelector('app-dialogo-cobro')).not.toBeNull();
+
+      await tecla('F9', el().querySelector('app-dialogo-cobro [role="dialog"]') as HTMLElement);
+
+      expect(dialogoCliente()).toBeNull();
+    });
+
+    it('sin cliente no hay renglón de cliente: la venta es a Consumidor Final', async () => {
+      await conMartillos();
+
+      expect(el().querySelector('.cliente-ticket')).toBeNull();
+    });
+
+    it('elegir un cliente cierra el diálogo, lo muestra en el ticket y devuelve el foco al buscador', async () => {
+      await conMartillos();
+
+      await elegirNorte();
+
+      expect(dialogoCliente()).toBeNull();
+      expect(clienteDelTicket()).toContain('Cliente: Ferretería Norte SRL');
+      expect(document.activeElement).toBe(campo());
+    });
+
+    it('el cliente se puede elegir antes del primer renglón y queda al agregar artículos', async () => {
+      await crear();
+      await elegirNorte();
+
+      await escribir('M');
+      await enter();
+      await responder(llamadas.length - 1, exacto(articulo(1)));
+
+      expect(clienteDelTicket()).toContain('Ferretería Norte SRL');
+    });
+
+    it('«Quitar» en el ticket vuelve a Consumidor Final', async () => {
+      await conMartillos();
+      await elegirNorte();
+
+      (el().querySelector('.cliente-ticket button') as HTMLButtonElement).click();
+      await refrescar();
+
+      expect(el().querySelector('.cliente-ticket')).toBeNull();
+    });
+
+    it('«Quitar cliente» del diálogo también vuelve a Consumidor Final y cierra', async () => {
+      await conMartillos();
+      await elegirNorte();
+      await tecla('F9');
+
+      Array.from(el().querySelectorAll<HTMLButtonElement>('app-dialogo-cliente button'))
+        .find((b) => normal(b.textContent) === 'Quitar cliente')!
+        .click();
+      await refrescar();
+
+      expect(dialogoCliente()).toBeNull();
+      expect(el().querySelector('.cliente-ticket')).toBeNull();
+    });
+
+    it('Esc cierra el diálogo sin cambiar el cliente', async () => {
+      await conMartillos();
+      await elegirNorte();
+      await tecla('F9');
+
+      await tecla('Escape');
+
+      expect(dialogoCliente()).toBeNull();
+      expect(clienteDelTicket()).toContain('Ferretería Norte SRL');
+    });
+
+    it('el cobro manda el clienteId, y tras cobrar el ticket queda sin cliente', async () => {
+      await conMartillos();
+      await elegirNorte();
+      await tecla('F4');
+      await tecla('Enter');
+
+      expect(cobros[0].pedido.clienteId).toBe(2);
+      cobros[0].respuesta.next({
+        venta: { ventaId: 1, numero: 5, total: 3000, fecha: '', renglones: [], sinStock: [], facturable: true, clienteId: 2, clienteNombre: 'Ferretería Norte SRL' },
+        repetida: false,
+      } as VentaCobrada);
+      cobros[0].respuesta.complete();
+      await refrescar();
+
+      expect(el().querySelector('.cliente-ticket')).toBeNull();
+    });
+
+    it('una venta sin cliente no manda clienteId', async () => {
+      await conMartillos();
+      await tecla('F4');
+      await tecla('Enter');
+
+      expect('clienteId' in cobros[0].pedido).toBe(false);
+    });
+
+    it('el presupuesto y el remito mandan el clienteId (y no el texto libre) cuando hay cliente', async () => {
+      await conMartillos();
+      await elegirNorte();
+
+      await tecla('F8');
+      await tecla('Enter');
+      expect(guardados[0].pedido.clienteId).toBe(2);
+      expect('clienteNombre' in guardados[0].pedido).toBe(false);
     });
   });
 });
