@@ -16,7 +16,7 @@ import com.ferreteria.common.HoraArgentina;
 import java.time.LocalDateTime;
 
 /**
- * La venta (CU-07): un comprobante de tipo VENTA y estado SIN_FACTURAR. Los importes son los de
+ * La venta (CU-07): un comprobante de tipo VENTA y estado SIN_FACTURAR (o NO_FACTURABLE si se marco asi). Los importes son los de
  * {@link TotalesVenta}: la suma de sus renglones. El cliente nulo es Consumidor Final. Sin relaciones JPA:
  * los items y el pago guardan el id del comprobante, como el resto del proyecto. Lo unico que cambiara
  * despues es el estado (fase 5, al facturar).
@@ -116,13 +116,20 @@ public class Comprobante {
     public static Comprobante venta(
             Long ferreteriaId, long numero, String claveIdempotencia, Long usuarioId, TotalesVenta totales,
             Long cajaId, BigDecimal descuentoPorcentaje, Long presupuestoId, Long remitoId) {
+        return venta(ferreteriaId, numero, claveIdempotencia, usuarioId, totales, cajaId, descuentoPorcentaje,
+                presupuestoId, remitoId, true);
+    }
+
+    public static Comprobante venta(
+            Long ferreteriaId, long numero, String claveIdempotencia, Long usuarioId, TotalesVenta totales,
+            Long cajaId, BigDecimal descuentoPorcentaje, Long presupuestoId, Long remitoId, boolean facturable) {
         Comprobante comprobante = new Comprobante();
         comprobante.presupuestoId = presupuestoId;
         comprobante.remitoId = remitoId;
         comprobante.cajaId = cajaId;
         comprobante.ferreteriaId = ferreteriaId;
         comprobante.tipo = TipoComprobante.VENTA;
-        comprobante.estado = EstadoComprobante.SIN_FACTURAR;
+        comprobante.estado = facturable ? EstadoComprobante.SIN_FACTURAR : EstadoComprobante.NO_FACTURABLE;
         comprobante.numero = numero;
         comprobante.claveIdempotencia = claveIdempotencia;
         comprobante.usuarioId = usuarioId;

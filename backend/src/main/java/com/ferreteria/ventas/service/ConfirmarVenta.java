@@ -10,14 +10,20 @@ import java.util.List;
  * o una lista de pagos (GDS-07), nunca las dos. Los montos de los pagos son la parte del total SIN recargo que cubre cada
  * forma. Si la venta sale de un presupuesto (PP-006), {@code presupuestoId} es el suyo y la venta lo deja FACTURADO; si sale
  * de un remito (RM-006), {@code remitoId} es el suyo y la venta lo deja FACTURADO y concilia el stock. Nunca los dos. La
- * ferreteria y el usuario NO viajan aca: salen del JWT. Un descuento ausente es 0 %.
+ * ferreteria y el usuario NO viajan aca: salen del JWT. Un descuento ausente es 0 %. {@code facturable} false deja la venta
+ * NO_FACTURABLE: cobra, mueve caja y stock igual pero la fase 5 no la factura nunca; lo normal es true.
  */
 public record ConfirmarVenta(String clave, List<Renglon> renglones, BigDecimal totalMostrado, Long formaPagoId,
-        BigDecimal descuentoPorcentaje, List<PagoPedido> pagos, Long presupuestoId, Long remitoId) {
+        BigDecimal descuentoPorcentaje, List<PagoPedido> pagos, Long presupuestoId, Long remitoId, boolean facturable) {
 
     public ConfirmarVenta {
         descuentoPorcentaje = descuentoPorcentaje == null ? BigDecimal.ZERO : descuentoPorcentaje;
         pagos = pagos == null ? List.of() : pagos;
+    }
+
+    public ConfirmarVenta(String clave, List<Renglon> renglones, BigDecimal totalMostrado, Long formaPagoId,
+            BigDecimal descuentoPorcentaje, List<PagoPedido> pagos, Long presupuestoId, Long remitoId) {
+        this(clave, renglones, totalMostrado, formaPagoId, descuentoPorcentaje, pagos, presupuestoId, remitoId, true);
     }
 
     public ConfirmarVenta(String clave, List<Renglon> renglones, BigDecimal totalMostrado, Long formaPagoId,

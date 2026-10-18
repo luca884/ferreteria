@@ -10,6 +10,7 @@ import com.ferreteria.stock.service.SalidaStock;
 import com.ferreteria.stock.service.StockService;
 import com.ferreteria.tenant.TenantContext;
 import com.ferreteria.ventas.model.Comprobante;
+import com.ferreteria.ventas.model.EstadoComprobante;
 import com.ferreteria.ventas.model.EstadoPresupuesto;
 import com.ferreteria.ventas.model.EstadoRemito;
 import com.ferreteria.ventas.model.FormaPago;
@@ -130,7 +131,7 @@ public class RegistroVenta {
         long numero = numeradorRepository.siguienteScoped();
         Comprobante comprobante = comprobanteRepository.save(
                 Comprobante.venta(ferreteriaId, numero, pedido.clave(), usuarioId, totales, cajaId,
-                        pedido.descuentoPorcentaje(), pedido.presupuestoId(), pedido.remitoId()));
+                        pedido.descuentoPorcentaje(), pedido.presupuestoId(), pedido.remitoId(), pedido.facturable()));
         if (presupuesto != null) {
             presupuesto.cambiarEstado(EstadoPresupuesto.FACTURADO);
         }
@@ -194,6 +195,7 @@ public class RegistroVenta {
                 || pedido.descuentoPorcentaje().compareTo(comprobante.getDescuentoPorcentaje()) != 0
                 || !java.util.Objects.equals(pedido.presupuestoId(), comprobante.getPresupuestoId())
                 || !java.util.Objects.equals(pedido.remitoId(), comprobante.getRemitoId())
+                || pedido.facturable() != (comprobante.getEstado() != EstadoComprobante.NO_FACTURABLE)
                 || pedido.renglones().size() != items.size()) {
             return false;
         }

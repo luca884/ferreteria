@@ -552,6 +552,66 @@ class RegistroVentaTest {
         assertThat(venta.repetida()).isFalse();
     }
 
+    // ---- venta no facturable
+
+    static ConfirmarVenta noFacturable(ConfirmarVenta p) {
+        return new ConfirmarVenta(p.clave(), p.renglones(), p.totalMostrado(), p.formaPagoId(),
+                p.descuentoPorcentaje(), p.pagos(), p.presupuestoId(), p.remitoId(), false);
+    }
+
+    @Test
+    @DisplayName("un pedido sin la marca es facturable: la venta de siempre queda SIN_FACTURAR")
+    void pedidoSinMarcaEsFacturable() {
+        assertThat(ventaC1C3(MedioPago.EFECTIVO).facturable()).isTrue();
+        assertThat(noFacturable(ventaC1C3(MedioPago.EFECTIVO)).facturable()).isFalse();
+    }
+
+    @Test
+    @DisplayName("la venta no facturable queda VENTA NO_FACTURABLE, con el mismo numerador, y mueve caja, stock e items igual")
+    void ventaNoFacturable() {
+        catalogoC1C3();
+        escrituraLista(Map.of(1L, bd("7"), 2L, bd("7.5")));
+
+        VentaRegistrada venta = registro.registrar(noFacturable(ventaC1C3(MedioPago.EFECTIVO)), USUARIO);
+
+        Comprobante c = venta.comprobante();
+        assertThat(c.getTipo()).isEqualTo(TipoComprobante.VENTA);
+        assertThat(c.getEstado()).isEqualTo(EstadoComprobante.NO_FACTURABLE);
+        assertThat(c.getNumero()).isEqualTo(NUMERO);
+        assertThat(c.getCajaId()).isEqualTo(CAJA);
+        assertThat(c.getTotal()).isEqualByComparingTo("4463.33");
+        verify(numeradorRepository).siguienteScoped();
+        verify(stockService).registrarVenta(eq(COMPROBANTE), eq(USUARIO), any());
+        assertThat(itemsGuardados()).hasSize(2);
+        verify(pagoRepository).save(any(Pago.class));
+    }
+
+    @Test
+    @DisplayName("repetir con la misma marca es la misma venta; con otra marca, CLAVE_CON_OTRO_CONTENIDO")
+    void repetidaConLaMarca() {
+        Comprobante guardado = ventaGuardadaC1C3();
+        ReflectionTestUtils.setField(guardado, "estado", EstadoComprobante.NO_FACTURABLE);
+        when(comprobanteRepository.porClaveScoped(CLAVE)).thenReturn(Optional.of(guardado));
+        when(itemRepository.deComprobanteScoped(COMPROBANTE)).thenReturn(itemsGuardadosC1C3());
+        when(pagoRepository.deComprobanteScoped(COMPROBANTE))
+                .thenReturn(List.of(pagoGuardado(MedioPago.EFECTIVO, "4463.33")));
+
+        assertThat(registro.registrar(noFacturable(ventaC1C3(MedioPago.EFECTIVO)), USUARIO).repetida()).isTrue();
+        assertThat(rechazo(ventaC1C3(MedioPago.EFECTIVO)).motivo()).isEqualTo(Motivo.CLAVE_CON_OTRO_CONTENIDO);
+    }
+
+    @Test
+    @DisplayName("repetir una venta facturable pidiendola no facturable es CLAVE_CON_OTRO_CONTENIDO")
+    void repetidaFacturablePedidaNoFacturable() {
+        when(comprobanteRepository.porClaveScoped(CLAVE)).thenReturn(Optional.of(ventaGuardadaC1C3()));
+        when(itemRepository.deComprobanteScoped(COMPROBANTE)).thenReturn(itemsGuardadosC1C3());
+        when(pagoRepository.deComprobanteScoped(COMPROBANTE))
+                .thenReturn(List.of(pagoGuardado(MedioPago.EFECTIVO, "4463.33")));
+
+        assertThat(rechazo(noFacturable(ventaC1C3(MedioPago.EFECTIVO))).motivo())
+                .isEqualTo(Motivo.CLAVE_CON_OTRO_CONTENIDO);
+    }
+
     @Test
     @DisplayName("cada item copia descripcion, unidad, cantidad, precio, alicuota del servidor, total, neto e IVA")
     void itemsCopianLosDatos() {
