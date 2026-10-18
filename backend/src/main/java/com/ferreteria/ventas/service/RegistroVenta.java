@@ -247,7 +247,7 @@ public class RegistroVenta {
     }
 
     /** R-016: los articulos cuyo stock resultante quedo menor que 0 (justo en 0 no avisa), por id. */
-    private static List<VentaRegistrada.ArticuloSinStock> sinStock(
+    static List<VentaRegistrada.ArticuloSinStock> sinStock(
             Map<Long, BigDecimal> stockResultante, Map<Long, ArticuloVendible> articulos) {
         return new TreeMap<>(stockResultante).entrySet().stream()
                 .filter(e -> e.getValue().signum() < 0)
