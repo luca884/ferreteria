@@ -46,6 +46,8 @@ class MigracionV4Test extends IntegrationTestBase {
             Map.entry("comprobante.descuento_porcentaje", "decimal(5,2) NOT NULL"),
             // V13 (CU-07, GDS-11): el recargo de la forma de pago, en el comprobante, en cada renglon y en cada pago.
             Map.entry("comprobante.recargo", "decimal(15,2) NOT NULL"),
+            // V15 (CU-07, GDS-13): el presupuesto del que salio la venta; nulo en las demas.
+            Map.entry("comprobante.presupuesto_id", "bigint NULL"),
             Map.entry("item_comprobante.recargo", "decimal(15,2) NOT NULL"),
             Map.entry("item_comprobante.id", "bigint NOT NULL"),
             Map.entry("item_comprobante.ferreteria_id", "bigint NOT NULL"),
@@ -77,6 +79,8 @@ class MigracionV4Test extends IntegrationTestBase {
             Map.entry("movimiento_stock.tipo", "varchar(20) NOT NULL"),
             Map.entry("movimiento_stock.cantidad", "decimal(15,3) NOT NULL"),
             Map.entry("movimiento_stock.comprobante_id", "bigint NULL"),
+            // V16 (CU-07, RM-003): el remito que origino el movimiento; nulo en los demas.
+            Map.entry("movimiento_stock.remito_id", "bigint NULL"),
             Map.entry("movimiento_stock.usuario_id", "bigint NOT NULL"),
             Map.entry("movimiento_stock.motivo", "varchar(200) NULL"),
             Map.entry("movimiento_stock.fecha", "datetime(6) NOT NULL"),
@@ -142,7 +146,8 @@ class MigracionV4Test extends IntegrationTestBase {
                 "select table_name, index_name, column_name from information_schema.statistics "
                         + "where table_schema = database() and seq_in_index = 1 "
                         + "and table_name in ('comprobante','item_comprobante','pago','movimiento_stock','numerador_comprobante') "
-                        + "and (index_name like 'uk\\_%' or index_name like 'ix\\_%')");
+                        + "and (index_name like 'uk\\_%' or index_name like 'ix\\_%') "
+                        + "and index_name <> 'uk_comprobante_presupuesto'");
 
         assertThat(propios).hasSizeGreaterThanOrEqualTo(7);
         for (Map<String, Object> indice : propios) {
