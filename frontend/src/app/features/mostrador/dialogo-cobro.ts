@@ -237,9 +237,13 @@ const centavosATexto = (c: number) => `${Math.floor(c / 100)},${String(c % 100).
       grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
       gap: var(--e-2);
     }
+    /* El botón global no parte el texto (nowrap): un nombre largo de forma lo desbordaba y pisaba al vecino. */
     .medio {
+      min-width: 0;
       min-height: 54px;
       padding: 6px 8px;
+      white-space: normal;
+      overflow-wrap: anywhere;
       border: 1px solid var(--borde);
       border-radius: var(--radio-lg);
       background: var(--superficie);
@@ -261,6 +265,8 @@ const centavosATexto = (c: number) => `${Math.floor(c / 100)},${String(c % 100).
     }
     .marca-recargo {
       display: block;
+      white-space: nowrap;
+      overflow-wrap: normal;
       font-size: var(--texto-xs);
       font-weight: 600;
     }

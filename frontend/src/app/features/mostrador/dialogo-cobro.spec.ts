@@ -285,6 +285,32 @@ describe('DialogoCobro', () => {
     expect(evento.defaultPrevented).toBe(true);
   });
 
+  describe('botones de forma con nombre largo', () => {
+    const LARGO = 'Visa 6 cuotas sin interés con tarjeta bancaria';
+
+    it('el botón deja partir el nombre en renglones: sin esto el texto desborda y pisa al vecino', async () => {
+      await abrir(363000, [...FORMAS, forma(7, LARGO, 'CREDITO', 10)]);
+
+      const boton = medio('Visa 6 cuotas');
+      const estilo = getComputedStyle(boton);
+
+      expect(boton.textContent).toContain(LARGO);
+      expect(estilo.whiteSpace).toBe('normal');
+      expect(estilo.overflowWrap).toBe('anywhere');
+      expect(estilo.minWidth).toBe('0px');
+    });
+
+    it('la marca del recargo no se parte: «+10 %» queda junto aunque el nombre ocupe dos renglones', async () => {
+      await abrir(363000, [...FORMAS, forma(7, LARGO, 'CREDITO', 10)]);
+
+      const marca = medio('Visa 6 cuotas').querySelector('.marca-recargo')!;
+      const estilo = getComputedStyle(marca);
+
+      expect(estilo.whiteSpace).toBe('nowrap');
+      expect(estilo.overflowWrap).toBe('normal');
+    });
+  });
+
   describe('no facturable (NF-003)', () => {
     const casilla = () => el().querySelector('input[type="checkbox"]') as HTMLInputElement;
 
