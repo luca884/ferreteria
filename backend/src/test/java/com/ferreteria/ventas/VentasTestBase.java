@@ -148,6 +148,21 @@ abstract class VentasTestBase extends IntegrationTestBase {
                 .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isCreated()));
     }
 
+    /** Emite un remito de un renglon (articulo y cantidad) al precio que se le pasa y devuelve la respuesta. */
+    protected JsonNode remito(String token, long articuloId, String cantidad, String precio, String total)
+            throws Exception {
+        Map<String, Object> renglon = new LinkedHashMap<>();
+        renglon.put("articuloId", articuloId);
+        renglon.put("cantidad", new BigDecimal(cantidad));
+        renglon.put("precioUnitario", new BigDecimal(precio));
+        Map<String, Object> cuerpo = new LinkedHashMap<>();
+        cuerpo.put("clave", clave());
+        cuerpo.put("renglones", List.of(renglon));
+        cuerpo.put("totalMostrado", new BigDecimal(total));
+        return json(postJson("/api/remitos", token, objectMapper.writeValueAsString(cuerpo))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isCreated()));
+    }
+
     protected JsonNode json(ResultActions resultado) throws Exception {
         return objectMapper.readTree(resultado.andReturn().getResponse().getContentAsString(StandardCharsets.UTF_8));
     }
