@@ -2,14 +2,18 @@ package com.ferreteria.ventas.service;
 
 import com.ferreteria.catalogo.api.ArticuloVendible;
 import com.ferreteria.catalogo.api.ArticulosParaVenta;
+import com.ferreteria.common.exception.ConflictException;
 import com.ferreteria.common.exception.DatosInvalidosException;
+import com.ferreteria.common.exception.ResourceNotFoundException;
 import com.ferreteria.stock.service.SalidaStock;
 import com.ferreteria.stock.service.StockService;
 import com.ferreteria.tenant.TenantContext;
 import com.ferreteria.ventas.model.Comprobante;
+import com.ferreteria.ventas.model.EstadoPresupuesto;
 import com.ferreteria.ventas.model.FormaPago;
 import com.ferreteria.ventas.model.ItemComprobante;
 import com.ferreteria.ventas.model.Pago;
+import com.ferreteria.ventas.model.Presupuesto;
 import com.ferreteria.ventas.model.RecargoVenta;
 import com.ferreteria.ventas.model.RenglonVenta;
 import com.ferreteria.ventas.model.TotalesVenta;
@@ -18,6 +22,7 @@ import com.ferreteria.ventas.repository.FormaPagoRepository;
 import com.ferreteria.ventas.repository.ItemComprobanteRepository;
 import com.ferreteria.ventas.repository.NumeradorComprobanteRepository;
 import com.ferreteria.ventas.repository.PagoRepository;
+import com.ferreteria.ventas.repository.PresupuestoRepository;
 import com.ferreteria.ventas.service.ConfirmarVenta.Renglon;
 import com.ferreteria.ventas.service.VentaRechazadaException.Motivo;
 import org.springframework.stereotype.Service;
@@ -56,12 +61,14 @@ public class RegistroVenta {
     private final NumeradorComprobanteRepository numeradorRepository;
     private final CajaService cajaService;
     private final FormaPagoRepository formaPagoRepository;
+    private final PresupuestoRepository presupuestoRepository;
 
     public RegistroVenta(
             ArticulosParaVenta articulosParaVenta, StockService stockService,
             ComprobanteRepository comprobanteRepository, ItemComprobanteRepository itemRepository,
             PagoRepository pagoRepository, NumeradorComprobanteRepository numeradorRepository,
-            CajaService cajaService, FormaPagoRepository formaPagoRepository) {
+            CajaService cajaService, FormaPagoRepository formaPagoRepository,
+            PresupuestoRepository presupuestoRepository) {
         this.articulosParaVenta = articulosParaVenta;
         this.stockService = stockService;
         this.comprobanteRepository = comprobanteRepository;
@@ -70,6 +77,7 @@ public class RegistroVenta {
         this.numeradorRepository = numeradorRepository;
         this.cajaService = cajaService;
         this.formaPagoRepository = formaPagoRepository;
+        this.presupuestoRepository = presupuestoRepository;
     }
 
     /** Lo que sale de validar: los articulos del catalogo y las formas de pago del pedido, por id. */
@@ -89,6 +97,10 @@ public class RegistroVenta {
         // aunque la caja se haya cerrado) y antes de mirar los articulos. Toma la caja compartida antes del numerador.
         Long cajaId = cajaService.cajaParaVender();
 
+        // PP-006: el presupuesto se toma con lock exclusivo antes de mirar el ticket: si esta rechazado o ya facturado no
+        // hay nada mas que validar, y una segunda venta del mismo presupuesto espera aca y lo ve FACTURADO.
+        Presupuesto presupuesto = presupuestoParaFacturar(pedido.presupuestoId());
+
         Validado validado = validar(pedido);
         Map<Long, ArticuloVendible> articulos = validado.articulos();
         Map<Long, FormaPago> formas = validado.formas();
@@ -101,7 +113,10 @@ public class RegistroVenta {
         long numero = numeradorRepository.siguienteScoped();
         Comprobante comprobante = comprobanteRepository.save(
                 Comprobante.venta(ferreteriaId, numero, pedido.clave(), usuarioId, totales, cajaId,
-                        pedido.descuentoPorcentaje()));
+                        pedido.descuentoPorcentaje(), pedido.presupuestoId()));
+        if (presupuesto != null) {
+            presupuesto.cambiarEstado(EstadoPresupuesto.FACTURADO);
+        }
 
         List<SalidaStock> salidas = pedido.renglones().stream()
                 .map(r -> new SalidaStock(r.articuloId(), r.cantidad()))
@@ -155,6 +170,7 @@ public class RegistroVenta {
         if (!mismosPagos(pedido, comprobante, pagos)
                 || pedido.totalMostrado().compareTo(comprobante.getTotal()) != 0
                 || pedido.descuentoPorcentaje().compareTo(comprobante.getDescuentoPorcentaje()) != 0
+                || !java.util.Objects.equals(pedido.presupuestoId(), comprobante.getPresupuestoId())
                 || pedido.renglones().size() != items.size()) {
             return false;
         }
@@ -238,6 +254,25 @@ public class RegistroVenta {
                 .map(e -> new VentaRegistrada.ArticuloSinStock(
                         e.getKey(), articulos.get(e.getKey()).descripcion(), e.getValue()))
                 .toList();
+    }
+
+    /**
+     * El presupuesto del que sale la venta, con lock exclusivo, o null si la venta no sale de uno. Uno de otra ferreteria
+     * o que no existe es 404; uno rechazado o ya facturado, 409. Pendiente, aceptado y vencido se cobran (PP-006).
+     */
+    private Presupuesto presupuestoParaFacturar(Long presupuestoId) {
+        if (presupuestoId == null) {
+            return null;
+        }
+        Presupuesto presupuesto = presupuestoRepository.paraCambiarScoped(presupuestoId)
+                .orElseThrow(() -> new ResourceNotFoundException(PresupuestoGestion.MENSAJE_NO_ENCONTRADO));
+        if (presupuesto.getEstado() == EstadoPresupuesto.RECHAZADO) {
+            throw new ConflictException("Ese presupuesto fue rechazado.");
+        }
+        if (presupuesto.getEstado() == EstadoPresupuesto.FACTURADO) {
+            throw new ConflictException(PresupuestoGestion.MENSAJE_FACTURADO);
+        }
+        return presupuesto;
     }
 
     /** Pasos 3 y 4 de C-008: busca los articulos y las formas de pago y valida en orden de precedencia, sin escribir. */

@@ -44,7 +44,10 @@ public record ConfirmarVentaRequest(
 
         /** Pago mixto (GDS-07): un pago por forma; las partes (sin recargo) tienen que sumar el total sin recargo. */
         @Size(max = 20, message = "Hay hasta 20 formas de pago en una venta.")
-        List<@NotNull(message = "Hay un pago vacío.") @Valid PagoRequest> pagos) {
+        List<@NotNull(message = "Hay un pago vacío.") @Valid PagoRequest> pagos,
+
+        /** El presupuesto del que sale la venta (PP-006), si sale de uno. Lo valida el servicio. */
+        Long presupuestoId) {
 
     /** Una parte del pago mixto: la forma y lo que cubre del total sin recargo. El rango fino lo valida el servicio. */
     public record PagoRequest(
@@ -81,6 +84,7 @@ public record ConfirmarVentaRequest(
                         r.descuentoPorcentaje()))
                 .toList(), totalMostrado, formaPagoId, descuentoPorcentaje,
                 pagos == null ? List.of()
-                        : pagos.stream().map(p -> new ConfirmarVenta.PagoPedido(p.formaPagoId(), p.monto())).toList());
+                        : pagos.stream().map(p -> new ConfirmarVenta.PagoPedido(p.formaPagoId(), p.monto())).toList(),
+                presupuestoId);
     }
 }

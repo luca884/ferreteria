@@ -34,6 +34,7 @@ import com.ferreteria.ventas.repository.FormaPagoRepository;
 import com.ferreteria.ventas.repository.ItemComprobanteRepository;
 import com.ferreteria.ventas.repository.NumeradorComprobanteRepository;
 import com.ferreteria.ventas.repository.PagoRepository;
+import com.ferreteria.ventas.repository.PresupuestoRepository;
 import com.ferreteria.ventas.service.CajaService;
 import com.ferreteria.ventas.service.ConfirmarVenta;
 import com.ferreteria.ventas.service.ConfirmarVenta.Renglon;
@@ -91,6 +92,9 @@ class RegistroVentaTest {
     @Mock
     FormaPagoRepository formaPagoRepository;
 
+    @Mock
+    PresupuestoRepository presupuestoRepository;
+
     RegistroVenta registro;
 
     static final Long CAJA = 77L;
@@ -103,7 +107,7 @@ class RegistroVentaTest {
         TenantContext.setCurrentFerreteriaId(FERRETERIA);
         registro = new RegistroVenta(
                 articulosParaVenta, stockService, comprobanteRepository, itemRepository, pagoRepository,
-                numeradorRepository, cajaService, formaPagoRepository);
+                numeradorRepository, cajaService, formaPagoRepository, presupuestoRepository);
         // CU-10: por defecto hay caja abierta hoy. Lenient: los rechazos previos a la caja no la consultan.
         lenient().when(cajaService.cajaParaVender()).thenReturn(CAJA);
         for (MedioPago medio : MedioPago.values()) {
