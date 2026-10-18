@@ -16,6 +16,8 @@ export interface RenglonVentaRequest {
   articuloId: number;
   cantidad: number;
   precioUnitario: number;
+  /** Descuento propio del renglón en % (GDS-12). Se omite si no hay. */
+  descuentoPorcentaje?: number;
 }
 
 export interface ConfirmarVentaRequest {
@@ -24,6 +26,8 @@ export interface ConfirmarVentaRequest {
   renglones: RenglonVentaRequest[];
   totalMostrado: number;
   medioPago: MedioPago;
+  /** Descuento global en % (GDS-12), aplicado a cada renglón. Se omite si no hay. */
+  descuentoPorcentaje?: number;
 }
 
 export interface RenglonVentaResponse {

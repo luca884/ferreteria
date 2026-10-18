@@ -7,8 +7,12 @@ import {
   cambiarCantidad,
   descontarVendido,
   marcarProblemas,
+  aplicarDescuentoGlobal,
+  aplicarDescuentoRenglon,
   moverElegido,
   parsearCantidad,
+  parsearDescuento,
+  subtotalDelTicket,
   quitar,
   sinStock,
   ticketVacio,
@@ -250,6 +254,89 @@ describe('ticket (puro)', () => {
         totalMostrado: 2145,
         medioPago: 'DEBITO',
       });
+    });
+  });
+
+  describe('descuentos (GDS-12)', () => {
+    it('parsearDescuento lee el % con coma o punto y hasta 2 decimales, en centésimas de punto', () => {
+      expect(parsearDescuento('10')).toBe(1000);
+      expect(parsearDescuento('10,5')).toBe(1050);
+      expect(parsearDescuento(' 0.01 ')).toBe(1);
+      expect(parsearDescuento('99,99')).toBe(9999);
+    });
+
+    it('parsearDescuento devuelve null si no es un número o tiene más de 2 decimales', () => {
+      for (const texto of ['', 'abc', '10,555', '-5']) expect(parsearDescuento(texto)).toBeNull();
+    });
+
+    it('el descuento del renglón baja el total de ese renglón y deja el resto igual', () => {
+      const r = aplicarDescuentoRenglon(conTres(), 0, 1000);
+
+      expect(r.error).toBeUndefined();
+      expect(r.ticket!.renglones[0].descuentoBp).toBe(1000);
+      expect(totalDelTicket(r.ticket!)).toBe(15300 + 79000 + 150000);
+      expect(subtotalDelTicket(r.ticket!)).toBe(17000 + 79000 + 150000);
+    });
+
+    it('un descuento de 0 lo saca', () => {
+      const con = aplicarDescuentoRenglon(conTres(), 0, 1000).ticket!;
+
+      const sin = aplicarDescuentoRenglon(con, 0, 0).ticket!;
+
+      expect(sin.renglones[0].descuentoBp).toBe(0);
+      expect(totalDelTicket(sin)).toBe(17000 + 79000 + 150000);
+    });
+
+    it('el descuento de un renglón fuera de 0 a 99,99 % o de un renglón que no existe da error', () => {
+      expect(aplicarDescuentoRenglon(conTres(), 0, 10000).error).toBe('El descuento tiene que estar entre 0 y 99,99 %.');
+      expect(aplicarDescuentoRenglon(conTres(), 0, -1).error).toBe('El descuento tiene que estar entre 0 y 99,99 %.');
+      expect(aplicarDescuentoRenglon(conTres(), 0, 10.5).error).toBe('El descuento tiene que estar entre 0 y 99,99 %.');
+      expect(aplicarDescuentoRenglon(conTres(), 7, 1000).error).toBe('Ese renglón no existe.');
+    });
+
+    it('el descuento global se aplica a cada renglón y el total sigue siendo la suma', () => {
+      const r = aplicarDescuentoGlobal(conTres(), 1000);
+
+      expect(r.error).toBeUndefined();
+      expect(r.ticket!.descuentoGlobalBp).toBe(1000);
+      expect(totalDelTicket(r.ticket!)).toBe(15300 + 71100 + 135000);
+    });
+
+    it('el global fuera de rango da error y no cambia nada', () => {
+      expect(aplicarDescuentoGlobal(conTres(), 10000).error).toBe('El descuento tiene que estar entre 0 y 99,99 %.');
+    });
+
+    it('agregar otra unidad de un renglón con descuento conserva el descuento', () => {
+      const con = aplicarDescuentoRenglon(conTres(), 0, 1000).ticket!;
+
+      const mas = agregar(con, art());
+
+      expect(mas.renglones[0].descuentoBp).toBe(1000);
+      expect(mas.renglones[0].cantidadMilesimas).toBe(2000);
+    });
+
+    it('aRequest manda los descuentos solo si hay: sin descuentos el cuerpo es el de siempre', () => {
+      const t = agregar(ticketVacio('c'), art());
+      expect(aRequest(t, 'EFECTIVO').descuentoPorcentaje).toBeUndefined();
+      expect(aRequest(t, 'EFECTIVO').renglones[0].descuentoPorcentaje).toBeUndefined();
+
+      const con = aplicarDescuentoGlobal(aplicarDescuentoRenglon(t, 0, 1050).ticket!, 500).ticket!;
+      const pedido = aRequest(con, 'EFECTIVO');
+
+      expect(pedido.renglones[0].descuentoPorcentaje).toBe(10.5);
+      expect(pedido.descuentoPorcentaje).toBe(5);
+      expect(pedido.totalMostrado).toBe(totalDelTicket(con) / 100);
+    });
+
+    it('tras cobrar, lo que se agregó en el medio queda sin el descuento global de la venta enviada', () => {
+      const t = aplicarDescuentoGlobal(agregar(ticketVacio('k'), art()), 1000).ticket!;
+      const pedido = aRequest(t, 'EFECTIVO');
+      const conEscaneo = agregar(t, martillo());
+
+      const r = descontarVendido(conEscaneo, pedido, () => 'nueva');
+
+      expect(r.renglones.map((x) => x.articuloId)).toEqual([3]);
+      expect(r.descuentoGlobalBp ?? 0).toBe(0);
     });
   });
 

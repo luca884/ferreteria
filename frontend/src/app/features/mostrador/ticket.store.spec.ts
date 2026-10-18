@@ -145,6 +145,70 @@ describe('TicketStore', () => {
     expect(b.ticket().clave).toBe('clave-1');
   });
 
+  describe('descuentos (GDS-12)', () => {
+    it('aplicarDescuentoRenglon y aplicarDescuentoGlobal bajan el total y devuelven null si salió bien', () => {
+      const s = crear();
+      s.agregar(art(1));
+
+      expect(s.aplicarDescuentoRenglon(0, 1000)).toBeNull();
+      expect(s.total()).toBe(15300);
+      expect(s.aplicarDescuentoGlobal(1000)).toBeNull();
+      expect(s.total()).toBe(13770);
+    });
+
+    it('un descuento inválido devuelve el mensaje y no toca el ticket', () => {
+      const s = crear();
+      s.agregar(art(1));
+
+      expect(s.aplicarDescuentoRenglon(0, 10000)).toBe('El descuento tiene que estar entre 0 y 99,99 %.');
+      expect(s.aplicarDescuentoGlobal(-1)).toBe('El descuento tiene que estar entre 0 y 99,99 %.');
+      expect(s.total()).toBe(17000);
+    });
+
+    it('los descuentos sobreviven a un F5', () => {
+      const a = crear();
+      a.agregar(art(1));
+      a.aplicarDescuentoRenglon(0, 1050);
+      a.aplicarDescuentoGlobal(500);
+      TestBed.tick();
+
+      const b = crear();
+
+      expect(b.ticket().renglones[0].descuentoBp).toBe(1050);
+      expect(b.ticket().descuentoGlobalBp).toBe(500);
+      expect(b.total()).toBe(a.total());
+    });
+
+    it('un ticket guardado antes de los descuentos se lee sin ellos', () => {
+      const viejo = {
+        articuloId: 1, codigoInterno: 'A', descripcion: 'A', unidad: 'UNIDAD', precioCentavos: 100,
+        cantidadMilesimas: 1000, stockActual: 1, stockMinimo: 0,
+      };
+      localStorage.setItem('ticket:3:7', JSON.stringify({ v: 1, clave: 'x', elegido: 0, renglones: [viejo] }));
+
+      const s = crear();
+
+      expect(s.ticket().renglones).toHaveLength(1);
+      expect(s.total()).toBe(100);
+    });
+
+    it('un descuento guardado fuera de rango descarta el ticket', () => {
+      const malo = {
+        articuloId: 1, codigoInterno: 'A', descripcion: 'A', unidad: 'UNIDAD', precioCentavos: 100,
+        cantidadMilesimas: 1000, stockActual: 1, stockMinimo: 0, descuentoBp: 12000,
+      };
+      localStorage.setItem('ticket:3:7', JSON.stringify({ v: 1, clave: 'x', elegido: 0, renglones: [malo] }));
+      expect(crear().ticket().renglones).toEqual([]);
+
+      const bueno = { ...malo, descuentoBp: 0 };
+      localStorage.setItem(
+        'ticket:3:7',
+        JSON.stringify({ v: 1, clave: 'x', elegido: 0, renglones: [bueno], descuentoGlobalBp: 10000 }),
+      );
+      expect(crear().ticket().renglones).toEqual([]);
+    });
+  });
+
   describe('lectura tolerante', () => {
     function conAlmacenado(valor: string): TicketStore {
       localStorage.setItem('ticket:3:7', valor);

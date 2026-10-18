@@ -8,6 +8,8 @@ import {
   Ticket,
   actualizarPrecios,
   agregar,
+  aplicarDescuentoGlobal,
+  aplicarDescuentoRenglon,
   cambiarCantidad,
   descontarVendido,
   marcarProblemas,
@@ -62,6 +64,22 @@ export class TicketStore {
     return null;
   }
 
+  /** Descuento propio del renglón en centésimas de punto (0 lo saca). Devuelve el error, o null si lo aplicó. */
+  aplicarDescuentoRenglon(indice: number, bp: number): string | null {
+    const r = aplicarDescuentoRenglon(this._ticket(), indice, bp);
+    if (r.error !== undefined || !r.ticket) return r.error ?? 'No se pudo aplicar el descuento.';
+    this._ticket.set(r.ticket);
+    return null;
+  }
+
+  /** Descuento global del ticket en centésimas de punto (0 lo saca). Devuelve el error, o null si lo aplicó. */
+  aplicarDescuentoGlobal(bp: number): string | null {
+    const r = aplicarDescuentoGlobal(this._ticket(), bp);
+    if (r.error !== undefined || !r.ticket) return r.error ?? 'No se pudo aplicar el descuento.';
+    this._ticket.set(r.ticket);
+    return null;
+  }
+
   quitar(indice: number): void {
     this._ticket.update((t) => quitar(t, indice));
   }
@@ -95,6 +113,10 @@ function claveDeStorage(auth: AuthService): string | null {
   return `ticket:${s.ferreteriaId}:${s.userId}`;
 }
 
+function descuentoGuardadoValido(bp: unknown): boolean {
+  return Number.isInteger(bp) && (bp as number) >= 0 && (bp as number) <= 9999;
+}
+
 function esRenglon(r: unknown): r is RenglonTicket {
   if (typeof r !== 'object' || r === null) return false;
   const x = r as Record<string, unknown>;
@@ -109,6 +131,7 @@ function esRenglon(r: unknown): r is RenglonTicket {
     (x['cantidadMilesimas'] as number) > 0 &&
     typeof x['stockActual'] === 'number' &&
     typeof x['stockMinimo'] === 'number' &&
+    (x['descuentoBp'] === undefined || descuentoGuardadoValido(x['descuentoBp'])) &&
     (x['problema'] === undefined || typeof x['problema'] === 'string')
   );
 }
@@ -125,7 +148,15 @@ function leerTicket(key: string): Ticket | null {
     const n = x['renglones'].length;
     const e = x['elegido'];
     if (e !== null && !(Number.isInteger(e) && (e as number) >= 0 && (e as number) < n)) return null;
-    return { v: 1, clave: x['clave'], renglones: x['renglones'] as RenglonTicket[], elegido: e as number | null };
+    const global = x['descuentoGlobalBp'];
+    if (global !== undefined && !descuentoGuardadoValido(global)) return null;
+    return {
+      v: 1,
+      clave: x['clave'],
+      renglones: x['renglones'] as RenglonTicket[],
+      elegido: e as number | null,
+      ...(global ? { descuentoGlobalBp: global as number } : {}),
+    };
   } catch {
     return null;
   }

@@ -36,22 +36,28 @@ class CasosCompartidosTotalesTest {
         return new BigDecimal(nodo.get(campo).asText());
     }
 
-    private static RenglonVenta renglon(JsonNode caso) {
-        return RenglonVenta.de(bd(caso, "precio"), bd(caso, "cantidad"), bd(caso, "alicuota"));
+    /** Los descuentos son opcionales en el JSON: sin ellos valen 0 %. */
+    private static BigDecimal opcional(JsonNode nodo, String campo) {
+        return nodo.has(campo) ? bd(nodo, campo) : BigDecimal.ZERO;
+    }
+
+    private static RenglonVenta renglon(JsonNode caso, BigDecimal descuentoGlobal) {
+        return RenglonVenta.de(bd(caso, "precio"), bd(caso, "cantidad"), bd(caso, "alicuota"),
+                opcional(caso, "descuento"), descuentoGlobal);
     }
 
     @Test
-    @DisplayName("el JSON trae los 5 casos de renglon del diseno mas C1, C3 y el renglon de C2")
+    @DisplayName("el JSON trae los 5 casos de renglon del diseno, C1, C3, el renglon de C2 y los de descuentos")
     void elJsonTieneLosCasos() {
-        assertThat(casos.get("renglones").size()).isEqualTo(8);
-        assertThat(casos.get("tickets").size()).isEqualTo(3);
+        assertThat(casos.get("renglones").size()).isEqualTo(11);
+        assertThat(casos.get("tickets").size()).isEqualTo(6);
     }
 
     @Test
     @DisplayName("cada renglon del JSON da el total, el neto y el IVA esperados")
     void cadaRenglon() {
         for (JsonNode caso : casos.get("renglones")) {
-            RenglonVenta r = renglon(caso);
+            RenglonVenta r = renglon(caso, BigDecimal.ZERO);
 
             assertThat(r.total()).as("total de %s", caso.get("nombre").asText()).isEqualByComparingTo(bd(caso, "total"));
             assertThat(r.neto()).as("neto de %s", caso.get("nombre").asText()).isEqualByComparingTo(bd(caso, "neto"));
@@ -65,7 +71,7 @@ class CasosCompartidosTotalesTest {
         for (JsonNode ticket : casos.get("tickets")) {
             List<RenglonVenta> renglones = new ArrayList<>();
             for (JsonNode nombre : ticket.get("renglones")) {
-                renglones.add(renglon(porNombre(nombre.asText())));
+                renglones.add(renglon(porNombre(nombre.asText()), opcional(ticket, "descuentoGlobal")));
             }
 
             TotalesVenta totales = TotalesVenta.de(renglones);

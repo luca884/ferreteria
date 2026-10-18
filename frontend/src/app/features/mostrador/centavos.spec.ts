@@ -1,7 +1,10 @@
 import casos from '../../../../../backend/src/test/resources/ventas/casos-totales.json';
 import {
+  aBasisPoints,
   aCentavos,
   aMilesimas,
+  brutoRenglon,
+  conDescuento,
   desdeTexto,
   totalRenglon,
   totalTicket,
@@ -11,19 +14,26 @@ interface CasoRenglon {
   nombre: string;
   precio: string;
   cantidad: string;
+  descuento?: string;
   total: string;
 }
 interface CasoTicket {
   nombre: string;
   renglones: string[];
+  descuentoGlobal?: string;
   total: string;
 }
 
 const renglones = casos.renglones as CasoRenglon[];
 const tickets = casos.tickets as CasoTicket[];
 
-function totalDe(caso: CasoRenglon): number {
-  return totalRenglon(desdeTexto(caso.precio, 2), desdeTexto(caso.cantidad, 3));
+/** Un descuento del JSON en % ("10.00") a centésimas de punto porcentual (1000). Sin descuento, 0. */
+function bp(porcentaje: string | undefined): number {
+  return porcentaje === undefined ? 0 : aBasisPoints(porcentaje);
+}
+
+function totalDe(caso: CasoRenglon, globalBp = 0): number {
+  return totalRenglon(desdeTexto(caso.precio, 2), desdeTexto(caso.cantidad, 3), bp(caso.descuento), globalBp);
 }
 
 describe('centavos (casos compartidos con Java)', () => {
@@ -35,7 +45,8 @@ describe('centavos (casos compartidos con Java)', () => {
 
   for (const t of tickets) {
     it(`ticket ${t.nombre}: total ${t.total}`, () => {
-      const lineas = t.renglones.map((n) => totalDe(renglones.find((r) => r.nombre === n)!));
+      const global = bp(t.descuentoGlobal);
+      const lineas = t.renglones.map((n) => totalDe(renglones.find((r) => r.nombre === n)!, global));
       expect(lineas.reduce((a, b) => a + b, 0)).toBe(desdeTexto(t.total, 2));
     });
   }
@@ -47,6 +58,44 @@ describe('centavos (casos compartidos con Java)', () => {
       return { precioCentavos: desdeTexto(c.precio, 2), cantidadMilesimas: desdeTexto(c.cantidad, 3) };
     });
     expect(totalTicket(rs)).toBe(248550);
+  });
+});
+
+describe('descuentos (GDS-12)', () => {
+  it('aBasisPoints pasa el % de texto a centésimas de punto sin pasar por float', () => {
+    expect(aBasisPoints('10')).toBe(1000);
+    expect(aBasisPoints('10,5')).toBe(1050);
+    expect(aBasisPoints('99.99')).toBe(9999);
+    expect(aBasisPoints('0')).toBe(0);
+  });
+
+  it('conDescuento aplica el porcentaje al importe con HALF_UP: 0,99 con 50 % da 0,50', () => {
+    expect(conDescuento(99, 5000)).toBe(50);
+    expect(conDescuento(10000, 1000)).toBe(9000);
+    expect(conDescuento(10000, 0)).toBe(10000);
+  });
+
+  it('el bruto del renglón es el producto sin descuentos', () => {
+    expect(brutoRenglon(10000, 2000)).toBe(20000);
+  });
+
+  it('el descuento del renglón y el global van en cadena, cada uno redondeado a centavos: 100 -> 90 -> 81', () => {
+    expect(totalRenglon(10000, 1000, 1000, 1000)).toBe(8100);
+  });
+
+  it('el global se prorratea: dos renglones de 0,05 con 10 % suman 0,10 y no 0,09', () => {
+    const renglon = { precioCentavos: 5, cantidadMilesimas: 1000 };
+
+    expect(totalTicket([renglon, renglon], 1000)).toBe(10);
+  });
+
+  it('cada renglón usa su propio descuento al sumar el ticket', () => {
+    const total = totalTicket([
+      { precioCentavos: 10000, cantidadMilesimas: 1000, descuentoBp: 1000 },
+      { precioCentavos: 20000, cantidadMilesimas: 1000 },
+    ]);
+
+    expect(total).toBe(29000);
   });
 });
 
