@@ -1,0 +1,252 @@
+<app-barra-acciones>
+  <h1>Clientes</h1>
+  <button type="button" class="accion-barra primario nuevo" (click)="nuevo()">
+    <svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+      <path d="M8 3v10M3 8h10" />
+    </svg>
+    Nuevo
+  </button>
+  <button type="button" class="accion-barra editar" [disabled]="!filas.elegido()" (click)="editar()">
+    <svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+      <path d="M3 13l1-3 7-7 2 2-7 7z" />
+    </svg>
+    Editar
+  </button>
+  @if (auth.esDueno()) {
+    <button
+      type="button"
+      class="accion-barra desactivar"
+      [disabled]="!filas.elegido() || cambiando()"
+      (click)="cambiarActivo()"
+    >
+      {{ filas.elegido()?.activo === false ? 'Reactivar' : 'Desactivar' }}
+    </button>
+  }
+</app-barra-acciones>
+
+<p class="ayuda">
+  Buscá por razón social o por documento. Un cliente desactivado no se puede elegir en el mostrador, pero sus ventas y
+  documentos se conservan. Sin cliente, la venta es a Consumidor Final.
+</p>
+
+<form class="filtros" (submit)="buscar($event)">
+  <label>
+    Buscar
+    <input
+      id="q"
+      name="q"
+      type="search"
+      autocomplete="off"
+      spellcheck="false"
+      placeholder="Razón social, CUIT o DNI…"
+      [value]="q()"
+      (input)="q.set($any($event.target).value)"
+    />
+  </label>
+  <label class="tilde">
+    <input id="solo-activos" name="soloActivos" type="checkbox" [checked]="soloActivos()" (change)="soloActivos.set($any($event.target).checked)" />
+    Solo activos
+  </label>
+  <button type="submit" class="primario">Buscar</button>
+  <button type="button" class="secundario" (click)="limpiar()">Limpiar</button>
+</form>
+
+@if (aviso(); as mensaje) {
+  <p class="alerta exito" role="status">{{ mensaje }}</p>
+}
+@if (erroresCampos().length > 0) {
+  <div class="error errores-campos" role="alert">
+    <strong>Revisá estos datos:</strong>
+    <ul>
+      @for (mensaje of erroresCampos(); track $index) {
+        <li>{{ mensaje }}</li>
+      }
+    </ul>
+  </div>
+} @else if (error(); as mensaje) {
+  <p class="error" role="alert">{{ mensaje }}</p>
+}
+
+<div class="listado con-alta">
+  <div class="principal">
+    @if (cargando()) {
+      <p class="ayuda estado-vacio">Cargando…</p>
+    } @else if (cargaFallida()) {
+      <div class="error con-accion" role="alert">
+        <span>No se pudieron cargar los clientes.</span>
+        <button type="button" class="secundario chico reintentar" (click)="cargar(pagina().page)">Reintentar</button>
+      </div>
+    } @else if (clientes().length === 0) {
+      <p class="ayuda estado-vacio">{{ filtrada() ? 'No hay clientes con esos filtros.' : 'Todavía no hay clientes.' }}</p>
+    } @else {
+      <div class="grilla-marco">
+        <table role="grid" aria-label="Clientes">
+          <thead>
+            <tr>
+              <th>Razón social</th>
+              <th>Documento</th>
+              <th>Condición de IVA</th>
+              <th>Contacto</th>
+              <th>Estado</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (cliente of clientes(); track cliente.id; let i = $index) {
+              <tr
+                class="elegible"
+                [class.editando]="cliente.id === editando()?.id"
+                [class.inactivo]="!cliente.activo"
+                [attr.aria-selected]="cliente.id === filas.elegidoId()"
+                [attr.tabindex]="filas.esTabulable(cliente, i) ? 0 : -1"
+                (click)="filas.elegir(cliente)"
+                (focus)="filas.elegir(cliente)"
+                (dblclick)="editar(cliente)"
+                (keydown)="filas.alTeclear($event, cliente, i)"
+              >
+                <td class="nombre">{{ cliente.razonSocial }}</td>
+                <td class="documento">{{ documentoLegible(cliente) }}</td>
+                <td>{{ etiquetaCondicion[cliente.condicionIva] }}</td>
+                <td>{{ contacto(cliente) }}</td>
+                <td class="estado">{{ cliente.activo ? 'Activo' : 'Inactivo' }}</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+      <p class="barra-estado">
+        <span>{{ pagina().totalElements }} {{ pagina().totalElements === 1 ? 'cliente' : 'clientes' }}</span>
+        @if (filas.elegido(); as actual) {
+          <span class="elegido">· Elegido: <strong>{{ actual.razonSocial }}</strong> · Enter edita</span>
+        }
+      </p>
+      @if (pagina().totalPages > 1) {
+        <nav class="paginas" aria-label="Páginas de clientes">
+          <button type="button" class="secundario chico" [disabled]="pagina().page === 0" (click)="cargar(pagina().page - 1)">
+            Anterior
+          </button>
+          <span>Página {{ pagina().page + 1 }} de {{ pagina().totalPages }}</span>
+          <button
+            type="button"
+            class="secundario chico"
+            [disabled]="pagina().page + 1 >= pagina().totalPages"
+            (click)="cargar(pagina().page + 1)"
+          >
+            Siguiente
+          </button>
+        </nav>
+      }
+    }
+  </div>
+
+  <form class="alta panel" [formGroup]="form" (ngSubmit)="guardar()" novalidate>
+    <h2>{{ editando() === null ? 'Nuevo cliente' : 'Editar cliente' }}</h2>
+    <div class="campo">
+      <label for="razon-social">Razón social</label>
+      <input
+        id="razon-social"
+        name="razonSocial"
+        formControlName="razonSocial"
+        autocomplete="off"
+        spellcheck="false"
+        placeholder="Nombre o razón social…"
+        [attr.aria-invalid]="invalido('razonSocial') ? 'true' : null"
+        [attr.aria-describedby]="invalido('razonSocial') ? 'razon-social-error' : null"
+      />
+      @if (invalido('razonSocial')) {
+        <span id="razon-social-error" class="campo-error">
+          {{
+            form.controls.razonSocial.errors?.['maxlength']
+              ? 'La razón social admite hasta 120 caracteres.'
+              : 'La razón social es obligatoria.'
+          }}
+        </span>
+      }
+    </div>
+    <div class="fila-doc">
+      <div class="campo">
+        <label for="tipo-documento">Documento</label>
+        <select
+          id="tipo-documento"
+          name="tipoDocumento"
+          formControlName="tipoDocumento"
+          [attr.aria-invalid]="errorTipo() ? 'true' : null"
+          [attr.aria-describedby]="errorTipo() ? 'tipo-documento-error' : null"
+        >
+          <option value="">Sin documento</option>
+          @for (tipo of tiposDocumento; track tipo) {
+            <option [value]="tipo">{{ tipo }}</option>
+          }
+        </select>
+        @if (errorTipo(); as mensaje) {
+          <span id="tipo-documento-error" class="campo-error">{{ mensaje }}</span>
+        }
+      </div>
+      <div class="campo numero">
+        <label for="numero-documento">Número</label>
+        <input
+          id="numero-documento"
+          name="numeroDocumento"
+          formControlName="numeroDocumento"
+          inputmode="numeric"
+          autocomplete="off"
+          spellcheck="false"
+          placeholder="30-71234567-1"
+          [attr.aria-invalid]="errorNumero() ? 'true' : null"
+          [attr.aria-describedby]="errorNumero() ? 'numero-documento-error' : null"
+        />
+        @if (errorNumero(); as mensaje) {
+          <span id="numero-documento-error" class="campo-error">{{ mensaje }}</span>
+        }
+      </div>
+    </div>
+    <div class="campo">
+      <label for="condicion-iva">Condición de IVA</label>
+      <select id="condicion-iva" name="condicionIva" formControlName="condicionIva">
+        @for (condicion of condiciones; track condicion) {
+          <option [value]="condicion">{{ etiquetaCondicion[condicion] }}</option>
+        }
+      </select>
+    </div>
+    <div class="campo">
+      <label for="domicilio">Domicilio</label>
+      <input id="domicilio" name="domicilio" formControlName="domicilio" autocomplete="off" />
+    </div>
+    <div class="fila-doc">
+      <div class="campo">
+        <label for="telefono">Teléfono</label>
+        <input id="telefono" name="telefono" formControlName="telefono" inputmode="tel" autocomplete="off" />
+      </div>
+      <div class="campo">
+        <label for="whatsapp">WhatsApp</label>
+        <input id="whatsapp" name="whatsapp" formControlName="whatsapp" inputmode="tel" autocomplete="off" />
+      </div>
+    </div>
+    <div class="campo">
+      <label for="email">Correo</label>
+      <input
+        id="email"
+        name="email"
+        type="text"
+        formControlName="email"
+        inputmode="email"
+        autocomplete="off"
+        spellcheck="false"
+        [attr.aria-invalid]="invalido('email') ? 'true' : null"
+        [attr.aria-describedby]="invalido('email') ? 'email-error' : null"
+      />
+      @if (invalido('email')) {
+        <span id="email-error" class="campo-error">
+          {{ form.controls.email.errors?.['maxlength'] ? 'El correo admite hasta 120 caracteres.' : 'El correo no es válido.' }}
+        </span>
+      }
+    </div>
+    <div class="acciones-alta">
+      <button type="submit" [disabled]="guardando()">
+        {{ editando() === null ? 'Agregar' : 'Guardar cambios' }}
+      </button>
+      @if (editando() !== null) {
+        <button type="button" class="secundario cancelar" (click)="cancelar()">Cancelar</button>
+      }
+    </div>
+  </form>
+</div>

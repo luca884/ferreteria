@@ -35,6 +35,12 @@ export const routes: Routes = [
         title: titulo('Remitos'),
         loadComponent: () => import('./features/remitos/remitos').then((m) => m.Remitos),
       },
+      // Sin guard de rol: los clientes los usan el Vendedor y el Dueño; desactivar lo valida el servidor (solo Dueño).
+      {
+        path: 'clientes',
+        title: titulo('Clientes'),
+        loadComponent: () => import('./features/clientes/clientes').then((m) => m.Clientes),
+      },
       // Sin guard de rol: la caja la usan el Vendedor y el Dueño; el historial es del Dueño y el Vendedor ve el aviso de la pantalla.
       {
         path: 'caja',

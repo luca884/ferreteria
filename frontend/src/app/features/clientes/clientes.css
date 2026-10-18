@@ -1,0 +1,52 @@
+:host {
+  display: block;
+}
+.filtros {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--e-3);
+  margin-bottom: var(--e-4);
+}
+.filtros label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-weight: 600;
+}
+.filtros label.tilde {
+  flex-direction: row;
+  align-items: center;
+  gap: var(--e-2);
+}
+.filtros input[type='search'] {
+  width: min(22rem, 100%);
+}
+.nombre {
+  font-weight: 600;
+}
+.documento {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+tr.inactivo td {
+  color: var(--texto-suave);
+}
+.estado {
+  white-space: nowrap;
+}
+.errores-campos ul {
+  margin: var(--e-1) 0 0;
+  padding-left: var(--e-6);
+}
+.fila-doc {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr);
+  gap: var(--e-3);
+}
+.paginas {
+  display: flex;
+  align-items: center;
+  gap: var(--e-3);
+  margin-top: var(--e-3);
+}

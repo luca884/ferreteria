@@ -75,7 +75,7 @@ describe('Shell', () => {
 
     const nav = el.querySelector('aside nav[aria-label="Secciones"]');
     expect(nav).not.toBeNull();
-    expect(nav!.querySelectorAll('a').length).toBe(11);
+    expect(nav!.querySelectorAll('a').length).toBe(12);
   });
 
   it('«Presupuestos» va después de «Mostrador» y lleva a /presupuestos, para el Vendedor y para el Dueño (GDS-13)', async () => {
@@ -98,12 +98,12 @@ describe('Shell', () => {
     }
   });
 
-  it('«Caja» va después de «Remitos» y lleva a /caja, para el Vendedor y para el Dueño (CU-10)', async () => {
+  it('«Caja» va después de «Clientes» y lleva a /caja, para el Vendedor y para el Dueño (CU-10)', async () => {
     for (const dueno of [false, true]) {
       TestBed.resetTestingModule();
       const el = await render(dueno);
 
-      expect(enlaces(el).slice(2, 4)).toEqual(['Remitos', 'Caja']);
+      expect(enlaces(el).slice(2, 5)).toEqual(['Remitos', 'Clientes', 'Caja']);
       expect(el.querySelector('nav a[href="/caja"]')).not.toBeNull();
     }
   });
@@ -115,6 +115,7 @@ describe('Shell', () => {
       'Mostrador',
       'Presupuestos',
       'Remitos',
+      'Clientes',
       'Caja',
       'Artículos',
       'Rubros',
@@ -148,6 +149,18 @@ describe('Shell', () => {
     expect(enlace!.textContent?.trim()).toBe('Cotización');
   });
 
+  it('el Vendedor y el Dueño ven «Clientes», entre «Remitos» y «Caja», y lleva a /clientes', async () => {
+    for (const dueno of [false, true]) {
+      TestBed.resetTestingModule();
+      const el = await render(dueno);
+
+      const nombres = enlaces(el);
+      expect(nombres.indexOf('Clientes')).toBe(nombres.indexOf('Remitos') + 1);
+      expect(nombres.indexOf('Clientes')).toBe(nombres.indexOf('Caja') - 1);
+      expect(el.querySelector('nav a[href="/clientes"]')!.textContent?.trim()).toBe('Clientes');
+    }
+  });
+
   it('el Dueño ve «Formas de pago» bajo «Cobro» y lleva a /configuracion/formas-pago; el Vendedor no la ve', async () => {
     const el = await render(true);
 
@@ -171,7 +184,16 @@ describe('Shell', () => {
   it('el Vendedor no ve "Importar lista", "Actualizar precios" ni el grupo «Precios»', async () => {
     const el = await render(false);
 
-    expect(enlaces(el)).toEqual(['Mostrador', 'Presupuestos', 'Remitos', 'Caja', 'Artículos', 'Rubros', 'Proveedores']);
+    expect(enlaces(el)).toEqual([
+      'Mostrador',
+      'Presupuestos',
+      'Remitos',
+      'Clientes',
+      'Caja',
+      'Artículos',
+      'Rubros',
+      'Proveedores',
+    ]);
     expect(el.querySelector('a[href="/actualizacion-masiva"]')).toBeNull();
     expect(el.querySelector('nav .grupo')).toBeNull();
   });
