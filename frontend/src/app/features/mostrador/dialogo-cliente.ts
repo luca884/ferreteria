@@ -219,6 +219,10 @@ const ESPERA_MS = 250;
       grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr);
       gap: var(--e-3);
     }
+    /* El «(opcional)» va al lado del nombre del campo, no en un renglón aparte. */
+    label.campo {
+      display: block;
+    }
   `,
 })
 export class DialogoCliente {
