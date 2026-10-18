@@ -61,6 +61,31 @@ export interface PresupuestoResponse {
   renglones: RenglonPresupuestoResponse[];
 }
 
+/** Una fila del listado: lo justo para la grilla, sin renglones. */
+export interface PresupuestoResumen {
+  presupuestoId: number;
+  numero: number;
+  estado: EstadoPresupuesto;
+  fecha: string;
+  vence: string;
+  vencido: boolean;
+  clienteNombre?: string;
+  total: number;
+}
+
+/** Los estados que se eligen a mano: FACTURADO solo lo pone la venta hecha desde el presupuesto. */
+export type EstadoManual = Exclude<EstadoPresupuesto, 'FACTURADO'>;
+
+/** Filtros del listado; `desde` y `hasta` son días (aaaa-mm-dd), ambos inclusive. `page` empieza en 0. */
+export interface FiltroPresupuestos {
+  page: number;
+  size?: number;
+  estado?: EstadoPresupuesto;
+  numero?: number;
+  desde?: string;
+  hasta?: string;
+}
+
 /** Lo que se completa en el diálogo de F8: el cliente y las observaciones son opcionales. */
 export interface DatosPresupuesto {
   diasValidez: number;
