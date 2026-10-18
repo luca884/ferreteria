@@ -1,5 +1,6 @@
 package com.ferreteria.common;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 
@@ -16,5 +17,9 @@ public final class HoraArgentina {
 
     public static LocalDateTime ahora() {
         return LocalDateTime.now(ZONA);
+    }
+
+    public static LocalDate hoy() {
+        return LocalDate.now(ZONA);
     }
 }
