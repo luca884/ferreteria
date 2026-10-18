@@ -520,7 +520,7 @@ Ordenada por prioridad. Las de la fase 3 afectan a CU-04 y van primero. **GDS-31
 | GDS-08 | Copiar el costo en `ItemComprobante` y sumar ganancia y ventas por usuario al reporte del MVP | B | 4 | S |
 | GDS-09 | Bloquear la venta de artículos con precio 0 | B | 4 (CU-07) | S |
 | GDS-10 | Atajos de teclado fijos en el mostrador. **CU-06 decidido (F2, Esc, flechas y Enter).** CU-07 propuesto: F4 cobrar, F3 cantidad, F8 presupuesto, F9 cliente, ↑ y Supr en el ticket. Ver la sección 6 | B | 4 (CU-06/07) | S |
-| GDS-11 | Recargo % por medio de pago (tarjeta de crédito), configurable, con una tabla de medios de pago como la de GDS | C | 4 (CU-07) | M |
+| GDS-11 | Recargo % por medio de pago (tarjeta de crédito), configurable, con una tabla de medios de pago como la de GDS. **Hecho en CU-07:** tabla de formas de pago por ferretería con su recargo (0 a 200 %), prorrateado entre renglones y por parte en el pago mixto. La columna `Porcentaje` de GDS (probable comisión de la tarjeta) no se implementa | C | 4 (CU-07) | M |
 | GDS-12 | Descuento manual % por renglón o total, con tope para el Vendedor | C | 4 (CU-07) | M |
 | GDS-13 | Presupuesto como cotización con estados (pendiente, aceptado, rechazado, facturado), sin stock, con vencimiento y convertible en venta sin doble descuento, separado de la venta sin factura | B | 4 (CU-07) | M |
 | GDS-14 | Cliente con email y WhatsApp, y validación del dígito del CUIT | B | 4/5 (CU-07) | S |

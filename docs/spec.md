@@ -82,7 +82,10 @@ Son 10 casos de uso, agrupados en cuatro módulos. Si algo no está en esta list
    - Puede aplicar un **descuento en %** a un renglón (F7) o a todo el ticket (F6). Va de 0 a 99,99 %, con hasta 2 decimales; 0 lo saca. No hay tope por usuario por ahora. El descuento global se aplica a cada renglón (prorrateo), así el total es exactamente la suma de los renglones. El comprobante guarda el descuento de cada renglón, el global y el subtotal antes de descuentos; el que lo aplicó es el usuario de la venta.
 2. Elige el cliente: Consumidor Final por defecto, o busca por CUIT o DNI.
 3. El sistema decide el comprobante (A, B o C) según la condición de IVA de la ferretería y del cliente.
-4. Elige el medio de pago: efectivo, débito, crédito o transferencia; o **pago mixto** (más de un medio): carga una parte y el resto se sugiere solo en el medio siguiente, y los pagos tienen que sumar exactamente el total. Cada medio va una sola vez. El vuelto es solo del pago en efectivo único.
+4. Elige la **forma de pago** entre las que la ferretería tiene activas (por defecto Efectivo, Débito, Crédito y Transferencia); o **pago mixto** (más de una forma): carga una parte y el resto se sugiere solo en la forma siguiente, y las partes tienen que sumar exactamente el total. Cada forma va una sola vez. El vuelto es solo del pago en efectivo único.
+   - Cada forma tiene un **recargo en %** (0 a 200, 2 decimales; 0 por defecto) que el Dueño configura en Configuración → Formas de pago, donde también da de alta, edita, activa y desactiva (las formas no se borran). Cada una pertenece a un medio (efectivo, débito, crédito o transferencia), así la caja sigue sumando por medio. Siempre tiene que quedar al menos una forma activa de efectivo.
+   - El recargo se calcula después de los descuentos, sobre la parte pagada con esa forma, y se reparte entre los renglones en proporción a su total (con su alícuota de IVA, porque integra la base del IVA): el total sigue siendo la suma de los renglones. El diálogo de cobro muestra el recargo y el total a cobrar. En el pago mixto la parte que se carga es la del ticket sin recargo.
+   - El comprobante y cada renglón guardan el recargo; cada pago guarda la forma, su nombre y % del momento, el recargo y lo cobrado. Cambiar el % después no toca las ventas hechas.
 5. Confirma: se pide el CAE a ARCA, se descuenta el stock y se imprime o envía el comprobante en PDF.
    - Alternativo: ARCA no responde → la venta queda guardada como "pendiente de CAE" y se reintenta sola.
    - Alternativo: venta sin factura → se registra como presupuesto o remito interno, sin pedir CAE.
@@ -156,9 +159,10 @@ Una sola base compartida y todas las tablas de negocio con `tenant_id`. Es el mi
 | ImportacionLista | archivo, fecha, cantidades (suben, bajan, nuevos), estado | N—1 Proveedor |
 | MovimientoStock | tipo, cantidad (decimal), motivo, fecha, usuario | N—1 Articulo, N—1 Comprobante (opcional) |
 | Cliente | nombre o razón social, tipo y número de documento, condición IVA, domicilio | 1—N Comprobante |
-| Comprobante | tipo (FA, FB, FC, NC, presupuesto), punto de venta, número, fecha, neto, IVA, total, subtotal (antes de descuentos), descuento global %, CAE, vencimiento del CAE, estado (pendiente, autorizado, rechazado) | N—1 Cliente, N—1 Caja, 1—N Item, 1—N Pago |
-| ItemComprobante | descripción, cantidad, precio unitario, alícuota IVA, bruto, descuento % del renglón, subtotal (copiados al momento de la venta) | N—1 Comprobante, N—1 Articulo |
-| Pago | medio (efectivo, débito, crédito, transferencia), monto | N—1 Comprobante |
+| Comprobante | tipo (FA, FB, FC, NC, presupuesto), punto de venta, número, fecha, neto, IVA, total, subtotal (antes de descuentos), descuento global %, recargo, CAE, vencimiento del CAE, estado (pendiente, autorizado, rechazado) | N—1 Cliente, N—1 Caja, 1—N Item, 1—N Pago |
+| ItemComprobante | descripción, cantidad, precio unitario, alícuota IVA, bruto, descuento % del renglón, recargo, subtotal (copiados al momento de la venta) | N—1 Comprobante, N—1 Articulo |
+| FormaPago | nombre (único por ferretería), medio (efectivo, débito, crédito, transferencia), recargo %, activa, orden | N—1 Ferretería, 1—N Pago |
+| Pago | forma de pago (con nombre y recargo % copiados al momento), medio, recargo, monto cobrado (parte + recargo) | N—1 Comprobante, N—1 FormaPago |
 | Caja | apertura (fecha y usuario que abre), cierre (fecha y usuario que cierra), efectivo inicial, efectivo contado, efectivo esperado, diferencia (contado − esperado), diferencia de apertura (inicial − contado del cierre anterior), abierta (una sola por ferretería) | N—1 Ferretería, N—1 Usuario (abre), N—1 Usuario (cierra), 1—N Comprobante, 1—N MovimientoCaja |
 | MovimientoCaja | tipo (ingreso, gasto, retiro), importe, motivo, fecha, usuario | N—1 Caja, N—1 Usuario |
 
