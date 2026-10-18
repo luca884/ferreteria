@@ -46,6 +46,8 @@ export interface ConfirmarVentaRequest {
   descuentoPorcentaje?: number;
   /** El presupuesto del que sale la venta (GDS-13): la venta lo deja FACTURADO. Se omite si no sale de uno. */
   presupuestoId?: number;
+  /** El remito del que sale la venta (RM-006): la venta lo deja FACTURADO y concilia el stock. Se omite si no sale de uno. */
+  remitoId?: number;
 }
 
 export interface RenglonVentaResponse {
@@ -97,6 +99,8 @@ export interface VentaResponse {
   sinStock: SinStockResponse[];
   /** Solo si la venta salió de un presupuesto. */
   presupuestoId?: number;
+  /** Solo si la venta salió de un remito. */
+  remitoId?: number;
 }
 
 /** 201 si la venta es nueva, 200 si la clave ya estaba registrada con el mismo contenido. */

@@ -4,7 +4,7 @@ import { RenglonTicket, Ticket } from './ticket';
 
 /**
  * El ticket en curso en localStorage (`ticket:{ferreteriaId}:{usuarioId}`). Lo usa el `TicketStore` del mostrador y la
- * pantalla de presupuestos, que deja ahí el ticket de «Pasar a venta» antes de abrir el mostrador.
+ * pantalla de presupuestos y la de remitos, que dejan ahí el ticket de «Pasar a venta» antes de abrir el mostrador.
  */
 
 export function claveDeStorage(auth: AuthService): string | null {
@@ -59,6 +59,12 @@ export function leerTicket(key: string): Ticket | null {
     const presupuestoNumero = x['presupuestoNumero'];
     if ((presupuestoId === undefined) !== (presupuestoNumero === undefined)) return null;
     if (presupuestoId !== undefined && !(esPositivo(presupuestoId) && esPositivo(presupuestoNumero))) return null;
+    // Igual con el remito de origen, y un ticket sale de un presupuesto o de un remito, no de los dos.
+    const remitoId = x['remitoId'];
+    const remitoNumero = x['remitoNumero'];
+    if ((remitoId === undefined) !== (remitoNumero === undefined)) return null;
+    if (remitoId !== undefined && !(esPositivo(remitoId) && esPositivo(remitoNumero))) return null;
+    if (remitoId !== undefined && presupuestoId !== undefined) return null;
     return {
       v: 1,
       clave: x['clave'],
@@ -67,6 +73,9 @@ export function leerTicket(key: string): Ticket | null {
       ...(global ? { descuentoGlobalBp: global as number } : {}),
       ...(presupuestoId !== undefined
         ? { presupuestoId: presupuestoId as number, presupuestoNumero: presupuestoNumero as number }
+        : {}),
+      ...(remitoId !== undefined
+        ? { remitoId: remitoId as number, remitoNumero: remitoNumero as number }
         : {}),
     };
   } catch {

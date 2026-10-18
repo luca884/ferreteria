@@ -1,4 +1,5 @@
 import { PresupuestoResponse } from '../presupuestos/presupuesto.models';
+import { RemitoResponse } from '../remitos/remito.models';
 import { ArticuloMostrador } from './mostrador.models';
 import {
   Ticket,
@@ -19,7 +20,9 @@ import {
   quitar,
   sinStock,
   soltarPresupuesto,
+  soltarRemito,
   ticketDePresupuesto,
+  ticketDeRemito,
   ticketVacio,
   totalDelTicket,
 } from './ticket';
@@ -524,6 +527,122 @@ describe('ticket (puro)', () => {
       const t = ticketDePresupuesto(presupuesto([renglon()]), new Map(), 'c');
 
       expect(t.renglones[0].problema).toBe('Ya no está disponible');
+    });
+  });
+
+  describe('venta desde un remito (RM-006, RM-008)', () => {
+    const renglon = (cambios: Partial<RemitoResponse['renglones'][number]> = {}) => ({
+      renglon: 1,
+      articuloId: 1,
+      descripcion: 'Tornillo (del remito)',
+      unidad: 'UNIDAD' as const,
+      cantidad: 2,
+      precioUnitario: 100,
+      alicuotaIva: 'IVA_21',
+      bruto: 200,
+      descuentoPorcentaje: 0,
+      total: 200,
+      neto: 165.29,
+      iva: 34.71,
+      ...cambios,
+    });
+
+    const remito = (renglones: RemitoResponse['renglones'], cambios: Partial<RemitoResponse> = {}): RemitoResponse => ({
+      remitoId: 8,
+      numero: 5,
+      estado: 'EMITIDO',
+      fecha: '2026-10-18T10:00:00',
+      subtotal: 200,
+      descuentoPorcentaje: 0,
+      descuento: 0,
+      neto: 0,
+      iva: 0,
+      total: 200,
+      renglones,
+      ...cambios,
+    });
+
+    it('aRequest manda el remito del que sale la venta, y sin remito no manda nada', () => {
+      const t = agregar(ticketVacio('c'), art());
+      expect('remitoId' in aRequest(t, 1)).toBe(false);
+
+      const conRemito = { ...t, remitoId: 8, remitoNumero: 5 };
+
+      expect(aRequest(conRemito, 1).remitoId).toBe(8);
+      expect('presupuestoId' in aRequest(conRemito, 1)).toBe(false);
+    });
+
+    it('el pedido de un remito o de un presupuesto no lleva el remito de origen', () => {
+      const t = { ...agregar(ticketVacio('c'), art()), remitoId: 8, remitoNumero: 5 };
+
+      expect('remitoId' in aRemitoRequest(t, {})).toBe(false);
+      expect('remitoId' in aPresupuestoRequest(t, { diasValidez: 15 })).toBe(false);
+    });
+
+    it('soltarRemito lo saca del ticket y deja todo lo demás', () => {
+      const t = { ...agregar(ticketVacio('c'), art()), remitoId: 8, remitoNumero: 5 };
+
+      const suelto = soltarRemito(t);
+
+      expect(suelto.remitoId).toBeUndefined();
+      expect(suelto.remitoNumero).toBeUndefined();
+      expect(suelto.renglones).toEqual(t.renglones);
+      expect(suelto.clave).toBe('c');
+    });
+
+    it('arma el ticket con las cantidades y los descuentos del remito y los precios de hoy', () => {
+      const r = remito([renglon({ cantidad: 2.5, descuentoPorcentaje: 10.5 })], { descuentoPorcentaje: 5 });
+      const actuales = new Map([[1, art({ descripcion: 'Tornillo', precioFinal: 120, stockActual: 7, stockMinimo: 2 })]]);
+
+      const t = ticketDeRemito(r, actuales, 'clave-9');
+
+      expect(t).toEqual({
+        v: 1,
+        clave: 'clave-9',
+        remitoId: 8,
+        remitoNumero: 5,
+        descuentoGlobalBp: 500,
+        elegido: 0,
+        renglones: [
+          {
+            articuloId: 1,
+            codigoInterno: 'TOR-001',
+            descripcion: 'Tornillo',
+            unidad: 'UNIDAD',
+            precioCentavos: 12000,
+            cantidadMilesimas: 2500,
+            descuentoBp: 1050,
+            stockActual: 7,
+            stockMinimo: 2,
+          },
+        ],
+      });
+    });
+
+    it('un artículo dado de baja, sin precio o que ya no existe queda marcado, con el precio del remito', () => {
+      const r = remito([
+        renglon(),
+        renglon({ renglon: 2, articuloId: 2, descripcion: 'Cable', precioUnitario: 790 }),
+        renglon({ renglon: 3, articuloId: 3, descripcion: 'Martillo', precioUnitario: 1500 }),
+        renglon({ renglon: 4, articuloId: 4, descripcion: 'Borrado', precioUnitario: 50 }),
+      ]);
+      const actuales = new Map<number, ArticuloMostrador | null>([
+        [1, art()],
+        [2, art({ id: 2, descripcion: 'Cable', activo: false })],
+        [3, art({ id: 3, descripcion: 'Martillo', precioFinal: 0 })],
+        [4, null],
+      ]);
+
+      const t = ticketDeRemito(r, actuales, 'c');
+
+      expect(t.renglones.map((x) => x.problema)).toEqual([
+        undefined,
+        'Artículo dado de baja',
+        'Sin precio',
+        'Ya no está disponible',
+      ]);
+      expect(t.renglones[3]).toMatchObject({ descripcion: 'Borrado', precioCentavos: 5000, codigoInterno: '' });
+      expect(t.elegido).toBe(1);
     });
   });
 

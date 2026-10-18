@@ -370,4 +370,72 @@ describe('TicketStore', () => {
       expect(a.ticket().presupuestoId).toBeUndefined();
     });
   });
+
+  describe('venta desde un remito (RM-006)', () => {
+    const renglon = {
+      articuloId: 1, codigoInterno: 'A', descripcion: 'A', unidad: 'UNIDAD', precioCentavos: 100,
+      cantidadMilesimas: 1000, stockActual: 1, stockMinimo: 0,
+    };
+    const guardar = (extra: Record<string, unknown>) =>
+      localStorage.setItem('ticket:3:7', JSON.stringify({ v: 1, clave: 'x', elegido: 0, renglones: [renglon], ...extra }));
+
+    it('el remito del que sale el ticket sobrevive a un F5', () => {
+      guardar({ remitoId: 8, remitoNumero: 5 });
+
+      const s = crear();
+
+      expect(s.ticket().remitoId).toBe(8);
+      expect(s.ticket().remitoNumero).toBe(5);
+    });
+
+    it('un ticket sin remito se lee sin remito', () => {
+      guardar({});
+
+      const s = crear();
+
+      expect(s.ticket().remitoId).toBeUndefined();
+      expect(s.ticket().remitoNumero).toBeUndefined();
+    });
+
+    it.each([
+      { remitoId: 0, remitoNumero: 1 },
+      { remitoId: -3, remitoNumero: 1 },
+      { remitoId: '8', remitoNumero: 1 },
+      { remitoId: 8 },
+      { remitoNumero: 5 },
+      { remitoId: 8, remitoNumero: 1.5 },
+      { remitoId: 8, remitoNumero: 5, presupuestoId: 3, presupuestoNumero: 2 },
+    ])('un remito guardado mal formado (%j) descarta el ticket', (extra) => {
+      guardar(extra);
+
+      const s = crear();
+
+      expect(s.ticket().renglones).toEqual([]);
+    });
+
+    it('soltarRemito lo saca del ticket, lo persiste y deja los renglones y la clave', () => {
+      guardar({ remitoId: 8, remitoNumero: 5 });
+      const a = crear();
+
+      a.soltarRemito();
+      TestBed.tick();
+
+      expect(a.ticket().remitoId).toBeUndefined();
+      expect(a.ticket().renglones).toHaveLength(1);
+      expect(a.ticket().clave).toBe('x');
+      const b = crear();
+      expect(b.ticket().remitoId).toBeUndefined();
+      expect(b.ticket().renglones).toHaveLength(1);
+    });
+
+    it('vaciar no arrastra el remito', () => {
+      guardar({ remitoId: 8, remitoNumero: 5 });
+      const a = crear();
+
+      a.vaciar();
+      a.agregar(art(2));
+
+      expect(a.ticket().remitoId).toBeUndefined();
+    });
+  });
 });

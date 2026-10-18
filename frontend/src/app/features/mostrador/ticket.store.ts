@@ -15,6 +15,7 @@ import {
   moverElegido,
   quitar,
   soltarPresupuesto,
+  soltarRemito,
   ticketVacio,
   totalDelTicket,
 } from './ticket';
@@ -104,6 +105,11 @@ export class TicketStore {
   /** El ticket sigue como una venta común: el presupuesto de origen ya no se manda al cobrar ni cambia. */
   soltarPresupuesto(): void {
     this._ticket.update(soltarPresupuesto);
+  }
+
+  /** El ticket sigue como una venta común: el remito de origen ya no se manda al cobrar ni cambia. */
+  soltarRemito(): void {
+    this._ticket.update(soltarRemito);
   }
 
   /** Tras cobrar o vaciar: ticket vacío y sin clave (el próximo primer renglón genera una nueva). */
