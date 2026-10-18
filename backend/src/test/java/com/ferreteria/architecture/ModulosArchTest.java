@@ -47,6 +47,21 @@ class ModulosArchTest {
     }
 
     @Test
+    void ventasNoDependeDeClientesSalvoPorSuPuerto() {
+        noClasses().that().resideInAPackage("com.ferreteria.ventas..")
+                .should().dependOnClassesThat(resideInAPackage("com.ferreteria.clientes..")
+                        .and(not(resideInAPackage("com.ferreteria.clientes.api.."))))
+                .check(clases);
+    }
+
+    @Test
+    void clientesNoDependeDeVentasNiDeStock() {
+        noClasses().that().resideInAPackage("com.ferreteria.clientes..")
+                .should().dependOnClassesThat(resideInAnyPackage("com.ferreteria.ventas..", "com.ferreteria.stock.."))
+                .check(clases);
+    }
+
+    @Test
     void stockNoDependeDelCatalogoSalvoPorSuPuerto() {
         noClasses().that().resideInAPackage("com.ferreteria.stock..")
                 .should().dependOnClassesThat(resideInAPackage("com.ferreteria.catalogo..")

@@ -34,6 +34,7 @@ class MigracionV4Test extends IntegrationTestBase {
             Map.entry("comprobante.numero", "bigint NOT NULL"),
             Map.entry("comprobante.clave_idempotencia", "varchar(36) NOT NULL"),
             Map.entry("comprobante.cliente_id", "bigint NULL"),
+            Map.entry("comprobante.cliente_nombre", "varchar(120) NULL"),
             Map.entry("comprobante.usuario_id", "bigint NOT NULL"),
             // V10 (CU-10): la caja de la venta; nula en las ventas anteriores a la caja.
             Map.entry("comprobante.caja_id", "bigint NULL"),
@@ -221,14 +222,14 @@ class MigracionV4Test extends IntegrationTestBase {
     }
 
     @Test
-    @DisplayName("cliente_id es nulo (Consumidor Final) y no tiene FK: la tabla cliente es del corte 3")
-    void clienteIdSinFk() {
-        Integer fks = jdbc.queryForObject(
-                "select count(*) from information_schema.key_column_usage where table_schema = database() "
+    @DisplayName("cliente_id es nulo (Consumidor Final) y desde V19 apunta con FK a la tabla cliente")
+    void clienteIdConFk() {
+        String referenciada = jdbc.queryForObject(
+                "select referenced_table_name from information_schema.key_column_usage where table_schema = database() "
                         + "and table_name = 'comprobante' and column_name = 'cliente_id' and referenced_table_name is not null",
-                Integer.class);
+                String.class);
 
-        assertThat(fks).isZero();
+        assertThat(referenciada).isEqualTo("cliente");
     }
 
     // ---- V1003 (T-06): movimientos de los articulos demo ----
