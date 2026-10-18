@@ -176,4 +176,50 @@ class RenglonVentaTest {
         assertThat(r.neto().scale()).isEqualTo(2);
         assertThat(r.iva().scale()).isEqualTo(2);
     }
+
+    @Test
+    @DisplayName("sin recargo, el recargo del renglon es cero")
+    void sinRecargo() {
+        RenglonVenta r = RenglonVenta.de(bd("100.00"), BigDecimal.ONE, bd("21.00"));
+
+        assertThat(r.recargo()).isEqualByComparingTo("0.00");
+    }
+
+    @Test
+    @DisplayName("con recargo, el total lo suma y el neto y el IVA salen del total nuevo: 100 + 10 da 110, neto 90,91 e IVA 19,09")
+    void conRecargo() {
+        RenglonVenta r = RenglonVenta.de(bd("100.00"), BigDecimal.ONE, bd("21.00")).conRecargo(bd("10.00"));
+
+        assertThat(r.recargo()).isEqualByComparingTo("10.00");
+        assertThat(r.total()).isEqualByComparingTo("110.00");
+        assertThat(r.neto()).isEqualByComparingTo("90.91");
+        assertThat(r.iva()).isEqualByComparingTo("19.09");
+        assertThat(r.bruto()).isEqualByComparingTo("100.00");
+    }
+
+    @Test
+    @DisplayName("el recargo usa la alicuota del renglon: a 10,5 % el neto de 88,00 es 79,64")
+    void conRecargoYAlicuotaPropia() {
+        RenglonVenta r = RenglonVenta.de(bd("80.00"), BigDecimal.ONE, bd("10.50")).conRecargo(bd("8.00"));
+
+        assertThat(r.total()).isEqualByComparingTo("88.00");
+        assertThat(r.neto()).isEqualByComparingTo("79.64");
+        assertThat(r.iva()).isEqualByComparingTo("8.36");
+    }
+
+    @Test
+    @DisplayName("el total sin recargo es el total menos el recargo")
+    void totalSinRecargo() {
+        RenglonVenta r = RenglonVenta.de(bd("100.00"), BigDecimal.ONE, bd("21.00")).conRecargo(bd("10.00"));
+
+        assertThat(r.totalSinRecargo()).isEqualByComparingTo("100.00");
+    }
+
+    @Test
+    @DisplayName("un recargo negativo se rechaza")
+    void recargoNegativo() {
+        RenglonVenta r = RenglonVenta.de(bd("100.00"), BigDecimal.ONE, bd("21.00"));
+
+        assertThatThrownBy(() -> r.conRecargo(bd("-0.01"))).isInstanceOf(IllegalArgumentException.class);
+    }
 }

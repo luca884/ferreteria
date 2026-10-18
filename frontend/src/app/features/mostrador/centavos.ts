@@ -85,3 +85,34 @@ export function totalTicket(renglones: readonly LineaEnteros[], descuentoGlobalB
 export function subtotalTicket(renglones: readonly LineaEnteros[]): number {
   return renglones.reduce((acc, r) => acc + brutoRenglon(r.precioCentavos, r.cantidadMilesimas), 0);
 }
+
+/**
+ * Lo que suma una forma de pago a la parte de la venta que cubre (GDS-11): monto x % con HALF_UP, a centavos. El
+ * porcentaje va en centésimas de punto porcentual (1000 = 10 %). Replica `RecargoVenta.deCobro` del backend; usa
+ * BigInt porque monto x porcentaje puede pasar de 2^53.
+ */
+export function recargoDeCobro(montoCentavos: number, porcentajeBp: number): number {
+  const producto = BigInt(montoCentavos) * BigInt(porcentajeBp);
+  return Number((producto + BigInt(CIEN_POR_CIENTO / 2)) / BigInt(CIEN_POR_CIENTO));
+}
+
+/**
+ * Reparte el recargo de la venta entre los renglones en proporción a su total ya descontado: cada uno se queda con
+ * la parte entera en centavos y los centavos que sobran van de a uno a los restos mayores (a igual resto, al
+ * primero). Ninguno da negativo y la suma es exacta. Replica `RecargoVenta.repartir` del backend.
+ */
+export function repartirRecargo(totalesCentavos: readonly number[], recargoCentavos: number): number[] {
+  if (recargoCentavos < 0) throw new Error('El recargo no puede ser negativo.');
+  if (recargoCentavos === 0) return totalesCentavos.map(() => 0);
+  const suma = totalesCentavos.reduce((a, t) => a + BigInt(t), 0n);
+  if (suma === 0n) throw new Error('No hay un total sobre el que repartir el recargo.');
+  const recargo = BigInt(recargoCentavos);
+  const partes = totalesCentavos.map((t) => (recargo * BigInt(t)) / suma);
+  const restos = totalesCentavos.map((t) => (recargo * BigInt(t)) % suma);
+  const sobrantes = Number(recargo - partes.reduce((a, p) => a + p, 0n));
+  const porResto = totalesCentavos
+    .map((_, i) => i)
+    .sort((a, b) => (restos[a] === restos[b] ? a - b : restos[a] > restos[b] ? -1 : 1));
+  for (let k = 0; k < sobrantes; k++) partes[porResto[k]] += 1n;
+  return partes.map(Number);
+}

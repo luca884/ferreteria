@@ -1,5 +1,5 @@
 {
-  "descripcion": "Casos canonicos de totales de una venta (R-043). Los leen CasosCompartidosTotalesTest (Java: total, neto, iva) y centavos.spec.ts (Vitest: solo total). Importes como string. Los descuentos (GDS-12) van en %: `descuento` es el del renglon y `descuentoGlobal` el del ticket, que se aplica a cada renglon.",
+  "descripcion": "Casos canonicos de totales de una venta (R-043). Los leen CasosCompartidosTotalesTest (Java: total, neto, iva) y centavos.spec.ts (Vitest: solo total). Importes como string. Los descuentos (GDS-12) van en %: `descuento` es el del renglon y `descuentoGlobal` el del ticket, que se aplica a cada renglon. El recargo de la forma de pago (GDS-11) va en el ticket: `recargo` es el importe total y `recargoPorRenglon` lo que le toca a cada renglon (se reparte por su total ya descontado, los centavos sobrantes a los restos mayores); `total`, `neto` e `iva` del ticket ya lo incluyen.",
   "renglones": [
     { "nombre": "tornillo-3u", "precio": "170.00", "cantidad": "3", "alicuota": "21.00", "total": "510.00", "neto": "421.49", "iva": "88.51" },
     { "nombre": "cable-2-5m", "precio": "790.00", "cantidad": "2.5", "alicuota": "21.00", "total": "1975.00", "neto": "1632.23", "iva": "342.77" },
@@ -19,6 +19,11 @@
     { "nombre": "c1-mas-c3", "renglones": ["c1", "c3"], "total": "4463.33", "neto": "3688.70", "iva": "774.63" },
     { "nombre": "dto-global-10", "renglones": ["cien"], "descuentoGlobal": "10.00", "total": "90.00", "neto": "74.38", "iva": "15.62" },
     { "nombre": "dto-renglon-y-global", "renglones": ["dto-renglon-10"], "descuentoGlobal": "10.00", "total": "81.00", "neto": "66.94", "iva": "14.06" },
-    { "nombre": "dto-global-prorrateado", "renglones": ["cinco-centavos", "cinco-centavos"], "descuentoGlobal": "10.00", "total": "0.10", "neto": "0.08", "iva": "0.02" }
+    { "nombre": "dto-global-prorrateado", "renglones": ["cinco-centavos", "cinco-centavos"], "descuentoGlobal": "10.00", "total": "0.10", "neto": "0.08", "iva": "0.02" },
+    { "nombre": "recargo-simple", "renglones": ["cien"], "recargo": "10.00", "recargoPorRenglon": ["10.00"], "total": "110.00", "neto": "90.91", "iva": "19.09" },
+    { "nombre": "recargo-reparto", "renglones": ["c1", "c3"], "recargo": "446.33", "recargoPorRenglon": ["363.00", "83.33"], "total": "4909.66", "neto": "4057.57", "iva": "852.09" },
+    { "nombre": "recargo-centavos", "renglones": ["cinco-centavos", "cinco-centavos", "cinco-centavos"], "recargo": "0.02", "recargoPorRenglon": ["0.01", "0.01", "0.00"], "total": "0.17", "neto": "0.14", "iva": "0.03" },
+    { "nombre": "recargo-alicuotas", "renglones": ["iva-10-5", "cien"], "recargo": "18.00", "recargoPorRenglon": ["8.00", "10.00"], "total": "198.00", "neto": "170.55", "iva": "27.45" },
+    { "nombre": "recargo-con-descuentos", "renglones": ["dto-renglon-10"], "descuentoGlobal": "10.00", "recargo": "8.10", "recargoPorRenglon": ["8.10"], "total": "89.10", "neto": "73.64", "iva": "15.46" }
   ]
 }

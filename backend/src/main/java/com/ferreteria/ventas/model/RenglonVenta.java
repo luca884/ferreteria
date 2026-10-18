@@ -9,10 +9,12 @@ import java.math.RoundingMode;
  * redondeado a centavos: el global se prorratea aplicandolo a cada renglon, asi el total del comprobante es exactamente
  * la suma de sus renglones (GDS-37). El neto sale de ese total (total x 100 / (100 + %)) y el IVA es la diferencia, asi
  * que neto + IVA = total siempre. Todo HALF_UP, nunca HALF_EVEN.
+ * El recargo de la forma de pago (GDS-11) llega despues, ya repartido ({@link RecargoVenta}): se suma al total y el
+ * neto y el IVA se sacan del total nuevo con la alicuota del renglon.
  */
 public record RenglonVenta(BigDecimal precioUnitario, BigDecimal cantidad, BigDecimal bruto,
         BigDecimal descuentoPorcentaje, BigDecimal descuentoGlobalPorcentaje, BigDecimal total, BigDecimal neto,
-        BigDecimal iva) {
+        BigDecimal iva, BigDecimal porcentajeIva, BigDecimal recargo) {
 
     private static final int ESCALA = 2;
     private static final BigDecimal CIEN = BigDecimal.valueOf(100);
@@ -30,9 +32,29 @@ public record RenglonVenta(BigDecimal precioUnitario, BigDecimal cantidad, BigDe
         BigDecimal bruto = precioUnitario.multiply(cantidad).setScale(ESCALA, RoundingMode.HALF_UP);
         BigDecimal conDescuentoDelRenglon = descontar(bruto, descuentoPorcentaje);
         BigDecimal total = descontar(conDescuentoDelRenglon, descuentoGlobalPorcentaje);
-        BigDecimal neto = total.multiply(CIEN).divide(CIEN.add(porcentajeIva), ESCALA, RoundingMode.HALF_UP);
+        BigDecimal neto = netoDe(total, porcentajeIva);
         return new RenglonVenta(precioUnitario, cantidad, bruto, descuentoPorcentaje, descuentoGlobalPorcentaje,
-                total, neto, total.subtract(neto));
+                total, neto, total.subtract(neto), porcentajeIva, BigDecimal.ZERO.setScale(ESCALA));
+    }
+
+    /** El total sin el recargo: sobre este importe se reparte el recargo de la venta. */
+    public BigDecimal totalSinRecargo() {
+        return total.subtract(recargo);
+    }
+
+    /** El mismo renglon con ese recargo (el que tenia se reemplaza, no se acumula) y neto e IVA del total nuevo. */
+    public RenglonVenta conRecargo(BigDecimal nuevoRecargo) {
+        if (nuevoRecargo.signum() < 0) {
+            throw new IllegalArgumentException("El recargo no puede ser negativo: " + nuevoRecargo);
+        }
+        BigDecimal nuevoTotal = totalSinRecargo().add(nuevoRecargo);
+        BigDecimal nuevoNeto = netoDe(nuevoTotal, porcentajeIva);
+        return new RenglonVenta(precioUnitario, cantidad, bruto, descuentoPorcentaje, descuentoGlobalPorcentaje,
+                nuevoTotal, nuevoNeto, nuevoTotal.subtract(nuevoNeto), porcentajeIva, nuevoRecargo);
+    }
+
+    private static BigDecimal netoDe(BigDecimal total, BigDecimal porcentajeIva) {
+        return total.multiply(CIEN).divide(CIEN.add(porcentajeIva), ESCALA, RoundingMode.HALF_UP);
     }
 
     private static BigDecimal descontar(BigDecimal importe, BigDecimal porcentaje) {

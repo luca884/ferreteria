@@ -6,6 +6,8 @@ import {
   brutoRenglon,
   conDescuento,
   desdeTexto,
+  recargoDeCobro,
+  repartirRecargo,
   totalRenglon,
   totalTicket,
 } from './centavos';
@@ -21,6 +23,8 @@ interface CasoTicket {
   nombre: string;
   renglones: string[];
   descuentoGlobal?: string;
+  recargo?: string;
+  recargoPorRenglon?: string[];
   total: string;
 }
 
@@ -47,7 +51,11 @@ describe('centavos (casos compartidos con Java)', () => {
     it(`ticket ${t.nombre}: total ${t.total}`, () => {
       const global = bp(t.descuentoGlobal);
       const lineas = t.renglones.map((n) => totalDe(renglones.find((r) => r.nombre === n)!, global));
-      expect(lineas.reduce((a, b) => a + b, 0)).toBe(desdeTexto(t.total, 2));
+      const recargos = repartirRecargo(lineas, t.recargo === undefined ? 0 : desdeTexto(t.recargo, 2));
+      if (t.recargoPorRenglon) {
+        expect(recargos).toEqual(t.recargoPorRenglon.map((r) => desdeTexto(r, 2)));
+      }
+      expect(lineas.reduce((a, b, i) => a + b + recargos[i], 0)).toBe(desdeTexto(t.total, 2));
     });
   }
 
@@ -58,6 +66,52 @@ describe('centavos (casos compartidos con Java)', () => {
       return { precioCentavos: desdeTexto(c.precio, 2), cantidadMilesimas: desdeTexto(c.cantidad, 3) };
     });
     expect(totalTicket(rs)).toBe(248550);
+  });
+});
+
+describe('recargo de la forma de pago (GDS-11)', () => {
+  it('recargoDeCobro: monto x % a centavos HALF_UP', () => {
+    expect(recargoDeCobro(600000, 1000)).toBe(60000);
+    expect(recargoDeCobro(3333, 1000)).toBe(333);
+    expect(recargoDeCobro(5, 1000)).toBe(1);
+    expect(recargoDeCobro(4, 1000)).toBe(0);
+    expect(recargoDeCobro(10000, 0)).toBe(0);
+    expect(recargoDeCobro(123457, 1235)).toBe(15247);
+  });
+
+  it('recargoDeCobro no pierde precisión con importes grandes', () => {
+    expect(recargoDeCobro(999999999999999, 20000)).toBe(1999999999999998);
+  });
+
+  it('repartirRecargo: en proporción al total de cada renglón', () => {
+    expect(repartirRecargo([30000, 10000], 4000)).toEqual([3000, 1000]);
+  });
+
+  it('repartirRecargo: los centavos sobrantes van a los restos mayores y, a igual resto, al primero', () => {
+    expect(repartirRecargo([5, 5, 5], 2)).toEqual([1, 1, 0]);
+  });
+
+  it('repartirRecargo: sin recargo devuelve ceros', () => {
+    expect(repartirRecargo([100, 200], 0)).toEqual([0, 0]);
+  });
+
+  it('repartirRecargo: con renglones que suman cero y recargo, falla', () => {
+    expect(() => repartirRecargo([0], 100)).toThrow();
+  });
+
+  it('repartirRecargo: lo repartido suma el recargo y ninguno es negativo (semilla fija)', () => {
+    let semilla = 11;
+    const azar = (tope: number) => {
+      semilla = (semilla * 1103515245 + 12345) % 2147483648;
+      return semilla % tope;
+    };
+    for (let ticket = 0; ticket < 1000; ticket++) {
+      const totales = Array.from({ length: 1 + azar(10) }, () => 1 + azar(500000));
+      const recargo = azar(1000000);
+      const partes = repartirRecargo(totales, recargo);
+      expect(partes.every((p) => p >= 0)).toBe(true);
+      expect(partes.reduce((a, b) => a + b, 0)).toBe(recargo);
+    }
   });
 });
 

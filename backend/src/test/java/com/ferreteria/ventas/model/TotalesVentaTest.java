@@ -73,6 +73,31 @@ class TotalesVentaTest {
     }
 
     @Test
+    @DisplayName("el recargo es la suma de los de los renglones y subtotal - descuento + recargo = total")
+    void recargoEnLosTotales() {
+        RenglonVenta a = RenglonVenta.de(bd("100.00"), BigDecimal.ONE, IVA_21, bd("10.00"), BigDecimal.ZERO)
+                .conRecargo(bd("9.00"));
+        RenglonVenta b = RenglonVenta.de(bd("200.00"), BigDecimal.ONE, IVA_21).conRecargo(bd("20.00"));
+
+        TotalesVenta totales = TotalesVenta.de(List.of(a, b));
+
+        assertThat(totales.subtotal()).isEqualByComparingTo("300.00");
+        assertThat(totales.recargo()).isEqualByComparingTo("29.00");
+        assertThat(totales.descuento()).isEqualByComparingTo("10.00");
+        assertThat(totales.total()).isEqualByComparingTo("319.00");
+        assertThat(totales.subtotal().subtract(totales.descuento()).add(totales.recargo()))
+                .isEqualByComparingTo(totales.total());
+    }
+
+    @Test
+    @DisplayName("sin recargo, el recargo del total es cero")
+    void sinRecargoEnLosTotales() {
+        TotalesVenta totales = TotalesVenta.de(List.of(RenglonVenta.de(bd("100.00"), BigDecimal.ONE, IVA_21)));
+
+        assertThat(totales.recargo()).isEqualByComparingTo("0.00");
+    }
+
+    @Test
     @DisplayName("un solo renglon: los totales son los del renglon")
     void unSoloRenglon() {
         RenglonVenta c1 = RenglonVenta.de(bd("1210.00"), bd("3"), IVA_21);

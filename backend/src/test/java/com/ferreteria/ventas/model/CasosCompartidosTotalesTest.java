@@ -50,7 +50,7 @@ class CasosCompartidosTotalesTest {
     @DisplayName("el JSON trae los 5 casos de renglon del diseno, C1, C3, el renglon de C2 y los de descuentos")
     void elJsonTieneLosCasos() {
         assertThat(casos.get("renglones").size()).isEqualTo(11);
-        assertThat(casos.get("tickets").size()).isEqualTo(6);
+        assertThat(casos.get("tickets").size()).isEqualTo(11);
     }
 
     @Test
@@ -74,9 +74,17 @@ class CasosCompartidosTotalesTest {
                 renglones.add(renglon(porNombre(nombre.asText()), opcional(ticket, "descuentoGlobal")));
             }
 
+            String id = ticket.get("nombre").asText();
+            if (ticket.has("recargo")) {
+                renglones = RecargoVenta.repartir(renglones, bd(ticket, "recargo"));
+                for (int i = 0; i < renglones.size(); i++) {
+                    assertThat(renglones.get(i).recargo()).as("recargo del renglon %d de %s", i, id)
+                            .isEqualByComparingTo(new BigDecimal(ticket.get("recargoPorRenglon").get(i).asText()));
+                }
+            }
+
             TotalesVenta totales = TotalesVenta.de(renglones);
 
-            String id = ticket.get("nombre").asText();
             assertThat(renglones).as("renglones de %s", id).isNotEmpty();
             assertThat(totales.total()).as("total de %s", id).isEqualByComparingTo(bd(ticket, "total"));
             assertThat(totales.neto()).as("neto de %s", id).isEqualByComparingTo(bd(ticket, "neto"));
