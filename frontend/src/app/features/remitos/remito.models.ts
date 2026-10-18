@@ -68,6 +68,26 @@ export interface RemitoResponse {
   sinStock?: RemitoSinStock[];
 }
 
+/** Una fila del listado: lo justo para la grilla, sin renglones. */
+export interface RemitoResumen {
+  remitoId: number;
+  numero: number;
+  estado: EstadoRemito;
+  fecha: string;
+  clienteNombre?: string;
+  total: number;
+}
+
+/** Filtros del listado; `desde` y `hasta` son días (aaaa-mm-dd), ambos inclusive. `page` empieza en 0. */
+export interface FiltroRemitos {
+  page: number;
+  size?: number;
+  estado?: EstadoRemito;
+  numero?: number;
+  desde?: string;
+  hasta?: string;
+}
+
 /** Lo que se completa en el diálogo del remito: los dos datos son opcionales. */
 export interface DatosRemito {
   clienteNombre?: string;
