@@ -137,6 +137,7 @@
     @case ('cobro') {
       <app-dialogo-cobro
         [totalCentavos]="ticket.total()"
+        [formas]="formasPago()"
         [renglones]="ticket.ticket().renglones.length"
         [enVuelo]="enVuelo()"
         [aviso]="avisoCobro()"

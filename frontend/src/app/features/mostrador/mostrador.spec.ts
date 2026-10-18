@@ -9,6 +9,8 @@ import { vi } from 'vitest';
 import { AuthService } from '../../core/auth/auth.service';
 import { CajaVigente } from '../caja/caja.models';
 import { CajaService } from '../caja/caja.service';
+import { FormaPago } from '../formas-pago/forma-pago.models';
+import { FormasPagoService } from '../formas-pago/formas-pago.service';
 import { ArticuloMostrador, BusquedaMostrador } from './mostrador.models';
 import { Mostrador } from './mostrador';
 import { MostradorService } from './mostrador.service';
@@ -17,6 +19,23 @@ import { VentaService } from './venta.service';
 import { ConfirmarVentaRequest, VentaCobrada } from './venta.models';
 
 registerLocaleData(localeEsAr);
+
+const formaDe = (id: number, nombre: string, medio: FormaPago['medio'], recargoPorcentaje = 0): FormaPago => ({
+  id,
+  nombre,
+  medio,
+  recargoPorcentaje,
+  activa: true,
+  orden: id,
+});
+
+/** Las formas de siempre, sin recargo: Efectivo 1, Débito 2, Crédito 3, Transferencia 4. */
+const FORMAS_BASE: FormaPago[] = [
+  formaDe(1, 'Efectivo', 'EFECTIVO'),
+  formaDe(2, 'Débito', 'DEBITO'),
+  formaDe(3, 'Crédito', 'CREDITO'),
+  formaDe(4, 'Transferencia', 'TRANSFERENCIA'),
+];
 
 describe('Mostrador', () => {
   const articulo = (id: number, cambios: Partial<ArticuloMostrador> = {}): ArticuloMostrador => ({
@@ -57,6 +76,7 @@ describe('Mostrador', () => {
   let cobros: Cobro[];
   let claves: number;
   let cajas: { actual: ReturnType<typeof vi.fn> };
+  let formasApi: { listar: ReturnType<typeof vi.fn> };
 
   /** CU-10: por defecto la caja está abierta hoy, como la encuentra el vendedor al empezar. */
   const cajaAbierta: CajaVigente = {
@@ -65,7 +85,7 @@ describe('Mostrador', () => {
     efectivoPropuesto: 0,
   };
 
-  async function crear(vigente: CajaVigente = cajaAbierta) {
+  async function crear(vigente: CajaVigente = cajaAbierta, formas: FormaPago[] = FORMAS_BASE) {
     // jsdom no implementa scrollIntoView.
     Element.prototype.scrollIntoView =
       vi.fn() as unknown as typeof Element.prototype.scrollIntoView;
@@ -87,6 +107,7 @@ describe('Mostrador', () => {
       }),
     };
     cajas = { actual: vi.fn(() => of(vigente)) };
+    formasApi = { listar: vi.fn(() => of(formas)) };
     const sesion = signal({
       userId: 7,
       nombre: 'Ana',
@@ -103,6 +124,7 @@ describe('Mostrador', () => {
         { provide: MostradorService, useValue: servicio },
         { provide: VentaService, useValue: ventas },
         { provide: CajaService, useValue: cajas },
+        { provide: FormasPagoService, useValue: formasApi },
         { provide: AuthService, useValue: { sesion: sesion.asReadonly() } },
         { provide: GENERAR_CLAVE, useValue: () => `clave-${++claves}` },
       ],
@@ -1269,7 +1291,7 @@ describe('Mostrador', () => {
         clave: 'clave-1',
         renglones: [{ articuloId: 1, cantidad: 2, precioUnitario: 1500 }],
         totalMostrado: 3000,
-        medioPago: 'EFECTIVO',
+        formaPagoId: 1,
       });
     });
 
@@ -1288,7 +1310,155 @@ describe('Mostrador', () => {
       await tecla('ArrowRight');
       await tecla('Enter');
 
-      expect(cobros[0].pedido.medioPago).toBe('DEBITO');
+      expect(cobros[0].pedido.formaPagoId).toBe(2);
+    });
+
+    describe('formas de pago con recargo (GDS-11)', () => {
+      const visa6 = formaDe(7, 'Visa 6 cuotas', 'CREDITO', 10);
+      const conVisa = [...FORMAS_BASE, visa6];
+
+      /** Ticket de 2 martillos ($ 3.000,00) con esas formas. */
+      async function conMartillosYFormas(formas: FormaPago[]) {
+        await crear(cajaAbierta, formas);
+        await escanear('M', martillo());
+        await escanear('M', martillo());
+      }
+
+      const opcionesDelCobro = () =>
+        Array.from(dialogo()!.querySelectorAll('button[role="radio"]')).map((b) => normal(b.textContent));
+
+      function elegirOpcion(texto: string) {
+        Array.from(dialogo()!.querySelectorAll<HTMLButtonElement>('button[role="radio"]'))
+          .find((b) => b.textContent!.includes(texto))!
+          .click();
+      }
+
+      it('lee las formas activas al abrir y las ofrece en el cobro, en su orden', async () => {
+        await conMartillosYFormas(conVisa);
+
+        await tecla('F4');
+
+        expect(formasApi.listar).toHaveBeenCalledWith(true);
+        expect(opcionesDelCobro()).toEqual([
+          'Efectivo',
+          'Débito',
+          'Crédito',
+          'Transferencia',
+          'Visa 6 cuotas +10 %',
+          'Mixto',
+        ]);
+      });
+
+      it('F4 vuelve a leer las formas: si el Dueño cambió un recargo, el cobro ya lo trae', async () => {
+        await conMartillosYFormas(conVisa);
+        formasApi.listar.mockReturnValue(of([...FORMAS_BASE, formaDe(7, 'Visa 6 cuotas', 'CREDITO', 25)]));
+
+        await tecla('F4');
+        elegirOpcion('Visa 6 cuotas');
+        await refrescar();
+
+        expect(formasApi.listar).toHaveBeenCalledTimes(2);
+        expect(normal(dialogo()!.querySelector('.total')?.textContent)).toBe('$ 3.750,00');
+      });
+
+      it('sin formas cargadas (no se pudieron leer) F4 avisa, no abre el cobro y las vuelve a pedir', async () => {
+        await crear(cajaAbierta, []);
+        await escanear('M', martillo());
+
+        await tecla('F4');
+
+        expect(dialogo()).toBeNull();
+        expect(normal(el().textContent)).toContain('No se pudieron cargar las formas de pago.');
+        expect(formasApi.listar).toHaveBeenCalledTimes(2);
+      });
+
+      it('con una forma con recargo manda su id y el total mostrado con el recargo, sin tocar los renglones', async () => {
+        await conMartillosYFormas(conVisa);
+
+        await tecla('F4');
+        elegirOpcion('Visa 6 cuotas');
+        await refrescar();
+        expect(normal(dialogo()!.querySelector('.total')?.textContent)).toBe('$ 3.300,00');
+        await tecla('Enter');
+
+        expect(cobros).toHaveLength(1);
+        expect(cobros[0].pedido).toEqual({
+          clave: 'clave-1',
+          renglones: [{ articuloId: 1, cantidad: 2, precioUnitario: 1500 }],
+          totalMostrado: 3300,
+          formaPagoId: 7,
+        });
+      });
+
+      it('el aviso de venta cobrada muestra el total con el recargo', async () => {
+        await conMartillosYFormas(conVisa);
+        await tecla('F4');
+        elegirOpcion('Visa 6 cuotas');
+        await refrescar();
+        await tecla('Enter');
+
+        await cobrarOk(0, venta(12, 3300));
+
+        expect(normal(el().textContent)).toContain('Venta N.º 12 cobrada: $ 3.300,00');
+      });
+
+      it('el pago mixto manda las partes sin recargo y el total mostrado con el recargo de la parte que lo tiene', async () => {
+        await conMartillosYFormas(conVisa);
+        await tecla('F4');
+        elegirOpcion('Mixto');
+        await refrescar();
+        const cargar = (id: number, texto: string) => {
+          const campo = dialogo()!.querySelector<HTMLInputElement>(`input[data-forma="${id}"]`)!;
+          campo.value = texto;
+          campo.dispatchEvent(new Event('input', { bubbles: true }));
+        };
+        cargar(1, '1000');
+        cargar(7, '2000');
+        await refrescar();
+
+        await tecla('Enter');
+
+        expect(cobros[0].pedido.formaPagoId).toBeUndefined();
+        expect(cobros[0].pedido.pagos).toEqual([
+          { formaPagoId: 1, monto: 1000 },
+          { formaPagoId: 7, monto: 2000 },
+        ]);
+        expect(cobros[0].pedido.totalMostrado).toBe(3200);
+      });
+
+      it('un 409 vuelve a leer las formas: el total pudo cambiar por un recargo nuevo', async () => {
+        await conMartillosYFormas(conVisa);
+        await tecla('F4');
+        elegirOpcion('Visa 6 cuotas');
+        await refrescar();
+        await tecla('Enter');
+        formasApi.listar.mockClear();
+
+        await fallarCobro(0, 409, rechazo(409, 'PRECIOS_CAMBIADOS', [], { total: 3750 }));
+
+        expect(formasApi.listar).toHaveBeenCalledTimes(1);
+        expect(dialogo()).not.toBeNull();
+      });
+
+      it('un 400 por una forma de pago inválida vuelve a leer las formas y deja el cobro abierto con el mensaje', async () => {
+        await conMartillosYFormas(conVisa);
+        await tecla('F4');
+        elegirOpcion('Visa 6 cuotas');
+        await refrescar();
+        await tecla('Enter');
+        formasApi.listar.mockClear();
+        formasApi.listar.mockReturnValue(of(FORMAS_BASE));
+
+        await fallarCobro(0, 400, {
+          status: 400,
+          message: 'Datos inválidos',
+          errors: { formaPagoId: 'La forma de pago no es válida.' },
+        });
+
+        expect(formasApi.listar).toHaveBeenCalledTimes(1);
+        expect(normal(dialogo()!.textContent)).toContain('La forma de pago no es válida.');
+        expect(opcionesDelCobro()).not.toContain('Visa 6 cuotas +10 %');
+      });
     });
 
     it('un 201 cierra el diálogo, vacía el ticket y avisa con el número y el total', async () => {
@@ -1774,11 +1944,11 @@ describe('Mostrador', () => {
       await fallarCobro(0, 400, {
         status: 400,
         message: 'Datos inválidos',
-        errors: { medioPago: 'El medio de pago no es válido.' },
+        errors: { formaPagoId: 'La forma de pago no es válida.' },
       });
 
       expect(dialogo()).not.toBeNull();
-      expect(normal(dialogo()!.textContent)).toContain('El medio de pago no es válido.');
+      expect(normal(dialogo()!.textContent)).toContain('La forma de pago no es válida.');
       expect(normal(dialogo()!.textContent)).not.toContain('No se pudo cobrar');
       expect(renglonesTicket()[0].querySelector('.problema')).toBeNull();
     });
@@ -1897,7 +2067,7 @@ describe('Mostrador', () => {
 
       expect(cobros).toHaveLength(1);
       expect(cobros[0].pedido.renglones.map((r) => r.articuloId)).toEqual([1, 2, 3, 4, 5]);
-      expect(cobros[0].pedido.medioPago).toBe('EFECTIVO');
+      expect(cobros[0].pedido.formaPagoId).toBe(1);
       expect(cobros[0].pedido.totalMostrado).toBe(1500);
 
       cobros[0].respuesta.next({
@@ -2402,32 +2572,32 @@ describe('Mostrador', () => {
       await refrescar();
     }
 
-    function cargar(medio: string, texto: string) {
-      const campoMonto = el().querySelector<HTMLInputElement>(`input[data-medio="${medio}"]`)!;
+    function cargar(formaPagoId: number, texto: string) {
+      const campoMonto = el().querySelector<HTMLInputElement>(`input[data-forma="${formaPagoId}"]`)!;
       campoMonto.value = texto;
       campoMonto.dispatchEvent(new Event('input', { bubbles: true }));
     }
 
-    it('cobra con dos medios: manda la lista de pagos y no el medio único', async () => {
+    it('cobra con dos formas: manda la lista de pagos y no la forma única', async () => {
       await cobrandoUnArticulo();
-      cargar('EFECTIVO', '500');
+      cargar(1, '500');
       await refrescar();
 
       await tecla('Enter');
       await tecla('Enter');
 
       expect(cobros).toHaveLength(1);
-      expect(cobros[0].pedido.medioPago).toBeUndefined();
+      expect(cobros[0].pedido.formaPagoId).toBeUndefined();
       expect(cobros[0].pedido.pagos).toEqual([
-        { medio: 'EFECTIVO', monto: 500 },
-        { medio: 'DEBITO', monto: 1000 },
+        { formaPagoId: 1, monto: 500 },
+        { formaPagoId: 2, monto: 1000 },
       ]);
       expect(cobros[0].pedido.totalMostrado).toBe(1500);
     });
 
     it('no cobra si los pagos no suman el total', async () => {
       await cobrandoUnArticulo();
-      cargar('EFECTIVO', '500');
+      cargar(1, '500');
       await refrescar();
 
       (el().querySelector('app-dialogo-cobro .cobrar') as HTMLButtonElement).click();

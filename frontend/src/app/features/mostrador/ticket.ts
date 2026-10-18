@@ -1,7 +1,7 @@
 import { Unidad } from '../articulos/articulo.models';
 import { aCentavos, aMilesimas, desdeTexto, subtotalTicket, totalTicket } from './centavos';
 import { ArticuloMostrador } from './mostrador.models';
-import { ConfirmarVentaRequest, MedioPago, PagoCobro } from './venta.models';
+import { ConfirmarVentaRequest, PagoCobro } from './venta.models';
 
 /**
  * El ticket en curso, como datos inmutables: toda función devuelve un ticket nuevo. Plata en centavos y
@@ -180,10 +180,15 @@ export function marcarProblemas(
 }
 
 /**
- * Cuerpo del POST: con un medio único manda `medioPago`; con un pago mixto, la lista `pagos` y no `medioPago`. El
- * recibido y el vuelto son del diálogo de cobro y no viajan.
+ * Cuerpo del POST: con una forma única manda `formaPagoId`; con un pago mixto, la lista `pagos` (cada parte sin recargo)
+ * y no `formaPagoId`. `recargoCentavos` es el de las formas de pago (GDS-11): el total mostrado lo incluye. El recibido y
+ * el vuelto son del diálogo de cobro y no viajan.
  */
-export function aRequest(t: Ticket, pago: MedioPago | readonly PagoCobro[]): ConfirmarVentaRequest {
+export function aRequest(
+  t: Ticket,
+  pago: number | readonly PagoCobro[],
+  recargoCentavos = 0,
+): ConfirmarVentaRequest {
   const global = t.descuentoGlobalBp ?? 0;
   return {
     clave: t.clave,
@@ -193,10 +198,10 @@ export function aRequest(t: Ticket, pago: MedioPago | readonly PagoCobro[]): Con
       precioUnitario: r.precioCentavos / 100,
       ...(r.descuentoBp ? { descuentoPorcentaje: r.descuentoBp / 100 } : {}),
     })),
-    totalMostrado: totalDelTicket(t) / 100,
-    ...(typeof pago === 'string'
-      ? { medioPago: pago }
-      : { pagos: pago.map((p) => ({ medio: p.medioPago, monto: p.centavos / 100 })) }),
+    totalMostrado: (totalDelTicket(t) + recargoCentavos) / 100,
+    ...(typeof pago === 'number'
+      ? { formaPagoId: pago }
+      : { pagos: pago.map((p) => ({ formaPagoId: p.formaPagoId, monto: p.centavos / 100 })) }),
     ...(global ? { descuentoPorcentaje: global / 100 } : {}),
   };
 }

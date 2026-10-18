@@ -241,19 +241,29 @@ describe('ticket (puro)', () => {
       expect(totalDelTicket(t)).toBe(83333 + 121000);
     });
 
-    it('aRequest arma clave, renglones, totalMostrado y medioPago, sin recibido ni vuelto', () => {
+    it('aRequest arma clave, renglones, totalMostrado y formaPagoId, sin recibido ni vuelto', () => {
       let t = agregar(ticketVacio('clave-1'), cable());
       t = cambiarCantidad(t, 0, 2500).ticket!;
       t = agregar(t, art());
-      expect(aRequest(t, 'DEBITO')).toEqual({
+      expect(aRequest(t, 2)).toEqual({
         clave: 'clave-1',
         renglones: [
           { articuloId: 2, cantidad: 2.5, precioUnitario: 790 },
           { articuloId: 1, cantidad: 1, precioUnitario: 170 },
         ],
         totalMostrado: 2145,
-        medioPago: 'DEBITO',
+        formaPagoId: 2,
       });
+    });
+
+    it('aRequest con el recargo de la forma: el total mostrado lo incluye y los renglones no cambian (GDS-11)', () => {
+      const t = agregar(ticketVacio('c'), art());
+
+      const pedido = aRequest(t, 3, 1700);
+
+      expect(pedido.formaPagoId).toBe(3);
+      expect(pedido.totalMostrado).toBe(187);
+      expect(pedido.renglones).toEqual([{ articuloId: 1, cantidad: 1, precioUnitario: 170 }]);
     });
   });
 
@@ -317,36 +327,40 @@ describe('ticket (puro)', () => {
 
     it('aRequest manda los descuentos solo si hay: sin descuentos el cuerpo es el de siempre', () => {
       const t = agregar(ticketVacio('c'), art());
-      expect(aRequest(t, 'EFECTIVO').descuentoPorcentaje).toBeUndefined();
-      expect(aRequest(t, 'EFECTIVO').renglones[0].descuentoPorcentaje).toBeUndefined();
+      expect(aRequest(t, 1).descuentoPorcentaje).toBeUndefined();
+      expect(aRequest(t, 1).renglones[0].descuentoPorcentaje).toBeUndefined();
 
       const con = aplicarDescuentoGlobal(aplicarDescuentoRenglon(t, 0, 1050).ticket!, 500).ticket!;
-      const pedido = aRequest(con, 'EFECTIVO');
+      const pedido = aRequest(con, 1);
 
       expect(pedido.renglones[0].descuentoPorcentaje).toBe(10.5);
       expect(pedido.descuentoPorcentaje).toBe(5);
       expect(pedido.totalMostrado).toBe(totalDelTicket(con) / 100);
     });
 
-    it('aRequest con un pago mixto manda la lista de pagos y no el medio único', () => {
+    it('aRequest con un pago mixto manda la lista de pagos (las partes sin recargo) y no la forma única', () => {
       const t = agregar(ticketVacio('c'), art());
 
-      const pedido = aRequest(t, [
-        { medioPago: 'EFECTIVO', centavos: 7000 },
-        { medioPago: 'DEBITO', centavos: 10000 },
-      ]);
+      const pedido = aRequest(
+        t,
+        [
+          { formaPagoId: 1, centavos: 7000 },
+          { formaPagoId: 3, centavos: 10000 },
+        ],
+        1000,
+      );
 
-      expect(pedido.medioPago).toBeUndefined();
+      expect(pedido.formaPagoId).toBeUndefined();
       expect(pedido.pagos).toEqual([
-        { medio: 'EFECTIVO', monto: 70 },
-        { medio: 'DEBITO', monto: 100 },
+        { formaPagoId: 1, monto: 70 },
+        { formaPagoId: 3, monto: 100 },
       ]);
-      expect(pedido.totalMostrado).toBe(170);
+      expect(pedido.totalMostrado).toBe(180);
     });
 
     it('tras cobrar, lo que se agregó en el medio queda sin el descuento global de la venta enviada', () => {
       const t = aplicarDescuentoGlobal(agregar(ticketVacio('k'), art()), 1000).ticket!;
-      const pedido = aRequest(t, 'EFECTIVO');
+      const pedido = aRequest(t, 1);
       const conEscaneo = agregar(t, martillo());
 
       const r = descontarVendido(conEscaneo, pedido, () => 'nueva');
@@ -361,13 +375,13 @@ describe('ticket (puro)', () => {
 
     it('si se vendió todo, el ticket queda vacío y sin clave', () => {
       const t = conTres();
-      const r = descontarVendido(t, aRequest(t, 'EFECTIVO'), nueva);
+      const r = descontarVendido(t, aRequest(t, 1), nueva);
       expect(r).toEqual(ticketVacio(''));
     });
 
     it('un renglón agregado después del request queda, con clave nueva', () => {
       const t = agregar(ticketVacio('k'), art());
-      const pedido = aRequest(t, 'EFECTIVO');
+      const pedido = aRequest(t, 1);
       const conEscaneo = agregar(t, martillo());
 
       const r = descontarVendido(conEscaneo, pedido, nueva);
@@ -380,7 +394,7 @@ describe('ticket (puro)', () => {
 
     it('si a un renglón enviado se le sumó cantidad, queda la diferencia', () => {
       const t = agregar(agregar(ticketVacio('k'), art()), art());
-      const pedido = aRequest(t, 'EFECTIVO');
+      const pedido = aRequest(t, 1);
       const conEscaneo = agregar(t, art());
 
       const r = descontarVendido(conEscaneo, pedido, nueva);
@@ -394,7 +408,7 @@ describe('ticket (puro)', () => {
     it('descuenta fraccionarios en milésimas exactas', () => {
       const base = agregar(ticketVacio('k'), cable());
       const t = cambiarCantidad(base, 0, 2500).ticket!;
-      const pedido = aRequest(t, 'EFECTIVO');
+      const pedido = aRequest(t, 1);
       const conMas = cambiarCantidad(t, 0, 3700).ticket!;
 
       const r = descontarVendido(conMas, pedido, nueva);
@@ -404,7 +418,7 @@ describe('ticket (puro)', () => {
 
     it('conserva el resto de los renglones y la marca de problema', () => {
       const t = agregar(ticketVacio('k'), art());
-      const pedido = aRequest(t, 'EFECTIVO');
+      const pedido = aRequest(t, 1);
       const conOtro = marcarProblemas(agregar(t, martillo()), [{ articuloId: 3, mensaje: 'x' }]);
 
       const r = descontarVendido(conOtro, pedido, nueva);
@@ -415,7 +429,7 @@ describe('ticket (puro)', () => {
     it('no genera clave si no sobra nada', () => {
       const t = conTres();
       let llamadas = 0;
-      descontarVendido(t, aRequest(t, 'EFECTIVO'), () => `c${++llamadas}`);
+      descontarVendido(t, aRequest(t, 1), () => `c${++llamadas}`);
       expect(llamadas).toBe(0);
     });
   });

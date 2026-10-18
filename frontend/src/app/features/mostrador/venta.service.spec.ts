@@ -12,7 +12,7 @@ describe('VentaService', () => {
     clave: '7c9e6679-7425-40de-944b-e07fc1f90ae7',
     renglones: [{ articuloId: 1, cantidad: 3, precioUnitario: 170 }],
     totalMostrado: 510,
-    medioPago: 'EFECTIVO',
+    formaPagoId: 1,
   };
 
   const venta: VentaResponse = {
@@ -51,7 +51,7 @@ describe('VentaService', () => {
     const req = http.expectOne((r) => r.url.endsWith('/ventas'));
     expect(req.request.method).toBe('POST');
     expect(req.request.body).toEqual(pedido);
-    expect(Object.keys(req.request.body).sort()).toEqual(['clave', 'medioPago', 'renglones', 'totalMostrado']);
+    expect(Object.keys(req.request.body).sort()).toEqual(['clave', 'formaPagoId', 'renglones', 'totalMostrado']);
     req.flush(venta, { status: 201, statusText: 'Created' });
   });
 

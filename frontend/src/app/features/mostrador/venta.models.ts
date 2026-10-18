@@ -20,15 +20,15 @@ export interface RenglonVentaRequest {
   descuentoPorcentaje?: number;
 }
 
-/** Una parte de un pago mixto (GDS-07): el medio y cuánto se paga con él, en centavos. */
+/** Una parte de un pago mixto (GDS-07): la forma de pago y la parte del total, sin recargo, que cubre; en centavos. */
 export interface PagoCobro {
-  medioPago: MedioPago;
+  formaPagoId: number;
   centavos: number;
 }
 
-/** Una parte del pago como viaja al servidor. */
+/** Una parte del pago como viaja al servidor: el monto es la parte del total SIN recargo (GDS-11). */
 export interface PagoRequest {
-  medio: MedioPago;
+  formaPagoId: number;
   monto: number;
 }
 
@@ -36,10 +36,11 @@ export interface ConfirmarVentaRequest {
   /** UUID generado al agregar el primer renglón: la misma clave en cada reintento. */
   clave: string;
   renglones: RenglonVentaRequest[];
+  /** El total con el recargo de la forma de pago (GDS-11). */
   totalMostrado: number;
-  /** El medio único, por el total. O, en vez de este, `pagos`: el servidor exige uno de los dos. */
-  medioPago?: MedioPago;
-  /** Pago mixto (GDS-07): un pago por medio que suma el total. */
+  /** La forma de pago única, por todo el total. O, en vez de esta, `pagos`: el servidor exige una de las dos. */
+  formaPagoId?: number;
+  /** Pago mixto (GDS-07): un pago por forma; las partes suman el total sin recargo. */
   pagos?: PagoRequest[];
   /** Descuento global en % (GDS-12), aplicado a cada renglón. Se omite si no hay. */
   descuentoPorcentaje?: number;
@@ -56,6 +57,19 @@ export interface RenglonVentaResponse {
   total: number;
   neto: number;
   iva: number;
+  /** La parte del recargo de la forma de pago que le tocó al renglón (ya está en el total). */
+  recargo?: number;
+}
+
+export interface PagoResponse {
+  formaPagoId: number;
+  /** El nombre de la forma como era al cobrar. */
+  formaPago: string;
+  medio: MedioPago;
+  recargoPorcentaje: number;
+  recargo: number;
+  /** Lo que se cobró con esa forma: la parte del total más su recargo. */
+  monto: number;
 }
 
 export interface SinStockResponse {
@@ -70,10 +84,13 @@ export interface VentaResponse {
   total: number;
   /** LocalDateTime ISO sin zona. */
   fecha: string;
-  /** Solo si se pagó con un único medio. */
+  /** Solo si se pagó con una única forma. */
+  formaPagoId?: number;
   medioPago?: MedioPago;
-  /** Un pago por medio (GDS-07). */
-  pagos?: { medio: MedioPago; monto: number }[];
+  /** Un pago por forma (GDS-07). */
+  pagos?: PagoResponse[];
+  /** El recargo de las formas de pago (GDS-11), ya sumado al total. */
+  recargo?: number;
   renglones: RenglonVentaResponse[];
   sinStock: SinStockResponse[];
 }
@@ -112,7 +129,7 @@ export interface VentaRechazada {
   total?: number;
 }
 
-/** Los 400 de validación: `errors` por campo (renglones[0].cantidad, medioPago...). */
+/** Los 400 de validación: `errors` por campo (renglones[0].cantidad, formaPagoId, pagos[1].formaPagoId...). */
 export interface VentaInvalida {
   status: number;
   message: string;

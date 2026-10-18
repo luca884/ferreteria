@@ -21,11 +21,13 @@ import { aRequest } from './ticket';
 import { TicketLista } from './ticket-lista';
 import { TicketStore } from './ticket.store';
 import { TotalesTicket } from './totales-ticket';
-import { ConfirmarVentaRequest, MedioPago, VentaCobrada, VentaInvalida, VentaRechazada } from './venta.models';
+import { ConfirmarVentaRequest, VentaCobrada, VentaInvalida, VentaRechazada } from './venta.models';
 import { VentaService, invalidaDe, rechazoDe } from './venta.service';
 import { RouterLink } from '@angular/router';
 import { CajaVigente, avisoParaVender } from '../caja/caja.models';
 import { CajaService } from '../caja/caja.service';
+import { FormaPago } from '../formas-pago/forma-pago.models';
+import { FormasPagoService } from '../formas-pago/formas-pago.service';
 
 const ESPERA_MS = 250;
 /** Cuánto queda a la vista el aviso de venta cobrada. */
@@ -34,6 +36,7 @@ const MENSAJE_ERROR = 'No se pudo buscar. Probá de nuevo.';
 const MENSAJE_SIN_RESULTADOS = 'No encontramos ningún artículo con ese código o descripción.';
 const MENSAJE_TICKET_VACIO = 'El ticket está vacío.';
 const MENSAJE_COBRO_FALLIDO = 'No se pudo cobrar. Probá de nuevo.';
+const MENSAJE_SIN_FORMAS = 'No se pudieron cargar las formas de pago. Probá de nuevo en un momento.';
 const PROBLEMA_DADO_DE_BAJA = 'Artículo dado de baja';
 const PROBLEMA_INEXISTENTE = 'Ya no está disponible';
 const PROBLEMA_SIN_PRECIO = 'Sin precio';
@@ -97,7 +100,15 @@ export class Mostrador {
   private readonly service = inject(MostradorService);
   private readonly ventas = inject(VentaService);
   private readonly cajas = inject(CajaService);
+  private readonly formas = inject(FormasPagoService);
   private readonly destroyRef = inject(DestroyRef);
+
+  /**
+   * Las formas de pago activas (GDS-11), en el orden del Dueño: son las opciones del cobro. Se leen al abrir, al apretar
+   * F4 (por si el Dueño cambió un recargo) y cuando el servidor rechaza una forma o un total. Vacía mientras no se
+   * pudieron leer: sin formas no se abre el cobro.
+   */
+  protected readonly formasPago = signal<readonly FormaPago[]>([]);
 
   /**
    * La caja de la ferretería (CU-10): sin caja abierta del día no se vende. null mientras se lee o si no se pudo leer:
@@ -213,6 +224,7 @@ export class Mostrador {
   constructor() {
     this.destroyRef.onDestroy(() => clearTimeout(this.ocultarAviso));
     this.leerCaja();
+    this.leerFormas();
     this.busquedas
       .pipe(
         switchMap((q) =>
@@ -264,6 +276,14 @@ export class Mostrador {
       .actual()
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({ next: (vigente) => this.cajaVigente.set(vigente), error: () => undefined });
+  }
+
+  /** Lee las formas de pago activas. Si no se puede, queda la lista que había (o vacía). */
+  private leerFormas(): void {
+    this.formas
+      .listar(true)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({ next: (formas) => this.formasPago.set(formas), error: () => undefined });
   }
 
   /** Todo cambio del aviso pasa por acá: un aviso nuevo (o ninguno) cancela el plazo del anterior. */
@@ -345,7 +365,13 @@ export class Mostrador {
           this.avisar({ texto: sinCaja, grave: true, tipo: 'otro' });
           return;
         }
+        if (this.formasPago().length === 0) {
+          this.leerFormas();
+          this.avisar({ texto: MENSAJE_SIN_FORMAS, grave: true, tipo: 'otro' });
+          return;
+        }
         this.avisar(null);
+        this.leerFormas();
         this.dialogo.set({ tipo: 'cobro' });
         return;
       }
@@ -424,7 +450,11 @@ export class Mostrador {
   /** Enter en el diálogo de cobro: manda la venta con la clave del ticket (la misma en cada reintento). */
   protected cobrar(confirmacion: ConfirmacionCobro): void {
     if (this.enVuelo()) return;
-    const pedido = aRequest(this.ticket.ticket(), confirmacion.pagos ?? (confirmacion.medioPago as MedioPago));
+    const pedido = aRequest(
+      this.ticket.ticket(),
+      confirmacion.pagos ?? (confirmacion.formaPagoId as number),
+      confirmacion.recargoCentavos,
+    );
     this.recibidoEnVuelo = confirmacion.recibidoCentavos;
     this.enVuelo.set(true);
     this.avisoCobro.set(null);
@@ -480,6 +510,8 @@ export class Mostrador {
     }
     switch (rechazo.motivo) {
       case 'PRECIOS_CAMBIADOS':
+        // También cambia el total si el Dueño tocó el recargo de la forma: se vuelven a leer.
+        this.leerFormas();
         this.ticket.actualizarPrecios(
           rechazo.articulos.flatMap((a) =>
             a.precioActual === undefined
@@ -525,6 +557,8 @@ export class Mostrador {
    */
   private alVentaInvalida(invalida: VentaInvalida): void {
     const entradas = Object.entries(invalida.errors ?? {});
+    // Una forma de pago inválida: la desactivaron o la borraron mientras tanto. Se vuelve a leer la lista.
+    if (entradas.some(([campo]) => /(^|\.|\])formaPagoId$/.test(campo))) this.leerFormas();
     const texto = entradas.length > 0 ? [...new Set(entradas.map(([, m]) => m))].join(' ') : invalida.message;
     const renglones = this.ticket.ticket().renglones;
     const problemas = entradas.flatMap(([campo, mensaje]) => {
