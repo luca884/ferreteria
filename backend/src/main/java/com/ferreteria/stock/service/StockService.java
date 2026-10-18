@@ -65,6 +65,55 @@ public class StockService {
     }
 
     /**
+     * Salida por remito (RM-003): igual que {@link #registrarVenta} pero los movimientos son REMITO y llevan el id del
+     * remito, no el de un comprobante. Devuelve el stock resultante de cada articulo.
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public Map<Long, BigDecimal> registrarRemito(Long remitoId, Long usuarioId, List<SalidaStock> salidas) {
+        if (salidas.isEmpty()) {
+            return Map.of();
+        }
+        Map<Long, BigDecimal> entregadoPorArticulo = sumarPorArticulo(salidas);
+        Map<Long, BigDecimal> deltas = new TreeMap<>();
+        entregadoPorArticulo.forEach((articuloId, entregado) -> deltas.put(articuloId, entregado.negate()));
+        Map<Long, BigDecimal> stockResultante = articulosParaVenta.ajustarStock(deltas);
+
+        Long ferreteriaId = TenantContext.requireFerreteriaId();
+        movimientoRepository.saveAll(entregadoPorArticulo.entrySet().stream()
+                .map(e -> MovimientoStock.remito(ferreteriaId, e.getKey(), e.getValue(), remitoId, usuarioId))
+                .toList());
+        return stockResultante;
+    }
+
+    /**
+     * Anular un remito (RM-005): devuelve al stock lo que salio, con un movimiento ANULACION_REMITO por articulo.
+     * Devuelve el stock resultante de cada articulo.
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public Map<Long, BigDecimal> devolverRemito(Long remitoId, Long usuarioId, List<SalidaStock> devueltas) {
+        if (devueltas.isEmpty()) {
+            return Map.of();
+        }
+        Map<Long, BigDecimal> devueltoPorArticulo = sumarPorArticulo(devueltas);
+        Map<Long, BigDecimal> stockResultante = articulosParaVenta.ajustarStock(devueltoPorArticulo);
+
+        Long ferreteriaId = TenantContext.requireFerreteriaId();
+        movimientoRepository.saveAll(devueltoPorArticulo.entrySet().stream()
+                .map(e -> MovimientoStock.anulacionRemito(ferreteriaId, e.getKey(), e.getValue(), remitoId, usuarioId))
+                .toList());
+        return stockResultante;
+    }
+
+    /** Suma las cantidades de cada articulo, en orden de id (el orden de los locks). */
+    private static Map<Long, BigDecimal> sumarPorArticulo(List<SalidaStock> salidas) {
+        Map<Long, BigDecimal> porArticulo = new TreeMap<>();
+        for (SalidaStock salida : salidas) {
+            porArticulo.merge(salida.articuloId(), salida.cantidad(), BigDecimal::add);
+        }
+        return porArticulo;
+    }
+
+    /**
      * Ajuste manual (CU-09): el Dueno carga el stock real contado y aca se calcula la diferencia contra el
      * stock confirmado en la base, leido con lock para que una venta simultanea no se pierda. Suma la
      * diferencia con el UPDATE atomico del catalogo y guarda un movimiento AJUSTE con el motivo. Un articulo

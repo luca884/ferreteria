@@ -169,6 +169,82 @@ class StockServiceTest {
     }
 
     @Test
+    @DisplayName("el remito agrupa por articulo en orden de id, descuenta y guarda un movimiento REMITO por articulo")
+    void remitoDescuentaYGuardaMovimientos() {
+        Map<Long, BigDecimal> resultante = Map.of(1L, bd("-1"), 2L, bd("4"));
+        when(articulosParaVenta.ajustarStock(any())).thenReturn(resultante);
+
+        Map<Long, BigDecimal> devuelto = service.registrarRemito(70L, USUARIO, List.of(
+                new SalidaStock(2L, bd("3")), new SalidaStock(1L, bd("1")), new SalidaStock(2L, bd("2"))));
+
+        Map<Long, BigDecimal> deltas = deltasEnviados();
+        assertThat(new ArrayList<>(deltas.keySet())).containsExactly(1L, 2L);
+        assertThat(deltas.get(1L)).isEqualByComparingTo("-1");
+        assertThat(deltas.get(2L)).isEqualByComparingTo("-5");
+        List<MovimientoStock> movimientos = movimientosGuardados();
+        assertThat(movimientos).extracting(MovimientoStock::getArticuloId).containsExactly(1L, 2L);
+        for (MovimientoStock m : movimientos) {
+            assertThat(m.getTipo()).isEqualTo(TipoMovimiento.REMITO);
+            assertThat(m.getRemitoId()).isEqualTo(70L);
+            assertThat(m.getComprobanteId()).isNull();
+            assertThat(m.getUsuarioId()).isEqualTo(USUARIO);
+            assertThat(m.getFerreteriaId()).isEqualTo(FERRETERIA);
+        }
+        assertThat(devuelto).isEqualTo(resultante);
+    }
+
+    @Test
+    @DisplayName("el remito ajusta el stock ANTES de guardar los movimientos")
+    void remitoAjustaAntesDeGuardar() {
+        when(articulosParaVenta.ajustarStock(any())).thenReturn(Map.of());
+
+        service.registrarRemito(70L, USUARIO, List.of(new SalidaStock(1L, bd("3"))));
+
+        InOrder orden = inOrder(articulosParaVenta, movimientoRepository);
+        orden.verify(articulosParaVenta).ajustarStock(any());
+        orden.verify(movimientoRepository).saveAll(any());
+    }
+
+    @Test
+    @DisplayName("un remito sin salidas no toca el stock ni guarda nada")
+    void remitoSinSalidas() {
+        assertThat(service.registrarRemito(70L, USUARIO, List.of())).isEmpty();
+
+        verify(articulosParaVenta, never()).ajustarStock(any());
+        verify(movimientoRepository, never()).saveAll(any());
+    }
+
+    @Test
+    @DisplayName("anular un remito devuelve cada articulo con delta positivo y un movimiento ANULACION_REMITO")
+    void anularRemitoDevuelveElStock() {
+        Map<Long, BigDecimal> resultante = Map.of(1L, bd("9"), 2L, bd("6"));
+        when(articulosParaVenta.ajustarStock(any())).thenReturn(resultante);
+
+        Map<Long, BigDecimal> devuelto = service.devolverRemito(70L, USUARIO, List.of(
+                new SalidaStock(2L, bd("3")), new SalidaStock(1L, bd("1")), new SalidaStock(2L, bd("2"))));
+
+        Map<Long, BigDecimal> deltas = deltasEnviados();
+        assertThat(new ArrayList<>(deltas.keySet())).containsExactly(1L, 2L);
+        assertThat(deltas.get(1L)).isEqualByComparingTo("1");
+        assertThat(deltas.get(2L)).isEqualByComparingTo("5");
+        List<MovimientoStock> movimientos = movimientosGuardados();
+        assertThat(movimientos).extracting(MovimientoStock::getTipo)
+                .containsOnly(TipoMovimiento.ANULACION_REMITO);
+        assertThat(movimientos.get(1).getCantidad()).isEqualByComparingTo("5");
+        assertThat(movimientos.get(1).getRemitoId()).isEqualTo(70L);
+        assertThat(devuelto).isEqualTo(resultante);
+    }
+
+    @Test
+    @DisplayName("registrarRemito y devolverRemito exigen una transaccion abierta (MANDATORY)")
+    void remitoExigeTransaccion() throws NoSuchMethodException {
+        assertThat(StockService.class.getMethod("registrarRemito", Long.class, Long.class, List.class)
+                .getAnnotation(Transactional.class).propagation()).isEqualTo(Propagation.MANDATORY);
+        assertThat(StockService.class.getMethod("devolverRemito", Long.class, Long.class, List.class)
+                .getAnnotation(Transactional.class).propagation()).isEqualTo(Propagation.MANDATORY);
+    }
+
+    @Test
     @DisplayName("registrarVenta exige una transaccion abierta (MANDATORY)")
     void exigeTransaccion() throws NoSuchMethodException {
         Transactional anotacion = StockService.class

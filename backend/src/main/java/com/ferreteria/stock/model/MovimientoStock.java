@@ -47,6 +47,10 @@ public class MovimientoStock {
     @Column(name = "comprobante_id", updatable = false)
     private Long comprobanteId;
 
+    /** El remito que lo origino (su salida, su anulacion o la venta que lo concilio); null en el resto. */
+    @Column(name = "remito_id", updatable = false)
+    private Long remitoId;
+
     @Column(name = "usuario_id", nullable = false, updatable = false)
     private Long usuarioId;
 
@@ -67,6 +71,54 @@ public class MovimientoStock {
         movimiento.tipo = TipoMovimiento.VENTA;
         movimiento.cantidad = cantidadVendida.negate();
         movimiento.comprobanteId = comprobanteId;
+        movimiento.usuarioId = usuarioId;
+        return movimiento;
+    }
+
+    /** Salida por remito (RM-003): guarda la cantidad entregada (positiva) como cantidad negativa. */
+    public static MovimientoStock remito(
+            Long ferreteriaId, Long articuloId, BigDecimal cantidadEntregada, Long remitoId, Long usuarioId) {
+        MovimientoStock movimiento = new MovimientoStock();
+        movimiento.ferreteriaId = ferreteriaId;
+        movimiento.articuloId = articuloId;
+        movimiento.tipo = TipoMovimiento.REMITO;
+        movimiento.cantidad = cantidadEntregada.negate();
+        movimiento.remitoId = remitoId;
+        movimiento.usuarioId = usuarioId;
+        return movimiento;
+    }
+
+    /** Anular un remito (RM-005): devuelve la cantidad que salio, con signo positivo. */
+    public static MovimientoStock anulacionRemito(
+            Long ferreteriaId, Long articuloId, BigDecimal cantidadDevuelta, Long remitoId, Long usuarioId) {
+        MovimientoStock movimiento = new MovimientoStock();
+        movimiento.ferreteriaId = ferreteriaId;
+        movimiento.articuloId = articuloId;
+        movimiento.tipo = TipoMovimiento.ANULACION_REMITO;
+        movimiento.cantidad = cantidadDevuelta;
+        movimiento.remitoId = remitoId;
+        movimiento.usuarioId = usuarioId;
+        return movimiento;
+    }
+
+    /**
+     * Lo que la venta mueve de mas o de menos respecto del remito que factura (RM-006): una VENTA con la diferencia ya
+     * con signo (negativa si sale mas stock, positiva si vuelve), el comprobante, el remito y el motivo.
+     */
+    public static MovimientoStock diferenciaConRemito(
+            Long ferreteriaId, Long articuloId, BigDecimal diferencia, Long comprobanteId, Long remitoId, String motivo,
+            Long usuarioId) {
+        if (diferencia == null || diferencia.signum() == 0) {
+            throw new IllegalArgumentException("Una diferencia tiene que cambiar el stock.");
+        }
+        MovimientoStock movimiento = new MovimientoStock();
+        movimiento.ferreteriaId = ferreteriaId;
+        movimiento.articuloId = articuloId;
+        movimiento.tipo = TipoMovimiento.VENTA;
+        movimiento.cantidad = diferencia;
+        movimiento.comprobanteId = comprobanteId;
+        movimiento.remitoId = remitoId;
+        movimiento.motivo = motivo;
         movimiento.usuarioId = usuarioId;
         return movimiento;
     }
@@ -96,6 +148,7 @@ public class MovimientoStock {
     public TipoMovimiento getTipo() { return tipo; }
     public BigDecimal getCantidad() { return cantidad; }
     public Long getComprobanteId() { return comprobanteId; }
+    public Long getRemitoId() { return remitoId; }
     public Long getUsuarioId() { return usuarioId; }
     public String getMotivo() { return motivo; }
     public LocalDateTime getFecha() { return fecha; }
