@@ -2379,6 +2379,67 @@ describe('Mostrador', () => {
     });
   });
 
+  describe('pago mixto (GDS-07)', () => {
+    const exacto = (a: ArticuloMostrador): BusquedaMostrador => ({ tipo: 'EXACTO', items: [a], hayMas: false });
+    const normal = (t: string | null | undefined) => (t ?? '').replace(/\s+/g, ' ').trim();
+
+    async function tecla(key: string) {
+      (document.activeElement as HTMLElement).dispatchEvent(
+        new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }),
+      );
+      await refrescar();
+    }
+
+    async function cobrandoUnArticulo() {
+      await crear();
+      await escribir('M');
+      await enter();
+      await responder(llamadas.length - 1, exacto(articulo(1, { precioFinal: 1500 })));
+      await tecla('F4');
+      Array.from(el().querySelectorAll<HTMLButtonElement>('button[role="radio"]'))
+        .find((b) => b.textContent!.includes('Mixto'))!
+        .click();
+      await refrescar();
+    }
+
+    function cargar(medio: string, texto: string) {
+      const campoMonto = el().querySelector<HTMLInputElement>(`input[data-medio="${medio}"]`)!;
+      campoMonto.value = texto;
+      campoMonto.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+
+    it('cobra con dos medios: manda la lista de pagos y no el medio único', async () => {
+      await cobrandoUnArticulo();
+      cargar('EFECTIVO', '500');
+      await refrescar();
+
+      await tecla('Enter');
+      await tecla('Enter');
+
+      expect(cobros).toHaveLength(1);
+      expect(cobros[0].pedido.medioPago).toBeUndefined();
+      expect(cobros[0].pedido.pagos).toEqual([
+        { medio: 'EFECTIVO', monto: 500 },
+        { medio: 'DEBITO', monto: 1000 },
+      ]);
+      expect(cobros[0].pedido.totalMostrado).toBe(1500);
+    });
+
+    it('no cobra si los pagos no suman el total', async () => {
+      await cobrandoUnArticulo();
+      cargar('EFECTIVO', '500');
+      await refrescar();
+
+      (el().querySelector('app-dialogo-cobro .cobrar') as HTMLButtonElement).click();
+      await refrescar();
+
+      expect(cobros).toHaveLength(0);
+      expect(normal(el().querySelector('app-dialogo-cobro [role="alert"]')?.textContent)).toBe(
+        'Los pagos tienen que sumar el total.',
+      );
+    });
+  });
+
   describe('caja (CU-10)', () => {
     const exacto = (a: ArticuloMostrador): BusquedaMostrador => ({ tipo: 'EXACTO', items: [a], hayMas: false });
     const normal = (t: string | null | undefined) => (t ?? '').replace(/\s+/g, ' ').trim();

@@ -82,7 +82,7 @@ Son 10 casos de uso, agrupados en cuatro módulos. Si algo no está en esta list
    - Puede aplicar un **descuento en %** a un renglón (F7) o a todo el ticket (F6). Va de 0 a 99,99 %, con hasta 2 decimales; 0 lo saca. No hay tope por usuario por ahora. El descuento global se aplica a cada renglón (prorrateo), así el total es exactamente la suma de los renglones. El comprobante guarda el descuento de cada renglón, el global y el subtotal antes de descuentos; el que lo aplicó es el usuario de la venta.
 2. Elige el cliente: Consumidor Final por defecto, o busca por CUIT o DNI.
 3. El sistema decide el comprobante (A, B o C) según la condición de IVA de la ferretería y del cliente.
-4. Elige el medio de pago: efectivo, débito, crédito o transferencia.
+4. Elige el medio de pago: efectivo, débito, crédito o transferencia; o **pago mixto** (más de un medio): carga una parte y el resto se sugiere solo en el medio siguiente, y los pagos tienen que sumar exactamente el total. Cada medio va una sola vez. El vuelto es solo del pago en efectivo único.
 5. Confirma: se pide el CAE a ARCA, se descuenta el stock y se imprime o envía el comprobante en PDF.
    - Alternativo: ARCA no responde → la venta queda guardada como "pendiente de CAE" y se reintenta sola.
    - Alternativo: venta sin factura → se registra como presupuesto o remito interno, sin pedir CAE.

@@ -87,13 +87,13 @@ describe('DialogoCobro', () => {
     expect(conteo()).toBe('1 renglón');
   });
 
-  it('muestra los 4 medios en orden', async () => {
+  it('muestra los 4 medios y «Mixto» en orden', async () => {
     await abrir();
 
     const nombres = Array.from(el().querySelectorAll('button[role="radio"]')).map((b) =>
       b.textContent!.trim(),
     );
-    expect(nombres).toEqual(['Efectivo', 'Débito', 'Crédito', 'Transferencia']);
+    expect(nombres).toEqual(['Efectivo', 'Débito', 'Crédito', 'Transferencia', 'Mixto']);
   });
 
   it('→ y ← ciclan los medios, con preventDefault', async () => {
@@ -107,12 +107,13 @@ describe('DialogoCobro', () => {
     tecla('ArrowRight');
     tecla('ArrowRight');
     tecla('ArrowRight');
+    tecla('ArrowRight');
     await estabilizar();
     expect(elegidos()).toEqual(['Efectivo']);
 
     const izquierda = tecla('ArrowLeft');
     await estabilizar();
-    expect(elegidos()).toEqual(['Transferencia']);
+    expect(elegidos()).toEqual(['Mixto']);
     expect(izquierda.defaultPrevented).toBe(true);
   });
 
@@ -343,5 +344,141 @@ describe('DialogoCobro', () => {
     expect(confirmadas).toEqual([]);
     expect(descartados).toBe(1);
     expect(evento.defaultPrevented).toBe(true);
+  });
+  describe('pago mixto (GDS-07)', () => {
+    const monto = (m: string) => el().querySelector<HTMLInputElement>(`input[data-medio="${m}"]`)!;
+    const resumen = () => el().querySelector('.resumen-mixto')?.textContent?.replace(/\s+/g, ' ').trim() ?? null;
+
+    function escribirMonto(m: string, texto: string) {
+      monto(m).value = texto;
+      monto(m).dispatchEvent(new Event('input', { bubbles: true }));
+      fixture.detectChanges();
+    }
+
+    async function abrirMixto(total = 363000) {
+      await abrir(total);
+      medio('Mixto').click();
+      await estabilizar();
+    }
+
+    it('«Mixto» muestra una fila por medio, sin el recibido, con el foco en efectivo y todo por cobrar', async () => {
+      await abrirMixto();
+
+      expect(elegidos()).toEqual(['Mixto']);
+      expect(el().querySelectorAll('input[data-medio]')).toHaveLength(4);
+      expect(el().querySelector('.recibido')).toBeNull();
+      expect(document.activeElement).toBe(monto('EFECTIVO'));
+      expect(resumen()).toBe('Falta $ 3.630,00');
+    });
+
+    it('al cargar una parte, lo que falta baja', async () => {
+      await abrirMixto();
+
+      escribirMonto('EFECTIVO', '1000');
+
+      expect(resumen()).toBe('Falta $ 2.630,00');
+    });
+
+    it('Enter en una fila pasa a la siguiente y le sugiere el resto', async () => {
+      await abrirMixto();
+      escribirMonto('EFECTIVO', '1000');
+
+      const evento = tecla('Enter');
+      await estabilizar();
+
+      expect(evento.defaultPrevented).toBe(true);
+      expect(document.activeElement).toBe(monto('DEBITO'));
+      expect(monto('DEBITO').value).toBe('2630,00');
+      expect(resumen()).toBe('Completo');
+      expect(confirmadas).toEqual([]);
+    });
+
+    it('con todo cubierto, Enter confirma los pagos en orden y sin medio único ni recibido', async () => {
+      await abrirMixto();
+      escribirMonto('EFECTIVO', '1000');
+      tecla('Enter');
+      await estabilizar();
+
+      tecla('Enter');
+
+      expect(confirmadas).toEqual([
+        {
+          medioPago: null,
+          recibidoCentavos: null,
+          pagos: [
+            { medioPago: 'EFECTIVO', centavos: 100000 },
+            { medioPago: 'DEBITO', centavos: 263000 },
+          ],
+        },
+      ]);
+    });
+
+    it('las filas en blanco o en 0 no viajan', async () => {
+      await abrirMixto(10000);
+      escribirMonto('EFECTIVO', '0');
+      escribirMonto('CREDITO', '100');
+
+      (el().querySelector('.cobrar') as HTMLButtonElement).click();
+
+      expect(confirmadas[0].pagos).toEqual([{ medioPago: 'CREDITO', centavos: 10000 }]);
+    });
+
+    it('si falta, Cobrar no confirma y lo dice', async () => {
+      await abrirMixto();
+      escribirMonto('EFECTIVO', '1000');
+
+      (el().querySelector('.cobrar') as HTMLButtonElement).click();
+      fixture.detectChanges();
+
+      expect(confirmadas).toEqual([]);
+      expect(error()).toBe('Los pagos tienen que sumar el total.');
+    });
+
+    it('si los montos se pasan del total avisa cuánto y no confirma', async () => {
+      await abrirMixto();
+      escribirMonto('EFECTIVO', '5000');
+      escribirMonto('DEBITO', '100');
+
+      expect(resumen()).toBe('Se pasa $ 1.470,00');
+      (el().querySelector('.cobrar') as HTMLButtonElement).click();
+      fixture.detectChanges();
+
+      expect(confirmadas).toEqual([]);
+      expect(error()).toBe('Los pagos tienen que sumar el total.');
+    });
+
+    it('un importe que no es número avisa y no confirma', async () => {
+      await abrirMixto();
+      escribirMonto('EFECTIVO', 'abc');
+
+      tecla('Enter');
+      fixture.detectChanges();
+
+      expect(confirmadas).toEqual([]);
+      expect(error()).toBe('Revisá los importes: usá números con hasta 2 decimales.');
+    });
+
+    it('un solo medio cargado por el total confirma igual (es lo mismo que un medio único)', async () => {
+      await abrirMixto(10000);
+      escribirMonto('TRANSFERENCIA', '100');
+
+      (el().querySelector('.cobrar') as HTMLButtonElement).click();
+
+      expect(confirmadas[0].pagos).toEqual([{ medioPago: 'TRANSFERENCIA', centavos: 10000 }]);
+    });
+
+    it('un escaneo con el pago mixto abierto no confirma y avisa', async () => {
+      await abrirMixto();
+      for (const c of '7790001') {
+        vi.advanceTimersByTime(5);
+        tecla(c);
+      }
+      vi.advanceTimersByTime(5);
+
+      tecla('Enter');
+
+      expect(confirmadas).toEqual([]);
+      expect(descartados).toBe(1);
+    });
   });
 });

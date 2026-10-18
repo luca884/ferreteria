@@ -14,13 +14,27 @@ import { MontoPipe } from '../../core/formato/monto';
 import { TrampaFoco } from '../../shared/trampa-foco';
 import { desdeTexto } from './centavos';
 import { GuardaLector } from './guarda-lector';
-import { MEDIOS_PAGO, MEDIO_PAGO_LABELS, MedioPago } from './venta.models';
+import { MEDIOS_PAGO, MEDIO_PAGO_LABELS, MedioPago, PagoCobro } from './venta.models';
 
 export interface ConfirmacionCobro {
-  medioPago: MedioPago;
-  /** Solo en efectivo. Es para el vuelto y no viaja al servidor. */
+  /** El medio único, o null si es un pago mixto (entonces vienen `pagos`). */
+  medioPago: MedioPago | null;
+  /** Solo en efectivo único. Es para el vuelto y no viaja al servidor. */
   recibidoCentavos: number | null;
+  /** Solo en el pago mixto (GDS-07): los medios con su importe, que suman el total. */
+  pagos?: PagoCobro[];
 }
+
+/** «Mixto» es la quinta opción: reparte el total entre varios medios. */
+type Opcion = MedioPago | 'MIXTO';
+const OPCIONES: readonly Opcion[] = [...MEDIOS_PAGO, 'MIXTO'];
+const ETIQUETAS: Record<Opcion, string> = { ...MEDIO_PAGO_LABELS, MIXTO: 'Mixto' };
+
+const MENSAJE_SUMA = 'Los pagos tienen que sumar el total.';
+const MENSAJE_IMPORTES = 'Revisá los importes: usá números con hasta 2 decimales.';
+
+type Montos = Record<MedioPago, string | null>;
+const MONTOS_VACIOS: Montos = { EFECTIVO: null, DEBITO: null, CREDITO: null, TRANSFERENCIA: null };
 
 /** Tope del vuelto: $ 1.000.000. Un recibido que supere el total en más que eso es un error de tipeo. */
 const VUELTO_MAXIMO_CENTAVOS = 100_000_000;
@@ -58,7 +72,7 @@ const centavosATexto = (c: number) => `${Math.floor(c / 100)},${String(c % 100).
         }
         <div class="bloque">
           <div class="medios" role="radiogroup" aria-label="Medio de pago">
-            @for (m of medios; track m) {
+            @for (m of opciones; track m) {
               <button
                 #botonMedio
                 type="button"
@@ -74,7 +88,37 @@ const centavosATexto = (c: number) => `${Math.floor(c / 100)},${String(c % 100).
           </div>
           <p class="pista-medios" aria-hidden="true"><kbd>←</kbd> <kbd>→</kbd> cambian el medio</p>
         </div>
-        @if (medio() === 'EFECTIVO') {
+        @if (medio() === 'MIXTO') {
+          <div class="mixto">
+            @for (m of medios; track m) {
+              <label class="fila-pago">
+                {{ etiquetas[m] }}
+                <input
+                  #filaMonto
+                  type="text"
+                  inputmode="decimal"
+                  autocomplete="off"
+                  spellcheck="false"
+                  [attr.data-medio]="m"
+                  [value]="montos()[m] ?? ''"
+                  (input)="escribirMonto(m, $any($event.target).value)"
+                />
+              </label>
+            }
+            <p class="resumen-mixto" [class.falta-mixto]="restoCentavos() > 0" [class.pasa-mixto]="restoCentavos() < 0" aria-live="polite">
+              @if (restoCentavos() > 0) {
+                Falta {{ restoCentavos() / 100 | monto }}
+              } @else if (restoCentavos() < 0) {
+                Se pasa {{ -restoCentavos() / 100 | monto }}
+              } @else {
+                Completo
+              }
+            </p>
+            @if (errorMixto(); as mensaje) {
+              <p class="error" role="alert">{{ mensaje }}</p>
+            }
+          </div>
+        } @else if (medio() === 'EFECTIVO') {
           <div class="efectivo">
             <label class="recibido">
               Recibido
@@ -168,7 +212,7 @@ const centavosATexto = (c: number) => `${Math.floor(c / 100)},${String(c % 100).
     /* Cuatro botones sueltos; el elegido con borde de acento y fondo suave. */
     .medios {
       display: grid;
-      grid-template-columns: repeat(4, minmax(0, 1fr));
+      grid-template-columns: repeat(5, minmax(0, 1fr));
       gap: var(--e-2);
     }
     .medio {
@@ -178,7 +222,7 @@ const centavosATexto = (c: number) => `${Math.floor(c / 100)},${String(c % 100).
       border-radius: var(--radio-lg);
       background: var(--superficie);
       color: var(--texto);
-      font-size: var(--texto-base);
+      font-size: var(--texto-sm);
       font-weight: 500;
     }
     .medio:hover:not(:disabled) {
@@ -257,6 +301,37 @@ const centavosATexto = (c: number) => `${Math.floor(c / 100)},${String(c % 100).
       background: var(--error-fondo);
       color: var(--error);
     }
+    /* Pago mixto: una fila por medio y, abajo, lo que falta o se pasa. */
+    .mixto {
+      display: grid;
+      gap: var(--e-2);
+    }
+    .fila-pago {
+      display: grid;
+      grid-template-columns: 9rem minmax(0, 1fr);
+      align-items: center;
+      gap: var(--e-3);
+    }
+    .fila-pago input {
+      height: 46px;
+      padding: 0 14px;
+      font-family: var(--fuente-mono);
+      font-size: 1.25rem;
+      font-weight: 600;
+      text-align: right;
+    }
+    .resumen-mixto {
+      margin: 0;
+      font-size: var(--texto-md);
+      font-weight: 700;
+      text-align: right;
+      color: var(--exito);
+      font-variant-numeric: tabular-nums;
+    }
+    .resumen-mixto.falta-mixto,
+    .resumen-mixto.pasa-mixto {
+      color: var(--error);
+    }
     .efectivo .error {
       grid-column: 1 / -1;
     }
@@ -283,11 +358,16 @@ export class DialogoCobro {
   readonly escaneoDescartado = output<void>();
 
   protected readonly medios = MEDIOS_PAGO;
-  protected readonly etiquetas = MEDIO_PAGO_LABELS;
-  protected readonly medio = signal<MedioPago>('EFECTIVO');
+  protected readonly opciones = OPCIONES;
+  protected readonly etiquetas = ETIQUETAS;
+  protected readonly medio = signal<Opcion>('EFECTIVO');
   protected readonly escrito = signal<string | null>(null);
+  /** Pago mixto: lo escrito en cada fila; null es una fila sin tocar. */
+  protected readonly montos = signal<Montos>(MONTOS_VACIOS);
+  private readonly mensajeMixto = signal<string | null>(null);
 
   private readonly importe = viewChild<ElementRef<HTMLInputElement>>('importe');
+  private readonly filasMonto = viewChildren<ElementRef<HTMLInputElement>>('filaMonto');
   private readonly botonesMedio = viewChildren<ElementRef<HTMLButtonElement>>('botonMedio');
   private readonly guarda = new GuardaLector();
   private readonly bloqueado = signal(false);
@@ -319,6 +399,38 @@ export class DialogoCobro {
     return recibido - this.totalCentavos() > VUELTO_MAXIMO_CENTAVOS ? 'El importe recibido es demasiado alto.' : null;
   });
 
+  /** El importe de cada fila en centavos; null si lo escrito no es un número. Una fila vacía es 0. */
+  private readonly centavosMixto = computed<Record<MedioPago, number | null>>(() => {
+    const montos = this.montos();
+    const leer = (texto: string | null): number | null => {
+      if (texto === null || texto.trim() === '') return 0;
+      try {
+        const c = desdeTexto(texto, 2);
+        return c >= 0 ? c : null;
+      } catch {
+        return null;
+      }
+    };
+    return {
+      EFECTIVO: leer(montos.EFECTIVO),
+      DEBITO: leer(montos.DEBITO),
+      CREDITO: leer(montos.CREDITO),
+      TRANSFERENCIA: leer(montos.TRANSFERENCIA),
+    };
+  });
+
+  protected readonly importesMixtoValidos = computed(() =>
+    MEDIOS_PAGO.every((m) => this.centavosMixto()[m] !== null),
+  );
+
+  /** Lo que falta (positivo) o lo que se pasa (negativo) del total. */
+  protected readonly restoCentavos = computed(() => {
+    const c = this.centavosMixto();
+    return this.totalCentavos() - MEDIOS_PAGO.reduce((acc, m) => acc + (c[m] ?? 0), 0);
+  });
+
+  protected readonly errorMixto = computed(() => this.mensajeMixto());
+
   constructor() {
     effect(() => {
       if (this.enVuelo()) this.estuvoEnVuelo = true;
@@ -334,19 +446,26 @@ export class DialogoCobro {
         const campo = this.importe()?.nativeElement;
         campo?.focus();
         campo?.select();
+      } else if (actual === 'MIXTO') {
+        this.filasMonto()[0]?.nativeElement.focus();
       } else {
         this.botonesMedio()[MEDIOS_PAGO.indexOf(actual)]?.nativeElement.focus();
       }
     });
   }
 
-  protected elegir(m: MedioPago): void {
+  protected elegir(m: Opcion): void {
     this.medio.set(m);
   }
 
   private ciclar(delta: 1 | -1): void {
-    const n = MEDIOS_PAGO.length;
-    this.medio.set(MEDIOS_PAGO[(MEDIOS_PAGO.indexOf(this.medio()) + delta + n) % n]);
+    const n = OPCIONES.length;
+    this.medio.set(OPCIONES[(OPCIONES.indexOf(this.medio()) + delta + n) % n]);
+  }
+
+  protected escribirMonto(m: MedioPago, texto: string): void {
+    this.montos.update((montos) => ({ ...montos, [m]: texto }));
+    this.mensajeMixto.set(null);
   }
 
   protected alTeclear(evento: KeyboardEvent): void {
@@ -374,14 +493,66 @@ export class DialogoCobro {
       this.escaneoDescartado.emit();
       return;
     }
+    if (this.medio() === 'MIXTO') {
+      this.enterEnMixto(evento.target as HTMLElement);
+      return;
+    }
     this.confirmarCobro();
+  }
+
+  /**
+   * Enter en una fila del pago mixto (como en GDS): si todo está cubierto cobra; si falta, pasa a la fila siguiente y
+   * le sugiere lo que falta, para que cargar el resto sea solo Enter.
+   */
+  private enterEnMixto(origen: HTMLElement): void {
+    if (this.importesMixtoValidos() && this.restoCentavos() === 0) {
+      this.confirmarCobro();
+      return;
+    }
+    const filas = this.filasMonto().map((f) => f.nativeElement);
+    const i = filas.indexOf(origen as HTMLInputElement);
+    const siguiente = filas[i + 1];
+    if (!this.importesMixtoValidos() || !siguiente || this.restoCentavos() < 0) {
+      this.confirmarCobro();
+      return;
+    }
+    const medio = MEDIOS_PAGO[i + 1];
+    if (this.montos()[medio] === null) {
+      const texto = centavosATexto(this.restoCentavos());
+      this.escribirMonto(medio, texto);
+      siguiente.value = texto;
+    }
+    siguiente.focus();
+    siguiente.select();
   }
 
   protected confirmarCobro(): void {
     if (this.enVuelo() || this.bloqueado()) return;
+    if (this.medio() === 'MIXTO') {
+      this.confirmarMixto();
+      return;
+    }
     const efectivo = this.medio() === 'EFECTIVO';
     if (efectivo && (this.recibido() === null || this.errorRecibido() !== null || this.faltaCentavos() > 0)) return;
     this.bloqueado.set(true);
-    this.confirmar.emit({ medioPago: this.medio(), recibidoCentavos: efectivo ? this.recibido() : null });
+    this.confirmar.emit({
+      medioPago: this.medio() as MedioPago,
+      recibidoCentavos: efectivo ? this.recibido() : null,
+    });
+  }
+
+  private confirmarMixto(): void {
+    if (!this.importesMixtoValidos()) {
+      this.mensajeMixto.set(MENSAJE_IMPORTES);
+      return;
+    }
+    if (this.restoCentavos() !== 0) {
+      this.mensajeMixto.set(MENSAJE_SUMA);
+      return;
+    }
+    const c = this.centavosMixto();
+    const pagos = MEDIOS_PAGO.filter((m) => (c[m] ?? 0) > 0).map((m) => ({ medioPago: m, centavos: c[m] as number }));
+    this.bloqueado.set(true);
+    this.confirmar.emit({ medioPago: null, recibidoCentavos: null, pagos });
   }
 }

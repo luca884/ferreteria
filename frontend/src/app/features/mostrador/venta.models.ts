@@ -20,12 +20,27 @@ export interface RenglonVentaRequest {
   descuentoPorcentaje?: number;
 }
 
+/** Una parte de un pago mixto (GDS-07): el medio y cuánto se paga con él, en centavos. */
+export interface PagoCobro {
+  medioPago: MedioPago;
+  centavos: number;
+}
+
+/** Una parte del pago como viaja al servidor. */
+export interface PagoRequest {
+  medio: MedioPago;
+  monto: number;
+}
+
 export interface ConfirmarVentaRequest {
   /** UUID generado al agregar el primer renglón: la misma clave en cada reintento. */
   clave: string;
   renglones: RenglonVentaRequest[];
   totalMostrado: number;
-  medioPago: MedioPago;
+  /** El medio único, por el total. O, en vez de este, `pagos`: el servidor exige uno de los dos. */
+  medioPago?: MedioPago;
+  /** Pago mixto (GDS-07): un pago por medio que suma el total. */
+  pagos?: PagoRequest[];
   /** Descuento global en % (GDS-12), aplicado a cada renglón. Se omite si no hay. */
   descuentoPorcentaje?: number;
 }
@@ -55,7 +70,10 @@ export interface VentaResponse {
   total: number;
   /** LocalDateTime ISO sin zona. */
   fecha: string;
-  medioPago: MedioPago;
+  /** Solo si se pagó con un único medio. */
+  medioPago?: MedioPago;
+  /** Un pago por medio (GDS-07). */
+  pagos?: { medio: MedioPago; monto: number }[];
   renglones: RenglonVentaResponse[];
   sinStock: SinStockResponse[];
 }

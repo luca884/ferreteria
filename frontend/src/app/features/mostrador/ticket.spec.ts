@@ -328,6 +328,22 @@ describe('ticket (puro)', () => {
       expect(pedido.totalMostrado).toBe(totalDelTicket(con) / 100);
     });
 
+    it('aRequest con un pago mixto manda la lista de pagos y no el medio único', () => {
+      const t = agregar(ticketVacio('c'), art());
+
+      const pedido = aRequest(t, [
+        { medioPago: 'EFECTIVO', centavos: 7000 },
+        { medioPago: 'DEBITO', centavos: 10000 },
+      ]);
+
+      expect(pedido.medioPago).toBeUndefined();
+      expect(pedido.pagos).toEqual([
+        { medio: 'EFECTIVO', monto: 70 },
+        { medio: 'DEBITO', monto: 100 },
+      ]);
+      expect(pedido.totalMostrado).toBe(170);
+    });
+
     it('tras cobrar, lo que se agregó en el medio queda sin el descuento global de la venta enviada', () => {
       const t = aplicarDescuentoGlobal(agregar(ticketVacio('k'), art()), 1000).ticket!;
       const pedido = aRequest(t, 'EFECTIVO');

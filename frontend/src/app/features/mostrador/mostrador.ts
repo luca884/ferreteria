@@ -21,7 +21,7 @@ import { aRequest } from './ticket';
 import { TicketLista } from './ticket-lista';
 import { TicketStore } from './ticket.store';
 import { TotalesTicket } from './totales-ticket';
-import { ConfirmarVentaRequest, VentaCobrada, VentaInvalida, VentaRechazada } from './venta.models';
+import { ConfirmarVentaRequest, MedioPago, VentaCobrada, VentaInvalida, VentaRechazada } from './venta.models';
 import { VentaService, invalidaDe, rechazoDe } from './venta.service';
 import { RouterLink } from '@angular/router';
 import { CajaVigente, avisoParaVender } from '../caja/caja.models';
@@ -424,7 +424,7 @@ export class Mostrador {
   /** Enter en el diálogo de cobro: manda la venta con la clave del ticket (la misma en cada reintento). */
   protected cobrar(confirmacion: ConfirmacionCobro): void {
     if (this.enVuelo()) return;
-    const pedido = aRequest(this.ticket.ticket(), confirmacion.medioPago);
+    const pedido = aRequest(this.ticket.ticket(), confirmacion.pagos ?? (confirmacion.medioPago as MedioPago));
     this.recibidoEnVuelo = confirmacion.recibidoCentavos;
     this.enVuelo.set(true);
     this.avisoCobro.set(null);
