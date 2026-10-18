@@ -273,6 +273,14 @@ describe('ticket (puro)', () => {
       expect(pedido.totalMostrado).toBe(187);
       expect(pedido.renglones).toEqual([{ articuloId: 1, cantidad: 1, precioUnitario: 170 }]);
     });
+
+    it('aRequest manda facturable false solo si la venta es no facturable (NF-003)', () => {
+      const t = agregar(ticketVacio('c'), art());
+
+      expect('facturable' in aRequest(t, 1)).toBe(false);
+      expect('facturable' in aRequest(t, 1, 0, false)).toBe(false);
+      expect(aRequest(t, 1, 0, true).facturable).toBe(false);
+    });
   });
 
   describe('aPresupuestoRequest (GDS-13)', () => {

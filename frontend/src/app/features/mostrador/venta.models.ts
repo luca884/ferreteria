@@ -48,6 +48,8 @@ export interface ConfirmarVentaRequest {
   presupuestoId?: number;
   /** El remito del que sale la venta (RM-006): la venta lo deja FACTURADO y concilia el stock. Se omite si no sale de uno. */
   remitoId?: number;
+  /** false marca la venta como no facturable (NF-002): cobra igual pero no se factura nunca. Se omite si es facturable. */
+  facturable?: false;
 }
 
 export interface RenglonVentaResponse {
@@ -101,6 +103,8 @@ export interface VentaResponse {
   presupuestoId?: number;
   /** Solo si la venta salió de un remito. */
   remitoId?: number;
+  /** false si la venta quedó NO_FACTURABLE (NF-002). */
+  facturable: boolean;
 }
 
 /** 201 si la venta es nueva, 200 si la clave ya estaba registrada con el mismo contenido. */

@@ -36,6 +36,7 @@ describe('VentaService', () => {
       },
     ],
     sinStock: [],
+    facturable: true,
   };
 
   beforeEach(() => {

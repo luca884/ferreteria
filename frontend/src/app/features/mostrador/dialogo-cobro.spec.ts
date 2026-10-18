@@ -29,7 +29,7 @@ describe('DialogoCobro', () => {
   let descartados: number;
 
   const el = () => fixture.nativeElement as HTMLElement;
-  const importe = () => el().querySelector('input')!;
+  const importe = () => el().querySelector<HTMLInputElement>('input:not([type="checkbox"])')!;
   const medio = (nombre: string) =>
     Array.from(el().querySelectorAll('button[role="radio"]')).find((b) =>
       b.textContent!.includes(nombre),
@@ -249,7 +249,7 @@ describe('DialogoCobro', () => {
     tecla('ArrowRight');
     await estabilizar();
 
-    expect(el().querySelector('input')).toBeNull();
+    expect(importe()).toBeNull();
     expect(vuelto()).toBeNull();
     expect(document.activeElement).toBe(medio('Débito'));
   });
@@ -283,6 +283,69 @@ describe('DialogoCobro', () => {
       { formaPagoId: 1, medio: 'EFECTIVO', recibidoCentavos: 363000, recargoCentavos: 0 },
     ]);
     expect(evento.defaultPrevented).toBe(true);
+  });
+
+  describe('no facturable (NF-003)', () => {
+    const casilla = () => el().querySelector('input[type="checkbox"]') as HTMLInputElement;
+
+    it('trae la casilla «No facturable» sin tildar', async () => {
+      await abrir();
+
+      expect(casilla()).not.toBeNull();
+      expect(casilla().checked).toBe(false);
+      expect(el().textContent).toContain('No facturable');
+    });
+
+    it('sin tildar no manda la marca: la confirmación es la de siempre', async () => {
+      await abrir();
+
+      tecla('Enter');
+
+      expect(confirmadas).toHaveLength(1);
+      expect('noFacturable' in confirmadas[0]).toBe(false);
+    });
+
+    it('tildada, Enter confirma con noFacturable true y el resto igual', async () => {
+      await abrir();
+      casilla().click();
+      await estabilizar();
+
+      tecla('Enter');
+
+      expect(confirmadas).toEqual([
+        { formaPagoId: 1, medio: 'EFECTIVO', recibidoCentavos: 363000, recargoCentavos: 0, noFacturable: true },
+      ]);
+    });
+
+    it('tildar y destildar vuelve a no mandar la marca', async () => {
+      await abrir();
+      casilla().click();
+      casilla().click();
+      await estabilizar();
+
+      tecla('Enter');
+
+      expect('noFacturable' in confirmadas[0]).toBe(false);
+    });
+
+    it('el pago mixto también manda la marca', async () => {
+      await abrir(10000);
+      medio('Mixto').click();
+      await estabilizar();
+      const filas = Array.from(el().querySelectorAll<HTMLInputElement>('.fila-pago input'));
+      filas[0].value = '40,00';
+      filas[0].dispatchEvent(new Event('input', { bubbles: true }));
+      filas[1].value = '60,00';
+      filas[1].dispatchEvent(new Event('input', { bubbles: true }));
+      casilla().click();
+      await estabilizar();
+
+      tecla('Enter', filas[1]);
+
+      expect(confirmadas).toHaveLength(1);
+      expect(confirmadas[0].noFacturable).toBe(true);
+      expect(confirmadas[0].pagos).toHaveLength(2);
+    });
   });
 
   it('Enter confirma con otro medio sin recibido', async () => {
@@ -602,7 +665,7 @@ describe('DialogoCobro', () => {
       medio('Visa 6 cuotas').click();
       await estabilizar();
 
-      expect(el().querySelector('input')).toBeNull();
+      expect(importe()).toBeNull();
       expect(vuelto()).toBeNull();
     });
 

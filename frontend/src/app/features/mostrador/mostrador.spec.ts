@@ -1293,6 +1293,7 @@ describe('Mostrador', () => {
           medioPago: 'EFECTIVO',
           renglones: [],
           sinStock,
+          facturable: true,
         },
         repetida: false,
       } as VentaCobrada;
@@ -1496,6 +1497,71 @@ describe('Mostrador', () => {
         expect(formasApi.listar).toHaveBeenCalledTimes(1);
         expect(normal(dialogo()!.textContent)).toContain('La forma de pago no es válida.');
         expect(opcionesDelCobro()).not.toContain('Visa 6 cuotas +10 %');
+      });
+    });
+
+    describe('venta no facturable (NF-003)', () => {
+      const noFacturable = (numero: number, total: number): VentaCobrada => {
+        const base = venta(numero, total);
+        return { ...base, venta: { ...base.venta, facturable: false } };
+      };
+
+      async function abrirCobroNoFacturable() {
+        await conMartillos();
+        await tecla('F4');
+        (dialogo()!.querySelector('input[type="checkbox"]') as HTMLInputElement).click();
+        await refrescar();
+      }
+
+      it('con la casilla tildada el POST manda facturable false y nada más cambia', async () => {
+        await abrirCobroNoFacturable();
+
+        await tecla('Enter');
+
+        expect(cobros).toHaveLength(1);
+        expect(cobros[0].pedido).toEqual({
+          clave: 'clave-1',
+          renglones: [{ articuloId: 1, cantidad: 2, precioUnitario: 1500 }],
+          totalMostrado: 3000,
+          formaPagoId: 1,
+          facturable: false,
+        });
+      });
+
+      it('sin tildar el POST no manda la marca', async () => {
+        await conMartillos();
+        await tecla('F4');
+
+        await tecla('Enter');
+
+        expect('facturable' in cobros[0].pedido).toBe(false);
+      });
+
+      it('el aviso de la venta cobrada dice que no es facturable', async () => {
+        await abrirCobroNoFacturable();
+        await tecla('Enter');
+
+        await cobrarOk(0, noFacturable(12, 3000));
+
+        expect(avisos()).toBe('Venta N.º 12 cobrada (no facturable): $ 3.000,00');
+      });
+
+      it('el aviso de una venta facturable no cambia', async () => {
+        await conMartillos();
+        await tecla('F4');
+        await tecla('Enter');
+
+        await cobrarOk(0, venta(12, 3000));
+
+        expect(avisos()).toBe('Venta N.º 12 cobrada: $ 3.000,00');
+      });
+
+      it('la casilla vuelve destildada en el cobro siguiente', async () => {
+        await abrirCobroNoFacturable();
+        await tecla('Escape');
+        await tecla('F4');
+
+        expect((dialogo()!.querySelector('input[type="checkbox"]') as HTMLInputElement).checked).toBe(false);
       });
     });
 
@@ -2066,7 +2132,7 @@ describe('Mostrador', () => {
       );
       await refrescar();
       cobros[0].respuesta.next({
-        venta: { ventaId: 1, numero: 1, total: 170, fecha: '', medioPago: 'EFECTIVO', renglones: [], sinStock: [] },
+        venta: { ventaId: 1, numero: 1, total: 170, fecha: '', medioPago: 'EFECTIVO', renglones: [], sinStock: [], facturable: true },
         repetida: false,
       });
       await refrescar();
@@ -2109,7 +2175,7 @@ describe('Mostrador', () => {
       expect(cobros[0].pedido.totalMostrado).toBe(1500);
 
       cobros[0].respuesta.next({
-        venta: { ventaId: 1, numero: 7, total: 1500, fecha: '', medioPago: 'EFECTIVO', renglones: [], sinStock: [] },
+        venta: { ventaId: 1, numero: 7, total: 1500, fecha: '', medioPago: 'EFECTIVO', renglones: [], sinStock: [], facturable: true },
         repetida: false,
       });
       await refrescar();
@@ -3410,7 +3476,7 @@ describe('Mostrador', () => {
       await tecla('Enter');
 
       cobros[0].respuesta.next({
-        venta: { ventaId: 99, numero: 5, total: 3000, fecha: '2026-10-18T10:00:00', renglones: [], sinStock: [], presupuestoId: 8 },
+        venta: { ventaId: 99, numero: 5, total: 3000, fecha: '2026-10-18T10:00:00', renglones: [], sinStock: [], presupuestoId: 8, facturable: true },
         repetida: false,
       } as VentaCobrada);
       cobros[0].respuesta.complete();
@@ -3551,7 +3617,7 @@ describe('Mostrador', () => {
       await tecla('Enter');
 
       cobros[0].respuesta.next({
-        venta: { ventaId: 99, numero: 5, total: 3000, fecha: '2026-10-18T10:00:00', renglones: [], sinStock: [], remitoId: 8 },
+        venta: { ventaId: 99, numero: 5, total: 3000, fecha: '2026-10-18T10:00:00', renglones: [], sinStock: [], remitoId: 8, facturable: true },
         repetida: false,
       } as VentaCobrada);
       cobros[0].respuesta.complete();

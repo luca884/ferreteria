@@ -494,6 +494,7 @@ export class Mostrador {
       this.ticket.ticket(),
       confirmacion.pagos ?? (confirmacion.formaPagoId as number),
       confirmacion.recargoCentavos,
+      confirmacion.noFacturable === true,
     );
     this.recibidoEnVuelo = confirmacion.recibidoCentavos;
     this.enVuelo.set(true);
@@ -517,16 +518,17 @@ export class Mostrador {
       .join('; ');
     const vuelto = this.recibidoEnVuelo === null ? 0 : this.recibidoEnVuelo - aCentavos(venta.total);
     this.recibidoEnVuelo = null;
+    const marca = venta.facturable === false ? ' (no facturable)' : '';
     const aviso: Aviso =
       vuelto > 0
         ? {
-            texto: `Venta N.º ${venta.numero} cobrada`,
+            texto: `Venta N.º ${venta.numero} cobrada${marca}`,
             grave: false,
             tipo: 'persistente',
             vueltoCentavos: vuelto,
           }
         : {
-            texto: `Venta N.º ${venta.numero} cobrada: ${formatearMonto(venta.total)}`,
+            texto: `Venta N.º ${venta.numero} cobrada${marca}: ${formatearMonto(venta.total)}`,
             grave: false,
             tipo: 'otro',
           };

@@ -28,6 +28,8 @@ export interface ConfirmacionCobro {
   recargoCentavos: number;
   /** Solo en el pago mixto (GDS-07): las formas con su parte del total sin recargo, que suman el total. */
   pagos?: PagoCobro[];
+  /** Solo si el cajero tildó «No facturable» (NF-003): la venta cobra igual pero no se factura nunca. */
+  noFacturable?: true;
 }
 
 /** «Mixto» es la última opción: reparte el total entre varias formas. Las demás son el id de una forma. */
@@ -160,6 +162,11 @@ const centavosATexto = (c: number) => `${Math.floor(c / 100)},${String(c % 100).
             }
           </div>
         }
+        <label class="no-facturable">
+          <input type="checkbox" [checked]="noFacturable()" (change)="noFacturable.set($any($event.target).checked)" />
+          No facturable
+          <small>cobra igual, pero no se factura</small>
+        </label>
         <div class="dialogo-acciones">
           <button type="button" class="cancelar" data-tecla="Esc" aria-keyshortcuts="Escape" (click)="cancelar.emit()">
             Cancelar
@@ -288,6 +295,16 @@ const centavosATexto = (c: number) => `${Math.floor(c / 100)},${String(c % 100).
       flex-direction: column;
       gap: 6px;
     }
+    .no-facturable {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: var(--texto-sm);
+      cursor: pointer;
+    }
+    .no-facturable small {
+      color: var(--texto-suave);
+    }
     .recibido input {
       width: 100%;
       min-width: 0;
@@ -396,6 +413,8 @@ export class DialogoCobro {
   /** Lo que eligió el cajero; null mientras no eligió (se usa la primera forma en efectivo). */
   protected readonly elegida = signal<Opcion | null>(null);
   protected readonly escrito = signal<string | null>(null);
+  /** «No facturable»: arranca destildado en cada cobro, para que sea una decisión de esa venta. */
+  protected readonly noFacturable = signal(false);
   /** Pago mixto: lo escrito en cada fila, por id de forma; sin clave o null es una fila sin tocar. */
   protected readonly montos = signal<Montos>({});
   private readonly mensajeMixto = signal<string | null>(null);
@@ -627,6 +646,7 @@ export class DialogoCobro {
       medio: forma.medio,
       recibidoCentavos: efectivo ? this.recibido() : null,
       recargoCentavos: this.recargoCentavos(),
+      ...(this.noFacturable() ? { noFacturable: true as const } : {}),
     });
   }
 
@@ -650,6 +670,7 @@ export class DialogoCobro {
       recibidoCentavos: null,
       recargoCentavos: this.recargoCentavos(),
       pagos,
+      ...(this.noFacturable() ? { noFacturable: true as const } : {}),
     });
   }
 }
