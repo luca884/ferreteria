@@ -204,10 +204,10 @@ Las clases son las del pedido: A = ya cubierto, B = refina un CU, C = candidato 
 | G27 | **A** | CU-09, fase 6 | Un botón "poner stock en cero" global es justo lo que no hay que copiar |
 | G28 | **A** | CU-09, fase 6 (ajuste con motivo: rotura, conteo) | GDS agrupa las salidas por motivo, que sirve para el reporte |
 | G29 | **B** | CU-09: pantalla "movimientos del artículo" | La spec registra los movimientos pero no dice dónde se consultan |
-| G30 | **B** | Cliente (CU-07, fase 4/5): sumar email y WhatsApp/teléfono y validar el dígito del CUIT. Descartar nacimiento, rubro y web | CU-07 dice "envía el comprobante en PDF" y la pregunta abierta menciona WhatsApp |
+| G30 | **B** | Cliente (CU-07, fase 4/5): sumar email y WhatsApp/teléfono y validar el dígito del CUIT. Descartar nacimiento, rubro y web | CU-07 dice "envía el comprobante en PDF" y la pregunta abierta menciona WhatsApp. **Hecho en CU-11 (2026-10-18, Luca):** razón social, documento (DNI, CUIT o CUIL con dígito verificador), condición de IVA, domicilio, teléfono, WhatsApp y correo; sin nacimiento, rubro ni web |
 | G31 | **D** | Junto con la cuenta corriente y las listas | Vendedor, zona y transporte son de distribuidora; límite, descuento y lista dependen de G16 y G59. El informe final sugiere copiar la política comercial del cliente a la venta cuando llegue |
 | G32 | **D** | — | Barato, pero nadie lo pidió |
-| G33 | **A** | Cliente en la spec | — |
+| G33 | **A** | Cliente en la spec | **Hecho en CU-11:** solo la razón social es obligatoria, el documento es opcional pero completo y único por ferretería |
 | G34 | **B** | CU-09, fase 6: "ingreso de mercadería" con varios renglones y número de remito del proveedor | La spec lo trata como un ajuste suelto. Cargar un remito de 30 renglones de a uno no es práctico |
 | G35 | **B** | CU-07, fase 4: escanear dos veces el mismo artículo **suma cantidad** en el renglón. Ver GDS-33 | Reclasificada (antes E). En la venta de GDS es lo que viene por defecto, y es lo que hace rápido un mostrador con lector: una pistola que agrega un renglón nuevo por cada pasada es un problema |
 | G36 | **D** | Con compras | Fuera de alcance ("Compras … y cuenta corriente con proveedores") |
@@ -529,7 +529,7 @@ Ordenada por prioridad. Las de la fase 3 afectan a CU-04 y van primero. **GDS-31
 | GDS-17 | Consulta de movimientos de stock por artículo | B | 6 (CU-09) | S |
 | GDS-18 | Listado de control: artículos sin costo, sin rubro, con margen negativo | B | 6 (CU-03) | S |
 | GDS-19 | Exportar artículos a CSV y carga inicial reutilizando el pipeline de CU-04 | B | 6 | M |
-| GDS-20 | Cuenta corriente de clientes y cobranzas (saldo y cobro) **con imputación de cada cobro a comprobantes**, si la fase 0 lo confirma | C | 6 o post-MVP | L |
+| GDS-20 | Cuenta corriente de clientes y cobranzas (saldo y cobro) **con imputación de cada cobro a comprobantes**, si la fase 0 lo confirma. **En curso (2026-10-18, Luca):** el tramo 1, la tabla de clientes con F9 en el mostrador (CU-11), está hecho; la forma de pago «Cuenta corriente» con límite (tramo 2) y las cobranzas con imputación (tramo 3) siguen pendientes | C | 6 o post-MVP | L |
 | GDS-21 | Moneda USD por proveedor y cotización con fecha | D | post-MVP | M |
 | GDS-22 | Límite de crédito y lista o descuento por cliente. El límite avisa y pide autorización de un rol, no bloquea sin salida | D | post-MVP | M |
 | GDS-23 | Listas de precios múltiples (mayorista) | D | post-MVP | L |
