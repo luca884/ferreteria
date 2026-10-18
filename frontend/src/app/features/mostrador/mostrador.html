@@ -29,6 +29,10 @@
     <p class="origen">Venta del presupuesto N.º {{ numero }}</p>
   }
 
+  @if (ticket.ticket().remitoNumero; as numero) {
+    <p class="origen">Venta del remito N.º {{ numero }}</p>
+  }
+
   @if (aviso(); as nota) {
     <p class="aviso" [class.error]="nota.grave" [attr.role]="nota.grave ? 'alert' : 'status'">
       {{ nota.texto }}

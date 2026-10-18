@@ -615,7 +615,7 @@ export class Mostrador {
     this.enVuelo.set(false);
     const rechazo = rechazoDe(err);
     if (!rechazo) {
-      if (esCobro && this.presupuestoNoSirve(err)) return;
+      if (esCobro && this.origenNoSirve(err)) return;
       const invalida = invalidaDe(err);
       if (invalida) this.alVentaInvalida(invalida);
       else this.avisoCobro.set(mensajeGenerico);
@@ -665,17 +665,25 @@ export class Mostrador {
   }
 
   /**
-   * El servidor no acepta el presupuesto del que sale el ticket (404 que no existe, 409 rechazado o ya facturado): se
-   * suelta y el ticket sigue como una venta común, con el mensaje del servidor. Esos errores no traen `motivo`, así que
-   * son los únicos 404 y 409 sin motivo que puede dar una venta. Devuelve si lo trató.
+   * El servidor no acepta el presupuesto o el remito del que sale el ticket (404 que no existe, 409 rechazado, anulado o ya
+   * facturado): se suelta y el ticket sigue como una venta común, con el mensaje del servidor. Esos errores no traen
+   * `motivo`, así que son los únicos 404 y 409 sin motivo que puede dar una venta. Devuelve si lo trató.
    */
-  private presupuestoNoSirve(err: unknown): boolean {
-    const desdePresupuesto = this.ticket.ticket().presupuestoId !== undefined;
-    if (!desdePresupuesto || !(err instanceof HttpErrorResponse) || (err.status !== 404 && err.status !== 409)) {
+  private origenNoSirve(err: unknown): boolean {
+    const { presupuestoId, remitoId } = this.ticket.ticket();
+    const desdePresupuesto = presupuestoId !== undefined;
+    const desdeRemito = remitoId !== undefined;
+    if (
+      (!desdePresupuesto && !desdeRemito) ||
+      !(err instanceof HttpErrorResponse) ||
+      (err.status !== 404 && err.status !== 409)
+    ) {
       return false;
     }
-    this.ticket.soltarPresupuesto();
-    this.rechazarTicket(`${mensajeDe(err, 'El presupuesto ya no se puede usar.')} El ticket sigue como una venta común.`);
+    if (desdeRemito) this.ticket.soltarRemito();
+    else this.ticket.soltarPresupuesto();
+    const documento = desdeRemito ? 'El remito' : 'El presupuesto';
+    this.rechazarTicket(`${mensajeDe(err, `${documento} ya no se puede usar.`)} El ticket sigue como una venta común.`);
     return true;
   }
 

@@ -3468,4 +3468,145 @@ describe('Mostrador', () => {
       expect(el().textContent).toContain('No se pudo cobrar. Probá de nuevo.');
     });
   });
+
+  describe('venta desde un remito (RM-006)', () => {
+    const normal = (t: string | null | undefined) => (t ?? '').replace(/\s+/g, ' ').trim();
+    const dialogo = () => el().querySelector<HTMLElement>('[role="dialog"], [role="alertdialog"]');
+    const aviso = () => normal(el().querySelector('.aviso')?.textContent);
+    const origen = () => el().querySelector('.origen');
+
+    async function tecla(key: string) {
+      (document.activeElement as HTMLElement).dispatchEvent(
+        new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }),
+      );
+      await refrescar();
+    }
+
+    /** Un ticket que dejó «Pasar a venta»: 2 martillos de $ 1.500,00, del remito N.º 5. */
+    function ticketDelRemito(extra: Record<string, unknown> = { remitoId: 8, remitoNumero: 5 }) {
+      localStorage.setItem(
+        'ticket:3:7',
+        JSON.stringify({
+          v: 1,
+          clave: 'clave-r',
+          elegido: 0,
+          renglones: [
+            {
+              articuloId: 1,
+              codigoInterno: 'COD-1',
+              descripcion: 'Martillo',
+              unidad: 'UNIDAD',
+              precioCentavos: 150000,
+              cantidadMilesimas: 2000,
+              stockActual: 10,
+              stockMinimo: 5,
+            },
+          ],
+          ...extra,
+        }),
+      );
+    }
+
+    async function fallarCobro(status: number, cuerpo: unknown) {
+      cobros[0].respuesta.error(new HttpErrorResponse({ status, error: cuerpo }));
+      await refrescar();
+    }
+
+    it('un ticket que viene de un remito dice de cuál', async () => {
+      ticketDelRemito();
+
+      await crear();
+
+      expect(normal(origen()?.textContent)).toBe('Venta del remito N.º 5');
+    });
+
+    it('un ticket común no dice nada de remitos', async () => {
+      ticketDelRemito({});
+
+      await crear();
+
+      expect(origen()).toBeNull();
+    });
+
+    it('al cobrar manda el remito del que sale la venta con la clave del ticket', async () => {
+      ticketDelRemito();
+      await crear();
+
+      await tecla('F4');
+      await tecla('Enter');
+
+      expect(cobros[0].pedido).toEqual({
+        clave: 'clave-r',
+        renglones: [{ articuloId: 1, cantidad: 2, precioUnitario: 1500 }],
+        totalMostrado: 3000,
+        formaPagoId: 1,
+        remitoId: 8,
+      });
+    });
+
+    it('al cobrarse el ticket se vacía y deja de decir de qué remito era', async () => {
+      ticketDelRemito();
+      await crear();
+      await tecla('F4');
+      await tecla('Enter');
+
+      cobros[0].respuesta.next({
+        venta: { ventaId: 99, numero: 5, total: 3000, fecha: '2026-10-18T10:00:00', renglones: [], sinStock: [], remitoId: 8 },
+        repetida: false,
+      } as VentaCobrada);
+      cobros[0].respuesta.complete();
+      await refrescar();
+
+      expect(origen()).toBeNull();
+      expect(renglonesTicket()).toHaveLength(0);
+    });
+
+    it.each([
+      [409, 'Ese remito fue anulado.'],
+      [409, 'Ese remito ya se facturó.'],
+      [404, 'Remito no encontrado'],
+    ])(
+      'si el servidor responde %i «%s»: cierra el cobro, suelta el remito, conserva el ticket y avisa',
+      async (status, mensaje) => {
+        ticketDelRemito();
+        await crear();
+        await tecla('F4');
+        await tecla('Enter');
+
+        await fallarCobro(status, { status, message: mensaje, timestamp: '2026-10-18T10:00:00' });
+
+        expect(dialogo()).toBeNull();
+        expect(origen()).toBeNull();
+        expect(renglonesTicket()).toHaveLength(1);
+        expect(aviso()).toBe(`${mensaje} El ticket sigue como una venta común.`);
+      },
+    );
+
+    it('después de soltarlo, el reintento vende sin el remito y con la misma clave', async () => {
+      ticketDelRemito();
+      await crear();
+      await tecla('F4');
+      await tecla('Enter');
+      await fallarCobro(409, { status: 409, message: 'Ese remito fue anulado.' });
+
+      await tecla('F4');
+      await tecla('Enter');
+
+      expect(cobros).toHaveLength(2);
+      expect(cobros[1].pedido.remitoId).toBeUndefined();
+      expect(cobros[1].pedido.clave).toBe('clave-r');
+    });
+
+    it('un 409 en un ticket que no viene de un remito sigue siendo un error de cobro común', async () => {
+      ticketDelRemito({});
+      await crear();
+      await tecla('F4');
+      await tecla('Enter');
+
+      await fallarCobro(409, { status: 409, message: 'Conflicto' });
+
+      expect(dialogo()).not.toBeNull();
+      expect(el().textContent).toContain('No se pudo cobrar. Probá de nuevo.');
+    });
+  });
 });
