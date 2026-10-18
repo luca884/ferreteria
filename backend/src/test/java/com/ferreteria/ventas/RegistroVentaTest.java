@@ -535,11 +535,164 @@ class RegistroVentaTest {
         VentaRegistrada venta = registro.registrar(ventaC1C3(MedioPago.TRANSFERENCIA), USUARIO);
 
         verify(pagoRepository, times(1)).save(any(Pago.class));
-        Pago pago = venta.pago();
+        assertThat(venta.pagos()).hasSize(1);
+        Pago pago = venta.pagos().get(0);
         assertThat(pago.getMedio()).isEqualTo(MedioPago.TRANSFERENCIA);
         assertThat(pago.getMonto()).isEqualByComparingTo("4463.33");
         assertThat(pago.getComprobanteId()).isEqualTo(COMPROBANTE);
         assertThat(pago.getFerreteriaId()).isEqualTo(FERRETERIA);
+    }
+
+    // ---- pago mixto (GDS-07)
+
+    static ConfirmarVenta.PagoPedido pagoDe(MedioPago medio, String monto) {
+        return new ConfirmarVenta.PagoPedido(medio, bd(monto));
+    }
+
+    /** El ticket C1 + C3 (4.463,33) pagado con la lista de pagos y sin medio unico. */
+    ConfirmarVenta ventaC1C3Mixta(ConfirmarVenta.PagoPedido... pagos) {
+        return new ConfirmarVenta(CLAVE, List.of(renglon(1L, "3", "1210.00"), renglon(2L, "2.5", "333.33")),
+                bd("4463.33"), null, BigDecimal.ZERO, List.of(pagos));
+    }
+
+    @Test
+    @DisplayName("un pago mixto guarda un Pago por medio, ligado al comprobante, y la suma es el total")
+    void pagoMixto() {
+        catalogoC1C3();
+        escrituraLista(Map.of());
+
+        VentaRegistrada venta = registro.registrar(ventaC1C3Mixta(
+                pagoDe(MedioPago.EFECTIVO, "1000.00"), pagoDe(MedioPago.DEBITO, "3463.33")), USUARIO);
+
+        assertThat(venta.pagos()).hasSize(2);
+        assertThat(venta.pagos().get(0).getMedio()).isEqualTo(MedioPago.EFECTIVO);
+        assertThat(venta.pagos().get(0).getMonto()).isEqualByComparingTo("1000.00");
+        assertThat(venta.pagos().get(1).getMedio()).isEqualTo(MedioPago.DEBITO);
+        assertThat(venta.pagos().get(1).getMonto()).isEqualByComparingTo("3463.33");
+        assertThat(venta.pagos()).allSatisfy(p -> {
+            assertThat(p.getComprobanteId()).isEqualTo(COMPROBANTE);
+            assertThat(p.getFerreteriaId()).isEqualTo(FERRETERIA);
+        });
+        verify(pagoRepository, times(2)).save(any(Pago.class));
+    }
+
+    @Test
+    @DisplayName("un solo pago en la lista es lo mismo que un medio unico")
+    void unSoloPagoEnLaLista() {
+        catalogoC1C3();
+        escrituraLista(Map.of());
+
+        VentaRegistrada venta = registro.registrar(
+                ventaC1C3Mixta(pagoDe(MedioPago.CREDITO, "4463.33")), USUARIO);
+
+        assertThat(venta.pagos()).hasSize(1);
+        assertThat(venta.pagos().get(0).getMedio()).isEqualTo(MedioPago.CREDITO);
+        assertThat(venta.pagos().get(0).getMonto()).isEqualByComparingTo("4463.33");
+    }
+
+    @Test
+    @DisplayName("los pagos que no suman el total dan 400 en pagos y no escriben nada")
+    void pagosQueNoSumanElTotal() {
+        catalogoC1C3();
+
+        assertThatThrownBy(() -> registro.registrar(ventaC1C3Mixta(
+                pagoDe(MedioPago.EFECTIVO, "1000.00"), pagoDe(MedioPago.DEBITO, "3000.00")), USUARIO))
+                .isInstanceOfSatisfying(DatosInvalidosException.class, e -> assertThat(e.errors())
+                        .containsEntry("pagos", "Los pagos tienen que sumar el total de la venta."));
+        assertSinEscrituras();
+    }
+
+    @Test
+    @DisplayName("un medio repetido en los pagos da 400 en el pago repetido")
+    void medioRepetido() {
+        catalogoC1C3();
+
+        assertThatThrownBy(() -> registro.registrar(ventaC1C3Mixta(
+                pagoDe(MedioPago.EFECTIVO, "1000.00"), pagoDe(MedioPago.EFECTIVO, "3463.33")), USUARIO))
+                .isInstanceOfSatisfying(DatosInvalidosException.class, e -> assertThat(e.errors())
+                        .containsEntry("pagos[1].medio", "Cada medio de pago va una sola vez."));
+        assertSinEscrituras();
+    }
+
+    @Test
+    @DisplayName("mandar el medio unico y la lista de pagos juntos da 400")
+    void medioUnicoYListaJuntos() {
+        catalogoC1C3();
+
+        ConfirmarVenta ambos = new ConfirmarVenta(CLAVE,
+                List.of(renglon(1L, "3", "1210.00"), renglon(2L, "2.5", "333.33")), bd("4463.33"),
+                MedioPago.EFECTIVO, BigDecimal.ZERO, List.of(pagoDe(MedioPago.EFECTIVO, "4463.33")));
+
+        assertThatThrownBy(() -> registro.registrar(ambos, USUARIO))
+                .isInstanceOfSatisfying(DatosInvalidosException.class, e -> assertThat(e.errors())
+                        .containsEntry("pagos", "Mandá un solo medio de pago o la lista de pagos, no los dos."));
+        assertSinEscrituras();
+    }
+
+    @Test
+    @DisplayName("un pago con monto cero o negativo da 400 en ese pago")
+    void montoNoPositivo() {
+        catalogoC1C3();
+
+        assertThatThrownBy(() -> registro.registrar(ventaC1C3Mixta(
+                pagoDe(MedioPago.EFECTIVO, "0.00"), pagoDe(MedioPago.DEBITO, "4463.33")), USUARIO))
+                .isInstanceOfSatisfying(DatosInvalidosException.class, e -> assertThat(e.errors())
+                        .containsEntry("pagos[0].monto", "El monto del pago tiene que ser mayor a cero."));
+        assertSinEscrituras();
+    }
+
+    @Test
+    @DisplayName("el pago mixto con descuento suma contra el total ya descontado")
+    void pagoMixtoConDescuento() {
+        catalogoDe100();
+        escrituraLista(Map.of());
+        ConfirmarVenta pedido = new ConfirmarVenta(CLAVE,
+                List.of(new Renglon(1L, bd("2"), bd("100.00"), bd("10.00"))), bd("162.00"), null, bd("10.00"),
+                List.of(pagoDe(MedioPago.EFECTIVO, "62.00"), pagoDe(MedioPago.TRANSFERENCIA, "100.00")));
+
+        VentaRegistrada venta = registro.registrar(pedido, USUARIO);
+
+        assertThat(venta.pagos()).extracting(Pago::getMonto)
+                .usingElementComparator(BigDecimal::compareTo).containsExactly(bd("62.00"), bd("100.00"));
+    }
+
+    @Test
+    @DisplayName("repetir con el mismo reparto de pagos es la misma venta; con otro reparto o medio, CLAVE_CON_OTRO_CONTENIDO")
+    void repetidaConPagosMixtos() {
+        when(comprobanteRepository.porClaveScoped(CLAVE)).thenReturn(Optional.of(ventaGuardadaC1C3()));
+        when(itemRepository.deComprobanteScoped(COMPROBANTE)).thenReturn(itemsGuardadosC1C3());
+        when(pagoRepository.deComprobanteScoped(COMPROBANTE)).thenReturn(List.of(
+                Pago.de(FERRETERIA, COMPROBANTE, MedioPago.EFECTIVO, bd("1000.00")),
+                Pago.de(FERRETERIA, COMPROBANTE, MedioPago.DEBITO, bd("3463.33"))));
+
+        VentaRegistrada igual = registro.registrar(ventaC1C3Mixta(
+                pagoDe(MedioPago.DEBITO, "3463.33"), pagoDe(MedioPago.EFECTIVO, "1000.00")), USUARIO);
+        assertThat(igual.repetida()).isTrue();
+        assertThat(igual.pagos()).hasSize(2);
+
+        for (ConfirmarVenta otro : List.of(
+                ventaC1C3Mixta(pagoDe(MedioPago.EFECTIVO, "2000.00"), pagoDe(MedioPago.DEBITO, "2463.33")),
+                ventaC1C3Mixta(pagoDe(MedioPago.EFECTIVO, "1000.00"), pagoDe(MedioPago.CREDITO, "3463.33")),
+                ventaC1C3Mixta(pagoDe(MedioPago.EFECTIVO, "4463.33")),
+                ventaC1C3(MedioPago.EFECTIVO))) {
+            assertThat(rechazo(otro).motivo()).isEqualTo(Motivo.CLAVE_CON_OTRO_CONTENIDO);
+        }
+    }
+
+    Comprobante ventaGuardadaC1C3() {
+        Comprobante c = Comprobante.venta(FERRETERIA, NUMERO, CLAVE, USUARIO,
+                TotalesVenta.de(List.of(RenglonVenta.de(bd("1210.00"), bd("3"), bd("21.00")),
+                        RenglonVenta.de(bd("333.33"), bd("2.5"), bd("21.00")))), CAJA);
+        ReflectionTestUtils.setField(c, "id", COMPROBANTE);
+        return c;
+    }
+
+    List<ItemComprobante> itemsGuardadosC1C3() {
+        return List.of(
+                ItemComprobante.de(FERRETERIA, COMPROBANTE, 1, 1L, "Tornillo 1/4", "UNIDAD", "IVA_21",
+                        RenglonVenta.de(bd("1210.00"), bd("3"), bd("21.00"))),
+                ItemComprobante.de(FERRETERIA, COMPROBANTE, 2, 2L, "Cable 2,5 mm", "METRO", "IVA_21",
+                        RenglonVenta.de(bd("333.33"), bd("2.5"), bd("21.00"))));
     }
 
     // ---- descuentos (GDS-12)
@@ -567,7 +720,7 @@ class RegistroVentaTest {
         assertThat(c.getDescuentoPorcentaje()).isEqualByComparingTo("10.00");
         assertThat(c.getTotal()).isEqualByComparingTo("162.00");
         assertThat(c.getNeto().add(c.getIva())).isEqualByComparingTo("162.00");
-        assertThat(venta.pago().getMonto()).isEqualByComparingTo("162.00");
+        assertThat(venta.pagos().get(0).getMonto()).isEqualByComparingTo("162.00");
     }
 
     @Test
@@ -730,7 +883,7 @@ class RegistroVentaTest {
         assertThat(venta.comprobante().getId()).isEqualTo(COMPROBANTE);
         assertThat(venta.comprobante().getNumero()).isEqualTo(NUMERO);
         assertThat(venta.items()).hasSize(1);
-        assertThat(venta.pago().getMedio()).isEqualTo(MedioPago.EFECTIVO);
+        assertThat(venta.pagos().get(0).getMedio()).isEqualTo(MedioPago.EFECTIVO);
         assertThat(venta.sinStock()).isEmpty();
         assertNadaNuevo();
     }

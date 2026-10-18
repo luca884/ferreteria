@@ -10,6 +10,7 @@ import com.ferreteria.ventas.model.CantidadVendible;
 import com.ferreteria.ventas.model.Comprobante;
 import com.ferreteria.ventas.model.ItemComprobante;
 import com.ferreteria.ventas.model.LimitesVenta;
+import com.ferreteria.ventas.model.MedioPago;
 import com.ferreteria.ventas.model.Pago;
 import com.ferreteria.ventas.model.RenglonVenta;
 import com.ferreteria.ventas.model.TotalesVenta;
@@ -106,10 +107,12 @@ public class RegistroVenta {
                     articulo.descripcion(), articulo.unidad(), articulo.alicuotaIva(), calculados.get(i)));
         }
         List<ItemComprobante> itemsGuardados = itemRepository.saveAll(items);
-        Pago pago = pagoRepository.save(
-                Pago.de(ferreteriaId, comprobante.getId(), pedido.medioPago(), totales.total()));
+        List<Pago> pagos = new ArrayList<>();
+        for (ConfirmarVenta.PagoPedido pago : pagosDe(pedido, totales.total())) {
+            pagos.add(pagoRepository.save(Pago.de(ferreteriaId, comprobante.getId(), pago.medio(), pago.monto())));
+        }
 
-        return new VentaRegistrada(comprobante, itemsGuardados, pago, sinStock(stockResultante, articulos), false);
+        return new VentaRegistrada(comprobante, itemsGuardados, pagos, sinStock(stockResultante, articulos), false);
     }
 
     /**
@@ -130,7 +133,7 @@ public class RegistroVenta {
             throw new VentaRechazadaException(Motivo.CLAVE_CON_OTRO_CONTENIDO,
                     "Esta venta ya se registró con otros datos", List.of());
         }
-        return Optional.of(new VentaRegistrada(comprobante, items, pagos.get(0), List.of(), true));
+        return Optional.of(new VentaRegistrada(comprobante, items, pagos, List.of(), true));
     }
 
     /**
@@ -139,7 +142,7 @@ public class RegistroVenta {
      */
     private static boolean mismoContenido(
             ConfirmarVenta pedido, Comprobante comprobante, List<ItemComprobante> items, List<Pago> pagos) {
-        if (pagos.size() != 1 || pagos.get(0).getMedio() != pedido.medioPago()
+        if (!mismosPagos(pedido, comprobante, pagos)
                 || pedido.totalMostrado().compareTo(comprobante.getTotal()) != 0
                 || pedido.descuentoPorcentaje().compareTo(comprobante.getDescuentoPorcentaje()) != 0
                 || pedido.renglones().size() != items.size()) {
@@ -156,6 +159,31 @@ public class RegistroVenta {
             }
         }
         return true;
+    }
+
+    /** Los pagos del pedido contra los guardados: mismo medio y mismo monto, sin importar el orden. */
+    private static boolean mismosPagos(ConfirmarVenta pedido, Comprobante comprobante, List<Pago> guardados) {
+        List<ConfirmarVenta.PagoPedido> pedidos = pagosDe(pedido, comprobante.getTotal());
+        if (pedidos.size() != guardados.size()) {
+            return false;
+        }
+        Map<MedioPago, BigDecimal> porMedio = new HashMap<>();
+        guardados.forEach(p -> porMedio.put(p.getMedio(), p.getMonto()));
+        for (ConfirmarVenta.PagoPedido pago : pedidos) {
+            BigDecimal monto = porMedio.get(pago.medio());
+            if (monto == null || monto.compareTo(pago.monto()) != 0) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /** Los pagos efectivos del pedido: la lista, o el medio unico por el total (que ya se valido). */
+    private static List<ConfirmarVenta.PagoPedido> pagosDe(ConfirmarVenta pedido, BigDecimal total) {
+        if (!pedido.pagos().isEmpty()) {
+            return pedido.pagos();
+        }
+        return List.of(new ConfirmarVenta.PagoPedido(pedido.medioPago(), total));
     }
 
     /** R-016: los articulos cuyo stock resultante quedo menor que 0 (justo en 0 no avisa), por id. */
@@ -182,7 +210,7 @@ public class RegistroVenta {
         validarDescuentos(pedido);
         validarImportes(pedido, articulos);
         validarPrecios(pedido, articulos);
-        validarMedioDePago(pedido);
+        validarPagos(pedido);
         return articulos;
     }
 
@@ -358,11 +386,44 @@ public class RegistroVenta {
         return porcentaje.signum() < 0 || porcentaje.compareTo(RenglonVenta.DESCUENTO_MAXIMO) > 0;
     }
 
-    /** Un solo medio por ahora (corte 1); el monto es siempre el total, asi que solo puede faltar el medio. */
-    private static void validarMedioDePago(ConfirmarVenta pedido) {
-        if (pedido.medioPago() == null) {
-            throw new DatosInvalidosException(Map.of("medioPago",
-                    "Elegí un medio de pago: EFECTIVO, DEBITO, CREDITO o TRANSFERENCIA."));
+    /**
+     * Como se paga: un medio unico por el total, o una lista de pagos (GDS-07) que suma exactamente el total. Un medio
+     * va una sola vez y cada monto es mayor que cero. Corre despues del 409 de precios: el total mostrado ya es el actual.
+     */
+    private static void validarPagos(ConfirmarVenta pedido) {
+        if (pedido.pagos().isEmpty()) {
+            if (pedido.medioPago() == null) {
+                throw new DatosInvalidosException(Map.of("medioPago",
+                        "Elegí un medio de pago: EFECTIVO, DEBITO, CREDITO o TRANSFERENCIA."));
+            }
+            return;
+        }
+        if (pedido.medioPago() != null) {
+            throw new DatosInvalidosException(
+                    Map.of("pagos", "Mandá un solo medio de pago o la lista de pagos, no los dos."));
+        }
+        Map<String, String> errores = new LinkedHashMap<>();
+        Set<MedioPago> vistos = new HashSet<>();
+        BigDecimal suma = BigDecimal.ZERO;
+        for (int i = 0; i < pedido.pagos().size(); i++) {
+            ConfirmarVenta.PagoPedido pago = pedido.pagos().get(i);
+            if (pago.medio() == null) {
+                errores.put("pagos[" + i + "].medio",
+                        "Elegí un medio de pago: EFECTIVO, DEBITO, CREDITO o TRANSFERENCIA.");
+            } else if (!vistos.add(pago.medio())) {
+                errores.put("pagos[" + i + "].medio", "Cada medio de pago va una sola vez.");
+            }
+            if (pago.monto() == null || pago.monto().signum() <= 0) {
+                errores.put("pagos[" + i + "].monto", "El monto del pago tiene que ser mayor a cero.");
+            } else {
+                suma = suma.add(pago.monto());
+            }
+        }
+        if (errores.isEmpty() && suma.compareTo(pedido.totalMostrado()) != 0) {
+            errores.put("pagos", "Los pagos tienen que sumar el total de la venta.");
+        }
+        if (!errores.isEmpty()) {
+            throw new DatosInvalidosException(errores);
         }
     }
 }

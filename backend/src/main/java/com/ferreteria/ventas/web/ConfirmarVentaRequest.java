@@ -36,12 +36,25 @@ public record ConfirmarVentaRequest(
                 message = "El total es demasiado grande: el máximo es $ 9.999.999.999.999,99.")
         BigDecimal totalMostrado,
 
-        @NotNull(message = "Elegí un medio de pago: EFECTIVO, DEBITO, CREDITO o TRANSFERENCIA.")
+        /** Un medio unico, por el total. O, en vez de este, la lista {@code pagos}. El servicio exige uno de los dos. */
         MedioPago medioPago,
 
         /** Descuento global en % (GDS-12), aplicado a cada renglon. Ausente es 0. El rango lo valida el servicio. */
         @Digits(integer = 5, fraction = 2, message = "El descuento admite hasta 2 decimales.")
-        BigDecimal descuentoPorcentaje) {
+        BigDecimal descuentoPorcentaje,
+
+        /** Pago mixto (GDS-07): un pago por medio; tiene que sumar el total. Hasta uno por cada medio. */
+        @Size(max = 4, message = "Hay hasta 4 medios de pago.")
+        List<@NotNull(message = "Hay un pago vacío.") @Valid PagoRequest> pagos) {
+
+    /** Una parte del pago mixto. El rango fino (medio repetido, suma) lo valida el servicio. */
+    public record PagoRequest(
+            MedioPago medio,
+
+            @DecimalMax(value = LimitesVenta.IMPORTE_MAXIMO_TEXTO,
+                    message = "El monto es demasiado grande: el máximo es $ 9.999.999.999.999,99.")
+            @Digits(integer = 13, fraction = 2, message = "El monto admite hasta 2 decimales.")
+            BigDecimal monto) {}
 
     /** Un renglon del ticket: articulo, cantidad y el precio unitario (con IVA) que vio el cajero. */
     public record RenglonRequest(
@@ -67,6 +80,8 @@ public record ConfirmarVentaRequest(
         return new ConfirmarVenta(clave, renglones.stream()
                 .map(r -> new ConfirmarVenta.Renglon(r.articuloId(), r.cantidad(), r.precioUnitario(),
                         r.descuentoPorcentaje()))
-                .toList(), totalMostrado, medioPago, descuentoPorcentaje);
+                .toList(), totalMostrado, medioPago, descuentoPorcentaje,
+                pagos == null ? List.of()
+                        : pagos.stream().map(p -> new ConfirmarVenta.PagoPedido(p.medio(), p.monto())).toList());
     }
 }

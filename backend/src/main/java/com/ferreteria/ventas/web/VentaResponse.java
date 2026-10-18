@@ -1,5 +1,6 @@
 package com.ferreteria.ventas.web;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.ferreteria.ventas.model.ItemComprobante;
 import com.ferreteria.ventas.model.MedioPago;
 import com.ferreteria.ventas.service.VentaRegistrada;
@@ -10,12 +11,14 @@ import java.util.List;
 
 /**
  * La venta guardada (R-001). Sin costo ni margen. El subtotal es antes de descuentos; {@code descuento} es lo
- * descontado en toda la venta (subtotal menos total) y {@code descuentoPorcentaje} el global. {@code sinStock} lista los articulos que quedaron con stock
+ * descontado en toda la venta (subtotal menos total) y {@code descuentoPorcentaje} el global. {@code pagos} es un
+ * pago por medio (GDS-07); {@code medioPago} solo viene si se pago con un unico medio. {@code sinStock} lista los articulos que quedaron con stock
  * negativo (R-016); en una venta repetida viene vacio.
  */
+@JsonInclude(JsonInclude.Include.NON_NULL)
 public record VentaResponse(
         Long ventaId, Long numero, BigDecimal total, LocalDateTime fecha, MedioPago medioPago,
-        List<RenglonResponse> renglones, List<SinStockResponse> sinStock, BigDecimal subtotal,
+        List<PagoResponse> pagos, List<RenglonResponse> renglones, List<SinStockResponse> sinStock, BigDecimal subtotal,
         BigDecimal descuentoPorcentaje, BigDecimal descuento) {
 
     public record RenglonResponse(
@@ -30,12 +33,16 @@ public record VentaResponse(
         }
     }
 
+    public record PagoResponse(MedioPago medio, BigDecimal monto) {}
+
     public record SinStockResponse(Long articuloId, String descripcion, BigDecimal stockActual) {}
 
     public static VentaResponse de(VentaRegistrada venta) {
         return new VentaResponse(
                 venta.comprobante().getId(), venta.comprobante().getNumero(), venta.comprobante().getTotal(),
-                venta.comprobante().getFecha(), venta.pago().getMedio(),
+                venta.comprobante().getFecha(),
+                venta.pagos().size() == 1 ? venta.pagos().get(0).getMedio() : null,
+                venta.pagos().stream().map(p -> new PagoResponse(p.getMedio(), p.getMonto())).toList(),
                 venta.items().stream().map(RenglonResponse::de).toList(),
                 venta.sinStock().stream()
                         .map(s -> new SinStockResponse(s.articuloId(), s.descripcion(), s.stockActual()))
