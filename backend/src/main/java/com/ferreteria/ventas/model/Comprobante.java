@@ -88,6 +88,10 @@ public class Comprobante {
     @Column(name = "presupuesto_id", updatable = false)
     private Long presupuestoId;
 
+    /** El remito desde el que se hizo la venta (RM-006); null si no sale de uno. */
+    @Column(name = "remito_id", updatable = false)
+    private Long remitoId;
+
     protected Comprobante() {}
 
     public static Comprobante venta(
@@ -105,8 +109,16 @@ public class Comprobante {
     public static Comprobante venta(
             Long ferreteriaId, long numero, String claveIdempotencia, Long usuarioId, TotalesVenta totales,
             Long cajaId, BigDecimal descuentoPorcentaje, Long presupuestoId) {
+        return venta(ferreteriaId, numero, claveIdempotencia, usuarioId, totales, cajaId, descuentoPorcentaje,
+                presupuestoId, null);
+    }
+
+    public static Comprobante venta(
+            Long ferreteriaId, long numero, String claveIdempotencia, Long usuarioId, TotalesVenta totales,
+            Long cajaId, BigDecimal descuentoPorcentaje, Long presupuestoId, Long remitoId) {
         Comprobante comprobante = new Comprobante();
         comprobante.presupuestoId = presupuestoId;
+        comprobante.remitoId = remitoId;
         comprobante.cajaId = cajaId;
         comprobante.ferreteriaId = ferreteriaId;
         comprobante.tipo = TipoComprobante.VENTA;
@@ -140,4 +152,5 @@ public class Comprobante {
     public BigDecimal getDescuentoPorcentaje() { return descuentoPorcentaje; }
     public BigDecimal getRecargo() { return recargo; }
     public Long getPresupuestoId() { return presupuestoId; }
+    public Long getRemitoId() { return remitoId; }
 }

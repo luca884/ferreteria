@@ -48,6 +48,8 @@ class MigracionV4Test extends IntegrationTestBase {
             Map.entry("comprobante.recargo", "decimal(15,2) NOT NULL"),
             // V15 (CU-07, GDS-13): el presupuesto del que salio la venta; nulo en las demas.
             Map.entry("comprobante.presupuesto_id", "bigint NULL"),
+            // V17 (CU-07, RM-006): el remito del que salio la venta; nulo en las demas.
+            Map.entry("comprobante.remito_id", "bigint NULL"),
             Map.entry("item_comprobante.recargo", "decimal(15,2) NOT NULL"),
             Map.entry("item_comprobante.id", "bigint NOT NULL"),
             Map.entry("item_comprobante.ferreteria_id", "bigint NOT NULL"),
@@ -147,7 +149,7 @@ class MigracionV4Test extends IntegrationTestBase {
                         + "where table_schema = database() and seq_in_index = 1 "
                         + "and table_name in ('comprobante','item_comprobante','pago','movimiento_stock','numerador_comprobante') "
                         + "and (index_name like 'uk\\_%' or index_name like 'ix\\_%') "
-                        + "and index_name <> 'uk_comprobante_presupuesto'");
+                        + "and index_name not in ('uk_comprobante_presupuesto', 'uk_comprobante_remito')");
 
         assertThat(propios).hasSizeGreaterThanOrEqualTo(7);
         for (Map<String, Object> indice : propios) {
