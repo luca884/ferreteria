@@ -2,6 +2,7 @@ import { ArticuloMostrador } from './mostrador.models';
 import {
   Ticket,
   agregar,
+  aPresupuestoRequest,
   aRequest,
   actualizarPrecios,
   cambiarCantidad,
@@ -264,6 +265,68 @@ describe('ticket (puro)', () => {
       expect(pedido.formaPagoId).toBe(3);
       expect(pedido.totalMostrado).toBe(187);
       expect(pedido.renglones).toEqual([{ articuloId: 1, cantidad: 1, precioUnitario: 170 }]);
+    });
+  });
+
+  describe('aPresupuestoRequest (GDS-13)', () => {
+    it('arma clave, renglones, total sin recargo y los datos del diálogo; sin cliente ni observaciones no los manda', () => {
+      let t = agregar(ticketVacio('clave-1'), cable());
+      t = cambiarCantidad(t, 0, 2500).ticket!;
+      t = agregar(t, art());
+
+      expect(aPresupuestoRequest(t, { diasValidez: 15 })).toEqual({
+        clave: 'clave-1',
+        renglones: [
+          { articuloId: 2, cantidad: 2.5, precioUnitario: 790 },
+          { articuloId: 1, cantidad: 1, precioUnitario: 170 },
+        ],
+        totalMostrado: 2145,
+        diasValidez: 15,
+      });
+    });
+
+    it('manda el cliente y las observaciones, sin espacios de más', () => {
+      const t = agregar(ticketVacio('c'), art());
+
+      const pedido = aPresupuestoRequest(t, {
+        diasValidez: 30,
+        clienteNombre: '  Obra Perez ',
+        observaciones: ' Entrega el viernes ',
+      });
+
+      expect(pedido.diasValidez).toBe(30);
+      expect(pedido.clienteNombre).toBe('Obra Perez');
+      expect(pedido.observaciones).toBe('Entrega el viernes');
+    });
+
+    it('un cliente o unas observaciones en blanco no viajan', () => {
+      const t = agregar(ticketVacio('c'), art());
+
+      const pedido = aPresupuestoRequest(t, { diasValidez: 15, clienteNombre: '   ', observaciones: '' });
+
+      expect('clienteNombre' in pedido).toBe(false);
+      expect('observaciones' in pedido).toBe(false);
+    });
+
+    it('manda los descuentos como la venta y el total mostrado los incluye', () => {
+      const t = agregar(ticketVacio('c'), art());
+      const con = aplicarDescuentoGlobal(aplicarDescuentoRenglon(t, 0, 1050).ticket!, 500).ticket!;
+
+      const pedido = aPresupuestoRequest(con, { diasValidez: 15 });
+
+      expect(pedido.renglones[0].descuentoPorcentaje).toBe(10.5);
+      expect(pedido.descuentoPorcentaje).toBe(5);
+      expect(pedido.totalMostrado).toBe(totalDelTicket(con) / 100);
+    });
+
+    it('no manda forma de pago ni recargo', () => {
+      const pedido = aPresupuestoRequest(agregar(ticketVacio('c'), art()), { diasValidez: 15 }) as unknown as Record<
+        string,
+        unknown
+      >;
+
+      expect(pedido['formaPagoId']).toBeUndefined();
+      expect(pedido['pagos']).toBeUndefined();
     });
   });
 

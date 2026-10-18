@@ -1,7 +1,8 @@
 import { Unidad } from '../articulos/articulo.models';
 import { aCentavos, aMilesimas, desdeTexto, subtotalTicket, totalTicket } from './centavos';
+import { DatosPresupuesto, EmitirPresupuestoRequest } from '../presupuestos/presupuesto.models';
 import { ArticuloMostrador } from './mostrador.models';
-import { ConfirmarVentaRequest, PagoCobro } from './venta.models';
+import { ConfirmarVentaRequest, PagoCobro, RenglonVentaRequest } from './venta.models';
 
 /**
  * El ticket en curso, como datos inmutables: toda función devuelve un ticket nuevo. Plata en centavos y
@@ -179,6 +180,16 @@ export function marcarProblemas(
   return { ...t, renglones, elegido: primero >= 0 ? primero : t.elegido };
 }
 
+/** Los renglones como viajan al servidor: cantidad y precio en unidades, y el descuento solo si hay. */
+function renglonesRequest(t: Ticket): RenglonVentaRequest[] {
+  return t.renglones.map((r) => ({
+    articuloId: r.articuloId,
+    cantidad: r.cantidadMilesimas / 1000,
+    precioUnitario: r.precioCentavos / 100,
+    ...(r.descuentoBp ? { descuentoPorcentaje: r.descuentoBp / 100 } : {}),
+  }));
+}
+
 /**
  * Cuerpo del POST: con una forma única manda `formaPagoId`; con un pago mixto, la lista `pagos` (cada parte sin recargo)
  * y no `formaPagoId`. `recargoCentavos` es el de las formas de pago (GDS-11): el total mostrado lo incluye. El recibido y
@@ -192,17 +203,31 @@ export function aRequest(
   const global = t.descuentoGlobalBp ?? 0;
   return {
     clave: t.clave,
-    renglones: t.renglones.map((r) => ({
-      articuloId: r.articuloId,
-      cantidad: r.cantidadMilesimas / 1000,
-      precioUnitario: r.precioCentavos / 100,
-      ...(r.descuentoBp ? { descuentoPorcentaje: r.descuentoBp / 100 } : {}),
-    })),
+    renglones: renglonesRequest(t),
     totalMostrado: (totalDelTicket(t) + recargoCentavos) / 100,
     ...(typeof pago === 'number'
       ? { formaPagoId: pago }
       : { pagos: pago.map((p) => ({ formaPagoId: p.formaPagoId, monto: p.centavos / 100 })) }),
     ...(global ? { descuentoPorcentaje: global / 100 } : {}),
+  };
+}
+
+/**
+ * Cuerpo del POST de un presupuesto (GDS-13): los renglones y los descuentos del ticket, el total sin recargo (no
+ * hay forma de pago), la validez y, si se completaron, el cliente y las observaciones.
+ */
+export function aPresupuestoRequest(t: Ticket, datos: DatosPresupuesto): EmitirPresupuestoRequest {
+  const global = t.descuentoGlobalBp ?? 0;
+  const cliente = datos.clienteNombre?.trim();
+  const observaciones = datos.observaciones?.trim();
+  return {
+    clave: t.clave,
+    renglones: renglonesRequest(t),
+    totalMostrado: totalDelTicket(t) / 100,
+    ...(global ? { descuentoPorcentaje: global / 100 } : {}),
+    diasValidez: datos.diasValidez,
+    ...(cliente ? { clienteNombre: cliente } : {}),
+    ...(observaciones ? { observaciones } : {}),
   };
 }
 
