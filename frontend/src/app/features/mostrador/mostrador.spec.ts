@@ -3008,4 +3008,145 @@ describe('Mostrador', () => {
       expect(renglonesTicket()).toHaveLength(1);
     });
   });
+
+  describe('venta desde un presupuesto (GDS-13, PP-006)', () => {
+    const normal = (t: string | null | undefined) => (t ?? '').replace(/\s+/g, ' ').trim();
+    const dialogo = () => el().querySelector<HTMLElement>('[role="dialog"], [role="alertdialog"]');
+    const aviso = () => normal(el().querySelector('.aviso')?.textContent);
+    const origen = () => el().querySelector('.origen');
+
+    async function tecla(key: string) {
+      (document.activeElement as HTMLElement).dispatchEvent(
+        new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }),
+      );
+      await refrescar();
+    }
+
+    /** Un ticket que dejó «Pasar a venta»: 2 martillos de $ 1.500,00, del presupuesto N.º 12. */
+    function ticketDelPresupuesto(extra: Record<string, unknown> = { presupuestoId: 8, presupuestoNumero: 12 }) {
+      localStorage.setItem(
+        'ticket:3:7',
+        JSON.stringify({
+          v: 1,
+          clave: 'clave-p',
+          elegido: 0,
+          renglones: [
+            {
+              articuloId: 1,
+              codigoInterno: 'COD-1',
+              descripcion: 'Martillo',
+              unidad: 'UNIDAD',
+              precioCentavos: 150000,
+              cantidadMilesimas: 2000,
+              stockActual: 10,
+              stockMinimo: 5,
+            },
+          ],
+          ...extra,
+        }),
+      );
+    }
+
+    async function fallarCobro(status: number, cuerpo: unknown) {
+      cobros[0].respuesta.error(new HttpErrorResponse({ status, error: cuerpo }));
+      await refrescar();
+    }
+
+    it('un ticket que viene de un presupuesto dice de cuál', async () => {
+      ticketDelPresupuesto();
+
+      await crear();
+
+      expect(normal(origen()?.textContent)).toBe('Venta del presupuesto N.º 12');
+    });
+
+    it('un ticket común no dice nada de presupuestos', async () => {
+      ticketDelPresupuesto({});
+
+      await crear();
+
+      expect(origen()).toBeNull();
+    });
+
+    it('al cobrar manda el presupuesto del que sale la venta con la clave del ticket', async () => {
+      ticketDelPresupuesto();
+      await crear();
+
+      await tecla('F4');
+      await tecla('Enter');
+
+      expect(cobros[0].pedido).toEqual({
+        clave: 'clave-p',
+        renglones: [{ articuloId: 1, cantidad: 2, precioUnitario: 1500 }],
+        totalMostrado: 3000,
+        formaPagoId: 1,
+        presupuestoId: 8,
+      });
+    });
+
+    it('al cobrarse el ticket se vacía y deja de decir de qué presupuesto era', async () => {
+      ticketDelPresupuesto();
+      await crear();
+      await tecla('F4');
+      await tecla('Enter');
+
+      cobros[0].respuesta.next({
+        venta: { ventaId: 99, numero: 5, total: 3000, fecha: '2026-10-18T10:00:00', renglones: [], sinStock: [], presupuestoId: 8 },
+        repetida: false,
+      } as VentaCobrada);
+      cobros[0].respuesta.complete();
+      await refrescar();
+
+      expect(origen()).toBeNull();
+      expect(renglonesTicket()).toHaveLength(0);
+    });
+
+    it.each([
+      [409, 'Ese presupuesto fue rechazado.'],
+      [409, 'Ese presupuesto ya se facturó.'],
+      [404, 'Presupuesto no encontrado'],
+    ])(
+      'si el servidor responde %i «%s»: cierra el cobro, suelta el presupuesto, conserva el ticket y avisa',
+      async (status, mensaje) => {
+        ticketDelPresupuesto();
+        await crear();
+        await tecla('F4');
+        await tecla('Enter');
+
+        await fallarCobro(status, { status, message: mensaje, timestamp: '2026-10-18T10:00:00' });
+
+        expect(dialogo()).toBeNull();
+        expect(origen()).toBeNull();
+        expect(renglonesTicket()).toHaveLength(1);
+        expect(aviso()).toBe(`${mensaje} El ticket sigue como una venta común.`);
+      },
+    );
+
+    it('después de soltarlo, el reintento vende sin el presupuesto y con la misma clave', async () => {
+      ticketDelPresupuesto();
+      await crear();
+      await tecla('F4');
+      await tecla('Enter');
+      await fallarCobro(409, { status: 409, message: 'Ese presupuesto fue rechazado.' });
+
+      await tecla('F4');
+      await tecla('Enter');
+
+      expect(cobros).toHaveLength(2);
+      expect(cobros[1].pedido.presupuestoId).toBeUndefined();
+      expect(cobros[1].pedido.clave).toBe('clave-p');
+    });
+
+    it('un 409 en un ticket que no viene de un presupuesto sigue siendo un error de cobro común', async () => {
+      ticketDelPresupuesto({});
+      await crear();
+      await tecla('F4');
+      await tecla('Enter');
+
+      await fallarCobro(409, { status: 409, message: 'Conflicto' });
+
+      expect(dialogo()).not.toBeNull();
+      expect(el().textContent).toContain('No se pudo cobrar. Probá de nuevo.');
+    });
+  });
 });

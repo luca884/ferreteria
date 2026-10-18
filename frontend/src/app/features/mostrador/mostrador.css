@@ -80,6 +80,17 @@ app-caja-busqueda {
   border-left-color: var(--texto-tenue);
   background: var(--superficie);
 }
+/* El ticket sale de un presupuesto: se cobra con lo que dice el mostrador, y la venta lo deja facturado. */
+.origen {
+  margin: 0;
+  padding: var(--e-2) var(--e-3);
+  border: 1px solid var(--borde);
+  border-left: 4px solid var(--acento);
+  border-radius: var(--radio);
+  background: var(--acento-suave);
+  color: var(--acento-profundo);
+  font-weight: 600;
+}
 /* Venta cobrada con vuelto: el vuelto es lo que el vendedor necesita al dar el cambio. */
 .aviso .vuelto {
   margin-left: var(--e-1);

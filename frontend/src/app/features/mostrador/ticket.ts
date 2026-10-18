@@ -1,6 +1,6 @@
 import { Unidad } from '../articulos/articulo.models';
 import { aCentavos, aMilesimas, desdeTexto, subtotalTicket, totalTicket } from './centavos';
-import { DatosPresupuesto, EmitirPresupuestoRequest } from '../presupuestos/presupuesto.models';
+import { DatosPresupuesto, EmitirPresupuestoRequest, PresupuestoResponse } from '../presupuestos/presupuesto.models';
 import { ArticuloMostrador } from './mostrador.models';
 import { ConfirmarVentaRequest, PagoCobro, RenglonVentaRequest } from './venta.models';
 
@@ -32,12 +32,21 @@ export interface Ticket {
   elegido: number | null;
   /** Descuento global del ticket, en centésimas de punto porcentual; se aplica a cada renglón. Ausente es 0. */
   descuentoGlobalBp?: number;
+  /** El presupuesto del que sale la venta (GDS-13): se manda al cobrar y lo deja FACTURADO. Ausente si no sale de uno. */
+  presupuestoId?: number;
+  /** Su número, para mostrar de dónde viene el ticket. Va siempre junto con `presupuestoId`. */
+  presupuestoNumero?: number;
 }
 
 export interface ResultadoCantidad {
   ticket?: Ticket;
   error?: string;
 }
+
+/** Por qué un renglón no se puede vender, como lo marca el ticket (lo mismo que dice el servidor al rechazarlo). */
+export const PROBLEMA_DADO_DE_BAJA = 'Artículo dado de baja';
+export const PROBLEMA_INEXISTENTE = 'Ya no está disponible';
+export const PROBLEMA_SIN_PRECIO = 'Sin precio';
 
 const DESCUENTO_MAXIMO_BP = 9999;
 const MENSAJE_DESCUENTO = 'El descuento tiene que estar entre 0 y 99,99 %.';
@@ -205,10 +214,71 @@ export function aRequest(
     clave: t.clave,
     renglones: renglonesRequest(t),
     totalMostrado: (totalDelTicket(t) + recargoCentavos) / 100,
+    ...(t.presupuestoId ? { presupuestoId: t.presupuestoId } : {}),
     ...(typeof pago === 'number'
       ? { formaPagoId: pago }
       : { pagos: pago.map((p) => ({ formaPagoId: p.formaPagoId, monto: p.centavos / 100 })) }),
     ...(global ? { descuentoPorcentaje: global / 100 } : {}),
+  };
+}
+
+/** Saca el presupuesto del ticket: la venta sigue como una venta común (el presupuesto no cambia). */
+export function soltarPresupuesto(t: Ticket): Ticket {
+  const { presupuestoId: _id, presupuestoNumero: _numero, ...resto } = t;
+  return resto;
+}
+
+/**
+ * El ticket de una venta que sale de un presupuesto (PP-006, PP-008): las cantidades y los descuentos del
+ * presupuesto, pero con el nombre, el precio y el stock de HOY de cada artículo (`actuales`, por id; null o ausente es
+ * que ya no existe). El que ya no se puede vender (dado de baja, sin precio, borrado) no se pierde en silencio: queda
+ * marcado, con el precio del presupuesto, para que el cajero lo vea y lo quite. Deja elegido el primero marcado.
+ */
+export function ticketDePresupuesto(
+  p: PresupuestoResponse,
+  actuales: ReadonlyMap<number, ArticuloMostrador | null>,
+  clave: string,
+): Ticket {
+  const renglones: RenglonTicket[] = p.renglones.map((r) => {
+    const actual = actuales.get(r.articuloId) ?? null;
+    const base = {
+      articuloId: r.articuloId,
+      cantidadMilesimas: Math.round(r.cantidad * 1000),
+      ...(r.descuentoPorcentaje > 0 ? { descuentoBp: Math.round(r.descuentoPorcentaje * 100) } : {}),
+    };
+    if (!actual) {
+      return {
+        ...base,
+        codigoInterno: '',
+        descripcion: r.descripcion,
+        unidad: r.unidad,
+        precioCentavos: aCentavos(r.precioUnitario),
+        stockActual: 0,
+        stockMinimo: 0,
+        problema: PROBLEMA_INEXISTENTE,
+      };
+    }
+    const problema = !actual.activo ? PROBLEMA_DADO_DE_BAJA : actual.precioFinal <= 0 ? PROBLEMA_SIN_PRECIO : undefined;
+    return {
+      ...base,
+      codigoInterno: actual.codigoInterno,
+      descripcion: actual.descripcion,
+      unidad: actual.unidad,
+      precioCentavos: aCentavos(actual.precioFinal),
+      stockActual: actual.stockActual,
+      stockMinimo: actual.stockMinimo,
+      ...(problema ? { problema } : {}),
+    };
+  });
+  const primero = renglones.findIndex((r) => r.problema !== undefined);
+  return {
+    v: 1,
+    clave,
+    renglones,
+    elegido: primero >= 0 ? primero : renglones.length - 1,
+    ...(p.descuentoPorcentaje > 0 ? { descuentoGlobalBp: Math.round(p.descuentoPorcentaje * 100) } : {}),
+    presupuestoId: p.presupuestoId,
+    presupuestoNumero: p.numero,
   };
 }
 

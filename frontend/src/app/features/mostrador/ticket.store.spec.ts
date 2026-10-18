@@ -303,4 +303,71 @@ describe('TicketStore', () => {
       expect(localStorage.length).toBe(0);
     });
   });
+
+  describe('venta desde un presupuesto (GDS-13)', () => {
+    const renglon = {
+      articuloId: 1, codigoInterno: 'A', descripcion: 'A', unidad: 'UNIDAD', precioCentavos: 100,
+      cantidadMilesimas: 1000, stockActual: 1, stockMinimo: 0,
+    };
+    const guardar = (extra: Record<string, unknown>) =>
+      localStorage.setItem('ticket:3:7', JSON.stringify({ v: 1, clave: 'x', elegido: 0, renglones: [renglon], ...extra }));
+
+    it('el presupuesto del que sale el ticket sobrevive a un F5', () => {
+      guardar({ presupuestoId: 8, presupuestoNumero: 12 });
+
+      const s = crear();
+
+      expect(s.ticket().presupuestoId).toBe(8);
+      expect(s.ticket().presupuestoNumero).toBe(12);
+    });
+
+    it('un ticket sin presupuesto se lee sin presupuesto', () => {
+      guardar({});
+
+      const s = crear();
+
+      expect(s.ticket().presupuestoId).toBeUndefined();
+      expect(s.ticket().presupuestoNumero).toBeUndefined();
+    });
+
+    it.each([
+      { presupuestoId: 0, presupuestoNumero: 1 },
+      { presupuestoId: -3, presupuestoNumero: 1 },
+      { presupuestoId: '8', presupuestoNumero: 1 },
+      { presupuestoId: 8 },
+      { presupuestoNumero: 12 },
+      { presupuestoId: 8, presupuestoNumero: 1.5 },
+    ])('un presupuesto guardado mal formado (%j) descarta el ticket', (extra) => {
+      guardar(extra);
+
+      const s = crear();
+
+      expect(s.ticket().renglones).toEqual([]);
+    });
+
+    it('soltarPresupuesto lo saca del ticket, lo persiste y deja los renglones y la clave', () => {
+      guardar({ presupuestoId: 8, presupuestoNumero: 12 });
+      const a = crear();
+
+      a.soltarPresupuesto();
+      TestBed.tick();
+
+      expect(a.ticket().presupuestoId).toBeUndefined();
+      expect(a.ticket().renglones).toHaveLength(1);
+      expect(a.ticket().clave).toBe('x');
+      const b = crear();
+      expect(b.ticket().presupuestoId).toBeUndefined();
+      expect(b.ticket().renglones).toHaveLength(1);
+    });
+
+    it('vaciar y cobrar (lo que sobra) no arrastran el presupuesto', () => {
+      guardar({ presupuestoId: 8, presupuestoNumero: 12 });
+      const a = crear();
+
+      a.vaciar();
+      a.agregar(art(2));
+
+      expect(a.ticket().presupuestoId).toBeUndefined();
+    });
+  });
 });

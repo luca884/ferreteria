@@ -1,3 +1,4 @@
+import { PresupuestoResponse } from '../presupuestos/presupuesto.models';
 import { ArticuloMostrador } from './mostrador.models';
 import {
   Ticket,
@@ -16,6 +17,8 @@ import {
   subtotalDelTicket,
   quitar,
   sinStock,
+  soltarPresupuesto,
+  ticketDePresupuesto,
   ticketVacio,
   totalDelTicket,
 } from './ticket';
@@ -327,6 +330,145 @@ describe('ticket (puro)', () => {
 
       expect(pedido['formaPagoId']).toBeUndefined();
       expect(pedido['pagos']).toBeUndefined();
+    });
+  });
+
+  describe('venta desde un presupuesto (GDS-13, PP-006)', () => {
+    const renglon = (cambios: Partial<PresupuestoResponse['renglones'][number]> = {}) => ({
+      renglon: 1,
+      articuloId: 1,
+      descripcion: 'Tornillo (del presupuesto)',
+      unidad: 'UNIDAD' as const,
+      cantidad: 2,
+      precioUnitario: 100,
+      alicuotaIva: 'IVA_21',
+      bruto: 200,
+      descuentoPorcentaje: 0,
+      total: 200,
+      neto: 165.29,
+      iva: 34.71,
+      ...cambios,
+    });
+
+    const presupuesto = (
+      renglones: PresupuestoResponse['renglones'],
+      cambios: Partial<PresupuestoResponse> = {},
+    ): PresupuestoResponse => ({
+      presupuestoId: 8,
+      numero: 12,
+      estado: 'PENDIENTE',
+      fecha: '2026-10-18T10:00:00',
+      vence: '2026-11-02',
+      vencido: false,
+      subtotal: 200,
+      descuentoPorcentaje: 0,
+      descuento: 0,
+      neto: 0,
+      iva: 0,
+      total: 200,
+      renglones,
+      ...cambios,
+    });
+
+    it('aRequest manda el presupuesto del que sale la venta, y sin presupuesto no manda nada', () => {
+      const t = agregar(ticketVacio('c'), art());
+      expect('presupuestoId' in aRequest(t, 1)).toBe(false);
+
+      const conPresupuesto = { ...t, presupuestoId: 8, presupuestoNumero: 12 };
+
+      expect(aRequest(conPresupuesto, 1).presupuestoId).toBe(8);
+    });
+
+    it('el pedido del presupuesto no lleva el presupuesto: ya es uno', () => {
+      const t = { ...agregar(ticketVacio('c'), art()), presupuestoId: 8, presupuestoNumero: 12 };
+
+      expect('presupuestoId' in aPresupuestoRequest(t, { diasValidez: 15 })).toBe(false);
+    });
+
+    it('soltarPresupuesto lo saca del ticket y deja todo lo demás', () => {
+      const t = { ...agregar(ticketVacio('c'), art()), presupuestoId: 8, presupuestoNumero: 12 };
+
+      const suelto = soltarPresupuesto(t);
+
+      expect(suelto.presupuestoId).toBeUndefined();
+      expect(suelto.presupuestoNumero).toBeUndefined();
+      expect(suelto.renglones).toEqual(t.renglones);
+      expect(suelto.clave).toBe('c');
+    });
+
+    it('arma el ticket con las cantidades y los descuentos del presupuesto y los precios de hoy', () => {
+      const p = presupuesto([renglon({ cantidad: 2.5, descuentoPorcentaje: 10.5 })], { descuentoPorcentaje: 5 });
+      const actuales = new Map([[1, art({ descripcion: 'Tornillo', precioFinal: 120, stockActual: 7, stockMinimo: 2 })]]);
+
+      const t = ticketDePresupuesto(p, actuales, 'clave-9');
+
+      expect(t).toEqual({
+        v: 1,
+        clave: 'clave-9',
+        presupuestoId: 8,
+        presupuestoNumero: 12,
+        descuentoGlobalBp: 500,
+        elegido: 0,
+        renglones: [
+          {
+            articuloId: 1,
+            codigoInterno: 'TOR-001',
+            descripcion: 'Tornillo',
+            unidad: 'UNIDAD',
+            precioCentavos: 12000,
+            cantidadMilesimas: 2500,
+            descuentoBp: 1050,
+            stockActual: 7,
+            stockMinimo: 2,
+          },
+        ],
+      });
+    });
+
+    it('sin descuentos no los pone, y deja elegido el último renglón', () => {
+      const p = presupuesto([renglon(), renglon({ renglon: 2, articuloId: 2 })]);
+      const actuales = new Map([
+        [1, art()],
+        [2, cable()],
+      ]);
+
+      const t = ticketDePresupuesto(p, actuales, 'c');
+
+      expect(t.descuentoGlobalBp).toBeUndefined();
+      expect(t.renglones[0].descuentoBp).toBeUndefined();
+      expect(t.elegido).toBe(1);
+    });
+
+    it('un artículo dado de baja, sin precio o que ya no existe queda en el ticket marcado, con el precio del presupuesto', () => {
+      const p = presupuesto([
+        renglon(),
+        renglon({ renglon: 2, articuloId: 2, descripcion: 'Cable', precioUnitario: 790 }),
+        renglon({ renglon: 3, articuloId: 3, descripcion: 'Martillo', precioUnitario: 1500 }),
+        renglon({ renglon: 4, articuloId: 4, descripcion: 'Borrado', precioUnitario: 50 }),
+      ]);
+      const actuales = new Map<number, ArticuloMostrador | null>([
+        [1, art()],
+        [2, art({ id: 2, descripcion: 'Cable', activo: false })],
+        [3, art({ id: 3, descripcion: 'Martillo', precioFinal: 0 })],
+        [4, null],
+      ]);
+
+      const t = ticketDePresupuesto(p, actuales, 'c');
+
+      expect(t.renglones.map((r) => r.problema)).toEqual([
+        undefined,
+        'Artículo dado de baja',
+        'Sin precio',
+        'Ya no está disponible',
+      ]);
+      expect(t.renglones[3]).toMatchObject({ descripcion: 'Borrado', precioCentavos: 5000, codigoInterno: '' });
+      expect(t.elegido).toBe(1);
+    });
+
+    it('un artículo que no se pudo leer del todo (ni siquiera está en el mapa) también queda marcado', () => {
+      const t = ticketDePresupuesto(presupuesto([renglon()]), new Map(), 'c');
+
+      expect(t.renglones[0].problema).toBe('Ya no está disponible');
     });
   });
 

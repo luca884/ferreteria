@@ -44,6 +44,8 @@ export interface ConfirmarVentaRequest {
   pagos?: PagoRequest[];
   /** Descuento global en % (GDS-12), aplicado a cada renglón. Se omite si no hay. */
   descuentoPorcentaje?: number;
+  /** El presupuesto del que sale la venta (GDS-13): la venta lo deja FACTURADO. Se omite si no sale de uno. */
+  presupuestoId?: number;
 }
 
 export interface RenglonVentaResponse {
@@ -93,6 +95,8 @@ export interface VentaResponse {
   recargo?: number;
   renglones: RenglonVentaResponse[];
   sinStock: SinStockResponse[];
+  /** Solo si la venta salió de un presupuesto. */
+  presupuestoId?: number;
 }
 
 /** 201 si la venta es nueva, 200 si la clave ya estaba registrada con el mismo contenido. */

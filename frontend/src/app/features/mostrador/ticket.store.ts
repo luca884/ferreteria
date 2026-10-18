@@ -1,10 +1,9 @@
 import { Injectable, InjectionToken, computed, effect, inject, signal } from '@angular/core';
 import { AuthService } from '../../core/auth/auth.service';
-import { UNIDADES } from '../articulos/articulo.models';
 import { ArticuloMostrador } from './mostrador.models';
+import { borrar, claveDeStorage, escribir, leerTicket } from './ticket.storage';
 import { ConfirmarVentaRequest } from './venta.models';
 import {
-  RenglonTicket,
   Ticket,
   actualizarPrecios,
   agregar,
@@ -15,6 +14,7 @@ import {
   marcarProblemas,
   moverElegido,
   quitar,
+  soltarPresupuesto,
   ticketVacio,
   totalDelTicket,
 } from './ticket';
@@ -101,80 +101,13 @@ export class TicketStore {
     this._ticket.update((t) => descontarVendido(t, pedido, this.generarClave));
   }
 
+  /** El ticket sigue como una venta común: el presupuesto de origen ya no se manda al cobrar ni cambia. */
+  soltarPresupuesto(): void {
+    this._ticket.update(soltarPresupuesto);
+  }
+
   /** Tras cobrar o vaciar: ticket vacío y sin clave (el próximo primer renglón genera una nueva). */
   vaciar(): void {
     this._ticket.set(ticketVacio(''));
-  }
-}
-
-function claveDeStorage(auth: AuthService): string | null {
-  const s = auth.sesion();
-  if (!s || s.ferreteriaId == null || s.userId == null) return null;
-  return `ticket:${s.ferreteriaId}:${s.userId}`;
-}
-
-function descuentoGuardadoValido(bp: unknown): boolean {
-  return Number.isInteger(bp) && (bp as number) >= 0 && (bp as number) <= 9999;
-}
-
-function esRenglon(r: unknown): r is RenglonTicket {
-  if (typeof r !== 'object' || r === null) return false;
-  const x = r as Record<string, unknown>;
-  return (
-    typeof x['articuloId'] === 'number' &&
-    typeof x['codigoInterno'] === 'string' &&
-    typeof x['descripcion'] === 'string' &&
-    typeof x['unidad'] === 'string' &&
-    (UNIDADES as readonly string[]).includes(x['unidad']) &&
-    Number.isSafeInteger(x['precioCentavos']) &&
-    Number.isSafeInteger(x['cantidadMilesimas']) &&
-    (x['cantidadMilesimas'] as number) > 0 &&
-    typeof x['stockActual'] === 'number' &&
-    typeof x['stockMinimo'] === 'number' &&
-    (x['descuentoBp'] === undefined || descuentoGuardadoValido(x['descuentoBp'])) &&
-    (x['problema'] === undefined || typeof x['problema'] === 'string')
-  );
-}
-
-function leerTicket(key: string): Ticket | null {
-  try {
-    const raw = localStorage.getItem(key);
-    if (!raw) return null;
-    const t: unknown = JSON.parse(raw);
-    if (typeof t !== 'object' || t === null) return null;
-    const x = t as Record<string, unknown>;
-    if (x['v'] !== 1 || typeof x['clave'] !== 'string' || x['clave'] === '') return null;
-    if (!Array.isArray(x['renglones']) || !x['renglones'].every(esRenglon)) return null;
-    const n = x['renglones'].length;
-    const e = x['elegido'];
-    if (e !== null && !(Number.isInteger(e) && (e as number) >= 0 && (e as number) < n)) return null;
-    const global = x['descuentoGlobalBp'];
-    if (global !== undefined && !descuentoGuardadoValido(global)) return null;
-    return {
-      v: 1,
-      clave: x['clave'],
-      renglones: x['renglones'] as RenglonTicket[],
-      elegido: e as number | null,
-      ...(global ? { descuentoGlobalBp: global as number } : {}),
-    };
-  } catch {
-    return null;
-  }
-}
-
-// localStorage puede fallar (modo privado, storage bloqueado): el ticket sigue en memoria sin persistir.
-function escribir(key: string, value: string): void {
-  try {
-    localStorage.setItem(key, value);
-  } catch {
-    /* sin persistencia */
-  }
-}
-
-function borrar(key: string): void {
-  try {
-    localStorage.removeItem(key);
-  } catch {
-    /* sin persistencia */
   }
 }

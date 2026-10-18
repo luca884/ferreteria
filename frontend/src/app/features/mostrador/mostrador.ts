@@ -15,10 +15,17 @@ import { ArticuloMostrador, BusquedaMostrador } from './mostrador.models';
 import { accionDeTecla } from './mostrador.atajos';
 import { MostradorService } from './mostrador.service';
 import { AVISO_ESCANEO_CON_DIALOGO } from './guarda-lector';
+import { mensajeDe } from '../../core/api/api-error';
 import { MontoPipe, formatearMonto } from '../../core/formato/monto';
 import { BarraAcciones } from '../../shared/barra-acciones';
 import { aCentavos } from './centavos';
-import { aPresupuestoRequest, aRequest } from './ticket';
+import {
+  PROBLEMA_DADO_DE_BAJA,
+  PROBLEMA_INEXISTENTE,
+  PROBLEMA_SIN_PRECIO,
+  aPresupuestoRequest,
+  aRequest,
+} from './ticket';
 import { TicketLista } from './ticket-lista';
 import { TicketStore } from './ticket.store';
 import { TotalesTicket } from './totales-ticket';
@@ -41,9 +48,6 @@ const MENSAJE_TICKET_VACIO = 'El ticket está vacío.';
 const MENSAJE_COBRO_FALLIDO = 'No se pudo cobrar. Probá de nuevo.';
 const MENSAJE_PRESUPUESTO_FALLIDO = 'No se pudo guardar el presupuesto. Probá de nuevo.';
 const MENSAJE_SIN_FORMAS = 'No se pudieron cargar las formas de pago. Probá de nuevo en un momento.';
-const PROBLEMA_DADO_DE_BAJA = 'Artículo dado de baja';
-const PROBLEMA_INEXISTENTE = 'Ya no está disponible';
-const PROBLEMA_SIN_PRECIO = 'Sin precio';
 
 /** El diálogo abierto, si hay uno. `indice` es el renglón del ticket sobre el que actúa. */
 type Dialogo =
@@ -560,6 +564,7 @@ export class Mostrador {
     this.enVuelo.set(false);
     const rechazo = rechazoDe(err);
     if (!rechazo) {
+      if (esCobro && this.presupuestoNoSirve(err)) return;
       const invalida = invalidaDe(err);
       if (invalida) this.alVentaInvalida(invalida);
       else this.avisoCobro.set(mensajeGenerico);
@@ -606,6 +611,21 @@ export class Mostrador {
         this.rechazarTicket(rechazo.message);
         return;
     }
+  }
+
+  /**
+   * El servidor no acepta el presupuesto del que sale el ticket (404 que no existe, 409 rechazado o ya facturado): se
+   * suelta y el ticket sigue como una venta común, con el mensaje del servidor. Esos errores no traen `motivo`, así que
+   * son los únicos 404 y 409 sin motivo que puede dar una venta. Devuelve si lo trató.
+   */
+  private presupuestoNoSirve(err: unknown): boolean {
+    const desdePresupuesto = this.ticket.ticket().presupuestoId !== undefined;
+    if (!desdePresupuesto || !(err instanceof HttpErrorResponse) || (err.status !== 404 && err.status !== 409)) {
+      return false;
+    }
+    this.ticket.soltarPresupuesto();
+    this.rechazarTicket(`${mensajeDe(err, 'El presupuesto ya no se puede usar.')} El ticket sigue como una venta común.`);
+    return true;
   }
 
   /**
