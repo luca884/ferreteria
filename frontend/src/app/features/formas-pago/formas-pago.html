@@ -1,0 +1,168 @@
+<app-barra-acciones>
+  <h1>Formas de pago</h1>
+  @if (auth.esDueno()) {
+    <button type="button" class="accion-barra primario nuevo" (click)="nuevo()">
+      <svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+        <path d="M8 3v10M3 8h10" />
+      </svg>
+      Nuevo
+    </button>
+    <button type="button" class="accion-barra editar" [disabled]="!filas.elegido()" (click)="editar()">
+      <svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+        <path d="M3 13l1-3 7-7 2 2-7 7z" />
+      </svg>
+      Editar
+    </button>
+  }
+</app-barra-acciones>
+
+@if (!auth.esDueno()) {
+  <p class="ayuda estado-vacio" role="status">Solo el Dueño puede configurar las formas de pago.</p>
+} @else {
+  <p class="ayuda">
+    El recargo se suma al total de lo que el cliente paga con esa forma (por ejemplo, Visa 6 cuotas). El medio es el que
+    cuenta la caja. Las formas no se borran: se desactivan, y dejan de ofrecerse al cobrar.
+  </p>
+
+  @if (aviso(); as mensaje) {
+    <p class="alerta exito" role="status">{{ mensaje }}</p>
+  }
+  @if (erroresCampos().length > 0) {
+    <div class="error errores-campos" role="alert">
+      <strong>Revisá estos datos:</strong>
+      <ul>
+        @for (mensaje of erroresCampos(); track $index) {
+          <li>{{ mensaje }}</li>
+        }
+      </ul>
+    </div>
+  } @else if (error(); as mensaje) {
+    <p class="error" role="alert">{{ mensaje }}</p>
+  }
+
+  <div class="listado con-alta">
+    <div class="principal">
+      @if (cargando()) {
+        <p class="ayuda estado-vacio">Cargando…</p>
+      } @else if (cargaFallida()) {
+        <div class="error con-accion" role="alert">
+          <span>No se pudieron cargar las formas de pago.</span>
+          <button type="button" class="secundario chico reintentar" (click)="cargar()">Reintentar</button>
+        </div>
+      } @else if (formas().length === 0) {
+        <p class="ayuda estado-vacio">Todavía no hay formas de pago.</p>
+      } @else {
+        <div class="grilla-marco">
+          <table role="grid" aria-label="Formas de pago">
+            <thead>
+              <tr>
+                <th>Nombre</th>
+                <th>Medio</th>
+                <th class="num">Recargo</th>
+                <th>Estado</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (forma of formas(); track forma.id; let i = $index) {
+                <tr
+                  class="elegible"
+                  [class.editando]="forma.id === editando()?.id"
+                  [class.inactiva]="!forma.activa"
+                  [attr.aria-selected]="forma.id === filas.elegidoId()"
+                  [attr.tabindex]="filas.esTabulable(forma, i) ? 0 : -1"
+                  (click)="filas.elegir(forma)"
+                  (focus)="filas.elegir(forma)"
+                  (dblclick)="editar(forma)"
+                  (keydown)="filas.alTeclear($event, forma, i)"
+                >
+                  <td class="nombre">{{ forma.nombre }}</td>
+                  <td>{{ etiquetaMedio[forma.medio] }}</td>
+                  <td class="num">{{ recargoTexto(forma) }}</td>
+                  <td class="estado">{{ forma.activa ? 'Activa' : 'Inactiva' }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+        <p class="barra-estado">
+          <span>{{ formas().length }} {{ formas().length === 1 ? 'forma de pago' : 'formas de pago' }}</span>
+          @if (filas.elegido(); as actual) {
+            <span class="elegido">· Elegida: <strong>{{ actual.nombre }}</strong> · Enter edita</span>
+          }
+        </p>
+      }
+    </div>
+
+    <form class="alta panel" [formGroup]="form" (ngSubmit)="guardar()" novalidate>
+      <h2>{{ editando() === null ? 'Nueva forma de pago' : 'Editar forma de pago' }}</h2>
+      <div class="campo nombre">
+        <label for="nombre">Nombre</label>
+        <input
+          id="nombre"
+          name="nombre"
+          formControlName="nombre"
+          autocomplete="off"
+          spellcheck="false"
+          placeholder="Ej: Visa 6 cuotas…"
+          [attr.aria-invalid]="invalido('nombre') ? 'true' : null"
+          [attr.aria-describedby]="invalido('nombre') ? 'nombre-error' : null"
+        />
+        @if (invalido('nombre')) {
+          <span id="nombre-error" class="campo-error">
+            {{
+              form.controls.nombre.errors?.['maxlength']
+                ? 'El nombre no puede superar 60 caracteres.'
+                : 'El nombre es obligatorio.'
+            }}
+          </span>
+        }
+      </div>
+      <div class="campo">
+        <label for="medio">Medio</label>
+        <select id="medio" name="medio" formControlName="medio" aria-describedby="medio-pista">
+          @for (medio of medios; track medio) {
+            <option [value]="medio">{{ etiquetaMedio[medio] }}</option>
+          }
+        </select>
+        <span id="medio-pista" class="pista">La caja suma lo cobrado por medio: una tarjeta en cuotas va en Crédito.</span>
+      </div>
+      <div class="campo margen">
+        <label for="recargo">Recargo %</label>
+        <input
+          id="recargo"
+          name="recargoPorcentaje"
+          type="number"
+          inputmode="decimal"
+          step="0.01"
+          min="0"
+          max="200"
+          autocomplete="off"
+          formControlName="recargoPorcentaje"
+          [attr.aria-invalid]="invalido('recargoPorcentaje') ? 'true' : null"
+          [attr.aria-describedby]="invalido('recargoPorcentaje') ? 'recargo-error' : null"
+        />
+        @if (invalido('recargoPorcentaje') && form.controls.recargoPorcentaje.errors; as errores) {
+          <span id="recargo-error" class="campo-error">
+            @if (errores['required']) {
+              El recargo es obligatorio.
+            } @else {
+              El recargo tiene que estar entre 0 y 200&nbsp;%.
+            }
+          </span>
+        }
+      </div>
+      <div class="campo activa">
+        <input id="activa" name="activa" type="checkbox" formControlName="activa" />
+        <label for="activa">Activa (se ofrece al cobrar)</label>
+      </div>
+      <div class="acciones-alta">
+        <button type="submit" [disabled]="guardando()">
+          {{ editando() === null ? 'Agregar' : 'Guardar cambios' }}
+        </button>
+        @if (editando() !== null) {
+          <button type="button" class="secundario cancelar" (click)="cancelar()">Cancelar</button>
+        }
+      </div>
+    </form>
+  </div>
+}

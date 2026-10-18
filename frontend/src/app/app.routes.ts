@@ -84,6 +84,12 @@ export const routes: Routes = [
             (m) => m.PaginaConfiguracionCotizacion,
           ),
       },
+      // Sin guard de rol, como cotización: al Vendedor la pantalla le avisa y el backend responde 403 a escribir.
+      {
+        path: 'configuracion/formas-pago',
+        title: titulo('Formas de pago'),
+        loadComponent: () => import('./features/formas-pago/formas-pago').then((m) => m.FormasPago),
+      },
     ],
   },
   { path: '**', redirectTo: '' },

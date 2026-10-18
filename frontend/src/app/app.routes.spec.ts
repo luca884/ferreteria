@@ -10,6 +10,7 @@ import { Caja } from './features/caja/caja';
 import { HistorialCajas } from './features/caja/historial-cajas';
 import { Articulos } from './features/articulos/articulos';
 import { PaginaConfiguracionCotizacion } from './features/configuracion-cotizacion/configuracion-cotizacion';
+import { FormasPago } from './features/formas-pago/formas-pago';
 import { Importaciones } from './features/importaciones/importaciones';
 import { Mostrador } from './features/mostrador/mostrador';
 import { Proveedores } from './features/proveedores/proveedores';
@@ -65,6 +66,18 @@ describe('rutas', () => {
     expect(cotizacion).toBeDefined();
     expect(cotizacion!.canActivate).toBeUndefined();
     expect(cotizacion!.canActivate).toEqual(importaciones!.canActivate);
+    expect(padre!.canActivate).toEqual([authGuard]);
+  });
+
+  it('la ruta configuracion/formas-pago carga la pantalla de formas de pago, sin guard propio (la pantalla le avisa al Vendedor)', async () => {
+    const padre = routes.find((r) => r.path === '');
+    const ruta = hijas().find((r) => r.path === 'configuracion/formas-pago');
+    const importaciones = hijas().find((r) => r.path === 'importaciones');
+
+    expect(ruta).toBeDefined();
+    expect(await (ruta!.loadComponent as () => Promise<unknown>)()).toBe(FormasPago);
+    expect(ruta!.canActivate).toBeUndefined();
+    expect(ruta!.canActivate).toEqual(importaciones!.canActivate);
     expect(padre!.canActivate).toEqual([authGuard]);
   });
 
@@ -144,6 +157,7 @@ describe('rutas', () => {
     expect(titulo(hijas(), 'importaciones')).toBe('Importar lista · Ferretería');
     expect(titulo(hijas(), 'actualizacion-masiva')).toBe('Actualizar precios · Ferretería');
     expect(titulo(hijas(), 'configuracion/cotizacion')).toBe('Cotización · Ferretería');
+    expect(titulo(hijas(), 'configuracion/formas-pago')).toBe('Formas de pago · Ferretería');
   });
 
   it('sin sesión, /mostrador redirige al login recordando adónde quería ir', async () => {

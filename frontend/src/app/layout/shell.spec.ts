@@ -75,7 +75,7 @@ describe('Shell', () => {
 
     const nav = el.querySelector('aside nav[aria-label="Secciones"]');
     expect(nav).not.toBeNull();
-    expect(nav!.querySelectorAll('a').length).toBe(8);
+    expect(nav!.querySelectorAll('a').length).toBe(9);
   });
 
   it('«Caja» va después de «Mostrador» y lleva a /caja, para el Vendedor y para el Dueño (CU-10)', async () => {
@@ -88,7 +88,7 @@ describe('Shell', () => {
     }
   });
 
-  it('el Dueño ve Mostrador, Artículos, Rubros, Proveedores y, bajo «Precios», Importar lista, Actualizar precios y Cotización', async () => {
+  it('el Dueño ve Mostrador, Artículos, Rubros, Proveedores y, bajo «Precios», Importar lista, Actualizar precios y Cotización, y bajo «Cobro», Formas de pago', async () => {
     const el = await render(true);
 
     expect(enlaces(el)).toEqual([
@@ -100,8 +100,9 @@ describe('Shell', () => {
       'Importar lista',
       'Actualizar precios',
       'Cotización',
+      'Formas de pago',
     ]);
-    expect(el.querySelector('nav .grupo')?.textContent?.trim()).toBe('Precios');
+    expect(Array.from(el.querySelectorAll('nav .grupo')).map((g) => g.textContent?.trim())).toEqual(['Precios', 'Cobro']);
     expect(el.querySelector('a[href="/importaciones"]')).not.toBeNull();
   });
 
@@ -115,14 +116,26 @@ describe('Shell', () => {
     expect(enlace!.textContent?.trim()).toBe('Actualizar precios');
   });
 
-  it('el Dueño ve «Cotización» al final del grupo «Precios» y lleva a /configuracion/cotizacion', async () => {
+  it('el Dueño ve «Cotización» al final del grupo «Precios» (justo antes de «Cobro») y lleva a /configuracion/cotizacion', async () => {
     const el = await render(true);
 
     const nombres = enlaces(el);
-    expect(nombres.at(-1)).toBe('Cotización');
+    expect(nombres.at(-2)).toBe('Cotización');
     const enlace = el.querySelector('nav a[href="/configuracion/cotizacion"]');
     expect(enlace).not.toBeNull();
     expect(enlace!.textContent?.trim()).toBe('Cotización');
+  });
+
+  it('el Dueño ve «Formas de pago» bajo «Cobro» y lleva a /configuracion/formas-pago; el Vendedor no la ve', async () => {
+    const el = await render(true);
+
+    expect(enlaces(el).at(-1)).toBe('Formas de pago');
+    expect(el.querySelector('nav a[href="/configuracion/formas-pago"]')).not.toBeNull();
+
+    TestBed.resetTestingModule();
+    const vendedor = await render(false);
+    expect(vendedor.querySelector('nav a[href="/configuracion/formas-pago"]')).toBeNull();
+    expect(enlaces(vendedor)).not.toContain('Formas de pago');
   });
 
   it('el Vendedor no ve «Cotización» en el menú (sí ve el bloque de cotización)', async () => {
