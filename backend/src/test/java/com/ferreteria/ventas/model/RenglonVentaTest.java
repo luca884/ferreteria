@@ -1,6 +1,7 @@
 package com.ferreteria.ventas.model;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.math.BigDecimal;
 import org.junit.jupiter.api.DisplayName;
@@ -92,6 +93,78 @@ class RenglonVentaTest {
             }
         }
         assertThat(casos).isEqualTo(216);
+    }
+
+    @Test
+    @DisplayName("D1: 10 % de descuento del renglon sobre 100,00 da bruto 100,00, total 90,00, neto 74,38 e IVA 15,62")
+    void descuentoDelRenglon() {
+        RenglonVenta r = RenglonVenta.de(bd("100.00"), BigDecimal.ONE, bd("21.00"), bd("10.00"), BigDecimal.ZERO);
+
+        assertThat(r.bruto()).isEqualByComparingTo("100.00");
+        assertThat(r.descuentoPorcentaje()).isEqualByComparingTo("10.00");
+        assertThat(r.total()).isEqualByComparingTo("90.00");
+        assertThat(r.neto()).isEqualByComparingTo("74.38");
+        assertThat(r.iva()).isEqualByComparingTo("15.62");
+    }
+
+    @Test
+    @DisplayName("D2: el descuento global se aplica a cada renglon y da lo mismo que uno propio de igual porcentaje")
+    void descuentoGlobalDelRenglon() {
+        RenglonVenta r = RenglonVenta.de(bd("100.00"), BigDecimal.ONE, bd("21.00"), BigDecimal.ZERO, bd("10.00"));
+
+        assertThat(r.descuentoGlobalPorcentaje()).isEqualByComparingTo("10.00");
+        assertThat(r.total()).isEqualByComparingTo("90.00");
+        assertThat(r.neto().add(r.iva())).isEqualByComparingTo(r.total());
+    }
+
+    @Test
+    @DisplayName("D3: primero el descuento del renglon y despues el global, cada uno redondeado a centavos: 100 -> 90 -> 81")
+    void losDosDescuentosEnCadena() {
+        RenglonVenta r = RenglonVenta.de(bd("100.00"), BigDecimal.ONE, bd("21.00"), bd("10.00"), bd("10.00"));
+
+        assertThat(r.total()).isEqualByComparingTo("81.00");
+    }
+
+    @Test
+    @DisplayName("D4: 0,99 con 50 % es 0,495 y redondea a 0,50 (HALF_UP)")
+    void descuentoRedondeaHalfUp() {
+        RenglonVenta r = RenglonVenta.de(bd("0.99"), BigDecimal.ONE, bd("21.00"), bd("50.00"), BigDecimal.ZERO);
+
+        assertThat(r.total()).isEqualByComparingTo("0.50");
+    }
+
+    @Test
+    @DisplayName("sin descuentos el renglon es el de siempre: bruto = total y porcentajes en cero")
+    void sinDescuentos() {
+        RenglonVenta r = RenglonVenta.de(bd("170.00"), bd("3"), bd("21.00"));
+
+        assertThat(r.bruto()).isEqualByComparingTo("510.00");
+        assertThat(r.total()).isEqualByComparingTo("510.00");
+        assertThat(r.descuentoPorcentaje()).isEqualByComparingTo("0");
+        assertThat(r.descuentoGlobalPorcentaje()).isEqualByComparingTo("0");
+    }
+
+    @ParameterizedTest(name = "descuento {0} % es invalido")
+    @DisplayName("el descuento va de 0 a 99,99 %: negativo, 100 o mas no se calcula")
+    @CsvSource({"-0.01", "100.00", "150.00"})
+    void descuentoFueraDeRango(String porcentaje) {
+        assertThatThrownBy(() -> RenglonVenta.de(bd("100.00"), BigDecimal.ONE, bd("21.00"), bd(porcentaje), BigDecimal.ZERO))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> RenglonVenta.de(bd("100.00"), BigDecimal.ONE, bd("21.00"), BigDecimal.ZERO, bd(porcentaje)))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    @DisplayName("neto + IVA = total tambien con descuentos, en una grilla de porcentajes")
+    void netoMasIvaEsTotalConDescuentos() {
+        String[] porcentajes = {"0", "0.01", "5", "10", "33.33", "50", "99.99"};
+
+        for (String renglon : porcentajes) {
+            for (String global : porcentajes) {
+                RenglonVenta r = RenglonVenta.de(bd("1999.99"), bd("2.5"), bd("21"), bd(renglon), bd(global));
+                assertThat(r.neto().add(r.iva())).as("%s y %s", renglon, global).isEqualByComparingTo(r.total());
+            }
+        }
     }
 
     @Test

@@ -47,6 +47,32 @@ class TotalesVentaTest {
     }
 
     @Test
+    @DisplayName("el descuento global se prorratea: cada renglon redondea el suyo y el total es la suma, aunque no sea el 10 % del subtotal")
+    void descuentoGlobalPorRenglon() {
+        RenglonVenta a = RenglonVenta.de(bd("0.05"), BigDecimal.ONE, IVA_21, BigDecimal.ZERO, bd("10.00"));
+        RenglonVenta b = RenglonVenta.de(bd("0.05"), BigDecimal.ONE, IVA_21, BigDecimal.ZERO, bd("10.00"));
+
+        TotalesVenta totales = TotalesVenta.de(List.of(a, b));
+
+        assertThat(totales.subtotal()).isEqualByComparingTo("0.10");
+        assertThat(totales.total()).isEqualByComparingTo("0.10");
+        assertThat(totales.neto().add(totales.iva())).isEqualByComparingTo(totales.total());
+    }
+
+    @Test
+    @DisplayName("el subtotal es la suma de los brutos y el descuento es subtotal menos total")
+    void subtotalYDescuento() {
+        RenglonVenta a = RenglonVenta.de(bd("100.00"), BigDecimal.ONE, IVA_21, bd("10.00"), BigDecimal.ZERO);
+        RenglonVenta b = RenglonVenta.de(bd("200.00"), BigDecimal.ONE, IVA_21, BigDecimal.ZERO, BigDecimal.ZERO);
+
+        TotalesVenta totales = TotalesVenta.de(List.of(a, b));
+
+        assertThat(totales.subtotal()).isEqualByComparingTo("300.00");
+        assertThat(totales.total()).isEqualByComparingTo("290.00");
+        assertThat(totales.descuento()).isEqualByComparingTo("10.00");
+    }
+
+    @Test
     @DisplayName("un solo renglon: los totales son los del renglon")
     void unSoloRenglon() {
         RenglonVenta c1 = RenglonVenta.de(bd("1210.00"), bd("3"), IVA_21);
