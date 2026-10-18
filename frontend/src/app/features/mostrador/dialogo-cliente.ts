@@ -1,0 +1,372 @@
+import { Component, ElementRef, afterNextRender, inject, input, output, signal, viewChild, Injector } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { Subject, catchError, debounceTime, merge, of, switchMap } from 'rxjs';
+import { erroresDeCampos, mensajeDe } from '../../core/api/api-error';
+import { TrampaFoco } from '../../shared/trampa-foco';
+import {
+  Cliente,
+  ClienteRequest,
+  TIPOS_DOCUMENTO,
+  TipoDocumento,
+  documentoLegible,
+} from '../clientes/cliente.models';
+import { ClientesService } from '../clientes/clientes.service';
+
+const RESULTADOS = 8;
+const ESPERA_MS = 250;
+
+/**
+ * Cliente de la venta (F9, CL-005): busca por razón social o documento entre los clientes activos, elige con ↑↓ y Enter,
+ * y da de alta uno nuevo sin salir del mostrador. Sin cliente la venta es a Consumidor Final: con uno elegido ofrece
+ * quitarlo. Habla con el servicio de clientes, porque la búsqueda es parte del diálogo. No descarta escaneos: tipear un
+ * DNI o un CUIT rápido es lo normal acá.
+ */
+@Component({
+  selector: 'app-dialogo-cliente',
+  imports: [TrampaFoco],
+  template: `
+    <div class="dialogo-fondo">
+      <div
+        class="dialogo cliente"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="dialogo-cliente-titulo"
+        appTrampaFoco
+        (keydown)="alTeclear($event)"
+      >
+        <h2 id="dialogo-cliente-titulo">Cliente</h2>
+        @if (actual(); as nombre) {
+          <p class="actual">
+            Cliente actual: <strong>{{ nombre }}</strong>
+          </p>
+        }
+
+        @if (!enAlta()) {
+          <input
+            #buscador
+            type="search"
+            role="combobox"
+            aria-label="Buscar cliente"
+            aria-controls="dialogo-cliente-resultados"
+            aria-autocomplete="list"
+            autocomplete="off"
+            spellcheck="false"
+            placeholder="Razón social, CUIT o DNI…"
+            [attr.aria-expanded]="resultados().length > 0"
+            [attr.aria-activedescendant]="resultados().length > 0 ? 'cliente-' + resultados()[resaltado()].id : null"
+            [value]="consulta()"
+            (input)="escribir($any($event.target).value)"
+          />
+          @if (errorBusqueda()) {
+            <p class="error" role="alert">No se pudo buscar clientes. Probá de nuevo.</p>
+          }
+          @if (resultados().length > 0) {
+            <ul id="dialogo-cliente-resultados" class="resultados" role="listbox" aria-label="Clientes">
+              @for (c of resultados(); track c.id; let i = $index) {
+                <li
+                  role="option"
+                  [id]="'cliente-' + c.id"
+                  [attr.aria-selected]="i === resaltado()"
+                  [class.resaltado]="i === resaltado()"
+                  (click)="elegir.emit(c)"
+                >
+                  <span class="nombre">{{ c.razonSocial }}</span
+                  >{{ ' ' }}<span class="documento">{{ documentoLegible(c) }}</span>
+                </li>
+              }
+            </ul>
+          } @else if (!cargando() && !errorBusqueda()) {
+            <p class="sin-resultados">No hay clientes con esa búsqueda.</p>
+          }
+          <div class="dialogo-acciones">
+            @if (actual()) {
+              <button type="button" class="secundario" (click)="quitar.emit()">Quitar cliente</button>
+            }
+            <button type="button" class="secundario" (click)="abrirAlta()">Nuevo cliente</button>
+            <button type="button" class="cancelar" data-tecla="Esc" aria-keyshortcuts="Escape" (click)="cancelar.emit()">
+              Cancelar
+            </button>
+          </div>
+        } @else {
+          <form class="alta-rapida" (submit)="guardarAlta($event)" novalidate>
+            @if (errorAlta(); as mensaje) {
+              <p class="error" role="alert">{{ mensaje }}</p>
+            } @else if (erroresCampos().length > 0) {
+              <div class="error" role="alert">
+                <strong>Revisá estos datos:</strong>
+                <ul>
+                  @for (m of erroresCampos(); track $index) {
+                    <li>{{ m }}</li>
+                  }
+                </ul>
+              </div>
+            }
+            <label class="campo" for="nuevo-razon-social">Razón social</label>
+            <input
+              #razonSocial
+              id="nuevo-razon-social"
+              name="razonSocial"
+              autocomplete="off"
+              spellcheck="false"
+              [value]="nuevoNombre()"
+              [attr.aria-invalid]="errorNombre() ? 'true' : null"
+              [attr.aria-describedby]="errorNombre() ? 'nuevo-razon-social-error' : null"
+              (input)="nuevoNombre.set($any($event.target).value); limpiarErrores()"
+            />
+            @if (errorNombre(); as mensaje) {
+              <span id="nuevo-razon-social-error" class="campo-error">{{ mensaje }}</span>
+            }
+            <div class="fila-doc">
+              <div>
+                <label class="campo" for="nuevo-tipo">Documento</label>
+                <select
+                  id="nuevo-tipo"
+                  name="tipo"
+                  [attr.aria-invalid]="errorTipo() ? 'true' : null"
+                  [attr.aria-describedby]="errorTipo() ? 'nuevo-tipo-error' : null"
+                  (change)="nuevoTipo.set($any($event.target).value); limpiarErrores()"
+                >
+                  <option value="">Sin documento</option>
+                  @for (t of tipos; track t) {
+                    <option [value]="t">{{ t }}</option>
+                  }
+                </select>
+                @if (errorTipo(); as mensaje) {
+                  <span id="nuevo-tipo-error" class="campo-error">{{ mensaje }}</span>
+                }
+              </div>
+              <div>
+                <label class="campo" for="nuevo-numero">Número</label>
+                <input
+                  id="nuevo-numero"
+                  name="numero"
+                  inputmode="numeric"
+                  autocomplete="off"
+                  spellcheck="false"
+                  placeholder="30-71234567-1"
+                  [attr.aria-invalid]="errorNumero() ? 'true' : null"
+                  [attr.aria-describedby]="errorNumero() ? 'nuevo-numero-error' : null"
+                  (input)="nuevoNumero.set($any($event.target).value); limpiarErrores()"
+                />
+                @if (errorNumero(); as mensaje) {
+                  <span id="nuevo-numero-error" class="campo-error">{{ mensaje }}</span>
+                }
+              </div>
+            </div>
+            <label class="campo" for="nuevo-telefono">Teléfono <small>(opcional)</small></label>
+            <input
+              id="nuevo-telefono"
+              name="telefono"
+              inputmode="tel"
+              autocomplete="off"
+              (input)="nuevoTelefono.set($any($event.target).value)"
+            />
+            <div class="dialogo-acciones">
+              <button type="button" class="secundario" (click)="volverABuscar()">Volver a buscar</button>
+              <button type="submit" class="aceptar primario" [disabled]="guardando()">Guardar y elegir</button>
+            </div>
+          </form>
+        }
+      </div>
+    </div>
+  `,
+  styles: `
+    .actual {
+      margin: 0;
+      color: var(--texto-suave);
+    }
+    .resultados {
+      margin: 0;
+      padding: 0;
+      list-style: none;
+      border: 1px solid var(--borde);
+      border-radius: var(--radio-lg);
+      overflow: hidden;
+    }
+    .resultados li {
+      display: flex;
+      justify-content: space-between;
+      gap: var(--e-3);
+      padding: 10px 14px;
+      cursor: pointer;
+    }
+    .resultados li + li {
+      border-top: 1px solid var(--borde);
+    }
+    .resultados li.resaltado {
+      background: var(--acento-suave);
+      color: var(--acento-profundo);
+    }
+    .nombre {
+      font-weight: 600;
+    }
+    .documento {
+      color: var(--texto-suave);
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+    }
+    .sin-resultados {
+      margin: 0;
+      color: var(--texto-suave);
+    }
+    .alta-rapida {
+      display: flex;
+      flex-direction: column;
+      gap: var(--e-2);
+    }
+    .fila-doc {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr);
+      gap: var(--e-3);
+    }
+  `,
+})
+export class DialogoCliente {
+  private readonly service = inject(ClientesService);
+  private readonly injector = inject(Injector);
+
+  /** La razón social del cliente que ya tiene el ticket; null es Consumidor Final. */
+  readonly actual = input<string | null>(null);
+
+  readonly elegir = output<Cliente>();
+  readonly quitar = output<void>();
+  readonly cancelar = output<void>();
+
+  private readonly buscador = viewChild<ElementRef<HTMLInputElement>>('buscador');
+  private readonly razonSocial = viewChild<ElementRef<HTMLInputElement>>('razonSocial');
+
+  protected readonly tipos = TIPOS_DOCUMENTO;
+  protected readonly documentoLegible = documentoLegible;
+
+  protected readonly consulta = signal('');
+  protected readonly resultados = signal<Cliente[]>([]);
+  protected readonly resaltado = signal(0);
+  protected readonly cargando = signal(true);
+  protected readonly errorBusqueda = signal(false);
+
+  protected readonly enAlta = signal(false);
+  protected readonly nuevoNombre = signal('');
+  protected readonly nuevoTipo = signal<TipoDocumento | ''>('');
+  protected readonly nuevoNumero = signal('');
+  protected readonly nuevoTelefono = signal('');
+  protected readonly guardando = signal(false);
+  protected readonly errorNombre = signal<string | null>(null);
+  protected readonly errorTipo = signal<string | null>(null);
+  protected readonly errorNumero = signal<string | null>(null);
+  protected readonly errorAlta = signal<string | null>(null);
+  protected readonly erroresCampos = signal<string[]>([]);
+
+  private readonly escrito = new Subject<string>();
+
+  constructor() {
+    // La primera búsqueda es inmediata (los primeros clientes ya a la vista); al escribir se espera a que termine de tipear.
+    merge(of(''), this.escrito.pipe(debounceTime(ESPERA_MS)))
+      .pipe(
+        switchMap((q) => {
+          this.cargando.set(true);
+          return this.service.buscar({ q, soloActivos: true, page: 0, size: RESULTADOS }).pipe(
+            catchError(() => of(null)),
+          );
+        }),
+        takeUntilDestroyed(),
+      )
+      .subscribe((respuesta) => {
+        this.cargando.set(false);
+        this.errorBusqueda.set(respuesta === null);
+        this.resultados.set(respuesta?.items ?? []);
+        this.resaltado.set(0);
+      });
+    afterNextRender(() => this.buscador()?.nativeElement.focus());
+  }
+
+  protected escribir(texto: string): void {
+    this.consulta.set(texto);
+    this.escrito.next(texto);
+  }
+
+  protected alTeclear(evento: KeyboardEvent): void {
+    if (evento.key === 'Escape') {
+      evento.preventDefault();
+      evento.stopPropagation();
+      this.cancelar.emit();
+      return;
+    }
+    if (this.enAlta()) return;
+    const n = this.resultados().length;
+    if (evento.key === 'ArrowDown' || evento.key === 'ArrowUp') {
+      evento.preventDefault();
+      evento.stopPropagation();
+      if (n > 0) this.resaltado.update((i) => Math.min(Math.max(i + (evento.key === 'ArrowDown' ? 1 : -1), 0), n - 1));
+      return;
+    }
+    // Enter elige solo desde el campo: sobre un botón hace lo que dice el botón.
+    if (evento.key === 'Enter' && evento.target === this.buscador()?.nativeElement) {
+      evento.preventDefault();
+      evento.stopPropagation();
+      const elegido = this.resultados()[this.resaltado()];
+      if (elegido) this.elegir.emit(elegido);
+    }
+  }
+
+  protected abrirAlta(): void {
+    this.nuevoNombre.set(this.consulta().trim());
+    this.limpiarErrores();
+    this.enAlta.set(true);
+    afterNextRender(
+      () => {
+        const campo = this.razonSocial()?.nativeElement;
+        campo?.focus();
+        campo?.select();
+      },
+      { injector: this.injector },
+    );
+  }
+
+  protected volverABuscar(): void {
+    this.limpiarErrores();
+    this.enAlta.set(false);
+    afterNextRender(() => this.buscador()?.nativeElement.focus(), { injector: this.injector });
+  }
+
+  protected limpiarErrores(): void {
+    this.errorNombre.set(null);
+    this.errorTipo.set(null);
+    this.errorNumero.set(null);
+    this.errorAlta.set(null);
+    this.erroresCampos.set([]);
+  }
+
+  protected guardarAlta(evento: Event): void {
+    evento.preventDefault();
+    if (this.guardando()) return;
+    this.limpiarErrores();
+    const nombre = this.nuevoNombre().trim();
+    const tipo = this.nuevoTipo();
+    const numero = this.nuevoNumero().trim();
+    if (!nombre) this.errorNombre.set('La razón social es obligatoria.');
+    if (numero && !tipo) this.errorTipo.set('Elegí el tipo de documento.');
+    if (tipo && !numero) this.errorNumero.set('Falta el número de documento.');
+    if (this.errorNombre() || this.errorTipo() || this.errorNumero()) return;
+
+    const telefono = this.nuevoTelefono().trim();
+    const request: ClienteRequest = {
+      razonSocial: nombre,
+      ...(tipo && numero ? { tipoDocumento: tipo, numeroDocumento: numero } : {}),
+      condicionIva: 'CONSUMIDOR_FINAL',
+      ...(telefono ? { telefono } : {}),
+    };
+    this.guardando.set(true);
+    this.service.crear(request).subscribe({
+      next: (creado) => {
+        this.guardando.set(false);
+        this.elegir.emit(creado);
+      },
+      error: (err: unknown) => {
+        this.guardando.set(false);
+        const porCampo = erroresDeCampos(err);
+        if (porCampo.length > 0) this.erroresCampos.set(porCampo);
+        else this.errorAlta.set(mensajeDe(err, 'No se pudo guardar el cliente.'));
+      },
+    });
+  }
+}
