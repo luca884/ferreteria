@@ -50,7 +50,10 @@ public record ConfirmarVentaRequest(
         Long presupuestoId,
 
         /** El remito del que sale la venta (RM-006), si sale de uno. Lo valida el servicio. */
-        Long remitoId) {
+        Long remitoId,
+
+        /** false marca la venta como no facturable (NF-002); ausente es true, la venta de siempre. */
+        Boolean facturable) {
 
     /** Una parte del pago mixto: la forma y lo que cubre del total sin recargo. El rango fino lo valida el servicio. */
     public record PagoRequest(
@@ -88,6 +91,6 @@ public record ConfirmarVentaRequest(
                 .toList(), totalMostrado, formaPagoId, descuentoPorcentaje,
                 pagos == null ? List.of()
                         : pagos.stream().map(p -> new ConfirmarVenta.PagoPedido(p.formaPagoId(), p.monto())).toList(),
-                presupuestoId, remitoId);
+                presupuestoId, remitoId, facturable == null || facturable);
     }
 }

@@ -1,6 +1,7 @@
 package com.ferreteria.ventas.web;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.ferreteria.ventas.model.EstadoComprobante;
 import com.ferreteria.ventas.model.ItemComprobante;
 import com.ferreteria.ventas.model.MedioPago;
 import com.ferreteria.ventas.service.VentaRegistrada;
@@ -15,14 +16,15 @@ import java.util.List;
  * (GDS-11) y ya esta sumado al total: subtotal - descuento + recargo = total. {@code pagos} es un pago por forma
  * (GDS-07); {@code formaPagoId} y {@code medioPago} solo vienen si se pago con una unica forma. {@code sinStock} lista los
  * articulos que quedaron con stock negativo (R-016); en una venta repetida viene vacio. {@code presupuestoId} solo viene si
- * la venta salio de un presupuesto (PP-006) y {@code remitoId} solo si salio de un remito (RM-006).
+ * la venta salio de un presupuesto (PP-006) y {@code remitoId} solo si salio de un remito (RM-006). {@code facturable} es
+ * false si la venta quedo NO_FACTURABLE (NF-002).
  */
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public record VentaResponse(
         Long ventaId, Long numero, BigDecimal total, LocalDateTime fecha, Long formaPagoId, MedioPago medioPago,
         List<PagoResponse> pagos, List<RenglonResponse> renglones, List<SinStockResponse> sinStock, BigDecimal subtotal,
         BigDecimal descuentoPorcentaje, BigDecimal descuento, BigDecimal recargo, Long presupuestoId,
-        Long remitoId) {
+        Long remitoId, boolean facturable) {
 
     public record RenglonResponse(
             Integer renglon, Long articuloId, String descripcion, String unidad, BigDecimal cantidad,
@@ -58,6 +60,7 @@ public record VentaResponse(
                 venta.comprobante().getSubtotal()
                         .subtract(venta.comprobante().getTotal().subtract(venta.comprobante().getRecargo())),
                 venta.comprobante().getRecargo(), venta.comprobante().getPresupuestoId(),
-                venta.comprobante().getRemitoId());
+                venta.comprobante().getRemitoId(),
+                venta.comprobante().getEstado() != EstadoComprobante.NO_FACTURABLE);
     }
 }
