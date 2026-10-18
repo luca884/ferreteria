@@ -20,7 +20,7 @@ import java.util.List;
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public record PresupuestoResponse(
         Long presupuestoId, Long numero, EstadoPresupuesto estado, LocalDateTime fecha, LocalDate vence, boolean vencido,
-        String clienteNombre, String observaciones, BigDecimal subtotal, BigDecimal descuentoPorcentaje,
+        Long clienteId, String clienteNombre, String observaciones, BigDecimal subtotal, BigDecimal descuentoPorcentaje,
         BigDecimal descuento, BigDecimal neto, BigDecimal iva, BigDecimal total, List<RenglonResponse> renglones) {
 
     public record RenglonResponse(
@@ -41,7 +41,8 @@ public record PresupuestoResponse(
 
     public static PresupuestoResponse de(Presupuesto p, List<ItemPresupuesto> items) {
         return new PresupuestoResponse(p.getId(), p.getNumero(), p.getEstado(), p.getFecha(), p.getVence(),
-                p.estaVencido(HoraArgentina.hoy()), p.getClienteNombre(), p.getObservaciones(), p.getSubtotal(),
+                p.estaVencido(HoraArgentina.hoy()), p.getClienteId(), p.getClienteNombre(), p.getObservaciones(),
+                p.getSubtotal(),
                 p.getDescuentoPorcentaje(), p.getSubtotal().subtract(p.getTotal()), p.getNeto(), p.getIva(),
                 p.getTotal(), items.stream().map(RenglonResponse::de).toList());
     }

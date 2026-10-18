@@ -56,7 +56,11 @@ public class Presupuesto {
     @Column(nullable = false, length = 20)
     private EstadoPresupuesto estado;
 
-    @Column(name = "cliente_nombre", updatable = false, length = 80)
+    /** El cliente elegido (CL-004); nulo si no se eligio uno. El nombre de abajo es una copia de su razon social. */
+    @Column(name = "cliente_id", updatable = false)
+    private Long clienteId;
+
+    @Column(name = "cliente_nombre", updatable = false, length = 120)
     private String clienteNombre;
 
     @Column(updatable = false, length = 200)
@@ -82,8 +86,10 @@ public class Presupuesto {
     /** Un presupuesto nuevo: siempre PENDIENTE, y vence {@code diasValidez} dias despues de hoy (hora argentina). */
     public static Presupuesto emitir(
             Long ferreteriaId, long numero, String claveIdempotencia, Long usuarioId, TotalesVenta totales,
-            BigDecimal descuentoPorcentaje, int diasValidez, String clienteNombre, String observaciones) {
+            BigDecimal descuentoPorcentaje, int diasValidez, Long clienteId, String clienteNombre,
+            String observaciones) {
         Presupuesto presupuesto = new Presupuesto();
+        presupuesto.clienteId = clienteId;
         presupuesto.ferreteriaId = ferreteriaId;
         presupuesto.numero = numero;
         presupuesto.claveIdempotencia = claveIdempotencia;
@@ -117,6 +123,7 @@ public class Presupuesto {
     public LocalDateTime getFecha() { return fecha; }
     public LocalDate getVence() { return vence; }
     public EstadoPresupuesto getEstado() { return estado; }
+    public Long getClienteId() { return clienteId; }
     public String getClienteNombre() { return clienteNombre; }
     public String getObservaciones() { return observaciones; }
     public BigDecimal getSubtotal() { return subtotal; }

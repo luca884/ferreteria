@@ -51,7 +51,11 @@ public class Remito {
     @Column(nullable = false, length = 20)
     private EstadoRemito estado;
 
-    @Column(name = "cliente_nombre", updatable = false, length = 80)
+    /** El cliente elegido (CL-004); nulo si no se eligio uno. El nombre de abajo es una copia de su razon social. */
+    @Column(name = "cliente_id", updatable = false)
+    private Long clienteId;
+
+    @Column(name = "cliente_nombre", updatable = false, length = 120)
     private String clienteNombre;
 
     @Column(updatable = false, length = 200)
@@ -77,8 +81,9 @@ public class Remito {
     /** Un remito nuevo: siempre EMITIDO. */
     public static Remito emitir(
             Long ferreteriaId, long numero, String claveIdempotencia, Long usuarioId, TotalesVenta totales,
-            BigDecimal descuentoPorcentaje, String clienteNombre, String observaciones) {
+            BigDecimal descuentoPorcentaje, Long clienteId, String clienteNombre, String observaciones) {
         Remito remito = new Remito();
+        remito.clienteId = clienteId;
         remito.ferreteriaId = ferreteriaId;
         remito.numero = numero;
         remito.claveIdempotencia = claveIdempotencia;
@@ -105,6 +110,7 @@ public class Remito {
     public Long getUsuarioId() { return usuarioId; }
     public LocalDateTime getFecha() { return fecha; }
     public EstadoRemito getEstado() { return estado; }
+    public Long getClienteId() { return clienteId; }
     public String getClienteNombre() { return clienteNombre; }
     public String getObservaciones() { return observaciones; }
     public BigDecimal getSubtotal() { return subtotal; }

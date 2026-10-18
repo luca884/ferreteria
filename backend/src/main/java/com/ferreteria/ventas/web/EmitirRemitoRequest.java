@@ -41,6 +41,9 @@ public record EmitirRemitoRequest(
         @Digits(integer = 5, fraction = 2, message = "El descuento admite hasta 2 decimales.")
         BigDecimal descuentoPorcentaje,
 
+        /** El cliente elegido en el mostrador (CL-004). Si viene, su razon social reemplaza al nombre de abajo. */
+        Long clienteId,
+
         @Size(max = 80, message = "El nombre del cliente admite hasta 80 caracteres.")
         String clienteNombre,
 
@@ -51,6 +54,6 @@ public record EmitirRemitoRequest(
         return new EmitirRemito(clave, renglones.stream()
                 .map(r -> new ConfirmarVenta.Renglon(r.articuloId(), r.cantidad(), r.precioUnitario(),
                         r.descuentoPorcentaje()))
-                .toList(), totalMostrado, descuentoPorcentaje, clienteNombre, observaciones);
+                .toList(), totalMostrado, descuentoPorcentaje, clienteId, clienteNombre, observaciones);
     }
 }

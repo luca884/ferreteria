@@ -18,8 +18,8 @@ import java.util.List;
  */
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public record RemitoResponse(
-        Long remitoId, Long numero, EstadoRemito estado, LocalDateTime fecha, String clienteNombre, String observaciones,
-        BigDecimal subtotal, BigDecimal descuentoPorcentaje, BigDecimal descuento, BigDecimal neto, BigDecimal iva,
+        Long remitoId, Long numero, EstadoRemito estado, LocalDateTime fecha, Long clienteId, String clienteNombre,
+        String observaciones, BigDecimal subtotal, BigDecimal descuentoPorcentaje, BigDecimal descuento, BigDecimal neto, BigDecimal iva,
         BigDecimal total, List<RenglonResponse> renglones, List<SinStockResponse> sinStock) {
 
     public record RenglonResponse(
@@ -45,8 +45,8 @@ public record RemitoResponse(
     }
 
     private static RemitoResponse de(Remito r, List<ItemRemito> items, List<SinStockResponse> sinStock) {
-        return new RemitoResponse(r.getId(), r.getNumero(), r.getEstado(), r.getFecha(), r.getClienteNombre(),
-                r.getObservaciones(), r.getSubtotal(), r.getDescuentoPorcentaje(),
+        return new RemitoResponse(r.getId(), r.getNumero(), r.getEstado(), r.getFecha(), r.getClienteId(),
+                r.getClienteNombre(), r.getObservaciones(), r.getSubtotal(), r.getDescuentoPorcentaje(),
                 r.getSubtotal().subtract(r.getTotal()), r.getNeto(), r.getIva(), r.getTotal(),
                 items.stream().map(RenglonResponse::de).toList(), sinStock);
     }

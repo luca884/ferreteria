@@ -47,6 +47,9 @@ public record EmitirPresupuestoRequest(
         @Max(value = EmitirPresupuesto.DIAS_VALIDEZ_MAXIMOS, message = "La validez va de 1 a 90 días.")
         Integer diasValidez,
 
+        /** El cliente elegido en el mostrador (CL-004). Si viene, su razon social reemplaza al nombre de abajo. */
+        Long clienteId,
+
         @Size(max = 80, message = "El nombre del cliente admite hasta 80 caracteres.")
         String clienteNombre,
 
@@ -57,6 +60,6 @@ public record EmitirPresupuestoRequest(
         return new EmitirPresupuesto(clave, renglones.stream()
                 .map(r -> new ConfirmarVenta.Renglon(r.articuloId(), r.cantidad(), r.precioUnitario(),
                         r.descuentoPorcentaje()))
-                .toList(), totalMostrado, descuentoPorcentaje, diasValidez, clienteNombre, observaciones);
+                .toList(), totalMostrado, descuentoPorcentaje, diasValidez, clienteId, clienteNombre, observaciones);
     }
 }

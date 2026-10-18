@@ -38,6 +38,7 @@ import com.ferreteria.ventas.repository.ItemRemitoRepository;
 import com.ferreteria.ventas.repository.PresupuestoRepository;
 import com.ferreteria.ventas.repository.RemitoRepository;
 import com.ferreteria.ventas.service.CajaService;
+import com.ferreteria.ventas.service.ClienteDelDocumento;
 import com.ferreteria.ventas.service.ConfirmarVenta;
 import com.ferreteria.ventas.service.ConfirmarVenta.Renglon;
 import com.ferreteria.ventas.service.RegistroVenta;
@@ -103,6 +104,9 @@ class RegistroVentaTest {
     @Mock
     ItemRemitoRepository itemRemitoRepository;
 
+    @Mock
+    com.ferreteria.clientes.api.ClientesParaVenta clientesParaVenta;
+
     RegistroVenta registro;
 
     static final Long CAJA = 77L;
@@ -116,7 +120,7 @@ class RegistroVentaTest {
         registro = new RegistroVenta(
                 articulosParaVenta, stockService, comprobanteRepository, itemRepository, pagoRepository,
                 numeradorRepository, cajaService, formaPagoRepository, presupuestoRepository, remitoRepository,
-                itemRemitoRepository);
+                itemRemitoRepository, new ClienteDelDocumento(clientesParaVenta));
         // CU-10: por defecto hay caja abierta hoy. Lenient: los rechazos previos a la caja no la consultan.
         lenient().when(cajaService.cajaParaVender()).thenReturn(CAJA);
         for (MedioPago medio : MedioPago.values()) {
@@ -550,6 +554,63 @@ class RegistroVentaTest {
         assertThat(c.getNeto()).isEqualByComparingTo("3688.70");
         assertThat(c.getIva()).isEqualByComparingTo("774.63");
         assertThat(venta.repetida()).isFalse();
+    }
+
+    // ---- cliente (CL-004)
+
+    static ConfirmarVenta conCliente(ConfirmarVenta p, Long clienteId) {
+        return new ConfirmarVenta(p.clave(), p.renglones(), p.totalMostrado(), p.formaPagoId(),
+                p.descuentoPorcentaje(), p.pagos(), p.presupuestoId(), p.remitoId(), p.facturable(), clienteId);
+    }
+
+    @Test
+    @DisplayName("la venta con cliente guarda su id y una copia de su razón social; sin cliente guarda nulo")
+    void ventaConCliente() {
+        catalogoC1C3();
+        escrituraLista(Map.of(1L, bd("7"), 2L, bd("7.5")));
+        when(clientesParaVenta.buscar(5L)).thenReturn(Optional.of(
+                new com.ferreteria.clientes.api.ClienteReferencia(5L, "Ferretería Norte SRL", true)));
+
+        Comprobante conCliente = registro.registrar(conCliente(ventaC1C3(MedioPago.EFECTIVO), 5L), USUARIO)
+                .comprobante();
+
+        assertThat(conCliente.getClienteId()).isEqualTo(5L);
+        assertThat(conCliente.getClienteNombre()).isEqualTo("Ferretería Norte SRL");
+        assertThat(ventaC1C3(MedioPago.EFECTIVO).clienteId()).isNull();
+    }
+
+    @Test
+    @DisplayName("con un cliente inexistente o desactivado rechaza antes de escribir: ni número, ni stock, ni comprobante")
+    void ventaConClienteInvalidoNoEscribe() {
+        when(comprobanteRepository.porClaveScoped(CLAVE)).thenReturn(Optional.empty());
+        when(clientesParaVenta.buscar(9L)).thenReturn(Optional.empty());
+        when(clientesParaVenta.buscar(8L)).thenReturn(Optional.of(
+                new com.ferreteria.clientes.api.ClienteReferencia(8L, "Viejo", false)));
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(
+                        () -> registro.registrar(conCliente(ventaC1C3(MedioPago.EFECTIVO), 9L), USUARIO))
+                .isInstanceOf(com.ferreteria.common.exception.ResourceNotFoundException.class);
+        org.assertj.core.api.Assertions.assertThatThrownBy(
+                        () -> registro.registrar(conCliente(ventaC1C3(MedioPago.EFECTIVO), 8L), USUARIO))
+                .isInstanceOf(com.ferreteria.common.exception.ReglaDeNegocioException.class);
+
+        assertSinEscrituras();
+    }
+
+    @Test
+    @DisplayName("repetir con otro cliente es CLAVE_CON_OTRO_CONTENIDO; con el mismo es la misma venta")
+    void ventaRepetidaConCliente() {
+        Comprobante guardado = ventaGuardadaC1C3();
+        ReflectionTestUtils.setField(guardado, "clienteId", 5L);
+        when(comprobanteRepository.porClaveScoped(CLAVE)).thenReturn(Optional.of(guardado));
+        when(itemRepository.deComprobanteScoped(COMPROBANTE)).thenReturn(itemsGuardadosC1C3());
+        when(pagoRepository.deComprobanteScoped(COMPROBANTE))
+                .thenReturn(List.of(pagoGuardado(MedioPago.EFECTIVO, "4463.33")));
+
+        assertThat(registro.registrar(conCliente(ventaC1C3(MedioPago.EFECTIVO), 5L), USUARIO).repetida()).isTrue();
+        assertThat(rechazo(conCliente(ventaC1C3(MedioPago.EFECTIVO), 6L)).motivo())
+                .isEqualTo(Motivo.CLAVE_CON_OTRO_CONTENIDO);
+        assertThat(rechazo(ventaC1C3(MedioPago.EFECTIVO)).motivo()).isEqualTo(Motivo.CLAVE_CON_OTRO_CONTENIDO);
     }
 
     // ---- venta no facturable

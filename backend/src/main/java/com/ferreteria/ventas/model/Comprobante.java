@@ -49,9 +49,13 @@ public class Comprobante {
     @Column(name = "clave_idempotencia", nullable = false, updatable = false, length = 36)
     private String claveIdempotencia;
 
-    /** Siempre null en el corte 1 (Consumidor Final); la tabla cliente es del corte 3. */
+    /** El cliente elegido en el mostrador (CL-004); null es Consumidor Final. */
     @Column(name = "cliente_id", updatable = false)
     private Long clienteId;
+
+    /** Copia de la razon social del cliente al vender: renombrarlo despues no cambia la venta. */
+    @Column(name = "cliente_nombre", updatable = false, length = 120)
+    private String clienteNombre;
 
     @Column(name = "usuario_id", nullable = false, updatable = false)
     private Long usuarioId;
@@ -123,7 +127,17 @@ public class Comprobante {
     public static Comprobante venta(
             Long ferreteriaId, long numero, String claveIdempotencia, Long usuarioId, TotalesVenta totales,
             Long cajaId, BigDecimal descuentoPorcentaje, Long presupuestoId, Long remitoId, boolean facturable) {
+        return venta(ferreteriaId, numero, claveIdempotencia, usuarioId, totales, cajaId, descuentoPorcentaje,
+                presupuestoId, remitoId, facturable, null, null);
+    }
+
+    public static Comprobante venta(
+            Long ferreteriaId, long numero, String claveIdempotencia, Long usuarioId, TotalesVenta totales,
+            Long cajaId, BigDecimal descuentoPorcentaje, Long presupuestoId, Long remitoId, boolean facturable,
+            Long clienteId, String clienteNombre) {
         Comprobante comprobante = new Comprobante();
+        comprobante.clienteId = clienteId;
+        comprobante.clienteNombre = clienteNombre;
         comprobante.presupuestoId = presupuestoId;
         comprobante.remitoId = remitoId;
         comprobante.cajaId = cajaId;
@@ -149,6 +163,7 @@ public class Comprobante {
     public Long getNumero() { return numero; }
     public String getClaveIdempotencia() { return claveIdempotencia; }
     public Long getClienteId() { return clienteId; }
+    public String getClienteNombre() { return clienteNombre; }
     public Long getUsuarioId() { return usuarioId; }
     public Long getCajaId() { return cajaId; }
     public LocalDateTime getFecha() { return fecha; }

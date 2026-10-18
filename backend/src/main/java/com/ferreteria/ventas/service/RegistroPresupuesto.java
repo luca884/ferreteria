@@ -38,10 +38,13 @@ public class RegistroPresupuesto {
     private final PresupuestoRepository presupuestoRepository;
     private final ItemPresupuestoRepository itemRepository;
     private final NumeradorPresupuestoRepository numeradorRepository;
+    private final ClienteDelDocumento clienteDelDocumento;
 
     public RegistroPresupuesto(
             ArticulosParaVenta articulosParaVenta, PresupuestoRepository presupuestoRepository,
-            ItemPresupuestoRepository itemRepository, NumeradorPresupuestoRepository numeradorRepository) {
+            ItemPresupuestoRepository itemRepository, NumeradorPresupuestoRepository numeradorRepository,
+            ClienteDelDocumento clienteDelDocumento) {
+        this.clienteDelDocumento = clienteDelDocumento;
         this.articulosParaVenta = articulosParaVenta;
         this.presupuestoRepository = presupuestoRepository;
         this.itemRepository = itemRepository;
@@ -58,6 +61,8 @@ public class RegistroPresupuesto {
             return yaEmitido.get();
         }
 
+        ClienteDelDocumento.Elegido cliente = clienteDelDocumento.resolver(pedido.clienteId(), pedido.clienteNombre());
+
         Set<Long> ids = pedido.renglones().stream().map(Renglon::articuloId)
                 .collect(Collectors.toCollection(LinkedHashSet::new));
         Map<Long, ArticuloVendible> articulos = new HashMap<>();
@@ -73,7 +78,7 @@ public class RegistroPresupuesto {
 
         long numero = numeradorRepository.siguienteScoped();
         Presupuesto presupuesto = presupuestoRepository.save(Presupuesto.emitir(ferreteriaId, numero, pedido.clave(),
-                usuarioId, totales, pedido.descuentoPorcentaje(), pedido.diasValidez(), pedido.clienteNombre(),
+                usuarioId, totales, pedido.descuentoPorcentaje(), pedido.diasValidez(), cliente.id(), cliente.nombre(),
                 pedido.observaciones()));
 
         List<ItemPresupuesto> items = new ArrayList<>();
@@ -112,6 +117,7 @@ public class RegistroPresupuesto {
     private static boolean mismoContenido(EmitirPresupuesto pedido, Presupuesto presupuesto, List<ItemPresupuesto> items) {
         if (pedido.totalMostrado().compareTo(presupuesto.getTotal()) != 0
                 || pedido.descuentoPorcentaje().compareTo(presupuesto.getDescuentoPorcentaje()) != 0
+                || !java.util.Objects.equals(pedido.clienteId(), presupuesto.getClienteId())
                 || pedido.renglones().size() != items.size()) {
             return false;
         }

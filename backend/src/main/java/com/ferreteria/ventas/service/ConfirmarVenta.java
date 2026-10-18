@@ -11,14 +11,23 @@ import java.util.List;
  * forma. Si la venta sale de un presupuesto (PP-006), {@code presupuestoId} es el suyo y la venta lo deja FACTURADO; si sale
  * de un remito (RM-006), {@code remitoId} es el suyo y la venta lo deja FACTURADO y concilia el stock. Nunca los dos. La
  * ferreteria y el usuario NO viajan aca: salen del JWT. Un descuento ausente es 0 %. {@code facturable} false deja la venta
- * NO_FACTURABLE: cobra, mueve caja y stock igual pero la fase 5 no la factura nunca; lo normal es true.
+ * NO_FACTURABLE: cobra, mueve caja y stock igual pero la fase 5 no la factura nunca; lo normal es true. {@code clienteId}
+ * es el cliente elegido en el mostrador (CL-004); nulo es Consumidor Final.
  */
 public record ConfirmarVenta(String clave, List<Renglon> renglones, BigDecimal totalMostrado, Long formaPagoId,
-        BigDecimal descuentoPorcentaje, List<PagoPedido> pagos, Long presupuestoId, Long remitoId, boolean facturable) {
+        BigDecimal descuentoPorcentaje, List<PagoPedido> pagos, Long presupuestoId, Long remitoId, boolean facturable,
+        Long clienteId) {
 
     public ConfirmarVenta {
         descuentoPorcentaje = descuentoPorcentaje == null ? BigDecimal.ZERO : descuentoPorcentaje;
         pagos = pagos == null ? List.of() : pagos;
+    }
+
+    public ConfirmarVenta(String clave, List<Renglon> renglones, BigDecimal totalMostrado, Long formaPagoId,
+            BigDecimal descuentoPorcentaje, List<PagoPedido> pagos, Long presupuestoId, Long remitoId,
+            boolean facturable) {
+        this(clave, renglones, totalMostrado, formaPagoId, descuentoPorcentaje, pagos, presupuestoId, remitoId,
+                facturable, null);
     }
 
     public ConfirmarVenta(String clave, List<Renglon> renglones, BigDecimal totalMostrado, Long formaPagoId,

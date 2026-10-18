@@ -71,6 +71,7 @@ public class RegistroVenta {
     private final PresupuestoRepository presupuestoRepository;
     private final RemitoRepository remitoRepository;
     private final ItemRemitoRepository itemRemitoRepository;
+    private final ClienteDelDocumento clienteDelDocumento;
 
     public RegistroVenta(
             ArticulosParaVenta articulosParaVenta, StockService stockService,
@@ -78,7 +79,8 @@ public class RegistroVenta {
             PagoRepository pagoRepository, NumeradorComprobanteRepository numeradorRepository,
             CajaService cajaService, FormaPagoRepository formaPagoRepository,
             PresupuestoRepository presupuestoRepository, RemitoRepository remitoRepository,
-            ItemRemitoRepository itemRemitoRepository) {
+            ItemRemitoRepository itemRemitoRepository, ClienteDelDocumento clienteDelDocumento) {
+        this.clienteDelDocumento = clienteDelDocumento;
         this.articulosParaVenta = articulosParaVenta;
         this.stockService = stockService;
         this.comprobanteRepository = comprobanteRepository;
@@ -118,6 +120,8 @@ public class RegistroVenta {
         // RM-006: lo mismo con el remito: se toma antes de mirar el ticket, y una segunda venta del mismo remito (o su
         // anulacion) espera aca y lo ve FACTURADO (o ANULADO).
         Remito remito = remitoParaFacturar(pedido.remitoId());
+        // CL-004: el cliente elegido tiene que ser uno activo de la ferreteria; la venta guarda su id y una copia del nombre.
+        ClienteDelDocumento.Elegido cliente = clienteDelDocumento.resolver(pedido.clienteId(), null);
 
         Validado validado = validar(pedido);
         Map<Long, ArticuloVendible> articulos = validado.articulos();
@@ -131,7 +135,8 @@ public class RegistroVenta {
         long numero = numeradorRepository.siguienteScoped();
         Comprobante comprobante = comprobanteRepository.save(
                 Comprobante.venta(ferreteriaId, numero, pedido.clave(), usuarioId, totales, cajaId,
-                        pedido.descuentoPorcentaje(), pedido.presupuestoId(), pedido.remitoId(), pedido.facturable()));
+                        pedido.descuentoPorcentaje(), pedido.presupuestoId(), pedido.remitoId(), pedido.facturable(),
+                        cliente.id(), cliente.nombre()));
         if (presupuesto != null) {
             presupuesto.cambiarEstado(EstadoPresupuesto.FACTURADO);
         }
@@ -195,6 +200,7 @@ public class RegistroVenta {
                 || pedido.descuentoPorcentaje().compareTo(comprobante.getDescuentoPorcentaje()) != 0
                 || !java.util.Objects.equals(pedido.presupuestoId(), comprobante.getPresupuestoId())
                 || !java.util.Objects.equals(pedido.remitoId(), comprobante.getRemitoId())
+                || !java.util.Objects.equals(pedido.clienteId(), comprobante.getClienteId())
                 || pedido.facturable() != (comprobante.getEstado() != EstadoComprobante.NO_FACTURABLE)
                 || pedido.renglones().size() != items.size()) {
             return false;

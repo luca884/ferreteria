@@ -42,10 +42,13 @@ public class RegistroRemito {
     private final RemitoRepository remitoRepository;
     private final ItemRemitoRepository itemRepository;
     private final NumeradorRemitoRepository numeradorRepository;
+    private final ClienteDelDocumento clienteDelDocumento;
 
     public RegistroRemito(
             ArticulosParaVenta articulosParaVenta, StockService stockService, RemitoRepository remitoRepository,
-            ItemRemitoRepository itemRepository, NumeradorRemitoRepository numeradorRepository) {
+            ItemRemitoRepository itemRepository, NumeradorRemitoRepository numeradorRepository,
+            ClienteDelDocumento clienteDelDocumento) {
+        this.clienteDelDocumento = clienteDelDocumento;
         this.articulosParaVenta = articulosParaVenta;
         this.stockService = stockService;
         this.remitoRepository = remitoRepository;
@@ -63,6 +66,8 @@ public class RegistroRemito {
             return yaEmitido.get();
         }
 
+        ClienteDelDocumento.Elegido cliente = clienteDelDocumento.resolver(pedido.clienteId(), pedido.clienteNombre());
+
         Set<Long> ids = pedido.renglones().stream().map(Renglon::articuloId)
                 .collect(Collectors.toCollection(LinkedHashSet::new));
         Map<Long, ArticuloVendible> articulos = new HashMap<>();
@@ -78,7 +83,7 @@ public class RegistroRemito {
 
         long numero = numeradorRepository.siguienteScoped();
         Remito remito = remitoRepository.save(Remito.emitir(ferreteriaId, numero, pedido.clave(), usuarioId, totales,
-                pedido.descuentoPorcentaje(), pedido.clienteNombre(), pedido.observaciones()));
+                pedido.descuentoPorcentaje(), cliente.id(), cliente.nombre(), pedido.observaciones()));
 
         List<SalidaStock> salidas = pedido.renglones().stream()
                 .map(r -> new SalidaStock(r.articuloId(), r.cantidad()))
@@ -122,6 +127,7 @@ public class RegistroRemito {
     private static boolean mismoContenido(EmitirRemito pedido, Remito remito, List<ItemRemito> items) {
         if (pedido.totalMostrado().compareTo(remito.getTotal()) != 0
                 || pedido.descuentoPorcentaje().compareTo(remito.getDescuentoPorcentaje()) != 0
+                || !java.util.Objects.equals(pedido.clienteId(), remito.getClienteId())
                 || pedido.renglones().size() != items.size()) {
             return false;
         }

@@ -53,7 +53,10 @@ public record ConfirmarVentaRequest(
         Long remitoId,
 
         /** false marca la venta como no facturable (NF-002); ausente es true, la venta de siempre. */
-        Boolean facturable) {
+        Boolean facturable,
+
+        /** El cliente elegido en el mostrador (CL-004); ausente es Consumidor Final. Lo valida el servicio. */
+        Long clienteId) {
 
     /** Una parte del pago mixto: la forma y lo que cubre del total sin recargo. El rango fino lo valida el servicio. */
     public record PagoRequest(
@@ -91,6 +94,6 @@ public record ConfirmarVentaRequest(
                 .toList(), totalMostrado, formaPagoId, descuentoPorcentaje,
                 pagos == null ? List.of()
                         : pagos.stream().map(p -> new ConfirmarVenta.PagoPedido(p.formaPagoId(), p.monto())).toList(),
-                presupuestoId, remitoId, facturable == null || facturable);
+                presupuestoId, remitoId, facturable == null || facturable, clienteId);
     }
 }
