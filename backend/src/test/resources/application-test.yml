@@ -1,7 +1,8 @@
 # Tests de integracion: el datasource lo pone Testcontainers (@ServiceConnection).
 spring:
   flyway:
-    locations: classpath:db/migration,classpath:db/dev-data
+    # db/test-data: solo tests (V1100 deja las ferreterias demo con el multiplo de $10 de los tests de precios).
+    locations: classpath:db/migration,classpath:db/dev-data,classpath:db/test-data
   jpa:
     properties:
       hibernate:

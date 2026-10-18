@@ -50,7 +50,8 @@ class ConfiguracionPreciosServiceTest {
         ConfiguracionPrecios cfg = service.actual();
 
         assertThat(cfg.margenDefectoPorcentaje()).isEqualByComparingTo(new BigDecimal("30"));
-        assertThat(cfg.redondeoMultiplo()).isEqualByComparingTo(new BigDecimal("10"));
+        // Sin redondeo por defecto (H11).
+        assertThat(cfg.redondeoMultiplo()).isEqualByComparingTo(BigDecimal.ZERO);
     }
 
     @Test

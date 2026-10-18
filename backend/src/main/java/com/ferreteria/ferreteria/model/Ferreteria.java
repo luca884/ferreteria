@@ -44,9 +44,12 @@ public class Ferreteria {
     @Column(name = "margen_defecto_porcentaje", nullable = false, precision = 6, scale = 2)
     private BigDecimal margenDefectoPorcentaje = new BigDecimal("30.00");
 
-    /** El precio final se redondea hacia arriba a un multiplo de este valor. */
+    /**
+     * El precio final se redondea hacia arriba a un multiplo de este valor; 0 es sin redondeo (precio con centavos).
+     * Por ahora 0 en todas (H11, V9): si las ferreterias lo piden, se evaluara redondear al peso entero.
+     */
     @Column(name = "redondeo_multiplo", nullable = false, precision = 15, scale = 2)
-    private BigDecimal redondeoMultiplo = new BigDecimal("10.00");
+    private BigDecimal redondeoMultiplo = new BigDecimal("0.00");
 
     @Column(name = "creado_en", nullable = false, updatable = false)
     private LocalDateTime creadoEn = HoraArgentina.ahora();

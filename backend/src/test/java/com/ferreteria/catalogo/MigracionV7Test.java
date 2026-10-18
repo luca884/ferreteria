@@ -264,7 +264,8 @@ class MigracionV7Test {
     void versionSieteSinArchivo(@org.junit.jupiter.api.io.TempDir java.nio.file.Path sinV7) throws Exception {
         java.nio.file.Path origen = java.nio.file.Path.of("src/main/resources/db/migration");
         try (var archivos = java.nio.file.Files.list(origen)) {
-            for (java.nio.file.Path archivo : archivos.filter(a -> !a.getFileName().toString().startsWith("V7__") && !a.getFileName().toString().startsWith("V8__")).toList()) {
+            // El codigo anterior a la V7: solo V1 a V6 (las posteriores, V8, V9..., tampoco existian).
+            for (java.nio.file.Path archivo : archivos.filter(a -> Integer.parseInt(a.getFileName().toString().replaceAll("^V(\\d+)__.*", "$1")) < 7).toList()) {
                 java.nio.file.Files.copy(archivo, sinV7.resolve(archivo.getFileName()));
             }
         }

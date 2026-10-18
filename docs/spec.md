@@ -51,7 +51,7 @@ Son 10 casos de uso, agrupados en cuatro módulos. Si algo no está en esta list
 **CU-03 Gestionar artículos** (Dueño)
 
 1. Alta, edición y baja lógica de un artículo: código interno, código de barras, código del proveedor, descripción, rubro, proveedor, costo, margen, alícuota de IVA, unidad y stock mínimo.
-2. El precio de venta se calcula solo: costo × (1 + margen).
+2. El precio de venta se calcula solo: costo × (1 + margen) × (1 + alícuota de IVA) (ver Reglas de negocio).
 
 **CU-04 Importar lista de precios del proveedor** (Dueño) — el caso más importante del sistema
 
@@ -111,7 +111,7 @@ Estas reglas se codifican en el dominio y se cubren con tests unitarios antes qu
 
 - El costo del proveedor se guarda **sin IVA**. Precio neto = costo × (1 + margen). Precio final = neto × (1 + alícuota de IVA).
 - El margen se define por artículo; si no tiene, hereda el del rubro; si no, el margen por defecto de la ferretería.
-- El precio final se redondea a un múltiplo configurable (por ejemplo $10) para que el mostrador no maneje centavos.
+- Sin redondeo por ahora: el precio final queda con centavos (escala 2, hacia arriba al centavo). Si las ferreterías lo piden, se evaluará redondear hacia arriba al peso entero. El código del múltiplo configurable sigue, con múltiplo 0 (sin redondeo) en todas las ferreterías (H11, migración V9).
 - Todo cambio de costo o precio guarda historial: fecha, valor anterior, valor nuevo y origen (importación, masivo, manual).
 - Montos en `BigDecimal` (Java) y `DECIMAL(15,2)` (base). Nunca `double`.
 

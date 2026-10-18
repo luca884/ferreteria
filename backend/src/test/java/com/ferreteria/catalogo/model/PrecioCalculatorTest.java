@@ -64,6 +64,19 @@ class PrecioCalculatorTest {
     }
 
     @Test
+    @DisplayName("H11, sin multiplo: la arandela de costo 2 + 30 % + IVA 21 % (3,146) queda en 3,15, no en 10")
+    void arandelaSinMultiplo() {
+        assertPrecio(PrecioCalculator.precioFinal(bd("2"), bd("30"), AlicuotaIva.IVA_21, BigDecimal.ZERO), "3.15");
+    }
+
+    @Test
+    @DisplayName("H11, sin multiplo en dolares: US$0,01 x 1535 + 30 % + IVA 21 % (24,14555) queda en 24,15, no en 30")
+    void dolaresSinMultiplo() {
+        assertPrecio(PrecioCalculator.precioFinal(
+                bd("0.01"), bd("30"), AlicuotaIva.IVA_21, BigDecimal.ZERO, bd("1535")), "24.15");
+    }
+
+    @Test
     @DisplayName("sin multiplo, un valor exacto de dos decimales queda igual")
     void sinMultiploValorExacto() {
         assertPrecio(PrecioCalculator.precioFinal(bd("100"), bd("20"), AlicuotaIva.IVA_0, null), "120.00");

@@ -66,7 +66,7 @@ class MigracionV8Test {
     }
 
     private void migrarALa8() {
-        flyway("classpath:db/migration").load().migrate();
+        flyway("classpath:db/migration").target("8").load().migrate();
     }
 
     @Test

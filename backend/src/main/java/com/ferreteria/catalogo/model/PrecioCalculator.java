@@ -48,7 +48,9 @@ public final class PrecioCalculator {
     /**
      * costo x (1 + margen/100) x (1 + iva/100), redondeado hacia arriba al multiplo. Escala 2.
      * El costo va sin IVA. Un multiplo null o menor o igual a 0 significa "sin multiplo":
-     * se redondea hacia arriba al centavo.
+     * se redondea hacia arriba al centavo. Por ahora todas las ferreterias van sin multiplo (H11, V9).
+     * Al centavo se sigue subiendo (CEILING) y no HALF_UP: nunca pierde margen, la diferencia es a lo sumo un centavo y
+     * el front (precio-final.ts) y los casos compartidos con el backend hacen exactamente la misma cuenta.
      */
     public static BigDecimal precioFinal(BigDecimal costo, BigDecimal margenPorcentaje, AlicuotaIva iva, BigDecimal multiplo) {
         return precioFinal(costo, margenPorcentaje, iva, multiplo, BigDecimal.ONE);

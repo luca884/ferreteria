@@ -62,13 +62,12 @@ class MigracionV2Test {
     @Test
     void lasFerreteriasExistentesRecibenLaConfiguracionPorDefecto() {
         List<Map<String, Object>> filas = jdbc.queryForList(
-                "select margen_defecto_porcentaje, redondeo_multiplo from ferreteria");
+                "select margen_defecto_porcentaje from ferreteria");
 
         assertThat(filas).isNotEmpty();
-        assertThat(filas).allSatisfy(fila -> {
-            assertThat(fila.get("margen_defecto_porcentaje")).hasToString("30.00");
-            assertThat(fila.get("redondeo_multiplo")).hasToString("10.00");
-        });
+        // El multiplo de $10 que dejaba V2 lo pasa a 0 la V9 (H11): lo prueba SinRedondeoIntegrationTest.
+        assertThat(filas).allSatisfy(fila ->
+                assertThat(fila.get("margen_defecto_porcentaje")).hasToString("30.00"));
     }
 
     @Test
