@@ -35,6 +35,8 @@ export interface EmitirPresupuestoRequest {
   /** Descuento global en %, aplicado a cada renglón. Se omite si no hay. */
   descuentoPorcentaje?: number;
   diasValidez?: number;
+  /** El cliente elegido con F9 (CL-005): si va, el servidor usa su razón social y se ignora `clienteNombre`. */
+  clienteId?: number;
   clienteNombre?: string;
   observaciones?: string;
 }
@@ -64,6 +66,8 @@ export interface PresupuestoResponse {
   vence: string;
   /** Pendiente o aceptado cuyo vencimiento pasó: se calcula al responder. */
   vencido: boolean;
+  /** Solo si se eligió un cliente de la tabla (CL-004); `clienteNombre` es la copia de su razón social o el texto libre. */
+  clienteId?: number;
   clienteNombre?: string;
   observaciones?: string;
   subtotal: number;

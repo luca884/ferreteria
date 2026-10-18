@@ -41,6 +41,10 @@ export interface Ticket {
   remitoId?: number;
   /** Su número, para mostrar de dónde viene el ticket. Va siempre junto con `remitoId`. */
   remitoNumero?: number;
+  /** El cliente elegido con F9 (CL-005): viaja con la venta, el presupuesto y el remito. Ausente es Consumidor Final. */
+  clienteId?: number;
+  /** Su razón social, para mostrarla en el mostrador. Va siempre junto con `clienteId`. */
+  clienteNombre?: string;
 }
 
 export interface ResultadoCantidad {
@@ -227,7 +231,19 @@ export function aRequest(
       : { pagos: pago.map((p) => ({ formaPagoId: p.formaPagoId, monto: p.centavos / 100 })) }),
     ...(global ? { descuentoPorcentaje: global / 100 } : {}),
     ...(noFacturable ? { facturable: false as const } : {}),
+    ...(t.clienteId ? { clienteId: t.clienteId } : {}),
   };
+}
+
+/** Elige el cliente del ticket (F9): reemplaza al anterior y no toca nada más. Sirve también con el ticket vacío. */
+export function elegirCliente(t: Ticket, cliente: { id: number; razonSocial: string }): Ticket {
+  return { ...t, clienteId: cliente.id, clienteNombre: cliente.razonSocial };
+}
+
+/** Vuelve a Consumidor Final. */
+export function quitarCliente(t: Ticket): Ticket {
+  const { clienteId: _id, clienteNombre: _nombre, ...resto } = t;
+  return resto;
 }
 
 /** Saca el presupuesto del ticket: la venta sigue como una venta común (el presupuesto no cambia). */
@@ -311,6 +327,7 @@ export function ticketDePresupuesto(
     ...(p.descuentoPorcentaje > 0 ? { descuentoGlobalBp: Math.round(p.descuentoPorcentaje * 100) } : {}),
     presupuestoId: p.presupuestoId,
     presupuestoNumero: p.numero,
+    ...(p.clienteId && p.clienteNombre ? { clienteId: p.clienteId, clienteNombre: p.clienteNombre } : {}),
   };
 }
 
@@ -330,6 +347,7 @@ export function ticketDeRemito(
     ...(r.descuentoPorcentaje > 0 ? { descuentoGlobalBp: Math.round(r.descuentoPorcentaje * 100) } : {}),
     remitoId: r.remitoId,
     remitoNumero: r.numero,
+    ...(r.clienteId && r.clienteNombre ? { clienteId: r.clienteId, clienteNombre: r.clienteNombre } : {}),
   };
 }
 
@@ -347,7 +365,7 @@ export function aPresupuestoRequest(t: Ticket, datos: DatosPresupuesto): EmitirP
     totalMostrado: totalDelTicket(t) / 100,
     ...(global ? { descuentoPorcentaje: global / 100 } : {}),
     diasValidez: datos.diasValidez,
-    ...(cliente ? { clienteNombre: cliente } : {}),
+    ...(t.clienteId ? { clienteId: t.clienteId } : cliente ? { clienteNombre: cliente } : {}),
     ...(observaciones ? { observaciones } : {}),
   };
 }
@@ -365,7 +383,7 @@ export function aRemitoRequest(t: Ticket, datos: DatosRemito): EmitirRemitoReque
     renglones: renglonesRequest(t),
     totalMostrado: totalDelTicket(t) / 100,
     ...(global ? { descuentoPorcentaje: global / 100 } : {}),
-    ...(cliente ? { clienteNombre: cliente } : {}),
+    ...(t.clienteId ? { clienteId: t.clienteId } : cliente ? { clienteNombre: cliente } : {}),
     ...(observaciones ? { observaciones } : {}),
   };
 }

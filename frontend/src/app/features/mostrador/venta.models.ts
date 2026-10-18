@@ -50,6 +50,8 @@ export interface ConfirmarVentaRequest {
   remitoId?: number;
   /** false marca la venta como no facturable (NF-002): cobra igual pero no se factura nunca. Se omite si es facturable. */
   facturable?: false;
+  /** El cliente elegido con F9 (CL-005). Se omite si es Consumidor Final. */
+  clienteId?: number;
 }
 
 export interface RenglonVentaResponse {
@@ -105,6 +107,9 @@ export interface VentaResponse {
   remitoId?: number;
   /** false si la venta quedó NO_FACTURABLE (NF-002). */
   facturable: boolean;
+  /** Solo si se eligió un cliente: su id y la copia de su razón social al vender (CL-004). */
+  clienteId?: number;
+  clienteNombre?: string;
 }
 
 /** 201 si la venta es nueva, 200 si la clave ya estaba registrada con el mismo contenido. */

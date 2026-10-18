@@ -23,6 +23,8 @@ export interface EmitirRemitoRequest {
   totalMostrado: number;
   /** Descuento global en %, aplicado a cada renglón. Se omite si no hay. */
   descuentoPorcentaje?: number;
+  /** El cliente elegido con F9 (CL-005): si va, el servidor usa su razón social y se ignora `clienteNombre`. */
+  clienteId?: number;
   clienteNombre?: string;
   observaciones?: string;
 }
@@ -55,6 +57,8 @@ export interface RemitoResponse {
   estado: EstadoRemito;
   /** LocalDateTime ISO sin zona. */
   fecha: string;
+  /** Solo si se eligió un cliente de la tabla (CL-004); `clienteNombre` es la copia de su razón social o el texto libre. */
+  clienteId?: number;
   clienteNombre?: string;
   observaciones?: string;
   subtotal: number;

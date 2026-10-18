@@ -68,4 +68,47 @@ describe('ticket.storage', () => {
 
     expect(ticketGuardado(auth())).toBeNull();
   });
+
+  describe('cliente (CL-005)', () => {
+    const guardarCrudo = (extra: Record<string, unknown>) =>
+      localStorage.setItem('ticket:3:7', JSON.stringify({ ...ticket, presupuestoId: undefined, presupuestoNumero: undefined, ...extra }));
+
+    it('el cliente elegido sobrevive: se guarda con el ticket y se lee igual', () => {
+      const conCliente: Ticket = { ...ticket, clienteId: 7, clienteNombre: 'Ferretería Norte SRL' };
+
+      guardarTicket(auth(), conCliente);
+
+      expect(ticketGuardado(auth())).toEqual(conCliente);
+    });
+
+    it('un ticket sin cliente se lee sin cliente', () => {
+      guardarTicket(auth(), ticket);
+
+      const leido = ticketGuardado(auth())!;
+      expect('clienteId' in leido).toBe(false);
+      expect('clienteNombre' in leido).toBe(false);
+    });
+
+    it('con el cliente a medias (solo id, o solo nombre) el ticket está roto', () => {
+      guardarCrudo({ clienteId: 7 });
+      expect(ticketGuardado(auth())).toBeNull();
+
+      guardarCrudo({ clienteNombre: 'Ana' });
+      expect(ticketGuardado(auth())).toBeNull();
+    });
+
+    it('con un id que no es un entero positivo, o un nombre vacío, el ticket está roto', () => {
+      for (const roto of [
+        { clienteId: 0, clienteNombre: 'Ana' },
+        { clienteId: -3, clienteNombre: 'Ana' },
+        { clienteId: 1.5, clienteNombre: 'Ana' },
+        { clienteId: '7', clienteNombre: 'Ana' },
+        { clienteId: 7, clienteNombre: '' },
+        { clienteId: 7, clienteNombre: 5 },
+      ]) {
+        guardarCrudo(roto);
+        expect(ticketGuardado(auth()), JSON.stringify(roto)).toBeNull();
+      }
+    });
+  });
 });

@@ -65,6 +65,13 @@ export function leerTicket(key: string): Ticket | null {
     if ((remitoId === undefined) !== (remitoNumero === undefined)) return null;
     if (remitoId !== undefined && !(esPositivo(remitoId) && esPositivo(remitoNumero))) return null;
     if (remitoId !== undefined && presupuestoId !== undefined) return null;
+    // El cliente elegido (CL-005) también va completo (id y nombre) o no va.
+    const clienteId = x['clienteId'];
+    const clienteNombre = x['clienteNombre'];
+    if ((clienteId === undefined) !== (clienteNombre === undefined)) return null;
+    if (clienteId !== undefined && !(esPositivo(clienteId) && typeof clienteNombre === 'string' && clienteNombre !== '')) {
+      return null;
+    }
     return {
       v: 1,
       clave: x['clave'],
@@ -77,6 +84,7 @@ export function leerTicket(key: string): Ticket | null {
       ...(remitoId !== undefined
         ? { remitoId: remitoId as number, remitoNumero: remitoNumero as number }
         : {}),
+      ...(clienteId !== undefined ? { clienteId: clienteId as number, clienteNombre: clienteNombre as string } : {}),
     };
   } catch {
     return null;

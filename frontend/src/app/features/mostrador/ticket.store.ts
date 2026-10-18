@@ -11,9 +11,11 @@ import {
   aplicarDescuentoRenglon,
   cambiarCantidad,
   descontarVendido,
+  elegirCliente,
   marcarProblemas,
   moverElegido,
   quitar,
+  quitarCliente,
   soltarPresupuesto,
   soltarRemito,
   ticketVacio,
@@ -110,6 +112,16 @@ export class TicketStore {
   /** El ticket sigue como una venta común: el remito de origen ya no se manda al cobrar ni cambia. */
   soltarRemito(): void {
     this._ticket.update(soltarRemito);
+  }
+
+  /** F9: el cliente de la venta, del presupuesto o del remito. Reemplaza al anterior; sirve con el ticket vacío. */
+  elegirCliente(cliente: { id: number; razonSocial: string }): void {
+    this._ticket.update((t) => elegirCliente(t, cliente));
+  }
+
+  /** Vuelve a Consumidor Final. */
+  quitarCliente(): void {
+    this._ticket.update(quitarCliente);
   }
 
   /** Tras cobrar o vaciar: ticket vacío y sin clave (el próximo primer renglón genera una nueva). */

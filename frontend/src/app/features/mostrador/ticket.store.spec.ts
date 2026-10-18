@@ -438,4 +438,64 @@ describe('TicketStore', () => {
       expect(a.ticket().remitoId).toBeUndefined();
     });
   });
+
+  describe('cliente (CL-005)', () => {
+    const norte = { id: 7, razonSocial: 'Ferretería Norte SRL' };
+
+    it('elegirCliente deja el cliente en el ticket aunque todavía no tenga renglones, y el primer renglón conserva la clave y el cliente', () => {
+      const s = crear();
+
+      s.elegirCliente(norte);
+      s.agregar(art(1));
+
+      expect(s.ticket().clienteId).toBe(7);
+      expect(s.ticket().clienteNombre).toBe('Ferretería Norte SRL');
+      expect(s.ticket().clave).toBe('clave-1');
+    });
+
+    it('el cliente se guarda con el ticket y sobrevive a un F5', () => {
+      const a = crear();
+      a.agregar(art(1));
+      a.elegirCliente(norte);
+      TestBed.tick();
+
+      const b = crear();
+
+      expect(b.ticket().clienteId).toBe(7);
+      expect(b.ticket().clienteNombre).toBe('Ferretería Norte SRL');
+    });
+
+    it('quitarCliente vuelve a Consumidor Final y queda guardado así', () => {
+      const a = crear();
+      a.agregar(art(1));
+      a.elegirCliente(norte);
+      a.quitarCliente();
+      TestBed.tick();
+
+      expect(a.ticket().clienteId).toBeUndefined();
+      expect(crear().ticket().clienteId).toBeUndefined();
+    });
+
+    it('vaciar no arrastra el cliente', () => {
+      const a = crear();
+      a.agregar(art(1));
+      a.elegirCliente(norte);
+
+      a.vaciar();
+      a.agregar(art(2));
+
+      expect(a.ticket().clienteId).toBeUndefined();
+    });
+
+    it('soltar el presupuesto o el remito conserva al cliente', () => {
+      const a = crear();
+      a.agregar(art(1));
+      a.elegirCliente(norte);
+
+      a.soltarPresupuesto();
+      a.soltarRemito();
+
+      expect(a.ticket().clienteId).toBe(7);
+    });
+  });
 });

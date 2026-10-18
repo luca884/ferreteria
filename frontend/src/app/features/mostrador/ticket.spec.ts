@@ -4,6 +4,8 @@ import { ArticuloMostrador } from './mostrador.models';
 import {
   Ticket,
   agregar,
+  elegirCliente,
+  quitarCliente,
   aPresupuestoRequest,
   aRemitoRequest,
   aRequest,
@@ -819,5 +821,110 @@ describe('ticket (puro)', () => {
       descontarVendido(t, aRequest(t, 1), () => `c${++llamadas}`);
       expect(llamadas).toBe(0);
     });
+  });
+});
+
+describe('ticket con cliente (CL-005)', () => {
+  const norte = { id: 7, razonSocial: 'Ferretería Norte SRL' };
+  const conUno = () => agregar(ticketVacio('c'), art());
+
+  it('elegirCliente deja el id y el nombre en el ticket y no toca los renglones', () => {
+    const t = elegirCliente(conUno(), norte);
+
+    expect(t.clienteId).toBe(7);
+    expect(t.clienteNombre).toBe('Ferretería Norte SRL');
+    expect(t.renglones).toEqual(conUno().renglones);
+    expect(t.clave).toBe('c');
+  });
+
+  it('elegir otro cliente reemplaza al anterior', () => {
+    const t = elegirCliente(elegirCliente(conUno(), norte), { id: 9, razonSocial: 'Ana Gómez' });
+
+    expect(t.clienteId).toBe(9);
+    expect(t.clienteNombre).toBe('Ana Gómez');
+  });
+
+  it('quitarCliente vuelve a Consumidor Final: no quedan ni el id ni el nombre', () => {
+    const t = quitarCliente(elegirCliente(conUno(), norte));
+
+    expect('clienteId' in t).toBe(false);
+    expect('clienteNombre' in t).toBe(false);
+  });
+
+  it('se puede elegir cliente con el ticket vacío (antes del primer renglón)', () => {
+    const t = elegirCliente(ticketVacio(''), norte);
+
+    expect(t.clienteId).toBe(7);
+    expect(t.renglones).toEqual([]);
+  });
+
+  it('aRequest manda clienteId solo si hay cliente', () => {
+    expect('clienteId' in aRequest(conUno(), 1)).toBe(false);
+    expect(aRequest(elegirCliente(conUno(), norte), 1).clienteId).toBe(7);
+  });
+
+  it('aPresupuestoRequest y aRemitoRequest mandan el clienteId y NO el texto libre cuando hay cliente', () => {
+    const t = elegirCliente(conUno(), norte);
+
+    const presupuesto = aPresupuestoRequest(t, { diasValidez: 15, clienteNombre: 'escrito a mano' });
+    const remito = aRemitoRequest(t, { clienteNombre: 'escrito a mano' });
+
+    expect(presupuesto.clienteId).toBe(7);
+    expect('clienteNombre' in presupuesto).toBe(false);
+    expect(remito.clienteId).toBe(7);
+    expect('clienteNombre' in remito).toBe(false);
+  });
+
+  it('sin cliente elegido, el presupuesto y el remito siguen mandando el texto libre', () => {
+    const presupuesto = aPresupuestoRequest(conUno(), { diasValidez: 15, clienteNombre: ' Juan, el del taller ' });
+    const remito = aRemitoRequest(conUno(), { clienteNombre: 'Juan' });
+
+    expect('clienteId' in presupuesto).toBe(false);
+    expect(presupuesto.clienteNombre).toBe('Juan, el del taller');
+    expect('clienteId' in remito).toBe(false);
+    expect(remito.clienteNombre).toBe('Juan');
+  });
+
+  it('el sobrante tras cobrar es una venta nueva: sin el cliente de la anterior', () => {
+    let t = elegirCliente(conUno(), norte);
+    t = agregar(t, cable());
+    const pedido = aRequest({ ...t, renglones: [t.renglones[0]] }, 1);
+
+    const resto = descontarVendido(t, pedido, () => 'nueva');
+
+    expect(resto.renglones).toHaveLength(1);
+    expect('clienteId' in resto).toBe(false);
+    expect('clienteNombre' in resto).toBe(false);
+  });
+
+  it('soltar el presupuesto o el remito conserva al cliente', () => {
+    const t = elegirCliente({ ...conUno(), presupuestoId: 8, presupuestoNumero: 12 }, norte);
+    const r = elegirCliente({ ...conUno(), remitoId: 8, remitoNumero: 5 }, norte);
+
+    expect(soltarPresupuesto(t).clienteId).toBe(7);
+    expect(soltarRemito(r).clienteId).toBe(7);
+  });
+
+  it('la venta que sale de un presupuesto o de un remito trae su cliente al ticket, si lo tenía', () => {
+    const sinRenglones: PresupuestoResponse['renglones'] = [];
+    const base = {
+      presupuestoId: 8, numero: 12, estado: 'PENDIENTE', fecha: '2026-10-18T10:00:00', vence: '2026-11-02',
+      vencido: false, subtotal: 0, descuentoPorcentaje: 0, descuento: 0, neto: 0, iva: 0, total: 0,
+      renglones: sinRenglones,
+    } as PresupuestoResponse;
+
+    const conCliente = ticketDePresupuesto({ ...base, clienteId: 7, clienteNombre: 'Ferretería Norte SRL' }, new Map(), 'k');
+    const conTexto = ticketDePresupuesto({ ...base, clienteNombre: 'Juan, el del taller' }, new Map(), 'k');
+    const remitoBase = {
+      remitoId: 8, numero: 5, estado: 'EMITIDO', fecha: '2026-10-18T10:00:00', subtotal: 0, descuentoPorcentaje: 0,
+      descuento: 0, neto: 0, iva: 0, total: 0, renglones: [],
+    } as RemitoResponse;
+    const remitoConCliente = ticketDeRemito({ ...remitoBase, clienteId: 7, clienteNombre: 'Ferretería Norte SRL' }, new Map(), 'k');
+
+    expect(conCliente.clienteId).toBe(7);
+    expect(conCliente.clienteNombre).toBe('Ferretería Norte SRL');
+    expect('clienteId' in conTexto).toBe(false);
+    expect(remitoConCliente.clienteId).toBe(7);
+    expect(remitoConCliente.clienteNombre).toBe('Ferretería Norte SRL');
   });
 });
