@@ -4,25 +4,30 @@ import com.ferreteria.catalogo.api.ArticuloVendible;
 import com.ferreteria.catalogo.api.ArticulosParaVenta;
 import com.ferreteria.common.exception.ConflictException;
 import com.ferreteria.common.exception.DatosInvalidosException;
+import com.ferreteria.common.exception.ReglaDeNegocioException;
 import com.ferreteria.common.exception.ResourceNotFoundException;
 import com.ferreteria.stock.service.SalidaStock;
 import com.ferreteria.stock.service.StockService;
 import com.ferreteria.tenant.TenantContext;
 import com.ferreteria.ventas.model.Comprobante;
 import com.ferreteria.ventas.model.EstadoPresupuesto;
+import com.ferreteria.ventas.model.EstadoRemito;
 import com.ferreteria.ventas.model.FormaPago;
 import com.ferreteria.ventas.model.ItemComprobante;
 import com.ferreteria.ventas.model.Pago;
 import com.ferreteria.ventas.model.Presupuesto;
 import com.ferreteria.ventas.model.RecargoVenta;
+import com.ferreteria.ventas.model.Remito;
 import com.ferreteria.ventas.model.RenglonVenta;
 import com.ferreteria.ventas.model.TotalesVenta;
 import com.ferreteria.ventas.repository.ComprobanteRepository;
 import com.ferreteria.ventas.repository.FormaPagoRepository;
 import com.ferreteria.ventas.repository.ItemComprobanteRepository;
+import com.ferreteria.ventas.repository.ItemRemitoRepository;
 import com.ferreteria.ventas.repository.NumeradorComprobanteRepository;
 import com.ferreteria.ventas.repository.PagoRepository;
 import com.ferreteria.ventas.repository.PresupuestoRepository;
+import com.ferreteria.ventas.repository.RemitoRepository;
 import com.ferreteria.ventas.service.ConfirmarVenta.Renglon;
 import com.ferreteria.ventas.service.VentaRechazadaException.Motivo;
 import org.springframework.stereotype.Service;
@@ -52,6 +57,7 @@ public class RegistroVenta {
 
     static final String MENSAJE_SIN_FORMA = "Elegí una forma de pago.";
     static final String MENSAJE_FORMA_INVALIDA = "La forma de pago no es válida.";
+    static final String MENSAJE_PRESUPUESTO_Y_REMITO = "Una venta sale de un presupuesto o de un remito, no de los dos.";
 
     private final ArticulosParaVenta articulosParaVenta;
     private final StockService stockService;
@@ -62,13 +68,16 @@ public class RegistroVenta {
     private final CajaService cajaService;
     private final FormaPagoRepository formaPagoRepository;
     private final PresupuestoRepository presupuestoRepository;
+    private final RemitoRepository remitoRepository;
+    private final ItemRemitoRepository itemRemitoRepository;
 
     public RegistroVenta(
             ArticulosParaVenta articulosParaVenta, StockService stockService,
             ComprobanteRepository comprobanteRepository, ItemComprobanteRepository itemRepository,
             PagoRepository pagoRepository, NumeradorComprobanteRepository numeradorRepository,
             CajaService cajaService, FormaPagoRepository formaPagoRepository,
-            PresupuestoRepository presupuestoRepository) {
+            PresupuestoRepository presupuestoRepository, RemitoRepository remitoRepository,
+            ItemRemitoRepository itemRemitoRepository) {
         this.articulosParaVenta = articulosParaVenta;
         this.stockService = stockService;
         this.comprobanteRepository = comprobanteRepository;
@@ -78,6 +87,8 @@ public class RegistroVenta {
         this.cajaService = cajaService;
         this.formaPagoRepository = formaPagoRepository;
         this.presupuestoRepository = presupuestoRepository;
+        this.remitoRepository = remitoRepository;
+        this.itemRemitoRepository = itemRemitoRepository;
     }
 
     /** Lo que sale de validar: los articulos del catalogo y las formas de pago del pedido, por id. */
@@ -87,6 +98,9 @@ public class RegistroVenta {
     public VentaRegistrada registrar(ConfirmarVenta pedido, Long usuarioId) {
         Long ferreteriaId = TenantContext.requireFerreteriaId();
         ValidacionTicket.articulosDistintos(pedido.renglones());
+        if (pedido.presupuestoId() != null && pedido.remitoId() != null) {
+            throw new ReglaDeNegocioException(MENSAJE_PRESUPUESTO_Y_REMITO);
+        }
 
         Optional<VentaRegistrada> yaRegistrada = repetida(pedido);
         if (yaRegistrada.isPresent()) {
@@ -100,6 +114,9 @@ public class RegistroVenta {
         // PP-006: el presupuesto se toma con lock exclusivo antes de mirar el ticket: si esta rechazado o ya facturado no
         // hay nada mas que validar, y una segunda venta del mismo presupuesto espera aca y lo ve FACTURADO.
         Presupuesto presupuesto = presupuestoParaFacturar(pedido.presupuestoId());
+        // RM-006: lo mismo con el remito: se toma antes de mirar el ticket, y una segunda venta del mismo remito (o su
+        // anulacion) espera aca y lo ve FACTURADO (o ANULADO).
+        Remito remito = remitoParaFacturar(pedido.remitoId());
 
         Validado validado = validar(pedido);
         Map<Long, ArticuloVendible> articulos = validado.articulos();
@@ -113,15 +130,20 @@ public class RegistroVenta {
         long numero = numeradorRepository.siguienteScoped();
         Comprobante comprobante = comprobanteRepository.save(
                 Comprobante.venta(ferreteriaId, numero, pedido.clave(), usuarioId, totales, cajaId,
-                        pedido.descuentoPorcentaje(), pedido.presupuestoId()));
+                        pedido.descuentoPorcentaje(), pedido.presupuestoId(), pedido.remitoId()));
         if (presupuesto != null) {
             presupuesto.cambiarEstado(EstadoPresupuesto.FACTURADO);
+        }
+        if (remito != null) {
+            remito.cambiarEstado(EstadoRemito.FACTURADO);
         }
 
         List<SalidaStock> salidas = pedido.renglones().stream()
                 .map(r -> new SalidaStock(r.articuloId(), r.cantidad()))
                 .toList();
-        Map<Long, BigDecimal> stockResultante = stockService.registrarVenta(comprobante.getId(), usuarioId, salidas);
+        Map<Long, BigDecimal> stockResultante = remito == null
+                ? stockService.registrarVenta(comprobante.getId(), usuarioId, salidas)
+                : facturarRemito(remito, comprobante, usuarioId, salidas);
 
         List<ItemComprobante> items = new ArrayList<>();
         for (int i = 0; i < pedido.renglones().size(); i++) {
@@ -171,6 +193,7 @@ public class RegistroVenta {
                 || pedido.totalMostrado().compareTo(comprobante.getTotal()) != 0
                 || pedido.descuentoPorcentaje().compareTo(comprobante.getDescuentoPorcentaje()) != 0
                 || !java.util.Objects.equals(pedido.presupuestoId(), comprobante.getPresupuestoId())
+                || !java.util.Objects.equals(pedido.remitoId(), comprobante.getRemitoId())
                 || pedido.renglones().size() != items.size()) {
             return false;
         }
@@ -273,6 +296,38 @@ public class RegistroVenta {
             throw new ConflictException(PresupuestoGestion.MENSAJE_FACTURADO);
         }
         return presupuesto;
+    }
+
+    /**
+     * El remito del que sale la venta, con lock exclusivo, o null si la venta no sale de uno. Uno de otra ferreteria o
+     * que no existe es 404; uno anulado o ya facturado, 409. Solo un EMITIDO se cobra (RM-006).
+     */
+    private Remito remitoParaFacturar(Long remitoId) {
+        if (remitoId == null) {
+            return null;
+        }
+        Remito remito = remitoRepository.paraCambiarScoped(remitoId)
+                .orElseThrow(() -> new ResourceNotFoundException(RemitoGestion.MENSAJE_NO_ENCONTRADO));
+        if (remito.getEstado() == EstadoRemito.ANULADO) {
+            throw new ConflictException(RemitoGestion.MENSAJE_ANULADO);
+        }
+        if (remito.getEstado() == EstadoRemito.FACTURADO) {
+            throw new ConflictException(RemitoGestion.MENSAJE_FACTURADO);
+        }
+        return remito;
+    }
+
+    /**
+     * El stock de una venta que sale de un remito: el remito ya descontó lo que entregó, asi que solo se mueve la
+     * diferencia (RM-006). Devuelve el stock resultante de los articulos que salen de mas.
+     */
+    private Map<Long, BigDecimal> facturarRemito(
+            Remito remito, Comprobante comprobante, Long usuarioId, List<SalidaStock> vendidas) {
+        List<SalidaStock> entregadas = itemRemitoRepository.deRemitoScoped(remito.getId()).stream()
+                .map(i -> new SalidaStock(i.getArticuloId(), i.getCantidad()))
+                .toList();
+        return stockService.facturarRemito(comprobante.getId(), remito.getId(), remito.getNumero(), usuarioId,
+                vendidas, entregadas);
     }
 
     /** Pasos 3 y 4 de C-008: busca los articulos y las formas de pago y valida en orden de precedencia, sin escribir. */

@@ -47,7 +47,10 @@ public record ConfirmarVentaRequest(
         List<@NotNull(message = "Hay un pago vacío.") @Valid PagoRequest> pagos,
 
         /** El presupuesto del que sale la venta (PP-006), si sale de uno. Lo valida el servicio. */
-        Long presupuestoId) {
+        Long presupuestoId,
+
+        /** El remito del que sale la venta (RM-006), si sale de uno. Lo valida el servicio. */
+        Long remitoId) {
 
     /** Una parte del pago mixto: la forma y lo que cubre del total sin recargo. El rango fino lo valida el servicio. */
     public record PagoRequest(
@@ -85,6 +88,6 @@ public record ConfirmarVentaRequest(
                 .toList(), totalMostrado, formaPagoId, descuentoPorcentaje,
                 pagos == null ? List.of()
                         : pagos.stream().map(p -> new ConfirmarVenta.PagoPedido(p.formaPagoId(), p.monto())).toList(),
-                presupuestoId);
+                presupuestoId, remitoId);
     }
 }
