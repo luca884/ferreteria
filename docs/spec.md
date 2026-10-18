@@ -24,7 +24,7 @@ El MVP tiene tres roles fijos. Nada de permisos configurables por ahora.
 | --- | --- | --- |
 | Super admin | Vos (el proveedor del servicio) | Dar de alta ferreterías, suspenderlas, ver estado general. No ve datos de ventas |
 | Dueño | El dueño o encargado de la ferretería | Todo dentro de su ferretería: configuración, ARCA, usuarios, precios, reportes, anulaciones |
-| Vendedor | Quien atiende el mostrador | Buscar artículos, vender, facturar, consultar stock, abrir y cerrar su caja |
+| Vendedor | Quien atiende el mostrador | Buscar artículos, vender, facturar, consultar stock, abrir y cerrar la caja |
 
 **Actor externo:** ARCA (WSAA para autenticación, WSFEv1 para pedir el CAE).
 
@@ -100,8 +100,13 @@ Son 10 casos de uso, agrupados en cuatro módulos. Si algo no está en esta list
 
 **CU-10 Abrir y cerrar caja** (Vendedor y Dueño)
 
-1. Abre la caja con el efectivo inicial.
-2. Al cerrar, el sistema muestra el total por medio de pago; el vendedor carga el efectivo contado y queda registrada la diferencia.
+1. Hay **una sola caja abierta por ferretería**, no una por usuario: cualquier usuario (Dueño o Vendedor) vende sobre la caja abierta. Abrir con una ya abierta se rechaza («Ya hay una caja abierta.»).
+2. Abre la caja con el efectivo inicial (cero o más). El sistema propone el efectivo contado del último cierre (o $ 0 si nunca hubo); si se abre con otro monto, queda registrada la diferencia de apertura (inicial − contado anterior) y quién abrió.
+3. **Sin caja abierta no se vende** («Abrí la caja para vender.»). Cada venta queda asociada a la caja abierta. Si la caja abierta es de un día anterior, no se vende ni se cargan movimientos hasta cerrarla y abrir una nueva («La caja del dd/MM sigue abierta. Cerrala antes de vender.»); cerrarla sí se puede.
+4. Durante el día se cargan movimientos de caja con importe, motivo, usuario y hora: ingresos varios y gastos varios (Dueño y Vendedor) y retiros (solo el Dueño).
+5. **Cierre ciego:** el que cierra (Dueño o Vendedor) carga solo el efectivo contado. Recién entonces el sistema muestra el total por medio de pago (efectivo, débito, crédito, transferencia), los ingresos, gastos y retiros, el efectivo esperado (inicial + ventas en efectivo + ingresos − gastos − retiros) y la diferencia (contado − esperado). Mientras la caja está abierta el Vendedor no ve lo esperado ni los totales; el Dueño sí ve la caja del día en vivo.
+6. Una caja cerrada es inmutable: no se reabre, no se edita y no admite movimientos ni ventas.
+7. El Dueño ve el historial de cajas cerradas (más nuevas primero) y el detalle de cada una: totales, movimientos y quién abrió y cerró.
 
 ## Reglas de negocio
 
@@ -153,7 +158,8 @@ Una sola base compartida y todas las tablas de negocio con `tenant_id`. Es el mi
 | Comprobante | tipo (FA, FB, FC, NC, presupuesto), punto de venta, número, fecha, neto, IVA, total, CAE, vencimiento del CAE, estado (pendiente, autorizado, rechazado) | N—1 Cliente, N—1 Caja, 1—N Item, 1—N Pago |
 | ItemComprobante | descripción, cantidad, precio unitario, alícuota IVA, subtotal (copiados al momento de la venta) | N—1 Comprobante, N—1 Articulo |
 | Pago | medio (efectivo, débito, crédito, transferencia), monto | N—1 Comprobante |
-| Caja | apertura, cierre, efectivo inicial, efectivo contado, diferencia | N—1 Usuario, 1—N Comprobante |
+| Caja | apertura (fecha y usuario que abre), cierre (fecha y usuario que cierra), efectivo inicial, efectivo contado, efectivo esperado, diferencia (contado − esperado), diferencia de apertura (inicial − contado del cierre anterior), abierta (una sola por ferretería) | N—1 Ferretería, N—1 Usuario (abre), N—1 Usuario (cierra), 1—N Comprobante, 1—N MovimientoCaja |
+| MovimientoCaja | tipo (ingreso, gasto, retiro), importe, motivo, fecha, usuario | N—1 Caja, N—1 Usuario |
 
 **Decisiones:**
 
