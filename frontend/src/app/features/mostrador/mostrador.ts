@@ -7,6 +7,7 @@ import { CajaBusqueda } from './caja-busqueda';
 import { DialogoCantidad } from './dialogo-cantidad';
 import { ConfirmacionCobro, DialogoCobro } from './dialogo-cobro';
 import { DialogoConfirmacion } from './dialogo-confirmacion';
+import { DialogoDescuento } from './dialogo-descuento';
 import { FichaArticulo } from './ficha-articulo';
 import { LISTA_ID, ListaResultados, filaId } from './lista-resultados';
 import { ArticuloMostrador, BusquedaMostrador } from './mostrador.models';
@@ -42,6 +43,8 @@ type Dialogo =
   | { tipo: 'cantidad'; indice: number }
   | { tipo: 'quitar'; indice: number }
   | { tipo: 'vaciar' }
+  | { tipo: 'descuento'; indice: number }
+  | { tipo: 'descuentoTotal' }
   | { tipo: 'cobro' };
 
 /**
@@ -75,6 +78,7 @@ interface Escaneo {
     DialogoCantidad,
     DialogoCobro,
     DialogoConfirmacion,
+    DialogoDescuento,
     ListaResultados,
     FichaArticulo,
     TicketLista,
@@ -198,6 +202,8 @@ export class Mostrador {
     return {
       buscar: !abierto,
       cantidad: conRenglones,
+      descuento: conRenglones,
+      descuentoTotal: conRenglones,
       cobrar: conRenglones && this.avisoCaja() === null,
       quitar: conRenglones,
       vaciar: conRenglones,
@@ -348,7 +354,16 @@ export class Mostrador {
         this.avisar(null);
         this.dialogo.set({ tipo: 'vaciar' });
         return;
+      case 'descuentoTotal':
+        if (renglones.length === 0) {
+          this.avisar({ texto: MENSAJE_TICKET_VACIO, grave: false, tipo: 'vacio' });
+          return;
+        }
+        this.avisar(null);
+        this.dialogo.set({ tipo: 'descuentoTotal' });
+        return;
       case 'cantidad':
+      case 'descuento':
       case 'quitar': {
         // Sin renglón elegido, el último agregado.
         const indice = this.ticket.ticket().elegido ?? renglones.length - 1;
@@ -370,6 +385,20 @@ export class Mostrador {
 
   protected cambiarCantidad(indice: number, milesimas: number): void {
     const error = this.ticket.cambiarCantidad(indice, milesimas);
+    if (error) this.avisar({ texto: error, grave: true, tipo: 'otro' });
+    this.cerrarDialogo();
+  }
+
+  /** El descuento propio de un renglón (F7), en centésimas de punto porcentual; 0 lo saca. */
+  protected aplicarDescuentoRenglon(indice: number, bp: number): void {
+    const error = this.ticket.aplicarDescuentoRenglon(indice, bp);
+    if (error) this.avisar({ texto: error, grave: true, tipo: 'otro' });
+    this.cerrarDialogo();
+  }
+
+  /** El descuento de todo el ticket (F6), en centésimas de punto porcentual; 0 lo saca. */
+  protected aplicarDescuentoGlobal(bp: number): void {
+    const error = this.ticket.aplicarDescuentoGlobal(bp);
     if (error) this.avisar({ texto: error, grave: true, tipo: 'otro' });
     this.cerrarDialogo();
   }

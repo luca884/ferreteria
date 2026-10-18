@@ -1,6 +1,6 @@
 import { Component, computed, input } from '@angular/core';
 import { MontoPipe } from '../../core/formato/monto';
-import { totalTicket } from './centavos';
+import { subtotalTicket, totalTicket } from './centavos';
 import { RenglonTicket } from './ticket';
 
 /**
@@ -18,6 +18,10 @@ import { RenglonTicket } from './ticket';
           {{ renglones().length }} {{ renglones().length === 1 ? 'renglón' : 'renglones' }}
         </p>
       </div>
+      @if (descuentoCentavos() > 0) {
+        <p class="linea subtotal">Subtotal <span>{{ subtotalCentavos() / 100 | monto }}</span></p>
+        <p class="linea descuento">Descuento <span>-{{ descuentoCentavos() / 100 | monto }}</span></p>
+      }
       <!-- <output>: un resultado calculado que admite nombre (un aria-label en un <p> se ignora). -->
       <output class="total" aria-labelledby="totales-etiqueta">{{ totalCentavos() / 100 | monto }}</output>
     </section>
@@ -49,6 +53,15 @@ import { RenglonTicket } from './ticket';
       margin: 0;
       font-variant-numeric: tabular-nums;
     }
+    .linea {
+      display: flex;
+      justify-content: space-between;
+      gap: var(--e-3);
+      margin: var(--e-1) 0 0;
+      color: var(--profundo-texto-tenue);
+      font-size: var(--texto-sm);
+      font-variant-numeric: tabular-nums;
+    }
     .total {
       display: block;
       margin: var(--e-1) 0 0;
@@ -64,6 +77,10 @@ import { RenglonTicket } from './ticket';
 })
 export class TotalesTicket {
   readonly renglones = input.required<readonly RenglonTicket[]>();
+  /** Descuento global del ticket en centésimas de punto porcentual; se aplica a cada renglón. */
+  readonly descuentoGlobalBp = input(0);
 
-  protected readonly totalCentavos = computed(() => totalTicket(this.renglones()));
+  protected readonly totalCentavos = computed(() => totalTicket(this.renglones(), this.descuentoGlobalBp()));
+  protected readonly subtotalCentavos = computed(() => subtotalTicket(this.renglones()));
+  protected readonly descuentoCentavos = computed(() => this.subtotalCentavos() - this.totalCentavos());
 }

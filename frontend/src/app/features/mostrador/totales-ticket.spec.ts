@@ -31,13 +31,14 @@ describe('TotalesTicket', () => {
   const texto = (selector: string) =>
     el().querySelector(selector)!.textContent!.replace(/\s+/g, ' ').trim();
 
-  async function crear(renglones: RenglonTicket[]) {
+  async function crear(renglones: RenglonTicket[], descuentoGlobalBp = 0) {
     await TestBed.configureTestingModule({
       imports: [TotalesTicket],
       providers: [{ provide: LOCALE_ID, useValue: 'es-AR' }],
     }).compileComponents();
     fixture = TestBed.createComponent(TotalesTicket);
     fixture.componentRef.setInput('renglones', renglones);
+    fixture.componentRef.setInput('descuentoGlobalBp', descuentoGlobalBp);
     fixture.detectChanges();
   }
 
@@ -48,6 +49,28 @@ describe('TotalesTicket', () => {
     ]);
 
     expect(el().querySelector('.total')!.textContent!.trim()).toBe(`$${NBSP}4.463,33`);
+  });
+
+  it('sin descuentos no muestra subtotal ni descuento', async () => {
+    await crear([renglon()]);
+
+    expect(el().querySelector('.subtotal')).toBeNull();
+    expect(el().querySelector('.descuento')).toBeNull();
+  });
+
+  it('con el descuento de un renglón muestra el subtotal, lo descontado y el total ya descontado', async () => {
+    await crear([renglon({ precioCentavos: 10000, cantidadMilesimas: 1000, descuentoBp: 1000 })]);
+
+    expect(texto('.subtotal')).toBe('Subtotal $ 100,00');
+    expect(texto('.descuento')).toBe('Descuento -$ 10,00');
+    expect(el().querySelector('.total')!.textContent!.trim()).toBe(`$${NBSP}90,00`);
+  });
+
+  it('con el descuento global aplica el porcentaje a cada renglón y lo dice', async () => {
+    await crear([renglon({ precioCentavos: 10000, cantidadMilesimas: 1000 })], 1000);
+
+    expect(texto('.descuento')).toBe('Descuento -$ 10,00');
+    expect(el().querySelector('.total')!.textContent!.trim()).toBe(`$${NBSP}90,00`);
   });
 
   it('el total es un <output> con nombre «Total» (un aria-label en un <p> se ignora)', async () => {

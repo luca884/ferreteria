@@ -32,13 +32,16 @@
           @if (sinStock(r)) {
             <span class="sin-stock">Sin stock suficiente</span>
           }
+          @if (r.descuentoBp) {
+            <span class="descuento">{{ r.descuentoBp / 100 | number: '1.0-2' }} % de descuento</span>
+          }
           @if (r.problema) {
             <!-- Sin role="alert": el aviso del mostrador ya anuncia el rechazo una vez, no uno por renglón. -->
             <span class="problema">{{ r.problema }}</span>
           }
         </td>
         <td class="num precio">{{ r.precioCentavos / 100 | monto }}</td>
-        <td class="num total-renglon">{{ totalRenglon(r.precioCentavos, r.cantidadMilesimas) / 100 | monto }}</td>
+        <td class="num total-renglon">{{ totalRenglon(r.precioCentavos, r.cantidadMilesimas, r.descuentoBp ?? 0) / 100 | monto }}</td>
       </tr>
     } @empty {
       @if (conMensajeVacio()) {

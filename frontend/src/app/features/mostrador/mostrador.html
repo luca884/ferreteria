@@ -79,7 +79,7 @@
       <p>Escaneá o buscá un artículo para ver su precio, stock y ubicación.</p>
     </div>
   }
-  <app-totales-ticket [renglones]="ticket.ticket().renglones" />
+  <app-totales-ticket [renglones]="ticket.ticket().renglones" [descuentoGlobalBp]="ticket.ticket().descuentoGlobalBp ?? 0" />
 </aside>
 
 @if (dialogo(); as abierto) {
@@ -95,6 +95,26 @@
           (escaneoDescartado)="escaneoDescartado()"
         />
       }
+    }
+    @case ('descuento') {
+      @if (renglonDe(abierto.indice); as r) {
+        <app-dialogo-descuento
+          [titulo]="'Descuento de ' + r.descripcion"
+          [descuentoBp]="r.descuentoBp ?? 0"
+          (confirmar)="aplicarDescuentoRenglon(abierto.indice, $event)"
+          (cancelar)="cerrarDialogo()"
+          (escaneoDescartado)="escaneoDescartado()"
+        />
+      }
+    }
+    @case ('descuentoTotal') {
+      <app-dialogo-descuento
+        titulo="Descuento de todo el ticket"
+        [descuentoBp]="ticket.ticket().descuentoGlobalBp ?? 0"
+        (confirmar)="aplicarDescuentoGlobal($event)"
+        (cancelar)="cerrarDialogo()"
+        (escaneoDescartado)="escaneoDescartado()"
+      />
     }
     @case ('quitar') {
       <app-dialogo-confirmacion

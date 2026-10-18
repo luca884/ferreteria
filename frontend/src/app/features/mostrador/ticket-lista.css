@@ -79,6 +79,7 @@ td {
   white-space: nowrap;
 }
 .sin-stock,
+.descuento,
 .problema {
   display: inline-block;
   margin: 4px 6px 0 0;
@@ -90,6 +91,10 @@ td {
 .sin-stock {
   background: var(--advertencia-insignia);
   color: var(--advertencia);
+}
+.descuento {
+  background: var(--exito-fondo);
+  color: var(--exito);
 }
 .problema {
   background: var(--error-borde);

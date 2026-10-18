@@ -167,7 +167,15 @@ describe('Mostrador', () => {
       const botones = Array.from(el().querySelectorAll('app-botonera button')).map((b) =>
         b.textContent!.replace(/\s+/g, ' ').trim(),
       );
-      expect(botones).toEqual(['F2 Buscar', 'F3 Cantidad', 'F4 Cobrar', 'F10 Quitar', 'Vaciar']);
+      expect(botones).toEqual([
+        'F2 Buscar',
+        'F3 Cantidad',
+        'F7 Descuento',
+        'F6 Dto. total',
+        'F4 Cobrar',
+        'F10 Quitar',
+        'Vaciar',
+      ]);
       expect(el().textContent).not.toContain('F2 buscar · Esc limpiar');
     });
 
@@ -1985,13 +1993,13 @@ describe('Mostrador', () => {
       expect(llamadas).toHaveLength(2);
     });
 
-    it('F6 no hace nada en este change', async () => {
+    it('F8 no hace nada todavía (es del presupuesto)', async () => {
       await crear();
       await escribir('tor');
       await avanzar(250);
       await responder(0, lista([articulo(1)]));
 
-      const evento = await tecla('F6');
+      const evento = await tecla('F8');
       await avanzar(500);
 
       expect(evento.defaultPrevented).toBe(false);
@@ -2262,6 +2270,112 @@ describe('Mostrador', () => {
       await buscarLista([articulo(1), articulo(2)]);
 
       expect(el().querySelector('app-ticket-lista .vacio')).toBeNull();
+    });
+  });
+
+  describe('descuentos (GDS-12)', () => {
+    const exacto = (a: ArticuloMostrador): BusquedaMostrador => ({ tipo: 'EXACTO', items: [a], hayMas: false });
+    const normal = (t: string | null | undefined) => (t ?? '').replace(/\s+/g, ' ').trim();
+    const dialogo = () => el().querySelector<HTMLElement>('app-dialogo-descuento [role="dialog"]');
+    const campoDescuento = () => el().querySelector<HTMLInputElement>('app-dialogo-descuento input')!;
+    const totalGrande = () => normal(el().querySelector('app-totales-ticket .total')?.textContent);
+
+    async function tecla(key: string) {
+      (document.activeElement as HTMLElement).dispatchEvent(
+        new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }),
+      );
+      await refrescar();
+    }
+
+    async function conUnArticulo() {
+      await crear();
+      await escribir('M');
+      await enter();
+      await responder(llamadas.length - 1, exacto(articulo(1, { precioFinal: 1500 })));
+    }
+
+    async function descuentoDelDialogo(valor: string) {
+      campoDescuento().value = valor;
+      campoDescuento().dispatchEvent(new Event('input'));
+      await refrescar();
+      await tecla('Enter');
+    }
+
+    it('F7 abre el descuento del renglón elegido y al confirmar el renglón lo dice y el total baja', async () => {
+      await conUnArticulo();
+
+      await tecla('F7');
+
+      expect(normal(dialogo()?.querySelector('h2')?.textContent)).toBe('Descuento de Artículo 1');
+      await descuentoDelDialogo('10');
+      expect(dialogo()).toBeNull();
+      expect(normal(el().querySelector('app-ticket-lista .descuento')?.textContent)).toBe('10 % de descuento');
+      expect(totalGrande()).toBe('$ 1.350,00');
+    });
+
+    it('F6 abre el descuento de todo el ticket y al confirmar baja el total', async () => {
+      await conUnArticulo();
+
+      await tecla('F6');
+
+      expect(normal(dialogo()?.querySelector('h2')?.textContent)).toBe('Descuento de todo el ticket');
+      await descuentoDelDialogo('10');
+      expect(dialogo()).toBeNull();
+      expect(totalGrande()).toBe('$ 1.350,00');
+      expect(normal(el().querySelector('app-totales-ticket .descuento')?.textContent)).toBe('Descuento -$ 150,00');
+    });
+
+    it('Esc cierra el diálogo sin aplicar nada', async () => {
+      await conUnArticulo();
+      await tecla('F7');
+
+      await tecla('Escape');
+
+      expect(dialogo()).toBeNull();
+      expect(totalGrande()).toBe('$ 1.500,00');
+    });
+
+    it('sin renglones los descuentos no abren nada: avisan que el ticket está vacío y los botones están apagados', async () => {
+      await crear();
+
+      await tecla('F7');
+      await tecla('F6');
+
+      expect(dialogo()).toBeNull();
+      expect(normal(el().querySelector('.aviso')?.textContent)).toBe('El ticket está vacío.');
+      const botones = Array.from(el().querySelectorAll<HTMLButtonElement>('app-botonera button'));
+      for (const texto of ['Descuento', 'Dto. total']) {
+        expect(botones.find((b) => normal(b.textContent).includes(texto))!.disabled).toBe(true);
+      }
+    });
+
+    it('un descuento inválido se avisa en el diálogo y no cierra', async () => {
+      await conUnArticulo();
+      await tecla('F7');
+
+      await descuentoDelDialogo('100');
+
+      expect(dialogo()).not.toBeNull();
+      expect(normal(el().querySelector('app-dialogo-descuento [role="alert"]')?.textContent)).toBe(
+        'El descuento tiene que estar entre 0 y 99,99 %.',
+      );
+      expect(totalGrande()).toBe('$ 1.500,00');
+    });
+
+    it('al cobrar manda los dos descuentos y el total ya descontado', async () => {
+      await conUnArticulo();
+      await tecla('F7');
+      await descuentoDelDialogo('10');
+      await tecla('F6');
+      await descuentoDelDialogo('10');
+
+      await tecla('F4');
+      await tecla('Enter');
+
+      expect(cobros).toHaveLength(1);
+      expect(cobros[0].pedido.renglones[0].descuentoPorcentaje).toBe(10);
+      expect(cobros[0].pedido.descuentoPorcentaje).toBe(10);
+      expect(cobros[0].pedido.totalMostrado).toBe(1215);
     });
   });
 

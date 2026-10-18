@@ -19,8 +19,16 @@ describe('Botonera', () => {
     fixture.detectChanges();
   });
 
-  it('muestra F2 Buscar, F3 Cantidad, F4 Cobrar, F10 Quitar y Vaciar', () => {
-    expect(textos()).toEqual(['F2 Buscar', 'F3 Cantidad', 'F4 Cobrar', 'F10 Quitar', 'Vaciar']);
+  it('muestra F2 Buscar, F3 Cantidad, los descuentos F7 y F6, F4 Cobrar, F10 Quitar y Vaciar', () => {
+    expect(textos()).toEqual([
+      'F2 Buscar',
+      'F3 Cantidad',
+      'F7 Descuento',
+      'F6 Dto. total',
+      'F4 Cobrar',
+      'F10 Quitar',
+      'Vaciar',
+    ]);
   });
 
   it('la tecla visible no forma parte del nombre: va en aria-keyshortcuts', () => {
@@ -30,9 +38,9 @@ describe('Botonera', () => {
     expect(boton('F4').getAttribute('aria-keyshortcuts')).toBe('F4');
   });
 
-  it('no muestra F7, F8 ni F9', () => {
+  it('no muestra F8 ni F9', () => {
     const todo = textos().join(' ');
-    expect(todo).not.toMatch(/F7|F8|F9/);
+    expect(todo).not.toMatch(/F8|F9/);
   });
 
   it('las etiquetas salen del mapa de atajos, sin duplicarlas', () => {

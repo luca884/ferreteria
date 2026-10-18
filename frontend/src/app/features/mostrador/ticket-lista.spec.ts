@@ -44,6 +44,19 @@ describe('TicketLista', () => {
     fixture.detectChanges();
   }
 
+  it('un renglón con descuento lo dice y su total sale ya descontado', async () => {
+    await crear([renglon({ precioCentavos: 10000, cantidadMilesimas: 2000, descuentoBp: 1050 })]);
+
+    expect(texto('.descuento')).toBe('10,5 % de descuento');
+    expect(texto('.total-renglon')).toBe(`$${NBSP}179,00`);
+  });
+
+  it('un renglón sin descuento, o con 0, no muestra nada de descuento', async () => {
+    await crear([renglon(), renglon({ articuloId: 2, descuentoBp: 0 })]);
+
+    expect(el().querySelector('.descuento')).toBeNull();
+  });
+
   it('la grilla tiene encabezados Cant. | Código | Descripción | P. unit. | Total', async () => {
     await crear([renglon()]);
 
