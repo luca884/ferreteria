@@ -136,7 +136,7 @@ class StockServiceIntegrationTest extends IntegrationTestBase {
         Long tornillo = articuloConAjusteInicial(f, u, "TOR-1", "UNIDAD");
         Long cable = articuloConAjusteInicial(f, u, "CAB-1", "METRO");
         jdbc.update("insert into comprobante (ferreteria_id, tipo, estado, numero, clave_idempotencia, usuario_id, "
-                + "neto, iva, total) values (?, 'VENTA', 'SIN_FACTURAR', 1, ?, ?, 0, 0, 0)",
+                + "neto, iva, total, subtotal) values (?, 'VENTA', 'SIN_FACTURAR', 1, ?, ?, 0, 0, 0, 0)",
                 f, "00000000-0000-4000-8000-" + String.format("%012d", SECUENCIA.get()), u);
         Long comprobante = jdbc.queryForObject("select id from comprobante where ferreteria_id = ?", Long.class, f);
         return new Escenario(f, u, comprobante, tornillo, cable);

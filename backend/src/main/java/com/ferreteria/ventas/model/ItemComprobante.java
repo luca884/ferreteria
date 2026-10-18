@@ -52,6 +52,15 @@ public class ItemComprobante {
     @Column(name = "alicuota_iva", nullable = false, updatable = false, length = 10)
     private String alicuotaIva;
 
+    /** Precio x cantidad, antes de descuentos. */
+    @Column(nullable = false, updatable = false, precision = 15, scale = 2)
+    private BigDecimal bruto;
+
+    /** El descuento propio del renglon en %. El global vive en el comprobante. */
+    @Column(name = "descuento_porcentaje", nullable = false, updatable = false, precision = 5, scale = 2)
+    private BigDecimal descuentoPorcentaje;
+
+    /** Ya con el descuento del renglon y el global. */
     @Column(nullable = false, updatable = false, precision = 15, scale = 2)
     private BigDecimal total;
 
@@ -76,6 +85,8 @@ public class ItemComprobante {
         item.cantidad = calculado.cantidad();
         item.precioUnitario = calculado.precioUnitario();
         item.alicuotaIva = alicuotaIva;
+        item.bruto = calculado.bruto();
+        item.descuentoPorcentaje = calculado.descuentoPorcentaje();
         item.total = calculado.total();
         item.neto = calculado.neto();
         item.iva = calculado.iva();
@@ -92,6 +103,8 @@ public class ItemComprobante {
     public BigDecimal getCantidad() { return cantidad; }
     public BigDecimal getPrecioUnitario() { return precioUnitario; }
     public String getAlicuotaIva() { return alicuotaIva; }
+    public BigDecimal getBruto() { return bruto; }
+    public BigDecimal getDescuentoPorcentaje() { return descuentoPorcentaje; }
     public BigDecimal getTotal() { return total; }
     public BigDecimal getNeto() { return neto; }
     public BigDecimal getIva() { return iva; }

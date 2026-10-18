@@ -179,14 +179,14 @@ class MigracionV6Test extends IntegrationTestBase {
     }
 
     @Test
-    @DisplayName("aditiva: V1 a V10 estan aplicadas, en orden y sin fallas (los datos demo, V1000 en adelante, no cuentan)")
+    @DisplayName("aditiva: V1 a V11 estan aplicadas, en orden y sin fallas (los datos demo, V1000 en adelante, no cuentan)")
     void historialDeMigraciones() {
         List<Map<String, Object>> migraciones = jdbc.queryForList(
             "select version, success from flyway_schema_history where version is not null "
                 + "and cast(version as unsigned) < 1000 order by installed_rank");
 
         assertThat(migraciones).extracting(m -> m.get("version"))
-                .containsExactly("1", "2", "3", "4", "5", "6", "7", "8", "9", "10");
+                .containsExactly("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11");
         assertThat(migraciones).allSatisfy(m -> assertThat(m.get("success")).isIn(true, 1));
     }
 

@@ -6,6 +6,7 @@ import com.ferreteria.ventas.model.LimitesVenta;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.DecimalMax;
 import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.Digits;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
@@ -36,7 +37,11 @@ public record ConfirmarVentaRequest(
         BigDecimal totalMostrado,
 
         @NotNull(message = "Elegí un medio de pago: EFECTIVO, DEBITO, CREDITO o TRANSFERENCIA.")
-        MedioPago medioPago) {
+        MedioPago medioPago,
+
+        /** Descuento global en % (GDS-12), aplicado a cada renglon. Ausente es 0. El rango lo valida el servicio. */
+        @Digits(integer = 5, fraction = 2, message = "El descuento admite hasta 2 decimales.")
+        BigDecimal descuentoPorcentaje) {
 
     /** Un renglon del ticket: articulo, cantidad y el precio unitario (con IVA) que vio el cajero. */
     public record RenglonRequest(
@@ -52,11 +57,16 @@ public record ConfirmarVentaRequest(
             @DecimalMin(value = "0.00", message = "El precio no puede ser negativo.")
             @DecimalMax(value = LimitesVenta.IMPORTE_MAXIMO_TEXTO,
                     message = "El precio es demasiado grande: el máximo es $ 9.999.999.999.999,99.")
-            BigDecimal precioUnitario) {}
+            BigDecimal precioUnitario,
+
+            /** Descuento del renglon en % (GDS-12). Ausente es 0. */
+            @Digits(integer = 5, fraction = 2, message = "El descuento admite hasta 2 decimales.")
+            BigDecimal descuentoPorcentaje) {}
 
     public ConfirmarVenta aPedido() {
         return new ConfirmarVenta(clave, renglones.stream()
-                .map(r -> new ConfirmarVenta.Renglon(r.articuloId(), r.cantidad(), r.precioUnitario()))
-                .toList(), totalMostrado, medioPago);
+                .map(r -> new ConfirmarVenta.Renglon(r.articuloId(), r.cantidad(), r.precioUnitario(),
+                        r.descuentoPorcentaje()))
+                .toList(), totalMostrado, medioPago, descuentoPorcentaje);
     }
 }

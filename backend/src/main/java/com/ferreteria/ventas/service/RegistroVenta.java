@@ -45,6 +45,7 @@ import java.util.stream.Collectors;
 @Service
 public class RegistroVenta {
 
+    static final String MENSAJE_DESCUENTO = "El descuento tiene que estar entre 0 y 99,99 %.";
     static final String MENSAJE_INEXISTENTE = "Hay un artículo del ticket que ya no está disponible";
 
     private final ArticulosParaVenta articulosParaVenta;
@@ -85,16 +86,13 @@ public class RegistroVenta {
 
         Map<Long, ArticuloVendible> articulos = validar(pedido);
 
-        List<RenglonVenta> calculados = new ArrayList<>();
-        for (Renglon renglon : pedido.renglones()) {
-            ArticuloVendible articulo = articulos.get(renglon.articuloId());
-            calculados.add(RenglonVenta.de(articulo.precioFinal(), renglon.cantidad(), articulo.porcentajeIva()));
-        }
+        List<RenglonVenta> calculados = calcular(pedido, articulos);
         TotalesVenta totales = TotalesVenta.de(calculados);
 
         long numero = numeradorRepository.siguienteScoped();
         Comprobante comprobante = comprobanteRepository.save(
-                Comprobante.venta(ferreteriaId, numero, pedido.clave(), usuarioId, totales, cajaId));
+                Comprobante.venta(ferreteriaId, numero, pedido.clave(), usuarioId, totales, cajaId,
+                        pedido.descuentoPorcentaje()));
 
         List<SalidaStock> salidas = pedido.renglones().stream()
                 .map(r -> new SalidaStock(r.articuloId(), r.cantidad()))
@@ -143,6 +141,7 @@ public class RegistroVenta {
             ConfirmarVenta pedido, Comprobante comprobante, List<ItemComprobante> items, List<Pago> pagos) {
         if (pagos.size() != 1 || pagos.get(0).getMedio() != pedido.medioPago()
                 || pedido.totalMostrado().compareTo(comprobante.getTotal()) != 0
+                || pedido.descuentoPorcentaje().compareTo(comprobante.getDescuentoPorcentaje()) != 0
                 || pedido.renglones().size() != items.size()) {
             return false;
         }
@@ -151,7 +150,8 @@ public class RegistroVenta {
         for (Renglon renglon : pedido.renglones()) {
             ItemComprobante guardado = guardados.get(renglon.articuloId());
             if (guardado == null || renglon.cantidad().compareTo(guardado.getCantidad()) != 0
-                    || renglon.precioUnitario().compareTo(guardado.getPrecioUnitario()) != 0) {
+                    || renglon.precioUnitario().compareTo(guardado.getPrecioUnitario()) != 0
+                    || renglon.descuentoPorcentaje().compareTo(guardado.getDescuentoPorcentaje()) != 0) {
                 return false;
             }
         }
@@ -179,7 +179,8 @@ public class RegistroVenta {
         validarQueEstenActivos(pedido.renglones(), articulos);
         validarQueTenganPrecio(pedido.renglones(), articulos);
         validarCantidades(pedido.renglones(), articulos);
-        validarImportes(pedido.renglones(), articulos);
+        validarDescuentos(pedido);
+        validarImportes(pedido, articulos);
         validarPrecios(pedido, articulos);
         validarMedioDePago(pedido);
         return articulos;
@@ -272,18 +273,19 @@ public class RegistroVenta {
      * Tope de DECIMAL(15,2): cada dato entra solo (lo frena el request) pero cantidad x precio del
      * servidor, o la suma de los renglones, puede no entrar. Se corta con un 400 antes de escribir.
      */
-    private static void validarImportes(List<Renglon> renglones, Map<Long, ArticuloVendible> articulos) {
+    private static void validarImportes(ConfirmarVenta pedido, Map<Long, ArticuloVendible> articulos) {
+        List<Renglon> renglones = pedido.renglones();
         Map<String, String> errores = new LinkedHashMap<>();
         BigDecimal total = BigDecimal.ZERO;
         for (int i = 0; i < renglones.size(); i++) {
             Renglon renglon = renglones.get(i);
             ArticuloVendible articulo = articulos.get(renglon.articuloId());
-            RenglonVenta calculado = RenglonVenta.de(articulo.precioFinal(), renglon.cantidad(), articulo.porcentajeIva());
-            if (calculado.total().compareTo(LimitesVenta.IMPORTE_MAXIMO) > 0) {
+            RenglonVenta calculado = calcular(renglon, articulo, pedido.descuentoPorcentaje());
+            if (calculado.bruto().compareTo(LimitesVenta.IMPORTE_MAXIMO) > 0) {
                 errores.put("renglones[" + i + "].cantidad", "El importe de \"" + articulo.descripcion()
                         + "\" es demasiado grande: el máximo por renglón es $ 9.999.999.999.999,99.");
             }
-            total = total.add(calculado.total());
+            total = total.add(calculado.bruto());
         }
         if (errores.isEmpty() && total.compareTo(LimitesVenta.IMPORTE_MAXIMO) > 0) {
             errores.put("totalMostrado", "El total de la venta es demasiado grande: el máximo es $ 9.999.999.999.999,99.");
@@ -298,12 +300,12 @@ public class RegistroVenta {
      * recalculado, 409 con los renglones que cambiaron y el total actual.
      */
     private static void validarPrecios(ConfirmarVenta pedido, Map<Long, ArticuloVendible> articulos) {
-        List<RenglonVenta> actuales = new ArrayList<>();
+        List<RenglonVenta> actuales = calcular(pedido, articulos);
         List<Articulo> cambiados = new ArrayList<>();
-        for (Renglon renglon : pedido.renglones()) {
+        for (int i = 0; i < pedido.renglones().size(); i++) {
+            Renglon renglon = pedido.renglones().get(i);
             ArticuloVendible articulo = articulos.get(renglon.articuloId());
-            RenglonVenta actual = RenglonVenta.de(articulo.precioFinal(), renglon.cantidad(), articulo.porcentajeIva());
-            actuales.add(actual);
+            RenglonVenta actual = actuales.get(i);
             if (renglon.precioUnitario().compareTo(articulo.precioFinal()) != 0) {
                 cambiados.add(new Articulo(articulo.id(), articulo.descripcion(), renglon.precioUnitario(),
                         articulo.precioFinal(), actual.total()));
@@ -320,6 +322,40 @@ public class RegistroVenta {
                     + " artículos. Revisá el total y confirmá de nuevo.";
         };
         throw new VentaRechazadaException(Motivo.PRECIOS_CAMBIADOS, mensaje, cambiados, totalActual);
+    }
+
+    /** Los renglones calculados con el precio del servidor y los descuentos que mando el cajero (GDS-12). */
+    private static List<RenglonVenta> calcular(ConfirmarVenta pedido, Map<Long, ArticuloVendible> articulos) {
+        List<RenglonVenta> calculados = new ArrayList<>();
+        for (Renglon renglon : pedido.renglones()) {
+            calculados.add(calcular(renglon, articulos.get(renglon.articuloId()), pedido.descuentoPorcentaje()));
+        }
+        return calculados;
+    }
+
+    private static RenglonVenta calcular(Renglon renglon, ArticuloVendible articulo, BigDecimal descuentoGlobal) {
+        return RenglonVenta.de(articulo.precioFinal(), renglon.cantidad(), articulo.porcentajeIva(),
+                renglon.descuentoPorcentaje(), descuentoGlobal);
+    }
+
+    /** GDS-12: cada descuento va de 0 a 99,99 %; el mensaje queda en el campo del renglon o en el global. */
+    private static void validarDescuentos(ConfirmarVenta pedido) {
+        Map<String, String> errores = new LinkedHashMap<>();
+        for (int i = 0; i < pedido.renglones().size(); i++) {
+            if (descuentoInvalido(pedido.renglones().get(i).descuentoPorcentaje())) {
+                errores.put("renglones[" + i + "].descuentoPorcentaje", MENSAJE_DESCUENTO);
+            }
+        }
+        if (descuentoInvalido(pedido.descuentoPorcentaje())) {
+            errores.put("descuentoPorcentaje", MENSAJE_DESCUENTO);
+        }
+        if (!errores.isEmpty()) {
+            throw new DatosInvalidosException(errores);
+        }
+    }
+
+    private static boolean descuentoInvalido(BigDecimal porcentaje) {
+        return porcentaje.signum() < 0 || porcentaje.compareTo(RenglonVenta.DESCUENTO_MAXIMO) > 0;
     }
 
     /** Un solo medio por ahora (corte 1); el monto es siempre el total, asi que solo puede faltar el medio. */

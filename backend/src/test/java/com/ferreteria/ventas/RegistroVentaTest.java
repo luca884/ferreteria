@@ -542,6 +542,120 @@ class RegistroVentaTest {
         assertThat(pago.getFerreteriaId()).isEqualTo(FERRETERIA);
     }
 
+    // ---- descuentos (GDS-12)
+
+    /** 2 u a 100,00 con 10 % en el renglon y 10 % global: 200 -> 180 -> 162. */
+    ConfirmarVenta ventaConDescuentos(String total) {
+        return new ConfirmarVenta(CLAVE, List.of(new Renglon(1L, bd("2"), bd("100.00"), bd("10.00"))), bd(total),
+                MedioPago.EFECTIVO, bd("10.00"));
+    }
+
+    void catalogoDe100() {
+        catalogoDevuelve(vendible(1L, "Tornillo 1/4", "UNIDAD", "100.00", true));
+    }
+
+    @Test
+    @DisplayName("el descuento del renglon y el global bajan el total: la cabecera guarda subtotal, descuento global y total")
+    void descuentosEnLaCabecera() {
+        catalogoDe100();
+        escrituraLista(Map.of());
+
+        VentaRegistrada venta = registro.registrar(ventaConDescuentos("162.00"), USUARIO);
+
+        Comprobante c = venta.comprobante();
+        assertThat(c.getSubtotal()).isEqualByComparingTo("200.00");
+        assertThat(c.getDescuentoPorcentaje()).isEqualByComparingTo("10.00");
+        assertThat(c.getTotal()).isEqualByComparingTo("162.00");
+        assertThat(c.getNeto().add(c.getIva())).isEqualByComparingTo("162.00");
+        assertThat(venta.pago().getMonto()).isEqualByComparingTo("162.00");
+    }
+
+    @Test
+    @DisplayName("el item guarda el bruto, el descuento del renglon y el total ya descontado")
+    void descuentosEnElItem() {
+        catalogoDe100();
+        escrituraLista(Map.of());
+
+        registro.registrar(ventaConDescuentos("162.00"), USUARIO);
+
+        ItemComprobante item = itemsGuardados().get(0);
+        assertThat(item.getBruto()).isEqualByComparingTo("200.00");
+        assertThat(item.getDescuentoPorcentaje()).isEqualByComparingTo("10.00");
+        assertThat(item.getTotal()).isEqualByComparingTo("162.00");
+        assertThat(item.getPrecioUnitario()).isEqualByComparingTo("100.00");
+    }
+
+    @Test
+    @DisplayName("sin descuentos en el pedido la venta es la de siempre: porcentajes en cero y subtotal igual al total")
+    void sinDescuentosEnElPedido() {
+        catalogoC1C3();
+        escrituraLista(Map.of());
+
+        VentaRegistrada venta = registro.registrar(ventaC1C3(MedioPago.EFECTIVO), USUARIO);
+
+        assertThat(venta.comprobante().getSubtotal()).isEqualByComparingTo("4463.33");
+        assertThat(venta.comprobante().getDescuentoPorcentaje()).isEqualByComparingTo("0");
+        assertThat(itemsGuardados().get(0).getDescuentoPorcentaje()).isEqualByComparingTo("0");
+    }
+
+    @Test
+    @DisplayName("si el cajero mostro el total sin el descuento que mando, da 409 con el total actual")
+    void totalMostradoSinElDescuento() {
+        catalogoDe100();
+
+        VentaRechazadaException error = rechazo(ventaConDescuentos("200.00"));
+
+        assertThat(error.motivo()).isEqualTo(Motivo.PRECIOS_CAMBIADOS);
+        assertThat(error.total()).isEqualByComparingTo("162.00");
+        assertSinEscrituras();
+    }
+
+    @Test
+    @DisplayName("un descuento fuera de 0 a 99,99 % da 400 con el campo del renglon o el global")
+    void descuentoFueraDeRango() {
+        catalogoDe100();
+
+        Throwable delRenglon = org.assertj.core.api.Assertions.catchThrowable(() -> registro.registrar(
+                new ConfirmarVenta(CLAVE, List.of(new Renglon(1L, bd("1"), bd("100.00"), bd("100.00"))), bd("0.00"),
+                        MedioPago.EFECTIVO, BigDecimal.ZERO), USUARIO));
+        Throwable global = org.assertj.core.api.Assertions.catchThrowable(() -> registro.registrar(
+                new ConfirmarVenta(CLAVE, List.of(new Renglon(1L, bd("1"), bd("100.00"))), bd("100.00"),
+                        MedioPago.EFECTIVO, bd("-1")), USUARIO));
+
+        assertThat(delRenglon).isInstanceOf(DatosInvalidosException.class);
+        assertThat(((DatosInvalidosException) delRenglon).errors()).containsKey("renglones[0].descuentoPorcentaje");
+        assertThat(global).isInstanceOf(DatosInvalidosException.class);
+        assertThat(((DatosInvalidosException) global).errors()).containsKey("descuentoPorcentaje");
+        assertSinEscrituras();
+    }
+
+    @Test
+    @DisplayName("misma clave y mismo descuento es la misma venta; con otro descuento es CLAVE_CON_OTRO_CONTENIDO")
+    void repetidaConDescuentos() {
+        Comprobante comprobante = Comprobante.venta(FERRETERIA, NUMERO, CLAVE, USUARIO,
+                TotalesVenta.de(List.of(RenglonVenta.de(bd("100.00"), bd("2"), bd("21.00"), bd("10.00"), bd("10.00")))),
+                CAJA, bd("10.00"));
+        ReflectionTestUtils.setField(comprobante, "id", COMPROBANTE);
+        ItemComprobante item = ItemComprobante.de(FERRETERIA, COMPROBANTE, 1, 1L, "Tornillo 1/4", "UNIDAD", "IVA_21",
+                RenglonVenta.de(bd("100.00"), bd("2"), bd("21.00"), bd("10.00"), bd("10.00")));
+        when(comprobanteRepository.porClaveScoped(CLAVE)).thenReturn(Optional.of(comprobante));
+        when(itemRepository.deComprobanteScoped(COMPROBANTE)).thenReturn(List.of(item));
+        when(pagoRepository.deComprobanteScoped(COMPROBANTE))
+                .thenReturn(List.of(Pago.de(FERRETERIA, COMPROBANTE, MedioPago.EFECTIVO, bd("162.00"))));
+
+        assertThat(registro.registrar(ventaConDescuentos("162.00"), USUARIO).repetida()).isTrue();
+
+        ConfirmarVenta otroGlobal = new ConfirmarVenta(CLAVE,
+                List.of(new Renglon(1L, bd("2"), bd("100.00"), bd("10.00"))), bd("162.00"), MedioPago.EFECTIVO,
+                bd("5.00"));
+        ConfirmarVenta otroDelRenglon = new ConfirmarVenta(CLAVE,
+                List.of(new Renglon(1L, bd("2"), bd("100.00"), bd("5.00"))), bd("162.00"), MedioPago.EFECTIVO,
+                bd("10.00"));
+        for (ConfirmarVenta otro : List.of(otroGlobal, otroDelRenglon)) {
+            assertThat(rechazo(otro).motivo()).isEqualTo(Motivo.CLAVE_CON_OTRO_CONTENIDO);
+        }
+    }
+
     @Test
     @DisplayName("le pide al stock una salida por renglon, con la cantidad vendida")
     @SuppressWarnings("unchecked")

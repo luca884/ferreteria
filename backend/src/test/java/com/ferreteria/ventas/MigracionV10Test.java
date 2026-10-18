@@ -67,7 +67,7 @@ class MigracionV10Test extends IntegrationTestBase {
         long f = ferreteria("30-71010004-4");
         Long usuario = jdbc.queryForObject("select min(id) from usuario where ferreteria_id = ?", Long.class, f);
         jdbc.update("insert into comprobante (ferreteria_id, tipo, estado, numero, clave_idempotencia, usuario_id, neto, "
-                + "iva, total) values (?, 'VENTA', 'SIN_FACTURAR', 1, 'v10-sin-caja', ?, 100, 21, 121)", f, usuario);
+                + "iva, total, subtotal) values (?, 'VENTA', 'SIN_FACTURAR', 1, 'v10-sin-caja', ?, 100, 21, 121, 121)", f, usuario);
 
         assertThat(jdbc.queryForObject("select caja_id from comprobante where ferreteria_id = ?", Long.class, f))
                 .isNull();

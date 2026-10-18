@@ -41,6 +41,9 @@ class MigracionV4Test extends IntegrationTestBase {
             Map.entry("comprobante.neto", "decimal(15,2) NOT NULL"),
             Map.entry("comprobante.iva", "decimal(15,2) NOT NULL"),
             Map.entry("comprobante.total", "decimal(15,2) NOT NULL"),
+            // V11 (CU-07 corte 2): subtotal antes de descuentos y descuento global en %.
+            Map.entry("comprobante.subtotal", "decimal(15,2) NOT NULL"),
+            Map.entry("comprobante.descuento_porcentaje", "decimal(5,2) NOT NULL"),
             Map.entry("item_comprobante.id", "bigint NOT NULL"),
             Map.entry("item_comprobante.ferreteria_id", "bigint NOT NULL"),
             Map.entry("item_comprobante.comprobante_id", "bigint NOT NULL"),
@@ -52,6 +55,8 @@ class MigracionV4Test extends IntegrationTestBase {
             Map.entry("item_comprobante.precio_unitario", "decimal(15,2) NOT NULL"),
             Map.entry("item_comprobante.alicuota_iva", "varchar(10) NOT NULL"),
             Map.entry("item_comprobante.total", "decimal(15,2) NOT NULL"),
+            Map.entry("item_comprobante.bruto", "decimal(15,2) NOT NULL"),
+            Map.entry("item_comprobante.descuento_porcentaje", "decimal(5,2) NOT NULL"),
             Map.entry("item_comprobante.neto", "decimal(15,2) NOT NULL"),
             Map.entry("item_comprobante.iva", "decimal(15,2) NOT NULL"),
             Map.entry("pago.id", "bigint NOT NULL"),
@@ -94,12 +99,13 @@ class MigracionV4Test extends IntegrationTestBase {
     }
 
     @Test
-    @DisplayName("tipo, estado y medio son VARCHAR sin CHECK (la fase 5 suma valores)")
+    @DisplayName("tipo, estado y medio son VARCHAR sin CHECK (la fase 5 suma valores); solo los descuentos de V11 tienen el suyo")
     void sinCheckEnTipoEstadoYMedio() {
         Integer checks = jdbc.queryForObject(
                 "select count(*) from information_schema.table_constraints "
                         + "where table_schema = database() and constraint_type = 'CHECK' and table_name in "
-                        + "('comprobante','item_comprobante','pago','movimiento_stock','numerador_comprobante')",
+                        + "('comprobante','item_comprobante','pago','movimiento_stock','numerador_comprobante') "
+                        + "and constraint_name not in ('ck_comprobante_descuento','ck_item_comprobante_descuento')",
                 Integer.class);
 
         assertThat(checks).isZero();
@@ -285,7 +291,7 @@ class MigracionV4Test extends IntegrationTestBase {
 
     private void insertarComprobante(Long ferreteriaId, Long usuarioId, long numero, String clave) {
         jdbc.update("insert into comprobante (ferreteria_id, tipo, estado, numero, clave_idempotencia, usuario_id, "
-                + "neto, iva, total) values (?, 'VENTA', 'SIN_FACTURAR', ?, ?, ?, 0, 0, 0)",
+                + "neto, iva, total, subtotal) values (?, 'VENTA', 'SIN_FACTURAR', ?, ?, ?, 0, 0, 0, 0)",
                 ferreteriaId, numero, clave, usuarioId);
     }
 

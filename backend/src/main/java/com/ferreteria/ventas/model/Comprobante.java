@@ -72,11 +72,25 @@ public class Comprobante {
     @Column(nullable = false, updatable = false, precision = 15, scale = 2)
     private BigDecimal total;
 
+    /** La suma de los brutos de los renglones, antes de cualquier descuento (GDS-12). */
+    @Column(nullable = false, updatable = false, precision = 15, scale = 2)
+    private BigDecimal subtotal;
+
+    /** El descuento global en %, aplicado a cada renglon; el usuario que lo aplico es el de la venta. */
+    @Column(name = "descuento_porcentaje", nullable = false, updatable = false, precision = 5, scale = 2)
+    private BigDecimal descuentoPorcentaje;
+
     protected Comprobante() {}
 
     public static Comprobante venta(
             Long ferreteriaId, long numero, String claveIdempotencia, Long usuarioId, TotalesVenta totales,
             Long cajaId) {
+        return venta(ferreteriaId, numero, claveIdempotencia, usuarioId, totales, cajaId, BigDecimal.ZERO);
+    }
+
+    public static Comprobante venta(
+            Long ferreteriaId, long numero, String claveIdempotencia, Long usuarioId, TotalesVenta totales,
+            Long cajaId, BigDecimal descuentoPorcentaje) {
         Comprobante comprobante = new Comprobante();
         comprobante.cajaId = cajaId;
         comprobante.ferreteriaId = ferreteriaId;
@@ -88,6 +102,8 @@ public class Comprobante {
         comprobante.neto = totales.neto();
         comprobante.iva = totales.iva();
         comprobante.total = totales.total();
+        comprobante.subtotal = totales.subtotal();
+        comprobante.descuentoPorcentaje = descuentoPorcentaje;
         return comprobante;
     }
 
@@ -104,4 +120,6 @@ public class Comprobante {
     public BigDecimal getNeto() { return neto; }
     public BigDecimal getIva() { return iva; }
     public BigDecimal getTotal() { return total; }
+    public BigDecimal getSubtotal() { return subtotal; }
+    public BigDecimal getDescuentoPorcentaje() { return descuentoPorcentaje; }
 }
