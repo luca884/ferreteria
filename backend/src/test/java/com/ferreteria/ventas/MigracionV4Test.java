@@ -209,19 +209,15 @@ class MigracionV4Test extends IntegrationTestBase {
     }
 
     @Test
-    @DisplayName("no existen la tabla cliente ni campos de CAE (caja_id llego con V10, CU-10)")
-    void sinClienteNiCae() {
+    @DisplayName("no existen campos de CAE (caja_id llego con V10, CU-10; la tabla cliente con V18, clientes)")
+    void sinCae() {
         Integer cajaOCae = jdbc.queryForObject(
                 "select count(*) from information_schema.columns where table_schema = database() "
                         + "and table_name in ('comprobante','item_comprobante','pago','movimiento_stock','numerador_comprobante') "
                         + "and column_name like 'cae%'",
                 Integer.class);
-        Integer tablaCliente = jdbc.queryForObject(
-                "select count(*) from information_schema.tables where table_schema = database() and table_name = 'cliente'",
-                Integer.class);
 
         assertThat(cajaOCae).isZero();
-        assertThat(tablaCliente).isZero();
     }
 
     @Test
