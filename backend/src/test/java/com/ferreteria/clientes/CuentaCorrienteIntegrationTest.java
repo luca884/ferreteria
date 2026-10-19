@@ -75,7 +75,7 @@ class CuentaCorrienteIntegrationTest extends CuentaCorrienteTestBase {
 
         enTx(() -> {
             clientesParaVenta.tomarParaVenta(cliente).orElseThrow();
-            cuentas.asentarVenta(new AsientoVenta(cliente, pagoA.comprobanteId(),
+            cuentas.asentarVenta(new AsientoVenta(cliente, pagoA.comprobanteId(), pagoA.numero(),
                     List.of(new CargoPago(pagoA.pagoId(), d("300.00")), new CargoPago(pagoB.pagoId(), d("120.50"))),
                     f.usuarioId(), null));
         });
@@ -100,7 +100,7 @@ class CuentaCorrienteIntegrationTest extends CuentaCorrienteTestBase {
         enTx(() -> {
             clientesParaVenta.tomarParaVenta(cliente);
             assertThat(cuentas.verificarCupo(cliente, d("500.00")).excede()).isTrue();
-            cuentas.asentarVenta(new AsientoVenta(cliente, v.comprobanteId(),
+            cuentas.asentarVenta(new AsientoVenta(cliente, v.comprobanteId(), v.numero(),
                     List.of(new CargoPago(v.pagoId(), d("500.00"))), f.usuarioId(), f.usuarioId()));
         });
 
@@ -122,7 +122,7 @@ class CuentaCorrienteIntegrationTest extends CuentaCorrienteTestBase {
 
         new TransactionTemplate(transactionManager).execute(status -> {
             clientesParaVenta.tomarParaVenta(cliente);
-            cuentas.asentarVenta(new AsientoVenta(cliente, v.comprobanteId(), List.of(new CargoPago(v.pagoId(), d("300.00"))),
+            cuentas.asentarVenta(new AsientoVenta(cliente, v.comprobanteId(), v.numero(), List.of(new CargoPago(v.pagoId(), d("300.00"))),
                     f.usuarioId(), null));
             status.setRollbackOnly();
             return null;
@@ -140,7 +140,7 @@ class CuentaCorrienteIntegrationTest extends CuentaCorrienteTestBase {
         long cliente = cliente(f, "1000.00");
         VentaSuelta v = ventaSuelta(f, cliente, "300.00");
         TenantContext.setCurrentFerreteriaId(f.id());
-        AsientoVenta asiento = new AsientoVenta(cliente, v.comprobanteId(), List.of(new CargoPago(v.pagoId(), d("300.00"))),
+        AsientoVenta asiento = new AsientoVenta(cliente, v.comprobanteId(), v.numero(), List.of(new CargoPago(v.pagoId(), d("300.00"))),
                 f.usuarioId(), null);
         enTx(() -> {
             clientesParaVenta.tomarParaVenta(cliente);
@@ -192,7 +192,7 @@ class CuentaCorrienteIntegrationTest extends CuentaCorrienteTestBase {
 
         assertThatThrownBy(() -> clientesParaVenta.tomarParaVenta(cliente)).isInstanceOf(IllegalTransactionStateException.class);
         assertThatThrownBy(() -> cuentas.verificarCupo(cliente, d("1.00"))).isInstanceOf(IllegalTransactionStateException.class);
-        assertThatThrownBy(() -> cuentas.asentarVenta(new AsientoVenta(cliente, v.comprobanteId(),
+        assertThatThrownBy(() -> cuentas.asentarVenta(new AsientoVenta(cliente, v.comprobanteId(), v.numero(),
                 List.of(new CargoPago(v.pagoId(), d("300.00"))), f.usuarioId(), null)))
                 .isInstanceOf(IllegalTransactionStateException.class);
 
@@ -271,7 +271,7 @@ class CuentaCorrienteIntegrationTest extends CuentaCorrienteTestBase {
         enTx(() -> assertThat(clientesParaVenta.tomarParaVenta(deB)).isEmpty());
         assertThatThrownBy(() -> enTx(() -> cuentas.verificarCupo(deB, d("1.00"))))
                 .isInstanceOf(ResourceNotFoundException.class);
-        assertThatThrownBy(() -> enTx(() -> cuentas.asentarVenta(new AsientoVenta(deB, ventaDeB.comprobanteId(),
+        assertThatThrownBy(() -> enTx(() -> cuentas.asentarVenta(new AsientoVenta(deB, ventaDeB.comprobanteId(), ventaDeB.numero(),
                 List.of(new CargoPago(ventaDeB.pagoId(), d("100.00"))), a.usuarioId(), null))))
                 .isInstanceOf(ResourceNotFoundException.class);
 
@@ -302,14 +302,14 @@ class CuentaCorrienteIntegrationTest extends CuentaCorrienteTestBase {
                 VentaSuelta repetida = ultimaAsentada;
                 assertThatThrownBy(() -> enTx(() -> {
                     clientesParaVenta.tomarParaVenta(cliente);
-                    cuentas.asentarVenta(new AsientoVenta(cliente, repetida.comprobanteId(),
+                    cuentas.asentarVenta(new AsientoVenta(cliente, repetida.comprobanteId(), repetida.numero(),
                             List.of(new CargoPago(repetida.pagoId(), d("1.00"))), f.usuarioId(), null));
                 })).isInstanceOf(DataIntegrityViolationException.class);
             } else if (accion == 8) { // revertida: se asienta y la transacción se cae
                 VentaSuelta v = ventaSuelta(f, cliente, importe.toPlainString());
                 new TransactionTemplate(transactionManager).execute(status -> {
                     clientesParaVenta.tomarParaVenta(cliente);
-                    cuentas.asentarVenta(new AsientoVenta(cliente, v.comprobanteId(),
+                    cuentas.asentarVenta(new AsientoVenta(cliente, v.comprobanteId(), v.numero(),
                             List.of(new CargoPago(v.pagoId(), importe)), f.usuarioId(), null));
                     status.setRollbackOnly();
                     return null;
@@ -318,7 +318,7 @@ class CuentaCorrienteIntegrationTest extends CuentaCorrienteTestBase {
                 VentaSuelta v = ventaSuelta(f, cliente, importe.toPlainString());
                 assertThatThrownBy(() -> enTx(() -> {
                     clientesParaVenta.tomarParaVenta(cliente);
-                    cuentas.asentarVenta(new AsientoVenta(cliente, v.comprobanteId(),
+                    cuentas.asentarVenta(new AsientoVenta(cliente, v.comprobanteId(), v.numero(),
                             List.of(new CargoPago(v.pagoId(), importe)), f.usuarioId(), null));
                     throw new IllegalStateException("falla posterior");
                 })).isInstanceOf(IllegalStateException.class);
@@ -331,7 +331,7 @@ class CuentaCorrienteIntegrationTest extends CuentaCorrienteTestBase {
                     if (cupo.excede() && !autoriza) {
                         return false;
                     }
-                    cuentas.asentarVenta(new AsientoVenta(cliente, v.comprobanteId(),
+                    cuentas.asentarVenta(new AsientoVenta(cliente, v.comprobanteId(), v.numero(),
                             List.of(new CargoPago(v.pagoId(), importe)), f.usuarioId(), cupo.excede() ? f.usuarioId() : null));
                     return true;
                 });

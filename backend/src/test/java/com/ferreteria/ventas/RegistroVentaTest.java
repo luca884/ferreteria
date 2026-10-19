@@ -1525,6 +1525,7 @@ class RegistroVentaTest {
         CuentaCorrienteParaVenta.AsientoVenta asiento = asientoGuardado();
         assertThat(asiento.clienteId()).isEqualTo(CLIENTE);
         assertThat(asiento.comprobanteId()).isEqualTo(COMPROBANTE);
+        assertThat(asiento.comprobanteNumero()).isEqualTo(NUMERO);
         assertThat(asiento.usuarioId()).isEqualTo(USUARIO);
         assertThat(asiento.autorizadoPor()).isNull();
         assertThat(asiento.pagos()).hasSize(1);

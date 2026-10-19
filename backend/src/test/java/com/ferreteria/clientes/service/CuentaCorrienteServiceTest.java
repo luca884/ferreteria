@@ -145,7 +145,7 @@ class CuentaCorrienteServiceTest {
         when(clientes.bloquearCuentaScoped(5L)).thenReturn(Optional.of(CuentaFalsa.de("1000.00", "0.00")));
         when(clientes.sumarSaldoScoped(anyLong(), any())).thenReturn(1);
 
-        servicio.asentarVenta(new AsientoVenta(5L, 20L,
+        servicio.asentarVenta(new AsientoVenta(5L, 20L, 77L,
                 List.of(new CargoPago(31L, d("300.00")), new CargoPago(32L, d("150.50"))), 9L, null));
 
         var orden = inOrder(clientes, libro);
@@ -169,13 +169,32 @@ class CuentaCorrienteServiceTest {
     }
 
     @Test
+    @DisplayName("cada movimiento VENTA guarda la referencia «Venta N.º <número del comprobante>» y ningún recibo (CC-001)")
+    void asentarGuardaLaReferenciaDeLaVenta() {
+        when(clientes.bloquearCuentaScoped(5L)).thenReturn(Optional.of(CuentaFalsa.de("1000.00", "0.00")));
+        when(clientes.sumarSaldoScoped(anyLong(), any())).thenReturn(1);
+
+        servicio.asentarVenta(new AsientoVenta(5L, 20L, 4321L,
+                List.of(new CargoPago(31L, d("300.00")), new CargoPago(32L, d("150.50"))), 9L, null));
+        servicio.asentarVenta(new AsientoVenta(5L, 21L, 8L, List.of(new CargoPago(33L, d("10.00"))), 9L, null));
+
+        verify(libro, org.mockito.Mockito.times(2)).saveAll(guardados.capture());
+        List<MovimientoCuentaCliente> primera = guardados.getAllValues().get(0);
+        assertThat(primera).hasSize(2).allSatisfy(m -> {
+            assertThat(m.getReferencia()).isEqualTo("Venta N.º 4321");
+            assertThat(m.getReciboId()).isNull();
+        });
+        assertThat(guardados.getAllValues().get(1).get(0).getReferencia()).isEqualTo("Venta N.º 8");
+    }
+
+    @Test
     @DisplayName("sin autorizador el libro queda sin marca de exceso; con autorizador, marcado y firmado")
     void autorizadoPor() {
         when(clientes.bloquearCuentaScoped(5L)).thenReturn(Optional.of(CuentaFalsa.de("100.00", "0.00")));
         when(clientes.sumarSaldoScoped(anyLong(), any())).thenReturn(1);
 
-        servicio.asentarVenta(new AsientoVenta(5L, 20L, List.of(new CargoPago(31L, d("50.00"))), 9L, null));
-        servicio.asentarVenta(new AsientoVenta(5L, 21L, List.of(new CargoPago(32L, d("500.00"))), 9L, 3L));
+        servicio.asentarVenta(new AsientoVenta(5L, 20L, 77L, List.of(new CargoPago(31L, d("50.00"))), 9L, null));
+        servicio.asentarVenta(new AsientoVenta(5L, 21L, 78L, List.of(new CargoPago(32L, d("500.00"))), 9L, 3L));
 
         verify(libro, org.mockito.Mockito.times(2)).saveAll(guardados.capture());
         MovimientoCuentaCliente sinExceso = guardados.getAllValues().get(0).get(0);
@@ -189,15 +208,15 @@ class CuentaCorrienteServiceTest {
     @Test
     @DisplayName("pagos vacíos, nulos o con monto no positivo son un error de programación: IllegalArgumentException sin tocar nada")
     void pagosInvalidos() {
-        assertThatThrownBy(() -> servicio.asentarVenta(new AsientoVenta(5L, 20L, List.of(), 9L, null)))
+        assertThatThrownBy(() -> servicio.asentarVenta(new AsientoVenta(5L, 20L, 77L, List.of(), 9L, null)))
                 .isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> servicio.asentarVenta(new AsientoVenta(5L, 20L, null, 9L, null)))
-                .isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> servicio.asentarVenta(
-                new AsientoVenta(5L, 20L, List.of(new CargoPago(31L, d("0.00"))), 9L, null)))
+        assertThatThrownBy(() -> servicio.asentarVenta(new AsientoVenta(5L, 20L, 77L, null, 9L, null)))
                 .isInstanceOf(IllegalArgumentException.class);
         assertThatThrownBy(() -> servicio.asentarVenta(
-                new AsientoVenta(5L, 20L, List.of(new CargoPago(31L, d("10.00")), new CargoPago(32L, d("-1.00"))), 9L, null)))
+                new AsientoVenta(5L, 20L, 77L, List.of(new CargoPago(31L, d("0.00"))), 9L, null)))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> servicio.asentarVenta(
+                new AsientoVenta(5L, 20L, 77L, List.of(new CargoPago(31L, d("10.00")), new CargoPago(32L, d("-1.00"))), 9L, null)))
                 .isInstanceOf(IllegalArgumentException.class);
 
         verifyNoMoreInteractions(clientes, libro);
@@ -209,7 +228,7 @@ class CuentaCorrienteServiceTest {
         when(clientes.bloquearCuentaScoped(99L)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> servicio.asentarVenta(
-                new AsientoVenta(99L, 20L, List.of(new CargoPago(31L, d("10.00"))), 9L, null)))
+                new AsientoVenta(99L, 20L, 77L, List.of(new CargoPago(31L, d("10.00"))), 9L, null)))
                 .isInstanceOf(ResourceNotFoundException.class);
 
         verify(libro, never()).saveAll(any());
@@ -220,7 +239,7 @@ class CuentaCorrienteServiceTest {
     @DisplayName("si el UPDATE del saldo no afecta exactamente una fila falla fuerte (IllegalStateException): libro y saldo no pueden divergir en silencio")
     void saldoQueNoSeActualizaFallaFuerte() {
         when(clientes.bloquearCuentaScoped(5L)).thenReturn(Optional.of(CuentaFalsa.de("1000.00", "0.00")));
-        AsientoVenta asiento = new AsientoVenta(5L, 20L, List.of(new CargoPago(31L, d("100.00"))), 9L, null);
+        AsientoVenta asiento = new AsientoVenta(5L, 20L, 77L, List.of(new CargoPago(31L, d("100.00"))), 9L, null);
 
         when(clientes.sumarSaldoScoped(5L, d("100.00"))).thenReturn(0);
         assertThatThrownBy(() -> servicio.asentarVenta(asiento))

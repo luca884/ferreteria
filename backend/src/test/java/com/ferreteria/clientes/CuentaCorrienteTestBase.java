@@ -19,7 +19,7 @@ public abstract class CuentaCorrienteTestBase extends IntegrationTestBase {
     protected record Ferreteria(long id, long usuarioId) {}
 
     /** El comprobante y el pago a cuenta corriente de una venta suelta. */
-    protected record VentaSuelta(long comprobanteId, long pagoId) {}
+    protected record VentaSuelta(long comprobanteId, long pagoId, long numero) {}
 
     @AfterEach
     void limpiarTenant() {
@@ -65,7 +65,7 @@ public abstract class CuentaCorrienteTestBase extends IntegrationTestBase {
                 + "values (?, ?, 'CUENTA_CORRIENTE', ?, ?, 'Cuenta corriente')", f.id(), comprobante, new BigDecimal(monto),
                 forma);
         long pago = jdbc.queryForObject("select max(id) from pago where comprobante_id = ?", Long.class, comprobante);
-        return new VentaSuelta(comprobante, pago);
+        return new VentaSuelta(comprobante, pago, n);
     }
 
     protected BigDecimal saldo(long clienteId) {

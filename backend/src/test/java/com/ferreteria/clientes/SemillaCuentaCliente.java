@@ -22,8 +22,8 @@ final class SemillaCuentaCliente {
         }
         long usuario = jdbc.queryForObject("select min(id) from usuario where ferreteria_id = ?", Long.class,
                 ferreteriaId);
-        jdbc.update("insert into movimiento_cuenta_cliente (ferreteria_id, cliente_id, tipo, debe, haber, fecha, usuario_id) "
-                + "values (?, ?, 'AJUSTE', ?, ?, now(6), ?)", ferreteriaId, clienteId,
+        jdbc.update("insert into movimiento_cuenta_cliente (ferreteria_id, cliente_id, tipo, debe, haber, fecha, usuario_id, "
+                + "referencia) values (?, ?, 'AJUSTE', ?, ?, now(6), ?, 'Saldo inicial de test')", ferreteriaId, clienteId,
                 importe.signum() > 0 ? importe : BigDecimal.ZERO, importe.signum() < 0 ? importe.negate() : BigDecimal.ZERO,
                 usuario);
         jdbc.update("update cliente set saldo = ? where id = ?", importe, clienteId);

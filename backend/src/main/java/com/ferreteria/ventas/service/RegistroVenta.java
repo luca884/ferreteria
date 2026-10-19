@@ -200,7 +200,7 @@ public class RegistroVenta {
                     .map(p -> new CuentaCorrienteParaVenta.CargoPago(p.getId(), p.getMonto()))
                     .toList();
             cuentaCorriente.asentarVenta(new CuentaCorrienteParaVenta.AsientoVenta(
-                    cliente.id(), comprobante.getId(), cargos, usuarioId, autorizadoPor));
+                    cliente.id(), comprobante.getId(), comprobante.getNumero(), cargos, usuarioId, autorizadoPor));
         }
 
         return new VentaRegistrada(comprobante, itemsGuardados, pagos, sinStock(stockResultante, articulos), false);

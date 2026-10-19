@@ -128,6 +128,13 @@ class VentaCuentaCorrienteIntegrationTest extends VentasTestBase {
         assertThat(((Number) mov.get("ferreteria_id")).longValue()).isEqualTo(e.tienda().id());
         assertThat(mov.get("autorizado_por")).isNull();
         assertThat(mov.get("excedio_limite")).isEqualTo(false);
+        // CC-001: el libro copia la referencia de la venta, con el número real del comprobante recién numerado
+        long numero = jdbc.queryForObject("select numero from comprobante where id = ?", Long.class,
+                venta.get("ventaId").asLong());
+        assertThat(jdbc.queryForObject("select referencia from movimiento_cuenta_cliente where cliente_id = ?", String.class,
+                c)).isEqualTo("Venta N.º " + numero);
+        assertThat(jdbc.queryForObject("select recibo_id from movimiento_cuenta_cliente where cliente_id = ?", Long.class,
+                c)).isNull();
         assertThat(saldo(c)).isEqualByComparingTo("1000.00");
         invariante(c);
     }

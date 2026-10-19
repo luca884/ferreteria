@@ -50,7 +50,7 @@ class CuentaCorrienteConcurrenciaPuertoIntegrationTest extends CuentaCorrienteTe
                     if (cupo.excede()) {
                         return false;
                     }
-                    cuentas.asentarVenta(new AsientoVenta(cliente, venta.comprobanteId(),
+                    cuentas.asentarVenta(new AsientoVenta(cliente, venta.comprobanteId(), venta.numero(),
                             List.of(new CargoPago(venta.pagoId(), new BigDecimal(importe))), f.usuarioId(), null));
                     return true;
                 });
@@ -175,7 +175,7 @@ class CuentaCorrienteConcurrenciaPuertoIntegrationTest extends CuentaCorrienteTe
                         } catch (InterruptedException e) {
                             Thread.currentThread().interrupt();
                         }
-                        cuentas.asentarVenta(new AsientoVenta(cliente, v1.comprobanteId(),
+                        cuentas.asentarVenta(new AsientoVenta(cliente, v1.comprobanteId(), v1.numero(),
                                 List.of(new CargoPago(v1.pagoId(), new BigDecimal("400.00"))), f.usuarioId(), null));
                         return true;
                     });

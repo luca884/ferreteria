@@ -201,10 +201,31 @@ class ClienteRepositoryCuentaTest extends CuentaCorrienteTestBase {
 
     private VentaSuelta asiento(Ferreteria f, long clienteId, String tipo, String debe, String haber) {
         VentaSuelta v = ventaSuelta(f, clienteId, "1.00");
+        if (tipo.equals("COBRO")) {
+            // un COBRO es de un recibo y no lleva comprobante ni pago (ck_mcc_recibo_ref): se siembra el recibo real
+            jdbc.update("insert into movimiento_cuenta_cliente (ferreteria_id, cliente_id, tipo, debe, haber, fecha, "
+                    + "usuario_id, recibo_id, referencia) values (?, ?, 'COBRO', ?, ?, ?, ?, ?, 'Recibo N.º test')", f.id(),
+                    clienteId, new BigDecimal(debe), new BigDecimal(haber), LocalDateTime.now(), f.usuarioId(),
+                    reciboSuelto(f, clienteId, haber));
+            return v;
+        }
         jdbc.update("insert into movimiento_cuenta_cliente (ferreteria_id, cliente_id, tipo, debe, haber, comprobante_id, "
-                + "pago_id, fecha, usuario_id) values (?, ?, ?, ?, ?, ?, ?, ?, ?)", f.id(), clienteId, tipo,
+                + "pago_id, fecha, usuario_id, referencia) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", f.id(), clienteId, tipo,
                 new BigDecimal(debe), new BigDecimal(haber), v.comprobanteId(), v.pagoId(), LocalDateTime.now(),
-                f.usuarioId());
+                f.usuarioId(), "Venta N.º " + v.numero());
         return v;
+    }
+
+    /** Un recibo de test (con su caja ya cerrada) para colgarle un COBRO del libro. */
+    private long reciboSuelto(Ferreteria f, long clienteId, String total) {
+        jdbc.update("insert into caja (ferreteria_id, abierta, fecha_apertura, usuario_apertura_id, efectivo_inicial) "
+                + "values (?, null, now(6), ?, 0)", f.id(), f.usuarioId());
+        long caja = jdbc.queryForObject("select max(id) from caja where ferreteria_id = ?", Long.class, f.id());
+        long numero = 1 + jdbc.queryForObject("select count(*) from recibo where ferreteria_id = ?", Long.class, f.id());
+        jdbc.update("insert into recibo (ferreteria_id, numero, clave_idempotencia, cliente_id, cliente_nombre, caja_id, "
+                + "usuario_id, fecha, medio, total) values (?, ?, ?, ?, 'Cliente', ?, ?, now(6), 'EFECTIVO', ?)", f.id(),
+                numero, java.util.UUID.randomUUID().toString(), clienteId, caja, f.usuarioId(), new BigDecimal(total));
+        return jdbc.queryForObject("select id from recibo where ferreteria_id = ? and numero = ?", Long.class, f.id(),
+                numero);
     }
 }

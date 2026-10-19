@@ -4,6 +4,7 @@ import com.ferreteria.clientes.api.CuentaCorrienteParaVenta;
 import com.ferreteria.clientes.model.Cliente;
 import com.ferreteria.clientes.model.Cupo;
 import com.ferreteria.clientes.model.MovimientoCuentaCliente;
+import com.ferreteria.clientes.model.Referencias;
 import com.ferreteria.clientes.repository.ClienteRepository;
 import com.ferreteria.clientes.repository.ClienteRepository.CuentaBloqueada;
 import com.ferreteria.clientes.repository.MovimientoCuentaClienteRepository;
@@ -104,9 +105,10 @@ public class CuentaCorrienteService implements CuentaCorrienteParaVenta {
         cuentaBloqueada(asiento.clienteId()); // ya la tiene tomada la venta: acá se re-confirma que existe y es de la ferretería
         Long ferreteriaId = TenantContext.requireFerreteriaId();
         LocalDateTime fecha = LocalDateTime.now(reloj);
+        String referencia = Referencias.venta(asiento.comprobanteNumero());
         libro.saveAll(pagos.stream()
                 .map(p -> MovimientoCuentaCliente.venta(ferreteriaId, asiento.clienteId(), asiento.comprobanteId(),
-                        p.pagoId(), p.monto(), fecha, asiento.usuarioId(), asiento.autorizadoPor()))
+                        p.pagoId(), referencia, p.monto(), fecha, asiento.usuarioId(), asiento.autorizadoPor()))
                 .toList());
         BigDecimal total = pagos.stream().map(CargoPago::monto).reduce(BigDecimal.ZERO, BigDecimal::add);
         int filas = clientes.sumarSaldoScoped(asiento.clienteId(), total);

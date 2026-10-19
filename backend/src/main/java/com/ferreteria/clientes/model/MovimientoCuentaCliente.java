@@ -16,12 +16,15 @@ import org.hibernate.type.SqlTypes;
 /**
  * Un renglón del libro de cuenta corriente del cliente (CC-001). Registro inmutable y append-only, como MovimientoStock:
  * no se edita ni se borra (columnas {@code updatable = false}, sin setters). Lleva debe O haber, nunca los dos. Referencia al
- * comprobante y al pago solo por id, sin relaciones JPA: clientes no conoce a ventas. El saldo del cliente es la suma de
- * debe - haber de estos renglones.
+ * comprobante, al pago y al recibo solo por id, sin relaciones JPA: clientes no conoce a ventas. {@code referencia} es el texto
+ * copiado de lo que originó el renglón («Venta N.º n», «Recibo N.º n»; ver {@link Referencias}). El saldo del cliente es la
+ * suma de debe - haber de estos renglones.
  */
 @Entity
 @Table(name = "movimiento_cuenta_cliente")
 public class MovimientoCuentaCliente {
+
+    private static final int MAX_REFERENCIA = 60;
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -50,6 +53,13 @@ public class MovimientoCuentaCliente {
     @Column(name = "pago_id", updatable = false)
     private Long pagoId;
 
+    /** El recibo de un COBRO (o de su ANULACION); null en el resto. */
+    @Column(name = "recibo_id", updatable = false)
+    private Long reciboId;
+
+    @Column(nullable = false, updatable = false, length = MAX_REFERENCIA)
+    private String referencia;
+
     @Column(nullable = false, updatable = false)
     private LocalDateTime fecha;
 
@@ -69,7 +79,7 @@ public class MovimientoCuentaCliente {
      * límite, o null si no hubo exceso; excedio_limite es true si y solo si hay autorizador.
      */
     public static MovimientoCuentaCliente venta(Long ferreteriaId, Long clienteId, Long comprobanteId, Long pagoId,
-            BigDecimal monto, LocalDateTime fecha, Long usuarioId, Long autorizadoPor) {
+            String referencia, BigDecimal monto, LocalDateTime fecha, Long usuarioId, Long autorizadoPor) {
         if (monto == null || monto.signum() <= 0) {
             throw new IllegalArgumentException("El monto de una venta a cuenta corriente tiene que ser mayor que cero.");
         }
@@ -84,11 +94,46 @@ public class MovimientoCuentaCliente {
         movimiento.haber = BigDecimal.ZERO;
         movimiento.comprobanteId = comprobanteId;
         movimiento.pagoId = pagoId;
+        movimiento.referencia = referenciaValida(referencia);
         movimiento.fecha = fecha;
         movimiento.usuarioId = usuarioId;
         movimiento.excedioLimite = autorizadoPor != null;
         movimiento.autorizadoPor = autorizadoPor;
         return movimiento;
+    }
+
+    /**
+     * El cobro de UN recibo: debe = 0, haber = monto (el total del recibo, aunque impute a varios comprobantes), con su recibo
+     * y su referencia; sin comprobante, pago ni exceso. Hay un COBRO por recibo (UNIQUE (recibo_id, tipo) en la base).
+     */
+    public static MovimientoCuentaCliente cobro(Long ferreteriaId, Long clienteId, Long reciboId, String referencia,
+            BigDecimal monto, LocalDateTime fecha, Long usuarioId) {
+        if (monto == null || monto.signum() <= 0) {
+            throw new IllegalArgumentException("El monto de un cobro tiene que ser mayor que cero.");
+        }
+        if (reciboId == null) {
+            throw new IllegalArgumentException("Un cobro referencia su recibo.");
+        }
+        MovimientoCuentaCliente movimiento = new MovimientoCuentaCliente();
+        movimiento.ferreteriaId = ferreteriaId;
+        movimiento.clienteId = clienteId;
+        movimiento.tipo = TipoMovimientoCuenta.COBRO;
+        movimiento.debe = BigDecimal.ZERO;
+        movimiento.haber = monto;
+        movimiento.reciboId = reciboId;
+        movimiento.referencia = referenciaValida(referencia);
+        movimiento.fecha = fecha;
+        movimiento.usuarioId = usuarioId;
+        movimiento.excedioLimite = false;
+        return movimiento;
+    }
+
+    private static String referenciaValida(String referencia) {
+        if (referencia == null || referencia.isBlank() || referencia.length() > MAX_REFERENCIA) {
+            throw new IllegalArgumentException(
+                    "La referencia del movimiento es obligatoria y de hasta " + MAX_REFERENCIA + " caracteres.");
+        }
+        return referencia;
     }
 
     public Long getId() { return id; }
@@ -99,6 +144,8 @@ public class MovimientoCuentaCliente {
     public BigDecimal getHaber() { return haber; }
     public Long getComprobanteId() { return comprobanteId; }
     public Long getPagoId() { return pagoId; }
+    public Long getReciboId() { return reciboId; }
+    public String getReferencia() { return referencia; }
     public LocalDateTime getFecha() { return fecha; }
     public Long getUsuarioId() { return usuarioId; }
     public boolean isExcedioLimite() { return excedioLimite; }

@@ -17,11 +17,12 @@ import org.junit.jupiter.api.Test;
 class MovimientoCuentaClienteTest {
 
     private static final LocalDateTime AHORA = LocalDateTime.of(2026, 10, 18, 11, 30);
+    private static final String REF = "Venta N.º 5";
 
     @Test
     @DisplayName("una venta: tipo VENTA, debe = monto, haber = 0, sin autorización queda sin marca de exceso")
     void ventaSinExceso() {
-        MovimientoCuentaCliente m = MovimientoCuentaCliente.venta(3L, 7L, 20L, 30L, new BigDecimal("1000.50"), AHORA, 9L,
+        MovimientoCuentaCliente m = MovimientoCuentaCliente.venta(3L, 7L, 20L, 30L, REF, new BigDecimal("1000.50"), AHORA, 9L,
                 null);
 
         assertThat(m.getFerreteriaId()).isEqualTo(3L);
@@ -40,7 +41,7 @@ class MovimientoCuentaClienteTest {
     @Test
     @DisplayName("con autorizadoPor, excedio_limite es true y guarda quién autorizó")
     void ventaConExcesoAutorizado() {
-        MovimientoCuentaCliente m = MovimientoCuentaCliente.venta(3L, 7L, 20L, 31L, new BigDecimal("250"), AHORA, 9L, 4L);
+        MovimientoCuentaCliente m = MovimientoCuentaCliente.venta(3L, 7L, 20L, 31L, REF, new BigDecimal("250"), AHORA, 9L, 4L);
 
         assertThat(m.isExcedioLimite()).isTrue();
         assertThat(m.getAutorizadoPor()).isEqualTo(4L);
@@ -51,21 +52,96 @@ class MovimientoCuentaClienteTest {
     @Test
     @DisplayName("el monto tiene que ser mayor que cero")
     void montoInvalido() {
-        assertThatThrownBy(() -> MovimientoCuentaCliente.venta(3L, 7L, 20L, 30L, BigDecimal.ZERO, AHORA, 9L, null))
+        assertThatThrownBy(() -> MovimientoCuentaCliente.venta(3L, 7L, 20L, 30L, REF, BigDecimal.ZERO, AHORA, 9L, null))
                 .isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> MovimientoCuentaCliente.venta(3L, 7L, 20L, 30L, new BigDecimal("-1"), AHORA, 9L, null))
+        assertThatThrownBy(() -> MovimientoCuentaCliente.venta(3L, 7L, 20L, 30L, REF, new BigDecimal("-1"), AHORA, 9L, null))
                 .isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> MovimientoCuentaCliente.venta(3L, 7L, 20L, 30L, null, AHORA, 9L, null))
+        assertThatThrownBy(() -> MovimientoCuentaCliente.venta(3L, 7L, 20L, 30L, REF, null, AHORA, 9L, null))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test
     @DisplayName("la venta exige comprobante y pago (el CHECK de la base los pide)")
     void ventaExigeReferencias() {
-        assertThatThrownBy(() -> MovimientoCuentaCliente.venta(3L, 7L, null, 30L, BigDecimal.TEN, AHORA, 9L, null))
+        assertThatThrownBy(() -> MovimientoCuentaCliente.venta(3L, 7L, null, 30L, REF, BigDecimal.TEN, AHORA, 9L, null))
                 .isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> MovimientoCuentaCliente.venta(3L, 7L, 20L, null, BigDecimal.TEN, AHORA, 9L, null))
+        assertThatThrownBy(() -> MovimientoCuentaCliente.venta(3L, 7L, 20L, null, REF, BigDecimal.TEN, AHORA, 9L, null))
                 .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    @DisplayName("la venta guarda su referencia copiada, sin recibo; sin referencia o de más de 60 caracteres se rechaza")
+    void ventaConReferencia() {
+        MovimientoCuentaCliente m = MovimientoCuentaCliente.venta(3L, 7L, 20L, 30L, "Venta N.º 42", BigDecimal.TEN, AHORA,
+                9L, null);
+
+        assertThat(m.getReferencia()).isEqualTo("Venta N.º 42");
+        assertThat(m.getReciboId()).isNull();
+        assertThat(m.getDebe()).isEqualByComparingTo("10");
+        // en el límite (60) entra; 61 y vacíos se rechazan
+        assertThat(MovimientoCuentaCliente.venta(3L, 7L, 20L, 30L, "x".repeat(60), BigDecimal.TEN, AHORA, 9L, null)
+                .getReferencia()).hasSize(60);
+        assertThatThrownBy(() -> MovimientoCuentaCliente.venta(3L, 7L, 20L, 30L, "x".repeat(61), BigDecimal.TEN, AHORA, 9L,
+                null)).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> MovimientoCuentaCliente.venta(3L, 7L, 20L, 30L, null, BigDecimal.TEN, AHORA, 9L, null))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> MovimientoCuentaCliente.venta(3L, 7L, 20L, 30L, "  ", BigDecimal.TEN, AHORA, 9L, null))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    @DisplayName("un cobro: tipo COBRO, debe = 0, haber = monto, con recibo y referencia, sin comprobante ni pago ni exceso")
+    void cobro() {
+        MovimientoCuentaCliente m = MovimientoCuentaCliente.cobro(3L, 7L, 55L, "Recibo N.º 12", new BigDecimal("700.25"),
+                AHORA, 9L);
+
+        assertThat(m.getFerreteriaId()).isEqualTo(3L);
+        assertThat(m.getClienteId()).isEqualTo(7L);
+        assertThat(m.getTipo()).isEqualTo(TipoMovimientoCuenta.COBRO);
+        assertThat(m.getDebe()).isEqualByComparingTo("0");
+        assertThat(m.getHaber()).isEqualByComparingTo("700.25");
+        assertThat(m.getReciboId()).isEqualTo(55L);
+        assertThat(m.getReferencia()).isEqualTo("Recibo N.º 12");
+        assertThat(m.getComprobanteId()).isNull();
+        assertThat(m.getPagoId()).isNull();
+        assertThat(m.isExcedioLimite()).isFalse();
+        assertThat(m.getAutorizadoPor()).isNull();
+        assertThat(m.getFecha()).isEqualTo(AHORA);
+        assertThat(m.getUsuarioId()).isEqualTo(9L);
+    }
+
+    @Test
+    @DisplayName("el cobro rechaza monto <= 0, recibo nulo y referencia vacía o de más de 60")
+    void cobroInvalido() {
+        assertThatThrownBy(() -> MovimientoCuentaCliente.cobro(3L, 7L, 55L, "Recibo N.º 1", BigDecimal.ZERO, AHORA, 9L))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> MovimientoCuentaCliente.cobro(3L, 7L, 55L, "Recibo N.º 1", new BigDecimal("-5"), AHORA, 9L))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> MovimientoCuentaCliente.cobro(3L, 7L, 55L, "Recibo N.º 1", null, AHORA, 9L))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> MovimientoCuentaCliente.cobro(3L, 7L, null, "Recibo N.º 1", BigDecimal.TEN, AHORA, 9L))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> MovimientoCuentaCliente.cobro(3L, 7L, 55L, "", BigDecimal.TEN, AHORA, 9L))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> MovimientoCuentaCliente.cobro(3L, 7L, 55L, "x".repeat(61), BigDecimal.TEN, AHORA, 9L))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    @DisplayName("el tipo ANULACION existe (previsto para 3b) y todos los nombres caben en VARCHAR(10)")
+    void tipoAnulacion() {
+        assertThat(TipoMovimientoCuenta.valueOf("ANULACION")).isEqualTo(TipoMovimientoCuenta.ANULACION);
+        assertThat(TipoMovimientoCuenta.values()).extracting(Enum::name)
+                .containsExactlyInAnyOrder("VENTA", "COBRO", "AJUSTE", "NC", "ANULACION");
+        assertThat(Arrays.stream(TipoMovimientoCuenta.values()).map(Enum::name)).allMatch(n -> n.length() <= 10);
+    }
+
+    @Test
+    @DisplayName("no hay fábrica de ANULACION: 3a no la escribe (solo venta y cobro)")
+    void sinFabricaDeAnulacion() {
+        assertThat(Arrays.stream(MovimientoCuentaCliente.class.getDeclaredMethods())
+                .filter(m -> Modifier.isStatic(m.getModifiers()) && Modifier.isPublic(m.getModifiers()))
+                .map(Method::getName)).containsExactlyInAnyOrder("venta", "cobro");
     }
 
     @Test

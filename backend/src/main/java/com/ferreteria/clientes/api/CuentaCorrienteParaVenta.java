@@ -45,10 +45,12 @@ public interface CuentaCorrienteParaVenta {
     }
 
     /**
-     * Una venta a cuenta corriente ya guardada (con sus ids). {@code autorizadoPor} es el Dueño que autorizó un exceso del
-     * límite, o null si no hubo exceso.
+     * Una venta a cuenta corriente ya guardada (con sus ids). {@code comprobanteNumero} es el número interno del comprobante
+     * recién numerado: el libro copia la referencia «Venta N.º n». {@code autorizadoPor} es el Dueño que autorizó un exceso
+     * del límite, o null si no hubo exceso.
      */
-    record AsientoVenta(Long clienteId, Long comprobanteId, List<CargoPago> pagos, Long usuarioId, Long autorizadoPor) {}
+    record AsientoVenta(Long clienteId, Long comprobanteId, Long comprobanteNumero, List<CargoPago> pagos, Long usuarioId,
+            Long autorizadoPor) {}
 
     /** Un pago a cuenta corriente: su id y la parte de la venta que se carga a la cuenta. */
     record CargoPago(Long pagoId, BigDecimal monto) {}
