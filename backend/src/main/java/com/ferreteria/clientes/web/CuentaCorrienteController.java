@@ -3,8 +3,10 @@ package com.ferreteria.clientes.web;
 import com.ferreteria.auth.model.Rol;
 import com.ferreteria.auth.security.AuthUser;
 import com.ferreteria.clientes.service.CuentaCorrienteService;
+import com.ferreteria.common.exception.DatosInvalidosException;
 import jakarta.validation.Valid;
 import java.math.BigDecimal;
+import java.util.Map;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -39,6 +41,10 @@ public class CuentaCorrienteController {
     @PutMapping("/limite")
     @PreAuthorize("hasRole('DUENO')")
     public CuentaClienteResponse cambiarLimite(@PathVariable Long id, @Valid @RequestBody LimiteCuentaRequest request) {
+        if (!request.presente()) {
+            throw new DatosInvalidosException(Map.of("limite",
+                    "Falta el límite. Mandalo con un número o con null para deshabilitar la cuenta corriente."));
+        }
         return CuentaClienteResponse.de(cuentaCorriente.cambiarLimite(id, request.limite()));
     }
 }

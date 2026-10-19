@@ -163,6 +163,24 @@ class CuentaClienteEndpointsIntegrationTest extends CuentaClienteWebTestBase {
     }
 
     @Test
+    @DisplayName("PUT sin la clave «limite» es 400 en limite y no deshabilita la cuenta; con «limite»: null sí la deshabilita")
+    void sinLaClaveLimiteNoDeshabilita() throws Exception {
+        Tienda t = tienda();
+        long id = cliente(t, "1000.00", "0.00");
+        String dueno = login(t.emailDueno());
+
+        for (String cuerpo : List.of("{}", "{\"otro\": 1}", "{\"Limite\": 5}")) {
+            JsonNode error = json(putJson(limiteUrl(id), dueno, cuerpo).andExpect(status().isBadRequest()));
+            assertThat(error.get("errors").has("limite")).as("cuerpo %s", cuerpo).isTrue();
+            assertThat(limite(id)).as("cuerpo %s", cuerpo).isEqualByComparingTo("1000.00");
+        }
+
+        putJson(limiteUrl(id), dueno, "{\"limite\": null}").andExpect(status().isOk());
+        assertThat(limite(id)).isNull();
+        assertInvariante(id);
+    }
+
+    @Test
     @DisplayName("PUT con un límite negativo, con más de 2 decimales o sobre el tope es 400 en limite y no cambia nada")
     void limiteInvalido() throws Exception {
         Tienda t = tienda();
