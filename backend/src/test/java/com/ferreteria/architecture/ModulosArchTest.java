@@ -3,6 +3,11 @@ package com.ferreteria.architecture;
 import com.tngtech.archunit.core.domain.JavaClasses;
 import com.tngtech.archunit.core.importer.ClassFileImporter;
 import com.tngtech.archunit.core.importer.ImportOption;
+import com.ferreteria.clientes.model.MovimientoCuentaCliente;
+import com.ferreteria.clientes.repository.ClienteRepository;
+import com.ferreteria.clientes.repository.MovimientoCuentaClienteRepository;
+import com.ferreteria.clientes.service.CuentaCorrienteService;
+import com.tngtech.archunit.core.domain.JavaMethodCall;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
@@ -17,7 +22,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static com.tngtech.archunit.base.DescribedPredicate.not;
 import static com.tngtech.archunit.core.domain.JavaClass.Predicates.resideInAPackage;
 import static com.tngtech.archunit.core.domain.JavaClass.Predicates.resideInAnyPackage;
+import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.classes;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
+import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noMethods;
 
 /**
  * Fronteras entre modulos (R-022). {@code ventas} y {@code stock} hablan con el catalogo SOLO por el puerto
@@ -158,5 +165,45 @@ class ModulosArchTest {
                         "com.ferreteria.catalogo.controller..", "com.ferreteria.catalogo.dto..",
                         "org.springframework.web..", "jakarta.servlet.."))
                 .check(clases);
+    }
+
+    // ---- Cuenta corriente de clientes (CC-001, CC-008): el puerto es chico y la escritura del saldo tiene una sola puerta ----
+
+    /** (a) {@code clientes.api} solo habla JDK y consigo mismo: ni entidades, ni repositorios, ni auth, ni ventas. */
+    @Test
+    void elPuertoDeClientesSoloDependeDelJdkYDeSiMismo() {
+        classes().that().resideInAPackage("com.ferreteria.clientes.api..")
+                .should().onlyDependOnClassesThat(resideInAnyPackage("java..", "com.ferreteria.clientes.api.."))
+                .check(clases);
+    }
+
+    /** (b) Solo CuentaCorrienteService escribe el saldo del cliente (el propio repositorio se llama a sí mismo en su default). */
+    @Test
+    void soloLaCuentaCorrienteEscribeElSaldo() {
+        var llamadores = clases.get(ClienteRepository.class).getMethodCallsToSelf().stream()
+                .filter(c -> c.getName().startsWith("sumarSaldo"))
+                .map(JavaMethodCall::getOriginOwner)
+                .filter(origen -> !origen.isEquivalentTo(ClienteRepository.class))
+                .map(origen -> origen.getName())
+                .collect(java.util.stream.Collectors.toSet());
+
+        assertThat(llamadores).containsExactly(CuentaCorrienteService.class.getName());
+    }
+
+    /** (c) El libro es append-only: la entidad no tiene setters y nadie borra con su repositorio. */
+    @Test
+    void elLibroDeCuentaCorrienteEsAppendOnly() {
+        noMethods().that().areDeclaredIn(MovimientoCuentaCliente.class)
+                .should().haveNameMatching("set[A-Z].*")
+                .check(clases);
+
+        noClasses().should().callMethodWhere(new com.tngtech.archunit.base.DescribedPredicate<JavaMethodCall>(
+                "borrar o quitar renglones con MovimientoCuentaClienteRepository") {
+            @Override
+            public boolean test(JavaMethodCall call) {
+                return call.getTargetOwner().isAssignableTo(MovimientoCuentaClienteRepository.class)
+                        && call.getName().matches("(delete|remove).*");
+            }
+        }).check(clases);
     }
 }

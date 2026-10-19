@@ -10,4 +10,12 @@ public interface ClientesParaVenta {
 
     /** El cliente de la ferretería del request con ese id, activo o no. Uno ajeno o inexistente no vuelve. */
     Optional<ClienteReferencia> buscar(Long id);
+
+    /**
+     * Como {@link #buscar}, pero TOMA la fila del cliente (lock de escritura hasta el fin de la transacción) y lee su estado
+     * con una lectura actual: quien lo toma serializa contra cualquier otra venta o desactivación del mismo cliente. Exige
+     * una transacción abierta ({@code Propagation.MANDATORY}). Es el primer paso de toda venta con cliente; ver el orden de
+     * locks en RegistroVenta.
+     */
+    Optional<ClienteReferencia> tomarParaVenta(Long id);
 }

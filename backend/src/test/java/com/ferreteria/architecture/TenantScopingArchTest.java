@@ -183,4 +183,66 @@ class TenantScopingArchTest {
                 .allowEmptyShould(false)
                 .check(clases);
     }
+
+    // ---- Cuenta corriente de clientes (CC-008): los repositorios nuevos también son de tenant ----
+
+    @Test
+    void todosLosRepositoriosDeClientesSonDeTenant() {
+        classes().that().resideInAPackage("com.ferreteria.clientes.repository..")
+                .and().areInterfaces()
+                .and().haveSimpleNameEndingWith("Repository")
+                .should().beAssignableTo(TenantScopedRepository.class)
+                .check(clases);
+        assertThat(TenantScopedRepository.class).isAssignableFrom(com.ferreteria.clientes.repository.MovimientoCuentaClienteRepository.class);
+    }
+
+    /** Las consultas con la ferretería como parámetro (bloquearCuenta, sumarSaldo, saldoDelLibro…) solo las llama su repositorio. */
+    @Test
+    void lasConsultasDeClientesConFerreteriaIdExplicitoSoloLasLlamaElRepositorio() {
+        DescribedPredicate<JavaMethodCall> consultaCruda = new DescribedPredicate<>(
+                "una consulta abstracta de un repositorio de clientes, llamada desde afuera de él") {
+            @Override
+            public boolean test(JavaMethodCall call) {
+                JavaClass duenio = call.getTarget().getOwner();
+                // Solo los repositorios: las proyecciones (ClienteRepository.CuentaBloqueada) son del mismo paquete y se leen desde afuera.
+                if (!duenio.getPackageName().equals("com.ferreteria.clientes.repository")
+                        || !duenio.isAssignableTo(TenantScopedRepository.class)) {
+                    return false;
+                }
+                boolean esConsultaPropia = call.getTarget().resolveMember()
+                        .map(m -> m.getOwner().getPackageName().equals("com.ferreteria.clientes.repository")
+                                && m.getModifiers().contains(com.tngtech.archunit.core.domain.JavaModifier.ABSTRACT))
+                        .orElse(false);
+                return esConsultaPropia && !call.getOriginOwner().equals(duenio);
+            }
+        };
+
+        noClasses().should().callMethodWhere(consultaCruda).check(clases);
+    }
+
+    @Test
+    void losMetodosScopedDeClientesTomanLaFerreteriaDelContexto() {
+        ArchCondition<JavaMethod> tomaLaFerreteriaDelContexto = new ArchCondition<>(
+                "llamar a TenantContext.requireFerreteriaId() o a otro metodo del mismo repositorio") {
+            @Override
+            public void check(JavaMethod metodo, ConditionEvents eventos) {
+                boolean ok = metodo.getMethodCallsFromSelf().stream().anyMatch(c ->
+                        (c.getTargetOwner().isEquivalentTo(com.ferreteria.tenant.TenantContext.class)
+                                && c.getName().equals("requireFerreteriaId"))
+                        || c.getTargetOwner().equals(metodo.getOwner()));
+                if (!ok) {
+                    eventos.add(SimpleConditionEvent.violated(metodo,
+                            metodo.getFullName() + " no toma la ferreteria de TenantContext"));
+                }
+            }
+        };
+
+        methods().that().areDeclaredInClassesThat().resideInAPackage("com.ferreteria.clientes.repository..")
+                .and().areDeclaredInClassesThat().areInterfaces()
+                .and().doNotHaveModifier(com.tngtech.archunit.core.domain.JavaModifier.ABSTRACT)
+                .and().doNotHaveModifier(com.tngtech.archunit.core.domain.JavaModifier.SYNTHETIC)
+                .should(tomaLaFerreteriaDelContexto)
+                .allowEmptyShould(false)
+                .check(clases);
+    }
 }

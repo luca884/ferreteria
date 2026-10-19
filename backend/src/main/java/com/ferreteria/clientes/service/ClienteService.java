@@ -8,6 +8,7 @@ import com.ferreteria.clientes.model.TipoDocumento;
 import com.ferreteria.clientes.repository.ClienteRepository;
 import com.ferreteria.common.exception.ConflictException;
 import com.ferreteria.common.exception.DatosInvalidosException;
+import com.ferreteria.common.exception.ReglaDeNegocioException;
 import com.ferreteria.common.exception.ResourceNotFoundException;
 import com.ferreteria.tenant.TenantContext;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -28,6 +29,7 @@ public class ClienteService {
 
     static final int TAMANO_MAXIMO = 100;
     private static final String NO_ENCONTRADO = "Cliente no encontrado";
+    private static final String CON_SALDO = "No se puede desactivar: el cliente tiene saldo en cuenta corriente.";
     private static final String DOCUMENTO_REPETIDO = "Ya hay un cliente con ese documento.";
 
     private final ClienteRepository repositorio;
@@ -79,8 +81,19 @@ public class ClienteService {
         return guardar(cliente);
     }
 
+    /**
+     * Desactivar toma antes la fila del cliente ({@code FOR UPDATE}, la misma que toma una venta) y rechaza con 422 si tiene
+     * saldo en cuenta corriente, a favor o en contra (CC-020): así una venta concurrente ve el cliente desactivado o el
+     * saldo ya inscripto, nunca una carrera. Reactivar no chequea nada.
+     */
     @Transactional
     public Cliente cambiarActivo(Long id, boolean activo) {
+        if (!activo) {
+            var cuenta = repositorio.bloquearCuentaScoped(id).orElseThrow(() -> new ResourceNotFoundException(NO_ENCONTRADO));
+            if (cuenta.getSaldo().signum() != 0) {
+                throw new ReglaDeNegocioException(CON_SALDO);
+            }
+        }
         Cliente cliente = obtener(id);
         cliente.cambiarActivo(activo);
         return cliente;

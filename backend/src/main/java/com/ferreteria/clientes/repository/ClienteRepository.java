@@ -5,8 +5,12 @@ import com.ferreteria.tenant.TenantContext;
 import com.ferreteria.tenant.TenantScopedRepository;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+
+import java.math.BigDecimal;
+import java.util.Optional;
 
 public interface ClienteRepository extends TenantScopedRepository<Cliente, Long> {
 
@@ -28,6 +32,43 @@ public interface ClienteRepository extends TenantScopedRepository<Cliente, Long>
     boolean existsByFerreteriaIdAndNumeroDocumento(Long ferreteriaId, String numeroDocumento);
 
     boolean existsByFerreteriaIdAndNumeroDocumentoAndIdNot(Long ferreteriaId, String numeroDocumento, Long id);
+
+    /** Lo que el bloqueo de la cuenta lee: escalares (con la razón social, que ventas copia al documento), nunca la entidad (ver {@link #bloquearCuenta}). */
+    interface CuentaBloqueada {
+        String getRazonSocial();
+
+        BigDecimal getSaldo();
+
+        BigDecimal getLimiteCuentaCorriente();
+
+        boolean getActivo();
+    }
+
+    /**
+     * Toma la fila del cliente con {@code SELECT … FOR UPDATE} y lee SALDO, LÍMITE y ACTIVO como escalares. Es nativa a
+     * propósito: un JPQL devolvería la instancia ya gestionada del persistence context (con el saldo de antes), y una
+     * lectura plana en REPEATABLE READ vería la foto del inicio de la transacción; el {@code FOR UPDATE} es una lectura
+     * actual y trae lo último confirmado. Requiere transacción.
+     */
+    @Query(value = "select razon_social as razonSocial, saldo as saldo, "
+            + "limite_cuenta_corriente as limiteCuentaCorriente, activo as activo from cliente where id = :id and ferreteria_id = :fid for update", nativeQuery = true)
+    Optional<CuentaBloqueada> bloquearCuenta(@Param("fid") Long ferreteriaId, @Param("id") Long id);
+
+    /**
+     * {@code saldo = saldo + :delta}: relativo, nunca un valor leído antes. Solo lo llama {@code CuentaCorrienteService}
+     * (lo vigila ModulosArchTest). Devuelve las filas afectadas (0 si el cliente es de otra ferretería).
+     */
+    @Modifying
+    @Query(value = "update cliente set saldo = saldo + :delta where id = :id and ferreteria_id = :fid", nativeQuery = true)
+    int sumarSaldo(@Param("fid") Long ferreteriaId, @Param("id") Long id, @Param("delta") BigDecimal delta);
+
+    default Optional<CuentaBloqueada> bloquearCuentaScoped(Long id) {
+        return bloquearCuenta(TenantContext.requireFerreteriaId(), id);
+    }
+
+    default int sumarSaldoScoped(Long id, BigDecimal delta) {
+        return sumarSaldo(TenantContext.requireFerreteriaId(), id, delta);
+    }
 
     default Page<Cliente> buscarScoped(String patron, String digitos, boolean soloActivos, Pageable pageable) {
         return buscar(TenantContext.requireFerreteriaId(), soloActivos, patron, digitos, pageable);

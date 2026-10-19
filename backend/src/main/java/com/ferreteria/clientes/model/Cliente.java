@@ -8,6 +8,8 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import java.math.BigDecimal;
+import org.hibernate.annotations.DynamicUpdate;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
@@ -15,8 +17,15 @@ import org.hibernate.type.SqlTypes;
  * Un cliente de la ferretería (CL-001). El documento, si está, es el normalizado de {@link DocumentoCliente}: solo
  * dígitos y siempre con su tipo. No se borra, se desactiva: las ventas, los presupuestos y los remitos lo referencian.
  * Consumidor Final no es un cliente: es una venta sin cliente.
+ *
+ * <p>Cuenta corriente (CC-001, CC-002): {@code limiteCuentaCorriente} null = sin cuenta corriente habilitada; 0 = habilitada
+ * sin crédito. {@code saldo} es una caché del libro, positivo si el cliente debe: JPA solo lo LEE (ni se inserta ni se
+ * actualiza) y lo escribe únicamente {@code CuentaCorrienteService} con un UPDATE relativo bajo el lock de la fila.
+ * {@code @DynamicUpdate} hace que un flush escriba solo las columnas sucias: editar el cliente nunca pisa un saldo o un
+ * límite que otra transacción cambió.
  */
 @Entity
+@DynamicUpdate
 @Table(name = "cliente")
 public class Cliente {
 
@@ -58,6 +67,12 @@ public class Cliente {
     @Column(nullable = false)
     private boolean activo = true;
 
+    @Column(name = "limite_cuenta_corriente", precision = 15, scale = 2)
+    private BigDecimal limiteCuentaCorriente;
+
+    @Column(nullable = false, insertable = false, updatable = false, precision = 15, scale = 2)
+    private BigDecimal saldo = BigDecimal.ZERO;
+
     protected Cliente() {}
 
     public static Cliente de(Long ferreteriaId, String razonSocial, TipoDocumento tipoDocumento, String numeroDocumento,
@@ -85,6 +100,14 @@ public class Cliente {
         this.activo = activo;
     }
 
+    /** null deshabilita la cuenta corriente; 0 la habilita sin crédito; un negativo no existe. */
+    public void cambiarLimite(BigDecimal limite) {
+        if (limite != null && limite.signum() < 0) {
+            throw new IllegalArgumentException("El límite de cuenta corriente no puede ser negativo.");
+        }
+        this.limiteCuentaCorriente = limite;
+    }
+
     public Long getId() { return id; }
     public Long getFerreteriaId() { return ferreteriaId; }
     public String getRazonSocial() { return razonSocial; }
@@ -96,4 +119,6 @@ public class Cliente {
     public String getWhatsapp() { return whatsapp; }
     public String getEmail() { return email; }
     public boolean isActivo() { return activo; }
+    public BigDecimal getLimiteCuentaCorriente() { return limiteCuentaCorriente; }
+    public BigDecimal getSaldo() { return saldo; }
 }
