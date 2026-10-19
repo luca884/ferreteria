@@ -25,7 +25,10 @@ public class ClientesParaVentaImpl implements ClientesParaVenta {
                 .map(c -> new ClienteReferencia(c.getId(), c.getRazonSocial(), c.isActivo()));
     }
 
-    /** Lee bajo {@code FOR UPDATE} (escalares: razón social y activo salen de la misma lectura actual, no de una foto). */
+    /**
+     * Lee bajo {@code FOR UPDATE} (escalares: razón social y activo salen de la misma lectura actual, no de una foto). Es la
+     * ÚNICA vía de tomar al cliente: el primer paso de toda operación que mueve su cuenta, la venta y la cobranza.
+     */
     @Override
     @Transactional(propagation = Propagation.MANDATORY)
     public Optional<ClienteReferencia> tomarParaVenta(Long id) {

@@ -3,12 +3,16 @@ package com.ferreteria.clientes;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.ferreteria.clientes.api.ClientesParaVenta;
 import com.ferreteria.clientes.api.CuentaCorrienteParaVenta;
 import com.ferreteria.clientes.api.CuentaCorrienteParaVenta.AsientoVenta;
 import com.ferreteria.clientes.api.CuentaCorrienteParaVenta.CargoPago;
 import com.ferreteria.clientes.api.CuentaCorrienteParaVenta.CupoCuenta;
+import com.ferreteria.clientes.api.CuentaCorrienteParaCobranza.AsientoCobro;
+import com.ferreteria.clientes.api.CuentaCorrienteParaCobranza.ImputacionInvalidaException;
+import com.ferreteria.clientes.api.CuentaCorrienteParaCobranza.Imputar;
 import com.ferreteria.clientes.model.Cliente;
+import com.ferreteria.clientes.service.CuentaCorrienteService;
+import com.ferreteria.clientes.service.PendientesCuenta;
 import com.ferreteria.clientes.repository.ClienteRepository;
 import com.ferreteria.common.exception.ResourceNotFoundException;
 import com.ferreteria.tenant.TenantContext;
@@ -16,7 +20,10 @@ import java.math.BigDecimal;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Random;
 import java.util.function.Supplier;
 import org.junit.jupiter.api.DisplayName;
@@ -24,7 +31,6 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.transaction.IllegalTransactionStateException;
-import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.support.TransactionTemplate;
 
@@ -39,13 +45,10 @@ class CuentaCorrienteIntegrationTest extends CuentaCorrienteTestBase {
     CuentaCorrienteParaVenta cuentas;
 
     @Autowired
-    ClientesParaVenta clientesParaVenta;
-
-    @Autowired
     ClienteRepository clientes;
 
     @Autowired
-    PlatformTransactionManager transactionManager;
+    CuentaCorrienteService servicioDeCuenta;
 
     private <T> T enTx(Supplier<T> trabajo) {
         return new TransactionTemplate(transactionManager).execute(status -> trabajo.get());
@@ -350,5 +353,149 @@ class CuentaCorrienteIntegrationTest extends CuentaCorrienteTestBase {
         assertThat(excedidas).as("hubo ventas con exceso autorizado (semilla %d)", semilla).isGreaterThan(0);
         assertThat(jdbc.queryForObject("select count(*) from movimiento_cuenta_cliente where cliente_id = ? "
                 + "and excedio_limite = false and debe > 0", Integer.class, cliente)).isGreaterThan(0);
+    }
+
+    // ---- invariantes I1 + I2: test de propiedad de la cobranza (CCT3-213, CC-040, CC-002, CC-051) ----
+
+    /** El modelo en memoria de un cliente: saldo y pendiente de cada comprobante abierto (en centavos exactos). */
+    private static final class Modelo {
+        BigDecimal saldo = BigDecimal.ZERO;
+        final Map<Long, BigDecimal> abiertos = new LinkedHashMap<>();
+    }
+
+    private record UltimoCobro(int cliente, ReciboEmitido recibo, BigDecimal total, List<Imputar> imputaciones) {}
+
+    private static BigDecimal centavos(Random azar, int maximo) {
+        return BigDecimal.valueOf(1 + azar.nextInt(maximo), 2);
+    }
+
+    @Test
+    @DisplayName("propiedad: tras cada paso de una secuencia aleatoria (semilla fija) de ventas, cobranzas válidas, sobre-imputadas, repetidas, a cuenta, adelantos a clientes sin deuda y rechazos tardíos, sobre 3 clientes con centavos: I1 + I2 y el modelo coinciden")
+    void propiedadDeLaCobranza() {
+        long semilla = Long.getLong("cc.semilla", 20261019L);
+        System.out.println("propiedadDeLaCobranza: semilla=" + semilla + " (para repetirla: -Dcc.semilla=" + semilla + ")");
+        Random azar = new Random(semilla);
+        Ferreteria f = ferreteria();
+        long caja = cajaCerrada(f);
+        long[] clientes3 = {cliente(f, "1000000.00"), cliente(f, "1000000.00"), cliente(f, null)}; // el 3.º nunca tiene deuda
+        Modelo[] modelo = {new Modelo(), new Modelo(), new Modelo()};
+        TenantContext.setCurrentFerreteriaId(f.id());
+        UltimoCobro ultimo = null;
+        int[] hechos = new int[10];
+
+        for (int paso = 0; paso < 150; paso++) {
+            int accion = azar.nextInt(10);
+            int c = azar.nextInt(3);
+            Modelo m = modelo[c];
+            String donde = "paso " + paso + ", acción " + accion + ", cliente " + c + " (semilla " + semilla + ")";
+            try {
+                if (((accion >= 3 && accion <= 5) || accion == 9) && m.abiertos.isEmpty()) {
+                    accion = 0; // sin pendientes no hay a quién imputar: vende (el 3.º cliente nunca vende: adelanta)
+                }
+                if (accion == 0 && c == 2) {
+                    accion = 8;
+                }
+                hechos[accion]++;
+                switch (accion) {
+                    case 0, 1, 2 -> { // venta a cuenta de uno de los dos clientes con límite
+                        int cv = c == 2 ? 0 : c;
+                        BigDecimal importe = centavos(azar, 120000);
+                        VentaSuelta v = ventaSuelta(f, clientes3[cv], importe.toPlainString());
+                        enTx(() -> {
+                            clientesParaVenta.tomarParaVenta(clientes3[cv]);
+                            cuentas.asentarVenta(new AsientoVenta(clientes3[cv], v.comprobanteId(), v.numero(),
+                                    List.of(new CargoPago(v.pagoId(), importe)), f.usuarioId(), null));
+                        });
+                        modelo[cv].saldo = modelo[cv].saldo.add(importe);
+                        modelo[cv].abiertos.put(v.comprobanteId(), importe);
+                    }
+                    case 3, 4, 9 -> { // cobranza válida con imputaciones (9: se cae después → no deja nada)
+                        List<Long> abiertos = new ArrayList<>(m.abiertos.keySet());
+                        List<Imputar> imputaciones = new ArrayList<>();
+                        BigDecimal suma = BigDecimal.ZERO;
+                        int cuantos = 1 + azar.nextInt(Math.min(3, abiertos.size()));
+                        for (int i = 0; i < cuantos; i++) {
+                            Long comprobante = abiertos.remove(azar.nextInt(abiertos.size()));
+                            BigDecimal pendiente = m.abiertos.get(comprobante);
+                            BigDecimal importe = pendiente.compareTo(new BigDecimal("0.01")) == 0 || azar.nextInt(3) == 0
+                                    ? pendiente : centavos(azar, pendiente.movePointRight(2).intValueExact());
+                            imputaciones.add(new Imputar(comprobante, importe));
+                            suma = suma.add(importe);
+                        }
+                        BigDecimal total = suma.add(azar.nextInt(3) == 0 ? centavos(azar, 50000) : BigDecimal.ZERO);
+                        Imputar[] pedido = imputaciones.toArray(Imputar[]::new);
+                        if (accion == 9) {
+                            new TransactionTemplate(transactionManager).execute(status -> {
+                                asentarEnLaTx(f, clientes3[c], caja, total.toPlainString(), pedido);
+                                status.setRollbackOnly(); // «sin caja» o cualquier rechazo posterior: la tx entera se revierte
+                                return null;
+                            });
+                        } else {
+                            cobrar(f, clientes3[c], caja, total.toPlainString(), pedido);
+                            m.saldo = m.saldo.subtract(total);
+                            for (Imputar imputar : imputaciones) {
+                                BigDecimal queda = m.abiertos.get(imputar.comprobanteId()).subtract(imputar.importe());
+                                if (queda.signum() == 0) {
+                                    m.abiertos.remove(imputar.comprobanteId());
+                                } else {
+                                    m.abiertos.put(imputar.comprobanteId(), queda);
+                                }
+                            }
+                            ReciboEmitido ultimoRecibo = new ReciboEmitido(
+                                    jdbc.queryForObject("select max(id) from recibo where cliente_id = ?", Long.class, clientes3[c]),
+                                    jdbc.queryForObject("select max(numero) from recibo where cliente_id = ?", Long.class, clientes3[c]));
+                            ultimo = new UltimoCobro(c, ultimoRecibo, total, imputaciones);
+                        }
+                    }
+                    case 5 -> { // sobre-imputada: un centavo o más por encima del pendiente → 409 con la deuda actual
+                        Long comprobante = new ArrayList<>(m.abiertos.keySet()).get(azar.nextInt(m.abiertos.size()));
+                        BigDecimal pendiente = m.abiertos.get(comprobante);
+                        BigDecimal importe = pendiente.add(centavos(azar, 500));
+                        assertThatThrownBy(() -> cobrar(f, clientes3[c], caja, importe.toPlainString(),
+                                new Imputar(comprobante, importe))).as(donde)
+                                .isInstanceOfSatisfying(ImputacionInvalidaException.class, e -> assertThat(e.deudas().get(0).pendiente())
+                                        .as(donde).isEqualByComparingTo(pendiente));
+                    }
+                    case 6 -> { // repetida: el mismo recibo asentado otra vez se rechaza (clave única o pendiente ya usado) y no deja nada
+                        if (ultimo != null) {
+                            UltimoCobro u = ultimo;
+                            assertThatThrownBy(() -> enTx(() -> {
+                                clientesParaVenta.tomarParaVenta(clientes3[u.cliente()]);
+                                cobranza.asentarCobro(new AsientoCobro(clientes3[u.cliente()], u.recibo().id(), u.recibo().numero(),
+                                        u.total(), u.imputaciones(), f.usuarioId()));
+                            })).as(donde).isInstanceOfAny(DataIntegrityViolationException.class, // el UNIQUE del recibo o de la imputación, o
+                                    ImputacionInvalidaException.class); // el pendiente ya reducido por el primer asiento
+                        }
+                    }
+                    default -> { // 7 y 8: todo a cuenta; el 8 (y el 3.er cliente, sin deuda) es un adelanto
+                        BigDecimal total = centavos(azar, 80000);
+                        cobrar(f, clientes3[c], caja, total.toPlainString());
+                        m.saldo = m.saldo.subtract(total);
+                    }
+                }
+                for (int i = 0; i < 3; i++) {
+                    assertInvariante(clientes3[i]);
+                    assertThat(saldo(clientes3[i])).as("saldo del modelo del cliente %d tras %s", i, donde)
+                            .isEqualByComparingTo(modelo[i].saldo);
+                    PendientesCuenta p = servicioDeCuenta.pendientes(clientes3[i]);
+                    assertThat(p.comprobantes()).as("pendientes del cliente %d tras %s", i, donde)
+                            .extracting(PendientesCuenta.Pendiente::comprobanteId)
+                            .containsExactlyElementsOf(modelo[i].abiertos.keySet());
+                    for (PendientesCuenta.Pendiente pendiente : p.comprobantes()) {
+                        assertThat(pendiente.pendiente()).as(donde)
+                                .isEqualByComparingTo(modelo[i].abiertos.get(pendiente.comprobanteId()));
+                    }
+                    assertThat(p.saldo()).as(donde).isEqualByComparingTo(modelo[i].saldo);
+                }
+            } catch (AssertionError e) { // toda falla lleva la semilla y el paso: se repite con -Dcc.semilla=...
+                throw new AssertionError(donde + " → " + e.getMessage(), e);
+            }
+        }
+
+        for (int accion : new int[] {0, 3, 5, 6, 7, 8, 9}) {
+            assertThat(hechos[accion]).as("la secuencia ejercitó la acción %d (semilla %d)", accion, semilla).isGreaterThan(0);
+        }
+        assertThat(cobros(clientes3[2])).as("el 3.er cliente (sin deuda) recibió adelantos").isGreaterThan(0);
+        assertThat(imputaciones(clientes3[0]) + imputaciones(clientes3[1])).as("hubo imputaciones").isGreaterThan(5);
     }
 }

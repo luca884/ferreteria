@@ -245,4 +245,54 @@ class TenantScopingArchTest {
                 .allowEmptyShould(false)
                 .check(clases);
     }
+
+    // ---- Cobranza (CC-041): ImputacionRepository entra en las reglas de clientes y además tiene las suyas, explícitas ----
+
+    @Test
+    void imputacionRepositoryEsDeTenantYSusMetodosScopedTomanLaFerreteriaDelContexto() {
+        assertThat(TenantScopedRepository.class).isAssignableFrom(com.ferreteria.clientes.repository.ImputacionRepository.class);
+
+        ArchCondition<JavaMethod> tomaLaFerreteriaDelContexto = new ArchCondition<>(
+                "llamar DIRECTAMENTE a TenantContext.requireFerreteriaId() (sin delegar en otro metodo: un default que pase un id fijo no pasa)") {
+            @Override
+            public void check(JavaMethod metodo, ConditionEvents eventos) {
+                boolean ok = metodo.getMethodCallsFromSelf().stream().anyMatch(c ->
+                        c.getTargetOwner().isEquivalentTo(com.ferreteria.tenant.TenantContext.class)
+                                && c.getName().equals("requireFerreteriaId"));
+                if (!ok) {
+                    eventos.add(SimpleConditionEvent.violated(metodo,
+                            metodo.getFullName() + " no toma la ferreteria de TenantContext"));
+                }
+            }
+        };
+
+        methods().that().areDeclaredIn(com.ferreteria.clientes.repository.ImputacionRepository.class)
+                .and().doNotHaveModifier(com.tngtech.archunit.core.domain.JavaModifier.ABSTRACT)
+                .and().doNotHaveModifier(com.tngtech.archunit.core.domain.JavaModifier.SYNTHETIC)
+                .should(tomaLaFerreteriaDelContexto)
+                .allowEmptyShould(false)
+                .check(clases);
+    }
+
+    @Test
+    void lasConsultasDeImputacionConFerreteriaIdExplicitoSoloLasLlamaElRepositorio() {
+        DescribedPredicate<JavaMethodCall> consultaCruda = new DescribedPredicate<>(
+                "una consulta abstracta de ImputacionRepository, llamada desde afuera de el") {
+            @Override
+            public boolean test(JavaMethodCall call) {
+                return call.getTargetOwner().isEquivalentTo(com.ferreteria.clientes.repository.ImputacionRepository.class)
+                        && call.getTarget().resolveMember()
+                                .map(m -> m.getModifiers().contains(com.tngtech.archunit.core.domain.JavaModifier.ABSTRACT))
+                                .orElse(false)
+                        && !call.getOriginOwner().isEquivalentTo(com.ferreteria.clientes.repository.ImputacionRepository.class)
+                        && !call.getName().startsWith("save");
+            }
+        };
+
+        noClasses().should().callMethodWhere(consultaCruda).check(clases);
+        // la regla no es vacía: ImputacionRepository tiene consultas abstractas con ferreteriaId
+        assertThat(clases.get(com.ferreteria.clientes.repository.ImputacionRepository.class).getMethods())
+                .anyMatch(m -> m.getModifiers().contains(com.tngtech.archunit.core.domain.JavaModifier.ABSTRACT)
+                        && m.getRawParameterTypes().size() >= 1 && m.getName().equals("imputadoBloqueado"));
+    }
 }

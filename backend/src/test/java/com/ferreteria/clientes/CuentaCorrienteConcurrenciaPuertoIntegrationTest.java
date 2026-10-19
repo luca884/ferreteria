@@ -2,13 +2,15 @@ package com.ferreteria.clientes;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.ferreteria.clientes.api.ClientesParaVenta;
 import com.ferreteria.clientes.api.CuentaCorrienteParaVenta;
 import com.ferreteria.clientes.api.CuentaCorrienteParaVenta.AsientoVenta;
 import com.ferreteria.clientes.api.CuentaCorrienteParaVenta.CargoPago;
 import com.ferreteria.clientes.api.CuentaCorrienteParaVenta.CupoCuenta;
+import com.ferreteria.support.BarreraDeLocks;
+import com.ferreteria.support.BarreraDeLocks.Hito;
 import com.ferreteria.tenant.TenantContext;
 import java.math.BigDecimal;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.Callable;
@@ -20,7 +22,6 @@ import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /**
@@ -32,12 +33,6 @@ class CuentaCorrienteConcurrenciaPuertoIntegrationTest extends CuentaCorrienteTe
 
     @Autowired
     CuentaCorrienteParaVenta cuentas;
-
-    @Autowired
-    ClientesParaVenta clientesParaVenta;
-
-    @Autowired
-    PlatformTransactionManager transactionManager;
 
     /** Un intento de venta a cuenta: true si asentó, false si el cupo no alcanzó. */
     private Callable<Boolean> vender(Ferreteria f, long cliente, VentaSuelta venta, String importe) {
@@ -157,8 +152,10 @@ class CuentaCorrienteConcurrenciaPuertoIntegrationTest extends CuentaCorrienteTe
     void elSegundoVeElSaldoDelPrimero() throws Exception {
         Ferreteria f = ferreteria();
         long cliente = cliente(f, "500.00");
-        CountDownLatch primeroTiene = new CountDownLatch(1);
-        CountDownLatch segundoEsperando = new CountDownLatch(1);
+        // Determinista (CCT3-205): el primero no asienta hasta que MySQL informa que el segundo está esperando el lock.
+        BarreraDeLocks barrera = new BarreraDeLocks(jdbcRoot(), Duration.ofSeconds(10));
+        long deadlocksAntes = barrera.deadlocksAntes();
+        Hito primeroTiene = new Hito();
         VentaSuelta v1 = ventaSuelta(f, cliente, "400.00");
         VentaSuelta v2 = ventaSuelta(f, cliente, "400.00");
         ExecutorService pool = Executors.newFixedThreadPool(2);
@@ -168,13 +165,8 @@ class CuentaCorrienteConcurrenciaPuertoIntegrationTest extends CuentaCorrienteTe
                 try {
                     return new TransactionTemplate(transactionManager).execute(status -> {
                         clientesParaVenta.tomarParaVenta(cliente);
-                        primeroTiene.countDown();
-                        try {
-                            segundoEsperando.await(60, TimeUnit.SECONDS);
-                            Thread.sleep(500); // deja que el segundo llegue a bloquearse en su tomarParaVenta
-                        } catch (InterruptedException e) {
-                            Thread.currentThread().interrupt();
-                        }
+                        primeroTiene.avisar();
+                        barrera.esperarBloqueados(1); // el segundo está en LOCK WAIT sobre la fila del cliente
                         cuentas.asentarVenta(new AsientoVenta(cliente, v1.comprobanteId(), v1.numero(),
                                 List.of(new CargoPago(v1.pagoId(), new BigDecimal("400.00"))), f.usuarioId(), null));
                         return true;
@@ -183,11 +175,8 @@ class CuentaCorrienteConcurrenciaPuertoIntegrationTest extends CuentaCorrienteTe
                     TenantContext.clear();
                 }
             });
-            assertThat(primeroTiene.await(30, TimeUnit.SECONDS)).isTrue();
-            Future<Boolean> segundo = pool.submit(() -> {
-                segundoEsperando.countDown();
-                return vender(f, cliente, v2, "400.00").call();
-            });
+            primeroTiene.esperar();
+            Future<Boolean> segundo = pool.submit(vender(f, cliente, v2, "400.00"));
 
             assertThat(primero.get(30, TimeUnit.SECONDS)).isTrue();
             assertThat(segundo.get(30, TimeUnit.SECONDS)).as("el segundo ve 400 + 400 > 500").isFalse();
@@ -198,5 +187,6 @@ class CuentaCorrienteConcurrenciaPuertoIntegrationTest extends CuentaCorrienteTe
         assertThat(saldo(cliente)).isEqualByComparingTo("400.00");
         assertThat(movimientos(cliente)).isEqualTo(1);
         assertInvariante(cliente);
+        barrera.assertSinDeadlocks(deadlocksAntes);
     }
 }

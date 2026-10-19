@@ -4,8 +4,10 @@ import com.tngtech.archunit.core.domain.JavaClasses;
 import com.tngtech.archunit.core.importer.ClassFileImporter;
 import com.tngtech.archunit.core.importer.ImportOption;
 import com.ferreteria.clientes.api.CuentaCorrienteParaVenta;
+import com.ferreteria.clientes.model.Imputacion;
 import com.ferreteria.clientes.model.MovimientoCuentaCliente;
 import com.ferreteria.clientes.repository.ClienteRepository;
+import com.ferreteria.clientes.repository.ImputacionRepository;
 import com.ferreteria.clientes.repository.MovimientoCuentaClienteRepository;
 import com.ferreteria.clientes.service.CuentaCorrienteService;
 import com.ferreteria.ventas.service.RegistroVenta;
@@ -237,5 +239,72 @@ class ModulosArchTest {
                 .should().dependOnClassesThat(resideInAnyPackage("com.ferreteria.clientes.service..",
                         "com.ferreteria.clientes.model.."))
                 .check(clases);
+    }
+
+    // ---- Cobranza (corte 2 de cuenta-corriente-tramo-3a): puerto nuevo, una sola puerta de escritura para libro e imputación ----
+
+    private static final String PUERTO_COBRANZA = "com.ferreteria.clientes.api.CuentaCorrienteParaCobranza";
+
+    /**
+     * (h) El puerto de cobranza existe en {@code clientes.api} y, con sus records y su excepción, solo habla JDK y consigo
+     * mismo (la regla (a) cubre todo el paquete; esta además falla si el puerto no existe).
+     */
+    @Test
+    void elPuertoDeCobranzaExisteYSoloDependeDelJdkYDeSiMismo() {
+        var puerto = clases.get(PUERTO_COBRANZA);
+        assertThat(puerto.isInterface()).isTrue();
+        assertThat(puerto.getPackageName()).isEqualTo("com.ferreteria.clientes.api");
+
+        classes().that().resideInAPackage("com.ferreteria.clientes.api..")
+                .and().haveSimpleNameStartingWith("CuentaCorrienteParaCobranza")
+                .should().onlyDependOnClassesThat(resideInAnyPackage("java..", "com.ferreteria.clientes.api.."))
+                .allowEmptyShould(false)
+                .check(clases);
+    }
+
+    private static com.tngtech.archunit.base.DescribedPredicate<JavaMethodCall> escribeConSave(Class<?> repositorio) {
+        return new com.tngtech.archunit.base.DescribedPredicate<>("escribir (save*) con " + repositorio.getSimpleName()) {
+            @Override
+            public boolean test(JavaMethodCall call) {
+                return call.getTargetOwner().isAssignableTo(repositorio) && call.getName().startsWith("save");
+            }
+        };
+    }
+
+    /** (j) Solo CuentaCorrienteService escribe el libro y las imputaciones (extiende la regla (b) del saldo). */
+    @Test
+    void soloLaCuentaCorrienteEscribeElLibroYLasImputaciones() {
+        for (Class<?> repositorio : List.of(MovimientoCuentaClienteRepository.class, ImputacionRepository.class)) {
+            // save/saveAll son métodos heredados de Spring Data: getMethodCallsToSelf() no los ve, se mira por tipo del dueño.
+            var llamadores = clases.stream().flatMap(c -> c.getMethodCallsFromSelf().stream())
+                    .filter(escribeConSave(repositorio))
+                    .map(JavaMethodCall::getOriginOwner)
+                    .map(origen -> origen.getName())
+                    .collect(java.util.stream.Collectors.toSet());
+
+            assertThat(llamadores).as("quién escribe con %s", repositorio.getSimpleName())
+                    .containsExactly(CuentaCorrienteService.class.getName());
+
+            noClasses().that().areNotAssignableTo(CuentaCorrienteService.class)
+                    .should().callMethodWhere(escribeConSave(repositorio))
+                    .check(clases);
+        }
+    }
+
+    /** (k-Imputación) La imputación es append-only: la entidad no tiene setters y nadie borra con su repositorio. */
+    @Test
+    void lasImputacionesSonAppendOnly() {
+        noMethods().that().areDeclaredIn(Imputacion.class)
+                .should().haveNameMatching("set[A-Z].*")
+                .check(clases);
+
+        noClasses().should().callMethodWhere(new com.tngtech.archunit.base.DescribedPredicate<JavaMethodCall>(
+                "borrar o quitar renglones con ImputacionRepository") {
+            @Override
+            public boolean test(JavaMethodCall call) {
+                return call.getTargetOwner().isAssignableTo(ImputacionRepository.class)
+                        && call.getName().matches("(delete|remove).*");
+            }
+        }).check(clases);
     }
 }

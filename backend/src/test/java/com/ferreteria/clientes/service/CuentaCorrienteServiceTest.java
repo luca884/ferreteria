@@ -4,23 +4,34 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
 import com.ferreteria.clientes.CuentaFalsa;
+import com.ferreteria.clientes.api.CuentaCorrienteParaCobranza.AsientoCobro;
+import com.ferreteria.clientes.api.CuentaCorrienteParaCobranza.ImputacionAsentada;
+import com.ferreteria.clientes.api.CuentaCorrienteParaCobranza.ImputacionInvalidaException;
+import com.ferreteria.clientes.api.CuentaCorrienteParaCobranza.ImputacionInvalidaException.DeudaActual;
+import com.ferreteria.clientes.api.CuentaCorrienteParaCobranza.Imputar;
 import com.ferreteria.clientes.api.CuentaCorrienteParaVenta.AsientoVenta;
 import com.ferreteria.clientes.api.CuentaCorrienteParaVenta.CargoPago;
 import com.ferreteria.clientes.api.CuentaCorrienteParaVenta.CupoCuenta;
 import com.ferreteria.clientes.model.Cliente;
 import com.ferreteria.clientes.model.CondicionIvaCliente;
+import com.ferreteria.clientes.model.Imputacion;
 import com.ferreteria.clientes.model.MovimientoCuentaCliente;
 import com.ferreteria.clientes.model.TipoMovimientoCuenta;
 import com.ferreteria.clientes.repository.ClienteRepository;
+import com.ferreteria.clientes.repository.ImputacionRepository;
+import com.ferreteria.clientes.repository.ImputacionRepository.FilaImputada;
 import com.ferreteria.clientes.repository.MovimientoCuentaClienteRepository;
+import com.ferreteria.clientes.repository.MovimientoCuentaClienteRepository.DebitoDeComprobante;
 import com.ferreteria.common.exception.DatosInvalidosException;
 import com.ferreteria.common.exception.ResourceNotFoundException;
 import com.ferreteria.tenant.TenantContext;
@@ -59,14 +70,23 @@ class CuentaCorrienteServiceTest {
     @Mock
     MovimientoCuentaClienteRepository libro;
 
+    @Mock
+    ImputacionRepository imputaciones;
+
     @Captor
     ArgumentCaptor<List<MovimientoCuentaCliente>> guardados;
+
+    @Captor
+    ArgumentCaptor<List<Imputacion>> imputacionesGuardadas;
+
+    @Captor
+    ArgumentCaptor<List<Long>> ids;
 
     CuentaCorrienteService servicio;
 
     @BeforeEach
     void preparar() {
-        servicio = new CuentaCorrienteService(clientes, libro, RELOJ);
+        servicio = new CuentaCorrienteService(clientes, libro, imputaciones, RELOJ);
         TenantContext.setCurrentFerreteriaId(FERRETERIA);
     }
 
@@ -449,5 +469,387 @@ class CuentaCorrienteServiceTest {
         assertThatThrownBy(() -> servicio.cambiarLimite(99L, d("10.00"))).isInstanceOf(ResourceNotFoundException.class);
 
         verify(clientes, never()).findScoped(anyLong());
+    }
+
+    // ---- asentarCobro (CCT3-206: CC-026, CC-027, CC-030, CC-033, CC-037, CC-042, CC-001) ----
+
+    private record DebitoFalso(Long comprobanteId, Long primerMovimientoId, String referencia, LocalDateTime fecha,
+            BigDecimal debe) implements DebitoDeComprobante {
+        @Override public Long getComprobanteId() { return comprobanteId; }
+        @Override public Long getPrimerMovimientoId() { return primerMovimientoId; }
+        @Override public String getReferencia() { return referencia; }
+        @Override public LocalDateTime getFecha() { return fecha; }
+        @Override public BigDecimal getDebe() { return debe; }
+    }
+
+    private record FilaFalsa(Long comprobanteId, BigDecimal importe) implements FilaImputada {
+        @Override public Long getComprobanteId() { return comprobanteId; }
+        @Override public BigDecimal getImporte() { return importe; }
+    }
+
+    private static DebitoFalso debito(long comprobante, long primerMovimiento, String debe) {
+        return new DebitoFalso(comprobante, primerMovimiento, "Venta N.º " + comprobante, AHORA.minusDays(1), d(debe));
+    }
+
+    private static FilaFalsa fila(long comprobante, String importe) {
+        return new FilaFalsa(comprobante, d(importe));
+    }
+
+    private static AsientoCobro cobro(String total, Imputar... imputaciones) {
+        return new AsientoCobro(5L, 61L, 12L, d(total), List.of(imputaciones), 9L);
+    }
+
+    private static Imputar imputar(long comprobante, String importe) {
+        return new Imputar(comprobante, d(importe));
+    }
+
+    /** Un cliente con cuenta, comprobantes 20 (debe 500) y 21 (debe 400), sin nada imputado todavía. */
+    private void cuentaConDosComprobantes() {
+        when(clientes.bloquearCuentaScoped(5L)).thenReturn(Optional.of(CuentaFalsa.de("1000.00", "900.00")));
+        when(libro.debitosDeComprobantesScoped(eq(5L), any())).thenReturn(List.of(debito(20, 100, "500.00"), debito(21, 101, "400.00")));
+        when(libro.idsDePartidasScoped(eq(5L), any())).thenReturn(List.of(100L, 101L));
+        when(libro.bloquearPartidasScoped(eq(5L), any())).thenReturn(List.of(100L, 101L));
+        when(imputaciones.imputadoBloqueadoScoped(eq(5L), any())).thenReturn(List.of());
+        when(clientes.sumarSaldoScoped(anyLong(), any())).thenReturn(1);
+    }
+
+    @Test
+    @DisplayName("asentarCobro respeta el orden: cuenta bloqueada → débitos → ids de partidas → partidas → imputado bloqueado → imputaciones → libro → saldo")
+    void cobroEnOrden() {
+        cuentaConDosComprobantes();
+
+        servicio.asentarCobro(cobro("600.00", imputar(20, "300.00"), imputar(21, "200.00")));
+
+        var orden = inOrder(clientes, libro, imputaciones);
+        orden.verify(clientes).bloquearCuentaScoped(5L);
+        orden.verify(libro).debitosDeComprobantesScoped(eq(5L), any());
+        orden.verify(libro).idsDePartidasScoped(eq(5L), any());
+        orden.verify(libro).bloquearPartidasScoped(eq(5L), any());
+        orden.verify(imputaciones).imputadoBloqueadoScoped(eq(5L), any());
+        orden.verify(imputaciones).saveAll(any());
+        orden.verify(libro).save(any(MovimientoCuentaCliente.class));
+        orden.verify(clientes).sumarSaldoScoped(5L, d("-600.00"));
+    }
+
+    @Test
+    @DisplayName("imputaciones pedidas en orden DESCENDENTE: las partidas se bloquean con los ids ascendentes (sin deadlock entre cobranzas)")
+    void partidasEnOrdenAscendente() {
+        when(clientes.bloquearCuentaScoped(5L)).thenReturn(Optional.of(CuentaFalsa.de("1000.00", "900.00")));
+        when(libro.debitosDeComprobantesScoped(eq(5L), any())).thenReturn(
+                List.of(debito(22, 120, "100.00"), debito(21, 110, "100.00"), debito(20, 100, "100.00")));
+        when(libro.idsDePartidasScoped(eq(5L), any())).thenReturn(List.of(120L, 110L, 100L)); // desordenados a propósito
+        when(libro.bloquearPartidasScoped(eq(5L), any())).thenReturn(List.of(100L, 110L, 120L));
+        when(imputaciones.imputadoBloqueadoScoped(eq(5L), any())).thenReturn(List.of());
+        when(clientes.sumarSaldoScoped(anyLong(), any())).thenReturn(1);
+
+        servicio.asentarCobro(cobro("300.00", imputar(22, "100.00"), imputar(21, "100.00"), imputar(20, "100.00")));
+
+        verify(libro).bloquearPartidasScoped(eq(5L), ids.capture());
+        assertThat(ids.getValue()).containsExactly(100L, 110L, 120L);
+        verify(imputaciones).imputadoBloqueadoScoped(eq(5L), ids.capture());
+        assertThat(ids.getValue()).as("también el imputado se bloquea por comprobante ascendente").containsExactly(20L, 21L, 22L);
+    }
+
+    @Test
+    @DisplayName("las imputaciones se guardan por comprobante ascendente y UN solo COBRO (haber = total, aunque haya 3 imputaciones) baja el saldo UNA vez")
+    void imputacionesYUnSoloCobro() {
+        when(clientes.bloquearCuentaScoped(5L)).thenReturn(Optional.of(CuentaFalsa.de("1000.00", "900.00")));
+        when(libro.debitosDeComprobantesScoped(eq(5L), any())).thenReturn(
+                List.of(debito(22, 120, "100.00"), debito(21, 110, "100.00"), debito(20, 100, "100.00")));
+        when(libro.idsDePartidasScoped(eq(5L), any())).thenReturn(List.of(100L, 110L, 120L));
+        when(imputaciones.imputadoBloqueadoScoped(eq(5L), any())).thenReturn(List.of());
+        when(clientes.sumarSaldoScoped(anyLong(), any())).thenReturn(1);
+
+        List<ImputacionAsentada> asentadas = servicio
+                .asentarCobro(cobro("700.00", imputar(22, "30.00"), imputar(20, "50.00"), imputar(21, "40.00")));
+
+        verify(imputaciones).saveAll(imputacionesGuardadas.capture());
+        assertThat(imputacionesGuardadas.getValue()).extracting(Imputacion::getComprobanteId).containsExactly(20L, 21L, 22L);
+        assertThat(imputacionesGuardadas.getValue()).allSatisfy(i -> {
+            assertThat(i.getFerreteriaId()).isEqualTo(FERRETERIA);
+            assertThat(i.getClienteId()).isEqualTo(5L);
+            assertThat(i.getReciboId()).isEqualTo(61L);
+        });
+        ArgumentCaptor<MovimientoCuentaCliente> cobroGuardado = ArgumentCaptor.forClass(MovimientoCuentaCliente.class);
+        verify(libro, org.mockito.Mockito.times(1)).save(cobroGuardado.capture());
+        MovimientoCuentaCliente movimiento = cobroGuardado.getValue();
+        assertThat(movimiento.getTipo()).isEqualTo(TipoMovimientoCuenta.COBRO);
+        assertThat(movimiento.getReciboId()).isEqualTo(61L);
+        assertThat(movimiento.getReferencia()).isEqualTo("Recibo N.º 12");
+        assertThat(movimiento.getHaber()).isEqualByComparingTo("700.00");
+        assertThat(movimiento.getDebe()).isEqualByComparingTo("0");
+        assertThat(movimiento.getClienteId()).isEqualTo(5L);
+        assertThat(movimiento.getFerreteriaId()).isEqualTo(FERRETERIA);
+        assertThat(movimiento.getFecha()).isEqualTo(AHORA);
+        assertThat(movimiento.getUsuarioId()).isEqualTo(9L);
+        verify(clientes, org.mockito.Mockito.times(1)).sumarSaldoScoped(anyLong(), any());
+        verify(clientes).sumarSaldoScoped(5L, d("-700.00"));
+        assertThat(asentadas).extracting(ImputacionAsentada::comprobanteId).containsExactly(20L, 21L, 22L);
+        assertThat(asentadas).extracting(ImputacionAsentada::referencia)
+                .containsExactly("Venta N.º 20", "Venta N.º 21", "Venta N.º 22");
+        assertThat(asentadas).extracting(ImputacionAsentada::importe).usingElementComparator(BigDecimal::compareTo)
+                .containsExactly(d("50.00"), d("40.00"), d("30.00"));
+    }
+
+    @Test
+    @DisplayName("si el UPDATE del saldo no afecta exactamente una fila, el cobro falla fuerte (IllegalStateException)")
+    void cobroConSaldoQueNoSeActualiza() {
+        cuentaConDosComprobantes();
+        AsientoCobro asiento = cobro("100.00", imputar(20, "100.00"));
+
+        when(clientes.sumarSaldoScoped(5L, d("-100.00"))).thenReturn(0);
+        assertThatThrownBy(() -> servicio.asentarCobro(asiento)).isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("saldo");
+
+        when(clientes.sumarSaldoScoped(5L, d("-100.00"))).thenReturn(2);
+        assertThatThrownBy(() -> servicio.asentarCobro(asiento)).isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("saldo");
+    }
+
+    @Test
+    @DisplayName("un comprobante sin débito en la cuenta (ajeno, de otro cliente, inexistente) es 404 y no escribe nada")
+    void comprobanteSinDebitoEsNoEncontrado() {
+        when(clientes.bloquearCuentaScoped(5L)).thenReturn(Optional.of(CuentaFalsa.de("1000.00", "900.00")));
+        when(libro.debitosDeComprobantesScoped(eq(5L), any())).thenReturn(List.of(debito(20, 100, "500.00"))); // falta el 99
+
+        assertThatThrownBy(() -> servicio.asentarCobro(cobro("100.00", imputar(20, "50.00"), imputar(99, "50.00"))))
+                .isInstanceOf(ResourceNotFoundException.class)
+                .hasMessage("Comprobante no encontrado en la cuenta del cliente");
+
+        verify(libro, never()).bloquearPartidasScoped(anyLong(), any());
+        verify(imputaciones, never()).imputadoBloqueadoScoped(anyLong(), any());
+        verify(imputaciones, never()).saveAll(any());
+        verify(libro, never()).save(any(MovimientoCuentaCliente.class));
+        verify(clientes, never()).sumarSaldoScoped(anyLong(), any());
+    }
+
+    @Test
+    @DisplayName("pendiente menor que el importe (incluido pendiente 0) → EXCEDE_DEUDA con TODAS las deudas actuales de los afectados, sin escribir")
+    void excedeLaDeuda() {
+        when(clientes.bloquearCuentaScoped(5L)).thenReturn(Optional.of(CuentaFalsa.de("1000.00", "900.00")));
+        when(libro.debitosDeComprobantesScoped(eq(5L), any())).thenReturn(
+                List.of(debito(20, 100, "500.00"), debito(21, 101, "400.00"), debito(22, 102, "1000.00")));
+        when(libro.idsDePartidasScoped(eq(5L), any())).thenReturn(List.of(100L, 101L, 102L));
+        when(imputaciones.imputadoBloqueadoScoped(eq(5L), any())).thenReturn(
+                List.of(fila(20, "400.00"), fila(21, "250.00"), fila(21, "150.00"))); // pendientes: 20 → 100, 21 → 0, 22 → 1000
+
+        assertThatThrownBy(() -> servicio.asentarCobro(
+                cobro("400.00", imputar(20, "300.00"), imputar(21, "50.00"), imputar(22, "50.00"))))
+                .isInstanceOfSatisfying(ImputacionInvalidaException.class, e -> {
+                    assertThat(e.motivo()).isEqualTo(ImputacionInvalidaException.Motivo.EXCEDE_DEUDA);
+                    assertThat(e.deudas()).extracting(DeudaActual::comprobanteId).containsExactly(20L, 21L);
+                    assertThat(e.deudas()).extracting(DeudaActual::referencia).containsExactly("Venta N.º 20", "Venta N.º 21");
+                    assertThat(e.deudas()).extracting(DeudaActual::pendiente).usingElementComparator(BigDecimal::compareTo)
+                            .containsExactly(d("100.00"), d("0.00"));
+                });
+
+        verify(imputaciones, never()).saveAll(any());
+        verify(libro, never()).save(any(MovimientoCuentaCliente.class));
+        verify(clientes, never()).sumarSaldoScoped(anyLong(), any());
+    }
+
+    @Test
+    @DisplayName("un centavo de más sobre el pendiente excede; justo el pendiente (otra escala) no")
+    void unCentavoDeMas() {
+        when(clientes.bloquearCuentaScoped(5L)).thenReturn(Optional.of(CuentaFalsa.de("1000.00", "900.00")));
+        when(libro.debitosDeComprobantesScoped(eq(5L), any())).thenReturn(List.of(debito(20, 100, "100.10")));
+        when(libro.idsDePartidasScoped(eq(5L), any())).thenReturn(List.of(100L));
+        when(imputaciones.imputadoBloqueadoScoped(eq(5L), any())).thenReturn(List.of());
+        when(clientes.sumarSaldoScoped(anyLong(), any())).thenReturn(1);
+
+        assertThatThrownBy(() -> servicio.asentarCobro(cobro("100.11", imputar(20, "100.11"))))
+                .isInstanceOf(ImputacionInvalidaException.class);
+        servicio.asentarCobro(cobro("100.1", imputar(20, "100.1"))); // 100,1 vs pendiente 100,10: mismo valor
+
+        verify(libro, org.mockito.Mockito.times(1)).save(any(MovimientoCuentaCliente.class));
+    }
+
+    @Test
+    @DisplayName("sin imputaciones (adelanto o todo a cuenta): no mira débitos ni partidas ni imputado; escribe el COBRO y baja el saldo, sin chequear saldo ni límite")
+    void adelantoSinImputaciones() {
+        when(clientes.bloquearCuentaScoped(5L)).thenReturn(Optional.of(CuentaFalsa.de(null, "-200.00"))); // límite NULL y saldo a favor
+        when(clientes.sumarSaldoScoped(anyLong(), any())).thenReturn(1);
+
+        List<ImputacionAsentada> asentadas = servicio.asentarCobro(cobro("500.00"));
+
+        assertThat(asentadas).isEmpty();
+        verify(clientes).bloquearCuentaScoped(5L);
+        ArgumentCaptor<MovimientoCuentaCliente> cobroGuardado = ArgumentCaptor.forClass(MovimientoCuentaCliente.class);
+        verify(libro).save(cobroGuardado.capture());
+        assertThat(cobroGuardado.getValue().getHaber()).isEqualByComparingTo("500.00");
+        verify(clientes).sumarSaldoScoped(5L, d("-500.00"));
+        verify(libro, never()).debitosDeComprobantesScoped(anyLong(), any());
+        verify(libro, never()).idsDePartidasScoped(anyLong(), any());
+        verify(libro, never()).bloquearPartidasScoped(anyLong(), any());
+        verify(imputaciones, never()).imputadoBloqueadoScoped(anyLong(), any());
+        verify(imputaciones, never()).saveAll(any());
+    }
+
+    @Test
+    @DisplayName("el cobro no depende del límite: con límite 0 y deuda cobra igual (CC-027)")
+    void cobroConLimiteCero() {
+        when(clientes.bloquearCuentaScoped(5L)).thenReturn(Optional.of(CuentaFalsa.de("0.00", "800.00")));
+        when(clientes.sumarSaldoScoped(anyLong(), any())).thenReturn(1);
+
+        servicio.asentarCobro(cobro("300.00"));
+
+        verify(clientes).sumarSaldoScoped(5L, d("-300.00"));
+    }
+
+    @Test
+    @DisplayName("argumentos mal formados son un error de programación (IllegalArgumentException) y no tocan nada")
+    void argumentosMalFormados() {
+        Imputar bien = imputar(20, "10.00");
+        assertThatThrownBy(() -> servicio.asentarCobro(cobro("0.00"))).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> servicio.asentarCobro(cobro("-5.00"))).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> servicio.asentarCobro(new AsientoCobro(5L, 61L, 12L, null, List.of(), 9L)))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> servicio.asentarCobro(cobro("100.001"))).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> servicio.asentarCobro(cobro("100.00", imputar(20, "0.00")))).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> servicio.asentarCobro(cobro("100.00", imputar(20, "-1.00")))).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> servicio.asentarCobro(cobro("100.00", imputar(20, "1.005")))).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> servicio.asentarCobro(cobro("100.00", bien, imputar(20, "5.00")))).as("comprobante repetido")
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> servicio.asentarCobro(cobro("100.00", imputar(20, "60.00"), imputar(21, "40.01"))))
+                .as("Σ imputaciones > total").isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> servicio.asentarCobro(new AsientoCobro(5L, 61L, 12L, d("100.00"), null, 9L)))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> servicio.asentarCobro(new AsientoCobro(5L, 61L, 0L, d("100.00"), List.of(), 9L)))
+                .as("número de recibo no positivo").isInstanceOf(IllegalArgumentException.class);
+
+        verifyNoInteractions(clientes, libro, imputaciones);
+    }
+
+    @Test
+    @DisplayName("un cobro a un cliente de otra ferretería o inexistente es 404 y no escribe nada")
+    void cobroClienteAjeno() {
+        when(clientes.bloquearCuentaScoped(5L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> servicio.asentarCobro(cobro("100.00"))).isInstanceOf(ResourceNotFoundException.class);
+
+        verify(libro, never()).save(any(MovimientoCuentaCliente.class));
+        verify(clientes, never()).sumarSaldoScoped(anyLong(), any());
+    }
+
+    @Test
+    @DisplayName("imputacionesDeRecibo devuelve cada imputación con la referencia de su comprobante, en el orden en que se asentaron")
+    void imputacionesDeRecibo() {
+        when(imputaciones.deReciboScoped(61L)).thenReturn(List.of(
+                Imputacion.de(FERRETERIA, 5L, 61L, 21L, d("40.00")), Imputacion.de(FERRETERIA, 5L, 61L, 20L, d("50.00"))));
+        when(libro.debitosDeComprobantesScoped(eq(5L), any())).thenReturn(List.of(debito(20, 100, "500.00"), debito(21, 101, "400.00")));
+
+        List<ImputacionAsentada> asentadas = servicio.imputacionesDeRecibo(61L);
+
+        assertThat(asentadas).extracting(ImputacionAsentada::comprobanteId).containsExactly(21L, 20L);
+        assertThat(asentadas).extracting(ImputacionAsentada::referencia).containsExactly("Venta N.º 21", "Venta N.º 20");
+        assertThat(asentadas).extracting(ImputacionAsentada::importe).usingElementComparator(BigDecimal::compareTo)
+                .containsExactly(d("40.00"), d("50.00"));
+        verify(clientes, never()).bloquearCuentaScoped(anyLong());
+    }
+
+    @Test
+    @DisplayName("imputacionesDeRecibo de un recibo sin imputaciones (a cuenta) es vacío y no consulta más")
+    void imputacionesDeReciboVacio() {
+        when(imputaciones.deReciboScoped(61L)).thenReturn(List.of());
+
+        assertThat(servicio.imputacionesDeRecibo(61L)).isEmpty();
+
+        verify(libro, never()).debitosDeComprobantesScoped(anyLong(), any());
+    }
+
+    // ---- pendientes (CCT3-207: CC-039, CC-050, CC-031, CC-032) ----
+
+    @Test
+    @DisplayName("pendientes lista solo los comprobantes con pendiente > 0 en orden FIFO; los saldados no aparecen; aCuenta es derivado")
+    void pendientesFifoYACuenta() {
+        Cliente cliente = clienteConSaldo("800.00");
+        when(clientes.findScoped(5L)).thenReturn(Optional.of(cliente));
+        when(libro.debitosDeClienteScoped(5L)).thenReturn(
+                List.of(debito(10, 50, "300.00"), debito(11, 51, "500.00"), debito(12, 52, "400.00")));
+        when(imputaciones.imputadoPorComprobanteScoped(5L)).thenReturn(List.of(imputado(10, "300.00"), imputado(11, "100.00")));
+        when(libro.creditosDeCobroScoped(5L)).thenReturn(d("600.00"));
+        when(imputaciones.totalImputadoScoped(5L)).thenReturn(d("400.00"));
+
+        PendientesCuenta pendientes = servicio.pendientes(5L);
+
+        assertThat(pendientes.saldo()).isEqualByComparingTo("800.00");
+        assertThat(pendientes.aCuenta()).isEqualByComparingTo("200.00");
+        assertThat(pendientes.comprobantes()).extracting(PendientesCuenta.Pendiente::comprobanteId).containsExactly(11L, 12L);
+        PendientesCuenta.Pendiente segundo = pendientes.comprobantes().get(0);
+        assertThat(segundo.referencia()).isEqualTo("Venta N.º 11");
+        assertThat(segundo.fecha()).isEqualTo(AHORA.minusDays(1));
+        assertThat(segundo.importe()).isEqualByComparingTo("500.00");
+        assertThat(segundo.imputado()).isEqualByComparingTo("100.00");
+        assertThat(segundo.pendiente()).isEqualByComparingTo("400.00");
+        verifyLecturaPura();
+    }
+
+    @Test
+    @DisplayName("cliente sin deuda: lista vacía, saldo 0 y aCuenta 0")
+    void pendientesSinDeuda() {
+        Cliente cliente = clienteConSaldo("0.00");
+        when(clientes.findScoped(5L)).thenReturn(Optional.of(cliente));
+        when(libro.debitosDeClienteScoped(5L)).thenReturn(List.of());
+        when(imputaciones.imputadoPorComprobanteScoped(5L)).thenReturn(List.of());
+        when(libro.creditosDeCobroScoped(5L)).thenReturn(d("0"));
+        when(imputaciones.totalImputadoScoped(5L)).thenReturn(d("0"));
+
+        PendientesCuenta pendientes = servicio.pendientes(5L);
+
+        assertThat(pendientes.comprobantes()).isEmpty();
+        assertThat(pendientes.saldo()).isEqualByComparingTo("0");
+        assertThat(pendientes.aCuenta()).isEqualByComparingTo("0");
+    }
+
+    @Test
+    @DisplayName("con un adelanto de 500 sin deuda: lista vacía, saldo −500, aCuenta 500")
+    void pendientesConAdelanto() {
+        Cliente cliente = clienteConSaldo("-500.00");
+        when(clientes.findScoped(5L)).thenReturn(Optional.of(cliente));
+        when(libro.debitosDeClienteScoped(5L)).thenReturn(List.of());
+        when(imputaciones.imputadoPorComprobanteScoped(5L)).thenReturn(List.of());
+        when(libro.creditosDeCobroScoped(5L)).thenReturn(d("500.00"));
+        when(imputaciones.totalImputadoScoped(5L)).thenReturn(d("0"));
+
+        PendientesCuenta pendientes = servicio.pendientes(5L);
+
+        assertThat(pendientes.comprobantes()).isEmpty();
+        assertThat(pendientes.saldo()).isEqualByComparingTo("-500.00");
+        assertThat(pendientes.aCuenta()).isEqualByComparingTo("500.00");
+    }
+
+    @Test
+    @DisplayName("pendientes de un cliente ajeno o inexistente es 404 y no lee nada más")
+    void pendientesClienteAjeno() {
+        when(clientes.findScoped(99L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> servicio.pendientes(99L)).isInstanceOf(ResourceNotFoundException.class);
+
+        verifyNoInteractions(libro, imputaciones);
+    }
+
+    private static Cliente clienteConSaldo(String saldo) {
+        Cliente c = mock(Cliente.class);
+        when(c.getSaldo()).thenReturn(new BigDecimal(saldo));
+        return c;
+    }
+
+    private static ImputacionRepository.ImputadoDeComprobante imputado(long comprobante, String importe) {
+        return new ImputacionRepository.ImputadoDeComprobante() {
+            @Override public Long getComprobanteId() { return comprobante; }
+            @Override public BigDecimal getImputado() { return d(importe); }
+        };
+    }
+
+    /** La consulta de pendientes es lectura pura: sin ningún lock (bloquear*) ni escritura (save*). */
+    private void verifyLecturaPura() {
+        verify(clientes, never()).bloquearCuentaScoped(anyLong());
+        verify(clientes, never()).sumarSaldoScoped(anyLong(), any());
+        verify(libro, never()).bloquearPartidasScoped(anyLong(), any());
+        verify(libro, never()).save(any(MovimientoCuentaCliente.class));
+        verify(libro, never()).saveAll(any());
+        verify(imputaciones, never()).imputadoBloqueadoScoped(anyLong(), any());
+        verify(imputaciones, never()).saveAll(any());
+        verify(imputaciones, never()).save(any(Imputacion.class));
     }
 }
