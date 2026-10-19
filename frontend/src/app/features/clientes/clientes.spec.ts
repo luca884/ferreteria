@@ -52,6 +52,7 @@ describe('Clientes', () => {
     crear: ReturnType<typeof vi.fn>;
     actualizar: ReturnType<typeof vi.fn>;
     cambiarActivo: ReturnType<typeof vi.fn>;
+    cambiarLimite: ReturnType<typeof vi.fn>;
   };
 
   const errorHttp = (status: number, message: string, errors?: Record<string, string>) =>
@@ -64,6 +65,9 @@ describe('Clientes', () => {
       actualizar: vi.fn((id: number, r: ClienteRequest) => of({ id, activo: true, cuentaCorrienteHabilitada: false, ...r })),
       cambiarActivo: vi.fn((id: number, activo: boolean) =>
         of({ ...([ana, norte, viejo].find((c) => c.id === id) as Cliente), activo }),
+      ),
+      cambiarLimite: vi.fn((_id: number, limite: number | null) =>
+        of(limite === null ? { habilitada: false } : { habilitada: true, limite, saldo: 0, disponible: limite }),
       ),
     };
     await TestBed.configureTestingModule({
@@ -420,6 +424,407 @@ describe('Clientes', () => {
 
       expect(texto('p.error')).toBe('No permitido');
       expect(filas()[0].textContent).toContain('Activo');
+    });
+  });
+  describe('cuenta corriente (CC-018, CC-019, CC-020)', () => {
+    const deudor: Cliente = {
+      id: 7,
+      razonSocial: 'Corralón Sur',
+      tipoDocumento: 'CUIT',
+      numeroDocumento: '30712345671',
+      condicionIva: 'RESPONSABLE_INSCRIPTO',
+      activo: true,
+      cuentaCorrienteHabilitada: true,
+      limiteCuentaCorriente: 5000,
+      saldo: 1500,
+    };
+    const aFavor: Cliente = { ...deudor, id: 8, razonSocial: 'Pinturería Este', limiteCuentaCorriente: 1000, saldo: -50 };
+    const alDia: Cliente = { ...deudor, id: 9, razonSocial: 'Obra Norte', limiteCuentaCorriente: 0, saldo: 0 };
+    const sinCuenta: Cliente = { ...ana, saldo: 0 };
+    /** Lo que recibe el Vendedor: la bandera sí, las cifras no. */
+    const paraVendedor = (c: Cliente): Cliente => ({ ...c, limiteCuentaCorriente: undefined, saldo: undefined });
+
+    const dicho = (e: Element | null | undefined) => (e?.textContent ?? '').replace(/\s+/g, ' ').trim();
+    const encabezados = () => Array.from(el().querySelectorAll('thead th')).map((th) => dicho(th));
+    const seccion = () => el().querySelector('fieldset.cuenta-corriente');
+    const habilitar = () => input('cuenta-habilitada');
+    const limite = () => input('limite-cuenta');
+    const desactivar = () => barra('.desactivar')!;
+
+    async function tildar(id: string, valor: boolean) {
+      input(id).checked = valor;
+      input(id).dispatchEvent(new Event('change'));
+      await refrescar();
+    }
+
+    async function editarFila(fila: number) {
+      await elegir(fila);
+      barra('.editar')!.click();
+      await refrescar();
+    }
+
+    /** Un servicio con la cuenta corriente: cambiarLimite devuelve la vista del Dueño. */
+    function conCambiarLimite() {
+      servicio.cambiarLimite = vi.fn((_id: number, l: number | null) =>
+        of(l === null ? { habilitada: false } : { habilitada: true, limite: l, saldo: 0, disponible: l }),
+      );
+    }
+
+    describe('la lista', () => {
+      it('el Dueño ve las columnas Saldo y Límite con las cifras de cada cliente', async () => {
+        await crear([deudor, aFavor, alDia, sinCuenta]);
+
+        expect(encabezados()).toContain('Saldo');
+        expect(encabezados()).toContain('Límite');
+        expect(dicho(filas()[0])).toContain('$ 1.500,00');
+        expect(dicho(filas()[0])).toContain('$ 5.000,00');
+        expect(dicho(filas()[1])).toContain('$ 50,00 a favor');
+        expect(dicho(filas()[2])).toContain('$ 0,00');
+        expect(dicho(filas()[3])).toContain('Sin habilitar');
+      });
+
+      it('el Vendedor no ve las columnas ni ninguna cifra', async () => {
+        await crear([paraVendedor(deudor)], false);
+
+        expect(encabezados()).not.toContain('Saldo');
+        expect(encabezados()).not.toContain('Límite');
+        expect(el().textContent).not.toMatch(/1\.500|5\.000|Sin habilitar/);
+      });
+    });
+
+    describe('la sección «Cuenta corriente» del formulario', () => {
+      it('el Dueño la ve al editar, con la casilla tildada y el límite cargado', async () => {
+        await crear([deudor, ana]);
+
+        await editarFila(0);
+
+        expect(dicho(seccion()?.querySelector('legend'))).toBe('Cuenta corriente');
+        expect(habilitar().checked).toBe(true);
+        expect(limite().value).toBe('5000');
+        expect(limite().disabled).toBe(false);
+      });
+
+      it('el Dueño que edita un cliente sin cuenta corriente ve la casilla destildada y el límite bloqueado', async () => {
+        await crear([sinCuenta]);
+
+        await editarFila(0);
+
+        expect(habilitar().checked).toBe(false);
+        expect(limite().disabled).toBe(true);
+        expect(limite().value).toBe('');
+      });
+
+      it('también está en el alta (Nuevo) para el Dueño', async () => {
+        await crear([ana]);
+
+        expect(seccion()).not.toBeNull();
+        expect(habilitar().checked).toBe(false);
+      });
+
+      it('el Vendedor no la ve ni al editar ni en el alta', async () => {
+        await crear([paraVendedor(deudor)], false);
+        expect(seccion()).toBeNull();
+
+        await editarFila(0);
+
+        expect(seccion()).toBeNull();
+        expect(el().querySelector('#cuenta-habilitada')).toBeNull();
+      });
+
+      it('tildar «Habilitar» desbloquea el límite y destildar lo bloquea', async () => {
+        await crear([sinCuenta]);
+        await editarFila(0);
+
+        await tildar('cuenta-habilitada', true);
+        expect(limite().disabled).toBe(false);
+
+        await tildar('cuenta-habilitada', false);
+        expect(limite().disabled).toBe(true);
+      });
+
+      it('al pasar de un cliente a otro la sección sigue al cliente editado', async () => {
+        await crear([deudor, sinCuenta]);
+        await editarFila(0);
+        expect(habilitar().checked).toBe(true);
+
+        await editarFila(1);
+
+        expect(habilitar().checked).toBe(false);
+        expect(limite().value).toBe('');
+      });
+    });
+
+    describe('guardar el límite', () => {
+      it('sin cambiar el límite solo llama al PUT del cliente', async () => {
+        await crear([deudor]);
+        conCambiarLimite();
+        await editarFila(0);
+        await escribir('telefono', '2231112222');
+
+        await enviar('form.alta');
+
+        expect(servicio.actualizar).toHaveBeenCalledTimes(1);
+        expect(servicio.cambiarLimite).not.toHaveBeenCalled();
+      });
+
+      it('si cambió el límite llama primero al PUT del cliente y después a cambiarLimite aparte', async () => {
+        const orden: string[] = [];
+        await crear([deudor]);
+        conCambiarLimite();
+        servicio.actualizar.mockImplementation((id: number, r: ClienteRequest) => {
+          orden.push('cliente');
+          return of({ ...deudor, id, ...r });
+        });
+        servicio.cambiarLimite.mockImplementation((_id: number, l: number | null) => {
+          orden.push('limite');
+          return of({ habilitada: true, limite: l ?? undefined });
+        });
+        await editarFila(0);
+        await escribir('limite-cuenta', '8000');
+
+        await enviar('form.alta');
+
+        expect(orden).toEqual(['cliente', 'limite']);
+        expect(servicio.cambiarLimite).toHaveBeenCalledWith(7, 8000);
+        expect(texto('.alerta.exito')).toBe('Se guardó «Corralón Sur».');
+      });
+
+      it('el límite no viaja en el PUT del cliente (ClienteRequest no lo lleva)', async () => {
+        await crear([deudor]);
+        conCambiarLimite();
+        await editarFila(0);
+        await escribir('limite-cuenta', '8000');
+
+        await enviar('form.alta');
+
+        const request = servicio.actualizar.mock.calls[0][1] as Record<string, unknown>;
+        expect('limiteCuentaCorriente' in request).toBe(false);
+        expect('limite' in request).toBe(false);
+        expect('saldo' in request).toBe(false);
+      });
+
+      it('destildar «Habilitar» deshabilita la cuenta: cambiarLimite con null', async () => {
+        await crear([deudor]);
+        conCambiarLimite();
+        await editarFila(0);
+        await tildar('cuenta-habilitada', false);
+
+        await enviar('form.alta');
+
+        expect(servicio.cambiarLimite).toHaveBeenCalledWith(7, null);
+      });
+
+      it('un límite 0 está permitido: habilita la cuenta sin crédito', async () => {
+        await crear([sinCuenta]);
+        conCambiarLimite();
+        await editarFila(0);
+        await tildar('cuenta-habilitada', true);
+        await escribir('limite-cuenta', '0');
+
+        await enviar('form.alta');
+
+        expect(servicio.cambiarLimite).toHaveBeenCalledWith(1, 0);
+      });
+
+      it('con «Habilitar» tildado y sin límite avisa en el campo y no llama a nada', async () => {
+        await crear([sinCuenta]);
+        conCambiarLimite();
+        await editarFila(0);
+        await tildar('cuenta-habilitada', true);
+
+        await enviar('form.alta');
+
+        expect(texto('#limite-cuenta-error')).toBe('Escribí el límite de la cuenta corriente (puede ser 0).');
+        expect(limite().getAttribute('aria-invalid')).toBe('true');
+        expect(servicio.actualizar).not.toHaveBeenCalled();
+        expect(servicio.cambiarLimite).not.toHaveBeenCalled();
+      });
+
+      it('un límite negativo o con más de 2 decimales no se envía', async () => {
+        await crear([sinCuenta]);
+        conCambiarLimite();
+        await editarFila(0);
+        await tildar('cuenta-habilitada', true);
+
+        await escribir('limite-cuenta', '-1');
+        await enviar('form.alta');
+        expect(texto('#limite-cuenta-error')).toBe('El límite no puede ser negativo.');
+
+        await escribir('limite-cuenta', '10.001');
+        await enviar('form.alta');
+        expect(texto('#limite-cuenta-error')).toBe('El límite admite hasta 2 decimales.');
+
+        expect(servicio.actualizar).not.toHaveBeenCalled();
+        expect(servicio.cambiarLimite).not.toHaveBeenCalled();
+      });
+
+      it('un límite sobre el tope no se envía', async () => {
+        await crear([sinCuenta]);
+        conCambiarLimite();
+        await editarFila(0);
+        await tildar('cuenta-habilitada', true);
+        await escribir('limite-cuenta', '10000000000000');
+
+        await enviar('form.alta');
+
+        expect(texto('#limite-cuenta-error')).toBe('El límite es demasiado grande.');
+        expect(servicio.cambiarLimite).not.toHaveBeenCalled();
+      });
+
+      it('en el alta con «Habilitar» crea el cliente y fija el límite del recién creado', async () => {
+        await crear([ana]);
+        conCambiarLimite();
+        await escribir('razon-social', 'Obra Oeste');
+        await tildar('cuenta-habilitada', true);
+        await escribir('limite-cuenta', '3000');
+
+        await enviar('form.alta');
+
+        expect(servicio.crear).toHaveBeenCalledTimes(1);
+        expect(servicio.cambiarLimite).toHaveBeenCalledWith(99, 3000);
+      });
+
+      it('en el alta sin tildar «Habilitar» no llama a cambiarLimite', async () => {
+        await crear([ana]);
+        conCambiarLimite();
+        await escribir('razon-social', 'Obra Oeste');
+
+        await enviar('form.alta');
+
+        expect(servicio.crear).toHaveBeenCalledTimes(1);
+        expect(servicio.cambiarLimite).not.toHaveBeenCalled();
+      });
+
+      it('si falla el PUT del cliente no se toca el límite', async () => {
+        await crear([deudor]);
+        conCambiarLimite();
+        servicio.actualizar.mockReturnValue(throwError(() => errorHttp(409, 'Ya existe un cliente con ese documento.')));
+        await editarFila(0);
+        await escribir('limite-cuenta', '8000');
+
+        await enviar('form.alta');
+
+        expect(servicio.cambiarLimite).not.toHaveBeenCalled();
+        expect(texto('p.error')).toBe('Ya existe un cliente con ese documento.');
+      });
+
+      it('si falla la segunda llamada el cliente queda guardado y se avisa del límite', async () => {
+        await crear([deudor]);
+        conCambiarLimite();
+        servicio.cambiarLimite.mockReturnValue(throwError(() => errorHttp(400, 'Datos inválidos', { limite: 'El límite es demasiado grande.' })));
+        await editarFila(0);
+        await escribir('limite-cuenta', '8000');
+        servicio.buscar.mockClear();
+
+        await enviar('form.alta');
+
+        expect(servicio.actualizar).toHaveBeenCalledTimes(1);
+        expect(texto('[role="alert"]')).toContain('Se guardó «Corralón Sur», pero no se pudo cambiar el límite de la cuenta corriente.');
+        expect(texto('[role="alert"]')).toContain('El límite es demasiado grande.');
+        expect(el().querySelector('.alerta.exito')).toBeNull();
+        expect(el().querySelector('form.alta h2')?.textContent).toContain('Nuevo cliente');
+        expect(servicio.buscar).toHaveBeenCalledTimes(1);
+      });
+
+      it('si falla la segunda llamada sin mensaje por campo usa el mensaje del servidor', async () => {
+        await crear([deudor]);
+        conCambiarLimite();
+        servicio.cambiarLimite.mockReturnValue(throwError(() => errorHttp(403, 'Acceso denegado')));
+        await editarFila(0);
+        await escribir('limite-cuenta', '8000');
+
+        await enviar('form.alta');
+
+        expect(texto('[role="alert"]')).toContain('Acceso denegado');
+      });
+
+      it('después de guardar el límite recarga la lista para mostrar el saldo y el límite vigentes', async () => {
+        await crear([deudor]);
+        conCambiarLimite();
+        await editarFila(0);
+        await escribir('limite-cuenta', '8000');
+        servicio.buscar.mockClear();
+
+        await enviar('form.alta');
+
+        expect(servicio.buscar).toHaveBeenCalledTimes(1);
+      });
+    });
+
+    describe('desactivar con saldo (lección G77: deshabilitar con razón, no ocultar)', () => {
+      const RAZON = 'No se puede desactivar: el cliente tiene saldo en cuenta corriente.';
+
+      it('con saldo que debe el botón queda deshabilitado con la razón a la vista y enlazada', async () => {
+        await crear([deudor]);
+
+        await elegir(0);
+
+        expect(desactivar().getAttribute('aria-disabled')).toBe('true');
+        const id = desactivar().getAttribute('aria-describedby')!;
+        expect(texto(`#${id}`)).toBe(RAZON);
+      });
+
+      it('con saldo a favor también', async () => {
+        await crear([aFavor]);
+
+        await elegir(0);
+
+        expect(desactivar().getAttribute('aria-disabled')).toBe('true');
+        expect(texto('#motivo-desactivar')).toBe(RAZON);
+      });
+
+      it('el clic en el botón con saldo no llama al servidor', async () => {
+        await crear([deudor]);
+        await elegir(0);
+
+        desactivar().click();
+        await refrescar();
+
+        expect(servicio.cambiarActivo).not.toHaveBeenCalled();
+      });
+
+      it('con saldo 0 el botón funciona y no hay razón', async () => {
+        await crear([alDia]);
+        await elegir(0);
+
+        expect(desactivar().hasAttribute('aria-disabled')).toBe(false);
+        expect(el().querySelector('#motivo-desactivar')).toBeNull();
+        desactivar().click();
+        await refrescar();
+
+        expect(servicio.cambiarActivo).toHaveBeenCalledWith(9, false);
+      });
+
+      it('un cliente sin cuenta corriente se desactiva como siempre (regresión)', async () => {
+        await crear([sinCuenta]);
+        await elegir(0);
+
+        expect(desactivar().hasAttribute('aria-disabled')).toBe(false);
+      });
+
+      it('reactivar un cliente desactivado con saldo siempre se puede', async () => {
+        await crear([{ ...deudor, activo: false }]);
+        await elegir(0);
+
+        expect(desactivar().textContent!.trim()).toBe('Reactivar');
+        expect(desactivar().hasAttribute('aria-disabled')).toBe(false);
+        desactivar().click();
+        await refrescar();
+
+        expect(servicio.cambiarActivo).toHaveBeenCalledWith(7, true);
+      });
+
+      it('el 422 del servidor igual se muestra (el saldo pudo cambiar desde que se cargó la lista)', async () => {
+        await crear([alDia]);
+        servicio.cambiarActivo.mockReturnValue(throwError(() => errorHttp(422, RAZON)));
+        await elegir(0);
+
+        desactivar().click();
+        await refrescar();
+
+        expect(texto('p.error')).toBe(RAZON);
+        expect(filas()[0].textContent).toContain('Activo');
+      });
     });
   });
 });

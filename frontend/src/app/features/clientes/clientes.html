@@ -17,12 +17,18 @@
       type="button"
       class="accion-barra desactivar"
       [disabled]="!filas.elegido() || cambiando()"
+      [attr.aria-disabled]="motivoNoDesactivar() ? 'true' : null"
+      [attr.aria-describedby]="motivoNoDesactivar() ? 'motivo-desactivar' : null"
       (click)="cambiarActivo()"
     >
       {{ filas.elegido()?.activo === false ? 'Reactivar' : 'Desactivar' }}
     </button>
   }
 </app-barra-acciones>
+
+@if (motivoNoDesactivar(); as motivo) {
+  <p id="motivo-desactivar" class="ayuda motivo">{{ motivo }}</p>
+}
 
 <p class="ayuda">
   Buscá por razón social o por documento. Un cliente desactivado no se puede elegir en el mostrador, pero sus ventas y
@@ -88,6 +94,10 @@
               <th>Condición de IVA</th>
               <th>Contacto</th>
               <th>Estado</th>
+              @if (auth.esDueno()) {
+                <th class="num">Saldo</th>
+                <th class="num">Límite</th>
+              }
             </tr>
           </thead>
           <tbody>
@@ -108,6 +118,10 @@
                 <td>{{ etiquetaCondicion[cliente.condicionIva] }}</td>
                 <td>{{ contacto(cliente) }}</td>
                 <td class="estado">{{ cliente.activo ? 'Activo' : 'Inactivo' }}</td>
+                @if (auth.esDueno()) {
+                  <td class="num" [class.debe]="(cliente.saldo ?? 0) > 0">{{ saldoTexto(cliente) }}</td>
+                  <td class="num">{{ limiteTexto(cliente) }}</td>
+                }
               </tr>
             }
           </tbody>
@@ -240,6 +254,37 @@
         </span>
       }
     </div>
+    @if (auth.esDueno()) {
+      <fieldset class="cuenta-corriente">
+        <legend>Cuenta corriente</legend>
+        <div class="campo tilde">
+          <input id="cuenta-habilitada" name="cuentaHabilitada" type="checkbox" formControlName="cuentaHabilitada" />
+          <label for="cuenta-habilitada">Habilitar (vender a cuenta corriente)</label>
+        </div>
+        <div class="campo">
+          <label for="limite-cuenta">Límite $</label>
+          <input
+            id="limite-cuenta"
+            name="limiteCuenta"
+            type="number"
+            inputmode="decimal"
+            step="0.01"
+            min="0"
+            autocomplete="off"
+            formControlName="limiteCuenta"
+            [attr.aria-invalid]="errorLimite() ? 'true' : null"
+            [attr.aria-describedby]="errorLimite() ? 'limite-cuenta-error' : 'limite-cuenta-pista'"
+          />
+          @if (errorLimite(); as mensaje) {
+            <span id="limite-cuenta-error" class="campo-error">{{ mensaje }}</span>
+          } @else {
+            <span id="limite-cuenta-pista" class="pista">
+              Hasta cuánto puede deber. 0 = habilitada sin crédito: toda venta a cuenta pide autorización.
+            </span>
+          }
+        </div>
+      </fieldset>
+    }
     <div class="acciones-alta">
       <button type="submit" [disabled]="guardando()">
         {{ editando() === null ? 'Agregar' : 'Guardar cambios' }}

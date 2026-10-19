@@ -50,3 +50,36 @@ tr.inactivo td {
   gap: var(--e-3);
   margin-top: var(--e-3);
 }
+.num {
+  text-align: right;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+td.debe {
+  font-weight: 600;
+}
+.motivo {
+  color: var(--texto-suave);
+}
+/* El botón sin acción por el saldo se ve apagado pero sigue enfocable para que se lea su motivo. */
+.desactivar[aria-disabled='true'] {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.cuenta-corriente {
+  display: grid;
+  gap: var(--e-2);
+  margin: 0;
+  padding: var(--e-3);
+  border: 1px solid var(--borde);
+  border-radius: var(--radio);
+}
+.cuenta-corriente legend {
+  padding: 0 var(--e-2);
+  font-weight: 600;
+}
+.cuenta-corriente .campo.tilde {
+  display: flex;
+  align-items: center;
+  gap: var(--e-2);
+}

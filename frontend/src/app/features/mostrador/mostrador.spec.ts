@@ -3857,6 +3857,32 @@ describe('Mostrador', () => {
       expect(el().querySelector('.cliente-ticket')).toBeNull();
     });
 
+    describe('cuenta corriente en F9 (CC-007)', () => {
+      const conCuenta: Cliente = { ...CLIENTE_ANA, id: 5, razonSocial: 'Corralón Sur', cuentaCorrienteHabilitada: true, limiteCuentaCorriente: 5000, saldo: 1500 };
+      const paraVendedor: Cliente = { ...conCuenta, limiteCuentaCorriente: undefined, saldo: undefined };
+
+      async function abrirF9(rol: 'DUENO' | 'VENDEDOR', cliente: Cliente) {
+        await crear(cajaAbierta, FORMAS_BASE, rol);
+        clientesApi.buscar.mockReturnValue(of({ items: [cliente], page: 0, size: 8, totalElements: 1, totalPages: 1 } as PageResponse<Cliente>));
+        await tecla('F9');
+        await refrescar();
+      }
+
+      it('el Dueño ve el saldo y el límite junto al indicador «Cta. cte.»', async () => {
+        await abrirF9('DUENO', conCuenta);
+
+        expect(normal(dialogoCliente()?.textContent)).toContain('Cta. cte.');
+        expect(normal(dialogoCliente()?.textContent)).toContain('Saldo $ 1.500,00 · Límite $ 5.000,00');
+      });
+
+      it('el Vendedor ve el indicador pero ninguna cifra', async () => {
+        await abrirF9('VENDEDOR', paraVendedor);
+
+        expect(normal(dialogoCliente()?.textContent)).toContain('Cta. cte.');
+        expect(normal(dialogoCliente()?.textContent)).not.toMatch(/Saldo|Límite|1\.500|5\.000/);
+      });
+    });
+
     it('una venta sin cliente no manda clienteId', async () => {
       await conMartillos();
       await tecla('F4');

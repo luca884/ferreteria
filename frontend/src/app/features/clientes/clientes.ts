@@ -5,6 +5,7 @@ import {
   Injector,
   OnInit,
   afterNextRender,
+  computed,
   inject,
   signal,
 } from '@angular/core';
@@ -13,6 +14,7 @@ import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { erroresDeCampos, mensajeDe } from '../../core/api/api-error';
 import { AuthService } from '../../core/auth/auth.service';
 import { BarraAcciones } from '../../shared/barra-acciones';
+import { formatearMonto } from '../../core/formato/monto';
 import { FilasElegibles } from '../../shared/filas-elegibles';
 import {
   CONDICIONES_IVA,
@@ -27,6 +29,10 @@ import {
 import { ClientesService } from './clientes.service';
 
 const TAMANO_PAGINA = 20;
+
+/** El tope del límite de cuenta corriente: el mismo que acepta el servidor (13 enteros y 2 decimales). */
+const LIMITE_MAXIMO = 9_999_999_999_999.99;
+const MOTIVO_NO_DESACTIVAR = 'No se puede desactivar: el cliente tiene saldo en cuenta corriente.';
 
 /** El texto sin espacios de los bordes; undefined si queda vacío, así el pedido no manda campos en blanco. */
 const sinVacios = (texto: string): string | undefined => texto.trim() || undefined;
@@ -52,6 +58,7 @@ export class Clientes implements OnInit {
   protected readonly condiciones = CONDICIONES_IVA;
   protected readonly etiquetaCondicion = CONDICION_IVA_LABELS;
   protected readonly documentoLegible = documentoLegible;
+  protected readonly monto = formatearMonto;
 
   protected readonly clientes = signal<Cliente[]>([]);
   /** Fila elegida en la grilla: la barra actúa sobre ella; Enter edita. */
@@ -86,9 +93,28 @@ export class Clientes implements OnInit {
     telefono: ['', Validators.maxLength(30)],
     whatsapp: ['', Validators.maxLength(30)],
     email: ['', [Validators.email, Validators.maxLength(120)]],
+    // Cuenta corriente (CC-018, solo el Dueño): «Habilitar» + el límite en $; 0 es habilitada sin crédito. Se guardan aparte
+    // del cliente, por el endpoint propio del límite.
+    cuentaHabilitada: [false],
+    limiteCuenta: [{ value: null as number | null, disabled: true }],
   });
 
+  /** Por qué no se puede desactivar al cliente elegido (tiene saldo, a favor o en contra), o null si se puede. */
+  protected readonly motivoNoDesactivar = computed(() => {
+    const cliente = this.filas.elegido();
+    return cliente?.activo && cliente.saldo !== undefined && cliente.saldo !== 0 ? MOTIVO_NO_DESACTIVAR : null;
+  });
+  protected readonly errorLimite = signal<string | null>(null);
+
   constructor() {
+    // El límite solo se escribe con «Habilitar» tildado.
+    this.form.controls.cuentaHabilitada.valueChanges
+      .pipe(takeUntilDestroyed(inject(DestroyRef)))
+      .subscribe((habilitada) => {
+        const limite = this.form.controls.limiteCuenta;
+        if (habilitada) limite.enable();
+        else limite.disable();
+      });
     // Al escribir se van los avisos del servidor y del documento: ya no corresponden a lo que hay en el formulario.
     this.form.valueChanges.pipe(takeUntilDestroyed(inject(DestroyRef))).subscribe(() => this.limpiarErrores());
   }
@@ -140,23 +166,22 @@ export class Clientes implements OnInit {
     const conNumero = numeroDocumento.trim() !== '';
     if (conNumero && !conTipo) this.errorTipo.set('Elegí el tipo de documento.');
     if (conTipo && !conNumero) this.errorNumero.set('Falta el número de documento.');
-    if (this.form.invalid || this.errorTipo() || this.errorNumero()) {
+    if (this.auth.esDueno()) this.errorLimite.set(this.validarLimite());
+    if (this.form.invalid || this.errorTipo() || this.errorNumero() || this.errorLimite()) {
       this.form.markAllAsTouched();
       this.enfocar('form.alta [aria-invalid="true"]');
       return;
     }
     const request = this.aRequest();
     const cliente = this.editando();
+    const limite = this.limiteElegido();
+    // Solo el Dueño toca el límite, y solo si cambió respecto de lo que tenía el cliente (null = sin cuenta corriente).
+    const cambiaLimite = this.auth.esDueno() && limite !== (cliente?.limiteCuentaCorriente ?? null);
     this.aviso.set(null);
     this.guardando.set(true);
     const llamada = cliente === null ? this.service.crear(request) : this.service.actualizar(cliente.id, request);
     llamada.subscribe({
-      next: (guardado) => {
-        this.vaciarFormulario();
-        this.guardando.set(false);
-        this.aviso.set(`Se guardó «${guardado.razonSocial}».`);
-        this.cargar(this.pagina().page);
-      },
+      next: (guardado) => (cambiaLimite ? this.guardarLimite(guardado, limite) : this.terminarGuardado(guardado)),
       error: (err: unknown) => {
         this.guardando.set(false);
         const porCampo = erroresDeCampos(err);
@@ -164,6 +189,46 @@ export class Clientes implements OnInit {
         else this.error.set(mensajeDe(err, 'No se pudo guardar el cliente.'));
       },
     });
+  }
+
+  /** Después de guardar el cliente: el límite va por su endpoint. Si falla, el cliente ya quedó guardado y se avisa. */
+  private guardarLimite(guardado: Cliente, limite: number | null): void {
+    this.service.cambiarLimite(guardado.id, limite).subscribe({
+      next: () => this.terminarGuardado(guardado),
+      error: (err: unknown) => {
+        this.vaciarFormulario();
+        this.guardando.set(false);
+        const detalle = erroresDeCampos(err).join(' ') || mensajeDe(err, 'Probá de nuevo.');
+        this.error.set(
+          `Se guardó «${guardado.razonSocial}», pero no se pudo cambiar el límite de la cuenta corriente. ${detalle}`,
+        );
+        this.cargar(this.pagina().page);
+      },
+    });
+  }
+
+  private terminarGuardado(guardado: Cliente): void {
+    this.vaciarFormulario();
+    this.guardando.set(false);
+    this.aviso.set(`Se guardó «${guardado.razonSocial}».`);
+    this.cargar(this.pagina().page);
+  }
+
+  /** El límite que quedó en el formulario: null si «Habilitar» está destildado (cuenta corriente deshabilitada). */
+  private limiteElegido(): number | null {
+    const { cuentaHabilitada, limiteCuenta } = this.form.getRawValue();
+    return cuentaHabilitada ? limiteCuenta : null;
+  }
+
+  /** Lo mismo que valida el servidor, para avisar en el campo. Null si está bien o si no se habilita la cuenta. */
+  private validarLimite(): string | null {
+    if (!this.form.controls.cuentaHabilitada.value) return null;
+    const limite = this.form.controls.limiteCuenta.value;
+    if (limite === null || Number.isNaN(limite)) return 'Escribí el límite de la cuenta corriente (puede ser 0).';
+    if (limite < 0) return 'El límite no puede ser negativo.';
+    if (limite > LIMITE_MAXIMO) return 'El límite es demasiado grande.';
+    if (Math.abs(limite * 100 - Math.round(limite * 100)) > 1e-6) return 'El límite admite hasta 2 decimales.';
+    return null;
   }
 
   /** Editar (barra, Enter o doble clic): precarga el cliente en el formulario de al lado. */
@@ -181,6 +246,8 @@ export class Clientes implements OnInit {
       telefono: cliente.telefono ?? '',
       whatsapp: cliente.whatsapp ?? '',
       email: cliente.email ?? '',
+      cuentaHabilitada: cliente.cuentaCorrienteHabilitada,
+      limiteCuenta: cliente.limiteCuentaCorriente ?? null,
     });
     this.limpiarErrores();
   }
@@ -200,7 +267,8 @@ export class Clientes implements OnInit {
   /** Solo el Dueño: desactiva al elegido, o lo reactiva si ya está desactivado. */
   protected cambiarActivo(): void {
     const cliente = this.filas.elegido();
-    if (!cliente || this.cambiando()) return;
+    // Con saldo no se desactiva (el botón explica por qué); el servidor lo vuelve a controlar.
+    if (!cliente || this.cambiando() || this.motivoNoDesactivar()) return;
     this.aviso.set(null);
     this.error.set(null);
     this.cambiando.set(true);
@@ -214,6 +282,17 @@ export class Clientes implements OnInit {
         this.error.set(mensajeDe(err, 'No se pudo cambiar el estado del cliente.'));
       },
     });
+  }
+
+  /** El saldo del Dueño: lo que debe; «a favor» si es negativo; vacío si el servidor no lo mandó. */
+  protected saldoTexto(cliente: Cliente): string {
+    if (cliente.saldo === undefined) return '';
+    return cliente.saldo < 0 ? `${formatearMonto(-cliente.saldo)} a favor` : formatearMonto(cliente.saldo);
+  }
+
+  protected limiteTexto(cliente: Cliente): string {
+    if (!cliente.cuentaCorrienteHabilitada || cliente.limiteCuentaCorriente === undefined) return 'Sin habilitar';
+    return formatearMonto(cliente.limiteCuentaCorriente);
   }
 
   protected contacto(cliente: Cliente): string {
@@ -252,6 +331,7 @@ export class Clientes implements OnInit {
     this.erroresCampos.set([]);
     this.errorTipo.set(null);
     this.errorNumero.set(null);
+    this.errorLimite.set(null);
   }
 
   private vaciarFormulario(): void {
@@ -265,6 +345,8 @@ export class Clientes implements OnInit {
       telefono: '',
       whatsapp: '',
       email: '',
+      cuentaHabilitada: false,
+      limiteCuenta: null,
     });
   }
 }

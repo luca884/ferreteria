@@ -2,6 +2,7 @@ import { Component, ElementRef, afterNextRender, inject, input, output, signal, 
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { Subject, catchError, debounceTime, merge, of, switchMap } from 'rxjs';
 import { erroresDeCampos, mensajeDe } from '../../core/api/api-error';
+import { formatearMonto } from '../../core/formato/monto';
 import { TrampaFoco } from '../../shared/trampa-foco';
 import {
   Cliente,
@@ -71,7 +72,15 @@ const ESPERA_MS = 250;
                   (click)="elegir.emit(c)"
                 >
                   <span class="nombre">{{ c.razonSocial }}</span
-                  >{{ ' ' }}<span class="documento">{{ documentoLegible(c) }}</span>
+                  >{{ ' ' }}<span class="lado"
+                    ><span class="documento">{{ documentoLegible(c) }}</span>
+                    @if (c.cuentaCorrienteHabilitada) {
+                      {{ ' ' }}<span class="cta-cte">Cta. cte.</span>
+                    }
+                    @if (esDueno() && cifras(c); as texto) {
+                      {{ ' ' }}<span class="cifras">{{ texto }}</span>
+                    }</span
+                  >
                 </li>
               }
             </ul>
@@ -205,6 +214,30 @@ const ESPERA_MS = 250;
       font-variant-numeric: tabular-nums;
       white-space: nowrap;
     }
+    /* El documento y lo de la cuenta corriente van juntos a la derecha de la fila. */
+    .lado {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: baseline;
+      justify-content: flex-end;
+      gap: 0 var(--e-2);
+      text-align: right;
+    }
+    .cta-cte {
+      padding: 0 6px;
+      border: 1px solid var(--acento);
+      border-radius: var(--radio);
+      color: var(--acento-profundo);
+      font-size: var(--texto-xs);
+      font-weight: 600;
+      white-space: nowrap;
+    }
+    .cifras {
+      flex-basis: 100%;
+      color: var(--texto-suave);
+      font-size: var(--texto-sm);
+      font-variant-numeric: tabular-nums;
+    }
     .sin-resultados {
       margin: 0;
       color: var(--texto-suave);
@@ -231,6 +264,8 @@ export class DialogoCliente {
 
   /** La razón social del cliente que ya tiene el ticket; null es Consumidor Final. */
   readonly actual = input<string | null>(null);
+  /** Solo el Dueño ve el saldo y el límite de la cuenta corriente (CC-007); el indicador «Cta. cte.» lo ven todos. */
+  readonly esDueno = input(false);
 
   readonly elegir = output<Cliente>();
   readonly quitar = output<void>();
@@ -241,6 +276,18 @@ export class DialogoCliente {
 
   protected readonly tipos = TIPOS_DOCUMENTO;
   protected readonly documentoLegible = documentoLegible;
+
+  /**
+   * «Saldo $ X · Límite $ Y» para el Dueño (CC-019). Con la cuenta deshabilitada y sin deuda no hay nada que decir; con la
+   * cuenta deshabilitada pero con saldo (se la sacaron a un cliente que debe) solo el saldo.
+   */
+  protected cifras(c: Cliente): string | null {
+    if (c.saldo === undefined) return null;
+    if (c.cuentaCorrienteHabilitada && c.limiteCuentaCorriente !== undefined) {
+      return `Saldo ${formatearMonto(c.saldo)} · Límite ${formatearMonto(c.limiteCuentaCorriente)}`;
+    }
+    return c.saldo !== 0 ? `Saldo ${formatearMonto(c.saldo)}` : null;
+  }
 
   protected readonly consulta = signal('');
   protected readonly resultados = signal<Cliente[]>([]);

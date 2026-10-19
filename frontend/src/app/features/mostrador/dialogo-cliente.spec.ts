@@ -117,6 +117,94 @@ describe('DialogoCliente (F9)', () => {
     });
   });
 
+  describe('cuenta corriente (CC-007, CC-019)', () => {
+    const conCuenta: Cliente = {
+      ...ana,
+      id: 5,
+      razonSocial: 'Corralón Sur',
+      cuentaCorrienteHabilitada: true,
+      limiteCuentaCorriente: 5000,
+      saldo: 1500,
+    };
+    /** Como lo recibe el Vendedor: la bandera sí, las cifras no. */
+    const conCuentaParaVendedor: Cliente = { ...ana, id: 5, razonSocial: 'Corralón Sur', cuentaCorrienteHabilitada: true };
+    const sinCuentaDueno: Cliente = { ...norte, saldo: 0 };
+
+    const fila = (nombre: string) => opciones().find((o) => o.textContent!.includes(nombre))!;
+    const dicho = (e: Element) => (e.textContent ?? '').replace(/\s+/g, ' ').trim();
+
+    async function abrirComo(esDueno: boolean, lista: Cliente[]) {
+      await abrir(lista);
+      fixture.componentRef.setInput('esDueno', esDueno);
+      await estabilizar();
+    }
+
+    it('un cliente con la cuenta corriente habilitada lleva el indicador «Cta. cte.» para el Dueño', async () => {
+      await abrirComo(true, [conCuenta, norte]);
+
+      expect(dicho(fila('Corralón Sur'))).toContain('Cta. cte.');
+      expect(dicho(fila('Ferretería Norte'))).not.toContain('Cta. cte.');
+    });
+
+    it('y también para el Vendedor', async () => {
+      await abrirComo(false, [conCuentaParaVendedor, norte]);
+
+      expect(dicho(fila('Corralón Sur'))).toContain('Cta. cte.');
+      expect(dicho(fila('Ferretería Norte'))).not.toContain('Cta. cte.');
+    });
+
+    it('el Dueño ve «Saldo $ X · Límite $ Y»', async () => {
+      await abrirComo(true, [conCuenta]);
+
+      expect(dicho(fila('Corralón Sur'))).toContain('Saldo $ 1.500,00 · Límite $ 5.000,00');
+    });
+
+    it('un límite 0 (habilitada sin crédito) se muestra como límite $ 0,00', async () => {
+      await abrirComo(true, [{ ...conCuenta, limiteCuentaCorriente: 0, saldo: 0 }]);
+
+      expect(dicho(fila('Corralón Sur'))).toContain('Saldo $ 0,00 · Límite $ 0,00');
+    });
+
+    it('el Vendedor no ve ninguna cifra: ni saldo ni límite en el DOM, aunque el cliente las trajera', async () => {
+      await abrirComo(false, [{ ...conCuenta }]);
+
+      expect(el().textContent).not.toContain('Saldo');
+      expect(el().textContent).not.toContain('Límite');
+      expect(el().textContent).not.toContain('1.500');
+      expect(el().textContent).not.toContain('5.000');
+      expect(dicho(fila('Corralón Sur'))).toContain('Cta. cte.');
+    });
+
+    it('un cliente sin cuenta corriente y sin saldo no muestra cifras al Dueño', async () => {
+      await abrirComo(true, [sinCuentaDueno]);
+
+      expect(dicho(fila('Ferretería Norte'))).not.toMatch(/Saldo|Límite|Cta\. cte\./);
+    });
+
+    it('un cliente con la cuenta deshabilitada pero con deuda muestra al Dueño solo el saldo', async () => {
+      await abrirComo(true, [{ ...norte, saldo: 700 }]);
+
+      expect(dicho(fila('Ferretería Norte'))).toContain('Saldo $ 700,00');
+      expect(dicho(fila('Ferretería Norte'))).not.toContain('Límite');
+      expect(dicho(fila('Ferretería Norte'))).not.toContain('Cta. cte.');
+    });
+
+    it('sin la entrada esDueno se comporta como Vendedor (sin cifras)', async () => {
+      await abrir([conCuenta]);
+
+      expect(el().textContent).not.toContain('Saldo');
+    });
+
+    it('el flujo no cambia: ↓ y Enter eligen al cliente con cuenta corriente y emiten el cliente completo', async () => {
+      await abrirComo(true, [ana, conCuenta]);
+
+      tecla('ArrowDown');
+      tecla('Enter');
+
+      expect(elegidos).toEqual([conCuenta]);
+    });
+  });
+
   describe('elegir', () => {
     it('el primero viene resaltado y Enter lo elige', async () => {
       await abrir();

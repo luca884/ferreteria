@@ -152,6 +152,7 @@
     @case ('cliente') {
       <app-dialogo-cliente
         [actual]="ticket.ticket().clienteNombre ?? null"
+        [esDueno]="esDueno()"
         (elegir)="elegirCliente($event)"
         (quitar)="quitarCliente()"
         (cancelar)="cerrarDialogo()"
