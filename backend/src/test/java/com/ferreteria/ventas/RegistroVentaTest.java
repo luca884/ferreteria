@@ -171,6 +171,7 @@ class RegistroVentaTest {
             case DEBITO -> "Débito";
             case CREDITO -> "Crédito";
             case TRANSFERENCIA -> "Transferencia";
+            case CUENTA_CORRIENTE -> "Cuenta corriente";
         };
     }
 

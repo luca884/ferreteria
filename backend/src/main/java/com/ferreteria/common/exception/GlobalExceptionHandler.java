@@ -40,8 +40,8 @@ public class GlobalExceptionHandler {
             "alicuotaIva", "La alícuota de IVA no es válida. Usá 0, 2,5, 5, 10,5, 21 o 27.",
             "unidad", "La unidad no es válida. Usá UNIDAD, METRO, KILO o LITRO.",
             "moneda", "La moneda no es válida. Usá ARS o USD.",
-            "medioPago", "El medio de pago no es válido. Usá EFECTIVO, DEBITO, CREDITO o TRANSFERENCIA.",
-            "medio", "El medio de pago no es válido. Usá EFECTIVO, DEBITO, CREDITO o TRANSFERENCIA.",
+            "medioPago", "El medio de pago no es válido. Usá EFECTIVO, DEBITO, CREDITO, TRANSFERENCIA o CUENTA_CORRIENTE.",
+            "medio", "El medio de pago no es válido. Usá EFECTIVO, DEBITO, CREDITO, TRANSFERENCIA o CUENTA_CORRIENTE.",
             "motivo", "El motivo no es válido. Usá INGRESO_MERCADERIA, ROTURA, CONTEO u OTRO.",
             "modo", "El modo no es válido. Usá STOCK_REAL o CANTIDAD.",
             "tipo", "El tipo de movimiento no es válido. Usá INGRESO, GASTO o RETIRO.");

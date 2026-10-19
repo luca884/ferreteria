@@ -47,9 +47,9 @@ public interface FormaPagoRepository extends TenantScopedRepository<FormaPago, L
     /** INSERT IGNORE: si dos pedidos siembran a la vez, el segundo no rompe contra la clave unica del nombre. */
     @Modifying
     @Query(value = "insert ignore into forma_pago (ferreteria_id, nombre, medio, recargo_porcentaje, activa, orden) "
-            + "values (:fid, :nombre, :medio, 0, true, :orden)", nativeQuery = true)
+            + "values (:fid, :nombre, :medio, 0, :activa, :orden)", nativeQuery = true)
     int sembrar(@Param("fid") Long ferreteriaId, @Param("nombre") String nombre, @Param("medio") String medio,
-            @Param("orden") int orden);
+            @Param("orden") int orden, @Param("activa") boolean activa);
 
     default List<FormaPago> listarScoped() {
         return deFerreteria(TenantContext.requireFerreteriaId());
@@ -89,7 +89,7 @@ public interface FormaPagoRepository extends TenantScopedRepository<FormaPago, L
         return bloquearFerreteria(TenantContext.requireFerreteriaId());
     }
 
-    default int sembrarScoped(String nombre, MedioPago medio, int orden) {
-        return sembrar(TenantContext.requireFerreteriaId(), nombre, medio.name(), orden);
+    default int sembrarScoped(String nombre, MedioPago medio, int orden, boolean activa) {
+        return sembrar(TenantContext.requireFerreteriaId(), nombre, medio.name(), orden, activa);
     }
 }

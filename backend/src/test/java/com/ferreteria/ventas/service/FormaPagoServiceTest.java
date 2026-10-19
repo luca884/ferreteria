@@ -82,10 +82,24 @@ class FormaPagoServiceTest {
 
         assertThat(service.listar(false)).isEqualTo(sembradas);
 
-        verify(repositorio).sembrarScoped("Efectivo", MedioPago.EFECTIVO, 1);
-        verify(repositorio).sembrarScoped("Débito", MedioPago.DEBITO, 2);
-        verify(repositorio).sembrarScoped("Crédito", MedioPago.CREDITO, 3);
-        verify(repositorio).sembrarScoped("Transferencia", MedioPago.TRANSFERENCIA, 4);
+        verify(repositorio).sembrarScoped("Efectivo", MedioPago.EFECTIVO, 1, true);
+        verify(repositorio).sembrarScoped("Débito", MedioPago.DEBITO, 2, true);
+        verify(repositorio).sembrarScoped("Crédito", MedioPago.CREDITO, 3, true);
+        verify(repositorio).sembrarScoped("Transferencia", MedioPago.TRANSFERENCIA, 4, true);
+    }
+
+    @Test
+    @DisplayName("CC-024: la quinta forma sembrada es «Cuenta corriente», medio CUENTA_CORRIENTE, orden 5 e INACTIVA")
+    void listarSiembraLaCuentaCorrienteInactiva() {
+        when(repositorio.contarScoped()).thenReturn(0L);
+        when(repositorio.listarScoped()).thenReturn(List.of());
+
+        service.listar(false);
+
+        verify(repositorio).sembrarScoped("Cuenta corriente", MedioPago.CUENTA_CORRIENTE, 5, false);
+        verify(repositorio, times(5)).sembrarScoped(anyString(), any(), anyInt(), org.mockito.ArgumentMatchers.anyBoolean());
+        // y las cuatro de siempre se siguen sembrando activas
+        verify(repositorio, times(4)).sembrarScoped(anyString(), any(), anyInt(), eq(true));
     }
 
     @Test
@@ -98,7 +112,7 @@ class FormaPagoServiceTest {
 
         org.mockito.InOrder orden = org.mockito.Mockito.inOrder(repositorio);
         orden.verify(repositorio).bloquearFerreteriaScoped();
-        orden.verify(repositorio, times(4)).sembrarScoped(anyString(), any(), anyInt());
+        orden.verify(repositorio, times(5)).sembrarScoped(anyString(), any(), anyInt(), org.mockito.ArgumentMatchers.anyBoolean());
     }
 
     @Test
@@ -110,7 +124,7 @@ class FormaPagoServiceTest {
         service.listar(false);
 
         verify(repositorio).bloquearFerreteriaScoped();
-        verify(repositorio, never()).sembrarScoped(anyString(), any(), anyInt());
+        verify(repositorio, never()).sembrarScoped(anyString(), any(), anyInt(), org.mockito.ArgumentMatchers.anyBoolean());
     }
 
     @Test
@@ -121,7 +135,7 @@ class FormaPagoServiceTest {
 
         service.listar(false);
 
-        verify(repositorio, never()).sembrarScoped(anyString(), any(), anyInt());
+        verify(repositorio, never()).sembrarScoped(anyString(), any(), anyInt(), org.mockito.ArgumentMatchers.anyBoolean());
     }
 
     @Test
@@ -189,6 +203,60 @@ class FormaPagoServiceTest {
                 .hasMessage("Ya hay una forma de pago con ese nombre.");
 
         verify(repositorio, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("CC-023 crear: con medio CUENTA_CORRIENTE y recargo 5 se guarda 0 (no se rechaza); sin recargo también 0")
+    void crearCuentaCorrienteFuerzaRecargoCero() {
+        when(repositorio.contarScoped()).thenReturn(5L);
+        when(repositorio.save(any(FormaPago.class))).thenAnswer(i -> i.getArgument(0));
+
+        FormaPago conRecargo = service.crear(datos("Fiado", MedioPago.CUENTA_CORRIENTE, "5", null, null));
+        FormaPago sinRecargo = service.crear(datos("Fiado 2", MedioPago.CUENTA_CORRIENTE, null, null, null));
+        FormaPago otroMedio = service.crear(datos("Visa", MedioPago.CREDITO, "5", null, null));
+
+        assertThat(conRecargo.getRecargoPorcentaje()).isEqualByComparingTo("0");
+        assertThat(sinRecargo.getRecargoPorcentaje()).isEqualByComparingTo("0");
+        assertThat(otroMedio.getRecargoPorcentaje()).isEqualByComparingTo("5");
+    }
+
+    @Test
+    @DisplayName("CC-023 actualizar: con medio CUENTA_CORRIENTE el recargo queda en 0 aunque venga 5 o falte; si le cambia el medio a CC también")
+    void actualizarCuentaCorrienteFuerzaRecargoCero() {
+        FormaPago cc = forma(5, "Cuenta corriente", MedioPago.CUENTA_CORRIENTE, "0", false);
+        when(repositorio.findScoped(5L)).thenReturn(Optional.of(cc));
+
+        FormaPago conRecargo = service.actualizar(5L, datos("Cuenta corriente", MedioPago.CUENTA_CORRIENTE, "5", true, null));
+        assertThat(conRecargo.getRecargoPorcentaje()).isEqualByComparingTo("0");
+        assertThat(conRecargo.isActiva()).isTrue();
+
+        FormaPago credito = forma(3, "Crédito", MedioPago.CREDITO, "8.00", true);
+        when(repositorio.findScoped(3L)).thenReturn(Optional.of(credito));
+        FormaPago convertida = service.actualizar(3L, datos("Crédito", MedioPago.CUENTA_CORRIENTE, null, null, null));
+        assertThat(convertida.getRecargoPorcentaje()).isEqualByComparingTo("0");
+    }
+
+    @Test
+    @DisplayName("actualizar: cambiar una forma de CC a otro medio conserva el recargo que viene (la regla es solo de CC)")
+    void salirDeCuentaCorrienteNoForzaNada() {
+        FormaPago cc = forma(5, "Fiado", MedioPago.CUENTA_CORRIENTE, "0", true);
+        when(repositorio.findScoped(5L)).thenReturn(Optional.of(cc));
+
+        FormaPago resultado = service.actualizar(5L, datos("Fiado", MedioPago.CREDITO, "9", true, null));
+
+        assertThat(resultado.getRecargoPorcentaje()).isEqualByComparingTo("9");
+    }
+
+    @Test
+    @DisplayName("regresión: la regla de «una EFECTIVO activa» sigue igual con la cuenta corriente de por medio")
+    void laReglaDelEfectivoNoCambia() {
+        FormaPago efectivo = forma(1, "Efectivo", MedioPago.EFECTIVO, "0", true);
+        when(repositorio.findScoped(1L)).thenReturn(Optional.of(efectivo));
+        when(repositorio.existeOtraActivaDeMedioScoped(MedioPago.EFECTIVO, 1L)).thenReturn(false);
+
+        assertThatThrownBy(() -> service.actualizar(1L, datos("Efectivo", MedioPago.CUENTA_CORRIENTE, "0", true, null)))
+                .isInstanceOf(ReglaDeNegocioException.class)
+                .hasMessage("Tiene que quedar al menos una forma de pago en efectivo.");
     }
 
     @Test

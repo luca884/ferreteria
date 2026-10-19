@@ -34,17 +34,119 @@ class FormaPagoIntegrationTest extends VentasTestBase {
     }
 
     @Test
-    @DisplayName("una ferreteria nueva ve las cuatro formas de siempre, en orden y sin recargo, la primera vez que las pide")
-    void ferreteriaNuevaVeLasCuatro() throws Exception {
+    @DisplayName("una ferreteria nueva ve las cinco formas (las cuatro de siempre y «Cuenta corriente»), en orden y sin recargo, la primera vez que las pide")
+    void ferreteriaNuevaVeLasCinco() throws Exception {
         Tienda t = tienda();
 
         JsonNode formas = getJson("/api/formas-pago", login(t.emailVendedor()));
 
-        assertThat(nombresDe(formas)).containsExactly("Efectivo", "Débito", "Crédito", "Transferencia");
+        assertThat(nombresDe(formas)).containsExactly("Efectivo", "Débito", "Crédito", "Transferencia",
+                "Cuenta corriente");
         assertThat(formas.get(0).get("medio").asText()).isEqualTo("EFECTIVO");
         assertThat(formas.get(0).get("recargoPorcentaje").decimalValue()).isEqualByComparingTo("0");
         assertThat(formas.get(0).get("activa").asBoolean()).isTrue();
         assertThat(formas.get(0).get("orden").asInt()).isEqualTo(1);
+        // las cuatro de siempre quedan activas y con sus ordenes 1 a 4
+        for (int i = 0; i < 4; i++) {
+            assertThat(formas.get(i).get("activa").asBoolean()).as(formas.get(i).get("nombre").asText()).isTrue();
+            assertThat(formas.get(i).get("orden").asInt()).isEqualTo(i + 1);
+        }
+    }
+
+    @Test
+    @DisplayName("CC-024: la sembrada «Cuenta corriente» viene inactiva, con medio CUENTA_CORRIENTE, recargo 0 y orden 5")
+    void cuentaCorrienteSembradaInactiva() throws Exception {
+        Tienda t = tienda();
+        String dueno = login(t.emailDueno());
+
+        JsonNode formas = getJson("/api/formas-pago", dueno);
+
+        JsonNode cc = formas.get(4);
+        assertThat(cc.get("nombre").asText()).isEqualTo("Cuenta corriente");
+        assertThat(cc.get("medio").asText()).isEqualTo("CUENTA_CORRIENTE");
+        assertThat(cc.get("recargoPorcentaje").decimalValue()).isEqualByComparingTo("0");
+        assertThat(cc.get("activa").asBoolean()).isFalse();
+        assertThat(cc.get("orden").asInt()).isEqualTo(5);
+        // inactiva: no aparece en el cobro (?activas=true)
+        assertThat(nombresDe(getJson("/api/formas-pago?activas=true", dueno)))
+                .containsExactly("Efectivo", "Débito", "Crédito", "Transferencia");
+    }
+
+    @Test
+    @DisplayName("soporte de tests: formaDe(tienda, CUENTA_CORRIENTE) devuelve la forma inactiva y activarFormaCuentaCorriente la deja activa, igual que el servicio")
+    void helpersDeLaFormaCuentaCorriente() throws Exception {
+        Tienda t = tienda();
+        long deLaBase = formaDe(t, "CUENTA_CORRIENTE");
+        String dueno = login(t.emailDueno());
+
+        // formaDe cargo las cinco formas como el servicio; la API ve la misma forma, inactiva
+        JsonNode antes = getJson("/api/formas-pago", dueno);
+        assertThat(antes).hasSize(5);
+        assertThat(idDe(antes, "Cuenta corriente")).isEqualTo(deLaBase);
+        assertThat(nombresDe(getJson("/api/formas-pago?activas=true", dueno))).doesNotContain("Cuenta corriente");
+
+        activarFormaCuentaCorriente(t);
+
+        assertThat(nombresDe(getJson("/api/formas-pago?activas=true", dueno))).contains("Cuenta corriente");
+        assertThat(formaDe(t, "CUENTA_CORRIENTE")).isEqualTo(deLaBase);
+    }
+
+    @Test
+    @DisplayName("CC-024: el Dueño activa la «Cuenta corriente» por PUT y desde ahí aparece activa en el cobro")
+    void duenoActivaCuentaCorriente() throws Exception {
+        Tienda t = tienda();
+        String dueno = login(t.emailDueno());
+        long cc = idDe(getJson("/api/formas-pago", dueno), "Cuenta corriente");
+
+        JsonNode activada = cuerpo(putJson("/api/formas-pago/" + cc, dueno,
+                "{\"nombre\": \"Cuenta corriente\", \"medio\": \"CUENTA_CORRIENTE\", \"activa\": true}")
+                .andExpect(status().isOk()));
+
+        assertThat(activada.get("activa").asBoolean()).isTrue();
+        assertThat(activada.get("medio").asText()).isEqualTo("CUENTA_CORRIENTE");
+        assertThat(nombresDe(getJson("/api/formas-pago?activas=true", dueno))).contains("Cuenta corriente");
+        assertThat(jdbc.queryForObject("select medio from forma_pago where id = ?", String.class, cc))
+                .isEqualTo("CUENTA_CORRIENTE");
+    }
+
+    @Test
+    @DisplayName("CC-023: con medio CUENTA_CORRIENTE el recargo se guarda en 0 aunque venga 10 (al editar la sembrada, al crear y al cambiarle el medio a otra forma)")
+    void cuentaCorrienteFuerzaRecargoCero() throws Exception {
+        Tienda t = tienda();
+        String dueno = login(t.emailDueno());
+        JsonNode formas = getJson("/api/formas-pago", dueno);
+        long cc = idDe(formas, "Cuenta corriente");
+        long credito = idDe(formas, "Crédito");
+
+        JsonNode editada = cuerpo(putJson("/api/formas-pago/" + cc, dueno,
+                "{\"nombre\": \"Cuenta corriente\", \"medio\": \"CUENTA_CORRIENTE\", \"recargoPorcentaje\": 10}")
+                .andExpect(status().isOk()));
+        JsonNode creada = cuerpo(postJson("/api/formas-pago", dueno,
+                "{\"nombre\": \"Fiado\", \"medio\": \"CUENTA_CORRIENTE\", \"recargoPorcentaje\": 7.5}")
+                .andExpect(status().isCreated()));
+        JsonNode convertida = cuerpo(putJson("/api/formas-pago/" + credito, dueno,
+                "{\"nombre\": \"Crédito\", \"medio\": \"CUENTA_CORRIENTE\", \"recargoPorcentaje\": 12}")
+                .andExpect(status().isOk()));
+
+        assertThat(editada.get("recargoPorcentaje").decimalValue()).isEqualByComparingTo("0");
+        assertThat(creada.get("recargoPorcentaje").decimalValue()).isEqualByComparingTo("0");
+        assertThat(convertida.get("recargoPorcentaje").decimalValue()).isEqualByComparingTo("0");
+        assertThat(jdbc.queryForObject("select recargo_porcentaje from forma_pago where id = ?", java.math.BigDecimal.class, cc))
+                .isEqualByComparingTo("0");
+    }
+
+    @Test
+    @DisplayName("CC-023: el recargo de las formas de otro medio sigue siendo editable (regresión)")
+    void otrosMediosConservanSuRecargo() throws Exception {
+        Tienda t = tienda();
+        String dueno = login(t.emailDueno());
+        long credito = idDe(getJson("/api/formas-pago", dueno), "Crédito");
+
+        JsonNode editada = cuerpo(putJson("/api/formas-pago/" + credito, dueno,
+                "{\"nombre\": \"Crédito\", \"medio\": \"CREDITO\", \"recargoPorcentaje\": 10}")
+                .andExpect(status().isOk()));
+
+        assertThat(editada.get("recargoPorcentaje").decimalValue()).isEqualByComparingTo("10");
     }
 
     @Test
@@ -56,11 +158,11 @@ class FormaPagoIntegrationTest extends VentasTestBase {
         getJson("/api/formas-pago", dueno);
         JsonNode otraVez = getJson("/api/formas-pago", dueno);
 
-        assertThat(otraVez).hasSize(4);
+        assertThat(otraVez).hasSize(5);
     }
 
     @Test
-    @DisplayName("varios primeros pedidos a la vez de una ferreteria nueva dan todos 200 y las cuatro formas una sola vez")
+    @DisplayName("varios primeros pedidos a la vez de una ferreteria nueva dan todos 200 y las cinco formas una sola vez")
     void primerosPedidosEnParalelo() throws Exception {
         Tienda t = tienda();
         String dueno = login(t.emailDueno());
@@ -85,7 +187,7 @@ class FormaPagoIntegrationTest extends VentasTestBase {
         }
 
         assertThat(jdbc.queryForObject("select count(*) from forma_pago where ferreteria_id = ?", Long.class, t.id()))
-                .isEqualTo(4);
+                .isEqualTo(5);
     }
 
     @Test
@@ -100,9 +202,9 @@ class FormaPagoIntegrationTest extends VentasTestBase {
         assertThat(creada.get("medio").asText()).isEqualTo("CREDITO");
         assertThat(creada.get("recargoPorcentaje").decimalValue()).isEqualByComparingTo("18.5");
         assertThat(creada.get("activa").asBoolean()).isTrue();
-        assertThat(creada.get("orden").asInt()).isEqualTo(5);
+        assertThat(creada.get("orden").asInt()).isEqualTo(6);
         assertThat(nombresDe(getJson("/api/formas-pago", dueno)))
-                .containsExactly("Efectivo", "Débito", "Crédito", "Transferencia", "Visa 6 cuotas");
+                .containsExactly("Efectivo", "Débito", "Crédito", "Transferencia", "Cuenta corriente", "Visa 6 cuotas");
     }
 
     @Test
@@ -113,7 +215,7 @@ class FormaPagoIntegrationTest extends VentasTestBase {
 
         postJson("/api/formas-pago", dueno, CREDITO_6).andExpect(status().isCreated());
 
-        assertThat(nombresDe(getJson("/api/formas-pago", dueno))).hasSize(5).contains("Efectivo", "Visa 6 cuotas");
+        assertThat(nombresDe(getJson("/api/formas-pago", dueno))).hasSize(6).contains("Efectivo", "Cuenta corriente", "Visa 6 cuotas");
     }
 
     @Test
@@ -149,7 +251,7 @@ class FormaPagoIntegrationTest extends VentasTestBase {
 
         assertThat(nombresDe(getJson("/api/formas-pago?activas=true", dueno)))
                 .containsExactly("Efectivo", "Débito", "Crédito");
-        assertThat(nombresDe(getJson("/api/formas-pago", dueno))).hasSize(4);
+        assertThat(nombresDe(getJson("/api/formas-pago", dueno))).hasSize(5);
     }
 
     @Test
@@ -266,7 +368,7 @@ class FormaPagoIntegrationTest extends VentasTestBase {
                 .isEqualTo("El nombre no puede superar 60 caracteres.");
         assertThat(sinMedio.get("errors").get("medio").asText()).isEqualTo("Elegí el medio de pago.");
         assertThat(medioMalo.get("errors").get("medio").asText())
-                .isEqualTo("El medio de pago no es válido. Usá EFECTIVO, DEBITO, CREDITO o TRANSFERENCIA.");
+                .isEqualTo("El medio de pago no es válido. Usá EFECTIVO, DEBITO, CREDITO, TRANSFERENCIA o CUENTA_CORRIENTE.");
         assertThat(recargoAlto.get("errors").get("recargoPorcentaje").asText())
                 .isEqualTo("El recargo tiene que estar entre 0 y 200 %.");
         assertThat(recargoNegativo.get("errors").get("recargoPorcentaje").asText())

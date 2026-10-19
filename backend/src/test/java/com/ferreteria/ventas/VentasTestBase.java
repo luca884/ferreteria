@@ -64,9 +64,11 @@ abstract class VentasTestBase extends IntegrationTestBase {
     }
 
     /**
-     * La forma de pago de siempre de ese medio (Efectivo, Debito, Credito o Transferencia) de la tienda. Si la tienda
-     * todavia no tiene ninguna forma las carga, igual que el servicio la primera vez que las pide. Un medio que no existe
-     * (por ejemplo "CHEQUE") da el id de una forma que tampoco existe: sirve para probar el rechazo.
+     * La forma de pago de siempre de ese medio (Efectivo, Debito, Credito, Transferencia o Cuenta corriente) de la tienda.
+     * Si la tienda todavia no tiene ninguna forma las carga, igual que el servicio la primera vez que las pide: las cuatro
+     * de siempre activas y «Cuenta corriente» INACTIVA (orden 5, recargo 0). {@code formaDe(tienda, "CUENTA_CORRIENTE")}
+     * devuelve su id aun inactiva: sirve para probar el 400 por forma inactiva. Un medio que no existe (por ejemplo
+     * "CHEQUE") da el id de una forma que tampoco existe: sirve para probar el rechazo.
      */
     protected long formaDe(Tienda tienda, String medio) {
         Long cargadas = jdbc.queryForObject("select count(*) from forma_pago where ferreteria_id = ?", Long.class,
@@ -75,10 +77,18 @@ abstract class VentasTestBase extends IntegrationTestBase {
             jdbc.update("insert ignore into forma_pago (ferreteria_id, nombre, medio, orden) values "
                     + "(?, 'Efectivo', 'EFECTIVO', 1), (?, 'Débito', 'DEBITO', 2), (?, 'Crédito', 'CREDITO', 3), "
                     + "(?, 'Transferencia', 'TRANSFERENCIA', 4)", tienda.id(), tienda.id(), tienda.id(), tienda.id());
+            jdbc.update("insert ignore into forma_pago (ferreteria_id, nombre, medio, recargo_porcentaje, activa, orden) "
+                    + "values (?, 'Cuenta corriente', 'CUENTA_CORRIENTE', 0, 0, 5)", tienda.id());
         }
         Long id = jdbc.queryForObject("select min(id) from forma_pago where ferreteria_id = ? and medio = ?", Long.class,
                 tienda.id(), medio);
         return id != null ? id : 999_999_999L;
+    }
+
+    /** Deja ACTIVA la forma «Cuenta corriente» de la tienda (la carga inactiva si todavia no hay formas), como el Dueño. */
+    protected void activarFormaCuentaCorriente(Tienda tienda) {
+        long id = formaDe(tienda, "CUENTA_CORRIENTE");
+        jdbc.update("update forma_pago set activa = 1 where id = ? and ferreteria_id = ?", id, tienda.id());
     }
 
     protected long articulo(Tienda tienda, String descripcion, String unidad, String precio, String stock) {

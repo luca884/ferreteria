@@ -45,6 +45,41 @@ class ResumenCajaTest {
     }
 
     @Test
+    @DisplayName("CC-025: lo vendido a cuenta corriente es un renglon informativo: suma al total de ventas, no al efectivo esperado")
+    void cuentaCorrienteEsInformativa() {
+        ResumenCaja resumen = ResumenCaja.de(bd("5000.00"),
+                Map.of(MedioPago.EFECTIVO, bd("1000.00"), MedioPago.CUENTA_CORRIENTE, bd("2000.00")), Map.of());
+
+        assertThat(resumen.ventasPorMedio().get(MedioPago.CUENTA_CORRIENTE)).isEqualByComparingTo("2000");
+        assertThat(resumen.totalVentas()).isEqualByComparingTo("3000");
+        assertThat(resumen.efectivoEsperado()).isEqualByComparingTo("6000");
+        assertThat(resumen.diferencia(bd("6000.00"))).isEqualByComparingTo("0");
+    }
+
+    @Test
+    @DisplayName("CC-025: la cuenta corriente no entra en el efectivo esperado ni con ingresos, gastos y retiros")
+    void cuentaCorrienteNoMuevaElEfectivoConMovimientos() {
+        ResumenCaja resumen = ResumenCaja.de(bd("5000.00"),
+                Map.of(MedioPago.EFECTIVO, bd("1000.00"), MedioPago.CUENTA_CORRIENTE, bd("9999.00")),
+                Map.of(TipoMovimientoCaja.INGRESO, bd("700.00"), TipoMovimientoCaja.GASTO, bd("1200.00"),
+                        TipoMovimientoCaja.RETIRO, bd("2000.00")));
+
+        // 5000 + 1000 + 700 - 1200 - 2000 = 3500, igual con o sin los 9999 a cuenta corriente
+        assertThat(resumen.efectivoEsperado()).isEqualByComparingTo("3500");
+        assertThat(resumen.totalVentas()).isEqualByComparingTo("10999");
+    }
+
+    @Test
+    @DisplayName("CC-025: sin ventas a cuenta corriente la clave esta presente con cero")
+    void sinVentasACuentaCorrienteLaClaveEstaEnCero() {
+        ResumenCaja resumen = ResumenCaja.de(bd("5000.00"), Map.of(MedioPago.EFECTIVO, bd("1000.00")), Map.of());
+
+        assertThat(resumen.ventasPorMedio()).containsKey(MedioPago.CUENTA_CORRIENTE);
+        assertThat(resumen.ventasPorMedio().get(MedioPago.CUENTA_CORRIENTE)).isEqualByComparingTo("0");
+        assertThat(resumen.totalVentas()).isEqualByComparingTo("1000");
+    }
+
+    @Test
     @DisplayName("la diferencia es contado - esperado: negativa si falta plata, positiva si sobra")
     void diferencia() {
         ResumenCaja resumen = ResumenCaja.de(bd("1000.00"), Map.of(MedioPago.EFECTIVO, bd("500.00")), Map.of());

@@ -16,21 +16,23 @@ import java.util.List;
 
 /**
  * Las formas de pago de la ferreteria (GDS-11, RC-001 y RC-008). Una ferreteria sin ninguna recibe las cuatro de siempre,
- * sin recargo, la primera vez que las pide o crea una. Siempre tiene que quedar una activa en efectivo: es la del cobro
- * rapido del mostrador (F4 y Enter).
+ * sin recargo, la primera vez que las pide o crea una, y una quinta, «Cuenta corriente», INACTIVA hasta que el Dueño la
+ * active (CC-024). La forma de medio CUENTA_CORRIENTE siempre guarda recargo 0 (CC-023): el servicio lo fuerza, no lo
+ * rechaza. Siempre tiene que quedar una activa en efectivo: es la del cobro rapido del mostrador (F4 y Enter).
  */
 @Service
 public class FormaPagoService {
 
     private static final String NOMBRE_REPETIDO = "Ya hay una forma de pago con ese nombre.";
 
-    private record PorDefecto(String nombre, MedioPago medio, int orden) {}
+    private record PorDefecto(String nombre, MedioPago medio, int orden, boolean activa) {}
 
     private static final List<PorDefecto> DE_SIEMPRE = List.of(
-            new PorDefecto("Efectivo", MedioPago.EFECTIVO, 1),
-            new PorDefecto("Débito", MedioPago.DEBITO, 2),
-            new PorDefecto("Crédito", MedioPago.CREDITO, 3),
-            new PorDefecto("Transferencia", MedioPago.TRANSFERENCIA, 4));
+            new PorDefecto("Efectivo", MedioPago.EFECTIVO, 1, true),
+            new PorDefecto("Débito", MedioPago.DEBITO, 2, true),
+            new PorDefecto("Crédito", MedioPago.CREDITO, 3, true),
+            new PorDefecto("Transferencia", MedioPago.TRANSFERENCIA, 4, true),
+            new PorDefecto("Cuenta corriente", MedioPago.CUENTA_CORRIENTE, 5, false));
 
     private final FormaPagoRepository repositorio;
 
@@ -54,8 +56,7 @@ public class FormaPagoService {
         }
         int orden = datos.orden() != null ? datos.orden() : repositorio.maxOrdenScoped() + 1;
         return repositorio.save(FormaPago.de(TenantContext.requireFerreteriaId(), nombre, datos.medio(),
-                datos.recargoPorcentaje() != null ? datos.recargoPorcentaje() : BigDecimal.ZERO,
-                datos.activa() == null || datos.activa(), orden));
+                recargoAlCrear(datos), datos.activa() == null || datos.activa(), orden));
     }
 
     /** Una forma de otra ferreteria da 404, igual que una que no existe. */
@@ -74,9 +75,25 @@ public class FormaPagoService {
             throw new ReglaDeNegocioException("Tiene que quedar al menos una forma de pago en efectivo.");
         }
         forma.actualizar(nombre, datos.medio(),
-                datos.recargoPorcentaje() != null ? datos.recargoPorcentaje() : forma.getRecargoPorcentaje(), activa,
+                recargoAlActualizar(datos, forma), activa,
                 datos.orden() != null ? datos.orden() : forma.getOrden());
         return forma;
+    }
+
+    /** Sin recargo vale 0, y la cuenta corriente nunca lleva recargo (CC-023). */
+    private static BigDecimal recargoAlCrear(DatosFormaPago datos) {
+        if (datos.medio() == MedioPago.CUENTA_CORRIENTE || datos.recargoPorcentaje() == null) {
+            return BigDecimal.ZERO;
+        }
+        return datos.recargoPorcentaje();
+    }
+
+    /** Sin recargo en el pedido conserva el que tenia, salvo la cuenta corriente, que siempre queda en 0 (CC-023). */
+    private static BigDecimal recargoAlActualizar(DatosFormaPago datos, FormaPago forma) {
+        if (datos.medio() == MedioPago.CUENTA_CORRIENTE) {
+            return BigDecimal.ZERO;
+        }
+        return datos.recargoPorcentaje() != null ? datos.recargoPorcentaje() : forma.getRecargoPorcentaje();
     }
 
     /**
@@ -90,7 +107,7 @@ public class FormaPagoService {
         }
         repositorio.bloquearFerreteriaScoped();
         if (repositorio.contarScoped() == 0) {
-            DE_SIEMPRE.forEach(f -> repositorio.sembrarScoped(f.nombre(), f.medio(), f.orden()));
+            DE_SIEMPRE.forEach(f -> repositorio.sembrarScoped(f.nombre(), f.medio(), f.orden(), f.activa()));
         }
     }
 }
