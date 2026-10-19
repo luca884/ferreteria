@@ -216,6 +216,23 @@ class CuentaCorrienteServiceTest {
         verify(clientes, never()).sumarSaldoScoped(anyLong(), any());
     }
 
+    @Test
+    @DisplayName("si el UPDATE del saldo no afecta exactamente una fila falla fuerte (IllegalStateException): libro y saldo no pueden divergir en silencio")
+    void saldoQueNoSeActualizaFallaFuerte() {
+        when(clientes.bloquearCuentaScoped(5L)).thenReturn(Optional.of(CuentaFalsa.de("1000.00", "0.00")));
+        AsientoVenta asiento = new AsientoVenta(5L, 20L, List.of(new CargoPago(31L, d("100.00"))), 9L, null);
+
+        when(clientes.sumarSaldoScoped(5L, d("100.00"))).thenReturn(0);
+        assertThatThrownBy(() -> servicio.asentarVenta(asiento))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("saldo");
+
+        when(clientes.sumarSaldoScoped(5L, d("100.00"))).thenReturn(2);
+        assertThatThrownBy(() -> servicio.asentarVenta(asiento))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("saldo");
+    }
+
     // ---- CupoCuenta.alcanza (CC-004) ----
 
     @Test

@@ -109,7 +109,12 @@ public class CuentaCorrienteService implements CuentaCorrienteParaVenta {
                         p.pagoId(), p.monto(), fecha, asiento.usuarioId(), asiento.autorizadoPor()))
                 .toList());
         BigDecimal total = pagos.stream().map(CargoPago::monto).reduce(BigDecimal.ZERO, BigDecimal::add);
-        clientes.sumarSaldoScoped(asiento.clienteId(), total);
+        int filas = clientes.sumarSaldoScoped(asiento.clienteId(), total);
+        if (filas != 1) {
+            // El libro ya está escrito: sin la fila del saldo divergirían. Es un estado ilegal (500 y rollback), no un 4xx.
+            throw new IllegalStateException("El saldo del cliente " + asiento.clienteId()
+                    + " no se actualizó (filas afectadas: " + filas + "): el libro y el saldo divergirían.");
+        }
     }
 
     private CuentaBloqueada cuentaBloqueada(Long clienteId) {

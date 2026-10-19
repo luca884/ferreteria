@@ -451,6 +451,31 @@ class VentaCuentaCorrienteIntegrationTest extends VentasTestBase {
         invariante(otro);
     }
 
+    @Test
+    @DisplayName("con el cupo agotado, la misma clave con OTRO contenido que además se pasa del límite es 422 CLAVE_CON_OTRO_CONTENIDO y no LIMITE_CUENTA_CORRIENTE; con el mismo contenido, 200")
+    void claveConOtroContenidoYExcesoDeLimite() throws Exception {
+        Escenario e = escenario();
+        long c = cliente(e.tienda(), "5000.00");
+        debiendo(e, c, 4000, "5000.00");
+        String clave = clave();
+        Map<String, Object> original = aCuenta(e, clave, 1000, c); // llega justo al límite: saldo 5.000
+        JsonNode creada = json(vender(e.vendedor(), original).andExpect(status().isCreated()));
+
+        // La clave ya está registrada: el contenido distinto gana al chequeo del cupo, también para el Dueño con el flag.
+        JsonNode vendedor = json(vender(e.vendedor(), aCuenta(e, clave, 1001, c)).andExpect(status().isUnprocessableEntity()));
+        JsonNode dueno = json(vender(e.dueno(), aCuenta(e, clave, 2500, c), true).andExpect(status().isUnprocessableEntity()));
+        JsonNode mismoContenido = json(vender(e.vendedor(), original).andExpect(status().isOk()));
+
+        assertThat(vendedor.get("motivo").asText()).isEqualTo("CLAVE_CON_OTRO_CONTENIDO");
+        assertThat(dueno.get("motivo").asText()).isEqualTo("CLAVE_CON_OTRO_CONTENIDO");
+        assertThat(vendedor.has("cuentaCorriente")).isFalse();
+        assertThat(dueno.has("cuentaCorriente")).isFalse();
+        assertThat(mismoContenido.get("ventaId").asLong()).isEqualTo(creada.get("ventaId").asLong());
+        assertThat(movimientos(c)).isEqualTo(2); // la deuda previa y la venta original: los rechazos no asientan nada
+        assertThat(saldo(c)).isEqualByComparingTo("5000.00");
+        invariante(c);
+    }
+
     // ------------------------------------------------------------------ aislamiento por ferretería
 
     @Test
