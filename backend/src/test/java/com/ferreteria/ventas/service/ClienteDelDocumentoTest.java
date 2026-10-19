@@ -2,7 +2,9 @@ package com.ferreteria.ventas.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
 import com.ferreteria.clientes.api.ClienteReferencia;
@@ -76,5 +78,55 @@ class ClienteDelDocumentoTest {
         assertThatThrownBy(() -> resolutor.resolver(8L, null))
                 .isInstanceOf(ReglaDeNegocioException.class)
                 .hasMessage("El cliente está desactivado.");
+    }
+
+    // ---- resolverParaVenta (CC-008, CC-012): como resolver, pero TOMANDO la fila del cliente
+
+    @Test
+    @DisplayName("resolverParaVenta sin clienteId no tiene cliente y no toca el puerto")
+    void paraVentaSinCliente() {
+        ClienteDelDocumento.Elegido elegido = resolutor.resolverParaVenta(null);
+
+        assertThat(elegido.id()).isNull();
+        assertThat(elegido.nombre()).isNull();
+        verifyNoInteractions(clientes);
+    }
+
+    @Test
+    @DisplayName("resolverParaVenta toma al cliente (tomarParaVenta, no buscar) y copia su razón social")
+    void paraVentaTomaAlCliente() {
+        when(clientes.tomarParaVenta(7L)).thenReturn(Optional.of(new ClienteReferencia(7L, "Ferretería Norte SRL", true)));
+
+        ClienteDelDocumento.Elegido elegido = resolutor.resolverParaVenta(7L);
+
+        assertThat(elegido.id()).isEqualTo(7L);
+        assertThat(elegido.nombre()).isEqualTo("Ferretería Norte SRL");
+        verify(clientes).tomarParaVenta(7L);
+        verifyNoMoreInteractions(clientes);
+    }
+
+    @Test
+    @DisplayName("resolverParaVenta: ajeno o inexistente es 404 y desactivado es 422, igual que resolver")
+    void paraVentaMismosRechazos() {
+        when(clientes.tomarParaVenta(9L)).thenReturn(Optional.empty());
+        when(clientes.tomarParaVenta(8L)).thenReturn(Optional.of(new ClienteReferencia(8L, "Viejo", false)));
+
+        assertThatThrownBy(() -> resolutor.resolverParaVenta(9L))
+                .isInstanceOf(ResourceNotFoundException.class)
+                .hasMessage("Cliente no encontrado");
+        assertThatThrownBy(() -> resolutor.resolverParaVenta(8L))
+                .isInstanceOf(ReglaDeNegocioException.class)
+                .hasMessage("El cliente está desactivado.");
+    }
+
+    @Test
+    @DisplayName("resolver (presupuesto y remito) sigue usando buscar y NUNCA toma la fila del cliente")
+    void resolverPlanoNoTomaLaFila() {
+        when(clientes.buscar(7L)).thenReturn(Optional.of(new ClienteReferencia(7L, "Norte", true)));
+
+        resolutor.resolver(7L, null);
+
+        verify(clientes).buscar(7L);
+        verifyNoMoreInteractions(clientes);
     }
 }

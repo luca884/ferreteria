@@ -15,6 +15,7 @@ import static org.mockito.Mockito.when;
 
 import com.ferreteria.catalogo.api.ArticuloVendible;
 import com.ferreteria.catalogo.api.ArticulosParaVenta;
+import com.ferreteria.clientes.api.CuentaCorrienteParaVenta;
 import com.ferreteria.common.exception.DatosInvalidosException;
 import com.ferreteria.stock.service.SalidaStock;
 import com.ferreteria.stock.service.StockService;
@@ -107,6 +108,9 @@ class RegistroVentaTest {
     @Mock
     com.ferreteria.clientes.api.ClientesParaVenta clientesParaVenta;
 
+    @Mock
+    CuentaCorrienteParaVenta cuentaCorriente;
+
     RegistroVenta registro;
 
     static final Long CAJA = 77L;
@@ -120,7 +124,7 @@ class RegistroVentaTest {
         registro = new RegistroVenta(
                 articulosParaVenta, stockService, comprobanteRepository, itemRepository, pagoRepository,
                 numeradorRepository, cajaService, formaPagoRepository, presupuestoRepository, remitoRepository,
-                itemRemitoRepository, new ClienteDelDocumento(clientesParaVenta));
+                itemRemitoRepository, new ClienteDelDocumento(clientesParaVenta), cuentaCorriente);
         // CU-10: por defecto hay caja abierta hoy. Lenient: los rechazos previos a la caja no la consultan.
         lenient().when(cajaService.cajaParaVender()).thenReturn(CAJA);
         for (MedioPago medio : MedioPago.values()) {
@@ -194,8 +198,13 @@ class RegistroVentaTest {
         org.mockito.Mockito.verify(comprobanteRepository, org.mockito.Mockito.never()).save(any());
     }
 
+    /** Registra como un Vendedor (el que no puede autorizar excesos): lo que hacían todos los tests antes de la cuenta corriente. */
+    VentaRegistrada comoVendedor(ConfirmarVenta pedido, Long usuarioId) {
+        return registro.registrar(pedido, usuarioId, false);
+    }
+
     VentaRechazadaException rechazo(ConfirmarVenta pedido) {
-        Throwable error = org.assertj.core.api.Assertions.catchThrowable(() -> registro.registrar(pedido, USUARIO));
+        Throwable error = org.assertj.core.api.Assertions.catchThrowable(() -> comoVendedor(pedido, USUARIO));
         assertThat(error).isInstanceOf(VentaRechazadaException.class);
         return (VentaRechazadaException) error;
     }
@@ -223,7 +232,7 @@ class RegistroVentaTest {
         catalogoC1C3();
         escrituraLista(Map.of());
 
-        VentaRegistrada venta = registro.registrar(ventaC1C3(MedioPago.EFECTIVO), USUARIO);
+        VentaRegistrada venta = comoVendedor(ventaC1C3(MedioPago.EFECTIVO), USUARIO);
 
         assertThat(venta.comprobante().getCajaId()).isEqualTo(CAJA);
     }
@@ -235,7 +244,7 @@ class RegistroVentaTest {
     void sinFerreteria() {
         TenantContext.clear();
 
-        assertThatThrownBy(() -> registro.registrar(pedido("10.00", MedioPago.EFECTIVO, renglon(1L, "1", "10.00")),
+        assertThatThrownBy(() -> comoVendedor(pedido("10.00", MedioPago.EFECTIVO, renglon(1L, "1", "10.00")),
                 USUARIO)).isInstanceOf(MissingTenantException.class);
         verifyNoInteractions(articulosParaVenta);
         assertSinEscrituras();
@@ -247,7 +256,7 @@ class RegistroVentaTest {
         ConfirmarVenta pedido = pedido("20.00", MedioPago.EFECTIVO, renglon(1L, "1", "10.00"),
                 renglon(2L, "1", "10.00"), renglon(1L, "1", "10.00"));
 
-        assertThatThrownBy(() -> registro.registrar(pedido, USUARIO))
+        assertThatThrownBy(() -> comoVendedor(pedido, USUARIO))
                 .isInstanceOfSatisfying(DatosInvalidosException.class, e -> assertThat(e.errors())
                         .containsKey("renglones[2].articuloId"));
         verifyNoInteractions(articulosParaVenta);
@@ -261,7 +270,7 @@ class RegistroVentaTest {
         when(comprobanteRepository.porClaveScoped(CLAVE)).thenReturn(Optional.empty());
 
         // las validaciones pasan y falla recien el medio de pago; nos interesan los ids consultados
-        assertThatThrownBy(() -> registro.registrar(
+        assertThatThrownBy(() -> comoVendedor(
                 pedido("20.00", null, renglon(1L, "1", "10.00"), renglon(2L, "1", "10.00")), USUARIO))
                 .isInstanceOf(DatosInvalidosException.class);
 
@@ -359,7 +368,7 @@ class RegistroVentaTest {
         catalogoDevuelve(tornillo(1L, "10.00"));
         when(comprobanteRepository.porClaveScoped(CLAVE)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> registro.registrar(pedido("25.00", MedioPago.EFECTIVO, renglon(1L, "2.5", "10.00")),
+        assertThatThrownBy(() -> comoVendedor(pedido("25.00", MedioPago.EFECTIVO, renglon(1L, "2.5", "10.00")),
                 USUARIO))
                 .isInstanceOfSatisfying(DatosInvalidosException.class, e -> assertThat(e.errors())
                         .containsEntry("renglones[0].cantidad",
@@ -373,7 +382,7 @@ class RegistroVentaTest {
         catalogoDevuelve(tornillo(1L, "10.00"), vendible(2L, "Cable", "METRO", "10.00", true));
         when(comprobanteRepository.porClaveScoped(CLAVE)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> registro.registrar(pedido("0.00", MedioPago.EFECTIVO, renglon(1L, "0", "10.00"),
+        assertThatThrownBy(() -> comoVendedor(pedido("0.00", MedioPago.EFECTIVO, renglon(1L, "0", "10.00"),
                 renglon(2L, "0.0005", "10.00")), USUARIO))
                 .isInstanceOfSatisfying(DatosInvalidosException.class, e -> assertThat(e.errors())
                         .containsOnlyKeys("renglones[0].cantidad", "renglones[1].cantidad"));
@@ -435,7 +444,7 @@ class RegistroVentaTest {
         when(comprobanteRepository.porClaveScoped(CLAVE)).thenReturn(Optional.empty());
 
         // llega hasta el medio de pago: si el precio se tomara como cambiado saltaria el 409
-        assertThatThrownBy(() -> registro.registrar(pedido("10", null, renglon(1L, "1", "10")), USUARIO))
+        assertThatThrownBy(() -> comoVendedor(pedido("10", null, renglon(1L, "1", "10")), USUARIO))
                 .isInstanceOf(DatosInvalidosException.class);
     }
 
@@ -445,7 +454,7 @@ class RegistroVentaTest {
         catalogoDevuelve(tornillo(1L, "10.00"));
         when(comprobanteRepository.porClaveScoped(CLAVE)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> registro.registrar(pedido("10.00", null, renglon(1L, "1", "10.00")), USUARIO))
+        assertThatThrownBy(() -> comoVendedor(pedido("10.00", null, renglon(1L, "1", "10.00")), USUARIO))
                 .isInstanceOfSatisfying(DatosInvalidosException.class, e -> assertThat(e.errors())
                         .containsEntry("formaPagoId", "Elegí una forma de pago."));
         assertSinEscrituras();
@@ -467,7 +476,7 @@ class RegistroVentaTest {
 
         // cantidad + precio + pago: gana la cantidad (400)
         catalogoDevuelve(tornillo(2L, "10.00"));
-        assertThatThrownBy(() -> registro.registrar(pedido("1.00", null, renglon(2L, "2.5", "99.00")), USUARIO))
+        assertThatThrownBy(() -> comoVendedor(pedido("1.00", null, renglon(2L, "2.5", "99.00")), USUARIO))
                 .isInstanceOfSatisfying(DatosInvalidosException.class,
                         e -> assertThat(e.errors()).containsOnlyKeys("renglones[0].cantidad"));
 
@@ -493,7 +502,13 @@ class RegistroVentaTest {
         });
         when(stockService.registrarVenta(eq(COMPROBANTE), eq(USUARIO), any())).thenReturn(stockResultante);
         when(itemRepository.saveAll(any())).thenAnswer(inv -> inv.getArgument(0));
-        when(pagoRepository.save(any(Pago.class))).thenAnswer(inv -> inv.getArgument(0));
+        // El pago guardado recibe el id 100, 101... (IDENTITY): el asiento de cuenta corriente lo referencia.
+        java.util.concurrent.atomic.AtomicLong idsDePago = new java.util.concurrent.atomic.AtomicLong(100);
+        when(pagoRepository.save(any(Pago.class))).thenAnswer(inv -> {
+            Pago p = inv.getArgument(0);
+            ReflectionTestUtils.setField(p, "id", idsDePago.getAndIncrement());
+            return p;
+        });
     }
 
     /** Las formas como las ve el servicio: la de ese medio, con su recargo. */
@@ -524,7 +539,7 @@ class RegistroVentaTest {
         catalogoC1C3();
         escrituraLista(Map.of(1L, bd("7"), 2L, bd("7.5")));
 
-        registro.registrar(ventaC1C3(MedioPago.EFECTIVO), USUARIO);
+        comoVendedor(ventaC1C3(MedioPago.EFECTIVO), USUARIO);
 
         InOrder orden = inOrder(numeradorRepository, comprobanteRepository, stockService, itemRepository,
                 pagoRepository);
@@ -541,7 +556,7 @@ class RegistroVentaTest {
         catalogoC1C3();
         escrituraLista(Map.of());
 
-        VentaRegistrada venta = registro.registrar(ventaC1C3(MedioPago.DEBITO), USUARIO);
+        VentaRegistrada venta = comoVendedor(ventaC1C3(MedioPago.DEBITO), USUARIO);
 
         Comprobante c = venta.comprobante();
         assertThat(c.getTipo()).isEqualTo(TipoComprobante.VENTA);
@@ -569,10 +584,10 @@ class RegistroVentaTest {
     void ventaConCliente() {
         catalogoC1C3();
         escrituraLista(Map.of(1L, bd("7"), 2L, bd("7.5")));
-        when(clientesParaVenta.buscar(5L)).thenReturn(Optional.of(
+        when(clientesParaVenta.tomarParaVenta(5L)).thenReturn(Optional.of(
                 new com.ferreteria.clientes.api.ClienteReferencia(5L, "Ferretería Norte SRL", true)));
 
-        Comprobante conCliente = registro.registrar(conCliente(ventaC1C3(MedioPago.EFECTIVO), 5L), USUARIO)
+        Comprobante conCliente = comoVendedor(conCliente(ventaC1C3(MedioPago.EFECTIVO), 5L), USUARIO)
                 .comprobante();
 
         assertThat(conCliente.getClienteId()).isEqualTo(5L);
@@ -584,15 +599,15 @@ class RegistroVentaTest {
     @DisplayName("con un cliente inexistente o desactivado rechaza antes de escribir: ni número, ni stock, ni comprobante")
     void ventaConClienteInvalidoNoEscribe() {
         when(comprobanteRepository.porClaveScoped(CLAVE)).thenReturn(Optional.empty());
-        when(clientesParaVenta.buscar(9L)).thenReturn(Optional.empty());
-        when(clientesParaVenta.buscar(8L)).thenReturn(Optional.of(
+        when(clientesParaVenta.tomarParaVenta(9L)).thenReturn(Optional.empty());
+        when(clientesParaVenta.tomarParaVenta(8L)).thenReturn(Optional.of(
                 new com.ferreteria.clientes.api.ClienteReferencia(8L, "Viejo", false)));
 
         org.assertj.core.api.Assertions.assertThatThrownBy(
-                        () -> registro.registrar(conCliente(ventaC1C3(MedioPago.EFECTIVO), 9L), USUARIO))
+                        () -> comoVendedor(conCliente(ventaC1C3(MedioPago.EFECTIVO), 9L), USUARIO))
                 .isInstanceOf(com.ferreteria.common.exception.ResourceNotFoundException.class);
         org.assertj.core.api.Assertions.assertThatThrownBy(
-                        () -> registro.registrar(conCliente(ventaC1C3(MedioPago.EFECTIVO), 8L), USUARIO))
+                        () -> comoVendedor(conCliente(ventaC1C3(MedioPago.EFECTIVO), 8L), USUARIO))
                 .isInstanceOf(com.ferreteria.common.exception.ReglaDeNegocioException.class);
 
         assertSinEscrituras();
@@ -608,7 +623,7 @@ class RegistroVentaTest {
         when(pagoRepository.deComprobanteScoped(COMPROBANTE))
                 .thenReturn(List.of(pagoGuardado(MedioPago.EFECTIVO, "4463.33")));
 
-        assertThat(registro.registrar(conCliente(ventaC1C3(MedioPago.EFECTIVO), 5L), USUARIO).repetida()).isTrue();
+        assertThat(comoVendedor(conCliente(ventaC1C3(MedioPago.EFECTIVO), 5L), USUARIO).repetida()).isTrue();
         assertThat(rechazo(conCliente(ventaC1C3(MedioPago.EFECTIVO), 6L)).motivo())
                 .isEqualTo(Motivo.CLAVE_CON_OTRO_CONTENIDO);
         assertThat(rechazo(ventaC1C3(MedioPago.EFECTIVO)).motivo()).isEqualTo(Motivo.CLAVE_CON_OTRO_CONTENIDO);
@@ -618,7 +633,7 @@ class RegistroVentaTest {
 
     static ConfirmarVenta noFacturable(ConfirmarVenta p) {
         return new ConfirmarVenta(p.clave(), p.renglones(), p.totalMostrado(), p.formaPagoId(),
-                p.descuentoPorcentaje(), p.pagos(), p.presupuestoId(), p.remitoId(), false);
+                p.descuentoPorcentaje(), p.pagos(), p.presupuestoId(), p.remitoId(), false, p.clienteId(), p.autorizaExceso());
     }
 
     @Test
@@ -634,7 +649,7 @@ class RegistroVentaTest {
         catalogoC1C3();
         escrituraLista(Map.of(1L, bd("7"), 2L, bd("7.5")));
 
-        VentaRegistrada venta = registro.registrar(noFacturable(ventaC1C3(MedioPago.EFECTIVO)), USUARIO);
+        VentaRegistrada venta = comoVendedor(noFacturable(ventaC1C3(MedioPago.EFECTIVO)), USUARIO);
 
         Comprobante c = venta.comprobante();
         assertThat(c.getTipo()).isEqualTo(TipoComprobante.VENTA);
@@ -658,7 +673,7 @@ class RegistroVentaTest {
         when(pagoRepository.deComprobanteScoped(COMPROBANTE))
                 .thenReturn(List.of(pagoGuardado(MedioPago.EFECTIVO, "4463.33")));
 
-        assertThat(registro.registrar(noFacturable(ventaC1C3(MedioPago.EFECTIVO)), USUARIO).repetida()).isTrue();
+        assertThat(comoVendedor(noFacturable(ventaC1C3(MedioPago.EFECTIVO)), USUARIO).repetida()).isTrue();
         assertThat(rechazo(ventaC1C3(MedioPago.EFECTIVO)).motivo()).isEqualTo(Motivo.CLAVE_CON_OTRO_CONTENIDO);
     }
 
@@ -680,7 +695,7 @@ class RegistroVentaTest {
         catalogoC1C3();
         escrituraLista(Map.of());
 
-        registro.registrar(ventaC1C3(MedioPago.EFECTIVO), USUARIO);
+        comoVendedor(ventaC1C3(MedioPago.EFECTIVO), USUARIO);
 
         List<ItemComprobante> items = itemsGuardados();
         assertThat(items).hasSize(2);
@@ -712,7 +727,7 @@ class RegistroVentaTest {
         catalogoC1C3();
         escrituraLista(Map.of());
 
-        VentaRegistrada venta = registro.registrar(ventaC1C3(MedioPago.TRANSFERENCIA), USUARIO);
+        VentaRegistrada venta = comoVendedor(ventaC1C3(MedioPago.TRANSFERENCIA), USUARIO);
 
         verify(pagoRepository, times(1)).save(any(Pago.class));
         assertThat(venta.pagos()).hasSize(1);
@@ -741,7 +756,7 @@ class RegistroVentaTest {
         catalogoC1C3();
         escrituraLista(Map.of());
 
-        VentaRegistrada venta = registro.registrar(ventaC1C3Mixta(
+        VentaRegistrada venta = comoVendedor(ventaC1C3Mixta(
                 pagoDe(MedioPago.EFECTIVO, "1000.00"), pagoDe(MedioPago.DEBITO, "3463.33")), USUARIO);
 
         assertThat(venta.pagos()).hasSize(2);
@@ -762,7 +777,7 @@ class RegistroVentaTest {
         catalogoC1C3();
         escrituraLista(Map.of());
 
-        VentaRegistrada venta = registro.registrar(
+        VentaRegistrada venta = comoVendedor(
                 ventaC1C3Mixta(pagoDe(MedioPago.CREDITO, "4463.33")), USUARIO);
 
         assertThat(venta.pagos()).hasSize(1);
@@ -775,7 +790,7 @@ class RegistroVentaTest {
     void pagosQueNoSumanElTotal() {
         catalogoC1C3();
 
-        assertThatThrownBy(() -> registro.registrar(ventaC1C3Mixta(
+        assertThatThrownBy(() -> comoVendedor(ventaC1C3Mixta(
                 pagoDe(MedioPago.EFECTIVO, "1000.00"), pagoDe(MedioPago.DEBITO, "3000.00")), USUARIO))
                 .isInstanceOfSatisfying(DatosInvalidosException.class, e -> assertThat(e.errors())
                         .containsEntry("pagos", "Los pagos tienen que sumar el total de la venta."));
@@ -787,7 +802,7 @@ class RegistroVentaTest {
     void formaRepetida() {
         catalogoC1C3();
 
-        assertThatThrownBy(() -> registro.registrar(ventaC1C3Mixta(
+        assertThatThrownBy(() -> comoVendedor(ventaC1C3Mixta(
                 pagoDe(MedioPago.EFECTIVO, "1000.00"), pagoDe(MedioPago.EFECTIVO, "3463.33")), USUARIO))
                 .isInstanceOfSatisfying(DatosInvalidosException.class, e -> assertThat(e.errors())
                         .containsEntry("pagos[1].formaPagoId", "Cada forma de pago va una sola vez."));
@@ -803,7 +818,7 @@ class RegistroVentaTest {
                 List.of(renglon(1L, "3", "1210.00"), renglon(2L, "2.5", "333.33")), bd("4463.33"),
                 formaId(MedioPago.EFECTIVO), BigDecimal.ZERO, List.of(pagoDe(MedioPago.EFECTIVO, "4463.33")));
 
-        assertThatThrownBy(() -> registro.registrar(ambos, USUARIO))
+        assertThatThrownBy(() -> comoVendedor(ambos, USUARIO))
                 .isInstanceOfSatisfying(DatosInvalidosException.class, e -> assertThat(e.errors())
                         .containsEntry("pagos", "Mandá una sola forma de pago o la lista de pagos, no las dos."));
         assertSinEscrituras();
@@ -814,7 +829,7 @@ class RegistroVentaTest {
     void montoNoPositivo() {
         catalogoC1C3();
 
-        assertThatThrownBy(() -> registro.registrar(ventaC1C3Mixta(
+        assertThatThrownBy(() -> comoVendedor(ventaC1C3Mixta(
                 pagoDe(MedioPago.EFECTIVO, "0.00"), pagoDe(MedioPago.DEBITO, "4463.33")), USUARIO))
                 .isInstanceOfSatisfying(DatosInvalidosException.class, e -> assertThat(e.errors())
                         .containsEntry("pagos[0].monto", "El monto del pago tiene que ser mayor a cero."));
@@ -830,7 +845,7 @@ class RegistroVentaTest {
                 List.of(new Renglon(1L, bd("2"), bd("100.00"), bd("10.00"))), bd("162.00"), null, bd("10.00"),
                 List.of(pagoDe(MedioPago.EFECTIVO, "62.00"), pagoDe(MedioPago.TRANSFERENCIA, "100.00")));
 
-        VentaRegistrada venta = registro.registrar(pedido, USUARIO);
+        VentaRegistrada venta = comoVendedor(pedido, USUARIO);
 
         assertThat(venta.pagos()).extracting(Pago::getMonto)
                 .usingElementComparator(BigDecimal::compareTo).containsExactly(bd("62.00"), bd("100.00"));
@@ -844,7 +859,7 @@ class RegistroVentaTest {
         when(pagoRepository.deComprobanteScoped(COMPROBANTE)).thenReturn(List.of(
                 pagoGuardado(MedioPago.EFECTIVO, "1000.00"), pagoGuardado(MedioPago.DEBITO, "3463.33")));
 
-        VentaRegistrada igual = registro.registrar(ventaC1C3Mixta(
+        VentaRegistrada igual = comoVendedor(ventaC1C3Mixta(
                 pagoDe(MedioPago.DEBITO, "3463.33"), pagoDe(MedioPago.EFECTIVO, "1000.00")), USUARIO);
         assertThat(igual.repetida()).isTrue();
         assertThat(igual.pagos()).hasSize(2);
@@ -892,7 +907,7 @@ class RegistroVentaTest {
         catalogoDe100();
         escrituraLista(Map.of());
 
-        VentaRegistrada venta = registro.registrar(ventaConDescuentos("162.00"), USUARIO);
+        VentaRegistrada venta = comoVendedor(ventaConDescuentos("162.00"), USUARIO);
 
         Comprobante c = venta.comprobante();
         assertThat(c.getSubtotal()).isEqualByComparingTo("200.00");
@@ -908,7 +923,7 @@ class RegistroVentaTest {
         catalogoDe100();
         escrituraLista(Map.of());
 
-        registro.registrar(ventaConDescuentos("162.00"), USUARIO);
+        comoVendedor(ventaConDescuentos("162.00"), USUARIO);
 
         ItemComprobante item = itemsGuardados().get(0);
         assertThat(item.getBruto()).isEqualByComparingTo("200.00");
@@ -923,7 +938,7 @@ class RegistroVentaTest {
         catalogoC1C3();
         escrituraLista(Map.of());
 
-        VentaRegistrada venta = registro.registrar(ventaC1C3(MedioPago.EFECTIVO), USUARIO);
+        VentaRegistrada venta = comoVendedor(ventaC1C3(MedioPago.EFECTIVO), USUARIO);
 
         assertThat(venta.comprobante().getSubtotal()).isEqualByComparingTo("4463.33");
         assertThat(venta.comprobante().getDescuentoPorcentaje()).isEqualByComparingTo("0");
@@ -947,10 +962,10 @@ class RegistroVentaTest {
     void descuentoFueraDeRango() {
         catalogoDe100();
 
-        Throwable delRenglon = org.assertj.core.api.Assertions.catchThrowable(() -> registro.registrar(
+        Throwable delRenglon = org.assertj.core.api.Assertions.catchThrowable(() -> comoVendedor(
                 new ConfirmarVenta(CLAVE, List.of(new Renglon(1L, bd("1"), bd("100.00"), bd("100.00"))), bd("0.00"),
                         formaId(MedioPago.EFECTIVO), BigDecimal.ZERO), USUARIO));
-        Throwable global = org.assertj.core.api.Assertions.catchThrowable(() -> registro.registrar(
+        Throwable global = org.assertj.core.api.Assertions.catchThrowable(() -> comoVendedor(
                 new ConfirmarVenta(CLAVE, List.of(new Renglon(1L, bd("1"), bd("100.00"))), bd("100.00"),
                         formaId(MedioPago.EFECTIVO), bd("-1")), USUARIO));
 
@@ -975,7 +990,7 @@ class RegistroVentaTest {
         when(pagoRepository.deComprobanteScoped(COMPROBANTE))
                 .thenReturn(List.of(pagoGuardado(MedioPago.EFECTIVO, "162.00")));
 
-        assertThat(registro.registrar(ventaConDescuentos("162.00"), USUARIO).repetida()).isTrue();
+        assertThat(comoVendedor(ventaConDescuentos("162.00"), USUARIO).repetida()).isTrue();
 
         ConfirmarVenta otroGlobal = new ConfirmarVenta(CLAVE,
                 List.of(new Renglon(1L, bd("2"), bd("100.00"), bd("10.00"))), bd("162.00"), formaId(MedioPago.EFECTIVO),
@@ -995,7 +1010,7 @@ class RegistroVentaTest {
         catalogoC1C3();
         escrituraLista(Map.of());
 
-        registro.registrar(ventaC1C3(MedioPago.EFECTIVO), USUARIO);
+        comoVendedor(ventaC1C3(MedioPago.EFECTIVO), USUARIO);
 
         ArgumentCaptor<List<SalidaStock>> salidas = ArgumentCaptor.forClass(List.class);
         verify(stockService).registrarVenta(eq(COMPROBANTE), eq(USUARIO), salidas.capture());
@@ -1013,7 +1028,7 @@ class RegistroVentaTest {
                 vendible(3L, "Sobra", "UNIDAD", "10.00", true));
         escrituraLista(Map.of(1L, bd("0.000"), 2L, bd("-3.000"), 3L, bd("4.000")));
 
-        VentaRegistrada venta = registro.registrar(pedido("110.00", MedioPago.EFECTIVO, renglon(1L, "5", "10.00"),
+        VentaRegistrada venta = comoVendedor(pedido("110.00", MedioPago.EFECTIVO, renglon(1L, "5", "10.00"),
                 renglon(2L, "5", "10.00"), renglon(3L, "1", "10.00")), USUARIO);
 
         assertThat(venta.sinStock()).hasSize(1);
@@ -1055,7 +1070,7 @@ class RegistroVentaTest {
     void repetidaMismoContenido() {
         ventaYaRegistrada();
 
-        VentaRegistrada venta = registro.registrar(
+        VentaRegistrada venta = comoVendedor(
                 pedido("3630.00", MedioPago.EFECTIVO, renglon(1L, "3", "1210.00")), USUARIO);
 
         assertThat(venta.repetida()).isTrue();
@@ -1072,7 +1087,7 @@ class RegistroVentaTest {
     void repetidaOtraEscala() {
         ventaYaRegistrada();
 
-        VentaRegistrada venta = registro.registrar(
+        VentaRegistrada venta = comoVendedor(
                 pedido("3630", MedioPago.EFECTIVO, renglon(1L, "3.000", "1210")), USUARIO);
 
         assertThat(venta.repetida()).isTrue();
@@ -1138,7 +1153,7 @@ class RegistroVentaTest {
         escrituraLista(Map.of());
         conRecargo(MedioPago.CREDITO, "10.00");
 
-        VentaRegistrada venta = registro.registrar(ventaC1C3ConCredito10("4909.66"), USUARIO);
+        VentaRegistrada venta = comoVendedor(ventaC1C3ConCredito10("4909.66"), USUARIO);
 
         assertThat(venta.comprobante().getTotal()).isEqualByComparingTo("4909.66");
         assertThat(venta.comprobante().getRecargo()).isEqualByComparingTo("446.33");
@@ -1183,7 +1198,7 @@ class RegistroVentaTest {
                 List.of(renglon(1L, "3", "1210.00"), renglon(2L, "2.5", "333.33")), bd("4809.66"), null,
                 BigDecimal.ZERO, List.of(pagoDe(MedioPago.EFECTIVO, "1000.00"), pagoDe(MedioPago.CREDITO, "3463.33")));
 
-        VentaRegistrada venta = registro.registrar(pedido, USUARIO);
+        VentaRegistrada venta = comoVendedor(pedido, USUARIO);
 
         assertThat(venta.comprobante().getTotal()).isEqualByComparingTo("4809.66");
         assertThat(venta.comprobante().getRecargo()).isEqualByComparingTo("346.33");
@@ -1204,7 +1219,7 @@ class RegistroVentaTest {
                 List.of(renglon(1L, "3", "1210.00"), renglon(2L, "2.5", "333.33")), bd("4763.33"), null,
                 BigDecimal.ZERO, List.of(pagoDe(MedioPago.EFECTIVO, "1000.00"), pagoDe(MedioPago.CREDITO, "3000.00")));
 
-        assertThatThrownBy(() -> registro.registrar(pedido, USUARIO))
+        assertThatThrownBy(() -> comoVendedor(pedido, USUARIO))
                 .isInstanceOfSatisfying(DatosInvalidosException.class, e -> assertThat(e.errors())
                         .containsEntry("pagos", "Los pagos tienen que sumar el total de la venta."));
         assertSinEscrituras();
@@ -1218,18 +1233,18 @@ class RegistroVentaTest {
 
         ConfirmarVenta inexistente = new ConfirmarVenta(CLAVE,
                 List.of(renglon(1L, "3", "1210.00"), renglon(2L, "2.5", "333.33")), bd("4463.33"), 999L);
-        assertThatThrownBy(() -> registro.registrar(inexistente, USUARIO))
+        assertThatThrownBy(() -> comoVendedor(inexistente, USUARIO))
                 .isInstanceOfSatisfying(DatosInvalidosException.class, e -> assertThat(e.errors())
                         .containsEntry("formaPagoId", "La forma de pago no es válida."));
 
         formasEnLaBase.put(formaId(MedioPago.DEBITO), forma(MedioPago.DEBITO, "0.00", false));
-        assertThatThrownBy(() -> registro.registrar(ventaC1C3(MedioPago.DEBITO), USUARIO))
+        assertThatThrownBy(() -> comoVendedor(ventaC1C3(MedioPago.DEBITO), USUARIO))
                 .isInstanceOfSatisfying(DatosInvalidosException.class, e -> assertThat(e.errors())
                         .containsEntry("formaPagoId", "La forma de pago no es válida."));
 
         ConfirmarVenta enLaLista = ventaC1C3Mixta(pagoDe(MedioPago.EFECTIVO, "1000.00"),
                 new ConfirmarVenta.PagoPedido(999L, bd("3463.33")));
-        assertThatThrownBy(() -> registro.registrar(enLaLista, USUARIO))
+        assertThatThrownBy(() -> comoVendedor(enLaLista, USUARIO))
                 .isInstanceOfSatisfying(DatosInvalidosException.class, e -> assertThat(e.errors())
                         .containsEntry("pagos[1].formaPagoId", "La forma de pago no es válida."));
         assertSinEscrituras();
@@ -1242,7 +1257,7 @@ class RegistroVentaTest {
         when(comprobanteRepository.porClaveScoped(CLAVE)).thenReturn(Optional.empty());
         conRecargo(MedioPago.CREDITO, "200.00");
 
-        assertThatThrownBy(() -> registro.registrar(pedido("9000000000000.00", MedioPago.CREDITO,
+        assertThatThrownBy(() -> comoVendedor(pedido("9000000000000.00", MedioPago.CREDITO,
                 renglon(1L, "1", "9000000000000.00")), USUARIO))
                 .isInstanceOfSatisfying(DatosInvalidosException.class, e -> assertThat(e.errors())
                         .containsKey("totalMostrado"));
@@ -1272,7 +1287,7 @@ class RegistroVentaTest {
     void repetidaConRecargo() {
         ventaYaGuardadaConCredito();
 
-        VentaRegistrada igual = registro.registrar(ventaC1C3ConCredito10("4909.66"), USUARIO);
+        VentaRegistrada igual = comoVendedor(ventaC1C3ConCredito10("4909.66"), USUARIO);
         assertThat(igual.repetida()).isTrue();
 
         // el cobro entre dos pagos de la misma venta cuenta por la parte sin recargo: otra forma es otro contenido
@@ -1288,6 +1303,395 @@ class RegistroVentaTest {
         ventaYaGuardadaConCredito();
         formasEnLaBase.put(formaId(MedioPago.CREDITO), forma(MedioPago.CREDITO, "10.00", false));
 
-        assertThat(registro.registrar(ventaC1C3ConCredito10("4909.66"), USUARIO).repetida()).isTrue();
+        assertThat(comoVendedor(ventaC1C3ConCredito10("4909.66"), USUARIO).repetida()).isTrue();
+    }
+
+    // ---------------------------------------------------------------- cuenta corriente (CC-005 a CC-015)
+
+    static final Long CLIENTE = 5L;
+    static final Long OTRA_FORMA_CC = 50L;
+
+    /** El cliente 5, activo, que toma la venta bajo lock. */
+    void clienteTomado() {
+        when(clientesParaVenta.tomarParaVenta(CLIENTE)).thenReturn(Optional.of(
+                new com.ferreteria.clientes.api.ClienteReferencia(CLIENTE, "Ferretería Norte SRL", true)));
+    }
+
+    /** El cupo de la cuenta del cliente 5 para el importe de la venta: limite, saldo y exceso dados. */
+    void cupoDe(String importe, String limite, String saldo) {
+        BigDecimal exceso = bd(saldo).add(bd(importe)).subtract(bd(limite));
+        when(cuentaCorriente.verificarCupo(CLIENTE, bd(importe))).thenReturn(new CuentaCorrienteParaVenta.CupoCuenta(
+                true, bd(limite), bd(saldo), bd(limite).subtract(bd(saldo)),
+                exceso.signum() > 0 ? exceso : BigDecimal.ZERO));
+    }
+
+    ConfirmarVenta ventaCC() {
+        return conCliente(ventaC1C3(MedioPago.CUENTA_CORRIENTE), CLIENTE);
+    }
+
+    static ConfirmarVenta autorizando(ConfirmarVenta p) {
+        return new ConfirmarVenta(p.clave(), p.renglones(), p.totalMostrado(), p.formaPagoId(), p.descuentoPorcentaje(),
+                p.pagos(), p.presupuestoId(), p.remitoId(), p.facturable(), p.clienteId(), true);
+    }
+
+    ConfirmarVenta.PagoPedido pagoDe(Long formaId, String monto) {
+        return new ConfirmarVenta.PagoPedido(formaId, bd(monto));
+    }
+
+    CuentaCorrienteParaVenta.AsientoVenta asientoGuardado() {
+        ArgumentCaptor<CuentaCorrienteParaVenta.AsientoVenta> captor =
+                ArgumentCaptor.forClass(CuentaCorrienteParaVenta.AsientoVenta.class);
+        verify(cuentaCorriente).asentarVenta(captor.capture());
+        return captor.getValue();
+    }
+
+    @Test
+    @DisplayName("el orden de locks: caja, cliente (antes de validar) y, despues de verificar el cupo, numerador ... asiento al final")
+    void ordenDeLocksConCliente() {
+        catalogoC1C3();
+        escrituraLista(Map.of());
+        clienteTomado();
+        cupoDe("4463.33", "10000.00", "0.00");
+
+        comoVendedor(ventaCC(), USUARIO);
+
+        InOrder orden = inOrder(cajaService, clientesParaVenta, articulosParaVenta, cuentaCorriente, numeradorRepository,
+                comprobanteRepository, stockService, itemRepository, pagoRepository);
+        orden.verify(cajaService).cajaParaVender();
+        orden.verify(clientesParaVenta).tomarParaVenta(CLIENTE);
+        orden.verify(articulosParaVenta).buscar(anyCollection());
+        orden.verify(cuentaCorriente).verificarCupo(CLIENTE, bd("4463.33"));
+        orden.verify(numeradorRepository).siguienteScoped();
+        orden.verify(comprobanteRepository).save(any(Comprobante.class));
+        orden.verify(stockService).registrarVenta(eq(COMPROBANTE), eq(USUARIO), any());
+        orden.verify(itemRepository).saveAll(any());
+        orden.verify(pagoRepository).save(any(Pago.class));
+        orden.verify(cuentaCorriente).asentarVenta(any());
+    }
+
+    @Test
+    @DisplayName("el orden de locks de una venta desde un presupuesto: caja, presupuesto, cliente, numerador")
+    void ordenDeLocksDesdePresupuesto() {
+        catalogoC1C3();
+        escrituraLista(Map.of());
+        clienteTomado();
+        cupoDe("4463.33", "10000.00", "0.00");
+        com.ferreteria.ventas.model.Presupuesto presupuesto = org.mockito.Mockito.mock(com.ferreteria.ventas.model.Presupuesto.class);
+        when(presupuestoRepository.paraCambiarScoped(8L)).thenReturn(Optional.of(presupuesto));
+        ConfirmarVenta base = ventaCC();
+        ConfirmarVenta desdePresupuesto = new ConfirmarVenta(base.clave(), base.renglones(), base.totalMostrado(),
+                base.formaPagoId(), base.descuentoPorcentaje(), base.pagos(), 8L, null, true, CLIENTE);
+
+        comoVendedor(desdePresupuesto, USUARIO);
+
+        InOrder orden = inOrder(cajaService, presupuestoRepository, clientesParaVenta, numeradorRepository);
+        orden.verify(cajaService).cajaParaVender();
+        orden.verify(presupuestoRepository).paraCambiarScoped(8L);
+        orden.verify(clientesParaVenta).tomarParaVenta(CLIENTE);
+        orden.verify(numeradorRepository).siguienteScoped();
+    }
+
+    @Test
+    @DisplayName("el orden de locks de una venta desde un remito: caja, remito, cliente, numerador")
+    void ordenDeLocksDesdeRemito() {
+        catalogoC1C3();
+        when(comprobanteRepository.porClaveScoped(CLAVE)).thenReturn(Optional.empty());
+        when(numeradorRepository.siguienteScoped()).thenReturn(NUMERO);
+        when(comprobanteRepository.save(any(Comprobante.class))).thenAnswer(inv -> {
+            Comprobante c = inv.getArgument(0);
+            ReflectionTestUtils.setField(c, "id", COMPROBANTE);
+            return c;
+        });
+        when(itemRepository.saveAll(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(pagoRepository.save(any(Pago.class))).thenAnswer(inv -> {
+            Pago p = inv.getArgument(0);
+            ReflectionTestUtils.setField(p, "id", 100L);
+            return p;
+        });
+        clienteTomado();
+        cupoDe("4463.33", "10000.00", "0.00");
+        com.ferreteria.ventas.model.Remito remito = org.mockito.Mockito.mock(com.ferreteria.ventas.model.Remito.class);
+        when(remitoRepository.paraCambiarScoped(8L)).thenReturn(Optional.of(remito));
+        ConfirmarVenta base = ventaCC();
+        ConfirmarVenta desdeRemito = new ConfirmarVenta(base.clave(), base.renglones(), base.totalMostrado(),
+                base.formaPagoId(), base.descuentoPorcentaje(), base.pagos(), null, 8L, true, CLIENTE);
+
+        comoVendedor(desdeRemito, USUARIO);
+
+        InOrder orden = inOrder(cajaService, remitoRepository, clientesParaVenta, numeradorRepository);
+        orden.verify(cajaService).cajaParaVender();
+        orden.verify(remitoRepository).paraCambiarScoped(8L);
+        orden.verify(clientesParaVenta).tomarParaVenta(CLIENTE);
+        orden.verify(numeradorRepository).siguienteScoped();
+    }
+
+    @Test
+    @DisplayName("una venta con cliente que NO cobra a cuenta toma al cliente igual (mismo lugar del orden) y no mira la cuenta")
+    void ventaConClienteSinCuentaTomaAlCliente() {
+        catalogoC1C3();
+        escrituraLista(Map.of());
+        clienteTomado();
+
+        comoVendedor(conCliente(ventaC1C3(MedioPago.EFECTIVO), CLIENTE), USUARIO);
+
+        InOrder orden = inOrder(clientesParaVenta, numeradorRepository);
+        orden.verify(clientesParaVenta).tomarParaVenta(CLIENTE);
+        orden.verify(numeradorRepository).siguienteScoped();
+        verifyNoInteractions(cuentaCorriente);
+    }
+
+    @Test
+    @DisplayName("sin cuenta corriente y sin cliente la venta de siempre no toca el puerto de clientes ni el de cuenta")
+    void ventaSinClienteNiCuenta() {
+        catalogoC1C3();
+        escrituraLista(Map.of());
+
+        comoVendedor(ventaC1C3(MedioPago.EFECTIVO), USUARIO);
+
+        verifyNoInteractions(cuentaCorriente, clientesParaVenta);
+    }
+
+    @Test
+    @DisplayName("pagar a cuenta corriente sin elegir cliente es 400 en clienteId con el mensaje exacto, y no escribe nada")
+    void cuentaSinCliente() {
+        catalogoC1C3();
+        when(comprobanteRepository.porClaveScoped(CLAVE)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> comoVendedor(ventaC1C3(MedioPago.CUENTA_CORRIENTE), USUARIO))
+                .isInstanceOfSatisfying(DatosInvalidosException.class, e -> assertThat(e.errors())
+                        .containsEntry("clienteId", "Elegí el cliente para vender a cuenta corriente."));
+        assertSinEscrituras();
+        verifyNoInteractions(cuentaCorriente);
+    }
+
+    @Test
+    @DisplayName("en un pago mixto con una parte a cuenta y sin cliente también es 400 en clienteId")
+    void mixtoConCuentaSinCliente() {
+        catalogoC1C3();
+        when(comprobanteRepository.porClaveScoped(CLAVE)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> comoVendedor(ventaC1C3Mixta(pagoDe(MedioPago.EFECTIVO, "1000.00"),
+                pagoDe(MedioPago.CUENTA_CORRIENTE, "3463.33")), USUARIO))
+                .isInstanceOfSatisfying(DatosInvalidosException.class, e -> assertThat(e.errors())
+                        .containsEntry("clienteId", "Elegí el cliente para vender a cuenta corriente."));
+        assertSinEscrituras();
+    }
+
+    @Test
+    @DisplayName("el 409 de precios gana al 400 de cliente obligatorio (CC-014): primero se corrige el ticket")
+    void preciosGananAlClienteObligatorio() {
+        catalogoC1C3();
+        when(comprobanteRepository.porClaveScoped(CLAVE)).thenReturn(Optional.empty());
+        ConfirmarVenta conOtroTotal = pedido("1.00", MedioPago.CUENTA_CORRIENTE, renglon(1L, "3", "1210.00"),
+                renglon(2L, "2.5", "333.33"));
+
+        assertThat(rechazo(conOtroTotal).motivo()).isEqualTo(Motivo.PRECIOS_CAMBIADOS);
+    }
+
+    @Test
+    @DisplayName("el importe a verificar es solo la parte a cuenta del pago mixto, sumada sobre todos los pagos a cuenta")
+    void importeEsLaParteACuenta() {
+        catalogoC1C3();
+        escrituraLista(Map.of());
+        clienteTomado();
+        formasEnLaBase.put(OTRA_FORMA_CC, formaConId(MedioPago.CUENTA_CORRIENTE, OTRA_FORMA_CC));
+        cupoDe("3463.33", "10000.00", "0.00");
+
+        comoVendedor(conCliente(ventaC1C3Mixta(pagoDe(MedioPago.EFECTIVO, "1000.00"),
+                pagoDe(MedioPago.CUENTA_CORRIENTE, "2000.00"), pagoDe(OTRA_FORMA_CC, "1463.33")), CLIENTE), USUARIO);
+
+        verify(cuentaCorriente).verificarCupo(CLIENTE, bd("3463.33"));
+        CuentaCorrienteParaVenta.AsientoVenta asiento = asientoGuardado();
+        assertThat(asiento.pagos()).extracting(CuentaCorrienteParaVenta.CargoPago::monto)
+                .usingElementComparator(BigDecimal::compareTo).containsExactly(bd("2000.00"), bd("1463.33"));
+    }
+
+    FormaPago formaConId(MedioPago medio, Long id) {
+        FormaPago forma = FormaPago.de(FERRETERIA, "Otra " + nombreDe(medio), medio, bd("0.00"), true, 9);
+        ReflectionTestUtils.setField(forma, "id", id);
+        return forma;
+    }
+
+    @Test
+    @DisplayName("la venta a cuenta que alcanza asienta UN cargo por pago con su id, el comprobante, el cliente y el usuario, sin autorizado")
+    void asientaLaVenta() {
+        catalogoC1C3();
+        escrituraLista(Map.of());
+        clienteTomado();
+        cupoDe("4463.33", "5000.00", "0.00");
+
+        VentaRegistrada venta = comoVendedor(ventaCC(), USUARIO);
+
+        CuentaCorrienteParaVenta.AsientoVenta asiento = asientoGuardado();
+        assertThat(asiento.clienteId()).isEqualTo(CLIENTE);
+        assertThat(asiento.comprobanteId()).isEqualTo(COMPROBANTE);
+        assertThat(asiento.usuarioId()).isEqualTo(USUARIO);
+        assertThat(asiento.autorizadoPor()).isNull();
+        assertThat(asiento.pagos()).hasSize(1);
+        assertThat(asiento.pagos().get(0).pagoId()).isEqualTo(venta.pagos().get(0).getId()).isEqualTo(100L);
+        assertThat(asiento.pagos().get(0).monto()).isEqualByComparingTo("4463.33");
+    }
+
+    @Test
+    @DisplayName("justo en el límite no excede: pasa sin autorización")
+    void justoEnElLimite() {
+        catalogoC1C3();
+        escrituraLista(Map.of());
+        clienteTomado();
+        cupoDe("4463.33", "5000.00", "536.67");
+
+        comoVendedor(ventaCC(), USUARIO);
+
+        assertThat(asientoGuardado().autorizadoPor()).isNull();
+    }
+
+    @Test
+    @DisplayName("una venta NO facturable a cuenta suma deuda igual que una facturable")
+    void noFacturableSumaDeuda() {
+        catalogoC1C3();
+        escrituraLista(Map.of());
+        clienteTomado();
+        cupoDe("4463.33", "5000.00", "0.00");
+
+        comoVendedor(noFacturable(ventaCC()), USUARIO);
+
+        verify(cuentaCorriente).asentarVenta(any());
+    }
+
+    @Test
+    @DisplayName("sin cuenta habilitada: CUENTA_CORRIENTE_NO_HABILITADA (422) con su razón social, también para el Dueño y con la autorización")
+    void noHabilitada() {
+        catalogoC1C3();
+        when(comprobanteRepository.porClaveScoped(CLAVE)).thenReturn(Optional.empty());
+        clienteTomado();
+        when(cuentaCorriente.verificarCupo(CLIENTE, bd("4463.33"))).thenReturn(new CuentaCorrienteParaVenta.CupoCuenta(
+                false, null, bd("0.00"), null, BigDecimal.ZERO));
+
+        VentaRechazadaException vendedor = rechazo(ventaCC());
+        Throwable dueno = org.assertj.core.api.Assertions.catchThrowable(
+                () -> registro.registrar(autorizando(ventaCC()), USUARIO, true));
+
+        assertThat(vendedor.motivo()).isEqualTo(Motivo.CUENTA_CORRIENTE_NO_HABILITADA);
+        assertThat(vendedor.motivo().estadoHttp()).isEqualTo(422);
+        assertThat(vendedor.getMessage()).isEqualTo("Ferretería Norte SRL no tiene cuenta corriente habilitada.");
+        assertThat(dueno).isInstanceOfSatisfying(VentaRechazadaException.class,
+                e -> assertThat(e.motivo()).isEqualTo(Motivo.CUENTA_CORRIENTE_NO_HABILITADA));
+        assertSinEscrituras();
+        verify(cuentaCorriente, never()).asentarVenta(any());
+    }
+
+    @Test
+    @DisplayName("el exceso sin autorización del Vendedor es LIMITE (422) sin cifras y puedeAutorizar=false; no guarda nada")
+    void excesoVendedorSinFlag() {
+        catalogoC1C3();
+        when(comprobanteRepository.porClaveScoped(CLAVE)).thenReturn(Optional.empty());
+        clienteTomado();
+        cupoDe("4463.33", "5000.00", "4000.00");
+
+        VentaRechazadaException e = rechazo(ventaCC());
+
+        assertThat(e.motivo()).isEqualTo(Motivo.LIMITE_CUENTA_CORRIENTE);
+        assertThat(e.motivo().estadoHttp()).isEqualTo(422);
+        assertThat(e.excesoLimite()).isEqualTo(VentaRechazadaException.ExcesoLimite.sinCifras());
+        assertThat(e.getMessage()).contains("Pedile al Dueño");
+        assertSinEscrituras();
+        verify(cuentaCorriente, never()).asentarVenta(any());
+    }
+
+    @Test
+    @DisplayName("el exceso sin autorizar del Dueño es LIMITE (422) con puedeAutorizar y las cifras (saldo, límite, disponible, importe, exceso)")
+    void excesoDuenoSinFlag() {
+        catalogoC1C3();
+        when(comprobanteRepository.porClaveScoped(CLAVE)).thenReturn(Optional.empty());
+        clienteTomado();
+        cupoDe("4463.33", "5000.00", "4000.00");
+
+        Throwable error = org.assertj.core.api.Assertions.catchThrowable(
+                () -> registro.registrar(ventaCC(), USUARIO, true));
+
+        assertThat(error).isInstanceOfSatisfying(VentaRechazadaException.class, e -> {
+            assertThat(e.motivo()).isEqualTo(Motivo.LIMITE_CUENTA_CORRIENTE);
+            assertThat(e.getMessage()).contains("Autorizala para seguir");
+            VentaRechazadaException.ExcesoLimite exceso = e.excesoLimite();
+            assertThat(exceso.puedeAutorizar()).isTrue();
+            assertThat(exceso.saldo()).isEqualByComparingTo("4000.00");
+            assertThat(exceso.limite()).isEqualByComparingTo("5000.00");
+            assertThat(exceso.disponible()).isEqualByComparingTo("1000.00");
+            assertThat(exceso.importe()).isEqualByComparingTo("4463.33");
+            assertThat(exceso.exceso()).isEqualByComparingTo("3463.33");
+        });
+        assertSinEscrituras();
+    }
+
+    @Test
+    @DisplayName("un Vendedor que manda la autorización y excede recibe AccessDenied (403) y no se guarda nada")
+    void vendedorAutorizaConExceso() {
+        catalogoC1C3();
+        when(comprobanteRepository.porClaveScoped(CLAVE)).thenReturn(Optional.empty());
+        clienteTomado();
+        cupoDe("4463.33", "5000.00", "4000.00");
+
+        assertThatThrownBy(() -> comoVendedor(autorizando(ventaCC()), USUARIO))
+                .isInstanceOf(org.springframework.security.access.AccessDeniedException.class)
+                .hasMessage("Autorizar el exceso es solo del Dueño");
+        assertSinEscrituras();
+        verify(cuentaCorriente, never()).asentarVenta(any());
+    }
+
+    @Test
+    @DisplayName("el Dueño que autoriza un exceso vende, y el asiento lleva su id en autorizadoPor")
+    void duenoAutorizaElExceso() {
+        catalogoC1C3();
+        escrituraLista(Map.of());
+        clienteTomado();
+        cupoDe("4463.33", "5000.00", "4000.00");
+
+        VentaRegistrada venta = registro.registrar(autorizando(ventaCC()), USUARIO, true);
+
+        assertThat(venta.repetida()).isFalse();
+        assertThat(asientoGuardado().autorizadoPor()).isEqualTo(USUARIO);
+    }
+
+    @Test
+    @DisplayName("la autorización del Dueño sin exceso se ignora: no ensucia el libro (autorizadoPor null)")
+    void autorizacionDelDuenoSinExceso() {
+        catalogoC1C3();
+        escrituraLista(Map.of());
+        clienteTomado();
+        cupoDe("4463.33", "5000.00", "0.00");
+
+        registro.registrar(autorizando(ventaCC()), USUARIO, true);
+
+        assertThat(asientoGuardado().autorizadoPor()).isNull();
+    }
+
+    @Test
+    @DisplayName("la autorización del Vendedor sin exceso también se ignora: no es 403 si la venta no excede")
+    void autorizacionDelVendedorSinExceso() {
+        catalogoC1C3();
+        escrituraLista(Map.of());
+        clienteTomado();
+        cupoDe("4463.33", "5000.00", "0.00");
+
+        comoVendedor(autorizando(ventaCC()), USUARIO);
+
+        assertThat(asientoGuardado().autorizadoPor()).isNull();
+    }
+
+    @Test
+    @DisplayName("repetir una venta a cuenta devuelve la original sin tomar al cliente ni asentar de nuevo, aunque cambie la autorización")
+    void repetidaNoTocaLaCuenta() {
+        Comprobante guardado = ventaGuardadaC1C3();
+        ReflectionTestUtils.setField(guardado, "clienteId", CLIENTE);
+        when(comprobanteRepository.porClaveScoped(CLAVE)).thenReturn(Optional.of(guardado));
+        when(itemRepository.deComprobanteScoped(COMPROBANTE)).thenReturn(itemsGuardadosC1C3());
+        when(pagoRepository.deComprobanteScoped(COMPROBANTE))
+                .thenReturn(List.of(pagoGuardado(MedioPago.CUENTA_CORRIENTE, "4463.33")));
+
+        assertThat(comoVendedor(ventaCC(), USUARIO).repetida()).isTrue();
+        assertThat(registro.registrar(autorizando(ventaCC()), USUARIO, true).repetida()).isTrue();
+
+        verifyNoInteractions(cuentaCorriente, clientesParaVenta);
+        assertNadaNuevo();
     }
 }

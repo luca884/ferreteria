@@ -59,63 +59,65 @@ class VentaServiceTest {
         assertThat(VentaService.class.isAnnotationPresent(Transactional.class)).isFalse();
         assertThat(VentaService.class.getMethod("cobrar", ConfirmarVenta.class, Long.class)
                 .isAnnotationPresent(Transactional.class)).isFalse();
+        assertThat(VentaService.class.getMethod("cobrar", ConfirmarVenta.class, Long.class, boolean.class)
+                .isAnnotationPresent(Transactional.class)).isFalse();
     }
 
     @Test
     @DisplayName("una venta que sale bien se devuelve tal cual, con un solo intento")
     void caminoFeliz() {
-        when(registroVenta.registrar(pedido, USUARIO)).thenReturn(nueva);
+        when(registroVenta.registrar(pedido, USUARIO, false)).thenReturn(nueva);
 
         assertThat(service.cobrar(pedido, USUARIO)).isSameAs(nueva);
-        verify(registroVenta, times(1)).registrar(pedido, USUARIO);
+        verify(registroVenta, times(1)).registrar(pedido, USUARIO, false);
     }
 
     @Test
     @DisplayName("un deadlock se reintenta y la venta sale en el segundo intento")
     void reintentaUnDeadlock() {
-        when(registroVenta.registrar(pedido, USUARIO))
+        when(registroVenta.registrar(pedido, USUARIO, false))
                 .thenThrow(new CannotAcquireLockException("deadlock"))
                 .thenReturn(nueva);
 
         assertThat(service.cobrar(pedido, USUARIO)).isSameAs(nueva);
-        verify(registroVenta, times(2)).registrar(pedido, USUARIO);
+        verify(registroVenta, times(2)).registrar(pedido, USUARIO, false);
     }
 
     @Test
     @DisplayName("tres deadlocks seguidos: 3 intentos y despues propaga la excepcion")
     void tresIntentosYPropaga() {
-        when(registroVenta.registrar(pedido, USUARIO)).thenThrow(new CannotAcquireLockException("deadlock"));
+        when(registroVenta.registrar(pedido, USUARIO, false)).thenThrow(new CannotAcquireLockException("deadlock"));
 
         assertThatThrownBy(() -> service.cobrar(pedido, USUARIO))
                 .isInstanceOf(PessimisticLockingFailureException.class);
-        verify(registroVenta, times(3)).registrar(pedido, USUARIO);
+        verify(registroVenta, times(3)).registrar(pedido, USUARIO, false);
     }
 
     @Test
     @DisplayName("un rechazo de la venta no se reintenta")
     void rechazoNoSeReintenta() {
         VentaRechazadaException rechazo = new VentaRechazadaException(Motivo.PRECIOS_CAMBIADOS, "cambio", List.of());
-        when(registroVenta.registrar(pedido, USUARIO)).thenThrow(rechazo);
+        when(registroVenta.registrar(pedido, USUARIO, false)).thenThrow(rechazo);
 
         assertThatThrownBy(() -> service.cobrar(pedido, USUARIO)).isSameAs(rechazo);
-        verify(registroVenta, times(1)).registrar(pedido, USUARIO);
+        verify(registroVenta, times(1)).registrar(pedido, USUARIO, false);
     }
 
     @Test
     @DisplayName("perder la carrera de la clave: busca la venta por clave y la devuelve repetida")
     void carreraDeClave() {
-        when(registroVenta.registrar(pedido, USUARIO)).thenThrow(new DataIntegrityViolationException("uk_comprobante_clave"));
+        when(registroVenta.registrar(pedido, USUARIO, false)).thenThrow(new DataIntegrityViolationException("uk_comprobante_clave"));
         when(registroVenta.repetida(pedido)).thenReturn(Optional.of(repetida));
 
         assertThat(service.cobrar(pedido, USUARIO)).isSameAs(repetida);
-        verify(registroVenta, times(1)).registrar(pedido, USUARIO);
+        verify(registroVenta, times(1)).registrar(pedido, USUARIO, false);
     }
 
     @Test
     @DisplayName("una violacion de integridad sin venta con esa clave se relanza")
     void integridadSinVenta() {
         DataIntegrityViolationException error = new DataIntegrityViolationException("otra restriccion");
-        when(registroVenta.registrar(pedido, USUARIO)).thenThrow(error);
+        when(registroVenta.registrar(pedido, USUARIO, false)).thenThrow(error);
         when(registroVenta.repetida(pedido)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.cobrar(pedido, USUARIO)).isSameAs(error);
@@ -126,7 +128,7 @@ class VentaServiceTest {
     void fueraDeRangoNoEsCarrera() {
         DataIntegrityViolationException error = new DataIntegrityViolationException("could not execute statement",
                 new java.sql.SQLException("Out of range value for column 'total'", "22003", 1264));
-        when(registroVenta.registrar(pedido, USUARIO)).thenThrow(error);
+        when(registroVenta.registrar(pedido, USUARIO, false)).thenThrow(error);
 
         assertThatThrownBy(() -> service.cobrar(pedido, USUARIO)).isSameAs(error);
         verify(registroVenta, never()).repetida(any());
@@ -135,7 +137,7 @@ class VentaServiceTest {
     @Test
     @DisplayName("la carrera con otro contenido propaga el 422 de la busqueda por clave")
     void carreraConOtroContenido() {
-        when(registroVenta.registrar(pedido, USUARIO)).thenThrow(new DataIntegrityViolationException("uk"));
+        when(registroVenta.registrar(pedido, USUARIO, false)).thenThrow(new DataIntegrityViolationException("uk"));
         VentaRechazadaException otroContenido = new VentaRechazadaException(
                 Motivo.CLAVE_CON_OTRO_CONTENIDO, "Esta venta ya se registró con otros datos", List.of());
         when(registroVenta.repetida(pedido)).thenThrow(otroContenido);
@@ -146,12 +148,87 @@ class VentaServiceTest {
     @Test
     @DisplayName("un deadlock y despues la carrera de clave: reintenta y despues resuelve por clave")
     void deadlockYLuegoCarrera() {
-        when(registroVenta.registrar(pedido, USUARIO))
+        when(registroVenta.registrar(pedido, USUARIO, false))
                 .thenThrow(new CannotAcquireLockException("deadlock"))
                 .thenThrow(new DataIntegrityViolationException("uk"));
         when(registroVenta.repetida(pedido)).thenReturn(Optional.of(repetida));
 
         assertThat(service.cobrar(pedido, USUARIO)).isSameAs(repetida);
-        verify(registroVenta, times(2)).registrar(eq(pedido), any());
+        verify(registroVenta, times(2)).registrar(eq(pedido), any(), eq(false));
+    }
+
+    // ---------------------------------------------------------------- cuenta corriente (CC-005, CC-009)
+
+    static VentaRechazadaException limite() {
+        return VentaRechazadaException.limiteCuentaCorriente(VentaRechazadaException.ExcesoLimite.sinCifras());
+    }
+
+    @Test
+    @DisplayName("el rol del Dueño llega a RegistroVenta; la sobrecarga de 2 argumentos es como Vendedor")
+    void rolDelUsuario() {
+        when(registroVenta.registrar(pedido, USUARIO, true)).thenReturn(nueva);
+        when(registroVenta.registrar(pedido, USUARIO, false)).thenReturn(repetida);
+
+        assertThat(service.cobrar(pedido, USUARIO, true)).isSameAs(nueva);
+        assertThat(service.cobrar(pedido, USUARIO)).isSameAs(repetida);
+    }
+
+    @Test
+    @DisplayName("un rechazo por LIMITE con la clave ya registrada (el doble envio con limite justo) devuelve la venta original")
+    void limiteConLaVentaYaRegistrada() {
+        when(registroVenta.registrar(pedido, USUARIO, false)).thenThrow(limite());
+        when(registroVenta.repetida(pedido)).thenReturn(Optional.of(repetida));
+
+        assertThat(service.cobrar(pedido, USUARIO)).isSameAs(repetida);
+        verify(registroVenta, times(1)).registrar(pedido, USUARIO, false);
+    }
+
+    @Test
+    @DisplayName("un rechazo por LIMITE sin venta con esa clave se relanza tal cual: es un rechazo de verdad")
+    void limiteSinVentaPrevia() {
+        VentaRechazadaException rechazo = limite();
+        when(registroVenta.registrar(pedido, USUARIO, true)).thenThrow(rechazo);
+        when(registroVenta.repetida(pedido)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.cobrar(pedido, USUARIO, true)).isSameAs(rechazo);
+        verify(registroVenta, times(1)).registrar(pedido, USUARIO, true);
+    }
+
+    @Test
+    @DisplayName("un rechazo por LIMITE con la clave usada con otro contenido propaga CLAVE_CON_OTRO_CONTENIDO")
+    void limiteConClaveDeOtroContenido() {
+        when(registroVenta.registrar(pedido, USUARIO, false)).thenThrow(limite());
+        VentaRechazadaException otroContenido = new VentaRechazadaException(
+                Motivo.CLAVE_CON_OTRO_CONTENIDO, "Esta venta ya se registró con otros datos", List.of());
+        when(registroVenta.repetida(pedido)).thenThrow(otroContenido);
+
+        assertThatThrownBy(() -> service.cobrar(pedido, USUARIO)).isSameAs(otroContenido);
+    }
+
+    @Test
+    @DisplayName("los demás rechazos (cuenta no habilitada, precios) NO buscan la venta repetida")
+    void otrosMotivosNoDisparanElFallback() {
+        VentaRechazadaException noHabilitada = VentaRechazadaException.cuentaNoHabilitada("Norte SRL");
+        when(registroVenta.registrar(pedido, USUARIO, false)).thenThrow(noHabilitada);
+
+        assertThatThrownBy(() -> service.cobrar(pedido, USUARIO)).isSameAs(noHabilitada);
+
+        VentaRechazadaException precios = new VentaRechazadaException(Motivo.PRECIOS_CAMBIADOS, "cambio", List.of());
+        when(registroVenta.registrar(pedido, USUARIO, true)).thenThrow(precios);
+
+        assertThatThrownBy(() -> service.cobrar(pedido, USUARIO, true)).isSameAs(precios);
+        verify(registroVenta, never()).repetida(any());
+    }
+
+    @Test
+    @DisplayName("un deadlock y despues un rechazo por LIMITE con la venta ya registrada: reintenta y despues devuelve la original")
+    void deadlockYLuegoLimite() {
+        when(registroVenta.registrar(pedido, USUARIO, false))
+                .thenThrow(new CannotAcquireLockException("deadlock"))
+                .thenThrow(limite());
+        when(registroVenta.repetida(pedido)).thenReturn(Optional.of(repetida));
+
+        assertThat(service.cobrar(pedido, USUARIO)).isSameAs(repetida);
+        verify(registroVenta, times(2)).registrar(pedido, USUARIO, false);
     }
 }

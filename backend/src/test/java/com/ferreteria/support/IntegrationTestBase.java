@@ -61,6 +61,15 @@ public abstract class IntegrationTestBase {
     @Autowired
     protected JdbcTemplate jdbc;
 
+    /**
+     * Un JdbcTemplate como root del MySQL del test (el usuario de la aplicación no tiene PROCESS): sirve para leer las métricas de
+     * InnoDB, por ejemplo {@code lock_deadlocks}. La contraseña de root del contenedor es la misma que la del usuario de prueba.
+     */
+    protected static JdbcTemplate jdbcRoot() {
+        return new JdbcTemplate(new org.springframework.jdbc.datasource.DriverManagerDataSource(
+                MYSQL.getJdbcUrl(), "root", MYSQL.getPassword()));
+    }
+
     /** Devuelve el JWT del usuario demo (contrasena demo1234). */
     protected String login(String email) throws Exception {
         String body = mvc.perform(post("/api/auth/login")

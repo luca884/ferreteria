@@ -56,7 +56,13 @@ public record ConfirmarVentaRequest(
         Boolean facturable,
 
         /** El cliente elegido en el mostrador (CL-004); ausente es Consumidor Final. Lo valida el servicio. */
-        Long clienteId) {
+        Long clienteId,
+
+        /**
+         * La autorización del Dueño para pasar el límite de cuenta corriente del cliente (CC-005). Ausente es false. Solo
+         * significa algo si la venta excede; un Vendedor que la manda con un exceso recibe 403. No es contenido (CC-009).
+         */
+        Boolean autorizaExceso) {
 
     /** Una parte del pago mixto: la forma y lo que cubre del total sin recargo. El rango fino lo valida el servicio. */
     public record PagoRequest(
@@ -94,6 +100,7 @@ public record ConfirmarVentaRequest(
                 .toList(), totalMostrado, formaPagoId, descuentoPorcentaje,
                 pagos == null ? List.of()
                         : pagos.stream().map(p -> new ConfirmarVenta.PagoPedido(p.formaPagoId(), p.monto())).toList(),
-                presupuestoId, remitoId, facturable == null || facturable, clienteId);
+                presupuestoId, remitoId, facturable == null || facturable, clienteId,
+                Boolean.TRUE.equals(autorizaExceso));
     }
 }

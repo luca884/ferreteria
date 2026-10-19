@@ -3,10 +3,12 @@ package com.ferreteria.architecture;
 import com.tngtech.archunit.core.domain.JavaClasses;
 import com.tngtech.archunit.core.importer.ClassFileImporter;
 import com.tngtech.archunit.core.importer.ImportOption;
+import com.ferreteria.clientes.api.CuentaCorrienteParaVenta;
 import com.ferreteria.clientes.model.MovimientoCuentaCliente;
 import com.ferreteria.clientes.repository.ClienteRepository;
 import com.ferreteria.clientes.repository.MovimientoCuentaClienteRepository;
 import com.ferreteria.clientes.service.CuentaCorrienteService;
+import com.ferreteria.ventas.service.RegistroVenta;
 import com.tngtech.archunit.core.domain.JavaMethodCall;
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -205,5 +207,35 @@ class ModulosArchTest {
                         && call.getName().matches("(delete|remove).*");
             }
         }).check(clases);
+    }
+
+    // ---- La venta a cuenta corriente (corte 3): ventas usa la cuenta SOLO por su puerto ----
+
+    /** (e) RegistroVenta cobra a cuenta por el puerto {@code clientes.api}, y no conoce la implementación. */
+    @Test
+    void registroVentaUsaLaCuentaCorrientePorSuPuerto() {
+        var dependencias = clases.get(RegistroVenta.class).getDirectDependenciesFromSelf().stream()
+                .map(d -> d.getTargetClass().getName())
+                .collect(java.util.stream.Collectors.toSet());
+
+        assertThat(dependencias).contains(CuentaCorrienteParaVenta.class.getName());
+        assertThat(dependencias).doesNotContain(CuentaCorrienteService.class.getName());
+    }
+
+    /** (f) Ninguna clase de ventas toca los repositorios de clientes: ni el del cliente ni el del libro. */
+    @Test
+    void ventasNoUsaLosRepositoriosDeClientes() {
+        noClasses().that().resideInAPackage("com.ferreteria.ventas..")
+                .should().dependOnClassesThat(resideInAPackage("com.ferreteria.clientes.repository.."))
+                .check(clases);
+    }
+
+    /** (g) Ni la implementación del servicio ni las entidades de la cuenta se usan desde ventas. */
+    @Test
+    void ventasNoDependeDeLaImplementacionDeLaCuenta() {
+        noClasses().that().resideInAPackage("com.ferreteria.ventas..")
+                .should().dependOnClassesThat(resideInAnyPackage("com.ferreteria.clientes.service..",
+                        "com.ferreteria.clientes.model.."))
+                .check(clases);
     }
 }

@@ -2,6 +2,8 @@ package com.ferreteria.ventas.service;
 
 import com.ferreteria.catalogo.api.ArticuloVendible;
 import com.ferreteria.catalogo.api.ArticulosParaVenta;
+import com.ferreteria.clientes.api.CuentaCorrienteParaVenta;
+import com.ferreteria.clientes.api.CuentaCorrienteParaVenta.CupoCuenta;
 import com.ferreteria.common.exception.ConflictException;
 import com.ferreteria.common.exception.DatosInvalidosException;
 import com.ferreteria.common.exception.ReglaDeNegocioException;
@@ -14,6 +16,7 @@ import com.ferreteria.ventas.model.EstadoComprobante;
 import com.ferreteria.ventas.model.EstadoPresupuesto;
 import com.ferreteria.ventas.model.EstadoRemito;
 import com.ferreteria.ventas.model.FormaPago;
+import com.ferreteria.ventas.model.MedioPago;
 import com.ferreteria.ventas.model.ItemComprobante;
 import com.ferreteria.ventas.model.Pago;
 import com.ferreteria.ventas.model.Presupuesto;
@@ -31,6 +34,7 @@ import com.ferreteria.ventas.repository.PresupuestoRepository;
 import com.ferreteria.ventas.repository.RemitoRepository;
 import com.ferreteria.ventas.service.ConfirmarVenta.Renglon;
 import com.ferreteria.ventas.service.VentaRechazadaException.Motivo;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -49,8 +53,17 @@ import java.util.stream.Collectors;
 
 /**
  * Registra una venta en UNA transaccion (C-008). Primero valida todo sin escribir nada (R-007 a R-010) y
- * recien despues escribe, siempre en el mismo orden de locks: caja abierta (compartido, CU-10), numerador, cabecera, articulos por id
- * ascendente, y al final los hijos. El que llama (VentaService) no tiene transaccion: resuelve la carrera de
+ * recien despues escribe, siempre en el mismo orden de locks:
+ * <pre>
+ * caja (S, CU-10) → presupuesto origen (X) → remito origen (X) → CLIENTE (X, solo si clienteId != null) → numerador (X)
+ *   → comprobante → articulos/stock (X, id asc) → hijos (items, pagos y movimientos de cuenta)
+ * </pre>
+ * TODA venta con cliente (cobre o no a cuenta corriente) toma al cliente en ese mismo lugar, justo antes del numerador: InnoDB
+ * toma un lock compartido sobre la fila del cliente al insertar el comprobante (FK), asi que si solo las ventas a cuenta lo
+ * tomaran antes del numerador, una venta con cliente que ya tiene el numerador y espera ese lock compartido cerraria un ciclo con
+ * la venta a cuenta que espera el numerador. El numerador ya serializa todas las ventas de la ferreteria: serializar tambien por
+ * cliente no cuesta nada. El cupo se verifica antes de escribir (bajo el lock del cliente) y el asiento va al final, cuando ya
+ * existen los ids del comprobante y de los pagos. El que llama (VentaService) no tiene transaccion: resuelve la carrera de
  * la clave y reintenta los deadlocks.
  */
 @Service
@@ -59,6 +72,8 @@ public class RegistroVenta {
     static final String MENSAJE_SIN_FORMA = "Elegí una forma de pago.";
     static final String MENSAJE_FORMA_INVALIDA = "La forma de pago no es válida.";
     static final String MENSAJE_PRESUPUESTO_Y_REMITO = "Una venta sale de un presupuesto o de un remito, no de los dos.";
+    static final String MENSAJE_CLIENTE_PARA_CUENTA = "Elegí el cliente para vender a cuenta corriente.";
+    static final String MENSAJE_SOLO_EL_DUENO_AUTORIZA = "Autorizar el exceso es solo del Dueño";
 
     private final ArticulosParaVenta articulosParaVenta;
     private final StockService stockService;
@@ -72,6 +87,7 @@ public class RegistroVenta {
     private final RemitoRepository remitoRepository;
     private final ItemRemitoRepository itemRemitoRepository;
     private final ClienteDelDocumento clienteDelDocumento;
+    private final CuentaCorrienteParaVenta cuentaCorriente;
 
     public RegistroVenta(
             ArticulosParaVenta articulosParaVenta, StockService stockService,
@@ -79,8 +95,10 @@ public class RegistroVenta {
             PagoRepository pagoRepository, NumeradorComprobanteRepository numeradorRepository,
             CajaService cajaService, FormaPagoRepository formaPagoRepository,
             PresupuestoRepository presupuestoRepository, RemitoRepository remitoRepository,
-            ItemRemitoRepository itemRemitoRepository, ClienteDelDocumento clienteDelDocumento) {
+            ItemRemitoRepository itemRemitoRepository, ClienteDelDocumento clienteDelDocumento,
+            CuentaCorrienteParaVenta cuentaCorriente) {
         this.clienteDelDocumento = clienteDelDocumento;
+        this.cuentaCorriente = cuentaCorriente;
         this.articulosParaVenta = articulosParaVenta;
         this.stockService = stockService;
         this.comprobanteRepository = comprobanteRepository;
@@ -97,8 +115,12 @@ public class RegistroVenta {
     /** Lo que sale de validar: los articulos del catalogo y las formas de pago del pedido, por id. */
     private record Validado(Map<Long, ArticuloVendible> articulos, Map<Long, FormaPago> formas) {}
 
+    /**
+     * Registra la venta. {@code usuarioEsDueno} sale del rol del JWT (el pedido no lleva actor): solo importa si la venta a
+     * cuenta corriente pasa el limite del cliente (CC-005), porque la autorizacion de un exceso es solo del Dueño.
+     */
     @Transactional
-    public VentaRegistrada registrar(ConfirmarVenta pedido, Long usuarioId) {
+    public VentaRegistrada registrar(ConfirmarVenta pedido, Long usuarioId, boolean usuarioEsDueno) {
         Long ferreteriaId = TenantContext.requireFerreteriaId();
         ValidacionTicket.articulosDistintos(pedido.renglones());
         if (pedido.presupuestoId() != null && pedido.remitoId() != null) {
@@ -121,7 +143,8 @@ public class RegistroVenta {
         // anulacion) espera aca y lo ve FACTURADO (o ANULADO).
         Remito remito = remitoParaFacturar(pedido.remitoId());
         // CL-004: el cliente elegido tiene que ser uno activo de la ferreteria; la venta guarda su id y una copia del nombre.
-        ClienteDelDocumento.Elegido cliente = clienteDelDocumento.resolver(pedido.clienteId(), null);
+        // CC-010: se lo TOMA aca (lock de escritura) para toda venta con cliente, antes del numerador: ver el orden de locks.
+        ClienteDelDocumento.Elegido cliente = clienteDelDocumento.resolverParaVenta(pedido.clienteId());
 
         Validado validado = validar(pedido);
         Map<Long, ArticuloVendible> articulos = validado.articulos();
@@ -131,6 +154,12 @@ public class RegistroVenta {
         List<ConfirmarVenta.PagoPedido> partes = pagosDe(pedido, TotalesVenta.de(sinRecargo).total());
         List<RenglonVenta> calculados = RecargoVenta.repartir(sinRecargo, recargoDe(partes, formas));
         TotalesVenta totales = TotalesVenta.de(calculados);
+
+        // CC-005, CC-006: el cupo se verifica antes de escribir nada, con el saldo vigente bajo el lock del cliente.
+        BigDecimal importeCuenta = importeACuenta(partes, formas);
+        Long autorizadoPor = importeCuenta.signum() > 0
+                ? verificarCupo(cliente, importeCuenta, pedido.autorizaExceso(), usuarioId, usuarioEsDueno)
+                : null;
 
         long numero = numeradorRepository.siguienteScoped();
         Comprobante comprobante = comprobanteRepository.save(
@@ -165,7 +194,54 @@ public class RegistroVenta {
                     RecargoVenta.deCobro(parte.monto(), forma.getRecargoPorcentaje()))));
         }
 
+        if (importeCuenta.signum() > 0) {
+            List<CuentaCorrienteParaVenta.CargoPago> cargos = pagos.stream()
+                    .filter(p -> p.getMedio() == MedioPago.CUENTA_CORRIENTE)
+                    .map(p -> new CuentaCorrienteParaVenta.CargoPago(p.getId(), p.getMonto()))
+                    .toList();
+            cuentaCorriente.asentarVenta(new CuentaCorrienteParaVenta.AsientoVenta(
+                    cliente.id(), comprobante.getId(), cargos, usuarioId, autorizadoPor));
+        }
+
         return new VentaRegistrada(comprobante, itemsGuardados, pagos, sinStock(stockResultante, articulos), false);
+    }
+
+    /** Lo que la venta carga a la cuenta corriente: la suma de lo cobrado (parte mas recargo) con las formas de medio CUENTA_CORRIENTE. */
+    private static BigDecimal importeACuenta(List<ConfirmarVenta.PagoPedido> partes, Map<Long, FormaPago> formas) {
+        BigDecimal importe = BigDecimal.ZERO;
+        for (ConfirmarVenta.PagoPedido parte : partes) {
+            FormaPago forma = formas.get(parte.formaPagoId());
+            if (forma.getMedio() == MedioPago.CUENTA_CORRIENTE) {
+                importe = importe.add(parte.monto()).add(RecargoVenta.deCobro(parte.monto(), forma.getRecargoPorcentaje()));
+            }
+        }
+        return importe;
+    }
+
+    /**
+     * Decide si la venta a cuenta corriente entra: sin cuenta habilitada se rechaza siempre (CC-006); si pasa el limite, solo
+     * entra con la autorizacion del Dueño (CC-005). Devuelve el Dueño que autorizo un exceso, o null si no hubo exceso (una
+     * autorizacion sin exceso se ignora). Un Vendedor que manda la autorizacion ante un exceso es 403: pide algo que no puede.
+     */
+    private Long verificarCupo(ClienteDelDocumento.Elegido cliente, BigDecimal importe, boolean autorizaExceso,
+            Long usuarioId, boolean usuarioEsDueno) {
+        CupoCuenta cupo = cuentaCorriente.verificarCupo(cliente.id(), importe);
+        if (!cupo.habilitada()) {
+            throw VentaRechazadaException.cuentaNoHabilitada(cliente.nombre());
+        }
+        if (!cupo.excede()) {
+            return null;
+        }
+        if (!autorizaExceso) {
+            throw VentaRechazadaException.limiteCuentaCorriente(usuarioEsDueno
+                    ? new VentaRechazadaException.ExcesoLimite(true, cupo.saldo(), cupo.limite(), cupo.disponible(), importe,
+                            cupo.exceso())
+                    : VentaRechazadaException.ExcesoLimite.sinCifras());
+        }
+        if (!usuarioEsDueno) {
+            throw new AccessDeniedException(MENSAJE_SOLO_EL_DUENO_AUTORIZA);
+        }
+        return usuarioId;
     }
 
     /**
@@ -388,6 +464,9 @@ public class RegistroVenta {
             if (!esUtilizable(formas.get(pedido.formaPagoId()))) {
                 throw new DatosInvalidosException(Map.of("formaPagoId", MENSAJE_FORMA_INVALIDA));
             }
+            if (pedido.clienteId() == null && esCuentaCorriente(formas.get(pedido.formaPagoId()))) {
+                throw new DatosInvalidosException(Map.of("clienteId", MENSAJE_CLIENTE_PARA_CUENTA));
+            }
             return;
         }
         if (pedido.formaPagoId() != null) {
@@ -415,9 +494,18 @@ public class RegistroVenta {
         if (errores.isEmpty() && suma.compareTo(totalSinRecargo) != 0) {
             errores.put("pagos", "Los pagos tienen que sumar el total de la venta.");
         }
+        // CC-012: vender a cuenta corriente exige elegir al cliente. Va con los errores de los pagos (despues del 409 de precios).
+        if (pedido.clienteId() == null && pedido.pagos().stream()
+                .anyMatch(p -> p.formaPagoId() != null && esCuentaCorriente(formas.get(p.formaPagoId())))) {
+            errores.put("clienteId", MENSAJE_CLIENTE_PARA_CUENTA);
+        }
         if (!errores.isEmpty()) {
             throw new DatosInvalidosException(errores);
         }
+    }
+
+    private static boolean esCuentaCorriente(FormaPago forma) {
+        return forma != null && forma.isActiva() && forma.getMedio() == MedioPago.CUENTA_CORRIENTE;
     }
 
     /** Una forma que no existe en la ferreteria (o es de otra) llega como null: es lo mismo que una inactiva. */

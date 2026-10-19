@@ -1,5 +1,6 @@
 package com.ferreteria.ventas.web;
 
+import com.ferreteria.auth.model.Rol;
 import com.ferreteria.auth.security.AuthUser;
 import com.ferreteria.ventas.service.VentaRechazadaException;
 import com.ferreteria.ventas.service.VentaRegistrada;
@@ -16,7 +17,8 @@ import org.springframework.web.bind.annotation.RestController;
 
 /**
  * Cobrar un ticket (CU-07). Lo pueden usar el Dueno y el Vendedor: sin {@code @PreAuthorize}, entra por
- * "autenticado". La ferreteria y el usuario salen solo del JWT.
+ * "autenticado". La ferreteria, el usuario y su rol salen solo del JWT: el rol decide quien puede autorizar un exceso del limite
+ * de cuenta corriente (CC-005).
  */
 @RestController
 @RequestMapping("/api/ventas")
@@ -32,7 +34,7 @@ public class VentaController {
     @PostMapping
     public ResponseEntity<VentaResponse> cobrar(
             @Valid @RequestBody ConfirmarVentaRequest request, @AuthenticationPrincipal AuthUser authUser) {
-        VentaRegistrada venta = ventaService.cobrar(request.aPedido(), authUser.userId());
+        VentaRegistrada venta = ventaService.cobrar(request.aPedido(), authUser.userId(), authUser.rol() == Rol.DUENO);
         return ResponseEntity.status(venta.repetida() ? HttpStatus.OK : HttpStatus.CREATED)
                 .body(VentaResponse.de(venta));
     }

@@ -4,8 +4,8 @@ import java.math.BigDecimal;
 import java.util.List;
 
 /**
- * La venta no se hizo por algo del ticket que el cajero puede corregir (R-008, R-009, R-010, R-011) o porque no hay
- * caja abierta del dia (CU-10). Lleva el
+ * La venta no se hizo por algo del ticket que el cajero puede corregir (R-008, R-009, R-010, R-011), porque no hay
+ * caja abierta del dia (CU-10) o por la cuenta corriente del cliente (CC-005, CC-006). Lleva el
  * motivo, su estado HTTP, el mensaje para el usuario y los articulos involucrados. Ningun rechazo guarda
  * nada ni consume la clave de idempotencia.
  */
@@ -23,7 +23,11 @@ public class VentaRechazadaException extends RuntimeException {
         /** CU-10: no hay caja abierta en la ferreteria. */
         CAJA_CERRADA(422),
         /** CU-10: la caja abierta es de un dia anterior; hay que cerrarla y abrir otra. */
-        CAJA_DE_OTRO_DIA(422);
+        CAJA_DE_OTRO_DIA(422),
+        /** CC-006: el cliente no tiene cuenta corriente habilitada (limite NULL). Ni el Dueño puede autorizarlo. */
+        CUENTA_CORRIENTE_NO_HABILITADA(422),
+        /** CC-005: la venta a cuenta corriente pasa el limite del cliente; la puede autorizar el Dueño. */
+        LIMITE_CUENTA_CORRIENTE(422);
 
         private final int estadoHttp;
 
@@ -52,15 +56,52 @@ public class VentaRechazadaException extends RuntimeException {
         }
     }
 
+    /**
+     * El detalle de un rechazo por limite de cuenta corriente (CC-013). {@code puedeAutorizar} es si quien vende es el Dueño; las
+     * cifras solo las ve el Dueño: para el Vendedor vienen en null (lo decide RegistroVenta, que conoce el rol, no el response).
+     */
+    public record ExcesoLimite(boolean puedeAutorizar, BigDecimal saldo, BigDecimal limite, BigDecimal disponible,
+            BigDecimal importe, BigDecimal exceso) {
+
+        /** Lo que recibe el Vendedor: que no puede autorizar y ninguna cifra. */
+        public static ExcesoLimite sinCifras() {
+            return new ExcesoLimite(false, null, null, null, null, null);
+        }
+    }
+
+    static final String MENSAJE_LIMITE =
+            "Esta venta supera el límite de cuenta corriente del cliente.";
+
+    /** CC-006: «<razón social> no tiene cuenta corriente habilitada.», sin cifras y sin objeto de cuenta. */
+    public static VentaRechazadaException cuentaNoHabilitada(String razonSocial) {
+        return new VentaRechazadaException(Motivo.CUENTA_CORRIENTE_NO_HABILITADA,
+                razonSocial + " no tiene cuenta corriente habilitada.", List.of());
+    }
+
+    /** CC-005, CC-013: el mensaje depende de si quien vende puede autorizar el exceso; sin cifras en ninguno. */
+    public static VentaRechazadaException limiteCuentaCorriente(ExcesoLimite exceso) {
+        String mensaje = MENSAJE_LIMITE + (exceso.puedeAutorizar()
+                ? " Autorizala para seguir."
+                : " Pedile al Dueño que la autorice.");
+        return new VentaRechazadaException(Motivo.LIMITE_CUENTA_CORRIENTE, mensaje, List.of(), null, exceso);
+    }
+
     private final Motivo motivo;
     private final List<Articulo> articulos;
     private final BigDecimal total;
+    private final ExcesoLimite excesoLimite;
 
-    public VentaRechazadaException(Motivo motivo, String mensaje, List<Articulo> articulos, BigDecimal total) {
+    private VentaRechazadaException(Motivo motivo, String mensaje, List<Articulo> articulos, BigDecimal total,
+            ExcesoLimite excesoLimite) {
         super(mensaje);
         this.motivo = motivo;
         this.articulos = List.copyOf(articulos);
         this.total = total;
+        this.excesoLimite = excesoLimite;
+    }
+
+    public VentaRechazadaException(Motivo motivo, String mensaje, List<Articulo> articulos, BigDecimal total) {
+        this(motivo, mensaje, articulos, total, null);
     }
 
     public VentaRechazadaException(Motivo motivo, String mensaje, List<Articulo> articulos) {
@@ -78,5 +119,10 @@ public class VentaRechazadaException extends RuntimeException {
     /** El total actual recalculado; solo en PRECIOS_CAMBIADOS, null en los demas. */
     public BigDecimal total() {
         return total;
+    }
+
+    /** El detalle del rechazo por limite; solo en LIMITE_CUENTA_CORRIENTE, null en los demas. */
+    public ExcesoLimite excesoLimite() {
+        return excesoLimite;
     }
 }
