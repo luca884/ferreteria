@@ -20,6 +20,8 @@ import com.ferreteria.common.HoraArgentina;
 
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -184,12 +186,18 @@ public abstract class IntegrationTestBase {
         return cajaAbiertaEl(ferreteriaId, LocalDateTime.now(HoraArgentina.ZONA));
     }
 
-    /** Inserta una caja abierta en esa fecha y hora (de Buenos Aires): sirve para la caja que quedo abierta de otro dia. */
+    /**
+     * Inserta una caja abierta en esa fecha y hora (de Buenos Aires): sirve para la caja que quedo abierta de otro dia.
+     * Por SQL directo, asi que la guarda como Hibernate ({@code jdbc.time_zone: UTC}): la hora local de la JVM pasada a
+     * UTC. Cruda, con la JVM fuera de UTC la app la leeria corrida y la caja de las 00:00 a las 03:00 caeria en otro dia.
+     */
     protected long cajaAbiertaEl(long ferreteriaId, LocalDateTime apertura) {
         Long usuario = jdbc.queryForObject("select min(id) from usuario where ferreteria_id = ?", Long.class,
                 ferreteriaId);
+        LocalDateTime guardada = apertura.atZone(ZoneId.systemDefault()).withZoneSameInstant(ZoneOffset.UTC)
+                .toLocalDateTime();
         jdbc.update("insert into caja (ferreteria_id, abierta, fecha_apertura, usuario_apertura_id, efectivo_inicial) "
-                + "values (?, true, ?, ?, 0.00)", ferreteriaId, apertura, usuario);
+                + "values (?, true, ?, ?, 0.00)", ferreteriaId, guardada, usuario);
         return jdbc.queryForObject("select id from caja where ferreteria_id = ? and abierta = true", Long.class,
                 ferreteriaId);
     }
