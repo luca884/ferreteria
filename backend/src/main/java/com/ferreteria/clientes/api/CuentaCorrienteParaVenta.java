@@ -37,6 +37,11 @@ public interface CuentaCorrienteParaVenta {
         public boolean excede() {
             return exceso.signum() > 0;
         }
+
+        /** La cuenta está habilitada y el importe entra en el límite. */
+        public boolean alcanza() {
+            return habilitada && !excede();
+        }
     }
 
     /**

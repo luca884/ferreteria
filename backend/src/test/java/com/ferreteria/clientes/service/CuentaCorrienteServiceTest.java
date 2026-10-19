@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
@@ -14,10 +15,13 @@ import com.ferreteria.clientes.CuentaFalsa;
 import com.ferreteria.clientes.api.CuentaCorrienteParaVenta.AsientoVenta;
 import com.ferreteria.clientes.api.CuentaCorrienteParaVenta.CargoPago;
 import com.ferreteria.clientes.api.CuentaCorrienteParaVenta.CupoCuenta;
+import com.ferreteria.clientes.model.Cliente;
+import com.ferreteria.clientes.model.CondicionIvaCliente;
 import com.ferreteria.clientes.model.MovimientoCuentaCliente;
 import com.ferreteria.clientes.model.TipoMovimientoCuenta;
 import com.ferreteria.clientes.repository.ClienteRepository;
 import com.ferreteria.clientes.repository.MovimientoCuentaClienteRepository;
+import com.ferreteria.common.exception.DatosInvalidosException;
 import com.ferreteria.common.exception.ResourceNotFoundException;
 import com.ferreteria.tenant.TenantContext;
 import java.math.BigDecimal;
@@ -37,7 +41,10 @@ import org.mockito.Captor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-/** CC-001, CC-002, CC-004, CC-005, CC-006, CC-008, CC-009: el servicio que escribe el saldo y el libro, con mocks. */
+/**
+ * CC-001 a CC-009 y CC-003, CC-004, CC-007, CC-018: el servicio que escribe el saldo y el libro (con mocks), más la consulta
+ * de la cuenta por rol y el cambio del límite.
+ */
 @ExtendWith(MockitoExtension.class)
 class CuentaCorrienteServiceTest {
 
@@ -207,5 +214,204 @@ class CuentaCorrienteServiceTest {
 
         verify(libro, never()).saveAll(any());
         verify(clientes, never()).sumarSaldoScoped(anyLong(), any());
+    }
+
+    // ---- CupoCuenta.alcanza (CC-004) ----
+
+    @Test
+    @DisplayName("alcanza = habilitada y no excede: sin habilitar o pasándose no alcanza; justo en el límite sí")
+    void alcanzaDelCupo() {
+        when(clientes.bloquearCuentaScoped(5L)).thenReturn(Optional.of(CuentaFalsa.de("1000.00", "400.00")));
+        when(clientes.bloquearCuentaScoped(6L)).thenReturn(Optional.of(CuentaFalsa.de(null, "0.00")));
+
+        assertThat(servicio.verificarCupo(5L, d("600.00")).alcanza()).isTrue();
+        assertThat(servicio.verificarCupo(5L, d("600.01")).alcanza()).isFalse();
+        assertThat(servicio.verificarCupo(6L, d("1.00")).alcanza()).isFalse();
+    }
+
+    // ---- consultar (CC-003, CC-004, CC-007) ----
+
+    private static Cliente clienteCon(String limite, String saldo) {
+        Cliente c = mock(Cliente.class);
+        when(c.getLimiteCuentaCorriente()).thenReturn(limite == null ? null : new BigDecimal(limite));
+        when(c.getSaldo()).thenReturn(new BigDecimal(saldo));
+        return c;
+    }
+
+    @Test
+    @DisplayName("consultar al Dueño con importe: habilitada, alcanza, límite, saldo y disponible")
+    void consultarDueno() {
+        Cliente cliente = clienteCon("1000.00", "400.00");
+        when(clientes.findScoped(5L)).thenReturn(Optional.of(cliente));
+
+        CuentaDelCliente alcanza = servicio.consultar(5L, d("500.00"), true);
+        CuentaDelCliente noAlcanza = servicio.consultar(5L, d("700.00"), true);
+
+        assertThat(alcanza.habilitada()).isTrue();
+        assertThat(alcanza.alcanza()).isTrue();
+        assertThat(alcanza.limite()).isEqualByComparingTo("1000.00");
+        assertThat(alcanza.saldo()).isEqualByComparingTo("400.00");
+        assertThat(alcanza.disponible()).isEqualByComparingTo("600.00");
+        assertThat(noAlcanza.alcanza()).isFalse();
+    }
+
+    @Test
+    @DisplayName("consultar al Vendedor: solo habilitada y alcanza, sin ninguna cifra")
+    void consultarVendedor() {
+        Cliente cliente = clienteCon("1000.00", "400.00");
+        when(clientes.findScoped(5L)).thenReturn(Optional.of(cliente));
+
+        CuentaDelCliente cuenta = servicio.consultar(5L, d("500.00"), false);
+
+        assertThat(cuenta.habilitada()).isTrue();
+        assertThat(cuenta.alcanza()).isTrue();
+        assertThat(cuenta.limite()).isNull();
+        assertThat(cuenta.saldo()).isNull();
+        assertThat(cuenta.disponible()).isNull();
+    }
+
+    @Test
+    @DisplayName("sin importe no hay «alcanza» (ni para el Dueño ni para el Vendedor)")
+    void consultarSinImporte() {
+        Cliente cliente = clienteCon("1000.00", "400.00");
+        when(clientes.findScoped(5L)).thenReturn(Optional.of(cliente));
+
+        assertThat(servicio.consultar(5L, null, true).alcanza()).isNull();
+        assertThat(servicio.consultar(5L, null, false).alcanza()).isNull();
+        assertThat(servicio.consultar(5L, null, true).disponible()).isEqualByComparingTo("600.00");
+    }
+
+    @Test
+    @DisplayName("límite NULL: no habilitada y alcanza=false con importe; el Dueño ve el saldo y no el límite ni el disponible")
+    void consultarNoHabilitada() {
+        Cliente cliente = clienteCon(null, "250.00");
+        when(clientes.findScoped(5L)).thenReturn(Optional.of(cliente));
+
+        CuentaDelCliente dueno = servicio.consultar(5L, d("1.00"), true);
+        CuentaDelCliente vendedor = servicio.consultar(5L, d("1.00"), false);
+
+        assertThat(dueno.habilitada()).isFalse();
+        assertThat(dueno.alcanza()).isFalse();
+        assertThat(dueno.limite()).isNull();
+        assertThat(dueno.disponible()).isNull();
+        assertThat(dueno.saldo()).isEqualByComparingTo("250.00");
+        assertThat(vendedor.habilitada()).isFalse();
+        assertThat(vendedor.alcanza()).isFalse();
+        assertThat(vendedor.saldo()).isNull();
+    }
+
+    @Test
+    @DisplayName("si el límite bajó del saldo el disponible es negativo y ninguna venta alcanza, ni la de importe 0")
+    void consultarLimiteBajoElSaldo() {
+        Cliente cliente = clienteCon("100.00", "300.00");
+        when(clientes.findScoped(5L)).thenReturn(Optional.of(cliente));
+
+        CuentaDelCliente cuenta = servicio.consultar(5L, d("0.00"), true);
+
+        assertThat(cuenta.disponible()).isEqualByComparingTo("-200.00");
+        assertThat(cuenta.alcanza()).isFalse();
+    }
+
+    @Test
+    @DisplayName("consultar un cliente ajeno o inexistente es 404; un importe negativo es 400 en importe")
+    void consultarAjenoYNegativo() {
+        when(clientes.findScoped(99L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> servicio.consultar(99L, d("1.00"), true)).isInstanceOf(ResourceNotFoundException.class);
+        assertThatThrownBy(() -> servicio.consultar(5L, d("-1.00"), true))
+                .isInstanceOfSatisfying(DatosInvalidosException.class,
+                        e -> assertThat(e.errors()).containsKey("importe"));
+    }
+
+    // ---- cambiarLimite (CC-003, CC-018) ----
+
+    private static Cliente clienteReal() {
+        return Cliente.de(FERRETERIA, "Cliente", null, null, CondicionIvaCliente.CONSUMIDOR_FINAL, null, null, null, null);
+    }
+
+    @Test
+    @DisplayName("cambiarLimite toma la cuenta, fija el límite y devuelve la vista del Dueño con el saldo FRESCO del bloqueo")
+    void cambiarLimite() {
+        Cliente c = clienteReal();
+        when(clientes.bloquearCuentaScoped(5L)).thenReturn(Optional.of(CuentaFalsa.de("100.00", "300.00")));
+        when(clientes.findScoped(5L)).thenReturn(Optional.of(c));
+
+        CuentaDelCliente cuenta = servicio.cambiarLimite(5L, d("2000.00"));
+
+        var orden = inOrder(clientes);
+        orden.verify(clientes).bloquearCuentaScoped(5L);
+        orden.verify(clientes).findScoped(5L);
+        assertThat(c.getLimiteCuentaCorriente()).isEqualByComparingTo("2000.00");
+        assertThat(cuenta.habilitada()).isTrue();
+        assertThat(cuenta.limite()).isEqualByComparingTo("2000.00");
+        assertThat(cuenta.saldo()).isEqualByComparingTo("300.00");
+        assertThat(cuenta.disponible()).isEqualByComparingTo("1700.00");
+        assertThat(cuenta.alcanza()).isNull();
+    }
+
+    @Test
+    @DisplayName("cambiarLimite(null) deshabilita la cuenta, también con saldo distinto de cero")
+    void deshabilitar() {
+        Cliente c = clienteReal();
+        c.cambiarLimite(d("500.00"));
+        when(clientes.bloquearCuentaScoped(5L)).thenReturn(Optional.of(CuentaFalsa.de("500.00", "300.00")));
+        when(clientes.findScoped(5L)).thenReturn(Optional.of(c));
+
+        CuentaDelCliente cuenta = servicio.cambiarLimite(5L, null);
+
+        assertThat(c.getLimiteCuentaCorriente()).isNull();
+        assertThat(cuenta.habilitada()).isFalse();
+        assertThat(cuenta.limite()).isNull();
+        assertThat(cuenta.disponible()).isNull();
+        assertThat(cuenta.saldo()).isEqualByComparingTo("300.00");
+    }
+
+    @Test
+    @DisplayName("cambiarLimite(0) habilita la cuenta sin crédito")
+    void limiteCero() {
+        Cliente c = clienteReal();
+        when(clientes.bloquearCuentaScoped(5L)).thenReturn(Optional.of(CuentaFalsa.de(null, "0.00")));
+        when(clientes.findScoped(5L)).thenReturn(Optional.of(c));
+
+        CuentaDelCliente cuenta = servicio.cambiarLimite(5L, d("0.00"));
+
+        assertThat(c.getLimiteCuentaCorriente()).isEqualByComparingTo("0");
+        assertThat(cuenta.habilitada()).isTrue();
+        assertThat(cuenta.disponible()).isEqualByComparingTo("0");
+    }
+
+    @Test
+    @DisplayName("bajar el límite por debajo del saldo está permitido: el disponible queda negativo")
+    void bajarPorDebajoDelSaldo() {
+        Cliente c = clienteReal();
+        when(clientes.bloquearCuentaScoped(5L)).thenReturn(Optional.of(CuentaFalsa.de("1000.00", "600.00")));
+        when(clientes.findScoped(5L)).thenReturn(Optional.of(c));
+
+        CuentaDelCliente cuenta = servicio.cambiarLimite(5L, d("100.00"));
+
+        assertThat(cuenta.disponible()).isEqualByComparingTo("-500.00");
+    }
+
+    @Test
+    @DisplayName("un límite negativo es un error y no cambia nada")
+    void limiteNegativo() {
+        Cliente c = clienteReal();
+        c.cambiarLimite(d("500.00"));
+        when(clientes.bloquearCuentaScoped(5L)).thenReturn(Optional.of(CuentaFalsa.de("500.00", "0.00")));
+        when(clientes.findScoped(5L)).thenReturn(Optional.of(c));
+
+        assertThatThrownBy(() -> servicio.cambiarLimite(5L, d("-1.00"))).isInstanceOf(IllegalArgumentException.class);
+
+        assertThat(c.getLimiteCuentaCorriente()).isEqualByComparingTo("500.00");
+    }
+
+    @Test
+    @DisplayName("cambiar el límite de un cliente ajeno o inexistente es 404 y no lee nada más")
+    void cambiarLimiteAjeno() {
+        when(clientes.bloquearCuentaScoped(99L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> servicio.cambiarLimite(99L, d("10.00"))).isInstanceOf(ResourceNotFoundException.class);
+
+        verify(clientes, never()).findScoped(anyLong());
     }
 }

@@ -1,11 +1,13 @@
 package com.ferreteria.clientes.service;
 
 import com.ferreteria.clientes.api.CuentaCorrienteParaVenta;
+import com.ferreteria.clientes.model.Cliente;
 import com.ferreteria.clientes.model.Cupo;
 import com.ferreteria.clientes.model.MovimientoCuentaCliente;
 import com.ferreteria.clientes.repository.ClienteRepository;
 import com.ferreteria.clientes.repository.ClienteRepository.CuentaBloqueada;
 import com.ferreteria.clientes.repository.MovimientoCuentaClienteRepository;
+import com.ferreteria.common.exception.DatosInvalidosException;
 import com.ferreteria.common.exception.ResourceNotFoundException;
 import com.ferreteria.tenant.TenantContext;
 import org.springframework.stereotype.Service;
@@ -16,6 +18,7 @@ import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 
 /**
  * La cuenta corriente de los clientes (CC-001 a CC-010). Es la ÚNICA clase que escribe el saldo del cliente y el libro (lo
@@ -45,9 +48,47 @@ public class CuentaCorrienteService implements CuentaCorrienteParaVenta {
     @Transactional(propagation = Propagation.MANDATORY)
     public CupoCuenta verificarCupo(Long clienteId, BigDecimal importe) {
         CuentaBloqueada cuenta = cuentaBloqueada(clienteId);
-        Cupo cupo = Cupo.de(cuenta.getLimiteCuentaCorriente(), cuenta.getSaldo(), importe);
-        return new CupoCuenta(cupo.habilitada(), cuenta.getLimiteCuentaCorriente(), cuenta.getSaldo(), cupo.disponible(),
-                cupo.exceso());
+        return cupo(cuenta.getLimiteCuentaCorriente(), cuenta.getSaldo(), importe);
+    }
+
+    private static CupoCuenta cupo(BigDecimal limite, BigDecimal saldo, BigDecimal importe) {
+        Cupo cupo = Cupo.de(limite, saldo, importe);
+        return new CupoCuenta(cupo.habilitada(), limite, saldo, cupo.disponible(), cupo.exceso());
+    }
+
+    /**
+     * La cuenta del cliente, con «alcanza» si viene el importe (CC-007). Es un consejo para el cobro: lectura plana, sin lock;
+     * la decisión real la toma la venta bajo lock. {@code conCifras} es el rol: el Dueño ve límite, saldo y disponible; el
+     * Vendedor solo si está habilitada y si alcanza, y las cifras ni salen de este método.
+     */
+    @Transactional(readOnly = true)
+    public CuentaDelCliente consultar(Long clienteId, BigDecimal importe, boolean conCifras) {
+        if (importe != null && importe.signum() < 0) {
+            throw new DatosInvalidosException(Map.of("importe", "El importe no puede ser negativo."));
+        }
+        Cliente cliente = clientes.findScoped(clienteId).orElseThrow(() -> new ResourceNotFoundException(NO_ENCONTRADO));
+        return vista(cliente.getLimiteCuentaCorriente(), cliente.getSaldo(), importe, conCifras);
+    }
+
+    /**
+     * Fija el límite (CC-018): null deshabilita la cuenta, 0 la habilita sin crédito. Bajarlo por debajo del saldo o
+     * deshabilitar con saldo está permitido: solo frena las ventas nuevas. Toma antes la fila del cliente (la misma que toma
+     * una venta), así que el saldo que devuelve es el último confirmado. Devuelve la vista del Dueño.
+     */
+    @Transactional
+    public CuentaDelCliente cambiarLimite(Long clienteId, BigDecimal limite) {
+        CuentaBloqueada cuenta = cuentaBloqueada(clienteId);
+        Cliente cliente = clientes.findScoped(clienteId).orElseThrow(() -> new ResourceNotFoundException(NO_ENCONTRADO));
+        cliente.cambiarLimite(limite);
+        return vista(limite, cuenta.getSaldo(), null, true);
+    }
+
+    private static CuentaDelCliente vista(BigDecimal limite, BigDecimal saldo, BigDecimal importe, boolean conCifras) {
+        CupoCuenta cupo = cupo(limite, saldo, importe == null ? BigDecimal.ZERO : importe);
+        Boolean alcanza = importe == null ? null : cupo.alcanza();
+        return conCifras
+                ? new CuentaDelCliente(cupo.habilitada(), alcanza, limite, saldo, cupo.disponible())
+                : new CuentaDelCliente(cupo.habilitada(), alcanza, null, null, null);
     }
 
     @Override

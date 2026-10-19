@@ -16,7 +16,10 @@ import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.ResultActions;
 
-/** CL-001 a CL-003: el contrato HTTP de {@code /api/clientes} contra MySQL real, con el aislamiento por ferretería. */
+/**
+ * CL-001 a CL-003 y CC-007, CC-019 a CC-021: el contrato HTTP de {@code /api/clientes} contra MySQL real, con el aislamiento
+ * por ferretería, el saldo y el límite de cuenta corriente solo para el Dueño y desactivar con saldo.
+ */
 class ClienteIntegrationTest extends IntegrationTestBase {
 
     record Tienda(long id, String emailDueno, String emailVendedor) {}
@@ -367,5 +370,181 @@ class ClienteIntegrationTest extends IntegrationTestBase {
     void sinToken() throws Exception {
         mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/api/clientes"))
                 .andExpect(status().isUnauthorized());
+    }
+
+    // ---------------------------------------------------------------- cuenta corriente en la respuesta (CC-007, CC-019)
+
+    /** Siembra el límite y el saldo del cliente (con su movimiento en el libro). */
+    private void cuenta(Tienda t, long id, String limite, String saldo) {
+        SemillaCuentaCliente.sembrar(jdbc, t.id(), id, limite, saldo);
+    }
+
+    private static void assertConCifras(JsonNode cliente, String limite, String saldo) {
+        assertThat(cliente.get("cuentaCorrienteHabilitada").asBoolean()).isEqualTo(limite != null);
+        if (limite == null) {
+            assertThat(cliente.has("limiteCuentaCorriente")).isFalse();
+        } else {
+            assertThat(cliente.get("limiteCuentaCorriente").decimalValue()).isEqualByComparingTo(limite);
+        }
+        assertThat(cliente.get("saldo").decimalValue()).isEqualByComparingTo(saldo);
+    }
+
+    private static void assertSinCifras(JsonNode cliente, boolean habilitada) {
+        assertThat(cliente.get("cuentaCorrienteHabilitada").asBoolean()).isEqualTo(habilitada);
+        assertThat(cliente.has("limiteCuentaCorriente")).as("limiteCuentaCorriente en %s", cliente).isFalse();
+        assertThat(cliente.has("saldo")).as("saldo en %s", cliente).isFalse();
+    }
+
+    @Test
+    @DisplayName("el Dueño ve el saldo y el límite en la lista, el detalle y al editar y al desactivar; crear trae el saldo en 0")
+    void duenoVeLasCifras() throws Exception {
+        Tienda t = tienda();
+        String dueno = login(t.emailDueno());
+        long habilitado = crearOk(dueno, cliente("Con cuenta"));
+        cuenta(t, habilitado, "1000.00", "0.00");
+        long con = crearOk(dueno, cliente("Con deuda"));
+        cuenta(t, con, "5000.00", "1250.50");
+
+        JsonNode creado = json(crear(dueno, cliente("Recién creado")).andExpect(status().isCreated()));
+        JsonNode lista = getJson("/api/clientes?q=Con", dueno);
+        JsonNode detalle = getJson("/api/clientes/" + con, dueno);
+        JsonNode editado = json(putJson("/api/clientes/" + con, dueno, cliente("Con deuda SA")).andExpect(status().isOk()));
+        long sinDeuda = habilitado;
+        JsonNode desactivado = json(desactivar(dueno, sinDeuda, false).andExpect(status().isOk()));
+
+        assertConCifras(creado, null, "0");
+        assertConCifras(detalle, "5000.00", "1250.50");
+        assertConCifras(editado, "5000.00", "1250.50");
+        assertConCifras(desactivado, "1000.00", "0");
+        assertThat(lista.get("items")).hasSize(2);
+        lista.get("items").forEach(c -> assertThat(c.has("saldo")).isTrue());
+    }
+
+    @Test
+    @DisplayName("el Vendedor no ve el saldo ni el límite en ningún lado, pero sí si la cuenta está habilitada")
+    void vendedorNoVeLasCifras() throws Exception {
+        Tienda t = tienda();
+        String vendedor = login(t.emailVendedor());
+        String dueno = login(t.emailDueno());
+        long con = crearOk(vendedor, cliente("Con deuda"));
+        cuenta(t, con, "5000.00", "1250.50");
+        long sin = crearOk(vendedor, cliente("Sin cuenta"));
+
+        JsonNode creado = json(crear(vendedor, cliente("Recién creado")).andExpect(status().isCreated()));
+        JsonNode lista = getJson("/api/clientes", vendedor);
+        JsonNode detalleCon = getJson("/api/clientes/" + con, vendedor);
+        JsonNode detalleSin = getJson("/api/clientes/" + sin, vendedor);
+        JsonNode editado = json(putJson("/api/clientes/" + con, vendedor, cliente("Con deuda SA")).andExpect(status().isOk()));
+        long libre = crearOk(dueno, cliente("Libre"));
+        JsonNode desactivadoPorElDueno = json(desactivar(dueno, libre, false).andExpect(status().isOk()));
+
+        assertSinCifras(creado, false);
+        assertSinCifras(detalleCon, true);
+        assertSinCifras(detalleSin, false);
+        assertSinCifras(editado, true);
+        lista.get("items").forEach(c -> assertThat(c.has("saldo") || c.has("limiteCuentaCorriente")).isFalse());
+        assertThat(lista.get("items")).hasSize(3);
+        assertThat(desactivadoPorElDueno.has("saldo")).isTrue(); // control: el mismo cliente, visto por el Dueño, sí trae el saldo
+    }
+
+    @Test
+    @DisplayName("un limiteCuentaCorriente (o saldo) en el cuerpo de crear o editar se ignora: el cliente conserva su cuenta")
+    void elRequestNoTocaLaCuenta() throws Exception {
+        Tienda t = tienda();
+        String dueno = login(t.emailDueno());
+        long id = crearOk(dueno, cliente("Ana"));
+        cuenta(t, id, "1000.00", "300.00");
+
+        JsonNode editado = json(putJson("/api/clientes/" + id, dueno,
+                "{\"razonSocial\": \"Ana Gómez\", \"limiteCuentaCorriente\": 999999, \"saldo\": 0}")
+                .andExpect(status().isOk()));
+        JsonNode creado = json(crear(dueno, "{\"razonSocial\": \"Beto\", \"limiteCuentaCorriente\": 5000, \"saldo\": 70}")
+                .andExpect(status().isCreated()));
+
+        assertConCifras(editado, "1000.00", "300.00");
+        assertConCifras(creado, null, "0");
+        assertThat(jdbc.queryForObject("select limite_cuenta_corriente from cliente where id = ?", java.math.BigDecimal.class,
+                creado.get("id").asLong())).isNull();
+    }
+
+    @Test
+    @DisplayName("renombrar o editar un cliente NO pisa su saldo ni su límite, ni toca el libro")
+    void editarNoPisaLaCuenta() throws Exception {
+        Tienda t = tienda();
+        String vendedor = login(t.emailVendedor());
+        long id = crearOk(vendedor, clienteConDoc("Ana", "DNI", "12345678"));
+        cuenta(t, id, "1000.00", "300.00");
+
+        putJson("/api/clientes/" + id, vendedor, clienteConDoc("Ana Gómez", "DNI", "12345678")).andExpect(status().isOk());
+
+        var fila = jdbc.queryForMap("select razon_social, saldo, limite_cuenta_corriente from cliente where id = ?", id);
+        assertThat(fila.get("razon_social")).isEqualTo("Ana Gómez");
+        assertThat((java.math.BigDecimal) fila.get("saldo")).isEqualByComparingTo("300.00");
+        assertThat((java.math.BigDecimal) fila.get("limite_cuenta_corriente")).isEqualByComparingTo("1000.00");
+        assertThat(jdbc.queryForObject("select count(*) from movimiento_cuenta_cliente where cliente_id = ?", Long.class, id))
+                .isEqualTo(1L);
+        assertThat(jdbc.queryForObject("select coalesce(sum(debe - haber), 0) from movimiento_cuenta_cliente "
+                + "where cliente_id = ?", java.math.BigDecimal.class, id)).isEqualByComparingTo("300.00");
+    }
+
+    // ---------------------------------------------------------------- desactivar con saldo (CC-020)
+
+    private static final String CON_SALDO = "No se puede desactivar: el cliente tiene saldo en cuenta corriente.";
+
+    @Test
+    @DisplayName("desactivar con saldo 500 es 422 con el mensaje exacto y el cliente sigue activo")
+    void desactivarConDeuda() throws Exception {
+        Tienda t = tienda();
+        String dueno = login(t.emailDueno());
+        long id = crearOk(dueno, cliente("Deudor"));
+        cuenta(t, id, "1000.00", "500.00");
+
+        JsonNode error = json(desactivar(dueno, id, false).andExpect(status().isUnprocessableEntity()));
+
+        assertThat(error.get("message").asText()).isEqualTo(CON_SALDO);
+        assertThat(jdbc.queryForObject("select activo from cliente where id = ?", Boolean.class, id)).isTrue();
+    }
+
+    @Test
+    @DisplayName("desactivar con saldo a favor (−50) también es 422")
+    void desactivarConSaldoAFavor() throws Exception {
+        Tienda t = tienda();
+        String dueno = login(t.emailDueno());
+        long id = crearOk(dueno, cliente("Acreedor"));
+        cuenta(t, id, null, "-50.00");
+
+        JsonNode error = json(desactivar(dueno, id, false).andExpect(status().isUnprocessableEntity()));
+
+        assertThat(error.get("message").asText()).isEqualTo(CON_SALDO);
+        assertThat(jdbc.queryForObject("select activo from cliente where id = ?", Boolean.class, id)).isTrue();
+    }
+
+    @Test
+    @DisplayName("desactivar con saldo 0 es 200 (aunque tenga cuenta habilitada) y reactivar con saldo es siempre 200")
+    void desactivarConSaldoCeroYReactivar() throws Exception {
+        Tienda t = tienda();
+        String dueno = login(t.emailDueno());
+        long id = crearOk(dueno, cliente("Al día"));
+        cuenta(t, id, "1000.00", "0.00");
+
+        assertThat(json(desactivar(dueno, id, false).andExpect(status().isOk())).get("activo").asBoolean()).isFalse();
+        // queda debiendo estando desactivado (p. ej. una venta que entró antes): reactivar nunca se rechaza
+        cuenta(t, id, null, "200.00");
+        assertThat(json(desactivar(dueno, id, true).andExpect(status().isOk())).get("activo").asBoolean()).isTrue();
+    }
+
+    @Test
+    @DisplayName("desactivar un cliente ajeno o que no existe es 404, antes del 422; el Vendedor sigue en 403 con saldo")
+    void desactivarAjenoInexistenteYVendedor() throws Exception {
+        Tienda a = tienda();
+        Tienda b = tienda();
+        long deAjena = crearOk(login(a.emailDueno()), cliente("Deudor ajeno"));
+        cuenta(a, deAjena, "1000.00", "500.00");
+
+        desactivar(login(b.emailDueno()), deAjena, false).andExpect(status().isNotFound());
+        desactivar(login(b.emailDueno()), Long.MAX_VALUE, false).andExpect(status().isNotFound());
+        desactivar(login(a.emailVendedor()), deAjena, false).andExpect(status().isForbidden());
+
+        assertThat(jdbc.queryForObject("select activo from cliente where id = ?", Boolean.class, deAjena)).isTrue();
     }
 }

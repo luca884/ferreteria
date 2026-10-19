@@ -427,6 +427,142 @@ class CajaIntegrationTest extends VentasTestBase {
         }
     }
 
+    // ---------------------------------------------------------------- cuenta corriente (CC-025)
+
+    @Nested
+    class CuentaCorriente {
+
+        /** Una ferretería sin caja y con la forma «Cuenta corriente» activa. */
+        private Tienda tiendaConCuenta() {
+            Tienda t = tiendaSinCaja();
+            activarFormaCuentaCorriente(t);
+            return t;
+        }
+
+        private long clienteConLimite(Tienda t, String limite) {
+            String razon = "Cliente " + unico("caja");
+            jdbc.update("insert into cliente (ferreteria_id, razon_social, limite_cuenta_corriente) values (?, ?, ?)", t.id(),
+                    razon, new BigDecimal(limite));
+            return jdbc.queryForObject("select id from cliente where ferreteria_id = ? and razon_social = ?", Long.class,
+                    t.id(), razon);
+        }
+
+        /** Vende {@code efectivo} en efectivo y {@code aCuenta} a cuenta corriente (pago mixto) a nombre del cliente. */
+        private void venderMixto(Tienda t, String token, long articulo, long cliente, String efectivo, String aCuenta)
+                throws Exception {
+            String total = new BigDecimal(efectivo).add(new BigDecimal(aCuenta)).toPlainString();
+            java.util.Map<String, Object> cuerpo = mapa(clave(), null, total, linea(articulo, "1", total));
+            cuerpo.put("clienteId", cliente);
+            cuerpo.put("pagos", List.of(
+                    java.util.Map.of("formaPagoId", formaDe(t, "EFECTIVO"), "monto", new BigDecimal(efectivo)),
+                    java.util.Map.of("formaPagoId", formaDe(t, "CUENTA_CORRIENTE"), "monto", new BigDecimal(aCuenta))));
+            postJson("/api/ventas", token, objectMapper.writeValueAsString(cuerpo)).andExpect(status().isCreated());
+        }
+
+        @Test
+        @DisplayName("una venta mixta ($ 1.000 efectivo + $ 2.000 a cuenta) suma a las ventas del cierre pero NO al efectivo esperado")
+        void ventaMixtaEnElCierre() throws Exception {
+            Tienda t = tiendaConCuenta();
+            String vendedor = login(t.emailVendedor());
+            long caja = abrir(vendedor, "5000.00");
+            long articulo = articulo(t, "Martillo", "UNIDAD", "3000.00", "50");
+            venderMixto(t, vendedor, articulo, clienteConLimite(t, "10000.00"), "1000.00", "2000.00");
+
+            JsonNode resumen = json(postJson("/api/cajas/" + caja + "/cierre", vendedor, cierre("6000.00"))
+                    .andExpect(status().isOk()));
+
+            assertThat(resumen.get("ventas").get("CUENTA_CORRIENTE").decimalValue()).isEqualByComparingTo("2000");
+            assertThat(resumen.get("ventas").get("EFECTIVO").decimalValue()).isEqualByComparingTo("1000");
+            assertThat(resumen.get("totalVentas").decimalValue()).isEqualByComparingTo("3000");
+            assertThat(resumen.get("efectivoEsperado").decimalValue()).isEqualByComparingTo("6000");
+            assertThat(resumen.get("diferencia").decimalValue()).isEqualByComparingTo("0");
+        }
+
+        @Test
+        @DisplayName("el Dueño ve en vivo el renglón informativo; con gastos y retiros el efectivo esperado sigue sin contarlo")
+        void renglonEnVivoParaElDueno() throws Exception {
+            Tienda t = tiendaConCuenta();
+            String vendedor = login(t.emailVendedor());
+            String dueno = login(t.emailDueno());
+            long caja = abrir(vendedor, "5000.00");
+            long articulo = articulo(t, "Martillo", "UNIDAD", "3000.00", "50");
+            venderMixto(t, vendedor, articulo, clienteConLimite(t, "10000.00"), "1000.00", "2000.00");
+            postJson("/api/cajas/" + caja + "/movimientos", vendedor, movimiento("GASTO", "300", "Cadete"))
+                    .andExpect(status().isCreated());
+            postJson("/api/cajas/" + caja + "/movimientos", dueno, movimiento("RETIRO", "1000", "Banco"))
+                    .andExpect(status().isCreated());
+
+            JsonNode enVivo = getJson("/api/cajas/" + caja, dueno);
+
+            assertThat(enVivo.get("ventas").get("CUENTA_CORRIENTE").decimalValue()).isEqualByComparingTo("2000");
+            assertThat(enVivo.get("totalVentas").decimalValue()).isEqualByComparingTo("3000");
+            // 5000 + 1000 de efectivo - 300 - 1000; los 2000 a cuenta nunca fueron efectivo
+            assertThat(enVivo.get("efectivoEsperado").decimalValue()).isEqualByComparingTo("4700");
+        }
+
+        @Test
+        @DisplayName("una venta ÍNTEGRA a cuenta no pone nada en el efectivo esperado, y sin ventas a cuenta la clave viene en 0")
+        void todoAcuentaYSinVentasACuenta() throws Exception {
+            Tienda t = tiendaConCuenta();
+            String vendedor = login(t.emailVendedor());
+            String dueno = login(t.emailDueno());
+            long caja = abrir(vendedor, "1000.00");
+            long articulo = articulo(t, "Martillo", "UNIDAD", "800.00", "50");
+
+            JsonNode sinCuenta = getJson("/api/cajas/" + caja, dueno);
+            assertThat(sinCuenta.get("ventas").has("CUENTA_CORRIENTE")).isTrue();
+            assertThat(sinCuenta.get("ventas").get("CUENTA_CORRIENTE").decimalValue()).isEqualByComparingTo("0");
+
+            java.util.Map<String, Object> cuerpo = mapa(clave(), "CUENTA_CORRIENTE", "800.00", linea(articulo, "1", "800.00"));
+            cuerpo.put("clienteId", clienteConLimite(t, "5000.00"));
+            postJson("/api/ventas", vendedor, objectMapper.writeValueAsString(cuerpo)).andExpect(status().isCreated());
+
+            JsonNode conCuenta = getJson("/api/cajas/" + caja, dueno);
+            assertThat(conCuenta.get("ventas").get("CUENTA_CORRIENTE").decimalValue()).isEqualByComparingTo("800");
+            assertThat(conCuenta.get("totalVentas").decimalValue()).isEqualByComparingTo("800");
+            assertThat(conCuenta.get("efectivoEsperado").decimalValue()).isEqualByComparingTo("1000");
+        }
+
+        @Test
+        @DisplayName("el cierre ciego no cambia: mientras está abierta el Vendedor no ve ventas, totales ni esperado, con ventas a cuenta")
+        void elVendedorSigueSinVer() throws Exception {
+            Tienda t = tiendaConCuenta();
+            String vendedor = login(t.emailVendedor());
+            long caja = abrir(vendedor, "5000.00");
+            long articulo = articulo(t, "Martillo", "UNIDAD", "3000.00", "50");
+            venderMixto(t, vendedor, articulo, clienteConLimite(t, "10000.00"), "1000.00", "2000.00");
+
+            JsonNode actual = getJson("/api/cajas/actual", vendedor);
+
+            assertThat(actual.get("caja").has("ventas")).isFalse();
+            assertThat(actual.get("caja").has("totalVentas")).isFalse();
+            assertThat(actual.get("caja").has("efectivoEsperado")).isFalse();
+            assertThat(actual.get("caja").has("diferencia")).isFalse();
+            getResult("/api/cajas/" + caja, vendedor).andExpect(status().isForbidden());
+        }
+
+        @Test
+        @DisplayName("el historial no se rompe: la caja cerrada con ventas a cuenta se lista y su detalle trae el renglón")
+        void historialConVentasACuenta() throws Exception {
+            Tienda t = tiendaConCuenta();
+            String vendedor = login(t.emailVendedor());
+            String dueno = login(t.emailDueno());
+            long caja = abrir(vendedor, "5000.00");
+            long articulo = articulo(t, "Martillo", "UNIDAD", "3000.00", "50");
+            venderMixto(t, vendedor, articulo, clienteConLimite(t, "10000.00"), "1000.00", "2000.00");
+            postJson("/api/cajas/" + caja + "/cierre", vendedor, cierre("6000.00")).andExpect(status().isOk());
+
+            JsonNode pagina = getJson("/api/cajas?page=0&size=20", dueno);
+            JsonNode detalle = getJson("/api/cajas/" + caja, dueno);
+
+            assertThat(pagina.get("totalElements").asLong()).isEqualTo(1);
+            assertThat(pagina.get("items").get(0).get("diferencia").decimalValue()).isEqualByComparingTo("0");
+            assertThat(detalle.get("ventas").get("CUENTA_CORRIENTE").decimalValue()).isEqualByComparingTo("2000");
+            assertThat(detalle.get("totalVentas").decimalValue()).isEqualByComparingTo("3000");
+            assertThat(detalle.get("efectivoEsperado").decimalValue()).isEqualByComparingTo("6000");
+        }
+    }
+
     // ---------------------------------------------------------------- aislamiento entre ferreterias
 
     @Nested
