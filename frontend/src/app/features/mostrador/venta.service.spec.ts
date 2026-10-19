@@ -56,6 +56,14 @@ describe('VentaService', () => {
     req.flush(venta, { status: 201, statusText: 'Created' });
   });
 
+  it('manda autorizaExceso solo cuando el pedido lo trae (CC-013)', () => {
+    service.cobrar({ ...pedido, autorizaExceso: true, clienteId: 8 }).subscribe();
+    const req = http.expectOne((r) => r.url.endsWith('/ventas'));
+    expect(req.request.body.autorizaExceso).toBe(true);
+    expect(req.request.body.clienteId).toBe(8);
+    req.flush(venta, { status: 201, statusText: 'Created' });
+  });
+
   it('201 es una venta nueva', () => {
     let r: VentaCobrada | undefined;
     service.cobrar(pedido).subscribe((x) => (r = x));
@@ -136,6 +144,49 @@ describe('VentaService', () => {
         const cuerpo = { status: 422, message: 'Abrí la caja para vender.', timestamp: 't', motivo, articulos: [] };
         expect(rechazoDe(new HttpErrorResponse({ status: 422, error: cuerpo }))).toEqual(cuerpo);
       }
+    });
+
+    it('reconoce el rechazo por límite de cuenta corriente y expone el objeto cuentaCorriente del Dueño (CC-013)', () => {
+      const cuerpo: VentaRechazada = {
+        status: 422,
+        message: 'Esta venta supera el límite de cuenta corriente del cliente. Autorizala para seguir.',
+        timestamp: 't',
+        motivo: 'LIMITE_CUENTA_CORRIENTE',
+        articulos: [],
+        cuentaCorriente: { puedeAutorizar: true, saldo: 4000, limite: 5000, disponible: 1000, importe: 2500, exceso: 1500 },
+      };
+      const rechazo = rechazoDe(new HttpErrorResponse({ status: 422, error: cuerpo }));
+      expect(rechazo).toEqual(cuerpo);
+      expect(rechazo?.cuentaCorriente?.exceso).toBe(1500);
+    });
+
+    it('el rechazo por límite del Vendedor trae puedeAutorizar false y ninguna cifra', () => {
+      const cuerpo: VentaRechazada = {
+        status: 422,
+        message: 'Esta venta supera el límite de cuenta corriente del cliente. Pedile al Dueño que la autorice.',
+        timestamp: 't',
+        motivo: 'LIMITE_CUENTA_CORRIENTE',
+        articulos: [],
+        cuentaCorriente: { puedeAutorizar: false },
+      };
+      const rechazo = rechazoDe(new HttpErrorResponse({ status: 422, error: cuerpo }));
+      expect(rechazo?.cuentaCorriente).toEqual({ puedeAutorizar: false });
+    });
+
+    it('reconoce el rechazo por cuenta corriente no habilitada', () => {
+      const cuerpo: VentaRechazada = {
+        status: 422,
+        message: 'Ana Gómez no tiene cuenta corriente habilitada.',
+        timestamp: 't',
+        motivo: 'CUENTA_CORRIENTE_NO_HABILITADA',
+        articulos: [],
+      };
+      expect(rechazoDe(new HttpErrorResponse({ status: 422, error: cuerpo }))).toEqual(cuerpo);
+    });
+
+    it('un 403 (autorizar el exceso siendo Vendedor) NO es un rechazo de venta', () => {
+      const cuerpo = { status: 403, message: 'Autorizar el exceso es solo del Dueño' };
+      expect(rechazoDe(new HttpErrorResponse({ status: 403, error: cuerpo }))).toBeNull();
     });
 
     it('devuelve null para errores que no son un rechazo de venta', () => {

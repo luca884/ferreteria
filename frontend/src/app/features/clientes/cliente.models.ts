@@ -29,6 +29,24 @@ export interface Cliente {
   whatsapp?: string;
   email?: string;
   activo: boolean;
+  /** Si el cliente tiene cuenta corriente habilitada (límite cargado, 0 incluido). Lo ven todos los roles (CC-019). */
+  cuentaCorrienteHabilitada: boolean;
+  /** Solo el Dueño y solo con la cuenta habilitada: lo que no se manda no se enmascara (CC-007). */
+  limiteCuentaCorriente?: number;
+  /** Solo el Dueño: lo que debe (positivo) o tiene a favor (negativo). */
+  saldo?: number;
+}
+
+/**
+ * La cuenta corriente de un cliente: GET y PUT de /clientes/{id}/cuenta-corriente (CC-018, CC-019). `alcanza` viene solo si
+ * se pidió con importe; `limite`, `saldo` y `disponible`, solo para el Dueño.
+ */
+export interface CuentaCliente {
+  habilitada: boolean;
+  alcanza?: boolean;
+  limite?: number;
+  saldo?: number;
+  disponible?: number;
 }
 
 export interface ClienteRequest {

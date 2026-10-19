@@ -51,6 +51,7 @@ const CLIENTE_ANA: Cliente = {
   numeroDocumento: '12345678',
   condicionIva: 'CONSUMIDOR_FINAL',
   activo: true,
+  cuentaCorrienteHabilitada: false,
 };
 const CLIENTE_NORTE: Cliente = {
   id: 2,
@@ -59,6 +60,7 @@ const CLIENTE_NORTE: Cliente = {
   numeroDocumento: '30712345671',
   condicionIva: 'RESPONSABLE_INSCRIPTO',
   activo: true,
+  cuentaCorrienteHabilitada: false,
 };
 
 describe('Mostrador', () => {

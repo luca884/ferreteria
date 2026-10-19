@@ -28,6 +28,8 @@ const MOTIVOS = [
   'CLAVE_CON_OTRO_CONTENIDO',
   'CAJA_CERRADA',
   'CAJA_DE_OTRO_DIA',
+  'LIMITE_CUENTA_CORRIENTE',
+  'CUENTA_CORRIENTE_NO_HABILITADA',
 ];
 
 /** El cuerpo de un 404, 409 o 422 de venta, o null si el error es otra cosa (red, 5xx, 400). */

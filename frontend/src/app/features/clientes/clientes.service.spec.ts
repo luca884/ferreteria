@@ -2,7 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { PageResponse } from '../../core/api/page.models';
-import { Cliente, ClienteRequest, documentoLegible } from './cliente.models';
+import { Cliente, ClienteRequest, CuentaCliente, documentoLegible } from './cliente.models';
 import { ClientesService } from './clientes.service';
 
 describe('ClientesService', () => {
@@ -16,6 +16,7 @@ describe('ClientesService', () => {
     numeroDocumento: '12345678',
     condicionIva: 'CONSUMIDOR_FINAL',
     activo: true,
+    cuentaCorrienteHabilitada: false,
   };
   const pagina: PageResponse<Cliente> = { items: [ana], page: 0, size: 20, totalElements: 1, totalPages: 1 };
 
@@ -87,6 +88,69 @@ describe('ClientesService', () => {
     expect(req.request.method).toBe('PATCH');
     expect(req.request.body).toEqual({ activo: false });
     req.flush({ ...ana, activo: false });
+  });
+
+  describe('cuenta corriente (CC-018, CC-019)', () => {
+    it('consulta la cuenta con GET /clientes/{id}/cuenta-corriente sin importe: no manda el parámetro', () => {
+      let cuenta: CuentaCliente | undefined;
+      service.cuenta(4).subscribe((c) => (cuenta = c));
+
+      const req = http.expectOne((r) => r.url.endsWith('/clientes/4/cuenta-corriente') && r.params.keys().length === 0);
+      expect(req.request.method).toBe('GET');
+      req.flush({ habilitada: true });
+
+      expect(cuenta).toEqual({ habilitada: true });
+    });
+
+    it('con importe manda ?importe= y trae alcanza; el Dueño recibe además límite, saldo y disponible', () => {
+      let cuenta: CuentaCliente | undefined;
+      service.cuenta(4, 2500).subscribe((c) => (cuenta = c));
+
+      const req = http.expectOne((r) => r.url.endsWith('/clientes/4/cuenta-corriente'));
+      expect(req.request.method).toBe('GET');
+      expect(req.request.params.get('importe')).toBe('2500');
+      req.flush({ habilitada: true, alcanza: false, limite: 5000, saldo: 4000, disponible: 1000 });
+
+      expect(cuenta?.alcanza).toBe(false);
+      expect(cuenta?.disponible).toBe(1000);
+    });
+
+    it('un importe 0 también se manda (no se confunde con «sin importe»)', () => {
+      service.cuenta(4, 0).subscribe();
+
+      const req = http.expectOne((r) => r.url.endsWith('/clientes/4/cuenta-corriente'));
+      expect(req.request.params.get('importe')).toBe('0');
+      req.flush({ habilitada: true, alcanza: true });
+    });
+
+    it('fija el límite con PUT /clientes/{id}/cuenta-corriente/limite y el cuerpo {limite}', () => {
+      let cuenta: CuentaCliente | undefined;
+      service.cambiarLimite(4, 2500.5).subscribe((c) => (cuenta = c));
+
+      const req = http.expectOne((r) => r.url.endsWith('/clientes/4/cuenta-corriente/limite'));
+      expect(req.request.method).toBe('PUT');
+      expect(req.request.body).toEqual({ limite: 2500.5 });
+      req.flush({ habilitada: true, limite: 2500.5, saldo: 0, disponible: 2500.5 });
+
+      expect(cuenta?.limite).toBe(2500.5);
+    });
+
+    it('con 0 manda {limite: 0} (habilitada sin crédito)', () => {
+      service.cambiarLimite(4, 0).subscribe();
+
+      const req = http.expectOne((r) => r.url.endsWith('/clientes/4/cuenta-corriente/limite'));
+      expect(req.request.body).toEqual({ limite: 0 });
+      req.flush({ habilitada: true, limite: 0, saldo: 0, disponible: 0 });
+    });
+
+    it('con null manda {limite: null} (la clave siempre viaja: deshabilita la cuenta)', () => {
+      service.cambiarLimite(4, null).subscribe();
+
+      const req = http.expectOne((r) => r.url.endsWith('/clientes/4/cuenta-corriente/limite'));
+      expect(req.request.body).toEqual({ limite: null });
+      expect(JSON.stringify(req.request.body)).toBe('{"limite":null}');
+      req.flush({ habilitada: false });
+    });
   });
 
   it('trae uno con GET /clientes/{id}', () => {

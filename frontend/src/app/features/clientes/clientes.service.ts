@@ -3,7 +3,7 @@ import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import { PageResponse } from '../../core/api/page.models';
-import { Cliente, ClienteRequest, FiltroClientes } from './cliente.models';
+import { Cliente, ClienteRequest, CuentaCliente, FiltroClientes } from './cliente.models';
 
 @Injectable({ providedIn: 'root' })
 export class ClientesService {
@@ -36,5 +36,23 @@ export class ClientesService {
   /** Solo el Dueño. Un cliente desactivado deja de poder elegirse en el mostrador. */
   cambiarActivo(id: number, activo: boolean): Observable<Cliente> {
     return this.http.patch<Cliente>(`${this.url}/${id}/activo`, { activo });
+  }
+
+  /**
+   * La cuenta corriente del cliente (CC-019). Con `importe` dice si alcanza para esa venta; es un consejo para el cobro: la
+   * venta lo vuelve a decidir en el servidor. Las cifras vienen solo para el Dueño.
+   */
+  cuenta(id: number, importe?: number): Observable<CuentaCliente> {
+    let params = new HttpParams();
+    if (importe !== undefined) params = params.set('importe', importe);
+    return this.http.get<CuentaCliente>(`${this.url}/${id}/cuenta-corriente`, { params });
+  }
+
+  /**
+   * Solo el Dueño (CC-018). `null` deshabilita la cuenta, 0 la habilita sin crédito. La clave `limite` viaja siempre, aun
+   * con null: sin ella el servidor responde 400 en vez de deshabilitar.
+   */
+  cambiarLimite(id: number, limite: number | null): Observable<CuentaCliente> {
+    return this.http.put<CuentaCliente>(`${this.url}/${id}/cuenta-corriente/limite`, { limite });
   }
 }

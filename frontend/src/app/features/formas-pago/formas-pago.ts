@@ -66,7 +66,25 @@ export class FormasPago implements OnInit {
     activa: [true],
   });
 
+  /** El medio y el estado elegidos en el formulario: la pista y el recargo bloqueado dependen de ellos. */
+  protected readonly medioElegido = signal<MedioPago>('EFECTIVO');
+  protected readonly activaElegida = signal(true);
+
   constructor() {
+    // Cuenta corriente no admite recargo (CC-023): se fija en 0 y se bloquea; con otro medio vuelve a poder editarse.
+    this.form.controls.medio.valueChanges.pipe(takeUntilDestroyed(inject(DestroyRef))).subscribe((medio) => {
+      this.medioElegido.set(medio);
+      const recargo = this.form.controls.recargoPorcentaje;
+      if (medio === 'CUENTA_CORRIENTE') {
+        recargo.setValue(0);
+        recargo.disable();
+      } else if (recargo.disabled) {
+        recargo.enable();
+      }
+    });
+    this.form.controls.activa.valueChanges
+      .pipe(takeUntilDestroyed(inject(DestroyRef)))
+      .subscribe((activa) => this.activaElegida.set(activa));
     // Al escribir se va el aviso de error del backend: ya no corresponde a lo que hay en el formulario.
     this.form.valueChanges.pipe(takeUntilDestroyed(inject(DestroyRef))).subscribe(() => this.limpiarErrores());
   }
@@ -102,7 +120,7 @@ export class FormasPago implements OnInit {
     const request: FormaPagoRequest = {
       nombre: nombre.trim(),
       medio,
-      recargoPorcentaje: recargoPorcentaje ?? 0,
+      recargoPorcentaje: medio === 'CUENTA_CORRIENTE' ? 0 : (recargoPorcentaje ?? 0),
       activa,
     };
     const forma = this.editando();
@@ -151,6 +169,11 @@ export class FormasPago implements OnInit {
     this.aviso.set(null);
     this.cancelar();
     this.enfocar('#nombre');
+  }
+
+  /** La forma de cuenta corriente que todavía no se activó: hasta entonces no se ofrece al cobrar. */
+  protected esperaActivacion(forma: FormaPago): boolean {
+    return forma.medio === 'CUENTA_CORRIENTE' && !forma.activa;
   }
 
   protected recargoTexto(forma: FormaPago): string {

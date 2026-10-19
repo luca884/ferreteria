@@ -212,12 +212,14 @@ function renglonesRequest(t: Ticket): RenglonVentaRequest[] {
  * Cuerpo del POST: con una forma única manda `formaPagoId`; con un pago mixto, la lista `pagos` (cada parte sin recargo)
  * y no `formaPagoId`. `recargoCentavos` es el de las formas de pago (GDS-11): el total mostrado lo incluye. El recibido y
  * el vuelto son del diálogo de cobro y no viajan. `noFacturable` manda `facturable: false` (NF-003); si no, no manda nada.
+ * `autorizaExceso` manda `autorizaExceso: true` (CC-013, solo el Dueño); si no, no manda nada.
  */
 export function aRequest(
   t: Ticket,
   pago: number | readonly PagoCobro[],
   recargoCentavos = 0,
   noFacturable = false,
+  autorizaExceso = false,
 ): ConfirmarVentaRequest {
   const global = t.descuentoGlobalBp ?? 0;
   return {
@@ -232,6 +234,7 @@ export function aRequest(
     ...(global ? { descuentoPorcentaje: global / 100 } : {}),
     ...(noFacturable ? { facturable: false as const } : {}),
     ...(t.clienteId ? { clienteId: t.clienteId } : {}),
+    ...(autorizaExceso ? { autorizaExceso: true as const } : {}),
   };
 }
 

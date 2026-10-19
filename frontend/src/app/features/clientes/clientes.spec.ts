@@ -18,6 +18,7 @@ describe('Clientes', () => {
     condicionIva: 'CONSUMIDOR_FINAL',
     telefono: '2234567890',
     activo: true,
+    cuentaCorrienteHabilitada: false,
   };
   const norte: Cliente = {
     id: 2,
@@ -27,8 +28,15 @@ describe('Clientes', () => {
     condicionIva: 'RESPONSABLE_INSCRIPTO',
     email: 'norte@correo.com',
     activo: true,
+    cuentaCorrienteHabilitada: false,
   };
-  const viejo: Cliente = { id: 3, razonSocial: 'Pedro Viejo', condicionIva: 'MONOTRIBUTISTA', activo: false };
+  const viejo: Cliente = {
+    id: 3,
+    razonSocial: 'Pedro Viejo',
+    condicionIva: 'MONOTRIBUTISTA',
+    activo: false,
+    cuentaCorrienteHabilitada: false,
+  };
 
   const pagina = (items: Cliente[], page = 0, totalPages = 1): PageResponse<Cliente> => ({
     items,
@@ -52,8 +60,8 @@ describe('Clientes', () => {
   async function crear(lista: Cliente[] = [ana, norte, viejo], dueno = true, buscar = vi.fn(() => of(pagina(lista)))) {
     servicio = {
       buscar,
-      crear: vi.fn((r: ClienteRequest) => of({ id: 99, activo: true, ...r })),
-      actualizar: vi.fn((id: number, r: ClienteRequest) => of({ id, activo: true, ...r })),
+      crear: vi.fn((r: ClienteRequest) => of({ id: 99, activo: true, cuentaCorrienteHabilitada: false, ...r })),
+      actualizar: vi.fn((id: number, r: ClienteRequest) => of({ id, activo: true, cuentaCorrienteHabilitada: false, ...r })),
       cambiarActivo: vi.fn((id: number, activo: boolean) =>
         of({ ...([ana, norte, viejo].find((c) => c.id === id) as Cliente), activo }),
       ),

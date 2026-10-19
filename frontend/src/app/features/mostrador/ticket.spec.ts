@@ -276,6 +276,14 @@ describe('ticket (puro)', () => {
       expect(pedido.renglones).toEqual([{ articuloId: 1, cantidad: 1, precioUnitario: 170 }]);
     });
 
+    it('aRequest manda autorizaExceso true solo si se autoriza el exceso del límite (CC-013)', () => {
+      const t = agregar(ticketVacio('c'), art());
+
+      expect('autorizaExceso' in aRequest(t, 1)).toBe(false);
+      expect('autorizaExceso' in aRequest(t, 1, 0, false, false)).toBe(false);
+      expect(aRequest(t, 1, 0, false, true).autorizaExceso).toBe(true);
+    });
+
     it('aRequest manda facturable false solo si la venta es no facturable (NF-003)', () => {
       const t = agregar(ticketVacio('c'), art());
 

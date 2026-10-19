@@ -35,7 +35,7 @@ describe('Caja (CU-10)', () => {
     diferenciaApertura: null,
     fechaCierre: null,
     cerradaPor: null,
-    ventas: { EFECTIVO: 1800, DEBITO: 1000, CREDITO: 800, TRANSFERENCIA: 1000 },
+    ventas: { EFECTIVO: 1800, DEBITO: 1000, CREDITO: 800, TRANSFERENCIA: 1000, CUENTA_CORRIENTE: 0 },
     totalVentas: 4600,
     ingresos: 200,
     gastos: 300,

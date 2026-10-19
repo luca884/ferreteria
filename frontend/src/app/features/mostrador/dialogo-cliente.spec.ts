@@ -8,8 +8,8 @@ import { ClientesService } from '../clientes/clientes.service';
 import { DialogoCliente } from './dialogo-cliente';
 
 describe('DialogoCliente (F9)', () => {
-  const ana: Cliente = { id: 1, razonSocial: 'Ana Gómez', tipoDocumento: 'DNI', numeroDocumento: '12345678', condicionIva: 'CONSUMIDOR_FINAL', activo: true };
-  const norte: Cliente = { id: 2, razonSocial: 'Ferretería Norte SRL', tipoDocumento: 'CUIT', numeroDocumento: '30712345671', condicionIva: 'RESPONSABLE_INSCRIPTO', activo: true };
+  const ana: Cliente = { id: 1, razonSocial: 'Ana Gómez', tipoDocumento: 'DNI', numeroDocumento: '12345678', condicionIva: 'CONSUMIDOR_FINAL', activo: true, cuentaCorrienteHabilitada: false };
+  const norte: Cliente = { id: 2, razonSocial: 'Ferretería Norte SRL', tipoDocumento: 'CUIT', numeroDocumento: '30712345671', condicionIva: 'RESPONSABLE_INSCRIPTO', activo: true, cuentaCorrienteHabilitada: false };
   const pagina = (items: Cliente[]): PageResponse<Cliente> => ({ items, page: 0, size: 8, totalElements: items.length, totalPages: 1 });
   const errorHttp = (status: number, message: string, errors?: Record<string, string>) =>
     new HttpErrorResponse({ status, error: { status, message, errors } });
@@ -48,7 +48,7 @@ describe('DialogoCliente (F9)', () => {
   async function abrir(lista: Cliente[] = [ana, norte], actual: string | null = null) {
     servicio = {
       buscar: vi.fn(() => of(pagina(lista))),
-      crear: vi.fn((r: ClienteRequest) => of({ id: 99, activo: true, ...r } as Cliente)),
+      crear: vi.fn((r: ClienteRequest) => of({ id: 99, activo: true, cuentaCorrienteHabilitada: false, ...r } as Cliente)),
     };
     await TestBed.configureTestingModule({
       imports: [DialogoCliente],

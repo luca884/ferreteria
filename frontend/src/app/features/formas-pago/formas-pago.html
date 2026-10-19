@@ -78,7 +78,12 @@
                   <td class="nombre">{{ forma.nombre }}</td>
                   <td>{{ etiquetaMedio[forma.medio] }}</td>
                   <td class="num">{{ recargoTexto(forma) }}</td>
-                  <td class="estado">{{ forma.activa ? 'Activa' : 'Inactiva' }}</td>
+                  <td class="estado">
+                    {{ forma.activa ? 'Activa' : 'Inactiva' }}
+                    @if (esperaActivacion(forma)) {
+                      <small class="pista-activar">Activala para vender a cuenta corriente.</small>
+                    }
+                  </td>
                 </tr>
               }
             </tbody>
@@ -139,8 +144,17 @@
           autocomplete="off"
           formControlName="recargoPorcentaje"
           [attr.aria-invalid]="invalido('recargoPorcentaje') ? 'true' : null"
-          [attr.aria-describedby]="invalido('recargoPorcentaje') ? 'recargo-error' : null"
+          [attr.aria-describedby]="
+            medioElegido() === 'CUENTA_CORRIENTE'
+              ? 'recargo-pista'
+              : invalido('recargoPorcentaje')
+                ? 'recargo-error'
+                : null
+          "
         />
+        @if (medioElegido() === 'CUENTA_CORRIENTE') {
+          <span id="recargo-pista" class="pista">La cuenta corriente va siempre con recargo 0&nbsp;%.</span>
+        }
         @if (invalido('recargoPorcentaje') && form.controls.recargoPorcentaje.errors; as errores) {
           <span id="recargo-error" class="campo-error">
             @if (errores['required']) {
@@ -154,6 +168,9 @@
       <div class="campo activa">
         <input id="activa" name="activa" type="checkbox" formControlName="activa" />
         <label for="activa">Activa (se ofrece al cobrar)</label>
+        @if (medioElegido() === 'CUENTA_CORRIENTE' && !activaElegida()) {
+          <span id="activa-pista" class="pista">Activala para vender a cuenta corriente.</span>
+        }
       </div>
       <div class="acciones-alta">
         <button type="submit" [disabled]="guardando()">

@@ -2,7 +2,7 @@ import { Unidad } from '../articulos/articulo.models';
 
 /** Contrato de POST /api/ventas, tipado contra ConfirmarVentaRequest / VentaResponse / VentaRechazadaResponse. */
 
-export const MEDIOS_PAGO = ['EFECTIVO', 'DEBITO', 'CREDITO', 'TRANSFERENCIA'] as const;
+export const MEDIOS_PAGO = ['EFECTIVO', 'DEBITO', 'CREDITO', 'TRANSFERENCIA', 'CUENTA_CORRIENTE'] as const;
 export type MedioPago = (typeof MEDIOS_PAGO)[number];
 
 export const MEDIO_PAGO_LABELS: Record<MedioPago, string> = {
@@ -10,6 +10,7 @@ export const MEDIO_PAGO_LABELS: Record<MedioPago, string> = {
   DEBITO: 'Débito',
   CREDITO: 'Crédito',
   TRANSFERENCIA: 'Transferencia',
+  CUENTA_CORRIENTE: 'Cuenta corriente',
 };
 
 export interface RenglonVentaRequest {
@@ -52,6 +53,11 @@ export interface ConfirmarVentaRequest {
   facturable?: false;
   /** El cliente elegido con F9 (CL-005). Se omite si es Consumidor Final. */
   clienteId?: number;
+  /**
+   * Solo el Dueño: autoriza que esta venta a cuenta corriente pase del límite del cliente (CC-013). Se omite si no se
+   * autoriza; un Vendedor que lo manda y excede recibe 403.
+   */
+  autorizaExceso?: true;
 }
 
 export interface RenglonVentaResponse {
@@ -125,7 +131,9 @@ export type MotivoRechazo =
   | 'PRECIOS_CAMBIADOS'
   | 'CLAVE_CON_OTRO_CONTENIDO'
   | 'CAJA_CERRADA'
-  | 'CAJA_DE_OTRO_DIA';
+  | 'CAJA_DE_OTRO_DIA'
+  | 'LIMITE_CUENTA_CORRIENTE'
+  | 'CUENTA_CORRIENTE_NO_HABILITADA';
 
 /** Los campos null no se serializan: cada motivo trae solo los que le aplican. */
 export interface ArticuloRechazado {
@@ -136,7 +144,22 @@ export interface ArticuloRechazado {
   totalRenglon?: number;
 }
 
-/** Cuerpo de los 404, 409 y 422 de una venta. `total` viene solo en PRECIOS_CAMBIADOS. */
+/**
+ * La cuenta del cliente en un rechazo LIMITE_CUENTA_CORRIENTE (CC-013). `puedeAutorizar` viaja siempre; las cifras, solo
+ * para el Dueño (el Vendedor no las recibe).
+ */
+export interface ExcesoCuentaCorriente {
+  puedeAutorizar: boolean;
+  saldo?: number;
+  limite?: number;
+  disponible?: number;
+  /** Lo que esta venta suma a la cuenta. */
+  importe?: number;
+  /** Cuánto se pasa del límite. */
+  exceso?: number;
+}
+
+/** Cuerpo de los 404, 409 y 422 de una venta. `total` viene solo en PRECIOS_CAMBIADOS; `cuentaCorriente`, en LIMITE_CUENTA_CORRIENTE. */
 export interface VentaRechazada {
   status: number;
   message: string;
@@ -144,6 +167,7 @@ export interface VentaRechazada {
   motivo: MotivoRechazo;
   articulos: ArticuloRechazado[];
   total?: number;
+  cuentaCorriente?: ExcesoCuentaCorriente;
 }
 
 /** Los 400 de validación: `errors` por campo (renglones[0].cantidad, formaPagoId, pagos[1].formaPagoId...). */

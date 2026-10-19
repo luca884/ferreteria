@@ -155,7 +155,7 @@ describe('FormasPago', () => {
     expect(filas()).toHaveLength(1);
   });
 
-  it('el formulario ofrece los cuatro medios con su nombre y arranca en efectivo, sin recargo y activa', async () => {
+  it('el formulario ofrece los cinco medios con su nombre y arranca en efectivo, sin recargo y activa', async () => {
     await crear([efectivo]);
 
     const opciones = Array.from(select('medio').options).map((o) => [o.value, o.textContent?.trim()]);
@@ -164,6 +164,7 @@ describe('FormasPago', () => {
       ['DEBITO', 'Débito'],
       ['CREDITO', 'Crédito'],
       ['TRANSFERENCIA', 'Transferencia'],
+      ['CUENTA_CORRIENTE', 'Cuenta corriente'],
     ]);
     expect(select('medio').value).toBe('EFECTIVO');
     expect(input('recargo').value).toBe('0');
@@ -315,6 +316,109 @@ describe('FormasPago', () => {
     expect(filas()[1].textContent).toContain('Inactiva');
     expect(el().querySelector('.alerta.exito')?.textContent).toContain('Se guardó «Visa 6 cuotas».');
     expect(el().querySelector('form h2')?.textContent).toContain('Nueva forma de pago');
+  });
+
+  describe('medio «Cuenta corriente» (CC-022, CC-023, CC-024)', () => {
+    const cuentaCorriente: FormaPago = {
+      id: 5,
+      nombre: 'Cuenta corriente',
+      medio: 'CUENTA_CORRIENTE',
+      recargoPorcentaje: 0,
+      activa: false,
+      orden: 5,
+    };
+
+    it('la forma sembrada se lista inactiva con la pista para activarla', async () => {
+      await crear([efectivo, cuentaCorriente]);
+
+      expect(filas()[1].textContent).toContain('Cuenta corriente');
+      expect(filas()[1].textContent).toContain('Inactiva');
+      expect(filas()[1].textContent).toContain('Activala para vender a cuenta corriente');
+      expect(filas()[0].textContent).not.toContain('Activala');
+    });
+
+    it('una forma de cuenta corriente activa no muestra la pista de activarla', async () => {
+      await crear([efectivo, { ...cuentaCorriente, activa: true }]);
+
+      expect(filas()[1].textContent).toContain('Activa');
+      expect(filas()[1].textContent).not.toContain('Activala');
+    });
+
+    it('al elegir el medio el recargo queda en 0 y deshabilitado, con su pista', async () => {
+      await crear([efectivo]);
+      await escribir('recargo', '12');
+
+      await elegirMedio('CUENTA_CORRIENTE');
+
+      expect(input('recargo').value).toBe('0');
+      expect(input('recargo').disabled).toBe(true);
+      expect(texto('#recargo-pista')).toContain('siempre con recargo 0');
+      expect(input('recargo').getAttribute('aria-describedby')).toContain('recargo-pista');
+    });
+
+    it('al volver a otro medio el recargo se puede editar de nuevo (regresión)', async () => {
+      await crear([efectivo]);
+      await elegirMedio('CUENTA_CORRIENTE');
+
+      await elegirMedio('CREDITO');
+      await escribir('recargo', '7');
+
+      expect(input('recargo').disabled).toBe(false);
+      expect(el().querySelector('#recargo-pista')).toBeNull();
+      expect(input('recargo').value).toBe('7');
+    });
+
+    it('con otros medios el recargo sigue editable (regresión)', async () => {
+      await crear([efectivo, visa6]);
+
+      await editarFila(1);
+
+      expect(input('recargo').disabled).toBe(false);
+      expect(input('recargo').value).toBe('18.5');
+    });
+
+    it('editar la forma de cuenta corriente la carga con el recargo bloqueado y la pista de activarla', async () => {
+      await crear([efectivo, cuentaCorriente]);
+
+      await editarFila(1);
+
+      expect(select('medio').value).toBe('CUENTA_CORRIENTE');
+      expect(input('recargo').disabled).toBe(true);
+      expect(input('activa').checked).toBe(false);
+      expect(texto('#activa-pista')).toContain('Activala para vender a cuenta corriente');
+    });
+
+    it('activarla manda el PUT con activa true y recargo 0', async () => {
+      await crear([efectivo, cuentaCorriente]);
+
+      await editarFila(1);
+      await tildarActiva(true);
+      await enviar();
+
+      expect(servicio.actualizar).toHaveBeenCalledWith(5, {
+        nombre: 'Cuenta corriente',
+        medio: 'CUENTA_CORRIENTE',
+        recargoPorcentaje: 0,
+        activa: true,
+      });
+      expect(filas()[1].textContent).toContain('Activa');
+      expect(filas()[1].textContent).not.toContain('Activala');
+    });
+
+    it('crear una forma con el medio manda recargo 0 aunque antes se hubiera escrito otro', async () => {
+      await crear([efectivo]);
+      await escribir('nombre', 'Fiado');
+      await escribir('recargo', '9');
+      await elegirMedio('CUENTA_CORRIENTE');
+      await enviar();
+
+      expect(servicio.crear).toHaveBeenCalledWith({
+        nombre: 'Fiado',
+        medio: 'CUENTA_CORRIENTE',
+        recargoPorcentaje: 0,
+        activa: true,
+      });
+    });
   });
 
   it('muestra el aviso del backend si no se puede desactivar la ultima en efectivo (422)', async () => {

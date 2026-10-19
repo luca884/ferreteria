@@ -36,7 +36,7 @@ describe('HistorialCajas (CU-10)', () => {
     diferenciaApertura: 0,
     fechaCierre: '2026-10-15T20:00:00',
     cerradaPor: 'Beto',
-    ventas: { EFECTIVO: 4000, DEBITO: 0, CREDITO: 0, TRANSFERENCIA: 0 },
+    ventas: { EFECTIVO: 4000, DEBITO: 0, CREDITO: 0, TRANSFERENCIA: 0, CUENTA_CORRIENTE: 0 },
     totalVentas: 4000,
     ingresos: 0,
     gastos: 0,

@@ -17,8 +17,11 @@
       </li>
     }
     @for (medio of medios; track medio) {
-      <li>
+      <li [class.informativo]="medio === 'CUENTA_CORRIENTE'">
         <span>Ventas en {{ medioLabels[medio].toLowerCase() }}</span>&ngsp;<strong>{{ detalle().ventas[medio] | monto }}</strong>
+        @if (medio === 'CUENTA_CORRIENTE') {
+          <small class="nota-informativa">no entra en el efectivo esperado</small>
+        }
       </li>
     }
     <li class="subtotal">
