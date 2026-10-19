@@ -10,12 +10,22 @@ import {
   viewChild,
   viewChildren,
 } from '@angular/core';
-import { MontoPipe } from '../../core/formato/monto';
+import { MontoPipe, formatearMonto } from '../../core/formato/monto';
 import { TrampaFoco } from '../../shared/trampa-foco';
+import { CuentaCliente } from '../clientes/cliente.models';
 import { FormaPago } from '../formas-pago/forma-pago.models';
 import { desdeTexto, recargoDeCobro } from './centavos';
 import { GuardaLector } from './guarda-lector';
-import { MedioPago, PagoCobro } from './venta.models';
+import { ExcesoCuentaCorriente, MedioPago, PagoCobro } from './venta.models';
+
+/**
+ * La cuenta corriente del cliente del ticket, como la tiene el contenedor al abrir el cobro (CC-017): leyéndose, leída o
+ * con error. Nunca se guarda en el ticket: se pide fresca cada vez que se abre el cobro.
+ */
+export type CuentaDelCobro =
+  | { estado: 'cargando' }
+  | { estado: 'error' }
+  | { estado: 'listo'; cuenta: CuentaCliente };
 
 export interface ConfirmacionCobro {
   /** La forma de pago única, o null si es un pago mixto (entonces vienen `pagos`). */
@@ -30,6 +40,8 @@ export interface ConfirmacionCobro {
   pagos?: PagoCobro[];
   /** Solo si el cajero tildó «No facturable» (NF-003): la venta cobra igual pero no se factura nunca. */
   noFacturable?: true;
+  /** Solo el Dueño, y solo si la venta a cuenta corriente se pasa del límite: autoriza el exceso (CC-013). */
+  autorizaExceso?: true;
 }
 
 /** «Mixto» es la última opción: reparte el total entre varias formas. Las demás son el id de una forma. */
@@ -93,6 +105,8 @@ const centavosATexto = (c: number) => `${Math.floor(c / 100)},${String(c % 100).
                 role="radio"
                 class="medio"
                 [attr.aria-checked]="o.id === seleccion()"
+                [attr.aria-disabled]="o.deshabilitada ? 'true' : null"
+                [attr.aria-describedby]="o.deshabilitada ? 'razon-medio-' + o.id : null"
                 [tabindex]="o.id === seleccion() ? 0 : -1"
                 (click)="elegir(o.id)"
               >
@@ -103,8 +117,17 @@ const centavosATexto = (c: number) => `${Math.floor(c / 100)},${String(c % 100).
               </button>
             }
           </div>
+          <!-- La razón de cada opción deshabilitada: visible y enlazada (no se oculta con disabled para que se lea). -->
+          @for (o of opciones(); track o.id) {
+            @if (o.deshabilitada; as razon) {
+              <p class="razon-medio" [id]="'razon-medio-' + o.id">{{ razon }}</p>
+            }
+          }
           <p class="pista-medios" aria-hidden="true"><kbd>←</kbd> <kbd>→</kbd> cambian el medio</p>
         </div>
+        @if (infoCuenta(); as texto) {
+          <p class="cuenta-corriente" [class.excede]="exceso() !== null" aria-live="polite">{{ texto }}</p>
+        }
         @if (seleccion() === 'MIXTO') {
           <div class="mixto">
             @for (f of formas(); track f.id) {
@@ -117,10 +140,15 @@ const centavosATexto = (c: number) => `${Math.floor(c / 100)},${String(c % 100).
                   autocomplete="off"
                   spellcheck="false"
                   [attr.data-forma]="f.id"
+                  [disabled]="razonesMixto()[f.id] !== null"
+                  [attr.aria-describedby]="razonesMixto()[f.id] ? 'razon-fila-' + f.id : null"
                   [value]="montos()[f.id] ?? ''"
                   (input)="escribirMonto(f.id, $any($event.target).value)"
                 />
               </label>
+              @if (razonesMixto()[f.id]; as razon) {
+                <small class="razon-fila" [id]="'razon-fila-' + f.id">{{ razon }}</small>
+              }
             }
             <p class="resumen-mixto" [class.falta-mixto]="restoCentavos() > 0" [class.pasa-mixto]="restoCentavos() < 0" aria-live="polite">
               @if (restoCentavos() > 0) {
@@ -172,7 +200,7 @@ const centavosATexto = (c: number) => `${Math.floor(c / 100)},${String(c % 100).
             Cancelar
           </button>
           <button type="button" class="cobrar primario" data-tecla="Enter" aria-keyshortcuts="Enter" (click)="confirmarCobro()">
-            Cobrar
+            {{ autoriza() ? 'Autorizar exceso y cobrar' : 'Cobrar' }}
           </button>
         </div>
       </div>
@@ -262,6 +290,44 @@ const centavosATexto = (c: number) => `${Math.floor(c / 100)},${String(c % 100).
       color: var(--acento-profundo);
       font-weight: 700;
       box-shadow: inset 0 0 0 1px var(--acento);
+    }
+    /* Una opción que hoy no se puede elegir (cuenta corriente sin cliente, sin cupo...): se ve apagada y se explica abajo. */
+    .medio[aria-disabled='true'],
+    .medio[aria-disabled='true']:hover {
+      border-style: dashed;
+      border-color: var(--borde);
+      background: var(--superficie-2);
+      color: var(--texto-suave);
+      font-weight: 500;
+      cursor: not-allowed;
+    }
+    .razon-medio,
+    .razon-fila {
+      margin: 0;
+      color: var(--texto-suave);
+      font-size: var(--texto-sm);
+    }
+    .razon-fila {
+      margin-top: calc(var(--e-1) * -1);
+    }
+    .cuenta-corriente {
+      margin: 0;
+      color: var(--texto-suave);
+      font-size: var(--texto-sm);
+      font-weight: 600;
+    }
+    /* Pasarse del límite es una decisión del Dueño: se marca con el color de aviso. */
+    .cuenta-corriente.excede {
+      padding: var(--e-2) var(--e-3);
+      border: 1px solid var(--advertencia-borde);
+      border-left: 4px solid var(--advertencia-marca);
+      border-radius: var(--radio);
+      background: var(--advertencia-fondo);
+      color: var(--texto);
+    }
+    .mixto input:disabled {
+      cursor: not-allowed;
+      background: var(--superficie-2);
     }
     .marca-recargo {
       display: block;
@@ -410,6 +476,14 @@ export class DialogoCobro {
   readonly enVuelo = input(false);
   /** Mensaje del contenedor (por ejemplo, un precio que cambió en el servidor). */
   readonly aviso = input<string | null>(null);
+  /** El nombre del cliente del ticket (F9), o null si es Consumidor Final: la cuenta corriente lo necesita (CC-012). */
+  readonly clienteNombre = input<string | null>(null);
+  /** La cuenta corriente de ese cliente, que el contenedor pide al abrir. Sin dato con cliente se lee como «verificando». */
+  readonly cuenta = input<CuentaDelCobro | null>(null);
+  /** Solo el Dueño ve saldo, límite y disponible y puede autorizar un exceso (CC-007). */
+  readonly esDueno = input(false);
+  /** El rechazo del servidor por el límite (CC-013): trae las cifras para el Dueño y `puedeAutorizar`. */
+  readonly avisoLimite = input<ExcesoCuentaCorriente | null>(null);
 
   readonly confirmar = output<ConfirmacionCobro>();
   readonly cancelar = output<void>();
@@ -425,27 +499,83 @@ export class DialogoCobro {
   protected readonly montos = signal<Montos>({});
   private readonly mensajeMixto = signal<string | null>(null);
 
-  /** Una opción por forma, con la marca de su recargo, y «Mixto» al final. */
-  protected readonly opciones = computed<{ id: Opcion; nombre: string; recargo: string | null }[]>(() => [
+  /**
+   * Por qué la cuenta corriente no se puede usar, sea una forma única o una parte del mixto (CC-012, CC-017): falta el
+   * cliente, la cuenta se está leyendo o no se pudo leer (falla cerrada) o no está habilitada. Null si se puede.
+   */
+  private readonly razonDeLaCuenta = computed<string | null>(() => {
+    const cliente = this.clienteNombre();
+    if (cliente === null) return 'Elegí un cliente (F9) para vender a cuenta corriente.';
+    const cuenta = this.cuenta();
+    if (cuenta === null || cuenta.estado === 'cargando') return 'Verificando la cuenta corriente…';
+    if (cuenta.estado === 'error') return 'No se pudo verificar la cuenta corriente. Cerrá y reintentá.';
+    if (!cuenta.cuenta.habilitada) {
+      return this.esDueno()
+        ? `${cliente} no tiene cuenta corriente habilitada. Habilitala desde Clientes.`
+        : `${cliente} no tiene cuenta corriente habilitada. Pedile al Dueño que se la habilite.`;
+    }
+    return null;
+  });
+
+  /**
+   * Como forma única, además: el Vendedor no puede pasarse del límite (CC-006). Sin cifras: solo sabe que no alcanza. Al
+   * Dueño no se le deshabilita: ve el exceso y lo autoriza.
+   */
+  private readonly razonDeLaCuentaUnica = computed<string | null>(() => {
+    const razon = this.razonDeLaCuenta();
+    if (razon !== null) return razon;
+    const cuenta = this.cuenta();
+    if (!this.esDueno() && cuenta?.estado === 'listo' && cuenta.cuenta.alcanza === false) {
+      return 'No alcanza el límite de la cuenta corriente. Pedile al Dueño.';
+    }
+    return null;
+  });
+
+  private razonDeLaForma(forma: FormaPago): string | null {
+    return forma.medio === 'CUENTA_CORRIENTE' ? this.razonDeLaCuentaUnica() : null;
+  }
+
+  /** En el mixto no hay pre-chequeo del importe (ADR-9): decide el servidor. Solo se bloquea lo que ya se sabe. */
+  protected readonly razonesMixto = computed<Record<number, string | null>>(() => {
+    const razon = this.razonDeLaCuenta();
+    const razones: Record<number, string | null> = {};
+    for (const f of this.formas()) razones[f.id] = f.medio === 'CUENTA_CORRIENTE' ? razon : null;
+    return razones;
+  });
+
+  /** Una opción por forma, con la marca de su recargo y, si hoy no se puede elegir, su razón; y «Mixto» al final. */
+  protected readonly opciones = computed<
+    { id: Opcion; nombre: string; recargo: string | null; deshabilitada: string | null }[]
+  >(() => [
     ...this.formas().map((f) => ({
       id: f.id as Opcion,
       nombre: f.nombre,
       recargo: f.recargoPorcentaje > 0 ? PORCENTAJE.format(f.recargoPorcentaje) : null,
+      deshabilitada: this.razonDeLaForma(f),
     })),
-    { id: 'MIXTO' as Opcion, nombre: 'Mixto', recargo: null },
+    { id: 'MIXTO' as Opcion, nombre: 'Mixto', recargo: null, deshabilitada: null },
   ]);
 
-  /** Abre en la primera forma en efectivo (F4 y Enter cobra); sin ninguna, en la primera. */
+  /**
+   * Abre en la primera forma en efectivo (F4 y Enter cobra); sin ninguna, en la primera que se pueda elegir. La cuenta
+   * corriente nunca abre elegida por sí sola.
+   */
   private readonly formaInicial = computed(() => {
     const formas = this.formas();
-    return (formas.find((f) => f.medio === 'EFECTIVO') ?? formas[0])?.id ?? null;
+    const inicial =
+      formas.find((f) => f.medio === 'EFECTIVO') ?? formas.find((f) => this.razonDeLaForma(f) === null) ?? formas[0];
+    return inicial?.id ?? null;
   });
 
-  /** Lo elegido si sigue existiendo; si la forma elegida desaparece mientras está abierto, vuelve a la inicial. */
+  /**
+   * Lo elegido si sigue existiendo y se puede usar; si la forma desaparece o pasa a estar deshabilitada mientras está
+   * abierto (la cuenta dejó de alcanzar), vuelve a la inicial.
+   */
   protected readonly seleccion = computed<Opcion | null>(() => {
     const elegida = this.elegida();
     if (elegida === 'MIXTO') return 'MIXTO';
-    if (elegida !== null && this.formas().some((f) => f.id === elegida)) return elegida;
+    const forma = elegida === null ? undefined : this.formas().find((f) => f.id === elegida);
+    if (forma && this.razonDeLaForma(forma) === null) return forma.id;
     return this.formaInicial();
   });
 
@@ -473,9 +603,61 @@ export class DialogoCobro {
         return null;
       }
     };
+    const razones = this.razonesMixto();
     const filas: Record<number, number | null> = {};
-    for (const f of this.formas()) filas[f.id] = leer(montos[f.id]);
+    // Una fila deshabilitada no aporta nada, aunque se hubiera escrito antes de que se deshabilitara.
+    for (const f of this.formas()) filas[f.id] = razones[f.id] ? 0 : leer(montos[f.id]);
     return filas;
+  });
+
+  /** Si el cobro mete plata en la cuenta corriente: la forma única elegida, o una parte del mixto con importe. */
+  private readonly usaCuentaCorriente = computed(() => {
+    if (this.seleccion() === 'MIXTO') {
+      const c = this.centavosMixto();
+      return this.formas().some((f) => f.medio === 'CUENTA_CORRIENTE' && (c[f.id] ?? 0) > 0);
+    }
+    return this.formaElegida()?.medio === 'CUENTA_CORRIENTE';
+  });
+
+  /**
+   * Lo que se pasa del límite, solo para el Dueño (CC-007, CC-013): del rechazo del servidor si lo hubo; si no, de la cuenta
+   * leída cuando la forma única elegida no alcanza. El mixto no se pre-chequea: solo muestra lo que rechazó el servidor.
+   */
+  protected readonly exceso = computed<{ exceso: number; limite: number; saldo: number } | null>(() => {
+    if (!this.esDueno() || !this.usaCuentaCorriente()) return null;
+    const aviso = this.avisoLimite();
+    if (aviso?.puedeAutorizar && aviso.exceso !== undefined && aviso.limite !== undefined && aviso.saldo !== undefined) {
+      return { exceso: aviso.exceso, limite: aviso.limite, saldo: aviso.saldo };
+    }
+    const cuenta = this.cuenta();
+    if (this.seleccion() === 'MIXTO' || cuenta?.estado !== 'listo') return null;
+    const { alcanza, limite, saldo, disponible } = cuenta.cuenta;
+    if (alcanza !== false || limite === undefined || saldo === undefined || disponible === undefined) return null;
+    return { exceso: (this.totalCentavos() - Math.round(disponible * 100)) / 100, limite, saldo };
+  });
+
+  /** El botón pasa a «Autorizar exceso y cobrar»: solo el Dueño, solo si el cobro usa la cuenta y se pasa del límite. */
+  protected readonly autoriza = computed(
+    () =>
+      this.esDueno() &&
+      this.usaCuentaCorriente() &&
+      (this.exceso() !== null || this.avisoLimite()?.puedeAutorizar === true),
+  );
+
+  /** Lo que se dice de la cuenta debajo de los medios: el exceso (Dueño), el disponible (Dueño) o «Alcanza» (Vendedor). */
+  protected readonly infoCuenta = computed<string | null>(() => {
+    const exceso = this.exceso();
+    if (exceso) {
+      return `Supera el límite por ${formatearMonto(exceso.exceso)} (límite ${formatearMonto(exceso.limite)}, saldo ${formatearMonto(exceso.saldo)})`;
+    }
+    const cuenta = this.cuenta();
+    if (this.formaElegida()?.medio !== 'CUENTA_CORRIENTE' || cuenta?.estado !== 'listo' || !cuenta.cuenta.habilitada) {
+      return null;
+    }
+    if (this.esDueno()) {
+      return cuenta.cuenta.disponible === undefined ? null : `Disponible ${formatearMonto(cuenta.cuenta.disponible)}`;
+    }
+    return cuenta.cuenta.alcanza ? 'Alcanza' : null;
   });
 
   protected readonly importesMixtoValidos = computed(() =>
@@ -550,7 +732,7 @@ export class DialogoCobro {
     afterRenderEffect(() => {
       const actual = this.seleccion();
       if (actual === 'MIXTO') {
-        this.filasMonto()[0]?.nativeElement.focus();
+        this.filasMonto().find((f) => !f.nativeElement.disabled)?.nativeElement.focus();
       } else if (this.formaElegida()?.medio === 'EFECTIVO') {
         const campo = this.importe()?.nativeElement;
         campo?.focus();
@@ -563,11 +745,16 @@ export class DialogoCobro {
   }
 
   protected elegir(opcion: Opcion): void {
+    // Una opción deshabilitada no se elige con el clic (su razón está a la vista).
+    if (this.opciones().find((o) => o.id === opcion)?.deshabilitada) return;
     this.elegida.set(opcion);
   }
 
+  /** ← y → recorren las opciones que se pueden elegir: las deshabilitadas se saltean. */
   private ciclar(delta: 1 | -1): void {
-    const ids = this.opciones().map((o) => o.id);
+    const ids = this.opciones()
+      .filter((o) => !o.deshabilitada)
+      .map((o) => o.id);
     const n = ids.length;
     const actual = ids.indexOf(this.seleccion() as Opcion);
     this.elegida.set(ids[(actual + delta + n) % n]);
@@ -621,12 +808,15 @@ export class DialogoCobro {
     }
     const filas = this.filasMonto().map((f) => f.nativeElement);
     const i = filas.indexOf(origen as HTMLInputElement);
-    const siguiente = filas[i + 1];
+    // La siguiente fila habilitada: una deshabilitada (cuenta corriente sin cliente) no recibe el foco.
+    let j = i + 1;
+    while (j < filas.length && filas[j].disabled) j++;
+    const siguiente = filas[j];
     if (!this.importesMixtoValidos() || !siguiente || this.restoCentavos() < 0) {
       this.confirmarCobro();
       return;
     }
-    const forma = this.formas()[i + 1];
+    const forma = this.formas()[j];
     if ((this.montos()[forma.id] ?? null) === null) {
       const texto = centavosATexto(this.restoCentavos());
       this.escribirMonto(forma.id, texto);
@@ -643,7 +833,7 @@ export class DialogoCobro {
       return;
     }
     const forma = this.formaElegida();
-    if (!forma) return;
+    if (!forma || this.razonDeLaForma(forma) !== null) return;
     const efectivo = forma.medio === 'EFECTIVO';
     if (efectivo && (this.recibido() === null || this.errorRecibido() !== null || this.faltaCentavos() > 0)) return;
     this.bloqueado.set(true);
@@ -653,6 +843,7 @@ export class DialogoCobro {
       recibidoCentavos: efectivo ? this.recibido() : null,
       recargoCentavos: this.recargoCentavos(),
       ...(this.noFacturable() ? { noFacturable: true as const } : {}),
+      ...(this.autoriza() ? { autorizaExceso: true as const } : {}),
     });
   }
 
@@ -677,6 +868,7 @@ export class DialogoCobro {
       recargoCentavos: this.recargoCentavos(),
       pagos,
       ...(this.noFacturable() ? { noFacturable: true as const } : {}),
+      ...(this.autoriza() ? { autorizaExceso: true as const } : {}),
     });
   }
 }

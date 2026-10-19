@@ -1,14 +1,16 @@
 import { HttpErrorResponse } from '@angular/common/http';
 import { Component, DestroyRef, computed, inject, signal, viewChild } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { EMPTY, Subject, catchError, concatMap, map, switchMap, timer } from 'rxjs';
+import { EMPTY, Subject, Subscription, catchError, concatMap, map, switchMap, timer } from 'rxjs';
 import { AccionBotonera, Botonera } from './botonera';
 import { CajaBusqueda } from './caja-busqueda';
 import { DialogoCantidad } from './dialogo-cantidad';
-import { ConfirmacionCobro, DialogoCobro } from './dialogo-cobro';
+import { ConfirmacionCobro, CuentaDelCobro, DialogoCobro } from './dialogo-cobro';
 import { DialogoConfirmacion } from './dialogo-confirmacion';
 import { DialogoDescuento } from './dialogo-descuento';
+import { AuthService } from '../../core/auth/auth.service';
 import { Cliente } from '../clientes/cliente.models';
+import { ClientesService } from '../clientes/clientes.service';
 import { DialogoCliente } from './dialogo-cliente';
 import { DialogoPresupuesto } from './dialogo-presupuesto';
 import { DialogoRemito } from './dialogo-remito';
@@ -33,7 +35,14 @@ import {
 import { TicketLista } from './ticket-lista';
 import { TicketStore } from './ticket.store';
 import { TotalesTicket } from './totales-ticket';
-import { ConfirmarVentaRequest, VentaCobrada, VentaInvalida, VentaRechazada } from './venta.models';
+import {
+  ConfirmarVentaRequest,
+  ExcesoCuentaCorriente,
+  VentaCobrada,
+  VentaInvalida,
+  VentaRechazada,
+  VentaResponse,
+} from './venta.models';
 import { VentaService, invalidaDe, rechazoDe } from './venta.service';
 import { RouterLink } from '@angular/router';
 import { CajaVigente, avisoParaVender } from '../caja/caja.models';
@@ -54,6 +63,7 @@ const MENSAJE_TICKET_VACIO = 'El ticket está vacío.';
 const MENSAJE_COBRO_FALLIDO = 'No se pudo cobrar. Probá de nuevo.';
 const MENSAJE_PRESUPUESTO_FALLIDO = 'No se pudo guardar el presupuesto. Probá de nuevo.';
 const MENSAJE_REMITO_FALLIDO = 'No se pudo emitir el remito. Probá de nuevo.';
+const MENSAJE_SIN_PERMISO = 'No tenés permiso para hacer esto.';
 const MENSAJE_SIN_FORMAS = 'No se pudieron cargar las formas de pago. Probá de nuevo en un momento.';
 
 /** El diálogo abierto, si hay uno. `indice` es el renglón del ticket sobre el que actúa. */
@@ -124,7 +134,21 @@ export class Mostrador {
   private readonly remitos = inject(RemitosService);
   private readonly cajas = inject(CajaService);
   private readonly formas = inject(FormasPagoService);
+  private readonly clientes = inject(ClientesService);
+  private readonly auth = inject(AuthService);
   private readonly destroyRef = inject(DestroyRef);
+
+  /** Solo el Dueño ve el saldo y el límite del cliente y puede autorizar que una venta a cuenta corriente se pase (CC-007). */
+  protected readonly esDueno = computed(() => this.auth.sesion()?.rol === 'DUENO');
+  /**
+   * La cuenta corriente del cliente del ticket, para el cobro abierto (CC-017). Se pide fresca cada vez que se abre y tras
+   * cada rechazo que la toca; nunca se guarda en el ticket. null si el ticket no tiene cliente o el cobro está cerrado.
+   */
+  protected readonly cuentaCobro = signal<CuentaDelCobro | null>(null);
+  /** El último rechazo por el límite (CC-013) del cobro abierto: trae las cifras para el Dueño y si puede autorizar. */
+  protected readonly avisoLimite = signal<ExcesoCuentaCorriente | null>(null);
+  /** La lectura de la cuenta en curso: una nueva cancela la anterior, para que una respuesta atrasada no pise a la vigente. */
+  private lecturaCuenta: Subscription | undefined;
 
   /**
    * Las formas de pago activas (GDS-11), en el orden del Dueño: son las opciones del cobro. Se leen al abrir, al apretar
@@ -401,6 +425,8 @@ export class Mostrador {
         }
         this.avisar(null);
         this.leerFormas();
+        this.avisoLimite.set(null);
+        this.leerCuenta();
         this.dialogo.set({ tipo: 'cobro' });
         return;
       }
@@ -455,7 +481,38 @@ export class Mostrador {
     if (this.enVuelo()) return;
     this.dialogo.set(null);
     this.avisoCobro.set(null);
+    this.soltarCuenta();
     this.caja().enfocar();
+  }
+
+  /**
+   * Pide la cuenta corriente del cliente del ticket con lo que se va a cobrar (el total sin recargo: la cuenta corriente no
+   * lleva recargo). Es un consejo: el servidor decide al vender. Sin cliente no hay nada que pedir.
+   */
+  private leerCuenta(): void {
+    this.lecturaCuenta?.unsubscribe();
+    const { clienteId } = this.ticket.ticket();
+    if (clienteId === undefined) {
+      this.cuentaCobro.set(null);
+      return;
+    }
+    this.cuentaCobro.set({ estado: 'cargando' });
+    this.lecturaCuenta = this.clientes
+      .cuenta(clienteId, this.ticket.total() / 100)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (cuenta) => this.cuentaCobro.set({ estado: 'listo', cuenta }),
+        // Falla cerrada: sin la cuenta no se ofrece cobrar a cuenta corriente.
+        error: () => this.cuentaCobro.set({ estado: 'error' }),
+      });
+  }
+
+  /** El cobro se cerró: no queda nada de la cuenta (la próxima apertura la pide de nuevo). */
+  private soltarCuenta(): void {
+    this.lecturaCuenta?.unsubscribe();
+    this.lecturaCuenta = undefined;
+    this.cuentaCobro.set(null);
+    this.avisoLimite.set(null);
   }
 
   protected cambiarCantidad(indice: number, milesimas: number): void {
@@ -517,6 +574,7 @@ export class Mostrador {
       confirmacion.pagos ?? (confirmacion.formaPagoId as number),
       confirmacion.recargoCentavos,
       confirmacion.noFacturable === true,
+      confirmacion.autorizaExceso === true,
     );
     this.recibidoEnVuelo = confirmacion.recibidoCentavos;
     this.enVuelo.set(true);
@@ -549,11 +607,7 @@ export class Mostrador {
             tipo: 'persistente',
             vueltoCentavos: vuelto,
           }
-        : {
-            texto: `Venta N.º ${venta.numero} cobrada${marca}: ${formatearMonto(venta.total)}`,
-            grave: false,
-            tipo: 'otro',
-          };
+        : { texto: this.textoCobrada(venta, marca), grave: false, tipo: 'otro' };
     if (sinStock) {
       aviso.advertencia = `Sin stock: ${sinStock}.`;
       aviso.tipo = 'persistente';
@@ -561,6 +615,21 @@ export class Mostrador {
     // El vuelto y el sin stock se necesitan después del plazo habitual: quedan hasta el próximo renglón.
     this.avisar(aviso, aviso.tipo === 'persistente' ? undefined : AVISO_COBRADA_MS);
     this.cerrarDialogo();
+  }
+
+  /** «Venta N.º 7 cobrada: $ 3.000,00»; a cuenta corriente lo dice, y en un pago mixto cuánto fue a cuenta. */
+  private textoCobrada(venta: VentaResponse, marca: string): string {
+    const total = formatearMonto(venta.total);
+    const pagos = venta.pagos ?? [];
+    const aCuenta = pagos
+      .filter((p) => p.medio === 'CUENTA_CORRIENTE')
+      .reduce((suma, p) => suma + aCentavos(p.monto), 0);
+    const todoACuenta = venta.medioPago === 'CUENTA_CORRIENTE' || (aCuenta > 0 && aCuenta === aCentavos(venta.total));
+    if (todoACuenta) return `Venta N.º ${venta.numero} cobrada a cuenta corriente${marca}: ${total}`;
+    if (aCuenta > 0) {
+      return `Venta N.º ${venta.numero} cobrada${marca}: ${total} (${formatearMonto(aCuenta / 100)} a cuenta corriente)`;
+    }
+    return `Venta N.º ${venta.numero} cobrada${marca}: ${total}`;
   }
 
   /** Enter en el diálogo de presupuesto (F8): guarda el ticket con la clave del ticket (la misma en cada reintento). */
@@ -640,6 +709,11 @@ export class Mostrador {
     const rechazo = rechazoDe(err);
     if (!rechazo) {
       if (esCobro && this.origenNoSirve(err)) return;
+      // Un 403 al cobrar: autorizar el exceso de la cuenta corriente es solo del Dueño. El ticket y el cobro siguen.
+      if (err instanceof HttpErrorResponse && err.status === 403) {
+        this.avisoCobro.set(mensajeDe(err, MENSAJE_SIN_PERMISO));
+        return;
+      }
       const invalida = invalidaDe(err);
       if (invalida) this.alVentaInvalida(invalida);
       else this.avisoCobro.set(mensajeGenerico);
@@ -656,6 +730,8 @@ export class Mostrador {
               : [{ articuloId: a.articuloId, precioActual: a.precioActual }],
           ),
         );
+        // El total cambió: lo que se le pregunta a la cuenta corriente también.
+        if (esCobro) this.leerCuenta();
         this.avisoCobro.set(this.textoPrecios(rechazo));
         return;
       case 'ARTICULO_DADO_DE_BAJA':
@@ -678,6 +754,18 @@ export class Mostrador {
         return;
       case 'CLAVE_CON_OTRO_CONTENIDO':
         this.rechazarTicket(rechazo.message);
+        return;
+      case 'LIMITE_CUENTA_CORRIENTE':
+        // La venta se pasa del límite: el cobro sigue abierto. El Dueño ve el exceso y puede autorizarlo; el Vendedor lee
+        // «pedile al Dueño». El saldo pudo cambiar: se vuelve a pedir la cuenta.
+        this.avisoLimite.set(rechazo.cuentaCorriente ?? null);
+        this.avisoCobro.set(rechazo.message);
+        this.leerCuenta();
+        return;
+      case 'CUENTA_CORRIENTE_NO_HABILITADA':
+        // Le sacaron la cuenta corriente al cliente mientras se cobraba: se relee y la opción queda explicada.
+        this.avisoCobro.set(rechazo.message);
+        this.leerCuenta();
         return;
       case 'CAJA_CERRADA':
       case 'CAJA_DE_OTRO_DIA':

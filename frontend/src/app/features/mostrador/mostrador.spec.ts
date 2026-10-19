@@ -4,7 +4,7 @@ import { HttpErrorResponse } from '@angular/common/http';
 import { LOCALE_ID, signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
-import { Subject, of } from 'rxjs';
+import { Subject, of, throwError } from 'rxjs';
 import { vi } from 'vitest';
 import { AuthService } from '../../core/auth/auth.service';
 import { CajaVigente } from '../caja/caja.models';
@@ -117,7 +117,11 @@ describe('Mostrador', () => {
   let claves: number;
   let cajas: { actual: ReturnType<typeof vi.fn> };
   let formasApi: { listar: ReturnType<typeof vi.fn> };
-  let clientesApi: { buscar: ReturnType<typeof vi.fn>; crear: ReturnType<typeof vi.fn> };
+  let clientesApi: {
+    buscar: ReturnType<typeof vi.fn>;
+    crear: ReturnType<typeof vi.fn>;
+    cuenta: ReturnType<typeof vi.fn>;
+  };
 
   /** CU-10: por defecto la caja está abierta hoy, como la encuentra el vendedor al empezar. */
   const cajaAbierta: CajaVigente = {
@@ -126,7 +130,11 @@ describe('Mostrador', () => {
     efectivoPropuesto: 0,
   };
 
-  async function crear(vigente: CajaVigente = cajaAbierta, formas: FormaPago[] = FORMAS_BASE) {
+  async function crear(
+    vigente: CajaVigente = cajaAbierta,
+    formas: FormaPago[] = FORMAS_BASE,
+    rol: 'DUENO' | 'VENDEDOR' = 'VENDEDOR',
+  ) {
     // jsdom no implementa scrollIntoView.
     Element.prototype.scrollIntoView =
       vi.fn() as unknown as typeof Element.prototype.scrollIntoView;
@@ -170,12 +178,14 @@ describe('Mostrador', () => {
         of({ items: [CLIENTE_ANA, CLIENTE_NORTE], page: 0, size: 8, totalElements: 2, totalPages: 1 } as PageResponse<Cliente>),
       ),
       crear: vi.fn(),
+      // La cuenta corriente del cliente del ticket (CC-017): por defecto sin habilitar; los tests la fijan.
+      cuenta: vi.fn(() => of({ habilitada: false })),
     };
     const sesion = signal({
       userId: 7,
       nombre: 'Ana',
       email: 'ana@x.com',
-      rol: 'VENDEDOR',
+      rol,
       ferreteriaId: 3,
       ferreteriaNombre: 'Tornillo',
     });
@@ -3864,5 +3874,376 @@ describe('Mostrador', () => {
       expect(guardados[0].pedido.clienteId).toBe(2);
       expect('clienteNombre' in guardados[0].pedido).toBe(false);
     });
+  });
+  describe('cuenta corriente en el cobro (CC-012, CC-013, CC-017)', () => {
+    const CC = formaDe(9, 'Cuenta corriente', 'CUENTA_CORRIENTE');
+    const FORMAS_CC = [...FORMAS_BASE, CC];
+    const exacto = (a: ArticuloMostrador): BusquedaMostrador => ({ tipo: 'EXACTO', items: [a], hayMas: false });
+    const normal = (t: string | null | undefined) => (t ?? '').replace(/\s+/g, ' ').trim();
+    const dialogoCobro = () => el().querySelector<HTMLElement>('app-dialogo-cobro [role="dialog"]');
+    const opcion = (nombre: string) =>
+      Array.from(el().querySelectorAll<HTMLButtonElement>('app-dialogo-cobro button[role="radio"]')).find((b) =>
+        normal(b.textContent).startsWith(nombre),
+      )!;
+    const botonCobrar = () => el().querySelector<HTMLButtonElement>('app-dialogo-cobro button.cobrar')!;
+    const razon = () => normal(el().querySelector('app-dialogo-cobro .razon-medio')?.textContent);
+    const avisoDelDialogo = () => normal(el().querySelector('app-dialogo-cobro .aviso')?.textContent);
+    const lineaCuenta = () => normal(el().querySelector('app-dialogo-cobro .cuenta-corriente')?.textContent);
+    const renglones = () => el().querySelectorAll('app-ticket-lista .renglon').length;
+
+    async function tecla(key: string, destino: HTMLElement = document.activeElement as HTMLElement) {
+      destino.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }));
+      await refrescar();
+    }
+
+    /** Dos martillos ($ 3.000,00) con Ferretería Norte SRL (id 2) elegida con F9; el cobro todavía cerrado. */
+    async function conClienteYMartillos(rol: 'DUENO' | 'VENDEDOR' = 'VENDEDOR', conCliente = true) {
+      await crear(cajaAbierta, FORMAS_CC, rol);
+      for (let i = 0; i < 2; i++) {
+        await escribir('M');
+        await enter();
+        await responder(llamadas.length - 1, exacto(articulo(1, { descripcion: 'Martillo', precioFinal: 1500 })));
+      }
+      if (conCliente) {
+        await tecla('F9');
+        await tecla('ArrowDown');
+        await tecla('Enter');
+      }
+    }
+
+    const ALCANZA = { habilitada: true, alcanza: true };
+    const DUENO_ALCANZA = { habilitada: true, alcanza: true, limite: 10000, saldo: 1000, disponible: 9000 };
+
+    async function elegirCC() {
+      opcion('Cuenta corriente').click();
+      await refrescar();
+    }
+
+    async function fallarCobro(indice: number, status: number, cuerpo: unknown) {
+      cobros[indice].respuesta.error(new HttpErrorResponse({ status, error: cuerpo }));
+      await refrescar();
+    }
+
+    const limite = (cuentaCorriente: unknown) => ({
+      status: 422,
+      message: 'Esta venta supera el límite de cuenta corriente del cliente.',
+      timestamp: 't',
+      motivo: 'LIMITE_CUENTA_CORRIENTE',
+      articulos: [],
+      cuentaCorriente,
+    });
+
+    describe('pide la cuenta fresca al abrir el cobro', () => {
+      it('con cliente pide la cuenta con el total sin recargo, en pesos', async () => {
+        await conClienteYMartillos();
+
+        await tecla('F4');
+
+        expect(clientesApi.cuenta).toHaveBeenCalledTimes(1);
+        expect(clientesApi.cuenta).toHaveBeenCalledWith(2, 3000);
+      });
+
+      it('sin cliente no pide nada y la opción dice que falta elegirlo', async () => {
+        await conClienteYMartillos('VENDEDOR', false);
+
+        await tecla('F4');
+
+        expect(clientesApi.cuenta).not.toHaveBeenCalled();
+        expect(razon()).toBe('Elegí un cliente (F9) para vender a cuenta corriente.');
+      });
+
+      it('mientras llega la respuesta la opción dice «Verificando…» y al llegar queda disponible', async () => {
+        const respuesta = new Subject<unknown>();
+        await conClienteYMartillos();
+        clientesApi.cuenta.mockReturnValue(respuesta);
+
+        await tecla('F4');
+        expect(opcion('Cuenta corriente').getAttribute('aria-disabled')).toBe('true');
+        expect(razon()).toBe('Verificando la cuenta corriente…');
+
+        respuesta.next(ALCANZA);
+        respuesta.complete();
+        await refrescar();
+
+        expect(opcion('Cuenta corriente').hasAttribute('aria-disabled')).toBe(false);
+      });
+
+      it('si la consulta falla la opción queda deshabilitada (falla cerrada) con su explicación', async () => {
+        await conClienteYMartillos();
+        clientesApi.cuenta.mockReturnValue(throwError(() => new HttpErrorResponse({ status: 500 })));
+
+        await tecla('F4');
+
+        expect(opcion('Cuenta corriente').getAttribute('aria-disabled')).toBe('true');
+        expect(razon()).toBe('No se pudo verificar la cuenta corriente. Cerrá y reintentá.');
+      });
+
+      it('nunca cachea la cuenta: cada vez que se abre el cobro se pide de nuevo y no queda el dato anterior', async () => {
+        await conClienteYMartillos();
+        clientesApi.cuenta.mockReturnValue(of(ALCANZA));
+        await tecla('F4');
+        expect(opcion('Cuenta corriente').hasAttribute('aria-disabled')).toBe(false);
+        await tecla('Escape');
+
+        const pendiente = new Subject<unknown>();
+        clientesApi.cuenta.mockReturnValue(pendiente);
+        await tecla('F4');
+
+        expect(clientesApi.cuenta).toHaveBeenCalledTimes(2);
+        expect(razon()).toBe('Verificando la cuenta corriente…');
+      });
+
+      it('una respuesta atrasada de un cobro ya cerrado no pisa la del cobro nuevo', async () => {
+        const vieja = new Subject<unknown>();
+        const nueva = new Subject<unknown>();
+        await conClienteYMartillos();
+        clientesApi.cuenta.mockReturnValueOnce(vieja).mockReturnValueOnce(nueva);
+        await tecla('F4');
+        await tecla('Escape');
+        await tecla('F4');
+
+        nueva.next({ habilitada: false });
+        nueva.complete();
+        vieja.next(ALCANZA);
+        vieja.complete();
+        await refrescar();
+
+        expect(razon()).toContain('no tiene cuenta corriente habilitada');
+      });
+
+      it('un precio que cambió en el servidor (409) vuelve a pedir la cuenta con el total nuevo', async () => {
+        await conClienteYMartillos();
+        await tecla('F4');
+        await tecla('Enter');
+        clientesApi.cuenta.mockClear();
+
+        await fallarCobro(0, 409, {
+          status: 409,
+          message: 'Cambió el precio',
+          timestamp: 't',
+          motivo: 'PRECIOS_CAMBIADOS',
+          total: 3600,
+          articulos: [{ articuloId: 1, descripcion: 'Martillo', precioMostrado: 1500, precioActual: 1800 }],
+        });
+
+        expect(clientesApi.cuenta).toHaveBeenCalledTimes(1);
+        expect(clientesApi.cuenta).toHaveBeenCalledWith(2, 3600);
+      });
+    });
+
+    describe('rechazo por el límite (422 LIMITE_CUENTA_CORRIENTE)', () => {
+      const CIFRAS = { puedeAutorizar: true, saldo: 4000, limite: 5000, disponible: 1000, importe: 3000, exceso: 2000 };
+
+      async function cobrarACuenta(rol: 'DUENO' | 'VENDEDOR', cuentaInicial: unknown) {
+        await conClienteYMartillos(rol);
+        clientesApi.cuenta.mockReturnValue(of(cuentaInicial));
+        await tecla('F4');
+        await elegirCC();
+        await tecla('Enter');
+      }
+
+      it('el cobro a cuenta corriente manda formaPagoId y clienteId, sin autorizaExceso', async () => {
+        await cobrarACuenta('VENDEDOR', ALCANZA);
+
+        expect(cobros[0].pedido.formaPagoId).toBe(9);
+        expect(cobros[0].pedido.clienteId).toBe(2);
+        expect('autorizaExceso' in cobros[0].pedido).toBe(false);
+      });
+
+      it('el Dueño: el diálogo sigue abierto, el ticket intacto y ve el exceso con «Autorizar exceso y cobrar»', async () => {
+        await cobrarACuenta('DUENO', DUENO_ALCANZA);
+        clientesApi.cuenta.mockReturnValue(of({ habilitada: true, alcanza: false, limite: 5000, saldo: 4000, disponible: 1000 }));
+
+        await fallarCobro(0, 422, limite(CIFRAS));
+
+        expect(dialogoCobro()).not.toBeNull();
+        expect(renglones()).toBe(1);
+        expect(avisoDelDialogo()).toContain('Esta venta supera el límite de cuenta corriente del cliente.');
+        expect(lineaCuenta()).toBe('Supera el límite por $ 2.000,00 (límite $ 5.000,00, saldo $ 4.000,00)');
+        expect(normal(botonCobrar().textContent)).toBe('Autorizar exceso y cobrar');
+      });
+
+      it('al autorizar reenvía la venta con autorizaExceso y la MISMA clave y el mismo contenido', async () => {
+        await cobrarACuenta('DUENO', DUENO_ALCANZA);
+        clientesApi.cuenta.mockReturnValue(of({ habilitada: true, alcanza: false, limite: 5000, saldo: 4000, disponible: 1000 }));
+        await fallarCobro(0, 422, limite(CIFRAS));
+
+        botonCobrar().click();
+        await refrescar();
+
+        expect(cobros).toHaveLength(2);
+        expect(cobros[1].pedido.autorizaExceso).toBe(true);
+        expect(cobros[1].pedido.clave).toBe(cobros[0].pedido.clave);
+        const { autorizaExceso: _flag, ...sinFlag } = cobros[1].pedido;
+        expect(sinFlag).toEqual(cobros[0].pedido);
+      });
+
+      it('el Vendedor: lee «pedile al Dueño», no ve cifras ni el botón de autorizar y la opción se apaga', async () => {
+        await cobrarACuenta('VENDEDOR', ALCANZA);
+        clientesApi.cuenta.mockReturnValue(of({ habilitada: true, alcanza: false }));
+
+        await fallarCobro(
+          0,
+          422,
+          { ...limite({ puedeAutorizar: false }), message: 'Esta venta supera el límite de cuenta corriente del cliente. Pedile al Dueño que la autorice.' },
+        );
+
+        expect(dialogoCobro()).not.toBeNull();
+        expect(renglones()).toBe(1);
+        expect(avisoDelDialogo()).toContain('Pedile al Dueño que la autorice.');
+        expect(normal(botonCobrar().textContent)).toBe('Cobrar');
+        expect(lineaCuenta()).toBe('');
+        expect(normal(dialogoCobro()!.textContent)).not.toMatch(/Supera|límite \$|saldo \$/);
+        expect(opcion('Cuenta corriente').getAttribute('aria-disabled')).toBe('true');
+        expect(elegidaEnElCobro()).toBe('Efectivo');
+      });
+
+      it('vuelve a pedir la cuenta tras el rechazo (el saldo cambió)', async () => {
+        await cobrarACuenta('DUENO', DUENO_ALCANZA);
+        clientesApi.cuenta.mockClear();
+
+        await fallarCobro(0, 422, limite(CIFRAS));
+
+        expect(clientesApi.cuenta).toHaveBeenCalledTimes(1);
+        expect(clientesApi.cuenta).toHaveBeenCalledWith(2, 3000);
+      });
+
+      it('cerrar el cobro y abrirlo de nuevo no arrastra el aviso del límite', async () => {
+        await cobrarACuenta('DUENO', DUENO_ALCANZA);
+        await fallarCobro(0, 422, limite(CIFRAS));
+        await tecla('Escape');
+
+        clientesApi.cuenta.mockReturnValue(of(DUENO_ALCANZA));
+        await tecla('F4');
+        await elegirCC();
+
+        expect(lineaCuenta()).toBe('Disponible $ 9.000,00');
+        expect(normal(botonCobrar().textContent)).toBe('Cobrar');
+      });
+    });
+
+    describe('otros rechazos', () => {
+      async function cobrarACuenta(rol: 'DUENO' | 'VENDEDOR' = 'VENDEDOR') {
+        await conClienteYMartillos(rol);
+        clientesApi.cuenta.mockReturnValue(of(rol === 'DUENO' ? DUENO_ALCANZA : ALCANZA));
+        await tecla('F4');
+        await elegirCC();
+        await tecla('Enter');
+      }
+
+      it('CUENTA_CORRIENTE_NO_HABILITADA: sigue el cobro con el mensaje, el ticket intacto y la cuenta releída', async () => {
+        await cobrarACuenta();
+        clientesApi.cuenta.mockClear();
+        clientesApi.cuenta.mockReturnValue(of({ habilitada: false }));
+
+        await fallarCobro(0, 422, {
+          status: 422,
+          message: 'Ferretería Norte SRL no tiene cuenta corriente habilitada.',
+          timestamp: 't',
+          motivo: 'CUENTA_CORRIENTE_NO_HABILITADA',
+          articulos: [],
+        });
+
+        expect(dialogoCobro()).not.toBeNull();
+        expect(renglones()).toBe(1);
+        expect(avisoDelDialogo()).toBe('Ferretería Norte SRL no tiene cuenta corriente habilitada.');
+        expect(clientesApi.cuenta).toHaveBeenCalledTimes(1);
+        expect(razon()).toContain('no tiene cuenta corriente habilitada');
+        expect(elegidaEnElCobro()).toBe('Efectivo');
+      });
+
+      it('un 403 por autorizar siendo Vendedor muestra el mensaje del servidor sin perder el ticket', async () => {
+        await cobrarACuenta();
+
+        await fallarCobro(0, 403, { status: 403, message: 'Autorizar el exceso es solo del Dueño' });
+
+        expect(dialogoCobro()).not.toBeNull();
+        expect(renglones()).toBe(1);
+        expect(avisoDelDialogo()).toBe('Autorizar el exceso es solo del Dueño');
+      });
+
+      it('un 400 por cliente obligatorio muestra el mensaje y el ticket sigue', async () => {
+        await cobrarACuenta();
+
+        await fallarCobro(0, 400, {
+          status: 400,
+          message: 'Datos inválidos',
+          errors: { clienteId: 'Elegí el cliente para vender a cuenta corriente.' },
+        });
+
+        expect(avisoDelDialogo()).toContain('Elegí el cliente para vender a cuenta corriente.');
+        expect(renglones()).toBe(1);
+      });
+    });
+
+    describe('venta cobrada a cuenta corriente', () => {
+      const cobrada = (pagos: { medio: string; monto: number }[], total = 3000): VentaCobrada =>
+        ({
+          venta: {
+            ventaId: 50,
+            numero: 7,
+            total,
+            fecha: '2026-10-15T10:00:00',
+            pagos: pagos.map((p, i) => ({ formaPagoId: i + 1, formaPago: p.medio, recargoPorcentaje: 0, recargo: 0, ...p })),
+            renglones: [],
+            sinStock: [],
+            facturable: true,
+            clienteId: 2,
+          },
+          repetida: false,
+        }) as unknown as VentaCobrada;
+
+      async function cobrarYResponder(v: VentaCobrada) {
+        await conClienteYMartillos();
+        clientesApi.cuenta.mockReturnValue(of(ALCANZA));
+        await tecla('F4');
+        await elegirCC();
+        await tecla('Enter');
+        cobros[0].respuesta.next(v);
+        cobros[0].respuesta.complete();
+        await refrescar();
+      }
+
+      it('avisa «cobrada a cuenta corriente» con el total y sin vuelto', async () => {
+        await cobrarYResponder(cobrada([{ medio: 'CUENTA_CORRIENTE', monto: 3000 }]));
+
+        const aviso = normal(el().querySelector('.aviso')?.textContent);
+        expect(aviso).toBe('Venta N.º 7 cobrada a cuenta corriente: $ 3.000,00');
+        expect(el().querySelector('.vuelto')).toBeNull();
+        expect(dialogoCobro()).toBeNull();
+      });
+
+      it('si solo una parte fue a cuenta corriente, lo dice con el monto de esa parte', async () => {
+        await cobrarYResponder(
+          cobrada([
+            { medio: 'EFECTIVO', monto: 1000 },
+            { medio: 'CUENTA_CORRIENTE', monto: 2000 },
+          ]),
+        );
+
+        expect(normal(el().querySelector('.aviso')?.textContent)).toBe(
+          'Venta N.º 7 cobrada: $ 3.000,00 ($ 2.000,00 a cuenta corriente)',
+        );
+      });
+
+      it('una venta sin cuenta corriente conserva el aviso de siempre (regresión)', async () => {
+        await cobrarYResponder(cobrada([{ medio: 'EFECTIVO', monto: 3000 }]));
+
+        expect(normal(el().querySelector('.aviso')?.textContent)).toBe('Venta N.º 7 cobrada: $ 3.000,00');
+      });
+
+      it('la venta de una sola forma de cuenta corriente (medioPago) también se reconoce', async () => {
+        const v = cobrada([]);
+        (v.venta as { pagos?: unknown }).pagos = undefined;
+        (v.venta as { medioPago?: string }).medioPago = 'CUENTA_CORRIENTE';
+        await cobrarYResponder(v);
+
+        expect(normal(el().querySelector('.aviso')?.textContent)).toBe('Venta N.º 7 cobrada a cuenta corriente: $ 3.000,00');
+      });
+    });
+
+    function elegidaEnElCobro() {
+      return normal(el().querySelector('app-dialogo-cobro button[role="radio"][aria-checked="true"]')?.textContent);
+    }
   });
 });

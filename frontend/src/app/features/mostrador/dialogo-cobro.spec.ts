@@ -1,7 +1,7 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { vi } from 'vitest';
 import { FormaPago } from '../formas-pago/forma-pago.models';
-import { DialogoCobro, ConfirmacionCobro } from './dialogo-cobro';
+import { ConfirmacionCobro, CuentaDelCobro, DialogoCobro } from './dialogo-cobro';
 
 const NBSP = ' ';
 
@@ -809,6 +809,482 @@ describe('DialogoCobro', () => {
 
         expect(el().querySelectorAll('input[data-forma]')).toHaveLength(6);
         expect(monto(1).value).toBe('40');
+      });
+    });
+  });
+  describe('cuenta corriente (CC-005, CC-006, CC-007, CC-013, CC-017)', () => {
+    const CC = forma(5, 'Cuenta corriente', 'CUENTA_CORRIENTE');
+    const FORMAS_CC = [...FORMAS, CC];
+    const MIXTO_OPCION = 'Mixto';
+    /** Los espacios duros del formato de moneda quedan como espacios comunes. */
+    const normal = (t: string | null | undefined) => (t ?? '').replace(/\s+/g, ' ').trim();
+
+    const opcionCC = () => medio('Cuenta corriente');
+    const monto = (id: number) => el().querySelector<HTMLInputElement>(`input[data-forma="${id}"]`)!;
+    const razonDe = (boton: HTMLElement) => {
+      const id = boton.getAttribute('aria-describedby');
+      return id ? normal(el().querySelector(`#${id}`)?.textContent) : null;
+    };
+    const textoDelDialogo = () => normal(el().querySelector('[role="dialog"]')?.textContent);
+    const botonCobrar = () => el().querySelector<HTMLButtonElement>('button.cobrar')!;
+    const lineaCuenta = () => normal(el().querySelector('.cuenta-corriente')?.textContent);
+
+    type Cuenta = CuentaDelCobro;
+
+    interface Escenario {
+      cliente?: string | null;
+      cuenta?: Cuenta | null;
+      esDueno?: boolean;
+      avisoLimite?: unknown;
+      total?: number;
+    }
+
+    async function abrirCC({ cliente = 'Ana Gómez', cuenta = null, esDueno = false, avisoLimite = null, total = 363000 }: Escenario = {}) {
+      await abrir(total, FORMAS_CC);
+      fixture.componentRef.setInput('clienteNombre', cliente);
+      fixture.componentRef.setInput('cuenta', cuenta);
+      fixture.componentRef.setInput('esDueno', esDueno);
+      fixture.componentRef.setInput('avisoLimite', avisoLimite);
+      await estabilizar();
+    }
+
+    const listo = (c: { habilitada: boolean; alcanza?: boolean; limite?: number; saldo?: number; disponible?: number }) =>
+      ({ estado: 'listo', cuenta: c }) as Cuenta;
+
+    /** Lo que ve el Vendedor: nada de cifras. */
+    const SIN_CIFRAS_ALCANZA = listo({ habilitada: true, alcanza: true });
+    const SIN_CIFRAS_NO_ALCANZA = listo({ habilitada: true, alcanza: false });
+    /** Lo que ve el Dueño: límite 5.000, saldo 3.000, disponible 2.000; la venta de 3.630 se pasa por 1.630. */
+    const DUENO_NO_ALCANZA = listo({ habilitada: true, alcanza: false, limite: 5000, saldo: 3000, disponible: 2000 });
+    const DUENO_ALCANZA = listo({ habilitada: true, alcanza: true, limite: 10000, saldo: 3000, disponible: 7000 });
+
+    describe('la opción «Cuenta corriente» deshabilitada, con su razón', () => {
+      it('sin cliente: aria-disabled, razón visible enlazada con aria-describedby y sin el atributo disabled', async () => {
+        await abrirCC({ cliente: null });
+
+        expect(opcionCC().getAttribute('aria-disabled')).toBe('true');
+        expect(opcionCC().hasAttribute('disabled')).toBe(false);
+        expect(razonDe(opcionCC())).toBe('Elegí un cliente (F9) para vender a cuenta corriente.');
+      });
+
+      it('un clic en la deshabilitada no la elige', async () => {
+        await abrirCC({ cliente: null });
+
+        opcionCC().click();
+        await estabilizar();
+
+        expect(elegidos()).toEqual(['Efectivo']);
+      });
+
+      it('con el cliente pero sin dato de la cuenta: «Verificando la cuenta corriente…»', async () => {
+        await abrirCC({ cuenta: null });
+
+        expect(opcionCC().getAttribute('aria-disabled')).toBe('true');
+        expect(razonDe(opcionCC())).toBe('Verificando la cuenta corriente…');
+      });
+
+      it('cargando la cuenta: «Verificando la cuenta corriente…»', async () => {
+        await abrirCC({ cuenta: { estado: 'cargando' } as Cuenta });
+
+        expect(razonDe(opcionCC())).toBe('Verificando la cuenta corriente…');
+      });
+
+      it('falla cerrada: si la cuenta no se pudo leer, no se ofrece y se explica', async () => {
+        await abrirCC({ cuenta: { estado: 'error' } as Cuenta });
+
+        expect(opcionCC().getAttribute('aria-disabled')).toBe('true');
+        expect(razonDe(opcionCC())).toBe('No se pudo verificar la cuenta corriente. Cerrá y reintentá.');
+      });
+
+      it('cuenta no habilitada: el Vendedor lee «Pedile al Dueño que se la habilite»', async () => {
+        await abrirCC({ cuenta: listo({ habilitada: false }) });
+
+        expect(razonDe(opcionCC())).toBe(
+          'Ana Gómez no tiene cuenta corriente habilitada. Pedile al Dueño que se la habilite.',
+        );
+      });
+
+      it('cuenta no habilitada: al Dueño se le dice dónde habilitarla', async () => {
+        await abrirCC({ cuenta: listo({ habilitada: false }), esDueno: true });
+
+        expect(razonDe(opcionCC())).toBe('Ana Gómez no tiene cuenta corriente habilitada. Habilitala desde Clientes.');
+      });
+
+      it('el Vendedor con una cuenta que no alcanza: la opción queda deshabilitada y no hay ninguna cifra en el DOM', async () => {
+        await abrirCC({ cuenta: SIN_CIFRAS_NO_ALCANZA });
+
+        expect(opcionCC().getAttribute('aria-disabled')).toBe('true');
+        expect(razonDe(opcionCC())).toBe('No alcanza el límite de la cuenta corriente. Pedile al Dueño.');
+        expect(textoDelDialogo()).not.toMatch(/Disponible|Supera|límite \$|saldo \$/);
+        expect(textoDelDialogo()).not.toContain('5.000');
+      });
+
+      it('las otras formas no llevan razón ni aria-disabled', async () => {
+        await abrirCC({ cliente: null });
+
+        for (const nombre of ['Efectivo', 'Débito', 'Crédito', 'Transferencia', MIXTO_OPCION]) {
+          expect(medio(nombre).hasAttribute('aria-disabled')).toBe(false);
+          expect(medio(nombre).hasAttribute('aria-describedby')).toBe(false);
+        }
+      });
+
+      it('no hay opción de cuenta corriente: no se agrega ninguna razón (regresión)', async () => {
+        await abrir();
+
+        expect(el().querySelector('.razon-medio')).toBeNull();
+        expect(el().querySelector('[aria-disabled]')).toBeNull();
+      });
+    });
+
+    describe('la opción habilitada', () => {
+      it('el Vendedor con una cuenta que alcanza: la elige y lee «Alcanza» sin cifras', async () => {
+        await abrirCC({ cuenta: SIN_CIFRAS_ALCANZA });
+
+        opcionCC().click();
+        await estabilizar();
+
+        expect(opcionCC().hasAttribute('aria-disabled')).toBe(false);
+        expect(elegidos()).toEqual(['Cuenta corriente']);
+        expect(lineaCuenta()).toBe('Alcanza');
+        expect(textoDelDialogo()).not.toMatch(/Disponible|límite|saldo/);
+      });
+
+      it('el Dueño que alcanza ve «Disponible $ D»', async () => {
+        await abrirCC({ cuenta: DUENO_ALCANZA, esDueno: true });
+
+        opcionCC().click();
+        await estabilizar();
+
+        expect(lineaCuenta()).toBe(`Disponible $ 7.000,00`);
+      });
+
+      it('el Dueño que no alcanza la puede elegir y ve cuánto se pasa, con el límite y el saldo', async () => {
+        await abrirCC({ cuenta: DUENO_NO_ALCANZA, esDueno: true });
+
+        expect(opcionCC().hasAttribute('aria-disabled')).toBe(false);
+        opcionCC().click();
+        await estabilizar();
+
+        expect(lineaCuenta()).toBe(
+          `Supera el límite por $ 1.630,00 (límite $ 5.000,00, saldo $ 3.000,00)`,
+        );
+      });
+
+      it('cuenta corriente nunca es la selección inicial: F4 + Enter sigue cobrando en efectivo', async () => {
+        await abrirCC({ cuenta: SIN_CIFRAS_ALCANZA });
+
+        expect(elegidos()).toEqual(['Efectivo']);
+        tecla('Enter');
+
+        expect(confirmadas).toHaveLength(1);
+        expect(confirmadas[0].medio).toBe('EFECTIVO');
+      });
+
+      it('sin efectivo y con la cuenta corriente primera pero deshabilitada, abre en la primera forma habilitada', async () => {
+        await abrir(363000, [CC, forma(2, 'Débito', 'DEBITO')]);
+        fixture.componentRef.setInput('clienteNombre', null);
+        await estabilizar();
+
+        expect(elegidos()).toEqual(['Débito']);
+      });
+
+      it('con cuenta corriente elegida no hay campo «Recibido» ni recargo', async () => {
+        await abrirCC({ cuenta: SIN_CIFRAS_ALCANZA });
+
+        opcionCC().click();
+        await estabilizar();
+
+        expect(el().querySelector('.recibido')).toBeNull();
+        expect(el().querySelector('.recargo')).toBeNull();
+        expect(el().querySelector('.marca-recargo')).toBeNull();
+        expect(normal(el().querySelector('.total')!.textContent)).toBe('$ 3.630,00');
+      });
+
+      it('confirma la venta a cuenta corriente sin recibido, sin recargo y sin autorizaExceso', async () => {
+        await abrirCC({ cuenta: SIN_CIFRAS_ALCANZA });
+        opcionCC().click();
+        await estabilizar();
+
+        botonCobrar().click();
+
+        expect(confirmadas).toEqual([
+          { formaPagoId: 5, medio: 'CUENTA_CORRIENTE', recibidoCentavos: null, recargoCentavos: 0 },
+        ]);
+        expect('autorizaExceso' in confirmadas[0]).toBe(false);
+      });
+
+      it('el Enter sobre la cuenta corriente elegida también confirma', async () => {
+        await abrirCC({ cuenta: SIN_CIFRAS_ALCANZA });
+        opcionCC().click();
+        await estabilizar();
+
+        tecla('Enter', opcionCC());
+
+        expect(confirmadas).toHaveLength(1);
+        expect(confirmadas[0].formaPagoId).toBe(5);
+      });
+    });
+
+    describe('las flechas saltan las opciones deshabilitadas', () => {
+      it('→ desde Transferencia pasa de largo la cuenta corriente deshabilitada y va a Mixto', async () => {
+        await abrirCC({ cliente: null });
+        medio('Transferencia').click();
+        await estabilizar();
+
+        tecla('ArrowRight');
+        await estabilizar();
+
+        expect(elegidos()).toEqual(['Mixto']);
+      });
+
+      it('← desde Mixto pasa de largo la cuenta corriente deshabilitada y va a Transferencia', async () => {
+        await abrirCC({ cliente: null });
+        medio(MIXTO_OPCION).click();
+        await estabilizar();
+
+        tecla('ArrowLeft');
+        await estabilizar();
+
+        expect(elegidos()).toEqual(['Transferencia']);
+      });
+
+      it('con la cuenta corriente habilitada las flechas sí pasan por ella', async () => {
+        await abrirCC({ cuenta: SIN_CIFRAS_ALCANZA });
+        medio('Transferencia').click();
+        await estabilizar();
+
+        tecla('ArrowRight');
+        await estabilizar();
+
+        expect(elegidos()).toEqual(['Cuenta corriente']);
+      });
+
+      it('si la cuenta elegida pasa a no alcanzar (Vendedor), vuelve a la forma inicial', async () => {
+        await abrirCC({ cuenta: SIN_CIFRAS_ALCANZA });
+        opcionCC().click();
+        await estabilizar();
+
+        fixture.componentRef.setInput('cuenta', SIN_CIFRAS_NO_ALCANZA);
+        await estabilizar();
+
+        expect(elegidos()).toEqual(['Efectivo']);
+      });
+    });
+
+    describe('autorización del exceso (solo el Dueño)', () => {
+      it('el Dueño con una cuenta que no alcanza: el botón principal pasa a «Autorizar exceso y cobrar» y confirma con autorizaExceso', async () => {
+        await abrirCC({ cuenta: DUENO_NO_ALCANZA, esDueno: true });
+        opcionCC().click();
+        await estabilizar();
+
+        expect(normal(botonCobrar().textContent)).toBe('Autorizar exceso y cobrar');
+        botonCobrar().click();
+
+        expect(confirmadas).toEqual([
+          { formaPagoId: 5, medio: 'CUENTA_CORRIENTE', recibidoCentavos: null, recargoCentavos: 0, autorizaExceso: true },
+        ]);
+      });
+
+      it('con una cuenta que alcanza el botón sigue siendo «Cobrar»', async () => {
+        await abrirCC({ cuenta: DUENO_ALCANZA, esDueno: true });
+        opcionCC().click();
+        await estabilizar();
+
+        expect(normal(botonCobrar().textContent)).toBe('Cobrar');
+      });
+
+      it('con otra forma elegida el botón es «Cobrar» aunque la cuenta no alcance', async () => {
+        await abrirCC({ cuenta: DUENO_NO_ALCANZA, esDueno: true });
+
+        expect(normal(botonCobrar().textContent)).toBe('Cobrar');
+        botonCobrar().click();
+        expect('autorizaExceso' in confirmadas[0]).toBe(false);
+      });
+
+      it('el rechazo del servidor por el límite muestra al Dueño el exceso con el límite y el saldo, y le ofrece autorizar', async () => {
+        await abrirCC({
+          cuenta: SIN_CIFRAS_ALCANZA,
+          esDueno: true,
+          avisoLimite: { puedeAutorizar: true, saldo: 4000, limite: 5000, disponible: 1000, importe: 3630, exceso: 2630 },
+        });
+        opcionCC().click();
+        await estabilizar();
+
+        expect(lineaCuenta()).toBe(
+          `Supera el límite por $ 2.630,00 (límite $ 5.000,00, saldo $ 4.000,00)`,
+        );
+        expect(normal(botonCobrar().textContent)).toBe('Autorizar exceso y cobrar');
+        botonCobrar().click();
+        expect(confirmadas[0].autorizaExceso).toBe(true);
+      });
+
+      it('el rechazo por el límite del Vendedor (puedeAutorizar false) no muestra cifras ni ofrece autorizar', async () => {
+        await abrirCC({ cuenta: SIN_CIFRAS_ALCANZA, avisoLimite: { puedeAutorizar: false } });
+        opcionCC().click();
+        await estabilizar();
+
+        expect(normal(botonCobrar().textContent)).toBe('Cobrar');
+        expect(textoDelDialogo()).not.toMatch(/Supera|límite \$|saldo \$/);
+      });
+
+      it('un Vendedor nunca manda autorizaExceso aunque llegara un aviso con puedeAutorizar', async () => {
+        await abrirCC({
+          cuenta: SIN_CIFRAS_ALCANZA,
+          esDueno: false,
+          avisoLimite: { puedeAutorizar: true, exceso: 10 },
+        });
+        opcionCC().click();
+        await estabilizar();
+
+        botonCobrar().click();
+
+        expect('autorizaExceso' in confirmadas[0]).toBe(false);
+        expect(normal(botonCobrar().textContent)).toBe('Cobrar');
+      });
+
+      it('si tras el rechazo se elige otra forma, ya no se ofrece autorizar ni se manda el flag', async () => {
+        await abrirCC({
+          cuenta: SIN_CIFRAS_ALCANZA,
+          esDueno: true,
+          avisoLimite: { puedeAutorizar: true, saldo: 4000, limite: 5000, disponible: 1000, importe: 3630, exceso: 2630 },
+        });
+        opcionCC().click();
+        await estabilizar();
+        medio('Débito').click();
+        await estabilizar();
+
+        expect(normal(botonCobrar().textContent)).toBe('Cobrar');
+        botonCobrar().click();
+        expect(confirmadas[0].medio).toBe('DEBITO');
+        expect('autorizaExceso' in confirmadas[0]).toBe(false);
+      });
+    });
+
+    describe('pago mixto con cuenta corriente', () => {
+      it('sin cliente la fila de cuenta corriente está deshabilitada, con la misma razón, y no cuenta para el total', async () => {
+        await abrirCC({ cliente: null });
+        medio(MIXTO_OPCION).click();
+        await estabilizar();
+
+        expect(monto(5).disabled).toBe(true);
+        expect(normal(el().querySelector('#razon-fila-5')?.textContent)).toBe(
+          'Elegí un cliente (F9) para vender a cuenta corriente.',
+        );
+        expect(monto(1).disabled).toBe(false);
+      });
+
+      it('con la cuenta no habilitada o con error la fila también se deshabilita', async () => {
+        await abrirCC({ cuenta: listo({ habilitada: false }) });
+        medio(MIXTO_OPCION).click();
+        await estabilizar();
+        expect(monto(5).disabled).toBe(true);
+
+        fixture.componentRef.setInput('cuenta', { estado: 'error' });
+        await estabilizar();
+        expect(monto(5).disabled).toBe(true);
+        expect(normal(el().querySelector('#razon-fila-5')?.textContent)).toBe(
+          'No se pudo verificar la cuenta corriente. Cerrá y reintentá.',
+        );
+      });
+
+      it('no hay pre-chequeo del importe: con una cuenta que no alcanza la fila queda habilitada y decide el servidor', async () => {
+        await abrirCC({ cuenta: SIN_CIFRAS_NO_ALCANZA });
+        medio(MIXTO_OPCION).click();
+        await estabilizar();
+
+        expect(monto(5).disabled).toBe(false);
+        expect(el().querySelector('#razon-fila-5')).toBeNull();
+      });
+
+      it('una parte a cuenta corriente confirma sus pagos sin autorizaExceso si no hubo rechazo', async () => {
+        await abrirCC({ cuenta: SIN_CIFRAS_ALCANZA, total: 10000 });
+        medio(MIXTO_OPCION).click();
+        await estabilizar();
+        for (const [id, texto] of [
+          [1, '40'],
+          [5, '60'],
+        ] as const) {
+          monto(id).value = texto;
+          monto(id).dispatchEvent(new Event('input', { bubbles: true }));
+        }
+        fixture.detectChanges();
+
+        botonCobrar().click();
+
+        expect(confirmadas).toEqual([
+          {
+            formaPagoId: null,
+            medio: null,
+            recibidoCentavos: null,
+            recargoCentavos: 0,
+            pagos: [
+              { formaPagoId: 1, centavos: 4000 },
+              { formaPagoId: 5, centavos: 6000 },
+            ],
+          },
+        ]);
+      });
+
+      it('tras un rechazo por el límite, el Dueño autoriza el mixto con una parte a cuenta corriente', async () => {
+        await abrirCC({
+          cuenta: SIN_CIFRAS_ALCANZA,
+          esDueno: true,
+          total: 10000,
+          avisoLimite: { puedeAutorizar: true, saldo: 4000, limite: 5000, disponible: 1000, importe: 6000, exceso: 5000 },
+        });
+        medio(MIXTO_OPCION).click();
+        await estabilizar();
+        for (const [id, texto] of [
+          [1, '40'],
+          [5, '60'],
+        ] as const) {
+          monto(id).value = texto;
+          monto(id).dispatchEvent(new Event('input', { bubbles: true }));
+        }
+        fixture.detectChanges();
+
+        expect(lineaCuenta()).toBe(
+          `Supera el límite por $ 5.000,00 (límite $ 5.000,00, saldo $ 4.000,00)`,
+        );
+        expect(normal(botonCobrar().textContent)).toBe('Autorizar exceso y cobrar');
+        botonCobrar().click();
+
+        expect(confirmadas[0].autorizaExceso).toBe(true);
+        expect(confirmadas[0].pagos).toHaveLength(2);
+      });
+
+      it('si la parte a cuenta corriente está vacía, el mixto no pide autorización aunque haya un aviso del límite', async () => {
+        await abrirCC({
+          cuenta: SIN_CIFRAS_ALCANZA,
+          esDueno: true,
+          total: 10000,
+          avisoLimite: { puedeAutorizar: true, saldo: 4000, limite: 5000, disponible: 1000, importe: 6000, exceso: 5000 },
+        });
+        medio(MIXTO_OPCION).click();
+        await estabilizar();
+        monto(1).value = '100';
+        monto(1).dispatchEvent(new Event('input', { bubbles: true }));
+        fixture.detectChanges();
+
+        expect(normal(botonCobrar().textContent)).toBe('Cobrar');
+        botonCobrar().click();
+        expect('autorizaExceso' in confirmadas[0]).toBe(false);
+      });
+
+      it('Enter en la fila anterior salta la fila de cuenta corriente deshabilitada en vez de trabarse', async () => {
+        await abrir(10000, [forma(1, 'Efectivo', 'EFECTIVO'), CC, forma(3, 'Crédito', 'CREDITO')]);
+        fixture.componentRef.setInput('clienteNombre', null);
+        medio(MIXTO_OPCION).click();
+        await estabilizar();
+        monto(1).value = '40';
+        monto(1).dispatchEvent(new Event('input', { bubbles: true }));
+        fixture.detectChanges();
+
+        tecla('Enter', monto(1));
+        await estabilizar();
+
+        expect(document.activeElement).toBe(monto(3));
+        expect(monto(3).value).toBe('60,00');
       });
     });
   });
