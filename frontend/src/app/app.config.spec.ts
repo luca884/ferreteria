@@ -38,7 +38,8 @@ describe('appConfig: locale es-AR', () => {
     TestBed.configureTestingModule({
       providers: [
         ...appConfig.providers,
-        { provide: AuthService, useValue: { esDueno: signal(true) } },
+        // `sesion` lo lee el redirect de «/» (inicioPorRol) cuando el router navega con la configuración real.
+        { provide: AuthService, useValue: { esDueno: signal(true), sesion: signal(null) } },
         ...(extra as []),
       ],
     });
