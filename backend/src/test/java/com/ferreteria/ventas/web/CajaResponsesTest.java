@@ -41,7 +41,7 @@ class CajaResponsesTest {
     @DisplayName("Detalle lleva «cobranzas» por medio (con ceros) y «totalCobranzas»; las ventas y su total no cambian")
     void detalleExponeLasCobranzas() throws Exception {
         ResumenCaja resumen = ResumenCaja.de(bd("5000.00"), Map.of(MedioPago.EFECTIVO, bd("1000.00")),
-                Map.of(MedioPago.EFECTIVO, bd("700.00"), MedioPago.TRANSFERENCIA, bd("300.00")), Map.of());
+                Map.of(MedioPago.EFECTIVO, bd("700.00"), MedioPago.TRANSFERENCIA, bd("300.00")), Map.of(), Map.of());
         DetalleCaja detalle = new DetalleCaja(caja(), EstadoCaja.ABIERTA, resumen, List.of(), Map.of(9L, "Ana"));
 
         CajaResponses.Detalle respuesta = CajaResponses.Detalle.de(detalle);
@@ -60,7 +60,7 @@ class CajaResponsesTest {
     @Test
     @DisplayName("una caja sin recibos (como las de antes de 3a) muestra todas las cobranzas en 0")
     void cajaViejaCobranzasEnCero() {
-        ResumenCaja resumen = ResumenCaja.de(bd("5000.00"), Map.of(), Map.of(), Map.of());
+        ResumenCaja resumen = ResumenCaja.de(bd("5000.00"), Map.of(), Map.of(), Map.of(), Map.of());
         DetalleCaja detalle = new DetalleCaja(caja(), EstadoCaja.ABIERTA, resumen, List.of(), Map.of(9L, "Ana"));
 
         CajaResponses.Detalle respuesta = CajaResponses.Detalle.de(detalle);
@@ -82,6 +82,58 @@ class CajaResponsesTest {
             assertThat(json.has("totalCobranzas")).isFalse();
             assertThat(json.has("efectivoEsperado")).isFalse();
             assertThat(json.has("ventas")).isFalse();
+        }
+    }
+
+    // ---- CCT3B1-303 (CC-081, CJ-R-014): anulaciones en el Detalle, nunca en la caja abierta del Vendedor ----
+
+    @Test
+    @DisplayName("Detalle lleva «anulaciones» por medio (todos, con ceros) y «totalAnulaciones» después de las cobranzas; las cobranzas siguen brutas")
+    void detalleExponeLasAnulaciones() throws Exception {
+        ResumenCaja resumen = ResumenCaja.de(bd("5000.00"), Map.of(MedioPago.EFECTIVO, bd("1800.00")),
+                Map.of(MedioPago.EFECTIVO, bd("700.00")), Map.of(MedioPago.EFECTIVO, bd("700.00"), MedioPago.TRANSFERENCIA, bd("300.00")),
+                Map.of());
+        DetalleCaja detalle = new DetalleCaja(caja(), EstadoCaja.ABIERTA, resumen, List.of(), Map.of(9L, "Ana"));
+
+        CajaResponses.Detalle respuesta = CajaResponses.Detalle.de(detalle);
+
+        assertThat(respuesta.anulaciones()).containsOnlyKeys(MedioPago.values());
+        assertThat(respuesta.anulaciones().get(MedioPago.EFECTIVO)).isEqualByComparingTo("700");
+        assertThat(respuesta.anulaciones().get(MedioPago.TRANSFERENCIA)).isEqualByComparingTo("300");
+        assertThat(respuesta.anulaciones().get(MedioPago.DEBITO)).isEqualByComparingTo("0");
+        assertThat(respuesta.totalAnulaciones()).isEqualByComparingTo("1000");
+        assertThat(respuesta.cobranzas().get(MedioPago.EFECTIVO)).isEqualByComparingTo("700");
+        assertThat(respuesta.totalCobranzas()).isEqualByComparingTo("700");
+        assertThat(respuesta.efectivoEsperado()).isEqualByComparingTo("6800"); // 5000 + 1800 + 700 - 700
+        JsonNode json = JSON.valueToTree(respuesta);
+        assertThat(json.has("anulaciones")).isTrue();
+        assertThat(json.has("totalAnulaciones")).isTrue();
+        assertThat(json.get("anulaciones").get("EFECTIVO").decimalValue()).isEqualByComparingTo("700");
+    }
+
+    @Test
+    @DisplayName("una caja vieja (sin anulaciones) muestra todas las anulaciones en 0")
+    void cajaViejaAnulacionesEnCero() {
+        ResumenCaja resumen = ResumenCaja.de(bd("5000.00"), Map.of(), Map.of(), Map.of(), Map.of());
+        DetalleCaja detalle = new DetalleCaja(caja(), EstadoCaja.ABIERTA, resumen, List.of(), Map.of(9L, "Ana"));
+
+        CajaResponses.Detalle respuesta = CajaResponses.Detalle.de(detalle);
+
+        assertThat(respuesta.anulaciones().values()).allSatisfy(v -> assertThat(v).isEqualByComparingTo("0"));
+        assertThat(respuesta.totalAnulaciones()).isEqualByComparingTo("0");
+    }
+
+    @Test
+    @DisplayName("la caja abierta y el estado vigente (lo que ve el Vendedor) NO llevan anulaciones: cierre ciego intacto")
+    void vigenteYAbiertaSinAnulaciones() throws Exception {
+        CajaVigente vigente = new CajaVigente(caja(), EstadoCaja.ABIERTA, "Ana", bd("5000.00"));
+
+        JsonNode abierta = JSON.valueToTree(CajaResponses.CajaAbierta.de(vigente));
+        JsonNode estado = JSON.valueToTree(CajaResponses.Vigente.de(vigente));
+
+        for (JsonNode json : List.of(abierta, estado, estado.get("caja"))) {
+            assertThat(json.has("anulaciones")).isFalse();
+            assertThat(json.has("totalAnulaciones")).isFalse();
         }
     }
 }

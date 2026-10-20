@@ -375,4 +375,21 @@ class TenantScopingArchTest {
                             && m.getRawParameterTypes().size() >= 1 && !m.getName().startsWith("save"));
         }
     }
+
+    /**
+     * CCT3B1-308 (CC-066, CC-081, CC-085): las consultas nuevas de {@code ReciboRepository} ({@code clienteDe},
+     * {@code sumasAnuladasDeCaja}) llevan {@code ferreteriaId} explícito, tienen su wrapper {@code *Scoped} y entran en las reglas
+     * acotadas de arriba (el wrapper llama a {@code TenantContext}, nadie más llama a la consulta cruda).
+     */
+    @Test
+    void lasConsultasDeAnulacionDeReciboTienenSuWrapperScoped() {
+        var metodos = clases.get(com.ferreteria.ventas.repository.ReciboRepository.class).getMethods();
+        var nombres = metodos.stream().map(JavaMethod::getName).collect(java.util.stream.Collectors.toSet());
+        var abstractas = metodos.stream()
+                .filter(m -> m.getModifiers().contains(com.tngtech.archunit.core.domain.JavaModifier.ABSTRACT))
+                .map(JavaMethod::getName).toList();
+
+        assertThat(abstractas).contains("clienteDe", "sumasAnuladasDeCaja");
+        assertThat(nombres).contains("clienteDeScoped", "totalesAnuladosDeCajaScoped");
+    }
 }

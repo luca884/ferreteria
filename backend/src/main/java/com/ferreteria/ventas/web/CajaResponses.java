@@ -63,11 +63,14 @@ public final class CajaResponses {
     /**
      * Totales, movimientos y quien abrio y cerro. Abierta: contado, diferencia y cierre en null. {@code cobranzas} son los
      * recibos de cuenta corriente por medio (CC-053): la de efectivo suma al esperado, la transferencia es informativa.
+     * {@code anulaciones} son los recibos anulados en ESTA caja (CC-081): la de efectivo resta del esperado, la de
+     * transferencia es informativa; las cobranzas siguen brutas.
      */
     public record Detalle(Long id, String estado, LocalDateTime fechaApertura, String abiertaPor,
             BigDecimal efectivoInicial, BigDecimal efectivoCierreAnterior, BigDecimal diferenciaApertura,
             LocalDateTime fechaCierre, String cerradaPor, Map<MedioPago, BigDecimal> ventas, BigDecimal totalVentas,
-            Map<MedioPago, BigDecimal> cobranzas, BigDecimal totalCobranzas, BigDecimal ingresos, BigDecimal gastos, BigDecimal retiros, BigDecimal efectivoEsperado,
+            Map<MedioPago, BigDecimal> cobranzas, BigDecimal totalCobranzas, Map<MedioPago, BigDecimal> anulaciones,
+            BigDecimal totalAnulaciones, BigDecimal ingresos, BigDecimal gastos, BigDecimal retiros, BigDecimal efectivoEsperado,
             BigDecimal efectivoContado, BigDecimal diferencia, List<Movimiento> movimientos) {
 
         static Detalle de(DetalleCaja detalle) {
@@ -80,7 +83,8 @@ public final class CajaResponses {
                     nombres.get(c.getUsuarioAperturaId()), c.getEfectivoInicial(), c.getEfectivoCierreAnterior(),
                     c.getDiferenciaApertura(), c.getFechaCierre(),
                     c.getUsuarioCierreId() == null ? null : nombres.get(c.getUsuarioCierreId()),
-                    r.ventasPorMedio(), r.totalVentas(), r.cobranzasPorMedio(), r.totalCobranzas(), r.ingresos(), r.gastos(), r.retiros(), esperado,
+                    r.ventasPorMedio(), r.totalVentas(), r.cobranzasPorMedio(), r.totalCobranzas(), r.anulacionesPorMedio(), r.totalAnulaciones(), r.ingresos(), r.gastos(),
+                    r.retiros(), esperado,
                     c.getEfectivoContado(), c.getDiferencia(),
                     detalle.movimientos().stream().map(m -> Movimiento.de(m, nombres.get(m.getUsuarioId()))).toList());
         }

@@ -185,4 +185,42 @@ class ClienteDelDocumentoTest {
         verify(clientes).buscar(7L);
         verifyNoMoreInteractions(clientes);
     }
+
+    // ---- resolverParaAnulacion (CC-059, CC-066): el cliente de una anulación; activo, sin exigir saldo ni límite ----
+
+    @Test
+    @DisplayName("resolverParaAnulacion toma al cliente (tomarParaVenta: lock X, no buscar) y copia su razón social")
+    void paraAnulacionTomaAlCliente() {
+        when(clientes.tomarParaVenta(7L)).thenReturn(Optional.of(new ClienteReferencia(7L, "Ferretería Norte SRL", true)));
+
+        ClienteDelDocumento.Elegido elegido = resolutor.resolverParaAnulacion(7L);
+
+        assertThat(elegido.id()).isEqualTo(7L);
+        assertThat(elegido.nombre()).isEqualTo("Ferretería Norte SRL");
+        verify(clientes).tomarParaVenta(7L);
+        verifyNoMoreInteractions(clientes);
+    }
+
+    @Test
+    @DisplayName("resolverParaAnulacion: ajeno o inexistente es 404 y desactivado es 422 «El cliente está desactivado.» (spec literal)")
+    void paraAnulacionRechazos() {
+        when(clientes.tomarParaVenta(9L)).thenReturn(Optional.empty());
+        when(clientes.tomarParaVenta(8L)).thenReturn(Optional.of(new ClienteReferencia(8L, "Viejo", false)));
+
+        assertThatThrownBy(() -> resolutor.resolverParaAnulacion(9L))
+                .isInstanceOf(ResourceNotFoundException.class)
+                .hasMessage("Cliente no encontrado");
+        assertThatThrownBy(() -> resolutor.resolverParaAnulacion(8L))
+                .isInstanceOf(ReglaDeNegocioException.class)
+                .hasMessage("El cliente está desactivado.");
+    }
+
+    @Test
+    @DisplayName("resolverParaAnulacion no exige saldo, cuenta habilitada ni límite (un cliente activo sin deuda resuelve) y sin cliente es error de programación")
+    void paraAnulacionNoExigeNada() {
+        when(clientes.tomarParaVenta(5L)).thenReturn(Optional.of(new ClienteReferencia(5L, "Sin deuda ni cuenta", true)));
+
+        assertThat(resolutor.resolverParaAnulacion(5L).id()).isEqualTo(5L);
+        assertThatThrownBy(() -> resolutor.resolverParaAnulacion(null)).isInstanceOf(IllegalArgumentException.class);
+    }
 }

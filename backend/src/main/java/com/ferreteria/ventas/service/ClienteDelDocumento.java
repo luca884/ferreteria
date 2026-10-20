@@ -59,6 +59,19 @@ public class ClienteDelDocumento {
         return elegido(clientes.tomarParaVenta(clienteId));
     }
 
+    /**
+     * El cliente de una ANULACIÓN de cobranza (CC-059, CC-066): lo TOMA igual que una venta o una cobranza (mismo lugar del orden de
+     * locks: después de la caja, antes de cualquier lectura plana). Ajeno o inexistente es 404; desactivado, 422 «El cliente está
+     * desactivado.» (así un cliente inactivo nunca queda con saldo ≠ 0: hay que reactivarlo antes de anular). NO exige saldo,
+     * cuenta habilitada ni límite (CC-065). Exige la transacción abierta de quien llama.
+     */
+    public Elegido resolverParaAnulacion(Long clienteId) {
+        if (clienteId == null) {
+            throw new IllegalArgumentException("Una anulación es siempre de un cliente.");
+        }
+        return elegido(clientes.tomarParaVenta(clienteId));
+    }
+
     private static Elegido elegido(Optional<ClienteReferencia> referencia) {
         ClienteReferencia cliente = referencia.orElseThrow(() -> new ResourceNotFoundException("Cliente no encontrado"));
         if (!cliente.activo()) {

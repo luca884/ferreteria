@@ -238,4 +238,17 @@ class CobranzaServiceTest {
 
         assertThat(CobranzaService.class.getMethod("recibo", Long.class).isAnnotationPresent(Transactional.class)).isFalse();
     }
+
+    @Test
+    @DisplayName("CCT3B1-311 (CC-070): si la clave es de un recibo ya ANULADO el pre-chequeo lo devuelve tal cual (200) y NO se registra nada nuevo")
+    void preChequeoDevuelveElReciboAnulado() {
+        CobroRegistrado anulado = new CobroRegistrado(null, List.of(), "Marta", true, "Ana");
+        when(registroCobranza.repetida(pedido)).thenReturn(Optional.of(anulado));
+
+        CobroRegistrado cobro = service.cobrar(pedido, USUARIO);
+
+        assertThat(cobro).isSameAs(anulado);
+        assertThat(cobro.anuladoPor()).isEqualTo("Ana");
+        verify(registroCobranza, never()).registrar(any(), any());
+    }
 }

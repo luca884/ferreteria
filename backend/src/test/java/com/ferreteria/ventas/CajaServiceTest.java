@@ -229,4 +229,116 @@ class CajaServiceTest {
         assertThat(caja.getDiferencia()).isEqualByComparingTo("-50");
         assertThat(detalle.resumen().totalCobranzas()).isEqualByComparingTo("0");
     }
+
+    // ---- CCT3B1-303 (CC-081, CC-082, CJ-R-012): el resumen suma las anulaciones por la caja de anulación ----
+
+    @Test
+    @DisplayName("el detalle pasa las anulaciones por medio al resumen: efectivo resta del esperado, la cobranza sigue bruta")
+    void detalleRestaLasAnulaciones() {
+        TenantContext.setCurrentFerreteriaId(3L);
+        try {
+            Caja caja = abiertaEl(LocalDateTime.of(2026, 10, 12, 8, 0));
+            when(cajas.findScoped(40L)).thenReturn(Optional.of(caja));
+            when(pagos.totalesDeCajaScoped(40L)).thenReturn(Map.of(MedioPago.EFECTIVO, new BigDecimal("1000.00")));
+            when(recibos.totalesDeCajaScoped(40L)).thenReturn(Map.of(MedioPago.EFECTIVO, new BigDecimal("700.00")));
+            when(recibos.totalesAnuladosDeCajaScoped(40L)).thenReturn(
+                    Map.of(MedioPago.EFECTIVO, new BigDecimal("700.00"), MedioPago.TRANSFERENCIA, new BigDecimal("300.00")));
+
+            DetalleCaja detalle = service.detalle(40L);
+
+            assertThat(detalle.resumen().anulacionesPorMedio().get(MedioPago.EFECTIVO)).isEqualByComparingTo("700");
+            assertThat(detalle.resumen().anulacionesPorMedio().get(MedioPago.TRANSFERENCIA)).isEqualByComparingTo("300");
+            assertThat(detalle.resumen().cobranzasEnEfectivo()).isEqualByComparingTo("700"); // brutas
+            assertThat(detalle.resumen().efectivoEsperado()).isEqualByComparingTo("1000"); // 0 + 1000 + 700 - 700
+            assertThat(detalle.resumen().totalAnulaciones()).isEqualByComparingTo("1000");
+        } finally {
+            TenantContext.clear();
+        }
+    }
+
+    @Test
+    @DisplayName("el cierre lee las anulaciones DESPUÉS del lock exclusivo de la caja y las guarda en el esperado (caja vieja: 0)")
+    void cierreRestaLasAnulacionesDespuesDelLock() {
+        Caja caja = Caja.abrir(3L, 9L, new BigDecimal("5000.00"), null, LocalDateTime.of(2026, 10, 12, 8, 0));
+        ReflectionTestUtils.setField(caja, "id", 40L);
+        when(cajas.paraCerrarScoped(40L)).thenReturn(Optional.of(caja));
+        when(pagos.totalesDeCajaScoped(40L)).thenReturn(Map.of(MedioPago.EFECTIVO, new BigDecimal("1000.00")));
+        when(recibos.totalesDeCajaScoped(40L)).thenReturn(Map.of(MedioPago.EFECTIVO, new BigDecimal("700.00")));
+        when(recibos.totalesAnuladosDeCajaScoped(40L)).thenReturn(Map.of(MedioPago.EFECTIVO, new BigDecimal("700.00")));
+
+        DetalleCaja detalle = service.cerrar(40L, new BigDecimal("6000.00"), 9L);
+
+        InOrder orden = inOrder(cajas, recibos);
+        orden.verify(cajas).paraCerrarScoped(40L);
+        orden.verify(recibos).totalesAnuladosDeCajaScoped(40L);
+        assertThat(caja.getEfectivoEsperado()).isEqualByComparingTo("6000"); // 5000 + 1000 + 700 - 700
+        assertThat(caja.getDiferencia()).isEqualByComparingTo("0");
+        assertThat(detalle.resumen().totalAnulaciones()).isEqualByComparingTo("700");
+    }
+
+    // ---- CCT3B1-304 (CC-058, CC-085): la caja en la que se anula ----
+
+    private CobranzaRechazadaException rechazoDeAnulacion() {
+        Throwable error = catchThrowable(service::cajaParaAnular);
+        assertThat(error).isInstanceOf(CobranzaRechazadaException.class);
+        return (CobranzaRechazadaException) error;
+    }
+
+    @Test
+    @DisplayName("anular sin caja abierta: CAJA_CERRADA «Abrí la caja para anular.» (422)")
+    void anularSinCaja() {
+        when(cajas.abiertaParaVenderScoped()).thenReturn(Optional.empty());
+
+        CobranzaRechazadaException e = rechazoDeAnulacion();
+
+        assertThat(e.motivo()).isEqualTo(CobranzaRechazadaException.Motivo.CAJA_CERRADA);
+        assertThat(e.motivo().estadoHttp()).isEqualTo(422);
+        assertThat(e.getMessage()).isEqualTo("Abrí la caja para anular.");
+    }
+
+    @Test
+    @DisplayName("anular con la caja de ayer: CAJA_DE_OTRO_DIA con la fecha dd/MM de esa caja")
+    void anularConCajaDeOtroDia() {
+        when(cajas.abiertaParaVenderScoped()).thenReturn(Optional.of(abiertaEl(LocalDateTime.of(2026, 10, 11, 8, 0))));
+
+        CobranzaRechazadaException e = rechazoDeAnulacion();
+
+        assertThat(e.motivo()).isEqualTo(CobranzaRechazadaException.Motivo.CAJA_DE_OTRO_DIA);
+        assertThat(e.motivo().estadoHttp()).isEqualTo(422);
+        assertThat(e.getMessage()).isEqualTo("La caja del 11/10 sigue abierta. Cerrala antes de anular.");
+    }
+
+    @Test
+    @DisplayName("anular con la caja abierta hoy devuelve su id y usa la misma caja compartida (FOR SHARE) que vender y cobrar")
+    void anularConCajaDeHoy() {
+        when(cajas.abiertaParaVenderScoped()).thenReturn(Optional.of(abiertaEl(LocalDateTime.of(2026, 10, 12, 8, 0))));
+
+        assertThat(service.cajaParaAnular()).isEqualTo(40L);
+        assertThat(service.cajaParaCobrar()).isEqualTo(40L);
+        assertThat(service.cajaParaVender()).isEqualTo(40L);
+        verify(cajas, org.mockito.Mockito.times(3)).abiertaParaVenderScoped();
+        verify(cajas, never()).abiertaScoped();
+    }
+
+    @Test
+    @DisplayName("regresión: cobrar y vender conservan sus mensajes aunque anular tenga el suyo")
+    void cobrarYVenderConservanSusMensajes() {
+        when(cajas.abiertaParaVenderScoped()).thenReturn(Optional.empty());
+        assertThat(rechazoDeCobro().getMessage()).isEqualTo("Abrí la caja para cobrar.");
+        assertThat(rechazo().getMessage()).isEqualTo("Abrí la caja para vender.");
+        assertThat(rechazoDeAnulacion().getMessage()).isEqualTo("Abrí la caja para anular.");
+
+        when(cajas.abiertaParaVenderScoped()).thenReturn(Optional.of(abiertaEl(LocalDateTime.of(2026, 10, 11, 8, 0))));
+        assertThat(rechazoDeCobro().getMessage()).isEqualTo("La caja del 11/10 sigue abierta. Cerrala antes de cobrar.");
+        assertThat(rechazo().getMessage()).isEqualTo("La caja del 11/10 sigue abierta. Cerrala antes de vender.");
+        assertThat(rechazoDeAnulacion().getMessage()).isEqualTo("La caja del 11/10 sigue abierta. Cerrala antes de anular.");
+    }
+
+    @Test
+    @DisplayName("cajaParaAnular exige transacción (MANDATORY): el lock compartido vive hasta el commit de la anulación")
+    void anularExigeTransaccion() throws NoSuchMethodException {
+        Method metodo = CajaService.class.getMethod("cajaParaAnular");
+        assertThat(metodo.getAnnotation(Transactional.class)).isNotNull();
+        assertThat(metodo.getAnnotation(Transactional.class).propagation()).isEqualTo(Propagation.MANDATORY);
+    }
 }

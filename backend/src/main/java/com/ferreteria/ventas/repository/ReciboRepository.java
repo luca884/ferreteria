@@ -40,4 +40,32 @@ public interface ReciboRepository extends TenantScopedRepository<Recibo, Long> {
                 .forEach(fila -> totales.put((MedioPago) fila[0], (BigDecimal) fila[1]));
         return totales;
     }
+
+    /** El id del cliente del recibo (CC-057, CC-085): una proyección de una columna, sin cargar la entidad ni tomar locks. */
+    @Query("select r.clienteId from Recibo r where r.ferreteriaId = :fid and r.id = :id")
+    Optional<Long> clienteDe(@Param("fid") Long ferreteriaId, @Param("id") Long id);
+
+    /**
+     * CC-085: el cliente del recibo, para resolver reciboId → clienteId ANTES de tomar los locks (el cliente de un recibo es
+     * inmutable). Vacío si el recibo no existe o es de otra ferretería (404). Lectura plana: la fachada la corre en una
+     * transacción propia de solo lectura.
+     */
+    default Optional<Long> clienteDeScoped(Long reciboId) {
+        return clienteDe(TenantContext.requireFerreteriaId(), reciboId);
+    }
+
+    @Query("select r.medio, sum(r.total) from Recibo r where r.ferreteriaId = :fid and r.cajaAnulacionId = :cajaId group by r.medio")
+    List<Object[]> sumasAnuladasDeCaja(@Param("fid") Long ferreteriaId, @Param("cajaId") Long cajaId);
+
+    /**
+     * CC-081: lo anulado por cada medio en los recibos cuya CAJA DE ANULACIÓN es la pedida (sean de esa u otra caja); los medios
+     * sin anulaciones no vienen. Usa {@code ix_recibo_caja_anulacion}. Lectura plana: en el cierre corre DESPUÉS de tomar la caja
+     * con lock exclusivo, así que ve toda anulación comprometida (las que llegan después reciben CAJA_CERRADA).
+     */
+    default Map<MedioPago, BigDecimal> totalesAnuladosDeCajaScoped(Long cajaId) {
+        Map<MedioPago, BigDecimal> totales = new EnumMap<>(MedioPago.class);
+        sumasAnuladasDeCaja(TenantContext.requireFerreteriaId(), cajaId)
+                .forEach(fila -> totales.put((MedioPago) fila[0], (BigDecimal) fila[1]));
+        return totales;
+    }
 }

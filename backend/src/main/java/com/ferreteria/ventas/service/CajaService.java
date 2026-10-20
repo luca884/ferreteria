@@ -202,14 +202,32 @@ public class CajaService {
         return caja.getId();
     }
 
-    /** La caja abierta de la ferretería con lock compartido (FOR SHARE): lo comparten vender y cobrar. */
+    /**
+     * La caja en la que se ANULA un cobro (CC-058, CC-085): la misma caja abierta de hoy, con el mismo lock compartido (así el
+     * cierre espera a esta anulación y la absorbe en su resumen; una anulación que llega después recibe CAJA_CERRADA). Es el
+     * primer lock de la anulación (caja S → cliente X → ...). La caja ORIGINAL del recibo (posiblemente cerrada) no se lee ni se
+     * bloquea. Sin caja abierta, CAJA_CERRADA; con la de un día anterior, CAJA_DE_OTRO_DIA.
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public Long cajaParaAnular() {
+        Caja caja = cajaAbiertaCompartida().orElseThrow(() ->
+                new CobranzaRechazadaException(CobranzaRechazadaException.Motivo.CAJA_CERRADA, "Abrí la caja para anular."));
+        if (caja.estado(hoy()) == EstadoCaja.DE_OTRO_DIA) {
+            throw new CobranzaRechazadaException(CobranzaRechazadaException.Motivo.CAJA_DE_OTRO_DIA,
+                    "La caja del " + dia(caja) + " sigue abierta. Cerrala antes de anular.");
+        }
+        return caja.getId();
+    }
+
+    /** La caja abierta de la ferretería con lock compartido (FOR SHARE): lo comparten vender, cobrar y anular. */
     private Optional<Caja> cajaAbiertaCompartida() {
         return cajaRepository.abiertaParaVenderScoped();
     }
 
     private ResumenCaja resumen(Caja caja) {
         return ResumenCaja.de(caja.getEfectivoInicial(), pagoRepository.totalesDeCajaScoped(caja.getId()),
-                reciboRepository.totalesDeCajaScoped(caja.getId()), movimientoRepository.totalesScoped(caja.getId()));
+                reciboRepository.totalesDeCajaScoped(caja.getId()), reciboRepository.totalesAnuladosDeCajaScoped(caja.getId()),
+                movimientoRepository.totalesScoped(caja.getId()));
     }
 
     private DetalleCaja detalle(Caja caja, ResumenCaja resumen) {

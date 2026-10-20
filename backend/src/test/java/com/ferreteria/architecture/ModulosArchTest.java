@@ -437,4 +437,60 @@ class ModulosArchTest {
                     || p.startsWith("com.ferreteria.clientes.service") || p.startsWith("com.ferreteria.clientes.model"));
         }
     }
+
+    // ---- Anulación de cobranza (corte 3 de cuenta-corriente-tramo-3b-1): ventas orquesta recibo, caja y estado ----
+
+    private static final String REGISTRO_ANULACION = "com.ferreteria.ventas.service.RegistroAnulacion";
+    private static final String ANULACION_SERVICE = "com.ferreteria.ventas.service.AnulacionService";
+
+    /**
+     * (k-Recibo-mod) CC-102, CC-062: el recibo cambia solo por {@code Recibo.anular} y solo {@code RegistroAnulacion} lo llama
+     * (bajo el lock del cliente, junto con el contra-asiento). {@code ReciboRepository} no declara {@code @Modifying} ni
+     * {@code delete*}/{@code remove*}. Falla si {@code RegistroAnulacion} no existe: la regla no puede pasar en vacío.
+     */
+    @Test
+    void soloRegistroAnulacionAnulaReciboYElRepositorioNoModificaEnMasa() {
+        var llamadores = clases.stream().flatMap(c -> c.getMethodCallsFromSelf().stream())
+                .filter(call -> call.getTargetOwner().isEquivalentTo(Recibo.class) && call.getName().equals("anular"))
+                .map(JavaMethodCall::getOriginOwner)
+                .filter(origen -> !origen.isEquivalentTo(Recibo.class))
+                .map(origen -> origen.getName())
+                .collect(java.util.stream.Collectors.toSet());
+
+        assertThat(llamadores).as("quién anula recibos").containsExactly(REGISTRO_ANULACION);
+        assertThat(clases.get(Recibo.class).getMethods().stream().map(m -> m.getName())).contains("anular");
+
+        var modificadores = clases.get(ReciboRepository.class).getMethods().stream()
+                .filter(m -> m.isAnnotatedWith(org.springframework.data.jpa.repository.Modifying.class))
+                .map(m -> m.getName())
+                .toList();
+        assertThat(modificadores).as("@Modifying en ReciboRepository").isEmpty();
+        assertThat(clases.get(ReciboRepository.class).getMethods().stream().map(m -> m.getName()))
+                .as("la regla no es vacía: ReciboRepository tiene consultas").contains("clienteDe", "sumasAnuladasDeCaja");
+        noMethods().that().areDeclaredIn(ReciboRepository.class).should().haveNameMatching("(delete|remove).*").check(clases);
+    }
+
+    /** (i') RegistroAnulacion anula por el puerto {@code CuentaCorrienteParaCobranza} y NO conoce la implementación. */
+    @Test
+    void registroAnulacionUsaLaCuentaCorrientePorSuPuerto() {
+        var dependencias = clases.get(REGISTRO_ANULACION).getDirectDependenciesFromSelf().stream()
+                .map(d -> d.getTargetClass().getName())
+                .collect(java.util.stream.Collectors.toSet());
+
+        assertThat(dependencias).contains(PUERTO_COBRANZA);
+        assertThat(dependencias).doesNotContain(CuentaCorrienteService.class.getName());
+    }
+
+    /** (l') La anulación de ventas (existen las dos clases) no toca repositorios, servicio ni modelo de clientes: solo su puerto. */
+    @Test
+    void laAnulacionDeVentasNoDependeDeLaInternaDeClientes() {
+        for (String nombre : List.of(REGISTRO_ANULACION, ANULACION_SERVICE)) {
+            var dependencias = clases.get(nombre).getDirectDependenciesFromSelf().stream()
+                    .map(d -> d.getTargetClass().getPackageName())
+                    .collect(java.util.stream.Collectors.toSet());
+
+            assertThat(dependencias).as("dependencias de %s", nombre).noneMatch(p -> p.startsWith("com.ferreteria.clientes.repository")
+                    || p.startsWith("com.ferreteria.clientes.service") || p.startsWith("com.ferreteria.clientes.model"));
+        }
+    }
 }

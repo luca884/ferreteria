@@ -154,7 +154,7 @@ public class RegistroCobranza {
     @Transactional(readOnly = true)
     public CobroRegistrado recibo(Long id) {
         Recibo recibo = reciboRepository.findScoped(id).orElseThrow(() -> new ResourceNotFoundException(MENSAJE_RECIBO_INEXISTENTE));
-        return new CobroRegistrado(recibo, cuentaCorriente.imputacionesDeRecibo(recibo.getId()), nombreDe(recibo.getUsuarioId()), true);
+        return cobroExistente(recibo, cuentaCorriente.imputacionesDeRecibo(recibo.getId()));
     }
 
     private Optional<CobroRegistrado> buscarRepetida(CobranzaPedido pedido) {
@@ -167,7 +167,20 @@ public class RegistroCobranza {
         if (!pedido.mismoContenido(recibo, asentadas)) {
             throw new CobranzaRechazadaException(Motivo.CLAVE_CON_OTRO_CONTENIDO, MENSAJE_OTRO_CONTENIDO);
         }
-        return Optional.of(new CobroRegistrado(recibo, asentadas, nombreDe(recibo.getUsuarioId()), true));
+        return Optional.of(cobroExistente(recibo, asentadas));
+    }
+
+    /**
+     * Un cobro ya registrado (repetida o GET): el recibo tal como está AHORA. Si fue anulado (CC-070) lleva también quién lo anuló,
+     * y las imputaciones son las originales: la repetida devuelve el recibo ANULADO, nunca uno nuevo.
+     */
+    private CobroRegistrado cobroExistente(Recibo recibo, List<ImputacionAsentada> asentadas) {
+        if (!recibo.isAnulado()) {
+            return new CobroRegistrado(recibo, asentadas, nombreDe(recibo.getUsuarioId()), true);
+        }
+        Map<Long, String> nombres = cajaRepository.nombresScoped(new HashSet<>(List.of(recibo.getUsuarioId(), recibo.getUsuarioAnulacionId())));
+        return new CobroRegistrado(recibo, asentadas, nombres.get(recibo.getUsuarioId()), true,
+                nombres.get(recibo.getUsuarioAnulacionId()));
     }
 
     /** El nombre de quien cobró (lectura plana, posterior a los locks: inocua). */

@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.ferreteria.common.HoraArgentina;
 import com.ferreteria.tenant.TenantContext;
 import com.ferreteria.ventas.model.MedioPago;
+import com.ferreteria.ventas.service.AnulacionService;
 import com.ferreteria.ventas.service.CajaService;
 import com.ferreteria.ventas.service.CobranzaPedido;
 import com.ferreteria.ventas.service.CobranzaRechazadaException;
@@ -33,6 +34,9 @@ class CajaIntegrationTest extends VentasTestBase {
 
     @Autowired
     CajaService cajaService;
+
+    @Autowired
+    AnulacionService anulacionService;
 
     private String abrirCon(String importe) {
         return "{\"efectivoInicial\": " + importe + "}";
@@ -766,6 +770,193 @@ class CajaIntegrationTest extends VentasTestBase {
             } finally {
                 TenantContext.clear();
             }
+        }
+    }
+
+    // ---------------------------------------------------------------- anulaciones de cobranzas (CCT3B1-313)
+
+    /**
+     * CC-081, CC-082, CC-083, CJ-R-012, CJ-R-013, CC-053: las anulaciones entran por {@link AnulacionService} (el controlador
+     * llega en C6) y se ven en el resumen de la CAJA DE ANULACIÓN: la de efectivo resta del esperado, la de transferencia es
+     * informativa y las cobranzas siguen brutas. Una caja cerrada no cambia nunca.
+     */
+    @Nested
+    class Anulaciones {
+
+        private long clienteSinDeuda(Tienda t) {
+            String razon = "Cliente " + unico("anulacion");
+            jdbc.update("insert into cliente (ferreteria_id, razon_social) values (?, ?)", t.id(), razon);
+            return jdbc.queryForObject("select id from cliente where ferreteria_id = ? and razon_social = ?", Long.class,
+                    t.id(), razon);
+        }
+
+        private long usuarioDueno(Tienda t) {
+            return jdbc.queryForObject("select id from usuario where email = ?", Long.class, t.emailDueno());
+        }
+
+        /** Un adelanto del Dueño en la caja abierta; devuelve el id del recibo. */
+        private long cobrar(Tienda t, long cliente, MedioPago medio, String total) {
+            TenantContext.setCurrentFerreteriaId(t.id());
+            try {
+                return cobranzaService.cobrar(new CobranzaPedido(UUID.randomUUID().toString(), cliente, medio,
+                        new BigDecimal(total), List.of()), usuarioDueno(t)).recibo().getId();
+            } finally {
+                TenantContext.clear();
+            }
+        }
+
+        private void anular(Tienda t, long recibo) {
+            TenantContext.setCurrentFerreteriaId(t.id());
+            try {
+                anulacionService.anular(recibo, "Cobro mal cargado", usuarioDueno(t));
+            } finally {
+                TenantContext.clear();
+            }
+        }
+
+        private JsonNode detalle(Tienda t, long caja) throws Exception {
+            return getJson("/api/cajas/" + caja, login(t.emailDueno()));
+        }
+
+        private void movimientoDelDueno(Tienda t, long caja, String tipo, String importe, String motivo) throws Exception {
+            postJson("/api/cajas/" + caja + "/movimientos", login(t.emailDueno()), movimiento(tipo, importe, motivo))
+                    .andExpect(status().isCreated());
+        }
+
+        @Test
+        @DisplayName("CC-082 (CJ-R-013): inicial 5.000, ventas ef. 1.800, cobranza ef. 700 anulada, ingreso 200, gasto 300, retiro 1.000, contado 5.700 → esperado 5.700, diferencia 0; el cierre trae anulaciones")
+        void ejemploCompletoDelSpec() throws Exception {
+            Tienda t = tiendaSinCaja();
+            String vendedor = login(t.emailVendedor());
+            long caja = abrir(vendedor, "5000.00");
+            long articulo = articulo(t, "Martillo", "UNIDAD", "1800.00", "50");
+            venderPor(vendedor, articulo, "1800.00", "EFECTIVO");
+            long recibo = cobrar(t, clienteSinDeuda(t), MedioPago.EFECTIVO, "700.00");
+            anular(t, recibo);
+            movimientoDelDueno(t, caja, "INGRESO", "200.00", "Cambio");
+            movimientoDelDueno(t, caja, "GASTO", "300.00", "Limpieza");
+            movimientoDelDueno(t, caja, "RETIRO", "1000.00", "Al banco");
+
+            JsonNode cierre = json(postJson("/api/cajas/" + caja + "/cierre", vendedor, cierre("5700.00")).andExpect(status().isOk()));
+
+            assertThat(cierre.get("efectivoEsperado").decimalValue()).isEqualByComparingTo("5700");
+            assertThat(cierre.get("diferencia").decimalValue()).isEqualByComparingTo("0");
+            assertThat(cierre.get("anulaciones").get("EFECTIVO").decimalValue()).isEqualByComparingTo("700");
+            assertThat(cierre.get("totalAnulaciones").decimalValue()).isEqualByComparingTo("700");
+            assertThat(cierre.get("cobranzas").get("EFECTIVO").decimalValue()).as("las cobranzas siguen brutas").isEqualByComparingTo("700");
+            assertThat(jdbc.queryForObject("select efectivo_esperado from caja where id = ?", BigDecimal.class, caja))
+                    .isEqualByComparingTo("5700");
+        }
+
+        @Test
+        @DisplayName("CC-081: anular en efectivo en la misma caja: cobranzas.EFECTIVO 700 Y anulaciones.EFECTIVO 700, totalAnulaciones 700; el esperado vuelve al de antes; las anulaciones no entran en ventas ni totalVentas")
+        void mismaCajaEfectivo() throws Exception {
+            Tienda t = tiendaSinCaja();
+            long caja = abrir(login(t.emailVendedor()), "1000.00");
+            long recibo = cobrar(t, clienteSinDeuda(t), MedioPago.EFECTIVO, "700.00");
+            assertThat(detalle(t, caja).get("efectivoEsperado").decimalValue()).isEqualByComparingTo("1700");
+
+            anular(t, recibo);
+
+            JsonNode d = detalle(t, caja);
+            assertThat(d.get("cobranzas").get("EFECTIVO").decimalValue()).isEqualByComparingTo("700");
+            assertThat(d.get("totalCobranzas").decimalValue()).isEqualByComparingTo("700");
+            assertThat(d.get("anulaciones").get("EFECTIVO").decimalValue()).isEqualByComparingTo("700");
+            assertThat(d.get("totalAnulaciones").decimalValue()).isEqualByComparingTo("700");
+            assertThat(d.get("anulaciones").size()).as("todos los medios").isEqualTo(MedioPago.values().length);
+            assertThat(d.get("anulaciones").get("TRANSFERENCIA").decimalValue()).isEqualByComparingTo("0");
+            assertThat(d.get("efectivoEsperado").decimalValue()).isEqualByComparingTo("1000");
+            assertThat(d.get("totalVentas").decimalValue()).isEqualByComparingTo("0");
+            assertThat(d.get("ventas").get("EFECTIVO").decimalValue()).isEqualByComparingTo("0");
+        }
+
+        @Test
+        @DisplayName("CC-082: una cobranza por TRANSFERENCIA de 300 anulada es informativa: el esperado no cambia y anulaciones.TRANSFERENCIA es 300")
+        void transferenciaInformativa() throws Exception {
+            Tienda t = tiendaSinCaja();
+            long caja = abrir(login(t.emailVendedor()), "1000.00");
+            long recibo = cobrar(t, clienteSinDeuda(t), MedioPago.TRANSFERENCIA, "300.00");
+
+            anular(t, recibo);
+
+            JsonNode d = detalle(t, caja);
+            assertThat(d.get("anulaciones").get("TRANSFERENCIA").decimalValue()).isEqualByComparingTo("300");
+            assertThat(d.get("anulaciones").get("EFECTIVO").decimalValue()).isEqualByComparingTo("0");
+            assertThat(d.get("totalAnulaciones").decimalValue()).isEqualByComparingTo("300");
+            assertThat(d.get("cobranzas").get("TRANSFERENCIA").decimalValue()).isEqualByComparingTo("300");
+            assertThat(d.get("efectivoEsperado").decimalValue()).isEqualByComparingTo("1000");
+        }
+
+        @Test
+        @DisplayName("CC-083: cobro en efectivo de una caja ya CERRADA (esperado guardado 8.000, cobranza 700) anulado con la caja de hoy (inicial 3.000): hoy esperado 2.300 y anulaciones.EFECTIVO 700; la cerrada no cambia (8.000, cobranzas 700, anulaciones 0)")
+        void anularElCobroDeUnaCajaCerrada() throws Exception {
+            Tienda t = tiendaSinCaja();
+            String vendedor = login(t.emailVendedor());
+            long ayer = abrir(vendedor, "7300.00");
+            long recibo = cobrar(t, clienteSinDeuda(t), MedioPago.EFECTIVO, "700.00");
+            postJson("/api/cajas/" + ayer + "/cierre", vendedor, cierre("8000.00")).andExpect(status().isOk());
+            long hoy = abrir(vendedor, "3000.00");
+            assertThat(detalle(t, hoy).get("efectivoEsperado").decimalValue()).isEqualByComparingTo("3000");
+
+            anular(t, recibo);
+
+            JsonNode deHoy = detalle(t, hoy);
+            assertThat(deHoy.get("efectivoEsperado").decimalValue()).isEqualByComparingTo("2300");
+            assertThat(deHoy.get("anulaciones").get("EFECTIVO").decimalValue()).isEqualByComparingTo("700");
+            assertThat(deHoy.get("cobranzas").get("EFECTIVO").decimalValue()).isEqualByComparingTo("0");
+            JsonNode deAyer = detalle(t, ayer);
+            assertThat(deAyer.get("efectivoEsperado").decimalValue()).isEqualByComparingTo("8000");
+            assertThat(deAyer.get("cobranzas").get("EFECTIVO").decimalValue()).isEqualByComparingTo("700");
+            assertThat(deAyer.get("anulaciones").get("EFECTIVO").decimalValue()).isEqualByComparingTo("0");
+            assertThat(deAyer.get("totalAnulaciones").decimalValue()).isEqualByComparingTo("0");
+            assertThat(jdbc.queryForObject("select efectivo_esperado from caja where id = ?", BigDecimal.class, ayer))
+                    .isEqualByComparingTo("8000");
+            assertThat(jdbc.queryForObject("select caja_anulacion_id from recibo where id = ?", Long.class, recibo)).isEqualTo(hoy);
+        }
+
+        @Test
+        @DisplayName("CJ-R-014: el Vendedor con la caja abierta y anulaciones hechas NO ve anulaciones ni totales; en el resumen de SU cierre sí")
+        void cierreCiego() throws Exception {
+            Tienda t = tiendaSinCaja();
+            String vendedor = login(t.emailVendedor());
+            long caja = abrir(vendedor, "100.00");
+            long recibo = cobrar(t, clienteSinDeuda(t), MedioPago.EFECTIVO, "300.00");
+            anular(t, recibo);
+
+            JsonNode actual = getJson("/api/cajas/actual", vendedor);
+
+            assertThat(actual.get("caja").has("anulaciones")).isFalse();
+            assertThat(actual.get("caja").has("totalAnulaciones")).isFalse();
+            assertThat(actual.has("anulaciones")).isFalse();
+            assertThat(actual.get("caja").has("efectivoEsperado")).isFalse();
+            getResult("/api/cajas/" + caja, vendedor).andExpect(status().isForbidden());
+
+            JsonNode cierre = json(postJson("/api/cajas/" + caja + "/cierre", vendedor, cierre("100.00")).andExpect(status().isOk()));
+            assertThat(cierre.get("anulaciones").get("EFECTIVO").decimalValue()).isEqualByComparingTo("300");
+            assertThat(cierre.get("totalAnulaciones").decimalValue()).isEqualByComparingTo("300");
+            assertThat(cierre.get("efectivoEsperado").decimalValue()).isEqualByComparingTo("100");
+            assertThat(cierre.get("diferencia").decimalValue()).isEqualByComparingTo("0");
+        }
+
+        @Test
+        @DisplayName("cada caja del historial muestra SUS anulaciones: la anterior (cobro) 0, la de hoy (anulación) 700; una caja vieja sin anulaciones las muestra en 0")
+        void cadaCajaConSusAnulaciones() throws Exception {
+            Tienda t = tiendaSinCaja();
+            String vendedor = login(t.emailVendedor());
+            long vieja = abrir(vendedor, "0");
+            postJson("/api/cajas/" + vieja + "/cierre", vendedor, cierre("0")).andExpect(status().isOk());
+            long primera = abrir(vendedor, "0");
+            long recibo = cobrar(t, clienteSinDeuda(t), MedioPago.EFECTIVO, "700.00");
+            postJson("/api/cajas/" + primera + "/cierre", vendedor, cierre("700.00")).andExpect(status().isOk());
+            long segunda = abrir(vendedor, "700.00");
+            anular(t, recibo);
+
+            assertThat(detalle(t, vieja).get("totalAnulaciones").decimalValue()).isEqualByComparingTo("0");
+            assertThat(detalle(t, vieja).get("anulaciones").size()).isEqualTo(MedioPago.values().length);
+            assertThat(detalle(t, primera).get("totalAnulaciones").decimalValue()).isEqualByComparingTo("0");
+            assertThat(detalle(t, primera).get("cobranzas").get("EFECTIVO").decimalValue()).isEqualByComparingTo("700");
+            assertThat(detalle(t, segunda).get("totalAnulaciones").decimalValue()).isEqualByComparingTo("700");
+            assertThat(detalle(t, segunda).get("efectivoEsperado").decimalValue()).isEqualByComparingTo("0");
         }
     }
 

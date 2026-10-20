@@ -589,4 +589,84 @@ class RegistroCobranzaTest {
                 .isInstanceOf(com.ferreteria.tenant.MissingTenantException.class);
         nadaTocado();
     }
+
+    // ---------------------------------------------------------------------------------------------------------------
+    // CCT3B1-311 (CC-070, CC-038 modificado, CC-067): la repetida de un recibo ANULADO
+    // ---------------------------------------------------------------------------------------------------------------
+
+    private static Recibo reciboAnulado(long numero, String total) {
+        Recibo recibo = reciboGuardado(numero, CLIENTE, MedioPago.EFECTIVO, total);
+        recibo.anular(11L, LocalDateTime.of(2026, 10, 20, 9, 5), 78L, "Cobro mal cargado");
+        return recibo;
+    }
+
+    @Test
+    @DisplayName("CC-070: misma clave y mismo contenido sobre un recibo ANULADO → 200 (repetida=true) con el recibo ANULADO y quién lo anuló; sin numerar, ni recibo nuevo, ni asiento")
+    void repetidaDeReciboAnulado() {
+        caminoFeliz(List.of());
+        Recibo anulado = reciboAnulado(7, "100.00");
+        when(reciboRepository.porClaveScoped(CLAVE)).thenReturn(Optional.of(anulado));
+        when(cuentaCorriente.imputacionesDeRecibo(RECIBO_ID)).thenReturn(List.of(asentada(1, "70.00"), asentada(2, "30.00")));
+        when(cajaRepository.nombresScoped(any())).thenReturn(Map.of(2L, "Pedro Cobrador", 11L, "Ana Dueña"));
+
+        CobroRegistrado cobro = registro.registrar(pedido(MedioPago.EFECTIVO, "100", imputar(2, "30"), imputar(1, "70")), USUARIO);
+
+        assertThat(cobro.repetida()).isTrue();
+        assertThat(cobro.recibo()).isSameAs(anulado);
+        assertThat(cobro.recibo().isAnulado()).isTrue();
+        assertThat(cobro.cobradoPor()).isEqualTo("Pedro Cobrador");
+        assertThat(cobro.anuladoPor()).isEqualTo("Ana Dueña");
+        assertThat(cobro.imputaciones()).hasSize(2);
+        verify(numeradorRepository, never()).siguienteScoped();
+        verify(reciboRepository, never()).save(any());
+        verify(cuentaCorriente, never()).asentarCobro(any());
+    }
+
+    @Test
+    @DisplayName("CC-070: la repetida pública (la fachada, sin consultar la caja) devuelve el recibo ANULADO aunque la caja esté cerrada")
+    void repetidaPublicaDeReciboAnulado() {
+        Recibo anulado = reciboAnulado(7, "10.00");
+        when(reciboRepository.porClaveScoped(CLAVE)).thenReturn(Optional.of(anulado));
+        when(cuentaCorriente.imputacionesDeRecibo(RECIBO_ID)).thenReturn(List.of());
+        when(cajaRepository.nombresScoped(any())).thenReturn(Map.of(2L, "Pedro Cobrador", 11L, "Ana Dueña"));
+
+        Optional<CobroRegistrado> cobro = registro.repetida(pedido(MedioPago.EFECTIVO, "10"));
+
+        assertThat(cobro).isPresent();
+        assertThat(cobro.get().repetida()).isTrue();
+        assertThat(cobro.get().recibo().isAnulado()).isTrue();
+        assertThat(cobro.get().anuladoPor()).isEqualTo("Ana Dueña");
+        verifyNoInteractions(cajaService, clienteDelDocumento, numeradorRepository);
+    }
+
+    @Test
+    @DisplayName("CC-070: misma clave con OTRO contenido sobre un recibo anulado sigue siendo CLAVE_CON_OTRO_CONTENIDO (422)")
+    void repetidaDeAnuladoConOtroContenido() {
+        Recibo anulado = reciboAnulado(7, "100.00");
+        when(reciboRepository.porClaveScoped(CLAVE)).thenReturn(Optional.of(anulado));
+        when(cuentaCorriente.imputacionesDeRecibo(RECIBO_ID)).thenReturn(List.of(asentada(1, "100.00")));
+
+        assertThatThrownBy(() -> registro.repetida(pedido(MedioPago.EFECTIVO, "250", imputar(1, "100"))))
+                .isInstanceOfSatisfying(CobranzaRechazadaException.class,
+                        e -> assertThat(e.motivo()).isEqualTo(Motivo.CLAVE_CON_OTRO_CONTENIDO));
+    }
+
+    @Test
+    @DisplayName("el GET del recibo ANULADO trae quién lo anuló; el de uno EMITIDO no (anuladoPor null)")
+    void reciboPorIdAnulado() {
+        Recibo anulado = reciboAnulado(7, "300.00");
+        when(reciboRepository.findScoped(RECIBO_ID)).thenReturn(Optional.of(anulado));
+        when(cuentaCorriente.imputacionesDeRecibo(RECIBO_ID)).thenReturn(List.of(asentada(8L, "300.00")));
+        when(cajaRepository.nombresScoped(any())).thenReturn(Map.of(2L, "Pedro Cobrador", 11L, "Ana Dueña"));
+
+        CobroRegistrado cobro = registro.recibo(RECIBO_ID);
+
+        assertThat(cobro.recibo().isAnulado()).isTrue();
+        assertThat(cobro.anuladoPor()).isEqualTo("Ana Dueña");
+        assertThat(cobro.imputaciones()).hasSize(1);
+
+        Recibo emitido = reciboGuardado(8, CLIENTE, MedioPago.EFECTIVO, "50.00");
+        when(reciboRepository.findScoped(RECIBO_ID)).thenReturn(Optional.of(emitido));
+        assertThat(registro.recibo(RECIBO_ID).anuladoPor()).isNull();
+    }
 }

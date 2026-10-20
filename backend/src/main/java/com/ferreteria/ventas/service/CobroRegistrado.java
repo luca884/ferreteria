@@ -9,9 +9,16 @@ import java.util.List;
 /**
  * El resultado de una cobranza: el recibo, a qué comprobantes se imputó, quién cobró y si es la repetición de un cobro ya
  * registrado con la misma clave ({@code repetida}: 200 en vez de 201). No lleva el saldo ni «lo que resta»: no se guardan, y
- * la repetida tiene que devolver lo mismo que la original.
+ * la repetida tiene que devolver lo mismo que la original. {@code anuladoPor} es el nombre de quien anuló el recibo (CC-069): null
+ * mientras está EMITIDO.
  */
-public record CobroRegistrado(Recibo recibo, List<ImputacionAsentada> imputaciones, String cobradoPor, boolean repetida) {
+public record CobroRegistrado(Recibo recibo, List<ImputacionAsentada> imputaciones, String cobradoPor, boolean repetida,
+        String anuladoPor) {
+
+    /** Un cobro de un recibo no anulado (la forma de 3a): {@code anuladoPor} null. */
+    public CobroRegistrado(Recibo recibo, List<ImputacionAsentada> imputaciones, String cobradoPor, boolean repetida) {
+        this(recibo, imputaciones, cobradoPor, repetida, null);
+    }
 
     /** Lo que quedó «a cuenta» (saldo a favor): el total del recibo menos lo imputado. Derivado, no se guarda. */
     public BigDecimal aCuenta() {

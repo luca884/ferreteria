@@ -2,6 +2,8 @@ package com.ferreteria.ventas.service;
 
 import com.ferreteria.clientes.api.CuentaCorrienteParaCobranza.ImputacionInvalidaException.DeudaActual;
 
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 
 /**
@@ -20,7 +22,9 @@ public class CobranzaRechazadaException extends RuntimeException {
         /** La misma clave ya registró otro cobro, con otros datos. */
         CLAVE_CON_OTRO_CONTENIDO(422),
         /** «La deuda cambió desde que la viste»: se imputó más de lo que le queda a algún comprobante. */
-        IMPUTACION_EXCEDE_DEUDA(409);
+        IMPUTACION_EXCEDE_DEUDA(409),
+        /** CC-060: el recibo que se quiere anular ya está anulado (hecho consumado: el front refresca). */
+        RECIBO_YA_ANULADO(409);
 
         private final int estadoHttp;
 
@@ -33,13 +37,31 @@ public class CobranzaRechazadaException extends RuntimeException {
         }
     }
 
+    private static final DateTimeFormatter CUANDO = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");
+
     private final Motivo motivo;
     private final List<DeudaActual> deudas;
+    private final String anuladoPor;
+    private final LocalDateTime fechaAnulacion;
 
     public CobranzaRechazadaException(Motivo motivo, String mensaje, List<DeudaActual> deudas) {
+        this(motivo, mensaje, deudas, null, null);
+    }
+
+    private CobranzaRechazadaException(Motivo motivo, String mensaje, List<DeudaActual> deudas, String anuladoPor,
+            LocalDateTime fechaAnulacion) {
         super(mensaje);
         this.motivo = motivo;
         this.deudas = List.copyOf(deudas);
+        this.anuladoPor = anuladoPor;
+        this.fechaAnulacion = fechaAnulacion;
+    }
+
+    /** CC-060: el recibo ya está anulado; el mensaje dice quién y cuándo, y los dos datos viajan también como campos. */
+    public static CobranzaRechazadaException reciboYaAnulado(String anuladoPor, LocalDateTime fechaAnulacion) {
+        return new CobranzaRechazadaException(Motivo.RECIBO_YA_ANULADO,
+                "Este recibo ya fue anulado por " + anuladoPor + " el " + fechaAnulacion.format(CUANDO) + ".", List.of(),
+                anuladoPor, fechaAnulacion);
     }
 
     public CobranzaRechazadaException(Motivo motivo, String mensaje) {
@@ -53,5 +75,15 @@ public class CobranzaRechazadaException extends RuntimeException {
     /** La deuda actual de los comprobantes afectados; vacía salvo en IMPUTACION_EXCEDE_DEUDA. */
     public List<DeudaActual> deudas() {
         return deudas;
+    }
+
+    /** Quién anuló el recibo; solo en RECIBO_YA_ANULADO. */
+    public String anuladoPor() {
+        return anuladoPor;
+    }
+
+    /** Cuándo se anuló el recibo (hora de Buenos Aires); solo en RECIBO_YA_ANULADO. */
+    public LocalDateTime fechaAnulacion() {
+        return fechaAnulacion;
     }
 }

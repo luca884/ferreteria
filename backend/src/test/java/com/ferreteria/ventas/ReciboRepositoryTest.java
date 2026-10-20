@@ -129,4 +129,73 @@ class ReciboRepositoryTest extends CuentaCorrienteTestBase {
         guardar(b, cliente(b, null), cajaCerrada(b), 1, clave, MedioPago.EFECTIVO, "10.00"); // otra ferretería: entra
         guardar(a, clienteA, cajaA, 2, clave(), MedioPago.EFECTIVO, "10.00");
     }
+
+    // ---- CCT3B1-301 (CC-057, CC-066, CC-081, CC-085): cliente del recibo y anulaciones por caja de anulación ----
+
+    private Recibo anulado(Ferreteria f, long cliente, long cajaDelCobro, long numero, MedioPago medio, String total, long cajaAnulacion) {
+        TenantContext.setCurrentFerreteriaId(f.id());
+        return new TransactionTemplate(transactionManager).execute(status -> {
+            Recibo recibo = recibos.save(Recibo.emitir(f.id(), numero, clave(), cliente, "Cliente " + cliente, cajaDelCobro,
+                    f.usuarioId(), FECHA, medio, new BigDecimal(total)));
+            recibo.anular(f.usuarioId(), FECHA.plusHours(1), cajaAnulacion, "Cobro mal cargado");
+            return recibos.saveAndFlush(recibo);
+        });
+    }
+
+    @Test
+    @DisplayName("clienteDeScoped devuelve el cliente del recibo; vacío para inexistente y para el de otra ferretería")
+    void clienteDelRecibo() {
+        Ferreteria a = ferreteria();
+        Ferreteria b = ferreteria();
+        long clienteA = cliente(a, null);
+        long otroClienteA = cliente(a, null);
+        Recibo uno = guardar(a, clienteA, cajaCerrada(a), 1, clave(), MedioPago.EFECTIVO, "100.00");
+        Recibo dos = guardar(a, otroClienteA, cajaCerrada(a), 2, clave(), MedioPago.EFECTIVO, "100.00");
+
+        TenantContext.setCurrentFerreteriaId(a.id());
+        assertThat(recibos.clienteDeScoped(uno.getId())).contains(clienteA);
+        assertThat(recibos.clienteDeScoped(dos.getId())).contains(otroClienteA);
+        assertThat(recibos.clienteDeScoped(999_999L)).isEmpty();
+        TenantContext.setCurrentFerreteriaId(b.id());
+        assertThat(recibos.clienteDeScoped(uno.getId())).isEmpty();
+    }
+
+    @Test
+    @DisplayName("totalesAnuladosDeCajaScoped suma por medio los recibos cuya CAJA DE ANULACIÓN es la pedida, aunque el recibo sea de otra caja")
+    void anuladosPorCajaDeAnulacion() {
+        Ferreteria f = ferreteria();
+        long cliente = cliente(f, null);
+        long cajaDeAyer = cajaCerrada(f);
+        long cajaDeHoy = cajaCerrada(f);
+        long otraCaja = cajaCerrada(f);
+        anulado(f, cliente, cajaDeAyer, 1, MedioPago.EFECTIVO, "700.00", cajaDeHoy);
+        anulado(f, cliente, cajaDeHoy, 2, MedioPago.EFECTIVO, "50.25", cajaDeHoy);
+        anulado(f, cliente, cajaDeAyer, 3, MedioPago.TRANSFERENCIA, "300.00", cajaDeHoy);
+        anulado(f, cliente, cajaDeAyer, 4, MedioPago.EFECTIVO, "999.00", otraCaja);
+        guardar(f, cliente, cajaDeHoy, 5, clave(), MedioPago.EFECTIVO, "11.00"); // emitido, sin anular: no suma
+
+        TenantContext.setCurrentFerreteriaId(f.id());
+        Map<MedioPago, BigDecimal> hoy = recibos.totalesAnuladosDeCajaScoped(cajaDeHoy);
+        assertThat(hoy).containsOnlyKeys(MedioPago.EFECTIVO, MedioPago.TRANSFERENCIA);
+        assertThat(hoy.get(MedioPago.EFECTIVO)).isEqualByComparingTo("750.25");
+        assertThat(hoy.get(MedioPago.TRANSFERENCIA)).isEqualByComparingTo("300.00");
+        assertThat(recibos.totalesAnuladosDeCajaScoped(otraCaja).get(MedioPago.EFECTIVO)).isEqualByComparingTo("999.00");
+        assertThat(recibos.totalesAnuladosDeCajaScoped(cajaDeAyer)).isEmpty();
+        // las cobranzas (brutas, por caja del cobro) no cambian por anular
+        assertThat(recibos.totalesDeCajaScoped(cajaDeAyer).get(MedioPago.EFECTIVO)).isEqualByComparingTo("1699.00");
+    }
+
+    @Test
+    @DisplayName("totalesAnuladosDeCajaScoped no suma recibos de otra ferretería aunque se pida el id de su caja")
+    void anuladosNoCruzanFerreterias() {
+        Ferreteria a = ferreteria();
+        Ferreteria b = ferreteria();
+        long cajaDeA = cajaCerrada(a);
+        anulado(a, cliente(a, null), cajaDeA, 1, MedioPago.EFECTIVO, "100.00", cajaDeA);
+
+        TenantContext.setCurrentFerreteriaId(a.id());
+        assertThat(recibos.totalesAnuladosDeCajaScoped(cajaDeA).get(MedioPago.EFECTIVO)).isEqualByComparingTo("100.00");
+        TenantContext.setCurrentFerreteriaId(b.id());
+        assertThat(recibos.totalesAnuladosDeCajaScoped(cajaDeA)).isEmpty();
+    }
 }

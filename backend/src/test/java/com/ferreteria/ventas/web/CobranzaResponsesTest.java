@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.ferreteria.clientes.api.CuentaCorrienteParaCobranza.ImputacionAsentada;
 import com.ferreteria.clientes.api.CuentaCorrienteParaCobranza.ImputacionInvalidaException.DeudaActual;
@@ -23,6 +24,9 @@ import org.springframework.test.util.ReflectionTestUtils;
 class CobranzaResponsesTest {
 
     private static final ObjectMapper JSON = new ObjectMapper().registerModule(new JavaTimeModule());
+    /** Como Spring Boot: las fechas en ISO (no como arreglo de números). */
+    private static final ObjectMapper JSON_ISO = new ObjectMapper().registerModule(new JavaTimeModule())
+            .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
 
     private static BigDecimal bd(String valor) {
         return new BigDecimal(valor);
@@ -48,7 +52,11 @@ class CobranzaResponsesTest {
         JsonNode json = JSON.valueToTree(ReciboResponse.de(cobro));
 
         assertThat(json.fieldNames()).toIterable().containsExactlyInAnyOrder("id", "numero", "fecha", "clienteId", "clienteNombre",
-                "medio", "total", "aCuenta", "cobradoPor", "imputaciones");
+                "medio", "total", "aCuenta", "cobradoPor", "imputaciones", "estado", "fechaAnulacion", "anuladoPor", "motivoAnulacion");
+        assertThat(json.get("estado").asText()).isEqualTo("EMITIDO");
+        assertThat(json.get("fechaAnulacion").isNull()).isTrue();
+        assertThat(json.get("anuladoPor").isNull()).isTrue();
+        assertThat(json.get("motivoAnulacion").isNull()).isTrue();
         assertThat(json.get("id").asLong()).isEqualTo(77L);
         assertThat(json.get("numero").asLong()).isEqualTo(12L);
         assertThat(json.get("clienteId").asLong()).isEqualTo(5L);
@@ -120,6 +128,49 @@ class CobranzaResponsesTest {
             assertThat(json.get("motivo").asText()).isEqualTo(motivo.name());
             assertThat(json.get("message").asText()).isEqualTo("Mensaje");
             assertThat(json.has("comprobantes")).as(motivo.name()).isFalse();
+        }
+    }
+
+    // ---- CCT3B1-307 (CC-069, CC-060, CC-067): el recibo anulado y el 409 con quién y cuándo ----
+
+    @Test
+    @DisplayName("un recibo ANULADO lleva estado, fecha, quién y motivo, y las MISMAS imputaciones, total y aCuenta que la emisión")
+    void reciboAnulado() {
+        Recibo recibo = recibo("1000.00");
+        recibo.anular(11L, LocalDateTime.of(2026, 10, 20, 9, 5), 41L, "  Cliente equivocado  ");
+        List<ImputacionAsentada> originales = List.of(imputacion(8L, "Venta N.º 8", "300.00"), imputacion(9L, "Venta N.º 9", "200.00"));
+
+        JsonNode anulado = JSON_ISO.valueToTree(ReciboResponse.de(new CobroRegistrado(recibo, originales, "Ana Dueña", false, "Marta")));
+        JsonNode emitido = JSON.valueToTree(ReciboResponse.de(new CobroRegistrado(recibo("1000.00"), originales, "Ana Dueña", false)));
+
+        assertThat(anulado.get("estado").asText()).isEqualTo("ANULADO");
+        assertThat(anulado.get("fechaAnulacion").asText()).isEqualTo("2026-10-20T09:05:00");
+        assertThat(anulado.get("anuladoPor").asText()).isEqualTo("Marta");
+        assertThat(anulado.get("motivoAnulacion").asText()).isEqualTo("Cliente equivocado");
+        assertThat(anulado.get("total").decimalValue()).isEqualByComparingTo("1000");
+        assertThat(anulado.get("aCuenta").decimalValue()).isEqualByComparingTo("500");
+        assertThat(anulado.get("imputaciones")).hasSize(2);
+        assertThat(anulado.get("imputaciones")).isEqualTo(emitido.get("imputaciones"));
+        assertThat(anulado.get("cobradoPor").asText()).isEqualTo("Ana Dueña");
+    }
+
+    @Test
+    @DisplayName("el 409 RECIBO_YA_ANULADO serializa motivo, message (la clave que lee el front), anuladoPor y fechaAnulacion; los 422 de 3a, sin esas claves")
+    void rechazoYaAnulado() {
+        CobranzaRechazadaException e = CobranzaRechazadaException.reciboYaAnulado("Ana", LocalDateTime.of(2026, 10, 19, 17, 45));
+
+        JsonNode json = JSON_ISO.valueToTree(CobranzaRechazadaResponse.de(e));
+
+        assertThat(json.get("status").asInt()).isEqualTo(409);
+        assertThat(json.get("motivo").asText()).isEqualTo("RECIBO_YA_ANULADO");
+        assertThat(json.get("message").asText()).isEqualTo("Este recibo ya fue anulado por Ana el 19/10/2026 17:45.");
+        assertThat(json.get("anuladoPor").asText()).isEqualTo("Ana");
+        assertThat(json.get("fechaAnulacion").asText()).isEqualTo("2026-10-19T17:45:00");
+        assertThat(json.has("comprobantes")).isFalse();
+        for (Motivo motivo : List.of(Motivo.CAJA_CERRADA, Motivo.CAJA_DE_OTRO_DIA, Motivo.CLAVE_CON_OTRO_CONTENIDO)) {
+            JsonNode otro = JSON.valueToTree(CobranzaRechazadaResponse.de(new CobranzaRechazadaException(motivo, "Mensaje")));
+            assertThat(otro.has("anuladoPor")).as(motivo.name()).isFalse();
+            assertThat(otro.has("fechaAnulacion")).as(motivo.name()).isFalse();
         }
     }
 }
