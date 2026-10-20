@@ -46,6 +46,19 @@ public class ClienteDelDocumento {
         return elegido(clientes.tomarParaVenta(clienteId));
     }
 
+    /**
+     * El cliente de una COBRANZA (CC-034, CC-041): lo TOMA igual que una venta (mismo primer paso del orden de locks, después
+     * de la caja y antes de cualquier numerador o lectura plana). Sirve cualquier cliente ACTIVO de la ferretería: no se
+     * exige saldo, deuda, pendientes ni cuenta habilitada (un cobro sin imputaciones es un adelanto, queda a favor). Ajeno o
+     * inexistente es 404; desactivado, 422. Exige la transacción abierta de quien llama.
+     */
+    public Elegido resolverParaCobranza(Long clienteId) {
+        if (clienteId == null) {
+            throw new IllegalArgumentException("Una cobranza es siempre de un cliente.");
+        }
+        return elegido(clientes.tomarParaVenta(clienteId));
+    }
+
     private static Elegido elegido(Optional<ClienteReferencia> referencia) {
         ClienteReferencia cliente = referencia.orElseThrow(() -> new ResourceNotFoundException("Cliente no encontrado"));
         if (!cliente.activo()) {

@@ -10,6 +10,8 @@ import com.ferreteria.clientes.repository.ClienteRepository;
 import com.ferreteria.clientes.repository.ImputacionRepository;
 import com.ferreteria.clientes.repository.MovimientoCuentaClienteRepository;
 import com.ferreteria.clientes.service.CuentaCorrienteService;
+import com.ferreteria.ventas.model.Recibo;
+import com.ferreteria.ventas.repository.ReciboRepository;
 import com.ferreteria.ventas.service.RegistroVenta;
 import com.tngtech.archunit.core.domain.JavaMethodCall;
 import java.io.IOException;
@@ -306,5 +308,58 @@ class ModulosArchTest {
                         && call.getName().matches("(delete|remove).*");
             }
         }).check(clases);
+    }
+
+    // ---- Cobranza (corte 3 de cuenta-corriente-tramo-3a): ventas orquesta el recibo y llama al puerto ----
+
+    private static final String REGISTRO_COBRANZA = "com.ferreteria.ventas.service.RegistroCobranza";
+
+    /**
+     * (i) RegistroCobranza cobra por el puerto {@code clientes.api.CuentaCorrienteParaCobranza} y NO conoce la implementación
+     * (copia de la regla (e)). Falla si RegistroCobranza no existe: la regla no puede pasar en vacío.
+     */
+    @Test
+    void registroCobranzaUsaLaCuentaCorrientePorSuPuerto() {
+        var dependencias = clases.get(REGISTRO_COBRANZA).getDirectDependenciesFromSelf().stream()
+                .map(d -> d.getTargetClass().getName())
+                .collect(java.util.stream.Collectors.toSet());
+
+        assertThat(dependencias).contains(PUERTO_COBRANZA);
+        assertThat(dependencias).doesNotContain(CuentaCorrienteService.class.getName());
+    }
+
+    /** (k-Recibo) El recibo es inmutable: la entidad no tiene setters y nadie borra con su repositorio. */
+    @Test
+    void losRecibosSonInmutablesYNadieLosBorra() {
+        noMethods().that().areDeclaredIn(Recibo.class)
+                .should().haveNameMatching("set[A-Z].*")
+                .check(clases);
+
+        noClasses().should().callMethodWhere(new com.tngtech.archunit.base.DescribedPredicate<JavaMethodCall>(
+                "borrar o quitar renglones con ReciboRepository") {
+            @Override
+            public boolean test(JavaMethodCall call) {
+                return call.getTargetOwner().isAssignableTo(ReciboRepository.class)
+                        && call.getName().matches("(delete|remove).*");
+            }
+        }).check(clases);
+    }
+
+    /**
+     * (l) Las clases de cobranza de ventas (existen todas) no tocan repositorios, servicio ni modelo de clientes: solo su
+     * puerto {@code clientes.api} (las reglas (f) y (g) ya lo exigen a todo ventas; esta además falla si falta alguna clase).
+     */
+    @Test
+    void laCobranzaDeVentasNoDependeDeLaInternaDeClientes() {
+        for (String nombre : List.of(REGISTRO_COBRANZA, "com.ferreteria.ventas.service.CobranzaService",
+                "com.ferreteria.ventas.service.CobranzaPedido", "com.ferreteria.ventas.service.CobroRegistrado",
+                "com.ferreteria.ventas.service.CobranzaRechazadaException")) {
+            var dependencias = clases.get(nombre).getDirectDependenciesFromSelf().stream()
+                    .map(d -> d.getTargetClass().getPackageName())
+                    .collect(java.util.stream.Collectors.toSet());
+
+            assertThat(dependencias).as("dependencias de %s", nombre).noneMatch(p -> p.startsWith("com.ferreteria.clientes.repository")
+                    || p.startsWith("com.ferreteria.clientes.service") || p.startsWith("com.ferreteria.clientes.model"));
+        }
     }
 }

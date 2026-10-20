@@ -129,4 +129,60 @@ class ClienteDelDocumentoTest {
         verify(clientes).buscar(7L);
         verifyNoMoreInteractions(clientes);
     }
+
+    // ---- resolverParaCobranza (CC-034, CC-041): el cliente de una cobranza; cualquier cliente ACTIVO, también el adelanto ----
+
+    @Test
+    @DisplayName("resolverParaCobranza toma al cliente (tomarParaVenta, no buscar) y copia su razón social")
+    void paraCobranzaTomaAlCliente() {
+        when(clientes.tomarParaVenta(7L)).thenReturn(Optional.of(new ClienteReferencia(7L, "Ferretería Norte SRL", true)));
+
+        ClienteDelDocumento.Elegido elegido = resolutor.resolverParaCobranza(7L);
+
+        assertThat(elegido.id()).isEqualTo(7L);
+        assertThat(elegido.nombre()).isEqualTo("Ferretería Norte SRL");
+        verify(clientes).tomarParaVenta(7L);
+        verifyNoMoreInteractions(clientes);
+    }
+
+    @Test
+    @DisplayName("resolverParaCobranza: ajeno o inexistente es 404 y desactivado es 422 «El cliente está desactivado.»")
+    void paraCobranzaRechazos() {
+        when(clientes.tomarParaVenta(9L)).thenReturn(Optional.empty());
+        when(clientes.tomarParaVenta(8L)).thenReturn(Optional.of(new ClienteReferencia(8L, "Viejo", false)));
+
+        assertThatThrownBy(() -> resolutor.resolverParaCobranza(9L))
+                .isInstanceOf(ResourceNotFoundException.class)
+                .hasMessage("Cliente no encontrado");
+        assertThatThrownBy(() -> resolutor.resolverParaCobranza(8L))
+                .isInstanceOf(ReglaDeNegocioException.class)
+                .hasMessage("El cliente está desactivado.");
+    }
+
+    @Test
+    @DisplayName("resolverParaCobranza NO pide saldo, cuenta habilitada ni límite: un cliente activo (la referencia solo trae id, nombre y activo) resuelve: adelanto")
+    void paraCobranzaNoExigeSaldoNiCuenta() {
+        // ClienteReferencia no lleva saldo ni límite: el resolutor ni siquiera puede exigirlos.
+        when(clientes.tomarParaVenta(5L)).thenReturn(Optional.of(new ClienteReferencia(5L, "Sin deuda ni cuenta", true)));
+
+        assertThat(resolutor.resolverParaCobranza(5L).id()).isEqualTo(5L);
+    }
+
+    @Test
+    @DisplayName("resolverParaCobranza sin cliente es un error de programación (la cobranza siempre es de un cliente): no toca el puerto")
+    void paraCobranzaSinCliente() {
+        assertThatThrownBy(() -> resolutor.resolverParaCobranza(null)).isInstanceOf(IllegalArgumentException.class);
+        verifyNoInteractions(clientes);
+    }
+
+    @Test
+    @DisplayName("resolver y resolverParaVenta siguen igual con resolverParaCobranza presente (regresión: resolver usa buscar)")
+    void regresionDeLosOtrosResolutores() {
+        when(clientes.buscar(7L)).thenReturn(Optional.of(new ClienteReferencia(7L, "Norte", true)));
+
+        resolutor.resolver(7L, null);
+
+        verify(clientes).buscar(7L);
+        verifyNoMoreInteractions(clientes);
+    }
 }

@@ -17,6 +17,7 @@ import com.ferreteria.ventas.model.TipoMovimientoCaja;
 import com.ferreteria.ventas.repository.CajaRepository;
 import com.ferreteria.ventas.repository.MovimientoCajaRepository;
 import com.ferreteria.ventas.repository.PagoRepository;
+import com.ferreteria.ventas.repository.ReciboRepository;
 import com.ferreteria.ventas.service.VentaRechazadaException.Motivo;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
@@ -35,6 +36,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Stream;
 
@@ -54,13 +56,15 @@ public class CajaService {
     private final CajaRepository cajaRepository;
     private final MovimientoCajaRepository movimientoRepository;
     private final PagoRepository pagoRepository;
+    private final ReciboRepository reciboRepository;
     private final Clock reloj;
 
     public CajaService(CajaRepository cajaRepository, MovimientoCajaRepository movimientoRepository,
-            PagoRepository pagoRepository, Clock reloj) {
+            PagoRepository pagoRepository, ReciboRepository reciboRepository, Clock reloj) {
         this.cajaRepository = cajaRepository;
         this.movimientoRepository = movimientoRepository;
         this.pagoRepository = pagoRepository;
+        this.reciboRepository = reciboRepository;
         this.reloj = reloj;
     }
 
@@ -173,7 +177,7 @@ public class CajaService {
      */
     @Transactional(propagation = Propagation.MANDATORY)
     public Long cajaParaVender() {
-        Caja caja = cajaRepository.abiertaParaVenderScoped().orElseThrow(() ->
+        Caja caja = cajaAbiertaCompartida().orElseThrow(() ->
                 new VentaRechazadaException(Motivo.CAJA_CERRADA, "Abrí la caja para vender.", List.of()));
         if (caja.estado(hoy()) == EstadoCaja.DE_OTRO_DIA) {
             throw new VentaRechazadaException(Motivo.CAJA_DE_OTRO_DIA,
@@ -182,9 +186,30 @@ public class CajaService {
         return caja.getId();
     }
 
+    /**
+     * La caja en la que se cobra una cuenta corriente (CC-035, CC-054): la misma que para vender (abierta hoy, lock compartido
+     * hasta el commit del cobro, así el cierre espera a esta cobranza y el recibo entra en su esperado). Sin caja abierta,
+     * CAJA_CERRADA; con la de un día anterior, CAJA_DE_OTRO_DIA. Es el primer lock de la cobranza (caja S → cliente X → ...).
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public Long cajaParaCobrar() {
+        Caja caja = cajaAbiertaCompartida().orElseThrow(() ->
+                new CobranzaRechazadaException(CobranzaRechazadaException.Motivo.CAJA_CERRADA, "Abrí la caja para cobrar."));
+        if (caja.estado(hoy()) == EstadoCaja.DE_OTRO_DIA) {
+            throw new CobranzaRechazadaException(CobranzaRechazadaException.Motivo.CAJA_DE_OTRO_DIA,
+                    "La caja del " + dia(caja) + " sigue abierta. Cerrala antes de cobrar.");
+        }
+        return caja.getId();
+    }
+
+    /** La caja abierta de la ferretería con lock compartido (FOR SHARE): lo comparten vender y cobrar. */
+    private Optional<Caja> cajaAbiertaCompartida() {
+        return cajaRepository.abiertaParaVenderScoped();
+    }
+
     private ResumenCaja resumen(Caja caja) {
         return ResumenCaja.de(caja.getEfectivoInicial(), pagoRepository.totalesDeCajaScoped(caja.getId()),
-                movimientoRepository.totalesScoped(caja.getId()));
+                reciboRepository.totalesDeCajaScoped(caja.getId()), movimientoRepository.totalesScoped(caja.getId()));
     }
 
     private DetalleCaja detalle(Caja caja, ResumenCaja resumen) {

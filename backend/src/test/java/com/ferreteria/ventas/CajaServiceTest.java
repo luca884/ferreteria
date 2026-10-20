@@ -2,22 +2,36 @@ package com.ferreteria.ventas;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.ferreteria.common.HoraArgentina;
 import com.ferreteria.ventas.model.Caja;
 import com.ferreteria.ventas.repository.CajaRepository;
 import com.ferreteria.ventas.repository.MovimientoCajaRepository;
+import com.ferreteria.tenant.TenantContext;
+import com.ferreteria.ventas.model.MedioPago;
 import com.ferreteria.ventas.repository.PagoRepository;
+import com.ferreteria.ventas.repository.ReciboRepository;
 import com.ferreteria.ventas.service.CajaService;
+import com.ferreteria.ventas.service.CobranzaRechazadaException;
+import com.ferreteria.ventas.service.DetalleCaja;
 import com.ferreteria.ventas.service.VentaRechazadaException;
 import com.ferreteria.ventas.service.VentaRechazadaException.Motivo;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDateTime;
+import java.lang.reflect.Method;
+import java.util.Map;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
+import org.mockito.InOrder;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -41,17 +55,26 @@ class CajaServiceTest {
     @Mock
     PagoRepository pagos;
 
+    @Mock
+    ReciboRepository recibos;
+
     CajaService service;
 
     @BeforeEach
     void preparar() {
-        service = new CajaService(cajas, movimientos, pagos, RELOJ);
+        service = new CajaService(cajas, movimientos, pagos, recibos, RELOJ);
     }
 
     private static Caja abiertaEl(LocalDateTime apertura) {
         Caja caja = Caja.abrir(3L, 9L, BigDecimal.ZERO, null, apertura);
         ReflectionTestUtils.setField(caja, "id", 40L);
         return caja;
+    }
+
+    private CobranzaRechazadaException rechazoDeCobro() {
+        Throwable error = catchThrowable(service::cajaParaCobrar);
+        assertThat(error).isInstanceOf(CobranzaRechazadaException.class);
+        return (CobranzaRechazadaException) error;
     }
 
     private VentaRechazadaException rechazo() {
@@ -90,5 +113,120 @@ class CajaServiceTest {
         assertThat(e.motivo()).isEqualTo(Motivo.CAJA_DE_OTRO_DIA);
         assertThat(e.motivo().estadoHttp()).isEqualTo(422);
         assertThat(e.getMessage()).isEqualTo("La caja del 11/10 sigue abierta. Cerrala antes de vender.");
+    }
+
+    // ---- CCT3-305 (CC-035, CC-054): la caja en la que se cobra ----
+
+    @Test
+    @DisplayName("cobrar sin caja abierta: CAJA_CERRADA «Abrí la caja para cobrar.» (422)")
+    void cobrarSinCaja() {
+        when(cajas.abiertaParaVenderScoped()).thenReturn(Optional.empty());
+
+        CobranzaRechazadaException e = rechazoDeCobro();
+
+        assertThat(e.motivo()).isEqualTo(CobranzaRechazadaException.Motivo.CAJA_CERRADA);
+        assertThat(e.motivo().estadoHttp()).isEqualTo(422);
+        assertThat(e.getMessage()).isEqualTo("Abrí la caja para cobrar.");
+    }
+
+    @Test
+    @DisplayName("cobrar con la caja de ayer: CAJA_DE_OTRO_DIA con la fecha dd/MM de esa caja")
+    void cobrarConCajaDeOtroDia() {
+        when(cajas.abiertaParaVenderScoped()).thenReturn(Optional.of(abiertaEl(LocalDateTime.of(2026, 10, 11, 8, 0))));
+
+        CobranzaRechazadaException e = rechazoDeCobro();
+
+        assertThat(e.motivo()).isEqualTo(CobranzaRechazadaException.Motivo.CAJA_DE_OTRO_DIA);
+        assertThat(e.motivo().estadoHttp()).isEqualTo(422);
+        assertThat(e.getMessage()).isEqualTo("La caja del 11/10 sigue abierta. Cerrala antes de cobrar.");
+    }
+
+    @Test
+    @DisplayName("cobrar con la caja abierta hoy (fecha de Buenos Aires) devuelve su id; toma la MISMA caja compartida (FOR SHARE) que vender")
+    void cobrarConCajaDeHoy() {
+        when(cajas.abiertaParaVenderScoped()).thenReturn(Optional.of(abiertaEl(LocalDateTime.of(2026, 10, 12, 8, 0))));
+
+        assertThat(service.cajaParaCobrar()).isEqualTo(40L);
+        assertThat(service.cajaParaVender()).isEqualTo(40L);
+        verify(cajas, org.mockito.Mockito.times(2)).abiertaParaVenderScoped();
+        verify(cajas, never()).abiertaScoped();
+    }
+
+    @Test
+    @DisplayName("regresión: vender mantiene sus mensajes («…para vender») aunque cobrar tenga los suyos")
+    void venderConservaSusMensajes() {
+        when(cajas.abiertaParaVenderScoped()).thenReturn(Optional.empty());
+        assertThat(rechazo().getMessage()).isEqualTo("Abrí la caja para vender.");
+
+        when(cajas.abiertaParaVenderScoped()).thenReturn(Optional.of(abiertaEl(LocalDateTime.of(2026, 10, 11, 8, 0))));
+        assertThat(rechazo().getMessage()).isEqualTo("La caja del 11/10 sigue abierta. Cerrala antes de vender.");
+    }
+
+    @Test
+    @DisplayName("cajaParaCobrar y cajaParaVender exigen transacción (MANDATORY): el lock compartido tiene que vivir hasta el commit del cobro")
+    void exigenTransaccion() throws NoSuchMethodException {
+        for (String nombre : new String[] {"cajaParaCobrar", "cajaParaVender"}) {
+            Method metodo = CajaService.class.getMethod(nombre);
+            assertThat(metodo.getAnnotation(Transactional.class)).as(nombre).isNotNull();
+            assertThat(metodo.getAnnotation(Transactional.class).propagation()).as(nombre).isEqualTo(Propagation.MANDATORY);
+        }
+    }
+
+    // ---- CCT3-304 (CC-053, CJ-R-012, CJ-R-013): el resumen de caja suma los recibos ----
+
+    @Test
+    @DisplayName("el detalle de una caja abierta pasa las cobranzas por medio al resumen: efectivo suma al esperado, transferencia no")
+    void detalleSumaLasCobranzas() {
+        TenantContext.setCurrentFerreteriaId(3L);
+        try {
+            Caja caja = abiertaEl(LocalDateTime.of(2026, 10, 12, 8, 0));
+            when(cajas.findScoped(40L)).thenReturn(Optional.of(caja));
+            when(pagos.totalesDeCajaScoped(40L)).thenReturn(Map.of(MedioPago.EFECTIVO, new BigDecimal("1000.00")));
+            when(recibos.totalesDeCajaScoped(40L)).thenReturn(
+                    Map.of(MedioPago.EFECTIVO, new BigDecimal("700.00"), MedioPago.TRANSFERENCIA, new BigDecimal("300.00")));
+
+            DetalleCaja detalle = service.detalle(40L);
+
+            assertThat(detalle.resumen().cobranzasPorMedio().get(MedioPago.EFECTIVO)).isEqualByComparingTo("700");
+            assertThat(detalle.resumen().cobranzasPorMedio().get(MedioPago.TRANSFERENCIA)).isEqualByComparingTo("300");
+            assertThat(detalle.resumen().efectivoEsperado()).isEqualByComparingTo("1700"); // 0 + 1000 + 700
+            assertThat(detalle.resumen().totalVentas()).isEqualByComparingTo("1000");
+        } finally {
+            TenantContext.clear();
+        }
+    }
+
+    @Test
+    @DisplayName("el cierre toma la caja con lock exclusivo ANTES de leer los recibos y guarda un esperado que incluye la cobranza en efectivo")
+    void cierreSumaLasCobranzasDespuesDelLock() {
+        Caja caja = Caja.abrir(3L, 9L, new BigDecimal("5000.00"), null, LocalDateTime.of(2026, 10, 12, 8, 0));
+        ReflectionTestUtils.setField(caja, "id", 40L);
+        when(cajas.paraCerrarScoped(40L)).thenReturn(Optional.of(caja));
+        when(pagos.totalesDeCajaScoped(40L)).thenReturn(Map.of(MedioPago.EFECTIVO, new BigDecimal("1000.00")));
+        when(recibos.totalesDeCajaScoped(40L)).thenReturn(Map.of(MedioPago.EFECTIVO, new BigDecimal("700.00")));
+
+        DetalleCaja detalle = service.cerrar(40L, new BigDecimal("6700.00"), 9L);
+
+        InOrder orden = inOrder(cajas, recibos);
+        orden.verify(cajas).paraCerrarScoped(40L);
+        orden.verify(recibos).totalesDeCajaScoped(40L);
+        assertThat(caja.getEfectivoEsperado()).isEqualByComparingTo("6700");
+        assertThat(caja.getDiferencia()).isEqualByComparingTo("0");
+        assertThat(detalle.resumen().cobranzasEnEfectivo()).isEqualByComparingTo("700");
+    }
+
+    @Test
+    @DisplayName("sin recibos el esperado es el de siempre (cajas viejas: cobranzas en 0)")
+    void sinRecibosNoCambiaNada() {
+        Caja caja = Caja.abrir(3L, 9L, new BigDecimal("5000.00"), null, LocalDateTime.of(2026, 10, 12, 8, 0));
+        ReflectionTestUtils.setField(caja, "id", 40L);
+        when(cajas.paraCerrarScoped(40L)).thenReturn(Optional.of(caja));
+        when(pagos.totalesDeCajaScoped(anyLong())).thenReturn(Map.of(MedioPago.EFECTIVO, new BigDecimal("1000.00")));
+
+        DetalleCaja detalle = service.cerrar(40L, new BigDecimal("5950.00"), 9L);
+
+        assertThat(caja.getEfectivoEsperado()).isEqualByComparingTo("6000");
+        assertThat(caja.getDiferencia()).isEqualByComparingTo("-50");
+        assertThat(detalle.resumen().totalCobranzas()).isEqualByComparingTo("0");
     }
 }

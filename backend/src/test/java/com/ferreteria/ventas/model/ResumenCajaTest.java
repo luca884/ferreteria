@@ -20,6 +20,7 @@ class ResumenCajaTest {
         ResumenCaja resumen = ResumenCaja.de(bd("5000.00"),
                 Map.of(MedioPago.EFECTIVO, bd("12000.00"), MedioPago.DEBITO, bd("8000.00"),
                         MedioPago.CREDITO, bd("3000.00"), MedioPago.TRANSFERENCIA, bd("1500.00")),
+                Map.of(),
                 Map.of(TipoMovimientoCaja.INGRESO, bd("700.00"), TipoMovimientoCaja.GASTO, bd("1200.00"),
                         TipoMovimientoCaja.RETIRO, bd("10000.00")));
 
@@ -34,7 +35,7 @@ class ResumenCajaTest {
     @Test
     @DisplayName("sin ventas ni movimientos, cada medio y cada tipo esta en cero y el esperado es el inicial")
     void sinMovimientos() {
-        ResumenCaja resumen = ResumenCaja.de(bd("300.00"), Map.of(), Map.of());
+        ResumenCaja resumen = ResumenCaja.de(bd("300.00"), Map.of(), Map.of(), Map.of());
 
         assertThat(resumen.ventasPorMedio()).containsOnlyKeys(MedioPago.values());
         assertThat(resumen.ventasPorMedio().values()).allSatisfy(v -> assertThat(v).isEqualByComparingTo("0"));
@@ -48,7 +49,7 @@ class ResumenCajaTest {
     @DisplayName("CC-025: lo vendido a cuenta corriente es un renglon informativo: suma al total de ventas, no al efectivo esperado")
     void cuentaCorrienteEsInformativa() {
         ResumenCaja resumen = ResumenCaja.de(bd("5000.00"),
-                Map.of(MedioPago.EFECTIVO, bd("1000.00"), MedioPago.CUENTA_CORRIENTE, bd("2000.00")), Map.of());
+                Map.of(MedioPago.EFECTIVO, bd("1000.00"), MedioPago.CUENTA_CORRIENTE, bd("2000.00")), Map.of(), Map.of());
 
         assertThat(resumen.ventasPorMedio().get(MedioPago.CUENTA_CORRIENTE)).isEqualByComparingTo("2000");
         assertThat(resumen.totalVentas()).isEqualByComparingTo("3000");
@@ -61,6 +62,7 @@ class ResumenCajaTest {
     void cuentaCorrienteNoMuevaElEfectivoConMovimientos() {
         ResumenCaja resumen = ResumenCaja.de(bd("5000.00"),
                 Map.of(MedioPago.EFECTIVO, bd("1000.00"), MedioPago.CUENTA_CORRIENTE, bd("9999.00")),
+                Map.of(),
                 Map.of(TipoMovimientoCaja.INGRESO, bd("700.00"), TipoMovimientoCaja.GASTO, bd("1200.00"),
                         TipoMovimientoCaja.RETIRO, bd("2000.00")));
 
@@ -72,7 +74,7 @@ class ResumenCajaTest {
     @Test
     @DisplayName("CC-025: sin ventas a cuenta corriente la clave esta presente con cero")
     void sinVentasACuentaCorrienteLaClaveEstaEnCero() {
-        ResumenCaja resumen = ResumenCaja.de(bd("5000.00"), Map.of(MedioPago.EFECTIVO, bd("1000.00")), Map.of());
+        ResumenCaja resumen = ResumenCaja.de(bd("5000.00"), Map.of(MedioPago.EFECTIVO, bd("1000.00")), Map.of(), Map.of());
 
         assertThat(resumen.ventasPorMedio()).containsKey(MedioPago.CUENTA_CORRIENTE);
         assertThat(resumen.ventasPorMedio().get(MedioPago.CUENTA_CORRIENTE)).isEqualByComparingTo("0");
@@ -82,10 +84,72 @@ class ResumenCajaTest {
     @Test
     @DisplayName("la diferencia es contado - esperado: negativa si falta plata, positiva si sobra")
     void diferencia() {
-        ResumenCaja resumen = ResumenCaja.de(bd("1000.00"), Map.of(MedioPago.EFECTIVO, bd("500.00")), Map.of());
+        ResumenCaja resumen = ResumenCaja.de(bd("1000.00"), Map.of(MedioPago.EFECTIVO, bd("500.00")), Map.of(), Map.of());
 
         assertThat(resumen.diferencia(bd("1400.00"))).isEqualByComparingTo("-100");
         assertThat(resumen.diferencia(bd("1550.00"))).isEqualByComparingTo("50");
         assertThat(resumen.diferencia(bd("1500"))).isEqualByComparingTo("0");
+    }
+
+    // ---- CCT3-303 (CC-053, CJ-R-012, CJ-R-013): las cobranzas de cuenta corriente ----
+
+    @Test
+    @DisplayName("CC-053: ejemplo del spec: cobranza 700 en efectivo y 300 por transferencia suma 700 al esperado; totalVentas no cambia")
+    void cobranzasEnEfectivoSumanAlEsperado() {
+        ResumenCaja resumen = ResumenCaja.de(bd("5000.00"), Map.of(MedioPago.EFECTIVO, bd("1000.00")),
+                Map.of(MedioPago.EFECTIVO, bd("700.00"), MedioPago.TRANSFERENCIA, bd("300.00")), Map.of());
+
+        assertThat(resumen.efectivoEsperado()).isEqualByComparingTo("6700");
+        assertThat(resumen.diferencia(bd("6700.00"))).isEqualByComparingTo("0");
+        assertThat(resumen.totalVentas()).isEqualByComparingTo("1000");
+        assertThat(resumen.cobranzasEnEfectivo()).isEqualByComparingTo("700");
+        assertThat(resumen.totalCobranzas()).isEqualByComparingTo("1000");
+        assertThat(resumen.cobranzasPorMedio().get(MedioPago.EFECTIVO)).isEqualByComparingTo("700");
+        assertThat(resumen.cobranzasPorMedio().get(MedioPago.TRANSFERENCIA)).isEqualByComparingTo("300");
+    }
+
+    @Test
+    @DisplayName("CJ-R-013: inicial 5.000, ventas efectivo 1.800, cobranza efectivo 700, ingreso 200, gasto 300, retiro 1.000 → esperado 6.400")
+    void ejemploCompletoDeCajaConCobranza() {
+        ResumenCaja resumen = ResumenCaja.de(bd("5000.00"), Map.of(MedioPago.EFECTIVO, bd("1800.00")),
+                Map.of(MedioPago.EFECTIVO, bd("700.00")),
+                Map.of(TipoMovimientoCaja.INGRESO, bd("200.00"), TipoMovimientoCaja.GASTO, bd("300.00"),
+                        TipoMovimientoCaja.RETIRO, bd("1000.00")));
+
+        assertThat(resumen.efectivoEsperado()).isEqualByComparingTo("6400");
+        assertThat(resumen.diferencia(bd("6400.00"))).isEqualByComparingTo("0");
+    }
+
+    @Test
+    @DisplayName("CJ-R-012 sin cobranzas: esperado 5.700 y diferencia −50 con contado 5.650 (el ejemplo no cambia)")
+    void ejemploSinCobranzasNoCambia() {
+        ResumenCaja resumen = ResumenCaja.de(bd("5000.00"), Map.of(MedioPago.EFECTIVO, bd("1000.00")), Map.of(),
+                Map.of(TipoMovimientoCaja.INGRESO, bd("200.00"), TipoMovimientoCaja.GASTO, bd("500.00")));
+
+        assertThat(resumen.efectivoEsperado()).isEqualByComparingTo("5700");
+        assertThat(resumen.diferencia(bd("5650.00"))).isEqualByComparingTo("-50");
+    }
+
+    @Test
+    @DisplayName("sin cobranzas, todos los medios de cobranzasPorMedio están presentes con cero")
+    void sinCobranzasLasClavesEstanEnCero() {
+        ResumenCaja resumen = ResumenCaja.de(bd("300.00"), Map.of(), Map.of(), Map.of());
+
+        assertThat(resumen.cobranzasPorMedio()).containsOnlyKeys(MedioPago.values());
+        assertThat(resumen.cobranzasPorMedio().values()).allSatisfy(v -> assertThat(v).isEqualByComparingTo("0"));
+        assertThat(resumen.cobranzasEnEfectivo()).isEqualByComparingTo("0");
+        assertThat(resumen.totalCobranzas()).isEqualByComparingTo("0");
+    }
+
+    @Test
+    @DisplayName("la transferencia cobrada es informativa: no entra al efectivo esperado, y las cobranzas no entran a ventasPorMedio")
+    void transferenciaNoEntraAlEsperadoNiLasCobranzasALasVentas() {
+        ResumenCaja resumen = ResumenCaja.de(bd("100.00"), Map.of(MedioPago.EFECTIVO, bd("50.00")),
+                Map.of(MedioPago.TRANSFERENCIA, bd("999.00")), Map.of());
+
+        assertThat(resumen.efectivoEsperado()).isEqualByComparingTo("150");
+        assertThat(resumen.ventasPorMedio().get(MedioPago.TRANSFERENCIA)).isEqualByComparingTo("0");
+        assertThat(resumen.totalVentas()).isEqualByComparingTo("50");
+        assertThat(resumen.totalCobranzas()).isEqualByComparingTo("999");
     }
 }

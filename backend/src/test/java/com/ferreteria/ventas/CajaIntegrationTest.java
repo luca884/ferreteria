@@ -2,15 +2,24 @@ package com.ferreteria.ventas;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.ferreteria.common.HoraArgentina;
+import com.ferreteria.tenant.TenantContext;
+import com.ferreteria.ventas.model.MedioPago;
+import com.ferreteria.ventas.service.CajaService;
+import com.ferreteria.ventas.service.CobranzaPedido;
+import com.ferreteria.ventas.service.CobranzaRechazadaException;
+import com.ferreteria.ventas.service.CobranzaService;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.transaction.IllegalTransactionStateException;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -18,6 +27,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 /** CU-10 Caja diaria: contrato HTTP de {@code /api/cajas} y sus reglas contra MySQL real. */
 class CajaIntegrationTest extends VentasTestBase {
+
+    @Autowired
+    CobranzaService cobranzaService;
+
+    @Autowired
+    CajaService cajaService;
 
     private String abrirCon(String importe) {
         return "{\"efectivoInicial\": " + importe + "}";
@@ -560,6 +575,197 @@ class CajaIntegrationTest extends VentasTestBase {
             assertThat(detalle.get("ventas").get("CUENTA_CORRIENTE").decimalValue()).isEqualByComparingTo("2000");
             assertThat(detalle.get("totalVentas").decimalValue()).isEqualByComparingTo("3000");
             assertThat(detalle.get("efectivoEsperado").decimalValue()).isEqualByComparingTo("6000");
+        }
+    }
+
+    // ---------------------------------------------------------------- cobranzas de cuenta corriente (CCT3-320)
+
+    /**
+     * CC-053, CC-054, CJ-R-012, CJ-R-013: las cobranzas entran por {@link CobranzaService} (el controlador llega en C4) y se
+     * ven en el resumen de la caja por medio. Solo las de EFECTIVO suman al esperado; las ventas no se tocan.
+     */
+    @Nested
+    class Cobranzas {
+
+        private long clienteSinDeuda(Tienda t) {
+            String razon = "Cliente " + unico("cobranza");
+            jdbc.update("insert into cliente (ferreteria_id, razon_social) values (?, ?)", t.id(), razon);
+            return jdbc.queryForObject("select id from cliente where ferreteria_id = ? and razon_social = ?", Long.class,
+                    t.id(), razon);
+        }
+
+        /** Un adelanto del Dueño (todo «a cuenta»: no hace falta deuda) en la caja abierta; devuelve el id del recibo. */
+        private long cobrar(Tienda t, long cliente, MedioPago medio, String total) {
+            long usuario = jdbc.queryForObject("select id from usuario where email = ?", Long.class, t.emailDueno());
+            TenantContext.setCurrentFerreteriaId(t.id());
+            try {
+                return cobranzaService.cobrar(new CobranzaPedido(UUID.randomUUID().toString(), cliente, medio,
+                        new BigDecimal(total), List.of()), usuario).recibo().getId();
+            } finally {
+                TenantContext.clear();
+            }
+        }
+
+        private JsonNode detalle(Tienda t, long caja) throws Exception {
+            return getJson("/api/cajas/" + caja, login(t.emailDueno()));
+        }
+
+        @Test
+        @DisplayName("una cobranza en EFECTIVO suma al efectivo esperado y figura en cobranzas; totalVentas queda intacto")
+        void efectivoSuma() throws Exception {
+            Tienda t = tiendaSinCaja();
+            long caja = abrir(login(t.emailVendedor()), "1000.00");
+            cobrar(t, clienteSinDeuda(t), MedioPago.EFECTIVO, "300.00");
+
+            JsonNode d = detalle(t, caja);
+
+            assertThat(d.get("cobranzas").get("EFECTIVO").decimalValue()).isEqualByComparingTo("300");
+            assertThat(d.get("cobranzas").get("TRANSFERENCIA").decimalValue()).isEqualByComparingTo("0");
+            assertThat(d.get("totalCobranzas").decimalValue()).isEqualByComparingTo("300");
+            assertThat(d.get("efectivoEsperado").decimalValue()).isEqualByComparingTo("1300");
+            assertThat(d.get("totalVentas").decimalValue()).as("la cobranza no es una venta").isEqualByComparingTo("0");
+            assertThat(d.get("ventas").get("EFECTIVO").decimalValue()).isEqualByComparingTo("0");
+        }
+
+        @Test
+        @DisplayName("una cobranza por TRANSFERENCIA es informativa: figura en cobranzas pero NO entra al efectivo esperado")
+        void transferenciaNoSuma() throws Exception {
+            Tienda t = tiendaSinCaja();
+            long caja = abrir(login(t.emailVendedor()), "1000.00");
+            cobrar(t, clienteSinDeuda(t), MedioPago.TRANSFERENCIA, "200.00");
+
+            JsonNode d = detalle(t, caja);
+
+            assertThat(d.get("cobranzas").get("TRANSFERENCIA").decimalValue()).isEqualByComparingTo("200");
+            assertThat(d.get("totalCobranzas").decimalValue()).isEqualByComparingTo("200");
+            assertThat(d.get("efectivoEsperado").decimalValue()).isEqualByComparingTo("1000");
+        }
+
+        @Test
+        @DisplayName("ejemplo del spec: inicial 5.000, venta en efectivo 1.000, cobranza 700 en efectivo + 300 por transferencia, contado 6.700 → esperado 6.700 y diferencia 0")
+        void ejemploDelSpec() throws Exception {
+            Tienda t = tiendaSinCaja();
+            String vendedor = login(t.emailVendedor());
+            long caja = abrir(vendedor, "5000.00");
+            long articulo = articulo(t, "Martillo", "UNIDAD", "1000.00", "50");
+            venderPor(vendedor, articulo, "1000.00", "EFECTIVO");
+            long cliente = clienteSinDeuda(t);
+            cobrar(t, cliente, MedioPago.EFECTIVO, "700.00");
+            cobrar(t, cliente, MedioPago.TRANSFERENCIA, "300.00");
+
+            JsonNode cierre = json(postJson("/api/cajas/" + caja + "/cierre", vendedor, cierre("6700.00"))
+                    .andExpect(status().isOk()));
+
+            assertThat(cierre.get("efectivoEsperado").decimalValue()).isEqualByComparingTo("6700");
+            assertThat(cierre.get("diferencia").decimalValue()).isEqualByComparingTo("0");
+            assertThat(cierre.get("totalVentas").decimalValue()).isEqualByComparingTo("1000");
+            assertThat(cierre.get("cobranzas").get("EFECTIVO").decimalValue()).isEqualByComparingTo("700");
+            assertThat(cierre.get("cobranzas").get("TRANSFERENCIA").decimalValue()).isEqualByComparingTo("300");
+            assertThat(cierre.get("totalCobranzas").decimalValue()).isEqualByComparingTo("1000");
+            assertThat(jdbc.queryForObject("select efectivo_esperado from caja where id = ?", BigDecimal.class, caja))
+                    .isEqualByComparingTo("6700");
+        }
+
+        @Test
+        @DisplayName("el Vendedor, con la caja abierta y cobranzas hechas, no ve cobranzas ni totales (cierre ciego intacto); el detalle sigue siendo 403")
+        void elVendedorSigueSinVer() throws Exception {
+            Tienda t = tiendaSinCaja();
+            String vendedor = login(t.emailVendedor());
+            long caja = abrir(vendedor, "100.00");
+            cobrar(t, clienteSinDeuda(t), MedioPago.EFECTIVO, "300.00");
+
+            JsonNode actual = getJson("/api/cajas/actual", vendedor);
+
+            assertThat(actual.get("caja").has("cobranzas")).isFalse();
+            assertThat(actual.get("caja").has("totalCobranzas")).isFalse();
+            assertThat(actual.get("caja").has("efectivoEsperado")).isFalse();
+            assertThat(actual.get("caja").has("ventas")).isFalse();
+            assertThat(actual.has("cobranzas")).isFalse();
+            getResult("/api/cajas/" + caja, vendedor).andExpect(status().isForbidden());
+        }
+
+        @Test
+        @DisplayName("una cobranza de OTRA caja no suma: cada caja del historial muestra solo las suyas (la anterior a las cobranzas, 0)")
+        void cadaCajaConSusCobranzas() throws Exception {
+            Tienda t = tiendaSinCaja();
+            String vendedor = login(t.emailVendedor());
+            long sinCobranzas = abrir(vendedor, "0");
+            postJson("/api/cajas/" + sinCobranzas + "/cierre", vendedor, cierre("0")).andExpect(status().isOk());
+            long primera = abrir(vendedor, "100.00");
+            long cliente = clienteSinDeuda(t);
+            long recibo = cobrar(t, cliente, MedioPago.EFECTIVO, "500.00");
+            postJson("/api/cajas/" + primera + "/cierre", vendedor, cierre("600.00")).andExpect(status().isOk());
+            long segunda = abrir(vendedor, "600.00");
+
+            assertThat(detalle(t, segunda).get("totalCobranzas").decimalValue()).isEqualByComparingTo("0");
+            assertThat(detalle(t, segunda).get("efectivoEsperado").decimalValue()).isEqualByComparingTo("600");
+            cobrar(t, cliente, MedioPago.TRANSFERENCIA, "70.00");
+
+            assertThat(detalle(t, sinCobranzas).get("totalCobranzas").decimalValue()).isEqualByComparingTo("0");
+            JsonNode cerrada = detalle(t, primera);
+            assertThat(cerrada.get("cobranzas").get("EFECTIVO").decimalValue()).isEqualByComparingTo("500");
+            assertThat(cerrada.get("totalCobranzas").decimalValue()).isEqualByComparingTo("500");
+            assertThat(cerrada.get("efectivoEsperado").decimalValue()).isEqualByComparingTo("600");
+            assertThat(detalle(t, segunda).get("cobranzas").get("TRANSFERENCIA").decimalValue()).isEqualByComparingTo("70");
+            assertThat(detalle(t, segunda).get("cobranzas").get("EFECTIVO").decimalValue()).isEqualByComparingTo("0");
+            assertThat(jdbc.queryForObject("select caja_id from recibo where id = ?", Long.class, recibo)).isEqualTo(primera);
+        }
+
+        @Test
+        @DisplayName("el recibo queda en la caja en la que se cobró aunque después se cierre: el cierre lo cuenta una sola vez")
+        void elReciboQuedaEnSuCaja() throws Exception {
+            Tienda t = tiendaSinCaja();
+            String vendedor = login(t.emailVendedor());
+            long caja = abrir(vendedor, "0");
+            long recibo = cobrar(t, clienteSinDeuda(t), MedioPago.EFECTIVO, "150.00");
+
+            JsonNode cierre = json(postJson("/api/cajas/" + caja + "/cierre", vendedor, cierre("150.00"))
+                    .andExpect(status().isOk()));
+
+            assertThat(jdbc.queryForObject("select caja_id from recibo where id = ?", Long.class, recibo)).isEqualTo(caja);
+            assertThat(cierre.get("cobranzas").get("EFECTIVO").decimalValue()).isEqualByComparingTo("150");
+            assertThat(cierre.get("diferencia").decimalValue()).isEqualByComparingTo("0");
+            assertThat(detalle(t, caja).get("totalCobranzas").decimalValue()).isEqualByComparingTo("150");
+        }
+
+        @Test
+        @DisplayName("una caja cerrada no admite cobranzas: CAJA_CERRADA «Abrí la caja para cobrar.», sin recibo; y la de otro día, CAJA_DE_OTRO_DIA")
+        void cajaCerradaOdeOtroDia() throws Exception {
+            Tienda t = tiendaSinCaja();
+            String vendedor = login(t.emailVendedor());
+            long cliente = clienteSinDeuda(t);
+            long caja = abrir(vendedor, "0");
+            postJson("/api/cajas/" + caja + "/cierre", vendedor, cierre("0")).andExpect(status().isOk());
+
+            assertThatThrownBy(() -> cobrar(t, cliente, MedioPago.EFECTIVO, "10.00"))
+                    .isInstanceOfSatisfying(CobranzaRechazadaException.class, e -> {
+                        assertThat(e.motivo()).isEqualTo(CobranzaRechazadaException.Motivo.CAJA_CERRADA);
+                        assertThat(e.getMessage()).isEqualTo("Abrí la caja para cobrar.");
+                    });
+
+            LocalDateTime anteayer = LocalDateTime.now(HoraArgentina.ZONA).minusDays(2);
+            cajaAbiertaEl(t.id(), anteayer);
+            assertThatThrownBy(() -> cobrar(t, cliente, MedioPago.EFECTIVO, "10.00"))
+                    .isInstanceOfSatisfying(CobranzaRechazadaException.class, e -> {
+                        assertThat(e.motivo()).isEqualTo(CobranzaRechazadaException.Motivo.CAJA_DE_OTRO_DIA);
+                        assertThat(e.getMessage()).isEqualTo("La caja del " + anteayer.format(DateTimeFormatter.ofPattern("dd/MM"))
+                                + " sigue abierta. Cerrala antes de cobrar.");
+                    });
+            assertThat(jdbc.queryForObject("select count(*) from recibo where ferreteria_id = ?", Long.class, t.id())).isZero();
+        }
+
+        @Test
+        @DisplayName("cajaParaCobrar y cajaParaVender exigen la transacción de quien llama (MANDATORY real): fuera de una → IllegalTransactionStateException")
+        void mandatoryReal() {
+            Tienda t = tiendaSinCaja();
+            cajaAbiertaHoy(t.id());
+            TenantContext.setCurrentFerreteriaId(t.id());
+            try {
+                assertThatThrownBy(() -> cajaService.cajaParaCobrar()).isInstanceOf(IllegalTransactionStateException.class);
+                assertThatThrownBy(() -> cajaService.cajaParaVender()).isInstanceOf(IllegalTransactionStateException.class);
+            } finally {
+                TenantContext.clear();
+            }
         }
     }
 

@@ -65,6 +65,12 @@ import java.util.stream.Collectors;
  * cliente no cuesta nada. El cupo se verifica antes de escribir (bajo el lock del cliente) y el asiento va al final, cuando ya
  * existen los ids del comprobante y de los pagos. El que llama (VentaService) no tiene transaccion: resuelve la carrera de
  * la clave y reintenta los deadlocks.
+ *
+ * <p>Compatibilidad con {@link RegistroCobranza} (caja S → CLIENTE X → numerador_recibo X → recibo → ...): comparten la caja
+ * en S y el cliente en X antes de cualquier numerador, y los numeradores son tablas distintas, asi que no hay ciclo. Quien
+ * agregue un paso a esta venta o a la cobranza mantiene «cliente antes que cualquier numerador». La venta hace la lectura plana
+ * de la clave (repetida) antes de la caja y del cliente; es segura porque despues solo lee con lectura actual: si una venta
+ * futura leyera algo derivado de filas bajo la foto vieja, debe tomar al cliente antes.
  */
 @Service
 public class RegistroVenta {

@@ -295,4 +295,61 @@ class TenantScopingArchTest {
                 .anyMatch(m -> m.getModifiers().contains(com.tngtech.archunit.core.domain.JavaModifier.ABSTRACT)
                         && m.getRawParameterTypes().size() >= 1 && m.getName().equals("imputadoBloqueado"));
     }
+
+    // ---- Cobranza de ventas (CC-041, CC-042): regla ACOTADA a ReciboRepository y NumeradorReciboRepository (no a todos los repos de ventas) ----
+
+    private static final java.util.List<Class<?>> REPOS_DE_COBRANZA = java.util.List.of(
+            com.ferreteria.ventas.repository.ReciboRepository.class,
+            com.ferreteria.ventas.repository.NumeradorReciboRepository.class);
+
+    @Test
+    void losRepositoriosDeCobranzaDeVentasSonDeTenantYSusMetodosScopedTomanLaFerreteriaDelContexto() {
+        ArchCondition<JavaMethod> tomaLaFerreteriaDelContexto = new ArchCondition<>(
+                "llamar DIRECTAMENTE a TenantContext.requireFerreteriaId() (sin delegar en otro metodo)") {
+            @Override
+            public void check(JavaMethod metodo, ConditionEvents eventos) {
+                boolean ok = metodo.getMethodCallsFromSelf().stream().anyMatch(c ->
+                        c.getTargetOwner().isEquivalentTo(com.ferreteria.tenant.TenantContext.class)
+                                && c.getName().equals("requireFerreteriaId"));
+                if (!ok) {
+                    eventos.add(SimpleConditionEvent.violated(metodo,
+                            metodo.getFullName() + " no toma la ferreteria de TenantContext"));
+                }
+            }
+        };
+
+        for (Class<?> repositorio : REPOS_DE_COBRANZA) {
+            assertThat(TenantScopedRepository.class).as(repositorio.getSimpleName()).isAssignableFrom(repositorio);
+            methods().that().areDeclaredIn(repositorio)
+                    .and().doNotHaveModifier(com.tngtech.archunit.core.domain.JavaModifier.ABSTRACT)
+                    .and().doNotHaveModifier(com.tngtech.archunit.core.domain.JavaModifier.SYNTHETIC)
+                    .should(tomaLaFerreteriaDelContexto)
+                    .allowEmptyShould(false)
+                    .check(clases);
+        }
+    }
+
+    @Test
+    void lasConsultasDeCobranzaDeVentasConFerreteriaIdExplicitoSoloLasLlamaElRepositorio() {
+        for (Class<?> repositorio : REPOS_DE_COBRANZA) {
+            DescribedPredicate<JavaMethodCall> consultaCruda = new DescribedPredicate<>(
+                    "una consulta abstracta de " + repositorio.getSimpleName() + ", llamada desde afuera de el") {
+                @Override
+                public boolean test(JavaMethodCall call) {
+                    return call.getTargetOwner().isEquivalentTo(repositorio)
+                            && call.getTarget().resolveMember()
+                                    .map(m -> m.getModifiers().contains(com.tngtech.archunit.core.domain.JavaModifier.ABSTRACT))
+                                    .orElse(false)
+                            && !call.getOriginOwner().isEquivalentTo(repositorio)
+                            && !call.getName().startsWith("save");
+                }
+            };
+
+            noClasses().should().callMethodWhere(consultaCruda).check(clases);
+            // la regla no es vacia: cada repositorio tiene consultas abstractas con ferreteriaId
+            assertThat(clases.get(repositorio).getMethods()).as(repositorio.getSimpleName())
+                    .anyMatch(m -> m.getModifiers().contains(com.tngtech.archunit.core.domain.JavaModifier.ABSTRACT)
+                            && m.getRawParameterTypes().size() >= 1 && !m.getName().startsWith("save"));
+        }
+    }
 }
