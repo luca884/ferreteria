@@ -30,7 +30,7 @@ El MVP tiene tres roles fijos. Nada de permisos configurables por ahora.
 
 ## Casos de uso del MVP
 
-Son 10 casos de uso, agrupados en cuatro módulos. Si algo no está en esta lista, no entra en el MVP.
+Son 12 casos de uso (CU-01 a CU-12), agrupados en cinco módulos: Configuración, Artículos y precios, Venta, Stock y caja, y Clientes. Si algo no está en esta lista, no entra en el MVP.
 
 ### Configuración
 
