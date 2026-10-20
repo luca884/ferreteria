@@ -48,7 +48,7 @@ function leer(texto: string): number | null {
  * Cobranza de cuenta corriente (F4 en la pantalla de cuenta). Presentacional: arranca con el total vacío (no precarga la
  * deuda) y, al tipearlo, sugiere repartirlo en orden FIFO entre los comprobantes con deuda; la tabla se puede editar a
  * mano (importe vacío = desmarcar) y lo que no se imputa queda «a cuenta». Sin deuda es un adelanto: no hay tabla y el
- * cobro queda todo a cuenta. ← y → cambian el medio; Enter confirma, Esc cierra. Mientras `enVuelo` ignora Enter.
+ * cobro queda todo a cuenta. Con el foco en el medio, ← y → (o ↑ y ↓) lo cambian; Enter confirma, Esc cierra. Mientras `enVuelo` ignora Enter.
  */
 @Component({
   selector: 'app-dialogo-cobranza',
@@ -180,9 +180,17 @@ export class DialogoCobranza {
     this.medio.set(medio);
   }
 
+  /** Cambia el medio con las flechas y lleva el foco al radio elegido (roving tabindex, como un grupo de radios nativo). */
   private ciclarMedio(delta: 1 | -1): void {
     const n = this.medios.length;
-    this.medio.set(this.medios[(this.medios.indexOf(this.medio()) + delta + n) % n]);
+    const indice = (this.medios.indexOf(this.medio()) + delta + n) % n;
+    this.medio.set(this.medios[indice]);
+    this.host.nativeElement.querySelectorAll<HTMLElement>('[role="radio"]')[indice]?.focus();
+  }
+
+  /** Un clic en el fondo no debe sacar el foco del diálogo (iría al body y Esc y Enter dejarían de llegarle). */
+  protected retenerFoco(evento: MouseEvent): void {
+    if (evento.target === evento.currentTarget) evento.preventDefault();
   }
 
   protected alTeclear(evento: KeyboardEvent): void {
@@ -193,10 +201,14 @@ export class DialogoCobranza {
         this.cancelar.emit();
         return;
       case 'ArrowRight':
+      case 'ArrowDown':
       case 'ArrowLeft':
+      case 'ArrowUp':
+        // Solo con el foco en el grupo de medios: dentro de un campo, las flechas mueven el cursor.
+        if (!(evento.target as HTMLElement).closest('[role="radiogroup"]')) return;
         evento.preventDefault();
         evento.stopPropagation();
-        this.ciclarMedio(evento.key === 'ArrowRight' ? 1 : -1);
+        this.ciclarMedio(evento.key === 'ArrowRight' || evento.key === 'ArrowDown' ? 1 : -1);
         return;
       case 'Enter':
         // En un botón, Enter es su clic: Cancelar cancela y «Imputar en orden» reaplica, no se confirma el cobro.

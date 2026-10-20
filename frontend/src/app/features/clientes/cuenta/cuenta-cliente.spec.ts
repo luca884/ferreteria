@@ -10,6 +10,7 @@ import { ClientesService } from '../clientes.service';
 import { CobranzaRequest, PendientesCuenta, Recibo, ReciboCobrado } from './cobranza.models';
 import { CobranzaService, GENERAR_CLAVE_COBRO } from './cobranza.service';
 import { CuentaCliente } from './cuenta-cliente';
+import { cargarEstilosGlobales } from './estilos-globales.testing';
 import { ReciboImprimible } from './recibo-imprimible';
 import { registerLocaleData } from '@angular/common';
 import localeEsAr from '@angular/common/locales/es-AR';
@@ -111,6 +112,7 @@ describe('CuentaCliente (CC-028, CC-033, CC-034, CC-038, CC-043)', () => {
         },
       ],
     }).compileComponents();
+    cargarEstilosGlobales();
     fixture = TestBed.createComponent(CuentaCliente);
     await refrescar();
   }
@@ -196,6 +198,14 @@ describe('CuentaCliente (CC-028, CC-033, CC-034, CC-038, CC-043)', () => {
       expect(renglones[2]).toContain('Venta N.º 9');
     });
 
+    it('la referencia de cada comprobante no se fuerza a mayúsculas («Venta N.º 7», no «VENTA N.º 7»)', async () => {
+      await crear();
+
+      const referencia = el().querySelector<HTMLElement>('table.pendientes tbody th')!;
+      expect(referencia.textContent).toContain('Venta N.º 7');
+      expect(getComputedStyle(referencia).textTransform).toBe('none');
+    });
+
     it('un saldo negativo se dice «a favor» y se muestra lo que tiene a cuenta', async () => {
       await crear({ pendientes: () => of({ saldo: -500, aCuenta: 500, comprobantes: [] }) });
 
@@ -234,6 +244,50 @@ describe('CuentaCliente (CC-028, CC-033, CC-034, CC-038, CC-043)', () => {
       expect(el().querySelector('[role="alert"]')).toBeNull();
       expect(el().querySelectorAll('table.pendientes tbody tr')).toHaveLength(3);
       expect(clientes.obtener).toHaveBeenCalledTimes(2);
+    });
+
+    it('cliente inexistente o de otra ferretería (404): dice «Cliente no encontrado», sin «Reintentar» y con el enlace para volver', async () => {
+      await crear({
+        pendientes: () => throwError(() => errorHttp(404, { status: 404, message: 'Cliente no encontrado' })),
+      });
+
+      expect(texto('[role="alert"]')).toContain('Cliente no encontrado');
+      expect(boton('Reintentar')).toBeUndefined();
+      expect(el().querySelector('a[href="/clientes"]')).not.toBeNull();
+      expect(boton('Cobrar (F4)')!.disabled).toBe(true);
+    });
+
+    it('el 404 también llega por la lectura del cliente: sin «Reintentar»', async () => {
+      await crear();
+      clientes.obtener.mockReturnValue(throwError(() => errorHttp(404, { status: 404, message: 'Cliente no encontrado' })));
+
+      fixture.componentInstance['cargar']();
+      await refrescar();
+
+      expect(texto('[role="alert"]')).toContain('Cliente no encontrado');
+      expect(boton('Reintentar')).toBeUndefined();
+    });
+
+    it('un error de red (status 0) conserva «Reintentar»', async () => {
+      await crear({ pendientes: () => throwError(() => errorHttp(0, null)) });
+
+      expect(boton('Reintentar')).toBeDefined();
+    });
+
+    it('un 404 seguido de un reintento posible no deja el botón escondido: un 500 después vuelve a mostrarlo', async () => {
+      let intento = 0;
+      await crear({
+        pendientes: () =>
+          ++intento === 1
+            ? throwError(() => errorHttp(404, { status: 404, message: 'Cliente no encontrado' }))
+            : throwError(() => errorHttp(500, null)),
+      });
+      expect(boton('Reintentar')).toBeUndefined();
+
+      fixture.componentInstance['cargar']();
+      await refrescar();
+
+      expect(boton('Reintentar')).toBeDefined();
     });
 
     it('un id inválido en la ruta es un error sin pedir nada', async () => {

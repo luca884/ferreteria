@@ -35,6 +35,11 @@ export class ReciboImprimible {
     window.print();
   }
 
+  /** Un clic en el fondo no debe sacar el foco del diálogo (iría al body y Esc y Enter dejarían de llegarle). */
+  protected retenerFoco(evento: MouseEvent): void {
+    if (evento.target === evento.currentTarget) evento.preventDefault();
+  }
+
   protected alTeclear(evento: KeyboardEvent): void {
     if (evento.key === 'Escape') {
       evento.preventDefault();

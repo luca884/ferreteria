@@ -5,6 +5,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { vi } from 'vitest';
 import { AuthService } from '../../../core/auth/auth.service';
 import { Recibo } from './cobranza.models';
+import { cargarEstilosGlobales } from './estilos-globales.testing';
 import { ReciboImprimible } from './recibo-imprimible';
 
 registerLocaleData(localeEsAr);
@@ -41,6 +42,7 @@ describe('ReciboImprimible (CC-036, CC-043)', () => {
   }
 
   async function abrir(r: Recibo = recibo(), ferreteriaNombre: string | null = 'Tornillo SA') {
+    cargarEstilosGlobales();
     imprimir = vi.spyOn(window, 'print').mockImplementation(() => undefined);
     await TestBed.configureTestingModule({
       imports: [ReciboImprimible],
@@ -103,6 +105,14 @@ describe('ReciboImprimible (CC-036, CC-043)', () => {
       (tr) => `${limpio(tr.querySelector('th')?.textContent)} ${limpio(tr.querySelector('td')?.textContent)}`,
     );
     expect(filas).toEqual(['Venta N.º 7 $ 300,00', 'Venta N.º 8 $ 300,00']);
+  });
+
+  it('la referencia de cada imputación no se fuerza a mayúsculas («Venta N.º 7», no «VENTA N.º 7»)', async () => {
+    await abrir();
+
+    const referencia = el().querySelector<HTMLElement>('tbody th')!;
+    expect(referencia.textContent).toContain('Venta N.º 7');
+    expect(getComputedStyle(referencia).textTransform).toBe('none');
   });
 
   it('muestra «A cuenta $X» cuando quedó algo sin imputar', async () => {
@@ -179,6 +189,32 @@ describe('ReciboImprimible (CC-036, CC-043)', () => {
       await abrir();
 
       expect(document.activeElement).toBe(boton('Imprimir'));
+    });
+
+    it('un clic en el fondo no le saca el foco al recibo (se cancela el mousedown del fondo, no el de los controles)', async () => {
+      await abrir();
+
+      const sobreFondo = new MouseEvent('mousedown', { bubbles: true, cancelable: true });
+      el().querySelector('.dialogo-fondo')!.dispatchEvent(sobreFondo);
+      const sobreBoton = new MouseEvent('mousedown', { bubbles: true, cancelable: true });
+      boton('Cerrar').dispatchEvent(sobreBoton);
+
+      expect(sobreFondo.defaultPrevented).toBe(true);
+      expect(sobreBoton.defaultPrevented).toBe(false);
+    });
+
+    it('un clic en una zona sin controles deja el foco en el diálogo, y Enter y Esc siguen andando', async () => {
+      await abrir();
+      const dialogo = el().querySelector<HTMLElement>('[role="dialog"]')!;
+      expect(dialogo.getAttribute('tabindex')).toBe('-1');
+
+      dialogo.focus();
+      expect(document.activeElement).toBe(dialogo);
+      tecla('Enter', document.activeElement!);
+      tecla('Escape', document.activeElement!);
+
+      expect(imprimir).toHaveBeenCalledTimes(1);
+      expect(cerradas).toBe(1);
     });
 
     it('los botones quedan fuera del recibo que se imprime', async () => {

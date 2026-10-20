@@ -1,6 +1,10 @@
 .recibo {
   width: min(480px, 100%);
 }
+/* El diálogo recibe el foco con un clic en una zona sin controles: no necesita el aro. */
+.recibo:focus {
+  outline: none;
+}
 
 .recibo-imprimible {
   display: flex;
@@ -55,6 +59,8 @@
 }
 .imputaciones tbody th {
   font-weight: 500;
+  letter-spacing: normal;
+  text-transform: none;
 }
 .imputaciones .num {
   text-align: right;

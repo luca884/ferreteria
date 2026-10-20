@@ -1,6 +1,8 @@
-<div class="dialogo-fondo">
+<!-- El mousedown sobre el fondo no mueve el foco al body: si no, Esc y Enter (que escucha el diálogo) dejarían de andar. -->
+<div class="dialogo-fondo" (mousedown)="retenerFoco($event)">
   <div
     class="dialogo recibo"
+    tabindex="-1"
     role="dialog"
     aria-modal="true"
     aria-labelledby="recibo-titulo"

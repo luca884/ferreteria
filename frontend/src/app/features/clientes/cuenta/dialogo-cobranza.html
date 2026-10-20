@@ -1,6 +1,8 @@
-<div class="dialogo-fondo">
+<!-- El mousedown sobre el fondo no mueve el foco al body: si no, Esc y Enter (que escucha el diálogo) dejarían de andar. -->
+<div class="dialogo-fondo" (mousedown)="retenerFoco($event)">
   <div
     class="dialogo cobranza"
+    tabindex="-1"
     role="dialog"
     aria-modal="true"
     aria-labelledby="dialogo-cobranza-titulo"
@@ -39,14 +41,14 @@
     }
 
     <div class="bloque-medios">
-      <div class="medios" role="radiogroup" aria-label="Medio de cobro">
+      <div class="medios" role="radiogroup" aria-label="Medio de cobro" aria-describedby="pista-medios-cobranza">
         @for (m of medios; track m) {
-          <!-- Sin parada de Tab: el medio se cambia con ← y → (o con el clic), así Tab va del total a las filas. -->
+          <!-- Roving tabindex: solo el elegido es parada de Tab; ← y → (o ↑ y ↓) cambian el medio con el foco acá. -->
           <button
             type="button"
             role="radio"
             class="medio"
-            tabindex="-1"
+            [tabindex]="m === medio() ? 0 : -1"
             [attr.aria-checked]="m === medio()"
             (click)="elegirMedio(m)"
           >
@@ -54,7 +56,7 @@
           </button>
         }
       </div>
-      <p class="pista-medios" aria-hidden="true"><kbd>←</kbd> <kbd>→</kbd> cambian el medio</p>
+      <p id="pista-medios-cobranza" class="pista-medios"><kbd>←</kbd> <kbd>→</kbd> cambian el medio</p>
     </div>
 
     @if (filas().length > 0) {

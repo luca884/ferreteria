@@ -4,6 +4,7 @@ import { LOCALE_ID } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { PendienteCuenta } from './cobranza.models';
 import { DialogoCobranza, PedidoCobranza } from './dialogo-cobranza';
+import { cargarEstilosGlobales } from './estilos-globales.testing';
 
 registerLocaleData(localeEsAr);
 
@@ -66,6 +67,7 @@ describe('DialogoCobranza (CC-032, CC-033, CC-034, CC-043, CC-051)', () => {
       imports: [DialogoCobranza],
       providers: [{ provide: LOCALE_ID, useValue: 'es-AR' }],
     }).compileComponents();
+    cargarEstilosGlobales();
     fixture = TestBed.createComponent(DialogoCobranza);
     confirmadas = [];
     canceladas = 0;
@@ -116,6 +118,14 @@ describe('DialogoCobranza (CC-032, CC-033, CC-034, CC-043, CC-051)', () => {
       expect(renglones[2]).toContain('Venta N.º 9');
     });
 
+    it('la referencia de cada fila no se fuerza a mayúsculas («Venta N.º 7», no «VENTA N.º 7»)', async () => {
+      await abrir();
+
+      const referencia = el().querySelector<HTMLElement>('tbody th')!;
+      expect(referencia.textContent).toContain('Venta N.º 7');
+      expect(getComputedStyle(referencia).textTransform).toBe('none');
+    });
+
     it('cada fila tiene su importe como campo con nombre accesible', async () => {
       await abrir();
 
@@ -124,24 +134,83 @@ describe('DialogoCobranza (CC-032, CC-033, CC-034, CC-043, CC-051)', () => {
   });
 
   describe('teclado', () => {
-    it('← y → cambian el medio (con preventDefault) y ciclan', async () => {
+    it('con el foco en el medio, ← y → lo cambian (con preventDefault), ciclan y el foco acompaña a la selección', async () => {
       await abrir();
+      medio('Efectivo').focus();
 
       const derecha = tecla('ArrowRight');
       await estabilizar();
       expect(elegidos()).toEqual(['Transferencia']);
       expect(derecha.defaultPrevented).toBe(true);
+      expect(document.activeElement).toBe(medio('Transferencia'));
 
       tecla('ArrowRight');
       await estabilizar();
       expect(elegidos()).toEqual(['Efectivo']);
+      expect(document.activeElement).toBe(medio('Efectivo'));
 
       tecla('ArrowLeft');
       await estabilizar();
       expect(elegidos()).toEqual(['Transferencia']);
     });
 
-    it('Tab recorre el total, las filas y los botones (el medio se cambia con las flechas, no es una parada)', async () => {
+    it('con el foco en el medio, ↑ y ↓ también lo cambian', async () => {
+      await abrir();
+      medio('Efectivo').focus();
+
+      tecla('ArrowDown');
+      await estabilizar();
+      expect(elegidos()).toEqual(['Transferencia']);
+
+      tecla('ArrowUp');
+      await estabilizar();
+      expect(elegidos()).toEqual(['Efectivo']);
+    });
+
+    it('dentro del total las flechas quedan para el cursor: no cambian el medio ni se cancelan', async () => {
+      await abrir();
+      await escribirTotal('600');
+
+      for (const key of ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown']) {
+        expect(tecla(key, total()).defaultPrevented).toBe(false);
+      }
+      await estabilizar();
+
+      expect(elegidos()).toEqual(['Efectivo']);
+    });
+
+    it('dentro de un importe de fila las flechas tampoco cambian el medio', async () => {
+      await abrir();
+
+      const evento = tecla('ArrowRight', fila(31));
+      await estabilizar();
+
+      expect(evento.defaultPrevented).toBe(false);
+      expect(elegidos()).toEqual(['Efectivo']);
+    });
+
+    it('el medio es un grupo de radios con nombre y con la pista visible como descripción (sin aria-hidden)', async () => {
+      await abrir();
+
+      const grupo = el().querySelector('[role="radiogroup"]')!;
+      expect(grupo.getAttribute('aria-label')).toBe('Medio de cobro');
+      const pista = el().querySelector(`#${grupo.getAttribute('aria-describedby')}`)!;
+      expect(limpio(pista.textContent)).toContain('cambian el medio');
+      expect(pista.closest('[aria-hidden]')).toBeNull();
+    });
+
+    it('roving tabindex: el radio elegido es la parada de Tab (0) y el otro queda en -1', async () => {
+      await abrir();
+      const tabindex = () => ['Efectivo', 'Transferencia'].map((m) => medio(m).getAttribute('tabindex'));
+      expect(tabindex()).toEqual(['0', '-1']);
+
+      medio('Transferencia').click();
+      await estabilizar();
+
+      expect(tabindex()).toEqual(['-1', '0']);
+    });
+
+    it('Tab recorre el total, el medio, las filas y los botones', async () => {
       await abrir();
 
       const orden = Array.from(
@@ -150,7 +219,34 @@ describe('DialogoCobranza (CC-032, CC-033, CC-034, CC-043, CC-051)', () => {
         .filter((e) => e.getAttribute('tabindex') !== '-1' && !(e as HTMLButtonElement).disabled)
         .map((e) => e.id || e.dataset['comprobante'] || e.className.split(' ')[0]);
 
-      expect(orden).toEqual(['total-cobranza', '31', '32', '33', 'imputar-en-orden', 'cancelar', 'cobrar']);
+      expect(orden).toEqual(['total-cobranza', 'medio', '31', '32', '33', 'imputar-en-orden', 'cancelar', 'cobrar']);
+    });
+
+    it('un clic en el fondo no le saca el foco al diálogo (se cancela el mousedown del fondo, no el de los controles)', async () => {
+      await abrir();
+
+      const sobreFondo = new MouseEvent('mousedown', { bubbles: true, cancelable: true });
+      el().querySelector('.dialogo-fondo')!.dispatchEvent(sobreFondo);
+      const sobreCampo = new MouseEvent('mousedown', { bubbles: true, cancelable: true });
+      total().dispatchEvent(sobreCampo);
+
+      expect(sobreFondo.defaultPrevented).toBe(true);
+      expect(sobreCampo.defaultPrevented).toBe(false);
+    });
+
+    it('un clic en una zona sin controles deja el foco en el diálogo, y Esc y Enter siguen andando', async () => {
+      await abrir();
+      await escribirTotal('600');
+      const dialogo = el().querySelector<HTMLElement>('[role="dialog"]')!;
+      expect(dialogo.getAttribute('tabindex')).toBe('-1');
+
+      dialogo.focus();
+      expect(document.activeElement).toBe(dialogo);
+      tecla('Enter');
+      tecla('Escape');
+
+      expect(confirmadas).toHaveLength(1);
+      expect(canceladas).toBe(1);
     });
 
     it('Esc cierra (emite cancelar) sin confirmar nada', async () => {

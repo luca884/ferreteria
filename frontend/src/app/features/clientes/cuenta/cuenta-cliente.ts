@@ -1,3 +1,4 @@
+import { HttpErrorResponse } from '@angular/common/http';
 import { Component, DestroyRef, OnInit, computed, inject, signal } from '@angular/core';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { Subscription, forkJoin } from 'rxjs';
@@ -49,7 +50,7 @@ export class CuentaCliente implements OnInit {
   protected readonly cliente = signal<Cliente | null>(null);
   protected readonly pendientes = signal<PendientesCuenta | null>(null);
   protected readonly errorCarga = signal<string | null>(null);
-  /** Si volver a pedir tiene sentido: con un id inválido en la ruta no lo tiene. */
+  /** Si volver a pedir tiene sentido: con un id inválido en la ruta o un cliente que no existe (404) no lo tiene. */
   protected readonly reintentable = signal(true);
 
   protected readonly dialogoAbierto = signal(false);
@@ -130,6 +131,8 @@ export class CuentaCliente implements OnInit {
   }
 
   private fallarCarga(err: unknown): void {
+    // «Cliente no encontrado» (inexistente o de otra ferretería) no se arregla pidiendo de nuevo: solo se vuelve a Clientes.
+    this.reintentable.set(!(err instanceof HttpErrorResponse && err.status === 404));
     this.errorCarga.set(mensajeDe(err, MENSAJE_CARGA));
     this.estado.set('error');
   }

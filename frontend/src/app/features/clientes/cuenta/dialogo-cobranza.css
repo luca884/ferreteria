@@ -4,6 +4,10 @@
   gap: var(--e-3);
   overflow-y: auto;
 }
+/* El diálogo recibe el foco con un clic en una zona sin controles: no necesita el aro. */
+.cobranza:focus {
+  outline: none;
+}
 
 .aviso {
   padding: var(--e-2) var(--e-3);
@@ -96,6 +100,8 @@
 }
 .imputacion tbody th {
   font-weight: 600;
+  letter-spacing: normal;
+  text-transform: none;
 }
 .imputacion .fecha {
   display: block;

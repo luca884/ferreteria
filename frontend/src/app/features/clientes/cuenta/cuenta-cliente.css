@@ -51,7 +51,9 @@
 }
 .pendientes tbody th {
   font-weight: 600;
+  letter-spacing: normal;
   text-align: left;
+  text-transform: none;
 }
 .num {
   text-align: right;
