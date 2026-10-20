@@ -76,6 +76,24 @@ public abstract class CuentaCorrienteTestBase extends IntegrationTestBase {
         return new Ferreteria(id, usuario);
     }
 
+    /** Los emails de un Dueño y un Vendedor de la ferretería, con la contraseña demo, para los tests HTTP. */
+    protected record Logins(String dueno, String vendedor) {}
+
+    /**
+     * Deja a la ferretería lista para el login: el Dueño que armó {@link #ferreteria()} recibe la contraseña demo y se le suma
+     * un Vendedor. Se llama una vez por ferretería.
+     */
+    protected Logins logins(Ferreteria f) {
+        String hash = jdbc.queryForObject("select password_hash from usuario where email = 'vendedor@tornillo.demo'",
+                String.class);
+        jdbc.update("update usuario set password_hash = ? where id = ?", hash, f.usuarioId());
+        String dueno = jdbc.queryForObject("select email from usuario where id = ?", String.class, f.usuarioId());
+        String vendedor = "vendedor-" + dueno;
+        jdbc.update("insert into usuario (ferreteria_id, email, password_hash, nombre, rol) "
+                + "values (?, ?, ?, 'Vendedor CC', 'VENDEDOR')", f.id(), vendedor, hash);
+        return new Logins(dueno, vendedor);
+    }
+
     /** Un cliente de la ferretería con ese límite (null = sin cuenta corriente) y saldo 0. */
     protected long cliente(Ferreteria f, String limite) {
         String razon = "Cliente " + SECUENCIA.incrementAndGet();

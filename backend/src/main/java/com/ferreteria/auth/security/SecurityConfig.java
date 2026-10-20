@@ -51,6 +51,11 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, "/api/cotizacion/recalculo").hasRole("DUENO")
                         // Editar los ajustes de un articulo es solo del Dueño; el 403 va antes de leer el cuerpo.
                         .requestMatchers(HttpMethod.PUT, "/api/articulos/*/ajustes").hasRole("DUENO")
+                        // Cobrar la cuenta corriente, ver un recibo y los pendientes de cobro son solo del Dueño (CC-028): el
+                        // Vendedor recibe 403 aunque el cuerpo no valide, y sin que se consuma un número de recibo.
+                        .requestMatchers("/api/cobranzas/**").hasRole("DUENO")
+                        .requestMatchers("/api/recibos/**").hasRole("DUENO")
+                        .requestMatchers(HttpMethod.GET, "/api/clientes/*/cuenta-corriente/pendientes").hasRole("DUENO")
                         .anyRequest().authenticated())
                 .exceptionHandling(e -> e
                         .authenticationEntryPoint((request, response, ex) -> {

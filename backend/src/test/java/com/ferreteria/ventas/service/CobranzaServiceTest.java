@@ -216,4 +216,14 @@ class CobranzaServiceTest {
         verify(registroCobranza, times(2)).registrar(pedido, USUARIO);
         verifyNoMoreInteractions(registroCobranza);
     }
+
+    @Test
+    @DisplayName("recibo(id) delega en RegistroCobranza (que lo lee en su propia transacción) y no abre transacción")
+    void reciboPorId() throws NoSuchMethodException {
+        when(registroCobranza.recibo(501L)).thenReturn(repetido);
+
+        assertThat(service.recibo(501L)).isSameAs(repetido);
+
+        assertThat(CobranzaService.class.getMethod("recibo", Long.class).isAnnotationPresent(Transactional.class)).isFalse();
+    }
 }

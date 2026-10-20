@@ -33,6 +33,11 @@ public class CobranzaService {
         this.registroCobranza = registroCobranza;
     }
 
+    /** El recibo con su imputación, para verlo o reimprimirlo. Lo lee {@link RegistroCobranza} en su transacción de solo lectura. */
+    public CobroRegistrado recibo(Long id) {
+        return registroCobranza.recibo(id);
+    }
+
     public CobroRegistrado cobrar(CobranzaPedido pedido, Long usuarioId) {
         Optional<CobroRegistrado> yaRegistrado = registroCobranza.repetida(pedido);
         if (yaRegistrado.isPresent()) {

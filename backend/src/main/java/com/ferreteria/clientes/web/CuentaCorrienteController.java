@@ -18,8 +18,8 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * La cuenta corriente de un cliente (CC-003, CC-007, CC-018). La consulta la hacen el Dueño y el Vendedor, con las cifras solo
- * para el Dueño; el límite lo fija solo el Dueño. Un cliente de otra ferretería da 404.
+ * La cuenta corriente de un cliente (CC-003, CC-007, CC-018, CC-039). La consulta la hacen el Dueño y el Vendedor, con las
+ * cifras solo para el Dueño; el límite y los pendientes de cobro son solo del Dueño. Un cliente de otra ferretería da 404.
  */
 @RestController
 @RequestMapping("/api/clientes/{id}/cuenta-corriente")
@@ -36,6 +36,16 @@ public class CuentaCorrienteController {
     public CuentaClienteResponse consultar(@PathVariable Long id, @RequestParam(required = false) BigDecimal importe,
             @AuthenticationPrincipal AuthUser authUser) {
         return CuentaClienteResponse.de(cuentaCorriente.consultar(id, importe, authUser.rol() == Rol.DUENO));
+    }
+
+    /**
+     * Los comprobantes con deuda, el saldo y lo que está «a cuenta» (CC-039), solo para el Dueño: es la base de la cobranza. Es un
+     * consejo de solo lectura que no toma ningún lock; lo que se puede imputar lo decide el cobro, bajo lock.
+     */
+    @GetMapping("/pendientes")
+    @PreAuthorize("hasRole('DUENO')")
+    public PendientesResponse pendientes(@PathVariable Long id) {
+        return PendientesResponse.de(cuentaCorriente.pendientes(id));
     }
 
     @PutMapping("/limite")

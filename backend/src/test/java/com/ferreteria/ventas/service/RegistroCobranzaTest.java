@@ -531,6 +531,37 @@ class RegistroCobranzaTest {
     }
 
     // ---------------------------------------------------------------------------------------------------------------
+    // GET del recibo (CCT3-403)
+    // ---------------------------------------------------------------------------------------------------------------
+
+    @Test
+    @DisplayName("recibo(id): arma lo mismo que la repetida (recibo, imputaciones, cobrador) sin tocar caja, cliente ni numerador")
+    void reciboPorId() {
+        Recibo existente = reciboGuardado(7, CLIENTE, MedioPago.TRANSFERENCIA, "300.00");
+        when(reciboRepository.findScoped(RECIBO_ID)).thenReturn(Optional.of(existente));
+        when(cuentaCorriente.imputacionesDeRecibo(RECIBO_ID)).thenReturn(List.of(asentada(8L, "300.00")));
+        when(cajaRepository.nombresScoped(any())).thenReturn(Map.of(2L, "Pedro Dueño"));
+
+        CobroRegistrado cobro = registro.recibo(RECIBO_ID);
+
+        assertThat(cobro.recibo()).isSameAs(existente);
+        assertThat(cobro.imputaciones()).containsExactly(asentada(8L, "300.00"));
+        assertThat(cobro.cobradoPor()).isEqualTo("Pedro Dueño");
+        verifyNoInteractions(cajaService, clienteDelDocumento, numeradorRepository);
+    }
+
+    @Test
+    @DisplayName("recibo(id) de otra ferretería o inexistente es 404 y no consulta imputaciones")
+    void reciboAjeno() {
+        when(reciboRepository.findScoped(RECIBO_ID)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> registro.recibo(RECIBO_ID)).isInstanceOf(ResourceNotFoundException.class)
+                .hasMessage("Recibo no encontrado");
+
+        verifyNoInteractions(cuentaCorriente, cajaService, clienteDelDocumento, numeradorRepository);
+    }
+
+    // ---------------------------------------------------------------------------------------------------------------
     // Transacciones
     // ---------------------------------------------------------------------------------------------------------------
 
@@ -544,6 +575,9 @@ class RegistroCobranzaTest {
         assertThat(registrar.getAnnotation(Transactional.class).readOnly()).isFalse();
         assertThat(repetida.getAnnotation(Transactional.class)).isNotNull();
         assertThat(repetida.getAnnotation(Transactional.class).readOnly()).isTrue();
+        Method recibo = RegistroCobranza.class.getMethod("recibo", Long.class);
+        assertThat(recibo.getAnnotation(Transactional.class)).isNotNull();
+        assertThat(recibo.getAnnotation(Transactional.class).readOnly()).isTrue();
     }
 
     @Test

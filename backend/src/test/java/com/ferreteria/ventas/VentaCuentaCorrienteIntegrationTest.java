@@ -507,4 +507,90 @@ class VentaCuentaCorrienteIntegrationTest extends VentasTestBase {
         invariante(deA);
         invariante(deB);
     }
+
+    // ------------------------------------------------------------------ después de una cobranza (CCT3-406: CC-045, CC-034, CC-039)
+
+    /** Cobra por HTTP (solo el Dueño): efectivo, con las imputaciones «comprobanteId:importe» que se pasen. */
+    private ResultActions cobrar(String token, long clienteId, String total, long... comprobanteEImporte) throws Exception {
+        List<Map<String, Object>> imputaciones = new ArrayList<>();
+        for (int i = 0; i < comprobanteEImporte.length; i += 2) {
+            Map<String, Object> renglon = new LinkedHashMap<>();
+            renglon.put("comprobanteId", comprobanteEImporte[i]);
+            renglon.put("importe", new BigDecimal(comprobanteEImporte[i + 1]));
+            imputaciones.add(renglon);
+        }
+        Map<String, Object> cuerpo = new LinkedHashMap<>();
+        cuerpo.put("clave", clave());
+        cuerpo.put("clienteId", clienteId);
+        cuerpo.put("medio", "EFECTIVO");
+        cuerpo.put("total", new BigDecimal(total));
+        cuerpo.put("imputaciones", imputaciones);
+        return postJson("/api/cobranzas", token, objectMapper.writeValueAsString(cuerpo));
+    }
+
+    @Test
+    @DisplayName("una venta a cuenta POSTERIOR a una cobranza ve el saldo reducido: límite 1.000, saldo 900, la de 600 era 422 y tras cobrar 500 entra")
+    void ventaDespuesDeCobrar() throws Exception {
+        Escenario e = escenario();
+        long c = cliente(e.tienda(), "1000.00");
+        long deuda = json(vender(e.dueno(), aCuenta(e, clave(), 900, c)).andExpect(status().isCreated())).get("ventaId").asLong();
+        vender(e.vendedor(), aCuenta(e, clave(), 600, c)).andExpect(status().isUnprocessableEntity());
+        assertThat(saldo(c)).isEqualByComparingTo("900.00");
+
+        cobrar(e.dueno(), c, "500", deuda, 500).andExpect(status().isCreated());
+        JsonNode venta = json(vender(e.vendedor(), aCuenta(e, clave(), 600, c)).andExpect(status().isCreated()));
+
+        assertThat(venta.get("total").decimalValue()).isEqualByComparingTo("600");
+        assertThat(saldo(c)).isEqualByComparingTo("1000.00");
+        invariante(c);
+    }
+
+    @Test
+    @DisplayName("con saldo A FAVOR por un adelanto (−500, límite 1.000) una venta a cuenta de 1.200 entra: el disponible es 1.500; el exceso se mide contra el saldo real")
+    void ventaConSaldoAFavor() throws Exception {
+        Escenario e = escenario();
+        long c = cliente(e.tienda(), "1000.00");
+        cobrar(e.dueno(), c, "500").andExpect(status().isCreated());
+        assertThat(saldo(c)).isEqualByComparingTo("-500.00");
+
+        vender(e.vendedor(), aCuenta(e, clave(), 1200, c)).andExpect(status().isCreated());
+        JsonNode rechazo = json(vender(e.vendedor(), aCuenta(e, clave(), 801, c)).andExpect(status().isUnprocessableEntity()));
+
+        assertThat(saldo(c)).isEqualByComparingTo("700.00");
+        assertThat(rechazo.get("motivo").asText()).isEqualTo("LIMITE_CUENTA_CORRIENTE");
+        invariante(c);
+    }
+
+    @Test
+    @DisplayName("la deuda nueva aparece en GET pendientes con su importe completo, y la imputación a un comprobante anterior no cambia el pendiente del nuevo")
+    void ventaNuevaEnLosPendientes() throws Exception {
+        Escenario e = escenario();
+        long c = cliente(e.tienda(), "5000.00");
+        long anterior = json(vender(e.dueno(), aCuenta(e, clave(), 900, c)).andExpect(status().isCreated())).get("ventaId").asLong();
+        cobrar(e.dueno(), c, "500", anterior, 500).andExpect(status().isCreated());
+
+        long nuevo = json(vender(e.vendedor(), aCuenta(e, clave(), 600, c)).andExpect(status().isCreated())).get("ventaId").asLong();
+        JsonNode pendientes = getJson("/api/clientes/" + c + "/cuenta-corriente/pendientes", e.dueno());
+        cobrar(e.dueno(), c, "100", anterior, 100).andExpect(status().isCreated());
+        JsonNode despues = getJson("/api/clientes/" + c + "/cuenta-corriente/pendientes", e.dueno());
+
+        assertThat(pendientes.get("comprobantes")).hasSize(2);
+        JsonNode viejo = pendientes.get("comprobantes").get(0);
+        JsonNode comprobanteNuevo = pendientes.get("comprobantes").get(1);
+        assertThat(viejo.get("comprobanteId").asLong()).isEqualTo(anterior);
+        assertThat(viejo.get("pendiente").decimalValue()).isEqualByComparingTo("400");
+        assertThat(comprobanteNuevo.get("comprobanteId").asLong()).isEqualTo(nuevo);
+        assertThat(comprobanteNuevo.get("importe").decimalValue()).isEqualByComparingTo("600");
+        assertThat(comprobanteNuevo.get("imputado").decimalValue()).isEqualByComparingTo("0");
+        assertThat(comprobanteNuevo.get("pendiente").decimalValue()).isEqualByComparingTo("600");
+        assertThat(pendientes.get("saldo").decimalValue()).isEqualByComparingTo("1000");
+        // Imputar 100 más al anterior no toca al nuevo: sigue con 600 de 600.
+        assertThat(despues.get("comprobantes")).hasSize(2);
+        assertThat(despues.get("comprobantes").get(0).get("pendiente").decimalValue()).isEqualByComparingTo("300");
+        assertThat(despues.get("comprobantes").get(1).get("comprobanteId").asLong()).isEqualTo(nuevo);
+        assertThat(despues.get("comprobantes").get(1).get("imputado").decimalValue()).isEqualByComparingTo("0");
+        assertThat(despues.get("comprobantes").get(1).get("pendiente").decimalValue()).isEqualByComparingTo("600");
+        assertThat(despues.get("saldo").decimalValue()).isEqualByComparingTo("900");
+        invariante(c);
+    }
 }

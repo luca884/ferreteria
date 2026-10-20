@@ -6,6 +6,7 @@ import com.ferreteria.clientes.api.CuentaCorrienteParaCobranza.ImputacionAsentad
 import com.ferreteria.clientes.api.CuentaCorrienteParaCobranza.ImputacionInvalidaException;
 import com.ferreteria.clientes.api.CuentaCorrienteParaCobranza.Imputar;
 import com.ferreteria.common.exception.DatosInvalidosException;
+import com.ferreteria.common.exception.ResourceNotFoundException;
 import com.ferreteria.tenant.TenantContext;
 import com.ferreteria.ventas.model.LimitesVenta;
 import com.ferreteria.ventas.model.MedioPago;
@@ -69,6 +70,7 @@ public class RegistroCobranza {
     static final String MENSAJE_COMPROBANTE_REPETIDO = "Cada comprobante va una sola vez.";
     static final String MENSAJE_SUMA_MAYOR = "Lo imputado supera el total del recibo.";
     static final String MENSAJE_OTRO_CONTENIDO = "Este cobro ya se registró con otros datos";
+    static final String MENSAJE_RECIBO_INEXISTENTE = "Recibo no encontrado";
     static final String MENSAJE_EXCEDE_DEUDA = "La deuda de algún comprobante cambió. Revisá la imputación y confirmá de nuevo.";
 
     private static final Pattern UUID = Pattern.compile(
@@ -143,6 +145,16 @@ public class RegistroCobranza {
         TenantContext.requireFerreteriaId();
         validarForma(pedido);
         return buscarRepetida(pedido);
+    }
+
+    /**
+     * El recibo con su imputación, para verlo o reimprimirlo (GET). Solo lee, sin locks, en una transacción de solo lectura (una
+     * foto): dice lo mismo que la cobranza repetida. Un recibo de otra ferretería o inexistente es 404.
+     */
+    @Transactional(readOnly = true)
+    public CobroRegistrado recibo(Long id) {
+        Recibo recibo = reciboRepository.findScoped(id).orElseThrow(() -> new ResourceNotFoundException(MENSAJE_RECIBO_INEXISTENTE));
+        return new CobroRegistrado(recibo, cuentaCorriente.imputacionesDeRecibo(recibo.getId()), nombreDe(recibo.getUsuarioId()), true);
     }
 
     private Optional<CobroRegistrado> buscarRepetida(CobranzaPedido pedido) {
