@@ -103,22 +103,31 @@ public abstract class CuentaCorrienteTestBase extends IntegrationTestBase {
                 razon);
     }
 
+    /**
+     * Desde dónde numeran los comprobantes sembrados por los helpers. La numeración real de una ferretería (el numerador de
+     * comprobantes) arranca en 1, y {@code uk_comprobante_numero (ferreteria_id, numero)} es único: con números chicos
+     * (la secuencia del test) una venta REAL de la misma ferretería, hecha por un servicio, chocaba con una sembrada según el
+     * orden en que corrieran los tests (S8). Un rango propio, muy lejos de lo que numerará el servicio, lo evita.
+     */
+    protected static final long NUMERO_BASE_SEMBRADO = 100_000_000L;
+
     /** Un comprobante y un pago a cuenta corriente de ese monto (sin tocar el libro ni el saldo). */
     protected VentaSuelta ventaSuelta(Ferreteria f, long clienteId, String monto) {
         int n = SECUENCIA.incrementAndGet();
+        long numero = NUMERO_BASE_SEMBRADO + n;
         jdbc.update("insert into comprobante (ferreteria_id, tipo, estado, numero, clave_idempotencia, cliente_id, usuario_id, "
-                + "neto, iva, total, subtotal) values (?, 'VENTA', 'SIN_FACTURAR', ?, ?, ?, ?, 0, 0, ?, ?)", f.id(), n,
+                + "neto, iva, total, subtotal) values (?, 'VENTA', 'SIN_FACTURAR', ?, ?, ?, ?, 0, 0, ?, ?)", f.id(), numero,
                 "00000000-0000-4000-8000-%012d".formatted(n), clienteId, f.usuarioId(), new BigDecimal(monto),
                 new BigDecimal(monto));
         long comprobante = jdbc.queryForObject("select id from comprobante where ferreteria_id = ? and numero = ?",
-                Long.class, f.id(), n);
+                Long.class, f.id(), numero);
         long forma = jdbc.queryForObject(
                 "select id from forma_pago where ferreteria_id = ? and medio = 'CUENTA_CORRIENTE'", Long.class, f.id());
         jdbc.update("insert into pago (ferreteria_id, comprobante_id, medio, monto, forma_pago_id, forma_pago_nombre) "
                 + "values (?, ?, 'CUENTA_CORRIENTE', ?, ?, 'Cuenta corriente')", f.id(), comprobante, new BigDecimal(monto),
                 forma);
         long pago = jdbc.queryForObject("select max(id) from pago where comprobante_id = ?", Long.class, comprobante);
-        return new VentaSuelta(comprobante, pago, n);
+        return new VentaSuelta(comprobante, pago, numero);
     }
 
     /**

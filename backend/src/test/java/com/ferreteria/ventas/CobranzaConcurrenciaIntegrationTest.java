@@ -1008,6 +1008,26 @@ class CobranzaConcurrenciaIntegrationTest extends CuentaCorrienteTestBase {
     }
 
     @Test
+    @DisplayName("S8: los comprobantes sembrados por los helpers usan números fuera de la numeración real, así que las ventas reales de la misma ferretería (1, 2, 3...) no chocan con uk_comprobante_numero, sin importar el orden de los tests")
+    void lasVentasSembradasNoChocanConLaNumeracionReal() throws Exception {
+        Escenario e = escenario();
+        long cliente = cliente(e.f(), "10000");
+        long articulo = articulo(e.f());
+        List<VentaSuelta> sembradas = new ArrayList<>();
+        for (int i = 0; i < 6; i++) {
+            sembradas.add(ventaEnLibro(e.f(), cliente, "10"));
+        }
+
+        assertThat(sembradas).extracting(VentaSuelta::numero).as("fuera de lo que numerará el servicio").allMatch(n -> n >= 100_000_000L);
+        for (int i = 0; i < 6; i++) {
+            ventaCC(e, articulo, cliente, 1).call(); // numeran 1..6: con sembradas chicas (3, 4...) la tercera chocaba
+        }
+        assertThat(jdbc.queryForObject("select count(*) from comprobante where ferreteria_id = ? and numero < 100", Long.class,
+                e.f().id())).isEqualTo(6);
+        assertInvariante(cliente);
+    }
+
+    @Test
     @DisplayName("CB-10: si asentarCobro falla (antes de escribir, o DESPUÉS de haber escrito todo) la cobranza no deja nada: sin recibo, imputaciones, COBRO, saldo movido ni número consumido")
     void cb10Atomicidad() {
         Escenario e = escenario();

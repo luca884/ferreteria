@@ -321,9 +321,6 @@ class CobranzaConcurrenciaHttpIntegrationTest extends CuentaCorrienteTestBase {
         long articulo = articulo(e.f());
         long cliente = cliente(e.f(), "10000");
         VentaSuelta a = ventaEnLibro(e.f(), cliente, "1000");
-        // ventaEnLibro siembra comprobantes con números chicos (una secuencia de test): el numerador real arranca lejos para
-        // que las ventas HTTP no choquen con ellos en uk_comprobante_numero.
-        jdbc.update("insert into numerador_comprobante (ferreteria_id, ultimo_numero) values (?, 1000000)", e.f().id());
         BarreraDeLocks barrera = new BarreraDeLocks(jdbcRoot());
         long deadlocksAntes = barrera.deadlocksAntes();
         List<Callable<Resp>> trabajos = new ArrayList<>();
