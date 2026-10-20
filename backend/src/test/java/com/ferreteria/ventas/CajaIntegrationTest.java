@@ -783,11 +783,22 @@ class CajaIntegrationTest extends VentasTestBase {
     @Nested
     class Anulaciones {
 
+        /** Los clientes que armó el test: cada escenario termina con la invariante de cada uno (CC-084). */
+        private final List<Long> clientesDelTest = new java.util.ArrayList<>();
+
         private long clienteSinDeuda(Tienda t) {
             String razon = "Cliente " + unico("anulacion");
             jdbc.update("insert into cliente (ferreteria_id, razon_social) values (?, ?)", t.id(), razon);
-            return jdbc.queryForObject("select id from cliente where ferreteria_id = ? and razon_social = ?", Long.class,
+            long id = jdbc.queryForObject("select id from cliente where ferreteria_id = ? and razon_social = ?", Long.class,
                     t.id(), razon);
+            clientesDelTest.add(id);
+            return id;
+        }
+
+        /** I1, I2a..I2e e I-inactivo de cada cliente del escenario (CC-084: todo escenario de anulación la verifica). */
+        private void assertInvariantes() {
+            assertThat(clientesDelTest).as("el escenario armó al menos un cliente").isNotEmpty();
+            clientesDelTest.forEach(id -> com.ferreteria.support.InvarianteCuenta.assertInvariante(jdbc, id));
         }
 
         private long usuarioDueno(Tienda t) {
@@ -846,6 +857,7 @@ class CajaIntegrationTest extends VentasTestBase {
             assertThat(cierre.get("cobranzas").get("EFECTIVO").decimalValue()).as("las cobranzas siguen brutas").isEqualByComparingTo("700");
             assertThat(jdbc.queryForObject("select efectivo_esperado from caja where id = ?", BigDecimal.class, caja))
                     .isEqualByComparingTo("5700");
+            assertInvariantes();
         }
 
         @Test
@@ -868,6 +880,7 @@ class CajaIntegrationTest extends VentasTestBase {
             assertThat(d.get("efectivoEsperado").decimalValue()).isEqualByComparingTo("1000");
             assertThat(d.get("totalVentas").decimalValue()).isEqualByComparingTo("0");
             assertThat(d.get("ventas").get("EFECTIVO").decimalValue()).isEqualByComparingTo("0");
+            assertInvariantes();
         }
 
         @Test
@@ -885,6 +898,7 @@ class CajaIntegrationTest extends VentasTestBase {
             assertThat(d.get("totalAnulaciones").decimalValue()).isEqualByComparingTo("300");
             assertThat(d.get("cobranzas").get("TRANSFERENCIA").decimalValue()).isEqualByComparingTo("300");
             assertThat(d.get("efectivoEsperado").decimalValue()).isEqualByComparingTo("1000");
+            assertInvariantes();
         }
 
         @Test
@@ -912,6 +926,7 @@ class CajaIntegrationTest extends VentasTestBase {
             assertThat(jdbc.queryForObject("select efectivo_esperado from caja where id = ?", BigDecimal.class, ayer))
                     .isEqualByComparingTo("8000");
             assertThat(jdbc.queryForObject("select caja_anulacion_id from recibo where id = ?", Long.class, recibo)).isEqualTo(hoy);
+            assertInvariantes();
         }
 
         @Test
@@ -936,6 +951,7 @@ class CajaIntegrationTest extends VentasTestBase {
             assertThat(cierre.get("totalAnulaciones").decimalValue()).isEqualByComparingTo("300");
             assertThat(cierre.get("efectivoEsperado").decimalValue()).isEqualByComparingTo("100");
             assertThat(cierre.get("diferencia").decimalValue()).isEqualByComparingTo("0");
+            assertInvariantes();
         }
 
         @Test
@@ -957,6 +973,7 @@ class CajaIntegrationTest extends VentasTestBase {
             assertThat(detalle(t, primera).get("cobranzas").get("EFECTIVO").decimalValue()).isEqualByComparingTo("700");
             assertThat(detalle(t, segunda).get("totalAnulaciones").decimalValue()).isEqualByComparingTo("700");
             assertThat(detalle(t, segunda).get("efectivoEsperado").decimalValue()).isEqualByComparingTo("0");
+            assertInvariantes();
         }
     }
 

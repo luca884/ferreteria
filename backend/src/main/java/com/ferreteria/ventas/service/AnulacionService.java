@@ -5,6 +5,7 @@ import com.ferreteria.common.exception.SistemaOcupadoException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.PessimisticLockingFailureException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 /**
  * Fachada de anular el cobro de una cuenta corriente (CC-057, CC-060, CC-061, CC-086, CC-092). Deliberadamente SIN transacción
@@ -18,6 +19,10 @@ import org.springframework.stereotype.Service;
  * lanza {@link SistemaOcupadoException} (503 «reintentá» con {@code Retry-After}, no 500). Si se viola el UNIQUE de la anulación
  * (otra transacción anuló el mismo recibo y esta no lo vio; no debería pasar por el lock del cliente) lo traduce a 409
  * RECIBO_YA_ANULADO con quién y cuándo, en una transacción nueva.
+ *
+ * <p>No puede llamarse dentro de una transacción ajena (CC-091, W5 del verify de C3): el chequeo del inicio de {@link #anular}
+ * lanza {@link IllegalStateException}, igual que {@code RecalculoConReintento}. Una transacción externa haría que la
+ * pre-resolución se uniera a ella y fijara la foto antes del lock del cliente.
  */
 @Service
 public class AnulacionService {
@@ -32,6 +37,13 @@ public class AnulacionService {
     }
 
     public CobroRegistrado anular(Long reciboId, String motivo, Long usuarioId) {
+        // CC-091: la pre-resolución recibo → cliente solo no fija la foto REPEATABLE READ si corre en su transacción PROPIA. Dentro
+        // de una externa (un controlador o un test con @Transactional) se uniría a ella, la foto nacería ANTES del lock del
+        // cliente y una anulación concurrente del mismo recibo daría 500 en vez de 409. Mismo criterio que RecalculoConReintento.
+        if (TransactionSynchronizationManager.isActualTransactionActive()) {
+            throw new IllegalStateException(
+                    "AnulacionService no puede llamarse dentro de una transaccion: cada intento abre la suya.");
+        }
         String recortado = RegistroAnulacion.validarMotivo(motivo);
         Long clienteId = registroAnulacion.clienteDelRecibo(reciboId);
         int intento = 1;

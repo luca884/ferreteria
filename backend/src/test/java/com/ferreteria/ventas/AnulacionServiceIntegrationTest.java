@@ -186,6 +186,28 @@ class AnulacionServiceIntegrationTest extends CuentaCorrienteTestBase {
         assertInvariante(cliente);
     }
 
+    // ---- CC-091 (W5): la frontera de transacción ----
+
+    @Test
+    @DisplayName("CC-091 (W5): anular desde DENTRO de una transacción externa se rechaza (IllegalStateException) y no deja nada: el recibo sigue EMITIDO, sin ANULACION, saldo intacto; fuera de la transacción anula con normalidad")
+    void noSeAnulaDentroDeUnaTransaccionExterna() {
+        Escenario e = escenario();
+        long cliente = cliente(e.f(), null);
+        CobroRegistrado cobro = cobrar(e, cliente, MedioPago.EFECTIVO, "300");
+        long recibo = cobro.recibo().getId();
+
+        assertThatThrownBy(() -> new TransactionTemplate(transactionManager).execute(status -> anular(e, recibo, MOTIVO)))
+                .isInstanceOf(IllegalStateException.class).hasMessageContaining("no puede llamarse dentro de una transaccion");
+
+        sinCambios(cliente, recibo, "-300");
+        assertInvariante(cliente);
+
+        anular(e, recibo, MOTIVO);
+        assertThat(estado(recibo)).isEqualTo("ANULADO");
+        assertThat(saldo(cliente)).isZero();
+        assertInvariante(cliente);
+    }
+
     // ---- CC-058: la caja ----
 
     @Test
@@ -219,6 +241,7 @@ class AnulacionServiceIntegrationTest extends CuentaCorrienteTestBase {
         });
 
         sinCambios(cliente, cobro.recibo().getId(), "-300");
+        assertInvariante(cliente);
     }
 
     @Test
@@ -269,11 +292,18 @@ class AnulacionServiceIntegrationTest extends CuentaCorrienteTestBase {
     @DisplayName("CC-057: el cuerpo gana al 404 (motivo inválido sobre un recibo inexistente → 400); inexistente → 404 «Recibo no encontrado»")
     void ordenCuerpoYRecibo() {
         Escenario e = escenario();
+        long cliente = cliente(e.f(), null);
+        CobroRegistrado cobro = cobrar(e, cliente, MedioPago.EFECTIVO, "120");
 
         assertThatThrownBy(() -> anular(e, 999_999_999L, "abc")).isInstanceOfSatisfying(DatosInvalidosException.class,
                 ex -> assertThat(ex.errors()).containsKey("motivo"));
         assertThatThrownBy(() -> anular(e, 999_999_999L, MOTIVO)).isInstanceOf(ResourceNotFoundException.class)
                 .hasMessage("Recibo no encontrado");
+        // el cuerpo inválido sobre un recibo REAL tampoco toca nada: 400 y todo sigue como estaba
+        assertThatThrownBy(() -> anular(e, cobro.recibo().getId(), "abc")).isInstanceOf(DatosInvalidosException.class);
+
+        sinCambios(cliente, cobro.recibo().getId(), "-120");
+        assertInvariante(cliente);
     }
 
     @Test

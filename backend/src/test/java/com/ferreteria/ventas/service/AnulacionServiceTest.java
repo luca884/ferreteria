@@ -30,6 +30,7 @@ import org.springframework.dao.CannotAcquireLockException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.DeadlockLoserDataAccessException;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 /**
  * CCT3B1-310 (CC-057, CC-060, CC-061, CC-086, CC-092): la fachada de anular, SIN transacción (molde de CobranzaService). Valida el
@@ -66,6 +67,19 @@ class AnulacionServiceTest {
         assertThat(AnulacionService.class.isAnnotationPresent(Transactional.class)).isFalse();
         assertThat(AnulacionService.class.getMethod("anular", Long.class, String.class, Long.class)
                 .isAnnotationPresent(Transactional.class)).isFalse();
+    }
+
+    @Test
+    @DisplayName("CC-091 (W5): dentro de una transacción ajena NO se anula: la pre-resolución fijaría la foto antes del lock del cliente; se rechaza antes de tocar nada")
+    void rechazaCorrerDentroDeUnaTransaccion() {
+        TransactionSynchronizationManager.setActualTransactionActive(true);
+        try {
+            assertThatThrownBy(() -> service.anular(RECIBO, MOTIVO, USUARIO)).isInstanceOf(IllegalStateException.class)
+                    .hasMessageContaining("no puede llamarse dentro de una transaccion");
+        } finally {
+            TransactionSynchronizationManager.setActualTransactionActive(false);
+        }
+        verifyNoInteractions(registro);
     }
 
     @Test
