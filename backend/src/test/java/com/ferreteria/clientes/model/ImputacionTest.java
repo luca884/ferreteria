@@ -59,21 +59,31 @@ class ImputacionTest {
     }
 
     @Test
-    @DisplayName("es append-only: mapeada a imputacion, sin setters y con todas sus columnas updatable=false")
+    @DisplayName("una imputación nueva nace vigente (CC-063)")
+    void nacesVigente() {
+        assertThat(Imputacion.de(3L, 7L, 55L, 20L, BigDecimal.TEN).isVigente()).isTrue();
+        assertThat(Imputacion.de(4L, 8L, 56L, 21L, new BigDecimal("0.01")).isVigente()).isTrue();
+    }
+
+    @Test
+    @DisplayName("es append-only: mapeada a imputacion, sin setters y con todas sus columnas updatable=false (la vigencia solo cambia por la query de la anulación)")
     void inmutable() {
         assertThat(Imputacion.class.getAnnotation(Table.class).name()).isEqualTo("imputacion");
         Method[] metodos = Imputacion.class.getDeclaredMethods();
         assertThat(Arrays.stream(metodos).filter(m -> Modifier.isPublic(m.getModifiers())).map(Method::getName))
-                .contains("de", "getImporte").noneMatch(nombre -> nombre.startsWith("set"));
+                .contains("de", "getImporte", "isVigente").noneMatch(nombre -> nombre.startsWith("set"));
 
         long columnas = Arrays.stream(Imputacion.class.getDeclaredFields()).filter(f -> f.isAnnotationPresent(Column.class))
                 .count();
-        assertThat(columnas).isEqualTo(5);
+        assertThat(columnas).isEqualTo(6);
         for (Field campo : Imputacion.class.getDeclaredFields()) {
             Column columna = campo.getAnnotation(Column.class);
             if (columna != null) {
                 assertThat(columna.updatable()).as(campo.getName()).isFalse();
             }
         }
+        Column vigente = Arrays.stream(Imputacion.class.getDeclaredFields()).filter(f -> f.getName().equals("vigente"))
+                .findFirst().orElseThrow().getAnnotation(Column.class);
+        assertThat(vigente.nullable()).isFalse();
     }
 }

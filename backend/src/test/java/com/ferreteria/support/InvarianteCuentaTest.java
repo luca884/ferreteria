@@ -61,7 +61,8 @@ class InvarianteCuentaTest extends CuentaCorrienteTestBase {
         Ferreteria f = ferreteria();
         long cliente = cliente(f, "1000.00");
         jdbc.update("insert into movimiento_cuenta_cliente (ferreteria_id, cliente_id, tipo, debe, haber, fecha, usuario_id, "
-                + "referencia) values (?, ?, 'AJUSTE', 900, 0, now(6), ?, 'Saldo inicial de test')", f.id(), cliente,
+                + "referencia, motivo) values (?, ?, 'AJUSTE', 900, 0, now(6), ?, 'Saldo inicial de test', "
+                + "'Saldo inicial de test')", f.id(), cliente,
                 f.usuarioId());
         jdbc.update("update cliente set saldo = 900 where id = ?", cliente);
 
@@ -174,7 +175,8 @@ class InvarianteCuentaTest extends CuentaCorrienteTestBase {
         long cliente = cliente(f, null);
         long recibo = cobroEnLibro(f, cliente, "100.00");
         jdbc.update("insert into movimiento_cuenta_cliente (ferreteria_id, cliente_id, tipo, debe, haber, fecha, usuario_id, "
-                + "recibo_id, referencia) values (?, ?, 'ANULACION', 100, 0, now(6), ?, ?, 'Anulación test')", f.id(),
+                + "recibo_id, referencia, motivo) values (?, ?, 'ANULACION', 100, 0, now(6), ?, ?, 'Anulación test', "
+                + "'Cobro mal cargado')", f.id(),
                 cliente, f.usuarioId(), recibo);
         jdbc.update("update cliente set saldo = saldo + 100 where id = ?", cliente); // I1 ok: saldo 0
 

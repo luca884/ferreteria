@@ -210,9 +210,11 @@ class ClienteRepositoryCuentaTest extends CuentaCorrienteTestBase {
             return v;
         }
         jdbc.update("insert into movimiento_cuenta_cliente (ferreteria_id, cliente_id, tipo, debe, haber, comprobante_id, "
-                + "pago_id, fecha, usuario_id, referencia) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", f.id(), clienteId, tipo,
-                new BigDecimal(debe), new BigDecimal(haber), v.comprobanteId(), v.pagoId(), LocalDateTime.now(),
-                f.usuarioId(), "Venta N.º " + v.numero());
+                + "pago_id, fecha, usuario_id, referencia, motivo) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", f.id(),
+                clienteId, tipo, new BigDecimal(debe), new BigDecimal(haber), v.comprobanteId(), v.pagoId(),
+                LocalDateTime.now(), f.usuarioId(), "Venta N.º " + v.numero(),
+                // ck_mcc_motivo: solo AJUSTE y ANULACION llevan motivo (obligatorio)
+                tipo.equals("AJUSTE") || tipo.equals("ANULACION") ? "Saldo inicial de test" : null);
         return v;
     }
 }

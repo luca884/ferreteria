@@ -23,6 +23,15 @@ class ReferenciasTest {
     }
 
     @Test
+    @DisplayName("la anulación se escribe «Anulación Recibo N.º n», con el º, y cabe en las 60 posiciones de la columna")
+    void anulacion() {
+        assertThat(Referencias.anulacion(14L)).isEqualTo("Anulación Recibo N.º 14");
+        assertThat(Referencias.anulacion(1L)).isEqualTo("Anulación Recibo N.º 1");
+        assertThat(Referencias.anulacion(Long.MAX_VALUE).length()).isLessThanOrEqualTo(60);
+        assertThat(Referencias.anulacion(1L).charAt(Referencias.anulacion(1L).indexOf("N.") + 2)).isEqualTo('\u00BA');
+    }
+
+    @Test
     @DisplayName("el ordinal es º (U+00BA), no el símbolo de grado ni «o»")
     void ordinalExacto() {
         assertThat(Referencias.venta(1L).charAt(Referencias.venta(1L).indexOf("N.") + 2)).isEqualTo('\u00BA');
@@ -35,6 +44,10 @@ class ReferenciasTest {
         org.assertj.core.api.Assertions.assertThatThrownBy(() -> Referencias.venta(null))
                 .isInstanceOf(IllegalArgumentException.class);
         org.assertj.core.api.Assertions.assertThatThrownBy(() -> Referencias.recibo(0L))
+                .isInstanceOf(IllegalArgumentException.class);
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> Referencias.anulacion(-3L))
+                .isInstanceOf(IllegalArgumentException.class);
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> Referencias.anulacion(null))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 }

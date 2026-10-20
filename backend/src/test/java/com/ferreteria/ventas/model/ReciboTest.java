@@ -129,21 +129,127 @@ class ReciboTest {
     }
 
     @Test
-    @DisplayName("el recibo es inmutable: sin setters y con todas sus columnas updatable=false, mapeado a la tabla recibo")
+    @DisplayName("emitir deja el recibo EMITIDO y sin auditoría de anulación (CC-069)")
+    void emitirDejaElReciboEmitido() {
+        Recibo r = emitir(MedioPago.EFECTIVO, "100.00");
+
+        assertThat(r.getEstado()).isEqualTo(EstadoRecibo.EMITIDO);
+        assertThat(r.isAnulado()).isFalse();
+        assertThat(r.getFechaAnulacion()).isNull();
+        assertThat(r.getUsuarioAnulacionId()).isNull();
+        assertThat(r.getCajaAnulacionId()).isNull();
+        assertThat(r.getMotivoAnulacion()).isNull();
+    }
+
+    @Test
+    @DisplayName("anular pasa a ANULADO y setea fecha, usuario, caja y motivo (recortado); el resto del recibo no cambia (CC-062, CC-067)")
+    void anularSeteaLaAuditoria() {
+        Recibo r = emitir(MedioPago.EFECTIVO, "1500.50");
+        LocalDateTime cuando = AHORA.plusDays(2);
+
+        r.anular(21L, cuando, 55L, "  Cobro mal cargado  ");
+
+        assertThat(r.getEstado()).isEqualTo(EstadoRecibo.ANULADO);
+        assertThat(r.isAnulado()).isTrue();
+        assertThat(r.getFechaAnulacion()).isEqualTo(cuando);
+        assertThat(r.getUsuarioAnulacionId()).isEqualTo(21L);
+        assertThat(r.getCajaAnulacionId()).isEqualTo(55L);
+        assertThat(r.getMotivoAnulacion()).isEqualTo("Cobro mal cargado");
+        // lo que describe cómo se emitió no se toca (la caja original, el usuario que cobró y el total siguen siendo los de la emisión)
+        assertThat(r.getCajaId()).isEqualTo(40L);
+        assertThat(r.getUsuarioId()).isEqualTo(9L);
+        assertThat(r.getFecha()).isEqualTo(AHORA);
+        assertThat(r.getTotal()).isEqualByComparingTo("1500.50");
+    }
+
+    @Test
+    @DisplayName("anular con otros valores: la auditoría copia lo que se le da (no hay valores fijos)")
+    void anularTriangula() {
+        Recibo r = emitir(MedioPago.TRANSFERENCIA, "10.00");
+
+        r.anular(3L, AHORA.plusHours(1), 77L, "12345");
+
+        assertThat(r.getUsuarioAnulacionId()).isEqualTo(3L);
+        assertThat(r.getCajaAnulacionId()).isEqualTo(77L);
+        assertThat(r.getFechaAnulacion()).isEqualTo(AHORA.plusHours(1));
+        assertThat(r.getMotivoAnulacion()).isEqualTo("12345");
+    }
+
+    @Test
+    @DisplayName("anular dos veces es IllegalStateException y la primera auditoría queda intacta (CC-060)")
+    void dobleAnulacion() {
+        Recibo r = emitir(MedioPago.EFECTIVO, "100.00");
+        r.anular(21L, AHORA.plusDays(1), 55L, "Cobro mal cargado");
+
+        assertThatThrownBy(() -> r.anular(22L, AHORA.plusDays(2), 56L, "Otro motivo distinto"))
+                .isInstanceOf(IllegalStateException.class);
+
+        assertThat(r.getUsuarioAnulacionId()).isEqualTo(21L);
+        assertThat(r.getCajaAnulacionId()).isEqualTo(55L);
+        assertThat(r.getFechaAnulacion()).isEqualTo(AHORA.plusDays(1));
+        assertThat(r.getMotivoAnulacion()).isEqualTo("Cobro mal cargado");
+    }
+
+    @Test
+    @DisplayName("anular con usuario, fecha, caja o motivo nulos es IllegalArgumentException y el recibo sigue EMITIDO")
+    void anularConNulos() {
+        Recibo r = emitir(MedioPago.EFECTIVO, "100.00");
+
+        assertThatThrownBy(() -> r.anular(null, AHORA, 55L, "Cobro mal cargado")).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> r.anular(21L, null, 55L, "Cobro mal cargado")).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> r.anular(21L, AHORA, null, "Cobro mal cargado")).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> r.anular(21L, AHORA, 55L, null)).isInstanceOf(IllegalArgumentException.class);
+
+        assertThat(r.getEstado()).isEqualTo(EstadoRecibo.EMITIDO);
+        assertThat(r.getMotivoAnulacion()).isNull();
+    }
+
+    @Test
+    @DisplayName("el motivo: vacío, en blanco, de menos de 5 caracteres tras recortar o de más de 200 se rechaza; 5 y 200 entran (alineado con ck_recibo_anulacion)")
+    void motivoDeLaAnulacion() {
+        for (String invalido : new String[] {"", "    ", "abcd", "  abcd  ", "x".repeat(201)}) {
+            Recibo r = emitir(MedioPago.EFECTIVO, "100.00");
+            assertThatThrownBy(() -> r.anular(21L, AHORA, 55L, invalido)).as("[" + invalido + "]")
+                    .isInstanceOf(IllegalArgumentException.class);
+            assertThat(r.isAnulado()).as("[" + invalido + "] no anula").isFalse();
+        }
+        Recibo cinco = emitir(MedioPago.EFECTIVO, "100.00");
+        cinco.anular(21L, AHORA, 55L, "12345");
+        Recibo doscientos = emitir(MedioPago.EFECTIVO, "100.00");
+        doscientos.anular(21L, AHORA, 55L, "x".repeat(200));
+
+        assertThat(cinco.getMotivoAnulacion()).isEqualTo("12345");
+        assertThat(doscientos.getMotivoAnulacion()).hasSize(200);
+    }
+
+    @Test
+    @DisplayName("el recibo sigue sin setters: anular es el único mutador, mapeado a la tabla recibo")
     void inmutable() {
         assertThat(Recibo.class.getAnnotation(Table.class).name()).isEqualTo("recibo");
         Method[] metodos = Recibo.class.getDeclaredMethods();
         assertThat(Arrays.stream(metodos).filter(m -> Modifier.isPublic(m.getModifiers())).map(Method::getName))
-                .contains("emitir", "getNumero").noneMatch(nombre -> nombre.startsWith("set"));
+                .contains("emitir", "anular", "getNumero").noneMatch(nombre -> nombre.startsWith("set"));
+        assertThat(Arrays.stream(metodos).filter(m -> Modifier.isPublic(m.getModifiers()) && !Modifier.isStatic(m.getModifiers()))
+                .map(Method::getName).filter(nombre -> !nombre.startsWith("get") && !nombre.startsWith("is")))
+                .containsExactly("anular");
+    }
 
+    @Test
+    @DisplayName("las 10 columnas de 3a siguen updatable=false y las 5 de la anulación (estado y auditoría) son las únicas updatable")
+    void columnasActualizables() {
+        java.util.Set<String> deLaAnulacion = java.util.Set.of("estado", "fechaAnulacion", "usuarioAnulacionId",
+                "cajaAnulacionId", "motivoAnulacion");
         long columnas = Arrays.stream(Recibo.class.getDeclaredFields()).filter(f -> f.isAnnotationPresent(Column.class))
                 .count();
-        assertThat(columnas).isEqualTo(10);
+
+        assertThat(columnas).isEqualTo(15);
         for (Field campo : Recibo.class.getDeclaredFields()) {
             Column columna = campo.getAnnotation(Column.class);
-            if (columna != null) {
-                assertThat(columna.updatable()).as(campo.getName()).isFalse();
+            if (columna == null) {
+                continue;
             }
+            assertThat(columna.updatable()).as(campo.getName()).isEqualTo(deLaAnulacion.contains(campo.getName()));
         }
+        assertThat(Arrays.stream(Recibo.class.getDeclaredFields()).map(Field::getName)).containsAll(deLaAnulacion);
     }
 }

@@ -137,11 +137,80 @@ class MovimientoCuentaClienteTest {
     }
 
     @Test
-    @DisplayName("no hay fábrica de ANULACION: 3a no la escribe (solo venta y cobro)")
-    void sinFabricaDeAnulacion() {
+    @DisplayName("una anulación: tipo ANULACION, debe = monto, haber = 0, con recibo, referencia y motivo (recortado); sin comprobante ni pago ni exceso (CC-062, CC-068)")
+    void anulacion() {
+        MovimientoCuentaCliente m = MovimientoCuentaCliente.anulacion(3L, 7L, 55L, "Anulación Recibo N.º 12",
+                new BigDecimal("700.25"), "  Cobro mal cargado  ", AHORA, 9L);
+
+        assertThat(m.getFerreteriaId()).isEqualTo(3L);
+        assertThat(m.getClienteId()).isEqualTo(7L);
+        assertThat(m.getTipo()).isEqualTo(TipoMovimientoCuenta.ANULACION);
+        assertThat(m.getDebe()).isEqualByComparingTo("700.25");
+        assertThat(m.getHaber()).isEqualByComparingTo("0");
+        assertThat(m.getReciboId()).isEqualTo(55L);
+        assertThat(m.getReferencia()).isEqualTo("Anulación Recibo N.º 12");
+        assertThat(m.getMotivo()).isEqualTo("Cobro mal cargado");
+        assertThat(m.getComprobanteId()).isNull();
+        assertThat(m.getPagoId()).isNull();
+        assertThat(m.isExcedioLimite()).isFalse();
+        assertThat(m.getAutorizadoPor()).isNull();
+        assertThat(m.getFecha()).isEqualTo(AHORA);
+        assertThat(m.getUsuarioId()).isEqualTo(9L);
+    }
+
+    @Test
+    @DisplayName("la anulación con otros valores copia lo que se le da (monto, recibo, motivo mínimo de 5 y máximo de 200)")
+    void anulacionTriangula() {
+        MovimientoCuentaCliente cinco = MovimientoCuentaCliente.anulacion(4L, 8L, 99L, "Anulación Recibo N.º 1",
+                new BigDecimal("0.01"), "12345", AHORA, 2L);
+        MovimientoCuentaCliente doscientos = MovimientoCuentaCliente.anulacion(4L, 8L, 99L, "Anulación Recibo N.º 1",
+                BigDecimal.TEN, "x".repeat(200), AHORA, 2L);
+
+        assertThat(cinco.getDebe()).isEqualByComparingTo("0.01");
+        assertThat(cinco.getReciboId()).isEqualTo(99L);
+        assertThat(cinco.getMotivo()).isEqualTo("12345");
+        assertThat(doscientos.getMotivo()).hasSize(200);
+        assertThat(doscientos.getClienteId()).isEqualTo(8L);
+    }
+
+    @Test
+    @DisplayName("la anulación rechaza monto <= 0 o nulo, recibo nulo, referencia vacía y motivo vacío, en blanco, de menos de 5 (tras recortar) o de más de 200")
+    void anulacionInvalida() {
+        assertThatThrownBy(() -> anulacionCon(55L, BigDecimal.ZERO, "Cobro mal cargado"))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> anulacionCon(55L, new BigDecimal("-5"), "Cobro mal cargado"))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> anulacionCon(55L, null, "Cobro mal cargado")).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> anulacionCon(null, BigDecimal.TEN, "Cobro mal cargado"))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> MovimientoCuentaCliente.anulacion(3L, 7L, 55L, "", BigDecimal.TEN, "Cobro mal cargado",
+                AHORA, 9L)).isInstanceOf(IllegalArgumentException.class);
+        for (String motivo : new String[] {null, "", "    ", "abcd", "  abcd  ", "x".repeat(201)}) {
+            assertThatThrownBy(() -> anulacionCon(55L, BigDecimal.TEN, motivo)).as("[" + motivo + "]")
+                    .isInstanceOf(IllegalArgumentException.class);
+        }
+    }
+
+    private static MovimientoCuentaCliente anulacionCon(Long reciboId, BigDecimal monto, String motivo) {
+        return MovimientoCuentaCliente.anulacion(3L, 7L, reciboId, "Anulación Recibo N.º 1", monto, motivo, AHORA, 9L);
+    }
+
+    @Test
+    @DisplayName("venta y cobro no llevan motivo (ck_mcc_motivo: solo ANULACION y AJUSTE lo tienen)")
+    void ventaYCobroSinMotivo() {
+        MovimientoCuentaCliente venta = MovimientoCuentaCliente.venta(3L, 7L, 20L, 30L, REF, BigDecimal.TEN, AHORA, 9L, null);
+        MovimientoCuentaCliente cobro = MovimientoCuentaCliente.cobro(3L, 7L, 55L, "Recibo N.º 12", BigDecimal.TEN, AHORA, 9L);
+
+        assertThat(venta.getMotivo()).isNull();
+        assertThat(cobro.getMotivo()).isNull();
+    }
+
+    @Test
+    @DisplayName("las fábricas públicas son venta, cobro y anulacion (3b-2 sumará la de ajuste)")
+    void fabricas() {
         assertThat(Arrays.stream(MovimientoCuentaCliente.class.getDeclaredMethods())
                 .filter(m -> Modifier.isStatic(m.getModifiers()) && Modifier.isPublic(m.getModifiers()))
-                .map(Method::getName)).containsExactlyInAnyOrder("venta", "cobro");
+                .map(Method::getName)).containsExactlyInAnyOrder("venta", "cobro", "anulacion");
     }
 
     @Test
@@ -154,7 +223,7 @@ class MovimientoCuentaClienteTest {
 
         long columnas = Arrays.stream(MovimientoCuentaCliente.class.getDeclaredFields())
                 .filter(f -> f.isAnnotationPresent(Column.class)).count();
-        assertThat(columnas).isGreaterThanOrEqualTo(10);
+        assertThat(columnas).isGreaterThanOrEqualTo(11);
         for (Field campo : MovimientoCuentaCliente.class.getDeclaredFields()) {
             Column columna = campo.getAnnotation(Column.class);
             if (columna != null) {

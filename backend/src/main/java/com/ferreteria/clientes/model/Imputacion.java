@@ -9,8 +9,10 @@ import jakarta.persistence.Table;
 import java.math.BigDecimal;
 
 /**
- * Una imputación (CC-026, CC-041): «este recibo canceló este importe de este comprobante». Registro inmutable y append-only
- * (columnas {@code updatable = false}, sin setters, nunca se borra). Guarda el cliente propio para consultar los pendientes y
+ * Una imputación (CC-026, CC-041): «este recibo canceló este importe de este comprobante». Registro inmutable (columnas
+ * {@code updatable = false}, sin setters, nunca se borra). La única escritura posterior es la vigencia: al anular el recibo
+ * la imputación deja de estar {@code vigente} (CC-063), y eso lo hace una query nativa de la cuenta corriente, no la entidad:
+ * por eso {@code vigente} tampoco es actualizable por JPA. Guarda el cliente propio para consultar los pendientes y
  * tomar los locks por cliente sin join; que el comprobante sea del cliente lo garantiza el servicio de cuenta corriente.
  * Referencia al recibo y al comprobante solo por id, sin relaciones JPA. El pendiente de un comprobante es lo que debe
  * (Σ debe de sus VENTA) menos Σ de sus imputaciones: nunca se guarda.
@@ -38,6 +40,10 @@ public class Imputacion {
     @Column(nullable = false, updatable = false, precision = 15, scale = 2)
     private BigDecimal importe;
 
+    /** false cuando el recibo se anuló: deja de restar del comprobante (V22). Solo cambia por query, nunca por la entidad. */
+    @Column(nullable = false, updatable = false)
+    private boolean vigente;
+
     protected Imputacion() {}
 
     public static Imputacion de(Long ferreteriaId, Long clienteId, Long reciboId, Long comprobanteId, BigDecimal importe) {
@@ -53,6 +59,7 @@ public class Imputacion {
         imputacion.reciboId = reciboId;
         imputacion.comprobanteId = comprobanteId;
         imputacion.importe = importe;
+        imputacion.vigente = true;
         return imputacion;
     }
 
@@ -62,4 +69,5 @@ public class Imputacion {
     public Long getReciboId() { return reciboId; }
     public Long getComprobanteId() { return comprobanteId; }
     public BigDecimal getImporte() { return importe; }
+    public boolean isVigente() { return vigente; }
 }

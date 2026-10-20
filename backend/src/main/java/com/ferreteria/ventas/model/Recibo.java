@@ -15,10 +15,13 @@ import org.hibernate.type.SqlTypes;
 
 /**
  * El recibo de una cobranza de cuenta corriente (CC-036, CC-041): cuánto cobró la ferretería a un cliente, en qué medio y en
- * qué caja. Inmutable en el tramo 3a (columnas {@code updatable = false}, sin setters, sin estado: la anulación de 3b es un
- * ALTER aditivo). Es un recibo interno, no un comprobante fiscal. Sin relaciones JPA: guarda ids y copia el nombre del cliente
- * (renombrarlo después no cambia el recibo). El medio solo puede ser EFECTIVO o TRANSFERENCIA: un medio inesperado
- * corrompería el efectivo esperado de la caja. A qué comprobantes se imputó lo guarda {@code Imputacion} (en clientes).
+ * qué caja. Lo que describe la emisión es inmutable (columnas {@code updatable = false}, sin setters). Lo único que cambia
+ * después es el estado ({@code EMITIDO} → {@code ANULADO}, CC-069) y la auditoría de esa transición (cuándo, quién, en qué
+ * caja y por qué, CC-062): cinco columnas {@code updatable = true} que escribe {@link #anular}, el único mutador (CC-102);
+ * precedente: {@code remito.estado}. Es un recibo interno, no un comprobante fiscal. Sin relaciones JPA: guarda ids y copia
+ * el nombre del cliente (renombrarlo después no cambia el recibo). El medio solo puede ser EFECTIVO o TRANSFERENCIA: un medio
+ * inesperado corrompería el efectivo esperado de la caja. A qué comprobantes se imputó lo guarda {@code Imputacion} (en
+ * clientes).
  */
 @Entity
 @Table(name = "recibo")
@@ -26,6 +29,8 @@ public class Recibo {
 
     private static final int MAX_CLAVE = 36;
     private static final int MAX_NOMBRE = 120;
+    private static final int MIN_MOTIVO = 5;
+    private static final int MAX_MOTIVO = 200;
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -66,6 +71,25 @@ public class Recibo {
     @Column(nullable = false, updatable = false, precision = 15, scale = 2)
     private BigDecimal total;
 
+    @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
+    @Column(nullable = false, length = 10)
+    private EstadoRecibo estado;
+
+    /** Cuándo se anuló (Clock de la ferretería); null mientras está EMITIDO. */
+    @Column(name = "fecha_anulacion")
+    private LocalDateTime fechaAnulacion;
+
+    @Column(name = "usuario_anulacion_id")
+    private Long usuarioAnulacionId;
+
+    /** La caja ABIERTA que absorbió la anulación (puede no ser la del cobro: {@link #cajaId}). */
+    @Column(name = "caja_anulacion_id")
+    private Long cajaAnulacionId;
+
+    @Column(name = "motivo_anulacion", length = MAX_MOTIVO)
+    private String motivoAnulacion;
+
     protected Recibo() {}
 
     /** Emite un recibo; la fecha la fija el llamador con su Clock. */
@@ -101,8 +125,35 @@ public class Recibo {
         recibo.fecha = fecha;
         recibo.medio = medio;
         recibo.total = total;
+        recibo.estado = EstadoRecibo.EMITIDO;
         return recibo;
     }
+
+    /**
+     * Anula el recibo (CC-062): pasa a ANULADO con quién, cuándo, en qué caja y por qué. Una sola vez: anular un recibo ya
+     * anulado es un error de programación (el servicio devuelve el 409 antes, con quién y cuándo). El motivo se recorta y tiene
+     * entre 5 y 200 caracteres, igual que {@code ck_recibo_anulacion}; si algo no vale, el recibo queda como estaba.
+     */
+    public void anular(Long usuarioId, LocalDateTime fecha, Long cajaId, String motivo) {
+        if (estado == EstadoRecibo.ANULADO) {
+            throw new IllegalStateException("El recibo ya está anulado.");
+        }
+        if (usuarioId == null || fecha == null || cajaId == null || motivo == null) {
+            throw new IllegalArgumentException("La anulación necesita usuario, fecha, caja y motivo.");
+        }
+        String recortado = motivo.trim();
+        if (recortado.length() < MIN_MOTIVO || recortado.length() > MAX_MOTIVO) {
+            throw new IllegalArgumentException(
+                    "El motivo de la anulación tiene entre " + MIN_MOTIVO + " y " + MAX_MOTIVO + " caracteres.");
+        }
+        this.estado = EstadoRecibo.ANULADO;
+        this.fechaAnulacion = fecha;
+        this.usuarioAnulacionId = usuarioId;
+        this.cajaAnulacionId = cajaId;
+        this.motivoAnulacion = recortado;
+    }
+
+    public boolean isAnulado() { return estado == EstadoRecibo.ANULADO; }
 
     public Long getId() { return id; }
     public Long getFerreteriaId() { return ferreteriaId; }
@@ -115,4 +166,9 @@ public class Recibo {
     public LocalDateTime getFecha() { return fecha; }
     public MedioPago getMedio() { return medio; }
     public BigDecimal getTotal() { return total; }
+    public EstadoRecibo getEstado() { return estado; }
+    public LocalDateTime getFechaAnulacion() { return fechaAnulacion; }
+    public Long getUsuarioAnulacionId() { return usuarioAnulacionId; }
+    public Long getCajaAnulacionId() { return cajaAnulacionId; }
+    public String getMotivoAnulacion() { return motivoAnulacion; }
 }
