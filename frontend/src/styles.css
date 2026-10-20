@@ -412,9 +412,11 @@ app-barra-acciones h1 {
 .accion-barra {
   flex-direction: column;
   gap: 4px;
-  width: 92px;
+  /* 92px como mínimo: una etiqueta más larga («Cuenta corriente») ensancha el botón en vez de salirse por los bordes. */
+  width: auto;
+  min-width: 92px;
   min-height: 54px;
-  padding: 7px 4px 6px;
+  padding: 7px 8px 6px;
   border-color: var(--borde);
   border-radius: 9px;
   font-size: var(--texto-sm);
