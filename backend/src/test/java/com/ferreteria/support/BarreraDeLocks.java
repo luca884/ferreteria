@@ -38,6 +38,9 @@ public final class BarreraDeLocks {
     /** Frecuencia fija con que se mira la condición (no condiciona ningún resultado). */
     static final long INTERVALO_MS = 5;
 
+    /** Código de MySQL de «no se pudo tomar el lock de inmediato y se pidió NOWAIT». */
+    private static final int ER_LOCK_NOWAIT = 3572;
+
     public static final Duration TOPE_POR_DEFECTO = Duration.ofSeconds(30);
 
     private final JdbcTemplate root;
@@ -81,6 +84,37 @@ public final class BarreraDeLocks {
                         + " transacción(es) en LOCK WAIT; hay " + bloqueadosAhora() + ". " + volcado());
             }
             pausaDeConsulta();
+        }
+    }
+
+    /**
+     * Las tablas sobre las que están esperando AHORA las transacciones en {@code LOCK WAIT} (el objeto del lock solicitado:
+     * {@code performance_schema.data_lock_waits} unida con {@code data_locks}), sin repetidos y ordenadas. Sirve para afirmar
+     * QUÉ espera un hilo bloqueado y no solo que espera (un test que solo mira «hay 1 bloqueado» pasa aunque espere otra cosa).
+     */
+    public List<String> objetosEnEspera() {
+        return root.queryForList("select distinct d.OBJECT_NAME from performance_schema.data_lock_waits w "
+                + "join performance_schema.data_locks d on d.ENGINE_LOCK_ID = w.REQUESTING_ENGINE_LOCK_ID "
+                + "order by d.OBJECT_NAME", String.class);
+    }
+
+    /**
+     * ¿Se puede tomar YA la fila {@code tabla.id} para escribir? Desde una conexión nueva (autocommit) ejecuta
+     * {@code select id from tabla where id = ? for update nowait}: {@code true} si entra (y se libera en el acto, no deja nada
+     * tomado), {@code false} si MySQL la rechaza por tenerla otro (error 3572, «lock(s) could not be acquired immediately and
+     * NOWAIT is set»). Es una condición observable sin tiempos: «¿retiene la cobranza bloqueada este lock?».
+     */
+    public static boolean sePuedeTomarYa(String tabla, long id) {
+        try (Connection c = DriverManager.getConnection(IntegrationTestBase.MYSQL.getJdbcUrl(),
+                IntegrationTestBase.MYSQL.getUsername(), IntegrationTestBase.MYSQL.getPassword());
+                Statement st = c.createStatement()) {
+            st.execute("select id from " + tabla + " where id = " + id + " for update nowait");
+            return true;
+        } catch (SQLException e) {
+            if (e.getErrorCode() == ER_LOCK_NOWAIT) {
+                return false;
+            }
+            throw new AssertionError("NOWAIT sobre " + tabla + " " + id + " falló por otra causa: " + e.getMessage(), e);
         }
     }
 

@@ -267,6 +267,15 @@ class CobranzaConcurrenciaIntegrationTest extends CuentaCorrienteTestBase {
      */
     private Par retenidoYBloqueado(Escenario e, Punto punto, Callable<?> primero, Function<Long, Callable<?>> segundo)
             throws Exception {
+        return retenidoYBloqueado(e, punto, primero, segundo, barrera -> { });
+    }
+
+    /**
+     * Igual, y {@code conElSegundoBloqueado} corre con el segundo YA en LOCK WAIT y el primero todavía retenido: el momento para
+     * afirmar QUÉ está esperando (S1 del verify: «hay 1 bloqueado» no dice si espera lo que debe).
+     */
+    private Par retenidoYBloqueado(Escenario e, Punto punto, Callable<?> primero, Function<Long, Callable<?>> segundo,
+            java.util.function.Consumer<BarreraDeLocks> conElSegundoBloqueado) throws Exception {
         BarreraDeLocks barrera = new BarreraDeLocks(jdbcRoot());
         long deadlocksAntes = barrera.deadlocksAntes();
         Hito llego = new Hito();
@@ -279,6 +288,7 @@ class CobranzaConcurrenciaIntegrationTest extends CuentaCorrienteTestBase {
             llego.esperar(); // el primero tiene todo tomado, está dentro del punto y no confirmó
             Future<Salida> t2 = lanzar(pool, e.f(), segundo.apply(comprobante.get()));
             barrera.esperarBloqueados(1); // el segundo está en LOCK WAIT en MySQL
+            conElSegundoBloqueado.accept(barrera);
             suelta.avisar();
             Par par = new Par(resultado(t1), resultado(t2));
             barrera.assertSinDeadlocks(deadlocksAntes);
@@ -296,6 +306,12 @@ class CobranzaConcurrenciaIntegrationTest extends CuentaCorrienteTestBase {
     /** Lo más común: el primero es una cobranza retenida en {@code asentarCobro}. */
     private Par retenidoYBloqueado(Escenario e, Callable<?> primero, Callable<?> segundo) throws Exception {
         return retenidoYBloqueado(e, Punto.ASENTAR_COBRO, primero, segundo);
+    }
+
+    /** Lo más común con una aserción sobre el momento del bloqueo (ver arriba). */
+    private Par retenidoYBloqueado(Escenario e, Callable<?> primero, Callable<?> segundo,
+            java.util.function.Consumer<BarreraDeLocks> conElSegundoBloqueado) throws Exception {
+        return retenidoYBloqueado(e, Punto.ASENTAR_COBRO, primero, comprobante -> segundo, conElSegundoBloqueado);
     }
 
     // ===============================================================================================================
@@ -549,7 +565,9 @@ class CobranzaConcurrenciaIntegrationTest extends CuentaCorrienteTestBase {
 
         Par par = retenidoYBloqueado(e,
                 cobrar(e, pedido(c1, "100", imputa(v1.comprobanteId(), "100"))),
-                cobrar(e, pedido(c2, "100", imputa(v2.comprobanteId(), "100"))));
+                cobrar(e, pedido(c2, "100", imputa(v2.comprobanteId(), "100"))),
+                // S1: lo que espera B es el numerador de recibos (ya pasó caja S y su cliente, que están libres), y nada más
+                barrera -> assertThat(barrera.objetosEnEspera()).as("B espera el numerador de recibos").containsExactly("numerador_recibo"));
 
         assertThat(par.primero().cobro().recibo().getNumero()).isEqualTo(1L);
         assertThat(par.segundo().cobro().recibo().getNumero()).isEqualTo(2L);
@@ -762,6 +780,10 @@ class CobranzaConcurrenciaIntegrationTest extends CuentaCorrienteTestBase {
         try {
             Future<Salida> cobranza = lanzar(pool, e.f(), cobrar(e, pedido(cliente, "100", imputa(a.comprobanteId(), "100"))));
             barrera.esperarBloqueados(1); // la cobranza espera la caja
+            // W2: espera la CAJA y todavía no tiene al cliente (la caja va antes): otra conexión lo toma sin esperar
+            assertThat(barrera.objetosEnEspera()).as("la cobranza espera la caja").containsExactly("caja");
+            assertThat(BarreraDeLocks.sePuedeTomarYa("cliente", cliente))
+                    .as("la cobranza bloqueada en la caja NO retiene al cliente (caja antes que cliente)").isTrue();
             holder.commit();
 
             assertThat(resultado(cobranza).rechazo().motivo()).isEqualTo(Motivo.CAJA_CERRADA);
@@ -870,6 +892,10 @@ class CobranzaConcurrenciaIntegrationTest extends CuentaCorrienteTestBase {
         try {
             Future<Salida> cobranza = lanzar(pool, e.f(), cobrar(e, pedido(cliente, "500")));
             barrera.esperarBloqueados(1);
+            // W2: espera al CLIENTE y ya tiene la caja en S (la caja va antes): otra conexión no la puede tomar en X
+            assertThat(barrera.objetosEnEspera()).as("la cobranza espera al cliente").containsExactly("cliente");
+            assertThat(BarreraDeLocks.sePuedeTomarYa("caja", e.caja()))
+                    .as("la cobranza bloqueada en el cliente YA tiene la caja en S (caja antes que cliente)").isFalse();
             holder.commit();
 
             assertThat(resultado(cobranza).error()).isInstanceOf(ReglaDeNegocioException.class)

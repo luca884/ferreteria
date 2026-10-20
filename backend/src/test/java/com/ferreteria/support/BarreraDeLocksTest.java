@@ -215,6 +215,36 @@ class BarreraDeLocksTest extends IntegrationTestBase {
     }
 
     @Test
+    @DisplayName("objetosEnEspera dice sobre QUÉ tabla espera el bloqueado (y queda vacío cuando nadie espera)")
+    void objetosEnEspera() throws Exception {
+        assertThat(barrera.objetosEnEspera()).as("nadie espera todavía").isEmpty();
+        HolderJdbc quienTiene = holder(bloquearFila(1));
+        HolderJdbc quienEspera = holder();
+        Future<?> espera = pool.submit(() -> quienEspera.ejecutar(bloquearFila(1)));
+
+        barrera.esperarBloqueados(1);
+
+        assertThat(barrera.objetosEnEspera()).containsExactly(TABLA);
+        quienTiene.commit();
+        espera.get(30, TimeUnit.SECONDS);
+        quienEspera.commit();
+        assertThat(barrera.objetosEnEspera()).as("ya nadie espera").isEmpty();
+    }
+
+    @Test
+    @DisplayName("sePuedeTomarYa: NOWAIT desde otra conexión entra si la fila está libre y es rechazado si la retiene otro; no deja nada tomado")
+    void sePuedeTomarYa() {
+        assertThat(BarreraDeLocks.sePuedeTomarYa(TABLA, 1)).as("libre").isTrue();
+        HolderJdbc quienTiene = holder(bloquearFila(1));
+
+        assertThat(BarreraDeLocks.sePuedeTomarYa(TABLA, 1)).as("retenida por el holder").isFalse();
+        assertThat(BarreraDeLocks.sePuedeTomarYa(TABLA, 2)).as("otra fila, libre").isTrue();
+        quienTiene.commit();
+        assertThat(BarreraDeLocks.sePuedeTomarYa(TABLA, 1)).as("soltada").isTrue();
+        assertThat(BarreraDeLocks.sePuedeTomarYa(TABLA, 1)).as("la consulta anterior no dejó el lock tomado").isTrue();
+    }
+
+    @Test
     @DisplayName("holderJdbc abre una tx, ejecuta y retiene el lock hasta commit() o rollback(); rollback descarta los cambios")
     void holderRetieneYSuelta() throws Exception {
         HolderJdbc h = holder("update " + TABLA + " set v = 7 where id = 1");
