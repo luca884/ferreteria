@@ -426,6 +426,9 @@ class CuentaCorrienteCobranzaIntegrationTest extends CuentaCorrienteTestBase {
         long caja = cajaCerrada(f);
         TenantContext.setCurrentFerreteriaId(f.id());
         cobrar(f, cliente, caja, "300.00", imputa(primera.comprobanteId(), "300.00"));
+        assertInvariante(cliente);
+        // Se fuerza por SQL un estado que la app no produce (CC-020: no se desactiva con saldo ≠ 0) solo para probar que se
+        // consulta igual; por eso la invariante (que desde 3b-1 incluye «inactivo ⇒ saldo 0») se verifica ANTES de forzarlo.
         jdbc.update("update cliente set activo = 0 where id = ?", cliente);
 
         PendientesCuenta p = pendientes(cliente);
@@ -434,7 +437,6 @@ class CuentaCorrienteCobranzaIntegrationTest extends CuentaCorrienteTestBase {
                 .containsExactly(segunda.comprobanteId(), tercera.comprobanteId());
         assertThat(p.saldo()).isEqualByComparingTo("900.00");
         assertThat(p.comprobantes().get(0).referencia()).isEqualTo("Venta N.º " + segunda.numero());
-        assertInvariante(cliente);
     }
 
     @Test

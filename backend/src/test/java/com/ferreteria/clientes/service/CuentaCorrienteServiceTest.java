@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -14,6 +15,8 @@ import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
 import com.ferreteria.clientes.CuentaFalsa;
+import com.ferreteria.clientes.api.CuentaCorrienteParaCobranza.AnulacionAsentada;
+import com.ferreteria.clientes.api.CuentaCorrienteParaCobranza.AsientoAnulacion;
 import com.ferreteria.clientes.api.CuentaCorrienteParaCobranza.AsientoCobro;
 import com.ferreteria.clientes.api.CuentaCorrienteParaCobranza.ImputacionAsentada;
 import com.ferreteria.clientes.api.CuentaCorrienteParaCobranza.ImputacionInvalidaException;
@@ -757,6 +760,289 @@ class CuentaCorrienteServiceTest {
         verify(libro, never()).debitosDeComprobantesScoped(anyLong(), any());
     }
 
+    // ---- asentarAnulacion (CCT3B1-205: CC-062, CC-063, CC-065, CC-068, CC-085, CC-102) ----
+
+    private record FilaImputacionFalsa(Long id, Long comprobanteId, boolean vigente)
+            implements ImputacionRepository.FilaDeImputacion {
+        @Override public Long getId() { return id; }
+        @Override public Long getComprobanteId() { return comprobanteId; }
+        @Override public boolean getVigente() { return vigente; }
+    }
+
+    private static AsientoAnulacion anulacion(String total, String motivo) {
+        return new AsientoAnulacion(5L, 61L, 12L, d(total), motivo, 9L);
+    }
+
+    private static MovimientoCuentaCliente cobroDelRecibo(String total) {
+        return MovimientoCuentaCliente.cobro(FERRETERIA, 5L, 61L, "Recibo N.º 12", d(total), AHORA.minusDays(1), 9L);
+    }
+
+    /** Un cliente con el COBRO de 600 del recibo 61, sin ANULACION, y dos imputaciones (ids 31 y 30, a los comprobantes 21 y 20). */
+    private void reciboConDosImputaciones() {
+        when(clientes.bloquearCuentaScoped(5L)).thenReturn(Optional.of(CuentaFalsa.de("1000.00", "100.00")));
+        when(libro.deReciboScoped(61L)).thenReturn(List.of(cobroDelRecibo("600.00")));
+        when(imputaciones.idsDeReciboScoped(61L)).thenReturn(List.of(31L, 30L)); // desordenados a propósito
+        // lo que sigue a la lectura bloqueada no se usa en los tests que rechazan antes: lenient
+        lenient().when(imputaciones.bloquearDeReciboScoped(eq(5L), any()))
+                .thenReturn(List.of(new FilaImputacionFalsa(30L, 20L, true), new FilaImputacionFalsa(31L, 21L, true)));
+        lenient().when(imputaciones.desactivarDeReciboScoped(eq(5L), eq(61L), any())).thenReturn(2);
+        stubGuardarElLibro();
+        lenient().when(clientes.sumarSaldoScoped(anyLong(), any())).thenReturn(1);
+    }
+
+    /** {@code save} devuelve el movimiento con un id (como Spring Data tras el INSERT). */
+    private void stubGuardarElLibro() {
+        lenient().when(libro.save(any(MovimientoCuentaCliente.class))).thenAnswer(inv -> {
+            MovimientoCuentaCliente m = inv.getArgument(0);
+            org.springframework.test.util.ReflectionTestUtils.setField(m, "id", 99L);
+            return m;
+        });
+    }
+
+    @Test
+    @DisplayName("asentarAnulacion respeta el orden: cuentaBloqueada → libro del recibo → ids → bloquear (ids ascendentes) → desactivar → save del libro → saldo +total")
+    void anulacionEnOrden() {
+        reciboConDosImputaciones();
+
+        servicio.asentarAnulacion(anulacion("600.00", "Cobro mal cargado"));
+
+        var orden = inOrder(clientes, libro, imputaciones);
+        orden.verify(clientes).bloquearCuentaScoped(5L);
+        orden.verify(libro).deReciboScoped(61L);
+        orden.verify(imputaciones).idsDeReciboScoped(61L);
+        orden.verify(imputaciones).bloquearDeReciboScoped(eq(5L), ids.capture());
+        orden.verify(imputaciones).desactivarDeReciboScoped(eq(5L), eq(61L), any());
+        orden.verify(libro).save(any(MovimientoCuentaCliente.class));
+        orden.verify(clientes).sumarSaldoScoped(5L, d("600.00"));
+        assertThat(ids.getValue()).as("se bloquea por PK en orden ascendente (sin deadlock entre anulaciones y cobranzas)")
+                .containsExactly(30L, 31L);
+        verify(imputaciones).desactivarDeReciboScoped(5L, 61L, List.of(30L, 31L));
+    }
+
+    @Test
+    @DisplayName("un solo save del libro: ANULACION con debe = total, recibo, «Anulación Recibo N.º n», motivo recortado y usuario; el saldo sube UNA vez; devuelve el id y los comprobantes liberados")
+    void anulacionAsientaUnContraAsiento() {
+        reciboConDosImputaciones();
+
+        AnulacionAsentada asentada = servicio.asentarAnulacion(anulacion("600.00", "  Cobro mal cargado  "));
+
+        ArgumentCaptor<MovimientoCuentaCliente> guardado = ArgumentCaptor.forClass(MovimientoCuentaCliente.class);
+        verify(libro, org.mockito.Mockito.times(1)).save(guardado.capture());
+        MovimientoCuentaCliente m = guardado.getValue();
+        assertThat(m.getTipo()).isEqualTo(TipoMovimientoCuenta.ANULACION);
+        assertThat(m.getDebe()).isEqualByComparingTo("600.00");
+        assertThat(m.getHaber()).isEqualByComparingTo("0");
+        assertThat(m.getReciboId()).isEqualTo(61L);
+        assertThat(m.getReferencia()).isEqualTo("Anulación Recibo N.º 12");
+        assertThat(m.getMotivo()).isEqualTo("Cobro mal cargado");
+        assertThat(m.getUsuarioId()).isEqualTo(9L);
+        assertThat(m.getClienteId()).isEqualTo(5L);
+        assertThat(m.getFerreteriaId()).isEqualTo(FERRETERIA);
+        assertThat(m.getFecha()).isEqualTo(AHORA);
+        verify(clientes, org.mockito.Mockito.times(1)).sumarSaldoScoped(anyLong(), any());
+        verify(clientes).sumarSaldoScoped(5L, d("600.00"));
+        assertThat(asentada.movimientoId()).isEqualTo(99L);
+        assertThat(asentada.comprobantesLiberados()).containsExactly(20L, 21L);
+    }
+
+    @Test
+    @DisplayName("comprobantesLiberados es distinct y ascendente aunque dos imputaciones del recibo apunten al mismo comprobante o lleguen desordenadas")
+    void comprobantesLiberadosDistinctAscendente() {
+        reciboConDosImputaciones();
+        when(imputaciones.idsDeReciboScoped(61L)).thenReturn(List.of(32L, 30L, 31L));
+        when(imputaciones.bloquearDeReciboScoped(eq(5L), any())).thenReturn(List.of(new FilaImputacionFalsa(30L, 25L, true),
+                new FilaImputacionFalsa(31L, 20L, true), new FilaImputacionFalsa(32L, 25L, true)));
+        when(imputaciones.desactivarDeReciboScoped(eq(5L), eq(61L), any())).thenReturn(3);
+
+        AnulacionAsentada asentada = servicio.asentarAnulacion(anulacion("600.00", "Cobro mal cargado"));
+
+        assertThat(asentada.comprobantesLiberados()).containsExactly(20L, 25L);
+    }
+
+    @Test
+    @DisplayName("un adelanto (recibo sin imputaciones) no bloquea ni desactiva nada, pero asienta el contra-asiento y sube el saldo")
+    void anulacionSinImputaciones() {
+        when(clientes.bloquearCuentaScoped(5L)).thenReturn(Optional.of(CuentaFalsa.de(null, "-500.00")));
+        when(libro.deReciboScoped(61L)).thenReturn(List.of(cobroDelRecibo("500.00")));
+        when(imputaciones.idsDeReciboScoped(61L)).thenReturn(List.of());
+        when(clientes.sumarSaldoScoped(anyLong(), any())).thenReturn(1);
+        stubGuardarElLibro();
+
+        AnulacionAsentada asentada = servicio.asentarAnulacion(anulacion("500.00", "Cobro mal cargado"));
+
+        verify(imputaciones, never()).bloquearDeReciboScoped(anyLong(), any());
+        verify(imputaciones, never()).desactivarDeReciboScoped(anyLong(), anyLong(), any());
+        verify(libro).save(any(MovimientoCuentaCliente.class));
+        verify(clientes).sumarSaldoScoped(5L, d("500.00"));
+        assertThat(asentada.comprobantesLiberados()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("CC-065: la anulación no mira el límite ni si el cliente está activo (límite 0 y cliente desactivado: asienta igual)")
+    void anulacionSinChequeoDeLimiteNiDeActivo() {
+        when(clientes.bloquearCuentaScoped(5L)).thenReturn(Optional.of(new CuentaFalsa("Cliente", d("0.00"), d("0.00"), false)));
+        when(libro.deReciboScoped(61L)).thenReturn(List.of(cobroDelRecibo("500.00")));
+        when(imputaciones.idsDeReciboScoped(61L)).thenReturn(List.of());
+        when(clientes.sumarSaldoScoped(anyLong(), any())).thenReturn(1);
+        stubGuardarElLibro();
+
+        servicio.asentarAnulacion(anulacion("500.00", "Cobro mal cargado"));
+
+        verify(libro).save(any(MovimientoCuentaCliente.class));
+        verify(clientes).sumarSaldoScoped(5L, d("500.00"));
+    }
+
+    private void verificarSinEscribir() {
+        verify(libro, never()).save(any(MovimientoCuentaCliente.class));
+        verify(imputaciones, never()).desactivarDeReciboScoped(anyLong(), anyLong(), any());
+        verify(clientes, never()).sumarSaldoScoped(anyLong(), any());
+    }
+
+    @Test
+    @DisplayName("CC-068: sin COBRO del recibo en la cuenta de ESE cliente → IllegalStateException sin escribir (recibo ajeno, inexistente)")
+    void anulacionSinCobro() {
+        when(clientes.bloquearCuentaScoped(5L)).thenReturn(Optional.of(CuentaFalsa.de("1000.00", "0.00")));
+        when(libro.deReciboScoped(61L)).thenReturn(List.of());
+
+        assertThatThrownBy(() -> servicio.asentarAnulacion(anulacion("600.00", "Cobro mal cargado")))
+                .isInstanceOf(IllegalStateException.class);
+
+        verificarSinEscribir();
+        verify(imputaciones, never()).idsDeReciboScoped(anyLong());
+    }
+
+    @Test
+    @DisplayName("CC-068: el COBRO es de OTRO cliente → IllegalStateException sin escribir")
+    void anulacionDeCobroDeOtroCliente() {
+        when(clientes.bloquearCuentaScoped(5L)).thenReturn(Optional.of(CuentaFalsa.de("1000.00", "0.00")));
+        when(libro.deReciboScoped(61L)).thenReturn(List.of(
+                MovimientoCuentaCliente.cobro(FERRETERIA, 6L, 61L, "Recibo N.º 12", d("600.00"), AHORA, 9L)));
+
+        assertThatThrownBy(() -> servicio.asentarAnulacion(anulacion("600.00", "Cobro mal cargado")))
+                .isInstanceOf(IllegalStateException.class);
+
+        verificarSinEscribir();
+    }
+
+    @Test
+    @DisplayName("CC-068: el haber del COBRO difiere del total pedido (un centavo alcanza) → IllegalStateException sin escribir; igual valor en otra escala pasa")
+    void anulacionConOtroImporte() {
+        when(clientes.bloquearCuentaScoped(5L)).thenReturn(Optional.of(CuentaFalsa.de("1000.00", "0.00")));
+        when(libro.deReciboScoped(61L)).thenReturn(List.of(cobroDelRecibo("600.01")));
+
+        assertThatThrownBy(() -> servicio.asentarAnulacion(anulacion("600.00", "Cobro mal cargado")))
+                .isInstanceOf(IllegalStateException.class);
+        verificarSinEscribir();
+
+        when(libro.deReciboScoped(61L)).thenReturn(List.of(cobroDelRecibo("600.0")));
+        when(imputaciones.idsDeReciboScoped(61L)).thenReturn(List.of());
+        when(clientes.sumarSaldoScoped(anyLong(), any())).thenReturn(1);
+        stubGuardarElLibro();
+        servicio.asentarAnulacion(anulacion("600.00", "Cobro mal cargado"));
+        verify(libro).save(any(MovimientoCuentaCliente.class));
+    }
+
+    @Test
+    @DisplayName("CC-068: ya hay una ANULACION del recibo → IllegalStateException sin escribir (segunda anulación)")
+    void anulacionRepetida() {
+        when(clientes.bloquearCuentaScoped(5L)).thenReturn(Optional.of(CuentaFalsa.de("1000.00", "0.00")));
+        when(libro.deReciboScoped(61L)).thenReturn(List.of(cobroDelRecibo("600.00"), MovimientoCuentaCliente.anulacion(
+                FERRETERIA, 5L, 61L, "Anulación Recibo N.º 12", d("600.00"), "Cobro mal cargado", AHORA, 9L)));
+
+        assertThatThrownBy(() -> servicio.asentarAnulacion(anulacion("600.00", "Cobro mal cargado")))
+                .isInstanceOf(IllegalStateException.class);
+
+        verificarSinEscribir();
+    }
+
+    @Test
+    @DisplayName("CC-063/CC-085: una fila ya no vigente en la lectura bloqueada (otra anulación se adelantó) → IllegalStateException sin desactivar ni escribir")
+    void anulacionConFilaNoVigente() {
+        reciboConDosImputaciones();
+        when(imputaciones.bloquearDeReciboScoped(eq(5L), any()))
+                .thenReturn(List.of(new FilaImputacionFalsa(30L, 20L, true), new FilaImputacionFalsa(31L, 21L, false)));
+
+        assertThatThrownBy(() -> servicio.asentarAnulacion(anulacion("600.00", "Cobro mal cargado")))
+                .isInstanceOf(IllegalStateException.class);
+
+        verificarSinEscribir();
+    }
+
+    @Test
+    @DisplayName("si la lectura bloqueada devuelve menos filas que los ids (otro cliente, borrada) → IllegalStateException sin escribir")
+    void anulacionConFilasFaltantes() {
+        reciboConDosImputaciones();
+        when(imputaciones.bloquearDeReciboScoped(eq(5L), any())).thenReturn(List.of(new FilaImputacionFalsa(30L, 20L, true)));
+
+        assertThatThrownBy(() -> servicio.asentarAnulacion(anulacion("600.00", "Cobro mal cargado")))
+                .isInstanceOf(IllegalStateException.class);
+
+        verificarSinEscribir();
+    }
+
+    @Test
+    @DisplayName("si desactivar devuelve un conteo distinto de ids.size() → IllegalStateException (rollback) y no se escribe el libro ni el saldo")
+    void anulacionConDesactivacionIncompleta() {
+        reciboConDosImputaciones();
+        when(imputaciones.desactivarDeReciboScoped(eq(5L), eq(61L), any())).thenReturn(1);
+
+        assertThatThrownBy(() -> servicio.asentarAnulacion(anulacion("600.00", "Cobro mal cargado")))
+                .isInstanceOf(IllegalStateException.class);
+
+        verify(libro, never()).save(any(MovimientoCuentaCliente.class));
+        verify(clientes, never()).sumarSaldoScoped(anyLong(), any());
+    }
+
+    @Test
+    @DisplayName("si el UPDATE del saldo no afecta exactamente una fila falla fuerte (IllegalStateException)")
+    void anulacionConSaldoQueNoSeActualiza() {
+        reciboConDosImputaciones();
+
+        when(clientes.sumarSaldoScoped(5L, d("600.00"))).thenReturn(0);
+        assertThatThrownBy(() -> servicio.asentarAnulacion(anulacion("600.00", "Cobro mal cargado")))
+                .isInstanceOf(IllegalStateException.class).hasMessageContaining("saldo");
+
+        when(clientes.sumarSaldoScoped(5L, d("600.00"))).thenReturn(2);
+        assertThatThrownBy(() -> servicio.asentarAnulacion(anulacion("600.00", "Cobro mal cargado")))
+                .isInstanceOf(IllegalStateException.class).hasMessageContaining("saldo");
+    }
+
+    @Test
+    @DisplayName("argumentos mal formados son un error de programación (IllegalArgumentException): ids nulos, total ≤ 0, más de 2 decimales, motivo vacío o corto, número de recibo no positivo")
+    void anulacionConArgumentosMalFormados() {
+        assertThatThrownBy(() -> servicio.asentarAnulacion(new AsientoAnulacion(null, 61L, 12L, d("10.00"), "Cobro mal cargado", 9L)))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> servicio.asentarAnulacion(new AsientoAnulacion(5L, null, 12L, d("10.00"), "Cobro mal cargado", 9L)))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> servicio.asentarAnulacion(new AsientoAnulacion(5L, 61L, 0L, d("10.00"), "Cobro mal cargado", 9L)))
+                .as("número de recibo no positivo").isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> servicio.asentarAnulacion(new AsientoAnulacion(5L, 61L, 12L, null, "Cobro mal cargado", 9L)))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> servicio.asentarAnulacion(anulacion("0.00", "Cobro mal cargado")))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> servicio.asentarAnulacion(anulacion("-5.00", "Cobro mal cargado")))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> servicio.asentarAnulacion(anulacion("10.001", "Cobro mal cargado")))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> servicio.asentarAnulacion(anulacion("10.00", null))).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> servicio.asentarAnulacion(anulacion("10.00", "    "))).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> servicio.asentarAnulacion(anulacion("10.00", "abc"))).isInstanceOf(IllegalArgumentException.class);
+
+        verifyNoInteractions(clientes, libro, imputaciones);
+    }
+
+    @Test
+    @DisplayName("una anulación de un cliente de otra ferretería o inexistente es 404 y no lee ni escribe nada más")
+    void anulacionClienteAjeno() {
+        when(clientes.bloquearCuentaScoped(5L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> servicio.asentarAnulacion(anulacion("600.00", "Cobro mal cargado")))
+                .isInstanceOf(ResourceNotFoundException.class);
+
+        verifyNoInteractions(libro, imputaciones);
+        verify(clientes, never()).sumarSaldoScoped(anyLong(), any());
+    }
+
     // ---- pendientes (CCT3-207: CC-039, CC-050, CC-031, CC-032) ----
 
     @Test
@@ -767,7 +1053,7 @@ class CuentaCorrienteServiceTest {
         when(libro.debitosDeClienteScoped(5L)).thenReturn(
                 List.of(debito(10, 50, "300.00"), debito(11, 51, "500.00"), debito(12, 52, "400.00")));
         when(imputaciones.imputadoPorComprobanteScoped(5L)).thenReturn(List.of(imputado(10, "300.00"), imputado(11, "100.00")));
-        when(libro.creditosDeCobroScoped(5L)).thenReturn(d("600.00"));
+        when(libro.creditoNetoDeRecibosScoped(5L)).thenReturn(d("600.00"));
         when(imputaciones.totalImputadoScoped(5L)).thenReturn(d("400.00"));
 
         PendientesCuenta pendientes = servicio.pendientes(5L);
@@ -791,7 +1077,7 @@ class CuentaCorrienteServiceTest {
         when(clientes.findScoped(5L)).thenReturn(Optional.of(cliente));
         when(libro.debitosDeClienteScoped(5L)).thenReturn(List.of());
         when(imputaciones.imputadoPorComprobanteScoped(5L)).thenReturn(List.of());
-        when(libro.creditosDeCobroScoped(5L)).thenReturn(d("0"));
+        when(libro.creditoNetoDeRecibosScoped(5L)).thenReturn(d("0"));
         when(imputaciones.totalImputadoScoped(5L)).thenReturn(d("0"));
 
         PendientesCuenta pendientes = servicio.pendientes(5L);
@@ -808,7 +1094,7 @@ class CuentaCorrienteServiceTest {
         when(clientes.findScoped(5L)).thenReturn(Optional.of(cliente));
         when(libro.debitosDeClienteScoped(5L)).thenReturn(List.of());
         when(imputaciones.imputadoPorComprobanteScoped(5L)).thenReturn(List.of());
-        when(libro.creditosDeCobroScoped(5L)).thenReturn(d("500.00"));
+        when(libro.creditoNetoDeRecibosScoped(5L)).thenReturn(d("500.00"));
         when(imputaciones.totalImputadoScoped(5L)).thenReturn(d("0"));
 
         PendientesCuenta pendientes = servicio.pendientes(5L);
@@ -816,6 +1102,66 @@ class CuentaCorrienteServiceTest {
         assertThat(pendientes.comprobantes()).isEmpty();
         assertThat(pendientes.saldo()).isEqualByComparingTo("-500.00");
         assertThat(pendientes.aCuenta()).isEqualByComparingTo("500.00");
+    }
+
+    @Test
+    @DisplayName("CCT3B1-204: con una anulación, aCuenta = creditoNeto (COBRO − ANULACION) − imputado VIGENTE; el comprobante liberado vuelve a la lista")
+    void pendientesConAnulacion() {
+        // venta A 1.000; cobro R1 700 imputando 400 a A (anulado: ANULACION 700, imputación no vigente); cobro R2 100 a cuenta
+        Cliente cliente = clienteConSaldo("900.00");
+        when(clientes.findScoped(5L)).thenReturn(Optional.of(cliente));
+        when(libro.debitosDeClienteScoped(5L)).thenReturn(List.of(debito(10, 50, "1000.00")));
+        when(imputaciones.imputadoPorComprobanteScoped(5L)).thenReturn(List.of()); // la imputación de R1 ya no es vigente
+        when(libro.creditoNetoDeRecibosScoped(5L)).thenReturn(d("100.00")); // 700 + 100 − 700
+        when(imputaciones.totalImputadoScoped(5L)).thenReturn(d("0.00"));
+
+        PendientesCuenta pendientes = servicio.pendientes(5L);
+
+        assertThat(pendientes.aCuenta()).isEqualByComparingTo("100.00");
+        assertThat(pendientes.comprobantes()).singleElement().satisfies(p -> {
+            assertThat(p.comprobanteId()).isEqualTo(10L);
+            assertThat(p.imputado()).isEqualByComparingTo("0.00");
+            assertThat(p.pendiente()).isEqualByComparingTo("1000.00");
+        });
+        assertThat(pendientes.comprobantes().get(0).pendiente().subtract(pendientes.aCuenta()))
+                .as("Σ pendiente − aCuenta = saldo").isEqualByComparingTo(pendientes.saldo());
+        verifyLecturaPura();
+    }
+
+    @Test
+    @DisplayName("CCT3B1-204: un adelanto anulado deja lista vacía, saldo 0 y aCuenta 0")
+    void pendientesConAdelantoAnulado() {
+        Cliente cliente = clienteConSaldo("0.00");
+        when(clientes.findScoped(5L)).thenReturn(Optional.of(cliente));
+        when(libro.debitosDeClienteScoped(5L)).thenReturn(List.of());
+        when(imputaciones.imputadoPorComprobanteScoped(5L)).thenReturn(List.of());
+        when(libro.creditoNetoDeRecibosScoped(5L)).thenReturn(d("0.00")); // COBRO 500 − ANULACION 500
+        when(imputaciones.totalImputadoScoped(5L)).thenReturn(d("0.00"));
+
+        PendientesCuenta pendientes = servicio.pendientes(5L);
+
+        assertThat(pendientes.comprobantes()).isEmpty();
+        assertThat(pendientes.saldo()).isEqualByComparingTo("0");
+        assertThat(pendientes.aCuenta()).isEqualByComparingTo("0");
+    }
+
+    @Test
+    @DisplayName("CCT3B1-204: solo restan las imputaciones vigentes (lo que devuelve el repositorio), y distinto crédito neto da distinto aCuenta")
+    void pendientesSoloRestanLasVigentes() {
+        // A 1.000 con 250 vigentes (el repositorio ya no devuelve la no vigente); B 500 sin nada; cobro neto 600
+        Cliente cliente = clienteConSaldo("900.00");
+        when(clientes.findScoped(5L)).thenReturn(Optional.of(cliente));
+        when(libro.debitosDeClienteScoped(5L)).thenReturn(List.of(debito(10, 50, "1000.00"), debito(11, 51, "500.00")));
+        when(imputaciones.imputadoPorComprobanteScoped(5L)).thenReturn(List.of(imputado(10, "250.00")));
+        when(libro.creditoNetoDeRecibosScoped(5L)).thenReturn(d("600.00"));
+        when(imputaciones.totalImputadoScoped(5L)).thenReturn(d("250.00"));
+
+        PendientesCuenta pendientes = servicio.pendientes(5L);
+
+        assertThat(pendientes.comprobantes()).extracting(PendientesCuenta.Pendiente::pendiente)
+                .usingElementComparator(BigDecimal::compareTo).containsExactly(d("750.00"), d("500.00"));
+        assertThat(pendientes.aCuenta()).isEqualByComparingTo("350.00");
+        verifyLecturaPura();
     }
 
     @Test

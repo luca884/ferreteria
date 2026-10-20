@@ -89,10 +89,24 @@ public interface MovimientoCuentaClienteRepository extends TenantScopedRepositor
     List<Long> bloquearPartidas(@Param("fid") Long ferreteriaId, @Param("clienteId") Long clienteId,
             @Param("ids") List<Long> ids);
 
-    /** Σ haber de los {@code COBRO} del cliente: con las imputaciones, el «a cuenta» (crédito sin imputar). 0 si no hay. */
-    @Query("select coalesce(sum(m.haber), 0) from MovimientoCuentaCliente m where m.ferreteriaId = :fid "
-            + "and m.clienteId = :clienteId and m.tipo = com.ferreteria.clientes.model.TipoMovimientoCuenta.COBRO")
-    BigDecimal creditosDeCobro(@Param("fid") Long ferreteriaId, @Param("clienteId") Long clienteId);
+    /**
+     * El crédito NETO de los recibos del cliente: Σ haber de los {@code COBRO} menos Σ debe de las {@code ANULACION} (un cobro
+     * anulado ya no es crédito, CC-064). Con las imputaciones vigentes, es el «a cuenta» (crédito sin imputar): aCuenta =
+     * creditoNeto − totalImputado. 0 si no hay.
+     */
+    @Query("select coalesce(sum(case when m.tipo = com.ferreteria.clientes.model.TipoMovimientoCuenta.COBRO then m.haber "
+            + "when m.tipo = com.ferreteria.clientes.model.TipoMovimientoCuenta.ANULACION then -m.debe else 0 end), 0) "
+            + "from MovimientoCuentaCliente m where m.ferreteriaId = :fid and m.clienteId = :clienteId")
+    BigDecimal creditoNetoDeRecibos(@Param("fid") Long ferreteriaId, @Param("clienteId") Long clienteId);
+
+    /**
+     * Los movimientos de UN recibo ({@code COBRO} y {@code ANULACION}), en orden: lo que {@code asentarAnulacion} mira, bajo
+     * el lock del cliente, para defenderse (un solo COBRO con haber = total y ninguna ANULACION previa). Lectura plana.
+     */
+    @Query("select m from MovimientoCuentaCliente m where m.ferreteriaId = :fid and m.reciboId = :reciboId "
+            + "and m.tipo in (com.ferreteria.clientes.model.TipoMovimientoCuenta.COBRO, "
+            + "com.ferreteria.clientes.model.TipoMovimientoCuenta.ANULACION) order by m.id")
+    List<MovimientoCuentaCliente> deRecibo(@Param("fid") Long ferreteriaId, @Param("reciboId") Long reciboId);
 
     default List<DebitoDeComprobante> debitosDeClienteScoped(Long clienteId) {
         return debitosDeCliente(TenantContext.requireFerreteriaId(), clienteId);
@@ -110,8 +124,12 @@ public interface MovimientoCuentaClienteRepository extends TenantScopedRepositor
         return bloquearPartidas(TenantContext.requireFerreteriaId(), clienteId, ids);
     }
 
-    default BigDecimal creditosDeCobroScoped(Long clienteId) {
-        return creditosDeCobro(TenantContext.requireFerreteriaId(), clienteId);
+    default BigDecimal creditoNetoDeRecibosScoped(Long clienteId) {
+        return creditoNetoDeRecibos(TenantContext.requireFerreteriaId(), clienteId);
+    }
+
+    default List<MovimientoCuentaCliente> deReciboScoped(Long reciboId) {
+        return deRecibo(TenantContext.requireFerreteriaId(), reciboId);
     }
 
     default Page<MovimientoCuentaCliente> deClienteScoped(Long clienteId, Pageable pageable) {

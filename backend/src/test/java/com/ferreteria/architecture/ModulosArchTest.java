@@ -310,6 +310,81 @@ class ModulosArchTest {
         }).check(clases);
     }
 
+    // ---- Anulación de cobranza (corte 2 de cuenta-corriente-tramo-3b-1): una sola mutación de imputación, una sola puerta ----
+
+    /** (h) Los records nuevos del puerto de anulación existen y, como todo {@code clientes.api}, solo hablan JDK. */
+    @Test
+    void losRecordsDeLaAnulacionEstanEnElPuertoYSoloDependenDelJdk() {
+        for (String nombre : List.of(PUERTO_COBRANZA + "$AsientoAnulacion", PUERTO_COBRANZA + "$AnulacionAsentada")) {
+            var record = clases.get(nombre);
+            assertThat(record.getPackageName()).isEqualTo("com.ferreteria.clientes.api");
+            assertThat(record.getDirectDependenciesFromSelf().stream().map(d -> d.getTargetClass().getPackageName())
+                    .filter(p -> !p.startsWith("java.") && !p.equals("com.ferreteria.clientes.api")))
+                    .as("dependencias fuera del JDK de %s", nombre).isEmpty();
+        }
+        assertThat(clases.get(PUERTO_COBRANZA).getMethods().stream().map(m -> m.getName()))
+                .contains("asentarAnulacion");
+    }
+
+    private static com.tngtech.archunit.base.DescribedPredicate<JavaMethodCall> llamaALaFabrica(Class<?> entidad) {
+        return new com.tngtech.archunit.base.DescribedPredicate<>("crear un asiento con la fábrica de " + entidad.getSimpleName()) {
+            @Override
+            public boolean test(JavaMethodCall call) {
+                return call.getTargetOwner().isEquivalentTo(entidad) && java.util.Set.of("venta", "cobro", "anulacion", "de")
+                        .contains(call.getName());
+            }
+        };
+    }
+
+    /**
+     * (j, fábricas) Solo CuentaCorrienteService arma asientos del libro (venta, cobro y la {@code anulacion} nueva) y
+     * imputaciones: la fábrica es la otra mitad de «una sola puerta de escritura» (el {@code save} es la primera).
+     */
+    @Test
+    void soloLaCuentaCorrienteArmaLosAsientosDelLibroYLasImputaciones() {
+        for (Class<?> entidad : List.of(MovimientoCuentaCliente.class, Imputacion.class)) {
+            var llamadores = clases.stream().flatMap(c -> c.getMethodCallsFromSelf().stream())
+                    .filter(llamaALaFabrica(entidad))
+                    .map(JavaMethodCall::getOriginOwner)
+                    .map(origen -> origen.getName())
+                    .collect(java.util.stream.Collectors.toSet());
+
+            assertThat(llamadores).as("quién arma %s", entidad.getSimpleName())
+                    .containsExactly(CuentaCorrienteService.class.getName());
+        }
+        // y la fábrica de la anulación existe en la entidad
+        assertThat(clases.get(MovimientoCuentaCliente.class).getMethods().stream().map(m -> m.getName())).contains("anulacion");
+    }
+
+    /**
+     * (k-Imputación-mod) CC-102: en {@code ImputacionRepository} el ÚNICO método {@code @Modifying} es
+     * {@code desactivarDeRecibo} y solo {@code CuentaCorrienteService} lo invoca. Ningún otro repositorio de clientes declara
+     * {@code @Modifying} salvo {@code ClienteRepository.sumarSaldo} (whitelist explícita: lo que existe hoy). Un
+     * {@code delete*}/{@code remove*} sobre {@code ImputacionRepository} sigue prohibido (regla k-Imputación).
+     */
+    @Test
+    void laUnicaMutacionDeImputacionEsLaBajaPorAnulacion() {
+        var modificadores = clases.stream()
+                .filter(c -> c.isInterface() && c.getPackageName().equals("com.ferreteria.clientes.repository"))
+                .flatMap(c -> c.getMethods().stream())
+                .filter(m -> m.isAnnotatedWith(org.springframework.data.jpa.repository.Modifying.class))
+                .map(m -> m.getOwner().getSimpleName() + "." + m.getName())
+                .collect(java.util.stream.Collectors.toSet());
+
+        assertThat(modificadores).as("métodos @Modifying de los repositorios de clientes")
+                .containsExactlyInAnyOrder("ClienteRepository.sumarSaldo", "ImputacionRepository.desactivarDeRecibo");
+
+        var llamadores = clases.stream().flatMap(c -> c.getMethodCallsFromSelf().stream())
+                .filter(call -> call.getTargetOwner().isEquivalentTo(ImputacionRepository.class)
+                        && call.getName().startsWith("desactivarDeRecibo"))
+                .map(JavaMethodCall::getOriginOwner)
+                .filter(origen -> !origen.isEquivalentTo(ImputacionRepository.class))
+                .map(origen -> origen.getName())
+                .collect(java.util.stream.Collectors.toSet());
+
+        assertThat(llamadores).as("quién da de baja imputaciones").containsExactly(CuentaCorrienteService.class.getName());
+    }
+
     // ---- Cobranza (corte 3 de cuenta-corriente-tramo-3a): ventas orquesta el recibo y llama al puerto ----
 
     private static final String REGISTRO_COBRANZA = "com.ferreteria.ventas.service.RegistroCobranza";

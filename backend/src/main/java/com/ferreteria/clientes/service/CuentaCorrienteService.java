@@ -8,9 +8,11 @@ import com.ferreteria.clientes.model.Imputacion;
 import com.ferreteria.clientes.model.MovimientoCuentaCliente;
 import com.ferreteria.clientes.model.PartidasAbiertas;
 import com.ferreteria.clientes.model.Referencias;
+import com.ferreteria.clientes.model.TipoMovimientoCuenta;
 import com.ferreteria.clientes.repository.ClienteRepository;
 import com.ferreteria.clientes.repository.ClienteRepository.CuentaBloqueada;
 import com.ferreteria.clientes.repository.ImputacionRepository;
+import com.ferreteria.clientes.repository.ImputacionRepository.FilaDeImputacion;
 import com.ferreteria.clientes.repository.ImputacionRepository.FilaImputada;
 import com.ferreteria.clientes.repository.ImputacionRepository.ImputadoDeComprobante;
 import com.ferreteria.clientes.repository.MovimientoCuentaClienteRepository;
@@ -252,6 +254,97 @@ public class CuentaCorrienteService implements CuentaCorrienteParaVenta, CuentaC
                 .toList();
     }
 
+    // ---------------------------------------------------------------------------------------------------------------
+    // Anulación de un cobro (CC-062, CC-063, CC-065, CC-068, CC-085, CC-102)
+    // ---------------------------------------------------------------------------------------------------------------
+
+    /**
+     * Asienta la anulación de un cobro (design §3, pasos a–g). Una sola puerta de escritura, y se defiende sola: no confía en
+     * que ventas haya mirado el estado del recibo ni en la foto de la transacción.
+     * <ol>
+     *   <li>valida lo de programador y arma el contra-asiento (sin tocar la base);
+     *   <li>re-toma la fila del cliente ({@code cuentaBloqueada}: no-op si ya la tiene) — NINGÚN SELECT plano antes;
+     *   <li>los movimientos del recibo (plano, ya con el cliente en X): un solo COBRO del cliente con haber = total y ninguna
+     *       ANULACION; si no, rompería I2b/I2e;
+     *   <li>ids de las imputaciones del recibo (todas), {@code FOR UPDATE} por PK exacta en orden ascendente con lectura
+     *       ACTUAL de su vigencia (una foto vieja no vería la baja que otra anulación confirmó) y baja de la vigencia: la
+     *       ÚNICA mutación de imputaciones; debe afectar exactamente esas filas;
+     *   <li>guarda UNA ANULACION (debe = total) y SUBE el saldo con un UPDATE relativo.
+     * </ol>
+     * Sin chequeo de límite (CC-065: anular puede dejar al cliente excedido) ni de activo (lo decide ventas).
+     */
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public AnulacionAsentada asentarAnulacion(AsientoAnulacion asiento) {
+        MovimientoCuentaCliente contraAsiento = contraAsientoDe(asiento);
+        Long clienteId = asiento.clienteId();
+        cuentaBloqueada(clienteId); // ya la tiene tomada quien llama: acá se re-toma y se confirma que existe y es de la ferretería
+        exigirCobroSinAnular(asiento);
+        List<Long> comprobantesLiberados = darDeBajaLasImputacionesDelRecibo(clienteId, asiento.reciboId());
+        MovimientoCuentaCliente guardado = libro.save(contraAsiento);
+        int filas = clientes.sumarSaldoScoped(clienteId, asiento.total());
+        if (filas != 1) {
+            // El libro ya está escrito: sin la fila del saldo divergirían. Es un estado ilegal (500 y rollback), no un 4xx.
+            throw new IllegalStateException("El saldo del cliente " + clienteId
+                    + " no se actualizó (filas afectadas: " + filas + "): el libro y el saldo divergirían.");
+        }
+        return new AnulacionAsentada(guardado.getId(), comprobantesLiberados);
+    }
+
+    /** Lo de programador (ventas ya validó con 400): ids, número, total positivo de hasta 2 decimales y motivo. */
+    private MovimientoCuentaCliente contraAsientoDe(AsientoAnulacion asiento) {
+        if (asiento.clienteId() == null || asiento.reciboId() == null) {
+            throw new IllegalArgumentException("La anulación necesita el cliente y el recibo.");
+        }
+        String referencia = Referencias.anulacion(asiento.reciboNumero()); // número no positivo → IllegalArgumentException
+        BigDecimal total = asiento.total();
+        if (total == null || total.signum() <= 0 || total.stripTrailingZeros().scale() > 2) {
+            throw new IllegalArgumentException("El total de la anulación tiene que ser mayor que cero y de hasta 2 decimales.");
+        }
+        return MovimientoCuentaCliente.anulacion(TenantContext.requireFerreteriaId(), asiento.clienteId(), asiento.reciboId(),
+                referencia, total, asiento.motivo(), LocalDateTime.now(reloj), asiento.usuarioId());
+    }
+
+    /** Exactamente un COBRO del cliente con haber = total y ninguna ANULACION del recibo (plano, ya con el cliente tomado). */
+    private void exigirCobroSinAnular(AsientoAnulacion asiento) {
+        List<MovimientoCuentaCliente> delRecibo = libro.deReciboScoped(asiento.reciboId());
+        if (delRecibo.stream().anyMatch(m -> m.getTipo() == TipoMovimientoCuenta.ANULACION)) {
+            throw new IllegalStateException("El recibo " + asiento.reciboId() + " ya tiene su ANULACION en el libro.");
+        }
+        List<MovimientoCuentaCliente> cobros = delRecibo.stream().filter(m -> m.getTipo() == TipoMovimientoCuenta.COBRO).toList();
+        boolean unCobroDelCliente = cobros.size() == 1 && cobros.get(0).getClienteId().equals(asiento.clienteId())
+                && cobros.get(0).getHaber().compareTo(asiento.total()) == 0;
+        if (!unCobroDelCliente) {
+            throw new IllegalStateException("El recibo " + asiento.reciboId() + " no tiene un único COBRO del cliente "
+                    + asiento.clienteId() + " por " + asiento.total() + ": no se puede anular.");
+        }
+    }
+
+    /**
+     * Bloquea por PK ascendente y da de baja TODAS las imputaciones del recibo. Devuelve los comprobantes que quedan
+     * pendientes (distinct, ascendentes). Sin imputaciones (adelanto) no toca nada.
+     */
+    private List<Long> darDeBajaLasImputacionesDelRecibo(Long clienteId, Long reciboId) {
+        List<Long> ids = imputaciones.idsDeReciboScoped(reciboId).stream().sorted().toList();
+        if (ids.isEmpty()) {
+            return List.of();
+        }
+        List<FilaDeImputacion> bloqueadas = imputaciones.bloquearDeReciboScoped(clienteId, ids); // lectura ACTUAL
+        if (bloqueadas.size() != ids.size()) {
+            throw new IllegalStateException("Se esperaban " + ids.size() + " imputaciones del recibo " + reciboId
+                    + " y el bloqueo devolvió " + bloqueadas.size() + ".");
+        }
+        if (bloqueadas.stream().anyMatch(fila -> !fila.getVigente())) {
+            throw new IllegalStateException("El recibo " + reciboId + " tiene imputaciones que ya no son vigentes: ya se anuló.");
+        }
+        int desactivadas = imputaciones.desactivarDeReciboScoped(clienteId, reciboId, ids);
+        if (desactivadas != ids.size()) {
+            throw new IllegalStateException("Se dieron de baja " + desactivadas + " imputaciones del recibo " + reciboId
+                    + " y se esperaban " + ids.size() + ".");
+        }
+        return bloqueadas.stream().map(FilaDeImputacion::getComprobanteId).distinct().sorted().toList();
+    }
+
     @Override
     @Transactional(readOnly = true)
     public List<ImputacionAsentada> imputacionesDeRecibo(Long reciboId) {
@@ -279,7 +372,8 @@ public class CuentaCorrienteService implements CuentaCorrienteParaVenta, CuentaC
         List<DebitoDeComprobante> debitos = libro.debitosDeClienteScoped(clienteId);
         Map<Long, BigDecimal> imputado = imputaciones.imputadoPorComprobanteScoped(clienteId).stream()
                 .collect(Collectors.toMap(ImputadoDeComprobante::getComprobanteId, ImputadoDeComprobante::getImputado));
-        BigDecimal aCuenta = libro.creditosDeCobroScoped(clienteId).subtract(imputaciones.totalImputadoScoped(clienteId));
+        // creditoNeto (COBRO − ANULACION) − imputado VIGENTE: un cobro anulado ya no es crédito ni resta de ningún comprobante
+        BigDecimal aCuenta = libro.creditoNetoDeRecibosScoped(clienteId).subtract(imputaciones.totalImputadoScoped(clienteId));
         List<PendientesCuenta.Pendiente> pendientes = new PartidasAbiertas(debitosDe(debitos), imputado).abiertas().stream()
                 .map(p -> new PendientesCuenta.Pendiente(p.comprobanteId(), p.referencia(), p.fecha(), p.importe(),
                         p.imputado(), p.pendiente()))

@@ -296,6 +296,29 @@ class TenantScopingArchTest {
                         && m.getRawParameterTypes().size() >= 1 && m.getName().equals("imputadoBloqueado"));
     }
 
+    /**
+     * CCT3B1-209 (CC-066, CC-068): toda consulta abstracta (con {@code ferreteriaId} explícito) de {@code ImputacionRepository}
+     * y de {@code MovimientoCuentaClienteRepository} tiene su wrapper {@code *Scoped} que toma la ferretería del contexto, así
+     * una consulta nueva (las nativas de la anulación: {@code bloquearDeRecibo}, {@code desactivarDeRecibo}…) no queda
+     * invocable sin pasar por el tenant. Las que ya llaman a otro default o a {@code TenantContext} las cubren las reglas de
+     * arriba.
+     */
+    @Test
+    void todaConsultaDeImputacionYLibroTieneSuWrapperScoped() {
+        for (Class<?> repositorio : java.util.List.of(com.ferreteria.clientes.repository.ImputacionRepository.class,
+                com.ferreteria.clientes.repository.MovimientoCuentaClienteRepository.class)) {
+            var metodos = clases.get(repositorio).getMethods();
+            var nombres = metodos.stream().map(JavaMethod::getName).collect(java.util.stream.Collectors.toSet());
+            var consultas = metodos.stream()
+                    .filter(m -> m.getModifiers().contains(com.tngtech.archunit.core.domain.JavaModifier.ABSTRACT))
+                    .map(JavaMethod::getName).toList();
+
+            assertThat(consultas).as("consultas abstractas de %s", repositorio.getSimpleName()).isNotEmpty();
+            assertThat(consultas).as("consultas de %s sin wrapper *Scoped", repositorio.getSimpleName())
+                    .allMatch(nombre -> nombres.contains(nombre + "Scoped"));
+        }
+    }
+
     // ---- Cobranza de ventas (CC-041, CC-042): regla ACOTADA a ReciboRepository y NumeradorReciboRepository (no a todos los repos de ventas) ----
 
     private static final java.util.List<Class<?>> REPOS_DE_COBRANZA = java.util.List.of(

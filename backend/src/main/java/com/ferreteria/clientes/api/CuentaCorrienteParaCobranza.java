@@ -36,8 +36,27 @@ public interface CuentaCorrienteParaCobranza {
     List<ImputacionAsentada> asentarCobro(AsientoCobro asiento);
 
     /**
-     * Las imputaciones de un recibo, en el orden en que se asentaron, con la referencia del comprobante. Lectura: sirve para
-     * armar el recibo y para comparar una cobranza repetida. Vacío si el recibo quedó todo «a cuenta».
+     * Asienta la anulación de un cobro (CC-062, CC-063, CC-068): bajo el lock del cliente, da de baja la vigencia de TODAS las
+     * imputaciones del recibo (los comprobantes vuelven a quedar pendientes), guarda UN contra-asiento {@code ANULACION}
+     * (debe = total del recibo, con su referencia «Anulación Recibo N.º n» y el motivo) y SUBE el saldo con un UPDATE
+     * relativo. {@code MANDATORY}: ventas ya marcó el recibo {@code ANULADO} en la misma transacción, bajo el mismo lock.
+     * Se defiende sola: re-toma la fila del cliente y relee el libro y las imputaciones con lectura actual, así que rechaza
+     * una doble anulación aunque quien llama haya respetado mal el orden. NO chequea límite (CC-065: anular puede dejar al
+     * cliente excedido) ni si el cliente está activo: eso lo decide ventas.
+     *
+     * @throws com.ferreteria.common.exception.ResourceNotFoundException (404) si el cliente no existe en la ferretería
+     * @throws IllegalStateException si el recibo no tiene exactamente un COBRO del cliente con haber = total, si ya hay una
+     *     ANULACION, si alguna imputación ya no es vigente o si el UPDATE de vigencia o de saldo no afecta lo esperado:
+     *     rompería I2b/I2e y es un estado ilegal (500 y rollback), no un 4xx
+     * @throws IllegalArgumentException si los argumentos están mal formados (ids nulos, total no positivo o con más de 2
+     *     decimales, motivo vacío o fuera de 5 a 200 caracteres): ventas ya los validó con 400
+     */
+    AnulacionAsentada asentarAnulacion(AsientoAnulacion asiento);
+
+    /**
+     * Las imputaciones de un recibo, en el orden en que se asentaron, con la referencia del comprobante. Todas, también las
+     * no vigentes (el recibo anulado se reimprime con sus imputaciones originales): sirve para armar el recibo y para comparar
+     * una cobranza repetida. Lectura. Vacío si el recibo quedó todo «a cuenta».
      */
     List<ImputacionAsentada> imputacionesDeRecibo(Long reciboId);
 
@@ -47,6 +66,17 @@ public interface CuentaCorrienteParaCobranza {
      */
     record AsientoCobro(Long clienteId, Long reciboId, Long reciboNumero, BigDecimal total, List<Imputar> imputaciones,
             Long usuarioId) {}
+
+    /**
+     * La anulación de un cobro ya marcado {@code ANULADO} por ventas. {@code reciboNumero} es el número interno (la referencia
+     * «Anulación Recibo N.º n»); {@code total} es el total del recibo (lo que vuelve a ser deuda); {@code motivo} ya viene
+     * recortado.
+     */
+    record AsientoAnulacion(Long clienteId, Long reciboId, Long reciboNumero, BigDecimal total, String motivo,
+            Long usuarioId) {}
+
+    /** Lo asentado por una anulación: el id del contra-asiento y los comprobantes que volvieron a quedar pendientes. */
+    record AnulacionAsentada(Long movimientoId, List<Long> comprobantesLiberados) {}
 
     /** Un renglón pedido: cuánto del cobro se aplica a este comprobante. */
     record Imputar(Long comprobanteId, BigDecimal importe) {}

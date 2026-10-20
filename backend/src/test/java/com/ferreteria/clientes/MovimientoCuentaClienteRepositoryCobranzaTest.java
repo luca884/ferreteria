@@ -224,8 +224,8 @@ class MovimientoCuentaClienteRepositoryCobranzaTest extends CuentaCorrienteTestB
     }
 
     @Test
-    @DisplayName("creditosDeCobroScoped suma solo los COBRO del cliente (0 si no hay): ni ventas, ni otro cliente, ni otra ferretería")
-    void creditosDeCobro() {
+    @DisplayName("creditoNetoDeRecibosScoped suma solo los COBRO del cliente (0 si no hay): ni ventas, ni otro cliente, ni otra ferretería")
+    void creditoNetoSoloCobros() {
         Ferreteria a = ferreteria();
         Ferreteria b = ferreteria();
         long cliente = cliente(a, "5000.00");
@@ -238,8 +238,8 @@ class MovimientoCuentaClienteRepositoryCobranzaTest extends CuentaCorrienteTestB
         cobroEnLibro(b, deB, "888.00");
         TenantContext.setCurrentFerreteriaId(a.id());
 
-        assertThat(enTx(() -> libro.creditosDeCobroScoped(cliente))).isEqualByComparingTo("400.25");
-        assertThat(enTx(() -> libro.creditosDeCobroScoped(cliente(a, null)))).isEqualByComparingTo("0");
-        assertThat(enTx(() -> libro.creditosDeCobroScoped(deB))).as("cliente de otra ferretería").isEqualByComparingTo("0");
+        assertThat(enTx(() -> libro.creditoNetoDeRecibosScoped(cliente))).isEqualByComparingTo("400.25");
+        assertThat(enTx(() -> libro.creditoNetoDeRecibosScoped(cliente(a, null)))).isEqualByComparingTo("0");
+        assertThat(enTx(() -> libro.creditoNetoDeRecibosScoped(deB))).as("cliente de otra ferretería").isEqualByComparingTo("0");
     }
 }

@@ -131,6 +131,57 @@ class PendientesIntegrationTest extends CuentaCorrienteTestBase {
     }
 
     @Test
+    @DisplayName("CCT3B1-210: dos ventas 1.000 y 500, la primera pagada con un recibo después anulado → [1.000, 500], saldo 1.500, aCuenta 0")
+    void reciboAnuladoVuelveAPendientes() throws Exception {
+        Ferreteria f = ferreteria();
+        Logins login = logins(f);
+        long cliente = cliente(f, "5000");
+        VentaSuelta a = ventaEnLibro(f, cliente, "1000");
+        VentaSuelta b = ventaEnLibro(f, cliente, "500");
+        long recibo = cobroEnLibro(f, cliente, "1000");
+        imputar(f, cliente, recibo, a.comprobanteId(), "1000");
+        assertInvariante(cliente);
+        anularRecibo(f, cliente, recibo);
+
+        JsonNode respuesta = getJson(url(cliente), login(login.dueno()));
+
+        assertThat(respuesta.get("saldo").decimalValue()).isEqualByComparingTo("1500");
+        assertThat(respuesta.get("aCuenta").decimalValue()).isEqualByComparingTo("0");
+        JsonNode comprobantes = respuesta.get("comprobantes");
+        assertThat(comprobantes).hasSize(2);
+        assertThat(comprobantes.get(0).get("comprobanteId").asLong()).isEqualTo(a.comprobanteId());
+        assertThat(comprobantes.get(0).get("imputado").decimalValue()).isEqualByComparingTo("0");
+        assertThat(comprobantes.get(0).get("pendiente").decimalValue()).isEqualByComparingTo("1000");
+        assertThat(comprobantes.get(1).get("comprobanteId").asLong()).isEqualTo(b.comprobanteId());
+        assertThat(comprobantes.get(1).get("pendiente").decimalValue()).isEqualByComparingTo("500");
+        assertInvariante(cliente);
+    }
+
+    @Test
+    @DisplayName("CCT3B1-210: un recibo con imputaciones no vigentes y otro vigente al mismo comprobante: solo restan las vigentes")
+    void soloRestanLasImputacionesVigentes() throws Exception {
+        Ferreteria f = ferreteria();
+        Logins login = logins(f);
+        long cliente = cliente(f, "5000");
+        VentaSuelta a = ventaEnLibro(f, cliente, "1000");
+        long anulado = cobroEnLibro(f, cliente, "400");
+        imputar(f, cliente, anulado, a.comprobanteId(), "400");
+        anularRecibo(f, cliente, anulado);
+        long vigente = cobroEnLibro(f, cliente, "300");
+        imputar(f, cliente, vigente, a.comprobanteId(), "300");
+
+        JsonNode respuesta = getJson(url(cliente), login(login.dueno()));
+
+        JsonNode comprobantes = respuesta.get("comprobantes");
+        assertThat(comprobantes).hasSize(1);
+        assertThat(comprobantes.get(0).get("imputado").decimalValue()).as("300 de la vigente, no 700").isEqualByComparingTo("300");
+        assertThat(comprobantes.get(0).get("pendiente").decimalValue()).isEqualByComparingTo("700");
+        assertThat(respuesta.get("saldo").decimalValue()).isEqualByComparingTo("700");
+        assertThat(respuesta.get("aCuenta").decimalValue()).isEqualByComparingTo("0");
+        assertInvariante(cliente);
+    }
+
+    @Test
     @DisplayName("un cliente desactivado se consulta bien: 200 con su deuda")
     void clienteDesactivado() throws Exception {
         Ferreteria f = ferreteria();

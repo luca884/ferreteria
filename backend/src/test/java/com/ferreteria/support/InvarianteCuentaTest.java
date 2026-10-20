@@ -168,20 +168,170 @@ class InvarianteCuentaTest extends CuentaCorrienteTestBase {
         fallaCon(cliente, "I2d");
     }
 
+    // ---- CCT3B1-206: vigencia, anulación (I2e) y cliente inactivo (I-inactivo) ----
+
     @Test
-    @DisplayName("I2c: un contra-asiento ANULACION (que 3a no escribe) rompe la igualdad global en vez de pasar en silencio")
-    void i2cAnulacionSinSoporte() {
+    @DisplayName("anulación bien hecha: cobro imputado a dos comprobantes, recibo ANULADO, imputaciones no vigentes y ANULACION → pasa; el saldo vuelve a la deuda")
+    void anulacionBienHechaPasa() {
+        Ferreteria f = ferreteria();
+        long cliente = cliente(f, "5000.00");
+        VentaSuelta a = ventaEnLibro(f, cliente, "600.00");
+        VentaSuelta b = ventaEnLibro(f, cliente, "400.00");
+        long recibo = cobroEnLibro(f, cliente, "1000.00");
+        imputar(f, cliente, recibo, a.comprobanteId(), "600.00");
+        imputar(f, cliente, recibo, b.comprobanteId(), "400.00");
+        assertThatCode(() -> assertInvariante(cliente)).as("antes de anular").doesNotThrowAnyException();
+
+        anularRecibo(f, cliente, recibo);
+
+        assertThatCode(() -> assertInvariante(cliente)).doesNotThrowAnyException();
+        org.assertj.core.api.Assertions.assertThat(saldo(cliente)).isEqualByComparingTo("1000.00");
+    }
+
+    @Test
+    @DisplayName("anulación de un cobro parcial (700, imputó 400 y 300 a cuenta): pasa y el saldo vuelve a 1.000")
+    void anulacionParcialPasa() {
+        Ferreteria f = ferreteria();
+        long cliente = cliente(f, "5000.00");
+        VentaSuelta a = ventaEnLibro(f, cliente, "1000.00");
+        long recibo = cobroEnLibro(f, cliente, "700.00");
+        imputar(f, cliente, recibo, a.comprobanteId(), "400.00");
+
+        anularRecibo(f, cliente, recibo);
+
+        assertThatCode(() -> assertInvariante(cliente)).doesNotThrowAnyException();
+        org.assertj.core.api.Assertions.assertThat(saldo(cliente)).isEqualByComparingTo("1000.00");
+    }
+
+    @Test
+    @DisplayName("adelanto anulado (saldo −500 → 0, sin imputaciones): pasa")
+    void adelantoAnuladoPasa() {
+        Ferreteria f = ferreteria();
+        long cliente = cliente(f, null);
+        long recibo = cobroEnLibro(f, cliente, "500.00");
+
+        anularRecibo(f, cliente, recibo);
+
+        assertThatCode(() -> assertInvariante(cliente)).doesNotThrowAnyException();
+        org.assertj.core.api.Assertions.assertThat(saldo(cliente)).isEqualByComparingTo("0.00");
+    }
+
+    @Test
+    @DisplayName("mixto: R1 imputa A y B, R2 imputa A; se anula R1 → R2 sigue vigente y I2a mira solo lo vigente (la no vigente de R1 + la de R2 superarían el débito de A)")
+    void anulacionMixtaPasa() {
+        Ferreteria f = ferreteria();
+        long cliente = cliente(f, "5000.00");
+        VentaSuelta a = ventaEnLibro(f, cliente, "100.00");
+        VentaSuelta b = ventaEnLibro(f, cliente, "50.00");
+        long r1 = cobroEnLibro(f, cliente, "150.00");
+        imputar(f, cliente, r1, a.comprobanteId(), "100.00");
+        imputar(f, cliente, r1, b.comprobanteId(), "50.00");
+        anularRecibo(f, cliente, r1);
+        long r2 = cobroEnLibro(f, cliente, "100.00");
+        imputar(f, cliente, r2, a.comprobanteId(), "100.00"); // vuelve a cobrar A: 100 no vigentes + 100 vigentes > 100
+
+        assertThatCode(() -> assertInvariante(cliente)).doesNotThrowAnyException();
+    }
+
+    @Test
+    @DisplayName("I2e: una imputación VIGENTE de un recibo ANULADO → falla")
+    void i2eImputacionVigenteDeReciboAnulado() {
+        Ferreteria f = ferreteria();
+        long cliente = cliente(f, "5000.00");
+        VentaSuelta a = ventaEnLibro(f, cliente, "600.00");
+        long recibo = cobroEnLibro(f, cliente, "600.00");
+        imputar(f, cliente, recibo, a.comprobanteId(), "600.00");
+        marcarReciboAnulado(f, recibo);
+        anulacionEnLibro(f, cliente, recibo, "600.00"); // pero la imputación sigue vigente
+
+        fallaCon(cliente, "I2e");
+    }
+
+    @Test
+    @DisplayName("I2e: una ANULACION cuyo recibo no se marcó ANULADO ni dio de baja sus imputaciones (fila corrupta a mano) → falla")
+    void i2eAnulacionSinReciboAnulado() {
         Ferreteria f = ferreteria();
         long cliente = cliente(f, null);
         long recibo = cobroEnLibro(f, cliente, "100.00");
-        jdbc.update("insert into movimiento_cuenta_cliente (ferreteria_id, cliente_id, tipo, debe, haber, fecha, usuario_id, "
-                + "recibo_id, referencia, motivo) values (?, ?, 'ANULACION', 100, 0, now(6), ?, ?, 'Anulación test', "
-                + "'Cobro mal cargado')", f.id(),
-                cliente, f.usuarioId(), recibo);
-        jdbc.update("update cliente set saldo = saldo + 100 where id = ?", cliente); // I1 ok: saldo 0
+        anulacionEnLibro(f, cliente, recibo, "100.00"); // I1 ok: saldo 0
 
-        assertThatCode(() -> org.assertj.core.api.Assertions.assertThat(saldo(cliente)).isEqualByComparingTo(BigDecimal.ZERO))
-                .doesNotThrowAnyException();
-        fallaCon(cliente, "I2c");
+        fallaCon(cliente, "I2e");
+    }
+
+    @Test
+    @DisplayName("I2e: un recibo ANULADO sin su ANULACION en el libro → falla")
+    void i2eReciboAnuladoSinAnulacion() {
+        Ferreteria f = ferreteria();
+        long cliente = cliente(f, "5000.00");
+        VentaSuelta a = ventaEnLibro(f, cliente, "100.00");
+        long recibo = cobroEnLibro(f, cliente, "100.00");
+        imputar(f, cliente, recibo, a.comprobanteId(), "100.00");
+        marcarReciboAnulado(f, recibo);
+        jdbc.update("update imputacion set vigente = false where recibo_id = ?", recibo);
+
+        fallaCon(cliente, "I2e");
+    }
+
+    @Test
+    @DisplayName("I2e: una imputación no vigente cuyo recibo sigue EMITIDO → falla")
+    void i2eImputacionNoVigenteConReciboEmitido() {
+        Ferreteria f = ferreteria();
+        long cliente = cliente(f, "5000.00");
+        VentaSuelta a = ventaEnLibro(f, cliente, "100.00");
+        long recibo = cobroEnLibro(f, cliente, "100.00");
+        imputarNoVigente(f, cliente, recibo, a.comprobanteId(), "100.00");
+
+        fallaCon(cliente, "I2e");
+    }
+
+    @Test
+    @DisplayName("I2e: la caja de la anulación es de otra ferretería → falla")
+    void i2eCajaDeLaAnulacionDeOtraFerreteria() {
+        Ferreteria f = ferreteria();
+        Ferreteria otra = ferreteria();
+        long cliente = cliente(f, null);
+        long recibo = cobroEnLibro(f, cliente, "100.00");
+        anularRecibo(f, cliente, recibo);
+        jdbc.update("update recibo set caja_anulacion_id = ? where id = ?", cajaCerrada(otra), recibo);
+
+        fallaCon(cliente, "I2e");
+    }
+
+    @Test
+    @DisplayName("I2b: el recibo ANULADO tiene una ANULACION con debe distinto del total → falla")
+    void i2bAnulacionConOtroImporte() {
+        Ferreteria f = ferreteria();
+        long cliente = cliente(f, null);
+        long recibo = cobroEnLibro(f, cliente, "100.00");
+        anularRecibo(f, cliente, recibo);
+        jdbc.update("update movimiento_cuenta_cliente set debe = 90 where recibo_id = ? and tipo = 'ANULACION'", recibo);
+        jdbc.update("update cliente set saldo = saldo - 10 where id = ?", cliente); // I1 se cumple
+
+        fallaCon(cliente, "I2b");
+    }
+
+    @Test
+    @DisplayName("I-inactivo: un cliente desactivado con saldo distinto de cero → falla")
+    void iInactivoConSaldo() {
+        Ferreteria f = ferreteria();
+        long cliente = cliente(f, "5000.00");
+        ventaEnLibro(f, cliente, "100.00");
+        jdbc.update("update cliente set activo = false where id = ?", cliente);
+
+        fallaCon(cliente, "I-inactivo");
+    }
+
+    @Test
+    @DisplayName("I-inactivo: un cliente desactivado con saldo 0 (su adelanto fue anulado) pasa; el mismo activo con saldo ≠ 0 también")
+    void iInactivoConSaldoCeroPasa() {
+        Ferreteria f = ferreteria();
+        long anulado = cliente(f, null);
+        anularRecibo(f, anulado, cobroEnLibro(f, anulado, "500.00"));
+        jdbc.update("update cliente set activo = false where id = ?", anulado);
+        long conDeuda = cliente(f, "5000.00");
+        ventaEnLibro(f, conDeuda, "100.00");
+
+        assertThatCode(() -> assertInvariante(anulado)).doesNotThrowAnyException();
+        assertThatCode(() -> assertInvariante(conDeuda)).doesNotThrowAnyException();
     }
 }

@@ -181,10 +181,54 @@ public abstract class CuentaCorrienteTestBase extends IntegrationTestBase {
         return recibo;
     }
 
+    /**
+     * El contra-asiento {@code ANULACION} de un recibo ya asentado, como lo deja la anulación: una fila del libro con débito
+     * por el total, la referencia y el motivo, y el saldo subido. NO toca el recibo ni las imputaciones (ver
+     * {@link #anularRecibo}).
+     */
+    protected void anulacionEnLibro(Ferreteria f, long clienteId, long reciboId, String total) {
+        jdbc.update("insert into movimiento_cuenta_cliente (ferreteria_id, cliente_id, tipo, debe, haber, fecha, usuario_id, "
+                + "recibo_id, referencia, motivo) values (?, ?, 'ANULACION', ?, 0, now(6), ?, ?, 'Anulación Recibo N.º test', "
+                + "'Cobro mal cargado')", f.id(), clienteId, new BigDecimal(total), f.usuarioId(), reciboId);
+        jdbc.update("update cliente set saldo = saldo + ? where id = ?", new BigDecimal(total), clienteId);
+    }
+
+    /** Marca el recibo {@code ANULADO} con su auditoría completa (como lo hace ventas), contra una caja cerrada de prueba. */
+    protected void marcarReciboAnulado(Ferreteria f, long reciboId) {
+        long caja = cajaCerrada(f);
+        jdbc.update("update recibo set estado = 'ANULADO', fecha_anulacion = now(6), usuario_anulacion_id = ?, "
+                + "caja_anulacion_id = ?, motivo_anulacion = 'Cobro mal cargado' where id = ?", f.usuarioId(), caja, reciboId);
+    }
+
+    /**
+     * Una anulación completa sembrada por SQL, independiente del servicio (oráculo): recibo {@code ANULADO}, sus imputaciones
+     * no vigentes, la {@code ANULACION} del libro y el saldo subido por el total del recibo.
+     */
+    protected void anularRecibo(Ferreteria f, long clienteId, long reciboId) {
+        String total = jdbc.queryForObject("select total from recibo where id = ?", BigDecimal.class, reciboId).toPlainString();
+        marcarReciboAnulado(f, reciboId);
+        jdbc.update("update imputacion set vigente = false where recibo_id = ?", reciboId);
+        anulacionEnLibro(f, clienteId, reciboId, total);
+    }
+
     /** Una fila de {@code imputacion} (el recibo ya existe; no toca el libro ni el saldo). */
     protected void imputar(Ferreteria f, long clienteId, long reciboId, long comprobanteId, String importe) {
         jdbc.update("insert into imputacion (ferreteria_id, cliente_id, recibo_id, comprobante_id, importe) "
                 + "values (?, ?, ?, ?, ?)", f.id(), clienteId, reciboId, comprobanteId, new BigDecimal(importe));
+    }
+
+    /** Una imputación NO vigente (como la deja una anulación de su recibo): no resta del comprobante. Devuelve su id. */
+    protected long imputarNoVigente(Ferreteria f, long clienteId, long reciboId, long comprobanteId, String importe) {
+        jdbc.update("insert into imputacion (ferreteria_id, cliente_id, recibo_id, comprobante_id, importe, vigente) "
+                + "values (?, ?, ?, ?, ?, false)", f.id(), clienteId, reciboId, comprobanteId, new BigDecimal(importe));
+        return jdbc.queryForObject("select id from imputacion where recibo_id = ? and comprobante_id = ?", Long.class,
+                reciboId, comprobanteId);
+    }
+
+    /** El id de la imputación de ese recibo a ese comprobante. */
+    protected long imputacionId(long reciboId, long comprobanteId) {
+        return jdbc.queryForObject("select id from imputacion where recibo_id = ? and comprobante_id = ?", Long.class,
+                reciboId, comprobanteId);
     }
 
     protected BigDecimal saldo(long clienteId) {
