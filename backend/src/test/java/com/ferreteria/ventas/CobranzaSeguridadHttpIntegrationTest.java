@@ -29,9 +29,17 @@ import org.springframework.test.web.servlet.request.MockMvcRequestBuilders;
  *       un método sin handler da 405 (no hay nada que proteger: no existe).
  *   <li>Dueño con un método que no existe: 405, nunca 500.
  * </ul>
+ *
+ * <p>CCT3B1-604 (CC-055, CC-101): lo mismo para {@code POST /api/recibos/{id}/anulacion}: cae bajo {@code /api/recibos/**}, así que
+ * el Vendedor recibe 403 con TODO método y con cualquier cuerpo (el matcher actúa antes de leer el cuerpo; sin él, un cuerpo
+ * ilegible daría 400, porque el binding corre antes del {@code @PreAuthorize}), y el Dueño recibe 405 con los métodos que no
+ * existen en esa ruta y 400 con un cuerpo ilegible. Mutaciones (registradas en apply-progress): quitar el matcher
+ * {@code /api/recibos/**} rompe estos tests; quitar el matcher y el {@code @PreAuthorize} a la vez deja anular al Vendedor.
  * CUIT 30-8411NNNN-1.
  */
 class CobranzaSeguridadHttpIntegrationTest extends CuentaCorrienteTestBase {
+
+    private static final String ANULACION = "/api/recibos/1/anulacion";
 
     private static final String PERMISO = "{\"status\":403,\"message\":\"No tenés permiso para hacer esto\"}";
 
@@ -68,12 +76,14 @@ class CobranzaSeguridadHttpIntegrationTest extends CuentaCorrienteTestBase {
             "/api/cobranzas", List.of(HttpMethod.GET, HttpMethod.HEAD, HttpMethod.PUT, HttpMethod.PATCH, HttpMethod.DELETE),
             "/api/cobranzas/1", List.of(HttpMethod.GET, HttpMethod.POST, HttpMethod.PUT, HttpMethod.PATCH, HttpMethod.DELETE),
             "/api/recibos", List.of(HttpMethod.GET, HttpMethod.POST, HttpMethod.PUT, HttpMethod.PATCH, HttpMethod.DELETE),
-            "/api/recibos/1", List.of(HttpMethod.POST, HttpMethod.PUT, HttpMethod.PATCH, HttpMethod.DELETE));
+            "/api/recibos/1", List.of(HttpMethod.POST, HttpMethod.PUT, HttpMethod.PATCH, HttpMethod.DELETE),
+            ANULACION, List.of(HttpMethod.POST, HttpMethod.GET, HttpMethod.PUT, HttpMethod.PATCH, HttpMethod.DELETE));
 
     /** Los métodos que NO existen en esas rutas (los que el Dueño ve como 405). */
     private static final Map<String, List<HttpMethod>> METODOS_SIN_HANDLER = Map.of(
             "/api/cobranzas", List.of(HttpMethod.GET, HttpMethod.HEAD, HttpMethod.PUT, HttpMethod.PATCH, HttpMethod.DELETE),
-            "/api/recibos/1", List.of(HttpMethod.POST, HttpMethod.PUT, HttpMethod.PATCH, HttpMethod.DELETE));
+            "/api/recibos/1", List.of(HttpMethod.POST, HttpMethod.PUT, HttpMethod.PATCH, HttpMethod.DELETE),
+            ANULACION, List.of(HttpMethod.GET, HttpMethod.HEAD, HttpMethod.PUT, HttpMethod.PATCH, HttpMethod.DELETE));
 
     private static final String PENDIENTES = "/api/clientes/1/cuenta-corriente/pendientes";
 
@@ -157,5 +167,77 @@ class CobranzaSeguridadHttpIntegrationTest extends CuentaCorrienteTestBase {
                 .as("pasó el rol y llegó a la validación del cuerpo").isEqualTo(400);
         assertThat(estado(HttpMethod.GET, "/api/recibos/" + Long.MAX_VALUE, t.dueno())).isEqualTo(404);
         assertThat(estado(HttpMethod.GET, "/api/clientes/" + t.cliente() + "/cuenta-corriente/pendientes", t.dueno())).isEqualTo(200);
+    }
+
+    // ------------------------------------------------------------------ CCT3B1-604: POST /api/recibos/{id}/anulacion
+
+    /** Un recibo ya cobrado y asentado (por SQL) del cliente de la tienda: lo que hay que anular. */
+    private long reciboDe(Tienda t) {
+        ventaEnLibro(t.f(), t.cliente(), "300");
+        return cobroEnLibro(t.f(), t.cliente(), "300");
+    }
+
+    private MvcResult anular(String token, long recibo, String cuerpo) throws Exception {
+        MockHttpServletRequestBuilder pedido = MockMvcRequestBuilders.post("/api/recibos/" + recibo + "/anulacion")
+                .contentType(MediaType.APPLICATION_JSON).content(cuerpo);
+        if (token != null) {
+            pedido.header("Authorization", "Bearer " + token);
+        }
+        return mvc.perform(pedido).andReturn();
+    }
+
+    private void reciboIntacto(Tienda t, long recibo) {
+        assertThat(jdbc.queryForObject("select estado from recibo where id = ?", String.class, recibo)).isEqualTo("EMITIDO");
+        assertThat(jdbc.queryForObject("select count(*) from movimiento_cuenta_cliente where cliente_id = ? and tipo = 'ANULACION'",
+                Long.class, t.cliente())).isZero();
+        assertThat(saldo(t.cliente())).isEqualByComparingTo("0");
+    }
+
+    @Test
+    @DisplayName("CC-055: el Vendedor recibe 403 al anular con un motivo válido, vacío, un cuerpo ilegible o sin cuerpo (el matcher actúa antes del binding: no es 400), y el recibo, el libro y el saldo quedan intactos")
+    void vendedorNoAnulaConNingunCuerpo() throws Exception {
+        Tienda t = tienda();
+        long recibo = reciboDe(t);
+
+        Map<String, Integer> estados = new java.util.LinkedHashMap<>();
+        Map<String, String> respuestas = new java.util.LinkedHashMap<>();
+        for (String cuerpo : List.of("{\"motivo\":\"Cobro mal cargado\"}", "{\"motivo\":\"\"}", "{}", "esto no es json", "")) {
+            MvcResult r = anular(t.vendedor(), recibo, cuerpo);
+            estados.put(cuerpo, r.getResponse().getStatus());
+            respuestas.put(cuerpo, r.getResponse().getContentAsString(StandardCharsets.UTF_8));
+        }
+        assertThat(estados).as("estado por cuerpo: 403 siempre, nunca 400 ni 200").containsOnlyKeys(estados.keySet())
+                .allSatisfy((cuerpo, estado) -> assertThat(estado).as("Vendedor, cuerpo «%s»", cuerpo).isEqualTo(403));
+        assertThat(respuestas.values()).as("el cuerpo del matcher, sin datos").containsOnly(PERMISO);
+
+        reciboIntacto(t, recibo);
+        assertInvariante(t.cliente());
+    }
+
+    @Test
+    @DisplayName("CC-055: el SUPER_ADMIN (sin ferretería) recibe 403 y sin token 401 al anular, sin cambios")
+    void superAdminYSinTokenNoAnulan() throws Exception {
+        Tienda t = tienda();
+        long recibo = reciboDe(t);
+
+        assertThat(anular(login("admin@demo.local"), recibo, "{\"motivo\":\"Cobro mal cargado\"}").getResponse().getStatus()).isEqualTo(403);
+        assertThat(anular(null, recibo, "{\"motivo\":\"Cobro mal cargado\"}").getResponse().getStatus()).isEqualTo(401);
+
+        reciboIntacto(t, recibo);
+    }
+
+    @Test
+    @DisplayName("CC-055/CC-101: el Dueño sí entra por POST …/anulacion: un cuerpo ilegible es 400 (ya pasó el rol, no 403) y con un motivo válido anula (200)")
+    void duenoAnula() throws Exception {
+        Tienda t = tienda();
+        long recibo = reciboDe(t);
+
+        MvcResult ilegible = anular(t.dueno(), recibo, "esto no es json");
+        assertThat(ilegible.getResponse().getStatus()).as("ilegible: el Dueño pasa el rol y falla el binding").isEqualTo(400);
+        reciboIntacto(t, recibo);
+
+        assertThat(anular(t.dueno(), recibo, "{\"motivo\":\"Cobro mal cargado\"}").getResponse().getStatus()).isEqualTo(200);
+        assertThat(jdbc.queryForObject("select estado from recibo where id = ?", String.class, recibo)).isEqualTo("ANULADO");
+        assertInvariante(t.cliente());
     }
 }

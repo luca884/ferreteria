@@ -1,6 +1,7 @@
 package com.ferreteria.ventas.web;
 
 import com.ferreteria.auth.security.AuthUser;
+import com.ferreteria.ventas.service.AnulacionService;
 import com.ferreteria.ventas.service.CobranzaRechazadaException;
 import com.ferreteria.ventas.service.CobranzaService;
 import com.ferreteria.ventas.service.CobroRegistrado;
@@ -17,7 +18,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * Cobranza de cuenta corriente (CC-028, CC-029) y consulta del recibo: solo el Dueño (el Vendedor recibe 403; el 403 también se
+ * Cobranza de cuenta corriente (CC-028, CC-029), consulta y anulación del recibo (CC-055): solo el Dueño (el Vendedor recibe 403; el 403 también se
  * exige en {@code SecurityConfig}, antes de leer el cuerpo). La ferretería y el usuario salen solo del JWT.
  */
 @RestController
@@ -25,9 +26,11 @@ import org.springframework.web.bind.annotation.RestController;
 public class CobranzaController {
 
     private final CobranzaService cobranzaService;
+    private final AnulacionService anulacionService;
 
-    public CobranzaController(CobranzaService cobranzaService) {
+    public CobranzaController(CobranzaService cobranzaService, AnulacionService anulacionService) {
         this.cobranzaService = cobranzaService;
+        this.anulacionService = anulacionService;
     }
 
     /** 201 si el cobro es nuevo; 200 si la clave ya estaba registrada con el mismo contenido (CC-038). */
@@ -42,6 +45,19 @@ public class CobranzaController {
     @GetMapping("/api/recibos/{id}")
     public ReciboResponse recibo(@PathVariable Long id) {
         return ReciboResponse.de(cobranzaService.recibo(id));
+    }
+
+    /**
+     * Anula el cobro de un recibo (CC-055..CC-057): 200 con el recibo ya ANULADO. El cuerpo es opcional a propósito: sin cuerpo el
+     * motivo queda ausente y el servicio da el 400 en {@code motivo}. Sin {@code @Transactional}: la fachada abre una transacción
+     * por intento y se niega a correr dentro de una ajena (CC-091). Los rechazos (404, 422, 409) y el 503 los resuelven la fachada
+     * y los handlers; acá solo se traduce. La ferretería y el usuario salen del JWT.
+     */
+    @PostMapping("/api/recibos/{id}/anulacion")
+    public ReciboResponse anular(@PathVariable Long id, @Valid @RequestBody(required = false) AnulacionRequest request,
+            @AuthenticationPrincipal AuthUser authUser) {
+        String motivo = request == null ? null : request.motivo();
+        return ReciboResponse.de(anulacionService.anular(id, motivo, authUser.userId()));
     }
 
     /** Local: le gana al advice global. El estado sale del motivo (409 o 422). */

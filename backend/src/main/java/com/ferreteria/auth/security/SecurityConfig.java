@@ -56,6 +56,8 @@ public class SecurityConfig {
                         .requestMatchers("/api/cobranzas/**").hasRole("DUENO")
                         .requestMatchers("/api/recibos/**").hasRole("DUENO")
                         .requestMatchers(HttpMethod.GET, "/api/clientes/*/cuenta-corriente/pendientes").hasRole("DUENO")
+                        // El extracto de la cuenta corriente (CC-072, CC-101) también: el 403 va antes de leer los parametros.
+                        .requestMatchers(HttpMethod.GET, "/api/clientes/*/cuenta-corriente/extracto").hasRole("DUENO")
                         .anyRequest().authenticated())
                 .exceptionHandling(e -> e
                         .authenticationEntryPoint((request, response, ex) -> {

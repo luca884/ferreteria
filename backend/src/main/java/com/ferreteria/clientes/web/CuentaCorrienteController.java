@@ -2,11 +2,16 @@ package com.ferreteria.clientes.web;
 
 import com.ferreteria.auth.model.Rol;
 import com.ferreteria.auth.security.AuthUser;
+import com.ferreteria.clientes.model.TipoMovimientoCuenta;
 import com.ferreteria.clientes.service.CuentaCorrienteService;
+import com.ferreteria.clientes.service.ExtractoCuenta;
+import com.ferreteria.clientes.service.FiltroExtracto;
 import com.ferreteria.common.exception.DatosInvalidosException;
 import jakarta.validation.Valid;
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.Map;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -26,9 +31,11 @@ import org.springframework.web.bind.annotation.RestController;
 public class CuentaCorrienteController {
 
     private final CuentaCorrienteService cuentaCorriente;
+    private final ExtractoCuenta extractoCuenta;
 
-    public CuentaCorrienteController(CuentaCorrienteService cuentaCorriente) {
+    public CuentaCorrienteController(CuentaCorrienteService cuentaCorriente, ExtractoCuenta extractoCuenta) {
         this.cuentaCorriente = cuentaCorriente;
+        this.extractoCuenta = extractoCuenta;
     }
 
     /** Si hay {@code importe}, dice si alcanza: es un consejo para el cobro, la venta lo vuelve a decidir bajo lock. */
@@ -46,6 +53,21 @@ public class CuentaCorrienteController {
     @PreAuthorize("hasRole('DUENO')")
     public PendientesResponse pendientes(@PathVariable Long id) {
         return PendientesResponse.de(cuentaCorriente.pendientes(id));
+    }
+
+    /**
+     * El extracto de la cuenta (CC-072..CC-080), solo para el Dueño (matcher de {@code SecurityConfig} + {@code @PreAuthorize}: el
+     * Vendedor recibe 403 aunque mande parámetros inválidos). Lectura de una sola foto, sin locks. Orden: 403 → 400 (parámetro mal
+     * formado o {@code desde > hasta}) → 404. Un cliente desactivado se consulta. {@code size} se acota a [1, 100], no se rechaza.
+     */
+    @GetMapping("/extracto")
+    @PreAuthorize("hasRole('DUENO')")
+    public ExtractoResponse extracto(@PathVariable Long id,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate desde,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate hasta,
+            @RequestParam(required = false) TipoMovimientoCuenta tipo, @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer size, @RequestParam(defaultValue = "false") boolean impresion) {
+        return ExtractoResponse.de(extractoCuenta.extracto(id, new FiltroExtracto(desde, hasta, tipo, page, size, impresion)));
     }
 
     @PutMapping("/limite")
