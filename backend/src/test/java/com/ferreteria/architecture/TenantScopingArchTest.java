@@ -392,4 +392,46 @@ class TenantScopingArchTest {
         assertThat(abstractas).contains("clienteDe", "sumasAnuladasDeCaja");
         assertThat(nombres).contains("clienteDeScoped", "totalesAnuladosDeCajaScoped");
     }
+
+    // ---- Extracto (CCT3B1-505, CC-080): las nativas del libro con :fid explícito, solo por su wrapper *Scoped ----
+
+    private static final java.util.List<String> NATIVAS_DEL_EXTRACTO = java.util.List.of(
+            "lineasDelExtracto", "contarLineas", "saldoAntesDe", "totalesDelPeriodo", "saldoHasta");
+
+    /**
+     * Cada nativa del extracto recibe la ferretería como PRIMER parámetro, filtra el libro por {@code ferreteria_id = :fid} en
+     * su texto (la que tiene la ventana, en la derivada), tiene su wrapper {@code *Scoped} que llama DIRECTAMENTE a
+     * {@code TenantContext.requireFerreteriaId()} y solo ese wrapper las llama (el servicio usa únicamente los {@code *Scoped}).
+     */
+    @Test
+    void lasNativasDelExtractoTienenFerreteriaExplicitaYSoloSeLlamanPorSuWrapperScoped() {
+        var repositorio = clases.get(com.ferreteria.clientes.repository.MovimientoCuentaClienteRepository.class);
+        for (String nombre : NATIVAS_DEL_EXTRACTO) {
+            var consulta = repositorio.getMethods().stream().filter(m -> m.getName().equals(nombre)).findFirst()
+                    .orElseThrow(() -> new AssertionError("falta la consulta " + nombre));
+            assertThat(consulta.getModifiers()).as(nombre).contains(com.tngtech.archunit.core.domain.JavaModifier.ABSTRACT);
+            assertThat(consulta.getRawParameterTypes().get(0).isEquivalentTo(Long.class)).as("%s: 1.er parámetro = ferreteriaId", nombre)
+                    .isTrue();
+            var query = consulta.getAnnotationOfType(org.springframework.data.jpa.repository.Query.class);
+            assertThat(query.nativeQuery()).as("%s es nativa", nombre).isTrue();
+            assertThat(query.value()).as("%s filtra el libro por la ferretería", nombre).contains("m.ferreteria_id = :fid");
+
+            var wrapper = repositorio.getMethods().stream().filter(m -> m.getName().equals(nombre + "Scoped")).findFirst()
+                    .orElseThrow(() -> new AssertionError("falta el wrapper " + nombre + "Scoped"));
+            assertThat(wrapper.getMethodCallsFromSelf()).as("%sScoped toma la ferretería del contexto", nombre).anyMatch(c ->
+                    c.getTargetOwner().isEquivalentTo(com.ferreteria.tenant.TenantContext.class)
+                            && c.getName().equals("requireFerreteriaId"));
+        }
+
+        DescribedPredicate<JavaMethodCall> nativaCruda = new DescribedPredicate<>(
+                "una nativa del extracto, llamada sin pasar por su wrapper *Scoped") {
+            @Override
+            public boolean test(JavaMethodCall call) {
+                return call.getTargetOwner().isEquivalentTo(com.ferreteria.clientes.repository.MovimientoCuentaClienteRepository.class)
+                        && NATIVAS_DEL_EXTRACTO.contains(call.getName())
+                        && !call.getOriginOwner().isEquivalentTo(com.ferreteria.clientes.repository.MovimientoCuentaClienteRepository.class);
+            }
+        };
+        noClasses().should().callMethodWhere(nativaCruda).check(clases);
+    }
 }

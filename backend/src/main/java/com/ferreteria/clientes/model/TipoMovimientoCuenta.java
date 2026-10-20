@@ -1,5 +1,9 @@
 package com.ferreteria.clientes.model;
 
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.List;
+
 /**
  * Tipos de movimiento del libro de cuenta corriente (CC-001). VENTA (debe, un renglón por pago a cuenta) y COBRO (haber, uno
  * por recibo) se escriben desde el tramo 3a; ANULACION es el contra-asiento de un COBRO (debe) previsto para el tramo 3b: ya
@@ -11,5 +15,14 @@ public enum TipoMovimientoCuenta {
     COBRO,
     AJUSTE,
     NC,
-    ANULACION
+    ANULACION;
+
+    /** Los nombres tal como están en la columna {@code tipo} (VARCHAR): lo que se bindea en un {@code in (:tipos)} nativo. */
+    public static List<String> nombres(Collection<TipoMovimientoCuenta> tipos) {
+        List<String> nombres = new ArrayList<>();
+        for (TipoMovimientoCuenta tipo : tipos) {
+            nombres.add(tipo.name());
+        }
+        return nombres;
+    }
 }

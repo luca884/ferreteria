@@ -493,4 +493,49 @@ class ModulosArchTest {
                     || p.startsWith("com.ferreteria.clientes.service") || p.startsWith("com.ferreteria.clientes.model"));
         }
     }
+
+    // ---- Extracto (corte 5 de cuenta-corriente-tramo-3b-1): lectura pura, sin locks, sin ventas ----
+
+    private static final String EXTRACTO_CUENTA = "com.ferreteria.clientes.service.ExtractoCuenta";
+
+    /**
+     * (m) CC-079, CC-102: {@code ExtractoCuenta} solo LEE. No depende de los repositorios de escritura (imputaciones, el único
+     * otro repositorio de la cuenta), no llama a nada que escriba o bloquee ({@code save*}, {@code delete*}, {@code bloquear*},
+     * {@code sumarSaldo*}, {@code desactivar*}) en ningún repositorio, ni a la cuenta corriente que escribe (puerto o servicio), y
+     * es una transacción {@code readOnly}. Falla si la clase no existe: la regla no puede pasar en vacío.
+     */
+    @Test
+    void elExtractoSoloLeeYNoTomaLocks() {
+        var extracto = clases.get(EXTRACTO_CUENTA);
+        var dependencias = extracto.getDirectDependenciesFromSelf().stream()
+                .map(d -> d.getTargetClass().getName()).collect(java.util.stream.Collectors.toSet());
+
+        assertThat(dependencias).contains(ClienteRepository.class.getName(), MovimientoCuentaClienteRepository.class.getName());
+        assertThat(dependencias).doesNotContain(ImputacionRepository.class.getName(), CuentaCorrienteService.class.getName(),
+                CuentaCorrienteParaVenta.class.getName(), PUERTO_COBRANZA);
+
+        var prohibidas = extracto.getMethodCallsFromSelf().stream()
+                .filter(c -> c.getTargetOwner().getPackageName().equals("com.ferreteria.clientes.repository"))
+                .map(JavaMethodCall::getName)
+                .filter(n -> n.matches("(save|delete|remove|bloquear|sumarSaldo|desactivar|flush).*"))
+                .toList();
+        assertThat(prohibidas).as("llamadas de ExtractoCuenta que escriben o bloquean").isEmpty();
+
+        var transaccional = extracto.getAnnotationOfType(org.springframework.transaction.annotation.Transactional.class);
+        assertThat(transaccional.readOnly()).as("@Transactional(readOnly = true)").isTrue();
+        assertThat(transaccional.propagation()).isEqualTo(org.springframework.transaction.annotation.Propagation.REQUIRED);
+    }
+
+    /** (n) CC-072, CC-078: el extracto y sus DTOs de clientes no leen {@code ventas}: «anulado» sale del propio libro (EXISTS). */
+    @Test
+    void elExtractoNoLeeVentas() {
+        classes().that().haveFullyQualifiedName(EXTRACTO_CUENTA)
+                .or().haveSimpleNameStartingWith("FiltroExtracto")
+                .or().haveSimpleNameStartingWith("ExtractoResponse")
+                .or().haveSimpleNameStartingWith("LineaExtractoResponse")
+                .should().onlyDependOnClassesThat(resideInAnyPackage("java..", "org.springframework..", "com.ferreteria.clientes..",
+                        "com.ferreteria.common..", "com.ferreteria.tenant..", "jakarta..", "com.fasterxml.."))
+                .allowEmptyShould(false)
+                .check(clases);
+    }
 }
