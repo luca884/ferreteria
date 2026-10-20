@@ -58,8 +58,12 @@ tr.inactivo td {
 td.debe {
   font-weight: 600;
 }
-.motivo {
+/* La razón queda al lado del botón (en la barra), no suelta debajo de ella. */
+.motivo-barra {
+  max-width: 18rem;
   color: var(--texto-suave);
+  font-size: var(--texto-xs);
+  line-height: 1.3;
 }
 /* El botón sin acción por el saldo se ve apagado pero sigue enfocable para que se lea su motivo. */
 .desactivar[aria-disabled='true'] {

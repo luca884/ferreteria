@@ -765,6 +765,17 @@ describe('Clientes', () => {
         expect(texto(`#${id}`)).toBe(RAZON);
       });
 
+      it('la razón va pegada al botón, dentro de la barra de acciones y no suelta arriba del texto de ayuda', async () => {
+        await crear([deudor]);
+
+        await elegir(0);
+
+        const razon = el().querySelector('#motivo-desactivar')!;
+        expect(razon.closest('app-barra-acciones')).not.toBeNull();
+        expect(desactivar().nextElementSibling).toBe(razon);
+        expect(razon.parentElement).toBe(desactivar().parentElement);
+      });
+
       it('con saldo a favor también', async () => {
         await crear([aFavor]);
 
