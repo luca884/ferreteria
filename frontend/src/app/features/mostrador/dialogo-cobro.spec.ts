@@ -285,6 +285,47 @@ describe('DialogoCobro', () => {
     expect(evento.defaultPrevented).toBe(true);
   });
 
+  describe('clic en el fondo', () => {
+    it('no le saca el foco al diálogo: se cancela el mousedown del fondo, no el de los controles', async () => {
+      await abrir();
+
+      const sobreFondo = new MouseEvent('mousedown', { bubbles: true, cancelable: true });
+      el().querySelector('.dialogo-fondo')!.dispatchEvent(sobreFondo);
+      const sobreCampo = new MouseEvent('mousedown', { bubbles: true, cancelable: true });
+      importe().dispatchEvent(sobreCampo);
+      const sobreMedio = new MouseEvent('mousedown', { bubbles: true, cancelable: true });
+      medio('Débito').dispatchEvent(sobreMedio);
+
+      expect(sobreFondo.defaultPrevented).toBe(true);
+      expect(sobreCampo.defaultPrevented).toBe(false);
+      expect(sobreMedio.defaultPrevented).toBe(false);
+    });
+
+    it('un mousedown dentro del diálogo, en una zona sin controles, no se cancela (el foco va al diálogo)', async () => {
+      await abrir();
+
+      const sobreDialogo = new MouseEvent('mousedown', { bubbles: true, cancelable: true });
+      el().querySelector('[role="dialog"]')!.dispatchEvent(sobreDialogo);
+
+      expect(sobreDialogo.defaultPrevented).toBe(false);
+    });
+
+    it('el diálogo puede recibir el foco (tabindex -1), y con él Esc y Enter siguen andando', async () => {
+      await abrir();
+      const dialogo = el().querySelector<HTMLElement>('[role="dialog"]')!;
+      expect(dialogo.getAttribute('tabindex')).toBe('-1');
+
+      dialogo.focus();
+      expect(document.activeElement).toBe(dialogo);
+      tecla('Enter');
+      tecla('Escape');
+
+      expect(confirmadas).toHaveLength(1);
+      expect(canceladas).toBe(1);
+    });
+
+  });
+
   describe('botones de forma con nombre largo', () => {
     const LARGO = 'Visa 6 cuotas sin interés con tarjeta bancaria';
 

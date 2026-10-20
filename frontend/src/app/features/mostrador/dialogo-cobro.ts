@@ -70,9 +70,11 @@ const centavosATexto = (c: number) => `${Math.floor(c / 100)},${String(c % 100).
   selector: 'app-dialogo-cobro',
   imports: [MontoPipe, TrampaFoco],
   template: `
-    <div class="dialogo-fondo">
+    <!-- El mousedown sobre el fondo no mueve el foco al body: si no, Esc y Enter (que escucha el diálogo) dejarían de andar. -->
+    <div class="dialogo-fondo" (mousedown)="retenerFoco($event)">
       <div
         class="dialogo cobro"
+        tabindex="-1"
         role="dialog"
         aria-modal="true"
         aria-labelledby="dialogo-cobro-titulo"
@@ -211,6 +213,10 @@ const centavosATexto = (c: number) => `${Math.floor(c / 100)},${String(c % 100).
       width: min(540px, 100%);
       gap: 18px;
       overflow: hidden;
+    }
+    /* El diálogo recibe el foco con un clic en una zona sin controles: no necesita el aro. */
+    .cobro:focus {
+      outline: none;
     }
     /* Cabecera azul profunda con el TOTAL grande a la derecha. */
     .cabecera {
@@ -763,6 +769,11 @@ export class DialogoCobro {
   protected escribirMonto(id: number, texto: string): void {
     this.montos.update((montos) => ({ ...montos, [id]: texto }));
     this.mensajeMixto.set(null);
+  }
+
+  /** Un clic en el fondo no debe sacar el foco del diálogo (iría al body y Esc y Enter dejarían de llegarle). */
+  protected retenerFoco(evento: MouseEvent): void {
+    if (evento.target === evento.currentTarget) evento.preventDefault();
   }
 
   protected alTeclear(evento: KeyboardEvent): void {
