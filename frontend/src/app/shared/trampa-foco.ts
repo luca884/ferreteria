@@ -56,6 +56,18 @@ export class TrampaFoco implements OnDestroy {
     const activo = this.documento.activeElement;
     const sinDuenio = !activo || activo === this.documento.body || this.host.contains(activo);
     if (!sinDuenio) return;
-    if (this.previo instanceof HTMLElement && this.previo.isConnected) this.previo.focus();
+    const volver = this.destinoDelFoco();
+    volver?.focus();
+  }
+
+  /**
+   * A dónde vuelve el foco: al elemento desde el que se abrió. Si se abrió con una tecla de atajo y no había nada
+   * enfocado (el `body`), o ese elemento ya no está, al contenido principal (`#contenido`, con `tabindex="-1"`) para
+   * que el Tab siguiente siga desde ahí y no desde el principio de la página.
+   */
+  private destinoDelFoco(): HTMLElement | null {
+    const previo = this.previo;
+    if (previo instanceof HTMLElement && previo.isConnected && previo !== this.documento.body) return previo;
+    return this.documento.getElementById('contenido');
   }
 }

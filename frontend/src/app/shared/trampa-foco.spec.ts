@@ -7,6 +7,7 @@ import { TrampaFoco } from './trampa-foco';
   template: `
     <button id="abrir" type="button">Abrir</button>
     <button id="otro" type="button">Otro</button>
+    <main id="contenido" tabindex="-1"></main>
     @if (abierto()) {
       <div role="dialog" aria-modal="true" appTrampaFoco>
         <button id="primero" type="button">Primero</button>
@@ -105,6 +106,40 @@ describe('TrampaFoco', () => {
     await cerrar();
 
     expect(document.activeElement).toBe(porId('otro'));
+  });
+
+  describe('abierto sin un elemento enfocado (F4 desde el body)', () => {
+    beforeEach(async () => {
+      await cerrar();
+      (document.activeElement as HTMLElement).blur();
+      expect(document.activeElement).toBe(document.body);
+      await abrir();
+    });
+
+    it('al cerrarse manda el foco al contenido principal, no lo deja en el body', async () => {
+      porId('medio').focus();
+
+      await cerrar();
+
+      expect(document.activeElement).toBe(porId('contenido'));
+    });
+
+    it('si alguien ya tomó el foco al cerrar, se respeta', async () => {
+      porId('otro').focus();
+
+      await cerrar();
+
+      expect(document.activeElement).toBe(porId('otro'));
+    });
+  });
+
+  it('si lo que tenía el foco al abrirse ya no está en el documento, el foco va al contenido principal', async () => {
+    porId('medio').focus();
+    porId('abrir').remove();
+
+    await cerrar();
+
+    expect(document.activeElement).toBe(porId('contenido'));
   });
 
   it('con el diálogo cerrado Tab no hace nada', async () => {
