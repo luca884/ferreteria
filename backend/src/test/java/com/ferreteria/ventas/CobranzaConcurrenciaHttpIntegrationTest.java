@@ -73,7 +73,7 @@ class CobranzaConcurrenciaHttpIntegrationTest extends CuentaCorrienteTestBase {
     }
 
     /** Lo que respondió un hilo: el estado HTTP y el cuerpo crudo. */
-    private record Resp(int status, String cuerpo) {
+    private record Resp(int status, String cuerpo, String retryAfter) {
         JsonNode json() throws Exception {
             return new com.fasterxml.jackson.databind.ObjectMapper().readTree(cuerpo);
         }
@@ -102,7 +102,8 @@ class CobranzaConcurrenciaHttpIntegrationTest extends CuentaCorrienteTestBase {
                         .header("Authorization", "Bearer " + token)
                         .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
                         .content(cuerpo)).andReturn().getResponse();
-        return new Resp(respuesta.getStatus(), respuesta.getContentAsString(StandardCharsets.UTF_8));
+        return new Resp(respuesta.getStatus(), respuesta.getContentAsString(StandardCharsets.UTF_8),
+                respuesta.getHeader("Retry-After"));
     }
 
     private Callable<Resp> cobrar(Escenario e, String cuerpo) {
@@ -120,9 +121,14 @@ class CobranzaConcurrenciaHttpIntegrationTest extends CuentaCorrienteTestBase {
 
     /** Una venta íntegra a cuenta corriente de {@code unidades} × $ 1,00, por HTTP. */
     private Callable<Resp> ventaCC(Escenario e, long articulo, long cliente, int unidades) {
+        return ventaCC(e, articulo, cliente, unidades, clave());
+    }
+
+    /** Igual, con la clave dada (para reintentar la MISMA venta). */
+    private Callable<Resp> ventaCC(Escenario e, long articulo, long cliente, int unidades, String clave) {
         long forma = jdbc.queryForObject("select id from forma_pago where ferreteria_id = ? and medio = 'CUENTA_CORRIENTE'",
                 Long.class, e.f().id());
-        String venta = "{\"clave\":\"" + clave() + "\",\"renglones\":[{\"articuloId\":" + articulo + ",\"cantidad\":" + unidades
+        String venta = "{\"clave\":\"" + clave + "\",\"renglones\":[{\"articuloId\":" + articulo + ",\"cantidad\":" + unidades
                 + ",\"precioUnitario\":1.00}],\"totalMostrado\":" + unidades + ".00,\"formaPagoId\":" + forma
                 + ",\"clienteId\":" + cliente + "}";
         return () -> enviar("/api/ventas", e.token(), venta);
@@ -420,6 +426,90 @@ class CobranzaConcurrenciaHttpIntegrationTest extends CuentaCorrienteTestBase {
         assertThat(cobros(cliente)).isEqualTo(1);
         assertThat(imputadoA(a.comprobanteId())).isEqualByComparingTo("100");
         assertThat(saldo(cliente)).isEqualByComparingTo("400");
+        assertInvariante(cliente);
+    }
+
+    // ===============================================================================================================
+    // S9: agotados los reintentos, 503 «reintentá» (transitorio) y no 500
+    // ===============================================================================================================
+
+    @Test
+    @DisplayName("S9 cobranza: si los 3 intentos terminan en deadlock o timeout, la respuesta es 503 «El sistema está ocupado, reintentá.» con Retry-After y sin rastros; el reintento con la MISMA clave entra (201, recibo N.º 1)")
+    void cobranzaConLocksAgotadosEs503() throws Exception {
+        Escenario e = escenario();
+        long cliente = cliente(e.f(), "5000");
+        VentaSuelta a = ventaEnLibro(e.f(), cliente, "500");
+        CuentaCorrienteService espia = AopTestUtils.getUltimateTargetObject(servicioEspiado);
+        doThrow(new DeadlockLoserDataAccessException("deadlock simulado, siempre", null)).when(espia).asentarCobro(any());
+        String pedido = cuerpo(clave(), cliente, "100", imp(a.comprobanteId(), "100"));
+
+        Resp agotada = cobrar(e, pedido).call();
+
+        assertThat(agotada.status()).as("cuerpo %s", agotada.cuerpo()).isEqualTo(503);
+        assertThat(agotada.json().get("message").asText()).isEqualTo("El sistema está ocupado, reintentá.");
+        assertThat(agotada.json().get("status").asInt()).isEqualTo(503);
+        assertThat(agotada.retryAfter()).isEqualTo("2");
+        verify(espia, times(3)).asentarCobro(any());
+        assertThat(recibosDe(e.f().id())).as("recibos").isZero();
+        assertThat(ultimoNumero(e.f().id())).as("número consumido").isNull();
+        assertThat(cobros(cliente)).isZero();
+        assertThat(saldo(cliente)).isEqualByComparingTo("500");
+
+        Mockito.reset(espia); // pasó la tormenta: el cliente reintenta lo mismo con la misma clave
+        Resp reintento = cobrar(e, pedido).call();
+
+        assertThat(reintento.status()).as("cuerpo %s", reintento.cuerpo()).isEqualTo(201);
+        assertThat(reintento.json().get("numero").asLong()).isEqualTo(1L);
+        assertThat(recibosDe(e.f().id())).isEqualTo(1);
+        assertThat(saldo(cliente)).isEqualByComparingTo("400");
+        assertInvariante(cliente);
+    }
+
+    @Test
+    @DisplayName("S9 cobranza: un error que NO es de lock (IllegalStateException al asentar) sigue siendo 500 «Error interno», sin Retry-After, y no se reintenta")
+    void otroErrorDeLaCobranzaSigueSiendo500() throws Exception {
+        Escenario e = escenario();
+        long cliente = cliente(e.f(), "5000");
+        VentaSuelta a = ventaEnLibro(e.f(), cliente, "500");
+        CuentaCorrienteService espia = AopTestUtils.getUltimateTargetObject(servicioEspiado);
+        doThrow(new IllegalStateException("falla simulada que no es de lock")).when(espia).asentarCobro(any());
+
+        Resp respuesta = cobrar(e, cuerpo(clave(), cliente, "100", imp(a.comprobanteId(), "100"))).call();
+
+        assertThat(respuesta.status()).as("cuerpo %s", respuesta.cuerpo()).isEqualTo(500);
+        assertThat(respuesta.json().get("message").asText()).isEqualTo("Error interno");
+        assertThat(respuesta.retryAfter()).isNull();
+        verify(espia, times(1)).asentarCobro(any());
+        assertThat(recibosDe(e.f().id())).isZero();
+        assertInvariante(cliente);
+    }
+
+    @Test
+    @DisplayName("S9 venta: con la misma condición (3 intentos con timeout de lock al asentar la cuenta corriente) POST /api/ventas responde 503 «reintentá» con Retry-After, sin comprobante; el reintento con la MISMA clave entra (201)")
+    void ventaConLocksAgotadosEs503() throws Exception {
+        Escenario e = escenario();
+        long cliente = cliente(e.f(), "5000");
+        long articulo = articulo(e.f());
+        CuentaCorrienteService espia = AopTestUtils.getUltimateTargetObject(servicioEspiado);
+        doThrow(new org.springframework.dao.CannotAcquireLockException("Lock wait timeout exceeded, simulado")).when(espia)
+                .asentarVenta(any());
+        String clave = clave();
+
+        Resp agotada = ventaCC(e, articulo, cliente, 10, clave).call();
+
+        assertThat(agotada.status()).as("cuerpo %s", agotada.cuerpo()).isEqualTo(503);
+        assertThat(agotada.json().get("message").asText()).isEqualTo("El sistema está ocupado, reintentá.");
+        assertThat(agotada.retryAfter()).isEqualTo("2");
+        verify(espia, times(3)).asentarVenta(any());
+        assertThat(jdbc.queryForObject("select count(*) from comprobante where ferreteria_id = ?", Long.class, e.f().id()))
+                .as("comprobantes").isZero();
+        assertThat(saldo(cliente)).isEqualByComparingTo("0");
+
+        Mockito.reset(espia);
+        Resp reintento = ventaCC(e, articulo, cliente, 10, clave).call();
+
+        assertThat(reintento.status()).as("cuerpo %s", reintento.cuerpo()).isEqualTo(201);
+        assertThat(saldo(cliente)).isEqualByComparingTo("10");
         assertInvariante(cliente);
     }
 }

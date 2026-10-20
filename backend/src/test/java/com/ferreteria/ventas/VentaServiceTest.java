@@ -9,6 +9,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.ferreteria.common.exception.SistemaOcupadoException;
 import com.ferreteria.ventas.service.ConfirmarVenta;
 import com.ferreteria.ventas.service.ConfirmarVenta.Renglon;
 import com.ferreteria.ventas.service.RegistroVenta;
@@ -27,7 +28,6 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.CannotAcquireLockException;
 import org.springframework.dao.DataIntegrityViolationException;
-import org.springframework.dao.PessimisticLockingFailureException;
 import org.springframework.transaction.annotation.Transactional;
 
 /** La fachada sin transaccion: reintenta deadlocks y resuelve la carrera de la clave (C-009). */
@@ -84,13 +84,24 @@ class VentaServiceTest {
     }
 
     @Test
-    @DisplayName("tres deadlocks seguidos: 3 intentos y despues propaga la excepcion")
-    void tresIntentosYPropaga() {
-        when(registroVenta.registrar(pedido, USUARIO, false)).thenThrow(new CannotAcquireLockException("deadlock"));
+    @DisplayName("tres deadlocks o timeouts seguidos: 3 intentos y despues avisa que el sistema esta ocupado (503), con el ultimo error como causa")
+    void tresIntentosYSistemaOcupado() {
+        CannotAcquireLockException ultimo = new CannotAcquireLockException("deadlock");
+        when(registroVenta.registrar(pedido, USUARIO, false)).thenThrow(ultimo);
 
-        assertThatThrownBy(() -> service.cobrar(pedido, USUARIO))
-                .isInstanceOf(PessimisticLockingFailureException.class);
+        assertThatThrownBy(() -> service.cobrar(pedido, USUARIO)).isInstanceOf(SistemaOcupadoException.class)
+                .hasCause(ultimo).hasMessage("El sistema está ocupado, reintentá.");
         verify(registroVenta, times(3)).registrar(pedido, USUARIO, false);
+    }
+
+    @Test
+    @DisplayName("un error que no es de lock se relanza tal cual, sin reintentos y sin disfrazarlo de sistema ocupado (sigue siendo 500)")
+    void otroErrorNoEsSistemaOcupado() {
+        IllegalStateException otro = new IllegalStateException("otra cosa");
+        when(registroVenta.registrar(pedido, USUARIO, false)).thenThrow(otro);
+
+        assertThatThrownBy(() -> service.cobrar(pedido, USUARIO)).isSameAs(otro);
+        verify(registroVenta, times(1)).registrar(pedido, USUARIO, false);
     }
 
     @Test

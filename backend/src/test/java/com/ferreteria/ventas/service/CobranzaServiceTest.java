@@ -11,6 +11,7 @@ import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
 import com.ferreteria.common.exception.DatosInvalidosException;
+import com.ferreteria.common.exception.SistemaOcupadoException;
 import com.ferreteria.ventas.model.MedioPago;
 import com.ferreteria.ventas.service.CobranzaRechazadaException.Motivo;
 import java.math.BigDecimal;
@@ -120,17 +121,28 @@ class CobranzaServiceTest {
     }
 
     @Test
-    @DisplayName("tres intentos con deadlock y se propaga el último; no hay un cuarto")
-    void tresIntentosYPropaga() {
+    @DisplayName("tres intentos con deadlock o timeout y se avisa que el sistema está ocupado (503), con el último error como causa; no hay un cuarto")
+    void tresIntentosYSistemaOcupado() {
         DeadlockLoserDataAccessException ultimo = new DeadlockLoserDataAccessException("deadlock", null);
         when(registroCobranza.registrar(pedido, USUARIO))
                 .thenThrow(new CannotAcquireLockException("timeout"))
                 .thenThrow(new CannotAcquireLockException("timeout"))
                 .thenThrow(ultimo);
 
-        assertThatThrownBy(() -> service.cobrar(pedido, USUARIO)).isSameAs(ultimo);
+        assertThatThrownBy(() -> service.cobrar(pedido, USUARIO)).isInstanceOf(SistemaOcupadoException.class)
+                .hasCause(ultimo).hasMessage("El sistema está ocupado, reintentá.");
         verify(registroCobranza, times(3)).registrar(pedido, USUARIO);
         assertThat(CobranzaService.MAX_INTENTOS).isEqualTo(3);
+    }
+
+    @Test
+    @DisplayName("un error que no es de lock se relanza tal cual, sin reintentos y sin disfrazarlo de «sistema ocupado» (sigue siendo 500)")
+    void otroErrorNoEsSistemaOcupado() {
+        IllegalStateException otro = new IllegalStateException("otra cosa");
+        when(registroCobranza.registrar(pedido, USUARIO)).thenThrow(otro);
+
+        assertThatThrownBy(() -> service.cobrar(pedido, USUARIO)).isSameAs(otro);
+        verify(registroCobranza, times(1)).registrar(pedido, USUARIO);
     }
 
     @Test

@@ -8,6 +8,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.OptimisticLockingFailureException;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -201,6 +202,18 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(OptimisticLockingFailureException.class)
     public ResponseEntity<ApiError> versionChocada(OptimisticLockingFailureException ex) {
         return build(HttpStatus.CONFLICT, ArticuloModificado.MENSAJE);
+    }
+
+    /**
+     * Una fachada agotó los reintentos por deadlock o timeout de lock: es contención transitoria, no un fallo del servidor. 503
+     * con {@code Retry-After}; el cliente reintenta con la misma clave de idempotencia.
+     */
+    @ExceptionHandler(SistemaOcupadoException.class)
+    public ResponseEntity<ApiError> sistemaOcupado(SistemaOcupadoException ex) {
+        log.warn("Sistema ocupado: reintentos por lock agotados", ex.getCause());
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                .header(HttpHeaders.RETRY_AFTER, String.valueOf(SistemaOcupadoException.REINTENTAR_EN_SEGUNDOS))
+                .body(ApiError.of(HttpStatus.SERVICE_UNAVAILABLE.value(), ex.getMessage()));
     }
 
     @ExceptionHandler(Exception.class)

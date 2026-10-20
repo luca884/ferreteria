@@ -1,6 +1,7 @@
 package com.ferreteria.ventas.service;
 
 import com.ferreteria.common.exception.ErrorDeBase;
+import com.ferreteria.common.exception.SistemaOcupadoException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.PessimisticLockingFailureException;
 import org.springframework.stereotype.Service;
@@ -16,7 +17,8 @@ import java.util.Optional;
  * <p>Antes de registrar hace un pre-chequeo de la clave ({@link RegistroCobranza#repetida}) en una transacción propia, de solo
  * lectura y sin locks: si el cobro ya existe lo devuelve aunque la caja haya cerrado o el cliente se haya desactivado (misma
  * semántica que ventas), y como es OTRA transacción no contamina la foto de la que registra. Después reintenta hasta
- * {@value #MAX_INTENTOS} veces ante un deadlock o timeout de lock (seguro por la idempotencia de la clave). Si pierde la carrera
+ * {@value #MAX_INTENTOS} veces ante un deadlock o timeout de lock (seguro por la idempotencia de la clave); agotados, lanza
+ * {@link SistemaOcupadoException} (la API responde 503 «reintentá», no 500). Si pierde la carrera
  * de la clave única (otra transacción con la misma clave ganó: el caso de la misma clave con OTRO cliente, que no comparte lock)
  * busca el cobro ganador con una transacción nueva. Misma clave y mismo cliente: la segunda espera el lock del cliente y el
  * paso «repetida» de {@link RegistroCobranza#registrar} le devuelve el recibo original, sin necesitar este fallback.
@@ -49,7 +51,8 @@ public class CobranzaService {
                 return registroCobranza.registrar(pedido, usuarioId);
             } catch (PessimisticLockingFailureException e) {
                 if (intento >= MAX_INTENTOS) {
-                    throw e;
+                    // Contención transitoria agotada: 503 «reintentá» (la clave hace seguro el reintento), no un 500.
+                    throw new SistemaOcupadoException(e);
                 }
                 intento++;
             } catch (DataIntegrityViolationException e) {

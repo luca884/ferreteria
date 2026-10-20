@@ -1,6 +1,7 @@
 package com.ferreteria.ventas.service;
 
 import com.ferreteria.common.exception.ErrorDeBase;
+import com.ferreteria.common.exception.SistemaOcupadoException;
 import com.ferreteria.ventas.service.VentaRechazadaException.Motivo;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.PessimisticLockingFailureException;
@@ -37,7 +38,8 @@ public class VentaService {
                 return registroVenta.registrar(pedido, usuarioId, usuarioEsDueno);
             } catch (PessimisticLockingFailureException e) {
                 if (intento >= MAX_INTENTOS) {
-                    throw e;
+                    // Contencion transitoria agotada: 503 «reintenta» (la clave hace seguro el reintento), no un 500.
+                    throw new SistemaOcupadoException(e);
                 }
                 intento++;
             } catch (DataIntegrityViolationException e) {
