@@ -1,0 +1,106 @@
+<app-barra-acciones>
+  <h1>Cuenta corriente</h1>
+  <a class="btn accion-barra volver" routerLink="/clientes">Volver a Clientes</a>
+  @if (auth.esDueno()) {
+    <button
+      type="button"
+      class="accion-barra primario cobrar-f4"
+      aria-keyshortcuts="F4"
+      [disabled]="estado() !== 'listo'"
+      (click)="abrirCobro()"
+    >
+      Cobrar (F4)
+    </button>
+  }
+</app-barra-acciones>
+
+@if (textoCobrado(); as texto) {
+  <p class="alerta exito" role="status">{{ texto }}</p>
+}
+
+@switch (estado()) {
+  @case ('sinPermiso') {
+    <p class="alerta advertencia" role="alert">{{ sinPermiso }}</p>
+  }
+  @case ('cargando') {
+    <p class="ayuda estado-vacio">Cargando…</p>
+  }
+  @case ('error') {
+    <div class="error con-accion" role="alert">
+      <span>{{ errorCarga() }}</span>
+      @if (reintentable()) {
+        <button type="button" class="secundario chico reintentar" (click)="cargar()">Reintentar</button>
+      }
+    </div>
+  }
+  @case ('listo') {
+    @if (cliente(); as c) {
+      @if (pendientes(); as p) {
+        <section class="panel cuenta" aria-labelledby="cuenta-titulo">
+          <h2 id="cuenta-titulo">
+            {{ c.razonSocial }}
+            @if (!c.activo) {
+              <span class="etiqueta">Desactivado</span>
+            }
+          </h2>
+          @if (documentoLegible(c); as documento) {
+            <p class="documento">{{ documento }}</p>
+          }
+          <ul class="lineas">
+            <li class="saldo">
+              <span>Saldo</span>&ngsp;<strong>{{ textoSaldo() }}</strong>
+            </li>
+            @if (p.aCuenta > 0) {
+              <li class="a-cuenta-actual">
+                <span>A cuenta (sin imputar)</span>&ngsp;<strong>{{ p.aCuenta | monto }}</strong>
+              </li>
+            }
+          </ul>
+        </section>
+
+        @if (p.comprobantes.length === 0) {
+          <p class="ayuda sin-pendientes">No tiene comprobantes con deuda.</p>
+        } @else {
+          <table class="pendientes">
+            <caption class="sr-only">
+              Comprobantes con deuda, del más viejo al más nuevo
+            </caption>
+            <thead>
+              <tr>
+                <th scope="col">Comprobante</th>
+                <th scope="col">Fecha</th>
+                <th scope="col" class="num">Importe</th>
+                <th scope="col" class="num">Imputado</th>
+                <th scope="col" class="num">Pendiente</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (comprobante of p.comprobantes; track comprobante.comprobanteId) {
+                <tr>
+                  <th scope="row">{{ comprobante.referencia }}</th>
+                  <td>{{ fecha(comprobante.fecha) }}</td>
+                  <td class="num">{{ comprobante.importe | monto }}</td>
+                  <td class="num">{{ comprobante.imputado | monto }}</td>
+                  <td class="num">{{ comprobante.pendiente | monto }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        }
+      }
+    }
+  }
+}
+
+@if (dialogoAbierto() && cliente(); as c) {
+  <app-dialogo-cobranza
+    [clienteNombre]="c.razonSocial"
+    [pendientes]="pendientes()?.comprobantes ?? []"
+    [aCuenta]="pendientes()?.aCuenta ?? 0"
+    [enVuelo]="cobrando()"
+    [aviso]="avisoDialogo()"
+    [error]="errorDialogo()"
+    (confirmar)="cobrar($event)"
+    (cancelar)="cerrarCobro()"
+  />
+}

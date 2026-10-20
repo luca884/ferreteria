@@ -2,7 +2,7 @@ import { HttpErrorResponse, provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 import { CobranzaRechazada, CobranzaRequest, PendientesCuenta, Recibo, ReciboCobrado } from './cobranza.models';
-import { CobranzaService, esTransitorio, invalidaDe, rechazoDe } from './cobranza.service';
+import { CobranzaService, GENERAR_CLAVE_COBRO, esTransitorio, invalidaDe, rechazoDe } from './cobranza.service';
 
 /**
  * Los cuerpos de estos mocks están copiados de los DTO reales del backend: PendientesResponse, CobranzaRequest,
@@ -87,6 +87,14 @@ describe('CobranzaService', () => {
     expect(req.request.method).toBe('GET');
     req.flush(recibo);
     expect(r).toEqual(recibo);
+  });
+
+  it('la clave de un cobro es un UUID nuevo cada vez (crypto.randomUUID)', () => {
+    const generar = TestBed.inject(GENERAR_CLAVE_COBRO);
+    const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+
+    expect(generar()).toMatch(UUID);
+    expect(generar()).not.toBe(generar());
   });
 
   describe('errores', () => {

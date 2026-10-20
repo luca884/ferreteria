@@ -135,3 +135,8 @@ export function sugerirFifo(pendientes: readonly Pick<PendienteCuenta, 'pendient
 export function aCuentaCentavos(totalCentavos: number, imputadosCentavos: readonly number[]): number {
   return totalCentavos - imputadosCentavos.reduce((suma, c) => suma + c, 0);
 }
+
+/** Los centavos como lo que se escribe en un campo: «300,50» (coma decimal, sin separador de miles). */
+export function centavosATexto(centavos: number): string {
+  return `${Math.floor(centavos / 100)},${String(centavos % 100).padStart(2, '0')}`;
+}

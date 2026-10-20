@@ -1,0 +1,59 @@
+:host {
+  display: block;
+}
+:host > :not(app-barra-acciones) {
+  max-width: 1040px;
+}
+
+.cuenta {
+  margin-bottom: var(--e-4);
+}
+.cuenta h2 {
+  display: flex;
+  align-items: center;
+  gap: var(--e-2);
+  margin-bottom: var(--e-1);
+}
+.documento {
+  margin: 0 0 var(--e-3);
+  color: var(--texto-suave);
+  font-variant-numeric: tabular-nums;
+}
+
+.lineas {
+  display: grid;
+  gap: var(--e-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.lineas li {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--e-3);
+  padding: var(--e-1) 0;
+  border-bottom: 1px solid var(--borde);
+}
+.lineas strong {
+  font-variant-numeric: tabular-nums;
+}
+.lineas .saldo {
+  font-size: var(--texto-md);
+  font-weight: 700;
+}
+.lineas .a-cuenta-actual {
+  color: var(--texto-suave);
+}
+
+.pendientes {
+  width: 100%;
+  margin-bottom: var(--e-4);
+}
+.pendientes tbody th {
+  font-weight: 600;
+  text-align: left;
+}
+.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}

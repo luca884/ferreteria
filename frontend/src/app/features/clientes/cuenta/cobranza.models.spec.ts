@@ -1,4 +1,4 @@
-import { MEDIOS_COBRANZA, MEDIO_COBRANZA_LABELS, aCuentaCentavos, sugerirFifo } from './cobranza.models';
+import { MEDIOS_COBRANZA, MEDIO_COBRANZA_LABELS, aCuentaCentavos, centavosATexto, sugerirFifo } from './cobranza.models';
 
 /** Pendientes en orden FIFO tal como los manda GET /pendientes: solo el importe que falta cobrar importa acá. */
 const pendientes = (...importes: number[]) => importes.map((pendiente) => ({ pendiente }));
@@ -98,6 +98,15 @@ describe('cobranza.models', () => {
 
     it('si lo imputado se pasa del total, da negativo (el diálogo lo marca como error)', () => {
       expect(aCuentaCentavos(1000, [600, 600])).toBe(-200);
+    });
+  });
+
+  describe('centavosATexto', () => {
+    it('escribe los centavos como un importe editable, con coma y 2 decimales (sin separador de miles)', () => {
+      expect(centavosATexto(30050)).toBe('300,50');
+      expect(centavosATexto(5)).toBe('0,05');
+      expect(centavosATexto(0)).toBe('0,00');
+      expect(centavosATexto(123456789)).toBe('1234567,89');
     });
   });
 });

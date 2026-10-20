@@ -1,0 +1,144 @@
+.cobranza {
+  width: min(600px, 100%);
+  max-height: calc(100vh - var(--e-8));
+  gap: var(--e-3);
+  overflow-y: auto;
+}
+
+.aviso {
+  padding: var(--e-2) var(--e-3);
+  border: 1px solid var(--advertencia-borde);
+  border-left: 4px solid var(--advertencia-marca);
+  border-radius: var(--radio);
+  background: var(--advertencia-fondo);
+  font-weight: 600;
+}
+
+.ya-a-cuenta,
+.sin-deudas {
+  color: var(--texto-suave);
+  font-size: var(--texto-sm);
+  font-weight: 600;
+}
+
+.campo-total {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-weight: 600;
+}
+.campo-total input {
+  width: 100%;
+  min-width: 0;
+  height: 58px;
+  padding: 0 14px;
+  border-width: 2px;
+  border-radius: var(--radio-lg);
+  font-family: var(--fuente-mono);
+  font-size: 1.625rem;
+  font-weight: 600;
+  text-align: right;
+}
+
+.bloque-medios {
+  display: flex;
+  flex-direction: column;
+  gap: var(--e-2);
+}
+.medios {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--e-2);
+}
+.medio {
+  min-height: 48px;
+  border: 1px solid var(--borde);
+  border-radius: var(--radio-lg);
+  background: var(--superficie);
+  color: var(--texto);
+  font-size: var(--texto-sm);
+  font-weight: 500;
+}
+.medio:hover {
+  border-color: var(--borde-fuerte);
+  background: var(--superficie-2);
+}
+.medio[aria-checked='true'],
+.medio[aria-checked='true']:hover {
+  border-color: var(--acento);
+  background: var(--acento-suave);
+  color: var(--acento-profundo);
+  font-weight: 700;
+  box-shadow: inset 0 0 0 1px var(--acento);
+}
+.pista-medios {
+  color: var(--texto-tenue);
+  font-size: var(--texto-xs);
+}
+.pista-medios kbd {
+  font-size: 0.9em;
+}
+
+.imputacion {
+  width: 100%;
+  border-collapse: collapse;
+}
+.imputacion th,
+.imputacion td {
+  padding: var(--e-1) var(--e-2);
+  border-bottom: 1px solid var(--borde);
+  vertical-align: top;
+  text-align: left;
+}
+.imputacion thead th {
+  color: var(--texto-suave);
+  font-size: var(--texto-sm);
+}
+.imputacion tbody th {
+  font-weight: 600;
+}
+.imputacion .fecha {
+  display: block;
+  color: var(--texto-tenue);
+  font-weight: 400;
+}
+.imputacion .num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.imputacion td input {
+  width: 9rem;
+  height: 40px;
+  padding: 0 10px;
+  font-family: var(--fuente-mono);
+  text-align: right;
+}
+.imputacion .campo-error {
+  display: block;
+  margin-top: 2px;
+}
+
+.imputar-en-orden {
+  align-self: flex-start;
+}
+
+.a-cuenta {
+  display: flex;
+  justify-content: space-between;
+  padding: var(--e-2) var(--e-3);
+  border: 1px solid var(--info-borde);
+  border-left: 4px solid var(--info-marca, var(--acento));
+  border-radius: var(--radio);
+  background: var(--info-fondo);
+  font-weight: 600;
+}
+.a-cuenta strong {
+  font-variant-numeric: tabular-nums;
+}
+
+.dialogo-acciones button {
+  min-height: 48px;
+}
+.dialogo-acciones .cobrar {
+  padding-inline: var(--e-6);
+}

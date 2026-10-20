@@ -7,6 +7,7 @@ import { inicioPorRol } from './core/auth/inicio-por-rol';
 import { ActualizacionMasiva } from './features/actualizacion-masiva/actualizacion-masiva';
 import { ArticuloForm } from './features/articulos/articulo-form';
 import { Caja } from './features/caja/caja';
+import { CuentaCliente } from './features/clientes/cuenta/cuenta-cliente';
 import { HistorialCajas } from './features/caja/historial-cajas';
 import { Articulos } from './features/articulos/articulos';
 import { PaginaConfiguracionCotizacion } from './features/configuracion-cotizacion/configuracion-cotizacion';
@@ -134,6 +135,17 @@ describe('rutas', () => {
     expect(historial!.canActivate).toBeUndefined();
   });
 
+  it('la ruta clientes/:id/cuenta carga la cuenta del cliente, sin guard de rol: el contenedor maneja «sinPermiso» (CC-043)', async () => {
+    const padre = routes.find((r) => r.path === '');
+    const ruta = hijas().find((r) => r.path === 'clientes/:id/cuenta');
+
+    expect(ruta).toBeDefined();
+    expect(ruta!.path).toContain(':id');
+    expect(await (ruta!.loadComponent as () => Promise<unknown>)()).toBe(CuentaCliente);
+    expect(ruta!.canActivate).toBeUndefined();
+    expect(padre!.canActivate).toEqual([authGuard]);
+  });
+
   it('la ruta mostrador carga el componente Mostrador', async () => {
     const ruta = hijas().find((r) => r.path === 'mostrador');
 
@@ -178,6 +190,7 @@ describe('rutas', () => {
     expect(titulo(hijas(), 'actualizacion-masiva')).toBe('Actualizar precios · Ferretería');
     expect(titulo(hijas(), 'configuracion/cotizacion')).toBe('Cotización · Ferretería');
     expect(titulo(hijas(), 'configuracion/formas-pago')).toBe('Formas de pago · Ferretería');
+    expect(titulo(hijas(), 'clientes/:id/cuenta')).toBe('Cuenta corriente · Ferretería');
   });
 
   it('sin sesión, /mostrador redirige al login recordando adónde quería ir', async () => {

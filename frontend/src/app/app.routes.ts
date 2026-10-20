@@ -41,6 +41,12 @@ export const routes: Routes = [
         title: titulo('Clientes'),
         loadComponent: () => import('./features/clientes/clientes').then((m) => m.Clientes),
       },
+      // Sin guard de rol, como las otras pantallas del Dueño: al Vendedor la pantalla le avisa y no pide nada al servidor.
+      {
+        path: 'clientes/:id/cuenta',
+        title: titulo('Cuenta corriente'),
+        loadComponent: () => import('./features/clientes/cuenta/cuenta-cliente').then((m) => m.CuentaCliente),
+      },
       // Sin guard de rol: la caja la usan el Vendedor y el Dueño; el historial es del Dueño y el Vendedor ve el aviso de la pantalla.
       {
         path: 'caja',

@@ -1,5 +1,5 @@
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
-import { Injectable, inject } from '@angular/core';
+import { Injectable, InjectionToken, inject } from '@angular/core';
 import { Observable, map } from 'rxjs';
 import { environment } from '../../../../environments/environment';
 import {
@@ -11,6 +11,12 @@ import {
   Recibo,
   ReciboCobrado,
 } from './cobranza.models';
+
+/** Genera la clave de idempotencia de un cobro. En los tests se reemplaza por una determinista. */
+export const GENERAR_CLAVE_COBRO = new InjectionToken<() => string>('GENERAR_CLAVE_COBRO', {
+  providedIn: 'root',
+  factory: () => () => crypto.randomUUID(),
+});
 
 /** Cobranza de cuenta corriente (solo el Dueño). La ferretería y el usuario los pone el backend desde el JWT. */
 @Injectable({ providedIn: 'root' })
