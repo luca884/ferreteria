@@ -655,4 +655,153 @@ describe('DialogoCobranza (CC-032, CC-033, CC-034, CC-043, CC-051)', () => {
       expect(el().querySelector('.error-servidor')!.getAttribute('role')).toBe('alert');
     });
   });
+
+  describe('envío sin confirmar: el contenido queda congelado hasta reintentar o empezar de nuevo (CC-038)', () => {
+    let reiniciadas: number;
+
+    /** Abre con A 300 + B 500 + C 400, tipea 600 (→ A 300 + B 300) y confirma; después el contenedor congela. */
+    async function congelar() {
+      await abrir();
+      reiniciadas = 0;
+      fixture.componentInstance.reiniciar.subscribe(() => reiniciadas++);
+      await escribirTotal('600');
+      tecla('Enter');
+      fixture.componentRef.setInput('congelado', true);
+      await estabilizar();
+    }
+
+    it('sin envío pendiente no hay aviso ni salida, y todo se puede editar', async () => {
+      await abrir();
+
+      expect(el().querySelector('.aviso-congelado')).toBeNull();
+      expect(boton('Cancelar y empezar de nuevo')).toBeUndefined();
+      expect(total().readOnly).toBe(false);
+      expect(filas().every((f) => !f.readOnly)).toBe(true);
+    });
+
+    it('avisa que se reenvía lo mismo y ofrece «Cancelar y empezar de nuevo»', async () => {
+      await congelar();
+
+      expect(texto('.aviso-congelado')).toBe('No pudimos confirmar el cobro. Reintentá: se envía lo mismo.');
+      expect(el().querySelector('.aviso-congelado')!.getAttribute('role')).toBe('status');
+      expect(boton('Cancelar y empezar de nuevo')).toBeDefined();
+    });
+
+    it('el total y los importes de las filas quedan de solo lectura (sin perder el foco)', async () => {
+      await congelar();
+
+      expect(total().readOnly).toBe(true);
+      expect(filas().every((f) => f.readOnly)).toBe(true);
+      expect(document.activeElement).toBe(total());
+    });
+
+    it('el medio queda deshabilitado (aria-disabled) y «Imputar en orden» también', async () => {
+      await congelar();
+
+      const radios = Array.from(el().querySelectorAll('button[role="radio"]'));
+      expect(radios.every((r) => r.getAttribute('aria-disabled') === 'true')).toBe(true);
+      expect(boton('Imputar en orden').disabled).toBe(true);
+    });
+
+    it('tipear en el total o en una fila no cambia lo que se reenvía', async () => {
+      await congelar();
+
+      await escribirTotal('50');
+      await escribirFila(31, '1');
+      tecla('Enter');
+
+      expect(confirmadas).toHaveLength(2);
+      expect(confirmadas[1]).toEqual(confirmadas[0]);
+    });
+
+    it('elegir otro medio (clic o flechas) no lo cambia', async () => {
+      await congelar();
+
+      medio('Transferencia').click();
+      medio('Efectivo').focus();
+      tecla('ArrowRight');
+      await estabilizar();
+
+      expect(elegidos()).toEqual(['Efectivo']);
+    });
+
+    it('«Imputar en orden» no reaplica nada mientras está congelado', async () => {
+      await abrir();
+      await escribirTotal('600');
+      await escribirFila(31, '100');
+      fixture.componentRef.setInput('congelado', true);
+      await estabilizar();
+
+      fixture.componentInstance['imputarEnOrden']();
+      await estabilizar();
+
+      expect(fila(31).value).toBe('100');
+    });
+
+    it('Enter (y «Cobrar») reintentan con exactamente el mismo contenido', async () => {
+      await congelar();
+
+      tecla('Enter');
+      boton('Cobrar').click();
+      await estabilizar();
+
+      expect(confirmadas).toHaveLength(2);
+      expect(confirmadas[1]).toEqual(confirmadas[0]);
+    });
+
+    it('Esc sigue cerrando el diálogo', async () => {
+      await congelar();
+
+      tecla('Escape');
+
+      expect(canceladas).toBe(1);
+    });
+
+    it('«Cancelar y empezar de nuevo» emite reiniciar (y no cancelar ni confirmar)', async () => {
+      await congelar();
+
+      boton('Cancelar y empezar de nuevo').click();
+
+      expect(reiniciadas).toBe(1);
+      expect(canceladas).toBe(0);
+      expect(confirmadas).toHaveLength(1);
+    });
+
+    it('Enter sobre «Cancelar y empezar de nuevo» no reenvía el cobro', async () => {
+      await congelar();
+
+      const reiniciar = boton('Cancelar y empezar de nuevo');
+      reiniciar.focus();
+      tecla('Enter', reiniciar);
+
+      expect(confirmadas).toHaveLength(1);
+    });
+
+    it('al liberar el contenido vuelve a ser editable', async () => {
+      await congelar();
+
+      fixture.componentRef.setInput('congelado', false);
+      await estabilizar();
+      await escribirTotal('500');
+
+      expect(el().querySelector('.aviso-congelado')).toBeNull();
+      expect(total().readOnly).toBe(false);
+      expect(filas().every((f) => !f.readOnly)).toBe(true);
+      expect(elegidos()).toEqual(['Efectivo']);
+      expect(fila(31).value).toBe('300,00');
+      expect(fila(32).value).toBe('200,00');
+    });
+
+    it('al liberar, el medio se puede cambiar de nuevo', async () => {
+      await congelar();
+      fixture.componentRef.setInput('congelado', false);
+      await estabilizar();
+
+      medio('Transferencia').click();
+      await estabilizar();
+
+      expect(elegidos()).toEqual(['Transferencia']);
+      expect(medio('Transferencia').getAttribute('aria-disabled')).not.toBe('true');
+    });
+  });
 });

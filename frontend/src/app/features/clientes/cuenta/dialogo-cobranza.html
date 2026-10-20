@@ -17,6 +17,9 @@
     @if (error(); as texto) {
       <p class="error error-servidor" role="alert">{{ texto }}</p>
     }
+    @if (congelado()) {
+      <p class="aviso aviso-congelado" role="status">No pudimos confirmar el cobro. Reintentá: se envía lo mismo.</p>
+    }
     @if (aCuenta() > 0) {
       <p class="ya-a-cuenta">Ya tiene {{ aCuenta() | monto }} a cuenta</p>
     }
@@ -30,6 +33,7 @@
         inputmode="decimal"
         autocomplete="off"
         spellcheck="false"
+        [readOnly]="congelado()"
         [attr.aria-invalid]="errorTotal() ? 'true' : null"
         [attr.aria-describedby]="errorTotal() ? 'error-total' : null"
         [value]="totalTexto()"
@@ -50,6 +54,7 @@
             class="medio"
             [tabindex]="m === medio() ? 0 : -1"
             [attr.aria-checked]="m === medio()"
+            [attr.aria-disabled]="congelado() ? 'true' : null"
             (click)="elegirMedio(m)"
           >
             {{ medioLabels[m] }}
@@ -86,6 +91,7 @@
                   autocomplete="off"
                   spellcheck="false"
                   placeholder="0,00"
+                  [readOnly]="congelado()"
                   [attr.data-comprobante]="f.comprobanteId"
                   [attr.aria-label]="'Importe a imputar a ' + f.referencia"
                   [attr.aria-invalid]="f.error ? 'true' : null"
@@ -101,7 +107,13 @@
           }
         </tbody>
       </table>
-      <button type="button" id="imputar-en-orden" class="secundario imputar-en-orden" (click)="imputarEnOrden()">
+      <button
+        type="button"
+        id="imputar-en-orden"
+        class="secundario imputar-en-orden"
+        [disabled]="congelado()"
+        (click)="imputarEnOrden()"
+      >
         Imputar en orden
       </button>
       @if (errorImputado(); as mensaje) {
@@ -118,6 +130,9 @@
     }
 
     <div class="dialogo-acciones">
+      @if (congelado()) {
+        <button type="button" class="secundario reiniciar" (click)="reiniciar.emit()">Cancelar y empezar de nuevo</button>
+      }
       <button type="button" class="cancelar" data-tecla="Esc" aria-keyshortcuts="Escape" (click)="cancelar.emit()">
         Cancelar
       </button>

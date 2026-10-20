@@ -564,6 +564,203 @@ describe('CuentaCliente (CC-028, CC-033, CC-034, CC-038, CC-043)', () => {
       expect(texto('.alerta.exito span')).toContain('Este cobro ya estaba registrado');
     });
 
+    describe('contenido congelado tras un envío sin confirmar (red o 5xx)', () => {
+      const congelado = () => el().querySelector('.aviso-congelado');
+      const medioElegido = () => texto('button[role="radio"][aria-checked="true"]');
+      const salida = () => boton('Cancelar y empezar de nuevo');
+
+      /** Falla el primer envío con `primero` y los siguientes con `despues` (por defecto, éxito). */
+      const fallando = (primero: unknown, despues?: unknown) => {
+        let intento = 0;
+        return () =>
+          ++intento === 1
+            ? throwError(() => primero)
+            : despues
+              ? throwError(() => despues)
+              : of({ recibo: recibo(), repetida: true });
+      };
+
+      it.each([
+        ['red (status 0)', errorHttp(0, null)],
+        ['503', errorHttp(503, { status: 503, message: 'x' })],
+      ])('%s congela el total, las filas y el medio, y avisa que se reenvía lo mismo', async (_n, error) => {
+        await crear({ cobrar: fallando(error) });
+
+        await cobrar('600');
+
+        expect(congelado()).not.toBeNull();
+        expect(total().readOnly).toBe(true);
+        expect(
+          Array.from(el().querySelectorAll<HTMLInputElement>('input[data-comprobante]')).every((f) => f.readOnly),
+        ).toBe(true);
+        expect(salida()).toBeDefined();
+      });
+
+      it('el reintento manda lo mismo y con la MISMA clave aunque se intente tipear', async () => {
+        await crear({ cobrar: fallando(errorHttp(0, null)) });
+
+        await cobrar('600');
+        await escribirTotal('50');
+        await confirmar();
+
+        expect(cobranza.cobrar).toHaveBeenCalledTimes(2);
+        expect(cobranza.cobrar.mock.calls[1][0]).toEqual(cobranza.cobrar.mock.calls[0][0]);
+        expect(claves).toHaveLength(1);
+      });
+
+      it('si el reintento sale bien, el diálogo se cierra y muestra el recibo', async () => {
+        await crear({ cobrar: fallando(errorHttp(0, null)) });
+
+        await cobrar('600');
+        await confirmar();
+
+        expect(dialogo()).toBeNull();
+        expect(el().querySelectorAll('app-recibo-imprimible')).toHaveLength(1);
+      });
+
+      it('«Cancelar y empezar de nuevo»: libera el contenido, limpia el error, pasa a una clave nueva y deja el diálogo abierto', async () => {
+        await crear({ cobrar: fallando(errorHttp(0, null)) });
+        await cobrar('600');
+        expect(texto('.error-servidor')).toContain('No se pudo registrar el cobro');
+
+        salida()!.click();
+        await refrescar();
+
+        expect(dialogo()).not.toBeNull();
+        expect(congelado()).toBeNull();
+        expect(el().querySelector('.error-servidor')).toBeNull();
+        expect(total().readOnly).toBe(false);
+        expect(claves).toHaveLength(2);
+        expect(cobranza.cobrar).toHaveBeenCalledTimes(1);
+      });
+
+      it('después de empezar de nuevo, el contenido editado se manda con la clave nueva', async () => {
+        await crear({ cobrar: fallando(errorHttp(0, null)) });
+        await cobrar('600');
+        salida()!.click();
+        await refrescar();
+
+        await escribirTotal('250');
+        await confirmar();
+
+        const enviado = cobranza.cobrar.mock.calls[1][0] as CobranzaRequest;
+        expect(enviado.clave).toBe(claves[1]);
+        expect(enviado.total).toBe(250);
+        expect(dialogo()).toBeNull();
+      });
+
+      it('después de empezar de nuevo, un nuevo envío sin respuesta vuelve a congelar', async () => {
+        await crear({ cobrar: () => throwError(() => errorHttp(0, null)) });
+        await cobrar('600');
+        salida()!.click();
+        await refrescar();
+
+        await escribirTotal('250');
+        await confirmar();
+
+        expect(congelado()).not.toBeNull();
+        expect(total().readOnly).toBe(true);
+      });
+
+      it('un rechazo definitivo en el reintento (422 caja cerrada) libera el contenido, con la misma clave', async () => {
+        await crear({
+          cobrar: fallando(errorHttp(0, null), rechazo(422, 'CAJA_CERRADA', 'Abrí la caja para cobrar.')),
+        });
+        await cobrar('600');
+        expect(congelado()).not.toBeNull();
+
+        await confirmar();
+
+        expect(congelado()).toBeNull();
+        expect(total().readOnly).toBe(false);
+        expect(texto('.error-servidor')).toBe('Abrí la caja para cobrar.');
+        expect(claves).toHaveLength(1);
+      });
+
+      it('un 409 (la deuda cambió) en el reintento libera el contenido y regenera la clave', async () => {
+        await crear({
+          cobrar: fallando(errorHttp(0, null), rechazo(409, 'IMPUTACION_EXCEDE_DEUDA', 'La deuda cambió.', [])),
+        });
+        await cobrar('600');
+
+        await confirmar();
+
+        expect(congelado()).toBeNull();
+        expect(total().readOnly).toBe(false);
+        expect(claves).toHaveLength(2);
+      });
+
+      it('un 400 en el reintento libera el contenido', async () => {
+        await crear({
+          cobrar: fallando(errorHttp(0, null), errorHttp(400, { status: 400, message: 'Hay datos inválidos', errors: {} })),
+        });
+        await cobrar('600');
+
+        await confirmar();
+
+        expect(congelado()).toBeNull();
+        expect(total().readOnly).toBe(false);
+      });
+
+      it('un 422 CLAVE_CON_OTRO_CONTENIDO en el reintento libera el contenido y regenera la clave', async () => {
+        await crear({
+          cobrar: fallando(
+            errorHttp(0, null),
+            rechazo(422, 'CLAVE_CON_OTRO_CONTENIDO', 'Este cobro ya se registró con otros datos.'),
+          ),
+        });
+        await cobrar('600');
+
+        await confirmar();
+
+        expect(congelado()).toBeNull();
+        expect(claves).toHaveLength(2);
+      });
+
+      it.each([
+        ['409', rechazo(409, 'IMPUTACION_EXCEDE_DEUDA', 'La deuda cambió.', [])],
+        ['422', rechazo(422, 'CAJA_CERRADA', 'Abrí la caja para cobrar.')],
+        ['400', errorHttp(400, { status: 400, message: 'Hay datos inválidos', errors: {} })],
+        ['404', errorHttp(404, { status: 404, message: 'Comprobante no encontrado' })],
+      ])('un %s en el primer envío no congela nada', async (_n, error) => {
+        await crear({ cobrar: () => throwError(() => error) });
+
+        await cobrar('600');
+
+        expect(congelado()).toBeNull();
+        expect(salida()).toBeUndefined();
+        expect(total().readOnly).toBe(false);
+      });
+
+      it('mientras el reintento está en vuelo sigue congelado', async () => {
+        const respuesta = new Subject<ReciboCobrado>();
+        let intento = 0;
+        await crear({ cobrar: () => (++intento === 1 ? throwError(() => errorHttp(0, null)) : respuesta) });
+        await cobrar('600');
+
+        await confirmar();
+
+        expect(congelado()).not.toBeNull();
+        expect(total().readOnly).toBe(true);
+        respuesta.complete();
+      });
+
+      it('cerrar con Esc y reabrir con F4 empieza de cero: clave nueva, sin congelar y sin el contenido anterior', async () => {
+        await crear({ cobrar: fallando(errorHttp(0, null)) });
+        await cobrar('600');
+
+        total().dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', cancelable: true, bubbles: true }));
+        await refrescar();
+        await f4();
+
+        expect(congelado()).toBeNull();
+        expect(total().readOnly).toBe(false);
+        expect(total().value).toBe('');
+        expect(medioElegido()).toBe('Efectivo');
+        expect(claves).toHaveLength(2);
+      });
+    });
+
     it('400: muestra los errores por campo del servidor y el siguiente intento lleva una clave nueva', async () => {
       await crear({
         cobrar: () =>

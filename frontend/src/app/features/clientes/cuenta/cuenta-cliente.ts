@@ -26,7 +26,8 @@ const MENSAJE_RED =
  * Cuenta corriente de un cliente (`clientes/:id/cuenta`): sus pendientes en orden FIFO, el saldo y la acción «Cobrar» (F4),
  * también para el adelanto de un cliente sin deuda. Solo el Dueño: el Vendedor ve un aviso y no se hace ningún request.
  * Contenedor: habla con los servicios y maneja la clave de idempotencia del cobro (CC-038): la misma clave en cada reintento
- * de red, una nueva cuando cambia el contenido (409, 400) o se abre un cobro nuevo.
+ * de red, una nueva cuando cambia el contenido (409, 400) o se abre un cobro nuevo. Mientras un envío quedó sin confirmar el
+ * diálogo no deja cambiar el contenido: o se reintenta lo mismo o se empieza de nuevo (clave nueva).
  */
 @Component({
   selector: 'app-cuenta-cliente',
@@ -57,6 +58,11 @@ export class CuentaCliente implements OnInit {
   protected readonly cobrando = signal(false);
   protected readonly avisoDialogo = signal<string | null>(null);
   protected readonly errorDialogo = signal<string | null>(null);
+  /**
+   * El último envío no se pudo confirmar (red o 5xx): el servidor puede haberlo registrado, así que el contenido queda
+   * congelado y se reintenta con la misma clave. Se suelta con una respuesta definitiva o al reiniciar.
+   */
+  protected readonly envioSinConfirmar = signal(false);
   /** El último cobro registrado (o repetido): el aviso y el recibo que se puede reimprimir. */
   protected readonly cobrado = signal<ReciboCobrado | null>(null);
   /** El recibo que se está viendo: el del cobro recién hecho o el que trajo «Reimprimir recibo». */
@@ -151,11 +157,21 @@ export class CuentaCliente implements OnInit {
     this.errorRecibo.set(null);
     this.avisoDialogo.set(null);
     this.errorDialogo.set(null);
+    this.envioSinConfirmar.set(false);
     this.dialogoAbierto.set(true);
   }
 
   protected cerrarCobro(): void {
     this.dialogoAbierto.set(false);
+    this.avisoDialogo.set(null);
+    this.errorDialogo.set(null);
+  }
+
+  /** «Cancelar y empezar de nuevo»: se abandona el envío sin confirmar, con clave nueva, y el contenido vuelve a editarse. */
+  protected reiniciarCobro(): void {
+    if (this.cobrando()) return;
+    this.clave = this.generarClave();
+    this.envioSinConfirmar.set(false);
     this.avisoDialogo.set(null);
     this.errorDialogo.set(null);
   }
@@ -168,6 +184,7 @@ export class CuentaCliente implements OnInit {
     this.cobranza.cobrar({ clave: this.clave, clienteId: this.clienteId, ...pedido }).subscribe({
       next: (cobro) => {
         this.cobrando.set(false);
+        this.envioSinConfirmar.set(false);
         this.dialogoAbierto.set(false);
         this.cobrado.set(cobro);
         this.errorRecibo.set(null);
@@ -209,6 +226,7 @@ export class CuentaCliente implements OnInit {
    * hay que mandar, y una clave usada con otro contenido es un 422: clave nueva.
    */
   private fallarCobro(err: unknown): void {
+    this.envioSinConfirmar.set(false);
     const rechazo = rechazoDe(err);
     if (rechazo?.motivo === 'IMPUTACION_EXCEDE_DEUDA') {
       this.clave = this.generarClave();
@@ -232,6 +250,11 @@ export class CuentaCliente implements OnInit {
       this.errorDialogo.set(erroresDeCampos(err).join(' ') || mensajeDe(err, 'Revisá los datos del cobro.'));
       return;
     }
-    this.errorDialogo.set(esTransitorio(err) ? MENSAJE_RED : mensajeDe(err, 'No se pudo registrar el cobro.'));
+    if (esTransitorio(err)) {
+      this.envioSinConfirmar.set(true);
+      this.errorDialogo.set(MENSAJE_RED);
+      return;
+    }
+    this.errorDialogo.set(mensajeDe(err, 'No se pudo registrar el cobro.'));
   }
 }

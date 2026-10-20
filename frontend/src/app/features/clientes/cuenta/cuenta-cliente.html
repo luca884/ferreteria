@@ -108,8 +108,10 @@
     [enVuelo]="cobrando()"
     [aviso]="avisoDialogo()"
     [error]="errorDialogo()"
+    [congelado]="envioSinConfirmar()"
     (confirmar)="cobrar($event)"
     (cancelar)="cerrarCobro()"
+    (reiniciar)="reiniciarCobro()"
   />
 }
 

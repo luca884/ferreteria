@@ -49,6 +49,8 @@ function leer(texto: string): number | null {
  * deuda) y, al tipearlo, sugiere repartirlo en orden FIFO entre los comprobantes con deuda; la tabla se puede editar a
  * mano (importe vacío = desmarcar) y lo que no se imputa queda «a cuenta». Sin deuda es un adelanto: no hay tabla y el
  * cobro queda todo a cuenta. Con el foco en el medio, ← y → (o ↑ y ↓) lo cambian; Enter confirma, Esc cierra. Mientras `enVuelo` ignora Enter.
+ * Si el envío quedó sin confirmar (`congelado`: red o 5xx) el contenido no se puede tocar —el reintento lleva la misma clave—
+ * y la única salida para cambiarlo es `reiniciar`.
  */
 @Component({
   selector: 'app-dialogo-cobranza',
@@ -71,9 +73,13 @@ export class DialogoCobranza {
   readonly aviso = input<string | null>(null);
   /** El rechazo del servidor (caja cerrada, cliente desactivado…). */
   readonly error = input<string | null>(null);
+  /** El último envío no se pudo confirmar: total, filas y medio quedan fijos hasta reintentar o reiniciar. */
+  readonly congelado = input(false);
 
   readonly confirmar = output<PedidoCobranza>();
   readonly cancelar = output<void>();
+  /** «Cancelar y empezar de nuevo»: el contenedor suelta el envío pendiente (clave nueva) y el contenido vuelve a ser editable. */
+  readonly reiniciar = output<void>();
 
   protected readonly medios = MEDIOS_COBRANZA;
   protected readonly medioLabels = MEDIO_COBRANZA_LABELS;
@@ -163,25 +169,30 @@ export class DialogoCobranza {
   }
 
   protected escribirTotal(texto: string): void {
+    if (this.congelado()) return;
     this.totalTexto.set(texto);
   }
 
   /** Editar una fila congela las demás tal como se ven: el total ya no las vuelve a repartir. */
   protected escribirFila(comprobanteId: number, texto: string): void {
+    if (this.congelado()) return;
     const base = this.editadas() ?? Object.fromEntries(this.filas().map((f) => [f.comprobanteId, f.texto]));
     this.editadas.set({ ...base, [comprobanteId]: texto });
   }
 
   protected imputarEnOrden(): void {
+    if (this.congelado()) return;
     this.editadas.set(null);
   }
 
   protected elegirMedio(medio: MedioCobranza): void {
+    if (this.congelado()) return;
     this.medio.set(medio);
   }
 
   /** Cambia el medio con las flechas y lleva el foco al radio elegido (roving tabindex, como un grupo de radios nativo). */
   private ciclarMedio(delta: 1 | -1): void {
+    if (this.congelado()) return;
     const n = this.medios.length;
     const indice = (this.medios.indexOf(this.medio()) + delta + n) % n;
     this.medio.set(this.medios[indice]);
