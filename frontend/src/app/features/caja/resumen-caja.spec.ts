@@ -21,6 +21,8 @@ describe('ResumenCaja (CC-025)', () => {
     cerradaPor: null,
     ventas: { EFECTIVO: 1000, DEBITO: 0, CREDITO: 0, TRANSFERENCIA: 0, CUENTA_CORRIENTE: 2000 },
     totalVentas: 3000,
+    cobranzas: { EFECTIVO: 0, DEBITO: 0, CREDITO: 0, TRANSFERENCIA: 0, CUENTA_CORRIENTE: 0 },
+    totalCobranzas: 0,
     ingresos: 0,
     gastos: 0,
     retiros: 0,
@@ -99,5 +101,70 @@ describe('ResumenCaja (CC-025)', () => {
 
     expect(limpio(linea('Efectivo contado')!.querySelector('strong'))).toContain('6.000');
     expect(limpio(linea('Diferencia')!.querySelector('strong'))).toBe('Sin diferencia');
+  });
+
+  describe('cobranzas de cuenta corriente (CC-053, CJ-R-013)', () => {
+    /** El ejemplo del spec: inicial 5.000; ventas en efectivo 1.000; cobranza 700 en efectivo y 300 por transferencia. */
+    const conCobranzas = (cambios: Partial<DetalleCaja> = {}) =>
+      detalle({
+        ventas: { EFECTIVO: 1000, DEBITO: 0, CREDITO: 0, TRANSFERENCIA: 0, CUENTA_CORRIENTE: 0 },
+        totalVentas: 1000,
+        cobranzas: { EFECTIVO: 700, DEBITO: 0, CREDITO: 0, TRANSFERENCIA: 300, CUENTA_CORRIENTE: 0 },
+        totalCobranzas: 1000,
+        efectivoEsperado: 6700,
+        ...cambios,
+      });
+
+    it('«Cobranzas en efectivo» muestra lo cobrado y dice que suma al efectivo esperado', async () => {
+      await crear(conCobranzas());
+
+      const fila = linea('Cobranzas en efectivo')!;
+      expect(limpio(fila.querySelector('strong'))).toContain('700');
+      expect(limpio(fila)).toContain('suma al efectivo esperado');
+      expect(fila.classList.contains('informativo')).toBe(false);
+    });
+
+    it('«Cobranzas por transferencia» es informativa: no entra en el efectivo esperado', async () => {
+      await crear(conCobranzas());
+
+      const fila = linea('Cobranzas por transferencia')!;
+      expect(limpio(fila.querySelector('strong'))).toContain('300');
+      expect(fila.classList.contains('informativo')).toBe(true);
+      expect(limpio(fila)).toContain('no entra en el efectivo esperado');
+    });
+
+    it('las filas van después del total de ventas y antes de los ingresos', async () => {
+      await crear(conCobranzas());
+
+      const nombres = lineas().map((l) => limpio(l.querySelector('span')));
+      expect(nombres.slice(6, 10)).toEqual([
+        'Total de ventas',
+        'Cobranzas en efectivo',
+        'Cobranzas por transferencia',
+        'Ingresos',
+      ]);
+    });
+
+    it('el total de ventas no incluye las cobranzas y el efectivo esperado sale como lo mandó el servidor', async () => {
+      await crear(conCobranzas());
+
+      expect(limpio(linea('Total de ventas')!.querySelector('strong'))).toContain('1.000');
+      expect(limpio(linea('Total de ventas')!.querySelector('strong'))).not.toContain('2.000');
+      expect(limpio(linea('Efectivo esperado')!.querySelector('strong'))).toContain('6.700');
+    });
+
+    it('sin cobranzas las dos filas se muestran igual, en 0', async () => {
+      await crear(detalle());
+
+      expect(limpio(linea('Cobranzas en efectivo')!.querySelector('strong'))).toContain('0');
+      expect(limpio(linea('Cobranzas por transferencia')!.querySelector('strong'))).toContain('0');
+    });
+
+    it('cerrada: el contado y la diferencia salen contra el esperado con cobranzas (6.700 contra 6.700 = sin diferencia)', async () => {
+      await crear(conCobranzas({ estado: 'CERRADA', efectivoContado: 6700, diferencia: 0 }));
+
+      expect(limpio(linea('Efectivo contado')!.querySelector('strong'))).toContain('6.700');
+      expect(limpio(linea('Diferencia')!.querySelector('strong'))).toBe('Sin diferencia');
+    });
   });
 });

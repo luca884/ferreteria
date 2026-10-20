@@ -53,13 +53,16 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* Lo vendido a cuenta corriente suma al total de ventas pero no es plata en la caja: se marca como informativo. */
+/* Lo vendido o cobrado a cuenta corriente/transferencia que no es plata en la caja se marca como informativo. */
 .lineas .informativo {
-  flex-wrap: wrap;
   color: var(--texto-suave);
   font-style: italic;
 }
-.lineas .informativo .nota-informativa {
+.lineas .informativo,
+.lineas .con-nota {
+  flex-wrap: wrap;
+}
+.lineas .nota-informativa {
   flex-basis: 100%;
   font-style: normal;
   color: var(--texto-tenue);

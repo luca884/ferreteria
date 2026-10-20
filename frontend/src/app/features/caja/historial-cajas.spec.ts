@@ -38,6 +38,8 @@ describe('HistorialCajas (CU-10)', () => {
     cerradaPor: 'Beto',
     ventas: { EFECTIVO: 4000, DEBITO: 0, CREDITO: 0, TRANSFERENCIA: 0, CUENTA_CORRIENTE: 0 },
     totalVentas: 4000,
+    cobranzas: { EFECTIVO: 700, DEBITO: 0, CREDITO: 0, TRANSFERENCIA: 300, CUENTA_CORRIENTE: 0 },
+    totalCobranzas: 1000,
     ingresos: 0,
     gastos: 0,
     retiros: 0,
@@ -98,6 +100,19 @@ describe('HistorialCajas (CU-10)', () => {
     expect(resumen).toContain('Luz');
     expect(resumen).toContain('Abrió Ana');
     expect(resumen).toContain('Cerró Beto');
+  });
+
+  it('el detalle de una caja cerrada muestra sus cobranzas por medio (CC-053)', async () => {
+    await crear(true);
+
+    (el().querySelector('tbody tr') as HTMLElement).click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const resumen = normal(el().querySelector('app-resumen-caja')?.textContent);
+    expect(resumen).toContain('Cobranzas en efectivo $ 700,00');
+    expect(resumen).toContain('Cobranzas por transferencia $ 300,00');
   });
 
   it('el vendedor ve un aviso y no se pide el historial', async () => {

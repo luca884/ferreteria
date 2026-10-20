@@ -37,6 +37,8 @@ describe('Caja (CU-10)', () => {
     cerradaPor: null,
     ventas: { EFECTIVO: 1800, DEBITO: 1000, CREDITO: 800, TRANSFERENCIA: 1000, CUENTA_CORRIENTE: 0 },
     totalVentas: 4600,
+    cobranzas: { EFECTIVO: 0, DEBITO: 0, CREDITO: 0, TRANSFERENCIA: 0, CUENTA_CORRIENTE: 0 },
+    totalCobranzas: 0,
     ingresos: 200,
     gastos: 300,
     retiros: 1000,
@@ -187,6 +189,35 @@ describe('Caja (CU-10)', () => {
       expect(servicio.detalle).not.toHaveBeenCalled();
       expect(el().querySelector('app-resumen-caja')).toBeNull();
       expect(el().textContent).not.toContain('esperado');
+    });
+
+    it('el vendedor tampoco ve las cobranzas mientras la caja está abierta (CC-053)', async () => {
+      await crear(conCaja());
+
+      expect(el().textContent).not.toContain('Cobranzas');
+    });
+
+    it('al cerrar, el resumen del cierre incluye las cobranzas del día', async () => {
+      await crear(conCaja());
+      servicio.cerrar.mockReturnValue(
+        of(
+          detalle({
+            estado: 'CERRADA',
+            efectivoContado: 5700,
+            diferencia: 0,
+            cobranzas: { EFECTIVO: 700, DEBITO: 0, CREDITO: 0, TRANSFERENCIA: 300, CUENTA_CORRIENTE: 0 },
+            totalCobranzas: 1000,
+          }),
+        ),
+      );
+      await escribir('efectivo-contado', '5700');
+      await enviar('form.cierre');
+      boton('Cerrar la caja')!.click();
+      await refrescar();
+
+      const resumen = normal(el().querySelector('app-resumen-caja')?.textContent);
+      expect(resumen).toContain('Cobranzas en efectivo $ 700,00');
+      expect(resumen).toContain('Cobranzas por transferencia $ 300,00');
     });
 
     it('pide confirmación y recién después del cierre muestra el esperado y la diferencia', async () => {

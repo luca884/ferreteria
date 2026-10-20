@@ -1,5 +1,5 @@
 import { formatearMonto } from '../../core/formato/monto';
-import { MedioPago } from '../mostrador/venta.models';
+import { MEDIOS_PAGO, MedioPago } from '../mostrador/venta.models';
 
 /** Contrato de /api/cajas (CU-10), tipado contra CajaResponses del backend. Fechas: LocalDateTime ISO sin zona. */
 
@@ -56,6 +56,9 @@ export interface DetalleCaja {
   cerradaPor: string | null;
   ventas: Record<MedioPago, number>;
   totalVentas: number;
+  /** Lo cobrado de cuenta corriente por medio (CC-053): el efectivo suma al esperado, la transferencia es informativa. */
+  cobranzas: Record<MedioPago, number>;
+  totalCobranzas: number;
   ingresos: number;
   gastos: number;
   retiros: number;
@@ -64,6 +67,19 @@ export interface DetalleCaja {
   efectivoContado: number | null;
   diferencia: number | null;
   movimientos: MovimientoCaja[];
+}
+
+/** Lo que manda el servidor: las cobranzas pueden faltar en una respuesta de antes de la cobranza (cajas viejas = 0). */
+export type DetalleCajaRespuesta = Omit<DetalleCaja, 'cobranzas' | 'totalCobranzas'> &
+  Partial<Pick<DetalleCaja, 'cobranzas' | 'totalCobranzas'>>;
+
+/** El detalle con las cobranzas completas: un medio o un total que falta se lee como 0. */
+export function conCobranzas(respuesta: DetalleCajaRespuesta): DetalleCaja {
+  const cobranzas = Object.fromEntries(MEDIOS_PAGO.map((m) => [m, respuesta.cobranzas?.[m] ?? 0])) as Record<
+    MedioPago,
+    number
+  >;
+  return { ...respuesta, cobranzas, totalCobranzas: respuesta.totalCobranzas ?? 0 };
 }
 
 /** Una fila del historial de cajas cerradas. */

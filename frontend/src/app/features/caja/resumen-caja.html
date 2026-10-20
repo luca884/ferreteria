@@ -27,6 +27,14 @@
     <li class="subtotal">
       <span>Total de ventas</span>&ngsp;<strong>{{ detalle().totalVentas | monto }}</strong>
     </li>
+    <li class="con-nota">
+      <span>Cobranzas en efectivo</span>&ngsp;<strong>{{ detalle().cobranzas.EFECTIVO | monto }}</strong>
+      <small class="nota-informativa">suma al efectivo esperado</small>
+    </li>
+    <li class="informativo">
+      <span>Cobranzas por transferencia</span>&ngsp;<strong>{{ detalle().cobranzas.TRANSFERENCIA | monto }}</strong>
+      <small class="nota-informativa">no entra en el efectivo esperado</small>
+    </li>
     <li>
       <span>Ingresos</span>&ngsp;<strong>{{ detalle().ingresos | monto }}</strong>
     </li>

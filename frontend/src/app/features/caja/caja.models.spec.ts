@@ -1,6 +1,10 @@
 import {
+  CajaAbierta,
   CajaVigente,
+  DetalleCaja,
+  DetalleCajaRespuesta,
   avisoParaVender,
+  conCobranzas,
   diaDeCaja,
   fechaHoraLocal,
   textoDiferencia,
@@ -49,5 +53,83 @@ describe('caja.models', () => {
     expect(textoDiferencia(-50)).toMatch(/^Faltan \$\s50,00$/);
     expect(textoDiferencia(100)).toMatch(/^Sobran \$\s100,00$/);
     expect(textoDiferencia(0)).toBe('Sin diferencia');
+  });
+
+  describe('cobranzas del detalle (CC-053)', () => {
+    const sinCobranzas: DetalleCajaRespuesta = {
+      id: 4,
+      estado: 'CERRADA',
+      fechaApertura: '2026-10-16T08:00:00',
+      abiertaPor: 'Ana',
+      efectivoInicial: 5000,
+      efectivoCierreAnterior: null,
+      diferenciaApertura: null,
+      fechaCierre: '2026-10-16T20:00:00',
+      cerradaPor: 'Ana',
+      ventas: { EFECTIVO: 1000, DEBITO: 0, CREDITO: 0, TRANSFERENCIA: 0, CUENTA_CORRIENTE: 0 },
+      totalVentas: 1000,
+      ingresos: 0,
+      gastos: 0,
+      retiros: 0,
+      efectivoEsperado: 6700,
+      efectivoContado: 6700,
+      diferencia: 0,
+      movimientos: [],
+    };
+
+    it('conserva las cobranzas por medio y el total que manda el servidor', () => {
+      const detalle: DetalleCaja = conCobranzas({
+        ...sinCobranzas,
+        cobranzas: { EFECTIVO: 700, DEBITO: 0, CREDITO: 0, TRANSFERENCIA: 300, CUENTA_CORRIENTE: 0 },
+        totalCobranzas: 1000,
+      });
+
+      expect(detalle.cobranzas).toEqual({ EFECTIVO: 700, DEBITO: 0, CREDITO: 0, TRANSFERENCIA: 300, CUENTA_CORRIENTE: 0 });
+      expect(detalle.totalCobranzas).toBe(1000);
+    });
+
+    it('una respuesta sin el campo (caja vieja) se lee con 0 cobrado en cada medio', () => {
+      const detalle = conCobranzas(sinCobranzas);
+
+      expect(detalle.cobranzas).toEqual({ EFECTIVO: 0, DEBITO: 0, CREDITO: 0, TRANSFERENCIA: 0, CUENTA_CORRIENTE: 0 });
+      expect(detalle.totalCobranzas).toBe(0);
+    });
+
+    it('un medio que falta en el mapa se completa con 0 y lo demás se conserva', () => {
+      const detalle = conCobranzas({ ...sinCobranzas, cobranzas: { EFECTIVO: 250 } as DetalleCaja['cobranzas'] });
+
+      expect(detalle.cobranzas.EFECTIVO).toBe(250);
+      expect(detalle.cobranzas.TRANSFERENCIA).toBe(0);
+    });
+
+    it('no toca el resto del detalle', () => {
+      const detalle = conCobranzas(sinCobranzas);
+
+      expect(detalle.efectivoEsperado).toBe(6700);
+      expect(detalle.ventas).toEqual(sinCobranzas.ventas);
+      expect(detalle.totalVentas).toBe(1000);
+    });
+
+    it('CajaAbierta y CajaVigente no llevan cifras de cobranzas (cierre ciego)', () => {
+      const abierta: CajaAbierta = {
+        id: 4,
+        estado: 'ABIERTA',
+        fechaApertura: '2026-10-16T08:00:00',
+        abiertaPor: 'Ana',
+        efectivoInicial: 1000,
+        // @ts-expect-error la caja abierta que ve cualquier rol no tiene cobranzas ni totales
+        cobranzas: { EFECTIVO: 1 },
+      };
+      const vigente: CajaVigente = {
+        estado: 'SIN_CAJA',
+        caja: null,
+        efectivoPropuesto: 0,
+        // @ts-expect-error la caja vigente tampoco
+        totalCobranzas: 1,
+      };
+
+      expect(Object.keys(abierta)).not.toContain('totalCobranzas');
+      expect(Object.keys(vigente)).not.toContain('cobranzas');
+    });
   });
 });
