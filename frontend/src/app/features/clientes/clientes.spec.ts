@@ -765,15 +765,35 @@ describe('Clientes', () => {
         expect(texto(`#${id}`)).toBe(RAZON);
       });
 
-      it('la razón va pegada al botón, dentro de la barra de acciones y no suelta arriba del texto de ayuda', async () => {
+      it('la razón NO va dentro de la barra de acciones (no le quita ancho a los botones) sino en una línea fija justo debajo', async () => {
         await crear([deudor]);
 
         await elegir(0);
 
+        const barra = el().querySelector('app-barra-acciones')!;
         const razon = el().querySelector('#motivo-desactivar')!;
-        expect(razon.closest('app-barra-acciones')).not.toBeNull();
-        expect(desactivar().nextElementSibling).toBe(razon);
-        expect(razon.parentElement).toBe(desactivar().parentElement);
+        expect(barra.contains(razon)).toBe(false);
+        expect(razon.parentElement!.classList.contains('motivo-linea')).toBe(true);
+        expect(barra.nextElementSibling).toBe(razon.parentElement);
+        expect(razon.textContent!.trim()).toBe(RAZON);
+        expect(razon.hasAttribute('hidden')).toBe(false);
+      });
+
+      it('la línea de la razón existe siempre (reserva su altura) y está vacía si no hay razón: elegir un deudor no mueve la grilla', async () => {
+        await crear([deudor, alDia]);
+
+        const linea = () => el().querySelector('.motivo-linea')!;
+        expect(linea()).not.toBeNull();
+        expect(linea().textContent!.trim()).toBe('');
+        const antes = linea();
+
+        await elegir(0);
+        expect(linea()).toBe(antes);
+        expect(linea().textContent!.trim()).toBe(RAZON);
+
+        await elegir(1);
+        expect(linea()).toBe(antes);
+        expect(linea().textContent!.trim()).toBe('');
       });
 
       it('con saldo a favor también', async () => {

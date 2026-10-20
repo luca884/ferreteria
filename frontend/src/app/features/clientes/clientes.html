@@ -23,14 +23,20 @@
     >
       {{ filas.elegido()?.activo === false ? 'Reactivar' : 'Desactivar' }}
     </button>
-    @if (motivoNoDesactivar(); as motivo) {
-      <span id="motivo-desactivar" class="motivo-barra">{{ motivo }}</span>
-    }
     <button type="button" class="accion-barra cuenta" [disabled]="!filas.elegido()" (click)="verCuenta()">
       Cuenta corriente
     </button>
   }
 </app-barra-acciones>
+
+@if (auth.esDueno()) {
+  <!-- Fuera de la barra para no robarle ancho a los botones; la línea siempre ocupa su alto así la grilla no salta. -->
+  <p class="motivo-linea">
+    @if (motivoNoDesactivar(); as motivo) {
+      <span id="motivo-desactivar">{{ motivo }}</span>
+    }
+  </p>
+}
 
 <p class="ayuda">
   Buscá por razón social o por documento. Un cliente desactivado no se puede elegir en el mostrador, pero sus ventas y

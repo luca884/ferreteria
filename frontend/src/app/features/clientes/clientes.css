@@ -58,9 +58,11 @@ tr.inactivo td {
 td.debe {
   font-weight: 600;
 }
-/* La razón queda al lado del botón (en la barra), no suelta debajo de ella. */
-.motivo-barra {
-  max-width: 18rem;
+/* La razón de no poder desactivar va en una línea bajo la barra (no dentro: a 1024px empujaba «Cuenta corriente» a otra fila).
+   Reserva su alto con o sin razón, así elegir un deudor no mueve la grilla. */
+.motivo-linea {
+  min-height: calc(1.3 * var(--texto-xs));
+  margin: calc(-1 * var(--e-2)) 0 var(--e-2);
   color: var(--texto-suave);
   font-size: var(--texto-xs);
   line-height: 1.3;
