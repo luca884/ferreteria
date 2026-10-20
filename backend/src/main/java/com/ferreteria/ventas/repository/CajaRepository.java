@@ -42,9 +42,9 @@ public interface CajaRepository extends TenantScopedRepository<Caja, Long> {
     Optional<Caja> porIdExclusiva(@Param("id") Long id, @Param("fid") Long ferreteriaId);
 
     /**
-     * La caja ABIERTA con lock exclusivo, tomada por el MISMO camino de índice que {@link #abiertaCompartida} y
-     * {@link #porIdCompartida}-de-venta: primero el registro de {@code uk_caja_abierta (ferreteria_id, abierta)} y recién después
-     * el de la clave primaria. Es lo que evita el deadlock entre el cierre y las operaciones que toman la caja en S
+     * La caja ABIERTA con lock exclusivo, tomada por el MISMO camino de índice que {@link #abiertaCompartida} (la que toman vender,
+     * cobrar y anular): primero el registro de {@code uk_caja_abierta (ferreteria_id, abierta)} y recién después el de la clave
+     * primaria. {@link #porIdCompartida} (la del movimiento de caja) entra solo por la PK y no forma ciclo con el cierre. Es lo que evita el deadlock entre el cierre y las operaciones que toman la caja en S
      * (vender, cobrar, anular): el cierre que entraba por la PK tenía la fila en X y, al poner {@code abierta = NULL}, pedía el
      * registro de {@code uk_caja_abierta} que un lector compartido ya tenía en S mientras esperaba la PK (ciclo). {@code force
      * index} fija el camino (con {@code id = :id} el optimizador elegiría la PK). Vacía si la caja no está abierta: el que llama

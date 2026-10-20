@@ -39,6 +39,12 @@ import org.springframework.beans.factory.annotation.Autowired;
  * anulados (200 ANULADO), sobre-imputaciones, desactivaciones y reactivaciones). Tras CADA paso: I1, I2a..I2e e I-inactivo
  * ({@code assertInvariante}) y un MODELO independiente (saldo, pendientes por comprobante, «a cuenta») que tiene que coincidir con
  * el servicio y con la base; además Σ pendiente − aCuenta = saldo en lo que devuelve el servicio de pendientes. CUIT 30-8504NNNN-1.
+ *
+ * <p>W2 (CC-093): como el saldo en centavos casi nunca cae solo a 0, «desactivar» primero LLEVA el saldo a 0 exacto (cobrando el
+ * saldo imputado FIFO, vendiendo el monto a favor, o anulando los adelantos del cliente sin cuenta) y recién entonces desactiva;
+ * con el cliente inactivo se anula (422 «desactivado») y se reactiva. Contadores con aserción &gt; 0: saldo en 0 exacto,
+ * desactivaciones, rechazos por saldo, reactivaciones, anulaciones a un desactivado y pasos evaluados con un cliente inactivo
+ * (I-inactivo).
  */
 class CuentaCorrientePropiedadAnulacionIntegrationTest extends CuentaCorrienteTestBase {
 
@@ -123,6 +129,40 @@ class CuentaCorrientePropiedadAnulacionIntegrationTest extends CuentaCorrienteTe
                 f.id(), codigo);
     }
 
+    /** Cobra el saldo EXACTO de un cliente con deuda neta, imputando a los comprobantes pendientes más viejos primero (FIFO). */
+    private void cobrarElSaldo(Ferreteria f, long caja, long cliente, Modelo m, String donde) {
+        Map<Long, BigDecimal> imputado = new TreeMap<>();
+        BigDecimal resta = m.saldo;
+        for (Map.Entry<Long, BigDecimal> abierto : m.abiertos.entrySet()) {
+            if (resta.signum() == 0) {
+                break;
+            }
+            BigDecimal importe = abierto.getValue().min(resta);
+            imputado.put(abierto.getKey(), importe);
+            resta = resta.subtract(importe);
+        }
+        assertThat(resta).as("Σ pendientes = saldo + a cuenta ≥ saldo: " + donde).isZero();
+        BigDecimal total = m.saldo;
+        CobranzaPedido pedido = new CobranzaPedido(UUID.randomUUID().toString(), cliente, MedioPago.EFECTIVO, total,
+                imputado.entrySet().stream().map(e -> new Imputar(e.getKey(), e.getValue())).toList());
+        CobroRegistrado cobro = cobranzaService.cobrar(pedido, f.usuarioId());
+        m.saldo = m.saldo.subtract(total);
+        imputado.forEach((comprobante, importe) -> m.sumarPendiente(comprobante, importe.negate()));
+        m.recibos.add(new ReciboModelo(cobro.recibo().getId(), pedido, total, imputado, caja));
+    }
+
+    /** Vende a cuenta, por VentaService, el monto exacto que compensa un saldo a favor (artículo de $ 0,01). */
+    private void venderPorElSaldo(Ferreteria f, long cliente, Modelo m, long articulo, long forma) {
+        BigDecimal total = m.saldo.negate();
+        int unidades = total.movePointRight(2).intValueExact();
+        ConfirmarVenta venta = new ConfirmarVenta(UUID.randomUUID().toString(),
+                List.of(new Renglon(articulo, new BigDecimal(unidades), new BigDecimal("0.01"))), total, forma, BigDecimal.ZERO,
+                List.of(), null, null, true, cliente, false);
+        long comprobante = ventaService.cobrar(venta, f.usuarioId(), false).comprobante().getId();
+        m.saldo = m.saldo.add(total);
+        m.sumarPendiente(comprobante, total);
+    }
+
     @Test
     @DisplayName("propiedad: 200 operaciones aleatorias (semilla fija e impresa) con ≥ 20 anulaciones —con y sin imputaciones, adelantos y cobros de caja cerrada— mezcladas con ventas, cobranzas, repetidas, 409 y desactivaciones: I1, I2a..I2e, I-inactivo y el modelo valen tras cada paso")
     void propiedadDeLaAnulacion() throws Exception {
@@ -141,6 +181,12 @@ class CuentaCorrientePropiedadAnulacionIntegrationTest extends CuentaCorrienteTe
         int cajasCerradasAnuladas = 0;
         int conImputaciones = 0;
         int adelantosAnulados = 0;
+        int desactivaciones = 0;
+        int saldoCeroExacto = 0;
+        int rechazosPorSaldo = 0;
+        int reactivaciones = 0;
+        int anulacionesADesactivado = 0;
+        int pasosConInactivo = 0;
 
         for (int paso = 0; paso < PASOS; paso++) {
             int c = azar.nextInt(3);
@@ -255,14 +301,34 @@ class CuentaCorrientePropiedadAnulacionIntegrationTest extends CuentaCorrienteTe
                         assertThat(repetida.recibo().getId()).as(donde).isEqualTo(r.id);
                         assertThat(repetida.recibo().isAnulado()).as(donde).isEqualTo(r.anulado);
                     }
-                    case 12 -> { // desactivar: con saldo 0 entra; si no, 422 por saldo ≠ 0
-                        if (m.saldo.signum() == 0) {
-                            clienteService.cambiarActivo(clientes3[c], false);
-                            m.activo = false;
-                        } else {
+                    case 12 -> { // desactivar: con saldo ≠ 0 se rechaza (422) o se lleva el saldo a 0 EXACTO y entra
+                        if (m.saldo.signum() != 0 && azar.nextInt(3) == 0) {
                             assertThatThrownBy(() -> clienteService.cambiarActivo(clientes3[c], false)).as(donde)
                                     .isInstanceOf(ReglaDeNegocioException.class).hasMessage(CON_SALDO);
+                            rechazosPorSaldo++;
+                            break;
                         }
+                        if (m.saldo.signum() > 0) { // deuda neta: se cobra el saldo exacto imputando a los pendientes (FIFO)
+                            cobrarElSaldo(f, caja[0], clientes3[c], m, donde);
+                        } else if (m.saldo.signum() < 0 && c != 2) { // a favor: se vende por el monto exacto
+                            venderPorElSaldo(f, clientes3[c], m, articulo, forma);
+                        } else if (m.saldo.signum() < 0) { // el 3.er cliente (solo adelantos): se anulan todos sus recibos
+                            for (ReciboModelo r : m.recibos.stream().filter(x -> !x.anulado).toList()) {
+                                anulacionService.anular(r.id, "Se anula para dejar el saldo en cero " + paso, f.usuarioId());
+                                r.anulado = true;
+                                m.saldo = m.saldo.add(r.total);
+                                adelantosAnulados++;
+                                if (r.cajaDelCobro != caja[0]) {
+                                    cajasCerradasAnuladas++;
+                                }
+                            }
+                        }
+                        assertThat(m.saldo).as("el modelo llegó a 0 exacto: " + donde).isEqualByComparingTo("0");
+                        assertThat(saldo(clientes3[c])).as("la base llegó a 0 exacto: " + donde).isEqualByComparingTo("0");
+                        saldoCeroExacto++;
+                        clienteService.cambiarActivo(clientes3[c], false);
+                        m.activo = false;
+                        desactivaciones++;
                     }
                     case 13 -> { // sobre-imputación: un centavo o más por encima del pendiente → 409 con la deuda actual
                         if (m.abiertos.isEmpty()) {
@@ -281,15 +347,18 @@ class CuentaCorrientePropiedadAnulacionIntegrationTest extends CuentaCorrienteTe
                     case 14 -> { // reactivar
                         clienteService.cambiarActivo(clientes3[c], true);
                         m.activo = true;
+                        reactivaciones++;
                     }
                     default -> { // 15: anular con el cliente desactivado → 422 sin efectos (o cerrar y abrir la caja si no hay a quién)
                         if (!m.recibos.isEmpty() && m.recibos.stream().anyMatch(r -> !r.anulado)) {
                             ReciboModelo r = m.recibos.stream().filter(x -> !x.anulado).findFirst().orElseThrow();
                             assertThatThrownBy(() -> anulacionService.anular(r.id, "Con el cliente desactivado", f.usuarioId()))
                                     .as(donde).isInstanceOf(ReglaDeNegocioException.class).hasMessage(DESACTIVADO);
+                            anulacionesADesactivado++;
                         } else {
                             clienteService.cambiarActivo(clientes3[c], true);
                             m.activo = true;
+                            reactivaciones++;
                         }
                     }
                 }
@@ -298,6 +367,9 @@ class CuentaCorrientePropiedadAnulacionIntegrationTest extends CuentaCorrienteTe
                     caja[0] = cajaAbiertaHoy(f.id());
                 }
                 for (int i = 0; i < 3; i++) {
+                    if (!modelo[i].activo) {
+                        pasosConInactivo++; // I-inactivo se evalúa con el cliente desactivado (saldo 0, sin deuda)
+                    }
                     assertInvariante(clientes3[i]);
                     assertThat(saldo(clientes3[i])).as("saldo del modelo del cliente %d tras %s", i, donde)
                             .isEqualByComparingTo(modelo[i].saldo);
@@ -334,7 +406,16 @@ class CuentaCorrientePropiedadAnulacionIntegrationTest extends CuentaCorrienteTe
         assertThat(conImputaciones).as("anulaciones de recibos con imputaciones (semilla %d)", semilla).isGreaterThan(0);
         assertThat(adelantosAnulados).as("anulaciones de adelantos (semilla %d)", semilla).isGreaterThan(0);
         assertThat(cajasCerradasAnuladas).as("anulaciones de cobros de una caja cerrada (semilla %d)", semilla).isGreaterThan(0);
-        for (int accion : new int[] {0, 3, 4, 5, 6, 9, 10, 11, 12, 13}) {
+        System.out.println("propiedadDeLaAnulacion: desactivaciones=" + desactivaciones + " (con el saldo llevado a 0 exacto "
+                + saldoCeroExacto + "), rechazos por saldo=" + rechazosPorSaldo + ", reactivaciones=" + reactivaciones
+                + ", anulaciones a un desactivado=" + anulacionesADesactivado + ", pasos con un cliente inactivo=" + pasosConInactivo);
+        assertThat(saldoCeroExacto).as("veces que se llevó el saldo a 0 exacto antes de desactivar (semilla %d)", semilla).isGreaterThan(0);
+        assertThat(desactivaciones).as("desactivaciones (semilla %d)", semilla).isGreaterThan(0);
+        assertThat(rechazosPorSaldo).as("desactivaciones rechazadas por saldo ≠ 0 (semilla %d)", semilla).isGreaterThan(0);
+        assertThat(reactivaciones).as("reactivaciones (acción 14, semilla %d)", semilla).isGreaterThan(0);
+        assertThat(anulacionesADesactivado).as("anulaciones a un desactivado → 422 (acción 15, semilla %d)", semilla).isGreaterThan(0);
+        assertThat(pasosConInactivo).as("pasos evaluados con un cliente inactivo (I-inactivo, semilla %d)", semilla).isGreaterThan(0);
+        for (int accion : new int[] {0, 3, 4, 5, 6, 9, 10, 11, 12, 13, 14, 15}) {
             assertThat(hechos[accion]).as("la secuencia ejercitó la acción %d (semilla %d)", accion, semilla).isGreaterThan(0);
         }
     }

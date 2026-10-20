@@ -771,7 +771,9 @@ class CobranzaConcurrenciaIntegrationTest extends CuentaCorrienteTestBase {
         VentaSuelta a = ventaEnLibro(e.f(), cliente, "300");
         BarreraDeLocks barrera = new BarreraDeLocks(jdbcRoot());
         long deadlocksAntes = barrera.deadlocksAntes();
-        // el mismo SQL que el cierre: toma la caja (FOR UPDATE) y la marca cerrada, sin confirmar
+        // emula a un cierre que toma la caja por la PK (FOR UPDATE) y la marca cerrada, sin confirmar. NO es el SQL del cierre real
+        // (que entra por uk_caja_abierta, igual que los lectores compartidos): sirve para ordenar la carrera; el cierre real contra
+        // vender/cobrar/anular se prueba en CierreDeCajaContraLectoresIntegrationTest
         BarreraDeLocks.HolderJdbc holder = BarreraDeLocks.holderJdbc(
                 "select id from caja where id = " + e.caja() + " for update",
                 "update caja set abierta = null, fecha_cierre = now(6), usuario_cierre_id = " + e.f().usuarioId()

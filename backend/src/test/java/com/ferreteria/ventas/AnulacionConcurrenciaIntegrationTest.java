@@ -467,6 +467,46 @@ class AnulacionConcurrenciaIntegrationTest extends CuentaCorrienteTestBase {
         barrera.assertSinDeadlocks(deadlocksAntes);
     }
 
+    @Test
+    @DisplayName("CC-085 (esc. 2): A (anulación del cliente 1) retenida con la caja (S) y c1 (X) y B (COBRANZA del cliente 2) → B termina SOLA con 201, sin ninguna transacción en LOCK WAIT (live e INNODB_TRX): ninguna toma un lock global de la ferretería; el numerador de recibos lo usa solo la cobranza")
+    void cc085AnulacionRetenidaNoFrenaUnaCobranzaDeOtroCliente() throws Exception {
+        Escenario e = escenario();
+        long c1 = cliente(e.f(), null);
+        long c2 = cliente(e.f(), null);
+        long r1 = cobroHecho(e, c1, "100");
+        BarreraDeLocks barrera = new BarreraDeLocks(jdbcRoot());
+        long deadlocksAntes = barrera.deadlocksAntes();
+        Hito llego = new Hito();
+        Hito suelta = new Hito();
+        pausar(Punto.ASENTAR_ANULACION, llego, suelta, new AtomicReference<>());
+        ExecutorService pool = Executors.newFixedThreadPool(2);
+        try {
+            Future<Salida> a = lanzarPausable(pool, e.f(), anular(e, r1));
+            llego.esperar(); // A tiene la caja (S) y a c1 (X) y no confirmó
+
+            Salida b = terminaSola(lanzar(pool, e.f(), cobrar(e, pedido(c2, "50"))),
+                    "la cobranza del cliente 2 se bloqueó con la anulación del cliente 1 (comparten algún lock)");
+
+            assertThat(b.cobro().repetida()).isFalse();
+            assertThat(b.cobro().recibo().getNumero()).as("la cobranza numeró el recibo 2 (el 1 es el cobro hecho)").isEqualTo(2L);
+            assertThat(barrera.bloqueadosAhora()).as("transacciones en LOCK WAIT (live, data_lock_waits)").isZero();
+            assertThat(jdbcRoot().queryForObject("select count(*) from information_schema.INNODB_TRX where trx_state = 'LOCK WAIT'",
+                    Long.class)).as("transacciones en LOCK WAIT (INNODB_TRX)").isZero();
+            assertThat(estado(r1)).as("A sigue sin confirmar").isEqualTo("EMITIDO");
+            suelta.avisar();
+            a.get(60, TimeUnit.SECONDS).cobro();
+        } finally {
+            suelta.avisar();
+            pool.shutdownNow();
+        }
+        assertThat(saldo(c1)).as("la anulación de c1 confirmó: −100 + 100").isZero();
+        assertThat(saldo(c2)).as("el adelanto de c2 confirmó").isEqualByComparingTo("-50");
+        assertThat(ultimoNumero(e.f().id())).isEqualTo(2L);
+        assertInvariante(c1);
+        assertInvariante(c2);
+        barrera.assertSinDeadlocks(deadlocksAntes);
+    }
+
     // ===============================================================================================================
     // CCT3B1-402. AN-4: anulación × cobranza
     // ===============================================================================================================
@@ -655,7 +695,9 @@ class AnulacionConcurrenciaIntegrationTest extends CuentaCorrienteTestBase {
         long recibo = cobroHecho(e, cliente, "1000");
         BarreraDeLocks barrera = new BarreraDeLocks(jdbcRoot());
         long deadlocksAntes = barrera.deadlocksAntes();
-        // el mismo SQL que el cierre: toma la caja (FOR UPDATE) y la marca cerrada, sin confirmar
+        // emula a un cierre que toma la caja por la PK (FOR UPDATE) y la marca cerrada, sin confirmar. NO es el SQL del cierre real
+        // (que entra por uk_caja_abierta, igual que los lectores compartidos): sirve para ordenar la carrera; el cierre real contra
+        // vender/cobrar/anular se prueba en CierreDeCajaContraLectoresIntegrationTest
         BarreraDeLocks.HolderJdbc holder = BarreraDeLocks.holderJdbc("select id from caja where id = " + e.caja() + " for update",
                 "update caja set abierta = null, fecha_cierre = now(6), usuario_cierre_id = " + e.f().usuarioId()
                         + ", efectivo_contado = 6000, efectivo_esperado = 6000, diferencia = 0 where id = " + e.caja());
