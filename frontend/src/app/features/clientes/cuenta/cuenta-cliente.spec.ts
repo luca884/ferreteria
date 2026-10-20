@@ -643,6 +643,36 @@ describe('CuentaCliente (CC-028, CC-033, CC-034, CC-038, CC-043)', () => {
         expect(cobranza.cobrar).toHaveBeenCalledTimes(1);
       });
 
+      it('«Cancelar y empezar de nuevo» deja el foco en el total (no cae al body) y Esc cierra el diálogo sin tocar Tab', async () => {
+        await crear({ cobrar: fallando(errorHttp(0, null)) });
+        await cobrar('600');
+        salida()!.focus();
+
+        salida()!.click();
+        await refrescar();
+
+        expect(salida()).toBeUndefined();
+        expect(document.activeElement).toBe(total());
+        (document.activeElement as HTMLElement).dispatchEvent(
+          new KeyboardEvent('keydown', { key: 'Escape', cancelable: true, bubbles: true }),
+        );
+        await refrescar();
+        expect(dialogo()).toBeNull();
+      });
+
+      it('un rechazo definitivo en el reintento también deja el foco en el total si el foco estaba en «Cancelar y empezar de nuevo»', async () => {
+        await crear({
+          cobrar: fallando(errorHttp(0, null), rechazo(422, 'CAJA_CERRADA', 'Abrí la caja para cobrar.')),
+        });
+        await cobrar('600');
+        salida()!.focus();
+
+        await confirmar();
+
+        expect(salida()).toBeUndefined();
+        expect(document.activeElement).toBe(total());
+      });
+
       it('después de empezar de nuevo, el contenido editado se manda con la clave nueva', async () => {
         await crear({ cobrar: fallando(errorHttp(0, null)) });
         await cobrar('600');

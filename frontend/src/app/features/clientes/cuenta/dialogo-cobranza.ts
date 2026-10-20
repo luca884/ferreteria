@@ -166,6 +166,15 @@ export class DialogoCobranza {
       untracked(() => this.editadas.set(null));
     });
     afterNextRender(() => this.campoTotal()?.nativeElement.focus());
+    // Al soltar el congelado (reiniciar, o un rechazo definitivo del reintento) «Cancelar y empezar de nuevo» se destruye:
+    // si tenía el foco, caería al body y Esc y Enter (que escucha el diálogo) dejarían de llegarle. Se lo lleva al total.
+    effect(() => {
+      if (!this.congelado()) this.enfocarTotalTrasPintar();
+    });
+  }
+
+  private enfocarTotalTrasPintar(): void {
+    afterNextRender(() => this.campoTotal()?.nativeElement.focus(), { injector: this.injector });
   }
 
   protected escribirTotal(texto: string): void {

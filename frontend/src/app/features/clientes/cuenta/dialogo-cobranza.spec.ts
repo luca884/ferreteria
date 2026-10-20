@@ -810,6 +810,31 @@ describe('DialogoCobranza (CC-032, CC-033, CC-034, CC-043, CC-051)', () => {
       expect(fila(32).value).toBe('200,00');
     });
 
+    it('al liberar, el foco va al total aunque el botón enfocado («Cancelar y empezar de nuevo») ya no exista, y Esc cierra', async () => {
+      await congelar();
+      boton('Cancelar y empezar de nuevo').focus();
+
+      fixture.componentRef.setInput('congelado', false);
+      await estabilizar();
+
+      expect(boton('Cancelar y empezar de nuevo')).toBeUndefined();
+      expect(document.activeElement).toBe(total());
+      tecla('Escape');
+      expect(canceladas).toBe(1);
+    });
+
+    it('al congelar, el foco se queda donde estaba (solo se mueve al liberar)', async () => {
+      await abrir();
+      await escribirTotal('600');
+      const cobrar = boton('Cobrar');
+      cobrar.focus();
+
+      fixture.componentRef.setInput('congelado', true);
+      await estabilizar();
+
+      expect(document.activeElement).toBe(cobrar);
+    });
+
     it('al liberar, el medio se puede cambiar de nuevo', async () => {
       await congelar();
       fixture.componentRef.setInput('congelado', false);
