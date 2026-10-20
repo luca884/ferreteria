@@ -23,6 +23,9 @@
     >
       {{ filas.elegido()?.activo === false ? 'Reactivar' : 'Desactivar' }}
     </button>
+    <button type="button" class="accion-barra cuenta" [disabled]="!filas.elegido()" (click)="verCuenta()">
+      Cuenta corriente
+    </button>
   }
 </app-barra-acciones>
 

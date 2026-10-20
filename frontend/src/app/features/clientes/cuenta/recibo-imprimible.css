@@ -1,0 +1,88 @@
+.recibo {
+  width: min(480px, 100%);
+}
+
+.recibo-imprimible {
+  display: flex;
+  flex-direction: column;
+  gap: var(--e-2);
+}
+.ferreteria {
+  font-size: var(--texto-md);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.recibo-imprimible h2 {
+  font-size: var(--texto-lg);
+}
+.fecha {
+  color: var(--texto-suave);
+}
+
+.datos {
+  display: grid;
+  gap: var(--e-1);
+  margin: 0;
+}
+.datos div {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--e-3);
+}
+.datos dt {
+  color: var(--texto-suave);
+}
+.datos dd {
+  margin: 0;
+  font-weight: 600;
+  text-align: right;
+}
+
+.imputaciones {
+  width: 100%;
+  border-collapse: collapse;
+}
+.imputaciones th,
+.imputaciones td {
+  padding: var(--e-1) 0;
+  border-bottom: 1px solid var(--borde);
+  text-align: left;
+}
+.imputaciones thead th {
+  color: var(--texto-suave);
+  font-size: var(--texto-sm);
+}
+.imputaciones tbody th {
+  font-weight: 500;
+}
+.imputaciones .num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.a-cuenta,
+.total {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--e-3);
+  font-variant-numeric: tabular-nums;
+}
+.a-cuenta {
+  color: var(--texto-suave);
+  font-weight: 600;
+}
+.total {
+  padding-top: var(--e-1);
+  border-top: 2px solid var(--texto);
+  font-size: var(--texto-lg);
+  font-weight: 700;
+}
+
+.leyenda {
+  margin-top: var(--e-2);
+  color: var(--texto-suave);
+  font-size: var(--texto-sm);
+  font-style: italic;
+  text-align: center;
+}

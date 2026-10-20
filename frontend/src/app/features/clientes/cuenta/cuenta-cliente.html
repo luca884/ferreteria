@@ -15,7 +15,15 @@
 </app-barra-acciones>
 
 @if (textoCobrado(); as texto) {
-  <p class="alerta exito" role="status">{{ texto }}</p>
+  <div class="alerta exito con-accion" role="status">
+    <span>{{ texto }}</span>
+    <button type="button" class="secundario chico reimprimir" [disabled]="trayendoRecibo()" (click)="reimprimir()">
+      Reimprimir recibo
+    </button>
+  </div>
+}
+@if (errorRecibo(); as texto) {
+  <p class="error" role="alert">{{ texto }}</p>
 }
 
 @switch (estado()) {
@@ -103,4 +111,8 @@
     (confirmar)="cobrar($event)"
     (cancelar)="cerrarCobro()"
   />
+}
+
+@if (reciboAbierto(); as recibo) {
+  <app-recibo-imprimible [recibo]="recibo" (cerrar)="cerrarRecibo()" />
 }

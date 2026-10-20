@@ -8,9 +8,10 @@ import { BarraAcciones } from '../../../shared/barra-acciones';
 import { fechaHoraLocal } from '../../caja/caja.models';
 import { Cliente, documentoLegible } from '../cliente.models';
 import { ClientesService } from '../clientes.service';
-import { PendientesCuenta, ReciboCobrado } from './cobranza.models';
+import { PendientesCuenta, Recibo, ReciboCobrado } from './cobranza.models';
 import { CobranzaService, GENERAR_CLAVE_COBRO, esTransitorio, invalidaDe, rechazoDe } from './cobranza.service';
 import { DialogoCobranza, PedidoCobranza } from './dialogo-cobranza';
+import { ReciboImprimible } from './recibo-imprimible';
 
 type Estado = 'cargando' | 'listo' | 'error' | 'sinPermiso';
 
@@ -28,7 +29,7 @@ const MENSAJE_RED =
  */
 @Component({
   selector: 'app-cuenta-cliente',
-  imports: [RouterLink, BarraAcciones, MontoPipe, DialogoCobranza],
+  imports: [RouterLink, BarraAcciones, MontoPipe, DialogoCobranza, ReciboImprimible],
   templateUrl: './cuenta-cliente.html',
   styleUrl: './cuenta-cliente.css',
   host: { '(document:keydown)': 'alTeclear($event)' },
@@ -55,8 +56,12 @@ export class CuentaCliente implements OnInit {
   protected readonly cobrando = signal(false);
   protected readonly avisoDialogo = signal<string | null>(null);
   protected readonly errorDialogo = signal<string | null>(null);
-  /** El último cobro registrado (o repetido), para avisar y, en el recibo, imprimirlo. */
+  /** El último cobro registrado (o repetido): el aviso y el recibo que se puede reimprimir. */
   protected readonly cobrado = signal<ReciboCobrado | null>(null);
+  /** El recibo que se está viendo: el del cobro recién hecho o el que trajo «Reimprimir recibo». */
+  protected readonly reciboAbierto = signal<Recibo | null>(null);
+  protected readonly errorRecibo = signal<string | null>(null);
+  protected readonly trayendoRecibo = signal(false);
 
   private clienteId = 0;
   /** La clave del cobro en curso: nace al abrir el diálogo y cambia solo cuando cambia el contenido. */
@@ -137,9 +142,10 @@ export class CuentaCliente implements OnInit {
 
   /** Abre el cobro: también sin deuda (adelanto). Cada apertura es un cobro nuevo, con su propia clave. */
   protected abrirCobro(): void {
-    if (this.estado() !== 'listo' || this.dialogoAbierto()) return;
+    if (this.estado() !== 'listo' || this.dialogoAbierto() || this.reciboAbierto()) return;
     this.clave = this.generarClave();
     this.cobrado.set(null);
+    this.errorRecibo.set(null);
     this.avisoDialogo.set(null);
     this.errorDialogo.set(null);
     this.dialogoAbierto.set(true);
@@ -161,6 +167,8 @@ export class CuentaCliente implements OnInit {
         this.cobrando.set(false);
         this.dialogoAbierto.set(false);
         this.cobrado.set(cobro);
+        this.errorRecibo.set(null);
+        this.reciboAbierto.set(cobro.recibo);
         this.recargarPendientes((err) => this.fallarCarga(err));
       },
       error: (err: unknown) => {
@@ -168,6 +176,28 @@ export class CuentaCliente implements OnInit {
         this.fallarCobro(err);
       },
     });
+  }
+
+  /** Reimprimir: pide el recibo al servidor (GET), que dice lo mismo que el cobro que lo creó. */
+  protected reimprimir(): void {
+    const cobro = this.cobrado();
+    if (!cobro || this.trayendoRecibo()) return;
+    this.trayendoRecibo.set(true);
+    this.errorRecibo.set(null);
+    this.cobranza.recibo(cobro.recibo.id).subscribe({
+      next: (recibo) => {
+        this.trayendoRecibo.set(false);
+        this.reciboAbierto.set(recibo);
+      },
+      error: () => {
+        this.trayendoRecibo.set(false);
+        this.errorRecibo.set('No se pudo traer el recibo. Probá de nuevo.');
+      },
+    });
+  }
+
+  protected cerrarRecibo(): void {
+    this.reciboAbierto.set(null);
   }
 
   /**

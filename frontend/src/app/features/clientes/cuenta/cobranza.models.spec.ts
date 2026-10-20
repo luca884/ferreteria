@@ -1,4 +1,4 @@
-import { MEDIOS_COBRANZA, MEDIO_COBRANZA_LABELS, aCuentaCentavos, centavosATexto, sugerirFifo } from './cobranza.models';
+import { MEDIOS_COBRANZA, MEDIO_COBRANZA_LABELS, aCuentaCentavos, centavosATexto, fechaCompletaLocal, sugerirFifo } from './cobranza.models';
 
 /** Pendientes en orden FIFO tal como los manda GET /pendientes: solo el importe que falta cobrar importa acá. */
 const pendientes = (...importes: number[]) => importes.map((pendiente) => ({ pendiente }));
@@ -107,6 +107,13 @@ describe('cobranza.models', () => {
       expect(centavosATexto(5)).toBe('0,05');
       expect(centavosATexto(0)).toBe('0,00');
       expect(centavosATexto(123456789)).toBe('1234567,89');
+    });
+  });
+
+  describe('fechaCompletaLocal', () => {
+    it('«19/10/2026 10:30» de una fecha local del servidor, leída del texto (sin pasar por la zona del navegador)', () => {
+      expect(fechaCompletaLocal('2026-10-19T10:30:12.5')).toBe('19/10/2026 10:30');
+      expect(fechaCompletaLocal('2026-01-05T23:59:59')).toBe('05/01/2026 23:59');
     });
   });
 });

@@ -834,3 +834,23 @@ ul.error {
     transition: none !important;
   }
 }
+
+/* ---------- Impresión ---------- */
+
+/* Al imprimir un recibo solo sale `.recibo-imprimible` (el contenido del diálogo del recibo): no la pantalla, ni los botones. */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  .recibo-imprimible,
+  .recibo-imprimible * {
+    visibility: visible;
+  }
+  .recibo-imprimible {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    color: #000;
+  }
+}

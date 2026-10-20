@@ -10,6 +10,7 @@ import { ClientesService } from '../clientes.service';
 import { CobranzaRequest, PendientesCuenta, Recibo, ReciboCobrado } from './cobranza.models';
 import { CobranzaService, GENERAR_CLAVE_COBRO } from './cobranza.service';
 import { CuentaCliente } from './cuenta-cliente';
+import { ReciboImprimible } from './recibo-imprimible';
 import { registerLocaleData } from '@angular/common';
 import localeEsAr from '@angular/common/locales/es-AR';
 
@@ -325,7 +326,7 @@ describe('CuentaCliente (CC-028, CC-033, CC-034, CC-038, CC-043)', () => {
       });
       expect(claves[0]).toMatch(/^[0-9a-f-]{36}$/);
       expect(dialogo()).toBeNull();
-      expect(texto('.alerta.exito')).toBe('Cobro registrado: Recibo N.º 12 por $ 600,00.');
+      expect(texto('.alerta.exito span')).toBe('Cobro registrado: Recibo N.º 12 por $ 600,00.');
     });
 
     it('recarga los pendientes del servidor (nada de saldo cacheado entre cobros) y muestra lo nuevo', async () => {
@@ -355,7 +356,7 @@ describe('CuentaCliente (CC-028, CC-033, CC-034, CC-038, CC-043)', () => {
         total: 500,
         imputaciones: [],
       });
-      expect(texto('.alerta.exito')).toBe('Cobro registrado: Recibo N.º 12 por $ 500,00. Quedó a cuenta $ 500,00.');
+      expect(texto('.alerta.exito span')).toBe('Cobro registrado: Recibo N.º 12 por $ 500,00. Quedó a cuenta $ 500,00.');
     });
 
     it('un 200 (la misma clave ya estaba registrada) dice que ya estaba registrado, con el mismo recibo', async () => {
@@ -363,7 +364,7 @@ describe('CuentaCliente (CC-028, CC-033, CC-034, CC-038, CC-043)', () => {
 
       await cobrar('600');
 
-      expect(texto('.alerta.exito')).toBe('Este cobro ya estaba registrado: Recibo N.º 12 por $ 600,00.');
+      expect(texto('.alerta.exito span')).toBe('Este cobro ya estaba registrado: Recibo N.º 12 por $ 600,00.');
       expect(dialogo()).toBeNull();
     });
 
@@ -506,7 +507,7 @@ describe('CuentaCliente (CC-028, CC-033, CC-034, CC-038, CC-043)', () => {
       expect(usadas).toEqual([claves[0], claves[0], claves[0]]);
       expect(claves).toHaveLength(1);
       expect(dialogo()).toBeNull();
-      expect(texto('.alerta.exito')).toContain('Este cobro ya estaba registrado');
+      expect(texto('.alerta.exito span')).toContain('Este cobro ya estaba registrado');
     });
 
     it('400: muestra los errores por campo del servidor y el siguiente intento lleva una clave nueva', async () => {
@@ -537,6 +538,113 @@ describe('CuentaCliente (CC-028, CC-033, CC-034, CC-038, CC-043)', () => {
       await f4();
 
       expect(el().querySelector('.error-servidor')).toBeNull();
+    });
+  });
+
+  describe('recibo (CC-036, CC-043)', () => {
+    const recibos = () => el().querySelectorAll('app-recibo-imprimible');
+    const reciboTexto = () => limpio(el().querySelector('app-recibo-imprimible')?.textContent);
+
+    it('tras un cobro exitoso (201) muestra el recibo, con su número, el cliente y las imputaciones', async () => {
+      await crear();
+
+      await cobrar('600');
+
+      expect(dialogo()).toBeNull();
+      expect(recibos()).toHaveLength(1);
+      expect(reciboTexto()).toContain('Recibo N.º 12');
+      expect(reciboTexto()).toContain('Ana Gómez');
+      expect(reciboTexto()).toContain('Venta N.º 7');
+      expect(reciboTexto()).toContain('Venta N.º 8');
+      expect(reciboTexto()).toContain('Recibo interno, no válido como comprobante fiscal');
+    });
+
+    it('tras un 200 repetido muestra el mismo recibo', async () => {
+      await crear({ cobrar: () => of({ recibo: recibo(), repetida: true }) });
+
+      await cobrar('600');
+
+      expect(recibos()).toHaveLength(1);
+      expect(reciboTexto()).toContain('Recibo N.º 12');
+      expect(texto('.alerta.exito span')).toContain('Este cobro ya estaba registrado');
+    });
+
+    it('el adelanto muestra el recibo con «A cuenta $X» y sin tabla de imputaciones', async () => {
+      await crear({
+        pendientes: () => of(sinDeuda),
+        cobrar: () => of({ recibo: recibo({ total: 500, aCuenta: 500, imputaciones: [] }), repetida: false }),
+      });
+
+      await cobrar('500');
+
+      expect(reciboTexto()).toContain('A cuenta $ 500,00');
+      expect(el().querySelector('app-recibo-imprimible table')).toBeNull();
+    });
+
+    it('Esc cierra el recibo y el aviso del cobro queda con «Reimprimir recibo»', async () => {
+      await crear();
+      await cobrar('600');
+
+      el().querySelector('app-recibo-imprimible [role="dialog"]')!.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'Escape', cancelable: true, bubbles: true }),
+      );
+      await refrescar();
+
+      expect(recibos()).toHaveLength(0);
+      expect(texto('.alerta.exito span')).toContain('Recibo N.º 12');
+      expect(boton('Reimprimir recibo')).toBeDefined();
+    });
+
+    it('«Reimprimir recibo» usa GET /recibos/{id} y muestra lo que dice el servidor', async () => {
+      await crear();
+      await cobrar('600');
+      boton('Cerrar')!.click();
+      await refrescar();
+      cobranza.recibo.mockReturnValue(of(recibo({ cobradoPor: 'Otro Usuario' })));
+
+      boton('Reimprimir recibo')!.click();
+      await refrescar();
+
+      expect(cobranza.recibo).toHaveBeenCalledWith(5);
+      expect(recibos()).toHaveLength(1);
+      expect(reciboTexto()).toContain('Otro Usuario');
+    });
+
+    it('si no se puede traer el recibo avisa y deja reintentar', async () => {
+      await crear();
+      await cobrar('600');
+      boton('Cerrar')!.click();
+      await refrescar();
+      cobranza.recibo.mockReturnValue(throwError(() => errorHttp(500, null)));
+
+      boton('Reimprimir recibo')!.click();
+      await refrescar();
+
+      expect(recibos()).toHaveLength(0);
+      expect(texto('[role="alert"]')).toContain('No se pudo traer el recibo.');
+      expect(boton('Reimprimir recibo')).toBeDefined();
+    });
+
+    it('con el recibo abierto F4 no abre el cobro', async () => {
+      await crear();
+      await cobrar('600');
+
+      await f4();
+
+      expect(dialogo()).toBeNull();
+      expect(recibos()).toHaveLength(1);
+    });
+
+    it('un cobro nuevo saca el recibo anterior y su aviso', async () => {
+      await crear();
+      await cobrar('600');
+      boton('Cerrar')!.click();
+      await refrescar();
+
+      await f4();
+
+      expect(el().querySelector('.alerta.exito')).toBeNull();
+      expect(boton('Reimprimir recibo')).toBeUndefined();
     });
   });
 });

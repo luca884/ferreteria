@@ -2,6 +2,7 @@ import { HttpErrorResponse } from '@angular/common/http';
 import { signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { of, throwError } from 'rxjs';
+import { Router } from '@angular/router';
 import { vi } from 'vitest';
 import { PageResponse } from '../../core/api/page.models';
 import { AuthService } from '../../core/auth/auth.service';
@@ -825,6 +826,73 @@ describe('Clientes', () => {
         expect(texto('p.error')).toBe(RAZON);
         expect(filas()[0].textContent).toContain('Activo');
       });
+    });
+  });
+
+  describe('botón «Cuenta corriente» (CC-028, CC-043)', () => {
+    const cuenta = () => barra('.cuenta');
+    const teclaEnFila = (i: number, key: string) =>
+      filas()[i].dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }));
+
+    it('el Dueño lo ve en la barra, apagado hasta elegir una fila', async () => {
+      await crear();
+
+      expect(cuenta()).not.toBeNull();
+      expect(cuenta()!.textContent!.trim()).toBe('Cuenta corriente');
+      expect(cuenta()!.disabled).toBe(true);
+
+      await elegir(1);
+
+      expect(cuenta()!.disabled).toBe(false);
+    });
+
+    it('navega a la pantalla de cuenta del cliente elegido', async () => {
+      await crear();
+      const navegar = vi.spyOn(TestBed.inject(Router), 'navigate').mockResolvedValue(true);
+
+      await elegir(1);
+      cuenta()!.click();
+
+      expect(navegar).toHaveBeenCalledWith(['/clientes', 2, 'cuenta']);
+    });
+
+    it('el Vendedor no lo ve', async () => {
+      await crear([ana, norte, viejo], false);
+
+      expect(cuenta()).toBeNull();
+      expect(boton('Cuenta corriente')).toBeUndefined();
+    });
+
+    it('sin fila elegida el clic no navega', async () => {
+      await crear();
+      const navegar = vi.spyOn(TestBed.inject(Router), 'navigate').mockResolvedValue(true);
+
+      cuenta()!.click();
+
+      expect(navegar).not.toHaveBeenCalled();
+    });
+
+    it('Enter en la grilla sigue editando (regresión) y no navega', async () => {
+      await crear();
+      const navegar = vi.spyOn(TestBed.inject(Router), 'navigate').mockResolvedValue(true);
+
+      await elegir(0);
+      teclaEnFila(0, 'Enter');
+      await refrescar();
+
+      expect(input('razon-social').value).toBe('Ana Gómez');
+      expect(navegar).not.toHaveBeenCalled();
+    });
+
+    it('no hay atajo nuevo en la grilla: ni F4 ni C ni otra tecla llevan a la cuenta', async () => {
+      await crear();
+      const navegar = vi.spyOn(TestBed.inject(Router), 'navigate').mockResolvedValue(true);
+
+      await elegir(0);
+      for (const key of ['F4', 'F6', 'c', 'C']) teclaEnFila(0, key);
+      await refrescar();
+
+      expect(navegar).not.toHaveBeenCalled();
     });
   });
 });

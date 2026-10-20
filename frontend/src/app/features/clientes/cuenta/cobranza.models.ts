@@ -140,3 +140,9 @@ export function aCuentaCentavos(totalCentavos: number, imputadosCentavos: readon
 export function centavosATexto(centavos: number): string {
   return `${Math.floor(centavos / 100)},${String(centavos % 100).padStart(2, '0')}`;
 }
+
+/** «19/10/2026 10:30» de una fecha local del servidor, leída del texto: no pasa por la zona del navegador. */
+export function fechaCompletaLocal(fechaLocal: string): string {
+  const [anio, mes, dia] = fechaLocal.slice(0, 10).split('-');
+  return `${dia}/${mes}/${anio} ${fechaLocal.slice(11, 16)}`;
+}

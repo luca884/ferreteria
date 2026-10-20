@@ -10,6 +10,7 @@ import {
   signal,
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { Router } from '@angular/router';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { erroresDeCampos, mensajeDe } from '../../core/api/api-error';
 import { AuthService } from '../../core/auth/auth.service';
@@ -52,6 +53,7 @@ export class Clientes implements OnInit {
   private readonly service = inject(ClientesService);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   private readonly injector = inject(Injector);
+  private readonly router = inject(Router);
   protected readonly auth = inject(AuthService);
 
   protected readonly tiposDocumento = TIPOS_DOCUMENTO;
@@ -282,6 +284,12 @@ export class Clientes implements OnInit {
         this.error.set(mensajeDe(err, 'No se pudo cambiar el estado del cliente.'));
       },
     });
+  }
+
+  /** Solo el Dueño: la pantalla de cuenta del cliente elegido (pendientes y cobranza). Sin atajo: Enter sigue editando. */
+  protected verCuenta(): void {
+    const cliente = this.filas.elegido();
+    if (cliente) void this.router.navigate(['/clientes', cliente.id, 'cuenta']);
   }
 
   /** El saldo del Dueño: lo que debe; «a favor» si es negativo; vacío si el servidor no lo mandó. */
