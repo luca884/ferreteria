@@ -126,6 +126,24 @@ describe('DialogoCobranza (CC-032, CC-033, CC-034, CC-043, CC-051)', () => {
       expect(getComputedStyle(referencia).textTransform).toBe('none');
     });
 
+    it('la referencia de cada fila es un dato más: sin el fondo gris ni el sticky del encabezado de columna', async () => {
+      await abrir();
+
+      const referencia = getComputedStyle(el().querySelector<HTMLElement>('tbody th')!);
+      expect(referencia.position).toBe('static');
+      expect(['transparent', 'rgba(0, 0, 0, 0)']).toContain(referencia.backgroundColor);
+      const encabezado = getComputedStyle(el().querySelector<HTMLElement>('thead th')!);
+      expect(encabezado.position).toBe('sticky');
+    });
+
+    it('las celdas de una fila (referencia, pendiente e importe) se alinean al centro, junto al campo', async () => {
+      await abrir();
+
+      const celdas = Array.from(el().querySelectorAll<HTMLElement>('tbody tr:first-child > *'));
+      expect(celdas).toHaveLength(3);
+      expect(celdas.map((c) => getComputedStyle(c).verticalAlign)).toEqual(['middle', 'middle', 'middle']);
+    });
+
     it('cada fila tiene su importe como campo con nombre accesible', async () => {
       await abrir();
 

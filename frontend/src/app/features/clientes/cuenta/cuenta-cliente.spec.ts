@@ -206,6 +206,15 @@ describe('CuentaCliente (CC-028, CC-033, CC-034, CC-038, CC-043)', () => {
       expect(getComputedStyle(referencia).textTransform).toBe('none');
     });
 
+    it('la referencia de cada fila es un dato más: sin el fondo gris ni el sticky del encabezado de columna', async () => {
+      await crear();
+
+      const referencia = getComputedStyle(el().querySelector<HTMLElement>('table.pendientes tbody th')!);
+      expect(referencia.position).toBe('static');
+      expect(['transparent', 'rgba(0, 0, 0, 0)']).toContain(referencia.backgroundColor);
+      expect(getComputedStyle(el().querySelector<HTMLElement>('table.pendientes thead th')!).position).toBe('sticky');
+    });
+
     it('un saldo negativo se dice «a favor» y se muestra lo que tiene a cuenta', async () => {
       await crear({ pendientes: () => of({ saldo: -500, aCuenta: 500, comprobantes: [] }) });
 
@@ -884,6 +893,19 @@ describe('CuentaCliente (CC-028, CC-033, CC-034, CC-038, CC-043)', () => {
 
       expect(dialogo()).toBeNull();
       expect(recibos()).toHaveLength(1);
+    });
+
+    it('el aviso del cobro y «Reimprimir recibo» van en una fila con espacio entre ellos (no pegados)', async () => {
+      await crear();
+      await cobrar('600');
+      boton('Cerrar')!.click();
+      await refrescar();
+
+      const aviso = getComputedStyle(el().querySelector<HTMLElement>('.alerta.exito')!);
+      expect(aviso.display).toBe('flex');
+      expect(aviso.justifyContent).toBe('space-between');
+      expect(aviso.gap).not.toBe('');
+      expect(aviso.gap).not.toBe('0px');
     });
 
     it('un cobro nuevo saca el recibo anterior y su aviso', async () => {

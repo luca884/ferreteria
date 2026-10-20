@@ -115,6 +115,15 @@ describe('ReciboImprimible (CC-036, CC-043)', () => {
     expect(getComputedStyle(referencia).textTransform).toBe('none');
   });
 
+  it('la referencia de cada fila es un dato más: sin el fondo gris ni el sticky del encabezado de columna', async () => {
+    await abrir();
+
+    const referencia = getComputedStyle(el().querySelector<HTMLElement>('tbody th')!);
+    expect(referencia.position).toBe('static');
+    expect(['transparent', 'rgba(0, 0, 0, 0)']).toContain(referencia.backgroundColor);
+    expect(getComputedStyle(el().querySelector<HTMLElement>('thead th')!).position).toBe('sticky');
+  });
+
   it('muestra «A cuenta $X» cuando quedó algo sin imputar', async () => {
     await abrir();
 

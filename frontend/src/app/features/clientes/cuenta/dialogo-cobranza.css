@@ -91,14 +91,17 @@
 .imputacion td {
   padding: var(--e-1) var(--e-2);
   border-bottom: 1px solid var(--borde);
-  vertical-align: top;
+  vertical-align: middle;
   text-align: left;
 }
 .imputacion thead th {
   color: var(--texto-suave);
   font-size: var(--texto-sm);
 }
+/* La referencia de la fila es un dato más: sin el fondo ni el sticky del encabezado de columna (styles.css). */
 .imputacion tbody th {
+  position: static;
+  background: transparent;
   font-weight: 600;
   letter-spacing: normal;
   text-transform: none;
