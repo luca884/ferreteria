@@ -41,6 +41,19 @@ public interface CajaRepository extends TenantScopedRepository<Caja, Long> {
     @Query("select c from Caja c where c.id = :id and c.ferreteriaId = :fid")
     Optional<Caja> porIdExclusiva(@Param("id") Long id, @Param("fid") Long ferreteriaId);
 
+    /**
+     * La caja ABIERTA con lock exclusivo, tomada por el MISMO camino de índice que {@link #abiertaCompartida} y
+     * {@link #porIdCompartida}-de-venta: primero el registro de {@code uk_caja_abierta (ferreteria_id, abierta)} y recién después
+     * el de la clave primaria. Es lo que evita el deadlock entre el cierre y las operaciones que toman la caja en S
+     * (vender, cobrar, anular): el cierre que entraba por la PK tenía la fila en X y, al poner {@code abierta = NULL}, pedía el
+     * registro de {@code uk_caja_abierta} que un lector compartido ya tenía en S mientras esperaba la PK (ciclo). {@code force
+     * index} fija el camino (con {@code id = :id} el optimizador elegiría la PK). Vacía si la caja no está abierta: el que llama
+     * recurre a {@link #porIdExclusiva} para distinguir «ya cerrada» de «no existe».
+     */
+    @Query(value = "select * from caja force index (uk_caja_abierta) where ferreteria_id = :fid and abierta = 1 and id = :id for update",
+            nativeQuery = true)
+    Optional<Caja> abiertaPorIdExclusiva(@Param("id") Long id, @Param("fid") Long ferreteriaId);
+
     @Query("select c from Caja c where c.ferreteriaId = :fid and c.abierta is null order by c.fechaCierre desc, c.id desc")
     Page<Caja> cerradas(@Param("fid") Long ferreteriaId, Pageable pageable);
 
@@ -68,7 +81,11 @@ public interface CajaRepository extends TenantScopedRepository<Caja, Long> {
 
     /** La caja con lock exclusivo, para cerrarla. La de otra ferreteria no aparece. */
     default Optional<Caja> paraCerrarScoped(Long id) {
-        return porIdExclusiva(id, TenantContext.requireFerreteriaId());
+        Long ferreteriaId = TenantContext.requireFerreteriaId();
+        // Abierta: por uk_caja_abierta y después la PK, igual que los lectores compartidos (sin ciclo con ellos). Si no está
+        // abierta (ya cerrada o inexistente) no hay quien la comparta: se la toma por la PK para distinguir un caso del otro.
+        Optional<Caja> abierta = abiertaPorIdExclusiva(id, ferreteriaId);
+        return abierta.isPresent() ? abierta : porIdExclusiva(id, ferreteriaId);
     }
 
     /** Las cerradas, mas nuevas primero. */
