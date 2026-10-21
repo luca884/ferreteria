@@ -25,8 +25,8 @@ describe('inicioPorRol', () => {
     expect(destino(sesion(rol))).toBe('mostrador');
   });
 
-  it('el administrador (sin ferretería) aterriza en rubros', () => {
-    expect(destino(sesion('SUPER_ADMIN'))).toBe('rubros');
+  it('el administrador (sin ferretería) aterriza en la pantalla de ferreterías', () => {
+    expect(destino(sesion('SUPER_ADMIN'))).toBe('admin/ferreterias');
   });
 
   it('sin sesión va directo al login (sin returnUrl: no quería ir a ningún lado en particular)', () => {

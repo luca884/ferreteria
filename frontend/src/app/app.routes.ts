@@ -120,6 +120,13 @@ export const routes: Routes = [
         title: titulo('Usuarios'),
         loadComponent: () => import('./features/usuarios/usuarios').then((m) => m.Usuarios),
       },
+      // Sin guard de rol, como las otras pantallas por rol: a quien no es super admin el API le responde 403 y la pantalla no muestra datos.
+      {
+        path: 'admin/ferreterias',
+        title: titulo('Ferreterías'),
+        loadComponent: () =>
+          import('./features/admin-ferreterias/admin-ferreterias').then((m) => m.AdminFerreterias),
+      },
       // Sin guard de rol: «Cambiar mi contraseña» es de todo usuario logueado.
       {
         path: 'mi-contrasena',

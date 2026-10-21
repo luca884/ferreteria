@@ -49,7 +49,12 @@ describe('Shell', () => {
         provideRouter(rutas),
         {
           provide: AuthService,
-          useValue: { esDueno: signal(dueno), sesion: signal(sesion), logout: () => undefined },
+          useValue: {
+            esDueno: signal(dueno),
+            esSuperAdmin: signal(sesion?.rol === 'SUPER_ADMIN'),
+            sesion: signal(sesion),
+            logout: () => undefined,
+          },
         },
         { provide: CotizacionService, useValue: { obtener, refrescos$: refrescos } },
       ],
@@ -69,6 +74,56 @@ describe('Shell', () => {
 
   const enlaces = (el: HTMLElement) =>
     Array.from(el.querySelectorAll('nav a')).map((a) => a.textContent?.trim());
+
+  describe('super admin', () => {
+    const SUPER_ADMIN: Sesion = {
+      userId: 1,
+      nombre: 'Admin',
+      email: 'admin@demo.local',
+      rol: 'SUPER_ADMIN',
+      ferreteriaId: null,
+      ferreteriaNombre: null,
+    };
+
+    it('ve solo «Ferreterías» en el menú, que lleva a /admin/ferreterias', async () => {
+      const el = await render(false, SUPER_ADMIN);
+
+      expect(enlaces(el)).toEqual(['Ferreterías']);
+      expect(el.querySelector('nav a[href="/admin/ferreterias"]')).not.toBeNull();
+      expect(el.querySelector('nav .grupo')).toBeNull();
+    });
+
+    it('no ve ningún link de ferretería', async () => {
+      const el = await render(false, SUPER_ADMIN);
+
+      for (const ruta of ['/mostrador', '/rubros', '/clientes', '/caja', '/articulos', '/usuarios', '/importaciones']) {
+        expect(el.querySelector(`a[href="${ruta}"]`), ruta).toBeNull();
+      }
+    });
+
+    it('ve «Cambiar mi contraseña» en el bloque del usuario', async () => {
+      const el = await render(false, SUPER_ADMIN);
+
+      expect(el.querySelector('.usuario a[href="/mi-contrasena"]')?.textContent?.trim()).toBe('Cambiar mi contraseña');
+    });
+
+    it('no ve el bloque de cotización ni el shell la pide', async () => {
+      const el = await render(false, SUPER_ADMIN);
+
+      expect(el.querySelector('app-cotizacion-lateral')).toBeNull();
+      expect(obtener).not.toHaveBeenCalled();
+    });
+
+    it('el Dueño y el Vendedor no ven «Ferreterías»', async () => {
+      for (const dueno of [false, true]) {
+        TestBed.resetTestingModule();
+        const el = await render(dueno);
+
+        expect(enlaces(el)).not.toContain('Ferreterías');
+        expect(el.querySelector('a[href="/admin/ferreterias"]')).toBeNull();
+      }
+    });
+  });
 
   it('las secciones van en el menú lateral', async () => {
     const el = await render(true);

@@ -41,6 +41,25 @@ describe('AuthService', () => {
     expect(localStorage.getItem('ferreteria.token')).toBe('jwt-de-prueba');
   });
 
+  it('esSuperAdmin es verdadero solo con el rol SUPER_ADMIN', () => {
+    expect(service.esSuperAdmin()).toBe(false);
+
+    service.login('dueno@tornillo.demo', 'demo1234').subscribe();
+    http.expectOne((r) => r.url.endsWith('/auth/login')).flush(respuesta);
+    expect(service.esSuperAdmin()).toBe(false);
+
+    service.logout();
+    service.login('admin@demo.local', 'demo1234').subscribe();
+    http
+      .expectOne((r) => r.url.endsWith('/auth/login'))
+      .flush({
+        ...respuesta,
+        sesion: { ...respuesta.sesion, rol: 'SUPER_ADMIN', ferreteriaId: null, ferreteriaNombre: null },
+      });
+    expect(service.esSuperAdmin()).toBe(true);
+    expect(service.esDueno()).toBe(false);
+  });
+
   it('al salir borra todo', () => {
     service.login('dueno@tornillo.demo', 'demo1234').subscribe();
     http.expectOne((r) => r.url.endsWith('/auth/login')).flush(respuesta);

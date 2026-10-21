@@ -19,6 +19,7 @@ export class AuthService {
   readonly sesion = this._sesion.asReadonly();
   readonly autenticado = computed(() => this._token() !== null);
   readonly esDueno = computed(() => this._sesion()?.rol === 'DUENO');
+  readonly esSuperAdmin = computed(() => this._sesion()?.rol === 'SUPER_ADMIN');
 
   login(email: string, password: string): Observable<LoginResponse> {
     return this.http
