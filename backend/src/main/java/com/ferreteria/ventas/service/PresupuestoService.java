@@ -1,6 +1,7 @@
 package com.ferreteria.ventas.service;
 
 import com.ferreteria.common.exception.ErrorDeBase;
+import com.ferreteria.common.exception.SistemaOcupadoException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.PessimisticLockingFailureException;
 import org.springframework.stereotype.Service;
@@ -8,7 +9,8 @@ import org.springframework.stereotype.Service;
 /**
  * Fachada de emitir un presupuesto. Deliberadamente SIN transaccion, como {@link VentaService}: cada intento abre la
  * suya en {@link RegistroPresupuesto}, asi un deadlock o un choque de la clave unica revierte todo y se puede
- * reintentar o resolver con una transaccion nueva.
+ * reintentar o resolver con una transaccion nueva. Reintenta hasta {@value #MAX_INTENTOS} veces ante un deadlock o timeout
+ * de lock; agotados, lanza {@link SistemaOcupadoException} (la API responde 503 «reintenta», no 500).
  */
 @Service
 public class PresupuestoService {
@@ -29,7 +31,8 @@ public class PresupuestoService {
                 return registroPresupuesto.emitir(pedido, usuarioId);
             } catch (PessimisticLockingFailureException e) {
                 if (intento >= MAX_INTENTOS) {
-                    throw e;
+                    // Contención transitoria agotada: 503 «reintentá» (la clave hace seguro el reintento), no un 500.
+                    throw new SistemaOcupadoException(e);
                 }
                 intento++;
             } catch (DataIntegrityViolationException e) {
