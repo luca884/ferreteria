@@ -59,6 +59,17 @@ class CambioContrasenaIntegrationTest extends UsuariosTestBase {
     }
 
     @Test
+    @DisplayName("una nueva de solo espacios da 400 en passwordNueva con el mensaje exacto y no cambia nada (W3)")
+    void nuevaEnBlanco() throws Exception {
+        cambiar(token, json("passwordActual", "demo1234", "passwordNueva", " ".repeat(8)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors.passwordNueva", is("La contraseña no puede ser solo espacios.")));
+
+        assertThat(jdbcHash()).isEqualTo(HASH_DEMO);
+        intentarLogin(email, "demo1234").andExpect(status().isOk());
+    }
+
+    @Test
     @DisplayName("sin passwordActual da 400")
     void actualAusente() throws Exception {
         cambiar(token, json("passwordNueva", "clave-nueva-99"))

@@ -202,7 +202,13 @@
               [attr.aria-describedby]="invalido('password') ? 'password-error' : null"
             />
             @if (invalido('password')) {
-              <span id="password-error" class="campo-error">La contraseña tiene que tener entre 8 y 72 caracteres.</span>
+              <span id="password-error" class="campo-error">
+                @if (form.controls.password.hasError('soloEspacios')) {
+                  {{ contrasenaSoloEspacios }}
+                } @else {
+                  La contraseña tiene que tener entre 8 y 72 caracteres.
+                }
+              </span>
             }
           </div>
         }

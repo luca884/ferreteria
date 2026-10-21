@@ -30,6 +30,25 @@ class PoliticaDeContrasenaTest {
     }
 
     @Test
+    @DisplayName("8 espacios en blanco falla en el campo indicado con el mensaje de solo espacios")
+    void soloEspaciosFalla() {
+        for (String blanca : new String[] {"        ", "\t".repeat(8), " ".repeat(72)}) {
+            assertThatThrownBy(() -> PoliticaDeContrasena.validar("password", blanca))
+                    .isInstanceOfSatisfying(DatosInvalidosException.class, e -> {
+                        assertThat(e.errors()).containsOnlyKeys("password");
+                        assertThat(e.errors().get("password")).isEqualTo("La contraseña no puede ser solo espacios.");
+                    });
+        }
+    }
+
+    @Test
+    @DisplayName("una contraseña con espacios en el medio o en los bordes, pero con otros caracteres, pasa")
+    void conEspaciosYLetrasPasa() {
+        assertThatCode(() -> PoliticaDeContrasena.validar("password", "  abcd  ")).doesNotThrowAnyException();
+        assertThatCode(() -> PoliticaDeContrasena.validar("password", "mi clave 1")).doesNotThrowAnyException();
+    }
+
+    @Test
     @DisplayName("8 y 72 caracteres pasan")
     void ochoYSetentaYDosPasan() {
         assertThatCode(() -> PoliticaDeContrasena.validar("password", "a".repeat(8))).doesNotThrowAnyException();

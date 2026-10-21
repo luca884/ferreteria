@@ -16,6 +16,14 @@ export interface NuevaContrasena {
   nueva: string;
 }
 
+export const CONTRASENA_SOLO_ESPACIOS = 'La contraseña no puede ser solo espacios.';
+
+/** Una contraseña de solo espacios no es válida (el servidor tampoco la acepta). */
+export const noSoloEspacios = (control: AbstractControl): ValidationErrors | null =>
+  typeof control.value === 'string' && control.value.length > 0 && control.value.trim() === ''
+    ? { soloEspacios: true }
+    : null;
+
 const coincide = (grupo: AbstractControl): ValidationErrors | null =>
   grupo.get('nueva')?.value === grupo.get('confirmacion')?.value ? null : { noCoincide: true };
 
@@ -64,7 +72,11 @@ const coincide = (grupo: AbstractControl): ValidationErrors | null =>
         />
         @if (nuevaInvalida()) {
           <span id="nueva-error" class="campo-error">
-            La contraseña tiene que tener entre {{ min }} y {{ max }} caracteres.
+            @if (form.controls.nueva.hasError('soloEspacios')) {
+              {{ soloEspacios }}
+            } @else {
+              La contraseña tiene que tener entre {{ min }} y {{ max }} caracteres.
+            }
           </span>
         } @else {
           <span id="nueva-pista" class="pista">Entre {{ min }} y {{ max }} caracteres.</span>
@@ -104,11 +116,12 @@ export class ContrasenaForm {
 
   protected readonly min = CONTRASENA_MIN;
   protected readonly max = CONTRASENA_MAX;
+  protected readonly soloEspacios = CONTRASENA_SOLO_ESPACIOS;
 
   protected readonly form = inject(FormBuilder).nonNullable.group(
     {
       actual: [''],
-      nueva: ['', [Validators.required, Validators.minLength(CONTRASENA_MIN), Validators.maxLength(CONTRASENA_MAX)]],
+      nueva: ['', [Validators.required, Validators.minLength(CONTRASENA_MIN), Validators.maxLength(CONTRASENA_MAX), noSoloEspacios]],
       confirmacion: [''],
     },
     { validators: coincide },

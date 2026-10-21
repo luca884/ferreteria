@@ -97,6 +97,25 @@ describe('ContrasenaForm', () => {
     expect(el().textContent).toContain('La contraseña tiene que tener entre 8 y 72 caracteres.');
   });
 
+  it('rechaza una nueva de solo espacios sin emitir y lo avisa', async () => {
+    await abrir();
+    await escribir('nueva', ' '.repeat(8));
+    await escribir('confirmacion', ' '.repeat(8));
+    await enviar();
+
+    expect(emitidos).toEqual([]);
+    expect(el().querySelector('#nueva-error')?.textContent).toContain('La contraseña no puede ser solo espacios.');
+  });
+
+  it('acepta una nueva con espacios si tiene otros caracteres', async () => {
+    await abrir();
+    await escribir('nueva', 'mi clave 1');
+    await escribir('confirmacion', 'mi clave 1');
+    await enviar();
+
+    expect(emitidos).toEqual([{ nueva: 'mi clave 1' }]);
+  });
+
   it('acepta justo 8 y justo 72 caracteres', async () => {
     await abrir();
     await escribir('nueva', 'a'.repeat(72));

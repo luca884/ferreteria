@@ -179,6 +179,18 @@ describe('Usuarios', () => {
     expect(el().querySelector('#password-error')?.textContent).toContain('entre 8 y 72 caracteres');
   });
 
+  it('no envía un alta con la contraseña de solo espacios y lo avisa en el campo', async () => {
+    await crear([dueno]);
+
+    await escribir('nombre', 'Ana');
+    await escribir('email', 'ana@tornillo.demo');
+    await escribir('password', ' '.repeat(8));
+    await enviar();
+
+    expect(servicio.crear).not.toHaveBeenCalled();
+    expect(el().querySelector('#password-error')?.textContent).toContain('La contraseña no puede ser solo espacios.');
+  });
+
   it('lista los mensajes por campo de un 400 y deja lo escrito', async () => {
     await crear([dueno]);
     servicio.crear.mockReturnValue(

@@ -78,15 +78,18 @@ class UsuariosAislamientoIntegrationTest extends UsuariosTestBase {
             String deB = cuerpoDe(pedir(ajeno, duenoA, cuerpo).andExpect(status().isNotFound()));
             String deNadie = cuerpoDe(pedir(ninguno, duenoA, cuerpo).andExpect(status().isNotFound()));
 
-            assertThat(mensaje(deB)).as(par[0].toString()).isEqualTo(mensaje(deNadie));
+            assertThat(sinPathNiTimestamp(deB)).as(par[0].toString()).isEqualTo(sinPathNiTimestamp(deNadie));
+            assertThat(sinPathNiTimestamp(deB).get("message").asText()).isEqualTo("Usuario no encontrado");
         }
         assertThat(jdbc.queryForObject("select activo from usuario where id = ?", Boolean.class, usuarioDeB)).isTrue();
         assertThat(jdbc.queryForObject("select nombre from usuario where id = ?", String.class, usuarioDeB))
                 .isEqualTo("Vendedor B");
     }
 
-    private String mensaje(String cuerpo) throws Exception {
-        return objectMapper.readTree(cuerpo).get("message").asText();
+    /** El cuerpo del error sin los campos que dependen del pedido (la ruta y la hora). */
+    private JsonNode sinPathNiTimestamp(String cuerpo) throws Exception {
+        return ((com.fasterxml.jackson.databind.node.ObjectNode) objectMapper.readTree(cuerpo)).deepCopy()
+                .without(List.of("path", "timestamp"));
     }
 
     @Test

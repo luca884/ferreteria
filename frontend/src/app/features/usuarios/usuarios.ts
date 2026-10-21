@@ -5,7 +5,7 @@ import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { erroresDeCampos, mensajeDe } from '../../core/api/api-error';
 import { AuthService } from '../../core/auth/auth.service';
 import { BarraAcciones } from '../../shared/barra-acciones';
-import { ContrasenaForm, NuevaContrasena } from '../../shared/contrasena-form';
+import { CONTRASENA_SOLO_ESPACIOS, ContrasenaForm, NuevaContrasena, noSoloEspacios } from '../../shared/contrasena-form';
 import { FilasElegibles } from '../../shared/filas-elegibles';
 import {
   EdicionUsuarioRequest,
@@ -61,11 +61,13 @@ export class Usuarios implements OnInit {
   protected readonly errorReset = signal<string | null>(null);
   protected readonly enviandoReset = signal(false);
 
+  protected readonly contrasenaSoloEspacios = CONTRASENA_SOLO_ESPACIOS;
+
   protected readonly form = inject(FormBuilder).nonNullable.group({
     nombre: ['', [Validators.required, Validators.maxLength(100), Validators.pattern(/\S/)]],
     email: ['', [Validators.required, Validators.email, Validators.maxLength(150)]],
     rol: ['VENDEDOR' as RolDeFerreteria],
-    password: ['', [Validators.required, Validators.minLength(8), Validators.maxLength(72)]],
+    password: ['', [Validators.required, Validators.minLength(8), Validators.maxLength(72), noSoloEspacios]],
   });
 
   constructor() {

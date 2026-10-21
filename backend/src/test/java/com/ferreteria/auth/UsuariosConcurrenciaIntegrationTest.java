@@ -10,9 +10,12 @@ import com.ferreteria.auth.service.EmailUnico;
 import com.ferreteria.support.BarreraDeLocks;
 import com.ferreteria.support.BarreraDeLocks.HolderJdbc;
 import com.ferreteria.support.BarreraDeLocks.Largada;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Queue;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -34,6 +37,7 @@ class UsuariosConcurrenciaIntegrationTest extends UsuariosTestBase {
     EmailUnico emailUnico;
 
     private HolderJdbc holder;
+    private final Queue<String> mensajesDel422 = new ConcurrentLinkedQueue<>();
 
     @AfterEach
     void soltar() {
@@ -46,8 +50,12 @@ class UsuariosConcurrenciaIntegrationTest extends UsuariosTestBase {
         var pedido = "PATCH".equals(metodo)
                 ? patch(url)
                 : post(url);
-        return mvc.perform(pedido.header("Authorization", "Bearer " + token).contentType(MediaType.APPLICATION_JSON)
-                .content(cuerpo)).andReturn().getResponse().getStatus();
+        var respuesta = mvc.perform(pedido.header("Authorization", "Bearer " + token).contentType(MediaType.APPLICATION_JSON)
+                .content(cuerpo)).andReturn().getResponse();
+        if (respuesta.getStatus() == 422) {
+            mensajesDel422.add(objectMapper.readTree(respuesta.getContentAsString(StandardCharsets.UTF_8)).get("message").asText());
+        }
+        return respuesta.getStatus();
     }
 
     private List<Integer> correrJuntos(List<Callable<Integer>> trabajos, Largada largada, Runnable cuandoEstenListos)
@@ -97,6 +105,7 @@ class UsuariosConcurrenciaIntegrationTest extends UsuariosTestBase {
                 });
 
         assertThat(codigos).containsExactlyInAnyOrder(200, 422);
+        assertThat(mensajesDel422).containsExactly("Tiene que quedar al menos un Dueño activo.");
         assertThat(jdbc.queryForObject(
                 "select count(*) from usuario where ferreteria_id = ? and rol = 'DUENO' and activo = true", Long.class,
                 ferreteria)).isEqualTo(1L);

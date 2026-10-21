@@ -132,6 +132,40 @@ class UsuariosIntegrationTest extends UsuariosTestBase {
     }
 
     @Test
+    @DisplayName("una contraseña de solo espacios da 400 en password con el mensaje exacto; no se crea nada (W3)")
+    void contrasenaEnBlanco() throws Exception {
+        crear("Ana", unico("a") + "@usuarios.test", "VENDEDOR", " ".repeat(8))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors.password", is("La contraseña no puede ser solo espacios.")));
+        assertThat(jdbc.queryForObject("select count(*) from usuario where ferreteria_id = ?", Long.class, ferreteria))
+                .isEqualTo(1L);
+    }
+
+    @Test
+    @DisplayName("email vacío, contraseña ausente, nombre de 101 y email de 151 dan 400 en su campo (test de cobertura, sin RED)")
+    void limitesDelAlta() throws Exception {
+        String ok = unico("ok") + "@usuarios.test";
+        crear("Ana", "", "VENDEDOR", "demo1234").andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors.email", is("El email es obligatorio.")));
+        crear("Ana", ok, "VENDEDOR", null).andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors.password", is("La contraseña es obligatoria.")));
+        crear("a".repeat(101), ok, "VENDEDOR", "demo1234").andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors.nombre", is("El nombre admite hasta 100 caracteres.")));
+        crear("Ana", emailDe(151), "VENDEDOR", "demo1234").andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors.email", is("El email admite hasta 150 caracteres.")));
+        crear("a".repeat(100), emailDe(150), "VENDEDOR", "demo1234").andExpect(status().isCreated());
+    }
+
+    /** Un email válido de exactamente {@code largo} caracteres (local de 60, dominio con etiquetas de hasta 63). */
+    private static String emailDe(int largo) {
+        String local = "a".repeat(60);
+        String fijo = "b".repeat(60) + ".";
+        String cola = ".com";
+        int medio = largo - local.length() - 1 - fijo.length() - cola.length();
+        return local + "@" + fijo + "c".repeat(medio) + cola;
+    }
+
+    @Test
     @DisplayName("la contraseña de 72 caracteres es válida y el usuario entra con ella")
     void contrasenaDeSetentaYDos() throws Exception {
         String email = unico("largo") + "@usuarios.test";
@@ -188,6 +222,48 @@ class UsuariosIntegrationTest extends UsuariosTestBase {
                 .andExpect(status().isOk()).andExpect(jsonPath("$.nombre", is("Otro Nombre")));
         putJson("/api/usuarios/" + id, dueno, json("nombre", "Otro Nombre", "email", unico("nuevo") + "@usuarios.test",
                 "rol", "DUENO")).andExpect(status().isOk()).andExpect(jsonPath("$.rol", is("DUENO")));
+    }
+
+    @Test
+    @DisplayName("PUT da 400 por campo: nombre vacío o de 101, email vacío, inválido o de 151, y rol ausente")
+    void editarValidaPorCampo() throws Exception {
+        String email = unico("v") + "@usuarios.test";
+        long id = crearVendedor(email);
+        String url = "/api/usuarios/" + id;
+
+        putJson(url, dueno, json("nombre", "  ", "email", email, "rol", "VENDEDOR")).andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors.nombre", is("El nombre es obligatorio.")));
+        putJson(url, dueno, json("nombre", "a".repeat(101), "email", email, "rol", "VENDEDOR"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors.nombre", is("El nombre admite hasta 100 caracteres.")));
+        putJson(url, dueno, json("nombre", "Ana", "email", "", "rol", "VENDEDOR")).andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors.email", is("El email es obligatorio.")));
+        putJson(url, dueno, json("nombre", "Ana", "email", "no-es-un-mail", "rol", "VENDEDOR"))
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.errors.email", is("El email no es válido.")));
+        putJson(url, dueno, json("nombre", "Ana", "email", emailDe(151), "rol", "VENDEDOR"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors.email", is("El email admite hasta 150 caracteres.")));
+        putJson(url, dueno, json("nombre", "Ana", "email", email, "rol", null)).andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors.rol", is("Elegí el rol.")));
+
+        assertThat(jdbc.queryForObject("select nombre from usuario where id = ?", String.class, id))
+                .isEqualTo("Vendedor " + email);
+    }
+
+    @Test
+    @DisplayName("PUT no toca la contraseña ni el estado activo (S2)")
+    void editarNoTocaContrasenaNiEstado() throws Exception {
+        String email = unico("v") + "@usuarios.test";
+        long id = crearVendedor(email);
+        jdbc.update("update usuario set activo = false where id = ?", id);
+        String hashAntes = jdbc.queryForObject("select password_hash from usuario where id = ?", String.class, id);
+
+        putJson("/api/usuarios/" + id, dueno, json("nombre", "Otro", "email", email, "rol", "DUENO"))
+                .andExpect(status().isOk());
+
+        assertThat(jdbc.queryForObject("select password_hash from usuario where id = ?", String.class, id))
+                .isEqualTo(hashAntes);
+        assertThat(jdbc.queryForObject("select activo from usuario where id = ?", Boolean.class, id)).isFalse();
     }
 
     @Test
@@ -276,6 +352,20 @@ class UsuariosIntegrationTest extends UsuariosTestBase {
 
         putJson("/api/usuarios/" + id + "/password", dueno, json("password", "corta"))
                 .andExpect(status().isBadRequest()).andExpect(jsonPath("$.errors.password").exists());
+    }
+
+    @Test
+    @DisplayName("resetear con una contraseña de solo espacios da 400 en password con el mensaje exacto y no cambia el hash (W3)")
+    void resetearEnBlanco() throws Exception {
+        long id = crearVendedor(unico("v") + "@usuarios.test");
+        String hashAntes = jdbc.queryForObject("select password_hash from usuario where id = ?", String.class, id);
+
+        putJson("/api/usuarios/" + id + "/password", dueno, json("password", " ".repeat(8)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors.password", is("La contraseña no puede ser solo espacios.")));
+
+        assertThat(jdbc.queryForObject("select password_hash from usuario where id = ?", String.class, id))
+                .isEqualTo(hashAntes);
     }
 
     @Test

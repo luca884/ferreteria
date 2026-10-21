@@ -20,7 +20,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
-@UnscopedTenantAccess(reason = "El login resuelve al usuario por email antes de conocer su ferreteria.")
+@UnscopedTenantAccess(reason = "El login resuelve al usuario por email antes de conocer su ferreteria, y el cambio de contraseña "
+        + "lo busca por el userId del JWT del propio usuario.")
 public class AuthService {
 
     private final UsuarioRepository usuarioRepository;
