@@ -2,6 +2,7 @@ package com.ferreteria.clientes;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import java.nio.charset.StandardCharsets;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -110,10 +111,21 @@ class ExtractoSeguridadHttpIntegrationTest extends CuentaCorrienteTestBase {
             for (Map.Entry<String, String> quien : Map.of("Dueño", t.dueno(), "Vendedor", t.vendedor()).entrySet()) {
                 MvcResult r = pedir(metodo, t.url(), quien.getValue());
                 assertThat(r.getResponse().getStatus()).as("%s %s extracto", quien.getKey(), metodo).isIn(405);
-                assertThat(cuerpo(r)).as("%s %s", quien.getKey(), metodo).contains("Método no permitido").doesNotContain("250");
+                assertThat(cuerpo(r)).as("%s %s", quien.getKey(), metodo).contains("Método no permitido");
+                sinDatosDelExtracto(r, quien.getKey() + " " + metodo);
             }
         }
         sinEfecto(t);
+    }
+
+    /**
+     * El cuerpo es un error y no trae nada del extracto. Se afirma sobre las CLAVES del JSON y no sobre un texto como «250»: el
+     * {@code timestamp} del error lleva microsegundos y alguna vez termina en «…250Z», lo que hacía fallar el test al azar.
+     */
+    private void sinDatosDelExtracto(MvcResult r, String quien) throws Exception {
+        JsonNode json = objectMapper.readTree(cuerpo(r));
+        assertThat(json.fieldNames()).toIterable().as("claves del cuerpo de %s", quien)
+                .doesNotContain("clienteId", "saldoActual", "saldoFinal", "movimientos", "items");
     }
 
     @Test
