@@ -22,6 +22,7 @@ import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * CCT3-311 (CC-033..CC-038, CC-040, CC-041, CC-054): la fachada de cobrar completa contra MySQL real, sin HTTP (el controlador
@@ -138,6 +139,32 @@ class CobranzaServiceIntegrationTest extends CuentaCorrienteTestBase {
 
         assertThat(recibos(cliente)).isZero();
         assertThat(ultimoNumero(e.f().id())).isNull();
+        assertInvariante(cliente);
+    }
+
+    @Test
+    @DisplayName("R-004: cobrar desde DENTRO de una transacción externa se rechaza (IllegalStateException) y no deja nada: sin recibo, sin número consumido, saldo intacto; fuera de la transacción cobra con normalidad (recibo N.º 1)")
+    void noSeCobraDentroDeUnaTransaccionExterna() {
+        Escenario e = escenario();
+        long cliente = cliente(e.f(), "1000");
+        VentaSuelta venta = ventaEnLibro(e.f(), cliente, "1000");
+        CobranzaPedido pedido = pedido(clave(), cliente, MedioPago.EFECTIVO, "400", imputa(venta.comprobanteId(), "400"));
+
+        assertThatThrownBy(() -> new TransactionTemplate(transactionManager).execute(status -> cobrar(e, pedido)))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("CobranzaService no puede llamarse dentro de una transaccion: cada intento abre la suya.");
+
+        assertThat(recibos(cliente)).isZero();
+        assertThat(ultimoNumero(e.f().id())).isNull();
+        assertThat(saldo(cliente)).isEqualByComparingTo("1000");
+        assertInvariante(cliente);
+
+        CobroRegistrado cobro = cobrar(e, pedido);
+
+        assertThat(cobro.repetida()).isFalse();
+        assertThat(cobro.recibo().getNumero()).isEqualTo(1L);
+        assertThat(recibos(cliente)).isEqualTo(1);
+        assertThat(saldo(cliente)).isEqualByComparingTo("600");
         assertInvariante(cliente);
     }
 

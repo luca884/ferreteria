@@ -7,6 +7,7 @@ import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
@@ -29,6 +30,7 @@ import org.springframework.dao.CannotAcquireLockException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.DeadlockLoserDataAccessException;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 /**
  * CCT3-310 (CC-038, CC-049): la fachada de cobrar, SIN transacción. Pre-chequea la clave en una transacción propia y sin locks,
@@ -63,6 +65,19 @@ class CobranzaServiceTest {
         assertThat(CobranzaService.class.isAnnotationPresent(Transactional.class)).isFalse();
         assertThat(CobranzaService.class.getMethod("cobrar", CobranzaPedido.class, Long.class)
                 .isAnnotationPresent(Transactional.class)).isFalse();
+    }
+
+    @Test
+    @DisplayName("R-004: dentro de una transacción ajena NO se cobra: el pre-chequeo de la clave se uniría a ella y fijaría la foto antes del lock del cliente; se rechaza antes de tocar nada")
+    void rechazaCorrerDentroDeUnaTransaccion() {
+        TransactionSynchronizationManager.setActualTransactionActive(true);
+        try {
+            assertThatThrownBy(() -> service.cobrar(pedido, USUARIO)).isInstanceOf(IllegalStateException.class)
+                    .hasMessage("CobranzaService no puede llamarse dentro de una transaccion: cada intento abre la suya.");
+        } finally {
+            TransactionSynchronizationManager.setActualTransactionActive(false);
+        }
+        verifyNoInteractions(registroCobranza);
     }
 
     @Test

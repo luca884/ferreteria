@@ -5,6 +5,7 @@ import com.ferreteria.common.exception.SistemaOcupadoException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.PessimisticLockingFailureException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.util.Optional;
 
@@ -22,6 +23,10 @@ import java.util.Optional;
  * de la clave única (otra transacción con la misma clave ganó: el caso de la misma clave con OTRO cliente, que no comparte lock)
  * busca el cobro ganador con una transacción nueva. Misma clave y mismo cliente: la segunda espera el lock del cliente y el
  * paso «repetida» de {@link RegistroCobranza#registrar} le devuelve el recibo original, sin necesitar este fallback.
+ *
+ * <p>No puede llamarse dentro de una transacción ajena (R-004, igual que {@link AnulacionService}): el chequeo del inicio de
+ * {@link #cobrar} lanza {@link IllegalStateException}. Una transacción externa haría que el pre-chequeo se uniera a ella y
+ * fijara la foto antes del lock del cliente.
  */
 @Service
 public class CobranzaService {
@@ -41,6 +46,13 @@ public class CobranzaService {
     }
 
     public CobroRegistrado cobrar(CobranzaPedido pedido, Long usuarioId) {
+        // CC-091: el pre-chequeo de la clave solo corre en una transacción PROPIA y sin foto previa. Dentro de una externa (un
+        // controlador o un test con @Transactional) se uniría a ella, la foto REPEATABLE READ nacería ANTES del lock del cliente
+        // y releer la clave tras perder la carrera no vería el commit de la otra. Mismo criterio que AnulacionService.anular.
+        if (TransactionSynchronizationManager.isActualTransactionActive()) {
+            throw new IllegalStateException(
+                    "CobranzaService no puede llamarse dentro de una transaccion: cada intento abre la suya.");
+        }
         Optional<CobroRegistrado> yaRegistrado = registroCobranza.repetida(pedido);
         if (yaRegistrado.isPresent()) {
             return yaRegistrado.get();
