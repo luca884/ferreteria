@@ -56,3 +56,14 @@ Usuarios demo (perfil dev, contraseña `demo1234`): `dueno@tornillo.demo`, `vend
 ## Estado
 
 Fase 2 (esqueleto) en curso: auth con JWT, multi-tenant, rubros como primer módulo con aislamiento probado. Próximo: fase 3, artículos y precios (CU-03, CU-04, CU-05). Ver `docs/spec.md` → Plan de implementación.
+
+## ODD
+
+- Test-first: aplica en `backend/` (JUnit 5 + Mockito + Testcontainers + ArchUnit) y `frontend/` (Vitest, builder `@angular/build:unit-test`). RED → GREEN → REFACTOR en cada cambio de comportamiento; el orden del caso de uso sigue siendo dominio → endpoint → pantalla.
+- `backend/` — focalizado: `./mvnw test -Dtest=<Clase>` (o `<Clase>#<metodo>`) · suite: `./mvnw test`. Necesita Docker corriendo.
+- `frontend/` — focalizado: `npx ng test --watch=false --include=<ruta/al/archivo.spec.ts>` · suite: `npx ng test --watch=false` · al cerrar, si toca templates, rutas o configuración: `npx ng build`.
+- **Nunca dos suites a la vez.** Borrar solo contenedores propios.
+- Ramas: una por caso de uso (`feat/cu-XX-<slug>`), gana sobre `feat/<feature>` de ODD.
+- Feature docs: `odd/tasks/<feature>.md` en la raíz del repo, commiteados con la feature. Espejo Engram con `project: "ferreteria"`.
+- Gate de verificación propio: ninguno (niveles de ODD; `odd-verifier` solo para alto riesgo). Ejecutores propios: ninguno (`odd-implementer`).
+- Merge y push a `main`: los corre Luca.
