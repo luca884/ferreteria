@@ -76,6 +76,18 @@ class RemitoServiceTest {
     }
 
     @Test
+    @DisplayName("R-001: falla de lock en el 1.º y el 2.º intento y éxito en el 3.º: se devuelve el remito, con tres intentos")
+    void dosFallasYExitoEnElTercero() {
+        when(registroRemito.emitir(pedido, USUARIO))
+                .thenThrow(new CannotAcquireLockException("timeout"))
+                .thenThrow(new DeadlockLoserDataAccessException("deadlock", null))
+                .thenReturn(nuevo);
+
+        assertThat(service.emitir(pedido, USUARIO)).isSameAs(nuevo);
+        verify(registroRemito, times(3)).emitir(pedido, USUARIO);
+    }
+
+    @Test
     @DisplayName("R-001: tres intentos con deadlock o timeout y se avisa que el sistema está ocupado (503), con el último error como causa; no hay un cuarto")
     void tresIntentosYSistemaOcupado() {
         DeadlockLoserDataAccessException ultimo = new DeadlockLoserDataAccessException("deadlock", null);

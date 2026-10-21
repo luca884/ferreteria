@@ -170,6 +170,11 @@ class MovimientoCuentaClienteRepositoryCobranzaTest extends CuentaCorrienteTestB
         assertThat(bloqueadas).containsExactly(id1, id2, id3);
     }
 
+    /**
+     * Este test NO discrimina el {@code force index (primary)} de {@code bloquearPartidas}: con el volumen de datos de la
+     * prueba el optimizador ya elige PRIMARY solo, así que queda verde aunque se quite el hint (verificado con una mutación).
+     * Quien protege el hint es {@code PlanDeLocksDeCobranzaTest} (texto del SQL + EXPLAIN con volumen).
+     */
     @Test
     @DisplayName("bloquearPartidas es por PK exacta: mientras A las tiene bloqueadas, otra conexión inserta una venta de OTRO cliente sin esperar (sin gap locks)")
     void bloquearPartidasNoTomaGapLocks() throws Exception {

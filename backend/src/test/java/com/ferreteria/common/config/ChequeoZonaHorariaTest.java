@@ -29,17 +29,21 @@ class ChequeoZonaHorariaTest {
     private final ch.qos.logback.classic.Logger logger =
             (ch.qos.logback.classic.Logger) LoggerFactory.getLogger(ChequeoZonaHoraria.class);
     private ListAppender<ILoggingEvent> eventos;
+    private boolean aditivoOriginal;
 
     @BeforeEach
     void capturarElLog() {
         eventos = new ListAppender<>();
         eventos.start();
+        aditivoOriginal = logger.isAdditive();
+        logger.setAdditive(false); // los WARN esperados quedan en el appender y no salen por la consola de la suite
         logger.addAppender(eventos);
     }
 
     @AfterEach
     void soltarElLog() {
         logger.detachAppender(eventos);
+        logger.setAdditive(aditivoOriginal);
     }
 
     @Test
