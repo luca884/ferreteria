@@ -45,8 +45,8 @@
         <thead>
           <tr>
             <th scope="col">Fecha</th>
-            <th scope="col">Comprobante</th>
             <th scope="col">Tipo</th>
+            <th scope="col">Comprobante</th>
             <th scope="col" class="num">Debe</th>
             <th scope="col" class="num">Haber</th>
             <th scope="col" class="num">Saldo</th>
@@ -56,16 +56,16 @@
           @for (linea of extracto().movimientos.items; track linea.id) {
             <tr>
               <td>{{ fecha(linea.fecha) }}</td>
+              <td>{{ tipoLabels[linea.tipo] }}</td>
               <td>
                 {{ linea.referencia }}
                 @if (linea.anulado) {
-                  <span class="marca-anulado">Anulado</span>
+                  <span class="marca-anulado">ANULADO</span>
                 }
                 @if (linea.tipo === 'ANULACION' && linea.motivo) {
                   <small class="motivo">Motivo: {{ linea.motivo }}</small>
                 }
               </td>
-              <td>{{ tipoLabels[linea.tipo] }}</td>
               <td class="num">{{ linea.debe > 0 ? (linea.debe | monto) : '' }}</td>
               <td class="num">{{ linea.haber > 0 ? (linea.haber | monto) : '' }}</td>
               <td class="num">{{ linea.saldo | monto }}</td>

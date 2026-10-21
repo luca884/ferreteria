@@ -132,7 +132,7 @@ describe('ExtractoImprimible (CC-099)', () => {
     expect(texto('.saldo-final')).toContain('$ 1.299,50');
   });
 
-  it('la tabla lista fecha, comprobante, tipo, debe, haber y saldo real, en el mismo orden que la pantalla (más nuevo arriba)', async () => {
+  it('la tabla lista fecha, tipo, comprobante, debe, haber y saldo real, en el mismo orden de columnas que la pantalla (CC-096) y más nuevo arriba', async () => {
     await abrir(
       extracto([
         linea(3, { fecha: '2026-10-20T23:59:59', tipo: 'COBRO', referencia: 'Recibo N.º 14', debe: 0, haber: 500, saldo: 700, reciboId: 14, comprobanteId: null }),
@@ -141,12 +141,19 @@ describe('ExtractoImprimible (CC-099)', () => {
     );
 
     expect(filas().map(celdas)).toEqual([
-      ['20/10/2026 23:59', 'Recibo N.º 14', 'Cobro', '', '$ 500,00', '$ 700,00'],
-      ['19/10/2026 08:05', 'Venta N.º 7', 'Venta', '$ 1.200,00', '', '$ 1.200,00'],
+      ['20/10/2026 23:59', 'Cobro', 'Recibo N.º 14', '', '$ 500,00', '$ 700,00'],
+      ['19/10/2026 08:05', 'Venta', 'Venta N.º 7', '$ 1.200,00', '', '$ 1.200,00'],
     ]);
   });
 
-  it('un cobro anulado se marca «Anulado» y la anulación muestra su motivo', async () => {
+  it('los encabezados del impreso van en el orden de la pantalla: Fecha, Tipo, Comprobante, Debe, Haber, Saldo', async () => {
+    await abrir();
+
+    const encabezados = Array.from(el().querySelectorAll('table.lineas thead th')).map((c) => limpio(c.textContent));
+    expect(encabezados).toEqual(['Fecha', 'Tipo', 'Comprobante', 'Debe', 'Haber', 'Saldo']);
+  });
+
+  it('un cobro anulado se marca «ANULADO» (como la pantalla, CC-096) y la anulación muestra su motivo', async () => {
     await abrir(
       extracto([
         linea(2, { tipo: 'ANULACION', referencia: 'Anulación Recibo N.º 14', reciboId: 14, comprobanteId: null, motivo: 'Cliente equivocado' }),
@@ -156,8 +163,8 @@ describe('ExtractoImprimible (CC-099)', () => {
 
     const [anulacion, cobro] = filas();
     expect(limpio(anulacion.textContent)).toContain('Motivo: Cliente equivocado');
-    expect(limpio(cobro.textContent)).toContain('Anulado');
-    expect(limpio(anulacion.textContent)).not.toMatch(/\bAnulado\b/);
+    expect(limpio(cobro.querySelector('.marca-anulado')?.textContent)).toBe('ANULADO');
+    expect(anulacion.querySelector('.marca-anulado')).toBeNull();
   });
 
   it('45 movimientos se imprimen los 45 (un solo extracto, sin paginar)', async () => {
@@ -165,8 +172,8 @@ describe('ExtractoImprimible (CC-099)', () => {
     await abrir(extracto(todos));
 
     expect(filas()).toHaveLength(45);
-    expect(celdas(filas()[0])[1]).toBe('Venta N.º 45');
-    expect(celdas(filas()[44])[1]).toBe('Venta N.º 1');
+    expect(celdas(filas()[0])[2]).toBe('Venta N.º 45');
+    expect(celdas(filas()[44])[2]).toBe('Venta N.º 1');
   });
 
   it('lleva «Emitido el …» en hora de Buenos Aires y la leyenda de resumen interno, no fiscal', async () => {
