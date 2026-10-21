@@ -370,11 +370,11 @@ class ExtractoIntegrationTest extends CuentaCorrienteTestBase {
         }
         for (String consulta : List.of("?hasta=9999-12-31", "?hasta=0999-12-31")) {
             JsonNode error = json(getResult(url(cliente) + consulta, t.dueno()).andExpect(status().isBadRequest()));
-            assertThat(error.get("errors").get("hasta").asText()).as(consulta).isEqualTo("La fecha hasta tiene que estar entre 1000 y 9999.");
+            assertThat(error.get("errors").get("hasta").asText()).as(consulta).isEqualTo("La fecha hasta tiene que estar entre el 01/01/1000 y el 30/12/9999.");
         }
         for (String consulta : List.of("?desde=0999-12-31", "?desde=9999-12-31", "?desde=0001-01-01")) {
             JsonNode error = json(getResult(url(cliente) + consulta, t.dueno()).andExpect(status().isBadRequest()));
-            assertThat(error.get("errors").get("desde").asText()).as(consulta).isEqualTo("La fecha desde tiene que estar entre 1000 y 9999.");
+            assertThat(error.get("errors").get("desde").asText()).as(consulta).isEqualTo("La fecha desde tiene que estar entre el 01/01/1000 y el 30/12/9999.");
         }
         // los bordes que sí entran
         for (String consulta : List.of("?page=21474836&size=100", "?page=2147483647&size=1", "?page=2147483647&impresion=true", "?hasta=9999-12-30",

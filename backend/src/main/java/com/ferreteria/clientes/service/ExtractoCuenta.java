@@ -71,10 +71,10 @@ public class ExtractoCuenta {
         }
         // Las fechas se acotan al rango que la base y el cálculo de «hasta + 1 día» soportan (nunca un 500, CC-073)
         if (fueraDeRango(filtro.desde())) {
-            throw new DatosInvalidosException(Map.of("desde", "La fecha desde tiene que estar entre 1000 y 9999."));
+            throw new DatosInvalidosException(Map.of("desde", "La fecha desde tiene que estar entre el 01/01/1000 y el 30/12/9999."));
         }
         if (fueraDeRango(filtro.hasta())) {
-            throw new DatosInvalidosException(Map.of("hasta", "La fecha hasta tiene que estar entre 1000 y 9999."));
+            throw new DatosInvalidosException(Map.of("hasta", "La fecha hasta tiene que estar entre el 01/01/1000 y el 30/12/9999."));
         }
         Cliente cliente = clientes.findScoped(clienteId).orElseThrow(() -> new ResourceNotFoundException(NO_ENCONTRADO));
 
