@@ -84,9 +84,12 @@ public interface MovimientoCuentaClienteRepository extends TenantScopedRepositor
      * una búsqueda por rango sobre un índice secundario no único ({@code ix_mcc_comprobante}, {@code ix_mcc_cliente}) toma
      * next-key y gap locks en REPEATABLE READ y frenaría las altas de ventas a cuenta de OTROS clientes. El mutex real de la
      * cuenta es la fila del cliente; esto fija además el orden de los locks (id ascendente: sin deadlock entre cobranzas).
-     * Requiere transacción. {@code ids} no puede ser vacío.
+     * {@code force index (primary)} es indispensable: sin él el optimizador puede elegir {@code ix_mcc_cliente} (un rango
+     * sobre ferretería y cliente, que además cubre la consulta) y tomar next-key locks sobre ese índice secundario, lo que
+     * reintroduce el gap lock que esta consulta evita (se vio con EXPLAIN: {@code PlanDeLocksDeCobranzaTest}, igual que
+     * {@code ImputacionRepository.bloquearDeRecibo}). Requiere transacción. {@code ids} no puede ser vacío.
      */
-    @Query(value = "select id from movimiento_cuenta_cliente where id in (:ids) and ferreteria_id = :fid "
+    @Query(value = "select id from movimiento_cuenta_cliente force index (primary) where id in (:ids) and ferreteria_id = :fid "
             + "and cliente_id = :clienteId order by id for update", nativeQuery = true)
     List<Long> bloquearPartidas(@Param("fid") Long ferreteriaId, @Param("clienteId") Long clienteId,
             @Param("ids") List<Long> ids);

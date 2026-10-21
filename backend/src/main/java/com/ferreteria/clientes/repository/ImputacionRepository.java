@@ -46,8 +46,15 @@ public interface ImputacionRepository extends TenantScopedRepository<Imputacion,
      * lectura crítica de la cobranza. Filas crudas, sin agregado (MySQL no admite agregados bajo FOR UPDATE de forma
      * confiable): se suman en el dominio. Se limita a los comprobantes imputados para no tomar locks de más. Requiere
      * transacción; {@code comprobanteIds} no puede ser vacío.
+     *
+     * <p>{@code force index (ix_imputacion_cliente)} fija el plan: sin él el optimizador puede elegir
+     * {@code fk_imputacion_comprobante} (un rango sobre {@code comprobante_id}, que toma locks sobre comprobantes de OTROS
+     * clientes de la ferretería; se vio con EXPLAIN en {@code PlanDeLocksDeCobranzaTest}). Es un índice secundario NO único,
+     * así que en REPEATABLE READ queda un gap residual acotado a (ferretería, cliente) más el registro siguiente: el hint no
+     * promete «sin gap locks» (a diferencia de {@code bloquearDeRecibo}, que va por la PRIMARY), solo que los locks se
+     * quedan dentro del cliente. El mutex real de la cuenta sigue siendo la fila del cliente.
      */
-    @Query(value = "select comprobante_id as comprobanteId, importe as importe from imputacion "
+    @Query(value = "select comprobante_id as comprobanteId, importe as importe from imputacion force index (ix_imputacion_cliente) "
             + "where ferreteria_id = :fid and cliente_id = :clienteId and comprobante_id in (:comprobanteIds) and vigente = true for update",
             nativeQuery = true)
     List<FilaImputada> imputadoBloqueado(@Param("fid") Long ferreteriaId, @Param("clienteId") Long clienteId,
