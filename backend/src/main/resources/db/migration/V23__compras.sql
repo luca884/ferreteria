@@ -1,7 +1,8 @@
 -- CU-13, tramo 1 de compras: la factura (o el remito) del proveedor. Suma el stock de cada articulo con un movimiento
 -- COMPRA y pisa su costo con el del renglon (ultimo costo, como GDS), recalculando el precio. El tramo 1 no lleva pago,
 -- cuenta corriente, IVA ni total de la factura: neto = suma de cantidad x costo unitario, en la moneda de la compra
--- (todos sus articulos son de la misma moneda). Una compra no se repite: proveedor, tipo, punto de venta y numero son
+-- (todos sus articulos son de la misma moneda). Guarda una copia del nombre del proveedor, como el comprobante guarda la
+-- razon social del cliente. Una compra no se repite: proveedor, tipo, punto de venta y numero son
 -- unicos en la ferreteria. La confirmacion es idempotente por clave, como el remito. Toda tabla lleva ferreteria_id y sus
 -- indices propios empiezan por esa columna.
 
@@ -9,7 +10,8 @@ CREATE TABLE compra (
     id                 BIGINT         NOT NULL AUTO_INCREMENT,
     ferreteria_id      BIGINT         NOT NULL,
     proveedor_id       BIGINT         NOT NULL,
-    tipo               VARCHAR(3)     NOT NULL,
+    proveedor_nombre   VARCHAR(100)   NOT NULL,
+    tipo             VARCHAR(3)     NOT NULL,
     punto_venta        INT            NOT NULL,
     numero             BIGINT         NOT NULL,
     fecha              DATE           NOT NULL,

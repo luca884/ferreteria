@@ -186,8 +186,8 @@ Son 12 casos de uso (CU-01 a CU-12), agrupados en cinco módulos: Configuración
 
 **CU-13 Registrar una compra** (solo el Dueño; punto 4 del orden acordado, tramo 1: ingreso de mercadería; GDS G34, G38 y G86)
 
-1. El Dueño carga la factura (o el remito) del proveedor: **proveedor** activo, **tipo** (Factura A, Factura B, Factura C o Remito), **punto de venta** (1 a 99999), **número** (1 a 99999999) y **fecha** (no futura). Proveedor, tipo, punto de venta y número no se pueden repetir en la ferretería: 409 «Esa compra ya está cargada: <tipo> <pppp>-<nnnnnnnn> de <proveedor>.».
-2. Agrega renglones: **artículo** activo, **cantidad** mayor a 0 y **costo unitario sin IVA** mayor a 0, en la moneda del artículo. Un artículo no se repite en la misma compra. Entre 1 y 500 renglones.
+1. El Dueño carga la factura (o el remito) del proveedor: **proveedor** activo, **tipo** (Factura A, Factura B, Factura C o Remito), **punto de venta** (1 a 99999), **número** (1 a 99999999) y **fecha** (no futura). Proveedor, tipo, punto de venta y número no se pueden repetir en la ferretería: 409 «Esa compra ya está cargada: <tipo> <ppppp>-<nnnnnnnn> de <proveedor>.».
+2. Agrega renglones: **artículo** activo, **cantidad** mayor a 0 (entera si el artículo se vende por unidad) y **costo unitario sin IVA** mayor a 0 (hasta 2 decimales), en la moneda del artículo. Un artículo no se repite en la misma compra, y una compra no mezcla artículos en pesos y en dólares. Entre 1 y 500 renglones.
 3. **Vista previa** antes de confirmar: por renglón, el costo y el precio de venta anteriores y nuevos, cuántos suben, cuántos bajan y cuántos quedan igual. Marca la variación fuerte (más de ±50 %, la misma advertencia de CU-04 y CU-05). La vista previa no guarda nada.
 4. El Dueño confirma y, **en una sola transacción**:
    - suma la cantidad al stock de cada artículo, con un movimiento de stock de tipo **compra** que referencia la compra;
