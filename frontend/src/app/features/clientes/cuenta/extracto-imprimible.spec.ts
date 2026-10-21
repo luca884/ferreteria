@@ -91,6 +91,16 @@ describe('ExtractoImprimible (CC-099)', () => {
     vi.useRealTimers();
   });
 
+  it('lo que sale en la hoja (el artículo) está dentro del diálogo y los botones quedan afuera (contrato con @media print de styles.css, CC-099)', async () => {
+    await abrir();
+
+    const articulo = el().querySelector('article.extracto-imprimible')!;
+    expect(articulo.closest('.dialogo-fondo > [role="dialog"]')).not.toBeNull();
+    const botones = Array.from(el().querySelectorAll('button'));
+    expect(botones.map((b) => limpio(b.textContent))).toEqual(['Cerrar', 'Imprimir']);
+    expect(botones.every((b) => !articulo.contains(b))).toBe(true);
+  });
+
   it('es un diálogo modal titulado «Extracto de cuenta corriente»', async () => {
     await abrir();
 

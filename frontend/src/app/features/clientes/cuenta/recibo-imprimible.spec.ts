@@ -75,6 +75,16 @@ describe('ReciboImprimible (CC-036, CC-043)', () => {
     expect(dialogo.getAttribute('aria-labelledby')).toBe('recibo-titulo');
   });
 
+  it('lo que sale en la hoja (el artículo) está dentro del diálogo y los botones quedan afuera (contrato con @media print de styles.css, CC-098)', async () => {
+    await abrir();
+
+    const articulo = el().querySelector('article.recibo-imprimible')!;
+    expect(articulo.closest('.dialogo-fondo > [role="dialog"]')).not.toBeNull();
+    const botones = Array.from(el().querySelectorAll('button'));
+    expect(botones.map((b) => limpio(b.textContent))).toEqual(['Cerrar', 'Imprimir']);
+    expect(botones.every((b) => !articulo.contains(b))).toBe(true);
+  });
+
   it('muestra la ferretería de la sesión, la fecha completa, el cliente, el medio, quién cobró y el total', async () => {
     await abrir();
 

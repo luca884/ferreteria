@@ -839,39 +839,32 @@ ul.error {
 
 /* ---------- Impresión ---------- */
 
-/* Al imprimir un recibo solo sale `.recibo-imprimible` (el contenido del diálogo del recibo): no la pantalla, ni los botones. */
+/*
+ * Los dos imprimibles (el recibo y el extracto) viven en un diálogo fijo y con scroll, encima de la pantalla. Al imprimir
+ * sale solo el artículo: todo lo que no lo contiene se saca con `display: none` (con `visibility: hidden` ocupa lugar y
+ * deja hojas en blanco), y el diálogo, su fondo, el shell y el contenido dejan de ser fijos, con scroll o de alto fijo
+ * (100vh): si no, Chrome repite el diálogo fijo en cada hoja (recibo) o el artículo queda en la columna angosta del
+ * menú (extracto). Las reglas solo rigen cuando hay un imprimible abierto, no en cualquier pantalla.
+ */
 @media print {
-  body * {
-    visibility: hidden;
-  }
-  .recibo-imprimible,
-  .recibo-imprimible * {
-    visibility: visible;
-  }
-  .recibo-imprimible {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    color: #000;
-  }
-
-  /*
-   * El extracto puede tener cientos de líneas y tiene que salir en varias hojas: no puede quedar dentro del diálogo
-   * (fijo y con scroll). Se saca de la pantalla todo lo que no lo contiene, el diálogo deja de ser fijo y el artículo
-   * fluye por las páginas. Sin esto saldrían hojas en blanco (lo oculto con `visibility` ocupa lugar) y solo la primera hoja.
-   */
-  body:has(.extracto-imprimible) *:not(:has(.extracto-imprimible)):not(.extracto-imprimible):not(.extracto-imprimible *) {
+  body:has(:is(.recibo-imprimible, .extracto-imprimible))
+    *:not(:has(:is(.recibo-imprimible, .extracto-imprimible))):not(:is(.recibo-imprimible, .extracto-imprimible)):not(
+      :is(.recibo-imprimible, .extracto-imprimible) *
+    ) {
     display: none !important;
   }
-  .extracto-imprimible,
-  .extracto-imprimible * {
-    visibility: visible;
+  app-shell:has(:is(.recibo-imprimible, .extracto-imprimible)),
+  app-shell:has(:is(.recibo-imprimible, .extracto-imprimible)) .contenido {
+    display: block !important;
+    height: auto !important;
+    overflow: visible !important;
+    padding: 0 !important;
   }
-  .dialogo-fondo:has(.extracto-imprimible),
-  .dialogo:has(.extracto-imprimible) {
+  .dialogo-fondo:has(:is(.recibo-imprimible, .extracto-imprimible)),
+  .dialogo:has(:is(.recibo-imprimible, .extracto-imprimible)) {
     position: static !important;
     display: block !important;
+    place-items: stretch !important;
     width: auto !important;
     max-height: none !important;
     padding: 0 !important;
@@ -879,6 +872,7 @@ ul.error {
     background: none !important;
     box-shadow: none !important;
   }
+  .recibo-imprimible,
   .extracto-imprimible {
     color: #000;
   }
