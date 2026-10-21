@@ -2,9 +2,9 @@ package com.ferreteria.catalogo.service;
 
 import com.ferreteria.catalogo.dto.ProveedorRequest;
 import com.ferreteria.catalogo.dto.ProveedorResponse;
-import com.ferreteria.catalogo.model.Cuit;
 import com.ferreteria.catalogo.model.Proveedor;
 import com.ferreteria.catalogo.repository.ProveedorRepository;
+import com.ferreteria.common.Cuit;
 import com.ferreteria.common.exception.ConflictException;
 import com.ferreteria.common.exception.DatosInvalidosException;
 import com.ferreteria.common.exception.ResourceNotFoundException;

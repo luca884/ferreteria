@@ -2,7 +2,7 @@ package com.ferreteria.catalogo;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.ferreteria.catalogo.model.Cuit;
+import com.ferreteria.common.Cuit;
 import com.ferreteria.support.IntegrationTestBase;
 import java.util.List;
 import org.junit.jupiter.api.Test;
