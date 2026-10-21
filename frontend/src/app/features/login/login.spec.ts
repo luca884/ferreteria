@@ -104,6 +104,30 @@ describe('Login', () => {
       expect(descripciones(campo('email'))).toEqual(['Email o contraseña incorrectos.']);
       expect(descripciones(campo('password'))).toEqual(['Email o contraseña incorrectos.']);
     });
+
+    it('un 401 con el mensaje genérico del servidor muestra el texto de siempre', async () => {
+      await crear();
+      const auth = TestBed.inject(AuthService) as unknown as { login: ReturnType<typeof vi.fn> };
+      auth.login.mockReturnValue(
+        throwError(() => new HttpErrorResponse({ status: 401, error: { message: 'Email o contraseña incorrectos' } })),
+      );
+
+      await ingresar();
+
+      expect(descripciones(campo('email'))).toEqual(['Email o contraseña incorrectos.']);
+    });
+
+    it('un 401 de ferretería suspendida muestra el mensaje del servidor', async () => {
+      await crear();
+      const auth = TestBed.inject(AuthService) as unknown as { login: ReturnType<typeof vi.fn> };
+      const mensaje = 'Tu ferretería está suspendida. Contactá al proveedor.';
+      auth.login.mockReturnValue(throwError(() => new HttpErrorResponse({ status: 401, error: { message: mensaje } })));
+
+      await ingresar();
+
+      expect(descripciones(campo('email'))).toEqual([mensaje]);
+      expect(descripciones(campo('password'))).toEqual([mensaje]);
+    });
   });
 
   it('sin returnUrl entra al inicio de su rol', async () => {

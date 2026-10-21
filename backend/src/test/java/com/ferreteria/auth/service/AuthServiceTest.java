@@ -3,8 +3,10 @@ package com.ferreteria.auth.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.entry;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -15,6 +17,7 @@ import com.ferreteria.auth.model.Usuario;
 import com.ferreteria.auth.repository.UsuarioRepository;
 import com.ferreteria.auth.security.AuthUser;
 import com.ferreteria.common.exception.DatosInvalidosException;
+import com.ferreteria.ferreteria.model.Ferreteria;
 import com.ferreteria.ferreteria.repository.FerreteriaRepository;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
@@ -31,6 +34,8 @@ class AuthServiceTest {
     private static final String SENUELO = "$2a$10$senuelo";
 
     private UsuarioRepository usuarios;
+    private FerreteriaRepository ferreterias;
+    private JwtService jwt;
     private PasswordEncoder encoder;
     private AuthService auth;
 
@@ -39,7 +44,9 @@ class AuthServiceTest {
         usuarios = mock(UsuarioRepository.class);
         encoder = mock(PasswordEncoder.class);
         when(encoder.encode(anyString())).thenReturn(SENUELO);
-        auth = new AuthService(usuarios, mock(FerreteriaRepository.class), encoder, mock(JwtService.class));
+        ferreterias = mock(FerreteriaRepository.class);
+        jwt = mock(JwtService.class);
+        auth = new AuthService(usuarios, ferreterias, encoder, jwt);
     }
 
     @Test
@@ -64,6 +71,100 @@ class AuthServiceTest {
         assertThatThrownBy(() -> auth.login(new LoginRequest("baja@demo.local", "demo1234")))
                 .isInstanceOf(CredencialesInvalidasException.class);
         verify(encoder, times(1)).matches("demo1234", "$2a$10$real");
+    }
+
+    // ---- login con la ferreteria suspendida (R-111) ----
+
+    private static final String GENERICO = "Email o contraseña incorrectos";
+
+    private Usuario deFerreteria(boolean activo, boolean passwordBuena) {
+        Usuario usuario = mock(Usuario.class);
+        when(usuario.isActivo()).thenReturn(activo);
+        when(usuario.getPasswordHash()).thenReturn("$2a$10$real");
+        when(usuario.getFerreteriaId()).thenReturn(3L);
+        when(encoder.matches("demo1234", "$2a$10$real")).thenReturn(passwordBuena);
+        when(usuarios.findByEmailIgnoreCase("u@demo.local")).thenReturn(Optional.of(usuario));
+        return usuario;
+    }
+
+    private Ferreteria ferreteria(boolean activa) {
+        Ferreteria ferreteria = mock(Ferreteria.class);
+        when(ferreteria.isActiva()).thenReturn(activa);
+        when(ferreterias.findById(3L)).thenReturn(Optional.of(ferreteria));
+        return ferreteria;
+    }
+
+    @Test
+    @DisplayName("ferretería suspendida con email y contraseña correctos: mensaje de suspendida, sin token")
+    void suspendidaConContrasenaBuena() {
+        deFerreteria(true, true);
+        ferreteria(false);
+
+        assertThatThrownBy(() -> auth.login(new LoginRequest("u@demo.local", "demo1234")))
+                .isExactlyInstanceOf(FerreteriaSuspendidaException.class)
+                .isInstanceOf(CredencialesInvalidasException.class)
+                .hasMessage("Tu ferretería está suspendida. Contactá al proveedor.");
+        verify(jwt, never()).generarToken(any());
+    }
+
+    @Test
+    @DisplayName("ferretería suspendida con contraseña mala: mensaje genérico y un solo bcrypt")
+    void suspendidaConContrasenaMala() {
+        deFerreteria(true, false);
+        ferreteria(false);
+
+        assertThatThrownBy(() -> auth.login(new LoginRequest("u@demo.local", "demo1234")))
+                .isExactlyInstanceOf(CredencialesInvalidasException.class)
+                .hasMessage(GENERICO);
+        verify(encoder, times(1)).matches("demo1234", "$2a$10$real");
+    }
+
+    @Test
+    @DisplayName("usuario inactivo con contraseña buena en una ferretería suspendida: genérico")
+    void inactivoEnFerreteriaSuspendida() {
+        deFerreteria(false, true);
+        ferreteria(false);
+
+        assertThatThrownBy(() -> auth.login(new LoginRequest("u@demo.local", "demo1234")))
+                .isExactlyInstanceOf(CredencialesInvalidasException.class)
+                .hasMessage(GENERICO);
+    }
+
+    @Test
+    @DisplayName("email inexistente: genérico, y el bcrypt corre igual contra el señuelo")
+    void emailInexistenteSigueGenerico() {
+        when(usuarios.findByEmailIgnoreCase("nadie@demo.local")).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> auth.login(new LoginRequest("nadie@demo.local", "demo1234")))
+                .isExactlyInstanceOf(CredencialesInvalidasException.class)
+                .hasMessage(GENERICO);
+        verify(encoder, times(1)).matches("demo1234", SENUELO);
+    }
+
+    @Test
+    @DisplayName("una ferretería que no existe sigue dando el genérico")
+    void ferreteriaInexistente() {
+        deFerreteria(true, true);
+        when(ferreterias.findById(3L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> auth.login(new LoginRequest("u@demo.local", "demo1234")))
+                .isExactlyInstanceOf(CredencialesInvalidasException.class)
+                .hasMessage(GENERICO);
+    }
+
+    @Test
+    @DisplayName("el super admin, sin ferretería, entra y no se consulta ninguna")
+    void superAdminSinFerreteria() {
+        Usuario admin = mock(Usuario.class);
+        when(admin.isActivo()).thenReturn(true);
+        when(admin.getPasswordHash()).thenReturn("$2a$10$admin");
+        when(admin.getFerreteriaId()).thenReturn(null);
+        when(encoder.matches("demo1234", "$2a$10$admin")).thenReturn(true);
+        when(usuarios.findByEmailIgnoreCase("admin@demo.local")).thenReturn(Optional.of(admin));
+        when(jwt.generarToken(admin)).thenReturn("token");
+
+        assertThat(auth.login(new LoginRequest("admin@demo.local", "demo1234")).token()).isEqualTo("token");
+        verify(ferreterias, never()).findById(any());
     }
 
     // ---- cambiar la propia contrasena (R-012) ----

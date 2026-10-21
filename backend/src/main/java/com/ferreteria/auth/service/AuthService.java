@@ -55,10 +55,13 @@ public class AuthService {
 
         Ferreteria ferreteria = null;
         if (usuario.getFerreteriaId() != null) {
+            // Misma respuesta que una contrasena mala: no revela si la ferreteria existe.
             ferreteria = ferreteriaRepository.findById(usuario.getFerreteriaId())
-                    .filter(Ferreteria::isActiva)
-                    // Misma respuesta que una contrasena mala: no revela si la ferreteria existe.
                     .orElseThrow(CredencialesInvalidasException::new);
+            // Llegar hasta aca ya probo el email y la contrasena y que el usuario esta activo: solo ahi se avisa.
+            if (!ferreteria.isActiva()) {
+                throw new FerreteriaSuspendidaException();
+            }
         }
         return new LoginResponse(jwtService.generarToken(usuario), toSesion(usuario, ferreteria));
     }
