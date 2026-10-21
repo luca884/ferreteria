@@ -75,7 +75,7 @@ describe('Shell', () => {
 
     const nav = el.querySelector('aside nav[aria-label="Secciones"]');
     expect(nav).not.toBeNull();
-    expect(nav!.querySelectorAll('a').length).toBe(12);
+    expect(nav!.querySelectorAll('a').length).toBe(13);
   });
 
   it('«Presupuestos» va después de «Mostrador» y lleva a /presupuestos, para el Vendedor y para el Dueño (GDS-13)', async () => {
@@ -108,7 +108,7 @@ describe('Shell', () => {
     }
   });
 
-  it('el Dueño ve Mostrador, Artículos, Rubros, Proveedores y, bajo «Precios», Importar lista, Actualizar precios y Cotización, y bajo «Cobro», Formas de pago', async () => {
+  it('el Dueño ve Mostrador, Artículos, Rubros, Proveedores y, bajo «Precios», Importar lista, Actualizar precios y Cotización, y bajo «Cobro», Formas de pago, y bajo «Equipo», Usuarios', async () => {
     const el = await render(true);
 
     expect(enlaces(el)).toEqual([
@@ -124,8 +124,13 @@ describe('Shell', () => {
       'Actualizar precios',
       'Cotización',
       'Formas de pago',
+      'Usuarios',
     ]);
-    expect(Array.from(el.querySelectorAll('nav .grupo')).map((g) => g.textContent?.trim())).toEqual(['Precios', 'Cobro']);
+    expect(Array.from(el.querySelectorAll('nav .grupo')).map((g) => g.textContent?.trim())).toEqual([
+      'Precios',
+      'Cobro',
+      'Equipo',
+    ]);
     expect(el.querySelector('a[href="/importaciones"]')).not.toBeNull();
   });
 
@@ -139,11 +144,11 @@ describe('Shell', () => {
     expect(enlace!.textContent?.trim()).toBe('Actualizar precios');
   });
 
-  it('el Dueño ve «Cotización» al final del grupo «Precios» (justo antes de «Cobro») y lleva a /configuracion/cotizacion', async () => {
+  it('el Dueño ve «Cotización» al final del grupo «Precios» (justo antes de «Formas de pago») y lleva a /configuracion/cotizacion', async () => {
     const el = await render(true);
 
     const nombres = enlaces(el);
-    expect(nombres.at(-2)).toBe('Cotización');
+    expect(nombres.indexOf('Cotización')).toBe(nombres.indexOf('Formas de pago') - 1);
     const enlace = el.querySelector('nav a[href="/configuracion/cotizacion"]');
     expect(enlace).not.toBeNull();
     expect(enlace!.textContent?.trim()).toBe('Cotización');
@@ -164,13 +169,40 @@ describe('Shell', () => {
   it('el Dueño ve «Formas de pago» bajo «Cobro» y lleva a /configuracion/formas-pago; el Vendedor no la ve', async () => {
     const el = await render(true);
 
-    expect(enlaces(el).at(-1)).toBe('Formas de pago');
+    const nombres = enlaces(el);
+    expect(nombres.indexOf('Formas de pago')).toBe(nombres.indexOf('Usuarios') - 1);
     expect(el.querySelector('nav a[href="/configuracion/formas-pago"]')).not.toBeNull();
 
     TestBed.resetTestingModule();
     const vendedor = await render(false);
     expect(vendedor.querySelector('nav a[href="/configuracion/formas-pago"]')).toBeNull();
     expect(enlaces(vendedor)).not.toContain('Formas de pago');
+  });
+
+  it('el Dueño ve «Usuarios» bajo «Equipo», al final del menú, y lleva a /usuarios', async () => {
+    const el = await render(true);
+
+    expect(enlaces(el).at(-1)).toBe('Usuarios');
+    expect(el.querySelector('nav a[href="/usuarios"]')!.textContent?.trim()).toBe('Usuarios');
+  });
+
+  it('el Vendedor no ve «Usuarios» ni el grupo «Equipo»', async () => {
+    const el = await render(false);
+
+    expect(enlaces(el)).not.toContain('Usuarios');
+    expect(el.querySelector('nav a[href="/usuarios"]')).toBeNull();
+    expect(Array.from(el.querySelectorAll('nav .grupo')).map((g) => g.textContent?.trim())).not.toContain('Equipo');
+  });
+
+  it('todo rol ve «Cambiar mi contraseña» en el bloque del usuario, que lleva a /mi-contrasena', async () => {
+    for (const dueno of [false, true]) {
+      TestBed.resetTestingModule();
+      const el = await render(dueno);
+
+      const enlace = el.querySelector('.usuario a[href="/mi-contrasena"]');
+      expect(enlace).not.toBeNull();
+      expect(enlace!.textContent?.trim()).toBe('Cambiar mi contraseña');
+    }
   });
 
   it('el Vendedor no ve «Cotización» en el menú (sí ve el bloque de cotización)', async () => {

@@ -80,6 +80,14 @@
         </svg>
         Formas de pago
       </a>
+      <span class="grupo">Equipo</span>
+      <a routerLink="/usuarios" routerLinkActive="activo" ariaCurrentWhenActive="page">
+        <svg viewBox="0 0 16 16" aria-hidden="true">
+          <circle cx="8" cy="5" r="2.5" />
+          <path d="M3 13.5c0-2.6 2.2-4.2 5-4.2s5 1.6 5 4.2" />
+        </svg>
+        Usuarios
+      </a>
     }
   </nav>
 
@@ -94,6 +102,9 @@
       </span>
     }
     <button type="button" class="salir" (click)="salir()">Salir</button>
+    <a class="cambiar-contrasena" routerLink="/mi-contrasena" routerLinkActive="activo" ariaCurrentWhenActive="page">
+      Cambiar mi contraseña
+    </a>
   </div>
 </aside>
 <main #contenido id="contenido" class="contenido" tabindex="-1">

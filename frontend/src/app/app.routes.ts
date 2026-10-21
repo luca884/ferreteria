@@ -114,6 +114,19 @@ export const routes: Routes = [
         title: titulo('Formas de pago'),
         loadComponent: () => import('./features/formas-pago/formas-pago').then((m) => m.FormasPago),
       },
+      // Sin guard de rol, como las otras pantallas del Dueño: al Vendedor el API le responde 403 y la pantalla lo avisa sin mostrar datos.
+      {
+        path: 'usuarios',
+        title: titulo('Usuarios'),
+        loadComponent: () => import('./features/usuarios/usuarios').then((m) => m.Usuarios),
+      },
+      // Sin guard de rol: «Cambiar mi contraseña» es de todo usuario logueado.
+      {
+        path: 'mi-contrasena',
+        title: titulo('Cambiar mi contraseña'),
+        loadComponent: () =>
+          import('./features/mi-contrasena/mi-contrasena').then((m) => m.MiContrasena),
+      },
     ],
   },
   { path: '**', redirectTo: '' },

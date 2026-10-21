@@ -33,6 +33,24 @@ export class AuthService {
       );
   }
 
+  /**
+   * Cambia la contraseña propia. Una actual incorrecta vuelve como 400 con la clave `passwordActual`, nunca como 401:
+   * el interceptor desloguea ante cualquier 401.
+   */
+  cambiarContrasena(passwordActual: string, passwordNueva: string): Observable<void> {
+    return this.http.put<void>(`${environment.apiUrl}/auth/password`, { passwordActual, passwordNueva });
+  }
+
+  /** Vuelve a pedir la sesión al servidor (por ejemplo después de editar el propio nombre). Si falla, la local queda como estaba. */
+  refrescarSesion(): Observable<Sesion> {
+    return this.http.get<Sesion>(`${environment.apiUrl}/auth/me`).pipe(
+      tap((sesion) => {
+        this._sesion.set(sesion);
+        escribir(SESION_KEY, JSON.stringify(sesion));
+      }),
+    );
+  }
+
   logout(): void {
     this._token.set(null);
     this._sesion.set(null);
