@@ -6,7 +6,7 @@ import { vi } from 'vitest';
 import { AuthService } from '../../../core/auth/auth.service';
 import { Recibo } from './cobranza.models';
 import { cargarEstilosGlobales } from './estilos-globales.testing';
-import { ReciboImprimible } from './recibo-imprimible';
+import { LEYENDA_ANULADO, ReciboImprimible } from './recibo-imprimible';
 
 registerLocaleData(localeEsAr);
 
@@ -159,6 +159,83 @@ describe('ReciboImprimible (CC-036, CC-043)', () => {
 
     expect(el().querySelector('.ferreteria')).toBeNull();
     expect(el().textContent).not.toContain('null');
+  });
+
+  describe('recibo anulado (CC-098, Q12)', () => {
+    const anulado = (): Recibo =>
+      recibo({
+        estado: 'ANULADO',
+        fechaAnulacion: '2026-10-20T09:15:40',
+        anuladoPor: 'Dueño Tornillo',
+        motivoAnulacion: 'Cliente equivocado',
+      });
+
+    it('la palabra de la marca sale de una constante aislada (a confirmar con el contador)', () => {
+      expect(LEYENDA_ANULADO).toBe('ANULADO');
+    });
+
+    it('un recibo ANULADO lleva la marca dentro del recibo que se imprime', async () => {
+      await abrir(anulado());
+
+      const articulo = el().querySelector('.recibo-imprimible')!;
+      const marca = articulo.querySelector('.marca-anulado');
+      expect(limpio(marca?.textContent)).toBe('ANULADO');
+    });
+
+    it('muestra el motivo y quién lo anuló con día y hora, dentro del recibo que se imprime', async () => {
+      await abrir(anulado());
+
+      const articulo = el().querySelector('.recibo-imprimible')!;
+      expect(limpio(articulo.querySelector('.motivo-anulacion')?.textContent)).toBe('Motivo: Cliente equivocado');
+      expect(limpio(articulo.querySelector('.anulado-por')?.textContent)).toBe(
+        'Anulado por Dueño Tornillo el 20/10/2026 09:15',
+      );
+    });
+
+    it('conserva los datos originales, las imputaciones y la leyenda de recibo interno', async () => {
+      await abrir(anulado());
+
+      expect(texto('#recibo-titulo')).toBe('Recibo N.º 12');
+      expect(texto('.datos')).toContain('Ana Gómez');
+      expect(texto('.imputaciones')).toContain('Venta N.º 7');
+      expect(texto('.total')).toContain('$ 1.500,00');
+      expect(texto('.fecha')).toBe('19/10/2026 10:30');
+      expect(texto('.leyenda')).toBe('Recibo interno, no válido como comprobante fiscal');
+    });
+
+    it('un recibo EMITIDO se ve como en 3a: sin marca, sin motivo y sin «anulado por»', async () => {
+      await abrir(recibo());
+
+      expect(el().querySelector('.marca-anulado')).toBeNull();
+      expect(el().querySelector('.motivo-anulacion')).toBeNull();
+      expect(el().querySelector('.anulado-por')).toBeNull();
+      expect(el().textContent).not.toContain('ANULADO');
+    });
+
+    it('si el servidor no manda quién ni cuándo, la marca y el motivo salen igual y no se escribe «null»', async () => {
+      await abrir(recibo({ estado: 'ANULADO', motivoAnulacion: 'Cliente equivocado' }));
+
+      expect(texto('.marca-anulado')).toBe('ANULADO');
+      expect(texto('.motivo-anulacion')).toBe('Motivo: Cliente equivocado');
+      expect(el().querySelector('.anulado-por')).toBeNull();
+      expect(el().textContent).not.toContain('null');
+    });
+
+    it('Enter imprime y Esc cierra también con la marca', async () => {
+      await abrir(anulado());
+
+      tecla('Enter');
+      tecla('Escape');
+
+      expect(imprimir).toHaveBeenCalledTimes(1);
+      expect(cerradas).toBe(1);
+    });
+
+    it('el diálogo marca el estado en pantalla: el título sigue siendo el del recibo', async () => {
+      await abrir(anulado());
+
+      expect(el().querySelector('[role="dialog"]')!.getAttribute('aria-labelledby')).toBe('recibo-titulo');
+    });
   });
 
   describe('imprimir y cerrar', () => {

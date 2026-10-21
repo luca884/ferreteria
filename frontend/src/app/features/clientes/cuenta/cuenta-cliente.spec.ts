@@ -80,6 +80,7 @@ describe('CuentaCliente (CC-028, CC-033, CC-034, CC-038, CC-043)', () => {
     pendientes: ReturnType<typeof vi.fn>;
     cobrar: ReturnType<typeof vi.fn>;
     recibo: ReturnType<typeof vi.fn>;
+    anular: ReturnType<typeof vi.fn>;
   };
   let extractos: { extracto: ReturnType<typeof vi.fn>; paraImprimir: ReturnType<typeof vi.fn> };
   let claves: string[];
@@ -128,6 +129,15 @@ describe('CuentaCliente (CC-028, CC-033, CC-034, CC-038, CC-043)', () => {
     truncado: false,
   });
 
+  /** Un cobro ya anulado por el Dueño el 20/10 a las 09:15 (lo que devuelven el POST de anulación y el GET después). */
+  const reciboAnulado = (): Recibo =>
+    recibo({
+      estado: 'ANULADO',
+      fechaAnulacion: '2026-10-20T09:15:40',
+      anuladoPor: 'Dueño Tornillo',
+      motivoAnulacion: 'Cliente equivocado',
+    });
+
   interface Opciones {
     dueno?: boolean;
     id?: string;
@@ -135,9 +145,18 @@ describe('CuentaCliente (CC-028, CC-033, CC-034, CC-038, CC-043)', () => {
     cobrar?: (r: CobranzaRequest) => Observable<ReciboCobrado>;
     extracto?: () => Observable<Extracto>;
     cliente?: Cliente;
+    anular?: (reciboId: number, motivo: string) => Observable<Recibo>;
   }
 
-  async function crear({ dueno = true, id = '8', pendientes, cobrar, extracto: pedirExtracto, cliente = ana }: Opciones = {}) {
+  async function crear({
+    dueno = true,
+    id = '8',
+    pendientes,
+    cobrar,
+    extracto: pedirExtracto,
+    cliente = ana,
+    anular,
+  }: Opciones = {}) {
     clientes = { obtener: vi.fn(() => of(cliente)) };
     extractos = {
       extracto: vi.fn(pedirExtracto ?? (() => of(extractoBase([lineaVenta])))),
@@ -147,6 +166,7 @@ describe('CuentaCliente (CC-028, CC-033, CC-034, CC-038, CC-043)', () => {
       pendientes: vi.fn(pendientes ?? (() => of(con3))),
       cobrar: vi.fn(cobrar ?? (() => of({ recibo: recibo(), repetida: false }))),
       recibo: vi.fn(() => of(recibo())),
+      anular: vi.fn(anular ?? (() => of(reciboAnulado()))),
     };
     let n = 0;
     claves = [];
@@ -304,6 +324,469 @@ describe('CuentaCliente (CC-028, CC-033, CC-034, CC-038, CC-043)', () => {
       await f4();
 
       expect(dialogo()).not.toBeNull();
+    });
+  });
+
+  describe('Anular un cobro y reimprimir (CC-097, CC-098, CC-060)', () => {
+    const lineaAnulacion: LineaExtracto = {
+      ...lineaCobro,
+      id: 3,
+      tipo: 'ANULACION',
+      referencia: 'Anulación Recibo N.º 12',
+      debe: 600,
+      haber: 0,
+      saldo: 1200,
+      motivo: 'Cliente equivocado',
+    };
+    const anulacion = () => el().querySelector('app-dialogo-anulacion');
+    const botonAnular = () => el().querySelector<HTMLButtonElement>('app-movimientos-cuenta button.anular')!;
+    const motivo = () => el().querySelector<HTMLInputElement>('#motivo-anulacion')!;
+    const recibos = () => el().querySelectorAll('app-recibo-imprimible');
+    const alerta = () => limpio(el().querySelector('.alerta')?.textContent);
+
+    async function pedirAnular() {
+      botonAnular().focus();
+      botonAnular().click();
+      await refrescar();
+    }
+
+    async function escribirMotivo(valor: string) {
+      motivo().value = valor;
+      motivo().dispatchEvent(new Event('input', { bubbles: true }));
+      await refrescar();
+    }
+
+    async function teclaEnMotivo(key: string) {
+      motivo().dispatchEvent(new KeyboardEvent('keydown', { key, cancelable: true, bubbles: true }));
+      await refrescar();
+    }
+
+    /** Abre el diálogo, escribe un motivo válido y confirma con Enter. */
+    async function anularConMotivo(valor = 'Cliente equivocado') {
+      await pedirAnular();
+      await escribirMotivo(valor);
+      await teclaEnMotivo('Enter');
+    }
+
+    const conCobro = (opciones: Opciones = {}) => crear({ extracto: () => of(extractoBase([lineaCobro])), ...opciones });
+
+    describe('abrir el diálogo', () => {
+      it('«Anular» trae el recibo (GET) y abre el diálogo de anulación con su resumen; todavía no se anula', async () => {
+        await conCobro();
+
+        await pedirAnular();
+
+        expect(cobranza.recibo).toHaveBeenCalledWith(5);
+        expect(anulacion()).not.toBeNull();
+        expect(limpio(anulacion()!.querySelector('h2')?.textContent)).toBe('Anular recibo N.º 12');
+        expect(limpio(anulacion()!.querySelector('.resumen')?.textContent)).toContain('Ana Gómez');
+        expect(cobranza.anular).not.toHaveBeenCalled();
+      });
+
+      it('si no se puede traer el recibo no abre nada y avisa que se pruebe de nuevo', async () => {
+        await conCobro();
+        cobranza.recibo.mockReturnValue(throwError(() => errorHttp(500, null)));
+
+        await pedirAnular();
+
+        expect(anulacion()).toBeNull();
+        expect(texto('[role="alert"]')).toContain('No se pudo traer el recibo.');
+        expect(cobranza.anular).not.toHaveBeenCalled();
+      });
+
+      it('mientras trae el recibo un segundo clic en «Anular» no pide otro', async () => {
+        const respuesta = new Subject<Recibo>();
+        await conCobro();
+        cobranza.recibo.mockReturnValue(respuesta);
+
+        botonAnular().click();
+        botonAnular().click();
+        await refrescar();
+        respuesta.next(recibo());
+        respuesta.complete();
+        await refrescar();
+
+        expect(cobranza.recibo).toHaveBeenCalledTimes(1);
+        expect(el().querySelectorAll('app-dialogo-anulacion')).toHaveLength(1);
+      });
+
+      it('si el recibo ya estaba anulado (la fila estaba desactualizada) no abre el diálogo: avisa y recarga', async () => {
+        await conCobro();
+        cobranza.recibo.mockReturnValue(of(reciboAnulado()));
+
+        await pedirAnular();
+
+        expect(anulacion()).toBeNull();
+        expect(alerta()).toContain('Este recibo ya fue anulado por Dueño Tornillo el 20/10/2026 09:15');
+        expect(extractos.extracto).toHaveBeenCalledTimes(2);
+        expect(cobranza.pendientes).toHaveBeenCalledTimes(2);
+      });
+
+      it('con el diálogo abierto F4 no abre el cobro', async () => {
+        await conCobro();
+        await pedirAnular();
+
+        await f4();
+
+        expect(dialogo()).toBeNull();
+        expect(anulacion()).not.toBeNull();
+      });
+
+      it('mientras se trae el recibo para anular F4 tampoco abre el cobro', async () => {
+        await conCobro();
+        cobranza.recibo.mockReturnValue(new Subject<Recibo>());
+
+        botonAnular().click();
+        await refrescar();
+        await f4();
+
+        expect(dialogo()).toBeNull();
+      });
+    });
+
+    describe('confirmar', () => {
+      it('Enter con un motivo válido anula el recibo con el motivo recortado', async () => {
+        await conCobro();
+
+        await anularConMotivo('  Cliente equivocado  ');
+
+        expect(cobranza.anular).toHaveBeenCalledTimes(1);
+        expect(cobranza.anular).toHaveBeenCalledWith(5, 'Cliente equivocado');
+      });
+
+      it('con un motivo corto no se llama al backend', async () => {
+        await conCobro();
+
+        await pedirAnular();
+        await escribirMotivo('abc');
+        await teclaEnMotivo('Enter');
+
+        expect(cobranza.anular).not.toHaveBeenCalled();
+        expect(anulacion()).not.toBeNull();
+      });
+
+      it('mientras se envía el diálogo se deshabilita y un segundo Enter no manda otra anulación', async () => {
+        const respuesta = new Subject<Recibo>();
+        await conCobro({ anular: () => respuesta });
+        await pedirAnular();
+        await escribirMotivo('Cliente equivocado');
+
+        await teclaEnMotivo('Enter');
+        await teclaEnMotivo('Enter');
+
+        expect(cobranza.anular).toHaveBeenCalledTimes(1);
+        expect(anulacion()!.querySelector<HTMLButtonElement>('button.anular-recibo')!.disabled).toBe(true);
+      });
+    });
+
+    describe('200: anulado', () => {
+      it('cierra el diálogo y avisa «Recibo N.º 12 anulado. Los comprobantes volvieron a quedar pendientes.»', async () => {
+        await conCobro();
+
+        await anularConMotivo();
+
+        expect(anulacion()).toBeNull();
+        expect(texto('.alerta.exito span')).toBe('Recibo N.º 12 anulado. Los comprobantes volvieron a quedar pendientes.');
+        expect(boton('Ver recibo')).toBeDefined();
+      });
+
+      it('recarga los pendientes y el extracto (saldo, pendientes y Movimientos se refrescan)', async () => {
+        await conCobro();
+        expect(cobranza.pendientes).toHaveBeenCalledTimes(1);
+        expect(extractos.extracto).toHaveBeenCalledTimes(1);
+
+        await anularConMotivo();
+
+        expect(cobranza.pendientes).toHaveBeenCalledTimes(2);
+        expect(extractos.extracto).toHaveBeenCalledTimes(2);
+      });
+
+      it('el foco pasa a «Ver recibo»: la fila ya no tiene «Anular» y el resultado se anuncia ahí', async () => {
+        await conCobro();
+
+        await anularConMotivo();
+
+        expect(document.activeElement).toBe(boton('Ver recibo'));
+      });
+
+      it('«Ver recibo» trae el recibo (GET) y lo muestra con la marca ANULADO, el motivo y quién lo anuló', async () => {
+        await conCobro();
+        await anularConMotivo();
+        cobranza.recibo.mockClear();
+        cobranza.recibo.mockReturnValue(of(reciboAnulado()));
+
+        boton('Ver recibo')!.click();
+        await refrescar();
+
+        expect(cobranza.recibo).toHaveBeenCalledWith(5);
+        expect(recibos()).toHaveLength(1);
+        const contenido = limpio(recibos()[0].textContent);
+        expect(contenido).toContain('ANULADO');
+        expect(contenido).toContain('Motivo: Cliente equivocado');
+        expect(contenido).toContain('Anulado por Dueño Tornillo el 20/10/2026 09:15');
+      });
+
+      it('un cobro nuevo saca el aviso de la anulación', async () => {
+        await conCobro();
+        await anularConMotivo();
+
+        await f4();
+
+        expect(el().querySelector('.alerta')).toBeNull();
+      });
+
+      it('no deja el aviso del cobro anterior junto al de la anulación', async () => {
+        await conCobro();
+        await cobrar('600');
+        boton('Cerrar')!.click();
+        await refrescar();
+        expect(boton('Reimprimir recibo')).toBeDefined();
+
+        await anularConMotivo();
+
+        expect(el().querySelectorAll('.alerta')).toHaveLength(1);
+        expect(boton('Reimprimir recibo')).toBeUndefined();
+      });
+    });
+
+    describe('rechazos', () => {
+      it('409 RECIBO_YA_ANULADO: cierra el diálogo, avisa quién y cuándo y recarga (hecho consumado)', async () => {
+        await conCobro({
+          anular: () =>
+            throwError(() =>
+              errorHttp(409, {
+                status: 409,
+                message: 'El recibo ya fue anulado.',
+                timestamp: '2026-10-20T12:00:00Z',
+                motivo: 'RECIBO_YA_ANULADO',
+                anuladoPor: 'Dueño Tornillo',
+                fechaAnulacion: '2026-10-20T09:15:40',
+              }),
+            ),
+        });
+
+        await anularConMotivo();
+
+        expect(anulacion()).toBeNull();
+        expect(texto('.alerta')).toContain('Este recibo ya fue anulado por Dueño Tornillo el 20/10/2026 09:15');
+        expect(texto('.alerta.exito')).toBeNull();
+        expect(cobranza.pendientes).toHaveBeenCalledTimes(2);
+        expect(extractos.extracto).toHaveBeenCalledTimes(2);
+      });
+
+      it('409 sin quién ni cuándo: muestra el mensaje del servidor', async () => {
+        await conCobro({
+          anular: () => throwError(() => rechazo(409, 'RECIBO_YA_ANULADO', 'El recibo ya fue anulado.')),
+        });
+
+        await anularConMotivo();
+
+        expect(anulacion()).toBeNull();
+        expect(texto('.alerta')).toContain('El recibo ya fue anulado.');
+      });
+
+      it.each([
+        ['CAJA_CERRADA', 'Abrí la caja para anular un cobro en efectivo.'],
+        ['CAJA_DE_OTRO_DIA', 'La caja del 18/10 sigue abierta. Cerrala antes de anular.'],
+      ])('422 %s: muestra el mensaje del servidor, el diálogo sigue abierto y conserva el motivo', async (codigo, message) => {
+        await conCobro({ anular: () => throwError(() => rechazo(422, codigo, message)) });
+
+        await anularConMotivo();
+
+        expect(anulacion()).not.toBeNull();
+        expect(limpio(anulacion()!.querySelector('.error-servidor')?.textContent)).toBe(message);
+        expect(motivo().value).toBe('Cliente equivocado');
+        expect(el().querySelector('.alerta')).toBeNull();
+      });
+
+      it('422 sin motivo (cliente desactivado): muestra el mensaje y el diálogo sigue abierto', async () => {
+        await conCobro({
+          anular: () => throwError(() => errorHttp(422, { status: 422, message: 'El cliente está desactivado.' })),
+        });
+
+        await anularConMotivo();
+
+        expect(anulacion()).not.toBeNull();
+        expect(limpio(anulacion()!.querySelector('.error-servidor')?.textContent)).toBe('El cliente está desactivado.');
+      });
+
+      it('después de un rechazo se puede volver a confirmar', async () => {
+        await conCobro({ anular: () => throwError(() => rechazo(422, 'CAJA_CERRADA', 'Abrí la caja.')) });
+        await anularConMotivo();
+
+        await teclaEnMotivo('Enter');
+
+        expect(cobranza.anular).toHaveBeenCalledTimes(2);
+      });
+
+      it('400: muestra el error del motivo que manda el servidor', async () => {
+        await conCobro({
+          anular: () =>
+            throwError(() =>
+              errorHttp(400, { status: 400, message: 'Datos inválidos.', errors: { motivo: 'El motivo es obligatorio.' } }),
+            ),
+        });
+
+        await anularConMotivo();
+
+        expect(anulacion()).not.toBeNull();
+        expect(limpio(anulacion()!.querySelector('.error-servidor')?.textContent)).toBe('El motivo es obligatorio.');
+      });
+
+      it('503: «El sistema está ocupado, reintentá.» y el diálogo sigue abierto', async () => {
+        await conCobro({
+          anular: () => throwError(() => errorHttp(503, { status: 503, message: 'El sistema está ocupado, reintentá.' })),
+        });
+
+        await anularConMotivo();
+
+        expect(anulacion()).not.toBeNull();
+        expect(limpio(anulacion()!.querySelector('.error-servidor')?.textContent)).toBe('El sistema está ocupado, reintentá.');
+      });
+
+      it('sin conexión o 5xx: dice que no se pudo, que se reintente y que si ya se anuló se va a ver el aviso', async () => {
+        await conCobro({ anular: () => throwError(() => errorHttp(0, new ProgressEvent('error'))) });
+
+        await anularConMotivo();
+
+        expect(anulacion()).not.toBeNull();
+        const mensaje = limpio(anulacion()!.querySelector('.error-servidor')?.textContent);
+        expect(mensaje).toContain('No se pudo anular');
+        expect(mensaje).toContain('Reintentá');
+        expect(mensaje).toContain('si ya se anuló, vas a ver el aviso');
+      });
+
+      it('un 500 se trata igual que la falta de conexión y reintentar es seguro (se vuelve a mandar)', async () => {
+        await conCobro({ anular: () => throwError(() => errorHttp(500, null)) });
+        await anularConMotivo();
+        expect(limpio(anulacion()!.querySelector('.error-servidor')?.textContent)).toContain('Reintentá');
+
+        await teclaEnMotivo('Enter');
+
+        expect(cobranza.anular).toHaveBeenCalledTimes(2);
+        expect(cobranza.anular).toHaveBeenNthCalledWith(2, 5, 'Cliente equivocado');
+      });
+
+      it('un error con mensaje del servidor que no es de los conocidos se muestra tal cual', async () => {
+        await conCobro({ anular: () => throwError(() => errorHttp(404, { status: 404, message: 'Recibo no encontrado.' })) });
+
+        await anularConMotivo();
+
+        expect(limpio(anulacion()!.querySelector('.error-servidor')?.textContent)).toBe('Recibo no encontrado.');
+      });
+
+      it('al reintentar se limpia el error anterior', async () => {
+        let intento = 0;
+        const respuesta = new Subject<Recibo>();
+        await conCobro({
+          anular: () => (++intento === 1 ? throwError(() => rechazo(422, 'CAJA_CERRADA', 'Abrí la caja.')) : respuesta),
+        });
+        await anularConMotivo();
+        expect(anulacion()!.querySelector('.error-servidor')).not.toBeNull();
+
+        await teclaEnMotivo('Enter');
+
+        expect(anulacion()!.querySelector('.error-servidor')).toBeNull();
+      });
+    });
+
+    describe('cancelar', () => {
+      it('Esc cierra sin anular y el foco vuelve al botón «Anular» de origen', async () => {
+        await conCobro();
+        await pedirAnular();
+
+        await teclaEnMotivo('Escape');
+
+        expect(anulacion()).toBeNull();
+        expect(cobranza.anular).not.toHaveBeenCalled();
+        expect(document.activeElement).toBe(botonAnular());
+      });
+
+      it('«Cancelar» cierra sin anular y no deja avisos', async () => {
+        await conCobro();
+        await pedirAnular();
+
+        boton('Cancelar')!.click();
+        await refrescar();
+
+        expect(anulacion()).toBeNull();
+        expect(cobranza.anular).not.toHaveBeenCalled();
+        expect(el().querySelector('.alerta')).toBeNull();
+      });
+
+      it('al volver a abrir, el diálogo empieza limpio (sin el error ni el motivo de antes)', async () => {
+        await conCobro({ anular: () => throwError(() => rechazo(422, 'CAJA_CERRADA', 'Abrí la caja.')) });
+        await anularConMotivo();
+        await teclaEnMotivo('Escape');
+
+        await pedirAnular();
+
+        expect(anulacion()!.querySelector('.error-servidor')).toBeNull();
+        expect(motivo().value).toBe('');
+      });
+    });
+
+    describe('Reimprimir (CC-098)', () => {
+      const reimprimir = () => el().querySelector<HTMLButtonElement>('app-movimientos-cuenta button.reimprimir')!;
+
+      it('en una fila COBRO trae el recibo por su id y lo muestra', async () => {
+        await conCobro();
+
+        reimprimir().click();
+        await refrescar();
+
+        expect(cobranza.recibo).toHaveBeenCalledWith(5);
+        expect(recibos()).toHaveLength(1);
+        expect(limpio(recibos()[0].textContent)).toContain('Recibo N.º 12');
+        expect(limpio(recibos()[0].textContent)).not.toContain('ANULADO');
+      });
+
+      it('en una fila ANULACION abre el mismo recibo, ya ANULADO', async () => {
+        await crear({ extracto: () => of(extractoBase([lineaAnulacion])) });
+        cobranza.recibo.mockReturnValue(of(reciboAnulado()));
+
+        reimprimir().click();
+        await refrescar();
+
+        expect(cobranza.recibo).toHaveBeenCalledWith(5);
+        expect(limpio(recibos()[0].textContent)).toContain('ANULADO');
+      });
+
+      it('si no se puede traer el recibo avisa y no abre nada', async () => {
+        await conCobro();
+        cobranza.recibo.mockReturnValue(throwError(() => errorHttp(500, null)));
+
+        reimprimir().click();
+        await refrescar();
+
+        expect(recibos()).toHaveLength(0);
+        expect(texto('[role="alert"]')).toContain('No se pudo traer el recibo.');
+      });
+
+      it('Esc cierra el recibo y el foco vuelve a «Reimprimir»', async () => {
+        await conCobro();
+        reimprimir().focus();
+        reimprimir().click();
+        await refrescar();
+
+        el().querySelector('app-recibo-imprimible [role="dialog"]')!.dispatchEvent(
+          new KeyboardEvent('keydown', { key: 'Escape', cancelable: true, bubbles: true }),
+        );
+        await refrescar();
+
+        expect(recibos()).toHaveLength(0);
+        expect(document.activeElement).toBe(reimprimir());
+      });
+
+      it('con el recibo abierto F4 no abre el cobro', async () => {
+        await conCobro();
+        reimprimir().click();
+        await refrescar();
+
+        await f4();
+
+        expect(dialogo()).toBeNull();
+      });
     });
   });
 

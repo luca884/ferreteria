@@ -4,6 +4,7 @@ import {
   aCuentaCentavos,
   centavosATexto,
   fechaCompletaLocal,
+  hoyEnBuenosAires,
   sugerirFifo,
   validarMotivo,
 } from './cobranza.models';
@@ -140,6 +141,17 @@ describe('cobranza.models', () => {
     it('con más de 200 caracteres tras recortar avisa el máximo; con 200 más espacios todavía vale', () => {
       expect(validarMotivo('a'.repeat(201))).toBe('El motivo admite hasta 200 caracteres.');
       expect(validarMotivo(`  ${'a'.repeat(200)}  `)).toBeNull();
+    });
+  });
+
+  describe('hoyEnBuenosAires (para saber si un cobro es de hoy)', () => {
+    it('el día de la caja es el de Buenos Aires: las 02:30 UTC todavía son el día anterior', () => {
+      expect(hoyEnBuenosAires(new Date('2026-10-20T02:30:00Z'))).toBe('2026-10-19');
+    });
+
+    it('a las 03:00 UTC (medianoche en Buenos Aires) cambia el día', () => {
+      expect(hoyEnBuenosAires(new Date('2026-10-20T03:00:00Z'))).toBe('2026-10-20');
+      expect(hoyEnBuenosAires(new Date('2026-01-05T15:00:00Z'))).toBe('2026-01-05');
     });
   });
 

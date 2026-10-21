@@ -1,0 +1,88 @@
+.anulacion {
+  width: min(560px, 100%);
+  max-height: calc(100vh - var(--e-8));
+  gap: var(--e-3);
+  overflow-y: auto;
+}
+/* El diálogo recibe el foco con un clic en una zona sin controles: no necesita el aro. */
+.anulacion:focus {
+  outline: none;
+}
+
+.liberados p {
+  font-weight: 600;
+}
+.liberados ul {
+  margin: var(--e-1) 0 0;
+  padding: 0;
+  list-style: none;
+}
+.liberados li {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--e-3);
+  padding: var(--e-1) 0;
+  border-bottom: 1px solid var(--borde);
+}
+.liberados .importe {
+  font-variant-numeric: tabular-nums;
+}
+
+.deja-a-cuenta {
+  font-weight: 600;
+}
+
+.avisos-caja {
+  display: flex;
+  flex-direction: column;
+  gap: var(--e-1);
+  padding: var(--e-2) var(--e-3);
+  border: 1px solid var(--info-borde);
+  border-left: 4px solid var(--info-marca, var(--acento));
+  border-radius: var(--radio);
+  background: var(--info-fondo);
+}
+.aviso-caja {
+  font-weight: 600;
+}
+.aviso-otro-dia {
+  color: var(--texto-suave);
+  font-size: var(--texto-sm);
+}
+
+.no-se-deshace {
+  color: var(--texto-suave);
+  font-size: var(--texto-sm);
+  font-weight: 600;
+}
+
+.campo-motivo {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-weight: 600;
+}
+.campo-motivo input {
+  width: 100%;
+  min-width: 0;
+  height: 48px;
+  padding: 0 14px;
+}
+.pie-motivo {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--e-2);
+  margin-top: calc(var(--e-2) * -1);
+}
+.pie-motivo .contador {
+  margin-left: auto;
+  color: var(--texto-tenue);
+  font-variant-numeric: tabular-nums;
+}
+
+.dialogo-acciones button {
+  min-height: 48px;
+}
+.dialogo-acciones .anular-recibo {
+  padding-inline: var(--e-6);
+}

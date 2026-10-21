@@ -24,6 +24,28 @@
   color: var(--texto-suave);
 }
 
+/* Borde y texto de la misma tinta (currentColor): en una impresora en blanco y negro sale como un sello gris oscuro. */
+.marca-anulado {
+  align-self: center;
+  margin: var(--e-2) 0;
+  padding: var(--e-1) var(--e-4);
+  border: 4px solid currentColor;
+  border-radius: var(--radio);
+  color: var(--error);
+  font-size: 2rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  transform: rotate(-8deg);
+}
+.motivo-anulacion,
+.anulado-por {
+  font-weight: 600;
+}
+.anulado-por {
+  color: var(--texto-suave);
+  font-size: var(--texto-sm);
+}
+
 .datos {
   display: grid;
   gap: var(--e-1);

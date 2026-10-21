@@ -1,0 +1,98 @@
+<!-- El mousedown sobre el fondo no mueve el foco al body: si no, Esc y Enter (que escucha el diálogo) dejarían de andar. -->
+<div class="dialogo-fondo" (mousedown)="retenerFoco($event)">
+  <div
+    class="dialogo anulacion"
+    tabindex="-1"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="dialogo-anulacion-titulo"
+    appTrampaFoco
+    (keydown)="alTeclear($event)"
+  >
+    <h2 id="dialogo-anulacion-titulo">Anular recibo N.º {{ recibo().numero }}</h2>
+
+    @if (error(); as texto) {
+      <p class="error error-servidor" role="alert">{{ texto }}</p>
+    }
+
+    <p class="resumen">
+      Recibo N.º {{ recibo().numero }} de <strong>{{ recibo().clienteNombre }}</strong>, del
+      {{ fecha(recibo().fecha) }}, cobrado en {{ medioLabels[recibo().medio] }} por
+      <strong>{{ recibo().total | monto }}</strong>.
+    </p>
+
+    @if (recibo().imputaciones.length > 0) {
+      <div class="liberados">
+        <p>Vuelven a quedar pendientes:</p>
+        <ul>
+          @for (i of recibo().imputaciones; track i.comprobanteId) {
+            <li>
+              <span>{{ i.referencia }}</span>&ngsp;<span class="importe">{{ i.importe | monto }}</span>
+            </li>
+          }
+        </ul>
+      </div>
+    }
+    @if (recibo().aCuenta > 0) {
+      <p class="deja-a-cuenta">Deja de estar a cuenta {{ recibo().aCuenta | monto }}</p>
+    }
+
+    <div class="avisos-caja">
+      @if (esEfectivo()) {
+        <p class="aviso-caja">{{ textoEfectivo() }}</p>
+        @if (textoOtroDia(); as texto) {
+          <p class="aviso-otro-dia">{{ texto }}</p>
+        }
+      } @else {
+        <p class="aviso-caja">No cambia el efectivo de la caja.</p>
+      }
+    </div>
+
+    <p class="no-se-deshace">La anulación no se puede deshacer: si hace falta, se vuelve a cobrar.</p>
+
+    <label class="campo-motivo" for="motivo-anulacion">
+      Motivo de la anulación
+      <input
+        #campoMotivo
+        id="motivo-anulacion"
+        type="text"
+        autocomplete="off"
+        spellcheck="true"
+        [maxLength]="maximo"
+        [attr.aria-invalid]="errorMotivo() ? 'true' : null"
+        [attr.aria-describedby]="errorMotivo() ? 'error-motivo' : null"
+        [value]="motivo()"
+        (input)="escribir($any($event.target).value)"
+      />
+    </label>
+    <div class="pie-motivo">
+      @if (errorMotivo(); as mensaje) {
+        <small id="error-motivo" class="campo-error">{{ mensaje }}</small>
+      }
+      <small class="contador" aria-hidden="true">{{ motivo().length }}/{{ maximo }}</small>
+    </div>
+
+    <div class="dialogo-acciones">
+      <button
+        type="button"
+        class="cancelar"
+        data-tecla="Esc"
+        aria-keyshortcuts="Escape"
+        [disabled]="enVuelo()"
+        (click)="cancelarAnulacion()"
+      >
+        Cancelar
+      </button>
+      <button
+        type="button"
+        class="anular-recibo peligro"
+        data-tecla="Enter"
+        aria-keyshortcuts="Enter"
+        [disabled]="enVuelo()"
+        (click)="confirmarAnulacion()"
+      >
+        Anular recibo
+      </button>
+    </div>
+  </div>
+</div>

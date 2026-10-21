@@ -22,6 +22,19 @@
     </button>
   </div>
 }
+@if (avisoAnulacion(); as aviso) {
+  <div
+    class="alerta con-accion"
+    [class.exito]="aviso.tipo === 'exito'"
+    [class.advertencia]="aviso.tipo === 'advertencia'"
+    [attr.role]="aviso.tipo === 'exito' ? 'status' : 'alert'"
+  >
+    <span>{{ aviso.texto }}</span>
+    <button type="button" class="secundario chico ver-recibo" [disabled]="trayendoRecibo()" (click)="verReciboAnulado()">
+      Ver recibo
+    </button>
+  </div>
+}
 @if (errorRecibo(); as texto) {
   <p class="error" role="alert">{{ texto }}</p>
 }
@@ -96,7 +109,13 @@
           </table>
         }
 
-        <app-movimientos-cuenta [clienteId]="c.id" [clienteActivo]="c.activo" [version]="version()" />
+        <app-movimientos-cuenta
+          [clienteId]="c.id"
+          [clienteActivo]="c.activo"
+          [version]="version()"
+          (anular)="anular($event)"
+          (verRecibo)="verRecibo($event)"
+        />
       }
     }
   }
@@ -114,6 +133,16 @@
     (confirmar)="cobrar($event)"
     (cancelar)="cerrarCobro()"
     (reiniciar)="reiniciarCobro()"
+  />
+}
+
+@if (anulando(); as recibo) {
+  <app-dialogo-anulacion
+    [recibo]="recibo"
+    [enVuelo]="anulandoEnVuelo()"
+    [error]="errorAnulacion()"
+    (confirmar)="confirmarAnulacion($event)"
+    (cancelar)="cerrarAnulacion()"
   />
 }
 

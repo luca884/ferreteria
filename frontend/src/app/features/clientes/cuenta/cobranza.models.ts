@@ -171,6 +171,21 @@ export function validarMotivo(texto: string): string | null {
   return null;
 }
 
+/**
+ * El día de hoy en Buenos Aires como «yyyy-MM-dd»: la caja se abre por día de esa zona, no del navegador. Sirve para saber
+ * si un cobro es de hoy (una anulación de un cobro de otro día no cambia la caja de hoy).
+ */
+export function hoyEnBuenosAires(ahora: Date): string {
+  const partes = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/Argentina/Buenos_Aires',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(ahora);
+  const valor = (tipo: string) => partes.find((p) => p.type === tipo)?.value ?? '';
+  return `${valor('year')}-${valor('month')}-${valor('day')}`;
+}
+
 /** «19/10/2026 10:30» de una fecha local del servidor, leída del texto: no pasa por la zona del navegador. */
 export function fechaCompletaLocal(fechaLocal: string): string {
   const [anio, mes, dia] = fechaLocal.slice(0, 10).split('-');

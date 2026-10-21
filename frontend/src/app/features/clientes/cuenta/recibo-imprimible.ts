@@ -4,9 +4,13 @@ import { MontoPipe } from '../../../core/formato/monto';
 import { TrampaFoco } from '../../../shared/trampa-foco';
 import { MEDIO_COBRANZA_LABELS, Recibo, fechaCompletaLocal } from './cobranza.models';
 
+/** La palabra de la marca de un recibo anulado (CC-098). Aislada: el texto exacto se confirma con el contador (P7). */
+export const LEYENDA_ANULADO = 'ANULADO';
+
 /**
  * El recibo de una cobranza, para ver e imprimir (CC-036). Presentacional: Enter imprime con `window.print()` y Esc
- * cierra. Es un recibo INTERNO, no un comprobante fiscal: la leyenda lo dice (texto a confirmar con el contador, P7). Al
+ * cierra. Si el recibo está ANULADO (CC-098) lleva una marca grande, el motivo y quién lo anuló: se sigue viendo y
+ * reimprimiendo con sus datos originales. Es un recibo INTERNO, no un comprobante fiscal: la leyenda lo dice (texto a confirmar con el contador, P7). Al
  * imprimir solo sale `.recibo-imprimible` (reglas `@media print` en styles.css), no la pantalla ni los botones.
  */
 @Component({
@@ -24,6 +28,14 @@ export class ReciboImprimible {
   protected readonly ferreteria = computed(() => this.auth.sesion()?.ferreteriaNombre ?? null);
   protected readonly fecha = computed(() => fechaCompletaLocal(this.recibo().fecha));
   protected readonly medio = computed(() => MEDIO_COBRANZA_LABELS[this.recibo().medio]);
+  protected readonly leyendaAnulado = LEYENDA_ANULADO;
+  protected readonly anulado = computed(() => this.recibo().estado === 'ANULADO');
+  /** «Dueño Tornillo el 20/10/2026 09:15»; vacío si el servidor no manda quién o cuándo. */
+  protected readonly anuladoPor = computed(() => {
+    const { anuladoPor, fechaAnulacion } = this.recibo();
+    if (!anuladoPor || !fechaAnulacion) return null;
+    return `${anuladoPor} el ${fechaCompletaLocal(fechaAnulacion)}`;
+  });
 
   private readonly botonImprimir = viewChild<ElementRef<HTMLButtonElement>>('botonImprimir');
 

@@ -1,5 +1,5 @@
 import { HttpErrorResponse } from '@angular/common/http';
-import { Component, DestroyRef, OnInit, computed, inject, signal } from '@angular/core';
+import { Component, DestroyRef, ElementRef, Injector, OnInit, afterNextRender, computed, inject, signal } from '@angular/core';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { Subscription, forkJoin } from 'rxjs';
 import { erroresDeCampos, mensajeDe } from '../../../core/api/api-error';
@@ -9,9 +9,18 @@ import { BarraAcciones } from '../../../shared/barra-acciones';
 import { fechaHoraLocal } from '../../caja/caja.models';
 import { Cliente, documentoLegible } from '../cliente.models';
 import { ClientesService } from '../clientes.service';
-import { PendientesCuenta, Recibo, ReciboCobrado } from './cobranza.models';
-import { CobranzaService, GENERAR_CLAVE_COBRO, esTransitorio, invalidaDe, rechazoDe } from './cobranza.service';
+import { PendientesCuenta, Recibo, ReciboCobrado, fechaCompletaLocal } from './cobranza.models';
+import {
+  CobranzaService,
+  GENERAR_CLAVE_COBRO,
+  esOcupado,
+  esTransitorio,
+  invalidaDe,
+  rechazoDe,
+} from './cobranza.service';
+import { DialogoAnulacion } from './dialogo-anulacion';
 import { DialogoCobranza, PedidoCobranza } from './dialogo-cobranza';
+import { LineaExtracto } from './extracto.models';
 import { MovimientosCuenta } from './movimientos-cuenta';
 import { ReciboImprimible } from './recibo-imprimible';
 
@@ -22,6 +31,17 @@ const MENSAJE_CARGA = 'No se pudo cargar la cuenta del cliente.';
 const AVISO_DEUDAS = 'Las deudas cambiaron: revisá la imputación y volvé a confirmar.';
 const MENSAJE_RED =
   'No se pudo registrar el cobro: no hay conexión o el servidor no respondió. Reintentá: no se cobra dos veces.';
+const MENSAJE_RECIBO = 'No se pudo traer el recibo. Probá de nuevo.';
+const MENSAJE_OCUPADO = 'El sistema está ocupado, reintentá.';
+const MENSAJE_RED_ANULACION =
+  'No se pudo anular: no hay conexión o el servidor no respondió. Reintentá: si ya se anuló, vas a ver el aviso.';
+
+/** El resultado de una anulación que queda a la vista, con acceso al recibo: se anuló, o ya estaba anulado. */
+interface AvisoAnulacion {
+  tipo: 'exito' | 'advertencia';
+  texto: string;
+  reciboId: number;
+}
 
 /**
  * Cuenta corriente de un cliente (`clientes/:id/cuenta`): sus pendientes en orden FIFO, el saldo y la acción «Cobrar» (F4),
@@ -32,7 +52,7 @@ const MENSAJE_RED =
  */
 @Component({
   selector: 'app-cuenta-cliente',
-  imports: [RouterLink, BarraAcciones, MontoPipe, DialogoCobranza, MovimientosCuenta, ReciboImprimible],
+  imports: [RouterLink, BarraAcciones, MontoPipe, DialogoAnulacion, DialogoCobranza, MovimientosCuenta, ReciboImprimible],
   templateUrl: './cuenta-cliente.html',
   styleUrl: './cuenta-cliente.css',
   host: { '(document:keydown)': 'alTeclear($event)' },
@@ -42,6 +62,8 @@ export class CuentaCliente implements OnInit {
   private readonly cobranza = inject(CobranzaService);
   private readonly route = inject(ActivatedRoute);
   private readonly generarClave = inject(GENERAR_CLAVE_COBRO);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+  private readonly injector = inject(Injector);
   protected readonly auth = inject(AuthService);
 
   protected readonly fecha = fechaHoraLocal;
@@ -72,6 +94,13 @@ export class CuentaCliente implements OnInit {
   protected readonly reciboAbierto = signal<Recibo | null>(null);
   protected readonly errorRecibo = signal<string | null>(null);
   protected readonly trayendoRecibo = signal(false);
+
+  /** El recibo que se está por anular: con él abierto se muestra el diálogo de anulación. */
+  protected readonly anulando = signal<Recibo | null>(null);
+  protected readonly anulandoEnVuelo = signal(false);
+  protected readonly errorAnulacion = signal<string | null>(null);
+  /** Cómo terminó la última anulación: se anuló, o el recibo ya estaba anulado. */
+  protected readonly avisoAnulacion = signal<AvisoAnulacion | null>(null);
 
   private clienteId = 0;
   /** La clave del cobro en curso: nace al abrir el diálogo y cambia solo cuando cambia el contenido. */
@@ -154,9 +183,10 @@ export class CuentaCliente implements OnInit {
 
   /** Abre el cobro: también sin deuda (adelanto). Cada apertura es un cobro nuevo, con su propia clave. */
   protected abrirCobro(): void {
-    if (this.estado() !== 'listo' || this.dialogoAbierto() || this.reciboAbierto()) return;
+    if (!this.libreParaUnDialogo()) return;
     this.clave = this.generarClave();
     this.cobrado.set(null);
+    this.avisoAnulacion.set(null);
     this.errorRecibo.set(null);
     this.avisoDialogo.set(null);
     this.errorDialogo.set(null);
@@ -202,22 +232,154 @@ export class CuentaCliente implements OnInit {
     });
   }
 
+  /** Ningún diálogo abierto ni un recibo en camino: recién ahí F4, «Cobrar» y «Anular» pueden abrir otro. */
+  private libreParaUnDialogo(): boolean {
+    return (
+      this.estado() === 'listo' &&
+      !this.dialogoAbierto() &&
+      !this.reciboAbierto() &&
+      !this.anulando() &&
+      !this.trayendoRecibo()
+    );
+  }
+
   /** Reimprimir: pide el recibo al servidor (GET), que dice lo mismo que el cobro que lo creó. */
   protected reimprimir(): void {
     const cobro = this.cobrado();
-    if (!cobro || this.trayendoRecibo()) return;
+    if (cobro) this.verRecibo(cobro.recibo.id);
+  }
+
+  /** «Ver recibo» del aviso de una anulación: el recibo ya figura ANULADO. */
+  protected verReciboAnulado(): void {
+    const aviso = this.avisoAnulacion();
+    if (aviso) this.verRecibo(aviso.reciboId);
+  }
+
+  /** Trae el recibo (GET) y lo abre para ver e imprimir; también el de una fila ANULACION, que es el mismo recibo. */
+  protected verRecibo(reciboId: number): void {
+    if (this.trayendoRecibo() || this.reciboAbierto() || this.anulando() || this.dialogoAbierto()) return;
     this.trayendoRecibo.set(true);
     this.errorRecibo.set(null);
-    this.cobranza.recibo(cobro.recibo.id).subscribe({
+    this.cobranza.recibo(reciboId).subscribe({
       next: (recibo) => {
         this.trayendoRecibo.set(false);
         this.reciboAbierto.set(recibo);
       },
       error: () => {
         this.trayendoRecibo.set(false);
-        this.errorRecibo.set('No se pudo traer el recibo. Probá de nuevo.');
+        this.errorRecibo.set(MENSAJE_RECIBO);
       },
     });
+  }
+
+  /**
+   * «Anular» en una fila del extracto: trae el recibo para mostrar qué se anula y abre el diálogo. El foco vuelve solo al
+   * botón de origen al cerrarse (`appTrampaFoco`); si se anuló, ese botón ya no existe y el foco pasa a «Ver recibo».
+   */
+  protected anular(linea: LineaExtracto): void {
+    const reciboId = linea.reciboId;
+    if (reciboId === null || !this.libreParaUnDialogo()) return;
+    this.trayendoRecibo.set(true);
+    this.errorRecibo.set(null);
+    this.cobranza.recibo(reciboId).subscribe({
+      next: (recibo) => {
+        this.trayendoRecibo.set(false);
+        if (recibo.estado === 'ANULADO') {
+          // La fila estaba desactualizada: no hay nada que anular, se muestra lo que pasó y se vuelve a pedir lo que se ve.
+          this.avisoAnulacion.set(this.avisoYaAnulado(recibo, null));
+          this.refrescarTrasAnulacion();
+          return;
+        }
+        this.cobrado.set(null);
+        this.avisoAnulacion.set(null);
+        this.errorAnulacion.set(null);
+        this.anulando.set(recibo);
+      },
+      error: () => {
+        this.trayendoRecibo.set(false);
+        this.errorRecibo.set(MENSAJE_RECIBO);
+      },
+    });
+  }
+
+  protected cerrarAnulacion(): void {
+    if (this.anulandoEnVuelo()) return;
+    this.anulando.set(null);
+    this.errorAnulacion.set(null);
+  }
+
+  protected confirmarAnulacion(motivo: string): void {
+    const recibo = this.anulando();
+    if (!recibo || this.anulandoEnVuelo()) return;
+    this.anulandoEnVuelo.set(true);
+    this.errorAnulacion.set(null);
+    this.cobranza.anular(recibo.id, motivo).subscribe({
+      next: (anulado) => {
+        this.anulandoEnVuelo.set(false);
+        this.anulando.set(null);
+        this.avisoAnulacion.set({
+          tipo: 'exito',
+          texto: `Recibo N.º ${anulado.numero} anulado. Los comprobantes volvieron a quedar pendientes.`,
+          reciboId: anulado.id,
+        });
+        this.refrescarTrasAnulacion();
+        // El botón «Anular» de la fila ya no existe: el resultado se anuncia en el aviso y el foco va a su acción.
+        afterNextRender(
+          () => this.host.nativeElement.querySelector<HTMLElement>('.ver-recibo')?.focus(),
+          { injector: this.injector },
+        );
+      },
+      error: (err: unknown) => {
+        this.anulandoEnVuelo.set(false);
+        this.fallarAnulacion(err, recibo);
+      },
+    });
+  }
+
+  /** Saldo, pendientes y Movimientos cambiaron: nunca se corrigen a mano, se vuelven a pedir. */
+  private refrescarTrasAnulacion(): void {
+    this.recargarPendientes((err) => this.fallarCarga(err));
+    this.version.update((v) => v + 1);
+  }
+
+  private avisoYaAnulado(recibo: Pick<Recibo, 'id' | 'anuladoPor' | 'fechaAnulacion'>, mensaje: string | null): AvisoAnulacion {
+    const { anuladoPor, fechaAnulacion } = recibo;
+    const texto =
+      anuladoPor && fechaAnulacion
+        ? `Este recibo ya fue anulado por ${anuladoPor} el ${fechaCompletaLocal(fechaAnulacion)}.`
+        : (mensaje ?? 'Este recibo ya fue anulado.');
+    return { tipo: 'advertencia', texto, reciboId: recibo.id };
+  }
+
+  /**
+   * Un 409 «ya anulado» es un hecho consumado: se cierra el diálogo y se avisa quién y cuándo. Los demás rechazos (caja
+   * cerrada, cliente desactivado, motivo inválido, sistema ocupado, red) dejan el diálogo abierto con el motivo escrito;
+   * reintentar es seguro porque el servidor responde 409 si la anulación ya había quedado hecha.
+   */
+  private fallarAnulacion(err: unknown, recibo: Recibo): void {
+    const rechazo = rechazoDe(err);
+    if (rechazo?.motivo === 'RECIBO_YA_ANULADO') {
+      this.anulando.set(null);
+      this.avisoAnulacion.set(
+        this.avisoYaAnulado(
+          { id: recibo.id, anuladoPor: rechazo.anuladoPor ?? null, fechaAnulacion: rechazo.fechaAnulacion ?? null },
+          rechazo.message,
+        ),
+      );
+      this.refrescarTrasAnulacion();
+      return;
+    }
+    if (rechazo) {
+      this.errorAnulacion.set(rechazo.message);
+    } else if (esOcupado(err)) {
+      this.errorAnulacion.set(MENSAJE_OCUPADO);
+    } else if (invalidaDe(err)) {
+      this.errorAnulacion.set(erroresDeCampos(err).join(' ') || mensajeDe(err, 'Revisá el motivo de la anulación.'));
+    } else if (esTransitorio(err)) {
+      this.errorAnulacion.set(MENSAJE_RED_ANULACION);
+    } else {
+      this.errorAnulacion.set(mensajeDe(err, 'No se pudo anular el cobro.'));
+    }
   }
 
   protected cerrarRecibo(): void {

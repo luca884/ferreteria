@@ -15,6 +15,15 @@
       }
       <h2 id="recibo-titulo">Recibo N.º {{ recibo().numero }}</h2>
       <p class="fecha">{{ fecha() }}</p>
+      @if (anulado()) {
+        <p class="marca-anulado">{{ leyendaAnulado }}</p>
+        @if (recibo().motivoAnulacion; as motivo) {
+          <p class="motivo-anulacion">Motivo: {{ motivo }}</p>
+        }
+        @if (anuladoPor(); as quien) {
+          <p class="anulado-por">Anulado por {{ quien }}</p>
+        }
+      }
 
       <dl class="datos">
         <div>
