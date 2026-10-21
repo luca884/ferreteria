@@ -71,6 +71,8 @@ export class NuevaCompra implements OnInit {
 
   /** La clave de la vista previa que se está viendo: reintentar confirmar la reusa y la compra no se duplica. */
   private clave = '';
+  /** Sube con cada edición: una vista previa pedida antes de la última edición ya no describe lo que se ve. */
+  private version = 0;
 
   ngOnInit(): void {
     if (!this.auth.esDueno()) return;
@@ -139,9 +141,11 @@ export class NuevaCompra implements OnInit {
     this.trabajando.set(true);
     this.errores.set([]);
     this.registrada.set(null);
+    const pedida = this.version;
     this.api.vistaPrevia(pedido).subscribe({
       next: (plan) => {
         this.trabajando.set(false);
+        if (pedida !== this.version) return;
         this.clave = this.generarClave();
         this.plan.set(plan);
       },
@@ -182,6 +186,7 @@ export class NuevaCompra implements OnInit {
 
   /** Lo que se vio en la vista previa deja de valer: para confirmar hay que volver a verla (y nace otra clave). */
   private descartarVistaPrevia(): void {
+    this.version++;
     this.plan.set(null);
     this.registrada.set(null);
   }

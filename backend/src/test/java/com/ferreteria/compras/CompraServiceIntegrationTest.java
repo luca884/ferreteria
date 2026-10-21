@@ -155,6 +155,46 @@ class CompraServiceIntegrationTest extends IntegrationTestBase {
                 .isEqualTo(3);
     }
 
+    @Test
+    @DisplayName("un articulo en dolares toma el costo del renglon en USD, recalcula el precio en pesos y la compra queda en USD")
+    void articuloEnDolares() {
+        Long taladro = taladroEnDolares();
+
+        CompraRegistrada registrada = compraService.registrar(pedido(UUID.randomUUID().toString(), 77L,
+                new RenglonCompra(taladro, new BigDecimal("2"), new BigDecimal("12.00"))), usuario);
+
+        assertThat(registrada.compra().getMoneda()).isEqualTo("USD");
+        assertThat(registrada.compra().getNeto()).isEqualByComparingTo("24.00");
+        assertThat(fila("select costo, precio_final from articulo where id = ?", taladro))
+                .containsEntry("costo", new BigDecimal("12.00"))
+                .containsEntry("precio_final", new BigDecimal("18876.00"));
+    }
+
+    @Test
+    @DisplayName("una compra que mezcla pesos y dolares es 400 y no escribe nada")
+    void mezclaDeMonedas() {
+        Long taladro = taladroEnDolares();
+
+        assertThatThrownBy(() -> compraService.registrar(pedido(UUID.randomUUID().toString(), 78L,
+                new RenglonCompra(tornillo, new BigDecimal("2"), new BigDecimal("12.00")),
+                new RenglonCompra(taladro, new BigDecimal("2"), new BigDecimal("12.00"))), usuario))
+                .isInstanceOf(DatosInvalidosException.class)
+                .extracting(e -> ((DatosInvalidosException) e).errors())
+                .isEqualTo(Map.of("renglones", "Una compra no puede mezclar artículos en pesos y en dólares."));
+        assertThat(jdbc.queryForObject("select count(*) from compra where ferreteria_id = ?", Integer.class, ferreteria))
+                .isZero();
+        assertThat(jdbc.queryForObject("select stock_actual from articulo where id = ?", BigDecimal.class, tornillo))
+                .isEqualByComparingTo("10");
+    }
+
+    /** Un taladro en USD (costo 10) con la cotizacion de la ferreteria en 1000: 12 x 1,3 x 1,21 x 1000 = 18.876. */
+    private Long taladroEnDolares() {
+        Long id = articulo(ferreteria, "USD-1", "Taladro", "UNIDAD", "10.00", "15730.00", "1", true);
+        jdbc.update("update articulo set moneda = 'USD' where id = ?", id);
+        jdbc.update("insert into configuracion_cotizacion (ferreteria_id, vigente) values (?, 1000.0000)", ferreteria);
+        return id;
+    }
+
     // ---- vista previa ----
 
     @Test

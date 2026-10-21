@@ -4,7 +4,7 @@ import { HttpErrorResponse } from '@angular/common/http';
 import { LOCALE_ID, signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
-import { of, throwError } from 'rxjs';
+import { Subject, of, throwError } from 'rxjs';
 import { vi } from 'vitest';
 import { AuthService } from '../../core/auth/auth.service';
 import { Articulo } from '../articulos/articulo.models';
@@ -209,6 +209,24 @@ describe('NuevaCompra', () => {
       'Compra registrada: Factura A 00003-00001234 de Bulonera Sur.',
     );
     expect(el().querySelectorAll('table.renglones tbody tr')).toHaveLength(0);
+  });
+
+  it('una edición mientras la vista previa está en vuelo descarta la respuesta: no se confirma lo que no se vio', async () => {
+    await crear();
+    await cargarCompra();
+    const respuesta = new Subject<PlanCompra>();
+    api.vistaPrevia.mockReturnValueOnce(respuesta);
+    boton('Ver vista previa')!.click();
+    await refrescar();
+
+    await escribir('input[name="costo-0"]', '999');
+    respuesta.next(plan);
+    respuesta.complete();
+    await refrescar();
+
+    expect(el().querySelector('section.vista-previa')).toBeNull();
+    expect(boton('Confirmar compra')).toBeUndefined();
+    expect(boton('Ver vista previa')!.disabled).toBe(false);
   });
 
   it('si confirmar falla por la red, reintentar usa la misma clave; una vista previa nueva trae otra', async () => {
