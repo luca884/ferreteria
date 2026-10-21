@@ -358,6 +358,36 @@ class ExtractoIntegrationTest extends CuentaCorrienteTestBase {
     }
 
     @Test
+    @DisplayName("CC-073 nunca 500: una página cuyo offset no entra en un int y una fecha fuera de [1000-01-01, 9999-12-30] dan 400 (con su clave), y los bordes válidos 200")
+    void bordesDeParametros() throws Exception {
+        Tienda t = tienda();
+        long cliente = cliente(t.f(), null);
+
+        for (String consulta : List.of("?page=2147483647&size=100", "?page=30000000&size=100", "?page=21474837&size=100",
+                "?page=2147483647&size=2")) {
+            JsonNode error = json(getResult(url(cliente) + consulta, t.dueno()).andExpect(status().isBadRequest()));
+            assertThat(error.get("errors").get("page").asText()).as(consulta).isEqualTo("La página pedida está fuera de rango.");
+        }
+        for (String consulta : List.of("?hasta=9999-12-31", "?hasta=0999-12-31")) {
+            JsonNode error = json(getResult(url(cliente) + consulta, t.dueno()).andExpect(status().isBadRequest()));
+            assertThat(error.get("errors").get("hasta").asText()).as(consulta).isEqualTo("La fecha hasta tiene que estar entre 1000 y 9999.");
+        }
+        for (String consulta : List.of("?desde=0999-12-31", "?desde=9999-12-31", "?desde=0001-01-01")) {
+            JsonNode error = json(getResult(url(cliente) + consulta, t.dueno()).andExpect(status().isBadRequest()));
+            assertThat(error.get("errors").get("desde").asText()).as(consulta).isEqualTo("La fecha desde tiene que estar entre 1000 y 9999.");
+        }
+        // los bordes que sí entran
+        for (String consulta : List.of("?page=21474836&size=100", "?page=2147483647&size=1", "?page=2147483647&impresion=true", "?hasta=9999-12-30",
+                "?desde=1000-01-01", "?desde=9999-12-30&hasta=9999-12-30", "?desde=1000-01-01&hasta=9999-12-30")) {
+            JsonNode ok = json(getResult(url(cliente) + consulta, t.dueno()).andExpect(status().isOk()));
+            assertThat(ok.get("movimientos").get("items")).as(consulta).isEmpty();
+        }
+        // el rango inválido va antes del 404, como desde > hasta: un cliente ajeno también da 400
+        Tienda otra = tienda();
+        getResult(url(cliente(otra.f(), null)) + "?hasta=9999-12-31", t.dueno()).andExpect(status().isBadRequest());
+    }
+
+    @Test
     @DisplayName("400 con clave desde: «La fecha desde no puede ser posterior a hasta.» — y va ANTES del 404 (un cliente ajeno con rango inválido da 400)")
     void desdePosteriorAHasta() throws Exception {
         Tienda t = tienda();

@@ -22,9 +22,10 @@ import org.springframework.test.web.servlet.request.MockMvcRequestBuilders;
  *   <li>Vendedor con GET: 403 aunque el parámetro sea inválido ({@code ?tipo=XYZ}, {@code ?desde=basura}, {@code desde > hasta}):
  *       el matcher de {@code SecurityConfig} corre antes del binding (sin él, daría 400: el binding va antes del
  *       {@code @PreAuthorize}). Es la mutación obligatoria de abajo.
- *   <li>Vendedor con HEAD: 403 (el matcher es solo de GET; el HEAD de Spring MVC es el GET y cae en el {@code @PreAuthorize}).
- *   <li>POST/PUT/PATCH/DELETE: 405 para Dueño Y Vendedor (no hay handler y nada que proteger; CC-101 tolera 403, pero el motor
- *       responde 405 en ambos casos), sin cuerpo de datos y sin efecto.
+ *   <li>Vendedor con HEAD: 403 también con un parámetro inválido (el matcher no restringe el método; con solo GET, el HEAD, que
+ *       en Spring MVC es el GET, llegaba al binding y daba 400).
+ *   <li>POST/PUT/PATCH/DELETE: 405 para el Dueño (no hay handler) y 403 para el Vendedor (lo frena el matcher; CC-101 acepta
+ *       403 o 405), sin cuerpo de datos y sin efecto.
  *   <li>SUPER_ADMIN: 403. Sin token: 401 con cualquier método.
  * </ul>
  * Mutación (apply-progress): quitar a la vez el matcher del extracto y el {@code @PreAuthorize} del método hace fallar el test del
@@ -93,27 +94,33 @@ class ExtractoSeguridadHttpIntegrationTest extends CuentaCorrienteTestBase {
     }
 
     @Test
-    @DisplayName("el Vendedor con HEAD recibe 403 (cae en el @PreAuthorize: el matcher es solo de GET)")
+    @DisplayName("el Vendedor con HEAD recibe 403, también con un parámetro inválido (?tipo=XYZ): el matcher no distingue el método")
     void vendedorHeadEs403() throws Exception {
         Tienda t = tienda();
 
-        assertThat(pedir(HttpMethod.HEAD, t.url(), t.vendedor()).getResponse().getStatus()).isEqualTo(403);
+        for (String consulta : List.of("", "?tipo=XYZ", "?desde=basura", "?page=abc", "?impresion=quizas")) {
+            MvcResult r = pedir(HttpMethod.HEAD, t.url() + consulta, t.vendedor());
+            assertThat(r.getResponse().getStatus()).as("Vendedor HEAD extracto%s", consulta).isEqualTo(403);
+        }
         assertThat(pedir(HttpMethod.HEAD, t.url(), null).getResponse().getStatus()).as("sin token").isEqualTo(401);
         assertThat(pedir(HttpMethod.HEAD, t.url(), t.dueno()).getResponse().getStatus()).as("el Dueño sí pasa el rol").isEqualTo(200);
     }
 
     @Test
-    @DisplayName("POST, PUT, PATCH y DELETE sobre el extracto dan 405 «Método no permitido» al Dueño y al Vendedor (no 403 ni 500), sin datos y sin efecto")
+    @DisplayName("POST, PUT, PATCH y DELETE sobre el extracto: 405 «Método no permitido» para el Dueño y 403 para el Vendedor (nunca 500), sin datos y sin efecto")
     void metodosNoPrevistos() throws Exception {
         Tienda t = tienda();
 
         for (HttpMethod metodo : List.of(HttpMethod.POST, HttpMethod.PUT, HttpMethod.PATCH, HttpMethod.DELETE)) {
-            for (Map.Entry<String, String> quien : Map.of("Dueño", t.dueno(), "Vendedor", t.vendedor()).entrySet()) {
-                MvcResult r = pedir(metodo, t.url(), quien.getValue());
-                assertThat(r.getResponse().getStatus()).as("%s %s extracto", quien.getKey(), metodo).isIn(405);
-                assertThat(cuerpo(r)).as("%s %s", quien.getKey(), metodo).contains("Método no permitido");
-                sinDatosDelExtracto(r, quien.getKey() + " " + metodo);
-            }
+            MvcResult dueno = pedir(metodo, t.url(), t.dueno());
+            assertThat(dueno.getResponse().getStatus()).as("Dueño %s extracto", metodo).isEqualTo(405);
+            assertThat(cuerpo(dueno)).as("Dueño %s", metodo).contains("Método no permitido");
+            sinDatosDelExtracto(dueno, "Dueño " + metodo);
+
+            // CC-101 acepta 403 o 405: el matcher del extracto no mira el método, así que el Vendedor recibe 403 con cualquiera
+            MvcResult vendedor = pedir(metodo, t.url(), t.vendedor());
+            assertThat(vendedor.getResponse().getStatus()).as("Vendedor %s extracto", metodo).isEqualTo(403);
+            assertThat(cuerpo(vendedor)).as("Vendedor %s", metodo).isEqualTo(PERMISO);
         }
         sinEfecto(t);
     }

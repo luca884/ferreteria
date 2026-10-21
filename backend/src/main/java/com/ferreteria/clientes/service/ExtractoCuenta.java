@@ -39,6 +39,8 @@ public class ExtractoCuenta {
 
     private static final LocalDateTime DESDE_ABIERTO = LocalDateTime.of(1000, 1, 1, 0, 0);
     private static final LocalDateTime HASTA_ABIERTO = LocalDateTime.of(9999, 12, 31, 0, 0);
+    private static final LocalDate FECHA_MINIMA = LocalDate.of(1000, 1, 1);
+    private static final LocalDate FECHA_MAXIMA = LocalDate.of(9999, 12, 30);
     private static final String NO_ENCONTRADO = "Cliente no encontrado";
 
     private final ClienteRepository clientes;
@@ -67,6 +69,13 @@ public class ExtractoCuenta {
         if (filtro.desde() != null && filtro.hasta() != null && filtro.desde().isAfter(filtro.hasta())) {
             throw new DatosInvalidosException(Map.of("desde", "La fecha desde no puede ser posterior a hasta."));
         }
+        // Las fechas se acotan al rango que la base y el cálculo de «hasta + 1 día» soportan (nunca un 500, CC-073)
+        if (fueraDeRango(filtro.desde())) {
+            throw new DatosInvalidosException(Map.of("desde", "La fecha desde tiene que estar entre 1000 y 9999."));
+        }
+        if (fueraDeRango(filtro.hasta())) {
+            throw new DatosInvalidosException(Map.of("hasta", "La fecha hasta tiene que estar entre 1000 y 9999."));
+        }
         Cliente cliente = clientes.findScoped(clienteId).orElseThrow(() -> new ResourceNotFoundException(NO_ENCONTRADO));
 
         LocalDateTime desde = filtro.desde() == null ? DESDE_ABIERTO : filtro.desde().atStartOfDay();
@@ -89,7 +98,11 @@ public class ExtractoCuenta {
             size = Math.min(Math.max(filtro.size() == null ? FiltroExtracto.TAMANO_POR_DEFECTO : filtro.size(), 1),
                     FiltroExtracto.TAMANO_MAXIMO);
             limite = size;
-            offset = Math.multiplyExact(page, size);
+            long desplazamiento = (long) page * size;
+            if (desplazamiento > Integer.MAX_VALUE) {
+                throw new DatosInvalidosException(Map.of("page", "La página pedida está fuera de rango."));
+            }
+            offset = (int) desplazamiento;
         }
 
         long totalLineas = libro.contarLineasScoped(clienteId, desde, hastaExclusivo, tipos);
@@ -110,6 +123,11 @@ public class ExtractoCuenta {
         return new Extracto(clienteId, cliente.getRazonSocial(), cliente.getSaldo(), filtro.desde(), filtro.hasta(),
                 filtro.tipo(), saldoInicial, totales.getDebe(), totales.getHaber(), saldoFinal, lineas, page, size,
                 totalLineas, totalPaginas, truncado);
+    }
+
+    /** Fuera de [1000-01-01, 9999-12-30]: {@code hasta + 1 día} del 9999-12-31 ya es el año 10000, que la base no guarda. */
+    private static boolean fueraDeRango(LocalDate fecha) {
+        return fecha != null && (fecha.isBefore(FECHA_MINIMA) || fecha.isAfter(FECHA_MAXIMA));
     }
 
     private static Linea linea(LineaDeExtracto fila) {

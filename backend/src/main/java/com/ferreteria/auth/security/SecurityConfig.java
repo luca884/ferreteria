@@ -56,8 +56,10 @@ public class SecurityConfig {
                         .requestMatchers("/api/cobranzas/**").hasRole("DUENO")
                         .requestMatchers("/api/recibos/**").hasRole("DUENO")
                         .requestMatchers(HttpMethod.GET, "/api/clientes/*/cuenta-corriente/pendientes").hasRole("DUENO")
-                        // El extracto de la cuenta corriente (CC-072, CC-101) también: el 403 va antes de leer los parametros.
-                        .requestMatchers(HttpMethod.GET, "/api/clientes/*/cuenta-corriente/extracto").hasRole("DUENO")
+                        // El extracto de la cuenta corriente (CC-072, CC-101) también: el 403 va antes de leer los parametros. Sin
+                        // restricción de método a propósito: con solo GET, un HEAD del Vendedor con un parámetro inválido llegaba al
+                        // binding y daba 400 en vez de 403 (el HEAD de Spring MVC es el GET). El Dueño con otro método recibe 405.
+                        .requestMatchers("/api/clientes/*/cuenta-corriente/extracto").hasRole("DUENO")
                         .anyRequest().authenticated())
                 .exceptionHandling(e -> e
                         .authenticationEntryPoint((request, response, ex) -> {
