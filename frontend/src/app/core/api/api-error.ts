@@ -19,3 +19,8 @@ export function mensajeDe(err: unknown, porDefecto: string): string {
   const mensaje: unknown = err instanceof HttpErrorResponse ? err.error?.message : undefined;
   return typeof mensaje === 'string' && mensaje.trim() !== '' ? mensaje : porDefecto;
 }
+
+/** 503: el servidor agotó los reintentos por contención («El sistema está ocupado, reintentá.»). No quedó nada hecho. */
+export function esOcupado(err: unknown): boolean {
+  return err instanceof HttpErrorResponse && err.status === 503;
+}

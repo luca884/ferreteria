@@ -1,6 +1,6 @@
 import { HttpErrorResponse } from '@angular/common/http';
 
-import { erroresDeCampos, mensajeDe } from './api-error';
+import { erroresDeCampos, esOcupado, mensajeDe } from './api-error';
 
 describe('erroresDeCampos', () => {
   const http400 = (error: unknown) => new HttpErrorResponse({ status: 400, error });
@@ -46,5 +46,21 @@ describe('mensajeDe', () => {
     expect(mensajeDe(new HttpErrorResponse({ status: 500, error: { message: '' } }), 'Falló.')).toBe('Falló.');
     expect(mensajeDe(new Error('boom'), 'Falló.')).toBe('Falló.');
     expect(mensajeDe(undefined, 'Falló.')).toBe('Falló.');
+  });
+});
+
+describe('esOcupado', () => {
+  it('es verdadero solo para un 503 HTTP', () => {
+    const err = new HttpErrorResponse({ status: 503, error: { message: 'El sistema está ocupado, reintentá.' } });
+
+    expect(esOcupado(err)).toBe(true);
+  });
+
+  it('es falso para otros status, la red caída y errores que no son HTTP', () => {
+    for (const status of [0, 400, 409, 500, 502]) {
+      expect(esOcupado(new HttpErrorResponse({ status }))).toBe(false);
+    }
+    expect(esOcupado(new Error('x'))).toBe(false);
+    expect(esOcupado(undefined)).toBe(false);
   });
 });

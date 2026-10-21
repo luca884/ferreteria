@@ -92,8 +92,3 @@ export function invalidaDe(err: unknown): CobranzaInvalida | null {
 export function esTransitorio(err: unknown): boolean {
   return !(err instanceof HttpErrorResponse) || err.status === 0 || err.status >= 500;
 }
-
-/** 503: el servidor agotó los reintentos por contención («El sistema está ocupado, reintentá.»). No quedó nada hecho. */
-export function esOcupado(err: unknown): boolean {
-  return err instanceof HttpErrorResponse && err.status === 503;
-}

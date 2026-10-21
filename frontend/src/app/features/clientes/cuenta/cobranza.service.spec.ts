@@ -1,9 +1,9 @@
 import { HttpErrorResponse, provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
-import { mensajeDe } from '../../../core/api/api-error';
+import { esOcupado, mensajeDe } from '../../../core/api/api-error';
 import { CobranzaRechazada, CobranzaRequest, PendientesCuenta, Recibo, ReciboCobrado } from './cobranza.models';
-import { CobranzaService, GENERAR_CLAVE_COBRO, esOcupado, esTransitorio, invalidaDe, rechazoDe } from './cobranza.service';
+import { CobranzaService, GENERAR_CLAVE_COBRO, esTransitorio, invalidaDe, rechazoDe } from './cobranza.service';
 
 /**
  * Los cuerpos de estos mocks están copiados de los DTO reales del backend: PendientesResponse, CobranzaRequest,

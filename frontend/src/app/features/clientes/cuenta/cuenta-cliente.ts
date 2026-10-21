@@ -2,7 +2,7 @@ import { HttpErrorResponse } from '@angular/common/http';
 import { Component, DestroyRef, ElementRef, Injector, OnInit, afterNextRender, computed, inject, signal } from '@angular/core';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { Subscription, forkJoin } from 'rxjs';
-import { erroresDeCampos, mensajeDe } from '../../../core/api/api-error';
+import { erroresDeCampos, esOcupado, mensajeDe } from '../../../core/api/api-error';
 import { AuthService } from '../../../core/auth/auth.service';
 import { MontoPipe, formatearMonto } from '../../../core/formato/monto';
 import { BarraAcciones } from '../../../shared/barra-acciones';
@@ -13,7 +13,6 @@ import { PendientesCuenta, Recibo, ReciboCobrado, fechaCompletaLocal } from './c
 import {
   CobranzaService,
   GENERAR_CLAVE_COBRO,
-  esOcupado,
   esTransitorio,
   invalidaDe,
   rechazoDe,
