@@ -1,0 +1,39 @@
+:host {
+  display: block;
+}
+.totales {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--e-4);
+  margin-bottom: var(--e-4);
+  font-weight: 600;
+}
+.nombre {
+  font-weight: 600;
+}
+.campo.nombre {
+  font-weight: normal;
+}
+tr.inactivo td {
+  color: var(--texto-suave);
+}
+.estado,
+.cuit {
+  white-space: nowrap;
+}
+.numero {
+  text-align: right;
+}
+.acciones-reset {
+  margin-top: var(--e-3);
+}
+fieldset.dueno {
+  border: 0;
+  margin: var(--e-3) 0 0;
+  padding: 0;
+}
+fieldset.dueno legend {
+  font-weight: 600;
+  padding: 0;
+  margin-bottom: var(--e-2);
+}

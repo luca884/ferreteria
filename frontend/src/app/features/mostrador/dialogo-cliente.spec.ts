@@ -374,13 +374,13 @@ describe('DialogoCliente (F9)', () => {
 
     it('un error del servidor (documento repetido) se muestra y no elige a nadie', async () => {
       await abrir();
-      servicio.crear.mockReturnValue(throwError(() => errorHttp(409, 'Ya hay un cliente con ese documento.')));
+      servicio.crear.mockReturnValue(throwError(() => errorHttp(409, 'Ya existe un cliente con ese tipo y número de documento.')));
       await abrirAlta();
       await escribirAlta('nuevo-razon-social', 'Ana');
 
       await guardar();
 
-      expect(texto('form.alta-rapida [role="alert"]')).toBe('Ya hay un cliente con ese documento.');
+      expect(texto('form.alta-rapida [role="alert"]')).toBe('Ya existe un cliente con ese tipo y número de documento.');
       expect(elegidos).toEqual([]);
     });
 

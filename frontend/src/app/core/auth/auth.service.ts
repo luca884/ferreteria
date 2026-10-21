@@ -19,6 +19,7 @@ export class AuthService {
   readonly sesion = this._sesion.asReadonly();
   readonly autenticado = computed(() => this._token() !== null);
   readonly esDueno = computed(() => this._sesion()?.rol === 'DUENO');
+  readonly esSuperAdmin = computed(() => this._sesion()?.rol === 'SUPER_ADMIN');
 
   login(email: string, password: string): Observable<LoginResponse> {
     return this.http
@@ -31,6 +32,24 @@ export class AuthService {
           escribir(SESION_KEY, JSON.stringify(res.sesion));
         }),
       );
+  }
+
+  /**
+   * Cambia la contraseña propia. Una actual incorrecta vuelve como 400 con la clave `passwordActual`, nunca como 401:
+   * el interceptor desloguea ante cualquier 401.
+   */
+  cambiarContrasena(passwordActual: string, passwordNueva: string): Observable<void> {
+    return this.http.put<void>(`${environment.apiUrl}/auth/password`, { passwordActual, passwordNueva });
+  }
+
+  /** Vuelve a pedir la sesión al servidor (por ejemplo después de editar el propio nombre). Si falla, la local queda como estaba. */
+  refrescarSesion(): Observable<Sesion> {
+    return this.http.get<Sesion>(`${environment.apiUrl}/auth/me`).pipe(
+      tap((sesion) => {
+        this._sesion.set(sesion);
+        escribir(SESION_KEY, JSON.stringify(sesion));
+      }),
+    );
   }
 
   logout(): void {

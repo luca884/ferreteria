@@ -47,8 +47,13 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @ActiveProfiles("test")
 public abstract class IntegrationTestBase {
 
+    /**
+     * max_connections alto: cada contexto de Spring cacheado (uno por combinacion de @SpyBean/@MockBean) deja su pool de
+     * Hikari abierto hasta el fin de la JVM, y con el limite por defecto de MySQL (151) la suite se quedaba sin conexiones
+     * ("Too many connections") para los tests que abren la suya con BarreraDeLocks.
+     */
     @ServiceConnection
-    static final MySQLContainer<?> MYSQL = new MySQLContainer<>("mysql:8.4");
+    static final MySQLContainer<?> MYSQL = new MySQLContainer<>("mysql:8.4").withCommand("--max-connections=1000");
 
     static {
         MYSQL.start();

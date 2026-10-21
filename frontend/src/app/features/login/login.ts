@@ -2,8 +2,12 @@ import { HttpErrorResponse } from '@angular/common/http';
 import { Component, ElementRef, inject, signal } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
+import { mensajeDe } from '../../core/api/api-error';
 import { AuthService } from '../../core/auth/auth.service';
 import { esRutaPropia } from '../../core/auth/ruta-propia';
+
+/** El `message` genérico del 401 del backend (CredencialesInvalidasException). */
+const GENERICO_DEL_SERVIDOR = 'Email o contraseña incorrectos';
 
 /** Los campos en el orden de la pantalla: al enviar con errores se enfoca el primero que falla. */
 const CAMPOS = ['email', 'password'] as const;
@@ -65,10 +69,16 @@ export class Login {
         this.enviando.set(false);
         this.error.set(
           err instanceof HttpErrorResponse && err.status === 401
-            ? 'Email o contraseña incorrectos.'
+            ? this.mensajeDeCredenciales(err)
             : 'No pudimos conectar con el servidor. Probá de nuevo.',
         );
       },
     });
+  }
+
+  /** El servidor explica un 401 solo cuando hay algo que decir (ferretería suspendida); si no, el texto de siempre. */
+  private mensajeDeCredenciales(err: HttpErrorResponse): string {
+    const mensaje = mensajeDe(err, GENERICO_DEL_SERVIDOR);
+    return mensaje === GENERICO_DEL_SERVIDOR ? 'Email o contraseña incorrectos.' : mensaje;
   }
 }

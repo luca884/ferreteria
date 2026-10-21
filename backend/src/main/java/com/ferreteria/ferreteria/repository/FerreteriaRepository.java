@@ -15,4 +15,10 @@ public interface FerreteriaRepository extends JpaRepository<Ferreteria, Long> {
      */
     @Query("select f.id from Ferreteria f where f.estado = com.ferreteria.ferreteria.model.EstadoFerreteria.ACTIVA")
     List<Long> idsActivas();
+
+    boolean existsByCuit(String cuit);
+
+    /** Todas las ferreterias (activas y suspendidas) por razon social, para el estado general de la plataforma. */
+    @Query("select f from Ferreteria f order by f.razonSocial, f.id")
+    List<Ferreteria> todasOrdenadas();
 }

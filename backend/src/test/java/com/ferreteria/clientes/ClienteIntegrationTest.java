@@ -192,7 +192,7 @@ class ClienteIntegrationTest extends IntegrationTestBase {
         JsonNode conflicto = json(crear(dueno, clienteConDoc("Otra Ana", "DNI", "12345678"))
                 .andExpect(status().isConflict()));
 
-        assertThat(conflicto.get("message").asText()).isEqualTo("Ya hay un cliente con ese documento.");
+        assertThat(conflicto.get("message").asText()).isEqualTo("Ya existe un cliente con ese tipo y número de documento.");
     }
 
     @Test

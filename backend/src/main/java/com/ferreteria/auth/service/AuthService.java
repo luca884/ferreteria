@@ -3,13 +3,16 @@ package com.ferreteria.auth.service;
 import com.ferreteria.auth.dto.LoginRequest;
 import com.ferreteria.auth.dto.LoginResponse;
 import com.ferreteria.auth.dto.SesionResponse;
+import com.ferreteria.auth.model.PoliticaDeContrasena;
 import com.ferreteria.auth.model.Usuario;
 import com.ferreteria.auth.repository.UsuarioRepository;
 import com.ferreteria.auth.security.AuthUser;
+import com.ferreteria.common.exception.DatosInvalidosException;
 import com.ferreteria.common.exception.ResourceNotFoundException;
 import com.ferreteria.ferreteria.model.Ferreteria;
 import com.ferreteria.ferreteria.repository.FerreteriaRepository;
 import com.ferreteria.tenant.UnscopedTenantAccess;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -17,7 +20,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
-@UnscopedTenantAccess(reason = "El login resuelve al usuario por email antes de conocer su ferreteria.")
+@UnscopedTenantAccess(reason = "El login resuelve al usuario por email antes de conocer su ferreteria, y el cambio de contraseña "
+        + "lo busca por el userId del JWT del propio usuario.")
 public class AuthService {
 
     private final UsuarioRepository usuarioRepository;
@@ -51,10 +55,13 @@ public class AuthService {
 
         Ferreteria ferreteria = null;
         if (usuario.getFerreteriaId() != null) {
+            // Misma respuesta que una contrasena mala: no revela si la ferreteria existe.
             ferreteria = ferreteriaRepository.findById(usuario.getFerreteriaId())
-                    .filter(Ferreteria::isActiva)
-                    // Misma respuesta que una contrasena mala: no revela si la ferreteria existe.
                     .orElseThrow(CredencialesInvalidasException::new);
+            // Llegar hasta aca ya probo el email y la contrasena y que el usuario esta activo: solo ahi se avisa.
+            if (!ferreteria.isActiva()) {
+                throw new FerreteriaSuspendidaException();
+            }
         }
         return new LoginResponse(jwtService.generarToken(usuario), toSesion(usuario, ferreteria));
     }
@@ -67,6 +74,24 @@ public class AuthService {
                 ? null
                 : ferreteriaRepository.findById(usuario.getFerreteriaId()).orElse(null);
         return toSesion(usuario, ferreteria);
+    }
+
+    /**
+     * Cada usuario cambia la propia contraseña pidiendo la actual. Una actual incorrecta es un error del campo (400), nunca
+     * un 401: el front desloguea ante cualquier 401.
+     *
+     * <p>Deuda conocida (R-013): los tokens ya emitidos siguen valiendo hasta que vencen (12 horas); cambiar la contraseña
+     * no los invalida.
+     */
+    @Transactional
+    public void cambiarContrasena(AuthUser authUser, String actual, String nueva) {
+        Usuario usuario = usuarioRepository.findById(authUser.userId())
+                .orElseThrow(() -> new ResourceNotFoundException("Usuario no encontrado"));
+        if (!passwordEncoder.matches(actual, usuario.getPasswordHash())) {
+            throw new DatosInvalidosException(Map.of("passwordActual", "La contraseña actual no es correcta."));
+        }
+        PoliticaDeContrasena.validar("passwordNueva", nueva);
+        usuario.cambiarPasswordHash(passwordEncoder.encode(nueva));
     }
 
     private SesionResponse toSesion(Usuario usuario, Ferreteria ferreteria) {

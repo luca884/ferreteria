@@ -27,7 +27,7 @@ public class Ferreteria {
     @Column(name = "razon_social", nullable = false, length = 150)
     private String razonSocial;
 
-    @Column(nullable = false, length = 13, unique = true)
+    @Column(nullable = false, length = 13, unique = true, updatable = false)
     private String cuit;
 
     @Enumerated(EnumType.STRING)
@@ -60,6 +60,17 @@ public class Ferreteria {
         this.razonSocial = razonSocial;
         this.cuit = cuit;
         this.condicionIva = condicionIva;
+    }
+
+    /** Lo unico que el super admin edita de una ferreteria ya creada: el CUIT no cambia nunca. */
+    public void actualizarDatos(String razonSocial, CondicionIva condicionIva) {
+        this.razonSocial = razonSocial;
+        this.condicionIva = condicionIva;
+    }
+
+    /** Suspender o reactivar. Idempotente; no toca ningun otro dato de la ferreteria. */
+    public void cambiarActivo(boolean activo) {
+        this.estado = activo ? EstadoFerreteria.ACTIVA : EstadoFerreteria.SUSPENDIDA;
     }
 
     public boolean isActiva() {

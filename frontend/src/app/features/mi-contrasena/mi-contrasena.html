@@ -1,0 +1,20 @@
+<app-barra-acciones>
+  <h1>Cambiar mi contraseña</h1>
+</app-barra-acciones>
+
+<p class="ayuda">Ingresá tu contraseña actual y elegí una nueva de 8 a 72 caracteres.</p>
+
+@if (aviso(); as mensaje) {
+  <p class="alerta exito" role="status">{{ mensaje }}</p>
+}
+
+<section class="panel formulario">
+  <app-contrasena-form
+    [pedirActual]="true"
+    [errorActual]="errorActual()"
+    [errorServidor]="error()"
+    [enviando]="enviando()"
+    textoEnviar="Cambiar contraseña"
+    (enviar)="cambiar($event)"
+  />
+</section>

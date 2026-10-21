@@ -61,6 +61,84 @@ class TenantScopingArchTest {
         noClasses().should().callMethodWhere(finderSinScope).check(clases);
     }
 
+    // ---- Usuarios (CU-02, R-006): el repositorio de usuarios es de tenant ----
+
+    @Test
+    void usuarioRepositoryEsDeTenant() {
+        assertThat(TenantScopedRepository.class).isAssignableFrom(com.ferreteria.auth.repository.UsuarioRepository.class);
+    }
+
+    private static final String PAQUETE_REPO_AUTH = "com.ferreteria.auth.repository";
+
+    /**
+     * Las consultas abstractas de {@code auth.repository} (las que reciben la ferreteria o el email como parametro) solo las
+     * llama el propio repositorio o una clase con {@code @UnscopedTenantAccess}. Se exceptuan los {@code save*}.
+     */
+    @Test
+    void lasConsultasDeUsuarioSoloLasLlamaElRepoOUnaClaseConExcepcionDocumentada() {
+        DescribedPredicate<JavaMethodCall> consultaCruda = new DescribedPredicate<>(
+                "una consulta abstracta de auth.repository, llamada desde una clase sin @UnscopedTenantAccess") {
+            @Override
+            public boolean test(JavaMethodCall call) {
+                boolean esConsultaAbstractaDeAuth = call.getTarget().resolveMember()
+                        .map(m -> m.getOwner().getPackageName().equals(PAQUETE_REPO_AUTH)
+                                && m.getModifiers().contains(com.tngtech.archunit.core.domain.JavaModifier.ABSTRACT))
+                        .orElse(false);
+                boolean llamaDesdeElRepo = call.getOriginOwner().getPackageName().equals(PAQUETE_REPO_AUTH);
+                boolean excepcionDocumentada = call.getOrigin().isAnnotatedWith(UnscopedTenantAccess.class)
+                        || call.getOriginOwner().isAnnotatedWith(UnscopedTenantAccess.class);
+                return esConsultaAbstractaDeAuth && !llamaDesdeElRepo && !excepcionDocumentada
+                        && !call.getName().startsWith("save");
+            }
+        };
+
+        noClasses().should().callMethodWhere(consultaCruda).check(clases);
+        // la regla no es vacia: UsuarioRepository tiene consultas abstractas propias
+        assertThat(clases.get(com.ferreteria.auth.repository.UsuarioRepository.class).getMethods())
+                .anyMatch(m -> m.getModifiers().contains(com.tngtech.archunit.core.domain.JavaModifier.ABSTRACT)
+                        && m.getName().equals("bloquearFerreteria"));
+    }
+
+    /** Los {@code default} de UsuarioRepository toman la ferreteria de TenantContext o delegan en otro metodo del repo. */
+    @Test
+    void losMetodosScopedDeUsuarioTomanLaFerreteriaDelContexto() {
+        ArchCondition<JavaMethod> tomaLaFerreteriaDelContexto = new ArchCondition<>(
+                "llamar a TenantContext.requireFerreteriaId() o a otro metodo del mismo repositorio") {
+            @Override
+            public void check(JavaMethod metodo, ConditionEvents eventos) {
+                boolean ok = metodo.getMethodCallsFromSelf().stream().anyMatch(c ->
+                        (c.getTargetOwner().isEquivalentTo(com.ferreteria.tenant.TenantContext.class)
+                                && c.getName().equals("requireFerreteriaId"))
+                        || c.getTargetOwner().equals(metodo.getOwner()));
+                if (!ok) {
+                    eventos.add(SimpleConditionEvent.violated(metodo,
+                            metodo.getFullName() + " no toma la ferreteria de TenantContext"));
+                }
+            }
+        };
+
+        methods().that().areDeclaredIn(com.ferreteria.auth.repository.UsuarioRepository.class)
+                .and().doNotHaveModifier(com.tngtech.archunit.core.domain.JavaModifier.ABSTRACT)
+                .and().doNotHaveModifier(com.tngtech.archunit.core.domain.JavaModifier.SYNTHETIC)
+                .should(tomaLaFerreteriaDelContexto)
+                .allowEmptyShould(false)
+                .check(clases);
+    }
+
+    /** El servicio y el controller de usuarios operan SOLO sobre la ferreteria del JWT: sin excepcion al tenant. */
+    @Test
+    void elServicioYElControllerDeUsuariosNoUsanUnscopedTenantAccess() {
+        noClasses().that().haveFullyQualifiedName("com.ferreteria.auth.service.UsuarioService")
+                .or().haveFullyQualifiedName("com.ferreteria.auth.controller.UsuarioController")
+                .should().beAnnotatedWith(UnscopedTenantAccess.class)
+                .allowEmptyShould(false)
+                .check(clases);
+        noMethods().that().areDeclaredIn(com.ferreteria.auth.service.UsuarioService.class)
+                .should().beAnnotatedWith(UnscopedTenantAccess.class)
+                .allowEmptyShould(false)
+                .check(clases);
+    }
+
     // ---- Cotizacion (R-024, R-022): la del mercado es global a proposito; la configuracion, de cada ferreteria ----
 
     @Test

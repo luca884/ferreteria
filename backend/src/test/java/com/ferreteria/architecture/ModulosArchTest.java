@@ -538,4 +538,44 @@ class ModulosArchTest {
                 .allowEmptyShould(false)
                 .check(clases);
     }
+
+    // ---- Plataforma (super admin, C-108): no conoce el negocio y habla con auth solo por su puerto ----
+
+    /** (a) R-109: el paquete {@code plataforma} no depende de ventas, catalogo, clientes, stock ni cotizacion. */
+    @Test
+    void plataformaNoDependeDeNegocio() {
+        noClasses().that().resideInAPackage("com.ferreteria.plataforma..")
+                .should().dependOnClassesThat(resideInAnyPackage("com.ferreteria.ventas..", "com.ferreteria.catalogo..",
+                        "com.ferreteria.clientes..", "com.ferreteria.stock..", "com.ferreteria.cotizacion.."))
+                .allowEmptyShould(false)
+                .check(clases);
+    }
+
+    /** (b) {@code plataforma} usa {@code auth} solo por {@code auth.api}: nunca por sus entidades, repositorios o servicios. */
+    @Test
+    void plataformaUsaAuthSoloPorSuPuerto() {
+        noClasses().that().resideInAPackage("com.ferreteria.plataforma..")
+                .should().dependOnClassesThat(resideInAPackage("com.ferreteria.auth..")
+                        .and(not(resideInAPackage("com.ferreteria.auth.api.."))))
+                .allowEmptyShould(false)
+                .check(clases);
+    }
+
+    /** (c) {@code auth.api} solo habla JDK y consigo mismo. */
+    @Test
+    void elPuertoDeAuthSoloDependeDelJdk() {
+        classes().that().resideInAPackage("com.ferreteria.auth.api..")
+                .should().onlyDependOnClassesThat(resideInAnyPackage("java..", "com.ferreteria.auth.api.."))
+                .allowEmptyShould(false)
+                .check(clases);
+    }
+
+    /** (d) Nadie fuera de {@code plataforma} depende de ella. */
+    @Test
+    void nadieDependeDePlataforma() {
+        noClasses().that().resideOutsideOfPackage("com.ferreteria.plataforma..")
+                .should().dependOnClassesThat(resideInAPackage("com.ferreteria.plataforma.."))
+                .check(clases);
+        assertThat(clases.containPackage("com.ferreteria.plataforma")).as("existe el paquete plataforma").isTrue();
+    }
 }

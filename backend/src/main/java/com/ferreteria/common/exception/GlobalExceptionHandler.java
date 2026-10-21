@@ -45,7 +45,8 @@ public class GlobalExceptionHandler {
             "medio", "El medio de pago no es válido. Usá EFECTIVO, DEBITO, CREDITO, TRANSFERENCIA o CUENTA_CORRIENTE.",
             "motivo", "El motivo no es válido. Usá INGRESO_MERCADERIA, ROTURA, CONTEO u OTRO.",
             "modo", "El modo no es válido. Usá STOCK_REAL o CANTIDAD.",
-            "tipo", "El tipo de movimiento no es válido. Usá INGRESO, GASTO o RETIRO.");
+            "tipo", "El tipo de movimiento no es válido. Usá INGRESO, GASTO o RETIRO.",
+            "rol", "El rol tiene que ser Dueño o Vendedor.");
 
     private static final Pattern BONIFICACION = Pattern.compile("bonificacion([123])");
 

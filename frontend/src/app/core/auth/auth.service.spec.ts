@@ -41,6 +41,25 @@ describe('AuthService', () => {
     expect(localStorage.getItem('ferreteria.token')).toBe('jwt-de-prueba');
   });
 
+  it('esSuperAdmin es verdadero solo con el rol SUPER_ADMIN', () => {
+    expect(service.esSuperAdmin()).toBe(false);
+
+    service.login('dueno@tornillo.demo', 'demo1234').subscribe();
+    http.expectOne((r) => r.url.endsWith('/auth/login')).flush(respuesta);
+    expect(service.esSuperAdmin()).toBe(false);
+
+    service.logout();
+    service.login('admin@demo.local', 'demo1234').subscribe();
+    http
+      .expectOne((r) => r.url.endsWith('/auth/login'))
+      .flush({
+        ...respuesta,
+        sesion: { ...respuesta.sesion, rol: 'SUPER_ADMIN', ferreteriaId: null, ferreteriaNombre: null },
+      });
+    expect(service.esSuperAdmin()).toBe(true);
+    expect(service.esDueno()).toBe(false);
+  });
+
   it('al salir borra todo', () => {
     service.login('dueno@tornillo.demo', 'demo1234').subscribe();
     http.expectOne((r) => r.url.endsWith('/auth/login')).flush(respuesta);
@@ -50,5 +69,53 @@ describe('AuthService', () => {
     expect(service.autenticado()).toBe(false);
     expect(service.sesion()).toBeNull();
     expect(localStorage.getItem('ferreteria.token')).toBeNull();
+  });
+
+  describe('cambiarContrasena', () => {
+    it('hace PUT /auth/password con la actual y la nueva', () => {
+      let listo = false;
+      service.cambiarContrasena('vieja1234', 'nueva1234').subscribe(() => (listo = true));
+
+      const req = http.expectOne((r) => r.url.endsWith('/auth/password'));
+      expect(req.request.method).toBe('PUT');
+      expect(req.request.body).toEqual({ passwordActual: 'vieja1234', passwordNueva: 'nueva1234' });
+      req.flush(null, { status: 204, statusText: 'No Content' });
+
+      expect(listo).toBe(true);
+    });
+  });
+
+  describe('refrescarSesion', () => {
+    const nueva = { ...respuesta.sesion, nombre: 'Dueño Renombrado' };
+
+    beforeEach(() => {
+      service.login('dueno@tornillo.demo', 'demo1234').subscribe();
+      http.expectOne((r) => r.url.endsWith('/auth/login')).flush(respuesta);
+    });
+
+    it('hace GET /auth/me, actualiza el signal y la sesión guardada', () => {
+      let devuelta: unknown;
+      service.refrescarSesion().subscribe((s) => (devuelta = s));
+
+      const req = http.expectOne((r) => r.url.endsWith('/auth/me'));
+      expect(req.request.method).toBe('GET');
+      req.flush(nueva);
+
+      expect(devuelta).toEqual(nueva);
+      expect(service.sesion()?.nombre).toBe('Dueño Renombrado');
+      expect(JSON.parse(localStorage.getItem('ferreteria.sesion')!).nombre).toBe('Dueño Renombrado');
+      expect(service.token()).toBe('jwt-de-prueba');
+    });
+
+    it('si falla no pisa la sesión que había', () => {
+      let fallo = false;
+      service.refrescarSesion().subscribe({ error: () => (fallo = true) });
+
+      http.expectOne((r) => r.url.endsWith('/auth/me')).flush({ message: 'x' }, { status: 500, statusText: 'Error' });
+
+      expect(fallo).toBe(true);
+      expect(service.sesion()?.nombre).toBe('Dueno El Tornillo');
+      expect(JSON.parse(localStorage.getItem('ferreteria.sesion')!).nombre).toBe('Dueno El Tornillo');
+    });
   });
 });

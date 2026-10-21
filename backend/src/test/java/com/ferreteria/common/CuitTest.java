@@ -1,4 +1,4 @@
-package com.ferreteria.catalogo.model;
+package com.ferreteria.common;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -31,6 +31,26 @@ class CuitTest {
     @DisplayName("una persona: 20-12345678-6")
     void persona() {
         assertThat(Cuit.normalizar("20-12345678-6")).isEqualTo("20-12345678-6");
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"20-12345678-6", "23-12345678-1", "24-12345678-1", "27-12345678-1", "30-12345678-1", "33-12345678-1", "34-12345678-1"})
+    @DisplayName("tienePrefijoValido: 20, 23, 24, 27, 30, 33 y 34 son validos")
+    void prefijosValidos(String normalizado) {
+        assertThat(Cuit.tienePrefijoValido(normalizado)).isTrue();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"10-12345678-1", "21-12345678-1", "25-12345678-1", "31-12345678-1", "35-12345678-1", "99-12345678-1", "", "3"})
+    @DisplayName("tienePrefijoValido: cualquier otro prefijo (o texto corto) no lo es")
+    void prefijosInvalidos(String normalizado) {
+        assertThat(Cuit.tienePrefijoValido(normalizado)).isFalse();
+    }
+
+    @Test
+    @DisplayName("tienePrefijoValido con null es falso")
+    void prefijoNull() {
+        assertThat(Cuit.tienePrefijoValido(null)).isFalse();
     }
 
     @Test

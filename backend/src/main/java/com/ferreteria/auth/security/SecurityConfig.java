@@ -60,6 +60,12 @@ public class SecurityConfig {
                         // restricción de método a propósito: con solo GET, un HEAD del Vendedor con un parámetro inválido llegaba al
                         // binding y daba 400 en vez de 403 (el HEAD de Spring MVC es el GET). El Dueño con otro método recibe 405.
                         .requestMatchers("/api/clientes/*/cuenta-corriente/extracto").hasRole("DUENO")
+                        // Gestionar los usuarios de la ferretería (CU-02) es solo del Dueño: el Vendedor y el super admin
+                        // reciben 403 aunque el cuerpo no valide.
+                        .requestMatchers("/api/usuarios/**").hasRole("DUENO")
+                        // Las ferreterias de la plataforma (alta, edicion, suspension) son solo del super admin: el Dueño y el
+                        // Vendedor reciben 403 aunque el cuerpo no valide.
+                        .requestMatchers("/api/admin/**").hasRole("SUPER_ADMIN")
                         .anyRequest().authenticated())
                 .exceptionHandling(e -> e
                         .authenticationEntryPoint((request, response, ex) -> {
