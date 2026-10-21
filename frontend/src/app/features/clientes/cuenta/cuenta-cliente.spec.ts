@@ -422,6 +422,15 @@ describe('CuentaCliente (CC-028, CC-033, CC-034, CC-038, CC-043)', () => {
         expect(cobranza.pendientes).toHaveBeenCalledTimes(2);
       });
 
+      it('si el recibo ya estaba anulado el foco pasa a «Ver recibo»: «Anular» desaparece al recargar la fila y no cae al body', async () => {
+        await conCobro();
+        cobranza.recibo.mockReturnValue(of(reciboAnulado()));
+
+        await pedirAnular();
+
+        expect(document.activeElement).toBe(boton('Ver recibo'));
+      });
+
       it('con el diálogo abierto F4 no abre el cobro', async () => {
         await conCobro();
         await pedirAnular();
@@ -574,6 +583,20 @@ describe('CuentaCliente (CC-028, CC-033, CC-034, CC-038, CC-043)', () => {
         expect(extractos.extracto).toHaveBeenCalledTimes(2);
       });
 
+      it('409: el foco pasa a «Ver recibo» (el aviso), no cae al body cuando «Anular» desaparece', async () => {
+        await conCobro({
+          anular: () =>
+            throwError(() =>
+              rechazo(409, 'RECIBO_YA_ANULADO', 'El recibo ya fue anulado.'),
+            ),
+        });
+
+        await anularConMotivo();
+
+        expect(anulacion()).toBeNull();
+        expect(document.activeElement).toBe(boton('Ver recibo'));
+      });
+
       it('409 sin quién ni cuándo: muestra el mensaje del servidor', async () => {
         await conCobro({
           anular: () => throwError(() => rechazo(409, 'RECIBO_YA_ANULADO', 'El recibo ya fue anulado.')),
@@ -586,7 +609,7 @@ describe('CuentaCliente (CC-028, CC-033, CC-034, CC-038, CC-043)', () => {
       });
 
       it.each([
-        ['CAJA_CERRADA', 'Abrí la caja para anular un cobro en efectivo.'],
+        ['CAJA_CERRADA', 'Abrí la caja para anular.'],
         ['CAJA_DE_OTRO_DIA', 'La caja del 18/10 sigue abierta. Cerrala antes de anular.'],
       ])('422 %s: muestra el mensaje del servidor, el diálogo sigue abierto y conserva el motivo', async (codigo, message) => {
         await conCobro({ anular: () => throwError(() => rechazo(422, codigo, message)) });

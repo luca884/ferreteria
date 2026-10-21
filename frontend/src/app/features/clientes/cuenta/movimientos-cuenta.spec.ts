@@ -172,7 +172,7 @@ describe('MovimientosCuenta (CC-074, CC-076, CC-078, CC-096)', () => {
   });
 
   describe('tabla', () => {
-    it('lista el más nuevo arriba con fecha, comprobante, debe, haber, saldo y usuario', async () => {
+    it('lista el más nuevo arriba con fecha, tipo, comprobante, debe, haber, saldo y usuario (CC-096)', async () => {
       await crear({
         extracto: () =>
           of(
@@ -185,19 +185,38 @@ describe('MovimientosCuenta (CC-074, CC-076, CC-078, CC-096)', () => {
 
       const [primera, segunda] = filas();
       // La fecha se lee del texto (hora de Buenos Aires): 23:59 no pasa a otro día por la zona del navegador.
-      expect(celdas(primera).slice(0, 6)).toEqual(['20/10/2026 23:59', 'Recibo N.º 14', '', '$ 500,00', '$ 700,00', 'Ana']);
-      expect(celdas(segunda).slice(0, 6)).toEqual(['19/10/2026 08:05', 'Venta N.º 7', '$ 1.200,00', '', '$ 1.200,00', '—']);
+      expect(celdas(primera).slice(0, 7)).toEqual(['20/10/2026 23:59', 'Cobro', 'Recibo N.º 14', '', '$ 500,00', '$ 700,00', 'Ana']);
+      expect(celdas(segunda).slice(0, 7)).toEqual(['19/10/2026 08:05', 'Venta', 'Venta N.º 7', '$ 1.200,00', '', '$ 1.200,00', '—']);
+    });
+
+    it('la columna «Tipo» va después de la fecha y dice el tipo de cada línea: Venta, Cobro, Anulación, Ajuste y NC', async () => {
+      await crear({
+        extracto: () =>
+          of(
+            extracto([
+              linea(5, { tipo: 'NC', referencia: 'NC N.º 3' }),
+              linea(4, { tipo: 'AJUSTE', referencia: 'Ajuste' }),
+              linea(3, { tipo: 'ANULACION', referencia: 'Anulación Recibo N.º 14', reciboId: 14, comprobanteId: null }),
+              linea(2, { tipo: 'COBRO', referencia: 'Recibo N.º 14', reciboId: 14, comprobanteId: null }),
+              linea(1),
+            ]),
+          ),
+      });
+
+      const encabezados = Array.from(el().querySelectorAll('table.movimientos thead th')).map((c) => limpio(c.textContent));
+      expect(encabezados.slice(0, 3)).toEqual(['Fecha', 'Tipo', 'Comprobante']);
+      expect(filas().map((f) => celdas(f)[1])).toEqual(['NC', 'Ajuste', 'Anulación', 'Cobro', 'Venta']);
     });
 
     it('los importes que llegan como número entero se muestran siempre con 2 decimales', async () => {
       await crear({ extracto: () => of(extracto([linea(1, { debe: 1600, saldo: 1600 })])) });
 
       const [fila] = filas();
-      expect(celdas(fila)[2]).toBe('$ 1.600,00');
-      expect(celdas(fila)[4]).toBe('$ 1.600,00');
+      expect(celdas(fila)[3]).toBe('$ 1.600,00');
+      expect(celdas(fila)[5]).toBe('$ 1.600,00');
     });
 
-    it('un COBRO anulado se marca «Anulado»; uno vigente no', async () => {
+    it('un COBRO anulado se marca «ANULADO» (CC-096); uno vigente no', async () => {
       await crear({
         extracto: () =>
           of(
@@ -209,7 +228,7 @@ describe('MovimientosCuenta (CC-074, CC-076, CC-078, CC-096)', () => {
       });
 
       const [anulado, vigente] = filas();
-      expect(limpio(anulado.querySelector('.etiqueta-anulado')?.textContent)).toBe('Anulado');
+      expect(limpio(anulado.querySelector('.etiqueta-anulado')?.textContent)).toBe('ANULADO');
       expect(vigente.querySelector('.etiqueta-anulado')).toBeNull();
     });
 
@@ -237,8 +256,8 @@ describe('MovimientosCuenta (CC-074, CC-076, CC-078, CC-096)', () => {
       await crear({ extracto: (_c, _f, page) => of(veinticinco(page)) });
 
       expect(filas()).toHaveLength(20);
-      expect(celdas(filas()[0])[1]).toBe('Venta N.º 25');
-      expect(celdas(filas()[19])[1]).toBe('Venta N.º 6');
+      expect(celdas(filas()[0])[2]).toBe('Venta N.º 25');
+      expect(celdas(filas()[19])[2]).toBe('Venta N.º 6');
       expect(texto('nav.paginas')).toContain('Página 1 de 2');
       expect((boton('Anterior') as HTMLButtonElement).disabled).toBe(true);
       expect((boton('Siguiente') as HTMLButtonElement).disabled).toBe(false);
@@ -252,7 +271,7 @@ describe('MovimientosCuenta (CC-074, CC-076, CC-078, CC-096)', () => {
 
       expect(servicio.extracto).toHaveBeenLastCalledWith(8, FILTRO_VACIO, 1);
       expect(filas()).toHaveLength(5);
-      expect(filas().map((f) => celdas(f)[4])).toEqual(['$ 500,00', '$ 400,00', '$ 300,00', '$ 200,00', '$ 100,00']);
+      expect(filas().map((f) => celdas(f)[5])).toEqual(['$ 500,00', '$ 400,00', '$ 300,00', '$ 200,00', '$ 100,00']);
       expect(texto('nav.paginas')).toContain('Página 2 de 2');
       expect((boton('Siguiente') as HTMLButtonElement).disabled).toBe(true);
     });
@@ -400,7 +419,7 @@ describe('MovimientosCuenta (CC-074, CC-076, CC-078, CC-096)', () => {
       boton('Filtrar')!.click();
       await refrescar();
 
-      expect(filas().map((f) => celdas(f)[4])).toEqual(['$ 1.000,00', '$ 1.200,00']);
+      expect(filas().map((f) => celdas(f)[5])).toEqual(['$ 1.000,00', '$ 1.200,00']);
     });
 
     it('con tipo elegido avisa que los totales son del tipo; sin tipo no lo dice', async () => {
@@ -444,6 +463,41 @@ describe('MovimientosCuenta (CC-074, CC-076, CC-078, CC-096)', () => {
       boton('Limpiar')!.click();
       await refrescar();
       expect(texto('.error-filtro')).toBeNull();
+      expect(filas()).toHaveLength(2);
+    });
+
+    it('desde > hasta con la primera carga fallida: muestra el error del filtro y «Reintentar» NO repite el filtro inválido', async () => {
+      const invalido = (filtro: FiltroExtracto) => filtro.desde > filtro.hasta && filtro.hasta !== '';
+      let cae = true;
+      await crear({
+        extracto: (_c, filtro) =>
+          invalido(filtro)
+            ? throwError(
+                () =>
+                  new HttpErrorResponse({
+                    status: 400,
+                    error: { status: 400, message: 'Datos inválidos', errors: { desde: 'La fecha desde no puede ser posterior a hasta.' } },
+                  }),
+              )
+            : cae
+              ? throwError(() => new HttpErrorResponse({ status: 500 }))
+              : of(extracto([linea(1), linea(2)])),
+      });
+      expect(texto('.error.con-accion')).toContain('No se pudieron cargar los movimientos.');
+      await escribir('desde', '2026-10-10');
+      await escribir('hasta', '2026-10-01');
+
+      boton('Filtrar')!.click();
+      await refrescar();
+
+      expect(texto('.error-filtro')).toBe('La fecha desde no puede ser posterior a hasta.');
+      expect(servicio.extracto).toHaveBeenLastCalledWith(8, { desde: '2026-10-10', hasta: '2026-10-01', tipo: '' }, 0);
+
+      cae = false;
+      boton('Reintentar')!.click();
+      await refrescar();
+
+      expect(servicio.extracto).toHaveBeenLastCalledWith(8, FILTRO_VACIO, 0);
       expect(filas()).toHaveLength(2);
     });
 
@@ -693,7 +747,7 @@ describe('MovimientosCuenta (CC-074, CC-076, CC-078, CC-096)', () => {
       primera.next(extracto([linea(1)]));
       await refrescar();
 
-      expect(filas().map((f) => celdas(f)[1])).toEqual(['Venta N.º 2']);
+      expect(filas().map((f) => celdas(f)[2])).toEqual(['Venta N.º 2']);
     });
   });
 });

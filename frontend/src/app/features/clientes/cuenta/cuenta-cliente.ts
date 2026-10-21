@@ -288,6 +288,7 @@ export class CuentaCliente implements OnInit {
           // La fila estaba desactualizada: no hay nada que anular, se muestra lo que pasó y se vuelve a pedir lo que se ve.
           this.avisoAnulacion.set(this.avisoYaAnulado(recibo, null));
           this.refrescarTrasAnulacion();
+          this.enfocarVerRecibo();
           return;
         }
         this.cobrado.set(null);
@@ -323,16 +324,22 @@ export class CuentaCliente implements OnInit {
           reciboId: anulado.id,
         });
         this.refrescarTrasAnulacion();
-        // El botón «Anular» de la fila ya no existe: el resultado se anuncia en el aviso y el foco va a su acción.
-        afterNextRender(
-          () => this.host.nativeElement.querySelector<HTMLElement>('.ver-recibo')?.focus(),
-          { injector: this.injector },
-        );
+        this.enfocarVerRecibo();
       },
       error: (err: unknown) => {
         this.anulandoEnVuelo.set(false);
         this.fallarAnulacion(err, recibo);
       },
+    });
+  }
+
+  /**
+   * El botón «Anular» de la fila ya no existe (o está por desaparecer al recargar): el resultado se anuncia en el aviso y
+   * el foco va a su acción, «Ver recibo», en lugar de caer al body.
+   */
+  private enfocarVerRecibo(): void {
+    afterNextRender(() => this.host.nativeElement.querySelector<HTMLElement>('.ver-recibo')?.focus(), {
+      injector: this.injector,
     });
   }
 
@@ -367,6 +374,7 @@ export class CuentaCliente implements OnInit {
         ),
       );
       this.refrescarTrasAnulacion();
+      this.enfocarVerRecibo();
       return;
     }
     if (rechazo) {

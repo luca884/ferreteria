@@ -93,6 +93,7 @@
             <thead>
               <tr>
                 <th scope="col">Fecha</th>
+                <th scope="col">Tipo</th>
                 <th scope="col">Comprobante</th>
                 <th scope="col" class="num">Debe</th>
                 <th scope="col" class="num">Haber</th>
@@ -105,10 +106,11 @@
               @for (linea of e.movimientos.items; track linea.id) {
                 <tr [class.anulacion]="linea.tipo === 'ANULACION'">
                   <td>{{ fecha(linea.fecha) }}</td>
+                  <td>{{ tipoLabels[linea.tipo] }}</td>
                   <td>
                     {{ linea.referencia }}
                     @if (linea.anulado) {
-                      <span class="etiqueta etiqueta-anulado">Anulado</span>
+                      <span class="etiqueta etiqueta-anulado">ANULADO</span>
                     }
                     @if (linea.tipo === 'ANULACION' && linea.motivo) {
                       <small class="motivo">Motivo: {{ linea.motivo }}</small>

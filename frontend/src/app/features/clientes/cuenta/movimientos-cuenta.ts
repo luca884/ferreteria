@@ -85,6 +85,7 @@ export class MovimientosCuenta {
           this.clienteCargado = clienteId;
           this.borrador.set(FILTRO_VACIO);
           this.extracto.set(null);
+          this.errorCarga.set(null);
           this.estado.set('cargando');
           this.cargar(FILTRO_VACIO, 0);
         } else {
@@ -97,17 +98,17 @@ export class MovimientosCuenta {
 
   /**
    * Pide una página con un filtro. Lo que ya se ve se mantiene mientras recarga. El filtro pedido recién queda vigente
-   * si el servidor lo acepta; un 400 (desde > hasta) deja la tabla como estaba y muestra el motivo.
+   * si el servidor lo acepta; un 400 (desde > hasta) deja lo que había como estaba y muestra el motivo del filtro.
    */
   protected cargar(filtro: FiltroExtracto, page: number): void {
     this.lectura?.unsubscribe();
     if (this.estado() !== 'listo' || this.extracto() === null) this.estado.set('cargando');
-    this.errorCarga.set(null);
     this.errorFiltro.set(null);
     this.lectura = this.servicio.extracto(this.clienteId(), filtro, page).subscribe({
       next: (extracto) => {
         this.pedido = { filtro, page: extracto.movimientos.page };
         this.extracto.set(extracto);
+        this.errorCarga.set(null);
         this.estado.set('listo');
       },
       error: (err: unknown) => this.fallar(err, filtro, page),
@@ -115,9 +116,15 @@ export class MovimientosCuenta {
   }
 
   private fallar(err: unknown, filtro: FiltroExtracto, page: number): void {
-    if (err instanceof HttpErrorResponse && err.status === 400 && this.extracto() !== null) {
+    if (err instanceof HttpErrorResponse && err.status === 400) {
+      // El filtro inválido nunca queda como lo último pedido: «Reintentar» (si no hay tabla) repite el último pedido válido.
       this.errorFiltro.set(erroresDeCampos(err).join(' ') || mensajeDe(err, 'Revisá los filtros.'));
-      this.estado.set('listo');
+      if (this.extracto() !== null) {
+        this.estado.set('listo');
+      } else {
+        this.errorCarga.update((actual) => actual ?? MENSAJE_CARGA);
+        this.estado.set('error');
+      }
       return;
     }
     this.pedido = { filtro, page };

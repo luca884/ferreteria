@@ -111,6 +111,23 @@ describe('ExtractoService (CC-072, CC-099)', () => {
     expect(mensajeDe(err, 'otro')).toBe(message);
   });
 
+  it.each([
+    [400, 'Parámetro inválido: hasta'],
+    [403, 'No tenés permiso para hacer esto'],
+    [404, 'Cliente no encontrado'],
+  ])('paraImprimir(): un %i se propaga como HttpErrorResponse con su message (no se traga ni se convierte)', (status, message) => {
+    let err: unknown;
+    let respuesta: Extracto | undefined;
+    service.paraImprimir(8, filtro({ hasta: '2026-10-31' })).subscribe({ next: (x) => (respuesta = x), error: (e) => (err = e) });
+
+    http.expectOne((q) => q.url.endsWith('/extracto')).flush({ status, message }, { status, statusText: 'x' });
+
+    expect(respuesta).toBeUndefined();
+    expect(err).toBeInstanceOf(HttpErrorResponse);
+    expect((err as HttpErrorResponse).status).toBe(status);
+    expect(mensajeDe(err, 'otro')).toBe(message);
+  });
+
   it('el 400 de desde > hasta trae errors.desde (el front lo muestra tal cual)', () => {
     let err: HttpErrorResponse | undefined;
     service.extracto(8, filtro({ desde: '2026-10-10', hasta: '2026-10-01' }), 0).subscribe({ error: (e) => (err = e) });

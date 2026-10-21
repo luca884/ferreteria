@@ -134,10 +134,10 @@ describe('DialogoAnulacion (CC-056, CC-097)', () => {
       expect(el().querySelector('.deja-a-cuenta')).toBeNull();
     });
 
-    it('avisa que no se puede deshacer', async () => {
+    it('avisa que no se puede deshacer (CC-097)', async () => {
       await abrir();
 
-      expect(texto('.no-se-deshace')).toBe('La anulación no se puede deshacer: si hace falta, se vuelve a cobrar.');
+      expect(texto('.no-se-deshace')).toBe('Esta acción no se puede deshacer.');
     });
 
     it('los botones son «Cancelar» (Esc) y «Anular recibo» (Enter, de peligro)', async () => {
