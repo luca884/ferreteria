@@ -63,6 +63,9 @@ public class SecurityConfig {
                         // Gestionar los usuarios de la ferretería (CU-02) es solo del Dueño: el Vendedor y el super admin
                         // reciben 403 aunque el cuerpo no valide.
                         .requestMatchers("/api/usuarios/**").hasRole("DUENO")
+                        // Las ferreterias de la plataforma (alta, edicion, suspension) son solo del super admin: el Dueño y el
+                        // Vendedor reciben 403 aunque el cuerpo no valide.
+                        .requestMatchers("/api/admin/**").hasRole("SUPER_ADMIN")
                         .anyRequest().authenticated())
                 .exceptionHandling(e -> e
                         .authenticationEntryPoint((request, response, ex) -> {

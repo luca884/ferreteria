@@ -11,7 +11,7 @@ import org.springframework.test.web.servlet.ResultActions;
  * Base de los tests de la gestion de usuarios (CU-02): cada test crea su propia ferreteria por JDBC, porque la base se
  * comparte entre tests y no se revierte. Los usuarios entran con demo1234, igual que los de los datos demo.
  */
-abstract class UsuariosTestBase extends IntegrationTestBase {
+public abstract class UsuariosTestBase extends IntegrationTestBase {
 
     /** Hash BCrypt de demo1234, el mismo de los datos demo. */
     static final String HASH_DEMO = "$2a$10$ElilOUcrECf1crPXSQ9j3eXlR8GWOg4usWY6nWK.XHsCTXJ.3Q4.i";
@@ -37,7 +37,7 @@ abstract class UsuariosTestBase extends IntegrationTestBase {
                 .content(objectMapper.createObjectNode().put("email", email).put("password", password).toString()));
     }
 
-    protected static String json(Object... paresClaveValor) {
+    public static String json(Object... paresClaveValor) {
         var nodo = new com.fasterxml.jackson.databind.ObjectMapper().createObjectNode();
         for (int i = 0; i < paresClaveValor.length; i += 2) {
             Object valor = paresClaveValor[i + 1];
