@@ -184,6 +184,22 @@ Son 12 casos de uso (CU-01 a CU-12), agrupados en cinco módulos: Configuración
    - **Tras anular, la pantalla** cierra el diálogo, avisa «Recibo N.º n anulado. Los comprobantes volvieron a quedar pendientes.» con el botón «Ver recibo» (que abre el recibo con la marca «ANULADO»; el foco pasa ahí), y recarga los pendientes y el extracto en la **página y el filtro en los que estaba**. Como la nueva línea `ANULACION` entra arriba, las filas corren una posición hacia las páginas siguientes (un cobro que era el último de una página pasa a la siguiente): es lo esperado. Con un 422 de caja o de cliente desactivado, el diálogo se queda abierto y muestra el mensaje del servidor; con un 409 se cierra y avisa quién y cuándo la anuló; con un corte de red o un 5xx dice «No se pudo anular: no hay conexión… Reintentá: si ya se anuló, vas a ver el aviso» (reintentar es seguro).
    - **Aislamiento.** Un recibo de otra ferretería es 404 «Recibo no encontrado»; la caja de la anulación es siempre la de la ferretería del token.
 
+**CU-13 Registrar una compra** (solo el Dueño; punto 4 del orden acordado, tramo 1: ingreso de mercadería; GDS G34, G38 y G86)
+
+1. El Dueño carga la factura (o el remito) del proveedor: **proveedor** activo, **tipo** (Factura A, Factura B, Factura C o Remito), **punto de venta** (1 a 99999), **número** (1 a 99999999) y **fecha** (no futura). Proveedor, tipo, punto de venta y número no se pueden repetir en la ferretería: 409 «Esa compra ya está cargada: <tipo> <pppp>-<nnnnnnnn> de <proveedor>.».
+2. Agrega renglones: **artículo** activo, **cantidad** mayor a 0 y **costo unitario sin IVA** mayor a 0, en la moneda del artículo. Un artículo no se repite en la misma compra. Entre 1 y 500 renglones.
+3. **Vista previa** antes de confirmar: por renglón, el costo y el precio de venta anteriores y nuevos, cuántos suben, cuántos bajan y cuántos quedan igual. Marca la variación fuerte (más de ±50 %, la misma advertencia de CU-04 y CU-05). La vista previa no guarda nada.
+4. El Dueño confirma y, **en una sola transacción**:
+   - suma la cantidad al stock de cada artículo, con un movimiento de stock de tipo **compra** que referencia la compra;
+   - **pisa el costo** del artículo con el del renglón (último costo, como GDS; decidido 2026-10-21) y **recalcula el precio de venta** con la regla de precios. GDS deja el precio viejo sin avisar (G86); acá no;
+   - guarda el historial de precio con origen **compra** solo si el costo o el precio cambiaron;
+   - no toca el precio de lista del proveedor, las bonificaciones, los ajustes, el margen ni el IVA del artículo.
+   Si algo falla, no queda nada. La confirmación es idempotente por clave, como el remito.
+5. **Consulta**: listado de compras (fecha, proveedor, comprobante, cantidad de renglones y neto = Σ cantidad × costo) con filtro por proveedor y por rango de fechas, y el detalle de cada compra con sus renglones.
+6. **Aislamiento.** Una compra, un proveedor o un artículo de otra ferretería es 404, igual que uno inexistente. Un Vendedor recibe 403.
+
+> **Fuera del tramo 1:** el pago de la compra (efectivo, cheque, cuenta corriente, G36), la cuenta corriente y el pago a proveedores (G39, G40), la anulación de una compra, la devolución al proveedor (G37), el cálculo del costo desde la lista menos 3 bonificaciones en el renglón (G86), el IVA y el total de la factura, el alta rápida de un artículo desde la compra (G94), la fecha de última compra (G19) y el libro IVA Compras (G87). El precio manual y los ajustes sobre el precio final son una feature aparte, posterior (2026-10-21, Luca).
+
 ## Reglas de negocio
 
 Estas reglas se codifican en el dominio y se cubren con tests unitarios antes que cualquier pantalla.
@@ -193,7 +209,7 @@ Estas reglas se codifican en el dominio y se cubren con tests unitarios antes qu
 - El costo del proveedor se guarda **sin IVA**. Precio neto = costo × (1 + margen). Precio final = neto × (1 + alícuota de IVA).
 - El margen se define por artículo; si no tiene, hereda el del rubro; si no, el margen por defecto de la ferretería.
 - Sin redondeo por ahora: el precio final queda con centavos (escala 2, hacia arriba al centavo). Si las ferreterías lo piden, se evaluará redondear hacia arriba al peso entero. El código del múltiplo configurable sigue, con múltiplo 0 (sin redondeo) en todas las ferreterías (H11, migración V9).
-- Todo cambio de costo o precio guarda historial: fecha, valor anterior, valor nuevo y origen (importación, masivo, manual).
+- Todo cambio de costo o precio guarda historial: fecha, valor anterior, valor nuevo y origen (importación, masivo, manual, compra).
 - Montos en `BigDecimal` (Java) y `DECIMAL(15,2)` (base). Nunca `double`.
 
 ### Comprobantes
@@ -249,7 +265,9 @@ Una sola base compartida y todas las tablas de negocio con `tenant_id`. Es el mi
 | Articulo | código interno, código de barras, código proveedor, descripción, costo, margen, alícuota IVA, precio final, unidad, stock actual, stock mínimo, ubicación, activo | N—1 Rubro, N—1 Proveedor |
 | HistorialPrecio | costo y precio anterior y nuevo, origen, fecha, usuario | N—1 Articulo |
 | ImportacionLista | archivo, fecha, cantidades (suben, bajan, nuevos), estado | N—1 Proveedor |
-| MovimientoStock | tipo (venta, ajuste, remito, anulación de remito), cantidad (decimal, con signo), motivo, fecha, usuario | N—1 Articulo, N—1 Comprobante (opcional), N—1 Remito (opcional) |
+| MovimientoStock | tipo (venta, ajuste, remito, anulación de remito, compra), cantidad (decimal, con signo), motivo, fecha, usuario | N—1 Articulo, N—1 Comprobante (opcional), N—1 Remito (opcional), N—1 Compra (opcional) |
+| Compra | proveedor, tipo (FA, FB, FC, REM), punto de venta, número (único por proveedor y tipo en la ferretería), fecha, neto, clave de idempotencia, usuario que la cargó | N—1 Proveedor, 1—N ItemCompra |
+| ItemCompra | cantidad, costo unitario sin IVA, costo y precio anteriores del artículo (copiados al confirmar) | N—1 Compra, N—1 Articulo |
 | Cliente | razón social, tipo y número de documento (opcionales y siempre juntos, único por ferretería), condición IVA, domicilio, teléfono, WhatsApp, correo, activo, límite de cuenta corriente (`limite_cuenta_corriente`, NULL = sin cuenta corriente, 0 = sin crédito, nunca negativo), saldo (`saldo`, 0 por defecto; positivo = debe, negativo = a favor; caché del libro) | N—1 Ferretería, 1—N Comprobante, 1—N Presupuesto, 1—N Remito, 1—N MovimientoCuentaCliente |
 | Comprobante | tipo (FA, FB, FC, NC), punto de venta, número, fecha, neto, IVA, total, subtotal (antes de descuentos), descuento global %, recargo, cliente (opcional, con copia de su razón social), presupuesto o remito de origen (opcional, nunca los dos), CAE, vencimiento del CAE, estado (pendiente, autorizado, rechazado) | N—1 Cliente, N—1 Caja, 1—N Item, 1—N Pago |
 | ItemComprobante | descripción, cantidad, precio unitario, alícuota IVA, bruto, descuento % del renglón, recargo, subtotal (copiados al momento de la venta) | N—1 Comprobante, N—1 Articulo |
@@ -351,7 +369,7 @@ Nada de esto entra hasta que haya una ferretería piloto usando el sistema todos
   - **PDF del recibo** (hoy es una vista imprimible del navegador), «imputar saldo a favor» a pendientes posteriores (3b-2), cobro con tarjeta, recargo o mora, y cobrar con otros medios (hoy efectivo o transferencia)
   - **Comisiones de vendedores** (G62): solo queda disponible el dato derivado «cobrado y pendiente por comprobante»; liquidarlas es post-MVP
 - PIN de supervisor para autorizar un exceso (hoy lo autoriza solo el Dueño logueado), recargo por financiación de la cuenta corriente y límite por usuario
-- Compras, órdenes de compra y cuenta corriente con proveedores
+- De compras, todo lo que no es el tramo 1 de CU-13: órdenes de compra, pago de la compra, cuenta corriente y pago a proveedores, anulación y devolución al proveedor
 - Múltiples sucursales o depósitos por ferretería
 - Listas de precios múltiples (mayorista y minorista) y descuentos por cliente
 - Libro IVA Ventas e integración con el contador
