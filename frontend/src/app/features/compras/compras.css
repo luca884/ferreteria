@@ -1,0 +1,81 @@
+.filtros,
+.encabezado,
+.buscador {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.encabezado {
+  border: 1px solid var(--borde, #d8dee8);
+  border-radius: 8px;
+  padding: 0.75rem 1rem 1rem;
+}
+
+.encabezado input[name='puntoVenta'] {
+  width: 7rem;
+}
+
+.encabezado input[name='numero'] {
+  width: 9rem;
+}
+
+.resultados {
+  list-style: none;
+  margin: 0 0 1rem;
+  padding: 0;
+  display: grid;
+  gap: 0.25rem;
+}
+
+.resultados li {
+  display: flex;
+  gap: 0.75rem;
+  align-items: baseline;
+}
+
+.renglones input {
+  width: 8rem;
+  text-align: right;
+}
+
+.num {
+  text-align: right;
+}
+
+tr.elegida {
+  background: var(--fila-elegida, #eaf1fd);
+}
+
+tr.advertencia td {
+  background: var(--advertencia-fondo, #fff7e0);
+}
+
+.aviso-fila {
+  display: block;
+  font-size: 0.85em;
+  color: var(--advertencia-texto, #8a5a00);
+}
+
+.acciones {
+  display: flex;
+  gap: 0.75rem;
+  margin: 1rem 0;
+}
+
+.vista-previa,
+.detalle {
+  margin-top: 1.5rem;
+}
+
+.datos {
+  color: var(--texto-suave, #5b6474);
+}
+
+.exito {
+  padding: 0.5rem 0.75rem;
+  border-radius: 6px;
+  background: var(--exito-fondo, #e7f6ec);
+}

@@ -59,6 +59,14 @@
         Proveedores
       </a>
       @if (auth.esDueno()) {
+        <a routerLink="/compras" routerLinkActive="activo" ariaCurrentWhenActive="page">
+          <svg viewBox="0 0 16 16" aria-hidden="true">
+            <path d="M1.5 2.5h2l1.6 7.5h7.4l1.5-5.5H4.3" />
+            <circle cx="6" cy="12.8" r="1.2" />
+            <circle cx="11.5" cy="12.8" r="1.2" />
+          </svg>
+          Compras
+        </a>
         <span class="grupo">Precios</span>
         <a routerLink="/importaciones" routerLinkActive="activo" ariaCurrentWhenActive="page">
           <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 1.5h5l3 3v10H4zM8 7v5M6 9l2-2 2 2" /></svg>
