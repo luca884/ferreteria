@@ -1,6 +1,7 @@
 package com.ferreteria.clientes.service;
 
 import com.ferreteria.clientes.model.Cliente;
+import com.ferreteria.clientes.model.TipoDocumento;
 import com.ferreteria.clientes.model.TipoMovimientoCuenta;
 import com.ferreteria.clientes.repository.ClienteRepository;
 import com.ferreteria.clientes.repository.MovimientoCuentaClienteRepository;
@@ -58,9 +59,11 @@ public class ExtractoCuenta {
 
     /**
      * El extracto: encabezado (saldos y totales), la página de líneas (más nueva primero) y su paginación. {@code truncado} solo
-     * es verdadero en una impresión que superó el tope.
+     * es verdadero en una impresión que superó el tope. El documento del cliente va para el impreso (CC-099); un cliente sin
+     * documento lo trae nulo.
      */
-    public record Extracto(Long clienteId, String clienteNombre, BigDecimal saldoActual, LocalDate desde, LocalDate hasta,
+    public record Extracto(Long clienteId, String clienteNombre, TipoDocumento tipoDocumento, String numeroDocumento,
+            BigDecimal saldoActual, LocalDate desde, LocalDate hasta,
             TipoMovimientoCuenta tipo, BigDecimal saldoInicial, BigDecimal totalDebe, BigDecimal totalHaber,
             BigDecimal saldoFinal, List<Linea> lineas, int page, int size, long totalLineas, int totalPaginas,
             boolean truncado) {}
@@ -120,7 +123,8 @@ public class ExtractoCuenta {
         BigDecimal saldoFinal = filtro.hasta() == null ? cliente.getSaldo() : libro.saldoHastaScoped(clienteId, hastaExclusivo);
         int totalPaginas = (int) ((totalLineas + size - 1) / size);
 
-        return new Extracto(clienteId, cliente.getRazonSocial(), cliente.getSaldo(), filtro.desde(), filtro.hasta(),
+        return new Extracto(clienteId, cliente.getRazonSocial(), cliente.getTipoDocumento(), cliente.getNumeroDocumento(),
+                cliente.getSaldo(), filtro.desde(), filtro.hasta(),
                 filtro.tipo(), saldoInicial, totales.getDebe(), totales.getHaber(), saldoFinal, lineas, page, size,
                 totalLineas, totalPaginas, truncado);
     }

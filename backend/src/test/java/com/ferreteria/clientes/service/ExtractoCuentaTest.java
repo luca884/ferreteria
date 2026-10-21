@@ -14,6 +14,7 @@ import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
 import com.ferreteria.clientes.model.Cliente;
+import com.ferreteria.clientes.model.TipoDocumento;
 import com.ferreteria.clientes.model.TipoMovimientoCuenta;
 import com.ferreteria.clientes.repository.ClienteRepository;
 import com.ferreteria.clientes.repository.MovimientoCuentaClienteRepository;
@@ -161,6 +162,26 @@ class ExtractoCuentaTest {
 
         assertThat(resultado.clienteId()).isEqualTo(7L);
         assertThat(resultado.clienteNombre()).isEqualTo("Ferretería Don Pepe");
+    }
+
+    @Test
+    @DisplayName("CC-099: el encabezado lleva el documento del cliente (tipo y número); sin documento, los dos nulos")
+    void documentoDelCliente() {
+        when(cliente.getTipoDocumento()).thenReturn(TipoDocumento.CUIT);
+        when(cliente.getNumeroDocumento()).thenReturn("30712345671");
+
+        Extracto conDocumento = extracto.extracto(7L, sinFiltros());
+
+        assertThat(conDocumento.tipoDocumento()).isEqualTo(TipoDocumento.CUIT);
+        assertThat(conDocumento.numeroDocumento()).isEqualTo("30712345671");
+
+        when(cliente.getTipoDocumento()).thenReturn(null);
+        when(cliente.getNumeroDocumento()).thenReturn(null);
+
+        Extracto sinDocumento = extracto.extracto(7L, sinFiltros());
+
+        assertThat(sinDocumento.tipoDocumento()).isNull();
+        assertThat(sinDocumento.numeroDocumento()).isNull();
     }
 
     // ---------------------------------------------------------------------------------------------------------------

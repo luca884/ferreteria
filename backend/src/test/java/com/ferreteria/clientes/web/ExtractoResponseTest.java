@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import com.ferreteria.clientes.model.TipoDocumento;
 import com.ferreteria.clientes.model.TipoMovimientoCuenta;
 import com.ferreteria.clientes.service.ExtractoCuenta.Extracto;
 import com.ferreteria.clientes.service.ExtractoCuenta.Linea;
@@ -40,7 +41,7 @@ class ExtractoResponseTest {
     }
 
     private static Extracto extracto(List<Linea> lineas, boolean truncado) {
-        return new Extracto(7L, "Ferretería Don Pepe", bd("1200"), LocalDate.of(2026, 10, 1), null, null, bd("300"),
+        return new Extracto(7L, "Ferretería Don Pepe", TipoDocumento.CUIT, "30712345671", bd("1200"), LocalDate.of(2026, 10, 1), null, null, bd("300"),
                 bd("1500"), bd("600"), bd("1200"), lineas, 0, 50, 37, 1, truncado);
     }
 
@@ -57,13 +58,15 @@ class ExtractoResponseTest {
     void clavesExactas() {
         JsonNode json = JSON.valueToTree(ExtractoResponse.de(extracto(List.of(anulacion()), false)));
 
-        assertThat(claves(json)).containsExactly("clienteId", "clienteNombre", "saldoActual", "desde", "hasta", "tipo", "saldoInicial",
+        assertThat(claves(json)).containsExactly("clienteId", "clienteNombre", "tipoDocumento", "numeroDocumento", "saldoActual", "desde", "hasta", "tipo", "saldoInicial",
                 "totalDebe", "totalHaber", "saldoFinal", "movimientos", "truncado");
         assertThat(claves(json.get("movimientos"))).containsExactly("items", "page", "size", "totalElements", "totalPages");
         assertThat(claves(json.get("movimientos").get("items").get(0))).containsExactly("id", "fecha", "tipo", "referencia", "debe",
                 "haber", "saldo", "usuario", "reciboId", "comprobanteId", "motivo", "excedioLimite", "autorizadoPor", "anulado");
         assertThat(json.get("clienteId").asLong()).isEqualTo(7L);
         assertThat(json.get("clienteNombre").asText()).isEqualTo("Ferretería Don Pepe");
+        assertThat(json.get("tipoDocumento").asText()).isEqualTo("CUIT");
+        assertThat(json.get("numeroDocumento").asText()).isEqualTo("30712345671");
     }
 
     @Test
@@ -112,11 +115,13 @@ class ExtractoResponseTest {
     void tipoTruncadoYAnulado() {
         Linea cobro = new Linea(5L, LocalDateTime.of(2026, 10, 2, 9, 0), TipoMovimientoCuenta.COBRO, "Recibo N.º 14", bd("0"),
                 bd("400"), bd("600"), "Ana", 14L, null, null, false, null, true);
-        Extracto x = new Extracto(7L, "Cliente", bd("600"), LocalDate.of(2026, 10, 1), LocalDate.of(2026, 10, 31),
+        Extracto x = new Extracto(7L, "Cliente", null, null, bd("600"), LocalDate.of(2026, 10, 1), LocalDate.of(2026, 10, 31),
                 TipoMovimientoCuenta.COBRO, bd("0"), bd("0"), bd("400"), bd("600"), List.of(cobro), 0, 2000, 1, 1, true);
 
         JsonNode json = JSON.valueToTree(ExtractoResponse.de(x));
 
+        assertThat(json.get("tipoDocumento").isNull()).as("sin documento: las claves están y valen null").isTrue();
+        assertThat(json.get("numeroDocumento").isNull()).isTrue();
         assertThat(json.get("tipo").asText()).isEqualTo("COBRO");
         assertThat(json.get("hasta").asText()).isEqualTo("2026-10-31");
         assertThat(json.get("truncado").asBoolean()).isTrue();
@@ -127,7 +132,7 @@ class ExtractoResponseTest {
     @Test
     @DisplayName("PageResponse: page, size, totalElements y totalPages de la paginación del servicio; sin líneas, items vacío")
     void paginacion() {
-        Extracto x = new Extracto(7L, "Cliente", bd("0"), null, null, null, bd("0"), bd("0"), bd("0"), bd("0"), List.of(), 2, 10, 45, 5,
+        Extracto x = new Extracto(7L, "Cliente", null, null, bd("0"), null, null, null, bd("0"), bd("0"), bd("0"), bd("0"), List.of(), 2, 10, 45, 5,
                 false);
 
         JsonNode pagina = JSON.valueToTree(ExtractoResponse.de(x)).get("movimientos");
