@@ -309,12 +309,12 @@ describe('Clientes', () => {
 
     it('un documento repetido (409) muestra el mensaje del servidor y conserva lo escrito', async () => {
       await crear();
-      servicio.crear.mockReturnValue(throwError(() => errorHttp(409, 'Ya hay un cliente con ese documento.')));
+      servicio.crear.mockReturnValue(throwError(() => errorHttp(409, 'Ya existe un cliente con ese tipo y número de documento.')));
       await escribir('razon-social', 'Ana');
 
       await enviar('form.alta');
 
-      expect(texto('p.error')).toBe('Ya hay un cliente con ese documento.');
+      expect(texto('p.error')).toBe('Ya existe un cliente con ese tipo y número de documento.');
       expect(input('razon-social').value).toBe('Ana');
     });
 

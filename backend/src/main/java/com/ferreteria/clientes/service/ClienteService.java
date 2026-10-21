@@ -30,7 +30,7 @@ public class ClienteService {
     static final int TAMANO_MAXIMO = 100;
     private static final String NO_ENCONTRADO = "Cliente no encontrado";
     private static final String CON_SALDO = "No se puede desactivar: el cliente tiene saldo en cuenta corriente.";
-    private static final String DOCUMENTO_REPETIDO = "Ya hay un cliente con ese documento.";
+    private static final String DOCUMENTO_REPETIDO = "Ya existe un cliente con ese tipo y número de documento.";
 
     private final ClienteRepository repositorio;
 
