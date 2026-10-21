@@ -10,6 +10,8 @@ import com.ferreteria.common.exception.ResourceNotFoundException;
 import com.ferreteria.ferreteria.model.Ferreteria;
 import com.ferreteria.ferreteria.repository.FerreteriaRepository;
 import com.ferreteria.tenant.UnscopedTenantAccess;
+import java.util.Optional;
+import java.util.UUID;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -22,6 +24,8 @@ public class AuthService {
     private final FerreteriaRepository ferreteriaRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
+    /** Hash de una contrasena que nadie tiene: contra el se compara cuando el email no existe. */
+    private final String hashSenuelo;
 
     public AuthService(UsuarioRepository usuarioRepository,
                        FerreteriaRepository ferreteriaRepository,
@@ -31,13 +35,18 @@ public class AuthService {
         this.ferreteriaRepository = ferreteriaRepository;
         this.passwordEncoder = passwordEncoder;
         this.jwtService = jwtService;
+        this.hashSenuelo = passwordEncoder.encode(UUID.randomUUID().toString());
     }
 
     @Transactional(readOnly = true)
     public LoginResponse login(LoginRequest request) {
-        Usuario usuario = usuarioRepository.findByEmailIgnoreCase(request.email().trim())
+        Optional<Usuario> encontrado = usuarioRepository.findByEmailIgnoreCase(request.email().trim());
+        // Siempre un bcrypt, exista o no el email y este o no activo: el tiempo de respuesta no revela cuentas.
+        boolean coincide = passwordEncoder.matches(request.password(),
+                encontrado.map(Usuario::getPasswordHash).orElse(hashSenuelo));
+        Usuario usuario = encontrado
+                .filter(u -> coincide)
                 .filter(Usuario::isActivo)
-                .filter(u -> passwordEncoder.matches(request.password(), u.getPasswordHash()))
                 .orElseThrow(CredencialesInvalidasException::new);
 
         Ferreteria ferreteria = null;
