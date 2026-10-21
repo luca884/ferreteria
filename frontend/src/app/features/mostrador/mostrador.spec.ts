@@ -2056,6 +2056,33 @@ describe('Mostrador', () => {
       expect(cobros[1].pedido.clave).toBe('clave-1');
     });
 
+    it('un 503 muestra el message del servidor en el diálogo, conserva ticket y clave y el reintento usa la misma clave', async () => {
+      await conMartillos();
+      await tecla('F4');
+      await tecla('Enter');
+
+      await fallarCobro(0, 503, { status: 503, message: 'El sistema está ocupado, reintentá.' });
+
+      expect(dialogo()).not.toBeNull();
+      expect(normal(dialogo()!.textContent)).toContain('El sistema está ocupado, reintentá.');
+      expect(normal(dialogo()!.textContent)).not.toContain('No se pudo cobrar');
+      expect(renglonesTicket()).toHaveLength(1);
+      await tecla('Enter');
+      expect(cobros).toHaveLength(2);
+      expect(cobros[1].pedido.clave).toBe('clave-1');
+    });
+
+    it('un 503 sin cuerpo cae en el texto fijo «El sistema está ocupado, reintentá.»', async () => {
+      await conMartillos();
+      await tecla('F4');
+      await tecla('Enter');
+
+      await fallarCobro(0, 503, null);
+
+      expect(normal(dialogo()!.textContent)).toContain('El sistema está ocupado, reintentá.');
+      expect(normal(dialogo()!.textContent)).not.toContain('No se pudo cobrar');
+    });
+
     it('un 400 por un renglón muestra el mensaje del servidor, marca ese renglón y conserva ticket y clave', async () => {
       await crear();
       await escanear('M', martillo());
@@ -3133,6 +3160,34 @@ describe('Mostrador', () => {
       );
       expect(renglonesTicket()).toHaveLength(1);
     });
+
+    it('un 503 muestra el message del servidor dentro del diálogo, conserva el ticket y el reintento usa la misma clave', async () => {
+      await conMartillos();
+      await tecla('F8');
+      await tecla('Enter');
+
+      await fallarGuardado(0, 503, { status: 503, message: 'El sistema está ocupado, reintentá.' });
+
+      expect(normal(dialogoPresupuesto()!.querySelector('[role="status"]')?.textContent)).toBe(
+        'El sistema está ocupado, reintentá.',
+      );
+      expect(renglonesTicket()).toHaveLength(1);
+      await tecla('Enter', dialogoPresupuesto()!.querySelector('input')!);
+      expect(guardados).toHaveLength(2);
+      expect(guardados[1].pedido.clave).toBe('clave-1');
+    });
+
+    it('un 503 sin cuerpo cae en el texto fijo «El sistema está ocupado, reintentá.»', async () => {
+      await conMartillos();
+      await tecla('F8');
+      await tecla('Enter');
+
+      await fallarGuardado(0, 503, null);
+
+      expect(normal(dialogoPresupuesto()!.querySelector('[role="status"]')?.textContent)).toBe(
+        'El sistema está ocupado, reintentá.',
+      );
+    });
   });
 
   describe('remito (G55, RM-007)', () => {
@@ -3432,6 +3487,34 @@ describe('Mostrador', () => {
         'No se pudo emitir el remito. Probá de nuevo.',
       );
       expect(renglonesTicket()).toHaveLength(1);
+    });
+
+    it('un 503 muestra el message del servidor dentro del diálogo, conserva el ticket y el reintento usa la misma clave', async () => {
+      await conMartillos();
+      await abrirRemito();
+      await tecla('Enter');
+
+      await fallarEmision(0, 503, { status: 503, message: 'El sistema está ocupado, reintentá.' });
+
+      expect(normal(dialogoRemito()!.querySelector('[role="status"]')?.textContent)).toBe(
+        'El sistema está ocupado, reintentá.',
+      );
+      expect(renglonesTicket()).toHaveLength(1);
+      await tecla('Enter', dialogoRemito()!.querySelector('input')!);
+      expect(emitidos).toHaveLength(2);
+      expect(emitidos[1].pedido.clave).toBe('clave-1');
+    });
+
+    it('un 503 sin cuerpo cae en el texto fijo «El sistema está ocupado, reintentá.»', async () => {
+      await conMartillos();
+      await abrirRemito();
+      await tecla('Enter');
+
+      await fallarEmision(0, 503, null);
+
+      expect(normal(dialogoRemito()!.querySelector('[role="status"]')?.textContent)).toBe(
+        'El sistema está ocupado, reintentá.',
+      );
     });
   });
 

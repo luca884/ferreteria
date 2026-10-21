@@ -11,6 +11,7 @@ import { DialogoDescuento } from './dialogo-descuento';
 import { AuthService } from '../../core/auth/auth.service';
 import { Cliente } from '../clientes/cliente.models';
 import { ClientesService } from '../clientes/clientes.service';
+import { esOcupado } from '../clientes/cuenta/cobranza.service';
 import { DialogoCliente } from './dialogo-cliente';
 import { DialogoPresupuesto } from './dialogo-presupuesto';
 import { DialogoRemito } from './dialogo-remito';
@@ -63,6 +64,7 @@ const MENSAJE_TICKET_VACIO = 'El ticket está vacío.';
 const MENSAJE_COBRO_FALLIDO = 'No se pudo cobrar. Probá de nuevo.';
 const MENSAJE_PRESUPUESTO_FALLIDO = 'No se pudo guardar el presupuesto. Probá de nuevo.';
 const MENSAJE_REMITO_FALLIDO = 'No se pudo emitir el remito. Probá de nuevo.';
+const MENSAJE_OCUPADO = 'El sistema está ocupado, reintentá.';
 const MENSAJE_SIN_PERMISO = 'No tenés permiso para hacer esto.';
 const MENSAJE_SIN_FORMAS = 'No se pudieron cargar las formas de pago. Probá de nuevo en un momento.';
 
@@ -712,6 +714,12 @@ export class Mostrador {
       // Un 403 al cobrar: autorizar el exceso de la cuenta corriente es solo del Dueño. El ticket y el cobro siguen.
       if (err instanceof HttpErrorResponse && err.status === 403) {
         this.avisoCobro.set(mensajeDe(err, MENSAJE_SIN_PERMISO));
+        return;
+      }
+      // Un 503: el servidor agotó los reintentos por contención y no quedó nada hecho. El diálogo sigue abierto y el
+      // reintento usa la misma clave del ticket.
+      if (esOcupado(err)) {
+        this.avisoCobro.set(mensajeDe(err, MENSAJE_OCUPADO));
         return;
       }
       const invalida = invalidaDe(err);
