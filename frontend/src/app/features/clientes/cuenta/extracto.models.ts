@@ -1,4 +1,5 @@
 import { PageResponse } from '../../../core/api/page.models';
+import { TipoDocumento } from '../cliente.models';
 
 /**
  * Contrato del extracto de la cuenta corriente (CC-072..CC-080), tipado contra ExtractoResponse y LineaExtractoResponse
@@ -46,6 +47,9 @@ export interface Extracto {
   clienteId: number;
   /** La razón social del cliente (no el nombre copiado en un recibo). */
   clienteNombre: string;
+  /** El documento del cliente, para el impreso (CC-099); nulos si no tiene. */
+  tipoDocumento: TipoDocumento | null;
+  numeroDocumento: string | null;
   saldoActual: number;
   desde: string | null;
   hasta: string | null;

@@ -69,7 +69,7 @@ export interface FiltroClientes {
 }
 
 /** El documento como se muestra: «CUIT 30-71234567-1», «DNI 12.345.678»; vacío si el cliente no lo tiene. */
-export function documentoLegible(c: Pick<Cliente, 'tipoDocumento' | 'numeroDocumento'>): string {
+export function documentoLegible(c: { tipoDocumento?: TipoDocumento | null; numeroDocumento?: string | null }): string {
   const n = c.numeroDocumento;
   if (!c.tipoDocumento || !n) return '';
   if (c.tipoDocumento === 'DNI') return `DNI ${n.replace(/\B(?=(\d{3})+(?!\d))/g, '.')}`;

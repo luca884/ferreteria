@@ -35,6 +35,8 @@ describe('MovimientosCuenta (CC-074, CC-076, CC-078, CC-096)', () => {
   const extracto = (items: LineaExtracto[], cambios: Partial<Extracto> = {}, pagina: Partial<Extracto['movimientos']> = {}): Extracto => ({
     clienteId: 8,
     clienteNombre: 'Ana Gómez',
+    tipoDocumento: null,
+    numeroDocumento: null,
     saldoActual: 1200,
     desde: null,
     hasta: null,

@@ -117,6 +117,8 @@ describe('CuentaCliente (CC-028, CC-033, CC-034, CC-038, CC-043)', () => {
   const extractoBase = (items: LineaExtracto[]): Extracto => ({
     clienteId: 8,
     clienteNombre: 'Ana Gómez',
+    tipoDocumento: null,
+    numeroDocumento: null,
     saldoActual: 1200,
     desde: null,
     hasta: null,

@@ -2,6 +2,7 @@ import { Component, ElementRef, afterNextRender, computed, inject, input, output
 import { AuthService } from '../../../core/auth/auth.service';
 import { MontoPipe } from '../../../core/formato/monto';
 import { TrampaFoco } from '../../../shared/trampa-foco';
+import { documentoLegible } from '../cliente.models';
 import { fechaCompletaLocal } from './cobranza.models';
 import { Extracto, TIPO_MOVIMIENTO_LABELS, TOPE_IMPRESION, textoPeriodo } from './extracto.models';
 
@@ -50,6 +51,7 @@ export class ExtractoImprimible {
   protected readonly emitido = emitidoEl(new Date());
 
   protected readonly ferreteria = computed(() => this.auth.sesion()?.ferreteriaNombre ?? null);
+  protected readonly documento = computed(() => documentoLegible(this.extracto()));
   protected readonly periodo = computed(() => textoPeriodo(this.extracto().desde, this.extracto().hasta));
   protected readonly tipo = computed(() => {
     const tipo = this.extracto().tipo;

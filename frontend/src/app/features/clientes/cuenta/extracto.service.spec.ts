@@ -9,6 +9,8 @@ import { ExtractoService } from './extracto.service';
 const extracto: Extracto = {
   clienteId: 8,
   clienteNombre: 'Ana Gómez',
+  tipoDocumento: null,
+  numeroDocumento: null,
   saldoActual: 0,
   desde: null,
   hasta: null,
