@@ -56,6 +56,39 @@ public class Usuario {
         this.rol = rol;
     }
 
+    /**
+     * Alta de un usuario de una ferreteria. Un SUPER_ADMIN no se crea por la API (no tiene ferreteria), asi que se
+     * rechaza aca: la unica via es el dato semilla.
+     */
+    public static Usuario nuevo(Long ferreteriaId, String email, String passwordHash, String nombre, Rol rol) {
+        if (ferreteriaId == null) {
+            throw new IllegalArgumentException("Un usuario de ferretería necesita ferretería");
+        }
+        exigirRolDeFerreteria(rol);
+        return new Usuario(ferreteriaId, email, passwordHash, nombre, rol);
+    }
+
+    public void actualizar(String nombre, String email, Rol rol) {
+        exigirRolDeFerreteria(rol);
+        this.nombre = nombre;
+        this.email = email;
+        this.rol = rol;
+    }
+
+    public void cambiarActivo(boolean activo) {
+        this.activo = activo;
+    }
+
+    public void cambiarPasswordHash(String passwordHash) {
+        this.passwordHash = passwordHash;
+    }
+
+    private static void exigirRolDeFerreteria(Rol rol) {
+        if (rol == null || rol == Rol.SUPER_ADMIN) {
+            throw new IllegalArgumentException("El rol de un usuario de ferretería es Dueño o Vendedor");
+        }
+    }
+
     public Long getId() { return id; }
     public Long getFerreteriaId() { return ferreteriaId; }
     public String getEmail() { return email; }
@@ -63,4 +96,5 @@ public class Usuario {
     public String getNombre() { return nombre; }
     public Rol getRol() { return rol; }
     public boolean isActivo() { return activo; }
+    public LocalDateTime getCreadoEn() { return creadoEn; }
 }

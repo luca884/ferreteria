@@ -125,6 +125,20 @@ class TenantScopingArchTest {
                 .check(clases);
     }
 
+    /** El servicio y el controller de usuarios operan SOLO sobre la ferreteria del JWT: sin excepcion al tenant. */
+    @Test
+    void elServicioYElControllerDeUsuariosNoUsanUnscopedTenantAccess() {
+        noClasses().that().haveFullyQualifiedName("com.ferreteria.auth.service.UsuarioService")
+                .or().haveFullyQualifiedName("com.ferreteria.auth.controller.UsuarioController")
+                .should().beAnnotatedWith(UnscopedTenantAccess.class)
+                .allowEmptyShould(false)
+                .check(clases);
+        noMethods().that().areDeclaredIn(com.ferreteria.auth.service.UsuarioService.class)
+                .should().beAnnotatedWith(UnscopedTenantAccess.class)
+                .allowEmptyShould(false)
+                .check(clases);
+    }
+
     // ---- Cotizacion (R-024, R-022): la del mercado es global a proposito; la configuracion, de cada ferreteria ----
 
     @Test
