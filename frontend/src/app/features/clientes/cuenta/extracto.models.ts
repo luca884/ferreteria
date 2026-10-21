@@ -103,6 +103,20 @@ export function paramsDeImpresion(filtro: FiltroExtracto): Record<string, string
   return { ...paramsDeFiltro(filtro), impresion: 'true' };
 }
 
+/** «01/10/2026» de un día `yyyy-MM-dd`, leído del texto (no pasa por la zona del navegador). */
+function diaCompleto(dia: string): string {
+  const [anio, mes, d] = dia.split('-');
+  return `${d}/${mes}/${anio}`;
+}
+
+/** El período del extracto dicho en palabras: «01/10/2026 al 31/10/2026», «desde el …», «hasta el …» o «todo el historial». */
+export function textoPeriodo(desde: string | null, hasta: string | null): string {
+  if (desde && hasta) return `${diaCompleto(desde)} al ${diaCompleto(hasta)}`;
+  if (desde) return `desde el ${diaCompleto(desde)}`;
+  if (hasta) return `hasta el ${diaCompleto(hasta)}`;
+  return 'todo el historial';
+}
+
 /** «Anular» se ofrece solo en un COBRO vigente (ni anulado, ni venta, ni ajuste, ni NC, ni la ANULACION misma). */
 export function puedeAnular(linea: LineaExtracto): boolean {
   return linea.tipo === 'COBRO' && !linea.anulado && linea.reciboId !== null;

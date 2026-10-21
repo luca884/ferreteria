@@ -10,6 +10,8 @@ import { ClientesService } from '../clientes.service';
 import { CobranzaRequest, PendientesCuenta, Recibo, ReciboCobrado } from './cobranza.models';
 import { CobranzaService, GENERAR_CLAVE_COBRO } from './cobranza.service';
 import { CuentaCliente } from './cuenta-cliente';
+import { Extracto, LineaExtracto } from './extracto.models';
+import { ExtractoService } from './extracto.service';
 import { cargarEstilosGlobales } from './estilos-globales.testing';
 import { ReciboImprimible } from './recibo-imprimible';
 import { registerLocaleData } from '@angular/common';
@@ -79,17 +81,68 @@ describe('CuentaCliente (CC-028, CC-033, CC-034, CC-038, CC-043)', () => {
     cobrar: ReturnType<typeof vi.fn>;
     recibo: ReturnType<typeof vi.fn>;
   };
+  let extractos: { extracto: ReturnType<typeof vi.fn>; paraImprimir: ReturnType<typeof vi.fn> };
   let claves: string[];
+
+  /** Una venta: no tiene acciones, así que los specs de 3a no ven botones nuevos. */
+  const lineaVenta: LineaExtracto = {
+    id: 1,
+    fecha: '2026-10-10T09:00:00',
+    tipo: 'VENTA',
+    referencia: 'Venta N.º 7',
+    debe: 1200,
+    haber: 0,
+    saldo: 1200,
+    usuario: 'Ana',
+    reciboId: null,
+    comprobanteId: 31,
+    motivo: null,
+    excedioLimite: false,
+    autorizadoPor: null,
+    anulado: false,
+  };
+  /** Un cobro vigente del recibo 5 (el que devuelve `recibo()`): el que se puede anular. */
+  const lineaCobro: LineaExtracto = {
+    ...lineaVenta,
+    id: 2,
+    tipo: 'COBRO',
+    referencia: 'Recibo N.º 12',
+    debe: 0,
+    haber: 600,
+    saldo: 600,
+    reciboId: 5,
+    comprobanteId: null,
+  };
+  const extractoBase = (items: LineaExtracto[]): Extracto => ({
+    clienteId: 8,
+    clienteNombre: 'Ana Gómez',
+    saldoActual: 1200,
+    desde: null,
+    hasta: null,
+    tipo: null,
+    saldoInicial: 0,
+    totalDebe: 1200,
+    totalHaber: 0,
+    saldoFinal: 1200,
+    movimientos: { items, page: 0, size: 20, totalElements: items.length, totalPages: 1 },
+    truncado: false,
+  });
 
   interface Opciones {
     dueno?: boolean;
     id?: string;
     pendientes?: () => Observable<PendientesCuenta>;
     cobrar?: (r: CobranzaRequest) => Observable<ReciboCobrado>;
+    extracto?: () => Observable<Extracto>;
+    cliente?: Cliente;
   }
 
-  async function crear({ dueno = true, id = '8', pendientes, cobrar }: Opciones = {}) {
-    clientes = { obtener: vi.fn(() => of(ana)) };
+  async function crear({ dueno = true, id = '8', pendientes, cobrar, extracto: pedirExtracto, cliente = ana }: Opciones = {}) {
+    clientes = { obtener: vi.fn(() => of(cliente)) };
+    extractos = {
+      extracto: vi.fn(pedirExtracto ?? (() => of(extractoBase([lineaVenta])))),
+      paraImprimir: vi.fn(() => of(extractoBase([lineaVenta]))),
+    };
     cobranza = {
       pendientes: vi.fn(pendientes ?? (() => of(con3))),
       cobrar: vi.fn(cobrar ?? (() => of({ recibo: recibo(), repetida: false }))),
@@ -104,6 +157,7 @@ describe('CuentaCliente (CC-028, CC-033, CC-034, CC-038, CC-043)', () => {
         { provide: LOCALE_ID, useValue: 'es-AR' },
         { provide: ClientesService, useValue: clientes },
         { provide: CobranzaService, useValue: cobranza },
+        { provide: ExtractoService, useValue: extractos },
         { provide: AuthService, useValue: { esDueno: signal(dueno), sesion: signal({ ferreteriaNombre: 'Tornillo SA' }) } },
         { provide: ActivatedRoute, useValue: { snapshot: { paramMap: convertToParamMap({ id }) } } },
         {
@@ -178,6 +232,78 @@ describe('CuentaCliente (CC-028, CC-033, CC-034, CC-038, CC-043)', () => {
       await f4();
       expect(dialogo()).toBeNull();
       expect(cobranza.pendientes).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('Movimientos (CC-096)', () => {
+    const movimientos = () => el().querySelector('app-movimientos-cuenta');
+
+    it('el Dueño ve la sección «Movimientos» debajo de los pendientes y se pide el extracto del cliente (página 0)', async () => {
+      await crear();
+
+      expect(movimientos()).not.toBeNull();
+      expect(limpio(movimientos()!.querySelector('h2')?.textContent)).toBe('Movimientos');
+      expect(extractos.extracto).toHaveBeenCalledTimes(1);
+      expect(extractos.extracto.mock.calls[0][0]).toBe(8);
+      expect(extractos.extracto.mock.calls[0][2]).toBe(0);
+      const pendientes = el().querySelector('table.pendientes')!;
+      expect(pendientes.compareDocumentPosition(movimientos()!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    });
+
+    it('también aparece cuando el cliente no tiene deuda (debajo del aviso «No tiene comprobantes con deuda.»)', async () => {
+      await crear({ pendientes: () => of(sinDeuda) });
+
+      expect(movimientos()).not.toBeNull();
+      const aviso = el().querySelector('.sin-pendientes')!;
+      expect(aviso.compareDocumentPosition(movimientos()!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    });
+
+    it('el Vendedor NO ve «Movimientos», no se hace ningún request del extracto y sigue el aviso de 3a', async () => {
+      await crear({ dueno: false });
+
+      expect(movimientos()).toBeNull();
+      expect(el().textContent).not.toContain('Movimientos');
+      expect(extractos.extracto).not.toHaveBeenCalled();
+      expect(extractos.paraImprimir).not.toHaveBeenCalled();
+      expect(texto('[role="alert"], .alerta')).toBe('Solo el Dueño ve y cobra la cuenta corriente.');
+    });
+
+    it('mientras la cuenta no cargó (cargando o con error) no se pide el extracto', async () => {
+      await crear({ pendientes: () => throwError(() => errorHttp(500, null)) });
+
+      expect(movimientos()).toBeNull();
+      expect(extractos.extracto).not.toHaveBeenCalled();
+    });
+
+    it('le pasa `clienteActivo` del cliente cargado: con el cliente desactivado «Anular» queda deshabilitado', async () => {
+      await crear({ cliente: { ...ana, activo: false }, extracto: () => of(extractoBase([lineaCobro])) });
+
+      const anular = movimientos()!.querySelector<HTMLButtonElement>('button.anular')!;
+      expect(anular.disabled).toBe(true);
+      expect(limpio(movimientos()!.querySelector('.aviso-inactivo')?.textContent)).toBe('Reactivá el cliente para anular');
+    });
+
+    it('con el cliente activo «Anular» está habilitado', async () => {
+      await crear({ extracto: () => of(extractoBase([lineaCobro])) });
+
+      expect(movimientos()!.querySelector<HTMLButtonElement>('button.anular')!.disabled).toBe(false);
+    });
+
+    it('tras un cobro la sección se recarga (version++) y muestra el cobro nuevo', async () => {
+      await crear();
+      expect(extractos.extracto).toHaveBeenCalledTimes(1);
+
+      await cobrar('600');
+
+      expect(extractos.extracto).toHaveBeenCalledTimes(2);
+    });
+
+    it('F4 sigue abriendo Cobrar con la sección a la vista', async () => {
+      await crear();
+
+      await f4();
+
+      expect(dialogo()).not.toBeNull();
     });
   });
 

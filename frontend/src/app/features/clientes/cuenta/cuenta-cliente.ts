@@ -12,6 +12,7 @@ import { ClientesService } from '../clientes.service';
 import { PendientesCuenta, Recibo, ReciboCobrado } from './cobranza.models';
 import { CobranzaService, GENERAR_CLAVE_COBRO, esTransitorio, invalidaDe, rechazoDe } from './cobranza.service';
 import { DialogoCobranza, PedidoCobranza } from './dialogo-cobranza';
+import { MovimientosCuenta } from './movimientos-cuenta';
 import { ReciboImprimible } from './recibo-imprimible';
 
 type Estado = 'cargando' | 'listo' | 'error' | 'sinPermiso';
@@ -31,7 +32,7 @@ const MENSAJE_RED =
  */
 @Component({
   selector: 'app-cuenta-cliente',
-  imports: [RouterLink, BarraAcciones, MontoPipe, DialogoCobranza, ReciboImprimible],
+  imports: [RouterLink, BarraAcciones, MontoPipe, DialogoCobranza, MovimientosCuenta, ReciboImprimible],
   templateUrl: './cuenta-cliente.html',
   styleUrl: './cuenta-cliente.css',
   host: { '(document:keydown)': 'alTeclear($event)' },
@@ -50,6 +51,8 @@ export class CuentaCliente implements OnInit {
   protected readonly estado = signal<Estado>('cargando');
   protected readonly cliente = signal<Cliente | null>(null);
   protected readonly pendientes = signal<PendientesCuenta | null>(null);
+  /** Se incrementa cuando algo cambia el libro (un cobro, una anulación): «Movimientos» vuelve a pedir lo que muestra. */
+  protected readonly version = signal(0);
   protected readonly errorCarga = signal<string | null>(null);
   /** Si volver a pedir tiene sentido: con un id inválido en la ruta o un cliente que no existe (404) no lo tiene. */
   protected readonly reintentable = signal(true);
@@ -190,6 +193,7 @@ export class CuentaCliente implements OnInit {
         this.errorRecibo.set(null);
         this.reciboAbierto.set(cobro.recibo);
         this.recargarPendientes((err) => this.fallarCarga(err));
+        this.version.update((v) => v + 1);
       },
       error: (err: unknown) => {
         this.cobrando.set(false);

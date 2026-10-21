@@ -1,0 +1,174 @@
+<section class="panel movimientos-seccion" aria-labelledby="movimientos-titulo">
+  <h2 id="movimientos-titulo">Movimientos</h2>
+
+  <form class="filtros" (submit)="filtrar($event)" novalidate>
+    <label>
+      Desde
+      <input
+        name="desde"
+        type="date"
+        [value]="borrador().desde"
+        [attr.aria-invalid]="errorFiltro() ? 'true' : null"
+        [attr.aria-describedby]="errorFiltro() ? 'error-filtro' : null"
+        (input)="cambiar('desde', $any($event.target).value)"
+      />
+    </label>
+    <label>
+      Hasta
+      <input name="hasta" type="date" [value]="borrador().hasta" (input)="cambiar('hasta', $any($event.target).value)" />
+    </label>
+    <label>
+      Tipo
+      <select name="tipo" (change)="cambiarTipo($any($event.target).value)">
+        <option value="" [selected]="borrador().tipo === ''">Todos</option>
+        @for (t of tipos; track t) {
+          <option [value]="t" [selected]="borrador().tipo === t">{{ tipoLabels[t] }}</option>
+        }
+      </select>
+    </label>
+    <button type="submit" class="primario">Filtrar</button>
+    <button type="button" class="secundario" (click)="limpiar()">Limpiar</button>
+    <button
+      type="button"
+      class="secundario imprimir-extracto"
+      [disabled]="estado() !== 'listo' || !extracto()?.movimientos?.items?.length"
+      [attr.aria-disabled]="imprimiendo() ? 'true' : null"
+      (click)="imprimir()"
+    >
+      Imprimir
+    </button>
+  </form>
+  @if (errorImpresion(); as texto) {
+    <p class="error error-imprimir" role="alert">{{ texto }}</p>
+  }
+
+  @if (errorFiltro(); as texto) {
+    <p id="error-filtro" class="error error-filtro" role="alert">{{ texto }}</p>
+  }
+
+  @switch (estado()) {
+    @case ('cargando') {
+      <p class="ayuda estado-vacio">Cargando…</p>
+    }
+    @case ('error') {
+      <div class="error con-accion" role="alert">
+        <span>{{ errorCarga() }}</span>
+        <button type="button" class="secundario chico reintentar" (click)="reintentar()">Reintentar</button>
+      </div>
+    }
+    @case ('listo') {
+      @if (extracto(); as e) {
+        <dl class="encabezado-periodo">
+          <div class="saldo-inicial">
+            <dt>Saldo inicial</dt>
+            <dd>{{ e.saldoInicial | monto }}</dd>
+          </div>
+          <div class="total-debe">
+            <dt>Total debe</dt>
+            <dd>{{ e.totalDebe | monto }}</dd>
+          </div>
+          <div class="total-haber">
+            <dt>Total haber</dt>
+            <dd>{{ e.totalHaber | monto }}</dd>
+          </div>
+          <div class="saldo-final">
+            <dt>Saldo final</dt>
+            <dd>{{ e.saldoFinal | monto }}</dd>
+          </div>
+        </dl>
+        @if (e.tipo) {
+          <p class="ayuda nota-tipo">Con filtro por tipo, los totales son del tipo elegido.</p>
+        }
+
+        @if (e.movimientos.items.length === 0) {
+          <p class="ayuda estado-vacio">Sin movimientos para ese filtro</p>
+        } @else {
+          @if (!clienteActivo() && hayAnulables()) {
+            <p id="aviso-inactivo" class="ayuda aviso-inactivo">Reactivá el cliente para anular</p>
+          }
+          <table class="movimientos">
+            <caption class="sr-only">
+              Movimientos de la cuenta, del más nuevo al más viejo
+            </caption>
+            <thead>
+              <tr>
+                <th scope="col">Fecha</th>
+                <th scope="col">Comprobante</th>
+                <th scope="col" class="num">Debe</th>
+                <th scope="col" class="num">Haber</th>
+                <th scope="col" class="num">Saldo</th>
+                <th scope="col">Usuario</th>
+                <th scope="col"><span class="sr-only">Acciones</span></th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (linea of e.movimientos.items; track linea.id) {
+                <tr [class.anulacion]="linea.tipo === 'ANULACION'">
+                  <td>{{ fecha(linea.fecha) }}</td>
+                  <td>
+                    {{ linea.referencia }}
+                    @if (linea.anulado) {
+                      <span class="etiqueta etiqueta-anulado">Anulado</span>
+                    }
+                    @if (linea.tipo === 'ANULACION' && linea.motivo) {
+                      <small class="motivo">Motivo: {{ linea.motivo }}</small>
+                    }
+                  </td>
+                  <td class="num">{{ linea.debe > 0 ? (linea.debe | monto) : '' }}</td>
+                  <td class="num">{{ linea.haber > 0 ? (linea.haber | monto) : '' }}</td>
+                  <td class="num">{{ linea.saldo | monto }}</td>
+                  <td>{{ linea.usuario ?? '—' }}</td>
+                  <td class="acciones">
+                    @if (puedeAnular(linea)) {
+                      <button
+                        type="button"
+                        class="peligro chico anular"
+                        [disabled]="!clienteActivo()"
+                        [attr.aria-describedby]="!clienteActivo() ? 'aviso-inactivo' : null"
+                        [attr.aria-label]="'Anular ' + linea.referencia"
+                        (click)="anular.emit(linea)"
+                      >
+                        Anular
+                      </button>
+                    }
+                    @if (puedeVerRecibo(linea)) {
+                      <button
+                        type="button"
+                        class="secundario chico reimprimir"
+                        [attr.aria-label]="'Reimprimir ' + linea.referencia"
+                        (click)="verRecibo.emit(linea.reciboId!)"
+                      >
+                        Reimprimir
+                      </button>
+                    }
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+
+          @if (e.movimientos.totalPages > 1) {
+            <nav class="paginas" aria-label="Páginas de movimientos">
+              <button type="button" class="secundario chico" [disabled]="e.movimientos.page === 0" (click)="irA(e.movimientos.page - 1)">
+                Anterior
+              </button>
+              <span>Página {{ e.movimientos.page + 1 }} de {{ e.movimientos.totalPages }}</span>
+              <button
+                type="button"
+                class="secundario chico"
+                [disabled]="e.movimientos.page + 1 >= e.movimientos.totalPages"
+                (click)="irA(e.movimientos.page + 1)"
+              >
+                Siguiente
+              </button>
+            </nav>
+          }
+        }
+      }
+    }
+  }
+</section>
+
+@if (extractoImpresion(); as impresion) {
+  <app-extracto-imprimible [extracto]="impresion" (cerrar)="extractoImpresion.set(null)" />
+}

@@ -1,0 +1,91 @@
+:host {
+  display: block;
+}
+
+.movimientos-seccion {
+  margin-bottom: var(--e-4);
+}
+.movimientos-seccion h2 {
+  margin-bottom: var(--e-3);
+}
+
+.filtros {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--e-3);
+  margin-bottom: var(--e-3);
+}
+.filtros label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-weight: 600;
+}
+.nota-tipo,
+.aviso-inactivo {
+  margin: 0 0 var(--e-3);
+}
+.acciones {
+  text-align: right;
+  white-space: nowrap;
+}
+.acciones button + button {
+  margin-left: var(--e-2);
+}
+
+.encabezado-periodo {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: var(--e-3);
+  margin: 0 0 var(--e-4);
+}
+.encabezado-periodo div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--e-2) var(--e-3);
+  border: 1px solid var(--borde);
+  border-radius: var(--radio);
+  background: var(--superficie-2);
+}
+.encabezado-periodo dt {
+  color: var(--texto-suave);
+  font-size: var(--texto-sm);
+  font-weight: 600;
+}
+.encabezado-periodo dd {
+  margin: 0;
+  font-size: var(--texto-md);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.movimientos {
+  width: 100%;
+  margin-bottom: var(--e-3);
+}
+.movimientos tbody tr.anulacion td {
+  background: var(--advertencia-fondo);
+}
+.movimientos .motivo {
+  display: block;
+  color: var(--texto-suave);
+  font-style: italic;
+}
+.etiqueta-anulado {
+  margin-left: var(--e-1);
+  background: var(--error-fondo);
+  color: var(--error);
+}
+.num {
+  text-align: right;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.paginas {
+  display: flex;
+  align-items: center;
+  gap: var(--e-3);
+}

@@ -11,6 +11,7 @@ import {
   paramsDeImpresion,
   puedeAnular,
   puedeVerRecibo,
+  textoPeriodo,
 } from './extracto.models';
 
 /** Una línea del libro con el contrato de LineaExtractoResponse (saldo, no saldoDespues). */
@@ -97,6 +98,22 @@ describe('extracto.models (CC-073, CC-078, CC-096)', () => {
       expect(hayFiltro(FILTRO_VACIO)).toBe(false);
       expect(hayFiltro({ ...FILTRO_VACIO, tipo: 'NC' })).toBe(true);
       expect(hayFiltro({ ...FILTRO_VACIO, hasta: '2026-10-01' })).toBe(true);
+    });
+  });
+
+  describe('textoPeriodo (CC-099)', () => {
+    it('con desde y hasta: «01/10/2026 al 31/10/2026»', () => {
+      expect(textoPeriodo('2026-10-01', '2026-10-31')).toBe('01/10/2026 al 31/10/2026');
+    });
+
+    it('con uno solo dice desde o hasta; sin ninguno, todo el historial', () => {
+      expect(textoPeriodo('2026-10-01', null)).toBe('desde el 01/10/2026');
+      expect(textoPeriodo(null, '2026-10-31')).toBe('hasta el 31/10/2026');
+      expect(textoPeriodo(null, null)).toBe('todo el historial');
+    });
+
+    it('lee el día del texto, sin pasar por la zona del navegador', () => {
+      expect(textoPeriodo('2026-01-05', '2026-01-05')).toBe('05/01/2026 al 05/01/2026');
     });
   });
 

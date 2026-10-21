@@ -855,4 +855,37 @@ ul.error {
     width: 100%;
     color: #000;
   }
+
+  /*
+   * El extracto puede tener cientos de líneas y tiene que salir en varias hojas: no puede quedar dentro del diálogo
+   * (fijo y con scroll). Se saca de la pantalla todo lo que no lo contiene, el diálogo deja de ser fijo y el artículo
+   * fluye por las páginas. Sin esto saldrían hojas en blanco (lo oculto con `visibility` ocupa lugar) y solo la primera hoja.
+   */
+  body:has(.extracto-imprimible) *:not(:has(.extracto-imprimible)):not(.extracto-imprimible):not(.extracto-imprimible *) {
+    display: none !important;
+  }
+  .extracto-imprimible,
+  .extracto-imprimible * {
+    visibility: visible;
+  }
+  .dialogo-fondo:has(.extracto-imprimible),
+  .dialogo:has(.extracto-imprimible) {
+    position: static !important;
+    display: block !important;
+    width: auto !important;
+    max-height: none !important;
+    padding: 0 !important;
+    overflow: visible !important;
+    background: none !important;
+    box-shadow: none !important;
+  }
+  .extracto-imprimible {
+    color: #000;
+  }
+  .extracto-imprimible tr {
+    break-inside: avoid;
+  }
+  .extracto-imprimible thead {
+    display: table-header-group;
+  }
 }

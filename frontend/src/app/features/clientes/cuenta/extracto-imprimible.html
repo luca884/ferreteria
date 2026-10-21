@@ -1,0 +1,110 @@
+<!-- El mousedown sobre el fondo no mueve el foco al body: si no, Esc y Enter (que escucha el diálogo) dejarían de andar. -->
+<div class="dialogo-fondo" (mousedown)="retenerFoco($event)">
+  <div
+    class="dialogo extracto"
+    tabindex="-1"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="extracto-titulo"
+    appTrampaFoco
+    (keydown)="alTeclear($event)"
+  >
+    <article class="extracto-imprimible">
+      @if (ferreteria(); as nombre) {
+        <p class="ferreteria">{{ nombre }}</p>
+      }
+      <h2 id="extracto-titulo">Extracto de cuenta corriente</h2>
+
+      <dl class="datos">
+        <div class="cliente">
+          <dt>Cliente</dt>
+          <dd>{{ extracto().clienteNombre }}</dd>
+        </div>
+        <div class="periodo">
+          <dt>Período</dt>
+          <dd>{{ periodo() }}</dd>
+        </div>
+        <div class="tipo-filtro">
+          <dt>Tipo</dt>
+          <dd>{{ tipo() }}</dd>
+        </div>
+        <div class="saldo-inicial">
+          <dt>Saldo inicial</dt>
+          <dd>{{ extracto().saldoInicial | monto }}</dd>
+        </div>
+      </dl>
+
+      @if (extracto().truncado) {
+        <p class="aviso-truncado" role="status">Se imprimen los primeros {{ tope }} movimientos; acotá las fechas</p>
+      }
+
+      <table class="lineas">
+        <caption class="sr-only">
+          Movimientos de la cuenta, del más nuevo al más viejo
+        </caption>
+        <thead>
+          <tr>
+            <th scope="col">Fecha</th>
+            <th scope="col">Comprobante</th>
+            <th scope="col">Tipo</th>
+            <th scope="col" class="num">Debe</th>
+            <th scope="col" class="num">Haber</th>
+            <th scope="col" class="num">Saldo</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (linea of extracto().movimientos.items; track linea.id) {
+            <tr>
+              <td>{{ fecha(linea.fecha) }}</td>
+              <td>
+                {{ linea.referencia }}
+                @if (linea.anulado) {
+                  <span class="marca-anulado">Anulado</span>
+                }
+                @if (linea.tipo === 'ANULACION' && linea.motivo) {
+                  <small class="motivo">Motivo: {{ linea.motivo }}</small>
+                }
+              </td>
+              <td>{{ tipoLabels[linea.tipo] }}</td>
+              <td class="num">{{ linea.debe > 0 ? (linea.debe | monto) : '' }}</td>
+              <td class="num">{{ linea.haber > 0 ? (linea.haber | monto) : '' }}</td>
+              <td class="num">{{ linea.saldo | monto }}</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+
+      <dl class="totales">
+        <div class="total-debe">
+          <dt>Total debe</dt>
+          <dd>{{ extracto().totalDebe | monto }}</dd>
+        </div>
+        <div class="total-haber">
+          <dt>Total haber</dt>
+          <dd>{{ extracto().totalHaber | monto }}</dd>
+        </div>
+        <div class="saldo-final">
+          <dt>Saldo final</dt>
+          <dd>{{ extracto().saldoFinal | monto }}</dd>
+        </div>
+      </dl>
+
+      <p class="emitido">Emitido el {{ emitido }}</p>
+      <p class="leyenda">{{ leyenda }}</p>
+    </article>
+
+    <div class="dialogo-acciones">
+      <button type="button" class="cerrar" data-tecla="Esc" aria-keyshortcuts="Escape" (click)="cerrar.emit()">Cerrar</button>
+      <button
+        #botonImprimir
+        type="button"
+        class="imprimir primario"
+        data-tecla="Enter"
+        aria-keyshortcuts="Enter"
+        (click)="imprimir()"
+      >
+        Imprimir
+      </button>
+    </div>
+  </div>
+</div>

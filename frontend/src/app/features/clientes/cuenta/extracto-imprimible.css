@@ -1,0 +1,109 @@
+.extracto {
+  width: min(860px, 100%);
+  max-height: calc(100vh - var(--e-8));
+  overflow-y: auto;
+}
+/* El diálogo recibe el foco con un clic en una zona sin controles: no necesita el aro. */
+.extracto:focus {
+  outline: none;
+}
+
+.extracto-imprimible {
+  display: flex;
+  flex-direction: column;
+  gap: var(--e-2);
+}
+.ferreteria {
+  font-size: var(--texto-md);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.extracto-imprimible h2 {
+  font-size: var(--texto-lg);
+}
+
+.datos,
+.totales {
+  display: grid;
+  gap: var(--e-1);
+  margin: 0;
+}
+.datos div,
+.totales div {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--e-3);
+}
+.datos dt,
+.totales dt {
+  color: var(--texto-suave);
+}
+.datos dd,
+.totales dd {
+  margin: 0;
+  font-weight: 600;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.totales {
+  padding-top: var(--e-1);
+  border-top: 2px solid var(--texto);
+}
+.totales .saldo-final {
+  font-size: var(--texto-lg);
+  font-weight: 700;
+}
+
+.aviso-truncado {
+  padding: var(--e-2) var(--e-3);
+  border: 1px solid var(--advertencia-borde);
+  border-left: 4px solid var(--advertencia-marca);
+  border-radius: var(--radio);
+  background: var(--advertencia-fondo);
+  font-weight: 600;
+}
+
+.lineas {
+  width: 100%;
+  border-collapse: collapse;
+}
+.lineas th,
+.lineas td {
+  padding: var(--e-1) var(--e-2);
+  border-bottom: 1px solid var(--borde);
+  text-align: left;
+  vertical-align: top;
+}
+.lineas thead th {
+  position: static;
+  background: transparent;
+  color: var(--texto-suave);
+  font-size: var(--texto-sm);
+}
+.lineas .num {
+  text-align: right;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.lineas .motivo {
+  display: block;
+  color: var(--texto-suave);
+  font-style: italic;
+}
+.marca-anulado {
+  margin-left: var(--e-1);
+  font-size: var(--texto-sm);
+  font-weight: 700;
+}
+
+.emitido {
+  color: var(--texto-suave);
+  font-size: var(--texto-sm);
+}
+.leyenda {
+  color: var(--texto-suave);
+  font-size: var(--texto-sm);
+  font-style: italic;
+  text-align: center;
+}
