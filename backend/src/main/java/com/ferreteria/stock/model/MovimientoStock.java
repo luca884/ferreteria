@@ -51,6 +51,10 @@ public class MovimientoStock {
     @Column(name = "remito_id", updatable = false)
     private Long remitoId;
 
+    /** La compra al proveedor que lo origino (CU-13); null en el resto. */
+    @Column(name = "compra_id", updatable = false)
+    private Long compraId;
+
     @Column(name = "usuario_id", nullable = false, updatable = false)
     private Long usuarioId;
 
@@ -123,6 +127,22 @@ public class MovimientoStock {
         return movimiento;
     }
 
+    /** Entrada por compra (CU-13): la cantidad comprada, positiva, con la compra que la origino. */
+    public static MovimientoStock compra(
+            Long ferreteriaId, Long articuloId, BigDecimal cantidadComprada, Long compraId, Long usuarioId) {
+        if (cantidadComprada == null || cantidadComprada.signum() <= 0) {
+            throw new IllegalArgumentException("Una compra tiene que sumar stock.");
+        }
+        MovimientoStock movimiento = new MovimientoStock();
+        movimiento.ferreteriaId = ferreteriaId;
+        movimiento.articuloId = articuloId;
+        movimiento.tipo = TipoMovimiento.COMPRA;
+        movimiento.cantidad = cantidadComprada;
+        movimiento.compraId = compraId;
+        movimiento.usuarioId = usuarioId;
+        return movimiento;
+    }
+
     /** Ajuste manual (CU-09): la diferencia lleva signo y el motivo es obligatorio. Sin comprobante. */
     public static MovimientoStock ajuste(
             Long ferreteriaId, Long articuloId, BigDecimal diferencia, String motivo, Long usuarioId) {
@@ -149,6 +169,7 @@ public class MovimientoStock {
     public BigDecimal getCantidad() { return cantidad; }
     public Long getComprobanteId() { return comprobanteId; }
     public Long getRemitoId() { return remitoId; }
+    public Long getCompraId() { return compraId; }
     public Long getUsuarioId() { return usuarioId; }
     public String getMotivo() { return motivo; }
     public LocalDateTime getFecha() { return fecha; }

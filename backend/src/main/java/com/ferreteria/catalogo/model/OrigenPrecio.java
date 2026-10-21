@@ -6,5 +6,7 @@ public enum OrigenPrecio {
     MASIVO,
     MANUAL,
     /** El precio de un articulo en dolares cambio porque cambio la cotizacion (recalculo diario o manual). */
-    COTIZACION
+    COTIZACION,
+    /** Una compra (CU-13) piso el costo con el del renglon y se recalculo el precio. */
+    COMPRA
 }
