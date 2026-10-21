@@ -42,6 +42,15 @@ export class CobranzaService {
   recibo(id: number): Observable<Recibo> {
     return this.http.get<Recibo>(`${environment.apiUrl}/recibos/${id}`);
   }
+
+  /**
+   * Anula un cobro (solo el Dueño): devuelve el mismo recibo, ANULADO. Los rechazos llegan como `HttpErrorResponse`:
+   * 409 RECIBO_YA_ANULADO y 422 CAJA_CERRADA / CAJA_DE_OTRO_DIA (`rechazoDe`), 422 de cliente desactivado (por su
+   * `message`), 400 con `errors.motivo` (`invalidaDe`) y 503 (`esOcupado`). Anular dos veces es seguro: la segunda es un 409.
+   */
+  anular(reciboId: number, motivo: string): Observable<Recibo> {
+    return this.http.post<Recibo>(`${environment.apiUrl}/recibos/${reciboId}/anulacion`, { motivo });
+  }
 }
 
 const MOTIVOS: readonly MotivoCobranza[] = [
@@ -49,6 +58,7 @@ const MOTIVOS: readonly MotivoCobranza[] = [
   'CAJA_CERRADA',
   'CAJA_DE_OTRO_DIA',
   'CLAVE_CON_OTRO_CONTENIDO',
+  'RECIBO_YA_ANULADO',
 ];
 
 /**
@@ -81,4 +91,9 @@ export function invalidaDe(err: unknown): CobranzaInvalida | null {
  */
 export function esTransitorio(err: unknown): boolean {
   return !(err instanceof HttpErrorResponse) || err.status === 0 || err.status >= 500;
+}
+
+/** 503: el servidor agotó los reintentos por contención («El sistema está ocupado, reintentá.»). No quedó nada hecho. */
+export function esOcupado(err: unknown): boolean {
+  return err instanceof HttpErrorResponse && err.status === 503;
 }

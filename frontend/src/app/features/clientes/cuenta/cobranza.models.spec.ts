@@ -1,4 +1,12 @@
-import { MEDIOS_COBRANZA, MEDIO_COBRANZA_LABELS, aCuentaCentavos, centavosATexto, fechaCompletaLocal, sugerirFifo } from './cobranza.models';
+import {
+  MEDIOS_COBRANZA,
+  MEDIO_COBRANZA_LABELS,
+  aCuentaCentavos,
+  centavosATexto,
+  fechaCompletaLocal,
+  sugerirFifo,
+  validarMotivo,
+} from './cobranza.models';
 
 /** Pendientes en orden FIFO tal como los manda GET /pendientes: solo el importe que falta cobrar importa acá. */
 const pendientes = (...importes: number[]) => importes.map((pendiente) => ({ pendiente }));
@@ -107,6 +115,31 @@ describe('cobranza.models', () => {
       expect(centavosATexto(5)).toBe('0,05');
       expect(centavosATexto(0)).toBe('0,00');
       expect(centavosATexto(123456789)).toBe('1234567,89');
+    });
+  });
+
+  describe('validarMotivo (CC-056, S-1: la misma regla que el backend)', () => {
+    it('un motivo de 5 a 200 caracteres tras recortar es válido (no devuelve error)', () => {
+      expect(validarMotivo('Cliente equivocado')).toBeNull();
+      expect(validarMotivo('abcde')).toBeNull();
+      expect(validarMotivo('a'.repeat(200))).toBeNull();
+    });
+
+    it('con menos de 5 caracteres tras recortar pide escribirlo, aunque tenga espacios alrededor', () => {
+      const mensaje = 'Escribí el motivo de la anulación (al menos 5 letras).';
+      expect(validarMotivo('abc')).toBe(mensaje);
+      expect(validarMotivo('')).toBe(mensaje);
+      expect(validarMotivo('     ')).toBe(mensaje);
+      expect(validarMotivo('  abcd  ')).toBe(mensaje);
+    });
+
+    it('«12345» vale: son 5 caracteres, no hace falta que sean letras (S-1)', () => {
+      expect(validarMotivo('12345')).toBeNull();
+    });
+
+    it('con más de 200 caracteres tras recortar avisa el máximo; con 200 más espacios todavía vale', () => {
+      expect(validarMotivo('a'.repeat(201))).toBe('El motivo admite hasta 200 caracteres.');
+      expect(validarMotivo(`  ${'a'.repeat(200)}  `)).toBeNull();
     });
   });
 

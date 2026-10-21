@@ -59,6 +59,12 @@ export interface DetalleCaja {
   /** Lo cobrado de cuenta corriente por medio (CC-053): el efectivo suma al esperado, la transferencia es informativa. */
   cobranzas: Record<MedioPago, number>;
   totalCobranzas: number;
+  /**
+   * Los recibos anulados contra esta caja por medio (CC-081): el efectivo RESTA del esperado, la transferencia es
+   * informativa. Ausente si el backend es anterior a la anulación (el resumen omite el renglón).
+   */
+  anulaciones?: Record<MedioPago, number>;
+  totalAnulaciones?: number;
   ingresos: number;
   gastos: number;
   retiros: number;
@@ -73,13 +79,28 @@ export interface DetalleCaja {
 export type DetalleCajaRespuesta = Omit<DetalleCaja, 'cobranzas' | 'totalCobranzas'> &
   Partial<Pick<DetalleCaja, 'cobranzas' | 'totalCobranzas'>>;
 
-/** El detalle con las cobranzas completas: un medio o un total que falta se lee como 0. */
+function completarMedios(porMedio: Partial<Record<MedioPago, number>> | undefined): Record<MedioPago, number> {
+  return Object.fromEntries(MEDIOS_PAGO.map((m) => [m, porMedio?.[m] ?? 0])) as Record<MedioPago, number>;
+}
+
+/**
+ * El detalle con las cobranzas completas: un medio o un total que falta se lee como 0. Las anulaciones se completan
+ * igual SOLO si el servidor las mandó; si la clave falta (backend viejo) quedan sin definir y el resumen omite el renglón.
+ */
 export function conCobranzas(respuesta: DetalleCajaRespuesta): DetalleCaja {
-  const cobranzas = Object.fromEntries(MEDIOS_PAGO.map((m) => [m, respuesta.cobranzas?.[m] ?? 0])) as Record<
-    MedioPago,
-    number
-  >;
-  return { ...respuesta, cobranzas, totalCobranzas: respuesta.totalCobranzas ?? 0 };
+  const detalle: DetalleCaja = {
+    ...respuesta,
+    cobranzas: completarMedios(respuesta.cobranzas),
+    totalCobranzas: respuesta.totalCobranzas ?? 0,
+  };
+  if (respuesta.anulaciones) {
+    detalle.anulaciones = completarMedios(respuesta.anulaciones);
+    detalle.totalAnulaciones = respuesta.totalAnulaciones ?? 0;
+  } else {
+    delete detalle.anulaciones;
+    delete detalle.totalAnulaciones;
+  }
+  return detalle;
 }
 
 /** Una fila del historial de cajas cerradas. */

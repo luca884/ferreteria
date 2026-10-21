@@ -61,6 +61,10 @@ describe('CuentaCliente (CC-028, CC-033, CC-034, CC-038, CC-043)', () => {
       { comprobanteId: 31, referencia: 'Venta N.º 7', importe: 300 },
       { comprobanteId: 32, referencia: 'Venta N.º 8', importe: 300 },
     ],
+    estado: 'EMITIDO',
+    fechaAnulacion: null,
+    anuladoPor: null,
+    motivoAnulacion: null,
     ...cambios,
   });
 

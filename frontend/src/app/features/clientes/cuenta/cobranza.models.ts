@@ -70,8 +70,16 @@ export interface Recibo {
   /** Lo que quedó sin imputar: total − Σ imputaciones. */
   aCuenta: number;
   cobradoPor: string;
+  /** Las imputaciones ORIGINALES: un recibo anulado conserva lo que cobró (las deudas ya volvieron a pendientes). */
   imputaciones: ReciboImputacion[];
+  estado: EstadoRecibo;
+  /** Quién, cuándo y por qué se anuló; los tres son null mientras el recibo está EMITIDO. */
+  fechaAnulacion: string | null;
+  anuladoPor: string | null;
+  motivoAnulacion: string | null;
 }
+
+export type EstadoRecibo = 'EMITIDO' | 'ANULADO';
 
 /** 201 si el cobro es nuevo, 200 si la clave ya estaba registrada con el mismo contenido. */
 export interface ReciboCobrado {
@@ -79,7 +87,12 @@ export interface ReciboCobrado {
   repetida: boolean;
 }
 
-export type MotivoCobranza = 'IMPUTACION_EXCEDE_DEUDA' | 'CAJA_CERRADA' | 'CAJA_DE_OTRO_DIA' | 'CLAVE_CON_OTRO_CONTENIDO';
+export type MotivoCobranza =
+  | 'IMPUTACION_EXCEDE_DEUDA'
+  | 'CAJA_CERRADA'
+  | 'CAJA_DE_OTRO_DIA'
+  | 'CLAVE_CON_OTRO_CONTENIDO'
+  | 'RECIBO_YA_ANULADO';
 
 /** La deuda ACTUAL de un comprobante en un 409, para refrescar la pantalla. */
 export interface DeudaActual {
@@ -95,6 +108,9 @@ export interface CobranzaRechazada {
   timestamp: string;
   motivo: MotivoCobranza;
   comprobantes?: DeudaActual[];
+  /** Solo en RECIBO_YA_ANULADO: quién lo anuló y cuándo (fecha local ISO sin zona). */
+  anuladoPor?: string;
+  fechaAnulacion?: string;
 }
 
 /**
@@ -139,6 +155,20 @@ export function aCuentaCentavos(totalCentavos: number, imputadosCentavos: readon
 /** Los centavos como lo que se escribe en un campo: «300,50» (coma decimal, sin separador de miles). */
 export function centavosATexto(centavos: number): string {
   return `${Math.floor(centavos / 100)},${String(centavos % 100).padStart(2, '0')}`;
+}
+
+export const MOTIVO_MINIMO = 5;
+export const MOTIVO_MAXIMO = 200;
+
+/**
+ * El error de un motivo de anulación (CC-056), o null si vale. La misma regla que el backend: se recorta y se miden los
+ * caracteres que quedan, entre 5 y 200 (sin exigir letras: «12345» vale). El backend vuelve a validar.
+ */
+export function validarMotivo(texto: string): string | null {
+  const largo = texto.trim().length;
+  if (largo < MOTIVO_MINIMO) return `Escribí el motivo de la anulación (al menos ${MOTIVO_MINIMO} letras).`;
+  if (largo > MOTIVO_MAXIMO) return `El motivo admite hasta ${MOTIVO_MAXIMO} caracteres.`;
+  return null;
 }
 
 /** «19/10/2026 10:30» de una fecha local del servidor, leída del texto: no pasa por la zona del navegador. */

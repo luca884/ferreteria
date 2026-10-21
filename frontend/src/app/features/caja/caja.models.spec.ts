@@ -110,6 +110,72 @@ describe('caja.models', () => {
       expect(detalle.totalVentas).toBe(1000);
     });
 
+    describe('anulaciones del detalle (CC-081, CC-100)', () => {
+      it('conserva las anulaciones por medio y el total que manda el servidor', () => {
+        const detalle = conCobranzas({
+          ...sinCobranzas,
+          anulaciones: { EFECTIVO: 700, DEBITO: 0, CREDITO: 0, TRANSFERENCIA: 300, CUENTA_CORRIENTE: 0 },
+          totalAnulaciones: 1000,
+        });
+
+        expect(detalle.anulaciones).toEqual({ EFECTIVO: 700, DEBITO: 0, CREDITO: 0, TRANSFERENCIA: 300, CUENTA_CORRIENTE: 0 });
+        expect(detalle.totalAnulaciones).toBe(1000);
+      });
+
+      it('con la clave presente, un medio que falta se completa con 0 y el total que falta también', () => {
+        const detalle = conCobranzas({ ...sinCobranzas, anulaciones: { EFECTIVO: 250 } as DetalleCaja['cobranzas'] });
+
+        expect(detalle.anulaciones).toEqual({ EFECTIVO: 250, DEBITO: 0, CREDITO: 0, TRANSFERENCIA: 0, CUENTA_CORRIENTE: 0 });
+        expect(detalle.totalAnulaciones).toBe(0);
+      });
+
+      it('con la clave ausente (backend viejo) NO la inventa: queda undefined y no falla', () => {
+        const detalle = conCobranzas(sinCobranzas);
+
+        expect(detalle.anulaciones).toBeUndefined();
+        expect(detalle.totalAnulaciones).toBeUndefined();
+        expect('anulaciones' in detalle).toBe(false);
+        // Lo demás se completa igual que antes.
+        expect(detalle.cobranzas.EFECTIVO).toBe(0);
+        expect(detalle.efectivoEsperado).toBe(6700);
+      });
+
+      it('las anulaciones no tocan las cobranzas ni el efectivo esperado que manda el servidor', () => {
+        const detalle = conCobranzas({
+          ...sinCobranzas,
+          cobranzas: { EFECTIVO: 700, DEBITO: 0, CREDITO: 0, TRANSFERENCIA: 0, CUENTA_CORRIENTE: 0 },
+          totalCobranzas: 700,
+          anulaciones: { EFECTIVO: 700, DEBITO: 0, CREDITO: 0, TRANSFERENCIA: 0, CUENTA_CORRIENTE: 0 },
+          totalAnulaciones: 700,
+        });
+
+        expect(detalle.cobranzas.EFECTIVO).toBe(700);
+        expect(detalle.efectivoEsperado).toBe(6700);
+      });
+
+      it('CajaAbierta y CajaVigente no llevan anulaciones (cierre ciego)', () => {
+        const abierta: CajaAbierta = {
+          id: 4,
+          estado: 'ABIERTA',
+          fechaApertura: '2026-10-16T08:00:00',
+          abiertaPor: 'Ana',
+          efectivoInicial: 1000,
+          // @ts-expect-error la caja abierta que ve cualquier rol no tiene anulaciones
+          anulaciones: { EFECTIVO: 1 },
+        };
+        const vigente: CajaVigente = {
+          estado: 'SIN_CAJA',
+          caja: null,
+          efectivoPropuesto: 0,
+          // @ts-expect-error la caja vigente tampoco
+          totalAnulaciones: 1,
+        };
+
+        // La verificación es de tipos (@ts-expect-error): si CajaAbierta o CajaVigente ganaran esos campos, no compila.
+        expect([abierta.efectivoInicial, vigente.efectivoPropuesto]).toEqual([1000, 0]);
+      });
+    });
+
     it('CajaAbierta y CajaVigente no llevan cifras de cobranzas (cierre ciego)', () => {
       const abierta: CajaAbierta = {
         id: 4,

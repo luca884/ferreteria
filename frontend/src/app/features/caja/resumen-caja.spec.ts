@@ -103,6 +103,85 @@ describe('ResumenCaja (CC-025)', () => {
     expect(limpio(linea('Diferencia')!.querySelector('strong'))).toBe('Sin diferencia');
   });
 
+  describe('anulaciones de cobranzas (CC-081, CC-082, CC-100)', () => {
+    const SIN: Record<string, number> = { EFECTIVO: 0, DEBITO: 0, CREDITO: 0, TRANSFERENCIA: 0, CUENTA_CORRIENTE: 0 };
+    /** El ejemplo del spec: inicial 5.000; cobranza 700 en efectivo anulada: el esperado vuelve a 5.000 + ventas. */
+    const conAnulaciones = (cambios: Partial<DetalleCaja> = {}) =>
+      detalle({
+        ventas: { EFECTIVO: 1000, DEBITO: 0, CREDITO: 0, TRANSFERENCIA: 0, CUENTA_CORRIENTE: 0 },
+        totalVentas: 1000,
+        cobranzas: { EFECTIVO: 700, DEBITO: 0, CREDITO: 0, TRANSFERENCIA: 300, CUENTA_CORRIENTE: 0 },
+        totalCobranzas: 1000,
+        anulaciones: { ...SIN, EFECTIVO: 700 } as DetalleCaja['cobranzas'],
+        totalAnulaciones: 700,
+        efectivoEsperado: 6000,
+        ...cambios,
+      });
+
+    it('«Anulaciones de cobranzas en efectivo» muestra −$700,00 y dice que resta del efectivo esperado', async () => {
+      await crear(conAnulaciones());
+
+      const fila = linea('Anulaciones de cobranzas en efectivo')!;
+      expect(limpio(fila.querySelector('strong'))).toMatch(/^−\s?\$\s700,00$/);
+      expect(limpio(fila)).toContain('resta del efectivo esperado');
+      expect(fila.classList.contains('informativo')).toBe(false);
+    });
+
+    it('«Anulaciones de cobranzas por transferencia» es informativa: no entra en el efectivo esperado', async () => {
+      await crear(
+        conAnulaciones({ anulaciones: { ...SIN, EFECTIVO: 700, TRANSFERENCIA: 300 } as DetalleCaja['cobranzas'], totalAnulaciones: 1000 }),
+      );
+
+      const fila = linea('Anulaciones de cobranzas por transferencia')!;
+      expect(limpio(fila.querySelector('strong'))).toMatch(/^−\s?\$\s300,00$/);
+      expect(fila.classList.contains('informativo')).toBe(true);
+      expect(limpio(fila)).toContain('informativo, no entra en el efectivo esperado');
+    });
+
+    it('las filas van después de las cobranzas y antes de los ingresos', async () => {
+      await crear(conAnulaciones());
+
+      const nombres = lineas().map((l) => limpio(l.querySelector('span')));
+      expect(nombres.slice(7, 12)).toEqual([
+        'Cobranzas en efectivo',
+        'Cobranzas por transferencia',
+        'Anulaciones de cobranzas en efectivo',
+        'Anulaciones de cobranzas por transferencia',
+        'Ingresos',
+      ]);
+    });
+
+    it('con todo en 0 el renglón se muestra igual, en 0 (consistente con las cobranzas)', async () => {
+      await crear(conAnulaciones({ anulaciones: SIN as DetalleCaja['cobranzas'], totalAnulaciones: 0 }));
+
+      expect(limpio(linea('Anulaciones de cobranzas en efectivo')!.querySelector('strong'))).toMatch(/^\$\s0,00$/);
+      expect(limpio(linea('Anulaciones de cobranzas por transferencia')!.querySelector('strong'))).toMatch(/^\$\s0,00$/);
+    });
+
+    it('con `anulaciones` indefinido (backend viejo) omite el renglón, sin error, y el resto se ve igual', async () => {
+      await crear(conAnulaciones({ anulaciones: undefined, totalAnulaciones: undefined }));
+
+      expect(linea('Anulaciones de cobranzas en efectivo')).toBeUndefined();
+      expect(linea('Anulaciones de cobranzas por transferencia')).toBeUndefined();
+      expect(limpio(linea('Cobranzas en efectivo')!.querySelector('strong'))).toContain('700');
+      expect(limpio(linea('Efectivo esperado')!.querySelector('strong'))).toContain('6.000');
+    });
+
+    it('el efectivo esperado se muestra tal cual lo manda el backend (no se vuelve a calcular acá)', async () => {
+      await crear(conAnulaciones({ efectivoEsperado: 5300 }));
+
+      expect(limpio(linea('Efectivo esperado')!.querySelector('strong'))).toContain('5.300');
+    });
+
+    it('cerrada: el contado y la diferencia salen contra el esperado que ya descuenta la anulación', async () => {
+      await crear(conAnulaciones({ estado: 'CERRADA', efectivoContado: 6000, diferencia: 0 }));
+
+      expect(limpio(linea('Anulaciones de cobranzas en efectivo')!.querySelector('strong'))).toMatch(/700,00$/);
+      expect(limpio(linea('Efectivo contado')!.querySelector('strong'))).toContain('6.000');
+      expect(limpio(linea('Diferencia')!.querySelector('strong'))).toBe('Sin diferencia');
+    });
+  });
+
   describe('cobranzas de cuenta corriente (CC-053, CJ-R-013)', () => {
     /** El ejemplo del spec: inicial 5.000; ventas en efectivo 1.000; cobranza 700 en efectivo y 300 por transferencia. */
     const conCobranzas = (cambios: Partial<DetalleCaja> = {}) =>

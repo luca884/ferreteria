@@ -1,8 +1,9 @@
 import { HttpErrorResponse, provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
+import { mensajeDe } from '../../../core/api/api-error';
 import { CobranzaRechazada, CobranzaRequest, PendientesCuenta, Recibo, ReciboCobrado } from './cobranza.models';
-import { CobranzaService, GENERAR_CLAVE_COBRO, esTransitorio, invalidaDe, rechazoDe } from './cobranza.service';
+import { CobranzaService, GENERAR_CLAVE_COBRO, esOcupado, esTransitorio, invalidaDe, rechazoDe } from './cobranza.service';
 
 /**
  * Los cuerpos de estos mocks están copiados de los DTO reales del backend: PendientesResponse, CobranzaRequest,
@@ -31,6 +32,19 @@ describe('CobranzaService', () => {
     aCuenta: 500,
     cobradoPor: 'Dueño Tornillo',
     imputaciones: [{ comprobanteId: 31, referencia: 'Venta N.º 7', importe: 1000 }],
+    estado: 'EMITIDO',
+    fechaAnulacion: null,
+    anuladoPor: null,
+    motivoAnulacion: null,
+  };
+
+  /** Lo que devuelve POST /recibos/{id}/anulacion: el mismo recibo con su auditoría (verify C6, respuesta real). */
+  const reciboAnulado: Recibo = {
+    ...recibo,
+    estado: 'ANULADO',
+    fechaAnulacion: '2026-10-20T19:49:39.487205',
+    anuladoPor: 'Dueño Tornillo',
+    motivoAnulacion: 'Cliente equivocado',
   };
 
   const pendientes: PendientesCuenta = {
@@ -95,6 +109,120 @@ describe('CobranzaService', () => {
 
     expect(generar()).toMatch(UUID);
     expect(generar()).not.toBe(generar());
+  });
+
+  describe('anular (CC-055..CC-060, CC-069)', () => {
+    it('hace POST a /recibos/{id}/anulacion con {motivo} y nada más, y devuelve el recibo ANULADO', () => {
+      let r: Recibo | undefined;
+      service.anular(5, 'Cliente equivocado').subscribe((x) => (r = x));
+
+      const req = http.expectOne((q) => q.url.endsWith('/recibos/5/anulacion'));
+      expect(req.request.method).toBe('POST');
+      expect(req.request.body).toEqual({ motivo: 'Cliente equivocado' });
+      expect(Object.keys(req.request.body)).toEqual(['motivo']);
+      req.flush(reciboAnulado);
+
+      expect(r).toEqual(reciboAnulado);
+      expect(r?.estado).toBe('ANULADO');
+      expect(r?.anuladoPor).toBe('Dueño Tornillo');
+      expect(r?.motivoAnulacion).toBe('Cliente equivocado');
+    });
+
+    it('manda el motivo tal como lo escribió el usuario (recortarlo es cosa del backend)', () => {
+      service.anular(5, '  con espacios  ').subscribe();
+      const req = http.expectOne((q) => q.url.endsWith('/recibos/5/anulacion'));
+      expect(req.request.body).toEqual({ motivo: '  con espacios  ' });
+      req.flush(reciboAnulado);
+    });
+
+    const anularConError = (status: number, error: unknown): unknown => {
+      let err: unknown;
+      service.anular(5, 'Cliente equivocado').subscribe({ error: (e) => (err = e) });
+      const req = http.expectOne((q) => q.url.endsWith('/recibos/5/anulacion'));
+      if (status === 0) req.error(new ProgressEvent('error'));
+      else req.flush(error as object | null, { status, statusText: 'x' });
+      return err;
+    };
+
+    it('409 RECIBO_YA_ANULADO se reconoce con quién y cuándo anuló', () => {
+      const cuerpo = {
+        status: 409,
+        message: 'Este recibo ya fue anulado por Ana el 20/10/2026 19:49.',
+        timestamp: '2026-10-20T22:45:31Z',
+        motivo: 'RECIBO_YA_ANULADO',
+        anuladoPor: 'Ana',
+        fechaAnulacion: '2026-10-20T19:49:39.487205',
+      };
+      const err = anularConError(409, cuerpo);
+
+      const rechazo = rechazoDe(err);
+      expect(rechazo?.motivo).toBe('RECIBO_YA_ANULADO');
+      expect(rechazo?.anuladoPor).toBe('Ana');
+      expect(rechazo?.fechaAnulacion).toBe('2026-10-20T19:49:39.487205');
+      expect(rechazo?.message).toBe('Este recibo ya fue anulado por Ana el 20/10/2026 19:49.');
+      expect(esTransitorio(err)).toBe(false);
+    });
+
+    it.each([
+      ['CAJA_CERRADA', 'Abrí la caja para anular.'],
+      ['CAJA_DE_OTRO_DIA', 'La caja del 19/10 sigue abierta. Cerrala antes de anular.'],
+    ] as const)('422 %s se reconoce y trae el message para mostrar', (motivo, message) => {
+      const rechazo = rechazoDe(anularConError(422, { status: 422, message, timestamp: '2026-10-20T22:45:31Z', motivo }));
+
+      expect(rechazo?.motivo).toBe(motivo);
+      expect(rechazo?.message).toBe(message);
+      expect(rechazo?.anuladoPor).toBeUndefined();
+    });
+
+    it('422 «El cliente está desactivado.» no trae motivo: no es un rechazo tipado, se muestra su message', () => {
+      const err = anularConError(422, { status: 422, message: 'El cliente está desactivado.', timestamp: 'x' });
+
+      expect(rechazoDe(err)).toBeNull();
+      expect(mensajeDe(err, 'otro')).toBe('El cliente está desactivado.');
+      expect(esTransitorio(err)).toBe(false);
+    });
+
+    it('400 de motivo trae errors.motivo y se lee como validación, no como rechazo', () => {
+      const cuerpo = {
+        status: 400,
+        message: 'Datos inválidos',
+        errors: { motivo: 'Escribí el motivo de la anulación (al menos 5 letras).' },
+      };
+      const err = anularConError(400, cuerpo);
+
+      expect(rechazoDe(err)).toBeNull();
+      expect(invalidaDe(err)?.errors?.['motivo']).toBe('Escribí el motivo de la anulación (al menos 5 letras).');
+    });
+
+    it('503 «El sistema está ocupado, reintentá.» se reconoce como ocupado (y es transitorio)', () => {
+      const err = anularConError(503, { status: 503, message: 'El sistema está ocupado, reintentá.' });
+
+      expect(esOcupado(err)).toBe(true);
+      expect(mensajeDe(err, 'otro')).toBe('El sistema está ocupado, reintentá.');
+      expect(rechazoDe(err)).toBeNull();
+      expect(esTransitorio(err)).toBe(true);
+    });
+
+    it('red caída y 500 no son un rechazo ni «ocupado»: son transitorios y se reintenta', () => {
+      for (const err of [anularConError(0, null), anularConError(500, { status: 500, message: 'Error interno' })]) {
+        expect(rechazoDe(err)).toBeNull();
+        expect(esOcupado(err)).toBe(false);
+        expect(esTransitorio(err)).toBe(true);
+      }
+    });
+
+    it('403 y 404 no son rechazos tipados ni transitorios', () => {
+      for (const status of [403, 404]) {
+        const err = anularConError(status, { status, message: 'No.' });
+        expect(rechazoDe(err)).toBeNull();
+        expect(esOcupado(err)).toBe(false);
+        expect(esTransitorio(err)).toBe(false);
+      }
+    });
+
+    it('un error que no es HTTP no es «ocupado»', () => {
+      expect(esOcupado(new Error('x'))).toBe(false);
+    });
   });
 
   describe('errores', () => {

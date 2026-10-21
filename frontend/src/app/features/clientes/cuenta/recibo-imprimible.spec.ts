@@ -22,6 +22,10 @@ describe('ReciboImprimible (CC-036, CC-043)', () => {
     aCuenta: 500,
     cobradoPor: 'Dueño Tornillo',
     imputaciones: [{ comprobanteId: 31, referencia: 'Venta N.º 7', importe: 1000 }],
+    estado: 'EMITIDO',
+    fechaAnulacion: null,
+    anuladoPor: null,
+    motivoAnulacion: null,
     ...cambios,
   });
 

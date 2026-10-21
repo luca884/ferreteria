@@ -35,6 +35,16 @@
       <span>Cobranzas por transferencia</span>&ngsp;<strong>{{ detalle().cobranzas.TRANSFERENCIA | monto }}</strong>
       <small class="nota-informativa">no entra en el efectivo esperado</small>
     </li>
+    @if (detalle().anulaciones; as anulaciones) {
+      <li class="con-nota">
+        <span>Anulaciones de cobranzas en efectivo</span>&ngsp;<strong>{{ restado(anulaciones.EFECTIVO) }}</strong>
+        <small class="nota-informativa">resta del efectivo esperado</small>
+      </li>
+      <li class="informativo">
+        <span>Anulaciones de cobranzas por transferencia</span>&ngsp;<strong>{{ restado(anulaciones.TRANSFERENCIA) }}</strong>
+        <small class="nota-informativa">informativo, no entra en el efectivo esperado</small>
+      </li>
+    }
     <li>
       <span>Ingresos</span>&ngsp;<strong>{{ detalle().ingresos | monto }}</strong>
     </li>

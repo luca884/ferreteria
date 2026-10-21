@@ -220,6 +220,39 @@ describe('Caja (CU-10)', () => {
       expect(resumen).toContain('Cobranzas por transferencia $ 300,00');
     });
 
+    it('el vendedor tampoco ve las anulaciones mientras la caja está abierta (CC-100, cierre ciego)', async () => {
+      await crear(conCaja());
+
+      expect(el().textContent).not.toContain('Anulaciones');
+    });
+
+    it('al cerrar, el resumen del cierre incluye las anulaciones del día y el esperado que manda el backend (CC-100)', async () => {
+      await crear(conCaja());
+      servicio.cerrar.mockReturnValue(
+        of(
+          detalle({
+            estado: 'CERRADA',
+            efectivoContado: 5000,
+            diferencia: 0,
+            cobranzas: { EFECTIVO: 700, DEBITO: 0, CREDITO: 0, TRANSFERENCIA: 300, CUENTA_CORRIENTE: 0 },
+            totalCobranzas: 1000,
+            anulaciones: { EFECTIVO: 700, DEBITO: 0, CREDITO: 0, TRANSFERENCIA: 300, CUENTA_CORRIENTE: 0 },
+            totalAnulaciones: 1000,
+            efectivoEsperado: 5000,
+          }),
+        ),
+      );
+      await escribir('efectivo-contado', '5000');
+      await enviar('form.cierre');
+      boton('Cerrar la caja')!.click();
+      await refrescar();
+
+      const resumen = normal(el().querySelector('app-resumen-caja')?.textContent);
+      expect(resumen).toContain('Anulaciones de cobranzas en efectivo −$ 700,00');
+      expect(resumen).toContain('Anulaciones de cobranzas por transferencia −$ 300,00');
+      expect(resumen).toContain('Efectivo esperado $ 5.000,00');
+    });
+
     it('pide confirmación y recién después del cierre muestra el esperado y la diferencia', async () => {
       await crear(conCaja());
 
