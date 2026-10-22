@@ -89,6 +89,31 @@ class ModulosArchTest {
                 .check(clases);
     }
 
+    /** Compras (CU-13) cambia costos y suma stock SOLO por {@code catalogo.api} y el servicio de stock. */
+    @Test
+    void comprasNoDependeDelCatalogoSalvoPorSuPuerto() {
+        noClasses().that().resideInAPackage("com.ferreteria.compras..")
+                .should().dependOnClassesThat(resideInAPackage("com.ferreteria.catalogo..")
+                        .and(not(resideInAPackage("com.ferreteria.catalogo.api.."))))
+                .check(clases);
+    }
+
+    @Test
+    void comprasNoDependeDeVentasClientesNiCotizacion() {
+        noClasses().that().resideInAPackage("com.ferreteria.compras..")
+                .should().dependOnClassesThat(resideInAnyPackage(
+                        "com.ferreteria.ventas..", "com.ferreteria.clientes..", "com.ferreteria.cotizacion.."))
+                .check(clases);
+    }
+
+    @Test
+    void nadieDependeDeCompras() {
+        noClasses().that().resideInAnyPackage("com.ferreteria.catalogo..", "com.ferreteria.stock..",
+                        "com.ferreteria.ventas..", "com.ferreteria.clientes..")
+                .should().dependOnClassesThat(resideInAPackage("com.ferreteria.compras.."))
+                .check(clases);
+    }
+
     @Test
     void cotizacionNoDependeDeCatalogoVentasNiStock() {
         noClasses().that().resideInAPackage("com.ferreteria.cotizacion..")

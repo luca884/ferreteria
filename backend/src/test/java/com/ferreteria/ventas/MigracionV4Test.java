@@ -84,6 +84,8 @@ class MigracionV4Test extends IntegrationTestBase {
             Map.entry("movimiento_stock.comprobante_id", "bigint NULL"),
             // V16 (CU-07, RM-003): el remito que origino el movimiento; nulo en los demas.
             Map.entry("movimiento_stock.remito_id", "bigint NULL"),
+            // V23 (CU-13): la compra que origino el movimiento; nulo en los demas.
+            Map.entry("movimiento_stock.compra_id", "bigint NULL"),
             Map.entry("movimiento_stock.usuario_id", "bigint NOT NULL"),
             Map.entry("movimiento_stock.motivo", "varchar(200) NULL"),
             Map.entry("movimiento_stock.fecha", "datetime(6) NOT NULL"),

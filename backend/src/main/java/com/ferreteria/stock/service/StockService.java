@@ -105,6 +105,25 @@ public class StockService {
     }
 
     /**
+     * Entrada por compra (CU-13): suma cada articulo con un movimiento COMPRA que lleva la compra. Primero el UPDATE del
+     * stock y despues los INSERT, como la venta. Devuelve el stock resultante de cada articulo.
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public Map<Long, BigDecimal> registrarCompra(Long compraId, Long usuarioId, List<SalidaStock> entradas) {
+        if (entradas.isEmpty()) {
+            return Map.of();
+        }
+        Map<Long, BigDecimal> compradoPorArticulo = sumarPorArticulo(entradas);
+        Map<Long, BigDecimal> stockResultante = articulosParaVenta.ajustarStock(compradoPorArticulo);
+
+        Long ferreteriaId = TenantContext.requireFerreteriaId();
+        movimientoRepository.saveAll(compradoPorArticulo.entrySet().stream()
+                .map(e -> MovimientoStock.compra(ferreteriaId, e.getKey(), e.getValue(), compraId, usuarioId))
+                .toList());
+        return stockResultante;
+    }
+
+    /**
      * Factura un remito (RM-006): el remito ya descontó lo que entregó, asi que la venta mueve solo la diferencia por
      * articulo (vendido - entregado). Sale lo que se vendio de mas y vuelve lo que sobra o no se vendio; si es igual no
      * mueve nada. Cada diferencia deja un movimiento VENTA con el comprobante, el remito y el motivo. Devuelve el stock

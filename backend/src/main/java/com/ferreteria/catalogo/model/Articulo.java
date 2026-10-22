@@ -395,13 +395,21 @@ public class Articulo {
      * 400 en {@code costo} antes de llegar a la base, que lo rechazaria como un "ya existe" engañoso.
      */
     private void calcularPrecio(ContextoPrecio ctx) {
+        this.precioFinal = precioConCosto(costo, ctx);
+    }
+
+    /**
+     * El precio final que tendria el articulo con ese costo, sin cambiar nada (vista previa de una compra, CU-13).
+     * Misma regla y mismo tope que {@link #calcularPrecio}.
+     */
+    public BigDecimal precioConCosto(BigDecimal costoNuevo, ContextoPrecio ctx) {
         BigDecimal margen = PrecioCalculator.margenEfectivo(margenPorcentaje, ctx.margenRubro(), ctx.margenDefecto());
         BigDecimal precio = PrecioCalculator.precioFinal(
-                costo, margen, alicuotaIva, ctx.redondeoMultiplo(), ctx.cotizacionPara(moneda));
+                costoNuevo, margen, alicuotaIva, ctx.redondeoMultiplo(), ctx.cotizacionPara(moneda));
         if (!TopeDeImporte.entra(precio)) {
             throw new DatosInvalidosException(Map.of("costo", PRECIO_DEMASIADO_GRANDE));
         }
-        this.precioFinal = precio;
+        return precio;
     }
 
     public Long getId() { return id; }

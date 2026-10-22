@@ -5,5 +5,7 @@ public enum TipoMovimiento {
     VENTA,
     AJUSTE,
     REMITO,
-    ANULACION_REMITO
+    ANULACION_REMITO,
+    /** Entrada por una compra al proveedor (CU-13). */
+    COMPRA
 }

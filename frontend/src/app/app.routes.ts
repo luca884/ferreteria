@@ -84,6 +84,17 @@ export const routes: Routes = [
         title: titulo('Proveedores'),
         loadComponent: () => import('./features/proveedores/proveedores').then((m) => m.Proveedores),
       },
+      // Sin guard de rol, como importaciones: las compras son del Dueño; el Vendedor ve el aviso y el backend responde 403.
+      {
+        path: 'compras',
+        title: titulo('Compras'),
+        loadComponent: () => import('./features/compras/compras').then((m) => m.Compras),
+      },
+      {
+        path: 'compras/nueva',
+        title: titulo('Nueva compra'),
+        loadComponent: () => import('./features/compras/nueva-compra').then((m) => m.NuevaCompra),
+      },
       {
         path: 'importaciones',
         title: titulo('Importar lista'),

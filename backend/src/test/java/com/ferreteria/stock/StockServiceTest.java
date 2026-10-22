@@ -236,6 +236,56 @@ class StockServiceTest {
     }
 
     @Test
+    @DisplayName("una compra suma cada articulo con delta positivo y un movimiento COMPRA con la compra")
+    void compraSumaElStock() {
+        Map<Long, BigDecimal> resultante = Map.of(1L, bd("11"), 2L, bd("25"));
+        when(articulosParaVenta.ajustarStock(any())).thenReturn(resultante);
+
+        Map<Long, BigDecimal> devuelto = service.registrarCompra(80L, USUARIO, List.of(
+                new SalidaStock(2L, bd("20")), new SalidaStock(1L, bd("1.5"))));
+
+        Map<Long, BigDecimal> deltas = deltasEnviados();
+        assertThat(new ArrayList<>(deltas.keySet())).containsExactly(1L, 2L);
+        assertThat(deltas.get(1L)).isEqualByComparingTo("1.5");
+        assertThat(deltas.get(2L)).isEqualByComparingTo("20");
+        List<MovimientoStock> movimientos = movimientosGuardados();
+        assertThat(movimientos).extracting(MovimientoStock::getArticuloId).containsExactly(1L, 2L);
+        assertThat(movimientos.get(1).getCantidad()).isEqualByComparingTo("20");
+        for (MovimientoStock m : movimientos) {
+            assertThat(m.getTipo()).isEqualTo(TipoMovimiento.COMPRA);
+            assertThat(m.getCompraId()).isEqualTo(80L);
+            assertThat(m.getComprobanteId()).isNull();
+            assertThat(m.getRemitoId()).isNull();
+            assertThat(m.getUsuarioId()).isEqualTo(USUARIO);
+            assertThat(m.getFerreteriaId()).isEqualTo(FERRETERIA);
+        }
+        assertThat(devuelto).isEqualTo(resultante);
+    }
+
+    @Test
+    @DisplayName("la compra ajusta el stock ANTES de guardar los movimientos y exige una transaccion abierta")
+    void compraAjustaAntesDeGuardar() throws NoSuchMethodException {
+        when(articulosParaVenta.ajustarStock(any())).thenReturn(Map.of());
+
+        service.registrarCompra(80L, USUARIO, List.of(new SalidaStock(1L, bd("3"))));
+
+        InOrder orden = inOrder(articulosParaVenta, movimientoRepository);
+        orden.verify(articulosParaVenta).ajustarStock(any());
+        orden.verify(movimientoRepository).saveAll(any());
+        assertThat(StockService.class.getMethod("registrarCompra", Long.class, Long.class, List.class)
+                .getAnnotation(Transactional.class).propagation()).isEqualTo(Propagation.MANDATORY);
+    }
+
+    @Test
+    @DisplayName("una entrada de compra tiene que sumar stock")
+    void compraConCantidadNoPositivaFalla() {
+        assertThatThrownBy(() -> MovimientoStock.compra(FERRETERIA, 1L, bd("0"), 80L, USUARIO))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> MovimientoStock.compra(FERRETERIA, 1L, bd("-1"), 80L, USUARIO))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
     @DisplayName("registrarRemito y devolverRemito exigen una transaccion abierta (MANDATORY)")
     void remitoExigeTransaccion() throws NoSuchMethodException {
         assertThat(StockService.class.getMethod("registrarRemito", Long.class, Long.class, List.class)

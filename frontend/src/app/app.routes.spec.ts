@@ -7,6 +7,8 @@ import { inicioPorRol } from './core/auth/inicio-por-rol';
 import { ActualizacionMasiva } from './features/actualizacion-masiva/actualizacion-masiva';
 import { ArticuloForm } from './features/articulos/articulo-form';
 import { Caja } from './features/caja/caja';
+import { Compras } from './features/compras/compras';
+import { NuevaCompra } from './features/compras/nueva-compra';
 import { CuentaCliente } from './features/clientes/cuenta/cuenta-cliente';
 import { HistorialCajas } from './features/caja/historial-cajas';
 import { Articulos } from './features/articulos/articulos';
@@ -52,6 +54,18 @@ describe('rutas', () => {
 
     expect(ruta).toBeDefined();
     expect(await (ruta!.loadComponent as () => Promise<unknown>)()).toBe(Importaciones);
+  });
+
+  it('las rutas compras y compras/nueva cargan el listado y la carga, sin guard propio (el Vendedor ve el aviso)', async () => {
+    const compras = hijas().find((r) => r.path === 'compras');
+    const nueva = hijas().find((r) => r.path === 'compras/nueva');
+
+    expect(await (compras!.loadComponent as () => Promise<unknown>)()).toBe(Compras);
+    expect(await (nueva!.loadComponent as () => Promise<unknown>)()).toBe(NuevaCompra);
+    expect(compras!.canActivate).toBeUndefined();
+    expect(nueva!.canActivate).toBeUndefined();
+    expect(compras!.title).toBe('Compras · Ferretería');
+    expect(nueva!.title).toBe('Nueva compra · Ferretería');
   });
 
   it('la ruta actualizacion-masiva carga el componente ActualizacionMasiva', async () => {
