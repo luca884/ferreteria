@@ -130,9 +130,12 @@ public class ActualizacionMasivaService {
         for (CambioMasivo cambio : plan.cambios()) {
             Articulo articulo = articulosPorId.get(cambio.articuloId());
             ContextoPrecio contexto = preparacion.contextos().de(articulo.getRubroId());
-            Optional<CambioPrecio> cambioDePrecio = operacion.modo() == ModoMasivo.MARGEN
-                    ? articulo.fijarMargen(operacion.valor(), contexto)
-                    : articulo.ajustarCosto(cambio.costoNuevo(), contexto);
+            Optional<CambioPrecio> cambioDePrecio = switch (operacion.modo()) {
+                case MARGEN -> articulo.fijarMargen(operacion.valor(), contexto);
+                // CU-14: el precio de la vista previa queda escrito a mano.
+                case PRECIO_PORCENTAJE, PRECIO_MONTO -> articulo.fijarPrecioManual(cambio.precioNuevo());
+                case COSTO_PORCENTAJE, COSTO_MONTO -> articulo.ajustarCosto(cambio.costoNuevo(), contexto);
+            };
             // El planificador y la entidad calculan con el mismo PrecioCalculator: si difieren hay un bug
             // y se revierte todo (500) antes de que se escriba el historial.
             if (articulo.getPrecioFinal().compareTo(cambio.precioNuevo()) != 0) {

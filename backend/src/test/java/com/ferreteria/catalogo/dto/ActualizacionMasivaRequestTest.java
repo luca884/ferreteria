@@ -29,7 +29,8 @@ import org.junit.jupiter.params.provider.ValueSource;
 class ActualizacionMasivaRequestTest {
 
     private static final String MENSAJE_MODO =
-            "Elegí qué querés hacer: cambiar el costo en porcentaje, sumarle un monto al costo o fijar el margen.";
+            "Elegí qué querés hacer: cambiar el costo en porcentaje, sumarle un monto al costo, fijar el "
+                + "margen o cambiar el precio final en porcentaje o en monto.";
     private static final String MENSAJE_VALOR_AUSENTE = "Ingresá un valor.";
     private static final String MENSAJE_CERO = "El porcentaje no puede ser cero.";
     private static final String MENSAJE_MONTO_CERO = "El monto no puede ser cero.";

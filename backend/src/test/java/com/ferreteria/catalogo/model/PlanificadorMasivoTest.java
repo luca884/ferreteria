@@ -123,6 +123,114 @@ class PlanificadorMasivoTest {
         return new ContextosDePrecio(Map.of(), new ContextoPrecio(null, bd("30.00"), bd("10"), bd("1000")));
     }
 
+    // ------------------------------------------------------------------ precio final en % o en $ (CU-14 punto 4)
+
+    /** Sin multiplo: el precio queda hacia arriba al centavo, como en las ferreterias reales (V9). */
+    private static PlanMasivo precioFinal(ModoMasivo modo, String valor, Art... articulos) {
+        return planificar(modo, valor, new ContextosDePrecio(Map.of(), new ContextoPrecio(null, bd("30.00"),
+            BigDecimal.ZERO)), articulos);
+    }
+
+    @Nested
+    @DisplayName("precio final en % o en $ (CU-14 punto 4): deja precio manual")
+    class PrecioFinal {
+
+        @Test
+        @DisplayName("+10 % sobre 170: 187, sin tocar costo ni margen")
+        void porcentaje() {
+            PlanMasivo plan = precioFinal(ModoMasivo.PRECIO_PORCENTAJE, "10", Art.art(1, "100.00").precio("170.00"));
+
+            assertThat(plan.cambios()).hasSize(1);
+            CambioMasivo cambio = plan.cambios().get(0);
+            assertThat(cambio.precioNuevo()).isEqualTo(bd("187.00"));
+            assertThat(cambio.costoNuevo()).isEqualByComparingTo("100.00");
+            assertThat(cambio.margenNuevo()).isEqualByComparingTo(cambio.margenAnterior());
+            assertThat(cambio.margenHeredado()).isTrue();
+            assertThat(plan.conteos().suben()).isEqualTo(1);
+        }
+
+        @Test
+        @DisplayName("+33,33 % sobre 100,01: 133,343... hacia arriba al centavo, 133,35")
+        void porcentajeRedondeaHaciaArriba() {
+            PlanMasivo plan = precioFinal(ModoMasivo.PRECIO_PORCENTAJE, "33.33", Art.art(1, "10.00").precio("100.01"));
+
+            assertThat(plan.cambios().get(0).precioNuevo()).isEqualTo(bd("133.35"));
+        }
+
+        @Test
+        @DisplayName("+$ 25,50 sobre 170: 195,50")
+        void monto() {
+            PlanMasivo plan = precioFinal(ModoMasivo.PRECIO_MONTO, "25.50", Art.art(1, "100.00").precio("170.00"));
+
+            assertThat(plan.cambios().get(0).precioNuevo()).isEqualTo(bd("195.50"));
+        }
+
+        @Test
+        @DisplayName("un monto que deja el precio en 0 o menos: el articulo va a errores")
+        void montoEnCero() {
+            PlanMasivo plan = precioFinal(ModoMasivo.PRECIO_MONTO, "-170", Art.art(1, "100.00").precio("170.00"));
+
+            assertThat(plan.cambios()).isEmpty();
+            assertThat(plan.errores()).extracting(ErrorMasivo::motivo)
+                .containsExactly("El precio nuevo da 0 o menos. Revisá el monto.");
+        }
+
+        @Test
+        @DisplayName("un precio que no entra en DECIMAL(15,2): el articulo va a errores")
+        void demasiadoGrande() {
+            PlanMasivo plan = precioFinal(ModoMasivo.PRECIO_PORCENTAJE, "10",
+                Art.art(1, "1.00").precio("9999999999999.99"));
+
+            assertThat(plan.errores()).extracting(ErrorMasivo::motivo).containsExactly(DEMASIADO_GRANDE);
+        }
+
+        @Test
+        @DisplayName("sobre un precio manual se aplica al precio escrito: 500 +10 % = 550")
+        void sobrePrecioManual() {
+            PlanMasivo plan = precioFinal(ModoMasivo.PRECIO_PORCENTAJE, "10",
+                Art.art(1, "100.00").precio("500.00").manual());
+
+            assertThat(plan.cambios().get(0).precioNuevo()).isEqualTo(bd("550.00"));
+        }
+
+        @Test
+        @DisplayName("los ajustes del articulo no se suman: el precio queda manual")
+        void ajustesNoSeSuman() {
+            PlanMasivo plan = precioFinal(ModoMasivo.PRECIO_PORCENTAJE, "10", Art.art(1, "100.00").precio("170.00")
+                .ajustes(new AjustePrecio(null, TipoAjustePrecio.PORCENTAJE, bd("10"))));
+
+            assertThat(plan.cambios().get(0).precioNuevo()).isEqualTo(bd("187.00"));
+        }
+
+        @Test
+        @DisplayName("-10 % sobre 121 con costo 100: 108,90 (90 sin IVA), avisa margen negativo")
+        void margenNegativo() {
+            PlanMasivo plan = precioFinal(ModoMasivo.PRECIO_PORCENTAJE, "-10", Art.art(1, "100.00").precio("121.00"));
+
+            assertThat(plan.cambios().get(0).advertencia()).isEqualTo(
+                "Margen negativo: el costo ($ 100,00) supera el precio sin IVA ($ 90,00). Revisá el precio manual.");
+            assertThat(plan.conteos().conAdvertencia()).isEqualTo(1);
+        }
+
+        @Test
+        @DisplayName("+60 % avisa la variacion fuerte del precio")
+        void variacionFuerte() {
+            PlanMasivo plan = precioFinal(ModoMasivo.PRECIO_PORCENTAJE, "60", Art.art(1, "10.00").precio("100.00"));
+
+            assertThat(plan.cambios().get(0).advertencia())
+                .isEqualTo("El precio sube un 60 % (de 100,00 a 160,00). Revisá que sea correcto.");
+        }
+
+        @Test
+        @DisplayName("la huella de precio final no es la de costo con el mismo valor")
+        void huellaDistintaDeCosto() {
+            Art art = Art.art(1, "100.00").precio("170.00");
+
+            assertThat(precioFinal(ModoMasivo.PRECIO_PORCENTAJE, "10", art).huella())
+                .isNotEqualTo(precioFinal(ModoMasivo.COSTO_PORCENTAJE, "10", art).huella());
+        }
+    }
+
     // ------------------------------------------------------------------ precio manual y ajustes (CU-14)
 
     @Nested
