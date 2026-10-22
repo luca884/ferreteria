@@ -132,7 +132,9 @@ public class GlobalExceptionHandler {
                     Map.of(campoDeAjuste.get(), TIPO_DE_AJUSTE_INVALIDO)));
         }
         String campo = ultimoCampo(ex);
-        String mensaje = MENSAJES_ENUM_POR_CAMPO.getOrDefault(campo, mensajeGenericoDeEnum(campo, ex));
+        MensajeDeValorInvalido propio = ex.getTargetType().getAnnotation(MensajeDeValorInvalido.class);
+        String mensaje = propio != null ? propio.value()
+                : MENSAJES_ENUM_POR_CAMPO.getOrDefault(campo, mensajeGenericoDeEnum(campo, ex));
         return ResponseEntity.badRequest()
                 .body(ApiError.of(HttpStatus.BAD_REQUEST.value(), mensaje, Map.of(campo, mensaje)));
     }

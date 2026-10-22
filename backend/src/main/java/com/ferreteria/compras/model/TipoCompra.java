@@ -1,6 +1,9 @@
 package com.ferreteria.compras.model;
 
+import com.ferreteria.common.exception.MensajeDeValorInvalido;
+
 /** Tipo del comprobante del proveedor (CU-13). Se guarda por nombre; la base tiene un CHECK con estos valores. */
+@MensajeDeValorInvalido("El tipo de comprobante no es válido. Usá FA, FB, FC o REM.")
 public enum TipoCompra {
     FA("Factura A"),
     FB("Factura B"),
