@@ -372,6 +372,63 @@ class ArticuloPrecioManualTest {
         assertThat(articulo.getCosto()).isEqualTo(bd("100"));
     }
 
+    private static final String AVISO_TOPE = "No se cambió el precio de TORN-001 (Tornillo): con sus ajustes quedaría"
+        + " demasiado grande. Revisá sus ajustes.";
+
+    /** Hereda el margen del rubro (100 %: calculado 242,00) con un ajuste de + 9.999.999.999.000: 9.999.999.999.242. */
+    private static Articulo conAjusteEnElTope() {
+        Articulo articulo = heredandoElMargenDelRubro();
+        articulo.fijarAjustesDePrecio(ajustes(monto("9999999999000")), new ContextoPrecio(bd("100"), bd("30"), BigDecimal.ZERO));
+        return articulo;
+    }
+
+    @Test
+    @DisplayName("recalculo automatico: si los ajustes pasan el tope del precio conserva el precio y avisa")
+    void recalculoAutomaticoSalteaElTope() {
+        Articulo articulo = conAjusteEnElTope();
+        BigDecimal precioDeHoy = articulo.getPrecioFinal();
+
+        // rubro al 1000 %: calculado 1.331,00, con el ajuste 10.000.000.000.331 no entra en DECIMAL(15,2)
+        RecalculoAutomatico resultado = articulo.recalcularPrecioAutomatico(
+            new ContextoPrecio(bd("1000"), bd("30"), BigDecimal.ZERO));
+
+        assertThat(resultado.cambio()).isEmpty();
+        assertThat(resultado.aviso()).contains(AVISO_TOPE);
+        assertThat(articulo.getPrecioFinal()).isEqualTo(precioDeHoy);
+    }
+
+    @Test
+    @DisplayName("precio planeado con un costo: si los ajustes pasan el tope es el de hoy y trae el aviso")
+    void precioPlaneadoSalteaElTope() {
+        Articulo articulo = conAjusteEnElTope();
+        ContextoPrecio rubroAl100 = new ContextoPrecio(bd("100"), bd("30"), BigDecimal.ZERO);
+
+        // costo 1000: calculado 2.420,00, con el ajuste 10.000.000.001.420
+        PrecioPlaneado planeado = articulo.precioConCostoAutomatico(bd("1000"), rubroAl100);
+
+        assertThat(planeado.precio()).isEqualTo(articulo.getPrecioFinal());
+        assertThat(planeado.aviso()).contains(AVISO_TOPE);
+    }
+
+    @Test
+    @DisplayName("recalculo automatico: si el precio calculado ya no entra, la culpa es del costo y sigue dando 400")
+    void recalculoAutomaticoConCalculadoFueraDelTopeRechaza() {
+        Articulo articulo = heredandoElMargenDelRubro();
+
+        assertThatThrownBy(() -> articulo.ajustarCostoAutomatico(bd("9999999999999"),
+            new ContextoPrecio(bd("100"), bd("30"), BigDecimal.ZERO)))
+            .isInstanceOf(DatosInvalidosException.class);
+    }
+
+    @Test
+    @DisplayName("las ediciones a mano siguen rechazando: ajustes que pasan el tope dan 400")
+    void edicionAManoSigueRechazandoElTope() {
+        Articulo articulo = conAjusteEnElTope();
+
+        assertThatThrownBy(() -> articulo.recalcularPrecio(new ContextoPrecio(bd("1000"), bd("30"), BigDecimal.ZERO)))
+            .isInstanceOf(DatosInvalidosException.class);
+    }
+
     @Test
     @DisplayName("las ediciones a mano siguen rechazando: un costo que deja el precio en 0 o menos da 400")
     void edicionAManoSigueRechazando() {

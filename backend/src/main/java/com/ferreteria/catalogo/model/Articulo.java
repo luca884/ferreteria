@@ -247,8 +247,8 @@ public class Articulo {
     public RecalculoAutomatico recalcularPrecioAutomatico(ContextoPrecio ctx) {
         try {
             return RecalculoAutomatico.de(recalcularPrecio(ctx));
-        } catch (PrecioEnCeroOMenosException e) {
-            return new RecalculoAutomatico(Optional.empty(), Optional.of(avisoDePrecioSalteado()));
+        } catch (AjustesFueraDeRangoException e) {
+            return new RecalculoAutomatico(Optional.empty(), Optional.of(avisoDePrecioSalteado(e)));
         }
     }
 
@@ -262,11 +262,11 @@ public class Articulo {
         BigDecimal precioAnterior = this.precioFinal;
         try {
             return RecalculoAutomatico.de(ajustarCosto(costoNuevo, ctx));
-        } catch (PrecioEnCeroOMenosException e) {
+        } catch (AjustesFueraDeRangoException e) {
             // ajustarCosto ya fijo el costo y fallo recien al calcular el precio, que no se toco.
             return new RecalculoAutomatico(
                 CambioPrecio.entre(costoAnterior, this.costo, precioAnterior, this.precioFinal),
-                Optional.of(avisoDePrecioSalteado()));
+                Optional.of(avisoDePrecioSalteado(e)));
         }
     }
 
@@ -277,14 +277,14 @@ public class Articulo {
     public PrecioPlaneado precioConCostoAutomatico(BigDecimal costoNuevo, ContextoPrecio ctx) {
         try {
             return new PrecioPlaneado(precioConCosto(costoNuevo, ctx), Optional.empty());
-        } catch (PrecioEnCeroOMenosException e) {
-            return new PrecioPlaneado(precioFinal, Optional.of(avisoDePrecioSalteado()));
+        } catch (AjustesFueraDeRangoException e) {
+            return new PrecioPlaneado(precioFinal, Optional.of(avisoDePrecioSalteado(e)));
         }
     }
 
-    private String avisoDePrecioSalteado() {
+    private String avisoDePrecioSalteado(AjustesFueraDeRangoException e) {
         return "No se cambió el precio de " + codigoInterno + " (" + descripcion
-            + "): con sus ajustes quedaría en 0 o menos. Revisá sus ajustes.";
+            + "): con sus ajustes quedaría " + e.queQuedaria() + ". Revisá sus ajustes.";
     }
 
     /**
@@ -576,12 +576,13 @@ public class Articulo {
         BigDecimal precio = ajustes.aplicar(calculado, ctx.redondeoMultiplo());
         if (!TopeDeImporte.entra(precio)) {
             // Si el calculado ya no entra, la culpa es del costo y el margen; si entra, de los ajustes.
-            throw new DatosInvalidosException(TopeDeImporte.entra(calculado)
-                    ? Map.of("ajustesPrecio", AJUSTES_DEMASIADO_GRANDES)
-                    : Map.of("costo", PRECIO_DEMASIADO_GRANDE));
+            if (!TopeDeImporte.entra(calculado)) {
+                throw new DatosInvalidosException(Map.of("costo", PRECIO_DEMASIADO_GRANDE));
+            }
+            throw new AjustesFueraDeRangoException(AJUSTES_DEMASIADO_GRANDES, "demasiado grande");
         }
         if (AjustesDePrecio.dejanElPrecioEnCeroOMenos(calculado, precio)) {
-            throw new PrecioEnCeroOMenosException(PRECIO_CERO_O_MENOS);
+            throw new AjustesFueraDeRangoException(PRECIO_CERO_O_MENOS, "en 0 o menos");
         }
         return precio;
     }
