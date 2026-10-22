@@ -14,7 +14,7 @@ public record OperacionMasiva(ModoMasivo modo, BigDecimal valor) {
     public OperacionMasiva {
         Objects.requireNonNull(modo, "modo");
         Objects.requireNonNull(valor, "valor");
-        if (modo == ModoMasivo.COSTO_MONTO) {
+        if (modo == ModoMasivo.COSTO_MONTO || modo == ModoMasivo.PRECIO_MONTO) {
             validarMonto(valor);
         }
         valor = valor.setScale(2, RoundingMode.UNNECESSARY);

@@ -69,6 +69,8 @@
           <option ngValue="COSTO_PORCENTAJE">Cambiar el costo en %</option>
           <option ngValue="MARGEN">Fijar el margen</option>
           <option ngValue="COSTO_MONTO">Sumar o restar un monto al costo</option>
+          <option ngValue="PRECIO_PORCENTAJE">Cambiar el precio final en %</option>
+          <option ngValue="PRECIO_MONTO">Sumar o restar un monto al precio final</option>
         </select>
       </div>
       <div class="campo">
@@ -90,11 +92,22 @@
             Positivo sube el costo, negativo lo baja. Se suma en la moneda de cada artículo.
           </span>
         }
+        @if (esMontoDePrecio()) {
+          <span id="valor-pista" class="pista">
+            Positivo sube el precio final, negativo lo baja. Siempre en pesos.
+          </span>
+        }
         @if (errorDelValor(); as mensaje) {
           <span id="valor-error" class="campo-error">{{ mensaje }}</span>
         }
       </div>
     </div>
+    @if (cambiaElPrecioFinal()) {
+      <p class="aviso aviso-precio-manual">
+        Los artículos quedan con precio manual: las listas, las compras y los cambios de costo no les
+        van a cambiar el precio.
+      </p>
+    }
     <div class="fila-generar">
       <button
         type="button"

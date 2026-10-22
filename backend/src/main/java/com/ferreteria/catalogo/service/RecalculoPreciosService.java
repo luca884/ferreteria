@@ -6,6 +6,7 @@ import com.ferreteria.catalogo.model.ContextosDePrecio;
 import com.ferreteria.catalogo.model.HistorialPrecio;
 import com.ferreteria.catalogo.model.Moneda;
 import com.ferreteria.catalogo.model.OrigenPrecio;
+import com.ferreteria.catalogo.model.RecalculoAutomatico;
 import com.ferreteria.catalogo.model.Rubro;
 import com.ferreteria.catalogo.repository.ArticuloRepository;
 import com.ferreteria.catalogo.repository.HistorialPrecioRepository;
@@ -19,8 +20,8 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.util.ArrayList;
 import java.util.List;
-import java.util.stream.Stream;
 
 /**
  * Cascada de precios cuando cambia el margen de un rubro. Vive aparte de ArticuloService para que
@@ -53,21 +54,37 @@ public class RecalculoPreciosService {
      * ahora, y guarda un historial MASIVO por cada uno cuyo precio final cambie. Debe correr dentro
      * de la transaccion de la edicion del rubro (MANDATORY): si falla, se revierte todo junto.
      * Los articulos ya administrados por JPA se escriben al terminar esa transaccion.
+     *
+     * <p>Un articulo cuyos ajustes sobre el precio final dejarian el precio en 0 o menos conserva el que tiene, el resto
+     * sigue y el articulo vuelve en los avisos devueltos (S7).
      */
     @Transactional(propagation = Propagation.MANDATORY)
-    public void porCambioDeMargenDeRubro(Rubro rubro, Long usuarioId) {
+    public List<String> porCambioDeMargenDeRubro(Rubro rubro, Long usuarioId) {
         ConfiguracionPrecios configuracion = configuracionPreciosService.actual();
         List<Articulo> herederos = articuloRepository.heredanMargenDeRubroScoped(rubro.getId());
         ContextoPrecio ctx = new ContextoPrecio(
                 rubro.getMargenPorcentaje(), configuracion.margenDefectoPorcentaje(), configuracion.redondeoMultiplo(),
                 dolarVigenteSiHayArticulosEnDolares(herederos));
 
-        List<HistorialPrecio> historial = herederos.stream()
-                .flatMap(articulo -> recalcular(articulo, ctx, usuarioId))
-                .toList();
+        List<HistorialPrecio> historial = new ArrayList<>();
+        List<String> avisos = new ArrayList<>();
+        for (Articulo articulo : herederos) {
+            RecalculoAutomatico resultado = articulo.recalcularPrecioAutomatico(ctx);
+            resultado.cambio().ifPresent(
+                    cambio -> historial.add(HistorialPrecio.de(articulo, cambio, OrigenPrecio.MASIVO, usuarioId)));
+            resultado.aviso().ifPresent(avisos::add);
+        }
         if (!historial.isEmpty()) {
             historialPrecioRepository.saveAll(historial);
         }
+        return avisos;
+    }
+
+    /**
+     * Cuantos articulos cambiaron de precio en un recalculo por cotizacion y los avisos de los que se saltearon porque
+     * sus ajustes sobre el precio final los dejarian en 0 o menos (S7).
+     */
+    public record ResultadoPorCotizacion(int articulosRecalculados, List<String> avisos) {
     }
 
     /**
@@ -75,23 +92,29 @@ public class RecalculoPreciosService {
      * inactivos, R-032) y guarda un historial COTIZACION por cada uno cuyo precio final cambie. Si el precio no cambia
      * no hay fila ni cuenta (R-030). {@code usuarioId} es null en el recalculo diario automatico («Automatico») y el
      * del Dueno en «Recalcular ahora». Devuelve cuantos articulos cambiaron de precio. Debe correr dentro de la
-     * transaccion del recalculo (MANDATORY): si falla, se revierte todo junto, incluido el reclamo del dia.
+     * transaccion del recalculo (MANDATORY): si falla, se revierte todo junto, incluido el reclamo del dia. Un articulo
+     * cuyos ajustes sobre el precio final lo dejarian en 0 o menos conserva su precio, no cuenta y vuelve en los avisos
+     * (S7): el resto del lote sigue.
      */
     @Transactional(propagation = Propagation.MANDATORY)
-    public int porCotizacion(BigDecimal dolar, Long usuarioId) {
+    public ResultadoPorCotizacion porCotizacion(BigDecimal dolar, Long usuarioId) {
         ConfiguracionPrecios configuracion = configuracionPreciosService.actual();
         ContextosDePrecio contextos = ContextosDePrecio.armar(
                 rubroRepository.listarScoped(), configuracion.margenDefectoPorcentaje(),
                 configuracion.redondeoMultiplo(), dolar);
 
-        List<HistorialPrecio> historial = articuloRepository.enDolaresScoped().stream()
-                .flatMap(articulo -> articulo.recalcularPrecio(contextos.de(articulo.getRubroId())).stream()
-                        .map(cambio -> HistorialPrecio.de(articulo, cambio, OrigenPrecio.COTIZACION, usuarioId)))
-                .toList();
+        List<HistorialPrecio> historial = new ArrayList<>();
+        List<String> avisos = new ArrayList<>();
+        for (Articulo articulo : articuloRepository.enDolaresScoped()) {
+            RecalculoAutomatico resultado = articulo.recalcularPrecioAutomatico(contextos.de(articulo.getRubroId()));
+            resultado.cambio().ifPresent(
+                    cambio -> historial.add(HistorialPrecio.de(articulo, cambio, OrigenPrecio.COTIZACION, usuarioId)));
+            resultado.aviso().ifPresent(avisos::add);
+        }
         if (!historial.isEmpty()) {
             historialPrecioRepository.saveAll(historial);
         }
-        return historial.size();
+        return new ResultadoPorCotizacion(historial.size(), avisos);
     }
 
     /**
@@ -104,10 +127,5 @@ public class RecalculoPreciosService {
             return null;
         }
         return dolarDePrecios.vigente().orElseThrow(() -> new ConflictException(DolarDePrecios.SIN_COTIZACION));
-    }
-
-    private Stream<HistorialPrecio> recalcular(Articulo articulo, ContextoPrecio ctx, Long usuarioId) {
-        return articulo.recalcularPrecio(ctx).stream()
-                .map(cambio -> HistorialPrecio.de(articulo, cambio, OrigenPrecio.MASIVO, usuarioId));
     }
 }

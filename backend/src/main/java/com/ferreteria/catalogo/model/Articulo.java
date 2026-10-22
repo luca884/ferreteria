@@ -17,6 +17,8 @@ import org.hibernate.type.SqlTypes;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -31,6 +33,11 @@ public class Articulo {
 
     private static final BigDecimal MARGEN_MAXIMO = BigDecimal.valueOf(1000);
     static final String PRECIO_DEMASIADO_GRANDE = "Con este costo y margen el precio queda demasiado grande.";
+    static final String PRECIO_CERO_O_MENOS = "Con los ajustes del precio final, el precio queda en 0 o menos.";
+    static final String PRECIO_MANUAL_INVALIDO = "El precio tiene que ser mayor a 0.";
+    static final String PRECIO_MANUAL_DEMASIADO_GRANDE = "El precio es demasiado grande.";
+    static final String PRECIO_MANUAL_CON_DECIMALES = "El precio admite hasta 2 decimales.";
+    static final String AJUSTES_DEMASIADO_GRANDES = "Con los ajustes del precio final, el precio queda demasiado grande.";
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -89,6 +96,18 @@ public class Articulo {
 
     @Column(name = "precio_final", nullable = false, precision = 15, scale = 2)
     private BigDecimal precioFinal;
+
+    /**
+     * Precio fijado a mano por el Dueño (CU-14, como «Lista 1 calculada» destildada en GDS): mientras es true, nada
+     * automatico recalcula el precio (listas, masivo, compras, cascada de rubro, cotizacion), aunque cambie el costo.
+     */
+    @Column(name = "precio_manual", nullable = false)
+    private boolean precioManual;
+
+    /** Ajustes sobre el precio final (CU-14), en el orden en que los cargo el Dueño. Con precio manual no se aplican. */
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "ajustes_precio", nullable = false)
+    private List<AjustePrecio> ajustesPrecio = new ArrayList<>();
 
     @Enumerated(EnumType.STRING)
     @JdbcTypeCode(SqlTypes.VARCHAR)
@@ -169,6 +188,16 @@ public class Articulo {
      * el stock actual.
      */
     public Optional<CambioPrecio> actualizar(DatosArticulo datos, ContextoPrecio ctx) {
+        return actualizar(datos, PedidoDePrecio.CONSERVAR, ctx);
+    }
+
+    /**
+     * Alta y edicion con lo que el Dueño pide sobre el precio (CU-14): primero los datos y los ajustes nuevos, despues
+     * el precio, en un solo paso y con un solo cambio para el historial. Con {@code manual} true el precio queda el
+     * escrito (mayor a 0 y dentro de DECIMAL(15,2), validado antes de tocar nada); con false se libera y se recalcula.
+     */
+    public Optional<CambioPrecio> actualizar(DatosArticulo datos, PedidoDePrecio pedido, ContextoPrecio ctx) {
+        BigDecimal precioManualPedido = Boolean.TRUE.equals(pedido.manual()) ? precioManualValido(pedido.precio()) : null;
         BigDecimal costoAnterior = this.costo;
         BigDecimal precioAnterior = this.precioFinal;
 
@@ -187,8 +216,18 @@ public class Articulo {
         this.stockMinimo = datos.stockMinimo();
         this.ubicacion = datos.ubicacion();
         this.activo = datos.activo();
+        if (pedido.ajustes() != null) {
+            this.ajustesPrecio = new ArrayList<>(pedido.ajustes().lista());
+        }
+        if (pedido.manual() != null) {
+            this.precioManual = pedido.manual();
+        }
 
-        calcularPrecio(ctx);
+        if (precioManualPedido != null) {
+            this.precioFinal = precioManualPedido;
+        } else {
+            calcularPrecio(ctx);
+        }
         return CambioPrecio.entre(costoAnterior, this.costo, precioAnterior, this.precioFinal);
     }
 
@@ -198,6 +237,54 @@ public class Articulo {
 
         calcularPrecio(ctx);
         return CambioPrecio.entre(this.costo, this.costo, precioAnterior, this.precioFinal);
+    }
+
+    /**
+     * Recalculo automatico (cascada del margen del rubro, cotizacion): igual que {@link #recalcularPrecio}, pero si los
+     * ajustes sobre el precio final dejarian el precio en 0 o menos el articulo conserva su precio y el resultado trae
+     * el aviso en vez de fallar el lote (S7).
+     */
+    public RecalculoAutomatico recalcularPrecioAutomatico(ContextoPrecio ctx) {
+        try {
+            return RecalculoAutomatico.de(recalcularPrecio(ctx));
+        } catch (AjustesFueraDeRangoException e) {
+            return new RecalculoAutomatico(Optional.empty(), Optional.of(avisoDePrecioSalteado(e)));
+        }
+    }
+
+    /**
+     * Compras (CU-13) al registrar: igual que {@link #ajustarCosto}, pero si los ajustes dejarian el precio en 0 o
+     * menos el costo igual se pisa, el precio se conserva y el resultado trae el aviso (S7). Hay cambio (historial) si el
+     * costo cambio, como siempre.
+     */
+    public RecalculoAutomatico ajustarCostoAutomatico(BigDecimal costoNuevo, ContextoPrecio ctx) {
+        BigDecimal costoAnterior = this.costo;
+        BigDecimal precioAnterior = this.precioFinal;
+        try {
+            return RecalculoAutomatico.de(ajustarCosto(costoNuevo, ctx));
+        } catch (AjustesFueraDeRangoException e) {
+            // ajustarCosto ya fijo el costo y fallo recien al calcular el precio, que no se toco.
+            return new RecalculoAutomatico(
+                CambioPrecio.entre(costoAnterior, this.costo, precioAnterior, this.precioFinal),
+                Optional.of(avisoDePrecioSalteado(e)));
+        }
+    }
+
+    /**
+     * Vista previa de una compra con el criterio de {@link #ajustarCostoAutomatico}: el precio con ese costo o, si los
+     * ajustes lo dejarian en 0 o menos, el de hoy con el aviso. No cambia nada.
+     */
+    public PrecioPlaneado precioConCostoAutomatico(BigDecimal costoNuevo, ContextoPrecio ctx) {
+        try {
+            return new PrecioPlaneado(precioConCosto(costoNuevo, ctx), Optional.empty());
+        } catch (AjustesFueraDeRangoException e) {
+            return new PrecioPlaneado(precioFinal, Optional.of(avisoDePrecioSalteado(e)));
+        }
+    }
+
+    private String avisoDePrecioSalteado(AjustesFueraDeRangoException e) {
+        return "No se cambió el precio de " + codigoInterno + " (" + descripcion
+            + "): con sus ajustes quedaría " + e.queQuedaria() + ". Revisá sus ajustes.";
     }
 
     /**
@@ -375,6 +462,64 @@ public class Articulo {
         return CambioPrecio.entre(costoAnterior, this.costo, precioAnterior, this.precioFinal);
     }
 
+    /**
+     * Fija los ajustes sobre el precio final (CU-14) y recalcula el precio, salvo con precio manual: ahi se guardan
+     * para cuando se libere el precio. Si el precio quedaria en 0 o menos no cambia nada.
+     */
+    public Optional<CambioPrecio> fijarAjustesDePrecio(AjustesDePrecio nuevos, ContextoPrecio ctx) {
+        AjustesDePrecio ajustes = nuevos == null ? AjustesDePrecio.NINGUNO : nuevos;
+        BigDecimal precioAnterior = this.precioFinal;
+        BigDecimal precioNuevo = precioManual ? this.precioFinal : precioCon(costo, ajustes, ctx);
+
+        this.ajustesPrecio = new ArrayList<>(ajustes.lista());
+        this.precioFinal = precioNuevo;
+        return CambioPrecio.entre(this.costo, this.costo, precioAnterior, this.precioFinal);
+    }
+
+    /**
+     * El Dueño escribe el precio final a mano (CU-14): queda marcado como manual y nada automatico lo vuelve a
+     * calcular hasta {@link #liberarPrecio}. Tiene que ser mayor a 0 y entrar en DECIMAL(15,2).
+     */
+    public Optional<CambioPrecio> fijarPrecioManual(BigDecimal precio) {
+        BigDecimal aDosDecimales = precioManualValido(precio);
+        BigDecimal precioAnterior = this.precioFinal;
+
+        this.precioManual = true;
+        this.precioFinal = aDosDecimales;
+        return CambioPrecio.entre(this.costo, this.costo, precioAnterior, this.precioFinal);
+    }
+
+    /**
+     * El precio escrito a mano: mayor a 0, con hasta 2 decimales (no se redondea sin avisar) y dentro de DECIMAL(15,2),
+     * o 400 en precioFinal.
+     */
+    private static BigDecimal precioManualValido(BigDecimal precio) {
+        if (precio == null || precio.signum() <= 0) {
+            throw new DatosInvalidosException(Map.of("precioFinal", PRECIO_MANUAL_INVALIDO));
+        }
+        if (precio.stripTrailingZeros().scale() > 2) {
+            throw new DatosInvalidosException(Map.of("precioFinal", PRECIO_MANUAL_CON_DECIMALES));
+        }
+        BigDecimal aDosDecimales = precio.setScale(2, RoundingMode.UNNECESSARY);
+        if (!TopeDeImporte.entra(aDosDecimales)) {
+            throw new DatosInvalidosException(Map.of("precioFinal", PRECIO_MANUAL_DEMASIADO_GRANDE));
+        }
+        return aDosDecimales;
+    }
+
+    /** Saca la marca de precio manual y vuelve a calcular el precio con la regla y los ajustes. */
+    public Optional<CambioPrecio> liberarPrecio(ContextoPrecio ctx) {
+        if (!precioManual) {
+            return Optional.empty();
+        }
+        BigDecimal precioAnterior = this.precioFinal;
+        BigDecimal precioNuevo = precioCon(costo, getAjustesPrecio(), ctx);
+
+        this.precioManual = false;
+        this.precioFinal = precioNuevo;
+        return CambioPrecio.entre(this.costo, this.costo, precioAnterior, this.precioFinal);
+    }
+
     /** Anota la importacion de lista que toco este articulo por ultima vez. */
     public void marcarImportacion(Long importacionId) {
         this.ultimaImportacionId = importacionId;
@@ -395,19 +540,49 @@ public class Articulo {
      * 400 en {@code costo} antes de llegar a la base, que lo rechazaria como un "ya existe" engañoso.
      */
     private void calcularPrecio(ContextoPrecio ctx) {
+        if (precioManual) {
+            return;
+        }
         this.precioFinal = precioConCosto(costo, ctx);
     }
 
     /**
      * El precio final que tendria el articulo con ese costo, sin cambiar nada (vista previa de una compra, CU-13).
-     * Misma regla y mismo tope que {@link #calcularPrecio}.
+     * Misma regla y mismo tope que {@link #calcularPrecio}: con precio manual es el precio de hoy.
      */
     public BigDecimal precioConCosto(BigDecimal costoNuevo, ContextoPrecio ctx) {
+        if (precioManual) {
+            return precioFinal;
+        }
+        return precioCon(costoNuevo, getAjustesPrecio(), ctx);
+    }
+
+    /** El aviso de margen negativo con ese costo, solo con precio manual (CU-14, {@link MargenNegativo}). */
+    public Optional<String> margenNegativoCon(BigDecimal costoNuevo, ContextoPrecio ctx) {
+        if (!precioManual) {
+            return Optional.empty();
+        }
+        return MargenNegativo.mensaje(costoNuevo, ctx.cotizacionPara(moneda), alicuotaIva, precioFinal);
+    }
+
+    /**
+     * La regla de precios con los ajustes sobre el precio final; el precio tiene que entrar en DECIMAL(15,2). Un costo
+     * 0 sigue dando precio 0 (como antes de CU-14), pero los ajustes no pueden llevar el precio a 0 o menos.
+     */
+    private BigDecimal precioCon(BigDecimal costoNuevo, AjustesDePrecio ajustes, ContextoPrecio ctx) {
         BigDecimal margen = PrecioCalculator.margenEfectivo(margenPorcentaje, ctx.margenRubro(), ctx.margenDefecto());
-        BigDecimal precio = PrecioCalculator.precioFinal(
+        BigDecimal calculado = PrecioCalculator.precioFinal(
                 costoNuevo, margen, alicuotaIva, ctx.redondeoMultiplo(), ctx.cotizacionPara(moneda));
+        BigDecimal precio = ajustes.aplicar(calculado, ctx.redondeoMultiplo());
         if (!TopeDeImporte.entra(precio)) {
-            throw new DatosInvalidosException(Map.of("costo", PRECIO_DEMASIADO_GRANDE));
+            // Si el calculado ya no entra, la culpa es del costo y el margen; si entra, de los ajustes.
+            if (!TopeDeImporte.entra(calculado)) {
+                throw new DatosInvalidosException(Map.of("costo", PRECIO_DEMASIADO_GRANDE));
+            }
+            throw new AjustesFueraDeRangoException(AJUSTES_DEMASIADO_GRANDES, "demasiado grande");
+        }
+        if (AjustesDePrecio.dejanElPrecioEnCeroOMenos(calculado, precio)) {
+            throw new AjustesFueraDeRangoException(PRECIO_CERO_O_MENOS, "en 0 o menos");
         }
         return precio;
     }
@@ -426,6 +601,8 @@ public class Articulo {
     public BigDecimal getMargenPorcentaje() { return margenPorcentaje; }
     public AlicuotaIva getAlicuotaIva() { return alicuotaIva; }
     public BigDecimal getPrecioFinal() { return precioFinal; }
+    public boolean isPrecioManual() { return precioManual; }
+    public AjustesDePrecio getAjustesPrecio() { return new AjustesDePrecio(ajustesPrecio); }
     public Unidad getUnidad() { return unidad; }
     public BigDecimal getStockActual() { return stockActual; }
     public BigDecimal getStockMinimo() { return stockMinimo; }

@@ -23,6 +23,15 @@
 @if (aviso(); as mensaje) {
   <p class="alerta exito" role="status">{{ mensaje }}</p>
 }
+@if (avisosSalteados().length > 0) {
+  <div class="alerta advertencia avisos-salteados" role="alert">
+    <ul>
+      @for (mensaje of avisosSalteados(); track $index) {
+        <li>{{ mensaje }}</li>
+      }
+    </ul>
+  </div>
+}
 @if (error(); as mensaje) {
   <p class="error" role="alert">{{ mensaje }}</p>
 }

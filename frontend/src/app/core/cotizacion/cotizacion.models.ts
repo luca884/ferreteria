@@ -51,4 +51,9 @@ export interface RecalculoCotizacion {
   cotizacion: number;
   /** Cuántos artículos cambiaron de precio; los que quedaron igual no cuentan. */
   articulosRecalculados: number;
+  /**
+   * CU-14: un aviso por artículo que conserva su precio porque sus ajustes lo dejarían en 0 o menos. Opcional por
+   * compatibilidad con respuestas viejas.
+   */
+  avisos?: string[];
 }

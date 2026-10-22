@@ -82,6 +82,25 @@ class ArticulosParaCompraServiceTest extends IntegrationTestBase {
     }
 
     @Test
+    @DisplayName("planear avisa el margen negativo de un articulo con precio manual (CU-14), despues de la variacion")
+    void planearAvisaMargenNegativo() {
+        Long f = ferreteria();
+        Long tornillo = articulo(f, "TOR-1", "Tornillo 1/4", "100.00", "121.00");
+        jdbc.update("update articulo set precio_manual = true where id = ?", tornillo);
+        TenantContext.setCurrentFerreteriaId(f);
+
+        CostoDeCompra c = articulosParaCompra.planear(Map.of(tornillo, new BigDecimal("110.00"))).get(0);
+        CostoDeCompra fuerte = articulosParaCompra.planear(Map.of(tornillo, new BigDecimal("200.00"))).get(0);
+
+        assertThat(c.precioNuevo()).isEqualByComparingTo("121.00");
+        assertThat(c.advertencia()).isEqualTo(
+                "Margen negativo: el costo ($ 110,00) supera el precio sin IVA ($ 100,00). Revisá el precio manual.");
+        assertThat(fuerte.advertencia()).isEqualTo("El costo sube un 100 % (de 100,00 a 200,00). Revisá que sea "
+                + "correcto. Margen negativo: el costo ($ 200,00) supera el precio sin IVA ($ 100,00). "
+                + "Revisá el precio manual.");
+    }
+
+    @Test
     @DisplayName("planear no trae articulos de otra ferreteria ni inexistentes")
     void planearAislado() {
         Long f = ferreteria();

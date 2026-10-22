@@ -99,6 +99,8 @@ public class DesglosePrecioService {
                 cadena.cotizacion(),
                 cadena.cotizacionCongelada(),
                 configuracion.redondeoMultiplo(),
-                articulo.getPrecioFinal());
+                articulo.getPrecioFinal(),
+                articulo.isPrecioManual(),
+                articulo.getAjustesPrecio().lista());
     }
 }

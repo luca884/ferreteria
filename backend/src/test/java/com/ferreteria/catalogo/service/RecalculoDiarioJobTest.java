@@ -46,7 +46,7 @@ class RecalculoDiarioJobTest {
     }
 
     private static RecalculoCotizacionResponse respuesta() {
-        return new RecalculoCotizacionResponse(new BigDecimal("1100"), 1);
+        return new RecalculoCotizacionResponse(new BigDecimal("1100"), 1, java.util.List.of());
     }
 
     @Test

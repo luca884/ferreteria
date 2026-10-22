@@ -235,6 +235,67 @@ class CompraServiceIntegrationTest extends IntegrationTestBase {
                 .hasMessage("Esa compra ya está cargada: Factura A 00003-00001234 de Bulonera Sur.");
     }
 
+    // ---- precio manual y ajustes sobre el precio final (CU-14) ----
+
+    @Test
+    @DisplayName("con precio manual el precio queda el escrito y con ajustes se suman; la vista previa da lo mismo")
+    void precioManualYAjustes() {
+        jdbc.update("update articulo set precio_manual = true, precio_final = 500.00 where id = ?", tornillo);
+        jdbc.update("update articulo set ajustes_precio = ? where id = ?",
+                "[{\"nombre\":\"Flete\",\"tipo\":\"PORCENTAJE\",\"valor\":10}]", tuerca);
+        RegistrarCompra pedido = pedido(UUID.randomUUID().toString(), 1240L,
+                new RenglonCompra(tornillo, new BigDecimal("1"), new BigDecimal("110.00")),
+                new RenglonCompra(tuerca, new BigDecimal("1"), new BigDecimal("60.00")));
+
+        PlanCompra plan = compraService.vistaPrevia(pedido);
+        // 60 x 1,30 x 1,21 = 94,38; +10 % = 103,818 hacia arriba al centavo.
+        assertThat(plan.renglones().get(0).costo().precioNuevo()).isEqualByComparingTo("500.00");
+        assertThat(plan.renglones().get(1).costo().precioNuevo()).isEqualByComparingTo("103.82");
+
+        compraService.registrar(pedido, usuario);
+
+        assertThat(fila("select costo, precio_final, precio_manual from articulo where id = ?", tornillo))
+                .containsEntry("costo", new BigDecimal("110.00"))
+                .containsEntry("precio_final", new BigDecimal("500.00"))
+                .containsEntry("precio_manual", true);
+        assertThat(jdbc.queryForObject("select precio_final from articulo where id = ?", BigDecimal.class, tuerca))
+                .isEqualByComparingTo("103.82");
+    }
+
+    @Test
+    @DisplayName("un ajuste que dejaria el precio en 0 o menos: la vista previa avisa, el registro conserva el precio, "
+            + "pisa el costo, suma el stock y el resto de la compra sigue (S7)")
+    void ajusteQueDejaElPrecioEnCeroSeSaltea() {
+        jdbc.update("update articulo set ajustes_precio = ? where id = ?",
+                "[{\"nombre\":null,\"tipo\":\"MONTO\",\"valor\":-150}]", tornillo);
+        RegistrarCompra pedido = pedido(UUID.randomUUID().toString(), 1241L,
+                new RenglonCompra(tornillo, new BigDecimal("20"), new BigDecimal("10.00")),
+                new RenglonCompra(tuerca, new BigDecimal("6"), new BigDecimal("60.00")));
+        String aviso = "No se cambió el precio de TOR-1 (Tornillo 1/4): con sus ajustes quedaría en 0 o menos. "
+                + "Revisá sus ajustes.";
+
+        PlanCompra plan = compraService.vistaPrevia(pedido);
+
+        assertThat(plan.renglones().get(0).costo().precioNuevo()).isEqualByComparingTo("157.30");
+        assertThat(plan.renglones().get(0).costo().advertencia()).endsWith(aviso);
+        assertThat(plan.renglones().get(1).costo().advertencia()).isNull();
+
+        compraService.registrar(pedido, usuario);
+
+        assertThat(fila("select stock_actual, costo, precio_final from articulo where id = ?", tornillo))
+                .containsEntry("stock_actual", new BigDecimal("30.000"))
+                .containsEntry("costo", new BigDecimal("10.00"))
+                .containsEntry("precio_final", new BigDecimal("157.30"));
+        assertThat(jdbc.queryForObject("select precio_final from articulo where id = ?", BigDecimal.class, tuerca))
+                .isEqualByComparingTo("94.38");
+        assertThat(fila("select costo_anterior, costo_nuevo, precio_anterior, precio_nuevo from historial_precio "
+                + "where articulo_id = ?", tornillo))
+                .containsEntry("costo_anterior", new BigDecimal("100.00"))
+                .containsEntry("costo_nuevo", new BigDecimal("10.00"))
+                .containsEntry("precio_anterior", new BigDecimal("157.30"))
+                .containsEntry("precio_nuevo", new BigDecimal("157.30"));
+    }
+
     // ---- rechazos ----
 
     @Test
@@ -327,5 +388,46 @@ class CompraServiceIntegrationTest extends IntegrationTestBase {
                 ferreteriaId, codigo, descripcion, costo, precio, unidad, stock, activo);
         return jdbc.queryForObject("select id from articulo where ferreteria_id = ? and codigo_interno = ?",
                 Long.class, ferreteriaId, codigo);
+    }
+
+    @Test
+    @DisplayName("un ajuste que pasaria el tope: la vista previa avisa, el registro pisa el costo y conserva el precio (S9)")
+    void ajustesQuePasanElTopeSeSaltean() {
+        jdbc.update("update articulo set ajustes_precio = ? where id = ?",
+                "[{\"nombre\":null,\"tipo\":\"MONTO\",\"valor\":9999999999842.69}]", tornillo);
+        RegistrarCompra pedido = pedido(UUID.randomUUID().toString(), 1291L,
+                new RenglonCompra(tornillo, new BigDecimal("20"), new BigDecimal("200.00")),
+                new RenglonCompra(tuerca, new BigDecimal("6"), new BigDecimal("60.00")));
+
+        PlanCompra plan = compraService.vistaPrevia(pedido);
+        assertThat(plan.renglones().get(0).costo().precioNuevo()).isEqualByComparingTo("157.30");
+        assertThat(plan.renglones().get(0).costo().advertencia()).endsWith(
+                "No se cambió el precio de TOR-1 (Tornillo 1/4): con sus ajustes quedaría demasiado grande. Revisá sus ajustes.");
+
+        compraService.registrar(pedido, usuario);
+        assertThat(fila("select stock_actual, costo, precio_final from articulo where id = ?", tornillo))
+                .containsEntry("stock_actual", new BigDecimal("30.000"))
+                .containsEntry("costo", new BigDecimal("200.00"))
+                .containsEntry("precio_final", new BigDecimal("157.30"));
+        assertThat(jdbc.queryForObject("select precio_final from articulo where id = ?", BigDecimal.class, tuerca))
+                .isEqualByComparingTo("94.38");
+        assertThat(fila("select costo_anterior, costo_nuevo, precio_anterior, precio_nuevo from historial_precio "
+                + "where articulo_id = ?", tornillo))
+                .containsEntry("costo_anterior", new BigDecimal("100.00"))
+                .containsEntry("costo_nuevo", new BigDecimal("200.00"))
+                .containsEntry("precio_anterior", new BigDecimal("157.30"))
+                .containsEntry("precio_nuevo", new BigDecimal("157.30"));
+    }
+
+    @Test
+    @DisplayName("si el precio calculado ya pasa el tope, la vista previa y el registro dan 400 y el costo no cambia")
+    void calculadoQuePasaElTopeRechaza() {
+        RegistrarCompra pedido = pedido(UUID.randomUUID().toString(), 1292L,
+                new RenglonCompra(tornillo, new BigDecimal("1"), new BigDecimal("7000000000000.00")));
+
+        assertThatThrownBy(() -> compraService.vistaPrevia(pedido)).isInstanceOf(DatosInvalidosException.class);
+        assertThatThrownBy(() -> compraService.registrar(pedido, usuario)).isInstanceOf(DatosInvalidosException.class);
+        assertThat(fila("select costo from articulo where id = ?", tornillo))
+                .containsEntry("costo", new BigDecimal("100.00"));
     }
 }

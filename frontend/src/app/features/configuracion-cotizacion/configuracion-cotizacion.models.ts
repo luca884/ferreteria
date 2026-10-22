@@ -1,4 +1,4 @@
-import { LadoCotizacion } from '../../core/cotizacion/cotizacion.models';
+import { LadoCotizacion, RecalculoCotizacion } from '../../core/cotizacion/cotizacion.models';
 
 /** Lo que devuelve `GET /configuracion-cotizacion` (solo el Dueño). */
 export interface ConfiguracionCotizacion {
@@ -47,3 +47,4 @@ export const OPCIONES_COTIZACION: readonly OpcionCotizacion[] = [
   { codigo: 'EUR:oficial', nombre: 'Euro', esDolar: false },
   { codigo: 'BRL:oficial', nombre: 'Real', esDolar: false },
 ];
+

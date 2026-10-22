@@ -45,7 +45,7 @@ class OperacionMasivaTest {
     @DisplayName("ModoMasivo tiene exactamente COSTO_PORCENTAJE, COSTO_MONTO y MARGEN")
     void modos() {
         assertThat(Arrays.stream(ModoMasivo.values()).map(Enum::name))
-            .containsExactly("COSTO_PORCENTAJE", "COSTO_MONTO", "MARGEN");
+            .containsExactly("COSTO_PORCENTAJE", "COSTO_MONTO", "MARGEN", "PRECIO_PORCENTAJE", "PRECIO_MONTO");
     }
 
     @Test

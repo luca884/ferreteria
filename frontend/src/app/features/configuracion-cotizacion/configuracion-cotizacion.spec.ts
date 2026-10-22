@@ -267,6 +267,27 @@ describe('PaginaConfiguracionCotizacion', () => {
       expect(q('.resultado').getAttribute('role')).toBe('status');
     });
 
+    it('si el backend saltea artículos por sus ajustes, los lista como advertencia debajo del resultado', async () => {
+      const aviso =
+        'No se cambió el precio de TOR-1 (Tornillo): con sus ajustes quedaría en 0 o menos. Revisá sus ajustes.';
+      recalcular = vi.fn(() => of({ cotizacion: 1100, articulosRecalculados: 2, avisos: [aviso] }));
+      await crear();
+
+      await hacerClick(botonRecalcular());
+
+      expect(texto(q('.resultado'))).toBe('Se recalcularon 2 artículos con el dólar a 1.100,00.');
+      expect(texto(q('.avisos-salteados'))).toContain(aviso);
+      expect(q('.avisos-salteados').getAttribute('role')).toBe('alert');
+    });
+
+    it('sin artículos salteados no muestra la advertencia', async () => {
+      await crear();
+
+      await hacerClick(botonRecalcular());
+
+      expect(el().querySelector('.avisos-salteados')).toBeNull();
+    });
+
     it('con un solo artículo, singular; sin cambios, lo dice', async () => {
       recalcular = vi.fn(() => of({ cotizacion: 1000, articulosRecalculados: 1 }));
       await crear();

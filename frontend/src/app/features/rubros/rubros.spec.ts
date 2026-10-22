@@ -350,6 +350,32 @@ describe('Rubros', () => {
       expect(el().querySelector('.alerta.exito')?.textContent).toContain('Se recalcularon 23 precios.');
     });
 
+    it('si el backend saltea artículos por sus ajustes al cambiar el margen, los lista como advertencia', async () => {
+      const aviso =
+        'No se cambió el precio de TOR-1 (Tornillo): con sus ajustes quedaría en 0 o menos. Revisá sus ajustes.';
+      await crear([buloneria], true);
+      servicio.actualizar.mockReturnValue(of({ ...buloneria, margenPorcentaje: 40, avisos: [aviso] }));
+      await editarFila(0);
+      await escribir('margen', '40');
+      await enviar();
+
+      await clickEn('app-confirmacion button.confirmar');
+
+      expect(el().querySelector('.avisos-salteados')?.textContent).toContain(aviso);
+      expect(el().querySelector('.avisos-salteados')?.getAttribute('role')).toBe('alert');
+    });
+
+    it('sin artículos salteados no muestra la advertencia', async () => {
+      await crear([buloneria], true);
+      await editarFila(0);
+      await escribir('margen', '40');
+      await enviar();
+
+      await clickEn('app-confirmacion button.confirmar');
+
+      expect(el().querySelector('.avisos-salteados')).toBeNull();
+    });
+
     it('cancelar el aviso no guarda y deja el formulario como estaba', async () => {
       await crear([buloneria], true);
       await editarFila(0);

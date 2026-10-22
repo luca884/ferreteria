@@ -571,4 +571,60 @@ describe('DesglosePrecioVista', () => {
       expect(cadena.precio).toBe('1350.00');
     });
   });
+
+  describe('ajustes sobre el precio final y precio manual (CU-14)', () => {
+    it('muestra una línea por ajuste entre el redondeo y el precio final', async () => {
+      await crear(
+        desgloseBase({
+          precioFinal: 1450,
+          ajustesPrecio: [
+            { nombre: 'Flete', tipo: 'PORCENTAJE', valor: 10 },
+            { nombre: null, tipo: 'MONTO', valor: -5 },
+          ],
+        }),
+      );
+
+      const nombres = textos('.paso-nombre');
+      expect(nombres.slice(-4)).toEqual([
+        'Redondeo hacia arriba al múltiplo de 10',
+        'Flete +10 %',
+        'Ajuste \u2212$ 5,00',
+        'Precio final',
+      ]);
+      expect(textos('.paso-importe').at(-1)).toBe('$ 1.450,00');
+    });
+
+    it('sin ajustes ni precio manual no suma líneas ni avisos', async () => {
+      await crear(desgloseBase({ ajustesPrecio: [], precioManual: false }));
+
+      expect(el().querySelector('[data-tipo="AJUSTE_PRECIO"]')).toBeNull();
+      expect(el().querySelector('.precio-manual')).toBeNull();
+    });
+
+    it('con precio manual lo dice y aclara que los ajustes no se aplican', async () => {
+      await crear(
+        desgloseBase({
+          precioManual: true,
+          precioFinal: 2000,
+          ajustesPrecio: [{ nombre: 'Flete', tipo: 'PORCENTAJE', valor: 10 }],
+        }),
+      );
+
+      expect(limpio(el().querySelector('.precio-manual')?.textContent)).toBe(
+        'Precio manual: lo escribió el dueño, no sale de la fórmula.',
+      );
+      expect(textos('[data-tipo="AJUSTE_PRECIO"] .paso-nombre')).toEqual(['Flete +10 %']);
+      expect(textos('[data-tipo="AJUSTE_PRECIO"] .paso-aclaracion')).toEqual([
+        'no se aplican mientras el precio sea manual',
+      ]);
+      expect(textos('.paso-importe').at(-1)).toBe('$ 2.000,00');
+    });
+
+    it('con precio manual y sin ajustes solo muestra el aviso del precio manual', async () => {
+      await crear(desgloseBase({ precioManual: true, precioFinal: 2000, ajustesPrecio: [] }));
+
+      expect(el().querySelector('.precio-manual')).not.toBeNull();
+      expect(el().querySelector('[data-tipo="AJUSTE_PRECIO"]')).toBeNull();
+    });
+  });
 });

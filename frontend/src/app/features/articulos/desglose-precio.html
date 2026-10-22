@@ -21,10 +21,17 @@
     </p>
   }
 
+  @if (precioManual()) {
+    <p class="precio-manual">Precio manual: lo escribió el dueño, no sale de la fórmula.</p>
+  }
+
   <ol class="pasos">
     @for (paso of pasos(); track $index) {
       <li class="paso" [attr.data-tipo]="paso.tipo" [class.final]="paso.tipo === 'PRECIO_FINAL'">
         <span class="paso-nombre">{{ paso.nombre }}</span>
+        @if (paso.aclaracion) {
+          <span class="paso-aclaracion pista">{{ paso.aclaracion }}</span>
+        }
         @if (paso.importe !== null) {
           <strong class="paso-importe">{{ paso.importe }}</strong>
         }

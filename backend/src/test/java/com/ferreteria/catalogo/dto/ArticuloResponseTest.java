@@ -87,7 +87,7 @@ class ArticuloResponseTest {
                 "proveedorId", "costo", "moneda", "margenPorcentaje", "alicuotaIva", "precioFinal", "unidad",
                 "stockActual", "stockMinimo", "ubicacion", "activo", "precioListaProveedor");
         assertThat(nombres).endsWith("ajuste1", "ajuste2", "ajuste3", "bonificacion1", "bonificacion2", "bonificacion3",
-                "listaIncluyeIva", "version");
+                "listaIncluyeIva", "version", "precioManual", "ajustesPrecio");
     }
 
     @Test
@@ -101,9 +101,11 @@ class ArticuloResponseTest {
     }
 
     @Test
-    @DisplayName("ArticuloRequest NO tiene ajustes ni bonificaciones: el PUT y el POST no los reciben")
+    @DisplayName("ArticuloRequest NO tiene los ajustes sobre el costo ni bonificaciones: el PUT y el POST no los reciben "
+            + "(los ajustes sobre el precio final de CU-14 si)")
     void elRequestNoTieneAjustes() {
         assertThat(Arrays.stream(ArticuloRequest.class.getRecordComponents()).map(RecordComponent::getName))
-                .noneMatch(n -> n.startsWith("ajuste") || n.startsWith("bonificacion") || n.equals("listaIncluyeIva"));
+                .noneMatch(n -> n.matches("ajuste\\d") || n.startsWith("bonificacion") || n.equals("listaIncluyeIva"))
+                .contains("ajustesPrecio");
     }
 }

@@ -5,10 +5,16 @@ import {
   ArticuloRequest,
   MONEDAS,
   MONEDA_LABELS,
+  TIPOS_AJUSTE_PRECIO,
+  TIPO_AJUSTE_PRECIO_LABELS,
   UNIDADES,
   UNIDAD_LABELS,
+  errorDeValorDeAjustePrecio,
   monedaDe,
+  textoDeAjustePrecio,
 } from './articulo.models';
+
+const NBSP = '\u00a0';
 
 describe('articulo.models', () => {
   it('las alícuotas tienen la etiqueta legible en porcentaje', () => {
@@ -79,5 +85,47 @@ describe('articulo.models', () => {
     expect(monedaDe({ moneda: 'ARS' })).toBe('ARS');
     expect(monedaDe({} as Pick<Articulo, 'moneda'>)).toBe('ARS');
     expect(monedaDe(null)).toBe('ARS');
+  });
+
+  it('los ajustes sobre el precio final son en % o en $, con su etiqueta', () => {
+    expect(TIPOS_AJUSTE_PRECIO).toEqual(['PORCENTAJE', 'MONTO']);
+    expect(TIPOS_AJUSTE_PRECIO.map((t) => TIPO_AJUSTE_PRECIO_LABELS[t])).toEqual(['%', '$']);
+  });
+
+  describe('errorDeValorDeAjustePrecio (los mismos textos del backend)', () => {
+    it('el valor es obligatorio', () => {
+      expect(errorDeValorDeAjustePrecio('PORCENTAJE', null)).toBe('El valor del ajuste es obligatorio.');
+      expect(errorDeValorDeAjustePrecio('MONTO', null)).toBe('El valor del ajuste es obligatorio.');
+    });
+
+    it('admite hasta 2 decimales', () => {
+      expect(errorDeValorDeAjustePrecio('MONTO', 1.005)).toBe('El valor del ajuste admite hasta 2 decimales.');
+      expect(errorDeValorDeAjustePrecio('PORCENTAJE', 0.07)).toBeNull();
+    });
+
+    it('el porcentaje va de -99,99 a 1.000, los extremos incluidos', () => {
+      const mensaje = 'El porcentaje del ajuste tiene que estar entre -99,99 y 1.000.';
+      expect(errorDeValorDeAjustePrecio('PORCENTAJE', -100)).toBe(mensaje);
+      expect(errorDeValorDeAjustePrecio('PORCENTAJE', 1000.01)).toBe(mensaje);
+      expect(errorDeValorDeAjustePrecio('PORCENTAJE', -99.99)).toBeNull();
+      expect(errorDeValorDeAjustePrecio('PORCENTAJE', 1000)).toBeNull();
+    });
+
+    it('un monto no tiene rango: puede ser negativo o grande', () => {
+      expect(errorDeValorDeAjustePrecio('MONTO', -5000)).toBeNull();
+      expect(errorDeValorDeAjustePrecio('MONTO', 99999)).toBeNull();
+    });
+  });
+
+  describe('textoDeAjustePrecio', () => {
+    it('nombre, signo y valor: «Flete +10 %»', () => {
+      expect(textoDeAjustePrecio({ nombre: 'Flete', tipo: 'PORCENTAJE', valor: 10 })).toBe('Flete +10 %');
+      expect(textoDeAjustePrecio({ nombre: 'Promo', tipo: 'PORCENTAJE', valor: -2.5 })).toBe('Promo \u22122,5 %');
+    });
+
+    it('en pesos usa el formato de la app y, sin nombre, «Ajuste»', () => {
+      expect(textoDeAjustePrecio({ nombre: null, tipo: 'MONTO', valor: -5 })).toBe(`Ajuste \u2212$${NBSP}5,00`);
+      expect(textoDeAjustePrecio({ nombre: '  ', tipo: 'MONTO', valor: 1234.5 })).toBe(`Ajuste +$${NBSP}1.234,50`);
+    });
   });
 });

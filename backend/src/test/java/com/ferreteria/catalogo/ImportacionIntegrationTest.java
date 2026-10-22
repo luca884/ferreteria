@@ -499,6 +499,39 @@ class ImportacionIntegrationTest extends CotizacionTestBase {
     // Caminos felices y consistencia (T-33)
     // =====================================================================================
 
+    // --- Precio manual y ajustes sobre el precio final (CU-14) ---
+
+    @Test
+    void laListaRespetaElPrecioManualYAplicaLosAjustesComoLaVistaPrevia() throws Exception {
+        long proveedor = crearProveedor(duenoA, unico("Prov CU14"));
+        String sufijo = unico("").substring(0, 6);
+        long manual = crearArticulo(duenoA, proveedor, "M-" + sufijo, "100.00");
+        jdbc.update("update articulo set precio_manual = true, precio_final = 999.00 where id = ?", manual);
+        long conAjuste = crearArticulo(duenoA, proveedor, "A-" + sufijo, "100.00");
+        jdbc.update("update articulo set ajustes_precio = ? where id = ?",
+                "[{\"nombre\":\"Flete\",\"tipo\":\"PORCENTAJE\",\"valor\":10}]", conAjuste);
+        long comun = crearArticulo(duenoA, proveedor, "C-" + sufijo, "100.00");
+        MockMultipartFile archivo = xlsx(conEncabezado(
+                fila("M-" + sufijo, "Manual", n("110")),
+                fila("A-" + sufijo, "Con ajuste", n("110")),
+                fila("C-" + sufijo, "Comun", n("110"))));
+
+        JsonNode previa = vistaPrevia(archivo, datosVistaPrevia(proveedor));
+        Map<Long, BigDecimal> precios = new LinkedHashMap<>();
+        previa.get("cambios").forEach(c -> precios.put(c.get("articuloId").asLong(), c.get("precioNuevo").decimalValue()));
+        assertThat(precios.get(manual)).isEqualByComparingTo("999.00");
+        assertThat(precios.get(conAjuste)).isGreaterThan(precios.get(comun));
+
+        aplicar(archivo, datosVistaPrevia(proveedor), false, null).andExpect(status().isCreated());
+
+        assertThat(decimal(manual, "costo")).isEqualByComparingTo("110.00");
+        assertThat(decimal(manual, "precio_final")).isEqualByComparingTo("999.00");
+        assertThat(jdbc.queryForObject("select precio_manual from articulo where id = ?", Boolean.class, manual))
+                .isTrue();
+        assertThat(decimal(conAjuste, "precio_final")).isEqualByComparingTo(precios.get(conAjuste));
+        assertThat(decimal(comun, "precio_final")).isEqualByComparingTo(precios.get(comun));
+    }
+
     private static List<Object> fila(Object... celdas) {
         return java.util.Arrays.asList(celdas);
     }

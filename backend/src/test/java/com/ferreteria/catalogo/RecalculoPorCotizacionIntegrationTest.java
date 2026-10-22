@@ -190,4 +190,67 @@ class RecalculoPorCotizacionIntegrationTest extends CotizacionTestBase {
         assertThat(precioDe(usd)).isEqualByComparingTo("15730");
         assertThat(historialDe(usd)).isEmpty();
     }
+
+    @Test
+    @DisplayName("un ajuste que dejaria el precio en 0 o menos: conserva el precio, avisa y el resto del lote sigue (S7)")
+    void ajusteQueDejaElPrecioEnCeroSeSaltea() {
+        Long normal = articuloUsd(a, "T27-NORMAL", "10.00", "15730.00");
+        Long conAjuste = articuloUsd(a, "T27-AJUSTE", "10.00", "5730.00");
+        jdbc.update("update articulo set ajustes_precio = ? where id = ?",
+                "[{\"nombre\":null,\"tipo\":\"MONTO\",\"valor\":-20000}]", conAjuste);
+
+        RecalculoCotizacionResponse respuesta = recalcularAhora();
+
+        assertThat(respuesta.articulosRecalculados()).isEqualTo(1);
+        assertThat(respuesta.avisos()).containsExactly("No se cambió el precio de T27-AJUSTE (Articulo T27-AJUSTE): "
+                + "con sus ajustes quedaría en 0 o menos. Revisá sus ajustes.");
+        assertThat(precioDe(normal)).isEqualByComparingTo("17310");
+        assertThat(precioDe(conAjuste)).isEqualByComparingTo("5730");
+        assertThat(historialDe(conAjuste)).isEmpty();
+        assertThat(configuracionDe(a).getVigente()).isEqualByComparingTo("1100");
+    }
+
+    @Test
+    @DisplayName("el precio manual no cambia ni deja historial; el que tiene ajustes se recalcula con ellos (CU-14)")
+    void respetaElPrecioManualYAplicaLosAjustes() {
+        Long manual = articuloUsd(a, "T27-MANUAL", "10.00", "15730.00");
+        jdbc.update("update articulo set precio_manual = true where id = ?", manual);
+        Long conAjustes = articuloUsd(a, "T27-AJUSTES", "10.00", "15730.00");
+        jdbc.update("update articulo set ajustes_precio = ? where id = ?",
+                "[{\"nombre\":null,\"tipo\":\"PORCENTAJE\",\"valor\":10}]", conAjustes);
+        Long comun = articuloUsd(a, "T27-COMUN", "10.00", "15730.00");
+
+        RecalculoCotizacionResponse respuesta = recalcularAhora();
+
+        assertThat(respuesta.articulosRecalculados()).isEqualTo(2);
+        assertThat(respuesta.avisos()).isEmpty();
+        assertThat(precioDe(manual)).isEqualByComparingTo("15730");
+        assertThat(historialDe(manual)).isEmpty();
+        assertThat(precioDe(comun)).isEqualByComparingTo("17310");
+        // 17.310 + 10 % = 19.041, hacia arriba al multiplo de 10
+        assertThat(precioDe(conAjustes)).isEqualByComparingTo("19050");
+    }
+
+    @Test
+    @DisplayName("ajustes que pasarian el tope y ajustes que dejarian 0 en el mismo lote: dos avisos y el resto sigue (S9)")
+    void ajustesQuePasanElTopeYEnCeroEnElMismoLote() {
+        Long normal = articuloUsd(a, "T27-SN", "10.00", "15730.00");
+        Long grande = articuloUsd(a, "T27-SG", "10.00", "5730.00");
+        Long cero = articuloUsd(a, "T27-SC", "10.00", "5730.00");
+        jdbc.update("update articulo set ajustes_precio = ? where id = ?",
+                "[{\"nombre\":null,\"tipo\":\"MONTO\",\"valor\":9999999990000.00}]", grande);
+        jdbc.update("update articulo set ajustes_precio = ? where id = ?",
+                "[{\"nombre\":null,\"tipo\":\"MONTO\",\"valor\":-20000}]", cero);
+
+        RecalculoCotizacionResponse respuesta = recalcularAhora();
+
+        assertThat(respuesta.articulosRecalculados()).isEqualTo(1);
+        assertThat(respuesta.avisos()).containsExactlyInAnyOrder(
+                "No se cambió el precio de T27-SG (Articulo T27-SG): con sus ajustes quedaría demasiado grande. Revisá sus ajustes.",
+                "No se cambió el precio de T27-SC (Articulo T27-SC): con sus ajustes quedaría en 0 o menos. Revisá sus ajustes.");
+        assertThat(precioDe(normal)).isEqualByComparingTo("17310");
+        assertThat(precioDe(grande)).isEqualByComparingTo("5730");
+        assertThat(historialDe(grande)).isEmpty();
+        assertThat(configuracionDe(a).getVigente()).isEqualByComparingTo("1100");
+    }
 }

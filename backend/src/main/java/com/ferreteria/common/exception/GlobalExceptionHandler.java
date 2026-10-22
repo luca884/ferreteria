@@ -1,5 +1,6 @@
 package com.ferreteria.common.exception;
 
+import com.fasterxml.jackson.databind.JsonMappingException;
 import com.fasterxml.jackson.databind.exc.InvalidFormatException;
 import com.ferreteria.auth.service.CredencialesInvalidasException;
 import com.ferreteria.common.ApiError;
@@ -26,7 +27,9 @@ import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import java.math.BigDecimal;
 import java.util.Arrays;
+import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -47,6 +50,8 @@ public class GlobalExceptionHandler {
             "modo", "El modo no es válido. Usá STOCK_REAL o CANTIDAD.",
             "tipo", "El tipo de movimiento no es válido. Usá INGRESO, GASTO o RETIRO.",
             "rol", "El rol tiene que ser Dueño o Vendedor.");
+
+    private static final String TIPO_DE_AJUSTE_INVALIDO = "Elegí si el ajuste es en % o en $.";
 
     private static final Pattern BONIFICACION = Pattern.compile("bonificacion([123])");
 
@@ -121,10 +126,28 @@ public class GlobalExceptionHandler {
 
     /** Un valor que no es de la enumeracion del campo (alicuota de IVA, unidad...): el mensaje nombra el campo. */
     private ResponseEntity<ApiError> enumInvalido(InvalidFormatException ex) {
+        Optional<String> campoDeAjuste = campoDeAjustePrecio(ex);
+        if (campoDeAjuste.isPresent()) {
+            return ResponseEntity.badRequest().body(ApiError.of(HttpStatus.BAD_REQUEST.value(), TIPO_DE_AJUSTE_INVALIDO,
+                    Map.of(campoDeAjuste.get(), TIPO_DE_AJUSTE_INVALIDO)));
+        }
         String campo = ultimoCampo(ex);
         String mensaje = MENSAJES_ENUM_POR_CAMPO.getOrDefault(campo, mensajeGenericoDeEnum(campo, ex));
         return ResponseEntity.badRequest()
                 .body(ApiError.of(HttpStatus.BAD_REQUEST.value(), mensaje, Map.of(campo, mensaje)));
+    }
+
+    /**
+     * El tipo de un ajuste sobre el precio final (CU-14) comparte el nombre {@code tipo} con el de los movimientos de
+     * caja: se reconoce por la ruta y se responde en {@code ajustesPrecio[i].tipo}, como la validacion del cuerpo.
+     */
+    private static Optional<String> campoDeAjustePrecio(InvalidFormatException ex) {
+        List<JsonMappingException.Reference> ruta = ex.getPath();
+        if (ruta.size() != 3 || !"ajustesPrecio".equals(ruta.get(0).getFieldName())
+                || !"tipo".equals(ruta.get(2).getFieldName())) {
+            return Optional.empty();
+        }
+        return Optional.of("ajustesPrecio[" + ruta.get(1).getIndex() + "].tipo");
     }
 
     private static String ultimoCampo(InvalidFormatException ex) {

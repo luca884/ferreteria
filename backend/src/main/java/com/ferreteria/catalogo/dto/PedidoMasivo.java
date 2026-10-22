@@ -14,7 +14,8 @@ import java.math.BigDecimal;
  */
 public interface PedidoMasivo {
 
-    String MENSAJE_MODO = "Elegí qué querés hacer: cambiar el costo en porcentaje, sumarle un monto al costo o fijar el margen.";
+    String MENSAJE_MODO = "Elegí qué querés hacer: cambiar el costo en porcentaje, sumarle un monto al costo, fijar el "
+            + "margen o cambiar el precio final en porcentaje o en monto.";
     String MENSAJE_VALOR_AUSENTE = "Ingresá un valor.";
     String MENSAJE_DECIMALES = "El valor puede tener como máximo 2 decimales.";
     String MENSAJE_CERO = "El porcentaje no puede ser cero.";
@@ -23,7 +24,7 @@ public interface PedidoMasivo {
     String MENSAJE_RANGO_MARGEN = "El margen tiene que estar entre 0 y 1.000.";
 
     /** Valores posibles de {@code modo}; es un String para que un modo desconocido no falle antes de los 404. */
-    String MODOS = "COSTO_PORCENTAJE|COSTO_MONTO|MARGEN";
+    String MODOS = "COSTO_PORCENTAJE|COSTO_MONTO|MARGEN|PRECIO_PORCENTAJE|PRECIO_MONTO";
 
     BigDecimal PORCENTAJE_MINIMO = new BigDecimal("-99.99");
     BigDecimal PORCENTAJE_MAXIMO = new BigDecimal("1000");
@@ -57,17 +58,17 @@ public interface PedidoMasivo {
 
     @AssertTrue(message = MENSAJE_CERO, groups = ValidacionActualizacionMasiva.class)
     default boolean isPorcentajeDistintoDeCero() {
-        return !aplica(ModoMasivo.COSTO_PORCENTAJE) || valor().signum() != 0;
+        return !aplica(ModoMasivo.COSTO_PORCENTAJE, ModoMasivo.PRECIO_PORCENTAJE) || valor().signum() != 0;
     }
 
     @AssertTrue(message = MENSAJE_MONTO_CERO, groups = ValidacionActualizacionMasiva.class)
     default boolean isMontoDistintoDeCero() {
-        return !aplica(ModoMasivo.COSTO_MONTO) || valor().signum() != 0;
+        return !aplica(ModoMasivo.COSTO_MONTO, ModoMasivo.PRECIO_MONTO) || valor().signum() != 0;
     }
 
     @AssertTrue(message = MENSAJE_RANGO_PORCENTAJE, groups = ValidacionActualizacionMasiva.class)
     default boolean isPorcentajeEnRango() {
-        return !aplica(ModoMasivo.COSTO_PORCENTAJE)
+        return !aplica(ModoMasivo.COSTO_PORCENTAJE, ModoMasivo.PRECIO_PORCENTAJE)
                 || (valor().compareTo(PORCENTAJE_MINIMO) >= 0 && valor().compareTo(PORCENTAJE_MAXIMO) <= 0);
     }
 
@@ -77,10 +78,10 @@ public interface PedidoMasivo {
                 || (valor().compareTo(MARGEN_MINIMO) >= 0 && valor().compareTo(MARGEN_MAXIMO) <= 0);
     }
 
-    /** True si el modo es ese, hay valor y tiene a lo sumo 2 decimales (si no, ya lo informan otras reglas). */
-    private boolean aplica(ModoMasivo esperado) {
+    /** True si el modo es uno de esos, hay valor y tiene a lo sumo 2 decimales (si no, ya lo informan otras reglas). */
+    private boolean aplica(ModoMasivo... esperados) {
         return modo() != null
-                && modo().equals(esperado.name())
+                && java.util.Arrays.stream(esperados).anyMatch(esperado -> modo().equals(esperado.name()))
                 && valor() != null
                 && valor().scale() <= 2;
     }

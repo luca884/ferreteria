@@ -256,7 +256,8 @@ class ActualizacionMasivaIntegrationTest extends IntegrationTestBase {
     void unModoDesconocidoOAusenteDa400ConElMensajeDelModoEnLosDosEndpoints() throws Exception {
         Tenant a = crearTenant();
         insertarArticulo(a, "100.00", "160.00");
-        String mensaje = "Elegí qué querés hacer: cambiar el costo en porcentaje, sumarle un monto al costo o fijar el margen.";
+        String mensaje = "Elegí qué querés hacer: cambiar el costo en porcentaje, sumarle un monto al costo, fijar el "
+                + "margen o cambiar el precio final en porcentaje o en monto.";
 
         for (String url : ENDPOINTS) {
             // "OTRO": modo es String, asi que no es el error de Jackson para enumeraciones.
@@ -1199,6 +1200,77 @@ class ActualizacionMasivaIntegrationTest extends IntegrationTestBase {
         List<Long> ids = new java.util.ArrayList<>();
         objectMapper.readTree(cuerpo).get("items").forEach(n -> ids.add(n.get("id").asLong()));
         return ids;
+    }
+
+    // --- Precio manual y ajustes sobre el precio final (CU-14) ---
+
+    @Test
+    void costoMasDiezPorCientoRespetaElPrecioManualYAplicaLosAjustesComoLaVistaPrevia() throws Exception {
+        Tenant t = crearTenant();
+        long manual = insertarArticulo(t, "100.00", "500.00");
+        jdbc.update("update articulo set precio_manual = true where id = ?", manual);
+        long conAjuste = insertarArticulo(t, "100.00", "180.00");
+        jdbc.update("update articulo set ajustes_precio = ? where id = ?",
+                "[{\"nombre\":\"Flete\",\"tipo\":\"PORCENTAJE\",\"valor\":10}]", conAjuste);
+        ObjectNode pedido = pedido("COSTO_PORCENTAJE", "10");
+
+        JsonNode previa = vistaPrevia(t.dueno(), pedido);
+        JsonNode cambios = previa.get("cambios");
+        assertThat(cambios).hasSize(2);
+        assertThat(cambios.get(0).get("articuloId").asLong()).isEqualTo(manual);
+        assertThat(dec(cambios.get(0).get("precioNuevo"))).isEqualByComparingTo("500.00");
+        // 110 x 1,30 x 1,21 = 173,03 (180 al multiplo 10); +10 % = 198, 200 al multiplo 10.
+        assertThat(cambios.get(1).get("articuloId").asLong()).isEqualTo(conAjuste);
+        assertThat(dec(cambios.get(1).get("precioNuevo"))).isEqualByComparingTo("200.00");
+
+        aplicar(t.dueno(), pedido, previa);
+
+        assertThat(decimal(manual, "costo")).isEqualByComparingTo("110.00");
+        assertThat(decimal(manual, "precio_final")).isEqualByComparingTo("500.00");
+        assertThat(jdbc.queryForObject("select precio_manual from articulo where id = ?", Boolean.class, manual))
+                .isTrue();
+        assertThat(decimal(conAjuste, "precio_final")).isEqualByComparingTo("200.00");
+    }
+
+    @Test
+    void precioFinalMasDiezPorCientoDejaPrecioManualSinTocarElCostoYGuardaHistorialMasivo() throws Exception {
+        Tenant t = crearTenant();
+        jdbc.update("update ferreteria set redondeo_multiplo = 0 where id = ?", t.ferreteriaId());
+        long id = insertarArticulo(t, "100.00", "170.00");
+        ObjectNode pedido = pedido("PRECIO_PORCENTAJE", "10");
+
+        JsonNode previa = vistaPrevia(t.dueno(), pedido);
+        assertThat(dec(previa.at("/cambios/0/precioNuevo"))).isEqualByComparingTo("187.00");
+
+        aplicar(t.dueno(), pedido, previa);
+
+        assertThat(decimal(id, "costo")).isEqualByComparingTo("100.00");
+        assertThat(decimal(id, "precio_final")).isEqualByComparingTo("187.00");
+        assertThat(jdbc.queryForObject("select precio_manual from articulo where id = ?", Boolean.class, id)).isTrue();
+        assertThat(entradas(id)).singleElement().satisfies(e -> {
+            assertThat(e.get("origen")).isEqualTo("MASIVO");
+            assertThat((BigDecimal) e.get("precio_anterior")).isEqualByComparingTo("170.00");
+            assertThat((BigDecimal) e.get("precio_nuevo")).isEqualByComparingTo("187.00");
+        });
+    }
+
+    @Test
+    void precioFinalEnMontoSumaPesosYSusValidacionesSonLasDelCosto() throws Exception {
+        Tenant t = crearTenant();
+        jdbc.update("update ferreteria set redondeo_multiplo = 0 where id = ?", t.ferreteriaId());
+        insertarArticulo(t, "100.00", "170.00");
+
+        assertThat(dec(vistaPrevia(t.dueno(), pedido("PRECIO_MONTO", "-20.50")).at("/cambios/0/precioNuevo")))
+                .isEqualByComparingTo("149.50");
+        postJson(VISTA_PREVIA, t.dueno(), pedido("PRECIO_PORCENTAJE", "0").toString())
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors.porcentajeDistintoDeCero", is("El porcentaje no puede ser cero.")));
+        postJson(VISTA_PREVIA, t.dueno(), pedido("PRECIO_PORCENTAJE", "1000.01").toString())
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors.porcentajeEnRango", is("El porcentaje tiene que estar entre -99,99 y 1.000.")));
+        postJson(VISTA_PREVIA, t.dueno(), pedido("PRECIO_MONTO", "0").toString())
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors.montoDistintoDeCero", is("El monto no puede ser cero.")));
     }
 
     // FIN-DE-TESTS

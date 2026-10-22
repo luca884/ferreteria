@@ -152,6 +152,8 @@ class PlanificadorImportacionTest {
         private String precioFinal;
         private Moneda moneda = Moneda.ARS;
         private Ajustes ajustes = Ajustes.NINGUNO;
+        private boolean precioManual;
+        private AjustesDePrecio ajustesPrecio = AjustesDePrecio.NINGUNO;
 
         private Art(long id, String codigoProveedor, String costo) {
             this.id = id;
@@ -198,12 +200,24 @@ class PlanificadorImportacionTest {
             return this;
         }
 
+        /** Con precio manual (CU-14): conviene darle tambien {@link #precio}. */
+        Art manual() {
+            this.precioManual = true;
+            return this;
+        }
+
+        /** Ajustes sobre el precio final (CU-14). */
+        Art ajustesPrecio(AjustePrecio... valores) {
+            this.ajustesPrecio = new AjustesDePrecio(List.of(valores));
+            return this;
+        }
+
         /** El articulo; sin precio explicito, el que corresponde a su costo con el contexto dado (el de su rubro). */
         ArticuloVigente vigente(Map<Long, ContextoPrecio> contextoPorRubro, ContextoPrecio contextoSinRubro) {
             BigDecimal margenPropio = margen == null ? null : bd(margen);
             return new ArticuloVigente(id, "INT-" + id, codigoProveedor, "Articulo " + id, bd(costo),
                 precioFinal != null ? bd(precioFinal) : alDia(margenPropio, contextoPorRubro, contextoSinRubro),
-                margenPropio, rubroId, iva, activo, moneda, ajustes);
+                margenPropio, rubroId, iva, activo, moneda, ajustes, precioManual, ajustesPrecio);
         }
 
         private BigDecimal alDia(BigDecimal margenPropio, Map<Long, ContextoPrecio> contextoPorRubro,
@@ -215,7 +229,7 @@ class PlanificadorImportacionTest {
             }
             return PrecioCalculator.precioFinal(bd(costo),
                 PrecioCalculator.margenEfectivo(margenPropio, ctx.margenRubro(), ctx.margenDefecto()), iva,
-                ctx.redondeoMultiplo(), ctx.cotizacionPara(moneda));
+                ctx.redondeoMultiplo(), ctx.cotizacionPara(moneda), ajustesPrecio);
         }
     }
 
@@ -2481,6 +2495,81 @@ class PlanificadorImportacionTest {
             assertThat(PlanificadorImportacion.codigosDeBarras(filas, conBarras))
                 .containsExactly("7791234567890", "7790000000001");
             assertThat(PlanificadorImportacion.codigosDeBarras(filas, MAPEO)).isEmpty();
+        }
+    }
+
+    // ------------------------------------------------------------------ precio manual y ajustes (CU-14)
+
+    @Nested
+    @DisplayName("CU-14: precio manual y ajustes sobre el precio final")
+    class PrecioManualYAjustes {
+
+        private static final String AJUSTES_EN_CERO = "Con los ajustes del precio final, el precio queda en 0 o menos.";
+
+        @Test
+        @DisplayName("costo 100 a 110 con precio manual: sube el costo y el precio queda el escrito (500)")
+        void precioManualNoCambia() {
+            PlanImportacion plan = escenario()
+                .articulos(Art.art(1, "A-1", "100").precio("500.00").manual())
+                .filas(fila(2, "A-1", "x", "110"))
+                .planificar();
+
+            assertThat(plan.cambios()).hasSize(1);
+            assertThat(plan.cambios().get(0).costoNuevo()).isEqualByComparingTo("110");
+            assertThat(plan.cambios().get(0).precioNuevo()).isEqualByComparingTo("500");
+        }
+
+        @Test
+        @DisplayName("mismo costo con precio manual distinto del calculado: sin cambio, no es una correccion")
+        void precioManualMismoCostoEsSinCambio() {
+            PlanImportacion plan = escenario()
+                .articulos(Art.art(1, "A-1", "100").precio("500.00").manual())
+                .filas(fila(2, "A-1", "x", "100"))
+                .planificar();
+
+            assertThat(plan.correcciones()).isEmpty();
+            assertThat(plan.sinCambio()).hasSize(1);
+        }
+
+        @Test
+        @DisplayName("costo 100 a 110 con un ajuste de +10 %: 110 x 1,3 x 1,21 = 180 (multiplo 10), +10 % = 200")
+        void ajustesSeAplican() {
+            PlanImportacion plan = escenario()
+                .articulos(Art.art(1, "A-1", "100")
+                    .ajustesPrecio(new AjustePrecio(null, TipoAjustePrecio.PORCENTAJE, bd("10"))))
+                .filas(fila(2, "A-1", "x", "110"))
+                .planificar();
+
+            assertThat(plan.cambios()).hasSize(1);
+            assertThat(plan.cambios().get(0).precioAnterior()).isEqualByComparingTo("180");
+            assertThat(plan.cambios().get(0).precioNuevo()).isEqualByComparingTo("200");
+        }
+
+        @Test
+        @DisplayName("costo 100 a 110 con precio manual 121 (100 sin IVA): advierte margen negativo en la fila")
+        void margenNegativo() {
+            PlanImportacion plan = escenario()
+                .articulos(Art.art(1, "A-1", "100").precio("121.00").manual(), Art.art(2, "B-1", "100"))
+                .filas(fila(2, "A-1", "x", "110"), fila(3, "B-1", "x", "110"))
+                .planificar();
+
+            assertThat(plan.cambios()).hasSize(2);
+            assertThat(plan.advertencias()).extracting(AvisoDeFila::fila, AvisoDeFila::mensaje).containsExactly(
+                org.assertj.core.groups.Tuple.tuple(2,
+                    "Margen negativo: el costo ($ 110,00) supera el precio sin IVA ($ 100,00). Revisá el precio manual."));
+        }
+
+        @Test
+        @DisplayName("ajustes que dejan el precio en 0 o menos: la fila va a errores")
+        void ajustesQueDejanElPrecioEnCero() {
+            PlanImportacion plan = escenario()
+                .articulos(Art.art(1, "A-1", "100").precio("10.00")
+                    .ajustesPrecio(new AjustePrecio(null, TipoAjustePrecio.MONTO, bd("-200"))))
+                .filas(fila(2, "A-1", "x", "110"))
+                .planificar();
+
+            assertThat(plan.cambios()).isEmpty();
+            assertThat(mensajes(plan.errores())).containsExactly(AJUSTES_EN_CERO);
         }
     }
 }

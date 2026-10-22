@@ -264,7 +264,7 @@ describe('ActualizacionMasiva', () => {
       expect(boton().textContent).toContain('Ver vista previa');
     });
 
-    it('el selector de modo ofrece las tres operaciones', async () => {
+    it('el selector de modo ofrece las cinco operaciones', async () => {
       await crearComponente();
 
       expect(textosDe('#modo')).toEqual([
@@ -272,6 +272,8 @@ describe('ActualizacionMasiva', () => {
         'Cambiar el costo en %',
         'Fijar el margen',
         'Sumar o restar un monto al costo',
+        'Cambiar el precio final en %',
+        'Sumar o restar un monto al precio final',
       ]);
       expect(seleccionado('#modo')).toBe('Elegí qué querés hacer');
     });
@@ -1785,7 +1787,7 @@ describe('ActualizacionMasiva', () => {
     }
 
     describe('el formulario', () => {
-      it('ofrece la tercera operación, después de las dos de siempre', async () => {
+      it('ofrece la tercera operación, después de las dos de siempre y antes de las del precio final', async () => {
         await crearComponente();
 
         expect(textosDe('#modo')).toEqual([
@@ -1793,6 +1795,8 @@ describe('ActualizacionMasiva', () => {
           'Cambiar el costo en %',
           'Fijar el margen',
           MODO_MONTO,
+          'Cambiar el precio final en %',
+          'Sumar o restar un monto al precio final',
         ]);
       });
 
@@ -1977,6 +1981,197 @@ describe('ActualizacionMasiva', () => {
 
         expect(el().querySelector('.vista-previa')).toBeNull();
       });
+    });
+  });
+  describe('modos del precio final (CU-14, punto 4)', () => {
+    const MODO_PORCENTAJE = 'Cambiar el precio final en %';
+    const MODO_MONTO_PRECIO = 'Sumar o restar un monto al precio final';
+    const AVISO_MANUAL =
+      'Los artículos quedan con precio manual: las listas, las compras y los cambios de costo no les van a cambiar el precio.';
+    const PISTA_PRECIO = 'Positivo sube el precio final, negativo lo baja. Siempre en pesos.';
+    const FUERTE = 'El precio sube un 206,25 % (de 160,00 a 490,00). Revisá que sea correcto.';
+    const NEGATIVO =
+      'Margen negativo: el costo ($ 120,00) supera el precio sin IVA ($ 99,17). Revisá el precio manual.';
+
+    const describedby = (selector: string) =>
+      (q(selector).getAttribute('aria-describedby') ?? '')
+        .split(' ')
+        .filter(Boolean)
+        .map((id) => el().querySelector(`[id="${id}"]`)?.textContent?.replace(/\s+/g, ' ').trim());
+    const avisoManual = () => el().querySelector('.aviso-precio-manual');
+
+    const cambioConAdvertencia = (advertencia: string | null): CambioMasivo => ({
+      articuloId: 1,
+      codigo: 'T-1',
+      descripcion: 'Tornillo',
+      costoAnterior: 100,
+      costoNuevo: 100,
+      margenAnterior: 60,
+      margenNuevo: 60,
+      precioAnterior: 160,
+      precioNuevo: 120,
+      margenHeredado: false,
+      advertencia,
+    });
+
+    it('«Cambiar el precio final en %» se rotula «Porcentaje (%)» y pide el modo PRECIO_PORCENTAJE', async () => {
+      await crearComponente();
+      await completar(MODO_PORCENTAJE, '-10,5');
+
+      expect(texto('label[for="valor"]')).toBe('Porcentaje (%)');
+      expect(el().querySelector('#valor-pista')).toBeNull();
+
+      await generar();
+
+      expect(servicio.vistaPrevia).toHaveBeenCalledWith(
+        expect.objectContaining({ modo: 'PRECIO_PORCENTAJE', valor: -10.5 }),
+      );
+    });
+
+    it('«Sumar o restar un monto al precio final» se rotula «Monto», aclara que es en pesos y pide PRECIO_MONTO', async () => {
+      await crearComponente();
+      await completar(MODO_MONTO_PRECIO, '-250');
+
+      expect(texto('label[for="valor"]')).toBe('Monto');
+      expect(describedby('#valor')).toEqual([PISTA_PRECIO]);
+
+      await generar();
+
+      expect(servicio.vistaPrevia).toHaveBeenCalledWith(
+        expect.objectContaining({ modo: 'PRECIO_MONTO', valor: -250 }),
+      );
+    });
+
+    it('el porcentaje del precio final tiene el rango del costo: de -99,99 a 1.000', async () => {
+      await crearComponente();
+
+      await completar(MODO_PORCENTAJE, '-100');
+      expect(texto('#valor-error')).toBe('El porcentaje tiene que estar entre -99,99 y 1.000.');
+      expect(boton().disabled).toBe(true);
+      await escribir('#valor', '1000,01');
+      expect(texto('#valor-error')).toBe('El porcentaje tiene que estar entre -99,99 y 1.000.');
+      expect(texto('#motivo-vista-previa')).toBe('Para ver la vista previa, corregí el porcentaje.');
+
+      await escribir('#valor', '-99,99');
+      expect(el().querySelector('#valor-error')).toBeNull();
+      await escribir('#valor', '1000');
+      expect(boton().disabled).toBe(false);
+    });
+
+    it('un porcentaje 0 del precio final llega al servidor, que contesta «El porcentaje no puede ser cero.» como con el costo', async () => {
+      await crearComponente();
+      servicio.vistaPrevia.mockReturnValue(
+        throwError(() => errorHttp(400, 'El porcentaje no puede ser cero.')),
+      );
+      await completar(MODO_PORCENTAJE, '0');
+
+      expect(el().querySelector('#valor-error')).toBeNull();
+      await generar();
+
+      expect(servicio.vistaPrevia).toHaveBeenCalledWith(
+        expect.objectContaining({ modo: 'PRECIO_PORCENTAJE', valor: 0 }),
+      );
+      expect(q('[role="alert"]').textContent).toContain('El porcentaje no puede ser cero.');
+    });
+
+    it('el monto del precio final no puede ser cero y no tiene tope', async () => {
+      await crearComponente();
+
+      await completar(MODO_MONTO_PRECIO, '0');
+      expect(texto('#valor-error')).toBe('El monto no puede ser cero.');
+      expect(describedby('#valor')).toEqual([PISTA_PRECIO, 'El monto no puede ser cero.']);
+      expect(texto('#motivo-vista-previa')).toBe('Para ver la vista previa, corregí el monto.');
+      expect(boton().disabled).toBe(true);
+
+      await escribir('#valor', '50000');
+      expect(el().querySelector('#valor-error')).toBeNull();
+      expect(boton().disabled).toBe(false);
+    });
+
+    it('con un modo del precio final hay un aviso fijo de que quedan con precio manual, y no bloquea', async () => {
+      await crearComponente();
+      await elegir('#modo', MODO_PORCENTAJE);
+
+      expect(texto('.aviso-precio-manual')).toBe(AVISO_MANUAL);
+
+      await completar(MODO_MONTO_PRECIO, '10');
+
+      expect(texto('.aviso-precio-manual')).toBe(AVISO_MANUAL);
+      expect(boton().disabled).toBe(false);
+    });
+
+    it('sin modo o con un modo del costo o del margen no aparece el aviso del precio manual', async () => {
+      await crearComponente();
+      expect(avisoManual()).toBeNull();
+
+      for (const modo of ['Cambiar el costo en %', 'Fijar el margen', 'Sumar o restar un monto al costo']) {
+        await elegir('#modo', modo);
+        expect(avisoManual(), modo).toBeNull();
+      }
+    });
+
+    it('con el precio final no aparece la pista del costo ni el aviso de mezcla de monedas', async () => {
+      await crearComponente();
+      servicio.vistaPrevia.mockReturnValue(of({ ...vistaPreviaBase, cambios: [cambioConAdvertencia(null)] }));
+      await completar(MODO_MONTO_PRECIO, '5');
+      await generar();
+
+      expect(describedby('#valor')).not.toContain(
+        'Positivo sube el costo, negativo lo baja. Se suma en la moneda de cada artículo.',
+      );
+      expect(el().querySelector('.advertencia-mezcla')).toBeNull();
+    });
+
+    it('la vista previa muestra el precio anterior y el nuevo con el costo y el margen sin cambios', async () => {
+      await crearComponente();
+      servicio.vistaPrevia.mockReturnValue(of({ ...vistaPreviaBase, cambios: [cambioConAdvertencia(null)] }));
+      await completar(MODO_PORCENTAJE, '-25');
+      await generar();
+
+      const celdas = Array.from(el().querySelectorAll('table.cambios tbody td')).map((c) =>
+        c.textContent?.replace(/\s+/g, ' ').trim(),
+      );
+      expect(celdas[2]).toBe('$ 100,00');
+      expect(celdas[3]).toBe('60 %');
+      expect(celdas[4]).toBe('$ 160,00 → $ 120,00');
+    });
+
+    it('el aviso de margen negativo se lee solo en la fila, y después del de variación fuerte si vienen los dos', async () => {
+      await crearComponente();
+      servicio.vistaPrevia.mockReturnValue(
+        of({
+          ...vistaPreviaBase,
+          conteos: { ...conteosBase, conAdvertencia: 2 },
+          cambios: [
+            { ...cambioConAdvertencia(NEGATIVO), articuloId: 1 },
+            { ...cambioConAdvertencia(`${FUERTE} ${NEGATIVO}`), articuloId: 2, codigo: 'T-2' },
+          ],
+        }),
+      );
+      await completar(MODO_PORCENTAJE, '-25');
+      await generar();
+
+      const avisos = Array.from(el().querySelectorAll('table.cambios .advertencia')).map((a) =>
+        a.textContent?.replace(/\s+/g, ' ').trim(),
+      );
+      expect(avisos).toEqual([NEGATIVO, `${FUERTE} ${NEGATIVO}`]);
+      expect(el().querySelectorAll('table.cambios tr.fuerte')).toHaveLength(2);
+      expect(q<HTMLButtonElement>('button.confirmar').disabled).toBe(false);
+    });
+
+    it('aplicar manda el modo del precio final y el valor de la vista previa, con su huella', async () => {
+      await crearComponente();
+      await elegir('#proveedor', 'Sinteplast');
+      await completar(MODO_PORCENTAJE, '12');
+      await generar();
+      servicio.aplicar.mockReturnValue(of({ conteos: conteosBase, entradasDeHistorial: 3 }));
+
+      q<HTMLButtonElement>('button.confirmar').click();
+      await asentar();
+
+      expect(servicio.aplicar).toHaveBeenCalledWith(
+        expect.objectContaining({ modo: 'PRECIO_PORCENTAJE', valor: 12, huella: 'huella-1' }),
+      );
     });
   });
   describe('selector de importación (R-202, R-203)', () => {
