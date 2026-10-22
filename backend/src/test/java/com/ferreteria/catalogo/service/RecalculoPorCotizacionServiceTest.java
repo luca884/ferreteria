@@ -48,7 +48,7 @@ class RecalculoPorCotizacionServiceTest {
     @DisplayName("recalcularAhora fija el ultimo dolar, recalcula con ese valor a nombre del Dueno y devuelve {cotizacion, cantidad}")
     void recalcularAhora() {
         when(dolar.fijarUltima(false)).thenReturn(bd("1100"));
-        when(recalculo.porCotizacion(bd("1100"), DUENO)).thenReturn(3);
+        when(recalculo.porCotizacion(bd("1100"), DUENO)).thenReturn(new RecalculoPreciosService.ResultadoPorCotizacion(3, List.of()));
 
         RecalculoCotizacionResponse respuesta = service.recalcularAhora(DUENO, false);
 
@@ -63,7 +63,7 @@ class RecalculoPorCotizacionServiceTest {
     @DisplayName("recalcularAhora usa el valor que fijo el puerto, no uno fijo: con 950 recalcula con 950 y a nombre de otro Dueno")
     void recalcularAhoraConOtroValor() {
         when(dolar.fijarUltima(false)).thenReturn(bd("950"));
-        when(recalculo.porCotizacion(bd("950"), 12L)).thenReturn(0);
+        when(recalculo.porCotizacion(bd("950"), 12L)).thenReturn(new RecalculoPreciosService.ResultadoPorCotizacion(0, List.of()));
 
         RecalculoCotizacionResponse respuesta = service.recalcularAhora(12L, false);
 
@@ -76,7 +76,7 @@ class RecalculoPorCotizacionServiceTest {
     @DisplayName("con la confirmacion del Dueno se la pasa al puerto: acepta el dolar que se aleja mas del 20 % (H09)")
     void recalcularAhoraConfirmandoElDesvio() {
         when(dolar.fijarUltima(true)).thenReturn(bd("11"));
-        when(recalculo.porCotizacion(bd("11"), DUENO)).thenReturn(1);
+        when(recalculo.porCotizacion(bd("11"), DUENO)).thenReturn(new RecalculoPreciosService.ResultadoPorCotizacion(1, List.of()));
 
         RecalculoCotizacionResponse respuesta = service.recalcularAhora(DUENO, true);
 
@@ -113,7 +113,7 @@ class RecalculoPorCotizacionServiceTest {
     @DisplayName("recalcularDelDia reclama el dia ANTES de recalcular y recalcula sin usuario (Automatico)")
     void recalcularDelDia() {
         when(dolar.reclamarRecalculoDelDia(LAS_OCHO)).thenReturn(Optional.of(bd("1100")));
-        when(recalculo.porCotizacion(bd("1100"), null)).thenReturn(2);
+        when(recalculo.porCotizacion(bd("1100"), null)).thenReturn(new RecalculoPreciosService.ResultadoPorCotizacion(2, List.of()));
 
         Optional<RecalculoCotizacionResponse> respuesta = service.recalcularDelDia(LAS_OCHO);
 

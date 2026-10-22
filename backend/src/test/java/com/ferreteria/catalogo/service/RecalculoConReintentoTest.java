@@ -32,7 +32,7 @@ class RecalculoConReintentoTest {
     private final RecalculoConReintento reintento = new RecalculoConReintento(servicio);
 
     private static RecalculoCotizacionResponse respuesta(int articulos) {
-        return new RecalculoCotizacionResponse(new BigDecimal("1100"), articulos);
+        return new RecalculoCotizacionResponse(new BigDecimal("1100"), articulos, java.util.List.of());
     }
 
     private static ObjectOptimisticLockingFailureException choque() {

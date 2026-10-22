@@ -54,7 +54,8 @@ public class RubroService {
 
     /**
      * Si cambia el margen, recalcula en la misma transaccion los articulos que lo heredan (con
-     * historial MASIVO a nombre de usuarioId); si falla, se revierte tambien el cambio del rubro.
+     * historial MASIVO a nombre de usuarioId); si falla, se revierte tambien el cambio del rubro. Los articulos que
+     * conservan su precio porque sus ajustes lo dejarian en 0 o menos vuelven en los avisos de la respuesta (S7).
      */
     @Transactional
     public RubroResponse actualizar(Long id, RubroRequest request, Long usuarioId) {
@@ -66,10 +67,10 @@ public class RubroService {
         // compareTo y no equals: 35 y 35.00 son el mismo margen. El margen del rubro nunca es null.
         boolean cambioElMargen = rubro.getMargenPorcentaje().compareTo(request.margenPorcentaje()) != 0;
         rubro.actualizar(nombre, request.margenPorcentaje());
-        if (cambioElMargen) {
-            recalculoPreciosService.porCambioDeMargenDeRubro(rubro, usuarioId);
-        }
-        return RubroResponse.from(rubro);
+        List<String> avisos = cambioElMargen
+                ? recalculoPreciosService.porCambioDeMargenDeRubro(rubro, usuarioId)
+                : List.of();
+        return RubroResponse.conAvisos(rubro, avisos);
     }
 
     /**

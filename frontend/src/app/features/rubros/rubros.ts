@@ -50,6 +50,8 @@ export class Rubros implements OnInit {
   protected readonly cargaFallida = signal(false);
   protected readonly error = signal<string | null>(null);
   protected readonly aviso = signal<string | null>(null);
+  /** Artículos que conservaron su precio al guardar el margen porque sus ajustes lo dejarían en 0 o menos. */
+  protected readonly avisosSalteados = signal<string[]>([]);
   protected readonly guardando = signal(false);
   /** Rubro que se está editando; null mientras se da de alta uno nuevo. */
   protected readonly editando = signal<Rubro | null>(null);
@@ -83,6 +85,7 @@ export class Rubros implements OnInit {
     const rubro = this.editando();
     this.error.set(null);
     this.aviso.set(null);
+    this.avisosSalteados.set([]);
     if (rubro === null) {
       this.enviar(this.service.crear(request), null);
       return;
@@ -127,6 +130,7 @@ export class Rubros implements OnInit {
   protected editar(rubro: Rubro | null = this.filas.elegido()): void {
     if (!rubro || !this.auth.esDueno()) return;
     this.aviso.set(null);
+    this.avisosSalteados.set([]);
     this.filas.elegidoId.set(rubro.id);
     this.editando.set(rubro);
     this.form.reset({ nombre: rubro.nombre, margenPorcentaje: rubro.margenPorcentaje });
@@ -141,6 +145,7 @@ export class Rubros implements OnInit {
   /** Nuevo: el formulario vuelve al alta y queda listo para escribir. */
   protected nuevo(): void {
     this.aviso.set(null);
+    this.avisosSalteados.set([]);
     this.cancelar();
     this.enfocar('#nombre');
   }
@@ -171,6 +176,7 @@ export class Rubros implements OnInit {
             ? ` Se recalcularon ${recalculados} ${recalculados === 1 ? 'precio' : 'precios'}.`
             : '';
         this.aviso.set(`Se guardó «${rubro.nombre}».${recalculo}`);
+        this.avisosSalteados.set(rubro.avisos ?? []);
       },
       error: (err: unknown) => {
         this.guardando.set(false);

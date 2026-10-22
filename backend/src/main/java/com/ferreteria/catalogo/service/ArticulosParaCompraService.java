@@ -3,13 +3,14 @@ package com.ferreteria.catalogo.service;
 import com.ferreteria.catalogo.api.ArticulosParaCompra;
 import com.ferreteria.catalogo.api.CostoDeCompra;
 import com.ferreteria.catalogo.model.Articulo;
-import com.ferreteria.catalogo.model.CambioPrecio;
 import com.ferreteria.catalogo.model.ContextoPrecio;
 import com.ferreteria.catalogo.model.ContextosDePrecio;
 import com.ferreteria.catalogo.model.HistorialPrecio;
 import com.ferreteria.catalogo.model.MargenNegativo;
 import com.ferreteria.catalogo.model.Moneda;
 import com.ferreteria.catalogo.model.OrigenPrecio;
+import com.ferreteria.catalogo.model.PrecioPlaneado;
+import com.ferreteria.catalogo.model.RecalculoAutomatico;
 import com.ferreteria.catalogo.model.VariacionFuerte;
 import com.ferreteria.catalogo.repository.ArticuloRepository;
 import com.ferreteria.catalogo.repository.HistorialPrecioRepository;
@@ -61,9 +62,9 @@ public class ArticulosParaCompraService implements ArticulosParaCompra {
         return articulos.stream().map(articulo -> {
             BigDecimal costoNuevo = costos.get(articulo.getId());
             ContextoPrecio ctx = contextos.de(articulo.getRubroId());
-            BigDecimal precioNuevo = articulo.precioConCosto(costoNuevo, ctx);
-            return costoDeCompra(articulo, articulo.getCosto(), costoNuevo, articulo.getPrecioFinal(), precioNuevo,
-                    articulo.margenNegativoCon(costoNuevo, ctx));
+            PrecioPlaneado planeado = articulo.precioConCostoAutomatico(costoNuevo, ctx);
+            return costoDeCompra(articulo, articulo.getCosto(), costoNuevo, articulo.getPrecioFinal(),
+                    planeado.precio(), articulo.margenNegativoCon(costoNuevo, ctx), planeado.aviso());
         }).toList();
     }
 
@@ -84,11 +85,11 @@ public class ArticulosParaCompraService implements ArticulosParaCompra {
             BigDecimal costoAnterior = articulo.getCosto();
             BigDecimal precioAnterior = articulo.getPrecioFinal();
             ContextoPrecio ctx = contextos.de(articulo.getRubroId());
-            Optional<CambioPrecio> cambio = articulo.ajustarCosto(costos.get(articulo.getId()), ctx);
-            cambio.ifPresent(c -> historial.add(HistorialPrecio.de(articulo, c, OrigenPrecio.COMPRA, usuarioId)));
+            RecalculoAutomatico resultado = articulo.ajustarCostoAutomatico(costos.get(articulo.getId()), ctx);
+            resultado.cambio().ifPresent(c -> historial.add(HistorialPrecio.de(articulo, c, OrigenPrecio.COMPRA, usuarioId)));
             aplicados.add(costoDeCompra(
                     articulo, costoAnterior, articulo.getCosto(), precioAnterior, articulo.getPrecioFinal(),
-                    articulo.margenNegativoCon(articulo.getCosto(), ctx)));
+                    articulo.margenNegativoCon(articulo.getCosto(), ctx), resultado.aviso()));
         }
         if (!historial.isEmpty()) {
             historialPrecioRepository.saveAll(historial);
@@ -108,11 +109,13 @@ public class ArticulosParaCompraService implements ArticulosParaCompra {
 
     private static CostoDeCompra costoDeCompra(Articulo articulo, BigDecimal costoAnterior, BigDecimal costoNuevo,
                                                BigDecimal precioAnterior, BigDecimal precioNuevo,
-                                               Optional<String> margenNegativo) {
-        String advertencia = MargenNegativo.junto(
+                                               Optional<String> margenNegativo, Optional<String> precioSalteado) {
+        String conMargen = MargenNegativo.junto(
                 VariacionFuerte.mensaje(VariacionFuerte.Sujeto.COSTO, costoAnterior, costoNuevo)
                         .or(() -> VariacionFuerte.mensaje(VariacionFuerte.Sujeto.PRECIO, precioAnterior, precioNuevo)),
                 margenNegativo);
+        // El aviso de que el precio no se cambia va al final, con el mismo patron de "junto".
+        String advertencia = MargenNegativo.junto(Optional.ofNullable(conMargen), precioSalteado);
         return new CostoDeCompra(articulo.getId(), articulo.getCodigoInterno(), articulo.getDescripcion(),
                 articulo.getUnidad().name(), articulo.getMoneda().name(), articulo.isActivo(),
                 costoAnterior, costoNuevo, precioAnterior, precioNuevo, advertencia);

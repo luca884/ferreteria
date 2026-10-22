@@ -262,6 +262,40 @@ class CompraServiceIntegrationTest extends IntegrationTestBase {
                 .isEqualByComparingTo("103.82");
     }
 
+    @Test
+    @DisplayName("un ajuste que dejaria el precio en 0 o menos: la vista previa avisa, el registro conserva el precio, "
+            + "pisa el costo, suma el stock y el resto de la compra sigue (S7)")
+    void ajusteQueDejaElPrecioEnCeroSeSaltea() {
+        jdbc.update("update articulo set ajustes_precio = ? where id = ?",
+                "[{\"nombre\":null,\"tipo\":\"MONTO\",\"valor\":-150}]", tornillo);
+        RegistrarCompra pedido = pedido(UUID.randomUUID().toString(), 1241L,
+                new RenglonCompra(tornillo, new BigDecimal("20"), new BigDecimal("10.00")),
+                new RenglonCompra(tuerca, new BigDecimal("6"), new BigDecimal("60.00")));
+        String aviso = "No se cambió el precio de TOR-1 (Tornillo 1/4): con sus ajustes quedaría en 0 o menos. "
+                + "Revisá sus ajustes.";
+
+        PlanCompra plan = compraService.vistaPrevia(pedido);
+
+        assertThat(plan.renglones().get(0).costo().precioNuevo()).isEqualByComparingTo("157.30");
+        assertThat(plan.renglones().get(0).costo().advertencia()).endsWith(aviso);
+        assertThat(plan.renglones().get(1).costo().advertencia()).isNull();
+
+        compraService.registrar(pedido, usuario);
+
+        assertThat(fila("select stock_actual, costo, precio_final from articulo where id = ?", tornillo))
+                .containsEntry("stock_actual", new BigDecimal("30.000"))
+                .containsEntry("costo", new BigDecimal("10.00"))
+                .containsEntry("precio_final", new BigDecimal("157.30"));
+        assertThat(jdbc.queryForObject("select precio_final from articulo where id = ?", BigDecimal.class, tuerca))
+                .isEqualByComparingTo("94.38");
+        assertThat(fila("select costo_anterior, costo_nuevo, precio_anterior, precio_nuevo from historial_precio "
+                + "where articulo_id = ?", tornillo))
+                .containsEntry("costo_anterior", new BigDecimal("100.00"))
+                .containsEntry("costo_nuevo", new BigDecimal("10.00"))
+                .containsEntry("precio_anterior", new BigDecimal("157.30"))
+                .containsEntry("precio_nuevo", new BigDecimal("157.30"));
+    }
+
     // ---- rechazos ----
 
     @Test

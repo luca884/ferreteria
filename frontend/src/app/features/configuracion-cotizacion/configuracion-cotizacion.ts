@@ -6,7 +6,11 @@ import { CotizacionService } from '../../core/cotizacion/cotizacion.service';
 import { formatearCotizacion } from '../../core/formato/monto';
 import { formatearFechaHora } from '../../core/formato/fecha-hora';
 import { BarraAcciones } from '../../shared/barra-acciones';
-import { ConfiguracionCotizacion, ConfiguracionCotizacionRequest } from './configuracion-cotizacion.models';
+import {
+  ConfiguracionCotizacion,
+  ConfiguracionCotizacionRequest,
+  RecalculoConAvisos,
+} from './configuracion-cotizacion.models';
 import { ConfiguracionCotizacionService } from './configuracion-cotizacion.service';
 import { FormularioCotizacion } from './formulario-cotizacion';
 
@@ -37,6 +41,8 @@ export class PaginaConfiguracionCotizacion implements OnInit {
   protected readonly errorGuardado = signal<string | null>(null);
   protected readonly recalculando = signal(false);
   protected readonly resultado = signal<string | null>(null);
+  /** Artículos que conservaron su precio en el último recálculo: sus ajustes lo dejarían en 0 o menos. */
+  protected readonly avisosSalteados = signal<string[]>([]);
   protected readonly errorRecalculo = signal<string | null>(null);
   /** El formulario difiere de lo guardado: «Recalcular ahora» usa lo guardado, así que espera. */
   protected readonly hayCambios = signal(false);
@@ -86,11 +92,13 @@ export class PaginaConfiguracionCotizacion implements OnInit {
     if (this.recalculando() || this.motivoSinRecalculo() !== null) return;
     this.recalculando.set(true);
     this.resultado.set(null);
+    this.avisosSalteados.set([]);
     this.errorRecalculo.set(null);
     this.cotizaciones.recalcular(confirmaDesvio).subscribe({
-      next: (recalculo) => {
+      next: (recalculo: RecalculoConAvisos) => {
         this.recalculando.set(false);
         this.resultado.set(describirRecalculo(recalculo));
+        this.avisosSalteados.set(recalculo.avisos ?? []);
         // El dólar vigente cambió: se vuelve a leer para mostrarlo (sin tapar el formulario si falla).
         this.configuraciones.obtener().subscribe({ next: (c) => this.configuracion.set(c), error: () => undefined });
       },

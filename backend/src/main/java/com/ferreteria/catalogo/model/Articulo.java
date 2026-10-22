@@ -238,6 +238,54 @@ public class Articulo {
     }
 
     /**
+     * Recalculo automatico (cascada del margen del rubro, cotizacion): igual que {@link #recalcularPrecio}, pero si los
+     * ajustes sobre el precio final dejarian el precio en 0 o menos el articulo conserva su precio y el resultado trae
+     * el aviso en vez de fallar el lote (S7).
+     */
+    public RecalculoAutomatico recalcularPrecioAutomatico(ContextoPrecio ctx) {
+        try {
+            return RecalculoAutomatico.de(recalcularPrecio(ctx));
+        } catch (PrecioEnCeroOMenosException e) {
+            return new RecalculoAutomatico(Optional.empty(), Optional.of(avisoDePrecioSalteado()));
+        }
+    }
+
+    /**
+     * Compras (CU-13) al registrar: igual que {@link #ajustarCosto}, pero si los ajustes dejarian el precio en 0 o
+     * menos el costo igual se pisa, el precio se conserva y el resultado trae el aviso (S7). Hay cambio (historial) si el
+     * costo cambio, como siempre.
+     */
+    public RecalculoAutomatico ajustarCostoAutomatico(BigDecimal costoNuevo, ContextoPrecio ctx) {
+        BigDecimal costoAnterior = this.costo;
+        BigDecimal precioAnterior = this.precioFinal;
+        try {
+            return RecalculoAutomatico.de(ajustarCosto(costoNuevo, ctx));
+        } catch (PrecioEnCeroOMenosException e) {
+            // ajustarCosto ya fijo el costo y fallo recien al calcular el precio, que no se toco.
+            return new RecalculoAutomatico(
+                CambioPrecio.entre(costoAnterior, this.costo, precioAnterior, this.precioFinal),
+                Optional.of(avisoDePrecioSalteado()));
+        }
+    }
+
+    /**
+     * Vista previa de una compra con el criterio de {@link #ajustarCostoAutomatico}: el precio con ese costo o, si los
+     * ajustes lo dejarian en 0 o menos, el de hoy con el aviso. No cambia nada.
+     */
+    public PrecioPlaneado precioConCostoAutomatico(BigDecimal costoNuevo, ContextoPrecio ctx) {
+        try {
+            return new PrecioPlaneado(precioConCosto(costoNuevo, ctx), Optional.empty());
+        } catch (PrecioEnCeroOMenosException e) {
+            return new PrecioPlaneado(precioFinal, Optional.of(avisoDePrecioSalteado()));
+        }
+    }
+
+    private String avisoDePrecioSalteado() {
+        return "No se cambió el precio de " + codigoInterno + " (" + descripcion
+            + "): con sus ajustes quedaría en 0 o menos. Revisá sus ajustes.";
+    }
+
+    /**
      * Importacion de listas: cambia el costo (sin IVA) y el precio de lista del proveedor, y
      * recalcula el precio final. No toca descripcion, rubro, margen, IVA, stock ni si esta activo.
      */
@@ -525,7 +573,7 @@ public class Articulo {
             throw new DatosInvalidosException(Map.of("costo", PRECIO_DEMASIADO_GRANDE));
         }
         if (AjustesDePrecio.dejanElPrecioEnCeroOMenos(calculado, precio)) {
-            throw new DatosInvalidosException(Map.of("ajustesPrecio", PRECIO_CERO_O_MENOS));
+            throw new PrecioEnCeroOMenosException(PRECIO_CERO_O_MENOS);
         }
         return precio;
     }

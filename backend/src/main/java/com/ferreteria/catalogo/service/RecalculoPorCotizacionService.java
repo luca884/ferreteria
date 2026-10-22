@@ -2,6 +2,8 @@ package com.ferreteria.catalogo.service;
 
 import com.ferreteria.catalogo.dto.RecalculoCotizacionResponse;
 import com.ferreteria.cotizacion.api.DolarDePrecios;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -16,6 +18,8 @@ import java.util.Optional;
  */
 @Service
 public class RecalculoPorCotizacionService {
+
+    private static final Logger log = LoggerFactory.getLogger(RecalculoPorCotizacionService.class);
 
     private final DolarDePrecios dolarDePrecios;
     private final RecalculoPreciosService recalculoPreciosService;
@@ -34,7 +38,7 @@ public class RecalculoPorCotizacionService {
     @Transactional
     public RecalculoCotizacionResponse recalcularAhora(Long usuarioId, boolean confirmaDesvio) {
         BigDecimal dolar = dolarDePrecios.fijarUltima(confirmaDesvio);
-        return new RecalculoCotizacionResponse(dolar, recalculoPreciosService.porCotizacion(dolar, usuarioId));
+        return respuesta(dolar, recalculoPreciosService.porCotizacion(dolar, usuarioId));
     }
 
     /**
@@ -47,6 +51,15 @@ public class RecalculoPorCotizacionService {
     public Optional<RecalculoCotizacionResponse> recalcularDelDia(LocalDateTime ahoraBuenosAires) {
         // Va primero: reclamarRecalculoDelDia limpia el contexto de persistencia, y asi no hay entidades cargadas antes.
         return dolarDePrecios.reclamarRecalculoDelDia(ahoraBuenosAires)
-                .map(dolar -> new RecalculoCotizacionResponse(dolar, recalculoPreciosService.porCotizacion(dolar, null)));
+                .map(dolar -> respuesta(dolar, recalculoPreciosService.porCotizacion(dolar, null)))
+                // El diario no tiene pantalla: los articulos salteados (S7) quedan en el log.
+                .map(respuesta -> {
+                    respuesta.avisos().forEach(aviso -> log.warn("Recalculo diario de precios: {}", aviso));
+                    return respuesta;
+                });
+    }
+
+    private static RecalculoCotizacionResponse respuesta(BigDecimal dolar, RecalculoPreciosService.ResultadoPorCotizacion resultado) {
+        return new RecalculoCotizacionResponse(dolar, resultado.articulosRecalculados(), resultado.avisos());
     }
 }

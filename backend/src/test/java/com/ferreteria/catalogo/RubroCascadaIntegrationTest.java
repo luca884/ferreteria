@@ -319,4 +319,30 @@ class RubroCascadaIntegrationTest extends IntegrationTestBase {
         assertThat(pagina.get("items")).hasSize(1);
         assertThat(pagina.get("items").get(0).get("precioFinal").decimalValue()).isEqualByComparingTo("190");
     }
+
+    // --- Ajustes que dejarian el precio en 0 o menos (S7) ---
+
+    @Test
+    void unArticuloConAjusteQueLoDejariaEnCeroConservaSuPrecioYApareceEnLosAvisosSinTumbarLaCascada() throws Exception {
+        long rubro = crearRubro(duenoA, unico("Salteo"), "35");
+        long normal = crearArticulo(duenoA, "SN", rubro, null);
+        long conAjuste = crearArticulo(duenoA, "SA", rubro, null);
+        jdbc.update("update articulo set ajustes_precio = ?, precio_final = 20.00 where id = ?",
+                "[{\"nombre\":null,\"tipo\":\"MONTO\",\"valor\":-150}]", conAjuste);
+        String codigo = jdbc.queryForObject("select codigo_interno from articulo where id = ?", String.class, conAjuste);
+        long historialAntes = historial(conAjuste).size();
+
+        putJson("/api/rubros/" + rubro, duenoA, json(unico("Salteo"), "0"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.margenPorcentaje", is(0)))
+                .andExpect(jsonPath("$.avisos.length()", is(1)))
+                .andExpect(jsonPath("$.avisos[0]", is("No se cambió el precio de " + codigo + " (Articulo SA): "
+                        + "con sus ajustes quedaría en 0 o menos. Revisá sus ajustes.")));
+
+        assertThat(filaDeRubro(rubro).get("margen_porcentaje")).isEqualTo(new BigDecimal("0.00"));
+        assertPrecio(normal, "130.00");
+        assertPrecio(conAjuste, "20.00");
+        assertThat(historial(conAjuste)).hasSize((int) historialAntes);
+        assertThat(masivos(normal)).hasSize(1);
+    }
 }

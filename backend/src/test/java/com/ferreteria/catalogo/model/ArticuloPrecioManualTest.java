@@ -294,4 +294,89 @@ class ArticuloPrecioManualTest {
             .isInstanceOf(DatosInvalidosException.class)
             .satisfies(e -> assertThat(((DatosInvalidosException) e).errors()).containsKey("ajustesPrecio"));
     }
+
+    // --- recalculos automaticos: saltear y avisar (S7) ---
+
+    private static final String AVISO = "No se cambió el precio de TORN-001 (Tornillo): con sus ajustes quedaría en 0 o menos."
+        + " Revisá sus ajustes.";
+
+    /** Costo 100 con margen de 35 % (precio 163,35) y un ajuste de -100: hoy da 63,35; con costo 5 daria 0 o menos. */
+    private static Articulo conAjusteNegativo() {
+        Articulo articulo = articulo();
+        articulo.fijarAjustesDePrecio(ajustes(monto("-100")), CTX);
+        return articulo;
+    }
+
+    /** Sin margen propio: hereda el del rubro. Con rubro al 100 % y ajuste de -150 el precio es 92,00. */
+    private static Articulo heredandoElMargenDelRubro() {
+        Articulo articulo = new Articulo(1L);
+        articulo.actualizar(new DatosArticulo("TORN-001", null, null, "Tornillo", null, null, bd("100"), null,
+            AlicuotaIva.IVA_21, Unidad.UNIDAD, BigDecimal.ZERO, null, true), new ContextoPrecio(bd("100"), bd("30"), BigDecimal.ZERO));
+        articulo.fijarAjustesDePrecio(ajustes(monto("-150")), new ContextoPrecio(bd("100"), bd("30"), BigDecimal.ZERO));
+        return articulo;
+    }
+
+    @Test
+    @DisplayName("recalculo automatico: si los ajustes dejan el precio en 0 o menos conserva el precio y avisa")
+    void recalculoAutomaticoSaltea() {
+        Articulo articulo = heredandoElMargenDelRubro();
+        assertThat(articulo.getPrecioFinal()).isEqualTo(bd("92.00"));
+
+        RecalculoAutomatico resultado = articulo.recalcularPrecioAutomatico(
+            new ContextoPrecio(BigDecimal.ZERO, bd("30"), BigDecimal.ZERO));
+
+        assertThat(resultado.cambio()).isEmpty();
+        assertThat(resultado.aviso()).contains(AVISO);
+        assertThat(articulo.getPrecioFinal()).isEqualTo(bd("92.00"));
+    }
+
+    @Test
+    @DisplayName("recalculo automatico sin problema: devuelve el cambio y no avisa")
+    void recalculoAutomaticoNormal() {
+        Articulo articulo = heredandoElMargenDelRubro();
+
+        RecalculoAutomatico resultado = articulo.recalcularPrecioAutomatico(
+            new ContextoPrecio(bd("200"), bd("30"), BigDecimal.ZERO));
+
+        assertThat(resultado.aviso()).isEmpty();
+        assertThat(resultado.cambio()).isPresent();
+        assertThat(articulo.getPrecioFinal()).isEqualTo(bd("213.00"));
+    }
+
+    @Test
+    @DisplayName("ajustar el costo automaticamente: el costo cambia, el precio se conserva y avisa")
+    void ajustarCostoAutomaticoSaltea() {
+        Articulo articulo = conAjusteNegativo();
+        BigDecimal precioDeHoy = articulo.getPrecioFinal();
+
+        RecalculoAutomatico resultado = articulo.ajustarCostoAutomatico(bd("5"), CTX);
+
+        assertThat(articulo.getCosto()).isEqualTo(bd("5"));
+        assertThat(articulo.getPrecioFinal()).isEqualTo(precioDeHoy);
+        assertThat(resultado.aviso()).contains(AVISO);
+        assertThat(resultado.cambio()).isPresent();
+        assertThat(resultado.cambio().get().costoAnterior()).isEqualTo(bd("100"));
+        assertThat(resultado.cambio().get().costoNuevo()).isEqualTo(bd("5"));
+        assertThat(resultado.cambio().get().precioNuevo()).isEqualTo(precioDeHoy);
+    }
+
+    @Test
+    @DisplayName("precio planeado con un costo: si los ajustes lo dejan en 0 o menos es el de hoy y trae el aviso")
+    void precioPlaneadoSaltea() {
+        Articulo articulo = conAjusteNegativo();
+
+        PrecioPlaneado planeado = articulo.precioConCostoAutomatico(bd("5"), CTX);
+
+        assertThat(planeado.precio()).isEqualTo(articulo.getPrecioFinal());
+        assertThat(planeado.aviso()).contains(AVISO);
+        assertThat(articulo.getCosto()).isEqualTo(bd("100"));
+    }
+
+    @Test
+    @DisplayName("las ediciones a mano siguen rechazando: un costo que deja el precio en 0 o menos da 400")
+    void edicionAManoSigueRechazando() {
+        Articulo articulo = conAjusteNegativo();
+
+        assertThatThrownBy(() -> articulo.ajustarCosto(bd("5"), CTX)).isInstanceOf(DatosInvalidosException.class);
+    }
 }

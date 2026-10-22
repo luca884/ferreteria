@@ -8,6 +8,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import com.ferreteria.catalogo.model.AjustePrecio;
+import com.ferreteria.catalogo.model.AjustesDePrecio;
 import com.ferreteria.catalogo.model.AlicuotaIva;
 import com.ferreteria.catalogo.model.Articulo;
 import com.ferreteria.catalogo.model.ContextoPrecio;
@@ -16,6 +18,7 @@ import com.ferreteria.catalogo.model.HistorialPrecio;
 import com.ferreteria.catalogo.model.Moneda;
 import com.ferreteria.catalogo.model.OrigenPrecio;
 import com.ferreteria.catalogo.model.Rubro;
+import com.ferreteria.catalogo.model.TipoAjustePrecio;
 import com.ferreteria.catalogo.model.Unidad;
 import com.ferreteria.catalogo.repository.ArticuloRepository;
 import com.ferreteria.catalogo.repository.HistorialPrecioRepository;
@@ -227,7 +230,7 @@ class RecalculoPreciosServiceTest {
         assertThat(usd.getPrecioFinal()).isEqualByComparingTo("15730");
         when(articuloRepository.enDolaresScoped()).thenReturn(List.of(usd));
 
-        int cambiados = service.porCotizacion(bd("1100"), null);
+        int cambiados = service.porCotizacion(bd("1100"), null).articulosRecalculados();
 
         assertThat(cambiados).isEqualTo(1);
         assertThat(usd.getPrecioFinal()).isEqualByComparingTo("17310");
@@ -267,7 +270,7 @@ class RecalculoPreciosServiceTest {
         Articulo inactivo = enDolares(22L, "10.00", "1000", false);
         when(articuloRepository.enDolaresScoped()).thenReturn(List.of(inactivo));
 
-        int cambiados = service.porCotizacion(bd("1100"), null);
+        int cambiados = service.porCotizacion(bd("1100"), null).articulosRecalculados();
 
         assertThat(cambiados).isEqualTo(1);
         assertThat(inactivo.getPrecioFinal()).isEqualByComparingTo("17310");
@@ -284,7 +287,7 @@ class RecalculoPreciosServiceTest {
         Articulo sube2 = enDolares(33L, "10.00", "1000", true);
         when(articuloRepository.enDolaresScoped()).thenReturn(List.of(sube1, yaAlDia, sube2));
 
-        int cambiados = service.porCotizacion(bd("1100"), null);
+        int cambiados = service.porCotizacion(bd("1100"), null).articulosRecalculados();
 
         assertThat(cambiados).isEqualTo(2);
         assertThat(historialGuardado()).extracting(HistorialPrecio::getArticuloId).containsExactly(31L, 33L);
@@ -298,7 +301,7 @@ class RecalculoPreciosServiceTest {
         Articulo usd = enDolares(21L, "10.00", "1000", true);
         when(articuloRepository.enDolaresScoped()).thenReturn(List.of(usd));
 
-        int cambiados = service.porCotizacion(bd("1000"), null);
+        int cambiados = service.porCotizacion(bd("1000"), null).articulosRecalculados();
 
         assertThat(cambiados).isZero();
         assertThat(usd.getPrecioFinal()).isEqualByComparingTo("15730");
@@ -330,7 +333,7 @@ class RecalculoPreciosServiceTest {
         configuracionPorDefecto();
         when(articuloRepository.enDolaresScoped()).thenReturn(List.of());
 
-        assertThat(service.porCotizacion(bd("1100"), null)).isZero();
+        assertThat(service.porCotizacion(bd("1100"), null).articulosRecalculados()).isZero();
         verify(historialPrecioRepository, never()).saveAll(anyList());
     }
 
@@ -429,5 +432,57 @@ class RecalculoPreciosServiceTest {
                 .isInstanceOf(ConflictException.class)
                 .hasMessage("Todavía no hay cotización del dólar. Probá en unos minutos");
         verify(historialPrecioRepository, never()).saveAll(anyList());
+    }
+
+    // ---- ajustes sobre el precio final que dejarian el precio en 0 o menos (S7) ----
+
+    private static final ContextoPrecio CTX_RUBRO_35 = new ContextoPrecio(bd("35.00"), bd("30.00"), bd("10.00"));
+
+    private static AjustesDePrecio ajusteEnPesos(String monto) {
+        return new AjustesDePrecio(List.of(new AjustePrecio(null, TipoAjustePrecio.MONTO, bd(monto))));
+    }
+
+    private static String aviso(String codigo, String descripcion) {
+        return "No se cambió el precio de " + codigo + " (" + descripcion
+                + "): con sus ajustes quedaría en 0 o menos. Revisá sus ajustes.";
+    }
+
+    @Test
+    @DisplayName("la cascada saltea al heredero cuyo ajuste lo dejaria en 0 o menos: conserva el precio, avisa y el resto sigue")
+    void cascadaSaltea() throws Exception {
+        configuracionPorDefecto();
+        Articulo normal = heredero(11L, "100.00");
+        Articulo conAjuste = heredero(12L, "100.00");
+        conAjuste.fijarAjustesDePrecio(ajusteEnPesos("-150"), CTX_RUBRO_35);
+        assertThat(conAjuste.getPrecioFinal()).isEqualByComparingTo("20.00");
+        when(articuloRepository.heredanMargenDeRubroScoped(RUBRO_ID)).thenReturn(List.of(normal, conAjuste));
+
+        List<String> avisos = service.porCambioDeMargenDeRubro(rubro("0.00"), USUARIO);
+
+        assertThat(normal.getPrecioFinal()).isEqualByComparingTo("130.00");
+        assertThat(conAjuste.getPrecioFinal()).isEqualByComparingTo("20.00");
+        assertThat(avisos).containsExactly(aviso("COD-12", "Articulo 12"));
+        assertThat(historialGuardado()).extracting(HistorialPrecio::getArticuloId).containsExactly(11L);
+    }
+
+    @Test
+    @DisplayName("el recalculo por cotizacion saltea al articulo cuyo ajuste lo dejaria en 0 o menos y cuenta solo los que cambian")
+    void cotizacionSaltea() throws Exception {
+        configuracionPorDefecto();
+        when(rubroRepository.listarScoped()).thenReturn(List.of(rubro("35.00")));
+        Articulo normal = usdHeredero(61L);
+        Articulo conAjuste = usdHeredero(62L);
+        conAjuste.fijarAjustesDePrecio(ajusteEnPesos("-16000"),
+                new ContextoPrecio(bd("35.00"), bd("30.00"), bd("10.00"), bd("1000")));
+        assertThat(conAjuste.getPrecioFinal()).isEqualByComparingTo("340");
+        when(articuloRepository.enDolaresScoped()).thenReturn(List.of(normal, conAjuste));
+
+        RecalculoPreciosService.ResultadoPorCotizacion resultado = service.porCotizacion(bd("100"), null);
+
+        assertThat(normal.getPrecioFinal()).isEqualByComparingTo("1640");
+        assertThat(conAjuste.getPrecioFinal()).isEqualByComparingTo("340");
+        assertThat(resultado.articulosRecalculados()).isEqualTo(1);
+        assertThat(resultado.avisos()).containsExactly(aviso("USD-62", "Articulo USD 62"));
+        assertThat(historialGuardado()).extracting(HistorialPrecio::getArticuloId).containsExactly(61L);
     }
 }
