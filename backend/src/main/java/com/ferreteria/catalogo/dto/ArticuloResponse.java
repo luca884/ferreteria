@@ -1,11 +1,13 @@
 package com.ferreteria.catalogo.dto;
 
+import com.ferreteria.catalogo.model.AjustePrecio;
 import com.ferreteria.catalogo.model.AlicuotaIva;
 import com.ferreteria.catalogo.model.Articulo;
 import com.ferreteria.catalogo.model.Moneda;
 import com.ferreteria.catalogo.model.Unidad;
 
 import java.math.BigDecimal;
+import java.util.List;
 
 /** Un articulo como lo ve el Dueno: con costo, margen y la lista del proveedor. El Vendedor recibe {@link ArticuloVendedorResponse} (H07). */
 public record ArticuloResponse(
@@ -38,7 +40,11 @@ public record ArticuloResponse(
         BigDecimal bonificacion3,
         Boolean listaIncluyeIva,
         /** Version del articulo (bloqueo optimista): la que hay que mandar en el proximo guardado. */
-        Long version) implements ArticuloLectura {
+        Long version,
+        /** CU-14: el precio final lo escribio el Dueño y nada automatico lo recalcula. */
+        boolean precioManual,
+        /** CU-14: ajustes sobre el precio final, en el orden en que se cargaron. */
+        List<AjustePrecio> ajustesPrecio) implements ArticuloLectura {
 
     /** Igual que {@link #from(Articulo)} pero con el stock indicado (el vigente en la base, no el de la entidad leida). */
     public static ArticuloResponse from(Articulo articulo, BigDecimal stockActual) {
@@ -48,7 +54,7 @@ public record ArticuloResponse(
                 base.alicuotaIva(), base.precioFinal(), base.unidad(), stockActual, base.stockMinimo(),
                 base.ubicacion(), base.activo(), base.precioListaProveedor(), base.ajuste1(), base.ajuste2(),
                 base.ajuste3(), base.bonificacion1(), base.bonificacion2(), base.bonificacion3(),
-                base.listaIncluyeIva(), base.version());
+                base.listaIncluyeIva(), base.version(), base.precioManual(), base.ajustesPrecio());
     }
 
     public static ArticuloResponse from(Articulo articulo) {
@@ -78,6 +84,8 @@ public record ArticuloResponse(
                 articulo.getBonificacion2(),
                 articulo.getBonificacion3(),
                 articulo.getListaIncluyeIva(),
-                articulo.getVersion());
+                articulo.getVersion(),
+                articulo.isPrecioManual(),
+                articulo.getAjustesPrecio().lista());
     }
 }

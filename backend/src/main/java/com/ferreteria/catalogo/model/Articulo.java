@@ -186,6 +186,16 @@ public class Articulo {
      * el stock actual.
      */
     public Optional<CambioPrecio> actualizar(DatosArticulo datos, ContextoPrecio ctx) {
+        return actualizar(datos, PedidoDePrecio.CONSERVAR, ctx);
+    }
+
+    /**
+     * Alta y edicion con lo que el Dueño pide sobre el precio (CU-14): primero los datos y los ajustes nuevos, despues
+     * el precio, en un solo paso y con un solo cambio para el historial. Con {@code manual} true el precio queda el
+     * escrito (mayor a 0 y dentro de DECIMAL(15,2), validado antes de tocar nada); con false se libera y se recalcula.
+     */
+    public Optional<CambioPrecio> actualizar(DatosArticulo datos, PedidoDePrecio pedido, ContextoPrecio ctx) {
+        BigDecimal precioManualPedido = Boolean.TRUE.equals(pedido.manual()) ? precioManualValido(pedido.precio()) : null;
         BigDecimal costoAnterior = this.costo;
         BigDecimal precioAnterior = this.precioFinal;
 
@@ -204,8 +214,18 @@ public class Articulo {
         this.stockMinimo = datos.stockMinimo();
         this.ubicacion = datos.ubicacion();
         this.activo = datos.activo();
+        if (pedido.ajustes() != null) {
+            this.ajustesPrecio = new ArrayList<>(pedido.ajustes().lista());
+        }
+        if (pedido.manual() != null) {
+            this.precioManual = pedido.manual();
+        }
 
-        calcularPrecio(ctx);
+        if (precioManualPedido != null) {
+            this.precioFinal = precioManualPedido;
+        } else {
+            calcularPrecio(ctx);
+        }
         return CambioPrecio.entre(costoAnterior, this.costo, precioAnterior, this.precioFinal);
     }
 
@@ -411,18 +431,27 @@ public class Articulo {
      * calcular hasta {@link #liberarPrecio}. Tiene que ser mayor a 0 y entrar en DECIMAL(15,2).
      */
     public Optional<CambioPrecio> fijarPrecioManual(BigDecimal precio) {
-        if (precio == null || precio.signum() <= 0) {
-            throw new DatosInvalidosException(Map.of("precioFinal", PRECIO_MANUAL_INVALIDO));
-        }
-        BigDecimal aDosDecimales = precio.setScale(2, RoundingMode.HALF_UP);
-        if (!TopeDeImporte.entra(aDosDecimales)) {
-            throw new DatosInvalidosException(Map.of("precioFinal", PRECIO_MANUAL_DEMASIADO_GRANDE));
-        }
+        BigDecimal aDosDecimales = precioManualValido(precio);
         BigDecimal precioAnterior = this.precioFinal;
 
         this.precioManual = true;
         this.precioFinal = aDosDecimales;
         return CambioPrecio.entre(this.costo, this.costo, precioAnterior, this.precioFinal);
+    }
+
+    /** El precio escrito a mano, a 2 decimales: mayor a 0 y dentro de DECIMAL(15,2), o 400 en precioFinal. */
+    private static BigDecimal precioManualValido(BigDecimal precio) {
+        if (precio == null || precio.signum() <= 0) {
+            throw new DatosInvalidosException(Map.of("precioFinal", PRECIO_MANUAL_INVALIDO));
+        }
+        BigDecimal aDosDecimales = precio.setScale(2, RoundingMode.HALF_UP);
+        if (aDosDecimales.signum() <= 0) {
+            throw new DatosInvalidosException(Map.of("precioFinal", PRECIO_MANUAL_INVALIDO));
+        }
+        if (!TopeDeImporte.entra(aDosDecimales)) {
+            throw new DatosInvalidosException(Map.of("precioFinal", PRECIO_MANUAL_DEMASIADO_GRANDE));
+        }
+        return aDosDecimales;
     }
 
     /** Saca la marca de precio manual y vuelve a calcular el precio con la regla y los ajustes. */

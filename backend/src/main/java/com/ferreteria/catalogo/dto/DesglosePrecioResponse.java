@@ -1,5 +1,6 @@
 package com.ferreteria.catalogo.dto;
 
+import com.ferreteria.catalogo.model.AjustePrecio;
 import com.ferreteria.catalogo.model.AlicuotaIva;
 import com.ferreteria.catalogo.model.Moneda;
 import com.ferreteria.catalogo.model.OrigenMargen;
@@ -46,9 +47,14 @@ public record DesglosePrecioResponse(
         /** True si el articulo esta en dolares y la cotizacion esta apagada (se usa la ultima). */
         boolean cotizacionCongelada,
         BigDecimal multiplo,
-        BigDecimal precioFinal) {
+        BigDecimal precioFinal,
+        /** CU-14: el precio final lo escribio el Dueño; los pasos no llegan a el. */
+        boolean precioManual,
+        /** CU-14: ajustes sobre el precio final, entre el redondeo y el precio final (sin efecto con precio manual). */
+        List<AjustePrecio> ajustesPrecio) {
 
     public DesglosePrecioResponse {
         pasos = List.copyOf(pasos);
+        ajustesPrecio = ajustesPrecio == null ? List.of() : List.copyOf(ajustesPrecio);
     }
 }

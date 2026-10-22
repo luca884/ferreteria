@@ -211,4 +211,87 @@ class ArticuloPrecioManualTest {
         assertThat(articulo.liberarPrecio(CTX)).isEmpty();
         assertThat(articulo.getPrecioFinal()).isEqualTo(bd("163.35"));
     }
+
+    // --- alta y edicion con el precio (PedidoDePrecio) ---
+
+    @Test
+    @DisplayName("editar con precio manual: guarda los datos, marca el precio y devuelve un solo cambio")
+    void editarConPrecioManual() {
+        Articulo articulo = articulo();
+
+        Optional<CambioPrecio> cambio = articulo.actualizar(datos("120"),
+            new PedidoDePrecio(true, bd("999.999"), null), CTX);
+
+        assertThat(articulo.getCosto()).isEqualTo(bd("120"));
+        assertThat(articulo.isPrecioManual()).isTrue();
+        assertThat(articulo.getPrecioFinal()).isEqualTo(bd("1000.00"));
+        assertThat(cambio).contains(new CambioPrecio(bd("100"), bd("120"), bd("163.35"), bd("1000.00")));
+    }
+
+    @Test
+    @DisplayName("editar con precio manual sin precio o en 0: 400 en precioFinal y no cambia nada")
+    void editarConPrecioManualInvalido() {
+        Articulo articulo = articulo();
+
+        assertThatThrownBy(() -> articulo.actualizar(datos("120"), new PedidoDePrecio(true, null, null), CTX))
+            .isInstanceOf(DatosInvalidosException.class)
+            .satisfies(e -> assertThat(((DatosInvalidosException) e).errors())
+                .containsEntry("precioFinal", "El precio tiene que ser mayor a 0."));
+        assertThatThrownBy(() -> articulo.actualizar(datos("120"), new PedidoDePrecio(true, bd("0"), null), CTX))
+            .isInstanceOf(DatosInvalidosException.class);
+        assertThat(articulo.getCosto()).isEqualTo(bd("100"));
+        assertThat(articulo.isPrecioManual()).isFalse();
+    }
+
+    @Test
+    @DisplayName("editar destildando el precio manual lo vuelve a calcular con el costo nuevo y los ajustes")
+    void editarLiberando() {
+        Articulo articulo = articulo();
+        articulo.fijarAjustesDePrecio(ajustes(porcentaje("10")), CTX);
+        articulo.fijarPrecioManual(bd("1500"));
+
+        articulo.actualizar(datos("200"), new PedidoDePrecio(false, bd("1500"), null), CTX);
+
+        assertThat(articulo.isPrecioManual()).isFalse();
+        // 200 x 1,35 x 1,21 = 326,70; +10 % = 359,37
+        assertThat(articulo.getPrecioFinal()).isEqualTo(bd("359.37"));
+    }
+
+    @Test
+    @DisplayName("los ajustes nuevos se aplican con el costo nuevo, aunque los viejos dejarian el precio en 0")
+    void ajustesNuevosConCostoNuevo() {
+        Articulo articulo = articulo();
+        articulo.fijarAjustesDePrecio(ajustes(monto("-150")), CTX);
+
+        articulo.actualizar(datos("10"), new PedidoDePrecio(null, null, ajustes(monto("5"))), CTX);
+
+        // 10 x 1,35 x 1,21 = 16,335 -> 16,34; +5 = 21,34
+        assertThat(articulo.getPrecioFinal()).isEqualTo(bd("21.34"));
+        assertThat(articulo.getAjustesPrecio()).isEqualTo(ajustes(monto("5")));
+    }
+
+    @Test
+    @DisplayName("sin nada del precio en el pedido se conservan la marca y los ajustes")
+    void conservar() {
+        Articulo articulo = articulo();
+        articulo.fijarAjustesDePrecio(ajustes(porcentaje("10")), CTX);
+        articulo.fijarPrecioManual(bd("1500"));
+
+        articulo.actualizar(datos("200"), PedidoDePrecio.CONSERVAR, CTX);
+
+        assertThat(articulo.isPrecioManual()).isTrue();
+        assertThat(articulo.getPrecioFinal()).isEqualTo(bd("1500.00"));
+        assertThat(articulo.getAjustesPrecio()).isEqualTo(ajustes(porcentaje("10")));
+    }
+
+    @Test
+    @DisplayName("ajustes que dejan el precio en 0 o menos: 400 en ajustesPrecio (la transaccion se deshace)")
+    void ajustesEnCero() {
+        Articulo articulo = articulo();
+
+        assertThatThrownBy(() -> articulo.actualizar(datos("120"),
+                new PedidoDePrecio(null, null, ajustes(monto("-1000"))), CTX))
+            .isInstanceOf(DatosInvalidosException.class)
+            .satisfies(e -> assertThat(((DatosInvalidosException) e).errors()).containsKey("ajustesPrecio"));
+    }
 }

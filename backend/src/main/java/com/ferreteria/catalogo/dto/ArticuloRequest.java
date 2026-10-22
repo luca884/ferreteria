@@ -1,9 +1,13 @@
 package com.ferreteria.catalogo.dto;
 
+import com.ferreteria.catalogo.model.AjustesDePrecio;
 import com.ferreteria.catalogo.model.AlicuotaIva;
 import com.ferreteria.catalogo.model.DatosArticulo;
 import com.ferreteria.catalogo.model.Moneda;
+import com.ferreteria.catalogo.model.PedidoDePrecio;
 import com.ferreteria.catalogo.model.Unidad;
+import com.ferreteria.common.exception.DatosInvalidosException;
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.DecimalMax;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Digits;
@@ -12,10 +16,13 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 
 import java.math.BigDecimal;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 
 /**
- * Alta y edicion de un articulo. No tiene stock actual ni precio final: el primero lo mueve CU-09
- * y el segundo lo calcula el backend, asi que si el cliente los manda se ignoran.
+ * Alta y edicion de un articulo. No tiene stock actual: lo mueve CU-09. El precio final lo calcula el backend, salvo
+ * con {@code precioManual} true (CU-14), que lo toma de {@code precioFinal}.
  */
 public record ArticuloRequest(
         @NotBlank(message = "El código interno es obligatorio")
@@ -76,7 +83,25 @@ public record ArticuloRequest(
          * desde el lote 6 (decision 48): sin ella es un 400 y, si no coincide con la vigente, un 409. El alta la
          * ignora. Un valor que no es un entero da 400 por el camino generico del cuerpo ilegible.
          */
-        Long version) {
+        Long version,
+
+        /** CU-14: true fija {@code precioFinal} a mano, false lo vuelve a calcular; null conserva la marca (alta: false). */
+        Boolean precioManual,
+
+        /** Solo cuenta con {@code precioManual} true; si no, se ignora. Lo valida el dominio (mayor a 0, tope). */
+        BigDecimal precioFinal,
+
+        /** Ajustes sobre el precio final (CU-14), sin limite; null conserva los de hoy (alta: ninguno). */
+        List<@Valid AjustePrecioRequest> ajustesPrecio) {
+
+    /** Pedido sin nada del precio (CU-14): conserva la marca de precio manual y los ajustes. */
+    public ArticuloRequest(
+            String codigoInterno, String codigoBarras, String codigoProveedor, String descripcion, Long rubroId,
+            Long proveedorId, BigDecimal costo, BigDecimal margenPorcentaje, AlicuotaIva alicuotaIva, Unidad unidad,
+            BigDecimal stockMinimo, String ubicacion, Boolean activo, Moneda moneda, Long version) {
+        this(codigoInterno, codigoBarras, codigoProveedor, descripcion, rubroId, proveedorId, costo, margenPorcentaje,
+                alicuotaIva, unidad, stockMinimo, ubicacion, activo, moneda, version, null, null, null);
+    }
 
     /** Pedido sin version: sirve para el alta, que no la usa; un PUT sin ella da 400. */
     public ArticuloRequest(
@@ -125,6 +150,27 @@ public record ArticuloRequest(
                 blancoANull(ubicacion),
                 activo == null ? activoActual : activo,
                 moneda == null ? monedaActual : moneda);
+    }
+
+    /**
+     * Lo que pide sobre el precio (CU-14). Un porcentaje fuera de -99,99 a 1000 da 400 en su valor
+     * ({@code ajustesPrecio[i].valor}); el resto ya lo valido el cuerpo.
+     */
+    public PedidoDePrecio toPedidoDePrecio() {
+        if (ajustesPrecio == null) {
+            return new PedidoDePrecio(precioManual, precioFinal, null);
+        }
+        Map<String, String> errores = new LinkedHashMap<>();
+        for (int i = 0; i < ajustesPrecio.size(); i++) {
+            if (ajustesPrecio.get(i).porcentajeFueraDeRango()) {
+                errores.put("ajustesPrecio[" + i + "].valor", AjustePrecioRequest.PORCENTAJE_FUERA_DE_RANGO);
+            }
+        }
+        if (!errores.isEmpty()) {
+            throw new DatosInvalidosException(errores);
+        }
+        return new PedidoDePrecio(precioManual, precioFinal,
+                new AjustesDePrecio(ajustesPrecio.stream().map(AjustePrecioRequest::toAjuste).toList()));
     }
 
     private static String blancoANull(String texto) {
