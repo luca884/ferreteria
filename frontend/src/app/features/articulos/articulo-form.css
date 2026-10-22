@@ -158,3 +158,51 @@ legend {
   flex: 1;
   margin: 0;
 }
+
+/* CU-14: la casilla de precio manual y los ajustes sobre el precio final (solo el Dueño). */
+.precio-manual {
+  grid-column: 1 / -1;
+}
+.ajustes-precio {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: var(--e-2);
+  min-width: 0;
+  margin: 0;
+  padding: var(--e-3) var(--e-4) var(--e-4);
+  border: 1px solid var(--borde);
+  border-radius: var(--radio);
+}
+.ajustes-precio legend {
+  float: none;
+  width: auto;
+  padding: 0 var(--e-1);
+  font-size: var(--texto-base);
+}
+.ajustes-precio .pista {
+  margin: 0;
+}
+.ajustes-precio-lista {
+  display: grid;
+  gap: var(--e-3);
+}
+.ajuste-precio {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr) auto;
+  gap: var(--e-3);
+  align-items: start;
+}
+.ajuste-precio .quitar-ajuste-precio {
+  align-self: end;
+}
+.agregar-ajuste-precio {
+  justify-self: start;
+}
+@media (max-width: 700px) {
+  .ajuste-precio {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .ajuste-precio .quitar-ajuste-precio {
+    justify-self: start;
+  }
+}

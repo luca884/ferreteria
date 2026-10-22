@@ -1,3 +1,6 @@
+import { formatearMonto } from '../../core/formato/monto';
+import { exacto } from '../../core/formato/precio-final';
+
 export const ALICUOTAS_IVA = ['IVA_0', 'IVA_2_5', 'IVA_5', 'IVA_10_5', 'IVA_21', 'IVA_27'] as const;
 export type AlicuotaIva = (typeof ALICUOTAS_IVA)[number];
 
@@ -32,6 +35,52 @@ export const MONEDA_LABELS: Record<Moneda, string> = {
 /** La moneda del artículo; ARS si todavía no hay artículo (alta) o si por alguna razón no vino. */
 export function monedaDe(articulo: Pick<Articulo, 'moneda'> | null | undefined): Moneda {
   return articulo?.moneda ?? 'ARS';
+}
+
+/** Un ajuste sobre el precio final puede ser un porcentaje o un monto en pesos (CU-14). */
+export const TIPOS_AJUSTE_PRECIO = ['PORCENTAJE', 'MONTO'] as const;
+export type TipoAjustePrecio = (typeof TIPOS_AJUSTE_PRECIO)[number];
+
+export const TIPO_AJUSTE_PRECIO_LABELS: Record<TipoAjustePrecio, string> = {
+  PORCENTAJE: '%',
+  MONTO: '$',
+};
+
+/** Un ajuste sobre el precio final calculado (CU-14): nombre opcional, tipo y valor, positivo o negativo. */
+export interface AjustePrecio {
+  nombre: string | null;
+  tipo: TipoAjustePrecio;
+  valor: number;
+}
+
+export const MENSAJE_VALOR_AJUSTE_OBLIGATORIO = 'El valor del ajuste es obligatorio.';
+export const MENSAJE_VALOR_AJUSTE_DECIMALES = 'El valor del ajuste admite hasta 2 decimales.';
+export const MENSAJE_PORCENTAJE_AJUSTE = 'El porcentaje del ajuste tiene que estar entre -99,99 y 1.000.';
+
+/** Lo mismo que valida el backend sobre el valor de un ajuste de precio; null si sirve. */
+export function errorDeValorDeAjustePrecio(
+  tipo: TipoAjustePrecio | null,
+  valor: number | null | undefined,
+): string | null {
+  if (valor === null || valor === undefined) return MENSAJE_VALOR_AJUSTE_OBLIGATORIO;
+  const decimal = exacto(valor);
+  if (decimal && decimal.escala > 2) return MENSAJE_VALOR_AJUSTE_DECIMALES;
+  if (tipo === 'PORCENTAJE' && (valor < -99.99 || valor > 1000)) return MENSAJE_PORCENTAJE_AJUSTE;
+  return null;
+}
+
+const FORMATO_PORCENTAJE_AJUSTE = new Intl.NumberFormat('es-AR', { maximumFractionDigits: 2 });
+
+/** «Flete +10 %» o «Ajuste −$ 5,00»: el nombre (o «Ajuste»), el signo y el valor, para el desglose. */
+export function textoDeAjustePrecio(ajuste: AjustePrecio): string {
+  const nombre = ajuste.nombre?.trim() || 'Ajuste';
+  const signo = ajuste.valor < 0 ? '\u2212' : '+';
+  const magnitud = Math.abs(ajuste.valor);
+  const valor =
+    ajuste.tipo === 'PORCENTAJE'
+      ? `${FORMATO_PORCENTAJE_AJUSTE.format(magnitud)} %`
+      : formatearMonto(magnitud);
+  return `${nombre} ${signo}${valor}`;
 }
 
 /** Lo que devuelve el backend, igual para Dueño y Vendedor (ambos ven costo y margen). */
@@ -76,6 +125,12 @@ export interface Articulo {
    * servidor anterior no la trae.
    */
   version?: number;
+  /**
+   * CU-14, solo para el Dueño (el Vendedor no los recibe): el precio lo escribió el Dueño y no sale de la fórmula, y
+   * los ajustes sobre el precio final calculado.
+   */
+  precioManual?: boolean;
+  ajustesPrecio?: AjustePrecio[];
 }
 
 /** Lo que responde el servidor (409) cuando otro cambio modificó el artículo después de cargarlo. */
@@ -136,6 +191,14 @@ export interface ArticuloRequest {
   activo: boolean;
   /** La versión que se leyó (solo en la edición; el alta no la manda). Si no coincide con la vigente, 409. */
   version?: number;
+  /**
+   * CU-14. `precioManual` true fija `precioFinal` a mano; false lo vuelve a calcular; sin el campo el backend
+   * conserva la marca. `precioFinal` solo cuenta con `precioManual` true. `ajustesPrecio` null conserva los
+   * guardados y una lista vacía los borra: el formulario siempre manda la lista.
+   */
+  precioManual?: boolean | null;
+  precioFinal?: number | null;
+  ajustesPrecio?: AjustePrecio[] | null;
 }
 
 /** Un paso del desglose, en el orden en que se aplican; `importe` va a 4 decimales en los intermedios. */
@@ -190,6 +253,9 @@ export interface DesglosePrecio {
   cotizacionCongelada: boolean;
   multiplo: number | null;
   precioFinal: number;
+  /** CU-14: el precio es manual (no sale de la fórmula) y los ajustes sobre el precio final calculado. */
+  precioManual?: boolean;
+  ajustesPrecio?: AjustePrecio[];
 }
 
 /**

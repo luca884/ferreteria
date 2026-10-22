@@ -4,7 +4,7 @@ import { CadenaDePrecio, cadenaDePrecio, costoDeLista } from '../../core/formato
 import { formatearFechaHora } from '../../core/formato/fecha-hora';
 import { formatearCotizacion, formatearTexto } from '../../core/formato/monto';
 import { Decimal, exacto } from '../../core/formato/precio-final';
-import { DesglosePrecio, Moneda } from './articulo.models';
+import { DesglosePrecio, Moneda, textoDeAjustePrecio } from './articulo.models';
 
 /** Los tres ajustes que escribe el Dueño: su propio grupo, fuera del formulario del artículo (decisión 43). */
 export type GrupoAjustes = FormGroup<{
@@ -102,9 +102,14 @@ function unirConY(items: string[]): string {
 interface PasoMostrado {
   tipo: string;
   nombre: string;
-  /** null en el redondeo: el múltiplo ya va en el nombre. */
+  /** null en el redondeo y en los ajustes sobre el precio final: la cuenta la hace el backend. */
   importe: string | null;
+  /** Una aclaración debajo del nombre (los ajustes de un precio manual). */
+  aclaracion?: string;
 }
+
+/** Lo que se dice de los ajustes cuando el precio es manual (CU-14). */
+const ACLARACION_AJUSTES_CON_PRECIO_MANUAL = 'no se aplican mientras el precio sea manual';
 
 @Component({
   selector: 'app-desglose-precio',
@@ -140,13 +145,26 @@ export class DesglosePrecioVista {
 
   protected readonly pasos = computed<PasoMostrado[]>(() => {
     const d = this.desglose();
-    return this.cadena().pasos.map((paso) => {
+    const mostrados = this.cadena().pasos.map((paso) => {
       const moneda: Moneda = EN_MONEDA_DEL_ARTICULO.includes(paso.tipo) ? d.moneda : 'ARS';
       const pct = paso.porcentaje === null ? null : Number(paso.porcentaje);
       const importe = paso.tipo === 'REDONDEO' ? null : formatearTexto(paso.importe, moneda, 4);
       return { tipo: paso.tipo, nombre: this.nombreDe(paso.tipo, pct, paso.importe), importe };
     });
+    // Los ajustes sobre el precio final van entre el redondeo y el precio final; el importe lo calcula el backend.
+    const ajustes: PasoMostrado[] = (d.ajustesPrecio ?? []).map((ajuste) => ({
+      tipo: 'AJUSTE_PRECIO',
+      nombre: textoDeAjustePrecio(ajuste),
+      importe: null,
+      ...(this.precioManual() ? { aclaracion: ACLARACION_AJUSTES_CON_PRECIO_MANUAL } : {}),
+    }));
+    const final = mostrados.findIndex((p) => p.tipo === 'PRECIO_FINAL');
+    if (final < 0) return [...mostrados, ...ajustes];
+    return [...mostrados.slice(0, final), ...ajustes, ...mostrados.slice(final)];
   });
+
+  /** CU-14: el precio lo escribió el Dueño y no sale de la fórmula. */
+  protected readonly precioManual = computed(() => this.desglose().precioManual === true);
 
   /** «Costo de la lista» de la comparación: el del servidor, o el que salga de los ajustes escritos. */
   protected readonly costoDeLaLista = computed(() => {

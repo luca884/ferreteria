@@ -3,6 +3,7 @@ import { Component, ElementRef, Injector, OnInit, afterNextRender, computed, inj
 import { toSignal } from '@angular/core/rxjs-interop';
 import {
   AbstractControl,
+  FormArray,
   FormBuilder,
   FormControl,
   FormGroup,
@@ -30,6 +31,7 @@ import { RubrosService } from '../rubros/rubros.service';
 import {
   ALICUOTAS_IVA,
   ALICUOTA_IVA_LABELS,
+  AjustePrecio,
   AjusteStockResponse,
   AlicuotaIva,
   Articulo,
@@ -41,9 +43,13 @@ import {
   MONEDAS,
   MONEDA_LABELS,
   Moneda,
+  TIPOS_AJUSTE_PRECIO,
+  TIPO_AJUSTE_PRECIO_LABELS,
+  TipoAjustePrecio,
   UNIDADES,
   UNIDAD_LABELS,
   Unidad,
+  errorDeValorDeAjustePrecio,
   monedaDe,
 } from './articulo.models';
 import { ArticulosService } from './articulos.service';
@@ -67,6 +73,46 @@ function textoONull(valor: string): string | null {
   return limpio === '' ? null : limpio;
 }
 
+/** El tope del importe del backend (`TopeDeImporte`): 13 dígitos enteros. */
+const PRECIO_MAXIMO_EXCLUSIVO = 10_000_000_000_000;
+const NOMBRE_AJUSTE_MAXIMO = 40;
+export const MENSAJE_PRECIO_MANUAL = 'El precio tiene que ser mayor a 0.';
+export const MENSAJE_PRECIO_GRANDE = 'El precio es demasiado grande.';
+
+/** El precio manual: mayor a 0 y dentro del tope. Con la casilla destildada el control está deshabilitado y no corre. */
+function precioManualValido(control: AbstractControl<number | null>): ValidationErrors | null {
+  const valor = control.value;
+  if (valor === null || valor === undefined || valor <= 0) return { precio: MENSAJE_PRECIO_MANUAL };
+  return valor >= PRECIO_MAXIMO_EXCLUSIVO ? { precio: MENSAJE_PRECIO_GRANDE } : null;
+}
+
+/** El valor de un ajuste: depende del tipo de su fila (el rango de -99,99 a 1.000 es solo del %). */
+function valorDeAjusteValido(control: AbstractControl<number | null>): ValidationErrors | null {
+  const tipo = (control.parent?.get('tipo')?.value as TipoAjustePrecio | undefined) ?? null;
+  const error = errorDeValorDeAjustePrecio(tipo, control.value);
+  return error === null ? null : { valorAjuste: error };
+}
+
+type FilaAjustePrecio = FormGroup<{
+  nombre: FormControl<string>;
+  tipo: FormControl<TipoAjustePrecio>;
+  valor: FormControl<number | null>;
+}>;
+
+function filaDeAjuste(ajuste?: AjustePrecio): FilaAjustePrecio {
+  return new FormGroup({
+    nombre: new FormControl(ajuste?.nombre ?? '', {
+      nonNullable: true,
+      validators: [Validators.maxLength(NOMBRE_AJUSTE_MAXIMO)],
+    }),
+    tipo: new FormControl<TipoAjustePrecio>(ajuste?.tipo ?? 'PORCENTAJE', {
+      nonNullable: true,
+      validators: [Validators.required],
+    }),
+    valor: new FormControl<number | null>(ajuste?.valor ?? null, { validators: [valorDeAjusteValido] }),
+  });
+}
+
 /** Campos del formulario que pueden traer un error del backend (los mismos nombres que el JSON). */
 type CampoArticulo =
   | 'codigoInterno'
@@ -82,6 +128,10 @@ type CampoArticulo =
   | 'margenPorcentaje'
   | 'alicuotaIva'
   | 'stockMinimo';
+
+/** Campos del precio de CU-14 que también pueden traer un error del backend. */
+type CampoPrecio = 'precioFinal' | 'ajustesPrecio';
+type CampoDeAjuste = 'nombre' | 'tipo' | 'valor';
 
 /** Al guardar o cancelar se vuelve al listado con la búsqueda, la página y los inactivos de la dirección. */
 const VOLVER_AL_LISTADO = { queryParamsHandling: 'preserve' } as const;
@@ -109,6 +159,8 @@ export class ArticuloForm implements OnInit {
   protected readonly unidades = UNIDADES;
   protected readonly unidadLabels = UNIDAD_LABELS;
   protected readonly monedaLabels = MONEDA_LABELS;
+  protected readonly tiposAjuste = TIPOS_AJUSTE_PRECIO;
+  protected readonly tipoAjusteLabels = TIPO_AJUSTE_PRECIO_LABELS;
   protected readonly cantidadConUnidad = cantidadConUnidad;
 
   protected readonly rubros = signal<Rubro[]>([]);
@@ -124,7 +176,7 @@ export class ArticuloForm implements OnInit {
   protected readonly error = signal<string | null>(null);
   protected readonly aviso = signal<string | null>(null);
   /** Mensajes por campo de un 400/409 del backend; si hay, el banner los lista en vez de `error`. */
-  protected readonly erroresServidor = signal<Partial<Record<CampoArticulo, string>>>({});
+  protected readonly erroresServidor = signal<Record<string, string>>({});
   protected readonly erroresCampos = computed(() => Object.values(this.erroresServidor()));
   /** Si falló la carga del artículo no hay nada que editar. */
   protected readonly sinFormulario = signal(false);
@@ -162,6 +214,12 @@ export class ArticuloForm implements OnInit {
     margenPorcentaje: [null as number | null, [Validators.min(0), Validators.max(1000)]],
     alicuotaIva: ['IVA_21' as AlicuotaIva, [Validators.required]],
     stockMinimo: [0 as number | null, [Validators.min(0)]],
+    /** CU-14: tildada, el precio lo escribe el Dueño y no sale de la fórmula. */
+    precioManual: [false],
+    /** Solo se habilita (y valida) con la casilla tildada. */
+    precioFinal: new FormControl<number | null>({ value: null, disabled: true }, [precioManualValido]),
+    /** CU-14: los ajustes sobre el precio final, sin límite; el formulario manda siempre la lista entera. */
+    ajustesPrecio: new FormArray<FilaAjustePrecio>([]),
   });
 
   /**
@@ -254,6 +312,10 @@ export class ArticuloForm implements OnInit {
   /** En dólares, el precio en vivo necesita el dólar vigente: sin él no hay cuenta que hacer. */
   protected readonly sinDolar = computed(() => this.enDolares() && this.dolarDePrecios() === null);
 
+  /** Hay ajustes sobre el precio final: el precio de abajo es el calculado, sin ellos. */
+  protected readonly hayAjustesPrecio = computed(() => this.valores().ajustesPrecio.length > 0);
+  protected readonly esPrecioManual = computed(() => this.valores().precioManual);
+
   /** Precio final con lo que hay cargado, con la misma cuenta y redondeo que el backend. */
   protected readonly precioEnVivo = computed(() => {
     const config = this.configuracion();
@@ -286,14 +348,113 @@ export class ArticuloForm implements OnInit {
     return this.id !== null;
   }
 
-  protected errorServidor(campo: CampoArticulo): string | null {
+  protected errorServidor(campo: CampoArticulo | CampoPrecio): string | null {
     return this.erroresServidor()[campo] ?? null;
   }
 
   /** Al escribir en un campo se borra su error del backend. */
-  protected limpiarErrorDe(campo: CampoArticulo): void {
+  protected limpiarErrorDe(campo: CampoArticulo | CampoPrecio): void {
     if (!this.erroresServidor()[campo]) return;
     this.erroresServidor.update(({ [campo]: _, ...resto }) => resto);
+  }
+
+  protected filasAjuste(): FilaAjustePrecio[] {
+    return this.form.controls.ajustesPrecio.controls;
+  }
+
+  /** El error del backend de un campo de una fila de ajustes (`ajustesPrecio[i].valor`). */
+  protected errorServidorDeFila(indice: number, campo: CampoDeAjuste): string | null {
+    return this.erroresServidor()[`ajustesPrecio[${indice}].${campo}`] ?? null;
+  }
+
+  /** Escribir en una fila borra los errores del backend de ese campo y el de la lista (que depende de todas). */
+  protected limpiarErrorDeFila(indice: number, campo: CampoDeAjuste): void {
+    this.limpiarErroresDe((clave) => clave === `ajustesPrecio[${indice}].${campo}` || clave === 'ajustesPrecio');
+  }
+
+  private limpiarErroresDe(coincide: (clave: string) => boolean): void {
+    if (!Object.keys(this.erroresServidor()).some(coincide)) return;
+    this.erroresServidor.update((errores) =>
+      Object.fromEntries(Object.entries(errores).filter(([clave]) => !coincide(clave))),
+    );
+  }
+
+  /** El error de validación propio de un campo de una fila (ya tocado); null si no hay. */
+  protected errorLocalDeFila(indice: number, campo: CampoDeAjuste): string | null {
+    const control = this.filasAjuste()[indice]?.controls[campo];
+    if (!control?.touched || !control.invalid) return null;
+    if (campo === 'nombre') return 'El nombre del ajuste tiene hasta 40 caracteres.';
+    if (campo === 'tipo') return 'Elegí si el ajuste es en % o en $.';
+    return (control.errors?.['valorAjuste'] as string | undefined) ?? null;
+  }
+
+  protected errorLocalDelPrecio(): string | null {
+    const control = this.form.controls.precioFinal;
+    return control.touched && control.invalid ? ((control.errors?.['precio'] as string | undefined) ?? null) : null;
+  }
+
+  /** Ids para aria-describedby de un campo de una fila: su error propio y el del backend, si se ven. */
+  protected describirFila(indice: number, campo: CampoDeAjuste): string | null {
+    const base = `ajuste-precio-${campo}-${indice}`;
+    const ids: string[] = [];
+    if (this.errorLocalDeFila(indice, campo)) ids.push(`${base}-error`);
+    if (this.errorServidorDeFila(indice, campo)) ids.push(`${base}-error-servidor`);
+    return ids.length > 0 ? ids.join(' ') : null;
+  }
+
+  protected describirPrecioManual(): string | null {
+    const ids: string[] = [];
+    if (this.errorLocalDelPrecio()) ids.push('precioFinalManual-error');
+    if (this.errorServidor('precioFinal')) ids.push('precioFinalManual-error-servidor');
+    return ids.length > 0 ? ids.join(' ') : null;
+  }
+
+  /**
+   * La casilla «Precio manual»: tildada habilita el campo del precio, que arranca con el precio actual; destildada lo
+   * apaga y lo borra (el backend vuelve a calcular el precio).
+   */
+  protected alCambiarPrecioManual(): void {
+    this.aplicarPrecioManual(this.form.controls.precioManual.value, this.precioParaArrancar());
+    this.limpiarErrorDe('precioFinal');
+  }
+
+  private aplicarPrecioManual(manual: boolean, arrancarCon: number | null): void {
+    const precio = this.form.controls.precioFinal;
+    if (manual) {
+      precio.enable({ emitEvent: false });
+      if (precio.value === null) precio.setValue(arrancarCon);
+    } else {
+      precio.reset(null, { emitEvent: false });
+      precio.disable({ emitEvent: false });
+    }
+  }
+
+  /** El precio actual: el guardado en la edición; en el alta, el que sale de la fórmula con lo cargado. */
+  private precioParaArrancar(): number | null {
+    return this.articulo()?.precioFinal ?? this.precioEnVivo();
+  }
+
+  protected agregarAjustePrecio(): void {
+    const fila = filaDeAjuste();
+    this.form.controls.ajustesPrecio.push(fila);
+    // El valor depende del tipo de su fila, que recién ahora tiene padre.
+    fila.controls.valor.updateValueAndValidity();
+    this.form.markAsDirty();
+    this.limpiarErroresDe((clave) => clave.startsWith('ajustesPrecio'));
+  }
+
+  protected quitarAjustePrecio(indice: number): void {
+    this.form.controls.ajustesPrecio.removeAt(indice);
+    this.form.markAsDirty();
+    // Los índices de los errores del backend ya no coinciden con las filas.
+    this.limpiarErroresDe((clave) => clave.startsWith('ajustesPrecio'));
+  }
+
+  /** Cambiar el tipo cambia lo que vale el valor (el rango de -99,99 a 1.000 es solo del %). */
+  protected alCambiarTipoDeAjuste(indice: number): void {
+    this.filasAjuste()[indice]?.controls.valor.updateValueAndValidity();
+    this.limpiarErrorDeFila(indice, 'tipo');
+    this.limpiarErrorDeFila(indice, 'valor');
   }
 
   /** Error de validación propio visible (el campo ya se tocó). */
@@ -620,7 +781,15 @@ export class ArticuloForm implements OnInit {
       margenPorcentaje: articulo.margenPorcentaje,
       alicuotaIva: articulo.alicuotaIva,
       stockMinimo: articulo.stockMinimo,
+      precioManual: articulo.precioManual === true,
     });
+    // Lo que había escrito se pierde: manda lo del servidor.
+    this.form.controls.precioFinal.reset(null, { emitEvent: false });
+    this.aplicarPrecioManual(articulo.precioManual === true, articulo.precioFinal);
+    const filas = this.form.controls.ajustesPrecio;
+    filas.clear();
+    for (const ajuste of articulo.ajustesPrecio ?? []) filas.push(filaDeAjuste(ajuste));
+    filas.controls.forEach((fila) => fila.controls.valor.updateValueAndValidity());
   }
 
   private fallarCarga(mensaje: string): void {
@@ -629,7 +798,16 @@ export class ArticuloForm implements OnInit {
     this.error.set(mensaje);
   }
 
-  /** Solo lo editable: stock actual y precio final los resuelve el backend. */
+  /**
+   * Tildada manda la marca y el precio; destildada manda `precioManual: false` solo si el artículo lo era (para que
+   * el backend lo recalcule). Un artículo que nunca fue manual y no se tocó no manda nada.
+   */
+  private pedidoDePrecioManual(v: { precioManual: boolean; precioFinal: number | null }): Partial<ArticuloRequest> {
+    if (v.precioManual) return { precioManual: true, precioFinal: v.precioFinal };
+    return this.articulo()?.precioManual === true ? { precioManual: false } : {};
+  }
+
+  /** Solo lo editable: stock actual lo resuelve el backend, y el precio final solo se manda con precio manual. */
   private armarRequest(): ArticuloRequest {
     const v = this.form.getRawValue();
     const version = this.articulo()?.version;
@@ -651,6 +829,13 @@ export class ArticuloForm implements OnInit {
       activo: this.articulo()?.activo ?? true,
       // Solo en la edición, y solo si el servidor la mandó: el alta no tiene versión que comparar.
       ...(this.id !== null && version !== undefined ? { version } : {}),
+      ...this.pedidoDePrecioManual(v),
+      // Siempre la lista del formulario: una lista vacía borra los ajustes.
+      ajustesPrecio: v.ajustesPrecio.map((a) => ({
+        nombre: textoONull(a.nombre),
+        tipo: a.tipo,
+        valor: a.valor ?? 0,
+      })),
     };
   }
 }
@@ -670,9 +855,9 @@ function mensajeDe(err: unknown, porDefecto: string): string {
 }
 
 /** Los `errors` de un 400/409 del backend (campo → mensaje); vacío si no trae. */
-function erroresPorCampo(err: unknown): Partial<Record<CampoArticulo, string>> {
+function erroresPorCampo(err: unknown): Record<string, string> {
   if (erroresDeCampos(err).length === 0) return {};
-  return (err as HttpErrorResponse).error.errors as Partial<Record<CampoArticulo, string>>;
+  return (err as HttpErrorResponse).error.errors as Record<string, string>;
 }
 
 function formatearPorcentaje(valor: number): string {

@@ -317,6 +317,7 @@ describe('ArticuloForm', () => {
         stockMinimo: 0,
         ubicacion: null,
         activo: true,
+        ajustesPrecio: [],
       });
       expect(servicio.actualizar).not.toHaveBeenCalled();
     });
@@ -353,6 +354,7 @@ describe('ArticuloForm', () => {
         stockMinimo: 4.5,
         ubicacion: 'Pasillo 2',
         activo: true,
+        ajustesPrecio: [],
       });
     });
 
@@ -636,6 +638,7 @@ describe('ArticuloForm', () => {
         stockMinimo: 3,
         ubicacion: 'Pasillo 2',
         activo: true,
+        ajustesPrecio: [],
       });
       expect(enviado).not.toHaveProperty('stockActual');
       expect(enviado).not.toHaveProperty('precioFinal');
@@ -1407,6 +1410,352 @@ describe('ArticuloForm', () => {
       expect(el().querySelector('button.reactivar')).toBeNull();
     });
   });
+  describe('precio manual y ajustes sobre el precio final (CU-14)', () => {
+    const limpio = (texto: string | null | undefined) => (texto ?? '').replace(/[\s ]+/g, ' ').trim();
+    const texto = (selector: string) => limpio(el().querySelector(selector)?.textContent);
+    const etiquetaDe = (id: string) => limpio(el().querySelector(`label[for="${id}"]`)?.textContent);
+    const filas = () => el().querySelectorAll('.ajuste-precio').length;
+    const manual = (cambios: Partial<Articulo> = {}) =>
+      articuloGuardado({ precioManual: true, precioFinal: 2000, ...cambios });
+
+    async function tildar(id: string, valor: boolean) {
+      const campo = input(id);
+      campo.checked = valor;
+      campo.dispatchEvent(new Event('change'));
+      await refrescar();
+    }
+    async function agregar() {
+      el().querySelector<HTMLButtonElement>('button.agregar-ajuste-precio')!.click();
+      await refrescar();
+    }
+    async function quitar(i: number) {
+      el().querySelectorAll<HTMLButtonElement>('button.quitar-ajuste-precio')[i].click();
+      await refrescar();
+    }
+    async function ajuste(i: number, nombre: string | null, tipo: '%' | '$', valor: string) {
+      if (nombre !== null) await escribir(`ajuste-precio-nombre-${i}`, nombre);
+      await elegir(`ajuste-precio-tipo-${i}`, tipo);
+      await escribir(`ajuste-precio-valor-${i}`, valor);
+    }
+    const enviadoAlta = () => servicio.crear.mock.calls[0][0];
+    const enviadoEdicion = () => servicio.actualizar.mock.calls[0][1];
+
+    describe('precio manual', () => {
+      it('la casilla «Precio manual» arranca sin tildar y sin campo de precio', async () => {
+        await crearComponente();
+
+        expect(etiquetaDe('precioManual')).toBe('Precio manual');
+        expect(input('precioManual').checked).toBe(false);
+        expect(el().querySelector('#precioFinalManual')).toBeNull();
+      });
+
+      it('tildarla muestra «Precio final (con IVA)» con el precio que sale de la fórmula y reemplaza el precio en vivo', async () => {
+        await crearComponente();
+        await escribir('costo', '100');
+
+        await tildar('precioManual', true);
+
+        expect(etiquetaDe('precioFinalManual')).toBe('Precio final (con IVA)');
+        expect(input('precioFinalManual').value).toBe('160');
+        expect(el().querySelector('.precio-en-vivo')).toBeNull();
+      });
+
+      it('en la edición el campo arranca con el precio actual del artículo', async () => {
+        await crearComponente({ id: '5' });
+
+        await tildar('precioManual', true);
+
+        expect(input('precioFinalManual').value).toBe('1234.5');
+      });
+
+      it('en el alta manda precioManual y el precio escrito', async () => {
+        await crearComponente();
+        await completarMinimos();
+        await tildar('precioManual', true);
+        await escribir('precioFinalManual', '2500.5');
+
+        await enviar();
+
+        expect(enviadoAlta()).toMatchObject({ precioManual: true, precioFinal: 2500.5 });
+      });
+
+      it('un artículo manual abre tildado, con su precio, y lo vuelve a mandar al guardar', async () => {
+        await crearComponente({ id: '5', articulo: manual() });
+
+        expect(input('precioManual').checked).toBe(true);
+        expect(input('precioFinalManual').value).toBe('2000');
+
+        await enviar();
+
+        expect(enviadoEdicion()).toMatchObject({ precioManual: true, precioFinal: 2000 });
+      });
+
+      it('destildarla manda precioManual false y ningún precio', async () => {
+        await crearComponente({ id: '5', articulo: manual() });
+
+        await tildar('precioManual', false);
+        await enviar();
+
+        expect(el().querySelector('#precioFinalManual')).toBeNull();
+        expect(enviadoEdicion().precioManual).toBe(false);
+        expect(enviadoEdicion()).not.toHaveProperty('precioFinal');
+      });
+
+      it('si nunca fue manual y no se toca, no manda la marca ni el precio', async () => {
+        await crearComponente({ id: '5' });
+
+        await enviar();
+
+        expect(enviadoEdicion()).not.toHaveProperty('precioManual');
+        expect(enviadoEdicion()).not.toHaveProperty('precioFinal');
+      });
+
+      it('tildarla y destildarla sin guardar en un artículo que no era manual no manda la marca', async () => {
+        await crearComponente({ id: '5' });
+
+        await tildar('precioManual', true);
+        await tildar('precioManual', false);
+        await enviar();
+
+        expect(enviadoEdicion()).not.toHaveProperty('precioManual');
+      });
+
+      it('el precio tiene que ser mayor a 0 y no demasiado grande, con los textos del backend', async () => {
+        await crearComponente({ id: '5', articulo: manual() });
+
+        await escribir('precioFinalManual', '0');
+        await enviar();
+        expect(servicio.actualizar).not.toHaveBeenCalled();
+        expect(texto('#precioFinalManual-error')).toBe('El precio tiene que ser mayor a 0.');
+        expect(input('precioFinalManual').getAttribute('aria-invalid')).toBe('true');
+
+        await escribir('precioFinalManual', '10000000000000');
+        expect(texto('#precioFinalManual-error')).toBe('El precio es demasiado grande.');
+
+        await escribir('precioFinalManual', '');
+        expect(texto('#precioFinalManual-error')).toBe('El precio tiene que ser mayor a 0.');
+      });
+
+      it('el precio de un artículo que no es manual no se valida', async () => {
+        await crearComponente({ id: '5' });
+
+        await tildar('precioManual', true);
+        await escribir('precioFinalManual', '0');
+        await tildar('precioManual', false);
+        await enviar();
+
+        expect(servicio.actualizar).toHaveBeenCalledTimes(1);
+      });
+
+      it('muestra el error del servidor en el campo del precio', async () => {
+        await crearComponente({ id: '5', articulo: manual() });
+        servicio.actualizar.mockReturnValue(
+          throwError(
+            () =>
+              new HttpErrorResponse({
+                status: 400,
+                error: { message: 'Datos inválidos', errors: { precioFinal: 'El precio es demasiado grande.' } },
+              }),
+          ),
+        );
+
+        await enviar();
+
+        expect(texto('#precioFinalManual-error-servidor')).toBe('El precio es demasiado grande.');
+      });
+    });
+
+    describe('ajustes sobre el precio final', () => {
+      it('arranca sin ajustes, con el botón «Agregar»', async () => {
+        await crearComponente();
+
+        expect(texto('button.agregar-ajuste-precio')).toBe('Agregar');
+        expect(filas()).toBe(0);
+      });
+
+      it('«Agregar» suma una fila con nombre opcional, tipo (% por defecto) y valor, cada uno con su label', async () => {
+        await crearComponente();
+
+        await agregar();
+
+        expect(filas()).toBe(1);
+        expect(etiquetaDe('ajuste-precio-nombre-0')).toBe('Nombre del ajuste 1 (opcional)');
+        expect(etiquetaDe('ajuste-precio-tipo-0')).toBe('Tipo del ajuste 1');
+        expect(etiquetaDe('ajuste-precio-valor-0')).toBe('Valor del ajuste 1');
+        expect(opciones('ajuste-precio-tipo-0')).toEqual(['%', '$']);
+        expect(elegida('ajuste-precio-tipo-0')).toBe('%');
+      });
+
+      it('no hay límite de filas', async () => {
+        await crearComponente();
+
+        for (let i = 0; i < 6; i++) await agregar();
+
+        expect(filas()).toBe(6);
+        expect(el().querySelector<HTMLButtonElement>('button.agregar-ajuste-precio')!.disabled).toBe(false);
+      });
+
+      it('cada fila tiene su «Quitar» y al quitar renumera las demás', async () => {
+        await crearComponente();
+        await agregar();
+        await ajuste(0, 'Flete', '%', '10');
+        await agregar();
+        await ajuste(1, 'Seña', '$', '-5');
+
+        await quitar(0);
+
+        expect(filas()).toBe(1);
+        expect(input('ajuste-precio-nombre-0').value).toBe('Seña');
+        expect(etiquetaDe('ajuste-precio-nombre-0')).toBe('Nombre del ajuste 1 (opcional)');
+      });
+
+      it('manda ajustesPrecio con la lista del formulario, nombre vacío como null', async () => {
+        await crearComponente();
+        await completarMinimos();
+        await agregar();
+        await ajuste(0, ' Flete ', '%', '10');
+        await agregar();
+        await ajuste(1, '', '$', '-5.5');
+
+        await enviar();
+
+        expect(enviadoAlta().ajustesPrecio).toEqual([
+          { nombre: 'Flete', tipo: 'PORCENTAJE', valor: 10 },
+          { nombre: null, tipo: 'MONTO', valor: -5.5 },
+        ]);
+      });
+
+      it('abre con los ajustes del artículo y quitarlos todos manda la lista vacía (borra)', async () => {
+        await crearComponente({
+          id: '5',
+          articulo: articuloGuardado({
+            ajustesPrecio: [
+              { nombre: 'Flete', tipo: 'PORCENTAJE', valor: 10 },
+              { nombre: null, tipo: 'MONTO', valor: -5 },
+            ],
+          }),
+        });
+        expect(filas()).toBe(2);
+        expect(input('ajuste-precio-nombre-0').value).toBe('Flete');
+        expect(elegida('ajuste-precio-tipo-1')).toBe('$');
+        expect(input('ajuste-precio-valor-1').value).toBe('-5');
+
+        await quitar(1);
+        await quitar(0);
+        await enviar();
+
+        expect(enviadoEdicion().ajustesPrecio).toEqual([]);
+      });
+
+      it('valida cada fila con los textos del backend y no envía', async () => {
+        await crearComponente();
+        await completarMinimos();
+        await agregar();
+
+        await escribir('ajuste-precio-nombre-0', 'x'.repeat(41));
+        await enviar();
+        expect(servicio.crear).not.toHaveBeenCalled();
+        expect(texto('#ajuste-precio-nombre-0-error')).toBe('El nombre del ajuste tiene hasta 40 caracteres.');
+
+        expect(texto('#ajuste-precio-valor-0-error')).toBe('El valor del ajuste es obligatorio.');
+
+        await escribir('ajuste-precio-valor-0', '1.005');
+        expect(texto('#ajuste-precio-valor-0-error')).toBe('El valor del ajuste admite hasta 2 decimales.');
+
+        await escribir('ajuste-precio-valor-0', '1000.01');
+        expect(texto('#ajuste-precio-valor-0-error')).toBe(
+          'El porcentaje del ajuste tiene que estar entre -99,99 y 1.000.',
+        );
+        expect(input('ajuste-precio-valor-0').getAttribute('aria-invalid')).toBe('true');
+      });
+
+      it('el rango del % no vale para un monto: al cambiar el tipo se revalida', async () => {
+        await crearComponente();
+        await agregar();
+        await escribir('ajuste-precio-valor-0', '-500');
+        input('ajuste-precio-valor-0').dispatchEvent(new Event('blur'));
+        await refrescar();
+        expect(texto('#ajuste-precio-valor-0-error')).toContain('entre -99,99 y 1.000');
+
+        await elegir('ajuste-precio-tipo-0', '$');
+
+        expect(el().querySelector('#ajuste-precio-valor-0-error')).toBeNull();
+      });
+
+      it('muestra los errores del servidor en la fila y en la lista, y los limpia al escribir', async () => {
+        await crearComponente({ id: '5' });
+        await agregar();
+        await ajuste(0, null, '%', '10');
+        servicio.actualizar.mockReturnValue(
+          throwError(
+            () =>
+              new HttpErrorResponse({
+                status: 400,
+                error: {
+                  message: 'Datos inválidos',
+                  errors: {
+                    'ajustesPrecio[0].valor': 'El porcentaje del ajuste tiene que estar entre -99,99 y 1.000.',
+                    ajustesPrecio: 'Con los ajustes del precio final, el precio queda en 0 o menos.',
+                  },
+                },
+              }),
+          ),
+        );
+
+        await enviar();
+
+        expect(texto('#ajuste-precio-valor-0-error-servidor')).toBe(
+          'El porcentaje del ajuste tiene que estar entre -99,99 y 1.000.',
+        );
+        expect(texto('#ajustesPrecio-error-servidor')).toBe(
+          'Con los ajustes del precio final, el precio queda en 0 o menos.',
+        );
+
+        await escribir('ajuste-precio-valor-0', '5');
+        expect(el().querySelector('#ajuste-precio-valor-0-error-servidor')).toBeNull();
+      });
+    });
+
+    describe('precio calculado en vivo', () => {
+      const etiqueta = () => texto('.precio-en-vivo-etiqueta');
+
+      it('sin ajustes se rotula «Precio final»', async () => {
+        await crearComponente();
+        await escribir('costo', '100');
+
+        expect(etiqueta()).toBe('Precio final');
+      });
+
+      it('con ajustes cargados se rotula «Precio calculado (sin ajustes)» y no los suma', async () => {
+        await crearComponente();
+        await escribir('costo', '100');
+        await agregar();
+        await ajuste(0, null, '%', '10');
+
+        expect(etiqueta()).toBe('Precio calculado (sin ajustes)');
+        expect(texto('.precio-en-vivo strong')).toBe('$ 160,00');
+      });
+
+      it('al quitar los ajustes vuelve a «Precio final»', async () => {
+        await crearComponente();
+        await agregar();
+
+        await quitar(0);
+
+        expect(etiqueta()).toBe('Precio final');
+      });
+    });
+
+    describe('Vendedor', () => {
+      it('no ve la casilla ni los ajustes: no recibe esos datos', async () => {
+        await crearComponente({ dueno: false, id: '5' });
+
+        expect(el().querySelector('#precioManual')).toBeNull();
+        expect(el().querySelector('button.agregar-ajuste-precio')).toBeNull();
+      });
+    });
+  });
+
   describe('desglose y ajustes del artículo (R-212 a R-219)', () => {
     const limpio = (texto: string | null | undefined) => (texto ?? '').replace(/[\s ]+/g, ' ').trim();
     const importes = () =>
@@ -1471,7 +1820,7 @@ describe('ArticuloForm', () => {
         await enviar();
 
         const [, enviado] = servicio.actualizar.mock.calls[0];
-        expect(Object.keys(enviado).filter((k) => /^(ajuste|bonificacion)/.test(k))).toEqual([]);
+        expect(Object.keys(enviado).filter((k) => /^(ajuste[123]|bonificacion)/.test(k))).toEqual([]);
         expect(servicio.guardarAjustes).not.toHaveBeenCalled();
       });
 

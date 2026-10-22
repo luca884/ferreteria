@@ -260,9 +260,137 @@
         }
       </div>
 
-      @if (configuracion()) {
+      @if (auth.esDueno()) {
+        <div class="campo precio-manual">
+          <label class="casilla" for="precioManual">
+            <input
+              id="precioManual"
+              name="precioManual"
+              type="checkbox"
+              formControlName="precioManual"
+              aria-describedby="precioManual-pista"
+              (change)="alCambiarPrecioManual()"
+            />
+            Precio manual
+          </label>
+          <span id="precioManual-pista" class="pista">
+            El precio no se recalcula solo: lo escribís vos. Con la casilla destildada lo calcula el sistema.
+          </span>
+        </div>
+
+        @if (esPrecioManual()) {
+          <div class="campo">
+            <label for="precioFinalManual">Precio final (con IVA)</label>
+            <input
+              id="precioFinalManual"
+              name="precioFinal"
+              type="number"
+              inputmode="decimal"
+              step="0.01"
+              min="0"
+              formControlName="precioFinal"
+              [attr.aria-invalid]="errorLocalDelPrecio() || errorServidor('precioFinal') ? 'true' : null"
+              [attr.aria-describedby]="describirPrecioManual()"
+              (input)="limpiarErrorDe('precioFinal')"
+            />
+            @if (errorLocalDelPrecio(); as mensaje) {
+              <span id="precioFinalManual-error" class="campo-error">{{ mensaje }}</span>
+            }
+            @if (errorServidor('precioFinal'); as mensaje) {
+              <span id="precioFinalManual-error-servidor" class="campo-error" data-error-de="precioFinal">{{ mensaje }}</span>
+            }
+          </div>
+        }
+
+        <fieldset class="ajustes-precio" aria-describedby="ajustes-precio-pista">
+          <legend>Ajustes sobre el precio final</legend>
+          <p id="ajustes-precio-pista" class="pista">
+            Cada ajuste se calcula sobre el precio calculado (no se encadenan). Negativo descuenta, positivo recarga.
+            @if (esPrecioManual() && hayAjustesPrecio()) {
+              Con precio manual no se aplican: se conservan para cuando destildes la casilla.
+            }
+          </p>
+          <div formArrayName="ajustesPrecio" class="ajustes-precio-lista">
+            @for (fila of filasAjuste(); track fila; let i = $index) {
+              <div class="ajuste-precio" [formGroupName]="i">
+                <div class="campo">
+                  <label [for]="'ajuste-precio-nombre-' + i">Nombre del ajuste {{ i + 1 }} (opcional)</label>
+                  <input
+                    [id]="'ajuste-precio-nombre-' + i"
+                    formControlName="nombre"
+                    autocomplete="off"
+                    placeholder="Ej: Flete…"
+                    [attr.aria-invalid]="errorLocalDeFila(i, 'nombre') || errorServidorDeFila(i, 'nombre') ? 'true' : null"
+                    [attr.aria-describedby]="describirFila(i, 'nombre')"
+                    (input)="limpiarErrorDeFila(i, 'nombre')"
+                  />
+                  @if (errorLocalDeFila(i, 'nombre'); as mensaje) {
+                    <span [id]="'ajuste-precio-nombre-' + i + '-error'" class="campo-error">{{ mensaje }}</span>
+                  }
+                  @if (errorServidorDeFila(i, 'nombre'); as mensaje) {
+                    <span [id]="'ajuste-precio-nombre-' + i + '-error-servidor'" class="campo-error">{{ mensaje }}</span>
+                  }
+                </div>
+                <div class="campo">
+                  <label [for]="'ajuste-precio-tipo-' + i">Tipo del ajuste {{ i + 1 }}</label>
+                  <select
+                    [id]="'ajuste-precio-tipo-' + i"
+                    formControlName="tipo"
+                    [attr.aria-invalid]="errorLocalDeFila(i, 'tipo') || errorServidorDeFila(i, 'tipo') ? 'true' : null"
+                    [attr.aria-describedby]="describirFila(i, 'tipo')"
+                    (change)="alCambiarTipoDeAjuste(i)"
+                  >
+                    @for (tipo of tiposAjuste; track tipo) {
+                      <option [ngValue]="tipo">{{ tipoAjusteLabels[tipo] }}</option>
+                    }
+                  </select>
+                  @if (errorLocalDeFila(i, 'tipo'); as mensaje) {
+                    <span [id]="'ajuste-precio-tipo-' + i + '-error'" class="campo-error">{{ mensaje }}</span>
+                  }
+                  @if (errorServidorDeFila(i, 'tipo'); as mensaje) {
+                    <span [id]="'ajuste-precio-tipo-' + i + '-error-servidor'" class="campo-error">{{ mensaje }}</span>
+                  }
+                </div>
+                <div class="campo">
+                  <label [for]="'ajuste-precio-valor-' + i">Valor del ajuste {{ i + 1 }}</label>
+                  <input
+                    [id]="'ajuste-precio-valor-' + i"
+                    type="number"
+                    inputmode="decimal"
+                    step="0.01"
+                    formControlName="valor"
+                    [attr.aria-invalid]="errorLocalDeFila(i, 'valor') || errorServidorDeFila(i, 'valor') ? 'true' : null"
+                    [attr.aria-describedby]="describirFila(i, 'valor')"
+                    (input)="limpiarErrorDeFila(i, 'valor')"
+                  />
+                  @if (errorLocalDeFila(i, 'valor'); as mensaje) {
+                    <span [id]="'ajuste-precio-valor-' + i + '-error'" class="campo-error">{{ mensaje }}</span>
+                  }
+                  @if (errorServidorDeFila(i, 'valor'); as mensaje) {
+                    <span [id]="'ajuste-precio-valor-' + i + '-error-servidor'" class="campo-error">{{ mensaje }}</span>
+                  }
+                </div>
+                <button
+                  type="button"
+                  class="secundario chico quitar-ajuste-precio"
+                  [attr.aria-label]="'Quitar el ajuste ' + (i + 1)"
+                  (click)="quitarAjustePrecio(i)"
+                >
+                  Quitar
+                </button>
+              </div>
+            }
+          </div>
+          @if (errorServidor('ajustesPrecio'); as mensaje) {
+            <span id="ajustesPrecio-error-servidor" class="campo-error" data-error-de="ajustesPrecio">{{ mensaje }}</span>
+          }
+          <button type="button" class="secundario chico agregar-ajuste-precio" (click)="agregarAjustePrecio()">Agregar</button>
+        </fieldset>
+      }
+
+      @if (configuracion() && !esPrecioManual()) {
         <div class="precio-en-vivo" aria-live="polite">
-          <span class="precio-en-vivo-etiqueta">Precio final</span>
+          <span class="precio-en-vivo-etiqueta">{{ hayAjustesPrecio() ? 'Precio calculado (sin ajustes)' : 'Precio final' }}</span>
           @if (vivoDeAjustes(); as vivo) {
             @if (vivo.precio !== null) {
               <strong>{{ vivo.precio }}</strong>

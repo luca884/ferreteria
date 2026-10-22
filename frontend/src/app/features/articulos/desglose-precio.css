@@ -26,6 +26,19 @@
 .cotizacion {
   margin: 0;
 }
+.precio-manual {
+  margin: 0;
+  padding: var(--e-2) var(--e-3);
+  border: 1px solid var(--info-borde);
+  border-left: 4px solid var(--info);
+  border-radius: var(--radio);
+  background: var(--info-fondo);
+  font-weight: 600;
+}
+/* La aclaración de un ajuste (precio manual) queda pegada a su nombre. */
+.paso-aclaracion {
+  margin-right: auto;
+}
 .congelada {
   display: block;
   color: var(--advertencia);
