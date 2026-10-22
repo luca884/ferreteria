@@ -130,6 +130,8 @@ class PlanificadorMasivoTest {
     class PrecioManualYAjustes {
 
         private static final String AJUSTES_EN_CERO = "Con los ajustes del precio final, el precio queda en 0 o menos.";
+        private static final String MARGEN_NEGATIVO_110 =
+            "Margen negativo: el costo ($ 110,00) supera el precio sin IVA ($ 100,00). Revisá el precio manual.";
 
         @Test
         @DisplayName("costo +10 % con precio manual: cambia el costo y el precio queda el escrito")
@@ -158,6 +160,32 @@ class PlanificadorMasivoTest {
 
             assertThat(plan.cambios()).hasSize(1);
             assertThat(plan.cambios().get(0).precioNuevo()).isEqualTo(bd("200.00"));
+        }
+
+        @Test
+        @DisplayName("costo 100 a 110 con precio manual 121 (100 sin IVA): avisa margen negativo")
+        void margenNegativo() {
+            PlanMasivo plan = costoPorcentaje("10", Art.art(1, "100.00").precio("121.00").manual());
+
+            assertThat(plan.cambios().get(0).advertencia()).isEqualTo(MARGEN_NEGATIVO_110);
+        }
+
+        @Test
+        @DisplayName("variacion fuerte y margen negativo: van los dos avisos, primero la variacion")
+        void variacionFuerteYMargenNegativo() {
+            PlanMasivo plan = costoPorcentaje("60", Art.art(1, "100.00").precio("121.00").manual());
+
+            assertThat(plan.cambios().get(0).advertencia()).isEqualTo(
+                "El costo sube un 60 % (de 100,00 a 160,00). Revisá que sea correcto. Margen negativo: el costo "
+                    + "($ 160,00) supera el precio sin IVA ($ 100,00). Revisá el precio manual.");
+        }
+
+        @Test
+        @DisplayName("sin precio manual no hay aviso de margen negativo")
+        void sinPrecioManualNoAvisa() {
+            PlanMasivo plan = costoPorcentaje("10", Art.art(1, "100.00").precio("121.00"));
+
+            assertThat(plan.cambios().get(0).advertencia()).isNull();
         }
 
         @Test

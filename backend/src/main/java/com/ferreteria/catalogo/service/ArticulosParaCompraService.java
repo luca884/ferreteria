@@ -4,8 +4,10 @@ import com.ferreteria.catalogo.api.ArticulosParaCompra;
 import com.ferreteria.catalogo.api.CostoDeCompra;
 import com.ferreteria.catalogo.model.Articulo;
 import com.ferreteria.catalogo.model.CambioPrecio;
+import com.ferreteria.catalogo.model.ContextoPrecio;
 import com.ferreteria.catalogo.model.ContextosDePrecio;
 import com.ferreteria.catalogo.model.HistorialPrecio;
+import com.ferreteria.catalogo.model.MargenNegativo;
 import com.ferreteria.catalogo.model.Moneda;
 import com.ferreteria.catalogo.model.OrigenPrecio;
 import com.ferreteria.catalogo.model.VariacionFuerte;
@@ -58,8 +60,10 @@ public class ArticulosParaCompraService implements ArticulosParaCompra {
         ContextosDePrecio contextos = contextos(articulos);
         return articulos.stream().map(articulo -> {
             BigDecimal costoNuevo = costos.get(articulo.getId());
-            BigDecimal precioNuevo = articulo.precioConCosto(costoNuevo, contextos.de(articulo.getRubroId()));
-            return costoDeCompra(articulo, articulo.getCosto(), costoNuevo, articulo.getPrecioFinal(), precioNuevo);
+            ContextoPrecio ctx = contextos.de(articulo.getRubroId());
+            BigDecimal precioNuevo = articulo.precioConCosto(costoNuevo, ctx);
+            return costoDeCompra(articulo, articulo.getCosto(), costoNuevo, articulo.getPrecioFinal(), precioNuevo,
+                    articulo.margenNegativoCon(costoNuevo, ctx));
         }).toList();
     }
 
@@ -79,11 +83,12 @@ public class ArticulosParaCompraService implements ArticulosParaCompra {
         for (Articulo articulo : articulos) {
             BigDecimal costoAnterior = articulo.getCosto();
             BigDecimal precioAnterior = articulo.getPrecioFinal();
-            Optional<CambioPrecio> cambio = articulo.ajustarCosto(
-                    costos.get(articulo.getId()), contextos.de(articulo.getRubroId()));
+            ContextoPrecio ctx = contextos.de(articulo.getRubroId());
+            Optional<CambioPrecio> cambio = articulo.ajustarCosto(costos.get(articulo.getId()), ctx);
             cambio.ifPresent(c -> historial.add(HistorialPrecio.de(articulo, c, OrigenPrecio.COMPRA, usuarioId)));
             aplicados.add(costoDeCompra(
-                    articulo, costoAnterior, articulo.getCosto(), precioAnterior, articulo.getPrecioFinal()));
+                    articulo, costoAnterior, articulo.getCosto(), precioAnterior, articulo.getPrecioFinal(),
+                    articulo.margenNegativoCon(articulo.getCosto(), ctx)));
         }
         if (!historial.isEmpty()) {
             historialPrecioRepository.saveAll(historial);
@@ -102,10 +107,12 @@ public class ArticulosParaCompraService implements ArticulosParaCompra {
     }
 
     private static CostoDeCompra costoDeCompra(Articulo articulo, BigDecimal costoAnterior, BigDecimal costoNuevo,
-                                               BigDecimal precioAnterior, BigDecimal precioNuevo) {
-        String advertencia = VariacionFuerte.mensaje(VariacionFuerte.Sujeto.COSTO, costoAnterior, costoNuevo)
-                .or(() -> VariacionFuerte.mensaje(VariacionFuerte.Sujeto.PRECIO, precioAnterior, precioNuevo))
-                .orElse(null);
+                                               BigDecimal precioAnterior, BigDecimal precioNuevo,
+                                               Optional<String> margenNegativo) {
+        String advertencia = MargenNegativo.junto(
+                VariacionFuerte.mensaje(VariacionFuerte.Sujeto.COSTO, costoAnterior, costoNuevo)
+                        .or(() -> VariacionFuerte.mensaje(VariacionFuerte.Sujeto.PRECIO, precioAnterior, precioNuevo)),
+                margenNegativo);
         return new CostoDeCompra(articulo.getId(), articulo.getCodigoInterno(), articulo.getDescripcion(),
                 articulo.getUnidad().name(), articulo.getMoneda().name(), articulo.isActivo(),
                 costoAnterior, costoNuevo, precioAnterior, precioNuevo, advertencia);

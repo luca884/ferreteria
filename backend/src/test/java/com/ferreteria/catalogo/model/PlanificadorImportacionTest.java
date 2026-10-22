@@ -2546,6 +2546,20 @@ class PlanificadorImportacionTest {
         }
 
         @Test
+        @DisplayName("costo 100 a 110 con precio manual 121 (100 sin IVA): advierte margen negativo en la fila")
+        void margenNegativo() {
+            PlanImportacion plan = escenario()
+                .articulos(Art.art(1, "A-1", "100").precio("121.00").manual(), Art.art(2, "B-1", "100"))
+                .filas(fila(2, "A-1", "x", "110"), fila(3, "B-1", "x", "110"))
+                .planificar();
+
+            assertThat(plan.cambios()).hasSize(2);
+            assertThat(plan.advertencias()).extracting(AvisoDeFila::fila, AvisoDeFila::mensaje).containsExactly(
+                org.assertj.core.groups.Tuple.tuple(2,
+                    "Margen negativo: el costo ($ 110,00) supera el precio sin IVA ($ 100,00). Revisá el precio manual."));
+        }
+
+        @Test
         @DisplayName("ajustes que dejan el precio en 0 o menos: la fila va a errores")
         void ajustesQueDejanElPrecioEnCero() {
             PlanImportacion plan = escenario()

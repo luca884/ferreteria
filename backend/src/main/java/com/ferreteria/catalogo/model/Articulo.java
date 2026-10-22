@@ -475,6 +475,14 @@ public class Articulo {
         return precioCon(costoNuevo, getAjustesPrecio(), ctx);
     }
 
+    /** El aviso de margen negativo con ese costo, solo con precio manual (CU-14, {@link MargenNegativo}). */
+    public Optional<String> margenNegativoCon(BigDecimal costoNuevo, ContextoPrecio ctx) {
+        if (!precioManual) {
+            return Optional.empty();
+        }
+        return MargenNegativo.mensaje(costoNuevo, ctx.cotizacionPara(moneda), alicuotaIva, precioFinal);
+    }
+
     /**
      * La regla de precios con los ajustes sobre el precio final; el precio tiene que entrar en DECIMAL(15,2). Un costo
      * 0 sigue dando precio 0 (como antes de CU-14), pero los ajustes no pueden llevar el precio a 0 o menos.

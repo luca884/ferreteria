@@ -1,6 +1,7 @@
 package com.ferreteria.catalogo.model;
 
 import java.math.BigDecimal;
+import java.util.Optional;
 
 /**
  * Foto de un articulo del proveedor al momento de planificar: el planificador no toca entidades.
@@ -48,6 +49,14 @@ public record ArticuloVigente(
             return precioFinal;
         }
         return PrecioCalculator.precioFinal(costoNuevo, margen, alicuota, multiplo, cotizacion, ajustesPrecio);
+    }
+
+    /**
+     * El aviso de margen negativo con ese costo y alicuota ({@link MargenNegativo}), solo si tiene precio manual: sin
+     * precio manual el precio sale del costo y no puede quedar por debajo.
+     */
+    public Optional<String> margenNegativo(BigDecimal costoNuevo, AlicuotaIva alicuota, BigDecimal cotizacion) {
+        return precioManual ? MargenNegativo.mensaje(costoNuevo, cotizacion, alicuota, precioFinal) : Optional.empty();
     }
 
     /** Articulo en una moneda, sin descuentos ni recargos propios. */

@@ -141,7 +141,9 @@ public final class PlanificadorMasivo {
             || distintos(articulo.precioFinal(), precioNuevo)
             || distintos(articulo.margenPorcentaje(), margenPropioNuevo);
         return new Fila(null, costoNuevo, margenAnterior, margenNuevo, margenPropioNuevo, precioNuevo,
-            advertencia.orElse(null), modificado);
+            MargenNegativo.junto(advertencia, articulo.margenNegativo(
+                costoNuevo, articulo.alicuotaIva(), contexto.cotizacionPara(articulo.moneda()))),
+            modificado);
     }
 
     /** El costo despues de la operacion: sin cambios en MARGEN, porcentual o con un monto sumado en los otros dos. */

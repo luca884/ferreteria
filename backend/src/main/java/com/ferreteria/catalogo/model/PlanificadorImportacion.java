@@ -209,6 +209,8 @@ public final class PlanificadorImportacion {
             acumulado.errores.add(aviso(d, MENSAJE_AJUSTES_EN_CERO));
             return false;
         }
+        articulo.margenNegativo(costoNuevo, alicuota, contexto(articulo, entrada).cotizacionPara(monedaFinal))
+            .ifPresent(mensaje -> acumulado.advertencias.add(aviso(d, mensaje)));
         CambioPlaneado cambio = cambio(d, articulo, costoNuevo, precioNuevo, monedaFinal, alicuota, ajustes, false);
         if (monedaFinal != articulo.moneda()) {
             // Un costo en dolares no se compara con uno en pesos: es un tipo propio.
@@ -380,15 +382,21 @@ public final class PlanificadorImportacion {
      */
     private static BigDecimal precioNuevo(ArticuloVigente articulo, BigDecimal costoNuevo, AlicuotaIva alicuota,
                                           Moneda moneda, EntradaPlan entrada) {
+        ContextoPrecio ctx = contexto(articulo, entrada);
+        BigDecimal margen = PrecioCalculator.margenEfectivo(
+            articulo.margenPorcentaje(), ctx.margenRubro(), ctx.margenDefecto());
+        return articulo.precioCon(costoNuevo, margen, alicuota, ctx.redondeoMultiplo(), ctx.cotizacionPara(moneda));
+    }
+
+    /** El contexto de precio del articulo: el de su rubro, o el de los articulos sin rubro. */
+    private static ContextoPrecio contexto(ArticuloVigente articulo, EntradaPlan entrada) {
         ContextoPrecio ctx = articulo.rubroId() == null
             ? entrada.contextoSinRubro()
             : entrada.contextoPorRubro().get(articulo.rubroId());
         if (ctx == null) {
             throw new IllegalStateException("Falta el contexto de precio del rubro " + articulo.rubroId());
         }
-        BigDecimal margen = PrecioCalculator.margenEfectivo(
-            articulo.margenPorcentaje(), ctx.margenRubro(), ctx.margenDefecto());
-        return articulo.precioCon(costoNuevo, margen, alicuota, ctx.redondeoMultiplo(), ctx.cotizacionPara(moneda));
+        return ctx;
     }
 
     /** Indice por clave del codigo del proveedor; si dos comparten clave gana el primero. */
