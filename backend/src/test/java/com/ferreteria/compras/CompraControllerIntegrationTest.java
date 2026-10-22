@@ -161,6 +161,22 @@ class CompraControllerIntegrationTest extends IntegrationTestBase {
                 .andExpect(jsonPath("$.errors['renglones[0].costoUnitario']").value("El costo admite hasta 2 decimales."));
     }
 
+    @Test
+    @DisplayName("un tipo de comprobante invalido da su mensaje, no el de los movimientos de caja")
+    void tipoDeComprobanteInvalido() throws Exception {
+        String mensaje = "El tipo de comprobante no es válido. Usá FA, FB, FC o REM.";
+        String cuerpo = cuerpo(null, 1, tornillo, "1", "100.00").replace("\"FA\"", "\"OTRO\"");
+
+        postJson("/api/compras/vista-previa", dueno, cuerpo)
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value(mensaje))
+                .andExpect(jsonPath("$.errors.tipo").value(mensaje));
+        postJson("/api/compras", dueno, cuerpo(UUID.randomUUID().toString(), 1, tornillo, "1", "100.00")
+                        .replace("\"FA\"", "\"OTRO\""))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors.tipo").value(mensaje));
+    }
+
     // ---- helpers ----
 
     record Tienda(long id, String emailDueno, String emailVendedor) {}
