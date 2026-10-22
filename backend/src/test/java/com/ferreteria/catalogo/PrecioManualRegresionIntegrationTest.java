@@ -1,6 +1,7 @@
 package com.ferreteria.catalogo;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.is;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -31,9 +32,14 @@ class PrecioManualRegresionIntegrationTest extends IntegrationTestBase {
     // ---- helpers ----
 
     private Ferreteria ferreteria() throws Exception {
+        return ferreteria("0.00");
+    }
+
+    private Ferreteria ferreteria(String multiplo) throws Exception {
         String cuit = String.format("30-7817%04d-1", SECUENCIA.incrementAndGet());
         jdbc.update("insert into ferreteria (razon_social, cuit, condicion_iva, margen_defecto_porcentaje, "
-                + "redondeo_multiplo) values (?, ?, 'RESPONSABLE_INSCRIPTO', 30.00, 0.00)", "Regresion " + cuit, cuit);
+                + "redondeo_multiplo) values (?, ?, 'RESPONSABLE_INSCRIPTO', 30.00, ?)", "Regresion " + cuit, cuit,
+                new BigDecimal(multiplo));
         long id = jdbc.queryForObject("select id from ferreteria where cuit = ?", Long.class, cuit);
         String hash = jdbc.queryForObject(
                 "select password_hash from usuario where email = 'dueno@tornillo.demo'", String.class);
@@ -54,11 +60,15 @@ class PrecioManualRegresionIntegrationTest extends IntegrationTestBase {
 
     /** Articulo de costo 100, IVA 21, sin margen propio, con el precio, la marca y los ajustes que se indican. */
     private long articulo(Ferreteria f, Long rubroId, String precio, boolean manual, String ajustes) {
+        return articulo(f, rubroId, "100.00", precio, manual, ajustes);
+    }
+
+    private long articulo(Ferreteria f, Long rubroId, String costo, String precio, boolean manual, String ajustes) {
         String codigo = unico("RG");
         jdbc.update("insert into articulo (ferreteria_id, codigo_interno, descripcion, rubro_id, costo, "
                         + "alicuota_iva, precio_final, unidad, activo, precio_manual, ajustes_precio) "
-                        + "values (?, ?, ?, ?, 100.00, 'IVA_21', ?, 'UNIDAD', true, ?, ?)",
-                f.id(), codigo, "Articulo " + codigo, rubroId, new BigDecimal(precio), manual,
+                        + "values (?, ?, ?, ?, ?, 'IVA_21', ?, 'UNIDAD', true, ?, ?)",
+                f.id(), codigo, "Articulo " + codigo, rubroId, new BigDecimal(costo), new BigDecimal(precio), manual,
                 ajustes == null ? "[]" : ajustes);
         return jdbc.queryForObject("select id from articulo where ferreteria_id = ? and codigo_interno = ?",
                 Long.class, f.id(), codigo);
@@ -96,6 +106,18 @@ class PrecioManualRegresionIntegrationTest extends IntegrationTestBase {
         return putJson("/api/articulos/" + id, f.dueno(), pedido.toString());
     }
 
+    /** PUT del articulo tal como lo devuelve el GET, con los campos de {@code cambios} (JSON crudo) pisados. */
+    private ResultActions editar(Ferreteria f, long id, String cambios) throws Exception {
+        ObjectNode pedido = (ObjectNode) getJson("/api/articulos/" + id, f.dueno());
+        JsonNode nuevos = objectMapper.readTree(cambios);
+        nuevos.fieldNames().forEachRemaining(campo -> pedido.set(campo, nuevos.get(campo)));
+        return putJson("/api/articulos/" + id, f.dueno(), pedido.toString());
+    }
+
+    private long version(long id) {
+        return jdbc.queryForObject("select version from articulo where id = ?", Long.class, id);
+    }
+
     // ---- S1: cascada del rubro ----
 
     @Test
@@ -117,6 +139,27 @@ class PrecioManualRegresionIntegrationTest extends IntegrationTestBase {
         // 100 x 1,50 x 1,21 = 181,50 y con el flete de 10 % = 199,65
         assertThat(precio(comun)).isEqualByComparingTo("181.50");
         assertThat(precio(conAjustes)).isEqualByComparingTo("199.65");
+    }
+
+    @Test
+    @DisplayName("la cascada del rubro saltea y avisa el articulo cuyos ajustes pasan el tope; el resto se recalcula")
+    void cascadaDelRubroSalteaLosAjustesQuePasanElTope() throws Exception {
+        Ferreteria f = ferreteria();
+        long rubro = rubro(f, "30");
+        // 157,30 + 9.999.999.999.841,70 = 9.999.999.999.999,00: con el rubro al 50 % (181,50) ya no entra
+        long enElTope = articulo(f, rubro, "9999999999999.00", false,
+                "[{\"nombre\":\"Grande\",\"tipo\":\"MONTO\",\"valor\":9999999999841.70}]");
+        long comun = articulo(f, rubro, "157.30", false, null);
+
+        putJson("/api/rubros/" + rubro, f.dueno(), "{\"nombre\":\"Regresion\",\"margenPorcentaje\":50}")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.avisos.length()", is(1)))
+                .andExpect(jsonPath("$.avisos[0]").value(containsString(
+                        "con sus ajustes quedaría demasiado grande")));
+
+        assertThat(precio(enElTope)).isEqualByComparingTo("9999999999999.00");
+        assertThat(historial(enElTope)).isZero();
+        assertThat(precio(comun)).isEqualByComparingTo("181.50");
     }
 
     // ---- S4: actualizacion masiva ----
@@ -174,6 +217,52 @@ class PrecioManualRegresionIntegrationTest extends IntegrationTestBase {
                 .isEqualByComparingTo("100.00");
     }
 
+    @Test
+    @DisplayName("masivo por margen con costo 0: el ajuste en % deja 0, el ajuste en $ negativo es error, el positivo y el manual quedan")
+    void masivoPorMargenConCostoCero() throws Exception {
+        Ferreteria f = ferreteria();
+        long porcentaje = articulo(f, null, "0.00", "0.00", false, FLETE_10);
+        long montoNegativo = articulo(f, null, "0.00", "0.00", false,
+                "[{\"nombre\":\"Descuento\",\"tipo\":\"MONTO\",\"valor\":-5}]");
+        long montoPositivo = articulo(f, null, "0.00", "5.00", false,
+                "[{\"nombre\":\"Flete\",\"tipo\":\"MONTO\",\"valor\":5}]");
+        long manual = articulo(f, null, "100.00", "500.00", true,
+                "[{\"nombre\":\"Descuento\",\"tipo\":\"MONTO\",\"valor\":-500}]");
+
+        JsonNode previa = vistaPrevia(f, "MARGEN", "40");
+        assertThat(previa.at("/conteos/conError").asInt()).isEqualTo(1);
+        assertThat(previa.at("/conteos/modificados").asInt()).isEqualTo(3);
+        aplicar(f, "MARGEN", "40", previa.get("huella").asText()).andExpect(status().isCreated());
+
+        assertThat(precio(porcentaje)).isEqualByComparingTo("0.00");
+        assertThat(version(montoNegativo)).isZero();
+        assertThat(precio(montoPositivo)).isEqualByComparingTo("5.00");
+        assertThat(precio(manual)).isEqualByComparingTo("500.00");
+        assertThat(manual(manual)).isTrue();
+    }
+
+    @Test
+    @DisplayName("masivo de precio final con multiplo 0,05: sube al multiplo, avisa el margen negativo y un -0,01 % no cambia nada")
+    void masivoDePrecioFinalConMultiplo() throws Exception {
+        Ferreteria f = ferreteria("0.05");
+        long bajoElCosto = articulo(f, null, "100.00", "10.01", false, null);
+        long manual = articulo(f, null, "3.33", "7.77", true, null);
+
+        JsonNode previa = vistaPrevia(f, "PRECIO_PORCENTAJE", "33.33");
+        assertThat(previa.at("/conteos/conAdvertencia").asInt()).isEqualTo(1);
+        assertThat(previa.at("/cambios/0/advertencia").asText()).startsWith("Margen negativo");
+        aplicar(f, "PRECIO_PORCENTAJE", "33.33", previa.get("huella").asText()).andExpect(status().isCreated());
+
+        // 10,01 x 1,3333 = 13,346 y 7,77 x 1,3333 = 10,360, hacia arriba al multiplo de 0,05
+        assertThat(precio(bajoElCosto)).isEqualByComparingTo("13.35");
+        assertThat(precio(manual)).isEqualByComparingTo("10.40");
+        assertThat(manual(bajoElCosto)).isTrue();
+
+        JsonNode sinCambio = vistaPrevia(f, "PRECIO_PORCENTAJE", "-0.01");
+        assertThat(sinCambio.at("/conteos/sinCambioDePrecio").asInt()).isEqualTo(2);
+        assertThat(sinCambio.at("/conteos/modificados").asInt()).isZero();
+    }
+
     // ---- S5: aislamiento ----
 
     @Test
@@ -229,6 +318,49 @@ class PrecioManualRegresionIntegrationTest extends IntegrationTestBase {
         alta(f, ",\"precioManual\":false,\"precioFinal\":1").andExpect(status().isCreated())
                 .andExpect(jsonPath("$.precioManual", is(false)))
                 .andExpect(jsonPath("$.precioFinal", is(157.3)));
+    }
+
+    @Test
+    @DisplayName("precio manual al editar: ceros de mas y notacion cientifica entran; con 3 decimales da 400 y la fila queda igual")
+    void bordesDelPrecioManualAlEditar() throws Exception {
+        Ferreteria f = ferreteria();
+        long id = articulo(f, null, "157.30", false, null);
+
+        editar(f, id, "{\"precioManual\":true,\"precioFinal\":100.5000}").andExpect(status().isOk())
+                .andExpect(jsonPath("$.precioFinal", is(100.5)));
+        editar(f, id, "{\"precioManual\":true,\"precioFinal\":1E+2}").andExpect(status().isOk())
+                .andExpect(jsonPath("$.precioFinal", is(100.0)));
+        long antes = version(id);
+
+        editar(f, id, "{\"precioManual\":true,\"precioFinal\":0.005}")
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors.precioFinal", is("El precio admite hasta 2 decimales.")));
+
+        assertThat(precio(id)).isEqualByComparingTo("100.00");
+        assertThat(version(id)).isEqualTo(antes);
+    }
+
+    @Test
+    @DisplayName("los enums invalidos del articulo dan su mensaje propio; el tipo del ajuste no toma el de la caja")
+    void enumsInvalidosDelArticulo() throws Exception {
+        Ferreteria f = ferreteria();
+        long id = articulo(f, null, "157.30", false, null);
+
+        editar(f, id, "{\"alicuotaIva\":\"IVA_99\"}").andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors.alicuotaIva",
+                        is("La alícuota de IVA no es válida. Usá 0, 2,5, 5, 10,5, 21 o 27.")));
+        editar(f, id, "{\"unidad\":\"XX\"}").andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors.unidad", is("La unidad no es válida. Usá UNIDAD, METRO, KILO o LITRO.")));
+        editar(f, id, "{\"moneda\":\"EUR\"}").andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors.moneda", is("La moneda no es válida. Usá ARS o USD.")));
+        editar(f, id, "{\"ajustesPrecio\":[{\"tipo\":\"MONTO\",\"valor\":1},{\"tipo\":\"MONTO\",\"valor\":1},"
+                        + "{\"tipo\":7,\"valor\":1}]}").andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors['ajustesPrecio[2].tipo']", is("Elegí si el ajuste es en % o en $.")));
+        postJson("/api/cajas/1/movimientos", f.dueno(), "{\"tipo\":\"OTRO\",\"importe\":10,\"descripcion\":\"x\"}")
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors.tipo", is("El tipo de movimiento no es válido. Usá INGRESO, GASTO o RETIRO.")));
+
+        assertThat(version(id)).isZero();
     }
 
     @Test
