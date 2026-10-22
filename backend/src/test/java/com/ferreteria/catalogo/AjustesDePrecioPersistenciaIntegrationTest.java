@@ -20,7 +20,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 
 /**
  * articulo.precio_manual y articulo.ajustes_precio (V24, CU-14) contra MySQL real: la lista de ajustes ida y vuelta
- * por Hibernate, con su forma JSON. CUIT: bloque 30-7814xxxx.
+ * por Hibernate, con su forma JSON. CUIT: bloque 30-7816xxxx.
  */
 class AjustesDePrecioPersistenciaIntegrationTest extends IntegrationTestBase {
 
@@ -51,7 +51,7 @@ class AjustesDePrecioPersistenciaIntegrationTest extends IntegrationTestBase {
     @Test
     @DisplayName("los ajustes se guardan como JSON en orden y se leen iguales")
     void idaYVueltaDeLosAjustes() throws Exception {
-        Long f = ferreteriaId("30-78140001-1");
+        Long f = ferreteriaId("30-78160001-1");
         Long id = articulo(f, "CU14-1");
         TenantContext.setCurrentFerreteriaId(f);
         AjustesDePrecio ajustes = new AjustesDePrecio(List.of(
@@ -78,7 +78,7 @@ class AjustesDePrecioPersistenciaIntegrationTest extends IntegrationTestBase {
     @Test
     @DisplayName("la marca de precio manual se guarda y el precio queda el escrito")
     void precioManual() {
-        Long f = ferreteriaId("30-78140001-2");
+        Long f = ferreteriaId("30-78160001-2");
         Long id = articulo(f, "CU14-2");
         TenantContext.setCurrentFerreteriaId(f);
 
@@ -95,7 +95,7 @@ class AjustesDePrecioPersistenciaIntegrationTest extends IntegrationTestBase {
     @Test
     @DisplayName("leer y volver a guardar un articulo sin cambios no lo escribe (los ajustes se comparan por igualdad)")
     void sinCambiosNoSubeLaVersion() {
-        Long f = ferreteriaId("30-78140001-3");
+        Long f = ferreteriaId("30-78160001-3");
         Long id = articulo(f, "CU14-3");
         TenantContext.setCurrentFerreteriaId(f);
         Articulo articulo = articuloRepository.findScoped(id).orElseThrow();

@@ -43,6 +43,8 @@ public final class PlanificadorImportacion {
         .thenComparing(AvisoDeFila::fila, Comparator.nullsFirst(Comparator.<Integer>naturalOrder()));
     private static final String MENSAJE_COSTO_CERO =
         "El costo calculado es 0. Revisá el precio de lista y las bonificaciones.";
+    private static final String MENSAJE_AJUSTES_EN_CERO =
+        "Con los ajustes del precio final, el precio queda en 0 o menos.";
 
     private PlanificadorImportacion() {
     }
@@ -203,6 +205,10 @@ public final class PlanificadorImportacion {
             return false;
         }
         BigDecimal precioNuevo = precioNuevo(articulo, costoNuevo, alicuota, monedaFinal, entrada);
+        if (precioNuevo.signum() <= 0 && !articulo.ajustesPrecio().estaVacia()) {
+            acumulado.errores.add(aviso(d, MENSAJE_AJUSTES_EN_CERO));
+            return false;
+        }
         CambioPlaneado cambio = cambio(d, articulo, costoNuevo, precioNuevo, monedaFinal, alicuota, ajustes, false);
         if (monedaFinal != articulo.moneda()) {
             // Un costo en dolares no se compara con uno en pesos: es un tipo propio.
@@ -368,7 +374,10 @@ public final class PlanificadorImportacion {
         return PrecioCalculator.precioFinal(costo, margen, alicuota, ctx.redondeoMultiplo(), ctx.cotizacionPara(moneda));
     }
 
-    /** Precio final con el contexto del articulo (rubro o sin rubro) y su margen propio si lo tiene. */
+    /**
+     * Precio final con el contexto del articulo (rubro o sin rubro) y su margen propio si lo tiene, con la regla de
+     * {@link Articulo}: con precio manual queda el de hoy; si no, el calculado mas los ajustes (CU-14).
+     */
     private static BigDecimal precioNuevo(ArticuloVigente articulo, BigDecimal costoNuevo, AlicuotaIva alicuota,
                                           Moneda moneda, EntradaPlan entrada) {
         ContextoPrecio ctx = articulo.rubroId() == null
@@ -379,8 +388,7 @@ public final class PlanificadorImportacion {
         }
         BigDecimal margen = PrecioCalculator.margenEfectivo(
             articulo.margenPorcentaje(), ctx.margenRubro(), ctx.margenDefecto());
-        return PrecioCalculator.precioFinal(
-            costoNuevo, margen, alicuota, ctx.redondeoMultiplo(), ctx.cotizacionPara(moneda));
+        return articulo.precioCon(costoNuevo, margen, alicuota, ctx.redondeoMultiplo(), ctx.cotizacionPara(moneda));
     }
 
     /** Indice por clave del codigo del proveedor; si dos comparten clave gana el primero. */

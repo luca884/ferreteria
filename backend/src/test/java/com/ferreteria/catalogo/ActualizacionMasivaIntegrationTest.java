@@ -1201,5 +1201,35 @@ class ActualizacionMasivaIntegrationTest extends IntegrationTestBase {
         return ids;
     }
 
+    // --- Precio manual y ajustes sobre el precio final (CU-14) ---
+
+    @Test
+    void costoMasDiezPorCientoRespetaElPrecioManualYAplicaLosAjustesComoLaVistaPrevia() throws Exception {
+        Tenant t = crearTenant();
+        long manual = insertarArticulo(t, "100.00", "500.00");
+        jdbc.update("update articulo set precio_manual = true where id = ?", manual);
+        long conAjuste = insertarArticulo(t, "100.00", "180.00");
+        jdbc.update("update articulo set ajustes_precio = ? where id = ?",
+                "[{\"nombre\":\"Flete\",\"tipo\":\"PORCENTAJE\",\"valor\":10}]", conAjuste);
+        ObjectNode pedido = pedido("COSTO_PORCENTAJE", "10");
+
+        JsonNode previa = vistaPrevia(t.dueno(), pedido);
+        JsonNode cambios = previa.get("cambios");
+        assertThat(cambios).hasSize(2);
+        assertThat(cambios.get(0).get("articuloId").asLong()).isEqualTo(manual);
+        assertThat(dec(cambios.get(0).get("precioNuevo"))).isEqualByComparingTo("500.00");
+        // 110 x 1,30 x 1,21 = 173,03 (180 al multiplo 10); +10 % = 198, 200 al multiplo 10.
+        assertThat(cambios.get(1).get("articuloId").asLong()).isEqualTo(conAjuste);
+        assertThat(dec(cambios.get(1).get("precioNuevo"))).isEqualByComparingTo("200.00");
+
+        aplicar(t.dueno(), pedido, previa);
+
+        assertThat(decimal(manual, "costo")).isEqualByComparingTo("110.00");
+        assertThat(decimal(manual, "precio_final")).isEqualByComparingTo("500.00");
+        assertThat(jdbc.queryForObject("select precio_manual from articulo where id = ?", Boolean.class, manual))
+                .isTrue();
+        assertThat(decimal(conAjuste, "precio_final")).isEqualByComparingTo("200.00");
+    }
+
     // FIN-DE-TESTS
 }
