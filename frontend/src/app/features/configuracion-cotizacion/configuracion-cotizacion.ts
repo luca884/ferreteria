@@ -9,7 +9,6 @@ import { BarraAcciones } from '../../shared/barra-acciones';
 import {
   ConfiguracionCotizacion,
   ConfiguracionCotizacionRequest,
-  RecalculoConAvisos,
 } from './configuracion-cotizacion.models';
 import { ConfiguracionCotizacionService } from './configuracion-cotizacion.service';
 import { FormularioCotizacion } from './formulario-cotizacion';
@@ -95,7 +94,7 @@ export class PaginaConfiguracionCotizacion implements OnInit {
     this.avisosSalteados.set([]);
     this.errorRecalculo.set(null);
     this.cotizaciones.recalcular(confirmaDesvio).subscribe({
-      next: (recalculo: RecalculoConAvisos) => {
+      next: (recalculo: RecalculoCotizacion) => {
         this.recalculando.set(false);
         this.resultado.set(describirRecalculo(recalculo));
         this.avisosSalteados.set(recalculo.avisos ?? []);

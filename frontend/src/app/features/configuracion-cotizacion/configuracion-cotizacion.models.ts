@@ -48,8 +48,3 @@ export const OPCIONES_COTIZACION: readonly OpcionCotizacion[] = [
   { codigo: 'BRL:oficial', nombre: 'Real', esDolar: false },
 ];
 
-/**
- * Lo que devuelve «Recalcular ahora»: además del resultado, un aviso por artículo que conserva su precio porque sus
- * ajustes lo dejarían en 0 o menos. Opcional por compatibilidad con respuestas viejas.
- */
-export type RecalculoConAvisos = RecalculoCotizacion & { avisos?: string[] };
