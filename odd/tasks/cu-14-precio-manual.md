@@ -19,7 +19,7 @@ Restricciones: reglas de arquitectura de `CLAUDE.md` (tenant, `TenantScopedRepos
 ## Tasks
 
 - [x] T1 · S1, S3, S6 · ruta: inline · commits `bd040a0`, `77537d0` · Dominio y persistencia: V24 (`articulo.precio_manual` y `articulo.ajustes_precio` JSON en la misma fila; ver L4), `Articulo` con precio manual y ajustes dentro de `calcularPrecio`/`precioConCosto`, `ArticuloVigente` y planificadores en paridad · Risk: item 1 (migración), item 3 (cálculo compartido por CU-04, CU-05, CU-13, ventas)
-- [x] T2 · S2 · ruta: inline · commit: ver L6 · Aviso de margen negativo en las vistas previas de importación, masivo y compras
+- [x] T2 · S2 · ruta: inline · commit `6dabc46` · Aviso de margen negativo en las vistas previas de importación, masivo y compras
 - [ ] T3 · S1, S3, S5, S6 · ruta: inline · API del artículo: alta y edición con precio manual y ajustes, respuesta y desglose, validaciones, test de aislamiento
 - [ ] T4 · S4 · ruta: inline · CU-05: modos de precio final en % y en $ que dejan precio manual, vista previa y aplicación
 - [ ] T5 · S1-S4 · ruta: inline · Pantallas: formulario del artículo (casilla «Precio manual», lista de ajustes con «Agregar»), modos nuevos del masivo y avisos de margen negativo
