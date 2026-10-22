@@ -219,9 +219,12 @@ class PrecioManualRegresionIntegrationTest extends IntegrationTestBase {
                 .andExpect(status().isBadRequest()).andExpect(jsonPath("$.errors.precioFinal").exists());
         alta(f, ",\"precioManual\":true,\"precioFinal\":-1")
                 .andExpect(status().isBadRequest()).andExpect(jsonPath("$.errors.precioFinal").exists());
-        // Con 3 decimales se redondea al centavo.
-        alta(f, ",\"precioManual\":true,\"precioFinal\":10.555").andExpect(status().isCreated())
-                .andExpect(jsonPath("$.precioFinal", is(10.56)));
+        // Con 3 decimales da 400: no se redondea sin avisar (S8). Ceros de mas no cuentan.
+        alta(f, ",\"precioManual\":true,\"precioFinal\":10.555")
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors.precioFinal", is("El precio admite hasta 2 decimales.")));
+        alta(f, ",\"precioManual\":true,\"precioFinal\":10.550").andExpect(status().isCreated())
+                .andExpect(jsonPath("$.precioFinal", is(10.55)));
         // Sin la marca, el precio escrito se ignora y el articulo queda con el precio calculado.
         alta(f, ",\"precioManual\":false,\"precioFinal\":1").andExpect(status().isCreated())
                 .andExpect(jsonPath("$.precioManual", is(false)))
