@@ -16,6 +16,7 @@ Restricciones: reglas de arquitectura de `CLAUDE.md` (tenant, `TenantScopedRepos
 - S5: aislamiento entre ferreterías (CU-14 punto 5, regla 7 de `CLAUDE.md`)
 - S6: "dale me parece bien" (confirmado el 2026-10-22) — el precio que resulta (manual, con ajustes o masivo) tiene que ser mayor a 0 y entrar en `TopeDeImporte`; un ajuste en % va de −99,99 a 1000; el nombre del ajuste tiene hasta 40 caracteres; solo el Dueño edita el precio manual y los ajustes, como hoy los artículos (`ArticuloController` con `hasRole('DUENO')`)
 - S7: "dale me parece bien" (2026-10-22, a «Mi recomendación: que ese artículo se saltee, conserve su precio actual y aparezca en un aviso, y que el resto del lote siga. ¿Lo hacemos así, o preferís que se rechace como hoy?») — En un recálculo automático (cascada del margen del rubro, recálculo por cotización manual y diario, compras), un artículo cuyos ajustes dejarían el precio en 0 o menos conserva su precio actual, el resto del lote sigue y el artículo aparece en un aviso — Checks: tests de dominio, de `RecalculoPreciosService`, de compras y de integración del rubro y de la cotización
+- S8: "antes del merge, cuando temrines todo y no haya ningun inconveniente dame los comandos" (2026-10-22, a «¿Los arreglamos antes del merge o quedan para después?», sobre los advisories 2 a 6 de L11) — `ajustesPrecio:[null]` da 400 en `ajustesPrecio[i]`; un `tipo` inválido en un ajuste da «Elegí si el ajuste es en % o en $.» en `ajustesPrecio[i].tipo`; si el precio calculado entra en el tope y con los ajustes no, el error va en `ajustesPrecio`; un precio manual con más de 2 decimales da 400 en `precioFinal` en lugar de redondearse; con costo 0, un ajuste en % no da error en el masivo, igual que en el artículo (`AjustesDePrecio.dejanElPrecioEnCeroOMenos`) — Checks: `ArticuloPrecioManualIntegrationTest`, `ArticuloPrecioManualTest`, `PlanificadorMasivoTest`, suites completas
 
 ## Tasks
 
@@ -27,6 +28,8 @@ Restricciones: reglas de arquitectura de `CLAUDE.md` (tenant, `TenantScopedRepos
 - [x] T6 · todas · ruta: inline + `odd-verifier` · commits `df9bbf5`, `91eeba6` (ver L11 y L13) · Cierre: suite backend, suite frontend, `npx ng build`, verificador independiente
 - [x] T7 · S7 · ruta: `odd-implementer` (sonnet; límite de contexto del padre) · commit `64b94de` · Saltear y avisar en la cascada del rubro, la cotización y las compras
 - [x] T8 · S1, S4, S5, S6 · ruta: el mismo `odd-implementer`, después de T7 · commit `64b94de` · Pasar las sondas del verificador a tests de regresión
+- [ ] T9 · S8 · ruta: inline · Validaciones de la API del artículo: advisories 2 a 5
+- [ ] T10 · S8 · ruta: inline · Paridad del masivo con el artículo en costo 0 + ajuste en % (advisory 6); cierre con suites, `ng build` y comandos de merge para Luca
 
 ## Log
 

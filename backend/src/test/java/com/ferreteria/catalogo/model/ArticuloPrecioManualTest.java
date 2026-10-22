@@ -220,12 +220,12 @@ class ArticuloPrecioManualTest {
         Articulo articulo = articulo();
 
         Optional<CambioPrecio> cambio = articulo.actualizar(datos("120"),
-            new PedidoDePrecio(true, bd("999.999"), null), CTX);
+            new PedidoDePrecio(true, bd("999.99"), null), CTX);
 
         assertThat(articulo.getCosto()).isEqualTo(bd("120"));
         assertThat(articulo.isPrecioManual()).isTrue();
-        assertThat(articulo.getPrecioFinal()).isEqualTo(bd("1000.00"));
-        assertThat(cambio).contains(new CambioPrecio(bd("100"), bd("120"), bd("163.35"), bd("1000.00")));
+        assertThat(articulo.getPrecioFinal()).isEqualTo(bd("999.99"));
+        assertThat(cambio).contains(new CambioPrecio(bd("100"), bd("120"), bd("163.35"), bd("999.99")));
     }
 
     @Test

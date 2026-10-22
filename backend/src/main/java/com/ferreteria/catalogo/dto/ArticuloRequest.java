@@ -92,7 +92,7 @@ public record ArticuloRequest(
         BigDecimal precioFinal,
 
         /** Ajustes sobre el precio final (CU-14), sin limite; null conserva los de hoy (alta: ninguno). */
-        List<@Valid AjustePrecioRequest> ajustesPrecio) {
+        List<@Valid @NotNull(message = "El ajuste no puede estar vacío.") AjustePrecioRequest> ajustesPrecio) {
 
     /** Pedido sin nada del precio (CU-14): conserva la marca de precio manual y los ajustes. */
     public ArticuloRequest(

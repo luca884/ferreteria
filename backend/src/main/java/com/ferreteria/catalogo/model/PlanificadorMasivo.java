@@ -135,7 +135,10 @@ public final class PlanificadorMasivo {
         if (!TopeDeImporte.entra(costoNuevo) || !TopeDeImporte.entra(precioNuevo)) {
             return Fila.conError(MOTIVO_DEMASIADO_GRANDE);
         }
-        if (precioNuevo.signum() <= 0 && !articulo.ajustesPrecio().estaVacia()) {
+        // Misma regla que Articulo: con costo 0 el calculado es 0 y un ajuste que lo deja en 0 no es error.
+        BigDecimal calculado = PrecioCalculator.precioFinal(costoNuevo, margenNuevo, articulo.alicuotaIva(),
+            contexto.redondeoMultiplo(), contexto.cotizacionPara(articulo.moneda()));
+        if (!articulo.precioManual() && AjustesDePrecio.dejanElPrecioEnCeroOMenos(calculado, precioNuevo)) {
             return Fila.conError(MOTIVO_AJUSTES_EN_CERO);
         }
 

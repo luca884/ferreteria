@@ -308,6 +308,17 @@ class PlanificadorMasivoTest {
         }
 
         @Test
+        @DisplayName("costo 0 con un ajuste en %: precio 0 sin error, igual que en el articulo")
+        void costoCeroConAjustePorcentual() {
+            PlanMasivo plan = margen("40", Art.art(1, "0.00").precio("5.00")
+                .ajustes(new AjustePrecio(null, TipoAjustePrecio.PORCENTAJE, bd("10"))));
+
+            assertThat(plan.errores()).isEmpty();
+            assertThat(plan.cambios()).hasSize(1);
+            assertThat(plan.cambios().get(0).precioNuevo()).isEqualByComparingTo("0");
+        }
+
+        @Test
         @DisplayName("la huella cambia si el articulo pasa a tener precio manual o ajustes")
         void huellaConPrecioManualYAjustes() {
             String sinNada = costoPorcentaje("10", Art.art(1, "100.00").precio("170.00")).huella();

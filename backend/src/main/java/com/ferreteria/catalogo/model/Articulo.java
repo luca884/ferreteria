@@ -36,6 +36,8 @@ public class Articulo {
     static final String PRECIO_CERO_O_MENOS = "Con los ajustes del precio final, el precio queda en 0 o menos.";
     static final String PRECIO_MANUAL_INVALIDO = "El precio tiene que ser mayor a 0.";
     static final String PRECIO_MANUAL_DEMASIADO_GRANDE = "El precio es demasiado grande.";
+    static final String PRECIO_MANUAL_CON_DECIMALES = "El precio admite hasta 2 decimales.";
+    static final String AJUSTES_DEMASIADO_GRANDES = "Con los ajustes del precio final, el precio queda demasiado grande.";
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -487,15 +489,18 @@ public class Articulo {
         return CambioPrecio.entre(this.costo, this.costo, precioAnterior, this.precioFinal);
     }
 
-    /** El precio escrito a mano, a 2 decimales: mayor a 0 y dentro de DECIMAL(15,2), o 400 en precioFinal. */
+    /**
+     * El precio escrito a mano: mayor a 0, con hasta 2 decimales (no se redondea sin avisar) y dentro de DECIMAL(15,2),
+     * o 400 en precioFinal.
+     */
     private static BigDecimal precioManualValido(BigDecimal precio) {
         if (precio == null || precio.signum() <= 0) {
             throw new DatosInvalidosException(Map.of("precioFinal", PRECIO_MANUAL_INVALIDO));
         }
-        BigDecimal aDosDecimales = precio.setScale(2, RoundingMode.HALF_UP);
-        if (aDosDecimales.signum() <= 0) {
-            throw new DatosInvalidosException(Map.of("precioFinal", PRECIO_MANUAL_INVALIDO));
+        if (precio.stripTrailingZeros().scale() > 2) {
+            throw new DatosInvalidosException(Map.of("precioFinal", PRECIO_MANUAL_CON_DECIMALES));
         }
+        BigDecimal aDosDecimales = precio.setScale(2, RoundingMode.UNNECESSARY);
         if (!TopeDeImporte.entra(aDosDecimales)) {
             throw new DatosInvalidosException(Map.of("precioFinal", PRECIO_MANUAL_DEMASIADO_GRANDE));
         }
@@ -570,7 +575,10 @@ public class Articulo {
                 costoNuevo, margen, alicuotaIva, ctx.redondeoMultiplo(), ctx.cotizacionPara(moneda));
         BigDecimal precio = ajustes.aplicar(calculado, ctx.redondeoMultiplo());
         if (!TopeDeImporte.entra(precio)) {
-            throw new DatosInvalidosException(Map.of("costo", PRECIO_DEMASIADO_GRANDE));
+            // Si el calculado ya no entra, la culpa es del costo y el margen; si entra, de los ajustes.
+            throw new DatosInvalidosException(TopeDeImporte.entra(calculado)
+                    ? Map.of("ajustesPrecio", AJUSTES_DEMASIADO_GRANDES)
+                    : Map.of("costo", PRECIO_DEMASIADO_GRANDE));
         }
         if (AjustesDePrecio.dejanElPrecioEnCeroOMenos(calculado, precio)) {
             throw new PrecioEnCeroOMenosException(PRECIO_CERO_O_MENOS);

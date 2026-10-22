@@ -228,6 +228,44 @@ class ArticuloPrecioManualIntegrationTest extends IntegrationTestBase {
                 .andExpect(jsonPath("$.errors.precioFinal").value("El precio tiene que ser mayor a 0."));
     }
 
+    @Test
+    @DisplayName("un ajuste null en la lista da 400 en su posicion, no 500")
+    void ajusteNull() throws Exception {
+        ObjectNode pedido = pedido();
+        pedido.putArray("ajustesPrecio").addNull();
+
+        postJson(URL, duenoA, pedido.toString())
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors['ajustesPrecio[0]']").value("El ajuste no puede estar vacío."));
+    }
+
+    @Test
+    @DisplayName("un tipo de ajuste invalido da el mensaje del ajuste en su posicion, no el de la caja")
+    void tipoDeAjusteInvalido() throws Exception {
+        postJson(URL, duenoA, ajuste(ajuste(pedido(), null, "MONTO", "1"), null, "OTRO", "1").toString())
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("Elegí si el ajuste es en % o en $."))
+                .andExpect(jsonPath("$.errors['ajustesPrecio[1].tipo']").value("Elegí si el ajuste es en % o en $."));
+    }
+
+    @Test
+    @DisplayName("si el precio calculado entra en el tope y con los ajustes no, el error va en los ajustes")
+    void ajustesDemasiadoGrandes() throws Exception {
+        postJson(URL, duenoA, ajuste(pedido(), null, "MONTO", "9999999999999").toString())
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors.costo").doesNotExist())
+                .andExpect(jsonPath("$.errors.ajustesPrecio")
+                        .value("Con los ajustes del precio final, el precio queda demasiado grande."));
+    }
+
+    @Test
+    @DisplayName("un precio manual con mas de 2 decimales da 400 en precioFinal en lugar de redondearse")
+    void precioManualConTresDecimales() throws Exception {
+        postJson(URL, duenoA, pedido().put("precioManual", true).put("precioFinal", new BigDecimal("100.555")).toString())
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors.precioFinal").value("El precio admite hasta 2 decimales."));
+    }
+
     // ---- permiso y aislamiento ----
 
     @Test
