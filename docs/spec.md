@@ -66,7 +66,7 @@ Son 12 casos de uso (CU-01 a CU-12), agrupados en cinco módulos: Configuración
 **CU-05 Actualizar precios masivamente** (Dueño)
 
 1. Filtra por proveedor, rubro o búsqueda.
-2. Aplica un porcentaje de aumento al costo o cambia el margen.
+2. Aplica un porcentaje de aumento al costo, cambia el margen o cambia el precio final en % o en $ (este último deja los artículos con precio manual, CU-14).
 3. Ve la vista previa y confirma.
 
 ### Venta
@@ -200,6 +200,14 @@ Son 12 casos de uso (CU-01 a CU-12), agrupados en cinco módulos: Configuración
 
 > **Fuera del tramo 1:** el pago de la compra (efectivo, cheque, cuenta corriente, G36), la cuenta corriente y el pago a proveedores (G39, G40), la anulación de una compra, la devolución al proveedor (G37), el cálculo del costo desde la lista menos 3 bonificaciones en el renglón (G86), el IVA y el total de la factura, el alta rápida de un artículo desde la compra (G94), la fecha de última compra (G19) y el libro IVA Compras (G87). El precio manual y los ajustes sobre el precio final son una feature aparte, posterior (2026-10-21, Luca).
 
+**CU-14 Precio manual y ajustes sobre el precio final** (quien edita artículos; decidido por Luca el 2026-10-22, como GDS G17 y G26)
+
+1. **Precio manual.** En el artículo, la casilla «Precio manual» deja escribir el precio final (con IVA) a mano. Mientras está tildada, el precio no cambia por nada automático: la importación de listas (CU-04), la actualización masiva de costo o margen (CU-05), las compras (CU-13), la cascada del margen del rubro y el recálculo por cotización pueden cambiar el costo, pero no el precio. Al destildarla, el precio se vuelve a calcular con la regla de precios. Cambiar el precio a mano guarda historial con origen manual.
+2. **Margen negativo.** Las vistas previas de CU-04, CU-05 y CU-13 avisan cuando un artículo con precio manual queda con un costo mayor que su precio sin IVA (margen negativo). Es un aviso, no impide confirmar.
+3. **Ajustes sobre el precio final.** Cada artículo tiene una lista de ajustes, sin límite, con el botón «Agregar»: nombre opcional (por ejemplo «Flete»), tipo (% o $) y valor, positivo o negativo. Todos se calculan sobre el precio calculado (no se encadenan; el orden no cambia el resultado): precio = precio calculado + Σ (precio calculado × % / 100) + Σ $. Se vuelven a aplicar en cada recálculo. Con precio manual no se aplican (se conservan para cuando se destilde).
+4. **Actualización masiva del precio final.** CU-05 suma la opción «precio final», en % o en $, sobre el precio final actual. Los artículos afectados quedan con precio manual al precio nuevo (como GDS). La vista previa muestra el precio anterior y el nuevo, y marca la variación fuerte y el margen negativo.
+5. **Aislamiento.** Los ajustes son datos de la ferretería: un artículo de otra ferretería es 404, igual que uno inexistente.
+
 ## Reglas de negocio
 
 Estas reglas se codifican en el dominio y se cubren con tests unitarios antes que cualquier pantalla.
@@ -208,6 +216,7 @@ Estas reglas se codifican en el dominio y se cubren con tests unitarios antes qu
 
 - El costo del proveedor se guarda **sin IVA**. Precio neto = costo × (1 + margen). Precio final = neto × (1 + alícuota de IVA).
 - El margen se define por artículo; si no tiene, hereda el del rubro; si no, el margen por defecto de la ferretería.
+- Sobre el precio final calculado se suman los ajustes del artículo, todos sobre el mismo precio calculado (CU-14). Un artículo con precio manual conserva el precio que escribió el Dueño y no usa la fórmula (CU-14).
 - Sin redondeo por ahora: el precio final queda con centavos (escala 2, hacia arriba al centavo). Si las ferreterías lo piden, se evaluará redondear hacia arriba al peso entero. El código del múltiplo configurable sigue, con múltiplo 0 (sin redondeo) en todas las ferreterías (H11, migración V9).
 - Todo cambio de costo o precio guarda historial: fecha, valor anterior, valor nuevo y origen (importación, masivo, manual, compra).
 - Montos en `BigDecimal` (Java) y `DECIMAL(15,2)` (base). Nunca `double`.
@@ -308,7 +317,7 @@ La facturación usa dos servicios SOAP de ARCA: WSAA para obtener el token y WSF
 4. `FECAESolicitar` con cabecera, importes, alícuotas de IVA y datos del cliente. Devuelve CAE y vencimiento, o las observaciones y errores.
 5. Se guarda el CAE, se genera el PDF con el código QR obligatorio y se marca el comprobante como autorizado.
 
-**Cómo se autentica cada ferretería:** hay dos modelos, y hay que elegir uno antes de codear.
+**Cómo se autentica cada ferretería:** se eligió el **certificado propio por tenant** (decisión de Luca, 2026-10-22). Cada ferretería genera su certificado con su clave fiscal, carga sus datos (CUIT, punto de venta) y hace sus trámites con ARCA; el sistema solo conecta esa ferretería con ARCA. No hay CUIT del servicio ni delegación. Los dos modelos que se evaluaron:
 
 | Modelo | Cómo funciona | A favor | En contra |
 | --- | --- | --- | --- |

@@ -1,0 +1,32 @@
+# cu-14-precio-manual
+
+Objetivo: precio manual por artículo, ajustes sin límite sobre el precio final y actualización masiva del precio final · Por qué: feature pedida por Luca después de CU-13 (precio manual y ajustes sobre el precio final)
+Rama: `feat/cu-14-precio-manual` desde `26de512` · Entrega: single-pr · Runner: `cd backend && ./mvnw test -Dtest=<Clase>` / `cd frontend && npx ng test --watch=false --include=<spec>` · Mirror Engram: `odd/cu-14-precio-manual/tasks` (ok)
+Pronóstico: ~2.500 líneas cambiadas (agregadas + borradas, sin generados) · Heurística por tarea: ~400 (no es límite)
+
+## Specs
+
+Alcance: CU-14 de `docs/spec.md` (puntos 1 a 5) y la regla de precios actualizada · Fuera de alcance: listas de precios múltiples (G16), redondeo nuevo, ajustes por rubro o por proveedor
+Restricciones: reglas de arquitectura de `CLAUDE.md` (tenant, `TenantScopedRepository`, 404 entre ferreterías, `BigDecimal`, Flyway, test de aislamiento por endpoint). Los ajustes nuevos no se llaman `ajuste`/`Ajustes`: ese nombre ya es de los ajustes sobre el costo (`Articulo.ajuste1..3`). Las vistas previas (`PlanificadorMasivo`, `PlanificadorImportacion`, `ArticulosParaCompraService`) tienen que dar lo mismo que la aplicación (`CasosCompartidosPrecioTest`).
+
+- S1: "dale" (2026-10-22, a «¿Lo hacemos como GDS, con una marca de precio manual y el aviso de margen negativo en las vistas previas?») — Aceptación: CU-14 punto 1 — Checks: tests de `Articulo`, de los planificadores y de integración de cada flujo que recalcula
+- S2: "dale" (mismo mensaje que S1: el aviso de margen negativo) — Aceptación: CU-14 punto 2 — Checks: tests de las tres vistas previas
+- S3: "que sea los aujeste que el usuario dese, no limitarlo solamente a uno, que haya una boton de agregar y listo" y "dale me parece correcto" (todos sobre el precio calculado, no encadenados) — Aceptación: CU-14 punto 3 — Checks: tests de dominio, API y pantalla del artículo
+- S4: "las dos" (parámetro permanente y cambio masivo de una vez) y "dale me parece bien, cuando haya alguna duda o duda sobre el negocio/producto, consultamos a como lo hace o como lo resuleve gds" (el masivo deja precio manual) — Aceptación: CU-14 punto 4 — Checks: tests de `PlanificadorMasivo`, `ActualizacionMasivaService` e integración
+- S5: aislamiento entre ferreterías (CU-14 punto 5, regla 7 de `CLAUDE.md`)
+- S6: "dale me parece bien" (confirmado el 2026-10-22) — el precio que resulta (manual, con ajustes o masivo) tiene que ser mayor a 0 y entrar en `TopeDeImporte`; un ajuste en % va de −99,99 a 1000; el nombre del ajuste tiene hasta 40 caracteres; solo el Dueño edita el precio manual y los ajustes, como hoy los artículos (`ArticuloController` con `hasRole('DUENO')`)
+
+## Tasks
+
+- [ ] T1 · S1, S3, S6 · ruta: inline · Dominio y persistencia: V24 (`articulo.precio_manual`, tabla de ajustes del precio final con `ferreteria_id`), `Articulo` con precio manual y ajustes dentro de `calcularPrecio`/`precioConCosto`, `ArticuloVigente` y planificadores en paridad · Risk: item 1 (migración), item 3 (cálculo compartido por CU-04, CU-05, CU-13, ventas)
+- [ ] T2 · S2 · ruta: inline · Aviso de margen negativo en las vistas previas de importación, masivo y compras
+- [ ] T3 · S1, S3, S5, S6 · ruta: inline · API del artículo: alta y edición con precio manual y ajustes, respuesta y desglose, validaciones, test de aislamiento
+- [ ] T4 · S4 · ruta: inline · CU-05: modos de precio final en % y en $ que dejan precio manual, vista previa y aplicación
+- [ ] T5 · S1-S4 · ruta: inline · Pantallas: formulario del artículo (casilla «Precio manual», lista de ajustes con «Agregar»), modos nuevos del masivo y avisos de margen negativo
+- [ ] T6 · todas · ruta: inline + `odd-verifier` · Cierre: suite backend, suite frontend, `npx ng build`, verificador independiente
+
+## Log
+
+- L1 (2026-10-21) Pedido original de Luca: «se puede recalcular el precio de un articulo obviamente, eso lo puede hacer el dueno, lo puede hacer modificando el precio directamente o tocando alguna de las varianetes que los contituyen el margen costo o iva o otro que quiera agrear, eso es importante tambien que tenga disponible creaer otro parametro de sumarle o restarle al precio final».
+- L2 (2026-10-22) Decisiones de Luca: precio manual como GDS G17, con marca y aviso de margen negativo («dale»); ajustes permanentes y cambio masivo («las dos»); ajustes sin límite con «Agregar» («que sea los aujeste que el usuario dese…»); todos sobre el precio calculado («dale me parece correcto»); el masivo deja precio manual («dale me parece bien…»). Preferencia: ante dudas de producto, consultar cómo lo resuelve GDS. CU-14 escrito en `docs/spec.md` (también CU-05 y la regla de precios). Decisión aparte, misma sesión: ARCA con certificado propio por ferretería (`docs/spec.md`, Integración ARCA).
+- L3 (2026-10-22) Exploración (`odd-explorer`): el precio sale de `Articulo.precioConCosto` (`Articulo.java:405`) → `PrecioCalculator.precioFinal`; `calcularPrecio` (`:397`) lo usan `actualizar`, `recalcularPrecio`, `actualizarCosto`, `aplicarLista`, `ajustarCosto`, `fijarMargen`, `editarAjustes`. Copias del cálculo para vistas previas: `PlanificadorMasivo.evaluar` (`:110-135`), `PlanificadorImportacion` (`:366-382`), `ArticulosParaCompraService` (`:61`). `ModoMasivo` = COSTO_PORCENTAJE, COSTO_MONTO, MARGEN (también en el frontend). `OrigenPrecio` se guarda como `VARCHAR(20)`. No existe aviso de margen negativo. Última migración: V23 (sigue V24; patrón `MigracionV8Test`).
