@@ -162,6 +162,24 @@ class PrecioManualRegresionIntegrationTest extends IntegrationTestBase {
         assertThat(precio(comun)).isEqualByComparingTo("181.50");
     }
 
+    @Test
+    @DisplayName("si el precio calculado ya pasa el tope, la cascada del rubro da 400 en el costo y no cambia nada")
+    void cascadaDelRubroConElCalculadoSobreElTopeRechaza() throws Exception {
+        Ferreteria f = ferreteria();
+        long rubro = rubro(f, "30");
+        long grande = articulo(f, rubro, "6000000000000.00", "9438000000000.00", false, null);
+        long comun = articulo(f, rubro, "157.30", false, null);
+
+        putJson("/api/rubros/" + rubro, f.dueno(), "{\"nombre\":\"Regresion\",\"margenPorcentaje\":50}")
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors.costo").exists());
+
+        assertThat(precio(grande)).isEqualByComparingTo("9438000000000.00");
+        assertThat(precio(comun)).isEqualByComparingTo("157.30");
+        assertThat(jdbc.queryForObject("select margen_porcentaje from rubro where id = ?", BigDecimal.class, rubro))
+                .isEqualByComparingTo("30");
+    }
+
     // ---- S4: actualizacion masiva ----
 
     @Test

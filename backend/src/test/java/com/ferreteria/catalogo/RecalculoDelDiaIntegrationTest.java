@@ -225,4 +225,23 @@ class RecalculoDelDiaIntegrationTest extends CotizacionTestBase {
         assertThat(precioDe(conAjuste)).isEqualByComparingTo("5730");
         assertThat(configuracionDe(a).getUltimoRecalculoDia()).isNotNull();
     }
+
+    @Test
+    @DisplayName("ajustes que pasarian el tope no hacen fallar el dia: se saltea, se reclama y el resto sigue (S9)")
+    void ajustesQuePasanElTopeNoHacenFallarElDia() {
+        Long normal = articulo(a, "T28-SN", "USD", "10.00", "15730.00", true);
+        Long grande = articulo(a, "T28-SG", "USD", "10.00", "5730.00", true);
+        jdbc.update("update articulo set ajustes_precio = ? where id = ?",
+                "[{\"nombre\":null,\"tipo\":\"MONTO\",\"valor\":9999999990000.00}]", grande);
+
+        Optional<RecalculoCotizacionResponse> respuesta = recalcularDelDia(a(8, 0));
+
+        assertThat(respuesta).hasValueSatisfying(r -> {
+            assertThat(r.articulosRecalculados()).isEqualTo(1);
+            assertThat(r.avisos()).singleElement().asString().contains("con sus ajustes quedaría demasiado grande");
+        });
+        assertThat(precioDe(normal)).isEqualByComparingTo("17310");
+        assertThat(precioDe(grande)).isEqualByComparingTo("5730");
+        assertThat(configuracionDe(a).getUltimoRecalculoDia()).isNotNull();
+    }
 }
