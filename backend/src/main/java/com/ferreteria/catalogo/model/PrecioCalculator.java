@@ -84,6 +84,24 @@ public final class PrecioCalculator {
                 .multiply(CIEN.add(iva.porcentaje()))
                 .movePointLeft(4);
 
+        return redondear(bruto, multiplo);
+    }
+
+    /**
+     * Precio calculado mas los ajustes sobre el precio final del articulo (CU-14). Es la regla completa de un articulo
+     * sin precio manual: la usan la entidad y los planificadores de las vistas previas.
+     */
+    public static BigDecimal precioFinal(BigDecimal costo, BigDecimal margenPorcentaje, AlicuotaIva iva,
+                                         BigDecimal multiplo, BigDecimal cotizacion, AjustesDePrecio ajustes) {
+        BigDecimal calculado = precioFinal(costo, margenPorcentaje, iva, multiplo, cotizacion);
+        return ajustes == null ? calculado : ajustes.aplicar(calculado, multiplo);
+    }
+
+    /**
+     * Hacia arriba al multiplo, escala 2. Un multiplo null o menor o igual a 0 significa "sin multiplo": hacia arriba
+     * al centavo.
+     */
+    public static BigDecimal redondear(BigDecimal bruto, BigDecimal multiplo) {
         if (multiplo == null || multiplo.signum() <= 0) {
             return bruto.setScale(2, RoundingMode.CEILING);
         }

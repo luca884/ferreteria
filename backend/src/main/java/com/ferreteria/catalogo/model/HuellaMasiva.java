@@ -62,7 +62,28 @@ final class HuellaMasiva {
 
     private static String anterior(ArticuloVigente a) {
         return "a|" + a.id() + "|" + a.activo() + "|" + decimal(a.costo()) + "|" + opcional(a.margenPorcentaje())
-            + "|" + decimal(a.precioFinal());
+            + "|" + decimal(a.precioFinal()) + precioManualYAjustes(a);
+    }
+
+    /**
+     * CU-14: solo si el articulo tiene precio manual o ajustes sobre el precio final, asi la huella de un articulo sin
+     * ninguno de los dos es la misma que antes (no invalida vistas previas abiertas durante un deploy).
+     */
+    private static String precioManualYAjustes(ArticuloVigente a) {
+        if (!a.precioManual() && a.ajustesPrecio().estaVacia()) {
+            return "";
+        }
+        return "|" + a.precioManual() + "|" + ajustesPrecio(a.ajustesPrecio());
+    }
+
+    /** Los ajustes sobre el precio final en orden (CU-14): tipo:valor:nombre, separados por punto y coma. */
+    private static String ajustesPrecio(AjustesDePrecio ajustes) {
+        StringBuilder texto = new StringBuilder();
+        for (AjustePrecio ajuste : ajustes.lista()) {
+            texto.append(ajuste.tipo()).append(':').append(decimal(ajuste.valor())).append(':')
+                .append(ajuste.nombre() == null ? "" : ajuste.nombre()).append(';');
+        }
+        return texto.toString();
     }
 
     private void linea(String texto) {

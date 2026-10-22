@@ -23,6 +23,7 @@ public final class PlanificadorMasivo {
     private static final String MOTIVO_COSTO_CERO = "El costo nuevo da 0. Revisá el porcentaje.";
     private static final String MOTIVO_COSTO_CERO_O_MENOS = "El costo nuevo da 0 o menos. Revisá el monto.";
     private static final String MOTIVO_DEMASIADO_GRANDE = "El costo o el precio nuevo es demasiado grande.";
+    private static final String MOTIVO_AJUSTES_EN_CERO = "Con los ajustes del precio final, el precio queda en 0 o menos.";
 
     private PlanificadorMasivo() {
     }
@@ -122,11 +123,15 @@ public final class PlanificadorMasivo {
         }
         BigDecimal margenPropioNuevo = enMargen ? operacion.valor() : articulo.margenPorcentaje();
         BigDecimal margenNuevo = enMargen ? operacion.valor() : margenAnterior;
-        BigDecimal precioNuevo = PrecioCalculator.precioFinal(
+        // Misma regla que Articulo: con precio manual queda el de hoy; si no, el calculado mas los ajustes (CU-14).
+        BigDecimal precioNuevo = articulo.precioCon(
             costoNuevo, margenNuevo, articulo.alicuotaIva(), contexto.redondeoMultiplo(),
             contexto.cotizacionPara(articulo.moneda()));
         if (!TopeDeImporte.entra(costoNuevo) || !TopeDeImporte.entra(precioNuevo)) {
             return Fila.conError(MOTIVO_DEMASIADO_GRANDE);
+        }
+        if (precioNuevo.signum() <= 0 && !articulo.ajustesPrecio().estaVacia()) {
+            return Fila.conError(MOTIVO_AJUSTES_EN_CERO);
         }
 
         Optional<String> advertencia = enMargen

@@ -37,6 +37,8 @@ class PlanificadorMasivoTest {
         private AlicuotaIva iva = AlicuotaIva.IVA_21;
         private boolean activo = true;
         private Moneda moneda = Moneda.ARS;
+        private boolean precioManual;
+        private List<AjustePrecio> ajustesPrecio = List.of();
 
         private Art(long id, String costo) {
             this.id = id;
@@ -72,9 +74,20 @@ class PlanificadorMasivoTest {
             return this;
         }
 
+        Art manual() {
+            this.precioManual = true;
+            return this;
+        }
+
+        Art ajustes(AjustePrecio... ajustes) {
+            this.ajustesPrecio = List.of(ajustes);
+            return this;
+        }
+
         ArticuloVigente vigente() {
             return new ArticuloVigente(id, "INT-" + id, "PROV-" + id, "Articulo " + id, bd(costo), bd(precioFinal),
-                margen == null ? null : bd(margen), rubroId, iva, activo, moneda);
+                margen == null ? null : bd(margen), rubroId, iva, activo, moneda, Ajustes.NINGUNO, precioManual,
+                new AjustesDePrecio(ajustesPrecio));
         }
     }
 
@@ -108,6 +121,67 @@ class PlanificadorMasivoTest {
     /** Ferreteria con el dolar vigente en 1000 pesos. */
     private static ContextosDePrecio contextosConDolar() {
         return new ContextosDePrecio(Map.of(), new ContextoPrecio(null, bd("30.00"), bd("10"), bd("1000")));
+    }
+
+    // ------------------------------------------------------------------ precio manual y ajustes (CU-14)
+
+    @Nested
+    @DisplayName("precio manual y ajustes sobre el precio final (CU-14)")
+    class PrecioManualYAjustes {
+
+        private static final String AJUSTES_EN_CERO = "Con los ajustes del precio final, el precio queda en 0 o menos.";
+
+        @Test
+        @DisplayName("costo +10 % con precio manual: cambia el costo y el precio queda el escrito")
+        void precioManualNoCambia() {
+            PlanMasivo plan = costoPorcentaje("10", Art.art(1, "100.00").precio("500.00").manual());
+
+            assertThat(plan.cambios()).hasSize(1);
+            assertThat(plan.cambios().get(0).costoNuevo()).isEqualTo(bd("110.00"));
+            assertThat(plan.cambios().get(0).precioNuevo()).isEqualTo(bd("500.00"));
+        }
+
+        @Test
+        @DisplayName("margen 80 con precio manual: cambia el margen y el precio queda el escrito")
+        void margenConPrecioManual() {
+            PlanMasivo plan = margen("80", Art.art(1, "100.00").precio("500.00").manual());
+
+            assertThat(plan.cambios()).hasSize(1);
+            assertThat(plan.cambios().get(0).precioNuevo()).isEqualTo(bd("500.00"));
+        }
+
+        @Test
+        @DisplayName("costo +10 % con un ajuste de +10 %: 110 x 1,3 x 1,21 = 180 (múltiplo 10), +10 % = 200")
+        void ajustesSeAplican() {
+            PlanMasivo plan = costoPorcentaje("10", Art.art(1, "100.00").precio("190.00")
+                .ajustes(new AjustePrecio(null, TipoAjustePrecio.PORCENTAJE, bd("10"))));
+
+            assertThat(plan.cambios()).hasSize(1);
+            assertThat(plan.cambios().get(0).precioNuevo()).isEqualTo(bd("200.00"));
+        }
+
+        @Test
+        @DisplayName("ajustes que dejan el precio en 0 o menos: el articulo va a errores")
+        void ajustesQueDejanElPrecioEnCero() {
+            PlanMasivo plan = costoPorcentaje("10", Art.art(1, "100.00").precio("10.00")
+                .ajustes(new AjustePrecio(null, TipoAjustePrecio.MONTO, bd("-200"))));
+
+            assertThat(plan.cambios()).isEmpty();
+            assertThat(plan.errores()).hasSize(1);
+            assertThat(plan.errores().get(0).motivo()).isEqualTo(AJUSTES_EN_CERO);
+        }
+
+        @Test
+        @DisplayName("la huella cambia si el articulo pasa a tener precio manual o ajustes")
+        void huellaConPrecioManualYAjustes() {
+            String sinNada = costoPorcentaje("10", Art.art(1, "100.00").precio("170.00")).huella();
+            String manual = costoPorcentaje("10", Art.art(1, "100.00").precio("170.00").manual()).huella();
+            String conAjuste = costoPorcentaje("10", Art.art(1, "100.00").precio("170.00")
+                .ajustes(new AjustePrecio(null, TipoAjustePrecio.MONTO, bd("1")))).huella();
+
+            assertThat(manual).isNotEqualTo(sinNada);
+            assertThat(conAjuste).isNotEqualTo(sinNada).isNotEqualTo(manual);
+        }
     }
 
     // ------------------------------------------------------------------ articulos en dolares
