@@ -254,7 +254,8 @@ class ActualizacionMasivaServiceTest {
 
             assertThatThrownBy(() -> service.vistaPrevia(pedido(null, RUBRO, null, false, "OTRO", null)))
                     .isInstanceOfSatisfying(DatosInvalidosException.class, e -> assertThat(e.errors()).containsOnly(
-                            Map.entry("modo", "Elegí qué querés hacer: cambiar el costo en porcentaje, sumarle un monto al costo o fijar el margen."),
+                            Map.entry("modo", "Elegí qué querés hacer: cambiar el costo en porcentaje, sumarle un monto al costo, "
+                                    + "fijar el margen o cambiar el precio final en porcentaje o en monto."),
                             Map.entry("valor", "Ingresá un valor.")));
 
             verifyNoInteractions(articuloRepository, configuracionPreciosService);
