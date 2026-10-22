@@ -128,6 +128,16 @@ describe('NuevaCompra', () => {
     expect(proveedores.listar).not.toHaveBeenCalled();
   });
 
+  it('cada campo del encabezado tiene nombre accesible', async () => {
+    await crear();
+    const nombre = (selector: string) => campo<HTMLInputElement>(selector).labels?.[0]?.textContent?.trim();
+    expect(nombre('select[name=proveedor]')).toMatch(/^Proveedor/);
+    expect(nombre('select[name=tipo]')).toMatch(/^Tipo/);
+    expect(nombre('input[name=puntoVenta]')).toBe('Punto de venta');
+    expect(nombre('input[name=numero]')).toBe('Número');
+    expect(nombre('input[name=fecha]')).toBe('Fecha');
+  });
+
   it('carga los proveedores activos y busca artículos por texto', async () => {
     await crear();
 
