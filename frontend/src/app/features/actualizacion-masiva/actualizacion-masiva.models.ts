@@ -2,9 +2,15 @@ import { Moneda } from '../articulos/articulo.models';
 
 /**
  * Qué hace la operación: `COSTO_PORCENTAJE` sube o baja el costo en %; `COSTO_MONTO` le suma o resta un monto
- * (en la moneda de cada artículo); `MARGEN` fija el margen propio.
+ * (en la moneda de cada artículo); `MARGEN` fija el margen propio; `PRECIO_PORCENTAJE` y `PRECIO_MONTO` cambian
+ * el precio final en % o en pesos y dejan a los artículos con precio manual (CU-14).
  */
-export type ModoMasivo = 'COSTO_PORCENTAJE' | 'COSTO_MONTO' | 'MARGEN';
+export type ModoMasivo =
+  | 'COSTO_PORCENTAJE'
+  | 'COSTO_MONTO'
+  | 'MARGEN'
+  | 'PRECIO_PORCENTAJE'
+  | 'PRECIO_MONTO';
 
 /**
  * Filtro (todo opcional: vacío alcanza a todo el catálogo activo), modo y valor. El texto en blanco
@@ -40,7 +46,10 @@ export interface ConteosMasivos {
   modificados: number;
 }
 
-/** Los márgenes son los efectivos (propio, del rubro o de la ferretería). `advertencia` es null si no hay. */
+/**
+ * Los márgenes son los efectivos (propio, del rubro o de la ferretería). `advertencia` es null si no hay; puede
+ * traer la variación fuerte, el margen negativo («Margen negativo: …», CU-14) o los dos, en ese orden.
+ */
 export interface CambioMasivo {
   articuloId: number;
   codigo: string;

@@ -46,6 +46,9 @@ const ESTADOS_CON_MENSAJE = [400, 403, 404, 409];
 /** Un número con coma o punto decimal y signo opcional; nada de notación científica, hexa ni miles. */
 const NUMERO = /^[+-]?\d+(?:[.,]\d+)?$/;
 
+/** Los modos que cambian el precio final y dejan a los artículos con precio manual (CU-14). */
+const MODOS_DE_PRECIO: readonly ModoMasivo[] = ['PRECIO_PORCENTAJE', 'PRECIO_MONTO'];
+
 @Component({
   selector: 'app-actualizacion-masiva',
   imports: [ReactiveFormsModule, DecimalPipe, MontoPipe, BarraAcciones],
@@ -100,7 +103,7 @@ export class ActualizacionMasiva implements OnInit {
   protected readonly etiquetaDelValor = computed(() => {
     const modo = this.formulario().modo;
     if (modo === 'MARGEN') return 'Margen (%)';
-    return modo === 'COSTO_MONTO' ? 'Monto' : 'Porcentaje (%)';
+    return modo === 'COSTO_MONTO' || modo === 'PRECIO_MONTO' ? 'Monto' : 'Porcentaje (%)';
   });
 
   /** Las importaciones que se ofrecen, de la más reciente a la más vieja y, con proveedor elegido, solo las suyas. */
@@ -125,6 +128,13 @@ export class ActualizacionMasiva implements OnInit {
   });
 
   protected readonly esMonto = computed(() => this.formulario().modo === 'COSTO_MONTO');
+  protected readonly esMontoDePrecio = computed(() => this.formulario().modo === 'PRECIO_MONTO');
+
+  /** Con un modo del precio final se avisa, sin bloquear, que los artículos quedan con precio manual. */
+  protected readonly cambiaElPrecioFinal = computed(() => {
+    const modo = this.formulario().modo;
+    return modo !== null && modo !== undefined && MODOS_DE_PRECIO.includes(modo);
+  });
 
   /** Hace falta el modo y un valor numérico, y que no haya otra vista previa en camino ni se esté aplicando. */
   protected readonly puedeGenerar = computed(() => {
@@ -143,7 +153,7 @@ export class ActualizacionMasiva implements OnInit {
     const f = this.formulario();
     const valor = parsearValor(f.valor ?? '');
     if (valor === null || f.modo === null || f.modo === undefined) return null;
-    if (f.modo === 'COSTO_MONTO') return valor === 0 ? 'El monto no puede ser cero.' : null;
+    if (f.modo === 'COSTO_MONTO' || f.modo === 'PRECIO_MONTO') return valor === 0 ? 'El monto no puede ser cero.' : null;
     if (f.modo === 'MARGEN') {
       return valor < 0 || valor > 1000 ? 'El margen tiene que estar entre 0 y 1.000.' : null;
     }
@@ -158,7 +168,11 @@ export class ActualizacionMasiva implements OnInit {
     const f = this.formulario();
     if ((f.modo ?? null) === null) return 'Para ver la vista previa, elegí la operación.';
     const nombre =
-      f.modo === 'MARGEN' ? 'el margen' : f.modo === 'COSTO_MONTO' ? 'el monto' : 'el porcentaje';
+      f.modo === 'MARGEN'
+        ? 'el margen'
+        : f.modo === 'COSTO_MONTO' || f.modo === 'PRECIO_MONTO'
+          ? 'el monto'
+          : 'el porcentaje';
     if (this.errorDelValor() !== null) return `Para ver la vista previa, corregí ${nombre}.`;
     return `Para ver la vista previa, escribí ${nombre}.`;
   });
@@ -211,7 +225,7 @@ export class ActualizacionMasiva implements OnInit {
   /** Ids para aria-describedby del valor: la pista del monto y, si hay, el error. */
   protected describirValor(): string | null {
     const ids = [
-      ...(this.esMonto() ? ['valor-pista'] : []),
+      ...(this.esMonto() || this.esMontoDePrecio() ? ['valor-pista'] : []),
       ...(this.errorDelValor() ? ['valor-error'] : []),
     ];
     return ids.length > 0 ? ids.join(' ') : null;

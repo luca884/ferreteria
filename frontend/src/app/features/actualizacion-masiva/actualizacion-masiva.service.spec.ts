@@ -95,6 +95,21 @@ describe('ActualizacionMasivaService', () => {
     req.flush({ conteos, cambios: [], errores: [], detalleRecortado: false, huella: 'h' });
   });
 
+  it('los modos del precio final viajan tal cual en la vista previa y al aplicar (CU-14)', () => {
+    const modos: PedidoMasivo['modo'][] = ['PRECIO_PORCENTAJE', 'PRECIO_MONTO'];
+    for (const modo of modos) {
+      service.vistaPrevia({ ...pedido, modo, valor: -250 }).subscribe();
+      service.aplicar({ ...pedido, modo, valor: -250, huella: 'h' }).subscribe();
+
+      const previa = http.expectOne(`${environment.apiUrl}/actualizacion-masiva/vista-previa`);
+      const aplicada = http.expectOne(`${environment.apiUrl}/actualizacion-masiva`);
+      expect(previa.request.body).toEqual(expect.objectContaining({ modo, valor: -250 }));
+      expect(aplicada.request.body).toEqual(expect.objectContaining({ modo, valor: -250, huella: 'h' }));
+      previa.flush({ conteos, cambios: [], errores: [], detalleRecortado: false, huella: 'h' });
+      aplicada.flush({ conteos, entradasDeHistorial: 0 });
+    }
+  });
+
   it('aplicar: POST JSON a /actualizacion-masiva con el pedido y la huella', () => {
     const aplicar: AplicarPedidoMasivo = { ...pedido, valor: -20, huella: 'h-64' };
     const respuesta: ResultadoMasivo = { conteos, entradasDeHistorial: 3 };
