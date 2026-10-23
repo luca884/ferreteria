@@ -22,9 +22,9 @@ Restricciones: sin migración; tenant solo del JWT; todo cruce con otra tabla un
 
 ## Tasks
 
-- [ ] T1 · S1, S2, S3 · ruta: inline · Aceptación: endpoint con tests de agrupado, orden, páginas, ventas sin cliente, permisos y aislamiento · Evidencia: — · Risk: none
-- [ ] T2 · S1, S3 · ruta: inline · Aceptación: pantalla `/articulos/{id}/clientes` y botón «Clientes» en la barra (solo Dueño) · Evidencia: — · Risk: none
-- [ ] T3 · S1 · ruta: inline · Aceptación: `docs/spec.md` (CU-03) y `docs/relevamiento-gds.md` (G29) dicen qué quedó · Evidencia: — · Risk: none
+- [x] T1 · S1, S2, S3 · ruta: inline · Aceptación: endpoint con tests de agrupado, orden, páginas, ventas sin cliente, permisos y aislamiento · Evidencia: RED `ClientesDelArticuloIntegrationTest` 6 fallas (404/403 sin endpoint) → GREEN 6/6; `ModulosArchTest` 40/0, `TenantScopingArchTest` 24/0; commit `68de7b8` · Risk: none
+- [x] T2 · S1, S3 · ruta: inline · Aceptación: pantalla `/articulos/{id}/clientes` y botón «Clientes» en la barra (solo Dueño) · Evidencia: specs escritos antes de la implementación pero corridos después (RED no observado): `clientes-articulo.spec.ts` 8/8, `articulos.spec.ts` 60/60, `articulos.service.spec.ts` 27/27; ego-browser: TOR-001 con 31 clientes en 2 páginas y «Además hubo 16 ventas sin cliente», Vendedor sin botón y con aviso; commit `a9d000e` · Risk: none
+- [x] T3 · S1 · ruta: inline · Aceptación: `docs/spec.md` (CU-03) y `docs/relevamiento-gds.md` (G29) dicen qué quedó · Evidencia: CU-03 punto 7, G29; commit `22b2d07` · Risk: none
 
 ## Log
 
@@ -36,3 +36,6 @@ Restricciones: sin migración; tenant solo del JWT; todo cruce con otra tabla un
   - GDS solo nombra la función: `docs/relevamiento-gds.md:96` (G29) y `:430` (Ctrl+A en el listado de artículos); sin captura de la pantalla.
   - Ventas: `comprobante` (`cliente_id` nulo, `fecha`) e `item_comprobante` (`articulo_id`, `cantidad`, `unidad`), `V4__ventas_y_stock.sql:7,30`. No hay anulación de ventas.
   - Patrón a copiar: movimientos del artículo, `stock/web/MovimientosArticuloController.java`, `stock/service/MovimientosArticulo.java` (404 con `ArticulosParaVenta.stockActual`), front `features/articulos/movimientos-articulo.*` y botón en `articulos.html:28`.
+- L3 (2026-10-23) Hallazgos:
+  - Un artículo no puede repetirse en el ticket (400 «Un artículo no puede repetirse en el ticket»): no hay dos renglones del mismo artículo en una venta. La consulta igual cuenta ventas distintas.
+  - Fuera de esta feature: la pantalla de Etiquetas (`cu-03-etiquetas`, ya en main) usaba la clase `.etiqueta`, que es la pastilla global de `styles.css:696` (nowrap, fondo gris). Se renombró a `.rotulo` con un test que lo fija; commit `01d82f0`.
