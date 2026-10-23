@@ -1,8 +1,10 @@
 package com.ferreteria.catalogo.repository;
 
 import com.ferreteria.catalogo.model.Articulo;
+import com.ferreteria.catalogo.model.ArticuloBajoMinimo;
 import com.ferreteria.catalogo.model.ConsultaMostrador;
 import com.ferreteria.catalogo.model.FiltroArticulos;
+import com.ferreteria.catalogo.model.OrdenBajoMinimo;
 import com.ferreteria.tenant.TenantContext;
 import com.ferreteria.tenant.TenantScopedRepository;
 import org.springframework.data.domain.Page;
@@ -329,6 +331,37 @@ public interface ArticuloRepository extends TenantScopedRepository<Articulo, Lon
     /** El articulo de la ferreteria del request con lock de escritura; ver {@link #findParaEditar}. */
     default Optional<Articulo> findParaEditarScoped(Long id) {
         return findParaEditar(TenantContext.requireFerreteriaId(), id);
+    }
+
+    /**
+     * Los articulos activos con stock menor al minimo (y minimo cargado, mayor a cero), en el orden pedido: DESCRIPCION,
+     * CODIGO, RUBRO o PROVEEDOR. Sin rubro o sin proveedor van al final; el desempate es la descripcion. Rubro y
+     * proveedor se unen por la ferreteria del articulo. Filas (id, codigo, descripcion, rubro, proveedor, costo, moneda,
+     * unidad, stock, minimo).
+     */
+    @Query(nativeQuery = true, value = """
+            select a.id, a.codigo_interno, a.descripcion, r.nombre, p.nombre, a.costo, a.moneda, a.unidad,
+                   a.stock_actual, a.stock_minimo
+            from articulo a
+            left join rubro r on r.id = a.rubro_id and r.ferreteria_id = a.ferreteria_id
+            left join proveedor p on p.id = a.proveedor_id and p.ferreteria_id = a.ferreteria_id
+            where a.ferreteria_id = :fid and a.activo and a.stock_minimo > 0 and a.stock_actual < a.stock_minimo
+            order by case when :orden = 'RUBRO' then r.nombre is null else 0 end,
+                     case when :orden = 'RUBRO' then r.nombre end,
+                     case when :orden = 'PROVEEDOR' then p.nombre is null else 0 end,
+                     case when :orden = 'PROVEEDOR' then p.nombre end,
+                     case when :orden = 'CODIGO' then a.codigo_interno end,
+                     a.descripcion, a.id
+            """)
+    List<Object[]> bajoMinimo(@Param("fid") Long ferreteriaId, @Param("orden") String orden);
+
+    /** Los articulos de la ferreteria del request bajo el stock minimo, en ese orden (CU-09, G72). */
+    default List<ArticuloBajoMinimo> bajoMinimoScoped(OrdenBajoMinimo orden) {
+        return bajoMinimo(TenantContext.requireFerreteriaId(), orden.name()).stream()
+                .map(f -> ArticuloBajoMinimo.de((Long) f[0], (String) f[1], (String) f[2], (String) f[3],
+                        (String) f[4], (BigDecimal) f[5], (String) f[6], (String) f[7], (BigDecimal) f[8],
+                        (BigDecimal) f[9]))
+                .toList();
     }
 
     /** Stock confirmado hoy en la base (lectura con lock) del articulo de la ferreteria del request. */
