@@ -51,6 +51,10 @@ public class Ferreteria {
     @Column(name = "redondeo_multiplo", nullable = false, precision = 15, scale = 2)
     private BigDecimal redondeoMultiplo = new BigDecimal("0.00");
 
+    /** Desde este importe (igual o superior) la venta facturable a Consumidor Final necesita un cliente con documento (GDS-32). */
+    @Column(name = "tope_consumidor_final", nullable = false, precision = 15, scale = 2)
+    private BigDecimal topeConsumidorFinal = new BigDecimal("10000000.00");
+
     @Column(name = "creado_en", nullable = false, updatable = false)
     private LocalDateTime creadoEn = HoraArgentina.ahora();
 
@@ -74,6 +78,11 @@ public class Ferreteria {
         this.redondeoMultiplo = redondeoMultiplo;
     }
 
+    /** El Dueño cambia el tope de venta a Consumidor Final sin identificar; mayor que 0 (lo valida el request y un CHECK). */
+    public void cambiarTopeConsumidorFinal(BigDecimal topeConsumidorFinal) {
+        this.topeConsumidorFinal = topeConsumidorFinal;
+    }
+
     /** Suspender o reactivar. Idempotente; no toca ningun otro dato de la ferreteria. */
     public void cambiarActivo(boolean activo) {
         this.estado = activo ? EstadoFerreteria.ACTIVA : EstadoFerreteria.SUSPENDIDA;
@@ -90,5 +99,6 @@ public class Ferreteria {
     public EstadoFerreteria getEstado() { return estado; }
     public BigDecimal getMargenDefectoPorcentaje() { return margenDefectoPorcentaje; }
     public BigDecimal getRedondeoMultiplo() { return redondeoMultiplo; }
+    public BigDecimal getTopeConsumidorFinal() { return topeConsumidorFinal; }
     public LocalDateTime getCreadoEn() { return creadoEn; }
 }
