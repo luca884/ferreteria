@@ -2,7 +2,7 @@ import { HttpErrorResponse } from '@angular/common/http';
 import { signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
-import { of, throwError } from 'rxjs';
+import { Subject, of, throwError } from 'rxjs';
 import { vi } from 'vitest';
 import { AuthService } from '../../core/auth/auth.service';
 import { formatearCosto, formatearMonto } from '../../core/formato/monto';
@@ -134,6 +134,28 @@ describe('ControlesDeDatos', () => {
     expect(texto('.controles-imprimible .control')).toBe(
       'Margen negativo: el costo supera el precio sin IVA, se vende a pérdida.',
     );
+  });
+
+  it('al cambiar de control no muestra ni imprime el listado anterior, aunque su respuesta llegue tarde', async () => {
+    const lento = new Subject<ArticuloEnControl[]>();
+    const rapido = new Subject<ArticuloEnControl[]>();
+    await crear(true, vi.fn().mockReturnValueOnce(of(filas)).mockReturnValueOnce(lento).mockReturnValueOnce(rapido));
+    const control = el().querySelector<HTMLSelectElement>('select[name="control"]')!;
+
+    control.value = 'SIN_RUBRO';
+    control.dispatchEvent(new Event('change'));
+    await refrescar();
+    expect(filasTabla()).toHaveLength(0);
+    expect(el().querySelector<HTMLButtonElement>('button.imprimir')!.disabled).toBe(true);
+
+    control.value = 'IVA_CERO';
+    control.dispatchEvent(new Event('change'));
+    rapido.next([filas[1]]);
+    lento.next(filas);
+    await refrescar();
+
+    expect(filasTabla()).toHaveLength(1);
+    expect(celdas(0)[0]).toBe('S-005');
   });
 
   it('Imprimir de la barra imprime el listado', async () => {

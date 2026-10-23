@@ -1,5 +1,6 @@
 import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
+import { Subscription } from 'rxjs';
 import { AuthService } from '../../core/auth/auth.service';
 import { formatearCosto, formatearMonto } from '../../core/formato/monto';
 import { BarraAcciones } from '../../shared/barra-acciones';
@@ -46,6 +47,7 @@ export class ControlesDeDatos implements OnInit {
   protected readonly cargando = signal(false);
   protected readonly error = signal<string | null>(null);
   protected readonly emitido = signal(emitidoEl(new Date()));
+  private pedido?: Subscription;
 
   protected readonly ferreteria = computed(() => this.auth.sesion()?.ferreteriaNombre ?? null);
   protected readonly elegido = computed(() => this.controles.find((c) => c.valor === this.control())!);
@@ -63,10 +65,13 @@ export class ControlesDeDatos implements OnInit {
     this.cargar();
   }
 
+  /** Cancela el pedido anterior y vacía el listado: nunca queda a la vista ni se imprime el de otro control. */
   protected cargar(): void {
+    this.pedido?.unsubscribe();
+    this.filas.set(null);
     this.cargando.set(true);
     this.error.set(null);
-    this.api.listar(this.control()).subscribe({
+    this.pedido = this.api.listar(this.control()).subscribe({
       next: (filas) => {
         this.filas.set(filas);
         this.emitido.set(emitidoEl(new Date()));
