@@ -6,7 +6,7 @@ Pronóstico: ~450 líneas cambiadas (agregadas + borradas, sin generados) · Heu
 
 ## Specs
 
-Alcance: `costoAl` en las respuestas de artículo (Dueño y Vendedor) y del mostrador; columna en Artículos; dato en los resultados del mostrador; docs. · Fuera de alcance: filtros u orden por fecha, la exportación CSV y la ficha.
+Alcance: `costoAl` en las respuestas de artículo (Dueño y Vendedor) y del mostrador; columna en Artículos; dato en los resultados y en la ficha del mostrador; docs. · Fuera de alcance: filtros u orden por fecha y la exportación CSV.
 Restricciones: sin migración; tenant solo del JWT; todo cruce con otra tabla une por `ferreteria_id`.
 
 - S1: «dale, vamos con gds-05» y «dale» (Luca, 2026-10-23) a la propuesta:
@@ -23,6 +23,8 @@ Restricciones: sin migración; tenant solo del JWT; todo cruce con otra tabla un
 - [x] T2 · S1, S2 · ruta: inline · Aceptación: columna «Costo al» en Artículos y «Costo al dd/mm/aaaa» en los resultados del mostrador · Evidencia: RED compilación → GREEN 4 specs; la guarda H07 de la ficha ahora permite solo la etiqueta «Costo al»; ego-browser como Vendedor: columna en Artículos, línea en los resultados y dato en la ficha del mostrador; commit `0a6769e` · Risk: none
 - [x] T3 · S1 · ruta: inline · Aceptación: `docs/spec.md` (CU-03 y CU-06) y `docs/relevamiento-gds.md` (G22, GDS-05) dicen qué quedó · Evidencia: CU-03 punto 5, CU-06 punto 2, G22 y GDS-05; commit `2d17ee0` · Risk: none
 
+- [x] T4 · S1 · ruta: inline · Aceptación: bloqueantes del verificador cerrados · Evidencia: RED `CostoAlIntegrationTest.madrugada` («2026-01-09» en vez de «2026-01-10») y `cambioDeMonedaManual` («2026-03-05» en vez de hoy) → GREEN 6/6; `ArticuloMonedaIntegrationTest` 16/0, `MostradorIntegrationTest` 32/0, `BusquedaMostradorServiceTest` 17/0, `TenantScopingArchTest` 24/0; commit `727cf73` · Risk: item 1 (el historial manual ahora guarda `moneda_anterior`)
+
 ## Log
 
 - L1 (2026-10-23) Pedido original, textual:
@@ -37,3 +39,8 @@ Restricciones: sin migración; tenant solo del JWT; todo cruce con otra tabla un
 - L3 (2026-10-23) Checks:
   - Backend `./mvnw test`: 4499/1. La falla fue `BusquedaMostradorServiceTest.elDtoNoExponeCostoNiMargen`, que fija los campos del DTO; se actualizó (17/0, `f6c308a`). La suite completa no se volvió a correr.
   - Frontend: 117 archivos en verde. `ng build`: OK.
+- L4 (2026-10-23) Verificador (opus), 2 bloqueantes:
+  - B1: `costoAlScoped` pasaba la fecha por la zona de la JVM (`Timestamp.toLocalDateTime()` con `hibernate.jdbc.time_zone: UTC`); en una JVM en Buenos Aires, lo guardado entre 00:00 y 02:59 salía con el día anterior. Arreglo: la consulta devuelve `date_format(..., '%Y-%m-%d')` y se parsea a `LocalDate`.
+  - B2: la edición manual guardaba el historial sin `moneda_anterior`, así que pasar a dólares con el mismo número de costo no movía la fecha. Arreglo: `ArticuloService.actualizar` guarda la moneda anterior cuando cambia, como la importación. Solo la consulta de «Costo al» lee esa columna.
+  - Advertencias: historial manual viejo con cambio de moneda sigue sin contar (sin datos en producción); la ficha del mostrador quedó en alcance (corregido arriba).
+- L5 (2026-10-23) Cierre: backend `./mvnw test` 4502/0 después de `727cf73`.
