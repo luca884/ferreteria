@@ -133,7 +133,8 @@ export type MotivoRechazo =
   | 'CAJA_CERRADA'
   | 'CAJA_DE_OTRO_DIA'
   | 'LIMITE_CUENTA_CORRIENTE'
-  | 'CUENTA_CORRIENTE_NO_HABILITADA';
+  | 'CUENTA_CORRIENTE_NO_HABILITADA'
+  | 'CONSUMIDOR_FINAL_SIN_DATOS';
 
 /** Los campos null no se serializan: cada motivo trae solo los que le aplican. */
 export interface ArticuloRechazado {

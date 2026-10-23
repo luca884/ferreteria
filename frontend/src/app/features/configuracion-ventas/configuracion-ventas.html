@@ -1,0 +1,75 @@
+<app-barra-acciones>
+  <h1>Consumidor Final</h1>
+</app-barra-acciones>
+
+@if (!auth.esDueno()) {
+  <p class="ayuda estado-vacio" role="status">Solo el Dueño puede configurar el tope de Consumidor Final.</p>
+} @else {
+  <p class="ayuda">
+    Desde este importe, una venta facturable necesita un cliente con DNI, CUIT o CUIL. Sin cliente identificado, el
+    mostrador no la cobra.
+  </p>
+
+  @if (aviso(); as mensaje) {
+    <p class="alerta exito" role="status">{{ mensaje }}</p>
+  }
+  @if (erroresGuardado().length > 0) {
+    <div class="error errores-campos" role="alert">
+      <strong>Revisá estos datos:</strong>
+      <ul>
+        @for (mensaje of erroresGuardado(); track $index) {
+          <li>{{ mensaje }}</li>
+        }
+      </ul>
+    </div>
+  } @else if (errorGuardado(); as mensaje) {
+    <p class="error" role="alert">{{ mensaje }}</p>
+  }
+
+  @if (cargando()) {
+    <p class="ayuda estado-vacio">Cargando…</p>
+  } @else if (cargaFallida()) {
+    <div class="error con-accion" role="alert">
+      <span>No se pudo cargar la configuración.</span>
+      <button type="button" class="secundario chico reintentar" (click)="cargar()">Reintentar</button>
+    </div>
+  } @else {
+    <form class="ventas" [formGroup]="form" (ngSubmit)="guardar()" novalidate>
+      <fieldset class="seccion">
+        <legend>Venta sin identificar</legend>
+
+        <div class="campo">
+          <label for="tope">Tope de venta a Consumidor Final ($)</label>
+          <input
+            id="tope"
+            name="topeConsumidorFinal"
+            type="number"
+            inputmode="decimal"
+            step="0.01"
+            min="0.01"
+            autocomplete="off"
+            formControlName="topeConsumidorFinal"
+            [attr.aria-invalid]="invalido() ? 'true' : null"
+            [attr.aria-describedby]="invalido() ? 'tope-pista tope-error' : 'tope-pista'"
+          />
+          <span id="tope-pista" class="pista">
+            ARCA pide identificar al comprador desde $ 10.000.000 (RG 5700/2025). Si cambia, actualizalo acá.
+          </span>
+          @if (invalido() && form.controls.topeConsumidorFinal.errors; as errores) {
+            <span id="tope-error" class="campo-error">
+              @if (errores['required']) {
+                El tope es obligatorio.
+              } @else {
+                El tope tiene que ser mayor que $ 0.
+              }
+            </span>
+          }
+        </div>
+      </fieldset>
+
+      <div class="acciones-form">
+        <button type="submit" [disabled]="guardando()">Guardar</button>
+      </div>
+    </form>
+  }
+}

@@ -130,7 +130,7 @@ describe('Shell', () => {
 
     const nav = el.querySelector('aside nav[aria-label="Secciones"]');
     expect(nav).not.toBeNull();
-    expect(nav!.querySelectorAll('a').length).toBe(19);
+    expect(nav!.querySelectorAll('a').length).toBe(20);
   });
 
   it('«Presupuestos» va después de «Mostrador» y lleva a /presupuestos, para el Vendedor y para el Dueño (GDS-13)', async () => {
@@ -185,6 +185,7 @@ describe('Shell', () => {
       'Margen y redondeo',
       'Cotización',
       'Formas de pago',
+      'Consumidor Final',
       'Usuarios',
     ]);
     expect(Array.from(el.querySelectorAll('nav .grupo')).map((g) => g.textContent?.trim())).toEqual([
@@ -231,13 +232,25 @@ describe('Shell', () => {
     const el = await render(true);
 
     const nombres = enlaces(el);
-    expect(nombres.indexOf('Formas de pago')).toBe(nombres.indexOf('Usuarios') - 1);
+    expect(nombres.indexOf('Formas de pago')).toBe(nombres.indexOf('Consumidor Final') - 1);
     expect(el.querySelector('nav a[href="/configuracion/formas-pago"]')).not.toBeNull();
 
     TestBed.resetTestingModule();
     const vendedor = await render(false);
     expect(vendedor.querySelector('nav a[href="/configuracion/formas-pago"]')).toBeNull();
     expect(enlaces(vendedor)).not.toContain('Formas de pago');
+  });
+
+  it('el Dueño ve «Consumidor Final» bajo «Cobro», antes de «Usuarios», y lleva a /configuracion/ventas; el Vendedor no la ve (GDS-32)', async () => {
+    const el = await render(true);
+
+    const nombres = enlaces(el);
+    expect(nombres.indexOf('Consumidor Final')).toBe(nombres.indexOf('Usuarios') - 1);
+    expect(el.querySelector('nav a[href="/configuracion/ventas"]')).not.toBeNull();
+
+    TestBed.resetTestingModule();
+    const vendedor = await render(false);
+    expect(vendedor.querySelector('nav a[href="/configuracion/ventas"]')).toBeNull();
   });
 
   it('el Dueño ve «Usuarios» bajo «Equipo», al final del menú, y lleva a /usuarios', async () => {
