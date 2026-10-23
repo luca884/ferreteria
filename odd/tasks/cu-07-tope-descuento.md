@@ -26,7 +26,7 @@ Restricciones: el control lo hace el backend; la pantalla solo adelanta el aviso
 - [x] T4 · S1 S3 · ruta: inline · Aceptación: pantalla de Usuarios con el campo y la columna; ego-browser · Evidencia: commits `0666dfc`, `dc96df3` · RED compilación (campo inexistente) → GREEN `usuarios.spec.ts` 34/34 · ego-browser OK · Risk: none
 - [x] T5 · S2 · ruta: inline · Aceptación: el diálogo de descuento del mostrador avisa del tope; el 400 del backend se muestra; ego-browser · Evidencia: commit `83afe10` · diálogo: tests escritos junto con el código (sin RED observado) 21/21; mostrador RED 1 falla → GREEN 254/254 · ego-browser OK · Risk: none
 - [x] T6 · S2 · ruta: inline · Aceptación: `docs/spec.md` CU-07 dice el tope por usuario · Evidencia: commit `83afe10` · Risk: none
-- [x] T7 · S8 · ruta: inline · Aceptación: «Pasar a venta» respeta los descuentos del presupuesto o remito · Evidencia: RED 3 fallas (400 en vez de 201, mensaje) → GREEN `TopeDescuentoIntegrationTest` 15/15 con `RegistroVentaTest`, `PresupuestoVentaIntegrationTest`, `RemitoVentaIntegrationTest` y las ArchTest · Risk: none
+- [x] T7 · S8 · ruta: inline · Aceptación: «Pasar a venta» respeta los descuentos del presupuesto o remito · Evidencia: RED 3 fallas (400 en vez de 201, mensaje) → GREEN `TopeDescuentoIntegrationTest` 15/15 con `RegistroVentaTest`, `PresupuestoVentaIntegrationTest`, `RemitoVentaIntegrationTest` y las ArchTest · commit `945a819` · suite backend 4401/0 · ego-browser: el Dueño emite un presupuesto con 20 %, el vendedor con tope 10 % hace «Pasar a venta» y cobra («Venta N.º 2247 cobrada: $ 158.920,00»); después se cerró la caja de prueba y se volvió a dejar al vendedor demo sin tope · Risk: none
 
 ## Log
 
