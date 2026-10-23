@@ -137,21 +137,49 @@ function valoresDe(origen: Partial<Record<CampoDeColumna, number | null>> & { fi
   return valores;
 }
 
+/**
+ * La primera fila de datos con la que sirve el guardado en este archivo, o null si no sirve. Los textos guardados del
+ * código y del costo se buscan en la hoja de referencia: si están en la fila anterior a la guardada, la guardada; si
+ * están en otra, la siguiente a esa (la lista se corrió). Si no están y hay propuesta, null. Sin textos guardados, sin
+ * filas para comparar o sin propuesta con que reemplazarlo, la guardada.
+ */
+function filaDesdeDelGuardado(guardado: MapeoLista, muestra: Muestra, hayPropuesta: boolean): number | null {
+  const { codigo, costo } = guardado.encabezados ?? {};
+  const filas = muestra.hojas[guardado.hoja]?.filas ?? [];
+  if ((!codigo && !costo) || filas.length === 0) return guardado.filaDesde;
+  const coincide = (celdas: string[], columna: number | null, texto: string | null | undefined) =>
+    !texto || (columna !== null && normalizar(celdas[columna]) === normalizar(texto));
+  const esEncabezado = (celdas: string[]) =>
+    coincide(celdas, guardado.columnaCodigo, codigo) && coincide(celdas, guardado.columnaCosto, costo);
+  const enSuLugar = filas.find((f) => f.numero === guardado.filaDesde - 1);
+  if (enSuLugar && esEncabezado(enSuLugar.celdas)) return guardado.filaDesde;
+  const encabezado = filas.find((f) => esEncabezado(f.celdas));
+  if (encabezado) return encabezado.numero + 1;
+  return hayPropuesta ? null : guardado.filaDesde;
+}
+
+function normalizar(texto: string | null | undefined): string {
+  return (texto ?? '').trim().replace(/\s+/g, ' ').toLowerCase();
+}
+
 function tienePropuesta(propuesta: PropuestaDeMapeo | null | undefined): propuesta is PropuestaDeMapeo {
   return !!propuesta && CAMPOS_DE_COLUMNA.some((campo) => propuesta[campo] !== null);
 }
 
 /**
- * El mapeo que se propone al abrir el archivo: el guardado del proveedor, si existe y todas sus hojas existen en el
- * archivo; si no, la propuesta que el servidor reconoció del encabezado; y si tampoco hay, todo vacío para elegir a mano.
+ * El mapeo que se propone al abrir el archivo: el guardado del proveedor, si existe, todas sus hojas existen en el
+ * archivo y su encabezado está en el archivo (con la primera fila de datos corrida si cambió de fila); si no, la propuesta que el servidor reconoció del encabezado; y si tampoco hay, todo vacío para elegir a mano.
  */
 export function precargarMapeo(guardado: MapeoLista | null | undefined, muestra: Muestra): Precarga {
   const cantidadDeHojas = muestra.hojas.length;
   if (guardado) {
     const hojas = guardado.hojas && guardado.hojas.length > 0 ? guardado.hojas : [guardado.hoja];
-    if (hojas.every((h) => h >= 0 && h < cantidadDeHojas)) {
+    const filaDesde = hojas.every((h) => h >= 0 && h < cantidadDeHojas)
+      ? filaDesdeDelGuardado(guardado, muestra, tienePropuesta(muestra.propuesta))
+      : null;
+    if (filaDesde !== null) {
       return {
-        valores: valoresDe(guardado),
+        valores: { ...valoresDe(guardado), filaDesde },
         hoja: guardado.hoja,
         hojas: [...hojas],
         desdePropuesta: false,

@@ -146,7 +146,8 @@ describe('Importaciones', () => {
       columnaCodigo: 1,
       columnaDescripcion: 0,
       columnaCosto: 2,
-      encabezados: { codigo: 'Codigo', descripcion: 'Detalle', costo: 'Precio' },
+      // Sin textos de encabezado: no se puede comparar con el archivo y se usa tal cual (ver mapeo-lista.spec).
+      encabezados: null,
     },
     listaIncluyeIva: true,
     bonificacion1: 40,
@@ -944,6 +945,21 @@ describe('Importaciones', () => {
         expect(q<HTMLInputElement>('#bonificacion2').value).toBe('10');
         expect(q<HTMLInputElement>('#bonificacion3').value).toBe('');
         expect(el().querySelectorAll('.reconocida')).toHaveLength(0);
+      });
+
+      it('si el encabezado guardado no está en el archivo, usa lo reconocido y no la primera fila guardada', async () => {
+        const otraLista: Proveedor = {
+          ...tersuave,
+          mapeoLista: { ...tersuave.mapeoLista!, encabezados: { codigo: 'Art.', descripcion: null, costo: 'Neto' } },
+        };
+        await crearComponente(true, [sinteplast, otraLista]);
+        await elegir('#proveedor', 'Tersuave');
+
+        await elegirArchivo(lista());
+
+        expect(q<HTMLInputElement>('#filaDesde').value).toBe('2');
+        expect(seleccionado('#columnaCodigo')).toBe('A · Codigo');
+        expect(seleccionado('#columnaCosto')).toBe('C · Precio');
       });
 
       it('el mapeo guardado abre la grilla en su hoja de referencia', async () => {
