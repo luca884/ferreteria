@@ -339,6 +339,7 @@ GDS tiene, aparte, "Verificar costos en cero o mal cargados" y "Ventas con costo
 - La ganancia de GDS es por artículo, con 30 por defecto (f121). Coincide con el margen heredado y con el 30 % por defecto de ferreteria. La importación cambia el costo, nunca el margen.
 - En GDS algunos precios son manuales (lista 3 y 4, "Lista 1 calculada" desmarcada; G17). En ferreteria todo precio es calculado, así que no existe el caso "costo nuevo > precio manual". Si más adelante aparecen precios fijos (D), la vista previa tiene que marcar el margen negativo.
 - **Corrección a la primera versión:** GDS **sí** redondea a un múltiplo. Tanto `Actualización de Precios` como `Configurar Descuentos` tienen un redondeo configurable (0,50 por defecto) (F-1420, F-1480). Coincide con la decisión de ferreteria de redondear al múltiplo. Además GDS redondea el total del comprobante con una casilla aparte (G52), y eso se sigue descartando.
+- **Hecho (2026-10-23, Luca: «vamos con gds»):** el Dueño edita el margen por defecto y el múltiplo de redondeo en «Margen y redondeo» (CU-03). El redondeo arranca en 0 y, al guardar, se recalculan los precios que dependen de esos valores, con aviso previo de cuántos artículos cambian.
 
 ### 4.7 Moneda — **no previsto en CU-04; pregunta**
 
@@ -357,7 +358,7 @@ Ahora que se vio la pantalla (G26), la comparación es posible:
 | Filtros | Marca, rubro, proveedor, rango de códigos | Proveedor, rubro o búsqueda |
 | Qué cambia | Costo o precio de venta | Costo (porcentaje) o margen |
 | Fórmula | `Lista X = Lista Y + valor`, en % o en $ | Porcentaje de aumento |
-| Redondeo | Múltiplo configurable (0,50) | Múltiplo de ferreteria |
+| Redondeo | Múltiplo configurable (0,50) | Múltiplo de ferreteria, que el Dueño edita en «Margen y redondeo» (CU-03, 2026-10-23) |
 | Vista previa | No se sabe (no se ejecutó) | Sí, antes de confirmar |
 
 Conclusión: CU-05 cubre lo importante. Lo único que GDS tiene de más es sumar un **monto fijo en $** (GDS-40, post-MVP) y filtrar por rango de códigos (no hace falta con búsqueda).

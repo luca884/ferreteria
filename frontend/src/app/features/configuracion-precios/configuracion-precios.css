@@ -1,0 +1,53 @@
+:host {
+  display: block;
+  width: 100%;
+}
+/* La barra de acciones va a todo el ancho; el resto no se estira de más. */
+:host > :not(app-barra-acciones) {
+  max-width: 1040px;
+}
+
+.errores-campos ul,
+.avisos-salteados ul {
+  margin: var(--e-1) 0 0;
+  padding-left: var(--e-6);
+}
+
+.precios {
+  display: grid;
+  gap: var(--e-4);
+  align-items: start;
+}
+.seccion {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--e-3) var(--e-4);
+  min-width: 0;
+  margin: 0;
+  padding: var(--e-4) var(--e-5) var(--e-5);
+  border: 1px solid var(--borde);
+  border-radius: var(--radio-lg);
+  background: var(--superficie);
+  box-shadow: var(--sombra-1);
+}
+.seccion > legend {
+  float: left;
+  grid-column: 1 / -1;
+  width: 100%;
+  margin-bottom: var(--e-1);
+  padding: 0;
+  font-size: 1rem;
+  font-weight: 650;
+}
+
+.acciones-form {
+  display: flex;
+  gap: var(--e-3);
+  align-items: center;
+}
+
+@media (max-width: 900px) {
+  .seccion {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

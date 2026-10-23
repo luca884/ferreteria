@@ -15,6 +15,7 @@ import { CuentaCliente } from './features/clientes/cuenta/cuenta-cliente';
 import { HistorialCajas } from './features/caja/historial-cajas';
 import { Articulos } from './features/articulos/articulos';
 import { PaginaConfiguracionCotizacion } from './features/configuracion-cotizacion/configuracion-cotizacion';
+import { PaginaConfiguracionPrecios } from './features/configuracion-precios/configuracion-precios';
 import { FormasPago } from './features/formas-pago/formas-pago';
 import { Importaciones } from './features/importaciones/importaciones';
 import { Mostrador } from './features/mostrador/mostrador';
@@ -109,6 +110,14 @@ describe('rutas', () => {
 
     expect(ruta).toBeDefined();
     expect(await (ruta!.loadComponent as () => Promise<unknown>)()).toBe(PaginaConfiguracionCotizacion);
+  });
+
+  it('la ruta configuracion/precios carga la pantalla de margen y redondeo, sin guard propio (la pantalla le avisa al Vendedor)', async () => {
+    const ruta = hijas().find((r) => r.path === 'configuracion/precios');
+
+    expect(ruta).toBeDefined();
+    expect(await (ruta!.loadComponent as () => Promise<unknown>)()).toBe(PaginaConfiguracionPrecios);
+    expect(ruta!.canActivate).toBeUndefined();
   });
 
   it('configuracion/cotizacion no tiene guard propio, como las otras pantallas del Dueño: la pantalla le avisa al Vendedor', () => {
@@ -221,6 +230,7 @@ describe('rutas', () => {
     expect(titulo(hijas(), 'importaciones')).toBe('Importar lista · Ferretería');
     expect(titulo(hijas(), 'actualizacion-masiva')).toBe('Actualizar precios · Ferretería');
     expect(titulo(hijas(), 'configuracion/cotizacion')).toBe('Cotización · Ferretería');
+    expect(titulo(hijas(), 'configuracion/precios')).toBe('Margen y redondeo · Ferretería');
     expect(titulo(hijas(), 'configuracion/formas-pago')).toBe('Formas de pago · Ferretería');
     expect(titulo(hijas(), 'clientes/:id/cuenta')).toBe('Cuenta corriente · Ferretería');
   });

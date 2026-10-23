@@ -485,4 +485,152 @@ class RecalculoPreciosServiceTest {
         assertThat(resultado.avisos()).containsExactly(aviso("USD-62", "Articulo USD 62"));
         assertThat(historialGuardado()).extracting(HistorialPrecio::getArticuloId).containsExactly(61L);
     }
+
+    // ---- porCambioDeConfiguracion: margen por defecto y multiplo de redondeo (cu-03-configuracion-precios) ----
+
+    private static final ConfiguracionPrecios CONFIG_ACTUAL = new ConfiguracionPrecios(bd("30.00"), bd("10.00"));
+
+    /** Articulo sin rubro ni margen propio (usa el 30 de la ferreteria), IVA 21: costo 100 vale 160 con multiplo 10. */
+    private static Articulo sinRubro(long id, String costo, Moneda moneda) throws Exception {
+        Articulo articulo = new Articulo(FERRETERIA);
+        articulo.actualizar(new DatosArticulo("SR-" + id, null, null, "Sin rubro " + id, null, null,
+                        bd(costo), null, AlicuotaIva.IVA_21, Unidad.UNIDAD, BigDecimal.ZERO, null, true, moneda),
+                new ContextoPrecio(null, bd("30.00"), bd("10.00"), moneda == Moneda.USD ? bd("1000") : null));
+        fijar(articulo, "id", id);
+        return articulo;
+    }
+
+    @Test
+    @DisplayName("porCambioDeConfiguracion exige una transaccion en curso (MANDATORY): corre dentro del guardado")
+    void porConfiguracionEsMandatory() throws Exception {
+        Transactional transaccional = RecalculoPreciosService.class
+                .getMethod("porCambioDeConfiguracion", ConfiguracionPrecios.class, ConfiguracionPrecios.class, Long.class)
+                .getAnnotation(Transactional.class);
+
+        assertThat(transaccional).isNotNull();
+        assertThat(transaccional.propagation()).isEqualTo(Propagation.MANDATORY);
+    }
+
+    @Test
+    @DisplayName("si solo cambia el margen por defecto recalcula los que lo heredan (30 a 50 %: 160 pasa a 190) con historial MASIVO")
+    void cambioDeMargenPorDefectoRecalculaLosHerederos() throws Exception {
+        Articulo x = sinRubro(21L, "100.00", Moneda.ARS);
+        assertThat(x.getPrecioFinal()).isEqualByComparingTo("160");
+        when(articuloRepository.heredanMargenPorDefectoScoped()).thenReturn(List.of(x));
+
+        RecalculoPreciosService.ResultadoRecalculo resultado = service.porCambioDeConfiguracion(
+                CONFIG_ACTUAL, new ConfiguracionPrecios(bd("50.00"), bd("10.00")), USUARIO);
+
+        // 100 x 1,50 x 1,21 = 181,50 -> multiplo 10 -> 190
+        assertThat(x.getPrecioFinal()).isEqualByComparingTo("190");
+        assertThat(resultado.articulosRecalculados()).isEqualTo(1);
+        assertThat(resultado.avisos()).isEmpty();
+        assertThat(historialGuardado()).singleElement().satisfies(h -> {
+            assertThat(h.getOrigen()).isEqualTo(OrigenPrecio.MASIVO);
+            assertThat(h.getUsuarioId()).isEqualTo(USUARIO);
+            assertThat(h.getPrecioAnterior()).isEqualByComparingTo("160");
+            assertThat(h.getPrecioNuevo()).isEqualByComparingTo("190");
+        });
+        verify(articuloRepository, never()).activosConPrecioCalculadoScoped();
+    }
+
+    @Test
+    @DisplayName("si cambia el multiplo recalcula todos los activos con precio calculado, cada uno con el margen de su rubro")
+    void cambioDeMultiploRecalculaTodos() throws Exception {
+        when(rubroRepository.listarScoped()).thenReturn(List.of(rubro("35.00")));
+        Articulo delRubro = heredero(11L, "100.00");
+        Articulo deLaFerreteria = sinRubro(21L, "100.00", Moneda.ARS);
+        when(articuloRepository.activosConPrecioCalculadoScoped()).thenReturn(List.of(delRubro, deLaFerreteria));
+
+        RecalculoPreciosService.ResultadoRecalculo resultado = service.porCambioDeConfiguracion(
+                CONFIG_ACTUAL, new ConfiguracionPrecios(bd("30.00"), bd("0.00")), USUARIO);
+
+        // Sin redondeo: 100 x 1,35 x 1,21 = 163,35 y 100 x 1,30 x 1,21 = 157,30
+        assertThat(delRubro.getPrecioFinal()).isEqualByComparingTo("163.35");
+        assertThat(deLaFerreteria.getPrecioFinal()).isEqualByComparingTo("157.30");
+        assertThat(resultado.articulosRecalculados()).isEqualTo(2);
+        assertThat(historialGuardado()).extracting(HistorialPrecio::getArticuloId).containsExactly(11L, 21L);
+        verify(articuloRepository, never()).heredanMargenPorDefectoScoped();
+    }
+
+    @Test
+    @DisplayName("si cambian los dos valores recalcula todos con el margen y el multiplo nuevos")
+    void cambianLosDos() throws Exception {
+        when(rubroRepository.listarScoped()).thenReturn(List.of());
+        Articulo x = sinRubro(21L, "100.00", Moneda.ARS);
+        when(articuloRepository.activosConPrecioCalculadoScoped()).thenReturn(List.of(x));
+
+        service.porCambioDeConfiguracion(CONFIG_ACTUAL, new ConfiguracionPrecios(bd("50.00"), bd("0.50")), USUARIO);
+
+        // 181,50 ya es multiplo de 0,50
+        assertThat(x.getPrecioFinal()).isEqualByComparingTo("181.50");
+    }
+
+    @Test
+    @DisplayName("si no cambia nada no consulta articulos ni guarda historial (35 y 35.00 son el mismo margen)")
+    void sinCambioNoRecalcula() {
+        RecalculoPreciosService.ResultadoRecalculo resultado = service.porCambioDeConfiguracion(
+                CONFIG_ACTUAL, new ConfiguracionPrecios(bd("30"), bd("10")), USUARIO);
+
+        assertThat(resultado.articulosRecalculados()).isZero();
+        assertThat(resultado.avisos()).isEmpty();
+        verifyNoInteractions(articuloRepository, historialPrecioRepository, dolarDePrecios);
+    }
+
+    @Test
+    @DisplayName("un heredero en dolares usa el dolar vigente: 10 USD a 1000 con 50 % pasa de 15.730 a 18.150")
+    void configuracionConArticuloEnDolares() throws Exception {
+        when(dolarDePrecios.vigente()).thenReturn(Optional.of(bd("1000")));
+        Articulo usd = sinRubro(61L, "10.00", Moneda.USD);
+        assertThat(usd.getPrecioFinal()).isEqualByComparingTo("15730");
+        when(articuloRepository.heredanMargenPorDefectoScoped()).thenReturn(List.of(usd));
+
+        service.porCambioDeConfiguracion(CONFIG_ACTUAL, new ConfiguracionPrecios(bd("50.00"), bd("10.00")), USUARIO);
+
+        assertThat(usd.getPrecioFinal()).isEqualByComparingTo("18150");
+    }
+
+    @Test
+    @DisplayName("con un articulo en dolares y ninguna cotizacion: 409 y no se guarda historial")
+    void configuracionSinCotizacionDa409() throws Exception {
+        when(dolarDePrecios.vigente()).thenReturn(Optional.empty());
+        when(articuloRepository.heredanMargenPorDefectoScoped()).thenReturn(List.of(sinRubro(61L, "10.00", Moneda.USD)));
+
+        assertThatThrownBy(() -> service.porCambioDeConfiguracion(
+                        CONFIG_ACTUAL, new ConfiguracionPrecios(bd("50.00"), bd("10.00")), USUARIO))
+                .isInstanceOf(ConflictException.class)
+                .hasMessage("Todavía no hay cotización del dólar. Probá en unos minutos");
+        verify(historialPrecioRepository, never()).saveAll(anyList());
+    }
+
+    @Test
+    @DisplayName("saltea al articulo cuyo ajuste lo dejaria en 0 o menos: conserva el precio, avisa y no lo cuenta")
+    void configuracionSaltea() throws Exception {
+        Articulo normal = sinRubro(21L, "100.00", Moneda.ARS);
+        Articulo conAjuste = sinRubro(22L, "100.00", Moneda.ARS);
+        conAjuste.fijarAjustesDePrecio(ajusteEnPesos("-150"), new ContextoPrecio(null, bd("30.00"), bd("10.00")));
+        assertThat(conAjuste.getPrecioFinal()).isEqualByComparingTo("10.00");
+        when(articuloRepository.heredanMargenPorDefectoScoped()).thenReturn(List.of(normal, conAjuste));
+
+        RecalculoPreciosService.ResultadoRecalculo resultado = service.porCambioDeConfiguracion(
+                CONFIG_ACTUAL, new ConfiguracionPrecios(bd("0.00"), bd("10.00")), USUARIO);
+
+        assertThat(conAjuste.getPrecioFinal()).isEqualByComparingTo("10.00");
+        assertThat(resultado.articulosRecalculados()).isEqualTo(1);
+        assertThat(resultado.avisos()).containsExactly(aviso("SR-22", "Sin rubro 22"));
+    }
+
+    @Test
+    @DisplayName("cuenta los que se recalcularian: herederos si cambia solo el margen, todos si cambia el multiplo, 0 si nada")
+    void cuentaLosQueSeRecalcularian() {
+        when(articuloRepository.contarHeredanMargenPorDefectoScoped()).thenReturn(3L);
+        when(articuloRepository.contarActivosConPrecioCalculadoScoped()).thenReturn(40L);
+
+        assertThat(service.contarPorCambioDeConfiguracion(CONFIG_ACTUAL, new ConfiguracionPrecios(bd("35"), bd("10"))))
+                .isEqualTo(3L);
+        assertThat(service.contarPorCambioDeConfiguracion(CONFIG_ACTUAL, new ConfiguracionPrecios(bd("30"), bd("1"))))
+                .isEqualTo(40L);
+        assertThat(service.contarPorCambioDeConfiguracion(CONFIG_ACTUAL, new ConfiguracionPrecios(bd("30"), bd("10"))))
+                .isZero();
+    }
 }

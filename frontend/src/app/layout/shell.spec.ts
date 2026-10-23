@@ -130,7 +130,7 @@ describe('Shell', () => {
 
     const nav = el.querySelector('aside nav[aria-label="Secciones"]');
     expect(nav).not.toBeNull();
-    expect(nav!.querySelectorAll('a').length).toBe(16);
+    expect(nav!.querySelectorAll('a').length).toBe(17);
   });
 
   it('«Presupuestos» va después de «Mostrador» y lleva a /presupuestos, para el Vendedor y para el Dueño (GDS-13)', async () => {
@@ -163,7 +163,7 @@ describe('Shell', () => {
     }
   });
 
-  it('el Dueño ve Mostrador, Artículos, Rubros, Proveedores, Compras, Ventas, Reportes y, bajo «Precios», Importar lista, Actualizar precios y Cotización, y bajo «Cobro», Formas de pago, y bajo «Equipo», Usuarios', async () => {
+  it('el Dueño ve Mostrador, Artículos, Rubros, Proveedores, Compras, Ventas, Reportes y, bajo «Precios», Importar lista, Actualizar precios, Margen y redondeo y Cotización, y bajo «Cobro», Formas de pago, y bajo «Equipo», Usuarios', async () => {
     const el = await render(true);
 
     expect(enlaces(el)).toEqual([
@@ -180,6 +180,7 @@ describe('Shell', () => {
       'Reportes',
       'Importar lista',
       'Actualizar precios',
+      'Margen y redondeo',
       'Cotización',
       'Formas de pago',
       'Usuarios',
@@ -261,6 +262,21 @@ describe('Shell', () => {
       expect(enlace).not.toBeNull();
       expect(enlace!.textContent?.trim()).toBe('Cambiar mi contraseña');
     }
+  });
+
+  it('el Dueño ve «Margen y redondeo» antes de «Cotización» y lleva a /configuracion/precios', async () => {
+    const el = await render(true);
+
+    const nombres = enlaces(el);
+    expect(nombres.indexOf('Margen y redondeo')).toBe(nombres.indexOf('Cotización') - 1);
+    const enlace = el.querySelector('nav a[href="/configuracion/precios"]');
+    expect(enlace!.textContent?.trim()).toBe('Margen y redondeo');
+  });
+
+  it('el Vendedor no ve «Margen y redondeo» en el menú', async () => {
+    const el = await render(false);
+
+    expect(el.querySelector('nav a[href="/configuracion/precios"]')).toBeNull();
   });
 
   it('el Vendedor no ve «Cotización» en el menú (sí ve el bloque de cotización)', async () => {

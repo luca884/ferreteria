@@ -52,6 +52,11 @@ Son 12 casos de uso (CU-01 a CU-12), agrupados en cinco módulos: Configuración
 
 1. Alta, edición y baja lógica de un artículo: código interno, código de barras, código del proveedor, descripción, rubro, proveedor, costo, margen, alícuota de IVA, unidad y stock mínimo.
 2. El precio de venta se calcula solo: costo × (1 + margen) × (1 + alícuota de IVA) (ver Reglas de negocio).
+3. **Margen y redondeo** (Configuración, solo el Dueño), como la ganancia por defecto y el redondeo de GDS (G13, G26). El Dueño edita el margen por defecto de la ferretería y el múltiplo de redondeo del precio final (0 es sin redondeo, y así arranca). Antes de guardar, la pantalla avisa cuántos artículos cambian de precio y pide confirmación. Al guardar:
+   - si cambió el múltiplo, se recalculan todos los artículos activos sin precio manual;
+   - si cambió solo el margen por defecto, se recalculan los artículos activos sin precio manual, sin margen propio y sin rubro;
+   - cada precio que cambia guarda historial con origen masivo. Un artículo cuyos ajustes dejarían el precio en 0 o menos conserva el suyo y se avisa;
+   - con artículos en dólares a recalcular y sin cotización guardada, no se guarda nada (409).
 
 **CU-04 Importar lista de precios del proveedor** (Dueño) — el caso más importante del sistema
 
@@ -242,7 +247,7 @@ Estas reglas se codifican en el dominio y se cubren con tests unitarios antes qu
 - El costo del proveedor se guarda **sin IVA**. Precio neto = costo × (1 + margen). Precio final = neto × (1 + alícuota de IVA).
 - El margen se define por artículo; si no tiene, hereda el del rubro; si no, el margen por defecto de la ferretería.
 - Sobre el precio final calculado se suman los ajustes del artículo, todos sobre el mismo precio calculado (CU-14). Un artículo con precio manual conserva el precio que escribió el Dueño y no usa la fórmula (CU-14).
-- Sin redondeo por ahora: el precio final queda con centavos (escala 2, hacia arriba al centavo). Si las ferreterías lo piden, se evaluará redondear hacia arriba al peso entero. El código del múltiplo configurable sigue, con múltiplo 0 (sin redondeo) en todas las ferreterías (H11, migración V9).
+- Redondeo: el precio final se redondea hacia arriba a un múltiplo que elige el Dueño (CU-03, «Margen y redondeo»), como GDS. Con múltiplo 0 no se redondea y el precio queda con centavos (escala 2, hacia arriba al centavo). Toda ferretería arranca en 0 (H11, migración V9); desde 2026-10-23 el Dueño lo puede cambiar.
 - Todo cambio de costo o precio guarda historial: fecha, valor anterior, valor nuevo y origen (importación, masivo, manual, compra).
 - Montos en `BigDecimal` (Java) y `DECIMAL(15,2)` (base). Nunca `double`.
 

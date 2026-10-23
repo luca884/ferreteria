@@ -46,7 +46,7 @@ public class Ferreteria {
 
     /**
      * El precio final se redondea hacia arriba a un multiplo de este valor; 0 es sin redondeo (precio con centavos).
-     * Por ahora 0 en todas (H11, V9): si las ferreterias lo piden, se evaluara redondear al peso entero.
+     * Arranca en 0 (V9) y lo cambia el Dueño, como el redondeo configurable de GDS.
      */
     @Column(name = "redondeo_multiplo", nullable = false, precision = 15, scale = 2)
     private BigDecimal redondeoMultiplo = new BigDecimal("0.00");
@@ -66,6 +66,12 @@ public class Ferreteria {
     public void actualizarDatos(String razonSocial, CondicionIva condicionIva) {
         this.razonSocial = razonSocial;
         this.condicionIva = condicionIva;
+    }
+
+    /** El Dueño cambia el margen por defecto y el multiplo de redondeo; el recalculo de precios lo hace el catalogo. */
+    public void cambiarConfiguracionPrecios(BigDecimal margenDefectoPorcentaje, BigDecimal redondeoMultiplo) {
+        this.margenDefectoPorcentaje = margenDefectoPorcentaje;
+        this.redondeoMultiplo = redondeoMultiplo;
     }
 
     /** Suspender o reactivar. Idempotente; no toca ningun otro dato de la ferreteria. */

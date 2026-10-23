@@ -1,0 +1,128 @@
+<app-barra-acciones>
+  <h1>Margen y redondeo</h1>
+</app-barra-acciones>
+
+@if (!auth.esDueno()) {
+  <p class="ayuda estado-vacio" role="status">Solo el Dueño puede configurar el margen y el redondeo.</p>
+} @else {
+  <p class="ayuda">
+    El margen por defecto y el redondeo con los que se calcula el precio final de los artículos. Al guardar, se
+    recalculan los precios que dependen de ellos.
+  </p>
+
+  @if (aviso(); as mensaje) {
+    <p class="alerta exito" role="status">{{ mensaje }}</p>
+  }
+  @if (avisosSalteados().length > 0) {
+    <div class="alerta advertencia avisos-salteados" role="alert">
+      <ul>
+        @for (mensaje of avisosSalteados(); track $index) {
+          <li>{{ mensaje }}</li>
+        }
+      </ul>
+    </div>
+  }
+  @if (erroresGuardado().length > 0) {
+    <div class="error errores-campos" role="alert">
+      <strong>Revisá estos datos:</strong>
+      <ul>
+        @for (mensaje of erroresGuardado(); track $index) {
+          <li>{{ mensaje }}</li>
+        }
+      </ul>
+    </div>
+  } @else if (errorGuardado(); as mensaje) {
+    <p class="error" role="alert">{{ mensaje }}</p>
+  }
+
+  @if (cargando()) {
+    <p class="ayuda estado-vacio">Cargando…</p>
+  } @else if (cargaFallida()) {
+    <div class="error con-accion" role="alert">
+      <span>No se pudo cargar la configuración.</span>
+      <button type="button" class="secundario chico reintentar" (click)="cargar()">Reintentar</button>
+    </div>
+  } @else {
+    <form class="precios" [formGroup]="form" (ngSubmit)="guardar()" novalidate>
+      <fieldset class="seccion">
+        <legend>Precio de venta</legend>
+
+        <div class="campo">
+          <label for="margen-defecto">Margen por defecto (%)</label>
+          <input
+            id="margen-defecto"
+            name="margenDefectoPorcentaje"
+            type="number"
+            inputmode="decimal"
+            step="0.01"
+            min="0"
+            autocomplete="off"
+            formControlName="margenDefectoPorcentaje"
+            [attr.aria-invalid]="invalido('margenDefectoPorcentaje') ? 'true' : null"
+            [attr.aria-describedby]="
+              invalido('margenDefectoPorcentaje') ? 'margen-defecto-pista margen-defecto-error' : 'margen-defecto-pista'
+            "
+          />
+          <span id="margen-defecto-pista" class="pista">Lo usan los artículos sin margen propio y sin rubro.</span>
+          @if (invalido('margenDefectoPorcentaje') && form.controls.margenDefectoPorcentaje.errors; as errores) {
+            <span id="margen-defecto-error" class="campo-error">
+              @if (errores['required']) {
+                El margen es obligatorio.
+              } @else if (errores['min']) {
+                El margen no puede ser negativo.
+              } @else {
+                El margen no puede superar 1000 %.
+              }
+            </span>
+          }
+        </div>
+
+        <div class="campo">
+          <label for="redondeo">Redondear a múltiplos de ($)</label>
+          <input
+            id="redondeo"
+            name="redondeoMultiplo"
+            type="number"
+            inputmode="decimal"
+            step="0.01"
+            min="0"
+            autocomplete="off"
+            formControlName="redondeoMultiplo"
+            [attr.aria-invalid]="invalido('redondeoMultiplo') ? 'true' : null"
+            [attr.aria-describedby]="invalido('redondeoMultiplo') ? 'redondeo-pista redondeo-error' : 'redondeo-pista'"
+          />
+          <span id="redondeo-pista" class="pista">
+            El precio final se redondea hacia arriba a un múltiplo de este valor. Con 0 no se redondea: el precio queda
+            con centavos.
+          </span>
+          @if (invalido('redondeoMultiplo') && form.controls.redondeoMultiplo.errors; as errores) {
+            <span id="redondeo-error" class="campo-error">
+              @if (errores['required']) {
+                El redondeo es obligatorio.
+              } @else if (errores['min']) {
+                El redondeo no puede ser negativo.
+              } @else {
+                El redondeo no puede superar $ 1000.
+              }
+            </span>
+          }
+        </div>
+      </fieldset>
+
+      <div class="acciones-form">
+        <button type="submit" [disabled]="guardando()">Guardar</button>
+      </div>
+    </form>
+  }
+}
+
+@if (cambioPendiente(); as cambio) {
+  <app-confirmacion
+    titulo="¿Cambiar el margen y el redondeo?"
+    [mensaje]="mensajeCambio(cambio)"
+    textoConfirmar="Guardar y recalcular"
+    foco="confirmar"
+    (confirmar)="confirmarCambio()"
+    (cancelar)="cambioPendiente.set(null)"
+  />
+}

@@ -118,6 +118,66 @@ public class RecalculoPreciosService {
     }
 
     /**
+     * Cuantos articulos cambiaron de precio en un recalculo por configuracion y los avisos de los que se saltearon porque
+     * sus ajustes sobre el precio final los dejarian en 0 o menos (S7).
+     */
+    public record ResultadoRecalculo(int articulosRecalculados, List<String> avisos) {
+    }
+
+    /**
+     * Recalcula los precios despues de que el Dueño cambia la configuracion de precios de la ferreteria: si cambio el
+     * multiplo de redondeo, todos los articulos activos sin precio manual; si solo cambio el margen por defecto, los que
+     * lo heredan (sin rubro ni margen propio). Guarda un historial MASIVO por cada precio que cambia. Debe correr dentro
+     * de la transaccion del guardado (MANDATORY): si falla, tambien se revierte la configuracion.
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public ResultadoRecalculo porCambioDeConfiguracion(
+            ConfiguracionPrecios anterior, ConfiguracionPrecios nueva, Long usuarioId) {
+        boolean cambioElMultiplo = cambioElMultiplo(anterior, nueva);
+        if (!cambioElMultiplo && !cambioElMargen(anterior, nueva)) {
+            return new ResultadoRecalculo(0, List.of());
+        }
+        List<Articulo> afectados = cambioElMultiplo
+                ? articuloRepository.activosConPrecioCalculadoScoped()
+                : articuloRepository.heredanMargenPorDefectoScoped();
+        // Los herederos del margen por defecto no tienen rubro: no hace falta leer los rubros.
+        List<Rubro> rubros = cambioElMultiplo ? rubroRepository.listarScoped() : List.of();
+        ContextosDePrecio contextos = ContextosDePrecio.armar(rubros, nueva.margenDefectoPorcentaje(),
+                nueva.redondeoMultiplo(), dolarVigenteSiHayArticulosEnDolares(afectados));
+
+        List<HistorialPrecio> historial = new ArrayList<>();
+        List<String> avisos = new ArrayList<>();
+        for (Articulo articulo : afectados) {
+            RecalculoAutomatico resultado = articulo.recalcularPrecioAutomatico(contextos.de(articulo.getRubroId()));
+            resultado.cambio().ifPresent(
+                    cambio -> historial.add(HistorialPrecio.de(articulo, cambio, OrigenPrecio.MASIVO, usuarioId)));
+            resultado.aviso().ifPresent(avisos::add);
+        }
+        if (!historial.isEmpty()) {
+            historialPrecioRepository.saveAll(historial);
+        }
+        return new ResultadoRecalculo(historial.size(), avisos);
+    }
+
+    /** Cuantos articulos recalcularia {@link #porCambioDeConfiguracion} con la configuracion nueva (aviso previo). */
+    @Transactional(readOnly = true)
+    public long contarPorCambioDeConfiguracion(ConfiguracionPrecios anterior, ConfiguracionPrecios nueva) {
+        if (cambioElMultiplo(anterior, nueva)) {
+            return articuloRepository.contarActivosConPrecioCalculadoScoped();
+        }
+        return cambioElMargen(anterior, nueva) ? articuloRepository.contarHeredanMargenPorDefectoScoped() : 0;
+    }
+
+    // compareTo y no equals: 35 y 35.00 son el mismo valor.
+    private static boolean cambioElMultiplo(ConfiguracionPrecios anterior, ConfiguracionPrecios nueva) {
+        return anterior.redondeoMultiplo().compareTo(nueva.redondeoMultiplo()) != 0;
+    }
+
+    private static boolean cambioElMargen(ConfiguracionPrecios anterior, ConfiguracionPrecios nueva) {
+        return anterior.margenDefectoPorcentaje().compareTo(nueva.margenDefectoPorcentaje()) != 0;
+    }
+
+    /**
      * El dolar vigente de la ferreteria (no el valor de la API en ese momento), solo si algun heredero esta en USD: con
      * todo en pesos no se consulta. Sin ninguna cotizacion guardada no se puede calcular su precio: 409, y se revierte
      * tambien el cambio del rubro.
