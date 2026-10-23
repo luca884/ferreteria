@@ -130,7 +130,7 @@ describe('Shell', () => {
 
     const nav = el.querySelector('aside nav[aria-label="Secciones"]');
     expect(nav).not.toBeNull();
-    expect(nav!.querySelectorAll('a').length).toBe(17);
+    expect(nav!.querySelectorAll('a').length).toBe(18);
   });
 
   it('«Presupuestos» va después de «Mostrador» y lleva a /presupuestos, para el Vendedor y para el Dueño (GDS-13)', async () => {
