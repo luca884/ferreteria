@@ -18,9 +18,9 @@ Restricciones: la ferretería sale del JWT; repositorios con métodos `*Scoped`;
 
 ## Tasks
 
-- [ ] T1 · S1-S5 · ruta: inline · Aceptación: endpoint y consulta con aislamiento · Evidencia: — · Risk: item 2 (aislamiento por tenant en consulta nativa con joins)
-- [ ] T2 · S2, S4, S6 · ruta: inline · Aceptación: pantalla, ruta, menú e impresión; verificada con ego-browser · Evidencia: — · Risk: none
-- [ ] T3 · S1 · ruta: inline · Aceptación: spec (CU-09 punto 1) y relevamiento (G72) · Evidencia: — · Risk: none
+- [x] T1 · S1-S5 · ruta: inline · Aceptación: endpoint y consulta con aislamiento · Evidencia: `StockBajoMinimoIntegrationTest` RED (400, la ruta caía en `/{id}`) → GREEN 4/4; `TenantScopingArchTest` 24 (pidió filas `Object[]` en vez de proyección en el paquete del repositorio), `ModulosArchTest` 40 · commit c50e7bf · Risk: item 2 (aislamiento por tenant en consulta nativa con joins)
+- [x] T2 · S2, S4, S6 · ruta: inline · Aceptación: pantalla, ruta, menú e impresión; verificada con ego-browser · Evidencia: specs focalizados 75/75, suite frontend 2927/2927, `ng build` OK (el aviso de presupuesto de `dialogo-cobro` ya estaba); ego-browser: menú → `/stock-bajo-minimo` con HER-001 y TOR-001 (a reponer 6 y 1.847), orden por código, vista de impresión solo con el listado · commit 202691f · Risk: none
+- [x] T3 · S1 · ruta: inline · Aceptación: spec (CU-09 punto 1) y relevamiento (G72) · Evidencia: CU-09 punto 1 y G72 actualizados · Risk: none
 
 ## Log
 
