@@ -42,7 +42,7 @@
         <div class="fila-campos">
           <div class="campo">
             <label for="tipo-movimiento">Tipo</label>
-            <select id="tipo-movimiento" (change)="tipo.set($any($event.target).value)">
+            <select id="tipo-movimiento" (change)="tipo.set($any($event.target).value); faltaEfectivo.set(null)">
               @for (opcion of tipos(); track opcion.valor) {
                 <option [value]="opcion.valor" [selected]="opcion.valor === tipo()">{{ opcion.etiqueta }}</option>
               }
@@ -59,7 +59,7 @@
               [value]="importe()"
               [attr.aria-invalid]="errorImporte() ? 'true' : null"
               [attr.aria-describedby]="errorImporte() ? 'importe-movimiento-error' : null"
-              (input)="importe.set($any($event.target).value)"
+              (input)="importe.set($any($event.target).value); faltaEfectivo.set(null)"
             />
             @if (errorImporte(); as texto) {
               <span id="importe-movimiento-error" class="campo-error">{{ texto }}</span>
@@ -75,7 +75,7 @@
               [value]="motivo()"
               [attr.aria-invalid]="errorMotivo() ? 'true' : null"
               [attr.aria-describedby]="errorMotivo() ? 'motivo-movimiento-error' : null"
-              (input)="motivo.set($any($event.target).value)"
+              (input)="motivo.set($any($event.target).value); faltaEfectivo.set(null)"
             />
             @if (errorMotivo(); as texto) {
               <span id="motivo-movimiento-error" class="campo-error">{{ texto }}</span>
@@ -83,6 +83,20 @@
           </div>
           <button type="submit" class="primario cargar" [disabled]="trabajando()">Cargar</button>
         </div>
+        @if (faltaEfectivo(); as falta) {
+          <div class="alerta advertencia falta-efectivo" role="alert">
+            <p>
+              {{ falta.mensaje }} Hay {{ falta.disponible | monto }} en efectivo y faltan {{ falta.faltante | monto }}: la
+              caja va a quedar en negativo.
+            </p>
+            <div class="acciones">
+              <button type="button" class="primario" [disabled]="trabajando()" (click)="confirmarSinEfectivo()">
+                Registrar igual
+              </button>
+              <button type="button" class="secundario" (click)="faltaEfectivo.set(null)">Cancelar</button>
+            </div>
+          </div>
+        }
       </form>
     }
 

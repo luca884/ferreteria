@@ -31,3 +31,15 @@ h2 {
 .campo.motivo {
   flex: 1 1 220px;
 }
+
+.falta-efectivo {
+  margin-top: var(--e-3);
+}
+.falta-efectivo p {
+  margin: 0 0 var(--e-2);
+}
+.falta-efectivo .acciones {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--e-2);
+}

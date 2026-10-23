@@ -180,6 +180,91 @@ describe('Caja (CU-10)', () => {
 
       expect(servicio.registrarMovimiento).not.toHaveBeenCalled();
     });
+
+    describe('egreso mayor al efectivo (GDS-36)', () => {
+      const sinEfectivo = (efectivo: Record<string, unknown>, message: string) =>
+        throwError(
+          () =>
+            new HttpErrorResponse({
+              status: 422,
+              error: { status: 422, message, motivo: 'EFECTIVO_INSUFICIENTE', efectivo },
+            }),
+        );
+
+      async function cargarGasto() {
+        await escribir('tipo-movimiento', 'GASTO');
+        await escribir('importe-movimiento', '150');
+        await escribir('motivo-movimiento', 'Cadete');
+        await enviar('form.movimiento');
+      }
+
+      it('al vendedor le muestra el rechazo sin cifras ni forma de confirmar', async () => {
+        await crear(conCaja());
+        servicio.registrarMovimiento.mockReturnValueOnce(
+          sinEfectivo(
+            { puedeConfirmar: false },
+            'No hay efectivo suficiente en la caja para este gasto. Pedile al Dueño que lo cargue.',
+          ),
+        );
+
+        await cargarGasto();
+
+        expect(normal(el().querySelector('.error')?.textContent)).toBe(
+          'No hay efectivo suficiente en la caja para este gasto. Pedile al Dueño que lo cargue.',
+        );
+        expect(boton('Registrar igual')).toBeUndefined();
+      });
+
+      it('al dueño le avisa con las cifras y «Registrar igual» lo manda confirmado', async () => {
+        await crear(conCaja(), true);
+        servicio.registrarMovimiento.mockReturnValueOnce(
+          sinEfectivo(
+            { puedeConfirmar: true, disponible: 100, importe: 150, faltante: 50 },
+            'No alcanza el efectivo de la caja para este gasto.',
+          ),
+        );
+
+        await cargarGasto();
+
+        const aviso = normal(el().querySelector('.falta-efectivo')?.textContent);
+        expect(aviso).toContain('No alcanza el efectivo de la caja para este gasto.');
+        expect(aviso).toContain('Hay $ 100,00 en efectivo y faltan $ 50,00: la caja va a quedar en negativo.');
+        expect(el().querySelector('.falta-efectivo')?.getAttribute('role')).toBe('alert');
+
+        boton('Registrar igual')!.click();
+        await refrescar();
+
+        expect(servicio.registrarMovimiento).toHaveBeenLastCalledWith(4, {
+          tipo: 'GASTO',
+          importe: 150,
+          motivo: 'Cadete',
+          confirmaSinEfectivo: true,
+        });
+        expect(el().querySelector('.falta-efectivo')).toBeNull();
+        expect(normal(el().querySelector('.alerta.exito')?.textContent)).toBe('Se cargó el gasto de $ 150,00.');
+      });
+
+      it('cambiar el importe o cancelar descarta el aviso sin mandar nada', async () => {
+        await crear(conCaja(), true);
+        servicio.registrarMovimiento.mockReturnValue(
+          sinEfectivo(
+            { puedeConfirmar: true, disponible: 100, importe: 150, faltante: 50 },
+            'No alcanza el efectivo de la caja para este gasto.',
+          ),
+        );
+
+        await cargarGasto();
+        await escribir('importe-movimiento', '90');
+        expect(el().querySelector('.falta-efectivo')).toBeNull();
+
+        await enviar('form.movimiento');
+        boton('Cancelar')!.click();
+        await refrescar();
+
+        expect(el().querySelector('.falta-efectivo')).toBeNull();
+        expect(servicio.registrarMovimiento).toHaveBeenCalledTimes(2);
+      });
+    });
   });
 
   describe('cierre ciego', () => {

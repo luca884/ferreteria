@@ -88,6 +88,14 @@ public interface CajaRepository extends TenantScopedRepository<Caja, Long> {
         return abierta.isPresent() ? abierta : porIdExclusiva(id, ferreteriaId);
     }
 
+    /**
+     * La caja con lock exclusivo, para un gasto o retiro: dos egresos no leen a la vez el mismo efectivo esperado (GDS-36).
+     * Mismo camino que el cierre (por uk_caja_abierta y despues la PK), sin ciclo con los lectores compartidos.
+     */
+    default Optional<Caja> paraEgresoScoped(Long id) {
+        return paraCerrarScoped(id);
+    }
+
     /** Las cerradas, mas nuevas primero. */
     default Page<Caja> cerradasScoped(Pageable pageable) {
         return cerradas(TenantContext.requireFerreteriaId(), pageable);

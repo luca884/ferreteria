@@ -3,9 +3,12 @@ package com.ferreteria.ventas.web;
 import com.ferreteria.auth.security.AuthUser;
 import com.ferreteria.common.PageResponse;
 import com.ferreteria.ventas.service.CajaService;
+import com.ferreteria.ventas.service.EgresoSinEfectivoException;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -47,8 +50,14 @@ public class CajaController {
     @ResponseStatus(HttpStatus.CREATED)
     public CajaResponses.Movimiento registrarMovimiento(@PathVariable Long id,
             @RequestBody CajaRequests.Movimiento request, @AuthenticationPrincipal AuthUser authUser) {
-        return CajaResponses.Movimiento.de(cajaService.registrarMovimiento(
-                id, request.tipo(), request.importe(), request.motivo(), authUser));
+        return CajaResponses.Movimiento.de(cajaService.registrarMovimiento(id, request.tipo(), request.importe(),
+                request.motivo(), Boolean.TRUE.equals(request.confirmaSinEfectivo()), authUser));
+    }
+
+    /** Gasto o retiro mayor al efectivo (GDS-36): 422 con el motivo y, solo para el Dueno, las cifras. */
+    @ExceptionHandler(EgresoSinEfectivoException.class)
+    public ResponseEntity<CajaResponses.EgresoRechazado> egresoSinEfectivo(EgresoSinEfectivoException e) {
+        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY).body(CajaResponses.EgresoRechazado.de(e));
     }
 
     /** Cierre ciego: manda el contado y recien la respuesta trae los totales, el esperado y la diferencia. */

@@ -104,16 +104,20 @@ public class CajaService {
 
     /**
      * Ingreso, gasto o retiro en la caja abierta del dia. El retiro es solo del Dueno (403 antes de mirar la caja). La
-     * caja ajena da 404; la cerrada o la de otro dia, 422; los datos invalidos, 400 con un mensaje por campo.
+     * caja ajena da 404; la cerrada o la de otro dia, 422; los datos invalidos, 400 con un mensaje por campo. Un gasto o
+     * retiro mayor al efectivo esperado da 422 (GDS-36): el Dueno lo registra igual con {@code confirmaSinEfectivo}; el
+     * Vendedor que lo pide recibe 403. Con efectivo suficiente la confirmacion se ignora.
      */
     @Transactional
     public MovimientoRegistrado registrarMovimiento(Long cajaId, TipoMovimientoCaja tipo, BigDecimal importe,
-            String motivo, AuthUser usuario) {
+            String motivo, boolean confirmaSinEfectivo, AuthUser usuario) {
         if (tipo == TipoMovimientoCaja.RETIRO && usuario.rol() != Rol.DUENO) {
             throw new AccessDeniedException("El retiro es solo del Dueño");
         }
-        Caja caja = cajaRepository.paraMovimientoScoped(cajaId)
-                .orElseThrow(() -> new ResourceNotFoundException("Caja no encontrada"));
+        // El egreso toma la caja en exclusivo: el control del efectivo no puede leer un esperado que otro egreso va a bajar.
+        Optional<Caja> tomada = tipo == TipoMovimientoCaja.INGRESO ? cajaRepository.paraMovimientoScoped(cajaId)
+                : cajaRepository.paraEgresoScoped(cajaId);
+        Caja caja = tomada.orElseThrow(() -> new ResourceNotFoundException("Caja no encontrada"));
         switch (caja.estado(hoy())) {
             case CERRADA -> throw new ReglaDeNegocioException("La caja está cerrada: no admite movimientos.");
             case DE_OTRO_DIA -> throw new ReglaDeNegocioException("La caja del " + dia(caja)
@@ -123,6 +127,9 @@ public class CajaService {
         Map<String, String> errores = MovimientoCaja.validar(tipo, importe, motivo);
         if (!errores.isEmpty()) {
             throw new DatosInvalidosException(errores);
+        }
+        if (tipo != TipoMovimientoCaja.INGRESO) {
+            verificarEfectivo(caja, tipo, importe, confirmaSinEfectivo, usuario);
         }
         MovimientoCaja movimiento = movimientoRepository.save(MovimientoCaja.de(TenantContext.requireFerreteriaId(),
                 caja.getId(), tipo, importe, motivo, usuario.userId(), ahora()));
@@ -222,6 +229,26 @@ public class CajaService {
     /** La caja abierta de la ferretería con lock compartido (FOR SHARE): lo comparten vender, cobrar y anular. */
     private Optional<Caja> cajaAbiertaCompartida() {
         return cajaRepository.abiertaParaVenderScoped();
+    }
+
+    /**
+     * Un gasto o retiro tiene que entrar en el efectivo esperado (igual entra, la caja queda en 0). Si no entra: sin
+     * confirmacion, 422 (con cifras solo para el Dueno); con confirmacion, la del Dueno vale y la del Vendedor es 403.
+     */
+    private void verificarEfectivo(Caja caja, TipoMovimientoCaja tipo, BigDecimal importe, boolean confirmaSinEfectivo,
+            AuthUser usuario) {
+        BigDecimal disponible = resumen(caja).efectivoEsperado();
+        if (importe.compareTo(disponible) <= 0) {
+            return;
+        }
+        boolean esDueno = usuario.rol() == Rol.DUENO;
+        if (!confirmaSinEfectivo) {
+            throw esDueno ? EgresoSinEfectivoException.paraElDueno(tipo, disponible, importe)
+                    : EgresoSinEfectivoException.paraElVendedor(tipo);
+        }
+        if (!esDueno) {
+            throw new AccessDeniedException("Registrar un egreso sin efectivo es solo del Dueño");
+        }
     }
 
     private ResumenCaja resumen(Caja caja) {

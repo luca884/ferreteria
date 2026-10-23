@@ -197,7 +197,7 @@ class CajaIntegrationTest extends VentasTestBase {
         void retiroSoloDueno() throws Exception {
             Tienda t = tiendaSinCaja();
             String vendedor = login(t.emailVendedor());
-            long caja = abrir(vendedor, "0");
+            long caja = abrir(vendedor, "100");
 
             postJson("/api/cajas/" + caja + "/movimientos", vendedor, movimiento("RETIRO", "100", "Me llevo"))
                     .andExpect(status().isForbidden());
@@ -264,6 +264,126 @@ class CajaIntegrationTest extends VentasTestBase {
 
             assertThat(error.get("message").asText()).isEqualTo("La caja del "
                     + ayer.format(DateTimeFormatter.ofPattern("dd/MM")) + " sigue abierta. Cerrala antes de cargar movimientos.");
+        }
+    }
+
+    // ---------------------------------------------------------------- egresos contra el efectivo (GDS-36)
+
+    @Nested
+    class EgresosContraElEfectivo {
+
+        private String egreso(String tipo, String importe, boolean confirma) throws Exception {
+            java.util.Map<String, Object> m = new java.util.LinkedHashMap<>();
+            m.put("tipo", tipo);
+            m.put("importe", new BigDecimal(importe));
+            m.put("motivo", "Prueba");
+            m.put("confirmaSinEfectivo", confirma);
+            return objectMapper.writeValueAsString(m);
+        }
+
+        @Test
+        @DisplayName("un gasto del vendedor mayor al efectivo da 422 sin cifras y no se guarda")
+        void vendedorFrenado() throws Exception {
+            Tienda t = tiendaSinCaja();
+            String vendedor = login(t.emailVendedor());
+            long caja = abrir(vendedor, "100");
+
+            JsonNode error = json(postJson("/api/cajas/" + caja + "/movimientos", vendedor,
+                    movimiento("GASTO", "150", "Cadete")).andExpect(status().isUnprocessableEntity()));
+
+            assertThat(error.get("motivo").asText()).isEqualTo("EFECTIVO_INSUFICIENTE");
+            assertThat(error.get("message").asText())
+                    .isEqualTo("No hay efectivo suficiente en la caja para este gasto. Pedile al Dueño que lo cargue.");
+            assertThat(error.get("efectivo").get("puedeConfirmar").asBoolean()).isFalse();
+            assertThat(error.get("efectivo").has("disponible")).isFalse();
+            assertThat(error.get("efectivo").has("faltante")).isFalse();
+            assertThat(movimientosDeCaja(t)).isZero();
+        }
+
+        @Test
+        @DisplayName("el egreso igual al efectivo esperado (inicial, ventas en efectivo e ingresos) entra")
+        void igualAlEsperadoEntra() throws Exception {
+            Tienda t = tiendaSinCaja();
+            String vendedor = login(t.emailVendedor());
+            long caja = abrir(vendedor, "100");
+            long a = articulo(t, "Martillo", "UNIDAD", "1000.00", "50");
+            venderPor(vendedor, a, "1000.00", "EFECTIVO");
+            venderPor(vendedor, a, "1000.00", "DEBITO");
+            postJson("/api/cajas/" + caja + "/movimientos", vendedor, movimiento("INGRESO", "50", "Cambio"))
+                    .andExpect(status().isCreated());
+
+            postJson("/api/cajas/" + caja + "/movimientos", vendedor, movimiento("GASTO", "1150", "Proveedor"))
+                    .andExpect(status().isCreated());
+            postJson("/api/cajas/" + caja + "/movimientos", vendedor, movimiento("GASTO", "0.01", "Cadete"))
+                    .andExpect(status().isUnprocessableEntity());
+            assertThat(movimientosDeCaja(t)).isEqualTo(2);
+        }
+
+        @Test
+        @DisplayName("al dueño le avisa con el disponible, el importe y el faltante, y no guarda nada")
+        void duenoVeElAviso() throws Exception {
+            Tienda t = tiendaSinCaja();
+            String dueno = login(t.emailDueno());
+            long caja = abrir(dueno, "100");
+
+            JsonNode gasto = json(postJson("/api/cajas/" + caja + "/movimientos", dueno,
+                    movimiento("GASTO", "150", "Cadete")).andExpect(status().isUnprocessableEntity()));
+            JsonNode retiro = json(postJson("/api/cajas/" + caja + "/movimientos", dueno,
+                    movimiento("RETIRO", "130.50", "Banco")).andExpect(status().isUnprocessableEntity()));
+
+            assertThat(gasto.get("motivo").asText()).isEqualTo("EFECTIVO_INSUFICIENTE");
+            assertThat(gasto.get("message").asText()).isEqualTo("No alcanza el efectivo de la caja para este gasto.");
+            JsonNode efectivo = gasto.get("efectivo");
+            assertThat(efectivo.get("puedeConfirmar").asBoolean()).isTrue();
+            assertThat(efectivo.get("disponible").decimalValue()).isEqualByComparingTo("100");
+            assertThat(efectivo.get("importe").decimalValue()).isEqualByComparingTo("150");
+            assertThat(efectivo.get("faltante").decimalValue()).isEqualByComparingTo("50");
+            assertThat(retiro.get("message").asText()).isEqualTo("No alcanza el efectivo de la caja para este retiro.");
+            assertThat(retiro.get("efectivo").get("faltante").decimalValue()).isEqualByComparingTo("30.50");
+            assertThat(movimientosDeCaja(t)).isZero();
+        }
+
+        @Test
+        @DisplayName("con confirmaSinEfectivo el dueño lo registra igual y la caja queda en negativo")
+        void duenoConfirma() throws Exception {
+            Tienda t = tiendaSinCaja();
+            String dueno = login(t.emailDueno());
+            long caja = abrir(dueno, "100");
+
+            postJson("/api/cajas/" + caja + "/movimientos", dueno, egreso("RETIRO", "150", true))
+                    .andExpect(status().isCreated());
+
+            assertThat(movimientosDeCaja(t)).isEqualTo(1);
+            assertThat(getJson("/api/cajas/" + caja, dueno).get("efectivoEsperado").decimalValue())
+                    .isEqualByComparingTo("-50");
+        }
+
+        @Test
+        @DisplayName("el vendedor que manda confirmaSinEfectivo ante un faltante recibe 403 y no se guarda")
+        void vendedorNoPuedeConfirmar() throws Exception {
+            Tienda t = tiendaSinCaja();
+            String vendedor = login(t.emailVendedor());
+            long caja = abrir(vendedor, "100");
+
+            postJson("/api/cajas/" + caja + "/movimientos", vendedor, egreso("GASTO", "150", true))
+                    .andExpect(status().isForbidden());
+
+            assertThat(movimientosDeCaja(t)).isZero();
+        }
+
+        @Test
+        @DisplayName("con efectivo suficiente la confirmación se ignora, también la del vendedor")
+        void confirmacionSinFaltanteSeIgnora() throws Exception {
+            Tienda t = tiendaSinCaja();
+            String vendedor = login(t.emailVendedor());
+            long caja = abrir(vendedor, "100");
+
+            postJson("/api/cajas/" + caja + "/movimientos", vendedor, egreso("GASTO", "40", true))
+                    .andExpect(status().isCreated());
+            postJson("/api/cajas/" + caja + "/movimientos", vendedor, egreso("INGRESO", "1000", false))
+                    .andExpect(status().isCreated());
+
+            assertThat(movimientosDeCaja(t)).isEqualTo(2);
         }
     }
 
@@ -415,7 +535,9 @@ class CajaIntegrationTest extends VentasTestBase {
             String vendedor = login(t.emailVendedor());
             String dueno = login(t.emailDueno());
             long primera = abrir(vendedor, "0");
-            postJson("/api/cajas/" + primera + "/movimientos", vendedor, movimiento("GASTO", "50", "Luz"))
+            // Sin efectivo en la caja: el gasto lo carga el dueño confirmándolo (GDS-36).
+            postJson("/api/cajas/" + primera + "/movimientos", dueno,
+                    "{\"tipo\":\"GASTO\",\"importe\":50,\"motivo\":\"Luz\",\"confirmaSinEfectivo\":true}")
                     .andExpect(status().isCreated());
             postJson("/api/cajas/" + primera + "/cierre", vendedor, cierre("0")).andExpect(status().isOk());
             long segunda = abrir(dueno, "0");
