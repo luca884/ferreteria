@@ -95,6 +95,12 @@ export class NuevaCompra implements OnInit {
     this.articulos.buscar(termino, 0, RESULTADOS_POR_BUSQUEDA, false).subscribe({
       next: (pagina) => {
         this.buscando.set(false);
+        // El lector escribe el código y manda Enter: con una coincidencia exacta se agrega sin elegir.
+        const exacto = coincidenciaExacta(pagina.items, termino);
+        if (exacto) {
+          this.escanear(exacto);
+          return;
+        }
         this.resultados.set(pagina.items);
       },
       error: () => {
@@ -123,6 +129,24 @@ export class NuevaCompra implements OnInit {
       },
     ]);
     this.descartarVistaPrevia();
+  }
+
+  /** Un artículo escaneado: si ya está, suma 1 a su cantidad (como en el mostrador); si no, lo agrega. */
+  private escanear(articulo: Articulo): void {
+    this.busqueda.set('');
+    this.resultados.set([]);
+    const indice = this.renglones().findIndex((r) => r.articuloId === articulo.id);
+    if (indice === -1) {
+      this.agregar(articulo);
+      return;
+    }
+    const cantidad = decimal(this.renglones()[indice].cantidad);
+    if (Number.isNaN(cantidad)) {
+      this.aviso.set(`${articulo.descripcion} ya está en la compra.`);
+      return;
+    }
+    this.aviso.set(null);
+    this.editar(indice, 'cantidad', String(cantidad + 1));
   }
 
   protected editar(indice: number, campo: 'cantidad' | 'costo', valor: string): void {
@@ -235,6 +259,15 @@ function entero(texto: string): number | null {
 }
 
 /** Acepta coma o punto decimal; NaN si no es un número. */
+/** El único artículo cuyo código interno, de barras o del proveedor es el término, sin mirar mayúsculas. */
+function coincidenciaExacta(articulos: readonly Articulo[], termino: string): Articulo | null {
+  const buscado = termino.toLowerCase();
+  const exactos = articulos.filter((a) =>
+    [a.codigoInterno, a.codigoBarras, a.codigoProveedor].some((codigo) => codigo?.trim().toLowerCase() === buscado),
+  );
+  return exactos.length === 1 ? exactos[0] : null;
+}
+
 function decimal(texto: string): number {
   const limpio = texto.trim().replace(',', '.');
   return /^\d+(\.\d+)?$/.test(limpio) ? Number(limpio) : Number.NaN;
