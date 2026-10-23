@@ -130,6 +130,13 @@ export const routes: Routes = [
             (m) => m.PaginaConfiguracionCotizacion,
           ),
       },
+      // Sin guard de rol, como cotización: al Vendedor la pantalla le avisa y el backend responde 403.
+      {
+        path: 'configuracion/precios',
+        title: titulo('Margen y redondeo'),
+        loadComponent: () =>
+          import('./features/configuracion-precios/configuracion-precios').then((m) => m.PaginaConfiguracionPrecios),
+      },
       // Sin guard de rol, como cotización: al Vendedor la pantalla le avisa y el backend responde 403 a escribir.
       {
         path: 'configuracion/formas-pago',

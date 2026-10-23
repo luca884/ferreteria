@@ -19,10 +19,10 @@ Restricciones: solo el Dueño; la ferretería sale del JWT; plata en BigDecimal;
 
 ## Tasks
 
-- [ ] T1 · S2, S3, S5, S7 · ruta: inline · Aceptación: servicio actualiza la configuración, cuenta afectados y recalcula · Evidencia: — · Risk: item 1 (cambia precios guardados)
-- [ ] T2 · S1, S6 · ruta: inline · Aceptación: PUT y conteo por API, seguridad, aislamiento por tenant · Evidencia: — · Risk: item 1
-- [ ] T3 · S4 · ruta: inline · Aceptación: pantalla `/configuracion/precios`, menú, confirmación con conteo, verificada con ego-browser · Evidencia: — · Risk: none
-- [ ] T4 · S1 · ruta: inline · Aceptación: spec (regla de redondeo, H11) y relevamiento GDS actualizados · Evidencia: — · Risk: none
+- [x] T1 · S2, S3, S5, S7 · ruta: inline · Aceptación: servicio actualiza la configuración, cuenta afectados y recalcula · Evidencia: RED (no compila) → GREEN `RecalculoPreciosServiceTest` + `ConfiguracionPreciosServiceTest` 34/34 · commit `76e1a6e` · Risk: item 1 (cambia precios guardados)
+- [x] T2 · S1, S5, S6 · ruta: inline · Aceptación: PUT y conteo por API, seguridad, aislamiento por tenant · Evidencia: RED (404/405) → GREEN `ConfiguracionPreciosIntegrationTest` 10/10, ArchUnit 64/64 · commit `76e1a6e` · Risk: item 1
+- [x] T3 · S4 · ruta: inline · Aceptación: pantalla `/configuracion/precios`, menú, confirmación con conteo, verificada con ego-browser · Evidencia: pantalla y servicio sin RED observado (implementación escrita antes de correr los specs) → 18/18; ruta y menú RED (4) → GREEN; suite 2923/2923; `ng build` OK (aviso de budget de `dialogo-cobro`, previo); ego-browser con El Tornillo: 5358 contados, 5097 recalculados con múltiplo 0,50; volver a 0 tardó ~4 s · Risk: none
+- [x] T4 · S1 · ruta: inline · Aceptación: spec (regla de redondeo, H11) y relevamiento GDS actualizados · Evidencia: `docs/spec.md` CU-03 punto 3 y regla de redondeo; `docs/relevamiento-gds.md` 4.6 y 4.9 · Risk: none
 
 ## Log
 
