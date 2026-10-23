@@ -1,0 +1,86 @@
+<app-barra-acciones>
+  <h1>Stock bajo mínimo</h1>
+  @if (auth.esDueno()) {
+    <button type="button" class="accion-barra primario imprimir" [disabled]="filas() === null" (click)="imprimir()">
+      <svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+        <path d="M4 6V1.5h8V6M4 12H2V6h12v6h-2M4 9.5h8v5H4z" />
+      </svg>
+      Imprimir
+    </button>
+  }
+</app-barra-acciones>
+
+@if (!auth.esDueno()) {
+  <p class="ayuda estado-vacio" role="status">El listado de stock bajo mínimo es solo del Dueño.</p>
+} @else {
+  <div class="filtros">
+    <label>
+      Ordenado por
+      <select name="orden" [value]="orden()" (change)="ordenar($any($event.target).value)">
+        @for (o of ordenes; track o.valor) {
+          <option [value]="o.valor">{{ o.texto }}</option>
+        }
+      </select>
+    </label>
+  </div>
+
+  @if (error(); as texto) {
+    <div class="error con-accion" role="alert">
+      <span>{{ texto }}</span>
+      <button type="button" class="secundario chico reintentar" (click)="cargar()">Reintentar</button>
+    </div>
+  }
+
+  @if (filas(); as lista) {
+    <section class="stock-imprimible" aria-labelledby="titulo-bajo-minimo">
+      <header class="encabezado">
+        <div>
+          @if (ferreteria(); as nombre) {
+            <p class="ferreteria">{{ nombre }}</p>
+          }
+          <h2 id="titulo-bajo-minimo">Listado de artículos bajo stock mínimo</h2>
+          <p class="orden">Ordenado por {{ textoOrden() }}</p>
+        </div>
+        <p class="emitido">Emitido el {{ emitido() }}</p>
+      </header>
+
+      @if (lista.length === 0) {
+        <p class="ayuda estado-vacio" role="status">No hay artículos bajo el stock mínimo.</p>
+      } @else {
+        <table>
+          <caption class="sr-only">
+            Artículos activos con stock menor al mínimo y cuánto reponer de cada uno.
+          </caption>
+          <thead>
+            <tr>
+              <th scope="col">Código</th>
+              <th scope="col">Descripción</th>
+              <th scope="col">Rubro</th>
+              <th scope="col">Proveedor</th>
+              <th scope="col" class="num">Costo</th>
+              <th scope="col" class="num">Stock</th>
+              <th scope="col" class="num">Mínimo</th>
+              <th scope="col" class="num">A reponer</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (f of lista; track f.articuloId) {
+              <tr>
+                <td>{{ f.codigoInterno }}</td>
+                <td>{{ f.descripcion }}</td>
+                <td>{{ f.rubro ?? '—' }}</td>
+                <td>{{ f.proveedor ?? '—' }}</td>
+                <td class="num">{{ costo(f) }}</td>
+                <td class="num" [class.negativo]="f.stockActual < 0">{{ numero(f.stockActual) }}</td>
+                <td class="num">{{ numero(f.stockMinimo) }}</td>
+                <td class="num reponer">{{ numero(f.aReponer) }}</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      }
+    </section>
+  } @else if (cargando()) {
+    <p class="ayuda estado-vacio">Cargando…</p>
+  }
+}
