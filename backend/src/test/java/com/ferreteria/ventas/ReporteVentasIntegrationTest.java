@@ -64,6 +64,15 @@ class ReporteVentasIntegrationTest extends VentasTestBase {
         return jdbc.queryForObject("select " + columna + " from comprobante where id = ?", BigDecimal.class, comprobante);
     }
 
+    /**
+     * Cambia la fecha de una venta a esa hora de Buenos Aires, guardada como Hibernate ({@code jdbc.time_zone: UTC}): la
+     * hora local de la JVM pasada a UTC. Cruda, se leeria corrida y no probaria el corte del dia.
+     */
+    private void fechar(long venta, java.time.LocalDateTime hora) {
+        jdbc.update("update comprobante set fecha = ? where id = ?", hora.atZone(java.time.ZoneId.systemDefault())
+                .withZoneSameInstant(java.time.ZoneOffset.UTC).toLocalDateTime(), venta);
+    }
+
     private JsonNode reporte(String nombre, String parametros) throws Exception {
         return getJson(BASE + nombre + "?" + parametros, dueno);
     }
@@ -116,7 +125,7 @@ class ReporteVentasIntegrationTest extends VentasTestBase {
     @Test
     @DisplayName("el rango incluye el dia «hasta» completo y deja afuera lo de antes de «desde»")
     void rangoDeFechas() throws Exception {
-        jdbc.update("update comprobante set fecha = ? where id = ?", hoy.minusDays(1).atTime(23, 59, 59), ventaDueno);
+        fechar(ventaDueno, hoy.minusDays(1).atTime(23, 59, 59));
 
         assertThat(reporte("resumen", hoyAHoy()).get("cantidad").asInt()).isEqualTo(2);
         JsonNode ayer = reporte("resumen", "desde=" + hoy.minusDays(1) + "&hasta=" + hoy.minusDays(1));
@@ -166,7 +175,7 @@ class ReporteVentasIntegrationTest extends VentasTestBase {
     @DisplayName("por dia y por mes: un renglon por periodo con ventas, en orden")
     void porPeriodo() throws Exception {
         LocalDate antes = hoy.minusDays(40);
-        jdbc.update("update comprobante set fecha = ? where id = ?", antes.atTime(10, 0), ventaDueno);
+        fechar(ventaDueno, antes.atTime(10, 0));
         String rango = "desde=" + antes + "&hasta=" + hoy;
 
         JsonNode dias = reporte("por-periodo", rango + "&agrupar=DIA");
