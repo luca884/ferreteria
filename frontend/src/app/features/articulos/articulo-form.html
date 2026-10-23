@@ -68,6 +68,9 @@
           >
             Ajustar stock
           </button>
+          <a class="btn secundario chico ver-movimientos" [routerLink]="['/articulos', actual.id, 'movimientos']">
+            Ver movimientos
+          </a>
           @if (!actual.activo) {
             <p id="motivo-sin-ajuste" class="pista motivo-sin-ajuste">
               «{{ actual.descripcion }}» está dado de baja. Reactivalo para ajustar el stock.

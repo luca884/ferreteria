@@ -1365,6 +1365,23 @@ describe('ArticuloForm', () => {
       expect(el().querySelector('.alerta.exito')?.textContent).toContain('Stock ajustado: ahora hay 50 metros.');
     });
 
+    it('el Dueño tiene «Ver movimientos» junto al stock actual, que lleva a los movimientos del artículo (G29)', async () => {
+      await crearComponente({ id: '5' });
+
+      const enlace = el().querySelector<HTMLAnchorElement>('.stock-actual a.ver-movimientos');
+      expect(enlace?.textContent?.trim()).toBe('Ver movimientos');
+      expect(enlace?.getAttribute('href')).toBe('/articulos/5/movimientos');
+    });
+
+    it('en el alta y para el Vendedor no hay «Ver movimientos»', async () => {
+      await crearComponente();
+      expect(el().querySelector('a.ver-movimientos')).toBeNull();
+
+      TestBed.resetTestingModule();
+      await crearComponente({ dueno: false, id: '5' });
+      expect(el().querySelector('a.ver-movimientos')).toBeNull();
+    });
+
     it('en el alta y para el Vendedor no hay «Ajustar stock»', async () => {
       await crearComponente();
       expect(el().querySelector('button.ajustar-stock')).toBeNull();

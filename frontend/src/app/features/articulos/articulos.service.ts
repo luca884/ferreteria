@@ -11,6 +11,8 @@ import {
   ArticuloRequest,
   ConfiguracionPrecios,
   DesglosePrecio,
+  FiltroMovimientos,
+  MovimientoStock,
 } from './articulo.models';
 
 @Injectable({ providedIn: 'root' })
@@ -66,6 +68,14 @@ export class ArticulosService {
   /** CU-09: se manda el stock real contado; el backend calcula la diferencia y deja el movimiento. */
   ajustarStock(id: number, ajuste: AjusteStockRequest): Observable<AjusteStockResponse> {
     return this.http.post<AjusteStockResponse>(`${this.url}/${id}/ajustes-stock`, ajuste);
+  }
+
+  /** G29: movimientos de stock del artículo con su saldo, los más nuevos primero (solo el Dueño). */
+  movimientos(id: number, filtro: FiltroMovimientos): Observable<PageResponse<MovimientoStock>> {
+    let params = new HttpParams().set('page', filtro.page).set('size', 20);
+    if (filtro.desde) params = params.set('desde', filtro.desde);
+    if (filtro.hasta) params = params.set('hasta', filtro.hasta);
+    return this.http.get<PageResponse<MovimientoStock>>(`${this.url}/${id}/movimientos-stock`, { params });
   }
 
   /** Margen por defecto y múltiplo de redondeo de la ferretería: para el precio final en vivo. */

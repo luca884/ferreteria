@@ -11,7 +11,7 @@ import {
   ValidationErrors,
   Validators,
 } from '@angular/forms';
-import { ActivatedRoute, Router } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { catchError, forkJoin, map, of } from 'rxjs';
 import { erroresDeCampos } from '../../core/api/api-error';
 import { AuthService } from '../../core/auth/auth.service';
@@ -138,7 +138,15 @@ const VOLVER_AL_LISTADO = { queryParamsHandling: 'preserve' } as const;
 
 @Component({
   selector: 'app-articulo-form',
-  imports: [ReactiveFormsModule, MontoPipe, Confirmacion, DialogoAjusteStock, BarraAcciones, DesglosePrecioVista],
+  imports: [
+    ReactiveFormsModule,
+    RouterLink,
+    MontoPipe,
+    Confirmacion,
+    DialogoAjusteStock,
+    BarraAcciones,
+    DesglosePrecioVista,
+  ],
   templateUrl: './articulo-form.html',
   styleUrl: './articulo-form.css',
 })

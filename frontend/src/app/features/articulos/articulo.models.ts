@@ -167,6 +167,31 @@ export interface AjusteStockResponse {
   stockActual: number;
 }
 
+/** Tipo de movimiento de stock (el mismo enum que el backend). */
+export type TipoMovimientoStock = 'VENTA' | 'AJUSTE' | 'REMITO' | 'ANULACION_REMITO' | 'COMPRA';
+
+/**
+ * Un movimiento del artículo (G29): cantidad con signo (salida negativa) y el saldo que quedó después. El comprobante
+ * viene armado del backend («Venta N.º 12», «FA 00003-00001234 · Proveedor»); un ajuste no tiene y muestra su motivo.
+ */
+export interface MovimientoStock {
+  id: number;
+  fecha: string;
+  tipo: TipoMovimientoStock;
+  cantidad: number;
+  saldo: number;
+  comprobante: string | null;
+  usuario: string | null;
+  motivo: string | null;
+}
+
+/** Filtro de los movimientos: días inclusive, como «aaaa-mm-dd». */
+export interface FiltroMovimientos {
+  page: number;
+  desde?: string;
+  hasta?: string;
+}
+
 export interface ConfiguracionPrecios {
   margenDefectoPorcentaje: number;
   redondeoMultiplo: number;

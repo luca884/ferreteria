@@ -30,6 +30,12 @@ public interface ArticulosParaVenta {
     Optional<BigDecimal> stockVigente(Long id);
 
     /**
+     * Stock de hoy del articulo, sin lock (consultas: movimientos del articulo). Vacio si el id no existe en la
+     * ferreteria del request.
+     */
+    Optional<BigDecimal> stockActual(Long id);
+
+    /**
      * El nombre del rubro de HOY de cada articulo de la ferreteria del request, por id (reportes de ventas). Un articulo
      * sin rubro, ajeno o inexistente no viene en el mapa.
      */

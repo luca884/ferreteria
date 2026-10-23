@@ -152,6 +152,13 @@ export class Articulos implements OnInit {
     });
   }
 
+  /** G29: los movimientos de stock del elegido, también de uno dado de baja (su historia sigue ahí). */
+  protected verMovimientos(): void {
+    const articulo = this.filas.elegido();
+    if (!articulo || !this.auth.esDueno()) return;
+    void this.router.navigate(['/articulos', articulo.id, 'movimientos']);
+  }
+
   protected ajustarStock(): void {
     const articulo = this.filas.elegido();
     if (!articulo?.activo) return;

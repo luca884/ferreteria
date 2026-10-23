@@ -454,6 +454,22 @@ describe('Articulos', () => {
       });
     });
 
+    it('Movimientos de la barra abre los movimientos de stock del elegido, aunque esté de baja (G29)', async () => {
+      await crearComponente(true, pagina([articulo(7), articulo(8, { activo: false })]));
+      expect(barra('button.movimientos')!.disabled).toBe(true);
+
+      await elegir(1);
+      await clickEn('app-barra-acciones button.movimientos');
+
+      expect(navegar).toHaveBeenCalledWith(['/articulos', 8, 'movimientos']);
+    });
+
+    it('el Vendedor no ve Movimientos en la barra', async () => {
+      await crearComponente(false);
+
+      expect(barra('button.movimientos')).toBeNull();
+    });
+
     it('elegido de baja: Reactivar en vez de Dar de baja y Ajustar stock deshabilitado con el motivo a la vista', async () => {
       await crearComponente(true, pagina([articulo(1), articulo(2, { activo: false, descripcion: 'Tuerca vieja' })]));
 
