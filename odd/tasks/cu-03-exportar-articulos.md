@@ -22,9 +22,9 @@ Restricciones: tenant solo del JWT; un endpoint nuevo lleva su test de aislamien
 
 ## Tasks
 
-- [x] T1 · S1-S5 · ruta: inline · Aceptación: endpoint con tests de formato, filtro, orden, rol y aislamiento · Evidencia: RED `EscritorCsvTest` 5 errores (sin implementar) y `ExportacionArticulosIntegrationTest` 400 (ruta inexistente) → GREEN 5/5 y 5/5; ArchUnit 64/0 · Risk: item 2 (inyección CSV)
-- [ ] T2 · S1, S5 · ruta: inline · Aceptación: botón «Exportar» del Dueño en la barra de Artículos baja el archivo con el filtro; el Vendedor no lo ve · Evidencia: — · Risk: none
-- [ ] T3 · S1 · ruta: inline · Aceptación: `docs/spec.md` y `docs/relevamiento-gds.md` dicen qué quedó · Evidencia: — · Risk: none
+- [x] T1 · S1-S5 · ruta: inline · Aceptación: endpoint con tests de formato, filtro, orden, rol y aislamiento · Evidencia: RED `EscritorCsvTest` 5 errores (sin implementar) y `ExportacionArticulosIntegrationTest` 400 (ruta inexistente) → GREEN 5/5 y 5/5; ArchUnit 64/0; commit `e617be3` · Risk: item 2 (inyección CSV)
+- [x] T2 · S1, S5 · ruta: inline · Aceptación: botón «Exportar» del Dueño en la barra de Artículos baja el archivo con el filtro; el Vendedor no lo ve · Evidencia: RED compilación (sin `exportar` ni `descarga.ts`) → GREEN 86/86 en 3 specs; CORS expone Content-Disposition (RED null → GREEN 6/6); ego-browser: `?q=tornillo` baja `articulos-2026-10-23.csv` con BOM y 18 filas, igual que la pantalla; commit `e33a000` · Risk: item 3 (CORS compartido, cambio aditivo)
+- [x] T3 · S1 · ruta: inline · Aceptación: `docs/spec.md` y `docs/relevamiento-gds.md` dicen qué quedó · Evidencia: CU-03 punto 4, G25 y GDS-19 marcados · Risk: none
 
 ## Log
 
