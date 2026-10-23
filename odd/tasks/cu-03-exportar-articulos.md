@@ -25,7 +25,7 @@ Restricciones: tenant solo del JWT; un endpoint nuevo lleva su test de aislamien
 
 - [x] T1 · S1-S5 · ruta: inline · Aceptación: endpoint con tests de formato, filtro, orden, rol y aislamiento · Evidencia: RED `EscritorCsvTest` 5 errores (sin implementar) y `ExportacionArticulosIntegrationTest` 400 (ruta inexistente) → GREEN 5/5 y 5/5; ArchUnit 64/0; commit `e617be3` · Risk: item 2 (inyección CSV)
 - [x] T2 · S1, S5 · ruta: inline · Aceptación: botón «Exportar» del Dueño en la barra de Artículos baja el archivo con el filtro; el Vendedor no lo ve · Evidencia: RED compilación (sin `exportar` ni `descarga.ts`) → GREEN 86/86 en 3 specs; CORS expone Content-Disposition (RED null → GREEN 6/6); ego-browser: `?q=tornillo` baja `articulos-2026-10-23.csv` con BOM y 18 filas, igual que la pantalla; commit `e33a000` · Risk: item 3 (CORS compartido, cambio aditivo)
-- [ ] T4 · S6 · ruta: inline · Aceptación: los códigos salen como `="…"` y la importación CSV los lee como texto · Evidencia: — · Risk: item 3 (`LectorCsv` lo comparte toda la importación de CU-04)
+- [x] T4 · S6 · ruta: inline · Aceptación: los códigos salen como `="…"` y la importación CSV los lee como texto · Evidencia: RED 1+1+6 fallas (`EscritorCsvTest`, `LectorCsvTest`, `ExportacionArticulosIntegrationTest`) → GREEN 6/0, 22/0 (con ida y vuelta escritor → lector), 9/0; `LectorDeListasTest` 20/0; ArchUnit 64/0; ego-browser: `="TOR-001";="7790000000011";="DBS-100"`; commit `615143c` · Risk: item 3 (`LectorCsv` lo comparte toda la importación de CU-04)
 - [x] T3 · S1 · ruta: inline · Aceptación: `docs/spec.md` y `docs/relevamiento-gds.md` dicen qué quedó · Evidencia: CU-03 punto 4, G25 y GDS-19 marcados · Risk: none
 
 ## Log
@@ -41,3 +41,9 @@ Restricciones: tenant solo del JWT; un endpoint nuevo lleva su test de aislamien
   - Advisory 3 corregido: Safari podía cortar la descarga, así que la dirección temporal ahora se libera después del clic.
   - Advisory 2 (un espacio o un `＝` de ancho completo delante de la fórmula): Excel no lo evalúa; queda así.
   - Abierto, advisory 1: Excel convierte los códigos a número (`0012` queda `12`, `7790001234567` queda `7,79E+12`). Es una decisión de producto para Luca.
+- L4 (2026-10-23) Luca, sobre el advisory 1: «dale». Queda como S6 y T4.
+- L5 (2026-10-23) Cierre:
+  - Checks: backend `./mvnw test` 4493/0, BUILD SUCCESS. Frontend 117 archivos y 2958 tests en verde.
+  - `ng build`: OK al cierre de T2. T4 no toca el front.
+  - No se probó en la app real importar el CSV exportado; lo cubre `LectorCsvTest.loQueEscribeLaExportacionSeVuelveALeerIgual`.
+  - Próximo paso: el merge de Luca.
