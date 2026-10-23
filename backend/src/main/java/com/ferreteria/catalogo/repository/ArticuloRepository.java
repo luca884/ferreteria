@@ -104,6 +104,15 @@ public interface ArticuloRepository extends TenantScopedRepository<Articulo, Lon
 
     long countByFerreteriaIdAndRubroIdAndMargenPorcentajeIsNullAndActivoTrue(Long ferreteriaId, Long rubroId);
 
+    List<Articulo> findAllByFerreteriaIdAndRubroIdIsNullAndMargenPorcentajeIsNullAndActivoTrueAndPrecioManualFalseOrderById(
+            Long ferreteriaId);
+
+    long countByFerreteriaIdAndRubroIdIsNullAndMargenPorcentajeIsNullAndActivoTrueAndPrecioManualFalse(Long ferreteriaId);
+
+    List<Articulo> findAllByFerreteriaIdAndActivoTrueAndPrecioManualFalseOrderById(Long ferreteriaId);
+
+    long countByFerreteriaIdAndActivoTrueAndPrecioManualFalse(Long ferreteriaId);
+
     @Query("select a from Articulo a where a.ferreteriaId = :fid and a.proveedorId = :proveedorId")
     List<Articulo> deProveedor(@Param("fid") Long ferreteriaId, @Param("proveedorId") Long proveedorId);
 
@@ -305,6 +314,29 @@ public interface ArticuloRepository extends TenantScopedRepository<Articulo, Lon
     default long contarHeredanMargenDeRubroScoped(Long rubroId) {
         return countByFerreteriaIdAndRubroIdAndMargenPorcentajeIsNullAndActivoTrue(
                 TenantContext.requireFerreteriaId(), rubroId);
+    }
+
+    /**
+     * Articulos activos sin precio manual, sin rubro y sin margen propio: los que usan el margen por defecto de la
+     * ferreteria y cambian de precio si cambia (el margen del rubro nunca es null).
+     */
+    default List<Articulo> heredanMargenPorDefectoScoped() {
+        return findAllByFerreteriaIdAndRubroIdIsNullAndMargenPorcentajeIsNullAndActivoTrueAndPrecioManualFalseOrderById(
+                TenantContext.requireFerreteriaId());
+    }
+
+    default long contarHeredanMargenPorDefectoScoped() {
+        return countByFerreteriaIdAndRubroIdIsNullAndMargenPorcentajeIsNullAndActivoTrueAndPrecioManualFalse(
+                TenantContext.requireFerreteriaId());
+    }
+
+    /** Articulos activos sin precio manual: los que cambian de precio si cambia el multiplo de redondeo. */
+    default List<Articulo> activosConPrecioCalculadoScoped() {
+        return findAllByFerreteriaIdAndActivoTrueAndPrecioManualFalseOrderById(TenantContext.requireFerreteriaId());
+    }
+
+    default long contarActivosConPrecioCalculadoScoped() {
+        return countByFerreteriaIdAndActivoTrueAndPrecioManualFalse(TenantContext.requireFerreteriaId());
     }
 
     /** Suma delta al stock del articulo de la ferreteria del request (atomico). Devuelve las filas afectadas. */

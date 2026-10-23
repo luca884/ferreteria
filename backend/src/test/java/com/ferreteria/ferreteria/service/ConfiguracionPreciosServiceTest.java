@@ -55,6 +55,20 @@ class ConfiguracionPreciosServiceTest {
     }
 
     @Test
+    @DisplayName("guardar() cambia margen y multiplo de la ferreteria del JWT y devuelve la configuracion anterior")
+    void guardarCambiaLaConfiguracionDelTenant() {
+        Ferreteria ferreteria = new Ferreteria("Tornillo SA", "30-11111111-1", CondicionIva.RESPONSABLE_INSCRIPTO);
+        when(ferreteriaRepository.findById(7L)).thenReturn(Optional.of(ferreteria));
+
+        ConfiguracionPrecios anterior = service.guardar(new ConfiguracionPrecios(new BigDecimal("45.50"), new BigDecimal("0.50")));
+
+        assertThat(anterior.margenDefectoPorcentaje()).isEqualByComparingTo("30");
+        assertThat(anterior.redondeoMultiplo()).isEqualByComparingTo("0");
+        assertThat(ferreteria.getMargenDefectoPorcentaje()).isEqualByComparingTo("45.50");
+        assertThat(ferreteria.getRedondeoMultiplo()).isEqualByComparingTo("0.50");
+    }
+
+    @Test
     @DisplayName("si la ferreteria no existe es un error de estado: un token valido siempre la tiene")
     void sinFerreteriaLanzaIllegalState() {
         when(ferreteriaRepository.findById(7L)).thenReturn(Optional.empty());
