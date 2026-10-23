@@ -48,10 +48,11 @@ public record CobranzaRequest(
 
     /**
      * Cuánto del cobro se aplica a una deuda: a un comprobante ({@code comprobanteId}) o, desde GDS-20, a un Recargo
-     * ({@code ajusteId}); exactamente uno de los dos. Que venga uno solo no se puede decir con una anotación sobre un campo, así
-     * que lo valida {@code RegistroCobranza.validarForma} con las mismas claves y mensajes de siempre («Elegí el comprobante.»
-     * en {@code imputaciones[i].comprobanteId} si no viene ninguno).
+     * ({@code ajusteId}); exactamente uno de los dos ({@link UnaSolaDeuda}, con las mismas claves y mensajes que
+     * {@code RegistroCobranza.validarForma}: «Elegí el comprobante.» en {@code imputaciones[i].comprobanteId} si no viene
+     * ninguno, junto con los demás errores del renglón).
      */
+    @UnaSolaDeuda
     public record ImputacionRequest(
             Long comprobanteId,
 
