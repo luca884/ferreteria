@@ -5,6 +5,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.fasterxml.jackson.databind.JsonNode;
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.time.ZoneOffset;
 import java.util.Arrays;
 import java.util.Map;
 import java.util.UUID;
@@ -25,6 +28,7 @@ class ClientesDelArticuloIntegrationTest extends VentasTestBase {
     private long ana;
     private long beto;
     private long carla;
+    private final Map<String, Long> ventas = new java.util.HashMap<>();
 
     private static String url(long articuloId) {
         return "/api/articulos/" + articuloId + "/clientes";
@@ -74,7 +78,17 @@ class ClientesDelArticuloIntegrationTest extends VentasTestBase {
         }
         long id = json(postJson("/api/ventas", dueno, objectMapper.writeValueAsString(cuerpo))
                 .andExpect(status().isCreated())).get("ventaId").asLong();
-        jdbc.update("update comprobante set fecha = ? where id = ?", fecha, id);
+        jdbc.update("update comprobante set fecha = ? where id = ?", comoLaGuardaHibernate(fecha), id);
+        ventas.put(fecha, id);
+    }
+
+    /**
+     * Una hora de Buenos Aires guardada como la guarda Hibernate ({@code hibernate.jdbc.time_zone: UTC}): pasada a UTC con
+     * la zona de la JVM (docs/spec.md, «Despliegue: zona horaria»). Un texto crudo en el SQL no pasa por esa conversion.
+     */
+    private static String comoLaGuardaHibernate(String fechaHora) {
+        return LocalDateTime.parse(fechaHora.replace(' ', 'T')).atZone(ZoneId.systemDefault())
+                .withZoneSameInstant(ZoneOffset.UTC).toLocalDateTime().toString().replace('T', ' ');
     }
 
     private static BigDecimal dec(String valor) {
@@ -97,6 +111,19 @@ class ClientesDelArticuloIntegrationTest extends VentasTestBase {
                 .containsExactly(dec("2"), dec("6"), dec("5"));
         assertThat(items.get(1).get("razonSocial").asText()).startsWith("Ana Ferrari");
         assertThat(items.findValues("activo")).extracting(JsonNode::asBoolean).containsExactly(false, true, true);
+    }
+
+    @Test
+    @DisplayName("la ultima compra es el dia de Buenos Aires de la venta, tambien a la noche: el mismo que muestra la venta")
+    void ventaDeNoche() throws Exception {
+        venta(beto, "2026-06-01 22:30:00", linea(tornillo, "1", "100.00"));
+
+        JsonNode primero = getJson(url(tornillo), dueno).get("items").get(0);
+
+        assertThat(primero.get("clienteId").asLong()).isEqualTo(beto);
+        assertThat(primero.get("ultimaCompra").asText()).isEqualTo("2026-06-01");
+        assertThat(getJson("/api/ventas/" + ventas.get("2026-06-01 22:30:00"), dueno).get("fecha").asText())
+                .startsWith("2026-06-01T22:30");
     }
 
     @Test
@@ -123,6 +150,24 @@ class ClientesDelArticuloIntegrationTest extends VentasTestBase {
     }
 
     @Test
+    @DisplayName("el tamaño de pagina queda entre 1 y 100 y una pagina negativa es la primera")
+    void tamanoAcotado() throws Exception {
+        assertThat(getJson(url(tornillo) + "?size=0", dueno).get("size").asInt()).isEqualTo(1);
+        assertThat(getJson(url(tornillo) + "?size=5000", dueno).get("size").asInt()).isEqualTo(100);
+        JsonNode negativa = getJson(url(tornillo) + "?size=-3&page=-2", dueno);
+        assertThat(negativa.get("page").asInt()).isZero();
+        assertThat(negativa.get("size").asInt()).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("un articulo dado de baja sigue mostrando quien lo compro")
+    void articuloDadoDeBaja() throws Exception {
+        jdbc.update("update articulo set activo = false where id = ?", tornillo);
+
+        assertThat(getJson(url(tornillo), dueno).get("totalElements").asLong()).isEqualTo(3);
+    }
+
+    @Test
     @DisplayName("un articulo que nadie compro da la lista vacia y cero ventas sin cliente")
     void sinVentas() throws Exception {
         long nuevo = articulo(tienda, "Arandela", "UNIDAD", "10.00", "10");
@@ -139,6 +184,12 @@ class ClientesDelArticuloIntegrationTest extends VentasTestBase {
     void aislamientoYPermisos() throws Exception {
         Tienda otra = tiendaSinCaja();
         getResult(url(tornillo), login(otra.emailDueno())).andExpect(status().isNotFound());
+        // La ferreteria sale solo del JWT: un parametro o un header del cliente no la cambian.
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get(url(tornillo))
+                        .param("ferreteriaId", String.valueOf(tienda.id()))
+                        .header("X-Ferreteria-Id", String.valueOf(tienda.id()))
+                        .header("Authorization", "Bearer " + login(otra.emailDueno())))
+                .andExpect(status().isNotFound());
         getResult(url(999_999_999L), dueno).andExpect(status().isNotFound());
         getResult(url(tornillo), login(tienda.emailVendedor())).andExpect(status().isForbidden());
         getResult(url(tornillo), login("admin@demo.local")).andExpect(status().isForbidden());

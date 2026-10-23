@@ -105,14 +105,14 @@ public interface ComprobanteRepository extends TenantScopedRepository<Comprobant
 
     // ---- Clientes que compraron un articulo (G29, Ctrl+A del listado de GDS) ----
 
-    /** Un cliente que compro el articulo: cuantas ventas, cuanto en total y la fecha de la ultima ('aaaa-mm-dd'). */
+    /** Un cliente que compro el articulo: cuantas ventas, cuanto en total y la fecha y hora de la ultima. */
     interface ClienteDelArticulo {
         Long getClienteId();
         String getRazonSocial();
         Boolean getActivo();
         Long getCompras();
         BigDecimal getCantidad();
-        String getUltimaCompra();
+        Object getUltimaCompra();
     }
 
     String RENGLONES_CON_VENTA = " from item_comprobante i"
@@ -124,11 +124,11 @@ public interface ComprobanteRepository extends TenantScopedRepository<Comprobant
 
     /**
      * Una fila por cliente que compro el articulo, la compra mas nueva primero. La razon social es la actual del cliente
-     * (no la copiada en la venta). La ultima compra sale como texto para no pasar por la zona de la JVM.
+     * (no la copiada en la venta).
      */
     @Query(nativeQuery = true, value = "select c.id as clienteId, c.razon_social as razonSocial, c.activo as activo,"
             + " count(distinct v.id) as compras, sum(i.cantidad) as cantidad,"
-            + " date_format(max(v.fecha), '%Y-%m-%d') as ultimaCompra" + RENGLONES_CON_VENTA + CON_CLIENTE + DEL_ARTICULO
+            + " max(v.fecha) as ultimaCompra" + RENGLONES_CON_VENTA + CON_CLIENTE + DEL_ARTICULO
             + " group by c.id, c.razon_social, c.activo order by max(v.fecha) desc, c.id desc",
             countQuery = "select count(distinct c.id)" + RENGLONES_CON_VENTA + CON_CLIENTE + DEL_ARTICULO)
     Page<ClienteDelArticulo> clientesDelArticulo(@Param("fid") Long ferreteriaId, @Param("articulo") Long articuloId,

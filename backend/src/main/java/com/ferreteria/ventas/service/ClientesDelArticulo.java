@@ -9,7 +9,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.sql.Timestamp;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 
 /**
  * Clientes que compraron un articulo (G29), como el Ctrl+A del listado de articulos de GDS: una fila por cliente, la
@@ -45,7 +47,16 @@ public class ClientesDelArticulo {
         PageRequest pedido = PageRequest.of(Math.max(page, 0), Math.min(Math.max(size, 1), TAMANO_MAXIMO));
         Page<Cliente> clientes = comprobanteRepository.clientesDelArticuloScoped(articuloId, pedido)
                 .map(c -> new Cliente(c.getClienteId(), c.getRazonSocial(), Boolean.TRUE.equals(c.getActivo()),
-                        c.getCompras(), c.getCantidad(), LocalDate.parse(c.getUltimaCompra())));
+                        c.getCompras(), c.getCantidad(), dia(c.getUltimaCompra())));
         return new Resultado(clientes, comprobanteRepository.ventasSinClienteDelArticuloScoped(articuloId));
+    }
+
+    /**
+     * El dia de Buenos Aires de una fecha leida por SQL nativo: vuelve a la hora local con la zona de la JVM, la misma
+     * conversion con la que Hibernate la guardo (docs/spec.md, «Despliegue: zona horaria»).
+     */
+    static LocalDate dia(Object fecha) {
+        LocalDateTime momento = fecha instanceof Timestamp ts ? ts.toLocalDateTime() : (LocalDateTime) fecha;
+        return momento.toLocalDate();
     }
 }
