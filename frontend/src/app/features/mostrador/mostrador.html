@@ -116,6 +116,7 @@
         <app-dialogo-descuento
           [titulo]="'Descuento de ' + r.descripcion"
           [descuentoBp]="r.descuentoBp ?? 0"
+          [topeBp]="topeDescuentoBp()"
           (confirmar)="aplicarDescuentoRenglon(abierto.indice, $event)"
           (cancelar)="cerrarDialogo()"
           (escaneoDescartado)="escaneoDescartado()"
@@ -126,6 +127,7 @@
       <app-dialogo-descuento
         titulo="Descuento de todo el ticket"
         [descuentoBp]="ticket.ticket().descuentoGlobalBp ?? 0"
+        [topeBp]="topeDescuentoBp()"
         (confirmar)="aplicarDescuentoGlobal($event)"
         (cancelar)="cerrarDialogo()"
         (escaneoDescartado)="escaneoDescartado()"

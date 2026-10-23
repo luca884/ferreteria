@@ -134,6 +134,7 @@ describe('Mostrador', () => {
     vigente: CajaVigente = cajaAbierta,
     formas: FormaPago[] = FORMAS_BASE,
     rol: 'DUENO' | 'VENDEDOR' = 'VENDEDOR',
+    topeDescuento: number | null = null,
   ) {
     // jsdom no implementa scrollIntoView.
     Element.prototype.scrollIntoView =
@@ -188,6 +189,7 @@ describe('Mostrador', () => {
       rol,
       ferreteriaId: 3,
       ferreteriaNombre: 'Tornillo',
+      topeDescuento,
     });
     await TestBed.configureTestingModule({
       imports: [Mostrador],
@@ -2666,6 +2668,20 @@ describe('Mostrador', () => {
       expect(dialogo()).toBeNull();
       expect(totalGrande()).toBe('$ 1.350,00');
       expect(normal(el().querySelector('app-totales-ticket .descuento')?.textContent)).toBe('Descuento -$ 150,00');
+    });
+
+    it('CU-07: con tope, el diálogo no deja pasarlo y lo avisa', async () => {
+      await crear(cajaAbierta, FORMAS_BASE, 'VENDEDOR', 10);
+      await escribir('M');
+      await enter();
+      await responder(llamadas.length - 1, exacto(articulo(1, { precioFinal: 1500 })));
+
+      await tecla('F7');
+      expect(normal(dialogo()?.querySelector('.ayuda')?.textContent)).toContain('Tu tope es 10 %.');
+      await descuentoDelDialogo('15');
+
+      expect(normal(dialogo()?.querySelector('.error')?.textContent)).toBe('Tu tope de descuento es 10 %.');
+      expect(totalGrande()).toBe('$ 1.500,00');
     });
 
     it('Esc cierra el diálogo sin aplicar nada', async () => {

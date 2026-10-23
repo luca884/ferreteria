@@ -24,7 +24,7 @@ describe('DialogoDescuento', () => {
     fixture.detectChanges();
   }
 
-  async function abrir(descuentoBp = 0, titulo = 'Descuento de Martillo') {
+  async function abrir(descuentoBp = 0, titulo = 'Descuento de Martillo', topeBp: number | null = null) {
     await TestBed.configureTestingModule({ imports: [DialogoDescuento] }).compileComponents();
     fixture = TestBed.createComponent(DialogoDescuento);
     confirmados = [];
@@ -32,6 +32,7 @@ describe('DialogoDescuento', () => {
     descartados = 0;
     fixture.componentRef.setInput('titulo', titulo);
     fixture.componentRef.setInput('descuentoBp', descuentoBp);
+    fixture.componentRef.setInput('topeBp', topeBp);
     fixture.componentInstance.confirmar.subscribe((bp) => confirmados.push(bp));
     fixture.componentInstance.cancelar.subscribe(() => cancelados++);
     fixture.componentInstance.escaneoDescartado.subscribe(() => descartados++);
@@ -130,6 +131,35 @@ describe('DialogoDescuento', () => {
     expect(confirmados).toEqual([]);
     expect(error()).toBe(mensaje);
     expect(document.activeElement).toBe(campo());
+  });
+
+  describe('con tope de descuento (CU-07)', () => {
+    it('la ayuda dice el tope del usuario', async () => {
+      await abrir(0, 'Descuento de Martillo', 1250);
+
+      expect(el().querySelector('.ayuda')!.textContent).toContain('Tu tope es 12,5 %');
+    });
+
+    it('igual al tope se confirma', async () => {
+      await abrir(0, 'Descuento de Martillo', 1000);
+      escribir('10');
+
+      tecla('Enter');
+
+      expect(confirmados).toEqual([1000]);
+    });
+
+    it('sobre el tope no se confirma y avisa con el tope', async () => {
+      await abrir(0, 'Descuento de Martillo', 1000);
+      escribir('10,01');
+
+      tecla('Enter');
+      fixture.detectChanges();
+
+      expect(confirmados).toEqual([]);
+      expect(error()).toBe('Tu tope de descuento es 10 %.');
+      expect(document.activeElement).toBe(campo());
+    });
   });
 
   it('99,99 es el máximo y se confirma', async () => {

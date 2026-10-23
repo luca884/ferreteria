@@ -35,7 +35,12 @@ const DESCUENTO_MAXIMO_BP = 9999;
           [value]="texto()"
           (input)="escrito.set($any($event.target).value)"
         />
-        <p id="dialogo-descuento-ayuda" class="ayuda">Porcentaje de 0 a 99,99. Con 0 lo saca.</p>
+        <p id="dialogo-descuento-ayuda" class="ayuda">
+          Porcentaje de 0 a 99,99. Con 0 lo saca.
+          @if (topeTexto(); as tope) {
+            Tu tope es {{ tope }} %.
+          }
+        </p>
         @if (error(); as mensaje) {
           <p id="dialogo-descuento-error" class="error" role="alert">{{ mensaje }}</p>
         }
@@ -69,6 +74,8 @@ export class DialogoDescuento {
   readonly titulo = input.required<string>();
   /** El descuento que tiene hoy, en centésimas de punto porcentual. */
   readonly descuentoBp = input.required<number>();
+  /** CU-07: el tope del usuario en centésimas; null = sin tope (el servidor igual lo controla). */
+  readonly topeBp = input<number | null>(null);
 
   readonly confirmar = output<number>();
   readonly cancelar = output<void>();
@@ -82,6 +89,10 @@ export class DialogoDescuento {
 
   protected readonly inicial = computed(() => String(this.descuentoBp() / 100).replace('.', ','));
   protected readonly texto = computed(() => this.escrito() ?? this.inicial());
+  protected readonly topeTexto = computed(() => {
+    const tope = this.topeBp();
+    return tope === null ? null : String(tope / 100).replace('.', ',');
+  });
 
   constructor() {
     afterNextRender(() => this.enfocar());
@@ -126,6 +137,11 @@ export class DialogoDescuento {
     }
     if (bp > DESCUENTO_MAXIMO_BP) {
       this.rechazar('El descuento tiene que estar entre 0 y 99,99 %.');
+      return;
+    }
+    const tope = this.topeBp();
+    if (tope !== null && bp > tope) {
+      this.rechazar(`Tu tope de descuento es ${this.topeTexto()} %.`);
       return;
     }
     this.error.set(null);
