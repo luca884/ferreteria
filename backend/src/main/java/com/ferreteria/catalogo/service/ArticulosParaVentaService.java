@@ -66,6 +66,12 @@ public class ArticulosParaVentaService implements ArticulosParaVenta {
         return articuloRepository.stockVigenteScoped(id);
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public Map<Long, String> rubros(Collection<Long> ids) {
+        return articuloRepository.rubrosDeScoped(ids);
+    }
+
     private static ArticuloVendible vendible(Articulo articulo, BigDecimal dolar) {
         return new ArticuloVendible(
                 articulo.getId(),

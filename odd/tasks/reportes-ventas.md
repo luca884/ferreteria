@@ -32,7 +32,7 @@ Texto aprobado por Luca (2026-10-22, «dale»):
 - S7: "Ventas por artículo y por rubro." — Aceptación: por artículo: descripción, cantidad vendida, total y ganancia; por rubro (el rubro actual del artículo, «Sin rubro» si no tiene): cantidad de renglones, total y ganancia — Checks: ídem
 - S8: "Ventas con descuento." — Aceptación: las ventas con descuento global o de algún renglón: número, fecha, usuario, cliente, descuento global %, importe descontado y total — Checks: ídem
 - S9: "los totales se arman con el total de cada comprobante, no sumando renglones." — Aceptación: el total del resumen es la suma de `comprobante.total`; los cortes por usuario, día y mes también — Checks: ídem
-- S10 (supuesto): solo el Dueño (Vendedor 403); `desde` y `hasta` obligatorios, `desde` ≤ `hasta` y hasta 366 días, si no 400; entran las ventas «No facturables»; no entran presupuestos, remitos ni cobranzas — Checks: ídem
+- S10 (supuesto): solo el Dueño (Vendedor 403); sin fechas es hoy (falta una, se toma la otra); «Hasta» antes de «Desde» da 400 «La fecha «Hasta» no puede ser anterior a «Desde».» y más de 366 días, 400 «El reporte admite hasta 366 días.»; entran las ventas «No facturables»; no entran presupuestos, remitos ni cobranzas — Checks: ídem
 - S11: aislamiento por tenant (regla 7): los reportes de una ferretería no cuentan ventas de otra — Checks: ídem
 - S12: pantalla «Reportes» (solo Dueño) con «Desde / Hasta» (hoy por defecto) y los seis reportes — Checks: specs de Vitest + ego-browser
 
@@ -40,7 +40,7 @@ Texto aprobado por Luca (2026-10-22, «dale»):
 
 - [x] T1 · S1 S2 · ruta: inline · Aceptación: V26 aditiva (`costo_unitario` y `costo` nulos en `item_comprobante`) + `MigracionV26Test` + rollback + `MigracionV6Test` a V26 · Evidencia: RED 5 errores (sin V26) y 1 falla → GREEN `MigracionV26Test` 6/6 + `MigracionV6Test` 14/14 (el CHECK con un solo NULL pasaba por UNKNOWN; se exige IS NOT NULL en las dos) · commit en la línea de abajo · Risk: item 1 (migración)
 - [x] T2 · S1 · ruta: inline · Aceptación: la venta guarda el costo (pesos y USD, desde presupuesto y remito) · Evidencia: RED `CostoDeVentaIntegrationTest` 5 fallas (costo nulo) → GREEN 6/6 con `ArticulosParaVentaServiceTest` 8, `RegistroVentaTest` 78, `AjusteStock*Test`, `ModulosArchTest` 40, `ComprobanteRepositoryTest` 2 · sin test: USD sin ningún dólar guardado deja el costo en NULL (la tabla de cotizaciones es compartida entre tests) · commit siguiente · Risk: item 3 (`ArticuloVendible` lo usan ventas y stock)
-- [ ] T3 · S2-S11 · ruta: inline · Aceptación: los seis reportes por API con rol, rango y tenant · Evidencia: — · Risk: none
+- [x] T3 · S2-S11 · ruta: inline · Aceptación: los seis reportes por API con rol, rango y tenant · Evidencia: RED `ReporteVentasIntegrationTest` 15 fallas (404) → GREEN 15/15 con `ModulosArchTest` 40, `TenantScopingArchTest` 24, `ArticulosParaVentaServiceTest` 8 · `GET /api/reportes/ventas/{resumen,por-usuario,por-medio-pago,por-periodo?agrupar=DIA|MES,por-articulo,por-rubro,con-descuento}` · commit siguiente · Risk: none
 - [ ] T4 · S12 · ruta: inline · Aceptación: pantalla y menú; ego-browser · Evidencia: — · Risk: none
 - [ ] T5 · S1-S12 · ruta: inline · Aceptación: `docs/spec.md` (CU-15) y `docs/relevamiento-gds.md` (G63, G66, G67, GDS-08) · Evidencia: — · Risk: none
 

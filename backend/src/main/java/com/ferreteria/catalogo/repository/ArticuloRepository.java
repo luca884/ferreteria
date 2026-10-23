@@ -163,6 +163,11 @@ public interface ArticuloRepository extends TenantScopedRepository<Articulo, Lon
     @Query("select a from Articulo a where a.ferreteriaId = :fid and a.id in :ids order by a.id")
     List<Articulo> porIds(@Param("fid") Long ferreteriaId, @Param("ids") Collection<Long> ids);
 
+    /** Pares (id del articulo, nombre del rubro) de los articulos con rubro. */
+    @Query("select a.id, r.nombre from Articulo a, Rubro r where r.id = a.rubroId and r.ferreteriaId = a.ferreteriaId "
+            + "and a.ferreteriaId = :fid and a.id in :ids")
+    List<Object[]> rubrosDe(@Param("fid") Long ferreteriaId, @Param("ids") Collection<Long> ids);
+
     /** Pares (id, stock actual) leidos de la base, sin pasar por el contexto de persistencia. */
     @Query("select a.id, a.stockActual from Articulo a where a.ferreteriaId = :fid and a.id in :ids")
     List<Object[]> stockDe(@Param("fid") Long ferreteriaId, @Param("ids") Collection<Long> ids);
@@ -305,6 +310,15 @@ public interface ArticuloRepository extends TenantScopedRepository<Articulo, Lon
     /** Suma delta al stock del articulo de la ferreteria del request (atomico). Devuelve las filas afectadas. */
     default int sumarStockScoped(Long id, BigDecimal delta) {
         return sumarStock(TenantContext.requireFerreteriaId(), id, delta);
+    }
+
+    /** El nombre del rubro de cada articulo de la ferreteria del request que tiene rubro, por id. */
+    default Map<Long, String> rubrosDeScoped(Collection<Long> ids) {
+        Map<Long, String> rubros = new HashMap<>();
+        if (!ids.isEmpty()) {
+            rubrosDe(TenantContext.requireFerreteriaId(), ids).forEach(f -> rubros.put((Long) f[0], (String) f[1]));
+        }
+        return rubros;
     }
 
     /** Los articulos de la ferreteria con esos ids (activos o no), por id ascendente. */
