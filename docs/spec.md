@@ -224,6 +224,15 @@ Son 12 casos de uso (CU-01 a CU-12), agrupados en cinco módulos: Configuración
 4. **Costo y ganancia.** Cada renglón vendido copia el costo del artículo al vender, sin IVA y en pesos (un artículo en USD se pasa con el dólar vigente); cambiar el costo después no cambia la ganancia de lo ya vendido. Ganancia = neto − costo. Las ventas anteriores a este cambio no tienen costo (no se completan con el de hoy) y la pantalla las avisa: «N ventas sin costo registrado: la ganancia no las incluye.»
 5. **API.** `GET /api/reportes/ventas/{resumen, por-usuario, por-medio-pago, por-periodo, por-articulo, por-rubro, con-descuento}` con `desde` y `hasta` (ISO; sin fechas, hoy; falta una, se usa la otra) y `agrupar=DIA|MES` en `por-periodo`. El Vendedor recibe 403. «Hasta» antes de «Desde» es 400 «La fecha «Hasta» no puede ser anterior a «Desde».» y más de 366 días, 400 «El reporte admite hasta 366 días.». Otra ferretería no ve ni suma estas ventas.
 
+**CU-16 Consultar y reimprimir ventas** (solo el Dueño; decidido por Luca el 2026-10-23, como la «Consulta de Facturas» de GDS: G60 y GDS-15)
+
+1. **Pantalla «Ventas».** El Dueño busca por número, por cliente (contiene, sin distinguir mayúsculas ni tildes) y por fecha «Desde / Hasta» (días de Buenos Aires, los dos incluidos). La lista va de la más nueva a la más vieja, de a 20, con número, fecha y hora, cliente («Consumidor Final» si no tiene), usuario que la cobró, total y la marca «No facturable».
+2. **Detalle.** Al elegir una venta se ve como al cobrarla: renglones, subtotal, descuento, recargo, total, pagos por forma, cliente, quién la cobró y si salió de un presupuesto o de un remito.
+3. **Reimprimir.** «Imprimir» abre la venta en una hoja imprimible con la leyenda provisoria «Comprobante interno, no válido como factura» (hasta el CAE de la fase 5; se confirma con el contador).
+4. **Sin anular ni borrar.** Anular es la nota de crédito de CU-08 (fase 5) y una venta no se borra (GDS-15).
+5. **Acceso.** GDS lo da por permisos de usuario («Consulta de Ventas», «Reimprimir Facturas»); acá no hay permisos por usuario y queda para el Dueño: con el listado el Vendedor podría sumar el efectivo del día y el cierre de caja dejaría de ser ciego (CU-10).
+6. **API.** `GET /api/ventas` con `numero`, `cliente`, `desde`, `hasta`, `page` y `size` (hasta 100), y `GET /api/ventas/{id}` (la misma respuesta que al cobrar, más `usuario`). El Vendedor recibe 403; una venta de otra ferretería o que no existe da 404 «Venta no encontrada».
+
 ## Reglas de negocio
 
 Estas reglas se codifican en el dominio y se cubren con tests unitarios antes que cualquier pantalla.
