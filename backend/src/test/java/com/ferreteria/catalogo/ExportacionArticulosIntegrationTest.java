@@ -1,6 +1,7 @@
 package com.ferreteria.catalogo;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.ferreteria.common.HoraArgentina;
@@ -122,6 +123,16 @@ class ExportacionArticulosIntegrationTest extends AjustesTestBase {
 
         assertThat(csv(exportar("?q=afuera", duenoA))).isEqualTo(ENCABEZADO + "\r\n"
                 + "D-004;;;Apunta afuera;;;Litro;ARS;5,00;21;Heredado;8,00;No;1;0;;Sí\r\n");
+    }
+
+    @Test
+    @DisplayName("el front, que corre en otro origen, puede leer el nombre del archivo (CORS expone Content-Disposition)")
+    void exponeElNombreDelArchivo() throws Exception {
+        MockHttpServletResponse respuesta = mvc.perform(get(URL).header("Authorization", "Bearer " + duenoA)
+                        .header("Origin", "http://localhost:4200"))
+                .andExpect(status().isOk()).andReturn().getResponse();
+
+        assertThat(respuesta.getHeader("Access-Control-Expose-Headers")).contains("Content-Disposition");
     }
 
     @Test

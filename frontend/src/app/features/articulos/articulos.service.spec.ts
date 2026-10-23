@@ -70,6 +70,29 @@ describe('ArticulosService', () => {
 
   afterEach(() => http.verify());
 
+  it('exporta con GET /articulos/exportacion la búsqueda sin espacios e inactivos, y trae el archivo con sus encabezados', () => {
+    let nombre: string | null | undefined;
+    service.exportar('  torni ', true).subscribe((r) => (nombre = r.headers.get('Content-Disposition')));
+
+    const req = http.expectOne((r) => r.url.endsWith('/articulos/exportacion'));
+    expect(req.request.method).toBe('GET');
+    expect(req.request.responseType).toBe('blob');
+    expect(req.request.params.get('q')).toBe('torni');
+    expect(req.request.params.get('incluirInactivos')).toBe('true');
+    req.flush(new Blob(['csv']), { headers: { 'Content-Disposition': 'attachment; filename="articulos.csv"' } });
+
+    expect(nombre).toBe('attachment; filename="articulos.csv"');
+  });
+
+  it('exporta sin q cuando la búsqueda está vacía', () => {
+    service.exportar('   ', false).subscribe();
+
+    const req = http.expectOne((r) => r.url.endsWith('/articulos/exportacion'));
+    expect(req.request.params.has('q')).toBe(false);
+    expect(req.request.params.get('incluirInactivos')).toBe('false');
+    req.flush(new Blob(['']));
+  });
+
   it('busca con GET /articulos mandando q, page, size e incluirInactivos', () => {
     let recibida: PageResponse<Articulo> | undefined;
     service.buscar('torni', 2, 10, true).subscribe((p) => (recibida = p));
