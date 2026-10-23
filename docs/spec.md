@@ -58,6 +58,7 @@ Son 12 casos de uso (CU-01 a CU-12), agrupados en cinco módulos: Configuración
    - cada precio que cambia guarda historial con origen masivo. Un artículo cuyos ajustes dejarían el precio en 0 o menos conserva el suyo y se avisa;
    - con artículos en dólares a recalcular y sin cotización guardada, no se guarda nada (409).
 4. **Exportar** (barra de Artículos, solo el Dueño), como la «Exportación Rápida» de GDS (G25, GDS-19). Baja en CSV los artículos que muestra la pantalla (la búsqueda y «Mostrar dados de baja»), todos juntos y en el mismo orden. El archivo `articulos-AAAA-MM-DD.csv` abre directo en Excel en castellano: UTF-8 con BOM, separador `;`, coma decimal, sin separador de miles. Columnas: código, código de barras, código del proveedor, descripción, rubro, proveedor, unidad, moneda, costo, IVA %, margen % («Heredado» si no tiene uno propio), precio final, precio manual (Sí/No), stock, stock mínimo, ubicación y activo (Sí/No). Los tres códigos salen como texto de Excel (`="0012"`), así Excel no les saca los ceros ni pasa un código de barras a `7,79E+12`; la importación de CU-04 lee `="…"` como su texto. Un texto que empieza con `=`, `+`, `-` o `@` sale con un apóstrofo adelante, para que Excel no lo tome como fórmula. La carga inicial de una ferretería usa la importación de CU-04 con «Crear los artículos nuevos».
+5. **Costo al** (columna de Artículos, para el Dueño y el Vendedor), como la «F. Modif.» de GDS (G22, GDS-05): desde cuándo está al día el costo. Es la fecha más nueva entre el último cambio de costo o de moneda del historial (un cambio solo de precio no cuenta), la última importación de lista que tocó el artículo (aunque haya confirmado el mismo costo) y el alta. Sale del historial y de las importaciones, sin migración.
 
 **CU-04 Importar lista de precios del proveedor** (Dueño) — el caso más importante del sistema
 
@@ -80,7 +81,7 @@ Son 12 casos de uso (CU-01 a CU-12), agrupados en cinco módulos: Configuración
 **CU-06 Buscar artículo** (Vendedor)
 
 1. Escanea el código de barras o escribe parte de la descripción o el código. La mayoría de las ferreterías ya tiene lector: funciona como teclado (escribe el código y manda Enter), así que el campo de búsqueda tiene que tener el foco siempre y reaccionar al Enter.
-2. Ve precio, stock y ubicación al instante, sin hacer clic en nada.
+2. Ve precio, stock y ubicación al instante, sin hacer clic en nada. También ve «Costo al»: desde cuándo está al día el costo (GDS-05, como la «F. Modif.» de GDS). Es una fecha, no el costo.
 
 **CU-07 Vender y facturar** (Vendedor)
 
