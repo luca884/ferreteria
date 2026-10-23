@@ -18,6 +18,7 @@ import org.springframework.data.repository.query.Param;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
@@ -417,31 +418,37 @@ public interface ArticuloRepository extends TenantScopedRepository<Articulo, Lon
      * Desde cuando esta al dia el costo de cada articulo (GDS-05): la fecha mas nueva entre el ultimo historial que
      * cambio el costo o la moneda (un cambio solo de precio no cuenta), la ultima importacion de lista que toco el
      * articulo (aunque haya confirmado el mismo costo) y el alta. Historial e importacion se unen por la ferreteria del
-     * articulo. Filas (id, fecha 'aaaa-mm-dd'): la fecha sale como texto para no pasar por la zona de la JVM.
+     * articulo. Filas (id, fecha y hora guardadas).
      */
     @Query(nativeQuery = true, value = """
             select a.id,
-                   date_format(greatest(a.creado_en,
+                   greatest(a.creado_en,
                             coalesce((select max(h.fecha) from historial_precio h
                                       where h.ferreteria_id = a.ferreteria_id and h.articulo_id = a.id
                                         and (h.costo_anterior is null or h.costo_anterior <> h.costo_nuevo
                                              or (h.moneda_anterior is not null and h.moneda_anterior <> h.moneda))),
                                      a.creado_en),
-                            coalesce(i.fecha, a.creado_en)), '%Y-%m-%d')
+                            coalesce(i.fecha, a.creado_en))
             from articulo a
             left join importacion_lista i on i.id = a.ultima_importacion_id and i.ferreteria_id = a.ferreteria_id
             where a.ferreteria_id = :fid and a.id in :ids
             """)
     List<Object[]> costoAl(@Param("fid") Long ferreteriaId, @Param("ids") Collection<Long> ids);
 
-    /** La fecha de {@link #costoAl} de cada id de la ferreteria del request; los ajenos o inexistentes no figuran. */
+    /**
+     * El dia de {@link #costoAl} de cada id de la ferreteria del request; los ajenos o inexistentes no figuran. La fecha
+     * vuelve a la hora de Buenos Aires con la zona de la JVM, la misma conversion con la que Hibernate la guardo
+     * (docs/spec.md, «Despliegue: zona horaria»).
+     */
     default Map<Long, LocalDate> costoAlScoped(Collection<Long> ids) {
         Map<Long, LocalDate> fechas = new HashMap<>();
         if (ids.isEmpty()) {
             return fechas;
         }
         for (Object[] fila : costoAl(TenantContext.requireFerreteriaId(), ids)) {
-            fechas.put(((Number) fila[0]).longValue(), LocalDate.parse((String) fila[1]));
+            Object fecha = fila[1];
+            LocalDateTime momento = fecha instanceof java.sql.Timestamp ts ? ts.toLocalDateTime() : (LocalDateTime) fecha;
+            fechas.put(((Number) fila[0]).longValue(), momento.toLocalDate());
         }
         return fechas;
     }

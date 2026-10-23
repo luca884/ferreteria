@@ -1,3 +1,4 @@
+import { PageResponse } from '../../core/api/page.models';
 import { formatearMonto } from '../../core/formato/monto';
 import { exacto } from '../../core/formato/precio-final';
 
@@ -192,6 +193,21 @@ export interface FiltroMovimientos {
   page: number;
   desde?: string;
   hasta?: string;
+}
+
+/** Un cliente que compró el artículo (G29, Ctrl+A de GDS): sus ventas, cuánto llevó y la última vez (AAAA-MM-DD). */
+export interface ClienteDelArticulo {
+  clienteId: number;
+  razonSocial: string;
+  activo: boolean;
+  compras: number;
+  cantidad: number;
+  ultimaCompra: string;
+}
+
+/** La página de clientes del artículo y cuántas ventas sin cliente (consumidor final) lo tuvieron. */
+export interface ClientesDelArticulo extends PageResponse<ClienteDelArticulo> {
+  ventasSinCliente: number;
 }
 
 export interface ConfiguracionPrecios {

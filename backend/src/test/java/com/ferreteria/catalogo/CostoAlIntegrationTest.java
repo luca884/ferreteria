@@ -7,6 +7,9 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.ferreteria.common.HoraArgentina;
 import com.ferreteria.cotizacion.model.LadoCotizacion;
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.time.ZoneOffset;
 import java.time.Instant;
 import java.util.HashMap;
 import java.util.Map;
@@ -81,7 +84,7 @@ class CostoAlIntegrationTest extends AjustesTestBase {
     private void cargar(String codigo, String descripcion) {
         jdbc.update("insert into articulo (ferreteria_id, codigo_interno, descripcion, costo, precio_final, unidad,"
                 + " alicuota_iva, stock_actual, activo, creado_en) values (?, ?, ?, 100.00, 160.00, 'UNIDAD', 'IVA_21',"
-                + " 0, true, '2026-01-10 08:00:00')", a, codigo, descripcion);
+                + " 0, true, ?)", a, codigo, descripcion, comoLaGuardaHibernate("2026-01-10 08:00:00"));
         ids.put(codigo, jdbc.queryForObject("select id from articulo where ferreteria_id = ? and codigo_interno = ?",
                 Long.class, a, codigo));
     }
@@ -91,14 +94,14 @@ class CostoAlIntegrationTest extends AjustesTestBase {
         jdbc.update("insert into historial_precio (ferreteria_id, articulo_id, costo_anterior, costo_nuevo,"
                 + " precio_anterior, precio_nuevo, origen, moneda, moneda_anterior, fecha) values (?, ?, ?, ?, 160.00,"
                 + " 170.00, 'MANUAL', ?, ?, ?)", ferreteriaId, ids.get(codigo), bd(costoAnterior), bd(costoNuevo),
-                moneda, monedaAnterior, fecha);
+                moneda, monedaAnterior, comoLaGuardaHibernate(fecha));
     }
 
     private Long importacion(Long ferreteriaId, Long usuarioId, Long proveedorId, String fecha) {
         String archivo = "lista-" + fecha + ".csv";
         jdbc.update("insert into importacion_lista (ferreteria_id, proveedor_id, usuario_id, archivo, suben, bajan,"
                 + " nuevos, sin_cambio, no_estan, con_error, estado, fecha) values (?, ?, ?, ?, 0, 0, 0, 1, 0, 0,"
-                + " 'APLICADA', ?)", ferreteriaId, proveedorId, usuarioId, archivo, fecha);
+                + " 'APLICADA', ?)", ferreteriaId, proveedorId, usuarioId, archivo, comoLaGuardaHibernate(fecha));
         return jdbc.queryForObject("select max(id) from importacion_lista where ferreteria_id = ? and archivo = ?",
                 Long.class, ferreteriaId, archivo);
     }
@@ -183,12 +186,23 @@ class CostoAlIntegrationTest extends AjustesTestBase {
     }
 
     @Test
-    @DisplayName("la fecha es la del dia guardado, tambien a la madrugada: no depende de la zona de la JVM")
-    void madrugada() throws Exception {
-        jdbc.update("update articulo set creado_en = '2026-01-10 00:30:00' where id = ?", ids.get("CAL-1"));
-        historial(a, "CAL-2", "120.00", "125.00", "ARS", "ARS", "2026-03-06 00:10:00");
+    @DisplayName("la fecha es el dia de Buenos Aires en que se guardo, tambien a la noche y a la madrugada")
+    void nocheYMadrugada() throws Exception {
+        jdbc.update("update articulo set creado_en = ? where id = ?", comoLaGuardaHibernate("2026-01-10 22:30:00"), ids.get("CAL-1"));
+        historial(a, "CAL-2", "120.00", "125.00", "ARS", "ARS", "2026-03-06 23:50:00");
+        historial(a, "CAL-4", "100.00", "105.00", "USD", "USD", "2026-02-20 00:10:00");
 
-        assertThat(costoAlDelListado(duenoA)).containsEntry("CAL-1", "2026-01-10").containsEntry("CAL-2", "2026-03-06");
+        assertThat(costoAlDelListado(duenoA)).containsEntry("CAL-1", "2026-01-10").containsEntry("CAL-2", "2026-03-06")
+                .containsEntry("CAL-4", "2026-02-20");
+    }
+
+    /**
+     * Una hora de Buenos Aires guardada como la guarda Hibernate ({@code hibernate.jdbc.time_zone: UTC}): pasada a UTC con
+     * la zona de la JVM (docs/spec.md, «Despliegue: zona horaria»). Un texto crudo en el SQL no pasa por esa conversion.
+     */
+    private static String comoLaGuardaHibernate(String fechaHora) {
+        return LocalDateTime.parse(fechaHora.replace(' ', 'T')).atZone(ZoneId.systemDefault())
+                .withZoneSameInstant(ZoneOffset.UTC).toLocalDateTime().toString().replace('T', ' ');
     }
 
     @Test

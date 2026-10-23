@@ -61,7 +61,7 @@ describe('Etiquetas', () => {
   const el = () => fixture.nativeElement as HTMLElement;
   const texto = (selector: string) => el().querySelector(selector)?.textContent?.replace(/\s+/g, ' ').trim();
   const buscador = () => el().querySelector<HTMLInputElement>('input[name="q"]')!;
-  const etiquetas = () => Array.from(el().querySelectorAll('.etiquetas-imprimible .etiqueta'));
+  const etiquetas = () => Array.from(el().querySelectorAll('.etiquetas-imprimible .rotulo'));
   const filasLista = () => Array.from(el().querySelectorAll('.lista tbody tr'));
   const imprimir = () => el().querySelector<HTMLButtonElement>('button.imprimir')!;
 
@@ -203,6 +203,8 @@ describe('Etiquetas', () => {
     expect(code128.querySelectorAll('svg rect')).toHaveLength(barras(codigoInterno.modulos).length);
     expect(code128.querySelector('.codigo')!.textContent!.trim()).toBe('TOR-002');
     expect(el().querySelector('.etiquetas-imprimible')!.textContent).not.toMatch(/\$|100/);
+    // `.etiqueta` es la pastilla global («Desactivado»): con ese nombre heredaba nowrap y fondo gris.
+    expect(el().querySelector('.etiquetas-imprimible .etiqueta')).toBeNull();
   });
 
   it('en la lista dice qué código va en las barras', async () => {

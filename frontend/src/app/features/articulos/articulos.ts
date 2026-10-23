@@ -164,6 +164,13 @@ export class Articulos implements OnInit {
     void this.router.navigate(['/articulos', articulo.id, 'movimientos']);
   }
 
+  /** G29: los clientes que compraron el elegido (el Ctrl+A de GDS), también de uno dado de baja. */
+  protected verClientes(): void {
+    const articulo = this.filas.elegido();
+    if (!articulo || !this.auth.esDueno()) return;
+    void this.router.navigate(['/articulos', articulo.id, 'clientes']);
+  }
+
   /** Baja en CSV lo que muestra la pantalla: la búsqueda aplicada y los inactivos, todas las páginas (GDS-19). */
   protected exportar(): void {
     if (!this.auth.esDueno() || this.exportando()) return;

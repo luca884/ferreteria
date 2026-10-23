@@ -484,6 +484,22 @@ describe('Articulos', () => {
 
       expect(barra('button.movimientos')).toBeNull();
     });
+
+    it('Clientes de la barra abre los clientes que compraron el elegido, aunque esté de baja (G29)', async () => {
+      await crearComponente(true, pagina([articulo(7), articulo(8, { activo: false })]));
+      expect(barra('button.clientes')!.disabled).toBe(true);
+
+      await elegir(1);
+      await clickEn('app-barra-acciones button.clientes');
+
+      expect(navegar).toHaveBeenCalledWith(['/articulos', 8, 'clientes']);
+    });
+
+    it('el Vendedor no ve Clientes en la barra', async () => {
+      await crearComponente(false);
+
+      expect(barra('button.clientes')).toBeNull();
+    });
   });
 
   describe('exportar a CSV (GDS-19)', () => {
