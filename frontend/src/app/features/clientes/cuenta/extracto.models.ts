@@ -34,7 +34,7 @@ export interface LineaExtracto {
   reciboId: number | null;
   /** Solo en VENTA. */
   comprobanteId: number | null;
-  /** El motivo de la anulación (solo en ANULACION). */
+  /** El motivo de la anulación o del ajuste (solo en ANULACION y AJUSTE). */
   motivo: string | null;
   excedioLimite: boolean;
   autorizadoPor: string | null;
@@ -119,6 +119,11 @@ export function textoPeriodo(desde: string | null, hasta: string | null): string
   if (desde) return `desde el ${diaCompleto(desde)}`;
   if (hasta) return `hasta el ${diaCompleto(hasta)}`;
   return 'todo el historial';
+}
+
+/** El motivo se muestra debajo de la referencia en la ANULACION y en el AJUSTE (Recargo o Descuento). */
+export function muestraMotivo(linea: LineaExtracto): boolean {
+  return (linea.tipo === 'ANULACION' || linea.tipo === 'AJUSTE') && !!linea.motivo;
 }
 
 /** «Anular» se ofrece solo en un COBRO vigente (ni anulado, ni venta, ni ajuste, ni NC, ni la ANULACION misma). */

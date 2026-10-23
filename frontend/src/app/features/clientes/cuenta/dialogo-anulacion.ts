@@ -18,6 +18,7 @@ import {
   MEDIO_COBRANZA_LABELS,
   MOTIVO_MAXIMO,
   Recibo,
+  clavePartida,
   fechaCompletaLocal,
   hoyEnBuenosAires,
   validarMotivo,
@@ -57,6 +58,8 @@ export class DialogoAnulacion {
   protected readonly maximo = MOTIVO_MAXIMO;
   protected readonly medioLabels = MEDIO_COBRANZA_LABELS;
   protected readonly fecha = fechaCompletaLocal;
+  /** Identifica cada partida liberada (venta o Recargo) en el `@for`: el comprobanteId solo no alcanza. */
+  protected readonly clave = clavePartida;
 
   protected readonly motivo = signal('');
   /** Se intentó confirmar con el motivo inválido: recién ahí se marca el error. */

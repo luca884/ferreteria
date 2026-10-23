@@ -67,7 +67,7 @@
     @if (filas().length > 0) {
       <table class="imputacion">
         <caption class="sr-only">
-          Imputación del cobro a los comprobantes con deuda
+          Imputación del cobro a los comprobantes y Recargos con deuda
         </caption>
         <thead>
           <tr>
@@ -77,7 +77,7 @@
           </tr>
         </thead>
         <tbody>
-          @for (f of filas(); track f.comprobanteId) {
+          @for (f of filas(); track f.clave) {
             <tr>
               <th scope="row">
                 {{ f.referencia }}
@@ -93,14 +93,15 @@
                   placeholder="0,00"
                   [readOnly]="congelado()"
                   [attr.data-comprobante]="f.comprobanteId"
+                  [attr.data-ajuste]="f.ajusteId ?? null"
                   [attr.aria-label]="'Importe a imputar a ' + f.referencia"
                   [attr.aria-invalid]="f.error ? 'true' : null"
-                  [attr.aria-describedby]="f.error ? 'error-fila-' + f.comprobanteId : null"
+                  [attr.aria-describedby]="f.error ? 'error-fila-' + f.idCampo : null"
                   [value]="f.texto"
-                  (input)="escribirFila(f.comprobanteId, $any($event.target).value)"
+                  (input)="escribirFila(f.clave, $any($event.target).value)"
                 />
                 @if (f.error; as mensaje) {
-                  <small class="campo-error" [id]="'error-fila-' + f.comprobanteId">{{ mensaje }}</small>
+                  <small class="campo-error" [id]="'error-fila-' + f.idCampo">{{ mensaje }}</small>
                 }
               </td>
             </tr>

@@ -78,14 +78,21 @@ class PlanDeLocksDeCobranzaTest extends CuentaCorrienteTestBase {
         long cliente = cliente(f, "100000");
         long otro = cliente(f, "100000");
         String insert = "insert into movimiento_cuenta_cliente (ferreteria_id, cliente_id, tipo, debe, haber, referencia, motivo, "
-                + "fecha, usuario_id) values (?, ?, 'AJUSTE', ?, 0, ?, 'Ajuste de prueba', ?, ?)";
+                + "fecha, usuario_id, ajuste_id) values (?, ?, 'AJUSTE', ?, 0, ?, 'Ajuste de prueba', ?, ?, ?)";
         for (int tanda = 0; tanda < 3; tanda++) {
             ventaEnLibro(f, cliente, "10.00"); // las partidas a bloquear, repartidas entre el ruido
             List<Object[]> filas = new ArrayList<>();
+            // V28: cada AJUSTE del libro lleva su ajuste
+            java.util.Iterator<Long> ajustesCliente = SemillaAjuste.ajustes(jdbc, f.id(), cliente, f.usuarioId(), "RECARGO",
+                    java.util.Collections.nCopies(350, new BigDecimal("1.00"))).iterator();
+            java.util.Iterator<Long> ajustesOtro = SemillaAjuste.ajustes(jdbc, f.id(), otro, f.usuarioId(), "RECARGO",
+                    java.util.Collections.nCopies(350, new BigDecimal("1.00"))).iterator();
             for (int i = 0; i < 350; i++) {
                 LocalDateTime fecha = LocalDateTime.of(2026, 1, 1, 0, 0).plusMinutes(tanda * 350L + i);
-                filas.add(new Object[] {f.id(), cliente, new BigDecimal("1.00"), "Mov " + i, fecha, f.usuarioId()});
-                filas.add(new Object[] {f.id(), otro, new BigDecimal("1.00"), "Otro " + i, fecha, f.usuarioId()});
+                filas.add(new Object[] {f.id(), cliente, new BigDecimal("1.00"), "Mov " + i, fecha, f.usuarioId(),
+                        ajustesCliente.next()});
+                filas.add(new Object[] {f.id(), otro, new BigDecimal("1.00"), "Otro " + i, fecha, f.usuarioId(),
+                        ajustesOtro.next()});
             }
             jdbc.batchUpdate(insert, filas);
         }

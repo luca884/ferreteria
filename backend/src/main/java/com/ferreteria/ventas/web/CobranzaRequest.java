@@ -46,19 +46,32 @@ public record CobranzaRequest(
 
     static final String MENSAJE_MEDIO = "Elegí efectivo o transferencia";
 
-    /** Cuánto del cobro se aplica a un comprobante. */
+    /**
+     * Cuánto del cobro se aplica a una deuda: a un comprobante ({@code comprobanteId}) o, desde GDS-20, a un Recargo
+     * ({@code ajusteId}); exactamente uno de los dos ({@link UnaSolaDeuda}, con las mismas claves y mensajes que
+     * {@code RegistroCobranza.validarForma}: «Elegí el comprobante.» en {@code imputaciones[i].comprobanteId} si no viene
+     * ninguno, junto con los demás errores del renglón).
+     */
+    @UnaSolaDeuda
     public record ImputacionRequest(
-            @NotNull(message = "Elegí el comprobante.")
             Long comprobanteId,
+
+            Long ajusteId,
 
             @NotNull(message = "Falta el importe.")
             @DecimalMin(value = "0.01", message = "El importe tiene que ser mayor que cero.")
             @Digits(integer = 13, fraction = 2, message = "El importe admite hasta 2 decimales.")
-            BigDecimal importe) {}
+            BigDecimal importe) {
+
+        /** A un comprobante (la forma de antes de los Recargos). */
+        public ImputacionRequest(Long comprobanteId, BigDecimal importe) {
+            this(comprobanteId, null, importe);
+        }
+    }
 
     public CobranzaPedido aPedido() {
         return new CobranzaPedido(clave, clienteId, MedioPago.valueOf(medio), total,
                 imputaciones == null ? List.of()
-                        : imputaciones.stream().map(i -> new Imputar(i.comprobanteId(), i.importe())).toList());
+                        : imputaciones.stream().map(i -> new Imputar(i.comprobanteId(), i.ajusteId(), i.importe())).toList());
     }
 }

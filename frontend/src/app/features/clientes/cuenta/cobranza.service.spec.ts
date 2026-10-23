@@ -2,6 +2,7 @@ import { HttpErrorResponse, provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 import { esOcupado, mensajeDe } from '../../../core/api/api-error';
+import { AjusteCobrado, AjusteRequest, AjusteResponse } from './ajuste.models';
 import { CobranzaRechazada, CobranzaRequest, PendientesCuenta, Recibo, ReciboCobrado } from './cobranza.models';
 import { CobranzaService, GENERAR_CLAVE_COBRO, esTransitorio, invalidaDe, rechazoDe } from './cobranza.service';
 
@@ -310,6 +311,65 @@ describe('CobranzaService', () => {
     it('un cuerpo 409 con otro motivo no se confunde con un rechazo de cobranza', () => {
       const err = new HttpErrorResponse({ status: 409, error: { status: 409, message: 'x', motivo: 'PRECIOS_CAMBIADOS' } });
       expect(rechazoDe(err)).toBeNull();
+    });
+  });
+
+  describe('ajustar (GDS-20, G59)', () => {
+    const ajuste: AjusteResponse = {
+      ajusteId: 3,
+      numero: 3,
+      referencia: 'Descuento N.º 3',
+      tipo: 'DESCUENTO',
+      importe: 1234.5,
+      motivo: 'Cliente de toda la vida',
+      fecha: '2026-10-23T18:00:00',
+      saldo: 500,
+      imputaciones: [{ comprobanteId: 31, ajusteId: null, referencia: 'Venta N.º 7', importe: 100 }],
+    };
+    const descuento: AjusteRequest = {
+      clave: '7c9e6679-7425-40de-944b-e07fc1f90ae7',
+      tipo: 'DESCUENTO',
+      importe: 1234.5,
+      motivo: 'Cliente de toda la vida',
+      imputaciones: [{ comprobanteId: 31, importe: 100 }],
+    };
+
+    it('hace POST a /clientes/{id}/cuenta-corriente/ajustes con el cuerpo del contrato, sin el cliente', () => {
+      service.ajustar(8, descuento).subscribe();
+
+      const req = http.expectOne((q) => q.url.endsWith('/clientes/8/cuenta-corriente/ajustes'));
+      expect(req.request.method).toBe('POST');
+      expect(req.request.body).toEqual(descuento);
+      expect(Object.keys(req.request.body).sort()).toEqual(['clave', 'importe', 'imputaciones', 'motivo', 'tipo']);
+      req.flush(ajuste, { status: 201, statusText: 'Created' });
+    });
+
+    it('201 es un ajuste nuevo y 200 el mismo ajuste de una clave ya registrada con el mismo contenido', () => {
+      const resultados: AjusteCobrado[] = [];
+      service.ajustar(8, descuento).subscribe((x) => resultados.push(x));
+      http.expectOne((q) => q.url.endsWith('/ajustes')).flush(ajuste, { status: 201, statusText: 'Created' });
+      service.ajustar(8, descuento).subscribe((x) => resultados.push(x));
+      http.expectOne((q) => q.url.endsWith('/ajustes')).flush(ajuste, { status: 200, statusText: 'OK' });
+
+      expect(resultados).toEqual([
+        { ajuste, repetida: false },
+        { ajuste, repetida: true },
+      ]);
+    });
+
+    it('un 409 IMPUTACION_EXCEDE_DEUDA de un ajuste trae la deuda actual, también de un Recargo (ajusteId)', () => {
+      const cuerpo = {
+        status: 409,
+        message: 'La deuda cambió',
+        timestamp: '2026-10-23T21:00:00Z',
+        motivo: 'IMPUTACION_EXCEDE_DEUDA',
+        comprobantes: [{ comprobanteId: null, ajusteId: 3, referencia: 'Recargo N.º 3', pendiente: 20 }],
+      };
+      let err: unknown;
+      service.ajustar(8, descuento).subscribe({ error: (e) => (err = e) });
+      http.expectOne((q) => q.url.endsWith('/ajustes')).flush(cuerpo, { status: 409, statusText: 'x' });
+
+      expect(rechazoDe(err)).toEqual(cuerpo);
     });
   });
 });

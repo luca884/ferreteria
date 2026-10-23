@@ -9,7 +9,8 @@ import { BarraAcciones } from '../../../shared/barra-acciones';
 import { fechaHoraLocal } from '../../caja/caja.models';
 import { Cliente, documentoLegible } from '../cliente.models';
 import { ClientesService } from '../clientes.service';
-import { PendientesCuenta, Recibo, ReciboCobrado, fechaCompletaLocal } from './cobranza.models';
+import { AjusteCobrado, TipoAjuste, textoDeSaldo } from './ajuste.models';
+import { PendientesCuenta, Recibo, ReciboCobrado, clavePartida, fechaCompletaLocal } from './cobranza.models';
 import {
   CobranzaService,
   GENERAR_CLAVE_COBRO,
@@ -17,6 +18,7 @@ import {
   invalidaDe,
   rechazoDe,
 } from './cobranza.service';
+import { DialogoAjuste, PedidoAjuste } from './dialogo-ajuste';
 import { DialogoAnulacion } from './dialogo-anulacion';
 import { DialogoCobranza, PedidoCobranza } from './dialogo-cobranza';
 import { LineaExtracto } from './extracto.models';
@@ -30,6 +32,8 @@ const MENSAJE_CARGA = 'No se pudo cargar la cuenta del cliente.';
 const AVISO_DEUDAS = 'Las deudas cambiaron: revisá la imputación y volvé a confirmar.';
 const MENSAJE_RED =
   'No se pudo registrar el cobro: no hay conexión o el servidor no respondió. Reintentá: no se cobra dos veces.';
+const MENSAJE_RED_AJUSTE =
+  'No se pudo registrar el ajuste: no hay conexión o el servidor no respondió. Reintentá: no se carga dos veces.';
 const MENSAJE_RECIBO = 'No se pudo traer el recibo. Probá de nuevo.';
 const MENSAJE_OCUPADO = 'El sistema está ocupado, reintentá.';
 const MENSAJE_RED_ANULACION =
@@ -43,15 +47,25 @@ interface AvisoAnulacion {
 }
 
 /**
- * Cuenta corriente de un cliente (`clientes/:id/cuenta`): sus pendientes en orden FIFO, el saldo y la acción «Cobrar» (F4),
- * también para el adelanto de un cliente sin deuda. Solo el Dueño: el Vendedor ve un aviso y no se hace ningún request.
- * Contenedor: habla con los servicios y maneja la clave de idempotencia del cobro (CC-038): la misma clave en cada reintento
- * de red, una nueva cuando cambia el contenido (409, 400) o se abre un cobro nuevo. Mientras un envío quedó sin confirmar el
- * diálogo no deja cambiar el contenido: o se reintenta lo mismo o se empieza de nuevo (clave nueva).
+ * Cuenta corriente de un cliente (`clientes/:id/cuenta`): sus pendientes en orden FIFO (ventas y Recargos), el saldo y la
+ * acción «Cobrar» (F4), también para el adelanto de un cliente sin deuda, más «Recargo» y «Descuento» (CU-12, ajustes
+ * manuales del saldo). Solo el Dueño: el Vendedor ve un aviso y no se hace ningún request.
+ * Contenedor: habla con los servicios y maneja la clave de idempotencia del cobro (CC-038) y la del ajuste: la misma clave
+ * en cada reintento de red, una nueva cuando cambia el contenido (409, 400) o se abre un diálogo nuevo. Mientras un envío
+ * quedó sin confirmar el diálogo no deja cambiar el contenido: o se reintenta lo mismo o se empieza de nuevo (clave nueva).
  */
 @Component({
   selector: 'app-cuenta-cliente',
-  imports: [RouterLink, BarraAcciones, MontoPipe, DialogoAnulacion, DialogoCobranza, MovimientosCuenta, ReciboImprimible],
+  imports: [
+    RouterLink,
+    BarraAcciones,
+    MontoPipe,
+    DialogoAjuste,
+    DialogoAnulacion,
+    DialogoCobranza,
+    MovimientosCuenta,
+    ReciboImprimible,
+  ],
   templateUrl: './cuenta-cliente.html',
   styleUrl: './cuenta-cliente.css',
   host: { '(document:keydown)': 'alTeclear($event)' },
@@ -68,6 +82,8 @@ export class CuentaCliente implements OnInit {
   protected readonly fecha = fechaHoraLocal;
   protected readonly documentoLegible = documentoLegible;
   protected readonly sinPermiso = MENSAJE_SIN_PERMISO;
+  /** Identifica cada partida (venta o Recargo) en la tabla de pendientes: el comprobanteId solo no alcanza. */
+  protected readonly clavePartida = clavePartida;
 
   protected readonly estado = signal<Estado>('cargando');
   protected readonly cliente = signal<Cliente | null>(null);
@@ -101,15 +117,36 @@ export class CuentaCliente implements OnInit {
   /** Cómo terminó la última anulación: se anuló, o el recibo ya estaba anulado. */
   protected readonly avisoAnulacion = signal<AvisoAnulacion | null>(null);
 
+  /** El ajuste que se está cargando: con él abierto se muestra el diálogo de Recargo o de Descuento. */
+  protected readonly ajustando = signal<TipoAjuste | null>(null);
+  protected readonly ajustandoEnVuelo = signal(false);
+  protected readonly avisoAjuste = signal<string | null>(null);
+  protected readonly errorAjuste = signal<string | null>(null);
+  /** Los errores de un 400 que corresponden a un campo del diálogo (importe, motivo). */
+  protected readonly erroresAjuste = signal<Record<string, string>>({});
+  /** Como `envioSinConfirmar`, del ajuste: el contenido queda congelado y se reintenta con la misma clave. */
+  protected readonly ajusteSinConfirmar = signal(false);
+  /** El último ajuste registrado (o repetido): el aviso con el saldo que dejó. */
+  protected readonly ajustado = signal<AjusteCobrado | null>(null);
+
   private clienteId = 0;
+  /** La clave del ajuste en curso: nace al abrir el diálogo y cambia solo cuando cambia el contenido. */
+  private claveAjuste = '';
   /** La clave del cobro en curso: nace al abrir el diálogo y cambia solo cuando cambia el contenido. */
   private clave = '';
   private lectura: Subscription | undefined;
 
   /** «$ 1.200,00» lo que debe; «$ 500,00 a favor» si el saldo es negativo. */
-  protected readonly textoSaldo = computed(() => {
-    const saldo = this.pendientes()?.saldo ?? 0;
-    return saldo < 0 ? `${formatearMonto(-saldo)} a favor` : formatearMonto(saldo);
+  protected readonly textoSaldo = computed(() => textoDeSaldo(this.pendientes()?.saldo ?? 0));
+
+  protected readonly textoAjustado = computed(() => {
+    const resultado = this.ajustado();
+    if (!resultado) return null;
+    const { ajuste, repetida } = resultado;
+    const hecho = repetida
+      ? `Este ajuste ya estaba registrado: ${ajuste.referencia}`
+      : `${ajuste.referencia} registrado`;
+    return `${hecho} por ${formatearMonto(ajuste.importe)}. El saldo ahora es ${textoDeSaldo(ajuste.saldo)}.`;
   });
 
   protected readonly textoCobrado = computed(() => {
@@ -185,6 +222,7 @@ export class CuentaCliente implements OnInit {
     if (!this.libreParaUnDialogo()) return;
     this.clave = this.generarClave();
     this.cobrado.set(null);
+    this.ajustado.set(null);
     this.avisoAnulacion.set(null);
     this.errorRecibo.set(null);
     this.avisoDialogo.set(null);
@@ -231,11 +269,65 @@ export class CuentaCliente implements OnInit {
     });
   }
 
+  /** Abre el Recargo o el Descuento. Cada apertura es un ajuste nuevo, con su propia clave. */
+  protected abrirAjuste(tipo: TipoAjuste): void {
+    if (!this.libreParaUnDialogo()) return;
+    this.claveAjuste = this.generarClave();
+    this.cobrado.set(null);
+    this.ajustado.set(null);
+    this.avisoAnulacion.set(null);
+    this.errorRecibo.set(null);
+    this.avisoAjuste.set(null);
+    this.errorAjuste.set(null);
+    this.erroresAjuste.set({});
+    this.ajusteSinConfirmar.set(false);
+    this.ajustando.set(tipo);
+  }
+
+  protected cerrarAjuste(): void {
+    this.ajustando.set(null);
+    this.avisoAjuste.set(null);
+    this.errorAjuste.set(null);
+    this.erroresAjuste.set({});
+  }
+
+  /** «Cancelar y empezar de nuevo»: se abandona el envío sin confirmar, con clave nueva, y el contenido vuelve a editarse. */
+  protected reiniciarAjuste(): void {
+    if (this.ajustandoEnVuelo()) return;
+    this.claveAjuste = this.generarClave();
+    this.ajusteSinConfirmar.set(false);
+    this.avisoAjuste.set(null);
+    this.errorAjuste.set(null);
+    this.erroresAjuste.set({});
+  }
+
+  protected ajustar(pedido: PedidoAjuste): void {
+    if (this.ajustandoEnVuelo()) return;
+    this.ajustandoEnVuelo.set(true);
+    this.avisoAjuste.set(null);
+    this.errorAjuste.set(null);
+    this.erroresAjuste.set({});
+    this.cobranza.ajustar(this.clienteId, { clave: this.claveAjuste, ...pedido }).subscribe({
+      next: (resultado) => {
+        this.ajustandoEnVuelo.set(false);
+        this.ajusteSinConfirmar.set(false);
+        this.ajustando.set(null);
+        this.ajustado.set(resultado);
+        this.refrescarCuenta();
+      },
+      error: (err: unknown) => {
+        this.ajustandoEnVuelo.set(false);
+        this.fallarAjuste(err);
+      },
+    });
+  }
+
   /** Ningún diálogo abierto ni un recibo en camino: recién ahí F4, «Cobrar» y «Anular» pueden abrir otro. */
   private libreParaUnDialogo(): boolean {
     return (
       this.estado() === 'listo' &&
       !this.dialogoAbierto() &&
+      !this.ajustando() &&
       !this.reciboAbierto() &&
       !this.anulando() &&
       !this.trayendoRecibo()
@@ -256,7 +348,7 @@ export class CuentaCliente implements OnInit {
 
   /** Trae el recibo (GET) y lo abre para ver e imprimir; también el de una fila ANULACION, que es el mismo recibo. */
   protected verRecibo(reciboId: number): void {
-    if (this.trayendoRecibo() || this.reciboAbierto() || this.anulando() || this.dialogoAbierto()) return;
+    if (this.trayendoRecibo() || this.reciboAbierto() || this.anulando() || this.dialogoAbierto() || this.ajustando()) return;
     this.trayendoRecibo.set(true);
     this.errorRecibo.set(null);
     this.cobranza.recibo(reciboId).subscribe({
@@ -286,7 +378,7 @@ export class CuentaCliente implements OnInit {
         if (recibo.estado === 'ANULADO') {
           // La fila estaba desactualizada: no hay nada que anular, se muestra lo que pasó y se vuelve a pedir lo que se ve.
           this.avisoAnulacion.set(this.avisoYaAnulado(recibo, null));
-          this.refrescarTrasAnulacion();
+          this.refrescarCuenta();
           this.enfocarVerRecibo();
           return;
         }
@@ -322,7 +414,7 @@ export class CuentaCliente implements OnInit {
           texto: `Recibo N.º ${anulado.numero} anulado. Los comprobantes volvieron a quedar pendientes.`,
           reciboId: anulado.id,
         });
-        this.refrescarTrasAnulacion();
+        this.refrescarCuenta();
         this.enfocarVerRecibo();
       },
       error: (err: unknown) => {
@@ -342,8 +434,8 @@ export class CuentaCliente implements OnInit {
     });
   }
 
-  /** Saldo, pendientes y Movimientos cambiaron: nunca se corrigen a mano, se vuelven a pedir. */
-  private refrescarTrasAnulacion(): void {
+  /** Saldo, pendientes y Movimientos cambiaron (un cobro, una anulación, un ajuste): nunca se corrigen a mano, se vuelven a pedir. */
+  private refrescarCuenta(): void {
     this.recargarPendientes((err) => this.fallarCarga(err));
     this.version.update((v) => v + 1);
   }
@@ -372,7 +464,7 @@ export class CuentaCliente implements OnInit {
           rechazo.message,
         ),
       );
-      this.refrescarTrasAnulacion();
+      this.refrescarCuenta();
       this.enfocarVerRecibo();
       return;
     }
@@ -391,6 +483,59 @@ export class CuentaCliente implements OnInit {
 
   protected cerrarRecibo(): void {
     this.reciboAbierto.set(null);
+  }
+
+  /**
+   * Qué pasa con la clave del ajuste según el error, como en el cobro: una falla de red o un 5xx no dice si quedó
+   * registrado, así que se reintenta con la MISMA clave (el servidor devuelve el ajuste si ya estaba) y el contenido queda
+   * congelado. Un 409 o un 400 cambian el contenido que hay que mandar, y una clave usada con otro contenido es un 409:
+   * clave nueva. Un 400 reparte sus errores: importe y motivo junto a su campo, el resto en el mensaje del diálogo.
+   */
+  private fallarAjuste(err: unknown): void {
+    this.ajusteSinConfirmar.set(false);
+    const rechazo = rechazoDe(err);
+    if (rechazo?.motivo === 'IMPUTACION_EXCEDE_DEUDA') {
+      this.claveAjuste = this.generarClave();
+      this.avisoAjuste.set(AVISO_DEUDAS);
+      this.recargarPendientes(() =>
+        this.errorAjuste.set('No se pudieron actualizar las deudas. Cerrá y volvé a abrir el ajuste.'),
+      );
+      return;
+    }
+    if (rechazo?.motivo === 'CLAVE_CON_OTRO_CONTENIDO') {
+      this.claveAjuste = this.generarClave();
+      this.errorAjuste.set(rechazo.message);
+      return;
+    }
+    if (rechazo) {
+      this.errorAjuste.set(rechazo.message);
+      return;
+    }
+    if (err instanceof HttpErrorResponse && err.status === 409) {
+      this.claveAjuste = this.generarClave();
+      this.errorAjuste.set(mensajeDe(err, 'El ajuste no se pudo registrar.'));
+      return;
+    }
+    if (esOcupado(err)) {
+      this.errorAjuste.set(MENSAJE_OCUPADO);
+      return;
+    }
+    const invalida = invalidaDe(err);
+    if (invalida) {
+      this.claveAjuste = this.generarClave();
+      const { importe, motivo, ...otros } = invalida.errors ?? {};
+      const propios = { ...(importe ? { importe } : {}), ...(motivo ? { motivo } : {}) };
+      this.erroresAjuste.set(propios);
+      const general = Object.values(otros).filter((m) => typeof m === 'string' && m.trim() !== '').join(' ');
+      this.errorAjuste.set(general || (Object.keys(propios).length > 0 ? null : mensajeDe(err, 'Revisá los datos del ajuste.')));
+      return;
+    }
+    if (esTransitorio(err)) {
+      this.ajusteSinConfirmar.set(true);
+      this.errorAjuste.set(MENSAJE_RED_AJUSTE);
+      return;
+    }
+    this.errorAjuste.set(mensajeDe(err, 'No se pudo registrar el ajuste.'));
   }
 
   /**

@@ -200,6 +200,18 @@ describe('ExtractoImprimible (CC-099)', () => {
     expect(anulacion.querySelector('.marca-anulado')).toBeNull();
   });
 
+  it('un ajuste se imprime con su referencia y su motivo', async () => {
+    await abrir(
+      extracto([
+        linea(1, { tipo: 'AJUSTE', referencia: 'Recargo N.º 3', debe: 500, haber: 0, reciboId: null, comprobanteId: null, motivo: 'Deuda vieja' }),
+      ]),
+    );
+
+    const [ajuste] = filas();
+    expect(limpio(ajuste.textContent)).toContain('Recargo N.º 3');
+    expect(limpio(ajuste.textContent)).toContain('Motivo: Deuda vieja');
+  });
+
   it('45 movimientos se imprimen los 45 (un solo extracto, sin paginar)', async () => {
     const todos = Array.from({ length: 45 }, (_, i) => linea(45 - i));
     await abrir(extracto(todos));

@@ -23,19 +23,25 @@ public record CobranzaPedido(String clave, Long clienteId, MedioPago medio, BigD
 
     /**
      * ¿Este pedido es el mismo que ya registró {@code recibo}? Compara cliente, medio, total y el CONJUNTO de imputaciones
-     * (comprobante → importe), sin importar el orden y con {@code compareTo} (10 es igual a 10.00).
+     * (comprobante o Recargo → importe), sin importar el orden y con {@code compareTo} (10 es igual a 10.00). El comprobante 5 y
+     * el Recargo 5 son deudas distintas.
      */
     public boolean mismoContenido(Recibo recibo, List<ImputacionAsentada> asentadas) {
         if (!clienteId.equals(recibo.getClienteId()) || medio != recibo.getMedio() || total.compareTo(recibo.getTotal()) != 0) {
             return false;
         }
-        Map<Long, BigDecimal> pedidas = new HashMap<>();
-        imputaciones.forEach(i -> pedidas.merge(i.comprobanteId(), i.importe(), BigDecimal::add));
-        Map<Long, BigDecimal> registradas = new HashMap<>();
-        asentadas.forEach(i -> registradas.merge(i.comprobanteId(), i.importe(), BigDecimal::add));
+        Map<String, BigDecimal> pedidas = new HashMap<>();
+        imputaciones.forEach(i -> pedidas.merge(deuda(i.comprobanteId(), i.ajusteId()), i.importe(), BigDecimal::add));
+        Map<String, BigDecimal> registradas = new HashMap<>();
+        asentadas.forEach(i -> registradas.merge(deuda(i.comprobanteId(), i.ajusteId()), i.importe(), BigDecimal::add));
         if (!pedidas.keySet().equals(registradas.keySet())) {
             return false;
         }
         return pedidas.entrySet().stream().allMatch(e -> e.getValue().compareTo(registradas.get(e.getKey())) == 0);
+    }
+
+    /** La deuda como clave: «C12» para un comprobante y «A7» para un Recargo (sus ids son espacios distintos). */
+    private static String deuda(Long comprobanteId, Long ajusteId) {
+        return comprobanteId != null ? "C" + comprobanteId : "A" + ajusteId;
     }
 }

@@ -1,4 +1,5 @@
-import { aCentavos } from '../../mostrador/centavos';
+import { formatearMonto } from '../../../core/formato/monto';
+import { aCentavos, desdeTexto } from '../../mostrador/centavos';
 
 /**
  * Contrato de la cobranza de cuenta corriente (CC-028..CC-039), tipado contra los DTO del backend: PendientesResponse,
@@ -15,10 +16,28 @@ export const MEDIO_COBRANZA_LABELS: Record<MedioCobranza, string> = {
   TRANSFERENCIA: 'Transferencia',
 };
 
-/** Un comprobante con deuda: lo cargado a la cuenta, lo ya imputado y lo que queda por cobrar. */
-export interface PendienteCuenta {
-  comprobanteId: number;
-  /** «Venta N.º 7»: copiada al asentar la venta. */
+/**
+ * Cómo se identifica una partida de la cuenta: una venta por `comprobanteId` o un Recargo por `ajusteId`, uno solo de los
+ * dos (el otro es null o falta: un cliente viejo manda solo `comprobanteId`).
+ */
+export interface PartidaRef {
+  comprobanteId?: number | null;
+  ajusteId?: number | null;
+}
+
+/**
+ * La clave de una partida para track-by, selección e imputación: `C-7` (venta) o `A-3` (Recargo). El número solo no
+ * alcanza: el comprobante 3 y el ajuste 3 son partidas distintas.
+ */
+export function clavePartida(partida: PartidaRef): string {
+  return partida.ajusteId != null ? `A-${partida.ajusteId}` : `C-${partida.comprobanteId}`;
+}
+
+/** Una partida con deuda: lo cargado a la cuenta, lo ya imputado y lo que queda por cobrar. */
+export interface PendienteCuenta extends PartidaRef {
+  /** Una venta; null en un Recargo. */
+  comprobanteId: number | null;
+  /** «Venta N.º 7» o «Recargo N.º 3»: copiada al asentar el movimiento. */
   referencia: string;
   fecha: string;
   importe: number;
@@ -36,10 +55,18 @@ export interface PendientesCuenta {
   comprobantes: PendienteCuenta[];
 }
 
-/** Cuánto del cobro se aplica a un comprobante. */
+/** Cuánto del cobro (o del Descuento) se aplica a una partida: `comprobanteId` en una venta o `ajusteId` en un Recargo. */
 export interface ImputacionCobro {
-  comprobanteId: number;
+  comprobanteId?: number;
+  ajusteId?: number;
   importe: number;
+}
+
+/** El renglón del pedido para una partida: solo la clave que corresponde, nunca las dos. */
+export function imputacionDe(partida: PartidaRef, importe: number): ImputacionCobro {
+  return partida.ajusteId != null
+    ? { ajusteId: partida.ajusteId, importe }
+    : { comprobanteId: partida.comprobanteId as number, importe };
 }
 
 /** POST /api/cobranzas. `imputaciones` vacía es válida: todo el total queda «a cuenta» (adelanto incluido). */
@@ -52,8 +79,9 @@ export interface CobranzaRequest {
   imputaciones: ImputacionCobro[];
 }
 
-export interface ReciboImputacion {
-  comprobanteId: number;
+export interface ReciboImputacion extends PartidaRef {
+  /** Null cuando la imputación fue a un Recargo (`ajusteId`). */
+  comprobanteId: number | null;
   referencia: string;
   importe: number;
 }
@@ -94,9 +122,9 @@ export type MotivoCobranza =
   | 'CLAVE_CON_OTRO_CONTENIDO'
   | 'RECIBO_YA_ANULADO';
 
-/** La deuda ACTUAL de un comprobante en un 409, para refrescar la pantalla. */
-export interface DeudaActual {
-  comprobanteId: number;
+/** La deuda ACTUAL de una partida en un 409, para refrescar la pantalla. */
+export interface DeudaActual extends PartidaRef {
+  comprobanteId: number | null;
   referencia: string;
   pendiente: number;
 }
@@ -152,21 +180,72 @@ export function aCuentaCentavos(totalCentavos: number, imputadosCentavos: readon
   return totalCentavos - imputadosCentavos.reduce((suma, c) => suma + c, 0);
 }
 
+/** Un importe escrito, en centavos; null si no es un número de hasta 2 decimales (o es negativo). */
+export function leerImporte(texto: string): number | null {
+  try {
+    const centavos = desdeTexto(texto, 2);
+    return centavos >= 0 ? centavos : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Una fila de la tabla de imputación: la partida con el texto que se ve, su importe en centavos y su error en línea. */
+export interface FilaImputacion extends PendienteCuenta {
+  /** `C-7` o `A-3`: lo que identifica la fila al editarla. */
+  clave: string;
+  /** Sufijo estable para los ids del DOM: `31` en una venta, `a3` en un Recargo. */
+  idCampo: string;
+  texto: string;
+  centavos: number;
+  error: string | null;
+}
+
+/**
+ * Las filas de imputación de un cobro o de un Descuento: lo escrito a mano en cada partida (`editadas`, por clave) o, mientras
+ * no se editó nada (`null`), la sugerencia FIFO (`sugeridas`, en centavos, en el mismo orden que `pendientes`). Una fila
+ * se marca con error si no es un importe de hasta 2 decimales o si supera lo pendiente.
+ */
+export function filasDeImputacion(
+  pendientes: readonly PendienteCuenta[],
+  editadas: Readonly<Record<string, string>> | null,
+  sugeridas: readonly number[],
+): FilaImputacion[] {
+  return pendientes.map((p, i) => {
+    const clave = clavePartida(p);
+    const texto = editadas ? (editadas[clave] ?? '') : sugeridas[i] === 0 ? '' : centavosATexto(sugeridas[i]);
+    const centavos = texto.trim() === '' ? 0 : leerImporte(texto.trim());
+    let error: string | null = null;
+    if (centavos === null) error = MENSAJE_DECIMALES;
+    else if (centavos > aCentavos(p.pendiente)) error = `No puede superar lo pendiente (${formatearMonto(p.pendiente)}).`;
+    const idCampo = p.ajusteId != null ? `a${p.ajusteId}` : String(p.comprobanteId);
+    return { ...p, clave, idCampo, texto, centavos: centavos ?? 0, error };
+  });
+}
+
+/** Los renglones del pedido: solo las filas con importe, cada una con la clave de su partida. */
+export function renglonesDeImputacion(filas: readonly FilaImputacion[]): ImputacionCobro[] {
+  return filas.filter((f) => f.centavos > 0).map((f) => imputacionDe(f, f.centavos / 100));
+}
+
 /** Los centavos como lo que se escribe en un campo: «300,50» (coma decimal, sin separador de miles). */
 export function centavosATexto(centavos: number): string {
   return `${Math.floor(centavos / 100)},${String(centavos % 100).padStart(2, '0')}`;
 }
 
+export const MENSAJE_DECIMALES = 'Usá un número con hasta 2 decimales.';
+
 export const MOTIVO_MINIMO = 5;
 export const MOTIVO_MAXIMO = 200;
 
 /**
- * El error de un motivo de anulación (CC-056), o null si vale. La misma regla que el backend: se recorta y se miden los
- * caracteres que quedan, entre 5 y 200 (sin exigir letras: «12345» vale). El backend vuelve a validar.
+ * El error de un motivo de anulación (CC-056) o de un ajuste (`de` = «del ajuste»), o null si vale. La misma regla que el
+ * backend: se recorta y se miden los caracteres que quedan, entre 5 y 200 (sin exigir letras: «12345» vale). El backend
+ * vuelve a validar.
  */
-export function validarMotivo(texto: string): string | null {
+export function validarMotivo(texto: string, de = 'de la anulación'): string | null {
   const largo = texto.trim().length;
-  if (largo < MOTIVO_MINIMO) return `Escribí el motivo de la anulación (al menos ${MOTIVO_MINIMO} letras).`;
+  if (largo < MOTIVO_MINIMO) return `Escribí el motivo ${de} (al menos ${MOTIVO_MINIMO} letras).`;
   if (largo > MOTIVO_MAXIMO) return `El motivo admite hasta ${MOTIVO_MAXIMO} caracteres.`;
   return null;
 }

@@ -43,7 +43,7 @@
       @if (recibo().imputaciones.length > 0) {
         <table class="imputaciones">
           <caption class="sr-only">
-            Comprobantes que se cobraron con este recibo
+            Comprobantes y Recargos que se cobraron con este recibo
           </caption>
           <thead>
             <tr>
@@ -52,7 +52,7 @@
             </tr>
           </thead>
           <tbody>
-            @for (imputacion of recibo().imputaciones; track imputacion.comprobanteId) {
+            @for (imputacion of recibo().imputaciones; track clave(imputacion)) {
               <tr>
                 <th scope="row">{{ imputacion.referencia }}</th>
                 <td class="num">{{ imputacion.importe | monto }}</td>

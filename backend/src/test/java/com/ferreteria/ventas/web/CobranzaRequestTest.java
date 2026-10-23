@@ -117,13 +117,24 @@ class CobranzaRequestTest {
     void renglones() throws Exception {
         CobranzaRequest cero = leer(valido("100", "[{\"comprobanteId\":1,\"importe\":0}]"));
         CobranzaRequest tresDecimales = leer(valido("100", "[{\"comprobanteId\":1,\"importe\":10},{\"comprobanteId\":2,\"importe\":1.005}]"));
+        // GDS-20: el renglón lleva comprobanteId o ajusteId (un Recargo), exactamente uno; sin ninguno sigue siendo el error de
+        // siempre en comprobanteId, junto con los demás errores del renglón (como antes de los Recargos)
         CobranzaRequest sinComprobante = leer(valido("100", "[{\"importe\":10}]"));
+        CobranzaRequest sinComprobanteNiImporte = leer(valido("100", "[{\"importe\":0}]"));
+        CobranzaRequest losDos = leer(valido("100", "[{\"comprobanteId\":1,\"ajusteId\":2,\"importe\":10}]"));
+        CobranzaRequest aUnRecargo = leer(valido("100", "[{\"ajusteId\":2,\"importe\":10}]"));
         CobranzaRequest sinImporte = leer(valido("100", "[{\"comprobanteId\":1}]"));
         CobranzaRequest renglonNulo = leer(valido("100", "[null]"));
 
         assertThat(errores(cero)).containsExactly(Map.entry("imputaciones[0].importe", "El importe tiene que ser mayor que cero."));
         assertThat(errores(tresDecimales)).containsExactly(Map.entry("imputaciones[1].importe", "El importe admite hasta 2 decimales."));
         assertThat(errores(sinComprobante)).containsExactly(Map.entry("imputaciones[0].comprobanteId", "Elegí el comprobante."));
+        assertThat(errores(sinComprobanteNiImporte)).containsOnly(
+                Map.entry("imputaciones[0].comprobanteId", "Elegí el comprobante."),
+                Map.entry("imputaciones[0].importe", "El importe tiene que ser mayor que cero."));
+        assertThat(errores(losDos)).containsExactly(
+                Map.entry("imputaciones[0].ajusteId", "Elegí el comprobante o el Recargo, no los dos."));
+        assertThat(errores(aUnRecargo)).isEmpty();
         assertThat(errores(sinImporte)).containsKey("imputaciones[0].importe");
         assertThat(errores(renglonNulo).keySet()).singleElement().asString().startsWith("imputaciones[0]");
     }

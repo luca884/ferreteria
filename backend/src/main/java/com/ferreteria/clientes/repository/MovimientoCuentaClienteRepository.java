@@ -37,11 +37,14 @@ public interface MovimientoCuentaClienteRepository extends TenantScopedRepositor
             @Param("comprobanteId") Long comprobanteId);
 
     /**
-     * El débito de un comprobante en la cuenta (CC-031): Σ debe de sus filas {@code VENTA} (una venta mixta puede traer más
-     * de un pago a cuenta corriente), el id de la primera (orden FIFO), y la referencia y fecha copiadas.
+     * El débito de una deuda en la cuenta (CC-031, GDS-20): de un comprobante, Σ debe de sus filas {@code VENTA} (una venta
+     * mixta puede traer más de un pago a cuenta corriente); de un Recargo, el debe de su fila {@code AJUSTE}. Más el id de la
+     * primera fila (orden FIFO) y la referencia y fecha copiadas. Exactamente uno de {@code comprobanteId} y {@code ajusteId}.
      */
     interface DebitoDeComprobante {
         Long getComprobanteId();
+
+        Long getAjusteId();
 
         Long getPrimerMovimientoId();
 
@@ -53,22 +56,24 @@ public interface MovimientoCuentaClienteRepository extends TenantScopedRepositor
     }
 
     /**
-     * Los débitos {@code VENTA} del cliente agrupados por comprobante, del más viejo al más nuevo (por el id de la primera
-     * fila). Lectura plana: es monótona (el libro solo agrega), una foto vieja solo SUBestima la deuda, nunca sobre-imputa.
+     * Los débitos del cliente, del más viejo al más nuevo (por el id de la primera fila): las {@code VENTA} agrupadas por
+     * comprobante y los {@code AJUSTE} con debe (los Recargos) uno por ajuste. Lectura plana: es monótona (el libro solo
+     * agrega), una foto vieja solo SUBestima la deuda, nunca sobre-imputa.
      */
-    @Query("select m.comprobanteId as comprobanteId, min(m.id) as primerMovimientoId, min(m.referencia) as referencia, "
-            + "min(m.fecha) as fecha, sum(m.debe) as debe from MovimientoCuentaCliente m "
+    @Query("select m.comprobanteId as comprobanteId, m.ajusteId as ajusteId, min(m.id) as primerMovimientoId, "
+            + "min(m.referencia) as referencia, min(m.fecha) as fecha, sum(m.debe) as debe from MovimientoCuentaCliente m "
             + "where m.ferreteriaId = :fid and m.clienteId = :clienteId "
-            + "and m.tipo = com.ferreteria.clientes.model.TipoMovimientoCuenta.VENTA "
-            + "group by m.comprobanteId order by min(m.id)")
+            + "and (m.tipo = com.ferreteria.clientes.model.TipoMovimientoCuenta.VENTA "
+            + "or (m.tipo = com.ferreteria.clientes.model.TipoMovimientoCuenta.AJUSTE and m.debe > 0)) "
+            + "group by m.comprobanteId, m.ajusteId order by min(m.id)")
     List<DebitoDeComprobante> debitosDeCliente(@Param("fid") Long ferreteriaId, @Param("clienteId") Long clienteId);
 
     /** Lo mismo, solo de esos comprobantes: uno que no tenga débito en la cuenta de ESE cliente simplemente no aparece. */
-    @Query("select m.comprobanteId as comprobanteId, min(m.id) as primerMovimientoId, min(m.referencia) as referencia, "
-            + "min(m.fecha) as fecha, sum(m.debe) as debe from MovimientoCuentaCliente m "
+    @Query("select m.comprobanteId as comprobanteId, m.ajusteId as ajusteId, min(m.id) as primerMovimientoId, "
+            + "min(m.referencia) as referencia, min(m.fecha) as fecha, sum(m.debe) as debe from MovimientoCuentaCliente m "
             + "where m.ferreteriaId = :fid and m.clienteId = :clienteId and m.comprobanteId in :comprobanteIds "
             + "and m.tipo = com.ferreteria.clientes.model.TipoMovimientoCuenta.VENTA "
-            + "group by m.comprobanteId order by min(m.id)")
+            + "group by m.comprobanteId, m.ajusteId order by min(m.id)")
     List<DebitoDeComprobante> debitosDeComprobantes(@Param("fid") Long ferreteriaId, @Param("clienteId") Long clienteId,
             @Param("comprobanteIds") List<Long> comprobanteIds);
 
@@ -78,6 +83,22 @@ public interface MovimientoCuentaClienteRepository extends TenantScopedRepositor
             + "and m.tipo = com.ferreteria.clientes.model.TipoMovimientoCuenta.VENTA order by m.id")
     List<Long> idsDePartidas(@Param("fid") Long ferreteriaId, @Param("clienteId") Long clienteId,
             @Param("comprobanteIds") List<Long> comprobanteIds);
+
+    /** El débito de esos Recargos en la cuenta de ESE cliente: uno que no sea suyo (o no exista) simplemente no aparece. */
+    @Query("select m.comprobanteId as comprobanteId, m.ajusteId as ajusteId, min(m.id) as primerMovimientoId, "
+            + "min(m.referencia) as referencia, min(m.fecha) as fecha, sum(m.debe) as debe from MovimientoCuentaCliente m "
+            + "where m.ferreteriaId = :fid and m.clienteId = :clienteId and m.ajusteId in :ajusteIds "
+            + "and m.tipo = com.ferreteria.clientes.model.TipoMovimientoCuenta.AJUSTE and m.debe > 0 "
+            + "group by m.comprobanteId, m.ajusteId order by min(m.id)")
+    List<DebitoDeComprobante> debitosDeRecargos(@Param("fid") Long ferreteriaId, @Param("clienteId") Long clienteId,
+            @Param("ajusteIds") List<Long> ajusteIds);
+
+    /** Los ids de las filas {@code AJUSTE} de esos Recargos en la cuenta del cliente, ascendentes (las partidas a bloquear). */
+    @Query("select m.id from MovimientoCuentaCliente m where m.ferreteriaId = :fid and m.clienteId = :clienteId "
+            + "and m.ajusteId in :ajusteIds and m.tipo = com.ferreteria.clientes.model.TipoMovimientoCuenta.AJUSTE "
+            + "and m.debe > 0 order by m.id")
+    List<Long> idsDePartidasDeRecargos(@Param("fid") Long ferreteriaId, @Param("clienteId") Long clienteId,
+            @Param("ajusteIds") List<Long> ajusteIds);
 
     /**
      * Bloquea las partidas con {@code FOR UPDATE} por CLAVE PRIMARIA exacta y en orden de id ascendente. Es nativa a propósito:
@@ -103,6 +124,48 @@ public interface MovimientoCuentaClienteRepository extends TenantScopedRepositor
             + "when m.tipo = com.ferreteria.clientes.model.TipoMovimientoCuenta.ANULACION then -m.debe else 0 end), 0) "
             + "from MovimientoCuentaCliente m where m.ferreteriaId = :fid and m.clienteId = :clienteId")
     BigDecimal creditoNetoDeRecibos(@Param("fid") Long ferreteriaId, @Param("clienteId") Long clienteId);
+
+    /** El crédito de los Descuentos del cliente (GDS-20): Σ haber de los {@code AJUSTE}. Con el de los recibos y las imputaciones, el «a cuenta». */
+    @Query("select coalesce(sum(m.haber), 0) from MovimientoCuentaCliente m where m.ferreteriaId = :fid "
+            + "and m.clienteId = :clienteId and m.tipo = com.ferreteria.clientes.model.TipoMovimientoCuenta.AJUSTE")
+    BigDecimal creditoDeDescuentos(@Param("fid") Long ferreteriaId, @Param("clienteId") Long clienteId);
+
+    /** Una fila del libro que mueve crédito: un COBRO, su ANULACION o un Descuento (AJUSTE con haber). */
+    interface FilaDeCredito {
+        Long getId();
+
+        String getTipo();
+
+        Long getReciboId();
+
+        Long getAjusteId();
+
+        BigDecimal getDebe();
+
+        BigDecimal getHaber();
+    }
+
+    /**
+     * Las filas del libro que mueven crédito (COBRO, ANULACION y AJUSTE con haber), con {@code FOR UPDATE}: lectura ACTUAL,
+     * inmune a la foto de REPEATABLE READ (una venta o un Recargo nuevos consumen crédito y no pueden ver de menos ni de más).
+     * Filas crudas. {@code force index (ix_mcc_cliente)} las recorre por (ferretería, cliente), con el mismo gap residual
+     * acotado al cliente que {@code ImputacionRepository.imputadoBloqueado}; el mutex real es la fila del cliente. Requiere
+     * transacción.
+     */
+    @Query(value = "select id as id, tipo as tipo, recibo_id as reciboId, ajuste_id as ajusteId, debe as debe, haber as haber "
+            + "from movimiento_cuenta_cliente force index (ix_mcc_cliente) where ferreteria_id = :fid and cliente_id = :clienteId "
+            + "and (tipo in ('COBRO', 'ANULACION') or (tipo = 'AJUSTE' and haber > 0)) order by id for update", nativeQuery = true)
+    List<FilaDeCredito> creditosBloqueados(@Param("fid") Long ferreteriaId, @Param("clienteId") Long clienteId);
+
+    /** El renglón de ese ajuste en el libro del cliente (a lo sumo uno: uk_mcc_ajuste). */
+    @Query("select m from MovimientoCuentaCliente m where m.ferreteriaId = :fid and m.ajusteId = :ajusteId")
+    List<MovimientoCuentaCliente> deAjuste(@Param("fid") Long ferreteriaId, @Param("ajusteId") Long ajusteId);
+
+    /** El saldo del cliente justo después de ese renglón: Σ(debe − haber) del libro hasta su id. */
+    @Query("select coalesce(sum(m.debe - m.haber), 0) from MovimientoCuentaCliente m "
+            + "where m.ferreteriaId = :fid and m.clienteId = :clienteId and m.id <= :movimientoId")
+    BigDecimal saldoHastaMovimiento(@Param("fid") Long ferreteriaId, @Param("clienteId") Long clienteId,
+            @Param("movimientoId") Long movimientoId);
 
     /**
      * Los movimientos de UN recibo ({@code COBRO} y {@code ANULACION}), en orden: lo que {@code asentarAnulacion} mira, bajo
@@ -221,6 +284,30 @@ public interface MovimientoCuentaClienteRepository extends TenantScopedRepositor
 
     default List<Long> idsDePartidasScoped(Long clienteId, List<Long> comprobanteIds) {
         return idsDePartidas(TenantContext.requireFerreteriaId(), clienteId, comprobanteIds);
+    }
+
+    default List<DebitoDeComprobante> debitosDeRecargosScoped(Long clienteId, List<Long> ajusteIds) {
+        return debitosDeRecargos(TenantContext.requireFerreteriaId(), clienteId, ajusteIds);
+    }
+
+    default List<Long> idsDePartidasDeRecargosScoped(Long clienteId, List<Long> ajusteIds) {
+        return idsDePartidasDeRecargos(TenantContext.requireFerreteriaId(), clienteId, ajusteIds);
+    }
+
+    default BigDecimal creditoDeDescuentosScoped(Long clienteId) {
+        return creditoDeDescuentos(TenantContext.requireFerreteriaId(), clienteId);
+    }
+
+    default List<FilaDeCredito> creditosBloqueadosScoped(Long clienteId) {
+        return creditosBloqueados(TenantContext.requireFerreteriaId(), clienteId);
+    }
+
+    default List<MovimientoCuentaCliente> deAjusteScoped(Long ajusteId) {
+        return deAjuste(TenantContext.requireFerreteriaId(), ajusteId);
+    }
+
+    default BigDecimal saldoHastaMovimientoScoped(Long clienteId, Long movimientoId) {
+        return saldoHastaMovimiento(TenantContext.requireFerreteriaId(), clienteId, movimientoId);
     }
 
     default List<Long> bloquearPartidasScoped(Long clienteId, List<Long> ids) {

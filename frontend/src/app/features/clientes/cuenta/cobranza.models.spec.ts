@@ -3,8 +3,13 @@ import {
   MEDIO_COBRANZA_LABELS,
   aCuentaCentavos,
   centavosATexto,
+  clavePartida,
   fechaCompletaLocal,
+  filasDeImputacion,
   hoyEnBuenosAires,
+  imputacionDe,
+  leerImporte,
+  renglonesDeImputacion,
   sugerirFifo,
   validarMotivo,
 } from './cobranza.models';
@@ -159,6 +164,79 @@ describe('cobranza.models', () => {
     it('«19/10/2026 10:30» de una fecha local del servidor, leída del texto (sin pasar por la zona del navegador)', () => {
       expect(fechaCompletaLocal('2026-10-19T10:30:12.5')).toBe('19/10/2026 10:30');
       expect(fechaCompletaLocal('2026-01-05T23:59:59')).toBe('05/01/2026 23:59');
+    });
+  });
+
+  describe('partidas pendientes: una venta (comprobanteId) o un Recargo (ajusteId)', () => {
+    it('la clave de una venta es C-<id> y la de un Recargo A-<id>: el mismo número no se pisa entre los dos', () => {
+      expect(clavePartida({ comprobanteId: 7 })).toBe('C-7');
+      expect(clavePartida({ comprobanteId: 7, ajusteId: null })).toBe('C-7');
+      expect(clavePartida({ comprobanteId: null, ajusteId: 7 })).toBe('A-7');
+      expect(clavePartida({ ajusteId: 3 })).toBe('A-3');
+    });
+
+    it('la imputación de una venta lleva solo comprobanteId y la de un Recargo solo ajusteId', () => {
+      expect(imputacionDe({ comprobanteId: 7, ajusteId: null }, 100)).toEqual({ comprobanteId: 7, importe: 100 });
+      expect(imputacionDe({ comprobanteId: null, ajusteId: 3 }, 50.5)).toEqual({ ajusteId: 3, importe: 50.5 });
+      expect('ajusteId' in imputacionDe({ comprobanteId: 7 }, 1)).toBe(false);
+      expect('comprobanteId' in imputacionDe({ comprobanteId: null, ajusteId: 3 }, 1)).toBe(false);
+    });
+
+    it('leerImporte lee hasta 2 decimales en centavos; null si no es un número o es negativo', () => {
+      expect(leerImporte('300,50')).toBe(30050);
+      expect(leerImporte('0')).toBe(0);
+      expect(leerImporte('1,234')).toBeNull();
+      expect(leerImporte('-1')).toBeNull();
+      expect(leerImporte('x')).toBeNull();
+    });
+  });
+
+  describe('filasDeImputacion y renglonesDeImputacion', () => {
+    const venta = { comprobanteId: 31, ajusteId: null, referencia: 'Venta N.º 7', fecha: '2026-10-10T09:00:00', importe: 300, imputado: 0, pendiente: 300 };
+    const recargo = { comprobanteId: null, ajusteId: 3, referencia: 'Recargo N.º 3', fecha: '2026-10-11T09:00:00', importe: 200, imputado: 0, pendiente: 200 };
+
+    it('con la sugerencia FIFO cada partida toma su importe, con la clave de la partida', () => {
+      const filas = filasDeImputacion([venta, recargo], null, [30000, 5000]);
+
+      expect(filas.map((f) => [f.clave, f.texto, f.centavos, f.error])).toEqual([
+        ['C-31', '300,00', 30000, null],
+        ['A-3', '50,00', 5000, null],
+      ]);
+      expect(filas.map((f) => f.idCampo)).toEqual(['31', 'a3']);
+    });
+
+    it('lo editado manda sobre la sugerencia y se busca por clave: C-3 no es A-3', () => {
+      const filas = filasDeImputacion([venta, recargo], { 'A-3': '75', 'C-31': '' }, [30000, 5000]);
+
+      expect(filas.map((f) => [f.texto, f.centavos])).toEqual([
+        ['', 0],
+        ['75', 7500],
+      ]);
+    });
+
+    it('un importe mayor que lo pendiente o con muchos decimales marca el error de la fila', () => {
+      const filas = filasDeImputacion([venta, recargo], { 'C-31': '300,01', 'A-3': '1,234' }, [0, 0]);
+
+      expect(filas[0].error).toBe('No puede superar lo pendiente ($\u00a0300,00).');
+      expect(filas[1].error).toBe('Usá un número con hasta 2 decimales.');
+    });
+
+    it('los renglones del pedido son solo las filas con importe, venta por comprobanteId y Recargo por ajusteId', () => {
+      const filas = filasDeImputacion([venta, recargo], null, [0, 5000]);
+
+      expect(renglonesDeImputacion(filas)).toEqual([{ ajusteId: 3, importe: 50 }]);
+      expect(renglonesDeImputacion(filasDeImputacion([venta, recargo], null, [30000, 5000]))).toEqual([
+        { comprobanteId: 31, importe: 300 },
+        { ajusteId: 3, importe: 50 },
+      ]);
+    });
+  });
+
+  describe('validarMotivo de un ajuste', () => {
+    it('nombra el ajuste y no la anulación, con la misma regla de 5 a 200 caracteres', () => {
+      expect(validarMotivo('abc', 'del ajuste')).toBe('Escribí el motivo del ajuste (al menos 5 letras).');
+      expect(validarMotivo('a'.repeat(201), 'del ajuste')).toBe('El motivo admite hasta 200 caracteres.');
+      expect(validarMotivo('Deuda vieja', 'del ajuste')).toBeNull();
     });
   });
 });

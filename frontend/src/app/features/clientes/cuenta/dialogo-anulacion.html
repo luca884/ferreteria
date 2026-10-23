@@ -25,7 +25,7 @@
       <div class="liberados">
         <p>Vuelven a quedar pendientes:</p>
         <ul>
-          @for (i of recibo().imputaciones; track i.comprobanteId) {
+          @for (i of recibo().imputaciones; track clave(i)) {
             <li>
               <span>{{ i.referencia }}</span>&ngsp;<span class="importe">{{ i.importe | monto }}</span>
             </li>

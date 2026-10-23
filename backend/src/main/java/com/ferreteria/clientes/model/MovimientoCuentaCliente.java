@@ -63,7 +63,11 @@ public class MovimientoCuentaCliente {
     @Column(nullable = false, updatable = false, length = MAX_REFERENCIA)
     private String referencia;
 
-    /** Por qué se anuló el cobro (ANULACION; también AJUSTE en 3b-2); null en VENTA, COBRO y NC. */
+    /** El ajuste de un AJUSTE (V28, ck_mcc_ajuste_ref); null en el resto. */
+    @Column(name = "ajuste_id", updatable = false)
+    private Long ajusteId;
+
+    /** Por qué se anuló el cobro (ANULACION) o se hizo el ajuste (AJUSTE); null en VENTA, COBRO y NC. */
     @Column(updatable = false, length = MAX_MOTIVO)
     private String motivo;
 
@@ -168,6 +172,39 @@ public class MovimientoCuentaCliente {
         return movimiento;
     }
 
+    /**
+     * El renglón de un ajuste manual (GDS-20): un Recargo va al debe (sube la deuda) y un Descuento al haber (la baja), con el
+     * ajuste, su referencia y el motivo (recortado, de 5 a 200 caracteres); sin comprobante, recibo, pago ni exceso. Hay un
+     * AJUSTE por ajuste (UNIQUE (ajuste_id) en la base).
+     */
+    public static MovimientoCuentaCliente ajuste(Long ferreteriaId, Long clienteId, Long ajusteId, TipoAjuste tipo,
+            String referencia, BigDecimal monto, String motivo, LocalDateTime fecha, Long usuarioId) {
+        if (monto == null || monto.signum() <= 0) {
+            throw new IllegalArgumentException("El monto de un ajuste tiene que ser mayor que cero.");
+        }
+        if (ajusteId == null || tipo == null) {
+            throw new IllegalArgumentException("Un ajuste referencia su ajuste y su tipo.");
+        }
+        String recortado = motivo == null ? "" : motivo.trim();
+        if (recortado.length() < MIN_MOTIVO || recortado.length() > MAX_MOTIVO) {
+            throw new IllegalArgumentException(
+                    "El motivo del ajuste tiene entre " + MIN_MOTIVO + " y " + MAX_MOTIVO + " caracteres.");
+        }
+        MovimientoCuentaCliente movimiento = new MovimientoCuentaCliente();
+        movimiento.ferreteriaId = ferreteriaId;
+        movimiento.clienteId = clienteId;
+        movimiento.tipo = TipoMovimientoCuenta.AJUSTE;
+        movimiento.debe = tipo == TipoAjuste.RECARGO ? monto : BigDecimal.ZERO;
+        movimiento.haber = tipo == TipoAjuste.DESCUENTO ? monto : BigDecimal.ZERO;
+        movimiento.ajusteId = ajusteId;
+        movimiento.referencia = referenciaValida(referencia);
+        movimiento.motivo = recortado;
+        movimiento.fecha = fecha;
+        movimiento.usuarioId = usuarioId;
+        movimiento.excedioLimite = false;
+        return movimiento;
+    }
+
     private static String referenciaValida(String referencia) {
         if (referencia == null || referencia.isBlank() || referencia.length() > MAX_REFERENCIA) {
             throw new IllegalArgumentException(
@@ -185,6 +222,7 @@ public class MovimientoCuentaCliente {
     public Long getComprobanteId() { return comprobanteId; }
     public Long getPagoId() { return pagoId; }
     public Long getReciboId() { return reciboId; }
+    public Long getAjusteId() { return ajusteId; }
     public String getReferencia() { return referencia; }
     public String getMotivo() { return motivo; }
     public LocalDateTime getFecha() { return fecha; }

@@ -27,7 +27,7 @@ public interface CuentaCorrienteParaCobranza {
      *
      * @return las imputaciones asentadas, por comprobante ascendente, con la referencia de cada comprobante
      * @throws com.ferreteria.common.exception.ResourceNotFoundException (404) si el cliente no existe en la ferretería o algún
-     *     comprobante no tiene débito VENTA en la cuenta de ESE cliente
+     *     comprobante no tiene débito VENTA (o algún Recargo su AJUSTE) en la cuenta de ESE cliente
      * @throws ImputacionInvalidaException si algún comprobante tiene menos pendiente que el importe imputado (incluye pendiente
      *     0); trae la deuda actual de todos los afectados
      * @throws IllegalArgumentException si los argumentos están mal formados (total o importe no positivo o con más de 2
@@ -78,11 +78,29 @@ public interface CuentaCorrienteParaCobranza {
     /** Lo asentado por una anulación: el id del contra-asiento y los comprobantes que volvieron a quedar pendientes. */
     record AnulacionAsentada(Long movimientoId, List<Long> comprobantesLiberados) {}
 
-    /** Un renglón pedido: cuánto del cobro se aplica a este comprobante. */
-    record Imputar(Long comprobanteId, BigDecimal importe) {}
+    /**
+     * Un renglón pedido: cuánto del cobro se aplica a esta deuda. Exactamente uno de {@code comprobanteId} y {@code ajusteId}
+     * (un Recargo, GDS-20).
+     */
+    record Imputar(Long comprobanteId, Long ajusteId, BigDecimal importe) {
 
-    /** Una imputación ya guardada, con la referencia («Venta N.º n») copiada del débito del comprobante. */
-    record ImputacionAsentada(Long comprobanteId, String referencia, BigDecimal importe) {}
+        /** Un comprobante (la forma de antes de los Recargos). */
+        public Imputar(Long comprobanteId, BigDecimal importe) {
+            this(comprobanteId, null, importe);
+        }
+    }
+
+    /**
+     * Una imputación ya guardada, con la referencia («Venta N.º n» o «Recargo N.º n») copiada del débito de la deuda. Exactamente
+     * uno de {@code comprobanteId} y {@code ajusteId}.
+     */
+    record ImputacionAsentada(Long comprobanteId, Long ajusteId, String referencia, BigDecimal importe) {
+
+        /** Un comprobante (la forma de antes de los Recargos). */
+        public ImputacionAsentada(Long comprobanteId, String referencia, BigDecimal importe) {
+            this(comprobanteId, null, referencia, importe);
+        }
+    }
 
     /**
      * Se pidió imputar más de lo que le queda por pagar a algún comprobante: «la deuda cambió desde que la viste».
@@ -93,8 +111,14 @@ public interface CuentaCorrienteParaCobranza {
 
         public enum Motivo { EXCEDE_DEUDA }
 
-        /** El pendiente actual de un comprobante. */
-        public record DeudaActual(Long comprobanteId, String referencia, BigDecimal pendiente) {}
+        /** El pendiente actual de un comprobante o, con {@code ajusteId}, de un Recargo (GDS-20). */
+        public record DeudaActual(Long comprobanteId, Long ajusteId, String referencia, BigDecimal pendiente) {
+
+            /** Un comprobante (la forma de antes de los Recargos). */
+            public DeudaActual(Long comprobanteId, String referencia, BigDecimal pendiente) {
+                this(comprobanteId, null, referencia, pendiente);
+            }
+        }
 
         private final Motivo motivo;
         private final List<DeudaActual> deudas;

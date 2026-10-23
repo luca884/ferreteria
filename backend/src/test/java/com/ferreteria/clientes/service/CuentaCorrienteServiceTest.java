@@ -91,6 +91,8 @@ class CuentaCorrienteServiceTest {
     void preparar() {
         servicio = new CuentaCorrienteService(clientes, libro, imputaciones, RELOJ);
         TenantContext.setCurrentFerreteriaId(FERRETERIA);
+        // GDS-20: sin Descuentos ni Recargos salvo que un test los pida (un mock devolvería null en una suma)
+        lenient().when(libro.creditoDeDescuentosScoped(anyLong())).thenReturn(BigDecimal.ZERO);
     }
 
     @AfterEach
@@ -479,6 +481,7 @@ class CuentaCorrienteServiceTest {
     private record DebitoFalso(Long comprobanteId, Long primerMovimientoId, String referencia, LocalDateTime fecha,
             BigDecimal debe) implements DebitoDeComprobante {
         @Override public Long getComprobanteId() { return comprobanteId; }
+        @Override public Long getAjusteId() { return null; } // GDS-20: estos tests son de ventas, sin Recargos
         @Override public Long getPrimerMovimientoId() { return primerMovimientoId; }
         @Override public String getReferencia() { return referencia; }
         @Override public LocalDateTime getFecha() { return fecha; }
@@ -766,6 +769,7 @@ class CuentaCorrienteServiceTest {
             implements ImputacionRepository.FilaDeImputacion {
         @Override public Long getId() { return id; }
         @Override public Long getComprobanteId() { return comprobanteId; }
+        @Override public Long getAjusteDestinoId() { return null; } // GDS-20: estos tests son de comprobantes
         @Override public boolean getVigente() { return vigente; }
     }
 

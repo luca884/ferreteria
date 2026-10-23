@@ -206,11 +206,60 @@ class MovimientoCuentaClienteTest {
     }
 
     @Test
-    @DisplayName("las fábricas públicas son venta, cobro y anulacion (3b-2 sumará la de ajuste)")
+    @DisplayName("un Recargo es un AJUSTE con debe = importe y un Descuento uno con haber = importe, con su ajuste, referencia y motivo recortado; sin comprobante, pago, recibo ni exceso")
+    void ajuste() {
+        MovimientoCuentaCliente recargo = MovimientoCuentaCliente.ajuste(3L, 7L, 81L, TipoAjuste.RECARGO, "Recargo N.º 4",
+                new BigDecimal("150.25"), "  Intereses de mora  ", AHORA, 9L);
+        MovimientoCuentaCliente descuento = MovimientoCuentaCliente.ajuste(3L, 7L, 82L, TipoAjuste.DESCUENTO,
+                "Descuento N.º 5", new BigDecimal("20"), "Bonificación", AHORA, 9L);
+
+        assertThat(recargo.getTipo()).isEqualTo(TipoMovimientoCuenta.AJUSTE);
+        assertThat(recargo.getDebe()).isEqualByComparingTo("150.25");
+        assertThat(recargo.getHaber()).isEqualByComparingTo("0");
+        assertThat(recargo.getAjusteId()).isEqualTo(81L);
+        assertThat(recargo.getReferencia()).isEqualTo("Recargo N.º 4");
+        assertThat(recargo.getMotivo()).isEqualTo("Intereses de mora");
+        assertThat(recargo.getComprobanteId()).isNull();
+        assertThat(recargo.getPagoId()).isNull();
+        assertThat(recargo.getReciboId()).isNull();
+        assertThat(recargo.isExcedioLimite()).isFalse();
+        assertThat(recargo.getAutorizadoPor()).isNull();
+        assertThat(recargo.getFecha()).isEqualTo(AHORA);
+        assertThat(recargo.getUsuarioId()).isEqualTo(9L);
+        assertThat(descuento.getTipo()).isEqualTo(TipoMovimientoCuenta.AJUSTE);
+        assertThat(descuento.getDebe()).isEqualByComparingTo("0");
+        assertThat(descuento.getHaber()).isEqualByComparingTo("20");
+        assertThat(descuento.getAjusteId()).isEqualTo(82L);
+    }
+
+    @Test
+    @DisplayName("el AJUSTE rechaza importe <= 0 o nulo, ajuste o tipo nulos, referencia vacía y motivo vacío, de menos de 5 (tras recortar) o de más de 200")
+    void ajusteInvalido() {
+        assertThatThrownBy(() -> ajusteCon(81L, TipoAjuste.RECARGO, BigDecimal.ZERO, "Intereses"))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> ajusteCon(81L, TipoAjuste.RECARGO, null, "Intereses")).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> ajusteCon(null, TipoAjuste.RECARGO, BigDecimal.TEN, "Intereses"))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> ajusteCon(81L, null, BigDecimal.TEN, "Intereses")).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> MovimientoCuentaCliente.ajuste(3L, 7L, 81L, TipoAjuste.RECARGO, "", BigDecimal.TEN,
+                "Intereses", AHORA, 9L)).isInstanceOf(IllegalArgumentException.class);
+        for (String motivo : new String[] {null, "", "    ", "abcd", "  abcd  ", "x".repeat(201)}) {
+            assertThatThrownBy(() -> ajusteCon(81L, TipoAjuste.DESCUENTO, BigDecimal.TEN, motivo)).as("[" + motivo + "]")
+                    .isInstanceOf(IllegalArgumentException.class);
+        }
+        assertThat(ajusteCon(81L, TipoAjuste.DESCUENTO, BigDecimal.TEN, "x".repeat(200)).getMotivo()).hasSize(200);
+    }
+
+    private static MovimientoCuentaCliente ajusteCon(Long ajusteId, TipoAjuste tipo, BigDecimal monto, String motivo) {
+        return MovimientoCuentaCliente.ajuste(3L, 7L, ajusteId, tipo, "Recargo N.º 1", monto, motivo, AHORA, 9L);
+    }
+
+    @Test
+    @DisplayName("las fábricas públicas son venta, cobro, anulacion y ajuste (GDS-20)")
     void fabricas() {
         assertThat(Arrays.stream(MovimientoCuentaCliente.class.getDeclaredMethods())
                 .filter(m -> Modifier.isStatic(m.getModifiers()) && Modifier.isPublic(m.getModifiers()))
-                .map(Method::getName)).containsExactlyInAnyOrder("venta", "cobro", "anulacion");
+                .map(Method::getName)).containsExactlyInAnyOrder("venta", "cobro", "anulacion", "ajuste");
     }
 
     @Test

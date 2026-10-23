@@ -23,15 +23,24 @@ public record ReciboResponse(
         BigDecimal aCuenta, String cobradoPor, List<ImputacionResponse> imputaciones, EstadoRecibo estado,
         LocalDateTime fechaAnulacion, String anuladoPor, String motivoAnulacion) {
 
-    /** A qué comprobante se imputó y cuánto; la referencia es la copiada al cobrar («Venta N.º n»). */
-    public record ImputacionResponse(Long comprobanteId, String referencia, BigDecimal importe) {}
+    /**
+     * A qué deuda se imputó y cuánto; la referencia es la copiada al cobrar («Venta N.º n» o «Recargo N.º n»). Una venta lleva
+     * {@code comprobanteId} y {@code ajusteId} null; un Recargo (GDS-20), al revés.
+     */
+    public record ImputacionResponse(Long comprobanteId, Long ajusteId, String referencia, BigDecimal importe) {
+
+        /** A un comprobante (la forma de antes de los Recargos). */
+        public ImputacionResponse(Long comprobanteId, String referencia, BigDecimal importe) {
+            this(comprobanteId, null, referencia, importe);
+        }
+    }
 
     public static ReciboResponse de(CobroRegistrado cobro) {
         Recibo recibo = cobro.recibo();
         return new ReciboResponse(recibo.getId(), recibo.getNumero(), recibo.getFecha(), recibo.getClienteId(),
                 recibo.getClienteNombre(), recibo.getMedio(), dos(recibo.getTotal()), dos(cobro.aCuenta()), cobro.cobradoPor(),
                 cobro.imputaciones().stream()
-                        .map(i -> new ImputacionResponse(i.comprobanteId(), i.referencia(), dos(i.importe())))
+                        .map(i -> new ImputacionResponse(i.comprobanteId(), i.ajusteId(), i.referencia(), dos(i.importe())))
                         .toList(),
                 recibo.getEstado(), recibo.getFechaAnulacion(), recibo.isAnulado() ? cobro.anuladoPor() : null,
                 recibo.getMotivoAnulacion());

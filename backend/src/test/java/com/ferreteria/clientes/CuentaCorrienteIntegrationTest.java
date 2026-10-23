@@ -361,6 +361,18 @@ class CuentaCorrienteIntegrationTest extends CuentaCorrienteTestBase {
     private static final class Modelo {
         BigDecimal saldo = BigDecimal.ZERO;
         final Map<Long, BigDecimal> abiertos = new LinkedHashMap<>();
+        /** El crédito a cuenta (adelantos y restos de cobros) sin imputar: GDS-20, la deuda nueva lo consume sola. */
+        BigDecimal credito = BigDecimal.ZERO;
+
+        /** Una venta de ese importe: paga con el crédito que haya y deja como pendiente lo que no alcanzó a cubrir. */
+        void vender(long comprobante, BigDecimal importe) {
+            BigDecimal consumido = credito.min(importe);
+            credito = credito.subtract(consumido);
+            saldo = saldo.add(importe);
+            if (importe.subtract(consumido).signum() > 0) {
+                abiertos.put(comprobante, importe.subtract(consumido));
+            }
+        }
     }
 
     private record UltimoCobro(int cliente, ReciboEmitido recibo, BigDecimal total, List<Imputar> imputaciones) {}
@@ -406,8 +418,7 @@ class CuentaCorrienteIntegrationTest extends CuentaCorrienteTestBase {
                             cuentas.asentarVenta(new AsientoVenta(clientes3[cv], v.comprobanteId(), v.numero(),
                                     List.of(new CargoPago(v.pagoId(), importe)), f.usuarioId(), null));
                         });
-                        modelo[cv].saldo = modelo[cv].saldo.add(importe);
-                        modelo[cv].abiertos.put(v.comprobanteId(), importe);
+                        modelo[cv].vender(v.comprobanteId(), importe);
                     }
                     case 3, 4, 9 -> { // cobranza válida con imputaciones (9: se cae después → no deja nada)
                         List<Long> abiertos = new ArrayList<>(m.abiertos.keySet());
@@ -433,6 +444,7 @@ class CuentaCorrienteIntegrationTest extends CuentaCorrienteTestBase {
                         } else {
                             cobrar(f, clientes3[c], caja, total.toPlainString(), pedido);
                             m.saldo = m.saldo.subtract(total);
+                            m.credito = m.credito.add(total.subtract(suma)); // lo que no se imputó queda a cuenta
                             for (Imputar imputar : imputaciones) {
                                 BigDecimal queda = m.abiertos.get(imputar.comprobanteId()).subtract(imputar.importe());
                                 if (queda.signum() == 0) {
@@ -471,6 +483,7 @@ class CuentaCorrienteIntegrationTest extends CuentaCorrienteTestBase {
                         BigDecimal total = centavos(azar, 80000);
                         cobrar(f, clientes3[c], caja, total.toPlainString());
                         m.saldo = m.saldo.subtract(total);
+                        m.credito = m.credito.add(total);
                     }
                 }
                 for (int i = 0; i < 3; i++) {

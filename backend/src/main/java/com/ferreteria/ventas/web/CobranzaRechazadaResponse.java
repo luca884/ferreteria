@@ -20,13 +20,19 @@ public record CobranzaRechazadaResponse(
         int status, String message, Instant timestamp, String motivo, List<DeudaResponse> comprobantes, String anuladoPor,
         LocalDateTime fechaAnulacion) {
 
-    /** La deuda que le queda a un comprobante, con 2 decimales. */
-    public record DeudaResponse(Long comprobanteId, String referencia, BigDecimal pendiente) {}
+    /** La deuda que le queda a un comprobante o, con {@code ajusteId} (GDS-20), a un Recargo, con 2 decimales. */
+    public record DeudaResponse(Long comprobanteId, Long ajusteId, String referencia, BigDecimal pendiente) {
+
+        /** Un comprobante (la forma de antes de los Recargos). */
+        public DeudaResponse(Long comprobanteId, String referencia, BigDecimal pendiente) {
+            this(comprobanteId, null, referencia, pendiente);
+        }
+    }
 
     public static CobranzaRechazadaResponse de(CobranzaRechazadaException e) {
         List<DeudaResponse> deudas = e.deudas().isEmpty() ? null
                 : e.deudas().stream()
-                        .map(d -> new DeudaResponse(d.comprobanteId(), d.referencia(), d.pendiente().setScale(2)))
+                        .map(d -> new DeudaResponse(d.comprobanteId(), d.ajusteId(), d.referencia(), d.pendiente().setScale(2)))
                         .toList();
         return new CobranzaRechazadaResponse(e.motivo().estadoHttp(), e.getMessage(), Instant.now(), e.motivo().name(), deudas,
                 e.anuladoPor(), e.fechaAnulacion());
