@@ -26,21 +26,33 @@ public class TopeDeDescuento {
     }
 
     void verificar(List<Renglon> renglones, BigDecimal descuentoGlobal, Long usuarioId) {
-        topes.topeDe(usuarioId).ifPresent(tope -> verificar(renglones, descuentoGlobal, tope));
+        verificar(renglones, descuentoGlobal, usuarioId, Autorizados.NINGUNO);
     }
 
-    /** Un global sobre el tope deja el error en el global; si no, en cada renglon que lo pasa. */
-    static void verificar(List<Renglon> renglones, BigDecimal descuentoGlobal, BigDecimal tope) {
+    /** Al pasar a venta un presupuesto o un remito, sus descuentos ya estan autorizados por quien lo emitio. */
+    void verificar(List<Renglon> renglones, BigDecimal descuentoGlobal, Long usuarioId, Autorizados autorizados) {
+        topes.topeDe(usuarioId).ifPresent(tope -> verificar(renglones, descuentoGlobal, tope, autorizados));
+    }
+
+    /**
+     * Un global sobre el tope (y sobre el del documento) deja el error en el global; si no, en cada renglon que lo pasa.
+     * El mensaje siempre nombra el tope del usuario.
+     */
+    static void verificar(List<Renglon> renglones, BigDecimal descuentoGlobal, BigDecimal tope,
+            Autorizados autorizados) {
         String texto = tope.stripTrailingZeros().toPlainString().replace('.', ',');
-        if (descuentoGlobal.compareTo(tope) > 0) {
+        if (descuentoGlobal.compareTo(tope.max(autorizados.global())) > 0) {
             throw new DatosInvalidosException(Map.of("descuentoPorcentaje", "Tu tope de descuento es " + texto + " %."));
         }
         Map<String, String> errores = new LinkedHashMap<>();
         for (int i = 0; i < renglones.size(); i++) {
-            BigDecimal propio = renglones.get(i).descuentoPorcentaje();
-            if (propio.compareTo(tope) > 0) {
+            Renglon renglon = renglones.get(i);
+            BigDecimal propio = renglon.descuentoPorcentaje();
+            BigDecimal delDocumento = autorizados.renglones().getOrDefault(renglon.articuloId(), BigDecimal.ZERO);
+            BigDecimal efectivoDelDocumento = efectivo(delDocumento, autorizados.global());
+            if (propio.compareTo(tope.max(delDocumento)) > 0) {
                 errores.put("renglones[" + i + "].descuentoPorcentaje", "Tu tope de descuento es " + texto + " %.");
-            } else if (efectivo(propio, descuentoGlobal).compareTo(tope) > 0) {
+            } else if (efectivo(propio, descuentoGlobal).compareTo(tope.max(efectivoDelDocumento)) > 0) {
                 errores.put("renglones[" + i + "].descuentoPorcentaje",
                         "Sumado al descuento general, pasa tu tope de descuento de " + texto + " %.");
             }
@@ -48,6 +60,11 @@ public class TopeDeDescuento {
         if (!errores.isEmpty()) {
             throw new DatosInvalidosException(errores);
         }
+    }
+
+    /** Los descuentos que ya trae el documento que se pasa a venta: el global y el de cada articulo. */
+    record Autorizados(BigDecimal global, Map<Long, BigDecimal> renglones) {
+        static final Autorizados NINGUNO = new Autorizados(BigDecimal.ZERO, Map.of());
     }
 
     /** 100 − (100 − r)(100 − g) / 100, exacto. */

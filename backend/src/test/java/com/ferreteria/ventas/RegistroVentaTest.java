@@ -126,7 +126,8 @@ class RegistroVentaTest {
                 articulosParaVenta, stockService, comprobanteRepository, itemRepository, pagoRepository,
                 numeradorRepository, cajaService, formaPagoRepository, presupuestoRepository, remitoRepository,
                 itemRemitoRepository, new ClienteDelDocumento(clientesParaVenta), cuentaCorriente,
-                new TopeDeDescuento(usuarioId -> java.util.Optional.empty()));
+                new TopeDeDescuento(usuarioId -> java.util.Optional.empty()),
+                org.mockito.Mockito.mock(com.ferreteria.ventas.repository.ItemPresupuestoRepository.class));
         // CU-10: por defecto hay caja abierta hoy. Lenient: los rechazos previos a la caja no la consultan.
         lenient().when(cajaService.cajaParaVender()).thenReturn(CAJA);
         for (MedioPago medio : MedioPago.values()) {

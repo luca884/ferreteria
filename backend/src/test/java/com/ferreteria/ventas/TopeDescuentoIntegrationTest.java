@@ -239,4 +239,73 @@ class TopeDescuentoIntegrationTest extends VentasTestBase {
         postJson("/api/ventas", login(t.emailVendedor()), venta("0.01", "50.00", "99.98", a))
                 .andExpect(status().isCreated());
     }
+
+    // ---- Pasar a venta: los descuentos del documento ya estan autorizados (Luca, 2026-10-22) ----
+
+    private Map<String, Object> documento(String total, String global, String renglon, long articulo) {
+        Map<String, Object> cuerpo = mapa(clave(), null, total, linea(articulo, "1", "100.00"));
+        cuerpo.remove("formaPagoId");
+        return conDescuentos(cuerpo, global, renglon);
+    }
+
+    private long emitir(String url, String token, Map<String, Object> cuerpo, String campoId) throws Exception {
+        return json(postJson(url, token, objectMapper.writeValueAsString(cuerpo)).andExpect(status().isCreated()))
+                .get(campoId).asLong();
+    }
+
+    private String ventaDesde(String campo, long id, String total, String global, String renglon, long articulo)
+            throws Exception {
+        Map<String, Object> cuerpo = conDescuentos(mapa(clave(), "EFECTIVO", total, linea(articulo, "1", "100.00")),
+                global, renglon);
+        cuerpo.put(campo, id);
+        return objectMapper.writeValueAsString(cuerpo);
+    }
+
+    @Test
+    @DisplayName("el vendedor con tope pasa a venta el presupuesto del Dueño con 20 % en el renglón y 5 % global")
+    void presupuestoDelDuenoSobreElTopeSePasaAVenta() throws Exception {
+        Tienda t = tienda();
+        topeDelVendedor(t, "10");
+        long a = articulo(t, "Tornillo", "UNIDAD", "100.00", "10");
+        long presupuesto = emitir("/api/presupuestos", login(t.emailDueno()), documento("76.00", "5.00", "20.00", a),
+                "presupuestoId");
+
+        postJson("/api/ventas", login(t.emailVendedor()),
+                ventaDesde("presupuestoId", presupuesto, "76.00", "5.00", "20.00", a)).andExpect(status().isCreated());
+    }
+
+    @Test
+    @DisplayName("el vendedor con tope pasa a venta el remito del Dueño con 20 % global")
+    void remitoDelDuenoSobreElTopeSePasaAVenta() throws Exception {
+        Tienda t = tienda();
+        topeDelVendedor(t, "10");
+        long a = articulo(t, "Tornillo", "UNIDAD", "100.00", "10");
+        long remito = emitir("/api/remitos", login(t.emailDueno()), documento("80.00", "20.00", null, a), "remitoId");
+
+        postJson("/api/ventas", login(t.emailVendedor()),
+                ventaDesde("remitoId", remito, "80.00", "20.00", null, a)).andExpect(status().isCreated());
+    }
+
+    @Test
+    @DisplayName("si al pasar a venta sube el descuento sobre el del documento y sobre su tope, se frena")
+    void subirElDescuentoDelDocumentoSeFrena() throws Exception {
+        Tienda t = tienda();
+        topeDelVendedor(t, "10");
+        long a = articulo(t, "Tornillo", "UNIDAD", "100.00", "10");
+        long presupuesto = emitir("/api/presupuestos", login(t.emailDueno()), documento("80.00", null, "20.00", a),
+                "presupuestoId");
+        String vendedor = login(t.emailVendedor());
+
+        JsonNode renglon = json(postJson("/api/ventas", vendedor,
+                ventaDesde("presupuestoId", presupuesto, "75.00", null, "25.00", a)).andExpect(status().isBadRequest()));
+        JsonNode global = json(postJson("/api/ventas", vendedor,
+                ventaDesde("presupuestoId", presupuesto, "76.00", "5.00", "20.00", a))
+                .andExpect(status().isBadRequest()));
+
+        assertThat(renglon.get("errors").get("renglones[0].descuentoPorcentaje").asText())
+                .isEqualTo("Tu tope de descuento es 10 %.");
+        assertThat(global.get("errors").get("renglones[0].descuentoPorcentaje").asText())
+                .isEqualTo("Sumado al descuento general, pasa tu tope de descuento de 10 %.");
+        assertThat(ventas(t)).isZero();
+    }
 }
