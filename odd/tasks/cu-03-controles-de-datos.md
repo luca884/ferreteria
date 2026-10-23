@@ -18,9 +18,9 @@ Restricciones: la ferretería sale del JWT; repositorios con métodos `*Scoped`;
 
 ## Tasks
 
-- [x] T1 · S1-S5 · ruta: inline · Aceptación: endpoint y consulta con aislamiento · Evidencia: `ControlesDeDatosIntegrationTest` RED 8/8 (400, la ruta caía en `/{id}`) → GREEN 8/8; `TenantScopingArchTest` 24, `ModulosArchTest` 40. «Sin rubro» es sin un rubro propio: uno de otra ferretería cuenta como ninguno · Risk: item 2 (aislamiento por tenant en consulta nativa con joins)
-- [ ] T2 · S2, S4, S6 · ruta: inline · Aceptación: pantalla, ruta, menú e impresión; verificada con ego-browser · Evidencia: — · Risk: none
-- [ ] T3 · S1 · ruta: inline · Aceptación: spec (CU-03) y relevamiento (G81, GDS-18) · Evidencia: — · Risk: none
+- [x] T1 · S1-S5 · ruta: inline · Aceptación: endpoint y consulta con aislamiento · Evidencia: `ControlesDeDatosIntegrationTest` RED 8/8 (400, la ruta caía en `/{id}`) → GREEN 8/8; `TenantScopingArchTest` 24, `ModulosArchTest` 40. «Sin rubro» es sin un rubro propio: uno de otra ferretería cuenta como ninguno · commit 477e644 · Risk: item 2 (aislamiento por tenant en consulta nativa con joins)
+- [x] T2 · S2, S4, S6 · ruta: inline · Aceptación: pantalla, ruta, menú e impresión; verificada con ego-browser · Evidencia: specs RED (no compilaba: faltaba el componente) → GREEN 80/80 (pantalla, servicio, rutas, shell); ego-browser con `dueno@tornillo.demo`: menú → `/controles-de-datos`, sin rubro lista 5296 artículos de la Lista 336, costo en cero y margen negativo vacíos; con TOR-001 en costo 0 y HER-001 a $ 9.000 (cambiados a mano en la base dev y vueltos atrás) aparecen en su control · commit 2482d1f · Risk: none
+- [x] T3 · S1 · ruta: inline · Aceptación: spec (CU-03) y relevamiento (G81, GDS-18) · Evidencia: CU-03 punto 8, G81 y GDS-18 actualizados · commit baa296c · Risk: none
 
 ## Log
 
@@ -28,3 +28,4 @@ Restricciones: la ferretería sale del JWT; repositorios con métodos `*Scoped`;
   > dale vamos con esas cosas pendientes las de contra GDS abierto dentro del mvp, yo me voy un rato, para esas tareas necesitas alguna deciion mio?
   Respuesta a la propuesta: «GDS-18 (listado de control): pantalla aparte imprimible, como «Controles de datos» de GDS (G81): costo 0 o vacío, sin rubro, margen negativo. Solo Dueño, como «Stock bajo mínimo».» Luca, sobre 3b-2: «como lo tiene gds».
 - L2 (2026-10-23) Exploración: G81 de GDS (`docs/relevamiento-gds.md:148`) trae «Verificar costos en cero o mal cargados», «Ventas con costo mayor a precio de venta» y «Artículos con alícuota de IVA en 0». Acá `articulo.costo` es `NOT NULL` y admite 0 (`Articulo.java:295`); `rubro_id` es nullable (`Articulo.java:69`); el aviso de margen negativo es `MargenNegativo.mensaje` (`catalogo/model/MargenNegativo.java`); el dólar de los precios sale de `DolarDePrecios.vigente()` (`cotizacion/api`). Molde: stock bajo mínimo (`StockBajoMinimoController`, `ArticuloRepository.bajoMinimo`, `features/stock-bajo-minimo`).
+- L3 (2026-10-23) Cierre: suite backend 4519/0 sobre baa296c; suite frontend 3013/3013; `ng build` OK (el aviso de presupuesto de `dialogo-cobro` ya estaba). Al mergear con `feat/cu-07-consumidor-final`, `layout/shell.spec.ts` queda con `toBe(20)` en las dos ramas y el menú con 21 enlaces: corregir a 21. Risk: item 2 (consulta nativa con joins por ferretería) → `odd-verifier`.
