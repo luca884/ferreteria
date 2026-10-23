@@ -1,0 +1,146 @@
+<app-barra-acciones>
+  <h1>Etiquetas</h1>
+  @if (auth.esDueno()) {
+    <button
+      type="button"
+      class="accion-barra primario imprimir"
+      [disabled]="etiquetas().length === 0"
+      (click)="imprimir()"
+    >
+      <svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+        <path d="M4 6V1.5h8V6M4 12H2V6h12v6h-2M4 9.5h8v5H4z" />
+      </svg>
+      Imprimir
+    </button>
+  }
+</app-barra-acciones>
+
+@if (!auth.esDueno()) {
+  <p class="ayuda estado-vacio" role="status">Las etiquetas son solo del Dueño.</p>
+} @else {
+  <div class="filtros">
+    <form class="buscador" (submit)="buscar($event)">
+      <label>
+        Agregar artículo
+        <input
+          #campo
+          name="q"
+          type="search"
+          autocomplete="off"
+          placeholder="Código o descripción"
+          [value]="busqueda()"
+          (input)="busqueda.set($any($event.target).value)"
+        />
+      </label>
+      <button type="submit" class="secundario" [disabled]="buscando()">Buscar</button>
+    </form>
+    <label>
+      Hoja A4
+      <select name="columnas" [value]="columnas()" (change)="cambiarColumnas($any($event.target).value)">
+        <option value="4">4 columnas</option>
+        <option value="5">5 columnas</option>
+      </select>
+    </label>
+  </div>
+
+  @if (error(); as texto) {
+    <p class="error" role="alert">{{ texto }}</p>
+  }
+
+  @if (resultados().length > 0) {
+    <ul class="resultados" aria-label="Artículos encontrados">
+      @for (a of resultados(); track a.id) {
+        <li>
+          <span class="codigo-interno">{{ a.codigoInterno }}</span>
+          <span class="descripcion">{{ a.descripcion }}</span>
+          @if (!a.activo) {
+            <span class="baja">Dado de baja</span>
+          }
+          <button type="button" class="secundario chico agregar" [disabled]="!a.activo" (click)="agregar(a)">
+            Agregar
+          </button>
+        </li>
+      }
+    </ul>
+  } @else if (buscado(); as q) {
+    <p class="ayuda resultados-vacio" role="status">No se encontraron artículos para «{{ q }}».</p>
+  }
+
+  @if (items().length === 0) {
+    <p class="ayuda estado-vacio">Buscá o escaneá los artículos que querés etiquetar.</p>
+  } @else {
+    <table class="lista">
+      <caption class="sr-only">Artículos a etiquetar y cuántas copias de cada uno</caption>
+      <thead>
+        <tr>
+          <th scope="col">Código</th>
+          <th scope="col">Descripción</th>
+          <th scope="col">En las barras</th>
+          <th scope="col" class="num">Copias</th>
+          <th scope="col"><span class="sr-only">Quitar</span></th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (item of items(); track item.articulo.id) {
+          <tr>
+            <td>{{ item.articulo.codigoInterno }}</td>
+            <td class="descripcion">{{ item.articulo.descripcion }}</td>
+            <td class="barras">
+              @if (item.codigo; as codigo) {
+                {{ codigo.texto }} <span class="ayuda">({{ codigo.simbologia }})</span>
+              } @else {
+                <span class="aviso-barras">Sin barras: el código tiene caracteres que no se pueden dibujar</span>
+              }
+            </td>
+            <td class="num">
+              <input
+                #input
+                class="copias"
+                type="number"
+                min="1"
+                max="999"
+                step="1"
+                [attr.aria-label]="'Copias de ' + item.articulo.descripcion"
+                [value]="item.copias"
+                (change)="cambiarCopias(item.articulo.id, input.value, input)"
+              />
+            </td>
+            <td>
+              <button
+                type="button"
+                class="secundario chico quitar"
+                [attr.aria-label]="'Quitar ' + item.articulo.descripcion"
+                (click)="quitar(item.articulo.id)"
+              >
+                Quitar
+              </button>
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+    <p class="total">{{ total() }}</p>
+
+    <section class="etiquetas-imprimible" [attr.data-columnas]="columnas()" aria-label="Vista previa de la hoja">
+      @for (e of etiquetas(); track e.clave) {
+        <div class="etiqueta">
+          @if (e.barras; as lista) {
+            <svg
+              class="barras-svg"
+              [attr.viewBox]="'0 0 ' + e.ancho + ' 30'"
+              preserveAspectRatio="none"
+              shape-rendering="crispEdges"
+              aria-hidden="true"
+            >
+              @for (b of lista; track b.x) {
+                <rect [attr.x]="b.x + zonaLibre" y="0" [attr.width]="b.ancho" height="30" />
+              }
+            </svg>
+          }
+          <span class="codigo">{{ e.texto }}</span>
+          <span class="descripcion">{{ e.descripcion }}</span>
+        </div>
+      }
+    </section>
+  }
+}
