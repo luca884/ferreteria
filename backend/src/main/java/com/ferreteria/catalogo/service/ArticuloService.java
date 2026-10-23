@@ -128,9 +128,10 @@ public class ArticuloService {
         validarUnicidad(datos, id);
         ContextoPrecio ctx = contextoDePrecio(datos, articulo.getMoneda() == Moneda.USD);
 
+        Moneda monedaAnterior = articulo.getMoneda();
         // El articulo ya esta administrado por JPA: los cambios se escriben al terminar la transaccion.
         Optional<CambioPrecio> cambio = articulo.actualizar(datos, request.toPedidoDePrecio(), ctx);
-        guardarHistorial(articulo, cambio, usuarioId);
+        guardarHistorial(articulo, cambio, usuarioId, monedaAnterior != articulo.getMoneda() ? monedaAnterior : null);
         // Escribe ahora: un choque con otra escritura sale como 409 y la respuesta trae la version NUEVA.
         escribirOChocar();
         // El stock no se escribe aca (updatable=false) y la entidad pudo leerse antes de una venta: la
@@ -356,7 +357,13 @@ public class ArticuloService {
 
     /** Solo se escribe historial si cambio el costo o el precio final. */
     private void guardarHistorial(Articulo articulo, Optional<CambioPrecio> cambio, Long usuarioId) {
+        guardarHistorial(articulo, cambio, usuarioId, null);
+    }
+
+    /** Con {@code monedaAnterior} si la moneda cambio (null si no), como en la importacion: cuenta para «Costo al». */
+    private void guardarHistorial(Articulo articulo, Optional<CambioPrecio> cambio, Long usuarioId,
+                                  Moneda monedaAnterior) {
         cambio.ifPresent(c -> historialPrecioRepository.save(
-                HistorialPrecio.de(articulo, c, OrigenPrecio.MANUAL, usuarioId)));
+                HistorialPrecio.de(articulo, c, OrigenPrecio.MANUAL, usuarioId, monedaAnterior)));
     }
 }

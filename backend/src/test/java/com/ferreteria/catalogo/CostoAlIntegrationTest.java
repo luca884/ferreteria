@@ -5,6 +5,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.ferreteria.common.HoraArgentina;
+import com.ferreteria.cotizacion.model.LadoCotizacion;
+import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.HashMap;
 import java.util.Map;
 import org.junit.jupiter.api.AfterEach;
@@ -67,6 +70,7 @@ class CostoAlIntegrationTest extends AjustesTestBase {
         jdbc.update("delete h from historial_precio h join articulo x on x.id = h.articulo_id"
                 + " where x.ferreteria_id in (?, ?)", a, b);
         jdbc.update("update articulo set ultima_importacion_id = null where ferreteria_id in (?, ?)", a, b);
+        borrarCotizaciones("cal-");
         borrarDatosDe(a, b);
     }
 
@@ -146,16 +150,45 @@ class CostoAlIntegrationTest extends AjustesTestBase {
     @DisplayName("al cambiar el costo, la respuesta del guardado y el listado dicen hoy; cambiar solo la descripcion no")
     void guardar() throws Exception {
         Long id = ids.get("CAL-2");
-        String sinCambioDeCosto = conLaVersionVigente(id, json(id, "costoal cambio de costo bis", "100.00"));
+        String sinCambioDeCosto = conLaVersionVigente(id, json("costoal cambio de costo bis", "100.00", "ARS"));
         JsonNode soloDescripcion = objectMapper.readTree(putJson("/api/articulos/" + id, duenoA, sinCambioDeCosto)
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString());
         assertThat(soloDescripcion.get("costoAl").asText()).isEqualTo("2026-03-05");
 
-        String conCambioDeCosto = conLaVersionVigente(id, json(id, "costoal cambio de costo bis", "130.00"));
+        String conCambioDeCosto = conLaVersionVigente(id, json("costoal cambio de costo bis", "130.00", "ARS"));
         JsonNode nuevoCosto = objectMapper.readTree(putJson("/api/articulos/" + id, duenoA, conCambioDeCosto)
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString());
         assertThat(nuevoCosto.get("costoAl").asText()).isEqualTo(HoraArgentina.hoy().toString());
         assertThat(costoAlDelListado(duenoA)).containsEntry("CAL-2", HoraArgentina.hoy().toString());
+    }
+
+    @Test
+    @DisplayName("pasar a dolares con el mismo numero de costo es un cambio de costo: la fecha pasa a hoy")
+    void cambioDeMonedaManual() throws Exception {
+        Instant haceUnRato = Instant.parse("2026-10-16T11:00:00Z");
+        cotizacion("USD", "cal-oficial", "1090", "1100", haceUnRato);
+        configuracion(a, c -> {
+            c.setCasaPrecios("cal-oficial");
+            c.fijarVigente(new BigDecimal("1000.0000"), "cal-oficial", LadoCotizacion.VENTA, haceUnRato);
+        });
+        Long id = ids.get("CAL-2");
+
+        String enDolares = conLaVersionVigente(id, json("costoal cambio de costo", "100.00", "USD"));
+        JsonNode guardado = objectMapper.readTree(putJson("/api/articulos/" + id, duenoA, enDolares)
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString());
+
+        assertThat(guardado.get("moneda").asText()).isEqualTo("USD");
+        assertThat(guardado.get("costoAl").asText()).isEqualTo(HoraArgentina.hoy().toString());
+        assertThat(costoAlDelListado(duenoA)).containsEntry("CAL-2", HoraArgentina.hoy().toString());
+    }
+
+    @Test
+    @DisplayName("la fecha es la del dia guardado, tambien a la madrugada: no depende de la zona de la JVM")
+    void madrugada() throws Exception {
+        jdbc.update("update articulo set creado_en = '2026-01-10 00:30:00' where id = ?", ids.get("CAL-1"));
+        historial(a, "CAL-2", "120.00", "125.00", "ARS", "ARS", "2026-03-06 00:10:00");
+
+        assertThat(costoAlDelListado(duenoA)).containsEntry("CAL-1", "2026-01-10").containsEntry("CAL-2", "2026-03-06");
     }
 
     @Test
@@ -169,10 +202,10 @@ class CostoAlIntegrationTest extends AjustesTestBase {
         assertThat(creado.get("costoAl").asText()).isEqualTo(HoraArgentina.hoy().toString());
     }
 
-    private static String json(Long id, String descripcion, String costo) {
+    private static String json(String descripcion, String costo, String moneda) {
         return """
-                {"codigoInterno": "CAL-2", "descripcion": "%s", "costo": %s, "moneda": "ARS",
+                {"codigoInterno": "CAL-2", "descripcion": "%s", "costo": %s, "moneda": "%s",
                  "alicuotaIva": "IVA_21", "unidad": "UNIDAD", "stockMinimo": 0, "activo": true}
-                """.formatted(descripcion, costo);
+                """.formatted(descripcion, costo, moneda);
     }
 }

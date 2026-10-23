@@ -18,7 +18,6 @@ import org.springframework.data.repository.query.Param;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
@@ -418,17 +417,17 @@ public interface ArticuloRepository extends TenantScopedRepository<Articulo, Lon
      * Desde cuando esta al dia el costo de cada articulo (GDS-05): la fecha mas nueva entre el ultimo historial que
      * cambio el costo o la moneda (un cambio solo de precio no cuenta), la ultima importacion de lista que toco el
      * articulo (aunque haya confirmado el mismo costo) y el alta. Historial e importacion se unen por la ferreteria del
-     * articulo. Filas (id, fecha).
+     * articulo. Filas (id, fecha 'aaaa-mm-dd'): la fecha sale como texto para no pasar por la zona de la JVM.
      */
     @Query(nativeQuery = true, value = """
             select a.id,
-                   greatest(a.creado_en,
+                   date_format(greatest(a.creado_en,
                             coalesce((select max(h.fecha) from historial_precio h
                                       where h.ferreteria_id = a.ferreteria_id and h.articulo_id = a.id
                                         and (h.costo_anterior is null or h.costo_anterior <> h.costo_nuevo
                                              or (h.moneda_anterior is not null and h.moneda_anterior <> h.moneda))),
                                      a.creado_en),
-                            coalesce(i.fecha, a.creado_en))
+                            coalesce(i.fecha, a.creado_en)), '%Y-%m-%d')
             from articulo a
             left join importacion_lista i on i.id = a.ultima_importacion_id and i.ferreteria_id = a.ferreteria_id
             where a.ferreteria_id = :fid and a.id in :ids
@@ -442,9 +441,7 @@ public interface ArticuloRepository extends TenantScopedRepository<Articulo, Lon
             return fechas;
         }
         for (Object[] fila : costoAl(TenantContext.requireFerreteriaId(), ids)) {
-            Object fecha = fila[1];
-            LocalDateTime momento = fecha instanceof java.sql.Timestamp ts ? ts.toLocalDateTime() : (LocalDateTime) fecha;
-            fechas.put(((Number) fila[0]).longValue(), momento.toLocalDate());
+            fechas.put(((Number) fila[0]).longValue(), LocalDate.parse((String) fila[1]));
         }
         return fechas;
     }
