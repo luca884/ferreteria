@@ -18,14 +18,15 @@ import java.util.List;
  * articulos que quedaron con stock negativo (R-016); en una venta repetida viene vacio. {@code presupuestoId} solo viene si
  * la venta salio de un presupuesto (PP-006) y {@code remitoId} solo si salio de un remito (RM-006). {@code facturable} es
  * false si la venta quedo NO_FACTURABLE (NF-002). {@code clienteId} y {@code clienteNombre} (copia de su razon social) solo
- * vienen si se eligio un cliente (CL-004).
+ * vienen si se eligio un cliente (CL-004). {@code usuario} (el nombre de quien la cobro) solo viene en la consulta
+ * (G60), no al cobrar.
  */
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public record VentaResponse(
         Long ventaId, Long numero, BigDecimal total, LocalDateTime fecha, Long formaPagoId, MedioPago medioPago,
         List<PagoResponse> pagos, List<RenglonResponse> renglones, List<SinStockResponse> sinStock, BigDecimal subtotal,
         BigDecimal descuentoPorcentaje, BigDecimal descuento, BigDecimal recargo, Long presupuestoId,
-        Long remitoId, boolean facturable, Long clienteId, String clienteNombre) {
+        Long remitoId, boolean facturable, Long clienteId, String clienteNombre, String usuario) {
 
     public record RenglonResponse(
             Integer renglon, Long articuloId, String descripcion, String unidad, BigDecimal cantidad,
@@ -46,6 +47,10 @@ public record VentaResponse(
     public record SinStockResponse(Long articuloId, String descripcion, BigDecimal stockActual) {}
 
     public static VentaResponse de(VentaRegistrada venta) {
+        return de(venta, null);
+    }
+
+    public static VentaResponse de(VentaRegistrada venta, String usuario) {
         return new VentaResponse(
                 venta.comprobante().getId(), venta.comprobante().getNumero(), venta.comprobante().getTotal(),
                 venta.comprobante().getFecha(),
@@ -63,6 +68,6 @@ public record VentaResponse(
                 venta.comprobante().getRecargo(), venta.comprobante().getPresupuestoId(),
                 venta.comprobante().getRemitoId(),
                 venta.comprobante().getEstado() != EstadoComprobante.NO_FACTURABLE,
-                venta.comprobante().getClienteId(), venta.comprobante().getClienteNombre());
+                venta.comprobante().getClienteId(), venta.comprobante().getClienteNombre(), usuario);
     }
 }

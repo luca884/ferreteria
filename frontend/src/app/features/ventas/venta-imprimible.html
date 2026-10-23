@@ -1,0 +1,37 @@
+<!-- El mousedown sobre el fondo no mueve el foco al body: si no, Esc y Enter (que escucha el diálogo) dejarían de andar. -->
+<div class="dialogo-fondo" (mousedown)="retenerFoco($event)">
+  <div
+    class="dialogo venta"
+    tabindex="-1"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="venta-titulo"
+    appTrampaFoco
+    (keydown)="alTeclear($event)"
+  >
+    <article class="venta-imprimible">
+      @if (ferreteria(); as nombre) {
+        <p class="ferreteria">{{ nombre }}</p>
+      }
+      <h2 id="venta-titulo">Venta N.º {{ venta().numero }}</h2>
+      <app-venta-hoja [venta]="venta()" />
+      <p class="leyenda">{{ leyenda }}</p>
+    </article>
+
+    <div class="dialogo-acciones">
+      <button type="button" class="cerrar" data-tecla="Esc" aria-keyshortcuts="Escape" (click)="cerrar.emit()">
+        Cerrar
+      </button>
+      <button
+        #botonImprimir
+        type="button"
+        class="imprimir primario"
+        data-tecla="Enter"
+        aria-keyshortcuts="Enter"
+        (click)="imprimir()"
+      >
+        Imprimir
+      </button>
+    </div>
+  </div>
+</div>

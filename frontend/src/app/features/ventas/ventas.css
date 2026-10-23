@@ -1,0 +1,78 @@
+:host {
+  display: block;
+  width: 100%;
+}
+:host > :not(app-barra-acciones) {
+  max-width: 1040px;
+}
+
+.filtros {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--e-3);
+  margin-bottom: var(--e-4);
+}
+.filtros label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-weight: 600;
+}
+.filtros input[name='numero'] {
+  width: 7rem;
+}
+
+.ventas {
+  margin-bottom: var(--e-4);
+}
+.ventas tbody tr {
+  cursor: pointer;
+}
+.ventas tbody tr.elegida {
+  background: var(--superficie-3);
+}
+.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.enlace {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--acento);
+  font-weight: 700;
+  text-decoration: underline;
+}
+.marca {
+  margin-left: var(--e-2);
+  color: var(--texto-suave);
+  font-size: var(--texto-sm);
+  font-weight: 600;
+}
+
+.paginas {
+  display: flex;
+  align-items: center;
+  gap: var(--e-3);
+  margin-bottom: var(--e-4);
+}
+
+.detalle {
+  display: flex;
+  flex-direction: column;
+  gap: var(--e-3);
+  margin-bottom: var(--e-6);
+  padding: var(--e-4);
+  border: 1px solid var(--borde);
+  border-radius: var(--radio-lg);
+  background: var(--superficie);
+}
+.detalle h2 {
+  margin: 0;
+}
+.acciones {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--e-2);
+}
