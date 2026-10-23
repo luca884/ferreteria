@@ -105,6 +105,20 @@ class StockBajoMinimoIntegrationTest extends AjustesTestBase {
     }
 
     @Test
+    @DisplayName("un articulo que apunta al rubro o proveedor de otra ferreteria no muestra el nombre ajeno")
+    void rubroYProveedorAjenosNoSeFiltran() throws Exception {
+        Long rubroAjeno = rubro(b, "Rubro Ajeno", "30");
+        Long proveedorAjeno = proveedor(b, "Proveedor Ajeno");
+        cargar(a, "H-008", "Apunta afuera", "UNIDAD", "0", "1", rubroAjeno, proveedorAjeno);
+
+        JsonNode fila = getJson(URL + "?orden=CODIGO", duenoA).get(3);
+
+        assertThat(fila.get("codigoInterno").asText()).isEqualTo("H-008");
+        assertThat(fila.get("rubro").isNull()).isTrue();
+        assertThat(fila.get("proveedor").isNull()).isTrue();
+    }
+
+    @Test
     @DisplayName("sin articulos bajo el minimo devuelve la lista vacia")
     void vacio() throws Exception {
         jdbc.update("update articulo set stock_minimo = 0 where ferreteria_id = ?", a);

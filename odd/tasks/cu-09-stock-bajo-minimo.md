@@ -24,6 +24,8 @@ Restricciones: la ferretería sale del JWT; repositorios con métodos `*Scoped`;
 
 ## Log
 
+- L3 (2026-10-23) Suite backend 4455/0 sobre 0fbba4b. Verificador opus: pasa S1-S6 sin blockers. Probó rubro y proveedor ajenos (nombre en null), decimales, stock negativo, los cuatro órdenes con empates y nulos, choques de rutas con `/api/articulos/{id}` y las reglas de impresión de los otros imprimibles. Advisory 1 (de antes de la feature): las FK de `articulo` a rubro y proveedor son solo por id. Se commiteó su sonda principal como regresión (`rubroYProveedorAjenosNoSeFiltran`, 5/5).
+
 - L1 (2026-10-23) Pedido original, textual:
   > dale, vamos con bajo mínimo como gds
   Respuesta a la propuesta: «Artículos bajo el mínimo — CU-09 punto 1 de la spec (parte del MVP, no extra) … En GDS es el reporte "Stock crítico" (G72).»
