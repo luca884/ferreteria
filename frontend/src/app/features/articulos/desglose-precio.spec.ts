@@ -284,7 +284,7 @@ describe('DesglosePrecioVista', () => {
       const aviso = limpio(el().querySelector('.no-coincide')?.textContent);
       expect(aviso).toContain('Costo de la lista $ 880,65');
       expect(aviso).toContain('Costo guardado $ 990,00');
-      expect(aviso).toContain('El costo guardado se cambió a mano o por una actualización masiva.');
+      expect(aviso).toContain('El costo guardado no es el de la lista: se cambió después, a mano, por una compra o por una actualización masiva.');
     });
 
     it('en dólares las dos cifras llevan «US$»', async () => {
