@@ -116,6 +116,7 @@ Son 12 casos de uso (CU-01 a CU-12), agrupados en cinco módulos: Configuración
 
 1. Ve el stock actual y los artículos bajo el mínimo.
 2. Hace un ajuste manual (ingreso de mercadería, rotura, conteo) con un motivo; queda registrado el movimiento.
+3. Consulta los **movimientos de stock de un artículo** («Movimientos» en la barra del listado o «Ver movimientos» en la ficha, también de uno dado de baja), como «Movimientos del Artículo» de GDS (G29): el más nuevo primero, de a 20 por página y filtrable por Desde y Hasta (días inclusive). Cada movimiento muestra la fecha, el tipo (venta, remito, anulación de remito, compra o ajuste), la cantidad con signo (las salidas en negativo), el **saldo** que quedó después, el comprobante («Venta N.º 12», «Remito N.º 5», compra «FA 00003-00001234 · Proveedor»), el usuario y el motivo del ajuste. El saldo se calcula hacia atrás desde el stock actual, así el último movimiento siempre muestra el stock de hoy aunque falte el stock inicial. Solo el Dueño; el artículo de otra ferretería da 404.
 
 **CU-10 Abrir y cerrar caja** (Vendedor y Dueño)
 

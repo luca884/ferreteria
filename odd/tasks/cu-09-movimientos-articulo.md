@@ -18,9 +18,9 @@ Restricciones: la ferretería sale del JWT; artículo ajeno da 404; `stock` no p
 
 ## Tasks
 
-- [ ] T1 · S1-S5 · ruta: inline · Aceptación: endpoint, consulta y saldo, con aislamiento · Evidencia: — · Risk: item 2 (aislamiento por tenant en consultas nativas)
-- [ ] T2 · S6 · ruta: inline · Aceptación: pantalla, ruta y accesos; verificada con ego-browser · Evidencia: — · Risk: none
-- [ ] T3 · S1 · ruta: inline · Aceptación: spec (CU-09) y relevamiento (G29, GDS-17) · Evidencia: — · Risk: none
+- [x] T1 · S1-S5 · ruta: inline · Aceptación: endpoint, consulta y saldo, con aislamiento · Evidencia: `MovimientosArticuloIntegrationTest` 5/5, `ModulosArchTest` 40, `TenantScopingArchTest` 24, `ArticulosParaVentaServiceTest` 9/9 · commit 4f6b03d · Risk: item 2 (aislamiento por tenant en consultas nativas)
+- [x] T2 · S6 · ruta: inline · Aceptación: pantalla, ruta y accesos; verificada con ego-browser · Evidencia: specs focalizados 369/369, suite frontend 2917/2917, `ng build` OK; ego-browser: ficha → «Ver movimientos» (BUL-002, saldos 200 → 192), barra → `/articulos/331/movimientos`, páginas (2 de 112) y filtro 19/10 (1 de 2) · commit 5cb54b4 · Risk: none
+- [x] T3 · S1 · ruta: inline · Aceptación: spec (CU-09) y relevamiento (G29, GDS-17) · Evidencia: CU-09 punto 3, G29 y GDS-17 marcados hechos · Risk: none
 
 ## Log
 
