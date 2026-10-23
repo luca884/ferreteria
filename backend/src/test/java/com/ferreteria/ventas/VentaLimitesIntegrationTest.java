@@ -1,7 +1,9 @@
 package com.ferreteria.ventas;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import java.util.Map;
 import org.junit.jupiter.api.Test;
+import org.springframework.test.web.servlet.ResultActions;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -94,14 +96,22 @@ class VentaLimitesIntegrationTest extends VentasTestBase {
         long a = articulo(t, "Maquina", "UNIDAD", "9999999999999.99", "10");
         long b = articulo(t, "Cable", "METRO", "1.00", "0");
 
-        JsonNode venta = json(vender(login(t.emailVendedor()), clave(), "9999999999999.99",
+        // Sin facturar: a Consumidor Final, un importe así facturable pediría identificar al comprador (GDS-32).
+        JsonNode venta = json(venderSinFacturar(login(t.emailVendedor()), clave(), "9999999999999.99",
                 linea(a, "1", "9999999999999.99")).andExpect(status().isCreated()));
         assertThat(venta.get("total").decimalValue()).isEqualByComparingTo("9999999999999.99");
         assertThat(stock(a)).isEqualByComparingTo("9");
 
         // La cantidad maxima (999.999.999.999,999) a $ 1 es un importe de 999.999.999.999,999 -> 1.000.000.000.000,00.
-        vender(login(t.emailVendedor()), clave(), "1000000000000.00", linea(b, "999999999999.999", "1.00"))
+        venderSinFacturar(login(t.emailVendedor()), clave(), "1000000000000.00", linea(b, "999999999999.999", "1.00"))
                 .andExpect(status().isCreated());
         assertThat(stock(b)).isEqualByComparingTo("-999999999999.999");
+    }
+
+    private ResultActions venderSinFacturar(String token, String clave, String total, Linea... lineas) throws Exception {
+        Map<String, Object> cuerpo = mapa(clave, null, total, lineas);
+        cuerpo.put("formaPagoId", formaDePago(token, "EFECTIVO"));
+        cuerpo.put("facturable", false);
+        return postJson("/api/ventas", token, objectMapper.writeValueAsString(cuerpo));
     }
 }

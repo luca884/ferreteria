@@ -31,4 +31,10 @@ public record CuentaFalsa(String razonSocial, BigDecimal saldo, BigDecimal limit
     public boolean getActivo() {
         return activo;
     }
+
+    /** Sin documento: los tests de cuenta corriente venden por debajo del tope de Consumidor Final (GDS-32). */
+    @Override
+    public String getTipoDocumento() {
+        return null;
+    }
 }

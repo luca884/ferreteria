@@ -27,7 +27,9 @@ public class VentaRechazadaException extends RuntimeException {
         /** CC-006: el cliente no tiene cuenta corriente habilitada (limite NULL). Ni el Dueño puede autorizarlo. */
         CUENTA_CORRIENTE_NO_HABILITADA(422),
         /** CC-005: la venta a cuenta corriente pasa el limite del cliente; la puede autorizar el Dueño. */
-        LIMITE_CUENTA_CORRIENTE(422);
+        LIMITE_CUENTA_CORRIENTE(422),
+        /** GDS-32: desde el tope, la venta facturable a Consumidor Final necesita un cliente con documento. */
+        CONSUMIDOR_FINAL_SIN_DATOS(422);
 
         private final int estadoHttp;
 
@@ -84,6 +86,13 @@ public class VentaRechazadaException extends RuntimeException {
                 ? " Autorizala para seguir."
                 : " Pedile al Dueño que la autorice.");
         return new VentaRechazadaException(Motivo.LIMITE_CUENTA_CORRIENTE, mensaje, List.of(), null, exceso);
+    }
+
+    /** GDS-32: «Desde $ <tope> la venta a Consumidor Final necesita identificar al comprador: …», sin articulos. */
+    public static VentaRechazadaException consumidorFinalSinDatos(String tope) {
+        return new VentaRechazadaException(Motivo.CONSUMIDOR_FINAL_SIN_DATOS, "Desde $ " + tope
+                + " la venta a Consumidor Final necesita identificar al comprador: elegí un cliente con DNI, CUIT o CUIL.",
+                List.of());
     }
 
     private final Motivo motivo;

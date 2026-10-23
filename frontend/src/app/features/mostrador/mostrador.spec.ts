@@ -2040,6 +2040,20 @@ describe('Mostrador', () => {
       expect(renglonesTicket()).toHaveLength(1);
     });
 
+    it('un 422 por Consumidor Final sin datos deja el cobro abierto con el mensaje y el ticket intacto (GDS-32)', async () => {
+      await conMartillos();
+      await tecla('F4');
+      await tecla('Enter');
+
+      const mensaje =
+        'Desde $ 1.000,00 la venta a Consumidor Final necesita identificar al comprador: elegí un cliente con DNI, CUIT o CUIL.';
+      await fallarCobro(0, 422, { ...rechazo(422, 'CONSUMIDOR_FINAL_SIN_DATOS', []), message: mensaje });
+
+      expect(dialogo()).not.toBeNull();
+      expect(normal(dialogo()!.querySelector('.aviso')?.textContent)).toBe(mensaje);
+      expect(renglonesTicket()).toHaveLength(1);
+    });
+
     it.each([
       ['un error de red', 0],
       ['un 500', 500],

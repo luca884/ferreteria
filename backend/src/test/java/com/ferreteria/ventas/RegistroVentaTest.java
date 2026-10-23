@@ -41,6 +41,7 @@ import com.ferreteria.ventas.repository.RemitoRepository;
 import com.ferreteria.ventas.service.CajaService;
 import com.ferreteria.ventas.service.ClienteDelDocumento;
 import com.ferreteria.ventas.service.ConfirmarVenta;
+import com.ferreteria.ventas.service.ConsumidorFinal;
 import com.ferreteria.ventas.service.TopeDeDescuento;
 import com.ferreteria.ventas.service.ConfirmarVenta.Renglon;
 import com.ferreteria.ventas.service.RegistroVenta;
@@ -127,7 +128,8 @@ class RegistroVentaTest {
                 numeradorRepository, cajaService, formaPagoRepository, presupuestoRepository, remitoRepository,
                 itemRemitoRepository, new ClienteDelDocumento(clientesParaVenta), cuentaCorriente,
                 new TopeDeDescuento(usuarioId -> java.util.Optional.empty()),
-                org.mockito.Mockito.mock(com.ferreteria.ventas.repository.ItemPresupuestoRepository.class));
+                org.mockito.Mockito.mock(com.ferreteria.ventas.repository.ItemPresupuestoRepository.class),
+                new ConsumidorFinal(() -> new java.math.BigDecimal("10000000.00")));
         // CU-10: por defecto hay caja abierta hoy. Lenient: los rechazos previos a la caja no la consultan.
         lenient().when(cajaService.cajaParaVender()).thenReturn(CAJA);
         for (MedioPago medio : MedioPago.values()) {
@@ -588,7 +590,7 @@ class RegistroVentaTest {
         catalogoC1C3();
         escrituraLista(Map.of(1L, bd("7"), 2L, bd("7.5")));
         when(clientesParaVenta.tomarParaVenta(5L)).thenReturn(Optional.of(
-                new com.ferreteria.clientes.api.ClienteReferencia(5L, "Ferretería Norte SRL", true)));
+                new com.ferreteria.clientes.api.ClienteReferencia(5L, "Ferretería Norte SRL", true, false)));
 
         Comprobante conCliente = comoVendedor(conCliente(ventaC1C3(MedioPago.EFECTIVO), 5L), USUARIO)
                 .comprobante();
@@ -604,7 +606,7 @@ class RegistroVentaTest {
         when(comprobanteRepository.porClaveScoped(CLAVE)).thenReturn(Optional.empty());
         when(clientesParaVenta.tomarParaVenta(9L)).thenReturn(Optional.empty());
         when(clientesParaVenta.tomarParaVenta(8L)).thenReturn(Optional.of(
-                new com.ferreteria.clientes.api.ClienteReferencia(8L, "Viejo", false)));
+                new com.ferreteria.clientes.api.ClienteReferencia(8L, "Viejo", false, false)));
 
         org.assertj.core.api.Assertions.assertThatThrownBy(
                         () -> comoVendedor(conCliente(ventaC1C3(MedioPago.EFECTIVO), 9L), USUARIO))
@@ -1317,7 +1319,7 @@ class RegistroVentaTest {
     /** El cliente 5, activo, que toma la venta bajo lock. */
     void clienteTomado() {
         when(clientesParaVenta.tomarParaVenta(CLIENTE)).thenReturn(Optional.of(
-                new com.ferreteria.clientes.api.ClienteReferencia(CLIENTE, "Ferretería Norte SRL", true)));
+                new com.ferreteria.clientes.api.ClienteReferencia(CLIENTE, "Ferretería Norte SRL", true, false)));
     }
 
     /** El cupo de la cuenta del cliente 5 para el importe de la venta: limite, saldo y exceso dados. */

@@ -779,6 +779,11 @@ export class Mostrador {
         this.avisoCobro.set(rechazo.message);
         this.leerCuenta();
         return;
+      case 'CONSUMIDOR_FINAL_SIN_DATOS':
+        // GDS-32: desde el tope hace falta un cliente con documento. El cobro sigue abierto con el mensaje; se elige el
+        // cliente (F9) y se vuelve a cobrar con el mismo ticket.
+        this.avisoCobro.set(rechazo.message);
+        return;
       case 'CAJA_CERRADA':
       case 'CAJA_DE_OTRO_DIA':
         // Otro usuario cerró la caja (o cambió el día) mientras se armaba el ticket: el ticket se conserva.

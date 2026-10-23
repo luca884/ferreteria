@@ -165,6 +165,13 @@ export const routes: Routes = [
         loadComponent: () =>
           import('./features/configuracion-precios/configuracion-precios').then((m) => m.PaginaConfiguracionPrecios),
       },
+      // Sin guard de rol, como cotización: al Vendedor la pantalla le avisa y el backend responde 403.
+      {
+        path: 'configuracion/ventas',
+        title: titulo('Consumidor Final'),
+        loadComponent: () =>
+          import('./features/configuracion-ventas/configuracion-ventas').then((m) => m.PaginaConfiguracionVentas),
+      },
       // Sin guard de rol, como cotización: al Vendedor la pantalla le avisa y el backend responde 403 a escribir.
       {
         path: 'configuracion/formas-pago',

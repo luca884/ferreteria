@@ -20,6 +20,7 @@ import { Articulos } from './features/articulos/articulos';
 import { PaginaConfiguracionCotizacion } from './features/configuracion-cotizacion/configuracion-cotizacion';
 import { PaginaConfiguracionPrecios } from './features/configuracion-precios/configuracion-precios';
 import { FormasPago } from './features/formas-pago/formas-pago';
+import { PaginaConfiguracionVentas } from './features/configuracion-ventas/configuracion-ventas';
 import { Importaciones } from './features/importaciones/importaciones';
 import { Mostrador } from './features/mostrador/mostrador';
 import { Proveedores } from './features/proveedores/proveedores';
@@ -150,6 +151,15 @@ describe('rutas', () => {
     expect(cotizacion!.canActivate).toBeUndefined();
     expect(cotizacion!.canActivate).toEqual(importaciones!.canActivate);
     expect(padre!.canActivate).toEqual([authGuard]);
+  });
+
+  it('la ruta configuracion/ventas carga el tope de Consumidor Final, sin guard propio (la pantalla le avisa al Vendedor)', async () => {
+    const ruta = hijas().find((r) => r.path === 'configuracion/ventas');
+
+    expect(ruta).toBeDefined();
+    expect(await (ruta!.loadComponent as () => Promise<unknown>)()).toBe(PaginaConfiguracionVentas);
+    expect(ruta!.canActivate).toBeUndefined();
+    expect(ruta!.title).toBe('Consumidor Final · Ferretería');
   });
 
   it('la ruta configuracion/formas-pago carga la pantalla de formas de pago, sin guard propio (la pantalla le avisa al Vendedor)', async () => {

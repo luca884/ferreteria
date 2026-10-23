@@ -184,6 +184,17 @@ describe('VentaService', () => {
       expect(rechazoDe(new HttpErrorResponse({ status: 422, error: cuerpo }))).toEqual(cuerpo);
     });
 
+    it('reconoce el rechazo por Consumidor Final sin datos (GDS-32)', () => {
+      const cuerpo: VentaRechazada = {
+        status: 422,
+        message: 'Desde $ 10.000.000,00 la venta a Consumidor Final necesita identificar al comprador.',
+        timestamp: 't',
+        motivo: 'CONSUMIDOR_FINAL_SIN_DATOS',
+        articulos: [],
+      };
+      expect(rechazoDe(new HttpErrorResponse({ status: 422, error: cuerpo }))).toEqual(cuerpo);
+    });
+
     it('un 403 (autorizar el exceso siendo Vendedor) NO es un rechazo de venta', () => {
       const cuerpo = { status: 403, message: 'Autorizar el exceso es solo del Dueño' };
       expect(rechazoDe(new HttpErrorResponse({ status: 403, error: cuerpo }))).toBeNull();
