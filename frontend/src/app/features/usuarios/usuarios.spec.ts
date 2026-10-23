@@ -381,6 +381,14 @@ describe('Usuarios', () => {
       expect(el().querySelector('table')).toBeNull();
     });
 
+    it('con el 403 no ofrece acciones ni la explicación de la pantalla', async () => {
+      await crear([], vi.fn(() => throwError(() => errorHttp(403, 'No tenés permiso para hacer esto.'))));
+
+      expect(el().querySelectorAll('button.accion-barra')).toHaveLength(0);
+      expect(el().textContent).not.toContain('Los usuarios de tu ferretería.');
+      expect(el().querySelector('h1')?.textContent).toContain('Usuarios');
+    });
+
     it('sin mensaje avisa que no se pudo cargar y reintenta', async () => {
       const listar = vi
         .fn()

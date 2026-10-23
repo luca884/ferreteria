@@ -1,39 +1,43 @@
 <app-barra-acciones>
   <h1>Usuarios</h1>
-  <button type="button" class="accion-barra primario nuevo" (click)="nuevo()">
-    <svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
-      <path d="M8 3v10M3 8h10" />
-    </svg>
-    Nuevo
-  </button>
-  <button type="button" class="accion-barra editar" [disabled]="!filas.elegido()" (click)="editar()">
-    <svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
-      <path d="M3 13l1-3 7-7 2 2-7 7z" />
-    </svg>
-    Editar
-  </button>
-  <button
-    type="button"
-    class="accion-barra desactivar"
-    [disabled]="!filas.elegido() || cambiando() || esPropio(filas.elegido())"
-    [attr.aria-describedby]="esPropio(filas.elegido()) ? 'motivo-desactivar' : null"
-    (click)="cambiarActivo()"
-  >
-    {{ filas.elegido()?.activo === false ? 'Reactivar' : 'Desactivar' }}
-  </button>
-  <button type="button" class="accion-barra resetear" [disabled]="!filas.elegido()" (click)="abrirReset()">
-    Resetear contraseña
-  </button>
+  @if (!sinPermiso()) {
+    <button type="button" class="accion-barra primario nuevo" (click)="nuevo()">
+      <svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+        <path d="M8 3v10M3 8h10" />
+      </svg>
+      Nuevo
+    </button>
+    <button type="button" class="accion-barra editar" [disabled]="!filas.elegido()" (click)="editar()">
+      <svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+        <path d="M3 13l1-3 7-7 2 2-7 7z" />
+      </svg>
+      Editar
+    </button>
+    <button
+      type="button"
+      class="accion-barra desactivar"
+      [disabled]="!filas.elegido() || cambiando() || esPropio(filas.elegido())"
+      [attr.aria-describedby]="esPropio(filas.elegido()) ? 'motivo-desactivar' : null"
+      (click)="cambiarActivo()"
+    >
+      {{ filas.elegido()?.activo === false ? 'Reactivar' : 'Desactivar' }}
+    </button>
+    <button type="button" class="accion-barra resetear" [disabled]="!filas.elegido()" (click)="abrirReset()">
+      Resetear contraseña
+    </button>
+  }
 </app-barra-acciones>
 
 @if (esPropio(filas.elegido())) {
   <p id="motivo-desactivar" class="ayuda">No podés desactivarte ni cambiarte el rol a vos mismo.</p>
 }
 
-<p class="ayuda">
-  Los usuarios de tu ferretería. Un usuario desactivado pierde el acceso en el acto, pero sus ventas se conservan.
-  La contraseña la elegís vos al crearlo y se la decís en persona.
-</p>
+@if (!sinPermiso()) {
+  <p class="ayuda">
+    Los usuarios de tu ferretería. Un usuario desactivado pierde el acceso en el acto, pero sus ventas se conservan.
+    La contraseña la elegís vos al crearlo y se la decís en persona.
+  </p>
+}
 
 @if (aviso(); as mensaje) {
   <p class="alerta exito" role="status">{{ mensaje }}</p>
