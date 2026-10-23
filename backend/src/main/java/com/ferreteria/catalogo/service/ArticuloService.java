@@ -40,7 +40,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -86,15 +88,20 @@ public class ArticuloService {
         PageRequest pageable = PageRequest.of(
                 Math.max(page, 0), Math.min(Math.max(size, 1), TAMANO_MAXIMO),
                 Sort.by(Sort.Order.asc("descripcion"), Sort.Order.asc("id")));
-        return PageResponse.from(
+        PageResponse<ArticuloResponse> pagina = PageResponse.from(
                 articuloRepository.buscarScoped(FiltroArticulos.patronDeBusqueda(q), incluirInactivos, pageable),
                 ArticuloResponse::from);
+        // Una sola consulta para el «costo al» de toda la pagina (GDS-05).
+        Map<Long, LocalDate> costoAl = articuloRepository.costoAlScoped(
+                pagina.items().stream().map(ArticuloResponse::id).toList());
+        return new PageResponse<>(pagina.items().stream().map(a -> a.conCostoAl(costoAl.get(a.id()))).toList(),
+                pagina.page(), pagina.size(), pagina.totalElements(), pagina.totalPages());
     }
 
     /** Un articulo de otra ferreteria da 404, igual que uno que no existe. Tambien devuelve los inactivos. */
     @Transactional(readOnly = true)
     public ArticuloResponse obtener(Long id) {
-        return ArticuloResponse.from(buscar(id));
+        return conCostoAl(ArticuloResponse.from(buscar(id)));
     }
 
     @Transactional
@@ -108,7 +115,7 @@ public class ArticuloService {
         // Primero el articulo: el historial necesita el id que genera la base.
         Articulo guardado = articuloRepository.save(articulo);
         guardarHistorial(guardado, cambio, usuarioId);
-        return ArticuloResponse.from(guardado);
+        return conCostoAl(ArticuloResponse.from(guardado));
     }
 
     @Transactional
@@ -121,15 +128,16 @@ public class ArticuloService {
         validarUnicidad(datos, id);
         ContextoPrecio ctx = contextoDePrecio(datos, articulo.getMoneda() == Moneda.USD);
 
+        Moneda monedaAnterior = articulo.getMoneda();
         // El articulo ya esta administrado por JPA: los cambios se escriben al terminar la transaccion.
         Optional<CambioPrecio> cambio = articulo.actualizar(datos, request.toPedidoDePrecio(), ctx);
-        guardarHistorial(articulo, cambio, usuarioId);
+        guardarHistorial(articulo, cambio, usuarioId, monedaAnterior != articulo.getMoneda() ? monedaAnterior : null);
         // Escribe ahora: un choque con otra escritura sale como 409 y la respuesta trae la version NUEVA.
         escribirOChocar();
         // El stock no se escribe aca (updatable=false) y la entidad pudo leerse antes de una venta: la
         // respuesta muestra el que esta confirmado en la base, sin tocarlo.
         BigDecimal stockVigente = articuloRepository.stockVigenteScoped(id).orElse(articulo.getStockActual());
-        return ArticuloResponse.from(articulo, stockVigente);
+        return conCostoAl(ArticuloResponse.from(articulo, stockVigente));
     }
 
     /**
@@ -147,7 +155,7 @@ public class ArticuloService {
         // Escribe ahora: la respuesta trae la version NUEVA y un choque sale como 409 desde aca.
         escribirOChocar();
         BigDecimal stockVigente = articuloRepository.stockVigenteScoped(id).orElse(articulo.getStockActual());
-        return ArticuloResponse.from(articulo, stockVigente);
+        return conCostoAl(ArticuloResponse.from(articulo, stockVigente));
     }
 
     /** Baja logica: el articulo y su historial de precios se conservan. No escribe historial. */
@@ -176,7 +184,7 @@ public class ArticuloService {
         Ajustes actuales = articulo.getAjustes();
         Ajustes nuevos = request.toAjustes();
         if (nuevos.equals(actuales)) {
-            return ArticuloResponse.from(articulo, stockVigente(id, articulo));
+            return conCostoAl(ArticuloResponse.from(articulo, stockVigente(id, articulo)));
         }
         // Un articulo en dolares ya estaba en dolares: con la cotizacion apagada se permite, con el dolar congelado.
         ContextoPrecio ctx = contextoDe(articulo.getRubroId(), articulo.getMoneda(), true);
@@ -186,7 +194,15 @@ public class ArticuloService {
         guardarHistorial(articulo, cambio, usuarioId);
         escribirOChocar();
         // Despues del flush (C-221): el stock confirmado se lee con la escritura ya hecha.
-        return ArticuloResponse.from(articulo, stockVigente(id, articulo));
+        return conCostoAl(ArticuloResponse.from(articulo, stockVigente(id, articulo)));
+    }
+
+    /**
+     * La respuesta con su «costo al» (GDS-05), leido de la base: el historial que se acaba de guardar ya cuenta, porque
+     * la consulta nativa escribe antes lo pendiente.
+     */
+    private ArticuloResponse conCostoAl(ArticuloResponse respuesta) {
+        return respuesta.conCostoAl(articuloRepository.costoAlScoped(List.of(respuesta.id())).get(respuesta.id()));
     }
 
     private BigDecimal stockVigente(Long id, Articulo articulo) {
@@ -341,7 +357,13 @@ public class ArticuloService {
 
     /** Solo se escribe historial si cambio el costo o el precio final. */
     private void guardarHistorial(Articulo articulo, Optional<CambioPrecio> cambio, Long usuarioId) {
+        guardarHistorial(articulo, cambio, usuarioId, null);
+    }
+
+    /** Con {@code monedaAnterior} si la moneda cambio (null si no), como en la importacion: cuenta para «Costo al». */
+    private void guardarHistorial(Articulo articulo, Optional<CambioPrecio> cambio, Long usuarioId,
+                                  Moneda monedaAnterior) {
         cambio.ifPresent(c -> historialPrecioRepository.save(
-                HistorialPrecio.de(articulo, c, OrigenPrecio.MANUAL, usuarioId)));
+                HistorialPrecio.de(articulo, c, OrigenPrecio.MANUAL, usuarioId, monedaAnterior)));
     }
 }

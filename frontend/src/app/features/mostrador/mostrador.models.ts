@@ -16,6 +16,8 @@ export interface ArticuloMostrador {
   ubicacion: string | null;
   /** Los dados de baja salen en la búsqueda, marcados, pero no se pueden agregar al ticket. */
   activo: boolean;
+  /** GDS-05: desde cuándo está al día el costo (AAAA-MM-DD). Es una fecha, no el costo. */
+  costoAl?: string | null;
 }
 
 export interface BusquedaMostrador {

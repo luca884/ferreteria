@@ -20,5 +20,9 @@
       <dt>Código de barras</dt>
       <dd class="codigo-barras">{{ articulo().codigoBarras ?? '—' }}</dd>
     </div>
+    <div>
+      <dt>Costo al</dt>
+      <dd class="costo-al">{{ formatearFecha(articulo().costoAl) || '—' }}</dd>
+    </div>
   </dl>
 </article>

@@ -196,7 +196,7 @@ Las clases son las del pedido: A = ya cubierto, B = refina un CU, C = candidato 
 | G19 | **D** | Fecha de última compra, derivada de los ingresos | Depende del ingreso con remito (GDS-16) |
 | G20 | **D** | — | Promociones: nadie las pidió para el MVP |
 | G21 | **E** | — | El mostrador no necesita foto y suma almacenamiento por tenant |
-| G22 | **B** | CU-03 y CU-06: mostrar "costo actualizado el …" (sale del historial, sin tocar el esquema) | El dueño quiere saber qué precios están viejos, y GDS lo pone en el listado y en la búsqueda de la venta |
+| G22 | **B** | CU-03 y CU-06: mostrar "costo actualizado el …" (sale del historial, sin tocar el esquema) | El dueño quiere saber qué precios están viejos, y GDS lo pone en el listado y en la búsqueda de la venta. **Hecho (2026-10-23, Luca):** «Costo al» en Artículos y en el mostrador; es la fecha más nueva entre el último cambio de costo o moneda, la última lista que lo confirmó y el alta |
 | G23 | **A** | CU-03 **impl.** (exige costo) | La spec es más estricta a propósito: el propio relevamiento advierte que GDS deja vender artículos incompletos (`R:198-206`) |
 | G24 | **A** | CU-03 **impl.** (listado, búsqueda y baja lógica) | El "Borrar" físico de GDS se reemplaza por la baja lógica |
 | G25 | **B** | Fase 6: exportar artículos a CSV y carga inicial reutilizando CU-04 | La fase 6 dice "carga inicial de datos del piloto" y la fase 0 pide "una exportación real de artículos". Que GDS tenga importación y exportación rápidas confirma que las ferreterías migran por planilla. **Hecho en CU-03 (2026-10-23, Luca):** «Exportar» en Artículos baja a CSV lo que muestra la pantalla (columnas propuestas, porque el relevamiento no ejecutó la de GDS) |
@@ -515,7 +515,7 @@ Ordenada por prioridad. Las de la fase 3 afectan a CU-04 y van primero. **GDS-31
 | GDS-02 | "Lista incluye IVA" quita el IVA según la alícuota del artículo (21 % para los nuevos, editable en la vista previa) | B | 3 (CU-04) | S |
 | GDS-03 | Guardar `precio_lista_proveedor` aparte del costo, con migración aditiva | B | 3 (CU-03/04) | S |
 | GDS-04 | Vista previa: costo 0 o vacío es error; variación mayor a ±X % es advertencia | B | 3 (CU-04) | S |
-| GDS-05 | Mostrar la fecha de la última actualización de costo en el listado y la búsqueda | B | 3 (CU-03) | S |
+| GDS-05 | Mostrar la fecha de la última actualización de costo en el listado y la búsqueda. **Hecho en CU-03 (2026-10-23, Luca)**: «Costo al» | B | 3 (CU-03) | S |
 | GDS-06 | Movimientos manuales de caja: retiro, gasto e ingreso con motivo, incluidos en el arqueo | B | 4 (CU-10) | M |
 | GDS-07 | Pago mixto: más de un medio por venta, con el resto calculado solo y vuelto en efectivo (importe recibido opcional) | B | 4 (CU-07) | S |
 | GDS-08 | Copiar el costo en `ItemComprobante` y sumar ganancia y ventas por usuario al reporte del MVP. **Hecho en CU-15 (2026-10-22, Luca)** | B | 4 | S |

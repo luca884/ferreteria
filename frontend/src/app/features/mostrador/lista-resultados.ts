@@ -7,6 +7,7 @@ import {
   output,
   viewChildren,
 } from '@angular/core';
+import { formatearFecha } from '../../core/formato/fecha-hora';
 import { cantidadConUnidad } from '../../core/formato/unidad';
 import { ArticuloMostrador, estadoStock } from './mostrador.models';
 
@@ -31,6 +32,7 @@ export class ListaResultados {
   protected readonly filaId = filaId;
   protected readonly cantidadConUnidad = cantidadConUnidad;
   protected readonly estadoStock = estadoStock;
+  protected readonly formatearFecha = formatearFecha;
 
   private readonly filas = viewChildren<ElementRef<HTMLElement>>('fila');
 

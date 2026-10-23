@@ -7,6 +7,7 @@ import com.ferreteria.catalogo.model.Moneda;
 import com.ferreteria.catalogo.model.Unidad;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.List;
 
 /** Un articulo como lo ve el Dueno: con costo, margen y la lista del proveedor. El Vendedor recibe {@link ArticuloVendedorResponse} (H07). */
@@ -44,7 +45,9 @@ public record ArticuloResponse(
         /** CU-14: el precio final lo escribio el Dueño y nada automatico lo recalcula. */
         boolean precioManual,
         /** CU-14: ajustes sobre el precio final, en el orden en que se cargaron. */
-        List<AjustePrecio> ajustesPrecio) implements ArticuloLectura {
+        List<AjustePrecio> ajustesPrecio,
+        /** GDS-05: desde cuando esta al dia el costo (ultimo cambio, ultima lista que lo confirmo o el alta). */
+        LocalDate costoAl) implements ArticuloLectura {
 
     /** Igual que {@link #from(Articulo)} pero con el stock indicado (el vigente en la base, no el de la entidad leida). */
     public static ArticuloResponse from(Articulo articulo, BigDecimal stockActual) {
@@ -54,7 +57,15 @@ public record ArticuloResponse(
                 base.alicuotaIva(), base.precioFinal(), base.unidad(), stockActual, base.stockMinimo(),
                 base.ubicacion(), base.activo(), base.precioListaProveedor(), base.ajuste1(), base.ajuste2(),
                 base.ajuste3(), base.bonificacion1(), base.bonificacion2(), base.bonificacion3(),
-                base.listaIncluyeIva(), base.version(), base.precioManual(), base.ajustesPrecio());
+                base.listaIncluyeIva(), base.version(), base.precioManual(), base.ajustesPrecio(), base.costoAl());
+    }
+
+    /** La misma respuesta con la fecha de {@link #costoAl}, que sale de la base y no de la entidad. */
+    public ArticuloResponse conCostoAl(LocalDate fecha) {
+        return new ArticuloResponse(id, codigoInterno, codigoBarras, codigoProveedor, descripcion, rubroId,
+                proveedorId, costo, moneda, margenPorcentaje, alicuotaIva, precioFinal, unidad, stockActual, stockMinimo,
+                ubicacion, activo, precioListaProveedor, ajuste1, ajuste2, ajuste3, bonificacion1, bonificacion2,
+                bonificacion3, listaIncluyeIva, version, precioManual, ajustesPrecio, fecha);
     }
 
     public static ArticuloResponse from(Articulo articulo) {
@@ -86,6 +97,7 @@ public record ArticuloResponse(
                 articulo.getListaIncluyeIva(),
                 articulo.getVersion(),
                 articulo.isPrecioManual(),
-                articulo.getAjustesPrecio().lista());
+                articulo.getAjustesPrecio().lista(),
+                null);
     }
 }

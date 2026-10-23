@@ -167,7 +167,7 @@ class BusquedaMostradorServiceTest {
                 .map(RecordComponent::getName).toList();
 
         assertThat(componentes).containsExactly("id", "codigoInterno", "codigoBarras", "codigoProveedor",
-                "descripcion", "precioFinal", "unidad", "stockActual", "stockMinimo", "ubicacion", "activo");
+                "descripcion", "precioFinal", "unidad", "stockActual", "stockMinimo", "ubicacion", "activo", "costoAl");
         assertThat(componentes).doesNotContain("costo", "margen", "margenPorcentaje", "margenPropio",
                 "alicuotaIva", "precioListaProveedor", "rubro", "rubroId", "proveedor", "proveedorId");
     }

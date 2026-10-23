@@ -6,6 +6,7 @@ import { ActivatedRoute, Params, Router, RouterLink } from '@angular/router';
 import { PageResponse } from '../../core/api/page.models';
 import { AuthService } from '../../core/auth/auth.service';
 import { descargar } from '../../core/archivos/descarga';
+import { formatearFecha } from '../../core/formato/fecha-hora';
 import { Avisos } from '../../core/avisos/avisos';
 import { MontoPipe, formatearCosto } from '../../core/formato/monto';
 import { cantidadConUnidad } from '../../core/formato/unidad';
@@ -42,6 +43,7 @@ export class Articulos implements OnInit {
   protected readonly alicuotaLabels = ALICUOTA_IVA_LABELS;
   protected readonly cantidadConUnidad = cantidadConUnidad;
   protected readonly formatearCosto = formatearCosto;
+  protected readonly formatearFecha = formatearFecha;
 
   protected readonly pagina = signal<PageResponse<Articulo> | null>(null);
   protected readonly cargando = signal(true);

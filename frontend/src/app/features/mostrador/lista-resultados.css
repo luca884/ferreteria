@@ -80,6 +80,10 @@
   font-family: var(--fuente-mono);
   font-size: var(--texto-xs);
 }
+.costo-al {
+  color: var(--texto-tenue);
+  font-size: var(--texto-2xs);
+}
 .precio {
   font-size: var(--texto-md);
   font-weight: 600;

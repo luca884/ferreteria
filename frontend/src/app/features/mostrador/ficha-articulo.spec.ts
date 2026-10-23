@@ -52,6 +52,18 @@ describe('FichaArticulo', () => {
     expect(texto('.ubicacion')).toBe('Pasillo 2');
   });
 
+  it('dice desde cuándo está al día el costo (GDS-05), sin mostrar el costo', async () => {
+    await crear({ ...tornillo, costoAl: '2026-05-20' });
+
+    expect(texto('.costo-al')).toBe('20/05/2026');
+  });
+
+  it('sin fecha de costo muestra un guion', async () => {
+    await crear({ ...tornillo, costoAl: null });
+
+    expect(texto('.costo-al')).toBe('—');
+  });
+
   it('sin código de barras ni ubicación muestra guiones', async () => {
     await crear({ ...tornillo, codigoBarras: null, ubicacion: null });
 
@@ -59,10 +71,10 @@ describe('FichaArticulo', () => {
     expect(texto('.ubicacion')).toBe('—');
   });
 
-  it('no muestra costo ni margen', async () => {
-    await crear(tornillo);
+  it('no muestra costo ni margen: lo único de costo es la fecha «Costo al» (GDS-05)', async () => {
+    await crear({ ...tornillo, costoAl: '2026-05-20' });
 
-    expect(el().textContent).not.toMatch(/costo|margen/i);
+    expect(el().textContent!.replace('Costo al', '')).not.toMatch(/costo|margen/i);
   });
 
   it.each([
