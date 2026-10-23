@@ -1,0 +1,229 @@
+<app-barra-acciones>
+  <h1>Reportes de ventas</h1>
+</app-barra-acciones>
+
+@if (!auth.esDueno()) {
+  <p class="ayuda estado-vacio" role="status">Los reportes son solo del dueño.</p>
+} @else {
+  <form class="filtros panel" (submit)="consultar($event)" novalidate>
+    <div class="fila-campos">
+      <div class="campo">
+        <label for="reporte">Reporte</label>
+        <select id="reporte" (change)="tipo.set($any($event.target).value)">
+          @for (opcion of opciones; track opcion.tipo) {
+            <option [value]="opcion.tipo" [selected]="opcion.tipo === tipo()">{{ opcion.nombre }}</option>
+          }
+        </select>
+      </div>
+      <div class="campo">
+        <label for="desde">Desde</label>
+        <input id="desde" type="date" [value]="desde()" (input)="desde.set($any($event.target).value)" />
+      </div>
+      <div class="campo">
+        <label for="hasta">Hasta</label>
+        <input id="hasta" type="date" [value]="hasta()" (input)="hasta.set($any($event.target).value)" />
+      </div>
+      @if (tipo() === 'por-periodo') {
+        <div class="campo">
+          <label for="agrupar">Agrupar por</label>
+          <select id="agrupar" (change)="agrupar.set($any($event.target).value)">
+            <option value="DIA" [selected]="agrupar() === 'DIA'">Día</option>
+            <option value="MES" [selected]="agrupar() === 'MES'">Mes</option>
+          </select>
+        </div>
+      }
+      <button type="submit" class="primario" [disabled]="cargando()">Ver</button>
+    </div>
+  </form>
+
+  @if (error(); as texto) {
+    <p class="error" role="alert">{{ texto }}</p>
+  }
+
+  @if (resultado(); as r) {
+    @if (avisoCosto(); as aviso) {
+      <p class="alerta advertencia aviso-costo" role="status">{{ aviso }}</p>
+    }
+
+    @switch (r.tipo) {
+      @case ('resumen') {
+        <dl class="resumen panel">
+          <div><dt>Ventas</dt><dd>{{ r.datos.total | monto }}</dd></div>
+          <div><dt>Neto</dt><dd>{{ r.datos.neto | monto }}</dd></div>
+          <div><dt>IVA</dt><dd>{{ r.datos.iva | monto }}</dd></div>
+          <div><dt>Costo</dt><dd>{{ r.datos.costo | monto }}</dd></div>
+          <div class="ganancia"><dt>Ganancia</dt><dd>{{ r.datos.ganancia | monto }}</dd></div>
+          <div><dt>Comprobantes</dt><dd>{{ r.datos.cantidad }}</dd></div>
+        </dl>
+      }
+      @case ('por-usuario') {
+        @if (r.datos.filas.length === 0) {
+          <p class="ayuda estado-vacio" role="status">No hubo ventas entre esas fechas.</p>
+        } @else {
+          <table>
+            <caption class="sr-only">Ventas por usuario, de mayor a menor total.</caption>
+            <thead>
+              <tr>
+                <th scope="col">Usuario</th>
+                <th scope="col" class="num">Ventas</th>
+                <th scope="col" class="num">Total</th>
+                <th scope="col" class="num">Ganancia</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (f of r.datos.filas; track f.usuarioId) {
+                <tr>
+                  <td>{{ f.nombre }}</td>
+                  <td class="num">{{ f.cantidad }}</td>
+                  <td class="num">{{ f.total | monto }}</td>
+                  <td class="num">{{ f.ganancia | monto }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        }
+      }
+      @case ('por-medio-pago') {
+        @if (r.datos.filas.length === 0) {
+          <p class="ayuda estado-vacio" role="status">No hubo ventas entre esas fechas.</p>
+        } @else {
+          <table>
+            <caption class="sr-only">Ventas por forma de pago, de mayor a menor monto.</caption>
+            <thead>
+              <tr>
+                <th scope="col">Forma de pago</th>
+                <th scope="col" class="num">Pagos</th>
+                <th scope="col" class="num">Monto</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (f of r.datos.filas; track f.formaPago + f.medio) {
+                <tr>
+                  <td>{{ f.formaPago }}</td>
+                  <td class="num">{{ f.cantidad }}</td>
+                  <td class="num">{{ f.monto | monto }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        }
+      }
+      @case ('por-periodo') {
+        @if (r.datos.filas.length === 0) {
+          <p class="ayuda estado-vacio" role="status">No hubo ventas entre esas fechas.</p>
+        } @else {
+          <table>
+            <caption class="sr-only">Ventas por período, en orden.</caption>
+            <thead>
+              <tr>
+                <th scope="col">Período</th>
+                <th scope="col" class="num">Ventas</th>
+                <th scope="col" class="num">Total</th>
+                <th scope="col" class="num">Ganancia</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (f of r.datos.filas; track f.periodo) {
+                <tr>
+                  <td>{{ textoPeriodo(f.periodo) }}</td>
+                  <td class="num">{{ f.cantidad }}</td>
+                  <td class="num">{{ f.total | monto }}</td>
+                  <td class="num">{{ f.ganancia | monto }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        }
+      }
+      @case ('por-articulo') {
+        @if (r.datos.filas.length === 0) {
+          <p class="ayuda estado-vacio" role="status">No hubo ventas entre esas fechas.</p>
+        } @else {
+          <table>
+            <caption class="sr-only">Ventas por artículo, de mayor a menor total.</caption>
+            <thead>
+              <tr>
+                <th scope="col">Artículo</th>
+                <th scope="col" class="num">Cantidad</th>
+                <th scope="col" class="num">Total</th>
+                <th scope="col" class="num">Ganancia</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (f of r.datos.filas; track f.articuloId) {
+                <tr>
+                  <td>{{ f.descripcion }}</td>
+                  <td class="num">{{ f.cantidad }}</td>
+                  <td class="num">{{ f.total | monto }}</td>
+                  <td class="num">{{ f.ganancia | monto }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        }
+      }
+      @case ('por-rubro') {
+        @if (r.datos.filas.length === 0) {
+          <p class="ayuda estado-vacio" role="status">No hubo ventas entre esas fechas.</p>
+        } @else {
+          <table>
+            <caption class="sr-only">Ventas por rubro (el rubro de hoy de cada artículo), de mayor a menor total.</caption>
+            <thead>
+              <tr>
+                <th scope="col">Rubro</th>
+                <th scope="col" class="num">Renglones</th>
+                <th scope="col" class="num">Total</th>
+                <th scope="col" class="num">Ganancia</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (f of r.datos.filas; track f.rubro) {
+                <tr>
+                  <td>{{ f.rubro }}</td>
+                  <td class="num">{{ f.renglones }}</td>
+                  <td class="num">{{ f.total | monto }}</td>
+                  <td class="num">{{ f.ganancia | monto }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        }
+      }
+      @case ('con-descuento') {
+        @if (r.datos.filas.length === 0) {
+          <p class="ayuda estado-vacio" role="status">No hubo ventas entre esas fechas.</p>
+        } @else {
+          <table>
+            <caption class="sr-only">Ventas con descuento, por fecha.</caption>
+            <thead>
+              <tr>
+                <th scope="col">N.º</th>
+                <th scope="col">Fecha</th>
+                <th scope="col">Usuario</th>
+                <th scope="col">Cliente</th>
+                <th scope="col" class="num">Desc. general</th>
+                <th scope="col" class="num">Descuento</th>
+                <th scope="col" class="num">Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (f of r.datos.filas; track f.ventaId) {
+                <tr>
+                  <td>{{ f.numero }}</td>
+                  <td>{{ fechaHora(f.fecha) }}</td>
+                  <td>{{ f.usuario }}</td>
+                  <td>{{ f.cliente ?? 'Consumidor Final' }}</td>
+                  <td class="num">{{ f.descuentoPorcentaje }} %</td>
+                  <td class="num">{{ f.descuento | monto }}</td>
+                  <td class="num">{{ f.total | monto }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        }
+      }
+    }
+  } @else if (cargando()) {
+    <p class="ayuda estado-vacio">Cargando…</p>
+  }
+}
