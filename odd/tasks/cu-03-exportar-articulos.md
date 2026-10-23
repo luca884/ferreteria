@@ -1,0 +1,35 @@
+# cu-03-exportar-articulos
+
+Objetivo: el Dueño baja a CSV los artículos que muestra la pantalla Artículos, como la «Exportación Rápida» de GDS (G25, GDS-19) · Por qué: las ferreterías migran y revisan precios por planilla.
+Rama: `feat/cu-03-exportar-articulos` desde `b70b536` · Entrega: single-pr · Runner: `./mvnw test -Dtest=<Clase>` (backend), `npx ng test --watch=false --include=<spec>` (frontend) · Mirror Engram: `odd/cu-03-exportar-articulos/tasks` (ok) · Modelo: caso 3, Opus.
+Pronóstico: ~650 líneas cambiadas (agregadas + borradas, sin generados) · Heurística por tarea: ~400 (no es límite)
+
+## Specs
+
+Alcance: endpoint de exportación, botón «Exportar» en Artículos, docs. · Fuera de alcance: la carga inicial (ya la cubre la importación de CU-04 con «Crear los artículos nuevos»), Excel `.xlsx`, filtros nuevos.
+Restricciones: tenant solo del JWT; un endpoint nuevo lleva su test de aislamiento; plata en `BigDecimal`.
+
+- S1: «exportar articulos» (Luca, 2026-10-23), con la propuesta que aprobó («dale me parece bien»):
+  - «**Quién:** solo el Dueño, porque el archivo lleva costos y márgenes.»
+  - «**Qué artículos:** los que muestra la pantalla Artículos (búsqueda y «incluir inactivos»), todos juntos, sin páginas.»
+  - «**Formato:** CSV que abre bien en Excel argentino: separador `;`, coma decimal y UTF-8 con BOM.»
+  - «**Columnas:** códigos: interno, de barras, del proveedor · datos: descripción, rubro, proveedor, unidad · precio: moneda, costo, IVA, margen, precio final, precio manual (Sí/No) · stock, stock mínimo, ubicación, activo (Sí/No)»
+  - Aceptación: `GET /api/articulos/exportacion?q=&incluirInactivos=` da `text/csv` con BOM, encabezado y una fila por artículo del filtro, en el orden de la pantalla (descripción, id); el Vendedor recibe 403; otra ferretería no ve los artículos ajenos; la pantalla baja el archivo con el filtro aplicado. — Checks: `./mvnw test -Dtest=ExportacionArticulosIntegrationTest`, `npx ng test --watch=false --include=src/app/features/articulos/articulos.spec.ts`
+- S2 (supuesto): el margen sale como lo muestra la pantalla: el porcentaje propio, o «Heredado» si el artículo hereda el del rubro o el por defecto.
+- S3 (supuesto): sin separador de miles; los importes con los decimales guardados (costo y precio con 2, stock con los suyos, sin ceros de más); fin de línea CRLF; los campos con `;`, comillas o saltos de línea van entre comillas dobles, con las comillas internas duplicadas.
+- S4 (supuesto, seguridad): un texto que empieza con `=`, `+`, `-`, `@`, tab o retorno sale con un apóstrofo adelante, para que Excel no lo ejecute como fórmula (inyección CSV).
+- S5 (supuesto): el archivo se llama `articulos-AAAA-MM-DD.csv`, con la fecha de Buenos Aires.
+
+## Tasks
+
+- [x] T1 · S1-S5 · ruta: inline · Aceptación: endpoint con tests de formato, filtro, orden, rol y aislamiento · Evidencia: RED `EscritorCsvTest` 5 errores (sin implementar) y `ExportacionArticulosIntegrationTest` 400 (ruta inexistente) → GREEN 5/5 y 5/5; ArchUnit 64/0 · Risk: item 2 (inyección CSV)
+- [ ] T2 · S1, S5 · ruta: inline · Aceptación: botón «Exportar» del Dueño en la barra de Artículos baja el archivo con el filtro; el Vendedor no lo ve · Evidencia: — · Risk: none
+- [ ] T3 · S1 · ruta: inline · Aceptación: `docs/spec.md` y `docs/relevamiento-gds.md` dicen qué quedó · Evidencia: — · Risk: none
+
+## Log
+
+- L1 (2026-10-23) Pedido original, textual:
+  > exportar articulos
+
+  Propuesta aprobada, textual: «dale me parece bien» (ver S1).
+- L2 (2026-10-23) Exploración: el filtro de la pantalla es `FILTRO_ARTICULOS` (`ArticuloRepository.java:34`), y el listado ordena por descripción e id (`ArticuloService.java:85`). `StockBajoMinimoController.java:23` es el molde de rol (`hasRole('DUENO')`). No hay ningún escritor CSV en el backend ni descargas de archivos en el frontend. El relevamiento no ejecutó la exportación de GDS (`docs/relevamiento-gds.md:92`), así que las columnas son nuestra propuesta.
