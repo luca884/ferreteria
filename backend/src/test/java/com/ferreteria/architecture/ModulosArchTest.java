@@ -4,12 +4,15 @@ import com.tngtech.archunit.core.domain.JavaClasses;
 import com.tngtech.archunit.core.importer.ClassFileImporter;
 import com.tngtech.archunit.core.importer.ImportOption;
 import com.ferreteria.clientes.api.CuentaCorrienteParaVenta;
+import com.ferreteria.clientes.model.AjusteCuenta;
 import com.ferreteria.clientes.model.Imputacion;
 import com.ferreteria.clientes.model.MovimientoCuentaCliente;
+import com.ferreteria.clientes.repository.AjusteCuentaRepository;
 import com.ferreteria.clientes.repository.ClienteRepository;
 import com.ferreteria.clientes.repository.ImputacionRepository;
 import com.ferreteria.clientes.repository.MovimientoCuentaClienteRepository;
 import com.ferreteria.clientes.service.CuentaCorrienteService;
+import com.ferreteria.clientes.service.RegistroAjuste;
 import com.ferreteria.ventas.model.Recibo;
 import com.ferreteria.ventas.repository.ReciboRepository;
 import com.ferreteria.ventas.service.RegistroVenta;
@@ -355,8 +358,8 @@ class ModulosArchTest {
         return new com.tngtech.archunit.base.DescribedPredicate<>("crear un asiento con la fábrica de " + entidad.getSimpleName()) {
             @Override
             public boolean test(JavaMethodCall call) {
-                return call.getTargetOwner().isEquivalentTo(entidad) && java.util.Set.of("venta", "cobro", "anulacion", "de")
-                        .contains(call.getName());
+                return call.getTargetOwner().isEquivalentTo(entidad) && java.util.Set.of("venta", "cobro", "anulacion", "ajuste", "de")
+                        .contains(call.getName()); // "ajuste": el renglón AJUSTE del libro (GDS-20), también solo del servicio
             }
         };
     }
@@ -397,7 +400,10 @@ class ModulosArchTest {
                 .collect(java.util.stream.Collectors.toSet());
 
         assertThat(modificadores).as("métodos @Modifying de los repositorios de clientes")
-                .containsExactlyInAnyOrder("ClienteRepository.sumarSaldo", "ImputacionRepository.desactivarDeRecibo");
+                // GDS-20: NumeradorAjusteCuentaRepository.incrementar es el UPSERT del numerador de ajustes (mismo molde que el
+                // del recibo, que vive en ventas); no toca el libro ni las imputaciones.
+                .containsExactlyInAnyOrder("ClienteRepository.sumarSaldo", "ImputacionRepository.desactivarDeRecibo",
+                        "NumeradorAjusteCuentaRepository.incrementar");
 
         var llamadores = clases.stream().flatMap(c -> c.getMethodCallsFromSelf().stream())
                 .filter(call -> call.getTargetOwner().isEquivalentTo(ImputacionRepository.class)
@@ -443,6 +449,35 @@ class ModulosArchTest {
                         && call.getName().matches("(delete|remove).*");
             }
         }).check(clases);
+    }
+
+    /**
+     * (k-Ajuste, GDS-20) El ajuste manual de la cuenta es inmutable: la entidad no tiene setters, nadie borra con su
+     * repositorio y solo {@code RegistroAjuste} lo guarda (junto con su renglón del libro, bajo el lock del cliente).
+     */
+    @Test
+    void losAjustesSonInmutablesYSoloRegistroAjusteLosGuarda() {
+        noMethods().that().areDeclaredIn(AjusteCuenta.class)
+                .should().haveNameMatching("set[A-Z].*")
+                .check(clases);
+
+        noClasses().should().callMethodWhere(new com.tngtech.archunit.base.DescribedPredicate<JavaMethodCall>(
+                "borrar o quitar ajustes con AjusteCuentaRepository") {
+            @Override
+            public boolean test(JavaMethodCall call) {
+                return call.getTargetOwner().isAssignableTo(AjusteCuentaRepository.class)
+                        && call.getName().matches("(delete|remove).*");
+            }
+        }).check(clases);
+
+        var guardadores = clases.stream().flatMap(c -> c.getMethodCallsFromSelf().stream())
+                .filter(call -> call.getTargetOwner().isAssignableTo(AjusteCuentaRepository.class)
+                        && call.getName().startsWith("save"))
+                .map(JavaMethodCall::getOriginOwner)
+                .map(origen -> origen.getName())
+                .collect(java.util.stream.Collectors.toSet());
+
+        assertThat(guardadores).as("quién guarda ajustes").containsExactly(RegistroAjuste.class.getName());
     }
 
     /**

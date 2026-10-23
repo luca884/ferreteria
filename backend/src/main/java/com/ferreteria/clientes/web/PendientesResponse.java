@@ -12,14 +12,25 @@ import java.util.List;
  */
 public record PendientesResponse(BigDecimal saldo, BigDecimal aCuenta, List<Comprobante> comprobantes) {
 
-    /** Un comprobante con deuda: lo cargado a la cuenta, lo ya imputado y lo que queda por cobrar. */
-    public record Comprobante(Long comprobanteId, String referencia, LocalDateTime fecha, BigDecimal importe,
-            BigDecimal imputado, BigDecimal pendiente) {}
+    /**
+     * Una deuda: lo cargado a la cuenta, lo ya imputado y lo que queda por cobrar. Una venta lleva {@code comprobanteId} y
+     * {@code ajusteId} null; un Recargo (GDS-20) lleva {@code ajusteId} y {@code comprobanteId} null. {@code referencia} dice
+     * cuál es: «Venta N.º n» o «Recargo N.º n».
+     */
+    public record Comprobante(Long comprobanteId, Long ajusteId, String referencia, LocalDateTime fecha, BigDecimal importe,
+            BigDecimal imputado, BigDecimal pendiente) {
+
+        /** Una venta (la forma de antes de los Recargos). */
+        public Comprobante(Long comprobanteId, String referencia, LocalDateTime fecha, BigDecimal importe, BigDecimal imputado,
+                BigDecimal pendiente) {
+            this(comprobanteId, null, referencia, fecha, importe, imputado, pendiente);
+        }
+    }
 
     public static PendientesResponse de(PendientesCuenta cuenta) {
         return new PendientesResponse(dos(cuenta.saldo()), dos(cuenta.aCuenta()), cuenta.comprobantes().stream()
-                .map(p -> new Comprobante(p.comprobanteId(), p.referencia(), p.fecha(), dos(p.importe()), dos(p.imputado()),
-                        dos(p.pendiente())))
+                .map(p -> new Comprobante(p.comprobanteId(), p.ajusteId(), p.referencia(), p.fecha(), dos(p.importe()),
+                        dos(p.imputado()), dos(p.pendiente())))
                 .toList());
     }
 

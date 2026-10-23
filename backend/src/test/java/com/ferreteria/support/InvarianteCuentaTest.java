@@ -56,17 +56,54 @@ class InvarianteCuentaTest extends CuentaCorrienteTestBase {
     }
 
     @Test
-    @DisplayName("un saldo inicial por AJUSTE (como siembran los tests de tramo 2) no rompe I2c")
+    @DisplayName("un saldo inicial por AJUSTE (como siembran los tests de tramo 2) es un Recargo pendiente y no rompe I2c")
     void ajusteNoRompe() {
         Ferreteria f = ferreteria();
         long cliente = cliente(f, "1000.00");
-        jdbc.update("insert into movimiento_cuenta_cliente (ferreteria_id, cliente_id, tipo, debe, haber, fecha, usuario_id, "
-                + "referencia, motivo) values (?, ?, 'AJUSTE', 900, 0, now(6), ?, 'Saldo inicial de test', "
-                + "'Saldo inicial de test')", f.id(), cliente,
-                f.usuarioId());
-        jdbc.update("update cliente set saldo = 900 where id = ?", cliente);
+        ajusteEnLibro(f, cliente, "RECARGO", "900.00");
 
         assertThatCode(() -> assertInvariante(cliente)).doesNotThrowAnyException();
+    }
+
+    @Test
+    @DisplayName("un Descuento sin imputar es saldo a favor y no rompe I2c")
+    void descuentoACuenta() {
+        Ferreteria f = ferreteria();
+        long cliente = cliente(f, null);
+        ajusteEnLibro(f, cliente, "DESCUENTO", "300.00");
+
+        assertThatCode(() -> assertInvariante(cliente)).doesNotThrowAnyException();
+        org.assertj.core.api.Assertions.assertThat(saldo(cliente)).isEqualByComparingTo("-300.00");
+    }
+
+    @Test
+    @DisplayName("I2f: un Descuento imputado por más que su importe → falla")
+    void i2f() {
+        Ferreteria f = ferreteria();
+        long cliente = cliente(f, null);
+        long recargo = ajusteEnLibro(f, cliente, "RECARGO", "900.00");
+        long descuento = ajusteEnLibro(f, cliente, "DESCUENTO", "100.00");
+        jdbc.update("insert into imputacion (ferreteria_id, cliente_id, ajuste_origen_id, ajuste_destino_id, importe) "
+                + "values (?, ?, ?, ?, 200)", f.id(), cliente, descuento, recargo);
+
+        fallaCon(cliente, "I2f");
+    }
+
+    /** Siembra un ajuste con su AJUSTE en el libro (ck_mcc_ajuste_ref, V28) y mueve el saldo; devuelve el id del ajuste. */
+    private long ajusteEnLibro(Ferreteria f, long cliente, String tipo, String importe) {
+        jdbc.update("insert into ajuste_cuenta (ferreteria_id, cliente_id, numero, tipo, importe, motivo, clave, fecha, usuario_id) "
+                + "values (?, ?, (select coalesce(max(a.numero), 0) + 1 from ajuste_cuenta a where a.ferreteria_id = ?), ?, ?, "
+                + "'Saldo inicial de test', uuid(), now(6), ?)", f.id(), cliente, f.id(), tipo, new BigDecimal(importe),
+                f.usuarioId());
+        long ajuste = jdbc.queryForObject("select max(id) from ajuste_cuenta where cliente_id = ?", Long.class, cliente);
+        boolean recargo = "RECARGO".equals(tipo);
+        jdbc.update("insert into movimiento_cuenta_cliente (ferreteria_id, cliente_id, tipo, debe, haber, fecha, usuario_id, "
+                + "referencia, motivo, ajuste_id) values (?, ?, 'AJUSTE', ?, ?, now(6), ?, 'Saldo inicial de test', "
+                + "'Saldo inicial de test', ?)", f.id(), cliente, recargo ? new BigDecimal(importe) : BigDecimal.ZERO,
+                recargo ? BigDecimal.ZERO : new BigDecimal(importe), f.usuarioId(), ajuste);
+        jdbc.update("update cliente set saldo = saldo + ? where id = ?",
+                recargo ? new BigDecimal(importe) : new BigDecimal(importe).negate(), cliente);
+        return ajuste;
     }
 
     @Test

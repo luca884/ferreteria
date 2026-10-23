@@ -334,6 +334,17 @@ class MovimientoCuentaClienteRepositoryExtractoTest extends CuentaCorrienteTestB
         List<Object[]> filasOtro = new ArrayList<>();
         BigDecimal[] acumulado = new BigDecimal[n];
         BigDecimal corrida = BigDecimal.ZERO;
+        // V28: cada AJUSTE del libro lleva su ajuste; los importes se conocen de antemano, así que se siembran todos juntos
+        List<BigDecimal> importesCliente = new ArrayList<>();
+        for (int i = 0; i < n; i++) {
+            if (i % 4 != 3) {
+                importesCliente.add(new BigDecimal(10 + (i % 17) + "." + (i % 100 < 10 ? "0" + i % 10 : "" + i % 100)));
+            }
+        }
+        java.util.Iterator<Long> ajustesCliente = SemillaAjuste.ajustes(jdbc, f.id(), cliente, f.usuarioId(), "RECARGO",
+                importesCliente).iterator();
+        java.util.Iterator<Long> ajustesOtro = SemillaAjuste.ajustes(jdbc, f.id(), otro, f.usuarioId(), "RECARGO",
+                java.util.Collections.nCopies(n, new BigDecimal("1.00"))).iterator();
         for (int i = 0; i < n; i++) {
             boolean venta = i % 4 != 3;
             BigDecimal importe = new BigDecimal(10 + (i % 17) + "." + (i % 100 < 10 ? "0" + i % 10 : "" + i % 100));
@@ -342,12 +353,13 @@ class MovimientoCuentaClienteRepositoryExtractoTest extends CuentaCorrienteTestB
             LocalDateTime fecha = almacenada(LocalDateTime.of(2026, 1, 1, 0, 0).plusMinutes(i));
             // AJUSTE (debe, con motivo) y NC (haber): no piden comprobante, pago ni recibo, así que se siembran por miles
             filas.add(new Object[] {f.id(), cliente, venta ? "AJUSTE" : "NC", venta ? importe : BigDecimal.ZERO,
-                    venta ? BigDecimal.ZERO : importe, "Mov " + i, venta ? "Ajuste de prueba" : null, fecha, f.usuarioId()});
+                    venta ? BigDecimal.ZERO : importe, "Mov " + i, venta ? "Ajuste de prueba" : null, fecha, f.usuarioId(),
+                    venta ? ajustesCliente.next() : null});
             filasOtro.add(new Object[] {f.id(), otro, "AJUSTE", new BigDecimal("1.00"), BigDecimal.ZERO, "Otro " + i,
-                    "Ajuste de prueba", fecha, f.usuarioId()});
+                    "Ajuste de prueba", fecha, f.usuarioId(), ajustesOtro.next()});
         }
         String insert = "insert into movimiento_cuenta_cliente (ferreteria_id, cliente_id, tipo, debe, haber, referencia, motivo, "
-                + "fecha, usuario_id) values (?, ?, ?, ?, ?, ?, ?, ?, ?)";
+                + "fecha, usuario_id, ajuste_id) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         jdbc.batchUpdate(insert, filas);
         jdbc.batchUpdate(insert, filasOtro); // ids intercalados con el cliente vecino de la MISMA ferretería: la ventana no los suma
 

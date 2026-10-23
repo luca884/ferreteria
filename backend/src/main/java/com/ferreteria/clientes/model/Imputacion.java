@@ -9,17 +9,42 @@ import jakarta.persistence.Table;
 import java.math.BigDecimal;
 
 /**
- * Una imputación (CC-026, CC-041): «este recibo canceló este importe de este comprobante». Registro inmutable (columnas
+ * Una imputación (CC-026, CC-041, GDS-20): «este crédito canceló este importe de esta deuda». El ORIGEN es el crédito: un
+ * recibo o un Descuento. El DESTINO es la deuda: un comprobante o un Recargo. Registro inmutable (columnas
  * {@code updatable = false}, sin setters, nunca se borra). La única escritura posterior es la vigencia: al anular el recibo
- * la imputación deja de estar {@code vigente} (CC-063), y eso lo hace una query nativa de la cuenta corriente, no la entidad:
- * por eso {@code vigente} tampoco es actualizable por JPA. Guarda el cliente propio para consultar los pendientes y
- * tomar los locks por cliente sin join; que el comprobante sea del cliente lo garantiza el servicio de cuenta corriente.
- * Referencia al recibo y al comprobante solo por id, sin relaciones JPA. El pendiente de un comprobante es lo que debe
- * (Σ debe de sus VENTA) menos Σ de sus imputaciones: nunca se guarda.
+ * de origen la imputación deja de estar {@code vigente} (CC-063), y eso lo hace una query nativa de la cuenta corriente, no la
+ * entidad: por eso {@code vigente} tampoco es actualizable por JPA. Guarda el cliente propio para consultar los pendientes y
+ * tomar los locks por cliente sin join; que el destino sea del cliente lo garantiza el servicio de cuenta corriente.
+ * Referencia al origen y al destino solo por id, sin relaciones JPA. El pendiente de una deuda es lo que debe (Σ debe de sus
+ * VENTA, o el importe del Recargo) menos Σ de sus imputaciones vigentes: nunca se guarda.
  */
 @Entity
 @Table(name = "imputacion")
 public class Imputacion {
+
+    /** De dónde sale el crédito: exactamente uno de un recibo o un Descuento (ck_imputacion_origen). */
+    public record Origen(Long reciboId, Long ajusteId) {
+
+        public static Origen recibo(Long reciboId) {
+            return new Origen(reciboId, null);
+        }
+
+        public static Origen ajuste(Long ajusteId) {
+            return new Origen(null, ajusteId);
+        }
+    }
+
+    /** A qué deuda se aplica: exactamente uno de un comprobante o un Recargo (ck_imputacion_destino). */
+    public record Destino(Long comprobanteId, Long ajusteId) {
+
+        public static Destino comprobante(Long comprobanteId) {
+            return new Destino(comprobanteId, null);
+        }
+
+        public static Destino ajuste(Long ajusteId) {
+            return new Destino(null, ajusteId);
+        }
+    }
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -31,14 +56,31 @@ public class Imputacion {
     @Column(name = "cliente_id", nullable = false, updatable = false)
     private Long clienteId;
 
-    @Column(name = "recibo_id", nullable = false, updatable = false)
+    /** El recibo de origen; null si el origen es un Descuento. */
+    @Column(name = "recibo_id", updatable = false)
     private Long reciboId;
 
-    @Column(name = "comprobante_id", nullable = false, updatable = false)
+    /** El comprobante de destino; null si el destino es un Recargo. */
+    @Column(name = "comprobante_id", updatable = false)
     private Long comprobanteId;
+
+    /** El Descuento de origen (V28); null si el origen es un recibo. */
+    @Column(name = "ajuste_origen_id", updatable = false)
+    private Long ajusteOrigenId;
+
+    /** El Recargo de destino (V28); null si el destino es un comprobante. */
+    @Column(name = "ajuste_destino_id", updatable = false)
+    private Long ajusteDestinoId;
 
     @Column(nullable = false, updatable = false, precision = 15, scale = 2)
     private BigDecimal importe;
+
+    /**
+     * true si la creó sola la deuda nueva al consumir crédito (una venta a cuenta o un Recargo pagados con el saldo a favor);
+     * false si la pidió el recibo o el Descuento. El recibo impreso y la cobranza repetida miran solo las no automáticas.
+     */
+    @Column(nullable = false, updatable = false)
+    private boolean automatica;
 
     /** false cuando el recibo se anuló: deja de restar del comprobante (V22). Solo cambia por query, nunca por la entidad. */
     @Column(nullable = false, updatable = false)
@@ -46,9 +88,36 @@ public class Imputacion {
 
     protected Imputacion() {}
 
+    /** El recibo cancela un comprobante (CC-026): la forma de antes de V28. */
     public static Imputacion de(Long ferreteriaId, Long clienteId, Long reciboId, Long comprobanteId, BigDecimal importe) {
-        if (ferreteriaId == null || clienteId == null || reciboId == null || comprobanteId == null) {
+        if (reciboId == null || comprobanteId == null) {
             throw new IllegalArgumentException("La imputación necesita ferretería, cliente, recibo y comprobante.");
+        }
+        return armar(ferreteriaId, clienteId, Origen.recibo(reciboId), Destino.comprobante(comprobanteId), importe, false);
+    }
+
+    /** Un crédito (recibo o Descuento) cancela una deuda (comprobante o Recargo) porque alguien lo pidió. */
+    public static Imputacion de(Long ferreteriaId, Long clienteId, Origen origen, Destino destino, BigDecimal importe) {
+        return armar(ferreteriaId, clienteId, origen, destino, importe, false);
+    }
+
+    /** Lo mismo; {@code automatica} marca la que crea sola la deuda nueva al consumir crédito. */
+    public static Imputacion de(Long ferreteriaId, Long clienteId, Origen origen, Destino destino, BigDecimal importe,
+            boolean automatica) {
+        return armar(ferreteriaId, clienteId, origen, destino, importe, automatica);
+    }
+
+    // No se llama «de»: ModulosArchTest vigila quién llama a la fábrica «de», y las dos públicas comparten esto.
+    private static Imputacion armar(Long ferreteriaId, Long clienteId, Origen origen, Destino destino, BigDecimal importe,
+            boolean automatica) {
+        if (ferreteriaId == null || clienteId == null || origen == null || destino == null) {
+            throw new IllegalArgumentException("La imputación necesita ferretería, cliente, origen y destino.");
+        }
+        if ((origen.reciboId() == null) == (origen.ajusteId() == null)) {
+            throw new IllegalArgumentException("La imputación sale de exactamente un recibo o un Descuento.");
+        }
+        if ((destino.comprobanteId() == null) == (destino.ajusteId() == null)) {
+            throw new IllegalArgumentException("La imputación va a exactamente un comprobante o un Recargo.");
         }
         if (importe == null || importe.signum() <= 0 || importe.stripTrailingZeros().scale() > 2) {
             throw new IllegalArgumentException("El importe imputado tiene que ser mayor que cero y de hasta 2 decimales.");
@@ -56,9 +125,12 @@ public class Imputacion {
         Imputacion imputacion = new Imputacion();
         imputacion.ferreteriaId = ferreteriaId;
         imputacion.clienteId = clienteId;
-        imputacion.reciboId = reciboId;
-        imputacion.comprobanteId = comprobanteId;
+        imputacion.reciboId = origen.reciboId();
+        imputacion.ajusteOrigenId = origen.ajusteId();
+        imputacion.comprobanteId = destino.comprobanteId();
+        imputacion.ajusteDestinoId = destino.ajusteId();
         imputacion.importe = importe;
+        imputacion.automatica = automatica;
         imputacion.vigente = true;
         return imputacion;
     }
@@ -68,6 +140,9 @@ public class Imputacion {
     public Long getClienteId() { return clienteId; }
     public Long getReciboId() { return reciboId; }
     public Long getComprobanteId() { return comprobanteId; }
+    public Long getAjusteOrigenId() { return ajusteOrigenId; }
+    public Long getAjusteDestinoId() { return ajusteDestinoId; }
     public BigDecimal getImporte() { return importe; }
+    public boolean isAutomatica() { return automatica; }
     public boolean isVigente() { return vigente; }
 }

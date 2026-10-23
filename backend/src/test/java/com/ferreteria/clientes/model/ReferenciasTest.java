@@ -32,6 +32,18 @@ class ReferenciasTest {
     }
 
     @Test
+    @DisplayName("el recargo y el descuento se escriben «Recargo N.º n» y «Descuento N.º n» (GDS-20), y un número no positivo se rechaza")
+    void recargoYDescuento() {
+        assertThat(Referencias.recargo(7L)).isEqualTo("Recargo N.º 7");
+        assertThat(Referencias.descuento(12L)).isEqualTo("Descuento N.º 12");
+        assertThat(Referencias.descuento(Long.MAX_VALUE).length()).isLessThanOrEqualTo(60);
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> Referencias.recargo(0L))
+                .isInstanceOf(IllegalArgumentException.class);
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> Referencias.descuento(null))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
     @DisplayName("el ordinal es º (U+00BA), no el símbolo de grado ni «o»")
     void ordinalExacto() {
         assertThat(Referencias.venta(1L).charAt(Referencias.venta(1L).indexOf("N.") + 2)).isEqualTo('\u00BA');

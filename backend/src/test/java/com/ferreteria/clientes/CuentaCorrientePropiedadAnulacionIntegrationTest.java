@@ -81,6 +81,8 @@ class CuentaCorrientePropiedadAnulacionIntegrationTest extends CuentaCorrienteTe
         final CobranzaPedido pedido;
         final BigDecimal total;
         final Map<Long, BigDecimal> imputaciones;
+        /** GDS-20: lo que ventas posteriores le consumieron solas a su crédito, por comprobante (no es parte del pedido). */
+        final Map<Long, BigDecimal> consumidas = new TreeMap<>();
         final long cajaDelCobro;
         boolean anulado;
 
@@ -101,9 +103,33 @@ class CuentaCorrientePropiedadAnulacionIntegrationTest extends CuentaCorrienteTe
         final List<ReciboModelo> recibos = new ArrayList<>();
 
         BigDecimal aCuenta() {
-            return recibos.stream().filter(r -> !r.anulado)
-                    .map(r -> r.total.subtract(r.imputaciones.values().stream().reduce(BigDecimal.ZERO, BigDecimal::add)))
-                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+            return recibos.stream().filter(r -> !r.anulado).map(Modelo::disponible).reduce(BigDecimal.ZERO, BigDecimal::add);
+        }
+
+        /** Lo que le queda a un recibo sin imputar: lo pedido y lo consumido por ventas posteriores ya no cuenta. */
+        private static BigDecimal disponible(ReciboModelo r) {
+            return r.total.subtract(r.imputaciones.values().stream().reduce(BigDecimal.ZERO, BigDecimal::add))
+                    .subtract(r.consumidas.values().stream().reduce(BigDecimal.ZERO, BigDecimal::add));
+        }
+
+        /**
+         * Una venta a cuenta de ese comprobante (GDS-20): paga sola con el crédito de los recibos no anulados, el más viejo
+         * primero, y deja como pendiente lo que no alcanzó a cubrir.
+         */
+        void vender(long comprobante, BigDecimal total) {
+            BigDecimal resta = total;
+            for (ReciboModelo r : recibos) {
+                if (r.anulado || resta.signum() == 0) {
+                    continue;
+                }
+                BigDecimal tomado = disponible(r).min(resta);
+                if (tomado.signum() > 0) {
+                    r.consumidas.merge(comprobante, tomado, BigDecimal::add);
+                    resta = resta.subtract(tomado);
+                }
+            }
+            saldo = saldo.add(total);
+            sumarPendiente(comprobante, resta);
         }
 
         void sumarPendiente(long comprobante, BigDecimal importe) {
@@ -159,8 +185,7 @@ class CuentaCorrientePropiedadAnulacionIntegrationTest extends CuentaCorrienteTe
                 List.of(new Renglon(articulo, new BigDecimal(unidades), new BigDecimal("0.01"))), total, forma, BigDecimal.ZERO,
                 List.of(), null, null, true, cliente, false);
         long comprobante = ventaService.cobrar(venta, f.usuarioId(), false).comprobante().getId();
-        m.saldo = m.saldo.add(total);
-        m.sumarPendiente(comprobante, total);
+        m.vender(comprobante, total);
     }
 
     @Test
@@ -235,8 +260,7 @@ class CuentaCorrientePropiedadAnulacionIntegrationTest extends CuentaCorrienteTe
                                 List.of(new Renglon(articulo, new BigDecimal(unidades), new BigDecimal("0.01"))), total, forma,
                                 BigDecimal.ZERO, List.of(), null, null, true, clientes3[c], false);
                         long comprobante = ventaService.cobrar(venta, f.usuarioId(), false).comprobante().getId();
-                        m.saldo = m.saldo.add(total);
-                        m.sumarPendiente(comprobante, total);
+                        m.vender(comprobante, total);
                     }
                     case 3, 4, 5 -> { // cobranza imputada: completa (3), parcial (4) o con un resto «a cuenta» (5)
                         List<Long> abiertos = new ArrayList<>(m.abiertos.keySet());
@@ -269,6 +293,7 @@ class CuentaCorrientePropiedadAnulacionIntegrationTest extends CuentaCorrienteTe
                         r.anulado = true;
                         m.saldo = m.saldo.add(r.total);
                         r.imputaciones.forEach(m::sumarPendiente);
+                        r.consumidas.forEach(m::sumarPendiente); // GDS-20: lo que consumieron las ventas vuelve a ser deuda
                         if (r.cajaDelCobro != caja[0]) {
                             cajasCerradasAnuladas++;
                         }

@@ -22,11 +22,14 @@ final class SemillaCuentaCliente {
         }
         long usuario = jdbc.queryForObject("select min(id) from usuario where ferreteria_id = ?", Long.class,
                 ferreteriaId);
+        // V28: todo AJUSTE del libro lleva su ajuste (un Recargo si sube la deuda, un Descuento si la baja)
+        long ajuste = SemillaAjuste.ajuste(jdbc, ferreteriaId, clienteId, usuario, importe.signum() > 0 ? "RECARGO" : "DESCUENTO",
+                importe.abs());
         jdbc.update("insert into movimiento_cuenta_cliente (ferreteria_id, cliente_id, tipo, debe, haber, fecha, usuario_id, "
-                + "referencia, motivo) values (?, ?, 'AJUSTE', ?, ?, now(6), ?, 'Saldo inicial de test', "
-                + "'Saldo inicial de test')", ferreteriaId, clienteId,
+                + "referencia, motivo, ajuste_id) values (?, ?, 'AJUSTE', ?, ?, now(6), ?, 'Saldo inicial de test', "
+                + "'Saldo inicial de test', ?)", ferreteriaId, clienteId,
                 importe.signum() > 0 ? importe : BigDecimal.ZERO, importe.signum() < 0 ? importe.negate() : BigDecimal.ZERO,
-                usuario);
+                usuario, ajuste);
         jdbc.update("update cliente set saldo = ? where id = ?", importe, clienteId);
     }
 }

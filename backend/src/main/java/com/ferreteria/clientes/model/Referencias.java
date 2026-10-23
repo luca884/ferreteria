@@ -23,6 +23,16 @@ public final class Referencias {
         return "Anulación Recibo N.º " + positivo(numero);
     }
 
+    /** El texto del Recargo de la cuenta corriente (GDS-20): «Recargo N.º n». */
+    public static String recargo(Long numero) {
+        return "Recargo N.º " + positivo(numero);
+    }
+
+    /** El texto del Descuento de la cuenta corriente (GDS-20): «Descuento N.º n». */
+    public static String descuento(Long numero) {
+        return "Descuento N.º " + positivo(numero);
+    }
+
     private static long positivo(Long numero) {
         if (numero == null || numero <= 0) {
             throw new IllegalArgumentException("El número de la referencia tiene que ser positivo.");

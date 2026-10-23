@@ -59,6 +59,63 @@ class ImputacionTest {
     }
 
     @Test
+    @DisplayName("GDS-20: el origen es un recibo o un Descuento y el destino un comprobante o un Recargo; las cuatro combinaciones se guardan")
+    void origenYDestino() {
+        Imputacion reciboAComprobante = Imputacion.de(3L, 7L, Imputacion.Origen.recibo(55L), Imputacion.Destino.comprobante(20L),
+                BigDecimal.TEN);
+        Imputacion reciboARecargo = Imputacion.de(3L, 7L, Imputacion.Origen.recibo(55L), Imputacion.Destino.ajuste(81L),
+                BigDecimal.TEN);
+        Imputacion descuentoAComprobante = Imputacion.de(3L, 7L, Imputacion.Origen.ajuste(82L),
+                Imputacion.Destino.comprobante(20L), BigDecimal.TEN);
+        Imputacion descuentoARecargo = Imputacion.de(3L, 7L, Imputacion.Origen.ajuste(82L), Imputacion.Destino.ajuste(81L),
+                BigDecimal.TEN);
+
+        assertThat(reciboAComprobante.getReciboId()).isEqualTo(55L);
+        assertThat(reciboAComprobante.getComprobanteId()).isEqualTo(20L);
+        assertThat(reciboAComprobante.getAjusteOrigenId()).isNull();
+        assertThat(reciboAComprobante.getAjusteDestinoId()).isNull();
+        assertThat(reciboARecargo.getReciboId()).isEqualTo(55L);
+        assertThat(reciboARecargo.getComprobanteId()).isNull();
+        assertThat(reciboARecargo.getAjusteDestinoId()).isEqualTo(81L);
+        assertThat(descuentoAComprobante.getReciboId()).isNull();
+        assertThat(descuentoAComprobante.getAjusteOrigenId()).isEqualTo(82L);
+        assertThat(descuentoAComprobante.getComprobanteId()).isEqualTo(20L);
+        assertThat(descuentoARecargo.getAjusteOrigenId()).isEqualTo(82L);
+        assertThat(descuentoARecargo.getAjusteDestinoId()).isEqualTo(81L);
+        assertThat(descuentoARecargo.isVigente()).isTrue();
+    }
+
+    @Test
+    @DisplayName("GDS-20: la imputación pedida no es automática; la que crea sola la deuda nueva al consumir crédito sí")
+    void automatica() {
+        assertThat(Imputacion.de(3L, 7L, 55L, 20L, BigDecimal.TEN).isAutomatica()).isFalse();
+        assertThat(Imputacion.de(3L, 7L, Imputacion.Origen.recibo(55L), Imputacion.Destino.comprobante(20L), BigDecimal.TEN)
+                .isAutomatica()).isFalse();
+        Imputacion consumida = Imputacion.de(3L, 7L, Imputacion.Origen.recibo(55L), Imputacion.Destino.comprobante(20L),
+                BigDecimal.TEN, true);
+        assertThat(consumida.isAutomatica()).isTrue();
+        assertThat(consumida.isVigente()).isTrue();
+        assertThat(consumida.getReciboId()).isEqualTo(55L);
+    }
+
+    @Test
+    @DisplayName("GDS-20: exactamente un origen y exactamente un destino (los dos CHECK de la base, antes en el dominio)")
+    void unSoloOrigenYUnSoloDestino() {
+        assertThatThrownBy(() -> Imputacion.de(3L, 7L, new Imputacion.Origen(55L, 82L), Imputacion.Destino.comprobante(20L),
+                BigDecimal.TEN)).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> Imputacion.de(3L, 7L, new Imputacion.Origen(null, null), Imputacion.Destino.comprobante(20L),
+                BigDecimal.TEN)).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> Imputacion.de(3L, 7L, Imputacion.Origen.recibo(55L), new Imputacion.Destino(20L, 81L),
+                BigDecimal.TEN)).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> Imputacion.de(3L, 7L, Imputacion.Origen.recibo(55L), new Imputacion.Destino(null, null),
+                BigDecimal.TEN)).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> Imputacion.de(3L, 7L, null, Imputacion.Destino.comprobante(20L), BigDecimal.TEN))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> Imputacion.de(3L, 7L, Imputacion.Origen.recibo(55L), null, BigDecimal.TEN))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
     @DisplayName("una imputación nueva nace vigente (CC-063)")
     void nacesVigente() {
         assertThat(Imputacion.de(3L, 7L, 55L, 20L, BigDecimal.TEN).isVigente()).isTrue();
@@ -75,7 +132,8 @@ class ImputacionTest {
 
         long columnas = Arrays.stream(Imputacion.class.getDeclaredFields()).filter(f -> f.isAnnotationPresent(Column.class))
                 .count();
-        assertThat(columnas).isEqualTo(6);
+        // 6 de V21 + ajuste_origen_id, ajuste_destino_id y automatica de V28 (GDS-20)
+        assertThat(columnas).isEqualTo(9);
         for (Field campo : Imputacion.class.getDeclaredFields()) {
             Column columna = campo.getAnnotation(Column.class);
             if (columna != null) {

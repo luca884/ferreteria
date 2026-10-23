@@ -117,13 +117,15 @@ class CobranzaRequestTest {
     void renglones() throws Exception {
         CobranzaRequest cero = leer(valido("100", "[{\"comprobanteId\":1,\"importe\":0}]"));
         CobranzaRequest tresDecimales = leer(valido("100", "[{\"comprobanteId\":1,\"importe\":10},{\"comprobanteId\":2,\"importe\":1.005}]"));
+        // GDS-20: el renglón admite comprobanteId o ajusteId, así que la forma ya no exige el comprobante; que venga uno de
+        // los dos (y no los dos) lo valida RegistroCobranza (RegistroCobranzaTest)
         CobranzaRequest sinComprobante = leer(valido("100", "[{\"importe\":10}]"));
         CobranzaRequest sinImporte = leer(valido("100", "[{\"comprobanteId\":1}]"));
         CobranzaRequest renglonNulo = leer(valido("100", "[null]"));
 
         assertThat(errores(cero)).containsExactly(Map.entry("imputaciones[0].importe", "El importe tiene que ser mayor que cero."));
         assertThat(errores(tresDecimales)).containsExactly(Map.entry("imputaciones[1].importe", "El importe admite hasta 2 decimales."));
-        assertThat(errores(sinComprobante)).containsExactly(Map.entry("imputaciones[0].comprobanteId", "Elegí el comprobante."));
+        assertThat(errores(sinComprobante)).isEmpty();
         assertThat(errores(sinImporte)).containsKey("imputaciones[0].importe");
         assertThat(errores(renglonNulo).keySet()).singleElement().asString().startsWith("imputaciones[0]");
     }

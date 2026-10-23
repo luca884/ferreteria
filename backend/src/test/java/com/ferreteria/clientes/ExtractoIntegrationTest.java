@@ -293,14 +293,19 @@ class ExtractoIntegrationTest extends CuentaCorrienteTestBase {
         List<Object[]> filas = new ArrayList<>();
         BigDecimal saldo = BigDecimal.ZERO;
         BigDecimal importe = new BigDecimal("1.50");
+        // V28: cada AJUSTE del libro (los que van al debe) lleva su ajuste
+        long conDebe = java.util.stream.IntStream.range(0, n).filter(i -> i % 3 != 2).count();
+        java.util.Iterator<Long> ajustes = SemillaAjuste.ajustes(jdbc, f.id(), cliente, f.usuarioId(), "RECARGO",
+                java.util.Collections.nCopies((int) conDebe, importe)).iterator();
         for (int i = 0; i < n; i++) {
             boolean debe = i % 3 != 2;
             saldo = debe ? saldo.add(importe) : saldo.subtract(importe);
             filas.add(new Object[] {f.id(), cliente, debe ? "AJUSTE" : "NC", debe ? importe : BigDecimal.ZERO,
-                    debe ? BigDecimal.ZERO : importe, "Mov " + i, debe ? "Ajuste de prueba" : null, f.usuarioId()});
+                    debe ? BigDecimal.ZERO : importe, "Mov " + i, debe ? "Ajuste de prueba" : null, f.usuarioId(),
+                    debe ? ajustes.next() : null});
         }
         jdbc.batchUpdate("insert into movimiento_cuenta_cliente (ferreteria_id, cliente_id, tipo, debe, haber, referencia, motivo, "
-                + "fecha, usuario_id) values (?, ?, ?, ?, ?, ?, ?, now(6), ?)", filas);
+                + "fecha, usuario_id, ajuste_id) values (?, ?, ?, ?, ?, ?, ?, now(6), ?, ?)", filas);
         jdbc.update("update cliente set saldo = ? where id = ?", saldo, cliente);
         return cliente;
     }

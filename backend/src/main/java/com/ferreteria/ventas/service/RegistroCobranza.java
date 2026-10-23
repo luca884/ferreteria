@@ -68,6 +68,7 @@ public class RegistroCobranza {
 
     static final String MENSAJE_MEDIO = "Elegí efectivo o transferencia";
     static final String MENSAJE_COMPROBANTE_REPETIDO = "Cada comprobante va una sola vez.";
+    static final String MENSAJE_DEUDA_DOBLE = "Elegí el comprobante o el Recargo, no los dos.";
     static final String MENSAJE_SUMA_MAYOR = "Lo imputado supera el total del recibo.";
     static final String MENSAJE_OTRO_CONTENIDO = "Este cobro ya se registró con otros datos";
     static final String MENSAJE_RECIBO_INEXISTENTE = "Recibo no encontrado";
@@ -216,15 +217,21 @@ public class RegistroCobranza {
 
         BigDecimal suma = BigDecimal.ZERO;
         boolean renglonesValidos = true;
-        Set<Long> vistos = new HashSet<>();
+        Set<Long> comprobantesVistos = new HashSet<>();
+        Set<Long> recargosVistos = new HashSet<>();
         boolean repetido = false;
         List<Imputar> renglones = pedido.imputaciones();
         for (int i = 0; i < renglones.size(); i++) {
             Imputar renglon = renglones.get(i);
-            if (renglon.comprobanteId() == null) {
+            // GDS-20: cada renglón va a un comprobante O a un Recargo (ajusteId), nunca a los dos ni a ninguno.
+            if (renglon.comprobanteId() == null && renglon.ajusteId() == null) {
                 errores.put("imputaciones[" + i + "].comprobanteId", "Elegí el comprobante.");
                 renglonesValidos = false;
-            } else if (!vistos.add(renglon.comprobanteId())) {
+            } else if (renglon.comprobanteId() != null && renglon.ajusteId() != null) {
+                errores.put("imputaciones[" + i + "].ajusteId", MENSAJE_DEUDA_DOBLE);
+                renglonesValidos = false;
+            } else if (!(renglon.comprobanteId() != null ? comprobantesVistos : recargosVistos)
+                    .add(renglon.comprobanteId() != null ? renglon.comprobanteId() : renglon.ajusteId())) {
                 repetido = true;
             }
             if (renglon.importe() == null || renglon.importe().signum() <= 0) {
