@@ -10,7 +10,9 @@ import com.ferreteria.tenant.TenantContext;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Buscar un articulo en el mostrador (CU-06): primero el codigo exacto de un activo y despues las palabras. Los dados
@@ -38,8 +40,7 @@ public class BusquedaMostradorService {
         }
         List<Articulo> exactos = articuloRepository.exactosActivosScoped(consulta.codigo(), LIMITE + 1);
         if (exactos.size() == 1) {
-            return new BusquedaMostradorResponse(
-                    TipoResultadoMostrador.EXACTO, List.of(ArticuloMostradorResponse.from(exactos.get(0))), false);
+            return new BusquedaMostradorResponse(TipoResultadoMostrador.EXACTO, items(exactos), false);
         }
         // El codigo de barras no es unico: varios exactos van a la lista.
         if (!exactos.isEmpty()) {
@@ -57,9 +58,14 @@ public class BusquedaMostradorService {
         return new BusquedaMostradorResponse(tipo, List.of(), false);
     }
 
-    private static BusquedaMostradorResponse lista(List<Articulo> filas) {
-        List<ArticuloMostradorResponse> items = filas.stream()
-                .limit(LIMITE).map(ArticuloMostradorResponse::from).toList();
-        return new BusquedaMostradorResponse(TipoResultadoMostrador.LISTA, items, filas.size() > LIMITE);
+    private BusquedaMostradorResponse lista(List<Articulo> filas) {
+        return new BusquedaMostradorResponse(TipoResultadoMostrador.LISTA, items(filas), filas.size() > LIMITE);
+    }
+
+    /** Hasta LIMITE filas, cada una con su «costo al» (GDS-05), que sale de una sola consulta. */
+    private List<ArticuloMostradorResponse> items(List<Articulo> filas) {
+        List<Articulo> mostradas = filas.stream().limit(LIMITE).toList();
+        Map<Long, LocalDate> costoAl = articuloRepository.costoAlScoped(mostradas.stream().map(Articulo::getId).toList());
+        return mostradas.stream().map(a -> ArticuloMostradorResponse.from(a, costoAl.get(a.getId()))).toList();
     }
 }
