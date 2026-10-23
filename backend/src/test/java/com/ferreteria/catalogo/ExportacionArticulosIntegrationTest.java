@@ -136,6 +136,43 @@ class ExportacionArticulosIntegrationTest extends AjustesTestBase {
     }
 
     @Test
+    @DisplayName("el apostrofo va en toda columna de texto: codigos, ubicacion, rubro y proveedor (sondas del verificador)")
+    void apostrofoEnTodasLasColumnasDeTexto() throws Exception {
+        Long rubroFormula = rubro(a, "=HYPERLINK(\"http://x\";\"y\")", "30");
+        Long proveedorFormula = proveedor(a, "\t=1+1");
+        Long id = cargar(a, "+A1", "Sonda formula", "UNIDAD", "ARS", "1.00", "2.00", "0.000", "0.000");
+        jdbc.update("update articulo set codigo_barras = '-2+3', codigo_proveedor = '@SUM(1)',"
+                + " ubicacion = '=cmd|'' /C calc''!A0', rubro_id = ?, proveedor_id = ? where id = ?",
+                rubroFormula, proveedorFormula, id);
+
+        assertThat(csv(exportar("?q=sonda", duenoA))).isEqualTo(ENCABEZADO + "\r\n"
+                + "'+A1;'-2+3;'@SUM(1);Sonda formula;\"'=HYPERLINK(\"\"http://x\"\";\"\"y\"\")\";'\t=1+1;Unidad;ARS;"
+                + "1,00;21;Heredado;2,00;No;0;0;'=cmd|' /C calc'!A0;Sí\r\n");
+    }
+
+    @Test
+    @DisplayName("stock y margen sin ceros de mas ni notacion cientifica, con su signo (sondas del verificador)")
+    void numerosEnLosBordes() throws Exception {
+        Long mil = cargar(a, "N-001", "Sonda mil", "UNIDAD", "ARS", "1.00", "2.00", "1000.000", "0.001");
+        jdbc.update("update articulo set margen_porcentaje = 12.50 where id = ?", mil);
+        Long negativo = cargar(a, "N-002", "Sonda negativo", "UNIDAD", "ARS", "1.00", "2.00", "-0.500", "12345678.123");
+        jdbc.update("update articulo set margen_porcentaje = -5.00 where id = ?", negativo);
+
+        assertThat(csv(exportar("?q=sonda", duenoA))).isEqualTo(ENCABEZADO + "\r\n"
+                + "N-001;;;Sonda mil;;;Unidad;ARS;1,00;21;12,5;2,00;No;1000;0,001;;Sí\r\n"
+                + "N-002;;;Sonda negativo;;;Unidad;ARS;1,00;21;-5;2,00;No;-0,5;12345678,123;;Sí\r\n");
+    }
+
+    @Test
+    @DisplayName("sin token da 401, y GET /api/articulos/{id} sigue andando al lado de /exportacion")
+    void sinTokenYRutaVecina() throws Exception {
+        mvc.perform(get(URL)).andExpect(status().isUnauthorized());
+        Long id = jdbc.queryForObject("select id from articulo where ferreteria_id = ? and codigo_interno = 'B-002'",
+                Long.class, a);
+        assertThat(getJson("/api/articulos/" + id, duenoA).get("codigoInterno").asText()).isEqualTo("B-002");
+    }
+
+    @Test
     @DisplayName("sin articulos que cumplan el filtro baja solo el encabezado")
     void vacio() throws Exception {
         assertThat(csv(exportar("?q=nada-que-ver", duenoA))).isEqualTo(ENCABEZADO + "\r\n");

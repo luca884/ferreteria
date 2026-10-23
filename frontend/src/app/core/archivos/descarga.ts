@@ -14,5 +14,6 @@ export function descargar(respuesta: HttpResponse<Blob>, porDefecto: string): vo
   enlace.href = direccion;
   enlace.download = nombreDeArchivo(respuesta, porDefecto);
   enlace.click();
-  URL.revokeObjectURL(direccion);
+  // Safari puede cortar la descarga si la dirección se libera en el mismo momento del clic.
+  setTimeout(() => URL.revokeObjectURL(direccion));
 }

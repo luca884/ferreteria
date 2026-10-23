@@ -33,3 +33,9 @@ Restricciones: tenant solo del JWT; un endpoint nuevo lleva su test de aislamien
 
   Propuesta aprobada, textual: «dale me parece bien» (ver S1).
 - L2 (2026-10-23) Exploración: el filtro de la pantalla es `FILTRO_ARTICULOS` (`ArticuloRepository.java:34`), y el listado ordena por descripción e id (`ArticuloService.java:85`). `StockBajoMinimoController.java:23` es el molde de rol (`hasRole('DUENO')`). No hay ningún escritor CSV en el backend ni descargas de archivos en el frontend. El relevamiento no ejecutó la exportación de GDS (`docs/relevamiento-gds.md:92`), así que las columnas son nuestra propuesta.
+- L3 (2026-10-23) Verificación:
+  - Checks: backend `./mvnw test` 4486/0, BUILD SUCCESS. Frontend 117 archivos en verde. `ng build` OK, con el warning de presupuesto de `dialogo-cobro.ts`, que ya estaba.
+  - `odd-verifier` (opus): sin blockers; S1 a S5 pasan. Sus sondas quedaron como tests: apóstrofo en todas las columnas de texto (con el DDE), números en los bordes (`1000`, `12,5`, `-5`, `-0,5`), 401 sin token y `/{id}` que sigue andando. `ExportacionArticulosIntegrationTest` 9/0.
+  - Advisory 3 corregido: Safari podía cortar la descarga, así que la dirección temporal ahora se libera después del clic.
+  - Advisory 2 (un espacio o un `＝` de ancho completo delante de la fórmula): Excel no lo evalúa; queda así.
+  - Abierto, advisory 1: Excel convierte los códigos a número (`0012` queda `12`, `7790001234567` queda `7,79E+12`). Es una decisión de producto para Luca.

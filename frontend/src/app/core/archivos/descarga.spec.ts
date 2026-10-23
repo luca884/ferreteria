@@ -21,7 +21,8 @@ describe('descarga', () => {
     expect(nombreDeArchivo(respuesta('attachment'), 'articulos.csv')).toBe('articulos.csv');
   });
 
-  it('baja el contenido con ese nombre y libera la dirección temporal', () => {
+  it('baja el contenido con ese nombre y libera la dirección temporal después del clic (Safari corta si es antes)', () => {
+    vi.useFakeTimers();
     const crear = vi.fn(() => 'blob:temporal');
     const liberar = vi.fn();
     Object.assign(URL, { createObjectURL: crear, revokeObjectURL: liberar });
@@ -37,7 +38,10 @@ describe('descarga', () => {
     expect(enlace?.download).toBe('articulos.csv');
     expect(enlace?.href).toBe('blob:temporal');
     expect(enlace?.isConnected).toBe(false);
+    expect(liberar).not.toHaveBeenCalled();
+    vi.runAllTimers();
     expect(liberar).toHaveBeenCalledWith('blob:temporal');
     click.mockRestore();
+    vi.useRealTimers();
   });
 });
