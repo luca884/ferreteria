@@ -1,0 +1,49 @@
+:host {
+  display: block;
+  width: 100%;
+}
+:host > :not(app-barra-acciones) {
+  max-width: 1040px;
+}
+
+.articulo {
+  margin: 0 0 var(--e-3);
+}
+
+.filtros {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--e-3);
+  margin-bottom: var(--e-4);
+}
+.filtros label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-weight: 600;
+}
+
+.movimientos {
+  margin-bottom: var(--e-4);
+}
+.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.cantidad {
+  font-weight: 700;
+}
+.cantidad.salida {
+  color: var(--error);
+}
+.cantidad.entrada {
+  color: var(--exito);
+}
+
+.paginas {
+  display: flex;
+  align-items: center;
+  gap: var(--e-3);
+  margin-bottom: var(--e-4);
+}

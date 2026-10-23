@@ -1,0 +1,95 @@
+<app-barra-acciones>
+  <h1>Movimientos de stock</h1>
+  <a class="btn accion-barra volver" [routerLink]="['/articulos', id]">Volver a la ficha</a>
+</app-barra-acciones>
+
+@if (!auth.esDueno()) {
+  <p class="ayuda estado-vacio" role="status">Los movimientos de stock son solo del Dueño.</p>
+} @else {
+  @if (articulo(); as a) {
+    <p class="articulo">
+      <strong>{{ a.codigoInterno }} · {{ a.descripcion }}</strong> — Stock actual: {{ stock(a) }}
+    </p>
+  }
+
+  <form class="filtros" (submit)="buscar($event)">
+    <label>
+      Desde
+      <input name="desde" type="date" [value]="desde()" (input)="desde.set($any($event.target).value)" />
+    </label>
+    <label>
+      Hasta
+      <input name="hasta" type="date" [value]="hasta()" (input)="hasta.set($any($event.target).value)" />
+    </label>
+    <button type="submit" class="primario">Buscar</button>
+    <button type="button" class="secundario limpiar" (click)="limpiar()">Limpiar</button>
+  </form>
+
+  @if (error(); as texto) {
+    <div class="error con-accion" role="alert">
+      <span>{{ texto }}</span>
+      <button type="button" class="secundario chico reintentar" (click)="cargar(pagina()?.page ?? 0)">Reintentar</button>
+    </div>
+  }
+
+  @if (pagina(); as actual) {
+    @if (actual.items.length === 0) {
+      <p class="ayuda estado-vacio" role="status">
+        {{
+          filtrada() ? 'No hay movimientos entre esas fechas.' : 'Este artículo todavía no tiene movimientos de stock.'
+        }}
+      </p>
+    } @else {
+      <table class="movimientos">
+        <caption class="sr-only">
+          Movimientos de stock del artículo, los más nuevos primero, con el saldo que quedó después de cada uno.
+        </caption>
+        <thead>
+          <tr>
+            <th scope="col">Fecha</th>
+            <th scope="col">Tipo</th>
+            <th scope="col">Comprobante</th>
+            <th scope="col" class="num">Cantidad</th>
+            <th scope="col" class="num">Saldo</th>
+            <th scope="col">Usuario</th>
+            <th scope="col">Motivo</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (m of actual.items; track m.id) {
+            <tr>
+              <td>{{ fecha(m.fecha) }}</td>
+              <td>{{ tipo(m.tipo) }}</td>
+              <td>{{ m.comprobante ?? '—' }}</td>
+              <td class="num cantidad" [class.salida]="m.cantidad < 0" [class.entrada]="m.cantidad > 0">
+                {{ conSigno(m.cantidad) }}
+              </td>
+              <td class="num">{{ numero(m.saldo) }}</td>
+              <td>{{ m.usuario ?? '—' }}</td>
+              <td>{{ m.motivo ?? '—' }}</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+
+      @if (actual.totalPages > 1) {
+        <nav class="paginas" aria-label="Páginas de movimientos">
+          <button type="button" class="secundario chico" [disabled]="actual.page === 0" (click)="cargar(actual.page - 1)">
+            Anterior
+          </button>
+          <span>Página {{ actual.page + 1 }} de {{ actual.totalPages }}</span>
+          <button
+            type="button"
+            class="secundario chico"
+            [disabled]="actual.page + 1 >= actual.totalPages"
+            (click)="cargar(actual.page + 1)"
+          >
+            Siguiente
+          </button>
+        </nav>
+      }
+    }
+  } @else if (cargando()) {
+    <p class="ayuda estado-vacio">Cargando…</p>
+  }
+}

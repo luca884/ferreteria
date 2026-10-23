@@ -357,3 +357,31 @@ describe('ArticulosService', () => {
     });
   });
 });
+
+describe('ArticulosService › movimientos de stock', () => {
+  let service: ArticulosService;
+  let http: HttpTestingController;
+
+  beforeEach(() => {
+    TestBed.configureTestingModule({ providers: [provideHttpClient(), provideHttpClientTesting()] });
+    service = TestBed.inject(ArticulosService);
+    http = TestBed.inject(HttpTestingController);
+  });
+
+  afterEach(() => http.verify());
+
+  it('pide GET /articulos/{id}/movimientos-stock con la página y solo los filtros cargados', () => {
+    let total: number | undefined;
+    service.movimientos(7, { page: 2, desde: '2026-10-01' }).subscribe((p) => (total = p.totalElements));
+
+    const req = http.expectOne((r) => r.url.endsWith('/articulos/7/movimientos-stock'));
+    expect(req.request.method).toBe('GET');
+    expect(req.request.params.get('page')).toBe('2');
+    expect(req.request.params.get('size')).toBe('20');
+    expect(req.request.params.get('desde')).toBe('2026-10-01');
+    expect(req.request.params.has('hasta')).toBe(false);
+    req.flush({ items: [], page: 2, size: 20, totalElements: 41, totalPages: 3 });
+
+    expect(total).toBe(41);
+  });
+});

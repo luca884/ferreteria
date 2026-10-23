@@ -6,6 +6,7 @@ import { AuthService } from './core/auth/auth.service';
 import { inicioPorRol } from './core/auth/inicio-por-rol';
 import { ActualizacionMasiva } from './features/actualizacion-masiva/actualizacion-masiva';
 import { ArticuloForm } from './features/articulos/articulo-form';
+import { MovimientosArticulo } from './features/articulos/movimientos-articulo';
 import { Caja } from './features/caja/caja';
 import { Compras } from './features/compras/compras';
 import { NuevaCompra } from './features/compras/nueva-compra';
@@ -150,6 +151,13 @@ describe('rutas', () => {
     }
   });
 
+  it('la ruta articulos/:id/movimientos carga los movimientos de stock del artículo (G29)', async () => {
+    const ruta = hijas().find((r) => r.path === 'articulos/:id/movimientos');
+
+    expect(ruta).toBeDefined();
+    expect(await (ruta!.loadComponent as () => Promise<unknown>)()).toBe(MovimientosArticulo);
+  });
+
   it('articulos/nuevo va antes que articulos/:id para que "nuevo" no se tome como id', () => {
     const paths = hijas().map((r) => r.path);
 
@@ -217,6 +225,7 @@ describe('rutas', () => {
     expect(titulo(hijas(), 'articulos')).toBe('Artículos · Ferretería');
     expect(titulo(hijas(), 'articulos/nuevo')).toBe('Nuevo artículo · Ferretería');
     expect(titulo(hijas(), 'articulos/:id')).toBe('Artículo · Ferretería');
+    expect(titulo(hijas(), 'articulos/:id/movimientos')).toBe('Movimientos de stock · Ferretería');
     expect(titulo(hijas(), 'proveedores')).toBe('Proveedores · Ferretería');
     expect(titulo(hijas(), 'importaciones')).toBe('Importar lista · Ferretería');
     expect(titulo(hijas(), 'actualizacion-masiva')).toBe('Actualizar precios · Ferretería');
