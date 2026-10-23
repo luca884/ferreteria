@@ -75,6 +75,7 @@
                 <th>Email</th>
                 <th>Rol</th>
                 <th>Estado</th>
+                <th>Tope de descuento</th>
               </tr>
             </thead>
             <tbody>
@@ -94,6 +95,7 @@
                   <td>{{ usuario.email }}</td>
                   <td>{{ etiquetaRol[usuario.rol] }}</td>
                   <td class="estado">{{ usuario.activo ? 'Activo' : 'Desactivado' }}</td>
+                  <td class="tope">{{ textoTope(usuario) }}</td>
                 </tr>
               }
             </tbody>
@@ -189,6 +191,27 @@
             }
           </select>
         </div>
+        @if (conTope()) {
+          <div class="campo">
+            <label for="topeDescuento">Tope de descuento (%)</label>
+            <input
+              id="topeDescuento"
+              name="topeDescuento"
+              type="text"
+              inputmode="decimal"
+              formControlName="topeDescuento"
+              autocomplete="off"
+              placeholder="Sin tope"
+              [attr.aria-invalid]="invalido('topeDescuento') ? 'true' : null"
+              [attr.aria-describedby]="invalido('topeDescuento') ? 'topeDescuento-error' : 'topeDescuento-ayuda'"
+            />
+            @if (invalido('topeDescuento')) {
+              <span id="topeDescuento-error" class="campo-error">El tope va de 0 a 99,99 %, con hasta 2 decimales.</span>
+            } @else {
+              <span id="topeDescuento-ayuda" class="ayuda">El descuento máximo que puede dar en el mostrador. Vacío: sin tope.</span>
+            }
+          </div>
+        }
         @if (editando() === null) {
           <div class="campo">
             <label for="password">Contraseña</label>
