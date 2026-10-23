@@ -6,7 +6,10 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import com.ferreteria.catalogo.model.Celda;
 import com.ferreteria.catalogo.model.FilaLeida;
 import com.ferreteria.catalogo.model.LecturaLista;
+import com.ferreteria.common.csv.EscritorCsv;
 import com.ferreteria.common.exception.BadRequestException;
+import java.math.BigDecimal;
+import java.util.Arrays;
 import com.ferreteria.support.ListasDePrueba;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
@@ -99,6 +102,36 @@ class LectorCsvTest {
         LecturaLista lectura = lector.leer(bytes("Codigo,Precio\nA-1,\"1.234,56\"\n"));
 
         assertThat(textos(lectura.filas().get(1))).containsExactly("A-1", "1.234,56");
+    }
+
+    @Test
+    void unaCeldaComoTextoDeExcelSeLeeComoSuTexto() {
+        // La exportacion de articulos escribe los codigos asi, para que Excel no les saque los ceros (GDS-19).
+        LecturaLista lectura = lector.leer(bytes("Codigo;Barras;Prov;Desc\n=\"0012\";=\"AB\"\"C\";\"=\"\"a;b\"\"\";=\"\"\n"));
+
+        assertThat(textos(lectura.filas().get(1))).containsExactly("0012", "AB\"C", "a;b", "");
+    }
+
+    @Test
+    void loQueEscribeLaExportacionSeVuelveALeerIgual() {
+        byte[] exportado = EscritorCsv.escribir(List.of("Código", "Barras", "Descripción", "Costo"), List.of(
+            Arrays.asList(EscritorCsv.codigo("0012"), EscritorCsv.codigo("7790001234567"), "Caño 1/2\"; largo",
+                new BigDecimal("1234.50")),
+            Arrays.asList(EscritorCsv.codigo("A\"B;C"), EscritorCsv.codigo(null), "Tuerca", new BigDecimal("-3"))));
+
+        LecturaLista lectura = lector.leer(exportado);
+
+        assertThat(textos(lectura.filas().get(0))).containsExactly("Código", "Barras", "Descripción", "Costo");
+        assertThat(textos(lectura.filas().get(1))).containsExactly("0012", "7790001234567", "Caño 1/2\"; largo", "1234,50");
+        assertThat(textos(lectura.filas().get(2))).containsExactly("A\"B;C", "", "Tuerca", "-3");
+    }
+
+    @Test
+    void loQueNoEsTextoDeExcelQuedaComoEsta() {
+        LecturaLista lectura = lector.leer(bytes("a;b;c;d;e;f\n=1+1;'=\"x\";=\"abierto;x=\"y\";\"=\"\"\";=\"a\"b\"\n"));
+
+        assertThat(textos(lectura.filas().get(1)))
+            .containsExactly("=1+1", "'=\"x\"", "=\"abierto", "x=\"y\"", "=\"", "=\"a\"b\"");
     }
 
     @Test

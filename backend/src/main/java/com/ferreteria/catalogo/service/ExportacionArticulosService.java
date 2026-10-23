@@ -53,9 +53,9 @@ public class ExportacionArticulosService {
 
     private static List<Object> fila(Articulo a, Map<Long, String> rubros, Map<Long, String> proveedores) {
         return Arrays.asList(
-                a.getCodigoInterno(),
-                a.getCodigoBarras(),
-                a.getCodigoProveedor(),
+                EscritorCsv.codigo(a.getCodigoInterno()),
+                EscritorCsv.codigo(a.getCodigoBarras()),
+                EscritorCsv.codigo(a.getCodigoProveedor()),
                 a.getDescripcion(),
                 rubros.get(a.getRubroId()),
                 proveedores.get(a.getProveedorId()),

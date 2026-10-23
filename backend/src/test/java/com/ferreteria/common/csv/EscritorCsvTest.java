@@ -54,6 +54,16 @@ class EscritorCsvTest {
     }
 
     @Test
+    @DisplayName("un codigo sale como texto de Excel =\"...\", que conserva los ceros; null es la celda vacia")
+    void codigos() {
+        String csv = escribir(List.of("a", "b", "c", "d", "e"), Arrays.asList(
+                EscritorCsv.codigo("0012"), EscritorCsv.codigo("AB\"C"), EscritorCsv.codigo("=1+1"),
+                EscritorCsv.codigo("a;b"), EscritorCsv.codigo(null)));
+
+        assertThat(csv).endsWith("\r\n=\"0012\";=\"AB\"\"C\";=\"=1+1\";\"=\"\"a;b\"\"\";\r\n");
+    }
+
+    @Test
     @DisplayName("el encabezado tambien se escapa, y sin filas queda solo el encabezado")
     void soloEncabezado() {
         assertThat(escribir(List.of("Precio; final", "=x"))).isEqualTo("\"Precio; final\";'=x\r\n");

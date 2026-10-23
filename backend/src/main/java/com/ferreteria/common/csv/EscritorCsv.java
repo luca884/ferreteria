@@ -11,7 +11,8 @@ import java.util.List;
  *
  * <p>Una celda {@link BigDecimal} es un numero: sale como viene, con coma decimal y sin separador de miles. Cualquier
  * otra es texto: si empieza con = + - @ tab o retorno lleva un apostrofo adelante, para que Excel no la ejecute como
- * formula (inyeccion CSV), y si tiene ; comillas o saltos de linea va entre comillas dobles. null es la celda vacia.
+ * formula (inyeccion CSV), y si tiene ; comillas o saltos de linea va entre comillas dobles. Un {@link #codigo} sale
+ * como texto de Excel. null es la celda vacia.
  */
 public final class EscritorCsv {
 
@@ -20,6 +21,18 @@ public final class EscritorCsv {
     private static final String FIN_DE_LINEA = "\r\n";
 
     private EscritorCsv() {
+    }
+
+    /** Un codigo como texto de Excel ({@code ="0012"}): no le saca los ceros ni lo pasa a numero. */
+    private record Codigo(String valor) {}
+
+    /**
+     * La celda de un codigo, que sale como {@code ="..."}: Excel la muestra tal cual (sin sacarle los ceros a 0012 ni
+     * pasar un codigo de barras a 7,79E+12) y, al guardar, escribe el texto. Es una formula que solo da ese texto, asi
+     * que no lleva el apostrofo. null es la celda vacia. La importacion de CSV la vuelve a leer como su texto.
+     */
+    public static Object codigo(String codigo) {
+        return codigo == null ? null : new Codigo(codigo);
     }
 
     public static byte[] escribir(List<String> encabezado, List<? extends List<?>> filas) {
@@ -51,15 +64,25 @@ public final class EscritorCsv {
         if (valor instanceof BigDecimal numero) {
             return numero.toPlainString().replace('.', ',');
         }
+        if (valor instanceof Codigo codigo) {
+            String formula = "=\"" + codigo.valor().replace("\"", "\"\"") + "\"";
+            // Las comillas de la formula no fuerzan el entrecomillado del CSV; el separador o un salto si.
+            return tieneSeparadorOSalto(formula) ? entrecomillado(formula) : formula;
+        }
         return texto(valor.toString());
     }
 
     private static String texto(String texto) {
         String seguro = pareceFormula(texto) ? "'" + texto : texto;
-        if (seguro.contains(SEPARADOR) || seguro.contains("\"") || seguro.contains("\n") || seguro.contains("\r")) {
-            return "\"" + seguro.replace("\"", "\"\"") + "\"";
-        }
-        return seguro;
+        return tieneSeparadorOSalto(seguro) || seguro.contains("\"") ? entrecomillado(seguro) : seguro;
+    }
+
+    private static boolean tieneSeparadorOSalto(String texto) {
+        return texto.contains(SEPARADOR) || texto.contains("\n") || texto.contains("\r");
+    }
+
+    private static String entrecomillado(String texto) {
+        return "\"" + texto.replace("\"", "\"\"") + "\"";
     }
 
     private static boolean pareceFormula(String texto) {

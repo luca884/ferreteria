@@ -19,11 +19,13 @@ Restricciones: tenant solo del JWT; un endpoint nuevo lleva su test de aislamien
 - S3 (supuesto): sin separador de miles; los importes con los decimales guardados (costo y precio con 2, stock con los suyos, sin ceros de más); fin de línea CRLF; los campos con `;`, comillas o saltos de línea van entre comillas dobles, con las comillas internas duplicadas.
 - S4 (supuesto, seguridad): un texto que empieza con `=`, `+`, `-`, `@`, tab o retorno sale con un apóstrofo adelante, para que Excel no lo ejecute como fórmula (inyección CSV).
 - S5 (supuesto): el archivo se llama `articulos-AAAA-MM-DD.csv`, con la fecha de Buenos Aires.
+- S6: propuesta del advisory 1, aprobada por Luca («dale», 2026-10-23): «escribir los tres códigos como `="0012"`: Excel los muestra tal cual y, si lo guardás, sigue saliendo `0012`. Eso obliga a que la importación de CU-04 también entienda `="..."`». — Aceptación: el código interno, el de barras y el del proveedor salen como `="…"` (vacío si no hay), y como esos códigos ya no se ejecutan, no llevan el apóstrofo de S4. La lectura de CSV de CU-04 convierte una celda `="…"` en su texto. — Checks: `./mvnw test -Dtest=EscritorCsvTest,ExportacionArticulosIntegrationTest,LectorCsvTest`
 
 ## Tasks
 
 - [x] T1 · S1-S5 · ruta: inline · Aceptación: endpoint con tests de formato, filtro, orden, rol y aislamiento · Evidencia: RED `EscritorCsvTest` 5 errores (sin implementar) y `ExportacionArticulosIntegrationTest` 400 (ruta inexistente) → GREEN 5/5 y 5/5; ArchUnit 64/0; commit `e617be3` · Risk: item 2 (inyección CSV)
 - [x] T2 · S1, S5 · ruta: inline · Aceptación: botón «Exportar» del Dueño en la barra de Artículos baja el archivo con el filtro; el Vendedor no lo ve · Evidencia: RED compilación (sin `exportar` ni `descarga.ts`) → GREEN 86/86 en 3 specs; CORS expone Content-Disposition (RED null → GREEN 6/6); ego-browser: `?q=tornillo` baja `articulos-2026-10-23.csv` con BOM y 18 filas, igual que la pantalla; commit `e33a000` · Risk: item 3 (CORS compartido, cambio aditivo)
+- [ ] T4 · S6 · ruta: inline · Aceptación: los códigos salen como `="…"` y la importación CSV los lee como texto · Evidencia: — · Risk: item 3 (`LectorCsv` lo comparte toda la importación de CU-04)
 - [x] T3 · S1 · ruta: inline · Aceptación: `docs/spec.md` y `docs/relevamiento-gds.md` dicen qué quedó · Evidencia: CU-03 punto 4, G25 y GDS-19 marcados · Risk: none
 
 ## Log

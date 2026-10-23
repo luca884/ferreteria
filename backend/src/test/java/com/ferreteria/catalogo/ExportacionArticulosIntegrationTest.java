@@ -87,8 +87,8 @@ class ExportacionArticulosIntegrationTest extends AjustesTestBase {
         assertThat(respuesta.getHeader("Content-Disposition"))
                 .isEqualTo("attachment; filename=\"articulos-" + HoraArgentina.hoy() + ".csv\"");
         assertThat(csv(respuesta)).isEqualTo(ENCABEZADO + "\r\n"
-                + "A-001;;;\"Cable \"\"taller\"\"; 2,5 mm\";;;Metro;USD;1234,50;21;Heredado;2000,00;Sí;-3;0;;Sí\r\n"
-                + "B-002;7790001;BS-14;Tuerca 1/4;Bulones;Bulonera Sur;Unidad;ARS;100,00;10,5;30;160,00;No;12,5;5;"
+                + "=\"A-001\";;;\"Cable \"\"taller\"\"; 2,5 mm\";;;Metro;USD;1234,50;21;Heredado;2000,00;Sí;-3;0;;Sí\r\n"
+                + "=\"B-002\";=\"7790001\";=\"BS-14\";Tuerca 1/4;Bulones;Bulonera Sur;Unidad;ARS;100,00;10,5;30;160,00;No;12,5;5;"
                 + "Estante 3;Sí\r\n");
     }
 
@@ -96,19 +96,19 @@ class ExportacionArticulosIntegrationTest extends AjustesTestBase {
     @DisplayName("respeta la busqueda y los inactivos de la pantalla; el texto que parece formula lleva apostrofo")
     void respetaElFiltro() throws Exception {
         assertThat(csv(exportar("?q=tuerca", duenoA))).isEqualTo(ENCABEZADO + "\r\n"
-                + "B-002;7790001;BS-14;Tuerca 1/4;Bulones;Bulonera Sur;Unidad;ARS;100,00;10,5;30;160,00;No;12,5;5;"
+                + "=\"B-002\";=\"7790001\";=\"BS-14\";Tuerca 1/4;Bulones;Bulonera Sur;Unidad;ARS;100,00;10,5;30;160,00;No;12,5;5;"
                 + "Estante 3;Sí\r\n");
 
         String conInactivos = csv(exportar("?incluirInactivos=true&q=dado", duenoA));
         assertThat(conInactivos).isEqualTo(ENCABEZADO + "\r\n"
-                + "C-003;;;'=Dado de baja;;;Kilo;ARS;10,00;21;Heredado;20,00;No;0;0;;No\r\n");
+                + "=\"C-003\";;;'=Dado de baja;;;Kilo;ARS;10,00;21;Heredado;20,00;No;0;0;;No\r\n");
     }
 
     @Test
     @DisplayName("otra ferreteria solo baja lo suyo; el Vendedor y el admin reciben 403")
     void aislamientoYPermisos() throws Exception {
         assertThat(csv(exportar("", login("dueno-exporta-b@test.local")))).isEqualTo(ENCABEZADO + "\r\n"
-                + "Z-009;;;Ajeno;;;Unidad;ARS;1,00;21;Heredado;2,00;No;0;0;;Sí\r\n");
+                + "=\"Z-009\";;;Ajeno;;;Unidad;ARS;1,00;21;Heredado;2,00;No;0;0;;Sí\r\n");
         getResult(URL, login("vendedor-exporta-a@test.local")).andExpect(status().isForbidden());
         getResult(URL, login("admin@demo.local")).andExpect(status().isForbidden());
     }
@@ -122,7 +122,7 @@ class ExportacionArticulosIntegrationTest extends AjustesTestBase {
         jdbc.update("update articulo set rubro_id = ?, proveedor_id = ? where id = ?", rubroAjeno, proveedorAjeno, id);
 
         assertThat(csv(exportar("?q=afuera", duenoA))).isEqualTo(ENCABEZADO + "\r\n"
-                + "D-004;;;Apunta afuera;;;Litro;ARS;5,00;21;Heredado;8,00;No;1;0;;Sí\r\n");
+                + "=\"D-004\";;;Apunta afuera;;;Litro;ARS;5,00;21;Heredado;8,00;No;1;0;;Sí\r\n");
     }
 
     @Test
@@ -136,7 +136,7 @@ class ExportacionArticulosIntegrationTest extends AjustesTestBase {
     }
 
     @Test
-    @DisplayName("el apostrofo va en toda columna de texto: codigos, ubicacion, rubro y proveedor (sondas del verificador)")
+    @DisplayName("el apostrofo va en toda columna de texto (ubicacion, rubro, proveedor); los codigos van como texto de Excel (sondas del verificador)")
     void apostrofoEnTodasLasColumnasDeTexto() throws Exception {
         Long rubroFormula = rubro(a, "=HYPERLINK(\"http://x\";\"y\")", "30");
         Long proveedorFormula = proveedor(a, "\t=1+1");
@@ -146,7 +146,7 @@ class ExportacionArticulosIntegrationTest extends AjustesTestBase {
                 rubroFormula, proveedorFormula, id);
 
         assertThat(csv(exportar("?q=sonda", duenoA))).isEqualTo(ENCABEZADO + "\r\n"
-                + "'+A1;'-2+3;'@SUM(1);Sonda formula;\"'=HYPERLINK(\"\"http://x\"\";\"\"y\"\")\";'\t=1+1;Unidad;ARS;"
+                + "=\"+A1\";=\"-2+3\";=\"@SUM(1)\";Sonda formula;\"'=HYPERLINK(\"\"http://x\"\";\"\"y\"\")\";'\t=1+1;Unidad;ARS;"
                 + "1,00;21;Heredado;2,00;No;0;0;'=cmd|' /C calc'!A0;Sí\r\n");
     }
 
@@ -159,8 +159,8 @@ class ExportacionArticulosIntegrationTest extends AjustesTestBase {
         jdbc.update("update articulo set margen_porcentaje = -5.00 where id = ?", negativo);
 
         assertThat(csv(exportar("?q=sonda", duenoA))).isEqualTo(ENCABEZADO + "\r\n"
-                + "N-001;;;Sonda mil;;;Unidad;ARS;1,00;21;12,5;2,00;No;1000;0,001;;Sí\r\n"
-                + "N-002;;;Sonda negativo;;;Unidad;ARS;1,00;21;-5;2,00;No;-0,5;12345678,123;;Sí\r\n");
+                + "=\"N-001\";;;Sonda mil;;;Unidad;ARS;1,00;21;12,5;2,00;No;1000;0,001;;Sí\r\n"
+                + "=\"N-002\";;;Sonda negativo;;;Unidad;ARS;1,00;21;-5;2,00;No;-0,5;12345678,123;;Sí\r\n");
     }
 
     @Test

@@ -61,9 +61,25 @@ public class LectorCsv implements LectorDeLista {
     private static List<Celda> celdas(CSVRecord registro) {
         List<Celda> celdas = new ArrayList<>(registro.size());
         for (String valor : registro) {
-            celdas.add(new Celda(valor, null));
+            celdas.add(new Celda(sinFormulaDeTexto(valor), null));
         }
         return celdas;
+    }
+
+    /**
+     * {@code ="0012"} es como Excel guarda un texto que no tiene que pasar a numero, y asi escribe los codigos la
+     * exportacion de articulos (GDS-19): se lee 0012, con las comillas dobladas de adentro como una sola. Cualquier
+     * otra cosa queda como esta.
+     */
+    private static String sinFormulaDeTexto(String valor) {
+        if (valor.length() < 3 || !valor.startsWith("=\"") || !valor.endsWith("\"")) {
+            return valor;
+        }
+        String adentro = valor.substring(2, valor.length() - 1);
+        if (adentro.replace("\"\"", "").contains("\"")) {
+            return valor;
+        }
+        return adentro.replace("\"\"", "\"");
     }
 
     private static String decodificar(byte[] contenido) {
