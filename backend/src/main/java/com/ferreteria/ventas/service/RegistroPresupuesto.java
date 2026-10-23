@@ -39,11 +39,13 @@ public class RegistroPresupuesto {
     private final ItemPresupuestoRepository itemRepository;
     private final NumeradorPresupuestoRepository numeradorRepository;
     private final ClienteDelDocumento clienteDelDocumento;
+    private final TopeDeDescuento topeDeDescuento;
 
     public RegistroPresupuesto(
             ArticulosParaVenta articulosParaVenta, PresupuestoRepository presupuestoRepository,
             ItemPresupuestoRepository itemRepository, NumeradorPresupuestoRepository numeradorRepository,
-            ClienteDelDocumento clienteDelDocumento) {
+            ClienteDelDocumento clienteDelDocumento, TopeDeDescuento topeDeDescuento) {
+        this.topeDeDescuento = topeDeDescuento;
         this.clienteDelDocumento = clienteDelDocumento;
         this.articulosParaVenta = articulosParaVenta;
         this.presupuestoRepository = presupuestoRepository;
@@ -69,6 +71,7 @@ public class RegistroPresupuesto {
         articulosParaVenta.buscar(ids).forEach(a -> articulos.put(a.id(), a));
 
         ValidacionTicket.renglones(pedido.renglones(), pedido.descuentoPorcentaje(), articulos);
+        topeDeDescuento.verificar(pedido.renglones(), pedido.descuentoPorcentaje(), usuarioId);
         List<RenglonVenta> calculados =
                 ValidacionTicket.calcular(pedido.renglones(), articulos, pedido.descuentoPorcentaje());
         TotalesVenta totales = TotalesVenta.de(calculados);

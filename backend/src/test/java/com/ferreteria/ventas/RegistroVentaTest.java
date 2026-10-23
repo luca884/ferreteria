@@ -41,6 +41,7 @@ import com.ferreteria.ventas.repository.RemitoRepository;
 import com.ferreteria.ventas.service.CajaService;
 import com.ferreteria.ventas.service.ClienteDelDocumento;
 import com.ferreteria.ventas.service.ConfirmarVenta;
+import com.ferreteria.ventas.service.TopeDeDescuento;
 import com.ferreteria.ventas.service.ConfirmarVenta.Renglon;
 import com.ferreteria.ventas.service.RegistroVenta;
 import com.ferreteria.ventas.service.VentaRechazadaException;
@@ -124,7 +125,8 @@ class RegistroVentaTest {
         registro = new RegistroVenta(
                 articulosParaVenta, stockService, comprobanteRepository, itemRepository, pagoRepository,
                 numeradorRepository, cajaService, formaPagoRepository, presupuestoRepository, remitoRepository,
-                itemRemitoRepository, new ClienteDelDocumento(clientesParaVenta), cuentaCorriente);
+                itemRemitoRepository, new ClienteDelDocumento(clientesParaVenta), cuentaCorriente,
+                new TopeDeDescuento(usuarioId -> java.util.Optional.empty()));
         // CU-10: por defecto hay caja abierta hoy. Lenient: los rechazos previos a la caja no la consultan.
         lenient().when(cajaService.cajaParaVender()).thenReturn(CAJA);
         for (MedioPago medio : MedioPago.values()) {

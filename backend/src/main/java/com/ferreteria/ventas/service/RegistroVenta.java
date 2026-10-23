@@ -94,6 +94,7 @@ public class RegistroVenta {
     private final ItemRemitoRepository itemRemitoRepository;
     private final ClienteDelDocumento clienteDelDocumento;
     private final CuentaCorrienteParaVenta cuentaCorriente;
+    private final TopeDeDescuento topeDeDescuento;
 
     public RegistroVenta(
             ArticulosParaVenta articulosParaVenta, StockService stockService,
@@ -102,7 +103,8 @@ public class RegistroVenta {
             CajaService cajaService, FormaPagoRepository formaPagoRepository,
             PresupuestoRepository presupuestoRepository, RemitoRepository remitoRepository,
             ItemRemitoRepository itemRemitoRepository, ClienteDelDocumento clienteDelDocumento,
-            CuentaCorrienteParaVenta cuentaCorriente) {
+            CuentaCorrienteParaVenta cuentaCorriente, TopeDeDescuento topeDeDescuento) {
+        this.topeDeDescuento = topeDeDescuento;
         this.clienteDelDocumento = clienteDelDocumento;
         this.cuentaCorriente = cuentaCorriente;
         this.articulosParaVenta = articulosParaVenta;
@@ -152,7 +154,7 @@ public class RegistroVenta {
         // CC-010: se lo TOMA aca (lock de escritura) para toda venta con cliente, antes del numerador: ver el orden de locks.
         ClienteDelDocumento.Elegido cliente = clienteDelDocumento.resolverParaVenta(pedido.clienteId());
 
-        Validado validado = validar(pedido);
+        Validado validado = validar(pedido, usuarioId);
         Map<Long, ArticuloVendible> articulos = validado.articulos();
         Map<Long, FormaPago> formas = validado.formas();
 
@@ -421,13 +423,14 @@ public class RegistroVenta {
     }
 
     /** Pasos 3 y 4 de C-008: busca los articulos y las formas de pago y valida en orden de precedencia, sin escribir. */
-    private Validado validar(ConfirmarVenta pedido) {
+    private Validado validar(ConfirmarVenta pedido, Long usuarioId) {
         Set<Long> ids = pedido.renglones().stream().map(Renglon::articuloId)
                 .collect(Collectors.toCollection(LinkedHashSet::new));
         Map<Long, ArticuloVendible> articulos = new HashMap<>();
         articulosParaVenta.buscar(ids).forEach(a -> articulos.put(a.id(), a));
 
         ValidacionTicket.renglones(pedido.renglones(), pedido.descuentoPorcentaje(), articulos);
+        topeDeDescuento.verificar(pedido.renglones(), pedido.descuentoPorcentaje(), usuarioId);
         Map<Long, FormaPago> formas = formasDe(pedido);
         ValidacionTicket.importes(pedido.renglones(), articulos, pedido.descuentoPorcentaje(),
                 () -> totalConRecargo(pedido, articulos, formas));
