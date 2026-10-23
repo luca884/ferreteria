@@ -43,11 +43,13 @@ public class RegistroRemito {
     private final ItemRemitoRepository itemRepository;
     private final NumeradorRemitoRepository numeradorRepository;
     private final ClienteDelDocumento clienteDelDocumento;
+    private final TopeDeDescuento topeDeDescuento;
 
     public RegistroRemito(
             ArticulosParaVenta articulosParaVenta, StockService stockService, RemitoRepository remitoRepository,
             ItemRemitoRepository itemRepository, NumeradorRemitoRepository numeradorRepository,
-            ClienteDelDocumento clienteDelDocumento) {
+            ClienteDelDocumento clienteDelDocumento, TopeDeDescuento topeDeDescuento) {
+        this.topeDeDescuento = topeDeDescuento;
         this.clienteDelDocumento = clienteDelDocumento;
         this.articulosParaVenta = articulosParaVenta;
         this.stockService = stockService;
@@ -74,6 +76,7 @@ public class RegistroRemito {
         articulosParaVenta.buscar(ids).forEach(a -> articulos.put(a.id(), a));
 
         ValidacionTicket.renglones(pedido.renglones(), pedido.descuentoPorcentaje(), articulos);
+        topeDeDescuento.verificar(pedido.renglones(), pedido.descuentoPorcentaje(), usuarioId);
         List<RenglonVenta> calculados =
                 ValidacionTicket.calcular(pedido.renglones(), articulos, pedido.descuentoPorcentaje());
         TotalesVenta totales = TotalesVenta.de(calculados);

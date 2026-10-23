@@ -43,6 +43,7 @@ describe('UsuariosService', () => {
       email: 'lucia@tornillo.demo',
       rol: 'VENDEDOR',
       password: 'clave1234',
+      topeDescuento: 12.5,
     };
     let creado: Usuario | undefined;
     service.crear(request).subscribe((u) => (creado = u));
@@ -56,7 +57,7 @@ describe('UsuariosService', () => {
   });
 
   it('actualiza con PUT /usuarios/{id}', () => {
-    const request: EdicionUsuarioRequest = { nombre: 'Lucía P.', email: 'lucia@tornillo.demo', rol: 'DUENO' };
+    const request: EdicionUsuarioRequest = { nombre: 'Lucía P.', email: 'lucia@tornillo.demo', rol: 'DUENO', topeDescuento: null };
     service.actualizar(7, request).subscribe();
 
     const req = http.expectOne((r) => r.url.endsWith('/usuarios/7'));

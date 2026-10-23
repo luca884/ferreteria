@@ -118,9 +118,9 @@ describe('Usuarios', () => {
     await refrescar();
 
     expect(filas().map(celdas)).toEqual([
-      ['Ana Baja', 'ana@tornillo.demo', 'Vendedor', 'Desactivado'],
-      ['Dueño El Tornillo', 'dueno@tornillo.demo', 'Dueño', 'Activo'],
-      ['Vendedor Uno', 'vendedor@tornillo.demo', 'Vendedor', 'Activo'],
+      ['Ana Baja', 'ana@tornillo.demo', 'Vendedor', 'Desactivado', 'Sin tope'],
+      ['Dueño El Tornillo', 'dueno@tornillo.demo', 'Dueño', 'Activo', '—'],
+      ['Vendedor Uno', 'vendedor@tornillo.demo', 'Vendedor', 'Activo', 'Sin tope'],
     ]);
     expect(filas()[0].classList.contains('inactivo')).toBe(true);
   });
@@ -158,6 +158,7 @@ describe('Usuarios', () => {
       email: 'lucia@tornillo.demo',
       rol: 'VENDEDOR',
       password: 'clave1234',
+      topeDescuento: null,
     });
     expect(filas().map((f) => celdas(f)[0])).toEqual(['Dueño El Tornillo', 'Lucía Pérez', 'Vendedor Uno']);
     expect(el().querySelector('.alerta.exito')?.textContent).toContain('Se guardó «Lucía Pérez».');
@@ -263,9 +264,69 @@ describe('Usuarios', () => {
       nombre: 'Vendedor Uno',
       email: 'vendedor@tornillo.demo',
       rol: 'DUENO',
+      topeDescuento: null,
     });
     expect(celdas(filas()[1])[2]).toBe('Dueño');
     expect(el().querySelector('.alerta.exito')?.textContent).toContain('Se guardó «Vendedor Uno».');
+  });
+
+  describe('tope de descuento (CU-07)', () => {
+    const conTope: Usuario = { ...vendedor, topeDescuento: 10 };
+    const decimal: Usuario = { id: 4, nombre: 'Zoe Decimal', email: 'zoe@tornillo.demo', rol: 'VENDEDOR', activo: true, topeDescuento: 12.5 };
+
+    it('la lista muestra el tope: con coma, «Sin tope» o «—» para el Dueño', async () => {
+      await crear([{ ...dueno, topeDescuento: null }, conTope, decimal, { ...exVendedor, topeDescuento: null }]);
+      await refrescar();
+
+      expect(filas().map((f) => celdas(f)[4])).toEqual(['—', '10 %', '12,5 %']);
+    });
+
+    it('el alta de un Vendedor manda el tope escrito con coma', async () => {
+      await crear([dueno]);
+
+      await altaCompleta();
+      await escribir('topeDescuento', '12,5');
+      await enviar();
+
+      expect(servicio.crear).toHaveBeenCalledWith(expect.objectContaining({ rol: 'VENDEDOR', topeDescuento: 12.5 }));
+    });
+
+    it('con rol Dueño el campo no aparece y se manda sin tope', async () => {
+      await crear([dueno]);
+
+      await altaCompleta();
+      await escribir('topeDescuento', '10');
+      await elegirRol('DUENO');
+      expect(el().querySelector('#topeDescuento')).toBeNull();
+      await enviar();
+
+      expect(servicio.crear).toHaveBeenCalledWith(expect.objectContaining({ rol: 'DUENO', topeDescuento: null }));
+    });
+
+    it('editar precarga el tope y guardarlo lo manda', async () => {
+      await crear([dueno, conTope]);
+
+      await editarFila(1);
+      expect(input('topeDescuento').value).toBe('10');
+      await escribir('topeDescuento', '');
+      await enviar();
+
+      expect(servicio.actualizar).toHaveBeenCalledWith(2, expect.objectContaining({ topeDescuento: null }));
+    });
+
+    it('un tope fuera de 0 a 99,99 o con 3 decimales no se envía y se avisa en el campo', async () => {
+      await crear([dueno]);
+      await altaCompleta();
+
+      for (const valor of ['100', '-1', '10,555', 'diez']) {
+        await escribir('topeDescuento', valor);
+        await enviar();
+        expect(el().querySelector('#topeDescuento-error')?.textContent).toContain(
+          'El tope va de 0 a 99,99 %, con hasta 2 decimales.',
+        );
+      }
+      expect(servicio.crear).not.toHaveBeenCalled();
+    });
   });
 
   describe('el usuario logueado', () => {

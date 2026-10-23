@@ -141,6 +141,11 @@ export class Mostrador {
 
   /** Solo el Dueño ve el saldo y el límite del cliente y puede autorizar que una venta a cuenta corriente se pase (CC-007). */
   protected readonly esDueno = computed(() => this.auth.sesion()?.rol === 'DUENO');
+  /** CU-07: el tope de descuento del usuario en centésimas, para que el diálogo avise antes; el servidor igual lo controla. */
+  protected readonly topeDescuentoBp = computed(() => {
+    const tope = this.auth.sesion()?.topeDescuento;
+    return tope == null ? null : Math.round(tope * 100);
+  });
   /**
    * La cuenta corriente del cliente del ticket, para el cobro abierto (CC-017). Se pide fresca cada vez que se abre y tras
    * cada rechazo que la toca; nunca se guarda en el ticket. null si el ticket no tiene cliente o el cobro está cerrado.

@@ -81,7 +81,8 @@ class UsuariosIntegrationTest extends UsuariosTestBase {
 
         assertThat(nombres(lista)).containsExactly("Alfa", "Dueño Prueba", "Zeta");
         assertThat(cuerpo).doesNotContain("passwordHash").doesNotContain("password");
-        assertThat(lista.get(0).fieldNames()).toIterable().containsExactlyInAnyOrder("id", "nombre", "email", "rol", "activo");
+        assertThat(lista.get(0).fieldNames()).toIterable().containsExactlyInAnyOrder("id", "nombre", "email", "rol", "activo",
+                "topeDescuento");
         assertThat(lista.findValuesAsText("id")).contains(String.valueOf(zeta)).doesNotContain(String.valueOf(baja));
     }
 

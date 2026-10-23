@@ -12,6 +12,7 @@ import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
 import com.ferreteria.common.HoraArgentina;
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 @Entity
@@ -43,6 +44,10 @@ public class Usuario {
     @Column(nullable = false)
     private boolean activo = true;
 
+    /** El descuento máximo que puede dar en el mostrador (CU-07); null = sin tope. El Dueño nunca tiene. */
+    @Column(name = "tope_descuento", precision = 5, scale = 2)
+    private BigDecimal topeDescuento;
+
     @Column(name = "creado_en", nullable = false, updatable = false)
     private LocalDateTime creadoEn = HoraArgentina.ahora();
 
@@ -73,6 +78,12 @@ public class Usuario {
         this.nombre = nombre;
         this.email = email;
         this.rol = rol;
+        cambiarTopeDescuento(topeDescuento);
+    }
+
+    /** Un Dueño no tiene tope: se descarta el que venga, igual que al pasar a Dueño. */
+    public void cambiarTopeDescuento(BigDecimal tope) {
+        this.topeDescuento = rol == Rol.DUENO ? null : tope;
     }
 
     public void cambiarActivo(boolean activo) {
@@ -96,5 +107,6 @@ public class Usuario {
     public String getNombre() { return nombre; }
     public Rol getRol() { return rol; }
     public boolean isActivo() { return activo; }
+    public BigDecimal getTopeDescuento() { return topeDescuento; }
     public LocalDateTime getCreadoEn() { return creadoEn; }
 }

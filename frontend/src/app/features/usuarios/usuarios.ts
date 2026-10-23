@@ -1,7 +1,7 @@
 import { HttpErrorResponse } from '@angular/common/http';
 import { Component, DestroyRef, ElementRef, Injector, OnInit, afterNextRender, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
+import { AbstractControl, FormBuilder, ReactiveFormsModule, ValidationErrors, Validators } from '@angular/forms';
 import { erroresDeCampos, mensajeDe } from '../../core/api/api-error';
 import { AuthService } from '../../core/auth/auth.service';
 import { BarraAcciones } from '../../shared/barra-acciones';
@@ -13,10 +13,15 @@ import {
   ROL_DE_FERRETERIA_LABELS,
   RolDeFerreteria,
   Usuario,
+  leerTope,
+  textoTope,
 } from './usuario.models';
 import { UsuariosService } from './usuarios.service';
 
 const porNombre = (a: Usuario, b: Usuario) => a.nombre.localeCompare(b.nombre) || a.id - b.id;
+
+const topeValido = (control: AbstractControl<string>): ValidationErrors | null =>
+  leerTope(control.value) === undefined ? { tope: true } : null;
 
 /**
  * Usuarios de la ferretería (CU-02, solo el Dueño): alta con contraseña, edición de nombre, email y rol, desactivar o
@@ -37,6 +42,7 @@ export class Usuarios implements OnInit {
 
   protected readonly roles = ROLES_DE_FERRETERIA;
   protected readonly etiquetaRol = ROL_DE_FERRETERIA_LABELS;
+  protected readonly textoTope = textoTope;
 
   protected readonly usuarios = signal<Usuario[]>([]);
   /** Fila elegida en la grilla: la barra actúa sobre ella; Enter edita. */
@@ -68,6 +74,8 @@ export class Usuarios implements OnInit {
     email: ['', [Validators.required, Validators.email, Validators.maxLength(150)]],
     rol: ['VENDEDOR' as RolDeFerreteria],
     password: ['', [Validators.required, Validators.minLength(8), Validators.maxLength(72), noSoloEspacios]],
+    /** CU-07: solo para un Vendedor; vacío = sin tope. */
+    topeDescuento: ['', topeValido],
   });
 
   constructor() {
@@ -110,15 +118,26 @@ export class Usuarios implements OnInit {
     this.cargar();
   }
 
+  /** El campo del tope solo va para un Vendedor: el Dueño no tiene tope. */
+  protected conTope(): boolean {
+    return this.form.controls.rol.value === 'VENDEDOR';
+  }
+
   protected guardar(): void {
+    if (!this.conTope()) this.form.controls.topeDescuento.setValue('', { emitEvent: false });
     if (this.form.invalid) {
       this.form.markAllAsTouched();
       this.enfocar('form.alta [aria-invalid="true"]');
       return;
     }
-    const { nombre, email, rol, password } = this.form.getRawValue();
+    const { nombre, email, rol, password, topeDescuento } = this.form.getRawValue();
     const usuario = this.editando();
-    const datos: EdicionUsuarioRequest = { nombre: nombre.trim(), email: email.trim(), rol };
+    const datos: EdicionUsuarioRequest = {
+      nombre: nombre.trim(),
+      email: email.trim(),
+      rol,
+      topeDescuento: rol === 'VENDEDOR' ? (leerTope(topeDescuento) ?? null) : null,
+    };
     this.limpiarErroresForm();
     this.aviso.set(null);
     this.guardando.set(true);
@@ -153,7 +172,13 @@ export class Usuarios implements OnInit {
     this.editando.set(usuario);
     this.form.controls.password.disable({ emitEvent: false });
     this.ajustarRol(usuario);
-    this.form.reset({ nombre: usuario.nombre, email: usuario.email, rol: usuario.rol, password: '' });
+    this.form.reset({
+      nombre: usuario.nombre,
+      email: usuario.email,
+      rol: usuario.rol,
+      password: '',
+      topeDescuento: usuario.topeDescuento == null ? '' : String(usuario.topeDescuento).replace('.', ','),
+    });
     this.limpiarErroresForm();
   }
 
@@ -223,7 +248,7 @@ export class Usuarios implements OnInit {
     });
   }
 
-  protected invalido(campo: 'nombre' | 'email' | 'password'): boolean {
+  protected invalido(campo: 'nombre' | 'email' | 'password' | 'topeDescuento'): boolean {
     const control = this.form.controls[campo];
     return control.touched && control.invalid;
   }
@@ -251,6 +276,6 @@ export class Usuarios implements OnInit {
     this.editando.set(null);
     this.form.controls.password.enable({ emitEvent: false });
     this.ajustarRol(null);
-    this.form.reset({ nombre: '', email: '', rol: 'VENDEDOR', password: '' });
+    this.form.reset({ nombre: '', email: '', rol: 'VENDEDOR', password: '', topeDescuento: '' });
   }
 }

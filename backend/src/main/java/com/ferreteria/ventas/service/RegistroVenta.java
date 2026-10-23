@@ -27,6 +27,7 @@ import com.ferreteria.ventas.model.TotalesVenta;
 import com.ferreteria.ventas.repository.ComprobanteRepository;
 import com.ferreteria.ventas.repository.FormaPagoRepository;
 import com.ferreteria.ventas.repository.ItemComprobanteRepository;
+import com.ferreteria.ventas.repository.ItemPresupuestoRepository;
 import com.ferreteria.ventas.repository.ItemRemitoRepository;
 import com.ferreteria.ventas.repository.NumeradorComprobanteRepository;
 import com.ferreteria.ventas.repository.PagoRepository;
@@ -92,8 +93,10 @@ public class RegistroVenta {
     private final PresupuestoRepository presupuestoRepository;
     private final RemitoRepository remitoRepository;
     private final ItemRemitoRepository itemRemitoRepository;
+    private final ItemPresupuestoRepository itemPresupuestoRepository;
     private final ClienteDelDocumento clienteDelDocumento;
     private final CuentaCorrienteParaVenta cuentaCorriente;
+    private final TopeDeDescuento topeDeDescuento;
 
     public RegistroVenta(
             ArticulosParaVenta articulosParaVenta, StockService stockService,
@@ -102,7 +105,10 @@ public class RegistroVenta {
             CajaService cajaService, FormaPagoRepository formaPagoRepository,
             PresupuestoRepository presupuestoRepository, RemitoRepository remitoRepository,
             ItemRemitoRepository itemRemitoRepository, ClienteDelDocumento clienteDelDocumento,
-            CuentaCorrienteParaVenta cuentaCorriente) {
+            CuentaCorrienteParaVenta cuentaCorriente, TopeDeDescuento topeDeDescuento,
+            ItemPresupuestoRepository itemPresupuestoRepository) {
+        this.itemPresupuestoRepository = itemPresupuestoRepository;
+        this.topeDeDescuento = topeDeDescuento;
         this.clienteDelDocumento = clienteDelDocumento;
         this.cuentaCorriente = cuentaCorriente;
         this.articulosParaVenta = articulosParaVenta;
@@ -152,7 +158,7 @@ public class RegistroVenta {
         // CC-010: se lo TOMA aca (lock de escritura) para toda venta con cliente, antes del numerador: ver el orden de locks.
         ClienteDelDocumento.Elegido cliente = clienteDelDocumento.resolverParaVenta(pedido.clienteId());
 
-        Validado validado = validar(pedido);
+        Validado validado = validar(pedido, usuarioId, autorizados(presupuesto, remito));
         Map<Long, ArticuloVendible> articulos = validado.articulos();
         Map<Long, FormaPago> formas = validado.formas();
 
@@ -421,13 +427,34 @@ public class RegistroVenta {
     }
 
     /** Pasos 3 y 4 de C-008: busca los articulos y las formas de pago y valida en orden de precedencia, sin escribir. */
-    private Validado validar(ConfirmarVenta pedido) {
+    /**
+     * CU-07: los descuentos del presupuesto o remito que se pasa a venta ya los autorizo quien lo emitio; el tope del
+     * usuario solo frena lo que se agregue o se suba (Luca, 2026-10-22).
+     */
+    private TopeDeDescuento.Autorizados autorizados(Presupuesto presupuesto, Remito remito) {
+        if (presupuesto != null) {
+            Map<Long, BigDecimal> renglones = new HashMap<>();
+            itemPresupuestoRepository.dePresupuestoScoped(presupuesto.getId())
+                    .forEach(i -> renglones.put(i.getArticuloId(), i.getDescuentoPorcentaje()));
+            return new TopeDeDescuento.Autorizados(presupuesto.getDescuentoPorcentaje(), renglones);
+        }
+        if (remito != null) {
+            Map<Long, BigDecimal> renglones = new HashMap<>();
+            itemRemitoRepository.deRemitoScoped(remito.getId())
+                    .forEach(i -> renglones.put(i.getArticuloId(), i.getDescuentoPorcentaje()));
+            return new TopeDeDescuento.Autorizados(remito.getDescuentoPorcentaje(), renglones);
+        }
+        return TopeDeDescuento.Autorizados.NINGUNO;
+    }
+
+    private Validado validar(ConfirmarVenta pedido, Long usuarioId, TopeDeDescuento.Autorizados autorizados) {
         Set<Long> ids = pedido.renglones().stream().map(Renglon::articuloId)
                 .collect(Collectors.toCollection(LinkedHashSet::new));
         Map<Long, ArticuloVendible> articulos = new HashMap<>();
         articulosParaVenta.buscar(ids).forEach(a -> articulos.put(a.id(), a));
 
         ValidacionTicket.renglones(pedido.renglones(), pedido.descuentoPorcentaje(), articulos);
+        topeDeDescuento.verificar(pedido.renglones(), pedido.descuentoPorcentaje(), usuarioId, autorizados);
         Map<Long, FormaPago> formas = formasDe(pedido);
         ValidacionTicket.importes(pedido.renglones(), articulos, pedido.descuentoPorcentaje(),
                 () -> totalConRecargo(pedido, articulos, formas));

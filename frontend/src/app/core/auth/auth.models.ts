@@ -14,6 +14,8 @@ export interface Sesion {
   rol: Rol;
   ferreteriaId: number | null;
   ferreteriaNombre: string | null;
+  /** CU-07: el descuento máximo del usuario en el mostrador; null = sin tope. Ausente en una sesión guardada antes. */
+  topeDescuento?: number | null;
 }
 
 export interface LoginResponse {
