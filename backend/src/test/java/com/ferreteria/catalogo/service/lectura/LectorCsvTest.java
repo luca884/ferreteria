@@ -127,11 +127,35 @@ class LectorCsvTest {
     }
 
     @Test
+    void elTextoDeExcelSirveEnCualquierColumnaYEnWindows1252() {
+        byte[] win = "Codigo;Desc;Precio\n=\"0012\";Caño;=\"1.234,56\"\n".getBytes(Charset.forName("windows-1252"));
+
+        assertThat(textos(lector.leer(win).filas().get(1))).containsExactly("0012", "Caño", "1.234,56");
+    }
+
+    @Test
+    void unaFilaSoloDeTextosDeExcelVaciosCuentaComoVaciaYLaSiguienteConservaSuNumero() {
+        LecturaLista lectura = lector.leer(bytes("a;b\n=\"\";=\"\"\nc;d\n"));
+
+        assertThat(lectura.filas()).extracting(FilaLeida::numero).containsExactly(1, 3);
+    }
+
+    @Test
+    void loQueEscribeLaExportacionVuelveIgualAunConComillasYFormulas() {
+        List<String> codigos = List.of("\"", "\"\"", "=\"\"", "=\"x\"", "x\"&HYPERLINK(\"http://e\")&\"", "'0012", "a,b");
+        byte[] exportado = EscritorCsv.escribir(List.of("Codigo"),
+            codigos.stream().map(c -> List.of(EscritorCsv.codigo(c))).toList());
+
+        assertThat(lector.leer(exportado).filas().subList(1, codigos.size() + 1)).extracting(f -> f.celdas().get(0).texto())
+            .containsExactlyElementsOf(codigos);
+    }
+
+    @Test
     void loQueNoEsTextoDeExcelQuedaComoEsta() {
-        LecturaLista lectura = lector.leer(bytes("a;b;c;d;e;f\n=1+1;'=\"x\";=\"abierto;x=\"y\";\"=\"\"\";=\"a\"b\"\n"));
+        LecturaLista lectura = lector.leer(bytes("a;b;c;d;e;f;g\n=1+1;'=\"x\";=\"abierto;x=\"y\";\"=\"\"\";=\"a\"b\";=\"a\"&\"b\"\n"));
 
         assertThat(textos(lectura.filas().get(1)))
-            .containsExactly("=1+1", "'=\"x\"", "=\"abierto", "x=\"y\"", "=\"", "=\"a\"b\"");
+            .containsExactly("=1+1", "'=\"x\"", "=\"abierto", "x=\"y\"", "=\"", "=\"a\"b\"", "=\"a\"&\"b\"");
     }
 
     @Test

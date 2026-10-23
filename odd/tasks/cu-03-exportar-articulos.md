@@ -47,3 +47,9 @@ Restricciones: tenant solo del JWT; un endpoint nuevo lleva su test de aislamien
   - `ng build`: OK al cierre de T2. T4 no toca el front.
   - No se probó en la app real importar el CSV exportado; lo cubre `LectorCsvTest.loQueEscribeLaExportacionSeVuelveALeerIgual`.
   - Próximo paso: el merge de Luca.
+- L6 (2026-10-23) Recheck de T4 con `odd-verifier` (opus), por item 3 (`LectorCsv` es compartido):
+  - Sin blockers. La corrida enfocada de importación dio 166/0.
+  - La ida y vuelta de 20 códigos volvió idéntica.
+  - Respecto de `202f669`, solo cambian las celdas `="…"`, que antes entraban con el `=` y las comillas.
+  - Sus sondas quedaron como tests en `LectorCsvTest` (25/0): precio como `="1.234,56"`, windows-1252, una fila solo de `=""` que cuenta como vacía, `="a"&"b"` que queda como está, y la ida y vuelta con comillas y `HYPERLINK`.
+  - Advisory: si alguien guarda desde Excel un código `=1+1`, el archivo lleva `=1+1` sin protección. Con el apóstrofo de S4 ya pasaba lo mismo, y nuestra importación lo lee como texto.
