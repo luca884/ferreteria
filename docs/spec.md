@@ -208,6 +208,22 @@ Son 12 casos de uso (CU-01 a CU-12), agrupados en cinco módulos: Configuración
 4. **Actualización masiva del precio final.** CU-05 suma la opción «precio final», en % o en $, sobre el precio final actual. Los artículos afectados quedan con precio manual al precio nuevo (como GDS). La vista previa muestra el precio anterior y el nuevo, y marca la variación fuerte y el margen negativo.
 5. **Aislamiento.** Los ajustes son datos de la ferretería: un artículo de otra ferretería es 404, igual que uno inexistente.
 
+### Reportes
+
+**CU-15 Reportes de ventas** (solo el Dueño; decidido por Luca el 2026-10-22, como el menú Ventas de GDS: G63, G66, G67 y GDS-08)
+
+1. **Pantalla «Reportes».** El Dueño elige el reporte y el rango «Desde / Hasta» (días de Buenos Aires, los dos incluidos, hoy al entrar, hasta 366 días). Hay seis reportes, cada uno aparte como en GDS:
+   - **Resumen:** ventas (total), neto, IVA, costo, ganancia y cantidad de comprobantes.
+   - **Por usuario:** quién confirmó cada venta, con cantidad, total y ganancia.
+   - **Por medio de pago:** cada forma de pago con la cantidad de pagos y el monto; los montos suman el total.
+   - **Por día o mes:** un renglón por período con ventas.
+   - **Por artículo y por rubro:** cantidad vendida, total y ganancia; el rubro es el de hoy del artículo («Sin rubro» si no tiene).
+   - **Con descuento:** las ventas con descuento general o de algún renglón, con el importe descontado.
+2. **Qué entra.** Solo las ventas, también las «No facturables». Los presupuestos y los remitos no son ventas, y las cobranzas tampoco. Las devoluciones y las facturas anuladas esperan la nota de crédito; marca, zona, rankings y gráficos quedan fuera.
+3. **Totales.** Salen del total de cada comprobante, nunca de sumar renglones (GDS-37: GDS da $ 2.000,00 en un reporte y $ 1.999,98 en otro para la misma venta).
+4. **Costo y ganancia.** Cada renglón vendido copia el costo del artículo al vender, sin IVA y en pesos (un artículo en USD se pasa con el dólar vigente); cambiar el costo después no cambia la ganancia de lo ya vendido. Ganancia = neto − costo. Las ventas anteriores a este cambio no tienen costo (no se completan con el de hoy) y la pantalla las avisa: «N ventas sin costo registrado: la ganancia no las incluye.»
+5. **API.** `GET /api/reportes/ventas/{resumen, por-usuario, por-medio-pago, por-periodo, por-articulo, por-rubro, con-descuento}` con `desde` y `hasta` (ISO; sin fechas, hoy; falta una, se usa la otra) y `agrupar=DIA|MES` en `por-periodo`. El Vendedor recibe 403. «Hasta» antes de «Desde» es 400 «La fecha «Hasta» no puede ser anterior a «Desde».» y más de 366 días, 400 «El reporte admite hasta 366 días.». Otra ferretería no ve ni suma estas ventas.
+
 ## Reglas de negocio
 
 Estas reglas se codifican en el dominio y se cubren con tests unitarios antes que cualquier pantalla.
@@ -279,7 +295,7 @@ Una sola base compartida y todas las tablas de negocio con `tenant_id`. Es el mi
 | ItemCompra | cantidad, costo unitario sin IVA, costo y precio anteriores del artículo (copiados al confirmar) | N—1 Compra, N—1 Articulo |
 | Cliente | razón social, tipo y número de documento (opcionales y siempre juntos, único por ferretería), condición IVA, domicilio, teléfono, WhatsApp, correo, activo, límite de cuenta corriente (`limite_cuenta_corriente`, NULL = sin cuenta corriente, 0 = sin crédito, nunca negativo), saldo (`saldo`, 0 por defecto; positivo = debe, negativo = a favor; caché del libro) | N—1 Ferretería, 1—N Comprobante, 1—N Presupuesto, 1—N Remito, 1—N MovimientoCuentaCliente |
 | Comprobante | tipo (FA, FB, FC, NC), punto de venta, número, fecha, neto, IVA, total, subtotal (antes de descuentos), descuento global %, recargo, cliente (opcional, con copia de su razón social), presupuesto o remito de origen (opcional, nunca los dos), CAE, vencimiento del CAE, estado (pendiente, autorizado, rechazado) | N—1 Cliente, N—1 Caja, 1—N Item, 1—N Pago |
-| ItemComprobante | descripción, cantidad, precio unitario, alícuota IVA, bruto, descuento % del renglón, recargo, subtotal (copiados al momento de la venta) | N—1 Comprobante, N—1 Articulo |
+| ItemComprobante | descripción, cantidad, precio unitario, alícuota IVA, bruto, descuento % del renglón, recargo, subtotal y costo sin IVA en pesos (copiados al momento de la venta; el costo es nulo en las ventas anteriores a CU-15) | N—1 Comprobante, N—1 Articulo |
 | Presupuesto | número propio por ferretería, fecha, vencimiento, estado (pendiente, aceptado, rechazado, facturado), cliente (texto libre, opcional), observaciones, neto, IVA, total, subtotal (antes de descuentos), descuento global %, usuario que lo emitió | N—1 Ferretería, N—1 Usuario, 1—N ItemPresupuesto, 0—1 Comprobante (la venta que lo facturó) |
 | ItemPresupuesto | descripción, unidad, cantidad, precio unitario, alícuota IVA, bruto, descuento % del renglón, subtotal (copiados al emitirlo) | N—1 Presupuesto, N—1 Articulo |
 | Remito | número propio por ferretería, fecha, estado (emitido, facturado, anulado), cliente (texto libre, opcional), observaciones, neto, IVA, total, subtotal (antes de descuentos), descuento global %, usuario que lo emitió | N—1 Ferretería, N—1 Usuario, 1—N ItemRemito, 1—N MovimientoStock, 0—1 Comprobante (la venta que lo facturó) |
@@ -382,7 +398,7 @@ Nada de esto entra hasta que haya una ferretería piloto usando el sistema todos
 - Múltiples sucursales o depósitos por ferretería
 - Listas de precios múltiples (mayorista y minorista) y descuentos por cliente
 - Libro IVA Ventas e integración con el contador
-- Reportes avanzados y tableros (el MVP solo trae ventas del día y de un rango de fechas)
+- Reportes avanzados y tableros: rankings, gráficos, ventas por marca o zona, stock valorizado y libro IVA (el MVP trae los reportes de ventas de CU-15)
 - CAEA y modo offline
 - Impresora fiscal o de tickets térmica con drivers propios (el MVP imprime PDF desde el navegador)
 - Tienda online, catálogo público o integración con Mercado Libre
