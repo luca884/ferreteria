@@ -10,6 +10,7 @@ import { Caja } from './features/caja/caja';
 import { Compras } from './features/compras/compras';
 import { NuevaCompra } from './features/compras/nueva-compra';
 import { Reportes } from './features/reportes/reportes';
+import { Ventas } from './features/ventas/ventas';
 import { CuentaCliente } from './features/clientes/cuenta/cuenta-cliente';
 import { HistorialCajas } from './features/caja/historial-cajas';
 import { Articulos } from './features/articulos/articulos';
@@ -75,6 +76,14 @@ describe('rutas', () => {
     expect(await (reportes!.loadComponent as () => Promise<unknown>)()).toBe(Reportes);
     expect(reportes!.canActivate).toBeUndefined();
     expect(reportes!.title).toBe('Reportes · Ferretería');
+  });
+
+  it('la ruta ventas carga la consulta de ventas, sin guard propio (el Vendedor ve el aviso)', async () => {
+    const ventas = hijas().find((r) => r.path === 'ventas');
+
+    expect(await (ventas!.loadComponent as () => Promise<unknown>)()).toBe(Ventas);
+    expect(ventas!.canActivate).toBeUndefined();
+    expect(ventas!.title).toBe('Ventas · Ferretería');
   });
 
   it('la ruta actualizacion-masiva carga el componente ActualizacionMasiva', async () => {

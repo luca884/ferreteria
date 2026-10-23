@@ -1,0 +1,131 @@
+<app-barra-acciones>
+  <h1>Ventas</h1>
+</app-barra-acciones>
+
+@if (!auth.esDueno()) {
+  <p class="ayuda estado-vacio" role="status">La consulta de ventas es solo del dueño.</p>
+} @else {
+  <form class="filtros" (submit)="buscar($event)">
+    <label>
+      N.º
+      <input
+        name="numero"
+        type="text"
+        inputmode="numeric"
+        autocomplete="off"
+        [value]="numero()"
+        (input)="numero.set($any($event.target).value)"
+      />
+    </label>
+    <label>
+      Cliente
+      <input
+        name="cliente"
+        type="search"
+        autocomplete="off"
+        [value]="clienteBuscado()"
+        (input)="clienteBuscado.set($any($event.target).value)"
+      />
+    </label>
+    <label>
+      Desde
+      <input name="desde" type="date" [value]="desde()" (input)="desde.set($any($event.target).value)" />
+    </label>
+    <label>
+      Hasta
+      <input name="hasta" type="date" [value]="hasta()" (input)="hasta.set($any($event.target).value)" />
+    </label>
+    <button type="submit" class="primario">Buscar</button>
+    <button type="button" class="secundario" (click)="limpiar()">Limpiar</button>
+  </form>
+  @if (errorFiltros(); as texto) {
+    <p class="error" role="alert">{{ texto }}</p>
+  }
+
+  @if (error(); as texto) {
+    <div class="error con-accion" role="alert">
+      <span>{{ texto }}</span>
+      <button type="button" class="secundario chico reintentar" (click)="cargar(pagina()?.page ?? 0)">Reintentar</button>
+    </div>
+  }
+
+  @if (pagina(); as actual) {
+    @if (actual.items.length === 0) {
+      <p class="ayuda estado-vacio" role="status">
+        {{ filtrada() ? 'No hay ventas con esos filtros.' : 'Todavía no hay ventas.' }}
+      </p>
+    } @else {
+      <table class="ventas">
+        <caption class="sr-only">
+          Ventas, las más nuevas primero. Elegí una para ver su detalle y reimprimirla.
+        </caption>
+        <thead>
+          <tr>
+            <th scope="col">N.º</th>
+            <th scope="col">Fecha</th>
+            <th scope="col">Cliente</th>
+            <th scope="col">Usuario</th>
+            <th scope="col" class="num">Total</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (fila of actual.items; track fila.ventaId) {
+            <tr [class.elegida]="elegida() === fila.ventaId" (click)="elegir(fila)">
+              <td>
+                <button type="button" class="enlace" [attr.aria-pressed]="elegida() === fila.ventaId">
+                  {{ fila.numero }}
+                </button>
+                @if (!fila.facturable) {
+                  <span class="marca">No facturable</span>
+                }
+              </td>
+              <td>{{ fecha(fila.fecha) }}</td>
+              <td>{{ cliente(fila.clienteNombre) }}</td>
+              <td>{{ fila.usuario ?? '—' }}</td>
+              <td class="num">{{ fila.total | monto }}</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+
+      @if (actual.totalPages > 1) {
+        <nav class="paginas" aria-label="Páginas de ventas">
+          <button type="button" class="secundario chico" [disabled]="actual.page === 0" (click)="cargar(actual.page - 1)">
+            Anterior
+          </button>
+          <span>Página {{ actual.page + 1 }} de {{ actual.totalPages }}</span>
+          <button
+            type="button"
+            class="secundario chico"
+            [disabled]="actual.page + 1 >= actual.totalPages"
+            (click)="cargar(actual.page + 1)"
+          >
+            Siguiente
+          </button>
+        </nav>
+      }
+    }
+  } @else if (cargando()) {
+    <p class="ayuda estado-vacio">Cargando…</p>
+  }
+
+  @if (elegida() !== null) {
+    <section class="detalle" aria-label="Detalle de la venta">
+      @if (errorDetalle(); as texto) {
+        <p class="error" role="alert">{{ texto }}</p>
+      }
+      @if (detalle(); as v) {
+        <h2>Venta N.º {{ v.numero }}</h2>
+        <app-venta-hoja [venta]="v" />
+        <div class="acciones">
+          <button type="button" class="primario" (click)="imprimiendo.set(true)">Imprimir</button>
+        </div>
+        @if (imprimiendo()) {
+          <app-venta-imprimible [venta]="v" (cerrar)="imprimiendo.set(false)" />
+        }
+      } @else if (!errorDetalle()) {
+        <p class="ayuda">Cargando…</p>
+      }
+    </section>
+  }
+}

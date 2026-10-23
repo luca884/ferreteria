@@ -24,8 +24,8 @@ GDS (`R:136`, `R:374-375`, F-1450, `M:consulta-facturas`): busca por F1 número,
 ## Tasks
 
 - [x] T1 · S1 S2 S4 S6 · ruta: inline · Aceptación: `GET /api/ventas` (filtros `numero`, `cliente`, `desde`, `hasta`, `page`, `size`) y `GET /api/ventas/{id}`, solo Dueño · Evidencia: RED `ConsultaVentasIntegrationTest` 5 fallas (405) → GREEN 5/5 con `TenantScopingArchTest` 24 y `ModulosArchTest` 40 · `VentaResponse` suma `usuario` (solo en la consulta; `NON_NULL`, el POST no cambia) · commit siguiente · Risk: none
-- [ ] T2 · S3 S5 S7 · ruta: inline · Aceptación: pantalla «Ventas» (lista, filtros, detalle, imprimible) y menú; ego-browser · Risk: none
-- [ ] T3 · S1-S7 · ruta: inline · Aceptación: `docs/spec.md` (CU-16) y `docs/relevamiento-gds.md` (G60, GDS-15) · Risk: none
+- [x] T2 · S3 S5 S7 · ruta: inline · Aceptación: pantalla «Ventas» (lista, filtros, detalle, imprimible) y menú; ego-browser · Evidencia: RED compilación (módulos inexistentes) y `shell.spec`/`app.routes.spec` 3 fallas → GREEN `features/ventas` 22/22, suite front 2902/2902, `ng build` OK (el aviso de presupuesto de `dialogo-cobro` ya estaba) · ego-browser (El Tornillo): Vendedor sin enlace y con «La consulta de ventas es solo del dueño.»; Dueño: 2249 ventas en 113 páginas, más nuevas primero con usuario; «PEREZ» trae las 2 de «Construcciones Pérez»; N.º 2245 → detalle con renglón, total y pago «Cuenta corriente»; «Imprimir» abre la hoja con el foco en Imprimir; con `@media print` emulado solo sale la hoja (sin menú, filtros, tabla ni botones), con la leyenda; Esc cierra · commit siguiente · Risk: none
+- [x] T3 · S1-S7 · ruta: inline · Aceptación: `docs/spec.md` (CU-16) y `docs/relevamiento-gds.md` (G60, GDS-15) · Evidencia: lectura estructural · commit siguiente · Risk: none
 
 ## Log
 

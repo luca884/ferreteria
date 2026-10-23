@@ -1,0 +1,32 @@
+.venta {
+  width: min(640px, 100%);
+}
+/* El diálogo recibe el foco con un clic en una zona sin controles: no necesita el aro. */
+.venta:focus {
+  outline: none;
+}
+
+.venta-imprimible {
+  display: flex;
+  flex-direction: column;
+  gap: var(--e-3);
+}
+.ferreteria {
+  margin: 0;
+  font-size: var(--texto-md);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.venta-imprimible h2 {
+  margin: 0;
+  font-size: var(--texto-lg);
+}
+
+.leyenda {
+  margin: var(--e-2) 0 0;
+  color: var(--texto-suave);
+  font-size: var(--texto-sm);
+  font-style: italic;
+  text-align: center;
+}

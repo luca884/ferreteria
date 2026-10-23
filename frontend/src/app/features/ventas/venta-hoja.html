@@ -1,0 +1,73 @@
+<dl class="datos">
+  <div>
+    <dt>Fecha</dt>
+    <dd>{{ fecha() }}</dd>
+  </div>
+  <div>
+    <dt>Cliente</dt>
+    <dd>{{ cliente() }}</dd>
+  </div>
+  @if (venta().usuario; as usuario) {
+    <div>
+      <dt>Cobró</dt>
+      <dd>{{ usuario }}</dd>
+    </div>
+  }
+</dl>
+@if (!venta().facturable || origen()) {
+  <p class="notas">
+    @if (!venta().facturable) {
+      <span class="no-facturable">No facturable</span>
+    }
+    @if (origen(); as texto) {
+      <span>{{ texto }}</span>
+    }
+  </p>
+}
+
+<table class="renglones">
+  <caption class="sr-only">
+    Renglones de la venta
+  </caption>
+  <thead>
+    <tr>
+      <th scope="col">Artículo</th>
+      <th scope="col" class="num">Cantidad</th>
+      <th scope="col" class="num">Precio</th>
+      <th scope="col" class="num">Dto.</th>
+      <th scope="col" class="num">Total</th>
+    </tr>
+  </thead>
+  <tbody>
+    @for (r of venta().renglones; track r.renglon) {
+      <tr>
+        <td>{{ r.descripcion }}</td>
+        <td class="num">{{ r.cantidad | number: '1.0-3' }}</td>
+        <td class="num">{{ r.precioUnitario | monto }}</td>
+        <td class="num">{{ r.descuentoPorcentaje > 0 ? (r.descuentoPorcentaje | number: '1.0-2') + ' %' : '' }}</td>
+        <td class="num">{{ r.total | monto }}</td>
+      </tr>
+    }
+  </tbody>
+</table>
+
+<div class="totales">
+  @if (venta().descuento > 0) {
+    <p>Subtotal <span>{{ venta().subtotal | monto }}</span></p>
+    <p>
+      Descuento ({{ venta().descuentoPorcentaje | number: '1.0-2' }} %) <span>-{{ venta().descuento | monto }}</span>
+    </p>
+  }
+  @if ((venta().recargo ?? 0) > 0) {
+    <p>Recargo <span>{{ venta().recargo | monto }}</span></p>
+  }
+  <p class="total">Total <strong>{{ venta().total | monto }}</strong></p>
+</div>
+
+@if (pagos().length > 0) {
+  <ul class="pagos" aria-label="Pagos">
+    @for (p of pagos(); track p.formaPagoId) {
+      <li>{{ p.formaPago }} <span>{{ p.monto | monto }}</span></li>
+    }
+  </ul>
+}
