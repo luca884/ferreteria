@@ -22,9 +22,9 @@ Restricciones: sin cambios de backend ni de base; sin dependencias nuevas; impre
 
 ## Tasks
 
-- [ ] T1 · S1 · ruta: inline · Aceptación: `codigo-barras.ts` arma EAN-13 (si son 13 dígitos con verificador válido) o Code128 (B, o C para pares de dígitos) en módulos de barras, con tests de vectores conocidos · Evidencia: — · Risk: item 6 (un patrón mal armado no lo detecta nada más que el lector; los vectores conocidos lo cubren)
-- [ ] T2 · S1, S2, S3 · ruta: inline · Aceptación: pantalla `/etiquetas`, ruta y enlace del menú; hoja imprimible con SVG · Evidencia: — · Risk: none
-- [ ] T3 · S1 · ruta: inline · Aceptación: `docs/spec.md` (CU-03) y `docs/relevamiento-gds.md` (G85, GDS-31) dicen qué quedó · Evidencia: — · Risk: none
+- [x] T1 · S1 · ruta: inline · Aceptación: `codigo-barras.ts` arma EAN-13 (si son 13 dígitos con verificador válido) o Code128 (B, o C para pares de dígitos) en módulos de barras, con tests de vectores conocidos · Evidencia: RED compilación (sin módulo) → GREEN `codigo-barras.spec.ts` 13/13, vectores de python-barcode 0.16; zxing-cpp decodifica 13 casos (EAN-13, B, C y mezclas); commit `1bb8485` · Risk: none (era item 6; los vectores de referencia fijan los patrones)
+- [x] T2 · S1, S2, S3 · ruta: inline · Aceptación: pantalla `/etiquetas`, ruta y enlace del menú; hoja imprimible con SVG · Evidencia: RED `etiquetas.spec.ts` (sin componente; después 5 fallas: buscador sin limpiar tras el escaneo y resultados que se borraban) → GREEN 14/14; `shell.spec.ts` 41/41; suite front 2991/0; `ng build` OK; ego-browser: Dueño suma por código exacto y por lista, copias, 5 columnas; PDF A4 de una página, zxing lee las 6 etiquetas a 300 y 600 dpi; Vendedor ve «Las etiquetas son solo del Dueño.» sin enlace; commit `4f14883` · Risk: none
+- [x] T3 · S1 · ruta: inline · Aceptación: `docs/spec.md` (CU-03) y `docs/relevamiento-gds.md` (G85, GDS-31) dicen qué quedó · Evidencia: CU-03 punto 6, G85 y GDS-31 marcados; commit siguiente a `4f14883` · Risk: none
 
 ## Log
 
@@ -36,3 +36,8 @@ Restricciones: sin cambios de backend ni de base; sin dependencias nuevas; impre
   - GDS: `docs/relevamiento-gds.md:152` (G85), `:262`, `:377` (usar código interno si no hay código de barras), `:544` (GDS-31).
   - Búsqueda reusable: `MostradorService.buscar(q)` (`features/mostrador/mostrador.service.ts:12`), devuelve `ArticuloMostrador` con `codigoInterno`, `codigoBarras`, `descripcion`, `activo`.
   - Patrón de pantalla imprimible solo Dueño: `features/stock-bajo-minimo/` y `@media print` en `styles.css:850`. Menú en `layout/shell.html:61-87`, con su orden fijado en `layout/shell.spec.ts:170`.
+- L3 (2026-10-23) Cierre:
+  - Los resultados de una búsqueda quedan a la vista al sumar uno, para sumar varios de la misma lista; el escaneo (resultado exacto) limpia el campo a mano, porque el lector manda Enter antes de que la vista se actualice.
+  - El código de barras de los artículos demo (`7790000000011`) no tiene el verificador EAN correcto: sale en Code128, como dice S1.
+  - Al imprimir, una descripción larga no cortaba línea (heredaba `white-space: nowrap`); se fijó `white-space: normal`, hasta 2 líneas.
+  - Checks: front 2991/0, `ng build` OK (aviso de presupuesto en `dialogo-cobro`, previo). Backend sin cambios.
