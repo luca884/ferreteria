@@ -173,7 +173,7 @@ class ArticulosParaVentaServiceTest extends IntegrationTestBase {
             desordenado.put(id, new BigDecimal("-1"));
         }
 
-        new ArticulosParaVentaService(repositorio).ajustarStock(desordenado);
+        new ArticulosParaVentaService(repositorio, mock(com.ferreteria.cotizacion.api.DolarDePrecios.class)).ajustarStock(desordenado);
 
         InOrder orden = inOrder(repositorio);
         for (long id : new long[] {3, 7, 19, 42, 1000}) {
@@ -187,7 +187,7 @@ class ArticulosParaVentaServiceTest extends IntegrationTestBase {
         ArticuloRepository repositorio = mock(ArticuloRepository.class);
         when(repositorio.sumarStockScoped(5L, new BigDecimal("-1"))).thenReturn(2);
 
-        assertThatThrownBy(() -> new ArticulosParaVentaService(repositorio)
+        assertThatThrownBy(() -> new ArticulosParaVentaService(repositorio, mock(com.ferreteria.cotizacion.api.DolarDePrecios.class))
                 .ajustarStock(Map.of(5L, new BigDecimal("-1"))))
                 .isInstanceOf(IllegalStateException.class);
         verify(repositorio, never()).stockDeScoped(any());

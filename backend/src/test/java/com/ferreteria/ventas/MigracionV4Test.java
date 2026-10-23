@@ -67,6 +67,9 @@ class MigracionV4Test extends IntegrationTestBase {
             Map.entry("item_comprobante.descuento_porcentaje", "decimal(5,2) NOT NULL"),
             Map.entry("item_comprobante.neto", "decimal(15,2) NOT NULL"),
             Map.entry("item_comprobante.iva", "decimal(15,2) NOT NULL"),
+            // V26 (reportes de ventas): el costo copiado al vender; nulo en las ventas anteriores.
+            Map.entry("item_comprobante.costo_unitario", "decimal(15,4) NULL"),
+            Map.entry("item_comprobante.costo", "decimal(15,2) NULL"),
             Map.entry("pago.id", "bigint NOT NULL"),
             Map.entry("pago.ferreteria_id", "bigint NOT NULL"),
             Map.entry("pago.comprobante_id", "bigint NOT NULL"),
@@ -115,14 +118,14 @@ class MigracionV4Test extends IntegrationTestBase {
     }
 
     @Test
-    @DisplayName("tipo, estado y medio son VARCHAR sin CHECK (la fase 5 suma valores); solo los descuentos de V11 y los recargos de V13 tienen el suyo")
+    @DisplayName("tipo, estado y medio son VARCHAR sin CHECK (la fase 5 suma valores); solo los descuentos de V11, los recargos de V13 y el costo de V26 tienen el suyo")
     void sinCheckEnTipoEstadoYMedio() {
         Integer checks = jdbc.queryForObject(
                 "select count(*) from information_schema.table_constraints "
                         + "where table_schema = database() and constraint_type = 'CHECK' and table_name in "
                         + "('comprobante','item_comprobante','pago','movimiento_stock','numerador_comprobante') "
                         + "and constraint_name not in ('ck_comprobante_descuento','ck_item_comprobante_descuento',"
-                        + "'ck_comprobante_recargo','ck_item_comprobante_recargo','ck_pago_recargo')",
+                        + "'ck_comprobante_recargo','ck_item_comprobante_recargo','ck_pago_recargo','ck_item_comprobante_costo')",
                 Integer.class);
 
         assertThat(checks).isZero();

@@ -196,7 +196,8 @@ public class RegistroVenta {
         for (int i = 0; i < pedido.renglones().size(); i++) {
             ArticuloVendible articulo = articulos.get(pedido.renglones().get(i).articuloId());
             items.add(ItemComprobante.de(ferreteriaId, comprobante.getId(), i + 1, articulo.id(),
-                    articulo.descripcion(), articulo.unidad(), articulo.alicuotaIva(), calculados.get(i)));
+                    articulo.descripcion(), articulo.unidad(), articulo.alicuotaIva(), articulo.costoUnitario(),
+                    calculados.get(i)));
         }
         List<ItemComprobante> itemsGuardados = itemRepository.saveAll(items);
         List<Pago> pagos = new ArrayList<>();

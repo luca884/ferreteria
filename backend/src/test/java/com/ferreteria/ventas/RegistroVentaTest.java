@@ -150,7 +150,7 @@ class RegistroVentaTest {
 
     static ArticuloVendible vendible(Long id, String descripcion, String unidad, String precio, boolean activo) {
         return new ArticuloVendible(id, descripcion, unidad, !"UNIDAD".equals(unidad), bd(precio), "IVA_21",
-                bd("21.00"), activo);
+                bd("21.00"), activo, bd("100"));
     }
 
     static ArticuloVendible tornillo(Long id, String precio) {
@@ -886,9 +886,9 @@ class RegistroVentaTest {
 
     List<ItemComprobante> itemsGuardadosC1C3() {
         return List.of(
-                ItemComprobante.de(FERRETERIA, COMPROBANTE, 1, 1L, "Tornillo 1/4", "UNIDAD", "IVA_21",
+                ItemComprobante.de(FERRETERIA, COMPROBANTE, 1, 1L, "Tornillo 1/4", "UNIDAD", "IVA_21", null,
                         RenglonVenta.de(bd("1210.00"), bd("3"), bd("21.00"))),
-                ItemComprobante.de(FERRETERIA, COMPROBANTE, 2, 2L, "Cable 2,5 mm", "METRO", "IVA_21",
+                ItemComprobante.de(FERRETERIA, COMPROBANTE, 2, 2L, "Cable 2,5 mm", "METRO", "IVA_21", null,
                         RenglonVenta.de(bd("333.33"), bd("2.5"), bd("21.00"))));
     }
 
@@ -986,7 +986,7 @@ class RegistroVentaTest {
                 TotalesVenta.de(List.of(RenglonVenta.de(bd("100.00"), bd("2"), bd("21.00"), bd("10.00"), bd("10.00")))),
                 CAJA, bd("10.00"));
         ReflectionTestUtils.setField(comprobante, "id", COMPROBANTE);
-        ItemComprobante item = ItemComprobante.de(FERRETERIA, COMPROBANTE, 1, 1L, "Tornillo 1/4", "UNIDAD", "IVA_21",
+        ItemComprobante item = ItemComprobante.de(FERRETERIA, COMPROBANTE, 1, 1L, "Tornillo 1/4", "UNIDAD", "IVA_21", null,
                 RenglonVenta.de(bd("100.00"), bd("2"), bd("21.00"), bd("10.00"), bd("10.00")));
         when(comprobanteRepository.porClaveScoped(CLAVE)).thenReturn(Optional.of(comprobante));
         when(itemRepository.deComprobanteScoped(COMPROBANTE)).thenReturn(List.of(item));
@@ -1050,7 +1050,7 @@ class RegistroVentaTest {
     }
 
     ItemComprobante itemGuardado() {
-        return ItemComprobante.de(FERRETERIA, COMPROBANTE, 1, 1L, "Tornillo 1/4", "UNIDAD", "IVA_21",
+        return ItemComprobante.de(FERRETERIA, COMPROBANTE, 1, 1L, "Tornillo 1/4", "UNIDAD", "IVA_21", null,
                 RenglonVenta.de(bd("1210.00"), bd("3"), bd("21.00")));
     }
 
@@ -1276,8 +1276,8 @@ class RegistroVentaTest {
         ReflectionTestUtils.setField(c, "id", COMPROBANTE);
         when(comprobanteRepository.porClaveScoped(CLAVE)).thenReturn(Optional.of(c));
         when(itemRepository.deComprobanteScoped(COMPROBANTE)).thenReturn(List.of(
-                ItemComprobante.de(FERRETERIA, COMPROBANTE, 1, 1L, "Tornillo 1/4", "UNIDAD", "IVA_21", repartidos.get(0)),
-                ItemComprobante.de(FERRETERIA, COMPROBANTE, 2, 2L, "Cable 2,5 mm", "METRO", "IVA_21",
+                ItemComprobante.de(FERRETERIA, COMPROBANTE, 1, 1L, "Tornillo 1/4", "UNIDAD", "IVA_21", null, repartidos.get(0)),
+                ItemComprobante.de(FERRETERIA, COMPROBANTE, 2, 2L, "Cable 2,5 mm", "METRO", "IVA_21", null,
                         repartidos.get(1))));
         conRecargo(MedioPago.CREDITO, "10.00");
         when(pagoRepository.deComprobanteScoped(COMPROBANTE)).thenReturn(List.of(

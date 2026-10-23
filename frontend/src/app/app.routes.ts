@@ -95,6 +95,12 @@ export const routes: Routes = [
         title: titulo('Nueva compra'),
         loadComponent: () => import('./features/compras/nueva-compra').then((m) => m.NuevaCompra),
       },
+      // Sin guard de rol, como las otras pantallas del Dueño: al Vendedor el API le responde 403 y la pantalla lo avisa sin mostrar datos.
+      {
+        path: 'reportes',
+        title: titulo('Reportes'),
+        loadComponent: () => import('./features/reportes/reportes').then((m) => m.Reportes),
+      },
       {
         path: 'importaciones',
         title: titulo('Importar lista'),

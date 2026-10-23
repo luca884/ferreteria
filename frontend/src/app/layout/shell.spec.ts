@@ -130,7 +130,7 @@ describe('Shell', () => {
 
     const nav = el.querySelector('aside nav[aria-label="Secciones"]');
     expect(nav).not.toBeNull();
-    expect(nav!.querySelectorAll('a').length).toBe(14);
+    expect(nav!.querySelectorAll('a').length).toBe(15);
   });
 
   it('«Presupuestos» va después de «Mostrador» y lleva a /presupuestos, para el Vendedor y para el Dueño (GDS-13)', async () => {
@@ -163,7 +163,7 @@ describe('Shell', () => {
     }
   });
 
-  it('el Dueño ve Mostrador, Artículos, Rubros, Proveedores, Compras y, bajo «Precios», Importar lista, Actualizar precios y Cotización, y bajo «Cobro», Formas de pago, y bajo «Equipo», Usuarios', async () => {
+  it('el Dueño ve Mostrador, Artículos, Rubros, Proveedores, Compras, Reportes y, bajo «Precios», Importar lista, Actualizar precios y Cotización, y bajo «Cobro», Formas de pago, y bajo «Equipo», Usuarios', async () => {
     const el = await render(true);
 
     expect(enlaces(el)).toEqual([
@@ -176,6 +176,7 @@ describe('Shell', () => {
       'Rubros',
       'Proveedores',
       'Compras',
+      'Reportes',
       'Importar lista',
       'Actualizar precios',
       'Cotización',
@@ -284,6 +285,7 @@ describe('Shell', () => {
     ]);
     expect(el.querySelector('a[href="/actualizacion-masiva"]')).toBeNull();
     expect(el.querySelector('a[href="/compras"]')).toBeNull();
+    expect(el.querySelector('a[href="/reportes"]')).toBeNull();
     expect(el.querySelector('nav .grupo')).toBeNull();
   });
 

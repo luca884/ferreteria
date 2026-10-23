@@ -8,6 +8,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 
 /**
  * Un renglon de la venta. COPIA la descripcion, la unidad, el precio y la alicuota del articulo al momento
@@ -74,11 +75,22 @@ public class ItemComprobante {
     @Column(nullable = false, updatable = false, precision = 15, scale = 2)
     private BigDecimal recargo;
 
+    /**
+     * El costo del articulo al vender, sin IVA y en pesos (G66): la ganancia de los reportes no cambia si el costo cambia
+     * despues. Null en las ventas anteriores a la V26 y si el articulo estaba en USD sin dolar guardado.
+     */
+    @Column(name = "costo_unitario", updatable = false, precision = 15, scale = 4)
+    private BigDecimal costoUnitario;
+
+    /** costoUnitario x cantidad, a 2 decimales. Null junto con costoUnitario. */
+    @Column(updatable = false, precision = 15, scale = 2)
+    private BigDecimal costo;
+
     protected ItemComprobante() {}
 
     public static ItemComprobante de(
             Long ferreteriaId, Long comprobanteId, int renglon, Long articuloId, String descripcion, String unidad,
-            String alicuotaIva, RenglonVenta calculado) {
+            String alicuotaIva, BigDecimal costoUnitario, RenglonVenta calculado) {
         ItemComprobante item = new ItemComprobante();
         item.ferreteriaId = ferreteriaId;
         item.comprobanteId = comprobanteId;
@@ -95,6 +107,10 @@ public class ItemComprobante {
         item.neto = calculado.neto();
         item.iva = calculado.iva();
         item.recargo = calculado.recargo();
+        item.costoUnitario = costoUnitario;
+        item.costo = costoUnitario == null
+                ? null
+                : costoUnitario.multiply(calculado.cantidad()).setScale(2, RoundingMode.HALF_UP);
         return item;
     }
 
@@ -111,6 +127,8 @@ public class ItemComprobante {
     public BigDecimal getBruto() { return bruto; }
     public BigDecimal getDescuentoPorcentaje() { return descuentoPorcentaje; }
     public BigDecimal getRecargo() { return recargo; }
+    public BigDecimal getCostoUnitario() { return costoUnitario; }
+    public BigDecimal getCosto() { return costo; }
     public BigDecimal getTotal() { return total; }
     public BigDecimal getNeto() { return neto; }
     public BigDecimal getIva() { return iva; }

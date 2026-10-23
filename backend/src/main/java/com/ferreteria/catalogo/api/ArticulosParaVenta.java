@@ -28,4 +28,10 @@ public interface ArticulosParaVenta {
      * ferreteria del request.
      */
     Optional<BigDecimal> stockVigente(Long id);
+
+    /**
+     * El nombre del rubro de HOY de cada articulo de la ferreteria del request, por id (reportes de ventas). Un articulo
+     * sin rubro, ajeno o inexistente no viene en el mapa.
+     */
+    Map<Long, String> rubros(Collection<Long> ids);
 }

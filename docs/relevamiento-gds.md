@@ -237,11 +237,11 @@ Las clases son las del pedido: A = ya cubierto, B = refina un CU, C = candidato 
 | G60 | **B** | CU-08, fase 5: consulta y **reimpresión** por número, fecha o cliente, **sin "Borrar"** | CU-08 dice "busca la factura" pero la pantalla no está definida. Un comprobante con CAE no se borra |
 | G61 | **E** | — | El vendedor ya es el `Usuario`. Sueldo y domicilio son de RR.HH. |
 | G62 | **D** | Después de GDS-20 (imputación) | Las comisiones existen en ferreterías, pero no el primer día. Hay que liquidarlas sobre comprobantes **cobrados**. **Habilitado (2026-10-19, Luca) como dato derivado:** con la imputación de G59 (CU-12, tramo 3a) cada comprobante a cuenta corriente tiene lo **cobrado** (Σ imputaciones) y lo **pendiente** (lo debido − lo cobrado), y la pantalla de la cuenta muestra los pendientes. Las **comisiones siguen post-MVP**: no hay liquidación, porcentajes ni pago de comisiones |
-| G63 | **B** | Reporte del MVP: ventas por usuario | Es barato: el comprobante ya cuelga de la caja, y la caja del usuario |
+| G63 | **B** | Reporte del MVP: ventas por usuario | Es barato: el comprobante ya cuelga de la caja, y la caja del usuario. **Hecho en CU-15 (2026-10-22, Luca)** |
 | G64 | **A** | CU-10, fase 4. Mantener la sesión con arqueo y **validar egresos contra el saldo** (GDS-36) | La caja de GDS no es una sesión y deja el efectivo en negativo sin avisar. Su fortaleza, el corte por concepto y por medio a la vez, vale la pena en CU-10 |
 | G65 | **B** | CU-10: movimientos de caja manuales (**retiro, gasto, ingreso**) con motivo | Sin esto el arqueo nunca cierra: el dueño saca efectivo o le paga al flete con la caja. GDS los probó y confirma que comparten un solo formulario |
-| G66 | **B** | Reporte del MVP: agregar **ganancia**, **copiando el costo en `ItemComprobante`** | Hay que decidirlo antes de crear la tabla en la fase 4. Después el costo histórico se pierde |
-| G67 | **A** | El MVP trae "ventas del día y de un rango de fechas" | — |
+| G66 | **B** | Reporte del MVP: agregar **ganancia**, **copiando el costo en `ItemComprobante`** | Hay que decidirlo antes de crear la tabla en la fase 4. Después el costo histórico se pierde. **Hecho en CU-15 (2026-10-22, Luca):** el renglón copia el costo desde la V26; las ventas anteriores quedan sin costo y se avisan. Devoluciones y «ganancia con y sin NC» esperan la nota de crédito |
+| G67 | **A** | El MVP trae "ventas del día y de un rango de fechas" | **Hecho en CU-15 (2026-10-22, Luca):** resumen, por usuario, por medio de pago, por día o mes, por artículo, por rubro y con descuento, cada uno con «Desde / Hasta» como GDS |
 | G68 | **A** | CU-10 muestra el total por medio de pago | "Con descuento" iría con G51, ya en D |
 | G69 | **D** | Por usuario, ver G63 | Reportes avanzados, fuera de alcance |
 | G70 | **D** | — | Libro IVA, fuera de alcance. El contador baja los comprobantes de "Mis Comprobantes" de ARCA. El informe final lo lista como "implementar" en Mostrador; acá queda post-MVP |
@@ -517,7 +517,7 @@ Ordenada por prioridad. Las de la fase 3 afectan a CU-04 y van primero. **GDS-31
 | GDS-05 | Mostrar la fecha de la última actualización de costo en el listado y la búsqueda | B | 3 (CU-03) | S |
 | GDS-06 | Movimientos manuales de caja: retiro, gasto e ingreso con motivo, incluidos en el arqueo | B | 4 (CU-10) | M |
 | GDS-07 | Pago mixto: más de un medio por venta, con el resto calculado solo y vuelto en efectivo (importe recibido opcional) | B | 4 (CU-07) | S |
-| GDS-08 | Copiar el costo en `ItemComprobante` y sumar ganancia y ventas por usuario al reporte del MVP | B | 4 | S |
+| GDS-08 | Copiar el costo en `ItemComprobante` y sumar ganancia y ventas por usuario al reporte del MVP. **Hecho en CU-15 (2026-10-22, Luca)** | B | 4 | S |
 | GDS-09 | Bloquear la venta de artículos con precio 0 | B | 4 (CU-07) | S |
 | GDS-10 | Atajos de teclado fijos en el mostrador. **CU-06 decidido (F2, Esc, flechas y Enter).** CU-07 propuesto: F4 cobrar, F3 cantidad, F8 presupuesto, F9 cliente, ↑ y Supr en el ticket. Ver la sección 6 | B | 4 (CU-06/07) | S |
 | GDS-11 | Recargo % por medio de pago (tarjeta de crédito), configurable, con una tabla de medios de pago como la de GDS. **Hecho en CU-07:** tabla de formas de pago por ferretería con su recargo (0 a 200 %), prorrateado entre renglones y por parte en el pago mixto. La columna `Porcentaje` de GDS (probable comisión de la tarjeta) no se implementa | C | 4 (CU-07) | M |
