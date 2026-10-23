@@ -247,6 +247,22 @@ describe('DesglosePrecioVista', () => {
       expect(limpio(el().querySelector('.bonificaciones dd')?.textContent)).toBe('Ninguna');
     });
 
+    it('los ajustes del costo dicen que van sobre el costo de la lista, antes del margen', async () => {
+      await crear(desgloseBase());
+
+      expect(limpio(el().querySelector('.ajustes legend')?.textContent)).toBe(
+        'Descuentos o recargos sobre el costo de la lista (antes del margen)',
+      );
+    });
+
+    it('sin edición, la lectura de los ajustes del costo dice lo mismo', async () => {
+      await crear(desgloseBase(), { dueno: false });
+
+      expect(limpio(el().querySelector('.ajustes-lectura dt')?.textContent)).toBe(
+        'Descuentos o recargos sobre el costo de la lista (antes del margen)',
+      );
+    });
+
     it('los tres ajustes del Dueño llevan «Negativo es descuento, positivo es recargo.» y arrancan con lo guardado', async () => {
       await crear(desgloseBase());
 

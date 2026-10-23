@@ -74,7 +74,7 @@
 
   @if (esDueno()) {
     <fieldset class="ajustes">
-      <legend>Descuentos o recargos del artículo</legend>
+      <legend>Descuentos o recargos sobre el costo de la lista (antes del margen)</legend>
       <p id="ajustes-pista" class="pista">Negativo es descuento, positivo es recargo.</p>
       <div class="ajustes-campos">
         @for (nombre of nombres; track nombre; let i = $index) {
@@ -102,7 +102,7 @@
     </fieldset>
   } @else if (desglose().tieneLista) {
     <dl class="ajustes-lectura">
-      <dt>Descuentos o recargos del artículo</dt>
+      <dt>Descuentos o recargos sobre el costo de la lista (antes del margen)</dt>
       <dd>{{ ajustesGuardadosTexto() }}</dd>
       <dd class="pista">Negativo es descuento, positivo es recargo.</dd>
     </dl>

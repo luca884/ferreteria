@@ -1566,6 +1566,14 @@ describe('ArticuloForm', () => {
     });
 
     describe('ajustes sobre el precio final', () => {
+      it('la sección dice que va sobre el precio final, después del margen', async () => {
+        await crearComponente();
+
+        expect(texto('fieldset.ajustes-precio legend')).toBe(
+          'Descuentos o recargos sobre el precio final (después del margen)',
+        );
+      });
+
       it('arranca sin ajustes, con el botón «Agregar»', async () => {
         await crearComponente();
 
