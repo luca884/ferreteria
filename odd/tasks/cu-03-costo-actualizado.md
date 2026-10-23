@@ -34,3 +34,6 @@ Restricciones: sin migración; tenant solo del JWT; todo cruce con otra tabla un
   - Una importación que no cambia el costo no deja historial; solo marca `articulo.ultima_importacion_id` (`ImportacionService.java:199-204`). Su fecha es `importacion_lista.fecha`.
   - `articulo.creado_en` es la fecha de alta.
   - Las respuestas se arman en `ArticuloService` (7 lugares), `ArticuloVendedorResponse.from` y `BusquedaMostradorService.java:42,62`.
+- L3 (2026-10-23) Checks:
+  - Backend `./mvnw test`: 4499/1. La falla fue `BusquedaMostradorServiceTest.elDtoNoExponeCostoNiMargen`, que fija los campos del DTO; se actualizó (17/0, `f6c308a`). La suite completa no se volvió a correr.
+  - Frontend: 117 archivos en verde. `ng build`: OK.
