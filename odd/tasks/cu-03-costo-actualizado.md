@@ -19,9 +19,9 @@ Restricciones: sin migración; tenant solo del JWT; todo cruce con otra tabla un
 
 ## Tasks
 
-- [ ] T1 · S1, S3 · ruta: inline · Aceptación: `costoAl` en las tres respuestas, con tests de cada fuente de fecha y de aislamiento · Evidencia: — · Risk: item 3 (respuestas de API que consume el front; campo nuevo, aditivo)
-- [ ] T2 · S1, S2 · ruta: inline · Aceptación: columna «Costo al» en Artículos y «Costo al dd/mm/aaaa» en los resultados del mostrador · Evidencia: — · Risk: none
-- [ ] T3 · S1 · ruta: inline · Aceptación: `docs/spec.md` (CU-03 y CU-06) y `docs/relevamiento-gds.md` (G22, GDS-05) dicen qué quedó · Evidencia: — · Risk: none
+- [x] T1 · S1, S3 · ruta: inline · Aceptación: `costoAl` en las tres respuestas, con tests de cada fuente de fecha y de aislamiento · Evidencia: RED `CostoAlIntegrationTest` 4 errores (sin `costoAl`) → GREEN 4/4; contratos de campos actualizados (`MostradorIntegrationTest`, `ArticuloResponseTest`, `BusquedaMostradorServiceTest`); commits `ce852e3`, `f6c308a` · Risk: item 3 (respuestas de API que consume el front; campo nuevo, aditivo)
+- [x] T2 · S1, S2 · ruta: inline · Aceptación: columna «Costo al» en Artículos y «Costo al dd/mm/aaaa» en los resultados del mostrador · Evidencia: RED compilación → GREEN 4 specs; la guarda H07 de la ficha ahora permite solo la etiqueta «Costo al»; ego-browser como Vendedor: columna en Artículos, línea en los resultados y dato en la ficha del mostrador; commit `0a6769e` · Risk: none
+- [x] T3 · S1 · ruta: inline · Aceptación: `docs/spec.md` (CU-03 y CU-06) y `docs/relevamiento-gds.md` (G22, GDS-05) dicen qué quedó · Evidencia: CU-03 punto 5, CU-06 punto 2, G22 y GDS-05; commit `2d17ee0` · Risk: none
 
 ## Log
 
