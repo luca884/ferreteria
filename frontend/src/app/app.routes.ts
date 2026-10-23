@@ -119,6 +119,11 @@ export const routes: Routes = [
           import('./features/stock-bajo-minimo/stock-bajo-minimo').then((m) => m.StockBajoMinimo),
       },
       {
+        path: 'etiquetas',
+        title: titulo('Etiquetas'),
+        loadComponent: () => import('./features/etiquetas/etiquetas').then((m) => m.Etiquetas),
+      },
+      {
         path: 'importaciones',
         title: titulo('Importar lista'),
         loadComponent: () =>
