@@ -25,6 +25,7 @@ Restricciones: sin migración; tenant solo del JWT; todo cruce con otra tabla un
 - [x] T1 · S1, S2, S3 · ruta: inline · Aceptación: endpoint con tests de agrupado, orden, páginas, ventas sin cliente, permisos y aislamiento · Evidencia: RED `ClientesDelArticuloIntegrationTest` 6 fallas (404/403 sin endpoint) → GREEN 6/6; `ModulosArchTest` 40/0, `TenantScopingArchTest` 24/0; commit `68de7b8` · Risk: none
 - [x] T2 · S1, S3 · ruta: inline · Aceptación: pantalla `/articulos/{id}/clientes` y botón «Clientes» en la barra (solo Dueño) · Evidencia: specs escritos antes de la implementación pero corridos después (RED no observado): `clientes-articulo.spec.ts` 8/8, `articulos.spec.ts` 60/60, `articulos.service.spec.ts` 27/27; ego-browser: TOR-001 con 31 clientes en 2 páginas y «Además hubo 16 ventas sin cliente», Vendedor sin botón y con aviso; commit `a9d000e` · Risk: none
 - [x] T3 · S1 · ruta: inline · Aceptación: `docs/spec.md` (CU-03) y `docs/relevamiento-gds.md` (G29) dicen qué quedó · Evidencia: CU-03 punto 7, G29; commit `22b2d07` · Risk: none
+- [x] T4 · S1 · ruta: inline · Aceptación: bloqueante del verificador cerrado (última compra de noche) y el mismo error en «Costo al» · Evidencia: RED `ClientesDelArticuloIntegrationTest.ventaDeNoche` («2026-06-02» en vez de «2026-06-01») y `CostoAlIntegrationTest.nocheYMadrugada` («2026-01-11», «2026-03-07») → GREEN 9/9 y 6/6, también con `-DargLine=-Duser.timezone=UTC`; `MostradorIntegrationTest` 32/0, `TenantScopingArchTest` 24/0; commit `4c09c81` · Risk: item 2 (aislamiento, ya verificado) y corrige un error de `main` en «Costo al»
 
 ## Log
 
@@ -39,3 +40,8 @@ Restricciones: sin migración; tenant solo del JWT; todo cruce con otra tabla un
 - L3 (2026-10-23) Hallazgos:
   - Un artículo no puede repetirse en el ticket (400 «Un artículo no puede repetirse en el ticket»): no hay dos renglones del mismo artículo en una venta. La consulta igual cuenta ventas distintas.
   - Fuera de esta feature: la pantalla de Etiquetas (`cu-03-etiquetas`, ya en main) usaba la clase `.etiqueta`, que es la pastilla global de `styles.css:696` (nowrap, fondo gris). Se renombró a `.rotulo` con un test que lo fija; commit `01d82f0`.
+- L4 (2026-10-23) Verificador (opus): S2 y S3 pasan; aislamiento sin fugas (joins por `ferreteria_id`, tenant solo del JWT, 404/403). Un bloqueante:
+  - B1: `ultimaCompra` salía con el día siguiente para ventas desde las 21:00. La JVM corre en hora de Buenos Aires y Hibernate guarda en UTC (`docs/spec.md`, «Despliegue: zona horaria»), así que `date_format` en SQL da el día UTC.
+  - Causa de fondo: en `cu-03-costo-actualizado` (`727cf73`) se cambió «Costo al» a `date_format` por un hallazgo del primer verificador que era falso positivo (sus datos de prueba eran textos crudos, que no pasan por la conversión). Ese cambio está en `main`: «Costo al» corre al día siguiente lo guardado de noche.
+  - Arreglo (`4c09c81`): las dos consultas devuelven la fecha y hora guardada y Java la pasa a día con la zona de la JVM, la misma conversión de Hibernate. Los tests escriben las fechas como Hibernate (pasadas a UTC, helper `comoLaGuardaHibernate`).
+  - Tests de regresión sumados de las pruebas del verificador: tamaño de página acotado, artículo dado de baja, ferretería por parámetro o header ignorada.
