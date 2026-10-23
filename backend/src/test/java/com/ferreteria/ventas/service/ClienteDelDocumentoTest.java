@@ -52,7 +52,7 @@ class ClienteDelDocumentoTest {
     @Test
     @DisplayName("con clienteId el nombre sale del cliente y el texto libre se ignora")
     void gana_el_cliente() {
-        when(clientes.buscar(7L)).thenReturn(Optional.of(new ClienteReferencia(7L, "Ferretería Norte SRL", true)));
+        when(clientes.buscar(7L)).thenReturn(Optional.of(new ClienteReferencia(7L, "Ferretería Norte SRL", true, false)));
 
         ClienteDelDocumento.Elegido elegido = resolutor.resolver(7L, "otro nombre escrito a mano");
 
@@ -73,7 +73,7 @@ class ClienteDelDocumentoTest {
     @Test
     @DisplayName("un cliente desactivado es 422: se usa solo uno activo")
     void desactivado() {
-        when(clientes.buscar(8L)).thenReturn(Optional.of(new ClienteReferencia(8L, "Viejo", false)));
+        when(clientes.buscar(8L)).thenReturn(Optional.of(new ClienteReferencia(8L, "Viejo", false, false)));
 
         assertThatThrownBy(() -> resolutor.resolver(8L, null))
                 .isInstanceOf(ReglaDeNegocioException.class)
@@ -95,7 +95,7 @@ class ClienteDelDocumentoTest {
     @Test
     @DisplayName("resolverParaVenta toma al cliente (tomarParaVenta, no buscar) y copia su razón social")
     void paraVentaTomaAlCliente() {
-        when(clientes.tomarParaVenta(7L)).thenReturn(Optional.of(new ClienteReferencia(7L, "Ferretería Norte SRL", true)));
+        when(clientes.tomarParaVenta(7L)).thenReturn(Optional.of(new ClienteReferencia(7L, "Ferretería Norte SRL", true, false)));
 
         ClienteDelDocumento.Elegido elegido = resolutor.resolverParaVenta(7L);
 
@@ -109,7 +109,7 @@ class ClienteDelDocumentoTest {
     @DisplayName("resolverParaVenta: ajeno o inexistente es 404 y desactivado es 422, igual que resolver")
     void paraVentaMismosRechazos() {
         when(clientes.tomarParaVenta(9L)).thenReturn(Optional.empty());
-        when(clientes.tomarParaVenta(8L)).thenReturn(Optional.of(new ClienteReferencia(8L, "Viejo", false)));
+        when(clientes.tomarParaVenta(8L)).thenReturn(Optional.of(new ClienteReferencia(8L, "Viejo", false, false)));
 
         assertThatThrownBy(() -> resolutor.resolverParaVenta(9L))
                 .isInstanceOf(ResourceNotFoundException.class)
@@ -122,7 +122,7 @@ class ClienteDelDocumentoTest {
     @Test
     @DisplayName("resolver (presupuesto y remito) sigue usando buscar y NUNCA toma la fila del cliente")
     void resolverPlanoNoTomaLaFila() {
-        when(clientes.buscar(7L)).thenReturn(Optional.of(new ClienteReferencia(7L, "Norte", true)));
+        when(clientes.buscar(7L)).thenReturn(Optional.of(new ClienteReferencia(7L, "Norte", true, false)));
 
         resolutor.resolver(7L, null);
 
@@ -135,7 +135,7 @@ class ClienteDelDocumentoTest {
     @Test
     @DisplayName("resolverParaCobranza toma al cliente (tomarParaVenta, no buscar) y copia su razón social")
     void paraCobranzaTomaAlCliente() {
-        when(clientes.tomarParaVenta(7L)).thenReturn(Optional.of(new ClienteReferencia(7L, "Ferretería Norte SRL", true)));
+        when(clientes.tomarParaVenta(7L)).thenReturn(Optional.of(new ClienteReferencia(7L, "Ferretería Norte SRL", true, false)));
 
         ClienteDelDocumento.Elegido elegido = resolutor.resolverParaCobranza(7L);
 
@@ -149,7 +149,7 @@ class ClienteDelDocumentoTest {
     @DisplayName("resolverParaCobranza: ajeno o inexistente es 404 y desactivado es 422 «El cliente está desactivado.»")
     void paraCobranzaRechazos() {
         when(clientes.tomarParaVenta(9L)).thenReturn(Optional.empty());
-        when(clientes.tomarParaVenta(8L)).thenReturn(Optional.of(new ClienteReferencia(8L, "Viejo", false)));
+        when(clientes.tomarParaVenta(8L)).thenReturn(Optional.of(new ClienteReferencia(8L, "Viejo", false, false)));
 
         assertThatThrownBy(() -> resolutor.resolverParaCobranza(9L))
                 .isInstanceOf(ResourceNotFoundException.class)
@@ -163,7 +163,7 @@ class ClienteDelDocumentoTest {
     @DisplayName("resolverParaCobranza NO pide saldo, cuenta habilitada ni límite: un cliente activo (la referencia solo trae id, nombre y activo) resuelve: adelanto")
     void paraCobranzaNoExigeSaldoNiCuenta() {
         // ClienteReferencia no lleva saldo ni límite: el resolutor ni siquiera puede exigirlos.
-        when(clientes.tomarParaVenta(5L)).thenReturn(Optional.of(new ClienteReferencia(5L, "Sin deuda ni cuenta", true)));
+        when(clientes.tomarParaVenta(5L)).thenReturn(Optional.of(new ClienteReferencia(5L, "Sin deuda ni cuenta", true, false)));
 
         assertThat(resolutor.resolverParaCobranza(5L).id()).isEqualTo(5L);
     }
@@ -178,7 +178,7 @@ class ClienteDelDocumentoTest {
     @Test
     @DisplayName("resolver y resolverParaVenta siguen igual con resolverParaCobranza presente (regresión: resolver usa buscar)")
     void regresionDeLosOtrosResolutores() {
-        when(clientes.buscar(7L)).thenReturn(Optional.of(new ClienteReferencia(7L, "Norte", true)));
+        when(clientes.buscar(7L)).thenReturn(Optional.of(new ClienteReferencia(7L, "Norte", true, false)));
 
         resolutor.resolver(7L, null);
 
@@ -191,7 +191,7 @@ class ClienteDelDocumentoTest {
     @Test
     @DisplayName("resolverParaAnulacion toma al cliente (tomarParaVenta: lock X, no buscar) y copia su razón social")
     void paraAnulacionTomaAlCliente() {
-        when(clientes.tomarParaVenta(7L)).thenReturn(Optional.of(new ClienteReferencia(7L, "Ferretería Norte SRL", true)));
+        when(clientes.tomarParaVenta(7L)).thenReturn(Optional.of(new ClienteReferencia(7L, "Ferretería Norte SRL", true, false)));
 
         ClienteDelDocumento.Elegido elegido = resolutor.resolverParaAnulacion(7L);
 
@@ -205,7 +205,7 @@ class ClienteDelDocumentoTest {
     @DisplayName("resolverParaAnulacion: ajeno o inexistente es 404 y desactivado es 422 «El cliente está desactivado.» (spec literal)")
     void paraAnulacionRechazos() {
         when(clientes.tomarParaVenta(9L)).thenReturn(Optional.empty());
-        when(clientes.tomarParaVenta(8L)).thenReturn(Optional.of(new ClienteReferencia(8L, "Viejo", false)));
+        when(clientes.tomarParaVenta(8L)).thenReturn(Optional.of(new ClienteReferencia(8L, "Viejo", false, false)));
 
         assertThatThrownBy(() -> resolutor.resolverParaAnulacion(9L))
                 .isInstanceOf(ResourceNotFoundException.class)
@@ -218,7 +218,7 @@ class ClienteDelDocumentoTest {
     @Test
     @DisplayName("resolverParaAnulacion no exige saldo, cuenta habilitada ni límite (un cliente activo sin deuda resuelve) y sin cliente es error de programación")
     void paraAnulacionNoExigeNada() {
-        when(clientes.tomarParaVenta(5L)).thenReturn(Optional.of(new ClienteReferencia(5L, "Sin deuda ni cuenta", true)));
+        when(clientes.tomarParaVenta(5L)).thenReturn(Optional.of(new ClienteReferencia(5L, "Sin deuda ni cuenta", true, false)));
 
         assertThat(resolutor.resolverParaAnulacion(5L).id()).isEqualTo(5L);
         assertThatThrownBy(() -> resolutor.resolverParaAnulacion(null)).isInstanceOf(IllegalArgumentException.class);

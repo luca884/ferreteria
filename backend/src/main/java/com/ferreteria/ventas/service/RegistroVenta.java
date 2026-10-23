@@ -97,6 +97,7 @@ public class RegistroVenta {
     private final ClienteDelDocumento clienteDelDocumento;
     private final CuentaCorrienteParaVenta cuentaCorriente;
     private final TopeDeDescuento topeDeDescuento;
+    private final ConsumidorFinal consumidorFinal;
 
     public RegistroVenta(
             ArticulosParaVenta articulosParaVenta, StockService stockService,
@@ -106,8 +107,9 @@ public class RegistroVenta {
             PresupuestoRepository presupuestoRepository, RemitoRepository remitoRepository,
             ItemRemitoRepository itemRemitoRepository, ClienteDelDocumento clienteDelDocumento,
             CuentaCorrienteParaVenta cuentaCorriente, TopeDeDescuento topeDeDescuento,
-            ItemPresupuestoRepository itemPresupuestoRepository) {
+            ItemPresupuestoRepository itemPresupuestoRepository, ConsumidorFinal consumidorFinal) {
         this.itemPresupuestoRepository = itemPresupuestoRepository;
+        this.consumidorFinal = consumidorFinal;
         this.topeDeDescuento = topeDeDescuento;
         this.clienteDelDocumento = clienteDelDocumento;
         this.cuentaCorriente = cuentaCorriente;
@@ -166,6 +168,8 @@ public class RegistroVenta {
         List<ConfirmarVenta.PagoPedido> partes = pagosDe(pedido, TotalesVenta.de(sinRecargo).total());
         List<RenglonVenta> calculados = RecargoVenta.repartir(sinRecargo, recargoDe(partes, formas));
         TotalesVenta totales = TotalesVenta.de(calculados);
+        // GDS-32: desde el tope, la venta facturable sin un cliente con documento no se registra (antes de escribir nada).
+        consumidorFinal.verificar(pedido.facturable(), cliente.identificado(), totales.total());
 
         // CC-005, CC-006: el cupo se verifica antes de escribir nada, con el saldo vigente bajo el lock del cliente.
         BigDecimal importeCuenta = importeACuenta(partes, formas);

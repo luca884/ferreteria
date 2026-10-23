@@ -22,7 +22,8 @@ public class ClientesParaVentaImpl implements ClientesParaVenta {
     @Transactional(readOnly = true)
     public Optional<ClienteReferencia> buscar(Long id) {
         return repositorio.findScoped(id)
-                .map(c -> new ClienteReferencia(c.getId(), c.getRazonSocial(), c.isActivo()));
+                .map(c -> new ClienteReferencia(c.getId(), c.getRazonSocial(), c.isActivo(),
+                        c.getTipoDocumento() != null));
     }
 
     /**
@@ -33,6 +34,6 @@ public class ClientesParaVentaImpl implements ClientesParaVenta {
     @Transactional(propagation = Propagation.MANDATORY)
     public Optional<ClienteReferencia> tomarParaVenta(Long id) {
         return repositorio.bloquearCuentaScoped(id)
-                .map(c -> new ClienteReferencia(id, c.getRazonSocial(), c.getActivo()));
+                .map(c -> new ClienteReferencia(id, c.getRazonSocial(), c.getActivo(), c.getTipoDocumento() != null));
     }
 }

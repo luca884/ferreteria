@@ -42,7 +42,7 @@ class ClientesParaVentaImplTest {
 
         Optional<ClienteReferencia> referencia = puerto.buscar(7L);
 
-        assertThat(referencia).contains(new ClienteReferencia(7L, "Ferretería Norte", true));
+        assertThat(referencia).contains(new ClienteReferencia(7L, "Ferretería Norte", true, false));
     }
 
     @Test
@@ -52,7 +52,7 @@ class ClientesParaVentaImplTest {
         org.springframework.test.util.ReflectionTestUtils.setField(c, "id", 8L);
         when(repositorio.findScoped(8L)).thenReturn(Optional.of(c));
 
-        assertThat(puerto.buscar(8L)).contains(new ClienteReferencia(8L, "Viejo", false));
+        assertThat(puerto.buscar(8L)).contains(new ClienteReferencia(8L, "Viejo", false, false));
     }
 
     @Test
@@ -71,7 +71,7 @@ class ClientesParaVentaImplTest {
         when(repositorio.bloquearCuentaScoped(7L)).thenReturn(Optional.of(
                 new CuentaFalsa("Ferretería Norte", BigDecimal.ZERO, null, true)));
 
-        assertThat(puerto.tomarParaVenta(7L)).contains(new ClienteReferencia(7L, "Ferretería Norte", true));
+        assertThat(puerto.tomarParaVenta(7L)).contains(new ClienteReferencia(7L, "Ferretería Norte", true, false));
         org.mockito.Mockito.verify(repositorio, org.mockito.Mockito.never()).findScoped(org.mockito.ArgumentMatchers.any());
     }
 
@@ -81,7 +81,7 @@ class ClientesParaVentaImplTest {
         when(repositorio.bloquearCuentaScoped(8L)).thenReturn(Optional.of(
                 new CuentaFalsa("Viejo", new BigDecimal("10.00"), new BigDecimal("500.00"), false)));
 
-        assertThat(puerto.tomarParaVenta(8L)).contains(new ClienteReferencia(8L, "Viejo", false));
+        assertThat(puerto.tomarParaVenta(8L)).contains(new ClienteReferencia(8L, "Viejo", false, false));
     }
 
     @Test

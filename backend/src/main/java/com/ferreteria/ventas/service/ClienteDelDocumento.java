@@ -16,8 +16,11 @@ import java.util.Optional;
 @Component
 public class ClienteDelDocumento {
 
-    /** El cliente tal como queda en el documento: el id (nulo si no se eligió uno) y el nombre a copiar. */
-    public record Elegido(Long id, String nombre) {}
+    /**
+     * El cliente tal como queda en el documento: el id (nulo si no se eligió uno), el nombre a copiar y si está identificado
+     * (tiene documento; Consumidor Final o un nombre libre nunca lo está).
+     */
+    public record Elegido(Long id, String nombre, boolean identificado) {}
 
     private final ClientesParaVenta clientes;
 
@@ -27,7 +30,7 @@ public class ClienteDelDocumento {
 
     public Elegido resolver(Long clienteId, String nombreLibre) {
         if (clienteId == null) {
-            return new Elegido(null, nombreLibre);
+            return new Elegido(null, nombreLibre, false);
         }
         return elegido(clientes.buscar(clienteId));
     }
@@ -41,7 +44,7 @@ public class ClienteDelDocumento {
      */
     public Elegido resolverParaVenta(Long clienteId) {
         if (clienteId == null) {
-            return new Elegido(null, null);
+            return new Elegido(null, null, false);
         }
         return elegido(clientes.tomarParaVenta(clienteId));
     }
@@ -77,6 +80,6 @@ public class ClienteDelDocumento {
         if (!cliente.activo()) {
             throw new ReglaDeNegocioException("El cliente está desactivado.");
         }
-        return new Elegido(cliente.id(), cliente.razonSocial());
+        return new Elegido(cliente.id(), cliente.razonSocial(), cliente.identificado());
     }
 }

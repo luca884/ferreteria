@@ -42,6 +42,9 @@ public interface ClienteRepository extends TenantScopedRepository<Cliente, Long>
         BigDecimal getLimiteCuentaCorriente();
 
         boolean getActivo();
+
+        /** DNI, CUIT o CUIL, o null sin documento, de la misma lectura actual (la venta lo pide desde el tope, GDS-32). */
+        String getTipoDocumento();
     }
 
     /**
@@ -51,7 +54,8 @@ public interface ClienteRepository extends TenantScopedRepository<Cliente, Long>
      * actual y trae lo último confirmado. Requiere transacción.
      */
     @Query(value = "select razon_social as razonSocial, saldo as saldo, "
-            + "limite_cuenta_corriente as limiteCuentaCorriente, activo as activo from cliente where id = :id and ferreteria_id = :fid for update", nativeQuery = true)
+            + "limite_cuenta_corriente as limiteCuentaCorriente, activo as activo, "
+            + "tipo_documento as tipoDocumento from cliente where id = :id and ferreteria_id = :fid for update", nativeQuery = true)
     Optional<CuentaBloqueada> bloquearCuenta(@Param("fid") Long ferreteriaId, @Param("id") Long id);
 
     /**
