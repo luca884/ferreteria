@@ -169,6 +169,63 @@ describe('NuevaCompra', () => {
     expect(el().textContent).toContain('Tornillo 1/4 ya está en la compra.');
   });
 
+  describe('Enter con un código exacto (lector)', () => {
+    async function escanear(codigo: string) {
+      await escribir('input[name=busqueda]', codigo);
+      campo<HTMLFormElement>('form.buscador').dispatchEvent(new Event('submit'));
+      await refrescar();
+    }
+
+    it('agrega el artículo sin clic y deja el buscador vacío y sin resultados', async () => {
+      await crear();
+
+      await escanear('tor-1');
+
+      expect(el().querySelectorAll('table.renglones tbody tr')).toHaveLength(1);
+      expect(campo<HTMLInputElement>('input[name="cantidad-0"]').value).toBe('1');
+      expect(campo<HTMLInputElement>('input[name=busqueda]').value).toBe('');
+      expect(el().querySelector('.resultados')).toBeNull();
+    });
+
+    it('también con el código de barras o el del proveedor', async () => {
+      await crear();
+      articulos.buscar.mockReturnValue(
+        of({
+          items: [{ ...tornillo, codigoBarras: '7790000000011', codigoProveedor: 'DBS-100' }],
+          page: 0,
+          size: 8,
+          totalElements: 1,
+          totalPages: 1,
+        }),
+      );
+
+      await escanear('7790000000011');
+      await escanear('DBS-100');
+
+      expect(el().querySelectorAll('table.renglones tbody tr')).toHaveLength(1);
+      expect(campo<HTMLInputElement>('input[name="cantidad-0"]').value).toBe('2');
+    });
+
+    it('escanear de nuevo el mismo artículo suma 1 a la cantidad', async () => {
+      await crear();
+
+      await escanear('TOR-1');
+      await escanear('TOR-1');
+
+      expect(el().querySelectorAll('table.renglones tbody tr')).toHaveLength(1);
+      expect(campo<HTMLInputElement>('input[name="cantidad-0"]').value).toBe('2');
+    });
+
+    it('sin coincidencia exacta muestra los resultados para elegir', async () => {
+      await crear();
+
+      await escanear('TOR');
+
+      expect(el().querySelectorAll('table.renglones tbody tr')).toHaveLength(0);
+      expect(el().querySelector('.resultados')?.textContent).toContain('Tornillo 1/4');
+    });
+  });
+
   it('la vista previa manda el encabezado y los renglones sin clave y muestra anteriores, nuevos y advertencias', async () => {
     await crear();
     await cargarCompra();
