@@ -81,6 +81,11 @@ export const routes: Routes = [
           import('./features/articulos/movimientos-articulo').then((m) => m.MovimientosArticulo),
       },
       {
+        path: 'articulos/:id/clientes',
+        title: titulo('Clientes del artículo'),
+        loadComponent: () => import('./features/articulos/clientes-articulo').then((m) => m.ClientesArticulo),
+      },
+      {
         path: 'articulos/:id',
         title: titulo('Artículo'),
         loadComponent: () => import('./features/articulos/articulo-form').then((m) => m.ArticuloForm),

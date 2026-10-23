@@ -9,6 +9,7 @@ import {
   AjustesRequest,
   Articulo,
   ArticuloRequest,
+  ClientesDelArticulo,
   ConfiguracionPrecios,
   DesglosePrecio,
   FiltroMovimientos,
@@ -84,6 +85,12 @@ export class ArticulosService {
     if (filtro.desde) params = params.set('desde', filtro.desde);
     if (filtro.hasta) params = params.set('hasta', filtro.hasta);
     return this.http.get<PageResponse<MovimientoStock>>(`${this.url}/${id}/movimientos-stock`, { params });
+  }
+
+  /** G29: clientes que compraron el artículo, la compra más nueva primero (solo el Dueño). */
+  clientes(id: number, page: number): Observable<ClientesDelArticulo> {
+    const params = new HttpParams().set('page', page).set('size', 20);
+    return this.http.get<ClientesDelArticulo>(`${this.url}/${id}/clientes`, { params });
   }
 
   /** Margen por defecto y múltiplo de redondeo de la ferretería: para el precio final en vivo. */

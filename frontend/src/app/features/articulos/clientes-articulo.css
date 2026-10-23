@@ -1,0 +1,29 @@
+:host {
+  display: block;
+  width: 100%;
+}
+:host > :not(app-barra-acciones) {
+  max-width: 1040px;
+}
+
+.articulo {
+  margin: 0 0 var(--e-3);
+}
+
+.clientes {
+  margin-bottom: var(--e-4);
+}
+.clientes .etiqueta {
+  margin-left: var(--e-2);
+}
+.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.paginas {
+  display: flex;
+  align-items: center;
+  gap: var(--e-3);
+  margin-bottom: var(--e-4);
+}

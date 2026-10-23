@@ -1,0 +1,78 @@
+<app-barra-acciones>
+  <h1>Clientes que lo compraron</h1>
+  <a class="btn accion-barra volver" [routerLink]="['/articulos', id]">Volver a la ficha</a>
+</app-barra-acciones>
+
+@if (!auth.esDueno()) {
+  <p class="ayuda estado-vacio" role="status">Los clientes que compraron el artículo son solo del Dueño.</p>
+} @else {
+  @if (articulo(); as a) {
+    <p class="articulo">
+      <strong>{{ a.codigoInterno }} · {{ a.descripcion }}</strong>
+    </p>
+  }
+
+  @if (error(); as texto) {
+    <div class="error con-accion" role="alert">
+      <span>{{ texto }}</span>
+      <button type="button" class="secundario chico reintentar" (click)="cargar(pagina()?.page ?? 0)">Reintentar</button>
+    </div>
+  }
+
+  @if (pagina(); as actual) {
+    @if (actual.items.length === 0) {
+      <p class="ayuda estado-vacio" role="status">Ningún cliente compró este artículo todavía.</p>
+    } @else {
+      <table class="clientes">
+        <caption class="sr-only">
+          Clientes que compraron el artículo, la compra más nueva primero.
+        </caption>
+        <thead>
+          <tr>
+            <th scope="col">Cliente</th>
+            <th scope="col" class="num">Compras</th>
+            <th scope="col" class="num">Cantidad</th>
+            <th scope="col">Última compra</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (c of actual.items; track c.clienteId) {
+            <tr>
+              <td>
+                {{ c.razonSocial }}
+                @if (!c.activo) {
+                  <span class="etiqueta">Desactivado</span>
+                }
+              </td>
+              <td class="num">{{ c.compras }}</td>
+              <td class="num">{{ cantidad(c.cantidad) }}</td>
+              <td>{{ fecha(c.ultimaCompra) }}</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+
+      @if (actual.totalPages > 1) {
+        <nav class="paginas" aria-label="Páginas de clientes">
+          <button type="button" class="secundario chico" [disabled]="actual.page === 0" (click)="cargar(actual.page - 1)">
+            Anterior
+          </button>
+          <span>Página {{ actual.page + 1 }} de {{ actual.totalPages }}</span>
+          <button
+            type="button"
+            class="secundario chico"
+            [disabled]="actual.page + 1 >= actual.totalPages"
+            (click)="cargar(actual.page + 1)"
+          >
+            Siguiente
+          </button>
+        </nav>
+      }
+    }
+    @if (actual.ventasSinCliente > 0) {
+      <p class="ayuda sin-cliente">{{ sinCliente(actual.ventasSinCliente) }}</p>
+    }
+  } @else if (cargando()) {
+    <p class="ayuda estado-vacio">Cargando…</p>
+  }
+}

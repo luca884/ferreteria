@@ -408,3 +408,29 @@ describe('ArticulosService › movimientos de stock', () => {
     expect(total).toBe(41);
   });
 });
+
+describe('ArticulosService › clientes que compraron el artículo', () => {
+  let service: ArticulosService;
+  let http: HttpTestingController;
+
+  beforeEach(() => {
+    TestBed.configureTestingModule({ providers: [provideHttpClient(), provideHttpClientTesting()] });
+    service = TestBed.inject(ArticulosService);
+    http = TestBed.inject(HttpTestingController);
+  });
+
+  afterEach(() => http.verify());
+
+  it('pide GET /articulos/{id}/clientes con la página y 20 por página', () => {
+    let sinCliente: number | undefined;
+    service.clientes(7, 1).subscribe((p) => (sinCliente = p.ventasSinCliente));
+
+    const req = http.expectOne((r) => r.url.endsWith('/articulos/7/clientes'));
+    expect(req.request.method).toBe('GET');
+    expect(req.request.params.get('page')).toBe('1');
+    expect(req.request.params.get('size')).toBe('20');
+    req.flush({ items: [], page: 1, size: 20, totalElements: 21, totalPages: 2, ventasSinCliente: 4 });
+
+    expect(sinCliente).toBe(4);
+  });
+});
