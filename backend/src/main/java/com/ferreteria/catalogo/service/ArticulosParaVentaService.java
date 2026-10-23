@@ -68,6 +68,12 @@ public class ArticulosParaVentaService implements ArticulosParaVenta {
 
     @Override
     @Transactional(readOnly = true)
+    public Optional<BigDecimal> stockActual(Long id) {
+        return Optional.ofNullable(articuloRepository.stockDeScoped(List.of(id)).get(id));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public Map<Long, String> rubros(Collection<Long> ids) {
         return articuloRepository.rubrosDeScoped(ids);
     }

@@ -203,6 +203,21 @@ class ArticulosParaVentaServiceTest extends IntegrationTestBase {
         return jdbc.queryForObject("select stock_actual from articulo where id = ?", BigDecimal.class, articuloId);
     }
 
+    @Test
+    @DisplayName("stockActual trae el stock de hoy de un articulo propio, activo o no, y nada de uno ajeno o inexistente")
+    void stockActualSoloDeLosPropios() {
+        Long a = ferreteria();
+        Long b = ferreteria();
+        Long propio = articulo(a, "S-1", "Propio", "UNIDAD", "IVA_21", "10.00", "7.5", false);
+        Long ajeno = articulo(b, "S-2", "Ajeno", "UNIDAD", "IVA_21", "10.00", "3", true);
+        TenantContext.setCurrentFerreteriaId(a);
+
+        assertThat(articulosParaVenta.stockActual(propio)).hasValueSatisfying(
+                stock -> assertThat(stock).isEqualByComparingTo("7.5"));
+        assertThat(articulosParaVenta.stockActual(ajeno)).isEmpty();
+        assertThat(articulosParaVenta.stockActual(999_999_999L)).isEmpty();
+    }
+
     private Long ferreteria() {
         String cuit = String.format("30-%08d-%d", 79800000 + SECUENCIA.incrementAndGet(), 1);
         jdbc.update("insert into ferreteria (razon_social, cuit, condicion_iva) "
