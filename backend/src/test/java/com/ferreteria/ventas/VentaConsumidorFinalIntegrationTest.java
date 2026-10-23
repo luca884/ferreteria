@@ -63,6 +63,25 @@ class VentaConsumidorFinalIntegrationTest extends VentasTestBase {
     }
 
     @Test
+    @DisplayName("el rechazo no gasta la clave ni el número: la misma clave con un cliente con DNI vende el N.º 1")
+    void elRechazoNoGastaClaveNiNumero() throws Exception {
+        Tienda t = conTope("1000.00");
+        long a = articulo(t, "Taladro", "UNIDAD", "1500.00", "10");
+        long conDni = cliente(t, "Juan Perez", "DNI", "30111222");
+        Map<String, Object> cuerpo = mapa(clave(), null, "1500.00", linea(a, "1", "1500.00"));
+        cuerpo.put("formaPagoId", formaDe(t, "EFECTIVO"));
+
+        postJson("/api/ventas", login(t.emailVendedor()), objectMapper.writeValueAsString(cuerpo))
+                .andExpect(status().is(422));
+        cuerpo.put("clienteId", conDni);
+        JsonNode venta = json(postJson("/api/ventas", login(t.emailVendedor()), objectMapper.writeValueAsString(cuerpo))
+                .andExpect(status().isCreated()));
+
+        assertThat(venta.get("numero").asLong()).isEqualTo(1);
+        assertThat(comprobantes(t)).isEqualTo(1);
+    }
+
+    @Test
     @DisplayName("un centavo debajo del tope se vende sin cliente")
     void debajoDelTope() throws Exception {
         Tienda t = conTope("1000.00");
