@@ -24,6 +24,8 @@ Restricciones: la ferretería sale del JWT; artículo ajeno da 404; `stock` no p
 
 ## Log
 
+- L3 (2026-10-23) Suite backend 4450/0 sobre d45d60a. Verificador opus: pasa S1-S6 sin blockers. Advisory 1: el nombre de usuario de la consulta nativa no filtraba por ferretería (solo con datos corruptos). Corregido test-first con `referenciasAjenasNoSeFiltran`, que también fija que comprobante, remito y compra ajenos no se muestran (RED con el nombre ajeno → GREEN 6/6). La suite completa no se volvió a correr: el cambio es una condición en una consulta que solo usa este endpoint.
+
 - L1 (2026-10-23) Pedido original, textual:
   > dale, cualquier duda o dilema o forma de hacerlo, vamos por como lo hace gds
   Respuesta a la propuesta: «Movimientos de stock por artículo (G29/GDS-17) … pantalla en la ficha del artículo con fecha, tipo (venta, compra, ajuste), cantidad, saldo, usuario y comprobante, como GDS.»

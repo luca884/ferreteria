@@ -41,7 +41,8 @@ public interface MovimientoStockRepository extends TenantScopedRepository<Movimi
 
     @Query(nativeQuery = true, value = """
             select m.id as id, m.fecha as fecha, m.tipo as tipo, m.cantidad as cantidad, m.motivo as motivo,
-                   (select u.nombre from usuario u where u.id = m.usuario_id) as usuario,
+                   (select u.nombre from usuario u where u.id = m.usuario_id and u.ferreteria_id = m.ferreteria_id)
+                       as usuario,
                    (select c.numero from comprobante c where c.id = m.comprobante_id and c.ferreteria_id = m.ferreteria_id)
                        as ventaNumero,
                    (select r.numero from remito r where r.id = m.remito_id and r.ferreteria_id = m.ferreteria_id)
