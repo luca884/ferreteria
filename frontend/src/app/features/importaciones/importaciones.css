@@ -219,6 +219,16 @@ details.no-estan summary {
 .navegacion-hojas select {
   min-width: 160px;
 }
+.nuevos-sin-crear,
+.nuevos-no-creados {
+  margin-bottom: var(--e-3);
+  padding: var(--e-2) var(--e-3);
+  border: 1px solid var(--advertencia-borde);
+  border-radius: 6px;
+  background: var(--advertencia-fondo);
+  color: var(--advertencia);
+  font-weight: 600;
+}
 .sin-filas-elegidas {
   margin-bottom: var(--e-2);
   color: var(--error);

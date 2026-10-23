@@ -44,6 +44,7 @@ import {
   conteosConSeleccion,
   filasElegidas,
   marcarNinguna,
+  nuevasElegidas,
   seleccionInicial,
   unirFilas,
 } from './seleccion-filas';
@@ -228,6 +229,12 @@ export class Importaciones implements OnInit {
   protected readonly sinFilasElegidas = computed(
     () => cantidadDeAplicadas(this.seleccion(), this.filasDeVista(), this.crearNuevos()) === 0,
   );
+  /** Las nuevas elegidas que no se van a crear porque la casilla está apagada. */
+  protected readonly nuevosSinCrear = computed(() =>
+    this.crearNuevos() ? 0 : nuevasElegidas(this.seleccion(), this.filasDeVista()),
+  );
+  /** Las nuevas que quedaron sin crear en la importación aplicada: el resultado lo avisa. */
+  protected readonly nuevosNoCreados = signal(0);
   protected readonly advertenciasVisibles = computed(
     () => this.vistaPrevia()?.advertencias.slice(0, this.advertenciasMostradas()) ?? [],
   );
@@ -510,6 +517,7 @@ export class Importaciones implements OnInit {
     if (this.sinFilasElegidas()) return;
     const filas = filasElegidas(this.seleccion(), this.filasDeVista());
     const antes = { seleccion: this.seleccion(), filas: this.filasDeVista() };
+    const nuevosSinCrear = this.nuevosSinCrear();
     this.limpiarMensajes();
     this.aplicando.set(true);
     this.service
@@ -523,6 +531,7 @@ export class Importaciones implements OnInit {
         next: (importacion) => {
           this.aplicando.set(false);
           this.vistaPrevia.set(null);
+          this.nuevosNoCreados.set(nuevosSinCrear);
           this.resumen.set(importacion);
           // El proveedor guardó mapeo, IVA y bonificaciones: se recargan para precargar lo nuevo.
           this.proveedoresService.listar().subscribe({ next: (lista) => this.proveedores.set(lista) });
