@@ -105,6 +105,45 @@ class ConfiguracionPreciosIntegrationTest extends IntegrationTestBase {
         return catalogo;
     }
 
+    /** Articulo de costo 1000 en un rubro nuevo de margen 40, sin margen propio. Devuelve su id. */
+    private long articuloConRubro(String token) throws Exception {
+        String rubro = postJson("/api/rubros", token,
+                        "{\"nombre\": \"" + unico("Rubro") + "\", \"margenPorcentaje\": 40}")
+                .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
+        var body = objectMapper.createObjectNode()
+                .put("codigoInterno", unico("CFG"))
+                .put("descripcion", "Articulo con rubro")
+                .put("costo", 1000)
+                .put("unidad", "UNIDAD")
+                .put("rubroId", objectMapper.readTree(rubro).get("id").asLong());
+        String respuesta = postJson("/api/articulos", token, objectMapper.writeValueAsString(body))
+                .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
+        return objectMapper.readTree(respuesta).get("id").asLong();
+    }
+
+    @Test
+    void siCambiaSoloElMargenPorDefectoNoTocaALosArticulosConRubro() throws Exception {
+        String dueno = ferreteriaConConfiguracionPropia();
+        long conRubro = articuloConRubro(dueno);
+        // 1000 x 1,40 x 1,21 = 1694 -> 1700
+        assertThat(precio(conRubro)).isEqualByComparingTo("1700");
+
+        getResult(URL_CONTEO + "?margenDefectoPorcentaje=60&redondeoMultiplo=50", dueno)
+                .andExpect(jsonPath("$.cantidad", is(0)));
+        putJson("/api/configuracion-precios", dueno, configuracion("60", "50"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.articulosRecalculados", is(0)));
+
+        assertThat(precio(conRubro)).isEqualByComparingTo("1700");
+    }
+
+    @Test
+    void elConteoSinUnParametroDa400() throws Exception {
+        getResult(URL_CONTEO + "?margenDefectoPorcentaje=10", ferreteriaConConfiguracionPropia())
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message", is("Falta el parámetro: redondeoMultiplo")));
+    }
+
     @Test
     void siCambiaSoloElMargenPorDefectoSeRecalculanLosQueLoHeredan() throws Exception {
         String dueno = ferreteriaConConfiguracionPropia();
