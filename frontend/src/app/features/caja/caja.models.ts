@@ -35,6 +35,16 @@ export interface MovimientoCajaRequest {
   tipo: TipoMovimientoCaja;
   importe: number;
   motivo: string;
+  /** Solo el Dueño: registra un gasto o retiro mayor al efectivo de la caja (GDS-36). */
+  confirmaSinEfectivo?: true;
+}
+
+/** El rechazo de un gasto o retiro mayor al efectivo (422 EFECTIVO_INSUFICIENTE): las cifras solo llegan al Dueño. */
+export interface EfectivoInsuficiente {
+  puedeConfirmar: boolean;
+  disponible?: number;
+  importe?: number;
+  faltante?: number;
 }
 
 export interface MovimientoCaja extends MovimientoCajaRequest {

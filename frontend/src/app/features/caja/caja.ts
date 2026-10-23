@@ -1,4 +1,5 @@
 import { Component, OnInit, computed, inject, signal } from '@angular/core';
+import { HttpErrorResponse } from '@angular/common/http';
 import { RouterLink } from '@angular/router';
 import { erroresDeCampos, mensajeDe } from '../../core/api/api-error';
 import { AuthService } from '../../core/auth/auth.service';
@@ -8,6 +9,8 @@ import { Confirmacion } from '../../shared/confirmacion';
 import {
   CajaVigente,
   DetalleCaja,
+  EfectivoInsuficiente,
+  MovimientoCajaRequest,
   TIPO_MOVIMIENTO_LABELS,
   TipoMovimientoCaja,
   avisoParaVender,
@@ -16,6 +19,12 @@ import {
 } from './caja.models';
 import { CajaService } from './caja.service';
 import { ResumenCaja } from './resumen-caja';
+
+/** El detalle del 422 EFECTIVO_INSUFICIENTE, o null si el error es otro. */
+function efectivoInsuficiente(err: unknown): EfectivoInsuficiente | null {
+  if (!(err instanceof HttpErrorResponse) || err.error?.motivo !== 'EFECTIVO_INSUFICIENTE') return null;
+  return (err.error.efectivo as EfectivoInsuficiente | undefined) ?? null;
+}
 
 /** Un número escrito en un campo (acepta coma decimal); NaN si está vacío o no se entiende. */
 function leerNumero(texto: string): number {
@@ -58,6 +67,13 @@ export class Caja implements OnInit {
   protected readonly motivo = signal('');
   protected readonly errorImporte = signal<string | null>(null);
   protected readonly errorMotivo = signal<string | null>(null);
+  /** El gasto o retiro que no entra en el efectivo, esperando que el Dueño lo confirme (GDS-36). */
+  protected readonly faltaEfectivo = signal<{
+    mensaje: string;
+    disponible: number;
+    faltante: number;
+    pedido: MovimientoCajaRequest;
+  } | null>(null);
 
   protected readonly contado = signal('');
   protected readonly errorContado = signal<string | null>(null);
@@ -159,8 +175,21 @@ export class Caja implements OnInit {
     this.errorImporte.set(importe > 0 ? null : 'El importe tiene que ser mayor a cero.');
     this.errorMotivo.set(motivo === '' ? 'Indicá el motivo.' : null);
     if (this.errorImporte() || this.errorMotivo()) return;
+    this.enviarMovimiento(caja.id, { tipo: this.tipo(), importe, motivo });
+  }
+
+  /** «Registrar igual»: el Dueño manda el mismo egreso confirmando que la caja queda en negativo. */
+  protected confirmarSinEfectivo(): void {
+    const caja = this.caja();
+    const falta = this.faltaEfectivo();
+    if (!caja || !falta || this.trabajando()) return;
+    this.limpiarAvisos();
+    this.enviarMovimiento(caja.id, { ...falta.pedido, confirmaSinEfectivo: true });
+  }
+
+  private enviarMovimiento(cajaId: number, pedido: MovimientoCajaRequest): void {
     this.trabajando.set(true);
-    this.cajas.registrarMovimiento(caja.id, { tipo: this.tipo(), importe, motivo }).subscribe({
+    this.cajas.registrarMovimiento(cajaId, pedido).subscribe({
       next: (movimiento) => {
         this.trabajando.set(false);
         this.mensaje.set(
@@ -172,6 +201,16 @@ export class Caja implements OnInit {
       },
       error: (err: unknown) => {
         this.trabajando.set(false);
+        const efectivo = efectivoInsuficiente(err);
+        if (efectivo?.puedeConfirmar && efectivo.disponible !== undefined && efectivo.faltante !== undefined) {
+          this.faltaEfectivo.set({
+            mensaje: mensajeDe(err, ''),
+            disponible: efectivo.disponible,
+            faltante: efectivo.faltante,
+            pedido,
+          });
+          return;
+        }
         this.error.set(this.textoDeError(err, 'No se pudo cargar el movimiento.'));
       },
     });
@@ -232,6 +271,7 @@ export class Caja implements OnInit {
   private limpiarAvisos(): void {
     this.mensaje.set(null);
     this.error.set(null);
+    this.faltaEfectivo.set(null);
   }
 
   private textoDeError(err: unknown, porDefecto: string): string {
