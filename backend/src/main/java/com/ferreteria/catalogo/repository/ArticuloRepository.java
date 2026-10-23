@@ -2,6 +2,8 @@ package com.ferreteria.catalogo.repository;
 
 import com.ferreteria.catalogo.model.Articulo;
 import com.ferreteria.catalogo.model.ArticuloBajoMinimo;
+import com.ferreteria.catalogo.model.ArticuloEnControl;
+import com.ferreteria.catalogo.model.ControlDeDatos;
 import com.ferreteria.catalogo.model.ConsultaMostrador;
 import com.ferreteria.catalogo.model.FiltroArticulos;
 import com.ferreteria.catalogo.model.OrdenBajoMinimo;
@@ -411,6 +413,43 @@ public interface ArticuloRepository extends TenantScopedRepository<Articulo, Lon
                 .map(f -> ArticuloBajoMinimo.de((Long) f[0], (String) f[1], (String) f[2], (String) f[3],
                         (String) f[4], (BigDecimal) f[5], (String) f[6], (String) f[7], (BigDecimal) f[8],
                         (BigDecimal) f[9]))
+                .toList();
+    }
+
+    /**
+     * Los articulos activos que caen en un control de datos (GDS-18), por descripcion. Sin rubro es sin un rubro propio
+     * (uno de otra ferreteria cuenta como ninguno). Margen negativo es la cuenta de {@code MargenNegativo}: costo x
+     * cotizacion x (100 + IVA) mayor que precio x 100; sin cotizacion, los de USD no salen. El porcentaje de cada
+     * alicuota repite el de {@code AlicuotaIva} (lo cuida ControlesDeDatosIntegrationTest con cada alicuota). Rubro y
+     * proveedor se unen por la ferreteria del articulo. Filas (id, codigo, descripcion, rubro, proveedor, costo, moneda,
+     * alicuota, precio final, precio manual).
+     */
+    @Query(nativeQuery = true, value = """
+            select a.id, a.codigo_interno, a.descripcion, r.nombre, p.nombre, a.costo, a.moneda, a.alicuota_iva,
+                   a.precio_final, a.precio_manual
+            from articulo a
+            left join rubro r on r.id = a.rubro_id and r.ferreteria_id = a.ferreteria_id
+            left join proveedor p on p.id = a.proveedor_id and p.ferreteria_id = a.ferreteria_id
+            where a.ferreteria_id = :fid and a.activo
+              and ((:control = 'COSTO_CERO' and a.costo = 0)
+                or (:control = 'SIN_RUBRO' and r.id is null)
+                or (:control = 'IVA_CERO' and a.alicuota_iva = 'IVA_0')
+                or (:control = 'MARGEN_NEGATIVO'
+                    and a.costo * (case when a.moneda = 'USD' then :cotizacion else 1 end)
+                        * (100 + case a.alicuota_iva when 'IVA_0' then 0 when 'IVA_2_5' then 2.5 when 'IVA_5' then 5
+                                 when 'IVA_10_5' then 10.5 when 'IVA_21' then 21 when 'IVA_27' then 27 end)
+                        > a.precio_final * 100))
+            order by a.descripcion, a.id
+            """)
+    List<Object[]> enControl(@Param("fid") Long ferreteriaId, @Param("control") String control,
+                             @Param("cotizacion") BigDecimal cotizacion);
+
+    /** Los articulos de la ferreteria del request en ese control de datos (GDS-18); cotizacion null si no hay dolar. */
+    default List<ArticuloEnControl> enControlScoped(ControlDeDatos control, BigDecimal cotizacion) {
+        return enControl(TenantContext.requireFerreteriaId(), control.name(), cotizacion).stream()
+                .map(f -> new ArticuloEnControl((Long) f[0], (String) f[1], (String) f[2], (String) f[3],
+                        (String) f[4], (BigDecimal) f[5], (String) f[6], (String) f[7], (BigDecimal) f[8],
+                        f[9] instanceof Boolean manual ? manual : ((Number) f[9]).intValue() != 0))
                 .toList();
     }
 
