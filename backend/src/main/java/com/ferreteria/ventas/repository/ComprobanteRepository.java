@@ -3,6 +3,8 @@ package com.ferreteria.ventas.repository;
 import com.ferreteria.tenant.TenantContext;
 import com.ferreteria.tenant.TenantScopedRepository;
 import com.ferreteria.ventas.model.Comprobante;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -76,5 +78,27 @@ public interface ComprobanteRepository extends TenantScopedRepository<Comprobant
 
     default List<Comprobante> conDescuentoDelRangoScoped(LocalDateTime desde, LocalDateTime hasta) {
         return conDescuentoDelRango(TenantContext.requireFerreteriaId(), desde, hasta);
+    }
+
+    // ---- Consulta de ventas (G60) ----
+
+    /**
+     * Las ventas de la ferreteria, mas nuevas primero. Cada filtro nulo no filtra. {@code cliente} ya viene con los
+     * comodines y escapado (barra invertida); la collation (_ai_ci) no distingue mayusculas ni tildes. {@code desde}
+     * incluye ese instante y {@code hasta} no (es el comienzo del dia siguiente al ultimo que se quiere ver).
+     */
+    @Query("select c from Comprobante c where c.ferreteriaId = :fid "
+            + "and c.tipo = com.ferreteria.ventas.model.TipoComprobante.VENTA "
+            + "and (:numero is null or c.numero = :numero) "
+            + "and (:cliente is null or c.clienteNombre like :cliente escape '\\') "
+            + "and (:desde is null or c.fecha >= :desde) and (:hasta is null or c.fecha < :hasta) "
+            + "order by c.numero desc")
+    Page<Comprobante> buscarVentas(@Param("fid") Long ferreteriaId, @Param("numero") Long numero,
+            @Param("cliente") String cliente, @Param("desde") LocalDateTime desde,
+            @Param("hasta") LocalDateTime hasta, Pageable pageable);
+
+    default Page<Comprobante> buscarVentasScoped(
+            Long numero, String cliente, LocalDateTime desde, LocalDateTime hasta, Pageable pageable) {
+        return buscarVentas(TenantContext.requireFerreteriaId(), numero, cliente, desde, hasta, pageable);
     }
 }
