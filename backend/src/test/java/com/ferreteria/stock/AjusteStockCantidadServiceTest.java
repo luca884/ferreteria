@@ -66,7 +66,7 @@ class AjusteStockCantidadServiceTest {
 
     private void existe(String unidad, String stockVigente) {
         when(articulos.buscar(List.of(ARTICULO))).thenReturn(List.of(new ArticuloVendible(
-                ARTICULO, "Tornillo", unidad, !"UNIDAD".equals(unidad), bd("170"), "IVA_21", bd("21"), true)));
+                ARTICULO, "Tornillo", unidad, !"UNIDAD".equals(unidad), bd("170"), "IVA_21", bd("21"), true, bd("100"))));
         when(articulos.stockVigente(ARTICULO)).thenReturn(Optional.of(bd(stockVigente)));
     }
 
@@ -135,7 +135,7 @@ class AjusteStockCantidadServiceTest {
     @DisplayName("cantidad cero, decimales en UNIDAD y OTRO sin detalle: errores por campo juntos")
     void erroresJuntos() {
         when(articulos.buscar(List.of(ARTICULO))).thenReturn(List.of(new ArticuloVendible(
-                ARTICULO, "Tornillo", "UNIDAD", false, bd("170"), "IVA_21", bd("21"), true)));
+                ARTICULO, "Tornillo", "UNIDAD", false, bd("170"), "IVA_21", bd("21"), true, bd("100"))));
 
         assertThatThrownBy(() -> service.ajustarPorCantidad(ARTICULO, bd("2.5"), MotivoAjuste.OTRO, " ", USUARIO))
                 .isInstanceOfSatisfying(DatosInvalidosException.class, e -> assertThat(e.errors()).containsOnly(
@@ -152,7 +152,7 @@ class AjusteStockCantidadServiceTest {
     @DisplayName("un articulo dado de baja no se ajusta, en ningun modo")
     void deBaja() {
         when(articulos.buscar(List.of(ARTICULO))).thenReturn(List.of(new ArticuloVendible(
-                ARTICULO, "Tornillo", "UNIDAD", false, bd("170"), "IVA_21", bd("21"), false)));
+                ARTICULO, "Tornillo", "UNIDAD", false, bd("170"), "IVA_21", bd("21"), false, bd("100"))));
 
         assertThatThrownBy(() -> service.ajustarPorCantidad(ARTICULO, bd("5"), MotivoAjuste.CONTEO, null, USUARIO))
                 .isInstanceOf(com.ferreteria.common.exception.ReglaDeNegocioException.class)

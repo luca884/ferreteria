@@ -67,7 +67,7 @@ class AjusteStockServiceTest {
 
     private static ArticuloVendible articulo(String unidad) {
         return new ArticuloVendible(ARTICULO, "Tornillo", unidad, !"UNIDAD".equals(unidad), bd("170"),
-                "IVA_21", bd("21"), true);
+                "IVA_21", bd("21"), true, bd("100"));
     }
 
     private void existe(String unidad, String stockActual) {

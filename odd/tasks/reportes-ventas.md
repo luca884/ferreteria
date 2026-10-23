@@ -39,7 +39,7 @@ Texto aprobado por Luca (2026-10-22, «dale»):
 ## Tasks
 
 - [x] T1 · S1 S2 · ruta: inline · Aceptación: V26 aditiva (`costo_unitario` y `costo` nulos en `item_comprobante`) + `MigracionV26Test` + rollback + `MigracionV6Test` a V26 · Evidencia: RED 5 errores (sin V26) y 1 falla → GREEN `MigracionV26Test` 6/6 + `MigracionV6Test` 14/14 (el CHECK con un solo NULL pasaba por UNKNOWN; se exige IS NOT NULL en las dos) · commit en la línea de abajo · Risk: item 1 (migración)
-- [ ] T2 · S1 · ruta: inline · Aceptación: la venta guarda el costo (pesos y USD, desde presupuesto y remito) · Evidencia: — · Risk: item 3 (`ArticuloVendible` lo usan ventas y stock)
+- [x] T2 · S1 · ruta: inline · Aceptación: la venta guarda el costo (pesos y USD, desde presupuesto y remito) · Evidencia: RED `CostoDeVentaIntegrationTest` 5 fallas (costo nulo) → GREEN 6/6 con `ArticulosParaVentaServiceTest` 8, `RegistroVentaTest` 78, `AjusteStock*Test`, `ModulosArchTest` 40, `ComprobanteRepositoryTest` 2 · sin test: USD sin ningún dólar guardado deja el costo en NULL (la tabla de cotizaciones es compartida entre tests) · commit siguiente · Risk: item 3 (`ArticuloVendible` lo usan ventas y stock)
 - [ ] T3 · S2-S11 · ruta: inline · Aceptación: los seis reportes por API con rol, rango y tenant · Evidencia: — · Risk: none
 - [ ] T4 · S12 · ruta: inline · Aceptación: pantalla y menú; ego-browser · Evidencia: — · Risk: none
 - [ ] T5 · S1-S12 · ruta: inline · Aceptación: `docs/spec.md` (CU-15) y `docs/relevamiento-gds.md` (G63, G66, G67, GDS-08) · Evidencia: — · Risk: none
