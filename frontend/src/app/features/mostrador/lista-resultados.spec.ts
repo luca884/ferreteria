@@ -115,6 +115,13 @@ describe('ListaResultados', () => {
     expect(texto('.ubicacion')).toBe('—');
   });
 
+  it('debajo de los códigos dice desde cuándo está al día el costo (GDS-05); sin fecha, nada', async () => {
+    await crear([articulo(1, { costoAl: '2026-05-20' }), articulo(2, { costoAl: null })]);
+
+    expect(texto('.costo-al')).toBe('Costo al 20/05/2026');
+    expect(filas()[1].querySelector('.costo-al')).toBeNull();
+  });
+
   it('un dado de baja lleva la marca «Dado de baja» en texto, y un activo no', async () => {
     await crear([articulo(1), articulo(2, { activo: false })]);
 

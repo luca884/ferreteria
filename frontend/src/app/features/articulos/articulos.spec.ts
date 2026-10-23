@@ -177,6 +177,19 @@ describe('Articulos', () => {
     expect(texto('.stock')).toBe('12,5 metros');
   });
 
+  it('la columna Costo al dice desde cuándo está al día el costo (GDS-05), para el Dueño y el Vendedor', async () => {
+    const primera = pagina([articulo(1, { costoAl: '2026-05-20' }), articulo(2, { costoAl: null })]);
+    await crearComponente(true, primera);
+
+    expect(Array.from(el().querySelectorAll('thead th')).map((th) => th.textContent!.trim())).toContain('Costo al');
+    expect(texto('.costo-al')).toBe('20/05/2026');
+    expect(texto('.costo-al', 1)).toBe('—');
+
+    TestBed.resetTestingModule();
+    await crearComponente(false, primera);
+    expect(texto('.costo-al')).toBe('20/05/2026');
+  });
+
   it('el stock lleva la unidad en singular o plural y el negativo va en rojo', async () => {
     await crearComponente(
       true,

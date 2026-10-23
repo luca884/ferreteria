@@ -115,6 +115,7 @@
             <th>IVA</th>
             <th class="num">Precio final</th>
             <th class="num">Stock</th>
+            <th>Costo al</th>
             <th>Estado</th>
           </tr>
         </thead>
@@ -147,6 +148,7 @@
               <td class="num stock" [class.negativo]="articulo.stockActual < 0">
                 {{ cantidadConUnidad(articulo.stockActual, articulo.unidad) }}
               </td>
+              <td class="costo-al">{{ formatearFecha(articulo.costoAl) || '—' }}</td>
               <td class="estado">
                 <span class="etiqueta" [class.de-baja]="!articulo.activo">{{
                   articulo.activo ? 'Activo' : 'De baja'

@@ -131,6 +131,8 @@ export interface Articulo {
    */
   precioManual?: boolean;
   ajustesPrecio?: AjustePrecio[];
+  /** GDS-05, para el Dueño y el Vendedor: desde cuándo está al día el costo (AAAA-MM-DD). */
+  costoAl?: string | null;
 }
 
 /** Lo que responde el servidor (409) cuando otro cambio modificó el artículo después de cargarlo. */

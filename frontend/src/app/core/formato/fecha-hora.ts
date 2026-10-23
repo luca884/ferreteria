@@ -18,3 +18,12 @@ export function formatearFechaHora(iso: string | null | undefined): string {
   const partes = Object.fromEntries(FORMATO.formatToParts(fecha).map((p) => [p.type, p.value.padStart(2, '0')]));
   return `${partes['day']}/${partes['month']} ${partes['hour']}:${partes['minute']}`;
 }
+
+/**
+ * «20/05/2026»: una fecha sin hora del servidor (AAAA-MM-DD), sin pasar por Date para que la zona horaria no la corra
+ * de día. Vacío si falta o no tiene esa forma.
+ */
+export function formatearFecha(fecha: string | null | undefined): string {
+  const partes = /^(\d{4})-(\d{2})-(\d{2})$/.exec(fecha ?? '');
+  return partes ? `${partes[3]}/${partes[2]}/${partes[1]}` : '';
+}

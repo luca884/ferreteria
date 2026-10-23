@@ -1,5 +1,6 @@
 import { MontoPipe } from '../../core/formato/monto';
 import { Component, input } from '@angular/core';
+import { formatearFecha } from '../../core/formato/fecha-hora';
 import { cantidadConUnidad } from '../../core/formato/unidad';
 import { ArticuloMostrador, estadoStock } from './mostrador.models';
 
@@ -15,4 +16,5 @@ export class FichaArticulo {
 
   protected readonly cantidadConUnidad = cantidadConUnidad;
   protected readonly estadoStock = estadoStock;
+  protected readonly formatearFecha = formatearFecha;
 }

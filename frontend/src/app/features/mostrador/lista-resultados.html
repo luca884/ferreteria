@@ -30,6 +30,9 @@
           >{{ articulo.codigoInterno
           }}{{ articulo.codigoBarras ? ' · ' + articulo.codigoBarras : '' }}</span
         >
+        @if (formatearFecha(articulo.costoAl); as fecha) {
+          <span class="costo-al">Costo al {{ fecha }}</span>
+        }
       </div>
       <span class="precio">{{ articulo.precioFinal | monto }}</span>
       <span class="stock" [attr.data-stock]="estadoStock(articulo)">
