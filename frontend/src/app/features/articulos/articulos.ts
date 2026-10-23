@@ -5,6 +5,7 @@ import { FormBuilder, ReactiveFormsModule } from '@angular/forms';
 import { ActivatedRoute, Params, Router, RouterLink } from '@angular/router';
 import { PageResponse } from '../../core/api/page.models';
 import { AuthService } from '../../core/auth/auth.service';
+import { descargar } from '../../core/archivos/descarga';
 import { Avisos } from '../../core/avisos/avisos';
 import { MontoPipe, formatearCosto } from '../../core/formato/monto';
 import { cantidadConUnidad } from '../../core/formato/unidad';
@@ -50,6 +51,8 @@ export class Articulos implements OnInit {
   /** Búsqueda ya aplicada: la que se manda al servidor, no lo que se está tipeando. */
   protected readonly busquedaAplicada = signal('');
   protected readonly incluirInactivos = signal(false);
+  /** El CSV se está bajando: Exportar queda deshabilitado. */
+  protected readonly exportando = signal(false);
   /** Fila elegida en la página (solo el Dueño, que es quien tiene acciones): la barra actúa sobre ella; Enter edita. */
   protected readonly filas = new FilasElegibles(
     computed(() => this.pagina()?.items ?? []),
@@ -157,6 +160,23 @@ export class Articulos implements OnInit {
     const articulo = this.filas.elegido();
     if (!articulo || !this.auth.esDueno()) return;
     void this.router.navigate(['/articulos', articulo.id, 'movimientos']);
+  }
+
+  /** Baja en CSV lo que muestra la pantalla: la búsqueda aplicada y los inactivos, todas las páginas (GDS-19). */
+  protected exportar(): void {
+    if (!this.auth.esDueno() || this.exportando()) return;
+    this.limpiarMensajes();
+    this.exportando.set(true);
+    this.service.exportar(this.busquedaAplicada(), this.incluirInactivos()).subscribe({
+      next: (respuesta) => {
+        this.exportando.set(false);
+        descargar(respuesta, 'articulos.csv');
+      },
+      error: () => {
+        this.exportando.set(false);
+        this.error.set('No se pudieron exportar los artículos.');
+      },
+    });
   }
 
   protected ajustarStock(): void {

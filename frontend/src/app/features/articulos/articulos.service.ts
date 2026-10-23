@@ -1,4 +1,4 @@
-import { HttpClient, HttpParams } from '@angular/common/http';
+import { HttpClient, HttpParams, HttpResponse } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import { environment } from '../../../environments/environment';
@@ -33,6 +33,14 @@ export class ArticulosService {
     const termino = q.trim();
     if (termino !== '') params = params.set('q', termino);
     return this.http.get<PageResponse<Articulo>>(this.url, { params });
+  }
+
+  /** CSV con todos los artículos de esa búsqueda (solo el Dueño); el nombre viene en Content-Disposition. */
+  exportar(q: string, incluirInactivos: boolean): Observable<HttpResponse<Blob>> {
+    let params = new HttpParams().set('incluirInactivos', incluirInactivos);
+    const termino = q.trim();
+    if (termino !== '') params = params.set('q', termino);
+    return this.http.get(`${this.url}/exportacion`, { params, observe: 'response', responseType: 'blob' });
   }
 
   obtener(id: number): Observable<Articulo> {

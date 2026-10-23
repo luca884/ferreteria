@@ -1,10 +1,10 @@
-import { HttpErrorResponse } from '@angular/common/http';
+import { HttpErrorResponse, HttpHeaders, HttpResponse } from '@angular/common/http';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { registerLocaleData } from '@angular/common';
 import localeEsAr from '@angular/common/locales/es-AR';
 import { LOCALE_ID, signal } from '@angular/core';
 import { ActivatedRoute, provideRouter } from '@angular/router';
-import { of, throwError } from 'rxjs';
+import { Subject, of, throwError } from 'rxjs';
 import { vi } from 'vitest';
 import { PageResponse } from '../../core/api/page.models';
 import { By } from '@angular/platform-browser';
@@ -56,6 +56,7 @@ describe('Articulos', () => {
     desactivar: ReturnType<typeof vi.fn>;
     reactivar: ReturnType<typeof vi.fn>;
     ajustarStock: ReturnType<typeof vi.fn>;
+    exportar: ReturnType<typeof vi.fn>;
   };
   let avisos: Avisos;
   let navegar: ReturnType<typeof vi.spyOn>;
@@ -76,6 +77,7 @@ describe('Articulos', () => {
       desactivar: vi.fn(() => of(undefined)),
       reactivar: vi.fn((id: number) => of(articulo(id, { activo: true }))),
       ajustarStock: vi.fn(),
+      exportar: vi.fn(),
     };
     await TestBed.configureTestingModule({
       imports: [Articulos],
@@ -469,6 +471,76 @@ describe('Articulos', () => {
 
       expect(barra('button.movimientos')).toBeNull();
     });
+  });
+
+  describe('exportar a CSV (GDS-19)', () => {
+    let enlace: HTMLAnchorElement | undefined;
+
+    beforeEach(() => {
+      enlace = undefined;
+      Object.assign(URL, { createObjectURL: vi.fn(() => 'blob:csv'), revokeObjectURL: vi.fn() });
+      vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (this: HTMLAnchorElement) {
+        enlace = this;
+      });
+    });
+
+    afterEach(() => vi.restoreAllMocks());
+
+    const archivo = () =>
+      new HttpResponse({
+        body: new Blob(['csv']),
+        headers: new HttpHeaders({ 'Content-Disposition': 'attachment; filename="articulos-2026-10-23.csv"' }),
+      });
+
+    it('el Dueño tiene Exportar en la barra, habilitado sin elegir fila', async () => {
+      await crearComponente(true);
+
+      expect(barra('button.exportar')!.textContent).toContain('Exportar');
+      expect(barra('button.exportar')!.disabled).toBe(false);
+    });
+
+    it('el Vendedor no ve Exportar', async () => {
+      await crearComponente(false);
+
+      expect(barra('button.exportar')).toBeNull();
+    });
+
+    it('baja lo que muestra la pantalla: la búsqueda aplicada y los inactivos, con el nombre del servidor', async () => {
+      await crearComponente(true, pagina([articulo(1)]), null, '/?q=tuerca&inactivos=1');
+      servicio.exportar.mockReturnValue(of(archivo()));
+
+      await clickEn('app-barra-acciones button.exportar');
+
+      expect(servicio.exportar).toHaveBeenCalledWith('tuerca', true);
+      expect(enlace?.download).toBe('articulos-2026-10-23.csv');
+    });
+
+    it('mientras baja, Exportar queda deshabilitado y dice Exportando…', async () => {
+      await crearComponente(true);
+      const pendiente = new Subject<HttpResponse<Blob>>();
+      servicio.exportar.mockReturnValue(pendiente);
+
+      await clickEn('app-barra-acciones button.exportar');
+
+      expect(barra('button.exportar')!.disabled).toBe(true);
+      expect(barra('button.exportar')!.textContent).toContain('Exportando…');
+      pendiente.next(archivo());
+      pendiente.complete();
+      await refrescar();
+      expect(barra('button.exportar')!.disabled).toBe(false);
+      expect(barra('button.exportar')!.textContent).not.toContain('Exportando');
+    });
+
+    it('si falla, avisa y no baja nada', async () => {
+      await crearComponente(true);
+      servicio.exportar.mockReturnValue(throwError(() => new HttpErrorResponse({ status: 500 })));
+
+      await clickEn('app-barra-acciones button.exportar');
+
+      expect(el().querySelector('[role="alert"]')!.textContent).toContain('No se pudieron exportar los artículos.');
+      expect(enlace).toBeUndefined();
+      expect(barra('button.exportar')!.disabled).toBe(false);
+    });
 
     it('elegido de baja: Reactivar en vez de Dar de baja y Ajustar stock deshabilitado con el motivo a la vista', async () => {
       await crearComponente(true, pagina([articulo(1), articulo(2, { activo: false, descripcion: 'Tuerca vieja' })]));
@@ -774,6 +846,7 @@ describe('Articulos', () => {
       desactivar: vi.fn(),
       reactivar: vi.fn(),
       ajustarStock: vi.fn(),
+      exportar: vi.fn(),
     };
     await TestBed.configureTestingModule({
       imports: [Articulos],
@@ -798,6 +871,7 @@ describe('Articulos', () => {
       desactivar: vi.fn(),
       reactivar: vi.fn(),
       ajustarStock: vi.fn(),
+      exportar: vi.fn(),
     };
     await TestBed.configureTestingModule({
       imports: [Articulos],

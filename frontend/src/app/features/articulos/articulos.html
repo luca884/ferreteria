@@ -46,6 +46,12 @@
         Dar de baja
       </button>
     }
+    <button type="button" class="accion-barra exportar" [disabled]="exportando()" (click)="exportar()">
+      <svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+        <path d="M8 2v8M5 7l3 3 3-3M3 12v1.5h10V12" />
+      </svg>
+      {{ exportando() ? 'Exportando…' : 'Exportar' }}
+    </button>
     <span class="separador-barra" aria-hidden="true"></span>
   }
   <form class="busqueda" role="search" [formGroup]="form" (ngSubmit)="buscar()">

@@ -57,6 +57,7 @@ Son 12 casos de uso (CU-01 a CU-12), agrupados en cinco módulos: Configuración
    - si cambió solo el margen por defecto, se recalculan los artículos activos sin precio manual, sin margen propio y sin rubro;
    - cada precio que cambia guarda historial con origen masivo. Un artículo cuyos ajustes dejarían el precio en 0 o menos conserva el suyo y se avisa;
    - con artículos en dólares a recalcular y sin cotización guardada, no se guarda nada (409).
+4. **Exportar** (barra de Artículos, solo el Dueño), como la «Exportación Rápida» de GDS (G25, GDS-19). Baja en CSV los artículos que muestra la pantalla (la búsqueda y «Mostrar dados de baja»), todos juntos y en el mismo orden. El archivo `articulos-AAAA-MM-DD.csv` abre directo en Excel en castellano: UTF-8 con BOM, separador `;`, coma decimal, sin separador de miles. Columnas: código, código de barras, código del proveedor, descripción, rubro, proveedor, unidad, moneda, costo, IVA %, margen % («Heredado» si no tiene uno propio), precio final, precio manual (Sí/No), stock, stock mínimo, ubicación y activo (Sí/No). Los tres códigos salen como texto de Excel (`="0012"`), así Excel no les saca los ceros ni pasa un código de barras a `7,79E+12`; la importación de CU-04 lee `="…"` como su texto. Un texto que empieza con `=`, `+`, `-` o `@` sale con un apóstrofo adelante, para que Excel no lo tome como fórmula. La carga inicial de una ferretería usa la importación de CU-04 con «Crear los artículos nuevos».
 
 **CU-04 Importar lista de precios del proveedor** (Dueño) — el caso más importante del sistema
 

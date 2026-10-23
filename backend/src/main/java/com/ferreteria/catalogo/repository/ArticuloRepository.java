@@ -65,6 +65,16 @@ public interface ArticuloRepository extends TenantScopedRepository<Articulo, Lon
             @Param("q") String q,
             @Param("incluirInactivos") boolean incluirInactivos);
 
+    /** Los articulos del filtro, todos y en el orden del listado: descripcion e id (GDS-19). */
+    @Query("select a " + FILTRO_ARTICULOS + " order by a.descripcion, a.id")
+    List<Articulo> paraExportar(
+            @Param("fid") Long ferreteriaId,
+            @Param("proveedorId") Long proveedorId,
+            @Param("rubroId") Long rubroId,
+            @Param("importacionId") Long importacionId,
+            @Param("q") String q,
+            @Param("incluirInactivos") boolean incluirInactivos);
+
     @Query("select count(a) " + FILTRO_ARTICULOS)
     long contar(
             @Param("fid") Long ferreteriaId,
@@ -264,6 +274,12 @@ public interface ArticuloRepository extends TenantScopedRepository<Articulo, Lon
     default List<Articulo> filtrarScoped(FiltroArticulos filtro) {
         return filtrar(TenantContext.requireFerreteriaId(), filtro.proveedorId(), filtro.rubroId(),
                 filtro.importacionId(), filtro.patron(), filtro.incluirInactivos());
+    }
+
+    /** Los articulos de la ferreteria que muestra el listado con esa busqueda, todos y en su orden (GDS-19). */
+    default List<Articulo> paraExportarScoped(String q, boolean incluirInactivos) {
+        return paraExportar(TenantContext.requireFerreteriaId(), null, null, null,
+                FiltroArticulos.patronDeBusqueda(q), incluirInactivos);
     }
 
     /** Cuantos articulos de la ferreteria cumplen el filtro, sin cargarlos (CU-05). */
