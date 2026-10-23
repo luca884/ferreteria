@@ -106,6 +106,74 @@ describe('mapeo-lista', () => {
       expect(precarga.valores.monedaFija).toBeNull();
     });
 
+    describe('el encabezado guardado se busca en el archivo', () => {
+      /** Hoja 1 (la de referencia del guardado) con estas filas; las otras hojas vacías. */
+      function archivoConFilas(filas: string[][], propuesta: PropuestaDeMapeo): Muestra {
+        const muestra = archivoDe(2, propuesta);
+        muestra.hojas[1].filas = filas.map((celdas, i) => ({ numero: i + 1, celdas }));
+        return muestra;
+      }
+      const PROPUESTA_OTRA: PropuestaDeMapeo = { ...SIN_PROPUESTA, hoja: 1, filaDesde: 2, columnaCodigo: 0, columnaCosto: 3, hojas: [1] };
+
+      it('si el encabezado está donde se guardó, usa el guardado tal cual', () => {
+        const muestra = archivoConFilas(
+          [['Lista octubre'], ['Detalle', 'Codigo', 'Precio'], ['Tornillo', 'T-1', '10']],
+          PROPUESTA_OTRA,
+        );
+
+        const precarga = precargarMapeo(GUARDADO_VIEJO, muestra);
+
+        expect(precarga.desdePropuesta).toBe(false);
+        expect(precarga.valores.filaDesde).toBe(3);
+        expect(precarga.valores.columnaCodigo).toBe(1);
+      });
+
+      it('si el encabezado está en otra fila, usa el guardado desde la fila siguiente a esa', () => {
+        const muestra = archivoConFilas(
+          [[' detalle ', 'CODIGO', 'Precio'], ['Tornillo', 'T-1', '10'], ['Tuerca', 'T-2', '5']],
+          PROPUESTA_OTRA,
+        );
+
+        const precarga = precargarMapeo(GUARDADO_VIEJO, muestra);
+
+        expect(precarga.desdePropuesta).toBe(false);
+        expect(precarga.valores.filaDesde).toBe(2);
+        expect(precarga.valores.columnaCodigo).toBe(1);
+        expect(precarga.valores.columnaCosto).toBe(2);
+      });
+
+      it('si el encabezado guardado no está en el archivo, usa la propuesta', () => {
+        const muestra = archivoConFilas(
+          [['Cod', 'Desc', 'Rubro', 'Neto'], ['T-1', 'Tornillo', 'Bulonería', '10']],
+          PROPUESTA_OTRA,
+        );
+
+        const precarga = precargarMapeo(GUARDADO_VIEJO, muestra);
+
+        expect(precarga.desdePropuesta).toBe(true);
+        expect(precarga.valores.filaDesde).toBe(2);
+        expect(precarga.valores.columnaCosto).toBe(3);
+      });
+
+      it('si no está y tampoco hay propuesta, queda el guardado', () => {
+        const muestra = archivoConFilas([['Cod', 'Desc', 'Rubro', 'Neto'], ['T-1', 'Tornillo', 'B', '10']], SIN_PROPUESTA);
+
+        const precarga = precargarMapeo(GUARDADO_VIEJO, muestra);
+
+        expect(precarga.desdePropuesta).toBe(false);
+        expect(precarga.valores.filaDesde).toBe(3);
+      });
+
+      it('un guardado sin textos de encabezado se usa tal cual', () => {
+        const muestra = archivoConFilas([['Cod', 'Desc', 'Rubro', 'Neto'], ['T-1', 'Tornillo', 'B', '10']], PROPUESTA_OTRA);
+
+        const precarga = precargarMapeo({ ...GUARDADO_VIEJO, encabezados: null }, muestra);
+
+        expect(precarga.desdePropuesta).toBe(false);
+        expect(precarga.valores.filaDesde).toBe(3);
+      });
+    });
+
     it('la moneda fija guardada se vuelve a proponer', () => {
       const guardado: MapeoLista = { ...GUARDADO_VIEJO, hoja: 0, monedaFija: 'USD' };
 
