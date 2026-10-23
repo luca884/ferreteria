@@ -130,7 +130,7 @@ describe('Shell', () => {
 
     const nav = el.querySelector('aside nav[aria-label="Secciones"]');
     expect(nav).not.toBeNull();
-    expect(nav!.querySelectorAll('a').length).toBe(19);
+    expect(nav!.querySelectorAll('a').length).toBe(20);
   });
 
   it('«Presupuestos» va después de «Mostrador» y lleva a /presupuestos, para el Vendedor y para el Dueño (GDS-13)', async () => {
@@ -180,6 +180,7 @@ describe('Shell', () => {
       'Reportes',
       'Stock bajo mínimo',
       'Etiquetas',
+      'Controles de datos',
       'Importar lista',
       'Actualizar precios',
       'Margen y redondeo',
@@ -306,6 +307,7 @@ describe('Shell', () => {
     expect(el.querySelector('a[href="/compras"]')).toBeNull();
     expect(el.querySelector('a[href="/reportes"]')).toBeNull();
     expect(el.querySelector('a[href="/stock-bajo-minimo"]')).toBeNull();
+    expect(el.querySelector('a[href="/controles-de-datos"]')).toBeNull();
     expect(el.querySelector('a[href="/etiquetas"]')).toBeNull();
     expect(el.querySelector('a[href="/ventas"]')).toBeNull();
     expect(el.querySelector('nav .grupo')).toBeNull();

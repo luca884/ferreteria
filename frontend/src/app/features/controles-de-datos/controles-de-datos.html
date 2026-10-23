@@ -1,0 +1,89 @@
+<app-barra-acciones>
+  <h1>Controles de datos</h1>
+  @if (auth.esDueno()) {
+    <button type="button" class="accion-barra primario imprimir" [disabled]="filas() === null" (click)="imprimir()">
+      <svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+        <path d="M4 6V1.5h8V6M4 12H2V6h12v6h-2M4 9.5h8v5H4z" />
+      </svg>
+      Imprimir
+    </button>
+  }
+</app-barra-acciones>
+
+@if (!auth.esDueno()) {
+  <p class="ayuda estado-vacio" role="status">Los controles de datos son solo del Dueño.</p>
+} @else {
+  <div class="filtros">
+    <label>
+      Control
+      <select name="control" [value]="control()" (change)="elegir($any($event.target).value)">
+        @for (c of controles; track c.valor) {
+          <option [value]="c.valor">{{ c.texto }}</option>
+        }
+      </select>
+    </label>
+  </div>
+
+  @if (error(); as texto) {
+    <div class="error con-accion" role="alert">
+      <span>{{ texto }}</span>
+      <button type="button" class="secundario chico reintentar" (click)="cargar()">Reintentar</button>
+    </div>
+  }
+
+  @if (filas(); as lista) {
+    <section class="controles-imprimible" aria-labelledby="titulo-controles">
+      <header class="encabezado">
+        <div>
+          @if (ferreteria(); as nombre) {
+            <p class="ferreteria">{{ nombre }}</p>
+          }
+          <h2 id="titulo-controles">Controles de datos</h2>
+          <p class="control">{{ elegido().texto }}: {{ elegido().explicacion }}</p>
+        </div>
+        <p class="emitido">Emitido el {{ emitido() }}</p>
+      </header>
+
+      @if (lista.length === 0) {
+        <p class="ayuda estado-vacio" role="status">Ningún artículo cae en este control.</p>
+      } @else {
+        <table>
+          <caption class="sr-only">
+            Artículos activos que caen en el control elegido, con los datos para corregirlos.
+          </caption>
+          <thead>
+            <tr>
+              <th scope="col">Código</th>
+              <th scope="col">Descripción</th>
+              <th scope="col">Rubro</th>
+              <th scope="col">Proveedor</th>
+              <th scope="col" class="num">Costo</th>
+              <th scope="col" class="num">IVA</th>
+              <th scope="col" class="num">Precio</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (f of lista; track f.articuloId) {
+              <tr>
+                <td>{{ f.codigoInterno }}</td>
+                <td><a [routerLink]="['/articulos', f.articuloId]">{{ f.descripcion }}</a></td>
+                <td>{{ f.rubro ?? '—' }}</td>
+                <td>{{ f.proveedor ?? '—' }}</td>
+                <td class="num">{{ costo(f) }}</td>
+                <td class="num">{{ iva(f) }}</td>
+                <td class="num">
+                  {{ precio(f) }}
+                  @if (f.precioManual) {
+                    <span class="manual">manual</span>
+                  }
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      }
+    </section>
+  } @else if (cargando()) {
+    <p class="ayuda estado-vacio">Cargando…</p>
+  }
+}

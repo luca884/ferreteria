@@ -845,7 +845,8 @@ ul.error {
  * deja hojas en blanco), y el diálogo, su fondo, el shell y el contenido dejan de ser fijos, con scroll o de alto fijo
  * (100vh): si no, Chrome repite el diálogo fijo en cada hoja (recibo) o el artículo queda en la columna angosta del
  * menú (extracto). Las reglas solo rigen cuando hay un imprimible abierto, no en cualquier pantalla. El listado de stock
- * bajo mínimo no es un diálogo: está en su pantalla, y al imprimirla sale solo el listado (sin la barra ni el orden).
+ * bajo mínimo y el de controles de datos no son diálogos: están en su pantalla, y al imprimirla sale solo el listado
+ * (sin la barra ni el selector).
  */
 /* Hoja de etiquetas (GDS-31): A4 con margen chico, para que entren 4 o 5 columnas. */
 @page etiquetas {
@@ -854,21 +855,21 @@ ul.error {
 }
 
 @media print {
-  body:has(:is(.recibo-imprimible, .extracto-imprimible, .venta-imprimible, .stock-imprimible, .etiquetas-imprimible))
-    *:not(:has(:is(.recibo-imprimible, .extracto-imprimible, .venta-imprimible, .stock-imprimible, .etiquetas-imprimible))):not(:is(.recibo-imprimible, .extracto-imprimible, .venta-imprimible, .stock-imprimible, .etiquetas-imprimible)):not(
-      :is(.recibo-imprimible, .extracto-imprimible, .venta-imprimible, .stock-imprimible, .etiquetas-imprimible) *
+  body:has(:is(.recibo-imprimible, .extracto-imprimible, .venta-imprimible, .stock-imprimible, .controles-imprimible, .etiquetas-imprimible))
+    *:not(:has(:is(.recibo-imprimible, .extracto-imprimible, .venta-imprimible, .stock-imprimible, .controles-imprimible, .etiquetas-imprimible))):not(:is(.recibo-imprimible, .extracto-imprimible, .venta-imprimible, .stock-imprimible, .controles-imprimible, .etiquetas-imprimible)):not(
+      :is(.recibo-imprimible, .extracto-imprimible, .venta-imprimible, .stock-imprimible, .controles-imprimible, .etiquetas-imprimible) *
     ) {
     display: none !important;
   }
-  app-shell:has(:is(.recibo-imprimible, .extracto-imprimible, .venta-imprimible, .stock-imprimible, .etiquetas-imprimible)),
-  app-shell:has(:is(.recibo-imprimible, .extracto-imprimible, .venta-imprimible, .stock-imprimible, .etiquetas-imprimible)) .contenido {
+  app-shell:has(:is(.recibo-imprimible, .extracto-imprimible, .venta-imprimible, .stock-imprimible, .controles-imprimible, .etiquetas-imprimible)),
+  app-shell:has(:is(.recibo-imprimible, .extracto-imprimible, .venta-imprimible, .stock-imprimible, .controles-imprimible, .etiquetas-imprimible)) .contenido {
     display: block !important;
     height: auto !important;
     overflow: visible !important;
     padding: 0 !important;
   }
-  .dialogo-fondo:has(:is(.recibo-imprimible, .extracto-imprimible, .venta-imprimible, .stock-imprimible, .etiquetas-imprimible)),
-  .dialogo:has(:is(.recibo-imprimible, .extracto-imprimible, .venta-imprimible, .stock-imprimible, .etiquetas-imprimible)) {
+  .dialogo-fondo:has(:is(.recibo-imprimible, .extracto-imprimible, .venta-imprimible, .stock-imprimible, .controles-imprimible, .etiquetas-imprimible)),
+  .dialogo:has(:is(.recibo-imprimible, .extracto-imprimible, .venta-imprimible, .stock-imprimible, .controles-imprimible, .etiquetas-imprimible)) {
     position: static !important;
     display: block !important;
     place-items: stretch !important;
@@ -882,17 +883,20 @@ ul.error {
   .recibo-imprimible,
   .extracto-imprimible,
   .venta-imprimible,
-  .stock-imprimible {
+  .stock-imprimible,
+  .controles-imprimible {
     color: #000;
   }
-  .stock-imprimible tr {
+  .stock-imprimible tr,
+  .controles-imprimible tr {
     break-inside: avoid;
   }
   .etiquetas-imprimible {
     page: etiquetas;
     width: auto !important;
   }
-  .stock-imprimible thead {
+  .stock-imprimible thead,
+  .controles-imprimible thead {
     display: table-header-group;
   }
   .venta-imprimible tr {

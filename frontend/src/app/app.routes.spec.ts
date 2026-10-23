@@ -12,6 +12,7 @@ import { Compras } from './features/compras/compras';
 import { NuevaCompra } from './features/compras/nueva-compra';
 import { Reportes } from './features/reportes/reportes';
 import { StockBajoMinimo } from './features/stock-bajo-minimo/stock-bajo-minimo';
+import { ControlesDeDatos } from './features/controles-de-datos/controles-de-datos';
 import { Ventas } from './features/ventas/ventas';
 import { CuentaCliente } from './features/clientes/cuenta/cuenta-cliente';
 import { HistorialCajas } from './features/caja/historial-cajas';
@@ -79,6 +80,15 @@ describe('rutas', () => {
     expect(await (reportes!.loadComponent as () => Promise<unknown>)()).toBe(Reportes);
     expect(reportes!.canActivate).toBeUndefined();
     expect(reportes!.title).toBe('Reportes · Ferretería');
+  });
+
+  it('la ruta controles-de-datos carga los controles de datos, sin guard propio (el Vendedor ve el aviso)', async () => {
+    const ruta = hijas().find((r) => r.path === 'controles-de-datos');
+
+    expect(ruta).toBeDefined();
+    expect(await (ruta!.loadComponent as () => Promise<unknown>)()).toBe(ControlesDeDatos);
+    expect(ruta!.canActivate).toBeUndefined();
+    expect(ruta!.title).toBe('Controles de datos · Ferretería');
   });
 
   it('la ruta stock-bajo-minimo carga el listado de stock bajo mínimo, sin guard propio (el Vendedor ve el aviso)', async () => {
