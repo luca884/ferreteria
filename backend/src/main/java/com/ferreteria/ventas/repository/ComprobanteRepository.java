@@ -8,6 +8,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -100,5 +101,49 @@ public interface ComprobanteRepository extends TenantScopedRepository<Comprobant
     default Page<Comprobante> buscarVentasScoped(
             Long numero, String cliente, LocalDateTime desde, LocalDateTime hasta, Pageable pageable) {
         return buscarVentas(TenantContext.requireFerreteriaId(), numero, cliente, desde, hasta, pageable);
+    }
+
+    // ---- Clientes que compraron un articulo (G29, Ctrl+A del listado de GDS) ----
+
+    /** Un cliente que compro el articulo: cuantas ventas, cuanto en total y la fecha de la ultima ('aaaa-mm-dd'). */
+    interface ClienteDelArticulo {
+        Long getClienteId();
+        String getRazonSocial();
+        Boolean getActivo();
+        Long getCompras();
+        BigDecimal getCantidad();
+        String getUltimaCompra();
+    }
+
+    String RENGLONES_CON_VENTA = " from item_comprobante i"
+            + " join comprobante v on v.id = i.comprobante_id and v.ferreteria_id = i.ferreteria_id";
+
+    String CON_CLIENTE = " join cliente c on c.id = v.cliente_id and c.ferreteria_id = v.ferreteria_id";
+
+    String DEL_ARTICULO = " where i.ferreteria_id = :fid and i.articulo_id = :articulo and v.tipo = 'VENTA'";
+
+    /**
+     * Una fila por cliente que compro el articulo, la compra mas nueva primero. La razon social es la actual del cliente
+     * (no la copiada en la venta). La ultima compra sale como texto para no pasar por la zona de la JVM.
+     */
+    @Query(nativeQuery = true, value = "select c.id as clienteId, c.razon_social as razonSocial, c.activo as activo,"
+            + " count(distinct v.id) as compras, sum(i.cantidad) as cantidad,"
+            + " date_format(max(v.fecha), '%Y-%m-%d') as ultimaCompra" + RENGLONES_CON_VENTA + CON_CLIENTE + DEL_ARTICULO
+            + " group by c.id, c.razon_social, c.activo order by max(v.fecha) desc, c.id desc",
+            countQuery = "select count(distinct c.id)" + RENGLONES_CON_VENTA + CON_CLIENTE + DEL_ARTICULO)
+    Page<ClienteDelArticulo> clientesDelArticulo(@Param("fid") Long ferreteriaId, @Param("articulo") Long articuloId,
+            Pageable pageable);
+
+    default Page<ClienteDelArticulo> clientesDelArticuloScoped(Long articuloId, Pageable pageable) {
+        return clientesDelArticulo(TenantContext.requireFerreteriaId(), articuloId, pageable);
+    }
+
+    /** Cuantas ventas sin cliente (consumidor final) tienen el articulo. */
+    @Query(nativeQuery = true, value = "select count(distinct v.id)" + RENGLONES_CON_VENTA + DEL_ARTICULO
+            + " and v.cliente_id is null")
+    long ventasSinClienteDelArticulo(@Param("fid") Long ferreteriaId, @Param("articulo") Long articuloId);
+
+    default long ventasSinClienteDelArticuloScoped(Long articuloId) {
+        return ventasSinClienteDelArticulo(TenantContext.requireFerreteriaId(), articuloId);
     }
 }
