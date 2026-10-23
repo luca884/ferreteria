@@ -1,5 +1,6 @@
 package com.ferreteria.ventas.web;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.ferreteria.common.PageResponse;
 import com.ferreteria.ventas.model.Caja;
 import com.ferreteria.ventas.model.MedioPago;
@@ -8,10 +9,12 @@ import com.ferreteria.ventas.model.ResumenCaja;
 import com.ferreteria.ventas.model.TipoMovimientoCaja;
 import com.ferreteria.ventas.service.CajaVigente;
 import com.ferreteria.ventas.service.DetalleCaja;
+import com.ferreteria.ventas.service.EgresoSinEfectivoException;
 import com.ferreteria.ventas.service.HistorialCajas;
 import com.ferreteria.ventas.service.MovimientoRegistrado;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
@@ -57,6 +60,22 @@ public final class CajaResponses {
 
         static Movimiento de(MovimientoRegistrado registrado) {
             return de(registrado.movimiento(), registrado.usuario());
+        }
+    }
+
+    /**
+     * El rechazo de un gasto o retiro mayor al efectivo (GDS-36): los campos de {@code ApiError}, el motivo y el detalle.
+     * Las cifras del detalle solo van al Dueño; al Vendedor no se serializan (cierre ciego).
+     */
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    public record EgresoRechazado(int status, String message, Instant timestamp, String motivo, Efectivo efectivo) {
+
+        @JsonInclude(JsonInclude.Include.NON_NULL)
+        public record Efectivo(boolean puedeConfirmar, BigDecimal disponible, BigDecimal importe, BigDecimal faltante) {}
+
+        static EgresoRechazado de(EgresoSinEfectivoException e) {
+            return new EgresoRechazado(422, e.getMessage(), Instant.now(), "EFECTIVO_INSUFICIENTE",
+                    new Efectivo(e.puedeConfirmar(), e.disponible(), e.importe(), e.faltante()));
         }
     }
 

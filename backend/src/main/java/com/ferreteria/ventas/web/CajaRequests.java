@@ -15,7 +15,8 @@ public final class CajaRequests {
 
     public record Apertura(BigDecimal efectivoInicial) {}
 
-    public record Movimiento(TipoMovimientoCaja tipo, BigDecimal importe, String motivo) {}
+    /** {@code confirmaSinEfectivo}: el Dueño registra un gasto o retiro mayor al efectivo de la caja (sin el campo, false). */
+    public record Movimiento(TipoMovimientoCaja tipo, BigDecimal importe, String motivo, Boolean confirmaSinEfectivo) {}
 
     /** Cierre ciego: solo el efectivo contado. */
     public record Cierre(BigDecimal efectivoContado) {}
