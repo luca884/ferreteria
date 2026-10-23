@@ -844,24 +844,25 @@ ul.error {
  * sale solo el artículo: todo lo que no lo contiene se saca con `display: none` (con `visibility: hidden` ocupa lugar y
  * deja hojas en blanco), y el diálogo, su fondo, el shell y el contenido dejan de ser fijos, con scroll o de alto fijo
  * (100vh): si no, Chrome repite el diálogo fijo en cada hoja (recibo) o el artículo queda en la columna angosta del
- * menú (extracto). Las reglas solo rigen cuando hay un imprimible abierto, no en cualquier pantalla.
+ * menú (extracto). Las reglas solo rigen cuando hay un imprimible abierto, no en cualquier pantalla. El listado de stock
+ * bajo mínimo no es un diálogo: está en su pantalla, y al imprimirla sale solo el listado (sin la barra ni el orden).
  */
 @media print {
-  body:has(:is(.recibo-imprimible, .extracto-imprimible, .venta-imprimible))
-    *:not(:has(:is(.recibo-imprimible, .extracto-imprimible, .venta-imprimible))):not(:is(.recibo-imprimible, .extracto-imprimible, .venta-imprimible)):not(
-      :is(.recibo-imprimible, .extracto-imprimible, .venta-imprimible) *
+  body:has(:is(.recibo-imprimible, .extracto-imprimible, .venta-imprimible, .stock-imprimible))
+    *:not(:has(:is(.recibo-imprimible, .extracto-imprimible, .venta-imprimible, .stock-imprimible))):not(:is(.recibo-imprimible, .extracto-imprimible, .venta-imprimible, .stock-imprimible)):not(
+      :is(.recibo-imprimible, .extracto-imprimible, .venta-imprimible, .stock-imprimible) *
     ) {
     display: none !important;
   }
-  app-shell:has(:is(.recibo-imprimible, .extracto-imprimible, .venta-imprimible)),
-  app-shell:has(:is(.recibo-imprimible, .extracto-imprimible, .venta-imprimible)) .contenido {
+  app-shell:has(:is(.recibo-imprimible, .extracto-imprimible, .venta-imprimible, .stock-imprimible)),
+  app-shell:has(:is(.recibo-imprimible, .extracto-imprimible, .venta-imprimible, .stock-imprimible)) .contenido {
     display: block !important;
     height: auto !important;
     overflow: visible !important;
     padding: 0 !important;
   }
-  .dialogo-fondo:has(:is(.recibo-imprimible, .extracto-imprimible, .venta-imprimible)),
-  .dialogo:has(:is(.recibo-imprimible, .extracto-imprimible, .venta-imprimible)) {
+  .dialogo-fondo:has(:is(.recibo-imprimible, .extracto-imprimible, .venta-imprimible, .stock-imprimible)),
+  .dialogo:has(:is(.recibo-imprimible, .extracto-imprimible, .venta-imprimible, .stock-imprimible)) {
     position: static !important;
     display: block !important;
     place-items: stretch !important;
@@ -874,8 +875,15 @@ ul.error {
   }
   .recibo-imprimible,
   .extracto-imprimible,
-  .venta-imprimible {
+  .venta-imprimible,
+  .stock-imprimible {
     color: #000;
+  }
+  .stock-imprimible tr {
+    break-inside: avoid;
+  }
+  .stock-imprimible thead {
+    display: table-header-group;
   }
   .venta-imprimible tr {
     break-inside: avoid;

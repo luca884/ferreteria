@@ -178,6 +178,7 @@ describe('Shell', () => {
       'Compras',
       'Ventas',
       'Reportes',
+      'Stock bajo mínimo',
       'Importar lista',
       'Actualizar precios',
       'Margen y redondeo',
@@ -303,6 +304,7 @@ describe('Shell', () => {
     expect(el.querySelector('a[href="/actualizacion-masiva"]')).toBeNull();
     expect(el.querySelector('a[href="/compras"]')).toBeNull();
     expect(el.querySelector('a[href="/reportes"]')).toBeNull();
+    expect(el.querySelector('a[href="/stock-bajo-minimo"]')).toBeNull();
     expect(el.querySelector('a[href="/ventas"]')).toBeNull();
     expect(el.querySelector('nav .grupo')).toBeNull();
   });
