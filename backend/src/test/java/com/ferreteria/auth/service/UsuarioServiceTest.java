@@ -88,7 +88,7 @@ class UsuarioServiceTest {
     // ---- crear ----
 
     private static DatosUsuario datos(Rol rol, String password) {
-        return new DatosUsuario("  Ana  ", "  ANA@Tornillo.com ", rol, password);
+        return new DatosUsuario("  Ana  ", "  ANA@Tornillo.com ", rol, password, null);
     }
 
     @Test
@@ -173,7 +173,7 @@ class UsuarioServiceTest {
     // ---- actualizar ----
 
     private static DatosEdicion edicion(Rol rol) {
-        return new DatosEdicion("  Nuevo Nombre ", " Nuevo@Mail.com ", rol);
+        return new DatosEdicion("  Nuevo Nombre ", " Nuevo@Mail.com ", rol, null);
     }
 
     @Test
@@ -290,7 +290,7 @@ class UsuarioServiceTest {
         existe(7, u);
         when(emailUnico.enUsoPorOtro(anyString(), anyLong())).thenReturn(false);
 
-        assertThat(servicio.actualizar(7L, new DatosEdicion("Equis", "x@t.com", Rol.VENDEDOR), ACTOR).getEmail())
+        assertThat(servicio.actualizar(7L, new DatosEdicion("Equis", "x@t.com", Rol.VENDEDOR, null), ACTOR).getEmail())
                 .isEqualTo("x@t.com");
     }
 

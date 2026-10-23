@@ -101,6 +101,7 @@ public class AuthService {
                 usuario.getEmail(),
                 usuario.getRol(),
                 usuario.getFerreteriaId(),
-                ferreteria == null ? null : ferreteria.getRazonSocial());
+                ferreteria == null ? null : ferreteria.getRazonSocial(),
+                usuario.getTopeDescuento());
     }
 }
