@@ -12,6 +12,7 @@ import {
   TIPOS_MOVIMIENTO_CUENTA,
   TIPO_MOVIMIENTO_LABELS,
   TipoMovimiento,
+  muestraMotivo,
   puedeAnular,
   puedeVerRecibo,
 } from './extracto.models';
@@ -63,6 +64,7 @@ export class MovimientosCuenta {
   protected readonly tipos = TIPOS_MOVIMIENTO_CUENTA;
   protected readonly tipoLabels = TIPO_MOVIMIENTO_LABELS;
   protected readonly fecha = fechaCompletaLocal;
+  protected readonly muestraMotivo = muestraMotivo;
   protected readonly puedeAnular = puedeAnular;
   protected readonly puedeVerRecibo = puedeVerRecibo;
 

@@ -12,18 +12,20 @@ import {
   untracked,
   viewChild,
 } from '@angular/core';
-import { MontoPipe, formatearMonto } from '../../../core/formato/monto';
+import { MontoPipe } from '../../../core/formato/monto';
 import { TrampaFoco } from '../../../shared/trampa-foco';
 import { fechaHoraLocal } from '../../caja/caja.models';
-import { aCentavos, desdeTexto } from '../../mostrador/centavos';
 import {
   CobranzaRequest,
   MEDIOS_COBRANZA,
   MEDIO_COBRANZA_LABELS,
+  MENSAJE_DECIMALES,
   MedioCobranza,
   PendienteCuenta,
   aCuentaCentavos,
-  centavosATexto,
+  filasDeImputacion,
+  leerImporte,
+  renglonesDeImputacion,
   sugerirFifo,
 } from './cobranza.models';
 
@@ -32,21 +34,10 @@ export type PedidoCobranza = Omit<CobranzaRequest, 'clave' | 'clienteId'>;
 
 /** El mismo tope que acepta el servidor: 13 enteros y 2 decimales. */
 const TOTAL_MAXIMO_CENTAVOS = 999_999_999_999_999;
-const MENSAJE_DECIMALES = 'Usá un número con hasta 2 decimales.';
-
-/** Un importe escrito, en centavos; null si no es un número de hasta 2 decimales (o es negativo). */
-function leer(texto: string): number | null {
-  try {
-    const centavos = desdeTexto(texto, 2);
-    return centavos >= 0 ? centavos : null;
-  } catch {
-    return null;
-  }
-}
 
 /**
  * Cobranza de cuenta corriente (F4 en la pantalla de cuenta). Presentacional: arranca con el total vacío (no precarga la
- * deuda) y, al tipearlo, sugiere repartirlo en orden FIFO entre los comprobantes con deuda; la tabla se puede editar a
+ * deuda) y, al tipearlo, sugiere repartirlo en orden FIFO entre las partidas con deuda (ventas y Recargos); la tabla se puede editar a
  * mano (importe vacío = desmarcar) y lo que no se imputa queda «a cuenta». Sin deuda es un adelanto: no hay tabla y el
  * cobro queda todo a cuenta. Con el foco en el medio, ← y → (o ↑ y ↓) lo cambian; Enter confirma, Esc cierra. Mientras `enVuelo` ignora Enter.
  * Si el envío quedó sin confirmar (`congelado`: red o 5xx) el contenido no se puede tocar —el reintento lleva la misma clave—
@@ -63,7 +54,7 @@ export class DialogoCobranza {
   private readonly injector = inject(Injector);
 
   readonly clienteNombre = input.required<string>();
-  /** Los comprobantes con deuda en orden FIFO, como los manda el servidor. Si cambian (409) se vuelve a sugerir. */
+  /** Las partidas con deuda (ventas y Recargos) en orden FIFO, como las manda el servidor. Si cambian (409) se vuelve a sugerir. */
   readonly pendientes = input<readonly PendienteCuenta[]>([]);
   /** Lo que el cliente ya tiene a cuenta, sin imputar (en pesos). */
   readonly aCuenta = input(0);
@@ -87,8 +78,8 @@ export class DialogoCobranza {
 
   protected readonly medio = signal<MedioCobranza>('EFECTIVO');
   protected readonly totalTexto = signal('');
-  /** Lo escrito a mano en cada fila, por comprobante; null mientras se usa la sugerencia FIFO. */
-  private readonly editadas = signal<Record<number, string> | null>(null);
+  /** Lo escrito a mano en cada fila, por clave de partida (`C-7`, `A-3`); null mientras se usa la sugerencia FIFO. */
+  private readonly editadas = signal<Record<string, string> | null>(null);
   /** Se intentó confirmar con errores: recién ahí se avisa que falta el total. */
   private readonly intentado = signal(false);
   /** Entre el Enter y el siguiente pintado, para que un segundo Enter no mande el cobro dos veces. */
@@ -99,7 +90,7 @@ export class DialogoCobranza {
   /** El total en centavos; null si está vacío o no es un número. */
   protected readonly totalCentavos = computed<number | null>(() => {
     const texto = this.totalTexto().trim();
-    return texto === '' ? null : leer(texto);
+    return texto === '' ? null : leerImporte(texto);
   });
 
   protected readonly errorTotal = computed<string | null>(() => {
@@ -115,24 +106,9 @@ export class DialogoCobranza {
   private readonly sugerencia = computed(() => sugerirFifo(this.pendientes(), this.totalCentavos() ?? 0));
 
   /** Las filas con el texto que se ve, su importe en centavos y su error en línea. */
-  protected readonly filas = computed(() => {
-    const editadas = this.editadas();
-    const sugeridas = this.sugerencia().imputaciones;
-    return this.pendientes().map((p, i) => {
-      const texto = editadas
-        ? (editadas[p.comprobanteId] ?? '')
-        : sugeridas[i] === 0
-          ? ''
-          : centavosATexto(sugeridas[i]);
-      const centavos = texto.trim() === '' ? 0 : leer(texto.trim());
-      let error: string | null = null;
-      if (centavos === null) error = MENSAJE_DECIMALES;
-      else if (centavos > aCentavos(p.pendiente)) {
-        error = `No puede superar lo pendiente (${formatearMonto(p.pendiente)}).`;
-      }
-      return { ...p, texto, centavos: centavos ?? 0, error };
-    });
-  });
+  protected readonly filas = computed(() =>
+    filasDeImputacion(this.pendientes(), this.editadas(), this.sugerencia().imputaciones),
+  );
 
   private readonly imputadoCentavos = computed(() => this.filas().reduce((suma, f) => suma + f.centavos, 0));
 
@@ -183,10 +159,10 @@ export class DialogoCobranza {
   }
 
   /** Editar una fila congela las demás tal como se ven: el total ya no las vuelve a repartir. */
-  protected escribirFila(comprobanteId: number, texto: string): void {
+  protected escribirFila(clave: string, texto: string): void {
     if (this.congelado()) return;
-    const base = this.editadas() ?? Object.fromEntries(this.filas().map((f) => [f.comprobanteId, f.texto]));
-    this.editadas.set({ ...base, [comprobanteId]: texto });
+    const base = this.editadas() ?? Object.fromEntries(this.filas().map((f) => [f.clave, f.texto]));
+    this.editadas.set({ ...base, [clave]: texto });
   }
 
   protected imputarEnOrden(): void {
@@ -254,9 +230,7 @@ export class DialogoCobranza {
     this.confirmar.emit({
       medio: this.medio(),
       total: total / 100,
-      imputaciones: this.filas()
-        .filter((f) => f.centavos > 0)
-        .map((f) => ({ comprobanteId: f.comprobanteId, importe: f.centavos / 100 })),
+      imputaciones: renglonesDeImputacion(this.filas()),
     });
   }
 

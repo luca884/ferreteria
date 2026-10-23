@@ -251,6 +251,25 @@ describe('MovimientosCuenta (CC-074, CC-076, CC-078, CC-096)', () => {
       expect(venta.classList.contains('anulacion')).toBe(false);
       expect(venta.querySelector('.motivo')).toBeNull();
     });
+
+    it('un AJUSTE muestra su referencia («Recargo N.º 3») y su motivo debajo, sin acciones de cobro', async () => {
+      await crear({
+        extracto: () =>
+          of(
+            extracto([
+              linea(3, { tipo: 'AJUSTE', referencia: 'Recargo N.º 3', debe: 500, haber: 0, reciboId: null, comprobanteId: null, motivo: 'Deuda vieja' }),
+              linea(2, { tipo: 'AJUSTE', referencia: 'Descuento N.º 1', debe: 0, haber: 200, reciboId: null, comprobanteId: null, motivo: 'Condonación' }),
+            ]),
+          ),
+      });
+
+      const [recargo, descuento] = filas();
+      expect(limpio(recargo.textContent)).toContain('Ajuste');
+      expect(limpio(recargo.textContent)).toContain('Recargo N.º 3');
+      expect(limpio(recargo.querySelector('.motivo')?.textContent)).toBe('Motivo: Deuda vieja');
+      expect(limpio(descuento.querySelector('.motivo')?.textContent)).toBe('Motivo: Condonación');
+      expect(recargo.querySelector('button')).toBeNull();
+    });
   });
 
   describe('paginación (CC-096: 25 movimientos → 20 + 5)', () => {

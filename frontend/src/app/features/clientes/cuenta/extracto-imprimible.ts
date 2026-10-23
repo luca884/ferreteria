@@ -4,7 +4,7 @@ import { MontoPipe } from '../../../core/formato/monto';
 import { TrampaFoco } from '../../../shared/trampa-foco';
 import { documentoLegible } from '../cliente.models';
 import { fechaCompletaLocal } from './cobranza.models';
-import { Extracto, TIPO_MOVIMIENTO_LABELS, TOPE_IMPRESION, textoPeriodo } from './extracto.models';
+import { Extracto, TIPO_MOVIMIENTO_LABELS, TOPE_IMPRESION, muestraMotivo, textoPeriodo } from './extracto.models';
 
 /** La leyenda del impreso. Texto a confirmar con el contador (P7): está acá, aislada, para ajustarla en un solo lugar. */
 export const LEYENDA_EXTRACTO = 'Resumen interno de cuenta, no válido como comprobante fiscal';
@@ -48,6 +48,7 @@ export class ExtractoImprimible {
   protected readonly tope = TOPE_IMPRESION;
   protected readonly fecha = fechaCompletaLocal;
   protected readonly tipoLabels = TIPO_MOVIMIENTO_LABELS;
+  protected readonly muestraMotivo = muestraMotivo;
   protected readonly emitido = emitidoEl(new Date());
 
   protected readonly ferreteria = computed(() => this.auth.sesion()?.ferreteriaNombre ?? null);

@@ -1,0 +1,174 @@
+.ajuste {
+  width: min(600px, 100%);
+  max-height: calc(100vh - var(--e-8));
+  gap: var(--e-3);
+  overflow-y: auto;
+}
+/* El diálogo recibe el foco con un clic en una zona sin controles: no necesita el aro. */
+.ajuste:focus {
+  outline: none;
+}
+
+.aviso {
+  padding: var(--e-2) var(--e-3);
+  border: 1px solid var(--advertencia-borde);
+  border-left: 4px solid var(--advertencia-marca);
+  border-radius: var(--radio);
+  background: var(--advertencia-fondo);
+  font-weight: 600;
+}
+
+.ya-a-cuenta,
+.sin-deudas {
+  color: var(--texto-suave);
+  font-size: var(--texto-sm);
+  font-weight: 600;
+}
+
+.campo-importe,
+.campo-motivo {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-weight: 600;
+}
+.campo-importe input {
+  width: 100%;
+  min-width: 0;
+  height: 58px;
+  padding: 0 14px;
+  border-width: 2px;
+  border-radius: var(--radio-lg);
+  font-family: var(--fuente-mono);
+  font-size: 1.625rem;
+  font-weight: 600;
+  text-align: right;
+}
+.campo-motivo input {
+  width: 100%;
+  min-width: 0;
+  height: 48px;
+  padding: 0 14px;
+}
+.pie-motivo {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--e-2);
+  margin-top: calc(var(--e-2) * -1);
+}
+.pie-motivo .contador {
+  margin-left: auto;
+  color: var(--texto-tenue);
+  font-variant-numeric: tabular-nums;
+}
+
+.imputacion {
+  width: 100%;
+  border-collapse: collapse;
+}
+.imputacion th,
+.imputacion td {
+  padding: var(--e-1) var(--e-2);
+  border-bottom: 1px solid var(--borde);
+  vertical-align: middle;
+  text-align: left;
+}
+.imputacion thead th {
+  color: var(--texto-suave);
+  font-size: var(--texto-sm);
+}
+/* La referencia de la fila es un dato más: sin el fondo ni el sticky del encabezado de columna (styles.css). */
+.imputacion tbody th {
+  position: static;
+  background: transparent;
+  font-weight: 600;
+  letter-spacing: normal;
+  text-transform: none;
+}
+.imputacion .fecha {
+  display: block;
+  color: var(--texto-tenue);
+  font-weight: 400;
+}
+.imputacion .num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.imputacion td input {
+  width: 9rem;
+  height: 40px;
+  padding: 0 10px;
+  font-family: var(--fuente-mono);
+  text-align: right;
+}
+.imputacion .campo-error {
+  display: block;
+  margin-top: 2px;
+}
+
+.imputar-en-orden {
+  align-self: flex-start;
+}
+
+.a-cuenta {
+  display: flex;
+  justify-content: space-between;
+  padding: var(--e-2) var(--e-3);
+  border: 1px solid var(--info-borde);
+  border-left: 4px solid var(--info-marca, var(--acento));
+  border-radius: var(--radio);
+  background: var(--info-fondo);
+  font-weight: 600;
+}
+.a-cuenta strong {
+  font-variant-numeric: tabular-nums;
+}
+
+.motivo-resumen {
+  color: var(--texto-suave);
+}
+.imputaciones-resumen p {
+  font-weight: 600;
+}
+.imputaciones-resumen ul {
+  margin: var(--e-1) 0 0;
+  padding: 0;
+  list-style: none;
+}
+.imputaciones-resumen li {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--e-3);
+  padding: var(--e-1) 0;
+  border-bottom: 1px solid var(--borde);
+}
+.imputaciones-resumen .importe {
+  font-variant-numeric: tabular-nums;
+}
+
+/* El efecto en el saldo es lo que se confirma: se destaca como el aviso de la caja en la anulación. */
+.efecto-saldo {
+  padding: var(--e-2) var(--e-3);
+  border: 1px solid var(--info-borde);
+  border-left: 4px solid var(--info-marca, var(--acento));
+  border-radius: var(--radio);
+  background: var(--info-fondo);
+  font-weight: 600;
+}
+.efecto-saldo strong {
+  font-variant-numeric: tabular-nums;
+}
+
+.no-se-deshace {
+  color: var(--texto-suave);
+  font-size: var(--texto-sm);
+  font-weight: 600;
+}
+
+.dialogo-acciones button {
+  min-height: 48px;
+}
+.dialogo-acciones .continuar,
+.dialogo-acciones .confirmar-ajuste {
+  padding-inline: var(--e-6);
+}

@@ -7,6 +7,7 @@ import { vi } from 'vitest';
 import { AuthService } from '../../../core/auth/auth.service';
 import { Cliente } from '../cliente.models';
 import { ClientesService } from '../clientes.service';
+import { AjusteCobrado, AjusteRequest, AjusteResponse } from './ajuste.models';
 import { CobranzaRequest, PendientesCuenta, Recibo, ReciboCobrado } from './cobranza.models';
 import { CobranzaService, GENERAR_CLAVE_COBRO } from './cobranza.service';
 import { CuentaCliente } from './cuenta-cliente';
@@ -81,6 +82,7 @@ describe('CuentaCliente (CC-028, CC-033, CC-034, CC-038, CC-043)', () => {
     cobrar: ReturnType<typeof vi.fn>;
     recibo: ReturnType<typeof vi.fn>;
     anular: ReturnType<typeof vi.fn>;
+    ajustar: ReturnType<typeof vi.fn>;
   };
   let extractos: { extracto: ReturnType<typeof vi.fn>; paraImprimir: ReturnType<typeof vi.fn> };
   let claves: string[];
@@ -140,6 +142,20 @@ describe('CuentaCliente (CC-028, CC-033, CC-034, CC-038, CC-043)', () => {
       motivoAnulacion: 'Cliente equivocado',
     });
 
+  /** Lo que devuelve POST /ajustes: un Recargo de 500 sobre un saldo de 1.200 (contrato de CU-12, S1). */
+  const respuestaAjuste = (cambios: Partial<AjusteResponse> = {}): AjusteResponse => ({
+    ajusteId: 3,
+    numero: 3,
+    referencia: 'Recargo N.º 3',
+    tipo: 'RECARGO',
+    importe: 500,
+    motivo: 'Deuda vieja del cliente',
+    fecha: '2026-10-23T18:00:00',
+    saldo: 1700,
+    imputaciones: [],
+    ...cambios,
+  });
+
   interface Opciones {
     dueno?: boolean;
     id?: string;
@@ -148,6 +164,7 @@ describe('CuentaCliente (CC-028, CC-033, CC-034, CC-038, CC-043)', () => {
     extracto?: () => Observable<Extracto>;
     cliente?: Cliente;
     anular?: (reciboId: number, motivo: string) => Observable<Recibo>;
+    ajustar?: (clienteId: number, pedido: AjusteRequest) => Observable<AjusteCobrado>;
   }
 
   async function crear({
@@ -158,6 +175,7 @@ describe('CuentaCliente (CC-028, CC-033, CC-034, CC-038, CC-043)', () => {
     extracto: pedirExtracto,
     cliente = ana,
     anular,
+    ajustar,
   }: Opciones = {}) {
     clientes = { obtener: vi.fn(() => of(cliente)) };
     extractos = {
@@ -169,6 +187,7 @@ describe('CuentaCliente (CC-028, CC-033, CC-034, CC-038, CC-043)', () => {
       cobrar: vi.fn(cobrar ?? (() => of({ recibo: recibo(), repetida: false }))),
       recibo: vi.fn(() => of(recibo())),
       anular: vi.fn(anular ?? (() => of(reciboAnulado()))),
+      ajustar: vi.fn(ajustar ?? (() => of({ ajuste: respuestaAjuste(), repetida: false }))),
     };
     let n = 0;
     claves = [];
@@ -1586,6 +1605,380 @@ describe('CuentaCliente (CC-028, CC-033, CC-034, CC-038, CC-043)', () => {
 
       expect(el().querySelector('.alerta.exito')).toBeNull();
       expect(boton('Reimprimir recibo')).toBeUndefined();
+    });
+  });
+
+  describe('Ajustes: Recargo y Descuento (CU-12, S5, S8)', () => {
+    const recargoPartida = (ajusteId: number, pendiente: number) => ({
+      comprobanteId: null,
+      ajusteId,
+      referencia: `Recargo N.º ${ajusteId}`,
+      fecha: '2026-10-11T09:00:00',
+      importe: pendiente,
+      imputado: 0,
+      pendiente,
+    });
+    /** Venta 300, Recargo 200 (ajusteId 3) y venta 500: saldo 1.000. */
+    const conRecargo: PendientesCuenta = {
+      saldo: 1000,
+      aCuenta: 0,
+      comprobantes: [comprobante(31, 7, 300), recargoPartida(3, 200), comprobante(32, 8, 500)],
+    };
+    const dialogoAjuste = () => el().querySelector('app-dialogo-ajuste');
+    const importeAj = () => el().querySelector<HTMLInputElement>('#importe-ajuste')!;
+    const motivoAj = () => el().querySelector<HTMLInputElement>('#motivo-ajuste')!;
+
+    async function escribirEn(campo: HTMLInputElement, valor: string) {
+      campo.value = valor;
+      campo.dispatchEvent(new Event('input', { bubbles: true }));
+      await refrescar();
+    }
+
+    async function pulsar(nombre: string) {
+      boton(nombre)!.click();
+      await refrescar();
+    }
+
+    /** Abre el diálogo del tipo, escribe importe y motivo, pasa a la confirmación y la confirma. */
+    async function ajustarCon(tipo: 'Recargo' | 'Descuento', importe: string, motivo = 'Deuda vieja del cliente') {
+      await pulsar(tipo);
+      await escribirEn(importeAj(), importe);
+      await escribirEn(motivoAj(), motivo);
+      await pulsar('Continuar');
+      await pulsar(`Confirmar ${tipo.toLowerCase()}`);
+    }
+
+    describe('quién los ve', () => {
+      it('el Dueño tiene «Recargo» y «Descuento» en la barra, junto a «Cobrar (F4)»', async () => {
+        await crear();
+
+        expect(boton('Recargo')).toBeDefined();
+        expect(boton('Descuento')).toBeDefined();
+        expect(boton('Cobrar (F4)')).toBeDefined();
+      });
+
+      it('el Vendedor no ve ni «Recargo» ni «Descuento» y no se hace ningún request de ajustes', async () => {
+        await crear({ dueno: false });
+
+        expect(boton('Recargo')).toBeUndefined();
+        expect(boton('Descuento')).toBeUndefined();
+        expect(cobranza.ajustar).not.toHaveBeenCalled();
+        expect(cobranza.pendientes).not.toHaveBeenCalled();
+      });
+
+      it('mientras la cuenta no cargó no se pueden abrir', async () => {
+        await crear({ pendientes: () => throwError(() => errorHttp(500, null)) });
+
+        expect(boton('Recargo')!.disabled).toBe(true);
+        expect(boton('Descuento')!.disabled).toBe(true);
+      });
+    });
+
+    describe('pendientes con Recargos (S3)', () => {
+      it('un Recargo figura en la tabla con su referencia, aunque no tenga comprobanteId', async () => {
+        const aviso = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+        const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+        // Al cobrar se vuelven a pedir los pendientes: la lista cambia de orden y Angular compara las claves de las filas.
+        let llamada = 0;
+        const despues: PendientesCuenta = { saldo: 250, aCuenta: 0, comprobantes: [recargoPartida(4, 50), recargoPartida(3, 200)] };
+        await crear({
+          pendientes: () =>
+            of(++llamada === 1 ? { ...conRecargo, comprobantes: [...conRecargo.comprobantes, recargoPartida(4, 50)] } : despues),
+        });
+
+        const referencias = () => Array.from(el().querySelectorAll('table.pendientes tbody th')).map((t) => limpio(t.textContent));
+        expect(referencias()).toEqual(['Venta N.º 7', 'Recargo N.º 3', 'Venta N.º 8', 'Recargo N.º 4']);
+
+        await cobrar('800');
+
+        expect(referencias()).toEqual(['Recargo N.º 4', 'Recargo N.º 3']);
+        const llamados = [...aviso.mock.calls, ...error.mock.calls].map((c) => String(c[0]));
+        expect(llamados.filter((l) => l.includes('NG0955'))).toEqual([]);
+        aviso.mockRestore();
+        error.mockRestore();
+      });
+
+      it('el cobro imputa FIFO también al Recargo: lo manda con ajusteId y a las ventas con comprobanteId', async () => {
+        await crear({ pendientes: () => of(conRecargo) });
+
+        await cobrar('600');
+
+        expect(cobranza.cobrar).toHaveBeenCalledWith({
+          clave: claves[0],
+          clienteId: 8,
+          medio: 'EFECTIVO',
+          total: 600,
+          imputaciones: [
+            { comprobanteId: 31, importe: 300 },
+            { ajusteId: 3, importe: 200 },
+            { comprobanteId: 32, importe: 100 },
+          ],
+        });
+      });
+    });
+
+    describe('Recargo', () => {
+      it('«Recargo» abre el diálogo del Recargo y otro clic o F4 no abren otro', async () => {
+        await crear();
+
+        await pulsar('Recargo');
+
+        expect(dialogoAjuste()).not.toBeNull();
+        expect(el().querySelector('h2#dialogo-ajuste-titulo')!.textContent).toContain('Recargo a Ana Gómez');
+        await f4();
+        expect(dialogo()).toBeNull();
+        await pulsar('Descuento');
+        expect(el().querySelectorAll('app-dialogo-ajuste')).toHaveLength(1);
+      });
+
+      it('con un cobro en curso no se abre un ajuste', async () => {
+        await crear();
+        await f4();
+
+        boton('Recargo')!.click();
+        await refrescar();
+
+        expect(dialogoAjuste()).toBeNull();
+      });
+
+      it('confirma con el efecto en el saldo y manda clave, tipo, importe y motivo (sin imputaciones)', async () => {
+        await crear();
+
+        await pulsar('Recargo');
+        await escribirEn(importeAj(), '500');
+        await escribirEn(motivoAj(), 'Deuda vieja del cliente');
+        await pulsar('Continuar');
+
+        expect(texto('.efecto-saldo')).toBe('El saldo pasa de $ 1.200,00 a $ 1.700,00.');
+        expect(cobranza.ajustar).not.toHaveBeenCalled();
+
+        await pulsar('Confirmar recargo');
+
+        expect(cobranza.ajustar).toHaveBeenCalledTimes(1);
+        expect(cobranza.ajustar).toHaveBeenCalledWith(8, {
+          clave: claves[0],
+          tipo: 'RECARGO',
+          importe: 500,
+          motivo: 'Deuda vieja del cliente',
+        });
+        expect(claves[0]).toMatch(/^[0-9a-f-]{36}$/);
+      });
+
+      it('al registrarse cierra el diálogo, avisa y recarga saldo, pendientes y movimientos', async () => {
+        let llamada = 0;
+        const despues: PendientesCuenta = { saldo: 1700, aCuenta: 0, comprobantes: [...con3.comprobantes, recargoPartida(3, 500)] };
+        await crear({ pendientes: () => of(++llamada === 1 ? con3 : despues) });
+        expect(extractos.extracto).toHaveBeenCalledTimes(1);
+
+        await ajustarCon('Recargo', '500');
+
+        expect(dialogoAjuste()).toBeNull();
+        expect(texto('.alerta.exito span')).toBe('Recargo N.º 3 registrado por $ 500,00. El saldo ahora es $ 1.700,00.');
+        expect(cobranza.pendientes).toHaveBeenCalledTimes(2);
+        expect(texto('.saldo strong')).toBe('$ 1.700,00');
+        expect(el().querySelectorAll('table.pendientes tbody tr')).toHaveLength(4);
+        expect(extractos.extracto).toHaveBeenCalledTimes(2);
+      });
+
+      it('si el saldo queda a favor lo dice «a favor»', async () => {
+        await crear({ ajustar: () => of({ ajuste: respuestaAjuste({ saldo: -300 }), repetida: false }) });
+
+        await ajustarCon('Recargo', '500');
+
+        expect(texto('.alerta.exito span')).toContain('El saldo ahora es $ 300,00 a favor.');
+      });
+
+      it('un 200 (la misma clave ya estaba registrada) dice que ya estaba registrado', async () => {
+        await crear({ ajustar: () => of({ ajuste: respuestaAjuste(), repetida: true }) });
+
+        await ajustarCon('Recargo', '500');
+
+        expect(texto('.alerta.exito span')).toContain('Este ajuste ya estaba registrado: Recargo N.º 3');
+      });
+
+      it('cada apertura del diálogo lleva una clave nueva', async () => {
+        await crear();
+
+        await ajustarCon('Recargo', '500');
+        await ajustarCon('Recargo', '600');
+
+        expect(claves).toHaveLength(2);
+        expect(cobranza.ajustar.mock.calls.map((c) => c[1].clave)).toEqual([claves[0], claves[1]]);
+      });
+
+      it('un cobro nuevo saca el aviso del ajuste anterior', async () => {
+        await crear();
+        await ajustarCon('Recargo', '500');
+        expect(texto('.alerta.exito span')).toContain('Recargo N.º 3 registrado');
+
+        await f4();
+
+        expect(texto('.alerta.exito span')).toBeNull();
+      });
+    });
+
+    describe('Descuento', () => {
+      it('imputa FIFO a ventas y Recargos y manda comprobanteId o ajusteId, con el resto a cuenta', async () => {
+        await crear({
+          pendientes: () => of(conRecargo),
+          ajustar: () => of({ ajuste: respuestaAjuste({ tipo: 'DESCUENTO', referencia: 'Descuento N.º 4', importe: 600, saldo: 400 }), repetida: false }),
+        });
+
+        await pulsar('Descuento');
+        await escribirEn(importeAj(), '600');
+        await escribirEn(motivoAj(), 'Condonación acordada');
+        await pulsar('Continuar');
+
+        expect(texto('.efecto-saldo')).toBe('El saldo pasa de $ 1.000,00 a $ 400,00.');
+        await pulsar('Confirmar descuento');
+
+        expect(cobranza.ajustar).toHaveBeenCalledWith(8, {
+          clave: claves[0],
+          tipo: 'DESCUENTO',
+          importe: 600,
+          motivo: 'Condonación acordada',
+          imputaciones: [
+            { comprobanteId: 31, importe: 300 },
+            { ajusteId: 3, importe: 200 },
+            { comprobanteId: 32, importe: 100 },
+          ],
+        });
+        expect(texto('.alerta.exito span')).toBe('Descuento N.º 4 registrado por $ 600,00. El saldo ahora es $ 400,00.');
+      });
+    });
+
+    describe('rechazos', () => {
+      it('409 IMPUTACION_EXCEDE_DEUDA: el diálogo sigue, vuelve a los datos con las deudas actuales, avisa y la clave cambia', async () => {
+        const despues: PendientesCuenta = { saldo: 800, aCuenta: 0, comprobantes: [comprobante(32, 8, 500), recargoPartida(3, 300)] };
+        let llamada = 0;
+        await crear({
+          pendientes: () => of(++llamada === 1 ? conRecargo : despues),
+          ajustar: () =>
+            throwError(() =>
+              rechazo(409, 'IMPUTACION_EXCEDE_DEUDA', 'La deuda de alguna partida cambió.', [
+                { comprobanteId: 31, ajusteId: null, referencia: 'Venta N.º 7', pendiente: 0 },
+              ]),
+            ),
+        });
+
+        await pulsar('Descuento');
+        await escribirEn(importeAj(), '600');
+        await escribirEn(motivoAj(), 'Condonación acordada');
+        await pulsar('Continuar');
+        await pulsar('Confirmar descuento');
+
+        expect(dialogoAjuste()).not.toBeNull();
+        expect(cobranza.pendientes).toHaveBeenCalledTimes(2);
+        expect(texto('.aviso')).toBe('Las deudas cambiaron: revisá la imputación y volvé a confirmar.');
+        expect(el().querySelector('.efecto-saldo')).toBeNull();
+        expect(
+          Array.from(el().querySelectorAll<HTMLInputElement>('.imputacion input')).map((i) => i.value),
+        ).toEqual(['500,00', '100,00']);
+        expect(importeAj().value).toBe('600');
+
+        await pulsar('Continuar');
+        await pulsar('Confirmar descuento');
+        expect(cobranza.ajustar.mock.calls[0][1].clave).toBe(claves[0]);
+        expect(cobranza.ajustar.mock.calls[1][1].clave).toBe(claves[1]);
+      });
+
+      it('409 de clave con otro contenido: muestra el mensaje y el siguiente intento lleva una clave nueva', async () => {
+        await crear({
+          ajustar: () => throwError(() => rechazo(409, 'CLAVE_CON_OTRO_CONTENIDO', 'Esa clave ya se usó con otro contenido.')),
+        });
+
+        await ajustarCon('Recargo', '500');
+        expect(texto('.error-servidor')).toBe('Esa clave ya se usó con otro contenido.');
+
+        await pulsar('Confirmar recargo');
+        expect(cobranza.ajustar.mock.calls[1][1].clave).toBe(claves[1]);
+      });
+
+      it('422 «El cliente está desactivado.» (sin motivo) muestra el mensaje y no cierra el diálogo', async () => {
+        await crear({
+          ajustar: () => throwError(() => errorHttp(422, { status: 422, message: 'El cliente está desactivado.' })),
+        });
+
+        await ajustarCon('Recargo', '500');
+
+        expect(dialogoAjuste()).not.toBeNull();
+        expect(texto('.error-servidor')).toBe('El cliente está desactivado.');
+        expect(cobranza.ajustar).toHaveBeenCalledTimes(1);
+      });
+
+      it('403 muestra el mensaje del servidor', async () => {
+        await crear({ ajustar: () => throwError(() => errorHttp(403, { status: 403, message: 'Solo el Dueño puede ajustar.' })) });
+
+        await ajustarCon('Recargo', '500');
+
+        expect(texto('.error-servidor')).toBe('Solo el Dueño puede ajustar.');
+      });
+
+      it('400: los errores van junto a cada campo y el siguiente intento lleva una clave nueva', async () => {
+        await crear({
+          ajustar: () =>
+            throwError(() =>
+              errorHttp(400, {
+                status: 400,
+                message: 'Hay datos inválidos',
+                errors: { importe: 'El importe admite hasta 2 decimales.', motivo: 'El motivo es obligatorio.', imputaciones: 'No corresponde.' },
+              }),
+            ),
+        });
+
+        await ajustarCon('Recargo', '500');
+
+        expect(el().querySelector('.efecto-saldo')).toBeNull();
+        expect(texto('#error-importe')).toBe('El importe admite hasta 2 decimales.');
+        expect(texto('#error-motivo')).toBe('El motivo es obligatorio.');
+        expect(texto('.error-servidor')).toBe('No corresponde.');
+
+        await pulsar('Continuar');
+        await pulsar('Confirmar recargo');
+        expect(cobranza.ajustar.mock.calls[1][1].clave).toBe(claves[1]);
+      });
+
+      it('red o 5xx: mensaje de reintento seguro, contenido congelado y el reintento usa la MISMA clave', async () => {
+        let intento = 0;
+        await crear({
+          ajustar: () => (++intento === 1 ? throwError(() => errorHttp(0, null)) : of({ ajuste: respuestaAjuste(), repetida: true })),
+        });
+
+        await ajustarCon('Recargo', '500');
+        expect(texto('.error-servidor')).toContain('No se pudo registrar el ajuste');
+        expect(texto('.error-servidor')).toContain('no se carga dos veces');
+        expect(texto('.aviso-congelado')).not.toBeNull();
+        expect(dialogoAjuste()).not.toBeNull();
+
+        await pulsar('Confirmar recargo');
+
+        expect(cobranza.ajustar.mock.calls.map((c) => c[1].clave)).toEqual([claves[0], claves[0]]);
+        expect(claves).toHaveLength(1);
+        expect(dialogoAjuste()).toBeNull();
+        expect(texto('.alerta.exito span')).toContain('Este ajuste ya estaba registrado');
+      });
+
+      it('«Cancelar y empezar de nuevo» suelta el envío sin confirmar con una clave nueva', async () => {
+        await crear({ ajustar: () => throwError(() => errorHttp(0, null)) });
+        await ajustarCon('Recargo', '500');
+
+        await pulsar('Cancelar y empezar de nuevo');
+        expect(el().querySelector('.aviso-congelado')).toBeNull();
+        await pulsar('Confirmar recargo');
+
+        expect(cobranza.ajustar.mock.calls.map((c) => c[1].clave)).toEqual([claves[0], claves[1]]);
+      });
+
+      it('un error del servidor se limpia al reabrir el diálogo', async () => {
+        await crear({ ajustar: () => throwError(() => errorHttp(422, { status: 422, message: 'El cliente está desactivado.' })) });
+        await ajustarCon('Recargo', '500');
+
+        boton('Cancelar')!.click();
+        await refrescar();
+        await pulsar('Recargo');
+
+        expect(el().querySelector('.error-servidor')).toBeNull();
+      });
     });
   });
 });

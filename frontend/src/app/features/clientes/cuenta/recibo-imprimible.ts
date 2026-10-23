@@ -2,7 +2,7 @@ import { Component, ElementRef, afterNextRender, computed, inject, input, output
 import { AuthService } from '../../../core/auth/auth.service';
 import { MontoPipe } from '../../../core/formato/monto';
 import { TrampaFoco } from '../../../shared/trampa-foco';
-import { MEDIO_COBRANZA_LABELS, Recibo, fechaCompletaLocal } from './cobranza.models';
+import { MEDIO_COBRANZA_LABELS, Recibo, clavePartida, fechaCompletaLocal } from './cobranza.models';
 
 /** La palabra de la marca de un recibo anulado (CC-098). Aislada: el texto exacto se confirma con el contador (P7). */
 export const LEYENDA_ANULADO = 'ANULADO';
@@ -29,6 +29,8 @@ export class ReciboImprimible {
   protected readonly fecha = computed(() => fechaCompletaLocal(this.recibo().fecha));
   protected readonly medio = computed(() => MEDIO_COBRANZA_LABELS[this.recibo().medio]);
   protected readonly leyendaAnulado = LEYENDA_ANULADO;
+  /** Identifica cada imputación (venta o Recargo) en el `@for`: el comprobanteId solo no alcanza. */
+  protected readonly clave = clavePartida;
   protected readonly anulado = computed(() => this.recibo().estado === 'ANULADO');
   /** «Dueño Tornillo el 20/10/2026 09:15»; vacío si el servidor no manda quién o cuándo. */
   protected readonly anuladoPor = computed(() => {

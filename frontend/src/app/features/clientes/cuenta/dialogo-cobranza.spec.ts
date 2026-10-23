@@ -847,4 +847,68 @@ describe('DialogoCobranza (CC-032, CC-033, CC-034, CC-043, CC-051)', () => {
       expect(medio('Transferencia').getAttribute('aria-disabled')).not.toBe('true');
     });
   });
+
+  describe('Recargos como partida pendiente (CU-12, S3)', () => {
+    /** Un Recargo con ajusteId 3 y una venta con comprobanteId 3: el mismo número no se pisa. */
+    const ventaTres = pendiente(3, 5, 100);
+    const recargo = (ajusteId: number, importe: number): PendienteCuenta => ({
+      comprobanteId: null,
+      ajusteId,
+      referencia: `Recargo N.º ${ajusteId}`,
+      fecha: '2026-10-11T09:00:00',
+      importe,
+      imputado: 0,
+      pendiente: importe,
+    });
+    const R = recargo(3, 200);
+    const filaRecargo = () => el().querySelector<HTMLInputElement>('input[data-ajuste="3"]')!;
+    const todas = () => Array.from(el().querySelectorAll<HTMLInputElement>('.imputacion input'));
+
+    it('lista el Recargo con su referencia junto a las ventas, en el orden en que viene (FIFO)', async () => {
+      await abrir([A, R, B]);
+
+      const renglones = Array.from(el().querySelectorAll('tbody tr')).map((tr) => limpio(tr.textContent));
+      expect(renglones[0]).toContain('Venta N.º 7');
+      expect(renglones[1]).toContain('Recargo N.º 3');
+      expect(renglones[1]).toContain('$ 200,00');
+      expect(renglones[2]).toContain('Venta N.º 8');
+      expect(filaRecargo().getAttribute('aria-label')).toBe('Importe a imputar a Recargo N.º 3');
+    });
+
+    it('la sugerencia FIFO cubre el Recargo y el cobro lo manda con ajusteId y a la venta con comprobanteId', async () => {
+      await abrir([A, R, B]);
+      await escribirTotal('600');
+
+      expect(todas().map((f) => f.value)).toEqual(['300,00', '200,00', '100,00']);
+      boton('Cobrar').click();
+
+      expect(confirmadas[0].imputaciones).toEqual([
+        { comprobanteId: 31, importe: 300 },
+        { ajusteId: 3, importe: 200 },
+        { comprobanteId: 32, importe: 100 },
+      ]);
+    });
+
+    it('editar el Recargo no toca la venta con el mismo número: se identifican por tipo de partida y número', async () => {
+      await abrir([ventaTres, R]);
+      await escribirTotal('300');
+
+      expect(fila(3).value).toBe('100,00');
+      expect(filaRecargo().value).toBe('200,00');
+      await escribir(filaRecargo(), '50');
+
+      expect(fila(3).value).toBe('100,00');
+      expect(filaRecargo().value).toBe('50');
+      expect(aCuenta()).toBe('A cuenta $ 150,00');
+    });
+
+    it('un importe mayor que lo pendiente del Recargo marca su error en su fila', async () => {
+      await abrir([A, R]);
+      await escribirTotal('500');
+      await escribir(filaRecargo(), '250');
+
+      expect(filaRecargo().getAttribute('aria-invalid')).toBe('true');
+      expect(texto('#error-fila-a3')).toBe('No puede superar lo pendiente ($ 200,00).');
+    });
+  });
 });

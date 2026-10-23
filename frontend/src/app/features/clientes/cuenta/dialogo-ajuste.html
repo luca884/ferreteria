@@ -1,0 +1,208 @@
+<!-- El mousedown sobre el fondo no mueve el foco al body: si no, Esc y Enter (que escucha el diálogo) dejarían de andar. -->
+<div class="dialogo-fondo" (mousedown)="retenerFoco($event)">
+  <div
+    class="dialogo ajuste"
+    tabindex="-1"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="dialogo-ajuste-titulo"
+    appTrampaFoco
+    (keydown)="alTeclear($event)"
+  >
+    <h2 id="dialogo-ajuste-titulo">{{ etiqueta() }} a {{ clienteNombre() }}</h2>
+
+    @if (aviso(); as texto) {
+      <p class="aviso" role="status">{{ texto }}</p>
+    }
+    @if (error(); as texto) {
+      <p class="error error-servidor" role="alert">{{ texto }}</p>
+    }
+    @if (congelado()) {
+      <p class="aviso aviso-congelado" role="status">No pudimos confirmar el ajuste. Reintentá: se envía lo mismo.</p>
+    }
+
+    @if (paso() === 'datos') {
+      @if (esDescuento() && aCuenta() > 0) {
+        <p class="ya-a-cuenta">Ya tiene {{ aCuenta() | monto }} a cuenta</p>
+      }
+
+      <label class="campo-importe" for="importe-ajuste">
+        Importe del {{ etiqueta().toLowerCase() }}
+        <input
+          #campoImporte
+          id="importe-ajuste"
+          type="text"
+          inputmode="decimal"
+          autocomplete="off"
+          spellcheck="false"
+          [readOnly]="congelado()"
+          [attr.aria-invalid]="errorImporte() ? 'true' : null"
+          [attr.aria-describedby]="errorImporte() ? 'error-importe' : null"
+          [value]="importeTexto()"
+          (input)="escribirImporte($any($event.target).value)"
+        />
+      </label>
+      @if (errorImporte(); as mensaje) {
+        <small id="error-importe" class="campo-error">{{ mensaje }}</small>
+      }
+
+      <label class="campo-motivo" for="motivo-ajuste">
+        Motivo
+        <input
+          id="motivo-ajuste"
+          type="text"
+          autocomplete="off"
+          spellcheck="true"
+          [maxLength]="maximo"
+          [readOnly]="congelado()"
+          [attr.aria-invalid]="errorMotivo() ? 'true' : null"
+          [attr.aria-describedby]="errorMotivo() ? 'error-motivo' : null"
+          [value]="motivoTexto()"
+          (input)="escribirMotivo($any($event.target).value)"
+        />
+      </label>
+      <div class="pie-motivo">
+        @if (errorMotivo(); as mensaje) {
+          <small id="error-motivo" class="campo-error">{{ mensaje }}</small>
+        }
+        <small class="contador" aria-hidden="true">{{ motivoTexto().length }}/{{ maximo }}</small>
+      </div>
+
+      @if (esDescuento()) {
+        @if (filas().length > 0) {
+          <table class="imputacion">
+            <caption class="sr-only">
+              Imputación del descuento a los comprobantes y Recargos con deuda
+            </caption>
+            <thead>
+              <tr>
+                <th scope="col">Comprobante</th>
+                <th scope="col" class="num">Pendiente</th>
+                <th scope="col" class="num">Imputar</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (f of filas(); track f.clave) {
+                <tr>
+                  <th scope="row">
+                    {{ f.referencia }}
+                    <small class="fecha">{{ fecha(f.fecha) }}</small>
+                  </th>
+                  <td class="num">{{ f.pendiente | monto }}</td>
+                  <td class="num">
+                    <input
+                      type="text"
+                      inputmode="decimal"
+                      autocomplete="off"
+                      spellcheck="false"
+                      placeholder="0,00"
+                      [readOnly]="congelado()"
+                      [attr.data-comprobante]="f.comprobanteId"
+                      [attr.data-ajuste]="f.ajusteId ?? null"
+                      [attr.aria-label]="'Importe a imputar a ' + f.referencia"
+                      [attr.aria-invalid]="f.error ? 'true' : null"
+                      [attr.aria-describedby]="f.error ? 'error-fila-' + f.idCampo : null"
+                      [value]="f.texto"
+                      (input)="escribirFila(f.clave, $any($event.target).value)"
+                    />
+                    @if (f.error; as mensaje) {
+                      <small class="campo-error" [id]="'error-fila-' + f.idCampo">{{ mensaje }}</small>
+                    }
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+          <button
+            type="button"
+            id="imputar-en-orden"
+            class="secundario imputar-en-orden"
+            [disabled]="congelado()"
+            (click)="imputarEnOrden()"
+          >
+            Imputar en orden
+          </button>
+          @if (errorImputado(); as mensaje) {
+            <p id="error-imputado" class="error" role="alert">{{ mensaje }}</p>
+          }
+        } @else {
+          <p class="sin-deudas">Sin deudas: el descuento queda a cuenta (saldo a favor)</p>
+        }
+
+        @if (aCuentaCentavos() > 0) {
+          <p class="a-cuenta" aria-live="polite">
+            A cuenta <strong>{{ aCuentaCentavos() / 100 | monto }}</strong>
+          </p>
+        }
+      }
+
+      <div class="dialogo-acciones">
+        @if (congelado()) {
+          <button type="button" class="secundario reiniciar" (click)="reiniciar.emit()">Cancelar y empezar de nuevo</button>
+        }
+        <button type="button" class="cancelar" data-tecla="Esc" aria-keyshortcuts="Escape" (click)="cancelar.emit()">
+          Cancelar
+        </button>
+        <button type="button" class="continuar primario" data-tecla="Enter" aria-keyshortcuts="Enter" (click)="continuar()">
+          Continuar
+        </button>
+      </div>
+    } @else {
+      <p class="resumen">
+        Vas a cargar un <strong>{{ etiqueta() }}</strong> de <strong>{{ importeCentavos()! / 100 | monto }}</strong> a la cuenta
+        de <strong>{{ clienteNombre() }}</strong
+        >.
+      </p>
+      <p class="motivo-resumen">Motivo: {{ motivoTexto().trim() }}</p>
+
+      @if (esDescuento()) {
+        @if (imputadas().length > 0) {
+          <div class="imputaciones-resumen">
+            <p>Se imputa a:</p>
+            <ul>
+              @for (f of imputadas(); track f.clave) {
+                <li>
+                  <span>{{ f.referencia }}</span
+                  >&ngsp;<span class="importe">{{ f.centavos / 100 | monto }}</span>
+                </li>
+              }
+            </ul>
+          </div>
+        }
+        @if (aCuentaCentavos() > 0) {
+          <p class="a-cuenta">
+            A cuenta <strong>{{ aCuentaCentavos() / 100 | monto }}</strong>
+          </p>
+        }
+      }
+
+      <p class="efecto-saldo" aria-live="polite">
+        El saldo pasa de <strong>{{ saldoActualTexto() }}</strong> a <strong>{{ saldoNuevoTexto() }}</strong
+        >.
+      </p>
+      <p class="no-se-deshace">
+        Esta acción no se puede deshacer: un ajuste mal cargado se corrige con el ajuste contrario.
+      </p>
+
+      <div class="dialogo-acciones">
+        @if (congelado()) {
+          <button type="button" class="secundario reiniciar" (click)="reiniciar.emit()">Cancelar y empezar de nuevo</button>
+        }
+        <button type="button" class="secundario volver" [disabled]="congelado() || enVuelo()" (click)="volver()">Volver</button>
+        <button type="button" class="cancelar" data-tecla="Esc" aria-keyshortcuts="Escape" (click)="cancelar.emit()">
+          Cancelar
+        </button>
+        <button
+          #botonConfirmar
+          type="button"
+          class="confirmar-ajuste primario"
+          data-tecla="Enter"
+          aria-keyshortcuts="Enter"
+          (click)="confirmarAjuste()"
+        >
+          Confirmar {{ etiqueta().toLowerCase() }}
+        </button>
+      </div>
+    }
+  </div>
+</div>

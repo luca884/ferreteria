@@ -68,7 +68,7 @@
                 @if (linea.anulado) {
                   <span class="marca-anulado">ANULADO</span>
                 }
-                @if (linea.tipo === 'ANULACION' && linea.motivo) {
+                @if (muestraMotivo(linea)) {
                   <small class="motivo">Motivo: {{ linea.motivo }}</small>
                 }
               </td>

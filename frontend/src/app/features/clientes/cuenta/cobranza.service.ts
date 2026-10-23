@@ -2,6 +2,7 @@ import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Injectable, InjectionToken, inject } from '@angular/core';
 import { Observable, map } from 'rxjs';
 import { environment } from '../../../../environments/environment';
+import { AjusteCobrado, AjusteRequest, AjusteResponse } from './ajuste.models';
 import {
   CobranzaInvalida,
   CobranzaRechazada,
@@ -18,7 +19,10 @@ export const GENERAR_CLAVE_COBRO = new InjectionToken<() => string>('GENERAR_CLA
   factory: () => () => crypto.randomUUID(),
 });
 
-/** Cobranza de cuenta corriente (solo el Dueño). La ferretería y el usuario los pone el backend desde el JWT. */
+/**
+ * Cobranza y ajustes de la cuenta corriente (solo el Dueño). La ferretería y el usuario los pone el backend desde el JWT.
+ * Los ajustes (Recargo y Descuento) usan la misma clave de idempotencia y los mismos rechazos que el cobro.
+ */
 @Injectable({ providedIn: 'root' })
 export class CobranzaService {
   private readonly http = inject(HttpClient);
@@ -36,6 +40,19 @@ export class CobranzaService {
     return this.http.post<Recibo>(`${environment.apiUrl}/cobranzas`, pedido, { observe: 'response' }).pipe(
       map((res) => ({ recibo: res.body as Recibo, repetida: res.status === 200 })),
     );
+  }
+
+  /**
+   * Carga un Recargo o un Descuento a la cuenta del cliente. 201 es nuevo y 200 es la misma clave ya registrada con el
+   * mismo contenido. Los rechazos llegan como `HttpErrorResponse`: 409 IMPUTACION_EXCEDE_DEUDA / clave con otro contenido
+   * (`rechazoDe`), 422 de cliente desactivado (por su `message`), 400 con `errors` por campo (`invalidaDe`) y 403 / 404.
+   */
+  ajustar(clienteId: number, pedido: AjusteRequest): Observable<AjusteCobrado> {
+    return this.http
+      .post<AjusteResponse>(`${environment.apiUrl}/clientes/${clienteId}/cuenta-corriente/ajustes`, pedido, {
+        observe: 'response',
+      })
+      .pipe(map((res) => ({ ajuste: res.body as AjusteResponse, repetida: res.status === 200 })));
   }
 
   /** El recibo de un cobro ya hecho, para reimprimirlo: dice lo mismo que el que lo creó. */

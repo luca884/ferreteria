@@ -121,6 +121,25 @@ describe('ReciboImprimible (CC-036, CC-043)', () => {
     expect(filas).toEqual(['Venta N.º 7 $ 300,00', 'Venta N.º 8 $ 300,00']);
   });
 
+  it('una imputación a un Recargo (ajusteId, sin comprobanteId) sale como «Recargo N.º n»', async () => {
+    await abrir(
+      recibo({
+        total: 700,
+        aCuenta: 0,
+        imputaciones: [
+          { comprobanteId: 31, referencia: 'Venta N.º 7', importe: 300 },
+          { comprobanteId: null, ajusteId: 3, referencia: 'Recargo N.º 3', importe: 250 },
+          { comprobanteId: null, ajusteId: 4, referencia: 'Recargo N.º 4', importe: 150 },
+        ],
+      }),
+    );
+
+    const filas = Array.from(el().querySelectorAll('tbody tr')).map(
+      (tr) => `${limpio(tr.querySelector('th')?.textContent)} ${limpio(tr.querySelector('td')?.textContent)}`,
+    );
+    expect(filas).toEqual(['Venta N.º 7 $ 300,00', 'Recargo N.º 3 $ 250,00', 'Recargo N.º 4 $ 150,00']);
+  });
+
   it('la referencia de cada imputación no se fuerza a mayúsculas («Venta N.º 7», no «VENTA N.º 7»)', async () => {
     await abrir();
 
