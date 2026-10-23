@@ -116,6 +116,9 @@ class MigracionV25Test {
             .hasMessageContaining("ck_usuario_tope_descuento");
         assertThatThrownBy(() -> jdbc.update("update usuario set tope_descuento = 10 where id = ?", dueno))
             .hasMessageContaining("ck_usuario_tope_descuento");
+        jdbc.update("update usuario set tope_descuento = 10 where id = ?", vendedor);
+        assertThatThrownBy(() -> jdbc.update("update usuario set rol = 'DUENO' where id = ?", vendedor))
+            .hasMessageContaining("ck_usuario_tope_descuento");
     }
 
     @Test
