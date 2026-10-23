@@ -2401,6 +2401,66 @@ describe('Importaciones', () => {
         expect(servicio.aplicar).not.toHaveBeenCalled();
       });
 
+      it('con crear nuevos apagado y nuevas elegidas, avisa junto a la casilla que no se van a crear', async () => {
+        await conVistaPrevia();
+        await desmarcarTodas();
+        casillaDeLaFila(4).click();
+        await asentar();
+        casillaDeLaFila(2).click();
+        await asentar();
+
+        expect(q('#nuevos-sin-crear').textContent).toContain(
+          'Elegiste 1 artículo nuevo. Con la casilla apagada no se crea. Tildala para crearlo.',
+        );
+        expect(q('#crearNuevos').getAttribute('aria-describedby')).toContain('nuevos-sin-crear');
+      });
+
+      it('sin el aviso si la casilla está encendida o no hay nuevas elegidas', async () => {
+        await conVistaPrevia();
+        await desmarcarTodas();
+        casillaDeLaFila(2).click();
+        await asentar();
+        expect(el().querySelector('#nuevos-sin-crear')).toBeNull();
+
+        casillaDeLaFila(4).click();
+        await asentar();
+        expect(q('#nuevos-sin-crear')).not.toBeNull();
+
+        q<HTMLInputElement>('#crearNuevos').click();
+        await asentar();
+        expect(el().querySelector('#nuevos-sin-crear')).toBeNull();
+      });
+
+      it('el resultado avisa cuántos artículos nuevos no se crearon', async () => {
+        await conVistaPrevia();
+        await desmarcarTodas();
+        casillaDeLaFila(4).click();
+        await asentar();
+        casillaDeLaFila(2).click();
+        await asentar();
+
+        servicio.aplicar.mockReturnValue(of(importacion));
+        await confirmar();
+
+        expect(q('.resumen .nuevos-no-creados').textContent).toContain(
+          '1 artículo nuevo no se creó porque «Crear los artículos nuevos» estaba apagada.',
+        );
+      });
+
+      it('el resultado no avisa nada si se crearon los nuevos', async () => {
+        await conVistaPrevia();
+        await desmarcarTodas();
+        casillaDeLaFila(4).click();
+        q<HTMLInputElement>('#crearNuevos').click();
+        await asentar();
+
+        servicio.aplicar.mockReturnValue(of(importacion));
+        await confirmar();
+
+        expect(q('.resumen')).not.toBeNull();
+        expect(el().querySelector('.resumen .nuevos-no-creados')).toBeNull();
+      });
+
       it('si junto a la nueva hay otra fila elegida, Confirmar queda habilitado aun con crear nuevos apagado', async () => {
         await conVistaPrevia();
         await desmarcarTodas();

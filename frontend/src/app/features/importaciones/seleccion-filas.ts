@@ -218,6 +218,11 @@ export function cantidadDeAplicadas(
   return filasElegidas(seleccion, filas).length - (crearNuevos ? 0 : elegidasDelTipo(seleccion, filas, 'nuevos'));
 }
 
+/** Cuántas filas nuevas están elegidas: con «Crear los artículos nuevos» apagado, son las que no se crean. */
+export function nuevasElegidas(seleccion: Seleccion, filas: readonly FilaDeVista[]): number {
+  return elegidasDelTipo(seleccion, filas, 'nuevos');
+}
+
 function elegidasDelTipo(seleccion: Seleccion, filas: readonly FilaDeVista[], tipo: TipoFila): number {
   return filas.filter((f) => f.tipo === tipo && esElegible(f) && seleccion.has(f.clave)).length;
 }
