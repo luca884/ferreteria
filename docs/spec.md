@@ -309,6 +309,8 @@ Estas reglas se codifican en el dominio y se cubren con tests unitarios antes qu
 
 Una sola base compartida y todas las tablas de negocio con `tenant_id`. Es el mismo esquema que en Sendo: la ferretería sale del JWT (`TenantFilter` → `TenantContext`), los repositorios extienden `TenantScopedRepository` y filtran siempre por `ferreteria_id`, y un test de ArchUnit prohíbe los finders sin scope.
 
+La base también lo garantiza (V29): toda FK entre tablas de negocio es compuesta, `(ferreteria_id, x_id) REFERENCES padre (ferreteria_id, id)`, y cada tabla padre tiene `UNIQUE (ferreteria_id, id)`. Una fila no puede apuntar a una fila de otra ferretería ni a un usuario SUPER_ADMIN, y una fila con hijos no se puede mudar de ferretería. Un `x_id` NULL no se chequea. Toda FK nueva entre tablas de negocio se escribe así; `MigracionV29Test` falla si una migración agrega una FK de negocio solo por `id`.
+
 | Entidad | Atributos clave | Relaciones |
 | --- | --- | --- |
 | Tenant | razón social, CUIT, condición IVA, domicilio, inicio de actividades, estado (activo/suspendido) | 1—N con todo lo demás |
