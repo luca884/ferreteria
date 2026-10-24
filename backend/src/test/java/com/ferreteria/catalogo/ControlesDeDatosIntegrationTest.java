@@ -145,20 +145,6 @@ class ControlesDeDatosIntegrationTest extends AjustesTestBase {
     }
 
     @Test
-    @DisplayName("un articulo que apunta al rubro o proveedor de otra ferreteria no muestra el nombre ajeno")
-    void rubroYProveedorAjenosNoSeFiltran() throws Exception {
-        Long rubroAjeno = rubro(b, "Rubro Ajeno", "30");
-        Long proveedorAjeno = proveedor(b, "Proveedor Ajeno");
-        cargar(a, "H-012", "Apunta afuera", "ARS", "0.00", "1.00", "IVA_21", rubroAjeno, proveedorAjeno);
-
-        JsonNode fila = getJson(URL + "?control=COSTO_CERO", duenoA).get(1);
-
-        assertThat(fila.get("codigoInterno").asText()).isEqualTo("H-012");
-        assertThat(fila.get("rubro").isNull()).isTrue();
-        assertThat(fila.get("proveedor").isNull()).isTrue();
-    }
-
-    @Test
     @DisplayName("sin articulos en el control devuelve la lista vacia")
     void vacio() throws Exception {
         jdbc.update("update articulo set alicuota_iva = 'IVA_21' where ferreteria_id = ?", a);

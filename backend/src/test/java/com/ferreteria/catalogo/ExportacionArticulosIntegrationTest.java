@@ -114,18 +114,6 @@ class ExportacionArticulosIntegrationTest extends AjustesTestBase {
     }
 
     @Test
-    @DisplayName("un articulo que apunta al rubro o proveedor de otra ferreteria no muestra el nombre ajeno")
-    void rubroYProveedorAjenosNoSeFiltran() throws Exception {
-        Long rubroAjeno = rubro(b, "Rubro Ajeno", "30");
-        Long proveedorAjeno = proveedor(b, "Proveedor Ajeno");
-        Long id = cargar(a, "D-004", "Apunta afuera", "LITRO", "ARS", "5.00", "8.00", "1.000", "0.000");
-        jdbc.update("update articulo set rubro_id = ?, proveedor_id = ? where id = ?", rubroAjeno, proveedorAjeno, id);
-
-        assertThat(csv(exportar("?q=afuera", duenoA))).isEqualTo(ENCABEZADO + "\r\n"
-                + "=\"D-004\";;;Apunta afuera;;;Litro;ARS;5,00;21;Heredado;8,00;No;1;0;;Sí\r\n");
-    }
-
-    @Test
     @DisplayName("el front, que corre en otro origen, puede leer el nombre del archivo (CORS expone Content-Disposition)")
     void exponeElNombreDelArchivo() throws Exception {
         MockHttpServletResponse respuesta = mvc.perform(get(URL).header("Authorization", "Bearer " + duenoA)

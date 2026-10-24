@@ -77,21 +77,6 @@ class ReporteVentasRegresionTest extends VentasTestBase {
     }
 
     @Test
-    @org.junit.jupiter.api.DisplayName("un rubro de otra ferreteria no se muestra: el articulo va a «Sin rubro»")
-    void rubroDeOtraFerreteriaNoSeFiltra() throws Exception {
-        Tienda a = tienda();
-        long art = articulo(a, "Tornillo", "UNIDAD", "100.00", "10");
-        Tienda b = tienda();
-        jdbc.update("insert into rubro (ferreteria_id, nombre, margen_porcentaje) values (?, 'SECRETO-B', 30.00)", b.id());
-        long rubroB = jdbc.queryForObject("select id from rubro where ferreteria_id = ?", Long.class, b.id());
-        jdbc.update("update articulo set rubro_id = ? where id = ?", rubroB, art);
-        vender(login(a.emailVendedor()), clave(), "100.00", linea(art, "1", "100.00")).andExpect(status().isCreated());
-        JsonNode r = getJson(BASE + "por-rubro", login(a.emailDueno()));
-        assertThat(r.toString()).doesNotContain("SECRETO-B");
-        assertThat(r.get("filas").get(0).get("rubro").asText()).isEqualTo("Sin rubro");
-    }
-
-    @Test
     @org.junit.jupiter.api.DisplayName("bordes del dia en hora de Buenos Aires: 23:59:59 de ayer es ayer; 00:00 y 23:59:59 de hoy son hoy")
     void bordesDelDiaEnHoraDeBuenosAires() throws Exception {
         Tienda t = tienda();

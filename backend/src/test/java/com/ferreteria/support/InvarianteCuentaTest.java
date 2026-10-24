@@ -322,19 +322,6 @@ class InvarianteCuentaTest extends CuentaCorrienteTestBase {
     }
 
     @Test
-    @DisplayName("I2e: la caja de la anulación es de otra ferretería → falla")
-    void i2eCajaDeLaAnulacionDeOtraFerreteria() {
-        Ferreteria f = ferreteria();
-        Ferreteria otra = ferreteria();
-        long cliente = cliente(f, null);
-        long recibo = cobroEnLibro(f, cliente, "100.00");
-        anularRecibo(f, cliente, recibo);
-        jdbc.update("update recibo set caja_anulacion_id = ? where id = ?", cajaCerrada(otra), recibo);
-
-        fallaCon(cliente, "I2e");
-    }
-
-    @Test
     @DisplayName("I2b: el recibo ANULADO tiene una ANULACION con debe distinto del total → falla")
     void i2bAnulacionConOtroImporte() {
         Ferreteria f = ferreteria();

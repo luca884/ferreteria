@@ -112,38 +112,6 @@ class MovimientosArticuloIntegrationTest extends VentasTestBase {
     }
 
     @Test
-    @DisplayName("un movimiento que apunta a comprobante, remito, compra o usuario de otra ferreteria no muestra nada ajeno")
-    void referenciasAjenasNoSeFiltran() throws Exception {
-        Tienda otra = tienda();
-        String duenoOtra = login(otra.emailDueno());
-        long ajeno = articulo(otra, "Ajeno", "UNIDAD", "100.00", "50");
-        long ventaAjena = json(vender(duenoOtra, clave(), "100.00", linea(ajeno, "1", "100.00"))
-                .andExpect(status().isCreated())).get("ventaId").asLong();
-        long remitoAjeno = remito(duenoOtra, ajeno, "1", "100.00", "100.00").get("remitoId").asLong();
-        jdbc.update("insert into proveedor (ferreteria_id, nombre, activo) values (?, 'Proveedor Ajeno', true)", otra.id());
-        long proveedorAjeno = jdbc.queryForObject("select id from proveedor where ferreteria_id = ?", Long.class, otra.id());
-        postJson("/api/compras", duenoOtra, """
-                {"clave": "%s", "proveedorId": %d, "tipo": "FB", "puntoVenta": 7, "numero": 777, "fecha": "%s",
-                 "renglones": [{"articuloId": %d, "cantidad": 5, "costoUnitario": 1.00}]}
-                """.formatted(clave(), proveedorAjeno, LocalDate.now(), ajeno))
-                .andExpect(status().isCreated());
-        long compraAjena = jdbc.queryForObject("select id from compra where ferreteria_id = ?", Long.class, otra.id());
-        long usuarioAjeno = jdbc.queryForObject("select id from usuario where email = ?", Long.class, otra.emailDueno());
-        long propio = articulo(tienda, "Arandela", "UNIDAD", "10.00", "10");
-        String insertar = "insert into movimiento_stock (ferreteria_id, articulo_id, tipo, cantidad, motivo, %s, usuario_id)"
-                + " values (?, ?, 'AJUSTE', 1, 'x', ?, ?)";
-        jdbc.update(insertar.formatted("comprobante_id"), tienda.id(), propio, ventaAjena, usuarioAjeno);
-        jdbc.update(insertar.formatted("remito_id"), tienda.id(), propio, remitoAjeno, usuarioAjeno);
-        jdbc.update(insertar.formatted("compra_id"), tienda.id(), propio, compraAjena, usuarioAjeno);
-
-        JsonNode items = getJson(url(propio), dueno).get("items");
-
-        assertThat(items).hasSize(3);
-        assertThat(items.findValues("comprobante")).allMatch(JsonNode::isNull);
-        assertThat(items.findValues("usuario")).allMatch(JsonNode::isNull);
-    }
-
-    @Test
     @DisplayName("un articulo sin movimientos devuelve la pagina vacia")
     void sinMovimientos() throws Exception {
         long nuevo = articulo(tienda, "Arandela", "UNIDAD", "10.00", "0");

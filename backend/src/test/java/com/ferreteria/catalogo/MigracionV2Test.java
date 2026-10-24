@@ -178,7 +178,9 @@ class MigracionV2Test {
     @Test
     void lasEntidadesSeMapeanContraElEsquema() {
         Long f = ferreteriaId("30-70000004-4", "Migracion D");
-        Long usuarioId = jdbc.queryForObject("select id from usuario limit 1", Long.class);
+        jdbc.update("insert into usuario (ferreteria_id, email, password_hash, nombre, rol) "
+                + "values (?, 'mapeo-v2@test.local', 'x', 'Dueno', 'DUENO')", f);
+        Long usuarioId = jdbc.queryForObject("select id from usuario where ferreteria_id = ?", Long.class, f);
         jdbc.update("insert into proveedor (ferreteria_id, nombre, cuit) values (?, 'Sinteplast', '30-12345678-9')", f);
         Long proveedorId = jdbc.queryForObject("select id from proveedor where ferreteria_id = ?", Long.class, f);
         jdbc.update("insert into articulo (ferreteria_id, codigo_interno, codigo_barras, codigo_proveedor, "

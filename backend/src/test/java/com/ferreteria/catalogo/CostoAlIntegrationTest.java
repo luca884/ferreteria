@@ -21,32 +21,26 @@ import org.junit.jupiter.api.Test;
 /**
  * «Costo al» (GDS-05, como «F. Modif.» de GDS G22): desde cuando esta al dia el costo de un articulo. Es la fecha mas
  * nueva entre el ultimo cambio de costo o de moneda del historial, la ultima importacion de lista que lo toco (aunque
- * haya confirmado el mismo costo) y el alta. Lo de otra ferreteria no cuenta. CUIT 30-79093001-7 y 30-79093002-8.
+ * haya confirmado el mismo costo) y el alta. Lo de otra ferreteria no puede apuntar al articulo (FK por ferreteria, V29).
+ * CUIT 30-79093001-7.
  */
 class CostoAlIntegrationTest extends AjustesTestBase {
 
     private Long a;
-    private Long b;
     private String duenoA;
     private String vendedorA;
     private Long usuarioA;
-    private Long usuarioB;
     private Long proveedorA;
-    private Long proveedorB;
     private final Map<String, Long> ids = new HashMap<>();
 
     @BeforeEach
     void sembrar() throws Exception {
         a = ferreteria("30-79093001-7", "Costo al A");
-        b = ferreteria("30-79093002-8", "Costo al B");
         limpiar();
         duenoA = login(usuario(a, "dueno-costoal-a@test.local", "DUENO"));
         vendedorA = login(usuario(a, "vendedor-costoal-a@test.local", "VENDEDOR"));
-        usuario(b, "dueno-costoal-b@test.local", "DUENO");
         usuarioA = idDeUsuario("dueno-costoal-a@test.local");
-        usuarioB = idDeUsuario("dueno-costoal-b@test.local");
         proveedorA = proveedor(a, "Proveedor costo al");
-        proveedorB = proveedor(b, "Proveedor ajeno costo al");
 
         // Solo el alta: no tiene historial ni importacion.
         cargar("CAL-1", "costoal solo alta");
@@ -61,20 +55,13 @@ class CostoAlIntegrationTest extends AjustesTestBase {
         // Mismo numero de costo, pero paso de pesos a dolares: el costo cambio.
         cargar("CAL-4", "costoal cambio de moneda");
         historial(a, "CAL-4", "100.00", "100.00", "USD", "ARS", "2026-02-15 10:00:00");
-        // Historial e importacion de otra ferreteria que apuntan a este articulo: no cuentan.
-        cargar("CAL-5", "costoal datos ajenos");
-        historial(b, "CAL-5", "100.00", "999.00", "ARS", "ARS", "2026-06-01 10:00:00");
-        marcarImportacion("CAL-5", importacion(b, usuarioB, proveedorB, "2026-06-01 10:00:00"));
     }
 
     @AfterEach
     void limpiar() {
-        // Primero lo cruzado a proposito entre las dos ferreterias, que el borrado por ferreteria no alcanza.
-        jdbc.update("delete h from historial_precio h join articulo x on x.id = h.articulo_id"
-                + " where x.ferreteria_id in (?, ?)", a, b);
-        jdbc.update("update articulo set ultima_importacion_id = null where ferreteria_id in (?, ?)", a, b);
+        jdbc.update("update articulo set ultima_importacion_id = null where ferreteria_id = ?", a);
         borrarCotizaciones("cal-");
-        borrarDatosDe(a, b);
+        borrarDatosDe(a);
     }
 
     private Long idDeUsuario(String email) {
@@ -124,8 +111,7 @@ class CostoAlIntegrationTest extends AjustesTestBase {
                 "CAL-1", "2026-01-10",
                 "CAL-2", "2026-03-05",
                 "CAL-3", "2026-05-20",
-                "CAL-4", "2026-02-15",
-                "CAL-5", "2026-01-10");
+                "CAL-4", "2026-02-15");
 
         assertThat(costoAlDelListado(duenoA)).isEqualTo(esperadas);
         assertThat(costoAlDelListado(vendedorA)).isEqualTo(esperadas);
@@ -141,8 +127,7 @@ class CostoAlIntegrationTest extends AjustesTestBase {
         JsonNode mostrador = getJson("/api/articulos/mostrador?q=costoal", vendedorA).get("items");
         Map<String, String> fechas = new HashMap<>();
         mostrador.forEach(i -> fechas.put(i.get("codigoInterno").asText(), i.get("costoAl").asText()));
-        assertThat(fechas).containsEntry("CAL-2", "2026-03-05").containsEntry("CAL-3", "2026-05-20")
-                .containsEntry("CAL-5", "2026-01-10");
+        assertThat(fechas).containsEntry("CAL-2", "2026-03-05").containsEntry("CAL-3", "2026-05-20");
 
         JsonNode exacto = getJson("/api/articulos/mostrador?q=CAL-4", vendedorA);
         assertThat(exacto.get("tipo").asText()).isEqualTo("EXACTO");

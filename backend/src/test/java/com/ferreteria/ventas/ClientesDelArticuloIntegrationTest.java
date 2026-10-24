@@ -194,31 +194,4 @@ class ClientesDelArticuloIntegrationTest extends VentasTestBase {
         getResult(url(tornillo), login(tienda.emailVendedor())).andExpect(status().isForbidden());
         getResult(url(tornillo), login("admin@demo.local")).andExpect(status().isForbidden());
     }
-
-    @Test
-    @DisplayName("una venta de otra ferreteria con un renglon que apunta a este articulo no cuenta")
-    void ventasAjenasNoCuentan() throws Exception {
-        Tienda otra = tienda();
-        String duenoOtra = login(otra.emailDueno());
-        long ajeno = articulo(otra, "Ajeno", "UNIDAD", "100.00", "50");
-        long clienteAjeno = cliente(otra, "Cliente ajeno");
-        Map<String, Object> cuerpo = mapa(clave(), "EFECTIVO", "100.00", linea(ajeno, "1", "100.00"));
-        cuerpo.put("clienteId", clienteAjeno);
-        long ventaAjena = json(postJson("/api/ventas", duenoOtra, objectMapper.writeValueAsString(cuerpo))
-                .andExpect(status().isCreated())).get("ventaId").asLong();
-        Map<String, Object> sinCliente = mapa(clave(), "EFECTIVO", "100.00", linea(ajeno, "1", "100.00"));
-        long ventaAjenaSinCliente = json(postJson("/api/ventas", duenoOtra,
-                objectMapper.writeValueAsString(sinCliente)).andExpect(status().isCreated())).get("ventaId").asLong();
-        // A proposito: los renglones de la otra ferreteria pasan a apuntar a nuestro articulo.
-        jdbc.update("update item_comprobante set articulo_id = ? where comprobante_id in (?, ?)", tornillo, ventaAjena,
-                ventaAjenaSinCliente);
-
-        JsonNode pagina = getJson(url(tornillo), dueno);
-
-        assertThat(pagina.get("items").findValues("clienteId")).extracting(JsonNode::asLong)
-                .containsExactly(carla, ana, beto);
-        assertThat(pagina.get("ventasSinCliente").asLong()).isEqualTo(2);
-        jdbc.update("update item_comprobante set articulo_id = ? where comprobante_id in (?, ?)", ajeno, ventaAjena,
-                ventaAjenaSinCliente);
-    }
 }
