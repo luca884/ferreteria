@@ -274,6 +274,49 @@ class MigracionV29Test {
         assertThat(fksEIndices()).isEqualTo(esquemaAntes);
     }
 
+    @Test
+    @DisplayName("guarda: revisa cada una de las 56 FK de negocio de la V28")
+    void guardaCubreTodasLasFks() throws Exception {
+        String v29 = StreamUtils.copyToString(new ClassPathResource("db/migration/V29__fk_por_ferreteria.sql").getInputStream(),
+                StandardCharsets.UTF_8);
+        String guarda = v29.substring(v29.indexOf("INSERT INTO guarda_v29"), v29.indexOf("DROP TEMPORARY TABLE guarda_v29"));
+
+        assertThat(jdbc.queryForList("""
+                select table_name hijo, column_name columna, referenced_table_name padre
+                from information_schema.key_column_usage
+                where table_schema = database() and referenced_table_name is not null
+                  and referenced_table_name <> 'ferreteria'""")).hasSize(56).allSatisfy(fk -> assertThat(guarda)
+                .contains("FROM %s h JOIN %s p ON p.id = h.%s WHERE".formatted(fk.get("hijo"), fk.get("padre"), fk.get("columna"))));
+    }
+
+    @Test
+    @DisplayName("guarda: un dato de negocio que apunta a un SUPER_ADMIN tambien frena la V29")
+    void guardaConSuperAdmin() {
+        Escenario a = escenario();
+        jdbc.update("insert into usuario (ferreteria_id, email, password_hash, nombre, rol) "
+                + "values (null, 'admin-guarda-v29@test.local', 'x', 'Admin', 'SUPER_ADMIN')");
+        long admin = jdbc.queryForObject("select id from usuario where email = 'admin-guarda-v29@test.local'", Long.class);
+        jdbc.update("update comprobante set usuario_id = ? where id = ?", admin, a.comprobante());
+        List<Map<String, Object>> esquemaAntes = fksEIndices();
+
+        assertThatThrownBy(() -> migrarHasta("29")).hasStackTraceContaining("ck_v29_sin_referencias_a_otra_ferreteria");
+
+        assertThat(fksEIndices()).isEqualTo(esquemaAntes);
+    }
+
+    @Test
+    @DisplayName("indices: la V29 no saca ningun indice de la V28 (las consultas del padre a los hijos los siguen usando)")
+    void conservaLosIndicesDeLaV28() {
+        String indices = "select table_name, index_name, non_unique, group_concat(column_name order by seq_in_index) columnas "
+                + "from information_schema.statistics where table_schema = database() "
+                + "and table_name <> 'flyway_schema_history' group by 1, 2, 3";
+        List<Map<String, Object>> antes = jdbc.queryForList(indices);
+
+        migrarHasta("29");
+
+        assertThat(jdbc.queryForList(indices)).containsAll(antes);
+    }
+
     // ---------------------------------------------------------------- rollback
 
     private void correrRollback() throws Exception {

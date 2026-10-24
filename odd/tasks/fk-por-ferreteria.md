@@ -18,8 +18,8 @@ Restricciones: Flyway, nunca `ddl-auto` distinto de `validate`; `ddl-auto=valida
 
 ## Tasks
 
-- [x] T1 · S1-S5 · ruta: inline · Aceptación: V29, rollback y `MigracionV29Test` · Evidencia: `MigracionV29Test` RED 7/7 (sin la V29: «No migration with a target version 29»; el esquema actual tenía las FK solo por id) → GREEN 7/7: 56 FK compuestas, UNIQUE en los 15 padres, cruces rechazados al insertar, al actualizar y al mudar, SUPER_ADMIN rechazado, filas intactas, guarda `ck_v29_sin_referencias_a_otra_ferreteria` sin tocar el esquema, rollback con FK e índices idénticos a la V28. `MigracionV6Test` lleva «29» · commit — · Risk: item 1 (migración de esquema sobre datos guardados)
-- [x] T2 · S6 · ruta: inline · Aceptación: suite backend verde con los tests ajustados; spec actualizada · Evidencia: suite con la V29 RED 4605 / 14 errores (siembras cruzadas, ver L4) → GREEN 4598/0; spec «Modelo de datos» · Risk: item 6 parcial (tests que sembraban estados ahora imposibles)
+- [x] T1 · S1-S5 · ruta: inline · Aceptación: V29, rollback y `MigracionV29Test` · Evidencia: `MigracionV29Test` RED 7/7 (sin la V29: «No migration with a target version 29»; el esquema actual tenía las FK solo por id) → GREEN 7/7: 56 FK compuestas, UNIQUE en los 15 padres, cruces rechazados al insertar, al actualizar y al mudar, SUPER_ADMIN rechazado, filas intactas, guarda `ck_v29_sin_referencias_a_otra_ferreteria` sin tocar el esquema, rollback con FK e índices idénticos a la V28. `MigracionV6Test` lleva «29»; con las sondas del verificador, 10/10 · commits 333bbca, y las sondas en el commit de cierre · Risk: item 1 (migración de esquema sobre datos guardados)
+- [x] T2 · S6 · ruta: inline · Aceptación: suite backend verde con los tests ajustados; spec actualizada · Evidencia: suite con la V29 RED 4605 / 14 errores (siembras cruzadas, ver L4) → GREEN 4598/0; spec «Modelo de datos» · commits f555835, 333bbca · Risk: item 6 parcial (tests que sembraban estados ahora imposibles)
 
 ## Log
 
@@ -32,3 +32,17 @@ Restricciones: Flyway, nunca `ddl-auto` distinto de `validate`; `ddl-auto=valida
   - Siete tests cuyo único caso era ese estado imposible. Se borran, porque convertirlos en «la base lo rechaza» repetiría `MigracionV29Test` dentro de tests de endpoints: `ControlesDeDatosIntegrationTest`, `ExportacionArticulosIntegrationTest` y `StockBajoMinimoIntegrationTest` (`rubroYProveedorAjenosNoSeFiltran`); `ReporteVentasRegresionTest.rubroDeOtraFerreteriaNoSeFiltra`; `ClientesDelArticuloIntegrationTest.ventasAjenasNoCuentan`; `MovimientosArticuloIntegrationTest.referenciasAjenasNoSeFiltran`; `InvarianteCuentaTest.i2eCajaDeLaAnulacionDeOtraFerreteria`. Los joins por `ferreteria_id` del código quedan como estaban.
   - Siembras que cruzaban de paso. `CostoAlIntegrationTest` pierde CAL-5 (historial e importación de otra ferretería) y su segunda ferretería. `MigracionV2Test` usaba `select id from usuario limit 1`, de otra ferretería, y ahora crea su propio usuario.
   Los 10 tests ajustados pasan: Controles 7, Exportación 8, Stock bajo mínimo 4, Reporte regresión 3, Clientes del artículo 8, Movimientos 5, Invariante 25, Costo al 6, V2 12, V6 14.
+- L5 (2026-10-23) `odd-verifier` (opus) sobre 333bbca: sin bloqueantes; S1 a S6 pasan. Probó cada una de las 56 FK:
+  - con un cruce: rechazo, en la guarda (también con `sql_mode=''`) y después de la V29;
+  - con la misma ferretería: aceptada;
+  - NULL en las 25 columnas nullable: aceptado;
+  - SUPER_ADMIN en las 15 FK hacia `usuario`: rechazo.
+  
+  La V29 corre out-of-order sobre V28 + `db/dev-data` sin cambiar filas (`CHECKSUM TABLE`). El rollback deja el mismo esquema que la V28. Los 7 tests borrados solo cubrían el estado imposible.
+  
+  Avisos sin cambios:
+  - el rollback deja los índices en otro orden dentro de `SHOW CREATE TABLE` (cosmético);
+  - si la guarda corta, Flyway deja la V29 con `success=0` y hace falta `flyway repair` (documentado en la V29);
+  - `ADD FOREIGN KEY` copia cada tabla hija con las escrituras bloqueadas: hoy prod no tiene datos, pero con datos conviene correrla en una ventana sin uso.
+  
+  Se suman 3 de sus sondas a `MigracionV29Test` (10/10): la guarda revisa las 56 FK del inventario, la guarda frena una referencia a un SUPER_ADMIN, y ningún índice de la V28 se pierde.
