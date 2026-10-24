@@ -176,6 +176,59 @@ describe('Ventas (consulta y reimpresión, G60)', () => {
     expect(d).toContain('Ana Vendedora');
   });
 
+  it('con descuento por renglón el total no muestra un porcentaje general que no es el del importe', async () => {
+    await crear();
+    const base = ventaDePrueba();
+    api.obtener.mockReturnValue(
+      of({ ...base, descuentoPorcentaje: 0, renglones: [{ ...base.renglones[0], descuentoPorcentaje: 10 }] }),
+    );
+
+    filas()[0].click();
+    await refrescar();
+
+    const totales = normal(detalle()!.querySelector('.totales')?.textContent);
+    expect(totales).toContain('Descuento -$ 300,00');
+    expect(totales).not.toContain('(0 %)');
+  });
+
+  it('con descuento general y por renglón el total no muestra el porcentaje general', async () => {
+    await crear();
+    const base = ventaDePrueba();
+    api.obtener.mockReturnValue(of({ ...base, renglones: [{ ...base.renglones[0], descuentoPorcentaje: 5 }] }));
+
+    filas()[0].click();
+    await refrescar();
+
+    const totales = normal(detalle()!.querySelector('.totales')?.textContent);
+    expect(totales).toContain('Descuento -$ 300,00');
+    expect(totales).not.toContain('(10 %)');
+  });
+
+  it('si el filtro deja afuera la venta elegida, cierra su detalle', async () => {
+    await crear();
+    filas()[0].click();
+    await refrescar();
+    expect(detalle()).not.toBeNull();
+
+    api.listar.mockReturnValue(of(pagina([resumenDePrueba(4)])));
+    campo('numero', '4');
+    await buscar();
+
+    expect(detalle()).toBeNull();
+  });
+
+  it('si la venta elegida sigue en la lista nueva, deja su detalle abierto', async () => {
+    await crear();
+    filas()[0].click();
+    await refrescar();
+
+    api.listar.mockReturnValue(of(pagina([resumenDePrueba(5)])));
+    campo('numero', '5');
+    await buscar();
+
+    expect(normal(detalle()?.textContent)).toContain('Venta N.º 5');
+  });
+
   it('el detalle dice si salió de un presupuesto o de un remito', async () => {
     await crear();
     api.obtener.mockReturnValue(of(ventaDePrueba({ remitoId: 4 })));

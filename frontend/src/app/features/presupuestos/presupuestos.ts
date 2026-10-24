@@ -8,6 +8,7 @@ import { PageResponse } from '../../core/api/page.models';
 import { AuthService } from '../../core/auth/auth.service';
 import { MontoPipe } from '../../core/formato/monto';
 import { BarraAcciones } from '../../shared/barra-acciones';
+import { porcentajeDescuentoGeneral } from '../../shared/descuento-general';
 import { ArticulosService } from '../articulos/articulos.service';
 import { fechaHoraLocal } from '../caja/caja.models';
 import { ArticuloMostrador } from '../mostrador/mostrador.models';
@@ -53,6 +54,7 @@ export class Presupuestos implements OnInit {
   protected readonly estados = ESTADOS_PRESUPUESTO;
   protected readonly etiqueta = ETIQUETA_ESTADO;
   protected readonly fechaHora = fechaHoraLocal;
+  protected readonly porcentajeGeneral = porcentajeDescuentoGeneral;
   protected readonly dia = fechaDia;
 
   protected readonly pagina = signal<PageResponse<PresupuestoResumen> | null>(null);
@@ -88,6 +90,10 @@ export class Presupuestos implements OnInit {
       next: (pagina) => {
         this.pagina.set(pagina);
         this.cargando.set(false);
+        // Un detalle abierto de un presupuesto que la lista nueva ya no muestra confunde: se cierra (no a mitad de una acción).
+        const elegido = this.elegido();
+        const ocupado = this.cambiando() || this.pasando();
+        if (elegido !== null && !ocupado && !pagina.items.some((x) => x.presupuestoId === elegido)) this.cerrarDetalle();
       },
       error: () => {
         this.cargando.set(false);
@@ -124,6 +130,13 @@ export class Presupuestos implements OnInit {
     this.aplicados = {};
     this.filtrada.set(false);
     this.cargar(0);
+  }
+
+  private cerrarDetalle(): void {
+    this.elegido.set(null);
+    this.detalle.set(null);
+    this.errorAccion.set(null);
+    this.reemplazo.set(null);
   }
 
   protected elegir(fila: PresupuestoResumen): void {

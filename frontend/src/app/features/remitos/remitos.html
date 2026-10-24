@@ -151,7 +151,13 @@
       <div class="totales">
         @if (r.descuento > 0) {
           <p>Subtotal <span>{{ r.subtotal | monto }}</span></p>
-          <p>Descuento ({{ r.descuentoPorcentaje | number: '1.0-2' }} %) <span>-{{ r.descuento | monto }}</span></p>
+          <p>
+            Descuento
+            @if (porcentajeGeneral(r); as porcentaje) {
+              ({{ porcentaje | number: '1.0-2' }} %)
+            }
+            <span>-{{ r.descuento | monto }}</span>
+          </p>
         }
         <p class="total">Total <strong>{{ r.total | monto }}</strong></p>
       </div>

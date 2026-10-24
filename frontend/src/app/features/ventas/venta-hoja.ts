@@ -1,6 +1,7 @@
 import { DecimalPipe } from '@angular/common';
 import { Component, computed, input } from '@angular/core';
 import { MontoPipe } from '../../core/formato/monto';
+import { porcentajeDescuentoGeneral } from '../../shared/descuento-general';
 import { fechaCompletaLocal } from '../clientes/cuenta/cobranza.models';
 import { VentaConsultada, clienteDeVenta } from './ventas.models';
 
@@ -20,6 +21,7 @@ export class VentaHoja {
   protected readonly fecha = computed(() => fechaCompletaLocal(this.venta().fecha));
   protected readonly cliente = computed(() => clienteDeVenta(this.venta().clienteNombre));
   protected readonly pagos = computed(() => this.venta().pagos ?? []);
+  protected readonly porcentajeGeneral = computed(() => porcentajeDescuentoGeneral(this.venta()));
   /** De dónde salió la venta, si no se armó en el mostrador. */
   protected readonly origen = computed(() => {
     const v = this.venta();

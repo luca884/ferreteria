@@ -298,6 +298,48 @@ describe('Presupuestos', () => {
       expect(normal(detalle()!.querySelector('.totales')?.textContent)).toContain('Descuento (10 %) -$ 300,00');
     });
 
+    it('con descuento por renglón no muestra un porcentaje general que no es el del importe', async () => {
+      await crear();
+      const base = detalleDe(12);
+      api.obtener.mockReturnValue(
+        of({
+          ...base,
+          descuento: 300,
+          total: 2700,
+          renglones: [{ ...base.renglones[0], descuentoPorcentaje: 10, total: 2700 }],
+        }),
+      );
+
+      await abrirDetalle(0);
+
+      const totales = normal(detalle()!.querySelector('.totales')?.textContent);
+      expect(totales).toContain('Descuento -$ 300,00');
+      expect(totales).not.toContain('%');
+    });
+
+    it('si el filtro deja afuera el presupuesto elegido, cierra su detalle', async () => {
+      await crear();
+      await abrirDetalle(0);
+      expect(detalle()).not.toBeNull();
+
+      api.listar.mockReturnValue(of(pagina([resumen(11)])));
+      filtrar('numero', '11');
+      await buscar();
+
+      expect(detalle()).toBeNull();
+    });
+
+    it('si el presupuesto elegido sigue en la lista nueva, deja su detalle abierto', async () => {
+      await crear();
+      await abrirDetalle(0);
+
+      api.listar.mockReturnValue(of(pagina([resumen(12)])));
+      filtrar('numero', '12');
+      await buscar();
+
+      expect(normal(detalle()?.querySelector('h2')?.textContent)).toBe('Presupuesto N.º 12');
+    });
+
     it('si no se pudo traer avisa dentro del detalle', async () => {
       await crear();
       api.obtener.mockReturnValue(throwError(() => new HttpErrorResponse({ status: 500 })));

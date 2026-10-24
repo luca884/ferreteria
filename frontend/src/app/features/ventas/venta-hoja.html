@@ -55,7 +55,11 @@
   @if (venta().descuento > 0) {
     <p>Subtotal <span>{{ venta().subtotal | monto }}</span></p>
     <p>
-      Descuento ({{ venta().descuentoPorcentaje | number: '1.0-2' }} %) <span>-{{ venta().descuento | monto }}</span>
+      Descuento
+      @if (porcentajeGeneral(); as porcentaje) {
+        ({{ porcentaje | number: '1.0-2' }} %)
+      }
+      <span>-{{ venta().descuento | monto }}</span>
     </p>
   }
   @if ((venta().recargo ?? 0) > 0) {

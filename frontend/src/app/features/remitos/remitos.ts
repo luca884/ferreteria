@@ -8,6 +8,7 @@ import { PageResponse } from '../../core/api/page.models';
 import { AuthService } from '../../core/auth/auth.service';
 import { MontoPipe } from '../../core/formato/monto';
 import { BarraAcciones } from '../../shared/barra-acciones';
+import { porcentajeDescuentoGeneral } from '../../shared/descuento-general';
 import { ArticulosService } from '../articulos/articulos.service';
 import { fechaHoraLocal } from '../caja/caja.models';
 import { ArticuloMostrador } from '../mostrador/mostrador.models';
@@ -51,6 +52,7 @@ export class Remitos implements OnInit {
   protected readonly estados = ESTADOS_REMITO;
   protected readonly etiqueta = ETIQUETA_ESTADO_REMITO;
   protected readonly fechaHora = fechaHoraLocal;
+  protected readonly porcentajeGeneral = porcentajeDescuentoGeneral;
   protected readonly esDueno = () => this.auth.esDueno();
 
   protected readonly pagina = signal<PageResponse<RemitoResumen> | null>(null);
@@ -88,6 +90,10 @@ export class Remitos implements OnInit {
       next: (pagina) => {
         this.pagina.set(pagina);
         this.cargando.set(false);
+        // Un detalle abierto de un remito que la lista nueva ya no muestra confunde: se cierra (no a mitad de una acción).
+        const elegido = this.elegido();
+        const ocupado = this.anulando() || this.pasando();
+        if (elegido !== null && !ocupado && !pagina.items.some((x) => x.remitoId === elegido)) this.cerrarDetalle();
       },
       error: () => {
         this.cargando.set(false);
@@ -124,6 +130,14 @@ export class Remitos implements OnInit {
     this.aplicados = {};
     this.filtrada.set(false);
     this.cargar(0);
+  }
+
+  private cerrarDetalle(): void {
+    this.elegido.set(null);
+    this.detalle.set(null);
+    this.errorAccion.set(null);
+    this.reemplazo.set(null);
+    this.confirmandoAnulacion.set(false);
   }
 
   protected elegir(fila: RemitoResumen): void {

@@ -61,6 +61,9 @@ export class Ventas implements OnInit {
       next: (pagina) => {
         this.pagina.set(pagina);
         this.cargando.set(false);
+        // Un detalle abierto de una venta que la lista nueva ya no muestra confunde: se cierra.
+        const elegida = this.elegida();
+        if (elegida !== null && !pagina.items.some((v) => v.ventaId === elegida)) this.cerrarDetalle();
       },
       error: () => {
         this.cargando.set(false);
@@ -98,6 +101,13 @@ export class Ventas implements OnInit {
     this.aplicados = {};
     this.filtrada.set(false);
     this.cargar(0);
+  }
+
+  private cerrarDetalle(): void {
+    this.elegida.set(null);
+    this.detalle.set(null);
+    this.errorDetalle.set(null);
+    this.imprimiendo.set(false);
   }
 
   protected elegir(fila: VentaResumen): void {

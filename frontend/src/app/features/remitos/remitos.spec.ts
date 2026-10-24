@@ -301,6 +301,48 @@ describe('Remitos', () => {
       expect(normal(detalle()!.querySelector('.totales')?.textContent)).toContain('Descuento (10 %) -$ 300,00');
     });
 
+    it('con descuento por renglón no muestra un porcentaje general que no es el del importe', async () => {
+      await crear();
+      const base = detalleDe(5);
+      api.obtener.mockReturnValue(
+        of({
+          ...base,
+          descuento: 300,
+          total: 2700,
+          renglones: [{ ...base.renglones[0], descuentoPorcentaje: 10, total: 2700 }],
+        }),
+      );
+
+      await abrirDetalle(0);
+
+      const totales = normal(detalle()!.querySelector('.totales')?.textContent);
+      expect(totales).toContain('Descuento -$ 300,00');
+      expect(totales).not.toContain('%');
+    });
+
+    it('si el filtro deja afuera el remito elegido, cierra su detalle', async () => {
+      await crear();
+      await abrirDetalle(0);
+      expect(detalle()).not.toBeNull();
+
+      api.listar.mockReturnValue(of(pagina([resumen(4)])));
+      filtrar('numero', '4');
+      await buscar();
+
+      expect(detalle()).toBeNull();
+    });
+
+    it('si el remito elegido sigue en la lista nueva, deja su detalle abierto', async () => {
+      await crear();
+      await abrirDetalle(0);
+
+      api.listar.mockReturnValue(of(pagina([resumen(5)])));
+      filtrar('numero', '5');
+      await buscar();
+
+      expect(normal(detalle()?.querySelector('h2')?.textContent)).toBe('Remito N.º 5');
+    });
+
     it('si no se pudo traer avisa dentro del detalle', async () => {
       await crear();
       api.obtener.mockReturnValue(throwError(() => new HttpErrorResponse({ status: 500 })));
