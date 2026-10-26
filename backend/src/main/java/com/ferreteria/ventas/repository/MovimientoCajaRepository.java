@@ -8,6 +8,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
@@ -20,6 +21,16 @@ public interface MovimientoCajaRepository extends TenantScopedRepository<Movimie
     @Query("select m.tipo, sum(m.importe) from MovimientoCaja m where m.ferreteriaId = :fid and m.cajaId = :cajaId "
             + "group by m.tipo")
     List<Object[]> sumas(@Param("fid") Long ferreteriaId, @Param("cajaId") Long cajaId);
+
+    @Query("select m from MovimientoCaja m where m.ferreteriaId = :fid and m.fecha >= :desde and m.fecha < :hasta "
+            + "order by m.fecha, m.id")
+    List<MovimientoCaja> delRango(@Param("fid") Long ferreteriaId, @Param("desde") LocalDateTime desde,
+            @Param("hasta") LocalDateTime hasta);
+
+    /** Los movimientos de todas las cajas de la ferreteria entre esas fechas ({@code hasta} exclusivo), del mas viejo al mas nuevo. */
+    default List<MovimientoCaja> delRangoScoped(LocalDateTime desde, LocalDateTime hasta) {
+        return delRango(TenantContext.requireFerreteriaId(), desde, hasta);
+    }
 
     /** Los movimientos de la caja, en el orden en que se cargaron. */
     default List<MovimientoCaja> deCajaScoped(Long cajaId) {
