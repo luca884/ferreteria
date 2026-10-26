@@ -37,4 +37,19 @@ describe('ReportesService', () => {
     expect(req.request.params.get('agrupar')).toBe('MES');
     req.flush({ desde: '2026-01-01', hasta: '2026-10-22', filas: [] });
   });
+
+  it('pide los movimientos de caja a /reportes/caja/movimientos y manda el tipo solo si se elige', () => {
+    service.movimientosCaja('2026-10-01', '2026-10-22').subscribe();
+    const todos = http.expectOne((r) => r.url.endsWith('/reportes/caja/movimientos'));
+    expect(todos.request.method).toBe('GET');
+    expect(todos.request.params.get('desde')).toBe('2026-10-01');
+    expect(todos.request.params.get('hasta')).toBe('2026-10-22');
+    expect(todos.request.params.has('tipo')).toBe(false);
+    todos.flush({});
+
+    service.movimientosCaja('2026-10-01', '2026-10-22', 'GASTO').subscribe();
+    const gastos = http.expectOne((r) => r.url.endsWith('/reportes/caja/movimientos'));
+    expect(gastos.request.params.get('tipo')).toBe('GASTO');
+    gastos.flush({});
+  });
 });

@@ -52,3 +52,53 @@ table {
   text-align: right;
   font-variant-numeric: tabular-nums;
 }
+
+.encabezado {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--e-3);
+  margin-bottom: var(--e-3);
+}
+.encabezado h2,
+.encabezado p {
+  margin: 0;
+}
+.ferreteria {
+  font-weight: 700;
+}
+.rango,
+.emitido {
+  color: var(--texto-suave);
+  font-size: var(--texto-sm);
+}
+
+.totales-caja {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--e-4);
+  margin: 0 0 var(--e-4);
+}
+.totales-caja div {
+  display: flex;
+  flex-direction: column;
+  gap: var(--e-1);
+}
+.totales-caja dt {
+  color: var(--texto-suave);
+  font-size: var(--texto-sm);
+}
+.totales-caja dd {
+  margin: 0;
+  font-size: var(--texto-lg);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+@media print {
+  .rango,
+  .emitido,
+  .totales-caja dt {
+    color: #000;
+  }
+}

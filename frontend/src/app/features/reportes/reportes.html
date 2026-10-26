@@ -1,5 +1,13 @@
 <app-barra-acciones>
-  <h1>Reportes de ventas</h1>
+  <h1>Reportes</h1>
+  @if (resultado()?.tipo === 'movimientos-caja') {
+    <button type="button" class="accion-barra primario imprimir" (click)="imprimir()">
+      <svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+        <path d="M4 6V1.5h8V6M4 12H2V6h12v6h-2M4 9.5h8v5H4z" />
+      </svg>
+      Imprimir
+    </button>
+  }
 </app-barra-acciones>
 
 @if (!auth.esDueno()) {
@@ -29,6 +37,17 @@
           <select id="agrupar" (change)="agrupar.set($any($event.target).value)">
             <option value="DIA" [selected]="agrupar() === 'DIA'">Día</option>
             <option value="MES" [selected]="agrupar() === 'MES'">Mes</option>
+          </select>
+        </div>
+      }
+      @if (tipo() === 'movimientos-caja') {
+        <div class="campo">
+          <label for="tipo-movimiento">Tipo</label>
+          <select id="tipo-movimiento" (change)="tipoMovimiento.set($any($event.target).value)">
+            <option value="" [selected]="tipoMovimiento() === ''">Todos</option>
+            @for (t of tiposMovimiento; track t) {
+              <option [value]="t" [selected]="tipoMovimiento() === t">{{ plural[t] }}</option>
+            }
           </select>
         </div>
       }
@@ -221,6 +240,60 @@
             </tbody>
           </table>
         }
+      }
+      @case ('movimientos-caja') {
+        <section class="caja-imprimible" aria-labelledby="titulo-movimientos">
+          <header class="encabezado">
+            <div>
+              @if (ferreteria(); as nombre) {
+                <p class="ferreteria">{{ nombre }}</p>
+              }
+              <h2 id="titulo-movimientos">Ingresos, gastos y retiros</h2>
+              <p class="rango">
+                Del {{ textoPeriodo(r.datos.desde) }} al {{ textoPeriodo(r.datos.hasta) }} · Tipo:
+                {{ r.filtro ? plural[r.filtro] : 'Todos' }}
+              </p>
+            </div>
+            <p class="emitido">Emitido el {{ emitido() }}</p>
+          </header>
+
+          @if (r.datos.filas.length === 0) {
+            <p class="ayuda estado-vacio" role="status">No hubo movimientos en esas fechas.</p>
+          } @else {
+            <table>
+              <caption class="sr-only">Ingresos, gastos y retiros de la caja, del más viejo al más nuevo.</caption>
+              <thead>
+                <tr>
+                  <th scope="col">Fecha y hora</th>
+                  <th scope="col">Tipo</th>
+                  <th scope="col">Motivo</th>
+                  <th scope="col">Usuario</th>
+                  <th scope="col" class="num">Importe</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (f of r.datos.filas; track f.id) {
+                  <tr>
+                    <td>{{ fechaCompleta(f.fecha) }}</td>
+                    <td>{{ tipoLabels[f.tipo] }}</td>
+                    <td>{{ f.motivo }}</td>
+                    <td>{{ f.usuario }}</td>
+                    <td class="num">{{ f.importe | monto }}</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          }
+
+          <dl class="totales-caja">
+            @for (t of totalesDeCaja(); track t.tipo) {
+              <div>
+                <dt>{{ t.texto }}</dt>
+                <dd>{{ t.total | monto }}</dd>
+              </div>
+            }
+          </dl>
+        </section>
       }
     }
   } @else if (cargando()) {

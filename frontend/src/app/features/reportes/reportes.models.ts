@@ -1,4 +1,9 @@
-/** Los reportes de ventas (como el menú Ventas de GDS), con el nombre que se ve en la pantalla. */
+import { TipoMovimientoCaja } from '../caja/caja.models';
+
+/**
+ * Los reportes de ventas (como el menú Ventas de GDS) y el de ingresos, gastos y retiros de la caja (G73), con el nombre
+ * que se ve en la pantalla.
+ */
 export const REPORTES = [
   { tipo: 'resumen', nombre: 'Resumen' },
   { tipo: 'por-usuario', nombre: 'Por usuario' },
@@ -7,10 +12,11 @@ export const REPORTES = [
   { tipo: 'por-articulo', nombre: 'Por artículo' },
   { tipo: 'por-rubro', nombre: 'Por rubro' },
   { tipo: 'con-descuento', nombre: 'Con descuento' },
+  { tipo: 'movimientos-caja', nombre: 'Ingresos, gastos y retiros' },
 ] as const;
 
 export type TipoReporte = (typeof REPORTES)[number]['tipo'];
-export type ReporteEnFilas = Exclude<TipoReporte, 'resumen'>;
+export type ReporteEnFilas = Exclude<TipoReporte, 'resumen' | 'movimientos-caja'>;
 export type Agrupar = 'DIA' | 'MES';
 
 export interface Resumen {
@@ -85,6 +91,31 @@ export interface ConDescuento {
   descuento: number;
   total: number;
 }
+
+/** Un ingreso, gasto o retiro de la caja. `fecha` es local de Buenos Aires, sin zona. */
+export interface MovimientoDeCaja {
+  id: number;
+  fecha: string;
+  tipo: TipoMovimientoCaja;
+  motivo: string;
+  usuario: string;
+  importe: number;
+}
+
+/** Los movimientos del rango y lo que suman por tipo (0 en los tipos sin movimientos). */
+export interface ReporteMovimientos {
+  desde: string;
+  hasta: string;
+  filas: MovimientoDeCaja[];
+  totales: Record<TipoMovimientoCaja, number>;
+}
+
+/** Los tipos en plural, para el filtro y los totales: «Ingresos», «Gastos» y «Retiros». */
+export const TIPO_MOVIMIENTO_PLURAL: Record<TipoMovimientoCaja, string> = {
+  INGRESO: 'Ingresos',
+  GASTO: 'Gastos',
+  RETIRO: 'Retiros',
+};
 
 /** Lo que el servidor devuelve para cada reporte en filas. */
 export interface FilasPorTipo {
