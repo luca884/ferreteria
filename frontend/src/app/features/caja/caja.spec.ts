@@ -399,4 +399,34 @@ describe('Caja (CU-10)', () => {
       expect(el().querySelector('a[href="/caja/historial"]')).not.toBeNull();
     });
   });
+
+  describe('hoja impresa', () => {
+    it('el Vendedor que cierra imprime el resumen del cierre: una sola hoja, con la ferretería', async () => {
+      await crear(conCaja());
+      await escribir('efectivo-contado', '5700');
+      await enviar('form.cierre');
+      boton('Cerrar la caja')!.click();
+      await refrescar();
+      const imprimir = vi.spyOn(window, 'print').mockImplementation(() => undefined);
+
+      el().querySelector<HTMLButtonElement>('app-resumen-caja button.imprimir')!.click();
+
+      expect(imprimir).toHaveBeenCalledOnce();
+      expect(el().querySelectorAll('.caja-imprimible').length).toBe(1);
+      expect(normal(el().querySelector('app-resumen-caja .encabezado-impreso')?.textContent)).toContain('Ferretería El Tornillo');
+      imprimir.mockRestore();
+    });
+
+    it('el Dueño tiene una sola hoja con la caja abierta y una sola después de cerrarla', async () => {
+      await crear(conCaja(), true);
+      expect(el().querySelectorAll('.caja-imprimible').length).toBe(1);
+
+      await escribir('efectivo-contado', '5700');
+      await enviar('form.cierre');
+      boton('Cerrar la caja')!.click();
+      await refrescar();
+
+      expect(el().querySelectorAll('.caja-imprimible').length).toBe(1);
+    });
+  });
 });

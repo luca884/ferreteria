@@ -187,6 +187,13 @@ class ReporteCajaIntegrationTest extends VentasTestBase {
     }
 
     @Test
+    @DisplayName("sin sesion, 401")
+    void sinSesion() throws Exception {
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get(URL + "?" + hoyAHoy()))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
     @DisplayName("fechas o tipo invalidos: «hasta» antes de «desde», mas de 366 dias o un tipo desconocido dan 400")
     void parametrosInvalidos() throws Exception {
         getResult(URL + "?desde=" + hoy + "&hasta=" + hoy.minusDays(1), dueno)
