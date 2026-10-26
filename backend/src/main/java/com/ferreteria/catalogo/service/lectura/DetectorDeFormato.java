@@ -28,11 +28,11 @@ public final class DetectorDeFormato {
             return FormatoLista.XLS;
         }
         if (empiezaCon(contenido, PDF)) {
-            throw new BadRequestException("Las listas en PDF todavía no se pueden importar.");
+            return FormatoLista.PDF;
         }
         if (empiezaCon(contenido, PNG) || empiezaCon(contenido, JPEG) || empiezaCon(contenido, GIF)
             || tieneBytesNulos(contenido)) {
-            throw new BadRequestException("El archivo no es una lista válida. Subí un Excel (.xlsx o .xls) o un CSV.");
+            throw new BadRequestException("El archivo no es una lista válida. Subí un Excel (.xlsx o .xls), un CSV o un PDF.");
         }
         return FormatoLista.CSV;
     }

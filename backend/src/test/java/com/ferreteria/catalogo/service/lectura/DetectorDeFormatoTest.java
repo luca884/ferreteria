@@ -13,9 +13,8 @@ import org.junit.jupiter.api.Test;
 /** Deteccion por bytes magicos: la extension y el Content-Type no se miran. */
 class DetectorDeFormatoTest {
 
-    private static final String MENSAJE_PDF = "Las listas en PDF todavía no se pueden importar.";
     private static final String MENSAJE_NO_VALIDO =
-        "El archivo no es una lista válida. Subí un Excel (.xlsx o .xls) o un CSV.";
+        "El archivo no es una lista válida. Subí un Excel (.xlsx o .xls), un CSV o un PDF.";
     private static final String MENSAJE_VACIO = "No se pudo leer el archivo. Verificá que no esté dañado.";
 
     private static byte[] bytes(int... valores) {
@@ -41,13 +40,11 @@ class DetectorDeFormatoTest {
     }
 
     @Test
-    @DisplayName("un PDF se rechaza con el mensaje de PDF")
+    @DisplayName("%PDF es PDF")
     void pdf() {
         byte[] pdf = "%PDF-1.7\n1 0 obj".getBytes(StandardCharsets.ISO_8859_1);
 
-        assertThatThrownBy(() -> DetectorDeFormato.detectar(pdf))
-            .isInstanceOf(BadRequestException.class)
-            .hasMessage(MENSAJE_PDF);
+        assertThat(DetectorDeFormato.detectar(pdf)).isEqualTo(FormatoLista.PDF);
     }
 
     @Test

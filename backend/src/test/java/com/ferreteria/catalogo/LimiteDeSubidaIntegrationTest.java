@@ -201,7 +201,7 @@ class LimiteDeSubidaIntegrationTest extends IntegrationTestBase {
     }
 
     @Test
-    void unPdfSeRechazaComoAntesConSuMensaje() throws Exception {
+    void unPdfDanadoDa400ConElMensajeDelLector() throws Exception {
         String token = login("dueno@tornillo.demo");
         byte[] pdf = ("%PDF-1.7\n" + "contenido de una lista en pdf ".repeat(100)).getBytes(StandardCharsets.US_ASCII);
 
@@ -209,7 +209,7 @@ class LimiteDeSubidaIntegrationTest extends IntegrationTestBase {
 
         assertThat(respuesta.statusCode()).isEqualTo(400);
         assertThat(objectMapper.readTree(respuesta.body()).get("message").asText())
-                .isEqualTo("Las listas en PDF todavía no se pueden importar.");
+                .isEqualTo("No se pudo leer el archivo. Verificá que no esté dañado.");
     }
 
     @Test

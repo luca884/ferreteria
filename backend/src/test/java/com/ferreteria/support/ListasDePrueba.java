@@ -1,5 +1,6 @@
 package com.ferreteria.support;
 
+import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
@@ -7,11 +8,25 @@ import java.io.UncheckedIOException;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
+import org.apache.pdfbox.Loader;
+import org.apache.pdfbox.cos.COSName;
+import org.apache.pdfbox.pdmodel.PDDocument;
+import org.apache.pdfbox.pdmodel.PDPage;
+import org.apache.pdfbox.pdmodel.PDPageContentStream;
+import org.apache.pdfbox.pdmodel.common.PDRectangle;
+import org.apache.pdfbox.pdmodel.common.PDStream;
+import org.apache.pdfbox.pdmodel.encryption.AccessPermission;
+import org.apache.pdfbox.pdmodel.encryption.StandardProtectionPolicy;
+import org.apache.pdfbox.pdmodel.font.PDType1Font;
+import org.apache.pdfbox.pdmodel.font.Standard14Fonts;
+import org.apache.pdfbox.pdmodel.graphics.image.LosslessFactory;
+import org.apache.pdfbox.pdmodel.graphics.image.PDImageXObject;
 import org.apache.poi.hssf.usermodel.HSSFWorkbook;
 import org.apache.poi.poifs.crypt.EncryptionInfo;
 import org.apache.poi.poifs.crypt.EncryptionMode;
@@ -125,6 +140,110 @@ public final class ListasDePrueba {
         conBom[2] = (byte) 0xBF;
         System.arraycopy(cuerpo, 0, conBom, 3, cuerpo.length);
         return conBom;
+    }
+
+    /** Renglones por pagina de {@link #pdf}: con mas filas, la lista sigue en otra pagina. */
+    public static final int RENGLONES_POR_PAGINA_PDF = 25;
+
+    /** A4 apaisada: entran siete columnas, como en LISTA 336. */
+    private static final PDRectangle HOJA_PDF = new PDRectangle(PDRectangle.A4.getHeight(), PDRectangle.A4.getWidth());
+
+    /**
+     * Un PDF con texto, como una lista impresa: cada fila es un renglon y cada celda arranca en su columna, a 110 pt una
+     * de otra, en Helvetica de 10 pt, en hojas A4 apaisadas. Una celda vacia o null no se escribe.
+     */
+    public static byte[] pdf(List<List<String>> filas) {
+        return pdfProtegido(filas, null);
+    }
+
+    /** El mismo PDF de {@link #pdf}, cifrado con contrasena de apertura (si no es null). */
+    public static byte[] pdfProtegido(List<List<String>> filas, String contrasena) {
+        try (PDDocument documento = new PDDocument()) {
+            PDType1Font fuente = new PDType1Font(Standard14Fonts.FontName.HELVETICA);
+            for (int desde = 0; desde == 0 || desde < filas.size(); desde += RENGLONES_POR_PAGINA_PDF) {
+                PDPage pagina = new PDPage(HOJA_PDF);
+                documento.addPage(pagina);
+                try (PDPageContentStream contenido = new PDPageContentStream(documento, pagina)) {
+                    for (int i = desde; i < Math.min(filas.size(), desde + RENGLONES_POR_PAGINA_PDF); i++) {
+                        float y = HOJA_PDF.getHeight() - 40 - (i - desde) * 20;
+                        List<String> fila = filas.get(i);
+                        for (int c = 0; c < fila.size(); c++) {
+                            if (fila.get(c) != null && !fila.get(c).isEmpty()) {
+                                contenido.beginText();
+                                contenido.setFont(fuente, 10);
+                                contenido.newLineAtOffset(40 + 110 * c, y);
+                                contenido.showText(fila.get(c));
+                                contenido.endText();
+                            }
+                        }
+                    }
+                }
+            }
+            if (contrasena != null) {
+                StandardProtectionPolicy politica =
+                    new StandardProtectionPolicy("dueno-" + contrasena, contrasena, new AccessPermission());
+                politica.setEncryptionKeyLength(128);
+                documento.protect(politica);
+            }
+            return guardar(documento);
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
+    }
+
+    /** Un PDF de una pagina sin texto, como uno escaneado. */
+    public static byte[] pdfSinTexto() {
+        try (PDDocument documento = new PDDocument()) {
+            documento.addPage(new PDPage(PDRectangle.A4));
+            return guardar(documento);
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
+    }
+
+    /**
+     * Un PDF con las filas de {@link #pdf} y, en una pagina mas, un contenido comprimido que se infla a {@code bytes}
+     * (espacios: no agrega texto).
+     */
+    public static byte[] pdfInflado(List<List<String>> filas, long bytes) {
+        try (PDDocument documento = Loader.loadPDF(pdf(filas))) {
+            PDPage pagina = new PDPage(PDRectangle.A4);
+            PDStream contenido = new PDStream(documento);
+            try (OutputStream salida = contenido.createOutputStream(COSName.FLATE_DECODE)) {
+                byte[] bloque = new byte[64 * 1024];
+                Arrays.fill(bloque, (byte) ' ');
+                for (long escritos = 0; escritos < bytes; escritos += bloque.length) {
+                    salida.write(bloque, 0, (int) Math.min(bloque.length, bytes - escritos));
+                }
+            }
+            pagina.setContents(contenido);
+            documento.addPage(pagina);
+            return guardar(documento);
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
+    }
+
+    /** Un PDF con las filas de {@link #pdf} y una imagen sin comprimir de {@code lado} x {@code lado} pixeles. */
+    public static byte[] pdfConImagen(List<List<String>> filas, int lado) {
+        try (PDDocument documento = Loader.loadPDF(pdf(filas))) {
+            PDPage pagina = documento.getPage(0);
+            PDImageXObject imagen =
+                LosslessFactory.createFromImage(documento, new BufferedImage(lado, lado, BufferedImage.TYPE_INT_RGB));
+            try (PDPageContentStream contenido =
+                     new PDPageContentStream(documento, pagina, PDPageContentStream.AppendMode.APPEND, true)) {
+                contenido.drawImage(imagen, 400, 40, 100, 100);
+            }
+            return guardar(documento);
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
+    }
+
+    private static byte[] guardar(PDDocument documento) throws IOException {
+        ByteArrayOutputStream salida = new ByteArrayOutputStream();
+        documento.save(salida);
+        return salida.toByteArray();
     }
 
     private static String campo(String valor, char separador) {

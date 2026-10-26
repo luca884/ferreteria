@@ -17,7 +17,7 @@ import org.junit.jupiter.api.Test;
 
 class LectorDeListasTest {
 
-    private final LectorDeListas lector = new LectorDeListas(new LectorExcel(), new LectorCsv());
+    private final LectorDeListas lector = new LectorDeListas(new LectorExcel(), new LectorCsv(), new LectorPdf());
 
     private static final String MENSAJE_LIMITE = "La lista tiene más de 20.000 filas. Dividila en archivos más chicos.";
 
@@ -54,6 +54,16 @@ class LectorDeListasTest {
 
         assertThat(lectura.hojas()).containsExactly("CSV");
         assertThat(lectura.filas().get(0).celda(0).texto()).isEqualTo("A-1");
+    }
+
+    @Test
+    void unPdfSeLeeComoPdfAunqueSeLlameXlsx() {
+        byte[] pdf = ListasDePrueba.pdf(List.of(List.of("A-1", "Tornillo", "10"), List.of("A-2", "Tuerca", "20")));
+
+        LecturaLista lectura = lector.leer(pdf);
+
+        assertThat(lectura.hojas()).containsExactly("PDF");
+        assertThat(lectura.filas().get(1).celda(1).texto()).isEqualTo("Tuerca");
     }
 
     @Test
@@ -140,10 +150,10 @@ class LectorDeListasTest {
     }
 
     @Test
-    void unPdfSeRechazaConSuMensaje() {
+    void unPdfDanadoEsUn400() {
         assertThatThrownBy(() -> lector.leer("%PDF-1.7 contenido".getBytes(StandardCharsets.UTF_8)))
             .isInstanceOf(BadRequestException.class)
-            .hasMessage("Las listas en PDF todavía no se pueden importar.");
+            .hasMessage("No se pudo leer el archivo. Verificá que no esté dañado.");
     }
 
     @Test
@@ -197,10 +207,15 @@ class LectorDeListasTest {
     }
 
     @Test
-    void sinHojaUnPdfSeRechazaConSuMensaje() {
-        assertThatThrownBy(() -> lector.leer("%PDF-1.7 contenido".getBytes(StandardCharsets.UTF_8)))
-            .isInstanceOf(BadRequestException.class)
-            .hasMessage("Las listas en PDF todavía no se pueden importar.");
+    void sinHojaUnPdfEsUnaSolaHojaLaCero() {
+        List<List<String>> filas = new ArrayList<>();
+        IntStream.rangeClosed(1, ListasDePrueba.RENGLONES_POR_PAGINA_PDF + 1).forEach(i -> filas.add(List.of("A-" + i, "10")));
+
+        LecturaLista lectura = lector.leer(ListasDePrueba.pdf(filas));
+
+        assertThat(lectura.hojas()).containsExactly("PDF");
+        assertThat(lectura.filas()).extracting(FilaLeida::hoja).containsOnly(0);
+        assertThat(lectura.filas()).hasSize(filas.size());
     }
 
     @Test

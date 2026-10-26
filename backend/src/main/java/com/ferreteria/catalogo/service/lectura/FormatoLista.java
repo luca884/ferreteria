@@ -4,5 +4,6 @@ package com.ferreteria.catalogo.service.lectura;
 public enum FormatoLista {
     XLSX,
     XLS,
-    CSV
+    CSV,
+    PDF
 }

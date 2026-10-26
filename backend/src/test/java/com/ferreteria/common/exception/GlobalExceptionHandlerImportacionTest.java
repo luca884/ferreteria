@@ -63,10 +63,10 @@ class GlobalExceptionHandlerImportacionTest {
 
     @Test
     void unBadRequestExceptionEs400ConSuMensaje() {
-        ResponseEntity<ApiError> respuesta = handler.badRequest(new BadRequestException("Las listas en PDF todavía no se pueden importar."));
+        ResponseEntity<ApiError> respuesta = handler.badRequest(new BadRequestException("El archivo está protegido con contraseña."));
 
         assertThat(respuesta.getStatusCode().value()).isEqualTo(400);
-        assertThat(respuesta.getBody().message()).isEqualTo("Las listas en PDF todavía no se pueden importar.");
+        assertThat(respuesta.getBody().message()).isEqualTo("El archivo está protegido con contraseña.");
     }
 
     @Test

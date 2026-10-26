@@ -14,10 +14,12 @@ public class LectorDeListas {
 
     private final LectorExcel lectorExcel;
     private final LectorCsv lectorCsv;
+    private final LectorPdf lectorPdf;
 
-    public LectorDeListas(LectorExcel lectorExcel, LectorCsv lectorCsv) {
+    public LectorDeListas(LectorExcel lectorExcel, LectorCsv lectorCsv, LectorPdf lectorPdf) {
         this.lectorExcel = lectorExcel;
         this.lectorCsv = lectorCsv;
+        this.lectorPdf = lectorPdf;
     }
 
     /** Todas las hojas del archivo, en una sola lectura. */
@@ -29,6 +31,7 @@ public class LectorDeListas {
         return switch (DetectorDeFormato.detectar(contenido)) {
             case XLSX, XLS -> lectorExcel;
             case CSV -> lectorCsv;
+            case PDF -> lectorPdf;
         };
     }
 }

@@ -292,8 +292,10 @@ class ImportacionIntegrationTest extends CotizacionTestBase {
         byte[] pdf = "%PDF-1.7\n1 0 obj\n".getBytes(StandardCharsets.US_ASCII);
         byte[] zipRoto = new byte[] {'P', 'K', 3, 4, 9, 9, 9, 9, 9, 9, 9, 9};
         return List.of(
-                new Object[] {archivo("lista.xlsx", pdf), "Las listas en PDF todavía no se pueden importar."},
-                new Object[] {archivo("lista.csv", PNG), "El archivo no es una lista válida. Subí un Excel (.xlsx o .xls) o un CSV."},
+                new Object[] {archivo("lista.xlsx", pdf), "No se pudo leer el archivo. Verificá que no esté dañado."},
+                new Object[] {archivo("lista.pdf", ListasDePrueba.pdfSinTexto()),
+                    "El PDF no tiene texto para leer. Pedile al proveedor la lista en Excel o en un PDF que no sea escaneado."},
+                new Object[] {archivo("lista.csv", PNG), "El archivo no es una lista válida. Subí un Excel (.xlsx o .xls), un CSV o un PDF."},
                 new Object[] {archivo("lista.xlsx", new byte[0]), "No se pudo leer el archivo. Verificá que no esté dañado."},
                 new Object[] {archivo("lista.xlsx", zipRoto), "No se pudo leer el archivo. Verificá que no esté dañado."},
                 new Object[] {archivo("lista.xlsx", ListasDePrueba.docx()), "No se pudo leer el archivo. Verificá que no esté dañado."});
