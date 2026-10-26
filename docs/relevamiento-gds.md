@@ -247,7 +247,7 @@ Las clases son las del pedido: A = ya cubierto, B = refina un CU, C = candidato 
 | G70 | **D** | — | Libro IVA, fuera de alcance. El contador baja los comprobantes de "Mis Comprobantes" de ARCA. El informe final lo lista como "implementar" en Mostrador; acá queda post-MVP |
 | G71 | **D** | — | CU-08 ya permite encontrar las NC |
 | G72 | **D** | El stock crítico ya está en CU-09 (A). Stock valorizado y rankings, post-MVP. El listado con foto es E | Reportes avanzados. **Hecho en CU-09 (2026-10-23, Luca), el stock crítico:** pantalla «Stock bajo mínimo» como el «Listado de Artículos bajo Stock Mínimo» de GDS (columnas de GDS más rubro y proveedor; orden por descripción, código, rubro o proveedor, sin marca porque el artículo no tiene) e imprimible. Stock valorizado y los demás reportes de artículos siguen post-MVP |
-| G73 | **B** | Junto con G65 | Viene gratis si existen los movimientos de caja |
+| G73 | **B** | Junto con G65 | Viene gratis si existen los movimientos de caja. **Hecho en CU-10 (2026-10-26, Luca):** «Imprimir» en el resumen de la caja (la del día en vivo, la del historial y el resumen del cierre) y, en Reportes, «Ingresos, gastos y retiros» entre fechas con filtro por tipo, totales e «Imprimir» (solo el Dueño); ver punto 8 de CU-10 |
 | G74 | **D** | — | El ranking por artículo sirve para comprar, pero es post-MVP |
 | G75 | **E** | — | Sin evidencia de uso. Es decoración |
 | G76 | **D** | — | Cada uno depende de un módulo post-MVP |
