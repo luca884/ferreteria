@@ -70,7 +70,7 @@ describe('Caja (CU-10)', () => {
         provideRouter([]),
         { provide: LOCALE_ID, useValue: 'es-AR' },
         { provide: CajaService, useValue: servicio },
-        { provide: AuthService, useValue: { esDueno: signal(dueno) } },
+        { provide: AuthService, useValue: { esDueno: signal(dueno), sesion: signal({ ferreteriaNombre: 'Ferretería El Tornillo' }) } },
       ],
     }).compileComponents();
     fixture = TestBed.createComponent(Caja);

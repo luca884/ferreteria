@@ -67,3 +67,34 @@
   font-style: normal;
   color: var(--texto-tenue);
 }
+
+.titulo {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--e-3);
+}
+
+/* La ferretería y cuándo se emitió salen solo en papel; el botón, nunca. */
+.encabezado-impreso {
+  display: none;
+}
+@media print {
+  .encabezado-impreso {
+    display: block;
+    margin-bottom: var(--e-3);
+  }
+  .encabezado-impreso p {
+    margin: 0;
+  }
+  .ferreteria {
+    font-weight: 700;
+  }
+  .emitido {
+    color: #000;
+    font-size: var(--texto-sm);
+  }
+  .imprimir {
+    display: none;
+  }
+}

@@ -1,7 +1,8 @@
 import { registerLocaleData } from '@angular/common';
 import localeEsAr from '@angular/common/locales/es-AR';
-import { LOCALE_ID } from '@angular/core';
+import { LOCALE_ID, signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { AuthService } from '../../core/auth/auth.service';
 import { DetalleCaja } from './caja.models';
 import { ResumenCaja } from './resumen-caja';
 
@@ -38,7 +39,10 @@ describe('ResumenCaja (CC-025)', () => {
   async function crear(d: DetalleCaja) {
     await TestBed.configureTestingModule({
       imports: [ResumenCaja],
-      providers: [{ provide: LOCALE_ID, useValue: 'es-AR' }],
+      providers: [
+        { provide: LOCALE_ID, useValue: 'es-AR' },
+        { provide: AuthService, useValue: { sesion: signal({ ferreteriaNombre: 'Ferretería El Tornillo' }) } },
+      ],
     }).compileComponents();
     fixture = TestBed.createComponent(ResumenCaja);
     fixture.componentRef.setInput('detalle', d);
@@ -50,6 +54,34 @@ describe('ResumenCaja (CC-025)', () => {
   const lineas = () => Array.from(el().querySelectorAll<HTMLElement>('.lineas li'));
   const limpio = (e: Element | undefined | null) => (e?.textContent ?? '').replace(/\s+/g, ' ').trim();
   const linea = (nombre: string) => lineas().find((l) => limpio(l.querySelector('span')) === nombre);
+
+  describe('imprimir (G73)', () => {
+    it('el resumen es lo imprimible y «Imprimir» llama a window.print', async () => {
+      await crear(detalle());
+      const imprimir = vi.spyOn(window, 'print').mockImplementation(() => undefined);
+
+      expect(el().querySelector('section.caja-imprimible')).not.toBeNull();
+      el().querySelector<HTMLButtonElement>('button.imprimir')!.click();
+
+      expect(imprimir).toHaveBeenCalledOnce();
+      expect(limpio(el().querySelector('button.imprimir'))).toBe('Imprimir');
+    });
+
+    it('el encabezado de la hoja trae la ferretería y cuándo se emitió', async () => {
+      await crear(detalle());
+
+      const encabezado = el().querySelector('.encabezado-impreso')!;
+      expect(limpio(encabezado.querySelector('.ferreteria'))).toBe('Ferretería El Tornillo');
+      expect(limpio(encabezado.querySelector('.emitido'))).toMatch(/^Emitido el \d{2}\/\d{2}\/\d{4} \d{2}:\d{2}$/);
+    });
+
+    it('imprime lo que se ve: el botón y el encabezado no cambian los renglones del resumen', async () => {
+      await crear(detalle());
+
+      expect(limpio(linea('Efectivo esperado')!.querySelector('strong'))).toContain('6.000');
+      expect(el().querySelector('#resumen-titulo')!.textContent).toBe('Resumen de la caja');
+    });
+  });
 
   it('muestra «Ventas en cuenta corriente» con lo vendido a cuenta, junto a los otros medios', async () => {
     await crear(detalle());

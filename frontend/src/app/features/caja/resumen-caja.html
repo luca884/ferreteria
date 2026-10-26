@@ -1,5 +1,14 @@
-<section class="resumen panel" aria-labelledby="resumen-titulo">
-  <h2 id="resumen-titulo">Resumen de la caja</h2>
+<section class="resumen panel caja-imprimible" aria-labelledby="resumen-titulo">
+  <header class="encabezado-impreso">
+    @if (ferreteria(); as nombre) {
+      <p class="ferreteria">{{ nombre }}</p>
+    }
+    <p class="emitido">Emitido el {{ emitido() }}</p>
+  </header>
+  <div class="titulo">
+    <h2 id="resumen-titulo">Resumen de la caja</h2>
+    <button type="button" class="secundario chico imprimir" (click)="imprimir()">Imprimir</button>
+  </div>
   <p class="quien">
     Abrió {{ detalle().abiertaPor }} · {{ fechaHora(detalle().fechaApertura) }}
     @if (detalle().cerradaPor; as cerro) {
