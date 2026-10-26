@@ -52,7 +52,7 @@ import { FILAS_POR_PAGINA, VistaPreviaTabla } from './vista-previa-tabla';
 
 /** El backend rechaza más de 25 MB; se controla antes de subir para no gastar el pedido. */
 const MAX_BYTES = 25 * 1024 * 1024;
-const EXTENSIONES = ['.xlsx', '.xls', '.csv'];
+const EXTENSIONES = ['.xlsx', '.xls', '.csv', '.pdf'];
 /** Las advertencias se muestran de a tandas; «Ver más» suma otra. */
 const ADVERTENCIAS_POR_TANDA = 100;
 
@@ -436,7 +436,7 @@ export class Importaciones implements OnInit {
     }
     if (!EXTENSIONES.some((extension) => archivo.name.toLowerCase().endsWith(extension))) {
       this.archivo.set(null);
-      this.error.set('El archivo tiene que ser una planilla de Excel (.xlsx o .xls) o un CSV.');
+      this.error.set('El archivo tiene que ser una planilla de Excel (.xlsx o .xls), un CSV o un PDF.');
       return;
     }
     if (archivo.size > MAX_BYTES) {

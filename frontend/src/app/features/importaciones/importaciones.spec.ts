@@ -292,10 +292,18 @@ describe('Importaciones', () => {
       return archivo;
     };
 
-    it('el input de archivo acepta xlsx, xls y csv', async () => {
+    it('el input de archivo acepta xlsx, xls, csv y pdf', async () => {
       await crearComponente();
 
-      expect(q('#archivo').getAttribute('accept')).toBe('.xlsx,.xls,.csv');
+      expect(q('#archivo').getAttribute('accept')).toBe('.xlsx,.xls,.csv,.pdf');
+    });
+
+    it('la ayuda del archivo dice que acepta Excel, CSV o PDF de hasta 25 MB', async () => {
+      await crearComponente();
+
+      expect(q('app-selector-archivo .ayuda').textContent?.replace(/\s+/g, ' ')).toContain(
+        'Excel (.xlsx, .xls), CSV o PDF, hasta 25 MB.',
+      );
     });
 
     it('un archivo de más de 25 MB muestra el aviso y no llama al servicio', async () => {
@@ -324,8 +332,8 @@ describe('Importaciones', () => {
       expect(servicio.muestra).toHaveBeenCalledTimes(1);
     });
 
-    it('.xlsx, .xls y .csv se aceptan, sin importar mayúsculas', async () => {
-      for (const nombre of ['lista.xlsx', 'lista.xls', 'lista.csv', 'LISTA.XLSX']) {
+    it('.xlsx, .xls, .csv y .pdf se aceptan, sin importar mayúsculas', async () => {
+      for (const nombre of ['lista.xlsx', 'lista.xls', 'lista.csv', 'lista.pdf', 'LISTA.XLSX', 'LISTA.PDF']) {
         TestBed.resetTestingModule();
         await crearComponente();
 
@@ -335,13 +343,13 @@ describe('Importaciones', () => {
       }
     });
 
-    it('un PDF se rechaza con el aviso y no llama al servicio', async () => {
+    it('una imagen se rechaza con el aviso y no llama al servicio', async () => {
       await crearComponente();
 
-      await elegirArchivo(conTamano(1000, 'lista.pdf'));
+      await elegirArchivo(conTamano(1000, 'lista.png'));
 
       expect(q('[role="alert"]').textContent).toContain(
-        'El archivo tiene que ser una planilla de Excel (.xlsx o .xls) o un CSV.',
+        'El archivo tiene que ser una planilla de Excel (.xlsx o .xls), un CSV o un PDF.',
       );
       expect(servicio.muestra).not.toHaveBeenCalled();
       expect(q('.nombre-archivo').textContent?.trim()).toBe('Ningún archivo elegido');
@@ -2638,10 +2646,22 @@ describe('Importaciones', () => {
         expect(servicio.muestra).not.toHaveBeenCalled();
       });
 
-      it('un PDF soltado se rechaza', async () => {
+      it('un PDF soltado se acepta y trae la muestra', async () => {
         await crearComponente();
         const soltar = new Event('drop', { bubbles: true, cancelable: true });
         Object.defineProperty(soltar, 'dataTransfer', { value: { files: [new File(['x'], 'lista.pdf')] } });
+
+        q('.zona-archivo').dispatchEvent(soltar);
+        await asentar();
+
+        expect(servicio.muestra).toHaveBeenCalledTimes(1);
+        expect(q('.nombre-archivo').textContent?.trim()).toBe('lista.pdf');
+      });
+
+      it('una imagen soltada se rechaza', async () => {
+        await crearComponente();
+        const soltar = new Event('drop', { bubbles: true, cancelable: true });
+        Object.defineProperty(soltar, 'dataTransfer', { value: { files: [new File(['x'], 'lista.png')] } });
 
         q('.zona-archivo').dispatchEvent(soltar);
         await asentar();

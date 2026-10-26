@@ -65,13 +65,13 @@ Son 12 casos de uso (CU-01 a CU-12), agrupados en cinco módulos: Configuración
 
 **CU-04 Importar lista de precios del proveedor** (Dueño) — el caso más importante del sistema
 
-1. Elige el proveedor y sube el archivo. Los proveedores mandan las listas en **Excel y/o PDF**: primero se soporta Excel/CSV; el PDF se extrae a tabla y pasa por la misma vista previa (ver nota abajo).
+1. Elige el proveedor y sube el archivo. Los proveedores mandan las listas en **Excel y/o PDF**: se aceptan Excel (.xlsx, .xls), CSV y PDF con texto; el PDF se extrae a tabla y pasa por la misma vista previa (ver nota abajo).
 2. Mapea columnas una sola vez (código, descripción, costo); el mapeo queda guardado para ese proveedor.
 3. El sistema cruza por código del proveedor y muestra una vista previa: cuántos suben, cuántos bajan, cuántos son nuevos, cuántos no están en la lista.
 4. El dueño confirma y se actualizan los costos y precios en una sola transacción.
    - Alternativo: artículos nuevos → se pueden dar de alta en bloque con el margen por defecto del rubro.
 
-> **Listas en PDF (2026-10-11):** varias listas llegan solo en PDF. La extracción de tablas de un PDF depende del formato de cada proveedor, así que se implementa después de Excel/CSV, con muestras reales, y siempre pasa por la vista previa antes de aplicar.
+> **Listas en PDF (2026-10-11, hecho el 2026-10-26):** varias listas llegan solo en PDF. Un PDF con texto se lee como **una sola hoja** («PDF») con todas las páginas seguidas: cada línea es una fila y las columnas salen de los huecos verticales que comparten las líneas de la tabla, así que el mapeo, la muestra y la vista previa son los mismos que con un Excel. Las líneas sueltas (títulos, rubros, encabezados y pies de página, notas) van enteras a la primera columna y la vista previa las saltea como títulos; el encabezado repetido en cada página también se saltea. Un importe con «US$» o «U$S» adelante se lee como el número (la moneda sale de la columna de moneda o del mapeo). Probado con las dos listas reales: LISTA 336 (152 páginas, 7 columnas, sus 4.139 artículos) y M-S (27 páginas, 1.167 artículos). Un PDF **escaneado** no tiene texto y da «El PDF no tiene texto para leer. Pedile al proveedor la lista en Excel o en un PDF que no sea escaneado.» (no hay OCR); uno con contraseña o dañado da el mismo aviso que un Excel. Como con el Excel, hay topes para no agotar la memoria del servidor (lo que se inflan los streams del texto y la cantidad de palabras): pasarlos da «La lista es demasiado grande para leerla. Dividila en archivos más chicos.». Quedan afuera las páginas rotadas o a dos columnas.
 
 **CU-05 Actualizar precios masivamente** (Dueño)
 
