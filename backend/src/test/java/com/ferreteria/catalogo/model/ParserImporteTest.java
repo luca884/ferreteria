@@ -77,6 +77,27 @@ class ParserImporteTest {
         assertThat(ParserImporte.parsear(texto(entrada))).isEmpty();
     }
 
+    @ParameterizedTest(name = "\"{0}\" -> {1}")
+    @CsvSource(delimiter = '|', value = {
+        "US$ 4,00|4.00",
+        "US$ 662.286,00|662286.00",
+        "U$S 12,50|12.50",
+        "us$ 3|3",
+        "US$4|4",
+    })
+    @DisplayName("un importe en dolares con US$ o U$S adelante se lee como el numero, igual que con $")
+    void conSignoDeDolar(String entrada, String esperado) {
+        assertThat(ParserImporte.parsear(texto(entrada))).hasValueSatisfying(
+            valor -> assertThat(valor).isEqualByComparingTo(esperado));
+    }
+
+    @ParameterizedTest(name = "\"{0}\" -> vacio")
+    @ValueSource(strings = {"US$", "U$S", "12 US$", "USD 4,00"})
+    @DisplayName("el signo de dolar solo, o en otro lugar que adelante, no es un importe")
+    void signoDeDolarSinImporte(String entrada) {
+        assertThat(ParserImporte.parsear(texto(entrada))).isEmpty();
+    }
+
     @Test
     @DisplayName("la celda vacia devuelve vacio")
     void celdaVacia() {
