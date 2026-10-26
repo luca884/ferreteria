@@ -259,6 +259,52 @@ class MedicionImportacionReal extends CotizacionTestBase {
                 "select count(*) from articulo where ferreteria_id = ? and ultima_importacion_id is not null", ferreteria));
     }
 
+    // ---- PDF (CU-04, listas en PDF) ----
+
+    @Test
+    void lista336PdfMuestraVistaPreviaYAplicar() throws Exception {
+        medirPdf("LISTA 336.pdf");
+    }
+
+    @Test
+    void msPdfMuestraVistaPreviaYAplicar() throws Exception {
+        medirPdf("DOC-20261002-WA0109.pdf");
+    }
+
+    /** Muestra, vista previa con la propuesta de columnas y aplicar creando todo, con la lista en PDF. */
+    private void medirPdf(String nombre) throws Exception {
+        byte[] contenido = Files.readAllBytes(Path.of(System.getProperty("medicion.listas"), nombre));
+        linea("archivo " + nombre + " " + contenido.length + " bytes; maxMemory "
+                + Runtime.getRuntime().maxMemory() / 1_048_576 + " MB");
+
+        Object[] m = medir(() -> muestra(contenido, nombre));
+        Respuesta muestra = (Respuesta) m[0];
+        linea("muestra: " + ((Medida) m[1]).texto());
+        resumen("muestra", muestra);
+        if (muestra.estado() >= 300) {
+            return;
+        }
+        JsonNode hoja = muestra.json(objectMapper).get("hojas").get(0);
+        JsonNode propuesta = muestra.json(objectMapper).get("propuesta");
+        linea("hoja=" + hoja.get("nombre") + " columnas=" + hoja.get("columnas") + " filaEncabezado="
+                + hoja.get("filaEncabezado") + " propuesta=" + propuesta);
+        ObjectNode datos = datosDe(propuesta);
+
+        m = medir(() -> vistaPrevia(contenido, nombre, datos));
+        Respuesta previa = (Respuesta) m[0];
+        linea("vista previa: " + ((Medida) m[1]).texto());
+        resumen("vista previa", previa);
+        if (previa.estado() >= 300) {
+            return;
+        }
+        previa.json(objectMapper).get("errores").forEach(error -> linea("error " + error));
+        m = medir(() -> aplicar(contenido, nombre, datos, previa.json(objectMapper).get("conteos")));
+        linea("APLICAR: " + ((Medida) m[1]).texto() + " | " + sql());
+        resumen("aplicar", (Respuesta) m[0]);
+        linea("articulos creados=" + contar("select count(*) from articulo where ferreteria_id = ?", ferreteria)
+                + " en USD=" + contar("select count(*) from articulo where ferreteria_id = ? and moneda = 'USD'", ferreteria));
+    }
+
     // ---- M-S .xls ----
 
     @Test
