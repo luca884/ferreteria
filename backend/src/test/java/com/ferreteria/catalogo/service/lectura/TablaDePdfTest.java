@@ -142,6 +142,24 @@ class TablaDePdfTest {
     }
 
     @Test
+    void unTextoQuePisaElBordeDeLaColumnaSiguienteSigueEnSuColumna() {
+        // Como en M-S: «Familia: 001 - Pasadores» comparte el renglon con «Unidad.» y «x Caja» del encabezado, asi que
+        // la linea es de varios bloques; «001» ya pisa la columna de la descripcion y lo que sigue pegado es del titulo.
+        List<String> descripciones = List.of("Pasador Cerrojo", "Bisagra Munich", "Tarugo nylon", "Candado bronce");
+        List<PalabraPdf> palabras = new ArrayList<>(
+            linea(1, 10, 0, "Familia: 001 - Pasadores", 300, "Unidad.", 350, "x Caja"));
+        for (int i = 0; i < 100; i++) {
+            palabras.addAll(linea(1, 25 + i * 15, 0, "PA0" + (3000 + i), 38, descripciones.get(i % 4), 300, "1,532.44",
+                350, "12"));
+        }
+
+        List<FilaLeida> filas = TablaDePdf.armar(palabras);
+
+        assertThat(textos(filas.get(0))).containsExactly("Familia: 001 - Pasadores", "", "Unidad.", "x Caja");
+        assertThat(textos(filas.get(1))).containsExactly("PA03000", "Pasador Cerrojo", "1,532.44", "12");
+    }
+
+    @Test
     void laColaDeUnTextoLargoQuedaEnSuColumnaAunqueEntreEnElHueco() {
         List<PalabraPdf> palabras = new ArrayList<>();
         for (int i = 0; i < 100; i++) {

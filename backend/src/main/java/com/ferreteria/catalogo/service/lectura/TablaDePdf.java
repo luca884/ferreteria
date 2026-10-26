@@ -21,7 +21,8 @@ import java.util.regex.Pattern;
  *   <li>una columna con texto en menos del 5 % de las lineas (el encabezado de cada pagina, mas ancho que sus valores)
  *       se une con la vecina mas cercana;</li>
  *   <li>una palabra que arranca en un hueco sigue en la columna de la anterior si va pegada a ella (la cola de una
- *       descripcion larga) y, si no, abre la columna siguiente (un importe largo alineado a la derecha);</li>
+ *       descripcion larga) y, si no, abre la columna siguiente (un importe largo alineado a la derecha); tambien sigue
+ *       si la anterior ya pisaba la columna siguiente (un titulo que atraviesa columnas);</li>
  *   <li>una columna que solo trae el signo de moneda se une con el importe de su derecha.</li>
  * </ul>
  * Una linea de un solo bloque (titulo, rubro, encabezado o pie de pagina) va entera a la primera columna, asi la zona
@@ -239,7 +240,10 @@ final class TablaDePdf {
             if (enHueco) {
                 indice = -indice - 1;
             }
-            if (enHueco && anterior != null && pegadas(anterior, palabra)) {
+            // Pegada a la anterior, sigue en su columna si arranca en un hueco (la cola de un texto largo) o si la
+            // anterior ya pisaba esta columna (un titulo que atraviesa columnas, como «Familia: 001 - Pasadores»).
+            if (anterior != null && pegadas(anterior, palabra)
+                && (enHueco || anterior.derecha() > columnas.get(indice).inicio)) {
                 indice = actual;
             }
             actual = Math.max(actual, indice);
