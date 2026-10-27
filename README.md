@@ -29,6 +29,8 @@ Todo corre en Railway, en el proyecto `ferreteria` (región us-east), con tres s
 - **Frontend**: Caddy sirve el build de Angular y reenvía `/api/*` al backend por la red privada (`backend.railway.internal:8080`, se cambia con `BACKEND_HOST`). El front le pide la API a `/api` en su mismo origen; en local hace lo mismo el proxy de `ng serve` (`frontend/proxy.conf.json`).
 - **Primer usuario**: la base de producción arranca sin usuarios. El primer `SUPER_ADMIN` se crea una sola vez con un `INSERT` en `usuario` (`ferreteria_id` NULL, rol `SUPER_ADMIN`) y el hash de `htpasswd -nBC 10 "" | tr -d ':\n'` (sin el `tr`, la salida empieza con `:` y el login da 401).
 
+Antes de cada deploy, probá la imagen real del backend: `cd backend && ./mvnw test -Pimagen`. Construye `backend/Dockerfile` con `docker build`, la levanta en perfil `prod` contra un MySQL 8.4 vacío y verifica health, zona horaria, login y la lectura de un PDF desde el jar. Tarda unos minutos la primera vez; después Docker reusa las capas (la imagen queda como `ferreteria-api:imagen-test`). `./mvnw test` no lo corre.
+
 ```bash
 railway up ./backend --path-as-root --service backend --ci
 railway up ./frontend --path-as-root --service frontend --ci
