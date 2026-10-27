@@ -6,6 +6,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.ferreteria.clientes.CuentaCorrienteTestBase;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
@@ -543,9 +544,11 @@ class AnulacionIntegrationTest extends CuentaCorrienteTestBase {
         long reciboA = cobrar(a.dueno(this), clienteA, "EFECTIVO", "100").get("id").asLong();
         long reciboB = cobrar(b.dueno(this), clienteB, "EFECTIVO", "75").get("id").asLong();
 
-        String cuerpo = texto(anular(a.dueno(this), reciboB).andExpect(status().isNotFound()));
+        JsonNode error = json(anular(a.dueno(this), reciboB).andExpect(status().isNotFound()));
+        ((ObjectNode) error).remove("timestamp"); // la hora puede traer «75» por azar
 
-        assertThat(cuerpo).contains("Recibo no encontrado").doesNotContain("75").doesNotContain("Cliente");
+        assertThat(error.get("message").asText()).isEqualTo("Recibo no encontrado");
+        assertThat(error.toString()).doesNotContain("75").doesNotContain("Cliente");
         getResult("/api/recibos/" + reciboB, a.dueno(this)).andExpect(status().isNotFound());
         sinCambios(clienteB, reciboB, "-75");
         assertThat(saldo(clienteA)).isEqualByComparingTo("-100");
