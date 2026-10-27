@@ -2,6 +2,10 @@
   <h1>Cambiar mi contraseña</h1>
 </app-barra-acciones>
 
+@if (debeCambiar()) {
+  <p class="alerta advertencia" role="status">Tu contraseña la eligió otra persona. Cambiala para seguir.</p>
+}
+
 <p class="ayuda">Ingresá tu contraseña actual y elegí una nueva de 8 a 72 caracteres.</p>
 
 @if (aviso(); as mensaje) {

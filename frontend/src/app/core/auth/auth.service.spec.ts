@@ -71,6 +71,47 @@ describe('AuthService', () => {
     expect(localStorage.getItem('ferreteria.token')).toBeNull();
   });
 
+  describe('marca de cambio obligatorio de contraseña', () => {
+    const conMarca: LoginResponse = { ...respuesta, sesion: { ...respuesta.sesion, debeCambiarContrasena: true } };
+
+    it('sale de la sesión: el login la prende y una sesión sin el dato (guardada antes) no la tiene', () => {
+      expect(service.debeCambiarContrasena()).toBe(false);
+
+      service.login('dueno@tornillo.demo', 'demo1234').subscribe();
+      http.expectOne((r) => r.url.endsWith('/auth/login')).flush(conMarca);
+      expect(service.debeCambiarContrasena()).toBe(true);
+
+      service.logout();
+      service.login('dueno@tornillo.demo', 'demo1234').subscribe();
+      http.expectOne((r) => r.url.endsWith('/auth/login')).flush(respuesta);
+      expect(service.debeCambiarContrasena()).toBe(false);
+    });
+
+    it('al cambiar la contraseña se apaga, en el signal y en la sesión guardada', () => {
+      service.login('dueno@tornillo.demo', 'demo1234').subscribe();
+      http.expectOne((r) => r.url.endsWith('/auth/login')).flush(conMarca);
+
+      service.cambiarContrasena('vieja1234', 'nueva1234').subscribe();
+      http.expectOne((r) => r.url.endsWith('/auth/password')).flush(null, { status: 204, statusText: 'No Content' });
+
+      expect(service.debeCambiarContrasena()).toBe(false);
+      expect(JSON.parse(localStorage.getItem('ferreteria.sesion')!).debeCambiarContrasena).toBe(false);
+      expect(service.sesion()?.nombre).toBe('Dueno El Tornillo');
+    });
+
+    it('si el cambio falla, la marca sigue prendida', () => {
+      service.login('dueno@tornillo.demo', 'demo1234').subscribe();
+      http.expectOne((r) => r.url.endsWith('/auth/login')).flush(conMarca);
+
+      service.cambiarContrasena('mala', 'nueva1234').subscribe({ error: () => undefined });
+      http
+        .expectOne((r) => r.url.endsWith('/auth/password'))
+        .flush({ errors: { passwordActual: 'x' } }, { status: 400, statusText: 'Bad Request' });
+
+      expect(service.debeCambiarContrasena()).toBe(true);
+    });
+  });
+
   describe('cambiarContrasena', () => {
     it('hace PUT /auth/password con la actual y la nueva', () => {
       let listo = false;

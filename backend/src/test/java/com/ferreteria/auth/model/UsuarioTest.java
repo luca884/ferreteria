@@ -73,13 +73,45 @@ class UsuarioTest {
     }
 
     @Test
-    @DisplayName("cambiarPasswordHash reemplaza el hash")
-    void cambiarPasswordHashMuta() {
+    @DisplayName("un usuario recién creado por otra persona queda marcado para cambiar la contraseña")
+    void nuevoQuedaMarcado() {
         Usuario u = Usuario.nuevo(5L, "a@b.com", "hash", "Ana", Rol.VENDEDOR);
 
-        u.cambiarPasswordHash("otro");
+        assertThat(u.isDebeCambiarContrasena()).isTrue();
+    }
+
+    @Test
+    @DisplayName("cambiarPropiaContrasena reemplaza el hash y apaga la marca")
+    void cambiarPropiaContrasenaApagaLaMarca() {
+        Usuario u = Usuario.nuevo(5L, "a@b.com", "hash", "Ana", Rol.VENDEDOR);
+
+        u.cambiarPropiaContrasena("otro");
 
         assertThat(u.getPasswordHash()).isEqualTo("otro");
+        assertThat(u.isDebeCambiarContrasena()).isFalse();
+    }
+
+    @Test
+    @DisplayName("cambiarPropiaContrasena nunca prende la marca")
+    void cambiarPropiaContrasenaNoLaPrende() {
+        Usuario u = Usuario.nuevo(5L, "a@b.com", "hash", "Ana", Rol.VENDEDOR);
+        u.cambiarPropiaContrasena("uno");
+
+        u.cambiarPropiaContrasena("dos");
+
+        assertThat(u.isDebeCambiarContrasena()).isFalse();
+    }
+
+    @Test
+    @DisplayName("resetearContrasena reemplaza el hash y prende la marca")
+    void resetearContrasenaPrendeLaMarca() {
+        Usuario u = Usuario.nuevo(5L, "a@b.com", "hash", "Ana", Rol.VENDEDOR);
+        u.cambiarPropiaContrasena("propio");
+
+        u.resetearContrasena("otro");
+
+        assertThat(u.getPasswordHash()).isEqualTo("otro");
+        assertThat(u.isDebeCambiarContrasena()).isTrue();
     }
 
     @Test

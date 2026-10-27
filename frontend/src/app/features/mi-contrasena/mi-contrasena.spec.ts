@@ -1,4 +1,5 @@
 import { HttpErrorResponse } from '@angular/common/http';
+import { WritableSignal, signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { Router } from '@angular/router';
 import { of, throwError } from 'rxjs';
@@ -8,14 +9,26 @@ import { MiContrasena } from './mi-contrasena';
 
 describe('MiContrasena', () => {
   let fixture: ComponentFixture<MiContrasena>;
-  let auth: { cambiarContrasena: ReturnType<typeof vi.fn>; logout: ReturnType<typeof vi.fn> };
+  let auth: {
+    cambiarContrasena: ReturnType<typeof vi.fn>;
+    logout: ReturnType<typeof vi.fn>;
+    debeCambiarContrasena: WritableSignal<boolean>;
+  };
   let navegar: ReturnType<typeof vi.fn>;
 
   const errorHttp = (status: number, message: string, errors?: Record<string, string>) =>
     new HttpErrorResponse({ status, error: { status, message, errors } });
 
-  async function abrir() {
-    auth = { cambiarContrasena: vi.fn(() => of(undefined)), logout: vi.fn() };
+  async function abrir(debeCambiar = false) {
+    auth = {
+      cambiarContrasena: vi.fn(() => {
+        // Como el servicio real: al cambiarla con éxito, la marca de la sesión se apaga.
+        auth.debeCambiarContrasena.set(false);
+        return of(undefined);
+      }),
+      logout: vi.fn(),
+      debeCambiarContrasena: signal(debeCambiar),
+    };
     navegar = vi.fn();
     await TestBed.configureTestingModule({
       imports: [MiContrasena],
@@ -121,5 +134,45 @@ describe('MiContrasena', () => {
     await enviar('otra12345', 'nueva5678');
 
     expect(el().querySelector('.alerta.exito')).toBeNull();
+  });
+
+  describe('con la contraseña elegida por otra persona', () => {
+    const AVISO = 'Tu contraseña la eligió otra persona. Cambiala para seguir.';
+
+    it('muestra el aviso', async () => {
+      await abrir(true);
+
+      expect(el().querySelector('.alerta.advertencia')?.textContent?.trim()).toBe(AVISO);
+    });
+
+    it('al cambiarla manda al inicio del rol (la raíz redirige con inicioPorRol)', async () => {
+      await abrir(true);
+
+      await enviar();
+
+      expect(auth.cambiarContrasena).toHaveBeenCalledWith('vieja1234', 'nueva1234');
+      expect(navegar).toHaveBeenCalledWith('/');
+    });
+
+    it('si el cambio falla no navega y el aviso sigue', async () => {
+      await abrir(true);
+      auth.cambiarContrasena.mockReturnValue(
+        throwError(() => errorHttp(400, 'Datos inválidos', { passwordActual: 'La contraseña actual no es correcta.' })),
+      );
+
+      await enviar();
+
+      expect(navegar).not.toHaveBeenCalled();
+      expect(el().querySelector('.alerta.advertencia')?.textContent?.trim()).toBe(AVISO);
+    });
+
+    it('sin la marca no hay aviso ni redirección al cambiarla', async () => {
+      await abrir(false);
+
+      await enviar();
+
+      expect(el().querySelector('.alerta.advertencia')).toBeNull();
+      expect(navegar).not.toHaveBeenCalled();
+    });
   });
 });

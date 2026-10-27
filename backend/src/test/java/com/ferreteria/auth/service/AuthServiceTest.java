@@ -213,4 +213,36 @@ class AuthServiceTest {
 
         assertThat(usuario.getPasswordHash()).isEqualTo("$2a$10$nuevo");
     }
+
+    @Test
+    @DisplayName("cambiar la propia contraseña apaga la marca de cambio obligatorio")
+    void cambiarContrasenaApagaLaMarca() {
+        Usuario usuario = yo();
+        when(encoder.matches("buena", "$2a$10$actual")).thenReturn(true);
+        when(encoder.encode("nueva-clave-99")).thenReturn("$2a$10$nuevo");
+        assertThat(usuario.isDebeCambiarContrasena()).isTrue();
+
+        auth.cambiarContrasena(YO, "buena", "nueva-clave-99");
+
+        assertThat(usuario.isDebeCambiarContrasena()).isFalse();
+    }
+
+    @Test
+    @DisplayName("el login y la sesión devuelven la marca del usuario")
+    void sesionConLaMarca() {
+        Usuario usuario = Usuario.nuevo(3L, "u@demo.local", "$2a$10$real", "U", Rol.VENDEDOR);
+        when(usuarios.findByEmailIgnoreCase("u@demo.local")).thenReturn(Optional.of(usuario));
+        when(usuarios.findById(7L)).thenReturn(Optional.of(usuario));
+        when(encoder.matches("demo1234", "$2a$10$real")).thenReturn(true);
+        Ferreteria ferreteria = mock(Ferreteria.class);
+        when(ferreteria.isActiva()).thenReturn(true);
+        when(ferreterias.findById(3L)).thenReturn(Optional.of(ferreteria));
+
+        assertThat(auth.login(new LoginRequest("u@demo.local", "demo1234")).sesion().debeCambiarContrasena()).isTrue();
+        assertThat(auth.sesionActual(new AuthUser(7L, "u@demo.local", Rol.VENDEDOR, 3L)).debeCambiarContrasena()).isTrue();
+
+        usuario.cambiarPropiaContrasena("otro");
+
+        assertThat(auth.sesionActual(new AuthUser(7L, "u@demo.local", Rol.VENDEDOR, 3L)).debeCambiarContrasena()).isFalse();
+    }
 }

@@ -347,6 +347,28 @@ class UsuariosIntegrationTest extends UsuariosTestBase {
     }
 
     @Test
+    @DisplayName("el Dueño crea un usuario y le resetea la contraseña: queda marcado para cambiarla, y al cambiarla la marca se apaga")
+    void marcaAlCrearYResetear() throws Exception {
+        String email = unico("v") + "@usuarios.test";
+        long id = crearVendedor(email);
+        intentarLogin(email, "demo1234").andExpect(jsonPath("$.sesion.debeCambiarContrasena", is(true)));
+
+        putJson("/api/auth/password", login(email), json("passwordActual", "demo1234", "passwordNueva", "clave-propia-99"))
+                .andExpect(status().isNoContent());
+        assertThat(marcaDe(id)).isFalse();
+
+        putJson("/api/usuarios/" + id + "/password", dueno, json("password", "clave-nueva-99"))
+                .andExpect(status().isNoContent());
+
+        assertThat(marcaDe(id)).isTrue();
+        intentarLogin(email, "clave-nueva-99").andExpect(jsonPath("$.sesion.debeCambiarContrasena", is(true)));
+    }
+
+    private boolean marcaDe(long id) {
+        return jdbc.queryForObject("select debe_cambiar_contrasena from usuario where id = ?", Boolean.class, id);
+    }
+
+    @Test
     @DisplayName("resetear con una contraseña inválida da 400 en password")
     void resetearInvalida() throws Exception {
         long id = crearVendedor(unico("v") + "@usuarios.test");

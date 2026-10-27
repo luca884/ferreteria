@@ -20,6 +20,8 @@ export class AuthService {
   readonly autenticado = computed(() => this._token() !== null);
   readonly esDueno = computed(() => this._sesion()?.rol === 'DUENO');
   readonly esSuperAdmin = computed(() => this._sesion()?.rol === 'SUPER_ADMIN');
+  /** La contraseña actual la eligió otra persona (alta o reseteo): hay que cambiarla antes de usar el resto. */
+  readonly debeCambiarContrasena = computed(() => this._sesion()?.debeCambiarContrasena === true);
 
   login(email: string, password: string): Observable<LoginResponse> {
     return this.http
@@ -36,10 +38,12 @@ export class AuthService {
 
   /**
    * Cambia la contraseña propia. Una actual incorrecta vuelve como 400 con la clave `passwordActual`, nunca como 401:
-   * el interceptor desloguea ante cualquier 401.
+   * el interceptor desloguea ante cualquier 401. Si sale bien, la marca de cambio obligatorio de la sesión se apaga.
    */
   cambiarContrasena(passwordActual: string, passwordNueva: string): Observable<void> {
-    return this.http.put<void>(`${environment.apiUrl}/auth/password`, { passwordActual, passwordNueva });
+    return this.http
+      .put<void>(`${environment.apiUrl}/auth/password`, { passwordActual, passwordNueva })
+      .pipe(tap(() => this.apagarMarcaDeContrasena()));
   }
 
   /** Vuelve a pedir la sesión al servidor (por ejemplo después de editar el propio nombre). Si falla, la local queda como estaba. */
@@ -50,6 +54,14 @@ export class AuthService {
         escribir(SESION_KEY, JSON.stringify(sesion));
       }),
     );
+  }
+
+  private apagarMarcaDeContrasena(): void {
+    const actual = this._sesion();
+    if (!actual) return;
+    const sesion = { ...actual, debeCambiarContrasena: false };
+    this._sesion.set(sesion);
+    escribir(SESION_KEY, JSON.stringify(sesion));
   }
 
   logout(): void {

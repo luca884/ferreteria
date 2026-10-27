@@ -105,6 +105,7 @@ class UsuarioServiceTest {
         assertThat(creado.getRol()).isEqualTo(Rol.VENDEDOR);
         assertThat(creado.getPasswordHash()).isEqualTo("hash-nuevo");
         assertThat(creado.isActivo()).isTrue();
+        assertThat(creado.isDebeCambiarContrasena()).isTrue();
     }
 
     @Test
@@ -382,12 +383,14 @@ class UsuarioServiceTest {
     @DisplayName("resetear la contraseña hashea la nueva y la guarda en el usuario")
     void resetear() {
         Usuario u = usuario(Rol.VENDEDOR, true);
+        u.cambiarPropiaContrasena("propio");
         existe(7, u);
 
         servicio.resetearContrasena(7L, "otraclave99");
 
         verify(encoder).encode("otraclave99");
         assertThat(u.getPasswordHash()).isEqualTo("hash-nuevo");
+        assertThat(u.isDebeCambiarContrasena()).isTrue();
         verify(usuarios).saveAndFlush(u);
     }
 

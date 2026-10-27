@@ -105,7 +105,7 @@ public class UsuarioService {
     public void resetearContrasena(Long id, String nueva) {
         Usuario usuario = obtener(id);
         PoliticaDeContrasena.validar("password", nueva);
-        usuario.cambiarPasswordHash(passwordEncoder.encode(nueva));
+        usuario.resetearContrasena(passwordEncoder.encode(nueva));
         guardar(usuario);
     }
 

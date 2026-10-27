@@ -98,6 +98,7 @@ class UsuariosParaPlataformaImplTest {
         assertThat(u.getNombre()).isEqualTo("Ana");
         assertThat(u.getEmail()).isEqualTo("ana@tienda.com");
         assertThat(u.getPasswordHash()).isEqualTo("hash-nuevo");
+        assertThat(u.isDebeCambiarContrasena()).isTrue();
     }
 
     @Test
@@ -171,10 +172,12 @@ class UsuariosParaPlataformaImplTest {
     @DisplayName("resetear cambia el hash del Dueño y devuelve true")
     void resetear() {
         Usuario d = dueno(9L, "d@x.com");
+        d.cambiarPropiaContrasena("propio");
         when(usuarios.duenoDe(5L, 9L)).thenReturn(Optional.of(d));
 
         assertThat(puerto.resetearContrasenaDeDueno(5L, 9L, "clave1234")).isTrue();
         assertThat(d.getPasswordHash()).isEqualTo("hash-nuevo");
+        assertThat(d.isDebeCambiarContrasena()).isTrue();
         verify(usuarios).saveAndFlush(d);
     }
 

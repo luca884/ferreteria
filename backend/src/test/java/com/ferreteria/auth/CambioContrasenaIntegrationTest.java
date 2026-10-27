@@ -38,6 +38,32 @@ class CambioContrasenaIntegrationTest extends UsuariosTestBase {
     }
 
     @Test
+    @DisplayName("cambiar la propia contraseña nunca prende la marca: un usuario sin marca sigue sin ella")
+    void cambiarLaPropiaNoPrendeLaMarca() throws Exception {
+        intentarLogin(email, "demo1234").andExpect(jsonPath("$.sesion.debeCambiarContrasena", is(false)));
+
+        cambiar(token, json("passwordActual", "demo1234", "passwordNueva", "clave-nueva-99")).andExpect(status().isNoContent());
+
+        intentarLogin(email, "clave-nueva-99").andExpect(jsonPath("$.sesion.debeCambiarContrasena", is(false)));
+        assertThat(marca()).isFalse();
+    }
+
+    @Test
+    @DisplayName("con la marca prendida, el login y /api/auth/me la devuelven, el resto de la API sigue andando y cambiarla la apaga")
+    void marcaEnLaSesion() throws Exception {
+        jdbc.update("update usuario set debe_cambiar_contrasena = true where email = ?", email);
+        intentarLogin(email, "demo1234").andExpect(status().isOk())
+                .andExpect(jsonPath("$.sesion.debeCambiarContrasena", is(true)));
+        getResult("/api/auth/me", token).andExpect(jsonPath("$.debeCambiarContrasena", is(true)));
+        getResult("/api/rubros", token).andExpect(status().isOk());
+
+        cambiar(token, json("passwordActual", "demo1234", "passwordNueva", "clave-nueva-99")).andExpect(status().isNoContent());
+
+        getResult("/api/auth/me", token).andExpect(jsonPath("$.debeCambiarContrasena", is(false)));
+        assertThat(marca()).isFalse();
+    }
+
+    @Test
     @DisplayName("con la actual incorrecta da 400 en passwordActual y el mismo token sigue sirviendo")
     void actualIncorrecta() throws Exception {
         cambiar(token, json("passwordActual", "equivocada", "passwordNueva", "clave-nueva-99"))
@@ -106,6 +132,10 @@ class CambioContrasenaIntegrationTest extends UsuariosTestBase {
                         .content(json("passwordActual", "demo1234", "passwordNueva", "clave-nueva-99")))
                 .andExpect(status().isUnauthorized());
         assertThat(jdbcHash()).isEqualTo(HASH_DEMO);
+    }
+
+    private boolean marca() {
+        return jdbc.queryForObject("select debe_cambiar_contrasena from usuario where email = ?", Boolean.class, email);
     }
 
     private String jdbcHash() {

@@ -94,7 +94,7 @@ public class UsuariosParaPlataformaImpl implements UsuariosParaPlataforma {
             return false;
         }
         PoliticaDeContrasena.validar("password", password);
-        dueno.get().cambiarPasswordHash(passwordEncoder.encode(password));
+        dueno.get().resetearContrasena(passwordEncoder.encode(password));
         usuarios.saveAndFlush(dueno.get());
         return true;
     }

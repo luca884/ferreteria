@@ -48,6 +48,13 @@ public class Usuario {
     @Column(name = "tope_descuento", precision = 5, scale = 2)
     private BigDecimal topeDescuento;
 
+    /**
+     * Su contraseña la eligió otra persona (al crearlo o al resetearla): el frontend le pide cambiarla antes de usar
+     * cualquier pantalla. Cambiar la propia contraseña la apaga y nunca la prende. El backend no bloquea otros endpoints.
+     */
+    @Column(name = "debe_cambiar_contrasena", nullable = false)
+    private boolean debeCambiarContrasena;
+
     @Column(name = "creado_en", nullable = false, updatable = false)
     private LocalDateTime creadoEn = HoraArgentina.ahora();
 
@@ -70,7 +77,9 @@ public class Usuario {
             throw new IllegalArgumentException("Un usuario de ferretería necesita ferretería");
         }
         exigirRolDeFerreteria(rol);
-        return new Usuario(ferreteriaId, email, passwordHash, nombre, rol);
+        Usuario usuario = new Usuario(ferreteriaId, email, passwordHash, nombre, rol);
+        usuario.debeCambiarContrasena = true;
+        return usuario;
     }
 
     public void actualizar(String nombre, String email, Rol rol) {
@@ -90,8 +99,16 @@ public class Usuario {
         this.activo = activo;
     }
 
-    public void cambiarPasswordHash(String passwordHash) {
+    /** El titular cambia la suya: la contraseña pasa a ser una que eligió él. */
+    public void cambiarPropiaContrasena(String passwordHash) {
         this.passwordHash = passwordHash;
+        this.debeCambiarContrasena = false;
+    }
+
+    /** Otra persona (el super admin o el Dueño) le fija una contraseña: tiene que cambiarla al entrar. */
+    public void resetearContrasena(String passwordHash) {
+        this.passwordHash = passwordHash;
+        this.debeCambiarContrasena = true;
     }
 
     private static void exigirRolDeFerreteria(Rol rol) {
@@ -107,6 +124,7 @@ public class Usuario {
     public String getNombre() { return nombre; }
     public Rol getRol() { return rol; }
     public boolean isActivo() { return activo; }
+    public boolean isDebeCambiarContrasena() { return debeCambiarContrasena; }
     public BigDecimal getTopeDescuento() { return topeDescuento; }
     public LocalDateTime getCreadoEn() { return creadoEn; }
 }

@@ -1,5 +1,6 @@
 import { Routes } from '@angular/router';
 import { authGuard } from './core/auth/auth.guard';
+import { contrasenaGuard } from './core/auth/contrasena.guard';
 import { inicioPorRol } from './core/auth/inicio-por-rol';
 
 /** Título de la pestaña: la pantalla primero, para distinguir pestañas abiertas en paralelo. */
@@ -14,6 +15,8 @@ export const routes: Routes = [
   {
     path: '',
     canActivate: [authGuard],
+    // Con la contraseña elegida por otra persona, todo lo del shell lleva a «Mi contraseña» (menos ella misma).
+    canActivateChild: [contrasenaGuard],
     loadComponent: () => import('./layout/shell').then((m) => m.Shell),
     children: [
       { path: '', pathMatch: 'full', redirectTo: inicioPorRol },

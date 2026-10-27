@@ -16,6 +16,8 @@ export interface Sesion {
   ferreteriaNombre: string | null;
   /** CU-07: el descuento máximo del usuario en el mostrador; null = sin tope. Ausente en una sesión guardada antes. */
   topeDescuento?: number | null;
+  /** Su contraseña la eligió otra persona: hasta que la cambie, toda pantalla lleva a «Mi contraseña». Ausente en una sesión guardada antes. */
+  debeCambiarContrasena?: boolean;
 }
 
 export interface LoginResponse {

@@ -224,6 +224,24 @@ class FerreteriasAdminIntegrationTest extends PlataformaTestBase {
     }
 
     @Test
+    @DisplayName("el Dueño que crea el super admin y el que resetea quedan marcados para cambiar la contraseña")
+    void marcaAlCrearYResetearDueno() throws Exception {
+        String email = emailNuevo();
+        long id = altaOk(cuitNuevo(), email);
+        String sesion = "$.sesion.debeCambiarContrasena";
+        intentarLogin(email, "demo1234").andExpect(jsonPath(sesion, is(true)));
+
+        putJson("/api/auth/password", login(email), json("passwordActual", "demo1234", "passwordNueva", "clave-propia-99"))
+                .andExpect(status().isNoContent());
+        intentarLogin(email, "clave-propia-99").andExpect(jsonPath(sesion, is(false)));
+
+        putJson(BASE + "/" + id + "/duenos/" + duenoDe(id) + "/password", admin, json("password", "nueva-clave-1"))
+                .andExpect(status().isNoContent());
+
+        intentarLogin(email, "nueva-clave-1").andExpect(jsonPath(sesion, is(true)));
+    }
+
+    @Test
     @DisplayName("reset: un Vendedor, el Dueño de otra ferretería o un id inexistente dan 404; una contraseña mala, 400 en password")
     void resetInvalido() throws Exception {
         long id = altaOk(cuitNuevo(), emailNuevo());

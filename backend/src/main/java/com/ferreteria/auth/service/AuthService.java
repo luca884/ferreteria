@@ -91,7 +91,7 @@ public class AuthService {
             throw new DatosInvalidosException(Map.of("passwordActual", "La contraseña actual no es correcta."));
         }
         PoliticaDeContrasena.validar("passwordNueva", nueva);
-        usuario.cambiarPasswordHash(passwordEncoder.encode(nueva));
+        usuario.cambiarPropiaContrasena(passwordEncoder.encode(nueva));
     }
 
     private SesionResponse toSesion(Usuario usuario, Ferreteria ferreteria) {
@@ -102,6 +102,7 @@ public class AuthService {
                 usuario.getRol(),
                 usuario.getFerreteriaId(),
                 ferreteria == null ? null : ferreteria.getRazonSocial(),
-                usuario.getTopeDescuento());
+                usuario.getTopeDescuento(),
+                usuario.isDebeCambiarContrasena());
     }
 }

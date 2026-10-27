@@ -1,6 +1,7 @@
 import { HttpErrorResponse } from '@angular/common/http';
 import { Component, inject, signal, viewChild } from '@angular/core';
 import { erroresDeCampos, mensajeDe } from '../../core/api/api-error';
+import { Router } from '@angular/router';
 import { AuthService } from '../../core/auth/auth.service';
 import { BarraAcciones } from '../../shared/barra-acciones';
 import { ContrasenaForm, NuevaContrasena } from '../../shared/contrasena-form';
@@ -18,8 +19,11 @@ import { ContrasenaForm, NuevaContrasena } from '../../shared/contrasena-form';
 })
 export class MiContrasena {
   private readonly auth = inject(AuthService);
+  private readonly router = inject(Router);
   private readonly formulario = viewChild.required(ContrasenaForm);
 
+  /** La contraseña la eligió otra persona: se pide cambiarla antes de seguir y al cambiarla se va al inicio. */
+  protected readonly debeCambiar = this.auth.debeCambiarContrasena;
   protected readonly aviso = signal<string | null>(null);
   protected readonly errorActual = signal<string | null>(null);
   protected readonly error = signal<string | null>(null);
@@ -30,10 +34,16 @@ export class MiContrasena {
     this.errorActual.set(null);
     this.error.set(null);
     this.enviando.set(true);
+    const eraObligatorio = this.debeCambiar();
     this.auth.cambiarContrasena(datos.actual ?? '', datos.nueva).subscribe({
       next: () => {
         this.enviando.set(false);
         this.formulario().reiniciar();
+        if (eraObligatorio) {
+          // La raíz redirige con inicioPorRol: cada rol cae en su pantalla de siempre.
+          void this.router.navigateByUrl('/');
+          return;
+        }
         this.aviso.set('Contraseña actualizada.');
       },
       error: (err: unknown) => {
