@@ -311,7 +311,7 @@ Estas reglas se codifican en el dominio y se cubren con tests unitarios antes qu
 
 ### Despliegue: lectura de PDF
 
-- Para leer una lista en PDF (CU-04), el backend lanza **otra JVM** (`LectorPdf` → `ExtractorPdf`) con el `java` de la suya (`java.home`) y `-Xmx256m`. El contenedor necesita entonces **hasta unos 350 MB más de memoria** mientras se lee un PDF (uno por vez; LISTA 336 usa unos 210 MB) y poder escribir en el directorio temporal (`java.io.tmpdir`), donde quedan el PDF y sus palabras mientras dura la lectura.
+- Para leer una lista en PDF (CU-04), el backend lanza **otra JVM** (`LectorPdf` → `ExtractorPdf`) con el `java` de la suya (`java.home`) y `-Xmx256m`. El contenedor necesita entonces **hasta unos 400 MB más de memoria** mientras se lee un PDF (uno por vez; LISTA 336 llega a unos 300 MB y un PDF que agota los 256 MB, a unos 370 MB) y poder escribir en el directorio temporal (`java.io.tmpdir`), donde quedan el PDF y sus palabras mientras dura la lectura.
 - El backend tiene que arrancar con **`java -jar` sobre el jar de Spring Boot** (la JVM hija arranca con su `PropertiesLauncher`) o con un classpath común. Las variables `JAVA_TOOL_OPTIONS`, `JDK_JAVA_OPTIONS` y `_JAVA_OPTIONS` no pasan a la JVM hija, así que no le cambian la memoria.
 - Si la JVM hija no arranca, cada PDF da «No se pudo leer el archivo» y el log del backend dice `El proceso que lee el PDF terminó con el código N`.
 

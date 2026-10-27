@@ -1,5 +1,6 @@
 package com.ferreteria.support;
 
+import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
@@ -12,6 +13,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
+import org.apache.pdfbox.Loader;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.pdmodel.PDPage;
 import org.apache.pdfbox.pdmodel.PDPageContentStream;
@@ -20,6 +22,8 @@ import org.apache.pdfbox.pdmodel.encryption.AccessPermission;
 import org.apache.pdfbox.pdmodel.encryption.StandardProtectionPolicy;
 import org.apache.pdfbox.pdmodel.font.PDType1Font;
 import org.apache.pdfbox.pdmodel.font.Standard14Fonts;
+import org.apache.pdfbox.pdmodel.graphics.image.LosslessFactory;
+import org.apache.pdfbox.pdmodel.graphics.image.PDImageXObject;
 import org.apache.poi.hssf.usermodel.HSSFWorkbook;
 import org.apache.poi.poifs.crypt.EncryptionInfo;
 import org.apache.poi.poifs.crypt.EncryptionMode;
@@ -212,6 +216,22 @@ public final class ListasDePrueba {
                     contenido.newLineAtOffset(0, -1);
                 }
                 contenido.endText();
+            }
+            return guardar(documento);
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
+    }
+
+    /** Un PDF con las filas de {@link #pdf} y una imagen de {@code lado} x {@code lado} pixeles en la primera pagina. */
+    public static byte[] pdfConImagen(List<List<String>> filas, int lado) {
+        try (PDDocument documento = Loader.loadPDF(pdf(filas))) {
+            PDPage pagina = documento.getPage(0);
+            PDImageXObject imagen =
+                LosslessFactory.createFromImage(documento, new BufferedImage(lado, lado, BufferedImage.TYPE_INT_RGB));
+            try (PDPageContentStream contenido =
+                     new PDPageContentStream(documento, pagina, PDPageContentStream.AppendMode.APPEND, true)) {
+                contenido.drawImage(imagen, 400, 40, 100, 100);
             }
             return guardar(documento);
         } catch (IOException e) {

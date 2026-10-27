@@ -89,6 +89,14 @@ class LectorPdfTest {
     }
 
     @Test
+    void unPdfConUnaImagenGrandeSeLeeDentroDeLaMemoriaDelProceso() {
+        // 3000 x 3000 pixeles son 27 MB sin comprimir: para leer el texto, la imagen no se descomprime.
+        LecturaLista lectura = lector.leer(ListasDePrueba.pdfConImagen(LISTA, 3000));
+
+        assertThat(textos(lectura.filas().get(1))).containsExactly("A-1", "Tornillo 3/8 x 1", "$ 1.532,44");
+    }
+
+    @Test
     void unPdfConMasPalabrasQueElTopeEsDemasiadoGrande() {
         LectorPdf conTopeChico = new LectorPdf(new Topes(8, TOPES.memoria(), TOPES.tiempo(), TOPES.espera()),
             ExtractorPdf.class);
