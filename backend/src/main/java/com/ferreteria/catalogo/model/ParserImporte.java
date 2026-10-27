@@ -33,6 +33,11 @@ public final class ParserImporte {
         return NUMERO.matcher(normalizado).matches() ? Optional.of(new BigDecimal(normalizado)) : Optional.empty();
     }
 
+    /** Si el texto de la celda trae el signo de dolares adelante (US$ o U$S); una celda numerica de Excel no lo trae. */
+    public static boolean enDolares(Celda celda) {
+        return celda.numero() == null && DOLARES_ADELANTE.matcher(celda.texto()).find();
+    }
+
     /** Deja el texto con punto decimal y sin separadores de miles. */
     private static String normalizar(String texto) {
         int ultimaComa = texto.lastIndexOf(',');

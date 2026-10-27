@@ -849,6 +849,28 @@ class ImportacionIntegrationTest extends CotizacionTestBase {
     }
 
     @Test
+    void unCostoEnDolaresEnUnCsvSinMonedaAvisaEnLaVistaPreviaYNoSeImporta() throws Exception {
+        long proveedor = crearProveedor(duenoA, unico("P"));
+        String enDolares = unico("USD");
+        String enPesos = unico("ARS");
+        MockMultipartFile csv = archivo("lista.csv", ListasDePrueba.csv(List.of(
+                List.of("Codigo", "Descripcion", "Costo"),
+                List.of(enDolares, "Tuerca", "US$ 4,00"),
+                List.of(enPesos, "Tornillo", "$ 100,00")), ';', StandardCharsets.UTF_8, false));
+
+        JsonNode previa = vistaPrevia(csv, datosVistaPrevia(proveedor));
+        assertThat(previa.at("/conteos/conError").asInt()).isEqualTo(1);
+        assertThat(previa.at("/conteos/nuevos").asInt()).isEqualTo(1);
+        assertThat(previa.at("/errores/0/fila").asInt()).isEqualTo(2);
+        assertThat(previa.at("/errores/0/mensaje").asText()).isEqualTo("El costo está en dólares, pero la lista no dice "
+                + "la moneda. Mapeá la columna de moneda o elegí la moneda de todas las filas.");
+
+        aplicar(csv, datosVistaPrevia(proveedor), true, null).andExpect(status().isCreated());
+        assertThat(contar("select count(*) from articulo where codigo_interno = ?", enDolares)).isZero();
+        assertThat(contar("select count(*) from articulo where codigo_interno = ?", enPesos)).isEqualTo(1);
+    }
+
+    @Test
     void sinCrearNuevosLasFilasNuevasSoloSeCuentan() throws Exception {
         long proveedor = crearProveedor(duenoA, unico("P"));
         String codigo = unico("SOLO");

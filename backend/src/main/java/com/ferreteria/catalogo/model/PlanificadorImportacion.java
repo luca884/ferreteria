@@ -45,6 +45,8 @@ public final class PlanificadorImportacion {
         "El costo calculado es 0. Revisá el precio de lista y las bonificaciones.";
     private static final String MENSAJE_AJUSTES_EN_CERO =
         "Con los ajustes del precio final, el precio queda en 0 o menos.";
+    private static final String MENSAJE_DOLARES_SIN_MONEDA = "El costo está en dólares, pero la lista no dice la "
+        + "moneda. Mapeá la columna de moneda o elegí la moneda de todas las filas.";
 
     private PlanificadorImportacion() {
     }
@@ -554,6 +556,10 @@ public final class PlanificadorImportacion {
                 celda(d, mapeo.columnaMoneda()), mapeo.columnaMoneda() != null, mapeo.monedaFija());
             if (moneda.esError()) {
                 return conError(moneda.mensaje());
+            }
+            // Sin dato de moneda, un costo «US$ 4,00» entraria en pesos: no se adivina la moneda.
+            if (moneda.esSinDato() && ParserImporte.enDolares(d.fila().celda(mapeo.columnaCosto()))) {
+                return conError(MENSAJE_DOLARES_SIN_MONEDA);
             }
             AlicuotaDeFila.ResultadoAlicuota iva = AlicuotaDeFila.interpretar(
                 celda(d, mapeo.columnaIva()), celda(d, mapeo.columnaSinIva()), celda(d, mapeo.columnaConIva()));

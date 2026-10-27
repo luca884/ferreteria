@@ -502,6 +502,40 @@ class PlanificadorImportacionTest {
 
             assertThat(plan.cambiosDeMoneda()).extracting(CambioPlaneado::monedaNueva).containsExactly(Moneda.USD);
         }
+
+        @Test
+        @DisplayName("A1: sin columna ni moneda fija, un costo con US$ o U$S adelante es un error de la fila: no crea ni actualiza")
+        void dolaresSinMonedaEnLaLista() {
+            PlanImportacion plan = escenario().dolar("1000")
+                .articulos(Art.art(1, "USD-1", "10").enDolares().precio("15730.00"), Art.art(2, "A-2", "100"))
+                .filas(fila(2, "USD-1", "x", "US$ 12,00"), fila(3, "N-1", "Nuevo", "u$s 4,00"),
+                    fila(4, "A-2", "x", "$ 120"))
+                .planificar();
+
+            String mensaje = "El costo está en dólares, pero la lista no dice la moneda. Mapeá la columna de moneda o "
+                + "elegí la moneda de todas las filas.";
+            assertThat(plan.errores()).extracting(AvisoDeFila::fila).containsExactly(2, 3);
+            assertThat(mensajes(plan.errores())).containsExactly(mensaje, mensaje);
+            assertThat(plan.altas()).isEmpty();
+            assertThat(plan.cambios()).extracting(CambioPlaneado::fila).containsExactly(4);
+            assertThat(plan.conteos()).isEqualTo(new ConteosImportacion(1, 0, 0, 0, 0, 2));
+        }
+
+        @Test
+        @DisplayName("A1: si la lista dice que es USD (columna o moneda fija), el costo con US$ adelante se importa en dolares")
+        void dolaresConMonedaEnLaLista() {
+            PlanImportacion conColumna = escenario().dolar("1000").mapeo(M.mapeo().moneda().build())
+                .filas(filaDe(2, "N-1", "Importado", "US$ 10,00", "USD")).planificar();
+            PlanImportacion conMonedaFija = escenario().dolar("1000").mapeo(M.mapeo().monedaFija(Moneda.USD).build())
+                .filas(fila(2, "N-1", "Importado", "U$S 10,00")).planificar();
+
+            for (PlanImportacion plan : List.of(conColumna, conMonedaFija)) {
+                assertThat(plan.errores()).isEmpty();
+                assertThat(plan.altas()).extracting(AltaPlaneada::moneda).containsExactly(Moneda.USD);
+                assertThat(plan.altas().get(0).costo()).isEqualByComparingTo("10.00");
+                assertThat(plan.altas().get(0).precioNuevo()).isEqualByComparingTo("15730");
+            }
+        }
     }
 
     // ------------------------------------------------------------------ cotizacion por fila (T-126)
