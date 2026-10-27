@@ -60,7 +60,7 @@ Fase 2 (esqueleto) en curso: auth con JWT, multi-tenant, rubros como primer mód
 ## ODD
 
 - Test-first: aplica en `backend/` (JUnit 5 + Mockito + Testcontainers + ArchUnit) y `frontend/` (Vitest, builder `@angular/build:unit-test`). RED → GREEN → REFACTOR en cada cambio de comportamiento; el orden del caso de uso sigue siendo dominio → endpoint → pantalla.
-- `backend/` — focalizado: `./mvnw test -Dtest=<Clase>` (o `<Clase>#<metodo>`) · suite: `./mvnw test`. Necesita Docker corriendo. Antes de cada deploy, o si cambia `backend/Dockerfile`: `./mvnw test -Pimagen` (construye la imagen real y la prueba; la suite no lo corre).
+- `backend/` — focalizado: `./mvnw test -Dtest=<Clase>` (o `<Clase>#<metodo>`) · suite: `./mvnw test`. Necesita Docker corriendo. Antes de cada deploy, o si cambia `backend/Dockerfile`: `./mvnw test -Pimagen` (construye la imagen real y la prueba; la suite no lo corre, y `-Dtest=ImagenDeProduccionTest` sin `-Pimagen` falla con «No tests were executed!»).
 - `frontend/` — focalizado: `npx ng test --watch=false --include=<ruta/al/archivo.spec.ts>` · suite: `npx ng test --watch=false` · al cerrar, si toca templates, rutas o configuración: `npx ng build`.
 - **Nunca dos suites a la vez.** Borrar solo contenedores propios.
 - Ramas: una por caso de uso (`feat/cu-XX-<slug>`), gana sobre `feat/<feature>` de ODD.

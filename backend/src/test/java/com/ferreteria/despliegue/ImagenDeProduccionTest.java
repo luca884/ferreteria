@@ -21,6 +21,7 @@ import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.MySQLContainer;
 import org.testcontainers.containers.Network;
 import org.testcontainers.containers.wait.strategy.Wait;
+import org.testcontainers.containers.wait.strategy.WaitAllStrategy;
 import org.testcontainers.utility.DockerImageName;
 
 import java.nio.file.Path;
@@ -36,12 +37,18 @@ import java.util.concurrent.TimeUnit;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * La imagen que va a Railway, construida con backend/Dockerfile y levantada como en produccion: perfil prod, las mismas
- * variables que README.md (Deploy) y un MySQL 8.4 vacio. Prueba lo que la suite no ve porque corre desde target/classes:
- * el jar empaquetado (el lector de PDF lanza su JVM con PropertiesLauncher) y el entorno de la imagen (zona horaria).
+ * La imagen del backend construida con backend/Dockerfile, el mismo que usa Railway, y levantada como en produccion:
+ * perfil prod, las mismas variables que README.md (Deploy) y un MySQL 8.4 vacio. Prueba lo que la suite no ve porque
+ * corre desde target/classes: el jar empaquetado y el entorno de la imagen (zona horaria). Si LectorPdf pierde la rama
+ * del jar (la JVM hija con PropertiesLauncher), LectorPdfTest e ImportacionPdfIntegrationTest siguen en verde y solo
+ * falla este test.
+ *
+ * No es la misma imagen byte a byte: en una Mac con Apple Silicon se construye para arm64 y Railway la construye para
+ * amd64, y las imagenes base (eclipse-temurin:17) son tags que cada builder resuelve por su cuenta.
  *
  * Fuera de la suite normal por el tag "imagen": construir la imagen tarda minutos. Se corre antes de cada deploy con
- * ./mvnw test -Pimagen. La imagen queda como ferreteria-api:imagen-test para que Docker reuse las capas de Maven.
+ * ./mvnw test -Pimagen. Cada corrida le pone a la imagen un tag propio, para no levantar una vieja si el build no la deja
+ * en el daemon, y la borra al terminar; las capas quedan en la cache de BuildKit y la proxima construccion las reusa.
  *
  * La imagen se construye con docker build (BuildKit, como Railway) y no con ImageFromDockerfile de Testcontainers: ese
  * empaqueta el contexto con commons-compress 1.28, que pide un commons-lang3 mas nuevo que el 3.14 que fija Spring Boot.
@@ -49,7 +56,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 @Tag("imagen")
 class ImagenDeProduccionTest {
 
-    private static final String IMAGEN = "ferreteria-api:imagen-test";
+    private static final String IMAGEN = "ferreteria-api:imagen-test-" + UUID.randomUUID();
     private static final String AVISO_DE_ZONA = "La zona horaria de la JVM";
     private static final String CLAVE_ADMIN = "clave-del-admin-123";
     private static final String CLAVE_DUENO = "clave-del-dueno-123";
@@ -60,12 +67,20 @@ class ImagenDeProduccionTest {
     private static final MySQLContainer<?> MYSQL = new MySQLContainer<>("mysql:8.4")
         .withNetwork(RED)
         .withNetworkAliases("mysql");
+    /**
+     * Health en 200 y el log "Started": Tomcat responde antes de que termine el arranque, y la zona se lee de ese log.
+     * El aviso de ChequeoZonaHoraria sale en el ApplicationReadyEvent, en el mismo hilo y apenas despues de "Started".
+     */
     private static final GenericContainer<?> API = new GenericContainer<>(DockerImageName.parse(IMAGEN))
         .withNetwork(RED)
         .withExposedPorts(8080)
-        .waitingFor(Wait.forHttp("/actuator/health").forStatusCode(200).withStartupTimeout(Duration.ofMinutes(3)));
+        .waitingFor(new WaitAllStrategy(WaitAllStrategy.Mode.WITH_MAXIMUM_OUTER_TIMEOUT)
+            .withStrategy(Wait.forHttp("/actuator/health").forStatusCode(200))
+            .withStrategy(Wait.forLogMessage(".*Started FerreteriaApplication.*\\n", 1))
+            .withStartupTimeout(Duration.ofMinutes(3)));
 
     private static RestClient http;
+    private static String tokenDelDueno;
 
     @BeforeAll
     static void levantarComoEnProduccion() throws Exception {
@@ -88,10 +103,12 @@ class ImagenDeProduccionTest {
     }
 
     @AfterAll
-    static void bajar() {
+    static void bajar() throws Exception {
         API.stop();
         MYSQL.stop();
         RED.close();
+        new ProcessBuilder("docker", "rmi", IMAGEN).redirectErrorStream(true).redirectOutput(ProcessBuilder.Redirect.DISCARD)
+            .start().waitFor(1, TimeUnit.MINUTES);
     }
 
     @Test
@@ -122,7 +139,7 @@ class ImagenDeProduccionTest {
 
     @Test
     void elLectorDePdfLeeUnaListaDesdeElJar() throws Exception {
-        String dueno = duenoDeUnaFerreteriaNueva();
+        String dueno = dueno();
         // Una palabra por celda: con tan pocos renglones, el espacio entre dos palabras puede leerse como otra columna.
         byte[] pdf = ListasDePrueba.pdf(List.of(
             List.of("Codigo", "Articulo", "Precio"),
@@ -175,6 +192,14 @@ class ImagenDeProduccionTest {
             insert.setString(3, "Admin de la imagen");
             insert.executeUpdate();
         }
+    }
+
+    /** Token del Dueño de la ferreteria de la imagen. El alta va una sola vez: el CUIT y el email son unicos en la base. */
+    private static String dueno() throws Exception {
+        if (tokenDelDueno == null) {
+            tokenDelDueno = duenoDeUnaFerreteriaNueva();
+        }
+        return tokenDelDueno;
     }
 
     /** El alta que hace el SUPER_ADMIN desde el panel: la ferreteria con su primer Dueño. */

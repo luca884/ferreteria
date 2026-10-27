@@ -172,6 +172,8 @@
                 <configuration>
                     <!-- El test de la imagen de produccion construye backend/Dockerfile y tarda minutos: solo con -Pimagen. -->
                     <excludedGroups>imagen</excludedGroups>
+                    <!-- Sin esto, -Dtest=ImagenDeProduccionTest sin -Pimagen (o -Pimagen sin el test) termina verde con 0 tests. -->
+                    <failIfNoTests>true</failIfNoTests>
                 </configuration>
             </plugin>
         </plugins>
