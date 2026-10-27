@@ -1,0 +1,37 @@
+/* Panel de bienvenida del Dueño: pasos numerados que se acomodan en renglones y bajan a una columna en pantallas angostas. */
+:host {
+  display: block;
+}
+.primeros-pasos {
+  padding: var(--e-3) var(--e-4);
+  border: 1px solid var(--borde);
+  border-left: 4px solid var(--acento);
+  border-radius: var(--radio);
+  background: var(--acento-suave);
+  color: var(--acento-profundo);
+}
+h2 {
+  margin: 0 0 var(--e-2);
+  font-size: var(--texto-md);
+}
+ol {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--e-1) var(--e-5);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: paso;
+  font-size: var(--texto-md);
+}
+li {
+  min-width: 0;
+  counter-increment: paso;
+}
+li::before {
+  content: counter(paso) '. ';
+  font-weight: 600;
+}
+a {
+  font-weight: 600;
+}

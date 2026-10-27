@@ -2,10 +2,12 @@ import { HttpErrorResponse } from '@angular/common/http';
 import { signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { of, throwError } from 'rxjs';
-import { Router } from '@angular/router';
+import { Router, provideRouter } from '@angular/router';
 import { vi } from 'vitest';
 import { PageResponse } from '../../core/api/page.models';
 import { AuthService } from '../../core/auth/auth.service';
+import { FormaPago } from '../formas-pago/forma-pago.models';
+import { FormasPagoService } from '../formas-pago/formas-pago.service';
 import { Cliente, ClienteRequest } from './cliente.models';
 import { Clientes } from './clientes';
 import { ClientesService } from './clientes.service';
@@ -47,7 +49,14 @@ describe('Clientes', () => {
     totalPages,
   });
 
+  /** Las formas activas de una ferretería que ya ofrece la cuenta corriente: el caso en que no hay nada que avisar. */
+  const CON_CUENTA_CORRIENTE: FormaPago[] = [
+    { id: 1, nombre: 'Efectivo', medio: 'EFECTIVO', recargoPorcentaje: 0, activa: true, orden: 1 },
+    { id: 5, nombre: 'Cuenta corriente', medio: 'CUENTA_CORRIENTE', recargoPorcentaje: 0, activa: true, orden: 5 },
+  ];
+
   let fixture: ComponentFixture<Clientes>;
+  let formasApi: { listar: ReturnType<typeof vi.fn> };
   let servicio: {
     buscar: ReturnType<typeof vi.fn>;
     crear: ReturnType<typeof vi.fn>;
@@ -59,7 +68,15 @@ describe('Clientes', () => {
   const errorHttp = (status: number, message: string, errors?: Record<string, string>) =>
     new HttpErrorResponse({ status, error: { status, message, errors } });
 
-  async function crear(lista: Cliente[] = [ana, norte, viejo], dueno = true, buscar = vi.fn(() => of(pagina(lista)))) {
+  async function crear(
+    lista: Cliente[] = [ana, norte, viejo],
+    dueno = true,
+    buscar = vi.fn(() => of(pagina(lista))),
+    formasActivas: FormaPago[] | Error = CON_CUENTA_CORRIENTE,
+  ) {
+    formasApi = {
+      listar: vi.fn(() => (formasActivas instanceof Error ? throwError(() => formasActivas) : of(formasActivas))),
+    };
     servicio = {
       buscar,
       crear: vi.fn((r: ClienteRequest) => of({ id: 99, activo: true, cuentaCorrienteHabilitada: false, ...r })),
@@ -74,7 +91,9 @@ describe('Clientes', () => {
     await TestBed.configureTestingModule({
       imports: [Clientes],
       providers: [
+        provideRouter([]),
         { provide: ClientesService, useValue: servicio },
+        { provide: FormasPagoService, useValue: formasApi },
         { provide: AuthService, useValue: { esDueno: signal(dueno) } },
       ],
     }).compileComponents();
@@ -552,6 +571,65 @@ describe('Clientes', () => {
 
         expect(habilitar().checked).toBe(false);
         expect(limite().value).toBe('');
+      });
+    });
+
+    describe('el aviso de la forma de pago «Cuenta corriente» (S6)', () => {
+      const SIN_CUENTA_CORRIENTE: FormaPago[] = [CON_CUENTA_CORRIENTE[0]];
+      const DESACTIVADA = 'La forma de pago «Cuenta corriente» está desactivada: el mostrador no ofrece vender a cuenta.';
+      const aviso = () => el().querySelector('.aviso-forma-cuenta');
+
+      it('en el alta: tildar «Habilitar» sin forma activa avisa y lleva a «Formas de pago»', async () => {
+        await crear([ana], true, undefined, SIN_CUENTA_CORRIENTE);
+        expect(aviso()).toBeNull();
+
+        await tildar('cuenta-habilitada', true);
+
+        expect(dicho(aviso()?.querySelector('span'))).toBe(DESACTIVADA);
+        const enlace = aviso()!.querySelector('a')!;
+        expect(dicho(enlace)).toBe('Activala en Formas de pago');
+        expect(enlace.getAttribute('href')).toBe('/configuracion/formas-pago');
+      });
+
+      it('en la edición: un cliente con la cuenta habilitada ya lo muestra', async () => {
+        await crear([deudor], true, undefined, SIN_CUENTA_CORRIENTE);
+
+        await editarFila(0);
+
+        expect(dicho(aviso()?.querySelector('span'))).toBe(DESACTIVADA);
+      });
+
+      it('con la forma activa no aparece', async () => {
+        await crear([deudor], true, undefined, CON_CUENTA_CORRIENTE);
+
+        await editarFila(0);
+
+        expect(aviso()).toBeNull();
+      });
+
+      it('con la casilla destildada no aparece', async () => {
+        await crear([sinCuenta], true, undefined, SIN_CUENTA_CORRIENTE);
+
+        await editarFila(0);
+
+        expect(aviso()).toBeNull();
+      });
+
+      it('si no se pudieron leer las formas no avisa: no se sabe si está desactivada', async () => {
+        await crear([deudor], true, undefined, new Error('sin red'));
+
+        await editarFila(0);
+
+        expect(aviso()).toBeNull();
+      });
+
+      it('el Vendedor no edita la casilla: no ve el aviso y no se piden las formas', async () => {
+        await crear([paraVendedor(deudor)], false, undefined, SIN_CUENTA_CORRIENTE);
+
+        await editarFila(0);
+
+        expect(aviso()).toBeNull();
+        expect(formasApi.listar).not.toHaveBeenCalled();
       });
     });
 

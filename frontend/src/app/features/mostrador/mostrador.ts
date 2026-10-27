@@ -19,6 +19,7 @@ import { LISTA_ID, ListaResultados, filaId } from './lista-resultados';
 import { ArticuloMostrador, BusquedaMostrador } from './mostrador.models';
 import { accionDeTecla } from './mostrador.atajos';
 import { MostradorService } from './mostrador.service';
+import { PrimerosPasos } from './primeros-pasos';
 import { AVISO_ESCANEO_CON_DIALOGO } from './guarda-lector';
 import { esOcupado, mensajeDe } from '../../core/api/api-error';
 import { MontoPipe, formatearMonto } from '../../core/formato/monto';
@@ -117,6 +118,7 @@ interface Escaneo {
     ListaResultados,
     FichaArticulo,
     TicketLista,
+    PrimerosPasos,
     TotalesTicket,
     RouterLink,
   ],

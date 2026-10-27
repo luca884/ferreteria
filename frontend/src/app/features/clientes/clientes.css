@@ -84,6 +84,23 @@ td.debe {
   padding: 0 var(--e-2);
   font-weight: 600;
 }
+.aviso-forma-cuenta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--e-1) var(--e-3);
+  margin: 0;
+  padding: var(--e-2) var(--e-3);
+  border: 1px solid var(--advertencia-borde);
+  border-left: 4px solid var(--advertencia-marca);
+  border-radius: var(--radio);
+  background: var(--advertencia-fondo);
+  color: var(--advertencia);
+  font-size: var(--texto-sm);
+}
+.aviso-forma-cuenta a {
+  font-weight: 600;
+}
 .cuenta-corriente .campo.tilde {
   display: flex;
   flex-direction: row;

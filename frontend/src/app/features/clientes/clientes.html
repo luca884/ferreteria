@@ -269,6 +269,12 @@
           <input id="cuenta-habilitada" name="cuentaHabilitada" type="checkbox" formControlName="cuentaHabilitada" />
           <label for="cuenta-habilitada">Habilitar (vender a cuenta corriente)</label>
         </div>
+        @if (formaCuentaDesactivada()) {
+          <p class="aviso-forma-cuenta" role="status">
+            <span>La forma de pago «Cuenta corriente» está desactivada: el mostrador no ofrece vender a cuenta.</span>
+            <a routerLink="/configuracion/formas-pago">Activala en Formas de pago</a>
+          </p>
+        }
         <div class="campo">
           <label for="limite-cuenta">Límite $</label>
           <input

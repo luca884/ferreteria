@@ -7,6 +7,8 @@ import { provideRouter } from '@angular/router';
 import { Subject, of, throwError } from 'rxjs';
 import { vi } from 'vitest';
 import { AuthService } from '../../core/auth/auth.service';
+import { Articulo } from '../articulos/articulo.models';
+import { ArticulosService } from '../articulos/articulos.service';
 import { CajaVigente } from '../caja/caja.models';
 import { CajaService } from '../caja/caja.service';
 import { FormaPago } from '../formas-pago/forma-pago.models';
@@ -135,6 +137,7 @@ describe('Mostrador', () => {
     formas: FormaPago[] = FORMAS_BASE,
     rol: 'DUENO' | 'VENDEDOR' = 'VENDEDOR',
     topeDescuento: number | null = null,
+    totalArticulos = 1,
   ) {
     // jsdom no implementa scrollIntoView.
     Element.prototype.scrollIntoView =
@@ -174,6 +177,12 @@ describe('Mostrador', () => {
     };
     cajas = { actual: vi.fn(() => of(vigente)) };
     formasApi = { listar: vi.fn(() => of(formas)) };
+    // S5: por defecto la ferretería ya tiene artículos, así que el panel «Primeros pasos» no aparece.
+    const articulosApi = {
+      buscar: vi.fn(() =>
+        of({ items: [], page: 0, size: 1, totalElements: totalArticulos, totalPages: totalArticulos } as PageResponse<Articulo>),
+      ),
+    };
     clientesApi = {
       buscar: vi.fn(() =>
         of({ items: [CLIENTE_ANA, CLIENTE_NORTE], page: 0, size: 8, totalElements: 2, totalPages: 1 } as PageResponse<Cliente>),
@@ -202,6 +211,7 @@ describe('Mostrador', () => {
         { provide: RemitosService, useValue: remitosApi },
         { provide: CajaService, useValue: cajas },
         { provide: FormasPagoService, useValue: formasApi },
+        { provide: ArticulosService, useValue: articulosApi },
         { provide: ClientesService, useValue: clientesApi },
         { provide: AuthService, useValue: { sesion: sesion.asReadonly() } },
         { provide: GENERAR_CLAVE, useValue: () => `clave-${++claves}` },
@@ -253,6 +263,36 @@ describe('Mostrador', () => {
 
   const renglonesTicket = () =>
     Array.from(el().querySelectorAll<HTMLElement>('app-ticket-lista .renglon'));
+
+  describe('primeros pasos (S5)', () => {
+    const panel = () => el().querySelector('app-primeros-pasos .primeros-pasos');
+
+    it('el Dueño de una ferretería sin artículos lo ve en el Mostrador, con los links', async () => {
+      await crear(cajaAbierta, FORMAS_BASE, 'DUENO', null, 0);
+
+      expect(panel()?.querySelector('h2')?.textContent?.trim()).toBe('Primeros pasos');
+      expect(Array.from(panel()!.querySelectorAll('a')).map((a) => a.getAttribute('href'))).toEqual([
+        '/configuracion/precios',
+        '/importaciones',
+        '/articulos/nuevo',
+        '/configuracion/formas-pago',
+        '/usuarios',
+        '/caja',
+      ]);
+    });
+
+    it('con artículos el Dueño no lo ve', async () => {
+      await crear(cajaAbierta, FORMAS_BASE, 'DUENO', null, 12);
+
+      expect(panel()).toBeNull();
+    });
+
+    it('el Vendedor no lo ve aunque no haya artículos', async () => {
+      await crear(cajaAbierta, FORMAS_BASE, 'VENDEDOR', null, 0);
+
+      expect(panel()).toBeNull();
+    });
+  });
 
   describe('búsqueda', () => {
     it('tiene el foco en el campo al abrir la pantalla', async () => {

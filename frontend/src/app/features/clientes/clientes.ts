@@ -9,14 +9,16 @@ import {
   inject,
   signal,
 } from '@angular/core';
-import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { Router } from '@angular/router';
+import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
+import { Router, RouterLink } from '@angular/router';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { erroresDeCampos, mensajeDe } from '../../core/api/api-error';
 import { AuthService } from '../../core/auth/auth.service';
 import { BarraAcciones } from '../../shared/barra-acciones';
 import { formatearMonto } from '../../core/formato/monto';
 import { FilasElegibles } from '../../shared/filas-elegibles';
+import { FormaPago } from '../formas-pago/forma-pago.models';
+import { FormasPagoService } from '../formas-pago/formas-pago.service';
 import {
   CONDICIONES_IVA,
   CONDICION_IVA_LABELS,
@@ -45,12 +47,13 @@ const sinVacios = (texto: string): string | undefined => texto.trim() || undefin
  */
 @Component({
   selector: 'app-clientes',
-  imports: [ReactiveFormsModule, BarraAcciones],
+  imports: [ReactiveFormsModule, RouterLink, BarraAcciones],
   templateUrl: './clientes.html',
   styleUrl: './clientes.css',
 })
 export class Clientes implements OnInit {
   private readonly service = inject(ClientesService);
+  private readonly formasPago = inject(FormasPagoService);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   private readonly injector = inject(Injector);
   private readonly router = inject(Router);
@@ -108,6 +111,18 @@ export class Clientes implements OnInit {
   });
   protected readonly errorLimite = signal<string | null>(null);
 
+  /** Las formas de pago activas, para avisar si falta la de cuenta corriente. null mientras no se leyeron (o no se pudo). */
+  private readonly formasActivas = signal<readonly FormaPago[] | null>(null);
+  private readonly cuentaTildada = toSignal(this.form.controls.cuentaHabilitada.valueChanges, { initialValue: false });
+  /**
+   * S6: «Habilitar» no alcanza si la forma de pago «Cuenta corriente» está desactivada: el cobro no la ofrece. Solo se avisa
+   * con las formas leídas; si no se pudieron leer no se sabe, y no se asusta al Dueño.
+   */
+  protected readonly formaCuentaDesactivada = computed(() => {
+    const formas = this.formasActivas();
+    return formas !== null && this.cuentaTildada() && !formas.some((f) => f.medio === 'CUENTA_CORRIENTE');
+  });
+
   constructor() {
     // El límite solo se escribe con «Habilitar» tildado.
     this.form.controls.cuentaHabilitada.valueChanges
@@ -123,6 +138,10 @@ export class Clientes implements OnInit {
 
   ngOnInit(): void {
     this.cargar(0);
+    // Solo el Dueño edita la cuenta corriente: el Vendedor no necesita las formas.
+    if (this.auth.esDueno()) {
+      this.formasPago.listar(true).subscribe({ next: (formas) => this.formasActivas.set(formas), error: () => undefined });
+    }
   }
 
   /** Carga una página con el filtro aplicado; también la usa Reintentar después de una carga fallida. */
