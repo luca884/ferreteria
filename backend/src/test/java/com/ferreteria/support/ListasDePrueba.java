@@ -1,6 +1,5 @@
 package com.ferreteria.support;
 
-import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
@@ -8,25 +7,19 @@ import java.io.UncheckedIOException;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
-import org.apache.pdfbox.Loader;
-import org.apache.pdfbox.cos.COSName;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.pdmodel.PDPage;
 import org.apache.pdfbox.pdmodel.PDPageContentStream;
 import org.apache.pdfbox.pdmodel.common.PDRectangle;
-import org.apache.pdfbox.pdmodel.common.PDStream;
 import org.apache.pdfbox.pdmodel.encryption.AccessPermission;
 import org.apache.pdfbox.pdmodel.encryption.StandardProtectionPolicy;
 import org.apache.pdfbox.pdmodel.font.PDType1Font;
 import org.apache.pdfbox.pdmodel.font.Standard14Fonts;
-import org.apache.pdfbox.pdmodel.graphics.image.LosslessFactory;
-import org.apache.pdfbox.pdmodel.graphics.image.PDImageXObject;
 import org.apache.poi.hssf.usermodel.HSSFWorkbook;
 import org.apache.poi.poifs.crypt.EncryptionInfo;
 import org.apache.poi.poifs.crypt.EncryptionMode;
@@ -202,37 +195,23 @@ public final class ListasDePrueba {
     }
 
     /**
-     * Un PDF con las filas de {@link #pdf} y, en una pagina mas, un contenido comprimido que se infla a {@code bytes}
-     * (espacios: no agrega texto).
+     * Un PDF de una pagina llena de letras: {@code renglones} renglones de {@code letras} letras seguidas (una palabra
+     * por renglon), en Helvetica de 1 pt. Para leerla, PDFBox guarda en memoria cada letra de la pagina.
      */
-    public static byte[] pdfInflado(List<List<String>> filas, long bytes) {
-        try (PDDocument documento = Loader.loadPDF(pdf(filas))) {
-            PDPage pagina = new PDPage(PDRectangle.A4);
-            PDStream contenido = new PDStream(documento);
-            try (OutputStream salida = contenido.createOutputStream(COSName.FLATE_DECODE)) {
-                byte[] bloque = new byte[64 * 1024];
-                Arrays.fill(bloque, (byte) ' ');
-                for (long escritos = 0; escritos < bytes; escritos += bloque.length) {
-                    salida.write(bloque, 0, (int) Math.min(bloque.length, bytes - escritos));
-                }
-            }
-            pagina.setContents(contenido);
+    public static byte[] pdfConPaginaLlena(int renglones, int letras) {
+        try (PDDocument documento = new PDDocument()) {
+            PDPage pagina = new PDPage(HOJA_PDF);
             documento.addPage(pagina);
-            return guardar(documento);
-        } catch (IOException e) {
-            throw new UncheckedIOException(e);
-        }
-    }
-
-    /** Un PDF con las filas de {@link #pdf} y una imagen sin comprimir de {@code lado} x {@code lado} pixeles. */
-    public static byte[] pdfConImagen(List<List<String>> filas, int lado) {
-        try (PDDocument documento = Loader.loadPDF(pdf(filas))) {
-            PDPage pagina = documento.getPage(0);
-            PDImageXObject imagen =
-                LosslessFactory.createFromImage(documento, new BufferedImage(lado, lado, BufferedImage.TYPE_INT_RGB));
-            try (PDPageContentStream contenido =
-                     new PDPageContentStream(documento, pagina, PDPageContentStream.AppendMode.APPEND, true)) {
-                contenido.drawImage(imagen, 400, 40, 100, 100);
+            String renglon = "ABCDEFGHIJ".repeat(letras / 10);
+            try (PDPageContentStream contenido = new PDPageContentStream(documento, pagina)) {
+                contenido.beginText();
+                contenido.setFont(new PDType1Font(Standard14Fonts.FontName.HELVETICA), 1);
+                contenido.newLineAtOffset(10, HOJA_PDF.getHeight() - 10);
+                for (int i = 0; i < renglones; i++) {
+                    contenido.showText(renglon);
+                    contenido.newLineAtOffset(0, -1);
+                }
+                contenido.endText();
             }
             return guardar(documento);
         } catch (IOException e) {

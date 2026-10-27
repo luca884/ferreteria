@@ -1,0 +1,4 @@
+<!-- La JVM que lee un PDF (ExtractorPdf) no loguea: su salida se descarta. -->
+<configuration>
+    <root level="OFF"/>
+</configuration>
