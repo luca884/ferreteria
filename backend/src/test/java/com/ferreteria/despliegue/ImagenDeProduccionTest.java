@@ -43,8 +43,9 @@ import static org.assertj.core.api.Assertions.assertThat;
  * del jar (la JVM hija con PropertiesLauncher), LectorPdfTest e ImportacionPdfIntegrationTest siguen en verde y solo
  * falla este test.
  *
- * No es la misma imagen byte a byte: en una Mac con Apple Silicon se construye para arm64 y Railway la construye para
- * amd64, y las imagenes base (eclipse-temurin:17) son tags que cada builder resuelve por su cuenta.
+ * Se construye para linux/amd64, como en Railway, aunque la maquina sea una Mac con Apple Silicon: ahi Docker emula x86 y
+ * el arranque tarda unos 20 s en lugar de 5. Igual no es la misma imagen byte a byte: las imagenes base
+ * (eclipse-temurin:17) son tags que cada builder resuelve por su cuenta.
  *
  * Fuera de la suite normal por el tag "imagen": construir la imagen tarda minutos. Se corre antes de cada deploy con
  * ./mvnw test -Pimagen. Cada corrida le pone a la imagen un tag propio, para no levantar una vieja si el build no la deja
@@ -57,6 +58,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class ImagenDeProduccionTest {
 
     private static final String IMAGEN = "ferreteria-api:imagen-test-" + UUID.randomUUID();
+    private static final String PLATAFORMA = "linux/amd64";
     private static final String AVISO_DE_ZONA = "La zona horaria de la JVM";
     private static final String CLAVE_ADMIN = "clave-del-admin-123";
     private static final String CLAVE_DUENO = "clave-del-dueno-123";
@@ -130,6 +132,11 @@ class ImagenDeProduccionTest {
     }
 
     @Test
+    void laImagenCorreEnAmd64ComoEnRailway() throws Exception {
+        assertThat(API.execInContainer("uname", "-m").getStdout().strip()).isEqualTo("x86_64");
+    }
+
+    @Test
     void elSuperAdminCreadoConUnInsertIniciaSesion() throws Exception {
         JsonNode login = login("admin@imagen.test", CLAVE_ADMIN);
 
@@ -166,10 +173,13 @@ class ImagenDeProduccionTest {
         assertThat(celdas(hoja.path("filas").path(2))).containsExactly("TUE-002", "Tuerca", "310,00");
     }
 
-    /** docker build de backend/ (el directorio del pom, donde corre surefire). La salida queda en target/ para leer un error. */
+    /**
+     * docker build de backend/ (el directorio del pom, donde corre surefire) para amd64, la arquitectura de Railway. La
+     * salida queda en target/ para leer un error.
+     */
     private static void construirImagen() throws Exception {
         Path salida = Path.of("target", "imagen-de-produccion-build.log").toAbsolutePath();
-        Process build = new ProcessBuilder("docker", "build", "--tag", IMAGEN, ".")
+        Process build = new ProcessBuilder("docker", "build", "--platform", PLATAFORMA, "--tag", IMAGEN, ".")
             .directory(Path.of("").toAbsolutePath().toFile())
             .redirectErrorStream(true)
             .redirectOutput(salida.toFile())
