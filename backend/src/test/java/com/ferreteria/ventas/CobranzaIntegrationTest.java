@@ -6,6 +6,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.ferreteria.clientes.CuentaCorrienteTestBase;
 import com.ferreteria.common.HoraArgentina;
 import java.math.BigDecimal;
@@ -557,10 +558,11 @@ class CobranzaIntegrationTest extends CuentaCorrienteTestBase {
         long clienteB = cliente(b.f(), "1000");
         JsonNode reciboB = json(cobrar(b.dueno(this), cuerpo(clave(), clienteB, "EFECTIVO", "75")).andExpect(status().isCreated()));
 
-        String cuerpoAjeno = texto(getResult("/api/recibos/" + reciboB.get("id").asLong(), a.dueno(this)).andExpect(status().isNotFound()));
+        JsonNode ajeno = json(getResult("/api/recibos/" + reciboB.get("id").asLong(), a.dueno(this)).andExpect(status().isNotFound()));
+        ((ObjectNode) ajeno).remove("timestamp"); // la hora puede traer «75» por azar
         getResult("/api/recibos/" + reciboB.get("id").asLong(), b.dueno(this)).andExpect(status().isOk());
 
-        assertThat(cuerpoAjeno).doesNotContain("75").doesNotContain("clienteNombre");
+        assertThat(ajeno.toString()).doesNotContain("75").doesNotContain("clienteNombre");
     }
 
     @Test

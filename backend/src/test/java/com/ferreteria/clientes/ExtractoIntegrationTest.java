@@ -5,6 +5,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.ferreteria.common.HoraArgentina;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
@@ -416,12 +417,13 @@ class ExtractoIntegrationTest extends CuentaCorrienteTestBase {
         Libro libroA = libro(a);
         Libro libroB = libro(b);
 
-        String cuerpo = texto(getResult(url(libroB.cliente()), a.dueno()).andExpect(status().isNotFound()));
+        JsonNode error = json(getResult(url(libroB.cliente()), a.dueno()).andExpect(status().isNotFound()));
+        ((ObjectNode) error).remove("timestamp"); // la hora puede traer «1600» por azar
         getResult(url(Long.MAX_VALUE), a.dueno()).andExpect(status().isNotFound());
         JsonNode propio = json(getResult(url(libroA.cliente()), a.dueno()).andExpect(status().isOk()));
         JsonNode ajenoVistoPorSuDueno = json(getResult(url(libroB.cliente()), b.dueno()).andExpect(status().isOk()));
 
-        assertThat(cuerpo).contains("Cliente no encontrado").doesNotContain("1600").doesNotContain("saldo").doesNotContain("movimientos");
+        assertThat(error.toString()).contains("Cliente no encontrado").doesNotContain("1600").doesNotContain("saldo").doesNotContain("movimientos");
         List<Long> ids = new ArrayList<>();
         propio.get("movimientos").get("items").forEach(i -> ids.add(i.get("id").asLong()));
         assertThat(ids).hasSize(4);
