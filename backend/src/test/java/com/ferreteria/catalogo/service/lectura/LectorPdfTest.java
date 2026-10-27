@@ -11,14 +11,21 @@ import com.ferreteria.catalogo.service.lectura.LectorPdf.Topes;
 import com.ferreteria.common.exception.BadRequestException;
 import com.ferreteria.support.ListasDePrueba;
 import com.ferreteria.tenant.TenantContext;
+import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
 
 class LectorPdfTest {
@@ -170,8 +177,12 @@ class LectorPdfTest {
 
         LecturaLista lectura = lector.leer(ListasDePrueba.pdf(LISTA));
 
-        assertThat(lectura.filas().stream().flatMap(fila -> textos(fila).stream()).filter(texto -> !texto.isBlank()))
-            .containsExactlyInAnyOrder("procesadores=1", "prioridad=19");
+        List<String> dichos = lectura.filas().stream().flatMap(fila -> textos(fila).stream())
+            .filter(texto -> !texto.isBlank()).toList();
+        assertThat(dichos).hasSize(2).contains("procesadores=1");
+        // 19 por debajo de la del que la lanza: si los tests ya corren con menos prioridad, el sistema la topa en 20.
+        String prioridad = dichos.stream().filter(texto -> texto.startsWith("prioridad=")).findFirst().orElseThrow();
+        assertThat(Integer.parseInt(prioridad.substring("prioridad=".length()))).isGreaterThanOrEqualTo(19);
     }
 
     @Test
@@ -207,6 +218,125 @@ class LectorPdfTest {
         }
     }
 
+    @Test
+    void laFerreteriaQueNoConsigueTurnoATiempoQuedaLibreParaVolverAProbar() throws Exception {
+        Topes esperaCorta = new Topes(TOPES.palabras(), TOPES.memoria(), TOPES.tiempo(), Duration.ofMillis(300));
+        LectorPdf lento = new LectorPdf(esperaCorta, HijosDePrueba.Tarda.class);
+        byte[] pdf = ListasDePrueba.pdf(LISTA);
+        ExecutorService otro = Executors.newSingleThreadExecutor();
+        try {
+            Future<String> deA = otro.submit(() -> leerComo(1L, lento, pdf));
+            esperarUnProcesoHijo();
+
+            assertThat(leerComo(2L, lento, pdf)).isEqualTo(OCUPADO);
+
+            assertThat(deA.get()).isEqualTo(ARCHIVO_DANADO);
+            assertThat(leerComo(2L, lento, pdf)).isEqualTo(ARCHIVO_DANADO);
+        } finally {
+            otro.shutdownNow();
+        }
+    }
+
+    @Test
+    void interrumpirLaEsperaDelTurnoDejaLibreALaFerreteria() throws Exception {
+        LectorPdf lento = new LectorPdf(TOPES, HijosDePrueba.Tarda.class);
+        byte[] pdf = ListasDePrueba.pdf(LISTA);
+        ExecutorService deA = Executors.newSingleThreadExecutor();
+        ExecutorService deB = Executors.newSingleThreadExecutor();
+        try {
+            Future<String> leyendo = deA.submit(() -> leerComo(1L, lento, pdf));
+            esperarUnProcesoHijo();
+            Future<String> esperando = deB.submit(() -> leerComo(2L, lento, pdf));
+            Thread.sleep(200);
+
+            esperando.cancel(true);
+            deB.shutdown();
+            assertThat(deB.awaitTermination(10, TimeUnit.SECONDS)).isTrue();
+
+            assertThat(leerComo(2L, lento, pdf)).as("B espera su turno y lee").isEqualTo(ARCHIVO_DANADO);
+            assertThat(leyendo.get()).isEqualTo(ARCHIVO_DANADO);
+        } finally {
+            deA.shutdownNow();
+            deB.shutdownNow();
+        }
+    }
+
+    @Test
+    void interrumpirLaLecturaMataAlProcesoBorraLosTemporalesYDejaLibreALaFerreteria() throws Exception {
+        long temporalesAntes = temporales();
+        Topes dosSegundos = new Topes(TOPES.palabras(), TOPES.memoria(), Duration.ofSeconds(2), TOPES.espera());
+        LectorPdf eterno = new LectorPdf(dosSegundos, HijosDePrueba.NoTermina.class);
+        byte[] pdf = ListasDePrueba.pdf(LISTA);
+        ExecutorService otro = Executors.newSingleThreadExecutor();
+        try {
+            Future<String> deA = otro.submit(() -> leerComo(1L, eterno, pdf));
+            esperarUnProcesoHijo();
+
+            deA.cancel(true);
+            otro.shutdown();
+            assertThat(otro.awaitTermination(10, TimeUnit.SECONDS)).isTrue();
+
+            esperarSinProcesosHijos();
+            assertThat(temporales()).isEqualTo(temporalesAntes);
+            assertThat(leerComo(1L, eterno, pdf)).isEqualTo(MENSAJE_GRANDE);
+        } finally {
+            otro.shutdownNow();
+        }
+    }
+
+    @Test
+    void unProcesoQueNoArrancaDejaLibreALaFerreteria() {
+        LectorPdf queNoArranca = new LectorPdf(TOPES, ExtractorPdf.class, Optional.of(Path.of("/no/existe/nice")));
+        byte[] pdf = ListasDePrueba.pdf(LISTA);
+
+        assertThatThrownBy(() -> leerComo(1L, queNoArranca, pdf)).isInstanceOf(UncheckedIOException.class);
+        assertThatThrownBy(() -> leerComo(1L, queNoArranca, pdf)).as("no avisa que está ocupada")
+            .isInstanceOf(UncheckedIOException.class);
+    }
+
+    @Test
+    void unPedidoSinFerreteriaEsperaSuTurnoAunqueLeaUnaFerreteria() throws Exception {
+        LectorPdf lento = new LectorPdf(TOPES, HijosDePrueba.Tarda.class);
+        byte[] pdf = ListasDePrueba.pdf(LISTA);
+        ExecutorService otro = Executors.newSingleThreadExecutor();
+        try {
+            Future<String> deA = otro.submit(() -> leerComo(1L, lento, pdf));
+            esperarUnProcesoHijo();
+
+            assertThatThrownBy(() -> lento.leer(pdf)).hasMessage(ARCHIVO_DANADO);
+            assertThat(deA.get()).isEqualTo(ARCHIVO_DANADO);
+        } finally {
+            otro.shutdownNow();
+        }
+    }
+
+    @Test
+    void entreFerreteriasSeLeeEnOrdenDeLlegada() throws Exception {
+        LectorPdf lento = new LectorPdf(TOPES, HijosDePrueba.Tarda.class);
+        byte[] pdf = ListasDePrueba.pdf(LISTA);
+        List<Long> orden = Collections.synchronizedList(new ArrayList<>());
+        ExecutorService pedidos = Executors.newFixedThreadPool(3);
+        try {
+            List<Future<String>> lecturas = new ArrayList<>();
+            for (long ferreteria = 1; ferreteria <= 3; ferreteria++) {
+                long esta = ferreteria;
+                lecturas.add(pedidos.submit(() -> {
+                    String aviso = leerComo(esta, lento, pdf);
+                    orden.add(esta);
+                    return aviso;
+                }));
+                Thread.sleep(150);
+            }
+
+            for (Future<String> lectura : lecturas) {
+                assertThat(lectura.get()).isEqualTo(ARCHIVO_DANADO);
+            }
+            assertThat(orden).containsExactly(1L, 2L, 3L);
+        } finally {
+            pedidos.shutdownNow();
+        }
+    }
+
     /** Lee como la ferreteria del pedido y devuelve el aviso con el que termino (el hijo de prueba sale como danado). */
     private static String leerComo(long ferreteria, LectorPdf lector, byte[] pdf) {
         TenantContext.setCurrentFerreteriaId(ferreteria);
@@ -222,6 +352,21 @@ class LectorPdfTest {
 
     private static long procesosHijosVivos() {
         return ProcessHandle.current().descendants().filter(ProcessHandle::isAlive).count();
+    }
+
+    private static void esperarSinProcesosHijos() throws InterruptedException {
+        long hasta = System.nanoTime() + Duration.ofSeconds(10).toNanos();
+        while (procesosHijosVivos() > 0) {
+            assertThat(System.nanoTime()).as("murio el proceso que lee el PDF").isLessThan(hasta);
+            Thread.sleep(20);
+        }
+    }
+
+    /** Los archivos temporales que deja {@link LectorPdf} mientras lee. */
+    private static long temporales() throws IOException {
+        try (Stream<Path> archivos = Files.list(Path.of(System.getProperty("java.io.tmpdir")))) {
+            return archivos.filter(archivo -> archivo.getFileName().toString().startsWith("lista-")).count();
+        }
     }
 
     private static void esperarUnProcesoHijo() throws InterruptedException {
