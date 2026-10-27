@@ -23,8 +23,16 @@ cd frontend && npx ng test --watch=false
 
 ## Deploy
 
-- **Backend (Railway)**: el jar arranca en el perfil `prod`, sin datos demo. Variables obligatorias: `JWT_SECRET` (32 bytes o más), `DB_URL`, `DB_USER`, `DB_PASSWORD` y `CORS_ORIGINS`. Sin `JWT_SECRET` no arranca.
-- **Frontend (Vercel)**: el front le pide la API a `/api` en su mismo origen. `frontend/vercel.json` reenvía `/api/*` a Railway: reemplazá `REEMPLAZAR-CON-URL-DE-RAILWAY` por la URL del backend. En local hace lo mismo el proxy de `ng serve` (`frontend/proxy.conf.json`).
+Todo corre en Railway, en el proyecto `ferreteria` (región us-east), con tres servicios: `MySQL`, `backend` y `frontend`. Cada servicio se construye con el `Dockerfile` de su carpeta y su `railway.json`.
+
+- **Backend**: el jar arranca en el perfil `prod`, sin datos demo, con la zona `America/Argentina/Buenos_Aires` fija en la imagen. Variables obligatorias: `JWT_SECRET` (32 bytes o más), `DB_URL`, `DB_USER`, `DB_PASSWORD` y `CORS_ORIGINS` (el dominio del frontend; con otro `Origin` el backend responde 403). Sin `JWT_SECRET` no arranca.
+- **Frontend**: Caddy sirve el build de Angular y reenvía `/api/*` al backend por la red privada (`backend.railway.internal:8080`, se cambia con `BACKEND_HOST`). El front le pide la API a `/api` en su mismo origen; en local hace lo mismo el proxy de `ng serve` (`frontend/proxy.conf.json`).
+- **Primer usuario**: la base de producción arranca sin usuarios. El primer `SUPER_ADMIN` se crea una sola vez con un `INSERT` en `usuario` (`ferreteria_id` NULL, rol `SUPER_ADMIN`) y el hash de `htpasswd -nBC 10 ""`.
+
+```bash
+railway up ./backend --path-as-root --service backend --ci
+railway up ./frontend --path-as-root --service frontend --ci
+```
 
 ## Documentación
 

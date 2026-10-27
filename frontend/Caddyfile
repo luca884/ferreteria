@@ -1,0 +1,23 @@
+# Sirve el build de Angular y reenvía /api al backend por la red privada de Railway.
+# Railway termina el TLS antes de llegar acá: Caddy escucha HTTP en $PORT.
+{
+	admin off
+	persist_config off
+	auto_https off
+}
+
+:{$PORT:8080} {
+	# El front le pide la API a su mismo origen (environment.ts), como el proxy de ng serve en local.
+	handle /api/* {
+		reverse_proxy {$BACKEND_HOST:backend.railway.internal:8080}
+	}
+
+	# Las rutas de la SPA caen en index.html. no-cache: el navegador revalida y toma el build nuevo después de un deploy.
+	handle {
+		root * /srv
+		header Cache-Control "no-cache"
+		encode gzip
+		try_files {path} /index.html
+		file_server
+	}
+}

@@ -15,7 +15,7 @@ SaaS multi-tenant de gestión para ferreterías de Mar del Plata: mostrador (ven
 - `backend/`: Java 17, Spring Boot 3.3, Spring Security (JWT con jjwt), JPA/Hibernate, MySQL 8.4, Flyway, Maven.
 - `frontend/`: Angular 22 (standalone, signals, control flow nuevo), Vitest.
 - Tests backend: JUnit 5, Mockito, Testcontainers (MySQL real), ArchUnit.
-- Deploy previsto: Railway (backend + MySQL), Vercel o Cloudflare Pages (frontend).
+- Deploy: todo en Railway (proyecto `ferreteria`, región us-east): servicios `backend`, `MySQL` y `frontend` (Caddy sirve el build de Angular y reenvía `/api` al backend por la red privada). Procedimiento en `README.md` → Deploy.
 
 ## Comandos
 

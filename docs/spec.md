@@ -398,7 +398,7 @@ Es un monolito modular con el mismo stack que Sendo. Sin microservicios: una fer
 
 ```mermaid
 flowchart TB
-    FE["Frontend Angular (SPA)<br/>Mostrador y panel del dueño · Vercel o Cloudflare Pages"]
+    FE["Frontend Angular (SPA)<br/>Mostrador y panel del dueño · Caddy en Railway"]
     subgraph BE["Backend Spring Boot · monolito modular en Railway"]
         AUTH["Auth y tenants<br/>Login, JWT, roles, filtro tenant_id"]
         CAT["Catálogo<br/>Artículos, rubros, proveedores, listas"]
@@ -424,7 +424,7 @@ Cada módulo es un paquete con su dominio, servicios y controladores. ArchUnit i
 | ARCA | Cliente SOAP generado del WSDL, BouncyCastle para firmar el TRA |
 | PDF | Generación en el backend (por ejemplo OpenPDF) con el QR de ARCA |
 | Tests | JUnit 5, Mockito, Testcontainers, ArchUnit, Karma/Jasmine |
-| Infra | Docker, Railway (backend y base), Vercel o Cloudflare Pages (frontend) |
+| Infra | Docker, Railway (backend, base y frontend servido por Caddy) |
 
 ## Fuera del alcance del MVP
 
