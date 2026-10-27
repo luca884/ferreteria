@@ -269,6 +269,21 @@ describe('Articulos', () => {
     expect(texto('.codigo')).toBe('COD-9');
   });
 
+  it('el botón «Buscar» busca igual que Enter, como en Clientes', async () => {
+    await crearComponente(true);
+    servicio.buscar.mockReturnValue(of(pagina([articulo(9)], 0, 1, 1)));
+    const input = el().querySelector<HTMLInputElement>('#q')!;
+    input.value = 'torni';
+    input.dispatchEvent(new Event('input'));
+
+    const boton = el().querySelector<HTMLButtonElement>('form.busqueda button[type="submit"]')!;
+    expect(boton.textContent?.trim()).toBe('Buscar');
+    boton.click();
+    await refrescar();
+
+    expect(servicio.buscar).toHaveBeenLastCalledWith('torni', 0, 20, false);
+  });
+
   it('el buscador no autocompleta ni corrige y su ejemplo termina en «…»', async () => {
     await crearComponente(true);
 

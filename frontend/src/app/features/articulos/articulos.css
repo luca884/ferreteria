@@ -19,8 +19,13 @@ a.accion-barra {
 .busqueda {
   display: flex;
   flex: 1 1 280px;
-  max-width: 460px;
+  gap: var(--e-2);
+  max-width: 560px;
   min-width: 0;
+}
+.busqueda .buscar {
+  flex: none;
+  height: 40px;
 }
 .caja-busqueda {
   display: flex;

@@ -107,8 +107,14 @@ export class Usuarios implements OnInit {
         this.usuarios.set([]);
         this.cargando.set(false);
         this.cargaFallida.set(true);
-        this.sinPermiso.set(err instanceof HttpErrorResponse && err.status === 403);
-        this.error.set(mensajeDe(err, 'No se pudieron cargar los usuarios.'));
+        const sinPermiso = err instanceof HttpErrorResponse && err.status === 403;
+        this.sinPermiso.set(sinPermiso);
+        // Como las demás pantallas del Dueño: decir qué es lo que solo puede él, no el «sin permiso» genérico.
+        this.error.set(
+          sinPermiso
+            ? 'Solo el Dueño puede administrar los usuarios.'
+            : mensajeDe(err, 'No se pudieron cargar los usuarios.'),
+        );
       },
     });
   }

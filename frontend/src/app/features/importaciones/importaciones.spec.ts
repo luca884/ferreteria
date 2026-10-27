@@ -2368,7 +2368,7 @@ describe('Importaciones', () => {
       };
       const tarjetas = () => Array.from(el().querySelectorAll('.tarjeta')).map((t) => texto(t));
 
-      it('con crear nuevos apagado, si solo quedan filas nuevas Confirmar se deshabilita con el aviso', async () => {
+      it('con crear nuevos apagado, si solo quedan filas nuevas Confirmar se deshabilita y explica la casilla', async () => {
         await conVistaPrevia();
         await desmarcarTodas();
 
@@ -2376,8 +2376,10 @@ describe('Importaciones', () => {
         await asentar();
 
         expect(q<HTMLButtonElement>('button.confirmar').disabled).toBe(true);
-        expect(q('#sin-filas-elegidas').textContent).toContain('Elegí al menos una fila.');
-        expect(q('button.confirmar').getAttribute('aria-describedby')).toContain('sin-filas-elegidas');
+        // Hay filas elegidas: «Elegí al menos una fila.» contradiría el contador. Lo que falta es la casilla.
+        expect(el().querySelector('#sin-filas-elegidas')).toBeNull();
+        expect(q('#nuevos-sin-crear').textContent).toContain('Tildala para crearlo.');
+        expect(q('button.confirmar').getAttribute('aria-describedby')).toContain('nuevos-sin-crear');
       });
 
       it('las tarjetas siguen contando la nueva elegida: el backend la cuenta para la deriva', async () => {
@@ -2421,7 +2423,7 @@ describe('Importaciones', () => {
         await asentar();
 
         expect(q<HTMLButtonElement>('button.confirmar').disabled).toBe(true);
-        expect(q('#sin-filas-elegidas')).not.toBeNull();
+        expect(q('#nuevos-sin-crear')).not.toBeNull();
         expect(servicio.aplicar).not.toHaveBeenCalled();
       });
 

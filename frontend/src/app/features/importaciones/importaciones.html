@@ -393,14 +393,17 @@
           }}
         </p>
       }
-      @if (sinFilasElegidas()) {
+      <!-- Con nuevas elegidas y la casilla apagada, el aviso de arriba ya dice qué falta. -->
+      @if (sinFilasElegidas() && !nuevosSinCrear()) {
         <p id="sin-filas-elegidas" class="ayuda sin-filas-elegidas">Elegí al menos una fila.</p>
       }
       <button
         type="button"
         class="confirmar primario"
         [disabled]="aplicando() || sinFilasElegidas()"
-        [attr.aria-describedby]="sinFilasElegidas() ? 'sin-filas-elegidas' : null"
+        [attr.aria-describedby]="
+          sinFilasElegidas() ? (nuevosSinCrear() ? 'nuevos-sin-crear' : 'sin-filas-elegidas') : null
+        "
         (click)="confirmar()"
       >
         {{ aplicando() ? 'Importando…' : 'Confirmar importación' }}

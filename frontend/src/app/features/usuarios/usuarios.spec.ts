@@ -434,10 +434,11 @@ describe('Usuarios', () => {
   });
 
   describe('si el servidor rechaza la lista', () => {
-    it('muestra el mensaje del 403 y ninguna fila', async () => {
+    it('con el 403 dice qué es solo del Dueño, como las demás pantallas, y ninguna fila', async () => {
       await crear([], vi.fn(() => throwError(() => errorHttp(403, 'No tenés permiso para hacer esto.'))));
 
-      expect(el().querySelector('.error')?.textContent).toContain('No tenés permiso para hacer esto.');
+      expect(el().querySelector('.error')?.textContent).toContain('Solo el Dueño puede administrar los usuarios.');
+      expect(el().textContent).not.toContain('No tenés permiso para hacer esto.');
       expect(filas()).toHaveLength(0);
       expect(el().querySelector('table')).toBeNull();
     });
