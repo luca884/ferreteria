@@ -72,7 +72,7 @@ public final class ExtractorPdf {
         reloj.start();
     }
 
-    private static void escribir(List<PalabraPdf> palabras, Path destino) throws IOException {
+    static void escribir(List<PalabraPdf> palabras, Path destino) throws IOException {
         try (DataOutputStream salida = new DataOutputStream(new BufferedOutputStream(Files.newOutputStream(destino)))) {
             salida.writeInt(palabras.size());
             for (PalabraPdf palabra : palabras) {

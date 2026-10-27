@@ -56,8 +56,12 @@ public class LectorPdf implements LectorDeLista {
     private static final List<String> OPCIONES_DEL_ENTORNO = List.of("JAVA_TOOL_OPTIONS", "JDK_JAVA_OPTIONS",
         "_JAVA_OPTIONS");
 
+    /** Donde suele estar {@code nice}; con una ruta fija, como el {@code java}, el PATH no elige que se ejecuta. */
+    private static final List<Path> NICE = List.of(Path.of("/usr/bin/nice"), Path.of("/bin/nice"));
+
     private final Topes topes;
     private final Class<?> principal;
+    private final Optional<Path> nice;
     private final Semaphore turno = new Semaphore(1, true);
     private final Set<Long> ferreteriasConPdf = ConcurrentHashMap.newKeySet();
 
@@ -67,8 +71,14 @@ public class LectorPdf implements LectorDeLista {
 
     /** Con otros topes o con otro proceso en lugar de {@link ExtractorPdf}, para probarlos. */
     LectorPdf(Topes topes, Class<?> principal) {
+        this(topes, principal, NICE.stream().filter(Files::isExecutable).findFirst());
+    }
+
+    /** Sin {@code nice} (una maquina que no lo tiene), para probar que la JVM aparte arranca igual. */
+    LectorPdf(Topes topes, Class<?> principal, Optional<Path> nice) {
         this.topes = topes;
         this.principal = principal;
+        this.nice = nice;
     }
 
     @Override
@@ -146,12 +156,19 @@ public class LectorPdf implements LectorDeLista {
         }
     }
 
+    /**
+     * La JVM aparte corre con la prioridad mas baja y ve un solo procesador: si un PDF la tiene ocupada, el servidor le
+     * gana la CPU. Un tope duro de CPU (cgroups) no se puede poner desde aca; el de tiempo sigue.
+     */
     private List<String> comando(Path pdf, Path palabras) {
-        List<String> comando = new ArrayList<>(List.of(
+        List<String> comando = new ArrayList<>();
+        nice.ifPresent(ruta -> comando.addAll(List.of(ruta.toString(), "-n", "19")));
+        comando.addAll(List.of(
             Path.of(System.getProperty("java.home"), "bin", "java").toString(),
             "-Xmx" + topes.memoria(),
             "-XX:+ExitOnOutOfMemoryError",
             "-XX:+UseSerialGC",
+            "-XX:ActiveProcessorCount=1",
             "-Djava.awt.headless=true",
             "-Dlogback.configurationFile=lector-pdf-logback.xml",
             "-cp", System.getProperty("java.class.path")));

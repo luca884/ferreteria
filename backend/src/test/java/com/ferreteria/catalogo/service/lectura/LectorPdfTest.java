@@ -15,6 +15,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -161,6 +162,25 @@ class LectorPdfTest {
         } finally {
             otro.shutdownNow();
         }
+    }
+
+    @Test
+    void elProcesoQueLeeCorreConLaPrioridadMasBajaYUnSoloProcesador() {
+        LectorPdf lector = new LectorPdf(TOPES, HijosDePrueba.DicePrioridadYProcesadores.class);
+
+        LecturaLista lectura = lector.leer(ListasDePrueba.pdf(LISTA));
+
+        assertThat(lectura.filas().stream().flatMap(fila -> textos(fila).stream()).filter(texto -> !texto.isBlank()))
+            .containsExactlyInAnyOrder("procesadores=1", "prioridad=19");
+    }
+
+    @Test
+    void sinNiceElProcesoQueLeeArrancaIgualYLee() {
+        LectorPdf sinNice = new LectorPdf(TOPES, ExtractorPdf.class, Optional.empty());
+
+        LecturaLista lectura = sinNice.leer(ListasDePrueba.pdf(LISTA));
+
+        assertThat(textos(lectura.filas().get(1))).containsExactly("A-1", "Tornillo 3/8 x 1", "$ 1.532,44");
     }
 
     @Test
