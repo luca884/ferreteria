@@ -51,8 +51,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * ./mvnw test -Pimagen. Cada corrida le pone a la imagen un tag propio, para no levantar una vieja si el build no la deja
  * en el daemon, y la borra al terminar; las capas quedan en la cache de BuildKit y la proxima construccion las reusa.
  *
- * La imagen se construye con docker build (BuildKit, como Railway) y no con ImageFromDockerfile de Testcontainers: ese
- * empaqueta el contexto con commons-compress 1.28, que pide un commons-lang3 mas nuevo que el 3.14 que fija Spring Boot.
+ * La imagen se construye con docker build (BuildKit, como Railway) y no con ImageFromDockerfile de Testcontainers.
  */
 @Tag("imagen")
 class ImagenDeProduccionTest {
