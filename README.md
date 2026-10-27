@@ -27,7 +27,7 @@ Todo corre en Railway, en el proyecto `ferreteria` (región us-east), con tres s
 
 - **Backend**: el jar arranca en el perfil `prod`, sin datos demo, con la zona `America/Argentina/Buenos_Aires` fija en la imagen. Variables obligatorias: `JWT_SECRET` (32 bytes o más), `DB_URL`, `DB_USER`, `DB_PASSWORD` y `CORS_ORIGINS` (el dominio del frontend; con otro `Origin` el backend responde 403). Sin `JWT_SECRET` no arranca.
 - **Frontend**: Caddy sirve el build de Angular y reenvía `/api/*` al backend por la red privada (`backend.railway.internal:8080`, se cambia con `BACKEND_HOST`). El front le pide la API a `/api` en su mismo origen; en local hace lo mismo el proxy de `ng serve` (`frontend/proxy.conf.json`).
-- **Primer usuario**: la base de producción arranca sin usuarios. El primer `SUPER_ADMIN` se crea una sola vez con un `INSERT` en `usuario` (`ferreteria_id` NULL, rol `SUPER_ADMIN`) y el hash de `htpasswd -nBC 10 ""`.
+- **Primer usuario**: la base de producción arranca sin usuarios. El primer `SUPER_ADMIN` se crea una sola vez con un `INSERT` en `usuario` (`ferreteria_id` NULL, rol `SUPER_ADMIN`) y el hash de `htpasswd -nBC 10 "" | tr -d ':\n'` (sin el `tr`, la salida empieza con `:` y el login da 401).
 
 ```bash
 railway up ./backend --path-as-root --service backend --ci
