@@ -3,6 +3,7 @@ package com.ferreteria.catalogo.service.lectura;
 import com.ferreteria.catalogo.model.FilaLeida;
 import com.ferreteria.catalogo.model.LecturaLista;
 import com.ferreteria.common.exception.BadRequestException;
+import com.ferreteria.tenant.TenantContext;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
@@ -11,6 +12,9 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import org.slf4j.Logger;
@@ -24,7 +28,7 @@ import org.springframework.stereotype.Component;
  *
  * <p>PDFBox no tiene topes propios: un PDF armado a proposito puede agotar la memoria o la CPU de quien lo lee. Por eso
  * el PDF se lee en una JVM aparte, con su memoria y su tiempo ({@link Topes}); si los pasa, se la mata y la lista es
- * demasiado grande, sin tocar al servidor compartido. Se lee un PDF por vez. En el jar empaquetado de Spring Boot la JVM
+ * demasiado grande, sin tocar al servidor compartido. Se lee un PDF por vez, y cada ferreteria espera uno solo. En el jar empaquetado de Spring Boot la JVM
  * aparte arranca con su {@code PropertiesLauncher}; con un classpath comun (tests, {@code spring-boot:run}), directo.
  */
 @Component
@@ -55,6 +59,7 @@ public class LectorPdf implements LectorDeLista {
     private final Topes topes;
     private final Class<?> principal;
     private final Semaphore turno = new Semaphore(1, true);
+    private final Set<Long> ferreteriasConPdf = ConcurrentHashMap.newKeySet();
 
     public LectorPdf() {
         this(TOPES, ExtractorPdf.class);
@@ -76,7 +81,28 @@ public class LectorPdf implements LectorDeLista {
         return new LecturaLista(List.of(HOJA), filas);
     }
 
+    /**
+     * Una ferreteria que ya tiene un PDF leyendose o esperando turno no espera otro: asi los pedidos que esperan no pasan
+     * de uno por ferreteria y ninguna le saca el turno a las demas. Sin ferreteria (tests, medicion) solo hay turno.
+     */
     private List<PalabraPdf> conTurno(byte[] contenido) {
+        Optional<Long> ferreteria = TenantContext.currentFerreteriaId();
+        if (ferreteria.isPresent() && !ferreteriasConPdf.add(ferreteria.get())) {
+            throw new BadRequestException(OCUPADO);
+        }
+        try {
+            esperarTurno();
+            try {
+                return leerAparte(contenido);
+            } finally {
+                turno.release();
+            }
+        } finally {
+            ferreteria.ifPresent(ferreteriasConPdf::remove);
+        }
+    }
+
+    private void esperarTurno() {
         try {
             if (!turno.tryAcquire(topes.espera().toMillis(), TimeUnit.MILLISECONDS)) {
                 throw new BadRequestException(OCUPADO);
@@ -84,11 +110,6 @@ public class LectorPdf implements LectorDeLista {
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw new IllegalStateException("Se interrumpió la espera para leer el PDF", e);
-        }
-        try {
-            return leerAparte(contenido);
-        } finally {
-            turno.release();
         }
     }
 

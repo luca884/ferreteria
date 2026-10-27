@@ -10,6 +10,7 @@ import com.ferreteria.catalogo.model.LecturaLista;
 import com.ferreteria.catalogo.service.lectura.LectorPdf.Topes;
 import com.ferreteria.common.exception.BadRequestException;
 import com.ferreteria.support.ListasDePrueba;
+import com.ferreteria.tenant.TenantContext;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -24,6 +25,7 @@ class LectorPdfTest {
     private static final String MENSAJE_GRANDE =
         "La lista es demasiado grande para leerla. Dividila en archivos más chicos.";
     private static final String ARCHIVO_DANADO = "No se pudo leer el archivo. Verificá que no esté dañado.";
+    private static final String OCUPADO = "Ya se está leyendo otra lista en PDF. Probá de nuevo en un momento.";
 
     private final LectorPdf lector = new LectorPdf();
 
@@ -151,13 +153,50 @@ class LectorPdfTest {
 
             assertThatThrownBy(() -> lento.leer(ListasDePrueba.pdf(LISTA)))
                 .isInstanceOf(BadRequestException.class)
-                .hasMessage("Ya se está leyendo otra lista en PDF. Probá de nuevo en un momento.");
+                .hasMessage(OCUPADO);
 
             // El primero sigue su curso y, al terminar (mal o bien), libera el turno.
             assertThatThrownBy(primero::get).hasRootCauseMessage(ARCHIVO_DANADO);
             assertThatThrownBy(() -> lento.leer(ListasDePrueba.pdf(LISTA))).hasMessage(ARCHIVO_DANADO);
         } finally {
             otro.shutdownNow();
+        }
+    }
+
+    @Test
+    void cadaFerreteriaLeeUnPdfPorVezYLasOtrasEsperanSuTurno() throws Exception {
+        LectorPdf lento = new LectorPdf(TOPES, HijosDePrueba.Tarda.class);
+        byte[] pdf = ListasDePrueba.pdf(LISTA);
+        ExecutorService pedidos = Executors.newFixedThreadPool(3);
+        try {
+            Future<String> deA = pedidos.submit(() -> leerComo(1L, lento, pdf));
+            esperarUnProcesoHijo();
+            Future<String> deB = pedidos.submit(() -> leerComo(2L, lento, pdf));
+            Future<String> otroDeB = pedidos.submit(() -> leerComo(2L, lento, pdf));
+            long desde = System.nanoTime();
+
+            assertThat(leerComo(1L, lento, pdf)).as("A ya está leyendo: avisa sin esperar turno").isEqualTo(OCUPADO);
+            assertThat(Duration.ofNanos(System.nanoTime() - desde)).isLessThan(Duration.ofSeconds(1));
+
+            // El de A sigue su curso; B lee uno solo de los suyos, y al terminar A vuelve a poder leer.
+            assertThat(deA.get()).isEqualTo(ARCHIVO_DANADO);
+            assertThat(List.of(deB.get(), otroDeB.get())).containsExactlyInAnyOrder(ARCHIVO_DANADO, OCUPADO);
+            assertThat(leerComo(1L, lento, pdf)).isEqualTo(ARCHIVO_DANADO);
+        } finally {
+            pedidos.shutdownNow();
+        }
+    }
+
+    /** Lee como la ferreteria del pedido y devuelve el aviso con el que termino (el hijo de prueba sale como danado). */
+    private static String leerComo(long ferreteria, LectorPdf lector, byte[] pdf) {
+        TenantContext.setCurrentFerreteriaId(ferreteria);
+        try {
+            lector.leer(pdf);
+            return "leyó";
+        } catch (BadRequestException e) {
+            return e.getMessage();
+        } finally {
+            TenantContext.clear();
         }
     }
 
