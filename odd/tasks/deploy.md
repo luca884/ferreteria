@@ -1,0 +1,36 @@
+# deploy
+
+Objetivo: dejar la app andando en producción, con el backend y MySQL en Railway y el frontend en Vercel · Por qué: pasar del entorno local a un entorno que pueda usar una ferretería real.
+Rama: `chore/deploy` desde `7ae3ec0` · Entrega: single-pr · Runner: `cd backend && ./mvnw test` · Mirror Engram: `odd/deploy/tasks` (ok) · Ruteo: caso 5 (alto riesgo), Opus de punta a punta.
+Pronóstico: ~150 líneas cambiadas (agregadas + borradas, sin generados) · Heurística por tarea: ~400 (no es límite)
+
+## Specs
+
+Alcance: imagen Docker del backend, configuración de Railway y Vercel, alta de los servicios, variables de entorno, primer SUPER_ADMIN y prueba de humo en producción. · Fuera de alcance: ARCA en producción (sigue en homologación por ferretería), dominio propio, CI, backups.
+Restricciones: cada paso remoto que cree o publique algo en las cuentas de Luca se confirma antes de correrlo. La zona de la JVM es `America/Argentina/Buenos_Aires` y no cambia entre deploys (`docs/spec.md:308-310`). Merge y push a `main` los corre Luca.
+
+- S1: "continuamos cn el proyecto, vamos con el deploy, donde decis de hacerlo" + "dale me parece bien" (a Railway para backend y MySQL, Vercel para el frontend) — Aceptación: el frontend en Vercel entra al backend en Railway por `/api` y se puede iniciar sesión. — Checks: `docker build`, `/actuator/health` en `UP`, login por el dominio de Vercel.
+- S2: "hay alguna forma que vos te puedas conectar desde aca con vercel y railway para que vos hagas el deploy?" — Aceptación: el deploy se hace con las CLIs `railway` y `vercel` desde esta máquina, con las sesiones de Luca. — Checks: `railway whoami`, `vercel whoami`.
+- S3: "dale, vamos con A" (A: el primer SUPER_ADMIN se crea con un `INSERT` a mano, una sola vez, en el MySQL de Railway, con el hash bcrypt generado en la máquina de Luca) — Aceptación: el SUPER_ADMIN inicia sesión en producción; la contraseña no queda en el repo, en variables de Railway ni en la conversación. — Checks: `POST /api/auth/login` responde 200.
+- S4 (supuesto): la JVM principal corre con `-Xmx768m`; con la hija del lector de PDF (`-Xmx256m`) el contenedor queda cerca de 1,2 GB. Confirmar o ajustar con el uso real.
+- S5 (supuesto): el MySQL de Railway es 8.4, igual que `docker-compose.yml`. Si la plantilla de Railway trae otra versión, se fija la imagen `mysql:8.4`.
+
+## Tasks
+
+- [x] T1 · S1 · ruta: inline · Aceptación: `backend/Dockerfile` (build con Maven, corre con JRE 17 completa, `TZ` fija, `java -jar`) y `.dockerignore`; el contenedor en perfil `prod` contra un MySQL 8.4 vacío aplica Flyway, responde `UP` y no avisa por la zona; en perfil `dev` el lector de PDF lee una lista dentro del contenedor. · Evidencia: RED sin `Dockerfile`; GREEN en L5 · Risk: item 5 (imagen de producción)
+- [x] T2 · S3 · ruta: inline · Aceptación: el `INSERT` del SUPER_ADMIN probado contra el MySQL vacío del T1: el login responde 200. · Evidencia: L5 · Risk: item 2 (alta de un usuario con todos los permisos)
+- [x] T3 · S1 · ruta: inline · Aceptación: `backend/railway.json` con el Dockerfile y el healthcheck `/actuator/health`. · Evidencia: `jq -e` válido; se lee al subir con `railway up ./backend --path-as-root` (L6) · Risk: item 5
+- [ ] T4 · S1, S2, S5 · ruta: inline, con OK de Luca por paso · Aceptación: proyecto en Railway con MySQL y el servicio del backend; variables `SPRING_PROFILES_ACTIVE`, `DB_URL`, `DB_USER`, `DB_PASSWORD`, `JWT_SECRET`, `CORS_ORIGINS`; dominio público; `/actuator/health` en `UP`. · Evidencia: — · Risk: item 5
+- [ ] T5 · S3 · ruta: Luca corre el `INSERT` · Aceptación: login del SUPER_ADMIN en producción responde 200. · Evidencia: — · Risk: item 2
+- [ ] T6 · S1, S2 · ruta: inline, con OK de Luca por paso · Aceptación: `frontend/vercel.json` apunta a Railway; proyecto en Vercel con raíz `frontend`; deploy de producción; login por el dominio de Vercel; una subida de lista de más de 4,5 MB pasa por el rewrite. · Evidencia: — · Risk: item 5
+- [ ] T7 · S1 · ruta: inline + `odd-verifier` · Aceptación: `CLAUDE.md` con el procedimiento de deploy; verificación independiente; `estado-actual.md` del vault actualizado. · Evidencia: — · Risk: item 5
+
+## Log
+
+- L1 (2026-10-27) Pedido original, textual:
+  > continuamos cn el proyecto, vamos con el deploy, donde decis de hacerlo
+- L2 (2026-10-27) Exploración: el perfil `prod` ya exige `JWT_SECRET` y `CORS_ORIGINS` y no carga `db/dev-data` (`backend/src/main/resources/application-prod.yml`); `PORT` sale del entorno (`application.yml`); el frontend usa `/api` relativo y `frontend/vercel.json` lo reenvía a Railway (falta la URL). No hay `Dockerfile`. `LectorPdf` lanza una JVM hija con `java.home` y `java.class.path` y, en el jar empaquetado, con `PropertiesLauncher` (`LectorPdf.java:54,163-188`): la imagen necesita JRE completa y arrancar con `java -jar`. Ninguna migración crea usuarios: el SUPER_ADMIN solo está en `db/dev-data/V1000__datos_demo.sql:9`.
+- L3 (2026-10-27) Decisiones de Luca: Railway + Vercel ("dale me parece bien"); deploy con las CLIs desde acá; primer SUPER_ADMIN con `INSERT` manual ("dale, vamos con A"). La CLI de Railway (5.49.2) ya tenía sesión; la de Vercel (59.11.7) quedó con sesión como `luca884`. Se saltearon el plugin global y el MCP que propone la guía de Vercel: alcanza con la CLI.
+- L4 (2026-10-27) Duda abierta para T6: si el rewrite de Vercel a un origen externo limita el tamaño del cuerpo, las listas de hasta 25 MB no pasan por `/api`. Verificar en la documentación de Vercel antes del deploy. Próximo paso: T1.
+- L5 (2026-10-27) T1 y T2 verificados con la imagen `ferreteria-api:deploy-check` en una red Docker propia, con un `mysql:8.4` vacío. Perfil `prod`: "Successfully applied 29 migrations ... now at version v29", `/actuator/health` → `{"status":"UP"}`, log en -03:00 y sin aviso de zona; corre como usuario `ferreteria`, con `/usr/bin/nice` y OpenJDK 17.0.20.1. Perfil `dev` (otra base): `POST /api/importaciones/muestra` con un PDF de 3 artículos → 200 y las 4 filas leídas por la JVM hija. T2: hash de `htpasswd -bnBC 10` (`$2y$10$`), `INSERT` con `ferreteria_id` NULL y rol `SUPER_ADMIN` → login 200 con `"rol":"SUPER_ADMIN"`, otra contraseña → 401. El WARN de `UserDetailsServiceAutoConfiguration` (usuario en memoria con contraseña generada) es inofensivo: basic con esa contraseña → 401, porque no hay `httpBasic` ni `formLogin`; queda como ruido en el log, fuera de alcance. Contenedores, red e imagen de prueba borrados.
+- L6 (2026-10-27) Documentación verificada. Railway: con `railway up ./backend --path-as-root` el archivo subido tiene raíz en `backend/`, así que toma `Dockerfile` y `railway.json` de ahí. Vercel: los proyectos creados desde el 6 de abril de 2026 cachean las respuestas de los rewrites externos según su `Cache-Control`; el backend no fija `Cache-Control` propio (Spring Security manda `no-store`), pero `frontend/vercel.json` apaga ese cacheo para `/api` con `x-vercel-enable-rewrite-caching: 0`, para que una respuesta de una ferretería nunca se sirva a otra. Límites de Vercel: el proxy a un origen externo corta a los 120 s (`ROUTER_EXTERNAL_TARGET_ERROR`); la página de límites no nombra un tope de cuerpo para rewrites externos (el de 4,5 MB es de las Functions): se prueba en T6. Próximo paso: T4, con OK de Luca.
