@@ -64,6 +64,31 @@ class CambioContrasenaIntegrationTest extends UsuariosTestBase {
     }
 
     @Test
+    @DisplayName("con la marca, repetir la contraseña que le dieron da 400 y la marca y el hash no cambian")
+    void marcaNoSeApagaConLaMisma() throws Exception {
+        jdbc.update("update usuario set debe_cambiar_contrasena = true where email = ?", email);
+
+        cambiar(token, json("passwordActual", "demo1234", "passwordNueva", "demo1234"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors.passwordNueva", is("Elegí una contraseña distinta de la que te dieron.")));
+
+        assertThat(marca()).isTrue();
+        assertThat(jdbcHash()).isEqualTo(HASH_DEMO);
+    }
+
+    @Test
+    @DisplayName("con la marca, un cambio rechazado (actual mala o nueva inválida) deja la marca y el hash como estaban")
+    void marcaSigueSiSeRechaza() throws Exception {
+        jdbc.update("update usuario set debe_cambiar_contrasena = true where email = ?", email);
+
+        cambiar(token, json("passwordActual", "equivocada", "passwordNueva", "clave-nueva-99")).andExpect(status().isBadRequest());
+        cambiar(token, json("passwordActual", "demo1234", "passwordNueva", "corta")).andExpect(status().isBadRequest());
+
+        assertThat(marca()).isTrue();
+        assertThat(jdbcHash()).isEqualTo(HASH_DEMO);
+    }
+
+    @Test
     @DisplayName("con la actual incorrecta da 400 en passwordActual y el mismo token sigue sirviendo")
     void actualIncorrecta() throws Exception {
         cambiar(token, json("passwordActual", "equivocada", "passwordNueva", "clave-nueva-99"))

@@ -364,6 +364,16 @@ class UsuariosIntegrationTest extends UsuariosTestBase {
         intentarLogin(email, "clave-nueva-99").andExpect(jsonPath("$.sesion.debeCambiarContrasena", is(true)));
     }
 
+    @Test
+    @DisplayName("el Dueño que se resetea la propia contraseña desde Usuarios no queda marcado: la eligió él")
+    void resetearLaPropiaNoMarca() throws Exception {
+        putJson("/api/usuarios/" + duenoId + "/password", dueno, json("password", "clave-propia-99"))
+                .andExpect(status().isNoContent());
+
+        assertThat(marcaDe(duenoId)).isFalse();
+        intentarLogin(emailDueno, "clave-propia-99").andExpect(jsonPath("$.sesion.debeCambiarContrasena", is(false)));
+    }
+
     private boolean marcaDe(long id) {
         return jdbc.queryForObject("select debe_cambiar_contrasena from usuario where id = ?", Boolean.class, id);
     }

@@ -63,7 +63,8 @@ public class UsuarioController {
 
     @PutMapping("/{id}/password")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void resetearContrasena(@PathVariable Long id, @Valid @RequestBody ResetContrasenaRequest request) {
-        usuarioService.resetearContrasena(id, request.password());
+    public void resetearContrasena(@PathVariable Long id, @Valid @RequestBody ResetContrasenaRequest request,
+                                   @AuthenticationPrincipal AuthUser authUser) {
+        usuarioService.resetearContrasena(id, request.password(), authUser.userId());
     }
 }

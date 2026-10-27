@@ -90,6 +90,10 @@ public class AuthService {
         if (!passwordEncoder.matches(actual, usuario.getPasswordHash())) {
             throw new DatosInvalidosException(Map.of("passwordActual", "La contraseña actual no es correcta."));
         }
+        // Con la marca, repetir la que eligió otra persona no es cambiarla: la marca seguiría apagándose sin rotar nada.
+        if (usuario.isDebeCambiarContrasena() && nueva.equals(actual)) {
+            throw new DatosInvalidosException(Map.of("passwordNueva", "Elegí una contraseña distinta de la que te dieron."));
+        }
         PoliticaDeContrasena.validar("passwordNueva", nueva);
         usuario.cambiarPropiaContrasena(passwordEncoder.encode(nueva));
     }

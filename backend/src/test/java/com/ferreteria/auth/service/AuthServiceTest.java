@@ -215,6 +215,33 @@ class AuthServiceTest {
     }
 
     @Test
+    @DisplayName("con la marca, repetir la contraseña que le dieron responde 400 en passwordNueva y la marca sigue")
+    void cambiarContrasenaObligatoriaPorLaMisma() {
+        Usuario usuario = yo();
+        when(encoder.matches("la-que-me-dieron", "$2a$10$actual")).thenReturn(true);
+
+        assertThatThrownBy(() -> auth.cambiarContrasena(YO, "la-que-me-dieron", "la-que-me-dieron"))
+                .isInstanceOfSatisfying(DatosInvalidosException.class, e ->
+                        assertThat(e.errors()).containsExactly(
+                                entry("passwordNueva", "Elegí una contraseña distinta de la que te dieron.")));
+        assertThat(usuario.getPasswordHash()).isEqualTo("$2a$10$actual");
+        assertThat(usuario.isDebeCambiarContrasena()).isTrue();
+    }
+
+    @Test
+    @DisplayName("sin la marca, repetir la misma contraseña sigue permitido, como antes")
+    void cambiarContrasenaPorLaMismaSinMarca() {
+        Usuario usuario = yo();
+        usuario.cambiarPropiaContrasena("$2a$10$actual");
+        when(encoder.matches("la-misma-de-siempre", "$2a$10$actual")).thenReturn(true);
+        when(encoder.encode("la-misma-de-siempre")).thenReturn("$2a$10$otro");
+
+        auth.cambiarContrasena(YO, "la-misma-de-siempre", "la-misma-de-siempre");
+
+        assertThat(usuario.getPasswordHash()).isEqualTo("$2a$10$otro");
+    }
+
+    @Test
     @DisplayName("cambiar la propia contraseña apaga la marca de cambio obligatorio")
     void cambiarContrasenaApagaLaMarca() {
         Usuario usuario = yo();

@@ -386,7 +386,7 @@ class UsuarioServiceTest {
         u.cambiarPropiaContrasena("propio");
         existe(7, u);
 
-        servicio.resetearContrasena(7L, "otraclave99");
+        servicio.resetearContrasena(7L, "otraclave99", 1L);
 
         verify(encoder).encode("otraclave99");
         assertThat(u.getPasswordHash()).isEqualTo("hash-nuevo");
@@ -395,11 +395,24 @@ class UsuarioServiceTest {
     }
 
     @Test
+    @DisplayName("el Dueño que se resetea la propia contraseña no queda marcado: la eligió él")
+    void resetearLaPropia() {
+        Usuario u = usuario(Rol.DUENO, true);
+        u.cambiarPropiaContrasena("propio");
+        existe(7, u);
+
+        servicio.resetearContrasena(7L, "otraclave99", 7L);
+
+        assertThat(u.getPasswordHash()).isEqualTo("hash-nuevo");
+        assertThat(u.isDebeCambiarContrasena()).isFalse();
+    }
+
+    @Test
     @DisplayName("resetear la contraseña de un usuario ajeno responde 404 sin hashear")
     void resetearAjeno() {
         when(usuarios.findScoped(99L)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> servicio.resetearContrasena(99L, "otraclave99"))
+        assertThatThrownBy(() -> servicio.resetearContrasena(99L, "otraclave99", 1L))
                 .isInstanceOf(ResourceNotFoundException.class);
         verify(encoder, never()).encode(anyString());
     }
@@ -409,7 +422,7 @@ class UsuarioServiceTest {
     void resetearValidaLaPolitica() {
         existe(7, usuario(Rol.VENDEDOR, true));
 
-        assertThatThrownBy(() -> servicio.resetearContrasena(7L, "corta"))
+        assertThatThrownBy(() -> servicio.resetearContrasena(7L, "corta", 1L))
                 .isInstanceOfSatisfying(DatosInvalidosException.class,
                         e -> assertThat(e.errors()).containsOnlyKeys("password"));
     }

@@ -102,10 +102,15 @@ public class UsuarioService {
     }
 
     @Transactional
-    public void resetearContrasena(Long id, String nueva) {
+    public void resetearContrasena(Long id, String nueva, Long actorId) {
         Usuario usuario = obtener(id);
         PoliticaDeContrasena.validar("password", nueva);
-        usuario.resetearContrasena(passwordEncoder.encode(nueva));
+        if (id.equals(actorId)) {
+            // El Dueño que se resetea la propia la eligió él: no hay nada que obligarlo a cambiar.
+            usuario.cambiarPropiaContrasena(passwordEncoder.encode(nueva));
+        } else {
+            usuario.resetearContrasena(passwordEncoder.encode(nueva));
+        }
         guardar(usuario);
     }
 
