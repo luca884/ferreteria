@@ -22,11 +22,11 @@ El MVP tiene tres roles fijos. Nada de permisos configurables por ahora.
 
 | Rol | Quién es | Puede |
 | --- | --- | --- |
-| Super admin | Vos (el proveedor del servicio) | Dar de alta ferreterías (razón social, CUIT y condición de IVA), suspenderlas, ver estado general. Después del alta no edita los datos de la ferretería: los edita el Dueño (CU-01). No ve datos de ventas |
-| Dueño | El dueño o encargado de la ferretería | Todo dentro de su ferretería: configuración, ARCA, usuarios, precios, reportes, anulaciones |
+| Super admin | Vos (el proveedor del servicio) | Dar de alta ferreterías (razón social, CUIT y condición de IVA), suspenderlas, ver estado general. Después del alta no edita los datos de la ferretería: los edita el Dueño (CU-01). Marca una ferretería «de prueba», le asigna el simulador de ARCA y prende su «facturación habilitada» (CU-01). No ve datos de ventas |
+| Dueño | El dueño o encargado de la ferretería | Todo dentro de su ferretería: configuración, ARCA (salvo el ambiente, que nunca elige), usuarios, precios, reportes, anulaciones |
 | Vendedor | Quien atiende el mostrador | Buscar artículos, vender, facturar, consultar stock, abrir y cerrar la caja |
 
-**Actor externo:** ARCA (WSAA para autenticación, WSFEv1 para pedir el CAE).
+**Actor externo:** ARCA (WSAA para autenticación, WSFEv1 para pedir el CAE). Hasta la conexión real, un simulador del WSFEv1 hace sus veces para la ferretería marcada «de prueba» (ver Integración ARCA).
 
 ## Casos de uso del MVP
 
@@ -39,6 +39,9 @@ Son 12 casos de uso (CU-01 a CU-12), agrupados en cinco módulos: Configuración
 1. Carga razón social, CUIT, condición frente al IVA, domicilio e inicio de actividades.
    - **Datos de la ferretería** (Configuración → Facturación, solo el Dueño; decidido por Luca el 2026-10-28, D1 del plan de facturación). La razón social, el CUIT y la condición de IVA los carga el super admin en el alta; después el Dueño es el único que edita la razón social, la condición de IVA, el **domicilio comercial**, el **inicio de actividades** y los **Ingresos Brutos** (número, Convenio Multilateral, Exento o No contribuyente: la RG 1415 los pide en cada comprobante). El CUIT se ve y no se cambia nunca. El domicilio y el inicio de actividades son los del local donde se factura. Domicilio, inicio de actividades e Ingresos Brutos se pueden dejar vacíos al guardar; completos son requisito para habilitar la facturación. El inicio de actividades no puede ser una fecha futura. `GET`/`PUT /api/datos-fiscales`; el Vendedor y el super admin reciben 403.
 2. Carga el punto de venta habilitado en ARCA para factura electrónica (web service).
+   - **Ambiente de ARCA** (panel del super admin; decidido por Luca el 2026-10-28, D3 del plan de facturación). Hay tres: simulador, homologación y producción (ver Integración ARCA → Ambientes). **El Dueño nunca elige el ambiente.** El simulador lo asigna solo el super admin, y solo a una ferretería que él marcó «de prueba» (hoy, la Ferretería de Prueba): nunca a una ferretería sin la marca ni a una con registros fiscales de homologación o producción. Homologación o producción salen de la CA que firmó el certificado validado (paso 3; ramas 5 y 6 del plan), y de producción no se vuelve. El ambiente y el punto de venta no cambian mientras la ferretería tenga registros fiscales abiertos (pendientes, en curso o en verificación). Solo el super admin pone la marca y asigna el simulador: el Dueño y el Vendedor reciben 403, y otra ferretería no ve nada.
+   - **Punto de venta con el simulador** (decidido por Luca el 2026-10-28 al abrir la rama 2 del plan de facturación). Al asignar el simulador, el punto de venta queda fijo en 1, sin pantalla para cambiarlo. En el simulador el número no tiene efecto fiscal; el real lo carga el Dueño en este paso, desde la rama 5.
+   - **Facturación habilitada** (panel del super admin; decidido por Luca el 2026-10-28, ajuste a D3 del plan de facturación). La prende solo el super admin, y queda guardada su fecha de activación. Exige los datos del paso 1 completos (razón social, condición de IVA, domicilio comercial, inicio de actividades e Ingresos Brutos) y un ambiente asignado. Un certificado validado fija el ambiente, pero no habilita la facturación por sí solo. El Dueño y el Vendedor reciben 403.
 3. Sube el certificado (.crt) y la clave privada, o genera el CSR desde el sistema.
 4. El sistema prueba la conexión contra ARCA y muestra el último número de comprobante autorizado.
    - Alternativo: el certificado vence o es inválido → se avisa y se bloquea la facturación (la venta sin factura sigue habilitada).
@@ -93,7 +96,7 @@ Son 12 casos de uso (CU-01 a CU-12), agrupados en cinco módulos: Configuración
    - Puede aplicar un **descuento en %** a un renglón (F7) o a todo el ticket (F6). Va de 0 a 99,99 %, con hasta 2 decimales; 0 lo saca. Cada usuario puede tener un **tope de descuento** (como el «Límite de Descuento» de GDS): lo carga el Dueño en Usuarios (0 a 99,99 %, vacío = sin tope) y el Dueño no tiene. Se mide el descuento efectivo de cada renglón, el del renglón y el global combinados; igual al tope entra. Si la venta, el presupuesto o el remito lo pasan, el sistema lo frena con un aviso. Al pasar a venta un presupuesto o un remito, sus descuentos ya están autorizados por quien lo emitió: el tope solo frena lo que se agregue o se suba. El descuento global se aplica a cada renglón (prorrateo), así el total es exactamente la suma de los renglones. El comprobante guarda el descuento de cada renglón, el global y el subtotal antes de descuentos; el que lo aplicó es el usuario de la venta.
 2. Elige el cliente: Consumidor Final por defecto, o **F9** (botón «Cliente»): busca por razón social, CUIT o DNI entre los clientes activos, elige con ↑↓ y Enter, y puede dar de alta uno nuevo sin salir del mostrador (CU-11). El cliente se ve en el ticket con un «Quitar», se guarda con el ticket y viaja con la venta, el presupuesto y el remito; tras cobrar el ticket vuelve a quedar sin cliente. La venta guarda el id del cliente y una **copia de su razón social**: renombrarlo después no cambia lo ya emitido. En el presupuesto y el remito el diálogo muestra el cliente elegido en lugar del campo de texto libre, que sigue valiendo cuando no se eligió uno. «Pasar a venta» desde un presupuesto o un remito trae su cliente al ticket. Un cliente de otra ferretería es 404 y uno desactivado es 422; repetir la clave con otro cliente es `CLAVE_CON_OTRO_CONTENIDO`.
    - **Consumidor Final sin identificar** (GDS-32, como el «Límite de Venta a Cons.Final sin datos» de GDS, G88): desde el tope de la ferretería (igual o superior), la venta **facturable** necesita un cliente con documento (DNI, CUIT o CUIL). Sin cliente, con un cliente sin documento o con un nombre libre, la venta es 422 `CONSUMIDOR_FINAL_SIN_DATOS` («Desde $ <tope> la venta a Consumidor Final necesita identificar al comprador: elegí un cliente con DNI, CUIT o CUIL.») y no guarda nada; el mostrador deja el cobro abierto con el mensaje. Se compara el total que se cobra, con el recargo. La venta no facturable no se controla, y tampoco el presupuesto ni el remito (sí la venta que sale de ellos). El tope arranca en **$ 10.000.000**, el vigente de ARCA (RG 5700/2025, que mantiene la RG 5866/2026), y el Dueño lo cambia en Configuración → Consumidor Final (`GET`/`PUT /api/configuracion-ventas`, mayor que 0, hasta 2 decimales).
-3. El sistema decide el comprobante (A, B o C) según la condición de IVA de la ferretería y del cliente.
+3. El sistema decide el comprobante (A, B o C) según la condición de IVA de la ferretería y del cliente (tabla en «Reglas de negocio → Comprobantes»).
 4. Elige la **forma de pago** entre las que la ferretería tiene activas (por defecto Efectivo, Débito, Crédito y Transferencia; «Cuenta corriente» existe pero viene inactiva hasta que el Dueño la activa); o **pago mixto** (más de una forma): carga una parte y el resto se sugiere solo en la forma siguiente, y las partes tienen que sumar exactamente el total. Cada forma va una sola vez. El vuelto es solo del pago en efectivo único.
    - Cada forma tiene un **recargo en %** (0 a 200, 2 decimales; 0 por defecto) que el Dueño configura en Configuración → Formas de pago, donde también da de alta, edita, activa y desactiva (las formas no se borran). Cada una pertenece a un medio (efectivo, débito, crédito, transferencia o cuenta corriente), así la caja sigue sumando por medio. Siempre tiene que quedar al menos una forma activa de efectivo.
    - El recargo se calcula después de los descuentos, sobre la parte pagada con esa forma, y se reparte entre los renglones en proporción a su total (con su alícuota de IVA, porque integra la base del IVA): el total sigue siendo la suma de los renglones. El diálogo de cobro muestra el recargo y el total a cobrar. En el pago mixto la parte que se carga es la del ticket sin recargo.
@@ -273,15 +276,30 @@ Estas reglas se codifican en el dominio y se cubren con tests unitarios antes qu
 
 ### Comprobantes
 
+La letra es la que autoriza ARCA hoy (decidido por Luca el 2026-10-28, D2 del plan de facturación: RG 1415 con la RG 5003 y el anexo del manual WSFEv1 4.8). La venta sin cliente es a Consumidor Final.
+
 | Emisor (la ferretería) | Cliente | Comprobante |
 | --- | --- | --- |
 | Responsable Inscripto | Responsable Inscripto | Factura A |
-| Responsable Inscripto | Consumidor Final, Monotributista o Exento | Factura B |
-| Monotributista | Cualquiera | Factura C |
+| Responsable Inscripto | Monotributista | Factura A, con la leyenda de la Ley 27.618 |
+| Responsable Inscripto | Consumidor Final, Exento o venta sin cliente | Factura B |
+| Monotributista | Cualquiera, también la venta sin cliente | Factura C, sin IVA |
+| Exento | Cualquiera, también la venta sin cliente | Factura C, sin IVA (el contador confirma esta fila antes de habilitar una ferretería exenta) |
 
+Cada pedido a ARCA lleva estos códigos (el mapeo vive en `facturacion`):
+
+| Dato del pedido | Valores |
+| --- | --- |
+| `CbteTipo` | Factura A 1, B 6 y C 11; nota de crédito A 3, B 8 y C 13 |
+| `DocTipo` | CUIT 80, CUIL 86, DNI 96 y sin identificar 99 (venta sin cliente o cliente sin documento) |
+| `CondicionIVAReceptorId` | Responsable Inscripto 1, Exento 4, Consumidor Final (también la venta sin cliente) 5 y Monotributista 6 |
+
+- **Todo pedido lleva `CondicionIVAReceptorId`.** ARCA rechaza el pedido sin ella (10246, obligatoria desde el 01/12/2026) y la B a un Monotributista (10243). La letra es una función pura con una tabla de verdad exhaustiva en JSON (las 3 condiciones del emisor por las 4 del cliente, más la venta sin cliente) que comparten el test de dominio y el simulador.
+- La A a un Monotributista lleva la leyenda de la Ley 27.618 (RG 5003, desde el 01/07/2021). La hoja impresa es de la rama 4 del plan de facturación.
 - La factura B a consumidor final informa el IVA contenido (Régimen de Transparencia Fiscal). Validar el formato vigente con un contador.
 - Por encima del monto que fija ARCA, la venta a consumidor final exige identificar al cliente con DNI. El monto queda como parámetro configurable, no en el código.
-- La numeración la da ARCA: antes de emitir se consulta el último comprobante autorizado por punto de venta y tipo.
+- La numeración la da ARCA, por serie (ferretería, ambiente, punto de venta y tipo): el número y la fecha fiscal se asignan al enviar, nunca se reenvía a ciegas y un rechazo libera el número (ver Integración ARCA → Numeración).
+- El IVA que se informa se desglosa por alícuota a nivel comprobante, no renglón por renglón (ver Integración ARCA → Qué se manda).
 - Un comprobante con CAE es inmutable. Solo se corrige con nota de crédito.
 
 ### Stock
@@ -326,7 +344,7 @@ La base también lo garantiza (V29): toda FK entre tablas de negocio es compuest
 | Entidad | Atributos clave | Relaciones |
 | --- | --- | --- |
 | Tenant | razón social, CUIT, condición IVA, domicilio comercial, inicio de actividades, Ingresos Brutos, estado (activo/suspendido) | 1—N con todo lo demás |
-| ConfigArca | punto de venta, certificado y clave (cifrados), vencimiento del certificado, ambiente (homologación/producción) | 1—1 con Tenant |
+| ConfigArca (módulo `facturacion`) | marca «de prueba», ambiente (`SIMULADOR`, `HOMOLOGACION` o `PRODUCCION`; sin asignar al principio, de producción no se vuelve), punto de venta (fijo en 1 con el simulador), facturación habilitada y su fecha de activación. La marca, el simulador y la habilitación los pone solo el super admin (CU-01). El certificado, la clave cifrada y su vencimiento llegan con CU-01 paso 3 (rama 5 del plan de facturación) | 1—1 con Tenant |
 | Usuario | email, hash de contraseña, nombre, rol, activo | N—1 Tenant |
 | Rubro | nombre, margen por defecto | 1—N Artículo |
 | Proveedor | nombre, CUIT, mapeo de columnas de su lista (JSON) | 1—N Artículo, 1—N ImportacionLista |
@@ -337,7 +355,7 @@ La base también lo garantiza (V29): toda FK entre tablas de negocio es compuest
 | Compra | proveedor, tipo (FA, FB, FC, REM), punto de venta, número (único por proveedor y tipo en la ferretería), fecha, neto, clave de idempotencia, usuario que la cargó | N—1 Proveedor, 1—N ItemCompra |
 | ItemCompra | cantidad, costo unitario sin IVA, costo y precio anteriores del artículo (copiados al confirmar) | N—1 Compra, N—1 Articulo |
 | Cliente | razón social, tipo y número de documento (opcionales y siempre juntos, único por ferretería), condición IVA, domicilio, teléfono, WhatsApp, correo, activo, límite de cuenta corriente (`limite_cuenta_corriente`, NULL = sin cuenta corriente, 0 = sin crédito, nunca negativo), saldo (`saldo`, 0 por defecto; positivo = debe, negativo = a favor; caché del libro) | N—1 Ferretería, 1—N Comprobante, 1—N Presupuesto, 1—N Remito, 1—N MovimientoCuentaCliente |
-| Comprobante | tipo (FA, FB, FC, NC), punto de venta, número, fecha, neto, IVA, total, subtotal (antes de descuentos), descuento global %, recargo, cliente (opcional, con copia de su razón social), presupuesto o remito de origen (opcional, nunca los dos), CAE, vencimiento del CAE, estado (pendiente, autorizado, rechazado) | N—1 Cliente, N—1 Caja, 1—N Item, 1—N Pago |
+| Comprobante | tipo (hoy solo `VENTA`; la nota de crédito llega con CU-08), número interno propio por ferretería (no es el fiscal), fecha, neto, IVA, total, subtotal (antes de descuentos), descuento global %, recargo, cliente (opcional, con copia de su razón social), presupuesto o remito de origen (opcional, nunca los dos), estado (`SIN_FACTURAR` o `NO_FACTURABLE`). No guarda CAE ni estado fiscal: viven en su ComprobanteFiscal | N—1 Cliente, N—1 Caja, 1—N Item, 1—N Pago, 0—1 ComprobanteFiscal |
 | ItemComprobante | descripción, cantidad, precio unitario, alícuota IVA, bruto, descuento % del renglón, recargo, subtotal y costo sin IVA en pesos (copiados al momento de la venta; el costo es nulo en las ventas anteriores a CU-15) | N—1 Comprobante, N—1 Articulo |
 | Presupuesto | número propio por ferretería, fecha, vencimiento, estado (pendiente, aceptado, rechazado, facturado), cliente (texto libre, opcional), observaciones, neto, IVA, total, subtotal (antes de descuentos), descuento global %, usuario que lo emitió | N—1 Ferretería, N—1 Usuario, 1—N ItemPresupuesto, 0—1 Comprobante (la venta que lo facturó) |
 | ItemPresupuesto | descripción, unidad, cantidad, precio unitario, alícuota IVA, bruto, descuento % del renglón, subtotal (copiados al emitirlo) | N—1 Presupuesto, N—1 Articulo |
@@ -351,6 +369,10 @@ La base también lo garantiza (V29): toda FK entre tablas de negocio es compuest
 | Recibo | número propio por ferretería (único, correlativo desde 1), clave de idempotencia (única por ferretería), cliente (con copia de su razón social), caja, usuario, fecha (la fija el reloj del servidor), medio (efectivo o transferencia), total (> 0), estado (`EMITIDO` o `ANULADO`) y, si está anulado, quién, cuándo, en qué caja y con qué motivo lo anuló (`fecha_anulacion`, `usuario_anulacion_id`, `caja_anulacion_id`, `motivo_anulacion`; las cuatro juntas o ninguna). Inmutable salvo el estado y su auditoría, que cambian una sola vez | N—1 Ferretería, N—1 Cliente, N—1 Caja (la del cobro), 0—1 Caja (la de la anulación), N—1 Usuario, 0—1 Usuario (el que anuló), 1—N Imputacion, 1—1 MovimientoCuentaCliente (el cobro), 0—1 MovimientoCuentaCliente (la anulación) |
 | NumeradorRecibo | último número usado, uno por ferretería (propio: independiente de los de comprobantes, presupuestos y remitos) | 1—1 Ferretería |
 | Imputacion | importe (> 0), cliente, vigente (verdadero mientras el recibo no está anulado); único por (recibo, comprobante). Solo alta: no se borra y no se edita, salvo el paso de vigente a no vigente que hace la anulación (una sola vez), y no escribe en el libro | N—1 Ferretería, N—1 Cliente, N—1 Recibo, N—1 Comprobante |
+| ComprobanteFiscal (registro fiscal, módulo `facturacion`) | ambiente (se fija al crearlo y no cambia), clase o letra (A, B o C), `CbteTipo`, punto de venta, número y `CbteFch` (nulos hasta enviar), estado (`PENDIENTE`, `EN_CURSO`, `EN_VERIFICACION`, `AUTORIZADO`, `RECHAZADO` o `FUERA_DE_FECHA`), CAE y su vencimiento, resultado, observaciones y errores de ARCA tal cual, copia del receptor (condición de IVA, documento, razón social y domicilio) y del emisor (los datos de CU-01 paso 1), importes enviados (`ImpTotal`, `ImpNeto`, `ImpIVA`). Único por comprobante y por (ferretería, ambiente, punto de venta, `CbteTipo`, número) | 1—1 Comprobante (FK compuesta), N—1 Ferretería, 1—N ComprobanteFiscalAlicuota, 1—N IntentoFiscal |
+| ComprobanteFiscalAlicuota | Id de alícuota de WSFEv1 (3 = 0 %, 4 = 10,5 %, 5 = 21 %, 6 = 27 %, 8 = 5 %, 9 = 2,5 %), `BaseImp` e `Importe` del desglose por comprobante | N—1 ComprobanteFiscal |
+| IntentoFiscal | número y `CbteFch` del envío, pedido, respuesta y resultado. Se guarda antes de llamar a ARCA y el resultado se completa después | N—1 ComprobanteFiscal |
+| SerieFiscal | ferretería, ambiente, punto de venta y `CbteTipo` (una fila por serie), lease con dueño (quién la tiene tomada y hasta cuándo) | N—1 Ferretería |
 
 **Decisiones:**
 
@@ -364,18 +386,53 @@ La base también lo garantiza (V29): toda FK entre tablas de negocio es compuest
 - **Ajustes (V28, tramo 3b-2):** migración aditiva. Crea `numerador_ajuste_cuenta` (como el de recibos) y `ajuste_cuenta` (ferretería, cliente, número y clave únicos por ferretería, tipo `RECARGO` o `DESCUENTO`, importe mayor que 0, motivo de al menos 5 caracteres, fecha y usuario; inmutable). El libro gana `ajuste_id` (único; `AJUSTE` ⇔ hay ajuste). `imputacion` deja opcionales `recibo_id` y `comprobante_id` y gana `ajuste_origen_id` (un Descuento), `ajuste_destino_id` (un Recargo) y `automatica` (falso por defecto; verdadero cuando la imputación la creó la deuda nueva al consumir crédito), con un CHECK de exactamente un origen y exactamente un destino y una única por cada par. Las filas existentes no cambian. Rollback probado en `backend/src/test/resources/clientes/rollback-v28-ajustes-cuenta-corriente.sql`. **Invariante nueva** I2f: cada ajuste tiene exactamente un `AJUSTE` en el libro con su importe del lado que le toca, y un Descuento no imputa más que su importe.
 - **Extracto:** una consulta nativa con una función de ventana (`SUM(debe − haber) OVER (ORDER BY id)`) sobre **todo** el libro del cliente, con los filtros de fecha y tipo y el límite aplicados afuera: el saldo de cada línea es el real aunque se filtre o se pagine, y una transacción de solo lectura sin locks da una única foto. Usa el índice `ix_mcc_cliente` (ferretería, cliente, id) y el filtro por `ferreteria_id` explícito. La impresión es un único pedido con tope de 2000 movimientos y el indicador `truncado`.
 - **Módulos:** `clientes` guarda el libro, el saldo y las imputaciones y expone un puerto de cobranza en `clientes.api` (solo ids y escalares, sin entidades) que incluye el asiento de la anulación; `ventas` guarda el recibo, el numerador, la caja y la idempotencia y orquesta (rol, caja, estado, motivo y auditoría de la anulación). `clientes` no lee `ventas` y `ventas` no usa repositorios de `clientes` (ArchUnit); `clientes` es el único escritor de libro, imputaciones y saldo. El puerto no declara nada de nota de crédito: la fase de facturación la agregará con un ALTER aditivo y un método propio.
+- **Registro fiscal (V32 y V33, rama 2 del plan de facturación):** el CAE vive en un registro fiscal 1—1 del módulo `facturacion`, no en Comprobante. Reportes, consultas y pantallas siguen leyendo `comprobante.tipo` (`VENTA`) y `comprobante.estado` (`SIN_FACTURAR` o `NO_FACTURABLE`), que no cambian. V32 es aditiva: crea ConfigArca, el registro fiscal con sus alícuotas, los intentos y la serie, todos con `ferreteria_id` y FK compuestas. El número es nulo hasta enviar, así que los pendientes no chocan en el único por serie. Un CHECK de coherencia, como el de V22: `AUTORIZADO` ⇔ CAE, vencimiento, número y `CbteFch` presentes, y número nulo en `PENDIENTE` y `RECHAZADO` (un rechazo libera el número). V33, también aditiva, crea las tablas del simulador, con `ferreteria_id`. Las dos traen su rollback probado con guarda; en producción, después del primer CAE (simulado o real), la vuelta atrás es solo de código, porque un rollback de esquema borraría comprobantes inmutables.
+- **Módulo `facturacion`** (rama 2 del plan de facturación): guarda ConfigArca, el registro fiscal, sus alícuotas, los intentos, la serie y el estado del simulador, y es el **único escritor** del registro fiscal y del CAE (sin setters del CAE). Es el único que habla con ARCA o con el simulador y, desde la rama 4, el que arma el QR. Fronteras en `ModulosArchTest`, que reemplazan la regla que prohibía el paquete: solo `facturacion` conoce a ARCA (escaneo de los hosts de ARCA en el código fuente); `facturacion.api` usa solo tipos del JDK; `ventas` usa `facturacion` solo por `facturacion.api` (desde la rama 3, dentro de la transacción de la venta); `facturacion` no depende de `ventas`, `clientes`, `stock` ni `catalogo` (sí de `ferreteria`, por los datos del emisor), y no usa `HoraArgentina.ahora()`, `now()` ni `Instant.now()`: el tiempo sale del `Clock` inyectado. `plataforma` lee y cambia la marca «de prueba», el ambiente y la facturación habilitada solo por `facturacion.api`. Sus repositorios extienden `TenantScopedRepository`. La alícuota se modela con el Id de WSFEv1, no con la de `catalogo`: la venta la traduce (rama 3).
 
 ## Integración ARCA
 
-La facturación usa dos servicios SOAP de ARCA: WSAA para obtener el token y WSFEv1 para pedir el CAE. Todo se desarrolla primero contra homologación y se pasa a producción por tenant con un flag.
+La facturación usa dos servicios SOAP de ARCA: WSAA para obtener el token y WSFEv1 para pedir el CAE. Todo se construye primero contra un **simulador del WSFEv1 4.8** dentro de `facturacion`; la homologación y el paso a producción se hacen con la piloto (rama 11 del plan de facturación). El ambiente de cada ferretería no es un flag: lo fija el super admin o la CA del certificado (CU-01, «Ambiente de ARCA»).
+
+**Ambientes** (quién los fija: decidido por Luca el 2026-10-28, D3 del plan de facturación; el resto, reglas del plan de facturación del 2026-10-28):
+
+- Hay tres: `SIMULADOR`, `HOMOLOGACION` y `PRODUCCION`. El ambiente va en cada registro fiscal y en sus únicos, se fija al crearlo y no cambia: un cambio de configuración no reetiqueta lo ya emitido ni manda a ARCA real un pendiente simulado.
+- **Lo simulado nunca parece fiscal.** La marca, la letra y el QR salen del ambiente del registro, nunca de la configuración actual. Fuera de producción, y en todo lo que no tiene CAE, la pantalla, la API y el impreso muestran la letra X con «DOCUMENTO NO VALIDO COMO FACTURA» y «SIMULADO — sin validez fiscal» (u «HOMOLOGACIÓN — sin validez fiscal»), sin QR ni «Comprobante Autorizado». La hoja es de la rama 4.
+- **Nada simulado llega a ARCA real.** El adaptador se elige por el ambiente del registro: el simulador rechaza lo que no es `SIMULADOR` y el cliente real rechaza `SIMULADOR`. Las URL de ARCA salen del ambiente, nunca de un campo editable. El ambiente y el punto de venta no cambian mientras haya registros `PENDIENTE`, `EN_CURSO` o `EN_VERIFICACION`.
 
 **Flujo de una factura:**
 
 1. Se arma el TRA (LoginTicketRequest), se firma en CMS/PKCS#7 con el certificado (BouncyCastle) y se llama a `loginCms` del WSAA. Devuelve token y sign, válidos unas 12 horas.
 2. El token se cachea por tenant y por servicio hasta que vence. No se pide uno por factura: ARCA rechaza pedidos repetidos con un token vigente.
-3. `FECompUltimoAutorizado` devuelve el último número para ese punto de venta y tipo; el nuevo es ese + 1.
-4. `FECAESolicitar` con cabecera, importes, alícuotas de IVA y datos del cliente. Devuelve CAE y vencimiento, o las observaciones y errores.
-5. Se guarda el CAE, se genera el PDF con el código QR obligatorio y se marca el comprobante como autorizado.
+3. Con la serie tomada, se asignan el número siguiente y la `CbteFch`, y el intento se guarda antes de llamar (ver «Numeración»).
+4. `FECAESolicitar` con cabecera, importes, el desglose por alícuota y el receptor con su `CondicionIVAReceptorId`. Devuelve CAE y vencimiento, o las observaciones y errores.
+5. El resultado se guarda en el registro fiscal (el comprobante no cambia): el CAE, su vencimiento y las observaciones y errores tal cual. La factura impresa lleva el código QR obligatorio, que se arma en `facturacion` (rama 4).
+
+Con el simulador, los pasos 1 y 2 no existen hasta la rama 6, cuando el simulador pasa a recibir el mismo XML y la misma firma CMS que recibiría ARCA.
+
+**Qué se manda** (la letra: decidido por Luca el 2026-10-28, D2 del plan de facturación; el desglose, plan de facturación del 2026-10-28):
+
+- La letra, `CbteTipo`, `DocTipo` y `CondicionIVAReceptorId` salen de las tablas de «Reglas de negocio → Comprobantes». El mapeo del dominio al pedido es el mismo en todos los ambientes.
+- **Desglose del IVA por alícuota a nivel comprobante.** Para cada alícuota a, con T el total con IVA de sus renglones: `BaseImp` = T / (1 + a) redondeado al centavo e `Importe` = T − `BaseImp`. En la C, `ImpNeto` es el total, `ImpIVA` vale 0 y no va el array de IVA. `ImpTotal` es siempre lo cobrado. Sumar el IVA renglón por renglón, como la venta de hoy, no pasa la tolerancia de 10051 en tickets chicos: dos renglones de $ 100 al 21 % ya fallan, y por comprobante pasan. El neto y el IVA del Comprobante (los de los reportes de CU-15) pueden diferir en centavos del desglose fiscal; se acepta mientras el libro IVA esté fuera del MVP.
+- Lo que va a ARCA (letra, receptor, emisor y desglose) se congela en el registro fiscal al vender (rama 3): un reintento nunca lo recalcula.
+
+**Numeración** (plan de facturación del 2026-10-28, regla «Nunca se reenvía a ciegas»):
+
+- La serie es (ferretería, ambiente, punto de venta, `CbteTipo`). Se toma con un **lease con dueño en la base**, que vale entre JVM (en cada deploy conviven dos): hay a lo sumo un intento abierto por serie, y la serie se atiende en orden FIFO.
+- El número y la `CbteFch` se asignan **al enviar**, no al vender. El intento se guarda con ellos en una transacción corta antes de llamar; la llamada va sin transacción ni lock abiertos, y el resultado se guarda en otra transacción corta con un UPDATE condicional.
+- Antes de enviar se chequea la `CbteFch`: no puede ser anterior a la del último autorizado ni a más de 5 días antes del envío (N−5) y, si es posterior al envío, tiene que caer en el mismo mes. Lo que no entra pasa a `FUERA_DE_FECHA`, sin reintento: la fecha nunca cambia sola.
+- Un timeout de conexión cuenta como no enviado. Un timeout de lectura o un 5xx pasa el registro a `EN_VERIFICACION`, que traba la serie hasta resolverse con `FECompUltimoAutorizado` y `FECompConsultar`, sobre el número N del intento:
+  - si ARCA ya autorizó N o más, se consulta N y se adopta el CAE solo si coinciden todos los campos; si no coinciden, alerta sin renumerar;
+  - si el último autorizado es N−1, se reenvía el mismo intento;
+  - si es menor que N−1, alerta de serie desincronizada.
+- Un rechazo libera el número: el registro rechazado queda sin número.
+
+**Simulador** (plan de facturación del 2026-10-28; rama 2, y desde la rama 6 en el borde del transporte):
+
+- Va detrás de un puerto en términos de WSFEv1 (`FECompUltimoAutorizado`, `FECAESolicitar` y `FECompConsultar`) y solo atiende el ambiente `SIMULADOR`, que solo se asigna a una ferretería marcada «de prueba» (CU-01).
+- Copia el manual WSFEv1 4.8, con la versión escrita en el código y sus mismos códigos y mensajes: valida 10013, 10015 (formato), 10016, 10023, 10040, 10048, 10051 (HALF_EVEN y tolerancias), 10061, 10071, 10152, 10197, 10243 y 10246, y devuelve como observaciones 10041, 10063, 10188, 10217 y 10237. Cada diferencia que aparezca con ARCA real se agrega como test del simulador.
+- Tiene **estado propio** en tablas con `ferreteria_id` (V33), que sobrevive a un reinicio. La latencia es configurable, y las fallas (timeout antes y después de autorizar, 502 y rechazo con observaciones) se inyectan solo en tests.
+
+**Tiempo:** todo el tiempo de `facturacion` (la `CbteFch`, los leases y los vencimientos) sale del `Clock` inyectado; ArchUnit le prohíbe `HoraArgentina.ahora()`, `now()` e `Instant.now()`.
 
 **Cómo se autentica cada ferretería:** se eligió el **certificado propio por tenant** (decisión de Luca, 2026-10-22). Cada ferretería genera su certificado con su clave fiscal, carga sus datos (CUIT, punto de venta) y hace sus trámites con ARCA; el sistema solo conecta esa ferretería con ARCA. No hay CUIT del servicio ni delegación. Los dos modelos que se evaluaron:
 
@@ -388,9 +445,9 @@ La facturación usa dos servicios SOAP de ARCA: WSAA para obtener el token y WSF
 
 **Contingencias:**
 
-- ARCA caída o con timeout → el comprobante queda "pendiente de CAE", el cliente se lleva un ticket provisorio y un job reintenta cada pocos minutos.
+- ARCA caída o con timeout → la venta queda "pendiente de CAE" (en su registro fiscal), el cliente se lleva un ticket provisorio y un job reintenta cada pocos minutos.
 - ARCA rechaza el comprobante → se guarda el error tal cual lo devuelve ARCA y se le muestra al dueño en una bandeja de rechazados.
-- Antes de reintentar, se consulta si el número ya fue autorizado (`FECompConsultar`) para no duplicar facturas.
+- Antes de reintentar un envío en duda se resuelve `EN_VERIFICACION` con `FECompUltimoAutorizado` y `FECompConsultar` (ver «Numeración»), para no duplicar facturas.
 - El régimen CAEA (CAE anticipado para emitir offline) queda para después del MVP.
 
 ## Arquitectura y stack
@@ -405,7 +462,7 @@ flowchart TB
         CAT["Catálogo<br/>Artículos, rubros, proveedores, listas"]
         VEN["Ventas<br/>Ticket, comprobantes, pagos, caja"]
         STK["Stock<br/>Movimientos, ajustes, mínimos"]
-        FAC["Facturación<br/>Cliente WSAA/WSFEv1, reintentos de CAE"]
+        FAC["Facturación<br/>Letra, numeración, simulador, cliente WSAA/WSFEv1, QR"]
         DOC["Documentos<br/>PDF con QR"]
     end
     DB[("MySQL en Railway<br/>base compartida · Flyway")]
@@ -415,7 +472,7 @@ flowchart TB
     FAC -- "SOAP, solo desde este módulo" --> ARCA
 ```
 
-Cada módulo es un paquete con su dominio, servicios y controladores. ArchUnit impide que un módulo use las clases internas de otro, y solo Facturación conoce a ARCA.
+Cada módulo es un paquete con su dominio, servicios y controladores. ArchUnit impide que un módulo use las clases internas de otro, y solo Facturación conoce a ARCA. Las reglas de `facturacion` (ver «Modelo de datos → Módulo `facturacion`») están en `ModulosArchTest`: un escaneo del código fuente encuentra los hosts de ARCA solo en `facturacion`. El QR de ARCA se arma ahí y se expone por `facturacion.api` (rama 4), así que la regla no necesita excepciones.
 
 | Capa | Tecnología |
 | --- | --- |
@@ -450,15 +507,15 @@ Nada de esto entra hasta que haya una ferretería piloto usando el sistema todos
 
 ## Plan de implementación
 
-Son siete fases (de la 0 a la 6) en orden de riesgo y de dolor del cliente. La fase 0 y la prueba con ARCA corren en paralelo porque ARCA es lo único que puede trabar el proyecto entero.
+Son siete fases (de la 0 a la 6) en orden de riesgo y de dolor del cliente. La fase 0 y la prueba con ARCA corren en paralelo porque ARCA es lo único que puede trabar el proyecto entero. Desde el 2026-10-28 (plan de facturación), esa prueba es el simulador de la fase 5 más la homologación con la piloto.
 
 0. **Validación con ferreterías** (1 semana, en paralelo con la fase 1)
    - Visitar 3 o 4 ferreterías con las preguntas de la sección siguiente.
    - Conseguir un Excel real de lista de proveedor y una exportación real de artículos.
    - Resultado: esta lista de casos de uso ajustada y una ferretería piloto comprometida.
-1. **Prueba técnica de ARCA en homologación** (1 semana)
-   - Proyecto aparte, sin UI: certificado de homologación, `loginCms`, `FECompUltimoAutorizado` y `FECAESolicitar` de una factura B.
-   - Terminado cuando: un test de integración obtiene un CAE real de homologación.
+1. **ARCA: simulador y homologación con la piloto** (reemplaza a la prueba técnica en homologación; plan de facturación del 2026-10-28)
+   - Sin proyecto aparte: el riesgo de ARCA se ataca con un simulador que copia el manual WSFEv1 4.8 (rama 2 de la fase 5) y con el cliente real probado sin CUIT (rama 6). La homologación necesita el certificado de una piloto y va en la rama 11.
+   - Terminado cuando: con el certificado de la piloto, la suite de contrato pasa contra homologación y obtiene un CAE real de homologación de una factura B (rama 11).
 2. **Esqueleto** (3 a 5 días)
    - Repo, Spring Boot + Angular, auth y multi-tenant traídos de Sendo, Flyway, Docker Compose y deploy en Railway.
    - Terminado cuando: un usuario de cada uno de dos tenants entra y no ve nada del otro (con test).
@@ -467,10 +524,22 @@ Son siete fases (de la 0 a la 6) en orden de riesgo y de dolor del cliente. La f
 4. **Mostrador** (CU-06, CU-07 sin ARCA, CU-10) (2 semanas)
    - Búsqueda con lector de código de barras, ticket, medios de pago, presupuesto y caja.
    - Terminado cuando: una venta de 5 artículos se cierra en menos de 15 segundos solo con teclado y lector.
-5. **Facturación electrónica** (CU-01, CU-07 completo, CU-08) (2 semanas)
-   - Se enchufa el código de la fase 1: CAE, PDF con QR, nota de crédito, reintentos y bandeja de rechazados.
+5. **Facturación electrónica** (CU-01, CU-07 completo, CU-08) (unas 18.000 a 28.000 líneas: las 2 semanas originales quedan cortas)
+   - Once ramas, en este orden (detalle en `wiki/plan-facturacion.md` del vault):
+     - Rama 1, `feat/cu-01-datos-fiscales`: CU-01 paso 1, datos fiscales de la ferretería.
+     - Rama 2, `feat/cu-07-motor-fiscal`: CU-07 pasos 3 y 5 sin pantalla: módulo `facturacion`, registro fiscal, numeración y simulador. Queda apagada en producción.
+     - Rama 3, `feat/cu-07-venta-facturada`: la venta crea el registro fiscal y pide el CAE.
+     - Rama 4, `feat/cu-07-factura-mostrador`: CU-07 paso 5 y CU-16, la factura impresa con QR en el mostrador.
+     - Rama 5, `feat/cu-01-certificado-arca`: CU-01 pasos 2 y 3, punto de venta, certificado y clave cifrada. Puede empezar apenas la 2 fije el puerto, en paralelo con la 3 y la 4.
+     - Rama 6, `feat/cu-01-conexion-arca`: CU-01 paso 4, WSAA y WSFEv1 reales, y el simulador en el borde del transporte.
+     - Rama 7, `feat/cu-07-contingencias`: reintento automático, bandeja de rechazados y contingencia.
+     - Rama 8, `feat/cu-08-nota-de-credito`: nota de crédito con CAE sobre una factura autorizada.
+     - Rama 9, `feat/cu-07-remito-presupuesto-imprimible`: remito y presupuesto imprimibles. Puede ir en cualquier momento después de la 4.
+     - Rama 10, `feat/cu-08-nc-cuenta-corriente`: CU-08 sobre cuenta corriente.
+     - Rama 11, `feat/cu-07-arca-real-piloto`: homologación con la piloto, que se adelanta apenas haya una piloto con certificado y la 6 esté en producción, y paso a producción, que espera la 7, la 8 y al contador.
+   - Siguen abiertos con el contador el CAEA y los duplicados electrónicos: si alguno entra, es una rama más antes del paso a producción.
 6. **Stock, pulido y piloto** (CU-02, CU-09) (2 semanas)
-   - Ajustes de stock, gestión de usuarios, carga inicial de datos del piloto y paso a producción en ARCA.
+   - Ajustes de stock, gestión de usuarios, carga inicial de datos del piloto y paso a producción en ARCA (rama 11 de la fase 5).
 
 **Forma de trabajo con Claude Code:** este documento se exporta como `docs/spec.md` en el repo y el `CLAUDE.md` apunta a él. Cada caso de uso se implementa en una rama propia: primero los tests del dominio, después el endpoint y después la pantalla.
 
