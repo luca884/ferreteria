@@ -81,6 +81,19 @@ app:
       # (si no, la app no arranca): si venciera con una llamada en vuelo, otra instancia vería N-1, reenviaría y ARCA
       # contestaría 10016.
       lease: ${FACTURACION_LEASE_SERIE:180s}
+    # Tope de ARCA (RG 5866) para la venta sin cliente identificado: desde ese total, inclusive, no se factura anónima.
+    tope-identificacion: ${FACTURACION_TOPE_IDENTIFICACION:10000000.00}
+    venta:
+      # Cuánto espera la venta su CAE antes de responder con el estado que haya (de 5 a 8 s en producción).
+      espera: ${FACTURACION_VENTA_ESPERA:6s}
+      # Pausa entre atenciones mientras otra instancia tiene tomada la serie.
+      pausa-serie-ocupada: ${FACTURACION_VENTA_PAUSA_SERIE_OCUPADA:200ms}
+      # Hilos del ejecutor que pide los CAE de las ventas.
+      hilos: ${FACTURACION_VENTA_HILOS:8}
+      # Pedidos que esperan un hilo libre; con la cola llena, la venta responde sin esperar su CAE.
+      cola: ${FACTURACION_VENTA_COLA:100}
+      # Al apagar, cuánto se espera a que terminen los pedidos de CAE en curso (el drenaje de Railway tiene que cubrirlo).
+      espera-al-apagar: ${FACTURACION_VENTA_ESPERA_AL_APAGAR:20s}
 
 ---
 # Desarrollo local: el simulador de WSFEv1 tarda un poco, como ARCA.

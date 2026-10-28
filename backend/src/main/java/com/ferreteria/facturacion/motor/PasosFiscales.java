@@ -75,7 +75,7 @@ public class PasosFiscales {
     @Transactional
     public long registrar(AltaFiscal alta, Instant ahora) {
         ConfigArca config = configs.bloquearCompartidaScoped()
-                .filter(c -> c.isFacturacionHabilitada() && c.getAmbiente() != null && c.getPuntoVenta() != null)
+                .filter(ConfigArca::puedeFacturar)
                 .orElseThrow(() -> new ReglaDeNegocioException(NO_HABILITADA));
         Long ferreteriaId = TenantContext.requireFerreteriaId();
         EmisorFiscal emisor = emisor(ferreteriaId);

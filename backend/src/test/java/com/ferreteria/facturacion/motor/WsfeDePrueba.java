@@ -25,6 +25,8 @@ import java.util.concurrent.atomic.AtomicInteger;
  *   <li>un rechazo en la cabecera ({@link #rechazarEnLaCabecera}): R en la cabecera, con {@code Errors} y sin detalle,
  *       como el ejemplo 3 del manual (p. 84), sin llegar al simulador.</li>
  * </ol>
+ * Además, una excepción sin traducir ({@link #lanzarEnElSiguienteFeCaeSolicitar}), como la de un adaptador que no la
+ * convierte en las del puerto: la lanza el siguiente {@code FECAESolicitar}, después de la pausa y sin llegar al simulador.
  * {@code FECompUltimoAutorizado} y {@code FECompConsultar} pasan siempre al simulador.
  */
 public final class WsfeDePrueba implements ServicioWsfe {
@@ -46,6 +48,7 @@ public final class WsfeDePrueba implements ServicioWsfe {
     private final ServicioWsfe simulador;
     private final Queue<Pausa> pausas = new ConcurrentLinkedQueue<>();
     private final Queue<List<Err>> rechazosEnLaCabecera = new ConcurrentLinkedQueue<>();
+    private final Queue<RuntimeException> excepciones = new ConcurrentLinkedQueue<>();
     private final AtomicInteger solicitudes = new AtomicInteger();
     private volatile WsfeConFallas fallas;
 
@@ -54,11 +57,12 @@ public final class WsfeDePrueba implements ServicioWsfe {
         reiniciar();
     }
 
-    /** Sin fallas, pausas ni rechazos pendientes, y la cuenta de pedidos en 0. */
+    /** Sin fallas, pausas, rechazos ni excepciones pendientes, y la cuenta de pedidos en 0. */
     public void reiniciar() {
         fallas = new WsfeConFallas(simulador);
         pausas.clear();
         rechazosEnLaCabecera.clear();
+        excepciones.clear();
         solicitudes.set(0);
     }
 
@@ -75,6 +79,11 @@ public final class WsfeDePrueba implements ServicioWsfe {
 
     public void rechazarEnLaCabecera(Err... errores) {
         rechazosEnLaCabecera.add(List.of(errores));
+    }
+
+    /** El siguiente {@code FECAESolicitar} lanza esa excepción, sin llegar al simulador. */
+    public void lanzarEnElSiguienteFeCaeSolicitar(RuntimeException excepcion) {
+        excepciones.add(excepcion);
     }
 
     /** Cuántos {@code FECAESolicitar} llegaron a este puerto. */
@@ -94,6 +103,10 @@ public final class WsfeDePrueba implements ServicioWsfe {
         if (pausa != null) {
             pausa.llego.avisar();
             pausa.soltada.esperar();
+        }
+        RuntimeException excepcion = excepciones.poll();
+        if (excepcion != null) {
+            throw excepcion;
         }
         List<Err> errores = rechazosEnLaCabecera.poll();
         if (errores != null) {

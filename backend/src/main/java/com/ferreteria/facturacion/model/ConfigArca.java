@@ -154,6 +154,14 @@ public class ConfigArca {
         this.habilitadaEn = null;
     }
 
+    /**
+     * Si la ferretería factura con esta configuración: la facturación habilitada, con ambiente y punto de venta. Lo miran la
+     * decisión de la venta y el alta del registro fiscal, así las dos deciden igual.
+     */
+    public boolean puedeFacturar() {
+        return facturacionHabilitada && ambiente != null && puntoVenta != null;
+    }
+
     private static String faltanDatos(List<String> faltantes) {
         if (faltantes.size() == 1) {
             return "Para habilitar la facturación falta un dato de la ferretería: " + faltantes.get(0)

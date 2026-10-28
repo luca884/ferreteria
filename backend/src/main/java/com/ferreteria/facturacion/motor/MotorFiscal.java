@@ -95,7 +95,15 @@ public class MotorFiscal {
      * ({@code ReglaDeNegocioException}). Devuelve el id del registro.
      */
     public long registrar(AltaFiscal alta) {
-        return pasos.registrar(alta, reloj.instant());
+        return registrar(alta, reloj.instant());
+    }
+
+    /**
+     * Lo mismo, con la hora de la venta en vez de la del {@code Clock}: la venta y su registro fiscal llevan el mismo
+     * instante, y de él sale la CbteFch. Se suma a la transacción de quien llama.
+     */
+    public long registrar(AltaFiscal alta, Instant registradoEn) {
+        return pasos.registrar(alta, registradoEn);
     }
 
     /**

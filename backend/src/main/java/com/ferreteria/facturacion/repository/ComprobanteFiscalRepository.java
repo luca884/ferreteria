@@ -34,6 +34,14 @@ public interface ComprobanteFiscalRepository extends TenantScopedRepository<Comp
         return siguientePendiente(TenantContext.requireFerreteriaId(), ambiente.name(), puntoVenta, cbteTipo);
     }
 
+    /** El registro de una venta (1-1: {@code uk_comprobante_fiscal_comprobante}). Solo lectura: el estado que ve la venta. */
+    @Query("select c from ComprobanteFiscal c where c.ferreteriaId = :fid and c.comprobanteId = :comprobanteId")
+    Optional<ComprobanteFiscal> deComprobante(@Param("fid") Long ferreteriaId, @Param("comprobanteId") long comprobanteId);
+
+    default Optional<ComprobanteFiscal> deComprobanteScoped(long comprobanteId) {
+        return deComprobante(TenantContext.requireFerreteriaId(), comprobanteId);
+    }
+
     /** PENDIENTE → EN_CURSO con el número y la CbteFch del intento que se guarda en la misma transacción. */
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query(value = """
