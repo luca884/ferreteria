@@ -1,3 +1,4 @@
+import { ResumenFiscal } from '../../shared/factura/factura.models';
 import { RenglonVentaResponse, VentaResponse } from '../mostrador/venta.models';
 
 /** Contrato de GET /api/ventas y GET /api/ventas/{id} (G60), tipado contra VentaResumenResponse / VentaResponse. */
@@ -15,6 +16,8 @@ export interface VentaResumen {
   usuario?: string;
   /** false si quedó «No facturable» (NF-002). */
   facturable: boolean;
+  /** Su factura, resumida (C2): null (o ausente) si la venta no tiene registro fiscal. */
+  fiscal?: ResumenFiscal | null;
 }
 
 /** Filtros del listado; `desde` y `hasta` son días (aaaa-mm-dd), ambos inclusive. `page` empieza en 0. */
@@ -26,6 +29,8 @@ export interface FiltroVentas {
   cliente?: string;
   desde?: string;
   hasta?: string;
+  /** El número de la factura como se escribió («12», «1-12» o «00001-00000012»): lo valida el servidor (S15). */
+  numeroFiscal?: string;
 }
 
 export interface RenglonConsultado extends RenglonVentaResponse {

@@ -46,5 +46,7 @@ export const resumenDePrueba = (numero: number, cambios: Partial<VentaResumen> =
   total: 3000,
   usuario: 'Ana Vendedora',
   facturable: true,
+  // C2: sin registro fiscal viene null.
+  fiscal: null,
   ...cambios,
 });

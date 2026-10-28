@@ -20,6 +20,7 @@ export class VentasService {
     if (filtro.cliente) params = params.set('cliente', filtro.cliente);
     if (filtro.desde) params = params.set('desde', filtro.desde);
     if (filtro.hasta) params = params.set('hasta', filtro.hasta);
+    if (filtro.numeroFiscal) params = params.set('numeroFiscal', filtro.numeroFiscal);
     return this.http.get<PageResponse<VentaResumen>>(this.url, { params });
   }
 

@@ -18,6 +18,17 @@
       />
     </label>
     <label>
+      N.º de factura
+      <input
+        name="numeroFiscal"
+        type="text"
+        autocomplete="off"
+        placeholder="00001-00000012"
+        [value]="numeroFactura()"
+        (input)="numeroFactura.set($any($event.target).value)"
+      />
+    </label>
+    <label>
       Cliente
       <input
         name="cliente"
@@ -62,6 +73,7 @@
         <thead>
           <tr>
             <th scope="col">N.º</th>
+            <th scope="col">Factura</th>
             <th scope="col">Fecha</th>
             <th scope="col">Cliente</th>
             <th scope="col">Usuario</th>
@@ -77,6 +89,14 @@
                 </button>
                 @if (!fila.facturable) {
                   <span class="marca">No facturable</span>
+                }
+              </td>
+              <td class="factura">
+                @if (factura(fila.fiscal); as f) {
+                  {{ f.texto }}
+                  @if (f.marcas) {
+                    <span class="marca">{{ f.marcas }}</span>
+                  }
                 }
               </td>
               <td>{{ fecha(fila.fecha) }}</td>
@@ -116,12 +136,19 @@
       }
       @if (detalle(); as v) {
         <h2>Venta N.º {{ v.numero }}</h2>
+        @if (lineaFiscal(); as linea) {
+          <p class="linea-fiscal">{{ linea }}</p>
+        }
         <app-venta-hoja [venta]="v" />
         <div class="acciones">
           <button type="button" class="primario" (click)="imprimiendo.set(true)">Imprimir</button>
         </div>
         @if (imprimiendo()) {
-          <app-venta-imprimible [venta]="v" (cerrar)="imprimiendo.set(false)" />
+          @if (facturada(); as f) {
+            <app-factura-imprimible [venta]="f" (cerrar)="imprimiendo.set(false)" />
+          } @else {
+            <app-venta-imprimible [venta]="v" (cerrar)="imprimiendo.set(false)" />
+          }
         }
       } @else if (!errorDetalle()) {
         <p class="ayuda">Cargando…</p>

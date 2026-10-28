@@ -36,6 +36,14 @@ describe('VentasService', () => {
     req.flush({ items: [], page: 2, size: 20, totalElements: 0, totalPages: 0 });
   });
 
+  it('manda el número de factura como `numeroFiscal`, tal cual se escribió (CU-16, S15)', () => {
+    service.listar({ page: 0, numeroFiscal: '00001-00000012' }).subscribe();
+    const req = http.expectOne((r) => r.url.endsWith('/ventas'));
+    expect(req.request.params.get('numeroFiscal')).toBe('00001-00000012');
+    expect(req.request.params.keys().sort()).toEqual(['numeroFiscal', 'page', 'size']);
+    req.flush({ items: [], page: 0, size: 20, totalElements: 0, totalPages: 0 });
+  });
+
   it('trae una venta con GET /ventas/{id}', () => {
     service.obtener(31).subscribe();
     const req = http.expectOne((r) => r.url.endsWith('/ventas/31'));

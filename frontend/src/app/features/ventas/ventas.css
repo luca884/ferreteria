@@ -22,6 +22,14 @@
 .filtros input[name='numero'] {
   width: 7rem;
 }
+.filtros input[name='numeroFiscal'] {
+  width: 11rem;
+}
+/* El número fiscal no se parte entre renglones. */
+.factura {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
 
 .ventas {
   margin-bottom: var(--e-4);
@@ -70,6 +78,12 @@
 }
 .detalle h2 {
   margin: 0;
+}
+/* La factura de la venta, en una línea: el detalle de siempre sigue abajo. */
+.linea-fiscal {
+  margin: 0;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
 }
 .acciones {
   display: flex;

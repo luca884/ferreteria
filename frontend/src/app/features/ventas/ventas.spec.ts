@@ -2,6 +2,7 @@ import { registerLocaleData } from '@angular/common';
 import localeEsAr from '@angular/common/locales/es-AR';
 import { LOCALE_ID, signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { HttpErrorResponse } from '@angular/common/http';
 import { of, throwError } from 'rxjs';
 import { vi } from 'vitest';
 import { PageResponse } from '../../core/api/page.models';
@@ -10,6 +11,8 @@ import { Ventas } from './ventas';
 import { VentaResumen } from './ventas.models';
 import { VentasService } from './ventas.service';
 import { resumenDePrueba, ventaDePrueba } from './ventas.testing';
+import { MARCA_SIMULADO, documentoB, documentoX, fiscalDe } from '../../shared/factura/factura.testing';
+import { FiscalVenta } from '../../shared/factura/factura.models';
 
 registerLocaleData(localeEsAr);
 
@@ -80,19 +83,143 @@ describe('Ventas (consulta y reimpresión, G60)', () => {
     expect(el().querySelector('form.filtros')).toBeNull();
   });
 
-  it('lista las ventas con número, fecha y hora, cliente, usuario y total', async () => {
+  it('lista las ventas con número, factura, fecha y hora, cliente, usuario y total; sin registro fiscal la factura va vacía', async () => {
     await crear([resumenDePrueba(5), resumenDePrueba(4, { clienteNombre: undefined, facturable: false })]);
 
     expect(api.listar).toHaveBeenCalledWith({ page: 0 });
     expect(filas()).toHaveLength(2);
-    expect(celdas(filas()[0])).toEqual(['5', '22/10/2026 16:05', 'Cliente 5', 'Ana Vendedora', '$ 3.000,00']);
+    expect(celdas(filas()[0])).toEqual(['5', '', '22/10/2026 16:05', 'Cliente 5', 'Ana Vendedora', '$ 3.000,00']);
     expect(celdas(filas()[1])).toEqual([
       '4 No facturable',
+      '',
       '22/10/2026 16:05',
       'Consumidor Final',
       'Ana Vendedora',
       '$ 3.000,00',
     ]);
+  });
+
+  it('la columna «Factura» dice la letra impresa y el número; el estado si no está autorizada y el ambiente si no es producción', async () => {
+    await crear([
+      resumenDePrueba(9, {
+        fiscal: { letra: 'B', puntoVenta: 1, numero: 12, estado: 'AUTORIZADO', ambiente: 'PRODUCCION', validoComoFactura: true },
+      }),
+      resumenDePrueba(8, {
+        fiscal: { letra: 'X', puntoVenta: 1, numero: 13, estado: 'AUTORIZADO', ambiente: 'SIMULADOR', validoComoFactura: false },
+      }),
+      resumenDePrueba(7, {
+        fiscal: { letra: 'X', puntoVenta: 2, numero: null, estado: 'PENDIENTE', ambiente: 'PRODUCCION', validoComoFactura: false },
+      }),
+      resumenDePrueba(6, {
+        fiscal: { letra: 'X', puntoVenta: 1, numero: 4, estado: 'RECHAZADO', ambiente: 'HOMOLOGACION', validoComoFactura: false },
+      }),
+    ]);
+
+    expect(filas().map((f) => celdas(f)[1])).toEqual([
+      'B 00001-00000012',
+      'X 00001-00000013 Simulado',
+      'X Pendiente',
+      'X 00001-00000004 Rechazada · Homologación',
+    ]);
+    expect(normal(el().querySelector('table.ventas thead')?.textContent)).toContain('Factura');
+  });
+
+  it('filtra por número de factura con `numeroFiscal`; un formato que el servidor no acepta muestra su mensaje en los filtros', async () => {
+    await crear();
+    campo('numeroFiscal', ' 00001-00000012 ');
+    api.listar.mockReturnValue(of(pagina([resumenDePrueba(5)], { totalPages: 2 })));
+
+    await buscar();
+
+    expect(api.listar).toHaveBeenLastCalledWith({ page: 0, numeroFiscal: '00001-00000012' });
+
+    const mensaje = 'Escribí el número de la factura como 12 o 00001-00000012.';
+    api.listar.mockReturnValue(
+      throwError(
+        () =>
+          new HttpErrorResponse({
+            status: 400,
+            error: { status: 400, message: 'Datos inválidos', errors: { numeroFiscal: mensaje } },
+          }),
+      ),
+    );
+    campo('numeroFiscal', 'doce');
+    await buscar();
+
+    expect(normal(el().querySelector('[role="alert"]')?.textContent)).toBe(mensaje);
+    expect(normal(el().textContent)).not.toContain('No se pudieron cargar las ventas.');
+    expect(filas()).toHaveLength(1);
+
+    // La lista sigue siendo la del filtro anterior: paginar no manda el número rechazado.
+    api.listar.mockReturnValue(of(pagina([resumenDePrueba(5)], { totalPages: 2, page: 1 })));
+    boton('Siguiente')!.click();
+    await refrescar();
+    expect(api.listar).toHaveBeenLastCalledWith({ page: 1, numeroFiscal: '00001-00000012' });
+  });
+
+  it('el detalle de una venta con factura sigue mostrando todo lo de CU-16 (pagos, quién cobró) y suma la línea fiscal; «Imprimir» imprime la factura', async () => {
+    await crear();
+    api.obtener.mockReturnValue(of(ventaDePrueba({ fiscal: fiscalDe(documentoB()), remitoNumero: 15 })));
+
+    filas()[0].click();
+    await refrescar();
+
+    const d = normal(detalle()!.textContent);
+    expect(detalle()!.querySelector('app-venta-hoja')).not.toBeNull();
+    expect(d).toContain('Martillo');
+    expect(d).toContain('Subtotal $ 3.000,00');
+    expect(d).toContain('Total $ 2.970,00');
+    expect(d).toContain('Crédito 1 pago $ 2.970,00');
+    expect(d).toContain('Cobró');
+    expect(d).toContain('Ana Vendedora');
+    expect(d).toContain('Construcciones Pérez');
+    expect(normal(detalle()!.querySelector('.linea-fiscal')?.textContent)).toBe('Factura B 00001-00000012 · Autorizada');
+
+    boton('Imprimir', detalle()!)!.click();
+    await refrescar();
+    const hoja = el().querySelector('app-factura-imprimible article.factura-imprimible')!;
+    expect(normal(hoja.querySelector('.numero-fiscal')?.textContent)).toBe('N.º 00001-00000012');
+    expect(normal(hoja.querySelector('.remito')?.textContent)).toBe('Remito N.º 15');
+    expect(el().querySelector('app-venta-imprimible')).toBeNull();
+
+    boton('Cerrar')!.click();
+    await refrescar();
+    expect(el().querySelector('app-factura-imprimible')).toBeNull();
+  });
+
+  it('una venta con documento X: la línea fiscal dice «X» y la marca, y reimprime la X sin datos fiscales', async () => {
+    await crear();
+    api.obtener.mockReturnValue(
+      of(ventaDePrueba({ fiscal: fiscalDe(documentoX(MARCA_SIMULADO), { ambiente: 'SIMULADOR', cae: '70417054367476' }) })),
+    );
+
+    filas()[0].click();
+    await refrescar();
+    expect(normal(detalle()!.querySelector('.linea-fiscal')?.textContent)).toBe('X · SIMULADO — sin validez fiscal');
+    expect(normal(detalle()!.textContent)).not.toContain('70417054367476');
+    boton('Imprimir', detalle()!)!.click();
+    await refrescar();
+
+    const hoja = normal(el().querySelector('article.factura-imprimible')?.textContent);
+    expect(hoja).toContain('DOCUMENTO NO VALIDO COMO FACTURA');
+    expect(hoja).toContain('SIMULADO — sin validez fiscal');
+    expect(hoja).not.toContain('70417054367476');
+  });
+
+  it('una venta con el `fiscal` de la rama 3 pero sin `documento` se ve e imprime como hoy', async () => {
+    await crear();
+    const { documento: _documento, ...sinDocumento } = fiscalDe(documentoB());
+    api.obtener.mockReturnValue(of(ventaDePrueba({ fiscal: sinDocumento as FiscalVenta })));
+
+    filas()[0].click();
+    await refrescar();
+
+    expect(detalle()!.querySelector('app-venta-hoja')).not.toBeNull();
+    expect(detalle()!.querySelector('.linea-fiscal')).toBeNull();
+    boton('Imprimir', detalle()!)!.click();
+    await refrescar();
+    expect(el().querySelector('app-venta-imprimible article.venta-imprimible')).not.toBeNull();
+    expect(el().querySelector('app-factura-imprimible')).toBeNull();
   });
 
   it('sin ventas lo dice', async () => {
@@ -256,6 +383,7 @@ describe('Ventas (consulta y reimpresión, G60)', () => {
     boton('Imprimir', detalle()!)!.click();
     await refrescar();
     expect(el().querySelector('app-venta-imprimible article.venta-imprimible')).not.toBeNull();
+    expect(el().querySelector('app-factura-imprimible')).toBeNull();
 
     boton('Cerrar')!.click();
     await refrescar();
