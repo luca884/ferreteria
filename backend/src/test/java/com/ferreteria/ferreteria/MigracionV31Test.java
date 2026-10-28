@@ -21,6 +21,8 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
@@ -177,19 +179,20 @@ class MigracionV31Test {
         assertThat(columnasDeFerreteria()).containsAll(COLUMNAS_NUEVAS);
     }
 
-    @Test
+    @ParameterizedTest(name = "con solo {0} cargado")
+    @CsvSource({"inicio_actividades, 2015-03-01", "ingresos_brutos, Exento", "domicilio_comercial, Av. Luro 3200"})
     @DisplayName("rollback-v31-datos-fiscales.sql se niega si alguna ferreteria ya cargo un dato fiscal, y no toca nada")
-    void rollbackConDatosSeNiega() {
+    void rollbackConDatosSeNiega(String columna, String valor) {
         long f = ferreteria("30-78601311-4");
         migrarALa31();
-        jdbc.update("update ferreteria set inicio_actividades = '2015-03-01' where id = ?", f);
+        jdbc.update("update ferreteria set " + columna + " = ? where id = ?", valor, f);
         List<String> columnasAntes = columnasDeFerreteria();
 
         assertThatThrownBy(this::correrRollback).hasMessageContaining("ck_rollback_sin_datos_fiscales");
 
         assertThat(columnasDeFerreteria()).containsExactlyInAnyOrderElementsOf(columnasAntes);
-        assertThat(jdbc.queryForObject("select inicio_actividades from ferreteria where id = ?", Date.class, f))
-            .isEqualTo(Date.valueOf("2015-03-01"));
+        assertThat(jdbc.queryForObject("select " + columna + " from ferreteria where id = ?", String.class, f))
+            .isEqualTo(valor);
         assertThat(jdbc.queryForObject("select count(*) from flyway_schema_history where version = '31'", Integer.class))
             .isEqualTo(1);
         assertThat(jdbc.queryForObject("select count(*) from information_schema.check_constraints "

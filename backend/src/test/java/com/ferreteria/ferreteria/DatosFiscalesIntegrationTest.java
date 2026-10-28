@@ -11,6 +11,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.ferreteria.common.HoraArgentina;
 import com.ferreteria.support.IntegrationTestBase;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ThreadLocalRandom;
 import org.junit.jupiter.api.Test;
@@ -106,14 +107,23 @@ class DatosFiscalesIntegrationTest extends IntegrationTestBase {
     @Test
     void elCuitNoCambiaAunqueElCuerpoTraigaOtro() throws Exception {
         FerreteriaDePrueba f = ferreteriaNueva();
-        String conOtroCuit = completos().replaceFirst("\\{", "{\"cuit\": \"30-71234567-1\", ");
+        Map<String, Object> antes = sinDatosFiscales(f.id());
+        String conOtroCuit = completos().replaceFirst("\\{",
+                "{\"cuit\": \"30-71234567-1\", \"estado\": \"SUSPENDIDA\", \"margenDefectoPorcentaje\": 99, ");
 
         putJson(URL, f.token(), conOtroCuit)
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.cuit", is(f.cuit())));
 
-        assertThat(jdbc.queryForObject("select cuit from ferreteria where id = ?", String.class, f.id()))
-                .isEqualTo(f.cuit());
+        // Fuera de los cinco datos fiscales no cambia nada: ni el CUIT ni el estado ni el margen.
+        assertThat(sinDatosFiscales(f.id())).isEqualTo(antes);
+    }
+
+    private Map<String, Object> sinDatosFiscales(long ferreteriaId) {
+        Map<String, Object> fila = jdbc.queryForMap("select * from ferreteria where id = ?", ferreteriaId);
+        fila.keySet().removeAll(List.of("razon_social", "condicion_iva", "domicilio_comercial",
+                "inicio_actividades", "ingresos_brutos"));
+        return fila;
     }
 
     @Test
@@ -139,6 +149,17 @@ class DatosFiscalesIntegrationTest extends IntegrationTestBase {
         FerreteriaDePrueba otra = ferreteriaNueva();
 
         putJson(URL, f.token(), completos()).andExpect(status().isOk());
+        // El id o la ferreteria que venga en el cuerpo o en la query no cuentan: solo la del token.
+        Map<String, Object> filaDeF = jdbc.queryForMap("select * from ferreteria where id = ?", f.id());
+        String conIdAjeno = datos("Ajena SA", "MONOTRIBUTISTA", null, null, null)
+                .replaceFirst("\\{", "{\"id\": " + f.id() + ", \"ferreteriaId\": " + f.id() + ", ");
+        putJson(URL + "?ferreteriaId=" + f.id(), otra.token(), conIdAjeno)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.razonSocial", is("Ajena SA")))
+                .andExpect(jsonPath("$.cuit", is(otra.cuit())));
+        assertThat(jdbc.queryForMap("select * from ferreteria where id = ?", f.id())).isEqualTo(filaDeF);
+        putJson(URL, otra.token(), datos("Fiscal " + otra.cuit(), "RESPONSABLE_INSCRIPTO", null, null, null))
+                .andExpect(status().isOk());
 
         getResult(URL, otra.token())
                 .andExpect(jsonPath("$.razonSocial", is("Fiscal " + otra.cuit())))
@@ -158,6 +179,7 @@ class DatosFiscalesIntegrationTest extends IntegrationTestBase {
         putJson(URL, vendedor, completos()).andExpect(status().isForbidden());
         // El 403 sale antes de leer el cuerpo: un Vendedor con datos invalidos no recibe 400.
         putJson(URL, vendedor, "{\"razonSocial\": \"\"}").andExpect(status().isForbidden());
+        putJson(URL, vendedor, "{x").andExpect(status().isForbidden());
         getResult(URL, admin).andExpect(status().isForbidden());
         putJson(URL, admin, completos()).andExpect(status().isForbidden());
         mvc.perform(get(URL)).andExpect(status().isUnauthorized());
@@ -169,6 +191,7 @@ class DatosFiscalesIntegrationTest extends IntegrationTestBase {
     void validaLosDatosYNoGuardaNada() throws Exception {
         FerreteriaDePrueba f = ferreteriaNueva();
         String largo201 = "x".repeat(201);
+        Map<String, Object> antes = jdbc.queryForMap("select * from ferreteria where id = ?", f.id());
 
         putJson(URL, f.token(), datos(" ", "MONOTRIBUTISTA", null, null, null))
                 .andExpect(status().isBadRequest())
@@ -194,10 +217,7 @@ class DatosFiscalesIntegrationTest extends IntegrationTestBase {
                 .andExpect(jsonPath("$.errors.inicioActividades",
                         is("El inicio de actividades no puede ser una fecha futura.")));
 
-        getResult(URL, f.token())
-                .andExpect(jsonPath("$.razonSocial", is("Fiscal " + f.cuit())))
-                .andExpect(jsonPath("$.condicionIva", is("RESPONSABLE_INSCRIPTO")))
-                .andExpect(jsonPath("$.inicioActividades", nullValue()));
+        assertThat(jdbc.queryForMap("select * from ferreteria where id = ?", f.id())).isEqualTo(antes);
     }
 
     @Test
