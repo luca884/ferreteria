@@ -263,6 +263,19 @@ public class PasosFiscales {
                 pedido, ahora)).getId();
     }
 
+    /**
+     * ARCA va en N−1 pero la CbteFch ya no entra en la ventana: no se reenvía. El intento se cierra NO_LLEGO y el registro
+     * pasa a FUERA_DE_FECHA sin número, que queda libre para el siguiente.
+     */
+    @Transactional
+    public void fueraDeFechaSinReenvio(long serieId, String dueno, long registroId, long intentoId, long numero,
+            String verificacion, Instant ahora, Instant vence) {
+        renovarOFallar(serieId, dueno, ahora, vence);
+        exigir(registros.vencerSinReenvioScoped(registroId, numero), "el registro ya no está en verificación");
+        exigir(intentos.resolverScoped(intentoId, EstadoIntento.NO_LLEGO, null, verificacion, ahora),
+                "el intento ya no está en verificación");
+    }
+
     private void renovarOFallar(long serieId, String dueno, Instant ahora, Instant vence) {
         exigir(series.renovarScoped(serieId, dueno, ahora, vence), "la toma de la serie venció o la tiene otra instancia");
     }

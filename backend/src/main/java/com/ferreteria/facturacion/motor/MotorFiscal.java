@@ -51,8 +51,8 @@ import org.springframework.stereotype.Service;
  * </ul>
  * La verificación es lo primero de la atención siguiente (nunca en la misma, así ARCA tiene tiempo de terminar lo que
  * recibió), con {@code FECompUltimoAutorizado}: N o más → {@code FECompConsultar(N)} y se adopta el CAE solo si coinciden
- * todos los campos (si no, CAE_NO_COINCIDE); N−1 → se reenvía el mismo número y fecha en un intento nuevo; menos →
- * SERIE_DESINCRONIZADA. Las dos alertas traban la serie hasta que la vea una persona.
+ * todos los campos (si no, CAE_NO_COINCIDE); N−1 → se reenvía el mismo número y fecha en un intento nuevo, o, si esa
+ * CbteFch ya no entra en la ventana, FUERA_DE_FECHA sin número y sin reenviar; menos → SERIE_DESINCRONIZADA. Las dos alertas traban la serie hasta que la vea una persona.
  *
  * <p>Una llamada que no llegó o quedó incierta corta la atención ({@link Atencion#SIN_RESPUESTA}); la sigue la próxima. El
  * adaptador sale del ambiente de la serie, que es el del registro ({@link WsfePorAmbiente}). Todo el tiempo sale del
@@ -290,6 +290,11 @@ public class MotorFiscal {
             }
             if (ultimo == numero - 1) {
                 Instant ahora = reloj.instant();
+                if (!VentanaCbteFch.admite(cbteFch, diaDelEnvio(), pasos.serie(serieId).getUltimaCbteFch())) {
+                    pasos.fueraDeFechaSinReenvio(serieId, dueno, registro.getId(), intento.getId(), numero,
+                            JsonFiscal.de(verificacion), ahora, ahora.plus(lease));
+                    return Optional.empty();
+                }
                 long nuevo = pasos.reenviar(serieId, dueno, registro.getId(), intento.getId(), numero, cbteFch,
                         JsonFiscal.de(enviado), JsonFiscal.de(verificacion), ahora, ahora.plus(lease));
                 return enviar(registro, nuevo, numero, cbteFch, enviado);

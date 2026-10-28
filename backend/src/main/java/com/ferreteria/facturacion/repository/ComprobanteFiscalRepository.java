@@ -114,4 +114,16 @@ public interface ComprobanteFiscalRepository extends TenantScopedRepository<Comp
     default int fueraDeFechaScoped(long id) {
         return fueraDeFecha(TenantContext.requireFerreteriaId(), id);
     }
+
+    /** EN_VERIFICACION (con ese número) → FUERA_DE_FECHA: ARCA no lo tiene y la CbteFch ya no entra para reenviarlo. */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query(value = """
+            update comprobante_fiscal set estado = 'FUERA_DE_FECHA', numero = null, cbte_fch = null
+            where ferreteria_id = :fid and id = :id and estado = 'EN_VERIFICACION' and numero = :numero
+            """, nativeQuery = true)
+    int vencerSinReenvio(@Param("fid") Long ferreteriaId, @Param("id") long id, @Param("numero") long numero);
+
+    default int vencerSinReenvioScoped(long id, long numero) {
+        return vencerSinReenvio(TenantContext.requireFerreteriaId(), id, numero);
+    }
 }

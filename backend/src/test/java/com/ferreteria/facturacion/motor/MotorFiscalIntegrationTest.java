@@ -363,6 +363,34 @@ class MotorFiscalIntegrationTest extends MotorFiscalTestBase {
         assertThat(ultimoEnArca(FACTURA_B)).isEqualTo(1);
     }
 
+    @Test
+    @DisplayName("si ARCA va en N−1 pero la CbteFch ya no entra, no se reenvía: FUERA_DE_FECHA sin número y el intento NO_LLEGO")
+    void reenvioConLaCbteFchFueraDeLaVentana() {
+        reloj.fijar(HOY.minusDays(5).atTime(10, 0).atZone(ZONA).toInstant());
+        long dudoso = registrarFacturaB();
+        reloj.fijar(AHORA);
+        wsfe.fallas().programar(Falla.TIMEOUT_ANTES_DE_AUTORIZAR);
+        assertThat(atenderB()).as("N−5 todavía entra").isEqualTo(Atencion.SIN_RESPUESTA);
+        assertThat(estado(dudoso)).isEqualTo("EN_VERIFICACION");
+        reloj.avanzar(Duration.ofDays(1));
+        long detras = registrarFacturaB();
+
+        assertThat(atenderB()).isEqualTo(Atencion.TERMINADA);
+
+        assertThat(estado(dudoso)).isEqualTo("FUERA_DE_FECHA");
+        assertThat(numero(dudoso)).isNull();
+        assertThat(leer(dudoso).getCbteFch()).isNull();
+        assertThat(intentos(dudoso)).singleElement().satisfies(i -> {
+            assertThat(i).containsEntry("estado", "NO_LLEGO").containsEntry("numero", 1L);
+            assertThat(i.get("cerrado_en")).isNotNull();
+            assertThat((String) i.get("respuesta_verificacion")).contains("\"ultimoAutorizado\":0");
+        });
+        assertThat(numero(detras)).as("el número quedó libre").isEqualTo(1);
+        assertThat(estado(detras)).isEqualTo("AUTORIZADO");
+        assertThat(wsfe.solicitudes()).as("ninguna solicitud con la CbteFch vencida").isEqualTo(2);
+        assertThat(ultimoEnArca(FACTURA_B)).isEqualTo(1);
+    }
+
     // ---- Adaptador ----
 
     @Test
