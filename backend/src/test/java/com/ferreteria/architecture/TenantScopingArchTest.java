@@ -195,13 +195,29 @@ class TenantScopingArchTest {
 
     // ---- Facturacion (CU-07, rama 2): todo lo fiscal es de una ferreteria, asi que todos sus repositorios son de tenant ----
 
+    /**
+     * Todo repositorio de {@code facturacion}, en cualquier subpaquete (tambien {@code facturacion.simulador}), es de tenant.
+     * Repositorio: una interfaz de Spring Data o una interfaz llamada {@code *Repository}.
+     */
     @Test
     void todosLosRepositoriosDeFacturacionSonDeTenant() {
-        classes().that().resideInAPackage("com.ferreteria.facturacion.repository..")
-                .and().areInterfaces()
+        DescribedPredicate<JavaClass> repositorio = new DescribedPredicate<>(
+                "un repositorio (interfaz de Spring Data o llamada *Repository)") {
+            @Override
+            public boolean test(JavaClass clase) {
+                return clase.isInterface()
+                        && (clase.isAssignableTo(org.springframework.data.repository.Repository.class)
+                                || clase.getSimpleName().endsWith("Repository"));
+            }
+        };
+
+        classes().that().resideInAPackage("com.ferreteria.facturacion..").and(repositorio)
                 .should().beAssignableTo(TenantScopedRepository.class)
                 .allowEmptyShould(false)
                 .check(clases);
+        // la regla alcanza al simulador: sus repositorios tambien entran
+        assertThat(clases.stream().filter(c -> c.getPackageName().equals("com.ferreteria.facturacion.simulador"))
+                .filter(repositorio)).isNotEmpty();
     }
 
     /**

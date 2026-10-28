@@ -73,6 +73,14 @@ app:
       # un receptor con CUIT, el simulador observa que corresponderia una factura de credito electronica (10188).
       tope-rg4444: ${SIMULADOR_WSFE_TOPE_RG4444:10000000.00}
       minimo-fce: ${SIMULADOR_WSFE_MINIMO_FCE:3958316.00}
+    motor:
+      # Lo más que puede tardar una llamada a WSFEv1 (conexión más lectura). El cliente real (rama 6) arma sus timeouts con
+      # este valor, y la latencia del simulador tiene que quedar por debajo.
+      presupuesto-llamada: ${FACTURACION_PRESUPUESTO_LLAMADA:60s}
+      # Cuánto dura la toma de una serie; se estira antes de cada llamada. Tiene que superar el presupuesto de la llamada
+      # (si no, la app no arranca): si venciera con una llamada en vuelo, otra instancia vería N-1, reenviaría y ARCA
+      # contestaría 10016.
+      lease: ${FACTURACION_LEASE_SERIE:180s}
 
 ---
 # Desarrollo local: el simulador de WSFEv1 tarda un poco, como ARCA.

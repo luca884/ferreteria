@@ -15,6 +15,16 @@ import com.ferreteria.clientes.service.CuentaCorrienteService;
 import com.ferreteria.clientes.service.RegistroAjuste;
 import com.ferreteria.common.HoraArgentina;
 import com.ferreteria.facturacion.api.ConfigArcaParaPlataforma;
+import com.ferreteria.facturacion.model.ComprobanteFiscal;
+import com.ferreteria.facturacion.model.ComprobanteFiscalAlicuota;
+import com.ferreteria.facturacion.model.IntentoFiscal;
+import com.ferreteria.facturacion.motor.MotorFiscal;
+import com.ferreteria.facturacion.motor.PasosFiscales;
+import com.ferreteria.facturacion.repository.ComprobanteFiscalAlicuotaRepository;
+import com.ferreteria.facturacion.repository.ComprobanteFiscalRepository;
+import com.ferreteria.facturacion.repository.IntentoFiscalRepository;
+import com.ferreteria.facturacion.simulador.SimuladorWsfe;
+import com.ferreteria.facturacion.wsfe.ServicioWsfe;
 import com.ferreteria.plataforma.service.FerreteriasAdminService;
 import com.ferreteria.ventas.model.Recibo;
 import com.ferreteria.ventas.repository.ReciboRepository;
@@ -268,6 +278,94 @@ class ModulosArchTest {
                                         .equals(List.of(java.time.Clock.class.getName()));
                     }
                 })
+                .check(clases);
+    }
+
+    // ---- Facturacion, motor (CU-07, rama 2, S5 y S8): un unico escritor del registro fiscal y el simulador detras del puerto ----
+
+    private static final List<Class<?>> REPOSITORIOS_DEL_REGISTRO_FISCAL = List.of(ComprobanteFiscalRepository.class,
+            ComprobanteFiscalAlicuotaRepository.class, IntentoFiscalRepository.class);
+
+    /**
+     * El registro fiscal tiene un unico escritor, el motor ({@code PasosFiscales}, que hace cada paso en su transaccion
+     * corta): nadie mas guarda, borra ni cambia (UPDATE con {@code @Modifying}, directo o por su {@code *Scoped}) el
+     * registro, su desglose ni sus intentos, y las entidades no tienen setters (ni del CAE ni del estado). Los
+     * repositorios no declaran borrados. Molde de {@code losAjustesSonInmutablesYSoloRegistroAjusteLosGuarda}.
+     */
+    @Test
+    void elRegistroFiscalTieneUnUnicoEscritorYNoTieneSetters() {
+        for (Class<?> entidad : List.of(ComprobanteFiscal.class, ComprobanteFiscalAlicuota.class, IntentoFiscal.class)) {
+            noMethods().that().areDeclaredIn(entidad).should().haveNameMatching("set[A-Z].*").check(clases);
+        }
+
+        var escritores = clases.stream().flatMap(c -> c.getMethodCallsFromSelf().stream())
+                .filter(call -> REPOSITORIOS_DEL_REGISTRO_FISCAL.stream()
+                        .anyMatch(r -> call.getTargetOwner().isAssignableTo(r)))
+                .filter(ModulosArchTest::escribe)
+                .map(JavaMethodCall::getOriginOwner)
+                .filter(origen -> REPOSITORIOS_DEL_REGISTRO_FISCAL.stream().noneMatch(origen::isEquivalentTo))
+                .map(origen -> origen.getName())
+                .collect(java.util.stream.Collectors.toSet());
+        assertThat(escritores).as("quien escribe el registro fiscal").containsExactly(PasosFiscales.class.getName());
+
+        for (Class<?> repositorio : REPOSITORIOS_DEL_REGISTRO_FISCAL) {
+            noMethods().that().areDeclaredIn(repositorio).should().haveNameMatching("(delete|remove).*").check(clases);
+        }
+    }
+
+    /**
+     * Una llamada que escribe: {@code save*}/{@code delete*}/{@code remove*}, un metodo {@code @Modifying} o un
+     * {@code default} del repositorio que llama a uno {@code @Modifying} (los {@code *Scoped}).
+     */
+    private static boolean escribe(JavaMethodCall call) {
+        if (call.getName().matches("(save|delete|remove).*")) {
+            return true;
+        }
+        return call.getTarget().resolveMember().map(m -> esModifying(m) || m.getMethodCallsFromSelf().stream()
+                .anyMatch(interna -> interna.getTarget().resolveMember().map(ModulosArchTest::esModifying).orElse(false)))
+                .orElse(false);
+    }
+
+    private static boolean esModifying(com.tngtech.archunit.core.domain.JavaMethod metodo) {
+        return metodo.isAnnotatedWith(org.springframework.data.jpa.repository.Modifying.class);
+    }
+
+    /**
+     * Fuera de {@code facturacion.simulador} nadie depende de {@code SimuladorWsfe} ni de los repositorios del simulador: el
+     * motor habla con el puerto {@code ServicioWsfe} (el adaptador se elige por el ambiente del registro). Y la llamada va
+     * sin transaccion: el motor ({@code MotorFiscal}) no es transaccional, y el que tiene las transacciones
+     * ({@code PasosFiscales}) no conoce el puerto.
+     */
+    @Test
+    void nadieFueraDelSimuladorDependeDeElYElMotorUsaElPuerto() {
+        com.tngtech.archunit.base.DescribedPredicate<com.tngtech.archunit.core.domain.JavaClass> delSimulador =
+                new com.tngtech.archunit.base.DescribedPredicate<>("SimuladorWsfe o un repositorio del simulador") {
+                    @Override
+                    public boolean test(com.tngtech.archunit.core.domain.JavaClass clase) {
+                        return clase.isEquivalentTo(SimuladorWsfe.class)
+                                || (clase.getPackageName().startsWith("com.ferreteria.facturacion.simulador")
+                                        && clase.isAssignableTo(org.springframework.data.repository.Repository.class));
+                    }
+                };
+        noClasses().that().resideOutsideOfPackage("com.ferreteria.facturacion.simulador..")
+                .should().dependOnClassesThat(delSimulador)
+                .check(clases);
+
+        // El motor es MotorFiscal y sus clases anidadas (la atencion de una serie vive en MotorFiscal$Turno).
+        String motor = Pattern.quote(MotorFiscal.class.getName()) + "(\\$.*)?";
+        assertThat(clases.stream().filter(c -> c.getName().matches(motor))
+                .flatMap(c -> c.getDirectDependenciesFromSelf().stream()))
+                .as("el motor usa el puerto").anyMatch(d -> d.getTargetClass().isEquivalentTo(ServicioWsfe.class));
+        assertThat(clases.get(PasosFiscales.class).getDirectDependenciesFromSelf())
+                .as("los pasos con transaccion no conocen el puerto")
+                .noneMatch(d -> d.getTargetClass().isEquivalentTo(ServicioWsfe.class));
+        noClasses().that().haveNameMatching(motor)
+                .should().beAnnotatedWith(org.springframework.transaction.annotation.Transactional.class)
+                .allowEmptyShould(false)
+                .check(clases);
+        noMethods().that().areDeclaredInClassesThat().haveNameMatching(motor)
+                .should().beAnnotatedWith(org.springframework.transaction.annotation.Transactional.class)
+                .allowEmptyShould(false)
                 .check(clases);
     }
 

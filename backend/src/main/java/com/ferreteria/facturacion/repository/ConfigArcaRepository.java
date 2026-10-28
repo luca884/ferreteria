@@ -1,6 +1,7 @@
 package com.ferreteria.facturacion.repository;
 
 import com.ferreteria.facturacion.model.ConfigArca;
+import com.ferreteria.tenant.TenantContext;
 import com.ferreteria.tenant.TenantScopedRepository;
 import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.Lock;
@@ -13,14 +14,14 @@ import java.util.Optional;
 
 /**
  * La configuración de ARCA de cada ferretería (una fila por ferretería, si el super admin ya la tocó). Repositorio de
- * tenant. Hoy solo la usa el panel del super admin, que no tiene ferretería en el token: sus consultas reciben la
- * ferretería explícita y solo se llaman desde métodos o clases con {@code @UnscopedTenantAccess} (regla de
- * {@code TenantScopingArchTest}). La venta (rama 3) va a leer la suya con un método {@code *Scoped}.
+ * tenant. El panel del super admin no tiene ferretería en el token: sus consultas reciben la ferretería explícita y solo se
+ * llaman desde métodos o clases con {@code @UnscopedTenantAccess} (regla de {@code TenantScopingArchTest}). El alta de un
+ * registro fiscal lee la suya con {@link #bloquearCompartidaScoped}.
  *
  * <p>El lock: los cambios del panel toman la fila con {@link #crearSiFalta} y {@link #bloquearDeFerreteria} (lock exclusivo)
- * antes de decidir. Para coordinarse con el panel, el alta de un registro fiscal (rama 3) tiene que leer esta misma fila
- * con {@code FOR SHARE} y sostenerla hasta el commit: mientras tanto el ambiente no cambia, y un cambio del panel que espera
- * ese lock ve el registro al tomarlo.
+ * antes de decidir. Para coordinarse con el panel, el alta de un registro fiscal lee esta misma fila con {@code FOR SHARE}
+ * ({@link #bloquearCompartidaScoped}) y la sostiene hasta el commit: mientras tanto el ambiente no cambia, y un cambio del
+ * panel que espera ese lock ve el registro al tomarlo.
  */
 public interface ConfigArcaRepository extends TenantScopedRepository<ConfigArca, Long> {
 
@@ -46,6 +47,19 @@ public interface ConfigArcaRepository extends TenantScopedRepository<ConfigArca,
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select c from ConfigArca c where c.ferreteriaId = :fid")
     Optional<ConfigArca> bloquearDeFerreteria(@Param("fid") Long ferreteriaId);
+
+    /** La fila de la ferretería con lock compartido ({@code FOR SHARE}): lee lo último confirmado. */
+    @Query(value = "select * from config_arca where ferreteria_id = :fid for share", nativeQuery = true)
+    Optional<ConfigArca> bloquearCompartida(@Param("fid") Long ferreteriaId);
+
+    /**
+     * La configuración de la ferretería del request, con lock compartido hasta el fin de la transacción: lo que lee el alta
+     * de un registro fiscal. Mientras tanto el panel no cambia el ambiente (espera el lock), y cuando lo toma ve el registro.
+     * Exige una transacción abierta.
+     */
+    default Optional<ConfigArca> bloquearCompartidaScoped() {
+        return bloquearCompartida(TenantContext.requireFerreteriaId());
+    }
 
     /** Las de todas las ferreterías que tienen fila, para la lista del super admin (sin N+1). */
     @Query("select c from ConfigArca c")
