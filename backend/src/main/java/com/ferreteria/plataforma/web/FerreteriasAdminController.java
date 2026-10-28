@@ -16,7 +16,8 @@ import org.springframework.web.bind.annotation.RestController;
 
 /**
  * Ferreterías de la plataforma: las gestiona solo el super admin. El 403 de cualquier otro rol sale antes de leer el cuerpo
- * (SecurityConfig). El super admin no ve ni toca datos de ventas.
+ * (SecurityConfig). El super admin no ve ni toca datos de ventas. Razón social, CUIT y condición de IVA los carga en el
+ * alta; después los edita solo el Dueño (CU-01, /api/datos-fiscales).
  */
 @RestController
 @RequestMapping("/api/admin/ferreterias")
@@ -38,11 +39,6 @@ public class FerreteriasAdminController {
     @ResponseStatus(HttpStatus.CREATED)
     public FerreteriaAdminResponse alta(@Valid @RequestBody AltaFerreteriaRequest request) {
         return FerreteriaAdminResponse.de(servicio.alta(request.aDatos()));
-    }
-
-    @PutMapping("/{id}")
-    public FerreteriaAdminResponse editar(@PathVariable Long id, @Valid @RequestBody EditarFerreteriaRequest request) {
-        return FerreteriaAdminResponse.de(servicio.actualizar(id, request.razonSocial(), request.condicionIva()));
     }
 
     @PatchMapping("/{id}/activo")

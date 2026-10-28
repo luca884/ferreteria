@@ -26,18 +26,6 @@ class FerreteriaTest {
     }
 
     @Test
-    @DisplayName("actualizarDatos cambia razón social y condición de IVA, y no el CUIT")
-    void actualizarDatos() {
-        Ferreteria f = nueva();
-
-        f.actualizarDatos("Tuerca SRL", CondicionIva.MONOTRIBUTISTA);
-
-        assertThat(f.getRazonSocial()).isEqualTo("Tuerca SRL");
-        assertThat(f.getCondicionIva()).isEqualTo(CondicionIva.MONOTRIBUTISTA);
-        assertThat(f.getCuit()).isEqualTo("30-12345678-1");
-    }
-
-    @Test
     @DisplayName("una ferretería nueva no tiene domicilio comercial, inicio de actividades ni Ingresos Brutos")
     void sinDatosFiscales() {
         Ferreteria f = nueva();

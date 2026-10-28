@@ -8,7 +8,6 @@ import com.ferreteria.common.exception.ConflictException;
 import com.ferreteria.common.exception.DatosInvalidosException;
 import com.ferreteria.common.exception.ErrorDeBase;
 import com.ferreteria.common.exception.ResourceNotFoundException;
-import com.ferreteria.ferreteria.model.CondicionIva;
 import com.ferreteria.ferreteria.model.EstadoFerreteria;
 import com.ferreteria.ferreteria.model.Ferreteria;
 import com.ferreteria.ferreteria.repository.FerreteriaRepository;
@@ -86,13 +85,6 @@ public class FerreteriasAdminService {
                 .toList();
         long activas = items.stream().filter(i -> i.estado() == EstadoFerreteria.ACTIVA).count();
         return new EstadoGeneral(activas, items.size() - activas, items);
-    }
-
-    @Transactional
-    public FerreteriaAdmin actualizar(long id, String razonSocial, CondicionIva condicionIva) {
-        Ferreteria ferreteria = obtener(id);
-        ferreteria.actualizarDatos(razonSocial.trim(), condicionIva);
-        return admin(ferreteria, usuarios.resumenPorFerreteria().get(id));
     }
 
     /** El corte de sesiones y logins lo hace SesionVigente; acá no se toca ningún otro dato de la ferretería. */

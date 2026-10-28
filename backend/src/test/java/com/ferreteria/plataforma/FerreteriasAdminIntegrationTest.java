@@ -133,37 +133,23 @@ class FerreteriasAdminIntegrationTest extends PlataformaTestBase {
         assertThat(jdbc.queryForObject("select count(*) from ferreteria where cuit = ?", Long.class, cuit)).isZero();
     }
 
-    // ---- editar ----
+    // ---- editar: ya no es del super admin ----
 
     @Test
-    @DisplayName("PUT cambia razón social e IVA; un cuit en el cuerpo no cambia el guardado")
-    void editar() throws Exception {
+    @DisplayName("el super admin ya no edita una ferretería: PUT no existe y la razón social y el IVA quedan como en el alta")
+    void elSuperAdminYaNoEdita() throws Exception {
         String cuit = cuitNuevo();
         long id = altaOk(cuit, emailNuevo());
+        String razonSocial = jdbc.queryForObject("select razon_social from ferreteria where id = ?", String.class, id);
 
-        putJson(BASE + "/" + id, admin,
-                json("razonSocial", "Nueva Razón SA", "condicionIva", "MONOTRIBUTISTA", "cuit", "30-99999999-9"))
-                .andExpect(status().isOk()).andExpect(jsonPath("$.razonSocial", is("Nueva Razón SA")))
-                .andExpect(jsonPath("$.condicionIva", is("MONOTRIBUTISTA"))).andExpect(jsonPath("$.cuit", is(cuit)));
+        putJson(BASE + "/" + id, admin, json("razonSocial", "Nueva Razón SA", "condicionIva", "MONOTRIBUTISTA"))
+                .andExpect(status().isNotFound());
 
         assertThat(jdbc.queryForObject("select razon_social from ferreteria where id = ?", String.class, id))
-                .isEqualTo("Nueva Razón SA");
+                .isEqualTo(razonSocial);
         assertThat(jdbc.queryForObject("select condicion_iva from ferreteria where id = ?", String.class, id))
-                .isEqualTo("MONOTRIBUTISTA");
+                .isEqualTo("RESPONSABLE_INSCRIPTO");
         assertThat(jdbc.queryForObject("select cuit from ferreteria where id = ?", String.class, id)).isEqualTo(cuit);
-    }
-
-    @Test
-    @DisplayName("PUT valida razón social e IVA, y una ferretería inexistente da 404")
-    void editarInvalidoOInexistente() throws Exception {
-        long id = altaOk(cuitNuevo(), emailNuevo());
-
-        putJson(BASE + "/" + id, admin, json("razonSocial", " ", "condicionIva", "EXENTO"))
-                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.errors.razonSocial").exists());
-        putJson(BASE + "/" + id, admin, json("razonSocial", "X"))
-                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.errors.condicionIva").exists());
-        putJson(BASE + "/999999999", admin, json("razonSocial", "X", "condicionIva", "EXENTO"))
-                .andExpect(status().isNotFound()).andExpect(jsonPath("$.message", is("Ferretería no encontrada")));
     }
 
     // ---- suspender y reactivar ----

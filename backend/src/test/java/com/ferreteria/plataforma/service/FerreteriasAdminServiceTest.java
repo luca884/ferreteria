@@ -218,27 +218,10 @@ class FerreteriasAdminServiceTest {
     }
 
     @Test
-    @DisplayName("actualizar cambia razón social e IVA y deja el CUIT")
-    void actualizar() {
-        Ferreteria f = ferreteria(1L, "Vieja", EstadoFerreteria.ACTIVA);
-        when(ferreterias.findById(1L)).thenReturn(Optional.of(f));
-        when(usuarios.resumenPorFerreteria()).thenReturn(Map.of());
-
-        FerreteriaAdmin admin = servicio.actualizar(1L, " Nueva SA ", CondicionIva.MONOTRIBUTISTA);
-
-        assertThat(f.getRazonSocial()).isEqualTo("Nueva SA");
-        assertThat(f.getCondicionIva()).isEqualTo(CondicionIva.MONOTRIBUTISTA);
-        assertThat(f.getCuit()).isEqualTo(CUIT_OK);
-        assertThat(admin.razonSocial()).isEqualTo("Nueva SA");
-    }
-
-    @Test
-    @DisplayName("actualizar y cambiarActivo sobre una ferretería inexistente: 404")
+    @DisplayName("cambiarActivo sobre una ferretería inexistente: 404")
     void inexistente() {
         when(ferreterias.findById(9L)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> servicio.actualizar(9L, "X", CondicionIva.EXENTO))
-                .isInstanceOf(ResourceNotFoundException.class).hasMessage("Ferretería no encontrada");
         assertThatThrownBy(() -> servicio.cambiarActivo(9L, false))
                 .isInstanceOf(ResourceNotFoundException.class).hasMessage("Ferretería no encontrada");
     }

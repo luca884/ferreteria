@@ -79,12 +79,6 @@ public class Ferreteria {
         this.condicionIva = condicionIva;
     }
 
-    /** Lo unico que el super admin edita de una ferreteria ya creada: el CUIT no cambia nunca. */
-    public void actualizarDatos(String razonSocial, CondicionIva condicionIva) {
-        this.razonSocial = razonSocial;
-        this.condicionIva = condicionIva;
-    }
-
     /**
      * Los datos del emisor que edita el Dueño (CU-01 paso 1): el CUIT no cambia nunca. Los textos se recortan, y un
      * domicilio o unos Ingresos Brutos en blanco quedan vacios (la base los rechaza en blanco).
