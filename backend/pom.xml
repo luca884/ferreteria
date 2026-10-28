@@ -29,6 +29,8 @@
         <commons-lang3.version>3.18.0</commons-lang3.version>
         <commons-csv.version>1.14.1</commons-csv.version>
         <pdfbox.version>3.0.7</pdfbox.version>
+        <!-- El QR de la factura (CU-07 paso 5): solo el core, sin dependencias de runtime. -->
+        <zxing.version>3.5.4</zxing.version>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     </properties>
 
@@ -120,6 +122,13 @@
                     <artifactId>commons-logging</artifactId>
                 </exclusion>
             </exclusions>
+        </dependency>
+
+        <!-- El QR de ARCA en la factura impresa (CU-07 paso 5): lo arma facturacion, el front lo dibuja. -->
+        <dependency>
+            <groupId>com.google.zxing</groupId>
+            <artifactId>core</artifactId>
+            <version>${zxing.version}</version>
         </dependency>
 
         <!-- Tests -->
