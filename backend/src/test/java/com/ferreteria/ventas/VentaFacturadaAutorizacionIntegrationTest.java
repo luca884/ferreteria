@@ -13,6 +13,7 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.Callable;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -24,8 +25,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 /**
  * CU-07 paso 5 (cu-07-venta-facturada S3 y S4) contra MySQL real y el simulador: después del commit, sin transacción, la venta
  * pide el CAE con la espera acotada (2 s acá) y responde con el estado que haya; la repetida devuelve el estado actual sin
- * volver a pedirlo; nada de ARCA la hace responder 503; y varias ventas a la vez numeran las facturas sin huecos ni
- * deadlocks. El contador de {@link WsfeDePrueba} cuenta cada {@code FECAESolicitar}.
+ * volver a pedirlo; con la serie OCUPADA por otra instancia reintenta dentro de la espera; nada de ARCA (ni una excepción
+ * sin traducir del puerto) la hace responder 5xx; y varias ventas a la vez numeran las facturas sin huecos ni deadlocks. El
+ * contador de {@link WsfeDePrueba} cuenta cada {@code FECAESolicitar}.
  */
 class VentaFacturadaAutorizacionIntegrationTest extends VentaFacturadaTestBase {
 
@@ -138,6 +140,50 @@ class VentaFacturadaAutorizacionIntegrationTest extends VentaFacturadaTestBase {
         esperarHasta(() -> "AUTORIZADO".equals(estadoFiscal(id)));
         assertThat(registroDe(id)).containsEntry("numero", 1L);
         assertThat(wsfe.solicitudes()).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("con la serie OCUPADA por otra instancia que la suelta a mitad de la espera, la venta reintenta y responde 201 AUTORIZADO")
+    void conLaSerieOcupadaQueSeLiberaResponde201Autorizado() throws Exception {
+        Tienda t = tiendaQueFactura(RI);
+        long a = articulo(t, "Martillo", "UNIDAD", "121.00", "10");
+        jdbc.update("insert into serie_fiscal (ferreteria_id, ambiente, punto_venta, cbte_tipo, lease_dueno, lease_vence) "
+                + "values (?, 'SIMULADOR', 1, ?, 'otra-instancia', '2030-01-01 00:00:00')", t.id(), FACTURA_B);
+        String cuerpo = cuerpoDe(t, null, null, clave(), "121.00", linea(a, "1", "121.00"));
+        String token = login(t.emailVendedor());
+        CompletableFuture<Void> soltar = CompletableFuture.runAsync(() -> {
+            dormir(Duration.ofMillis(600));
+            jdbc.update("update serie_fiscal set lease_dueno = null, lease_vence = null where ferreteria_id = ?", t.id());
+        });
+
+        long inicio = System.nanoTime();
+        MockHttpServletResponse respuesta = postJson("/api/ventas", token, cuerpo).andReturn().getResponse();
+        Duration tardo = Duration.ofNanos(System.nanoTime() - inicio);
+        soltar.join();
+
+        assertThat(respuesta.getStatus()).isEqualTo(201);
+        JsonNode venta = objectMapper.readTree(respuesta.getContentAsString(StandardCharsets.UTF_8));
+        assertThat(venta.get("fiscal").get("estado").asText()).isEqualTo("AUTORIZADO");
+        assertThat(venta.get("fiscal").get("numero").asLong()).isEqualTo(1);
+        assertThat(tardo).isBetween(Duration.ofMillis(500), ESPERA.plus(MARGEN));
+        assertThat(wsfe.solicitudes()).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("una excepción sin traducir del puerto de ARCA no sale de la venta: 201 con el registro EN_CURSO, nunca 5xx")
+    void unaExcepcionSinTraducirDelPuertoResponde201() throws Exception {
+        Tienda t = tiendaQueFactura(RI);
+        long a = articulo(t, "Martillo", "UNIDAD", "121.00", "10");
+        wsfe.lanzarEnElSiguienteFeCaeSolicitar(new IllegalStateException("Socket cerrado sin traducir (inyectada)."));
+
+        MockHttpServletResponse respuesta = venderA(t, null, null, clave(), "121.00", linea(a, "1", "121.00"))
+                .andReturn().getResponse();
+
+        assertThat(respuesta.getStatus()).isEqualTo(201);
+        JsonNode venta = objectMapper.readTree(respuesta.getContentAsString(StandardCharsets.UTF_8));
+        assertThat(venta.get("fiscal").get("estado").asText()).isEqualTo("EN_CURSO");
+        assertThat(estadoFiscal(venta.get("ventaId").asLong())).isEqualTo("EN_CURSO");
+        assertThat(stock(a)).isEqualByComparingTo("9");
     }
 
     @Test
