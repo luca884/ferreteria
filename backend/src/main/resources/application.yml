@@ -33,9 +33,21 @@ spring:
   flyway:
     enabled: true
     locations: classpath:db/migration
+  lifecycle:
+    # Con el apagado ordenado, cuánto espera el servidor web los pedidos en curso (el drenaje de Railway tiene que cubrirlo).
+    timeout-per-shutdown-phase: ${APAGADO_ESPERA_POR_FASE:20s}
+  task:
+    scheduling:
+      shutdown:
+        # Al apagar, la tarea programada que esté corriendo termina en vez de cortarse a la mitad.
+        await-termination: true
+        # Lo más que se la espera; va después de la espera del ejecutor fiscal, y el drenaje de Railway cubre las dos.
+        await-termination-period: ${APAGADO_ESPERA_TAREAS_PROGRAMADAS:20s}
 
 server:
   port: ${PORT:8080}
+  # Con SIGTERM (Railway, en cada deploy) deja de aceptar pedidos y termina los que están en curso antes de apagarse.
+  shutdown: graceful
   error:
     include-message: never
   compression:

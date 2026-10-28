@@ -6,8 +6,11 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ferreteria.support.ListasDePrueba;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.MethodOrderer;
+import org.junit.jupiter.api.Order;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestMethodOrder;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.MediaType;
@@ -52,8 +55,12 @@ import static org.assertj.core.api.Assertions.assertThat;
  * en el daemon, y la borra al terminar; las capas quedan en la cache de BuildKit y la proxima construccion las reusa.
  *
  * La imagen se construye con docker build (BuildKit, como Railway) y no con ImageFromDockerfile de Testcontainers.
+ *
+ * El ultimo test le manda SIGTERM al contenedor, como Railway en cada deploy, y prueba el apagado ordenado: por eso los
+ * tests van en orden y ese va al final.
  */
 @Tag("imagen")
+@TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class ImagenDeProduccionTest {
 
     private static final String IMAGEN = "ferreteria-api:imagen-test-" + UUID.randomUUID();
@@ -170,6 +177,31 @@ class ImagenDeProduccionTest {
         assertThat(hoja.path("nombre").asText()).isEqualTo("PDF");
         assertThat(celdas(hoja.path("filas").path(1))).containsExactly("TOR-001", "Tornillo", "1250,50");
         assertThat(celdas(hoja.path("filas").path(2))).containsExactly("TUE-002", "Tuerca", "310,00");
+    }
+
+    /**
+     * Lo que hace Railway en cada deploy: SIGTERM al contenedor viejo y SIGKILL pasados deploy.drainingSeconds de
+     * backend/railway.json. La app tiene que apagarse ordenada (server.shutdown=graceful: el log del apagado ordenado de
+     * Tomcat) y salir sola antes del SIGKILL, con el 143 de un SIGTERM atendido (128 + 15; un SIGKILL da 137). Va ultimo
+     * porque apaga el contenedor que usan los demas tests.
+     */
+    @Test
+    @Order(Integer.MAX_VALUE)
+    void conSigtermSeApagaOrdenadaAntesDelDrenajeDeRailway() throws Exception {
+        long drenaje = JSON.readTree(Path.of("railway.json").toFile()).path("deploy").path("drainingSeconds").asLong();
+        assertThat(drenaje).as("deploy.drainingSeconds en railway.json").isPositive();
+        String contenedor = API.getContainerId();
+
+        long inicio = System.nanoTime();
+        API.getDockerClient().killContainerCmd(contenedor).withSignal("SIGTERM").exec();
+        // docker kill no manda el SIGKILL: se espera de mas para medir cuanto tarda si se pasa del drenaje.
+        Integer salida = API.getDockerClient().waitContainerCmd(contenedor).start()
+            .awaitStatusCode(drenaje + 60, TimeUnit.SECONDS);
+        Duration tardo = Duration.ofNanos(System.nanoTime() - inicio);
+
+        assertThat(API.getLogs()).contains("Commencing graceful shutdown", "Graceful shutdown complete");
+        assertThat(salida).as("codigo de salida").isEqualTo(143);
+        assertThat(tardo).as("hasta salir, con drainingSeconds = %d", drenaje).isLessThan(Duration.ofSeconds(drenaje));
     }
 
     /**

@@ -6,6 +6,7 @@
   },
   "deploy": {
     "healthcheckPath": "/actuator/health",
+    "drainingSeconds": 70,
     "restartPolicyType": "ON_FAILURE",
     "restartPolicyMaxRetries": 3
   }
