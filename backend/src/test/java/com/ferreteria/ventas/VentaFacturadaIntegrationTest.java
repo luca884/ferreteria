@@ -8,11 +8,13 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDateTime;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -22,7 +24,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 /**
  * CU-07 pasos 2, 3 y 5 con la facturación (cu-07-venta-facturada S1 b y c, S2, S3 y S5) contra MySQL real y el simulador:
  * la venta facturable de una ferretería con la facturación habilitada crea su registro fiscal en su transacción y responde
- * con el CAE; la que no factura responde como siempre, sin «fiscal»; los dos controles que dependen de la facturación (el
+ * con el CAE; la que no factura (también la habilitada a la que el Dueño le vació un dato de CU-01, B1) responde como
+ * siempre, sin «fiscal»; los dos controles que dependen de la facturación (el
  * cliente sin datos fiscales y el tope de ARCA) no guardan nada; y la venta, sus movimientos y su registro llevan la misma
  * hora. La autorización después del commit (repetida, timeout, simulador lento y concurrencia) está en
  * {@link VentaFacturadaAutorizacionIntegrationTest}.
@@ -118,6 +121,39 @@ class VentaFacturadaIntegrationTest extends VentaFacturadaTestBase {
             assertThat(anonima.get("facturable").asBoolean()).isTrue();
             assertThat(registrosFiscales(t)).isZero();
         }
+        assertThat(wsfe.solicitudes()).isZero();
+    }
+
+    @ParameterizedTest(name = "sin {0}")
+    @ValueSource(strings = {"ingresosBrutos", "domicilioComercial", "inicioActividades"})
+    @DisplayName("con la facturación habilitada y un dato de CU-01 que el Dueño vació, la venta facturable se cobra sin factura: 201 sin «fiscal», sin registro y sin controlar al cliente (B1)")
+    void sinUnDatoDeCu01LaVentaSeCobraSinFactura(String dato) throws Exception {
+        Tienda t = tiendaQueFactura(RI);
+        long a = articulo(t, "Martillo", "UNIDAD", "121.00", "10");
+        long riSinDomicilio = cliente(t, "Corralón Sur SA", RI, "CUIT", cuitDeCliente(), null);
+        // Lo que guarda el formulario de «Datos de la ferretería» con ese dato vacío (CU-01 paso 1 lo permite).
+        Map<String, Object> datos = new HashMap<>();
+        datos.put("razonSocial", "Ventas SA");
+        datos.put("condicionIva", RI);
+        datos.put("domicilioComercial", "Av. Luro 1234, Mar del Plata");
+        datos.put("inicioActividades", "2015-03-01");
+        datos.put("ingresosBrutos", "901-123456-7");
+        datos.put(dato, null);
+        putJson("/api/datos-fiscales", login(t.emailDueno()), objectMapper.writeValueAsString(datos))
+                .andExpect(status().isOk());
+
+        JsonNode anonima = json(venderA(t, null, null, clave(), "121.00", linea(a, "1", "121.00"))
+                .andExpect(status().isCreated()));
+        JsonNode alCliente = json(venderA(t, riSinDomicilio, null, clave(), "121.00", linea(a, "1", "121.00"))
+                .andExpect(status().isCreated()));
+
+        assertSinFiscal(anonima);
+        assertSinFiscal(alCliente);
+        assertThat(anonima.get("facturable").asBoolean()).isTrue();
+        assertThat(comprobantes(t)).isEqualTo(2);
+        assertThat(movimientos(t)).isEqualTo(2);
+        assertThat(stock(a)).isEqualByComparingTo("8");
+        assertThat(registrosFiscales(t)).isZero();
         assertThat(wsfe.solicitudes()).isZero();
     }
 

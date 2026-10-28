@@ -5,7 +5,6 @@ import com.ferreteria.facturacion.config.EjecutorFiscalConfig;
 import com.ferreteria.facturacion.model.Alicuota;
 import com.ferreteria.facturacion.model.ComprobanteFiscal;
 import com.ferreteria.facturacion.model.CondicionIvaReceptor;
-import com.ferreteria.facturacion.model.ConfigArca;
 import com.ferreteria.facturacion.model.EstadoFiscal;
 import com.ferreteria.facturacion.model.ReceptorFiscal;
 import com.ferreteria.facturacion.model.RenglonFiscal;
@@ -14,8 +13,8 @@ import com.ferreteria.facturacion.motor.AltaFiscal;
 import com.ferreteria.facturacion.motor.AmbienteNoDisponibleException;
 import com.ferreteria.facturacion.motor.Atencion;
 import com.ferreteria.facturacion.motor.MotorFiscal;
+import com.ferreteria.facturacion.motor.PasosFiscales;
 import com.ferreteria.facturacion.repository.ComprobanteFiscalRepository;
-import com.ferreteria.facturacion.repository.ConfigArcaRepository;
 import com.ferreteria.tenant.TenantContext;
 import java.math.BigDecimal;
 import java.time.Duration;
@@ -50,7 +49,9 @@ import org.springframework.transaction.support.TransactionTemplate;
  * <p>Dentro de la transacción de la venta ({@code Propagation.MANDATORY}): {@link #decidir} es la primera carga de
  * {@code config_arca} en esa transacción, con {@code FOR SHARE} hasta el commit (advisory A3 de la rama 2: así no queda una
  * instancia vieja en el contexto de persistencia), y {@link #registrar}, el último paso, da de alta el registro con el motor,
- * cuyo {@code FOR SHARE} devuelve esa misma instancia ya tomada.
+ * cuyo {@code FOR SHARE} devuelve esa misma instancia ya tomada. Las dos deciden con la misma regla,
+ * {@link PasosFiscales#puedeFacturar()} (la facturación habilitada y los datos de CU-01 completos): lo que {@code decidir}
+ * deja facturar, {@code registrar} lo da de alta.
  *
  * <p>Después del commit, sin transacción (advisory A2: la llamada a ARCA nunca va con una conexión tomada),
  * {@link #autorizar} atiende la serie del registro en el ejecutor de {@code facturacion} ({@link EjecutorFiscalConfig}) y la
@@ -79,7 +80,7 @@ public class FacturacionParaVentaImpl implements FacturacionParaVenta {
      */
     private static final Set<Atencion> FINALES = EnumSet.of(Atencion.TERMINADA, Atencion.SIN_RESPUESTA, Atencion.TRABADA);
 
-    private final ConfigArcaRepository configs;
+    private final PasosFiscales pasos;
     private final ComprobanteFiscalRepository registros;
     private final MotorFiscal motor;
     private final ThreadPoolTaskExecutor ejecutor;
@@ -93,13 +94,13 @@ public class FacturacionParaVentaImpl implements FacturacionParaVenta {
      * @param espera cuánto espera {@link #autorizar} el resultado, en tiempo de pared
      * @param pausaSerieOcupada la pausa entre atenciones mientras otra instancia tiene la serie
      */
-    public FacturacionParaVentaImpl(ConfigArcaRepository configs, ComprobanteFiscalRepository registros, MotorFiscal motor,
+    public FacturacionParaVentaImpl(PasosFiscales pasos, ComprobanteFiscalRepository registros, MotorFiscal motor,
             @Qualifier(EjecutorFiscalConfig.EJECUTOR_FISCAL) ThreadPoolTaskExecutor ejecutor,
             PlatformTransactionManager transacciones,
             @Value("${app.facturacion.tope-identificacion}") BigDecimal topeIdentificacion,
             @Value("${app.facturacion.venta.espera}") Duration espera,
             @Value("${app.facturacion.venta.pausa-serie-ocupada}") Duration pausaSerieOcupada) {
-        this.configs = configs;
+        this.pasos = pasos;
         this.registros = registros;
         this.motor = motor;
         this.ejecutor = ejecutor;
@@ -112,13 +113,17 @@ public class FacturacionParaVentaImpl implements FacturacionParaVenta {
 
     // ---- En la transacción de la venta ----
 
+    /**
+     * Factura si la ferretería puede facturar ahora, con la misma regla que el alta ({@link PasosFiscales#puedeFacturar()}:
+     * la facturación habilitada con ambiente y punto de venta, y los datos de CU-01 completos). Si no, la venta sale «sin
+     * factura», como sin facturación (D5): sin controlar al receptor ni el tope de ARCA.
+     */
     @Override
     @Transactional(propagation = Propagation.MANDATORY)
     public Decision decidir(ReceptorVenta receptor) {
         Objects.requireNonNull(receptor, "Falta el receptor de la venta.");
         // Siempre con FOR SHARE, también sin fila (lock de hueco): la decisión y el alta ven la misma configuración (L3).
-        boolean factura = configs.bloquearCompartidaScoped().filter(ConfigArca::puedeFacturar).isPresent();
-        if (!factura) {
+        if (!pasos.puedeFacturar()) {
             return Decision.SIN_FACTURA;
         }
         return new Decision(true, receptorCompleto(receptor), topeIdentificacion);

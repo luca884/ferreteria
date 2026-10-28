@@ -44,7 +44,8 @@ public interface FacturacionParaVenta {
     /**
      * Lo que decide {@link #decidir}.
      *
-     * @param factura true si la venta sale con factura electrónica (la facturación está habilitada)
+     * @param factura true si la venta sale con factura electrónica (la facturación está habilitada y los datos de CU-01
+     *     de la ferretería están completos); si no, la venta se cobra sin factura (D5)
      * @param receptorCompleto false si el receptor es Responsable Inscripto, Monotributista o Exento y le falta el CUIT o
      *     el domicilio (D4); con {@code factura} en false, siempre true
      * @param topeIdentificacion desde este total (inclusive) la venta sin cliente identificado no se factura: el tope de

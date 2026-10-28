@@ -3,6 +3,7 @@ package com.ferreteria.facturacion.motor;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.ferreteria.common.exception.ReglaDeNegocioException;
 import com.ferreteria.facturacion.api.FacturacionParaVenta;
 import com.ferreteria.facturacion.api.FacturacionParaVenta.CondicionIva;
 import com.ferreteria.facturacion.api.FacturacionParaVenta.Decision;
@@ -13,7 +14,6 @@ import com.ferreteria.facturacion.api.FacturacionParaVenta.TipoDocumento;
 import com.ferreteria.facturacion.config.EjecutorFiscalConfig;
 import com.ferreteria.facturacion.model.Ambiente;
 import com.ferreteria.facturacion.repository.ComprobanteFiscalRepository;
-import com.ferreteria.facturacion.repository.ConfigArcaRepository;
 import com.ferreteria.facturacion.service.FacturacionParaVentaImpl;
 import com.ferreteria.facturacion.wsfe.WsfeConFallas.Falla;
 import com.ferreteria.tenant.TenantContext;
@@ -36,6 +36,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
@@ -69,8 +70,6 @@ class FacturacionParaVentaIntegrationTest extends MotorFiscalTestBase {
     @Autowired
     ComprobanteFiscalRepository registros;
     @Autowired
-    ConfigArcaRepository configs;
-    @Autowired
     @Qualifier(EjecutorFiscalConfig.EJECUTOR_FISCAL)
     ThreadPoolTaskExecutor ejecutor;
 
@@ -96,6 +95,16 @@ class FacturacionParaVentaIntegrationTest extends MotorFiscalTestBase {
         TenantContext.setCurrentFerreteriaId(f);
 
         assertThat(enLaVenta(() -> facturacion.decidir(ReceptorVenta.sinCliente()))).isEqualTo(Decision.SIN_FACTURA);
+    }
+
+    @ParameterizedTest(name = "sin {0}")
+    @ValueSource(strings = {"ingresos_brutos", "domicilio_comercial", "inicio_actividades"})
+    @DisplayName("con la facturación habilitada y un dato de CU-01 vacío no factura (D5, B1), y no controla al receptor")
+    void conUnDatoDeCu01VacioNoFactura(String columna) {
+        jdbc.update("update ferreteria set " + columna + " = null where id = ?", ferreteriaId);
+        ReceptorVenta riSinCuit = new ReceptorVenta(CondicionIva.RESPONSABLE_INSCRIPTO, null, null, "Corralón Sur SA", null);
+
+        assertThat(enLaVenta(() -> facturacion.decidir(riSinCuit))).isEqualTo(Decision.SIN_FACTURA);
     }
 
     @Test
@@ -210,6 +219,18 @@ class FacturacionParaVentaIntegrationTest extends MotorFiscalTestBase {
             return facturacion.registrar(venta, ReceptorVenta.sinCliente(),
                     List.of(new RenglonParaFacturar(new BigDecimal("15"), new BigDecimal("100.00"))), AHORA);
         })).isInstanceOf(IllegalArgumentException.class);
+        assertThat(jdbc.queryForObject("select count(*) from comprobante_fiscal where comprobante_id = ?", Long.class,
+                venta)).isZero();
+    }
+
+    @Test
+    @DisplayName("registrar con un dato de CU-01 vacío se sigue negando con el motivo de siempre y no da de alta nada")
+    void registrarConUnDatoDeCu01VacioSeNiega() {
+        long venta = venta(ferreteriaId);
+        jdbc.update("update ferreteria set ingresos_brutos = null where id = ?", ferreteriaId);
+
+        assertThatThrownBy(() -> enLaVenta(() -> facturacion.registrar(venta, ReceptorVenta.sinCliente(), renglones121(),
+                AHORA))).isInstanceOf(ReglaDeNegocioException.class).hasMessage(PasosFiscales.FALTAN_DATOS);
         assertThat(jdbc.queryForObject("select count(*) from comprobante_fiscal where comprobante_id = ?", Long.class,
                 venta)).isZero();
     }
@@ -395,7 +416,7 @@ class FacturacionParaVentaIntegrationTest extends MotorFiscalTestBase {
                 soltar.await();
                 return null;
             });
-            FacturacionParaVenta conUnHiloOcupado = new FacturacionParaVentaImpl(configs, registros, motor, unHiloSinCola,
+            FacturacionParaVenta conUnHiloOcupado = new FacturacionParaVentaImpl(pasos, registros, motor, unHiloSinCola,
                     transacciones, new BigDecimal("10000000.00"), ESPERA, Duration.ofMillis(200));
 
             long inicio = System.nanoTime();

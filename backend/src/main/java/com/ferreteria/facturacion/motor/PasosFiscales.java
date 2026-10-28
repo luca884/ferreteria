@@ -28,6 +28,7 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
@@ -68,17 +69,39 @@ public class PasosFiscales {
     // ---- Alta ----
 
     /**
+     * Si la ferretería del request factura ahora: la regla única que comparten la decisión de la venta
+     * ({@code FacturacionParaVenta.decidir}) y el alta del registro ({@link #registrar}), así una venta que se decidió
+     * facturable no se cae al darla de alta (D5, B1 de cu-07-venta-facturada). Factura si su configuración de ARCA tiene la
+     * facturación habilitada con ambiente y punto de venta ({@link ConfigArca#puedeFacturar()}) y si están completos los
+     * datos de CU-01 paso 1 que la factura imprime. Lee {@code config_arca} con {@code FOR SHARE} hasta el fin de la
+     * transacción de quien llama (también sin fila: lock de hueco), así que exige una abierta. No escribe nada.
+     *
+     * <p>Las dos llamadas van en la transacción de la venta y ven lo mismo: la configuración, porque el lock compartido no
+     * deja que el panel la cambie hasta el commit, y los datos de la ferretería, porque la segunda lectura devuelve la
+     * instancia que la primera dejó en el contexto de persistencia (y, aun sin ella, la lectura sin lock de REPEATABLE READ
+     * devuelve la misma foto). Si el Dueño vacía un dato entre las dos, la venta que se decidió facturable se da de alta con
+     * los datos que vio al decidir.
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public boolean puedeFacturar() {
+        return emision().impedimento() == null;
+    }
+
+    /**
      * Da de alta el registro PENDIENTE de una venta y su desglose, con lo que va a ARCA congelado. Se suma a la transacción
      * de quien llama (la de la venta, desde la rama 3) y empieza leyendo {@code config_arca} con {@code FOR SHARE} hasta el
-     * commit (L12): mientras tanto el panel no cambia el ambiente. Sin facturación habilitada (o sin ambiente) se niega.
+     * commit (L12): mientras tanto el panel no cambia el ambiente. Si la ferretería no factura ({@link #puedeFacturar()}) se
+     * niega: sin facturación habilitada (o sin ambiente), o con un dato de CU-01 vacío.
      */
     @Transactional
     public long registrar(AltaFiscal alta, Instant ahora) {
-        ConfigArca config = configs.bloquearCompartidaScoped()
-                .filter(ConfigArca::puedeFacturar)
-                .orElseThrow(() -> new ReglaDeNegocioException(NO_HABILITADA));
+        Emision emision = emision();
+        if (emision.impedimento() != null) {
+            throw new ReglaDeNegocioException(emision.impedimento());
+        }
+        ConfigArca config = emision.config();
+        EmisorFiscal emisor = emision.emisor();
         Long ferreteriaId = TenantContext.requireFerreteriaId();
-        EmisorFiscal emisor = emisor(ferreteriaId);
         EncuadreFiscal encuadre = EncuadreFiscal.de(emisor.condicionIva(), alta.receptor().condicionIva());
         DesgloseFiscal desglose = DesgloseFiscal.de(encuadre.letra(), alta.renglones());
 
@@ -91,17 +114,43 @@ public class PasosFiscales {
         return registro.getId();
     }
 
-    /** La copia del emisor: los datos de CU-01 paso 1 de la ferretería, que tienen que estar completos. */
-    private EmisorFiscal emisor(Long ferreteriaId) {
-        // findById es valido: la ferreteria es la raiz del tenant, no un repositorio de tenant.
-        DatosFiscales datos = DatosFiscales.de(ferreterias.findById(ferreteriaId)
-                .orElseThrow(() -> new ReglaDeNegocioException(FALTAN_DATOS)));
-        if (vacio(datos.razonSocial()) || datos.condicionIva() == null || vacio(datos.domicilioComercial())
-                || datos.inicioActividades() == null || vacio(datos.ingresosBrutos())) {
-            throw new ReglaDeNegocioException(FALTAN_DATOS);
+    /**
+     * Con qué factura la ferretería del request: su configuración de ARCA y su emisor, o por qué no factura.
+     *
+     * @param impedimento null si factura; si no, el motivo que da {@link #registrar} (y entonces lo demás es null)
+     */
+    private record Emision(ConfigArca config, EmisorFiscal emisor, String impedimento) {
+
+        static Emision impedida(String impedimento) {
+            return new Emision(null, null, impedimento);
         }
-        return new EmisorFiscal(datos.cuit(), datos.razonSocial(), CondicionIvaEmisor.valueOf(datos.condicionIva().name()),
-                datos.domicilioComercial(), datos.ingresosBrutos(), datos.inicioActividades());
+    }
+
+    /** La regla de {@link #puedeFacturar()}: primero la configuración (con su {@code FOR SHARE}), después el emisor. */
+    private Emision emision() {
+        Optional<ConfigArca> config = configs.bloquearCompartidaScoped().filter(ConfigArca::puedeFacturar);
+        if (config.isEmpty()) {
+            return Emision.impedida(NO_HABILITADA);
+        }
+        return emisor(TenantContext.requireFerreteriaId())
+                .map(emisor -> new Emision(config.get(), emisor, null))
+                .orElseGet(() -> Emision.impedida(FALTAN_DATOS));
+    }
+
+    /** La copia del emisor: los datos de CU-01 paso 1 de la ferretería; vacío si falta alguno de los que se imprimen. */
+    private Optional<EmisorFiscal> emisor(Long ferreteriaId) {
+        // findById es valido: la ferreteria es la raiz del tenant, no un repositorio de tenant.
+        return ferreterias.findById(ferreteriaId)
+                .map(DatosFiscales::de)
+                .filter(PasosFiscales::completos)
+                .map(datos -> new EmisorFiscal(datos.cuit(), datos.razonSocial(),
+                        CondicionIvaEmisor.valueOf(datos.condicionIva().name()), datos.domicilioComercial(),
+                        datos.ingresosBrutos(), datos.inicioActividades()));
+    }
+
+    private static boolean completos(DatosFiscales datos) {
+        return !vacio(datos.razonSocial()) && datos.condicionIva() != null && !vacio(datos.domicilioComercial())
+                && datos.inicioActividades() != null && !vacio(datos.ingresosBrutos());
     }
 
     private static boolean vacio(String texto) {

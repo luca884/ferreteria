@@ -155,8 +155,10 @@ public class ConfigArca {
     }
 
     /**
-     * Si la ferretería factura con esta configuración: la facturación habilitada, con ambiente y punto de venta. Lo miran la
-     * decisión de la venta y el alta del registro fiscal, así las dos deciden igual.
+     * Si esta configuración deja facturar: la facturación habilitada, con ambiente y punto de venta. Es solo la parte de
+     * ARCA: la ferretería factura si además tiene completos los datos de CU-01 que la factura imprime, que el Dueño puede
+     * vaciar con la facturación prendida. La regla entera, la que miran la decisión de la venta y el alta del registro
+     * fiscal, es {@code PasosFiscales.puedeFacturar()}.
      */
     public boolean puedeFacturar() {
         return facturacionHabilitada && ambiente != null && puntoVenta != null;
