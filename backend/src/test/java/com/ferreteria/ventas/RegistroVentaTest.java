@@ -590,7 +590,8 @@ class RegistroVentaTest {
         catalogoC1C3();
         escrituraLista(Map.of(1L, bd("7"), 2L, bd("7.5")));
         when(clientesParaVenta.tomarParaVenta(5L)).thenReturn(Optional.of(
-                new com.ferreteria.clientes.api.ClienteReferencia(5L, "Ferretería Norte SRL", true, false)));
+                new com.ferreteria.clientes.api.ClienteReferencia(5L, "Ferretería Norte SRL", true,
+                        com.ferreteria.clientes.api.ClienteReferencia.CondicionIva.CONSUMIDOR_FINAL, null, null, null)));
 
         Comprobante conCliente = comoVendedor(conCliente(ventaC1C3(MedioPago.EFECTIVO), 5L), USUARIO)
                 .comprobante();
@@ -606,7 +607,8 @@ class RegistroVentaTest {
         when(comprobanteRepository.porClaveScoped(CLAVE)).thenReturn(Optional.empty());
         when(clientesParaVenta.tomarParaVenta(9L)).thenReturn(Optional.empty());
         when(clientesParaVenta.tomarParaVenta(8L)).thenReturn(Optional.of(
-                new com.ferreteria.clientes.api.ClienteReferencia(8L, "Viejo", false, false)));
+                new com.ferreteria.clientes.api.ClienteReferencia(8L, "Viejo", false,
+                        com.ferreteria.clientes.api.ClienteReferencia.CondicionIva.CONSUMIDOR_FINAL, null, null, null)));
 
         org.assertj.core.api.Assertions.assertThatThrownBy(
                         () -> comoVendedor(conCliente(ventaC1C3(MedioPago.EFECTIVO), 9L), USUARIO))
@@ -1319,7 +1321,8 @@ class RegistroVentaTest {
     /** El cliente 5, activo, que toma la venta bajo lock. */
     void clienteTomado() {
         when(clientesParaVenta.tomarParaVenta(CLIENTE)).thenReturn(Optional.of(
-                new com.ferreteria.clientes.api.ClienteReferencia(CLIENTE, "Ferretería Norte SRL", true, false)));
+                new com.ferreteria.clientes.api.ClienteReferencia(CLIENTE, "Ferretería Norte SRL", true,
+                        com.ferreteria.clientes.api.ClienteReferencia.CondicionIva.CONSUMIDOR_FINAL, null, null, null)));
     }
 
     /** El cupo de la cuenta del cliente 5 para el importe de la venta: limite, saldo y exceso dados. */

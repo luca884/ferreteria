@@ -4,8 +4,11 @@ import com.ferreteria.clientes.api.ClienteReferencia;
 import com.ferreteria.clientes.api.ClientesParaVenta;
 import com.ferreteria.common.exception.ReglaDeNegocioException;
 import com.ferreteria.common.exception.ResourceNotFoundException;
+import com.ferreteria.facturacion.api.FacturacionParaVenta;
+import com.ferreteria.facturacion.api.FacturacionParaVenta.ReceptorVenta;
 import org.springframework.stereotype.Component;
 
+import java.util.Objects;
 import java.util.Optional;
 
 /**
@@ -17,10 +20,21 @@ import java.util.Optional;
 public class ClienteDelDocumento {
 
     /**
-     * El cliente tal como queda en el documento: el id (nulo si no se eligió uno), el nombre a copiar y si está identificado
-     * (tiene documento; Consumidor Final o un nombre libre nunca lo está).
+     * El cliente tal como queda en el documento: el id (nulo si no se eligió uno), el nombre a copiar y el receptor de la
+     * factura (CU-07, D4), con la condición frente al IVA, el documento y el domicilio leídos junto con el cliente. Sin
+     * cliente elegido (Consumidor Final o un nombre libre) el receptor es {@link ReceptorVenta#sinCliente()}.
      */
-    public record Elegido(Long id, String nombre, boolean identificado) {}
+    public record Elegido(Long id, String nombre, ReceptorVenta receptor) {
+
+        public Elegido {
+            Objects.requireNonNull(receptor, "Falta el receptor del documento.");
+        }
+
+        /** Tiene documento (DNI, CUIT o CUIL); Consumidor Final o un nombre libre nunca lo está (GDS-32). */
+        public boolean identificado() {
+            return receptor.identificado();
+        }
+    }
 
     private final ClientesParaVenta clientes;
 
@@ -30,7 +44,7 @@ public class ClienteDelDocumento {
 
     public Elegido resolver(Long clienteId, String nombreLibre) {
         if (clienteId == null) {
-            return new Elegido(null, nombreLibre, false);
+            return new Elegido(null, nombreLibre, ReceptorVenta.sinCliente());
         }
         return elegido(clientes.buscar(clienteId));
     }
@@ -44,7 +58,7 @@ public class ClienteDelDocumento {
      */
     public Elegido resolverParaVenta(Long clienteId) {
         if (clienteId == null) {
-            return new Elegido(null, null, false);
+            return new Elegido(null, null, ReceptorVenta.sinCliente());
         }
         return elegido(clientes.tomarParaVenta(clienteId));
     }
@@ -80,6 +94,33 @@ public class ClienteDelDocumento {
         if (!cliente.activo()) {
             throw new ReglaDeNegocioException("El cliente está desactivado.");
         }
-        return new Elegido(cliente.id(), cliente.razonSocial(), cliente.identificado());
+        return new Elegido(cliente.id(), cliente.razonSocial(), receptor(cliente));
+    }
+
+    /**
+     * El cliente como receptor de la factura: su condición frente al IVA, su documento, su razón social y su domicilio, tal
+     * como se leyeron (bajo el lock en la venta). Si están completos lo decide facturación (D4), no acá.
+     */
+    private static ReceptorVenta receptor(ClienteReferencia cliente) {
+        return new ReceptorVenta(condicion(cliente.condicionIva()),
+                cliente.tipoDocumento() == null ? null : tipoDocumento(cliente.tipoDocumento()), cliente.numeroDocumento(),
+                cliente.razonSocial(), cliente.domicilio());
+    }
+
+    private static FacturacionParaVenta.CondicionIva condicion(ClienteReferencia.CondicionIva condicion) {
+        return switch (condicion) {
+            case CONSUMIDOR_FINAL -> FacturacionParaVenta.CondicionIva.CONSUMIDOR_FINAL;
+            case RESPONSABLE_INSCRIPTO -> FacturacionParaVenta.CondicionIva.RESPONSABLE_INSCRIPTO;
+            case MONOTRIBUTISTA -> FacturacionParaVenta.CondicionIva.MONOTRIBUTISTA;
+            case EXENTO -> FacturacionParaVenta.CondicionIva.EXENTO;
+        };
+    }
+
+    private static FacturacionParaVenta.TipoDocumento tipoDocumento(ClienteReferencia.TipoDocumento tipo) {
+        return switch (tipo) {
+            case DNI -> FacturacionParaVenta.TipoDocumento.DNI;
+            case CUIT -> FacturacionParaVenta.TipoDocumento.CUIT;
+            case CUIL -> FacturacionParaVenta.TipoDocumento.CUIL;
+        };
     }
 }

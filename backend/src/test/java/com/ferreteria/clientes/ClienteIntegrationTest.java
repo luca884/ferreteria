@@ -13,6 +13,8 @@ import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.ResultActions;
 
@@ -97,14 +99,16 @@ class ClienteIntegrationTest extends IntegrationTestBase {
     @DisplayName("guarda todos los datos de contacto y la condición de IVA elegida")
     void guardaTodosLosDatos() throws Exception {
         Tienda t = tienda();
+        // D4: un Monotributista lleva CUIT y domicilio (antes este alta usaba un DNI)
         String cuerpo = """
-                {"razonSocial": "Juan Pérez", "tipoDocumento": "DNI", "numeroDocumento": "12.345.678",
+                {"razonSocial": "Juan Pérez", "tipoDocumento": "CUIT", "numeroDocumento": "20-12345678-6",
                  "condicionIva": "MONOTRIBUTISTA", "domicilio": "Av. Colón 1234, Mar del Plata",
                  "telefono": "223 456-7890", "whatsapp": "+54 9 223 555-0000", "email": "juan@correo.com"}""";
 
         JsonNode creado = json(crear(login(t.emailDueno()), cuerpo).andExpect(status().isCreated()));
 
-        assertThat(creado.get("numeroDocumento").asText()).isEqualTo("12345678");
+        assertThat(creado.get("tipoDocumento").asText()).isEqualTo("CUIT");
+        assertThat(creado.get("numeroDocumento").asText()).isEqualTo("20123456786");
         assertThat(creado.get("condicionIva").asText()).isEqualTo("MONOTRIBUTISTA");
         assertThat(creado.get("domicilio").asText()).isEqualTo("Av. Colón 1234, Mar del Plata");
         assertThat(creado.get("telefono").asText()).isEqualTo("223 456-7890");
@@ -301,14 +305,17 @@ class ClienteIntegrationTest extends IntegrationTestBase {
     void edita() throws Exception {
         Tienda t = tienda();
         String vendedor = login(t.emailVendedor());
-        long id = crearOk(vendedor, clienteConDoc("Ana", "DNI", "12345678"));
+        long id = crearOk(vendedor, clienteConDoc("Ana", "CUIT", "20-12345678-6"));
 
+        // D4: pasar a Responsable Inscripto pide CUIT y domicilio (antes esta edición iba con DNI y sin domicilio)
         JsonNode editado = json(putJson("/api/clientes/" + id, vendedor, """
-                {"razonSocial": "Ana Gómez", "tipoDocumento": "DNI", "numeroDocumento": "12345678",
-                 "condicionIva": "RESPONSABLE_INSCRIPTO", "telefono": "2234567890"}""").andExpect(status().isOk()));
+                {"razonSocial": "Ana Gómez", "tipoDocumento": "CUIT", "numeroDocumento": "20123456786",
+                 "condicionIva": "RESPONSABLE_INSCRIPTO", "domicilio": "Av. Colón 1234", "telefono": "2234567890"}""")
+                .andExpect(status().isOk()));
 
         assertThat(editado.get("razonSocial").asText()).isEqualTo("Ana Gómez");
         assertThat(editado.get("condicionIva").asText()).isEqualTo("RESPONSABLE_INSCRIPTO");
+        assertThat(editado.get("domicilio").asText()).isEqualTo("Av. Colón 1234");
         assertThat(editado.get("telefono").asText()).isEqualTo("2234567890");
         assertThat(editado.get("activo").asBoolean()).isTrue();
     }
@@ -370,6 +377,105 @@ class ClienteIntegrationTest extends IntegrationTestBase {
     void sinToken() throws Exception {
         mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/api/clientes"))
                 .andExpect(status().isUnauthorized());
+    }
+
+    // ---------------------------------------------------------------- datos fiscales (CU-11, D4: en toda ferretería)
+
+    private static final String FALTA_CUIT =
+            "Falta el CUIT: es obligatorio para Responsable Inscripto, Monotributista o Exento.";
+    private static final String NO_ES_CUIT =
+            "Para Responsable Inscripto, Monotributista o Exento el documento tiene que ser el CUIT.";
+    private static final String FALTA_DOMICILIO =
+            "Falta el domicilio: es obligatorio para Responsable Inscripto, Monotributista o Exento.";
+
+    /** Un cliente con esa condición de IVA; sin {@code tipo} no lleva documento y sin {@code domicilio}, no lo manda. */
+    private static String clienteFiscal(String razonSocial, String condicion, String tipo, String numero,
+            String domicilio) {
+        StringBuilder cuerpo = new StringBuilder("{\"razonSocial\": \"" + razonSocial + "\", \"condicionIva\": \""
+                + condicion + "\"");
+        if (tipo != null) {
+            cuerpo.append(", \"tipoDocumento\": \"").append(tipo).append("\", \"numeroDocumento\": \"").append(numero)
+                    .append("\"");
+        }
+        if (domicilio != null) {
+            cuerpo.append(", \"domicilio\": \"").append(domicilio).append("\"");
+        }
+        return cuerpo.append("}").toString();
+    }
+
+    @ParameterizedTest(name = "{0}")
+    @ValueSource(strings = {"RESPONSABLE_INSCRIPTO", "MONOTRIBUTISTA", "EXENTO"})
+    @DisplayName("el alta de un cliente RI, Monotributista o Exento sin CUIT, con DNI en vez de CUIT o sin domicilio es 400 por campo; con los dos, 201")
+    void altaConCondicionFiscalPideCuitYDomicilio(String condicion) throws Exception {
+        Tienda t = tienda();
+        String token = login(t.emailVendedor());
+
+        JsonNode sinCuit = json(crear(token, clienteFiscal("A", condicion, null, null, "Av. Colón 1234"))
+                .andExpect(status().isBadRequest()));
+        JsonNode conDni = json(crear(token, clienteFiscal("B", condicion, "DNI", "12345678", "Av. Colón 1234"))
+                .andExpect(status().isBadRequest()));
+        JsonNode sinDomicilio = json(crear(token, clienteFiscal("C", condicion, "CUIT", "20-12345678-6", null))
+                .andExpect(status().isBadRequest()));
+        JsonNode sinNada = json(crear(token, clienteFiscal("D", condicion, null, null, "   "))
+                .andExpect(status().isBadRequest()));
+
+        assertThat(sinCuit.get("errors").get("numeroDocumento").asText()).isEqualTo(FALTA_CUIT);
+        assertThat(conDni.get("errors").get("tipoDocumento").asText()).isEqualTo(NO_ES_CUIT);
+        assertThat(sinDomicilio.get("errors").get("domicilio").asText()).isEqualTo(FALTA_DOMICILIO);
+        assertThat(sinNada.get("errors").get("numeroDocumento").asText()).isEqualTo(FALTA_CUIT);
+        assertThat(sinNada.get("errors").get("domicilio").asText()).isEqualTo(FALTA_DOMICILIO);
+        assertThat(jdbc.queryForObject("select count(*) from cliente where ferreteria_id = ?", Long.class, t.id()))
+                .isZero();
+
+        JsonNode completo = json(crear(token, clienteFiscal("E", condicion, "CUIT", "20-12345678-6", "Av. Colón 1234"))
+                .andExpect(status().isCreated()));
+        assertThat(completo.get("condicionIva").asText()).isEqualTo(condicion);
+    }
+
+    @ParameterizedTest(name = "{0}")
+    @ValueSource(strings = {"RESPONSABLE_INSCRIPTO", "MONOTRIBUTISTA", "EXENTO"})
+    @DisplayName("editar un cliente a RI, Monotributista o Exento sin CUIT, con DNI en vez de CUIT o sin domicilio es 400 por campo y no cambia nada; con los dos, 200")
+    void edicionConCondicionFiscalPideCuitYDomicilio(String condicion) throws Exception {
+        Tienda t = tienda();
+        String token = login(t.emailVendedor());
+        long id = crearOk(token, clienteConDoc("Ana", "DNI", "12345678"));
+        String url = "/api/clientes/" + id;
+
+        JsonNode sinCuit = json(putJson(url, token, clienteFiscal("Ana", condicion, null, null, "Av. Colón 1234"))
+                .andExpect(status().isBadRequest()));
+        JsonNode conDni = json(putJson(url, token, clienteFiscal("Ana", condicion, "DNI", "12345678", "Av. Colón 1234"))
+                .andExpect(status().isBadRequest()));
+        JsonNode sinDomicilio = json(putJson(url, token, clienteFiscal("Ana", condicion, "CUIT", "20123456786", "  "))
+                .andExpect(status().isBadRequest()));
+
+        assertThat(sinCuit.get("errors").get("numeroDocumento").asText()).isEqualTo(FALTA_CUIT);
+        assertThat(conDni.get("errors").get("tipoDocumento").asText()).isEqualTo(NO_ES_CUIT);
+        assertThat(sinDomicilio.get("errors").get("domicilio").asText()).isEqualTo(FALTA_DOMICILIO);
+        var fila = jdbc.queryForMap("select condicion_iva, tipo_documento from cliente where id = ?", id);
+        assertThat(fila.get("condicion_iva")).isEqualTo("CONSUMIDOR_FINAL");
+        assertThat(fila.get("tipo_documento")).isEqualTo("DNI");
+
+        JsonNode editado = json(putJson(url, token, clienteFiscal("Ana", condicion, "CUIT", "20123456786",
+                "Av. Colón 1234")).andExpect(status().isOk()));
+        assertThat(editado.get("condicionIva").asText()).isEqualTo(condicion);
+        assertThat(editado.get("tipoDocumento").asText()).isEqualTo("CUIT");
+    }
+
+    @Test
+    @DisplayName("Consumidor Final sigue sin pedir documento ni domicilio, en el alta y en la edición")
+    void consumidorFinalNoPideDatosFiscales() throws Exception {
+        Tienda t = tienda();
+        String token = login(t.emailVendedor());
+
+        long id = crearOk(token, clienteFiscal("Ana", "CONSUMIDOR_FINAL", null, null, null));
+        putJson("/api/clientes/" + id, token, clienteFiscal("Ana", "CONSUMIDOR_FINAL", "DNI", "12345678", null))
+                .andExpect(status().isOk());
+        JsonNode sinNada = json(putJson("/api/clientes/" + id, token,
+                clienteFiscal("Ana Gómez", "CONSUMIDOR_FINAL", null, null, null)).andExpect(status().isOk()));
+
+        assertThat(sinNada.get("condicionIva").asText()).isEqualTo("CONSUMIDOR_FINAL");
+        assertThat(sinNada.has("tipoDocumento")).isFalse();
+        assertThat(sinNada.has("domicilio")).isFalse();
     }
 
     // ---------------------------------------------------------------- cuenta corriente en la respuesta (CC-007, CC-019)

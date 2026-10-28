@@ -2095,6 +2095,19 @@ describe('Mostrador', () => {
       expect(renglonesTicket()).toHaveLength(1);
     });
 
+    it('un 422 por cliente sin datos fiscales deja el cobro abierto con el mensaje y el ticket intacto (D4)', async () => {
+      await conMartillos();
+      await tecla('F4');
+      await tecla('Enter');
+
+      const mensaje = 'Para facturarle a Ana Gómez falta su CUIT o su domicilio: completalos en Clientes.';
+      await fallarCobro(0, 422, { ...rechazo(422, 'CLIENTE_SIN_DATOS_FISCALES', []), message: mensaje });
+
+      expect(dialogo()).not.toBeNull();
+      expect(normal(dialogo()!.querySelector('.aviso')?.textContent)).toBe(mensaje);
+      expect(renglonesTicket()).toHaveLength(1);
+    });
+
     it.each([
       ['un error de red', 0],
       ['un 500', 500],

@@ -51,6 +51,23 @@ class ClienteRepositoryCuentaTest extends CuentaCorrienteTestBase {
     }
 
     @Test
+    @DisplayName("bloquearCuentaScoped lee también la condición de IVA, el documento y el domicilio, en la misma lectura (D4)")
+    void bloquearCuentaLeeLosDatosFiscales() {
+        Ferreteria f = ferreteria();
+        long id = cliente(f, null);
+        jdbc.update("update cliente set condicion_iva = 'EXENTO', tipo_documento = 'CUIT', numero_documento = ?, "
+                + "domicilio = 'Av. Colón 1234' where id = ?", "30712345671", id);
+        TenantContext.setCurrentFerreteriaId(f.id());
+
+        var cuenta = enTx(() -> clientes.bloquearCuentaScoped(id)).orElseThrow();
+
+        assertThat(cuenta.getCondicionIva()).isEqualTo("EXENTO");
+        assertThat(cuenta.getTipoDocumento()).isEqualTo("CUIT");
+        assertThat(cuenta.getNumeroDocumento()).isEqualTo("30712345671");
+        assertThat(cuenta.getDomicilio()).isEqualTo("Av. Colón 1234");
+    }
+
+    @Test
     @DisplayName("bloquearCuentaScoped con un cliente sin cuenta corriente habilitada: límite null; y desactivado: activo false")
     void bloquearCuentaSinLimiteYDesactivado() {
         Ferreteria f = ferreteria();

@@ -134,7 +134,9 @@ export type MotivoRechazo =
   | 'CAJA_DE_OTRO_DIA'
   | 'LIMITE_CUENTA_CORRIENTE'
   | 'CUENTA_CORRIENTE_NO_HABILITADA'
-  | 'CONSUMIDOR_FINAL_SIN_DATOS';
+  | 'CONSUMIDOR_FINAL_SIN_DATOS'
+  /** D4: el cliente es Responsable Inscripto, Monotributista o Exento y le falta el CUIT o el domicilio para facturarle. */
+  | 'CLIENTE_SIN_DATOS_FISCALES';
 
 /** Los campos null no se serializan: cada motivo trae solo los que le aplican. */
 export interface ArticuloRechazado {

@@ -195,6 +195,17 @@ describe('VentaService', () => {
       expect(rechazoDe(new HttpErrorResponse({ status: 422, error: cuerpo }))).toEqual(cuerpo);
     });
 
+    it('reconoce el rechazo por cliente sin datos fiscales (D4)', () => {
+      const cuerpo: VentaRechazada = {
+        status: 422,
+        message: 'Para facturarle a Ana Gómez falta su CUIT o su domicilio: completalos en Clientes.',
+        timestamp: 't',
+        motivo: 'CLIENTE_SIN_DATOS_FISCALES',
+        articulos: [],
+      };
+      expect(rechazoDe(new HttpErrorResponse({ status: 422, error: cuerpo }))).toEqual(cuerpo);
+    });
+
     it('un 403 (autorizar el exceso siendo Vendedor) NO es un rechazo de venta', () => {
       const cuerpo = { status: 403, message: 'Autorizar el exceso es solo del Dueño' };
       expect(rechazoDe(new HttpErrorResponse({ status: 403, error: cuerpo }))).toBeNull();

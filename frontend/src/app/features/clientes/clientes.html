@@ -191,6 +191,7 @@
           id="tipo-documento"
           name="tipoDocumento"
           formControlName="tipoDocumento"
+          [attr.aria-required]="pideDatosFiscales() ? 'true' : null"
           [attr.aria-invalid]="errorTipo() ? 'true' : null"
           [attr.aria-describedby]="errorTipo() ? 'tipo-documento-error' : null"
         >
@@ -204,7 +205,7 @@
         }
       </div>
       <div class="campo numero">
-        <label for="numero-documento">Número</label>
+        <label for="numero-documento">{{ pideDatosFiscales() ? 'Número de CUIT (obligatorio)' : 'Número' }}</label>
         <input
           id="numero-documento"
           name="numeroDocumento"
@@ -213,6 +214,7 @@
           autocomplete="off"
           spellcheck="false"
           placeholder="30-71234567-1"
+          [attr.aria-required]="pideDatosFiscales() ? 'true' : null"
           [attr.aria-invalid]="errorNumero() ? 'true' : null"
           [attr.aria-describedby]="errorNumero() ? 'numero-documento-error' : null"
         />
@@ -223,15 +225,36 @@
     </div>
     <div class="campo">
       <label for="condicion-iva">Condición de IVA</label>
-      <select id="condicion-iva" name="condicionIva" formControlName="condicionIva">
+      <select
+        id="condicion-iva"
+        name="condicionIva"
+        formControlName="condicionIva"
+        [attr.aria-describedby]="pideDatosFiscales() ? 'condicion-iva-pista' : null"
+      >
         @for (condicion of condiciones; track condicion) {
           <option [value]="condicion">{{ etiquetaCondicion[condicion] }}</option>
         }
       </select>
+      @if (pideDatosFiscales()) {
+        <span id="condicion-iva-pista" class="pista">
+          Responsable inscripto, Monotributista y Exento llevan CUIT y domicilio: los pide la factura.
+        </span>
+      }
     </div>
     <div class="campo">
-      <label for="domicilio">Domicilio</label>
-      <input id="domicilio" name="domicilio" formControlName="domicilio" autocomplete="off" />
+      <label for="domicilio">{{ pideDatosFiscales() ? 'Domicilio (obligatorio)' : 'Domicilio' }}</label>
+      <input
+        id="domicilio"
+        name="domicilio"
+        formControlName="domicilio"
+        autocomplete="off"
+        [attr.aria-required]="pideDatosFiscales() ? 'true' : null"
+        [attr.aria-invalid]="errorDomicilio() ? 'true' : null"
+        [attr.aria-describedby]="errorDomicilio() ? 'domicilio-error' : null"
+      />
+      @if (errorDomicilio(); as mensaje) {
+        <span id="domicilio-error" class="campo-error">{{ mensaje }}</span>
+      }
     </div>
     <div class="fila-doc">
       <div class="campo">

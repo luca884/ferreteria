@@ -36,6 +36,10 @@ const TAMANO_PAGINA = 20;
 /** El tope del límite de cuenta corriente: el mismo que acepta el servidor (13 enteros y 2 decimales). */
 const LIMITE_MAXIMO = 9_999_999_999_999.99;
 const MOTIVO_NO_DESACTIVAR = 'No se puede desactivar: el cliente tiene saldo en cuenta corriente.';
+/** CU-11 (D4): los mismos mensajes que da el servidor cuando a un RI, Monotributista o Exento le falta el CUIT o el domicilio. */
+const FALTA_CUIT = 'Falta el CUIT: es obligatorio para Responsable Inscripto, Monotributista o Exento.';
+const NO_ES_CUIT = 'Para Responsable Inscripto, Monotributista o Exento el documento tiene que ser el CUIT.';
+const FALTA_DOMICILIO = 'Falta el domicilio: es obligatorio para Responsable Inscripto, Monotributista o Exento.';
 
 /** El texto sin espacios de los bordes; undefined si queda vacío, así el pedido no manda campos en blanco. */
 const sinVacios = (texto: string): string | undefined => texto.trim() || undefined;
@@ -84,6 +88,7 @@ export class Clientes implements OnInit {
   protected readonly erroresCampos = signal<string[]>([]);
   protected readonly errorTipo = signal<string | null>(null);
   protected readonly errorNumero = signal<string | null>(null);
+  protected readonly errorDomicilio = signal<string | null>(null);
   protected readonly guardando = signal(false);
   protected readonly cambiando = signal(false);
   /** El cliente que se está editando; null mientras se da de alta uno nuevo. */
@@ -110,6 +115,12 @@ export class Clientes implements OnInit {
     return cliente?.activo && cliente.saldo !== undefined && cliente.saldo !== 0 ? MOTIVO_NO_DESACTIVAR : null;
   });
   protected readonly errorLimite = signal<string | null>(null);
+
+  private readonly condicionElegida = toSignal(this.form.controls.condicionIva.valueChanges, {
+    initialValue: this.form.controls.condicionIva.value,
+  });
+  /** CU-11 (D4): Responsable inscripto, Monotributista y Exento llevan CUIT y domicilio; Consumidor final, no. */
+  protected readonly pideDatosFiscales = computed(() => this.condicionElegida() !== 'CONSUMIDOR_FINAL');
 
   /** Las formas de pago activas, para avisar si falta la de cuenta corriente. null mientras no se leyeron (o no se pudo). */
   private readonly formasActivas = signal<readonly FormaPago[] | null>(null);
@@ -182,13 +193,19 @@ export class Clientes implements OnInit {
 
   protected guardar(): void {
     this.limpiarErrores();
-    const { tipoDocumento, numeroDocumento } = this.form.getRawValue();
+    const { tipoDocumento, numeroDocumento, domicilio } = this.form.getRawValue();
     const conTipo = tipoDocumento !== '';
     const conNumero = numeroDocumento.trim() !== '';
     if (conNumero && !conTipo) this.errorTipo.set('Elegí el tipo de documento.');
     if (conTipo && !conNumero) this.errorNumero.set('Falta el número de documento.');
+    if (this.pideDatosFiscales()) {
+      // Lo mismo que valida el servidor (CU-11, D4), para avisar en cada campo antes de mandar.
+      if (!conTipo && !conNumero) this.errorNumero.set(FALTA_CUIT);
+      else if (conTipo && tipoDocumento !== 'CUIT') this.errorTipo.set(NO_ES_CUIT);
+      if (domicilio.trim() === '') this.errorDomicilio.set(FALTA_DOMICILIO);
+    }
     if (this.auth.esDueno()) this.errorLimite.set(this.validarLimite());
-    if (this.form.invalid || this.errorTipo() || this.errorNumero() || this.errorLimite()) {
+    if (this.form.invalid || this.errorTipo() || this.errorNumero() || this.errorDomicilio() || this.errorLimite()) {
       this.form.markAllAsTouched();
       this.enfocar('form.alta [aria-invalid="true"]');
       return;
@@ -358,6 +375,7 @@ export class Clientes implements OnInit {
     this.erroresCampos.set([]);
     this.errorTipo.set(null);
     this.errorNumero.set(null);
+    this.errorDomicilio.set(null);
     this.errorLimite.set(null);
   }
 

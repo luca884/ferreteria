@@ -786,6 +786,12 @@ export class Mostrador {
         // cliente (F9) y se vuelve a cobrar con el mismo ticket.
         this.avisoCobro.set(rechazo.message);
         return;
+      case 'CLIENTE_SIN_DATOS_FISCALES':
+        // D4: el cliente es Responsable Inscripto, Monotributista o Exento y le falta el CUIT o el domicilio para facturarle.
+        // No se guardó nada: el cobro sigue abierto con el mensaje; se completan sus datos en Clientes (o se elige otro
+        // cliente con F9) y se vuelve a cobrar con el mismo ticket.
+        this.avisoCobro.set(rechazo.message);
+        return;
       case 'CAJA_CERRADA':
       case 'CAJA_DE_OTRO_DIA':
         // Otro usuario cerró la caja (o cambió el día) mientras se armaba el ticket: el ticket se conserva.

@@ -17,12 +17,13 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
  * Los clientes de la ferretería (CL-001 a CL-003). El documento se valida y se guarda solo con dígitos; es único por
- * ferretería entre los cargados. Un cliente de otra ferretería da 404, igual que uno que no existe. No se borran:
- * se desactivan.
+ * ferretería entre los cargados. Responsable Inscripto, Monotributista y Exento llevan CUIT y domicilio (CU-11, D4).
+ * Un cliente de otra ferretería da 404, igual que uno que no existe. No se borran: se desactivan.
  */
 @Service
 public class ClienteService {
@@ -31,6 +32,12 @@ public class ClienteService {
     private static final String NO_ENCONTRADO = "Cliente no encontrado";
     private static final String CON_SALDO = "No se puede desactivar: el cliente tiene saldo en cuenta corriente.";
     private static final String DOCUMENTO_REPETIDO = "Ya existe un cliente con ese tipo y número de documento.";
+    private static final String FALTA_CUIT =
+            "Falta el CUIT: es obligatorio para Responsable Inscripto, Monotributista o Exento.";
+    private static final String NO_ES_CUIT =
+            "Para Responsable Inscripto, Monotributista o Exento el documento tiene que ser el CUIT.";
+    private static final String FALTA_DOMICILIO =
+            "Falta el domicilio: es obligatorio para Responsable Inscripto, Monotributista o Exento.";
 
     private final ClienteRepository repositorio;
 
@@ -59,6 +66,7 @@ public class ClienteService {
     @Transactional
     public Cliente crear(DatosCliente datos) {
         Documento documento = documentoDe(datos);
+        exigirDatosFiscales(condicionDe(datos), documento, datos.domicilio());
         if (documento.numero() != null && repositorio.existeDocumentoScoped(documento.numero())) {
             throw new ConflictException(DOCUMENTO_REPETIDO);
         }
@@ -72,6 +80,7 @@ public class ClienteService {
     public Cliente actualizar(Long id, DatosCliente datos) {
         Cliente cliente = obtener(id);
         Documento documento = documentoDe(datos);
+        exigirDatosFiscales(condicionDe(datos), documento, datos.domicilio());
         if (documento.numero() != null && repositorio.existeOtroConDocumentoScoped(documento.numero(), id)) {
             throw new ConflictException(DOCUMENTO_REPETIDO);
         }
@@ -117,6 +126,29 @@ public class ClienteService {
             return new Documento(datos.tipoDocumento(), DocumentoCliente.normalizar(datos.tipoDocumento(), numero));
         } catch (DocumentoInvalidoException e) {
             throw new DatosInvalidosException(Map.of("numeroDocumento", e.getMessage()));
+        }
+    }
+
+    /**
+     * CU-11 (D4), en toda ferretería: un cliente Responsable Inscripto, Monotributista o Exento lleva el CUIT y el domicilio,
+     * que pide su factura. Va después de {@link #documentoDe}, con el documento ya validado; los faltantes salen juntos, uno
+     * por campo. Consumidor Final no pide nada.
+     */
+    private static void exigirDatosFiscales(CondicionIvaCliente condicion, Documento documento, String domicilio) {
+        if (condicion == CondicionIvaCliente.CONSUMIDOR_FINAL) {
+            return;
+        }
+        Map<String, String> errores = new LinkedHashMap<>();
+        if (documento.tipo() == null) {
+            errores.put("numeroDocumento", FALTA_CUIT);
+        } else if (documento.tipo() != TipoDocumento.CUIT) {
+            errores.put("tipoDocumento", NO_ES_CUIT);
+        }
+        if (vacioANulo(domicilio) == null) {
+            errores.put("domicilio", FALTA_DOMICILIO);
+        }
+        if (!errores.isEmpty()) {
+            throw new DatosInvalidosException(errores);
         }
     }
 

@@ -116,7 +116,8 @@ class RegistroAnulacionTest {
     private void caminoFeliz() {
         lenient().when(cajaService.cajaParaAnular()).thenReturn(CAJA_DE_HOY);
         lenient().when(clienteDelDocumento.resolverParaAnulacion(CLIENTE))
-                .thenReturn(new ClienteDelDocumento.Elegido(CLIENTE, NOMBRE_CLIENTE, false));
+                .thenReturn(new ClienteDelDocumento.Elegido(CLIENTE, NOMBRE_CLIENTE,
+                        com.ferreteria.facturacion.api.FacturacionParaVenta.ReceptorVenta.sinCliente()));
         lenient().when(reciboRepository.findScoped(RECIBO_ID)).thenReturn(Optional.of(recibo(CLIENTE, "1000.00")));
         lenient().when(reciboRepository.saveAndFlush(any(Recibo.class))).thenAnswer(inv -> inv.getArgument(0));
         lenient().when(cuentaCorriente.asentarAnulacion(any())).thenReturn(new AnulacionAsentada(900L, List.of(8L, 9L)));
@@ -181,7 +182,8 @@ class RegistroAnulacionTest {
         caminoFeliz();
         doAnswer(inv -> {
             verifyNoInteractions(reciboRepository, cuentaCorriente, cajaRepository);
-            return new ClienteDelDocumento.Elegido(CLIENTE, NOMBRE_CLIENTE, false);
+            return new ClienteDelDocumento.Elegido(CLIENTE, NOMBRE_CLIENTE,
+                    com.ferreteria.facturacion.api.FacturacionParaVenta.ReceptorVenta.sinCliente());
         }).when(clienteDelDocumento).resolverParaAnulacion(CLIENTE);
 
         registro.registrar(RECIBO_ID, CLIENTE, "Cobro mal cargado", ANULADOR);

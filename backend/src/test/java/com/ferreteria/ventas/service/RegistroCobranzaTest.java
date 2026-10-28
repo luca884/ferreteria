@@ -124,7 +124,8 @@ class RegistroCobranzaTest {
     private void caminoFeliz(List<ImputacionAsentada> asentadas) {
         lenient().when(cajaService.cajaParaCobrar()).thenReturn(CAJA);
         lenient().when(clienteDelDocumento.resolverParaCobranza(CLIENTE))
-                .thenReturn(new ClienteDelDocumento.Elegido(CLIENTE, NOMBRE_CLIENTE, false));
+                .thenReturn(new ClienteDelDocumento.Elegido(CLIENTE, NOMBRE_CLIENTE,
+                        com.ferreteria.facturacion.api.FacturacionParaVenta.ReceptorVenta.sinCliente()));
         lenient().when(reciboRepository.porClaveScoped(CLAVE)).thenReturn(Optional.empty());
         lenient().when(numeradorRepository.siguienteScoped()).thenReturn(12L);
         lenient().when(reciboRepository.save(any(Recibo.class))).thenAnswer(inv -> {
@@ -284,7 +285,8 @@ class RegistroCobranzaTest {
         // pueden haber corrido: solo la caja (lectura bloqueante FOR SHARE) puede ir antes.
         doAnswer(inv -> {
             verifyNoInteractions(reciboRepository, numeradorRepository, cuentaCorriente, cajaRepository);
-            return new ClienteDelDocumento.Elegido(CLIENTE, NOMBRE_CLIENTE, false);
+            return new ClienteDelDocumento.Elegido(CLIENTE, NOMBRE_CLIENTE,
+                    com.ferreteria.facturacion.api.FacturacionParaVenta.ReceptorVenta.sinCliente());
         }).when(clienteDelDocumento).resolverParaCobranza(CLIENTE);
 
         registro.registrar(pedido(MedioPago.EFECTIVO, "10"), USUARIO);

@@ -9,7 +9,8 @@ import jakarta.validation.constraints.Size;
 
 /**
  * Lo que manda el mostrador o la pantalla de clientes al crear o editar (CL-003). La ferretería sale del JWT. Acá solo
- * se valida la forma; el documento (que tipo y número vayan juntos, el dígito verificador) lo valida el servicio.
+ * se valida la forma; el documento (que tipo y número vayan juntos, el dígito verificador) y el CUIT y el domicilio que
+ * piden Responsable Inscripto, Monotributista o Exento (CU-11, D4) los valida el servicio.
  */
 public record ClienteRequest(
         @NotBlank(message = "La razón social es obligatoria.")

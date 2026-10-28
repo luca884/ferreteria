@@ -45,17 +45,27 @@ public interface ClienteRepository extends TenantScopedRepository<Cliente, Long>
 
         /** DNI, CUIT o CUIL, o null sin documento, de la misma lectura actual (la venta lo pide desde el tope, GDS-32). */
         String getTipoDocumento();
+
+        /** Solo dígitos, o null sin documento. Con la condición y el domicilio, lo que la venta facturada copia (D4). */
+        String getNumeroDocumento();
+
+        /** El nombre de {@code CondicionIvaCliente}: nunca null. */
+        String getCondicionIva();
+
+        String getDomicilio();
     }
 
     /**
-     * Toma la fila del cliente con {@code SELECT … FOR UPDATE} y lee SALDO, LÍMITE y ACTIVO como escalares. Es nativa a
-     * propósito: un JPQL devolvería la instancia ya gestionada del persistence context (con el saldo de antes), y una
-     * lectura plana en REPEATABLE READ vería la foto del inicio de la transacción; el {@code FOR UPDATE} es una lectura
-     * actual y trae lo último confirmado. Requiere transacción.
+     * Toma la fila del cliente con {@code SELECT … FOR UPDATE} y lee SALDO, LÍMITE y ACTIVO como escalares, con los datos
+     * fiscales (condición de IVA, documento y domicilio) en la misma lectura. Es nativa a propósito: un JPQL devolvería la
+     * instancia ya gestionada del persistence context (con el saldo de antes), y una lectura plana en REPEATABLE READ vería
+     * la foto del inicio de la transacción; el {@code FOR UPDATE} es una lectura actual y trae lo último confirmado.
+     * Requiere transacción.
      */
     @Query(value = "select razon_social as razonSocial, saldo as saldo, "
             + "limite_cuenta_corriente as limiteCuentaCorriente, activo as activo, "
-            + "tipo_documento as tipoDocumento from cliente where id = :id and ferreteria_id = :fid for update", nativeQuery = true)
+            + "tipo_documento as tipoDocumento, numero_documento as numeroDocumento, condicion_iva as condicionIva, "
+            + "domicilio as domicilio from cliente where id = :id and ferreteria_id = :fid for update", nativeQuery = true)
     Optional<CuentaBloqueada> bloquearCuenta(@Param("fid") Long ferreteriaId, @Param("id") Long id);
 
     /**

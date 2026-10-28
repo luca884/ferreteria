@@ -29,6 +29,7 @@ describe('Clientes', () => {
     tipoDocumento: 'CUIT',
     numeroDocumento: '30712345671',
     condicionIva: 'RESPONSABLE_INSCRIPTO',
+    domicilio: 'Av. Colón 1234',
     email: 'norte@correo.com',
     activo: true,
     cuentaCorrienteHabilitada: false,
@@ -247,6 +248,8 @@ describe('Clientes', () => {
       await elegirEn('tipo-documento', 'CUIT');
       await escribir('numero-documento', '30-71234567-1');
       await elegirEn('condicion-iva', 'RESPONSABLE_INSCRIPTO');
+      // D4: Responsable inscripto lleva domicilio (antes este alta iba sin él)
+      await escribir('domicilio', 'Av. Colón 1234');
 
       await enviar('form.alta');
 
@@ -255,6 +258,7 @@ describe('Clientes', () => {
         tipoDocumento: 'CUIT',
         numeroDocumento: '30-71234567-1',
         condicionIva: 'RESPONSABLE_INSCRIPTO',
+        domicilio: 'Av. Colón 1234',
       });
     });
 
@@ -399,6 +403,99 @@ describe('Clientes', () => {
     });
   });
 
+  describe('datos fiscales (CU-11, D4)', () => {
+    const FALTA_CUIT = 'Falta el CUIT: es obligatorio para Responsable Inscripto, Monotributista o Exento.';
+    const NO_ES_CUIT = 'Para Responsable Inscripto, Monotributista o Exento el documento tiene que ser el CUIT.';
+    const FALTA_DOMICILIO = 'Falta el domicilio: es obligatorio para Responsable Inscripto, Monotributista o Exento.';
+    const label = (id: string) => texto(`label[for="${id}"]`);
+
+    it.each(['RESPONSABLE_INSCRIPTO', 'MONOTRIBUTISTA', 'EXENTO'])(
+      'con %s el CUIT y el domicilio se marcan obligatorios; al volver a Consumidor final, no',
+      async (condicion) => {
+        await crear();
+
+        await elegirEn('condicion-iva', condicion);
+
+        expect(label('numero-documento')).toBe('Número de CUIT (obligatorio)');
+        expect(label('domicilio')).toBe('Domicilio (obligatorio)');
+        expect(input('numero-documento').getAttribute('aria-required')).toBe('true');
+        expect(input('domicilio').getAttribute('aria-required')).toBe('true');
+        expect(select('tipo-documento').getAttribute('aria-required')).toBe('true');
+        expect(texto('#condicion-iva-pista')).toBe(
+          'Responsable inscripto, Monotributista y Exento llevan CUIT y domicilio: los pide la factura.',
+        );
+
+        await elegirEn('condicion-iva', 'CONSUMIDOR_FINAL');
+
+        expect(label('numero-documento')).toBe('Número');
+        expect(label('domicilio')).toBe('Domicilio');
+        expect(input('numero-documento').getAttribute('aria-required')).toBeNull();
+        expect(input('domicilio').getAttribute('aria-required')).toBeNull();
+        expect(el().querySelector('#condicion-iva-pista')).toBeNull();
+      },
+    );
+
+    it.each(['RESPONSABLE_INSCRIPTO', 'MONOTRIBUTISTA', 'EXENTO'])(
+      'con %s, sin CUIT ni domicilio no llama al servicio y marca los dos campos',
+      async (condicion) => {
+        await crear();
+        await escribir('razon-social', 'Juan Pérez');
+        await elegirEn('condicion-iva', condicion);
+        await escribir('domicilio', '   ');
+
+        await enviar('form.alta');
+
+        expect(servicio.crear).not.toHaveBeenCalled();
+        expect(texto('#numero-documento-error')).toBe(FALTA_CUIT);
+        expect(input('numero-documento').getAttribute('aria-invalid')).toBe('true');
+        expect(texto('#domicilio-error')).toBe(FALTA_DOMICILIO);
+        expect(input('domicilio').getAttribute('aria-invalid')).toBe('true');
+      },
+    );
+
+    it('con un DNI en vez del CUIT no llama al servicio y marca el tipo de documento', async () => {
+      await crear();
+      await escribir('razon-social', 'Juan Pérez');
+      await elegirEn('condicion-iva', 'MONOTRIBUTISTA');
+      await elegirEn('tipo-documento', 'DNI');
+      await escribir('numero-documento', '12345678');
+      await escribir('domicilio', 'Av. Colón 1234');
+
+      await enviar('form.alta');
+
+      expect(servicio.crear).not.toHaveBeenCalled();
+      expect(texto('#tipo-documento-error')).toBe(NO_ES_CUIT);
+      expect(select('tipo-documento').getAttribute('aria-invalid')).toBe('true');
+      expect(el().querySelector('#domicilio-error')).toBeNull();
+    });
+
+    it('editar un Monotributista cargado sin CUIT ni domicilio pide los dos antes de guardar', async () => {
+      await crear();
+      await elegir(2);
+      barra('.editar')!.click();
+      await refrescar();
+
+      await enviar('form.alta');
+
+      expect(servicio.actualizar).not.toHaveBeenCalled();
+      expect(texto('#numero-documento-error')).toBe(FALTA_CUIT);
+      expect(texto('#domicilio-error')).toBe(FALTA_DOMICILIO);
+    });
+
+    it('los errores por campo del servidor (400) sobre el CUIT y el domicilio se listan', async () => {
+      await crear();
+      servicio.crear.mockReturnValue(
+        throwError(() => errorHttp(400, 'Datos inválidos', { numeroDocumento: FALTA_CUIT, domicilio: FALTA_DOMICILIO })),
+      );
+      await escribir('razon-social', 'Juan Pérez');
+
+      await enviar('form.alta');
+
+      expect(texto('.errores-campos')).toContain(FALTA_CUIT);
+      expect(texto('.errores-campos')).toContain(FALTA_DOMICILIO);
+    });
+  });
+
   describe('desactivar (solo el Dueño)', () => {
     it('el Dueño desactiva al elegido y la fila pasa a Inactivo', async () => {
       await crear();
@@ -453,6 +550,7 @@ describe('Clientes', () => {
       tipoDocumento: 'CUIT',
       numeroDocumento: '30712345671',
       condicionIva: 'RESPONSABLE_INSCRIPTO',
+      domicilio: 'Av. Luro 3200',
       activo: true,
       cuentaCorrienteHabilitada: true,
       limiteCuentaCorriente: 5000,
