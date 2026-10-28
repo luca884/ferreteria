@@ -13,6 +13,7 @@ import org.hibernate.type.SqlTypes;
 
 import java.math.BigDecimal;
 import com.ferreteria.common.HoraArgentina;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 /** La ferreteria es el tenant: la raiz de todos los datos de negocio. */
@@ -55,6 +56,18 @@ public class Ferreteria {
     @Column(name = "tope_consumidor_final", nullable = false, precision = 15, scale = 2)
     private BigDecimal topeConsumidorFinal = new BigDecimal("10000000.00");
 
+    /** Domicilio del local donde se factura (RG 1415). Lo carga el Dueño (CU-01); vacio hasta que lo carga. */
+    @Column(name = "domicilio_comercial", length = 200)
+    private String domicilioComercial;
+
+    /** Inicio de actividades del local donde se factura (RG 1415). */
+    @Column(name = "inicio_actividades")
+    private LocalDate inicioActividades;
+
+    /** Ingresos Brutos como se imprimen: numero, Convenio Multilateral, Exento o No contribuyente (RG 1415). */
+    @Column(name = "ingresos_brutos", length = 30)
+    private String ingresosBrutos;
+
     @Column(name = "creado_en", nullable = false, updatable = false)
     private LocalDateTime creadoEn = HoraArgentina.ahora();
 
@@ -70,6 +83,23 @@ public class Ferreteria {
     public void actualizarDatos(String razonSocial, CondicionIva condicionIva) {
         this.razonSocial = razonSocial;
         this.condicionIva = condicionIva;
+    }
+
+    /**
+     * Los datos del emisor que edita el Dueño (CU-01 paso 1): el CUIT no cambia nunca. Los textos se recortan, y un
+     * domicilio o unos Ingresos Brutos en blanco quedan vacios (la base los rechaza en blanco).
+     */
+    public void actualizarDatosFiscales(String razonSocial, CondicionIva condicionIva, String domicilioComercial,
+            LocalDate inicioActividades, String ingresosBrutos) {
+        this.razonSocial = razonSocial.trim();
+        this.condicionIva = condicionIva;
+        this.domicilioComercial = textoOVacio(domicilioComercial);
+        this.inicioActividades = inicioActividades;
+        this.ingresosBrutos = textoOVacio(ingresosBrutos);
+    }
+
+    private static String textoOVacio(String texto) {
+        return texto == null || texto.isBlank() ? null : texto.trim();
     }
 
     /** El Dueño cambia el margen por defecto y el multiplo de redondeo; el recalculo de precios lo hace el catalogo. */
@@ -100,5 +130,8 @@ public class Ferreteria {
     public BigDecimal getMargenDefectoPorcentaje() { return margenDefectoPorcentaje; }
     public BigDecimal getRedondeoMultiplo() { return redondeoMultiplo; }
     public BigDecimal getTopeConsumidorFinal() { return topeConsumidorFinal; }
+    public String getDomicilioComercial() { return domicilioComercial; }
+    public LocalDate getInicioActividades() { return inicioActividades; }
+    public String getIngresosBrutos() { return ingresosBrutos; }
     public LocalDateTime getCreadoEn() { return creadoEn; }
 }

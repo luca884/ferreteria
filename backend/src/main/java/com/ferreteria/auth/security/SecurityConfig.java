@@ -49,6 +49,9 @@ public class SecurityConfig {
                         .requestMatchers("/api/configuracion-cotizacion/**").hasRole("DUENO")
                         // La configuracion de precios (margen por defecto y redondeo) tambien, leerla y cambiarla (H07).
                         .requestMatchers("/api/configuracion-precios/**").hasRole("DUENO")
+                        // Los datos fiscales de la ferreteria (CU-01 paso 1) los lee y los edita solo el Dueño: el
+                        // Vendedor y el super admin reciben 403 aunque el cuerpo no valide.
+                        .requestMatchers("/api/datos-fiscales/**").hasRole("DUENO")
                         // «Recalcular ahora» tambien: el GET de la cotizacion (/api/cotizacion) sigue siendo de todos.
                         .requestMatchers(HttpMethod.POST, "/api/cotizacion/recalculo").hasRole("DUENO")
                         // Editar los ajustes de un articulo es solo del Dueño; el 403 va antes de leer el cuerpo.

@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import jakarta.persistence.Column;
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -34,6 +35,46 @@ class FerreteriaTest {
         assertThat(f.getRazonSocial()).isEqualTo("Tuerca SRL");
         assertThat(f.getCondicionIva()).isEqualTo(CondicionIva.MONOTRIBUTISTA);
         assertThat(f.getCuit()).isEqualTo("30-12345678-1");
+    }
+
+    @Test
+    @DisplayName("una ferretería nueva no tiene domicilio comercial, inicio de actividades ni Ingresos Brutos")
+    void sinDatosFiscales() {
+        Ferreteria f = nueva();
+
+        assertThat(f.getDomicilioComercial()).isNull();
+        assertThat(f.getInicioActividades()).isNull();
+        assertThat(f.getIngresosBrutos()).isNull();
+    }
+
+    @Test
+    @DisplayName("actualizarDatosFiscales cambia los cinco datos del emisor, recorta los textos y no toca el CUIT")
+    void actualizarDatosFiscales() {
+        Ferreteria f = nueva();
+
+        f.actualizarDatosFiscales("  Tuerca SRL ", CondicionIva.MONOTRIBUTISTA, " Av. Luro 3200, Mar del Plata ",
+                LocalDate.of(2015, 3, 1), " 901-123456-7 ");
+
+        assertThat(f.getRazonSocial()).isEqualTo("Tuerca SRL");
+        assertThat(f.getCondicionIva()).isEqualTo(CondicionIva.MONOTRIBUTISTA);
+        assertThat(f.getDomicilioComercial()).isEqualTo("Av. Luro 3200, Mar del Plata");
+        assertThat(f.getInicioActividades()).isEqualTo(LocalDate.of(2015, 3, 1));
+        assertThat(f.getIngresosBrutos()).isEqualTo("901-123456-7");
+        assertThat(f.getCuit()).isEqualTo("30-12345678-1");
+    }
+
+    @Test
+    @DisplayName("actualizarDatosFiscales guarda un domicilio o unos Ingresos Brutos en blanco como vacíos (null)")
+    void datosFiscalesEnBlancoQuedanVacios() {
+        Ferreteria f = nueva();
+        f.actualizarDatosFiscales("Tornillo SA", CondicionIva.RESPONSABLE_INSCRIPTO, "Av. Luro 3200",
+                LocalDate.of(2015, 3, 1), "Convenio Multilateral 901-1");
+
+        f.actualizarDatosFiscales("Tornillo SA", CondicionIva.RESPONSABLE_INSCRIPTO, "   ", null, "");
+
+        assertThat(f.getDomicilioComercial()).isNull();
+        assertThat(f.getInicioActividades()).isNull();
+        assertThat(f.getIngresosBrutos()).isNull();
     }
 
     @Test
