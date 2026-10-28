@@ -3,6 +3,7 @@ package com.ferreteria.plataforma.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -17,6 +18,8 @@ import com.ferreteria.auth.api.UsuariosParaPlataforma.ResumenUsuarios;
 import com.ferreteria.common.exception.ConflictException;
 import com.ferreteria.common.exception.DatosInvalidosException;
 import com.ferreteria.common.exception.ResourceNotFoundException;
+import com.ferreteria.facturacion.api.ConfigArcaParaPlataforma;
+import com.ferreteria.facturacion.api.ConfigArcaParaPlataforma.ResumenArca;
 import com.ferreteria.ferreteria.model.CondicionIva;
 import com.ferreteria.ferreteria.model.EstadoFerreteria;
 import com.ferreteria.ferreteria.model.Ferreteria;
@@ -41,19 +44,21 @@ class FerreteriasAdminServiceTest {
 
     private FerreteriaRepository ferreterias;
     private UsuariosParaPlataforma usuarios;
+    private ConfigArcaParaPlataforma arca;
     private FerreteriasAdminService servicio;
 
     @BeforeEach
     void armar() {
         ferreterias = mock(FerreteriaRepository.class);
         usuarios = mock(UsuariosParaPlataforma.class);
+        arca = mock(ConfigArcaParaPlataforma.class);
         when(ferreterias.saveAndFlush(any(Ferreteria.class))).thenAnswer(i -> {
             Ferreteria f = i.getArgument(0);
             ReflectionTestUtils.setField(f, "id", 3L);
             return f;
         });
         when(usuarios.crearDueno(anyLong(), anyString(), anyString(), anyString())).thenReturn(8L);
-        servicio = new FerreteriasAdminService(ferreterias, usuarios);
+        servicio = new FerreteriasAdminService(ferreterias, usuarios, arca);
     }
 
     private static DatosAlta alta(String cuit) {
@@ -249,6 +254,44 @@ class FerreteriasAdminServiceTest {
         assertThatThrownBy(() -> servicio.resetearContrasenaDeDueno(1L, 5L, "clave1234"))
                 .isInstanceOf(ResourceNotFoundException.class).hasMessage("Usuario no encontrado");
         verify(usuarios, never()).resetearContrasenaDeDueno(eq(9L), anyLong(), anyString());
+    }
+
+    @Test
+    @DisplayName("la configuración de ARCA: sobre una ferretería inexistente da 404 sin tocar el puerto; si existe, delega y la devuelve")
+    void configuracionDeArca() {
+        when(ferreterias.findById(9L)).thenReturn(Optional.empty());
+        Ferreteria f = ferreteria(1L, "Arco", EstadoFerreteria.ACTIVA);
+        when(ferreterias.findById(1L)).thenReturn(Optional.of(f));
+        ResumenArca conSimulador = new ResumenArca(true, "SIMULADOR", 1, false, null);
+        when(arca.cambiarDePrueba(1L, true)).thenReturn(new ResumenArca(true, null, null, false, null));
+        when(arca.cambiarSimulador(1L, true)).thenReturn(conSimulador);
+        when(arca.cambiarFacturacionHabilitada(1L, false)).thenReturn(conSimulador);
+
+        assertThatThrownBy(() -> servicio.cambiarDePrueba(9L, true)).isInstanceOf(ResourceNotFoundException.class);
+        assertThatThrownBy(() -> servicio.cambiarSimulador(9L, true)).isInstanceOf(ResourceNotFoundException.class);
+        assertThatThrownBy(() -> servicio.cambiarFacturacionHabilitada(9L, true))
+                .isInstanceOf(ResourceNotFoundException.class);
+        verify(arca, never()).cambiarDePrueba(eq(9L), anyBoolean());
+        verify(arca, never()).cambiarSimulador(eq(9L), anyBoolean());
+        verify(arca, never()).cambiarFacturacionHabilitada(eq(9L), anyBoolean());
+
+        assertThat(servicio.cambiarDePrueba(1L, true).arca().dePrueba()).isTrue();
+        assertThat(servicio.cambiarSimulador(1L, true).arca()).isEqualTo(conSimulador);
+        assertThat(servicio.cambiarFacturacionHabilitada(1L, false).arca()).isEqualTo(conSimulador);
+    }
+
+    @Test
+    @DisplayName("listar completa cada ferretería con su configuración de ARCA; sin fila, sin configurar")
+    void listarConArca() {
+        when(ferreterias.todasOrdenadas()).thenReturn(List.of(ferreteria(1L, "Arco", EstadoFerreteria.ACTIVA),
+                ferreteria(2L, "Bulón", EstadoFerreteria.ACTIVA)));
+        ResumenArca deArco = new ResumenArca(true, "SIMULADOR", 1, true, java.time.Instant.parse("2026-10-28T13:00:00Z"));
+        when(arca.resumenPorFerreteria()).thenReturn(Map.of(1L, deArco));
+
+        List<FerreteriaAdmin> items = servicio.listar().ferreterias();
+
+        assertThat(items.get(0).arca()).isEqualTo(deArco);
+        assertThat(items.get(1).arca()).isEqualTo(ResumenArca.SIN_CONFIGURAR);
     }
 
     @Test

@@ -8,6 +8,8 @@ import com.ferreteria.common.exception.ConflictException;
 import com.ferreteria.common.exception.DatosInvalidosException;
 import com.ferreteria.common.exception.ErrorDeBase;
 import com.ferreteria.common.exception.ResourceNotFoundException;
+import com.ferreteria.facturacion.api.ConfigArcaParaPlataforma;
+import com.ferreteria.facturacion.api.ConfigArcaParaPlataforma.ResumenArca;
 import com.ferreteria.ferreteria.model.EstadoFerreteria;
 import com.ferreteria.ferreteria.model.Ferreteria;
 import com.ferreteria.ferreteria.repository.FerreteriaRepository;
@@ -20,8 +22,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * El super admin da de alta, edita y suspende ferreterías (plataforma). Opera por id explícito y NO toca el TenantContext
- * (el super admin no tiene ferretería). Solo lee las tablas ferretería y usuario: nunca datos de ventas.
+ * El super admin da de alta, edita y suspende ferreterías (plataforma), y cambia su configuración de ARCA (marca «de
+ * prueba», simulador y facturación habilitada, CU-01 paso 2). Opera por id explícito y NO toca el TenantContext (el super
+ * admin no tiene ferretería). Lee la ferretería y, por sus puertos, los usuarios y la configuración de ARCA: nunca datos
+ * de ventas.
  */
 @Service
 public class FerreteriasAdminService {
@@ -35,10 +39,13 @@ public class FerreteriasAdminService {
 
     private final FerreteriaRepository ferreterias;
     private final UsuariosParaPlataforma usuarios;
+    private final ConfigArcaParaPlataforma arca;
 
-    public FerreteriasAdminService(FerreteriaRepository ferreterias, UsuariosParaPlataforma usuarios) {
+    public FerreteriasAdminService(FerreteriaRepository ferreterias, UsuariosParaPlataforma usuarios,
+            ConfigArcaParaPlataforma arca) {
         this.ferreterias = ferreterias;
         this.usuarios = usuarios;
+        this.arca = arca;
     }
 
     /**
@@ -74,14 +81,16 @@ public class FerreteriasAdminService {
         } catch (DatosInvalidosException e) {
             throw new DatosInvalidosException(prefijarConDueno(e.errors()));
         }
-        return admin(ferreteria, new ResumenUsuarios(1, 0, duenoId, dueno.email().trim().toLowerCase(Locale.ROOT)));
+        return admin(ferreteria, new ResumenUsuarios(1, 0, duenoId, dueno.email().trim().toLowerCase(Locale.ROOT)),
+                ResumenArca.SIN_CONFIGURAR);
     }
 
     @Transactional(readOnly = true)
     public EstadoGeneral listar() {
         Map<Long, ResumenUsuarios> resumen = usuarios.resumenPorFerreteria();
+        Map<Long, ResumenArca> arcas = arca.resumenPorFerreteria();
         List<FerreteriaAdmin> items = ferreterias.todasOrdenadas().stream()
-                .map(f -> admin(f, resumen.get(f.getId())))
+                .map(f -> admin(f, resumen.get(f.getId()), arcas.get(f.getId())))
                 .toList();
         long activas = items.stream().filter(i -> i.estado() == EstadoFerreteria.ACTIVA).count();
         return new EstadoGeneral(activas, items.size() - activas, items);
@@ -92,7 +101,29 @@ public class FerreteriasAdminService {
     public FerreteriaAdmin cambiarActivo(long id, boolean activo) {
         Ferreteria ferreteria = obtener(id);
         ferreteria.cambiarActivo(activo);
-        return admin(ferreteria, usuarios.resumenPorFerreteria().get(id));
+        return admin(ferreteria, usuarios.resumenPorFerreteria().get(id), arca.resumenDe(id));
+    }
+
+    /** Pone o saca la marca «de prueba» (CU-01, «Ambiente de ARCA»). Una regla rota sale como 422. */
+    @Transactional
+    public FerreteriaAdmin cambiarDePrueba(long id, boolean dePrueba) {
+        Ferreteria ferreteria = obtener(id);
+        return admin(ferreteria, usuarios.resumenPorFerreteria().get(id), arca.cambiarDePrueba(id, dePrueba));
+    }
+
+    /** Asigna el simulador (punto de venta 1) o lo quita. Una regla rota sale como 422. */
+    @Transactional
+    public FerreteriaAdmin cambiarSimulador(long id, boolean simulador) {
+        Ferreteria ferreteria = obtener(id);
+        return admin(ferreteria, usuarios.resumenPorFerreteria().get(id), arca.cambiarSimulador(id, simulador));
+    }
+
+    /** Prende o apaga la facturación (CU-01, «Facturación habilitada»). Una regla rota sale como 422. */
+    @Transactional
+    public FerreteriaAdmin cambiarFacturacionHabilitada(long id, boolean habilitada) {
+        Ferreteria ferreteria = obtener(id);
+        return admin(ferreteria, usuarios.resumenPorFerreteria().get(id),
+                arca.cambiarFacturacionHabilitada(id, habilitada));
     }
 
     @Transactional
@@ -138,10 +169,11 @@ public class FerreteriasAdminService {
         return new ConflictException(EMAIL_EN_USO, Map.of("dueno.email", EMAIL_EN_USO));
     }
 
-    private static FerreteriaAdmin admin(Ferreteria f, ResumenUsuarios r) {
+    /** Sin resumen de usuarios: ninguno activo. Sin resumen de ARCA: el super admin todavía no la tocó. */
+    private static FerreteriaAdmin admin(Ferreteria f, ResumenUsuarios r, ResumenArca a) {
         ResumenUsuarios resumen = r == null ? new ResumenUsuarios(0, 0, null, null) : r;
         return new FerreteriaAdmin(f.getId(), f.getRazonSocial(), f.getCuit(), f.getCondicionIva(), f.getEstado(),
                 f.getCreadoEn(), resumen.duenosActivos(), resumen.vendedoresActivos(), resumen.duenoId(),
-                resumen.emailDueno());
+                resumen.emailDueno(), a == null ? ResumenArca.SIN_CONFIGURAR : a);
     }
 }

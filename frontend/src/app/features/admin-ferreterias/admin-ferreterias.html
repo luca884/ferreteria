@@ -6,8 +6,22 @@
     </svg>
     Nueva
   </button>
-  <button type="button" class="accion-barra suspender" [disabled]="!filas.elegido() || cambiando()" (click)="pedirConfirmacion()">
+  <button type="button" class="accion-barra suspender" [disabled]="!filas.elegido() || cambiando()" (click)="pedirConfirmacion('activo')">
     {{ filas.elegido()?.estado === 'SUSPENDIDA' ? 'Reactivar' : 'Suspender' }}
+  </button>
+  <button type="button" class="accion-barra de-prueba" [disabled]="!filas.elegido() || cambiando()" (click)="pedirConfirmacion('dePrueba')">
+    {{ filas.elegido()?.dePrueba ? 'Quitar marca de prueba' : 'Marcar de prueba' }}
+  </button>
+  <button type="button" class="accion-barra simulador" [disabled]="!filas.elegido() || cambiando()" (click)="pedirConfirmacion('simulador')">
+    {{ filas.elegido()?.ambiente === 'SIMULADOR' ? 'Quitar simulador' : 'Asignar simulador' }}
+  </button>
+  <button
+    type="button"
+    class="accion-barra facturacion"
+    [disabled]="!filas.elegido() || cambiando()"
+    (click)="pedirConfirmacion('facturacion')"
+  >
+    {{ filas.elegido()?.facturacionHabilitada ? 'Deshabilitar facturación' : 'Habilitar facturación' }}
   </button>
   <button
     type="button"
@@ -22,7 +36,8 @@
 <p class="ayuda">
   Las ferreterías que usan el sistema. Suspender corta el acceso de todos sus usuarios en el acto, pero no borra ningún
   dato; al reactivarla todo vuelve como estaba. Acá no se ve nada de lo que vende cada una. Después del alta, la razón
-  social y la condición de IVA las edita el Dueño en «Datos de la ferretería».
+  social y la condición de IVA las edita el Dueño en «Datos de la ferretería». El simulador de ARCA solo se le asigna a
+  una ferretería marcada de prueba, y para habilitar la facturación hacen falta un ambiente y sus datos fiscales completos.
 </p>
 
 @if (aviso(); as mensaje) {
@@ -62,6 +77,9 @@
                 <th class="numero">Dueños</th>
                 <th class="numero">Vendedores</th>
                 <th>Email del Dueño</th>
+                <th>De prueba</th>
+                <th>Ambiente</th>
+                <th>Factura</th>
               </tr>
             </thead>
             <tbody>
@@ -83,6 +101,9 @@
                   <td class="numero">{{ ferreteria.duenosActivos }}</td>
                   <td class="numero">{{ ferreteria.vendedoresActivos }}</td>
                   <td>{{ ferreteria.emailDueno ?? '—' }}</td>
+                  <td class="de-prueba">{{ ferreteria.dePrueba ? 'Sí' : 'No' }}</td>
+                  <td class="ambiente">{{ ferreteria.ambiente ? etiquetaAmbiente[ferreteria.ambiente] : '—' }}</td>
+                  <td class="factura">{{ ferreteria.facturacionHabilitada ? 'Sí' : 'No' }}</td>
                 </tr>
               }
             </tbody>
@@ -212,12 +233,12 @@
   </div>
 }
 
-@if (aConfirmar(); as ferreteria) {
+@if (confirmacion(); as texto) {
   <app-confirmacion
-    [titulo]="tituloConfirmacion(ferreteria)"
-    [mensaje]="mensajeConfirmacion(ferreteria)"
-    [textoConfirmar]="ferreteria.estado === 'ACTIVA' ? 'Suspender' : 'Reactivar'"
-    [peligro]="ferreteria.estado === 'ACTIVA'"
+    [titulo]="texto.titulo"
+    [mensaje]="texto.mensaje"
+    [textoConfirmar]="texto.confirmar"
+    [peligro]="texto.peligro"
     (confirmar)="confirmarCambio()"
     (cancelar)="aConfirmar.set(null)"
   />

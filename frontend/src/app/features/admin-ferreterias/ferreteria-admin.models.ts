@@ -22,7 +22,19 @@ export const ESTADO_FERRETERIA_LABELS: Record<EstadoFerreteria, string> = {
   SUSPENDIDA: 'Suspendida',
 };
 
-/** Contrato de /api/admin/ferreterias (FerreteriaAdminResponse): datos de alta y usuarios activos. Nada de ventas. */
+/** El ambiente de ARCA de una ferretería. El super admin solo asigna o quita el simulador; los otros los fija el certificado. */
+export type AmbienteArca = 'SIMULADOR' | 'HOMOLOGACION' | 'PRODUCCION';
+
+export const AMBIENTE_ARCA_LABELS: Record<AmbienteArca, string> = {
+  SIMULADOR: 'Simulador',
+  HOMOLOGACION: 'Homologación',
+  PRODUCCION: 'Producción',
+};
+
+/**
+ * Contrato de /api/admin/ferreterias (FerreteriaAdminResponse): datos de alta, usuarios activos y configuración de ARCA.
+ * Nada de ventas.
+ */
 export interface FerreteriaAdmin {
   id: number;
   razonSocial: string;
@@ -37,6 +49,15 @@ export interface FerreteriaAdmin {
   /** null si no tiene ningún Dueño activo. */
   duenoId: number | null;
   emailDueno: string | null;
+  /** Marca «de prueba»: solo una ferretería de prueba puede usar el simulador. */
+  dePrueba: boolean;
+  /** null mientras no tenga ambiente. */
+  ambiente: AmbienteArca | null;
+  /** 1 con el simulador; null sin ambiente. */
+  puntoVenta: number | null;
+  facturacionHabilitada: boolean;
+  /** Cuándo se prendió la facturación (ISO, UTC); null si no factura. */
+  habilitadaEn: string | null;
 }
 
 export interface EstadoGeneral {

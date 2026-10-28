@@ -207,9 +207,8 @@ class ModulosArchTest {
     void elPuertoDeFacturacionSoloDependeDelJdk() {
         classes().that().resideInAPackage("com.ferreteria.facturacion.api..")
                 .should().onlyDependOnClassesThat(resideInAnyPackage("java..", "com.ferreteria.facturacion.api.."))
-                // El puerto todavia no existe: lo crea la rama 3, cuando la venta pida la factura. Hasta entonces la regla
-                // no tiene a quien mirar y no debe fallar por eso.
-                .allowEmptyShould(true)
+                // Existe desde T4 (ConfigArcaParaPlataforma, para el panel del super admin): la regla no puede quedar vacia.
+                .allowEmptyShould(false)
                 .check(clases);
     }
 

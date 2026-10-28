@@ -192,6 +192,17 @@ class TenantScopingArchTest {
                 .check(clases);
     }
 
+    // ---- Facturacion (CU-07, rama 2): todo lo fiscal es de una ferreteria, asi que todos sus repositorios son de tenant ----
+
+    @Test
+    void todosLosRepositoriosDeFacturacionSonDeTenant() {
+        classes().that().resideInAPackage("com.ferreteria.facturacion.repository..")
+                .and().areInterfaces()
+                .should().beAssignableTo(TenantScopedRepository.class)
+                .allowEmptyShould(false)
+                .check(clases);
+    }
+
     @Test
     void elRepositorioDeImportacionesNoDeclaraFindersSinScope() {
         assertThat(TenantScopedRepository.class).isAssignableFrom(ImportacionListaRepository.class);

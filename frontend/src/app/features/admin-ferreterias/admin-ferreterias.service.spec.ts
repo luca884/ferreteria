@@ -23,6 +23,11 @@ describe('AdminFerreteriasService', () => {
     vendedoresActivos: 2,
     duenoId: 7,
     emailDueno: 'dueno@tornillo.demo',
+    dePrueba: false,
+    ambiente: null,
+    puntoVenta: null,
+    facturacionHabilitada: false,
+    habilitadaEn: null,
   };
 
   beforeEach(() => {
@@ -73,6 +78,42 @@ describe('AdminFerreteriasService', () => {
     req.flush({ ...tornillo, estado: 'SUSPENDIDA' });
 
     expect(devuelta?.estado).toBe('SUSPENDIDA');
+  });
+
+  it('pone o saca la marca de prueba con PATCH /admin/ferreterias/{id}/de-prueba', () => {
+    let devuelta: FerreteriaAdmin | undefined;
+    service.cambiarDePrueba(3, true).subscribe((f) => (devuelta = f));
+
+    const req = http.expectOne((r) => r.url.endsWith('/admin/ferreterias/3/de-prueba'));
+    expect(req.request.method).toBe('PATCH');
+    expect(req.request.body).toEqual({ dePrueba: true });
+    req.flush({ ...tornillo, dePrueba: true });
+
+    expect(devuelta?.dePrueba).toBe(true);
+  });
+
+  it('asigna o quita el simulador con PATCH /admin/ferreterias/{id}/simulador', () => {
+    let devuelta: FerreteriaAdmin | undefined;
+    service.cambiarSimulador(3, true).subscribe((f) => (devuelta = f));
+
+    const req = http.expectOne((r) => r.url.endsWith('/admin/ferreterias/3/simulador'));
+    expect(req.request.method).toBe('PATCH');
+    expect(req.request.body).toEqual({ simulador: true });
+    req.flush({ ...tornillo, dePrueba: true, ambiente: 'SIMULADOR', puntoVenta: 1 });
+
+    expect(devuelta?.ambiente).toBe('SIMULADOR');
+  });
+
+  it('prende o apaga la facturación con PATCH /admin/ferreterias/{id}/facturacion', () => {
+    let devuelta: FerreteriaAdmin | undefined;
+    service.cambiarFacturacion(3, false).subscribe((f) => (devuelta = f));
+
+    const req = http.expectOne((r) => r.url.endsWith('/admin/ferreterias/3/facturacion'));
+    expect(req.request.method).toBe('PATCH');
+    expect(req.request.body).toEqual({ habilitada: false });
+    req.flush(tornillo);
+
+    expect(devuelta?.facturacionHabilitada).toBe(false);
   });
 
   it('resetea la contraseña del Dueño con PUT /admin/ferreterias/{id}/duenos/{uid}/password', () => {

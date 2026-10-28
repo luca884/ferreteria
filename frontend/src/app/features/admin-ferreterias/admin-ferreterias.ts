@@ -2,6 +2,7 @@ import { HttpErrorResponse } from '@angular/common/http';
 import { Component, DestroyRef, ElementRef, Injector, OnInit, afterNextRender, computed, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
+import { Observable } from 'rxjs';
 import { mensajeDe } from '../../core/api/api-error';
 import { normalizarCuit, validarCuit } from '../../core/formato/cuit';
 import { BarraAcciones } from '../../shared/barra-acciones';
@@ -10,6 +11,7 @@ import { CONTRASENA_SOLO_ESPACIOS, ContrasenaForm, NuevaContrasena, noSoloEspaci
 import { FilasElegibles } from '../../shared/filas-elegibles';
 import { AdminFerreteriasService } from './admin-ferreterias.service';
 import {
+  AMBIENTE_ARCA_LABELS,
   CONDICIONES_IVA_FERRETERIA,
   CONDICION_IVA_FERRETERIA_LABELS,
   CondicionIvaFerreteria,
@@ -19,6 +21,31 @@ import {
 
 /** Los campos del formulario, con la misma clave que usa el servidor en sus errores (`dueno.email`, etc.). */
 export type CampoFerreteria = 'razonSocial' | 'cuit' | 'dueno.nombre' | 'dueno.email' | 'dueno.password';
+
+/**
+ * Lo que la barra cambia sobre la fila elegida, siempre con confirmación: suspender o reactivar, y la configuración de
+ * ARCA (marca «de prueba», simulador y facturación habilitada). Cada una invierte lo que la fila tiene hoy.
+ */
+export type AccionFerreteria = 'activo' | 'dePrueba' | 'simulador' | 'facturacion';
+
+interface PedidoDeCambio {
+  accion: AccionFerreteria;
+  ferreteria: FerreteriaAdmin;
+}
+
+interface TextoConfirmacion {
+  titulo: string;
+  mensaje: string;
+  confirmar: string;
+  peligro: boolean;
+}
+
+const ERROR_POR_ACCION: Record<AccionFerreteria, string> = {
+  activo: 'No se pudo cambiar el estado de la ferretería.',
+  dePrueba: 'No se pudo cambiar la configuración de ARCA.',
+  simulador: 'No se pudo cambiar la configuración de ARCA.',
+  facturacion: 'No se pudo cambiar la configuración de ARCA.',
+};
 
 const porRazonSocial = (a: FerreteriaAdmin, b: FerreteriaAdmin) =>
   a.razonSocial.localeCompare(b.razonSocial, 'es') || a.id - b.id;
@@ -30,8 +57,9 @@ export function fechaDeAlta(creadoEn: string): string {
 
 /**
  * Ferreterías de la plataforma (solo el super admin): estado general, alta con el primer Dueño, suspender o reactivar con
- * confirmación y reset de la contraseña del Dueño. Después del alta no edita los datos de la ferretería: los edita el Dueño
- * (CU-01). No muestra ningún dato de ventas. Contenedor: habla con el servicio.
+ * confirmación, reset de la contraseña del Dueño y la configuración de ARCA (marca «de prueba», simulador y facturación
+ * habilitada, CU-01 paso 2): las reglas las decide el servidor y su 422 se muestra tal cual. Después del alta no edita los
+ * datos de la ferretería: los edita el Dueño (CU-01). No muestra ningún dato de ventas. Contenedor: habla con el servicio.
  */
 @Component({
   selector: 'app-admin-ferreterias',
@@ -47,6 +75,7 @@ export class AdminFerreterias implements OnInit {
   protected readonly condiciones = CONDICIONES_IVA_FERRETERIA;
   protected readonly etiquetaIva = CONDICION_IVA_FERRETERIA_LABELS;
   protected readonly etiquetaEstado = ESTADO_FERRETERIA_LABELS;
+  protected readonly etiquetaAmbiente = AMBIENTE_ARCA_LABELS;
   protected readonly fechaDeAlta = fechaDeAlta;
 
   protected readonly ferreterias = signal<FerreteriaAdmin[]>([]);
@@ -57,15 +86,19 @@ export class AdminFerreterias implements OnInit {
   protected readonly cargando = signal(true);
   protected readonly cargaFallida = signal(false);
   protected readonly aviso = signal<string | null>(null);
-  /** Error de la pantalla (carga, suspender). */
+  /** Error de la pantalla (carga, suspender, configuración de ARCA). */
   protected readonly error = signal<string | null>(null);
   /** Lo que el servidor rechazó al guardar: un mensaje por campo (400 y 409) o uno general. */
   protected readonly erroresServidor = signal<Record<string, string>>({});
   protected readonly errorForm = signal<string | null>(null);
   protected readonly guardando = signal(false);
   protected readonly cambiando = signal(false);
-  /** La ferretería a la que se le pide confirmación para suspenderla o reactivarla. */
-  protected readonly aConfirmar = signal<FerreteriaAdmin | null>(null);
+  /** El cambio que espera confirmación, sobre la ferretería que estaba elegida al pedirlo. */
+  protected readonly aConfirmar = signal<PedidoDeCambio | null>(null);
+  protected readonly confirmacion = computed(() => {
+    const pedido = this.aConfirmar();
+    return pedido ? textoConfirmacion(pedido) : null;
+  });
   /** La ferretería cuyo Dueño tiene el reset abierto. */
   protected readonly reseteando = signal<FerreteriaAdmin | null>(null);
   protected readonly errorReset = signal<string | null>(null);
@@ -178,30 +211,44 @@ export class AdminFerreterias implements OnInit {
     this.enfocar('#razonSocial');
   }
 
-  protected pedirConfirmacion(): void {
+  protected pedirConfirmacion(accion: AccionFerreteria): void {
     const ferreteria = this.filas.elegido();
     if (!ferreteria || this.cambiando()) return;
     this.aviso.set(null);
     this.error.set(null);
-    this.aConfirmar.set(ferreteria);
+    this.aConfirmar.set({ accion, ferreteria });
   }
 
-  /** Suspende a la ferretería de la confirmación, o la reactiva si ya estaba suspendida. */
+  /** Aplica el cambio confirmado; la fila queda como la devuelve el servidor. Un 422 muestra su motivo. */
   protected confirmarCambio(): void {
-    const ferreteria = this.aConfirmar();
-    if (!ferreteria) return;
+    const pedido = this.aConfirmar();
+    if (!pedido) return;
     this.aConfirmar.set(null);
     this.cambiando.set(true);
-    this.service.cambiarActivo(ferreteria.id, ferreteria.estado === 'SUSPENDIDA').subscribe({
+    this.cambio(pedido).subscribe({
       next: (cambiada) => {
         this.ferreterias.update((lista) => lista.map((f) => (f.id === cambiada.id ? cambiada : f)));
         this.cambiando.set(false);
       },
       error: (err: unknown) => {
         this.cambiando.set(false);
-        this.error.set(mensajeDe(err, 'No se pudo cambiar el estado de la ferretería.'));
+        this.error.set(mensajeDe(err, ERROR_POR_ACCION[pedido.accion]));
       },
     });
+  }
+
+  /** Cada acción invierte lo que la fila tiene hoy. */
+  private cambio({ accion, ferreteria: f }: PedidoDeCambio): Observable<FerreteriaAdmin> {
+    switch (accion) {
+      case 'activo':
+        return this.service.cambiarActivo(f.id, f.estado === 'SUSPENDIDA');
+      case 'dePrueba':
+        return this.service.cambiarDePrueba(f.id, !f.dePrueba);
+      case 'simulador':
+        return this.service.cambiarSimulador(f.id, f.ambiente !== 'SIMULADOR');
+      case 'facturacion':
+        return this.service.cambiarFacturacion(f.id, !f.facturacionHabilitada);
+    }
   }
 
   protected abrirReset(): void {
@@ -236,16 +283,6 @@ export class AdminFerreterias implements OnInit {
     });
   }
 
-  protected tituloConfirmacion(f: FerreteriaAdmin): string {
-    return f.estado === 'ACTIVA' ? `¿Suspender a ${f.razonSocial}?` : `¿Reactivar a ${f.razonSocial}?`;
-  }
-
-  protected mensajeConfirmacion(f: FerreteriaAdmin): string {
-    return f.estado === 'ACTIVA'
-      ? 'Sus usuarios dejan de poder entrar en el acto. No se borra ningún dato y la podés reactivar cuando quieras.'
-      : 'Sus usuarios vuelven a poder entrar y todos sus datos están como los dejaron.';
-  }
-
   private cuitNormalizado(escrito: string): string {
     const resultado = normalizarCuit(escrito);
     return 'cuit' in resultado && resultado.cuit !== null ? resultado.cuit : escrito.trim();
@@ -268,6 +305,69 @@ export class AdminFerreterias implements OnInit {
       { razonSocial: '', cuit: '', condicionIva: 'RESPONSABLE_INSCRIPTO', dueno: { nombre: '', email: '', password: '' } },
       { emitEvent: false },
     );
+  }
+}
+
+/** Título, mensaje y botón de la confirmación de cada acción, según lo que la fila tiene hoy. */
+function textoConfirmacion({ accion, ferreteria: f }: PedidoDeCambio): TextoConfirmacion {
+  const nombre = f.razonSocial;
+  switch (accion) {
+    case 'activo':
+      return f.estado === 'ACTIVA'
+        ? {
+            titulo: `¿Suspender a ${nombre}?`,
+            mensaje: 'Sus usuarios dejan de poder entrar en el acto. No se borra ningún dato y la podés reactivar cuando quieras.',
+            confirmar: 'Suspender',
+            peligro: true,
+          }
+        : {
+            titulo: `¿Reactivar a ${nombre}?`,
+            mensaje: 'Sus usuarios vuelven a poder entrar y todos sus datos están como los dejaron.',
+            confirmar: 'Reactivar',
+            peligro: false,
+          };
+    case 'dePrueba':
+      return f.dePrueba
+        ? {
+            titulo: `¿Quitarle la marca de prueba a ${nombre}?`,
+            mensaje: 'Ya no va a poder usar el simulador de ARCA.',
+            confirmar: 'Quitar marca',
+            peligro: false,
+          }
+        : {
+            titulo: `¿Marcar a ${nombre} como de prueba?`,
+            mensaje: 'Una ferretería de prueba puede usar el simulador de ARCA, que no tiene valor fiscal.',
+            confirmar: 'Marcar de prueba',
+            peligro: false,
+          };
+    case 'simulador':
+      return f.ambiente === 'SIMULADOR'
+        ? {
+            titulo: `¿Quitarle el simulador a ${nombre}?`,
+            mensaje: 'Queda sin ambiente de ARCA: no va a poder facturar hasta tener otro.',
+            confirmar: 'Quitar simulador',
+            peligro: true,
+          }
+        : {
+            titulo: `¿Asignarle el simulador a ${nombre}?`,
+            mensaje: 'Sus facturas se autorizan contra el simulador de ARCA, sin valor fiscal. El punto de venta queda en 1.',
+            confirmar: 'Asignar simulador',
+            peligro: false,
+          };
+    case 'facturacion':
+      return f.facturacionHabilitada
+        ? {
+            titulo: `¿Deshabilitar la facturación de ${nombre}?`,
+            mensaje: 'Deja de emitir facturas electrónicas. Lo que ya se autorizó no cambia.',
+            confirmar: 'Deshabilitar',
+            peligro: true,
+          }
+        : {
+            titulo: `¿Habilitar la facturación de ${nombre}?`,
+            mensaje: 'Desde ahora emite facturas electrónicas en su ambiente de ARCA.',
+            confirmar: 'Habilitar',
+            peligro: false,
+          };
   }
 }
 

@@ -25,6 +25,21 @@ export class AdminFerreteriasService {
     return this.http.patch<FerreteriaAdmin>(`${this.url}/${id}/activo`, { activo });
   }
 
+  /** Pone o saca la marca «de prueba». Con el simulador asignado no se saca (422 con el motivo). */
+  cambiarDePrueba(id: number, dePrueba: boolean): Observable<FerreteriaAdmin> {
+    return this.http.patch<FerreteriaAdmin>(`${this.url}/${id}/de-prueba`, { dePrueba });
+  }
+
+  /** Asigna el simulador (punto de venta 1) o lo quita. Si el cerrojo del ambiente lo impide, 422 con el motivo. */
+  cambiarSimulador(id: number, simulador: boolean): Observable<FerreteriaAdmin> {
+    return this.http.patch<FerreteriaAdmin>(`${this.url}/${id}/simulador`, { simulador });
+  }
+
+  /** Prende la facturación (exige ambiente y los datos fiscales completos; si no, 422) o la apaga. */
+  cambiarFacturacion(id: number, habilitada: boolean): Observable<FerreteriaAdmin> {
+    return this.http.patch<FerreteriaAdmin>(`${this.url}/${id}/facturacion`, { habilitada });
+  }
+
   /** El super admin le pone una contraseña nueva al Dueño de una ferretería, sin pedir la actual. */
   resetearContrasenaDueno(ferreteriaId: number, usuarioId: number, password: string): Observable<void> {
     return this.http.put<void>(`${this.url}/${ferreteriaId}/duenos/${usuarioId}/password`, { password });
