@@ -5,6 +5,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.Set;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -16,6 +17,13 @@ class SuperAdminSinVentasIntegrationTest extends PlataformaTestBase {
 
     private static final List<String> CLAVES_DE_NEGOCIO = List.of("venta", "stock", "caja", "cliente", "importe", "total",
             "saldo", "precio", "articulo", "rubro", "remito", "presupuesto", "ultimoAcceso");
+
+    /**
+     * Claves exactas que contienen una palabra de negocio pero no son datos de ventas. {@code puntoVenta} es el punto de venta
+     * de ARCA (CU-01 paso 2): configuración fiscal de la ferretería, que el super admin asigna con el simulador. No dice nada
+     * de lo que vende.
+     */
+    private static final Set<String> CLAVES_PERMITIDAS = Set.of("puntoVenta");
 
     @Test
     @DisplayName("el super admin recibe 403 en las listas de ventas, clientes, caja, stock y catálogo")
@@ -40,6 +48,9 @@ class SuperAdminSinVentasIntegrationTest extends PlataformaTestBase {
 
         assertThat(claves).isNotEmpty();
         for (String clave : claves) {
+            if (CLAVES_PERMITIDAS.contains(clave)) {
+                continue;
+            }
             assertThat(CLAVES_DE_NEGOCIO).as("clave «%s»", clave)
                     .noneMatch(prohibida -> clave.toLowerCase().contains(prohibida.toLowerCase()));
         }

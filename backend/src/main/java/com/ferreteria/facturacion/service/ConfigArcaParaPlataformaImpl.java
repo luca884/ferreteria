@@ -22,8 +22,11 @@ import java.util.stream.Collectors;
  * Lo que el super admin hace con la configuración de ARCA (CU-01 paso 2, D3). Las reglas viven en {@link ConfigArca}; acá
  * se juntan los registros fiscales de la ferretería, sus datos de CU-01 y la hora del {@code Clock} inyectado.
  *
- * <p>El super admin no tiene ferretería en el token: opera por el id de la ruta, que la plataforma ya validó, y las
- * consultas reciben esa ferretería explícita. Por eso los métodos que las llaman llevan {@code @UnscopedTenantAccess}
+ * <p>Los tres cambios empiezan tomando el lock de la fila de {@code config_arca} ({@link #bloquear}): dos cambios a la vez
+ * se serializan y el segundo decide sobre lo que dejó el primero.
+ *
+ * <p>El super admin no tiene ferretería en el token: opera por el id de la ruta, y las consultas reciben esa ferretería
+ * explícita. Por eso los métodos que las llaman llevan {@code @UnscopedTenantAccess}
  * (molde de {@code UsuariosParaPlataformaImpl}). No se fija el {@code TenantContext} con el id de la ruta: la ferretería
  * del contexto sale solo del JWT.
  */
@@ -62,7 +65,7 @@ public class ConfigArcaParaPlataformaImpl implements ConfigArcaParaPlataforma {
     @Override
     @Transactional
     public ResumenArca cambiarDePrueba(long ferreteriaId, boolean dePrueba) {
-        ConfigArca config = configDe(ferreteriaId);
+        ConfigArca config = bloquear(ferreteriaId);
         config.cambiarDePrueba(dePrueba);
         return guardar(config);
     }
@@ -70,7 +73,7 @@ public class ConfigArcaParaPlataformaImpl implements ConfigArcaParaPlataforma {
     @Override
     @Transactional
     public ResumenArca cambiarSimulador(long ferreteriaId, boolean simulador) {
-        ConfigArca config = configDe(ferreteriaId);
+        ConfigArca config = bloquear(ferreteriaId);
         RegistrosFiscales registros = registrosDe(ferreteriaId);
         if (simulador) {
             config.asignarSimulador(registros);
@@ -83,7 +86,7 @@ public class ConfigArcaParaPlataformaImpl implements ConfigArcaParaPlataforma {
     @Override
     @Transactional
     public ResumenArca cambiarFacturacionHabilitada(long ferreteriaId, boolean habilitada) {
-        ConfigArca config = configDe(ferreteriaId);
+        ConfigArca config = bloquear(ferreteriaId);
         if (habilitada) {
             config.habilitar(datosFaltantes(ferreteriaId), Instant.now(reloj));
         } else {
@@ -92,10 +95,19 @@ public class ConfigArcaParaPlataformaImpl implements ConfigArcaParaPlataforma {
         return guardar(config);
     }
 
-    /** La fila de la ferretería, o una nueva sin guardar: nace al guardarla, solo si la regla dejó cambiar algo. */
+    /**
+     * La fila de la ferretería con su lock exclusivo, que se sostiene hasta el fin de la transacción. Si no existía la crea
+     * con los valores por defecto (sin marca, sin ambiente, deshabilitada): una regla rota (422) revierte la transacción y la
+     * fila no queda, pero un cambio que no cambia nada (sacar una marca que no estaba, apagar una facturación apagada) la
+     * deja creada con esos valores. Tiene que ser lo primero de la transacción, antes de cualquier lectura sin lock: en
+     * REPEATABLE READ la foto de las lecturas se toma en la primera, y así incluye todo lo confirmado antes del lock (por
+     * ejemplo, un registro fiscal que se dio de alta mientras se esperaba). Ferretería inexistente: 404.
+     */
     @UnscopedTenantAccess(reason = PLATAFORMA)
-    private ConfigArca configDe(long ferreteriaId) {
-        return configs.deFerreteria(ferreteriaId).orElseGet(() -> ConfigArca.nueva(ferreteriaId));
+    private ConfigArca bloquear(long ferreteriaId) {
+        configs.crearSiFalta(ferreteriaId);
+        return configs.bloquearDeFerreteria(ferreteriaId)
+                .orElseThrow(() -> new ResourceNotFoundException("Ferretería no encontrada"));
     }
 
     @UnscopedTenantAccess(reason = PLATAFORMA)

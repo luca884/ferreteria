@@ -7,6 +7,7 @@ import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -34,6 +35,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.transaction.annotation.Transactional;
@@ -257,9 +259,8 @@ class FerreteriasAdminServiceTest {
     }
 
     @Test
-    @DisplayName("la configuración de ARCA: sobre una ferretería inexistente da 404 sin tocar el puerto; si existe, delega y la devuelve")
+    @DisplayName("la configuración de ARCA llama al puerto antes de leer nada (toma el lock primero), y devuelve lo que dice")
     void configuracionDeArca() {
-        when(ferreterias.findById(9L)).thenReturn(Optional.empty());
         Ferreteria f = ferreteria(1L, "Arco", EstadoFerreteria.ACTIVA);
         when(ferreterias.findById(1L)).thenReturn(Optional.of(f));
         ResumenArca conSimulador = new ResumenArca(true, "SIMULADOR", 1, false, null);
@@ -267,17 +268,30 @@ class FerreteriasAdminServiceTest {
         when(arca.cambiarSimulador(1L, true)).thenReturn(conSimulador);
         when(arca.cambiarFacturacionHabilitada(1L, false)).thenReturn(conSimulador);
 
-        assertThatThrownBy(() -> servicio.cambiarDePrueba(9L, true)).isInstanceOf(ResourceNotFoundException.class);
-        assertThatThrownBy(() -> servicio.cambiarSimulador(9L, true)).isInstanceOf(ResourceNotFoundException.class);
-        assertThatThrownBy(() -> servicio.cambiarFacturacionHabilitada(9L, true))
-                .isInstanceOf(ResourceNotFoundException.class);
-        verify(arca, never()).cambiarDePrueba(eq(9L), anyBoolean());
-        verify(arca, never()).cambiarSimulador(eq(9L), anyBoolean());
-        verify(arca, never()).cambiarFacturacionHabilitada(eq(9L), anyBoolean());
-
         assertThat(servicio.cambiarDePrueba(1L, true).arca().dePrueba()).isTrue();
         assertThat(servicio.cambiarSimulador(1L, true).arca()).isEqualTo(conSimulador);
         assertThat(servicio.cambiarFacturacionHabilitada(1L, false).arca()).isEqualTo(conSimulador);
+
+        InOrder orden = inOrder(arca, ferreterias, usuarios);
+        orden.verify(arca).cambiarDePrueba(1L, true);
+        orden.verify(ferreterias).findById(1L);
+        orden.verify(usuarios).resumenPorFerreteria();
+        orden.verify(arca).cambiarSimulador(1L, true);
+        orden.verify(ferreterias).findById(1L);
+        orden.verify(usuarios).resumenPorFerreteria();
+        orden.verify(arca).cambiarFacturacionHabilitada(1L, false);
+        orden.verify(ferreterias).findById(1L);
+        orden.verify(usuarios).resumenPorFerreteria();
+    }
+
+    @Test
+    @DisplayName("la configuración de ARCA de una ferretería inexistente: el 404 del puerto sale tal cual")
+    void configuracionDeArcaInexistente() {
+        ResourceNotFoundException noEsta = new ResourceNotFoundException("Ferretería no encontrada");
+        when(arca.cambiarDePrueba(eq(9L), anyBoolean())).thenThrow(noEsta);
+
+        assertThatThrownBy(() -> servicio.cambiarDePrueba(9L, true)).isSameAs(noEsta);
+        verify(ferreterias, never()).findById(9L);
     }
 
     @Test

@@ -8,9 +8,13 @@ import java.util.Map;
  * ambiente de ARCA y la facturación habilitada de una ferretería (CU-01 paso 2, D3). Solo tipos del JDK: la plataforma no
  * conoce la entidad, el repositorio ni el servicio de facturación.
  *
- * <p>Opera por id de ferretería explícito: quien llama ya comprobó que la ferretería existe. Una regla rota sale como la
- * excepción de regla de negocio de la aplicación (422) con el mensaje para el super admin. La primera vez que el super
- * admin toca una ferretería nace su fila; sin fila, la ferretería está {@link ResumenArca#SIN_CONFIGURAR}.
+ * <p>Opera por id de ferretería explícito; una ferretería inexistente sale como 404. Una regla rota sale como la excepción
+ * de regla de negocio de la aplicación (422) con el mensaje para el super admin. La primera vez que el super admin toca una
+ * ferretería nace su fila; sin fila, la ferretería está {@link ResumenArca#SIN_CONFIGURAR}.
+ *
+ * <p>Los tres {@code cambiar*} toman el lock exclusivo de la fila de la ferretería y lo sostienen hasta el fin de la
+ * transacción: dos cambios a la vez se serializan y el segundo decide sobre lo que dejó el primero. Quien los llama dentro
+ * de su transacción tiene que llamarlos ANTES de cualquier otra lectura (ver {@code FerreteriasAdminService}).
  */
 public interface ConfigArcaParaPlataforma {
 

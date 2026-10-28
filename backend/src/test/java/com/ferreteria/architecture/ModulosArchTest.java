@@ -14,6 +14,8 @@ import com.ferreteria.clientes.repository.MovimientoCuentaClienteRepository;
 import com.ferreteria.clientes.service.CuentaCorrienteService;
 import com.ferreteria.clientes.service.RegistroAjuste;
 import com.ferreteria.common.HoraArgentina;
+import com.ferreteria.facturacion.api.ConfigArcaParaPlataforma;
+import com.ferreteria.plataforma.service.FerreteriasAdminService;
 import com.ferreteria.ventas.model.Recibo;
 import com.ferreteria.ventas.repository.ReciboRepository;
 import com.ferreteria.ventas.service.RegistroVenta;
@@ -210,6 +212,21 @@ class ModulosArchTest {
                 // Existe desde T4 (ConfigArcaParaPlataforma, para el panel del super admin): la regla no puede quedar vacia.
                 .allowEmptyShould(false)
                 .check(clases);
+    }
+
+    /**
+     * El puerto del panel del super admin ({@code ConfigArcaParaPlataforma}: marca «de prueba», simulador y facturacion
+     * habilitada, por id explicito y sin tenant) lo usa solo {@code plataforma}; {@code facturacion} lo implementa. La
+     * venta (rama 3) lee su configuracion por otro puerto, con la ferreteria del JWT.
+     */
+    @Test
+    void elPuertoDeConfigArcaParaPlataformaSoloLoUsaPlataforma() {
+        noClasses().that().resideOutsideOfPackages("com.ferreteria.plataforma..", "com.ferreteria.facturacion..")
+                .should().dependOnClassesThat().belongToAnyOf(ConfigArcaParaPlataforma.class)
+                .check(clases);
+        // la regla no es vacia: la plataforma lo usa
+        assertThat(clases.get(FerreteriasAdminService.class).getDirectDependenciesFromSelf())
+                .anyMatch(d -> d.getTargetClass().isEquivalentTo(ConfigArcaParaPlataforma.class));
     }
 
     /**

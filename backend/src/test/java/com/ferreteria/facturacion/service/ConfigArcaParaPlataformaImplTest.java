@@ -32,7 +32,7 @@ class ConfigArcaParaPlataformaImplTest {
         ConfigArca config = ConfigArca.nueva(5L);
         config.cambiarDePrueba(true);
         config.asignarSimulador(RegistrosFiscales.NINGUNO);
-        when(configs.deFerreteria(5L)).thenReturn(Optional.of(config));
+        when(configs.bloquearDeFerreteria(5L)).thenReturn(Optional.of(config));
         when(configs.saveAndFlush(any(ConfigArca.class))).thenAnswer(i -> i.getArgument(0));
         Ferreteria ferreteria = new Ferreteria("Arco SA", "30-00000001-5", CondicionIva.RESPONSABLE_INSCRIPTO);
         ferreteria.actualizarDatosFiscales("Arco SA", CondicionIva.RESPONSABLE_INSCRIPTO, "Av. Luro 1",

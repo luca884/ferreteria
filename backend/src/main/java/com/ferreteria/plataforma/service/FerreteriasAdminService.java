@@ -104,26 +104,31 @@ public class FerreteriasAdminService {
         return admin(ferreteria, usuarios.resumenPorFerreteria().get(id), arca.resumenDe(id));
     }
 
-    /** Pone o saca la marca «de prueba» (CU-01, «Ambiente de ARCA»). Una regla rota sale como 422. */
+    /*
+     * Los tres cambios de ARCA llaman al puerto PRIMERO: toma el lock de config_arca (o da 404 si la ferretería no existe)
+     * antes de cualquier lectura de la transacción, así lo que se lee después incluye todo lo confirmado antes del lock.
+     * Recién después se arma la respuesta con la ferretería y sus usuarios. Una regla rota sale como 422.
+     */
+
+    /** Pone o saca la marca «de prueba» (CU-01, «Ambiente de ARCA»). */
     @Transactional
     public FerreteriaAdmin cambiarDePrueba(long id, boolean dePrueba) {
-        Ferreteria ferreteria = obtener(id);
-        return admin(ferreteria, usuarios.resumenPorFerreteria().get(id), arca.cambiarDePrueba(id, dePrueba));
+        ResumenArca resumen = arca.cambiarDePrueba(id, dePrueba);
+        return admin(obtener(id), usuarios.resumenPorFerreteria().get(id), resumen);
     }
 
-    /** Asigna el simulador (punto de venta 1) o lo quita. Una regla rota sale como 422. */
+    /** Asigna el simulador (punto de venta 1) o lo quita. */
     @Transactional
     public FerreteriaAdmin cambiarSimulador(long id, boolean simulador) {
-        Ferreteria ferreteria = obtener(id);
-        return admin(ferreteria, usuarios.resumenPorFerreteria().get(id), arca.cambiarSimulador(id, simulador));
+        ResumenArca resumen = arca.cambiarSimulador(id, simulador);
+        return admin(obtener(id), usuarios.resumenPorFerreteria().get(id), resumen);
     }
 
-    /** Prende o apaga la facturación (CU-01, «Facturación habilitada»). Una regla rota sale como 422. */
+    /** Prende o apaga la facturación (CU-01, «Facturación habilitada»). */
     @Transactional
     public FerreteriaAdmin cambiarFacturacionHabilitada(long id, boolean habilitada) {
-        Ferreteria ferreteria = obtener(id);
-        return admin(ferreteria, usuarios.resumenPorFerreteria().get(id),
-                arca.cambiarFacturacionHabilitada(id, habilitada));
+        ResumenArca resumen = arca.cambiarFacturacionHabilitada(id, habilitada);
+        return admin(obtener(id), usuarios.resumenPorFerreteria().get(id), resumen);
     }
 
     @Transactional

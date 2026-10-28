@@ -38,6 +38,10 @@ class ConfigArcaAdminIntegrationTest extends PlataformaTestBase {
             "Primero deshabilitá la facturación: no se puede quitar el ambiente mientras esté habilitada.";
     private static final String HABILITAR_SIN_AMBIENTE =
             "Para habilitar la facturación, la ferretería necesita un ambiente de ARCA y un punto de venta.";
+    private static final String AMBIENTE_DEL_CERTIFICADO =
+            "El ambiente de homologación o producción lo fija el certificado: no se cambia desde el panel.";
+    private static final List<String> ESTADOS_ABIERTOS =
+            List.of("PENDIENTE", "EN_CURSO", "EN_VERIFICACION", "CAE_NO_COINCIDE", "SERIE_DESINCRONIZADA");
 
     private String admin;
 
@@ -106,7 +110,8 @@ class ConfigArcaAdminIntegrationTest extends PlataformaTestBase {
 
     /**
      * Un registro fiscal de la ferretería (por SQL: el motor llega en T6) en ese ambiente y estado, sobre un comprobante
-     * propio. AUTORIZADO lleva número, CAE y resultado A; RECHAZADO, resultado R; los demás, nada.
+     * propio, con lo que exige el CHECK de coherencia de V32: número y CbteFch salvo en PENDIENTE, RECHAZADO y
+     * FUERA_DE_FECHA; AUTORIZADO además con CAE y resultado A; RECHAZADO, resultado R.
      */
     private void registro(long ferreteria, String ambiente, String estado) {
         int numero = COMPROBANTES.incrementAndGet();
@@ -117,6 +122,7 @@ class ConfigArcaAdminIntegrationTest extends PlataformaTestBase {
         long comprobante = jdbc.queryForObject("select id from comprobante where ferreteria_id = ? and numero = ?",
                 Long.class, ferreteria, numero);
         boolean autorizado = estado.equals("AUTORIZADO");
+        boolean numerado = !List.of("PENDIENTE", "RECHAZADO", "FUERA_DE_FECHA").contains(estado);
         String resultado = autorizado ? "A" : estado.equals("RECHAZADO") ? "R" : null;
         jdbc.update("insert into comprobante_fiscal (ferreteria_id, comprobante_id, ambiente, clase, letra, cbte_tipo, "
                 + "punto_venta, numero, cbte_fch, estado, cae, cae_vencimiento, resultado, receptor_doc_tipo, "
@@ -126,7 +132,7 @@ class ConfigArcaAdminIntegrationTest extends PlataformaTestBase {
                 + "values (?, ?, ?, 'FACTURA', 'B', 6, 1, ?, ?, ?, ?, ?, ?, 99, 0, 5, '30-00000001-5', 'Ferretería', "
                 + "'RESPONSABLE_INSCRIPTO', 'Av. Independencia 1234', '901-123456-7', '2015-03-01', 121.00, 100.00, "
                 + "21.00, 0, 0, '2026-10-28 13:00:00')",
-                ferreteria, comprobante, ambiente, autorizado ? numero : null, autorizado ? "2026-10-28" : null, estado,
+                ferreteria, comprobante, ambiente, numerado ? numero : null, numerado ? "2026-10-28" : null, estado,
                 autorizado ? "12345678901234" : null, autorizado ? "2026-11-07" : null, resultado);
     }
 
@@ -382,5 +388,139 @@ class ConfigArcaAdminIntegrationTest extends PlataformaTestBase {
         assertThat(enC.get("dePrueba").asBoolean()).isFalse();
         assertThat(enC.get("ambiente").isNull()).isTrue();
         assertThat(enC.get("facturacionHabilitada").asBoolean()).isFalse();
+    }
+
+    // ---- sondas del verificador (T4), como regresión ----
+
+    @Test
+    @DisplayName("cada uno de los cinco estados abiertos traba asignar y quitar el simulador")
+    void losCincoEstadosAbiertosTrabanElAmbiente() throws Exception {
+        for (String estado : ESTADOS_ABIERTOS) {
+            long sinAmbiente = crearFerreteria("Abierto " + estado);
+            dePrueba(sinAmbiente, true).andExpect(status().isOk());
+            registro(sinAmbiente, "SIMULADOR", estado);
+            regla(simulador(sinAmbiente, true), CON_REGISTROS_ABIERTOS);
+            assertThat(fila(sinAmbiente)).as(estado).containsEntry("ambiente", null);
+
+            long conAmbiente = conSimulador();
+            registro(conAmbiente, "SIMULADOR", estado);
+            regla(simulador(conAmbiente, false), CON_REGISTROS_ABIERTOS);
+            assertThat(fila(conAmbiente)).as(estado).containsEntry("ambiente", "SIMULADOR").containsEntry("punto_venta", 1);
+        }
+    }
+
+    @Test
+    @DisplayName("un FUERA_DE_FECHA de homologación o producción traba el simulador")
+    void unFueraDeFechaRealTrabaElSimulador() throws Exception {
+        for (String ambiente : List.of("HOMOLOGACION", "PRODUCCION")) {
+            long f = crearFerreteria("Fuera de fecha " + ambiente);
+            dePrueba(f, true).andExpect(status().isOk());
+            registro(f, ambiente, "FUERA_DE_FECHA");
+
+            regla(simulador(f, true), CON_REGISTROS_REALES);
+
+            assertThat(fila(f)).containsEntry("ambiente", null);
+        }
+    }
+
+    @Test
+    @DisplayName("un registro abierto o de homologación o producción de otra ferretería no traba nada")
+    void losRegistrosDeOtraFerreteriaNoTraban() throws Exception {
+        long otra = crearFerreteria("Otra");
+        registro(otra, "SIMULADOR", "PENDIENTE");
+        registro(otra, "PRODUCCION", "RECHAZADO");
+        long f = crearFerreteria("Propia");
+        dePrueba(f, true).andExpect(status().isOk());
+
+        simulador(f, true).andExpect(status().isOk()).andExpect(jsonPath("$.ambiente", is("SIMULADOR")));
+        simulador(f, false).andExpect(status().isOk()).andExpect(jsonPath("$.ambiente", nullValue()));
+    }
+
+    @Test
+    @DisplayName("con homologación o producción puestos por SQL, asignar y quitar el simulador dan 422 y la fila no cambia")
+    void elAmbienteDelCertificadoNoSeCambiaDesdeElPanel() throws Exception {
+        for (String ambiente : List.of("HOMOLOGACION", "PRODUCCION")) {
+            long f = crearFerreteria("Certificado " + ambiente);
+            jdbc.update("insert into config_arca (ferreteria_id, de_prueba, ambiente, punto_venta) values (?, true, ?, 3)",
+                    f, ambiente);
+            Map<String, Object> antes = fila(f);
+
+            regla(simulador(f, true), AMBIENTE_DEL_CERTIFICADO);
+            regla(simulador(f, false), AMBIENTE_DEL_CERTIFICADO);
+
+            assertThat(fila(f)).as(ambiente).isEqualTo(antes).containsEntry("ambiente", ambiente)
+                    .containsEntry("punto_venta", 3);
+        }
+    }
+
+    @Test
+    @DisplayName("los extras del cuerpo (ambiente, puntoVenta) se ignoran")
+    void losExtrasDelCuerpoSeIgnoran() throws Exception {
+        long f = crearFerreteria("Extras");
+        String extras = ", \"ambiente\": \"PRODUCCION\", \"puntoVenta\": 7}";
+
+        patchJson(url(f, "de-prueba"), admin, "{\"dePrueba\": true" + extras).andExpect(status().isOk())
+                .andExpect(jsonPath("$.ambiente", nullValue())).andExpect(jsonPath("$.puntoVenta", nullValue()));
+        patchJson(url(f, "simulador"), admin, "{\"simulador\": true" + extras).andExpect(status().isOk())
+                .andExpect(jsonPath("$.ambiente", is("SIMULADOR"))).andExpect(jsonPath("$.puntoVenta", is(1)));
+        patchJson(url(f, "facturacion"), admin, "{\"habilitada\": false" + extras).andExpect(status().isOk())
+                .andExpect(jsonPath("$.ambiente", is("SIMULADOR"))).andExpect(jsonPath("$.puntoVenta", is(1)));
+
+        assertThat(fila(f)).containsEntry("ambiente", "SIMULADOR").containsEntry("punto_venta", 1);
+    }
+
+    @Test
+    @DisplayName("habilitar dos veces conserva la fecha de activación")
+    void habilitarDosVecesConservaLaFecha() throws Exception {
+        long f = conSimulador();
+        datosCompletos(f);
+        String primera = cuerpo(facturacion(f, true).andExpect(status().isOk())).get("habilitadaEn").asText();
+        Object enLaBase = fila(f).get("habilitada_en");
+
+        facturacion(f, true).andExpect(status().isOk()).andExpect(jsonPath("$.habilitadaEn", is(primera)));
+
+        assertThat(fila(f).get("habilitada_en")).isEqualTo(enLaBase);
+    }
+
+    @Test
+    @DisplayName("sacar la marca con el simulador y la facturación prendidos da 422 y la fila no cambia")
+    void laMarcaNoSeSacaConSimuladorYFacturacion() throws Exception {
+        long f = conSimulador();
+        datosCompletos(f);
+        facturacion(f, true).andExpect(status().isOk());
+        Map<String, Object> antes = fila(f);
+
+        regla(dePrueba(f, false), MARCA_CON_SIMULADOR);
+
+        assertThat(fila(f)).isEqualTo(antes);
+    }
+
+    @Test
+    @DisplayName("una razón social en blanco cuenta como dato faltante")
+    void razonSocialEnBlancoEsFaltante() throws Exception {
+        long f = conSimulador();
+        datosCompletos(f);
+        String razonSocial = jdbc.queryForObject("select razon_social from ferreteria where id = ?", String.class, f);
+        jdbc.update("update ferreteria set razon_social = '   ' where id = ?", f);
+        try {
+            regla(facturacion(f, true), "Para habilitar la facturación falta un dato de la ferretería: razón social. "
+                    + "Lo carga el Dueño en «Datos de la ferretería».");
+            assertThat(fila(f)).containsEntry("facturacion_habilitada", false);
+        } finally {
+            jdbc.update("update ferreteria set razon_social = ? where id = ?", razonSocial, f);
+        }
+    }
+
+    @Test
+    @DisplayName("el Dueño de La Tuerca recibe 403 en las tres rutas sobre la ferretería 1")
+    void elDuenoDeTuercaNoTocaLaFerreteria1() throws Exception {
+        String dueno = login("dueno@tuerca.demo");
+        List<Map<String, Object>> antes = jdbc.queryForList("select * from config_arca where ferreteria_id = 1");
+
+        patchJson(url(1, "de-prueba"), dueno, json("dePrueba", true)).andExpect(status().isForbidden());
+        patchJson(url(1, "simulador"), dueno, json("simulador", true)).andExpect(status().isForbidden());
+        patchJson(url(1, "facturacion"), dueno, json("habilitada", true)).andExpect(status().isForbidden());
+
+        assertThat(jdbc.queryForList("select * from config_arca where ferreteria_id = 1")).isEqualTo(antes);
     }
 }

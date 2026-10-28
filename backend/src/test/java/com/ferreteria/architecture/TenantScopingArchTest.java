@@ -5,6 +5,7 @@ import com.ferreteria.catalogo.service.RecalculoDiarioJob;
 import com.ferreteria.cotizacion.model.Cotizacion;
 import com.ferreteria.cotizacion.repository.ConfiguracionCotizacionRepository;
 import com.ferreteria.cotizacion.repository.CotizacionRepository;
+import com.ferreteria.facturacion.repository.ConfigArcaRepository;
 import com.ferreteria.tenant.TenantScopedRepository;
 import com.ferreteria.tenant.UnscopedTenantAccess;
 import com.tngtech.archunit.base.DescribedPredicate;
@@ -201,6 +202,39 @@ class TenantScopingArchTest {
                 .should().beAssignableTo(TenantScopedRepository.class)
                 .allowEmptyShould(false)
                 .check(clases);
+    }
+
+    /**
+     * Las consultas con la ferreteria explicita de {@code ConfigArcaRepository} ({@code deFerreteria},
+     * {@code crearSiFalta}, {@code bloquearDeFerreteria}, {@code deTodasLasFerreterias}, {@code registrosAbiertos},
+     * {@code registrosDeHomologacionOProduccion}...) solo las llama un metodo o una clase con {@code @UnscopedTenantAccess}
+     * (hoy, el panel del super admin). Molde de las reglas de auth, catalogo y clientes. La venta (rama 3) lee la suya con
+     * un metodo {@code *Scoped}.
+     */
+    @Test
+    void lasConsultasDeConfigArcaSoloLasLlamaCodigoConExcepcionDocumentada() {
+        DescribedPredicate<JavaMethodCall> consultaCruda = new DescribedPredicate<>(
+                "una consulta abstracta de ConfigArcaRepository, llamada desde un metodo o clase sin @UnscopedTenantAccess") {
+            @Override
+            public boolean test(JavaMethodCall call) {
+                boolean esConsultaPropia = call.getTarget().resolveMember()
+                        .map(m -> m.getOwner().isEquivalentTo(ConfigArcaRepository.class)
+                                && m.getModifiers().contains(com.tngtech.archunit.core.domain.JavaModifier.ABSTRACT))
+                        .orElse(false);
+                boolean llamaDesdeElRepo = call.getOriginOwner().isEquivalentTo(ConfigArcaRepository.class);
+                boolean excepcionDocumentada = call.getOrigin().isAnnotatedWith(UnscopedTenantAccess.class)
+                        || call.getOriginOwner().isAnnotatedWith(UnscopedTenantAccess.class);
+                return esConsultaPropia && !llamaDesdeElRepo && !excepcionDocumentada;
+            }
+        };
+
+        noClasses().should().callMethodWhere(consultaCruda).check(clases);
+        // la regla no es vacia: estas son consultas abstractas del repositorio, con la ferreteria explicita
+        assertThat(clases.get(ConfigArcaRepository.class).getMethods().stream()
+                .filter(m -> m.getModifiers().contains(com.tngtech.archunit.core.domain.JavaModifier.ABSTRACT))
+                .map(JavaMethod::getName).toList())
+                .contains("deFerreteria", "crearSiFalta", "bloquearDeFerreteria", "deTodasLasFerreterias",
+                        "registrosAbiertos", "registrosDeHomologacionOProduccion");
     }
 
     @Test
