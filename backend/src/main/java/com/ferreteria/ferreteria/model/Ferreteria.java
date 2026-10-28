@@ -65,7 +65,7 @@ public class Ferreteria {
     private LocalDate inicioActividades;
 
     /** Ingresos Brutos como se imprimen: numero, Convenio Multilateral, Exento o No contribuyente (RG 1415). */
-    @Column(name = "ingresos_brutos", length = 30)
+    @Column(name = "ingresos_brutos", length = 50)
     private String ingresosBrutos;
 
     @Column(name = "creado_en", nullable = false, updatable = false)

@@ -73,7 +73,7 @@ class MigracionV31Test {
     }
 
     @Test
-    @DisplayName("ferreteria suma domicilio_comercial VARCHAR(200), inicio_actividades DATE e ingresos_brutos VARCHAR(30), nullable")
+    @DisplayName("ferreteria suma domicilio_comercial VARCHAR(200), inicio_actividades DATE e ingresos_brutos VARCHAR(50), nullable")
     void columnasNuevas() {
         migrarALa31();
 
@@ -87,7 +87,7 @@ class MigracionV31Test {
             });
         assertThat(tipos).containsEntry("domicilio_comercial", "varchar(200)")
             .containsEntry("inicio_actividades", "date")
-            .containsEntry("ingresos_brutos", "varchar(30)");
+            .containsEntry("ingresos_brutos", "varchar(50)");
         assertThat(COLUMNAS_NUEVAS).allSatisfy(columna -> assertThat(nulos.get(columna)).isEqualTo("YES"));
     }
 

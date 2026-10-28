@@ -24,5 +24,5 @@ public record DatosFiscalesRequest(
 
         LocalDate inicioActividades,
 
-        @Size(max = 30, message = "Ingresos Brutos admite hasta 30 caracteres.")
+        @Size(max = 50, message = "Ingresos Brutos admite hasta 50 caracteres.")
         String ingresosBrutos) {}

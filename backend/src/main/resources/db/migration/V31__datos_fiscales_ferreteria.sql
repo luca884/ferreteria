@@ -6,7 +6,7 @@
 ALTER TABLE ferreteria
     ADD COLUMN domicilio_comercial VARCHAR(200) NULL,
     ADD COLUMN inicio_actividades  DATE         NULL,
-    ADD COLUMN ingresos_brutos     VARCHAR(30)  NULL,
+    ADD COLUMN ingresos_brutos     VARCHAR(50)  NULL,
     ADD CONSTRAINT ck_ferreteria_domicilio_comercial CHECK (domicilio_comercial IS NULL OR TRIM(domicilio_comercial) <> ''),
     ADD CONSTRAINT ck_ferreteria_ingresos_brutos CHECK (ingresos_brutos IS NULL OR TRIM(ingresos_brutos) <> '');
 

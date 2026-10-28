@@ -131,6 +131,22 @@ describe('PaginaDatosFiscales', () => {
     expect(texto('#inicioActividades-error')).toBe('El inicio de actividades no puede ser una fecha futura.');
   });
 
+  it('Ingresos Brutos entra con el Convenio Multilateral escrito entero; más de 50 caracteres no se manda', async () => {
+    await crear();
+
+    await escribir('ingresosBrutos', 'Convenio Multilateral 901-123456-7');
+    await enviar();
+    expect(guardar).toHaveBeenLastCalledWith(
+      expect.objectContaining({ ingresosBrutos: 'Convenio Multilateral 901-123456-7' }),
+    );
+
+    guardar.mockClear();
+    await escribir('ingresosBrutos', 'x'.repeat(51));
+    await enviar();
+    expect(guardar).not.toHaveBeenCalled();
+    expect(texto('#ingresosBrutos-error')).toBe('Ingresos Brutos admite hasta 50 caracteres.');
+  });
+
   it('lo que rechaza el servidor se lista por campo, y un error sin campos se muestra entero', async () => {
     await crear();
     guardar.mockReturnValueOnce(
@@ -138,12 +154,12 @@ describe('PaginaDatosFiscales', () => {
         () =>
           new HttpErrorResponse({
             status: 400,
-            error: { message: 'Datos inválidos', errors: { ingresosBrutos: 'Ingresos Brutos admite hasta 30 caracteres.' } },
+            error: { message: 'Datos inválidos', errors: { ingresosBrutos: 'Ingresos Brutos admite hasta 50 caracteres.' } },
           }),
       ),
     );
     await enviar();
-    expect(texto('.errores-campos')).toContain('Ingresos Brutos admite hasta 30 caracteres.');
+    expect(texto('.errores-campos')).toContain('Ingresos Brutos admite hasta 50 caracteres.');
     expect(refrescarSesion).not.toHaveBeenCalled();
 
     guardar.mockReturnValueOnce(throwError(() => new HttpErrorResponse({ status: 500, error: {} })));

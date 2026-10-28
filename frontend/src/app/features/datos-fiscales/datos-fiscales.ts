@@ -44,7 +44,7 @@ export class PaginaDatosFiscales implements OnInit {
     condicionIva: ['RESPONSABLE_INSCRIPTO' as CondicionIvaFerreteria],
     domicilioComercial: ['', Validators.maxLength(200)],
     inicioActividades: ['', noFutura],
-    ingresosBrutos: ['', Validators.maxLength(30)],
+    ingresosBrutos: ['', Validators.maxLength(50)],
   });
 
   protected readonly cuit = signal<string | null>(null);
@@ -125,7 +125,7 @@ export class PaginaDatosFiscales implements OnInit {
       case 'inicioActividades':
         return 'El inicio de actividades no puede ser una fecha futura.';
       case 'ingresosBrutos':
-        return 'Ingresos Brutos admite hasta 30 caracteres.';
+        return 'Ingresos Brutos admite hasta 50 caracteres.';
     }
   }
 

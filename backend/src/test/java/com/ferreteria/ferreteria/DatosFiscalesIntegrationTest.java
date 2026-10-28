@@ -92,6 +92,18 @@ class DatosFiscalesIntegrationTest extends IntegrationTestBase {
     }
 
     @Test
+    void ingresosBrutosEntraConElConvenioMultilateralEscritoEntero() throws Exception {
+        FerreteriaDePrueba f = ferreteriaNueva();
+        String conTexto = "Convenio Multilateral 901-123456-7";
+
+        putJson(URL, f.token(), datos("Tuerca SRL", "RESPONSABLE_INSCRIPTO", null, null, conTexto))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.ingresosBrutos", is(conTexto)));
+        putJson(URL, f.token(), datos("Tuerca SRL", "RESPONSABLE_INSCRIPTO", null, null, "x".repeat(50)))
+                .andExpect(status().isOk());
+    }
+
+    @Test
     void elCuitNoCambiaAunqueElCuerpoTraigaOtro() throws Exception {
         FerreteriaDePrueba f = ferreteriaNueva();
         String conOtroCuit = completos().replaceFirst("\\{", "{\"cuit\": \"30-71234567-1\", ");
@@ -173,9 +185,9 @@ class DatosFiscalesIntegrationTest extends IntegrationTestBase {
         putJson(URL, f.token(), datos("Tuerca SRL", "MONOTRIBUTISTA", largo201, null, null))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.errors.domicilioComercial", is("El domicilio admite hasta 200 caracteres.")));
-        putJson(URL, f.token(), datos("Tuerca SRL", "MONOTRIBUTISTA", null, null, "x".repeat(31)))
+        putJson(URL, f.token(), datos("Tuerca SRL", "MONOTRIBUTISTA", null, null, "x".repeat(51)))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.errors.ingresosBrutos", is("Ingresos Brutos admite hasta 30 caracteres.")));
+                .andExpect(jsonPath("$.errors.ingresosBrutos", is("Ingresos Brutos admite hasta 50 caracteres.")));
         String manana = HoraArgentina.hoy().plusDays(1).toString();
         putJson(URL, f.token(), datos("Tuerca SRL", "MONOTRIBUTISTA", null, manana, null))
                 .andExpect(status().isBadRequest())
