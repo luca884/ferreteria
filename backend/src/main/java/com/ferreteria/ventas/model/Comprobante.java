@@ -12,14 +12,15 @@ import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
 import java.math.BigDecimal;
-import com.ferreteria.common.HoraArgentina;
 import java.time.LocalDateTime;
+import java.util.Objects;
 
 /**
  * La venta (CU-07): un comprobante de tipo VENTA y estado SIN_FACTURAR (o NO_FACTURABLE si se marco asi). Los importes son los de
  * {@link TotalesVenta}: la suma de sus renglones. El cliente nulo es Consumidor Final. Sin relaciones JPA:
  * los items y el pago guardan el id del comprobante, como el resto del proyecto. Lo unico que cambiara
- * despues es el estado (fase 5, al facturar).
+ * despues es el estado (fase 5, al facturar). La fecha (hora de Buenos Aires) la pone la venta con su {@code Clock}: es el
+ * mismo instante de sus movimientos de stock y de su registro fiscal.
  */
 @Entity
 @Table(name = "comprobante")
@@ -65,7 +66,7 @@ public class Comprobante {
     private Long cajaId;
 
     @Column(nullable = false, updatable = false)
-    private LocalDateTime fecha = HoraArgentina.ahora();
+    private LocalDateTime fecha;
 
     @Column(nullable = false, updatable = false, precision = 15, scale = 2)
     private BigDecimal neto;
@@ -100,42 +101,46 @@ public class Comprobante {
 
     public static Comprobante venta(
             Long ferreteriaId, long numero, String claveIdempotencia, Long usuarioId, TotalesVenta totales,
-            Long cajaId) {
-        return venta(ferreteriaId, numero, claveIdempotencia, usuarioId, totales, cajaId, BigDecimal.ZERO);
+            Long cajaId, LocalDateTime fecha) {
+        return venta(ferreteriaId, numero, claveIdempotencia, usuarioId, totales, cajaId, BigDecimal.ZERO, fecha);
     }
 
     public static Comprobante venta(
             Long ferreteriaId, long numero, String claveIdempotencia, Long usuarioId, TotalesVenta totales,
-            Long cajaId, BigDecimal descuentoPorcentaje) {
-        return venta(ferreteriaId, numero, claveIdempotencia, usuarioId, totales, cajaId, descuentoPorcentaje, null);
+            Long cajaId, BigDecimal descuentoPorcentaje, LocalDateTime fecha) {
+        return venta(ferreteriaId, numero, claveIdempotencia, usuarioId, totales, cajaId, descuentoPorcentaje, null,
+                fecha);
     }
 
     public static Comprobante venta(
             Long ferreteriaId, long numero, String claveIdempotencia, Long usuarioId, TotalesVenta totales,
-            Long cajaId, BigDecimal descuentoPorcentaje, Long presupuestoId) {
+            Long cajaId, BigDecimal descuentoPorcentaje, Long presupuestoId, LocalDateTime fecha) {
         return venta(ferreteriaId, numero, claveIdempotencia, usuarioId, totales, cajaId, descuentoPorcentaje,
-                presupuestoId, null);
+                presupuestoId, null, fecha);
     }
 
     public static Comprobante venta(
             Long ferreteriaId, long numero, String claveIdempotencia, Long usuarioId, TotalesVenta totales,
-            Long cajaId, BigDecimal descuentoPorcentaje, Long presupuestoId, Long remitoId) {
+            Long cajaId, BigDecimal descuentoPorcentaje, Long presupuestoId, Long remitoId, LocalDateTime fecha) {
         return venta(ferreteriaId, numero, claveIdempotencia, usuarioId, totales, cajaId, descuentoPorcentaje,
-                presupuestoId, remitoId, true);
-    }
-
-    public static Comprobante venta(
-            Long ferreteriaId, long numero, String claveIdempotencia, Long usuarioId, TotalesVenta totales,
-            Long cajaId, BigDecimal descuentoPorcentaje, Long presupuestoId, Long remitoId, boolean facturable) {
-        return venta(ferreteriaId, numero, claveIdempotencia, usuarioId, totales, cajaId, descuentoPorcentaje,
-                presupuestoId, remitoId, facturable, null, null);
+                presupuestoId, remitoId, true, fecha);
     }
 
     public static Comprobante venta(
             Long ferreteriaId, long numero, String claveIdempotencia, Long usuarioId, TotalesVenta totales,
             Long cajaId, BigDecimal descuentoPorcentaje, Long presupuestoId, Long remitoId, boolean facturable,
-            Long clienteId, String clienteNombre) {
+            LocalDateTime fecha) {
+        return venta(ferreteriaId, numero, claveIdempotencia, usuarioId, totales, cajaId, descuentoPorcentaje,
+                presupuestoId, remitoId, facturable, null, null, fecha);
+    }
+
+    /** {@code fecha}: la hora de Buenos Aires de la venta, del {@code Clock} de quien la registra. */
+    public static Comprobante venta(
+            Long ferreteriaId, long numero, String claveIdempotencia, Long usuarioId, TotalesVenta totales,
+            Long cajaId, BigDecimal descuentoPorcentaje, Long presupuestoId, Long remitoId, boolean facturable,
+            Long clienteId, String clienteNombre, LocalDateTime fecha) {
         Comprobante comprobante = new Comprobante();
+        comprobante.fecha = Objects.requireNonNull(fecha, "Falta la fecha de la venta.");
         comprobante.clienteId = clienteId;
         comprobante.clienteNombre = clienteNombre;
         comprobante.presupuestoId = presupuestoId;

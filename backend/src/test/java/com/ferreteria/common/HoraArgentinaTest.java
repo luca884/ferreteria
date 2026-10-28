@@ -2,6 +2,7 @@ package com.ferreteria.common;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.ferreteria.common.config.RelojConfig;
 import com.ferreteria.stock.model.MovimientoStock;
 import com.ferreteria.ventas.model.Comprobante;
 import com.ferreteria.ventas.model.TotalesVenta;
@@ -46,10 +47,13 @@ class HoraArgentinaTest {
     }
 
     @Test
-    @DisplayName("la venta y el movimiento de stock se fechan con la hora de Buenos Aires")
+    @DisplayName("la venta y el movimiento de stock se fechan con la hora de Buenos Aires del reloj de la aplicacion")
     void ventaYMovimiento() {
+        // La venta y el stock toman el instante del Clock (RelojConfig) y lo pasan a la hora de Buenos Aires.
+        LocalDateTime ahora = LocalDateTime.ofInstant(new RelojConfig().reloj().instant(), HoraArgentina.ZONA);
+        esHoraDeBuenosAires(ahora);
         TotalesVenta totales = new TotalesVenta(new BigDecimal("121.00"), new BigDecimal("100.00"), new BigDecimal("21.00"));
-        esHoraDeBuenosAires(Comprobante.venta(1L, 1, "clave", 1L, totales, null).getFecha());
-        esHoraDeBuenosAires(MovimientoStock.ajuste(1L, 1L, BigDecimal.ONE, "Conteo", 1L).getFecha());
+        assertThat(Comprobante.venta(1L, 1, "clave", 1L, totales, null, ahora).getFecha()).isEqualTo(ahora);
+        assertThat(MovimientoStock.ajuste(1L, 1L, BigDecimal.ONE, "Conteo", 1L, ahora).getFecha()).isEqualTo(ahora);
     }
 }

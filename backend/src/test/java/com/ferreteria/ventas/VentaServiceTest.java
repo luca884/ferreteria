@@ -10,6 +10,11 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.ferreteria.common.exception.SistemaOcupadoException;
+import com.ferreteria.facturacion.api.FacturacionParaVenta;
+import com.ferreteria.facturacion.api.FacturacionParaVenta.EstadoFiscalVenta;
+import com.ferreteria.ventas.model.Comprobante;
+import com.ferreteria.ventas.model.RenglonVenta;
+import com.ferreteria.ventas.model.TotalesVenta;
 import com.ferreteria.ventas.service.ConfirmarVenta;
 import com.ferreteria.ventas.service.ConfirmarVenta.Renglon;
 import com.ferreteria.ventas.service.RegistroVenta;
@@ -18,6 +23,8 @@ import com.ferreteria.ventas.service.VentaRechazadaException.Motivo;
 import com.ferreteria.ventas.service.VentaRegistrada;
 import com.ferreteria.ventas.service.VentaService;
 import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
@@ -28,6 +35,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.CannotAcquireLockException;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.transaction.annotation.Transactional;
 
 /** La fachada sin transaccion: reintenta deadlocks y resuelve la carrera de la clave (C-009). */
@@ -39,18 +47,37 @@ class VentaServiceTest {
     @Mock
     RegistroVenta registroVenta;
 
+    @Mock
+    FacturacionParaVenta facturacion;
+
     VentaService service;
 
     ConfirmarVenta pedido = new ConfirmarVenta("7c9e6679-7425-40de-944b-e07fc1f90ae7",
             List.of(new Renglon(1L, BigDecimal.ONE, new BigDecimal("10.00"))), new BigDecimal("10.00"),
             1L);
 
-    VentaRegistrada nueva = new VentaRegistrada(null, List.of(), null, List.of(), false);
-    VentaRegistrada repetida = new VentaRegistrada(null, List.of(), null, List.of(), true);
+    static final long COMPROBANTE = 31L;
+
+    VentaRegistrada nueva = new VentaRegistrada(comprobante(true), List.of(), null, List.of(), false);
+    VentaRegistrada repetida = new VentaRegistrada(comprobante(true), List.of(), null, List.of(), true);
+    /** La venta nueva que dio de alta su registro fiscal en su transaccion. */
+    VentaRegistrada nuevaConRegistro = new VentaRegistrada(comprobante(true), List.of(), null, List.of(), false, true, null);
+
+    static final EstadoFiscalVenta AUTORIZADA = new EstadoFiscalVenta("AUTORIZADO", "FACTURA", "B", 1, 7L,
+            "74123456789012", LocalDate.of(2026, 11, 7), "SIMULADOR");
 
     @BeforeEach
     void preparar() {
-        service = new VentaService(registroVenta);
+        service = new VentaService(registroVenta, facturacion);
+    }
+
+    /** Una venta guardada con el id 31, facturable o no. */
+    static Comprobante comprobante(boolean facturable) {
+        Comprobante c = Comprobante.venta(3L, 12L, "7c9e6679-7425-40de-944b-e07fc1f90ae7", 9L,
+                TotalesVenta.de(List.of(RenglonVenta.de(new BigDecimal("10.00"), BigDecimal.ONE, new BigDecimal("21.00")))),
+                77L, BigDecimal.ZERO, null, null, facturable, LocalDateTime.of(2026, 10, 28, 10, 15, 30));
+        ReflectionTestUtils.setField(c, "id", COMPROBANTE);
+        return c;
     }
 
     @Test
@@ -241,5 +268,64 @@ class VentaServiceTest {
 
         assertThat(service.cobrar(pedido, USUARIO)).isSameAs(repetida);
         verify(registroVenta, times(2)).registrar(pedido, USUARIO, false);
+    }
+
+    // ---------------------------------------------------------------- CU-07 paso 5: el CAE despues del commit (S4)
+
+    @Test
+    @DisplayName("la venta nueva con registro fiscal pide el CAE una sola vez, despues de los reintentos, y responde con su estado")
+    void pideElCaeDespuesDelBucle() {
+        when(registroVenta.registrar(pedido, USUARIO, false))
+                .thenThrow(new CannotAcquireLockException("deadlock"))
+                .thenReturn(nuevaConRegistro);
+        when(facturacion.autorizar(COMPROBANTE)).thenReturn(Optional.of(AUTORIZADA));
+
+        VentaRegistrada venta = service.cobrar(pedido, USUARIO);
+
+        assertThat(venta.fiscal()).isEqualTo(AUTORIZADA);
+        assertThat(venta.comprobante()).isSameAs(nuevaConRegistro.comprobante());
+        verify(facturacion, times(1)).autorizar(COMPROBANTE);
+        verify(facturacion, never()).estado(org.mockito.ArgumentMatchers.anyLong());
+    }
+
+    @Test
+    @DisplayName("la repetida facturable (la misma clave, la carrera de la clave o CC-009) lee el estado actual sin pedir otro CAE")
+    void laRepetidaLeeElEstadoSinPedirOtroCae() {
+        when(facturacion.estado(COMPROBANTE)).thenReturn(Optional.of(AUTORIZADA));
+        when(registroVenta.registrar(pedido, USUARIO, false))
+                .thenReturn(repetida)
+                .thenThrow(new DataIntegrityViolationException("uk_comprobante_clave"))
+                .thenThrow(limite());
+        when(registroVenta.repetida(pedido)).thenReturn(Optional.of(repetida));
+
+        for (int i = 0; i < 3; i++) {
+            VentaRegistrada venta = service.cobrar(pedido, USUARIO);
+            assertThat(venta.repetida()).isTrue();
+            assertThat(venta.fiscal()).isEqualTo(AUTORIZADA);
+        }
+        verify(facturacion, times(3)).estado(COMPROBANTE);
+        verify(facturacion, never()).autorizar(org.mockito.ArgumentMatchers.anyLong());
+    }
+
+    @Test
+    @DisplayName("la venta sin registro fiscal y la repetida no facturable no le preguntan nada a facturacion")
+    void sinRegistroNoPregunta() {
+        VentaRegistrada repetidaNoFacturable = new VentaRegistrada(comprobante(false), List.of(), null, List.of(), true);
+        when(registroVenta.registrar(pedido, USUARIO, false)).thenReturn(nueva).thenReturn(repetidaNoFacturable);
+
+        assertThat(service.cobrar(pedido, USUARIO)).isSameAs(nueva);
+        assertThat(service.cobrar(pedido, USUARIO)).isSameAs(repetidaNoFacturable);
+        org.mockito.Mockito.verifyNoInteractions(facturacion);
+    }
+
+    @Test
+    @DisplayName("una falla al pedir el CAE o al leer el estado no bloquea la venta ya cobrada: responde sin «fiscal», nunca con un error")
+    void unaFallaDeFacturacionNoBloqueaLaVenta() {
+        when(registroVenta.registrar(pedido, USUARIO, false)).thenReturn(nuevaConRegistro).thenReturn(repetida);
+        when(facturacion.autorizar(COMPROBANTE)).thenThrow(new IllegalStateException("con una transaccion abierta"));
+        when(facturacion.estado(COMPROBANTE)).thenThrow(new CannotAcquireLockException("sin conexion"));
+
+        assertThat(service.cobrar(pedido, USUARIO)).isSameAs(nuevaConRegistro);
+        assertThat(service.cobrar(pedido, USUARIO)).isSameAs(repetida);
     }
 }

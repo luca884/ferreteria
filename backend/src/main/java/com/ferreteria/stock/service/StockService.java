@@ -2,6 +2,7 @@ package com.ferreteria.stock.service;
 
 import com.ferreteria.catalogo.api.ArticuloVendible;
 import com.ferreteria.catalogo.api.ArticulosParaVenta;
+import com.ferreteria.common.HoraArgentina;
 import com.ferreteria.common.exception.DatosInvalidosException;
 import com.ferreteria.common.exception.ReglaDeNegocioException;
 import com.ferreteria.common.exception.ResourceNotFoundException;
@@ -15,6 +16,8 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.Clock;
+import java.time.LocalDateTime;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -23,27 +26,32 @@ import java.util.TreeMap;
 /**
  * Toda variacion de stock deja un movimiento (spec, reglas de negocio). Este servicio registra la salida por
  * venta: pide a catalogo el ajuste atomico del cache (por el puerto, sin tocar catalogo.model) y guarda un
- * movimiento por articulo. Corre dentro de la transaccion de la venta.
+ * movimiento por articulo. Corre dentro de la transaccion de la venta. La fecha de los movimientos de la venta es la de
+ * la venta (la pasa quien llama); la del resto (remitos, compras y ajustes) sale del {@code Clock}, en hora de Buenos Aires.
  */
 @Service
 public class StockService {
 
     private final ArticulosParaVenta articulosParaVenta;
     private final MovimientoStockRepository movimientoRepository;
+    private final Clock reloj;
 
-    public StockService(ArticulosParaVenta articulosParaVenta, MovimientoStockRepository movimientoRepository) {
+    public StockService(ArticulosParaVenta articulosParaVenta, MovimientoStockRepository movimientoRepository,
+            Clock reloj) {
         this.articulosParaVenta = articulosParaVenta;
         this.movimientoRepository = movimientoRepository;
+        this.reloj = reloj;
     }
 
     /**
-     * Descuenta cada articulo de la venta y guarda un movimiento VENTA (cantidad negativa) por articulo.
-     * Si un articulo aparece en mas de una salida se suman. Primero el UPDATE del stock y despues los
+     * Descuenta cada articulo de la venta y guarda un movimiento VENTA (cantidad negativa) por articulo, con la fecha de
+     * la venta. Si un articulo aparece en mas de una salida se suman. Primero el UPDATE del stock y despues los
      * INSERT: asi los locks de los articulos se toman antes que los S-locks de las FK de los movimientos.
      * Devuelve el stock resultante de cada articulo.
      */
     @Transactional(propagation = Propagation.MANDATORY)
-    public Map<Long, BigDecimal> registrarVenta(Long comprobanteId, Long usuarioId, List<SalidaStock> salidas) {
+    public Map<Long, BigDecimal> registrarVenta(Long comprobanteId, Long usuarioId, LocalDateTime fecha,
+            List<SalidaStock> salidas) {
         if (salidas.isEmpty()) {
             return Map.of();
         }
@@ -58,7 +66,7 @@ public class StockService {
 
         Long ferreteriaId = TenantContext.requireFerreteriaId();
         List<MovimientoStock> movimientos = vendidoPorArticulo.entrySet().stream()
-                .map(e -> MovimientoStock.venta(ferreteriaId, e.getKey(), e.getValue(), comprobanteId, usuarioId))
+                .map(e -> MovimientoStock.venta(ferreteriaId, e.getKey(), e.getValue(), comprobanteId, usuarioId, fecha))
                 .toList();
         movimientoRepository.saveAll(movimientos);
         return stockResultante;
@@ -79,8 +87,9 @@ public class StockService {
         Map<Long, BigDecimal> stockResultante = articulosParaVenta.ajustarStock(deltas);
 
         Long ferreteriaId = TenantContext.requireFerreteriaId();
+        LocalDateTime fecha = ahora();
         movimientoRepository.saveAll(entregadoPorArticulo.entrySet().stream()
-                .map(e -> MovimientoStock.remito(ferreteriaId, e.getKey(), e.getValue(), remitoId, usuarioId))
+                .map(e -> MovimientoStock.remito(ferreteriaId, e.getKey(), e.getValue(), remitoId, usuarioId, fecha))
                 .toList());
         return stockResultante;
     }
@@ -98,8 +107,10 @@ public class StockService {
         Map<Long, BigDecimal> stockResultante = articulosParaVenta.ajustarStock(devueltoPorArticulo);
 
         Long ferreteriaId = TenantContext.requireFerreteriaId();
+        LocalDateTime fecha = ahora();
         movimientoRepository.saveAll(devueltoPorArticulo.entrySet().stream()
-                .map(e -> MovimientoStock.anulacionRemito(ferreteriaId, e.getKey(), e.getValue(), remitoId, usuarioId))
+                .map(e -> MovimientoStock.anulacionRemito(ferreteriaId, e.getKey(), e.getValue(), remitoId, usuarioId,
+                        fecha))
                 .toList());
         return stockResultante;
     }
@@ -117,8 +128,9 @@ public class StockService {
         Map<Long, BigDecimal> stockResultante = articulosParaVenta.ajustarStock(compradoPorArticulo);
 
         Long ferreteriaId = TenantContext.requireFerreteriaId();
+        LocalDateTime fecha = ahora();
         movimientoRepository.saveAll(compradoPorArticulo.entrySet().stream()
-                .map(e -> MovimientoStock.compra(ferreteriaId, e.getKey(), e.getValue(), compraId, usuarioId))
+                .map(e -> MovimientoStock.compra(ferreteriaId, e.getKey(), e.getValue(), compraId, usuarioId, fecha))
                 .toList());
         return stockResultante;
     }
@@ -126,12 +138,12 @@ public class StockService {
     /**
      * Factura un remito (RM-006): el remito ya descontó lo que entregó, asi que la venta mueve solo la diferencia por
      * articulo (vendido - entregado). Sale lo que se vendio de mas y vuelve lo que sobra o no se vendio; si es igual no
-     * mueve nada. Cada diferencia deja un movimiento VENTA con el comprobante, el remito y el motivo. Devuelve el stock
-     * resultante solo de los articulos que salen (los unicos que pueden quedar sin stock).
+     * mueve nada. Cada diferencia deja un movimiento VENTA con el comprobante, el remito, el motivo y la fecha de la venta.
+     * Devuelve el stock resultante solo de los articulos que salen (los unicos que pueden quedar sin stock).
      */
     @Transactional(propagation = Propagation.MANDATORY)
     public Map<Long, BigDecimal> facturarRemito(Long comprobanteId, Long remitoId, Long numeroRemito, Long usuarioId,
-            List<SalidaStock> vendidas, List<SalidaStock> entregadas) {
+            LocalDateTime fecha, List<SalidaStock> vendidas, List<SalidaStock> entregadas) {
         Map<Long, BigDecimal> deltas = new TreeMap<>();
         sumarPorArticulo(entregadas).forEach(deltas::put);
         sumarPorArticulo(vendidas).forEach((articuloId, vendido) -> deltas.merge(articuloId, vendido.negate(), BigDecimal::add));
@@ -145,7 +157,7 @@ public class StockService {
         String motivo = "Diferencia con el remito N.º " + numeroRemito;
         movimientoRepository.saveAll(deltas.entrySet().stream()
                 .map(e -> MovimientoStock.diferenciaConRemito(
-                        ferreteriaId, e.getKey(), e.getValue(), comprobanteId, remitoId, motivo, usuarioId))
+                        ferreteriaId, e.getKey(), e.getValue(), comprobanteId, remitoId, motivo, usuarioId, fecha))
                 .toList());
 
         Map<Long, BigDecimal> resultanteDeLosQueSalen = new TreeMap<>();
@@ -208,7 +220,7 @@ public class StockService {
 
         BigDecimal stockActual = articulosParaVenta.ajustarStock(Map.of(articuloId, diferencia)).get(articuloId);
         movimientoRepository.save(MovimientoStock.ajuste(
-                TenantContext.requireFerreteriaId(), articuloId, diferencia, textoMotivo, usuarioId));
+                TenantContext.requireFerreteriaId(), articuloId, diferencia, textoMotivo, usuarioId, ahora()));
         return new AjusteRegistrado(articuloId, stockAnterior, diferencia, stockActual);
     }
 
@@ -252,8 +264,13 @@ public class StockService {
 
         BigDecimal stockActual = articulosParaVenta.ajustarStock(Map.of(articuloId, cantidad)).get(articuloId);
         movimientoRepository.save(MovimientoStock.ajuste(
-                TenantContext.requireFerreteriaId(), articuloId, cantidad, textoMotivo, usuarioId));
+                TenantContext.requireFerreteriaId(), articuloId, cantidad, textoMotivo, usuarioId, ahora()));
         return new AjusteRegistrado(articuloId, stockAnterior, cantidad.setScale(3), stockActual);
+    }
+
+    /** La hora de Buenos Aires del reloj, la de los movimientos que no son de una venta. */
+    private LocalDateTime ahora() {
+        return LocalDateTime.ofInstant(reloj.instant(), HoraArgentina.ZONA);
     }
 
     /** El articulo de la ferreteria del request: 404 si es ajeno o no existe, 422 si esta dado de baja. */

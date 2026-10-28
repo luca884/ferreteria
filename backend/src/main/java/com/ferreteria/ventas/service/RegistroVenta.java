@@ -4,10 +4,14 @@ import com.ferreteria.catalogo.api.ArticuloVendible;
 import com.ferreteria.catalogo.api.ArticulosParaVenta;
 import com.ferreteria.clientes.api.CuentaCorrienteParaVenta;
 import com.ferreteria.clientes.api.CuentaCorrienteParaVenta.CupoCuenta;
+import com.ferreteria.common.HoraArgentina;
 import com.ferreteria.common.exception.ConflictException;
 import com.ferreteria.common.exception.DatosInvalidosException;
 import com.ferreteria.common.exception.ReglaDeNegocioException;
 import com.ferreteria.common.exception.ResourceNotFoundException;
+import com.ferreteria.facturacion.api.FacturacionParaVenta;
+import com.ferreteria.facturacion.api.FacturacionParaVenta.Decision;
+import com.ferreteria.facturacion.api.FacturacionParaVenta.RenglonParaFacturar;
 import com.ferreteria.stock.service.SalidaStock;
 import com.ferreteria.stock.service.StockService;
 import com.ferreteria.tenant.TenantContext;
@@ -40,6 +44,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -56,8 +63,9 @@ import java.util.stream.Collectors;
  * Registra una venta en UNA transaccion (C-008). Primero valida todo sin escribir nada (R-007 a R-010) y
  * recien despues escribe, siempre en el mismo orden de locks:
  * <pre>
- * caja (S, CU-10) → presupuesto origen (X) → remito origen (X) → CLIENTE (X, solo si clienteId != null) → numerador (X)
- *   → comprobante → articulos/stock (X, id asc) → hijos (items, pagos y movimientos de cuenta)
+ * caja (S, CU-10) → presupuesto origen (X) → remito origen (X) → CLIENTE (X, solo si clienteId != null)
+ *   → config_arca (S, solo si la venta es facturable) → numerador (X) → comprobante → articulos/stock (X, id asc)
+ *   → hijos (items, pagos y movimientos de cuenta) → registro fiscal (solo si sale con factura)
  * </pre>
  * TODA venta con cliente (cobre o no a cuenta corriente) toma al cliente en ese mismo lugar, justo antes del numerador: InnoDB
  * toma un lock compartido sobre la fila del cliente al insertar el comprobante (FK), asi que si solo las ventas a cuenta lo
@@ -72,6 +80,14 @@ import java.util.stream.Collectors;
  * agregue un paso a esta venta o a la cobranza mantiene «cliente antes que cualquier numerador». La venta hace la lectura plana
  * de la clave (repetida) antes de la caja y del cliente; es segura porque despues solo lee con lectura actual: si una venta
  * futura leyera algo derivado de filas bajo la foto vieja, debe tomar al cliente antes.
+ *
+ * <p>La factura (CU-07 pasos 2, 3 y 5; cu-07-venta-facturada S1, S3 y S5). Solo la venta facturable pregunta a
+ * {@code facturacion} ({@link FacturacionParaVenta#decidir}) si sale con factura: va despues del cliente y de los totales y
+ * antes del numerador, y deja la configuracion de ARCA tomada en S hasta el commit (el panel del super admin no la cambia
+ * mientras tanto). Con factura suma sus dos controles antes de escribir nada (el cliente sin CUIT o sin domicilio, y el tope
+ * de identificacion de ARCA para la venta anonima) y, como ultimo hijo, da de alta el registro fiscal con el receptor leido
+ * bajo el lock del cliente: editarlo despues no lo cambia. El CAE lo pide {@link VentaService} despues del commit. La venta,
+ * sus movimientos de stock y su registro fiscal llevan el mismo instante, tomado una vez del {@code Clock}.
  */
 @Service
 public class RegistroVenta {
@@ -98,6 +114,8 @@ public class RegistroVenta {
     private final CuentaCorrienteParaVenta cuentaCorriente;
     private final TopeDeDescuento topeDeDescuento;
     private final ConsumidorFinal consumidorFinal;
+    private final FacturacionParaVenta facturacion;
+    private final Clock reloj;
 
     public RegistroVenta(
             ArticulosParaVenta articulosParaVenta, StockService stockService,
@@ -107,7 +125,10 @@ public class RegistroVenta {
             PresupuestoRepository presupuestoRepository, RemitoRepository remitoRepository,
             ItemRemitoRepository itemRemitoRepository, ClienteDelDocumento clienteDelDocumento,
             CuentaCorrienteParaVenta cuentaCorriente, TopeDeDescuento topeDeDescuento,
-            ItemPresupuestoRepository itemPresupuestoRepository, ConsumidorFinal consumidorFinal) {
+            ItemPresupuestoRepository itemPresupuestoRepository, ConsumidorFinal consumidorFinal,
+            FacturacionParaVenta facturacion, Clock reloj) {
+        this.facturacion = facturacion;
+        this.reloj = reloj;
         this.itemPresupuestoRepository = itemPresupuestoRepository;
         this.consumidorFinal = consumidorFinal;
         this.topeDeDescuento = topeDeDescuento;
@@ -168,8 +189,17 @@ public class RegistroVenta {
         List<ConfirmarVenta.PagoPedido> partes = pagosDe(pedido, TotalesVenta.de(sinRecargo).total());
         List<RenglonVenta> calculados = RecargoVenta.repartir(sinRecargo, recargoDe(partes, formas));
         TotalesVenta totales = TotalesVenta.de(calculados);
+        // CU-07 paso 3 (D5): solo la venta facturable pregunta si sale con factura. Toma config_arca en S hasta el commit,
+        // despues del cliente y antes del numerador (ver el orden de locks). Sin facturacion habilitada no hay factura.
+        Decision decision = pedido.facturable() ? facturacion.decidir(cliente.receptor()) : Decision.SIN_FACTURA;
+        // D4: con factura, el cliente RI, Monotributista o Exento necesita su CUIT y su domicilio (antes de escribir nada).
+        if (decision.factura() && !decision.receptorCompleto()) {
+            throw VentaRechazadaException.clienteSinDatosFiscales(cliente.nombre());
+        }
         // GDS-32: desde el tope, la venta facturable sin un cliente con documento no se registra (antes de escribir nada).
-        consumidorFinal.verificar(pedido.facturable(), cliente.identificado(), totales.total());
+        // D4: con factura rige el menor entre el tope del Dueño y el de ARCA.
+        consumidorFinal.verificar(pedido.facturable(), cliente.identificado(), totales.total(),
+                decision.topeIdentificacion());
 
         // CC-005, CC-006: el cupo se verifica antes de escribir nada, con el saldo vigente bajo el lock del cliente.
         BigDecimal importeCuenta = importeACuenta(partes, formas);
@@ -178,10 +208,13 @@ public class RegistroVenta {
                 : null;
 
         long numero = numeradorRepository.siguienteScoped();
+        // S5: un solo instante para la venta, sus movimientos de stock y su registro fiscal.
+        Instant instante = reloj.instant();
+        LocalDateTime fecha = LocalDateTime.ofInstant(instante, HoraArgentina.ZONA);
         Comprobante comprobante = comprobanteRepository.save(
                 Comprobante.venta(ferreteriaId, numero, pedido.clave(), usuarioId, totales, cajaId,
                         pedido.descuentoPorcentaje(), pedido.presupuestoId(), pedido.remitoId(), pedido.facturable(),
-                        cliente.id(), cliente.nombre()));
+                        cliente.id(), cliente.nombre(), fecha));
         if (presupuesto != null) {
             presupuesto.cambiarEstado(EstadoPresupuesto.FACTURADO);
         }
@@ -193,8 +226,8 @@ public class RegistroVenta {
                 .map(r -> new SalidaStock(r.articuloId(), r.cantidad()))
                 .toList();
         Map<Long, BigDecimal> stockResultante = remito == null
-                ? stockService.registrarVenta(comprobante.getId(), usuarioId, salidas)
-                : facturarRemito(remito, comprobante, usuarioId, salidas);
+                ? stockService.registrarVenta(comprobante.getId(), usuarioId, fecha, salidas)
+                : facturarRemito(remito, comprobante, usuarioId, salidas, fecha);
 
         List<ItemComprobante> items = new ArrayList<>();
         for (int i = 0; i < pedido.renglones().size(); i++) {
@@ -220,7 +253,19 @@ public class RegistroVenta {
                     cliente.id(), comprobante.getId(), comprobante.getNumero(), cargos, usuarioId, autorizadoPor));
         }
 
-        return new VentaRegistrada(comprobante, itemsGuardados, pagos, sinStock(stockResultante, articulos), false);
+        // CU-07 paso 3: el registro fiscal es el ultimo hijo, con el receptor leido bajo el lock del cliente y lo que se
+        // cobra por renglon (con descuento y recargo: la suma es el total de la venta).
+        if (decision.factura()) {
+            facturacion.registrar(comprobante.getId(), cliente.receptor(), renglonesParaFacturar(calculados), instante);
+        }
+
+        return new VentaRegistrada(comprobante, itemsGuardados, pagos, sinStock(stockResultante, articulos), false,
+                decision.factura(), null);
+    }
+
+    /** Cada renglon como lo pide la factura: su alicuota de IVA y su total cobrado (con descuento y recargo). */
+    private static List<RenglonParaFacturar> renglonesParaFacturar(List<RenglonVenta> calculados) {
+        return calculados.stream().map(r -> new RenglonParaFacturar(r.porcentajeIva(), r.total())).toList();
     }
 
     /** Lo que la venta carga a la cuenta corriente: la suma de lo cobrado (parte mas recargo) con las formas de medio CUENTA_CORRIENTE. */
@@ -423,11 +468,11 @@ public class RegistroVenta {
      * diferencia (RM-006). Devuelve el stock resultante de los articulos que salen de mas.
      */
     private Map<Long, BigDecimal> facturarRemito(
-            Remito remito, Comprobante comprobante, Long usuarioId, List<SalidaStock> vendidas) {
+            Remito remito, Comprobante comprobante, Long usuarioId, List<SalidaStock> vendidas, LocalDateTime fecha) {
         List<SalidaStock> entregadas = itemRemitoRepository.deRemitoScoped(remito.getId()).stream()
                 .map(i -> new SalidaStock(i.getArticuloId(), i.getCantidad()))
                 .toList();
-        return stockService.facturarRemito(comprobante.getId(), remito.getId(), remito.getNumero(), usuarioId,
+        return stockService.facturarRemito(comprobante.getId(), remito.getId(), remito.getNumero(), usuarioId, fecha,
                 vendidas, entregadas);
     }
 

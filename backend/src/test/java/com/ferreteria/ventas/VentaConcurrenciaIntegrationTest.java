@@ -143,7 +143,7 @@ class VentaConcurrenciaIntegrationTest extends VentasTestBase {
         doAnswer(invocacion -> {
             invocacion.callRealMethod();
             throw new IllegalStateException("falla inyectada al escribir el segundo movimiento");
-        }).when(objetivo).registrarVenta(any(), any(), any());
+        }).when(objetivo).registrarVenta(any(), any(), any(), any());
 
         vender(token, clave(), "150.00", linea(a, "1", "100.00"), linea(b, "1", "50.00"))
                 .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isInternalServerError());

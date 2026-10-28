@@ -16,7 +16,12 @@ import static org.mockito.Mockito.when;
 import com.ferreteria.catalogo.api.ArticuloVendible;
 import com.ferreteria.catalogo.api.ArticulosParaVenta;
 import com.ferreteria.clientes.api.CuentaCorrienteParaVenta;
+import com.ferreteria.common.HoraArgentina;
 import com.ferreteria.common.exception.DatosInvalidosException;
+import com.ferreteria.facturacion.api.FacturacionParaVenta;
+import com.ferreteria.facturacion.api.FacturacionParaVenta.Decision;
+import com.ferreteria.facturacion.api.FacturacionParaVenta.ReceptorVenta;
+import com.ferreteria.facturacion.api.FacturacionParaVenta.RenglonParaFacturar;
 import com.ferreteria.stock.service.SalidaStock;
 import com.ferreteria.stock.service.StockService;
 import com.ferreteria.tenant.MissingTenantException;
@@ -49,6 +54,9 @@ import com.ferreteria.ventas.service.VentaRechazadaException;
 import com.ferreteria.ventas.service.VentaRegistrada;
 import com.ferreteria.ventas.service.VentaRechazadaException.Motivo;
 import java.math.BigDecimal;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
@@ -113,9 +121,16 @@ class RegistroVentaTest {
     @Mock
     CuentaCorrienteParaVenta cuentaCorriente;
 
+    @Mock
+    FacturacionParaVenta facturacion;
+
     RegistroVenta registro;
 
     static final Long CAJA = 77L;
+
+    /** El reloj de la venta: el miércoles 2026-10-28 a las 10:15:30 de Buenos Aires. */
+    static final Clock RELOJ = Clock.fixed(Instant.parse("2026-10-28T13:15:30Z"), HoraArgentina.ZONA);
+    static final LocalDateTime FECHA = LocalDateTime.of(2026, 10, 28, 10, 15, 30);
 
     /** Las formas de la ferreteria de prueba, por id: una por medio, activas y sin recargo (cada test las cambia). */
     final Map<Long, FormaPago> formasEnLaBase = new java.util.HashMap<>();
@@ -129,9 +144,11 @@ class RegistroVentaTest {
                 itemRemitoRepository, new ClienteDelDocumento(clientesParaVenta), cuentaCorriente,
                 new TopeDeDescuento(usuarioId -> java.util.Optional.empty()),
                 org.mockito.Mockito.mock(com.ferreteria.ventas.repository.ItemPresupuestoRepository.class),
-                new ConsumidorFinal(() -> new java.math.BigDecimal("10000000.00")));
+                new ConsumidorFinal(() -> new java.math.BigDecimal("10000000.00")), facturacion, RELOJ);
         // CU-10: por defecto hay caja abierta hoy. Lenient: los rechazos previos a la caja no la consultan.
         lenient().when(cajaService.cajaParaVender()).thenReturn(CAJA);
+        // D5: por defecto la ferreteria no factura (la venta de siempre). Lenient: los rechazos previos no preguntan.
+        lenient().when(facturacion.decidir(any())).thenReturn(Decision.SIN_FACTURA);
         for (MedioPago medio : MedioPago.values()) {
             formasEnLaBase.put(formaId(medio), forma(medio, "0.00", true));
         }
@@ -505,7 +522,7 @@ class RegistroVentaTest {
             ReflectionTestUtils.setField(c, "id", COMPROBANTE);
             return c;
         });
-        when(stockService.registrarVenta(eq(COMPROBANTE), eq(USUARIO), any())).thenReturn(stockResultante);
+        when(stockService.registrarVenta(eq(COMPROBANTE), eq(USUARIO), eq(FECHA), any())).thenReturn(stockResultante);
         when(itemRepository.saveAll(any())).thenAnswer(inv -> inv.getArgument(0));
         // El pago guardado recibe el id 100, 101... (IDENTITY): el asiento de cuenta corriente lo referencia.
         java.util.concurrent.atomic.AtomicLong idsDePago = new java.util.concurrent.atomic.AtomicLong(100);
@@ -550,7 +567,7 @@ class RegistroVentaTest {
                 pagoRepository);
         orden.verify(numeradorRepository).siguienteScoped();
         orden.verify(comprobanteRepository).save(any(Comprobante.class));
-        orden.verify(stockService).registrarVenta(eq(COMPROBANTE), eq(USUARIO), any());
+        orden.verify(stockService).registrarVenta(eq(COMPROBANTE), eq(USUARIO), eq(FECHA), any());
         orden.verify(itemRepository).saveAll(any());
         orden.verify(pagoRepository).save(any(Pago.class));
     }
@@ -665,7 +682,7 @@ class RegistroVentaTest {
         assertThat(c.getCajaId()).isEqualTo(CAJA);
         assertThat(c.getTotal()).isEqualByComparingTo("4463.33");
         verify(numeradorRepository).siguienteScoped();
-        verify(stockService).registrarVenta(eq(COMPROBANTE), eq(USUARIO), any());
+        verify(stockService).registrarVenta(eq(COMPROBANTE), eq(USUARIO), eq(FECHA), any());
         assertThat(itemsGuardados()).hasSize(2);
         verify(pagoRepository).save(any(Pago.class));
     }
@@ -883,7 +900,7 @@ class RegistroVentaTest {
     Comprobante ventaGuardadaC1C3() {
         Comprobante c = Comprobante.venta(FERRETERIA, NUMERO, CLAVE, USUARIO,
                 TotalesVenta.de(List.of(RenglonVenta.de(bd("1210.00"), bd("3"), bd("21.00")),
-                        RenglonVenta.de(bd("333.33"), bd("2.5"), bd("21.00")))), CAJA);
+                        RenglonVenta.de(bd("333.33"), bd("2.5"), bd("21.00")))), CAJA, FECHA);
         ReflectionTestUtils.setField(c, "id", COMPROBANTE);
         return c;
     }
@@ -988,7 +1005,7 @@ class RegistroVentaTest {
     void repetidaConDescuentos() {
         Comprobante comprobante = Comprobante.venta(FERRETERIA, NUMERO, CLAVE, USUARIO,
                 TotalesVenta.de(List.of(RenglonVenta.de(bd("100.00"), bd("2"), bd("21.00"), bd("10.00"), bd("10.00")))),
-                CAJA, bd("10.00"));
+                CAJA, bd("10.00"), FECHA);
         ReflectionTestUtils.setField(comprobante, "id", COMPROBANTE);
         ItemComprobante item = ItemComprobante.de(FERRETERIA, COMPROBANTE, 1, 1L, "Tornillo 1/4", "UNIDAD", "IVA_21", null,
                 RenglonVenta.de(bd("100.00"), bd("2"), bd("21.00"), bd("10.00"), bd("10.00")));
@@ -1020,7 +1037,7 @@ class RegistroVentaTest {
         comoVendedor(ventaC1C3(MedioPago.EFECTIVO), USUARIO);
 
         ArgumentCaptor<List<SalidaStock>> salidas = ArgumentCaptor.forClass(List.class);
-        verify(stockService).registrarVenta(eq(COMPROBANTE), eq(USUARIO), salidas.capture());
+        verify(stockService).registrarVenta(eq(COMPROBANTE), eq(USUARIO), eq(FECHA), salidas.capture());
         assertThat(salidas.getValue()).hasSize(2);
         assertThat(salidas.getValue().get(0).articuloId()).isEqualTo(1L);
         assertThat(salidas.getValue().get(0).cantidad()).isEqualByComparingTo("3");
@@ -1048,7 +1065,7 @@ class RegistroVentaTest {
 
     Comprobante ventaGuardada() {
         Comprobante c = Comprobante.venta(FERRETERIA, NUMERO, CLAVE, USUARIO,
-                TotalesVenta.de(List.of(RenglonVenta.de(bd("1210.00"), bd("3"), bd("21.00")))), CAJA);
+                TotalesVenta.de(List.of(RenglonVenta.de(bd("1210.00"), bd("3"), bd("21.00")))), CAJA, FECHA);
         ReflectionTestUtils.setField(c, "id", COMPROBANTE);
         return c;
     }
@@ -1276,7 +1293,7 @@ class RegistroVentaTest {
         List<RenglonVenta> sinRecargo = List.of(RenglonVenta.de(bd("1210.00"), bd("3"), bd("21.00")),
                 RenglonVenta.de(bd("333.33"), bd("2.5"), bd("21.00")));
         List<RenglonVenta> repartidos = com.ferreteria.ventas.model.RecargoVenta.repartir(sinRecargo, bd("446.33"));
-        Comprobante c = Comprobante.venta(FERRETERIA, NUMERO, CLAVE, USUARIO, TotalesVenta.de(repartidos), CAJA);
+        Comprobante c = Comprobante.venta(FERRETERIA, NUMERO, CLAVE, USUARIO, TotalesVenta.de(repartidos), CAJA, FECHA);
         ReflectionTestUtils.setField(c, "id", COMPROBANTE);
         when(comprobanteRepository.porClaveScoped(CLAVE)).thenReturn(Optional.of(c));
         when(itemRepository.deComprobanteScoped(COMPROBANTE)).thenReturn(List.of(
@@ -1371,10 +1388,69 @@ class RegistroVentaTest {
         orden.verify(cuentaCorriente).verificarCupo(CLIENTE, bd("4463.33"));
         orden.verify(numeradorRepository).siguienteScoped();
         orden.verify(comprobanteRepository).save(any(Comprobante.class));
-        orden.verify(stockService).registrarVenta(eq(COMPROBANTE), eq(USUARIO), any());
+        orden.verify(stockService).registrarVenta(eq(COMPROBANTE), eq(USUARIO), eq(FECHA), any());
         orden.verify(itemRepository).saveAll(any());
         orden.verify(pagoRepository).save(any(Pago.class));
         orden.verify(cuentaCorriente).asentarVenta(any());
+    }
+
+    @Test
+    @DisplayName("con factura: decidir va despues del cliente y antes del numerador, y el registro fiscal es el ultimo hijo, con el receptor, lo cobrado por renglon y el instante de la venta")
+    void ordenDeLocksConFactura() {
+        catalogoC1C3();
+        escrituraLista(Map.of());
+        clienteTomado();
+        cupoDe("4463.33", "10000.00", "0.00");
+        when(facturacion.decidir(any())).thenReturn(new Decision(true, true, bd("10000000.00")));
+
+        VentaRegistrada venta = comoVendedor(ventaCC(), USUARIO);
+
+        InOrder orden = inOrder(clientesParaVenta, facturacion, cuentaCorriente, numeradorRepository, comprobanteRepository,
+                stockService, itemRepository, pagoRepository);
+        orden.verify(clientesParaVenta).tomarParaVenta(CLIENTE);
+        orden.verify(facturacion).decidir(new ReceptorVenta(FacturacionParaVenta.CondicionIva.CONSUMIDOR_FINAL, null,
+                null, "Ferretería Norte SRL", null));
+        orden.verify(cuentaCorriente).verificarCupo(CLIENTE, bd("4463.33"));
+        orden.verify(numeradorRepository).siguienteScoped();
+        orden.verify(comprobanteRepository).save(any(Comprobante.class));
+        orden.verify(stockService).registrarVenta(eq(COMPROBANTE), eq(USUARIO), eq(FECHA), any());
+        orden.verify(itemRepository).saveAll(any());
+        orden.verify(pagoRepository).save(any(Pago.class));
+        orden.verify(cuentaCorriente).asentarVenta(any());
+        orden.verify(facturacion).registrar(COMPROBANTE, new ReceptorVenta(FacturacionParaVenta.CondicionIva.CONSUMIDOR_FINAL,
+                null, null, "Ferretería Norte SRL", null), List.of(new RenglonParaFacturar(bd("21.00"), bd("3630.00")),
+                new RenglonParaFacturar(bd("21.00"), bd("833.33"))), RELOJ.instant());
+        assertThat(venta.comprobante().getFecha()).isEqualTo(FECHA);
+        assertThat(venta.conRegistroFiscal()).isTrue();
+    }
+
+    @Test
+    @DisplayName("la venta no facturable no pregunta si factura ni da de alta un registro fiscal")
+    void laNoFacturableNoPreguntaAFacturacion() {
+        catalogoC1C3();
+        escrituraLista(Map.of());
+        ConfirmarVenta base = ventaC1C3(MedioPago.EFECTIVO);
+        ConfirmarVenta noFacturable = new ConfirmarVenta(base.clave(), base.renglones(), base.totalMostrado(),
+                base.formaPagoId(), base.descuentoPorcentaje(), base.pagos(), null, null, false, null);
+
+        VentaRegistrada venta = comoVendedor(noFacturable, USUARIO);
+
+        verifyNoInteractions(facturacion);
+        assertThat(venta.conRegistroFiscal()).isFalse();
+        assertThat(venta.comprobante().getEstado()).isEqualTo(EstadoComprobante.NO_FACTURABLE);
+    }
+
+    @Test
+    @DisplayName("la venta facturable de una ferreteria que no factura pregunta, pero no da de alta un registro fiscal")
+    void decidirSinFacturaNoRegistra() {
+        catalogoC1C3();
+        escrituraLista(Map.of());
+
+        VentaRegistrada venta = comoVendedor(ventaC1C3(MedioPago.EFECTIVO), USUARIO);
+
+        verify(facturacion).decidir(ReceptorVenta.sinCliente());
+        verify(facturacion, never()).registrar(org.mockito.ArgumentMatchers.anyLong(), any(), any(), any());
+        assertThat(venta.conRegistroFiscal()).isFalse();
     }
 
     @Test

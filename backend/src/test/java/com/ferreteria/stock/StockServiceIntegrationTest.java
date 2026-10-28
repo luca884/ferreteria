@@ -3,6 +3,7 @@ package com.ferreteria.stock;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.ferreteria.common.HoraArgentina;
 import com.ferreteria.stock.service.SalidaStock;
 import com.ferreteria.stock.service.StockService;
 import com.ferreteria.support.IntegrationTestBase;
@@ -41,7 +42,7 @@ class StockServiceIntegrationTest extends IntegrationTestBase {
         TenantContext.setCurrentFerreteriaId(e.ferreteriaId());
 
         Map<Long, BigDecimal> resultante = new TransactionTemplate(transactionManager).execute(status ->
-                stockService.registrarVenta(e.comprobanteId(), e.usuarioId(), List.of(
+                stockService.registrarVenta(e.comprobanteId(), e.usuarioId(), HoraArgentina.ahora(), List.of(
                         new SalidaStock(e.tornillo(), new BigDecimal("3")),
                         new SalidaStock(e.cable(), new BigDecimal("2.5")),
                         new SalidaStock(e.tornillo(), new BigDecimal("1")))));
@@ -65,7 +66,7 @@ class StockServiceIntegrationTest extends IntegrationTestBase {
         TenantContext.setCurrentFerreteriaId(e.ferreteriaId());
 
         Map<Long, BigDecimal> resultante = new TransactionTemplate(transactionManager).execute(status ->
-                stockService.registrarVenta(e.comprobanteId(), e.usuarioId(),
+                stockService.registrarVenta(e.comprobanteId(), e.usuarioId(), HoraArgentina.ahora(),
                         List.of(new SalidaStock(e.tornillo(), new BigDecimal("15")))));
 
         assertThat(resultante.get(e.tornillo())).isEqualByComparingTo("-5");
@@ -79,7 +80,7 @@ class StockServiceIntegrationTest extends IntegrationTestBase {
         TenantContext.setCurrentFerreteriaId(e.ferreteriaId());
 
         new TransactionTemplate(transactionManager).execute(status -> {
-            stockService.registrarVenta(e.comprobanteId(), e.usuarioId(),
+            stockService.registrarVenta(e.comprobanteId(), e.usuarioId(), HoraArgentina.ahora(),
                     List.of(new SalidaStock(e.tornillo(), new BigDecimal("3"))));
             status.setRollbackOnly();
             return null;
@@ -97,7 +98,7 @@ class StockServiceIntegrationTest extends IntegrationTestBase {
         TenantContext.setCurrentFerreteriaId(a.ferreteriaId());
 
         assertThatThrownBy(() -> new TransactionTemplate(transactionManager).execute(status ->
-                stockService.registrarVenta(a.comprobanteId(), a.usuarioId(),
+                stockService.registrarVenta(a.comprobanteId(), a.usuarioId(), HoraArgentina.ahora(),
                         List.of(new SalidaStock(b.tornillo(), new BigDecimal("3"))))))
                 .isInstanceOf(IllegalStateException.class);
 

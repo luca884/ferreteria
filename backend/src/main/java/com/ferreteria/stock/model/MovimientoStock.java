@@ -12,13 +12,14 @@ import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
 import java.math.BigDecimal;
-import com.ferreteria.common.HoraArgentina;
 import java.time.LocalDateTime;
+import java.util.Objects;
 
 /**
  * Toda variacion de stock es un movimiento; el stock actual del articulo es su suma, cacheada. La cantidad
  * lleva signo (una venta resta). Registro inmutable: se escribe en la misma transaccion que la venta y no se
- * edita. Sin relaciones JPA: guarda ids, como HistorialPrecio.
+ * edita. Sin relaciones JPA: guarda ids, como HistorialPrecio. La fecha (hora de Buenos Aires) la pone quien lo crea con su
+ * {@code Clock}: la venta le pasa la suya, asi la venta y sus movimientos llevan la misma hora.
  */
 @Entity
 @Table(name = "movimiento_stock")
@@ -62,14 +63,19 @@ public class MovimientoStock {
     private String motivo;
 
     @Column(nullable = false, updatable = false)
-    private LocalDateTime fecha = HoraArgentina.ahora();
+    private LocalDateTime fecha;
 
     protected MovimientoStock() {}
 
+    private MovimientoStock(LocalDateTime fecha) {
+        this.fecha = Objects.requireNonNull(fecha, "Falta la fecha del movimiento.");
+    }
+
     /** Salida por venta: guarda la cantidad vendida (positiva) como cantidad negativa. */
     public static MovimientoStock venta(
-            Long ferreteriaId, Long articuloId, BigDecimal cantidadVendida, Long comprobanteId, Long usuarioId) {
-        MovimientoStock movimiento = new MovimientoStock();
+            Long ferreteriaId, Long articuloId, BigDecimal cantidadVendida, Long comprobanteId, Long usuarioId,
+            LocalDateTime fecha) {
+        MovimientoStock movimiento = new MovimientoStock(fecha);
         movimiento.ferreteriaId = ferreteriaId;
         movimiento.articuloId = articuloId;
         movimiento.tipo = TipoMovimiento.VENTA;
@@ -81,8 +87,9 @@ public class MovimientoStock {
 
     /** Salida por remito (RM-003): guarda la cantidad entregada (positiva) como cantidad negativa. */
     public static MovimientoStock remito(
-            Long ferreteriaId, Long articuloId, BigDecimal cantidadEntregada, Long remitoId, Long usuarioId) {
-        MovimientoStock movimiento = new MovimientoStock();
+            Long ferreteriaId, Long articuloId, BigDecimal cantidadEntregada, Long remitoId, Long usuarioId,
+            LocalDateTime fecha) {
+        MovimientoStock movimiento = new MovimientoStock(fecha);
         movimiento.ferreteriaId = ferreteriaId;
         movimiento.articuloId = articuloId;
         movimiento.tipo = TipoMovimiento.REMITO;
@@ -94,8 +101,9 @@ public class MovimientoStock {
 
     /** Anular un remito (RM-005): devuelve la cantidad que salio, con signo positivo. */
     public static MovimientoStock anulacionRemito(
-            Long ferreteriaId, Long articuloId, BigDecimal cantidadDevuelta, Long remitoId, Long usuarioId) {
-        MovimientoStock movimiento = new MovimientoStock();
+            Long ferreteriaId, Long articuloId, BigDecimal cantidadDevuelta, Long remitoId, Long usuarioId,
+            LocalDateTime fecha) {
+        MovimientoStock movimiento = new MovimientoStock(fecha);
         movimiento.ferreteriaId = ferreteriaId;
         movimiento.articuloId = articuloId;
         movimiento.tipo = TipoMovimiento.ANULACION_REMITO;
@@ -111,11 +119,11 @@ public class MovimientoStock {
      */
     public static MovimientoStock diferenciaConRemito(
             Long ferreteriaId, Long articuloId, BigDecimal diferencia, Long comprobanteId, Long remitoId, String motivo,
-            Long usuarioId) {
+            Long usuarioId, LocalDateTime fecha) {
         if (diferencia == null || diferencia.signum() == 0) {
             throw new IllegalArgumentException("Una diferencia tiene que cambiar el stock.");
         }
-        MovimientoStock movimiento = new MovimientoStock();
+        MovimientoStock movimiento = new MovimientoStock(fecha);
         movimiento.ferreteriaId = ferreteriaId;
         movimiento.articuloId = articuloId;
         movimiento.tipo = TipoMovimiento.VENTA;
@@ -129,11 +137,12 @@ public class MovimientoStock {
 
     /** Entrada por compra (CU-13): la cantidad comprada, positiva, con la compra que la origino. */
     public static MovimientoStock compra(
-            Long ferreteriaId, Long articuloId, BigDecimal cantidadComprada, Long compraId, Long usuarioId) {
+            Long ferreteriaId, Long articuloId, BigDecimal cantidadComprada, Long compraId, Long usuarioId,
+            LocalDateTime fecha) {
         if (cantidadComprada == null || cantidadComprada.signum() <= 0) {
             throw new IllegalArgumentException("Una compra tiene que sumar stock.");
         }
-        MovimientoStock movimiento = new MovimientoStock();
+        MovimientoStock movimiento = new MovimientoStock(fecha);
         movimiento.ferreteriaId = ferreteriaId;
         movimiento.articuloId = articuloId;
         movimiento.tipo = TipoMovimiento.COMPRA;
@@ -145,14 +154,15 @@ public class MovimientoStock {
 
     /** Ajuste manual (CU-09): la diferencia lleva signo y el motivo es obligatorio. Sin comprobante. */
     public static MovimientoStock ajuste(
-            Long ferreteriaId, Long articuloId, BigDecimal diferencia, String motivo, Long usuarioId) {
+            Long ferreteriaId, Long articuloId, BigDecimal diferencia, String motivo, Long usuarioId,
+            LocalDateTime fecha) {
         if (diferencia == null || diferencia.signum() == 0) {
             throw new IllegalArgumentException("Un ajuste tiene que cambiar el stock.");
         }
         if (motivo == null || motivo.isBlank() || motivo.length() > 200) {
             throw new IllegalArgumentException("Un ajuste necesita un motivo de hasta 200 caracteres.");
         }
-        MovimientoStock movimiento = new MovimientoStock();
+        MovimientoStock movimiento = new MovimientoStock(fecha);
         movimiento.ferreteriaId = ferreteriaId;
         movimiento.articuloId = articuloId;
         movimiento.tipo = TipoMovimiento.AJUSTE;

@@ -5,7 +5,8 @@ import java.util.List;
 
 /**
  * La venta no se hizo por algo del ticket que el cajero puede corregir (R-008, R-009, R-010, R-011), porque no hay
- * caja abierta del dia (CU-10) o por la cuenta corriente del cliente (CC-005, CC-006). Lleva el
+ * caja abierta del dia (CU-10), por la cuenta corriente del cliente (CC-005, CC-006) o por lo que pide la factura (GDS-32,
+ * D4). Lleva el
  * motivo, su estado HTTP, el mensaje para el usuario y los articulos involucrados. Ningun rechazo guarda
  * nada ni consume la clave de idempotencia.
  */
@@ -29,7 +30,12 @@ public class VentaRechazadaException extends RuntimeException {
         /** CC-005: la venta a cuenta corriente pasa el limite del cliente; la puede autorizar el Dueño. */
         LIMITE_CUENTA_CORRIENTE(422),
         /** GDS-32: desde el tope, la venta facturable a Consumidor Final necesita un cliente con documento. */
-        CONSUMIDOR_FINAL_SIN_DATOS(422);
+        CONSUMIDOR_FINAL_SIN_DATOS(422),
+        /**
+         * CU-07 paso 2 (D4): con la facturación habilitada, la venta facturable a un cliente Responsable Inscripto,
+         * Monotributista o Exento necesita su CUIT y su domicilio.
+         */
+        CLIENTE_SIN_DATOS_FISCALES(422);
 
         private final int estadoHttp;
 
@@ -93,6 +99,12 @@ public class VentaRechazadaException extends RuntimeException {
         return new VentaRechazadaException(Motivo.CONSUMIDOR_FINAL_SIN_DATOS, "Desde $ " + tope
                 + " la venta a Consumidor Final necesita identificar al comprador: elegí un cliente con DNI, CUIT o CUIL.",
                 List.of());
+    }
+
+    /** D4: «Para facturarle a <razón social> falta su CUIT o su domicilio: completalos en Clientes.», sin articulos. */
+    public static VentaRechazadaException clienteSinDatosFiscales(String razonSocial) {
+        return new VentaRechazadaException(Motivo.CLIENTE_SIN_DATOS_FISCALES, "Para facturarle a " + razonSocial
+                + " falta su CUIT o su domicilio: completalos en Clientes.", List.of());
     }
 
     private final Motivo motivo;

@@ -2,6 +2,7 @@ package com.ferreteria.ventas;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.ferreteria.common.HoraArgentina;
 import com.ferreteria.support.IntegrationTestBase;
 import com.ferreteria.tenant.TenantContext;
 import com.ferreteria.ventas.model.Comprobante;
@@ -67,7 +68,8 @@ class ComprobanteRepositoryTest extends IntegrationTestBase {
 
         Long comprobanteId = new TransactionTemplate(transactionManager).execute(status -> {
             Comprobante guardado = comprobanteRepository.save(
-                    Comprobante.venta(e.ferreteriaId(), 7L, CLAVE, e.usuarioId(), totales, null));
+                    Comprobante.venta(e.ferreteriaId(), 7L, CLAVE, e.usuarioId(), totales, null,
+                            HoraArgentina.ahora()));
             itemRepository.saveAll(List.of(ItemComprobante.de(e.ferreteriaId(), guardado.getId(), 1, e.articuloId(),
                     "Cable unipolar", "METRO", "IVA_21", null, renglon)));
             FormaPago visa = formaPagoRepository.save(FormaPago.de(e.ferreteriaId(), "Visa débito", MedioPago.DEBITO,
@@ -117,7 +119,8 @@ class ComprobanteRepositoryTest extends IntegrationTestBase {
         Escenario b = escenario();
         TotalesVenta totales = TotalesVenta.de(List.of());
         new TransactionTemplate(transactionManager).execute(status ->
-                comprobanteRepository.save(Comprobante.venta(a.ferreteriaId(), 1L, CLAVE, a.usuarioId(), totales, null)));
+                comprobanteRepository.save(Comprobante.venta(a.ferreteriaId(), 1L, CLAVE, a.usuarioId(), totales, null,
+                        HoraArgentina.ahora())));
 
         TenantContext.setCurrentFerreteriaId(a.ferreteriaId());
         assertThat(comprobanteRepository.porClaveScoped(CLAVE)).isPresent();

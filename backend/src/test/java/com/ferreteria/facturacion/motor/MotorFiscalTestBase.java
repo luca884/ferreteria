@@ -33,7 +33,7 @@ import org.springframework.context.annotation.Import;
  * (hoy nadie las factura: el enganche es de la rama 3) y los registros fiscales se dan de alta con el motor.
  */
 @Import(MotorDePruebaConfig.class)
-abstract class MotorFiscalTestBase extends IntegrationTestBase {
+public abstract class MotorFiscalTestBase extends IntegrationTestBase {
 
     static final ZoneId ZONA = ZoneId.of("America/Argentina/Buenos_Aires");
     static final LocalDate HOY = LocalDate.of(2026, 10, 28);
@@ -152,12 +152,12 @@ abstract class MotorFiscalTestBase extends IntegrationTestBase {
         return new Auth(Ambiente.SIMULADOR, cuit);
     }
 
-    static String conGuiones(long cuit) {
+    public static String conGuiones(long cuit) {
         return String.valueOf(cuit).replaceFirst("(\\d{2})(\\d{8})(\\d)", "$1-$2-$3");
     }
 
     /** Un CUIT nuevo de persona jurídica (30), con dígito verificador válido. */
-    static long cuitNuevo() {
+    public static long cuitNuevo() {
         int[] pesos = {5, 4, 3, 2, 7, 6, 5, 4, 3, 2};
         while (true) {
             String base = "30" + String.format("%08d", ThreadLocalRandom.current().nextInt(100_000_000));

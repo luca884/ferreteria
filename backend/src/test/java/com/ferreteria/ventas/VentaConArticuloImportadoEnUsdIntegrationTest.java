@@ -72,6 +72,10 @@ class VentaConArticuloImportadoEnUsdIntegrationTest extends CotizacionTestBase {
         jdbc.update("delete from pago where ferreteria_id = ?", ferreteria);
         jdbc.update("delete from item_comprobante where ferreteria_id = ?", ferreteria);
         jdbc.update("delete from movimiento_stock where ferreteria_id = ?", ferreteria);
+        // Lo fiscal cuelga del comprobante (si la ferreteria factura): se borra antes.
+        jdbc.update("delete from intento_fiscal where ferreteria_id = ?", ferreteria);
+        jdbc.update("delete from comprobante_fiscal_alicuota where ferreteria_id = ?", ferreteria);
+        jdbc.update("delete from comprobante_fiscal where ferreteria_id = ?", ferreteria);
         jdbc.update("delete from comprobante where ferreteria_id = ?", ferreteria);
         jdbc.update("delete from numerador_comprobante where ferreteria_id = ?", ferreteria);
     }

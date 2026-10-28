@@ -16,6 +16,10 @@ import com.ferreteria.stock.service.SalidaStock;
 import com.ferreteria.stock.service.StockService;
 import com.ferreteria.tenant.TenantContext;
 import java.math.BigDecimal;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -37,6 +41,11 @@ class StockServiceTest {
     private static final Long FERRETERIA = 3L;
     private static final Long USUARIO = 9L;
     private static final Long COMPROBANTE = 77L;
+    /** La fecha de la venta, que pasa quien la registra. */
+    private static final LocalDateTime FECHA = LocalDateTime.of(2026, 10, 28, 10, 15, 30, 123_456_000);
+    /** El reloj del resto de los movimientos: el 2026-10-27 a las 18:00 de Buenos Aires. */
+    private static final Clock RELOJ = Clock.fixed(Instant.parse("2026-10-27T21:00:00Z"), ZoneOffset.UTC);
+    private static final LocalDateTime AHORA_EN_BUENOS_AIRES = LocalDateTime.of(2026, 10, 27, 18, 0);
 
     @Mock
     ArticulosParaVenta articulosParaVenta;
@@ -49,7 +58,7 @@ class StockServiceTest {
     @BeforeEach
     void preparar() {
         TenantContext.setCurrentFerreteriaId(FERRETERIA);
-        service = new StockService(articulosParaVenta, movimientoRepository);
+        service = new StockService(articulosParaVenta, movimientoRepository, RELOJ);
     }
 
     @AfterEach
@@ -80,7 +89,7 @@ class StockServiceTest {
     void agrupaPorArticuloEnOrdenDeId() {
         when(articulosParaVenta.ajustarStock(any())).thenReturn(Map.of());
 
-        service.registrarVenta(COMPROBANTE, USUARIO, List.of(
+        service.registrarVenta(COMPROBANTE, USUARIO, FECHA,List.of(
                 new SalidaStock(30L, bd("1")), new SalidaStock(10L, bd("2")), new SalidaStock(30L, bd("4")),
                 new SalidaStock(20L, bd("0.5"))));
 
@@ -96,7 +105,7 @@ class StockServiceTest {
     void ajustaAntesDeGuardar() {
         when(articulosParaVenta.ajustarStock(any())).thenReturn(Map.of());
 
-        service.registrarVenta(COMPROBANTE, USUARIO, List.of(new SalidaStock(1L, bd("3"))));
+        service.registrarVenta(COMPROBANTE, USUARIO, FECHA,List.of(new SalidaStock(1L, bd("3"))));
 
         InOrder orden = inOrder(articulosParaVenta, movimientoRepository);
         orden.verify(articulosParaVenta).ajustarStock(any());
@@ -104,11 +113,11 @@ class StockServiceTest {
     }
 
     @Test
-    @DisplayName("un movimiento VENTA por articulo, con cantidad negativa, comprobante, usuario y ferreteria")
+    @DisplayName("un movimiento VENTA por articulo, con cantidad negativa, comprobante, usuario, ferreteria y la fecha de la venta")
     void unMovimientoVentaPorArticulo() {
         when(articulosParaVenta.ajustarStock(any())).thenReturn(Map.of());
 
-        service.registrarVenta(COMPROBANTE, USUARIO, List.of(
+        service.registrarVenta(COMPROBANTE, USUARIO, FECHA,List.of(
                 new SalidaStock(2L, bd("3")), new SalidaStock(1L, bd("1")), new SalidaStock(2L, bd("2"))));
 
         List<MovimientoStock> movimientos = movimientosGuardados();
@@ -121,6 +130,7 @@ class StockServiceTest {
             assertThat(m.getComprobanteId()).isEqualTo(COMPROBANTE);
             assertThat(m.getUsuarioId()).isEqualTo(USUARIO);
             assertThat(m.getFerreteriaId()).isEqualTo(FERRETERIA);
+            assertThat(m.getFecha()).isEqualTo(FECHA);
         }
     }
 
@@ -129,7 +139,7 @@ class StockServiceTest {
     void cantidadDecimal() {
         when(articulosParaVenta.ajustarStock(any())).thenReturn(Map.of());
 
-        service.registrarVenta(COMPROBANTE, USUARIO, List.of(new SalidaStock(4L, bd("2.5"))));
+        service.registrarVenta(COMPROBANTE, USUARIO, FECHA,List.of(new SalidaStock(4L, bd("2.5"))));
 
         assertThat(movimientosGuardados().get(0).getCantidad()).isEqualByComparingTo("-2.500");
         assertThat(deltasEnviados().get(4L)).isEqualByComparingTo("-2.500");
@@ -141,7 +151,7 @@ class StockServiceTest {
         Map<Long, BigDecimal> resultante = Map.of(1L, bd("7"), 2L, bd("-3"));
         when(articulosParaVenta.ajustarStock(any())).thenReturn(resultante);
 
-        Map<Long, BigDecimal> devuelto = service.registrarVenta(COMPROBANTE, USUARIO, List.of(
+        Map<Long, BigDecimal> devuelto = service.registrarVenta(COMPROBANTE, USUARIO, FECHA,List.of(
                 new SalidaStock(1L, bd("3")), new SalidaStock(2L, bd("5"))));
 
         assertThat(devuelto).isEqualTo(resultante);
@@ -150,7 +160,7 @@ class StockServiceTest {
     @Test
     @DisplayName("sin salidas no toca el stock ni guarda nada")
     void sinSalidas() {
-        Map<Long, BigDecimal> devuelto = service.registrarVenta(COMPROBANTE, USUARIO, List.of());
+        Map<Long, BigDecimal> devuelto = service.registrarVenta(COMPROBANTE, USUARIO, FECHA,List.of());
 
         assertThat(devuelto).isEmpty();
         verify(articulosParaVenta, never()).ajustarStock(any());
@@ -162,7 +172,7 @@ class StockServiceTest {
     void siFallaElAjusteNoSeGuardaNada() {
         when(articulosParaVenta.ajustarStock(any())).thenThrow(new IllegalStateException("sin fila"));
 
-        assertThatThrownBy(() -> service.registrarVenta(COMPROBANTE, USUARIO, List.of(new SalidaStock(1L, bd("1")))))
+        assertThatThrownBy(() -> service.registrarVenta(COMPROBANTE, USUARIO, FECHA,List.of(new SalidaStock(1L, bd("1")))))
                 .isInstanceOf(IllegalStateException.class).hasMessage("sin fila");
 
         verify(movimientoRepository, never()).saveAll(any());
@@ -189,6 +199,7 @@ class StockServiceTest {
             assertThat(m.getComprobanteId()).isNull();
             assertThat(m.getUsuarioId()).isEqualTo(USUARIO);
             assertThat(m.getFerreteriaId()).isEqualTo(FERRETERIA);
+            assertThat(m.getFecha()).isEqualTo(AHORA_EN_BUENOS_AIRES);
         }
         assertThat(devuelto).isEqualTo(resultante);
     }
@@ -258,6 +269,7 @@ class StockServiceTest {
             assertThat(m.getRemitoId()).isNull();
             assertThat(m.getUsuarioId()).isEqualTo(USUARIO);
             assertThat(m.getFerreteriaId()).isEqualTo(FERRETERIA);
+            assertThat(m.getFecha()).isEqualTo(AHORA_EN_BUENOS_AIRES);
         }
         assertThat(devuelto).isEqualTo(resultante);
     }
@@ -279,9 +291,9 @@ class StockServiceTest {
     @Test
     @DisplayName("una entrada de compra tiene que sumar stock")
     void compraConCantidadNoPositivaFalla() {
-        assertThatThrownBy(() -> MovimientoStock.compra(FERRETERIA, 1L, bd("0"), 80L, USUARIO))
+        assertThatThrownBy(() -> MovimientoStock.compra(FERRETERIA, 1L, bd("0"), 80L, USUARIO, FECHA))
                 .isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> MovimientoStock.compra(FERRETERIA, 1L, bd("-1"), 80L, USUARIO))
+        assertThatThrownBy(() -> MovimientoStock.compra(FERRETERIA, 1L, bd("-1"), 80L, USUARIO, FECHA))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 
@@ -299,7 +311,7 @@ class StockServiceTest {
     void facturarRemitoMueveSoloLaDiferencia() {
         when(articulosParaVenta.ajustarStock(any())).thenReturn(Map.of(1L, bd("5"), 2L, bd("3")));
 
-        service.facturarRemito(COMPROBANTE, 70L, 5L, USUARIO,
+        service.facturarRemito(COMPROBANTE, 70L, 5L, USUARIO, FECHA,
                 List.of(new SalidaStock(1L, bd("12")), new SalidaStock(2L, bd("8")), new SalidaStock(3L, bd("4"))),
                 List.of(new SalidaStock(1L, bd("10")), new SalidaStock(2L, bd("10")), new SalidaStock(3L, bd("4"))));
 
@@ -318,6 +330,7 @@ class StockServiceTest {
             assertThat(m.getMotivo()).isEqualTo("Diferencia con el remito N.º 5");
             assertThat(m.getUsuarioId()).isEqualTo(USUARIO);
             assertThat(m.getFerreteriaId()).isEqualTo(FERRETERIA);
+            assertThat(m.getFecha()).isEqualTo(FECHA);
         }
     }
 
@@ -326,7 +339,7 @@ class StockServiceTest {
     void articuloQueSeSumaOSeQuita() {
         when(articulosParaVenta.ajustarStock(any())).thenReturn(Map.of());
 
-        service.facturarRemito(COMPROBANTE, 70L, 5L, USUARIO,
+        service.facturarRemito(COMPROBANTE, 70L, 5L, USUARIO, FECHA,
                 List.of(new SalidaStock(2L, bd("3"))),
                 List.of(new SalidaStock(1L, bd("4"))));
 
@@ -340,7 +353,7 @@ class StockServiceTest {
     void facturarRemitoAjustaAntesDeGuardar() {
         when(articulosParaVenta.ajustarStock(any())).thenReturn(Map.of());
 
-        service.facturarRemito(COMPROBANTE, 70L, 5L, USUARIO,
+        service.facturarRemito(COMPROBANTE, 70L, 5L, USUARIO, FECHA,
                 List.of(new SalidaStock(1L, bd("3"))), List.of(new SalidaStock(1L, bd("1"))));
 
         InOrder orden = inOrder(articulosParaVenta, movimientoRepository);
@@ -351,7 +364,7 @@ class StockServiceTest {
     @Test
     @DisplayName("sin diferencia no toca el stock ni guarda nada, y no hay articulos sin stock que avisar")
     void facturarRemitoSinDiferencia() {
-        Map<Long, BigDecimal> resultante = service.facturarRemito(COMPROBANTE, 70L, 5L, USUARIO,
+        Map<Long, BigDecimal> resultante = service.facturarRemito(COMPROBANTE, 70L, 5L, USUARIO, FECHA,
                 List.of(new SalidaStock(1L, bd("2.5")), new SalidaStock(2L, bd("1"))),
                 List.of(new SalidaStock(2L, bd("1.000")), new SalidaStock(1L, bd("2.5"))));
 
@@ -365,7 +378,7 @@ class StockServiceTest {
     void facturarRemitoDevuelveSoloLosQueSalen() {
         when(articulosParaVenta.ajustarStock(any())).thenReturn(Map.of(1L, bd("-1"), 2L, bd("9")));
 
-        Map<Long, BigDecimal> resultante = service.facturarRemito(COMPROBANTE, 70L, 5L, USUARIO,
+        Map<Long, BigDecimal> resultante = service.facturarRemito(COMPROBANTE, 70L, 5L, USUARIO, FECHA,
                 List.of(new SalidaStock(1L, bd("3")), new SalidaStock(2L, bd("1"))),
                 List.of(new SalidaStock(1L, bd("2")), new SalidaStock(2L, bd("3"))));
 
@@ -377,7 +390,7 @@ class StockServiceTest {
     @DisplayName("facturarRemito exige una transaccion abierta (MANDATORY)")
     void facturarRemitoExigeTransaccion() throws NoSuchMethodException {
         assertThat(StockService.class.getMethod("facturarRemito", Long.class, Long.class, Long.class, Long.class,
-                List.class, List.class).getAnnotation(Transactional.class).propagation())
+                LocalDateTime.class, List.class, List.class).getAnnotation(Transactional.class).propagation())
                 .isEqualTo(Propagation.MANDATORY);
     }
 
@@ -385,7 +398,8 @@ class StockServiceTest {
     @DisplayName("registrarVenta exige una transaccion abierta (MANDATORY)")
     void exigeTransaccion() throws NoSuchMethodException {
         Transactional anotacion = StockService.class
-                .getMethod("registrarVenta", Long.class, Long.class, List.class).getAnnotation(Transactional.class);
+                .getMethod("registrarVenta", Long.class, Long.class, LocalDateTime.class, List.class)
+                .getAnnotation(Transactional.class);
 
         assertThat(anotacion.propagation()).isEqualTo(Propagation.MANDATORY);
     }

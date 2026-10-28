@@ -11,6 +11,7 @@ import static org.mockito.Mockito.when;
 
 import com.ferreteria.catalogo.api.ArticuloVendible;
 import com.ferreteria.catalogo.api.ArticulosParaVenta;
+import com.ferreteria.common.HoraArgentina;
 import com.ferreteria.common.exception.DatosInvalidosException;
 import com.ferreteria.common.exception.ResourceNotFoundException;
 import com.ferreteria.stock.model.MotivoAjuste;
@@ -52,7 +53,7 @@ class AjusteStockCantidadServiceTest {
     @BeforeEach
     void preparar() {
         TenantContext.setCurrentFerreteriaId(FERRETERIA);
-        service = new StockService(articulos, movimientoRepository);
+        service = new StockService(articulos, movimientoRepository, java.time.Clock.system(HoraArgentina.ZONA));
     }
 
     @AfterEach
