@@ -4,7 +4,8 @@
 --
 -- config_arca: 1-1 con ferreteria; la fila nace cuando el super admin toca algo. La marca de_prueba, el ambiente, el punto de
 -- venta y la facturacion habilitada los pone solo el super admin (D3). ck_config_arca_simulador_de_prueba: SIMULADOR solo en
--- una ferreteria de prueba. ck_config_arca_habilitada: habilitada exige ambiente, punto de venta y fecha, y la fecha va solo
+-- una ferreteria de prueba. ck_config_arca_simulador_punto_venta: con SIMULADOR el punto de venta es 1, sin pantalla para
+-- cambiarlo (S3). ck_config_arca_habilitada: habilitada exige ambiente, punto de venta y fecha, y la fecha va solo
 -- mientras este habilitada. Lo que vive en otras tablas (datos de CU-01 completos, sin registros abiertos al cambiar el
 -- ambiente o el punto de venta) lo valida el codigo.
 --
@@ -58,6 +59,7 @@ CREATE TABLE config_arca (
     CONSTRAINT ck_config_arca_ambiente CHECK (ambiente IS NULL OR ambiente IN ('SIMULADOR', 'HOMOLOGACION', 'PRODUCCION')),
     CONSTRAINT ck_config_arca_punto_venta CHECK (punto_venta IS NULL OR punto_venta BETWEEN 1 AND 99999),
     CONSTRAINT ck_config_arca_simulador_de_prueba CHECK (ambiente IS NULL OR ambiente <> 'SIMULADOR' OR de_prueba),
+    CONSTRAINT ck_config_arca_simulador_punto_venta CHECK (ambiente IS NULL OR ambiente <> 'SIMULADOR' OR punto_venta <=> 1),
     CONSTRAINT ck_config_arca_habilitada CHECK (
         facturacion_habilitada = (habilitada_en IS NOT NULL)
         AND (NOT facturacion_habilitada OR (ambiente IS NOT NULL AND punto_venta IS NOT NULL)))
@@ -198,4 +200,4 @@ CREATE TABLE intento_fiscal (
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci;
 
 -- Rollback: backend/src/test/resources/facturacion/rollback-v32-facturacion.sql, SOLO sin datos (se niega con una sola fila
--- en cualquiera de las cinco tablas; con datos se conserva todo).
+-- en cualquiera de las cinco tablas, aunque se corra con mysql --force; con datos se conserva todo).

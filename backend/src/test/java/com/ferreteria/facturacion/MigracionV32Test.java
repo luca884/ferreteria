@@ -4,10 +4,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.ferreteria.support.BarreraDeLocks;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.sql.Connection;
 import java.sql.DriverManager;
+import java.sql.PreparedStatement;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.ArrayList;
@@ -15,7 +17,12 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.Collectors;
 import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
@@ -177,16 +184,17 @@ class MigracionV32Test {
             .isEqualTo(5);
     }
 
-    @ParameterizedTest(name = "con el primero en {0}")
-    @ValueSource(strings = {"ABIERTO", "EN_VERIFICACION", "ALERTA"})
+    @ParameterizedTest(name = "con el primero en {0}, el segundo en {1}")
+    @CsvSource({"ABIERTO, ABIERTO", "EN_VERIFICACION, ABIERTO", "ALERTA, ABIERTO", "ABIERTO, EN_VERIFICACION",
+        "ABIERTO, ALERTA"})
     @DisplayName("uk_intento_fiscal_abierto_por_serie: a lo sumo un intento abierto (ABIERTO, EN_VERIFICACION o ALERTA) por serie")
-    void unSoloIntentoAbiertoPorSerie(String estadoDelPrimero) {
+    void unSoloIntentoAbiertoPorSerie(String estadoDelPrimero, String estadoDelSegundo) {
         migrarALa32();
         Escenario a = escenarioCompleto(CUIT_A);
         long segundo = registro(a.ferreteria(), comprobante(a.ferreteria(), a.usuario()), "SIMULADOR", 1, "B");
         long primero = intento(a.ferreteria(), a.registro(), a.serie(), 1, estadoDelPrimero);
 
-        assertThatThrownBy(() -> intento(a.ferreteria(), segundo, a.serie(), 2, "ABIERTO"))
+        assertThatThrownBy(() -> intento(a.ferreteria(), segundo, a.serie(), 2, estadoDelSegundo))
             .hasMessageContaining("uk_intento_fiscal_abierto_por_serie");
 
         // Otra serie de la misma ferreteria tiene el suyo, y los cerrados no cuentan.
@@ -198,17 +206,114 @@ class MigracionV32Test {
         // Cerrado el primero, la serie acepta el siguiente.
         jdbc.update("update intento_fiscal set estado = 'NO_LLEGO', terminado_en = coalesce(terminado_en, "
             + "'2026-10-28 13:00:01'), cerrado_en = '2026-10-28 13:00:02' where id = ?", primero);
-        assertThatCode(() -> intento(a.ferreteria(), segundo, a.serie(), 1, "ABIERTO")).doesNotThrowAnyException();
+        assertThatCode(() -> intento(a.ferreteria(), segundo, a.serie(), 1, estadoDelSegundo)).doesNotThrowAnyException();
+    }
+
+    @ParameterizedTest(name = "reabrir en {0}")
+    @ValueSource(strings = {"ABIERTO", "EN_VERIFICACION", "ALERTA"})
+    @DisplayName("uk_intento_fiscal_abierto_por_serie: reabrir por UPDATE un intento cerrado mientras otro esta abierto falla y lo deja como estaba")
+    void reabrirUnIntentoCerradoConOtroAbiertoFalla(String estado) {
+        migrarALa32();
+        Escenario a = escenarioCompleto(CUIT_A);   // su intento esta cerrado (NO_LLEGO)
+        long segundo = registro(a.ferreteria(), comprobante(a.ferreteria(), a.usuario()), "SIMULADOR", 1, "B");
+        intento(a.ferreteria(), segundo, a.serie(), 2, "ABIERTO");
+
+        assertThatThrownBy(() -> jdbc.update("update intento_fiscal set estado = ?, cerrado_en = null, "
+            + "terminado_en = if(? = 'ABIERTO', null, terminado_en) where id = ?", estado, estado, a.intento()))
+            .hasMessageContaining("uk_intento_fiscal_abierto_por_serie");
+        assertThat(jdbc.queryForObject("select estado from intento_fiscal where id = ?", String.class, a.intento()))
+            .isEqualTo("NO_LLEGO");
+    }
+
+    @Test
+    @DisplayName("N-1 en una transaccion: el intento viejo pasa a NO_LLEGO, entra uno ABIERTO con el mismo numero y CbteFch, y el registro vuelve a EN_CURSO conservandolos")
+    void reenvioPorNMenosUnoEnUnaTransaccion() throws Exception {
+        migrarALa32();
+        Escenario a = escenarioCompleto(CUIT_A);
+        jdbc.update("update comprobante_fiscal set estado = 'EN_VERIFICACION', numero = 5, cbte_fch = '2026-10-28' where id = ?",
+            a.registro());
+        long viejo = intento(a.ferreteria(), a.registro(), a.serie(), 5, "EN_VERIFICACION");
+
+        try (Connection c = conexion()) {
+            c.setAutoCommit(false);
+            assertThat(actualizar(c, "update intento_fiscal set estado = 'NO_LLEGO', cerrado_en = '2026-10-28 13:05:00', "
+                + "respuesta_verificacion = 'FECompUltimoAutorizado: 4' where ferreteria_id = ? and id = ? "
+                + "and estado = 'EN_VERIFICACION'", a.ferreteria(), viejo)).isEqualTo(1);
+            assertThat(actualizar(c, "insert into intento_fiscal (ferreteria_id, comprobante_fiscal_id, serie_fiscal_id, "
+                + "numero, cbte_fch, estado, pedido, iniciado_en) select ferreteria_id, comprobante_fiscal_id, serie_fiscal_id, "
+                + "numero, cbte_fch, 'ABIERTO', pedido, '2026-10-28 13:05:00' from intento_fiscal where ferreteria_id = ? "
+                + "and id = ?", a.ferreteria(), viejo)).isEqualTo(1);
+            assertThat(actualizar(c, "update comprobante_fiscal set estado = 'EN_CURSO' where ferreteria_id = ? and id = ? "
+                + "and estado = 'EN_VERIFICACION'", a.ferreteria(), a.registro())).isEqualTo(1);
+            c.commit();
+        }
+
+        assertThat(jdbc.queryForList("select estado, numero, cast(cbte_fch as char) as cbte_fch from intento_fiscal "
+            + "where comprobante_fiscal_id = ? and numero = 5 order by id", a.registro()))
+            .containsExactly(Map.of("estado", "NO_LLEGO", "numero", 5L, "cbte_fch", "2026-10-28"),
+                Map.of("estado", "ABIERTO", "numero", 5L, "cbte_fch", "2026-10-28"));
+        assertThat(jdbc.queryForMap("select estado, numero, cast(cbte_fch as char) as cbte_fch from comprobante_fiscal "
+            + "where id = ?", a.registro()))
+            .isEqualTo(Map.of("estado", "EN_CURSO", "numero", 5L, "cbte_fch", "2026-10-28"));
+    }
+
+    @Test
+    @DisplayName("lease: dos tomas simultaneas de la serie con el UPDATE condicional, una afecta 1 fila y la otra 0, sin deadlocks")
+    void dosTomasSimultaneasDelLease() throws Exception {
+        migrarALa32();
+        Escenario a = escenarioCompleto(CUIT_A);
+        BarreraDeLocks barrera = new BarreraDeLocks(jdbc);
+        long deadlocks = barrera.deadlocksAntes();
+        ExecutorService hilo = Executors.newSingleThreadExecutor();
+
+        try (Connection uno = conexion(); Connection otro = conexion()) {
+            uno.setAutoCommit(false);
+            assertThat(tomarLease(uno, a, "dueno-1")).isEqualTo(1);
+            Future<Integer> segunda = hilo.submit(() -> tomarLease(otro, a, "dueno-2"));
+            barrera.esperarBloqueados(1);   // la segunda toma espera el lock de la fila de la serie
+            assertThat(barrera.objetosEnEspera()).containsExactly("serie_fiscal");
+            uno.commit();
+            assertThat(segunda.get(30, TimeUnit.SECONDS)).isZero();
+        } finally {
+            hilo.shutdownNow();
+        }
+
+        assertThat(jdbc.queryForObject("select lease_dueno from serie_fiscal where id = ?", String.class, a.serie()))
+            .isEqualTo("dueno-1");
+        barrera.assertSinDeadlocks(deadlocks);
+    }
+
+    /** El UPDATE condicional del lease, con la hora fija (13:00:00) y 30 s de vida. */
+    private static int tomarLease(Connection c, Escenario a, String dueno) throws SQLException {
+        return actualizar(c, "update serie_fiscal set lease_dueno = ?, lease_vence = '2026-10-28 13:00:30' "
+            + "where ferreteria_id = ? and id = ? "
+            + "and (lease_dueno is null or lease_vence <= '2026-10-28 13:00:00' or lease_dueno = ?)",
+            dueno, a.ferreteria(), a.serie(), dueno);
+    }
+
+    private static int actualizar(Connection c, String sql, Object... parametros) throws SQLException {
+        try (PreparedStatement ps = c.prepareStatement(sql)) {
+            for (int i = 0; i < parametros.length; i++) {
+                ps.setObject(i + 1, parametros[i]);
+            }
+            return ps.executeUpdate();
+        }
+    }
+
+    private Connection conexion() throws SQLException {
+        return DriverManager.getConnection(url, "root", MYSQL.getPassword());
     }
 
     @ParameterizedTest(name = "[{index}] {0}")
     @CsvSource(delimiter = '|', quoteCharacter = '"', textBlock = """
         config_arca: ambiente fuera de la lista | update config_arca set ambiente = 'PRUEBA' | ck_config_arca_ambiente
-        config_arca: punto de venta 0 | update config_arca set punto_venta = 0 | ck_config_arca_punto_venta
-        config_arca: punto de venta de 6 cifras | update config_arca set punto_venta = 100000 | ck_config_arca_punto_venta
+        config_arca: punto de venta 0 | update config_arca set ambiente = 'HOMOLOGACION', punto_venta = 0 | ck_config_arca_punto_venta
+        config_arca: punto de venta de 6 cifras | update config_arca set ambiente = 'HOMOLOGACION', punto_venta = 100000 | ck_config_arca_punto_venta
         config_arca: SIMULADOR sin la marca de prueba | update config_arca set de_prueba = false | ck_config_arca_simulador_de_prueba
+        config_arca: SIMULADOR con punto de venta 2 | update config_arca set punto_venta = 2 | ck_config_arca_simulador_punto_venta
+        config_arca: SIMULADOR sin punto de venta | update config_arca set facturacion_habilitada = false, habilitada_en = null, punto_venta = null | ck_config_arca_simulador_punto_venta
         config_arca: habilitada sin ambiente | update config_arca set ambiente = null | ck_config_arca_habilitada
-        config_arca: habilitada sin punto de venta | update config_arca set punto_venta = null | ck_config_arca_habilitada
+        config_arca: habilitada sin punto de venta | update config_arca set ambiente = 'HOMOLOGACION', punto_venta = null | ck_config_arca_habilitada
         config_arca: habilitada sin fecha | update config_arca set habilitada_en = null | ck_config_arca_habilitada
         config_arca: fecha sin estar habilitada | update config_arca set facturacion_habilitada = false | ck_config_arca_habilitada
         registro: ambiente fuera de la lista | update comprobante_fiscal set ambiente = 'PRUEBA' | ck_comprobante_fiscal_ambiente
@@ -344,14 +449,19 @@ class MigracionV32Test {
             assertThat(jdbc.queryForObject("select count(*) from " + tabla, Integer.class)).as(tabla).isZero());
     }
 
-    @Test
+    @ParameterizedTest(name = "{0}")
+    @ValueSource(strings = {"de corrido", "ignorando errores"})
     @DisplayName("rollback-v32-facturacion.sql, sin datos, saca las cinco tablas y la V32, deja el esquema como en la V31, y la V32 vuelve a entrar")
-    void rollbackSinDatos() throws Exception {
+    void rollbackSinDatos(String modo) throws Exception {
         long f = ferreteria(CUIT_A);
         List<String> esquemaAntes = esquema();
         migrarALa32();
 
-        correrRollback();
+        if (modo.equals("de corrido")) {
+            correrRollback();
+        } else {
+            assertThat(correrRollbackIgnorandoErrores()).isEmpty();
+        }
 
         assertThat(esquema()).containsExactlyInAnyOrderElementsOf(esquemaAntes);
         assertThat(jdbc.queryForObject("select count(*) from flyway_schema_history where version = '32'", Integer.class))
@@ -364,24 +474,60 @@ class MigracionV32Test {
     }
 
     @ParameterizedTest(name = "con una fila en {0}")
-    @ValueSource(strings = {"config_arca", "serie_fiscal", "comprobante_fiscal"})
+    @ValueSource(strings = {"config_arca", "serie_fiscal", "comprobante_fiscal", "comprobante_fiscal_alicuota",
+        "intento_fiscal"})
     @DisplayName("rollback-v32-facturacion.sql se niega si hay una sola fila en las tablas de facturacion, y no toca nada")
     void rollbackConDatosSeNiega(String tabla) {
         migrarALa32();
-        long f = ferreteria(CUIT_A);
-        switch (tabla) {
-            case "config_arca" -> jdbc.update("insert into config_arca (ferreteria_id, de_prueba) values (?, true)", f);
-            case "serie_fiscal" -> serie(f, "SIMULADOR", 1, 6);
-            default -> registro(f, comprobante(f, usuario(f)), "SIMULADOR", 1, "B");
-        }
+        sembrarUnaFilaEn(tabla);
         List<String> esquemaAntes = esquema();
+        Map<String, Integer> filasAntes = filasDeFacturacion();
 
         assertThatThrownBy(this::correrRollback).hasMessageContaining("ck_rollback_sin_datos_de_facturacion");
 
         assertThat(esquema()).containsExactlyInAnyOrderElementsOf(esquemaAntes);
-        assertThat(jdbc.queryForObject("select count(*) from " + tabla, Integer.class)).isEqualTo(1);
+        assertThat(filasDeFacturacion()).isEqualTo(filasAntes).containsEntry(tabla, 1);
         assertThat(jdbc.queryForObject("select count(*) from flyway_schema_history where version = '32'", Integer.class))
             .isEqualTo(1);
+    }
+
+    @ParameterizedTest(name = "con una fila en {0}")
+    @ValueSource(strings = {"config_arca", "serie_fiscal", "comprobante_fiscal", "comprobante_fiscal_alicuota",
+        "intento_fiscal"})
+    @DisplayName("rollback-v32-facturacion.sql corrido sentencia por sentencia ignorando errores (mysql --force, consola) "
+        + "con una sola fila no borra ninguna tabla ni la 32 del historial")
+    void rollbackIgnorandoErroresConDatosNoBorraNada(String tabla) throws Exception {
+        migrarALa32();
+        sembrarUnaFilaEn(tabla);
+        List<String> esquemaAntes = esquema();
+        Map<String, Integer> filasAntes = filasDeFacturacion();
+
+        List<String> errores = correrRollbackIgnorandoErrores();
+
+        assertThat(errores).anySatisfy(error -> assertThat(error).contains("ck_rollback_sin_datos_de_facturacion"));
+        assertThat(esquema()).containsExactlyInAnyOrderElementsOf(esquemaAntes);
+        assertThat(filasDeFacturacion()).isEqualTo(filasAntes).containsEntry(tabla, 1);
+        assertThat(jdbc.queryForObject("select count(*) from flyway_schema_history where version = '32'", Integer.class))
+            .isEqualTo(1);
+    }
+
+    /** Una sola fila en la tabla pedida, mas los padres que necesite (la alicuota y el intento cuelgan de un registro). */
+    private void sembrarUnaFilaEn(String tabla) {
+        long f = ferreteria(CUIT_A);
+        switch (tabla) {
+            case "config_arca" -> jdbc.update("insert into config_arca (ferreteria_id, de_prueba) values (?, true)", f);
+            case "serie_fiscal" -> serie(f, "SIMULADOR", 1, 6);
+            case "comprobante_fiscal" -> registro(f, comprobante(f, usuario(f)), "SIMULADOR", 1, "B");
+            case "comprobante_fiscal_alicuota" -> alicuota(f, registro(f, comprobante(f, usuario(f)), "SIMULADOR", 1, "B"), 5);
+            default -> intento(f, registro(f, comprobante(f, usuario(f)), "SIMULADOR", 1, "B"), serie(f, "SIMULADOR", 1, 6),
+                1, "NO_LLEGO");
+        }
+    }
+
+    private Map<String, Integer> filasDeFacturacion() {
+        Map<String, Integer> filas = new HashMap<>();
+        TABLAS_NUEVAS.forEach(t -> filas.put(t, jdbc.queryForObject("select count(*) from " + t, Integer.class)));
+        return filas;
     }
 
     // ---- siembra por JDBC ----
@@ -523,6 +669,29 @@ class MigracionV32Test {
         try (Connection c = DriverManager.getConnection(url, propiedades); Statement s = c.createStatement()) {
             s.execute(scriptDeRollback());
         }
+    }
+
+    /**
+     * Como un mysql --force o el script pegado en una consola: sentencia por sentencia (sin los comentarios, cortando en cada
+     * punto y coma), sigue aunque una falle. Devuelve los mensajes de las que fallaron.
+     */
+    private List<String> correrRollbackIgnorandoErrores() throws Exception {
+        String sinComentarios = scriptDeRollback().lines().filter(linea -> !linea.strip().startsWith("--"))
+            .collect(Collectors.joining("\n"));
+        List<String> errores = new ArrayList<>();
+        try (Connection c = conexion(); Statement s = c.createStatement()) {
+            for (String sentencia : sinComentarios.split(";")) {
+                if (sentencia.isBlank()) {
+                    continue;
+                }
+                try {
+                    s.execute(sentencia);
+                } catch (SQLException e) {
+                    errores.add(e.getMessage());
+                }
+            }
+        }
+        return errores;
     }
 
     private static String scriptDeRollback() throws IOException {
