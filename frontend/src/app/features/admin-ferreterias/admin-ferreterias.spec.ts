@@ -4,7 +4,7 @@ import { of, throwError } from 'rxjs';
 import { vi } from 'vitest';
 import { AdminFerreterias } from './admin-ferreterias';
 import { AdminFerreteriasService } from './admin-ferreterias.service';
-import { AltaFerreteriaRequest, EdicionFerreteriaRequest, EstadoGeneral, FerreteriaAdmin } from './ferreteria-admin.models';
+import { AltaFerreteriaRequest, EstadoGeneral, FerreteriaAdmin } from './ferreteria-admin.models';
 
 describe('AdminFerreterias', () => {
   const arco: FerreteriaAdmin = {
@@ -38,7 +38,6 @@ describe('AdminFerreterias', () => {
   let servicio: {
     listar: ReturnType<typeof vi.fn>;
     alta: ReturnType<typeof vi.fn>;
-    actualizar: ReturnType<typeof vi.fn>;
     cambiarActivo: ReturnType<typeof vi.fn>;
     resetearContrasenaDueno: ReturnType<typeof vi.fn>;
   };
@@ -68,9 +67,6 @@ describe('AdminFerreterias', () => {
           duenoId: 90,
           emailDueno: r.dueno.email,
         }),
-      ),
-      actualizar: vi.fn((id: number, r: EdicionFerreteriaRequest) =>
-        of({ ...[arco, bulon].find((f) => f.id === id)!, ...r }),
       ),
       cambiarActivo: vi.fn((id: number, activo: boolean) =>
         of({ ...[arco, bulon].find((f) => f.id === id)!, estado: activo ? 'ACTIVA' : 'SUSPENDIDA' }),
@@ -318,49 +314,40 @@ describe('AdminFerreterias', () => {
     });
   });
 
-  describe('edición', () => {
-    async function editarFila(fila: number) {
-      await elegir(fila);
-      barra('button.editar').click();
-      await refrescar();
-    }
-
-    it('precarga razón social e IVA, deja el CUIT de solo lectura y no pide los datos del Dueño', async () => {
-      await crear();
-
-      await editarFila(0);
-
-      expect(input('razonSocial').value).toBe('Arco SA');
-      expect(select('condicionIva').value).toBe('RESPONSABLE_INSCRIPTO');
-      expect(input('cuit').value).toBe('30-12345678-1');
-      expect(input('cuit').readOnly).toBe(true);
-      expect(el().querySelector('#dueno-nombre')).toBeNull();
-      expect(el().querySelector('#dueno-password')).toBeNull();
-    });
-
-    it('guarda solo razón social e IVA y actualiza la fila', async () => {
-      await crear();
-      await editarFila(0);
-
-      await escribir('razonSocial', ' Arco y Flecha SA ');
-      await elegirIva('EXENTO');
-      await enviar();
-
-      expect(servicio.actualizar).toHaveBeenCalledWith(1, { razonSocial: 'Arco y Flecha SA', condicionIva: 'EXENTO' });
-      expect(celdas(filas()[0])).toContain('Arco y Flecha SA');
-      expect(celdas(filas()[0])).toContain('Exento');
-      expect(texto('.alerta.exito')).toContain('Se guardó «Arco y Flecha SA».');
-    });
-
-    it('Cancelar vuelve al alta', async () => {
-      await crear();
-      await editarFila(0);
-
-      el().querySelector<HTMLButtonElement>('.cancelar')!.click();
-      await refrescar();
-
+  describe('sin edición (CU-01: después del alta, los datos los edita el Dueño)', () => {
+    const formularioDeAlta = () => {
+      expect(texto('form.alta h2')).toBe('Nueva ferretería');
       expect(input('razonSocial').value).toBe('');
+      expect(input('cuit').readOnly).toBe(false);
       expect(el().querySelector('#dueno-nombre')).not.toBeNull();
+    };
+
+    it('la barra no ofrece Editar', async () => {
+      await crear();
+      await elegir(0);
+
+      expect(el().querySelector('app-barra-acciones button.editar')).toBeNull();
+      expect(barra('button.suspender')).not.toBeNull();
+      expect(barra('button.resetear')).not.toBeNull();
+    });
+
+    it('el doble clic y Enter sobre una fila no abren una edición: el formulario sigue siendo el alta', async () => {
+      await crear();
+
+      filas()[0].dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
+      await refrescar();
+      formularioDeAlta();
+
+      await elegir(0);
+      filas()[0].dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+      await refrescar();
+      formularioDeAlta();
+    });
+
+    it('la ayuda avisa que los datos los edita el Dueño', async () => {
+      await crear();
+
+      expect(texto('p.ayuda')).toContain('Después del alta, la razón social y la condición de IVA las edita el Dueño');
     });
   });
 

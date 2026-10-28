@@ -2,7 +2,7 @@ import { HttpClient } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import { environment } from '../../../environments/environment';
-import { AltaFerreteriaRequest, EdicionFerreteriaRequest, EstadoGeneral, FerreteriaAdmin } from './ferreteria-admin.models';
+import { AltaFerreteriaRequest, EstadoGeneral, FerreteriaAdmin } from './ferreteria-admin.models';
 
 /** Las ferreterías de la plataforma. Todo el recurso es solo del super admin; no trae ningún dato de ventas. */
 @Injectable({ providedIn: 'root' })
@@ -18,11 +18,6 @@ export class AdminFerreteriasService {
   /** Alta de la ferretería con su primer Dueño, en una sola operación. */
   alta(request: AltaFerreteriaRequest): Observable<FerreteriaAdmin> {
     return this.http.post<FerreteriaAdmin>(this.url, request);
-  }
-
-  /** Razón social y condición de IVA; el CUIT no se edita. */
-  actualizar(id: number, request: EdicionFerreteriaRequest): Observable<FerreteriaAdmin> {
-    return this.http.put<FerreteriaAdmin>(`${this.url}/${id}`, request);
   }
 
   /** Suspender corta los logins y los tokens de sus usuarios sin tocar ningún dato; reactivar los devuelve. */

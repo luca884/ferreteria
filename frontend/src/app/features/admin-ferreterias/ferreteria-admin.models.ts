@@ -58,9 +58,3 @@ export interface AltaFerreteriaRequest {
   condicionIva: CondicionIvaFerreteria;
   dueno: DuenoRequest;
 }
-
-/** Edición: razón social y condición de IVA. El CUIT no se edita. */
-export interface EdicionFerreteriaRequest {
-  razonSocial: string;
-  condicionIva: CondicionIvaFerreteria;
-}

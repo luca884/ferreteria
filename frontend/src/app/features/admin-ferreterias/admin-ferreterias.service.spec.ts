@@ -4,7 +4,6 @@ import { HttpTestingController, provideHttpClientTesting } from '@angular/common
 import { AdminFerreteriasService } from './admin-ferreterias.service';
 import {
   AltaFerreteriaRequest,
-  EdicionFerreteriaRequest,
   EstadoGeneral,
   FerreteriaAdmin,
 } from './ferreteria-admin.models';
@@ -62,16 +61,6 @@ describe('AdminFerreteriasService', () => {
     req.flush(tornillo);
 
     expect(creada?.id).toBe(3);
-  });
-
-  it('edita razón social e IVA con PUT /admin/ferreterias/{id}', () => {
-    const request: EdicionFerreteriaRequest = { razonSocial: 'Nueva SA', condicionIva: 'EXENTO' };
-    service.actualizar(3, request).subscribe();
-
-    const req = http.expectOne((r) => r.url.endsWith('/admin/ferreterias/3'));
-    expect(req.request.method).toBe('PUT');
-    expect(req.request.body).toEqual(request);
-    req.flush({ ...tornillo, ...request });
   });
 
   it('suspende o reactiva con PATCH /admin/ferreterias/{id}/activo', () => {

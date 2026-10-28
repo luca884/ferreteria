@@ -29,9 +29,9 @@ export function fechaDeAlta(creadoEn: string): string {
 }
 
 /**
- * Ferreterías de la plataforma (solo el super admin): estado general, alta con el primer Dueño, edición de razón social e
- * IVA (el CUIT no se edita), suspender o reactivar con confirmación y reset de la contraseña del Dueño. No muestra ningún
- * dato de ventas. Contenedor: habla con el servicio.
+ * Ferreterías de la plataforma (solo el super admin): estado general, alta con el primer Dueño, suspender o reactivar con
+ * confirmación y reset de la contraseña del Dueño. Después del alta no edita los datos de la ferretería: los edita el Dueño
+ * (CU-01). No muestra ningún dato de ventas. Contenedor: habla con el servicio.
  */
 @Component({
   selector: 'app-admin-ferreterias',
@@ -52,8 +52,8 @@ export class AdminFerreterias implements OnInit {
   protected readonly ferreterias = signal<FerreteriaAdmin[]>([]);
   protected readonly activas = computed(() => this.ferreterias().filter((f) => f.estado === 'ACTIVA').length);
   protected readonly suspendidas = computed(() => this.ferreterias().length - this.activas());
-  /** Fila elegida en la grilla: la barra actúa sobre ella; Enter edita. */
-  protected readonly filas = new FilasElegibles(this.ferreterias, () => true, (f) => this.editar(f));
+  /** Fila elegida en la grilla: la barra actúa sobre ella. Enter no hace nada: el super admin no edita la ferretería. */
+  protected readonly filas = new FilasElegibles(this.ferreterias, () => true, () => undefined);
   protected readonly cargando = signal(true);
   protected readonly cargaFallida = signal(false);
   protected readonly aviso = signal<string | null>(null);
@@ -64,8 +64,6 @@ export class AdminFerreterias implements OnInit {
   protected readonly errorForm = signal<string | null>(null);
   protected readonly guardando = signal(false);
   protected readonly cambiando = signal(false);
-  /** La ferretería que se está editando; null mientras se da de alta una nueva. */
-  protected readonly editando = signal<FerreteriaAdmin | null>(null);
   /** La ferretería a la que se le pide confirmación para suspenderla o reactivarla. */
   protected readonly aConfirmar = signal<FerreteriaAdmin | null>(null);
   /** La ferretería cuyo Dueño tiene el reset abierto. */
@@ -146,26 +144,21 @@ export class AdminFerreterias implements OnInit {
       return;
     }
     const { razonSocial, cuit, condicionIva, dueno } = this.form.getRawValue();
-    const ferreteria = this.editando();
     this.limpiarErroresForm();
     this.aviso.set(null);
     this.guardando.set(true);
-    const llamada =
-      ferreteria === null
-        ? this.service.alta({
-            razonSocial: razonSocial.trim(),
-            cuit: this.cuitNormalizado(cuit),
-            condicionIva,
-            dueno: { nombre: dueno.nombre.trim(), email: dueno.email.trim(), password: dueno.password },
-          })
-        : this.service.actualizar(ferreteria.id, { razonSocial: razonSocial.trim(), condicionIva });
-    llamada.subscribe({
-      next: (guardada) => {
-        const creada = ferreteria === null;
-        this.ferreterias.update((lista) => [...lista.filter((f) => f.id !== guardada.id), guardada].sort(porRazonSocial));
+    const alta = {
+      razonSocial: razonSocial.trim(),
+      cuit: this.cuitNormalizado(cuit),
+      condicionIva,
+      dueno: { nombre: dueno.nombre.trim(), email: dueno.email.trim(), password: dueno.password },
+    };
+    this.service.alta(alta).subscribe({
+      next: (creada) => {
+        this.ferreterias.update((lista) => [...lista, creada].sort(porRazonSocial));
         this.vaciarFormulario();
         this.guardando.set(false);
-        this.aviso.set(creada ? `Se creó «${guardada.razonSocial}».` : `Se guardó «${guardada.razonSocial}».`);
+        this.aviso.set(`Se creó «${creada.razonSocial}».`);
       },
       error: (err: unknown) => {
         this.guardando.set(false);
@@ -176,32 +169,12 @@ export class AdminFerreterias implements OnInit {
     });
   }
 
-  /** Editar (barra, Enter o doble clic): razón social e IVA; el CUIT se ve pero no se toca y no se piden los datos del Dueño. */
-  protected editar(ferreteria: FerreteriaAdmin | null = this.filas.elegido()): void {
-    if (!ferreteria) return;
-    this.aviso.set(null);
-    this.reseteando.set(null);
-    this.filas.elegidoId.set(ferreteria.id);
-    this.editando.set(ferreteria);
-    this.form.controls.cuit.disable({ emitEvent: false });
-    this.form.controls.dueno.disable({ emitEvent: false });
-    this.form.reset(
-      { razonSocial: ferreteria.razonSocial, cuit: ferreteria.cuit, condicionIva: ferreteria.condicionIva },
-      { emitEvent: false },
-    );
-    this.limpiarErroresForm();
-  }
-
-  protected cancelar(): void {
-    this.vaciarFormulario();
-    this.limpiarErroresForm();
-  }
-
-  /** Nueva: el formulario vuelve al alta y queda listo para escribir. */
+  /** Nueva: el formulario de alta queda vacío y listo para escribir. */
   protected nueva(): void {
     this.aviso.set(null);
     this.reseteando.set(null);
-    this.cancelar();
+    this.vaciarFormulario();
+    this.limpiarErroresForm();
     this.enfocar('#razonSocial');
   }
 
@@ -291,9 +264,6 @@ export class AdminFerreterias implements OnInit {
   }
 
   private vaciarFormulario(): void {
-    this.editando.set(null);
-    this.form.controls.cuit.enable({ emitEvent: false });
-    this.form.controls.dueno.enable({ emitEvent: false });
     this.form.reset(
       { razonSocial: '', cuit: '', condicionIva: 'RESPONSABLE_INSCRIPTO', dueno: { nombre: '', email: '', password: '' } },
       { emitEvent: false },
