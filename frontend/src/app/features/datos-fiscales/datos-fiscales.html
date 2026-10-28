@@ -1,0 +1,130 @@
+<app-barra-acciones>
+  <h1>Datos de la ferretería</h1>
+</app-barra-acciones>
+
+@if (!auth.esDueno()) {
+  <p class="ayuda estado-vacio" role="status">Solo el Dueño puede ver y editar los datos de la ferretería.</p>
+} @else {
+  <p class="ayuda">
+    Son los datos que lleva cada factura. El domicilio comercial y el inicio de actividades son los del local donde se
+    factura. Para facturar hacen falta todos.
+  </p>
+
+  @if (aviso(); as mensaje) {
+    <p class="alerta exito" role="status">{{ mensaje }}</p>
+  }
+  @if (erroresGuardado().length > 0) {
+    <div class="error errores-campos" role="alert">
+      <strong>Revisá estos datos:</strong>
+      <ul>
+        @for (mensaje of erroresGuardado(); track $index) {
+          <li>{{ mensaje }}</li>
+        }
+      </ul>
+    </div>
+  } @else if (errorGuardado(); as mensaje) {
+    <p class="error" role="alert">{{ mensaje }}</p>
+  }
+
+  @if (cargando()) {
+    <p class="ayuda estado-vacio">Cargando…</p>
+  } @else if (cargaFallida()) {
+    <div class="error con-accion" role="alert">
+      <span>No se pudieron cargar los datos de la ferretería.</span>
+      <button type="button" class="secundario chico reintentar" (click)="cargar()">Reintentar</button>
+    </div>
+  } @else {
+    <form class="fiscales" [formGroup]="form" (ngSubmit)="guardar()" novalidate>
+      <fieldset class="seccion">
+        <legend>Emisor</legend>
+
+        <div class="campo">
+          <label for="razonSocial">Razón social</label>
+          <input
+            id="razonSocial"
+            name="razonSocial"
+            formControlName="razonSocial"
+            autocomplete="off"
+            [attr.aria-invalid]="mensaje('razonSocial') ? 'true' : null"
+            [attr.aria-describedby]="mensaje('razonSocial') ? 'razonSocial-error' : null"
+          />
+          @if (mensaje('razonSocial'); as texto) {
+            <span id="razonSocial-error" class="campo-error">{{ texto }}</span>
+          }
+        </div>
+
+        <div class="campo cuit">
+          <span class="etiqueta">CUIT</span>
+          <span class="valor">{{ cuit() }}</span>
+          <span class="pista">No se puede cambiar.</span>
+        </div>
+
+        <div class="campo">
+          <label for="condicionIva">Condición de IVA</label>
+          <select id="condicionIva" name="condicionIva" formControlName="condicionIva">
+            @for (condicion of condiciones; track condicion) {
+              <option [value]="condicion">{{ etiquetaIva[condicion] }}</option>
+            }
+          </select>
+        </div>
+
+        <div class="campo">
+          <label for="ingresosBrutos">Ingresos Brutos</label>
+          <input
+            id="ingresosBrutos"
+            name="ingresosBrutos"
+            formControlName="ingresosBrutos"
+            autocomplete="off"
+            [attr.aria-invalid]="mensaje('ingresosBrutos') ? 'true' : null"
+            [attr.aria-describedby]="mensaje('ingresosBrutos') ? 'ingresosBrutos-pista ingresosBrutos-error' : 'ingresosBrutos-pista'"
+          />
+          <span id="ingresosBrutos-pista" class="pista">
+            Número de inscripción, Convenio Multilateral, Exento o No contribuyente.
+          </span>
+          @if (mensaje('ingresosBrutos'); as texto) {
+            <span id="ingresosBrutos-error" class="campo-error">{{ texto }}</span>
+          }
+        </div>
+      </fieldset>
+
+      <fieldset class="seccion">
+        <legend>Local donde se factura</legend>
+
+        <div class="campo">
+          <label for="domicilioComercial">Domicilio comercial</label>
+          <input
+            id="domicilioComercial"
+            name="domicilioComercial"
+            formControlName="domicilioComercial"
+            autocomplete="off"
+            [attr.aria-invalid]="mensaje('domicilioComercial') ? 'true' : null"
+            [attr.aria-describedby]="mensaje('domicilioComercial') ? 'domicilioComercial-error' : null"
+          />
+          @if (mensaje('domicilioComercial'); as texto) {
+            <span id="domicilioComercial-error" class="campo-error">{{ texto }}</span>
+          }
+        </div>
+
+        <div class="campo">
+          <label for="inicioActividades">Inicio de actividades</label>
+          <input
+            id="inicioActividades"
+            name="inicioActividades"
+            type="date"
+            [max]="hoy"
+            formControlName="inicioActividades"
+            [attr.aria-invalid]="mensaje('inicioActividades') ? 'true' : null"
+            [attr.aria-describedby]="mensaje('inicioActividades') ? 'inicioActividades-error' : null"
+          />
+          @if (mensaje('inicioActividades'); as texto) {
+            <span id="inicioActividades-error" class="campo-error">{{ texto }}</span>
+          }
+        </div>
+      </fieldset>
+
+      <div class="acciones-form">
+        <button type="submit" [disabled]="guardando()">Guardar</button>
+      </div>
+    </form>
+  }
+}

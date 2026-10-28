@@ -21,6 +21,7 @@ import { PaginaConfiguracionCotizacion } from './features/configuracion-cotizaci
 import { PaginaConfiguracionPrecios } from './features/configuracion-precios/configuracion-precios';
 import { FormasPago } from './features/formas-pago/formas-pago';
 import { PaginaConfiguracionVentas } from './features/configuracion-ventas/configuracion-ventas';
+import { PaginaDatosFiscales } from './features/datos-fiscales/datos-fiscales';
 import { Importaciones } from './features/importaciones/importaciones';
 import { Mostrador } from './features/mostrador/mostrador';
 import { Proveedores } from './features/proveedores/proveedores';
@@ -160,6 +161,15 @@ describe('rutas', () => {
     expect(await (ruta!.loadComponent as () => Promise<unknown>)()).toBe(PaginaConfiguracionVentas);
     expect(ruta!.canActivate).toBeUndefined();
     expect(ruta!.title).toBe('Consumidor Final · Ferretería');
+  });
+
+  it('la ruta configuracion/datos-fiscales carga los datos de la ferretería, sin guard propio (la pantalla le avisa al Vendedor)', async () => {
+    const ruta = hijas().find((r) => r.path === 'configuracion/datos-fiscales');
+
+    expect(ruta).toBeDefined();
+    expect(await (ruta!.loadComponent as () => Promise<unknown>)()).toBe(PaginaDatosFiscales);
+    expect(ruta!.canActivate).toBeUndefined();
+    expect(ruta!.title).toBe('Datos de la ferretería · Ferretería');
   });
 
   it('la ruta configuracion/formas-pago carga la pantalla de formas de pago, sin guard propio (la pantalla le avisa al Vendedor)', async () => {

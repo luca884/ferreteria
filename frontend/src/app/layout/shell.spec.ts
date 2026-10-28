@@ -130,7 +130,7 @@ describe('Shell', () => {
 
     const nav = el.querySelector('aside nav[aria-label="Secciones"]');
     expect(nav).not.toBeNull();
-    expect(nav!.querySelectorAll('a').length).toBe(21);
+    expect(nav!.querySelectorAll('a').length).toBe(22);
   });
 
   it('«Presupuestos» va después de «Mostrador» y lleva a /presupuestos, para el Vendedor y para el Dueño (GDS-13)', async () => {
@@ -163,7 +163,7 @@ describe('Shell', () => {
     }
   });
 
-  it('el Dueño ve Mostrador, Artículos, Rubros, Proveedores, Compras, Ventas, Reportes y, bajo «Precios», Importar lista, Actualizar precios, Margen y redondeo y Cotización, y bajo «Cobro», Formas de pago, y bajo «Equipo», Usuarios', async () => {
+  it('el Dueño ve Mostrador, Artículos, Rubros, Proveedores, Compras, Ventas, Reportes y, bajo «Precios», Importar lista, Actualizar precios, Margen y redondeo y Cotización, y bajo «Cobro», Formas de pago y Consumidor Final, bajo «Facturación», Datos de la ferretería, y bajo «Equipo», Usuarios', async () => {
     const el = await render(true);
 
     expect(enlaces(el)).toEqual([
@@ -187,11 +187,13 @@ describe('Shell', () => {
       'Cotización',
       'Formas de pago',
       'Consumidor Final',
+      'Datos de la ferretería',
       'Usuarios',
     ]);
     expect(Array.from(el.querySelectorAll('nav .grupo')).map((g) => g.textContent?.trim())).toEqual([
       'Precios',
       'Cobro',
+      'Facturación',
       'Equipo',
     ]);
     expect(el.querySelector('a[href="/importaciones"]')).not.toBeNull();
@@ -242,16 +244,33 @@ describe('Shell', () => {
     expect(enlaces(vendedor)).not.toContain('Formas de pago');
   });
 
-  it('el Dueño ve «Consumidor Final» bajo «Cobro», antes de «Usuarios», y lleva a /configuracion/ventas; el Vendedor no la ve (GDS-32)', async () => {
+  it('el Dueño ve «Consumidor Final» al final de «Cobro», antes de «Datos de la ferretería», y lleva a /configuracion/ventas; el Vendedor no la ve (GDS-32)', async () => {
     const el = await render(true);
 
     const nombres = enlaces(el);
-    expect(nombres.indexOf('Consumidor Final')).toBe(nombres.indexOf('Usuarios') - 1);
+    expect(nombres.indexOf('Consumidor Final')).toBe(nombres.indexOf('Datos de la ferretería') - 1);
     expect(el.querySelector('nav a[href="/configuracion/ventas"]')).not.toBeNull();
 
     TestBed.resetTestingModule();
     const vendedor = await render(false);
     expect(vendedor.querySelector('nav a[href="/configuracion/ventas"]')).toBeNull();
+  });
+
+  it('el Dueño ve «Datos de la ferretería» bajo «Facturación», antes de «Usuarios», y lleva a /configuracion/datos-fiscales; el Vendedor no la ve ni ve el grupo (CU-01)', async () => {
+    const el = await render(true);
+
+    const nombres = enlaces(el);
+    expect(nombres.indexOf('Datos de la ferretería')).toBe(nombres.indexOf('Usuarios') - 1);
+    expect(el.querySelector('nav a[href="/configuracion/datos-fiscales"]')!.textContent?.trim()).toBe(
+      'Datos de la ferretería',
+    );
+
+    TestBed.resetTestingModule();
+    const vendedor = await render(false);
+    expect(vendedor.querySelector('nav a[href="/configuracion/datos-fiscales"]')).toBeNull();
+    expect(Array.from(vendedor.querySelectorAll('nav .grupo')).map((g) => g.textContent?.trim())).not.toContain(
+      'Facturación',
+    );
   });
 
   it('el Dueño ve «Usuarios» bajo «Equipo», al final del menú, y lleva a /usuarios', async () => {
