@@ -63,3 +63,24 @@ app:
       url: ${DOLARAPI_URL:https://dolarapi.com}
     bluelytics:
       url: ${BLUELYTICS_URL:https://api.bluelytics.com.ar}
+  facturacion:
+    simulador:
+      # Demora de cada llamada al simulador de WSFEv1, como la red hasta ARCA. 0 en tests y en prod; en dev, el documento de
+      # abajo la sube a un valor chico para ver la espera en la pantalla.
+      latencia: ${SIMULADOR_WSFE_LATENCIA:0ms}
+      # Montos que el manual 4.8 nombra y no trae (los fija ARCA aparte): valores de trabajo del simulador, sin efecto fiscal.
+      # tope-rg4444: desde ese ImpTotal la Factura B exige identificar al receptor (10015). minimo-fce: desde ese ImpTotal, a
+      # un receptor con CUIT, el simulador observa que corresponderia una factura de credito electronica (10188).
+      tope-rg4444: ${SIMULADOR_WSFE_TOPE_RG4444:10000000.00}
+      minimo-fce: ${SIMULADOR_WSFE_MINIMO_FCE:3958316.00}
+
+---
+# Desarrollo local: el simulador de WSFEv1 tarda un poco, como ARCA.
+spring:
+  config:
+    activate:
+      on-profile: dev
+app:
+  facturacion:
+    simulador:
+      latencia: ${SIMULADOR_WSFE_LATENCIA:300ms}
