@@ -22,7 +22,7 @@ El MVP tiene tres roles fijos. Nada de permisos configurables por ahora.
 
 | Rol | Quién es | Puede |
 | --- | --- | --- |
-| Super admin | Vos (el proveedor del servicio) | Dar de alta ferreterías, suspenderlas, ver estado general. No ve datos de ventas |
+| Super admin | Vos (el proveedor del servicio) | Dar de alta ferreterías (razón social, CUIT y condición de IVA), suspenderlas, ver estado general. Después del alta no edita los datos de la ferretería: los edita el Dueño (CU-01). No ve datos de ventas |
 | Dueño | El dueño o encargado de la ferretería | Todo dentro de su ferretería: configuración, ARCA, usuarios, precios, reportes, anulaciones |
 | Vendedor | Quien atiende el mostrador | Buscar artículos, vender, facturar, consultar stock, abrir y cerrar la caja |
 
@@ -37,6 +37,7 @@ Son 12 casos de uso (CU-01 a CU-12), agrupados en cinco módulos: Configuración
 **CU-01 Configurar la ferretería** (Dueño)
 
 1. Carga razón social, CUIT, condición frente al IVA, domicilio e inicio de actividades.
+   - **Datos de la ferretería** (Configuración → Facturación, solo el Dueño; decidido por Luca el 2026-10-28, D1 del plan de facturación). La razón social, el CUIT y la condición de IVA los carga el super admin en el alta; después el Dueño es el único que edita la razón social, la condición de IVA, el **domicilio comercial**, el **inicio de actividades** y los **Ingresos Brutos** (número, Convenio Multilateral, Exento o No contribuyente: la RG 1415 los pide en cada comprobante). El CUIT se ve y no se cambia nunca. El domicilio y el inicio de actividades son los del local donde se factura. Domicilio, inicio de actividades e Ingresos Brutos se pueden dejar vacíos al guardar; completos son requisito para habilitar la facturación. El inicio de actividades no puede ser una fecha futura. `GET`/`PUT /api/datos-fiscales`; el Vendedor y el super admin reciben 403.
 2. Carga el punto de venta habilitado en ARCA para factura electrónica (web service).
 3. Sube el certificado (.crt) y la clave privada, o genera el CSR desde el sistema.
 4. El sistema prueba la conexión contra ARCA y muestra el último número de comprobante autorizado.
@@ -324,7 +325,7 @@ La base también lo garantiza (V29): toda FK entre tablas de negocio es compuest
 
 | Entidad | Atributos clave | Relaciones |
 | --- | --- | --- |
-| Tenant | razón social, CUIT, condición IVA, domicilio, inicio de actividades, estado (activo/suspendido) | 1—N con todo lo demás |
+| Tenant | razón social, CUIT, condición IVA, domicilio comercial, inicio de actividades, Ingresos Brutos, estado (activo/suspendido) | 1—N con todo lo demás |
 | ConfigArca | punto de venta, certificado y clave (cifrados), vencimiento del certificado, ambiente (homologación/producción) | 1—1 con Tenant |
 | Usuario | email, hash de contraseña, nombre, rol, activo | N—1 Tenant |
 | Rubro | nombre, margen por defecto | 1—N Artículo |
