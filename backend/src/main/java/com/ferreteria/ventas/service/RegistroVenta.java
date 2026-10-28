@@ -260,7 +260,7 @@ public class RegistroVenta {
         }
 
         return new VentaRegistrada(comprobante, itemsGuardados, pagos, sinStock(stockResultante, articulos), false,
-                decision.factura(), null);
+                decision.factura(), null, remito == null ? null : remito.getNumero());
     }
 
     /** Cada renglon como lo pide la factura: su alicuota de IVA y su total cobrado (con descuento y recargo). */
@@ -324,7 +324,16 @@ public class RegistroVenta {
             throw new VentaRechazadaException(Motivo.CLAVE_CON_OTRO_CONTENIDO,
                     "Esta venta ya se registró con otros datos", List.of());
         }
-        return Optional.of(new VentaRegistrada(comprobante, items, pagos, List.of(), true));
+        return Optional.of(new VentaRegistrada(comprobante, items, pagos, List.of(), true, false, null,
+                numeroDeRemito(comprobante)));
+    }
+
+    /** El numero del remito del que salio la venta, o null si no salio de uno (cu-07-factura-mostrador C1). */
+    private Long numeroDeRemito(Comprobante venta) {
+        if (venta.getRemitoId() == null) {
+            return null;
+        }
+        return remitoRepository.findScoped(venta.getRemitoId()).map(Remito::getNumero).orElse(null);
     }
 
     /**

@@ -10,6 +10,7 @@ import org.springframework.data.repository.query.Param;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -88,12 +89,13 @@ public interface ComprobanteRepository extends TenantScopedRepository<Comprobant
      * comodines y escapado (barra invertida); la collation (_ai_ci) no distingue mayusculas ni tildes. {@code desde}
      * incluye ese instante y {@code hasta} no (es el comienzo del dia siguiente al ultimo que se quiere ver).
      */
-    @Query("select c from Comprobante c where c.ferreteriaId = :fid "
+    String FILTROS_DE_LA_CONSULTA = " c.ferreteriaId = :fid "
             + "and c.tipo = com.ferreteria.ventas.model.TipoComprobante.VENTA "
             + "and (:numero is null or c.numero = :numero) "
             + "and (:cliente is null or c.clienteNombre like :cliente escape '\\') "
-            + "and (:desde is null or c.fecha >= :desde) and (:hasta is null or c.fecha < :hasta) "
-            + "order by c.numero desc")
+            + "and (:desde is null or c.fecha >= :desde) and (:hasta is null or c.fecha < :hasta) ";
+
+    @Query("select c from Comprobante c where" + FILTROS_DE_LA_CONSULTA + "order by c.numero desc")
     Page<Comprobante> buscarVentas(@Param("fid") Long ferreteriaId, @Param("numero") Long numero,
             @Param("cliente") String cliente, @Param("desde") LocalDateTime desde,
             @Param("hasta") LocalDateTime hasta, Pageable pageable);
@@ -101,6 +103,20 @@ public interface ComprobanteRepository extends TenantScopedRepository<Comprobant
     default Page<Comprobante> buscarVentasScoped(
             Long numero, String cliente, LocalDateTime desde, LocalDateTime hasta, Pageable pageable) {
         return buscarVentas(TenantContext.requireFerreteriaId(), numero, cliente, desde, hasta, pageable);
+    }
+
+    /**
+     * Lo mismo, solo entre esas ventas: las que tienen el numero fiscal buscado (cu-07-factura-mostrador S15). Los ids los
+     * da {@code facturacion}, sin unir tablas entre modulos; nunca vacios (sin ids no hay nada que buscar).
+     */
+    @Query("select c from Comprobante c where" + FILTROS_DE_LA_CONSULTA + "and c.id in :ids order by c.numero desc")
+    Page<Comprobante> buscarVentasEntre(@Param("fid") Long ferreteriaId, @Param("ids") Collection<Long> ids,
+            @Param("numero") Long numero, @Param("cliente") String cliente, @Param("desde") LocalDateTime desde,
+            @Param("hasta") LocalDateTime hasta, Pageable pageable);
+
+    default Page<Comprobante> buscarVentasEntreScoped(Collection<Long> ids, Long numero, String cliente,
+            LocalDateTime desde, LocalDateTime hasta, Pageable pageable) {
+        return buscarVentasEntre(TenantContext.requireFerreteriaId(), ids, numero, cliente, desde, hasta, pageable);
     }
 
     // ---- Clientes que compraron un articulo (G29, Ctrl+A del listado de GDS) ----

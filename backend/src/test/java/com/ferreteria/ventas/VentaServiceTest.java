@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -11,7 +12,10 @@ import static org.mockito.Mockito.when;
 
 import com.ferreteria.common.exception.SistemaOcupadoException;
 import com.ferreteria.facturacion.api.FacturacionParaVenta;
+import com.ferreteria.facturacion.api.FacturacionParaVenta.DocumentoFiscal;
+import com.ferreteria.facturacion.api.FacturacionParaVenta.EmisorDelDocumento;
 import com.ferreteria.facturacion.api.FacturacionParaVenta.EstadoFiscalVenta;
+import com.ferreteria.facturacion.api.FacturacionParaVenta.ReceptorDelDocumento;
 import com.ferreteria.ventas.model.Comprobante;
 import com.ferreteria.ventas.model.RenglonVenta;
 import com.ferreteria.ventas.model.TotalesVenta;
@@ -31,6 +35,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.CannotAcquireLockException;
@@ -61,10 +66,20 @@ class VentaServiceTest {
     VentaRegistrada nueva = new VentaRegistrada(comprobante(true), List.of(), null, List.of(), false);
     VentaRegistrada repetida = new VentaRegistrada(comprobante(true), List.of(), null, List.of(), true);
     /** La venta nueva que dio de alta su registro fiscal en su transaccion. */
-    VentaRegistrada nuevaConRegistro = new VentaRegistrada(comprobante(true), List.of(), null, List.of(), false, true, null);
+    VentaRegistrada nuevaConRegistro = new VentaRegistrada(comprobante(true), List.of(), null, List.of(), false, true, null,
+            null);
 
     static final EstadoFiscalVenta AUTORIZADA = new EstadoFiscalVenta("AUTORIZADO", "FACTURA", "B", 1, 7L,
             "74123456789012", LocalDate.of(2026, 11, 7), "SIMULADOR");
+
+    /** El documento X de esa venta, con su estado de la misma lectura. */
+    static final DocumentoFiscal DOCUMENTO = new DocumentoFiscal(AUTORIZADA, false, "X", null,
+            "SIMULADO — sin validez fiscal", null, null, LocalDate.of(2026, 10, 28), null, null,
+            new EmisorDelDocumento("El Tornillo SRL", "30712345678", "IVA RESPONSABLE INSCRIPTO",
+                    "Av. Luro 1234, Mar del Plata", "901-123456-7", LocalDate.of(2015, 3, 1)),
+            new ReceptorDelDocumento(null, "CONSUMIDOR FINAL", null, null, null, true), new BigDecimal("12.10"),
+            new BigDecimal("10.00"), new BigDecimal("2.10"), new BigDecimal("0.00"), new BigDecimal("0.00"), List.of(),
+            null, null, null, null);
 
     @BeforeEach
     void preparar() {
@@ -273,25 +288,29 @@ class VentaServiceTest {
     // ---------------------------------------------------------------- CU-07 paso 5: el CAE despues del commit (S4)
 
     @Test
-    @DisplayName("la venta nueva con registro fiscal pide el CAE una sola vez, despues de los reintentos, y responde con su estado")
+    @DisplayName("la venta nueva con registro fiscal pide el CAE una sola vez, despues de los reintentos, y responde con el documento leido despues (C4)")
     void pideElCaeDespuesDelBucle() {
         when(registroVenta.registrar(pedido, USUARIO, false))
                 .thenThrow(new CannotAcquireLockException("deadlock"))
                 .thenReturn(nuevaConRegistro);
         when(facturacion.autorizar(COMPROBANTE)).thenReturn(Optional.of(AUTORIZADA));
+        when(facturacion.documento(COMPROBANTE)).thenReturn(Optional.of(DOCUMENTO));
 
         VentaRegistrada venta = service.cobrar(pedido, USUARIO);
 
-        assertThat(venta.fiscal()).isEqualTo(AUTORIZADA);
+        assertThat(venta.fiscal()).isEqualTo(DOCUMENTO);
         assertThat(venta.comprobante()).isSameAs(nuevaConRegistro.comprobante());
-        verify(facturacion, times(1)).autorizar(COMPROBANTE);
+        InOrder orden = inOrder(facturacion);
+        orden.verify(facturacion, times(1)).autorizar(COMPROBANTE);
+        orden.verify(facturacion, times(1)).documento(COMPROBANTE);
         verify(facturacion, never()).estado(org.mockito.ArgumentMatchers.anyLong());
     }
 
     @Test
-    @DisplayName("la repetida facturable (la misma clave, la carrera de la clave o CC-009) lee el estado actual sin pedir otro CAE")
+    @DisplayName("la repetida facturable (la misma clave, la carrera de la clave o CC-009) lee el estado y el documento actuales sin pedir otro CAE")
     void laRepetidaLeeElEstadoSinPedirOtroCae() {
         when(facturacion.estado(COMPROBANTE)).thenReturn(Optional.of(AUTORIZADA));
+        when(facturacion.documento(COMPROBANTE)).thenReturn(Optional.of(DOCUMENTO));
         when(registroVenta.registrar(pedido, USUARIO, false))
                 .thenReturn(repetida)
                 .thenThrow(new DataIntegrityViolationException("uk_comprobante_clave"))
@@ -301,10 +320,21 @@ class VentaServiceTest {
         for (int i = 0; i < 3; i++) {
             VentaRegistrada venta = service.cobrar(pedido, USUARIO);
             assertThat(venta.repetida()).isTrue();
-            assertThat(venta.fiscal()).isEqualTo(AUTORIZADA);
+            assertThat(venta.fiscal()).isEqualTo(DOCUMENTO);
         }
         verify(facturacion, times(3)).estado(COMPROBANTE);
+        verify(facturacion, times(3)).documento(COMPROBANTE);
         verify(facturacion, never()).autorizar(org.mockito.ArgumentMatchers.anyLong());
+    }
+
+    @Test
+    @DisplayName("con estado pero sin documento (el registro no se pudo leer otra vez) la venta responde sin «fiscal»")
+    void sinDocumentoNoHayFiscal() {
+        when(registroVenta.registrar(pedido, USUARIO, false)).thenReturn(nuevaConRegistro);
+        when(facturacion.autorizar(COMPROBANTE)).thenReturn(Optional.of(AUTORIZADA));
+        when(facturacion.documento(COMPROBANTE)).thenReturn(Optional.empty());
+
+        assertThat(service.cobrar(pedido, USUARIO).fiscal()).isNull();
     }
 
     @Test
@@ -327,5 +357,15 @@ class VentaServiceTest {
 
         assertThat(service.cobrar(pedido, USUARIO)).isSameAs(nuevaConRegistro);
         assertThat(service.cobrar(pedido, USUARIO)).isSameAs(repetida);
+    }
+
+    @Test
+    @DisplayName("una falla al leer el documento despues del CAE tampoco bloquea la venta: responde sin «fiscal»")
+    void unaFallaAlLeerElDocumentoNoBloqueaLaVenta() {
+        when(registroVenta.registrar(pedido, USUARIO, false)).thenReturn(nuevaConRegistro);
+        when(facturacion.autorizar(COMPROBANTE)).thenReturn(Optional.of(AUTORIZADA));
+        when(facturacion.documento(COMPROBANTE)).thenThrow(new CannotAcquireLockException("sin conexion"));
+
+        assertThat(service.cobrar(pedido, USUARIO)).isSameAs(nuevaConRegistro);
     }
 }

@@ -83,9 +83,11 @@ public class VentaService {
     }
 
     /**
-     * La venta con su estado fiscal: la nueva que dio de alta su registro pide el CAE ({@code autorizar}, con la espera
-     * acotada); la repetida facturable lee el estado actual ({@code estado}, sin llamar a ARCA). La venta nueva sin registro
-     * y la repetida no facturable no preguntan nada. Cualquier falla queda en el log y la venta sale sin {@code fiscal}.
+     * La venta con su documento fiscal: la nueva que dio de alta su registro pide el CAE ({@code autorizar}, con la espera
+     * acotada); la repetida facturable mira el estado actual ({@code estado}, sin llamar a ARCA). Si tiene registro, la
+     * respuesta sale entera de UNA lectura posterior del documento ({@code documento}, cu-07-factura-mostrador C4): el estado
+     * y la hoja no pueden no coincidir. La venta nueva sin registro y la repetida no facturable no preguntan nada. Cualquier
+     * falla queda en el log y la venta sale sin {@code fiscal}.
      */
     private VentaRegistrada conEstadoFiscal(VentaRegistrada venta) {
         boolean pedirCae = !venta.repetida() && venta.conRegistroFiscal();
@@ -98,7 +100,10 @@ public class VentaService {
             Optional<EstadoFiscalVenta> estado = pedirCae
                     ? facturacion.autorizar(comprobanteId)
                     : facturacion.estado(comprobanteId);
-            return estado.map(venta::conFiscal).orElse(venta);
+            if (estado.isEmpty()) {
+                return venta;
+            }
+            return facturacion.documento(comprobanteId).map(venta::conFiscal).orElse(venta);
         } catch (RuntimeException e) {
             log.error("No se pudo {} de la venta {}: la venta ya está cobrada y responde sin su estado fiscal.",
                     pedirCae ? "pedir el CAE" : "leer el estado fiscal", comprobanteId, e);
