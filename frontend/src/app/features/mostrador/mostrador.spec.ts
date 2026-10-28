@@ -272,6 +272,7 @@ describe('Mostrador', () => {
 
       expect(panel()?.querySelector('h2')?.textContent?.trim()).toBe('Primeros pasos');
       expect(Array.from(panel()!.querySelectorAll('a')).map((a) => a.getAttribute('href'))).toEqual([
+        '/configuracion/datos-fiscales',
         '/configuracion/precios',
         '/importaciones',
         '/articulos/nuevo',
