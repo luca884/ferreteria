@@ -126,9 +126,33 @@ public class PasosFiscales {
         }
     }
 
+    /**
+     * Con qué factura hoy la ferretería del request, si factura (cu-07-factura-mostrador C3): la regla de
+     * {@link #puedeFacturar()}, pero leyendo {@code config_arca} sin lock, porque no decide nada (lo anticipa el cobro).
+     *
+     * @param ambiente el ambiente de ARCA de la configuración
+     * @param condicionEmisor la condición frente al IVA de la ferretería, de sus datos de CU-01
+     */
+    public record EmisionVigente(Ambiente ambiente, CondicionIvaEmisor condicionEmisor) {}
+
+    /** Vacío si la venta de ahora saldría sin factura (la misma regla que {@link #puedeFacturar()}), sin lock. */
+    @Transactional(readOnly = true)
+    public Optional<EmisionVigente> emisionSinLock() {
+        Emision emision = emision(configs.deFerreteriaScoped());
+        if (emision.impedimento() != null) {
+            return Optional.empty();
+        }
+        return Optional.of(new EmisionVigente(emision.config().getAmbiente(), emision.emisor().condicionIva()));
+    }
+
     /** La regla de {@link #puedeFacturar()}: primero la configuración (con su {@code FOR SHARE}), después el emisor. */
     private Emision emision() {
-        Optional<ConfigArca> config = configs.bloquearCompartidaScoped().filter(ConfigArca::puedeFacturar);
+        return emision(configs.bloquearCompartidaScoped());
+    }
+
+    /** La regla, con la configuración ya leída (con lock o sin él): habilitada con ambiente y punto de venta, y el emisor. */
+    private Emision emision(Optional<ConfigArca> leida) {
+        Optional<ConfigArca> config = leida.filter(ConfigArca::puedeFacturar);
         if (config.isEmpty()) {
             return Emision.impedida(NO_HABILITADA);
         }

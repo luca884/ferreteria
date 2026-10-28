@@ -2,9 +2,12 @@ package com.ferreteria.facturacion.service;
 
 import com.ferreteria.facturacion.api.FacturacionParaVenta;
 import com.ferreteria.facturacion.config.EjecutorFiscalConfig;
+import com.ferreteria.facturacion.documento.HojaFiscal;
 import com.ferreteria.facturacion.model.Alicuota;
 import com.ferreteria.facturacion.model.ComprobanteFiscal;
+import com.ferreteria.facturacion.model.CondicionIvaEmisor;
 import com.ferreteria.facturacion.model.CondicionIvaReceptor;
+import com.ferreteria.facturacion.model.EncuadreFiscal;
 import com.ferreteria.facturacion.model.EstadoFiscal;
 import com.ferreteria.facturacion.model.ReceptorFiscal;
 import com.ferreteria.facturacion.model.RenglonFiscal;
@@ -19,8 +22,12 @@ import com.ferreteria.tenant.TenantContext;
 import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Collection;
+import java.util.EnumMap;
 import java.util.EnumSet;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
@@ -60,6 +67,10 @@ import org.springframework.transaction.support.TransactionTemplate;
  * atención en curso termina sola y no se reintenta más (lo pendiente lo levanta la venta siguiente de la serie). Nunca lanza
  * por ARCA: lo que no se resolvió vuelve en su estado actual. Cada lectura del estado es fresca, en su propia transacción
  * de solo lectura ({@code open-in-view} está apagado).
+ *
+ * <p>La hoja de la factura, el listado y el cobro (cu-07-factura-mostrador C4) son solo lecturas, cada una en una
+ * transacción de solo lectura (o en la de quien llama, si tiene una): {@link #documento} lee el registro y su desglose de
+ * una vez y deja la apariencia a {@link HojaFiscal}; {@link #paraElMostrador} usa la regla de {@link #decidir} sin lock.
  */
 @Service
 public class FacturacionParaVentaImpl implements FacturacionParaVenta {
@@ -193,6 +204,47 @@ public class FacturacionParaVentaImpl implements FacturacionParaVenta {
         return registroDeVenta(comprobanteId).map(FacturacionParaVentaImpl::estadoDe);
     }
 
+    // ---- La hoja, el listado y el cobro (cu-07-factura-mostrador C4): solo lecturas, la apariencia la decide HojaFiscal ----
+
+    /** El registro y su desglose en la misma transacción de solo lectura: el estado y la hoja salen de una sola foto. */
+    @Override
+    public Optional<DocumentoFiscal> documento(long comprobanteId) {
+        return lectura.execute(s -> registros.deComprobanteScoped(comprobanteId)
+                .map(r -> HojaFiscal.de(r, pasos.alicuotas(r.getId()), estadoDe(r))));
+    }
+
+    @Override
+    public Map<Long, ResumenFiscal> resumenes(Collection<Long> comprobanteIds) {
+        Objects.requireNonNull(comprobanteIds, "Faltan las ventas.");
+        List<ComprobanteFiscal> deLasVentas = lectura.execute(s -> registros.deComprobantesScoped(comprobanteIds));
+        Map<Long, ResumenFiscal> resumenes = new HashMap<>();
+        for (ComprobanteFiscal registro : deLasVentas) {
+            resumenes.put(registro.getComprobanteId(), HojaFiscal.resumen(registro));
+        }
+        return Map.copyOf(resumenes);
+    }
+
+    @Override
+    public List<Long> ventasConNumeroFiscal(Integer puntoVenta, long numero) {
+        return lectura.execute(s -> registros.comprobantesConNumeroScoped(puntoVenta, numero));
+    }
+
+    /** La regla de {@link #decidir} sin lock ({@link PasosFiscales#emisionSinLock()}), y la letra con la función del alta. */
+    @Override
+    public Optional<FacturacionDelMostrador> paraElMostrador() {
+        return pasos.emisionSinLock().map(emision -> new FacturacionDelMostrador(emision.ambiente().name(),
+                letras(emision.condicionEmisor())));
+    }
+
+    /** La letra que saldría para cada condición del cliente, en el orden del puerto, con {@link EncuadreFiscal#de}. */
+    static Map<CondicionIva, String> letras(CondicionIvaEmisor emisor) {
+        Map<CondicionIva, String> letras = new EnumMap<>(CondicionIva.class);
+        for (CondicionIva condicion : CondicionIva.values()) {
+            letras.put(condicion, EncuadreFiscal.de(emisor, condicionReceptor(condicion)).letra().name());
+        }
+        return letras;
+    }
+
     /**
      * En un hilo del ejecutor, con la ferretería de quien pidió: atiende la serie del registro hasta que el registro se
      * resuelve o la atención termina por algo que otra no cambiaría ahora. Con la serie de otra instancia, reintenta después
@@ -249,12 +301,7 @@ public class FacturacionParaVentaImpl implements FacturacionParaVenta {
 
     /** Sin documento, sin identificar (DocTipo 99, DocNro 0); el nombre y el domicilio, cortados a lo que guarda el registro. */
     static ReceptorFiscal receptorFiscal(ReceptorVenta receptor) {
-        CondicionIvaReceptor condicion = switch (receptor.condicion()) {
-            case CONSUMIDOR_FINAL -> CondicionIvaReceptor.CONSUMIDOR_FINAL;
-            case RESPONSABLE_INSCRIPTO -> CondicionIvaReceptor.RESPONSABLE_INSCRIPTO;
-            case MONOTRIBUTISTA -> CondicionIvaReceptor.MONOTRIBUTISTA;
-            case EXENTO -> CondicionIvaReceptor.EXENTO;
-        };
+        CondicionIvaReceptor condicion = condicionReceptor(receptor.condicion());
         String nombre = recortar(receptor.nombre(), LARGO_NOMBRE);
         String domicilio = recortar(receptor.domicilio(), LARGO_DOMICILIO);
         if (!receptor.identificado()) {
@@ -266,6 +313,16 @@ public class FacturacionParaVentaImpl implements FacturacionParaVenta {
             case CUIL -> TipoDocumentoReceptor.CUIL;
         };
         return new ReceptorFiscal(condicion, tipo, Long.parseLong(receptor.numeroDocumento().strip()), nombre, domicilio);
+    }
+
+    /** La condición del puerto, como la conoce {@code facturacion}. */
+    static CondicionIvaReceptor condicionReceptor(CondicionIva condicion) {
+        return switch (condicion) {
+            case CONSUMIDOR_FINAL -> CondicionIvaReceptor.CONSUMIDOR_FINAL;
+            case RESPONSABLE_INSCRIPTO -> CondicionIvaReceptor.RESPONSABLE_INSCRIPTO;
+            case MONOTRIBUTISTA -> CondicionIvaReceptor.MONOTRIBUTISTA;
+            case EXENTO -> CondicionIvaReceptor.EXENTO;
+        };
     }
 
     static RenglonFiscal renglonFiscal(RenglonParaFacturar renglon) {

@@ -61,6 +61,14 @@ public interface ConfigArcaRepository extends TenantScopedRepository<ConfigArca,
         return bloquearCompartida(TenantContext.requireFerreteriaId());
     }
 
+    /**
+     * La configuración de la ferretería del request, sin lock: lo que anticipa el cobro (cu-07-factura-mostrador C3), que
+     * no decide nada. Lo que decide la venta la lee con {@link #bloquearCompartidaScoped}.
+     */
+    default Optional<ConfigArca> deFerreteriaScoped() {
+        return deFerreteria(TenantContext.requireFerreteriaId());
+    }
+
     /** Las de todas las ferreterías que tienen fila, para la lista del super admin (sin N+1). */
     @Query("select c from ConfigArca c")
     List<ConfigArca> deTodasLasFerreterias();

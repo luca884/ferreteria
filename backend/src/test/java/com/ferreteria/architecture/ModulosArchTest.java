@@ -259,6 +259,20 @@ class ModulosArchTest {
     }
 
     /**
+     * El QR de ARCA lo arma {@code facturacion} (cu-07-factura-mostrador S7): nadie mas usa ZXing, y {@code facturacion} si
+     * (la regla no queda vacia). Quien imprime solo dibuja la matriz que le llega por el puerto.
+     */
+    @Test
+    void soloFacturacionArmaElQrConZxing() {
+        noClasses().that().resideOutsideOfPackage("com.ferreteria.facturacion..")
+                .should().dependOnClassesThat(resideInAPackage("com.google.zxing.."))
+                .check(clases);
+        assertThat(clases.stream().filter(c -> c.getPackageName().startsWith("com.ferreteria.facturacion"))
+                .flatMap(c -> c.getDirectDependenciesFromSelf().stream()))
+                .anyMatch(d -> d.getTargetClass().getPackageName().startsWith("com.google.zxing"));
+    }
+
+    /**
      * {@code facturacion} toma la hora del {@code Clock} inyectado: no llama a {@code HoraArgentina.ahora()} ni
      * {@code hoy()}, ni a ningun {@code now(...)} de {@code java.time} que no reciba un {@code Clock}
      * ({@code LocalDateTime.now()}, {@code LocalDate.now()}, {@code Instant.now()}, y tambien {@code now(ZoneId)}).

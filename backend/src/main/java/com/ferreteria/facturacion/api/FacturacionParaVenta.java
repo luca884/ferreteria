@@ -3,7 +3,11 @@ package com.ferreteria.facturacion.api;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 
@@ -40,6 +44,34 @@ public interface FacturacionParaVenta {
 
     /** El estado fiscal actual de la venta, sin llamar a ARCA (la venta repetida). Vacío si no tiene registro fiscal. */
     Optional<EstadoFiscalVenta> estado(long comprobanteId);
+
+    /**
+     * El documento imprimible de la venta (CU-07 paso 5, cu-07-factura-mostrador C1), con su estado fiscal, en una sola
+     * lectura del registro: el estado y la hoja no pueden no coincidir. Se arma solo con la copia del registro fiscal, nunca
+     * con la configuración ni con el cliente de hoy. Sin llamar a ARCA y sin transacción propia de escritura. Vacío si la
+     * venta no tiene registro fiscal (o es de otra ferretería).
+     */
+    Optional<DocumentoFiscal> documento(long comprobanteId);
+
+    /**
+     * El resumen fiscal de cada venta que tiene registro (CU-16, C2), por id de venta: las que no tienen, o son de otra
+     * ferretería, no aparecen en el mapa.
+     */
+    Map<Long, ResumenFiscal> resumenes(Collection<Long> comprobanteIds);
+
+    /**
+     * Las ventas de la ferretería cuyo registro fiscal tiene ese número (S15), en cualquier letra y ambiente; con
+     * {@code puntoVenta} null, en cualquier punto de venta. Solo los registros con número (no los PENDIENTE, RECHAZADO ni
+     * FUERA_DE_FECHA).
+     */
+    List<Long> ventasConNumeroFiscal(Integer puntoVenta, long numero);
+
+    /**
+     * Lo que el cobro anticipa (S3, C3): si la ferretería factura ahora, con la misma regla que {@link #decidir} (la
+     * facturación habilitada y los datos de CU-01 completos) pero sin lock, su ambiente y la letra que saldría para cada
+     * condición frente al IVA del cliente. Vacío si no factura. La letra la sigue decidiendo el alta del registro.
+     */
+    Optional<FacturacionDelMostrador> paraElMostrador();
 
     /**
      * Lo que decide {@link #decidir}.
@@ -129,4 +161,112 @@ public interface FacturacionParaVenta {
      */
     record EstadoFiscalVenta(String estado, String clase, String letra, int puntoVenta, Long numero, String cae,
             LocalDate caeVencimiento, String ambiente) {}
+
+    /**
+     * El documento imprimible de la venta (cu-07-factura-mostrador C1): lo que la hoja muestra, decidido acá y nunca en
+     * quien imprime. La apariencia (S6): {@code validoComoFactura} solo con el ambiente PRODUCCION, el registro AUTORIZADO y
+     * su CAE; si no, es un documento X: {@code letra} "X", con {@code codigo}, {@code puntoVenta}, {@code numero},
+     * {@code cae}, {@code caeVencimiento}, {@code qr} y {@code qrModulos} en null y la {@code marca} del caso (S12). Lo que
+     * depende de la letra del registro (alícuotas, transparencia y leyenda) se arma igual en el X. Importes con escala 2.
+     *
+     * @param estadoFiscal el estado del registro, de la misma lectura que la hoja
+     * @param validoComoFactura true solo en PRODUCCION, AUTORIZADO y con CAE
+     * @param letra A, B o C del registro; X si no es válido como factura
+     * @param codigo el {@code CbteTipo} (1, 6 u 11); null en el X
+     * @param marca lo que el X muestra debajo de «DOCUMENTO NO VALIDO COMO FACTURA»; null en la factura válida
+     * @param puntoVenta el punto de venta; null en el X
+     * @param numero el número fiscal; null en el X
+     * @param fecha la CbteFch; sin CbteFch, el día de la venta en Buenos Aires
+     * @param cae el CAE; null en el X
+     * @param caeVencimiento el vencimiento del CAE; null en el X
+     * @param emisor la ferretería, como se copió al vender
+     * @param receptor quien recibe el comprobante, como se copió al vender
+     * @param total {@code ImpTotal}
+     * @param neto {@code ImpNeto} (en la C, el total)
+     * @param iva {@code ImpIVA} (en la C, 0)
+     * @param noGravado {@code ImpTotConc}
+     * @param exento {@code ImpOpEx}
+     * @param alicuotas el desglose por alícuota guardado, en el orden de su Id; vacío en la C
+     * @param transparencia la del Régimen de Transparencia Fiscal (Ley 27.743): solo en la B a Consumidor Final
+     * @param leyendaMonotributo la leyenda de la Ley 27.618: solo en la A a un Monotributista
+     * @param qr el texto del QR de ARCA ({@code https://www.arca.gob.ar/fe/qr/?p=...}); null en el X
+     * @param qrModulos la matriz del QR sin zona de silencio, una fila por texto de '1' (oscuro) y '0' (claro), todas del
+     *     mismo largo; null en el X
+     */
+    record DocumentoFiscal(EstadoFiscalVenta estadoFiscal, boolean validoComoFactura, String letra, Integer codigo,
+            String marca, Integer puntoVenta, Long numero, LocalDate fecha, String cae, LocalDate caeVencimiento,
+            EmisorDelDocumento emisor, ReceptorDelDocumento receptor, BigDecimal total, BigDecimal neto, BigDecimal iva,
+            BigDecimal noGravado, BigDecimal exento, List<AlicuotaDelDocumento> alicuotas, Transparencia transparencia,
+            String leyendaMonotributo, String qr, List<String> qrModulos) {
+
+        public DocumentoFiscal {
+            alicuotas = List.copyOf(alicuotas);
+            qrModulos = qrModulos == null ? null : List.copyOf(qrModulos);
+        }
+    }
+
+    /**
+     * La ferretería como emisora, de la copia del registro.
+     *
+     * @param cuit los 11 dígitos, sin guiones
+     * @param condicionIva «IVA RESPONSABLE INSCRIPTO», «RESPONSABLE MONOTRIBUTO» o «IVA EXENTO»
+     */
+    record EmisorDelDocumento(String razonSocial, String cuit, String condicionIva, String domicilioComercial,
+            String ingresosBrutos, LocalDate inicioActividades) {}
+
+    /**
+     * Quien recibe el comprobante, de la copia del registro.
+     *
+     * @param nombre la razón social o el nombre; null si se vendió sin cliente
+     * @param condicionIva «IVA RESPONSABLE INSCRIPTO», «RESPONSABLE MONOTRIBUTO», «IVA EXENTO» o «CONSUMIDOR FINAL»
+     * @param tipoDocumento CUIT, CUIL o DNI; null sin identificar
+     * @param numeroDocumento solo dígitos; null sin identificar
+     * @param aConsumidorFinal true si la condición es Consumidor Final, con documento o sin él
+     */
+    record ReceptorDelDocumento(String nombre, String condicionIva, String tipoDocumento, String numeroDocumento,
+            String domicilio, boolean aConsumidorFinal) {}
+
+    /**
+     * Una alícuota del desglose guardado.
+     *
+     * @param porcentaje 21.00 significa 21 %
+     * @param base la base imponible ({@code BaseImp})
+     * @param importe el IVA de esa alícuota
+     */
+    record AlicuotaDelDocumento(BigDecimal porcentaje, BigDecimal base, BigDecimal importe) {}
+
+    /**
+     * El Régimen de Transparencia Fiscal al Consumidor (Ley 27.743) de la B a Consumidor Final.
+     *
+     * @param ivaContenido el IVA guardado del comprobante
+     * @param otrosImpuestosNacionalesIndirectos 0.00: la venta no tiene otros
+     */
+    record Transparencia(BigDecimal ivaContenido, BigDecimal otrosImpuestosNacionalesIndirectos) {}
+
+    /**
+     * El resumen fiscal de una venta para el listado (C2).
+     *
+     * @param letra la letra de la hoja: A, B o C si es válida como factura; X si no
+     * @param puntoVenta el punto de venta del registro
+     * @param numero el número fiscal del registro, o null mientras no tiene
+     * @param estado el estado del registro
+     * @param ambiente SIMULADOR, HOMOLOGACION o PRODUCCION
+     * @param validoComoFactura la misma regla que {@link DocumentoFiscal#validoComoFactura()}
+     */
+    record ResumenFiscal(String letra, int puntoVenta, Long numero, String estado, String ambiente,
+            boolean validoComoFactura) {}
+
+    /**
+     * La facturación de la ferretería, como la anticipa el cobro (C3).
+     *
+     * @param ambiente SIMULADOR, HOMOLOGACION o PRODUCCION
+     * @param letras la letra que saldría para cada condición frente al IVA del cliente (la venta sin cliente es la de
+     *     Consumidor Final), armada con la misma función que el alta del registro
+     */
+    record FacturacionDelMostrador(String ambiente, Map<CondicionIva, String> letras) {
+
+        public FacturacionDelMostrador {
+            letras = Collections.unmodifiableMap(new LinkedHashMap<>(letras));
+        }
+    }
 }

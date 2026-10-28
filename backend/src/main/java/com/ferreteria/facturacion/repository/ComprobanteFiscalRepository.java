@@ -6,6 +6,8 @@ import com.ferreteria.facturacion.model.EstadoFiscal;
 import com.ferreteria.tenant.TenantContext;
 import com.ferreteria.tenant.TenantScopedRepository;
 import java.time.LocalDate;
+import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -40,6 +42,32 @@ public interface ComprobanteFiscalRepository extends TenantScopedRepository<Comp
 
     default Optional<ComprobanteFiscal> deComprobanteScoped(long comprobanteId) {
         return deComprobante(TenantContext.requireFerreteriaId(), comprobanteId);
+    }
+
+    /** Los registros de esas ventas (el listado, CU-16). Solo lectura. */
+    @Query("select c from ComprobanteFiscal c where c.ferreteriaId = :fid and c.comprobanteId in :comprobantes")
+    List<ComprobanteFiscal> deComprobantes(@Param("fid") Long ferreteriaId,
+            @Param("comprobantes") Collection<Long> comprobanteIds);
+
+    /** Vacío sin ventas: no llega a la base. */
+    default List<ComprobanteFiscal> deComprobantesScoped(Collection<Long> comprobanteIds) {
+        if (comprobanteIds.isEmpty()) {
+            return List.of();
+        }
+        return deComprobantes(TenantContext.requireFerreteriaId(), comprobanteIds);
+    }
+
+    /**
+     * Las ventas cuyo registro tiene ese número, en cualquier ambiente, clase y letra; con {@code puntoVenta} null, en
+     * cualquier punto de venta (la búsqueda por número fiscal, cu-07-factura-mostrador S15). Solo lectura.
+     */
+    @Query("select c.comprobanteId from ComprobanteFiscal c where c.ferreteriaId = :fid and c.numero = :numero "
+            + "and (:pv is null or c.puntoVenta = :pv) order by c.comprobanteId")
+    List<Long> comprobantesConNumero(@Param("fid") Long ferreteriaId, @Param("pv") Integer puntoVenta,
+            @Param("numero") long numero);
+
+    default List<Long> comprobantesConNumeroScoped(Integer puntoVenta, long numero) {
+        return comprobantesConNumero(TenantContext.requireFerreteriaId(), puntoVenta, numero);
     }
 
     /** PENDIENTE → EN_CURSO con el número y la CbteFch del intento que se guarda en la misma transacción. */
