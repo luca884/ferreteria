@@ -1,0 +1,126 @@
+:host {
+  display: flex;
+  flex-direction: column;
+  gap: var(--e-3);
+  font-size: var(--texto-sm);
+}
+p {
+  margin: 0;
+}
+
+/* Como «Comprobantes en línea»: el emisor a la izquierda, la letra en su recuadro al medio y el comprobante a la derecha. */
+.encabezado {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  border: 1px solid currentColor;
+}
+.emisor,
+.comprobante {
+  display: grid;
+  align-content: start;
+  gap: 2px;
+  padding: var(--e-2) var(--e-3);
+}
+.razon-social {
+  font-size: var(--texto-md);
+  font-weight: 700;
+  text-transform: uppercase;
+}
+.letra {
+  display: grid;
+  justify-items: center;
+  align-content: start;
+  padding: var(--e-1) var(--e-3);
+  border-inline: 1px solid currentColor;
+  border-bottom: 1px solid currentColor;
+}
+.grande {
+  font-size: 2.25rem;
+  font-weight: 700;
+  line-height: 1;
+}
+.codigo {
+  font-size: var(--texto-xs);
+  font-weight: 700;
+}
+.tipo {
+  font-size: var(--texto-md);
+  font-weight: 700;
+}
+.marca {
+  font-weight: 700;
+}
+
+.receptor {
+  display: grid;
+  gap: 2px;
+  padding: var(--e-2) var(--e-3);
+  border: 1px solid currentColor;
+}
+.a-consumidor-final,
+.nombre {
+  font-weight: 700;
+}
+
+.renglones {
+  width: 100%;
+  border-collapse: collapse;
+}
+.renglones th,
+.renglones td {
+  padding: 4px 6px;
+  border-bottom: 1px solid var(--borde);
+  text-align: left;
+}
+.renglones .num {
+  text-align: right;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.totales,
+.transparencia {
+  display: grid;
+  gap: 2px;
+  justify-self: end;
+  min-width: 18rem;
+  margin-left: auto;
+}
+.totales p,
+.transparencia p {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--e-4);
+  font-variant-numeric: tabular-nums;
+}
+.total {
+  font-size: var(--texto-md);
+}
+.transparencia {
+  padding: var(--e-2) var(--e-3);
+  border: 1px solid currentColor;
+}
+.transparencia .titulo {
+  font-weight: 700;
+}
+.leyenda-monotributo {
+  font-size: var(--texto-xs);
+  font-style: italic;
+}
+
+/* El pie de la factura autorizada: el QR a la izquierda y los datos del CAE. */
+.pie-fiscal {
+  display: flex;
+  align-items: center;
+  gap: var(--e-4);
+  padding-top: var(--e-2);
+  border-top: 1px solid currentColor;
+}
+.qr {
+  flex: none;
+  width: 30mm;
+  height: 30mm;
+}
+.autorizado {
+  font-weight: 700;
+}

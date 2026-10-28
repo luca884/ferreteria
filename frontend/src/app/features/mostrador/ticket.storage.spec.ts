@@ -81,6 +81,27 @@ describe('ticket.storage', () => {
       expect(ticketGuardado(auth())).toEqual(conCliente);
     });
 
+    it('la condición de IVA del cliente se guarda y se lee; una que no existe, o sin cliente, se descarta sin romper el ticket', () => {
+      const conCondicion: Ticket = {
+        ...ticket,
+        clienteId: 7,
+        clienteNombre: 'Ferretería Norte SRL',
+        clienteCondicionIva: 'RESPONSABLE_INSCRIPTO',
+      };
+      guardarTicket(auth(), conCondicion);
+      expect(ticketGuardado(auth())).toEqual(conCondicion);
+
+      guardarCrudo({ clienteId: 7, clienteNombre: 'Ana', clienteCondicionIva: 'MARCIANO' });
+      const rara = ticketGuardado(auth())!;
+      expect(rara.clienteId).toBe(7);
+      expect('clienteCondicionIva' in rara).toBe(false);
+
+      guardarCrudo({ clienteCondicionIva: 'EXENTO' });
+      const sinCliente = ticketGuardado(auth())!;
+      expect(sinCliente.renglones).toHaveLength(1);
+      expect('clienteCondicionIva' in sinCliente).toBe(false);
+    });
+
     it('un ticket sin cliente se lee sin cliente', () => {
       guardarTicket(auth(), ticket);
 

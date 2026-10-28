@@ -5,7 +5,7 @@ import { EMPTY, Subject, Subscription, catchError, concatMap, map, switchMap, ti
 import { AccionBotonera, Botonera } from './botonera';
 import { CajaBusqueda } from './caja-busqueda';
 import { DialogoCantidad } from './dialogo-cantidad';
-import { ConfirmacionCobro, CuentaDelCobro, DialogoCobro } from './dialogo-cobro';
+import { ConfirmacionCobro, CuentaDelCobro, DialogoCobro, RotuloFactura } from './dialogo-cobro';
 import { DialogoConfirmacion } from './dialogo-confirmacion';
 import { DialogoDescuento } from './dialogo-descuento';
 import { AuthService } from '../../core/auth/auth.service';
@@ -20,10 +20,12 @@ import { ArticuloMostrador, BusquedaMostrador } from './mostrador.models';
 import { accionDeTecla } from './mostrador.atajos';
 import { MostradorService } from './mostrador.service';
 import { PrimerosPasos } from './primeros-pasos';
-import { AVISO_ESCANEO_CON_DIALOGO } from './guarda-lector';
+import { AVISO_ESCANEO_CON_DIALOGO, GuardaLector } from './guarda-lector';
 import { esOcupado, mensajeDe } from '../../core/api/api-error';
 import { MontoPipe, formatearMonto } from '../../core/formato/monto';
 import { BarraAcciones } from '../../shared/barra-acciones';
+import { FacturaImprimible } from '../../shared/factura/factura-imprimible';
+import { VentaFacturada } from '../../shared/factura/factura.models';
 import { aCentavos } from './centavos';
 import {
   PROBLEMA_DADO_DE_BAJA,
@@ -39,6 +41,7 @@ import { TotalesTicket } from './totales-ticket';
 import {
   ConfirmarVentaRequest,
   ExcesoCuentaCorriente,
+  FacturacionDelMostrador,
   VentaCobrada,
   VentaInvalida,
   VentaRechazada,
@@ -78,7 +81,20 @@ type Dialogo =
   | { tipo: 'cobro' }
   | { tipo: 'presupuesto' }
   | { tipo: 'remito' }
-  | { tipo: 'cliente' };
+  | { tipo: 'cliente' }
+  | { tipo: 'factura'; factura: FacturaCobrada };
+
+/**
+ * La factura de la venta recién cobrada (CU-07 paso 5, D7): la respuesta del cobro tal cual, para abrirla y reimprimirla sin
+ * pedir nada al servidor. El vuelto, si lo hubo, se ve en el diálogo.
+ */
+interface FacturaCobrada {
+  venta: VentaFacturada;
+  vueltoCentavos: number | null;
+}
+
+/** La marca del ambiente en el rótulo del cobro: en producción no hay. */
+const MARCA_AMBIENTE: Record<string, string> = { SIMULADOR: 'SIMULADO', HOMOLOGACION: 'HOMOLOGACIÓN' };
 
 /**
  * Aviso del contenedor, aparte del mensaje de la búsqueda. `vacio` y `persistente` se van con el próximo
@@ -92,6 +108,8 @@ interface Aviso {
   vueltoCentavos?: number;
   /** Advertencia aparte (sin stock): en color de aviso, no de éxito. */
   advertencia?: string;
+  /** La factura de la venta cobrada: el aviso ofrece «Reimprimir factura» mientras está. */
+  factura?: FacturaCobrada;
 }
 
 /** Un escaneo (Enter): `seq` dice si sigue siendo lo último que hizo el vendedor. */
@@ -121,6 +139,7 @@ interface Escaneo {
     PrimerosPasos,
     TotalesTicket,
     RouterLink,
+    FacturaImprimible,
   ],
   templateUrl: './mostrador.html',
   styleUrl: './mostrador.css',
@@ -181,6 +200,28 @@ export class Mostrador {
   );
   protected readonly ticket = inject(TicketStore);
   private readonly caja = viewChild.required(CajaBusqueda);
+
+  /**
+   * Qué comprobante sale al cobrar (C3), leído al abrir el mostrador. null mientras se lee o si no se pudo: el cobro no
+   * anticipa nada y la venta la factura (o no) el servidor igual.
+   */
+  private readonly facturacion = signal<FacturacionDelMostrador | null>(null);
+  /**
+   * El rótulo del cobro: «Factura <letra> · Consumidor Final» o «Factura <letra> · <cliente>», con la letra que el servidor
+   * dio para la condición del cliente; un ticket guardado sin esa condición dice solo «Factura». null si no se factura.
+   */
+  protected readonly rotuloFactura = computed<RotuloFactura | null>(() => {
+    const f = this.facturacion();
+    if (!f?.factura || !f.letras) return null;
+    const ambiente = (f.ambiente && MARCA_AMBIENTE[f.ambiente]) ?? null;
+    const { clienteId, clienteNombre, clienteCondicionIva } = this.ticket.ticket();
+    if (clienteId === undefined) return { texto: `Factura ${f.letras.CONSUMIDOR_FINAL} · Consumidor Final`, ambiente };
+    const letra = clienteCondicionIva ? f.letras[clienteCondicionIva] : undefined;
+    return { texto: letra ? `Factura ${letra} · ${clienteNombre}` : 'Factura', ambiente };
+  });
+  /** La guarda de escaneo del diálogo de la factura: un Enter del lector no imprime. */
+  private readonly guardaFactura = new GuardaLector();
+  protected readonly esEscaneo = (evento: KeyboardEvent) => this.guardaFactura.alTeclear(evento);
 
   protected readonly texto = signal('');
   protected readonly resultado = signal<BusquedaMostrador | null>(null);
@@ -286,6 +327,7 @@ export class Mostrador {
     this.destroyRef.onDestroy(() => clearTimeout(this.ocultarAviso));
     this.leerCaja();
     this.leerFormas();
+    this.leerFacturacion();
     this.busquedas
       .pipe(
         switchMap((q) =>
@@ -345,6 +387,14 @@ export class Mostrador {
       .listar(true)
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({ next: (formas) => this.formasPago.set(formas), error: () => undefined });
+  }
+
+  /** Lee qué comprobante sale al cobrar. Si no se puede, el cobro no muestra rótulo (como sin facturación). */
+  private leerFacturacion(): void {
+    this.ventas
+      .facturacion()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({ next: (f) => this.facturacion.set(f), error: () => undefined });
   }
 
   /** Todo cambio del aviso pasa por acá: un aviso nuevo (o ninguno) cancela el plazo del anterior. */
@@ -570,7 +620,9 @@ export class Mostrador {
   /** Un escaneo llegó con un diálogo abierto: el diálogo lo descartó y acá se avisa. */
   protected escaneoDescartado(): void {
     const tipo = this.dialogo()?.tipo;
-    if (tipo === 'cobro' || tipo === 'presupuesto' || tipo === 'remito') this.avisoCobro.set(AVISO_ESCANEO_CON_DIALOGO);
+    if (tipo === 'cobro' || tipo === 'presupuesto' || tipo === 'remito' || tipo === 'factura') {
+      this.avisoCobro.set(AVISO_ESCANEO_CON_DIALOGO);
+    }
     else this.avisar({ texto: AVISO_ESCANEO_CON_DIALOGO, grave: false, tipo: 'otro' });
   }
 
@@ -620,9 +672,29 @@ export class Mostrador {
       aviso.advertencia = `Sin stock: ${sinStock}.`;
       aviso.tipo = 'persistente';
     }
-    // El vuelto y el sin stock se necesitan después del plazo habitual: quedan hasta el próximo renglón.
+    // Con registro fiscal se abre la factura y el aviso ofrece reimprimirla (D7), con la misma respuesta del cobro. Sin el
+    // documento (un servidor anterior a C1) no hay hoja que mostrar: todo sigue como sin factura.
+    const factura: FacturaCobrada | null = venta.fiscal?.documento
+      ? { venta: { ...venta, fiscal: venta.fiscal }, vueltoCentavos: vuelto > 0 ? vuelto : null }
+      : null;
+    if (factura) {
+      aviso.factura = factura;
+      aviso.tipo = 'persistente';
+    }
+    // El vuelto, el sin stock y la factura se necesitan después del plazo habitual: quedan hasta el próximo renglón.
     this.avisar(aviso, aviso.tipo === 'persistente' ? undefined : AVISO_COBRADA_MS);
-    this.cerrarDialogo();
+    if (factura) this.abrirFactura(factura);
+    else this.cerrarDialogo();
+  }
+
+  /**
+   * Abre la factura de la venta cobrada (o la reabre desde el aviso, sin pedir nada al servidor). Esc la cierra y el foco
+   * vuelve al buscador, como cualquier diálogo del mostrador.
+   */
+  protected abrirFactura(factura: FacturaCobrada): void {
+    this.avisoCobro.set(null);
+    this.soltarCuenta();
+    this.dialogo.set({ tipo: 'factura', factura });
   }
 
   /** «Venta N.º 7 cobrada: $ 3.000,00»; a cuenta corriente lo dice, y en un pago mixto cuánto fue a cuenta. */

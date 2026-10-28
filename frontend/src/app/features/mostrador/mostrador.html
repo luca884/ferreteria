@@ -49,6 +49,9 @@
         <span class="separador" aria-hidden="true">·</span> Vuelto
         <strong class="vuelto">{{ nota.vueltoCentavos / 100 | monto }}</strong>
       }
+      @if (nota.factura; as factura) {
+        <button type="button" class="secundario chico reimprimir" (click)="abrirFactura(factura)">Reimprimir factura</button>
+      }
     </p>
     @if (nota.advertencia) {
       <p class="aviso advertencia" role="status">{{ nota.advertencia }}</p>
@@ -197,8 +200,19 @@
         [cuenta]="cuentaCobro()"
         [esDueno]="esDueno()"
         [avisoLimite]="avisoLimite()"
+        [rotuloFactura]="rotuloFactura()"
         (confirmar)="cobrar($event)"
         (cancelar)="cerrarDialogo()"
+        (escaneoDescartado)="escaneoDescartado()"
+      />
+    }
+    @case ('factura') {
+      <app-factura-imprimible
+        [venta]="abierto.factura.venta"
+        [vueltoCentavos]="abierto.factura.vueltoCentavos"
+        [aviso]="avisoCobro()"
+        [esEscaneo]="esEscaneo"
+        (cerrar)="cerrarDialogo()"
         (escaneoDescartado)="escaneoDescartado()"
       />
     }

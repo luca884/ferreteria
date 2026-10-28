@@ -1,4 +1,6 @@
+import { AmbienteFiscal, FiscalVenta, LetraFactura } from '../../shared/factura/factura.models';
 import { Unidad } from '../articulos/articulo.models';
+import { CondicionIva } from '../clientes/cliente.models';
 
 /** Contrato de POST /api/ventas, tipado contra ConfirmarVentaRequest / VentaResponse / VentaRechazadaResponse. */
 
@@ -116,6 +118,26 @@ export interface VentaResponse {
   /** Solo si se eligió un cliente: su id y la copia de su razón social al vender (CL-004). */
   clienteId?: number;
   clienteNombre?: string;
+  /** Antes de descuentos: subtotal − descuento + recargo = total. */
+  subtotal?: number;
+  /** El descuento global en %. */
+  descuentoPorcentaje?: number;
+  /** Lo descontado en toda la venta. */
+  descuento?: number;
+  /** El número del remito del que salió la venta, para «Remito N.º» de la factura (C1). */
+  remitoNumero?: number | null;
+  /** Solo si la venta tiene registro fiscal (C1): su estado y el documento a imprimir. */
+  fiscal?: FiscalVenta;
+}
+
+/**
+ * GET /api/ventas/facturacion (C3): si la venta que se cobra se factura y con qué letra según la condición del cliente
+ * (la decide el servidor con su tabla). Sin facturación habilitada: `factura` false, sin ambiente ni letras.
+ */
+export interface FacturacionDelMostrador {
+  factura: boolean;
+  ambiente: AmbienteFiscal | null;
+  letras: Record<CondicionIva, LetraFactura> | null;
 }
 
 /** 201 si la venta es nueva, 200 si la clave ya estaba registrada con el mismo contenido. */

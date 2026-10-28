@@ -866,6 +866,14 @@ describe('ticket con cliente (CL-005)', () => {
     expect(t.renglones).toEqual([]);
   });
 
+  it('elegirCliente guarda su condición de IVA (para el rótulo del cobro); otro cliente sin condición no hereda la anterior, y quitarlo la saca', () => {
+    const inscripto = elegirCliente(conUno(), { ...norte, condicionIva: 'RESPONSABLE_INSCRIPTO' });
+    expect(inscripto.clienteCondicionIva).toBe('RESPONSABLE_INSCRIPTO');
+
+    expect('clienteCondicionIva' in elegirCliente(inscripto, { id: 9, razonSocial: 'Ana Gómez' })).toBe(false);
+    expect('clienteCondicionIva' in quitarCliente(inscripto)).toBe(false);
+  });
+
   it('aRequest manda clienteId solo si hay cliente', () => {
     expect('clienteId' in aRequest(conUno(), 1)).toBe(false);
     expect(aRequest(elegirCliente(conUno(), norte), 1).clienteId).toBe(7);

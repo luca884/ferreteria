@@ -1,7 +1,13 @@
 import { HttpErrorResponse, provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
-import { ConfirmarVentaRequest, VentaCobrada, VentaRechazada, VentaResponse } from './venta.models';
+import {
+  ConfirmarVentaRequest,
+  FacturacionDelMostrador,
+  VentaCobrada,
+  VentaRechazada,
+  VentaResponse,
+} from './venta.models';
 import { VentaService, invalidaDe, rechazoDe } from './venta.service';
 
 describe('VentaService', () => {
@@ -136,6 +142,20 @@ describe('VentaService', () => {
     service.cobrar(pedido).subscribe({ error: (e) => (e2 = e) });
     http.expectOne((q) => q.url.endsWith('/ventas')).flush(otro, { status: 422, statusText: 'x' });
     expect(rechazoDe(e2)).toEqual(otro);
+  });
+
+  it('lee con GET /ventas/facturacion qué comprobante sale y con qué letra (C3)', () => {
+    const cuerpo: FacturacionDelMostrador = {
+      factura: true,
+      ambiente: 'SIMULADOR',
+      letras: { CONSUMIDOR_FINAL: 'B', RESPONSABLE_INSCRIPTO: 'A', MONOTRIBUTISTA: 'A', EXENTO: 'B' },
+    };
+    let leida: FacturacionDelMostrador | undefined;
+    service.facturacion().subscribe((f) => (leida = f));
+    const req = http.expectOne((r) => r.url.endsWith('/ventas/facturacion'));
+    expect(req.request.method).toBe('GET');
+    req.flush(cuerpo);
+    expect(leida).toEqual(cuerpo);
   });
 
   describe('rechazoDe', () => {

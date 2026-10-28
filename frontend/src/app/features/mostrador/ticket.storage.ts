@@ -1,5 +1,6 @@
 import { AuthService } from '../../core/auth/auth.service';
 import { UNIDADES } from '../articulos/articulo.models';
+import { CONDICIONES_IVA, CondicionIva } from '../clientes/cliente.models';
 import { RenglonTicket, Ticket } from './ticket';
 
 /**
@@ -72,6 +73,10 @@ export function leerTicket(key: string): Ticket | null {
     if (clienteId !== undefined && !(esPositivo(clienteId) && typeof clienteNombre === 'string' && clienteNombre !== '')) {
       return null;
     }
+    // La condición de IVA solo anticipa la letra en el cobro: una rara (o sin cliente) se descarta, el ticket sigue.
+    const condicion = x['clienteCondicionIva'];
+    const condicionValida =
+      clienteId !== undefined && (CONDICIONES_IVA as readonly unknown[]).includes(condicion) ? (condicion as CondicionIva) : null;
     return {
       v: 1,
       clave: x['clave'],
@@ -85,6 +90,7 @@ export function leerTicket(key: string): Ticket | null {
         ? { remitoId: remitoId as number, remitoNumero: remitoNumero as number }
         : {}),
       ...(clienteId !== undefined ? { clienteId: clienteId as number, clienteNombre: clienteNombre as string } : {}),
+      ...(condicionValida ? { clienteCondicionIva: condicionValida } : {}),
     };
   } catch {
     return null;

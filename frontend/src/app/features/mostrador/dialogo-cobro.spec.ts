@@ -352,6 +352,62 @@ describe('DialogoCobro', () => {
     });
   });
 
+  describe('qué comprobante sale (CU-07 paso 5, S3, S4)', () => {
+    const casilla = () => el().querySelector('input[type="checkbox"]') as HTMLInputElement;
+    const normal = (t: string | null | undefined) => (t ?? '').replace(/\s+/g, ' ').trim();
+    const comprobante = () => normal(el().querySelector('.comprobante')?.textContent) || null;
+    const autorizando = () =>
+      Array.from(el().querySelectorAll('[role="status"]')).find((p) => normal(p.textContent) === 'Autorizando con ARCA…');
+
+    it('sin rótulo (ferretería sin facturación) no dice nada, como hoy, ni siquiera en vuelo', async () => {
+      await abrir();
+      fixture.componentRef.setInput('enVuelo', true);
+      await estabilizar();
+
+      expect(el().querySelector('.comprobante')).toBeNull();
+      expect(autorizando()).toBeUndefined();
+    });
+
+    it('muestra el rótulo con la marca del ambiente; tildar «No facturable» lo cambia por «Sin factura»', async () => {
+      await abrir();
+      fixture.componentRef.setInput('rotuloFactura', { texto: 'Factura A · Ferretería Norte SRL', ambiente: 'SIMULADO' });
+      await estabilizar();
+
+      expect(comprobante()).toBe('Factura A · Ferretería Norte SRL SIMULADO');
+      expect(normal(el().querySelector('.comprobante .ambiente')?.textContent)).toBe('SIMULADO');
+
+      casilla().click();
+      await estabilizar();
+      expect(comprobante()).toBe('Sin factura');
+    });
+
+    it('en producción el rótulo va sin marca', async () => {
+      await abrir();
+      fixture.componentRef.setInput('rotuloFactura', { texto: 'Factura B · Consumidor Final', ambiente: null });
+      await estabilizar();
+
+      expect(comprobante()).toBe('Factura B · Consumidor Final');
+      expect(el().querySelector('.comprobante .ambiente')).toBeNull();
+    });
+
+    it('mientras viaja una venta que se factura dice «Autorizando con ARCA…»; si es no facturable, no', async () => {
+      await abrir();
+      fixture.componentRef.setInput('rotuloFactura', { texto: 'Factura B · Consumidor Final', ambiente: null });
+      await estabilizar();
+      expect(autorizando()).toBeUndefined();
+
+      fixture.componentRef.setInput('enVuelo', true);
+      await estabilizar();
+      expect(autorizando()).toBeDefined();
+
+      fixture.componentRef.setInput('enVuelo', false);
+      casilla().click();
+      fixture.componentRef.setInput('enVuelo', true);
+      await estabilizar();
+      expect(autorizando()).toBeUndefined();
+    });
+  });
+
   describe('no facturable (NF-003)', () => {
     const casilla = () => el().querySelector('input[type="checkbox"]') as HTMLInputElement;
 

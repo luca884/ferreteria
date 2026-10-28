@@ -1,4 +1,5 @@
 import { Unidad } from '../articulos/articulo.models';
+import { CondicionIva } from '../clientes/cliente.models';
 import { aCentavos, aMilesimas, desdeTexto, subtotalTicket, totalTicket } from './centavos';
 import { DatosPresupuesto, EmitirPresupuestoRequest, PresupuestoResponse } from '../presupuestos/presupuesto.models';
 import { DatosRemito, EmitirRemitoRequest, RemitoResponse } from '../remitos/remito.models';
@@ -45,6 +46,11 @@ export interface Ticket {
   clienteId?: number;
   /** Su razón social, para mostrarla en el mostrador. Va siempre junto con `clienteId`. */
   clienteNombre?: string;
+  /**
+   * Su condición frente al IVA al elegirlo, para anticipar la letra de la factura en el cobro. Solo con `clienteId`; un
+   * ticket guardado antes no la tiene (el cobro dice solo «Factura»).
+   */
+  clienteCondicionIva?: CondicionIva;
 }
 
 export interface ResultadoCantidad {
@@ -239,13 +245,21 @@ export function aRequest(
 }
 
 /** Elige el cliente del ticket (F9): reemplaza al anterior y no toca nada más. Sirve también con el ticket vacío. */
-export function elegirCliente(t: Ticket, cliente: { id: number; razonSocial: string }): Ticket {
-  return { ...t, clienteId: cliente.id, clienteNombre: cliente.razonSocial };
+export function elegirCliente(
+  t: Ticket,
+  cliente: { id: number; razonSocial: string; condicionIva?: CondicionIva },
+): Ticket {
+  return {
+    ...quitarCliente(t),
+    clienteId: cliente.id,
+    clienteNombre: cliente.razonSocial,
+    ...(cliente.condicionIva ? { clienteCondicionIva: cliente.condicionIva } : {}),
+  };
 }
 
 /** Vuelve a Consumidor Final. */
 export function quitarCliente(t: Ticket): Ticket {
-  const { clienteId: _id, clienteNombre: _nombre, ...resto } = t;
+  const { clienteId: _id, clienteNombre: _nombre, clienteCondicionIva: _condicion, ...resto } = t;
   return resto;
 }
 

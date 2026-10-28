@@ -1,0 +1,162 @@
+@let d = documento();
+@let v = venta();
+<header class="encabezado">
+  <div class="emisor">
+    <p class="razon-social">{{ d.emisor.razonSocial }}</p>
+    @if (d.emisor.domicilioComercial; as domicilio) {
+      <p>Domicilio comercial: {{ domicilio }}</p>
+    }
+    <p>Condición frente al IVA: {{ d.emisor.condicionIva }}</p>
+  </div>
+
+  <div class="letra">
+    <span class="grande">{{ letra() }}</span>
+    @if (codigo(); as cod) {
+      <span class="codigo">{{ cod }}</span>
+    }
+  </div>
+
+  <div class="comprobante">
+    @if (valido()) {
+      <p class="tipo">FACTURA</p>
+      @if (numero(); as n) {
+        <p class="numero-fiscal">N.º {{ n }}</p>
+      }
+    } @else {
+      <p class="tipo">DOCUMENTO NO VALIDO COMO FACTURA</p>
+      @if (d.marca; as marca) {
+        <p class="marca">{{ marca }}</p>
+      }
+      <p class="numero-interno">Venta N.º {{ v.numero }}</p>
+    }
+    <p>Fecha de emisión: {{ fecha(d.fecha) }}</p>
+    <p>CUIT: {{ cuitEmisor() }}</p>
+    @if (d.emisor.ingresosBrutos; as iibb) {
+      <p>Ingresos Brutos: {{ iibb }}</p>
+    }
+    @if (d.emisor.inicioActividades; as inicio) {
+      <p>Inicio de actividades: {{ fecha(inicio) }}</p>
+    }
+  </div>
+</header>
+
+<section class="receptor" aria-label="Receptor">
+  @if (d.receptor.aConsumidorFinal) {
+    <p class="a-consumidor-final">A CONSUMIDOR FINAL</p>
+  }
+  @if (d.receptor.nombre; as nombre) {
+    <p class="nombre">{{ nombre }}</p>
+  }
+  @if (documentoReceptor(); as doc) {
+    <p>{{ doc }}</p>
+  }
+  <p>Condición frente al IVA: {{ d.receptor.condicionIva }}</p>
+  @if (d.receptor.domicilio; as domicilio) {
+    <p>Domicilio: {{ domicilio }}</p>
+  }
+  @if (v.remitoNumero; as remito) {
+    <p class="remito">Remito N.º {{ remito }}</p>
+  }
+</section>
+
+<table class="renglones">
+  <caption class="sr-only">
+    Renglones
+  </caption>
+  @if (discriminaIva()) {
+    <thead>
+      <tr>
+        <th scope="col" class="num">Cantidad</th>
+        <th scope="col">Descripción</th>
+        <th scope="col" class="num">Precio unit. sin IVA</th>
+        <th scope="col" class="num">Alícuota</th>
+        <th scope="col" class="num">Subtotal sin IVA</th>
+      </tr>
+    </thead>
+    <tbody>
+      @for (r of renglonesSinIva(); track r.renglon) {
+        <tr>
+          <td class="num">{{ r.cantidad | number: '1.0-3' }}</td>
+          <td>{{ r.descripcion }}</td>
+          <td class="num">{{ r.precioSinIva | monto }}</td>
+          <td class="num">{{ r.alicuota }}</td>
+          <td class="num">{{ r.neto | monto }}</td>
+        </tr>
+      }
+    </tbody>
+  } @else {
+    <thead>
+      <tr>
+        <th scope="col" class="num">Cantidad</th>
+        <th scope="col">Descripción</th>
+        <th scope="col" class="num">Precio unit.</th>
+        <th scope="col" class="num">Importe</th>
+      </tr>
+    </thead>
+    <tbody>
+      @for (r of v.renglones; track r.renglon) {
+        <tr>
+          <td class="num">{{ r.cantidad | number: '1.0-3' }}</td>
+          <td>{{ r.descripcion }}</td>
+          <td class="num">{{ r.precioUnitario | monto }}</td>
+          <td class="num">{{ r.total | monto }}</td>
+        </tr>
+      }
+    </tbody>
+  }
+</table>
+
+<div class="totales">
+  @if (discriminaIva()) {
+    <p>Importe neto gravado <span>{{ d.neto | monto }}</span></p>
+    @for (a of alicuotas(); track a.porcentaje) {
+      <p>IVA {{ a.texto }} <span>{{ a.importe | monto }}</span></p>
+    }
+    <p>Importe no gravado <span>{{ d.noGravado | monto }}</span></p>
+    <p>Importe exento <span>{{ d.exento | monto }}</span></p>
+  } @else {
+    @if ((v.descuento ?? 0) > 0) {
+      <p>Subtotal <span>{{ v.subtotal | monto }}</span></p>
+      <p>Descuento <span>-{{ v.descuento | monto }}</span></p>
+    }
+    @if ((v.recargo ?? 0) > 0) {
+      <p>Recargo <span>{{ v.recargo | monto }}</span></p>
+    }
+  }
+  <p class="total">Total <strong>{{ d.total | monto }}</strong></p>
+</div>
+
+@if (d.transparencia; as t) {
+  <section class="transparencia" aria-label="Transparencia fiscal">
+    <p class="titulo">Régimen de Transparencia Fiscal al Consumidor (Ley 27.743)</p>
+    <p>IVA Contenido <span>{{ t.ivaContenido | monto }}</span></p>
+    <p>Otros Impuestos Nacionales Indirectos <span>{{ t.otrosImpuestosNacionalesIndirectos | monto }}</span></p>
+  </section>
+}
+
+@if (d.leyendaMonotributo; as leyenda) {
+  <p class="leyenda-monotributo">{{ leyenda }}</p>
+}
+
+@if (cae(); as autorizado) {
+  <footer class="pie-fiscal">
+    @if (qr(); as codigo) {
+      <svg
+        class="qr"
+        [attr.viewBox]="codigo.viewBox"
+        shape-rendering="crispEdges"
+        role="img"
+        aria-label="Código QR de ARCA"
+      >
+        @for (m of codigo.modulos; track $index) {
+          <rect [attr.x]="m.x" [attr.y]="m.y" [attr.width]="m.ancho" height="1" />
+        }
+      </svg>
+    }
+    <div class="cae">
+      <p class="autorizado">Comprobante Autorizado</p>
+      <p>CAE N.º: {{ autorizado.numero }}</p>
+      <p>Fecha de Vto. de CAE: {{ autorizado.vencimiento }}</p>
+    </div>
+  </footer>
+}

@@ -1,5 +1,6 @@
 import { Injectable, InjectionToken, computed, effect, inject, signal } from '@angular/core';
 import { AuthService } from '../../core/auth/auth.service';
+import { CondicionIva } from '../clientes/cliente.models';
 import { ArticuloMostrador } from './mostrador.models';
 import { borrar, claveDeStorage, escribir, leerTicket } from './ticket.storage';
 import { ConfirmarVentaRequest } from './venta.models';
@@ -114,8 +115,11 @@ export class TicketStore {
     this._ticket.update(soltarRemito);
   }
 
-  /** F9: el cliente de la venta, del presupuesto o del remito. Reemplaza al anterior; sirve con el ticket vacío. */
-  elegirCliente(cliente: { id: number; razonSocial: string }): void {
+  /**
+   * F9: el cliente de la venta, del presupuesto o del remito. Reemplaza al anterior; sirve con el ticket vacío. Guarda su
+   * condición de IVA, si viene, para anticipar la letra de la factura en el cobro.
+   */
+  elegirCliente(cliente: { id: number; razonSocial: string; condicionIva?: CondicionIva }): void {
     this._ticket.update((t) => elegirCliente(t, cliente));
   }
 

@@ -44,6 +44,16 @@ export interface ConfirmacionCobro {
   autorizaExceso?: true;
 }
 
+/**
+ * Qué comprobante sale al cobrar (CU-07 paso 5): «Factura B · Consumidor Final», «Factura A · <cliente>» o solo «Factura»,
+ * con la marca del ambiente («SIMULADO», «HOMOLOGACIÓN») fuera de producción. Lo arma el contenedor con las letras del
+ * servidor (C3); sin facturación habilitada no hay rótulo.
+ */
+export interface RotuloFactura {
+  texto: string;
+  ambiente: string | null;
+}
+
 /** «Mixto» es la última opción: reparte el total entre varias formas. Las demás son el id de una forma. */
 type Opcion = number | 'MIXTO';
 
@@ -87,6 +97,18 @@ const centavosATexto = (c: number) => `${Math.floor(c / 100)},${String(c % 100).
             @if (renglones(); as n) {
               <p class="conteo">{{ n }} {{ n === 1 ? 'renglón' : 'renglones' }}</p>
             }
+            @if (rotuloFactura(); as rotulo) {
+              <p class="comprobante">
+                @if (noFacturable()) {
+                  Sin factura
+                } @else {
+                  {{ rotulo.texto }}
+                  @if (rotulo.ambiente; as ambiente) {
+                    <strong class="ambiente">{{ ambiente }}</strong>
+                  }
+                }
+              </p>
+            }
           </div>
           <p class="total">{{ aCobrarCentavos() / 100 | monto }}</p>
         </div>
@@ -97,6 +119,9 @@ const centavosATexto = (c: number) => `${Math.floor(c / 100)},${String(c % 100).
         }
         @if (aviso(); as texto) {
           <p class="aviso" role="status">{{ texto }}</p>
+        }
+        @if (autorizando()) {
+          <p class="aviso" role="status">Autorizando con ARCA…</p>
         }
         <div class="bloque">
           <div class="medios" role="radiogroup" aria-label="Medio de pago">
@@ -239,7 +264,8 @@ const centavosATexto = (c: number) => `${Math.floor(c / 100)},${String(c % 100).
       letter-spacing: 0.08em;
       text-transform: uppercase;
     }
-    .conteo {
+    .conteo,
+    .comprobante {
       color: var(--profundo-texto-tenue);
       font-size: var(--texto-sm);
     }
@@ -490,6 +516,8 @@ export class DialogoCobro {
   readonly esDueno = input(false);
   /** El rechazo del servidor por el límite (CC-013): trae las cifras para el Dueño y `puedeAutorizar`. */
   readonly avisoLimite = input<ExcesoCuentaCorriente | null>(null);
+  /** Qué factura sale (CU-07 paso 5). null: la ferretería no factura y no se dice nada, como antes. */
+  readonly rotuloFactura = input<RotuloFactura | null>(null);
 
   readonly confirmar = output<ConfirmacionCobro>();
   readonly cancelar = output<void>();
@@ -725,6 +753,11 @@ export class DialogoCobro {
   });
 
   protected readonly errorMixto = computed(() => this.mensajeMixto());
+
+  /** Mientras viaja una venta que se factura, el servidor espera el CAE: se avisa para que nadie reintente. */
+  protected readonly autorizando = computed(
+    () => this.enVuelo() && this.rotuloFactura() !== null && !this.noFacturable(),
+  );
 
   constructor() {
     effect(() => {

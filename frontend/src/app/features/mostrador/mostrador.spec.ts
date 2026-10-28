@@ -25,7 +25,9 @@ import { Mostrador } from './mostrador';
 import { MostradorService } from './mostrador.service';
 import { GENERAR_CLAVE } from './ticket.store';
 import { VentaService } from './venta.service';
-import { ConfirmarVentaRequest, VentaCobrada } from './venta.models';
+import { ConfirmarVentaRequest, FacturacionDelMostrador, VentaCobrada } from './venta.models';
+import { MARCA_SIMULADO, documentoB, documentoX, fiscalDe } from '../../shared/factura/factura.testing';
+import { FiscalVenta } from '../../shared/factura/factura.models';
 
 registerLocaleData(localeEsAr);
 
@@ -124,6 +126,9 @@ describe('Mostrador', () => {
     crear: ReturnType<typeof vi.fn>;
     cuenta: ReturnType<typeof vi.fn>;
   };
+  /** C3: qué comprobante sale al cobrar. Por defecto la ferretería no factura, como antes de la fase 5; null: la lectura falla. */
+  let facturacionDelServidor: FacturacionDelMostrador | null;
+  let leerFacturacion: ReturnType<typeof vi.fn>;
 
   /** CU-10: por defecto la caja está abierta hoy, como la encuentra el vendedor al empezar. */
   const cajaAbierta: CajaVigente = {
@@ -154,12 +159,16 @@ describe('Mostrador', () => {
         return respuesta;
       }),
     };
+    leerFacturacion = vi.fn(() =>
+      facturacionDelServidor ? of(facturacionDelServidor) : throwError(() => new HttpErrorResponse({ status: 500 })),
+    );
     const ventas = {
       cobrar: vi.fn((pedido: ConfirmarVentaRequest) => {
         const respuesta = new Subject<VentaCobrada>();
         cobros.push({ pedido, respuesta });
         return respuesta;
       }),
+      facturacion: leerFacturacion,
     };
     const presupuestosApi = {
       emitir: vi.fn((pedido: EmitirPresupuestoRequest) => {
@@ -258,6 +267,7 @@ describe('Mostrador', () => {
   beforeEach(() => {
     localStorage.clear();
     vi.useFakeTimers();
+    facturacionDelServidor = { factura: false, ambiente: null, letras: null };
   });
   afterEach(() => vi.useRealTimers());
 
@@ -4438,5 +4448,288 @@ describe('Mostrador', () => {
     function elegidaEnElCobro() {
       return normal(el().querySelector('app-dialogo-cobro button[role="radio"][aria-checked="true"]')?.textContent);
     }
+  });
+
+  describe('factura del mostrador (CU-07 paso 5, S2, S3, S4, S11)', () => {
+    const LETRAS: FacturacionDelMostrador['letras'] = {
+      CONSUMIDOR_FINAL: 'B',
+      RESPONSABLE_INSCRIPTO: 'A',
+      MONOTRIBUTISTA: 'A',
+      EXENTO: 'B',
+    };
+    const exacto = (a: ArticuloMostrador): BusquedaMostrador => ({ tipo: 'EXACTO', items: [a], hayMas: false });
+    const normal = (t: string | null | undefined) => (t ?? '').replace(/\s+/g, ' ').trim();
+    const rotulo = () => normal(el().querySelector('app-dialogo-cobro .comprobante')?.textContent) || null;
+    const dialogoFactura = () => el().querySelector<HTMLElement>('app-factura-imprimible [role="dialog"]');
+    const reimprimir = () =>
+      Array.from(el().querySelectorAll<HTMLButtonElement>('.aviso button')).find(
+        (b) => normal(b.textContent) === 'Reimprimir factura',
+      );
+    let imprimir: ReturnType<typeof vi.spyOn>;
+
+    beforeEach(() => {
+      imprimir = vi.spyOn(window, 'print').mockImplementation(() => undefined);
+    });
+    afterEach(() => imprimir.mockRestore());
+
+    async function tecla(key: string, destino: HTMLElement = document.activeElement as HTMLElement) {
+      const evento = new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true });
+      destino.dispatchEvent(evento);
+      await refrescar();
+      return evento;
+    }
+
+    /** Factura habilitada en el simulador, con las letras del servidor; y el ticket de 2 martillos ($ 3.000,00). */
+    async function conMartillos(ambiente: FacturacionDelMostrador['ambiente'] = 'SIMULADOR') {
+      facturacionDelServidor = { factura: true, ambiente, letras: LETRAS };
+      await crear();
+      for (let i = 0; i < 2; i++) {
+        await escribir('M');
+        await enter();
+        await responder(llamadas.length - 1, exacto(articulo(1, { descripcion: 'Martillo', precioFinal: 1500 })));
+      }
+    }
+
+    /** La respuesta del cobro, con o sin registro fiscal. */
+    function cobrada(fiscal?: FiscalVenta): VentaCobrada {
+      return {
+        venta: {
+          ventaId: 99,
+          numero: 7,
+          total: 3000,
+          fecha: '2026-10-28T10:00:00',
+          medioPago: 'EFECTIVO',
+          renglones: [
+            {
+              renglon: 1,
+              articuloId: 1,
+              descripcion: 'Martillo',
+              unidad: 'UNIDAD',
+              cantidad: 2,
+              precioUnitario: 1500,
+              alicuotaIva: 'IVA_21',
+              total: 3000,
+              neto: 2479.34,
+              iva: 520.66,
+            },
+          ],
+          sinStock: [],
+          facturable: true,
+          subtotal: 3000,
+          descuentoPorcentaje: 0,
+          descuento: 0,
+          recargo: 0,
+          ...(fiscal ? { fiscal } : {}),
+        },
+        repetida: false,
+      };
+    }
+
+    async function cobrarCon(respuesta: VentaCobrada, recibido: string | null = null) {
+      await tecla('F4');
+      if (recibido !== null) {
+        const input = el().querySelector<HTMLInputElement>('app-dialogo-cobro input')!;
+        input.value = recibido;
+        input.dispatchEvent(new Event('input'));
+        await refrescar();
+      }
+      await tecla('Enter');
+      cobros[0].respuesta.next(respuesta);
+      cobros[0].respuesta.complete();
+      await refrescar();
+    }
+
+    it('lee qué comprobante sale al abrir el mostrador, una vez', async () => {
+      await conMartillos();
+
+      expect(leerFacturacion).toHaveBeenCalledTimes(1);
+    });
+
+    it('sin cliente el cobro dice «Factura B · Consumidor Final» con la marca del simulador', async () => {
+      await conMartillos();
+
+      await tecla('F4');
+
+      expect(rotulo()).toBe('Factura B · Consumidor Final SIMULADO');
+    });
+
+    it('en homologación la marca es «HOMOLOGACIÓN»; en producción no hay marca', async () => {
+      await conMartillos('HOMOLOGACION');
+      await tecla('F4');
+      expect(rotulo()).toBe('Factura B · Consumidor Final HOMOLOGACIÓN');
+
+      TestBed.resetTestingModule();
+      localStorage.clear();
+      await conMartillos('PRODUCCION');
+      await tecla('F4');
+      expect(rotulo()).toBe('Factura B · Consumidor Final');
+    });
+
+    it('con un Responsable Inscripto elegido con F9 dice «Factura A · <razón social>», con la letra del servidor', async () => {
+      await conMartillos();
+      await tecla('F9');
+      await tecla('ArrowDown');
+      await tecla('Enter');
+
+      await tecla('F4');
+
+      expect(rotulo()).toBe('Factura A · Ferretería Norte SRL SIMULADO');
+    });
+
+    it('un ticket guardado antes, con cliente pero sin su condición, dice solo «Factura»', async () => {
+      localStorage.setItem(
+        'ticket:3:7',
+        JSON.stringify({
+          v: 1,
+          clave: 'vieja',
+          elegido: 0,
+          clienteId: 2,
+          clienteNombre: 'Ferretería Norte SRL',
+          renglones: [
+            {
+              articuloId: 1,
+              codigoInterno: 'COD-1',
+              descripcion: 'Martillo',
+              unidad: 'UNIDAD',
+              precioCentavos: 150000,
+              cantidadMilesimas: 1000,
+              stockActual: 10,
+              stockMinimo: 5,
+            },
+          ],
+        }),
+      );
+      facturacionDelServidor = { factura: true, ambiente: 'PRODUCCION', letras: LETRAS };
+      await crear();
+
+      await tecla('F4');
+
+      expect(rotulo()).toBe('Factura');
+    });
+
+    it('sin facturación habilitada (o si no se pudo leer) no hay rótulo ni «Autorizando con ARCA…», como antes', async () => {
+      for (const servidor of [{ factura: false, ambiente: null, letras: null }, null]) {
+        TestBed.resetTestingModule();
+        localStorage.clear();
+        facturacionDelServidor = servidor;
+        await crear();
+        await escribir('M');
+        await enter();
+        await responder(llamadas.length - 1, exacto(articulo(1, { descripcion: 'Martillo', precioFinal: 1500 })));
+
+        await tecla('F4');
+        expect(el().querySelector('app-dialogo-cobro .comprobante'), JSON.stringify(servidor)).toBeNull();
+        await tecla('Enter');
+        expect(normal(el().querySelector('app-dialogo-cobro')?.textContent)).not.toContain('Autorizando');
+      }
+    });
+
+    it('mientras viaja la venta el cobro dice «Autorizando con ARCA…»', async () => {
+      await conMartillos();
+      await tecla('F4');
+
+      await tecla('Enter');
+
+      expect(normal(el().querySelector('app-dialogo-cobro')?.textContent)).toContain('Autorizando con ARCA…');
+    });
+
+    it('con `fiscal` abre la factura: la hoja del documento, el vuelto fuera de lo que se imprime y el aviso persistente', async () => {
+      await conMartillos();
+
+      await cobrarCon(cobrada(fiscalDe(documentoB({ total: 3000 }))), '3565');
+
+      expect(el().querySelector('app-dialogo-cobro')).toBeNull();
+      const dialogo = dialogoFactura()!;
+      expect(normal(dialogo.querySelector('#factura-titulo')?.textContent)).toBe('Factura B');
+      const articulo = dialogo.querySelector('article.factura-imprimible')!;
+      expect(normal(articulo.querySelector('.numero-fiscal')?.textContent)).toBe('N.º 00001-00000012');
+      const vuelto = dialogo.querySelector('.vuelto')!;
+      expect(normal(vuelto.textContent)).toBe('Vuelto $ 565,00');
+      expect(articulo.contains(vuelto)).toBe(false);
+      expect(document.activeElement?.textContent?.trim()).toBe('Imprimir');
+
+      await avanzar(60000);
+      expect(normal(el().querySelector('.aviso')?.textContent)).toContain('Venta N.º 7 cobrada · Vuelto $ 565,00');
+      expect(reimprimir()).toBeDefined();
+    });
+
+    it('Enter imprime; un escaneo con la factura abierta no imprime y avisa adentro', async () => {
+      await conMartillos();
+      await cobrarCon(cobrada(fiscalDe(documentoB())));
+
+      for (const c of '7790001') {
+        vi.advanceTimersByTime(5);
+        await tecla(c);
+      }
+      vi.advanceTimersByTime(5);
+      await tecla('Enter');
+
+      expect(imprimir).not.toHaveBeenCalled();
+      expect(normal(dialogoFactura()!.querySelector('[role="status"]')?.textContent)).toBe(
+        'Cerrá el diálogo antes de escanear.',
+      );
+      expect(normal(el().querySelector('.aviso')?.textContent)).toContain('Venta N.º 7 cobrada');
+
+      vi.advanceTimersByTime(1000);
+      await tecla('Enter', dialogoFactura()!);
+      expect(imprimir).toHaveBeenCalledTimes(1);
+    });
+
+    it('Esc cierra la factura y el foco vuelve al buscador; «Reimprimir factura» la reabre sin pedir nada al servidor', async () => {
+      await conMartillos();
+      const respuesta = cobrada(fiscalDe(documentoX(MARCA_SIMULADO), { ambiente: 'SIMULADOR' }));
+      await cobrarCon(respuesta);
+
+      await tecla('Escape');
+      expect(dialogoFactura()).toBeNull();
+      expect(document.activeElement).toBe(campo());
+
+      reimprimir()!.click();
+      await refrescar();
+
+      expect(normal(dialogoFactura()!.querySelector('.tipo')?.textContent)).toBe('DOCUMENTO NO VALIDO COMO FACTURA');
+      expect(normal(dialogoFactura()!.querySelector('.numero-interno')?.textContent)).toBe('Venta N.º 7');
+      expect(cobros).toHaveLength(1);
+      expect(leerFacturacion).toHaveBeenCalledTimes(1);
+    });
+
+    it('el aviso con «Reimprimir factura» se va con el próximo renglón', async () => {
+      await conMartillos();
+      await cobrarCon(cobrada(fiscalDe(documentoB())));
+      await tecla('Escape');
+
+      await escribir('S');
+      await enter();
+      await responder(llamadas.length - 1, exacto(articulo(2, { descripcion: 'Serrucho', precioFinal: 100 })));
+
+      expect(reimprimir()).toBeUndefined();
+    });
+
+    it('con el `fiscal` de la rama 3 pero sin `documento` tampoco se abre nada: todo como hoy', async () => {
+      await conMartillos();
+      const { documento: _documento, ...sinDocumento } = fiscalDe(documentoB());
+
+      await cobrarCon(cobrada(sinDocumento as FiscalVenta));
+
+      expect(dialogoFactura()).toBeNull();
+      expect(reimprimir()).toBeUndefined();
+      expect(normal(el().querySelector('.aviso')?.textContent)).toBe('Venta N.º 7 cobrada: $ 3.000,00');
+      expect(document.activeElement).toBe(campo());
+      await avanzar(5000);
+      expect(el().querySelector('.aviso')).toBeNull();
+    });
+
+    it('sin `fiscal` en la respuesta no se abre nada: el aviso de siempre y el foco en el buscador', async () => {
+      await conMartillos();
+
+      await cobrarCon(cobrada());
+
+      expect(dialogoFactura()).toBeNull();
+      expect(reimprimir()).toBeUndefined();
+      expect(normal(el().querySelector('.aviso')?.textContent)).toBe('Venta N.º 7 cobrada: $ 3.000,00');
+      expect(document.activeElement).toBe(campo());
+      await avanzar(5000);
+      expect(el().querySelector('.aviso')).toBeNull();
+    });
   });
 });

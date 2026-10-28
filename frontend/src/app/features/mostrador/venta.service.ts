@@ -2,7 +2,14 @@ import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable, map } from 'rxjs';
 import { environment } from '../../../environments/environment';
-import { ConfirmarVentaRequest, VentaCobrada, VentaInvalida, VentaRechazada, VentaResponse } from './venta.models';
+import {
+  ConfirmarVentaRequest,
+  FacturacionDelMostrador,
+  VentaCobrada,
+  VentaInvalida,
+  VentaRechazada,
+  VentaResponse,
+} from './venta.models';
 
 @Injectable({ providedIn: 'root' })
 export class VentaService {
@@ -17,6 +24,11 @@ export class VentaService {
     return this.http.post<VentaResponse>(this.url, pedido, { observe: 'response' }).pipe(
       map((res) => ({ venta: res.body as VentaResponse, repetida: res.status === 200 })),
     );
+  }
+
+  /** Qué comprobante sale al cobrar (C3): Dueño y Vendedor. La letra la decide el servidor, por condición del cliente. */
+  facturacion(): Observable<FacturacionDelMostrador> {
+    return this.http.get<FacturacionDelMostrador>(`${this.url}/facturacion`);
   }
 }
 
