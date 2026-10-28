@@ -1,0 +1,31 @@
+{
+  "descripcion": "Tabla de verdad de la letra del comprobante (S1, D2 aprobada por Luca el 2026-10-28). Una fila por cada condicion frente al IVA del emisor (la ferreteria) y del receptor (el cliente), mas la venta sin cliente: 3 x (4 + 1) = 15 filas. La leen LetraTablaDeVerdadTest (dominio) y el simulador de WSFEv1 (T5), que no conoce la funcion: todo lo que hace falta para validar un pedido esta en cada fila.",
+  "campos": {
+    "emisor": "condicion frente al IVA de la ferreteria: RESPONSABLE_INSCRIPTO, MONOTRIBUTISTA o EXENTO",
+    "receptor": "condicion frente al IVA del cliente: RESPONSABLE_INSCRIPTO, EXENTO, CONSUMIDOR_FINAL o MONOTRIBUTISTA; SIN_CLIENTE es la venta sin cliente, que se informa como Consumidor Final (DocTipo 99, DocNro 0)",
+    "letra": "A, B o C",
+    "cbteTipoFactura": "CbteTipo de WSFEv1 de la factura de esa letra (A 1, B 6, C 11)",
+    "cbteTipoNotaCredito": "CbteTipo de WSFEv1 de la nota de credito de esa letra (A 3, B 8, C 13)",
+    "condicionIvaReceptorId": "CondicionIVAReceptorId que va en el pedido (RG 5616): RI 1, Exento 4, Consumidor Final 5, Monotributista 6",
+    "leyendaLey27618": "true si el comprobante lleva la leyenda de la Ley 27.618 (factura A a un Monotributista)"
+  },
+  "filas": [
+    { "emisor": "RESPONSABLE_INSCRIPTO", "receptor": "RESPONSABLE_INSCRIPTO", "letra": "A", "cbteTipoFactura": 1, "cbteTipoNotaCredito": 3, "condicionIvaReceptorId": 1, "leyendaLey27618": false },
+    { "emisor": "RESPONSABLE_INSCRIPTO", "receptor": "MONOTRIBUTISTA", "letra": "A", "cbteTipoFactura": 1, "cbteTipoNotaCredito": 3, "condicionIvaReceptorId": 6, "leyendaLey27618": true },
+    { "emisor": "RESPONSABLE_INSCRIPTO", "receptor": "EXENTO", "letra": "B", "cbteTipoFactura": 6, "cbteTipoNotaCredito": 8, "condicionIvaReceptorId": 4, "leyendaLey27618": false },
+    { "emisor": "RESPONSABLE_INSCRIPTO", "receptor": "CONSUMIDOR_FINAL", "letra": "B", "cbteTipoFactura": 6, "cbteTipoNotaCredito": 8, "condicionIvaReceptorId": 5, "leyendaLey27618": false },
+    { "emisor": "RESPONSABLE_INSCRIPTO", "receptor": "SIN_CLIENTE", "letra": "B", "cbteTipoFactura": 6, "cbteTipoNotaCredito": 8, "condicionIvaReceptorId": 5, "leyendaLey27618": false },
+
+    { "emisor": "MONOTRIBUTISTA", "receptor": "RESPONSABLE_INSCRIPTO", "letra": "C", "cbteTipoFactura": 11, "cbteTipoNotaCredito": 13, "condicionIvaReceptorId": 1, "leyendaLey27618": false },
+    { "emisor": "MONOTRIBUTISTA", "receptor": "MONOTRIBUTISTA", "letra": "C", "cbteTipoFactura": 11, "cbteTipoNotaCredito": 13, "condicionIvaReceptorId": 6, "leyendaLey27618": false },
+    { "emisor": "MONOTRIBUTISTA", "receptor": "EXENTO", "letra": "C", "cbteTipoFactura": 11, "cbteTipoNotaCredito": 13, "condicionIvaReceptorId": 4, "leyendaLey27618": false },
+    { "emisor": "MONOTRIBUTISTA", "receptor": "CONSUMIDOR_FINAL", "letra": "C", "cbteTipoFactura": 11, "cbteTipoNotaCredito": 13, "condicionIvaReceptorId": 5, "leyendaLey27618": false },
+    { "emisor": "MONOTRIBUTISTA", "receptor": "SIN_CLIENTE", "letra": "C", "cbteTipoFactura": 11, "cbteTipoNotaCredito": 13, "condicionIvaReceptorId": 5, "leyendaLey27618": false },
+
+    { "emisor": "EXENTO", "receptor": "RESPONSABLE_INSCRIPTO", "letra": "C", "cbteTipoFactura": 11, "cbteTipoNotaCredito": 13, "condicionIvaReceptorId": 1, "leyendaLey27618": false },
+    { "emisor": "EXENTO", "receptor": "MONOTRIBUTISTA", "letra": "C", "cbteTipoFactura": 11, "cbteTipoNotaCredito": 13, "condicionIvaReceptorId": 6, "leyendaLey27618": false },
+    { "emisor": "EXENTO", "receptor": "EXENTO", "letra": "C", "cbteTipoFactura": 11, "cbteTipoNotaCredito": 13, "condicionIvaReceptorId": 4, "leyendaLey27618": false },
+    { "emisor": "EXENTO", "receptor": "CONSUMIDOR_FINAL", "letra": "C", "cbteTipoFactura": 11, "cbteTipoNotaCredito": 13, "condicionIvaReceptorId": 5, "leyendaLey27618": false },
+    { "emisor": "EXENTO", "receptor": "SIN_CLIENTE", "letra": "C", "cbteTipoFactura": 11, "cbteTipoNotaCredito": 13, "condicionIvaReceptorId": 5, "leyendaLey27618": false }
+  ]
+}

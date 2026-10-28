@@ -13,6 +13,7 @@ import com.ferreteria.clientes.repository.ImputacionRepository;
 import com.ferreteria.clientes.repository.MovimientoCuentaClienteRepository;
 import com.ferreteria.clientes.service.CuentaCorrienteService;
 import com.ferreteria.clientes.service.RegistroAjuste;
+import com.ferreteria.common.HoraArgentina;
 import com.ferreteria.ventas.model.Recibo;
 import com.ferreteria.ventas.repository.ReciboRepository;
 import com.ferreteria.ventas.service.RegistroVenta;
@@ -38,8 +39,9 @@ import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noMethods;
 /**
  * Fronteras entre modulos (R-022). {@code ventas} y {@code stock} hablan con el catalogo SOLO por el puerto
  * {@code catalogo.api} (tipos del JDK): nunca por sus entidades, repositorios o servicios. {@code stock} no
- * conoce a {@code ventas}. Y todavia no existe {@code facturacion}: solo ese modulo hablara con ARCA y llega
- * en la fase 5.
+ * conoce a {@code ventas}. Solo {@code facturacion} habla con ARCA (CU-07, S8): no conoce a ventas, clientes, stock
+ * ni catalogo, los demas la usan solo por {@code facturacion.api} (tipos del JDK) y toma la hora del {@code Clock}
+ * inyectado, nunca del reloj del sistema.
  *
  * El modulo {@code cotizacion} (R-024) no conoce a catalogo, ventas ni stock; {@code catalogo} lo usa SOLO por
  * {@code cotizacion.api} (tipos del JDK). Y {@code ventas} y {@code stock} ni lo nombran: el mostrador y las ventas
@@ -180,9 +182,77 @@ class ModulosArchTest {
         }
     }
 
+    // ---- Facturacion (CU-07, rama 2, S8): el unico modulo que habla con ARCA, con un puerto chico y sin reloj propio ----
+
+    /** {@code facturacion} no conoce el negocio que le pide facturas: quien la llama traduce a sus tipos. */
     @Test
-    void todaviaNoExisteElPaqueteFacturacion() {
-        noClasses().should().resideInAPackage("com.ferreteria.facturacion..").check(clases);
+    void facturacionNoDependeDeVentasClientesStockNiCatalogo() {
+        noClasses().that().resideInAPackage("com.ferreteria.facturacion..")
+                .should().dependOnClassesThat(resideInAnyPackage("com.ferreteria.ventas..", "com.ferreteria.clientes..",
+                        "com.ferreteria.stock..", "com.ferreteria.catalogo.."))
+                .check(clases);
+    }
+
+    /** Fuera de {@code facturacion} nadie usa sus entidades, servicios ni modelo: solo su puerto {@code facturacion.api}. */
+    @Test
+    void nadieDependeDeFacturacionSalvoPorSuPuerto() {
+        noClasses().that().resideOutsideOfPackage("com.ferreteria.facturacion..")
+                .should().dependOnClassesThat(resideInAPackage("com.ferreteria.facturacion..")
+                        .and(not(resideInAPackage("com.ferreteria.facturacion.api.."))))
+                .check(clases);
+    }
+
+    /** {@code facturacion.api} solo habla JDK y consigo mismo (molde de {@code clientes.api} y {@code auth.api}). */
+    @Test
+    void elPuertoDeFacturacionSoloDependeDelJdk() {
+        classes().that().resideInAPackage("com.ferreteria.facturacion.api..")
+                .should().onlyDependOnClassesThat(resideInAnyPackage("java..", "com.ferreteria.facturacion.api.."))
+                // El puerto todavia no existe: lo crea la rama 3, cuando la venta pida la factura. Hasta entonces la regla
+                // no tiene a quien mirar y no debe fallar por eso.
+                .allowEmptyShould(true)
+                .check(clases);
+    }
+
+    /**
+     * Solo {@code facturacion} conoce a ARCA: ningun otro paquete nombra sus hosts. Un host es un {@code String}, no un
+     * tipo, asi que el bytecode no registra la dependencia (y javac copia las constantes en el sitio de uso, ver la regla
+     * de {@code common}): se revisa el codigo fuente.
+     */
+    @Test
+    void soloFacturacionConoceLosHostsDeArca() throws IOException {
+        Pattern hostDeArca = Pattern.compile("afip\\.gov\\.ar|arca\\.gob\\.ar", Pattern.CASE_INSENSITIVE);
+        Path facturacion = Path.of("src/main/java/com/ferreteria/facturacion");
+        try (Stream<Path> archivos = Files.walk(Path.of("src/main/java"))) {
+            List<Path> revisados = archivos.filter(a -> a.toString().endsWith(".java"))
+                    .filter(a -> !a.startsWith(facturacion))
+                    .toList();
+            assertThat(revisados).as("archivos revisados fuera de facturacion").isNotEmpty();
+            assertThat(revisados.stream().filter(a -> hostDeArca.matcher(leer(a)).find()).map(Path::toString).toList())
+                    .as("archivos fuera de facturacion que nombran un host de ARCA").isEmpty();
+        }
+    }
+
+    /**
+     * {@code facturacion} toma la hora del {@code Clock} inyectado: no llama a {@code HoraArgentina.ahora()} ni
+     * {@code hoy()}, ni a ningun {@code now(...)} de {@code java.time} que no reciba un {@code Clock}
+     * ({@code LocalDateTime.now()}, {@code LocalDate.now()}, {@code Instant.now()}, y tambien {@code now(ZoneId)}).
+     */
+    @Test
+    void facturacionNoLeeElRelojDelSistema() {
+        noClasses().that().resideInAPackage("com.ferreteria.facturacion..")
+                .should().callMethodWhere(new com.tngtech.archunit.base.DescribedPredicate<JavaMethodCall>(
+                        "leer el reloj del sistema (HoraArgentina.ahora/hoy o un now() de java.time sin Clock)") {
+                    @Override
+                    public boolean test(JavaMethodCall call) {
+                        if (call.getTargetOwner().isEquivalentTo(HoraArgentina.class)) {
+                            return List.of("ahora", "hoy").contains(call.getName());
+                        }
+                        return call.getTargetOwner().getPackageName().equals("java.time") && call.getName().equals("now")
+                                && !call.getTarget().getRawParameterTypes().stream().map(t -> t.getName()).toList()
+                                        .equals(List.of(java.time.Clock.class.getName()));
+                    }
+                })
+                .check(clases);
     }
 
     @Test
