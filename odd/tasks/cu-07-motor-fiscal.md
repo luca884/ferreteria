@@ -22,13 +22,13 @@ Restricciones: la ferretería sale solo del JWT; toda tabla nueva con `ferreteri
 
 ## Tasks
 
-- [ ] T1 · S1, S2, S3, S7, S10 · ruta: delegada (writer «docs»; disparador: backstop de contexto ~150k, en paralelo con T2 y T3) · Aceptación: commit `docs:` que pasa D2, D3 (con el ajuste y el punto de venta fijo en 1), el modelo de datos (registro fiscal y ConfigArca en facturacion, Comprobante sin CAE ni estado fiscal), módulos, Integración ARCA (simulador, ambiente por registro, número al enviar, recuperación) y el Plan de implementación a `docs/spec.md` · Evidencia: — · Risk: none (docs)
-- [ ] T2 · S1, S7, S8 · ruta: delegada (writer «dominio», sigue con T5; disparador: unidades disjuntas en paralelo con T1 y T3, y backstop) · Aceptación: paquete `facturacion` con la letra A/B/C, el mapeo a WSFEv1 y el desglose por alícuota como funciones puras; tabla de verdad JSON en test resources; reglas nuevas de `ModulosArchTest` · Evidencia: — · Risk: none (dominio puro, sin persistencia)
-- [ ] T3 · S2, S5, S9, S10 · ruta: delegada (writer «motor», sigue con T6; diseña V32 para el motor de T6) · Aceptación: V32 aditiva (`config_arca`, `ferreteria.de_prueba`, `comprobante_fiscal` con CHECK de coherencia, `comprobante_fiscal_alicuota`, `intento_fiscal`, `serie_fiscal`; FK compuestas; UNIQUE (ferreteria_id, ambiente, punto_venta, cbte_tipo, numero)); `MigracionV32Test` con rollback con guarda; `MigracionV6Test` con la 32 · Evidencia: — · Risk: item 1 (migración) → commit propio
-- [ ] T4 · S2, S3, S9 · ruta: delegada (después del commit de T3) · Aceptación: ConfigArca y la marca «de prueba»; endpoints y panel del super admin para marcar, asignar SIMULADOR (punto de venta 1) y prender «facturación habilitada» con sus requisitos; 403 para Dueño y Vendedor; aislamiento; V1006 de dev-data · Evidencia: — · Risk: item 2 (cerrojo del ambiente y permisos)
-- [ ] T5 · S1, S6, S7 · ruta: delegada (writer «dominio», después de T2) · Aceptación: puerto WSFEv1 y simulador con V33, validaciones y observaciones del manual 4.8, latencia y fallas inyectables en tests, estado que sobrevive a un reinicio · Evidencia: — · Risk: item 1 (V33) y item 6 (la recuperación se prueba solo contra el simulador hasta la rama 11)
-- [ ] T6 · S5, S8 · ruta: delegada (writer «motor», después de T3 y T5) · Aceptación: registro fiscal con único escritor, serie con lease, intento antes de llamar, llamada sin transacción, resultado con UPDATE condicional, EN_VERIFICACION y recuperación, FIFO, chequeo de CbteFch y FUERA_DE_FECHA, rechazo que libera el número; batería de concurrencia con MySQL real · Evidencia: — · Risk: item 4 (concurrencia del motor)
-- [ ] T7 · todas · ruta: inline (suites) + `odd-verifier` por commit de riesgo · Aceptación: suite backend, suite frontend y `ng build` verdes; ego-browser del panel del super admin; verificador sin bloqueantes · Evidencia: — · Risk: —
+- [x] T1 · S1, S2, S3, S7, S10 · ruta: delegada (writer «docs»; disparador: backstop de contexto ~150k, en paralelo con T2 y T3) · Aceptación: commit `docs:` que pasa D2, D3 (con el ajuste y el punto de venta fijo en 1), el modelo de datos (registro fiscal y ConfigArca en facturacion, Comprobante sin CAE ni estado fiscal), módulos, Integración ARCA (simulador, ambiente por registro, número al enviar, recuperación) y el Plan de implementación a `docs/spec.md` · Evidencia: docs pasivos, sin RED; readback estructural del writer (6 tablas con columnas parejas, fences balanceados, referencias cruzadas con destino); muestra del padre: tabla A/B/C y CU-01 paso 2 correctos; `docs/spec.md` +93/−24 · Risk: none (docs)
+- [x] T2 · S1, S7, S8 · ruta: delegada (writer «dominio», sigue con T5; disparador: unidades disjuntas en paralelo con T1 y T3, y backstop) · Aceptación: paquete `facturacion` con la letra A/B/C, el mapeo a WSFEv1 y el desglose por alícuota como funciones puras; tabla de verdad JSON en test resources; reglas nuevas de `ModulosArchTest` · Evidencia: RED con stubs (82 tests, 2 fallas y 11 errores; `todaviaNoExisteElPaqueteFacturacion` violada 10 veces); GREEN `LetraTablaDeVerdadTest` 2, `DesgloseFiscalTest` 7, `MapeoWsfeTest` 4, `ModulosArchTest` 45, `TenantScopingArchTest` 24; las 5 reglas nuevas fallan con una violación sembrada en una copia scratch; commit `7525aeb` (T1: `b329c10`) · Risk: none (dominio puro, sin persistencia)
+- [x] T3 · S2, S5, S9, S10 · ruta: delegada (writer «motor», sigue con T6; diseña V32 para el motor de T6) · Aceptación: V32 aditiva (`config_arca` con la marca «de prueba» (L3), `comprobante_fiscal` con CHECK de coherencia, `comprobante_fiscal_alicuota`, `intento_fiscal`, `serie_fiscal`; FK compuestas; UNIQUE (ferreteria_id, ambiente, punto_venta, cbte_tipo, numero)); `MigracionV32Test` con rollback con guarda; `MigracionV6Test` con la 32 · Evidencia: RED 91 tests (89 errores «No migration with a target version 32», 2 fallas); GREEN `MigracionV32Test` 90/0, con `MigracionV6Test#historialDeMigraciones` y `MigracionV31Test` 100/0; `MigracionV29Test#ningunaFkDeNegocioSoloPorId` 1/1; control del padre `MigracionV6Test` 1/1; commit `6eab13c`; `odd-verifier`: B1 (L7) corregido en `1e07edf` y cerrado en el recheck con el cliente real (L18) · Risk: item 1 (migración) → commit propio
+- [x] T4 · S2, S3, S9 · ruta: delegada (después del commit de T3) · Aceptación: ConfigArca y la marca «de prueba»; endpoints y panel del super admin para marcar, asignar SIMULADOR (punto de venta 1) y prender «facturación habilitada» con sus requisitos; 403 para Dueño y Vendedor; aislamiento; V1006 de dev-data · Evidencia: RED `ConfigArcaTest` 19 (stub), `TenantScopingArchTest#todosLosRepositoriosDeFacturacionSonDeTenant` (repo sembrado con `JpaRepository`), `ConfigArcaAdminIntegrationTest` 11/13 (404), `DatosDemoCuitIntegrationTest`, 11 specs del panel; GREEN backend focalizado 148/0, migraciones V6/V7/V8/V24-V27 55/0, frontend 47/47, `ng build` OK; control del padre 32/32; commits `4c2c3b7` y `8328ae1` (corrección); `odd-verifier`: B1 cerrado en el recheck (62/0; `totalVentas`, `ventasDelDia` y `puntoVentas` sembradas siguen fallando; los 404 no crean filas) · Risk: item 2 (cerrojo del ambiente y permisos)
+- [x] T5 · S1, S6, S7 · ruta: delegada (writer «dominio», después de T2) · Aceptación: puerto WSFEv1 y simulador con V33, validaciones y observaciones del manual 4.8, latencia y fallas inyectables en tests, estado que sobrevive a un reinicio · Evidencia: RED V33 35 (34 errores y 1 falla), simulador 97 (stub), ajuste de `Obs` 114 con 47 fallas; GREEN del writer 218/0; control del padre en el árbol principal, con T4: 254/0; commit `302856b`; `odd-verifier` sin bloqueantes (231/0 y 191/0 focalizados, 7 sondas propias); sus sondas pasan a `SimuladorWsfeBordesTest` (se corre en T7) · Risk: item 1 (V33) y item 6 (la recuperación se prueba solo contra el simulador hasta la rama 11)
+- [x] T6 · S5, S8 · ruta: delegada (writer «motor», después de T3 y T5) · Aceptación: registro fiscal con único escritor, serie con lease, intento antes de llamar, llamada sin transacción, resultado con UPDATE condicional, EN_VERIFICACION y recuperación, FIFO, chequeo de CbteFch y FUERA_DE_FECHA, rechazo que libera el número; batería de concurrencia con MySQL real · Evidencia: RED con stubs, 110 tests (9 fallas y 29 errores); GREEN del writer focalizado 280/0 y concurrencia 9/9 en 5 corridas (delta de deadlocks 0); cada regla de ArchUnit falla con su semilla; control del padre 30/0 (con `SimuladorWsfeBordesTest`); commit `c2d1bf4`; `odd-verifier`: B1 (reenvío N−1 sin ventana, L19) corregido en `46bf0ec` (RED→GREEN, sondas en `MotorFiscalBordesIntegrationTest` 23/0) y cerrado en el recheck (L21; sus sondas en `4e53955`, `MotorFiscalReenvioIntegrationTest` 8/0) · Risk: item 4 (concurrencia del motor)
+- [x] T7 · todas · ruta: inline (suites) + `odd-verifier` por commit de riesgo · Aceptación: suite backend, suite frontend y `ng build` verdes; ego-browser del panel del super admin; verificador sin bloqueantes · Evidencia: suite backend sobre `4e53955` 5088/0, BUILD SUCCESS en 21:27 min; frontend 132 archivos verdes y `ng build` OK sobre `c2d1bf4` (el frontend no cambió después); ego-browser del panel OK (L20); los 4 verificadores sin bloqueantes abiertos (L7/L18, L10/L13, L16, L19/L21) · Risk: item 1 (V32, V33), item 4 (motor), item 6 (la recuperación se prueba solo contra el simulador hasta la rama 11)
 
 ## Log
 
@@ -51,3 +51,222 @@ Restricciones: la ferretería sale solo del JWT; toda tabla nueva con `ferreteri
   - `TenantScopingArchTest` suma «todo repositorio de `facturacion..repository` es de tenant».
   - V1006 solo corrige los CUIT demo, sin tocar objetos de V32/V33, porque seis tests de migración corren `db/dev-data` solo sobre bases viejas. La marca «de prueba» de las ferreterías demo se pone desde el panel, que es el flujo real.
   - Writers con Opus (caso 5). El writer «motor» diseña V32 pensando en el motor de T6 y lo continúa; el writer «dominio» sigue con el simulador (T5), que comparte la tabla de verdad. · Próximo paso: T1, T2 y T3 en paralelo.
+- L4 (2026-10-28) T1 y T2 hechas. Decisiones técnicas del writer «dominio»: redondeo HALF_EVEN en el desglose (con las seis alícuotas, T/(1+a) nunca cae justo en medio centavo, así que da lo mismo que HALF_UP y coincide con el chequeo 10051 del simulador); una alícuota cuyo T suma 0 no va en AlicIva; se suma `ImpTrib` en 0 porque entra en la ecuación de ImpTotal; `RenglonFiscal` rechaza totales negativos o con más de 2 decimales; la regla del reloj prohíbe todo `now(...)` de `java.time` salvo `now(Clock)`. La spec quedó con los estados PENDIENTE, EN_CURSO, EN_VERIFICACION, AUTORIZADO, RECHAZADO y FUERA_DE_FECHA: hay que cruzarlos con los de V32 (T3). El worktree aislado arrancó en `c9e3dfe` y el writer hizo fast-forward a `85187a3`; los próximos writers en worktree tienen que verificar la base. · Próximo paso: cerrar T3.
+- L5 (2026-10-28) T3: V32 commiteada sola (`6eab13c`). Diseño del writer «motor»:
+  - estados del registro: PENDIENTE, EN_CURSO, EN_VERIFICACION, AUTORIZADO, RECHAZADO, FUERA_DE_FECHA y dos alertas que traban la serie sin renumerar, CAE_NO_COINCIDE y SERIE_DESINCRONIZADA (la spec se alineó en el mismo commit);
+  - intento = un FECAESolicitar: ABIERTO, EN_VERIFICACION y ALERTA abiertos; AUTORIZADO, RECHAZADO y NO_LLEGO cerrados; el reenvío por N−1 cierra el intento viejo y abre otro con el mismo número y fecha;
+  - a lo sumo un intento abierto por serie con un UNIQUE funcional (`uk_intento_fiscal_abierto_por_serie`);
+  - lease en `serie_fiscal` (`lease_dueno` UUID por toma, `lease_vence`) con UPDATE condicional; `ultimo_autorizado` NULL = todavía no se consultó;
+  - CHECK de coherencia como igualdades booleanas; CHECK de (clase, letra, CbteTipo), de ImpTotal = suma de los importes, DocTipo, CondicionIVAReceptorId, Id de IVA y rangos de punto de venta y número.
+  Para T6: el TTL del lease tiene que superar el presupuesto total de la llamada; si no, otra instancia puede ver N−1 con la llamada en vuelo y reenviar. · En paralelo: `odd-verifier` sobre `6eab13c`, investigación de los códigos y mensajes del manual WSFEv1 para T5 (el writer no tiene web) y T4 en el árbol principal.
+- L6 (2026-10-28) Investigación del manual WSFEv1 (agente con web; referencia en el vault, `evidencia/plan-facturacion/wsfev1-referencia.md`). Fuente: «RG 4291 – Proyecto FE v4.8, revisión 1 de diciembre de 2026», https://www.afip.gob.ar/fe/ayuda/documentos/wsfev1-RG-4291.pdf. Diferencias con el plan:
+  - 10015 es la identificación del receptor en la B (DocTipo 99 y DocNro 0 bajo el tope), no formato;
+  - 10040 es la compatibilidad con `CbtesAsoc`;
+  - 10243 es la condición inválida para la clase y 10246 la ausencia;
+  - el anexo cruza la condición con la clase: A admite 1, 6, 13 y 16; B admite 4, 5, 7, 8, 9, 10 y 15. La tabla A/B/C de D2 coincide;
+  - tolerancia de 10048, 10051, 10023 y 10061: relativo ≤ 0,01 % o absoluto ≤ 0,01, HALF_EVEN;
+  - CbteFch del concepto 1: N−5 a N+5 sin salir del mes, y no anterior al último autorizado.
+  Inferido: CAEFchVto = CbteFch + 10, CAE de 14 dígitos, Ids de IVA 8 y 9. No está en el manual: el Msg literal por código, el monto de la RG 4444 y la respuesta de FECompConsultar ante un comprobante inexistente. Se confirman contra homologación en la rama 6. · T5 lanzada en worktree, con esa referencia.
+- L7 (2026-10-28) `odd-verifier` (opus) sobre `6eab13c`. El esquema sirve al motor de S5 sin huecos:
+  - aditiva (dump idéntico al de V31 sin las tablas nuevas);
+  - out-of-order sobre una base dev con datos demo;
+  - las FK no cruzan ferreterías;
+  - el UNIQUE funcional frena dos intentos abiertos, también en concurrencia y en una reapertura por UPDATE;
+  - el lease toma, renueva y vence sin carreras;
+  - el CHECK de coherencia deja pasar todas las transiciones de S5 y rechaza los estados imposibles.
+  
+  Tests: `MigracionV32Test` 90/0; V6, V7, V8, V24 a V27, V29 y V31: 74/0.
+  
+  **Bloqueante B1**: `rollback-v32-facturacion.sql:10-24` borra las 5 tablas con datos y la fila 32 del historial si se pega en un `mysql` interactivo o se corre con `--force`. La guarda es un INSERT que falla y los DROP no dependen de ella. En la base (`7525aeb`) el rollback de V31 no borra.
+  
+  Advisories:
+  - A1: nada en la base ata el intento a la serie ni al número del registro (lo cuida T6).
+  - A2: la collation `_ci` acepta estados en minúscula, y el CAE no tiene CHECK de formato.
+  - A3: la spec no lista los estados del intento ni las columnas de la serie. Las alertas cuentan como abiertas para el cerrojo; el pedido de T4 ya lo dice.
+  - A4: ImpTrib, Concepto y MonId no se guardan.
+  - A5: no hay CHECK de «punto de venta 1 con SIMULADOR».
+  - A6: para la rama 3, tres tests hacen `delete from comprobante` y van a chocar con la FK del registro fiscal.
+  - A7: problema previo: el rollback de V31 en modo interactivo borra la fila 31 del historial.
+  
+  Corrección (una tanda, al writer «motor» cuando T4 libere el árbol):
+  - B1, con un test en modo «continuar ante error»;
+  - A5 como CHECK;
+  - las sondas del verificador como regresión (EN_VERIFICACION y ALERTA contra un ABIERTO, reapertura por UPDATE, N−1 en una transacción, dos tomas del lease).
+  
+  Después, un recheck acotado a B1.
+- L8 (2026-10-28) T4 commiteada sola (`4c2c3b7`). Decisiones del writer:
+  - rutas `PATCH /api/admin/ferreterias/{id}/de-prueba`, `/simulador` y `/facturacion`, con el patrón de `/activo` (400, 404, 422);
+  - `@UnscopedTenantAccess` en métodos puntuales de `ConfigArcaParaPlataformaImpl`; no se fija `TenantContext` con el id de la ruta;
+  - el cerrojo vive en `ConfigArca` (`ReglaDeNegocioException`) y suma «homologación y producción no se tocan desde el panel»;
+  - «abiertos» = todo estado salvo AUTORIZADO, RECHAZADO y FUERA_DE_FECHA, y las alertas cuentan; las consultas son nativas sobre `comprobante_fiscal` hasta que T6 traiga la entidad;
+  - un 422 no crea la fila; prender de nuevo conserva `habilitada_en` y apagar la borra;
+  - `elPuertoDeFacturacionSoloDependeDelJdk` pasa a `allowEmptyShould(false)`.
+  Gotcha: con `-Dtest='A,B#metodo'`, surefire saltea las clases `@Nested`.
+  Para la rama 3: el chequeo de «sin registros abiertos» no toma lock; el alta del registro y el cambio de ambiente se coordinan con `FOR SHARE` en `config_arca` al registrar y `FOR UPDATE` en el panel.
+- L9 (2026-10-28) Corrección de B1 (writer «motor», en un worktree scratch, patch aplicado por el padre). El rollback de V32:
+  1. suelta una guarda vieja;
+  2. crea la guarda con `CREATE TABLE … (CHECK (filas = 0)) SELECT` de la suma de los COUNT;
+  3. borra todo en un único `DROP TABLE` que incluye la guarda (atómico: sin guarda no borra nada);
+  4. borra la 32 del historial solo si las tablas ya no existen.
+  
+  A5: CHECK `ck_config_arca_simulador_punto_venta`. Sondas del verificador como tests:
+  - EN_VERIFICACION y ALERTA contra un ABIERTO;
+  - reapertura por UPDATE;
+  - N−1 en una transacción;
+  - dos tomas del lease, con `BarreraDeLocks`.
+  
+  RED: `MigracionV32Test` 107 tests, 7 fallas (B1 en sus 5 casos, A5 en 2). GREEN 107/0. Control del padre con `ConfigArcaAdminIntegrationTest`, `ConfigArcaTest` y `MigracionV6Test`: 153/0. Commit `1e07edf`. Recheck de B1 pedido al verificador.
+- L10 (2026-10-28) `odd-verifier` (opus) sobre `4c2c3b7` (T4). Lo que se verificó:
+  - permisos: 135 casos de Dueño, Vendedor y Dueño ajeno dan 403, sin token 401, y ninguna variante de ruta saltea el permiso;
+  - inexistente 404, cuerpos inválidos 400;
+  - todo el cerrojo, por HTTP;
+  - habilitar con CU-01 completo;
+  - regresión del alta, suspender y reset contra la base;
+  - `@UnscopedTenantAccess` solo alcanzable por SUPER_ADMIN.
+
+  S2 y S3 cumplidos. S9 no cumplido por B1.
+  - **B1 (T4)**: `SuperAdminSinVentasIntegrationTest:44` falla con la clave `puntoVenta` (prohíbe toda clave con «venta»). En `6eab13c` pasa, y el 148/0 del writer no lo incluía. Es un falso positivo de la heurística, pero deja la suite en rojo.
+  - Advisories:
+    - A1: ninguna regla ata las consultas con ferretería explícita de `ConfigArcaRepository` a `@UnscopedTenantAccess`, ni limita `ConfigArcaParaPlataforma` a `plataforma`;
+    - A2: update perdido entre «sacar marca» y «asignar simulador» en paralelo (dos 200; el CHECK sostiene la invariante);
+    - A3: el primer toque concurrente da 409 genéricos;
+    - A4: el javadoc de `configDe` no es exacto;
+    - A5: la coerción de Jackson ya estaba en la base.
+
+  Corrección en una tanda, a cargo del writer de T4: B1 (excepción acotada para `puntoVenta` en el test), A2 (lock pesimista en las acciones del panel, con test de concurrencia), A1 (dos reglas de ArchUnit), A4 y las sondas como regresión. Después, recheck de B1.
+- L11 (2026-10-28) T5 (writer «simulador», en un worktree desde `6eab13c`):
+  - puerto `facturacion/wsfe` (`ServicioWsfe`, records de WSFEv1, `PedidoNoLlegoException` y `ResultadoInciertoException`);
+  - simulador `facturacion/simulador` con V33 y su rollback;
+  - suite de contrato abstracta (`ContratoWsfeTest`) y fallas en un decorador de test (`WsfeConFallas`).
+  
+  RED V33: 35 tests, 34 errores y 1 falla. RED simulador: 97 tests (stub y `Campos` vacío). GREEN focalizado: 214/0. Sin RED propio: la concurrencia del simulador (6 pedidos simultáneos con el mismo número dan un A y cinco 10016).
+  
+  Inferidos (marcados en el código): CAE de 14 dígitos al azar, CAEFchVto = CbteFch + 10, Ids 8 y 9, CbteNro 0 sin comprobantes, 602 al consultar un inexistente, padrón = CUIT con dígito válido, 10217, 10188, 10237 y 10041. Códigos sumados: 10007 y 10242. Montos configurables sin verificar contra la normativa: `tope-rg4444` 10.000.000 y `minimo-fce` 3.958.316.
+  
+  10051: compara el Importe contra BaseImp × alícuota sin redondear (si redondeara al centavo, la suma por renglón quedaría justo a 0,01 y pasaría). Los arrays van en TEXT con CHECK de JSON, porque una columna JSON de MySQL devuelve 100.00 como 100.0.
+  
+  Ajustes pedidos antes de integrar:
+  - sacar `wsfe.Ambiente` y usar el de T4;
+  - los rechazos de validación van en las `Obs` del detalle con R, como en los ejemplos del manual (págs. 83 y 86), no en `Errors` (el error estaba en el pedido del padre).
+  
+  Reglas de ArchUnit propuestas para después (T6 o integración): todo repositorio de `facturacion..` es de tenant, también `facturacion.simulador`, y nadie fuera del simulador depende de `SimuladorWsfe` ni de sus repositorios.
+- L12 (2026-10-28) Corrección de T4 (`8328ae1`):
+  - **B1**: excepción solo para la clave `puntoVenta` en `SuperAdminSinVentasIntegrationTest`. RED: la falla original. GREEN: 2/0.
+  - **A2**: las acciones del panel arrancan con `crearSiFalta` (`INSERT … ON DUPLICATE KEY UPDATE`, lock exclusivo) y siguen con `bloquearDeFerreteria` (`PESSIMISTIC_WRITE`). El lock va primero en la transacción: en REPEATABLE READ, la foto de las lecturas sin lock se toma en la primera lectura. Por eso el 404 de una ferretería inexistente ahora sale del puerto. `FOR UPDATE` solo, sobre una fila inexistente, daba deadlock por locks de hueco. `ConfigArcaConcurrenciaIntegrationTest`: RED con `[200, 200]` y `[200, 409]`; GREEN 3/3, con delta de deadlocks 0.
+  - **A1**: `TenantScopingArchTest#lasConsultasDeConfigArcaSoloLasLlamaCodigoConExcepcionDocumentada` y `ModulosArchTest#elPuertoDeConfigArcaParaPlataformaSoloLoUsaPlataforma`. Las dos tienen su RED con una violación sembrada en una copia scratch.
+  - **A4**: el javadoc queda documentado. Un `false` sin fila deja la fila por defecto; una regla rota la revierte.
+  - Sondas: 9 tests nuevos en `ConfigArcaAdminIntegrationTest` (22/22).
+  
+  Focalizado del writer: 166/0. Control del padre: 20/0.
+  
+  Para la rama 3: al dar de alta un registro, leer `config_arca` con `FOR SHARE` hasta el commit (documentado en el repositorio y el puerto). Recheck de B1 pedido al verificador de T4.
+- L13 (2026-10-28) Recheck de T4 sobre `8328ae1`: B1 cerrado. Efectos nuevos, sin defecto:
+  - el 404 sale del puerto, con el mismo mensaje;
+  - un 422 hace INSERT y rollback (deja un hueco en el AUTO_INCREMENT);
+  - `crearSiFalta` toma un lock compartido de `ferreteria` (`INSERT … SELECT`). Leyendo el código no hay ciclo con `/activo`, pero no se probó en concurrencia: queda como advisory.
+- L14 (2026-10-28) T5 integrada en `302856b`. El writer aplicó estos ajustes antes de integrar:
+  - sacó `wsfe.Ambiente` y usa `facturacion.model.Ambiente`;
+  - los rechazos del detalle van en las `Obs` con R y sin CAE (ejemplo 4, p. 86); en `Errors` quedan 10007 (cabecera, sin detalle; ejemplo 3, p. 84) y el 602 de `FECompConsultar`;
+  - el ambiente que no es SIMULADOR sigue siendo una excepción y no un R, para que el motor no libere el número por un error de configuración;
+  - 10242 va en `Obs`, por inferencia: es una validación del campo;
+  - el rollback de V33 sigue el molde seguro de B1.
+
+  Se lanzaron en paralelo el `odd-verifier` de T5 y el writer de T6 (motor, árbol principal).
+- L15 (2026-10-28) Luca, textual: «okey cuando termines con la rama dos cerra sesion y dejamos lo proxima para la otra session». Al cerrar T7 se cierra la sesión (Obsidian y resumen en Engram) y la rama 3 queda para la próxima.
+- L16 (2026-10-28) `odd-verifier` (opus) sobre `302856b` (T5): sin bloqueantes; S1, S6 y S7 cumplidos. Lo que verificó:
+  - el anexo completo, 140 casos;
+  - las tolerancias justo en el límite y apenas afuera, con 1 y con 3 alícuotas;
+  - la CbteFch en cambio de mes y de año, y en el concepto 2;
+  - la combinación de varias fallas en orden;
+  - que un rechazo no toca nada;
+  - que `REQUIRES_NEW` sobrevive al rollback de quien llama;
+  - 15 rondas de concurrencia con dos ferreterías y la misma CUIT, con delta de deadlocks 0;
+  - un barrido de 20.000 desgloses al azar sin ningún rechazo;
+  - V33 aditiva, out-of-order y con el rollback probado con el `mysql --force` real.
+
+  Advisories:
+  - A1: CbteTipo o PtoVta 0 dan `JpaSystemException`, porque el simulador toma la serie antes de validar, y un CbteTipo 999 deja una fila de serie huérfana;
+  - A2: los importes negativos se aprueban, cuando ARCA da 10043 a 10047 o 10065;
+  - A3: una C con ImpIVA ≠ 0 sin array se aprueba, y una A o B con neto sin array sale con 10061 en vez de 10070/10018;
+  - A4: la tolerancia relativa es asimétrica (toma el informado como el valor real; es inferido);
+  - A5: la ventana de las FCE y el CDI no están modelados;
+  - A6: el «reinicio» se prueba con una instancia nueva sobre la misma base.
+
+  Ninguno afecta lo que genera el motor. Las sondas se pasaron a `SimuladorWsfeBordesTest`, con el registro en memoria en lugar de `/tmp`.
+- L17 (2026-10-28) T6 en `c2d1bf4`. Las sondas de T5 quedaron como `SimuladorWsfeBordesTest` en `6fb23ae` (7/0).
+
+  Diseño:
+  - `MotorFiscal` no es transaccional y es el único que llama al puerto. `PasosFiscales` es el único escritor, con pasos `@Transactional` cortos.
+  - Entidades `@Immutable`, sin setters. Cada transición es un UPDATE nativo condicional, que si no toca una fila lanza `PasoDescartadoException`.
+  - Locks en orden serie → registro → intento.
+  - Lease de 180 s con presupuesto de 60 s. El bean no arranca si el lease no lo supera.
+  - Primera sincronización con `FECompUltimoAutorizado` + `FECompConsultar(último)`.
+  - EN_VERIFICACION se resuelve en la atención siguiente. Un ABIERTO huérfano pasa a EN_VERIFICACION.
+  - La adopción exige `FeCaeDetRequest.equals`, el mismo ptoVta y CbteTipo, A, CAE y vencimiento.
+  - `AltaFiscal(comprobanteId, ReceptorFiscal, renglones)`, con `FOR SHARE` sobre `config_arca`.
+  - `WsfePorAmbiente` toma el simulador por `@Qualifier`.
+  - `RelojControlable` en los tests.
+  - La regla de tenant cubre todo `facturacion..`; antes tenía un punto ciego.
+
+  Advisories del writer para las ramas 6 y 7:
+  - ARCA adelante de la caché da 10016 sin resincronizar.
+  - Un reenvío por N−1 contra un ARCA que procesó tarde deja un CAE huérfano.
+  - Un alta junto a la liberación de la serie queda PENDIENTE hasta la próxima atención (la levanta el job).
+
+  Suite frontend: 132 archivos verdes; `ng build` OK (el aviso de `dialogo-cobro` ya estaba).
+- L18 (2026-10-28) Recheck de B1 de V32 sobre `1e07edf`: cerrado. Se probó en un MySQL 8.4.11 descartable con el cliente real:
+  - con `--force` y en modo interactivo, con una fila en cualquiera de las 5 tablas o con datos en todas, el rollback da ERROR 3819 y 1051, no borra nada y la fila 32 queda;
+  - una guarda vieja con `filas=0` más datos no habilita el DROP;
+  - sin datos, el esquema queda igual al de V31;
+  - `MigracionV32Test` da 107/0.
+
+  Advisories nuevos:
+  - con `sql_require_primary_key=ON`, la guarda no se crea y el rollback no hace nada (falla sin borrar). Antes de usarlo en Railway, hay que revisar esa variable;
+  - `mysql --force` sale con código 0 aunque se niegue (ya pasaba).
+
+  El primer verificador de V32 quedó colgado en un trabajo de fondo y se paró; el recheck lo hizo uno nuevo.
+- L19 (2026-10-28) `odd-verifier` (opus) sobre `c2d1bf4` (T6).
+  - Corridas: 36/0 focalizado; la concurrencia 9/0 en 6 corridas; el panel con el `FOR SHARE` nuevo 120/0.
+  - Sondas: 27 propias. Cada regla de ArchUnit falló con su semilla.
+  - S8, S2 (lo de T6) y S7: cumplidos.
+  - B1 (S5): el reenvío por N−1 no pasaba por `VentanaCbteFch`.
+    - Caso: venta del 23/10, envío el 28/10 (N−5), timeout, atención el 29/10.
+    - Daba RECHAZADO por 10016 y un segundo `FECAESolicitar` a ciegas.
+    - Corrección en `46bf0ec`, test primero: RED `reenvioConLaCbteFchFueraDeLaVentana` (RECHAZADO en vez de FUERA_DE_FECHA).
+    - Ahora `PasosFiscales.fueraDeFechaSinReenvio`, en una transacción, renueva el lease, pasa EN_VERIFICACION a FUERA_DE_FECHA sin número ni CbteFch y cierra el intento NO_LLEGO.
+    - GREEN: motor y ArchUnit 99/0.
+  - Las sondas pasan a `MotorFiscalBordesIntegrationTest`: 23/0, y con el motor 38/0. Quedan afuera p1b, p10d y p11, que son advisories, y p6g, que cubre el test nuevo.
+  - Advisories:
+    - A1, fuera de dominio. Una llamada más larga que el lease deja RECHAZADO aunque ARCA lo autorizó, y la caché queda atrás (10016 en cadena). Nadie valida `simulador.latencia` contra `presupuesto-llamada`. Recomendación para la rama 6: ante una R con 10016, resincronizar o verificar en vez de liberar. Tampoco hay espera mínima antes de verificar.
+    - A2, rama 3. `atender` dentro de una transacción de quien llama rompe S5 sin aviso: el intento no se ve durante la llamada y queda una conexión tomada. Hace falta una guarda (`isActualTransactionActive()`) o `REQUIRES_NEW`.
+    - A3, rama 3. Si quien llama ya cargó la entidad `ConfigArca`, el `FOR SHARE` nativo devuelve la instancia vieja del contexto de persistencia y crea un registro con la facturación apagada.
+    - A4. La regla de único escritor no ve `JdbcTemplate` ni un `@Modifying` de otro repositorio. Hoy no hay ninguno.
+    - A5. La batería no exigía al menos un OCUPADA. `p12` lo exige ahora en el total de 15 rondas.
+    - A6, rama 6. Una excepción del puerto sin traducir deja el intento ABIERTO. El adaptador real tiene que traducirlas.
+- L20 (2026-10-28) ego-browser, panel del super admin en dev local, sobre `46bf0ec`:
+  - Habilitar la facturación sin ambiente da «Para habilitar la facturación, la ferretería necesita un ambiente de ARCA y un punto de venta.».
+  - Con el simulador pero sin datos fiscales da el aviso de los tres datos que faltan.
+  - Con los datos cargados (por API, como Dueño), la facturación se habilita: la fila muestra «Sí · Simulador · Sí».
+  - Con la facturación habilitada:
+    - «Quitar simulador» se niega con «Primero deshabilitá la facturación…»;
+    - «Quitar marca de prueba» se niega con «…quitale el simulador primero.».
+  - Al deshabilitar, el simulador y la marca se quitan en ese orden.
+  - El Tornillo y Prueba SRL quedaron como estaban, con los datos fiscales de El Tornillo otra vez vacíos.
+  - Observación: a 1470 px, las columnas De prueba, Ambiente y Factura quedan fuera de vista y hay que desplazar la tabla.
+- L21 (2026-10-28) Recheck de B1 de T6 sobre `46bf0ec`: cerrado.
+  - En la base `c2d1bf4`, p6f, p6g y `reenvioConLaCbteFchFueraDeLaVentana` fallan; en `46bf0ec`, pasan.
+  - Comando pedido, más las sondas del recheck: 122/0, y las 9 sondas también.
+  - Lo vecino sigue igual:
+    - el reenvío dentro de la ventana, incluso en N−5 a las 23:59 y de un mes al otro;
+    - adopción y alertas;
+    - el rollback completo de `fueraDeFechaSinReenvio`, descartado por intento, registro o lease cambiados.
+  - `vencerSinReenvio` solo lo llama `PasosFiscales`. ArchUnit 48 y 26.
+  - Sin advisories nuevos. Las sondas p6g y r1 a r7 quedaron como `MotorFiscalReenvioIntegrationTest` en `4e53955` (8/0).
+- L22 (2026-10-28) Cierre de la rama.
+  - Suite backend sobre `4e53955`: 5088/0, BUILD SUCCESS en 21:27 min. Con la rama 1 eran 4697 en 11:50 min; el tiempo extra coincide con un contenedor de otro proyecto corriendo a la vez.
+  - El frontend no cambió desde `c2d1bf4`.
+  - Pendientes que no son de esta rama:
+    - la fecha mínima del inicio de actividades (A2 de la rama 1; hoy solo se exige que no sea nula);
+    - los advisories de L17 y L19, para las ramas 3, 6 y 7;
+    - revisar `sql_require_primary_key` antes de usar los rollbacks en Railway.
+  - Merge y push: Luca, primero la rama 1 y después esta. La rama 3 queda para la próxima sesión (L15).
