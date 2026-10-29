@@ -52,6 +52,10 @@ public class SecurityConfig {
                         // Los datos fiscales de la ferreteria (CU-01 paso 1) los lee y los edita solo el Dueño: el
                         // Vendedor y el super admin reciben 403 aunque el cuerpo no valide.
                         .requestMatchers("/api/datos-fiscales/**").hasRole("DUENO")
+                        // La facturacion de la ferreteria (CU-01 pasos 2 y 3: punto de venta, pedido de certificado y
+                        // certificado de ARCA) es solo del Dueño: el Vendedor y el super admin reciben 403 aunque el cuerpo
+                        // no valide.
+                        .requestMatchers("/api/facturacion/**").hasRole("DUENO")
                         // «Recalcular ahora» tambien: el GET de la cotizacion (/api/cotizacion) sigue siendo de todos.
                         .requestMatchers(HttpMethod.POST, "/api/cotizacion/recalculo").hasRole("DUENO")
                         // Editar los ajustes de un articulo es solo del Dueño; el 403 va antes de leer el cuerpo.

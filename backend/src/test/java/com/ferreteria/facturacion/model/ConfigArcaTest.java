@@ -3,9 +3,12 @@ package com.ferreteria.facturacion.model;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.ferreteria.common.exception.ConflictException;
+import com.ferreteria.common.exception.DatosInvalidosException;
 import com.ferreteria.common.exception.ReglaDeNegocioException;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -226,6 +229,106 @@ class ConfigArcaTest {
                 + "actividades e Ingresos Brutos. Los carga el Dueño en «Datos de la ferretería».");
         assertThat(config.isFacturacionHabilitada()).isFalse();
         assertThat(config.getHabilitadaEn()).isNull();
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = Ambiente.class, names = {"HOMOLOGACION", "PRODUCCION"})
+    @DisplayName("hasta la conexión real (rama 6), la facturación no se prende en homologación ni producción (S13)")
+    void habilitarNoSaleEnHomologacionNiProduccion(Ambiente ambiente) {
+        ConfigArca config = conAmbienteDelCertificado(ambiente);
+
+        assertRegla(() -> config.habilitar(List.of(), AHORA),
+                "La facturación con ARCA se habilita cuando esté la conexión real.");
+        assertThat(config.isFacturacionHabilitada()).isFalse();
+        assertThat(config.getHabilitadaEn()).isNull();
+    }
+
+    // ---- punto de venta del Dueño (rama 5, S2) ----
+
+    @ParameterizedTest
+    @EnumSource(value = Ambiente.class, names = {"HOMOLOGACION", "PRODUCCION"})
+    @DisplayName("el Dueño cambia el punto de venta sin ambiente o con el del certificado, si no hay registros abiertos")
+    void cambiarPuntoVenta(Ambiente ambiente) {
+        ConfigArca sinAmbiente = ConfigArca.nueva(7L);
+        ConfigArca conCertificado = conAmbienteDelCertificado(ambiente);
+
+        assertThat(sinAmbiente.motivoPuntoVentaTrabado(false)).isNull();
+        sinAmbiente.cambiarPuntoVenta(99998, false);
+        conCertificado.cambiarPuntoVenta(5, false);
+
+        assertThat(sinAmbiente.getPuntoVenta()).isEqualTo(99998);
+        assertThat(sinAmbiente.getAmbiente()).isNull();
+        assertThat(conCertificado.getPuntoVenta()).isEqualTo(5);
+        assertThat(conCertificado.getAmbiente()).isEqualTo(ambiente);
+    }
+
+    @Test
+    @DisplayName("el punto de venta queda trabado con el simulador (fijo en 1) o con registros abiertos: 409 con el motivo")
+    void puntoVentaTrabado() {
+        ConfigArca simulador = conSimulador();
+        ConfigArca conAbiertos = conAmbienteDelCertificado(Ambiente.HOMOLOGACION);
+
+        assertThat(simulador.motivoPuntoVentaTrabado(false)).isEqualTo("Con el simulador el punto de venta es 1.");
+        assertThat(conAbiertos.motivoPuntoVentaTrabado(true))
+                .isEqualTo("Hay facturas en trámite con ARCA: el punto de venta no se puede cambiar.");
+        assertThatThrownBy(() -> simulador.cambiarPuntoVenta(3, false)).isInstanceOf(ConflictException.class)
+                .hasMessage("Con el simulador el punto de venta es 1.");
+        assertThatThrownBy(() -> conAbiertos.cambiarPuntoVenta(4, true)).isInstanceOf(ConflictException.class)
+                .hasMessage("Hay facturas en trámite con ARCA: el punto de venta no se puede cambiar.");
+        assertThat(simulador.getPuntoVenta()).isEqualTo(1);
+        assertThat(conAbiertos.getPuntoVenta()).isEqualTo(3);
+    }
+
+    // ---- el ambiente que fija el certificado (rama 5, S16) ----
+
+    @ParameterizedTest
+    @EnumSource(value = Ambiente.class, names = {"HOMOLOGACION", "PRODUCCION"})
+    @DisplayName("sin ambiente, el certificado fija el de su CA y deja el punto de venta y la facturación como estaban")
+    void sinAmbienteElCertificadoLoFija(Ambiente deLaCa) {
+        ConfigArca config = ConfigArca.nueva(7L);
+
+        config.fijarAmbienteDelCertificado(deLaCa, RegistrosFiscales.NINGUNO);
+
+        assertThat(config.getAmbiente()).isEqualTo(deLaCa);
+        assertThat(config.getPuntoVenta()).isNull();
+        assertThat(config.isFacturacionHabilitada()).isFalse();
+    }
+
+    @Test
+    @DisplayName("de homologación a producción solo sin registros abiertos (409); el mismo ambiente no cambia nada")
+    void deHomologacionAProduccion() {
+        ConfigArca conAbiertos = conAmbienteDelCertificado(Ambiente.HOMOLOGACION);
+        ConfigArca sinAbiertos = conAmbienteDelCertificado(Ambiente.HOMOLOGACION);
+
+        assertThatThrownBy(() -> conAbiertos.fijarAmbienteDelCertificado(Ambiente.PRODUCCION, ABIERTOS))
+                .isInstanceOf(ConflictException.class).hasMessage(CON_REGISTROS_ABIERTOS);
+        sinAbiertos.fijarAmbienteDelCertificado(Ambiente.PRODUCCION, RegistrosFiscales.NINGUNO);
+        conAbiertos.fijarAmbienteDelCertificado(Ambiente.HOMOLOGACION, ABIERTOS);
+
+        assertThat(conAbiertos.getAmbiente()).isEqualTo(Ambiente.HOMOLOGACION);
+        assertThat(sinAbiertos.getAmbiente()).isEqualTo(Ambiente.PRODUCCION);
+        assertThat(sinAbiertos.getPuntoVenta()).isEqualTo(3);
+    }
+
+    @Test
+    @DisplayName("desde producción no se vuelve a homologación, y con el simulador solo vale su CA: 400 en «certificado»")
+    void elCertificadoNoVuelveAtrasNiReemplazaAlSimulador() {
+        ConfigArca produccion = conAmbienteDelCertificado(Ambiente.PRODUCCION);
+        ConfigArca simulador = conSimulador();
+
+        assertThatThrownBy(() -> produccion.fijarAmbienteDelCertificado(Ambiente.HOMOLOGACION, RegistrosFiscales.NINGUNO))
+                .isInstanceOfSatisfying(DatosInvalidosException.class, e -> assertThat(e.errors())
+                        .containsExactly(Map.entry("certificado", "Desde producción no se vuelve a homologación.")));
+        for (Ambiente deArca : List.of(Ambiente.HOMOLOGACION, Ambiente.PRODUCCION)) {
+            assertThatThrownBy(() -> simulador.fijarAmbienteDelCertificado(deArca, RegistrosFiscales.NINGUNO))
+                    .isInstanceOfSatisfying(DatosInvalidosException.class, e -> assertThat(e.errors())
+                            .containsExactly(Map.entry("certificado", "Con el simulador, el certificado lo firma el "
+                                    + "simulador: usá «Firmar con el simulador».")));
+        }
+        simulador.fijarAmbienteDelCertificado(Ambiente.SIMULADOR, RegistrosFiscales.NINGUNO);
+
+        assertThat(produccion.getAmbiente()).isEqualTo(Ambiente.PRODUCCION);
+        assertThat(simulador.getAmbiente()).isEqualTo(Ambiente.SIMULADOR);
     }
 
     @Test

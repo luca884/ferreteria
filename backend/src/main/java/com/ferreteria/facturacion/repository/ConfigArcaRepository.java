@@ -1,6 +1,7 @@
 package com.ferreteria.facturacion.repository;
 
 import com.ferreteria.facturacion.model.ConfigArca;
+import com.ferreteria.facturacion.model.RegistrosFiscales;
 import com.ferreteria.tenant.TenantContext;
 import com.ferreteria.tenant.TenantScopedRepository;
 import jakarta.persistence.LockModeType;
@@ -67,6 +68,25 @@ public interface ConfigArcaRepository extends TenantScopedRepository<ConfigArca,
      */
     default Optional<ConfigArca> deFerreteriaScoped() {
         return deFerreteria(TenantContext.requireFerreteriaId());
+    }
+
+    /**
+     * La configuración de la ferretería del request con lock exclusivo hasta el fin de la transacción, creándola si falta:
+     * el mismo protocolo que el panel ({@link #crearSiFalta} y {@link #bloquearDeFerreteria}), para lo que cambia el Dueño
+     * (el punto de venta, el pedido de certificado, el certificado que fija el ambiente; rama 5). Tiene que ser lo primero
+     * de la transacción, antes de cualquier lectura sin lock (ver {@code ConfigArcaParaPlataformaImpl.bloquear}).
+     */
+    default Optional<ConfigArca> bloquearScoped() {
+        Long ferreteriaId = TenantContext.requireFerreteriaId();
+        crearSiFalta(ferreteriaId);
+        return bloquearDeFerreteria(ferreteriaId);
+    }
+
+    /** Los registros fiscales de la ferretería del request que traban el ambiente: abiertos, y de homologación o producción. */
+    default RegistrosFiscales registrosScoped() {
+        Long ferreteriaId = TenantContext.requireFerreteriaId();
+        return new RegistrosFiscales(registrosAbiertos(ferreteriaId) > 0,
+                registrosDeHomologacionOProduccion(ferreteriaId) > 0);
     }
 
     /** Las de todas las ferreterías que tienen fila, para la lista del super admin (sin N+1). */

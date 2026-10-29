@@ -1,6 +1,7 @@
 package com.ferreteria.facturacion.motor;
 
 import com.ferreteria.common.exception.ReglaDeNegocioException;
+import com.ferreteria.facturacion.credencial.RevisionDeCredencial;
 import com.ferreteria.facturacion.model.AlicuotaDesglosada;
 import com.ferreteria.facturacion.model.Ambiente;
 import com.ferreteria.facturacion.model.ClaseComprobante;
@@ -23,6 +24,7 @@ import com.ferreteria.facturacion.repository.SerieFiscalRepository;
 import com.ferreteria.ferreteria.model.DatosFiscales;
 import com.ferreteria.ferreteria.repository.FerreteriaRepository;
 import com.ferreteria.tenant.TenantContext;
+import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
@@ -47,6 +49,8 @@ public class PasosFiscales {
             "La facturación electrónica no está habilitada en esta ferretería: la habilita el super admin.";
     static final String FALTAN_DATOS = "Faltan datos de la ferretería para facturar (razón social, condición de IVA, "
             + "domicilio comercial, inicio de actividades o Ingresos Brutos). Los carga el Dueño en «Datos de la ferretería».";
+    static final String SIN_CREDENCIAL = "La facturación con ARCA está bloqueada: el certificado falta, venció o no se "
+            + "puede leer. El Dueño lo renueva en «Facturación».";
 
     private final ComprobanteFiscalRepository registros;
     private final ComprobanteFiscalAlicuotaRepository alicuotas;
@@ -54,16 +58,20 @@ public class PasosFiscales {
     private final SerieFiscalRepository series;
     private final ConfigArcaRepository configs;
     private final FerreteriaRepository ferreterias;
+    private final RevisionDeCredencial credencial;
+    private final Clock reloj;
 
     public PasosFiscales(ComprobanteFiscalRepository registros, ComprobanteFiscalAlicuotaRepository alicuotas,
             IntentoFiscalRepository intentos, SerieFiscalRepository series, ConfigArcaRepository configs,
-            FerreteriaRepository ferreterias) {
+            FerreteriaRepository ferreterias, RevisionDeCredencial credencial, Clock reloj) {
         this.registros = registros;
         this.alicuotas = alicuotas;
         this.intentos = intentos;
         this.series = series;
         this.configs = configs;
         this.ferreterias = ferreterias;
+        this.credencial = credencial;
+        this.reloj = reloj;
     }
 
     // ---- Alta ----
@@ -72,9 +80,11 @@ public class PasosFiscales {
      * Si la ferretería del request factura ahora: la regla única que comparten la decisión de la venta
      * ({@code FacturacionParaVenta.decidir}) y el alta del registro ({@link #registrar}), así una venta que se decidió
      * facturable no se cae al darla de alta (D5, B1 de cu-07-venta-facturada). Factura si su configuración de ARCA tiene la
-     * facturación habilitada con ambiente y punto de venta ({@link ConfigArca#puedeFacturar()}) y si están completos los
-     * datos de CU-01 paso 1 que la factura imprime. Lee {@code config_arca} con {@code FOR SHARE} hasta el fin de la
-     * transacción de quien llama (también sin fila: lock de hueco), así que exige una abierta. No escribe nada.
+     * facturación habilitada con ambiente y punto de venta ({@link ConfigArca#puedeFacturar()}); en homologación o
+     * producción, si además tiene una credencial activa de ese ambiente, vigente y legible ({@link RevisionDeCredencial},
+     * rama 5, S8); y si están completos los datos de CU-01 paso 1 que la factura imprime. Lee {@code config_arca} y la
+     * credencial con {@code FOR SHARE} hasta el fin de la transacción de quien llama (también sin fila: lock de hueco), así
+     * que exige una abierta. No escribe nada.
      *
      * <p>Las dos llamadas van en la transacción de la venta y ven lo mismo: la configuración, porque el lock compartido no
      * deja que el panel la cambie hasta el commit, y los datos de la ferretería, porque la segunda lectura devuelve la
@@ -138,23 +148,33 @@ public class PasosFiscales {
     /** Vacío si la venta de ahora saldría sin factura (la misma regla que {@link #puedeFacturar()}), sin lock. */
     @Transactional(readOnly = true)
     public Optional<EmisionVigente> emisionSinLock() {
-        Emision emision = emision(configs.deFerreteriaScoped());
+        Emision emision = emision(configs.deFerreteriaScoped(), false);
         if (emision.impedimento() != null) {
             return Optional.empty();
         }
         return Optional.of(new EmisionVigente(emision.config().getAmbiente(), emision.emisor().condicionIva()));
     }
 
-    /** La regla de {@link #puedeFacturar()}: primero la configuración (con su {@code FOR SHARE}), después el emisor. */
+    /**
+     * La regla de {@link #puedeFacturar()}: primero la configuración (con su {@code FOR SHARE}), después la credencial (con
+     * el suyo, en el mismo orden que quien activa un certificado) y el emisor.
+     */
     private Emision emision() {
-        return emision(configs.bloquearCompartidaScoped());
+        return emision(configs.bloquearCompartidaScoped(), true);
     }
 
-    /** La regla, con la configuración ya leída (con lock o sin él): habilitada con ambiente y punto de venta, y el emisor. */
-    private Emision emision(Optional<ConfigArca> leida) {
+    /**
+     * La regla, con la configuración ya leída (con lock o sin él): habilitada con ambiente y punto de venta; en homologación
+     * o producción, una credencial activa de ese ambiente, vigente según el {@code Clock} y legible (rama 5, S8; la lee con
+     * lock si {@code conLock}); y el emisor. En SIMULADOR no se exige credencial (hasta la rama 6).
+     */
+    private Emision emision(Optional<ConfigArca> leida, boolean conLock) {
         Optional<ConfigArca> config = leida.filter(ConfigArca::puedeFacturar);
         if (config.isEmpty()) {
             return Emision.impedida(NO_HABILITADA);
+        }
+        if (!credencial.dejaFacturar(config.get(), Instant.now(reloj), conLock)) {
+            return Emision.impedida(SIN_CREDENCIAL);
         }
         return emisor(TenantContext.requireFerreteriaId())
                 .map(emisor -> new Emision(config.get(), emisor, null))

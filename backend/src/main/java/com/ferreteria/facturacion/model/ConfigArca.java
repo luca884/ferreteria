@@ -1,5 +1,7 @@
 package com.ferreteria.facturacion.model;
 
+import com.ferreteria.common.exception.ConflictException;
+import com.ferreteria.common.exception.DatosInvalidosException;
 import com.ferreteria.common.exception.ReglaDeNegocioException;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -15,16 +17,20 @@ import org.hibernate.type.SqlTypes;
 import java.time.Instant;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 
 /**
  * La configuración de ARCA de una ferretería (tabla {@code config_arca}, 1-1 con la ferretería; CU-01 paso 2, D3). La
- * marca «de prueba», el ambiente, el punto de venta y la facturación habilitada los cambia solo el super admin. La fila
- * nace la primera vez que la toca: una ferretería sin fila está sin marca, sin ambiente y deshabilitada.
+ * marca «de prueba», el simulador y la facturación habilitada los cambia solo el super admin; el punto de venta, el Dueño
+ * (rama 5, S2), salvo con el simulador; homologación o producción, el certificado que valida el Dueño (S16). La fila nace
+ * la primera vez que alguno la toca: una ferretería sin fila está sin marca, sin ambiente y deshabilitada.
  *
  * <p>El cerrojo del ambiente: el simulador solo va a una ferretería marcada «de prueba», sin registros de homologación o
  * producción y sin registros abiertos, y deja el punto de venta en 1 (S3). Homologación y producción los fija el
- * certificado (rama 5): desde acá no se asignan, no se reemplazan ni se quitan. Quitar el ambiente exige la facturación
- * apagada y ningún registro abierto. Los CHECK de V32 sostienen lo mismo en la base.
+ * certificado ({@link #fijarAmbienteDelCertificado}): desde el panel no se asignan, no se reemplazan ni se quitan, y de
+ * producción no se vuelve. Quitar el ambiente exige la facturación apagada y ningún registro abierto; cambiarlo o cambiar
+ * el punto de venta, ningún registro abierto. Hasta la conexión real (rama 6) la facturación se prende solo con el
+ * simulador (S13). Los CHECK de V32 sostienen lo mismo en la base.
  */
 @Entity
 @Table(name = "config_arca")
@@ -46,6 +52,20 @@ public class ConfigArca {
             "Primero deshabilitá la facturación: no se puede quitar el ambiente mientras esté habilitada.";
     static final String HABILITAR_SIN_AMBIENTE =
             "Para habilitar la facturación, la ferretería necesita un ambiente de ARCA y un punto de venta.";
+    /** Hasta la rama 6 no hay cliente real de ARCA: los registros quedarían pendientes sin poder autorizarse (S13). */
+    static final String SIN_CONEXION_REAL = "La facturación con ARCA se habilita cuando esté la conexión real.";
+
+    /** El punto de venta más alto que carga el Dueño (S2). */
+    public static final int PUNTO_VENTA_MAXIMO = 99998;
+    static final String PUNTO_VENTA_DEL_SIMULADOR = "Con el simulador el punto de venta es 1.";
+    static final String PUNTO_VENTA_CON_REGISTROS_ABIERTOS =
+            "Hay facturas en trámite con ARCA: el punto de venta no se puede cambiar.";
+    static final String CERTIFICADO_CON_SIMULADOR =
+            "Con el simulador, el certificado lo firma el simulador: usá «Firmar con el simulador».";
+    static final String DESDE_PRODUCCION = "Desde producción no se vuelve a homologación.";
+    /** «Firmar con el simulador» fuera del simulador (S5): esa acción no existe ahí. */
+    public static final String FIRMA_SOLO_CON_SIMULADOR =
+            "«Firmar con el simulador» es solo para la ferretería de prueba que usa el simulador de ARCA.";
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -132,11 +152,15 @@ public class ConfigArca {
     /**
      * Prende la facturación y guarda {@code ahora} como su fecha de activación. Exige ambiente, punto de venta y los datos
      * de CU-01 completos: {@code datosFaltantes} son los nombres de los que faltan, como se le muestran al super admin. Si
-     * ya estaba prendida, no cambia nada (ni la fecha).
+     * ya estaba prendida, no cambia nada (ni la fecha). En homologación o producción no se prende hasta la conexión real
+     * (rama 6, S13): sin cliente real de ARCA, los registros quedarían pendientes sin poder autorizarse.
      */
     public void habilitar(List<String> datosFaltantes, Instant ahora) {
         if (facturacionHabilitada) {
             return;
+        }
+        if (ambiente == Ambiente.HOMOLOGACION || ambiente == Ambiente.PRODUCCION) {
+            throw new ReglaDeNegocioException(SIN_CONEXION_REAL);
         }
         if (ambiente == null || puntoVenta == null) {
             throw new ReglaDeNegocioException(HABILITAR_SIN_AMBIENTE);
@@ -162,6 +186,63 @@ public class ConfigArca {
      */
     public boolean puedeFacturar() {
         return facturacionHabilitada && ambiente != null && puntoVenta != null;
+    }
+
+    /**
+     * Por qué el Dueño no puede cambiar el punto de venta (rama 5, S2), o null si puede: con el simulador queda fijo en 1, y
+     * mientras haya registros fiscales abiertos ({@code ConfigArcaRepository.registrosAbiertos}) no cambia.
+     */
+    public String motivoPuntoVentaTrabado(boolean registrosAbiertos) {
+        if (ambiente == Ambiente.SIMULADOR) {
+            return PUNTO_VENTA_DEL_SIMULADOR;
+        }
+        if (registrosAbiertos) {
+            return PUNTO_VENTA_CON_REGISTROS_ABIERTOS;
+        }
+        return null;
+    }
+
+    /**
+     * El Dueño carga el punto de venta habilitado en ARCA (CU-01 paso 2, rama 5): de 1 a {@link #PUNTO_VENTA_MAXIMO}, con
+     * o sin ambiente. Trabado ({@link #motivoPuntoVentaTrabado}): 409 con el motivo. El mismo número no cambia nada.
+     */
+    public void cambiarPuntoVenta(int nuevo, boolean registrosAbiertos) {
+        if (nuevo < 1 || nuevo > PUNTO_VENTA_MAXIMO) {
+            throw new IllegalArgumentException("El punto de venta va de 1 a " + PUNTO_VENTA_MAXIMO + ".");
+        }
+        if (puntoVenta != null && puntoVenta == nuevo) {
+            return;
+        }
+        String trabado = motivoPuntoVentaTrabado(registrosAbiertos);
+        if (trabado != null) {
+            throw new ConflictException(trabado);
+        }
+        this.puntoVenta = nuevo;
+    }
+
+    /**
+     * El ambiente que fija un certificado validado (rama 5, S16): el de la CA que lo firmó. Sin ambiente, toma el de la
+     * CA; de homologación pasa a producción solo sin registros abiertos (409); de producción no se vuelve (400 en
+     * {@code certificado}); con el simulador solo vale la CA del simulador (400 en {@code certificado}). El mismo ambiente
+     * no cambia nada. No toca el punto de venta ni la facturación: un certificado validado no la habilita.
+     */
+    public void fijarAmbienteDelCertificado(Ambiente deLaCa, RegistrosFiscales registros) {
+        if (ambiente == deLaCa) {
+            return;
+        }
+        if (ambiente == Ambiente.SIMULADOR) {
+            throw new DatosInvalidosException(Map.of("certificado", CERTIFICADO_CON_SIMULADOR));
+        }
+        if (deLaCa == Ambiente.SIMULADOR) {
+            throw new ConflictException(FIRMA_SOLO_CON_SIMULADOR);
+        }
+        if (ambiente == Ambiente.PRODUCCION) {
+            throw new DatosInvalidosException(Map.of("certificado", DESDE_PRODUCCION));
+        }
+        if (registros.hayAbiertos()) {
+            throw new ConflictException(CON_REGISTROS_ABIERTOS);
+        }
+        this.ambiente = deLaCa;
     }
 
     private static String faltanDatos(List<String> faltantes) {

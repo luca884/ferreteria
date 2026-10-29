@@ -273,6 +273,25 @@ class ModulosArchTest {
     }
 
     /**
+     * BouncyCastle arma el pedido de certificado (PKCS#10) y la CA del simulador, donde el JDK no llega (rama 5): solo lo usa
+     * {@code facturacion.credencial} (la regla no queda vacia), y nadie registra un proveedor de seguridad
+     * ({@code Security.addProvider} ni {@code insertProviderAt}): todo corre con los proveedores del JDK.
+     */
+    @Test
+    void soloLaCredencialDeArcaUsaBouncyCastleYNadieRegistraProveedores() {
+        noClasses().that().resideOutsideOfPackage("com.ferreteria.facturacion.credencial..")
+                .should().dependOnClassesThat(resideInAPackage("org.bouncycastle.."))
+                .check(clases);
+        noClasses().should().callMethod(java.security.Security.class, "addProvider", java.security.Provider.class)
+                .orShould().callMethod(java.security.Security.class, "insertProviderAt", java.security.Provider.class,
+                        int.class)
+                .check(clases);
+        assertThat(clases.stream().filter(c -> c.getPackageName().equals("com.ferreteria.facturacion.credencial"))
+                .flatMap(c -> c.getDirectDependenciesFromSelf().stream()))
+                .anyMatch(d -> d.getTargetClass().getPackageName().startsWith("org.bouncycastle"));
+    }
+
+    /**
      * {@code facturacion} toma la hora del {@code Clock} inyectado: no llama a {@code HoraArgentina.ahora()} ni
      * {@code hoy()}, ni a ningun {@code now(...)} de {@code java.time} que no reciba un {@code Clock}
      * ({@code LocalDateTime.now()}, {@code LocalDate.now()}, {@code Instant.now()}, y tambien {@code now(ZoneId)}).
