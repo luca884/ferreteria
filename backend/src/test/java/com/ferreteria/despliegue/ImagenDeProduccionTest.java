@@ -27,15 +27,29 @@ import org.testcontainers.containers.wait.strategy.Wait;
 import org.testcontainers.containers.wait.strategy.WaitAllStrategy;
 import org.testcontainers.utility.DockerImageName;
 
+import java.io.StringReader;
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.PublicKey;
+import java.security.SecureRandom;
+import java.security.interfaces.RSAPublicKey;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.Base64;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
+import org.bouncycastle.asn1.x500.style.BCStyle;
+import org.bouncycastle.asn1.x500.style.IETFUtils;
+import org.bouncycastle.openssl.PEMParser;
+import org.bouncycastle.operator.jcajce.JcaContentVerifierProviderBuilder;
+import org.bouncycastle.pkcs.PKCS10CertificationRequest;
+import org.bouncycastle.pkcs.jcajce.JcaPKCS10CertificationRequest;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -89,25 +103,40 @@ class ImagenDeProduccionTest {
 
     private static RestClient http;
     private static String tokenDelDueno;
+    private static long idDeLaFerreteria;
 
     @BeforeAll
     static void levantarComoEnProduccion() throws Exception {
         construirImagen();
         MYSQL.start();
-        API.withEnv(Map.of(
-            "SPRING_PROFILES_ACTIVE", "prod",
-            "DB_URL", "jdbc:mysql://mysql:3306/" + MYSQL.getDatabaseName()
-                + "?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC",
-            "DB_USER", MYSQL.getUsername(),
-            "DB_PASSWORD", MYSQL.getPassword(),
-            "JWT_SECRET", UUID.randomUUID() + "-" + UUID.randomUUID(),
-            "CORS_ORIGINS", "http://localhost"));
+        API.withEnv(entorno(true));
         API.start();
         http = RestClient.builder()
             .baseUrl("http://" + API.getHost() + ":" + API.getMappedPort(8080))
             .defaultStatusHandler(HttpStatusCode::isError, (pedido, respuesta) -> { })
             .build();
         crearSuperAdmin();
+    }
+
+    /**
+     * Las variables de README.md (Deploy), con un JWT_SECRET y una ARCA_CLAVE_MAESTRA (32 bytes en Base64) nuevos por
+     * corrida. Sin {@code conClaveMaestra}, todas menos ARCA_CLAVE_MAESTRA.
+     */
+    private static Map<String, String> entorno(boolean conClaveMaestra) {
+        Map<String, String> entorno = new LinkedHashMap<>();
+        entorno.put("SPRING_PROFILES_ACTIVE", "prod");
+        entorno.put("DB_URL", "jdbc:mysql://mysql:3306/" + MYSQL.getDatabaseName()
+            + "?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC");
+        entorno.put("DB_USER", MYSQL.getUsername());
+        entorno.put("DB_PASSWORD", MYSQL.getPassword());
+        entorno.put("JWT_SECRET", UUID.randomUUID() + "-" + UUID.randomUUID());
+        entorno.put("CORS_ORIGINS", "http://localhost");
+        if (conClaveMaestra) {
+            byte[] clave = new byte[32];
+            new SecureRandom().nextBytes(clave);
+            entorno.put("ARCA_CLAVE_MAESTRA", Base64.getEncoder().encodeToString(clave));
+        }
+        return entorno;
     }
 
     @AfterAll
@@ -177,6 +206,82 @@ class ImagenDeProduccionTest {
         assertThat(hoja.path("nombre").asText()).isEqualTo("PDF");
         assertThat(celdas(hoja.path("filas").path(1))).containsExactly("TOR-001", "Tornillo", "1250,50");
         assertThat(celdas(hoja.path("filas").path(2))).containsExactly("TUE-002", "Tuerca", "310,00");
+    }
+
+    /**
+     * El cifrado AES-GCM y BouncyCastle desde el jar (rama 5, S9): el Dueño genera el pedido de certificado (clave RSA, CSR
+     * PKCS#10 armado con BouncyCastle y la clave cifrada con ARCA_CLAVE_MAESTRA) y, con el simulador que le asigna el super
+     * admin, lo firma la CA del simulador (un certificado de BouncyCastle, y la clave de la CA cifrada y descifrada). Ni las
+     * respuestas ni el log llevan la clave privada.
+     */
+    @Test
+    void elPedidoDeCertificadoYLaFirmaDelSimuladorCorrenDesdeElJar() throws Exception {
+        String dueno = dueno();
+        ResponseEntity<String> pedido = http.post().uri("/api/facturacion/pedido-certificado")
+            .header("Authorization", "Bearer " + dueno)
+            .contentType(MediaType.APPLICATION_JSON)
+            .body(Map.of())
+            .retrieve().toEntity(String.class);
+
+        assertThat(pedido.getStatusCode().value()).as(pedido.getBody()).isEqualTo(201);
+        PKCS10CertificationRequest csr;
+        try (PEMParser lector = new PEMParser(new StringReader(JSON.readTree(pedido.getBody()).path("csr").asText()))) {
+            csr = (PKCS10CertificationRequest) lector.readObject();
+        }
+        PublicKey publica = new JcaPKCS10CertificationRequest(csr).getPublicKey();
+        assertThat(csr.isSignatureValid(new JcaContentVerifierProviderBuilder().build(publica))).isTrue();
+        assertThat(((RSAPublicKey) publica).getModulus().bitLength()).isEqualTo(2048);
+        assertThat(IETFUtils.valueToString(csr.getSubject().getRDNs(BCStyle.SERIALNUMBER)[0].getFirst().getValue()))
+            .isEqualTo("CUIT 30712345671");
+
+        String admin = login("admin@imagen.test", CLAVE_ADMIN).path("token").asText();
+        for (Map.Entry<String, Map<String, Boolean>> cambio : List.of(Map.entry("de-prueba", Map.of("dePrueba", true)),
+                Map.entry("simulador", Map.of("simulador", true)))) {
+            ResponseEntity<String> panel = http.patch().uri("/api/admin/ferreterias/" + idDeLaFerreteria + "/" + cambio.getKey())
+                .header("Authorization", "Bearer " + admin)
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(cambio.getValue())
+                .retrieve().toEntity(String.class);
+            assertThat(panel.getStatusCode().value()).as(panel.getBody()).isEqualTo(200);
+        }
+        ResponseEntity<String> firmado = http.post().uri("/api/facturacion/certificado/simulador")
+            .header("Authorization", "Bearer " + dueno)
+            .retrieve().toEntity(String.class);
+
+        assertThat(firmado.getStatusCode().value()).as(firmado.getBody()).isEqualTo(200);
+        JsonNode credencial = JSON.readTree(firmado.getBody()).path("credencial");
+        assertThat(credencial.path("estado").asText()).isEqualTo("VIGENTE");
+        assertThat(credencial.path("emisor").asText()).isEqualTo("Simulador de ARCA");
+        assertThat(credencial.path("ambiente").asText()).isEqualTo("SIMULADOR");
+        assertThat(pedido.getBody() + firmado.getBody() + API.getLogs()).doesNotContain("PRIVATE KEY");
+    }
+
+    /**
+     * Sin ARCA_CLAVE_MAESTRA la imagen no arranca (S6, C2): la misma imagen, con las mismas variables menos esa y contra la
+     * misma base, sale sola con error y el log nombra la variable. Corre con docker run: el contenedor no llega a estar
+     * listo, y la espera de Testcontainers no sirve para eso. La salida queda en target/ para leer un error.
+     */
+    @Test
+    void sinLaClaveMaestraLaImagenNoArranca() throws Exception {
+        String nombre = "ferreteria-sin-clave-maestra-" + UUID.randomUUID();
+        List<String> comando = new ArrayList<>(List.of("docker", "run", "--name", nombre, "--platform", PLATAFORMA,
+            "--network", RED.getId()));
+        entorno(false).forEach((variable, valor) -> comando.addAll(List.of("-e", variable + "=" + valor)));
+        comando.add(IMAGEN);
+        Path salida = Path.of("target", "imagen-sin-clave-maestra.log").toAbsolutePath();
+        Process corrida = new ProcessBuilder(comando).redirectErrorStream(true).redirectOutput(salida.toFile()).start();
+        try {
+            boolean termino = corrida.waitFor(4, TimeUnit.MINUTES);
+
+            assertThat(termino).as("sin ARCA_CLAVE_MAESTRA tiene que salir sola; salida en " + salida).isTrue();
+            assertThat(corrida.exitValue()).as("codigo de salida, salida en " + salida).isNotZero();
+            assertThat(Files.readString(salida)).contains("Could not resolve placeholder 'ARCA_CLAVE_MAESTRA'")
+                .doesNotContain("Started FerreteriaApplication");
+        } finally {
+            corrida.destroyForcibly();
+            new ProcessBuilder("docker", "rm", "-f", nombre).redirectErrorStream(true)
+                .redirectOutput(ProcessBuilder.Redirect.DISCARD).start().waitFor(1, TimeUnit.MINUTES);
+        }
     }
 
     /**
@@ -256,6 +361,7 @@ class ImagenDeProduccionTest {
                 "dueno", Map.of("nombre", "Dueño de la imagen", "email", EMAIL_DUENO, "password", CLAVE_DUENO)))
             .retrieve().toEntity(String.class);
         assertThat(alta.getStatusCode().is2xxSuccessful()).as(alta.getBody()).isTrue();
+        idDeLaFerreteria = JSON.readTree(alta.getBody()).path("id").asLong();
 
         JsonNode login = login(EMAIL_DUENO, CLAVE_DUENO);
         assertThat(login.path("sesion").path("rol").asText()).isEqualTo("DUENO");
