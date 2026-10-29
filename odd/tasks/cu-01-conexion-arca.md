@@ -164,18 +164,18 @@ Restricciones:
   - El README pasa a T9.
   - Commit: ver el Log.
   - Risk: none (docs)
-- [ ] T2 · S13, S14, S15, S16 · ruta: delegada (writer «backend», backstop) · Aceptación: la `O` del CSR, la deshabilitación al cambiar de ambiente, un solo instante entre `decidir` y `registrar` y HOMOLOGACION habilitable con PRODUCCION trabada; con tests · Evidencia: — · Risk: item 3 (la regla de facturación de todas las ventas)
-- [ ] T3 · S2, S3, S6 (tablas) · ruta: delegada (writer «backend», junto con T2, con su propio commit) · Aceptación:
+- [x] T2 · S13, S14, S15, S16 · ruta: delegada (writer «backend», backstop) + arreglo inline del padre (L6) · Aceptación: la `O` del CSR, la deshabilitación al cambiar de ambiente, un solo instante entre `decidir` y `registrar` y HOMOLOGACION habilitable con PRODUCCION trabada; con tests · Evidencia: RED→GREEN por regla (S13 `laRazonSocialLargaSeRecortaEnLaO`; S14 `elCambioDeAmbienteApagaLaFacturacion` y `elCertificadoDeProduccionDeshabilitaLaFacturacion`; S15 `decidirYRegistrarUsanElMismoInstante` y `RegistroVentaTest#decidirYRegistrarConElMismoInstante`; S16 `ConfigArcaTest`, `ConfigArcaAdminIntegrationTest#habilitarPorAmbiente`); facturacion+ventas+plataforma 1822/0 (writer, antes de L6); después de L6: RegistroVenta 82/0, bloqueo 16/0, FacturacionParaVenta 34/0, Motor 15/0, Documento 29/0, ModulosArch 50/0; commit `2029a5a` (+414/−117) · Risk: items 3 y 4 (regla de facturación y orden de fechas bajo el numerador)
+- [x] T3 · S2, S3, S6 (tablas) · ruta: delegada (writer «backend», junto con T2, con su propio commit) · Aceptación:
   - V35 con `ticket_acceso` (token y sign cifrados, huella de la credencial, vencimiento, lease, espera y última falla), `ticket_simulado` (estado del simulador) y el bloqueo en `config_arca`;
   - el rollback con guarda «sin bloqueos»;
   - `MigracionV35Test` y `MigracionV6Test`.
-  - Evidencia: — · Risk: item 1
-- [ ] T4 · S4, S5, S7 (HttpServer), S10 (WSFE), C5, C6, C7 · ruta: delegada (writer «backend») · Aceptación:
+  - Evidencia: RED sin la V35 (27: 26 errores, 1 falla; `MigracionV6Test#historialDeMigraciones`); GREEN `MigracionV35Test` 27/27 y la tanda de migraciones + ArchUnit 175/0; el rollback encadena un CHECK de guarda en `config_arca` y una tabla guarda (L6); commit `a3b4443` (+592/−2) · Risk: item 1
+- [x] T4 · S4, S5, S7 (HttpServer), S10 (WSFE), S17, C5, C6, C7 · ruta: delegada (writer «backend», en paralelo con T2 y T3: superficies disjuntas, Writer trigger a) · Aceptación:
   - XML seguro, plantillas y parseo de los cinco métodos;
   - `Transporte`, `TransporteHttp` (SSLContext, ECDHE, timeouts y el mapeo a `PedidoNoLlego`/`ResultadoIncierto`) y `ClienteWsfe`;
   - fixtures (XSD en main, FEDummy real en test);
   - pruebas con `HttpServer` y `HttpsServer`, y la validación de C6 al arrancar.
-  - Evidencia: — · Risk: items 2 (XXE y TLS) y 5 (red y TLS)
+  - Evidencia: RED→GREEN por clase (XmlSeguro 3, Plantillas 12, Lector 23, TransporteHttp 10, ClienteWsfe 9, SinSecretosEnLogs 2 con mutación temporal que el test detectó, ConfiguracionArca 4); `arca` 63/0 (repetido por el padre); ModulosArch+TenantScoping+PerfilPorDefecto 81/0; `xmllint` valida los pedidos de ejemplo; commit `eeadd36` (+3791) · Risk: items 2 (XXE y TLS) y 5 (red y TLS)
 - [ ] T5 · S2, S3, S10 (WSAA), C3, C4 · ruta: delegada (writer «backend») · Aceptación:
   - TRA y `FirmaCms` (en `credencial`);
   - `ClienteWsaa` con los faults;
@@ -245,3 +245,19 @@ Restricciones:
   - FEDummy y FEParamGetPtosVenta son métodos de `ClienteWsfe` y no del puerto `ServicioWsfe`: el motor no los usa y así los dobles de prueba del motor no cambian.
   - El simulador recuerda el TA que emitió en `ticket_simulado`, y con eso verifica el `Auth` y la regla del lapso.
   - Los supuestos S13 a S17 se anotan para Luca al cerrar.
+- L5 (2026-10-29) T1 cerrada en `03b54e5` (+275/−7): la spec y este doc. Próximo paso: T2 y T3, con un writer «backend».
+- L6 (2026-10-29) T2, T3 y T4 cerradas (writers en paralelo; el padre repitió `arca` 63/0 y la tanda de S15).
+  - **Arreglo del padre en S15.** El writer de T2 avisó que leer el instante de la venta antes de `decidir` lo sacaba de abajo del lock del numerador. La CbteFch sale de `registradoEn` (`MotorFiscal.java:169`) y el motor atiende por id: dos ventas que cruzan la medianoche podían quedar con las fechas al revés de sus ids, y la de id mayor, en FUERA_DE_FECHA.
+    - Arreglo: la venta vuelve a leer su instante con el numerador tomado. `decidir` recibe el instante leído antes de decidir, y `registrar(…, fecha, decididaEn)` mira la credencial con ese.
+    - El atajo de cuatro argumentos queda abstracto en la API: como `default` salteaba el `@Transactional(MANDATORY)` del proxy (lo detectó `decidirYRegistrarExigenUnaTransaccion`).
+    - `RegistroVentaTest#decidirYRegistrarConElMismoInstante` fija las dos cosas con un numerador que adelanta el reloj: RED (registrar con el instante de la decisión) y después GREEN.
+  - **Rollback de la V35.** Un ALTER no puede depender de una tabla guarda. Primero se agrega un CHECK `ck_rollback_sin_bloqueos` (falla si hay bloqueos), después un ALTER atómico y una tabla guarda que solo se crea sin las columnas. Los tickets no frenan el rollback.
+  - **Decisiones de T4** (writer, inferidas):
+    - los FEDummy de C7 van envueltos en el Envelope estándar;
+    - un 600 sin `FeCabResp` se lee como cabecera R;
+    - `ProveedorDeTicket.descartar(ambiente, servicio, rechazado)` recibe el ticket rechazado, para no descartar uno más nuevo;
+    - `TransporteHttp` corta todo en conexión + lectura con `sendAsync().get(…)`;
+    - los Events se leen pero no se loguean;
+    - `FchBaja` «NULL» se lee como null;
+    - `AlertaArca` loguea ERROR con el marcador `ALERTA ARCA`.
+  - Próximo paso: T5 (WSAA, `TicketsDeAcceso`, cortacircuito).
