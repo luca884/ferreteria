@@ -4,6 +4,7 @@ import com.ferreteria.catalogo.api.ArticulosParaVenta;
 import com.ferreteria.common.exception.DatosInvalidosException;
 import com.ferreteria.ventas.model.Comprobante;
 import com.ferreteria.ventas.model.MedioPago;
+import com.ferreteria.ventas.model.TipoComprobante;
 import com.ferreteria.ventas.repository.CajaRepository;
 import com.ferreteria.ventas.repository.ComprobanteRepository;
 import java.math.BigDecimal;
@@ -26,6 +27,12 @@ import org.springframework.transaction.annotation.Transactional;
  * dia o mes, por articulo, por rubro y con descuento, de un rango de dias de Buenos Aires. Solo ventas: los presupuestos
  * y los remitos no son comprobantes, y las cobranzas no son ventas.
  *
+ * <p>Desde CU-08 (C4) las notas de credito y las anulaciones internas RESTAN en su fecha (no en la de la venta), atribuidas
+ * a quien las hizo: el total, el neto, el IVA, el costo y la ganancia van netos. No cuentan como ventas en
+ * {@code cantidad} ni en {@code ventasSinCosto}; el resumen las muestra aparte ({@code notasDeCredito}) junto con la
+ * ganancia sin ellas ({@code gananciaSinNotas}, G66). «Por medio de pago» no las resta (no mueven plata) y «Con descuento»
+ * lista solo ventas.
+ *
  * <p>Los totales salen del total de cada comprobante, nunca de sumar renglones (GDS-37). La ganancia es el neto menos el
  * costo copiado al vender (V26), y solo de las ventas cuyo costo esta completo: una venta con algun renglon sin costo
  * (anterior a la V26) se cuenta aparte en {@code ventasSinCosto}. Por articulo y por rubro la cuenta es por renglon.
@@ -40,8 +47,16 @@ public class ReporteVentas {
 
     public record Rango(LocalDate desde, LocalDate hasta) {}
 
+    /**
+     * {@code cantidad} son las ventas; los importes y {@code ganancia} van netos de las notas de credito, y
+     * {@code gananciaSinNotas} es la de las ventas solas.
+     */
     public record Resumen(LocalDate desde, LocalDate hasta, int cantidad, BigDecimal total, BigDecimal neto,
-            BigDecimal iva, BigDecimal costo, BigDecimal ganancia, int ventasSinCosto) {}
+            BigDecimal iva, BigDecimal costo, BigDecimal ganancia, int ventasSinCosto, NotasDeCredito notasDeCredito,
+            BigDecimal gananciaSinNotas) {}
+
+    /** El renglon «Notas de credito» del resumen: cuantas y su total, en positivo (lo que se resto). */
+    public record NotasDeCredito(int cantidad, BigDecimal total) {}
 
     /** Una fila agrupada por usuario o por periodo. */
     public record Grupo(String clave, int cantidad, BigDecimal total, BigDecimal ganancia, int ventasSinCosto) {}
@@ -59,9 +74,21 @@ public class ReporteVentas {
     public record ConDescuento(Long ventaId, Long numero, LocalDateTime fecha, String usuario, String cliente,
             BigDecimal descuentoPorcentaje, BigDecimal descuento, BigDecimal total) {}
 
-    /** Una venta del rango con su costo; {@code costo} es null si algun renglon no tiene costo. */
+    /**
+     * Una venta o nota de credito del rango con su costo; {@code costo} es null si algun renglon no tiene costo. Los
+     * importes de una nota ya vienen en negativo.
+     */
     private record Venta(LocalDateTime fecha, Long usuarioId, BigDecimal total, BigDecimal neto, BigDecimal iva,
-            BigDecimal costo) {
+            BigDecimal costo, boolean nota) {
+
+        /** Lo que cuenta como venta en {@code cantidad} y {@code ventasSinCosto}: la nota no. */
+        int comoVenta() {
+            return nota ? 0 : 1;
+        }
+
+        int sinCosto() {
+            return conCosto() ? 0 : comoVenta();
+        }
 
         boolean conCosto() {
             return costo != null;
@@ -109,19 +136,31 @@ public class ReporteVentas {
         BigDecimal iva = BigDecimal.ZERO;
         BigDecimal costo = BigDecimal.ZERO;
         BigDecimal ganancia = BigDecimal.ZERO;
+        BigDecimal gananciaSinNotas = BigDecimal.ZERO;
+        BigDecimal totalNotas = BigDecimal.ZERO;
+        int cantidad = 0;
+        int notas = 0;
         int sinCosto = 0;
         for (Venta v : ventas) {
             total = total.add(v.total());
             neto = neto.add(v.neto());
             iva = iva.add(v.iva());
+            cantidad += v.comoVenta();
+            sinCosto += v.sinCosto();
+            if (v.nota()) {
+                notas++;
+                totalNotas = totalNotas.subtract(v.total());
+            }
             if (v.conCosto()) {
                 costo = costo.add(v.costo());
                 ganancia = ganancia.add(v.ganancia());
-            } else {
-                sinCosto++;
+                if (!v.nota()) {
+                    gananciaSinNotas = gananciaSinNotas.add(v.ganancia());
+                }
             }
         }
-        return new Resumen(rango.desde(), rango.hasta(), ventas.size(), total, neto, iva, costo, ganancia, sinCosto);
+        return new Resumen(rango.desde(), rango.hasta(), cantidad, total, neto, iva, costo, ganancia, sinCosto,
+                new NotasDeCredito(notas, totalNotas), gananciaSinNotas);
     }
 
     @Transactional(readOnly = true)
@@ -142,7 +181,7 @@ public class ReporteVentas {
                 .toList();
     }
 
-    /** Un grupo por dia ({@code 2026-10-22}) o por mes ({@code 2026-10}) con ventas, en orden. */
+    /** Un grupo por dia ({@code 2026-10-22}) o por mes ({@code 2026-10}) con ventas o notas de credito, en orden. */
     @Transactional(readOnly = true)
     public List<Grupo> porPeriodo(Rango rango, Agrupar agrupar) {
         Function<Venta, String> periodo = agrupar == Agrupar.MES
@@ -186,11 +225,21 @@ public class ReporteVentas {
                 .toList();
     }
 
+    /** Las ventas y las notas de credito del rango; las de una nota, con los importes en negativo (restan). */
     private List<Venta> ventas(Rango rango) {
         return comprobantes.ventasDelRangoScoped(inicio(rango), fin(rango)).stream()
-                .map(f -> new Venta((LocalDateTime) f[1], (Long) f[2], (BigDecimal) f[3], (BigDecimal) f[4],
-                        (BigDecimal) f[5], entero(f[7]) == 0 ? (BigDecimal) f[6] : null))
+                .map(f -> {
+                    boolean nota = f[8] == TipoComprobante.NOTA_CREDITO;
+                    BigDecimal costo = entero(f[7]) == 0 ? (BigDecimal) f[6] : null;
+                    return new Venta((LocalDateTime) f[1], (Long) f[2], signo((BigDecimal) f[3], nota),
+                            signo((BigDecimal) f[4], nota), signo((BigDecimal) f[5], nota),
+                            costo == null ? null : signo(costo, nota), nota);
+                })
                 .toList();
+    }
+
+    private static BigDecimal signo(BigDecimal importe, boolean nota) {
+        return nota ? importe.negate() : importe;
     }
 
     private static Map<String, Grupo> agrupar(List<Venta> ventas, Function<Venta, String> clave) {
@@ -198,8 +247,8 @@ public class ReporteVentas {
         for (Venta v : ventas) {
             String k = clave.apply(v);
             Grupo previo = grupos.getOrDefault(k, new Grupo(k, 0, BigDecimal.ZERO, BigDecimal.ZERO, 0));
-            grupos.put(k, new Grupo(k, previo.cantidad() + 1, previo.total().add(v.total()),
-                    previo.ganancia().add(v.ganancia()), previo.ventasSinCosto() + (v.conCosto() ? 0 : 1)));
+            grupos.put(k, new Grupo(k, previo.cantidad() + v.comoVenta(), previo.total().add(v.total()),
+                    previo.ganancia().add(v.ganancia()), previo.ventasSinCosto() + v.sinCosto()));
         }
         return grupos;
     }

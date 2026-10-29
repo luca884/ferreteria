@@ -62,16 +62,48 @@ Decisiones de producto (S11 a S16; Luca: «listo continua», 2026-10-29, L3):
   - 422: «La venta tiene un pago a cuenta corriente: todavía no se puede anular.»
 - S16 (confirmado por Luca el 2026-10-29): el remito de origen sigue «facturado» después de la NC. La NC devuelve el stock, pero no reabre el remito.
 
+### Contratos (los fija el padre, L5)
+
+- **C1 · Puerto fiscal para la anulación** (`facturacion.api.FacturacionParaVenta`, solo tipos del JDK; T3 lo implementa y T4 lo usa):
+  - `ViaDeAnulacion tomarParaAnular(long ventaId)`. Exige transacción. Toma el registro vigente de la venta con lock X (es el paso «factura original» del orden de locks) y devuelve:
+    - `NOTA_DE_CREDITO` si es AUTORIZADO;
+    - `ANULACION_INTERNA` sin registro, o con uno PENDIENTE (sin número ni intento abierto), RECHAZADO, FUERA_DE_FECHA o SIN_FACTURA.
+  - Lanza `FacturaImpedidaException`:
+    - `ESPERAR_CAE` con EN_CURSO, EN_VERIFICACION, CAE_NO_COINCIDE o SERIE_DESINCRONIZADA;
+    - `FACTURACION_FRENADA` si es AUTORIZADO pero la ferretería no puede facturar hoy, con el mismo motivo que «Reintentar»;
+    - `OTRO_AMBIENTE` si es AUTORIZADO pero el ambiente de hoy de `config_arca` no es el de la factura. Es el cerrojo de ambiente, con el texto «La factura es de otro ambiente de ARCA: no se puede anular con nota de crédito.».
+  - `long registrarNotaDeCredito(long notaId, long ventaId)`. Exige la transacción, después de `tomarParaAnular`. Da de alta el registro PENDIENTE de la NC:
+    - clase NOTA_CREDITO, el ambiente, el punto de venta y la letra de la factura, y `CbteTipo` 3, 8 o 13;
+    - el receptor, el emisor, los importes y las alícuotas copiados del registro de la factura, nunca del cliente de hoy;
+    - el asociado (tipo, punto de venta, número, CUIT del emisor y `CbteFch` de la factura), con la fecha del `Clock`.
+    - Devuelve el id del registro.
+    - El CAE se pide después del commit, con el `autorizar(notaId)` de siempre.
+  - `void cerrarSinCae(long ventaId, String motivo, long usuarioId)`. Exige la transacción, después de `tomarParaAnular` con `ANULACION_INTERNA`. Con un vigente PENDIENTE, RECHAZADO o FUERA_DE_FECHA, lo pasa a SIN_FACTURA con el motivo, el usuario y la hora, con un UPDATE condicional como el del job. Sin registro, o ya SIN_FACTURA, no hace nada.
+  - `reintentar` sobre el registro de una NC (RECHAZADO o FUERA_DE_FECHA) ignora el receptor y los renglones que le pasa ventas: vuelve a copiar de la factura asociada.
+  - `documento`, `consulta` y `resumenes` de una NC: clase NOTA_CREDITO, `codigo` 3, 8 o 13, y un campo nuevo `comprobanteAsociado` («Factura B 00001-00000045»; null en una factura).
+- **C2 · Esquema.** La V37 es de `comprobante` (T2). La V38 es de `comprobante_fiscal` (T3): las columnas del asociado. Cada una tiene su test y su rollback con guarda. `MigracionV6Test` lista las dos y es de T2.
+- **C3 · Comprobante de la NC** (T2 lo modela y T4 lo crea):
+  - `tipo = NOTA_CREDITO`, `comprobante_asociado_id` (la venta, FK compuesta, UNIQUE) y `motivo_anulacion` (solo en la anulación interna);
+  - `usuario_id` y `fecha` son quién y cuándo;
+  - sin caja ni pagos;
+  - los renglones (con su costo) y los totales copiados de la venta, en positivo; los lectores restan.
+- **C4 · Lectores (T5):**
+  - CU-15 resta la NC en su fecha y la atribuye a su usuario. «Por medio de pago» no la resta, y «Con descuento» lista solo ventas.
+  - El resumen suma `notasDeCredito` (cantidad y total) y `gananciaSinNotas` / `ganancia`.
+  - La lista de Ventas incluye las NC (`tipo`, `ventaAnulada { id, numero }`). Cada venta lleva `anulacion { notaId, numero, interna, motivo, usuario, fecha } | null`.
+  - Los clientes del artículo no cuentan las ventas anuladas.
+  - «Movimientos del artículo» etiqueta «Nota de crédito N.º n», o «Anulación N.º n» si tiene `motivo_anulacion`.
+
 ## Tasks
 
 Orden: T1 → T2 → T3 ∥ T5 (superficies separadas: `facturacion` y los lectores) → T4 → T6 → T7 → T8.
 
 
 - [x] T1 · S1, S11-S16 · ruta: inline · Aceptación: spec con D11, D12, D13 y los supuestos confirmados · Evidencia: `docs/spec.md` (CU-08, CU-15.2, CU-16.4, modelo, fuera del alcance) · Risk: none
-- [ ] T2 · S4, S9, S10, S11 · ruta: inline o writer «backend» · Aceptación: V37 (`comprobante_asociado_id` con FK compuesta y UNIQUE, columnas de la anulación interna), `TipoComprobante.NOTA_CREDITO`, `MigracionV37Test` con rollback · Evidencia: — · Risk: item 1 (migración)
+- [x] T2 · S4, S9, S10, S11 · ruta: writer «ventas» (junto con T5) · Aceptación: V37 (`comprobante_asociado_id` con FK compuesta y UNIQUE, columnas de la anulación interna), `TipoComprobante.NOTA_CREDITO`, `MigracionV37Test` con rollback · Evidencia: `MigracionV37Test` RED 17 → GREEN 17/17, `NotaDeCreditoTest` 4/4, commit `f760592` · Risk: item 1 (migración)
 - [ ] T3 · S3, S8 · ruta: writer «backend» · Aceptación: el motor da de alta la NC con su letra, `CbtesAsoc` y el receptor de la factura, en su propia serie; el simulador da 10197 y 10040; «Reintentar» de la bandeja sirve para una NC y copia el receptor y el asociado de la factura, no del cliente de hoy; la hoja de la NC · Evidencia: — · Risk: item 2 (cerrojo de ambiente)
 - [ ] T4 · S2-S6, S9, S13, S15 · ruta: writer «backend» · Aceptación: los endpoints del Dueño para la NC y la anulación, con la fachada con reintentos, el orden de locks, los 409 y el 422, el stock `NOTA_CREDITO`, el 403 y el 404 · Evidencia: — · Risk: items 2 y 4 (Dueño, locks y doble anulación)
-- [ ] T5 · S5, S7, S12, S14 · ruta: writer «backend» · Aceptación: los lectores de `tipo = VENTA` (`ComprobanteRepository:29,93,127,153,172`, `VentaGestion:187`, `MovimientoStockRepository:46`), los reportes de CU-15 y la lista de Ventas; un test de cobertura arma una venta con su NC y pide cada reporte de CU-15, la lista de Ventas, los movimientos y los clientes del artículo, y compara contra lo esperado, así un lector que falte se ve · Evidencia: — · Risk: item 3 (lectores compartidos)
+- [x] T5 · S5, S7, S12, S14 · ruta: writer «ventas» (junto con T2) · Aceptación: los lectores de `tipo = VENTA` (`ComprobanteRepository:29,93,127,153,172`, `VentaGestion:187`, `MovimientoStockRepository:46`), los reportes de CU-15 y la lista de Ventas; un test de cobertura arma una venta con su NC y pide cada reporte de CU-15, la lista de Ventas, los movimientos y los clientes del artículo, y compara contra lo esperado, así un lector que falte se ve · Evidencia: `NotaDeCreditoEnLosLectoresIntegrationTest` RED 7 fallas + 3 errores → GREEN 11/11; 188 tests focalizados (los lectores y sus regresiones) verdes salvo `MigracionV6Test#historialDeMigraciones`, que espera la V38 · Risk: item 3 (lectores compartidos)
 - [ ] T6 · S2, S7, S8, S13-S15 · ruta: writer «frontend» · Aceptación: «Anular» en el detalle, la confirmación, el diálogo de la anulación interna, la NC en la lista y su impreso, los reportes y los movimientos del artículo · Evidencia: — · Risk: none
 - [ ] T7 · S10 · ruta: inline · Aceptación: suite backend, suite frontend, `ng build`, ego-browser (NC B y A, anulación interna, stock y reportes) y `odd-verifier` sin bloqueantes · Evidencia: — · Risk: —
 - [ ] T8 · — · ruta: Luca · Aceptación: merge, push y deploy; la V37 aplicada en prod · Evidencia: — · Risk: item 5 (deploy)
@@ -125,3 +157,16 @@ Orden: T1 → T2 → T3 ∥ T5 (superficies separadas: `facturacion` y los lecto
   - anular una NC da 409 «Una nota de crédito no se anula.»;
   - el primer 400 del motivo se adapta a «Contá por qué se anula la venta.», porque el de «Dejar sin factura» habla de la factura. El de largo es el mismo.
   - Próximo paso: T2 (V37).
+- L5 (2026-10-29) Reparto (padre). T2 + T5 van juntas en un writer «ventas», en el árbol principal, porque T5 necesita el tipo nuevo. T3 va en un writer «facturacion», en el worktree `../ferreteria-cu-08-motor` (rama `feat/cu-08-nc-motor`), así no comparten `backend/target`. Las superficies son disjuntas. T3 suma la V38 porque el asociado vive en el registro fiscal. Cuando terminen los dos, el padre integra la rama del motor y corre la suite una vez.
+- L6 (2026-10-29) T2 y T5 cerradas (writer «ventas»).
+  - **Arreglo del padre.** La etiqueta de «Movimientos del artículo» se arma en `stock/service/MovimientosArticulo.comprobante()`, que estaba fuera de la superficie del writer, así que la puso el padre. La proyección pedía un `Boolean` y MySQL devuelve `0/1` como `Long`, lo que daba un 500. Ahora se proyecta `motivoAnulacion` (texto) y se pregunta si es null. Prueba: `NotaDeCreditoEnLosLectoresIntegrationTest` + `MovimientosArticulo*Test` 16/16.
+  - **Decisiones inferidas del writer:**
+    - la NC es SIN_FACTURAR y la anulación interna NO_FACTURABLE;
+    - la NC no copia `presupuesto_id`, `remito_id` (los dos UNIQUE) ni `caja_id`;
+    - `Comprobante.notaDeCredito` exige una VENTA guardada y un motivo no vacío; los 400 los valida T4;
+    - en CU-15, `cantidad`, `ventasSinCosto`, `renglones` y `renglonesSinCosto` cuentan solo ventas. Los importes van netos de NC, `notasDeCredito.total` es positivo y `gananciaSinNotas` es la de las ventas solas;
+    - en la lista, la NC lleva el `total` positivo y el front la muestra en negativo por el `tipo`;
+    - `anulacion` siempre viaja (null si no hay), y `ventaAnulada` solo en las NC;
+    - `VentaGestion.venta(id)` sigue aceptando solo VENTA, porque la usan «Reintentar» y «Dejar sin factura»; el detalle y `/factura` usan `ventaONota(id)`;
+    - el detalle (`VentaResponse`) todavía no trae `tipo` ni `ventaAnulada`.
+  - **Para T4.** «Reintentar» sobre una NC hoy da 404, porque pasa por `venta(id)`. Tiene que usar `ventaONota`, sin ofrecer «Dejar sin factura» sobre una NC. Además, `VentaResponse` suma `tipo`, `ventaAnulada` y `anulacion`.

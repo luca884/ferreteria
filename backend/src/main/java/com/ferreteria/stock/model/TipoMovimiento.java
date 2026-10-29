@@ -7,5 +7,10 @@ public enum TipoMovimiento {
     REMITO,
     ANULACION_REMITO,
     /** Entrada por una compra al proveedor (CU-13). */
-    COMPRA
+    COMPRA,
+    /**
+     * Entrada por la nota de credito o la anulacion interna de una venta (CU-08): repone todo lo vendido, tambien lo que
+     * salio por el remito de origen.
+     */
+    NOTA_CREDITO
 }

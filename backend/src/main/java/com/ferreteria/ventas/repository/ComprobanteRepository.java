@@ -26,17 +26,29 @@ public interface ComprobanteRepository extends TenantScopedRepository<Comprobant
 
     // ---- Reportes de ventas: [desde, hasta) en hora de Buenos Aires, solo ventas (no presupuestos ni remitos) ----
 
+    /** Solo las ventas: «Por medio de pago» y «Con descuento» no cuentan las notas de credito (CU-08, C4). */
     String VENTAS_DEL_RANGO = " c.ferreteriaId = :fid and c.tipo = com.ferreteria.ventas.model.TipoComprobante.VENTA"
             + " and c.fecha >= :desde and c.fecha < :hasta";
 
     /**
-     * Una fila por venta: id, fecha, usuario, total, neto, IVA, la suma del costo de sus renglones y cuantos renglones no
-     * tienen costo.
+     * Las ventas y las notas de credito (CU-08, C4: la NC y la anulacion interna restan en SU fecha, no en la de la venta).
+     * Sus importes se guardan en positivo: quien lee resta los de la NOTA_CREDITO.
+     */
+    String COMPROBANTES_DEL_RANGO = " c.ferreteriaId = :fid and c.tipo in ("
+            + "com.ferreteria.ventas.model.TipoComprobante.VENTA, com.ferreteria.ventas.model.TipoComprobante.NOTA_CREDITO)"
+            + " and c.fecha >= :desde and c.fecha < :hasta";
+
+    /** El renglon de una nota de credito resta (CU-08, C4): el signo de cada importe por renglon. */
+    String ES_NOTA = "c.tipo = com.ferreteria.ventas.model.TipoComprobante.NOTA_CREDITO";
+
+    /**
+     * Una fila por venta o nota de credito: id, fecha, usuario (el que la hizo: la NC es de quien anulo), total, neto, IVA,
+     * la suma del costo de sus renglones, cuantos renglones no tienen costo y el tipo. Los importes van en positivo.
      */
     @Query("select c.id, c.fecha, c.usuarioId, c.total, c.neto, c.iva, sum(i.costo), "
-            + "sum(case when i.costo is null then 1 else 0 end) "
-            + "from Comprobante c, ItemComprobante i where i.comprobanteId = c.id and" + VENTAS_DEL_RANGO
-            + " group by c.id, c.fecha, c.usuarioId, c.total, c.neto, c.iva order by c.fecha, c.id")
+            + "sum(case when i.costo is null then 1 else 0 end), c.tipo "
+            + "from Comprobante c, ItemComprobante i where i.comprobanteId = c.id and" + COMPROBANTES_DEL_RANGO
+            + " group by c.id, c.fecha, c.usuarioId, c.total, c.neto, c.iva, c.tipo order by c.fecha, c.id")
     List<Object[]> ventasDelRango(@Param("fid") Long ferreteriaId, @Param("desde") LocalDateTime desde,
             @Param("hasta") LocalDateTime hasta);
 
@@ -57,13 +69,18 @@ public interface ComprobanteRepository extends TenantScopedRepository<Comprobant
 
     /**
      * Por articulo: id, descripcion (la mayor de las copiadas), cantidad, total de los renglones, ganancia de los
-     * renglones con costo (neto - costo), renglones sin costo y renglones.
+     * renglones con costo (neto - costo), renglones vendidos sin costo y renglones vendidos. Los renglones de una nota de
+     * credito restan la cantidad, el total y la ganancia (CU-08, C4), y no se cuentan como renglones.
      */
-    @Query("select i.articuloId, max(i.descripcion), sum(i.cantidad), sum(i.total), "
-            + "sum(case when i.costo is not null then i.neto - i.costo else 0 end), "
-            + "sum(case when i.costo is null then 1 else 0 end), count(i) "
-            + "from ItemComprobante i, Comprobante c where i.comprobanteId = c.id and" + VENTAS_DEL_RANGO
-            + " group by i.articuloId order by sum(i.total) desc, i.articuloId")
+    @Query("select i.articuloId, max(i.descripcion), "
+            + "sum(case when " + ES_NOTA + " then -i.cantidad else i.cantidad end), "
+            + "sum(case when " + ES_NOTA + " then -i.total else i.total end), "
+            + "sum(case when i.costo is null then 0 when " + ES_NOTA + " then i.costo - i.neto else i.neto - i.costo end), "
+            + "sum(case when i.costo is null and not " + ES_NOTA + " then 1 else 0 end), "
+            + "sum(case when " + ES_NOTA + " then 0 else 1 end) "
+            + "from ItemComprobante i, Comprobante c where i.comprobanteId = c.id and" + COMPROBANTES_DEL_RANGO
+            + " group by i.articuloId order by sum(case when " + ES_NOTA + " then -i.total else i.total end) desc, "
+            + "i.articuloId")
     List<Object[]> articulosDelRango(@Param("fid") Long ferreteriaId, @Param("desde") LocalDateTime desde,
             @Param("hasta") LocalDateTime hasta);
 
@@ -85,12 +102,14 @@ public interface ComprobanteRepository extends TenantScopedRepository<Comprobant
     // ---- Consulta de ventas (G60) ----
 
     /**
-     * Las ventas de la ferreteria, mas nuevas primero. Cada filtro nulo no filtra. {@code cliente} ya viene con los
+     * Las ventas de la ferreteria y sus notas de credito (CU-08, S14: renglones propios), mas nuevas primero. Cada filtro
+     * nulo no filtra. {@code cliente} ya viene con los
      * comodines y escapado (barra invertida); la collation (_ai_ci) no distingue mayusculas ni tildes. {@code desde}
      * incluye ese instante y {@code hasta} no (es el comienzo del dia siguiente al ultimo que se quiere ver).
      */
     String FILTROS_DE_LA_CONSULTA = " c.ferreteriaId = :fid "
-            + "and c.tipo = com.ferreteria.ventas.model.TipoComprobante.VENTA "
+            + "and c.tipo in (com.ferreteria.ventas.model.TipoComprobante.VENTA, "
+            + "com.ferreteria.ventas.model.TipoComprobante.NOTA_CREDITO) "
             + "and (:numero is null or c.numero = :numero) "
             + "and (:cliente is null or c.clienteNombre like :cliente escape '\\') "
             + "and (:desde is null or c.fecha >= :desde) and (:hasta is null or c.fecha < :hasta) ";
@@ -133,6 +152,24 @@ public interface ComprobanteRepository extends TenantScopedRepository<Comprobant
         return ventasDelUsuarioEnLaCaja(TenantContext.requireFerreteriaId(), cajaId, usuarioId);
     }
 
+    // ---- La anulacion de las ventas (CU-08, C4) ----
+
+    /** Las notas de credito (y anulaciones internas) de esas ventas: a lo sumo una por venta (uk_comprobante_asociado). */
+    @Query("select n from Comprobante n where n.ferreteriaId = :fid and n.comprobanteAsociadoId in :ventas")
+    List<Comprobante> notasDe(@Param("fid") Long ferreteriaId, @Param("ventas") Collection<Long> ventaIds);
+
+    default List<Comprobante> notasDeScoped(Collection<Long> ventaIds) {
+        return ventaIds.isEmpty() ? List.of() : notasDe(TenantContext.requireFerreteriaId(), ventaIds);
+    }
+
+    /** El id y el numero de esos comprobantes de la ferreteria (las ventas que anulan las NC de una pagina). */
+    @Query("select c.id, c.numero from Comprobante c where c.ferreteriaId = :fid and c.id in :ids")
+    List<Object[]> numerosDe(@Param("fid") Long ferreteriaId, @Param("ids") Collection<Long> ids);
+
+    default List<Object[]> numerosDeScoped(Collection<Long> ids) {
+        return ids.isEmpty() ? List.of() : numerosDe(TenantContext.requireFerreteriaId(), ids);
+    }
+
     // ---- Clientes que compraron un articulo (G29, Ctrl+A del listado de GDS) ----
 
     /** Un cliente que compro el articulo: cuantas ventas, cuanto en total y la fecha y hora de la ultima. */
@@ -150,7 +187,10 @@ public interface ComprobanteRepository extends TenantScopedRepository<Comprobant
 
     String CON_CLIENTE = " join cliente c on c.id = v.cliente_id and c.ferreteria_id = v.ferreteria_id";
 
-    String DEL_ARTICULO = " where i.ferreteria_id = :fid and i.articulo_id = :articulo and v.tipo = 'VENTA'";
+    /** Solo las ventas que no estan anuladas (CU-08, C4): una venta con su nota de credito no es una compra. */
+    String DEL_ARTICULO = " where i.ferreteria_id = :fid and i.articulo_id = :articulo and v.tipo = 'VENTA'"
+            + " and not exists (select 1 from comprobante n where n.ferreteria_id = v.ferreteria_id"
+            + " and n.comprobante_asociado_id = v.id)";
 
     /**
      * Una fila por cliente que compro el articulo, la compra mas nueva primero. La razon social es la actual del cliente

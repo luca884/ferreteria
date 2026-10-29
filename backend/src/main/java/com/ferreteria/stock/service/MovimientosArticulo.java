@@ -69,11 +69,16 @@ public class MovimientosArticulo {
     }
 
     /**
-     * Como lo nombra cada pantalla: «Venta N.º 12», «Remito N.º 5» y la compra con el codigo de tipo de GDS y su
-     * proveedor («FA 00003-00001234 · Bulonera Sur»). El ajuste no tiene comprobante.
+     * Como lo nombra cada pantalla: «Venta N.º 12», «Nota de crédito N.º 13» o «Anulación N.º 14» (CU-08: la anulación
+     * interna es la nota sin factura, con motivo), «Remito N.º 5» y la compra con el codigo de tipo de GDS y su proveedor
+     * («FA 00003-00001234 · Bulonera Sur»). El ajuste no tiene comprobante.
      */
     static String comprobante(MovimientoListado fila) {
         if (fila.getVentaNumero() != null) {
+            if ("NOTA_CREDITO".equals(fila.getVentaTipo())) {
+                return (fila.getMotivoAnulacion() != null ? "Anulación N.º " : "Nota de crédito N.º ")
+                        + fila.getVentaNumero();
+            }
             return "Venta N.º " + fila.getVentaNumero();
         }
         if (fila.getRemitoNumero() != null) {

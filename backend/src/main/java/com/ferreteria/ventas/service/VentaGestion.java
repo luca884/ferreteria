@@ -21,11 +21,14 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Stream;
 
 /**
  * Consulta de las ventas hechas (G60, GDS-15): listar y ver una para reimprimirla. Solo lectura: anular es la nota de
@@ -47,8 +50,28 @@ public class VentaGestion {
     static final int TAMANO_MAXIMO = 100;
     static final String MENSAJE_NO_ENCONTRADA = "Venta no encontrada";
 
-    /** Una fila del listado: la venta, el nombre del usuario que la cobro y su resumen fiscal (null sin registro). */
-    public record VentaListada(Comprobante venta, String usuario, ResumenFiscal fiscal) {}
+    /**
+     * Una fila del listado: la venta (o la nota de credito, CU-08 S14), el nombre del usuario que la cobro (o la hizo) y su
+     * resumen fiscal (null sin registro). Una venta anulada lleva su {@code anulacion}; una nota, la {@code ventaAnulada}.
+     * Lo que no corresponde es null.
+     */
+    public record VentaListada(Comprobante venta, String usuario, ResumenFiscal fiscal, Anulacion anulacion,
+            VentaAnulada ventaAnulada) {
+
+        public VentaListada(Comprobante venta, String usuario, ResumenFiscal fiscal) {
+            this(venta, usuario, fiscal, null, null);
+        }
+    }
+
+    /**
+     * Como se anulo una venta (CU-08, C4): la nota, su numero, si es la anulacion interna (con motivo) o la NC, quien y
+     * cuando.
+     */
+    public record Anulacion(long notaId, long numero, boolean interna, String motivo, String usuario,
+            LocalDateTime fecha) {}
+
+    /** La venta que anula una nota de credito. */
+    public record VentaAnulada(long id, long numero) {}
 
     /**
      * La venta con sus renglones y pagos, como al cobrarla, el nombre del usuario que la cobro y su factura como la ve el
@@ -117,19 +140,35 @@ public class VentaGestion {
                     : comprobanteRepository.buscarVentasEntreScoped(entre, numero, clienteLike, desdeHora, hastaHora,
                             pagina);
         }
-        Map<Long, String> nombres = cajaRepository.nombresScoped(
-                ventas.stream().map(Comprobante::getUsuarioId).distinct().toList());
+        // La anulacion de cada venta de la pagina y la venta de cada nota (CU-08, C4), en dos lecturas.
+        Map<Long, Comprobante> notaDe = new HashMap<>();
+        comprobanteRepository.notasDeScoped(ventas.stream().filter(c -> c.getTipo() == TipoComprobante.VENTA)
+                .map(Comprobante::getId).toList()).forEach(n -> notaDe.put(n.getComprobanteAsociadoId(), n));
+        Map<Long, Long> numeroDe = new HashMap<>();
+        comprobanteRepository.numerosDeScoped(ventas.stream().map(Comprobante::getComprobanteAsociadoId)
+                .filter(Objects::nonNull).distinct().toList()).forEach(f -> numeroDe.put((Long) f[0], (Long) f[1]));
+        Map<Long, String> nombres = cajaRepository.nombresScoped(Stream.concat(ventas.stream(), notaDe.values().stream())
+                .map(Comprobante::getUsuarioId).distinct().toList());
         Map<Long, ResumenFiscal> resumenes = facturacion.resumenes(ventas.map(Comprobante::getId).getContent());
-        return ventas.map(v -> new VentaListada(v, nombres.get(v.getUsuarioId()), resumenes.get(v.getId())));
+        return ventas.map(v -> {
+            Comprobante nota = notaDe.get(v.getId());
+            Anulacion anulacion = nota == null ? null : new Anulacion(nota.getId(), nota.getNumero(),
+                    nota.esAnulacionInterna(), nota.getMotivoAnulacion(), nombres.get(nota.getUsuarioId()),
+                    nota.getFecha());
+            VentaAnulada ventaAnulada = v.getComprobanteAsociadoId() == null ? null
+                    : new VentaAnulada(v.getComprobanteAsociadoId(), numeroDe.get(v.getComprobanteAsociadoId()));
+            return new VentaListada(v, nombres.get(v.getUsuarioId()), resumenes.get(v.getId()), anulacion,
+                    ventaAnulada);
+        });
     }
 
     /**
      * Con su factura si tiene registro (C1 de cu-07-factura-mostrador y de cu-07-contingencias), para reimprimirla y para
-     * la bandeja, y el numero de su remito.
+     * la bandeja, y el numero de su remito. Tambien el de una nota de credito (CU-08, S14: desde su detalle se reimprime).
      */
     @Transactional(readOnly = true)
     public VentaConsultada detalle(Long id) {
-        Comprobante venta = venta(id);
+        Comprobante venta = ventaONota(id);
         String usuario = cajaRepository.nombresScoped(List.of(venta.getUsuarioId())).get(venta.getUsuarioId());
         Long remitoNumero = venta.getRemitoId() == null
                 ? null
@@ -180,11 +219,25 @@ public class VentaGestion {
                                 .get(factura.usuarioSinFacturaId())));
     }
 
-    /** Una venta de la ferreteria del request; otra cosa (o de otra ferreteria) es 404 «Venta no encontrada». */
+    /**
+     * Una venta de la ferreteria del request; otra cosa (una nota de credito, o de otra ferreteria) es 404 «Venta no
+     * encontrada». Es la de las acciones sobre la factura de la venta («Reintentar», «Dejar sin factura»).
+     */
     @Transactional(readOnly = true)
     public Comprobante venta(Long id) {
         return comprobanteRepository.findScoped(id)
                 .filter(c -> c.getTipo() == TipoComprobante.VENTA)
+                .orElseThrow(() -> new ResourceNotFoundException(MENSAJE_NO_ENCONTRADA));
+    }
+
+    /**
+     * Una venta o una nota de credito de la ferreteria del request (CU-08, S14: la lista y el detalle las muestran); otra
+     * cosa (o de otra ferreteria) es 404 «Venta no encontrada».
+     */
+    @Transactional(readOnly = true)
+    public Comprobante ventaONota(Long id) {
+        return comprobanteRepository.findScoped(id)
+                .filter(c -> c.getTipo() == TipoComprobante.VENTA || c.getTipo() == TipoComprobante.NOTA_CREDITO)
                 .orElseThrow(() -> new ResourceNotFoundException(MENSAJE_NO_ENCONTRADA));
     }
 
