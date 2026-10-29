@@ -44,7 +44,11 @@ public class VentaRechazadaException extends RuntimeException {
         /** «Reintentar» (C2): la fecha de la venta ya no entra en ARCA y el Dueño no confirmó que salga con la de hoy. */
         FECHA_NUEVA_REQUERIDA(409),
         /** «Reintentar» (C2): la ferretería no factura hoy (deshabilitada, sin certificado vigente o bloqueada por ARCA). */
-        FACTURACION_FRENADA(409);
+        FACTURACION_FRENADA(409),
+        /** Anular (CU-08): la factura de la venta está en envío, en verificación o en revisión. */
+        ESPERAR_CAE(409),
+        /** Anular (CU-08): la factura es de otro ambiente de ARCA que el de hoy (cerrojo de ambiente). */
+        OTRO_AMBIENTE(409);
 
         private final int estadoHttp;
 

@@ -157,6 +157,8 @@ public class FacturaDeLaVenta {
             case SIN_FACTURA_RECHAZADA -> Motivo.SIN_FACTURA_RECHAZADA;
             case FECHA_NUEVA_REQUERIDA -> Motivo.FECHA_NUEVA_REQUERIDA;
             case FACTURACION_FRENADA -> Motivo.FACTURACION_FRENADA;
+            case ESPERAR_CAE -> Motivo.ESPERAR_CAE;
+            case OTRO_AMBIENTE -> Motivo.OTRO_AMBIENTE;
         };
         return VentaRechazadaException.facturaImpedida(motivo, e.getMessage());
     }

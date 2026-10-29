@@ -51,6 +51,8 @@ class MigracionV4Test extends IntegrationTestBase {
             Map.entry("comprobante.presupuesto_id", "bigint NULL"),
             // V17 (CU-07, RM-006): el remito del que salio la venta; nulo en las demas.
             Map.entry("comprobante.remito_id", "bigint NULL"),
+            Map.entry("comprobante.comprobante_asociado_id", "bigint NULL"),
+            Map.entry("comprobante.motivo_anulacion", "varchar(200) NULL"),
             Map.entry("item_comprobante.recargo", "decimal(15,2) NOT NULL"),
             Map.entry("item_comprobante.id", "bigint NOT NULL"),
             Map.entry("item_comprobante.ferreteria_id", "bigint NOT NULL"),
@@ -118,14 +120,15 @@ class MigracionV4Test extends IntegrationTestBase {
     }
 
     @Test
-    @DisplayName("tipo, estado y medio son VARCHAR sin CHECK (la fase 5 suma valores); solo los descuentos de V11, los recargos de V13 y el costo de V26 tienen el suyo")
+    @DisplayName("tipo, estado y medio son VARCHAR sin CHECK (la fase 5 suma valores); solo los descuentos de V11, los recargos de V13, el costo de V26 y la nota de credito de V37 (que ata NOTA_CREDITO a su venta, sin cerrar los valores) tienen el suyo")
     void sinCheckEnTipoEstadoYMedio() {
         Integer checks = jdbc.queryForObject(
                 "select count(*) from information_schema.table_constraints "
                         + "where table_schema = database() and constraint_type = 'CHECK' and table_name in "
                         + "('comprobante','item_comprobante','pago','movimiento_stock','numerador_comprobante') "
                         + "and constraint_name not in ('ck_comprobante_descuento','ck_item_comprobante_descuento',"
-                        + "'ck_comprobante_recargo','ck_item_comprobante_recargo','ck_pago_recargo','ck_item_comprobante_costo')",
+                        + "'ck_comprobante_recargo','ck_item_comprobante_recargo','ck_pago_recargo','ck_item_comprobante_costo',"
+                        + "'ck_comprobante_nota_de_credito')",
                 Integer.class);
 
         assertThat(checks).isZero();
