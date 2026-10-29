@@ -9,6 +9,8 @@ import java.time.Instant;
  * @param id el registro
  * @param estado su estado
  * @param registradoEn la hora de la que sale su CbteFch
+ * @param clase FACTURA o NOTA_CREDITO
+ * @param asociadoId en una nota de crédito, el registro de la factura que anula (V38); null en una factura
  */
-public record RegistroVigente(long id, EstadoFiscal estado, Instant registradoEn) {
+public record RegistroVigente(long id, EstadoFiscal estado, Instant registradoEn, ClaseComprobante clase, Long asociadoId) {
 }

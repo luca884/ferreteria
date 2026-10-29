@@ -153,6 +153,31 @@ public class MotorFiscal {
     }
 
     /**
+     * Anular una venta (rama 8, CU-08; C1 de cu-08-nota-de-credito): decide la vía con el registro de su factura tomado con
+     * lock exclusivo hasta el fin de la transacción de quien llama ({@link PasosFiscales#tomarParaAnular}), mirando la
+     * facturación en la hora del {@code Clock}.
+     *
+     * @throws AccionFiscalImpedidaException ESPERAR_CAE, OTRO_AMBIENTE o FACTURACION_FRENADA; no cambia nada
+     */
+    public ViaFiscalDeAnulacion tomarParaAnular(long ventaId) {
+        return pasos.tomarParaAnular(ventaId, reloj.instant());
+    }
+
+    /**
+     * La nota de crédito de la venta, PENDIENTE, copiada de su factura y con la hora del {@code Clock}
+     * ({@link PasosFiscales#registrarNotaDeCredito}). Se manda a ARCA en su propia serie, con la misma atención que una
+     * factura: el CAE se pide después del commit. Devuelve el id del registro.
+     */
+    public long registrarNotaDeCredito(long notaId, long ventaId) {
+        return pasos.registrarNotaDeCredito(notaId, ventaId, reloj.instant());
+    }
+
+    /** La anulación interna: lo que la venta tenga sin CAE queda SIN_FACTURA ({@link PasosFiscales#cerrarSinCae}). */
+    public void cerrarSinCae(long ventaId, String motivo, long usuarioId) {
+        pasos.cerrarSinCae(ventaId, motivo, usuarioId, reloj.instant());
+    }
+
+    /**
      * Atiende la serie de la ferretería del request: si está libre la toma, resuelve lo que haya quedado en verificación y
      * manda sus pendientes en orden, y al final la suelta. Si la tiene otra instancia, no hace nada. Sin límite de tiempo:
      * lo que usa la venta.

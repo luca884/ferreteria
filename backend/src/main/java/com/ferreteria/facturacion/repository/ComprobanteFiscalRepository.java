@@ -60,7 +60,8 @@ public interface ComprobanteFiscalRepository extends TenantScopedRepository<Comp
      * El id, el estado y la hora del registro vigente de una venta, sin cargar la entidad en el contexto de persistencia (lo
      * que lee el reintento del Dueño en la transacción de quien llama).
      */
-    @Query("select new com.ferreteria.facturacion.model.RegistroVigente(c.id, c.estado, c.registradoEn) "
+    @Query("select new com.ferreteria.facturacion.model.RegistroVigente(c.id, c.estado, c.registradoEn, c.clase, "
+            + "c.asociadoId) "
             + "from ComprobanteFiscal c where c.ferreteriaId = :fid and c.comprobanteId = :comprobanteId "
             + "and c.reemplazadoEn is null")
     Optional<RegistroVigente> vigenteDe(@Param("fid") Long ferreteriaId, @Param("comprobanteId") long comprobanteId);
@@ -265,6 +266,63 @@ public interface ComprobanteFiscalRepository extends TenantScopedRepository<Comp
 
     default int marcarProvisorioScoped(long comprobanteId) {
         return marcarProvisorio(TenantContext.requireFerreteriaId(), comprobanteId);
+    }
+
+    // ---- Rama 8 (V38): la anulación de una venta (CU-08, C1 de cu-08-nota-de-credito) ----
+
+    /**
+     * El estado, el ambiente y si quedó reemplazado del registro, con su fila tomada ({@code FOR UPDATE}) hasta el fin de la
+     * transacción de quien llama: el paso «factura original» del orden de locks de la anulación. Es por la clave primaria,
+     * así toma solo esa fila (sin lock de hueco que frene el alta del registro de otra venta), y lee lo último confirmado.
+     * No carga la entidad en el contexto de persistencia de quien llama. Una fila (estado, ambiente, reemplazado_en), o
+     * ninguna.
+     */
+    @Query(value = """
+            select estado, ambiente, reemplazado_en from comprobante_fiscal
+            where ferreteria_id = :fid and id = :id for update
+            """, nativeQuery = true)
+    List<Object[]> bloquearParaAnular(@Param("fid") Long ferreteriaId, @Param("id") long id);
+
+    default Optional<RegistroTomado> bloquearParaAnularScoped(long id) {
+        return bloquearParaAnular(TenantContext.requireFerreteriaId(), id).stream().findFirst()
+                .map(fila -> new RegistroTomado(EstadoFiscal.valueOf((String) fila[0]), Ambiente.valueOf((String) fila[1]),
+                        fila[2] != null));
+    }
+
+    /** Lo que {@link #bloquearParaAnular} lee del registro tomado. */
+    record RegistroTomado(EstadoFiscal estado, Ambiente ambiente, boolean reemplazado) {}
+
+    /**
+     * El registro entero, con su fila tomada ({@code FOR UPDATE}, por la clave primaria) y leído de lo último confirmado: la
+     * factura que copia su nota de crédito, que la anulación ya tomó con {@link #bloquearParaAnular}.
+     */
+    @Query(value = "select * from comprobante_fiscal where ferreteria_id = :fid and id = :id for update", nativeQuery = true)
+    Optional<ComprobanteFiscal> bloquearRegistro(@Param("fid") Long ferreteriaId, @Param("id") long id);
+
+    default Optional<ComprobanteFiscal> bloquearRegistroScoped(long id) {
+        return bloquearRegistro(TenantContext.requireFerreteriaId(), id);
+    }
+
+    /**
+     * La anulación interna de una venta sin CAE (CU-08 punto 3, D12): su vigente PENDIENTE (sin número, así que sin un envío
+     * abierto), RECHAZADO o FUERA_DE_FECHA → SIN_FACTURA, con el motivo, el usuario y la hora. Es el mismo cambio condicional
+     * que los del job ({@link #numerar} mira el mismo PENDIENTE): con la fila tomada por la anulación, el job espera y
+     * después no la encuentra pendiente; si el job la numeró antes, acá no cambia nada. Por la clave primaria, como
+     * {@link #bloquearParaAnular}. No limpia el contexto de persistencia: corre en la transacción de quien llama, que tiene
+     * sus entidades (la caja, el cliente y la anulación).
+     */
+    @Modifying(flushAutomatically = true)
+    @Query(value = """
+            update comprobante_fiscal set estado = 'SIN_FACTURA', motivo_sin_factura = :motivo,
+              usuario_sin_factura_id = :usuario, sin_factura_en = :ahora
+            where ferreteria_id = :fid and id = :id and estado in ('PENDIENTE', 'RECHAZADO', 'FUERA_DE_FECHA')
+              and reemplazado_en is null
+            """, nativeQuery = true)
+    int cerrarSinCae(@Param("fid") Long ferreteriaId, @Param("id") long id, @Param("motivo") String motivo,
+            @Param("usuario") long usuarioId, @Param("ahora") Instant ahora);
+
+    default int cerrarSinCaeScoped(long id, String motivo, long usuarioId, Instant ahora) {
+        return cerrarSinCae(TenantContext.requireFerreteriaId(), id, motivo, usuarioId, ahora);
     }
 
     // ---- Rama 7: lo que leen la bandeja de Ventas, «llegó el CAE» y los avisos del mostrador (C1, C4 y C7) ----

@@ -79,13 +79,16 @@ public final class BandejaFiscal {
                 reimprimir(registro));
     }
 
-    /** «Factura B 00001-00000045» si es válida como factura; si no, «X · <marca>», como el X de la hoja (C7). */
+    /**
+     * «Factura B 00001-00000045» (o, desde la rama 8, «Nota de crédito B 00001-00000003») si es válida como factura; si no,
+     * «X · <marca>», como el X de la hoja (C7).
+     */
     public static String factura(ComprobanteFiscal registro) {
         if (!HojaFiscal.validoComoFactura(registro)) {
             return HojaFiscal.letra(registro) + " · " + HojaFiscal.marca(registro);
         }
-        return String.format("Factura %s %05d-%08d", registro.getLetra().name(), registro.getPuntoVenta(),
-                registro.getNumero());
+        return String.format("%s %s %05d-%08d", registro.esNotaDeCredito() ? "Nota de crédito" : "Factura",
+                registro.getLetra().name(), registro.getPuntoVenta(), registro.getNumero());
     }
 
     private static List<ErrorArca> errores(String json) {

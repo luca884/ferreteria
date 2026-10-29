@@ -19,6 +19,10 @@ import java.util.Optional;
  * <p>Orden dentro de la transacción de la venta: {@link #decidir} antes de escribir nada (después del lock del cliente y
  * antes del numerador), {@link #registrar} como último paso, y {@link #autorizar} recién después del commit, sin
  * transacción. La venta no facturable no llama a nada.
+ *
+ * <p>La anulación de una venta (CU-08, rama 8) sigue el mismo orden: {@link #tomarParaAnular} después de la caja y el
+ * cliente y antes del numerador, {@link #registrarNotaDeCredito} o {@link #cerrarSinCae} después, y {@link #autorizar} de
+ * la nota de crédito recién después del commit.
  */
 public interface FacturacionParaVenta {
 
@@ -116,7 +120,12 @@ public interface FacturacionParaVenta {
      * en ARCA. Exige la transacción de quien llama, con el cliente ya tomado: adentro se toman {@code config_arca} en S y
      * el registro. El CAE se pide después del commit, con {@link #autorizar}. Devuelve el id del registro nuevo.
      *
-     * @throws FacturaImpedidaException SIN_FACTURA_RECHAZADA, FACTURACION_FRENADA o FECHA_NUEVA_REQUERIDA; no cambia nada
+     * <p>Sobre una nota de crédito (rama 8, C1), {@code comprobanteId} es la NC: ignora {@code receptor} y {@code renglones}
+     * y vuelve a copiar todo de la factura asociada, como {@link #registrarNotaDeCredito}; la factura tiene que ser del
+     * ambiente de hoy.
+     *
+     * @throws FacturaImpedidaException SIN_FACTURA_RECHAZADA, FACTURACION_FRENADA o FECHA_NUEVA_REQUERIDA, y OTRO_AMBIENTE
+     *     en una NC; no cambia nada
      */
     long reintentar(long comprobanteId, ReceptorVenta receptor, List<RenglonParaFacturar> renglones, boolean fechaDeHoy);
 
@@ -127,6 +136,54 @@ public interface FacturacionParaVenta {
      * @throws FacturaImpedidaException SIN_FACTURA_RECHAZADA si no hay una rechazada; no cambia nada
      */
     void dejarSinFactura(long comprobanteId, String motivo, long usuarioId);
+
+    // ---- La anulación de una venta (CU-08, rama 8; C1 de cu-08-nota-de-credito) ----
+
+    /**
+     * Cómo se anula la venta del lado fiscal. Exige la transacción de la anulación: va después de tomar la caja y el cliente
+     * y antes del numerador, y toma el registro vigente de la venta con lock exclusivo hasta el commit (el paso «factura
+     * original» del orden de locks): mientras tanto ni el job ni la venta siguiente de la serie lo mandan a ARCA. Si el
+     * registro cambió con un «Reintentar» que la foto de la transacción no ve, lanza
+     * {@code org.springframework.dao.CannotAcquireLockException}: la anulación se repite en una transacción nueva, como con
+     * un deadlock.
+     *
+     * @return {@link ViaDeAnulacion#NOTA_DE_CREDITO} con la factura AUTORIZADO; {@link ViaDeAnulacion#ANULACION_INTERNA} sin
+     *     registro, o con uno PENDIENTE (sin número ni envío abierto), RECHAZADO, FUERA_DE_FECHA o SIN_FACTURA
+     * @throws FacturaImpedidaException ESPERAR_CAE con EN_CURSO, EN_VERIFICACION, CAE_NO_COINCIDE o SERIE_DESINCRONIZADA;
+     *     con la factura AUTORIZADO, OTRO_AMBIENTE si el ambiente de hoy de la ferretería no es el de la factura (el
+     *     cerrojo de ambiente), o FACTURACION_FRENADA si no puede facturar hoy, con el mismo motivo que «Reintentar». No
+     *     cambia nada
+     */
+    ViaDeAnulacion tomarParaAnular(long ventaId);
+
+    /**
+     * Da de alta el registro PENDIENTE de la nota de crédito {@code notaId} (el comprobante de la anulación) de la venta, en
+     * la serie de su letra (CbteTipo 3, 8 o 13): el ambiente, el punto de venta, la letra, el receptor, el emisor, los
+     * importes y las alícuotas copiados del registro de la factura, nunca del cliente ni de los datos de hoy, y la factura
+     * como comprobante asociado (tipo, punto de venta, número, CUIT del emisor y CbteFch). La fecha es la del {@code Clock}.
+     * Exige la transacción de la anulación, después de {@link #tomarParaAnular} con NOTA_DE_CREDITO. El CAE se pide después
+     * del commit, con {@link #autorizar}{@code (notaId)}. Devuelve el id del registro.
+     *
+     * @throws IllegalStateException si la venta no tiene su factura AUTORIZADO
+     */
+    long registrarNotaDeCredito(long notaId, long ventaId);
+
+    /**
+     * La anulación interna del lado fiscal (CU-08 punto 3, D12): el registro vigente PENDIENTE, RECHAZADO o FUERA_DE_FECHA de
+     * la venta pasa a SIN_FACTURA con el motivo (obligatorio, hasta 200 caracteres: si no, 400 en {@code motivo}), el
+     * usuario y la hora, con el mismo UPDATE condicional que el job: o lo manda el job o lo anula el Dueño, nunca las dos
+     * cosas. Sin registro, o ya SIN_FACTURA, no hace nada. Exige la transacción de la anulación, después de
+     * {@link #tomarParaAnular} con ANULACION_INTERNA.
+     */
+    void cerrarSinCae(long ventaId, String motivo, long usuarioId);
+
+    /** Cómo se anula una venta del lado fiscal ({@link #tomarParaAnular}). */
+    enum ViaDeAnulacion {
+        /** Con una nota de crédito total, con su propio CAE: la venta tiene su factura AUTORIZADO. */
+        NOTA_DE_CREDITO,
+        /** Sin documento fiscal, con motivo: la venta no tiene CAE ({@link #cerrarSinCae}). */
+        ANULACION_INTERNA
+    }
 
     /** La bandeja de Ventas del Dueño (C1, CU-16 punto 7). */
     enum Bandeja {
@@ -257,7 +314,7 @@ public interface FacturacionParaVenta {
      *
      * @param estado PENDIENTE, EN_CURSO, EN_VERIFICACION, AUTORIZADO, RECHAZADO, FUERA_DE_FECHA, CAE_NO_COINCIDE,
      *     SERIE_DESINCRONIZADA o SIN_FACTURA
-     * @param clase FACTURA
+     * @param clase FACTURA o NOTA_CREDITO
      * @param letra A, B o C
      * @param puntoVenta el punto de venta del registro
      * @param numero el número fiscal, o null mientras no tenga
@@ -281,7 +338,7 @@ public interface FacturacionParaVenta {
      * @param letra A, B o C del registro; X si no es válido como factura
      * @param discriminaIva true si el registro es una A, válida o X: la hoja muestra los renglones sin IVA con su alícuota
      *     y el pie con el neto gravado y el IVA por alícuota (S13); describe el cuerpo, no la apariencia fiscal
-     * @param codigo el {@code CbteTipo} (1, 6 u 11); null en el X
+     * @param codigo el {@code CbteTipo} (1, 6 u 11; en una nota de crédito, 3, 8 o 13); null en el X
      * @param marca lo que el X muestra debajo de «DOCUMENTO NO VALIDO COMO FACTURA»; null en la factura válida
      * @param puntoVenta el punto de venta; null en el X
      * @param numero el número fiscal; null en el X
@@ -301,17 +358,32 @@ public interface FacturacionParaVenta {
      * @param qr el texto del QR de ARCA ({@code https://www.arca.gob.ar/fe/qr/?p=...}); null en el X
      * @param qrModulos la matriz del QR sin zona de silencio, una fila por texto de '1' (oscuro) y '0' (claro), todas del
      *     mismo largo; null en el X
+     * @param comprobanteAsociado en una nota de crédito (la clase de {@code estadoFiscal}), la factura que anula: «Factura B
+     *     00001-00000045» en producción; fuera de producción, «X · <marca del ambiente>», porque lo simulado nunca parece
+     *     fiscal. Null en una factura
      */
     record DocumentoFiscal(EstadoFiscalVenta estadoFiscal, boolean validoComoFactura, String letra,
             boolean discriminaIva, Integer codigo, String marca, Integer puntoVenta, Long numero, LocalDate fecha,
             String cae, LocalDate caeVencimiento, EmisorDelDocumento emisor, ReceptorDelDocumento receptor,
             BigDecimal total, BigDecimal neto, BigDecimal iva, BigDecimal noGravado, BigDecimal exento,
             List<AlicuotaDelDocumento> alicuotas, Transparencia transparencia, String leyendaMonotributo, String qr,
-            List<String> qrModulos) {
+            List<String> qrModulos, String comprobanteAsociado) {
 
         public DocumentoFiscal {
             alicuotas = List.copyOf(alicuotas);
             qrModulos = qrModulos == null ? null : List.copyOf(qrModulos);
+        }
+
+        /** El documento de una factura, sin comprobante asociado (como antes de la rama 8). */
+        public DocumentoFiscal(EstadoFiscalVenta estadoFiscal, boolean validoComoFactura, String letra,
+                boolean discriminaIva, Integer codigo, String marca, Integer puntoVenta, Long numero, LocalDate fecha,
+                String cae, LocalDate caeVencimiento, EmisorDelDocumento emisor, ReceptorDelDocumento receptor,
+                BigDecimal total, BigDecimal neto, BigDecimal iva, BigDecimal noGravado, BigDecimal exento,
+                List<AlicuotaDelDocumento> alicuotas, Transparencia transparencia, String leyendaMonotributo, String qr,
+                List<String> qrModulos) {
+            this(estadoFiscal, validoComoFactura, letra, discriminaIva, codigo, marca, puntoVenta, numero, fecha, cae,
+                    caeVencimiento, emisor, receptor, total, neto, iva, noGravado, exento, alicuotas, transparencia,
+                    leyendaMonotributo, qr, qrModulos, null);
         }
     }
 
@@ -363,9 +435,14 @@ public interface FacturacionParaVenta {
      * @param ambiente SIMULADOR, HOMOLOGACION o PRODUCCION
      * @param validoComoFactura la misma regla que {@link DocumentoFiscal#validoComoFactura()}
      * @param reimprimir true si salió con el ticket provisorio y ya está AUTORIZADO (rama 7, C1)
+     * @param clase FACTURA o NOTA_CREDITO (rama 8)
+     * @param codigo el {@code CbteTipo} con la misma regla que {@link DocumentoFiscal#codigo()}: null si no es válido como
+     *     factura
+     * @param comprobanteAsociado el de {@link DocumentoFiscal#comprobanteAsociado()}: la factura que anula una nota de
+     *     crédito; null en una factura
      */
     record ResumenFiscal(String letra, int puntoVenta, Long numero, String estado, String ambiente,
-            boolean validoComoFactura, boolean reimprimir) {}
+            boolean validoComoFactura, boolean reimprimir, String clase, Integer codigo, String comprobanteAsociado) {}
 
     /**
      * La facturación de la ferretería, como la anticipa el cobro (C3).

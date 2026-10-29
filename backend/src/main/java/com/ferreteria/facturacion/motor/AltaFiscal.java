@@ -10,7 +10,8 @@ import java.util.Objects;
  * los renglones; nada de entidades de ventas ni de clientes). El resto lo pone el motor al registrar: el ambiente y el punto
  * de venta de {@code ConfigArca}, el encuadre y el CbteTipo de {@code EncuadreFiscal}, el desglose de
  * {@code DesgloseFiscal}, la copia del emisor de los datos fiscales de la ferretería y la hora del {@code Clock}. Siempre es
- * una factura: la nota de crédito, con sus comprobantes asociados, llega en la rama 8.
+ * una factura: la nota de crédito (rama 8) no se arma con un alta, porque no recalcula nada; copia todo, con el asociado, del
+ * registro de su factura ({@code ComprobanteFiscal.notaDeCredito}).
  *
  * @param comprobanteId la venta (de la ferretería del request) que se factura
  * @param receptor quien la recibe ({@link ReceptorFiscal#sinCliente()} si no hay cliente)

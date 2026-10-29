@@ -25,7 +25,8 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * La hoja de la factura de una venta (CU-07 paso 5; cu-07-factura-mostrador S5, S6, S7, S12 y S14), armada solo con la
+ * La hoja de la factura de una venta (CU-07 paso 5; cu-07-factura-mostrador S5, S6, S7, S12 y S14), y desde la rama 8 la
+ * de su nota de crédito (CU-08, S8: el código 3, 8 u 13 y la factura asociada, con QR solo en producción), armada solo con la
  * copia del registro fiscal y su desglose: nunca con la configuración ni con los datos de hoy de la ferretería o del
  * cliente. Función pura: acá se decide todo lo que la hoja muestra, y quien imprime solo lo pinta.
  *
@@ -83,7 +84,8 @@ public final class HojaFiscal {
                 registro.getImpTotal(), registro.getImpNeto(), registro.getImpIva(), registro.getImpTotConc(),
                 registro.getImpOpEx(), desglose.stream().map(HojaFiscal::alicuota).toList(),
                 transparencia ? new Transparencia(registro.getImpIva(), CERO) : null,
-                leyenda ? LEYENDA_LEY_27618 : null, qr, valido ? QrArca.modulos(qr) : null);
+                leyenda ? LEYENDA_LEY_27618 : null, qr, valido ? QrArca.modulos(qr) : null,
+                comprobanteAsociado(registro));
     }
 
     /**
@@ -91,9 +93,27 @@ public final class HojaFiscal {
      * ({@link BandejaFiscal#reimprimir}).
      */
     public static ResumenFiscal resumen(ComprobanteFiscal registro) {
+        boolean valido = validoComoFactura(registro);
         return new ResumenFiscal(letra(registro), registro.getPuntoVenta(), registro.getNumero(),
-                registro.getEstado().name(), registro.getAmbiente().name(), validoComoFactura(registro),
-                BandejaFiscal.reimprimir(registro));
+                registro.getEstado().name(), registro.getAmbiente().name(), valido, BandejaFiscal.reimprimir(registro),
+                registro.getClase().name(), valido ? registro.getCbteTipo() : null, comprobanteAsociado(registro));
+    }
+
+    /**
+     * La factura que anula una nota de crédito (rama 8, S8), de la copia del asociado: «Factura B 00001-00000045» en
+     * producción, donde la factura es fiscal (la NC sale solo en el ambiente de su factura, y solo de una AUTORIZADO); fuera
+     * de producción, «X · <marca del ambiente>», como el texto de «llegó el CAE» ({@link BandejaFiscal#factura}): lo
+     * simulado nunca parece fiscal. Null en una factura.
+     */
+    static String comprobanteAsociado(ComprobanteFiscal registro) {
+        if (!registro.esNotaDeCredito()) {
+            return null;
+        }
+        if (registro.getAmbiente() != Ambiente.PRODUCCION) {
+            return LETRA_X + " · " + marca(registro);
+        }
+        return String.format("Factura %s %05d-%08d", registro.getLetra().name(), registro.getAsociadoPuntoVenta(),
+                registro.getAsociadoNumero());
     }
 
     /** La letra de la hoja: la del registro si es válida como factura; X si no. */
