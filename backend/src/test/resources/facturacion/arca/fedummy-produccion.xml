@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- FEDummy real de producción (servicios1.afip.gov.ar), observado el 2026-10-29 (C7 de odd/tasks/cu-01-conexion-arca.md):
+     igual al de homologación, con ambiente «Produccion - sr8» e id 7.0.1.1. C7 no guardó la fecha de esta respuesta, así que
+     repite la de homologación. El Envelope es el estándar de ASMX. -->
+<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema"><soap:Header><FEHeaderInfo xmlns="http://ar.gov.afip.dif.FEV1/"><ambiente>Produccion - sr8</ambiente><fecha>2026-10-29T00:56:59.6882518-03:00</fecha><id>7.0.1.1</id></FEHeaderInfo></soap:Header><soap:Body><FEDummyResponse xmlns="http://ar.gov.afip.dif.FEV1/"><FEDummyResult><AppServer>OK</AppServer><DbServer>OK</DbServer><AuthServer>OK</AuthServer></FEDummyResult></FEDummyResponse></soap:Body></soap:Envelope>

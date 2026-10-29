@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Armado con la forma del WSDL de WSFEv1 (FECAEResponse), no copiado de los ejemplos del manual: el 600 de un TA que ARCA no
+     acepta. No se conoce la forma real (se ve en la rama 11): esta es la mínima que permite el WSDL, sin FeCabResp ni detalle,
+     solo Errors. El texto es de prueba. -->
+<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema"><soap:Header><FEHeaderInfo xmlns="http://ar.gov.afip.dif.FEV1/"><ambiente>HomologacionExterno - srt</ambiente><fecha>2026-10-29T10:30:15.1234567-03:00</fecha><id>7.0.0.53</id></FEHeaderInfo></soap:Header><soap:Body><FECAESolicitarResponse xmlns="http://ar.gov.afip.dif.FEV1/"><FECAESolicitarResult><Errors><Err><Code>600</Code><Msg>ValidacionDeToken: texto de prueba.</Msg></Err></Errors></FECAESolicitarResult></FECAESolicitarResponse></soap:Body></soap:Envelope>
