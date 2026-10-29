@@ -96,6 +96,20 @@ public interface ComprobanteFiscalRepository extends TenantScopedRepository<Comp
         return comprobantesConNumero(TenantContext.requireFerreteriaId(), puntoVenta, numero);
     }
 
+    /**
+     * Cuántos registros de la serie, además de {@code id}, tienen un número mayor que {@code ultimo}, vigentes o reemplazados
+     * (los cuenta {@code uk_comprobante_fiscal_numero}). El 10016 (rama 7, C6): con alguno, ARCA va atrás de lo que la serie
+     * ya tiene y no se renumera. Solo lectura.
+     */
+    @Query("select count(c) from ComprobanteFiscal c where c.ferreteriaId = :fid and c.ambiente = :ambiente "
+            + "and c.puntoVenta = :puntoVenta and c.cbteTipo = :cbteTipo and c.numero > :ultimo and c.id <> :id")
+    long contarNumerosDespuesDe(@Param("fid") Long ferreteriaId, @Param("id") long id, @Param("ambiente") Ambiente ambiente,
+            @Param("puntoVenta") int puntoVenta, @Param("cbteTipo") int cbteTipo, @Param("ultimo") long ultimo);
+
+    default long contarNumerosDespuesDeScoped(long id, Ambiente ambiente, int puntoVenta, int cbteTipo, long ultimo) {
+        return contarNumerosDespuesDe(TenantContext.requireFerreteriaId(), id, ambiente, puntoVenta, cbteTipo, ultimo);
+    }
+
     /** PENDIENTE → EN_CURSO con el número y la CbteFch del intento que se guarda en la misma transacción. */
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query(value = """

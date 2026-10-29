@@ -1,6 +1,7 @@
 package com.ferreteria.facturacion.motor;
 
 import com.ferreteria.common.HoraArgentina;
+import com.ferreteria.facturacion.arca.AlertaArca;
 import com.ferreteria.facturacion.model.Ambiente;
 import com.ferreteria.facturacion.model.ComprobanteFiscal;
 import com.ferreteria.facturacion.model.EstadoFiscal;
@@ -29,6 +30,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
@@ -56,7 +59,7 @@ import org.springframework.stereotype.Service;
  * todos los campos (si no, CAE_NO_COINCIDE; un 602 ahí también: con ARCA en N o más, N tendría que existir, y renumerar
  * a ciegas podría duplicar la factura); N−1 → se reenvía el mismo número y fecha en un intento nuevo, o, si esa
  * CbteFch ya no entra en la ventana, FUERA_DE_FECHA sin número y sin reenviar; menos → SERIE_DESINCRONIZADA. Las dos
- * alertas traban la serie hasta que la vea una persona.
+ * alertas traban la serie hasta que la vea una persona, y quedan en el log con {@code ALERTA ARCA}.
  *
  * <p>Una llamada que no llegó o quedó incierta, o que volvió con un error del sistema de ARCA (no un 602), corta la atención
  * ({@link Atencion#SIN_RESPUESTA}); la sigue la próxima. La atención del job de reintento lleva un límite de tiempo
@@ -74,6 +77,8 @@ public class MotorFiscal {
     static final int ERROR_NUMERO_O_FECHA = 10016;
     /** 602 de FECompConsultar: «No existen datos en nuestros registros». */
     static final int NO_EXISTE = 602;
+
+    private static final Logger log = LoggerFactory.getLogger(MotorFiscal.class);
 
     private final PasosFiscales pasos;
     private final WsfePorAmbiente wsfePorAmbiente;
@@ -357,8 +362,9 @@ public class MotorFiscal {
         /**
          * Un R con 10016 (C6): el código es el mismo para el número y para la fecha, así que se pregunta el último de ARCA.
          * Si el número enviado no era el próximo, la serie se resincroniza (también hacia atrás) y el registro vuelve a
-         * PENDIENTE sin número, para renumerarse en esta misma atención. Si era el próximo, es la fecha: FUERA_DE_FECHA. Si
-         * ARCA no contesta, el registro vuelve a PENDIENTE sin tocar la serie y la atención corta como transitoria.
+         * PENDIENTE sin número, para renumerarse en esta misma atención; pero si ARCA va atrás de números que la serie ya
+         * tiene, es SERIE_DESINCRONIZADA sin renumerar. Si era el próximo, es la fecha: FUERA_DE_FECHA. Si ARCA no contesta,
+         * el registro vuelve a PENDIENTE sin tocar la serie y la atención corta como transitoria.
          */
         private Optional<Atencion> entenderDiezMilDieciseis(ComprobanteFiscal registro, long intento, long numero,
                 String observaciones, String errores, String respuesta) {
@@ -370,6 +376,14 @@ public class MotorFiscal {
             }
             UltimoEnArca u = ultimo.get();
             String verificacion = JsonFiscal.de(u.verificacion());
+            if (u.numero() + 1 != numero && pasos.hayNumeroDespuesDe(registro, u.numero())) {
+                // ARCA va atrás de números que esta serie ya tiene (un homologación vaciado, o ARCA que perdió algo nuestro):
+                // renumerar chocaría con ellos o repetiría uno. Alerta sin renumerar, como «menos» en la verificación.
+                pasos.desincronizadaPorArca(serieId, dueno, registro.getId(), intento, numero, respuesta, verificacion,
+                        ahora, ahora.plus(lease));
+                alertaEnElLog(registro, numero, EstadoFiscal.SERIE_DESINCRONIZADA);
+                return Optional.of(Atencion.TRABADA);
+            }
             if (u.numero() + 1 != numero) {
                 pasos.renumerar(serieId, dueno, registro.getId(), intento, numero, u.numero(), u.fecha(), respuesta,
                         verificacion, ahora, ahora.plus(lease));
@@ -415,9 +429,7 @@ public class MotorFiscal {
                 // una contradicción, no un «no existe» que habilite renumerar: si ARCA tarda en reflejar el nuestro,
                 // renumerar duplicaría la factura de la venta. Alerta sin renumerar, como un CAE que no coincide.
                 verificacion.put("consulta", consulta);
-                pasos.alertar(registro.getId(), intento.getId(), numero, EstadoFiscal.CAE_NO_COINCIDE,
-                        JsonFiscal.de(verificacion));
-                return Optional.of(Atencion.TRABADA);
+                return alertar(registro, intento, numero, EstadoFiscal.CAE_NO_COINCIDE, verificacion);
             }
             if (ultimo >= numero) {
                 verificacion.put("consulta", consulta);
@@ -428,9 +440,7 @@ public class MotorFiscal {
                             JsonFiscal.de(verificacion), reloj.instant());
                     return Optional.empty();
                 }
-                pasos.alertar(registro.getId(), intento.getId(), numero, EstadoFiscal.CAE_NO_COINCIDE,
-                        JsonFiscal.de(verificacion));
-                return Optional.of(Atencion.TRABADA);
+                return alertar(registro, intento, numero, EstadoFiscal.CAE_NO_COINCIDE, verificacion);
             }
             if (ultimo == numero - 1) {
                 Instant ahora = reloj.instant();
@@ -443,8 +453,14 @@ public class MotorFiscal {
                         JsonFiscal.de(enviado), JsonFiscal.de(verificacion), ahora, ahora.plus(lease));
                 return enviar(registro, nuevo, numero, cbteFch, enviado);
             }
-            pasos.alertar(registro.getId(), intento.getId(), numero, EstadoFiscal.SERIE_DESINCRONIZADA,
-                    JsonFiscal.de(verificacion));
+            return alertar(registro, intento, numero, EstadoFiscal.SERIE_DESINCRONIZADA, verificacion);
+        }
+
+        /** Una alerta de la verificación: el registro y el intento pasan a la alerta, que queda en el log, y la serie se traba. */
+        private Optional<Atencion> alertar(ComprobanteFiscal registro, IntentoFiscal intento, long numero, EstadoFiscal alerta,
+                Map<String, Object> verificacion) {
+            pasos.alertar(registro.getId(), intento.getId(), numero, alerta, JsonFiscal.de(verificacion));
+            alertaEnElLog(registro, numero, alerta);
             return Optional.of(Atencion.TRABADA);
         }
 
@@ -457,6 +473,17 @@ public class MotorFiscal {
         private LocalDate diaDelEnvio() {
             return LocalDate.ofInstant(reloj.instant(), ZONA_ARCA);
         }
+    }
+
+    /**
+     * S13 (rama 7): cada alerta queda en el log con {@link AlertaArca}, una vez, al pasar el registro (las atenciones que
+     * encuentran la serie trabada no la repiten). Solo identificadores: nada del pedido ni de la respuesta.
+     */
+    private static void alertaEnElLog(ComprobanteFiscal registro, long numero, EstadoFiscal alerta) {
+        log.error(AlertaArca.MARCADOR, "{}: el registro fiscal {} de la ferretería {} quedó en {} (serie {} {}-{}, número "
+                + "{}): la serie queda trabada hasta que la revise soporte.", AlertaArca.TEXTO, registro.getId(),
+                registro.getFerreteriaId(), alerta, registro.getAmbiente(), registro.getPuntoVenta(), registro.getCbteTipo(),
+                numero);
     }
 
     /** La CUIT del emisor congelada en el registro y el ambiente del registro (nunca el de la configuración actual). */

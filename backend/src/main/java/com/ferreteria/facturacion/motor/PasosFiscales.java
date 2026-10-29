@@ -304,6 +304,13 @@ public class PasosFiscales {
         return registros.findScoped(registroId).orElseThrow();
     }
 
+    /** Si la serie del registro tiene otro registro con un número mayor que {@code ultimo} (el 10016, C6). */
+    @Transactional(readOnly = true)
+    public boolean hayNumeroDespuesDe(ComprobanteFiscal registro, long ultimo) {
+        return registros.contarNumerosDespuesDeScoped(registro.getId(), registro.getAmbiente(), registro.getPuntoVenta(),
+                registro.getCbteTipo(), ultimo) > 0;
+    }
+
     @Transactional(readOnly = true)
     public Optional<ComprobanteFiscal> siguientePendiente(SerieFiscal serie) {
         return registros.siguientePendienteScoped(serie.getAmbiente(), serie.getPuntoVenta(), serie.getCbteTipo());
@@ -442,6 +449,21 @@ public class PasosFiscales {
         exigir(series.sincronizarScoped(serieId, dueno, ahora, ultimo, fecha), "la serie ya no es de esta toma");
         exigir(registros.liberarScoped(registroId, numero), "el registro ya no está en curso");
         exigir(intentos.rechazarConVerificacionScoped(intentoId, respuesta, verificacion, ahora),
+                "el intento ya no está abierto");
+    }
+
+    /**
+     * 10016 con ARCA atrás de números que la serie ya tiene: renumerar chocaría con ellos o repetiría un número que ARCA
+     * perdió. El registro pasa a SERIE_DESINCRONIZADA con el número enviado y el intento a ALERTA, con la respuesta y el
+     * último autorizado tal cual; la caché de la serie no se toca. Traba la serie hasta que la vea una persona.
+     */
+    @Transactional
+    public void desincronizadaPorArca(long serieId, String dueno, long registroId, long intentoId, long numero,
+            String respuesta, String verificacion, Instant ahora, Instant vence) {
+        renovarOFallar(serieId, dueno, ahora, vence);
+        exigir(registros.pasarScoped(registroId, numero, EstadoFiscal.EN_CURSO, EstadoFiscal.SERIE_DESINCRONIZADA),
+                "el registro ya no está en curso");
+        exigir(intentos.alertarConVerificacionScoped(intentoId, respuesta, verificacion, ahora),
                 "el intento ya no está abierto");
     }
 

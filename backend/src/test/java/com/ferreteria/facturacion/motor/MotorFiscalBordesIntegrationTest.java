@@ -44,8 +44,11 @@ import java.util.concurrent.TimeUnit;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
@@ -277,7 +280,8 @@ class MotorFiscalBordesIntegrationTest extends MotorFiscalTestBase {
     }
 
     @Test
-    void p5b_serieDesincronizadaTrabaSinRenumerar() {
+    @ExtendWith(OutputCaptureExtension.class)
+    void p5b_serieDesincronizadaTrabaSinRenumerar(CapturedOutput salida) {
         long r0 = registrarFacturaB();
         assertThat(atenderB()).isEqualTo(Atencion.TERMINADA);
         // la caché de la serie va adelante de ARCA (ARCA en 1, la serie dice 5)
@@ -293,6 +297,9 @@ class MotorFiscalBordesIntegrationTest extends MotorFiscalTestBase {
         assertThat(registro(r2)).containsEntry("estado", "PENDIENTE");
         assertThat(wsfe.solicitudes()).isEqualTo(2);
         assertThat(numero(r0)).isEqualTo(1);
+        // S13 (rama 7): la alerta queda en el log una sola vez, al pasar el registro; las atenciones trabadas no la repiten.
+        assertThat(salida.getOut().split("ALERTA ARCA", -1)).hasSize(2);
+        assertThat(salida).contains("SERIE_DESINCRONIZADA");
     }
 
     // ---------- P6: CbteFch ----------

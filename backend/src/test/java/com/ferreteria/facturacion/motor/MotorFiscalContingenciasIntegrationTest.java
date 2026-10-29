@@ -16,12 +16,18 @@ import java.time.LocalDate;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 
 /**
  * Lo que la rama 7 suma al motor contra MySQL real y el simulador (cu-07-contingencias S3, C6): el 10016 se entiende con
  * FECompUltimoAutorizado (el número atrasado o adelantado resincroniza la serie y renumera; el número próximo es la fecha,
  * FUERA_DE_FECHA). Un 602 de FECompConsultar con ARCA en N o más es una alerta sin renumerar, no un error transitorio; al sincronizar la serie, el 602 del último es «no existe».
+ * Con ARCA atrás de números que la serie ya tiene, el 10016 es una alerta. Cada alerta queda en el log con
+ * {@code ALERTA ARCA} (S13).
  */
+@ExtendWith(OutputCaptureExtension.class)
 class MotorFiscalContingenciasIntegrationTest extends MotorFiscalTestBase {
 
     // ---- 10016 ----
@@ -63,6 +69,41 @@ class MotorFiscalContingenciasIntegrationTest extends MotorFiscalTestBase {
                 .containsExactly(tuple("RECHAZADO", 6L), tuple("AUTORIZADO", 2L));
         assertThat(ultimoDeLaSerie()).isEqualTo(2);
         assertThat(ultimoEnArca(FACTURA_B)).isEqualTo(2);
+    }
+
+    @Test
+    @DisplayName("10016 con ARCA atrás de números que la serie ya autorizó (un homologación vaciado): no renumera, el registro "
+            + "queda SERIE_DESINCRONIZADA con el número enviado y el intento en ALERTA, la serie trabada y la alerta en el log")
+    void elDiezMilDieciseisConArcaAtrasDeLoNuestroEsUnaAlerta(CapturedOutput salida) {
+        long r1 = registrarFacturaB();
+        long r2 = registrarFacturaB();
+        assertThat(atenderB()).isEqualTo(Atencion.TERMINADA);
+        jdbc.update("delete from simulador_wsfe_comprobante where ferreteria_id = ?", ferreteriaId);
+        jdbc.update("update simulador_wsfe_serie set ultimo_nro = 0, ultima_cbte_fch = null where ferreteria_id = ?",
+                ferreteriaId);
+        long r3 = registrarFacturaB();
+
+        assertThat(atenderB()).isEqualTo(Atencion.TRABADA);
+
+        assertThat(registro(r3)).containsEntry("estado", "SERIE_DESINCRONIZADA").containsEntry("numero", 3L)
+                .containsEntry("cae", null);
+        assertThat(intentos(r3)).singleElement().satisfies(i -> {
+            assertThat(i).containsEntry("estado", "ALERTA").containsEntry("numero", 3L).containsEntry("resultado", null)
+                    .containsEntry("cerrado_en", null);
+            assertThat((String) i.get("respuesta")).contains("10016");
+            assertThat((String) i.get("respuesta_verificacion")).contains("\"ultimoAutorizado\":0");
+        });
+        assertThat(registro(r1)).containsEntry("estado", "AUTORIZADO").containsEntry("numero", 1L);
+        assertThat(registro(r2)).containsEntry("estado", "AUTORIZADO").containsEntry("numero", 2L);
+        assertThat(ultimoDeLaSerie()).isEqualTo(2);
+        assertThat(salida).contains("ALERTA ARCA").contains("SERIE_DESINCRONIZADA");
+
+        long r4 = registrarFacturaB();
+        int solicitudes = wsfe.solicitudes();
+        assertThat(atenderB()).isEqualTo(Atencion.TRABADA);
+        assertThat(wsfe.solicitudes()).isEqualTo(solicitudes);
+        assertThat(registro(r4)).containsEntry("estado", "PENDIENTE").containsEntry("numero", null);
+        assertThat(registro(r3)).containsEntry("estado", "SERIE_DESINCRONIZADA").containsEntry("numero", 3L);
     }
 
     @Test
@@ -115,7 +156,7 @@ class MotorFiscalContingenciasIntegrationTest extends MotorFiscalTestBase {
     @Test
     @DisplayName("602 en la verificación con ARCA en N o más es una contradicción (la numeración es correlativa): alerta "
             + "CAE_NO_COINCIDE sin renumerar, porque nunca se reenvía a ciegas; no es un error transitorio")
-    void elSeiscientosDosEnLaVerificacionEsUnaAlerta() {
+    void elSeiscientosDosEnLaVerificacionEsUnaAlerta(CapturedOutput salida) {
         long r = registrarFacturaB();
         wsfe.fallas().programar(Falla.TIMEOUT_ANTES_DE_AUTORIZAR);
         assertThat(atenderB()).isEqualTo(Atencion.SIN_RESPUESTA);
@@ -131,6 +172,7 @@ class MotorFiscalContingenciasIntegrationTest extends MotorFiscalTestBase {
         assertThat(intentos(r)).singleElement()
                 .satisfies(i -> assertThat((String) i.get("respuesta_verificacion")).contains("602"));
         assertThat(ultimoEnArca(FACTURA_B)).isEqualTo(1);
+        assertThat(salida).contains("ALERTA ARCA").contains("CAE_NO_COINCIDE");
     }
 
     @Test
