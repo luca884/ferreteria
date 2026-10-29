@@ -28,16 +28,19 @@ class QrArcaTest {
         return Stream.of(
                 Arguments.of("Factura B a Consumidor Final sin identificar (99 y 0, S14)",
                         new QrArca.Datos(LocalDate.of(2026, 10, 28), 30712345678L, 1, 6, 12, new BigDecimal("1210.00"), 99,
-                                0, 70417054367476L)),
+                                0, 70417054367476L), "1210.00"),
                 Arguments.of("Factura A a un Responsable Inscripto con CUIT, punto de venta y número grandes",
                         new QrArca.Datos(LocalDate.of(2026, 1, 5), 30712345678L, 99999, 1, 99999999,
-                                new BigDecimal("229.19"), 80, 30786013301L, 70417054367499L)));
+                                new BigDecimal("229.19"), 80, 30786013301L, 70417054367499L), "229.19"),
+                Arguments.of("Factura B a Consumidor Final con DNI (96) y un importe que termina en cero",
+                        new QrArca.Datos(LocalDate.of(2026, 10, 28), 30712345678L, 1, 6, 13, new BigDecimal("201.5"), 96,
+                                30123456L, 70417054367476L), "201.50"));
     }
 
     @ParameterizedTest(name = "{0}")
     @MethodSource("comprobantes")
     @DisplayName("el QR lleva la URL de ARCA con el JSON v1 en Base64, y ZXing lee la matriz con corrección M")
-    void elQrEsElDeLaEspecificacion(String caso, QrArca.Datos datos) {
+    void elQrEsElDeLaEspecificacion(String caso, QrArca.Datos datos, String importe) {
         String texto = QrArca.texto(datos);
         List<String> modulos = QrArca.modulos(texto);
 
@@ -65,7 +68,9 @@ class QrArcaTest {
         assertThat(json.get("nroCmp").asLong()).isEqualTo(datos.nroCmp());
         assertThat(json.get("importe").isNumber()).isTrue();
         assertThat(json.get("importe").decimalValue()).isEqualByComparingTo(datos.importe());
-        assertThat(json.get("importe").decimalValue().scale()).isLessThanOrEqualTo(2);
+        // El importe va con sus 2 decimales, tal cual en el texto (1210.00, no 1210 ni 1.21E+3).
+        assertThat(json.get("importe").decimalValue().scale()).isEqualTo(2);
+        assertThat(LectorQr.json(texto)).contains("\"importe\":" + importe + ",");
         assertThat(json.get("moneda").asText()).isEqualTo("PES");
         assertThat(json.get("ctz").isNumber()).isTrue();
         assertThat(json.get("ctz").decimalValue()).isEqualByComparingTo("1");

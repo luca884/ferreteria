@@ -63,11 +63,11 @@ describe('FacturaImprimible (CU-07 paso 5, S1, S4, S6)', () => {
     expect(articulo.contains(el().querySelector('#factura-titulo'))).toBe(false);
   });
 
-  it('con `fiscal.letra` B y `fiscal.cae` cargados pero el documento X, no aparece ninguno: la hoja sale solo del documento', async () => {
+  it('con `fiscal.letra` B y `fiscal.cae` cargados, y el documento no válido aunque traiga letra B, no aparece ninguno: el título es el número interno y la hoja sale solo del documento', async () => {
     const base = ventaParaFactura();
     await abrir({
       ...base,
-      fiscal: fiscalDe(documentoX(MARCA_SIMULADO), {
+      fiscal: fiscalDe(documentoX(MARCA_SIMULADO, { letra: 'B' }), {
         letra: 'B',
         numero: 12,
         cae: '70417054367476',

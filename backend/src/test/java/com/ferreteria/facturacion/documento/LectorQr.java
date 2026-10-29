@@ -3,6 +3,7 @@ package com.ferreteria.facturacion.documento;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.cfg.JsonNodeFeature;
 import com.google.zxing.BinaryBitmap;
 import com.google.zxing.DecodeHintType;
 import com.google.zxing.RGBLuminanceSource;
@@ -74,13 +75,20 @@ public final class LectorQr {
         return url.substring(desde + 3);
     }
 
-    /** El JSON del comprobante: {@code p} decodificado como Base64 estándar. */
+    /** El JSON del comprobante tal cual, como texto: {@code p} decodificado como Base64 estándar. */
+    public static String json(String url) {
+        return new String(Base64.getDecoder().decode(parametro(url)), StandardCharsets.UTF_8);
+    }
+
+    /**
+     * El JSON del comprobante, leído. Los decimales como BigDecimal exactos, con su escala: con
+     * {@code STRIP_TRAILING_BIGDECIMAL_ZEROES} prendido (el default), Jackson les saca los ceros de la derecha (1210.00
+     * queda 1.21E+3).
+     */
     public static JsonNode datos(String url) {
-        byte[] json = Base64.getDecoder().decode(parametro(url));
         try {
-            // Los decimales como BigDecimal: el importe se compara exacto, con su escala.
             return new ObjectMapper().enable(DeserializationFeature.USE_BIG_DECIMAL_FOR_FLOATS)
-                    .readTree(new String(json, StandardCharsets.UTF_8));
+                    .configure(JsonNodeFeature.STRIP_TRAILING_BIGDECIMAL_ZEROES, false).readTree(json(url));
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }
