@@ -239,7 +239,12 @@ public class TicketsDeAcceso implements ProveedorDeTicket {
             } catch (FaultWsaaException e) {
                 registrarFault(ambiente, servicio, ferreteriaId, dueno, e); // también suelta el lease
                 suelto = true;
-                return vigente.orElseThrow(() -> new PedidoNoLlegoException(String.format(RECHAZADO, e.codigo()), e));
+                PedidoNoLlegoException rechazo = new PedidoNoLlegoException(String.format(RECHAZADO, e.codigo()), e);
+                if (!respetarBloqueo && FallaWsaa.de(e.codigo()) == FallaWsaa.CREDENCIAL) {
+                    // «Probar conexión»: el TA viejo no prueba nada si ARCA acaba de rechazar el certificado
+                    throw rechazo;
+                }
+                return vigente.orElseThrow(() -> rechazo);
             } catch (PedidoNoLlegoException | ResultadoInciertoException | FirmaCms.NoSePudoFirmarException e) {
                 log.warn("No se pudo sacar el ticket de acceso de {} en {} para la ferretería {}: {}", servicio, ambiente,
                         ferreteriaId, e.getMessage());

@@ -63,6 +63,25 @@ class TicketsDeAccesoProbarIntegrationTest extends TicketsDeAccesoTestBase {
     }
 
     @Test
+    @DisplayName("probar() con un rechazo del certificado falla aunque quede un TA vigente en la ventana de renovación")
+    void probarConRechazoEnLaVentanaDeRenovacionFalla() {
+        TicketsDeAcceso tickets = instancia();
+        tickets.ticket(Ambiente.HOMOLOGACION, WSFE);
+        reloj.fijar(AHORA.plus(wsaa.vigencia).minus(Duration.ofMinutes(15)));
+        wsaa.luegoFault("coe.notAuthorized", "Computador no autorizado a acceder al servicio");
+        tickets.ticket(Ambiente.HOMOLOGACION, WSFE); // la renovación rechazada bloquea; ticket() sigue con el viejo
+        assertThat(bloqueo()).isEqualTo("coe.notAuthorized");
+        wsaa.luegoFault("coe.notAuthorized", "Computador no autorizado a acceder al servicio");
+
+        assertThatThrownBy(() -> tickets.probar(Ambiente.HOMOLOGACION, WSFE))
+                .isInstanceOf(PedidoNoLlegoException.class)
+                .cause().isInstanceOfSatisfying(FaultWsaaException.class,
+                        fault -> assertThat(fault.codigo()).isEqualTo("coe.notAuthorized"));
+        assertThat(wsaa.llamadas).hasValue(3);
+        assertThat(bloqueo()).isEqualTo("coe.notAuthorized");
+    }
+
+    @Test
     @DisplayName("probar() reusa el TA vigente sin otro loginCms, con su vencimiento")
     void probarReusaElTaVigente() {
         TicketsDeAcceso tickets = instancia();

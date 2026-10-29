@@ -178,7 +178,7 @@ public class PasosFiscales {
      * La regla, con la configuración ya leída (con lock o sin él): habilitada con ambiente y punto de venta, y sin el bloqueo
      * de ARCA (que, con la facturación habilitada, da su propio motivo, {@link #FRENADA}); en homologación
      * o producción, una credencial activa de ese ambiente, vigente en {@code ahora} y legible (rama 5, S8; la lee con lock
-     * si {@code conLock}); y el emisor. En SIMULADOR no se exige credencial (hasta la rama 6).
+     * si {@code conLock}); y el emisor. Desde la rama 6, SIMULADOR también exige credencial.
      */
     private Emision emision(Optional<ConfigArca> leida, boolean conLock, Instant ahora) {
         Optional<ConfigArca> config = leida.filter(ConfigArca::puedeFacturar);
