@@ -35,6 +35,7 @@ spring:
     locations: classpath:db/migration
   lifecycle:
     # Con el apagado ordenado, cuánto espera el servidor web los pedidos en curso (el drenaje de Railway tiene que cubrirlo).
+    # En la misma fase, y a la par, se espera la pasada en curso del job de reintento fiscal: no suma tiempo.
     timeout-per-shutdown-phase: ${APAGADO_ESPERA_POR_FASE:20s}
   task:
     scheduling:
@@ -99,7 +100,9 @@ app:
       # contestaría 10016.
       lease: ${FACTURACION_LEASE_SERIE:180s}
     reintento:
-      # Job de reintento de los pendientes de CAE (rama 7, C5). Entre el fin de una pasada y la siguiente.
+      # Job de reintento de los pendientes de CAE (rama 7, C5). Corre en un hilo propio, no en el del scheduler que comparten
+      # el recálculo diario y las cotizaciones, y se apaga con app.programacion.habilitada=false, como ellos (los tests).
+      # Entre el fin de una pasada y la siguiente.
       cada: ${FACTURACION_REINTENTO_CADA:60s}
       # Lo más que dura una pasada: se mira entre una serie y otra y entre un registro y el siguiente. Tiene que alcanzar
       # para una llamada (motor.presupuesto-llamada); si no, la app no arranca.
