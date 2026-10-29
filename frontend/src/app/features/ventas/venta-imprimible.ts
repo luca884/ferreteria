@@ -2,7 +2,7 @@ import { Component, ElementRef, afterNextRender, computed, inject, input, output
 import { AuthService } from '../../core/auth/auth.service';
 import { TrampaFoco } from '../../shared/trampa-foco';
 import { VentaHoja } from './venta-hoja';
-import { VentaConsultada } from './ventas.models';
+import { VentaConsultada, tituloDeComprobante } from './ventas.models';
 
 /** La leyenda de la venta impresa mientras no haya factura electrónica (fase 5). Provisoria: se confirma con el contador. */
 export const LEYENDA_VENTA_INTERNA = 'Comprobante interno, no válido como factura';
@@ -25,6 +25,8 @@ export class VentaImprimible {
 
   protected readonly ferreteria = computed(() => this.auth.sesion()?.ferreteriaNombre ?? null);
   protected readonly leyenda = LEYENDA_VENTA_INTERNA;
+  /** «Venta N.º 7», o «Anulación N.º 14» para la anulación interna (CU-08). */
+  protected readonly titulo = computed(() => tituloDeComprobante(this.venta()));
 
   private readonly botonImprimir = viewChild<ElementRef<HTMLButtonElement>>('botonImprimir');
 

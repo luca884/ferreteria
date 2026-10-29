@@ -9,7 +9,7 @@ import { vi } from 'vitest';
 import { PageResponse } from '../../core/api/page.models';
 import { AuthService } from '../../core/auth/auth.service';
 import { Ventas } from './ventas';
-import { FiscalConsultado, VentaResumen } from './ventas.models';
+import { FiscalConsultado, VentaConsultada, VentaResumen } from './ventas.models';
 import { VentasService } from './ventas.service';
 import { resumenDePrueba, ventaDePrueba } from './ventas.testing';
 import { MARCA_SIMULADO, documentoB, documentoX, fiscalDe } from '../../shared/factura/factura.testing';
@@ -24,6 +24,7 @@ describe('Ventas (consulta y reimpresión, G60)', () => {
     obtener: ReturnType<typeof vi.fn>;
     reintentar: ReturnType<typeof vi.fn>;
     dejarSinFactura: ReturnType<typeof vi.fn>;
+    anular: ReturnType<typeof vi.fn>;
   };
 
   const pagina = (
@@ -48,6 +49,7 @@ describe('Ventas (consulta y reimpresión, G60)', () => {
       obtener: vi.fn((id: number) => of(ventaDePrueba({ ventaId: id, numero: id / 10 }))),
       reintentar: vi.fn(() => of({})),
       dejarSinFactura: vi.fn(() => of({})),
+      anular: vi.fn(() => of(ventaDePrueba({ ventaId: 140, numero: 14, tipo: 'NOTA_CREDITO' }))),
     };
     const sesion = signal({ userId: 7, nombre: 'Ana', email: 'a@x.com', rol, ferreteriaId: 3, ferreteriaNombre: 'Tornillo' });
     await TestBed.configureTestingModule({
@@ -379,13 +381,18 @@ describe('Ventas (consulta y reimpresión, G60)', () => {
     expect(normal(detalle()!.textContent)).toContain('Salió de un remito');
   });
 
-  it('el detalle solo ofrece Imprimir: ni Anular ni Borrar (GDS-15)', async () => {
+  it('el detalle ofrece Imprimir y, aparte, Anular (CU-08), sin atajo de teclado; nunca Borrar (GDS-15)', async () => {
     await crear();
     filas()[0].click();
     await refrescar();
 
     const acciones = Array.from(detalle()!.querySelectorAll('button')).map((b) => normal(b.textContent));
-    expect(acciones).toEqual(['Imprimir']);
+    expect(acciones).toEqual(['Imprimir', 'Anular']);
+    const anular = boton('Anular', detalle()!)!;
+    expect(anular.closest('.anular-venta')).not.toBeNull();
+    expect(anular.closest('.acciones')).toBeNull();
+    expect(anular.getAttribute('aria-keyshortcuts')).toBeNull();
+    expect(anular.getAttribute('data-tecla')).toBeNull();
   });
 
   it('Imprimir abre la venta imprimible y Cerrar la cierra', async () => {
@@ -755,6 +762,206 @@ describe('Ventas (consulta y reimpresión, G60)', () => {
 
       const hoja = el().querySelector('app-factura-imprimible article.factura-imprimible')!;
       expect(normal(hoja.querySelector('.numero-fiscal')?.textContent)).toBe('N.º 00001-00000012');
+    });
+  });
+
+  describe('anular una venta (CU-08)', () => {
+    const CONFIRMACION =
+      '¿Anular la venta N.º 5? Se emite una nota de crédito y vuelve el stock. La caja no cambia: si devolvés plata, cargá un egreso.';
+    const dialogo = () => el().querySelector<HTMLElement>('app-dialogo-anular [role="alertdialog"]');
+    const textoDialogo = () =>
+      `${normal(dialogo()!.querySelector('h2')?.textContent)} ${normal(dialogo()!.querySelector('h2 + p')?.textContent)}`;
+    const motivo = () => dialogo()!.querySelector<HTMLInputElement>('#motivo-anulacion');
+    const error = (status: number, cuerpo: Record<string, unknown>) =>
+      throwError(() => new HttpErrorResponse({ status, error: { status, ...cuerpo } }));
+    const autorizada = (): FiscalConsultado => ({ ...fiscalDe(documentoB()), acciones: [], reimprimir: false });
+    const anulacion = {
+      notaId: 140,
+      numero: 14,
+      interna: false,
+      motivo: null,
+      usuario: 'Dueño de Prueba',
+      fecha: '2026-10-29T14:05:00',
+    };
+    /** La nota de crédito B con CAE de la venta N.º 7. */
+    const notaB = (cambios: Partial<VentaConsultada> = {}) =>
+      ventaDePrueba({
+        ventaId: 140,
+        numero: 14,
+        tipo: 'NOTA_CREDITO',
+        ventaAnulada: { id: 70, numero: 7 },
+        anulacion: null,
+        pagos: [],
+        fiscal: {
+          ...fiscalDe(documentoB({ codigo: 8, numero: 3, comprobanteAsociado: 'Factura B 00001-00000045' }), {
+            clase: 'NOTA_CREDITO',
+          }),
+          acciones: [],
+          reimprimir: false,
+        },
+        ...cambios,
+      });
+
+    async function abrirVenta(venta: VentaConsultada) {
+      await crear();
+      api.obtener.mockReturnValue(of(venta));
+      filas()[0].click();
+      await refrescar();
+    }
+
+    it('con la factura autorizada confirma con el texto de la spec, sin motivo; después refresca la lista y abre la nota', async () => {
+      await abrirVenta(ventaDePrueba({ ventaId: 50, numero: 5, fiscal: autorizada(), anulacion: null }));
+      api.listar.mockClear();
+
+      boton('Anular', detalle()!)!.click();
+      await refrescar();
+
+      expect(textoDialogo()).toBe(CONFIRMACION);
+      expect(motivo()).toBeNull();
+      expect(api.anular).not.toHaveBeenCalled();
+
+      api.anular.mockReturnValue(of(notaB()));
+      api.obtener.mockReturnValue(of(notaB()));
+      api.listar.mockReturnValue(of(pagina([resumenDePrueba(14, { tipo: 'NOTA_CREDITO' }), resumenDePrueba(5)])));
+      boton('Anular', dialogo()!)!.click();
+      await refrescar();
+
+      expect(api.anular).toHaveBeenCalledWith(50, null);
+      expect(dialogo()).toBeNull();
+      expect(api.listar).toHaveBeenCalledWith({ page: 0 });
+      expect(api.obtener).toHaveBeenLastCalledWith(140);
+      expect(normal(detalle()!.querySelector('h2')?.textContent)).toBe('Nota de crédito N.º 14');
+      expect(normal(el().querySelector('.resultado-accion')?.textContent)).toBe(
+        'Se anuló la venta N.º 5 con la nota de crédito N.º 14.',
+      );
+    });
+
+    it('sin la factura autorizada pide el motivo y lo manda; los 400 del motivo y los 409 y 422 quedan en el diálogo', async () => {
+      for (const fiscal of [undefined, { ...autorizada(), estado: 'RECHAZADO' as const }]) {
+        TestBed.resetTestingModule();
+        await abrirVenta(ventaDePrueba({ ventaId: 50, numero: 5, fiscal, anulacion: null }));
+        boton('Anular', detalle()!)!.click();
+        await refrescar();
+        expect(textoDialogo()).toBe(CONFIRMACION);
+        expect(motivo(), String(fiscal?.estado)).not.toBeNull();
+      }
+
+      motivo()!.value = 'El cliente devolvió todo';
+      motivo()!.dispatchEvent(new Event('input'));
+      const casos: [ReturnType<typeof error>, string][] = [
+        [error(400, { message: 'Datos inválidos', errors: { motivo: 'El motivo tiene hasta 200 caracteres.' } }), 'El motivo tiene hasta 200 caracteres.'],
+        [error(409, { message: 'Esperá el CAE de la factura para anularla.', motivo: 'ESPERAR_CAE' }), 'Esperá el CAE de la factura para anularla.'],
+        [error(409, { message: 'La venta ya fue anulada por Dueño el 29/10/2026 14:05.', motivo: 'VENTA_YA_ANULADA' }), 'La venta ya fue anulada por Dueño el 29/10/2026 14:05.'],
+        [
+          error(422, { message: 'La venta tiene un pago a cuenta corriente: todavía no se puede anular.', motivo: 'VENTA_A_CUENTA_CORRIENTE' }),
+          'La venta tiene un pago a cuenta corriente: todavía no se puede anular.',
+        ],
+      ];
+      for (const [respuesta, mensaje] of casos) {
+        api.anular.mockReturnValueOnce(respuesta);
+        boton('Anular', dialogo()!)!.click();
+        await refrescar();
+        expect(normal(dialogo()!.querySelector('[role="alert"]')?.textContent)).toBe(mensaje);
+      }
+      expect(api.anular).toHaveBeenCalledWith(50, 'El cliente devolvió todo');
+      expect(motivo()!.value).toBe('El cliente devolvió todo');
+    });
+
+    it('una venta anulada dice cómo, quién y cuándo, y no ofrece Anular; la lista la marca «Anulada»', async () => {
+      await crear([resumenDePrueba(5, { anulacion }), resumenDePrueba(4, { anulacion: null })]);
+      expect(celdas(filas()[0])[0]).toBe('5 Anulada');
+      expect(celdas(filas()[1])[0]).toBe('4');
+
+      api.obtener.mockReturnValue(of(ventaDePrueba({ ventaId: 50, numero: 5, fiscal: autorizada(), anulacion })));
+      filas()[0].click();
+      await refrescar();
+      expect(normal(detalle()!.querySelector('.anulacion')?.textContent)).toBe(
+        'Anulada por la NC N.º 14 · Dueño de Prueba, 29/10/2026 14:05',
+      );
+      expect(boton('Anular', detalle()!)).toBeUndefined();
+
+      const interna = { ...anulacion, interna: true, motivo: 'El cliente devolvió todo' };
+      api.obtener.mockReturnValue(of(ventaDePrueba({ ventaId: 40, numero: 4, anulacion: interna })));
+      filas()[1].click();
+      await refrescar();
+      expect(normal(detalle()!.querySelector('.anulacion')?.textContent)).toBe(
+        'Anulada: El cliente devolvió todo · Dueño de Prueba, 29/10/2026 14:05',
+      );
+      expect(boton('Anular', detalle()!)).toBeUndefined();
+    });
+
+    it('la nota de crédito y la anulación son renglones propios, con el total en negativo y la venta que anulan', async () => {
+      const resumenB: ResumenFiscal = {
+        letra: 'B',
+        puntoVenta: 1,
+        numero: 3,
+        estado: 'AUTORIZADO',
+        ambiente: 'PRODUCCION',
+        validoComoFactura: true,
+      };
+      await crear([
+        resumenDePrueba(15, { tipo: 'NOTA_CREDITO', ventaAnulada: { id: 40, numero: 4 }, fiscal: null }),
+        resumenDePrueba(14, { tipo: 'NOTA_CREDITO', ventaAnulada: { id: 70, numero: 7 }, fiscal: resumenB }),
+      ]);
+
+      expect(celdas(filas()[0])).toEqual([
+        '15 Anulación · Venta N.º 4',
+        '',
+        '22/10/2026 16:05',
+        'Cliente 15',
+        'Ana Vendedora',
+        '-$ 3.000,00',
+      ]);
+      expect(celdas(filas()[1])[0]).toBe('14 Nota de crédito · Venta N.º 7');
+      expect(celdas(filas()[1])[1]).toBe('B 00001-00000003');
+    });
+
+    it('el detalle de la nota dice qué venta anula, no ofrece Anular y reimprime la nota de crédito', async () => {
+      await abrirVenta(notaB());
+
+      expect(normal(detalle()!.querySelector('h2')?.textContent)).toBe('Nota de crédito N.º 14');
+      expect(normal(detalle()!.querySelector('.venta-anulada')?.textContent)).toBe('Anula la venta N.º 7');
+      const datos = Array.from(detalle()!.querySelectorAll('dl.datos dt')).map((dt) => normal(dt.textContent));
+      expect(datos).toEqual(['Fecha', 'Cliente', 'Anuló']);
+      expect(normal(detalle()!.querySelector('.linea-fiscal')?.textContent)).toBe(
+        'Nota de crédito B 00001-00000003 · Autorizada',
+      );
+      expect(boton('Anular', detalle()!)).toBeUndefined();
+
+      boton('Imprimir', detalle()!)!.click();
+      await refrescar();
+      const hoja = el().querySelector('app-factura-imprimible article.factura-imprimible')!;
+      expect(normal(hoja.querySelector('.tipo')?.textContent)).toBe('NOTA DE CRÉDITO');
+      expect(normal(hoja.querySelector('.comprobante-asociado')?.textContent)).toBe(
+        'Comprobante asociado: Factura B 00001-00000045',
+      );
+    });
+
+    it('la anulación interna se titula «Anulación N.º n» y se imprime como comprobante interno', async () => {
+      await abrirVenta(notaB({ fiscal: undefined, ventaAnulada: { id: 40, numero: 4 } }));
+
+      expect(normal(detalle()!.querySelector('h2')?.textContent)).toBe('Anulación N.º 14');
+      boton('Imprimir', detalle()!)!.click();
+      await refrescar();
+      expect(normal(el().querySelector('app-venta-imprimible h2')?.textContent)).toBe('Anulación N.º 14');
+    });
+
+    it('una nota de crédito rechazada se reintenta desde la bandeja, sin «Dejar sin factura»', async () => {
+      await abrirVenta(
+        notaB({
+          fiscal: {
+            ...fiscalDe(documentoX('SIN FACTURA — ARCA no la autorizó'), { clase: 'NOTA_CREDITO' }),
+            estado: 'RECHAZADO',
+            acciones: ['REINTENTAR'],
+            reimprimir: false,
+          },
+        }),
+      );
+
+      expect(boton('Dejar sin factura', detalle()!)).toBeUndefined();
+      boton('Reintentar', detalle()!)!.click();
+      await refrescar();
+      expect(api.reintentar).toHaveBeenCalledWith(140, false);
     });
   });
 });

@@ -104,7 +104,7 @@ Orden: T1 → T2 → T3 ∥ T5 (superficies separadas: `facturacion` y los lecto
 - [x] T3 · S3, S8 · ruta: writer «facturacion» (worktree) · Aceptación: el motor da de alta la NC con su letra, `CbtesAsoc` y el receptor de la factura, en su propia serie; el simulador da 10197 y 10040; «Reintentar» de la bandeja sirve para una NC y copia el receptor y el asociado de la factura, no del cliente de hoy; la hoja de la NC · Evidencia: `MigracionV38Test` RED 1 falla + 22 errores → GREEN 23/23, `NotaDeCreditoIntegrationTest` RED (no compila) → GREEN 29/29, 270 focalizados verdes (en la copia del writer), commit `12641ed` · Risk: items 1, 2 y 4 (V38, cerrojo de ambiente, lock del registro y carrera con el job)
 - [x] T4 · S2-S6, S9, S13, S15 · ruta: writer «ventas» · Aceptación: los endpoints del Dueño para la NC y la anulación, con la fachada con reintentos, el orden de locks, los 409 y el 422, el stock `NOTA_CREDITO`, el 403 y el 404 · Evidencia: `AnulacionDeVentaIntegrationTest` RED 19/19 (404) → GREEN 19/19 (tres corridas), 306 focalizados verdes; tras el ajuste del padre, 61/61 · Risk: items 2 y 4 (Dueño, locks y doble anulación)
 - [x] T5 · S5, S7, S12, S14 · ruta: writer «ventas» (junto con T2) · Aceptación: los lectores de `tipo = VENTA` (`ComprobanteRepository:29,93,127,153,172`, `VentaGestion:187`, `MovimientoStockRepository:46`), los reportes de CU-15 y la lista de Ventas; un test de cobertura arma una venta con su NC y pide cada reporte de CU-15, la lista de Ventas, los movimientos y los clientes del artículo, y compara contra lo esperado, así un lector que falte se ve · Evidencia: `NotaDeCreditoEnLosLectoresIntegrationTest` RED 7 fallas + 3 errores → GREEN 11/11; 188 tests focalizados (los lectores y sus regresiones) verdes salvo `MigracionV6Test#historialDeMigraciones`, que espera la V38 · Risk: item 3 (lectores compartidos)
-- [ ] T6 · S2, S7, S8, S13-S15 · ruta: writer «frontend» · Aceptación: «Anular» en el detalle, la confirmación, el diálogo de la anulación interna, la NC en la lista y su impreso, los reportes y los movimientos del artículo · Evidencia: — · Risk: none
+- [x] T6 · S2, S7, S8, S13-S15 · ruta: writer «frontend» · Aceptación: «Anular» en el detalle, la confirmación, el diálogo de la anulación interna, la NC en la lista y su impreso, los reportes y los movimientos del artículo · Evidencia: cada spec nuevo RED (no compila o falla) → GREEN; ventas + reportes + movimientos 110/110, `shared/factura` 23/23, mostrador 855/855, `ng build` OK · Risk: item 3 (`shared/factura`, compartida con el mostrador)
 - [ ] T7 · S10 · ruta: inline · Aceptación: suite backend, suite frontend, `ng build`, ego-browser (NC B y A, anulación interna, stock y reportes) y `odd-verifier` sin bloqueantes · Evidencia: — · Risk: —
 - [ ] T8 · — · ruta: Luca · Aceptación: merge, push y deploy; la V37 aplicada en prod · Evidencia: — · Risk: item 5 (deploy)
 
@@ -203,3 +203,14 @@ Orden: T1 → T2 → T3 ∥ T5 (superficies separadas: `facturacion` y los lecto
   - **Arreglo del padre.** El writer escribía el movimiento de stock con un INSERT nativo, porque `MovimientoStock` estaba fuera de su superficie. Ahora usa la fábrica `MovimientoStock.notaDeCredito` y `saveAll`, como la venta. Prueba: 61/61 (`AnulacionDeVentaIntegrationTest`, los lectores, los movimientos y `StockService*`).
   - **Sin test:** el camino del duplicado en `uk_comprobante_asociado`. En la carrera, el segundo espera el lock de la venta y ve la nota.
   - Próximo paso: T6 (front).
+- L10 (2026-10-29) T6 cerrada (writer «frontend»).
+  - **Hoja.** La hoja fiscal es `app-factura-hoja`, en `shared/factura`, compartida con el mostrador. Suma el input `clase` (por defecto `'FACTURA'`) y `comprobanteAsociado`, que es opcional.
+  - **Decisiones inferidas:**
+    - una `NOTA_CREDITO` sin `fiscal` es «Anulación», y con `fiscal` es «Nota de crédito»;
+    - después de anular, se vuelve a leer la lista y se abre el detalle de la NC, con el aviso «Se anuló la venta N.º n con la nota de crédito N.º m.» o «… con la anulación N.º m.»;
+    - el motivo se pide salvo con `fiscal.estado === 'AUTORIZADO'`. Los errores se muestran tal cual dentro del diálogo, que queda abierto;
+    - `DialogoAnular` sigue el molde de `DialogoSinFactura`, y «Anular» va debajo de «Imprimir», separado y sin atajo;
+    - la marca de la lista es «Anulada», y el renglón de la NC dice «Nota de crédito · Venta N.º m»;
+    - el resumen de CU-15 muestra Ventas, Notas de crédito, Neto, IVA, Costo, Ganancia sin NC, Ganancia con NC y Comprobantes;
+    - en el X de una NC dice «Nota de crédito N.º n», y en la hoja de venta, «Anuló» en vez de «Cobró».
+  - **Aviso de `ng build`:** el presupuesto CSS de `mostrador/dialogo-cobro.ts` (4,40 kB contra 4,00 kB) ya estaba en la base.

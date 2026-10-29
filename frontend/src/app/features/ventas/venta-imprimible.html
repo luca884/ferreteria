@@ -13,7 +13,7 @@
       @if (ferreteria(); as nombre) {
         <p class="ferreteria">{{ nombre }}</p>
       }
-      <h2 id="venta-titulo">Venta N.º {{ venta().numero }}</h2>
+      <h2 id="venta-titulo">{{ titulo() }}</h2>
       <app-venta-hoja [venta]="venta()" />
       <p class="leyenda">{{ leyenda }}</p>
     </article>

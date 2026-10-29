@@ -20,7 +20,7 @@
     }
 
     <article class="factura-imprimible">
-      <app-factura-hoja [documento]="documento()" [venta]="venta()" />
+      <app-factura-hoja [documento]="documento()" [venta]="venta()" [clase]="venta().fiscal.clase" />
     </article>
 
     <div class="dialogo-acciones">

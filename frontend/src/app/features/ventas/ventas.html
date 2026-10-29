@@ -102,6 +102,14 @@
                 @if (!fila.facturable) {
                   <span class="marca">No facturable</span>
                 }
+                @if (esNota(fila)) {
+                  <span class="marca nota">
+                    {{ fila.fiscal ? 'Nota de crédito' : 'Anulación' }}@if (fila.ventaAnulada; as anulada) {&ngsp;· Venta N.º {{ anulada.numero }}}
+                  </span>
+                }
+                @if (fila.anulacion) {
+                  <span class="marca anulada">Anulada</span>
+                }
               </td>
               <td class="factura">
                 @if (factura(fila.fiscal); as f) {
@@ -117,7 +125,7 @@
               <td>{{ fecha(fila.fecha) }}</td>
               <td>{{ cliente(fila.clienteNombre) }}</td>
               <td>{{ fila.usuario ?? '—' }}</td>
-              <td class="num">{{ fila.total | monto }}</td>
+              <td class="num">{{ (esNota(fila) ? -fila.total : fila.total) | monto }}</td>
             </tr>
           }
         </tbody>
@@ -150,7 +158,13 @@
         <p class="error" role="alert">{{ texto }}</p>
       }
       @if (detalle(); as v) {
-        <h2>Venta N.º {{ v.numero }}</h2>
+        <h2>{{ titulo(v) }}</h2>
+        @if (v.ventaAnulada; as anulada) {
+          <p class="venta-anulada">Anula la venta N.º {{ anulada.numero }}</p>
+        }
+        @if (v.anulacion; as a) {
+          <p class="anulacion">{{ anulacion(a) }}</p>
+        }
         @if (lineaFiscal(); as linea) {
           <p class="linea-fiscal">{{ linea }}</p>
         }
@@ -227,6 +241,12 @@
             {{ fiscalElegido()?.reimprimir ? 'Reimprimir factura' : 'Imprimir' }}
           </button>
         </div>
+        @if (puedeAnular()) {
+          <!-- Separado de «Imprimir» y sin atajo de teclado (CU-08 punto 1): anular no se hace de pasada. -->
+          <div class="anular-venta">
+            <button type="button" class="peligro" [disabled]="enVueloAccion()" (click)="pedirAnular()">Anular</button>
+          </div>
+        }
         @if (imprimiendo()) {
           @if (facturada(); as f) {
             <app-factura-imprimible [venta]="f" (cerrar)="imprimiendo.set(false)" />
@@ -248,6 +268,19 @@
       (confirmar)="confirmarFechaDeHoy()"
       (cancelar)="confirmandoFecha.set(null)"
     />
+  }
+
+  @if (confirmandoAnular()) {
+    @if (detalle(); as v) {
+      <app-dialogo-anular
+        [numero]="v.numero"
+        [conMotivo]="anularConMotivo()"
+        [enVuelo]="enVueloAccion()"
+        [error]="errorAnular()"
+        (confirmar)="anular($event)"
+        (cancelar)="cerrarAnular()"
+      />
+    }
   }
 
   @if (pidiendoMotivo()) {

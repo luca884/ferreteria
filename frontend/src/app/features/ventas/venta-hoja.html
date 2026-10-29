@@ -9,7 +9,7 @@
   </div>
   @if (venta().usuario; as usuario) {
     <div>
-      <dt>Cobró</dt>
+      <dt>{{ esNota() ? 'Anuló' : 'Cobró' }}</dt>
       <dd>{{ usuario }}</dd>
     </div>
   }

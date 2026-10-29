@@ -5,7 +5,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { vi } from 'vitest';
 import { FacturaImprimible } from './factura-imprimible';
 import { VentaFacturada } from './factura.models';
-import { MARCA_SIMULADO, documentoX, fiscalDe, ventaFacturada, ventaParaFactura } from './factura.testing';
+import { MARCA_SIMULADO, documentoB, documentoX, fiscalDe, ventaFacturada, ventaParaFactura } from './factura.testing';
 
 registerLocaleData(localeEsAr);
 
@@ -87,6 +87,19 @@ describe('FacturaImprimible (CU-07 paso 5, S1, S4, S6)', () => {
     expect(todo).not.toContain('Comprobante Autorizado');
     expect(todo).not.toMatch(/Factura [ABC]\b/);
     expect(el().querySelector('svg.qr')).toBeNull();
+  });
+
+  it('una nota de crédito (CU-08) se titula «Nota de crédito B», o con su número interno si no es válida, y la hoja lo dice', async () => {
+    const base = ventaParaFactura({ numero: 9 });
+    const documento = documentoB({ codigo: 8, comprobanteAsociado: 'Factura B 00001-00000045' });
+    await abrir({ ...base, fiscal: fiscalDe(documento, { clase: 'NOTA_CREDITO' }) });
+
+    expect(texto('#factura-titulo')).toBe('Nota de crédito B');
+    expect(texto('article .tipo')).toBe('NOTA DE CRÉDITO');
+
+    TestBed.resetTestingModule();
+    await abrir({ ...base, fiscal: fiscalDe(documentoX(MARCA_SIMULADO), { clase: 'NOTA_CREDITO' }) });
+    expect(texto('#factura-titulo')).toBe('Nota de crédito N.º 9');
   });
 
   it('Imprimir y Enter imprimen; Cerrar y Esc cierran', async () => {

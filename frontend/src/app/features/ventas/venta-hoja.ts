@@ -3,7 +3,7 @@ import { Component, computed, input } from '@angular/core';
 import { MontoPipe } from '../../core/formato/monto';
 import { porcentajeDescuentoGeneral } from '../../shared/descuento-general';
 import { fechaCompletaLocal } from '../clientes/cuenta/cobranza.models';
-import { VentaConsultada, clienteDeVenta } from './ventas.models';
+import { VentaConsultada, clienteDeVenta, esNotaDeCredito } from './ventas.models';
 
 /**
  * El contenido de una venta: datos, renglones, totales y pagos. Presentacional: lo usan el detalle de la consulta y la
@@ -21,6 +21,8 @@ export class VentaHoja {
   protected readonly fecha = computed(() => fechaCompletaLocal(this.venta().fecha));
   protected readonly cliente = computed(() => clienteDeVenta(this.venta().clienteNombre));
   protected readonly pagos = computed(() => this.venta().pagos ?? []);
+  /** La nota de crédito (CU-08) dice quién la hizo, no quién cobró. */
+  protected readonly esNota = computed(() => esNotaDeCredito(this.venta()));
   protected readonly porcentajeGeneral = computed(() => porcentajeDescuentoGeneral(this.venta()));
   /** De dónde salió la venta, si no se armó en el mostrador. */
   protected readonly origen = computed(() => {

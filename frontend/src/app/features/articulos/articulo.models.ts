@@ -171,7 +171,8 @@ export interface AjusteStockResponse {
 }
 
 /** Tipo de movimiento de stock (el mismo enum que el backend). */
-export type TipoMovimientoStock = 'VENTA' | 'AJUSTE' | 'REMITO' | 'ANULACION_REMITO' | 'COMPRA';
+/** NOTA_CREDITO: la nota de crédito o la anulación interna de una venta (CU-08), que repone lo vendido. */
+export type TipoMovimientoStock = 'VENTA' | 'AJUSTE' | 'REMITO' | 'ANULACION_REMITO' | 'COMPRA' | 'NOTA_CREDITO';
 
 /**
  * Un movimiento del artículo (G29): cantidad con signo (salida negativa) y el saldo que quedó después. El comprobante

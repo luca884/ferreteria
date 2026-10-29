@@ -24,6 +24,8 @@ describe('Reportes de ventas', () => {
     costo: 100,
     ganancia: 102.48,
     ventasSinCosto: 1,
+    notasDeCredito: { cantidad: 1, total: 121 },
+    gananciaSinNotas: 123.48,
   };
 
   const filas: Record<string, unknown[]> = {
@@ -122,11 +124,43 @@ describe('Reportes de ventas', () => {
     expect(texto).toContain('Ventas $ 345,00');
     expect(texto).toContain('Costo $ 100,00');
     expect(texto).toContain('IVA $ 59,87');
-    expect(texto).toContain('Ganancia $ 102,48');
+    expect(texto).toContain('Ganancia con NC $ 102,48');
     expect(texto).toContain('Comprobantes 3');
     expect(normal(el().querySelector('.aviso-costo')?.textContent)).toBe(
       '1 venta sin costo registrado: la ganancia no la incluye.',
     );
+  });
+
+  it('el resumen suma el renglón «Notas de crédito» con cuántas y lo que restaron, y la ganancia sin NC y con NC (CU-08)', async () => {
+    await crear();
+
+    const texto = Array.from(el().querySelectorAll('.resumen > div')).map(
+      (d) => `${normal(d.querySelector('dt')?.textContent)} ${normal(d.querySelector('dd')?.textContent)}`,
+    );
+    expect(texto).toEqual([
+      'Ventas $ 345,00',
+      'Notas de crédito 1 · -$ 121,00',
+      'Neto $ 285,13',
+      'IVA $ 59,87',
+      'Costo $ 100,00',
+      'Ganancia sin NC $ 123,48',
+      'Ganancia con NC $ 102,48',
+      'Comprobantes 3',
+    ]);
+  });
+
+  it('un grupo con solo notas de crédito se ve con 0 ventas y el total y la ganancia en negativo', async () => {
+    await crear();
+    servicio['filas'].mockReturnValue(
+      of({
+        desde: '2026-10-22',
+        hasta: '2026-10-22',
+        filas: [{ usuarioId: 2, nombre: 'Dueno Ventas', cantidad: 0, total: -121, ganancia: -21, ventasSinCosto: 0 }],
+      }),
+    );
+    await elegir('por-usuario');
+
+    expect(primeraFila()).toBe('Dueno Ventas 0 -$ 121,00 -$ 21,00');
   });
 
   it('ofrece los seis reportes de ventas, como el menú Ventas de GDS, y el de ingresos, gastos y retiros de la caja', async () => {

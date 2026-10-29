@@ -18,7 +18,7 @@
 
   <div class="comprobante">
     @if (valido()) {
-      <p class="tipo">FACTURA</p>
+      <p class="tipo">{{ esNota() ? 'NOTA DE CRÉDITO' : 'FACTURA' }}</p>
       @if (numero(); as n) {
         <p class="numero-fiscal">N.º {{ n }}</p>
       }
@@ -27,7 +27,10 @@
       @if (d.marca; as marca) {
         <p class="marca">{{ marca }}</p>
       }
-      <p class="numero-interno">Venta N.º {{ v.numero }}</p>
+      <p class="numero-interno">{{ esNota() ? 'Nota de crédito' : 'Venta' }} N.º {{ v.numero }}</p>
+    }
+    @if (d.comprobanteAsociado; as asociado) {
+      <p class="comprobante-asociado">Comprobante asociado: {{ asociado }}</p>
     }
     <p>Fecha de emisión: {{ fecha(d.fecha) }}</p>
     <p>CUIT: {{ cuitEmisor() }}</p>

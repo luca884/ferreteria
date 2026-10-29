@@ -37,7 +37,7 @@ describe('FacturaHoja (CU-07 paso 5, S5, S6, S12, S13)', () => {
       Array.from(tr.querySelectorAll('td')).map((td) => limpio(td.textContent)),
     );
 
-  async function crear(documento: DocumentoFiscal, venta: VentaParaFactura = ventaParaFactura()) {
+  async function crear(documento: DocumentoFiscal, venta: VentaParaFactura = ventaParaFactura(), clase?: string) {
     await TestBed.configureTestingModule({
       imports: [FacturaHoja],
       providers: [{ provide: LOCALE_ID, useValue: 'es-AR' }],
@@ -45,6 +45,7 @@ describe('FacturaHoja (CU-07 paso 5, S5, S6, S12, S13)', () => {
     fixture = TestBed.createComponent(FacturaHoja);
     fixture.componentRef.setInput('documento', documento);
     fixture.componentRef.setInput('venta', venta);
+    if (clase !== undefined) fixture.componentRef.setInput('clase', clase);
     fixture.detectChanges();
     await fixture.whenStable();
   }
@@ -191,6 +192,35 @@ describe('FacturaHoja (CU-07 paso 5, S5, S6, S12, S13)', () => {
     expect(hoja()).not.toContain('COD.');
     expect(hoja()).not.toMatch(/\d{5}-\d{8}/);
     expect(texto('.tipo')).toBe('DOCUMENTO NO VALIDO COMO FACTURA');
+  });
+
+  it('nota de crédito B (CU-08, S8): «NOTA DE CRÉDITO» con la letra y el código 008, el número, el comprobante asociado, el CAE y el QR', async () => {
+    await crear(
+      documentoB({ codigo: 8, numero: 3, comprobanteAsociado: 'Factura B 00001-00000045' }),
+      ventaParaFactura(),
+      'NOTA_CREDITO',
+    );
+
+    expect(letra()).toEqual(['B', 'COD. 008']);
+    expect(texto('.tipo')).toBe('NOTA DE CRÉDITO');
+    expect(texto('.numero-fiscal')).toBe('N.º 00001-00000003');
+    expect(texto('.comprobante-asociado')).toBe('Comprobante asociado: Factura B 00001-00000045');
+    esperarPieFiscal();
+  });
+
+  it('nota de crédito simulada: la marca y el número interno de la nota, con el asociado del servidor y sin QR', async () => {
+    await crear(
+      documentoX(MARCA_SIMULADO, { comprobanteAsociado: `X · ${MARCA_SIMULADO}` }),
+      ventaParaFactura({ numero: 9 }),
+      'NOTA_CREDITO',
+    );
+
+    expect(letra()).toEqual(['X', null]);
+    expect(texto('.tipo')).toBe('DOCUMENTO NO VALIDO COMO FACTURA');
+    expect(texto('.marca')).toBe(MARCA_SIMULADO);
+    expect(texto('.numero-interno')).toBe('Nota de crédito N.º 9');
+    expect(texto('.comprobante-asociado')).toBe(`Comprobante asociado: X · ${MARCA_SIMULADO}`);
+    expect(el().querySelector('svg.qr')).toBeNull();
   });
 
   it('ticket provisorio (producción sin CAE): la marca del caso y el resto como el X', async () => {
