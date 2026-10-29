@@ -2,6 +2,7 @@ package com.ferreteria.facturacion.config;
 
 import com.ferreteria.facturacion.arca.ClienteWsaa;
 import com.ferreteria.facturacion.arca.ClienteWsfe;
+import com.ferreteria.facturacion.arca.ClientesWsfe;
 import com.ferreteria.facturacion.arca.PasosDelTicket;
 import com.ferreteria.facturacion.arca.PropiedadesArca;
 import com.ferreteria.facturacion.arca.TicketsDeAcceso;
@@ -12,9 +13,7 @@ import com.ferreteria.facturacion.model.Ambiente;
 import com.ferreteria.facturacion.motor.WsfePorAmbiente;
 import java.time.Clock;
 import java.util.Arrays;
-import java.util.EnumMap;
 import java.util.List;
-import java.util.Map;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -49,16 +48,23 @@ public class ClienteArcaConfig {
         return new TicketsDeAcceso(pasos, firma, clientes, propiedades, reloj);
     }
 
-    /** El adaptador de WSFEv1 de cada ambiente: el mismo {@link ClienteWsfe}, cada uno con su transporte y su URL. */
+    /**
+     * El {@link ClienteWsfe} de cada ambiente, cada uno con su transporte y su URL: los usan el motor (por
+     * {@link WsfePorAmbiente}), «Probar conexión» y el chequeo FEDummy del super admin.
+     */
     @Bean
-    public WsfePorAmbiente wsfePorAmbiente(PropiedadesArca propiedades, TicketsDeAcceso tickets,
-            TransporteHttp transporteHttp, @Qualifier("simuladorEnElBorde") Transporte simulador) {
-        Map<Ambiente, ClienteWsfe> clientes = new EnumMap<>(Ambiente.class);
-        for (Ambiente ambiente : Ambiente.values()) {
-            clientes.put(ambiente, new ClienteWsfe(ambiente, transporte(ambiente, transporteHttp, simulador),
-                    propiedades.wsfe().de(ambiente), tickets));
-        }
-        return new WsfePorAmbiente(clientes);
+    public ClientesWsfe clientesWsfe(PropiedadesArca propiedades, TicketsDeAcceso tickets, TransporteHttp transporteHttp,
+            @Qualifier("simuladorEnElBorde") Transporte simulador) {
+        return new ClientesWsfe(Arrays.stream(Ambiente.values())
+                .map(ambiente -> new ClienteWsfe(ambiente, transporte(ambiente, transporteHttp, simulador),
+                        propiedades.wsfe().de(ambiente), tickets))
+                .toList());
+    }
+
+    /** El adaptador de WSFEv1 de cada ambiente para el motor: los mismos clientes de {@link #clientesWsfe}. */
+    @Bean
+    public WsfePorAmbiente wsfePorAmbiente(ClientesWsfe clientes) {
+        return new WsfePorAmbiente(clientes.porAmbiente());
     }
 
     private static Transporte transporte(Ambiente ambiente, TransporteHttp http, Transporte simulador) {

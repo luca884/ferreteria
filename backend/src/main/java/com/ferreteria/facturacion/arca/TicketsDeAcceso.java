@@ -36,7 +36,8 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
  *       UUID, {@code lease-ticket}), se firma el TRA, se llama a {@code loginCms}, se guarda cifrado y se suelta el lease. Si
  *       el lease lo tiene otro, se espera con pausas cortas y se relee, hasta {@code espera-ticket}.</li>
  *   <li><b>El cortacircuito</b> ({@link FallaWsaa}): con el bloqueo de {@code config_arca}, o antes de {@code espera_hasta},
- *       no se llama a WSAA.</li>
+ *       no se llama a WSAA. La excepción es {@link #probar}, de «Probar conexión» (C1): pasa por encima del bloqueo, porque
+ *       una prueba OK es lo que lo levanta; la espera la respeta igual.</li>
  * </ul>
  *
  * <p>Toda falla de conseguir el ticket sale como {@link PedidoNoLlegoException}, porque el pedido a WSFE todavía no se
@@ -117,6 +118,23 @@ public class TicketsDeAcceso implements ProveedorDeTicket {
      */
     @Override
     public TicketDeAcceso ticket(Ambiente ambiente, String servicio) {
+        return obtener(ambiente, servicio, true).ticket();
+    }
+
+    /**
+     * El TA para «Probar conexión» (C1, CU-01 paso 4), con su vencimiento: igual que {@link #ticket}, pero con el bloqueo de
+     * C4 llama a WSAA igual (si el certificado ya sirve, la prueba OK levanta el bloqueo; si ARCA lo vuelve a rechazar, el
+     * bloqueo queda con el código nuevo). Respeta la espera de C4 y reusa el TA vigente.
+     *
+     * @throws PedidoNoLlegoException si no se pudo conseguir; con un fault de WSAA, su causa es la
+     *     {@link FaultWsaaException}
+     * @throws IllegalStateException si se llama con una transacción abierta
+     */
+    public Probado probar(Ambiente ambiente, String servicio) {
+        return obtener(ambiente, servicio, false);
+    }
+
+    private Probado obtener(Ambiente ambiente, String servicio, boolean respetarBloqueo) {
         Objects.requireNonNull(ambiente, "el ambiente");
         Objects.requireNonNull(servicio, "el servicio");
         if (TransactionSynchronizationManager.isActualTransactionActive()) {
@@ -125,7 +143,7 @@ public class TicketsDeAcceso implements ProveedorDeTicket {
         }
         Long ferreteriaId = TenantContext.requireFerreteriaId();
         try {
-            return conseguir(ambiente, servicio, ferreteriaId);
+            return conseguir(ambiente, servicio, ferreteriaId, respetarBloqueo);
         } catch (DataAccessException | TransactionException e) {
             throw new PedidoNoLlegoException("No se pudo leer el ticket de acceso de ARCA: no se mandó nada.", e);
         }
@@ -146,7 +164,7 @@ public class TicketsDeAcceso implements ProveedorDeTicket {
         }
     }
 
-    private TicketDeAcceso conseguir(Ambiente ambiente, String servicio, Long ferreteriaId) {
+    private Probado conseguir(Ambiente ambiente, String servicio, Long ferreteriaId, boolean respetarBloqueo) {
         Instant limite = null;
         while (true) {
             Instant ahora = Instant.now(reloj);
@@ -154,11 +172,11 @@ public class TicketsDeAcceso implements ProveedorDeTicket {
                 limite = ahora.plus(propiedades.esperaTicket());
             }
             PasosDelTicket.Estado leido = pasos.leer(ambiente, servicio);
-            Optional<TicketDeAcceso> resuelto = resolverSinWsaa(leido, ambiente, ahora);
+            Optional<Probado> resuelto = resolverSinWsaa(leido, ambiente, ahora, respetarBloqueo);
             if (resuelto.isPresent()) {
                 return resuelto.get();
             }
-            Optional<TicketDeAcceso> vigente = vigente(leido, ahora);
+            Optional<Probado> vigente = vigente(leido, ahora);
             if (leido.leaseDeOtro(ahora)) {
                 if (vigente.isPresent()) {
                     return vigente.get(); // otro lo está renovando: mientras tanto sirve el viejo
@@ -175,7 +193,7 @@ public class TicketsDeAcceso implements ProveedorDeTicket {
             if (tomado.isEmpty()) {
                 continue; // otro lo tomó entre la lectura y la toma: la próxima lectura lo ve
             }
-            return pedir(ambiente, servicio, ferreteriaId, dueno, tomado.get(), ahora);
+            return pedir(ambiente, servicio, ferreteriaId, dueno, tomado.get(), ahora, respetarBloqueo);
         }
     }
 
@@ -183,15 +201,16 @@ public class TicketsDeAcceso implements ProveedorDeTicket {
      * Lo que se resuelve sin llamar a WSAA: el TA vigente que no toca renovar, o, si hace falta WSAA pero no se puede (sin
      * credencial, con el bloqueo o en espera), el TA vigente o la falla. Vacío si hay que llamar a WSAA.
      */
-    private Optional<TicketDeAcceso> resolverSinWsaa(PasosDelTicket.Estado leido, Ambiente ambiente, Instant ahora) {
+    private Optional<Probado> resolverSinWsaa(PasosDelTicket.Estado leido, Ambiente ambiente, Instant ahora,
+            boolean respetarBloqueo) {
         if (leido.firmante() == null) {
             throw new PedidoNoLlegoException(String.format(SIN_CREDENCIAL, ambiente));
         }
-        Optional<TicketDeAcceso> vigente = vigente(leido, ahora);
+        Optional<Probado> vigente = vigente(leido, ahora);
         if (vigente.isPresent() && !tocaRenovar(leido.guardado(), ambiente, ahora)) {
             return vigente;
         }
-        String impedimento = impedimento(leido, ahora);
+        String impedimento = impedimento(leido, ahora, respetarBloqueo);
         if (impedimento != null) {
             return Optional.of(vigente.orElseThrow(() -> new PedidoNoLlegoException(impedimento)));
         }
@@ -199,15 +218,15 @@ public class TicketsDeAcceso implements ProveedorDeTicket {
     }
 
     /** Con el lease tomado: si otro dejó un TA mientras tanto, ese; si no, firma, {@code loginCms} y guarda. */
-    private TicketDeAcceso pedir(Ambiente ambiente, String servicio, Long ferreteriaId, String dueno,
-            PasosDelTicket.Estado tomado, Instant ahora) {
+    private Probado pedir(Ambiente ambiente, String servicio, Long ferreteriaId, String dueno,
+            PasosDelTicket.Estado tomado, Instant ahora, boolean respetarBloqueo) {
         boolean suelto = false;
         try {
-            Optional<TicketDeAcceso> resuelto = resolverSinWsaa(tomado, ambiente, ahora);
+            Optional<Probado> resuelto = resolverSinWsaa(tomado, ambiente, ahora, respetarBloqueo);
             if (resuelto.isPresent()) {
                 return resuelto.get();
             }
-            Optional<TicketDeAcceso> vigente = vigente(tomado, ahora);
+            Optional<Probado> vigente = vigente(tomado, ahora);
             ClienteWsaa cliente = clientes.get(ambiente);
             if (cliente == null) {
                 throw new PedidoNoLlegoException("No hay un cliente de WSAA para " + ambiente + ": no se mandó nada.");
@@ -231,7 +250,7 @@ public class TicketsDeAcceso implements ProveedorDeTicket {
             suelto = true;
             log.info("Ticket de acceso de {} en {} para la ferretería {} (huella {}): vence {}", servicio, ambiente,
                     ferreteriaId, firmado.huella(), ta.vence());
-            return new TicketDeAcceso(ta.token(), ta.sign(), firmado.cuit());
+            return new Probado(new TicketDeAcceso(ta.token(), ta.sign(), firmado.cuit()), ta.vence());
         } finally {
             if (!suelto) {
                 pasos.soltar(ambiente, servicio, dueno);
@@ -271,12 +290,13 @@ public class TicketsDeAcceso implements ProveedorDeTicket {
     }
 
     /** El TA guardado de la credencial activa, si no venció en {@code ahora}. */
-    private static Optional<TicketDeAcceso> vigente(PasosDelTicket.Estado leido, Instant ahora) {
+    private static Optional<Probado> vigente(PasosDelTicket.Estado leido, Instant ahora) {
         PasosDelTicket.Guardado guardado = leido.guardado();
         if (guardado == null || leido.firmante() == null || !guardado.vence().isAfter(ahora)) {
             return Optional.empty();
         }
-        return Optional.of(new TicketDeAcceso(guardado.token(), guardado.sign(), leido.firmante().cuit()));
+        return Optional.of(new Probado(new TicketDeAcceso(guardado.token(), guardado.sign(), leido.firmante().cuit()),
+                guardado.vence()));
     }
 
     /** Si toca renovarlo: le falta menos que el margen para vencer, y ya pasó el lapso del ambiente desde que se sacó. */
@@ -286,9 +306,12 @@ public class TicketsDeAcceso implements ProveedorDeTicket {
         return cercaDeVencer && pasoElLapso;
     }
 
-    /** Por qué no se puede llamar a WSAA en {@code ahora} (el bloqueo o la espera de C4), o null. */
-    private static String impedimento(PasosDelTicket.Estado leido, Instant ahora) {
-        if (leido.bloqueo() != null) {
+    /**
+     * Por qué no se puede llamar a WSAA en {@code ahora} (el bloqueo o la espera de C4), o null. Sin
+     * {@code respetarBloqueo} («Probar conexión»), el bloqueo no impide.
+     */
+    private static String impedimento(PasosDelTicket.Estado leido, Instant ahora, boolean respetarBloqueo) {
+        if (respetarBloqueo && leido.bloqueo() != null) {
             return String.format(FRENADA, leido.bloqueo());
         }
         if (leido.enEspera(ahora)) {
@@ -303,6 +326,21 @@ public class TicketsDeAcceso implements ProveedorDeTicket {
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw new PedidoNoLlegoException("Se interrumpió la espera del ticket de acceso de ARCA: no se mandó nada.", e);
+        }
+    }
+
+    /**
+     * Un TA con su vencimiento ({@code expirationTime}), para «Probar conexión». {@link #toString()} no muestra el token ni
+     * el sign (los enmascara {@link TicketDeAcceso}).
+     *
+     * @param ticket el token, el sign y la CUIT de la credencial
+     * @param vence hasta cuándo vale
+     */
+    public record Probado(TicketDeAcceso ticket, Instant vence) {
+
+        public Probado {
+            Objects.requireNonNull(ticket, "el ticket");
+            Objects.requireNonNull(vence, "el vencimiento");
         }
     }
 }
