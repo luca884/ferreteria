@@ -12,6 +12,9 @@ spring:
 app:
   jwt:
     secret: test-secret-ferreteria-solo-para-tests-0123456789
+  facturacion:
+    # Fija, sin variable: "solo-test-clave-maestra-arca-001" en Base64.
+    clave-maestra: c29sby10ZXN0LWNsYXZlLW1hZXN0cmEtYXJjYS0wMDE=
   # Ningun test toca la red ni corre tareas solas: sin scheduler y con las fuentes apuntando a un puerto donde no escucha nadie.
   programacion:
     habilitada: false

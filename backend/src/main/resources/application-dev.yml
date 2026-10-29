@@ -10,3 +10,6 @@ app:
   jwt:
     # Solo para desarrollo local: en prod JWT_SECRET es obligatorio y application.yml no trae default.
     secret: ${JWT_SECRET:dev-secret-ferreteria-cambiar-en-produccion-0123456789}
+  facturacion:
+    # Solo para desarrollo local ("solo-dev-clave-maestra-arca-0001" en Base64): en prod ARCA_CLAVE_MAESTRA es obligatoria.
+    clave-maestra: ${ARCA_CLAVE_MAESTRA:c29sby1kZXYtY2xhdmUtbWFlc3RyYS1hcmNhLTAwMDE=}

@@ -7,3 +7,5 @@ app:
     secret: ${JWT_SECRET}
   cors:
     allowed-origins: ${CORS_ORIGINS}
+  facturacion:
+    clave-maestra: ${ARCA_CLAVE_MAESTRA}

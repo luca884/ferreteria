@@ -76,6 +76,11 @@ app:
     bluelytics:
       url: ${BLUELYTICS_URL:https://api.bluelytics.com.ar}
   facturacion:
+    # Clave maestra del cifrado AES-GCM de las claves privadas de ARCA (32 bytes en Base64, «openssl rand -base64 32»).
+    # Obligatoria y sin default: sin la variable, o con otro largo, la app no arranca. El default de dev esta en
+    # application-dev.yml. Para rotarla, la vieja pasa a ARCA_CLAVE_MAESTRA_ANTERIOR (opcional) y se lee igual.
+    clave-maestra: ${ARCA_CLAVE_MAESTRA}
+    clave-maestra-anterior: ${ARCA_CLAVE_MAESTRA_ANTERIOR:}
     simulador:
       # Demora de cada llamada al simulador de WSFEv1, como la red hasta ARCA. 0 en tests y en prod; en dev, el documento de
       # abajo la sube a un valor chico para ver la espera en la pantalla.
