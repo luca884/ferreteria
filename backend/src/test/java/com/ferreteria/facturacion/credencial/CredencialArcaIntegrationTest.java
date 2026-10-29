@@ -9,12 +9,15 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.ferreteria.facturacion.cripto.CifradorDeClaves;
 import com.ferreteria.facturacion.cripto.ContextoDeCifrado;
 import com.ferreteria.facturacion.cripto.Proposito;
+import java.nio.charset.StandardCharsets;
 import java.security.KeyFactory;
-import java.security.MessageDigest;
+import java.security.KeyPairGenerator;
+import java.security.PrivateKey;
 import java.security.PublicKey;
 import java.security.interfaces.RSAPrivateCrtKey;
 import java.security.interfaces.RSAPublicKey;
 import java.security.cert.X509Certificate;
+import java.security.spec.ECGenParameterSpec;
 import java.security.spec.PKCS8EncodedKeySpec;
 import java.time.Instant;
 import java.util.Base64;
@@ -25,6 +28,7 @@ import java.util.stream.Stream;
 import org.bouncycastle.asn1.ASN1ObjectIdentifier;
 import org.bouncycastle.asn1.x500.RDN;
 import org.bouncycastle.asn1.x500.X500Name;
+import org.bouncycastle.asn1.x500.X500NameBuilder;
 import org.bouncycastle.asn1.x500.style.BCStyle;
 import org.bouncycastle.asn1.x500.style.IETFUtils;
 import org.bouncycastle.operator.jcajce.JcaContentVerifierProviderBuilder;
@@ -34,6 +38,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 
 /**
@@ -261,13 +266,15 @@ class CredencialArcaIntegrationTest extends CredencialArcaTestBase {
     }
 
     @Test
-    @DisplayName("el .crt entra en DER en Base64, y en PEM con fines de línea de Windows (CRLF) o de Mac viejo (CR)")
+    @DisplayName("el .crt entra en DER en Base64 (en una línea o con saltos MIME), y en PEM con fines de línea de Windows "
+            + "(CRLF) o de Mac viejo (CR)")
     void aceptaDerEnBase64YFinesDeLinea() throws Exception {
-        for (String formato : List.of("DER", "CRLF", "CR")) {
+        for (String formato : List.of("DER", "DER_MIME", "CRLF", "CR")) {
             Ferreteria f = ferreteria();
             X509Certificate certificado = emitido(CasDeArcaDePrueba.HOMOLOGACION, pedido(f), f);
             String texto = switch (formato) {
                 case "DER" -> Base64.getEncoder().encodeToString(certificado.getEncoded());
+                case "DER_MIME" -> Base64.getMimeEncoder().encodeToString(certificado.getEncoded());
                 case "CRLF" -> pem(certificado).replace("\n", "\r\n");
                 default -> pem(certificado).replace("\n", "\r");
             };
@@ -288,6 +295,14 @@ class CredencialArcaIntegrationTest extends CredencialArcaTestBase {
                 Arguments.of("vencido", "El certificado venció el 27/10/2026: generá un pedido nuevo y pedí otro en ARCA."),
                 Arguments.of("todavía no vigente", "El certificado empieza a valer el 29/10/2026: subilo desde ese día."),
                 Arguments.of("con clave de 1024 bits", "La clave del certificado tiene que ser RSA de 2048 bits o más."),
+                Arguments.of("con clave EC firmada por la CA de ARCA",
+                        "La clave del certificado tiene que ser RSA de 2048 bits o más."),
+                Arguments.of("de producción sin serialNumber",
+                        "El certificado no dice de qué CUIT es: en producción tiene que ser la de la ferretería."),
+                Arguments.of("de producción con el CUIT con guiones en el serialNumber",
+                        "El certificado no dice de qué CUIT es: en producción tiene que ser la de la ferretería."),
+                Arguments.of("que vence en este mismo instante",
+                        "El certificado venció el 28/10/2026: generá un pedido nuevo y pedí otro en ARCA."),
                 Arguments.of("de más de 16 KB", "El certificado pesa más de 16 KB: no parece un .crt de ARCA."),
                 Arguments.of("mal formado",
                         "No se pudo leer el certificado: subí el .crt que bajaste de ARCA (PEM, o DER en Base64)."),
@@ -317,6 +332,14 @@ class CredencialArcaIntegrationTest extends CredencialArcaTestBase {
                     AHORA.plus(DIA.multipliedBy(10))));
             case "con clave de 1024 bits" -> pem(homologacion.emitir(AutoridadDePrueba.rsa(1024).getPublic(),
                     AutoridadDePrueba.sujeto(f.razonSocial(), f.cuit()), AHORA.minus(DIA), AHORA.plus(DIA)));
+            case "con clave EC firmada por la CA de ARCA" -> pem(homologacion.emitir(claveEc(),
+                    AutoridadDePrueba.sujeto(f.razonSocial(), f.cuit()), AHORA.minus(DIA), AHORA.plus(DIA)));
+            case "de producción sin serialNumber" -> pem(CasDeArcaDePrueba.PRODUCCION.emitir(publica,
+                    sinSerialNumber(f), AHORA.minus(DIA), AHORA.plus(DIA)));
+            case "de producción con el CUIT con guiones en el serialNumber" -> pem(CasDeArcaDePrueba.PRODUCCION.emitir(
+                    publica, AutoridadDePrueba.sujeto(f.razonSocial(), conGuiones(f.cuit())), AHORA.minus(DIA),
+                    AHORA.plus(DIA)));
+            case "que vence en este mismo instante" -> pem(emitido(homologacion, csr, f, f.cuit(), AHORA.minus(DIA), AHORA));
             case "de más de 16 KB" -> pem(emitido(homologacion, csr, f)) + "\n".repeat(16 * 1024);
             case "mal formado" -> "-----BEGIN CERTIFICATE-----\nnoesuncertificado\n-----END CERTIFICATE-----\n";
             case "firmado por otra CA" -> pem(emitido(CasDeArcaDePrueba.AJENA, csr, f));
@@ -330,6 +353,46 @@ class CredencialArcaIntegrationTest extends CredencialArcaTestBase {
 
         assertThat(credenciales(f)).singleElement().satisfies(fila -> assertThat(fila).containsEntry("estado", "PENDIENTE"));
         assertThat(configuracion(f).get("ambiente").isNull()).isTrue();
+    }
+
+    @ParameterizedTest(name = "{0}")
+    @ValueSource(strings = {"seguido de la CA (cadena)", "vigente desde este mismo instante",
+            "de homologación sin serialNumber"})
+    @DisplayName("entra, queda activa y se guarda solo el certificado")
+    void aceptaElCertificado(String caso) throws Exception {
+        Ferreteria f = ferreteria();
+        String csr = pedido(f);
+        AutoridadDePrueba homologacion = CasDeArcaDePrueba.HOMOLOGACION;
+        X509Certificate certificado = switch (caso) {
+            case "vigente desde este mismo instante" -> emitido(homologacion, csr, f, f.cuit(), AHORA,
+                    AHORA.plus(DIA.multipliedBy(730)));
+            case "de homologación sin serialNumber" -> homologacion.emitir(publica(csr), sinSerialNumber(f),
+                    AHORA.minus(DIA), AHORA.plus(DIA.multipliedBy(730)));
+            default -> emitido(homologacion, csr, f);
+        };
+        String texto = caso.contains("cadena") ? pem(certificado) + pem(homologacion.certificado()) : pem(certificado);
+
+        subir(f, texto).andExpect(status().isOk()).andExpect(jsonPath("$.ambiente", is("HOMOLOGACION")))
+                .andExpect(jsonPath("$.credencial.estado", is("VIGENTE")));
+
+        assertThat(credenciales(f)).singleElement().satisfies(fila -> assertThat(fila).containsEntry("estado", "ACTIVA"));
+        assertThat(jdbc.queryForObject("select certificado from credencial_arca where ferreteria_id = ?", String.class,
+                f.id())).isEqualTo(pem(certificado));
+    }
+
+    @Test
+    @DisplayName("el tope de 16 KB es exacto: con 16384 bytes entra y con 16385 da 400, y el pedido sigue pendiente")
+    void elTopeDe16KbEsExacto() throws Exception {
+        Ferreteria f = ferreteria();
+        String pem = pem(emitido(CasDeArcaDePrueba.HOMOLOGACION, pedido(f), f));
+        String justo = pem + "\n".repeat(16 * 1024 - pem.length());
+        String pasado = justo + "\n";
+        assertThat(justo.getBytes(StandardCharsets.UTF_8)).hasSize(16 * 1024);
+
+        subir(f, pasado).andExpect(status().isBadRequest()).andExpect(jsonPath("$.errors.certificado",
+                is("El certificado pesa más de 16 KB: no parece un .crt de ARCA.")));
+        assertThat(credenciales(f)).singleElement().satisfies(fila -> assertThat(fila).containsEntry("estado", "PENDIENTE"));
+        subir(f, justo).andExpect(status().isOk()).andExpect(jsonPath("$.credencial.estado", is("VIGENTE")));
     }
 
     @Test
@@ -469,16 +532,100 @@ class CredencialArcaIntegrationTest extends CredencialArcaTestBase {
                 sinAmbiente.id(), homologacion.id())).isZero();
     }
 
+    @Test
+    @DisplayName("la CA del simulador es una por ferretería: dos ferreterías tienen CA con huellas distintas y cada credencial "
+            + "apunta a la suya")
+    void cadaFerreteriaTieneSuCaDelSimulador() throws Exception {
+        Ferreteria a = ferreteria();
+        conSimulador(a);
+        pedido(a);
+        postJson(URL + "/certificado/simulador", a.dueno(), "").andExpect(status().isOk());
+        Ferreteria b = ferreteria();
+        conSimulador(b);
+        pedido(b);
+        postJson(URL + "/certificado/simulador", b.dueno(), "").andExpect(status().isOk());
+
+        Map<String, Object> caDeA = caDelSimulador(a);
+        Map<String, Object> caDeB = caDelSimulador(b);
+
+        assertThat(caDeA.get("id")).isNotEqualTo(caDeB.get("id"));
+        assertThat(caDeA.get("huella")).isNotEqualTo(caDeB.get("huella"));
+        assertThat(caDeA.get("certificado")).isNotEqualTo(caDeB.get("certificado"));
+        assertThat(jdbc.queryForObject("select ca_simulador_id from credencial_arca where ferreteria_id = ?", Long.class,
+                a.id())).isEqualTo(caDeA.get("id"));
+        assertThat(jdbc.queryForObject("select ca_simulador_id from credencial_arca where ferreteria_id = ?", Long.class,
+                b.id())).isEqualTo(caDeB.get("id"));
+    }
+
+    @Test
+    @DisplayName("el .crt de la CA del simulador no es de ARCA: sin ambiente y en homologación da 400, y sin simulador «Firmar "
+            + "con el simulador» da 409")
+    void elCertificadoDeLaCaDelSimuladorNoEsDeArca() throws Exception {
+        Ferreteria a = ferreteria();
+        conSimulador(a);
+        pedido(a);
+        postJson(URL + "/certificado/simulador", a.dueno(), "").andExpect(status().isOk());
+        // El super admin le saca el simulador: queda sin ambiente, con su CA y con la credencial que esa CA firmó.
+        patchAdmin(login("admin@demo.local"), a, "simulador", "{\"simulador\": false}").andExpect(status().isOk());
+        assertThat(config(a)).containsEntry("ambiente", null);
+        Ferreteria homologacion = ferreteria();
+        activa(homologacion, CasDeArcaDePrueba.HOMOLOGACION);
+        String noLoFirmoArca = "El certificado no lo firmó ARCA: subí el .crt que bajaste de ARCA, de homologación o de "
+                + "producción.";
+
+        subir(a, pem(firmadoPorLaCaDe(a, pedido(a)))).andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors.certificado", is(noLoFirmoArca)));
+        postJson(URL + "/certificado/simulador", a.dueno(), "").andExpect(status().isConflict()).andExpect(jsonPath(
+                "$.message", is("«Firmar con el simulador» es solo para la ferretería de prueba que usa el simulador de "
+                        + "ARCA.")));
+        subir(homologacion, pem(firmadoPorLaCaDe(a, pedido(homologacion)))).andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors.certificado", is(noLoFirmoArca)));
+
+        assertThat(config(a)).containsEntry("ambiente", null);
+        assertThat(credenciales(a)).extracting(fila -> fila.get("estado")).containsExactly("ACTIVA", "PENDIENTE");
+        assertThat(config(homologacion)).containsEntry("ambiente", "HOMOLOGACION");
+        assertThat(credenciales(homologacion)).extracting(fila -> fila.get("estado")).containsExactly("ACTIVA", "PENDIENTE");
+    }
+
     // ---- ayudas ----
+
+    /** La CA del simulador de la ferretería, con su clave cifrada. */
+    private Map<String, Object> caDelSimulador(Ferreteria f) {
+        return jdbc.queryForMap("select id, huella, clave_privada, certificado from ca_simulador where ferreteria_id = ?",
+                f.id());
+    }
+
+    /** El certificado del pedido, firmado con la CA del simulador de esa ferretería (la clave la descifra el test). */
+    private X509Certificate firmadoPorLaCaDe(Ferreteria deLaCa, String csr) throws Exception {
+        Map<String, Object> ca = caDelSimulador(deLaCa);
+        byte[] pkcs8 = cifrador.descifrar((byte[]) ca.get("clave_privada"),
+                new ContextoDeCifrado(Proposito.CLAVE_DE_CA_SIMULADOR, deLaCa.id(), (String) ca.get("huella")));
+        PrivateKey clave = KeyFactory.getInstance("RSA").generatePrivate(new PKCS8EncodedKeySpec(pkcs8));
+        X509Certificate certificadoDeLaCa = Certificados.leer(((String) ca.get("certificado"))
+                .getBytes(StandardCharsets.US_ASCII));
+        return FirmaDelSimulador.firmar(csr, certificadoDeLaCa, clave, AHORA);
+    }
+
+    private static PublicKey claveEc() throws Exception {
+        KeyPairGenerator generador = KeyPairGenerator.getInstance("EC");
+        generador.initialize(new ECGenParameterSpec("secp256r1"));
+        return generador.generateKeyPair().getPublic();
+    }
+
+    /** El sujeto de un certificado de ARCA, pero sin el serialNumber (sin la CUIT). */
+    private static X500Name sinSerialNumber(Ferreteria f) {
+        return new X500NameBuilder(BCStyle.INSTANCE).addRDN(BCStyle.C, "AR").addRDN(BCStyle.O, f.razonSocial())
+                .addRDN(BCStyle.CN, "Ferreteria SaaS").build();
+    }
+
+    private static String conGuiones(String cuit) {
+        return cuit.substring(0, 2) + "-" + cuit.substring(2, 10) + "-" + cuit.substring(10);
+    }
 
     private static String valor(X500Name nombre, ASN1ObjectIdentifier tipo) {
         RDN[] rdns = nombre.getRDNs(tipo);
         assertThat(rdns).hasSize(1);
         return IETFUtils.valueToString(rdns[0].getFirst().getValue());
-    }
-
-    static String huella(PublicKey clave) throws Exception {
-        return HexFormat.of().withUpperCase().formatHex(MessageDigest.getInstance("SHA-256").digest(clave.getEncoded()));
     }
 
     static String conDosPuntos(String huella) {

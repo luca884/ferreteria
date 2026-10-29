@@ -12,6 +12,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.boot.test.system.CapturedOutput;
 import org.springframework.boot.test.system.OutputCaptureExtension;
 
@@ -103,6 +104,28 @@ class CifradorDeClavesTest {
     }
 
     @Test
+    @DisplayName("cada byte tocado de a uno da su motivo (versión, id de clave o «no se descifra») y ningún recorte se descifra")
+    void cadaByteTocado() {
+        CifradorDeClaves cifrador = cifrador(CLAVE);
+        byte[] guardado = cifrador.cifrar(CLARO, CONTEXTO);
+
+        for (int posicion = 0; posicion < guardado.length; posicion++) {
+            byte[] tocado = guardado.clone();
+            tocado[posicion] ^= 1;
+            DatoIlegibleException.Motivo esperado = posicion == 0 ? DatoIlegibleException.Motivo.VERSION_DESCONOCIDA
+                    : posicion <= 8 ? DatoIlegibleException.Motivo.CLAVE_DESCONOCIDA
+                    : DatoIlegibleException.Motivo.NO_SE_DESCIFRA;
+            assertThatThrownBy(() -> cifrador.descifrar(tocado, CONTEXTO)).as("byte " + posicion)
+                    .isInstanceOfSatisfying(DatoIlegibleException.class, e -> assertThat(e.motivo()).isEqualTo(esperado));
+        }
+        for (int largo : new int[] {0, 1, 9, 20, 21, 36, guardado.length - 1}) {
+            assertThatThrownBy(() -> cifrador.descifrar(Arrays.copyOf(guardado, largo), CONTEXTO)).as("largo " + largo)
+                    .isInstanceOf(DatoIlegibleException.class);
+        }
+        assertThatThrownBy(() -> cifrador.descifrar(null, CONTEXTO)).isInstanceOf(DatoIlegibleException.class);
+    }
+
+    @Test
     @DisplayName("un id de clave desconocido es un error tipado: sin la clave anterior, el dato de la vieja no se lee")
     void idDeClaveDesconocido() {
         byte[] conLaVieja = cifrador(OTRA_CLAVE).cifrar(CLARO, CONTEXTO);
@@ -123,6 +146,40 @@ class CifradorDeClavesTest {
         assertThat(cifrador(CLAVE).descifrar(nuevo, CONTEXTO)).isEqualTo(CLARO);
         assertThatThrownBy(() -> cifrador(OTRA_CLAVE).descifrar(nuevo, CONTEXTO))
                 .isInstanceOf(DatoIlegibleException.class);
+    }
+
+    @Test
+    @DisplayName("rotación: ponerle a un dato de la vieja el id de clave de la actual no lo vuelve legible")
+    void idDeClaveCambiado() {
+        CifradorDeClaves rotado = new CifradorDeClaves(CLAVE, OTRA_CLAVE);
+        byte[] cambiado = cifrador(OTRA_CLAVE).cifrar(CLARO, CONTEXTO);
+        System.arraycopy(rotado.cifrar(CLARO, CONTEXTO), 1, cambiado, 1, 8);
+
+        assertThatThrownBy(() -> rotado.descifrar(cambiado, CONTEXTO))
+                .isInstanceOfSatisfying(DatoIlegibleException.class,
+                        e -> assertThat(e.motivo()).isEqualTo(DatoIlegibleException.Motivo.NO_SE_DESCIFRA));
+    }
+
+    @Test
+    @DisplayName("al arrancar, Spring arma el cifrador con las dos propiedades: una clave o una anterior de otro largo frenan "
+            + "el arranque sin mostrar el valor")
+    void arranqueConLasPropiedades() {
+        ApplicationContextRunner contexto = new ApplicationContextRunner().withUserConfiguration(CifradorDeClaves.class);
+        String deDieciseisBytes = base64("dieciseis-bytes!");
+        byte[] conLaVieja = cifrador(OTRA_CLAVE).cifrar(CLARO, CONTEXTO);
+
+        contexto.withPropertyValues("app.facturacion.clave-maestra=" + CLAVE,
+                "app.facturacion.clave-maestra-anterior=" + OTRA_CLAVE).run(c -> {
+                    assertThat(c).hasNotFailed();
+                    assertThat(c.getBean(CifradorDeClaves.class).descifrar(conLaVieja, CONTEXTO)).isEqualTo(CLARO);
+                });
+        contexto.withPropertyValues("app.facturacion.clave-maestra=" + deDieciseisBytes).run(c -> assertThat(c)
+                .getFailure().rootCause().hasMessageContaining("ARCA_CLAVE_MAESTRA")
+                .hasMessageNotContaining(deDieciseisBytes));
+        contexto.withPropertyValues("app.facturacion.clave-maestra=" + CLAVE,
+                "app.facturacion.clave-maestra-anterior=" + deDieciseisBytes).run(c -> assertThat(c)
+                .getFailure().rootCause().hasMessageContaining("ARCA_CLAVE_MAESTRA_ANTERIOR")
+                .hasMessageNotContaining(deDieciseisBytes));
     }
 
     @ParameterizedTest(name = "[{index}] «{0}»")

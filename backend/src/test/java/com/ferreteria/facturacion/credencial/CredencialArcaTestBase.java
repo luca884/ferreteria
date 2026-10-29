@@ -1,5 +1,6 @@
 package com.ferreteria.facturacion.credencial;
 
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -8,11 +9,13 @@ import com.ferreteria.support.RelojControlable;
 import com.ferreteria.support.RelojControlableConfig;
 import java.io.StringReader;
 import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.security.PublicKey;
 import java.security.cert.X509Certificate;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Base64;
+import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ThreadLocalRandom;
@@ -23,6 +26,7 @@ import org.bouncycastle.pkcs.jcajce.JcaPKCS10CertificationRequest;
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Import;
+import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.ResultActions;
 
 /**
@@ -90,6 +94,18 @@ abstract class CredencialArcaTestBase extends IntegrationTestBase {
                 f.id());
     }
 
+    /** La facturación prendida por SQL (hasta la rama 6 el panel no la prende en homologación ni producción, S13). */
+    void facturacionPrendida(Ferreteria f) {
+        jdbc.update("update config_arca set punto_venta = 3, facturacion_habilitada = true, habilitada_en = "
+                + "'2026-10-01 12:00:00' where ferreteria_id = ?", f.id());
+    }
+
+    /** PATCH del panel del super admin a {@code /api/admin/ferreterias/{id}/{ruta}} (por ejemplo {@code facturacion}). */
+    ResultActions patchAdmin(String admin, Ferreteria f, String ruta, String json) throws Exception {
+        return mvc.perform(patch("/api/admin/ferreterias/" + f.id() + "/" + ruta).header("Authorization", "Bearer " + admin)
+                .contentType(MediaType.APPLICATION_JSON).content(json));
+    }
+
     // ---- la API del Dueño ----
 
     JsonNode configuracion(Ferreteria f) throws Exception {
@@ -132,6 +148,11 @@ abstract class CredencialArcaTestBase extends IntegrationTestBase {
     /** Un certificado de dos años para el pedido, con el CUIT de la ferretería. */
     static X509Certificate emitido(AutoridadDePrueba ca, String csrPem, Ferreteria f) throws Exception {
         return emitido(ca, csrPem, f, f.cuit(), AHORA.minus(DIA), AHORA.plus(DIA.multipliedBy(730)));
+    }
+
+    /** La huella de la clave pública: SHA-256 de su codificación, en hexa mayúscula y sin separadores (la de la base). */
+    static String huella(PublicKey clave) throws Exception {
+        return HexFormat.of().withUpperCase().formatHex(MessageDigest.getInstance("SHA-256").digest(clave.getEncoded()));
     }
 
     static String pem(X509Certificate certificado) throws Exception {

@@ -2,7 +2,7 @@ package com.ferreteria.facturacion.credencial;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.is;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -15,9 +15,12 @@ import com.ferreteria.facturacion.cripto.Proposito;
 import com.ferreteria.tenant.TenantContext;
 import java.nio.charset.StandardCharsets;
 import java.security.cert.X509Certificate;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Base64;
+import java.util.HexFormat;
 import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -28,6 +31,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.system.CapturedOutput;
 import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.http.MediaType;
+import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
@@ -52,12 +56,6 @@ class CredencialArcaBloqueoIntegrationTest extends CredencialArcaTestBase {
     @AfterEach
     void sinFerreteria() {
         TenantContext.clear();
-    }
-
-    /** La facturación prendida por SQL (hasta la rama 6 el panel no la prende en homologación ni producción, S13). */
-    private void facturacionPrendida(Ferreteria f) {
-        jdbc.update("update config_arca set punto_venta = 3, facturacion_habilitada = true, habilitada_en = "
-                + "'2026-10-01 12:00:00' where ferreteria_id = ?", f.id());
     }
 
     /** Lo que decide la venta (con lock) y lo que anticipa el mostrador (sin lock, por HTTP): si factura. */
@@ -124,6 +122,38 @@ class CredencialArcaBloqueoIntegrationTest extends CredencialArcaTestBase {
     }
 
     @Test
+    @DisplayName("el vencimiento es exacto: a un milisegundo del final factura y está POR_VENCER; en el instante del final no "
+            + "factura ni la venta ni el mostrador y está VENCIDA")
+    void elVencimientoEsExacto() throws Exception {
+        Ferreteria f = ferreteria();
+        Instant hasta = AHORA.plus(DIA.multipliedBy(10));
+        subir(f, pem(emitido(CasDeArcaDePrueba.HOMOLOGACION, pedido(f), f, f.cuit(), AHORA.minus(DIA), hasta)))
+                .andExpect(status().isOk());
+        facturacionPrendida(f);
+
+        reloj.fijar(hasta.minusMillis(1));
+        assertThat(factura(f)).containsExactly(true, true);
+        assertThat(configuracion(f).get("credencial").get("estado").asText()).isEqualTo("POR_VENCER");
+
+        reloj.fijar(hasta);
+        assertThat(factura(f)).containsExactly(false, false);
+        assertThat(configuracion(f).get("credencial").get("estado").asText()).isEqualTo("VENCIDA");
+    }
+
+    @Test
+    @DisplayName("con el ambiente en PRODUCCION (por SQL) y una credencial de HOMOLOGACION, la venta no factura")
+    void laCredencialDeOtroAmbienteNoFactura() throws Exception {
+        Ferreteria f = ferreteria();
+        activa(f, CasDeArcaDePrueba.HOMOLOGACION);
+        facturacionPrendida(f);
+        assertThat(factura(f)).containsExactly(true, true);
+
+        jdbc.update("update config_arca set ambiente = 'PRODUCCION' where ferreteria_id = ?", f.id());
+
+        assertThat(factura(f)).containsExactly(false, false);
+    }
+
+    @Test
     @DisplayName("sin credencial activa, homologación con la facturación prendida no factura; el simulador sigue sin credencial")
     void sinCredencialNoFacturaSalvoElSimulador() throws Exception {
         Ferreteria sinCredencial = ferreteria();
@@ -182,13 +212,42 @@ class CredencialArcaBloqueoIntegrationTest extends CredencialArcaTestBase {
             activa(f, ca);
             putJson(URL + "/punto-venta", f.dueno(), "{\"puntoVenta\": 3}").andExpect(status().isOk());
 
-            mvc.perform(patch("/api/admin/ferreterias/" + f.id() + "/facturacion").header("Authorization", "Bearer " + admin)
-                            .contentType(MediaType.APPLICATION_JSON).content("{\"habilitada\": true}"))
-                    .andExpect(status().isUnprocessableEntity())
+            patchAdmin(admin, f, "facturacion", "{\"habilitada\": true}").andExpect(status().isUnprocessableEntity())
                     .andExpect(jsonPath("$.message", is("La facturación con ARCA se habilita cuando esté la conexión real.")));
 
             assertThat(config(f)).containsEntry("facturacion_habilitada", false);
         }
+    }
+
+    @Test
+    @DisplayName("prender, apagar y volver a prender en homologación: ya prendida no cambia nada, apagarla anda y la vuelta es "
+            + "un 422 con el mensaje")
+    void apagarYVolverAPrenderEnHomologacion() throws Exception {
+        String admin = login("admin@demo.local");
+        Ferreteria f = ferreteria();
+        activa(f, CasDeArcaDePrueba.HOMOLOGACION);
+        facturacionPrendida(f);
+
+        patchAdmin(admin, f, "facturacion", "{\"habilitada\": true}").andExpect(status().isOk());
+        assertThat(config(f)).containsEntry("facturacion_habilitada", true);
+        patchAdmin(admin, f, "facturacion", "{\"habilitada\": false}").andExpect(status().isOk());
+        assertThat(config(f)).containsEntry("facturacion_habilitada", false);
+        patchAdmin(admin, f, "facturacion", "{\"habilitada\": true}").andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.message", is("La facturación con ARCA se habilita cuando esté la conexión real.")));
+
+        assertThat(config(f)).containsEntry("facturacion_habilitada", false);
+    }
+
+    @Test
+    @DisplayName("el simulador se habilita sin credencial: el super admin lo prende (200) y la venta factura")
+    void elSimuladorSeHabilitaSinCredencial() throws Exception {
+        Ferreteria f = ferreteria();
+        conSimulador(f);
+
+        patchAdmin(login("admin@demo.local"), f, "facturacion", "{\"habilitada\": true}").andExpect(status().isOk());
+
+        assertThat(config(f)).containsEntry("facturacion_habilitada", true);
+        assertThat(factura(f)).containsExactly(true, true);
     }
 
     // ---- S11: roles y aislamiento ----
@@ -216,6 +275,27 @@ class CredencialArcaBloqueoIntegrationTest extends CredencialArcaTestBase {
         assertThat(credenciales(f).stream().map(Object::toString).toList()).isEqualTo(antes);
         assertThat(jdbc.queryForObject("select count(*) from config_arca where ferreteria_id = ?", Integer.class, f.id()))
                 .isOne();
+    }
+
+    @Test
+    @DisplayName("el Vendedor y el super admin reciben 403 también con DELETE y en una ruta que no existe; sin token, 401 y no "
+            + "se crea ninguna fila")
+    void tambienLosMetodosYLasRutasQueNoExisten() throws Exception {
+        Ferreteria f = ferreteria();
+        String admin = login("admin@demo.local");
+        int filas = jdbc.queryForObject("select count(*) from credencial_arca", Integer.class);
+
+        for (String token : List.of(f.vendedor(), admin)) {
+            delete(URL + "/certificado", token).andExpect(status().isForbidden());
+            getResult(URL + "/otra-cosa", token).andExpect(status().isForbidden());
+        }
+        mvc.perform(post(URL + "/pedido-certificado").contentType(MediaType.APPLICATION_JSON).content("{}"))
+                .andExpect(status().isUnauthorized());
+
+        assertThat(credenciales(f)).isEmpty();
+        assertThat(jdbc.queryForObject("select count(*) from credencial_arca", Integer.class)).isEqualTo(filas);
+        assertThat(jdbc.queryForObject("select count(*) from config_arca where ferreteria_id = ?", Integer.class, f.id()))
+                .isZero();
     }
 
     @Test
@@ -277,6 +357,100 @@ class CredencialArcaBloqueoIntegrationTest extends CredencialArcaTestBase {
                 assertThat(texto).doesNotContain(cifrado).doesNotContain(cifrado.substring(0, 40));
             }
         }
+    }
+
+    @Test
+    @DisplayName("ni el eco de una clave pegada, de un JSON roto o del CUIT, ni el dato cifrado ni el PKCS#8 descifrado (en "
+            + "Base64, hex o HEX), en las respuestas ni en el log")
+    void sinSecretosNiEnLosEcos(CapturedOutput salida) throws Exception {
+        Ferreteria homologacion = ferreteria();
+        Ferreteria simulador = ferreteria();
+        conSimulador(simulador);
+        List<String> respuestas = new ArrayList<>();
+
+        // Una clave privada de verdad, pegada de todas las formas: en PEM, en Base64 con saltos y en una línea.
+        byte[] pkcs8 = AutoridadDePrueba.rsa(2048).getPrivate().getEncoded();
+        String enUnaLinea = Base64.getEncoder().encodeToString(pkcs8);
+        String conSaltos = Base64.getMimeEncoder(64, "\n".getBytes(StandardCharsets.US_ASCII)).encodeToString(pkcs8);
+        String pegada = "-----BEGIN PRIVATE KEY-----\n" + conSaltos + "\n-----END PRIVATE KEY-----\n";
+        String marca = enUnaLinea.substring(200, 260);
+
+        String delPedido = texto(postJson(URL + "/pedido-certificado", homologacion.dueno(), "{}"));
+        respuestas.add(delPedido);
+        String csr = objectMapper.readTree(delPedido).get("csr").asText();
+        respuestas.add(texto(getResult(URL + "/pedido-certificado", homologacion.dueno())));
+        respuestas.add(texto(getResult(URL + "/configuracion", homologacion.dueno())));
+        respuestas.add(texto(subir(homologacion, pegada)));
+        respuestas.add(texto(subir(homologacion, conSaltos)));
+        respuestas.add(texto(subir(homologacion, enUnaLinea)));
+        // JSON roto (sin cerrar, con la clave adentro), JSON bien escapado pero cortado, tipos que no son, y el CUIT con la clave.
+        respuestas.add(texto(postJson(URL + "/certificado", homologacion.dueno(), "{\"certificado\": \"" + pegada + "\"")));
+        respuestas.add(texto(postJson(URL + "/certificado", homologacion.dueno(),
+                objectMapper.writeValueAsString(Map.of("certificado", pegada)).replaceFirst("}$", ""))));
+        respuestas.add(texto(postJson(URL + "/certificado", homologacion.dueno(),
+                "{\"certificado\": 12, \"x\": \"" + enUnaLinea + "\"}")));
+        respuestas.add(texto(postJson(URL + "/pedido-certificado", homologacion.dueno(), "{\"cuit\": \"" + marca + "\"}")));
+        // Certificados que no sirven y el que sí.
+        respuestas.add(texto(subir(homologacion, pem(CasDeArcaDePrueba.AJENA.certificado()))));
+        respuestas.add(texto(subir(homologacion,
+                "-----BEGIN CERTIFICATE-----\n" + marca + "\n-----END CERTIFICATE-----\n")));
+        respuestas.add(texto(subir(homologacion, pem(emitido(CasDeArcaDePrueba.HOMOLOGACION, csr, homologacion)))));
+        // El simulador: el pedido, la firma (que crea la CA) y un pedido nuevo.
+        respuestas.add(texto(postJson(URL + "/pedido-certificado", simulador.dueno(), "{}")));
+        respuestas.add(texto(postJson(URL + "/certificado/simulador", simulador.dueno(), "")));
+        respuestas.add(texto(postJson(URL + "/pedido-certificado", simulador.dueno(), "{}")));
+
+        // Los secretos: lo cifrado y lo descifrado de cada clave guardada (dos credenciales, un pedido y la CA del simulador).
+        List<String> secretos = new ArrayList<>(List.of(marca));
+        int guardadas = 0;
+        for (Map<String, Object> fila : jdbc.queryForList("select ferreteria_id, huella, clave_privada, 'C' as origen from "
+                + "credencial_arca where ferreteria_id in (?, ?) union all select ferreteria_id, huella, clave_privada, 'S' "
+                + "from ca_simulador where ferreteria_id = ?", homologacion.id(), simulador.id(), simulador.id())) {
+            byte[] cifrado = (byte[]) fila.get("clave_privada");
+            Proposito proposito = "C".equals(fila.get("origen")) ? Proposito.CLAVE_DE_CREDENCIAL : Proposito.CLAVE_DE_CA_SIMULADOR;
+            byte[] claro = cifrador.descifrar(cifrado, new ContextoDeCifrado(proposito,
+                    ((Number) fila.get("ferreteria_id")).longValue(), (String) fila.get("huella")));
+            secretos.addAll(rodajas(cifrado));
+            secretos.addAll(rodajas(claro));
+            guardadas++;
+        }
+        assertThat(guardadas).isEqualTo(4);
+        // Con las claves ya guardadas ilegibles: el error al descifrar tampoco las filtra.
+        jdbc.update("update ca_simulador set clave_privada = concat(clave_privada, x'00') where ferreteria_id = ?",
+                simulador.id());
+        respuestas.add(texto(postJson(URL + "/certificado/simulador", simulador.dueno(), "")));
+        jdbc.update("update credencial_arca set clave_privada = concat(clave_privada, x'00') where ferreteria_id = ? "
+                + "and estado = 'ACTIVA'", homologacion.id());
+        respuestas.add(texto(getResult(URL + "/configuracion", homologacion.dueno())));
+
+        assertThat(salida.getAll()).contains("NO_SE_DESCIFRA");
+        List<String> textos = concatenar(respuestas, salida.getAll());
+        for (int i = 0; i < textos.size(); i++) {
+            // Sin volcar el texto entero (el log es largo): solo dónde está lo que no tendría que estar.
+            String donde = i < respuestas.size() ? "la respuesta " + i : "el log";
+            assertThat(textos.get(i).contains("PRIVATE KEY")).as("«PRIVATE KEY» en " + donde).isFalse();
+            // Sin espacios ni saltos (ni \n escapados de un JSON): un secreto partido en líneas también se encuentra.
+            String corrido = textos.get(i).replaceAll("\\\\[nr]|\\s", "");
+            for (String secreto : secretos) {
+                assertThat(corrido.contains(secreto)).as("«" + secreto + "» en " + donde).isFalse();
+            }
+        }
+    }
+
+    /** El cuerpo de la respuesta, tal cual (UTF-8). */
+    private static String texto(ResultActions resultado) throws Exception {
+        return resultado.andReturn().getResponse().getContentAsString(StandardCharsets.UTF_8);
+    }
+
+    /** Dos rodajas de 60 caracteres del dato en Base64, en hex y en HEX: lo que se buscaría si alguien lo filtrara. */
+    private static List<String> rodajas(byte[] dato) {
+        List<String> rodajas = new ArrayList<>();
+        for (String forma : List.of(Base64.getEncoder().encodeToString(dato), HexFormat.of().formatHex(dato),
+                HexFormat.of().withUpperCase().formatHex(dato))) {
+            rodajas.add(forma.substring(forma.length() / 4, forma.length() / 4 + 60));
+            rodajas.add(forma.substring(forma.length() * 3 / 4, forma.length() * 3 / 4 + 60));
+        }
+        return rodajas;
     }
 
     private static List<String> concatenar(List<String> respuestas, String log) {
