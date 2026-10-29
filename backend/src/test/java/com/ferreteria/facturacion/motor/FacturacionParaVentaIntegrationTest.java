@@ -15,6 +15,7 @@ import com.ferreteria.facturacion.config.EjecutorFiscalConfig;
 import com.ferreteria.facturacion.model.Ambiente;
 import com.ferreteria.facturacion.repository.ComprobanteFiscalRepository;
 import com.ferreteria.facturacion.service.FacturacionParaVentaImpl;
+import com.ferreteria.facturacion.wsfe.Obs;
 import com.ferreteria.facturacion.wsfe.WsfeConFallas.Falla;
 import com.ferreteria.tenant.TenantContext;
 import java.math.BigDecimal;
@@ -367,6 +368,50 @@ class FacturacionParaVentaIntegrationTest extends MotorFiscalTestBase {
         assertThat(wsfe.solicitudes()).isZero();
     }
 
+    // ---- La marca de «salió con ticket provisorio» (rama 7, S6) ----
+
+    @Test
+    @DisplayName("vencida la espera sin el CAE, la venta queda marcada con ticket provisorio, y la marca sigue cuando llega; "
+            + "la que se autoriza dentro de la espera no")
+    void vencidaLaEsperaQuedaMarcadaConTicketProvisorio() {
+        long lenta = ventaFacturada();
+        WsfeDePrueba.Pausa pausa = wsfe.pausarElSiguienteFeCaeSolicitar();
+
+        try {
+            assertThat(facturacion.autorizar(lenta)).get().extracting(EstadoFiscalVenta::estado)
+                    .isIn("PENDIENTE", "EN_CURSO");
+            assertThat(ticketProvisorio(lenta)).isTrue();
+        } finally {
+            pausa.soltar();
+        }
+        esperarHasta(() -> "AUTORIZADO".equals(estado(registroDe(lenta))) && leaseDe() == null);
+        assertThat(ticketProvisorio(lenta)).isTrue();
+
+        long rapida = ventaFacturada();
+        assertThat(facturacion.autorizar(rapida)).get().extracting(EstadoFiscalVenta::estado).isEqualTo("AUTORIZADO");
+        assertThat(ticketProvisorio(rapida)).isFalse();
+    }
+
+    @Test
+    @DisplayName("con ARCA caída la venta vuelve PENDIENTE enseguida, sin agotar la espera, y también queda marcada")
+    void conArcaCaidaQuedaMarcada() {
+        long venta = ventaFacturada();
+        wsfe.fallas().programar(Falla.NO_LLEGA);
+
+        assertThat(facturacion.autorizar(venta)).get().extracting(EstadoFiscalVenta::estado).isEqualTo("PENDIENTE");
+        assertThat(ticketProvisorio(venta)).isTrue();
+    }
+
+    @Test
+    @DisplayName("una venta rechazada dentro de la espera no queda marcada: sale «sin factura», no con el ticket provisorio")
+    void laRechazadaNoQuedaMarcada() {
+        long venta = ventaFacturada();
+        wsfe.fallas().rechazarConObservaciones(new Obs(10015, "Receptor no identificado"));
+
+        assertThat(facturacion.autorizar(venta)).get().extracting(EstadoFiscalVenta::estado).isEqualTo("RECHAZADO");
+        assertThat(ticketProvisorio(venta)).isFalse();
+    }
+
     @Test
     @DisplayName("un timeout después de autorizar deja EN_VERIFICACION, y la venta siguiente de la serie adopta su CAE")
     void elTimeoutDespuesDeAutorizarLoRecuperaLaVentaSiguiente() {
@@ -425,6 +470,7 @@ class FacturacionParaVentaIntegrationTest extends MotorFiscalTestBase {
             assertThat(Duration.ofNanos(System.nanoTime() - inicio)).isLessThan(ESPERA.dividedBy(2));
             assertThat(estado).get().extracting(EstadoFiscalVenta::estado).isEqualTo("PENDIENTE");
             assertThat(wsfe.solicitudes()).isZero();
+            assertThat(ticketProvisorio(venta)).as("sale con el ticket provisorio").isTrue();
         } finally {
             soltar.countDown();
             unHiloSinCola.shutdown();
@@ -495,6 +541,11 @@ class FacturacionParaVentaIntegrationTest extends MotorFiscalTestBase {
 
     private long registroDe(long venta) {
         return jdbc.queryForObject("select id from comprobante_fiscal where comprobante_id = ?", Long.class, venta);
+    }
+
+    private boolean ticketProvisorio(long venta) {
+        return jdbc.queryForObject("select ticket_provisorio from comprobante_fiscal where comprobante_id = ?",
+                Boolean.class, venta);
     }
 
     /** La serie de las Facturas B, tomada por otra instancia hasta 2030 (el reloj está fijo en 2026). */

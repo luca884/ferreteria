@@ -105,4 +105,50 @@ public interface SerieFiscalRepository extends TenantScopedRepository<SerieFisca
     default int registrarAutorizadoScoped(long id, long numero, LocalDate fecha) {
         return registrarAutorizado(TenantContext.requireFerreteriaId(), id, numero, fecha);
     }
+
+    // ---- Rama 7 (V36): el backoff del job de reintento y lo que mira el reintento del Dueño ----
+
+    /** La CbteFch del último autorizado de la serie con esa clave; vacío si la serie no existe o no la conoce. */
+    @Query("select s.ultimaCbteFch from SerieFiscal s where s.ferreteriaId = :fid and s.ambiente = :ambiente "
+            + "and s.puntoVenta = :pv and s.cbteTipo = :tipo")
+    Optional<LocalDate> ultimaCbteFch(@Param("fid") Long ferreteriaId, @Param("ambiente") Ambiente ambiente,
+            @Param("pv") int puntoVenta, @Param("tipo") int cbteTipo);
+
+    default Optional<LocalDate> ultimaCbteFchScoped(Ambiente ambiente, int puntoVenta, int cbteTipo) {
+        return ultimaCbteFch(TenantContext.requireFerreteriaId(), ambiente, puntoVenta, cbteTipo);
+    }
+
+    /** Las fallas seguidas de la serie, con su fila tomada ({@code FOR UPDATE}) hasta el fin de la transacción. */
+    @Query(value = "select fallas_seguidas from serie_fiscal where ferreteria_id = :fid and id = :id for update",
+            nativeQuery = true)
+    Optional<Integer> fallasSeguidasBloqueando(@Param("fid") Long ferreteriaId, @Param("id") long id);
+
+    default Optional<Integer> fallasSeguidasBloqueandoScoped(long id) {
+        return fallasSeguidasBloqueando(TenantContext.requireFerreteriaId(), id);
+    }
+
+    /** Otra pasada con error transitorio: las fallas seguidas y desde cuándo el job la vuelve a atender. */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query(value = """
+            update serie_fiscal set fallas_seguidas = :fallas, proximo_reintento = :proximo
+            where ferreteria_id = :fid and id = :id
+            """, nativeQuery = true)
+    int posponer(@Param("fid") Long ferreteriaId, @Param("id") long id, @Param("fallas") int fallas,
+            @Param("proximo") Instant proximo);
+
+    default int posponerScoped(long id, int fallas, Instant proximo) {
+        return posponer(TenantContext.requireFerreteriaId(), id, fallas, proximo);
+    }
+
+    /** El backoff vuelve a cero: la serie autorizó, o una pasada terminó sin error transitorio. */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query(value = """
+            update serie_fiscal set fallas_seguidas = 0, proximo_reintento = null
+            where ferreteria_id = :fid and id = :id and fallas_seguidas > 0
+            """, nativeQuery = true)
+    int reiniciarBackoff(@Param("fid") Long ferreteriaId, @Param("id") long id);
+
+    default int reiniciarBackoffScoped(long id) {
+        return reiniciarBackoff(TenantContext.requireFerreteriaId(), id);
+    }
 }

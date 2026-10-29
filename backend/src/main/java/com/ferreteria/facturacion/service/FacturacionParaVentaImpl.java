@@ -64,9 +64,10 @@ import org.springframework.transaction.support.TransactionTemplate;
  * {@link #autorizar} atiende la serie del registro en el ejecutor de {@code facturacion} ({@link EjecutorFiscalConfig}) y la
  * espera un rato acotado ({@code app.facturacion.venta.espera}), medido con el reloj de pared y no con el {@code Clock}
  * (que en los tests está fijo). Mientras otra instancia tiene la serie, reintenta con una pausa corta; vencida la espera, la
- * atención en curso termina sola y no se reintenta más (lo pendiente lo levanta la venta siguiente de la serie). Nunca lanza
- * por ARCA: lo que no se resolvió vuelve en su estado actual. Cada lectura del estado es fresca, en su propia transacción
- * de solo lectura ({@code open-in-view} está apagado).
+ * atención en curso termina sola y no se reintenta más (lo pendiente lo levanta la venta siguiente de la serie o, desde la
+ * rama 7, el job de reintento). Nunca lanza por ARCA: lo que no se resolvió vuelve en su estado actual y, si sigue en
+ * trámite, la venta sale con el ticket provisorio y su registro queda marcado (S6), para avisar cuando llegue el CAE. Cada
+ * lectura del estado es fresca, en su propia transacción ({@code open-in-view} está apagado).
  *
  * <p>La hoja de la factura, el listado y el cobro (cu-07-factura-mostrador C4) son solo lecturas, cada una en una
  * transacción de solo lectura (o en la de quien llama, si tiene una): {@link #documento} lee el registro y su desglose de
@@ -81,9 +82,13 @@ public class FacturacionParaVentaImpl implements FacturacionParaVenta {
     private static final int LARGO_NOMBRE = 120;
     private static final int LARGO_DOMICILIO = 200;
 
-    /** Los estados que no cambian con otra atención: el resultado de ARCA, o una alerta que espera a una persona. */
+    /**
+     * Los estados que no cambian con otra atención: el resultado de ARCA, una alerta que espera a una persona, o la venta
+     * que el Dueño dejó sin factura (rama 7).
+     */
     private static final Set<EstadoFiscal> RESUELTOS = EnumSet.of(EstadoFiscal.AUTORIZADO, EstadoFiscal.RECHAZADO,
-            EstadoFiscal.FUERA_DE_FECHA, EstadoFiscal.CAE_NO_COINCIDE, EstadoFiscal.SERIE_DESINCRONIZADA);
+            EstadoFiscal.FUERA_DE_FECHA, EstadoFiscal.CAE_NO_COINCIDE, EstadoFiscal.SERIE_DESINCRONIZADA,
+            EstadoFiscal.SIN_FACTURA);
 
     /**
      * Las atenciones después de las cuales otra, ahora, no cambiaría nada: se atendió todo, ARCA no contestó (sigue la
@@ -182,7 +187,7 @@ public class FacturacionParaVentaImpl implements FacturacionParaVenta {
         } catch (TaskRejectedException e) {
             log.warn("Sin lugar en el ejecutor fiscal para pedir el CAE de la venta {} de la ferretería {}: queda en su "
                     + "estado actual.", comprobanteId, ferreteriaId);
-            return estado(comprobanteId);
+            return conTicketProvisorioSiSigueEnTramite(comprobanteId);
         }
         boolean interrumpido = false;
         try {
@@ -201,7 +206,7 @@ public class FacturacionParaVentaImpl implements FacturacionParaVenta {
         abandonada.set(true);
         atencion.cancel(false);
         try {
-            return estado(comprobanteId);
+            return conTicketProvisorioSiSigueEnTramite(comprobanteId);
         } finally {
             if (interrumpido) {
                 Thread.currentThread().interrupt();
@@ -212,6 +217,14 @@ public class FacturacionParaVentaImpl implements FacturacionParaVenta {
     @Override
     public Optional<EstadoFiscalVenta> estado(long comprobanteId) {
         return registroDeVenta(comprobanteId).map(FacturacionParaVentaImpl::estadoDe);
+    }
+
+    /**
+     * El estado con que responde la venta cuando deja de esperar: si su registro sigue en trámite, la venta sale con el
+     * ticket provisorio y el registro queda marcado (rama 7, S6), en la misma transacción que la lectura.
+     */
+    private Optional<EstadoFiscalVenta> conTicketProvisorioSiSigueEnTramite(long comprobanteId) {
+        return pasos.salioConTicketProvisorio(comprobanteId).map(FacturacionParaVentaImpl::estadoDe);
     }
 
     // ---- La hoja, el listado y el cobro (cu-07-factura-mostrador C4): solo lecturas, la apariencia la decide HojaFiscal ----

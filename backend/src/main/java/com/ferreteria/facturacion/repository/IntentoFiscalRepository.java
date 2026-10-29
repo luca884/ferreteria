@@ -49,6 +49,24 @@ public interface IntentoFiscalRepository extends TenantScopedRepository<IntentoF
     }
 
     /**
+     * ABIERTO → RECHAZADO (R), con la respuesta tal cual y lo que se consultó después para entenderla (el 10016, C6:
+     * FECompUltimoAutorizado), cerrado en la misma hora.
+     */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query(value = """
+            update intento_fiscal set estado = 'RECHAZADO', resultado = 'R', respuesta = :respuesta,
+              respuesta_verificacion = :verificacion, terminado_en = :ahora, cerrado_en = :ahora
+            where ferreteria_id = :fid and id = :id and estado = 'ABIERTO'
+            """, nativeQuery = true)
+    int rechazarConVerificacion(@Param("fid") Long ferreteriaId, @Param("id") long id,
+            @Param("respuesta") String respuesta, @Param("verificacion") String verificacion,
+            @Param("ahora") Instant ahora);
+
+    default int rechazarConVerificacionScoped(long id, String respuesta, String verificacion, Instant ahora) {
+        return rechazarConVerificacion(TenantContext.requireFerreteriaId(), id, respuesta, verificacion, ahora);
+    }
+
+    /**
      * EN_VERIFICACION → {@code hacia} (AUTORIZADO, NO_LLEGO o ALERTA), con lo que respondió la verificación;
      * {@code cerradoEn} va solo si {@code hacia} es un estado cerrado.
      */

@@ -472,7 +472,7 @@ Desde la rama 6, el simulador hace los cinco pasos igual que ARCA: recibe el mis
   - si es menor que N−1, alerta de serie desincronizada.
 - Un rechazo libera el número: el registro rechazado queda sin número.
 - **10016** (el número o la fecha no son los próximos; rama 7). El código es el mismo para los dos casos, así que se consulta `FECompUltimoAutorizado`: si el número enviado no era el próximo, la serie se resincroniza con ARCA (también hacia atrás) y el registro vuelve a pendiente sin número, para renumerarse; si era el próximo, el problema es la fecha y pasa a `FUERA_DE_FECHA`. Un 10016 no deja el registro rechazado.
-- **602** de `FECompConsultar` («no existe») se lee como que el comprobante no está en ARCA, no como un error transitorio.
+- **602** de `FECompConsultar` («no existe») no es un error transitorio. Al sincronizar la serie, el 602 del último es que no está: la serie sigue sin su fecha. En la verificación, con ARCA en N o más, es una contradicción (la numeración de ARCA es correlativa, así que N tendría que existir): alerta sin renumerar, como un CAE que no coincide, porque renumerar a ciegas podría duplicar la factura de la venta.
 
 **Simulador** (plan de facturación del 2026-10-28; rama 2, y desde la rama 6 en el borde del transporte):
 

@@ -17,9 +17,10 @@ import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
 /**
- * El registro fiscal de un comprobante (tabla {@code comprobante_fiscal}, V32): 1-1 con la venta, con lo que va a ARCA
- * congelado al registrarlo (ambiente y punto de venta de la configuración, letra y CbteTipo del encuadre, receptor, emisor e
- * importes del desglose) y el estado de su autorización.
+ * El registro fiscal de un comprobante (tabla {@code comprobante_fiscal}, V32): uno solo vigente por venta, con lo que va
+ * a ARCA congelado al registrarlo (ambiente y punto de venta de la configuración, letra y CbteTipo del encuadre, receptor,
+ * emisor e importes del desglose) y el estado de su autorización. Desde la V36 (rama 7), el reintento del Dueño no lo
+ * reescribe: lo deja como historia ({@link #getReemplazadoEn()}) y da de alta otro, vigente, con la copia de ese momento.
  *
  * <p>Único escritor: el motor ({@code facturacion.motor}). La entidad no tiene setters, y Hibernate no la actualiza nunca
  * ({@link Immutable}): el número, la CbteFch, el estado, el CAE y lo que respondió ARCA cambian solo por los UPDATE
@@ -142,9 +143,33 @@ public class ComprobanteFiscal {
     @Column(name = "imp_op_ex", nullable = false, updatable = false, precision = 15, scale = 2)
     private BigDecimal impOpEx;
 
-    /** La hora de la venta (UTC): de ella sale la CbteFch, en la fecha de Buenos Aires. */
+    /**
+     * La hora de la venta (UTC): de ella sale la CbteFch, en la fecha de Buenos Aires. En el registro del reintento del
+     * Dueño, la del registro que reemplaza, o la del reintento si el Dueño confirmó la fecha de hoy (V36).
+     */
     @Column(name = "registrado_en", nullable = false, updatable = false)
     private Instant registradoEn;
+
+    /** La venta salió con el ticket provisorio: el CAE no llegó dentro de su espera (V36, S6). */
+    @Column(name = "ticket_provisorio", nullable = false)
+    private boolean ticketProvisorio;
+
+    /** Por qué el Dueño la dejó sin factura; solo en SIN_FACTURA, con el usuario y la hora (V36). */
+    @Column(name = "motivo_sin_factura", length = 200)
+    private String motivoSinFactura;
+
+    @Column(name = "usuario_sin_factura_id")
+    private Long usuarioSinFacturaId;
+
+    @Column(name = "sin_factura_en")
+    private Instant sinFacturaEn;
+
+    /**
+     * Cuándo lo reemplazó el reintento del Dueño (V36): null en el vigente, que es uno solo por venta. Solo un RECHAZADO o
+     * un FUERA_DE_FECHA queda reemplazado, y después no cambia más.
+     */
+    @Column(name = "reemplazado_en")
+    private Instant reemplazadoEn;
 
     protected ComprobanteFiscal() {
     }
@@ -233,4 +258,14 @@ public class ComprobanteFiscal {
     public BigDecimal getImpTotConc() { return impTotConc; }
     public BigDecimal getImpOpEx() { return impOpEx; }
     public Instant getRegistradoEn() { return registradoEn; }
+    public boolean isTicketProvisorio() { return ticketProvisorio; }
+    public String getMotivoSinFactura() { return motivoSinFactura; }
+    public Long getUsuarioSinFacturaId() { return usuarioSinFacturaId; }
+    public Instant getSinFacturaEn() { return sinFacturaEn; }
+    public Instant getReemplazadoEn() { return reemplazadoEn; }
+
+    /** El registro de la venta que vale: el que no reemplazó ningún reintento. */
+    public boolean esVigente() {
+        return reemplazadoEn == null;
+    }
 }

@@ -41,7 +41,7 @@ Restricciones (del mapa, L2):
   - el backoff es por serie y vive en la base (vale entre las dos JVM de un deploy); vuelve a cero cuando la serie autoriza;
   - una serie TRABADA o SERIE_PERDIDA no se reintenta hasta que la resuelva Luca.
 - S3 (plan, motor): "trata el 602 de FECompConsultar como «no existe», no como transitorio; ante un 10016 por número, recupera y renumera; ante uno por fecha, pasa a FUERA_DE_FECHA." — Aceptación (C6):
-  - un 602 en la recuperación no termina en CAE_NO_COINCIDE ni cuenta como error transitorio;
+  - un 602 no cuenta como error transitorio: al sincronizar la serie, el del último es «no existe» (sin fecha); en la verificación, con ARCA en N o más, es una alerta CAE_NO_COINCIDE sin renumerar (L7);
   - un 10016 no deja el registro RECHAZADO: se consulta FECompUltimoAutorizado; si el número enviado no era el próximo, la caché de la serie se resincroniza (también hacia atrás) y el registro vuelve a PENDIENTE sin número; si era el próximo, el problema es la fecha y pasa a FUERA_DE_FECHA;
   - cada caso con un test del motor contra el simulador.
 - S4 (plan, bandeja): "Bandeja: el filtro «Pendientes / Rechazadas» en Ventas del Dueño, con el error de ARCA tal cual y explicado en criollo, y las observaciones de los autorizados." — Aceptación (C1):
@@ -106,17 +106,17 @@ Restricciones (del mapa, L2):
 ## Tasks
 
 - [x] T1 · S1, S11-S15 · ruta: inline · Aceptación: commit `docs:` con este doc y la spec (Contingencias, CU-07, CU-16 y el modelo de datos) · Evidencia: docs pasivos; lectura de vuelta: CU-07 (el job y la marca de provisorio; «Reimprimir» con el aviso del Vendedor), CU-16 puntos 7 y 8 (la bandeja, las dos acciones con sus mensajes, «En revisión» y los avisos del Dueño), el modelo (SIN_FACTURA, uno solo vigente, backoff de la serie), «Numeración» (10016 y 602) y «Contingencias» (D9 y el job); commit: ver el Log · Risk: none (docs)
-- [ ] T2 · S10, S5 (datos), S6 (marca de provisorio), S2 (backoff) · ruta: delegada (writer «backend») · Aceptación:
+- [x] T2 · S10, S5 (datos), S6 (marca de provisorio), S2 (backoff) · ruta: delegada (writer «backend», junto con T3, con su propio commit) · Aceptación:
   - la V36: SIN_FACTURA en el CHECK con sus columnas (motivo, usuario, fecha) y la coherencia; el registro fiscal versionado (varios por venta, uno solo vigente: el índice único pasa a la venta vigente); la marca de «salió con ticket provisorio»; el backoff de la serie;
   - el rollback con guarda;
   - `MigracionV36Test` y `MigracionV6Test`.
-  - Evidencia: — · Risk: item 1 (cambia un índice único y el CHECK del registro fiscal)
-- [ ] T3 · S2 (atención con límite y backoff), S3, S5 (transiciones), S7, C6 · ruta: delegada (writer «backend») · Aceptación:
+  - Evidencia (L7): RED `MigracionV36Test` 26 errores «No migration with a target version 36» + 1 falla, y `MigracionV6Test#historialDeMigraciones`; GREEN 27/0 y 14/0 · Risk: item 1 (cambia un índice único y el CHECK del registro fiscal)
+- [x] T3 · S2 (atención con límite y backoff), S3, S5 (transiciones), S7, C6 · ruta: delegada (writer «backend») + arreglo del padre en el 602 (L7) · Aceptación:
   - `MotorFiscal.atender` con un límite de tiempo; el backoff de la serie en `PasosFiscales`;
   - 602 y 10016 como en C6;
   - las transiciones nuevas en `PasosFiscales` (SIN_FACTURA y el registro nuevo del reintento), `registrosAbiertos` al día, y todos los lectores leen el registro vigente;
   - la marca de provisorio cuando vence la espera de la venta.
-  - Evidencia: — · Risk: items 1 y 4 (estados nuevos y la caché de la serie bajo lease)
+  - Evidencia (L7): RED `MotorFiscalContingenciasIntegrationTest` 7/7 y los 3 de provisorio de `FacturacionParaVentaIntegrationTest`; el resto por 15 mutaciones temporales (17 tests fallaron, todo restaurado y comparado con `cmp`); GREEN Contingencias 7/0, FacturacionParaVenta 37/0, Acciones 11/0, Pasada 5/0, Política 2/0; `facturacion.**` + `ventas.**` + arch + RegistroVenta + migraciones 2165/0 (writer). Arreglo del padre en el 602: RED «expected: TRABADA but was: TERMINADA» → GREEN `MotorFiscal*IntegrationTest` + `ModulosArchTest` 113/0 · Risk: items 1, 3 y 4 (estados nuevos; un error de ARCA en la consulta de la verificación pasa de TRABADA a transitorio; la caché de la serie se resincroniza bajo lease)
 - [ ] T4 · S2, S7, S8, C5 · ruta: delegada (writer «backend») · Aceptación: el job con su ejecutor, la pasada con tope, el molde de tenant, el backoff, el apagado, y la batería de S8 · Evidencia: — · Risk: items 4 y 5 (concurrencia; `drainingSeconds` si suma una espera)
 - [ ] T5 · S4, S5, S6 (backend), C1-C4, C7 · ruta: delegada (writer «backend») · Aceptación: los endpoints, la explicación de los códigos conocidos, el contrato JDK de `facturacion.api` para el reintento (cliente X → config_arca S → registro), roles, aislamiento y el límite del Vendedor · Evidencia: — · Risk: items 2 y 3 (acciones solo del Dueño; la respuesta de Ventas cambia)
 - [x] T6 · S4, S5, S6 (frontend) · ruta: delegada (writer «frontend», en paralelo con T2-T3 contra C1-C4 y C7) + ajuste del padre (L6) · Aceptación: el filtro y la bandeja en Ventas, el detalle con errores y acciones (la confirmación de la fecha de hoy y el diálogo del motivo), los avisos del Dueño y el de «llegó el CAE» en el mostrador · Evidencia: RED→GREEN por regla (services TS2339/TS2307 → 28/28; `ventas.spec` 15 nuevos en rojo → 36/36; `dialogo-sin-factura` 6/6; `avisos-facturacion` 7/7; `avisos-cae` 7 en rojo contra un esqueleto → 7/7; `mostrador.spec` 8 de 9 en rojo → 320/320); frontend 141 archivos 3348/3348 y `ng build` OK (writer); ajuste del padre: RED TS2353/TS2339 → GREEN 51/51 en `ventas.spec`, `ventas.service.spec` y `avisos-cae.spec`. Falta ego-browser (T7) · Risk: item 1 bajo (clave nueva de localStorage `cae-descartados:{ferreteriaId}:{userId}`)
@@ -153,3 +153,33 @@ Restricciones (del mapa, L2):
     - el aviso «llegó el CAE» existe solo con la caja ABIERTA o DE_OTRO_DIA, y los descartados se guardan en localStorage (`cae-descartados:{ferreteriaId}:{userId}`), recortados a lo que devuelve el servidor;
     - las dos alertas se ven como «En revisión» en `ESTADO_FISCAL_LABELS`, y se suma `SIN_FACTURA: 'Sin factura'`;
     - el aviso del bloqueo enlaza a Facturación, y las cuentas a `/ventas?fiscal=…`.
+- L7 (2026-10-29) T2 y T3 cerradas (un writer, dos commits).
+  - **Esquema de la V36** (writer):
+    - el versionado se marca con `reemplazado_en`, más un índice único funcional `uk_comprobante_fiscal_vigente (ferreteria_id, (CASE WHEN reemplazado_en IS NULL THEN comprobante_id END))`; solo un RECHAZADO o un FUERA_DE_FECHA puede quedar reemplazado;
+    - la FK al comprobante queda con `ix_comprobante_fiscal_comprobante`;
+    - SIN_FACTURA con `motivo_sin_factura` (VARCHAR 200, con TRIM no vacío), `usuario_sin_factura_id` (FK a usuario) y `sin_factura_en`, las tres juntas; conserva el resultado R;
+    - `ticket_provisorio`, y en `serie_fiscal` `fallas_seguidas` y `proximo_reintento`, con un CHECK que los ata;
+    - un índice para la bandeja, `ix_comprobante_fiscal_estado (ferreteria_id, estado, registrado_en)`;
+    - el rollback guarda con un CHECK «sin historia» y encadena `serie_fiscal` con un PREPARE condicional.
+  - **10016** (writer): se pregunta FECompUltimoAutorizado (y FECompConsultar del último para su fecha):
+    - si el número no era el próximo, `renumerar`;
+    - si era el próximo, `fueraDeFechaPorArca`;
+    - si ARCA no contesta, el registro vuelve a PENDIENTE y la atención corta SIN_RESPUESTA.
+    - El simulador ya emitía el 10016 por número y por fecha.
+  - **Cambio de comportamiento** (writer): otro error de ARCA en la consulta de la verificación pasa de TRABADA a SIN_RESPUESTA (transitorio).
+  - **Reintentar** (writer):
+    - usa el `registrado_en` del vigente si entra en la ventana de la serie de la letra nueva; con `fechaDeHoy` usa hoy; si no entra, FECHA_NUEVA_REQUERIDA;
+    - chequea SIN_FACTURA_RECHAZADA antes que FACTURACION_FRENADA;
+    - no toma la serie: se apoya en el lock del cliente y en el índice del vigente.
+  - **Arreglo del padre en el 602.** El writer renumeraba ante un 602 en la verificación con ARCA en N o más. Pero la numeración de ARCA es correlativa: si ARCA tarda en reflejar el N nuestro, renumerar duplica la factura de la venta, contra «nunca se reenvía a ciegas». Ahora es una alerta CAE_NO_COINCIDE sin renumerar (test cambiado primero; RED → GREEN). Se sacaron `PasosFiscales.noExiste` y `liberarDeVerificacion`, que quedaron sin uso. La spec y S3 dicen esto.
+  - **Firmas para T4:**
+    - `MotorFiscal.atender(Ambiente, int, int, Instant limite)`, con `Atencion.SIN_TIEMPO`;
+    - `PasosFiscales.seriesConTrabajo(Instant)` → `List<ClaveDeSerie>` (sin las que están en backoff ni las que tienen alerta);
+    - `PasosFiscales.registrarPasada(ClaveDeSerie, Atencion, Instant)`;
+    - `PoliticaDeReintento` (`cada`, `topePasada`, `espera(int)`).
+  - **Firmas para T5:**
+    - `MotorFiscal.reintentar(AltaFiscal, boolean fechaDeHoy)`: MANDATORY, con el cliente ya tomado; el CAE se pide después del commit;
+    - `MotorFiscal.dejarSinFactura(long comprobanteId, String motivo, long usuarioId)`;
+    - `AccionFiscalImpedidaException` con `impedimento()`;
+    - `ComprobanteFiscalRepository.vigenteDeScoped(long)`.
+  - Próximo paso: T4 (el job) y T5 (los endpoints) en paralelo, con superficies separadas.
