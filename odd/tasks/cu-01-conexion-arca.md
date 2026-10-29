@@ -196,7 +196,7 @@ Restricciones:
   - el perfil `-Parca-real` con el tag `arca-real` (FEDummy real y ECDHE con servicios1), excluido de la suite y de `-Pimagen`;
   - el chequeo de «Probar conexión» en SIMULADOR en `ImagenDeProduccionTest`.
   - Evidencia (writer, L12): RED `-Dtest=ArcaRealTest` corría sin perfil y `-Parca-real` no existía; GREEN `-Parca-real` 3/0 contra ARCA real (FEDummy OK en wswhomo y servicios1, servicios1 con ECDHE), y sin el perfil «No tests were executed!»; `-Pimagen` 9/0 (nuevo `probarConexionConElSimuladorCorreDesdeElJar`, solo GREEN); `facturacion.arca.**` 120/0 sin `arca-real`; README con `-Parca-real`; el padre repitió `-Parca-real` 3/0 · Risk: item 5 (red y ARCA arriba; fuera de la suite y de `-Pimagen`)
-- [ ] T10 · todas · ruta: inline (suites) + `odd-verifier` · Aceptación: suite backend, suite frontend, `ng build`, `-Pimagen`, `-Parca-real`, ego-browser en dev (alta y «Probar conexión» con el simulador), verificador sin bloqueantes · Evidencia: — · Risk: items 1 a 6
+- [x] T10 · todas · ruta: inline (suites) + `odd-verifier` · Aceptación: suite backend, suite frontend, `ng build`, `-Pimagen`, `-Parca-real`, ego-browser en dev (alta y «Probar conexión» con el simulador), verificador sin bloqueantes · Evidencia (L13): suite backend 5591/0 (después del arreglo de B1); frontend 137 archivos en verde; `ng build` OK (solo el aviso de `dialogo-cobro`); `-Pimagen` 9/0 (writer de T9); `-Parca-real` 3/0 (padre); ego-browser en dev: «Probar conexión» del Dueño en SIMULADOR con los 4 pasos OK y FEDummy real del super admin OK en homologación y producción (el alta en pantalla no se repitió: el runner dev usa la misma alta); `odd-verifier` (opus) con 1 blocker (B1), arreglado en `7d7737d` con RED→GREEN `TicketsDeAccesoProbarIntegrationTest#probarConRechazoEnLaVentanaDeRenovacionFalla` · Risk: items 1 a 6
 - [ ] T11 · S12 · ruta: inline, después del deploy de Luca · Aceptación: el alta completa de la Ferretería de Prueba en producción, el chequeo FEDummy del super admin y los logs sin secretos · Evidencia: — · Risk: —
 
 ## Log
@@ -292,3 +292,10 @@ Restricciones:
   - El aviso del bloqueo va primero en `avisos`.
   - Próximo paso: T9.
 - L12 (2026-10-29) T9 cerrada (writer). `TransporteHttp.contexto` y `parametros` pasan a package-private para que `ArcaRealTest` haga el handshake con el mismo TLS (sin cambio de comportamiento). En TLS 1.3 el test solo exige una suite de `SUITES`; ECDHE se exige en 1.2. En `ImagenDeProduccionTest`, «Probar conexión» (`@Order(2)`) depende del alta de la credencial (`@Order(1)`). Próximo paso: T10.
+- L13 (2026-10-29) T10 cerrada. El `odd-verifier` encontró B1: con un TA vigente en la ventana de renovación, un rechazo de clase CREDENCIAL en `probar()` devolvía el TA viejo, la prueba daba OK y levantaba el bloqueo. Arreglo en `7d7737d`: en `probar()` un fault CREDENCIAL falla aunque haya TA vigente. Advisories abiertos (para Luca):
+  - antes del deploy, revisar si alguna ferretería de producción está en SIMULADOR sin credencial: pasaría a vender sin factura sin aviso;
+  - el camino del 600 puede hacer cuatro llamadas (~120 s), más que `presupuesto-llamada` (60 s) y menos que el lease de la serie (180 s);
+  - los rechazos CREDENCIAL no ponen espera: cada «Probar conexión» con bloqueo llama a WSAA;
+  - el front no relee la configuración cuando la prueba falla (el aviso aparece al recargar);
+  - el runner dev no renueva una credencial demo vencida.
+  - Próximo paso: T11, después del deploy de Luca.
