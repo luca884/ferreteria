@@ -73,7 +73,7 @@ class VentaServiceTest {
             "74123456789012", LocalDate.of(2026, 11, 7), "SIMULADOR");
 
     /** El documento X de esa venta, con su estado de la misma lectura. */
-    static final DocumentoFiscal DOCUMENTO = new DocumentoFiscal(AUTORIZADA, false, "X", null,
+    static final DocumentoFiscal DOCUMENTO = new DocumentoFiscal(AUTORIZADA, false, "X", false, null,
             "SIMULADO — sin validez fiscal", null, null, LocalDate.of(2026, 10, 28), null, null,
             new EmisorDelDocumento("El Tornillo SRL", "30712345678", "IVA RESPONSABLE INSCRIPTO",
                     "Av. Luro 1234, Mar del Plata", "901-123456-7", LocalDate.of(2015, 3, 1)),

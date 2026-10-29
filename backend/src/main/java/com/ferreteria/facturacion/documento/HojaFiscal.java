@@ -32,7 +32,8 @@ import java.util.Set;
  * <p>El cerrojo de la apariencia (S6, «lo simulado nunca parece fiscal»): es válida como factura solo en PRODUCCION, con
  * el registro AUTORIZADO y su CAE. Si no, es un documento X, sin letra A/B/C, sin código, punto de venta, número, CAE ni
  * QR, con la marca del caso (S12) debajo de «DOCUMENTO NO VALIDO COMO FACTURA». Lo que depende de la letra del registro
- * (alícuotas, transparencia y leyenda) se arma igual, porque no hace pasar al X por una factura.
+ * (el cuerpo que discrimina el IVA, alícuotas, transparencia y leyenda) se arma igual, porque no hace pasar al X por una
+ * factura: así el X de una A muestra el formato de la A (S13) antes de producción.
  *
  * <p>Los textos de la condición frente al IVA son los de «Comprobantes en línea»; la transparencia (Ley 27.743) va solo en
  * la B a Consumidor Final, con el IVA guardado como «IVA Contenido»; la leyenda de la Ley 27.618 (RG 5022/2021), solo en
@@ -74,7 +75,8 @@ public final class HojaFiscal {
         boolean transparencia = registro.getLetra() == Letra.B
                 && condicionReceptor == CondicionIvaReceptor.CONSUMIDOR_FINAL;
         String qr = valido ? QrArca.texto(datosDelQr(registro)) : null;
-        return new DocumentoFiscal(estado, valido, letra(registro), valido ? registro.getCbteTipo() : null,
+        return new DocumentoFiscal(estado, valido, letra(registro), discriminaIva(registro),
+                valido ? registro.getCbteTipo() : null,
                 valido ? null : marca(registro), valido ? registro.getPuntoVenta() : null,
                 valido ? registro.getNumero() : null, fecha(registro), valido ? registro.getCae() : null,
                 valido ? registro.getCaeVencimiento() : null, emisor(registro), receptor(registro, condicionReceptor),
@@ -93,6 +95,15 @@ public final class HojaFiscal {
     /** La letra de la hoja: la del registro si es válida como factura; X si no. */
     static String letra(ComprobanteFiscal registro) {
         return validoComoFactura(registro) ? registro.getLetra().name() : LETRA_X;
+    }
+
+    /**
+     * S13: la hoja discrimina el IVA (renglones sin IVA con su alícuota, neto gravado e IVA por alícuota) solo en la A,
+     * válida o X. No es {@link Letra#discriminaIva()}: ese dice si van alícuotas a ARCA, y la B también las lleva aunque
+     * se imprima con precios con IVA.
+     */
+    static boolean discriminaIva(ComprobanteFiscal registro) {
+        return registro.getLetra() == Letra.A;
     }
 
     /** S12: la marca del X, por ambiente y, en producción, por estado. */

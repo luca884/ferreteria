@@ -14,6 +14,7 @@ import {
   documentoB,
   documentoC,
   documentoX,
+  documentoXDeA,
   ventaParaFactura,
 } from './factura.testing';
 
@@ -213,6 +214,61 @@ describe('FacturaHoja (CU-07 paso 5, S5, S6, S12, S13)', () => {
     expect(hoja()).not.toContain('CAE');
     expect(hoja()).not.toContain('70417054367476');
     expect(hoja()).not.toMatch(/\d{5}-\d{8}/);
+  });
+
+  it('X de una A: el cuerpo de la A (renglones sin IVA con alícuota, neto e IVA por alícuota) con «X», la marca y el número interno; sin código, número fiscal, CAE ni QR', async () => {
+    await crear(documentoXDeA(MARCA_SIMULADO));
+
+    expect(letra()).toEqual(['X', null]);
+    expect(texto('.tipo')).toBe('DOCUMENTO NO VALIDO COMO FACTURA');
+    expect(texto('.marca')).toBe('SIMULADO — sin validez fiscal');
+    expect(texto('.comprobante')).toContain('Venta N.º 7');
+    expect(texto('.receptor')).toContain('Ferretería Norte SRL');
+    expect(filas('.renglones')).toEqual([['2', 'Martillo', '$ 500,00', '21 %', '$ 1.000,00']]);
+    expect(lineas('.totales')).toEqual([
+      'Importe neto gravado $ 1.000,00',
+      'IVA 21 % $ 210,00',
+      'Importe no gravado $ 0,00',
+      'Importe exento $ 0,00',
+      'Total $ 1.210,00',
+    ]);
+    expect(el().querySelector('.pie-fiscal')).toBeNull();
+    expect(el().querySelector('svg.qr')).toBeNull();
+    expect(hoja()).not.toContain('Comprobante Autorizado');
+    expect(hoja()).not.toContain('CAE');
+    expect(hoja()).not.toContain('COD.');
+    expect(hoja()).not.toMatch(/\d{5}-\d{8}/);
+  });
+
+  it('un X de una A que trae letra, código, número, CAE, vencimiento, QR y la leyenda no muestra nada fiscal, pero sí el neto y las alícuotas', async () => {
+    await crear(
+      documentoXDeA(MARCA_SIMULADO, {
+        letra: 'A',
+        codigo: 1,
+        puntoVenta: 3,
+        numero: 12,
+        cae: '70417054367476',
+        caeVencimiento: '2026-11-07',
+        qr: 'https://www.arca.gob.ar/fe/qr/?p=eyJ2ZXIiOjF9',
+        qrModulos: [...QR_MODULOS],
+        leyendaMonotributo: LEYENDA_LEY_27618,
+      }),
+    );
+
+    expect(letra()).toEqual(['X', null]);
+    expect(texto('.tipo')).toBe('DOCUMENTO NO VALIDO COMO FACTURA');
+    expect(el().querySelector('svg')).toBeNull();
+    expect(el().querySelector('.pie-fiscal')).toBeNull();
+    expect(el().querySelector('.numero-fiscal')).toBeNull();
+    expect(hoja()).not.toContain('COD.');
+    expect(hoja()).not.toContain('CAE');
+    expect(hoja()).not.toContain('70417054367476');
+    expect(hoja()).not.toContain('07/11/2026');
+    expect(hoja()).not.toContain('Comprobante Autorizado');
+    expect(hoja()).not.toMatch(/\d{5}-\d{8}/);
+    expect(texto('.leyenda-monotributo')).toBe(LEYENDA_LEY_27618);
+    expect(lineas('.totales')).toContain('Importe neto gravado $ 1.000,00');
+    expect(lineas('.totales')).toContain('IVA 21 % $ 210,00');
   });
 
   it('con remito vinculado dice «Remito N.º 15»; sin remito no dice nada', async () => {

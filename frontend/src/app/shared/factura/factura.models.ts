@@ -60,6 +60,11 @@ export interface TransparenciaFiscal {
 export interface DocumentoFiscal {
   validoComoFactura: boolean;
   letra: LetraDocumento;
+  /**
+   * True en la A, válida o X: renglones sin IVA con su alícuota y el pie con el neto gravado y el IVA por alícuota (S13).
+   * Describe el cuerpo, no la apariencia fiscal: el X de una A se ve con el formato de la A.
+   */
+  discriminaIva: boolean;
   codigo: number | null;
   marca: string | null;
   puntoVenta: number | null;

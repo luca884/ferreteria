@@ -167,11 +167,14 @@ public interface FacturacionParaVenta {
      * quien imprime. La apariencia (S6): {@code validoComoFactura} solo con el ambiente PRODUCCION, el registro AUTORIZADO y
      * su CAE; si no, es un documento X: {@code letra} "X", con {@code codigo}, {@code puntoVenta}, {@code numero},
      * {@code cae}, {@code caeVencimiento}, {@code qr} y {@code qrModulos} en null y la {@code marca} del caso (S12). Lo que
-     * depende de la letra del registro (alícuotas, transparencia y leyenda) se arma igual en el X. Importes con escala 2.
+     * depende de la letra del registro (el cuerpo que discrimina el IVA, alícuotas, transparencia y leyenda) se arma igual
+     * en el X: así el X de una A se ve con el formato de la A (S13). Importes con escala 2.
      *
      * @param estadoFiscal el estado del registro, de la misma lectura que la hoja
      * @param validoComoFactura true solo en PRODUCCION, AUTORIZADO y con CAE
      * @param letra A, B o C del registro; X si no es válido como factura
+     * @param discriminaIva true si el registro es una A, válida o X: la hoja muestra los renglones sin IVA con su alícuota
+     *     y el pie con el neto gravado y el IVA por alícuota (S13); describe el cuerpo, no la apariencia fiscal
      * @param codigo el {@code CbteTipo} (1, 6 u 11); null en el X
      * @param marca lo que el X muestra debajo de «DOCUMENTO NO VALIDO COMO FACTURA»; null en la factura válida
      * @param puntoVenta el punto de venta; null en el X
@@ -193,11 +196,12 @@ public interface FacturacionParaVenta {
      * @param qrModulos la matriz del QR sin zona de silencio, una fila por texto de '1' (oscuro) y '0' (claro), todas del
      *     mismo largo; null en el X
      */
-    record DocumentoFiscal(EstadoFiscalVenta estadoFiscal, boolean validoComoFactura, String letra, Integer codigo,
-            String marca, Integer puntoVenta, Long numero, LocalDate fecha, String cae, LocalDate caeVencimiento,
-            EmisorDelDocumento emisor, ReceptorDelDocumento receptor, BigDecimal total, BigDecimal neto, BigDecimal iva,
-            BigDecimal noGravado, BigDecimal exento, List<AlicuotaDelDocumento> alicuotas, Transparencia transparencia,
-            String leyendaMonotributo, String qr, List<String> qrModulos) {
+    record DocumentoFiscal(EstadoFiscalVenta estadoFiscal, boolean validoComoFactura, String letra,
+            boolean discriminaIva, Integer codigo, String marca, Integer puntoVenta, Long numero, LocalDate fecha,
+            String cae, LocalDate caeVencimiento, EmisorDelDocumento emisor, ReceptorDelDocumento receptor,
+            BigDecimal total, BigDecimal neto, BigDecimal iva, BigDecimal noGravado, BigDecimal exento,
+            List<AlicuotaDelDocumento> alicuotas, Transparencia transparencia, String leyendaMonotributo, String qr,
+            List<String> qrModulos) {
 
         public DocumentoFiscal {
             alicuotas = List.copyOf(alicuotas);

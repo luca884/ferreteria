@@ -71,21 +71,22 @@ public record VentaResponse(
      * La hoja de la factura tal como la decide {@code facturacion} (C1): ventas solo la copia. Con
      * {@code validoComoFactura} false es un X: {@code letra} "X", y {@code codigo}, {@code puntoVenta}, {@code numero},
      * {@code cae}, {@code caeVencimiento}, {@code qr} y {@code qrModulos} en null, con la {@code marca} del caso.
+     * {@code discriminaIva} es true en la A, válida o X (renglones sin IVA y el desglose por alícuota, S13).
      * {@code transparencia} solo en la B a Consumidor Final; {@code leyendaMonotributo} solo en la A a un Monotributista;
      * {@code alicuotas} vacía en la C. Los nulos se mandan igual, como null.
      */
     @JsonInclude(JsonInclude.Include.ALWAYS)
-    public record DocumentoResponse(boolean validoComoFactura, String letra, Integer codigo, String marca,
-            Integer puntoVenta, Long numero, LocalDate fecha, String cae, LocalDate caeVencimiento,
+    public record DocumentoResponse(boolean validoComoFactura, String letra, boolean discriminaIva, Integer codigo,
+            String marca, Integer puntoVenta, Long numero, LocalDate fecha, String cae, LocalDate caeVencimiento,
             EmisorDelDocumento emisor, ReceptorDelDocumento receptor, BigDecimal total, BigDecimal neto, BigDecimal iva,
             BigDecimal noGravado, BigDecimal exento, List<AlicuotaDelDocumento> alicuotas, Transparencia transparencia,
             String leyendaMonotributo, String qr, List<String> qrModulos) {
 
         static DocumentoResponse de(DocumentoFiscal d) {
-            return new DocumentoResponse(d.validoComoFactura(), d.letra(), d.codigo(), d.marca(), d.puntoVenta(),
-                    d.numero(), d.fecha(), d.cae(), d.caeVencimiento(), d.emisor(), d.receptor(), d.total(), d.neto(),
-                    d.iva(), d.noGravado(), d.exento(), d.alicuotas(), d.transparencia(), d.leyendaMonotributo(), d.qr(),
-                    d.qrModulos());
+            return new DocumentoResponse(d.validoComoFactura(), d.letra(), d.discriminaIva(), d.codigo(), d.marca(),
+                    d.puntoVenta(), d.numero(), d.fecha(), d.cae(), d.caeVencimiento(), d.emisor(), d.receptor(),
+                    d.total(), d.neto(), d.iva(), d.noGravado(), d.exento(), d.alicuotas(), d.transparencia(),
+                    d.leyendaMonotributo(), d.qr(), d.qrModulos());
         }
     }
 

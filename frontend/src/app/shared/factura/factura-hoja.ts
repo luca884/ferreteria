@@ -15,7 +15,8 @@ const SILENCIO_QR = 4;
 /**
  * La hoja de la factura (A, B, C o X), compartida por el mostrador y Ventas. Presentacional y fiscal: pinta solo lo que
  * trae `documento` (la copia del registro que armó el servidor) más los renglones y totales de la venta. Si el documento
- * no es válido como factura, es una X: nunca letra A/B/C, código, número fiscal, CAE ni QR, aunque vinieran.
+ * no es válido como factura, es una X: nunca letra A/B/C, código, número fiscal, CAE ni QR, aunque vinieran; el cuerpo
+ * (con o sin IVA discriminado) sigue a `documento.discriminaIva`.
  */
 @Component({
   selector: 'app-factura-hoja',
@@ -30,8 +31,11 @@ export class FacturaHoja {
   protected readonly fecha = formatearFecha;
 
   protected readonly valido = computed(() => this.documento().validoComoFactura);
-  /** La A discrimina el IVA: renglones sin IVA y el desglose por alícuota. */
-  protected readonly discriminaIva = computed(() => this.valido() && this.documento().letra === 'A');
+  /**
+   * La A discrimina el IVA: renglones sin IVA y el desglose por alícuota. Lo decide el servidor (`documento.discriminaIva`)
+   * y vale también en el X de una A, que así muestra el formato de la A sin nada que la haga pasar por factura.
+   */
+  protected readonly discriminaIva = computed(() => this.documento().discriminaIva);
   protected readonly letra = computed(() => (this.valido() ? this.documento().letra : 'X'));
   protected readonly codigo = computed(() => {
     const codigo = this.documento().codigo;

@@ -22,6 +22,7 @@ const EMISOR_RI = {
 export const documentoB = (cambios: Partial<DocumentoFiscal> = {}): DocumentoFiscal => ({
   validoComoFactura: true,
   letra: 'B',
+  discriminaIva: false,
   codigo: 6,
   marca: null,
   puntoVenta: 1,
@@ -51,10 +52,11 @@ export const documentoB = (cambios: Partial<DocumentoFiscal> = {}): DocumentoFis
   ...cambios,
 });
 
-/** A autorizada a un Responsable Inscripto. */
+/** A autorizada a un Responsable Inscripto: discrimina el IVA. */
 export const documentoARI = (cambios: Partial<DocumentoFiscal> = {}): DocumentoFiscal =>
   documentoB({
     letra: 'A',
+    discriminaIva: true,
     codigo: 1,
     numero: 5,
     receptor: {
@@ -98,21 +100,26 @@ export const documentoC = (cambios: Partial<DocumentoFiscal> = {}): DocumentoFis
     ...cambios,
   });
 
-/** Un documento que no es factura (S6, S12): letra X y sin datos fiscales. */
+/** Lo que el servidor pone en un documento que no es factura (S6): letra X y los siete campos fiscales en null. */
+const NO_VALIDO = {
+  validoComoFactura: false,
+  letra: 'X',
+  codigo: null,
+  puntoVenta: null,
+  numero: null,
+  cae: null,
+  caeVencimiento: null,
+  qr: null,
+  qrModulos: null,
+} satisfies Partial<DocumentoFiscal>;
+
+/** Un documento que no es factura (S6, S12), de una B: letra X y sin datos fiscales. */
 export const documentoX = (marca: string, cambios: Partial<DocumentoFiscal> = {}): DocumentoFiscal =>
-  documentoB({
-    validoComoFactura: false,
-    letra: 'X',
-    codigo: null,
-    marca,
-    puntoVenta: null,
-    numero: null,
-    cae: null,
-    caeVencimiento: null,
-    qr: null,
-    qrModulos: null,
-    ...cambios,
-  });
+  documentoB({ ...NO_VALIDO, marca, ...cambios });
+
+/** El X de una A a un Responsable Inscripto (S6 con el cuerpo de S13): discrimina el IVA, sin datos fiscales. */
+export const documentoXDeA = (marca: string, cambios: Partial<DocumentoFiscal> = {}): DocumentoFiscal =>
+  documentoARI({ ...NO_VALIDO, marca, ...cambios });
 
 export const MARCA_SIMULADO = 'SIMULADO — sin validez fiscal';
 export const MARCA_TICKET_PROVISORIO = 'TICKET PROVISORIO — factura en trámite con ARCA';
