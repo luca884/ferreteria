@@ -150,7 +150,8 @@ public final class TransporteHttp implements Transporte {
         return false;
     }
 
-    private static SSLContext contexto(KeyStore truststore) {
+    /** El TLS del transporte; package-private para que el handshake real con ARCA (tag {@code arca-real}) use el mismo. */
+    static SSLContext contexto(KeyStore truststore) {
         try {
             TrustManagerFactory confianza = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
             confianza.init(truststore);
@@ -162,7 +163,8 @@ public final class TransporteHttp implements Transporte {
         }
     }
 
-    private static SSLParameters parametros() {
+    /** Las suites y protocolos del transporte, con el host verificado; package-private por la misma razón. */
+    static SSLParameters parametros() {
         SSLParameters parametros = new SSLParameters(SUITES.clone(), PROTOCOLOS.clone());
         parametros.setEndpointIdentificationAlgorithm("HTTPS");
         return parametros;
