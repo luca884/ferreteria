@@ -182,7 +182,7 @@ Restricciones:
   - `TicketsDeAcceso` (cifrado, lease en la base, margen, lapso y esperas);
   - el cortacircuito en `config_arca` y en `puedeFacturar`, y el 600 que renueva una vez;
   - tests de concurrencia (20 hilos, dos instancias), de reinicio y de cada fault con conteo de llamadas.
-  - Evidencia: — · Risk: items 1, 2 y 4
+  - Evidencia: parcial, sin commitear (L8) · Risk: items 1, 2 y 4
 - [ ] T6 · S6, S7 (simulador) · ruta: delegada (writer «backend») · Aceptación:
   - el simulador en el borde (XSD, CMS, TA con su lapso y verificación del `Auth`);
   - `WsfePorAmbiente` con `ClienteWsfe` en los tres ambientes;
@@ -191,7 +191,7 @@ Restricciones:
   - la subclase de contrato.
   - Evidencia: — · Risk: items 3 y 6
 - [ ] T7 · S8, S9, C1, C2, C4 (avisos) · ruta: delegada (writer «backend») · Aceptación: los endpoints de C1 y C2, el bloqueo en `avisos` de la configuración, y tests de roles y aislamiento · Evidencia: — · Risk: item 3 (respuesta de la configuración)
-- [ ] T8 · S8, S9 (front), C1, C2, C4 · ruta: delegada (writer «frontend», en paralelo con T7 contra C1 y C2) · Aceptación: «Probar conexión» en «Facturación», el aviso del bloqueo y el chequeo FEDummy en el panel del super admin · Evidencia: — · Risk: none
+- [x] T8 · S8, S9 (front), C1, C2, C4 · ruta: delegada (writer «frontend», en paralelo con T5 contra C1 y C2) · Aceptación: «Probar conexión» en «Facturación», el aviso del bloqueo y el chequeo FEDummy en el panel del super admin · Evidencia: RED→GREEN `facturacion.spec` (5 fallas → 28/28), `facturacion.service.spec` (TS2339 → 6/6), `admin-ferreterias.spec` (3 fallas → 43/43), `admin-ferreterias.service.spec` (TS2339 → 8/8); el aviso largo de C4 ya se mostraba y quedó fijado; frontend 137 archivos 3299/3299; `ng build` OK (solo el aviso conocido de `dialogo-cobro`); el padre repitió los dos specs de pantalla; commit `a5344e8` (+643/−12). Falta ego-browser (T10) · Risk: none
 - [ ] T9 · S7 (opt-in), S11 (imagen) · ruta: delegada (writer «backend») · Aceptación:
   - el perfil `-Parca-real` con el tag `arca-real` (FEDummy real y ECDHE con servicios1), excluido de la suite y de `-Pimagen`;
   - el chequeo de «Probar conexión» en SIMULADOR en `ImagenDeProduccionTest`.
@@ -261,3 +261,17 @@ Restricciones:
     - `FchBaja` «NULL» se lee como null;
     - `AlertaArca` loguea ERROR con el marcador `ALERTA ARCA`.
   - Próximo paso: T5 (WSAA, `TicketsDeAcceso`, cortacircuito).
+- L7 (2026-10-29) T8 cerrada en `a5344e8`. El panel del super admin vive en `frontend/src/app/features/admin-ferreterias/` (el handoff decía `features/plataforma/`, que no existe: el writer frenó y el padre le amplió la superficie). El 409 de «Probar conexión» se muestra al lado del botón, dentro de la región `aria-live`.
+- L8 (2026-10-29) Luca frenó la sesión con T5 a medio verificar: «que frene ahora despues seguimos cerra». El padre paró al writer mientras corría ArchUnit, antes de las tandas largas. No quedaron procesos de Maven ni contenedores.
+  - **El código de T5 queda en el árbol, sin commitear y sin verificar.** No cambiar de rama sin commitearlo o guardarlo antes.
+    - Nuevos en `facturacion/arca`: `Tra`, `ClienteWsaa`, `FallaWsaa`, `FaultWsaaException`, `RespuestaLoginCms`, `TicketAcceso`, `TicketAccesoRepository`, `PasosDelTicket` y `TicketsDeAcceso`.
+    - Nuevo en `facturacion/credencial`: `FirmaCms`.
+    - Recursos: el XSD `login-ticket-request-wsaa-1.2.2.xsd` y los fixtures `logincms-respuesta.xml` y `logincms-fault.xml`.
+    - Modificados: `PropiedadesArca`, `CredencialArcaService`, `Proposito`, `ConfigArca` y `PasosFiscales`.
+    - Tests nuevos: `ClienteWsaaTest`, `TraTest`, `FirmaCmsTest`, `TicketsDeAcceso{,Concurrencia}IntegrationTest`, `TicketsDeAccesoTestBase`, `WsaaDePrueba`, `CortacircuitoWsaaIntegrationTest`, `SinSecretosEnLogsWsaaIntegrationTest`, `BloqueoDeArcaIntegrationTest` y `CredencialDePrueba`.
+    - Tests modificados: `ConfiguracionArcaTest`, `ConfigArcaTest` y `MotorFiscalIntegrationTest`.
+    - Las clases de integración ya habían corrido (reportes de 02:31 a 02:47), pero no hay evidencia RED/GREEN registrada.
+  - **Próximo paso (T5):**
+    - leer el diff contra la sección de T5 y C3/C4;
+    - correr los tests de T5, `com.ferreteria.facturacion.**.*Test` y `ModulosArchTest,TenantScopingArchTest,RegistroVentaTest,ConfigArcaAdminIntegrationTest`;
+    - completar lo que falte, commitear T5 y seguir con T6.
