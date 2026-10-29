@@ -35,18 +35,18 @@ Restricciones: la ferretería sale solo del JWT; `facturacion.api` solo con tipo
   - `POST /api/facturacion/certificado` `{ "certificado": "<PEM, o DER en Base64>" }` → 200 con la configuración (y `avisos`); 400 en `certificado` con el motivo; 409 sin pedido pendiente.
   - `POST /api/facturacion/certificado/simulador` → 200 con la configuración; 409 fuera de SIMULADOR o sin pedido pendiente.
 - **C2 · Variables:** `ARCA_CLAVE_MAESTRA` (32 bytes en Base64; prod sin default y validada al arrancar; dev con default; test fija) y `ARCA_CLAVE_MAESTRA_ANTERIOR` (opcional). Propiedades `app.facturacion.clave-maestra` y `app.facturacion.clave-maestra-anterior`.
-- **C3 · CA oficiales** (bajadas de ARCA y verificadas con `openssl verify` el 2026-10-28, engram «CA oficiales de ARCA para validar el .crt»): `Computadores` (producción, 2024-01-03 a 2035-01-03, firmada por `AFIP Root CA 2`) y `Computadores Test` (homologación, 2022-07-07 a 2030-07-07, firmada por `AC Raiz Test`), como PEM normalizados en `backend/src/main/resources/facturacion/ca/`.
+- **C3 · CA oficiales** (bajadas de ARCA y verificadas con `openssl verify` el 2026-10-28, engram «CA oficiales de ARCA para validar el .crt»): `Computadores` (producción, 2024-01-03 a 2035-01-03, firmada por `AFIP Root CA 2`) y `Computadores Test` (homologación, 2022-07-07 a 2030-07-07, firmada por `AC Raiz Test`), como PEM normalizados en `backend/src/main/resources/facturacion/ca/` (con extensión `.crt`: L4).
 
 ## Tasks
 
-- [ ] T1 · S1, S10 · ruta: inline · Aceptación: commit `docs:` con este doc, D8 y CU-01 pasos 2 y 3 en la spec, «Seguridad» (formato, clave maestra, rotación) y `ARCA_CLAVE_MAESTRA` en el README · Evidencia: — · Risk: none (docs)
-- [ ] T2 · S3 · ruta: delegada (writer «backend») · Aceptación: `bcpkix-jdk18on` 1.86 en `backend/pom.xml`, commit propio · Evidencia: — · Risk: item 5
-- [ ] T3 · S6, S7, C2 · ruta: delegada (writer «backend») · Aceptación: cifrador AES-GCM con el formato y el AAD, clave maestra validada al arrancar, rotación, `toString` enmascarado; tests de AAD, id desconocido, arranque y perfiles · Evidencia: — · Risk: items 1 y 2
-- [ ] T4 · S15 · ruta: delegada (writer «backend») · Aceptación: V34 (`credencial_arca` y CA del simulador, con `ferreteria_id` y FK compuestas) y su rollback con guarda «sin credenciales», `MigracionV34Test` · Evidencia: — · Risk: item 1
-- [ ] T5 · S2 (backend), S3, S4, S5, S7, S8, S13, S14, S16, C1, C3 · ruta: delegada (writer «backend») · Aceptación: servicio y controlador de `facturacion`; CSR; validación del .crt; CA del simulador; punto de venta; reglas de ambiente; bloqueo por credencial; habilitar trabado en HOMOLOGACION y PRODUCCION; tests con `OutputCaptureExtension`, roles y aislamiento · Evidencia: — · Risk: items 2 y 3
-- [ ] T6 · S9 · ruta: delegada (writer «backend») · Aceptación: `ImagenDeProduccionTest` con la variable y el CSR dentro del contenedor; `PerfilPorDefectoTest` · Evidencia: — · Risk: item 5
-- [ ] T7 · S2, S3, S4, S5, S8, S12 (front), C1 · ruta: delegada (writer «frontend», en paralelo contra C1) · Aceptación: pantalla «Facturación», enlace en el menú, paso en «Primeros pasos», aviso al Vendedor, aviso de vencimiento en el mostrador del Dueño · Evidencia: — · Risk: none
-- [ ] T8 · todas · ruta: inline (suites) + `odd-verifier` · Aceptación: suite backend, suite frontend, `ng build`, `-Pimagen`, ego-browser del alta completa con el simulador en dev, verificador sin bloqueantes · Evidencia: — · Risk: items 1, 2, 3, 5 y 6
+- [x] T1 · S1, S10 · ruta: inline · Aceptación: commit `docs:` con este doc, D8 y CU-01 pasos 2 y 3 en la spec, «Seguridad» (formato, clave maestra, rotación) y `ARCA_CLAVE_MAESTRA` en el README · Evidencia: docs pasivos; readback (CU-01: punto de venta real, paso 3 con D8, pedido, certificado, traba hasta la rama 6, alternativo con el aviso de 30 días; «Seguridad» con formato, clave maestra, rotación y sin secretos; README con la variable, el respaldo, la rotación y el chequeo de `-Pimagen`); commit `f80a6da` (+81/−4) · Risk: none (docs)
+- [x] T2 · S3 · ruta: delegada (writer «backend») · Aceptación: `bcpkix-jdk18on` 1.86 en `backend/pom.xml`, commit propio · Evidencia: propiedad `bouncycastle.version` (trae bcutil y bcprov 1.86); commit `6aedf42` (+10) · Risk: item 5
+- [x] T3 · S6, S7, C2 · ruta: delegada (writer «backend») · Aceptación: cifrador AES-GCM con el formato y el AAD, clave maestra validada al arrancar, rotación, `toString` enmascarado; tests de AAD, id desconocido, arranque y perfiles · Evidencia: RED `CifradorDeClavesTest` 14 (7 fallas y 7 errores contra un stub), `PerfilPorDefectoTest` 2 fallas con los yml de HEAD; GREEN 14/14 y 5/5; control del padre `CifradorDeClavesTest` 14/0; commit `3be764a` · Risk: items 1 y 2
+- [x] T4 · S15 · ruta: delegada (writer «backend») · Aceptación: V34 (`credencial_arca` y CA del simulador, con `ferreteria_id` y FK compuestas) y su rollback con guarda «sin credenciales», `MigracionV34Test` · Evidencia: RED 29 sin V34; GREEN 29/29 (de corrido e ignorando errores); commit `39543db` (+522) · Risk: item 1
+- [x] T5 · S2 (backend), S3, S4, S5, S7, S8, S13, S14, S16, C1, C3 · ruta: delegada (writer «backend») · Aceptación: servicio y controlador de `facturacion`; CSR; validación del .crt; CA del simulador; punto de venta; reglas de ambiente; bloqueo por credencial; habilitar trabado en HOMOLOGACION y PRODUCCION; tests con `OutputCaptureExtension`, roles y aislamiento · Evidencia: RED `CredencialArcaIntegrationTest` + `CredencialArcaBloqueoIntegrationTest` 34 (33 fallas, 1 error), `ConfigArcaTest` 9 casos nuevos, `CasDeArcaTest` 2, `SinSecretosEnToStringTest` 2 (sin los `toString` enmascarados); GREEN 25/25, 9/9, 28/28, 2/2, 2/2; `ModulosArchTest` 50/0 (regla nueva: BouncyCastle solo en `facturacion.credencial` y nadie registra proveedores); paquete `facturacion` 511/0 y `plataforma` + ArchUnit + ventas facturadas + credencial 267/0; commit `77c0cb8` · Risk: items 2 y 3
+- [x] T6 · S9 · ruta: delegada (writer «backend») · Aceptación: `ImagenDeProduccionTest` con la variable y el CSR dentro del contenedor; `PerfilPorDefectoTest` · Evidencia: `-Pimagen` 8/8 (2 nuevos: el CSR por la API dentro del contenedor y el contenedor sin `ARCA_CLAVE_MAESTRA` que sale con «Could not resolve placeholder 'ARCA_CLAVE_MAESTRA'») en 3:44; commit `57387f1` · Risk: item 5
+- [x] T7 · S2, S3, S4, S5, S8, S12 (front), C1 · ruta: delegada (writer «frontend», en paralelo contra C1) · Aceptación: pantalla «Facturación», enlace en el menú, paso en «Primeros pasos», aviso al Vendedor, aviso de vencimiento en el mostrador del Dueño · Evidencia: RED por módulo faltante y mutaciones (guarda de confirmación, tope de 16 KB, CUIT en PRODUCCION), `shell.spec` 4 fallas, `primeros-pasos.spec` 1, `mostrador.spec` 3; GREEN 5, 2, 22, 44, 5 y 276; test de ruta agregado por el padre (`app.routes.spec.ts`, 54/54 con la página); frontend 137 archivos 3287/3287 y `ng build` OK (solo el aviso conocido); commit `55946b1` · Risk: none
+- [x] T8 · todas · ruta: inline (suites) + `odd-verifier` · Aceptación: suite backend, suite frontend, `ng build`, `-Pimagen`, ego-browser del alta completa con el simulador en dev, verificador sin bloqueantes · Evidencia: suite backend 5398/0 en 23:30 min sobre `6f34301`; frontend 3287/3287 y `ng build` OK sobre `55946b1` (el front no cambió después); `-Pimagen` 8/8 sobre `57387f1` (después solo cambiaron tests); ego-browser OK; `odd-verifier` sin bloqueantes; regresión `6f34301` (+646/−17); rotación aclarada en la spec y el README (L5) · Risk: items 1, 2, 3, 5 y 6
 
 ## Log
 
@@ -66,3 +66,44 @@ Restricciones: la ferretería sale solo del JWT; `facturacion.api` solo con tipo
   - S13 traba la habilitación real hasta la rama 6, por la regla transversal «ninguna ferretería real se habilita antes de la rama 11» y porque `WsfePorAmbiente` todavía no atiende esos ambientes.
   - El controlador va en `facturacion/web` (los otros módulos tienen su `web`); la frontera de ArchUnit es para quien está fuera de `facturacion`.
   - Dos writers en paralelo (backend y frontend) contra C1; el padre commitea por tarea.
+- L4 (2026-10-28) T2 a T7 cerradas (`6aedf42`, `3be764a`, `39543db`, `77c0cb8`, `57387f1`, `55946b1`).
+  - Desvío de C3: las CA van como `facturacion/ca/Computadores.cacert_2024-2035.crt` y `ComputadoresTest.cacert_2022-2030.crt` (PEM con LF), porque el `.gitignore` de la raíz excluye `*.pem` y no se subirían ni con git ni con `railway up`. Solo las dos CA emisoras, no las raíces.
+  - Contrato C1 cumplido. Lo que suma: 400 en `errors.cuit` del pedido; 409 al pasar de homologación a producción con registros abiertos («La ferretería tiene comprobantes fiscales sin terminar: el ambiente no se puede cambiar hasta que se resuelvan.»); `diasParaVencer` negativo después del vencimiento; el emisor del simulador es «Simulador de ARCA». El front muestra el primer error de campo de un 400 en su campo y el resto como aviso.
+  - Bloqueo (S8, S13): exige en HOMOLOGACION y PRODUCCION una credencial ACTIVA del mismo ambiente, vigente según el `Clock` y cuya clave se descifra (más estricto que mirar solo el id de clave); se lee con `FOR SHARE` después de `config_arca`. `registrar` tiene el impedimento «La facturación con ARCA está bloqueada: el certificado falta, venció o no se puede leer. El Dueño lo renueva en «Facturación».»; `decidir` y `GET /api/ventas/facturacion` responden sin factura. El super admin recibe 422 al habilitar HOMOLOGACION o PRODUCCION.
+  - Advisories del writer: (a) al pasar de homologación a producción, `facturacionHabilitada` queda como estaba (hoy solo puede ser true por SQL, por S13); (b) `decidir` y `registrar` leen el `Clock` por separado: si el certificado vence entre los dos, la venta da 422 en vez de salir sin factura (milisegundos, y solo en ambientes que no se pueden habilitar hasta la rama 6). Los dos quedan para la rama 6.
+  - Próximo paso: T8 (suite backend en curso, después ego-browser del alta con el simulador y `odd-verifier`).
+- L5 (2026-10-28) T8.
+  - La primera suite backend (sobre `55946b1`) dio 5374 con 1 falla: `MigracionV6Test.historialDeMigraciones` no esperaba la V34. Se corrigió en `e085423` (14/0).
+  - ego-browser en dev (Dueño de El Tornillo):
+    - «Facturación» muestra Simulador y el punto de venta 1.
+    - «Generar pedido de certificado» y «Firmar con el simulador» dejan la credencial vigente del 28/10/2026 al 27/10/2028, emitida por «Simulador de ARCA», sin «PRIVATE KEY» en la página.
+    - Un segundo pedido sale sin confirmación, porque no queda pendiente.
+    - Un `.crt` basura da «No se pudo leer el certificado…».
+    - El Vendedor ve «Solo el Dueño puede configurar la facturación.».
+    - El mostrador del Dueño no avisa nada con la credencial vigente.
+  - `odd-verifier` (opus, sobre `e085423`): sin bloqueantes.
+    - Las 16 S pasan. S9 queda sobre la evidencia de T6.
+    - Focalizados en copia limpia: backend 204/0 y frontend 386/386.
+    - Probó concurrencia real: el lock de la venta contra el `.crt` y el punto de venta, 8 pedidos a la vez y el mismo `.crt` dos veces. Ningún deadlock.
+    - Probó el arranque con claves inválidas, cada byte tocado y la búsqueda de secretos en respuestas y logs.
+  - Destino de los advisories:
+    1. Una pendiente ilegible igual se activa (queda «ilegible»). Solo pasa con la clave maestra perdida o tocada; queda anotado.
+    2. Una CA del simulador ilegible no se recupera sin SQL. Mismo caso que el 1; queda anotado.
+    3. Rotación incompleta en los docs: corregido en la spec («Seguridad») y el README. Nada se recifra, la anterior se saca recién cuando todas renovaron, y hay un solo lugar para la anterior.
+    4. Se rechazan con 400 un BOM, texto antes del PEM y la cadena con la CA primero. ARCA entrega PEM limpio; no se fija en tests.
+    5. Una razón social de más de 64 caracteres va entera en la `O` del CSR. Se prueba contra ARCA en la homologación de la rama 6.
+    6. `PUT punto-venta` acepta `3.7` y `"5"` por la coerción de Jackson de todo el proyecto. Es preexistente.
+    7. El front topea 16 KB del archivo y el back 16 KB del texto. Un DER de 12 a 16 KB recibe el mensaje del servidor; queda así.
+    8. Los advisories (a) y (b) del writer (L4) siguen para la rama 6.
+    9. La clave RSA se genera dentro del lock de `config_arca`: frena las ventas de esa ferretería mientras dura, una vez cada dos años. Queda anotado.
+    10. El rollback de la V34 va antes que el de la V33 por convención, como los demás.
+    11. Los cosméticos del panel del super admin son preexistentes.
+  - Sondas pasadas a tests de regresión:
+    - Writer «backend» en `CredencialArcaIntegrationTest`, `CredencialArcaBloqueoIntegrationTest`, `CredencialArcaConcurrenciaIntegrationTest` (nuevo) y la base. `CredencialArca*` da 55/0. Probó cada aserción con una mutación temporal en una copia (tope, vencimiento, RSA, CUIT, DER, cadena, CA ajena, CA por ferretería, 409, ambiente, `habilitar`, secretos, matcher de seguridad, locks).
+    - El padre sumó en `CifradorDeClavesTest` cada byte tocado, el id de clave cambiado y el arranque con `ApplicationContextRunner` (17/0).
+    - No se fijan los advisories 1, 4, 5 y 6.
+    - Commit `6f34301`. Suite backend final: 5398/0.
+  - Cierre. Rama `feat/cu-01-certificado-arca` lista para que Luca la mergee después de las ramas 1 a 4.
+    - Antes del deploy, Luca crea `ARCA_CLAVE_MAESTRA` en Railway y guarda una copia fuera de Railway.
+    - Después se verifica en la Ferretería de Prueba.
+    - Queda para la rama 6: los advisories 5 y 8, WSAA y la exigencia de credencial en SIMULADOR.
