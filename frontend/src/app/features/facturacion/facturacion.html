@@ -1,0 +1,247 @@
+<app-barra-acciones>
+  <h1>Facturación</h1>
+</app-barra-acciones>
+
+@if (!auth.esDueno()) {
+  <p class="ayuda estado-vacio" role="status">Solo el Dueño puede configurar la facturación.</p>
+} @else {
+  <p class="ayuda">
+    Para facturar con ARCA hace falta un certificado digital a nombre de la ferretería. El sistema genera la clave y el
+    pedido de certificado; la clave queda guardada cifrada y nunca sale del sistema. Vos llevás el pedido a ARCA y subís
+    acá el certificado que te dan.
+  </p>
+
+  @if (exito(); as mensaje) {
+    <p class="alerta exito" role="status">{{ mensaje }}</p>
+  }
+  @if (error(); as mensaje) {
+    <p class="error error-accion" role="alert">{{ mensaje }}</p>
+  }
+
+  @if (cargando()) {
+    <p class="ayuda estado-vacio">Cargando…</p>
+  } @else if (cargaFallida()) {
+    <div class="error con-accion" role="alert">
+      <span>No se pudo cargar la configuración de facturación.</span>
+      <button type="button" class="secundario chico reintentar" (click)="cargar()">Reintentar</button>
+    </div>
+  } @else if (config(); as c) {
+    @if (c.avisos.length > 0) {
+      <ul class="alerta advertencia avisos" role="status">
+        @for (aviso of c.avisos; track $index) {
+          <li>{{ aviso }}</li>
+        }
+      </ul>
+    }
+
+    <div class="secciones">
+      <section class="seccion" aria-labelledby="titulo-ambiente">
+        <h2 id="titulo-ambiente">Ambiente y punto de venta</h2>
+
+        <div class="campo ambiente">
+          <span class="rotulo">Ambiente</span>
+          @if (c.ambiente) {
+            <span class="valor">{{ ambientes[c.ambiente] }}</span>
+          } @else {
+            <span class="valor">Sin definir</span>
+            <span class="pista">Lo fija el primer certificado que subas.</span>
+          }
+        </div>
+
+        @if (c.puntoVentaEditable) {
+          <form class="campo" [formGroup]="formPuntoVenta" (ngSubmit)="guardarPuntoVenta()" novalidate>
+            <label for="puntoVenta">Punto de venta</label>
+            <div class="fila">
+              <input
+                id="puntoVenta"
+                name="puntoVenta"
+                type="number"
+                min="1"
+                max="99998"
+                formControlName="puntoVenta"
+                [attr.aria-invalid]="errorPuntoVenta() ? 'true' : null"
+                [attr.aria-describedby]="errorPuntoVenta() ? 'puntoVenta-pista puntoVenta-error' : 'puntoVenta-pista'"
+              />
+              <button type="submit" class="secundario guardar-punto-venta" [disabled]="ocupado()">Guardar</button>
+            </div>
+            <span id="puntoVenta-pista" class="pista">
+              Del 1 al 99998: el punto de venta que diste de alta en ARCA para facturar desde el sistema (web services).
+            </span>
+            @if (errorPuntoVenta(); as texto) {
+              <span id="puntoVenta-error" class="campo-error">{{ texto }}</span>
+            }
+          </form>
+        } @else {
+          <div class="campo punto-venta">
+            <span class="rotulo">Punto de venta</span>
+            <span class="valor">{{ c.puntoVenta ?? '—' }}</span>
+            @if (c.motivoPuntoVentaTrabado; as motivo) {
+              <span class="pista">{{ motivo }}</span>
+            }
+          </div>
+        }
+      </section>
+
+      <section class="seccion" aria-labelledby="titulo-credencial">
+        <h2 id="titulo-credencial">Certificado de ARCA</h2>
+
+        @if (c.credencial; as credencial) {
+          <dl class="credencial">
+            <div>
+              <dt>CUIT</dt>
+              <dd>{{ credencial.cuit }}</dd>
+            </div>
+            <div>
+              <dt>Emisor</dt>
+              <dd>{{ credencial.emisor }}</dd>
+            </div>
+            <div>
+              <dt>Ambiente</dt>
+              <dd>{{ ambientes[credencial.ambiente] }}</dd>
+            </div>
+            <div>
+              <dt>Vigencia</dt>
+              <dd>Del {{ fecha(credencial.vigenteDesde) }} al {{ fecha(credencial.vigenteHasta) }}</dd>
+            </div>
+            <div>
+              <dt>Huella</dt>
+              <dd><code class="huella">{{ credencial.huella }}</code></dd>
+            </div>
+            <div>
+              <dt>Estado</dt>
+              <dd>
+                <span class="etiqueta estado" [attr.data-estado]="credencial.estado">{{ estados[credencial.estado] }}</span>
+              </dd>
+            </div>
+          </dl>
+          @if (detalleDelEstado(credencial); as detalle) {
+            <p
+              class="alerta detalle-estado"
+              [class.advertencia]="credencial.estado === 'POR_VENCER'"
+              [class.error]="credencial.estado !== 'POR_VENCER'"
+              role="status"
+            >
+              {{ detalle }}
+            </p>
+          }
+        } @else {
+          <p class="sin-credencial">Todavía no hay certificado de ARCA.</p>
+        }
+      </section>
+
+      <section class="seccion pedido" aria-labelledby="titulo-pedido">
+        <h2 id="titulo-pedido">Obtener o renovar el certificado</h2>
+
+        <ol class="guia">
+          <li>Generá el pedido de certificado (.csr) acá abajo y bajalo.</li>
+          <li>
+            Entrá a ARCA con tu clave fiscal y abrí «Administración de certificados digitales» (en homologación, «WSASS
+            - Autogestión Certificados Homologación»).
+          </li>
+          <li>
+            Creá un alias (por ejemplo, «facturacion») y subí el pedido. Para renovar, usá «Agregar certificado» en el
+            mismo alias.
+          </li>
+          <li>Bajá el certificado (.crt) que te da ARCA y subilo acá.</li>
+          <li>
+            En «Administrador de relaciones de clave fiscal», autorizá ese alias para el servicio «wsfe» (Facturación
+            Electrónica). En homologación, la autorización se crea en el mismo WSASS.
+          </li>
+        </ol>
+
+        @if (c.pedido; as pedido) {
+          <p class="pedido-pendiente">
+            Hay un pedido pendiente del {{ fechaHora(pedido.creadoEn) }}, para la CUIT {{ pedido.cuit }}.
+          </p>
+        }
+
+        @if (c.ambiente !== 'PRODUCCION') {
+          <div class="campo cuit-pedido">
+            <label for="cuitPedido">CUIT del certificado (solo para homologación)</label>
+            <input
+              id="cuitPedido"
+              name="cuitPedido"
+              inputmode="numeric"
+              autocomplete="off"
+              [formControl]="cuitPedido"
+              [attr.aria-invalid]="errorCuit() ? 'true' : null"
+              [attr.aria-describedby]="errorCuit() ? 'cuitPedido-pista cuitPedido-error' : 'cuitPedido-pista'"
+            />
+            <span id="cuitPedido-pista" class="pista">
+              Vacío usa la CUIT de la ferretería. En homologación podés poner la de la persona que tiene la clave fiscal.
+            </span>
+            @if (errorCuit(); as texto) {
+              <span id="cuitPedido-error" class="campo-error">{{ texto }}</span>
+            }
+          </div>
+        }
+
+        <div class="acciones">
+          <button
+            type="button"
+            class="generar-pedido"
+            [class.primario]="!hayPedido()"
+            [class.secundario]="hayPedido()"
+            [disabled]="ocupado()"
+            (click)="pedirGenerar()"
+          >
+            Generar pedido de certificado
+          </button>
+          @if (hayPedido()) {
+            <button type="button" class="secundario descargar-pedido" [disabled]="ocupado()" (click)="descargarPedido()">
+              Descargar pedido (.csr)
+            </button>
+            <button type="button" class="secundario copiar-pedido" [disabled]="ocupado()" (click)="copiarPedido()">
+              Copiar
+            </button>
+          }
+        </div>
+
+        @if (hayPedido()) {
+          <div class="campo subir">
+            <div class="fila">
+              <button
+                type="button"
+                class="primario subir-certificado"
+                aria-describedby="certificado-pista"
+                [disabled]="ocupado()"
+                (click)="entrada.click()"
+              >
+                Subir certificado (.crt)
+              </button>
+            </div>
+            <input #entrada id="certificado" type="file" hidden accept=".crt,.pem,.cer" (change)="alElegirCertificado(entrada)" />
+            <span id="certificado-pista" class="pista">
+              El archivo que bajaste de ARCA (.crt, .pem o .cer), de hasta 16 KB.
+            </span>
+            @if (errorCertificado(); as texto) {
+              <span id="certificado-error" class="campo-error" role="alert">{{ texto }}</span>
+            }
+          </div>
+
+          @if (c.simulador) {
+            <div class="simulador">
+              <button type="button" class="secundario firmar-simulador" [disabled]="ocupado()" (click)="firmarConSimulador()">
+                Firmar con el simulador
+              </button>
+              <span class="pista">
+                Solo para pruebas: la CA del simulador firma el pedido y el certificado sirve únicamente en el simulador,
+                no con ARCA.
+              </span>
+            </div>
+          }
+        }
+      </section>
+    </div>
+  }
+}
+
+@if (confirmandoPedido()) {
+  <app-confirmacion
+    titulo="¿Generar un pedido nuevo?"
+    mensaje="Reemplaza al pedido pendiente: si ya lo subiste a ARCA, el certificado que te den por ese pedido no va a servir. El certificado activo sigue andando hasta que subas el nuevo."
+    textoConfirmar="Generar pedido nuevo"
+    (confirmar)="generarPedido()"
+    (cancelar)="confirmandoPedido.set(false)"
+  />
+}

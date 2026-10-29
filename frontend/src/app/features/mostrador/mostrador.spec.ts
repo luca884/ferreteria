@@ -28,6 +28,8 @@ import { VentaService } from './venta.service';
 import { ConfirmarVentaRequest, FacturacionDelMostrador, VentaCobrada } from './venta.models';
 import { MARCA_SIMULADO, documentoB, documentoX, fiscalDe } from '../../shared/factura/factura.testing';
 import { FiscalVenta } from '../../shared/factura/factura.models';
+import { ConfiguracionFacturacion, CredencialArca } from '../facturacion/facturacion.models';
+import { FacturacionService } from '../facturacion/facturacion.service';
 
 registerLocaleData(localeEsAr);
 
@@ -129,6 +131,9 @@ describe('Mostrador', () => {
   /** C3: qué comprobante sale al cobrar. Por defecto la ferretería no factura, como antes de la fase 5; null: la lectura falla. */
   let facturacionDelServidor: FacturacionDelMostrador | null;
   let leerFacturacion: ReturnType<typeof vi.fn>;
+  /** S12: la configuración de ARCA del Dueño. Por defecto sin certificado; null: la lectura falla. */
+  let configuracionArca: ConfiguracionFacturacion | null;
+  let leerConfiguracionArca: ReturnType<typeof vi.fn>;
 
   /** CU-10: por defecto la caja está abierta hoy, como la encuentra el vendedor al empezar. */
   const cajaAbierta: CajaVigente = {
@@ -161,6 +166,9 @@ describe('Mostrador', () => {
     };
     leerFacturacion = vi.fn(() =>
       facturacionDelServidor ? of(facturacionDelServidor) : throwError(() => new HttpErrorResponse({ status: 500 })),
+    );
+    leerConfiguracionArca = vi.fn(() =>
+      configuracionArca ? of(configuracionArca) : throwError(() => new HttpErrorResponse({ status: 500 })),
     );
     const ventas = {
       cobrar: vi.fn((pedido: ConfirmarVentaRequest) => {
@@ -222,6 +230,7 @@ describe('Mostrador', () => {
         { provide: FormasPagoService, useValue: formasApi },
         { provide: ArticulosService, useValue: articulosApi },
         { provide: ClientesService, useValue: clientesApi },
+        { provide: FacturacionService, useValue: { configuracion: leerConfiguracionArca } },
         { provide: AuthService, useValue: { sesion: sesion.asReadonly() } },
         { provide: GENERAR_CLAVE, useValue: () => `clave-${++claves}` },
       ],
@@ -268,8 +277,32 @@ describe('Mostrador', () => {
     localStorage.clear();
     vi.useFakeTimers();
     facturacionDelServidor = { factura: false, ambiente: null, letras: null };
+    configuracionArca = configuracionConCertificado(null);
   });
   afterEach(() => vi.useRealTimers());
+
+  const configuracionConCertificado = (credencial: CredencialArca | null): ConfiguracionFacturacion => ({
+    ambiente: 'HOMOLOGACION',
+    puntoVenta: 3,
+    puntoVentaEditable: false,
+    motivoPuntoVentaTrabado: null,
+    facturacionHabilitada: false,
+    simulador: false,
+    credencial,
+    pedido: null,
+    avisos: [],
+  });
+  const certificado = (cambios: Partial<CredencialArca>): CredencialArca => ({
+    cuit: '30999999995',
+    emisor: 'Computadores Test',
+    ambiente: 'HOMOLOGACION',
+    vigenteDesde: '2024-11-26',
+    vigenteHasta: '2026-11-26',
+    huella: 'AB:CD',
+    estado: 'VIGENTE',
+    diasParaVencer: 29,
+    ...cambios,
+  });
 
   const renglonesTicket = () =>
     Array.from(el().querySelectorAll<HTMLElement>('app-ticket-lista .renglon'));
@@ -283,6 +316,7 @@ describe('Mostrador', () => {
       expect(panel()?.querySelector('h2')?.textContent?.trim()).toBe('Primeros pasos');
       expect(Array.from(panel()!.querySelectorAll('a')).map((a) => a.getAttribute('href'))).toEqual([
         '/configuracion/datos-fiscales',
+        '/configuracion/facturacion',
         '/configuracion/precios',
         '/importaciones',
         '/articulos/nuevo',
@@ -302,6 +336,50 @@ describe('Mostrador', () => {
       await crear(cajaAbierta, FORMAS_BASE, 'VENDEDOR', null, 0);
 
       expect(panel()).toBeNull();
+    });
+  });
+
+  describe('vencimiento del certificado de ARCA (S12)', () => {
+    const aviso = () => el().querySelector('.aviso-certificado');
+    const dicho = () => (aviso()?.textContent ?? '').replace(/\s+/g, ' ').trim();
+
+    it('al Dueño, con el certificado por vencer, le avisa sin frenar nada y lo lleva a Facturación', async () => {
+      configuracionArca = configuracionConCertificado(certificado({ estado: 'POR_VENCER' }));
+      await crear(cajaAbierta, FORMAS_BASE, 'DUENO');
+
+      expect(leerConfiguracionArca).toHaveBeenCalledTimes(1);
+      expect(dicho()).toBe('El certificado de ARCA vence el 26/11/2026: renovalo en Facturación.');
+      expect(aviso()!.getAttribute('role')).toBe('status');
+      expect(aviso()!.querySelector('a')!.getAttribute('href')).toBe('/configuracion/facturacion');
+    });
+
+    it('con el certificado vencido dice que venció', async () => {
+      configuracionArca = configuracionConCertificado(
+        certificado({ vigenteHasta: '2026-10-20', estado: 'VENCIDA', diasParaVencer: -8 }),
+      );
+      await crear(cajaAbierta, FORMAS_BASE, 'DUENO');
+
+      expect(dicho()).toBe('El certificado de ARCA venció el 20/10/2026: renovalo en Facturación.');
+    });
+
+    it('con el certificado vigente, o si la lectura falla, no avisa nada', async () => {
+      configuracionArca = configuracionConCertificado(certificado({ estado: 'VIGENTE', diasParaVencer: 400 }));
+      await crear(cajaAbierta, FORMAS_BASE, 'DUENO');
+      expect(aviso()).toBeNull();
+
+      TestBed.resetTestingModule();
+      configuracionArca = null;
+      await crear(cajaAbierta, FORMAS_BASE, 'DUENO');
+      expect(leerConfiguracionArca).toHaveBeenCalledTimes(1);
+      expect(aviso()).toBeNull();
+    });
+
+    it('el Vendedor nunca lo pide', async () => {
+      configuracionArca = configuracionConCertificado(certificado({ estado: 'POR_VENCER' }));
+      await crear(cajaAbierta, FORMAS_BASE, 'VENDEDOR');
+
+      expect(leerConfiguracionArca).not.toHaveBeenCalled();
+      expect(aviso()).toBeNull();
     });
   });
 

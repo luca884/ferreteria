@@ -57,6 +57,8 @@ import { DatosPresupuesto, PresupuestoResponse } from '../presupuestos/presupues
 import { PresupuestosService } from '../presupuestos/presupuestos.service';
 import { DatosRemito, RemitoEmitido } from '../remitos/remito.models';
 import { RemitosService } from '../remitos/remitos.service';
+import { VencimientoCertificado, vencimientoParaElMostrador } from '../facturacion/facturacion.models';
+import { FacturacionService } from '../facturacion/facturacion.service';
 
 const ESPERA_MS = 250;
 /** Cuánto queda a la vista el aviso de venta cobrada. */
@@ -157,6 +159,7 @@ export class Mostrador {
   private readonly cajas = inject(CajaService);
   private readonly formas = inject(FormasPagoService);
   private readonly clientes = inject(ClientesService);
+  private readonly configuracionArca = inject(FacturacionService);
   private readonly auth = inject(AuthService);
   private readonly destroyRef = inject(DestroyRef);
 
@@ -219,6 +222,11 @@ export class Mostrador {
     const letra = clienteCondicionIva ? f.letras[clienteCondicionIva] : undefined;
     return { texto: letra ? `Factura ${letra} · ${clienteNombre}` : 'Factura', ambiente };
   });
+  /**
+   * S12: el certificado de ARCA por vencer o vencido, para avisarle al Dueño al abrir el mostrador. No frena nada; null si
+   * está vigente, si no hay certificado o si no se pudo leer.
+   */
+  protected readonly vencimientoCertificado = signal<VencimientoCertificado | null>(null);
   /** La guarda de escaneo del diálogo de la factura: un Enter del lector no imprime. */
   private readonly guardaFactura = new GuardaLector();
   protected readonly esEscaneo = (evento: KeyboardEvent) => this.guardaFactura.alTeclear(evento);
@@ -328,6 +336,8 @@ export class Mostrador {
     this.leerCaja();
     this.leerFormas();
     this.leerFacturacion();
+    // Solo el Dueño configura la facturación: al Vendedor el servidor le respondería 403.
+    if (this.esDueno()) this.leerCertificado();
     this.busquedas
       .pipe(
         switchMap((q) =>
@@ -395,6 +405,17 @@ export class Mostrador {
       .facturacion()
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({ next: (f) => this.facturacion.set(f), error: () => undefined });
+  }
+
+  /** Lee el vencimiento del certificado de ARCA. Si no se puede, no se avisa nada. */
+  private leerCertificado(): void {
+    this.configuracionArca
+      .configuracion()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (config) => this.vencimientoCertificado.set(vencimientoParaElMostrador(config)),
+        error: () => undefined,
+      });
   }
 
   /** Todo cambio del aviso pasa por acá: un aviso nuevo (o ninguno) cancela el plazo del anterior. */

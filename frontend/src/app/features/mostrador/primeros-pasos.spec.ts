@@ -41,13 +41,14 @@ describe('PrimerosPasos', () => {
   const panel = () => el().querySelector('.primeros-pasos');
   const dicho = (e: Element | null | undefined) => (e?.textContent ?? '').replace(/\s+/g, ' ').trim();
 
-  it('el Dueño de una ferretería sin artículos ve «Primeros pasos» con los seis pasos en orden', async () => {
+  it('el Dueño de una ferretería sin artículos ve «Primeros pasos» con los siete pasos en orden, la facturación después de los datos de la ferretería', async () => {
     await crear('DUENO');
 
     expect(dicho(panel()?.querySelector('h2'))).toBe('Primeros pasos');
     const pasos = Array.from(panel()!.querySelectorAll('li'));
     expect(pasos.map((p) => dicho(p))).toEqual([
       'Datos de la ferretería',
+      'Configurá la facturación con ARCA',
       'Margen y redondeo',
       'Importar una lista o cargar un artículo',
       'Formas de pago',
@@ -56,6 +57,7 @@ describe('PrimerosPasos', () => {
     ]);
     expect(Array.from(panel()!.querySelectorAll('a')).map((a) => [dicho(a), a.getAttribute('href')])).toEqual([
       ['Datos de la ferretería', '/configuracion/datos-fiscales'],
+      ['Configurá la facturación con ARCA', '/configuracion/facturacion'],
       ['Margen y redondeo', '/configuracion/precios'],
       ['Importar una lista', '/importaciones'],
       ['cargar un artículo', '/articulos/nuevo'],

@@ -182,6 +182,12 @@ export const routes: Routes = [
         loadComponent: () =>
           import('./features/datos-fiscales/datos-fiscales').then((m) => m.PaginaDatosFiscales),
       },
+      // Sin guard de rol, como datos fiscales: al Vendedor la pantalla le avisa y el backend responde 403 (CU-01 pasos 2 y 3).
+      {
+        path: 'configuracion/facturacion',
+        title: titulo('Facturación'),
+        loadComponent: () => import('./features/facturacion/facturacion').then((m) => m.PaginaFacturacion),
+      },
       // Sin guard de rol, como cotización: al Vendedor la pantalla le avisa y el backend responde 403 a escribir.
       {
         path: 'configuracion/formas-pago',

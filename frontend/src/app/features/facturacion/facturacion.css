@@ -1,0 +1,128 @@
+:host {
+  display: block;
+  width: 100%;
+}
+/* La barra de acciones va a todo el ancho; el resto no se estira de más. */
+:host > :not(app-barra-acciones) {
+  max-width: 1040px;
+}
+
+.avisos {
+  padding-left: var(--e-6);
+}
+
+.secciones {
+  display: grid;
+  gap: var(--e-4);
+  align-items: start;
+}
+.seccion {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  max-width: 640px;
+  gap: var(--e-3);
+  min-width: 0;
+  padding: var(--e-4) var(--e-5) var(--e-5);
+  border: 1px solid var(--borde);
+  border-radius: var(--radio-lg);
+  background: var(--superficie);
+  box-shadow: var(--sombra-1);
+}
+.seccion > h2 {
+  margin: 0 0 var(--e-1);
+  font-size: 1rem;
+  font-weight: 650;
+}
+.seccion p {
+  margin: 0;
+}
+
+/* Un dato que no se edita: rótulo arriba, valor abajo, como los campos. */
+.rotulo,
+.credencial dt {
+  font-size: var(--texto-sm);
+  font-weight: 600;
+  color: var(--texto-suave);
+}
+.valor {
+  font-variant-numeric: tabular-nums;
+}
+.fila {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--e-2);
+  align-items: center;
+}
+#puntoVenta {
+  width: 10ch;
+}
+
+.credencial {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: var(--e-3) var(--e-4);
+  margin: 0;
+}
+.credencial div {
+  display: flex;
+  flex-direction: column;
+  gap: var(--e-1);
+  min-width: 0;
+}
+.credencial dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+/* La huella es larga: se corta donde haga falta en vez de ensanchar la tarjeta. */
+.huella {
+  font-family: var(--fuente-mono);
+  font-size: var(--texto-sm);
+  overflow-wrap: anywhere;
+}
+.estado[data-estado='VIGENTE'] {
+  background: var(--exito-fondo);
+  color: var(--exito);
+}
+.estado[data-estado='POR_VENCER'] {
+  background: var(--advertencia-fondo);
+  color: var(--advertencia);
+}
+.estado[data-estado='VENCIDA'],
+.estado[data-estado='ILEGIBLE'] {
+  background: var(--error-fondo);
+  color: var(--error);
+}
+.detalle-estado,
+.sin-credencial {
+  margin: 0;
+}
+.sin-credencial {
+  color: var(--texto-suave);
+}
+
+.guia {
+  display: grid;
+  gap: var(--e-1);
+  margin: 0;
+  padding-left: var(--e-6);
+  color: var(--texto-suave);
+}
+.pedido-pendiente {
+  font-weight: 600;
+}
+.cuit-pedido {
+  max-width: 360px;
+}
+.acciones {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--e-2);
+}
+.simulador {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--e-1);
+  padding-top: var(--e-3);
+  border-top: 1px dashed var(--borde-fuerte);
+}

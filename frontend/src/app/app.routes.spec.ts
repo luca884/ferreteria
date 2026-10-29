@@ -22,6 +22,7 @@ import { PaginaConfiguracionPrecios } from './features/configuracion-precios/con
 import { FormasPago } from './features/formas-pago/formas-pago';
 import { PaginaConfiguracionVentas } from './features/configuracion-ventas/configuracion-ventas';
 import { PaginaDatosFiscales } from './features/datos-fiscales/datos-fiscales';
+import { PaginaFacturacion } from './features/facturacion/facturacion';
 import { Importaciones } from './features/importaciones/importaciones';
 import { Mostrador } from './features/mostrador/mostrador';
 import { Proveedores } from './features/proveedores/proveedores';
@@ -170,6 +171,15 @@ describe('rutas', () => {
     expect(await (ruta!.loadComponent as () => Promise<unknown>)()).toBe(PaginaDatosFiscales);
     expect(ruta!.canActivate).toBeUndefined();
     expect(ruta!.title).toBe('Datos de la ferretería · Ferretería');
+  });
+
+  it('la ruta configuracion/facturacion carga la configuración de ARCA, sin guard propio (la pantalla le avisa al Vendedor)', async () => {
+    const ruta = hijas().find((r) => r.path === 'configuracion/facturacion');
+
+    expect(ruta).toBeDefined();
+    expect(await (ruta!.loadComponent as () => Promise<unknown>)()).toBe(PaginaFacturacion);
+    expect(ruta!.canActivate).toBeUndefined();
+    expect(ruta!.title).toBe('Facturación · Ferretería');
   });
 
   it('la ruta configuracion/formas-pago carga la pantalla de formas de pago, sin guard propio (la pantalla le avisa al Vendedor)', async () => {

@@ -25,6 +25,13 @@
     </div>
   }
 
+  @if (vencimientoCertificado(); as vencimiento) {
+    <p class="aviso-certificado" role="status">
+      El certificado de ARCA {{ vencimiento.vencido ? 'venció' : 'vence' }} el {{ vencimiento.fecha }}: renovalo en
+      <a routerLink="/configuracion/facturacion">Facturación</a>.
+    </p>
+  }
+
   <app-primeros-pasos />
 
   @if (ticket.ticket().clienteNombre; as cliente) {
