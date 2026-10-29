@@ -3,8 +3,10 @@ package com.ferreteria.ventas.repository;
 import com.ferreteria.tenant.TenantContext;
 import com.ferreteria.tenant.TenantScopedRepository;
 import com.ferreteria.ventas.model.Comprobante;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -153,6 +155,19 @@ public interface ComprobanteRepository extends TenantScopedRepository<Comprobant
     }
 
     // ---- La anulacion de las ventas (CU-08, C4) ----
+
+    /**
+     * El comprobante con lock exclusivo (FOR UPDATE) hasta el fin de la transaccion: lo toma la anulacion de la venta
+     * (CU-08, S4), asi una segunda anulacion de la misma venta espera aca y despues ve la nota de la primera.
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select c from Comprobante c where c.id = :id and c.ferreteriaId = :fid")
+    Optional<Comprobante> paraAnular(@Param("id") Long id, @Param("fid") Long ferreteriaId);
+
+    /** El comprobante de la ferreteria del request con lock exclusivo. El de otra ferreteria no aparece. */
+    default Optional<Comprobante> paraAnularScoped(Long id) {
+        return paraAnular(id, TenantContext.requireFerreteriaId());
+    }
 
     /** Las notas de credito (y anulaciones internas) de esas ventas: a lo sumo una por venta (uk_comprobante_asociado). */
     @Query("select n from Comprobante n where n.ferreteriaId = :fid and n.comprobanteAsociadoId in :ventas")

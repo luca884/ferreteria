@@ -5,6 +5,7 @@ import com.ferreteria.auth.security.AuthUser;
 import com.ferreteria.common.PageResponse;
 import com.ferreteria.facturacion.api.FacturacionParaVenta;
 import com.ferreteria.facturacion.api.FacturacionParaVenta.Bandeja;
+import com.ferreteria.ventas.service.AnulacionDeVenta;
 import com.ferreteria.ventas.service.FacturaDeLaVenta;
 import com.ferreteria.ventas.service.VentaGestion;
 import com.ferreteria.ventas.service.VentaRechazadaException;
@@ -39,6 +40,8 @@ import java.util.List;
  * <p>Rama 7 (cu-07-contingencias): la bandeja ({@code fiscal}) y las dos acciones sobre la factura son del Dueño; «llego el
  * CAE» y la hoja de esas ventas ({@code /provisorias-autorizadas} y {@code /{id}/factura}) son de los dos, pero el
  * Vendedor solo ve las ventas que cobro en la caja abierta y salieron con ticket provisorio: el cierre sigue ciego.
+ *
+ * <p>Rama 8 (CU-08): anular una venta ({@code /{id}/anular}) es solo del Dueño.
  */
 @RestController
 @RequestMapping("/api/ventas")
@@ -48,9 +51,11 @@ public class VentaController {
     private final VentaGestion ventaGestion;
     private final FacturaDeLaVenta facturaDeLaVenta;
     private final FacturacionParaVenta facturacion;
+    private final AnulacionDeVenta anulacionDeVenta;
 
     public VentaController(VentaService ventaService, VentaGestion ventaGestion, FacturaDeLaVenta facturaDeLaVenta,
-            FacturacionParaVenta facturacion) {
+            FacturacionParaVenta facturacion, AnulacionDeVenta anulacionDeVenta) {
+        this.anulacionDeVenta = anulacionDeVenta;
         this.ventaService = ventaService;
         this.ventaGestion = ventaGestion;
         this.facturaDeLaVenta = facturaDeLaVenta;
@@ -141,6 +146,20 @@ public class VentaController {
             @AuthenticationPrincipal AuthUser authUser) {
         return VentaResponse.FiscalConsultadoResponse.de(facturaDeLaVenta.dejarSinFactura(id,
                 request == null ? null : request.motivo(), authUser.userId()));
+    }
+
+    /**
+     * Anular la venta (CU-08): con su factura AUTORIZADO, la nota de crédito total con su CAE; sin CAE, la anulación
+     * interna con el motivo. Responde 201 con la nota como la ve el detalle. 400 en {@code motivo}; 404 «Venta no
+     * encontrada»; 409 ya anulada, una nota de crédito, «Esperá el CAE» u otro ambiente; 422 con un pago a cuenta corriente.
+     */
+    @PostMapping("/{id}/anular")
+    @PreAuthorize("hasRole('DUENO')")
+    public ResponseEntity<VentaResponse> anular(@PathVariable Long id,
+            @RequestBody(required = false) AccionesFacturaRequests.Anular request,
+            @AuthenticationPrincipal AuthUser authUser) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(VentaResponse.de(anulacionDeVenta.anular(id,
+                request == null ? null : request.motivo(), authUser.userId())));
     }
 
     /** Local: le gana al advice global. El estado sale del motivo (404, 409 o 422). */

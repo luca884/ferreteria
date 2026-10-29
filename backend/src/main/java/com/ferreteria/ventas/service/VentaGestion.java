@@ -2,6 +2,7 @@ package com.ferreteria.ventas.service;
 
 import com.ferreteria.common.exception.ResourceNotFoundException;
 import com.ferreteria.facturacion.api.FacturacionParaVenta;
+import com.ferreteria.facturacion.api.FacturacionParaVenta.AccionFiscal;
 import com.ferreteria.facturacion.api.FacturacionParaVenta.Bandeja;
 import com.ferreteria.facturacion.api.FacturacionParaVenta.FacturaConsultada;
 import com.ferreteria.facturacion.api.FacturacionParaVenta.ResumenFiscal;
@@ -75,9 +76,16 @@ public class VentaGestion {
 
     /**
      * La venta con sus renglones y pagos, como al cobrarla, el nombre del usuario que la cobro y su factura como la ve el
-     * detalle (null si no tiene registro fiscal).
+     * detalle (null si no tiene registro fiscal). Como en el listado (CU-08, C4): una venta anulada lleva su
+     * {@code anulacion} y una nota de credito, la {@code ventaAnulada}; lo que no corresponde es null.
      */
-    public record VentaConsultada(VentaRegistrada venta, String usuario, FiscalConsultado fiscal) {}
+    public record VentaConsultada(VentaRegistrada venta, String usuario, FiscalConsultado fiscal, Anulacion anulacion,
+            VentaAnulada ventaAnulada) {
+
+        public VentaConsultada(VentaRegistrada venta, String usuario, FiscalConsultado fiscal) {
+            this(venta, usuario, fiscal, null, null);
+        }
+    }
 
     /** La factura de la venta en el detalle (C1) y el nombre de quien la dejo sin factura (null si nadie). */
     public record FiscalConsultado(FacturaConsultada factura, String sinFacturaPor) {}
@@ -173,10 +181,35 @@ public class VentaGestion {
         Long remitoNumero = venta.getRemitoId() == null
                 ? null
                 : remitoRepository.findScoped(venta.getRemitoId()).map(Remito::getNumero).orElse(null);
-        FiscalConsultado fiscal = fiscalDe(id).orElse(null);
+        FiscalConsultado fiscal = fiscalDe(venta).orElse(null);
         return new VentaConsultada(new VentaRegistrada(venta, itemRepository.deComprobanteScoped(id),
                 pagoRepository.deComprobanteScoped(id), List.of(), false, false,
-                fiscal == null ? null : fiscal.factura().documento(), remitoNumero), usuario, fiscal);
+                fiscal == null ? null : fiscal.factura().documento(), remitoNumero), usuario, fiscal,
+                anulacionDe(venta), ventaAnuladaDe(venta));
+    }
+
+    /** Como se anulo la venta (CU-08, C4), o null si no esta anulada o es una nota. */
+    private Anulacion anulacionDe(Comprobante venta) {
+        if (venta.getTipo() != TipoComprobante.VENTA) {
+            return null;
+        }
+        return comprobanteRepository.notasDeScoped(List.of(venta.getId())).stream().findFirst()
+                .map(nota -> new Anulacion(nota.getId(), nota.getNumero(), nota.esAnulacionInterna(),
+                        nota.getMotivoAnulacion(),
+                        cajaRepository.nombresScoped(List.of(nota.getUsuarioId())).get(nota.getUsuarioId()),
+                        nota.getFecha()))
+                .orElse(null);
+    }
+
+    /** La venta que anula una nota de credito, o null en una venta. */
+    private VentaAnulada ventaAnuladaDe(Comprobante nota) {
+        Long ventaId = nota.getComprobanteAsociadoId();
+        if (ventaId == null) {
+            return null;
+        }
+        return comprobanteRepository.numerosDeScoped(List.of(ventaId)).stream().findFirst()
+                .map(fila -> new VentaAnulada(ventaId, (Long) fila[1]))
+                .orElse(null);
     }
 
     /**
@@ -210,10 +243,20 @@ public class VentaGestion {
                 .toList();
     }
 
-    /** La factura de la venta como la ve el detalle, con el nombre de quien la dejo sin factura. Vacio sin registro. */
+    /**
+     * La factura de la venta (o de la nota de credito) como la ve el detalle, con el nombre de quien la dejo sin factura.
+     * Vacio sin registro. Una nota de credito rechazada solo se reintenta (CU-08 punto 2): «Dejar sin factura» no vale
+     * sobre una NC, asi que no se ofrece.
+     */
     @Transactional(readOnly = true)
     public Optional<FiscalConsultado> fiscalDe(Long id) {
-        return facturacion.consulta(id).map(factura -> new FiscalConsultado(factura,
+        return fiscalDe(ventaONota(id));
+    }
+
+    private Optional<FiscalConsultado> fiscalDe(Comprobante comprobante) {
+        boolean esNota = comprobante.getTipo() == TipoComprobante.NOTA_CREDITO;
+        return facturacion.consulta(comprobante.getId()).map(factura -> esNota ? sinDejarSinFactura(factura) : factura)
+                .map(factura -> new FiscalConsultado(factura,
                 factura.usuarioSinFacturaId() == null ? null
                         : cajaRepository.nombresScoped(List.of(factura.usuarioSinFacturaId()))
                                 .get(factura.usuarioSinFacturaId())));
@@ -239,6 +282,14 @@ public class VentaGestion {
         return comprobanteRepository.findScoped(id)
                 .filter(c -> c.getTipo() == TipoComprobante.VENTA || c.getTipo() == TipoComprobante.NOTA_CREDITO)
                 .orElseThrow(() -> new ResourceNotFoundException(MENSAJE_NO_ENCONTRADA));
+    }
+
+    /** La misma factura sin la accion «Dejar sin factura». */
+    private static FacturaConsultada sinDejarSinFactura(FacturaConsultada f) {
+        return new FacturaConsultada(f.documento(), f.errores(), f.observaciones(), f.motivoSinFactura(),
+                f.usuarioSinFacturaId(), f.sinFacturaEn(),
+                f.acciones().stream().filter(a -> a != AccionFiscal.DEJAR_SIN_FACTURA).toList(), f.fechaNuevaRequerida(),
+                f.reimprimir());
     }
 
     /** Barra invertida, % y _ como texto: el escape de LIKE en MySQL es la barra invertida. */

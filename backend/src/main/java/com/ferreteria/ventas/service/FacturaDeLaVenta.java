@@ -4,9 +4,11 @@ import com.ferreteria.common.exception.SistemaOcupadoException;
 import com.ferreteria.facturacion.api.FacturaImpedidaException;
 import com.ferreteria.facturacion.api.FacturacionParaVenta;
 import com.ferreteria.facturacion.api.FacturacionParaVenta.Decision;
+import com.ferreteria.facturacion.api.FacturacionParaVenta.ReceptorVenta;
 import com.ferreteria.facturacion.api.FacturacionParaVenta.RenglonParaFacturar;
 import com.ferreteria.ventas.model.Comprobante;
 import com.ferreteria.ventas.model.ItemComprobante;
+import com.ferreteria.ventas.model.TipoComprobante;
 import com.ferreteria.ventas.repository.ItemComprobanteRepository;
 import com.ferreteria.ventas.service.VentaGestion.FiscalConsultado;
 import com.ferreteria.ventas.service.VentaRechazadaException.Motivo;
@@ -96,7 +98,9 @@ public class FacturaDeLaVenta {
     }
 
     /**
-     * «Dejar sin factura» (C3): definitivo, con el motivo, quien y cuando; devuelve la factura como la ve el detalle.
+     * «Dejar sin factura» (C3): definitivo, con el motivo, quien y cuando; devuelve la factura como la ve el detalle. Solo
+     * sobre una venta: una nota de credito rechazada se corrige con «Reintentar» (CU-08 punto 2), y sobre ella esto es 404
+     * «Venta no encontrada».
      *
      * @throws VentaRechazadaException SIN_FACTURA_RECHAZADA (409) si no hay una rechazada; con el motivo vacio o largo,
      *     400 en {@code motivo}
@@ -111,12 +115,20 @@ public class FacturaDeLaVenta {
         return gestion.fiscalDe(ventaId).orElseThrow();
     }
 
-    /** En la transaccion del reintento, en el orden de locks de la venta. */
+    /**
+     * En la transaccion del reintento, en el orden de locks de la venta. Sobre una nota de credito (CU-08 punto 2) no hay
+     * cliente de hoy ni controles de D4: {@code facturacion} vuelve a copiar todo de la factura asociada e ignora el
+     * receptor y los renglones que se le pasan (van los de la nota, que son los de la venta).
+     */
     private void darDeAltaLaFacturaNueva(long ventaId, boolean fechaDeHoy) {
-        Comprobante venta = gestion.venta(ventaId);
+        Comprobante venta = gestion.ventaONota(ventaId);
         try {
             // Sin una rechazada no hay nada que reintentar: se responde antes de mirar el cliente de hoy.
             facturacion.exigirFacturaRechazada(ventaId);
+            if (venta.getTipo() == TipoComprobante.NOTA_CREDITO) {
+                facturacion.reintentar(ventaId, ReceptorVenta.sinCliente(), renglones(ventaId), fechaDeHoy);
+                return;
+            }
             ClienteDelDocumento.Elegido cliente = clienteDelDocumento.resolverParaReintento(venta.getClienteId());
             Decision decision = facturacion.decidir(cliente.receptor(), reloj.instant());
             // Con la facturacion frenada no hay controles de D4: el reintento responde FACTURACION_FRENADA.
@@ -152,7 +164,8 @@ public class FacturaDeLaVenta {
         return new BigDecimal(nombre.substring(PREFIJO_ALICUOTA.length()).replace('_', '.'));
     }
 
-    private static VentaRechazadaException rechazo(FacturaImpedidaException e) {
+    /** El impedimento fiscal como el rechazo de la venta (409), con su texto tal cual. Lo usa también la anulación. */
+    static VentaRechazadaException rechazo(FacturaImpedidaException e) {
         Motivo motivo = switch (e.impedimento()) {
             case SIN_FACTURA_RECHAZADA -> Motivo.SIN_FACTURA_RECHAZADA;
             case FECHA_NUEVA_REQUERIDA -> Motivo.FECHA_NUEVA_REQUERIDA;

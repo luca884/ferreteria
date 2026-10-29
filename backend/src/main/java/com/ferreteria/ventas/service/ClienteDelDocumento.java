@@ -79,6 +79,15 @@ public class ClienteDelDocumento {
     }
 
     /**
+     * El cliente de una venta que se anula (CU-08): lo TOMA igual que una venta, en el mismo lugar del orden de locks
+     * (antes del comprobante y de cualquier numerador), aunque esté desactivado: la venta ya se hizo y anularla no le cambia
+     * nada al cliente. Mismo lock que {@link #resolverParaReintento}. Exige la transacción abierta de quien llama.
+     */
+    public void tomarParaAnularVenta(Long clienteId) {
+        resolverParaReintento(clienteId);
+    }
+
+    /**
      * El cliente de una COBRANZA (CC-034, CC-041): lo TOMA igual que una venta (mismo primer paso del orden de locks, después
      * de la caja y antes de cualquier numerador o lectura plana). Sirve cualquier cliente ACTIVO de la ferretería: no se
      * exige saldo, deuda, pendientes ni cuenta habilitada (un cobro sin imputaciones es un adelanto, queda a favor). Ajeno o
