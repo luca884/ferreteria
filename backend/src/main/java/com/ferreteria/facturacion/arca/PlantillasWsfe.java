@@ -93,6 +93,23 @@ public final class PlantillasWsfe {
      */
     private static void detalle(Sobre sobre, FeCaeDetRequest detalle) {
         sobre.abrir("FECAEDetRequest");
+        camposDelDetalle(sobre, detalle);
+        sobre.cerrar("FECAEDetRequest");
+    }
+
+    /**
+     * Los campos de {@code FECAEDetRequest}, sin el elemento que los envuelve y en el orden de {@code FEDetRequest}: los del
+     * pedido de {@code FECAESolicitar}, y también la primera parte de un {@code FECompConsResponse}, que lo extiende (así los
+     * escribe el simulador en el borde). Cada valor va escapado.
+     */
+    public static String camposDelDetalle(FeCaeDetRequest detalle) {
+        Objects.requireNonNull(detalle, "el detalle");
+        Sobre suelto = new Sobre();
+        camposDelDetalle(suelto, detalle);
+        return suelto.xml.toString();
+    }
+
+    private static void camposDelDetalle(Sobre sobre, FeCaeDetRequest detalle) {
         sobre.campo("Concepto", detalle.concepto());
         sobre.campo("DocTipo", detalle.docTipo());
         sobre.campo("DocNro", detalle.docNro());
@@ -125,7 +142,6 @@ public final class PlantillasWsfe {
         if (detalle.periodoAsoc() != null) {
             periodo(sobre, detalle.periodoAsoc());
         }
-        sobre.cerrar("FECAEDetRequest");
     }
 
     private static void asociado(Sobre sobre, CbteAsoc asociado) {
@@ -176,6 +192,11 @@ public final class PlantillasWsfe {
             this.metodo = metodo;
             xml.append(INICIO).append('<').append(metodo.nombre()).append(" xmlns=\"").append(MetodoWsfe.NAMESPACE)
                     .append("\">");
+        }
+
+        /** Un fragmento suelto, sin sobre ni método: solo los elementos que se escriban. */
+        Sobre() {
+            this.metodo = null;
         }
 
         void auth(TicketDeAcceso ticket, long cuit) {

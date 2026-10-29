@@ -3,13 +3,14 @@ package com.ferreteria.facturacion.motor;
 import com.ferreteria.facturacion.model.Ambiente;
 
 /**
- * El ambiente del registro todavía no tiene con quién hablar: homologación y producción llegan con el cliente real de
- * WSFEv1 (rama 6). El registro queda como estaba y no se manda a ningún otro lado (nunca al simulador).
+ * El ambiente del registro no tiene con quién hablar: {@link WsfePorAmbiente} no tiene un adaptador para él. En el cableado
+ * real los tres ambientes tienen uno (rama 6); pasa con un cableado parcial, como el de algunos tests. El registro queda como
+ * estaba y no se manda a ningún otro lado (nunca al simulador).
  */
 public class AmbienteNoDisponibleException extends RuntimeException {
 
     public AmbienteNoDisponibleException(Ambiente ambiente) {
-        super("Todavía no hay conexión con ARCA para el ambiente " + ambiente
-                + ": llega con la rama 6 del plan de facturación. El comprobante queda pendiente y no se manda al simulador.");
+        super("No hay conexión con ARCA para el ambiente " + ambiente
+                + ": el comprobante queda pendiente y no se manda a ningún otro lado.");
     }
 }

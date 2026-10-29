@@ -183,13 +183,13 @@ Restricciones:
   - el cortacircuito en `config_arca` y en `puedeFacturar`, y el 600 que renueva una vez;
   - tests de concurrencia (20 hilos, dos instancias), de reinicio y de cada fault con conteo de llamadas.
   - Evidencia (L9): GREEN sin RED registrado (el writer se frenó antes de anotarlo); unitarios `TraTest` 2/0, `FirmaCmsTest` 3/0, `ClienteWsaaTest` 4/0, `ConfigArcaTest` 31/0, `ConfiguracionArcaTest` 4/0; integración `TicketsDeAcceso` 13/0, concurrencia (20 pedidos, dos instancias) 1/0, cortacircuito (cada fault con conteo) 17/0, sin secretos 2/0, `BloqueoDeArca` 2/0, `MotorFiscal` 16/0; `facturacion.**` + `ModulosArchTest`, `TenantScopingArchTest`, `RegistroVentaTest` y `ConfigArcaAdminIntegrationTest` 857/0 · Risk: items 1, 2 y 4 (van al `odd-verifier` de T10)
-- [ ] T6 · S6, S7 (simulador) · ruta: delegada (writer «backend») · Aceptación:
+- [x] T6 · S6, S7 (simulador) · ruta: delegada (writer «backend») · Aceptación:
   - el simulador en el borde (XSD, CMS, TA con su lapso y verificación del `Auth`);
   - `WsfePorAmbiente` con `ClienteWsfe` en los tres ambientes;
   - la credencial obligatoria en SIMULADOR, con un fixture de credencial para los tests;
   - la credencial demo en el perfil dev;
   - la subclase de contrato.
-  - Evidencia: — · Risk: items 3 y 6
+  - Evidencia (writer, L10): RED `CredencialArcaBloqueoIntegrationTest#sinCredencialNoFacturaNiElSimulador` y `elSimuladorSeHabilitaSinCredencial` (`[true, true]` en vez de `[false, false]`); en las clases nuevas, RED por mutaciones temporales (sin `Auth`, sin XSD, sin lapso, CMS de otra CA, cableado al simulador, runner sin chequeo); GREEN `SimuladorEnElBorde` 7/0, contrato con `ClienteWsfe` 6/0, cableado 1/0, credenciales demo 2/0, `SobresDelSimulador` 3/0, `WsfePorAmbiente` 3/0; `facturacion.**` + arch + RegistroVenta + ConfigArcaAdmin + FacturacionParaVenta 876/0; `ventas.**` 1128/0; el padre repitió las clases del borde, cableado, bloqueo y demo 32/0 · Risk: items 3 (regla de facturación compartida: SIMULADOR exige credencial; `WsfePorAmbiente` cambia de constructor) y 6 (el runner dev solo se prueba instanciado a mano) — al `odd-verifier` de T10
 - [ ] T7 · S8, S9, C1, C2, C4 (avisos) · ruta: delegada (writer «backend») · Aceptación: los endpoints de C1 y C2, el bloqueo en `avisos` de la configuración, y tests de roles y aislamiento · Evidencia: — · Risk: item 3 (respuesta de la configuración)
 - [x] T8 · S8, S9 (front), C1, C2, C4 · ruta: delegada (writer «frontend», en paralelo con T5 contra C1 y C2) · Aceptación: «Probar conexión» en «Facturación», el aviso del bloqueo y el chequeo FEDummy en el panel del super admin · Evidencia: RED→GREEN `facturacion.spec` (5 fallas → 28/28), `facturacion.service.spec` (TS2339 → 6/6), `admin-ferreterias.spec` (3 fallas → 43/43), `admin-ferreterias.service.spec` (TS2339 → 8/8); el aviso largo de C4 ya se mostraba y quedó fijado; frontend 137 archivos 3299/3299; `ng build` OK (solo el aviso conocido de `dialogo-cobro`); el padre repitió los dos specs de pantalla; commit `a5344e8` (+643/−12). Falta ego-browser (T10) · Risk: none
 - [ ] T9 · S7 (opt-in), S11 (imagen) · ruta: delegada (writer «backend») · Aceptación:
@@ -276,3 +276,11 @@ Restricciones:
     - correr los tests de T5, `com.ferreteria.facturacion.**.*Test` y `ModulosArchTest,TenantScopingArchTest,RegistroVentaTest,ConfigArcaAdminIntegrationTest`;
     - completar lo que falte, commitear T5 y seguir con T6.
 - L9 (2026-10-29) T5 reanudada: el padre corrió los tests del árbol sin cambios de código; todo en verde (ver T5). Próximo paso: T6.
+- L10 (2026-10-29) T6 cerrada (writer). Decisiones inferidas:
+  - el lapso del simulador va por (ferretería, servicio), no por certificado: un certificado con `notBefore` posterior al último TA saca uno nuevo;
+  - los textos de los faults son aproximados a WSAA 1.2.2; el Fault de WSFE es `soap:Client` (ASMX) y el texto del 600 es propio;
+  - FEParamGetPtosVenta del simulador devuelve solo el punto de `config_arca` (CAE, sin bloqueo), o el 602;
+  - un pedido con más de un `FECAEDetRequest` da un Fault.
+  - Los tests del motor y de ventas siguen con el núcleo `SimuladorWsfe` directo; el borde está solo en `facturacion.config.ClienteArcaConfig`.
+  - Para T9: `ImagenDeProduccionTest` puede necesitar una credencial del simulador.
+  - Próximo paso: T7.

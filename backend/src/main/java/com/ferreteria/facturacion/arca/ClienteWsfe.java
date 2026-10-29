@@ -73,6 +73,16 @@ public class ClienteWsfe implements ServicioWsfe {
         return ambiente;
     }
 
+    /** Por dónde van sus pedidos (para los tests del cableado). */
+    Transporte transporte() {
+        return transporte;
+    }
+
+    /** La URL de WSFEv1 de su ambiente (para los tests del cableado). */
+    URI url() {
+        return url;
+    }
+
     /**
      * {@code FEDummy}: si andan los servidores de ARCA (AppServer, DbServer y AuthServer). Sin ticket.
      *

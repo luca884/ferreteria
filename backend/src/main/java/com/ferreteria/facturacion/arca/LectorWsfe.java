@@ -140,7 +140,18 @@ public final class LectorWsfe {
 
     /** {@code FECompConsResponse}: los campos de {@code FECAEDetRequest} y los del resultado. */
     private static ResultGet comprobante(Element g) {
-        FeCaeDetRequest detalle = new FeCaeDetRequest(entero(g, "Concepto"), entero(g, "DocTipo"), largo(g, "DocNro"),
+        return new ResultGet(entero(g, "PtoVta"), entero(g, "CbteTipo"), detalle(g), resultado(g), texto(g, "CodAutorizacion"),
+                texto(g, "EmisionTipo"), fecha(g, "FchVto"), fechaHora(g, "FchProceso"), observaciones(g));
+    }
+
+    /**
+     * Los campos de {@code FECAEDetRequest} de un elemento: el detalle de un pedido de {@code FECAESolicitar} o la parte del
+     * pedido de un {@code FECompConsResponse} (que lo extiende). Lo usan esta clase y el simulador en el borde, que lee los
+     * pedidos. Lo que no tiene la forma esperada sale como {@link IllegalArgumentException} (un número mal escrito o un campo
+     * que el record no acepta) o {@link DateTimeException}.
+     */
+    public static FeCaeDetRequest detalle(Element g) {
+        return new FeCaeDetRequest(entero(g, "Concepto"), entero(g, "DocTipo"), largo(g, "DocNro"),
                 largo(g, "CbteDesde"), largo(g, "CbteHasta"), fecha(g, "CbteFch"), importe(g, "ImpTotal"),
                 importe(g, "ImpTotConc"), importe(g, "ImpNeto"), importe(g, "ImpOpEx"), importe(g, "ImpTrib"),
                 importe(g, "ImpIVA"), texto(g, "MonId"), importe(g, "MonCotiz"), enteroOpcional(g, "CondicionIVAReceptorId"),
@@ -151,8 +162,6 @@ public final class LectorWsfe {
                                 fecha(a, "CbteFch"))).toList(),
                 XmlSeguro.hijo(g, "PeriodoAsoc").map(p -> new PeriodoAsoc(fecha(p, "FchDesde"), fecha(p, "FchHasta")))
                         .orElse(null));
-        return new ResultGet(entero(g, "PtoVta"), entero(g, "CbteTipo"), detalle, resultado(g), texto(g, "CodAutorizacion"),
-                texto(g, "EmisionTipo"), fecha(g, "FchVto"), fechaHora(g, "FchProceso"), observaciones(g));
     }
 
     private static List<Err> errores(Element padre) {

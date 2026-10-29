@@ -7,34 +7,44 @@ import static org.mockito.Mockito.verifyNoInteractions;
 
 import com.ferreteria.facturacion.model.Ambiente;
 import com.ferreteria.facturacion.wsfe.ServicioWsfe;
+import java.util.Map;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 
 /**
- * El adaptador sale del ambiente del registro (regla «Nada simulado llega a ARCA real»): SIMULADOR va al simulador, y
- * homologación y producción todavía no tienen con quién hablar (rama 6): un error claro, sin tocar el simulador.
+ * El adaptador sale del ambiente del registro (regla «Nada simulado llega a ARCA real»): cada ambiente va al suyo, y uno sin
+ * adaptador da un error claro, sin tocar a los otros. El cableado real (los tres con {@code ClienteWsfe}) lo prueba
+ * {@code CableadoDeArcaIntegrationTest}.
  */
 class WsfePorAmbienteTest {
 
     private final ServicioWsfe simulador = mock(ServicioWsfe.class);
-    private final WsfePorAmbiente porAmbiente = new WsfePorAmbiente(simulador);
+    private final ServicioWsfe homologacion = mock(ServicioWsfe.class);
+    private final ServicioWsfe produccion = mock(ServicioWsfe.class);
 
     @Test
-    @DisplayName("SIMULADOR va al simulador")
-    void simulador() {
+    @DisplayName("cada ambiente va a su adaptador")
+    void cadaAmbienteASuAdaptador() {
+        WsfePorAmbiente porAmbiente = new WsfePorAmbiente(Map.of(Ambiente.SIMULADOR, simulador,
+                Ambiente.HOMOLOGACION, homologacion, Ambiente.PRODUCCION, produccion));
+
         assertThat(porAmbiente.para(Ambiente.SIMULADOR)).isSameAs(simulador);
+        assertThat(porAmbiente.para(Ambiente.HOMOLOGACION)).isSameAs(homologacion);
+        assertThat(porAmbiente.para(Ambiente.PRODUCCION)).isSameAs(produccion);
     }
 
     @ParameterizedTest
     @EnumSource(value = Ambiente.class, names = {"HOMOLOGACION", "PRODUCCION"})
-    @DisplayName("homologación y producción dan un error claro hasta la rama 6, sin pasar por el simulador")
-    void homologacionYProduccion(Ambiente ambiente) {
-        assertThatThrownBy(() -> porAmbiente.para(ambiente))
+    @DisplayName("un ambiente sin adaptador da un error claro, sin pasar por el simulador")
+    void unAmbienteSinAdaptador(Ambiente ambiente) {
+        WsfePorAmbiente soloSimulador = new WsfePorAmbiente(Map.of(Ambiente.SIMULADOR, simulador));
+
+        assertThatThrownBy(() -> soloSimulador.para(ambiente))
                 .isInstanceOf(AmbienteNoDisponibleException.class)
-                .hasMessage("Todavía no hay conexión con ARCA para el ambiente " + ambiente + ": llega con la rama 6 del "
-                        + "plan de facturación. El comprobante queda pendiente y no se manda al simulador.");
+                .hasMessage("No hay conexión con ARCA para el ambiente " + ambiente + ": el comprobante queda pendiente y "
+                        + "no se manda a ningún otro lado.");
         verifyNoInteractions(simulador);
     }
 }

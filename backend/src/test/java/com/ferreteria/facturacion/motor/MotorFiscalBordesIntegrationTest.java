@@ -31,6 +31,7 @@ import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Queue;
 import java.util.UUID;
@@ -102,7 +103,7 @@ class MotorFiscalBordesIntegrationTest extends MotorFiscalTestBase {
     }
 
     MotorFiscal instancia(ServicioWsfe puerto) {
-        return new MotorFiscal(pasos, new WsfePorAmbiente(puerto), reloj, lease, presupuesto);
+        return new MotorFiscal(pasos, new WsfePorAmbiente(Map.of(Ambiente.SIMULADOR, puerto)), reloj, lease, presupuesto);
     }
 
     Future<Atencion> atenderEnOtroHilo(ExecutorService pool, MotorFiscal m, long ferreteria, int tipo) {

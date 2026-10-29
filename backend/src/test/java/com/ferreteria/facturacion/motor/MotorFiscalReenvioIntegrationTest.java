@@ -18,6 +18,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ExecutorService;
@@ -58,7 +59,7 @@ class MotorFiscalReenvioIntegrationTest extends MotorFiscalTestBase {
     }
 
     MotorFiscal instancia(ServicioWsfe puerto) {
-        return new MotorFiscal(pasos, new WsfePorAmbiente(puerto), reloj, lease, presupuesto);
+        return new MotorFiscal(pasos, new WsfePorAmbiente(Map.of(Ambiente.SIMULADOR, puerto)), reloj, lease, presupuesto);
     }
 
     Future<Atencion> atenderEnOtroHilo(ExecutorService pool, MotorFiscal m) {

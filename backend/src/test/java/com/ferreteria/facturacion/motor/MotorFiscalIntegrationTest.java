@@ -409,7 +409,8 @@ class MotorFiscalIntegrationTest extends MotorFiscalTestBase {
     // ---- Adaptador ----
 
     @Test
-    @DisplayName("el adaptador sale del ambiente del registro: uno de HOMOLOGACION da un error claro y no va al simulador")
+    @DisplayName("el adaptador sale del ambiente del registro: con el cableado de los tests (solo SIMULADOR), uno de "
+            + "HOMOLOGACION da un error claro y no va al simulador")
     void elAdaptadorSaleDelAmbienteDelRegistro() {
         long venta = venta(ferreteriaId);
         jdbc.update("insert into comprobante_fiscal (ferreteria_id, comprobante_id, ambiente, clase, letra, cbte_tipo, "
@@ -422,7 +423,8 @@ class MotorFiscalIntegrationTest extends MotorFiscalTestBase {
         long id = jdbc.queryForObject("select id from comprobante_fiscal where comprobante_id = ?", Long.class, venta);
 
         assertThatThrownBy(() -> motor.atender(Ambiente.HOMOLOGACION, 1, FACTURA_B))
-                .isInstanceOf(AmbienteNoDisponibleException.class).hasMessageContaining("rama 6");
+                .isInstanceOf(AmbienteNoDisponibleException.class)
+                .hasMessageContaining("No hay conexión con ARCA para el ambiente HOMOLOGACION");
 
         assertThat(estado(id)).isEqualTo("PENDIENTE");
         assertThat(intentos(id)).isEmpty();

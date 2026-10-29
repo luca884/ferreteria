@@ -187,8 +187,9 @@ class CredencialArcaBloqueoIntegrationTest extends CredencialArcaTestBase {
     }
 
     @Test
-    @DisplayName("sin credencial activa, homologación con la facturación prendida no factura; el simulador sigue sin credencial")
-    void sinCredencialNoFacturaSalvoElSimulador() throws Exception {
+    @DisplayName("sin credencial activa no factura ni homologación ni el simulador (rama 6, S6); con la credencial que firma el "
+            + "simulador, el simulador factura")
+    void sinCredencialNoFacturaNiElSimulador() throws Exception {
         Ferreteria sinCredencial = ferreteria();
         jdbc.update("insert into config_arca (ferreteria_id, ambiente, punto_venta, facturacion_habilitada, habilitada_en) "
                 + "values (?, 'HOMOLOGACION', 3, true, '2026-10-01 12:00:00')", sinCredencial.id());
@@ -198,6 +199,11 @@ class CredencialArcaBloqueoIntegrationTest extends CredencialArcaTestBase {
                 + "where ferreteria_id = ?", simulador.id());
 
         assertThat(factura(sinCredencial)).containsExactly(false, false);
+        assertThat(factura(simulador)).containsExactly(false, false);
+
+        pedido(simulador);
+        postJson(URL + "/certificado/simulador", simulador.dueno(), "").andExpect(status().isOk());
+
         assertThat(factura(simulador)).containsExactly(true, true);
     }
 
@@ -279,7 +285,8 @@ class CredencialArcaBloqueoIntegrationTest extends CredencialArcaTestBase {
     }
 
     @Test
-    @DisplayName("el simulador se habilita sin credencial: el super admin lo prende (200) y la venta factura")
+    @DisplayName("el simulador se habilita sin credencial: el super admin lo prende (200), y la venta factura recién con la "
+            + "credencial del simulador (rama 6, S6)")
     void elSimuladorSeHabilitaSinCredencial() throws Exception {
         Ferreteria f = ferreteria();
         conSimulador(f);
@@ -287,6 +294,9 @@ class CredencialArcaBloqueoIntegrationTest extends CredencialArcaTestBase {
         patchAdmin(login("admin@demo.local"), f, "facturacion", "{\"habilitada\": true}").andExpect(status().isOk());
 
         assertThat(config(f)).containsEntry("facturacion_habilitada", true);
+        assertThat(factura(f)).containsExactly(false, false);
+        pedido(f);
+        postJson(URL + "/certificado/simulador", f.dueno(), "").andExpect(status().isOk());
         assertThat(factura(f)).containsExactly(true, true);
     }
 
