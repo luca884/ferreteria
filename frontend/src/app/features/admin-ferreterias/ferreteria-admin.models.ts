@@ -66,6 +66,27 @@ export interface EstadoGeneral {
   ferreterias: FerreteriaAdmin[];
 }
 
+/**
+ * El chequeo del super admin (C2 de la rama 6, `POST /api/admin/arca/fedummy`): FEDummy de ARCA corrido desde el servidor
+ * desplegado, para probar la red y el TLS. No usa certificados ni datos de ninguna ferretería.
+ */
+export interface FeDummyAmbiente {
+  ok: boolean;
+  /** Lo que contestó ARCA por cada servidor («OK» si anda); null si no hubo respuesta. */
+  appServer: string | null;
+  dbServer: string | null;
+  authServer: string | null;
+  /** Cuánto tardó la llamada; null si no hubo respuesta. */
+  milisegundos: number | null;
+  /** El motivo legible («No se pudo conectar con ARCA (timeout de conexión).», «Falló el handshake TLS.»); null si anduvo. */
+  error: string | null;
+}
+
+export interface ChequeoFeDummy {
+  homologacion: FeDummyAmbiente;
+  produccion: FeDummyAmbiente;
+}
+
 export interface DuenoRequest {
   nombre: string;
   email: string;

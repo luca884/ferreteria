@@ -1,7 +1,7 @@
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
-import { ConfiguracionFacturacion, PedidoCertificado } from './facturacion.models';
+import { ConfiguracionFacturacion, PedidoCertificado, PruebaConexion } from './facturacion.models';
 import { FacturacionService } from './facturacion.service';
 
 describe('FacturacionService', () => {
@@ -84,5 +84,24 @@ describe('FacturacionService', () => {
     const req = http.expectOne((r) => r.url.endsWith('/facturacion/certificado/simulador'));
     expect(req.request.method).toBe('POST');
     req.flush(config);
+  });
+
+  it('prueba la conexión con POST /facturacion/probar-conexion, sin cuerpo', () => {
+    const prueba: PruebaConexion = {
+      ambiente: 'SIMULADOR',
+      ok: true,
+      aviso: 'Simulador: no se probó contra ARCA',
+      pasos: [{ paso: 'SERVIDORES', ok: true, detalle: 'AppServer OK, DbServer OK, AuthServer OK' }],
+      ultimos: [{ cbteTipo: 6, comprobante: 'Factura B', numero: 0 }],
+    };
+    let recibida: PruebaConexion | undefined;
+    service.probarConexion().subscribe((p) => (recibida = p));
+
+    const req = http.expectOne((r) => r.url.endsWith('/facturacion/probar-conexion'));
+    expect(req.request.method).toBe('POST');
+    expect(req.request.body).toBeNull();
+    req.flush(prueba);
+
+    expect(recibida).toEqual(prueba);
   });
 });

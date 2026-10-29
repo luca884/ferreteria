@@ -2,7 +2,7 @@ import { HttpClient } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import { environment } from '../../../environments/environment';
-import { ConfiguracionFacturacion, PedidoCertificado } from './facturacion.models';
+import { ConfiguracionFacturacion, PedidoCertificado, PruebaConexion } from './facturacion.models';
 
 /** La API del Dueño para la facturación con ARCA (contrato C1). El Vendedor y el super admin reciben 403. */
 @Injectable({ providedIn: 'root' })
@@ -37,5 +37,13 @@ export class FacturacionService {
   /** Solo en SIMULADOR y con pedido pendiente (si no, 409): la CA de simulación firma el pedido. */
   firmarConSimulador(): Observable<ConfiguracionFacturacion> {
     return this.http.post<ConfiguracionFacturacion>(`${this.url}/certificado/simulador`, null);
+  }
+
+  /**
+   * «Probar conexión» (C1 de la rama 6): FEDummy, WSAA, el punto de venta y los últimos números. 409 sin ambiente y punto
+   * de venta, o sin certificado vigente. Un OK completo levanta el bloqueo de ARCA.
+   */
+  probarConexion(): Observable<PruebaConexion> {
+    return this.http.post<PruebaConexion>(`${this.url}/probar-conexion`, null);
   }
 }

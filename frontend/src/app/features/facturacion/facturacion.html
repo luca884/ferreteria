@@ -129,6 +129,70 @@
         }
       </section>
 
+      @if (c.ambiente) {
+        <section class="seccion conexion" aria-labelledby="titulo-conexion">
+          <h2 id="titulo-conexion">Conexión con ARCA</h2>
+          <p class="pista">
+            Comprueba con ARCA los servidores, el certificado, el punto de venta y el último número de cada factura. No
+            emite ningún comprobante.
+          </p>
+
+          <div class="probar">
+            <div class="acciones">
+              <button type="button" class="secundario probar-conexion" [disabled]="ocupado()" (click)="probarConexion()">
+                {{ probando() ? 'Probando…' : 'Probar conexión' }}
+              </button>
+            </div>
+
+            <!-- Siempre en la página, aunque esté vacío: así el lector de pantalla anuncia el resultado cuando llega. -->
+            <div class="resultado-conexion" aria-live="polite">
+              @if (errorPrueba(); as mensaje) {
+                <p class="error error-prueba">{{ mensaje }}</p>
+              }
+              @if (prueba(); as p) {
+                <p class="alerta resumen-prueba" [class.exito]="p.ok" [class.error]="!p.ok">
+                  {{ p.ok ? 'La prueba de conexión salió bien.' : 'La prueba de conexión falló.' }}
+                </p>
+                @if (p.aviso; as aviso) {
+                  <p class="alerta advertencia aviso-prueba">{{ aviso }}</p>
+                }
+                <ol class="pasos">
+                  @for (paso of p.pasos; track paso.paso) {
+                    <!-- &ngsp; deja un espacio entre las partes, para que se lean separadas. -->
+                    <li class="paso">
+                      <span class="paso-rotulo">{{ pasos[paso.paso] }}</span>&ngsp;
+                      <span class="etiqueta paso-estado" [attr.data-ok]="paso.ok">{{ paso.ok ? 'OK' : 'Falló' }}</span>&ngsp;
+                      <span class="paso-detalle">{{ paso.detalle }}</span>
+                    </li>
+                  }
+                </ol>
+                @if (p.ultimos.length > 0) {
+                  <table class="ultimos">
+                    <caption class="sr-only">
+                      Último número autorizado en ARCA de cada tipo de factura.
+                    </caption>
+                    <thead>
+                      <tr>
+                        <th scope="col">Comprobante</th>
+                        <th scope="col" class="num">Último número</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      @for (ultimo of p.ultimos; track ultimo.cbteTipo) {
+                        <tr>
+                          <td>{{ ultimo.comprobante }}</td>
+                          <td class="num">{{ ultimo.numero }}</td>
+                        </tr>
+                      }
+                    </tbody>
+                  </table>
+                }
+              }
+            </div>
+          </div>
+        </section>
+      }
+
       <section class="seccion pedido" aria-labelledby="titulo-pedido">
         <h2 id="titulo-pedido">Obtener o renovar el certificado</h2>
 

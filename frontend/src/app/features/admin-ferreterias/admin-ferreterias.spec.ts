@@ -1,10 +1,10 @@
 import { HttpErrorResponse } from '@angular/common/http';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { of, throwError } from 'rxjs';
+import { Subject, of, throwError } from 'rxjs';
 import { vi } from 'vitest';
 import { AdminFerreterias } from './admin-ferreterias';
 import { AdminFerreteriasService } from './admin-ferreterias.service';
-import { AltaFerreteriaRequest, EstadoGeneral, FerreteriaAdmin } from './ferreteria-admin.models';
+import { AltaFerreteriaRequest, ChequeoFeDummy, EstadoGeneral, FerreteriaAdmin } from './ferreteria-admin.models';
 
 describe('AdminFerreterias', () => {
   const arco: FerreteriaAdmin = {
@@ -44,6 +44,19 @@ describe('AdminFerreterias', () => {
 
   const CUIT_VALIDO = '30-71234567-1';
 
+  /** El chequeo FEDummy del super admin (C2 de la rama 6): homologación anda y producción no llega. */
+  const CHEQUEO: ChequeoFeDummy = {
+    homologacion: { ok: true, appServer: 'OK', dbServer: 'OK', authServer: 'OK', milisegundos: 312, error: null },
+    produccion: {
+      ok: false,
+      appServer: null,
+      dbServer: null,
+      authServer: null,
+      milisegundos: null,
+      error: 'No se pudo conectar con ARCA (timeout de conexión).',
+    },
+  };
+
   let fixture: ComponentFixture<AdminFerreterias>;
   let servicio: {
     listar: ReturnType<typeof vi.fn>;
@@ -53,6 +66,7 @@ describe('AdminFerreterias', () => {
     cambiarDePrueba: ReturnType<typeof vi.fn>;
     cambiarSimulador: ReturnType<typeof vi.fn>;
     cambiarFacturacion: ReturnType<typeof vi.fn>;
+    fedummy: ReturnType<typeof vi.fn>;
   };
 
   const deLaLista = (id: number) => [arco, bulon].find((f) => f.id === id)!;
@@ -99,6 +113,7 @@ describe('AdminFerreterias', () => {
       cambiarFacturacion: vi.fn((id: number, habilitada: boolean) =>
         of({ ...deLaLista(id), facturacionHabilitada: habilitada, habilitadaEn: habilitada ? '2026-10-29T12:00:00Z' : null }),
       ),
+      fedummy: vi.fn(() => of(CHEQUEO)),
     };
     await TestBed.configureTestingModule({
       imports: [AdminFerreterias],
@@ -598,6 +613,66 @@ describe('AdminFerreterias', () => {
       await refrescar();
 
       expect(el().querySelector('.error')).toBeNull();
+    });
+  });
+
+  describe('probar ARCA desde el servidor (FEDummy)', () => {
+    const boton = () => el().querySelector<HTMLButtonElement>('button.probar-arca')!;
+    /** Cada fila del resultado, celda por celda (el ambiente va en un th de fila). */
+    const filasChequeo = () =>
+      Array.from(el().querySelectorAll('.chequeo-arca tbody tr')).map((fila) =>
+        Array.from(fila.children).map((celda) => (celda.textContent ?? '').replace(/\s+/g, ' ').trim()),
+      );
+
+    async function probar() {
+      boton().click();
+      await refrescar();
+    }
+
+    it('el botón «Probar ARCA desde el servidor» hace el pedido y, mientras espera, queda deshabilitado con «Probando…»', async () => {
+      await crear();
+      const respuesta = new Subject<ChequeoFeDummy>();
+      servicio.fedummy.mockReturnValueOnce(respuesta);
+      expect(boton().textContent?.trim()).toBe('Probar ARCA desde el servidor');
+
+      await probar();
+      expect(servicio.fedummy).toHaveBeenCalledTimes(1);
+      expect(boton().disabled).toBe(true);
+      expect(boton().textContent?.trim()).toBe('Probando…');
+
+      respuesta.next(CHEQUEO);
+      respuesta.complete();
+      await refrescar();
+      expect(boton().disabled).toBe(false);
+      expect(boton().textContent?.trim()).toBe('Probar ARCA desde el servidor');
+    });
+
+    it('muestra homologación y producción: el resultado, los servidores y los milisegundos, o el error tal cual', async () => {
+      await crear();
+
+      await probar();
+
+      expect(el().querySelector('.resultado-chequeo')!.getAttribute('aria-live')).toBe('polite');
+      const encabezados = Array.from(el().querySelectorAll('.chequeo-arca thead th')).map((th) => (th.textContent ?? '').trim());
+      expect(encabezados).toEqual(['Ambiente', 'Resultado', 'AppServer', 'DbServer', 'AuthServer', 'Tiempo o error']);
+      expect(filasChequeo()).toEqual([
+        ['Homologación', 'OK', 'OK', 'OK', 'OK', '312 ms'],
+        ['Producción', 'Falló', '—', '—', '—', 'No se pudo conectar con ARCA (timeout de conexión).'],
+      ]);
+    });
+
+    it('si falla el pedido muestra el mensaje del servidor, o «No se pudo probar ARCA desde el servidor.»', async () => {
+      await crear();
+      servicio.fedummy.mockReturnValueOnce(throwError(() => errorHttp(403, 'No tenés permiso para hacer esto.')));
+
+      await probar();
+      expect(texto('.resultado-chequeo .error-chequeo')).toBe('No tenés permiso para hacer esto.');
+      expect(el().querySelector('table.chequeo')).toBeNull();
+      expect(boton().disabled).toBe(false);
+
+      servicio.fedummy.mockReturnValueOnce(throwError(() => new HttpErrorResponse({ status: 0 })));
+      await probar();
+      expect(texto('.resultado-chequeo .error-chequeo')).toBe('No se pudo probar ARCA desde el servidor.');
     });
   });
 

@@ -13,7 +13,9 @@ import {
   ConfiguracionFacturacion,
   CredencialArca,
   ESTADO_CREDENCIAL_LABELS,
+  PASO_PRUEBA_LABELS,
   PedidoCertificado,
+  PruebaConexion,
 } from './facturacion.models';
 import { FacturacionService } from './facturacion.service';
 
@@ -38,9 +40,9 @@ function detalleDelEstado(credencial: CredencialArca): string | null {
 }
 
 /**
- * Configuración › Facturación (solo el Dueño, CU-01 pasos 2 y 3): el ambiente y el punto de venta, el certificado de ARCA y
- * su vencimiento, y cómo obtenerlo. El sistema genera la clave y el pedido (CSR); la clave privada nace cifrada en el
- * servidor y nunca pasa por acá (D8): el Dueño baja el .csr, lo lleva a ARCA y sube el .crt que le dan.
+ * Configuración › Facturación (solo el Dueño, CU-01 pasos 2 a 4): el ambiente y el punto de venta, el certificado de ARCA y
+ * su vencimiento, cómo obtenerlo y «Probar conexión». El sistema genera la clave y el pedido (CSR); la clave privada nace
+ * cifrada en el servidor y nunca pasa por acá (D8): el Dueño baja el .csr, lo lleva a ARCA y sube el .crt que le dan.
  */
 @Component({
   selector: 'app-facturacion',
@@ -54,6 +56,7 @@ export class PaginaFacturacion implements OnInit {
 
   protected readonly ambientes = AMBIENTE_ARCA_LABELS;
   protected readonly estados = ESTADO_CREDENCIAL_LABELS;
+  protected readonly pasos = PASO_PRUEBA_LABELS;
   protected readonly fecha = formatearFecha;
   protected readonly fechaHora = formatearFechaHora;
   protected readonly detalleDelEstado = detalleDelEstado;
@@ -74,6 +77,12 @@ export class PaginaFacturacion implements OnInit {
   protected readonly errorCertificado = signal<string | null>(null);
   /** Hay un pedido pendiente y el Dueño pidió otro: se confirma antes de reemplazarlo. */
   protected readonly confirmandoPedido = signal(false);
+  /** «Probar conexión» en curso: además de `ocupado`, el botón dice «Probando…». */
+  protected readonly probando = signal(false);
+  /** El resultado de la última prueba de conexión; null antes de probar o si el servidor no la dejó correr. */
+  protected readonly prueba = signal<PruebaConexion | null>(null);
+  /** Por qué no se pudo probar (409: falta el ambiente, el punto de venta o el certificado; red), junto al resultado. */
+  protected readonly errorPrueba = signal<string | null>(null);
 
   /** El último pedido generado o bajado: descargarlo o copiarlo otra vez no lo vuelve a pedir. */
   private readonly pedidoBajado = signal<PedidoCertificado | null>(null);
@@ -194,6 +203,33 @@ export class PaginaFacturacion implements OnInit {
       },
       error: (err: unknown) => this.alFallar(err, null, 'No se pudo firmar el pedido con el simulador.'),
     });
+  }
+
+  /** «Probar conexión» (CU-01 paso 4): muestra cada paso; un OK completo levanta el bloqueo de ARCA. */
+  protected probarConexion(): void {
+    if (this.ocupado()) return;
+    this.limpiar();
+    this.prueba.set(null);
+    this.errorPrueba.set(null);
+    this.ocupado.set(true);
+    this.probando.set(true);
+    this.service.probarConexion().subscribe({
+      next: (prueba) => {
+        this.terminarPrueba();
+        this.prueba.set(prueba);
+        // El aviso del bloqueo viene en la configuración: se vuelve a leer para que desaparezca.
+        if (prueba.ok) this.service.configuracion().subscribe({ next: (config) => this.mostrar(config), error: () => undefined });
+      },
+      error: (err: unknown) => {
+        this.terminarPrueba();
+        this.errorPrueba.set(mensajeDe(err, 'No se pudo probar la conexión.'));
+      },
+    });
+  }
+
+  private terminarPrueba(): void {
+    this.ocupado.set(false);
+    this.probando.set(false);
   }
 
   /** Usa el pedido que ya se tiene o lo baja del servidor (un pedido pendiente de otra sesión). */

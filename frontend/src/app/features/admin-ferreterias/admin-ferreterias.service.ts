@@ -2,13 +2,17 @@ import { HttpClient } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import { environment } from '../../../environments/environment';
-import { AltaFerreteriaRequest, EstadoGeneral, FerreteriaAdmin } from './ferreteria-admin.models';
+import { AltaFerreteriaRequest, ChequeoFeDummy, EstadoGeneral, FerreteriaAdmin } from './ferreteria-admin.models';
 
-/** Las ferreterías de la plataforma. Todo el recurso es solo del super admin; no trae ningún dato de ventas. */
+/**
+ * Las ferreterías de la plataforma y el chequeo de ARCA desde el servidor. Todo el recurso es solo del super admin; no trae
+ * ningún dato de ventas.
+ */
 @Injectable({ providedIn: 'root' })
 export class AdminFerreteriasService {
   private readonly http = inject(HttpClient);
   private readonly url = `${environment.apiUrl}/admin/ferreterias`;
+  private readonly urlArca = `${environment.apiUrl}/admin/arca`;
 
   /** Totales de activas y suspendidas, y cada ferretería (también las suspendidas) por razón social. */
   listar(): Observable<EstadoGeneral> {
@@ -43,5 +47,10 @@ export class AdminFerreteriasService {
   /** El super admin le pone una contraseña nueva al Dueño de una ferretería, sin pedir la actual. */
   resetearContrasenaDueno(ferreteriaId: number, usuarioId: number, password: string): Observable<void> {
     return this.http.put<void>(`${this.url}/${ferreteriaId}/duenos/${usuarioId}/password`, { password });
+  }
+
+  /** FEDummy de ARCA desde el servidor desplegado, por homologación y por producción (C2 de la rama 6): la red y el TLS. */
+  fedummy(): Observable<ChequeoFeDummy> {
+    return this.http.post<ChequeoFeDummy>(`${this.urlArca}/fedummy`, null);
   }
 }

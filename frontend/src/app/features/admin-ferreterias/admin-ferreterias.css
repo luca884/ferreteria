@@ -37,3 +37,49 @@ fieldset.dueno legend {
   padding: 0;
   margin-bottom: var(--e-2);
 }
+
+/*
+ * «Probar ARCA desde el servidor»: debajo del listado, con el resultado de los dos ambientes. Es un bloque común, así la
+ * zona del resultado vacía no suma espacio; cada parte del resultado lleva su margen de arriba.
+ */
+.chequeo-arca {
+  max-width: 880px;
+  margin-top: var(--e-6);
+}
+.chequeo-arca h2 {
+  margin: 0 0 var(--e-1);
+  font-size: 1rem;
+}
+.chequeo-arca .pista {
+  margin: 0 0 var(--e-3);
+}
+.resultado-chequeo > * {
+  margin: var(--e-3) 0 0;
+}
+.chequeo {
+  border: 1px solid var(--borde);
+  border-radius: var(--radio);
+}
+/* Dos filas: el encabezado no necesita quedar fijo al bajar la página. */
+.chequeo th {
+  position: static;
+}
+.chequeo tbody th {
+  background: none;
+  color: var(--texto);
+  font-size: inherit;
+  font-weight: 600;
+  letter-spacing: normal;
+  text-transform: none;
+}
+.chequeo .detalle {
+  overflow-wrap: break-word;
+}
+.resultado[data-ok='true'] {
+  background: var(--exito-fondo);
+  color: var(--exito);
+}
+.resultado[data-ok='false'] {
+  background: var(--error-fondo);
+  color: var(--error);
+}

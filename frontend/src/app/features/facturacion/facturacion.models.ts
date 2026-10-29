@@ -57,6 +57,42 @@ export interface PedidoCertificado {
   archivo: string;
 }
 
+/**
+ * «Probar conexión» (C1 de la rama 6, CU-01 paso 4): los pasos van en orden y uno que falla corta los siguientes (el resto
+ * no figura). En SIMULADOR trae el `aviso` «Simulador: no se probó contra ARCA».
+ */
+export type PasoPrueba = 'SERVIDORES' | 'AUTENTICACION' | 'PUNTO_DE_VENTA' | 'ULTIMOS_NUMEROS';
+
+export const PASO_PRUEBA_LABELS: Record<PasoPrueba, string> = {
+  SERVIDORES: 'Servidores de ARCA',
+  AUTENTICACION: 'Autenticación (WSAA)',
+  PUNTO_DE_VENTA: 'Punto de venta',
+  ULTIMOS_NUMEROS: 'Últimos números',
+};
+
+export interface ResultadoPaso {
+  paso: PasoPrueba;
+  ok: boolean;
+  /** Lo que dijo ARCA, legible: «AppServer OK, DbServer OK, AuthServer OK», el fault con su código, etc. */
+  detalle: string;
+}
+
+/** El último número autorizado de un tipo de factura de la ferretería (según su condición frente al IVA). */
+export interface UltimoNumero {
+  cbteTipo: number;
+  comprobante: string;
+  numero: number;
+}
+
+export interface PruebaConexion {
+  ambiente: AmbienteArca;
+  /** Todos los pasos dieron OK: levanta el bloqueo de ARCA (C4). */
+  ok: boolean;
+  aviso: string | null;
+  pasos: ResultadoPaso[];
+  ultimos: UltimoNumero[];
+}
+
 /** El vencimiento que el mostrador le avisa al Dueño (S12): solo con la credencial por vencer o vencida. */
 export interface VencimientoCertificado {
   vencido: boolean;

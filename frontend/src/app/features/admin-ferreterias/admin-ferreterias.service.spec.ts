@@ -4,6 +4,7 @@ import { HttpTestingController, provideHttpClientTesting } from '@angular/common
 import { AdminFerreteriasService } from './admin-ferreterias.service';
 import {
   AltaFerreteriaRequest,
+  ChequeoFeDummy,
   EstadoGeneral,
   FerreteriaAdmin,
 } from './ferreteria-admin.models';
@@ -126,5 +127,28 @@ describe('AdminFerreteriasService', () => {
     req.flush(null, { status: 204, statusText: 'No Content' });
 
     expect(listo).toBe(true);
+  });
+
+  it('prueba ARCA desde el servidor con POST /admin/arca/fedummy, sin cuerpo, por homologación y por producción', () => {
+    const chequeo: ChequeoFeDummy = {
+      homologacion: { ok: true, appServer: 'OK', dbServer: 'OK', authServer: 'OK', milisegundos: 312, error: null },
+      produccion: {
+        ok: false,
+        appServer: null,
+        dbServer: null,
+        authServer: null,
+        milisegundos: null,
+        error: 'Falló el handshake TLS.',
+      },
+    };
+    let recibido: ChequeoFeDummy | undefined;
+    service.fedummy().subscribe((c) => (recibido = c));
+
+    const req = http.expectOne((r) => r.url.endsWith('/admin/arca/fedummy'));
+    expect(req.request.method).toBe('POST');
+    expect(req.request.body).toBeNull();
+    req.flush(chequeo);
+
+    expect(recibido).toEqual(chequeo);
   });
 });
