@@ -99,7 +99,7 @@ Restricciones (del mapa, L2):
   - se valida al arrancar: `tope-pasada ≥ motor.presupuesto-llamada` y `backoff-tope ≥ backoff-inicial`.
 - **C6 · Motor:** 602 y 10016 como en S3. El código y el texto de ARCA se guardan tal cual en el intento.
 - **C7 · Llegó el CAE (Vendedor y Dueño):** `GET /api/ventas/provisorias-autorizadas`.
-  - 200: `[{ "ventaId": 1, "numero": 12, "factura": "Factura B 0001-00000045" }]`: las ventas que el usuario cobró en la caja abierta, que salieron con ticket provisorio y ya están AUTORIZADO.
+  - 200: `[{ "ventaId": 1, "numero": 12, "factura": "Factura B 00001-00000045" }]`: las ventas que el usuario cobró en la caja abierta, que salieron con ticket provisorio y ya están AUTORIZADO.
   - Sin caja abierta, lista vacía.
   - La hoja se pide con `GET /api/ventas/{id}/factura` (Dueño y Vendedor; L6): responde lo mismo que `GET /api/ventas/{id}`, que es lo mismo que el cobro. El Vendedor solo puede pedir una venta de esta lista: cualquier otra, aunque exista, da 404 «Venta no encontrada». `GET /api/ventas/{id}` sigue siendo solo del Dueño.
 
@@ -118,7 +118,7 @@ Restricciones (del mapa, L2):
   - la marca de provisorio cuando vence la espera de la venta.
   - Evidencia (L7): RED `MotorFiscalContingenciasIntegrationTest` 7/7 y los 3 de provisorio de `FacturacionParaVentaIntegrationTest`; el resto por 15 mutaciones temporales (17 tests fallaron, todo restaurado y comparado con `cmp`); GREEN Contingencias 7/0, FacturacionParaVenta 37/0, Acciones 11/0, Pasada 5/0, Política 2/0; `facturacion.**` + `ventas.**` + arch + RegistroVenta + migraciones 2165/0 (writer). Arreglo del padre en el 602: RED «expected: TRABADA but was: TERMINADA» → GREEN `MotorFiscal*IntegrationTest` + `ModulosArchTest` 113/0 · Risk: items 1, 3 y 4 (estados nuevos; un error de ARCA en la consulta de la verificación pasa de TRABADA a transitorio; la caché de la serie se resincroniza bajo lease)
 - [ ] T4 · S2, S7, S8, C5 · ruta: delegada (writer «backend») · Aceptación: el job con su ejecutor, la pasada con tope, el molde de tenant, el backoff, el apagado, y la batería de S8 · Evidencia: — · Risk: items 4 y 5 (concurrencia; `drainingSeconds` si suma una espera)
-- [ ] T5 · S4, S5, S6 (backend), C1-C4, C7 · ruta: delegada (writer «backend») · Aceptación: los endpoints, la explicación de los códigos conocidos, el contrato JDK de `facturacion.api` para el reintento (cliente X → config_arca S → registro), roles, aislamiento y el límite del Vendedor · Evidencia: — · Risk: items 2 y 3 (acciones solo del Dueño; la respuesta de Ventas cambia)
+- [x] T5 · S4, S5, S6 (backend), C1-C4, C7 · ruta: delegada (writer «backend», en paralelo con T4) · Aceptación: los endpoints, la explicación de los códigos conocidos, el contrato JDK de `facturacion.api` para el reintento (cliente X → config_arca S → registro), roles, aislamiento y el límite del Vendedor · Evidencia (L8): RED de los endpoints 21 fallas + 2 errores de 26 (404 en las rutas nuevas, `provisorias-autorizadas` leído como `{id}`, faltaban los campos de C1); `ExplicacionesArcaTest` RED de compilación → 16/16; `AccionesDelDuenoIntegrationTest#conLaFacturacionFrenada` RED de texto → GREEN; `ventas.**` + `facturacion.**` + arch 2025/0 (writer); el padre repitió Bandeja 7, Acciones 9, Provisorias 6, Avisos 4 y Explicaciones 16: 42/0 · Risk: items 2, 3 y 4 (acciones solo del Dueño y `/{id}/factura` abierto al Vendedor limitado; el detalle y la lista suman campos y cambia el texto de FACTURACION_FRENADA en `PasosFiscales`; el reintento contra el job no está probado junto)
 - [x] T6 · S4, S5, S6 (frontend) · ruta: delegada (writer «frontend», en paralelo con T2-T3 contra C1-C4 y C7) + ajuste del padre (L6) · Aceptación: el filtro y la bandeja en Ventas, el detalle con errores y acciones (la confirmación de la fecha de hoy y el diálogo del motivo), los avisos del Dueño y el de «llegó el CAE» en el mostrador · Evidencia: RED→GREEN por regla (services TS2339/TS2307 → 28/28; `ventas.spec` 15 nuevos en rojo → 36/36; `dialogo-sin-factura` 6/6; `avisos-facturacion` 7/7; `avisos-cae` 7 en rojo contra un esqueleto → 7/7; `mostrador.spec` 8 de 9 en rojo → 320/320); frontend 141 archivos 3348/3348 y `ng build` OK (writer); ajuste del padre: RED TS2353/TS2339 → GREEN 51/51 en `ventas.spec`, `ventas.service.spec` y `avisos-cae.spec`. Falta ego-browser (T7) · Risk: item 1 bajo (clave nueva de localStorage `cae-descartados:{ferreteriaId}:{userId}`)
 - [ ] T7 · S9 · ruta: inline (suites) + `odd-verifier` · Aceptación: ARCA simulada caída en dev, ego-browser (ticket X, el job autoriza, aviso y reimpresión; Reintentar y Dejar sin factura), suite backend, suite frontend, `ng build`, `-Pimagen` y verificador sin bloqueantes · Evidencia: — · Risk: items 1 a 5
 - [ ] T8 · S2 (producción) · ruta: inline, después del deploy de Luca · Aceptación: los logs del job en producción sin errores y sin secretos · Evidencia: — · Risk: —
@@ -183,3 +183,17 @@ Restricciones (del mapa, L2):
     - `AccionFiscalImpedidaException` con `impedimento()`;
     - `ComprobanteFiscalRepository.vigenteDeScoped(long)`.
   - Próximo paso: T4 (el job) y T5 (los endpoints) en paralelo, con superficies separadas.
+- L8 (2026-10-29) T5 cerrada (writer). Decisiones inferidas:
+  - el reintento vuelve a leer el cliente con lock X, sin mirar si está activo (si fue borrado, 404; sin cliente, Consumidor Final);
+  - SIN_FACTURA_RECHAZADA se responde antes de tomar el cliente y de D4; con la facturación frenada no se corre D4 y responde FACTURACION_FRENADA, con motivos cortos nuevos en `PasosFiscales` (`registrar` no cambia);
+  - «REINTENTAR» se ofrece aunque la facturación esté frenada: el 409 explica por qué no sale;
+  - en una venta no autorizada, `errores` junta los Errors y las Obs de ARCA (el simulador rechaza con Obs); en una autorizada, `observaciones` lleva las Obs; las `acciones` aparecen solo en RECHAZADO y FUERA_DE_FECHA;
+  - `fechaNuevaRequerida` se calcula con la serie del registro y el `Clock`, solo para las rechazadas;
+  - las pendientes viejas de C4 se miden desde el `registrado_en` del vigente;
+  - el bloqueo de C4 reusa el texto de la rama 6;
+  - `factura` de C7 con el punto de venta en 5 dígitos («Factura B 00001-00000045»), como el resto de la app; el padre corrigió el ejemplo del doc y el comentario del front;
+  - C2 y C3 responden el `fiscal` del detalle;
+  - `/{id}/factura`: el Dueño la pide de cualquier venta, el Vendedor solo de las de C7; el super admin, 403;
+  - un deadlock en el reintento se reintenta hasta `VentaService.MAX_INTENTOS`, como el cobro;
+  - la tabla de explicaciones cubre 10007, 10013, 10015, 10016, 10023, 10040, 10048, 10051, 10061, 10071, 10152, 10192, 10197, 10242, 10243 y 10246 (la del 10192 es inferida).
+  - El padre corrigió el javadoc de `AccionFiscalImpedidaException.facturacionFrenada`.

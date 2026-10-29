@@ -142,7 +142,7 @@ export interface FacturacionDelMostrador {
 
 /**
  * Una venta de la caja abierta que salió con ticket provisorio y ya tiene CAE (C7, GET /api/ventas/provisorias-autorizadas):
- * el mostrador avisa «Llegó el CAE de la venta N.º <numero>» para reimprimir la factura. `factura`: «Factura B 0001-00000045».
+ * el mostrador avisa «Llegó el CAE de la venta N.º <numero>» para reimprimir la factura. `factura`: «Factura B 00001-00000045».
  */
 export interface ProvisoriaAutorizada {
   ventaId: number;

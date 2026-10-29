@@ -1,7 +1,9 @@
 package com.ferreteria.facturacion.service;
 
+import com.ferreteria.facturacion.api.FacturaImpedidaException;
 import com.ferreteria.facturacion.api.FacturacionParaVenta;
 import com.ferreteria.facturacion.config.EjecutorFiscalConfig;
+import com.ferreteria.facturacion.documento.BandejaFiscal;
 import com.ferreteria.facturacion.documento.HojaFiscal;
 import com.ferreteria.facturacion.model.Alicuota;
 import com.ferreteria.facturacion.model.ComprobanteFiscal;
@@ -12,6 +14,7 @@ import com.ferreteria.facturacion.model.EstadoFiscal;
 import com.ferreteria.facturacion.model.ReceptorFiscal;
 import com.ferreteria.facturacion.model.RenglonFiscal;
 import com.ferreteria.facturacion.model.TipoDocumentoReceptor;
+import com.ferreteria.facturacion.motor.AccionFiscalImpedidaException;
 import com.ferreteria.facturacion.motor.AltaFiscal;
 import com.ferreteria.facturacion.motor.AmbienteNoDisponibleException;
 import com.ferreteria.facturacion.motor.Atencion;
@@ -72,6 +75,10 @@ import org.springframework.transaction.support.TransactionTemplate;
  * <p>La hoja de la factura, el listado y el cobro (cu-07-factura-mostrador C4) son solo lecturas, cada una en una
  * transacción de solo lectura (o en la de quien llama, si tiene una): {@link #documento} lee el registro y su desglose de
  * una vez y deja la apariencia a {@link HojaFiscal}; {@link #paraElMostrador} usa la regla de {@link #decidir} sin lock.
+ *
+ * <p>La bandeja de Ventas y «llegó el CAE» (cu-07-contingencias C1 y C7) también son lecturas, y lo que muestran lo decide
+ * {@link BandejaFiscal}. Las dos acciones del Dueño (C2 y C3) las hace el motor; acá se traducen sus impedimentos a los del
+ * puerto ({@link FacturaImpedidaException}), con el mismo texto.
  */
 @Service
 public class FacturacionParaVentaImpl implements FacturacionParaVenta {
@@ -257,6 +264,77 @@ public class FacturacionParaVentaImpl implements FacturacionParaVenta {
     public Optional<FacturacionDelMostrador> paraElMostrador() {
         return pasos.emisionSinLock().map(emision -> new FacturacionDelMostrador(emision.ambiente().name(),
                 letras(emision.condicionEmisor())));
+    }
+
+    // ---- La bandeja de Ventas, las acciones del Dueño y «llegó el CAE» (cu-07-contingencias C1 a C3 y C7) ----
+
+    @Override
+    public List<Long> ventasEnBandeja(Bandeja bandeja) {
+        Objects.requireNonNull(bandeja, "Falta la bandeja.");
+        return lectura.execute(s -> registros.comprobantesEnEstadosScoped(BandejaFiscal.estados(bandeja)));
+    }
+
+    /** El registro, su desglose y la serie en la misma transacción de solo lectura: la hoja y la bandeja, de una sola foto. */
+    @Override
+    public Optional<FacturaConsultada> consulta(long comprobanteId) {
+        return lectura.execute(s -> registros.deComprobanteScoped(comprobanteId)
+                .map(r -> BandejaFiscal.consultada(r, HojaFiscal.de(r, pasos.alicuotas(r.getId()), estadoDe(r)),
+                        BandejaFiscal.rechazada(r) && !pasos.fechaEntraHoy(r))));
+    }
+
+    @Override
+    public Map<Long, String> provisoriasAutorizadas(Collection<Long> comprobanteIds) {
+        Objects.requireNonNull(comprobanteIds, "Faltan las ventas.");
+        List<ComprobanteFiscal> provisorias = lectura.execute(s -> registros.provisoriasAutorizadasScoped(comprobanteIds));
+        Map<Long, String> facturas = new HashMap<>();
+        for (ComprobanteFiscal registro : provisorias) {
+            facturas.put(registro.getComprobanteId(), BandejaFiscal.factura(registro));
+        }
+        return Map.copyOf(facturas);
+    }
+
+    @Override
+    public void exigirFacturaRechazada(long comprobanteId) {
+        try {
+            pasos.exigirRechazada(comprobanteId);
+        } catch (AccionFiscalImpedidaException e) {
+            throw traducida(e);
+        }
+    }
+
+    /** El receptor y los renglones, traducidos como en el alta de la venta; el reintento lo hace el motor. */
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public long reintentar(long comprobanteId, ReceptorVenta receptor, List<RenglonParaFacturar> renglones,
+            boolean fechaDeHoy) {
+        Objects.requireNonNull(receptor, "Falta el receptor de la venta.");
+        Objects.requireNonNull(renglones, "Faltan los renglones de la venta.");
+        AltaFiscal alta = new AltaFiscal(comprobanteId, receptorFiscal(receptor),
+                renglones.stream().map(FacturacionParaVentaImpl::renglonFiscal).toList());
+        try {
+            return motor.reintentar(alta, fechaDeHoy);
+        } catch (AccionFiscalImpedidaException e) {
+            throw traducida(e);
+        }
+    }
+
+    @Override
+    public void dejarSinFactura(long comprobanteId, String motivo, long usuarioId) {
+        try {
+            motor.dejarSinFactura(comprobanteId, motivo, usuarioId);
+        } catch (AccionFiscalImpedidaException e) {
+            throw traducida(e);
+        }
+    }
+
+    /** El impedimento del motor, con el mismo código y el mismo texto, como lo conoce el puerto. */
+    private static FacturaImpedidaException traducida(AccionFiscalImpedidaException e) {
+        FacturaImpedidaException.Impedimento impedimento = switch (e.impedimento()) {
+            case SIN_FACTURA_RECHAZADA -> FacturaImpedidaException.Impedimento.SIN_FACTURA_RECHAZADA;
+            case FECHA_NUEVA_REQUERIDA -> FacturaImpedidaException.Impedimento.FECHA_NUEVA_REQUERIDA;
+            case FACTURACION_FRENADA -> FacturaImpedidaException.Impedimento.FACTURACION_FRENADA;
+        };
+        return new FacturaImpedidaException(impedimento, e.getMessage());
     }
 
     /** La letra que saldría para cada condición del cliente, en el orden del puerto, con {@link EncuadreFiscal#de}. */

@@ -319,9 +319,12 @@ class DocumentoFiscalIntegrationTest extends MotorFiscalTestBase {
         Map<Long, ResumenFiscal> resumenes = facturacion.resumenes(List.of(valida, simulada, pendiente, sinRegistro));
 
         assertThat(resumenes).containsOnlyKeys(valida, simulada, pendiente);
-        assertThat(resumenes.get(valida)).isEqualTo(new ResumenFiscal("B", 3, 12L, "AUTORIZADO", "PRODUCCION", true));
-        assertThat(resumenes.get(simulada)).isEqualTo(new ResumenFiscal("X", 1, 12L, "AUTORIZADO", "SIMULADOR", false));
-        assertThat(resumenes.get(pendiente)).isEqualTo(new ResumenFiscal("X", 3, null, "PENDIENTE", "PRODUCCION", false));
+        assertThat(resumenes.get(valida)).isEqualTo(
+                new ResumenFiscal("B", 3, 12L, "AUTORIZADO", "PRODUCCION", true, false));
+        assertThat(resumenes.get(simulada)).isEqualTo(
+                new ResumenFiscal("X", 1, 12L, "AUTORIZADO", "SIMULADOR", false, false));
+        assertThat(resumenes.get(pendiente)).isEqualTo(
+                new ResumenFiscal("X", 3, null, "PENDIENTE", "PRODUCCION", false, false));
         assertThat(facturacion.resumenes(List.of())).isEmpty();
     }
 

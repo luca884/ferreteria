@@ -253,6 +253,59 @@ public interface ComprobanteFiscalRepository extends TenantScopedRepository<Comp
         return marcarProvisorio(TenantContext.requireFerreteriaId(), comprobanteId);
     }
 
+    // ---- Rama 7: lo que leen la bandeja de Ventas, «llegó el CAE» y los avisos del mostrador (C1, C4 y C7) ----
+
+    /** Las ventas cuyo registro vigente está en alguno de esos estados (la bandeja, C1), por id. Solo lectura. */
+    @Query("select c.comprobanteId from ComprobanteFiscal c where c.ferreteriaId = :fid and c.estado in :estados "
+            + "and c.reemplazadoEn is null order by c.comprobanteId")
+    List<Long> comprobantesEnEstados(@Param("fid") Long ferreteriaId,
+            @Param("estados") Collection<EstadoFiscal> estados);
+
+    default List<Long> comprobantesEnEstadosScoped(Collection<EstadoFiscal> estados) {
+        return comprobantesEnEstados(TenantContext.requireFerreteriaId(), estados);
+    }
+
+    /** De esas ventas, los registros vigentes que salieron con el ticket provisorio y ya están AUTORIZADO (C7). */
+    @Query("select c from ComprobanteFiscal c where c.ferreteriaId = :fid and c.comprobanteId in :comprobantes "
+            + "and c.reemplazadoEn is null and c.ticketProvisorio = true "
+            + "and c.estado = com.ferreteria.facturacion.model.EstadoFiscal.AUTORIZADO")
+    List<ComprobanteFiscal> provisoriasAutorizadas(@Param("fid") Long ferreteriaId,
+            @Param("comprobantes") Collection<Long> comprobanteIds);
+
+    /** Vacío sin ventas: no llega a la base. */
+    default List<ComprobanteFiscal> provisoriasAutorizadasScoped(Collection<Long> comprobanteIds) {
+        if (comprobanteIds.isEmpty()) {
+            return List.of();
+        }
+        return provisoriasAutorizadas(TenantContext.requireFerreteriaId(), comprobanteIds);
+    }
+
+    /**
+     * Lo que el mostrador avisa al Dueño (C4), contado sobre los registros vigentes: rechazadas (RECHAZADO y FUERA_DE_FECHA),
+     * pendientes de CAE (PENDIENTE, EN_CURSO y EN_VERIFICACION) registradas antes de {@code limite}, y en revisión
+     * (CAE_NO_COINCIDE y SERIE_DESINCRONIZADA). Por {@code ix_comprobante_fiscal_estado}: las autorizadas, que son casi
+     * todas, ni se leen. Una sola fila con las tres cuentas.
+     */
+    @Query(value = """
+            select coalesce(sum(estado in ('RECHAZADO', 'FUERA_DE_FECHA')), 0),
+              coalesce(sum(estado in ('PENDIENTE', 'EN_CURSO', 'EN_VERIFICACION') and registrado_en < :limite), 0),
+              coalesce(sum(estado in ('CAE_NO_COINCIDE', 'SERIE_DESINCRONIZADA')), 0)
+            from comprobante_fiscal
+            where ferreteria_id = :fid and reemplazado_en is null
+              and estado in ('RECHAZADO', 'FUERA_DE_FECHA', 'PENDIENTE', 'EN_CURSO', 'EN_VERIFICACION', 'CAE_NO_COINCIDE',
+                'SERIE_DESINCRONIZADA')
+            """, nativeQuery = true)
+    List<Object[]> avisos(@Param("fid") Long ferreteriaId, @Param("limite") Instant limite);
+
+    default AvisosFiscales avisosScoped(Instant limite) {
+        Object[] fila = avisos(TenantContext.requireFerreteriaId(), limite).get(0);
+        return new AvisosFiscales(((Number) fila[0]).longValue(), ((Number) fila[1]).longValue(),
+                ((Number) fila[2]).longValue());
+    }
+
+    /** Las cuentas de {@link #avisos}. */
+    record AvisosFiscales(long rechazadas, long pendientesViejas, long enRevision) {}
+
     // ---- Rama 7: lo que lee el job de reintento ----
 
     /**

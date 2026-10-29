@@ -1,15 +1,22 @@
 package com.ferreteria.ventas.web;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.ferreteria.common.HoraArgentina;
+import com.ferreteria.facturacion.api.FacturacionParaVenta.AccionFiscal;
 import com.ferreteria.facturacion.api.FacturacionParaVenta.AlicuotaDelDocumento;
 import com.ferreteria.facturacion.api.FacturacionParaVenta.DocumentoFiscal;
 import com.ferreteria.facturacion.api.FacturacionParaVenta.EmisorDelDocumento;
+import com.ferreteria.facturacion.api.FacturacionParaVenta.ErrorArca;
 import com.ferreteria.facturacion.api.FacturacionParaVenta.EstadoFiscalVenta;
+import com.ferreteria.facturacion.api.FacturacionParaVenta.FacturaConsultada;
+import com.ferreteria.facturacion.api.FacturacionParaVenta.ObservacionArca;
 import com.ferreteria.facturacion.api.FacturacionParaVenta.ReceptorDelDocumento;
 import com.ferreteria.facturacion.api.FacturacionParaVenta.Transparencia;
 import com.ferreteria.ventas.model.EstadoComprobante;
 import com.ferreteria.ventas.model.ItemComprobante;
 import com.ferreteria.ventas.model.MedioPago;
+import com.ferreteria.ventas.service.VentaGestion.FiscalConsultado;
+import com.ferreteria.ventas.service.VentaGestion.VentaConsultada;
 import com.ferreteria.ventas.service.VentaRegistrada;
 
 import java.math.BigDecimal;
@@ -30,7 +37,8 @@ import java.util.List;
  * factura al terminar la espera del CAE, o el actual en la venta repetida) y en el detalle de la consulta, con la hoja
  * imprimible en {@code documento} (cu-07-factura-mostrador C1); la venta sin registro fiscal no lo trae.
  * {@code remitoNumero} es el numero del remito del que sale la venta, para «Remito N.º» de la hoja; solo viene con
- * {@code remitoId}.
+ * {@code remitoId}. En el detalle de la consulta {@code fiscal} suma lo de la bandeja ({@link FiscalConsultadoResponse},
+ * cu-07-contingencias C1); al cobrar viene como siempre ({@link FiscalResponse}).
  */
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public record VentaResponse(
@@ -38,7 +46,13 @@ public record VentaResponse(
         List<PagoResponse> pagos, List<RenglonResponse> renglones, List<SinStockResponse> sinStock, BigDecimal subtotal,
         BigDecimal descuentoPorcentaje, BigDecimal descuento, BigDecimal recargo, Long presupuestoId,
         Long remitoId, Long remitoNumero, boolean facturable, Long clienteId, String clienteNombre, String usuario,
-        FiscalResponse fiscal) {
+        Fiscal fiscal) {
+
+    /**
+     * El {@code fiscal} de la venta: al cobrar, {@link FiscalResponse}; en el detalle, {@link FiscalConsultadoResponse}.
+     * Jackson escribe el de cada caso con sus campos.
+     */
+    public sealed interface Fiscal permits FiscalResponse, FiscalConsultadoResponse {}
 
     /**
      * El estado de la factura de la venta (CU-07 paso 5) y su hoja imprimible. Trae todos sus campos: {@code numero} es
@@ -55,7 +69,7 @@ public record VentaResponse(
      */
     @JsonInclude(JsonInclude.Include.ALWAYS)
     public record FiscalResponse(String estado, String clase, String letra, int puntoVenta, Long numero, String cae,
-            LocalDate caeVencimiento, String ambiente, DocumentoResponse documento) {
+            LocalDate caeVencimiento, String ambiente, DocumentoResponse documento) implements Fiscal {
 
         static FiscalResponse de(DocumentoFiscal d) {
             if (d == null) {
@@ -64,6 +78,41 @@ public record VentaResponse(
             EstadoFiscalVenta e = d.estadoFiscal();
             return new FiscalResponse(e.estado(), e.clase(), e.letra(), e.puntoVenta(), e.numero(), e.cae(),
                     e.caeVencimiento(), e.ambiente(), DocumentoResponse.de(d));
+        }
+    }
+
+    /**
+     * El {@code fiscal} del detalle de Ventas (cu-07-contingencias C1): los mismos campos que {@link FiscalResponse} y lo
+     * de la bandeja. Es también la respuesta de «Reintentar» y «Dejar sin factura» (C2 y C3). Los nulos se mandan igual.
+     *
+     * @param errores lo que dijo ARCA al no autorizarla, con el código numérico, el texto tal cual y la explicación de los
+     *     códigos conocidos (null si no)
+     * @param observaciones las de una factura autorizada, tal cual
+     * @param motivoSinFactura por qué el Dueño la dejó sin factura, o null
+     * @param sinFacturaPor el nombre de quien la dejó sin factura, o null
+     * @param sinFacturaEn cuándo, en hora de Buenos Aires sin zona (como {@code fecha}), o null
+     * @param acciones las que valen hoy: REINTENTAR y DEJAR_SIN_FACTURA en una rechazada o fuera de fecha
+     * @param fechaNuevaRequerida la fecha de la venta ya no entra en ARCA: reintentar pide confirmar la de hoy
+     * @param reimprimir salió con ticket provisorio y ya está AUTORIZADO
+     */
+    @JsonInclude(JsonInclude.Include.ALWAYS)
+    public record FiscalConsultadoResponse(String estado, String clase, String letra, int puntoVenta, Long numero,
+            String cae, LocalDate caeVencimiento, String ambiente, DocumentoResponse documento,
+            List<ErrorArca> errores, List<ObservacionArca> observaciones, String motivoSinFactura, String sinFacturaPor,
+            LocalDateTime sinFacturaEn, List<AccionFiscal> acciones, boolean fechaNuevaRequerida, boolean reimprimir)
+            implements Fiscal {
+
+        public static FiscalConsultadoResponse de(FiscalConsultado consultado) {
+            if (consultado == null) {
+                return null;
+            }
+            FacturaConsultada f = consultado.factura();
+            EstadoFiscalVenta e = f.documento().estadoFiscal();
+            return new FiscalConsultadoResponse(e.estado(), e.clase(), e.letra(), e.puntoVenta(), e.numero(), e.cae(),
+                    e.caeVencimiento(), e.ambiente(), DocumentoResponse.de(f.documento()), f.errores(), f.observaciones(),
+                    f.motivoSinFactura(), consultado.sinFacturaPor(),
+                    f.sinFacturaEn() == null ? null : LocalDateTime.ofInstant(f.sinFacturaEn(), HoraArgentina.ZONA),
+                    f.acciones(), f.fechaNuevaRequerida(), f.reimprimir());
         }
     }
 
@@ -109,10 +158,15 @@ public record VentaResponse(
     public record SinStockResponse(Long articuloId, String descripcion, BigDecimal stockActual) {}
 
     public static VentaResponse de(VentaRegistrada venta) {
-        return de(venta, null);
+        return de(venta, null, FiscalResponse.de(venta.fiscal()));
     }
 
-    public static VentaResponse de(VentaRegistrada venta, String usuario) {
+    /** La venta del detalle de la consulta (y de la hoja de C7): con quién la cobró y la factura con la bandeja. */
+    public static VentaResponse de(VentaConsultada consultada) {
+        return de(consultada.venta(), consultada.usuario(), FiscalConsultadoResponse.de(consultada.fiscal()));
+    }
+
+    private static VentaResponse de(VentaRegistrada venta, String usuario, Fiscal fiscal) {
         return new VentaResponse(
                 venta.comprobante().getId(), venta.comprobante().getNumero(), venta.comprobante().getTotal(),
                 venta.comprobante().getFecha(),
@@ -130,7 +184,6 @@ public record VentaResponse(
                 venta.comprobante().getRecargo(), venta.comprobante().getPresupuestoId(),
                 venta.comprobante().getRemitoId(), venta.remitoNumero(),
                 venta.comprobante().getEstado() != EstadoComprobante.NO_FACTURABLE,
-                venta.comprobante().getClienteId(), venta.comprobante().getClienteNombre(), usuario,
-                FiscalResponse.de(venta.fiscal()));
+                venta.comprobante().getClienteId(), venta.comprobante().getClienteNombre(), usuario, fiscal);
     }
 }

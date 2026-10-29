@@ -64,6 +64,21 @@ public class ClienteDelDocumento {
     }
 
     /**
+     * El cliente de una venta ya hecha, para «Reintentar» su factura (cu-07-contingencias C2, D10): lo TOMA igual que una
+     * venta (lock de escritura y lectura actual), así la factura nueva lleva el cliente de hoy. Sirve aunque esté desactivado:
+     * la venta ya se hizo y la factura es suya. Sin {@code clienteId} es Consumidor Final, como al vender. Uno que ya no
+     * aparece es 404. Exige la transacción abierta de quien llama.
+     */
+    public Elegido resolverParaReintento(Long clienteId) {
+        if (clienteId == null) {
+            return new Elegido(null, null, ReceptorVenta.sinCliente());
+        }
+        ClienteReferencia cliente = clientes.tomarParaVenta(clienteId)
+                .orElseThrow(() -> new ResourceNotFoundException("Cliente no encontrado"));
+        return new Elegido(cliente.id(), cliente.razonSocial(), receptor(cliente));
+    }
+
+    /**
      * El cliente de una COBRANZA (CC-034, CC-041): lo TOMA igual que una venta (mismo primer paso del orden de locks, después
      * de la caja y antes de cualquier numerador o lectura plana). Sirve cualquier cliente ACTIVO de la ferretería: no se
      * exige saldo, deuda, pendientes ni cuenta habilitada (un cobro sin imputaciones es un adelanto, queda a favor). Ajeno o

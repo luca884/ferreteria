@@ -119,6 +119,20 @@ public interface ComprobanteRepository extends TenantScopedRepository<Comprobant
         return buscarVentasEntre(TenantContext.requireFerreteriaId(), ids, numero, cliente, desde, hasta, pageable);
     }
 
+    /**
+     * El id y el numero de las ventas que ese usuario cobro en esa caja, por numero (cu-07-contingencias C7: «llego el
+     * CAE»). Solo ventas, no presupuestos ni remitos.
+     */
+    @Query("select c.id, c.numero from Comprobante c where c.ferreteriaId = :fid and c.cajaId = :caja "
+            + "and c.usuarioId = :usuario and c.tipo = com.ferreteria.ventas.model.TipoComprobante.VENTA "
+            + "order by c.numero")
+    List<Object[]> ventasDelUsuarioEnLaCaja(@Param("fid") Long ferreteriaId, @Param("caja") Long cajaId,
+            @Param("usuario") Long usuarioId);
+
+    default List<Object[]> ventasDelUsuarioEnLaCajaScoped(Long cajaId, Long usuarioId) {
+        return ventasDelUsuarioEnLaCaja(TenantContext.requireFerreteriaId(), cajaId, usuarioId);
+    }
+
     // ---- Clientes que compraron un articulo (G29, Ctrl+A del listado de GDS) ----
 
     /** Un cliente que compro el articulo: cuantas ventas, cuanto en total y la fecha y hora de la ultima. */

@@ -39,7 +39,10 @@ public class AccionFiscalImpedidaException extends ConflictException {
         return new AccionFiscalImpedidaException(Impedimento.FECHA_NUEVA_REQUERIDA, FECHA_NUEVA_REQUERIDA);
     }
 
-    /** @param motivo el de la regla de alta (el mismo texto con que se niega una venta facturable) */
+    /**
+     * @param motivo el motivo corto de C2 («no está habilitada en esta ferretería…», «ARCA rechazó el certificado (…)»),
+     *     que va después de «La facturación está frenada: »
+     */
     static AccionFiscalImpedidaException facturacionFrenada(String motivo) {
         return new AccionFiscalImpedidaException(Impedimento.FACTURACION_FRENADA, motivo);
     }

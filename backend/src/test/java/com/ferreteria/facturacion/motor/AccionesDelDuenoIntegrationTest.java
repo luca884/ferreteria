@@ -234,7 +234,8 @@ class AccionesDelDuenoIntegrationTest extends MotorFiscalTestBase {
     }
 
     @Test
-    @DisplayName("con la facturación frenada da FACTURACION_FRENADA con el motivo de la regla del alta, y no cambia nada")
+    @DisplayName("con la facturación frenada da FACTURACION_FRENADA «La facturación está frenada: <motivo>.» (C2), con el "
+            + "motivo de la regla del alta en corto, y no cambia nada")
     void conLaFacturacionFrenada() {
         long venta = ventaRechazada();
         jdbc.update("update config_arca set facturacion_habilitada = false, habilitada_en = null where ferreteria_id = ?",
@@ -243,7 +244,8 @@ class AccionesDelDuenoIntegrationTest extends MotorFiscalTestBase {
         assertThatThrownBy(() -> enLaVenta(() -> motor.reintentar(new AltaFiscal(venta, ReceptorFiscal.sinCliente(),
                 RENGLONES), true))).isInstanceOfSatisfying(AccionFiscalImpedidaException.class,
                         e -> assertThat(e.impedimento()).isEqualTo(Impedimento.FACTURACION_FRENADA))
-                .hasMessage(PasosFiscales.NO_HABILITADA);
+                .hasMessage("La facturación está frenada: no está habilitada en esta ferretería (la habilita el super "
+                        + "admin).");
         assertThat(jdbc.queryForList("select estado, reemplazado_en from comprobante_fiscal where comprobante_id = ?",
                 venta)).singleElement().satisfies(fila -> assertThat(fila).containsEntry("estado", "RECHAZADO")
                         .containsEntry("reemplazado_en", null));

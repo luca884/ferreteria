@@ -60,6 +60,17 @@ public class PasosFiscales {
             + "puede leer. El Dueño lo renueva en «Facturación».";
     /** WSAA rechazó el certificado (rama 6, C4): la facturación está frenada hasta otro certificado o «Probar conexión». */
     static final String FRENADA = "La facturación con ARCA está frenada: ARCA rechazó el certificado (%s).";
+    /**
+     * «Reintentar» con la facturación frenada (C2 de cu-07-contingencias): «La facturación está frenada: <motivo>.», con el
+     * motivo de la regla del alta en corto.
+     */
+    static final String FACTURACION_FRENADA = "La facturación está frenada: %s.";
+    static final String FRENADA_NO_HABILITADA = "no está habilitada en esta ferretería (la habilita el super admin)";
+    static final String FRENADA_FALTAN_DATOS = "faltan datos de la ferretería (los carga el Dueño en «Datos de la "
+            + "ferretería»)";
+    static final String FRENADA_SIN_CREDENCIAL = "el certificado de ARCA falta, venció o no se puede leer (el Dueño lo "
+            + "renueva en «Facturación»)";
+    static final String FRENADA_POR_ARCA = "ARCA rechazó el certificado (%s)";
     /** El motivo de «Dejar sin factura» (C3, S12). */
     static final int LARGO_MOTIVO = 200;
     static final String MOTIVO_VACIO = "Contá por qué la venta queda sin factura.";
@@ -161,11 +172,13 @@ public class PasosFiscales {
      * Con qué factura la ferretería del request: su configuración de ARCA y su emisor, o por qué no factura.
      *
      * @param impedimento null si factura; si no, el motivo que da {@link #registrar} (y entonces lo demás es null)
+     * @param frenada el mismo motivo en corto, para el mensaje de «Reintentar» ({@link #FACTURACION_FRENADA}); null si
+     *     factura
      */
-    private record Emision(ConfigArca config, EmisorFiscal emisor, String impedimento) {
+    private record Emision(ConfigArca config, EmisorFiscal emisor, String impedimento, String frenada) {
 
-        static Emision impedida(String impedimento) {
-            return new Emision(null, null, impedimento);
+        static Emision impedida(String impedimento, String frenada) {
+            return new Emision(null, null, impedimento, frenada);
         }
     }
 
@@ -209,16 +222,17 @@ public class PasosFiscales {
     private Emision emision(Optional<ConfigArca> leida, boolean conLock, Instant ahora) {
         Optional<ConfigArca> config = leida.filter(ConfigArca::puedeFacturar);
         if (config.isEmpty()) {
-            return Emision.impedida(leida.filter(c -> c.isFacturacionHabilitada() && c.estaBloqueada())
-                    .map(c -> String.format(FRENADA, c.getBloqueoCodigo()))
-                    .orElse(NO_HABILITADA));
+            return leida.filter(c -> c.isFacturacionHabilitada() && c.estaBloqueada())
+                    .map(c -> Emision.impedida(String.format(FRENADA, c.getBloqueoCodigo()),
+                            String.format(FRENADA_POR_ARCA, c.getBloqueoCodigo())))
+                    .orElseGet(() -> Emision.impedida(NO_HABILITADA, FRENADA_NO_HABILITADA));
         }
         if (!credencial.dejaFacturar(config.get(), ahora, conLock)) {
-            return Emision.impedida(SIN_CREDENCIAL);
+            return Emision.impedida(SIN_CREDENCIAL, FRENADA_SIN_CREDENCIAL);
         }
         return emisor(TenantContext.requireFerreteriaId())
-                .map(emisor -> new Emision(config.get(), emisor, null))
-                .orElseGet(() -> Emision.impedida(FALTAN_DATOS));
+                .map(emisor -> new Emision(config.get(), emisor, null, null))
+                .orElseGet(() -> Emision.impedida(FALTAN_DATOS, FRENADA_FALTAN_DATOS));
     }
 
     /** La copia del emisor: los datos de CU-01 paso 1 de la ferretería; vacío si falta alguno de los que se imprimen. */
@@ -507,6 +521,33 @@ public class PasosFiscales {
     // ---- Las acciones del Dueño (rama 7, CU-16 punto 7; D10 y S12) ----
 
     /**
+     * Solo lectura, para quien va a reintentar (C2): que la venta tenga un registro vigente RECHAZADO o FUERA_DE_FECHA, leído
+     * sin cargarlo en el contexto de persistencia de quien llama. Así «sin una rechazada» se responde antes que lo que
+     * dependa del cliente de hoy; {@link #reintentar} lo vuelve a exigir al reemplazarlo.
+     *
+     * @throws AccionFiscalImpedidaException SIN_FACTURA_RECHAZADA si no lo tiene
+     */
+    @Transactional(readOnly = true)
+    public void exigirRechazada(long comprobanteId) {
+        registros.vigenteDeScoped(comprobanteId)
+                .filter(r -> r.estado() == EstadoFiscal.RECHAZADO || r.estado() == EstadoFiscal.FUERA_DE_FECHA)
+                .orElseThrow(AccionFiscalImpedidaException::sinFacturaRechazada);
+    }
+
+    /**
+     * Solo lectura, para el detalle de Ventas (C1, «fecha nueva»): si la fecha del registro entra hoy (el {@code Clock}) en
+     * la ventana de ARCA, con el último autorizado que conoce su serie ({@link VentanaCbteFch}). Es la regla de
+     * {@link #reintentar} con la serie del registro; si al reintentar cambia la letra, el reintento decide con la nueva.
+     */
+    @Transactional(readOnly = true)
+    public boolean fechaEntraHoy(ComprobanteFiscal registro) {
+        LocalDate ultima = series.ultimaCbteFchScoped(registro.getAmbiente(), registro.getPuntoVenta(),
+                registro.getCbteTipo()).orElse(null);
+        return VentanaCbteFch.admite(LocalDate.ofInstant(registro.getRegistradoEn(), ZONA_ARCA),
+                LocalDate.ofInstant(reloj.instant(), ZONA_ARCA), ultima);
+    }
+
+    /**
      * «Dejar sin factura»: el registro vigente RECHAZADO o FUERA_DE_FECHA de la venta pasa a SIN_FACTURA con el motivo
      * (sin espacios de más; obligatorio, hasta {@value #LARGO_MOTIVO} caracteres), el usuario y la hora del {@code Clock}.
      * Es definitivo (S12).
@@ -557,7 +598,7 @@ public class PasosFiscales {
                 .orElseThrow(AccionFiscalImpedidaException::sinFacturaRechazada);
         Emision emision = emision(ahora);
         if (emision.impedimento() != null) {
-            throw AccionFiscalImpedidaException.facturacionFrenada(emision.impedimento());
+            throw AccionFiscalImpedidaException.facturacionFrenada(String.format(FACTURACION_FRENADA, emision.frenada()));
         }
         Instant registradoEn = ahora;
         if (!fechaDeHoy) {

@@ -23,14 +23,15 @@ public record VentaResumenResponse(
      *
      * @param letra la letra de la hoja: A, B o C si es válida como factura; X si no
      * @param numero null mientras no tiene número fiscal
+     * @param reimprimir salió con ticket provisorio y ya está AUTORIZADO (cu-07-contingencias C1)
      */
     @JsonInclude(JsonInclude.Include.ALWAYS)
     public record FiscalResumenResponse(String letra, int puntoVenta, Long numero, String estado, String ambiente,
-            boolean validoComoFactura) {
+            boolean validoComoFactura, boolean reimprimir) {
 
         static FiscalResumenResponse de(ResumenFiscal r) {
             return r == null ? null : new FiscalResumenResponse(r.letra(), r.puntoVenta(), r.numero(), r.estado(),
-                    r.ambiente(), r.validoComoFactura());
+                    r.ambiente(), r.validoComoFactura(), r.reimprimir());
         }
     }
 

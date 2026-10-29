@@ -4,6 +4,8 @@ import com.ferreteria.facturacion.arca.PruebaConexion;
 import com.ferreteria.facturacion.credencial.ConfiguracionFacturacion;
 import com.ferreteria.facturacion.credencial.CredencialArcaService;
 import com.ferreteria.facturacion.credencial.PedidoCertificado;
+import com.ferreteria.facturacion.service.AvisosDelMostradorService;
+import com.ferreteria.facturacion.service.AvisosDelMostradorService.AvisosDelMostrador;
 import com.ferreteria.facturacion.service.ProbarConexionService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
@@ -18,7 +20,8 @@ import org.springframework.web.bind.annotation.RestController;
 
 /**
  * «Facturación» del Dueño (CU-01 pasos 2 a 4, rama 5 C1 y rama 6 C1): el punto de venta, el pedido de certificado, el .crt
- * de ARCA, la firma con el simulador y «Probar conexión», de la ferretería del token. Solo el Dueño: el Vendedor y el super admin reciben 403 antes de
+ * de ARCA, la firma con el simulador y «Probar conexión», de la ferretería del token; y, desde la rama 7, los avisos de
+ * facturación del mostrador. Solo el Dueño: el Vendedor y el super admin reciben 403 antes de
  * leer el cuerpo ({@code SecurityConfig}). Ninguna respuesta lleva la clave privada (D8, S7), y no hay forma de subir una.
  */
 @RestController
@@ -27,10 +30,23 @@ public class FacturacionController {
 
     private final CredencialArcaService credenciales;
     private final ProbarConexionService prueba;
+    private final AvisosDelMostradorService avisos;
 
-    public FacturacionController(CredencialArcaService credenciales, ProbarConexionService prueba) {
+    public FacturacionController(CredencialArcaService credenciales, ProbarConexionService prueba,
+            AvisosDelMostradorService avisos) {
         this.credenciales = credenciales;
         this.prueba = prueba;
+        this.avisos = avisos;
+    }
+
+    /**
+     * Los avisos de facturación del mostrador (cu-07-contingencias C4): rechazadas, pendientes de CAE de más de 30 minutos,
+     * en revisión y el bloqueo de ARCA. El mostrador del Dueño lo lee al abrir y cada minuto.
+     */
+    @GetMapping("/avisos-mostrador")
+    @PreAuthorize("hasRole('DUENO')")
+    public AvisosDelMostrador avisosDelMostrador() {
+        return avisos.leer();
     }
 
     @GetMapping("/configuracion")
