@@ -82,6 +82,103 @@ public interface FacturacionParaVenta {
      */
     Optional<FacturacionDelMostrador> paraElMostrador();
 
+    // ---- La bandeja de Ventas, las acciones del Dueño y «llegó el CAE» (cu-07-contingencias C1 a C3 y C7) ----
+
+    /** Las ventas de la ferretería cuyo registro vigente está en esa bandeja (C1), por id. Solo lectura. */
+    List<Long> ventasEnBandeja(Bandeja bandeja);
+
+    /**
+     * La factura de la venta como la ve el detalle de Ventas (C1): la hoja de {@link #documento} y, de la misma lectura del
+     * registro vigente, lo que dijo ARCA, quién la dejó sin factura, las acciones que valen hoy y si hay que reimprimirla.
+     * Sin llamar a ARCA. Vacío si la venta no tiene registro fiscal (o es de otra ferretería).
+     */
+    Optional<FacturaConsultada> consulta(long comprobanteId);
+
+    /**
+     * De esas ventas, las que salieron con el ticket provisorio y ya están AUTORIZADO (C7), con el texto de su factura:
+     * «Factura B 00001-00000045» si es válida como factura, o «X · <marca>» si no (lo simulado nunca parece fiscal). Las
+     * demás, o de otra ferretería, no aparecen. Solo lectura.
+     */
+    Map<Long, String> provisoriasAutorizadas(Collection<Long> comprobanteIds);
+
+    /**
+     * Que la venta tenga un registro vigente RECHAZADO o FUERA_DE_FECHA (C2), sin cargarlo: quien va a reintentar lo
+     * pregunta antes de mirar el cliente de hoy. Se suma a la transacción de quien llama, si tiene una.
+     *
+     * @throws FacturaImpedidaException SIN_FACTURA_RECHAZADA si no lo tiene
+     */
+    void exigirFacturaRechazada(long comprobanteId);
+
+    /**
+     * «Reintentar» del Dueño (C2, D10): el registro vigente RECHAZADO o FUERA_DE_FECHA de la venta queda como historia y nace
+     * otro PENDIENTE con la copia de hoy: el receptor que pasa la venta (el cliente leído con su lock exclusivo), el emisor
+     * de CU-01 y la letra recalculada. La fecha nunca cambia sola: sin {@code fechaDeHoy}, la de la venta si todavía entra
+     * en ARCA. Exige la transacción de quien llama, con el cliente ya tomado: adentro se toman {@code config_arca} en S y
+     * el registro. El CAE se pide después del commit, con {@link #autorizar}. Devuelve el id del registro nuevo.
+     *
+     * @throws FacturaImpedidaException SIN_FACTURA_RECHAZADA, FACTURACION_FRENADA o FECHA_NUEVA_REQUERIDA; no cambia nada
+     */
+    long reintentar(long comprobanteId, ReceptorVenta receptor, List<RenglonParaFacturar> renglones, boolean fechaDeHoy);
+
+    /**
+     * «Dejar sin factura» del Dueño (C3, S12): el registro vigente RECHAZADO o FUERA_DE_FECHA pasa a SIN_FACTURA con el
+     * motivo (obligatorio, hasta 200 caracteres: si no, 400 en {@code motivo}), el usuario y la hora. Es definitivo.
+     *
+     * @throws FacturaImpedidaException SIN_FACTURA_RECHAZADA si no hay una rechazada; no cambia nada
+     */
+    void dejarSinFactura(long comprobanteId, String motivo, long usuarioId);
+
+    /** La bandeja de Ventas del Dueño (C1, CU-16 punto 7). */
+    enum Bandeja {
+        /** Todavía sin CAE: PENDIENTE, EN_CURSO, EN_VERIFICACION y las en revisión (CAE_NO_COINCIDE y SERIE_DESINCRONIZADA). */
+        PENDIENTES,
+        /** ARCA no la autorizó: RECHAZADO y FUERA_DE_FECHA. */
+        RECHAZADAS
+    }
+
+    /** Lo que el Dueño puede hacer hoy con la factura de una venta (C2 y C3). */
+    enum AccionFiscal {
+        REINTENTAR,
+        DEJAR_SIN_FACTURA
+    }
+
+    /**
+     * Un error de ARCA, tal cual (C6), con la explicación de los códigos conocidos.
+     *
+     * @param explicacion qué quiere decir y qué hacer; null si el código no es uno de los conocidos
+     */
+    record ErrorArca(int codigo, String mensaje, String explicacion) {}
+
+    /** Una observación de ARCA sobre una factura autorizada, tal cual. */
+    record ObservacionArca(int codigo, String mensaje) {}
+
+    /**
+     * La factura de la venta en el detalle de Ventas (C1).
+     *
+     * @param documento la hoja, como la de {@link #documento}
+     * @param errores lo que ARCA dijo al no autorizarla (sus {@code Errors} y, con R, sus {@code Observaciones}), en ese
+     *     orden; vacío si no dijo nada
+     * @param observaciones las {@code Observaciones} de una factura autorizada; vacío en las demás
+     * @param motivoSinFactura por qué el Dueño la dejó sin factura; null si no
+     * @param usuarioSinFacturaId quién (el id del usuario); null si no
+     * @param sinFacturaEn cuándo; null si no
+     * @param acciones las que valen hoy: las dos con un registro RECHAZADO o FUERA_DE_FECHA; ninguna en los demás
+     * @param fechaNuevaRequerida true si es RECHAZADO o FUERA_DE_FECHA y la fecha de la venta ya no entra en ARCA hoy
+     *     (reintentar pide confirmar la de hoy)
+     * @param reimprimir true si salió con el ticket provisorio y ya está AUTORIZADO
+     */
+    record FacturaConsultada(DocumentoFiscal documento, List<ErrorArca> errores, List<ObservacionArca> observaciones,
+            String motivoSinFactura, Long usuarioSinFacturaId, Instant sinFacturaEn, List<AccionFiscal> acciones,
+            boolean fechaNuevaRequerida, boolean reimprimir) {
+
+        public FacturaConsultada {
+            Objects.requireNonNull(documento, "Falta la hoja de la factura.");
+            errores = List.copyOf(errores);
+            observaciones = List.copyOf(observaciones);
+            acciones = List.copyOf(acciones);
+        }
+    }
+
     /**
      * Lo que decide {@link #decidir}.
      *
@@ -158,8 +255,8 @@ public interface FacturacionParaVenta {
     /**
      * El estado fiscal de una venta, para la respuesta del cobro.
      *
-     * @param estado PENDIENTE, EN_CURSO, EN_VERIFICACION, AUTORIZADO, RECHAZADO, FUERA_DE_FECHA, CAE_NO_COINCIDE o
-     *     SERIE_DESINCRONIZADA
+     * @param estado PENDIENTE, EN_CURSO, EN_VERIFICACION, AUTORIZADO, RECHAZADO, FUERA_DE_FECHA, CAE_NO_COINCIDE,
+     *     SERIE_DESINCRONIZADA o SIN_FACTURA
      * @param clase FACTURA
      * @param letra A, B o C
      * @param puntoVenta el punto de venta del registro
@@ -265,9 +362,10 @@ public interface FacturacionParaVenta {
      * @param estado el estado del registro
      * @param ambiente SIMULADOR, HOMOLOGACION o PRODUCCION
      * @param validoComoFactura la misma regla que {@link DocumentoFiscal#validoComoFactura()}
+     * @param reimprimir true si salió con el ticket provisorio y ya está AUTORIZADO (rama 7, C1)
      */
     record ResumenFiscal(String letra, int puntoVenta, Long numero, String estado, String ambiente,
-            boolean validoComoFactura) {}
+            boolean validoComoFactura, boolean reimprimir) {}
 
     /**
      * La facturación de la ferretería, como la anticipa el cobro (C3).

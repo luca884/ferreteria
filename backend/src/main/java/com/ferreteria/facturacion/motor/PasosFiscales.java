@@ -1,10 +1,13 @@
 package com.ferreteria.facturacion.motor;
 
+import com.ferreteria.common.HoraArgentina;
+import com.ferreteria.common.exception.DatosInvalidosException;
 import com.ferreteria.common.exception.ReglaDeNegocioException;
 import com.ferreteria.facturacion.credencial.RevisionDeCredencial;
 import com.ferreteria.facturacion.model.AlicuotaDesglosada;
 import com.ferreteria.facturacion.model.Ambiente;
 import com.ferreteria.facturacion.model.ClaseComprobante;
+import com.ferreteria.facturacion.model.ClaveDeSerie;
 import com.ferreteria.facturacion.model.ComprobanteFiscal;
 import com.ferreteria.facturacion.model.ComprobanteFiscalAlicuota;
 import com.ferreteria.facturacion.model.CondicionIvaEmisor;
@@ -15,7 +18,9 @@ import com.ferreteria.facturacion.model.EncuadreFiscal;
 import com.ferreteria.facturacion.model.EstadoFiscal;
 import com.ferreteria.facturacion.model.EstadoIntento;
 import com.ferreteria.facturacion.model.IntentoFiscal;
+import com.ferreteria.facturacion.model.RegistroVigente;
 import com.ferreteria.facturacion.model.SerieFiscal;
+import com.ferreteria.facturacion.model.VentanaCbteFch;
 import com.ferreteria.facturacion.repository.ComprobanteFiscalAlicuotaRepository;
 import com.ferreteria.facturacion.repository.ComprobanteFiscalRepository;
 import com.ferreteria.facturacion.repository.ConfigArcaRepository;
@@ -27,7 +32,9 @@ import com.ferreteria.tenant.TenantContext;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
@@ -53,6 +60,24 @@ public class PasosFiscales {
             + "puede leer. El Dueño lo renueva en «Facturación».";
     /** WSAA rechazó el certificado (rama 6, C4): la facturación está frenada hasta otro certificado o «Probar conexión». */
     static final String FRENADA = "La facturación con ARCA está frenada: ARCA rechazó el certificado (%s).";
+    /**
+     * «Reintentar» con la facturación frenada (C2 de cu-07-contingencias): «La facturación está frenada: <motivo>.», con el
+     * motivo de la regla del alta en corto.
+     */
+    static final String FACTURACION_FRENADA = "La facturación está frenada: %s.";
+    static final String FRENADA_NO_HABILITADA = "no está habilitada en esta ferretería (la habilita el super admin)";
+    static final String FRENADA_FALTAN_DATOS = "faltan datos de la ferretería (los carga el Dueño en «Datos de la "
+            + "ferretería»)";
+    static final String FRENADA_SIN_CREDENCIAL = "el certificado de ARCA falta, venció o no se puede leer (el Dueño lo "
+            + "renueva en «Facturación»)";
+    static final String FRENADA_POR_ARCA = "ARCA rechazó el certificado (%s)";
+    /** El motivo de «Dejar sin factura» (C3, S12). */
+    static final int LARGO_MOTIVO = 200;
+    static final String MOTIVO_VACIO = "Contá por qué la venta queda sin factura.";
+    static final String MOTIVO_LARGO = "El motivo tiene hasta 200 caracteres.";
+
+    /** ARCA trabaja en hora de Buenos Aires: de ahí salen la CbteFch y el día del envío. */
+    private static final ZoneId ZONA_ARCA = HoraArgentina.ZONA;
 
     private final ComprobanteFiscalRepository registros;
     private final ComprobanteFiscalAlicuotaRepository alicuotas;
@@ -61,11 +86,13 @@ public class PasosFiscales {
     private final ConfigArcaRepository configs;
     private final FerreteriaRepository ferreterias;
     private final RevisionDeCredencial credencial;
+    private final PoliticaDeReintento reintento;
     private final Clock reloj;
 
     public PasosFiscales(ComprobanteFiscalRepository registros, ComprobanteFiscalAlicuotaRepository alicuotas,
             IntentoFiscalRepository intentos, SerieFiscalRepository series, ConfigArcaRepository configs,
-            FerreteriaRepository ferreterias, RevisionDeCredencial credencial, Clock reloj) {
+            FerreteriaRepository ferreterias, RevisionDeCredencial credencial, PoliticaDeReintento reintento,
+            Clock reloj) {
         this.registros = registros;
         this.alicuotas = alicuotas;
         this.intentos = intentos;
@@ -73,6 +100,7 @@ public class PasosFiscales {
         this.configs = configs;
         this.ferreterias = ferreterias;
         this.credencial = credencial;
+        this.reintento = reintento;
         this.reloj = reloj;
     }
 
@@ -116,6 +144,15 @@ public class PasosFiscales {
         if (emision.impedimento() != null) {
             throw new ReglaDeNegocioException(emision.impedimento());
         }
+        return alta(emision, alta, ahora);
+    }
+
+    /**
+     * El alta del registro PENDIENTE con lo que va a ARCA congelado: el ambiente y el punto de venta de la configuración,
+     * el encuadre (letra y CbteTipo) de la condición del emisor y la del receptor, el desglose de los renglones con esa
+     * letra, el receptor y el emisor; y su desglose por alícuota. Lo comparten la venta y el reintento del Dueño.
+     */
+    private long alta(Emision emision, AltaFiscal alta, Instant registradoEn) {
         ConfigArca config = emision.config();
         EmisorFiscal emisor = emision.emisor();
         Long ferreteriaId = TenantContext.requireFerreteriaId();
@@ -124,7 +161,7 @@ public class PasosFiscales {
 
         ComprobanteFiscal registro = registros.save(ComprobanteFiscal.pendiente(ferreteriaId, alta.comprobanteId(),
                 config.getAmbiente(), config.getPuntoVenta(), ClaseComprobante.FACTURA, encuadre, alta.receptor(), emisor,
-                desglose, ahora));
+                desglose, registradoEn));
         for (AlicuotaDesglosada alicuota : desglose.alicuotas()) {
             alicuotas.save(ComprobanteFiscalAlicuota.de(ferreteriaId, registro.getId(), alicuota));
         }
@@ -135,11 +172,13 @@ public class PasosFiscales {
      * Con qué factura la ferretería del request: su configuración de ARCA y su emisor, o por qué no factura.
      *
      * @param impedimento null si factura; si no, el motivo que da {@link #registrar} (y entonces lo demás es null)
+     * @param frenada el mismo motivo en corto, para el mensaje de «Reintentar» ({@link #FACTURACION_FRENADA}); null si
+     *     factura
      */
-    private record Emision(ConfigArca config, EmisorFiscal emisor, String impedimento) {
+    private record Emision(ConfigArca config, EmisorFiscal emisor, String impedimento, String frenada) {
 
-        static Emision impedida(String impedimento) {
-            return new Emision(null, null, impedimento);
+        static Emision impedida(String impedimento, String frenada) {
+            return new Emision(null, null, impedimento, frenada);
         }
     }
 
@@ -183,16 +222,17 @@ public class PasosFiscales {
     private Emision emision(Optional<ConfigArca> leida, boolean conLock, Instant ahora) {
         Optional<ConfigArca> config = leida.filter(ConfigArca::puedeFacturar);
         if (config.isEmpty()) {
-            return Emision.impedida(leida.filter(c -> c.isFacturacionHabilitada() && c.estaBloqueada())
-                    .map(c -> String.format(FRENADA, c.getBloqueoCodigo()))
-                    .orElse(NO_HABILITADA));
+            return leida.filter(c -> c.isFacturacionHabilitada() && c.estaBloqueada())
+                    .map(c -> Emision.impedida(String.format(FRENADA, c.getBloqueoCodigo()),
+                            String.format(FRENADA_POR_ARCA, c.getBloqueoCodigo())))
+                    .orElseGet(() -> Emision.impedida(NO_HABILITADA, FRENADA_NO_HABILITADA));
         }
         if (!credencial.dejaFacturar(config.get(), ahora, conLock)) {
-            return Emision.impedida(SIN_CREDENCIAL);
+            return Emision.impedida(SIN_CREDENCIAL, FRENADA_SIN_CREDENCIAL);
         }
         return emisor(TenantContext.requireFerreteriaId())
-                .map(emisor -> new Emision(config.get(), emisor, null))
-                .orElseGet(() -> Emision.impedida(FALTAN_DATOS));
+                .map(emisor -> new Emision(config.get(), emisor, null, null))
+                .orElseGet(() -> Emision.impedida(FALTAN_DATOS, FRENADA_FALTAN_DATOS));
     }
 
     /** La copia del emisor: los datos de CU-01 paso 1 de la ferretería; vacío si falta alguno de los que se imprimen. */
@@ -264,6 +304,13 @@ public class PasosFiscales {
         return registros.findScoped(registroId).orElseThrow();
     }
 
+    /** Si la serie del registro tiene otro registro con un número mayor que {@code ultimo} (el 10016, C6). */
+    @Transactional(readOnly = true)
+    public boolean hayNumeroDespuesDe(ComprobanteFiscal registro, long ultimo) {
+        return registros.contarNumerosDespuesDeScoped(registro.getId(), registro.getAmbiente(), registro.getPuntoVenta(),
+                registro.getCbteTipo(), ultimo) > 0;
+    }
+
     @Transactional(readOnly = true)
     public Optional<ComprobanteFiscal> siguientePendiente(SerieFiscal serie) {
         return registros.siguientePendienteScoped(serie.getAmbiente(), serie.getPuntoVenta(), serie.getCbteTipo());
@@ -295,11 +342,15 @@ public class PasosFiscales {
                 pedido, ahora)).getId();
     }
 
-    /** A: el registro AUTORIZADO con su CAE, el intento cerrado y el número como último de la serie. */
+    /**
+     * A: el registro AUTORIZADO con su CAE, el intento cerrado y el número como último de la serie, cuyo backoff vuelve a
+     * cero (C5: ARCA contesta).
+     */
     @Transactional
     public void autorizado(long serieId, long registroId, long intentoId, long numero, LocalDate cbteFch, String cae,
             LocalDate vencimiento, String observaciones, String errores, String respuesta, Instant ahora) {
         series.registrarAutorizadoScoped(serieId, numero, cbteFch);
+        series.reiniciarBackoffScoped(serieId);
         exigir(registros.autorizarScoped(registroId, numero, EstadoFiscal.EN_CURSO, cae, vencimiento, observaciones,
                 errores), "el registro ya no está en curso");
         exigir(intentos.terminarScoped(intentoId, EstadoIntento.AUTORIZADO, "A", respuesta, ahora, ahora),
@@ -334,11 +385,12 @@ public class PasosFiscales {
 
     // ---- Verificación ----
 
-    /** ARCA tiene N con todos los campos enviados: se adopta su CAE. */
+    /** ARCA tiene N con todos los campos enviados: se adopta su CAE, y el backoff de la serie vuelve a cero. */
     @Transactional
     public void adoptar(long serieId, long registroId, long intentoId, long numero, LocalDate cbteFch, String cae,
             LocalDate vencimiento, String observaciones, String verificacion, Instant ahora) {
         series.registrarAutorizadoScoped(serieId, numero, cbteFch);
+        series.reiniciarBackoffScoped(serieId);
         exigir(registros.autorizarScoped(registroId, numero, EstadoFiscal.EN_VERIFICACION, cae, vencimiento,
                 observaciones, "[]"), "el registro ya no está en verificación");
         exigir(intentos.resolverScoped(intentoId, EstadoIntento.AUTORIZADO, "A", verificacion, ahora),
@@ -381,6 +433,212 @@ public class PasosFiscales {
         exigir(registros.vencerSinReenvioScoped(registroId, numero), "el registro ya no está en verificación");
         exigir(intentos.resolverScoped(intentoId, EstadoIntento.NO_LLEGO, null, verificacion, ahora),
                 "el intento ya no está en verificación");
+    }
+
+    // ---- El 10016 (rama 7, C6) ----
+
+    /**
+     * 10016 con un número que no era el próximo de ARCA: la serie se resincroniza con lo que dice ARCA (también hacia
+     * atrás), el registro vuelve a PENDIENTE sin número para renumerarse y el intento se cierra RECHAZADO, con la respuesta y
+     * el último autorizado tal cual. Todo con la serie todavía propia.
+     */
+    @Transactional
+    public void renumerar(long serieId, String dueno, long registroId, long intentoId, long numero, long ultimo,
+            LocalDate fecha, String respuesta, String verificacion, Instant ahora, Instant vence) {
+        renovarOFallar(serieId, dueno, ahora, vence);
+        exigir(series.sincronizarScoped(serieId, dueno, ahora, ultimo, fecha), "la serie ya no es de esta toma");
+        exigir(registros.liberarScoped(registroId, numero), "el registro ya no está en curso");
+        exigir(intentos.rechazarConVerificacionScoped(intentoId, respuesta, verificacion, ahora),
+                "el intento ya no está abierto");
+    }
+
+    /**
+     * 10016 con ARCA atrás de números que la serie ya tiene: renumerar chocaría con ellos o repetiría un número que ARCA
+     * perdió. El registro pasa a SERIE_DESINCRONIZADA con el número enviado y el intento a ALERTA, con la respuesta y el
+     * último autorizado tal cual; la caché de la serie no se toca. Traba la serie hasta que la vea una persona.
+     */
+    @Transactional
+    public void desincronizadaPorArca(long serieId, String dueno, long registroId, long intentoId, long numero,
+            String respuesta, String verificacion, Instant ahora, Instant vence) {
+        renovarOFallar(serieId, dueno, ahora, vence);
+        exigir(registros.pasarScoped(registroId, numero, EstadoFiscal.EN_CURSO, EstadoFiscal.SERIE_DESINCRONIZADA),
+                "el registro ya no está en curso");
+        exigir(intentos.alertarConVerificacionScoped(intentoId, respuesta, verificacion, ahora),
+                "el intento ya no está abierto");
+    }
+
+    /**
+     * 10016 con el número próximo: el problema es la CbteFch. El registro pasa a FUERA_DE_FECHA sin número, con lo que dijo
+     * ARCA; el intento se cierra RECHAZADO; la serie aprende la fecha del último de ARCA. El número sigue libre.
+     */
+    @Transactional
+    public void fueraDeFechaPorArca(long serieId, String dueno, long registroId, long intentoId, long numero, long ultimo,
+            LocalDate fecha, String observaciones, String errores, String respuesta, String verificacion, Instant ahora,
+            Instant vence) {
+        renovarOFallar(serieId, dueno, ahora, vence);
+        exigir(series.sincronizarScoped(serieId, dueno, ahora, ultimo, fecha), "la serie ya no es de esta toma");
+        exigir(registros.fueraDeFechaPorArcaScoped(registroId, numero, observaciones, errores),
+                "el registro ya no está en curso");
+        exigir(intentos.rechazarConVerificacionScoped(intentoId, respuesta, verificacion, ahora),
+                "el intento ya no está abierto");
+    }
+
+    /**
+     * 10016 sin poder preguntar a ARCA su último autorizado: no se sabe si fue el número o la fecha. El registro vuelve a
+     * PENDIENTE sin número (el número no se consumió) y el intento se cierra RECHAZADO con la respuesta; la serie no se toca.
+     * La atención siguiente lo vuelve a mandar y, con otro 10016, lo entiende.
+     */
+    @Transactional
+    public void rechazadoSinEntender(long registroId, long intentoId, long numero, String respuesta, Instant ahora) {
+        exigir(registros.liberarScoped(registroId, numero), "el registro ya no está en curso");
+        exigir(intentos.rechazarConVerificacionScoped(intentoId, respuesta, null, ahora), "el intento ya no está abierto");
+    }
+
+    // ---- El job de reintento (rama 7, S2 y C5) ----
+
+    /**
+     * Las series de la ferretería del request que el job tiene que atender en {@code ahora}: con algún registro en trámite,
+     * sin backoff o con el próximo reintento vencido, y sin alertas (S13: las resuelve soporte). FIFO entre series.
+     */
+    @Transactional(readOnly = true)
+    public List<ClaveDeSerie> seriesConTrabajo(Instant ahora) {
+        return registros.seriesConTrabajoScoped(ahora);
+    }
+
+    /**
+     * El resultado de la pasada del job sobre una serie, en su backoff: SIN_RESPUESTA (un error transitorio) suma una falla
+     * seguida y pospone la serie según {@link PoliticaDeReintento#espera(int)} desde {@code ahora}; TERMINADA lo vuelve a
+     * cero. Las demás no lo cambian: OCUPADA y SERIE_PERDIDA son de otra instancia, TRABADA espera a soporte y SIN_TIEMPO
+     * cortó sin error.
+     */
+    @Transactional
+    public void registrarPasada(ClaveDeSerie clave, Atencion atencion, Instant ahora) {
+        switch (atencion) {
+            case SIN_RESPUESTA -> {
+                long serieId = series.asegurarScoped(clave.ambiente(), clave.puntoVenta(), clave.cbteTipo());
+                int fallas = series.fallasSeguidasBloqueandoScoped(serieId).orElseThrow() + 1;
+                series.posponerScoped(serieId, fallas, ahora.plus(reintento.espera(fallas)));
+            }
+            case TERMINADA -> series.reiniciarBackoffScoped(
+                    series.asegurarScoped(clave.ambiente(), clave.puntoVenta(), clave.cbteTipo()));
+            default -> {
+                // OCUPADA, SERIE_PERDIDA, TRABADA y SIN_TIEMPO no cambian el backoff.
+            }
+        }
+    }
+
+    // ---- La venta salió con el ticket provisorio (rama 7, S6) ----
+
+    /**
+     * Cuando la venta deja de esperar su CAE: si su registro vigente sigue en trámite (PENDIENTE, EN_CURSO o
+     * EN_VERIFICACION), la venta sale con el ticket provisorio y queda marcada. Devuelve el registro vigente leído en la
+     * misma transacción, después de marcarlo: lo que responde la venta y la marca no se contradicen.
+     */
+    @Transactional
+    public Optional<ComprobanteFiscal> salioConTicketProvisorio(long comprobanteId) {
+        registros.marcarProvisorioScoped(comprobanteId);
+        return registros.deComprobanteScoped(comprobanteId);
+    }
+
+    // ---- Las acciones del Dueño (rama 7, CU-16 punto 7; D10 y S12) ----
+
+    /**
+     * Solo lectura, para quien va a reintentar (C2): que la venta tenga un registro vigente RECHAZADO o FUERA_DE_FECHA, leído
+     * sin cargarlo en el contexto de persistencia de quien llama. Así «sin una rechazada» se responde antes que lo que
+     * dependa del cliente de hoy; {@link #reintentar} lo vuelve a exigir al reemplazarlo.
+     *
+     * @throws AccionFiscalImpedidaException SIN_FACTURA_RECHAZADA si no lo tiene
+     */
+    @Transactional(readOnly = true)
+    public void exigirRechazada(long comprobanteId) {
+        registros.vigenteDeScoped(comprobanteId)
+                .filter(r -> r.estado() == EstadoFiscal.RECHAZADO || r.estado() == EstadoFiscal.FUERA_DE_FECHA)
+                .orElseThrow(AccionFiscalImpedidaException::sinFacturaRechazada);
+    }
+
+    /**
+     * Solo lectura, para el detalle de Ventas (C1, «fecha nueva»): si la fecha del registro entra hoy (el {@code Clock}) en
+     * la ventana de ARCA, con el último autorizado que conoce su serie ({@link VentanaCbteFch}). Es la regla de
+     * {@link #reintentar} con la serie del registro; si al reintentar cambia la letra, el reintento decide con la nueva.
+     */
+    @Transactional(readOnly = true)
+    public boolean fechaEntraHoy(ComprobanteFiscal registro) {
+        LocalDate ultima = series.ultimaCbteFchScoped(registro.getAmbiente(), registro.getPuntoVenta(),
+                registro.getCbteTipo()).orElse(null);
+        return VentanaCbteFch.admite(LocalDate.ofInstant(registro.getRegistradoEn(), ZONA_ARCA),
+                LocalDate.ofInstant(reloj.instant(), ZONA_ARCA), ultima);
+    }
+
+    /**
+     * «Dejar sin factura»: el registro vigente RECHAZADO o FUERA_DE_FECHA de la venta pasa a SIN_FACTURA con el motivo
+     * (sin espacios de más; obligatorio, hasta {@value #LARGO_MOTIVO} caracteres), el usuario y la hora del {@code Clock}.
+     * Es definitivo (S12).
+     *
+     * @throws DatosInvalidosException con el motivo vacío o largo (400 en {@code motivo})
+     * @throws AccionFiscalImpedidaException SIN_FACTURA_RECHAZADA si la venta (de la ferretería del request) no tiene un
+     *     registro vigente RECHAZADO o FUERA_DE_FECHA
+     */
+    @Transactional
+    public void dejarSinFactura(long comprobanteId, String motivo, long usuarioId) {
+        String limpio = motivo == null ? "" : motivo.strip();
+        if (limpio.isEmpty()) {
+            throw new DatosInvalidosException(Map.of("motivo", MOTIVO_VACIO));
+        }
+        if (limpio.codePointCount(0, limpio.length()) > LARGO_MOTIVO) {
+            throw new DatosInvalidosException(Map.of("motivo", MOTIVO_LARGO));
+        }
+        if (registros.dejarSinFacturaScoped(comprobanteId, limpio, usuarioId, Instant.now(reloj)) != 1) {
+            throw AccionFiscalImpedidaException.sinFacturaRechazada();
+        }
+    }
+
+    /**
+     * «Reintentar» (D10): el registro vigente RECHAZADO o FUERA_DE_FECHA de la venta queda reemplazado (como historia, con
+     * sus errores) y nace otro PENDIENTE, vigente, con la copia de {@code ahora}: el receptor que pasa quien llama (el
+     * cliente de hoy), el emisor de CU-01 leído ahora, y la letra y el desglose recalculados como en el alta. La letra puede
+     * cambiar; el ambiente y el punto de venta son los de la configuración de hoy.
+     *
+     * <p>La fecha nunca cambia sola: el registro nuevo lleva la hora del reemplazado (la de la venta, o la de hoy que el
+     * Dueño ya confirmó en un reintento anterior) si su CbteFch entra en la ventana de ARCA ({@link VentanaCbteFch}, con el
+     * último autorizado que conoce la serie de la letra nueva); si no entra, solo con {@code fechaDeHoy} lleva
+     * {@code ahora}. Con {@code fechaDeHoy}, lleva {@code ahora} siempre.
+     *
+     * <p>Exige la transacción de quien llama, que ya tomó al cliente con lock exclusivo: acá se toman, en orden,
+     * {@code config_arca} con {@code FOR SHARE} (la regla del alta, {@link #puedeFacturar(Instant)}, en {@code ahora}) y el
+     * registro reemplazado. La serie solo se lee. No limpia el contexto de persistencia de quien llama ni carga el registro
+     * reemplazado en él. Pedir el CAE va después del commit, como en la venta.
+     *
+     * @return el id del registro nuevo
+     * @throws AccionFiscalImpedidaException SIN_FACTURA_RECHAZADA si la venta no tiene un vigente RECHAZADO o
+     *     FUERA_DE_FECHA; FACTURACION_FRENADA si la ferretería no factura en {@code ahora}; FECHA_NUEVA_REQUERIDA si la fecha
+     *     ya no entra y no se pidió la de hoy. En los tres casos no cambia nada.
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public long reintentar(AltaFiscal alta, boolean fechaDeHoy, Instant ahora) {
+        RegistroVigente reemplazado = registros.vigenteDeScoped(alta.comprobanteId())
+                .filter(r -> r.estado() == EstadoFiscal.RECHAZADO || r.estado() == EstadoFiscal.FUERA_DE_FECHA)
+                .orElseThrow(AccionFiscalImpedidaException::sinFacturaRechazada);
+        Emision emision = emision(ahora);
+        if (emision.impedimento() != null) {
+            throw AccionFiscalImpedidaException.facturacionFrenada(String.format(FACTURACION_FRENADA, emision.frenada()));
+        }
+        Instant registradoEn = ahora;
+        if (!fechaDeHoy) {
+            ConfigArca config = emision.config();
+            int cbteTipo = EncuadreFiscal.de(emision.emisor().condicionIva(), alta.receptor().condicionIva())
+                    .cbteTipo(ClaseComprobante.FACTURA);
+            LocalDate ultima = series.ultimaCbteFchScoped(config.getAmbiente(), config.getPuntoVenta(), cbteTipo)
+                    .orElse(null);
+            if (!VentanaCbteFch.admite(LocalDate.ofInstant(reemplazado.registradoEn(), ZONA_ARCA),
+                    LocalDate.ofInstant(ahora, ZONA_ARCA), ultima)) {
+                throw AccionFiscalImpedidaException.fechaNuevaRequerida();
+            }
+            registradoEn = reemplazado.registradoEn();
+        }
+        if (registros.reemplazarScoped(reemplazado.id(), ahora) != 1) {
+            throw AccionFiscalImpedidaException.sinFacturaRechazada();
+        }
+        return alta(emision, alta, registradoEn);
     }
 
     private void renovarOFallar(long serieId, String dueno, Instant ahora, Instant vence) {

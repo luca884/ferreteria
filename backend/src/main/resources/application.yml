@@ -35,6 +35,7 @@ spring:
     locations: classpath:db/migration
   lifecycle:
     # Con el apagado ordenado, cuánto espera el servidor web los pedidos en curso (el drenaje de Railway tiene que cubrirlo).
+    # En la misma fase, y a la par, se espera la pasada en curso del job de reintento fiscal: no suma tiempo.
     timeout-per-shutdown-phase: ${APAGADO_ESPERA_POR_FASE:20s}
   task:
     scheduling:
@@ -98,6 +99,18 @@ app:
       # (si no, la app no arranca): si venciera con una llamada en vuelo, otra instancia vería N-1, reenviaría y ARCA
       # contestaría 10016.
       lease: ${FACTURACION_LEASE_SERIE:180s}
+    reintento:
+      # Job de reintento de los pendientes de CAE (rama 7, C5). Corre en un hilo propio, no en el del scheduler que comparten
+      # el recálculo diario y las cotizaciones, y se apaga con app.programacion.habilitada=false, como ellos (los tests).
+      # Entre el fin de una pasada y la siguiente.
+      cada: ${FACTURACION_REINTENTO_CADA:60s}
+      # Lo más que dura una pasada: se mira entre una serie y otra y entre un registro y el siguiente. Tiene que alcanzar
+      # para una llamada (motor.presupuesto-llamada); si no, la app no arranca.
+      tope-pasada: ${FACTURACION_REINTENTO_TOPE_PASADA:120s}
+      # Backoff de cada serie, en la base: arranca en backoff-inicial, se duplica en cada pasada seguida con un error
+      # transitorio y no pasa de backoff-tope (que no puede ser menor que el inicial); vuelve a cero cuando la serie autoriza.
+      backoff-inicial: ${FACTURACION_REINTENTO_BACKOFF_INICIAL:60s}
+      backoff-tope: ${FACTURACION_REINTENTO_BACKOFF_TOPE:30m}
     arca:
       # Cliente real de ARCA (rama 6, C6). Las URL salen solo de acá, sin variable ni endpoint que las cambie: un deploy no
       # puede mandar los pedidos a otro lado. Son las del soap:address de cada WSDL.
@@ -153,3 +166,6 @@ app:
   facturacion:
     simulador:
       latencia: ${SIMULADOR_WSFE_LATENCIA:300ms}
+      # ARCA simulada caída (rama 7): mientras exista este archivo, el WSFEv1 del simulador no contesta. Se prende con
+      # «touch» y se apaga con «rm». Solo dev: fuera de este perfil no hay interruptor.
+      caida: ${SIMULADOR_WSFE_CAIDA:${java.io.tmpdir}/ferreteria-arca-caida}

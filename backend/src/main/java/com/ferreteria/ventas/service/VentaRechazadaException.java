@@ -35,7 +35,16 @@ public class VentaRechazadaException extends RuntimeException {
          * CU-07 paso 2 (D4): con la facturación habilitada, la venta facturable a un cliente Responsable Inscripto,
          * Monotributista o Exento necesita su CUIT y su domicilio.
          */
-        CLIENTE_SIN_DATOS_FISCALES(422);
+        CLIENTE_SIN_DATOS_FISCALES(422),
+        /**
+         * «Reintentar» o «Dejar sin factura» (cu-07-contingencias C2 y C3): la venta no tiene una factura RECHAZADO o
+         * FUERA_DE_FECHA.
+         */
+        SIN_FACTURA_RECHAZADA(409),
+        /** «Reintentar» (C2): la fecha de la venta ya no entra en ARCA y el Dueño no confirmó que salga con la de hoy. */
+        FECHA_NUEVA_REQUERIDA(409),
+        /** «Reintentar» (C2): la ferretería no factura hoy (deshabilitada, sin certificado vigente o bloqueada por ARCA). */
+        FACTURACION_FRENADA(409);
 
         private final int estadoHttp;
 
@@ -105,6 +114,14 @@ public class VentaRechazadaException extends RuntimeException {
     public static VentaRechazadaException clienteSinDatosFiscales(String razonSocial) {
         return new VentaRechazadaException(Motivo.CLIENTE_SIN_DATOS_FISCALES, "Para facturarle a " + razonSocial
                 + " falta su CUIT o su domicilio: completalos en Clientes.", List.of());
+    }
+
+    /**
+     * C2 y C3: una acción del Dueño sobre la factura que {@code facturacion} no dejó hacer, con su código (SIN_FACTURA_RECHAZADA,
+     * FECHA_NUEVA_REQUERIDA o FACTURACION_FRENADA) y su texto tal cual, sin articulos.
+     */
+    public static VentaRechazadaException facturaImpedida(Motivo motivo, String mensaje) {
+        return new VentaRechazadaException(motivo, mensaje, List.of());
     }
 
     private final Motivo motivo;

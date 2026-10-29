@@ -2,7 +2,10 @@ package com.ferreteria.ventas.service;
 
 import com.ferreteria.common.exception.ResourceNotFoundException;
 import com.ferreteria.facturacion.api.FacturacionParaVenta;
+import com.ferreteria.facturacion.api.FacturacionParaVenta.Bandeja;
+import com.ferreteria.facturacion.api.FacturacionParaVenta.FacturaConsultada;
 import com.ferreteria.facturacion.api.FacturacionParaVenta.ResumenFiscal;
+import com.ferreteria.ventas.model.Caja;
 import com.ferreteria.ventas.model.Comprobante;
 import com.ferreteria.ventas.model.Remito;
 import com.ferreteria.ventas.model.TipoComprobante;
@@ -18,9 +21,11 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * Consulta de las ventas hechas (G60, GDS-15): listar y ver una para reimprimirla. Solo lectura: anular es la nota de
@@ -30,6 +35,11 @@ import java.util.Optional;
  * busca por numero fiscal, y el detalle trae el documento fiscal para reimprimir la factura. Todo lo fiscal lo da
  * {@code facturacion} por su puerto: la busqueda le pide los ids de las ventas con ese numero y filtra por ellos, sin unir
  * tablas entre modulos.
+ *
+ * <p>La bandeja (cu-07-contingencias C1) es un filtro mas, con los ids que da {@code facturacion}, y el detalle suma lo que
+ * dijo ARCA y las acciones del Dueño. «Llego el CAE» (C7) lista las ventas que el usuario cobro en la caja abierta y
+ * salieron con ticket provisorio; el Vendedor pide la hoja solo de una de esas (cualquier otra es 404), asi el cierre de
+ * caja sigue ciego.
  */
 @Service
 public class VentaGestion {
@@ -40,8 +50,17 @@ public class VentaGestion {
     /** Una fila del listado: la venta, el nombre del usuario que la cobro y su resumen fiscal (null sin registro). */
     public record VentaListada(Comprobante venta, String usuario, ResumenFiscal fiscal) {}
 
-    /** La venta con sus renglones y pagos, como al cobrarla, y el nombre del usuario que la cobro. */
-    public record VentaConsultada(VentaRegistrada venta, String usuario) {}
+    /**
+     * La venta con sus renglones y pagos, como al cobrarla, el nombre del usuario que la cobro y su factura como la ve el
+     * detalle (null si no tiene registro fiscal).
+     */
+    public record VentaConsultada(VentaRegistrada venta, String usuario, FiscalConsultado fiscal) {}
+
+    /** La factura de la venta en el detalle (C1) y el nombre de quien la dejo sin factura (null si nadie). */
+    public record FiscalConsultado(FacturaConsultada factura, String sinFacturaPor) {}
+
+    /** Una venta de la caja abierta a la que le llego el CAE (C7), con el texto de su factura. */
+    public record ProvisoriaAutorizada(long ventaId, long numero, String factura) {}
 
     private final ComprobanteRepository comprobanteRepository;
     private final ItemComprobanteRepository itemRepository;
@@ -64,26 +83,39 @@ public class VentaGestion {
     /**
      * Las mas nuevas primero. {@code desde} y {@code hasta} son dias, ambos inclusive; {@code cliente} busca el texto
      * dentro del nombre del cliente; {@code numeroFiscal} («12», «1-12» o «00001-00000012», S15) busca la factura con ese
-     * numero en cualquier letra y ambiente (con otro formato, 400). Un filtro nulo o en blanco no filtra.
+     * numero en cualquier letra y ambiente (con otro formato, 400); {@code bandeja} (C1) deja solo las pendientes o las
+     * rechazadas. Un filtro nulo o en blanco no filtra.
      */
     @Transactional(readOnly = true)
-    public Page<VentaListada> listar(Long numero, String cliente, String numeroFiscal, LocalDate desde, LocalDate hasta,
-            int page, int size) {
+    public Page<VentaListada> listar(Long numero, String cliente, String numeroFiscal, Bandeja bandeja, LocalDate desde,
+            LocalDate hasta, int page, int size) {
         Optional<NumeroFiscal> fiscal = NumeroFiscal.de(numeroFiscal);
         String clienteLike = cliente == null || cliente.isBlank() ? null : "%" + escapar(cliente.strip()) + "%";
         LocalDateTime desdeHora = desde == null ? null : desde.atStartOfDay();
         LocalDateTime hastaHora = hasta == null ? null : hasta.plusDays(1).atStartOfDay();
         PageRequest pagina = PageRequest.of(Math.max(page, 0), Math.min(Math.max(size, 1), TAMANO_MAXIMO));
 
-        Page<Comprobante> ventas;
+        // Los filtros fiscales los resuelve facturacion: los ids de las ventas que cumplen cada uno, y entre ellas se busca.
+        Set<Long> entre = null;
         if (fiscal.isPresent()) {
-            List<Long> conEseNumero = facturacion.ventasConNumeroFiscal(fiscal.get().puntoVenta(), fiscal.get().numero());
-            ventas = conEseNumero.isEmpty()
-                    ? Page.empty(pagina)
-                    : comprobanteRepository.buscarVentasEntreScoped(conEseNumero, numero, clienteLike, desdeHora,
-                            hastaHora, pagina);
-        } else {
+            entre = new HashSet<>(facturacion.ventasConNumeroFiscal(fiscal.get().puntoVenta(), fiscal.get().numero()));
+        }
+        if (bandeja != null) {
+            List<Long> enLaBandeja = facturacion.ventasEnBandeja(bandeja);
+            if (entre == null) {
+                entre = new HashSet<>(enLaBandeja);
+            } else {
+                entre.retainAll(enLaBandeja);
+            }
+        }
+        Page<Comprobante> ventas;
+        if (entre == null) {
             ventas = comprobanteRepository.buscarVentasScoped(numero, clienteLike, desdeHora, hastaHora, pagina);
+        } else {
+            ventas = entre.isEmpty()
+                    ? Page.empty(pagina)
+                    : comprobanteRepository.buscarVentasEntreScoped(entre, numero, clienteLike, desdeHora, hastaHora,
+                            pagina);
         }
         Map<Long, String> nombres = cajaRepository.nombresScoped(
                 ventas.stream().map(Comprobante::getUsuarioId).distinct().toList());
@@ -91,19 +123,69 @@ public class VentaGestion {
         return ventas.map(v -> new VentaListada(v, nombres.get(v.getUsuarioId()), resumenes.get(v.getId())));
     }
 
-    /** Con su documento fiscal si tiene registro (C1), para reimprimir la factura, y el numero de su remito. */
+    /**
+     * Con su factura si tiene registro (C1 de cu-07-factura-mostrador y de cu-07-contingencias), para reimprimirla y para
+     * la bandeja, y el numero de su remito.
+     */
     @Transactional(readOnly = true)
     public VentaConsultada detalle(Long id) {
-        Comprobante venta = comprobanteRepository.findScoped(id)
-                .filter(c -> c.getTipo() == TipoComprobante.VENTA)
-                .orElseThrow(() -> new ResourceNotFoundException(MENSAJE_NO_ENCONTRADA));
+        Comprobante venta = venta(id);
         String usuario = cajaRepository.nombresScoped(List.of(venta.getUsuarioId())).get(venta.getUsuarioId());
         Long remitoNumero = venta.getRemitoId() == null
                 ? null
                 : remitoRepository.findScoped(venta.getRemitoId()).map(Remito::getNumero).orElse(null);
+        FiscalConsultado fiscal = fiscalDe(id).orElse(null);
         return new VentaConsultada(new VentaRegistrada(venta, itemRepository.deComprobanteScoped(id),
-                pagoRepository.deComprobanteScoped(id), List.of(), false, false, facturacion.documento(id).orElse(null),
-                remitoNumero), usuario);
+                pagoRepository.deComprobanteScoped(id), List.of(), false, false,
+                fiscal == null ? null : fiscal.factura().documento(), remitoNumero), usuario, fiscal);
+    }
+
+    /**
+     * La hoja de una venta para reimprimirla cuando llego su CAE (C7): lo mismo que {@link #detalle}. El Dueño la pide de
+     * cualquier venta; el Vendedor, solo de una de {@link #provisoriasAutorizadas}: cualquier otra, aunque exista, es 404.
+     */
+    @Transactional(readOnly = true)
+    public VentaConsultada factura(Long id, Long usuarioId, boolean esDueno) {
+        if (!esDueno && provisoriasAutorizadas(usuarioId).stream().noneMatch(p -> p.ventaId() == id)) {
+            throw new ResourceNotFoundException(MENSAJE_NO_ENCONTRADA);
+        }
+        return detalle(id);
+    }
+
+    /**
+     * Las ventas que el usuario cobro en la caja abierta (de hoy o de otro dia) que salieron con el ticket provisorio y ya
+     * estan AUTORIZADO (C7), por numero. Sin caja abierta, ninguna.
+     */
+    @Transactional(readOnly = true)
+    public List<ProvisoriaAutorizada> provisoriasAutorizadas(Long usuarioId) {
+        Optional<Caja> caja = cajaRepository.abiertaScoped();
+        if (caja.isEmpty()) {
+            return List.of();
+        }
+        List<Object[]> cobradas = comprobanteRepository.ventasDelUsuarioEnLaCajaScoped(caja.get().getId(), usuarioId);
+        Map<Long, String> facturas = facturacion.provisoriasAutorizadas(
+                cobradas.stream().map(fila -> (Long) fila[0]).toList());
+        return cobradas.stream()
+                .filter(fila -> facturas.containsKey((Long) fila[0]))
+                .map(fila -> new ProvisoriaAutorizada((Long) fila[0], (Long) fila[1], facturas.get((Long) fila[0])))
+                .toList();
+    }
+
+    /** La factura de la venta como la ve el detalle, con el nombre de quien la dejo sin factura. Vacio sin registro. */
+    @Transactional(readOnly = true)
+    public Optional<FiscalConsultado> fiscalDe(Long id) {
+        return facturacion.consulta(id).map(factura -> new FiscalConsultado(factura,
+                factura.usuarioSinFacturaId() == null ? null
+                        : cajaRepository.nombresScoped(List.of(factura.usuarioSinFacturaId()))
+                                .get(factura.usuarioSinFacturaId())));
+    }
+
+    /** Una venta de la ferreteria del request; otra cosa (o de otra ferreteria) es 404 «Venta no encontrada». */
+    @Transactional(readOnly = true)
+    public Comprobante venta(Long id) {
+        return comprobanteRepository.findScoped(id)
+                .filter(c -> c.getTipo() == TipoComprobante.VENTA)
+                .orElseThrow(() -> new ResourceNotFoundException(MENSAJE_NO_ENCONTRADA));
     }
 
     /** Barra invertida, % y _ como texto: el escape de LIKE en MySQL es la barra invertida. */

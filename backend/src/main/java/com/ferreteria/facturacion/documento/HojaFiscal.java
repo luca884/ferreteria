@@ -86,10 +86,14 @@ public final class HojaFiscal {
                 leyenda ? LEYENDA_LEY_27618 : null, qr, valido ? QrArca.modulos(qr) : null);
     }
 
-    /** El resumen para el listado (C2), con la misma letra que la hoja. */
+    /**
+     * El resumen para el listado (C2), con la misma letra que la hoja y, desde la rama 7, si hay que reimprimirla
+     * ({@link BandejaFiscal#reimprimir}).
+     */
     public static ResumenFiscal resumen(ComprobanteFiscal registro) {
         return new ResumenFiscal(letra(registro), registro.getPuntoVenta(), registro.getNumero(),
-                registro.getEstado().name(), registro.getAmbiente().name(), validoComoFactura(registro));
+                registro.getEstado().name(), registro.getAmbiente().name(), validoComoFactura(registro),
+                BandejaFiscal.reimprimir(registro));
     }
 
     /** La letra de la hoja: la del registro si es válida como factura; X si no. */

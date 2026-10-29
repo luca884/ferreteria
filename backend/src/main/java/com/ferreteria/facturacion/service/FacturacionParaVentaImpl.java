@@ -1,7 +1,9 @@
 package com.ferreteria.facturacion.service;
 
+import com.ferreteria.facturacion.api.FacturaImpedidaException;
 import com.ferreteria.facturacion.api.FacturacionParaVenta;
 import com.ferreteria.facturacion.config.EjecutorFiscalConfig;
+import com.ferreteria.facturacion.documento.BandejaFiscal;
 import com.ferreteria.facturacion.documento.HojaFiscal;
 import com.ferreteria.facturacion.model.Alicuota;
 import com.ferreteria.facturacion.model.ComprobanteFiscal;
@@ -12,6 +14,7 @@ import com.ferreteria.facturacion.model.EstadoFiscal;
 import com.ferreteria.facturacion.model.ReceptorFiscal;
 import com.ferreteria.facturacion.model.RenglonFiscal;
 import com.ferreteria.facturacion.model.TipoDocumentoReceptor;
+import com.ferreteria.facturacion.motor.AccionFiscalImpedidaException;
 import com.ferreteria.facturacion.motor.AltaFiscal;
 import com.ferreteria.facturacion.motor.AmbienteNoDisponibleException;
 import com.ferreteria.facturacion.motor.Atencion;
@@ -64,13 +67,18 @@ import org.springframework.transaction.support.TransactionTemplate;
  * {@link #autorizar} atiende la serie del registro en el ejecutor de {@code facturacion} ({@link EjecutorFiscalConfig}) y la
  * espera un rato acotado ({@code app.facturacion.venta.espera}), medido con el reloj de pared y no con el {@code Clock}
  * (que en los tests está fijo). Mientras otra instancia tiene la serie, reintenta con una pausa corta; vencida la espera, la
- * atención en curso termina sola y no se reintenta más (lo pendiente lo levanta la venta siguiente de la serie). Nunca lanza
- * por ARCA: lo que no se resolvió vuelve en su estado actual. Cada lectura del estado es fresca, en su propia transacción
- * de solo lectura ({@code open-in-view} está apagado).
+ * atención en curso termina sola y no se reintenta más (lo pendiente lo levanta la venta siguiente de la serie o, desde la
+ * rama 7, el job de reintento). Nunca lanza por ARCA: lo que no se resolvió vuelve en su estado actual y, si sigue en
+ * trámite, la venta sale con el ticket provisorio y su registro queda marcado (S6), para avisar cuando llegue el CAE. Cada
+ * lectura del estado es fresca, en su propia transacción ({@code open-in-view} está apagado).
  *
  * <p>La hoja de la factura, el listado y el cobro (cu-07-factura-mostrador C4) son solo lecturas, cada una en una
  * transacción de solo lectura (o en la de quien llama, si tiene una): {@link #documento} lee el registro y su desglose de
  * una vez y deja la apariencia a {@link HojaFiscal}; {@link #paraElMostrador} usa la regla de {@link #decidir} sin lock.
+ *
+ * <p>La bandeja de Ventas y «llegó el CAE» (cu-07-contingencias C1 y C7) también son lecturas, y lo que muestran lo decide
+ * {@link BandejaFiscal}. Las dos acciones del Dueño (C2 y C3) las hace el motor; acá se traducen sus impedimentos a los del
+ * puerto ({@link FacturaImpedidaException}), con el mismo texto.
  */
 @Service
 public class FacturacionParaVentaImpl implements FacturacionParaVenta {
@@ -81,9 +89,13 @@ public class FacturacionParaVentaImpl implements FacturacionParaVenta {
     private static final int LARGO_NOMBRE = 120;
     private static final int LARGO_DOMICILIO = 200;
 
-    /** Los estados que no cambian con otra atención: el resultado de ARCA, o una alerta que espera a una persona. */
+    /**
+     * Los estados que no cambian con otra atención: el resultado de ARCA, una alerta que espera a una persona, o la venta
+     * que el Dueño dejó sin factura (rama 7).
+     */
     private static final Set<EstadoFiscal> RESUELTOS = EnumSet.of(EstadoFiscal.AUTORIZADO, EstadoFiscal.RECHAZADO,
-            EstadoFiscal.FUERA_DE_FECHA, EstadoFiscal.CAE_NO_COINCIDE, EstadoFiscal.SERIE_DESINCRONIZADA);
+            EstadoFiscal.FUERA_DE_FECHA, EstadoFiscal.CAE_NO_COINCIDE, EstadoFiscal.SERIE_DESINCRONIZADA,
+            EstadoFiscal.SIN_FACTURA);
 
     /**
      * Las atenciones después de las cuales otra, ahora, no cambiaría nada: se atendió todo, ARCA no contestó (sigue la
@@ -182,7 +194,7 @@ public class FacturacionParaVentaImpl implements FacturacionParaVenta {
         } catch (TaskRejectedException e) {
             log.warn("Sin lugar en el ejecutor fiscal para pedir el CAE de la venta {} de la ferretería {}: queda en su "
                     + "estado actual.", comprobanteId, ferreteriaId);
-            return estado(comprobanteId);
+            return conTicketProvisorioSiSigueEnTramite(comprobanteId);
         }
         boolean interrumpido = false;
         try {
@@ -201,7 +213,7 @@ public class FacturacionParaVentaImpl implements FacturacionParaVenta {
         abandonada.set(true);
         atencion.cancel(false);
         try {
-            return estado(comprobanteId);
+            return conTicketProvisorioSiSigueEnTramite(comprobanteId);
         } finally {
             if (interrumpido) {
                 Thread.currentThread().interrupt();
@@ -212,6 +224,14 @@ public class FacturacionParaVentaImpl implements FacturacionParaVenta {
     @Override
     public Optional<EstadoFiscalVenta> estado(long comprobanteId) {
         return registroDeVenta(comprobanteId).map(FacturacionParaVentaImpl::estadoDe);
+    }
+
+    /**
+     * El estado con que responde la venta cuando deja de esperar: si su registro sigue en trámite, la venta sale con el
+     * ticket provisorio y el registro queda marcado (rama 7, S6), en la misma transacción que la lectura.
+     */
+    private Optional<EstadoFiscalVenta> conTicketProvisorioSiSigueEnTramite(long comprobanteId) {
+        return pasos.salioConTicketProvisorio(comprobanteId).map(FacturacionParaVentaImpl::estadoDe);
     }
 
     // ---- La hoja, el listado y el cobro (cu-07-factura-mostrador C4): solo lecturas, la apariencia la decide HojaFiscal ----
@@ -244,6 +264,77 @@ public class FacturacionParaVentaImpl implements FacturacionParaVenta {
     public Optional<FacturacionDelMostrador> paraElMostrador() {
         return pasos.emisionSinLock().map(emision -> new FacturacionDelMostrador(emision.ambiente().name(),
                 letras(emision.condicionEmisor())));
+    }
+
+    // ---- La bandeja de Ventas, las acciones del Dueño y «llegó el CAE» (cu-07-contingencias C1 a C3 y C7) ----
+
+    @Override
+    public List<Long> ventasEnBandeja(Bandeja bandeja) {
+        Objects.requireNonNull(bandeja, "Falta la bandeja.");
+        return lectura.execute(s -> registros.comprobantesEnEstadosScoped(BandejaFiscal.estados(bandeja)));
+    }
+
+    /** El registro, su desglose y la serie en la misma transacción de solo lectura: la hoja y la bandeja, de una sola foto. */
+    @Override
+    public Optional<FacturaConsultada> consulta(long comprobanteId) {
+        return lectura.execute(s -> registros.deComprobanteScoped(comprobanteId)
+                .map(r -> BandejaFiscal.consultada(r, HojaFiscal.de(r, pasos.alicuotas(r.getId()), estadoDe(r)),
+                        BandejaFiscal.rechazada(r) && !pasos.fechaEntraHoy(r))));
+    }
+
+    @Override
+    public Map<Long, String> provisoriasAutorizadas(Collection<Long> comprobanteIds) {
+        Objects.requireNonNull(comprobanteIds, "Faltan las ventas.");
+        List<ComprobanteFiscal> provisorias = lectura.execute(s -> registros.provisoriasAutorizadasScoped(comprobanteIds));
+        Map<Long, String> facturas = new HashMap<>();
+        for (ComprobanteFiscal registro : provisorias) {
+            facturas.put(registro.getComprobanteId(), BandejaFiscal.factura(registro));
+        }
+        return Map.copyOf(facturas);
+    }
+
+    @Override
+    public void exigirFacturaRechazada(long comprobanteId) {
+        try {
+            pasos.exigirRechazada(comprobanteId);
+        } catch (AccionFiscalImpedidaException e) {
+            throw traducida(e);
+        }
+    }
+
+    /** El receptor y los renglones, traducidos como en el alta de la venta; el reintento lo hace el motor. */
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public long reintentar(long comprobanteId, ReceptorVenta receptor, List<RenglonParaFacturar> renglones,
+            boolean fechaDeHoy) {
+        Objects.requireNonNull(receptor, "Falta el receptor de la venta.");
+        Objects.requireNonNull(renglones, "Faltan los renglones de la venta.");
+        AltaFiscal alta = new AltaFiscal(comprobanteId, receptorFiscal(receptor),
+                renglones.stream().map(FacturacionParaVentaImpl::renglonFiscal).toList());
+        try {
+            return motor.reintentar(alta, fechaDeHoy);
+        } catch (AccionFiscalImpedidaException e) {
+            throw traducida(e);
+        }
+    }
+
+    @Override
+    public void dejarSinFactura(long comprobanteId, String motivo, long usuarioId) {
+        try {
+            motor.dejarSinFactura(comprobanteId, motivo, usuarioId);
+        } catch (AccionFiscalImpedidaException e) {
+            throw traducida(e);
+        }
+    }
+
+    /** El impedimento del motor, con el mismo código y el mismo texto, como lo conoce el puerto. */
+    private static FacturaImpedidaException traducida(AccionFiscalImpedidaException e) {
+        FacturaImpedidaException.Impedimento impedimento = switch (e.impedimento()) {
+            case SIN_FACTURA_RECHAZADA -> FacturaImpedidaException.Impedimento.SIN_FACTURA_RECHAZADA;
+            case FECHA_NUEVA_REQUERIDA -> FacturaImpedidaException.Impedimento.FECHA_NUEVA_REQUERIDA;
+            case FACTURACION_FRENADA -> FacturaImpedidaException.Impedimento.FACTURACION_FRENADA;
+        };
+        return new FacturaImpedidaException(impedimento, e.getMessage());
     }
 
     /** La letra que saldría para cada condición del cliente, en el orden del puerto, con {@link EncuadreFiscal#de}. */

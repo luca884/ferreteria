@@ -50,4 +50,42 @@ describe('VentasService', () => {
     expect(req.request.method).toBe('GET');
     req.flush({});
   });
+
+  it('manda la bandeja como `fiscal` (C1): PENDIENTES o RECHAZADAS', () => {
+    for (const fiscal of ['PENDIENTES', 'RECHAZADAS'] as const) {
+      service.listar({ page: 0, fiscal }).subscribe();
+      const req = http.expectOne((r) => r.url.endsWith('/ventas'));
+      expect(req.request.params.get('fiscal')).toBe(fiscal);
+      expect(req.request.params.keys().sort()).toEqual(['fiscal', 'page', 'size']);
+      req.flush({ items: [], page: 0, size: 20, totalElements: 0, totalPages: 0 });
+    }
+  });
+
+  it('«Reintentar» es POST /ventas/{id}/factura/reintentar con `fechaDeHoy` (C2)', () => {
+    service.reintentar(31, false).subscribe();
+    const sin = http.expectOne((r) => r.url.endsWith('/ventas/31/factura/reintentar'));
+    expect(sin.request.method).toBe('POST');
+    expect(sin.request.body).toEqual({ fechaDeHoy: false });
+    sin.flush({});
+
+    service.reintentar(31, true).subscribe();
+    const con = http.expectOne((r) => r.url.endsWith('/ventas/31/factura/reintentar'));
+    expect(con.request.body).toEqual({ fechaDeHoy: true });
+    con.flush({});
+  });
+
+  it('la factura de una venta es GET /ventas/{id}/factura (C7: el Vendedor solo la de sus ventas de la caja abierta)', () => {
+    service.factura(31).subscribe();
+    const req = http.expectOne((r) => r.url.endsWith('/ventas/31/factura'));
+    expect(req.request.method).toBe('GET');
+    req.flush({});
+  });
+
+  it('«Dejar sin factura» es POST /ventas/{id}/factura/sin-factura con el `motivo` (C3)', () => {
+    service.dejarSinFactura(31, 'El cliente no quiere factura').subscribe();
+    const req = http.expectOne((r) => r.url.endsWith('/ventas/31/factura/sin-factura'));
+    expect(req.request.method).toBe('POST');
+    expect(req.request.body).toEqual({ motivo: 'El cliente no quiere factura' });
+    req.flush({});
+  });
 });

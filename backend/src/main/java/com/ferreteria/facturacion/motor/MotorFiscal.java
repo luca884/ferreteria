@@ -1,6 +1,7 @@
 package com.ferreteria.facturacion.motor;
 
 import com.ferreteria.common.HoraArgentina;
+import com.ferreteria.facturacion.arca.AlertaArca;
 import com.ferreteria.facturacion.model.Ambiente;
 import com.ferreteria.facturacion.model.ComprobanteFiscal;
 import com.ferreteria.facturacion.model.EstadoFiscal;
@@ -29,6 +30,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
@@ -45,16 +48,22 @@ import org.springframework.stereotype.Service;
  * <ul>
  *   <li>A: AUTORIZADO, con el CAE, y el número pasa a ser el último de la serie;</li>
  *   <li>R (del detalle, o de la cabecera si no hay detalle): RECHAZADO, con lo que dijo ARCA tal cual; el número se
- *       libera;</li>
+ *       libera. Salvo el 10016 (rama 7, C6), que no es un rechazo del comprobante: se pregunta el último de ARCA y, si el
+ *       número no era el próximo, la serie se resincroniza (también hacia atrás) y el registro se renumera; si lo era, el
+ *       problema es la fecha: FUERA_DE_FECHA;</li>
  *   <li>no llegó: el intento NO_LLEGO y el registro otra vez PENDIENTE, sin número;</li>
  *   <li>incierto (timeout de lectura, 5xx): EN_VERIFICACION, que traba la serie.</li>
  * </ul>
  * La verificación es lo primero de la atención siguiente (nunca en la misma, así ARCA tiene tiempo de terminar lo que
  * recibió), con {@code FECompUltimoAutorizado}: N o más → {@code FECompConsultar(N)} y se adopta el CAE solo si coinciden
- * todos los campos (si no, CAE_NO_COINCIDE); N−1 → se reenvía el mismo número y fecha en un intento nuevo, o, si esa
- * CbteFch ya no entra en la ventana, FUERA_DE_FECHA sin número y sin reenviar; menos → SERIE_DESINCRONIZADA. Las dos alertas traban la serie hasta que la vea una persona.
+ * todos los campos (si no, CAE_NO_COINCIDE; un 602 ahí también: con ARCA en N o más, N tendría que existir, y renumerar
+ * a ciegas podría duplicar la factura); N−1 → se reenvía el mismo número y fecha en un intento nuevo, o, si esa
+ * CbteFch ya no entra en la ventana, FUERA_DE_FECHA sin número y sin reenviar; menos → SERIE_DESINCRONIZADA. Las dos
+ * alertas traban la serie hasta que la vea una persona, y quedan en el log con {@code ALERTA ARCA}.
  *
- * <p>Una llamada que no llegó o quedó incierta corta la atención ({@link Atencion#SIN_RESPUESTA}); la sigue la próxima. El
+ * <p>Una llamada que no llegó o quedó incierta, o que volvió con un error del sistema de ARCA (no un 602), corta la atención
+ * ({@link Atencion#SIN_RESPUESTA}); la sigue la próxima. La atención del job de reintento lleva un límite de tiempo
+ * ({@link Atencion#SIN_TIEMPO}); la de la venta, no. El
  * adaptador sale del ambiente de la serie, que es el del registro ({@link WsfePorAmbiente}). Todo el tiempo sale del
  * {@code Clock} inyectado.
  */
@@ -63,6 +72,13 @@ public class MotorFiscal {
 
     /** ARCA trabaja en hora de Buenos Aires: de ahí salen la CbteFch y el día del envío. */
     private static final ZoneId ZONA_ARCA = HoraArgentina.ZONA;
+
+    /** 10016 de FECAESolicitar: el número no es el próximo o la CbteFch no entra (el mismo código para los dos). */
+    static final int ERROR_NUMERO_O_FECHA = 10016;
+    /** 602 de FECompConsultar: «No existen datos en nuestros registros». */
+    static final int NO_EXISTE = 602;
+
+    private static final Logger log = LoggerFactory.getLogger(MotorFiscal.class);
 
     private final PasosFiscales pasos;
     private final WsfePorAmbiente wsfePorAmbiente;
@@ -115,13 +131,45 @@ public class MotorFiscal {
     }
 
     /**
+     * «Reintentar» del Dueño (rama 7, D10): el registro vigente RECHAZADO o FUERA_DE_FECHA de la venta queda como historia
+     * y nace otro PENDIENTE con la copia de la hora del {@code Clock} ({@link PasosFiscales#reintentar}). Exige la
+     * transacción de quien llama, con el cliente ya tomado con lock exclusivo. El CAE se pide después del commit.
+     *
+     * @param alta la venta, con el receptor de hoy y sus renglones
+     * @param fechaDeHoy si el Dueño confirmó que la factura salga con la fecha de hoy
+     * @return el id del registro nuevo
+     * @throws AccionFiscalImpedidaException si no se puede; no cambia nada
+     */
+    public long reintentar(AltaFiscal alta, boolean fechaDeHoy) {
+        return pasos.reintentar(alta, fechaDeHoy, reloj.instant());
+    }
+
+    /**
+     * «Dejar sin factura» del Dueño (rama 7, S12): el registro vigente RECHAZADO o FUERA_DE_FECHA de la venta pasa a
+     * SIN_FACTURA con el motivo, el usuario y la hora ({@link PasosFiscales#dejarSinFactura}).
+     */
+    public void dejarSinFactura(long comprobanteId, String motivo, long usuarioId) {
+        pasos.dejarSinFactura(comprobanteId, motivo, usuarioId);
+    }
+
+    /**
      * Atiende la serie de la ferretería del request: si está libre la toma, resuelve lo que haya quedado en verificación y
-     * manda sus pendientes en orden, y al final la suelta. Si la tiene otra instancia, no hace nada.
+     * manda sus pendientes en orden, y al final la suelta. Si la tiene otra instancia, no hace nada. Sin límite de tiempo:
+     * lo que usa la venta.
      *
      * @throws AmbienteNoDisponibleException si el ambiente todavía no tiene con quién hablar (homologación y producción,
      *     hasta la rama 6); no toca nada
      */
     public Atencion atender(Ambiente ambiente, int puntoVenta, int cbteTipo) {
+        return atender(ambiente, puntoVenta, cbteTipo, Instant.MAX);
+    }
+
+    /**
+     * Lo mismo, con un límite de tiempo (rama 7, el tope de la pasada del job, C5): antes de empezar cada paso (lo que quedó
+     * en verificación, o el registro siguiente) mira el {@code Clock} y, si ya llegó a {@code limite}, termina en
+     * {@link Atencion#SIN_TIEMPO} y suelta la serie. Lo que está en vuelo termina igual.
+     */
+    public Atencion atender(Ambiente ambiente, int puntoVenta, int cbteTipo, Instant limite) {
         ServicioWsfe wsfe = wsfePorAmbiente.para(ambiente);
         long serieId = pasos.asegurarSerie(ambiente, puntoVenta, cbteTipo);
         String dueno = UUID.randomUUID().toString();
@@ -130,11 +178,34 @@ public class MotorFiscal {
             return Atencion.OCUPADA;
         }
         try {
-            return new Turno(wsfe, serieId, dueno).atender();
+            return new Turno(wsfe, serieId, dueno, limite).atender();
         } catch (PasoDescartadoException e) {
             return Atencion.SERIE_PERDIDA;
         } finally {
             pasos.soltar(serieId, dueno);
+        }
+    }
+
+    /**
+     * Lo último autorizado de una serie según ARCA y su CbteFch.
+     *
+     * @param numero el último autorizado (0 si no tiene)
+     * @param fecha su CbteFch; null sin comprobantes, o si ARCA no lo encuentra (602)
+     * @param ultimo la respuesta de FECompUltimoAutorizado, tal cual
+     * @param consulta la de FECompConsultar del último; null si no se consultó
+     */
+    private record UltimoEnArca(long numero, LocalDate fecha, FeCompUltimoAutorizadoResponse ultimo,
+            FeCompConsultarResponse consulta) {
+
+        /** Lo que se guarda en el intento como verificación. */
+        Map<String, Object> verificacion() {
+            Map<String, Object> verificacion = new LinkedHashMap<>();
+            verificacion.put("ultimoAutorizado", numero);
+            verificacion.put("cbteFch", fecha);
+            if (consulta != null && !consulta.errors().isEmpty()) {
+                verificacion.put("consulta", consulta);
+            }
+            return verificacion;
         }
     }
 
@@ -144,15 +215,20 @@ public class MotorFiscal {
         private final ServicioWsfe wsfe;
         private final long serieId;
         private final String dueno;
+        private final Instant limite;
 
-        Turno(ServicioWsfe wsfe, long serieId, String dueno) {
+        Turno(ServicioWsfe wsfe, long serieId, String dueno, Instant limite) {
             this.wsfe = wsfe;
             this.serieId = serieId;
             this.dueno = dueno;
+            this.limite = limite;
         }
 
         Atencion atender() {
             while (true) {
+                if (!reloj.instant().isBefore(limite)) {
+                    return Atencion.SIN_TIEMPO;
+                }
                 Optional<IntentoFiscal> abierto = pasos.intentoAbierto(serieId);
                 if (abierto.isPresent()) {
                     Optional<Atencion> fin = resolver(abierto.get());
@@ -208,28 +284,42 @@ public class MotorFiscal {
 
         /** La primera vez: el último autorizado según ARCA, y su CbteFch (para no mandar una anterior). */
         private Optional<Atencion> sincronizar(SerieFiscal serie, ComprobanteFiscal registro) {
-            Auth auth = auth(registro);
-            renovar();
-            FeCompUltimoAutorizadoResponse ultimo;
-            LocalDate fecha = null;
-            try {
-                ultimo = wsfe.feCompUltimoAutorizado(auth, serie.getPuntoVenta(), serie.getCbteTipo());
-                if (!ultimo.errors().isEmpty()) {
-                    return Optional.of(Atencion.SIN_RESPUESTA);
-                }
-                if (ultimo.cbteNro() > 0) {
-                    renovar();
-                    FeCompConsultarResponse consulta = wsfe.feCompConsultar(auth, serie.getCbteTipo(),
-                            serie.getPuntoVenta(), ultimo.cbteNro());
-                    if (consulta.resultGet() != null) {
-                        fecha = consulta.resultGet().detalle().cbteFch();
-                    }
-                }
-            } catch (PedidoNoLlegoException | ResultadoInciertoException e) {
+            Optional<UltimoEnArca> ultimo = ultimoEnArca(auth(registro), serie.getPuntoVenta(), serie.getCbteTipo());
+            if (ultimo.isEmpty()) {
                 return Optional.of(Atencion.SIN_RESPUESTA);
             }
-            pasos.sincronizar(serieId, dueno, reloj.instant(), ultimo.cbteNro(), fecha);
+            pasos.sincronizar(serieId, dueno, reloj.instant(), ultimo.get().numero(), ultimo.get().fecha());
             return Optional.empty();
+        }
+
+        /**
+         * {@code FECompUltimoAutorizado} y, si tiene alguno, {@code FECompConsultar} del último para su CbteFch, con la toma
+         * estirada antes de cada llamada. Un 602 de la consulta es «no existe» (C6): sigue sin la fecha. Vacío si ARCA no
+         * contestó: la llamada no llegó o quedó incierta, o vino con otro error (un error del sistema de ARCA, transitorio).
+         */
+        private Optional<UltimoEnArca> ultimoEnArca(Auth auth, int puntoVenta, int cbteTipo) {
+            renovar();
+            try {
+                FeCompUltimoAutorizadoResponse ultimo = wsfe.feCompUltimoAutorizado(auth, puntoVenta, cbteTipo);
+                if (!ultimo.errors().isEmpty()) {
+                    return Optional.empty();
+                }
+                if (ultimo.cbteNro() == 0) {
+                    return Optional.of(new UltimoEnArca(0, null, ultimo, null));
+                }
+                renovar();
+                FeCompConsultarResponse consulta = wsfe.feCompConsultar(auth, cbteTipo, puntoVenta, ultimo.cbteNro());
+                if (consulta.resultGet() != null) {
+                    return Optional.of(new UltimoEnArca(ultimo.cbteNro(), consulta.resultGet().detalle().cbteFch(), ultimo,
+                            consulta));
+                }
+                if (noExiste(consulta)) {
+                    return Optional.of(new UltimoEnArca(ultimo.cbteNro(), null, ultimo, consulta));
+                }
+                return Optional.empty();
+            } catch (PedidoNoLlegoException | ResultadoInciertoException e) {
+                return Optional.empty();
+            }
         }
 
         /** La llamada, sin transacción ni conexión tomada, y su resultado en una transacción corta. */
@@ -251,6 +341,10 @@ public class MotorFiscal {
             Resultado resultado = detalle != null ? detalle.resultado() : respuesta.feCabResp().resultado();
             String observaciones = JsonFiscal.de(detalle == null ? List.of() : detalle.observaciones());
             String errores = JsonFiscal.de(respuesta.errors());
+            if (resultado == Resultado.R && esDiezMilDieciseis(respuesta)) {
+                return entenderDiezMilDieciseis(registro, intento, numero, observaciones, errores,
+                        JsonFiscal.de(respuesta));
+            }
             if (resultado == Resultado.R) {
                 pasos.rechazado(registro.getId(), intento, numero, observaciones, errores, JsonFiscal.de(respuesta), ahora);
                 return Optional.empty();
@@ -263,6 +357,41 @@ public class MotorFiscal {
             // A sin CAE: no hay con qué darlo por autorizado; se verifica como un resultado incierto.
             pasos.enVerificacion(registro.getId(), intento, numero, JsonFiscal.de(respuesta), ahora);
             return Optional.of(Atencion.SIN_RESPUESTA);
+        }
+
+        /**
+         * Un R con 10016 (C6): el código es el mismo para el número y para la fecha, así que se pregunta el último de ARCA.
+         * Si el número enviado no era el próximo, la serie se resincroniza (también hacia atrás) y el registro vuelve a
+         * PENDIENTE sin número, para renumerarse en esta misma atención; pero si ARCA va atrás de números que la serie ya
+         * tiene, es SERIE_DESINCRONIZADA sin renumerar. Si era el próximo, es la fecha: FUERA_DE_FECHA. Si ARCA no contesta,
+         * el registro vuelve a PENDIENTE sin tocar la serie y la atención corta como transitoria.
+         */
+        private Optional<Atencion> entenderDiezMilDieciseis(ComprobanteFiscal registro, long intento, long numero,
+                String observaciones, String errores, String respuesta) {
+            Optional<UltimoEnArca> ultimo = ultimoEnArca(auth(registro), registro.getPuntoVenta(), registro.getCbteTipo());
+            Instant ahora = reloj.instant();
+            if (ultimo.isEmpty()) {
+                pasos.rechazadoSinEntender(registro.getId(), intento, numero, respuesta, ahora);
+                return Optional.of(Atencion.SIN_RESPUESTA);
+            }
+            UltimoEnArca u = ultimo.get();
+            String verificacion = JsonFiscal.de(u.verificacion());
+            if (u.numero() + 1 != numero && pasos.hayNumeroDespuesDe(registro, u.numero())) {
+                // ARCA va atrás de números que esta serie ya tiene (un homologación vaciado, o ARCA que perdió algo nuestro):
+                // renumerar chocaría con ellos o repetiría uno. Alerta sin renumerar, como «menos» en la verificación.
+                pasos.desincronizadaPorArca(serieId, dueno, registro.getId(), intento, numero, respuesta, verificacion,
+                        ahora, ahora.plus(lease));
+                alertaEnElLog(registro, numero, EstadoFiscal.SERIE_DESINCRONIZADA);
+                return Optional.of(Atencion.TRABADA);
+            }
+            if (u.numero() + 1 != numero) {
+                pasos.renumerar(serieId, dueno, registro.getId(), intento, numero, u.numero(), u.fecha(), respuesta,
+                        verificacion, ahora, ahora.plus(lease));
+            } else {
+                pasos.fueraDeFechaPorArca(serieId, dueno, registro.getId(), intento, numero, u.numero(), u.fecha(),
+                        observaciones, errores, respuesta, verificacion, ahora, ahora.plus(lease));
+            }
+            return Optional.empty();
         }
 
         /** Resuelve un intento EN_VERIFICACION con FECompUltimoAutorizado y, si hace falta, FECompConsultar. */
@@ -291,6 +420,17 @@ public class MotorFiscal {
             verificacion.put("ultimoAutorizado", ultimo);
             FeCaeReq enviado = PedidoFiscal.armar(registro, pasos.alicuotas(registro.getId()), numero, cbteFch);
 
+            if (ultimo >= numero && consulta.resultGet() == null) {
+                if (!noExiste(consulta)) {
+                    // Un error del sistema de ARCA, no una respuesta: se verifica en la próxima, sin alerta.
+                    return Optional.of(Atencion.SIN_RESPUESTA);
+                }
+                // 602 (C6) con ARCA en N o más: la numeración de ARCA es correlativa, así que N tendría que existir. Es
+                // una contradicción, no un «no existe» que habilite renumerar: si ARCA tarda en reflejar el nuestro,
+                // renumerar duplicaría la factura de la venta. Alerta sin renumerar, como un CAE que no coincide.
+                verificacion.put("consulta", consulta);
+                return alertar(registro, intento, numero, EstadoFiscal.CAE_NO_COINCIDE, verificacion);
+            }
             if (ultimo >= numero) {
                 verificacion.put("consulta", consulta);
                 ResultGet autorizado = consulta.resultGet();
@@ -300,9 +440,7 @@ public class MotorFiscal {
                             JsonFiscal.de(verificacion), reloj.instant());
                     return Optional.empty();
                 }
-                pasos.alertar(registro.getId(), intento.getId(), numero, EstadoFiscal.CAE_NO_COINCIDE,
-                        JsonFiscal.de(verificacion));
-                return Optional.of(Atencion.TRABADA);
+                return alertar(registro, intento, numero, EstadoFiscal.CAE_NO_COINCIDE, verificacion);
             }
             if (ultimo == numero - 1) {
                 Instant ahora = reloj.instant();
@@ -315,8 +453,14 @@ public class MotorFiscal {
                         JsonFiscal.de(enviado), JsonFiscal.de(verificacion), ahora, ahora.plus(lease));
                 return enviar(registro, nuevo, numero, cbteFch, enviado);
             }
-            pasos.alertar(registro.getId(), intento.getId(), numero, EstadoFiscal.SERIE_DESINCRONIZADA,
-                    JsonFiscal.de(verificacion));
+            return alertar(registro, intento, numero, EstadoFiscal.SERIE_DESINCRONIZADA, verificacion);
+        }
+
+        /** Una alerta de la verificación: el registro y el intento pasan a la alerta, que queda en el log, y la serie se traba. */
+        private Optional<Atencion> alertar(ComprobanteFiscal registro, IntentoFiscal intento, long numero, EstadoFiscal alerta,
+                Map<String, Object> verificacion) {
+            pasos.alertar(registro.getId(), intento.getId(), numero, alerta, JsonFiscal.de(verificacion));
+            alertaEnElLog(registro, numero, alerta);
             return Optional.of(Atencion.TRABADA);
         }
 
@@ -331,9 +475,35 @@ public class MotorFiscal {
         }
     }
 
+    /**
+     * S13 (rama 7): cada alerta queda en el log con {@link AlertaArca}, una vez, al pasar el registro (las atenciones que
+     * encuentran la serie trabada no la repiten). Solo identificadores: nada del pedido ni de la respuesta.
+     */
+    private static void alertaEnElLog(ComprobanteFiscal registro, long numero, EstadoFiscal alerta) {
+        log.error(AlertaArca.MARCADOR, "{}: el registro fiscal {} de la ferretería {} quedó en {} (serie {} {}-{}, número "
+                + "{}): la serie queda trabada hasta que la revise soporte.", AlertaArca.TEXTO, registro.getId(),
+                registro.getFerreteriaId(), alerta, registro.getAmbiente(), registro.getPuntoVenta(), registro.getCbteTipo(),
+                numero);
+    }
+
     /** La CUIT del emisor congelada en el registro y el ambiente del registro (nunca el de la configuración actual). */
     private static Auth auth(ComprobanteFiscal registro) {
         return new Auth(registro.getAmbiente(), registro.cuitEmisora());
+    }
+
+    /**
+     * Un R con el 10016 (el número o la CbteFch no son los próximos; manual 4.8): en las {@code Observaciones} del detalle,
+     * donde lo pone ARCA para una validación del comprobante, o en los {@code Errors} (inferido: por si lo devuelve ahí).
+     */
+    static boolean esDiezMilDieciseis(FeCaeResponse respuesta) {
+        FeCaeDetResponse detalle = respuesta.feDetResp();
+        return (detalle != null && detalle.observaciones().stream().anyMatch(o -> o.code() == ERROR_NUMERO_O_FECHA))
+                || respuesta.errors().stream().anyMatch(e -> e.code() == ERROR_NUMERO_O_FECHA);
+    }
+
+    /** {@code FECompConsultar} sin el comprobante y con el 602 («No existen datos en nuestros registros»): no existe (C6). */
+    static boolean noExiste(FeCompConsultarResponse consulta) {
+        return consulta.resultGet() == null && consulta.errors().stream().anyMatch(e -> e.code() == NO_EXISTE);
     }
 
     private static Map<String, String> falla(RuntimeException e) {

@@ -25,11 +25,16 @@ import { Mostrador } from './mostrador';
 import { MostradorService } from './mostrador.service';
 import { GENERAR_CLAVE } from './ticket.store';
 import { VentaService } from './venta.service';
-import { ConfirmarVentaRequest, FacturacionDelMostrador, VentaCobrada } from './venta.models';
+import { ConfirmarVentaRequest, FacturacionDelMostrador, ProvisoriaAutorizada, VentaCobrada } from './venta.models';
 import { MARCA_SIMULADO, documentoB, documentoX, fiscalDe } from '../../shared/factura/factura.testing';
 import { FiscalVenta } from '../../shared/factura/factura.models';
 import { ConfiguracionFacturacion, CredencialArca } from '../facturacion/facturacion.models';
 import { FacturacionService } from '../facturacion/facturacion.service';
+import { VentaConsultada } from '../ventas/ventas.models';
+import { VentasService } from '../ventas/ventas.service';
+import { ventaDePrueba } from '../ventas/ventas.testing';
+import { AvisosFacturacion, INTERVALO_AVISOS_MS } from './avisos-facturacion.models';
+import { AvisosFacturacionService } from './avisos-facturacion.service';
 
 registerLocaleData(localeEsAr);
 
@@ -134,6 +139,14 @@ describe('Mostrador', () => {
   /** S12: la configuración de ARCA del Dueño. Por defecto sin certificado; null: la lectura falla. */
   let configuracionArca: ConfiguracionFacturacion | null;
   let leerConfiguracionArca: ReturnType<typeof vi.fn>;
+  /** C4: los avisos de facturación del Dueño. Por defecto no hay nada para revisar. */
+  let avisosDelServidor: AvisosFacturacion;
+  let leerAvisos: ReturnType<typeof vi.fn>;
+  /** C7: las ventas de la caja abierta a las que les llegó el CAE. Por defecto ninguna. */
+  let provisorias: ProvisoriaAutorizada[];
+  let leerProvisorias: ReturnType<typeof vi.fn>;
+  /** La hoja fiscal que se reimprime cuando llega el CAE (GET /ventas/{id}). */
+  let obtenerHoja: ReturnType<typeof vi.fn>;
 
   /** CU-10: por defecto la caja está abierta hoy, como la encuentra el vendedor al empezar. */
   const cajaAbierta: CajaVigente = {
@@ -170,6 +183,11 @@ describe('Mostrador', () => {
     leerConfiguracionArca = vi.fn(() =>
       configuracionArca ? of(configuracionArca) : throwError(() => new HttpErrorResponse({ status: 500 })),
     );
+    leerAvisos = vi.fn(() => of(avisosDelServidor));
+    leerProvisorias = vi.fn(() => of(provisorias));
+    obtenerHoja = vi.fn((ventaId: number) =>
+      of(ventaDePrueba({ ventaId, numero: ventaId / 10, fiscal: fiscalDe(documentoB({ numero: 45 })) })),
+    );
     const ventas = {
       cobrar: vi.fn((pedido: ConfirmarVentaRequest) => {
         const respuesta = new Subject<VentaCobrada>();
@@ -177,6 +195,7 @@ describe('Mostrador', () => {
         return respuesta;
       }),
       facturacion: leerFacturacion,
+      provisoriasAutorizadas: leerProvisorias,
     };
     const presupuestosApi = {
       emitir: vi.fn((pedido: EmitirPresupuestoRequest) => {
@@ -231,6 +250,8 @@ describe('Mostrador', () => {
         { provide: ArticulosService, useValue: articulosApi },
         { provide: ClientesService, useValue: clientesApi },
         { provide: FacturacionService, useValue: { configuracion: leerConfiguracionArca } },
+        { provide: AvisosFacturacionService, useValue: { leer: leerAvisos } },
+        { provide: VentasService, useValue: { factura: obtenerHoja } },
         { provide: AuthService, useValue: { sesion: sesion.asReadonly() } },
         { provide: GENERAR_CLAVE, useValue: () => `clave-${++claves}` },
       ],
@@ -278,6 +299,8 @@ describe('Mostrador', () => {
     vi.useFakeTimers();
     facturacionDelServidor = { factura: false, ambiente: null, letras: null };
     configuracionArca = configuracionConCertificado(null);
+    avisosDelServidor = { rechazadas: 0, pendientesViejas: 0, enRevision: 0, bloqueo: null };
+    provisorias = [];
   });
   afterEach(() => vi.useRealTimers());
 
@@ -1851,7 +1874,8 @@ describe('Mostrador', () => {
 
         fixture.destroy();
 
-        expect(vi.getTimerCount()).toBe(pendientes - 1);
+        // El del aviso y el de la consulta de cada minuto por el CAE de la caja abierta (C7).
+        expect(vi.getTimerCount()).toBe(pendientes - 2);
       });
     });
 
@@ -4808,6 +4832,177 @@ describe('Mostrador', () => {
       expect(document.activeElement).toBe(campo());
       await avanzar(5000);
       expect(el().querySelector('.aviso')).toBeNull();
+    });
+  });
+
+  describe('avisos de facturación (rama 7: CU-16 punto 8 y «Reimprimir» de CU-07; S6, S11, S14)', () => {
+    const normal = (t: string | null | undefined) => (t ?? '').replace(/\s+/g, ' ').trim();
+    const avisoDueno = () => el().querySelector<HTMLElement>('.zona-busqueda .aviso-facturacion');
+    const avisosCae = () => Array.from(el().querySelectorAll<HTMLElement>('.zona-busqueda .aviso-cae'));
+    const textosCae = () => avisosCae().map((a) => normal(a.querySelector('.texto')?.textContent));
+    const dialogoFactura = () => el().querySelector<HTMLElement>('app-factura-imprimible [role="dialog"]');
+    const botonCae = (nombre: string, i = 0) =>
+      Array.from(avisosCae()[i].querySelectorAll<HTMLButtonElement>('button')).find(
+        (b) => normal(b.textContent) === nombre || b.getAttribute('aria-label') === nombre,
+      )!;
+    const venta12: ProvisoriaAutorizada = { ventaId: 120, numero: 12, factura: 'Factura B 0001-00000045' };
+    const exacto = (a: ArticuloMostrador): BusquedaMostrador => ({ tipo: 'EXACTO', items: [a], hayMas: false });
+
+    async function tecla(key: string, destino: HTMLElement = document.activeElement as HTMLElement) {
+      destino.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }));
+      await refrescar();
+    }
+
+    it('el Dueño ve al abrir y cada minuto lo que tiene que revisar, debajo del buscador y sin sacarle el foco', async () => {
+      avisosDelServidor = { rechazadas: 2, pendientesViejas: 1, enRevision: 0, bloqueo: null };
+      await crear(cajaAbierta, FORMAS_BASE, 'DUENO');
+
+      expect(leerAvisos).toHaveBeenCalledTimes(1);
+      expect(Array.from(avisoDueno()!.querySelectorAll('a')).map((a) => [normal(a.textContent), a.getAttribute('href')])).toEqual([
+        ['2 rechazadas', '/ventas?fiscal=RECHAZADAS'],
+        ['1 pendiente de CAE desde hace más de 30 minutos', '/ventas?fiscal=PENDIENTES'],
+      ]);
+      expect(document.activeElement).toBe(campo());
+
+      avisosDelServidor = { rechazadas: 0, pendientesViejas: 0, enRevision: 0, bloqueo: null };
+      await avanzar(INTERVALO_AVISOS_MS);
+      expect(leerAvisos).toHaveBeenCalledTimes(2);
+      expect(avisoDueno()).toBeNull();
+    });
+
+    it('al Vendedor no se le piden los avisos del Dueño', async () => {
+      avisosDelServidor = { rechazadas: 2, pendientesViejas: 1, enRevision: 1, bloqueo: null };
+      await crear();
+      await avanzar(INTERVALO_AVISOS_MS);
+
+      expect(leerAvisos).not.toHaveBeenCalled();
+      expect(avisoDueno()).toBeNull();
+    });
+
+    it('con la caja abierta pregunta cada minuto si llegó el CAE y avisa, al Vendedor y al Dueño', async () => {
+      for (const rol of ['VENDEDOR', 'DUENO'] as const) {
+        TestBed.resetTestingModule();
+        provisorias = [];
+        await crear(cajaAbierta, FORMAS_BASE, rol);
+        expect(leerProvisorias, rol).toHaveBeenCalledTimes(1);
+        expect(avisosCae()).toHaveLength(0);
+
+        provisorias = [venta12];
+        await avanzar(INTERVALO_AVISOS_MS);
+        expect(leerProvisorias).toHaveBeenCalledTimes(2);
+        expect(textosCae()).toEqual(['Llegó el CAE de la venta N.º 12']);
+        expect(document.activeElement).toBe(campo());
+      }
+    });
+
+    it('sin caja abierta no pregunta por el CAE; con la caja abierta de otro día, sí', async () => {
+      provisorias = [venta12];
+      await crear({ estado: 'SIN_CAJA', caja: null, efectivoPropuesto: 0 });
+      await avanzar(INTERVALO_AVISOS_MS);
+      expect(leerProvisorias).not.toHaveBeenCalled();
+      expect(avisosCae()).toHaveLength(0);
+
+      TestBed.resetTestingModule();
+      await crear({ ...cajaAbierta, estado: 'DE_OTRO_DIA' });
+      expect(leerProvisorias).toHaveBeenCalledTimes(1);
+      expect(textosCae()).toEqual(['Llegó el CAE de la venta N.º 12']);
+    });
+
+    it('«Reimprimir factura» abre la hoja fiscal de esa venta como la del cobro, el aviso se va y Esc vuelve al buscador', async () => {
+      const imprimir = vi.spyOn(window, 'print').mockImplementation(() => undefined);
+      provisorias = [venta12];
+      await crear();
+
+      botonCae('Reimprimir factura').click();
+      await refrescar();
+
+      expect(obtenerHoja).toHaveBeenCalledWith(120);
+      const dialogo = dialogoFactura()!;
+      expect(normal(dialogo.querySelector('#factura-titulo')?.textContent)).toBe('Factura B');
+      expect(normal(dialogo.querySelector('.numero-fiscal')?.textContent)).toBe('N.º 00001-00000045');
+      expect(dialogo.querySelector('.vuelto')).toBeNull();
+      expect(avisosCae()).toHaveLength(0);
+
+      await tecla('Enter', dialogo);
+      expect(imprimir).toHaveBeenCalledTimes(1);
+      await tecla('Escape');
+      expect(dialogoFactura()).toBeNull();
+      expect(document.activeElement).toBe(campo());
+      imprimir.mockRestore();
+    });
+
+    it('cerrar el aviso del CAE lo descarta y el foco vuelve al buscador', async () => {
+      provisorias = [venta12];
+      await crear();
+      const cerrar = botonCae('Cerrar el aviso de la venta N.º 12');
+      cerrar.focus();
+
+      cerrar.click();
+      await refrescar();
+
+      expect(avisosCae()).toHaveLength(0);
+      expect(obtenerHoja).not.toHaveBeenCalled();
+      expect(document.activeElement).toBe(campo());
+    });
+
+    it('la hoja del CAE que llega con un diálogo abierto no lo pisa y el aviso queda', async () => {
+      provisorias = [venta12];
+      await crear();
+      const respuesta = new Subject<VentaConsultada>();
+      obtenerHoja.mockReturnValueOnce(respuesta);
+
+      botonCae('Reimprimir factura').click();
+      await refrescar();
+      await tecla('F9', campo());
+      expect(el().querySelector('app-dialogo-cliente')).not.toBeNull();
+      respuesta.next(ventaDePrueba({ ventaId: 120, numero: 12, fiscal: fiscalDe(documentoB({ numero: 45 })) }));
+      respuesta.complete();
+      await refrescar();
+
+      expect(el().querySelector('app-dialogo-cliente')).not.toBeNull();
+      expect(dialogoFactura()).toBeNull();
+      expect(textosCae()).toEqual(['Llegó el CAE de la venta N.º 12']);
+    });
+
+    it('el aviso de venta cobrada sigue igual con un aviso del CAE a la vista', async () => {
+      provisorias = [venta12];
+      await crear();
+      await escribir('M');
+      await enter();
+      await responder(llamadas.length - 1, exacto(articulo(1, { descripcion: 'Martillo', precioFinal: 1500 })));
+      await tecla('F4', campo());
+      await tecla('Enter');
+      cobros[0].respuesta.next({
+        venta: {
+          ventaId: 99,
+          numero: 7,
+          total: 1500,
+          fecha: '2026-10-29T10:00:00',
+          medioPago: 'EFECTIVO',
+          renglones: [],
+          sinStock: [],
+          facturable: true,
+        },
+        repetida: false,
+      });
+      cobros[0].respuesta.complete();
+      await refrescar();
+
+      expect(normal(el().querySelector('.aviso')?.textContent)).toBe('Venta N.º 7 cobrada: $ 1.500,00');
+      expect(textosCae()).toEqual(['Llegó el CAE de la venta N.º 12']);
+      await avanzar(5000);
+      expect(el().querySelector('.aviso')).toBeNull();
+      expect(textosCae()).toEqual(['Llegó el CAE de la venta N.º 12']);
+    });
+
+    it('al salir del mostrador deja de preguntar', async () => {
+      await crear(cajaAbierta, FORMAS_BASE, 'DUENO');
+      fixture.destroy();
+
+      vi.advanceTimersByTime(INTERVALO_AVISOS_MS * 3);
+
+      expect(leerAvisos).toHaveBeenCalledTimes(1);
+      expect(leerProvisorias).toHaveBeenCalledTimes(1);
     });
   });
 });

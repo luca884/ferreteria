@@ -95,11 +95,13 @@ public interface ConfigArcaRepository extends TenantScopedRepository<ConfigArca,
 
     /**
      * Registros fiscales abiertos de la ferretería, de cualquier ambiente: los que no terminaron (todo estado salvo
-     * AUTORIZADO, RECHAZADO y FUERA_DE_FECHA, incluidas las alertas). Mientras haya uno, el ambiente no cambia.
+     * AUTORIZADO, RECHAZADO, FUERA_DE_FECHA y, desde la V36, SIN_FACTURA; incluidas las alertas). Un reemplazado tampoco
+     * cuenta: es un RECHAZADO o un FUERA_DE_FECHA que quedó como historia. Mientras haya uno, el ambiente no cambia.
      */
     @Query(value = """
             select count(*) from comprobante_fiscal
-            where ferreteria_id = :fid and estado not in ('AUTORIZADO', 'RECHAZADO', 'FUERA_DE_FECHA')
+            where ferreteria_id = :fid and estado not in ('AUTORIZADO', 'RECHAZADO', 'FUERA_DE_FECHA', 'SIN_FACTURA')
+              and reemplazado_en is null
             """, nativeQuery = true)
     long registrosAbiertos(@Param("fid") Long ferreteriaId);
 

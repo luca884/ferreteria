@@ -23,14 +23,20 @@ import com.ferreteria.facturacion.wsfe.Err;
 import com.ferreteria.facturacion.wsfe.FeCompUltimoAutorizadoResponse;
 import com.ferreteria.facturacion.wsfe.PedidoNoLlegoException;
 import com.ferreteria.tenant.TenantContext;
+import java.io.IOException;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.Duration;
 import java.util.Map;
+import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.context.ApplicationContext;
 
 /**
  * El simulador en el borde (rama 6, S6), con el XML, el CMS y el TA reales que arman {@link ClienteWsaa}, {@link FirmaCms} y
@@ -47,6 +53,12 @@ class SimuladorEnElBordeIntegrationTest extends SimuladorEnElBordeTestBase {
     FirmaCms firma;
     @Autowired
     PropiedadesArca propiedades;
+    @Autowired
+    WsaaDelSimulador wsaaDelSimulador;
+    @Autowired
+    WsfeDelSimulador wsfeDelSimulador;
+    @Autowired
+    ApplicationContext contexto;
 
     private ClienteWsaa wsaa() {
         return new ClienteWsaa(Ambiente.SIMULADOR, borde, propiedades.wsaa());
@@ -187,6 +199,30 @@ class SimuladorEnElBordeIntegrationTest extends SimuladorEnElBordeTestBase {
                 .isInstanceOf(PedidoNoLlegoException.class);
         assertThatThrownBy(() -> borde.enviar(new Transporte.Pedido(URI.create("https://otro.invalid/"), "", "")))
                 .isInstanceOf(PedidoNoLlegoException.class);
+    }
+
+    // ---- ARCA caída (solo dev, rama 7) ----
+
+    @Test
+    @DisplayName("ARCA caída en dev: mientras existe el archivo, WSFEv1 no contesta (PedidoNoLlegoException) y WSAA sí; sin el "
+            + "archivo vuelve a contestar. Fuera de dev no hay interruptor")
+    void laCaidaDeDevApagaWsfeMientrasExisteElArchivo(@TempDir Path carpeta) throws IOException {
+        Path archivo = carpeta.resolve("arca-caida");
+        Transporte conCaida = new SimuladorEnElBorde(propiedades, wsaaDelSimulador, wsfeDelSimulador,
+                Optional.of(new CaidaSimulada(archivo)));
+        Transporte.Pedido dummy = new Transporte.Pedido(propiedades.wsfe().de(Ambiente.SIMULADOR),
+                MetodoWsfe.FE_DUMMY.soapAction(), PlantillasWsfe.feDummy());
+        assertThat(conCaida.enviar(dummy).status()).isEqualTo(200);
+
+        Files.createFile(archivo);
+        assertThatThrownBy(() -> conCaida.enviar(dummy)).isInstanceOf(PedidoNoLlegoException.class)
+                .hasMessageContaining("caída");
+        assertThat(new ClienteWsaa(Ambiente.SIMULADOR, conCaida, propiedades.wsaa()).loginCms(cms(traValido())).token())
+                .isNotBlank();
+
+        Files.delete(archivo);
+        assertThat(conCaida.enviar(dummy).status()).isEqualTo(200);
+        assertThat(contexto.getBeansOfType(CaidaSimulada.class)).isEmpty();
     }
 
     private FeCompUltimoAutorizadoResponse ultimo(TicketDeAcceso ticket) {

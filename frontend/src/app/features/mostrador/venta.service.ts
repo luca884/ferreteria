@@ -5,6 +5,7 @@ import { environment } from '../../../environments/environment';
 import {
   ConfirmarVentaRequest,
   FacturacionDelMostrador,
+  ProvisoriaAutorizada,
   VentaCobrada,
   VentaInvalida,
   VentaRechazada,
@@ -29,6 +30,14 @@ export class VentaService {
   /** Qué comprobante sale al cobrar (C3): Dueño y Vendedor. La letra la decide el servidor, por condición del cliente. */
   facturacion(): Observable<FacturacionDelMostrador> {
     return this.http.get<FacturacionDelMostrador>(`${this.url}/facturacion`);
+  }
+
+  /**
+   * Las ventas que el usuario cobró en la caja abierta, que salieron con ticket provisorio y ya tienen CAE (C7): Dueño y
+   * Vendedor. Sin caja abierta, lista vacía.
+   */
+  provisoriasAutorizadas(): Observable<ProvisoriaAutorizada[]> {
+    return this.http.get<ProvisoriaAutorizada[]>(`${this.url}/provisorias-autorizadas`);
   }
 }
 

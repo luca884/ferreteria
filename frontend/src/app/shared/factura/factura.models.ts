@@ -14,7 +14,12 @@ export type EstadoFiscal =
   | 'RECHAZADO'
   | 'FUERA_DE_FECHA'
   | 'CAE_NO_COINCIDE'
-  | 'SERIE_DESINCRONIZADA';
+  | 'SERIE_DESINCRONIZADA'
+  /** El Dueño la dejó sin factura, con un motivo (rama 7, D10): definitivo. */
+  | 'SIN_FACTURA';
+
+/** Las alertas que traban la serie y resuelve soporte: la bandeja las muestra «En revisión», sin acciones (S13). */
+export const ESTADOS_EN_REVISION: readonly EstadoFiscal[] = ['CAE_NO_COINCIDE', 'SERIE_DESINCRONIZADA'];
 
 export type LetraFactura = 'A' | 'B' | 'C';
 /** La letra impresa: X si el documento no es válido como factura. */
@@ -112,6 +117,8 @@ export interface ResumenFiscal {
   estado: EstadoFiscal;
   ambiente: AmbienteFiscal;
   validoComoFactura: boolean;
+  /** Salió con ticket provisorio y ya está AUTORIZADO (rama 7, C1): la lista marca «Reimprimir factura». */
+  reimprimir?: boolean;
 }
 
 /** Un renglón de la venta como lo necesita la hoja: `neto` es el subtotal sin IVA (la A lo muestra). */
@@ -153,6 +160,7 @@ export const ESTADO_FISCAL_LABELS: Record<EstadoFiscal, string> = {
   AUTORIZADO: 'Autorizada',
   RECHAZADO: 'Rechazada',
   FUERA_DE_FECHA: 'Fuera de fecha',
-  CAE_NO_COINCIDE: 'CAE no coincide',
-  SERIE_DESINCRONIZADA: 'Serie desincronizada',
+  CAE_NO_COINCIDE: 'En revisión',
+  SERIE_DESINCRONIZADA: 'En revisión',
+  SIN_FACTURA: 'Sin factura',
 };

@@ -4,6 +4,7 @@ import { TestBed } from '@angular/core/testing';
 import {
   ConfirmarVentaRequest,
   FacturacionDelMostrador,
+  ProvisoriaAutorizada,
   VentaCobrada,
   VentaRechazada,
   VentaResponse,
@@ -156,6 +157,16 @@ describe('VentaService', () => {
     expect(req.request.method).toBe('GET');
     req.flush(cuerpo);
     expect(leida).toEqual(cuerpo);
+  });
+
+  it('lee con GET /ventas/provisorias-autorizadas las ventas de la caja abierta a las que les llegó el CAE (C7)', () => {
+    const cuerpo: ProvisoriaAutorizada[] = [{ ventaId: 1, numero: 12, factura: 'Factura B 0001-00000045' }];
+    let leidas: ProvisoriaAutorizada[] | undefined;
+    service.provisoriasAutorizadas().subscribe((l) => (leidas = l));
+    const req = http.expectOne((r) => r.url.endsWith('/ventas/provisorias-autorizadas'));
+    expect(req.request.method).toBe('GET');
+    req.flush(cuerpo);
+    expect(leidas).toEqual(cuerpo);
   });
 
   describe('rechazoDe', () => {

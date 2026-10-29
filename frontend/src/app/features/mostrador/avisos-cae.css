@@ -1,0 +1,44 @@
+/* Sin caja propia: cada aviso es un renglón más de la zona del buscador, y sin avisos no ocupa lugar. */
+:host {
+  display: contents;
+}
+
+/* Una buena noticia que pide algo: reimprimir la factura que antes salió como ticket provisorio. */
+.aviso-cae {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--e-1) var(--e-3);
+  padding: var(--e-2) var(--e-3);
+  border: 1px solid var(--acento-borde);
+  border-left: 4px solid var(--acento);
+  border-radius: var(--radio);
+  background: var(--acento-suave);
+  color: var(--acento-profundo);
+  font-weight: 600;
+}
+.aviso-cae .factura {
+  color: var(--texto-suave);
+  font-size: var(--texto-sm);
+  font-variant-numeric: tabular-nums;
+}
+.aviso-cae .botones {
+  display: flex;
+  align-items: center;
+  gap: var(--e-2);
+  margin-left: auto;
+}
+.aviso-cae .cerrar-aviso {
+  min-width: 32px;
+  min-height: 32px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font-size: 1.25rem;
+  line-height: 1;
+}
+.aviso-cae .error {
+  flex-basis: 100%;
+  margin: 0;
+}

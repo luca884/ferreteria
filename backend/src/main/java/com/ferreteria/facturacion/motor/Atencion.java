@@ -11,5 +11,10 @@ public enum Atencion {
     /** La serie tiene una alerta (CAE_NO_COINCIDE o SERIE_DESINCRONIZADA): no avanza hasta que la resuelva una persona. */
     TRABADA,
     /** La serie se perdió a mitad de camino (venció la toma y la tomó otra instancia): lo de esta no se guardó. */
-    SERIE_PERDIDA
+    SERIE_PERDIDA,
+    /**
+     * Se llegó al límite de tiempo de la atención antes de empezar otro registro (el tope de la pasada del job, rama 7): lo
+     * que quede pendiente sigue en la próxima. La venta atiende sin límite y nunca la recibe.
+     */
+    SIN_TIEMPO
 }

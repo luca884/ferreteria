@@ -27,7 +27,10 @@ import java.util.concurrent.atomic.AtomicInteger;
  * </ol>
  * Además, una excepción sin traducir ({@link #lanzarEnElSiguienteFeCaeSolicitar}), como la de un adaptador que no la
  * convierte en las del puerto: la lanza el siguiente {@code FECAESolicitar}, después de la pausa y sin llegar al simulador.
- * {@code FECompUltimoAutorizado} y {@code FECompConsultar} pasan siempre al simulador.
+ * {@code FECompUltimoAutorizado} y {@code FECompConsultar} pasan al simulador, salvo que haya una respuesta con
+ * {@code Errors} programada para la siguiente ({@link #responderConErroresElSiguienteFeCompConsultar},
+ * {@link #responderConErroresElSiguienteFeCompUltimoAutorizado}; rama 7, C6): el 602 de un comprobante que no está, o un
+ * error del sistema de ARCA (500 a 502), sin llegar al simulador.
  */
 public final class WsfeDePrueba implements ServicioWsfe {
 
@@ -49,6 +52,8 @@ public final class WsfeDePrueba implements ServicioWsfe {
     private final Queue<Pausa> pausas = new ConcurrentLinkedQueue<>();
     private final Queue<List<Err>> rechazosEnLaCabecera = new ConcurrentLinkedQueue<>();
     private final Queue<RuntimeException> excepciones = new ConcurrentLinkedQueue<>();
+    private final Queue<List<Err>> erroresDeConsultar = new ConcurrentLinkedQueue<>();
+    private final Queue<List<Err>> erroresDeUltimoAutorizado = new ConcurrentLinkedQueue<>();
     private final AtomicInteger solicitudes = new AtomicInteger();
     private volatile WsfeConFallas fallas;
 
@@ -63,7 +68,19 @@ public final class WsfeDePrueba implements ServicioWsfe {
         pausas.clear();
         rechazosEnLaCabecera.clear();
         excepciones.clear();
+        erroresDeConsultar.clear();
+        erroresDeUltimoAutorizado.clear();
         solicitudes.set(0);
+    }
+
+    /** El siguiente {@code FECompConsultar} vuelve sin {@code ResultGet} y con esos {@code Errors}, sin llegar al simulador. */
+    public void responderConErroresElSiguienteFeCompConsultar(Err... errores) {
+        erroresDeConsultar.add(List.of(errores));
+    }
+
+    /** El siguiente {@code FECompUltimoAutorizado} vuelve con esos {@code Errors}, sin llegar al simulador. */
+    public void responderConErroresElSiguienteFeCompUltimoAutorizado(Err... errores) {
+        erroresDeUltimoAutorizado.add(List.of(errores));
     }
 
     /** Las fallas programables ({@code programar}, {@code rechazarConObservaciones}). */
@@ -93,6 +110,10 @@ public final class WsfeDePrueba implements ServicioWsfe {
 
     @Override
     public FeCompUltimoAutorizadoResponse feCompUltimoAutorizado(Auth auth, int ptoVta, int cbteTipo) {
+        List<Err> errores = erroresDeUltimoAutorizado.poll();
+        if (errores != null) {
+            return new FeCompUltimoAutorizadoResponse(ptoVta, cbteTipo, 0, errores);
+        }
         return fallas.feCompUltimoAutorizado(auth, ptoVta, cbteTipo);
     }
 
@@ -119,6 +140,10 @@ public final class WsfeDePrueba implements ServicioWsfe {
 
     @Override
     public FeCompConsultarResponse feCompConsultar(Auth auth, int cbteTipo, int ptoVta, long cbteNro) {
+        List<Err> errores = erroresDeConsultar.poll();
+        if (errores != null) {
+            return new FeCompConsultarResponse(null, errores);
+        }
         return fallas.feCompConsultar(auth, cbteTipo, ptoVta, cbteNro);
     }
 }

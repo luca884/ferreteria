@@ -1,6 +1,7 @@
 package com.ferreteria.ventas;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.ferreteria.facturacion.documento.LectorQr;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -98,7 +99,8 @@ class VentaFacturadaDocumentoIntegrationTest extends VentaFacturadaTestBase {
     }
 
     @Test
-    @DisplayName("el detalle (Dueño) trae el mismo «fiscal» con su documento; la venta sin registro fiscal sigue sin «fiscal»")
+    @DisplayName("el detalle (Dueño) trae el mismo «fiscal» con su documento, más lo de la bandeja (cu-07-contingencias C1); "
+            + "la venta sin registro fiscal sigue sin «fiscal»")
     void elDetalleTraeElDocumento() throws Exception {
         Tienda t = tiendaQueFactura(RI);
         long a = articulo(t, "Martillo", "UNIDAD", "121.00", "10");
@@ -111,7 +113,19 @@ class VentaFacturadaDocumentoIntegrationTest extends VentaFacturadaTestBase {
         JsonNode detalle = getJson("/api/ventas/" + cobrada.get("ventaId").asLong(), dueno);
         JsonNode detalleSinFactura = getJson("/api/ventas/" + sinFactura.get("ventaId").asLong(), dueno);
 
-        assertThat(detalle.get("fiscal")).isEqualTo(cobrada.get("fiscal"));
+        // Lo del cobro, igual; el detalle suma lo de la bandeja (C1), vacío en una autorizada que no salió provisoria.
+        ObjectNode delDetalle = ((ObjectNode) detalle.get("fiscal")).deepCopy();
+        for (String lista : List.of("errores", "observaciones", "acciones")) {
+            assertThat(delDetalle.remove(lista)).as(lista).isNotNull().isEmpty();
+        }
+        for (String nulo : List.of("motivoSinFactura", "sinFacturaPor", "sinFacturaEn")) {
+            assertThat(delDetalle.remove(nulo).isNull()).as(nulo).isTrue();
+        }
+        for (String marca : List.of("fechaNuevaRequerida", "reimprimir")) {
+            assertThat(delDetalle.remove(marca).isBoolean()).as(marca).isTrue();
+            assertThat(detalle.get("fiscal").get(marca).asBoolean()).as(marca).isFalse();
+        }
+        assertThat(delDetalle).isEqualTo(cobrada.get("fiscal"));
         assertThat(detalle.get("fiscal").get("documento").get("letra").asText()).isEqualTo("X");
         assertSinFiscal(sinFactura);
         assertSinFiscal(detalleSinFactura);

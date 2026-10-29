@@ -1,0 +1,50 @@
+.sin-factura {
+  width: min(520px, 100%);
+  max-height: calc(100vh - var(--e-8));
+  gap: var(--e-3);
+  overflow-y: auto;
+}
+/* El diálogo recibe el foco con un clic en una zona sin controles: no necesita el aro. */
+.sin-factura:focus {
+  outline: none;
+}
+
+/* Que no se pueda volver atrás se lee antes del campo. */
+.definitivo {
+  padding: var(--e-2) var(--e-3);
+  border: 1px solid var(--advertencia-borde);
+  border-left: 4px solid var(--advertencia-marca);
+  border-radius: var(--radio);
+  background: var(--advertencia-fondo);
+  color: var(--advertencia);
+  font-weight: 600;
+}
+
+.campo-motivo {
+  margin-bottom: calc(var(--e-2) * -1);
+  font-weight: 600;
+}
+.campo-motivo-input {
+  width: 100%;
+  min-width: 0;
+  height: 48px;
+  padding: 0 14px;
+}
+.pie-motivo {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--e-2);
+  margin-top: calc(var(--e-2) * -1);
+}
+.pie-motivo .contador {
+  margin-left: auto;
+  color: var(--texto-tenue);
+  font-variant-numeric: tabular-nums;
+}
+
+.dialogo-acciones button {
+  min-height: 48px;
+}
+.dialogo-acciones .dejar-sin-factura {
+  padding-inline: var(--e-6);
+}

@@ -20,5 +20,10 @@ public enum EstadoFiscal {
     /** Alerta: ARCA tiene ese número con otros datos. Conserva el número y traba la serie. */
     CAE_NO_COINCIDE,
     /** Alerta: ARCA va más de uno atrás (último &lt; N−1). Conserva el número y traba la serie. */
-    SERIE_DESINCRONIZADA
+    SERIE_DESINCRONIZADA,
+    /**
+     * El Dueño dejó sin factura una venta RECHAZADO o FUERA_DE_FECHA (V36, rama 7; CU-16 punto 7), con el motivo, quién y
+     * cuándo. Definitivo (S12): no se reintenta.
+     */
+    SIN_FACTURA
 }

@@ -46,11 +46,23 @@
       Hasta
       <input name="hasta" type="date" [value]="hasta()" (input)="hasta.set($any($event.target).value)" />
     </label>
+    <label>
+      Facturas
+      <select name="fiscal" [value]="fiscal()" (change)="elegirFiscal($any($event.target).value)">
+        <option value="">Todas</option>
+        <option value="PENDIENTES">Pendientes</option>
+        <option value="RECHAZADAS">Rechazadas</option>
+      </select>
+    </label>
     <button type="submit" class="primario">Buscar</button>
     <button type="button" class="secundario" (click)="limpiar()">Limpiar</button>
   </form>
   @if (errorFiltros(); as texto) {
     <p class="error" role="alert">{{ texto }}</p>
+  }
+
+  @if (resultadoAccion(); as texto) {
+    <p class="resultado-accion" role="status">{{ texto }}</p>
   }
 
   @if (error(); as texto) {
@@ -97,6 +109,9 @@
                   @if (f.marcas) {
                     <span class="marca">{{ f.marcas }}</span>
                   }
+                  @if (f.reimprimir) {
+                    <span class="marca reimprimir">Reimprimir factura</span>
+                  }
                 }
               </td>
               <td>{{ fecha(fila.fecha) }}</td>
@@ -139,9 +154,78 @@
         @if (lineaFiscal(); as linea) {
           <p class="linea-fiscal">{{ linea }}</p>
         }
+        @if (fiscalElegido(); as f) {
+          <div class="factura-bandeja">
+            @if (estadoFactura(); as estado) {
+              <p class="estado-factura">Estado de la factura: <strong>{{ estado }}</strong></p>
+            }
+            @if (enRevision()) {
+              <p class="en-revision">Hay una diferencia con ARCA que tiene que revisar soporte.</p>
+            }
+            @if (f.estado === 'SIN_FACTURA' && f.motivoSinFactura) {
+              <p class="motivo-sin-factura">
+                Motivo: {{ f.motivoSinFactura }}@if (f.sinFacturaPor && f.sinFacturaEn) {&ngsp;· {{ f.sinFacturaPor }}, {{ fecha(f.sinFacturaEn) }}}
+              </p>
+            }
+            @if (f.reimprimir) {
+              <p class="aviso-reimprimir">
+                Salió con ticket provisorio y ARCA ya la autorizó: reimprimí la factura para el cliente.
+              </p>
+            }
+            @if (f.errores?.length) {
+              <section class="errores-arca" aria-labelledby="errores-arca-titulo">
+                <h3 id="errores-arca-titulo">Errores de ARCA</h3>
+                <ul>
+                  @for (e of f.errores; track $index) {
+                    <li>
+                      <span class="codigo">{{ e.codigo }}</span>&ngsp;<span class="mensaje">{{ e.mensaje }}</span>
+                      @if (e.explicacion) {
+                        <span class="explicacion">{{ e.explicacion }}</span>
+                      }
+                    </li>
+                  }
+                </ul>
+              </section>
+            }
+            @if (f.observaciones?.length) {
+              <section class="observaciones-arca" aria-labelledby="observaciones-arca-titulo">
+                <h3 id="observaciones-arca-titulo">Observaciones de ARCA</h3>
+                <ul>
+                  @for (o of f.observaciones; track $index) {
+                    <li><span class="codigo">{{ o.codigo }}</span>&ngsp;<span class="mensaje">{{ o.mensaje }}</span></li>
+                  }
+                </ul>
+              </section>
+            }
+            @if (puedeReintentar() || puedeDejarSinFactura()) {
+              <div class="acciones-factura">
+                <div class="botones">
+                  @if (puedeReintentar()) {
+                    <button type="button" class="primario" [disabled]="enVueloAccion()" (click)="reintentar()">
+                      Reintentar
+                    </button>
+                  }
+                  @if (puedeDejarSinFactura()) {
+                    <button type="button" class="secundario" [disabled]="enVueloAccion()" (click)="pedirMotivo()">
+                      Dejar sin factura
+                    </button>
+                  }
+                </div>
+                @if (reintentando()) {
+                  <p class="ayuda" role="status">Autorizando con ARCA…</p>
+                }
+                @if (errorAccion(); as texto) {
+                  <p class="error error-accion" role="alert">{{ texto }}</p>
+                }
+              </div>
+            }
+          </div>
+        }
         <app-venta-hoja [venta]="v" />
         <div class="acciones">
-          <button type="button" class="primario" (click)="imprimiendo.set(true)">Imprimir</button>
+          <button type="button" class="primario" (click)="imprimiendo.set(true)">
+            {{ fiscalElegido()?.reimprimir ? 'Reimprimir factura' : 'Imprimir' }}
+          </button>
         </div>
         @if (imprimiendo()) {
           @if (facturada(); as f) {
@@ -154,5 +238,27 @@
         <p class="ayuda">Cargando…</p>
       }
     </section>
+  }
+
+  @if (confirmandoFecha(); as mensaje) {
+    <app-confirmacion
+      titulo="¿Facturar con la fecha de hoy?"
+      [mensaje]="mensaje"
+      textoConfirmar="Facturar con la fecha de hoy"
+      (confirmar)="confirmarFechaDeHoy()"
+      (cancelar)="confirmandoFecha.set(null)"
+    />
+  }
+
+  @if (pidiendoMotivo()) {
+    @if (detalle(); as v) {
+      <app-dialogo-sin-factura
+        [numero]="v.numero"
+        [enVuelo]="enVueloAccion()"
+        [error]="errorMotivo()"
+        (confirmar)="dejarSinFactura($event)"
+        (cancelar)="cerrarMotivo()"
+      />
+    }
   }
 }
