@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  El XSD del TRA (LoginTicketRequest.xml) de WSAA (rama 6, C3 y C5): copiado el 2026-10-29 de la «Especificación Técnica del
+  WebService de Autenticación y Autorización» 1.2.2 de ARCA (https://www.afip.gob.ar/ws/WSAA/Especificacion_Tecnica_WSAA_1.2.2.pdf,
+  PDF del 2025-07-15, página 6, «Generación del documento del TRA»).
+
+  Tres arreglos de transcripción, sin cambiar lo que valida: el PDF perdió los guiones (por eso su ejemplo muestra fechas como
+  «20011231T12:00:0003:00»), así que el patrón de serviceType vuelve a tener sus rangos «a-z», «A-Z» y «0-9» y el «\-»
+  escapado, y el encoding es «UTF-8»; además se separan dos atributos que el PDF deja pegados (minOccurs y maxOccurs de
+  service, use y default de version).
+
+  Lo usan los tests del TRA y, desde la rama 6 (T6), el simulador en el borde, que contesta xml.bad a un TRA que no valida.
+-->
+<xsd:schema xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+  <xsd:annotation>
+    <xsd:documentation xml:lang="es">
+     Esquema de Ticket de pedido de acceso a un WSN
+     por parte de un CEE.
+     Nro revision SVN: $Rev:1869 $
+    </xsd:documentation>
+  </xsd:annotation>
+  <xsd:element name="loginTicketRequest" type="loginTicketRequest" />
+  <xsd:complexType name="loginTicketRequest">
+    <xsd:sequence>
+          <xsd:element name="header" type="headerType" minOccurs="1" maxOccurs="1"/>
+          <xsd:element name="service" type="serviceType" minOccurs="1" maxOccurs="1"/>
+    </xsd:sequence>
+    <xsd:attribute name="version" type="xsd:decimal" use="optional" default="1.0" />
+  </xsd:complexType>
+  <xsd:complexType name="headerType">
+    <xsd:sequence>
+          <xsd:element name="source" type="xsd:string" minOccurs="0" maxOccurs="1" />
+          <xsd:element name="destination" type="xsd:string" minOccurs="0" maxOccurs="1"/>
+          <xsd:element name="uniqueId" type="xsd:unsignedInt" minOccurs="1" maxOccurs="1"/>
+          <xsd:element name="generationTime" type="xsd:dateTime" minOccurs="1" maxOccurs="1"/>
+          <xsd:element name="expirationTime" type="xsd:dateTime" minOccurs="1" maxOccurs="1" />
+    </xsd:sequence>
+  </xsd:complexType>
+  <xsd:simpleType name="serviceType">
+    <xsd:restriction base="xsd:string">
+      <xsd:pattern value="[a-z,A-Z][a-z,A-Z,\-,_,0-9]*"/>
+      <xsd:minLength value='3'/>
+      <xsd:maxLength value='32'/>
+    </xsd:restriction>
+  </xsd:simpleType>
+</xsd:schema>

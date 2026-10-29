@@ -176,13 +176,13 @@ Restricciones:
   - fixtures (XSD en main, FEDummy real en test);
   - pruebas con `HttpServer` y `HttpsServer`, y la validación de C6 al arrancar.
   - Evidencia: RED→GREEN por clase (XmlSeguro 3, Plantillas 12, Lector 23, TransporteHttp 10, ClienteWsfe 9, SinSecretosEnLogs 2 con mutación temporal que el test detectó, ConfiguracionArca 4); `arca` 63/0 (repetido por el padre); ModulosArch+TenantScoping+PerfilPorDefecto 81/0; `xmllint` valida los pedidos de ejemplo; commit `eeadd36` (+3791) · Risk: items 2 (XXE y TLS) y 5 (red y TLS)
-- [ ] T5 · S2, S3, S10 (WSAA), C3, C4 · ruta: delegada (writer «backend») · Aceptación:
+- [x] T5 · S2, S3, S10 (WSAA), C3, C4 · ruta: delegada (writer «backend») · Aceptación:
   - TRA y `FirmaCms` (en `credencial`);
   - `ClienteWsaa` con los faults;
   - `TicketsDeAcceso` (cifrado, lease en la base, margen, lapso y esperas);
   - el cortacircuito en `config_arca` y en `puedeFacturar`, y el 600 que renueva una vez;
   - tests de concurrencia (20 hilos, dos instancias), de reinicio y de cada fault con conteo de llamadas.
-  - Evidencia: parcial, sin commitear (L8) · Risk: items 1, 2 y 4
+  - Evidencia (L9): GREEN sin RED registrado (el writer se frenó antes de anotarlo); unitarios `TraTest` 2/0, `FirmaCmsTest` 3/0, `ClienteWsaaTest` 4/0, `ConfigArcaTest` 31/0, `ConfiguracionArcaTest` 4/0; integración `TicketsDeAcceso` 13/0, concurrencia (20 pedidos, dos instancias) 1/0, cortacircuito (cada fault con conteo) 17/0, sin secretos 2/0, `BloqueoDeArca` 2/0, `MotorFiscal` 16/0; `facturacion.**` + `ModulosArchTest`, `TenantScopingArchTest`, `RegistroVentaTest` y `ConfigArcaAdminIntegrationTest` 857/0 · Risk: items 1, 2 y 4 (van al `odd-verifier` de T10)
 - [ ] T6 · S6, S7 (simulador) · ruta: delegada (writer «backend») · Aceptación:
   - el simulador en el borde (XSD, CMS, TA con su lapso y verificación del `Auth`);
   - `WsfePorAmbiente` con `ClienteWsfe` en los tres ambientes;
@@ -275,3 +275,4 @@ Restricciones:
     - leer el diff contra la sección de T5 y C3/C4;
     - correr los tests de T5, `com.ferreteria.facturacion.**.*Test` y `ModulosArchTest,TenantScopingArchTest,RegistroVentaTest,ConfigArcaAdminIntegrationTest`;
     - completar lo que falte, commitear T5 y seguir con T6.
+- L9 (2026-10-29) T5 reanudada: el padre corrió los tests del árbol sin cambios de código; todo en verde (ver T5). Próximo paso: T6.

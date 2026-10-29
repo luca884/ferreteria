@@ -51,6 +51,8 @@ public class PasosFiscales {
             + "domicilio comercial, inicio de actividades o Ingresos Brutos). Los carga el Dueño en «Datos de la ferretería».";
     static final String SIN_CREDENCIAL = "La facturación con ARCA está bloqueada: el certificado falta, venció o no se "
             + "puede leer. El Dueño lo renueva en «Facturación».";
+    /** WSAA rechazó el certificado (rama 6, C4): la facturación está frenada hasta otro certificado o «Probar conexión». */
+    static final String FRENADA = "La facturación con ARCA está frenada: ARCA rechazó el certificado (%s).";
 
     private final ComprobanteFiscalRepository registros;
     private final ComprobanteFiscalAlicuotaRepository alicuotas;
@@ -80,7 +82,8 @@ public class PasosFiscales {
      * Si la ferretería del request factura en {@code ahora}, el instante de la venta: la regla única que comparten la
      * decisión de la venta ({@code FacturacionParaVenta.decidir}) y el alta del registro ({@link #registrar}), así una venta
      * que se decidió facturable no se cae al darla de alta (D5, B1 de cu-07-venta-facturada). Factura si su configuración de
-     * ARCA tiene la facturación habilitada con ambiente y punto de venta ({@link ConfigArca#puedeFacturar()}); en
+     * ARCA tiene la facturación habilitada con ambiente y punto de venta, sin el bloqueo de ARCA de C4
+     * ({@link ConfigArca#puedeFacturar()}; con el bloqueo, el motivo lleva el código de WSAA); en
      * homologación o producción, si además tiene una credencial activa de ese ambiente, vigente en {@code ahora} y legible
      * ({@link RevisionDeCredencial}, rama 5, S8); y si están completos los datos de CU-01 paso 1 que la factura imprime. Lee
      * {@code config_arca} y la credencial con {@code FOR SHARE} hasta el fin de la transacción de quien llama (también sin
@@ -172,14 +175,17 @@ public class PasosFiscales {
     }
 
     /**
-     * La regla, con la configuración ya leída (con lock o sin él): habilitada con ambiente y punto de venta; en homologación
+     * La regla, con la configuración ya leída (con lock o sin él): habilitada con ambiente y punto de venta, y sin el bloqueo
+     * de ARCA (que, con la facturación habilitada, da su propio motivo, {@link #FRENADA}); en homologación
      * o producción, una credencial activa de ese ambiente, vigente en {@code ahora} y legible (rama 5, S8; la lee con lock
      * si {@code conLock}); y el emisor. En SIMULADOR no se exige credencial (hasta la rama 6).
      */
     private Emision emision(Optional<ConfigArca> leida, boolean conLock, Instant ahora) {
         Optional<ConfigArca> config = leida.filter(ConfigArca::puedeFacturar);
         if (config.isEmpty()) {
-            return Emision.impedida(NO_HABILITADA);
+            return Emision.impedida(leida.filter(c -> c.isFacturacionHabilitada() && c.estaBloqueada())
+                    .map(c -> String.format(FRENADA, c.getBloqueoCodigo()))
+                    .orElse(NO_HABILITADA));
         }
         if (!credencial.dejaFacturar(config.get(), ahora, conLock)) {
             return Emision.impedida(SIN_CREDENCIAL);

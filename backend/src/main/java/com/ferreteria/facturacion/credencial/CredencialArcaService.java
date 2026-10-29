@@ -237,15 +237,32 @@ public class CredencialArcaService {
         return vista(config, configs.registrosScoped());
     }
 
+    /**
+     * Levanta el bloqueo de ARCA de la ferretería del request (rama 6, C4): lo usa «Probar conexión» cuando sale OK (T7). Con
+     * el lock exclusivo de {@code config_arca}, como todo cambio. Sin bloqueo no cambia nada.
+     */
+    @Transactional
+    public void levantarBloqueo() {
+        ConfigArca config = bloquear();
+        if (config.estaBloqueada()) {
+            log.info("Bloqueo de ARCA levantado en la ferretería {} (era {})", config.getFerreteriaId(),
+                    config.getBloqueoCodigo());
+            config.levantarBloqueo();
+            configs.saveAndFlush(config);
+        }
+    }
+
     // ---- activar ----
 
     /**
-     * Fija el ambiente del certificado en la configuración (S16), borra la credencial activa anterior con su clave (S15) y
-     * convierte el pedido pendiente en la activa. Todo con el lock de {@code config_arca} tomado.
+     * Fija el ambiente del certificado en la configuración (S16), levanta el bloqueo de ARCA (rama 6, C4: otro certificado),
+     * borra la credencial activa anterior con su clave (S15) y convierte el pedido pendiente en la activa. Todo con el lock de
+     * {@code config_arca} tomado, en la misma transacción.
      */
     private void activar(ConfigArca config, CredencialArca pendiente, X509Certificate certificado, Ambiente ambiente,
             String emisor, Long caDelSimulador, long cuit, Instant ahora) {
         config.fijarAmbienteDelCertificado(ambiente, configs.registrosScoped());
+        config.levantarBloqueo();
         configs.save(config);
         credenciales.borrarActivaScoped();
         pendiente.activar(Certificados.pem("CERTIFICATE", encoded(certificado)), cuit, ambiente, emisor,

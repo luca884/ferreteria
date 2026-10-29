@@ -6,7 +6,8 @@ import com.ferreteria.facturacion.wsfe.PedidoNoLlegoException;
 /**
  * De dónde saca {@link ClienteWsfe} el TA para llamar a un servicio de ARCA: el token, el sign y la CUIT de la credencial
  * activa de la ferretería (la del {@code TenantContext} que fija el ejecutor fiscal), para un ambiente y un servicio
- * ({@code "wsfe"}). La implementación real (rama 6, T5) lo pide a WSAA con un lease en la base y lo guarda cifrado.
+ * ({@code "wsfe"}). La implementación real, {@link TicketsDeAcceso} (rama 6, T5), lo pide a WSAA con un lease en la base y
+ * lo guarda cifrado.
  */
 public interface ProveedorDeTicket {
 

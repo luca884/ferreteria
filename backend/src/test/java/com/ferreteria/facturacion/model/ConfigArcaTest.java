@@ -392,4 +392,40 @@ class ConfigArcaTest {
         nueva.deshabilitar();
         assertThat(nueva.isFacturacionHabilitada()).isFalse();
     }
+
+    // ---- el bloqueo de ARCA (rama 6, C4: un fault de CREDENCIAL de WSAA) ----
+
+    @Test
+    @DisplayName("C4: con el bloqueo de ARCA no factura aunque esté habilitada; guarda el código, el texto y la hora, y al "
+            + "levantarlo vuelve a facturar")
+    void elBloqueoDeArcaFrenaLaFacturacion() {
+        ConfigArca config = conAmbienteDelCertificado(Ambiente.HOMOLOGACION);
+        config.habilitar(List.of(), AHORA);
+
+        config.bloquear("cms.cert.untrusted", "Certificado no emitido por AC de confianza", AHORA.plusSeconds(60));
+
+        assertThat(config.puedeFacturar()).isFalse();
+        assertThat(config.isFacturacionHabilitada()).isTrue();
+        assertThat(config.getBloqueoCodigo()).isEqualTo("cms.cert.untrusted");
+        assertThat(config.getBloqueoMensaje()).isEqualTo("Certificado no emitido por AC de confianza");
+        assertThat(config.getBloqueadoEn()).isEqualTo(AHORA.plusSeconds(60));
+
+        config.levantarBloqueo();
+
+        assertThat(config.puedeFacturar()).isTrue();
+        assertThat(config.getBloqueoCodigo()).isNull();
+        assertThat(config.getBloqueoMensaje()).isNull();
+        assertThat(config.getBloqueadoEn()).isNull();
+    }
+
+    @Test
+    @DisplayName("C4: el bloqueo recorta el código a 64 caracteres y el texto de ARCA a 500, los largos de config_arca")
+    void elBloqueoEntraEnLasColumnas() {
+        ConfigArca config = conSimulador();
+
+        config.bloquear("cms.cert." + "x".repeat(80), "y".repeat(900), AHORA);
+
+        assertThat(config.getBloqueoCodigo()).hasSize(64).startsWith("cms.cert.");
+        assertThat(config.getBloqueoMensaje()).hasSize(500);
+    }
 }

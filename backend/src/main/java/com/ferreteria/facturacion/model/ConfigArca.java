@@ -31,6 +31,11 @@ import java.util.Map;
  * producción no se vuelve. Quitar el ambiente exige la facturación apagada y ningún registro abierto; cambiarlo o cambiar
  * el punto de venta, ningún registro abierto. La facturación se prende con el simulador o en homologación; en producción,
  * recién con la rama 11 (rama 6, S16). Los CHECK de V32 sostienen lo mismo en la base.
+ *
+ * <p>El bloqueo de ARCA (rama 6, C4, columnas de V35): cuando WSAA rechaza el certificado ({@code cms.cert.*} o
+ * {@code coe.notAuthorized}), la facturación de la ferretería queda frenada con el código, el texto de ARCA y la hora, sin
+ * tocar la facturación habilitada: {@link #puedeFacturar()} da false y no se vuelve a llamar a WSAA. Lo levantan activar otro
+ * certificado o «Probar conexión» OK ({@link #levantarBloqueo()}).
  */
 @Entity
 @Table(name = "config_arca")
@@ -57,6 +62,10 @@ public class ConfigArca {
      * ferretería real factura en producción hasta entonces (rama 6, S16).
      */
     static final String PRODUCCION_NO_DISPONIBLE = "La facturación en producción todavía no está disponible.";
+
+    /** El largo de {@code config_arca.bloqueo_codigo} y {@code bloqueo_mensaje} (V35). */
+    static final int LARGO_BLOQUEO_CODIGO = 64;
+    static final int LARGO_BLOQUEO_MENSAJE = 500;
 
     /** El punto de venta más alto que carga el Dueño (S2). */
     public static final int PUNTO_VENTA_MAXIMO = 99998;
@@ -95,6 +104,18 @@ public class ConfigArca {
     /** Cuándo se prendió la facturación (UTC); null mientras esté apagada. */
     @Column(name = "habilitada_en")
     private Instant habilitadaEn;
+
+    /** El código de WSAA que frenó la facturación (C4); null sin bloqueo. */
+    @Column(name = "bloqueo_codigo", length = LARGO_BLOQUEO_CODIGO)
+    private String bloqueoCodigo;
+
+    /** El {@code faultstring} de ese rechazo; null sin bloqueo (o si ARCA no mandó texto). */
+    @Column(name = "bloqueo_mensaje", length = LARGO_BLOQUEO_MENSAJE)
+    private String bloqueoMensaje;
+
+    /** Cuándo se frenó (UTC); null sin bloqueo. */
+    @Column(name = "bloqueado_en")
+    private Instant bloqueadoEn;
 
     protected ConfigArca() {}
 
@@ -182,13 +203,42 @@ public class ConfigArca {
     }
 
     /**
-     * Si esta configuración deja facturar: la facturación habilitada, con ambiente y punto de venta. Es solo la parte de
-     * ARCA: la ferretería factura si además tiene completos los datos de CU-01 que la factura imprime, que el Dueño puede
-     * vaciar con la facturación prendida. La regla entera, la que miran la decisión de la venta y el alta del registro
-     * fiscal, es {@code PasosFiscales.puedeFacturar(Instant)}.
+     * Si esta configuración deja facturar: la facturación habilitada, con ambiente y punto de venta, y sin el bloqueo de ARCA
+     * (rama 6, C4). Es solo la parte de ARCA: la ferretería factura si además tiene completos los datos de CU-01 que la
+     * factura imprime, que el Dueño puede vaciar con la facturación prendida. La regla entera, la que miran la decisión de la
+     * venta y el alta del registro fiscal, es {@code PasosFiscales.puedeFacturar(Instant)}.
      */
     public boolean puedeFacturar() {
-        return facturacionHabilitada && ambiente != null && puntoVenta != null;
+        return facturacionHabilitada && ambiente != null && puntoVenta != null && !estaBloqueada();
+    }
+
+    /**
+     * Frena la facturación porque WSAA rechazó el certificado (C4): guarda el código, el texto de ARCA y la hora, recortados
+     * a lo que entra en {@code config_arca}. No toca la facturación habilitada. Otro rechazo reemplaza al anterior.
+     *
+     * @param codigo el código de WSAA, sin prefijo ({@code cms.cert.expired}, {@code coe.notAuthorized}…)
+     * @param mensaje el {@code faultstring}; null o vacío si no vino
+     * @param ahora la hora del {@code Clock} de quien llama
+     */
+    public void bloquear(String codigo, String mensaje, Instant ahora) {
+        if (codigo == null || codigo.isBlank() || ahora == null) {
+            throw new IllegalArgumentException("El bloqueo de ARCA lleva el código y la hora.");
+        }
+        this.bloqueoCodigo = recortar(codigo.strip(), LARGO_BLOQUEO_CODIGO);
+        this.bloqueoMensaje = mensaje == null || mensaje.isBlank() ? null : recortar(mensaje.strip(), LARGO_BLOQUEO_MENSAJE);
+        this.bloqueadoEn = ahora;
+    }
+
+    /** Levanta el bloqueo de ARCA (otro certificado activado, o «Probar conexión» OK). Sin bloqueo no cambia nada. */
+    public void levantarBloqueo() {
+        this.bloqueoCodigo = null;
+        this.bloqueoMensaje = null;
+        this.bloqueadoEn = null;
+    }
+
+    /** Si la facturación está frenada por un rechazo del certificado en WSAA (C4). */
+    public boolean estaBloqueada() {
+        return bloqueoCodigo != null;
     }
 
     /**
@@ -253,6 +303,14 @@ public class ConfigArca {
         this.ambiente = deLaCa;
     }
 
+    /** Los primeros {@code largo} caracteres (code points: una letra fuera del plano básico no se parte). */
+    private static String recortar(String texto, int largo) {
+        if (texto.codePointCount(0, texto.length()) <= largo) {
+            return texto;
+        }
+        return texto.substring(0, texto.offsetByCodePoints(0, largo));
+    }
+
     private static String faltanDatos(List<String> faltantes) {
         if (faltantes.size() == 1) {
             return "Para habilitar la facturación falta un dato de la ferretería: " + faltantes.get(0)
@@ -273,4 +331,7 @@ public class ConfigArca {
     public Integer getPuntoVenta() { return puntoVenta; }
     public boolean isFacturacionHabilitada() { return facturacionHabilitada; }
     public Instant getHabilitadaEn() { return habilitadaEn; }
+    public String getBloqueoCodigo() { return bloqueoCodigo; }
+    public String getBloqueoMensaje() { return bloqueoMensaje; }
+    public Instant getBloqueadoEn() { return bloqueadoEn; }
 }

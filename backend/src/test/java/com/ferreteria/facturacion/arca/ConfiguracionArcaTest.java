@@ -2,6 +2,7 @@ package com.ferreteria.facturacion.arca;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.ferreteria.facturacion.model.Ambiente;
 import java.net.URI;
 import java.time.Duration;
 import org.junit.jupiter.api.DisplayName;
@@ -33,12 +34,17 @@ class ConfiguracionArcaTest {
         contexto.run(c -> {
             assertThat(c).hasNotFailed();
             PropiedadesArca arca = c.getBean(PropiedadesArca.class);
+            // El simulador, sin URL en el yml, toma la suya por defecto: un host .invalid, que nunca resuelve.
             assertThat(arca.wsaa()).isEqualTo(new PropiedadesArca.Urls(
                     URI.create("https://wsaahomo.afip.gov.ar/ws/services/LoginCms"),
-                    URI.create("https://wsaa.afip.gov.ar/ws/services/LoginCms")));
+                    URI.create("https://wsaa.afip.gov.ar/ws/services/LoginCms"),
+                    URI.create("https://wsaa.simulador.invalid/ws/services/LoginCms")));
             assertThat(arca.wsfe()).isEqualTo(new PropiedadesArca.Urls(
                     URI.create("https://wswhomo.afip.gov.ar/wsfev1/service.asmx"),
-                    URI.create("https://servicios1.afip.gov.ar/wsfev1/service.asmx")));
+                    URI.create("https://servicios1.afip.gov.ar/wsfev1/service.asmx"),
+                    URI.create("https://wsfe.simulador.invalid/wsfev1/service.asmx")));
+            assertThat(arca.wsaa().de(Ambiente.PRODUCCION)).isEqualTo(arca.wsaa().produccion());
+            assertThat(arca.lapsoTa().de(Ambiente.PRODUCCION)).isEqualTo(Duration.ofMinutes(2));
             assertThat(arca.timeoutConexion()).isEqualTo(Duration.ofSeconds(5));
             assertThat(arca.timeoutLectura()).isEqualTo(Duration.ofSeconds(20));
             assertThat(arca.lapsoTa()).isEqualTo(new PropiedadesArca.Lapsos(Duration.ofMinutes(10), Duration.ofMinutes(2),
