@@ -105,7 +105,7 @@ Orden: T1 → T2 → T3 ∥ T5 (superficies separadas: `facturacion` y los lecto
 - [x] T4 · S2-S6, S9, S13, S15 · ruta: writer «ventas» · Aceptación: los endpoints del Dueño para la NC y la anulación, con la fachada con reintentos, el orden de locks, los 409 y el 422, el stock `NOTA_CREDITO`, el 403 y el 404 · Evidencia: `AnulacionDeVentaIntegrationTest` RED 19/19 (404) → GREEN 19/19 (tres corridas), 306 focalizados verdes; tras el ajuste del padre, 61/61 · Risk: items 2 y 4 (Dueño, locks y doble anulación)
 - [x] T5 · S5, S7, S12, S14 · ruta: writer «ventas» (junto con T2) · Aceptación: los lectores de `tipo = VENTA` (`ComprobanteRepository:29,93,127,153,172`, `VentaGestion:187`, `MovimientoStockRepository:46`), los reportes de CU-15 y la lista de Ventas; un test de cobertura arma una venta con su NC y pide cada reporte de CU-15, la lista de Ventas, los movimientos y los clientes del artículo, y compara contra lo esperado, así un lector que falte se ve · Evidencia: `NotaDeCreditoEnLosLectoresIntegrationTest` RED 7 fallas + 3 errores → GREEN 11/11; 188 tests focalizados (los lectores y sus regresiones) verdes salvo `MigracionV6Test#historialDeMigraciones`, que espera la V38 · Risk: item 3 (lectores compartidos)
 - [x] T6 · S2, S7, S8, S13-S15 · ruta: writer «frontend» · Aceptación: «Anular» en el detalle, la confirmación, el diálogo de la anulación interna, la NC en la lista y su impreso, los reportes y los movimientos del artículo · Evidencia: cada spec nuevo RED (no compila o falla) → GREEN; ventas + reportes + movimientos 110/110, `shared/factura` 23/23, mostrador 855/855, `ng build` OK · Risk: item 3 (`shared/factura`, compartida con el mostrador)
-- [ ] T7 · S10 · ruta: inline · Aceptación: suite backend, suite frontend, `ng build`, ego-browser (NC B y A, anulación interna, stock y reportes) y `odd-verifier` sin bloqueantes · Evidencia: — · Risk: —
+- [x] T7 · S10 · ruta: inline · Aceptación: suite backend, suite frontend, `ng build`, ego-browser (NC B y A, anulación interna, stock y reportes) y `odd-verifier` sin bloqueantes · Evidencia: backend 5809/0, frontend 3367/3367, `ng build` OK, ego-browser OK (L11), `odd-verifier` sin bloqueantes (L12), sondas como regresión 8/8 · Risk: —
 - [ ] T8 · — · ruta: Luca · Aceptación: merge, push y deploy; la V37 aplicada en prod · Evidencia: — · Risk: item 5 (deploy)
 
 ## Log
@@ -214,3 +214,28 @@ Orden: T1 → T2 → T3 ∥ T5 (superficies separadas: `facturacion` y los lecto
     - el resumen de CU-15 muestra Ventas, Notas de crédito, Neto, IVA, Costo, Ganancia sin NC, Ganancia con NC y Comprobantes;
     - en el X de una NC dice «Nota de crédito N.º n», y en la hoja de venta, «Anuló» en vez de «Cobró».
   - **Aviso de `ng build`:** el presupuesto CSS de `mostrador/dialogo-cobro.ts` (4,40 kB contra 4,00 kB) ya estaba en la base.
+- L11 (2026-10-29) T7, checks y recorrido (padre):
+  - **Checks sobre `760ede7`:** suite backend 5809/0, suite frontend 3367/3367, `ng build` OK (con el aviso de CSS de la base).
+  - **ego-browser en dev**, como Dueño de El Tornillo:
+    - la venta 2260 (autorizada en el simulador) se anula con la NC 2262. La confirmación sale con el texto de S15 y sin motivo. La NC lleva su propia serie (`X 00001-00000001`), el renglón va en negativo y la venta queda «Anulada». La hoja es una X «Nota de crédito N.º 2262», con el comprobante asociado y sin QR;
+    - la venta 2261 (SIN_FACTURA) sin motivo da «Contá por qué se anula la venta.». Con motivo queda la anulación 2263 y la venta muestra «Anulada: El cliente devolvió el pedido · Dueño El Tornillo, 29/10/2026 20:32»;
+    - el resumen de hoy da Ventas $ 0,00, Notas de crédito «2 · -$ 67.673,82», Ganancia sin NC $ 12.907,28 y con NC $ 0,00;
+    - en «Movimientos del artículo» se ven «Nota de crédito N.º 2262» +1 y «Anulación N.º 2263» +2.000, y el stock vuelve a 83, el de antes de las ventas.
+  - **Observaciones para Luca** (sin cambio):
+    - la confirmación de una anulación interna también dice «Se emite una nota de crédito» (S15 tiene un solo texto);
+    - el renglón de la anulación lleva la marca «No facturable»;
+    - en el resumen, «Ventas» ya va neto de NC.
+- L12 (2026-10-29) `odd-verifier` (opus) sobre `760ede7` contra `57f6d8d`: **sin bloqueantes**. S1-S16 pass.
+  - **Sondas en paralelo** (6 corridas cada una):
+    - anular contra «Reintentar» sobre una rechazada sin cliente: a lo sumo una nota, sin 500 ni 503;
+    - anular contra una venta del mismo artículo: las dos dan 201 y el stock queda bien;
+    - un 409 OTRO_AMBIENTE no toca nada;
+    - la NC no se ve desde el Vendedor por `/factura`, ni desde otra ferretería.
+  - Quedaron como regresión en `AnulacionDeVentaConcurrenciaIntegrationTest` (8/8, con `@RepeatedTest(3)`).
+  - **Arreglo del padre:** el Javadoc de `RegistroAnulacionDeVenta` decía que no había ciclos, y ahora describe el ciclo posible con «Reintentar» (FK compuesta de V32), que se recupera con el reintento de las fachadas.
+  - **Advertencias para Luca** (sin cambio):
+    - A1: el «Ventas» del resumen va neto de NC y no suma a la vista. Lo usual sería «Ventas» bruto, «NC» y el neto;
+    - A2: anular un PENDIENTE mientras se cobra otra venta de la serie puede demorar el CAE de la nueva hasta la pasada del job (transitorio);
+    - A4: el rollback de la V37 no exige que la V38 esté revertida, aunque el orden 38 → 37 está documentado;
+    - A5: el texto de la confirmación de la anulación interna (igual que L11).
+  - Próximo paso: T8 (Luca): merge, push y deploy, que aplica la V37 y la V38 en prod.

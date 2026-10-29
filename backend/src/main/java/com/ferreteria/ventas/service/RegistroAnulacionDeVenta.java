@@ -34,7 +34,7 @@ import java.util.UUID;
  * PENDIENTE de la NC (la venta tiene su factura AUTORIZADO) o cierra sin CAE lo que tenga la venta (la anulación interna,
  * con motivo). No toma la caja ni escribe pagos (D11: la caja no cambia).
  *
- * <p><b>Orden canónico de locks</b> (el prefijo de la venta y del «Reintentar», para que no haya ciclos):
+ * <p><b>Orden canónico de locks</b> (el prefijo de la venta y del «Reintentar»):
  * <pre>
  * CLIENTE (X, solo si la venta tiene uno) → la VENTA (X, FOR UPDATE: el comprobante) → [primeras lecturas planas: la nota,
  *   los pagos y los renglones de la venta] → registro fiscal vigente de la venta (X, tomarParaAnular; config_arca en S si
@@ -43,7 +43,10 @@ import java.util.UUID;
  * </pre>
  * La nota no lleva caja, así que no toma la caja en S: el cierre de caja no la espera ni la ve. El stock va antes que los
  * renglones de la nota, como en la venta: así los locks X de los artículos se toman antes que los S de las FK de los
- * renglones.
+ * renglones. Queda un ciclo posible con «Reintentar» sobre una venta sin cliente: ese toma el registro rechazado en X
+ * y el INSERT del registro nuevo pide la venta en S (la FK compuesta de V32), mientras la anulación toma la venta en X y
+ * después el registro. InnoDB corta el deadlock y las dos fachadas reintentan (verificado en T7 con
+ * {@code AnulacionDeVentaConcurrenciaIntegrationTest}).
  *
  * <p><b>Regla estructural</b> (la de {@link RegistroAnulacion}): ninguna lectura plana antes de tomar la venta. La foto
  * REPEATABLE READ de InnoDB nace con la primera lectura plana: si la nota se buscara antes del lock de la venta, una
