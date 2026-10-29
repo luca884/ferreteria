@@ -98,6 +98,37 @@ app:
       # (si no, la app no arranca): si venciera con una llamada en vuelo, otra instancia vería N-1, reenviaría y ARCA
       # contestaría 10016.
       lease: ${FACTURACION_LEASE_SERIE:180s}
+    arca:
+      # Cliente real de ARCA (rama 6, C6). Las URL salen solo de acá, sin variable ni endpoint que las cambie: un deploy no
+      # puede mandar los pedidos a otro lado. Son las del soap:address de cada WSDL.
+      wsaa:
+        homologacion: https://wsaahomo.afip.gov.ar/ws/services/LoginCms
+        produccion: https://wsaa.afip.gov.ar/ws/services/LoginCms
+      wsfe:
+        homologacion: https://wswhomo.afip.gov.ar/wsfev1/service.asmx
+        produccion: https://servicios1.afip.gov.ar/wsfev1/service.asmx
+      # Cuánto se espera para conectar (con el handshake TLS) y para la respuesta de cada llamada. Al arrancar se valida que
+      # 2 × (timeout-conexion + timeout-lectura) + espera-ticket entre en motor.presupuesto-llamada (WSAA y WSFE en la misma
+      # atención); si no, la app no arranca.
+      timeout-conexion: ${ARCA_TIMEOUT_CONEXION:5s}
+      timeout-lectura: ${ARCA_TIMEOUT_LECTURA:20s}
+      # Lapso preventivo del TA (FAQ 10.6 del manual de WSAA): dentro de ese tiempo desde que se sacó, ARCA puede rechazar
+      # otro loginCms aunque el TA siga vigente. ARCA lo puede cambiar sin aviso.
+      lapso-ta:
+        homologacion: ${ARCA_LAPSO_TA_HOMOLOGACION:10m}
+        produccion: ${ARCA_LAPSO_TA_PRODUCCION:2m}
+        simulador: ${ARCA_LAPSO_TA_SIMULADOR:10m}
+      # El TA se renueva cuando le faltan menos que esto para vencer (y ya pasó el lapso).
+      margen-renovacion: ${ARCA_MARGEN_RENOVACION:30m}
+      # Cuánto no se llama a WSAA después de wsaa.* o wsn.unavailable (60 s o más), de coe.alreadyAuthenticated y de un error
+      # del sistema (xml.*, cms.bad*, códigos desconocidos).
+      espera-wsaa: ${ARCA_ESPERA_WSAA:60s}
+      espera-ta-vigente: ${ARCA_ESPERA_TA_VIGENTE:10m}
+      espera-error-sistema: ${ARCA_ESPERA_ERROR_SISTEMA:30m}
+      # Cuánto espera un pedido mientras otro saca el TA, y cuánto dura esa toma (tiene que superar una llamada: si no, la
+      # app no arranca).
+      espera-ticket: ${ARCA_ESPERA_TICKET:10s}
+      lease-ticket: ${ARCA_LEASE_TICKET:90s}
     # Tope de ARCA (RG 5866) para la venta sin cliente identificado: desde ese total, inclusive, no se factura anónima.
     tope-identificacion: ${FACTURACION_TOPE_IDENTIFICACION:10000000.00}
     venta:

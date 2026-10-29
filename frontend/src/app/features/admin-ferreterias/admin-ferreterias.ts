@@ -14,8 +14,10 @@ import {
   AMBIENTE_ARCA_LABELS,
   CONDICIONES_IVA_FERRETERIA,
   CONDICION_IVA_FERRETERIA_LABELS,
+  ChequeoFeDummy,
   CondicionIvaFerreteria,
   ESTADO_FERRETERIA_LABELS,
+  FeDummyAmbiente,
   FerreteriaAdmin,
 } from './ferreteria-admin.models';
 
@@ -55,11 +57,18 @@ export function fechaDeAlta(creadoEn: string): string {
   return creadoEn.slice(0, 10).split('-').reverse().join('/');
 }
 
+/** Una fila del chequeo FEDummy: el nombre del ambiente y lo que contestó ARCA desde el servidor. */
+interface FilaChequeo {
+  ambiente: string;
+  resultado: FeDummyAmbiente;
+}
+
 /**
  * Ferreterías de la plataforma (solo el super admin): estado general, alta con el primer Dueño, suspender o reactivar con
  * confirmación, reset de la contraseña del Dueño y la configuración de ARCA (marca «de prueba», simulador y facturación
  * habilitada, CU-01 paso 2): las reglas las decide el servidor y su 422 se muestra tal cual. Después del alta no edita los
- * datos de la ferretería: los edita el Dueño (CU-01). No muestra ningún dato de ventas. Contenedor: habla con el servicio.
+ * datos de la ferretería: los edita el Dueño (CU-01). Además, «Probar ARCA desde el servidor» corre FEDummy en homologación
+ * y producción desde el contenedor desplegado. No muestra ningún dato de ventas. Contenedor: habla con el servicio.
  */
 @Component({
   selector: 'app-admin-ferreterias',
@@ -103,6 +112,20 @@ export class AdminFerreterias implements OnInit {
   protected readonly reseteando = signal<FerreteriaAdmin | null>(null);
   protected readonly errorReset = signal<string | null>(null);
   protected readonly enviandoReset = signal(false);
+  /** «Probar ARCA desde el servidor» en curso: el botón dice «Probando…». */
+  protected readonly chequeando = signal(false);
+  /** Lo que contestó el último chequeo FEDummy; null antes de probar o si el pedido falló. */
+  protected readonly chequeo = signal<ChequeoFeDummy | null>(null);
+  /** Por qué no se pudo hacer el chequeo (el pedido HTTP falló), junto al resultado. */
+  protected readonly errorChequeo = signal<string | null>(null);
+  protected readonly filasChequeo = computed<FilaChequeo[]>(() => {
+    const chequeo = this.chequeo();
+    if (!chequeo) return [];
+    return [
+      { ambiente: AMBIENTE_ARCA_LABELS.HOMOLOGACION, resultado: chequeo.homologacion },
+      { ambiente: AMBIENTE_ARCA_LABELS.PRODUCCION, resultado: chequeo.produccion },
+    ];
+  });
 
   protected readonly form = inject(FormBuilder).nonNullable.group({
     razonSocial: ['', [Validators.required, Validators.maxLength(150), Validators.pattern(/\S/)]],
@@ -279,6 +302,24 @@ export class AdminFerreterias implements OnInit {
         this.enviandoReset.set(false);
         const mensajes = Object.values(erroresPorCampo(err));
         this.errorReset.set(mensajes.length > 0 ? mensajes.join(' ') : mensajeDe(err, 'No se pudo cambiar la contraseña.'));
+      },
+    });
+  }
+
+  /** FEDummy desde el servidor (S9): prueba la red y el TLS de Railway contra ARCA, sin certificado. */
+  protected probarArca(): void {
+    if (this.chequeando()) return;
+    this.chequeo.set(null);
+    this.errorChequeo.set(null);
+    this.chequeando.set(true);
+    this.service.fedummy().subscribe({
+      next: (chequeo) => {
+        this.chequeando.set(false);
+        this.chequeo.set(chequeo);
+      },
+      error: (err: unknown) => {
+        this.chequeando.set(false);
+        this.errorChequeo.set(mensajeDe(err, 'No se pudo probar ARCA desde el servidor.'));
       },
     });
   }

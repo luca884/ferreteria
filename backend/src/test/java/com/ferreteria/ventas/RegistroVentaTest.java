@@ -57,11 +57,14 @@ import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -138,17 +141,11 @@ class RegistroVentaTest {
     @BeforeEach
     void preparar() {
         TenantContext.setCurrentFerreteriaId(FERRETERIA);
-        registro = new RegistroVenta(
-                articulosParaVenta, stockService, comprobanteRepository, itemRepository, pagoRepository,
-                numeradorRepository, cajaService, formaPagoRepository, presupuestoRepository, remitoRepository,
-                itemRemitoRepository, new ClienteDelDocumento(clientesParaVenta), cuentaCorriente,
-                new TopeDeDescuento(usuarioId -> java.util.Optional.empty()),
-                org.mockito.Mockito.mock(com.ferreteria.ventas.repository.ItemPresupuestoRepository.class),
-                new ConsumidorFinal(() -> new java.math.BigDecimal("10000000.00")), facturacion, RELOJ);
+        registro = registroCon(RELOJ);
         // CU-10: por defecto hay caja abierta hoy. Lenient: los rechazos previos a la caja no la consultan.
         lenient().when(cajaService.cajaParaVender()).thenReturn(CAJA);
         // D5: por defecto la ferreteria no factura (la venta de siempre). Lenient: los rechazos previos no preguntan.
-        lenient().when(facturacion.decidir(any())).thenReturn(Decision.SIN_FACTURA);
+        lenient().when(facturacion.decidir(any(), any())).thenReturn(Decision.SIN_FACTURA);
         for (MedioPago medio : MedioPago.values()) {
             formasEnLaBase.put(formaId(medio), forma(medio, "0.00", true));
         }
@@ -156,6 +153,38 @@ class RegistroVentaTest {
             Collection<Long> ids = inv.getArgument(0);
             return ids.stream().map(formasEnLaBase::get).filter(java.util.Objects::nonNull).toList();
         });
+    }
+
+    /** El servicio con los mocks de la clase y ese reloj. */
+    RegistroVenta registroCon(Clock reloj) {
+        return new RegistroVenta(
+                articulosParaVenta, stockService, comprobanteRepository, itemRepository, pagoRepository,
+                numeradorRepository, cajaService, formaPagoRepository, presupuestoRepository, remitoRepository,
+                itemRemitoRepository, new ClienteDelDocumento(clientesParaVenta), cuentaCorriente,
+                new TopeDeDescuento(usuarioId -> java.util.Optional.empty()),
+                org.mockito.Mockito.mock(com.ferreteria.ventas.repository.ItemPresupuestoRepository.class),
+                new ConsumidorFinal(() -> new java.math.BigDecimal("10000000.00")), facturacion, reloj);
+    }
+
+    /** Un reloj que avanza un minuto en cada lectura: quien lo lea dos veces ve dos instantes distintos. */
+    static Clock queAvanza(Instant inicio) {
+        AtomicReference<Instant> ahora = new AtomicReference<>(inicio);
+        return new Clock() {
+            @Override
+            public ZoneId getZone() {
+                return HoraArgentina.ZONA;
+            }
+
+            @Override
+            public Clock withZone(ZoneId zona) {
+                throw new UnsupportedOperationException("La venta no cambia la zona del reloj.");
+            }
+
+            @Override
+            public Instant instant() {
+                return ahora.getAndUpdate(i -> i.plusSeconds(60));
+            }
+        };
     }
 
     @AfterEach
@@ -1401,7 +1430,7 @@ class RegistroVentaTest {
         escrituraLista(Map.of());
         clienteTomado();
         cupoDe("4463.33", "10000.00", "0.00");
-        when(facturacion.decidir(any())).thenReturn(new Decision(true, true, bd("10000000.00")));
+        when(facturacion.decidir(any(), any())).thenReturn(new Decision(true, true, bd("10000000.00")));
 
         VentaRegistrada venta = comoVendedor(ventaCC(), USUARIO);
 
@@ -1409,7 +1438,7 @@ class RegistroVentaTest {
                 stockService, itemRepository, pagoRepository);
         orden.verify(clientesParaVenta).tomarParaVenta(CLIENTE);
         orden.verify(facturacion).decidir(new ReceptorVenta(FacturacionParaVenta.CondicionIva.CONSUMIDOR_FINAL, null,
-                null, "Ferretería Norte SRL", null));
+                null, "Ferretería Norte SRL", null), RELOJ.instant());
         orden.verify(cuentaCorriente).verificarCupo(CLIENTE, bd("4463.33"));
         orden.verify(numeradorRepository).siguienteScoped();
         orden.verify(comprobanteRepository).save(any(Comprobante.class));
@@ -1419,7 +1448,7 @@ class RegistroVentaTest {
         orden.verify(cuentaCorriente).asentarVenta(any());
         orden.verify(facturacion).registrar(COMPROBANTE, new ReceptorVenta(FacturacionParaVenta.CondicionIva.CONSUMIDOR_FINAL,
                 null, null, "Ferretería Norte SRL", null), List.of(new RenglonParaFacturar(bd("21.00"), bd("3630.00")),
-                new RenglonParaFacturar(bd("21.00"), bd("833.33"))), RELOJ.instant());
+                new RenglonParaFacturar(bd("21.00"), bd("833.33"))), RELOJ.instant(), RELOJ.instant());
         assertThat(venta.comprobante().getFecha()).isEqualTo(FECHA);
         assertThat(venta.conRegistroFiscal()).isTrue();
     }
@@ -1448,9 +1477,52 @@ class RegistroVentaTest {
 
         VentaRegistrada venta = comoVendedor(ventaC1C3(MedioPago.EFECTIVO), USUARIO);
 
-        verify(facturacion).decidir(ReceptorVenta.sinCliente());
+        verify(facturacion).decidir(ReceptorVenta.sinCliente(), RELOJ.instant());
         verify(facturacion, never()).registrar(org.mockito.ArgumentMatchers.anyLong(), any(), any(), any());
         assertThat(venta.conRegistroFiscal()).isFalse();
+    }
+
+    @Test
+    @DisplayName("con factura, decidir y registrar reciben un solo instante, el de la venta, aunque el reloj avance entre los "
+            + "dos (rama 6, S15)")
+    void decidirYRegistrarConElMismoInstante() {
+        // El reloj solo avanza cuando la venta toma el numerador: así se ve qué instante se leyó antes y cuál después.
+        AtomicReference<Instant> ahora = new AtomicReference<>(RELOJ.instant().minus(1, ChronoUnit.MINUTES));
+        registro = registroCon(new Clock() {
+            @Override
+            public ZoneId getZone() {
+                return HoraArgentina.ZONA;
+            }
+
+            @Override
+            public Clock withZone(ZoneId zone) {
+                return this;
+            }
+
+            @Override
+            public Instant instant() {
+                return ahora.get();
+            }
+        });
+        catalogoC1C3();
+        escrituraLista(Map.of());
+        when(numeradorRepository.siguienteScoped()).thenAnswer(inv -> {
+            ahora.set(ahora.get().plus(1, ChronoUnit.MINUTES));
+            return NUMERO;
+        });
+        when(facturacion.decidir(any(), any())).thenReturn(new Decision(true, true, bd("10000000.00")));
+        Instant alNumerar = RELOJ.instant();
+        Instant alDecidir = alNumerar.minus(1, ChronoUnit.MINUTES);
+
+        VentaRegistrada venta = comoVendedor(ventaC1C3(MedioPago.EFECTIVO), USUARIO);
+
+        // La credencial se mira con el instante de la decisión; la venta y su registro fiscal llevan el que se lee con el
+        // numerador tomado, así las fechas de una ferretería siguen el orden de sus ids (el motor atiende por id y la CbteFch
+        // no puede ser anterior a la del último autorizado).
+        verify(facturacion).decidir(ReceptorVenta.sinCliente(), alDecidir);
+        verify(facturacion).registrar(eq(COMPROBANTE), eq(ReceptorVenta.sinCliente()), any(), eq(alNumerar), eq(alDecidir));
+        assertThat(venta.comprobante().getFecha()).isEqualTo(LocalDateTime.ofInstant(alNumerar, HoraArgentina.ZONA));
+        assertThat(venta.conRegistroFiscal()).isTrue();
     }
 
     @Test

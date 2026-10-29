@@ -339,6 +339,29 @@ class ConfigArcaAdminIntegrationTest extends PlataformaTestBase {
         assertThat(enLaLista(f).get("habilitadaEn").asText()).isEqualTo(habilitada.get("habilitadaEn").asText());
     }
 
+    @Test
+    @DisplayName("con el ambiente del certificado y los datos completos, homologación se habilita (200) y producción da 422 "
+            + "con el mensaje y la fila no cambia (rama 6, S16)")
+    void habilitarPorAmbiente() throws Exception {
+        long homologacion = crearFerreteria("Homologación");
+        long produccion = crearFerreteria("Producción");
+        for (long f : List.of(homologacion, produccion)) {
+            datosCompletos(f);
+            jdbc.update("insert into config_arca (ferreteria_id, ambiente, punto_venta) values (?, ?, 3)", f,
+                    f == homologacion ? "HOMOLOGACION" : "PRODUCCION");
+        }
+        Map<String, Object> produccionAntes = fila(produccion);
+
+        facturacion(homologacion, true).andExpect(status().isOk()).andExpect(jsonPath("$.ambiente", is("HOMOLOGACION")))
+                .andExpect(jsonPath("$.facturacionHabilitada", is(true)));
+        regla(facturacion(produccion, true), "La facturación en producción todavía no está disponible.");
+
+        assertThat(fila(homologacion)).containsEntry("ambiente", "HOMOLOGACION").containsEntry("punto_venta", 3)
+                .containsEntry("facturacion_habilitada", true);
+        assertThat(fila(homologacion).get("habilitada_en")).isNotNull();
+        assertThat(fila(produccion)).isEqualTo(produccionAntes).containsEntry("facturacion_habilitada", false);
+    }
+
     // ---- errores de forma ----
 
     @Test

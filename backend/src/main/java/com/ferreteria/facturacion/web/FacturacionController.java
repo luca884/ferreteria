@@ -1,8 +1,10 @@
 package com.ferreteria.facturacion.web;
 
+import com.ferreteria.facturacion.arca.PruebaConexion;
 import com.ferreteria.facturacion.credencial.ConfiguracionFacturacion;
 import com.ferreteria.facturacion.credencial.CredencialArcaService;
 import com.ferreteria.facturacion.credencial.PedidoCertificado;
+import com.ferreteria.facturacion.service.ProbarConexionService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -15,8 +17,8 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * «Facturación» del Dueño (CU-01 pasos 2 y 3, rama 5, C1): el punto de venta, el pedido de certificado, el .crt de ARCA y la
- * firma con el simulador, de la ferretería del token. Solo el Dueño: el Vendedor y el super admin reciben 403 antes de
+ * «Facturación» del Dueño (CU-01 pasos 2 a 4, rama 5 C1 y rama 6 C1): el punto de venta, el pedido de certificado, el .crt
+ * de ARCA, la firma con el simulador y «Probar conexión», de la ferretería del token. Solo el Dueño: el Vendedor y el super admin reciben 403 antes de
  * leer el cuerpo ({@code SecurityConfig}). Ninguna respuesta lleva la clave privada (D8, S7), y no hay forma de subir una.
  */
 @RestController
@@ -24,9 +26,11 @@ import org.springframework.web.bind.annotation.RestController;
 public class FacturacionController {
 
     private final CredencialArcaService credenciales;
+    private final ProbarConexionService prueba;
 
-    public FacturacionController(CredencialArcaService credenciales) {
+    public FacturacionController(CredencialArcaService credenciales, ProbarConexionService prueba) {
         this.credenciales = credenciales;
+        this.prueba = prueba;
     }
 
     @GetMapping("/configuracion")
@@ -69,5 +73,16 @@ public class FacturacionController {
     @PreAuthorize("hasRole('DUENO')")
     public ConfiguracionFacturacion firmarConElSimulador() {
         return credenciales.firmarConElSimulador();
+    }
+
+    /**
+     * «Probar conexión» (rama 6, C1, CU-01 paso 4): FEDummy, el ticket de WSAA, el punto de venta y los últimos números, en
+     * orden, contra el ambiente de la ferretería (en SIMULADOR, con el aviso). 409 sin ambiente o punto de venta, o sin un
+     * certificado vigente. Un OK completo levanta el bloqueo de ARCA.
+     */
+    @PostMapping("/probar-conexion")
+    @PreAuthorize("hasRole('DUENO')")
+    public PruebaConexion probarConexion() {
+        return prueba.probar();
     }
 }

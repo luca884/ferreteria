@@ -2,6 +2,8 @@ package com.ferreteria.ventas;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.ferreteria.facturacion.config.EjecutorFiscalConfig;
+import com.ferreteria.facturacion.credencial.CredencialDePrueba;
+import com.ferreteria.facturacion.cripto.CifradorDeClaves;
 import com.ferreteria.facturacion.motor.MotorDePruebaConfig;
 import com.ferreteria.facturacion.motor.MotorFiscalTestBase;
 import com.ferreteria.facturacion.motor.WsfeDePrueba;
@@ -44,6 +46,8 @@ abstract class VentaFacturadaTestBase extends VentasTestBase {
     @Autowired
     WsfeDePrueba wsfe;
     @Autowired
+    CifradorDeClaves cifrador;
+    @Autowired
     @Qualifier(EjecutorFiscalConfig.EJECUTOR_FISCAL)
     ThreadPoolTaskExecutor ejecutor;
 
@@ -66,12 +70,16 @@ abstract class VentaFacturadaTestBase extends VentasTestBase {
 
     /**
      * Una ferretería que factura con el simulador (punto de venta 1): datos de CU-01 completos con esa condición frente al
-     * IVA, marcada de prueba, la facturación habilitada y la caja abierta el día del reloj.
+     * IVA, marcada de prueba, la facturación habilitada, la credencial activa del simulador (desde la rama 6, sin ella la
+     * venta sale sin factura) y la caja abierta el día del reloj.
      */
     protected Tienda tiendaQueFactura(String condicionIva) {
         Tienda t = tiendaConDatosFiscales(condicionIva);
         jdbc.update("insert into config_arca (ferreteria_id, de_prueba, ambiente, punto_venta, facturacion_habilitada, "
                 + "habilitada_en) values (?, true, 'SIMULADOR', 1, true, '2026-10-01 12:00:00')", t.id());
+        long cuit = Long.parseLong(jdbc.queryForObject("select cuit from ferreteria where id = ?", String.class, t.id())
+                .replace("-", ""));
+        CredencialDePrueba.activaDelSimulador(jdbc, cifrador, t.id(), cuit, reloj.instant());
         return t;
     }
 

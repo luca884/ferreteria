@@ -1,0 +1,302 @@
+# cu-01-conexion-arca
+
+Objetivo: dejar terminado el cliente real de ARCA (WSAA y WSFEv1, con XML armado a mano), probado sin CUIT, y que desde acá el simulador reciba el mismo XML y la misma firma CMS que recibiría ARCA. Suma «Probar conexión» (CU-01 paso 4). · Por qué: rama 6 de la fase 5 (`wiki/plan-facturacion.md` del vault, :394-452). Destraba la homologación con la piloto (rama 11).
+Rama: `feat/cu-01-conexion-arca` desde `ebae1c8` (`main`, con las ramas 1 a 5 en producción) · Entrega: single-pr · Runner: `cd backend && ./mvnw test -Dtest=<Clase>` / `cd frontend && npx ng test --watch=false --include=<spec>` · Mirror Engram: `odd/cu-01-conexion-arca/tasks` (ok)
+Ruteo: caso 5, Opus de punta a punta (Luca: «dale», 2026-10-29). Los writers delegados corren con Opus. · Pronóstico: ~6.000 líneas cambiadas · Heurística por tarea: ~400 (no es límite)
+
+## Specs
+
+Alcance:
+- WSAA: el TRA, el CMS y `loginCms`. El TA se guarda cifrado, con un lease en la base.
+- WSFEv1: FEDummy, FEParamGetPtosVenta, FECompUltimoAutorizado, FECAESolicitar y FECompConsultar, con XML a mano y javax.xml.
+- El transporte HTTP: TLS propio y timeouts dentro del presupuesto.
+- El cortacircuito por ferretería.
+- El simulador en el borde del transporte, con el XSD y la verificación del CMS.
+- La credencial pasa a ser obligatoria también en SIMULADOR, y el perfil dev genera la credencial demo.
+- La suite de contrato contra el simulador y contra el `HttpServer` del JDK, y un tag opt-in contra ARCA real (solo FEDummy).
+- «Probar conexión» del Dueño y el chequeo FEDummy del super admin.
+- Los logs sin SOAP ni secretos.
+- La V35 con su rollback.
+- Los cuatro pendientes que vienen de la rama 5 y la habilitación por ambiente.
+
+Fuera de alcance:
+- `loginCms` con un certificado autofirmado.
+- WireMock, Spring-WS, CXF y el cliente generado del WSDL.
+- La homologación con un certificado real (rama 11).
+- El job de reintento, la bandeja y el aviso de facturación bloqueada en el mostrador (rama 7).
+- La NC (rama 8).
+
+Restricciones:
+- La ferretería sale solo del JWT, o del `TenantContext` que fija el ejecutor fiscal.
+- `facturacion.api` usa solo tipos del JDK. `facturacion` no lee el reloj del sistema: todo `now()` recibe el `Clock` (`ModulosArchTest:299-315`).
+- BouncyCastle solo en `facturacion.credencial`, sin registrar el proveedor (`:280-292`).
+- El motor usa el puerto `ServicioWsfe`, sin `@Transactional`, y nadie fuera de `simulador` depende de `SimuladorWsfe` (`:372-403`). Los hosts de ARCA solo aparecen en `facturacion` y en la configuración (`:247-259`).
+- Ninguna respuesta ni log lleva el token, el sign, la clave privada, el CMS ni el dato cifrado.
+- La V35 es aditiva y tiene un rollback con guarda.
+- Cada commit con un ítem de riesgo va aislado y lo verifica `odd-verifier` (opus) al final.
+
+- S1 (plan, alcance): "Commit docs: actualiza «Integración ARCA» en la spec […]: XML con plantillas y javax.xml en vez de un cliente generado; lapso preventivo del TA de 10 minutos en homologación y 2 en producción, que ARCA puede cambiar; clasificación de errores; FEDummy." — Aceptación:
+  - la spec dice cómo se arma y se guarda el TA, la clasificación de C4, el simulador en el borde, la credencial obligatoria en SIMULADOR y «Probar conexión» (CU-01 paso 4);
+  - el README tiene el tag opt-in (va con T9, cuando el perfil existe).
+- S2 (plan, WSAA): "TRA con generationTime unos minutos antes del Clock; CMS SignedData con BouncyCastle y la credencial activa, y loginCms; el TA se guarda cifrado por (ferretería, servicio, ambiente), con su expirationTime; se pide de a uno, con un lease en la base que vale también entre las dos JVM de un deploy, y se renueva con margen; «TA vigente» es un error transitorio, con espera configurable." — Aceptación:
+  - el TRA y el CMS se validan en tests: se parsea el CMS, se verifica la firma con el certificado y se compara el TRA (C3);
+  - el TA se guarda cifrado con el propósito `TICKET_DE_ACCESO` y la huella de la credencial en el AAD; un TA de otra credencial no se usa;
+  - con 20 pedidos simultáneos y dos instancias hay un solo `loginCms` por (ferretería, servicio, ambiente);
+  - después de un reinicio (instancia nueva, misma base) el TA se reusa sin `loginCms`;
+  - `coe.alreadyAuthenticated` deja el registro sin enviar y no se vuelve a pedir antes de la espera.
+- S3 (plan, cortacircuito): "cms.cert.* y coe.notAuthorized bloquean la facturación hasta que el Dueño cambie el certificado o autorice wsfe; xml.*, wsn.notFound, cms.bad* y cms.sign.invalid son errores del sistema, con alerta para Luca; wsaa.* y wsn.unavailable esperan 60 s o más; el 600 renueva el TA una vez." — Aceptación: cada fault de C4 tiene un test que cuenta las llamadas siguientes a WSAA y mira su efecto:
+  - el bloqueo hace que la venta salga sin factura (D5);
+  - el bloqueo se levanta al activar otro certificado o con «Probar conexión» OK;
+  - el 600 da exactamente un `loginCms` más y un reintento.
+- S4 (plan, WSFEv1): "WSFEv1: FEDummy, FEParamGetPtosVenta, FECompUltimoAutorizado, FECAESolicitar y FECompConsultar, con plantillas de texto y javax.xml, leyendo errores y observaciones." — Aceptación:
+  - con fixtures del WSDL y respuestas reales, se leen bien los `Errors`, `Observaciones` y `Events`, y se ignora el header `FEHeaderInfo`;
+  - el XML que se manda valida contra el XSD (C5);
+  - el parser rechaza un DOCTYPE o una entidad externa (XXE).
+- S5 (plan, transporte): "timeouts de conexión y de lectura dentro del presupuesto total; SSLContext propio con el truststore del JDK: TLS 1.3 y 1.2, y en 1.2 solo suites ECDHE (servicios1 ofrece DHE de 1024 bits); endpoints de afip.gov.ar por ambiente, en la configuración y nunca editables." — Aceptación:
+  - con el `HttpServer` del JDK, la conexión rechazada o el timeout de conexión quedan como no enviados (`PedidoNoLlegoException`), y el timeout de lectura o un 5xx como `EN_VERIFICACION`;
+  - contra un `HttpsServer` que ofrece solo DHE, el handshake falla, y con ECDHE anda;
+  - si el presupuesto no alcanza para dos llamadas más la espera del TA (C6), el backend no arranca;
+  - las URL salen de C6 y no hay ningún endpoint que las cambie.
+- S6 (plan, simulador): "El simulador pasa al borde del transporte: valida el XML contra el XSD del WSDL, guardado como fixture con su fecha; verifica el CMS contra la CA de simulación; emite el TA con el lapso configurable; comparte el núcleo de reglas de la rama 2. Desde esta rama, el ambiente SIMULADOR usa el mismo cliente SOAP que ARCA y exige una credencial vigente. En dev, el perfil dev genera al arrancar la credencial simulada de las ferreterías demo; nunca hay datos cifrados en db/dev-data." — Aceptación:
+  - en el cableado real, SIMULADOR, HOMOLOGACION y PRODUCCION usan el mismo `ClienteWsfe`, cada uno con su transporte;
+  - el simulador rechaza un XML que no valida (`xml.bad` en WSAA, y en WSFE un fault), un CMS que no firmó la CA de la ferretería (`cms.cert.untrusted`) y un `Auth` que no emitió él (600);
+  - sin credencial vigente, la venta de SIMULADOR sale sin factura;
+  - el perfil dev deja una credencial activa del simulador para las demo con SIMULADOR, y no hace nada si ya la tienen.
+- S7 (plan, contrato): "Suite de contrato única del puerto: corre siempre contra el simulador; también contra el HttpServer del JDK, con fixtures del WSDL y de respuestas reales de FEDummy (no de los ejemplos del manual); con un tag opt-in, como -Pimagen, corre FEDummy real contra wswhomo y servicios1." — Aceptación:
+  - `ContratoWsfeTest` tiene la subclase `ClienteWsfe` + simulador en el borde, con TA y CMS reales;
+  - las pruebas con el `HttpServer` usan los fixtures;
+  - `-Parca-real` corre solo el tag `arca-real`, que la suite y `-Pimagen` excluyen: FEDummy OK en homologación y en producción, y servicios1 negocia una suite ECDHE (se ve en la `SSLSession`).
+- S8 (plan, CU-01 paso 4): "«Probar conexión» llama a FEDummy, a WSAA, a FEParamGetPtosVenta (verifica que el punto existe, es de tipo CAE y no está bloqueado ni dado de baja) y a FECompUltimoAutorizado de cada tipo. En SIMULADOR dice «Simulador: no se probó contra ARCA»." — Aceptación:
+  - `POST /api/facturacion/probar-conexion` (C1) devuelve cada paso con su resultado y el último número de cada tipo de factura de la ferretería;
+  - la pantalla «Facturación» tiene el botón y muestra el resultado;
+  - el Vendedor y el super admin reciben 403, y otra ferretería no ve nada.
+- S9 (plan): "Un chequeo del super admin corre FEDummy desde el contenedor desplegado, para probar la red y el TLS desde Railway." — Aceptación:
+  - `POST /api/admin/arca/fedummy` (C2) responde por homologación y por producción;
+  - el panel del super admin tiene el botón;
+  - el Dueño y el Vendedor reciben 403.
+- S10 (plan): "En producción no se vuelca el SOAP a los logs, y Token y Sign van enmascarados." — Aceptación:
+  - con `OutputCaptureExtension` y un flujo completo (WSAA + FECAESolicitar contra el simulador en el borde), la salida no contiene el token, el sign, el CMS ni «PRIVATE KEY»;
+  - los records con el token o el sign enmascaran su `toString`.
+- S11 (plan, terminado): "Con el HttpServer del JDK: un timeout de conexión queda como no enviado y uno de lectura como EN_VERIFICACION, y los errores y las observaciones se leen bien. […] -Pimagen y la suite verdes. odd-verifier sin bloqueantes sobre cada commit de alto riesgo." — Aceptación:
+  - `-Pimagen` suma un chequeo con «Probar conexión» en SIMULADOR dentro del contenedor (CMS, XSD y XML desde el jar);
+  - la suite y `-Pimagen` verdes;
+  - verificador sin bloqueantes.
+- S12 (plan, entrega): "Después del deploy, la Ferretería de Prueba hace el alta completa (CSR, certificado del simulador y «Probar conexión») como ensayo de la piloto." y "El chequeo desde el contenedor desplegado da OK. […] Ningún log contiene el token, el sign ni la clave." — Aceptación: después del deploy de Luca, y con su autorización para entrar a producción:
+  - el alta completa con ego-browser;
+  - el chequeo FEDummy del super admin;
+  - una mirada a los logs de Railway.
+- S13 (pendiente de la rama 5, advisory 5): una `O` de más de 64 caracteres en el CSR. — Supuesto: `O` lleva los primeros 64 caracteres de la razón social (el tope `ub-organization-name` de RFC 5280); el CUIT va en el `serialNumber`, que es lo que valida ARCA. — Aceptación: una razón social de 150 caracteres da un CSR válido con una `O` de 64.
+- S14 (pendiente de la rama 5): `facturacionHabilitada` al pasar de homologación a producción. — Supuesto (D3: solo el super admin habilita): el cambio de ambiente por un certificado nuevo deshabilita la facturación, y el super admin la vuelve a prender. — Aceptación: una ferretería habilitada en HOMOLOGACION que activa un certificado de producción queda en PRODUCCION y deshabilitada.
+- S15 (pendiente de la rama 5): el `Clock` leído dos veces entre `decidir` y `registrar`. — Aceptación: `registrar` usa el mismo instante que `decidir`. Con un reloj que avanza entre los dos, y una credencial que vence en el medio, la venta decidida facturable se registra.
+- S16 (supuesto, seguridad; plan :735 «ninguna ferretería real se habilita antes de la rama 11», y rama 11 «El paso a producción espera la 7, la 8 y al contador»):
+  - el super admin ya puede habilitar la facturación en HOMOLOGACION;
+  - en PRODUCCION sigue trabada hasta la rama 11, con «La facturación en producción todavía no está disponible.» (reemplaza a «La facturación con ARCA se habilita cuando esté la conexión real.»).
+  - Aceptación: los dos casos con tests en `ConfigArcaTest` y en el panel.
+- S17 (supuesto, técnico): el `Auth.Cuit` de WSFE es el CUIT congelado en el registro (el del emisor).
+  - En PRODUCCION, si no coincide con el de la credencial activa, es un error del sistema.
+  - En HOMOLOGACION con un certificado de otra CUIT (S14 de la rama 5) ARCA puede contestar 601: la rama 11 confirma qué CUIT va, con la piloto.
+
+### Contratos
+
+- **C1 · «Probar conexión» del Dueño:**
+  - `POST /api/facturacion/probar-conexion`, `hasRole('DUENO')`, sin cuerpo.
+  - Responde 200: `{ "ambiente": "SIMULADOR"|"HOMOLOGACION"|"PRODUCCION", "ok": true, "aviso": "Simulador: no se probó contra ARCA"|null, "pasos": [ { "paso": "SERVIDORES"|"AUTENTICACION"|"PUNTO_DE_VENTA"|"ULTIMOS_NUMEROS", "ok": true, "detalle": "…" } ], "ultimos": [ { "cbteTipo": 6, "comprobante": "Factura B", "numero": 0 } ] }`.
+  - Los pasos van en orden, y uno que falla corta los siguientes (el resto no figura).
+  - Los `detalle`:
+    - SERVIDORES: «AppServer OK, DbServer OK, AuthServer OK», o el que no esté OK.
+    - AUTENTICACION: «Ticket de acceso vigente hasta dd/mm/aaaa hh:mm», o el fault de ARCA con su código.
+    - PUNTO_DE_VENTA: «Punto de venta 3: CAE, habilitado», o «El punto de venta 3 no está dado de alta en ARCA.», «… es de tipo CAEA: tiene que ser CAE.», «… está bloqueado en ARCA.» o «… está dado de baja en ARCA desde dd/mm/aaaa.».
+  - Los tipos que se piden salen de la condición frente al IVA del emisor, con la tabla de la rama 2: A y B para RI, y C para Monotributista y Exento.
+  - Errores:
+    - 409 «Para probar la conexión hacen falta el ambiente de ARCA y el punto de venta.»;
+    - 409 «Para probar la conexión hace falta un certificado vigente.»
+  - Un OK completo levanta el bloqueo de C4.
+- **C2 · Chequeo del super admin:**
+  - `POST /api/admin/arca/fedummy`, `hasRole('SUPER_ADMIN')`, sin cuerpo.
+  - Responde 200: `{ "homologacion": { "ok": true, "appServer": "OK", "dbServer": "OK", "authServer": "OK", "milisegundos": 312, "error": null }, "produccion": { … } }`.
+  - `error` lleva el motivo legible, por ejemplo «No se pudo conectar con ARCA (timeout de conexión).» o «Falló el handshake TLS.».
+  - Pasa por `facturacion.api`, solo con tipos del JDK.
+- **C3 · WSAA (verificado el 2026-10-29, engram «Protocolo WSAA y WSFEv1 verificado…»):**
+  - TRA: `<loginTicketRequest version="1.0"><header><uniqueId/><generationTime/><expirationTime/></header><service>wsfe</service></loginTicketRequest>`, sin `source` ni `destination`.
+    - `generationTime` = `Clock` − 5 min y `expirationTime` = `Clock` + 10 min, con la zona -03:00 explícita.
+    - `uniqueId` = segundos epoch del `Clock`.
+  - CMS: SignedData *attached*, SHA256withRSA, con el certificado de la credencial activa incluido, en DER pasado a Base64 sin cabeceras.
+  - Sobre SOAP 1.1:
+    - `POST` con `Content-Type: text/xml; charset=utf-8` y `SOAPAction: ""`;
+    - cuerpo `<loginCms xmlns="http://wsaa.view.sua.dvadac.desein.afip.gov"><in0>…</in0></loginCms>`.
+  - La respuesta `loginCmsReturn` trae el `loginTicketResponse` escapado: se parsea dos veces, y se leen `credentials/token`, `credentials/sign` y `header/expirationTime`.
+  - Fault: el código sale de `faultcode`, con prefijo (`ns1:`) o sin él, y el texto de `faultstring`.
+- **C4 · Clasificación (cortacircuito):**
+  - **CREDENCIAL**: `cms.cert.expired`, `cms.cert.untrusted`, `cms.cert.invalid`, `cms.cert.notFound` y `coe.notAuthorized`.
+    - Efecto: bloquea la facturación de la ferretería. Va en `config_arca`, con el código, el mensaje de ARCA y la hora.
+    - Mientras dure, `puedeFacturar` da false (la venta sale sin factura, D5) y no se llama a WSAA.
+    - «Facturación» lo muestra en `avisos`: «ARCA rechazó el certificado: <faultstring> (<código>). La facturación está frenada hasta que cambies el certificado o pruebes la conexión.», y para `coe.notAuthorized`, «ARCA no autorizó el certificado a facturar (coe.notAuthorized). Autorizalo a wsfe en el Administrador de Relaciones de ARCA y probá la conexión.».
+    - Se levanta al activar otro certificado o con «Probar conexión» OK.
+  - **SISTEMA**: `xml.*`, `wsn.notFound`, `cms.bad`, `cms.bad.base64`, `cms.sign.invalid` y cualquier código desconocido.
+    - Efecto: un log `ERROR` con el marcador `ALERTA ARCA`, el código, la ferretería y el ambiente.
+    - No se llama a WSAA durante `espera-error-sistema`, y el registro queda sin enviar (`PedidoNoLlegoException`). No bloquea `puedeFacturar`.
+  - **TRANSITORIO**: `wsaa.unavailable`, `wsaa.internalError` (todo `wsaa.*`) y `wsn.unavailable`: no se llama a WSAA durante `espera-wsaa` (≥ 60 s), y el registro queda sin enviar. `coe.alreadyAuthenticated` hace lo mismo con `espera-ta-vigente`.
+  - **WSFE 600**: se descarta el TA, se pide uno nuevo una sola vez y se repite la llamada una vez. Otro 600 vuelve como error de cabecera, igual que hoy.
+  - La espera vale por (ferretería, servicio, ambiente) y va en la fila del TA. Un error de transporte en WSAA (no llegó o incierto) no es un fault: el registro queda sin enviar.
+- **C5 · XSD:** el schema embebido del WSDL de WSFEv1 (44 elementos, sin imports; igual en homologación y producción), bajado el 2026-10-29.
+  - Va en `backend/src/main/resources/facturacion/arca/wsfev1-2026-10-29.xsd`, con `xmlns:s` y `xmlns:tns` agregados.
+  - Se valida el hijo del `Body`, no el `Envelope`.
+  - El XSD del TRA es el de la especificación técnica WSAA 1.2.2, como recurso propio.
+- **C6 · Configuración (`app.facturacion.arca`, en el yml, nunca en un endpoint):**
+  - `wsaa.homologacion: https://wsaahomo.afip.gov.ar/ws/services/LoginCms` y `wsaa.produccion: https://wsaa.afip.gov.ar/ws/services/LoginCms`;
+  - `wsfe.homologacion: https://wswhomo.afip.gov.ar/wsfev1/service.asmx` y `wsfe.produccion: https://servicios1.afip.gov.ar/wsfev1/service.asmx`;
+  - `timeout-conexion: 5s` y `timeout-lectura: 20s`;
+  - `lapso-ta.homologacion: 10m`, `lapso-ta.produccion: 2m` y `lapso-ta.simulador: 10m`;
+  - `margen-renovacion: 30m` (se renueva cuando faltan menos de 30 min y ya pasó el lapso);
+  - `espera-wsaa: 60s`, `espera-ta-vigente: 10m`, `espera-error-sistema: 30m`;
+  - `espera-ticket: 10s` (cuánto espera un pedido mientras otro saca el TA) y `lease-ticket: 90s`.
+  - Al arrancar se valida `2 × (timeout-conexion + timeout-lectura) + espera-ticket ≤ motor.presupuesto-llamada` y `lease-ticket > timeout-conexion + timeout-lectura`.
+- **C7 · FEDummy real (fixture, observado el 2026-10-29):**
+  - Homologación: `<soap:Header><FEHeaderInfo xmlns="http://ar.gov.afip.dif.FEV1/"><ambiente>HomologacionExterno - srt</ambiente><fecha>2026-10-29T00:56:59.6882518-03:00</fecha><id>7.0.0.53</id></FEHeaderInfo></soap:Header><soap:Body><FEDummyResponse xmlns="http://ar.gov.afip.dif.FEV1/"><FEDummyResult><AppServer>OK</AppServer><DbServer>OK</DbServer><AuthServer>OK</AuthServer></FEDummyResult></FEDummyResponse></soap:Body>`.
+  - Producción: igual, con `<ambiente>Produccion - sr8</ambiente>` e `id` 7.0.1.1.
+  - Se pide con `SOAPAction: "http://ar.gov.afip.dif.FEV1/FEDummy"`.
+
+## Tasks
+
+- [x] T1 · S1 · ruta: inline · Aceptación: commit `docs:` con este doc, «Integración ARCA», CU-01 paso 4 y «Seguridad» (el TA cifrado y los logs) en la spec · Evidencia: docs pasivos; lectura de vuelta:
+  - CU-01: la `O` hasta 64 caracteres, la deshabilitación al cambiar de ambiente, la habilitación por ambiente, «Probar conexión», el chequeo del super admin, la credencial obligatoria en todos los ambientes y el alternativo «ARCA rechaza el certificado»;
+  - Integración ARCA: el TA guardado y su lapso, «Cliente de ARCA», «Errores de ARCA», el simulador en el borde y el TA en «Seguridad».
+  - El README pasa a T9.
+  - Commit: ver el Log.
+  - Risk: none (docs)
+- [x] T2 · S13, S14, S15, S16 · ruta: delegada (writer «backend», backstop) + arreglo inline del padre (L6) · Aceptación: la `O` del CSR, la deshabilitación al cambiar de ambiente, un solo instante entre `decidir` y `registrar` y HOMOLOGACION habilitable con PRODUCCION trabada; con tests · Evidencia: RED→GREEN por regla (S13 `laRazonSocialLargaSeRecortaEnLaO`; S14 `elCambioDeAmbienteApagaLaFacturacion` y `elCertificadoDeProduccionDeshabilitaLaFacturacion`; S15 `decidirYRegistrarUsanElMismoInstante` y `RegistroVentaTest#decidirYRegistrarConElMismoInstante`; S16 `ConfigArcaTest`, `ConfigArcaAdminIntegrationTest#habilitarPorAmbiente`); facturacion+ventas+plataforma 1822/0 (writer, antes de L6); después de L6: RegistroVenta 82/0, bloqueo 16/0, FacturacionParaVenta 34/0, Motor 15/0, Documento 29/0, ModulosArch 50/0; commit `2029a5a` (+414/−117) · Risk: items 3 y 4 (regla de facturación y orden de fechas bajo el numerador)
+- [x] T3 · S2, S3, S6 (tablas) · ruta: delegada (writer «backend», junto con T2, con su propio commit) · Aceptación:
+  - V35 con `ticket_acceso` (token y sign cifrados, huella de la credencial, vencimiento, lease, espera y última falla), `ticket_simulado` (estado del simulador) y el bloqueo en `config_arca`;
+  - el rollback con guarda «sin bloqueos»;
+  - `MigracionV35Test` y `MigracionV6Test`.
+  - Evidencia: RED sin la V35 (27: 26 errores, 1 falla; `MigracionV6Test#historialDeMigraciones`); GREEN `MigracionV35Test` 27/27 y la tanda de migraciones + ArchUnit 175/0; el rollback encadena un CHECK de guarda en `config_arca` y una tabla guarda (L6); commit `a3b4443` (+592/−2) · Risk: item 1
+- [x] T4 · S4, S5, S7 (HttpServer), S10 (WSFE), S17, C5, C6, C7 · ruta: delegada (writer «backend», en paralelo con T2 y T3: superficies disjuntas, Writer trigger a) · Aceptación:
+  - XML seguro, plantillas y parseo de los cinco métodos;
+  - `Transporte`, `TransporteHttp` (SSLContext, ECDHE, timeouts y el mapeo a `PedidoNoLlego`/`ResultadoIncierto`) y `ClienteWsfe`;
+  - fixtures (XSD en main, FEDummy real en test);
+  - pruebas con `HttpServer` y `HttpsServer`, y la validación de C6 al arrancar.
+  - Evidencia: RED→GREEN por clase (XmlSeguro 3, Plantillas 12, Lector 23, TransporteHttp 10, ClienteWsfe 9, SinSecretosEnLogs 2 con mutación temporal que el test detectó, ConfiguracionArca 4); `arca` 63/0 (repetido por el padre); ModulosArch+TenantScoping+PerfilPorDefecto 81/0; `xmllint` valida los pedidos de ejemplo; commit `eeadd36` (+3791) · Risk: items 2 (XXE y TLS) y 5 (red y TLS)
+- [x] T5 · S2, S3, S10 (WSAA), C3, C4 · ruta: delegada (writer «backend») · Aceptación:
+  - TRA y `FirmaCms` (en `credencial`);
+  - `ClienteWsaa` con los faults;
+  - `TicketsDeAcceso` (cifrado, lease en la base, margen, lapso y esperas);
+  - el cortacircuito en `config_arca` y en `puedeFacturar`, y el 600 que renueva una vez;
+  - tests de concurrencia (20 hilos, dos instancias), de reinicio y de cada fault con conteo de llamadas.
+  - Evidencia (L9): GREEN sin RED registrado (el writer se frenó antes de anotarlo); unitarios `TraTest` 2/0, `FirmaCmsTest` 3/0, `ClienteWsaaTest` 4/0, `ConfigArcaTest` 31/0, `ConfiguracionArcaTest` 4/0; integración `TicketsDeAcceso` 13/0, concurrencia (20 pedidos, dos instancias) 1/0, cortacircuito (cada fault con conteo) 17/0, sin secretos 2/0, `BloqueoDeArca` 2/0, `MotorFiscal` 16/0; `facturacion.**` + `ModulosArchTest`, `TenantScopingArchTest`, `RegistroVentaTest` y `ConfigArcaAdminIntegrationTest` 857/0 · Risk: items 1, 2 y 4 (van al `odd-verifier` de T10)
+- [x] T6 · S6, S7 (simulador) · ruta: delegada (writer «backend») · Aceptación:
+  - el simulador en el borde (XSD, CMS, TA con su lapso y verificación del `Auth`);
+  - `WsfePorAmbiente` con `ClienteWsfe` en los tres ambientes;
+  - la credencial obligatoria en SIMULADOR, con un fixture de credencial para los tests;
+  - la credencial demo en el perfil dev;
+  - la subclase de contrato.
+  - Evidencia (writer, L10): RED `CredencialArcaBloqueoIntegrationTest#sinCredencialNoFacturaNiElSimulador` y `elSimuladorSeHabilitaSinCredencial` (`[true, true]` en vez de `[false, false]`); en las clases nuevas, RED por mutaciones temporales (sin `Auth`, sin XSD, sin lapso, CMS de otra CA, cableado al simulador, runner sin chequeo); GREEN `SimuladorEnElBorde` 7/0, contrato con `ClienteWsfe` 6/0, cableado 1/0, credenciales demo 2/0, `SobresDelSimulador` 3/0, `WsfePorAmbiente` 3/0; `facturacion.**` + arch + RegistroVenta + ConfigArcaAdmin + FacturacionParaVenta 876/0; `ventas.**` 1128/0; el padre repitió las clases del borde, cableado, bloqueo y demo 32/0 · Risk: items 3 (regla de facturación compartida: SIMULADOR exige credencial; `WsfePorAmbiente` cambia de constructor) y 6 (el runner dev solo se prueba instanciado a mano) — al `odd-verifier` de T10
+- [x] T7 · S8, S9, C1, C2, C4 (avisos) · ruta: delegada (writer «backend») · Aceptación: los endpoints de C1 y C2, el bloqueo en `avisos` de la configuración, y tests de roles y aislamiento · Evidencia (writer, L11): RED avisos vacíos en `BloqueoDeArcaIntegrationTest` (2 nuevos); `TicketsDeAccesoProbar` por mutación (probar respetando el bloqueo); `PruebaDeConexionTest` RED de compilación y mutación del corte (2 fallas); endpoint C1 404 → 6/6; C2 404 → 2/2 y la implementación 3/3; `facturacion.**` + `plataforma.**` + arch + RegistroVenta 948/0; el padre repitió las 5 clases de T7 29/0; front y contratos coinciden · Risk: item 3 (`GET /configuracion` suma el aviso; `TicketsDeAcceso.ticket` comparte el refactor con `probar`; `WsfePorAmbiente` se arma desde `ClientesWsfe`) — al `odd-verifier` de T10
+- [x] T8 · S8, S9 (front), C1, C2, C4 · ruta: delegada (writer «frontend», en paralelo con T5 contra C1 y C2) · Aceptación: «Probar conexión» en «Facturación», el aviso del bloqueo y el chequeo FEDummy en el panel del super admin · Evidencia: RED→GREEN `facturacion.spec` (5 fallas → 28/28), `facturacion.service.spec` (TS2339 → 6/6), `admin-ferreterias.spec` (3 fallas → 43/43), `admin-ferreterias.service.spec` (TS2339 → 8/8); el aviso largo de C4 ya se mostraba y quedó fijado; frontend 137 archivos 3299/3299; `ng build` OK (solo el aviso conocido de `dialogo-cobro`); el padre repitió los dos specs de pantalla; commit `a5344e8` (+643/−12). Falta ego-browser (T10) · Risk: none
+- [x] T9 · S7 (opt-in), S11 (imagen) · ruta: delegada (writer «backend») · Aceptación:
+  - el perfil `-Parca-real` con el tag `arca-real` (FEDummy real y ECDHE con servicios1), excluido de la suite y de `-Pimagen`;
+  - el chequeo de «Probar conexión» en SIMULADOR en `ImagenDeProduccionTest`.
+  - Evidencia (writer, L12): RED `-Dtest=ArcaRealTest` corría sin perfil y `-Parca-real` no existía; GREEN `-Parca-real` 3/0 contra ARCA real (FEDummy OK en wswhomo y servicios1, servicios1 con ECDHE), y sin el perfil «No tests were executed!»; `-Pimagen` 9/0 (nuevo `probarConexionConElSimuladorCorreDesdeElJar`, solo GREEN); `facturacion.arca.**` 120/0 sin `arca-real`; README con `-Parca-real`; el padre repitió `-Parca-real` 3/0 · Risk: item 5 (red y ARCA arriba; fuera de la suite y de `-Pimagen`)
+- [x] T10 · todas · ruta: inline (suites) + `odd-verifier` · Aceptación: suite backend, suite frontend, `ng build`, `-Pimagen`, `-Parca-real`, ego-browser en dev (alta y «Probar conexión» con el simulador), verificador sin bloqueantes · Evidencia (L13): suite backend 5591/0 (después del arreglo de B1); frontend 137 archivos en verde; `ng build` OK (solo el aviso de `dialogo-cobro`); `-Pimagen` 9/0 (writer de T9); `-Parca-real` 3/0 (padre); ego-browser en dev: «Probar conexión» del Dueño en SIMULADOR con los 4 pasos OK y FEDummy real del super admin OK en homologación y producción (el alta en pantalla no se repitió: el runner dev usa la misma alta); `odd-verifier` (opus) con 1 blocker (B1), arreglado en `7d7737d` con RED→GREEN `TicketsDeAccesoProbarIntegrationTest#probarConRechazoEnLaVentanaDeRenovacionFalla` · Risk: items 1 a 6
+- [ ] T11 · S12 · ruta: inline, después del deploy de Luca · Aceptación: el alta completa de la Ferretería de Prueba en producción, el chequeo FEDummy del super admin y los logs sin secretos · Evidencia: — · Risk: —
+
+## Log
+
+- L1 (2026-10-29) Pedido original, textual. Luca: «continuamos»; ante la propuesta (rama 6 con caso 5, Opus de punta a punta): «dale».
+- L2 (2026-10-29) Exploración del código (`odd-explorer`):
+  - **Puerto y selección.** `wsfe/ServicioWsfe.java:22,30,38` tiene solo 3 métodos. `wsfe/Auth.java:13` es `(Ambiente, long cuit)`, sin token ni sign, y lo arma `MotorFiscal.java:327-329`.
+    - `PedidoNoLlegoException` y `ResultadoInciertoException` las atrapa `MotorFiscal.java:220,233,236,280`.
+    - `motor/WsfePorAmbiente.java:22-32` es el switch: HOMOLOGACION y PRODUCCION tiran `AmbienteNoDisponibleException`, que atrapa `FacturacionParaVentaImpl.java:265` y fija `WsfePorAmbienteTest.java:36`.
+    - En los tests: `MotorDePruebaConfig.java:21-29`, `WsfeDePrueba.java:32` y `WsfeConFallas.java:12`.
+  - **Lease y presupuesto.** El único lease en la base es `serie_fiscal.lease_dueno/lease_vence` (`V32:76-84`). Lo manejan `SerieFiscalRepository.java:45-80` (`tomar`, `renovar`, `soltar`, con el `Clock`) y `PasosFiscales.java:213-227`.
+    - `app.facturacion.motor.presupuesto-llamada` 60 s (`application.yml:96`) se valida en `MotorFiscal.java:80`.
+    - La espera de la venta, 6 s, está en `FacturacionParaVentaImpl.java:112,179,253`.
+  - **El `Clock` dos veces.** `FacturacionParaVentaImpl.decidir` (:134) y `registrar` (:107) llaman cada una a `Instant.now(reloj)` (`PasosFiscales.java:176`).
+  - **Simulador.** `simulador/SimuladorWsfe.java:61`, con estado V33 y transacción `REQUIRES_NEW` (:94-98). El núcleo es `ReglasWsfe.java:36,126`.
+    - `wsfe/ContratoWsfeTest.java:22` es abstracta, con 5 casos y el punto de extensión de la rama 6 (:13-17).
+    - `SimuladorWsfeContratoTest.java:17` es su única subclase.
+  - **Credencial.** No hay un método para la credencial activa descifrada más el X509. Las piezas que hay:
+    - `CredencialArcaRepository.java:37,46`;
+    - `CifradorDeClaves.descifrar` (:94);
+    - `CredencialArca.getClavePrivada()/contexto()`, package-private (:126,130);
+    - el patrón de `CredencialArcaService.claveDeLaCa` (:271-285) y `leerGuardado` (:311).
+    - El AAD está en `CifradorDeClaves.java:136-140`, y `Proposito.java:7-12` tiene 2 valores.
+    - La omisión en SIMULADOR está en `RevisionDeCredencial.java:58` (verificado por el padre).
+    - El CSR se arma en `PedidoDeCertificado.java:52-62`, sin tope para la `O`. La razón social es VARCHAR(150).
+  - **ConfigArca.** `ConfigArca.java:56` `SIN_CONEXION_REAL` se tira en `habilitar` (:158-173, :162-163). `fijarAmbienteDelCertificado` (:229-246) no deshabilita, y lo llama `CredencialArcaService.activar` (:246-256). `puedeFacturar` está en :187.
+  - **Dev.** `db/dev-only/V2000__demo_factura_con_simulador.sql` deja las demo en SIMULADOR, habilitadas. No existe ningún `ApplicationRunner` en main.
+  - **ArchUnit.** `ModulosArchTest:280-292` (BouncyCastle), `:299-315` (reloj) y `:372-403` (simulador y motor).
+  - **Moldes.**
+    - `V34__credencial_arca.sql:1-21` y `MigracionV34Test.java:42-75`;
+    - `MigracionV6Test.java:182-190`;
+    - `ImagenDeProduccionTest.java:76,109,125,217,344-371`;
+    - `pom.xml:192-215` (`excludedGroups` = `imagen`);
+    - `HttpServer` en `DolarApiFuenteTest.java:222,230-250`.
+  - **Web.** `FacturacionController.java:23-68` y `plataforma/web/FerreteriasAdminController.java:25-74`.
+- L3 (2026-10-29) Protocolo (`odd-explorer`, fuentes primarias). Va en C3 a C7 y en engram «Protocolo WSAA y WSFEv1 verificado para el cliente propio (rama 6)». Lo que cambia el plan:
+  - ningún host de ARCA ofrece TLS 1.3, aunque se deja habilitado;
+  - servicios1 elige DHE de 1024 bits si el cliente ofrece una lista amplia;
+  - el código es `wsaa.internalError` (no `wsaa.unexpectedError`), y se suman `cms.cert.invalid`, `xml.generationTime.invalid` y `xml.expirationTime.*`;
+  - no se conoce la forma real del fault (se captura en la rama 11);
+  - `SOAPAction` de WSAA va vacío.
+  - Los WSDL, el XSD extraído (`fev1.xsd`) y los PDF de WSAA están en el scratchpad de la sesión (`…/scratchpad/w/`).
+- L4 (2026-10-29) Decisiones de diseño (del padre, técnicas):
+  - El cliente real va en `facturacion.arca`. Lo que usa BouncyCastle (firmar y verificar el CMS) va en `facturacion.credencial`, detrás de una clase sin tipos de BC.
+  - El simulador en el borde implementa `Transporte` dentro de `facturacion.simulador` y usa `SimuladorWsfe` como núcleo.
+  - FEDummy y FEParamGetPtosVenta son métodos de `ClienteWsfe` y no del puerto `ServicioWsfe`: el motor no los usa y así los dobles de prueba del motor no cambian.
+  - El simulador recuerda el TA que emitió en `ticket_simulado`, y con eso verifica el `Auth` y la regla del lapso.
+  - Los supuestos S13 a S17 se anotan para Luca al cerrar.
+- L5 (2026-10-29) T1 cerrada en `03b54e5` (+275/−7): la spec y este doc. Próximo paso: T2 y T3, con un writer «backend».
+- L6 (2026-10-29) T2, T3 y T4 cerradas (writers en paralelo; el padre repitió `arca` 63/0 y la tanda de S15).
+  - **Arreglo del padre en S15.** El writer de T2 avisó que leer el instante de la venta antes de `decidir` lo sacaba de abajo del lock del numerador. La CbteFch sale de `registradoEn` (`MotorFiscal.java:169`) y el motor atiende por id: dos ventas que cruzan la medianoche podían quedar con las fechas al revés de sus ids, y la de id mayor, en FUERA_DE_FECHA.
+    - Arreglo: la venta vuelve a leer su instante con el numerador tomado. `decidir` recibe el instante leído antes de decidir, y `registrar(…, fecha, decididaEn)` mira la credencial con ese.
+    - El atajo de cuatro argumentos queda abstracto en la API: como `default` salteaba el `@Transactional(MANDATORY)` del proxy (lo detectó `decidirYRegistrarExigenUnaTransaccion`).
+    - `RegistroVentaTest#decidirYRegistrarConElMismoInstante` fija las dos cosas con un numerador que adelanta el reloj: RED (registrar con el instante de la decisión) y después GREEN.
+  - **Rollback de la V35.** Un ALTER no puede depender de una tabla guarda. Primero se agrega un CHECK `ck_rollback_sin_bloqueos` (falla si hay bloqueos), después un ALTER atómico y una tabla guarda que solo se crea sin las columnas. Los tickets no frenan el rollback.
+  - **Decisiones de T4** (writer, inferidas):
+    - los FEDummy de C7 van envueltos en el Envelope estándar;
+    - un 600 sin `FeCabResp` se lee como cabecera R;
+    - `ProveedorDeTicket.descartar(ambiente, servicio, rechazado)` recibe el ticket rechazado, para no descartar uno más nuevo;
+    - `TransporteHttp` corta todo en conexión + lectura con `sendAsync().get(…)`;
+    - los Events se leen pero no se loguean;
+    - `FchBaja` «NULL» se lee como null;
+    - `AlertaArca` loguea ERROR con el marcador `ALERTA ARCA`.
+  - Próximo paso: T5 (WSAA, `TicketsDeAcceso`, cortacircuito).
+- L7 (2026-10-29) T8 cerrada en `a5344e8`. El panel del super admin vive en `frontend/src/app/features/admin-ferreterias/` (el handoff decía `features/plataforma/`, que no existe: el writer frenó y el padre le amplió la superficie). El 409 de «Probar conexión» se muestra al lado del botón, dentro de la región `aria-live`.
+- L8 (2026-10-29) Luca frenó la sesión con T5 a medio verificar: «que frene ahora despues seguimos cerra». El padre paró al writer mientras corría ArchUnit, antes de las tandas largas. No quedaron procesos de Maven ni contenedores.
+  - **El código de T5 queda en el árbol, sin commitear y sin verificar.** No cambiar de rama sin commitearlo o guardarlo antes.
+    - Nuevos en `facturacion/arca`: `Tra`, `ClienteWsaa`, `FallaWsaa`, `FaultWsaaException`, `RespuestaLoginCms`, `TicketAcceso`, `TicketAccesoRepository`, `PasosDelTicket` y `TicketsDeAcceso`.
+    - Nuevo en `facturacion/credencial`: `FirmaCms`.
+    - Recursos: el XSD `login-ticket-request-wsaa-1.2.2.xsd` y los fixtures `logincms-respuesta.xml` y `logincms-fault.xml`.
+    - Modificados: `PropiedadesArca`, `CredencialArcaService`, `Proposito`, `ConfigArca` y `PasosFiscales`.
+    - Tests nuevos: `ClienteWsaaTest`, `TraTest`, `FirmaCmsTest`, `TicketsDeAcceso{,Concurrencia}IntegrationTest`, `TicketsDeAccesoTestBase`, `WsaaDePrueba`, `CortacircuitoWsaaIntegrationTest`, `SinSecretosEnLogsWsaaIntegrationTest`, `BloqueoDeArcaIntegrationTest` y `CredencialDePrueba`.
+    - Tests modificados: `ConfiguracionArcaTest`, `ConfigArcaTest` y `MotorFiscalIntegrationTest`.
+    - Las clases de integración ya habían corrido (reportes de 02:31 a 02:47), pero no hay evidencia RED/GREEN registrada.
+  - **Próximo paso (T5):**
+    - leer el diff contra la sección de T5 y C3/C4;
+    - correr los tests de T5, `com.ferreteria.facturacion.**.*Test` y `ModulosArchTest,TenantScopingArchTest,RegistroVentaTest,ConfigArcaAdminIntegrationTest`;
+    - completar lo que falte, commitear T5 y seguir con T6.
+- L9 (2026-10-29) T5 reanudada: el padre corrió los tests del árbol sin cambios de código; todo en verde (ver T5). Próximo paso: T6.
+- L10 (2026-10-29) T6 cerrada (writer). Decisiones inferidas:
+  - el lapso del simulador va por (ferretería, servicio), no por certificado: un certificado con `notBefore` posterior al último TA saca uno nuevo;
+  - los textos de los faults son aproximados a WSAA 1.2.2; el Fault de WSFE es `soap:Client` (ASMX) y el texto del 600 es propio;
+  - FEParamGetPtosVenta del simulador devuelve solo el punto de `config_arca` (CAE, sin bloqueo), o el 602;
+  - un pedido con más de un `FECAEDetRequest` da un Fault.
+  - Los tests del motor y de ventas siguen con el núcleo `SimuladorWsfe` directo; el borde está solo en `facturacion.config.ClienteArcaConfig`.
+  - Para T9: `ImagenDeProduccionTest` puede necesitar una credencial del simulador.
+  - Próximo paso: T7.
+- L11 (2026-10-29) T7 cerrada (writer). Decisiones inferidas:
+  - «Probar conexión» llama a WSAA aunque la ferretería esté bloqueada (`TicketsDeAcceso.probar`): si no, una ferretería frenada no se podría destrabar. Respeta la espera de C4; un rechazo nuevo vuelve a bloquear con su código; el bloqueo se levanta solo con los 4 pasos OK.
+  - Textos que C1 no fija: SERVIDORES «DbServer ERROR» / «AppServer sin respuesta»; AUTENTICACION «ARCA rechazó el certificado: <faultstring> (<código>)» o «ARCA no dio el ticket de acceso…»; ULTIMOS_NUMEROS OK «Factura A y Factura B», con falla «Factura A: ARCA respondió <code>: <msg>».
+  - `ultimos` va vacío salvo ULTIMOS_NUMEROS OK; el 409 de certificado acepta POR_VENCER (`RevisionDeCredencial.dejaFacturar`).
+  - C2: homologación y producción en secuencia, sin cortarse; con falla de transporte los servidores y `milisegundos` van en null; si ARCA responde sin todo OK, «ARCA respondió, pero no todos sus servidores están OK.».
+  - El aviso del bloqueo va primero en `avisos`.
+  - Próximo paso: T9.
+- L12 (2026-10-29) T9 cerrada (writer). `TransporteHttp.contexto` y `parametros` pasan a package-private para que `ArcaRealTest` haga el handshake con el mismo TLS (sin cambio de comportamiento). En TLS 1.3 el test solo exige una suite de `SUITES`; ECDHE se exige en 1.2. En `ImagenDeProduccionTest`, «Probar conexión» (`@Order(2)`) depende del alta de la credencial (`@Order(1)`). Próximo paso: T10.
+- L13 (2026-10-29) T10 cerrada. El `odd-verifier` encontró B1: con un TA vigente en la ventana de renovación, un rechazo de clase CREDENCIAL en `probar()` devolvía el TA viejo, la prueba daba OK y levantaba el bloqueo. Arreglo en `7d7737d`: en `probar()` un fault CREDENCIAL falla aunque haya TA vigente. Advisories abiertos (para Luca):
+  - antes del deploy, revisar si alguna ferretería de producción está en SIMULADOR sin credencial: pasaría a vender sin factura sin aviso;
+  - el camino del 600 puede hacer cuatro llamadas (~120 s), más que `presupuesto-llamada` (60 s) y menos que el lease de la serie (180 s);
+  - los rechazos CREDENCIAL no ponen espera: cada «Probar conexión» con bloqueo llama a WSAA;
+  - el front no relee la configuración cuando la prueba falla (el aviso aparece al recargar);
+  - el runner dev no renueva una credencial demo vencida.
+  - Próximo paso: T11, después del deploy de Luca.
+- L14 (2026-10-29) Antes del deploy: `-Pimagen` 9/0 con el arreglo de B1. Revisión de producción (panel del super admin, solo lectura, con autorización de Luca): hay una sola ferretería, «Ferretería de Prueba (uso interno)», sin ambiente y sin facturación. El advisory de SIMULADOR sin credencial no aplica. Luca hace el merge, el push y el deploy; después, T11.

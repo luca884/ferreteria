@@ -103,7 +103,15 @@ public class MotorFiscal {
      * instante, y de él sale la CbteFch. Se suma a la transacción de quien llama.
      */
     public long registrar(AltaFiscal alta, Instant registradoEn) {
-        return pasos.registrar(alta, registradoEn);
+        return registrar(alta, registradoEn, registradoEn);
+    }
+
+    /**
+     * Lo mismo, mirando la regla (la vigencia de la credencial) en {@code revisadaEn}, el instante en que la venta decidió
+     * facturar, que puede ser anterior a {@code registradoEn} (rama 6, S15).
+     */
+    public long registrar(AltaFiscal alta, Instant registradoEn, Instant revisadaEn) {
+        return pasos.registrar(alta, registradoEn, revisadaEn);
     }
 
     /**

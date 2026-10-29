@@ -215,6 +215,7 @@ class ImagenDeProduccionTest {
      * respuestas ni el log llevan la clave privada.
      */
     @Test
+    @Order(1)
     void elPedidoDeCertificadoYLaFirmaDelSimuladorCorrenDesdeElJar() throws Exception {
         String dueno = dueno();
         ResponseEntity<String> pedido = http.post().uri("/api/facturacion/pedido-certificado")
@@ -254,6 +255,33 @@ class ImagenDeProduccionTest {
         assertThat(credencial.path("emisor").asText()).isEqualTo("Simulador de ARCA");
         assertThat(credencial.path("ambiente").asText()).isEqualTo("SIMULADOR");
         assertThat(pedido.getBody() + firmado.getBody() + API.getLogs()).doesNotContain("PRIVATE KEY");
+    }
+
+    /**
+     * «Probar conexión» en SIMULADOR desde el jar (rama 6, S11): con la credencial que firmó el simulador en el test anterior
+     * (por eso va despues), el cliente real de WSFEv1 y WSAA arma el XML, firma el CMS con BouncyCastle y la clave descifrada,
+     * y el simulador en el borde valida el XML contra los XSD (recursos del jar) y verifica la firma. Los cuatro pasos dan OK,
+     * con el aviso de que no se probo contra ARCA, y ni la respuesta ni el log llevan el token, el sign ni la clave.
+     */
+    @Test
+    @Order(2)
+    void probarConexionConElSimuladorCorreDesdeElJar() throws Exception {
+        ResponseEntity<String> respuesta = http.post().uri("/api/facturacion/probar-conexion")
+            .header("Authorization", "Bearer " + dueno())
+            .retrieve().toEntity(String.class);
+
+        assertThat(respuesta.getStatusCode().value()).as(respuesta.getBody()).isEqualTo(200);
+        JsonNode prueba = JSON.readTree(respuesta.getBody());
+        assertThat(prueba.path("ambiente").asText()).isEqualTo("SIMULADOR");
+        assertThat(prueba.path("ok").asBoolean()).as(respuesta.getBody()).isTrue();
+        assertThat(prueba.path("aviso").asText()).isEqualTo("Simulador: no se probó contra ARCA");
+        List<String> pasos = new ArrayList<>();
+        prueba.path("pasos").forEach(p -> pasos.add(p.path("paso").asText() + " " + p.path("ok").asBoolean()));
+        assertThat(pasos).containsExactly("SERVIDORES true", "AUTENTICACION true", "PUNTO_DE_VENTA true",
+            "ULTIMOS_NUMEROS true");
+        assertThat(prueba.path("ultimos").findValuesAsText("comprobante")).containsExactly("Factura A", "Factura B");
+        assertThat(respuesta.getBody() + API.getLogs()).doesNotContain("PRIVATE KEY").doesNotContain("<token>")
+            .doesNotContain("<sign>").doesNotContain("<in0>");
     }
 
     /**

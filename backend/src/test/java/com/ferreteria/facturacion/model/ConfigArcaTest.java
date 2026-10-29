@@ -231,14 +231,29 @@ class ConfigArcaTest {
         assertThat(config.getHabilitadaEn()).isNull();
     }
 
-    @ParameterizedTest
-    @EnumSource(value = Ambiente.class, names = {"HOMOLOGACION", "PRODUCCION"})
-    @DisplayName("hasta la conexión real (rama 6), la facturación no se prende en homologación ni producción (S13)")
-    void habilitarNoSaleEnHomologacionNiProduccion(Ambiente ambiente) {
-        ConfigArca config = conAmbienteDelCertificado(ambiente);
+    @Test
+    @DisplayName("en homologación la facturación se prende con los datos de CU-01 completos (rama 6, S16)")
+    void habilitarEnHomologacion() {
+        ConfigArca config = conAmbienteDelCertificado(Ambiente.HOMOLOGACION);
+
+        assertRegla(() -> config.habilitar(List.of("Ingresos Brutos"), AHORA), "Para habilitar la facturación falta un "
+                + "dato de la ferretería: Ingresos Brutos. Lo carga el Dueño en «Datos de la ferretería».");
+        assertThat(config.isFacturacionHabilitada()).isFalse();
+
+        config.habilitar(List.of(), AHORA);
+
+        assertThat(config.isFacturacionHabilitada()).isTrue();
+        assertThat(config.getHabilitadaEn()).isEqualTo(AHORA);
+        assertThat(config.puedeFacturar()).isTrue();
+    }
+
+    @Test
+    @DisplayName("en producción la facturación sigue trabada hasta la rama 11, aun con los datos completos (S16)")
+    void habilitarEnProduccionSigueTrabada() {
+        ConfigArca config = conAmbienteDelCertificado(Ambiente.PRODUCCION);
 
         assertRegla(() -> config.habilitar(List.of(), AHORA),
-                "La facturación con ARCA se habilita cuando esté la conexión real.");
+                "La facturación en producción todavía no está disponible.");
         assertThat(config.isFacturacionHabilitada()).isFalse();
         assertThat(config.getHabilitadaEn()).isNull();
     }
@@ -311,6 +326,27 @@ class ConfigArcaTest {
     }
 
     @Test
+    @DisplayName("con la facturación prendida en homologación, un certificado de producción deja PRODUCCION y la apaga; uno "
+            + "de homologación (el mismo ambiente) no la apaga (rama 6, S14)")
+    void elCambioDeAmbienteApagaLaFacturacion() {
+        ConfigArca aProduccion = conAmbienteDelCertificado(Ambiente.HOMOLOGACION);
+        aProduccion.habilitar(List.of(), AHORA);
+        ConfigArca renueva = conAmbienteDelCertificado(Ambiente.HOMOLOGACION);
+        renueva.habilitar(List.of(), AHORA);
+
+        aProduccion.fijarAmbienteDelCertificado(Ambiente.PRODUCCION, RegistrosFiscales.NINGUNO);
+        renueva.fijarAmbienteDelCertificado(Ambiente.HOMOLOGACION, RegistrosFiscales.NINGUNO);
+
+        assertThat(aProduccion.getAmbiente()).isEqualTo(Ambiente.PRODUCCION);
+        assertThat(aProduccion.isFacturacionHabilitada()).isFalse();
+        assertThat(aProduccion.getHabilitadaEn()).isNull();
+        assertThat(aProduccion.getPuntoVenta()).isEqualTo(3);
+        assertThat(renueva.getAmbiente()).isEqualTo(Ambiente.HOMOLOGACION);
+        assertThat(renueva.isFacturacionHabilitada()).isTrue();
+        assertThat(renueva.getHabilitadaEn()).isEqualTo(AHORA);
+    }
+
+    @Test
     @DisplayName("desde producción no se vuelve a homologación, y con el simulador solo vale su CA: 400 en «certificado»")
     void elCertificadoNoVuelveAtrasNiReemplazaAlSimulador() {
         ConfigArca produccion = conAmbienteDelCertificado(Ambiente.PRODUCCION);
@@ -355,5 +391,41 @@ class ConfigArcaTest {
         ConfigArca nueva = ConfigArca.nueva(8L);
         nueva.deshabilitar();
         assertThat(nueva.isFacturacionHabilitada()).isFalse();
+    }
+
+    // ---- el bloqueo de ARCA (rama 6, C4: un fault de CREDENCIAL de WSAA) ----
+
+    @Test
+    @DisplayName("C4: con el bloqueo de ARCA no factura aunque esté habilitada; guarda el código, el texto y la hora, y al "
+            + "levantarlo vuelve a facturar")
+    void elBloqueoDeArcaFrenaLaFacturacion() {
+        ConfigArca config = conAmbienteDelCertificado(Ambiente.HOMOLOGACION);
+        config.habilitar(List.of(), AHORA);
+
+        config.bloquear("cms.cert.untrusted", "Certificado no emitido por AC de confianza", AHORA.plusSeconds(60));
+
+        assertThat(config.puedeFacturar()).isFalse();
+        assertThat(config.isFacturacionHabilitada()).isTrue();
+        assertThat(config.getBloqueoCodigo()).isEqualTo("cms.cert.untrusted");
+        assertThat(config.getBloqueoMensaje()).isEqualTo("Certificado no emitido por AC de confianza");
+        assertThat(config.getBloqueadoEn()).isEqualTo(AHORA.plusSeconds(60));
+
+        config.levantarBloqueo();
+
+        assertThat(config.puedeFacturar()).isTrue();
+        assertThat(config.getBloqueoCodigo()).isNull();
+        assertThat(config.getBloqueoMensaje()).isNull();
+        assertThat(config.getBloqueadoEn()).isNull();
+    }
+
+    @Test
+    @DisplayName("C4: el bloqueo recorta el código a 64 caracteres y el texto de ARCA a 500, los largos de config_arca")
+    void elBloqueoEntraEnLasColumnas() {
+        ConfigArca config = conSimulador();
+
+        config.bloquear("cms.cert." + "x".repeat(80), "y".repeat(900), AHORA);
+
+        assertThat(config.getBloqueoCodigo()).hasSize(64).startsWith("cms.cert.");
+        assertThat(config.getBloqueoMensaje()).hasSize(500);
     }
 }

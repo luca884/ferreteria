@@ -9,6 +9,8 @@
 
 .avisos {
   padding-left: var(--e-6);
+  /* El aviso del bloqueo de ARCA trae el texto del fault: una palabra larga se corta en vez de ensanchar la pantalla. */
+  overflow-wrap: break-word;
 }
 
 .secciones {
@@ -118,6 +120,52 @@
   flex-wrap: wrap;
   gap: var(--e-2);
 }
+/*
+ * «Probar conexión»: el resultado va debajo del botón. El contenedor es un bloque común (no la grilla de la sección), así
+ * la zona del resultado vacía no suma espacio; cada parte del resultado lleva su margen de arriba.
+ */
+.seccion .resultado-conexion > * {
+  margin: var(--e-3) 0 0;
+}
+.pasos {
+  display: grid;
+  gap: var(--e-2);
+  padding: 0;
+  list-style: none;
+}
+.paso {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--e-1) var(--e-2);
+}
+.paso-rotulo {
+  font-weight: 600;
+}
+.paso-detalle {
+  flex-basis: 100%;
+  color: var(--texto-suave);
+  overflow-wrap: break-word;
+}
+.paso-estado[data-ok='true'] {
+  background: var(--exito-fondo);
+  color: var(--exito);
+}
+.paso-estado[data-ok='false'] {
+  background: var(--error-fondo);
+  color: var(--error);
+}
+.ultimos {
+  width: auto;
+  min-width: 280px;
+  border: 1px solid var(--borde);
+  border-radius: var(--radio);
+}
+/* Dos o tres filas: el encabezado no necesita quedar fijo al bajar la página. */
+.ultimos th {
+  position: static;
+}
+
 .simulador {
   display: flex;
   flex-direction: column;

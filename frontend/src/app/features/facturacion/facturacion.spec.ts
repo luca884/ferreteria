@@ -1,11 +1,17 @@
 import { HttpErrorResponse } from '@angular/common/http';
 import { signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { Observable, of, throwError } from 'rxjs';
+import { Observable, Subject, of, throwError } from 'rxjs';
 import { vi } from 'vitest';
 import { AuthService } from '../../core/auth/auth.service';
 import { PaginaFacturacion } from './facturacion';
-import { ConfiguracionFacturacion, CredencialArca, PedidoCertificado, PedidoPendiente } from './facturacion.models';
+import {
+  ConfiguracionFacturacion,
+  CredencialArca,
+  PedidoCertificado,
+  PedidoPendiente,
+  PruebaConexion,
+} from './facturacion.models';
 import { FacturacionService } from './facturacion.service';
 
 describe('PaginaFacturacion', () => {
@@ -17,6 +23,7 @@ describe('PaginaFacturacion', () => {
     pedido: ReturnType<typeof vi.fn>;
     subirCertificado: ReturnType<typeof vi.fn>;
     firmarConSimulador: ReturnType<typeof vi.fn>;
+    probarConexion: ReturnType<typeof vi.fn>;
   };
 
   const CREDENCIAL: CredencialArca = {
@@ -35,6 +42,37 @@ describe('PaginaFacturacion', () => {
     archivo: 'pedido-certificado-30999999995.csr',
   };
   const PEM = '-----BEGIN CERTIFICATE-----\nMIIB\n-----END CERTIFICATE-----\n';
+  /** «Probar conexión» completa (C1 de la rama 6), en el simulador: los cuatro pasos OK y el último número de A y B. */
+  const PRUEBA_OK: PruebaConexion = {
+    ambiente: 'SIMULADOR',
+    ok: true,
+    aviso: 'Simulador: no se probó contra ARCA',
+    pasos: [
+      { paso: 'SERVIDORES', ok: true, detalle: 'AppServer OK, DbServer OK, AuthServer OK' },
+      { paso: 'AUTENTICACION', ok: true, detalle: 'Ticket de acceso vigente hasta 29/10/2026 18:40' },
+      { paso: 'PUNTO_DE_VENTA', ok: true, detalle: 'Punto de venta 1: CAE, habilitado' },
+      { paso: 'ULTIMOS_NUMEROS', ok: true, detalle: 'Factura A y Factura B' },
+    ],
+    ultimos: [
+      { cbteTipo: 1, comprobante: 'Factura A', numero: 12 },
+      { cbteTipo: 6, comprobante: 'Factura B', numero: 345 },
+    ],
+  };
+  /** Una prueba que se corta en la autenticación: los pasos siguientes no figuran (C1). */
+  const PRUEBA_FALLIDA: PruebaConexion = {
+    ambiente: 'HOMOLOGACION',
+    ok: false,
+    aviso: null,
+    pasos: [
+      { paso: 'SERVIDORES', ok: true, detalle: 'AppServer OK, DbServer OK, AuthServer OK' },
+      { paso: 'AUTENTICACION', ok: false, detalle: 'ARCA rechazó el certificado: Certificado expirado (cms.cert.expired)' },
+    ],
+    ultimos: [],
+  };
+  /** Uno de los dos textos del bloqueo de C4: largo, con el faultstring de ARCA y su código. */
+  const AVISO_BLOQUEO =
+    'ARCA rechazó el certificado: Certificado no emitido por AC de confianza (cms.cert.untrusted). ' +
+    'La facturación está frenada hasta que cambies el certificado o pruebes la conexión.';
 
   const config = (cambios: Partial<ConfiguracionFacturacion> = {}): ConfiguracionFacturacion => ({
     ambiente: 'HOMOLOGACION',
@@ -59,6 +97,7 @@ describe('PaginaFacturacion', () => {
       pedido: vi.fn(() => of(CSR)),
       subirCertificado: vi.fn(() => of({ ...inicial, pedido: null, credencial: CREDENCIAL })),
       firmarConSimulador: vi.fn(() => of({ ...inicial, pedido: null, credencial: { ...CREDENCIAL, emisor: 'CA del simulador' } })),
+      probarConexion: vi.fn(() => of(PRUEBA_OK)),
     };
     await TestBed.configureTestingModule({
       imports: [PaginaFacturacion],
@@ -395,6 +434,110 @@ describe('PaginaFacturacion', () => {
       expect(boton('button.firmar-simulador')).toBeNull();
       expect(boton('button.subir-certificado')).not.toBeNull();
     });
+  });
+
+  describe('probar conexión', () => {
+    const filas = (selector: string) =>
+      Array.from(el().querySelectorAll(selector)).map((f) => (f.textContent ?? '').replace(/\s+/g, ' ').trim());
+
+    it('el botón «Probar conexión» está solo cuando la configuración tiene ambiente', async () => {
+      await crear(config({ ambiente: null, puntoVenta: null }));
+      expect(boton('button.probar-conexion')).toBeNull();
+
+      TestBed.resetTestingModule();
+      await crear();
+      expect(texto('button.probar-conexion')).toBe('Probar conexión');
+    });
+
+    it('mientras espera, el botón queda deshabilitado con «Probando…»', async () => {
+      await crear();
+      const respuesta = new Subject<PruebaConexion>();
+      api.probarConexion.mockReturnValueOnce(respuesta);
+
+      await click('button.probar-conexion');
+      expect(api.probarConexion).toHaveBeenCalledTimes(1);
+      expect(boton('button.probar-conexion')!.disabled).toBe(true);
+      expect(texto('button.probar-conexion')).toBe('Probando…');
+
+      respuesta.next(PRUEBA_OK);
+      respuesta.complete();
+      await refrescar();
+      expect(boton('button.probar-conexion')!.disabled).toBe(false);
+      expect(texto('button.probar-conexion')).toBe('Probar conexión');
+    });
+
+    it('muestra cada paso con su rótulo, su resultado y su detalle, los últimos números y el aviso del simulador', async () => {
+      await crear(config({ ambiente: 'SIMULADOR', simulador: true, puntoVenta: 1 }));
+
+      await click('button.probar-conexion');
+
+      expect(el().querySelector('.resultado-conexion')!.getAttribute('aria-live')).toBe('polite');
+      expect(texto('.resumen-prueba')).toBe('La prueba de conexión salió bien.');
+      expect(filas('.paso')).toEqual([
+        'Servidores de ARCA OK AppServer OK, DbServer OK, AuthServer OK',
+        'Autenticación (WSAA) OK Ticket de acceso vigente hasta 29/10/2026 18:40',
+        'Punto de venta OK Punto de venta 1: CAE, habilitado',
+        'Últimos números OK Factura A y Factura B',
+      ]);
+      expect(filas('.ultimos thead th')).toEqual(['Comprobante', 'Último número']);
+      const celdas = Array.from(el().querySelectorAll('.ultimos tbody tr')).map((fila) =>
+        Array.from(fila.children).map((celda) => (celda.textContent ?? '').trim()),
+      );
+      expect(celdas).toEqual([
+        ['Factura A', '12'],
+        ['Factura B', '345'],
+      ]);
+      expect(texto('.aviso-prueba')).toBe('Simulador: no se probó contra ARCA');
+
+      api.probarConexion.mockReturnValueOnce(of(PRUEBA_FALLIDA));
+      await click('button.probar-conexion');
+
+      expect(texto('.resumen-prueba')).toBe('La prueba de conexión falló.');
+      expect(filas('.paso')).toEqual([
+        'Servidores de ARCA OK AppServer OK, DbServer OK, AuthServer OK',
+        'Autenticación (WSAA) Falló ARCA rechazó el certificado: Certificado expirado (cms.cert.expired)',
+      ]);
+      expect(el().querySelector('.ultimos')).toBeNull();
+      expect(el().querySelector('.aviso-prueba')).toBeNull();
+    });
+
+    it('un 409 muestra el mensaje del servidor tal cual', async () => {
+      await crear();
+      api.probarConexion.mockReturnValueOnce(
+        fallo(409, { message: 'Para probar la conexión hace falta un certificado vigente.' }),
+      );
+
+      await click('button.probar-conexion');
+
+      expect(texto('.resultado-conexion .error-prueba')).toBe('Para probar la conexión hace falta un certificado vigente.');
+      expect(el().querySelector('.paso')).toBeNull();
+      expect(boton('button.probar-conexion')!.disabled).toBe(false);
+    });
+
+    it('después de un OK completo vuelve a pedir la configuración, que ya no trae el bloqueo; si un paso falla, no', async () => {
+      await crear(config({ avisos: [AVISO_BLOQUEO] }));
+      api.probarConexion.mockReturnValueOnce(of(PRUEBA_FALLIDA));
+
+      await click('button.probar-conexion');
+      expect(api.configuracion).toHaveBeenCalledTimes(1);
+      expect(texto('.avisos')).toBe(AVISO_BLOQUEO);
+
+      api.configuracion.mockReturnValue(of(config()));
+      await click('button.probar-conexion');
+      expect(api.configuracion).toHaveBeenCalledTimes(2);
+      expect(el().querySelector('.avisos')).toBeNull();
+      expect(texto('.resumen-prueba')).toBe('La prueba de conexión salió bien.');
+    });
+  });
+
+  it('el aviso largo del bloqueo de ARCA (C4) se ve entero, arriba de las secciones', async () => {
+    await crear(config({ avisos: [AVISO_BLOQUEO] }));
+
+    const avisos = el().querySelector('.avisos')!;
+    expect(avisos.getAttribute('role')).toBe('status');
+    expect(texto('.avisos')).toBe(AVISO_BLOQUEO);
+    const secciones = el().querySelector('.secciones')!;
+    expect(avisos.compareDocumentPosition(secciones) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
   it('si la carga falla, avisa y deja reintentar', async () => {

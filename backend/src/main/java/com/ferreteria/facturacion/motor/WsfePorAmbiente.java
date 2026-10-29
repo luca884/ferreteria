@@ -2,32 +2,42 @@ package com.ferreteria.facturacion.motor;
 
 import com.ferreteria.facturacion.model.Ambiente;
 import com.ferreteria.facturacion.wsfe.ServicioWsfe;
-import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.stereotype.Component;
+import java.util.EnumMap;
+import java.util.Map;
+import java.util.Objects;
 
 /**
  * El adaptador de WSFEv1 de cada ambiente (regla «Nada simulado llega a ARCA real»). Se elige por el ambiente del registro
- * (que se fija al registrarlo y no cambia), nunca por la configuración actual de la ferretería: SIMULADOR va al simulador,
- * y homologación y producción todavía no tienen cliente (rama 6), así que dan {@link AmbienteNoDisponibleException} sin
- * pasar por ningún otro lado.
+ * (que se fija al registrarlo y no cambia), nunca por la configuración actual de la ferretería.
  *
- * <p>El simulador llega como {@link ServicioWsfe}, por el nombre de su bean: el motor no conoce la clase del simulador
- * (regla de {@code ModulosArchTest}).
+ * <p>Desde la rama 6 (S6), en el cableado real ({@code facturacion.config.ClienteArcaConfig}) los tres ambientes tienen el
+ * mismo cliente SOAP ({@code ClienteWsfe}), cada uno con su transporte: SIMULADOR el simulador en el borde, que no sale de la
+ * JVM, y homologación y producción el HTTP real, cada uno a su URL. Un ambiente sin adaptador da
+ * {@link AmbienteNoDisponibleException} sin pasar por ningún otro lado.
+ *
+ * <p>El motor lo ve solo como el puerto {@link ServicioWsfe}: no conoce el cliente ni el simulador (regla de
+ * {@code ModulosArchTest}).
  */
-@Component
 public class WsfePorAmbiente {
 
-    private final ServicioWsfe simulador;
+    private final Map<Ambiente, ServicioWsfe> porAmbiente = new EnumMap<>(Ambiente.class);
 
-    public WsfePorAmbiente(@Qualifier("simuladorWsfe") ServicioWsfe simulador) {
-        this.simulador = simulador;
+    /** @param porAmbiente el adaptador de cada ambiente que tiene uno */
+    public WsfePorAmbiente(Map<Ambiente, ? extends ServicioWsfe> porAmbiente) {
+        porAmbiente.forEach((ambiente, servicio) -> this.porAmbiente.put(Objects.requireNonNull(ambiente, "el ambiente"),
+                Objects.requireNonNull(servicio, "el adaptador de " + ambiente)));
     }
 
-    /** El puerto que atiende ese ambiente. */
+    /**
+     * El puerto que atiende ese ambiente.
+     *
+     * @throws AmbienteNoDisponibleException si ese ambiente no tiene adaptador
+     */
     public ServicioWsfe para(Ambiente ambiente) {
-        return switch (ambiente) {
-            case SIMULADOR -> simulador;
-            case HOMOLOGACION, PRODUCCION -> throw new AmbienteNoDisponibleException(ambiente);
-        };
+        ServicioWsfe servicio = porAmbiente.get(ambiente);
+        if (servicio == null) {
+            throw new AmbienteNoDisponibleException(ambiente);
+        }
+        return servicio;
     }
 }

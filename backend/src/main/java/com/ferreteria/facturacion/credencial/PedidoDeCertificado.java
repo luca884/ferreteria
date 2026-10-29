@@ -25,12 +25,16 @@ import org.bouncycastle.pkcs.jcajce.JcaPKCS10CertificationRequestBuilder;
  *
  * <p>El sujeto, en este orden: {@code C=AR, O=<razón social>, CN=Ferreteria SaaS, serialNumber=CUIT <11 dígitos>}, el que
  * pide ARCA para los certificados de los web services. El CN es un nombre fijo del sistema (S15); en el portal de ARCA el
- * Dueño elige el alias.
+ * Dueño elige el alias. La {@code O} lleva hasta {@link #LARGO_ORGANIZACION} caracteres de la razón social (que guarda
+ * hasta 150): el tope {@code ub-organization-name} de RFC 5280. Lo que valida ARCA es el CUIT del {@code serialNumber}
+ * (rama 6, S13).
  */
 final class PedidoDeCertificado {
 
     static final String NOMBRE_DEL_SISTEMA = "Ferreteria SaaS";
     static final int BITS = 2048;
+    /** El tope de la {@code O} en caracteres (code points), {@code ub-organization-name} de RFC 5280. */
+    static final int LARGO_ORGANIZACION = 64;
     private static final String FIRMA = "SHA256withRSA";
 
     /**
@@ -56,7 +60,7 @@ final class PedidoDeCertificado {
             KeyPair claves = generador.generateKeyPair();
             X500Name sujeto = new X500NameBuilder(BCStyle.INSTANCE)
                     .addRDN(BCStyle.C, "AR")
-                    .addRDN(BCStyle.O, razonSocial)
+                    .addRDN(BCStyle.O, organizacion(razonSocial))
                     .addRDN(BCStyle.CN, NOMBRE_DEL_SISTEMA)
                     .addRDN(BCStyle.SERIALNUMBER, "CUIT " + cuit)
                     .build();
@@ -67,6 +71,17 @@ final class PedidoDeCertificado {
         } catch (GeneralSecurityException | OperatorCreationException | IOException e) {
             throw new IllegalStateException("No se pudo generar el pedido de certificado.", e);
         }
+    }
+
+    /**
+     * La {@code O} del sujeto: la razón social tal cual si entra; si no, sus primeros {@link #LARGO_ORGANIZACION} code points
+     * (no {@code char}: una letra fuera del plano básico no se parte), sin los espacios que el recorte deje en los bordes.
+     */
+    private static String organizacion(String razonSocial) {
+        if (razonSocial.codePointCount(0, razonSocial.length()) <= LARGO_ORGANIZACION) {
+            return razonSocial;
+        }
+        return razonSocial.substring(0, razonSocial.offsetByCodePoints(0, LARGO_ORGANIZACION)).strip();
     }
 
     /** El CSR guardado (PEM), para volver a leer su sujeto y su clave pública. */

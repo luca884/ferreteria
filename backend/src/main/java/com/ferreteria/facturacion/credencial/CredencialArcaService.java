@@ -11,6 +11,7 @@ import com.ferreteria.facturacion.cripto.ContextoDeCifrado;
 import com.ferreteria.facturacion.cripto.DatoIlegibleException;
 import com.ferreteria.facturacion.cripto.Proposito;
 import com.ferreteria.facturacion.model.Ambiente;
+import com.ferreteria.facturacion.model.CondicionIvaEmisor;
 import com.ferreteria.facturacion.model.ConfigArca;
 import com.ferreteria.facturacion.model.RegistrosFiscales;
 import com.ferreteria.facturacion.repository.ConfigArcaRepository;
@@ -90,6 +91,19 @@ public class CredencialArcaService {
             "El certificado de ARCA venció el %s: generá un pedido nuevo y subí el certificado renovado.";
     static final String AVISO_ILEGIBLE = "No se puede leer la clave guardada del certificado de ARCA: generá un pedido "
             + "nuevo y subí el certificado otra vez.";
+    /** El bloqueo de C4 (rama 6): ARCA rechazó el certificado; con el {@code faultstring} y el código. */
+    static final String AVISO_BLOQUEO = "ARCA rechazó el certificado%s. La facturación está frenada hasta que cambies el "
+            + "certificado o pruebes la conexión.";
+    /** El bloqueo de C4 con {@code coe.notAuthorized}: el certificado no está autorizado a wsfe. */
+    static final String AVISO_NO_AUTORIZADO = "ARCA no autorizó el certificado a facturar (coe.notAuthorized). Autorizalo a "
+            + "wsfe en el Administrador de Relaciones de ARCA y probá la conexión.";
+    static final String NO_AUTORIZADO = "coe.notAuthorized";
+
+    /** «Probar conexión» (rama 6, C1) sin ambiente o sin punto de venta. */
+    static final String PROBAR_SIN_AMBIENTE =
+            "Para probar la conexión hacen falta el ambiente de ARCA y el punto de venta.";
+    /** «Probar conexión» sin una credencial activa del ambiente, vigente y legible. */
+    static final String PROBAR_SIN_CERTIFICADO = "Para probar la conexión hace falta un certificado vigente.";
 
     /** Lo más que pesa el .crt que se acepta, como texto, antes de leerlo (S4). */
     static final int MAXIMO_BYTES = 16 * 1024;
@@ -237,15 +251,63 @@ public class CredencialArcaService {
         return vista(config, configs.registrosScoped());
     }
 
+    /**
+     * Levanta el bloqueo de ARCA de la ferretería del request (rama 6, C4): lo usa «Probar conexión» cuando sale OK (T7). Con
+     * el lock exclusivo de {@code config_arca}, como todo cambio. Sin bloqueo no cambia nada.
+     */
+    @Transactional
+    public void levantarBloqueo() {
+        ConfigArca config = bloquear();
+        if (config.estaBloqueada()) {
+            log.info("Bloqueo de ARCA levantado en la ferretería {} (era {})", config.getFerreteriaId(),
+                    config.getBloqueoCodigo());
+            config.levantarBloqueo();
+            configs.saveAndFlush(config);
+        }
+    }
+
+    /**
+     * Lo que «Probar conexión» (rama 6, C1) necesita de la ferretería del request, leído en una transacción corta (las
+     * llamadas a ARCA van después, sin ninguna abierta): el ambiente, el punto de venta, la CUIT y la condición frente al IVA.
+     * 409 sin ambiente o sin punto de venta, y 409 sin una credencial activa de ese ambiente, vigente y legible.
+     */
+    @Transactional(readOnly = true)
+    public ParaProbar paraProbar() {
+        ConfigArca config = configs.deFerreteriaScoped().orElse(null);
+        if (config == null || config.getAmbiente() == null || config.getPuntoVenta() == null) {
+            throw new ConflictException(PROBAR_SIN_AMBIENTE);
+        }
+        if (!revision.dejaFacturar(config, ahora(), false)) {
+            throw new ConflictException(PROBAR_SIN_CERTIFICADO);
+        }
+        DatosFiscales ferreteria = ferreteria();
+        CondicionIvaEmisor condicion = ferreteria.condicionIva() == null ? null
+                : CondicionIvaEmisor.valueOf(ferreteria.condicionIva().name());
+        return new ParaProbar(config.getAmbiente(), config.getPuntoVenta(), Long.parseLong(digitos(ferreteria.cuit())),
+                condicion);
+    }
+
+    /**
+     * Lo que se prueba en «Probar conexión».
+     *
+     * @param ambiente el de la configuración
+     * @param puntoVenta el de la configuración
+     * @param cuit la de la ferretería, 11 dígitos (la del emisor, que va en {@code Auth.Cuit})
+     * @param condicionIva la de la ferretería frente al IVA; null si no la tiene cargada
+     */
+    public record ParaProbar(Ambiente ambiente, int puntoVenta, long cuit, CondicionIvaEmisor condicionIva) {}
+
     // ---- activar ----
 
     /**
-     * Fija el ambiente del certificado en la configuración (S16), borra la credencial activa anterior con su clave (S15) y
-     * convierte el pedido pendiente en la activa. Todo con el lock de {@code config_arca} tomado.
+     * Fija el ambiente del certificado en la configuración (S16), levanta el bloqueo de ARCA (rama 6, C4: otro certificado),
+     * borra la credencial activa anterior con su clave (S15) y convierte el pedido pendiente en la activa. Todo con el lock de
+     * {@code config_arca} tomado, en la misma transacción.
      */
     private void activar(ConfigArca config, CredencialArca pendiente, X509Certificate certificado, Ambiente ambiente,
             String emisor, Long caDelSimulador, long cuit, Instant ahora) {
         config.fijarAmbienteDelCertificado(ambiente, configs.registrosScoped());
+        config.levantarBloqueo();
         configs.save(config);
         credenciales.borrarActivaScoped();
         pendiente.activar(Certificados.pem("CERTIFICATE", encoded(certificado)), cuit, ambiente, emisor,
@@ -349,6 +411,9 @@ public class CredencialArcaService {
         LocalDate hoy = ahora.atZone(HoraArgentina.ZONA).toLocalDate();
         String deLaFerreteria = digitos(ferreteria().cuit());
         List<String> avisos = new ArrayList<>();
+        if (config.estaBloqueada()) {
+            avisos.add(avisoDeBloqueo(config));
+        }
         ConfiguracionFacturacion.Credencial credencial = credenciales.activaScoped().map(activa -> {
             EstadoCredencial estado = revision.estado(activa, ahora);
             LocalDate hasta = fechaArgentina(activa.getVigenteHasta());
@@ -374,6 +439,16 @@ public class CredencialArcaService {
         return new ConfiguracionFacturacion(config.getAmbiente() == null ? null : config.getAmbiente().name(),
                 config.getPuntoVenta(), motivo == null, motivo, config.isFacturacionHabilitada(),
                 config.getAmbiente() == Ambiente.SIMULADOR, credencial, pedido, List.copyOf(avisos));
+    }
+
+    /** El texto de C4 para el bloqueo: el de {@code coe.notAuthorized}, o el genérico con el texto de ARCA y el código. */
+    private static String avisoDeBloqueo(ConfigArca config) {
+        if (NO_AUTORIZADO.equals(config.getBloqueoCodigo())) {
+            return AVISO_NO_AUTORIZADO;
+        }
+        String mensaje = config.getBloqueoMensaje();
+        String motivo = (mensaje == null ? "" : ": " + mensaje) + " (" + config.getBloqueoCodigo() + ")";
+        return String.format(AVISO_BLOQUEO, motivo);
     }
 
     // ---- ayudas ----

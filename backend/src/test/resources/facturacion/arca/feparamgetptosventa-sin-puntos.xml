@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Armado con la forma del WSDL de WSFEv1 (FEPtoVentaResponse), no copiado de los ejemplos del manual: sin ResultGet y con un
+     Err. El código y el texto son de prueba. -->
+<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema"><soap:Header><FEHeaderInfo xmlns="http://ar.gov.afip.dif.FEV1/"><ambiente>HomologacionExterno - srt</ambiente><fecha>2026-10-29T10:30:15.1234567-03:00</fecha><id>7.0.0.53</id></FEHeaderInfo></soap:Header><soap:Body><FEParamGetPtosVentaResponse xmlns="http://ar.gov.afip.dif.FEV1/"><FEParamGetPtosVentaResult><Errors><Err><Code>602</Code><Msg>Sin resultados (texto de prueba).</Msg></Err></Errors></FEParamGetPtosVentaResult></FEParamGetPtosVentaResponse></soap:Body></soap:Envelope>

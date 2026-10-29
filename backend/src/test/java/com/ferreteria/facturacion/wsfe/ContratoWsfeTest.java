@@ -10,10 +10,11 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /**
- * El contrato del puerto {@link ServicioWsfe}: lo que cualquier implementación tiene que cumplir, la simulada y la real. Hoy
- * la corre {@code SimuladorWsfeContratoTest}. El punto de extensión de la rama 6 es una subclase más contra homologación,
- * marcada con un tag opt-in (por ejemplo {@code @Tag("homologacion")}, excluido por defecto en el surefire): si ARCA real se
- * aparta del contrato, la diferencia se agrega como test del simulador.
+ * El contrato del puerto {@link ServicioWsfe}: lo que cualquier implementación tiene que cumplir, la simulada y la real. Lo
+ * corren {@code SimuladorWsfeContratoTest} (el núcleo del simulador, directo) y {@code ClienteWsfeConSimuladorContratoTest}
+ * ({@code ClienteWsfe} con el simulador en el borde, con TA y CMS reales: rama 6, S7). Otra extensión posible es una subclase
+ * contra homologación, marcada con un tag opt-in (por ejemplo {@code @Tag("homologacion")}, excluido por defecto en el
+ * surefire): si ARCA real se aparta del contrato, la diferencia se agrega como test del simulador.
  *
  * <p>Los casos no suponen una serie vacía (homologación guarda lo autorizado): leen el último y piden el siguiente. Cada
  * código se busca donde lo pone el manual (ver {@link FeCaeResponse}): el rechazo de una validación del comprobante, en las

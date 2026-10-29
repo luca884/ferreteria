@@ -191,8 +191,9 @@
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
                 <configuration>
-                    <!-- El test de la imagen de produccion construye backend/Dockerfile y tarda minutos: solo con -Pimagen. -->
-                    <excludedGroups>imagen</excludedGroups>
+                    <!-- El test de la imagen de produccion construye backend/Dockerfile y tarda minutos: solo con -Pimagen.
+                         Los de ARCA real salen a internet: solo con -Parca-real. -->
+                    <excludedGroups>imagen,arca-real</excludedGroups>
                     <!-- Sin esto, -Dtest=ImagenDeProduccionTest sin -Pimagen (o -Pimagen sin el test) termina verde con 0 tests. -->
                     <failIfNoTests>true</failIfNoTests>
                 </configuration>
@@ -211,6 +212,23 @@
                         <artifactId>maven-surefire-plugin</artifactId>
                         <configuration>
                             <groups>imagen</groups>
+                            <excludedGroups combine.self="override"/>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+        <profile>
+            <!-- ./mvnw test -Parca-real: corre solo los tests con el tag arca-real (FEDummy contra ARCA real y el TLS con
+                 servicios1). Salen a internet; no los corren la suite ni -Pimagen (README, Deploy). -->
+            <id>arca-real</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-surefire-plugin</artifactId>
+                        <configuration>
+                            <groups>arca-real</groups>
                             <excludedGroups combine.self="override"/>
                         </configuration>
                     </plugin>

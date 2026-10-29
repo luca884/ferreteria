@@ -1,5 +1,7 @@
 package com.ferreteria.facturacion.motor;
 
+import com.ferreteria.facturacion.credencial.CredencialDePrueba;
+import com.ferreteria.facturacion.cripto.CifradorDeClaves;
 import com.ferreteria.facturacion.model.Alicuota;
 import com.ferreteria.facturacion.model.Ambiente;
 import com.ferreteria.facturacion.model.ReceptorFiscal;
@@ -28,7 +30,8 @@ import org.springframework.context.annotation.Import;
 /**
  * Base de los tests del motor contra MySQL real: el contexto con el reloj controlable y {@link WsfeDePrueba}
  * ({@link MotorDePruebaConfig}), una ferretería nueva por test (Responsable Inscripto, con CUIT válida y los datos de CU-01
- * completos), marcada «de prueba», con el simulador (punto de venta 1) y la facturación habilitada, esa ferretería en
+ * completos), marcada «de prueba», con el simulador (punto de venta 1), la facturación habilitada y la credencial del
+ * simulador que exige la rama 6 ({@link CredencialDePrueba#activaDelSimulador}), esa ferretería en
  * {@link TenantContext}, y el reloj el miércoles 2026-10-28 a las 10:15:30 de Buenos Aires. Las ventas se insertan por SQL
  * (hoy nadie las factura: el enganche es de la rama 3) y los registros fiscales se dan de alta con el motor.
  */
@@ -50,6 +53,8 @@ public abstract class MotorFiscalTestBase extends IntegrationTestBase {
     RelojControlable reloj;
     @Autowired
     WsfeDePrueba wsfe;
+    @Autowired
+    CifradorDeClaves cifrador;
     /** El simulador sin decorar: lo que ARCA tiene del lado suyo (y lo que otro sistema le podría pedir). */
     @Autowired
     @Qualifier("simuladorWsfe")
@@ -73,11 +78,15 @@ public abstract class MotorFiscalTestBase extends IntegrationTestBase {
         wsfe.reiniciar();
     }
 
-    /** Una ferretería RI con los datos de CU-01 completos, de prueba, con el simulador y la facturación habilitada. */
+    /**
+     * Una ferretería RI con los datos de CU-01 completos, de prueba, con el simulador, la facturación habilitada y la
+     * credencial activa del simulador (desde la rama 6, sin ella la venta de SIMULADOR sale sin factura).
+     */
     long ferreteriaConFacturacion(long cuitEmisor) {
         long f = ferreteriaSinConfig(cuitEmisor);
         jdbc.update("insert into config_arca (ferreteria_id, de_prueba, ambiente, punto_venta, facturacion_habilitada, "
                 + "habilitada_en) values (?, true, 'SIMULADOR', 1, true, '2026-10-01 12:00:00')", f);
+        CredencialDePrueba.activaDelSimulador(jdbc, cifrador, f, cuitEmisor, AHORA);
         return f;
     }
 

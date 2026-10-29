@@ -2,7 +2,6 @@ package com.ferreteria.facturacion.credencial;
 
 import com.ferreteria.facturacion.cripto.CifradorDeClaves;
 import com.ferreteria.facturacion.cripto.DatoIlegibleException;
-import com.ferreteria.facturacion.model.Ambiente;
 import com.ferreteria.facturacion.model.ConfigArca;
 import java.time.Duration;
 import java.time.Instant;
@@ -14,10 +13,11 @@ import org.springframework.stereotype.Component;
  * El estado de la credencial activa y su parte en la regla de facturación (rama 5, S6, S8 y S13). Sin job diario (S12): se
  * calcula al leer, con la hora que pasa quien llama (de su {@code Clock}).
  *
- * <p>La regla: en HOMOLOGACION o PRODUCCION, la ferretería factura solo con una credencial ACTIVA de ese mismo ambiente,
- * vigente y legible (su clave se descifra con la clave maestra actual o la anterior). En SIMULADOR no se exige credencial
- * hasta la rama 6: las demo de dev y los tests facturan con el simulador sin ella. Una credencial vencida o ilegible bloquea
- * solo la facturación de su ferretería: la venta sale sin factura (D5).
+ * <p>La regla, en los tres ambientes: la ferretería factura solo con una credencial ACTIVA de ese mismo ambiente, vigente y
+ * legible (su clave se descifra con la clave maestra actual o la anterior). Desde la rama 6 (S6) también en SIMULADOR, que
+ * usa el mismo cliente SOAP que ARCA y firma el pedido del ticket con esa credencial (la que firma la CA del simulador de la
+ * ferretería). Una credencial vencida, ilegible o que falta bloquea solo la facturación de su ferretería: la venta sale sin
+ * factura (D5).
  */
 @Component
 public class RevisionDeCredencial {
@@ -55,9 +55,6 @@ public class RevisionDeCredencial {
      * el mostrador.
      */
     public boolean dejaFacturar(ConfigArca config, Instant ahora, boolean conLock) {
-        if (config.getAmbiente() == Ambiente.SIMULADOR) {
-            return true;
-        }
         Optional<CredencialArca> activa = conLock ? credenciales.activaCompartidaScoped() : credenciales.activaScoped();
         return activa.filter(credencial -> credencial.getAmbiente() == config.getAmbiente())
                 .map(credencial -> estado(credencial, ahora).dejaFacturar())

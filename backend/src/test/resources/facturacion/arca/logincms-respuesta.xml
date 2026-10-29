@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Armado con la forma del WSDL de WSAA (loginCmsResponse con loginCmsReturn, document/literal, de Apache Axis 1.4) y el
+     LoginTicketResponse de la especificación técnica WSAA 1.2.2 («Extracción y validación del TA»), escapado dentro de
+     loginCmsReturn: no es una respuesta real. El token y el sign son de prueba; el TA dura 12 h, como dice la especificación. -->
+<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"><soapenv:Body><loginCmsResponse xmlns="http://wsaa.view.sua.dvadac.desein.afip.gov"><loginCmsReturn>&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot; standalone=&quot;yes&quot;?&gt;
+&lt;loginTicketResponse version=&quot;1.0&quot;&gt;
+    &lt;header&gt;
+        &lt;source&gt;CN=wsaahomo, O=AFIP, C=AR, SERIALNUMBER=CUIT 33693450239&lt;/source&gt;
+        &lt;destination&gt;SERIALNUMBER=CUIT 30999999995, CN=Ferreteria SaaS, O=Ferreteria de Prueba, C=AR&lt;/destination&gt;
+        &lt;uniqueId&gt;3958132611&lt;/uniqueId&gt;
+        &lt;generationTime&gt;2026-10-29T10:15:31.218-03:00&lt;/generationTime&gt;
+        &lt;expirationTime&gt;2026-10-29T22:15:31.218-03:00&lt;/expirationTime&gt;
+    &lt;/header&gt;
+    &lt;credentials&gt;
+        &lt;token&gt;PD94bWwgdmVyc2lvbj0iMS4wIj8+VE9LRU4tREUtUFJVRUJBLVdTQUE=&lt;/token&gt;
+        &lt;sign&gt;U0lHTi1ERS1QUlVFQkEtV1NBQQ==&lt;/sign&gt;
+    &lt;/credentials&gt;
+&lt;/loginTicketResponse&gt;
+</loginCmsReturn></loginCmsResponse></soapenv:Body></soapenv:Envelope>

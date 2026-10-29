@@ -14,7 +14,8 @@ import java.util.List;
  * @param simulador true con el simulador: se puede firmar el pedido con su CA
  * @param credencial la activa, o null
  * @param pedido el pendiente, o null
- * @param avisos el vencimiento cercano o pasado, la clave ilegible o el certificado de otra CUIT
+ * @param avisos el bloqueo de ARCA (rama 6, C4: ARCA rechazó el certificado o no lo autorizó a wsfe), primero; el
+ *     vencimiento cercano o pasado, la clave ilegible o el certificado de otra CUIT
  */
 public record ConfiguracionFacturacion(String ambiente, Integer puntoVenta, boolean puntoVentaEditable,
         String motivoPuntoVentaTrabado, boolean facturacionHabilitada, boolean simulador, Credencial credencial,

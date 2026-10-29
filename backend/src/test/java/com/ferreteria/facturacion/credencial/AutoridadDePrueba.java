@@ -3,6 +3,7 @@ package com.ferreteria.facturacion.credencial;
 import java.math.BigInteger;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
+import java.security.PrivateKey;
 import java.security.PublicKey;
 import java.security.cert.X509Certificate;
 import java.time.Instant;
@@ -96,5 +97,10 @@ public final class AutoridadDePrueba {
 
     public X509Certificate certificado() {
         return certificado;
+    }
+
+    /** La clave privada de la CA (para guardarla cifrada como la de una CA del simulador). */
+    public PrivateKey privada() {
+        return claves.getPrivate();
     }
 }

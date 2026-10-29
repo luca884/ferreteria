@@ -135,6 +135,21 @@ class MotorFiscalIntegrationTest extends MotorFiscalTestBase {
     }
 
     @Test
+    @DisplayName("C4: con la facturación frenada porque ARCA rechazó el certificado, el alta se niega con el código y no "
+            + "guarda nada")
+    void elAltaSeNiegaConElBloqueoDeArca() {
+        jdbc.update("update config_arca set bloqueo_codigo = 'cms.cert.expired', bloqueo_mensaje = 'Certificado expirado', "
+                + "bloqueado_en = '2026-10-28 13:00:00' where ferreteria_id = ?", ferreteriaId);
+        AltaFiscal alta = new AltaFiscal(venta(ferreteriaId), ReceptorFiscal.sinCliente(),
+                List.of(new RenglonFiscal(Alicuota.IVA_21, new BigDecimal("121.00"))));
+
+        assertThatThrownBy(() -> motor.registrar(alta)).isInstanceOf(ReglaDeNegocioException.class)
+                .hasMessage("La facturación con ARCA está frenada: ARCA rechazó el certificado (cms.cert.expired).");
+        assertThat(jdbc.queryForObject("select count(*) from comprobante_fiscal where ferreteria_id = ?", Integer.class,
+                ferreteriaId)).isZero();
+    }
+
+    @Test
     @DisplayName("el alta lee config_arca con FOR SHARE y lo sostiene hasta el commit")
     void elAltaSostieneUnLockCompartidoDeLaConfiguracion() {
         long config = jdbc.queryForObject("select id from config_arca where ferreteria_id = ?", Long.class, ferreteriaId);
@@ -394,7 +409,8 @@ class MotorFiscalIntegrationTest extends MotorFiscalTestBase {
     // ---- Adaptador ----
 
     @Test
-    @DisplayName("el adaptador sale del ambiente del registro: uno de HOMOLOGACION da un error claro y no va al simulador")
+    @DisplayName("el adaptador sale del ambiente del registro: con el cableado de los tests (solo SIMULADOR), uno de "
+            + "HOMOLOGACION da un error claro y no va al simulador")
     void elAdaptadorSaleDelAmbienteDelRegistro() {
         long venta = venta(ferreteriaId);
         jdbc.update("insert into comprobante_fiscal (ferreteria_id, comprobante_id, ambiente, clase, letra, cbte_tipo, "
@@ -407,7 +423,8 @@ class MotorFiscalIntegrationTest extends MotorFiscalTestBase {
         long id = jdbc.queryForObject("select id from comprobante_fiscal where comprobante_id = ?", Long.class, venta);
 
         assertThatThrownBy(() -> motor.atender(Ambiente.HOMOLOGACION, 1, FACTURA_B))
-                .isInstanceOf(AmbienteNoDisponibleException.class).hasMessageContaining("rama 6");
+                .isInstanceOf(AmbienteNoDisponibleException.class)
+                .hasMessageContaining("No hay conexión con ARCA para el ambiente HOMOLOGACION");
 
         assertThat(estado(id)).isEqualTo("PENDIENTE");
         assertThat(intentos(id)).isEmpty();

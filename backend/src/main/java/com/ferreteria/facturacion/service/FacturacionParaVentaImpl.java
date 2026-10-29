@@ -56,9 +56,9 @@ import org.springframework.transaction.support.TransactionTemplate;
  * <p>Dentro de la transacción de la venta ({@code Propagation.MANDATORY}): {@link #decidir} es la primera carga de
  * {@code config_arca} en esa transacción, con {@code FOR SHARE} hasta el commit (advisory A3 de la rama 2: así no queda una
  * instancia vieja en el contexto de persistencia), y {@link #registrar}, el último paso, da de alta el registro con el motor,
- * cuyo {@code FOR SHARE} devuelve esa misma instancia ya tomada. Las dos deciden con la misma regla,
- * {@link PasosFiscales#puedeFacturar()} (la facturación habilitada y los datos de CU-01 completos): lo que {@code decidir}
- * deja facturar, {@code registrar} lo da de alta.
+ * cuyo {@code FOR SHARE} devuelve esa misma instancia ya tomada. Las dos deciden con la misma regla y el mismo instante, el
+ * de la venta, {@link PasosFiscales#puedeFacturar(Instant)} (la facturación habilitada, la credencial vigente en ese instante
+ * y los datos de CU-01 completos): lo que {@code decidir} deja facturar, {@code registrar} lo da de alta.
  *
  * <p>Después del commit, sin transacción (advisory A2: la llamada a ARCA nunca va con una conexión tomada),
  * {@link #autorizar} atiende la serie del registro en el ejecutor de {@code facturacion} ({@link EjecutorFiscalConfig}) y la
@@ -125,16 +125,18 @@ public class FacturacionParaVentaImpl implements FacturacionParaVenta {
     // ---- En la transacción de la venta ----
 
     /**
-     * Factura si la ferretería puede facturar ahora, con la misma regla que el alta ({@link PasosFiscales#puedeFacturar()}:
-     * la facturación habilitada con ambiente y punto de venta, y los datos de CU-01 completos). Si no, la venta sale «sin
-     * factura», como sin facturación (D5): sin controlar al receptor ni el tope de ARCA.
+     * Factura si la ferretería puede facturar en el instante de la venta, con la misma regla que el alta
+     * ({@link PasosFiscales#puedeFacturar(Instant)}: la facturación habilitada con ambiente y punto de venta, la credencial
+     * vigente en ese instante y los datos de CU-01 completos). Si no, la venta sale «sin factura», como sin facturación (D5):
+     * sin controlar al receptor ni el tope de ARCA.
      */
     @Override
     @Transactional(propagation = Propagation.MANDATORY)
-    public Decision decidir(ReceptorVenta receptor) {
+    public Decision decidir(ReceptorVenta receptor, Instant instante) {
         Objects.requireNonNull(receptor, "Falta el receptor de la venta.");
+        Objects.requireNonNull(instante, "Falta el instante de la venta.");
         // Siempre con FOR SHARE, también sin fila (lock de hueco): la decisión y el alta ven la misma configuración (L3).
-        if (!pasos.puedeFacturar()) {
+        if (!pasos.puedeFacturar(instante)) {
             return Decision.SIN_FACTURA;
         }
         return new Decision(true, receptorCompleto(receptor), topeIdentificacion);
@@ -143,12 +145,20 @@ public class FacturacionParaVentaImpl implements FacturacionParaVenta {
     @Override
     @Transactional(propagation = Propagation.MANDATORY)
     public long registrar(long comprobanteId, ReceptorVenta receptor, List<RenglonParaFacturar> renglones, Instant fecha) {
+        return registrar(comprobanteId, receptor, renglones, fecha, fecha);
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public long registrar(long comprobanteId, ReceptorVenta receptor, List<RenglonParaFacturar> renglones, Instant fecha,
+            Instant decididaEn) {
         Objects.requireNonNull(receptor, "Falta el receptor de la venta.");
         Objects.requireNonNull(renglones, "Faltan los renglones de la venta.");
         Objects.requireNonNull(fecha, "Falta la fecha de la venta.");
+        Objects.requireNonNull(decididaEn, "Falta el instante de la decisión.");
         AltaFiscal alta = new AltaFiscal(comprobanteId, receptorFiscal(receptor),
                 renglones.stream().map(FacturacionParaVentaImpl::renglonFiscal).toList());
-        return motor.registrar(alta, fecha);
+        return motor.registrar(alta, fecha, decididaEn);
     }
 
     // ---- Después del commit ----

@@ -24,15 +24,24 @@ public interface FacturacionParaVenta {
 
     /**
      * Lee la configuración de ARCA de la ferretería con lock compartido hasta el fin de la transacción (mientras tanto el
-     * panel no la cambia) y decide si la venta sale con factura. No escribe nada. Exige una transacción abierta.
+     * panel no la cambia) y decide si la venta sale con factura en {@code instante}: el mismo que después recibe
+     * {@link #registrar} como {@code decididaEn}, así la vigencia de la credencial se mira en un solo instante (rama 6,
+     * S15). No escribe nada. Exige una transacción abierta.
      */
-    Decision decidir(ReceptorVenta receptor);
+    Decision decidir(ReceptorVenta receptor, Instant instante);
 
     /**
-     * Da de alta el registro fiscal PENDIENTE de la venta {@code comprobanteId}, con lo que va a ARCA congelado y la fecha
-     * de la venta. Exige la transacción de la venta, con una {@link Decision#factura()} tomada en ella. Devuelve el id del
-     * registro.
+     * Da de alta el registro fiscal PENDIENTE de la venta {@code comprobanteId}, con lo que va a ARCA congelado y
+     * {@code fecha}, el instante de la venta (de él sale la CbteFch). Vuelve a mirar la regla en {@code decididaEn}, el
+     * instante con el que se llamó a {@link #decidir}: lo que se decidió facturable se da de alta aunque la credencial venza
+     * entre las dos llamadas (rama 6, S15). La venta lee {@code fecha} con su numerador tomado, después de decidir, así las
+     * fechas de una ferretería siguen el orden de sus registros. Exige la transacción de la venta, con una
+     * {@link Decision#factura()} tomada en ella. Devuelve el id del registro.
      */
+    long registrar(long comprobanteId, ReceptorVenta receptor, List<RenglonParaFacturar> renglones, Instant fecha,
+            Instant decididaEn);
+
+    /** {@link #registrar(long, ReceptorVenta, List, Instant, Instant)} para quien decidió en el mismo instante de la venta. */
     long registrar(long comprobanteId, ReceptorVenta receptor, List<RenglonParaFacturar> renglones, Instant fecha);
 
     /**

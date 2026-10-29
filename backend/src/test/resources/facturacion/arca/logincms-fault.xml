@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Armado con la forma de un SOAP 1.1 Fault de Apache Axis 1.4 (el WSDL de WSAA dice «WSDL created by Apache Axis version:
+     1.4» y declara el mensaje LoginFault), con el código de la tabla de errores de la especificación técnica WSAA 1.2.2 y el
+     texto que cita la FAQ 10.6 del manual de WSAA: no es una respuesta real. El faultcode va con el prefijo ns1: de Axis; no se conoce la forma real (se captura
+     en la rama 11), por eso el cliente acepta el código con prefijo y sin él. Va con status 500, como manda SOAP 1.1. -->
+<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"><soapenv:Body><soapenv:Fault><faultcode xmlns:ns1="http://wsaa.view.sua.dvadac.desein.afip.gov">ns1:coe.alreadyAuthenticated</faultcode><faultstring>El CEE ya posee un TA valido para el acceso al WSN solicitado</faultstring><detail><ns2:hostname xmlns:ns2="http://xml.apache.org/axis/">servidor-de-prueba</ns2:hostname></detail></soapenv:Fault></soapenv:Body></soapenv:Envelope>

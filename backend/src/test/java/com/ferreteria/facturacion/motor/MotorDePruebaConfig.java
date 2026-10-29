@@ -1,7 +1,9 @@
 package com.ferreteria.facturacion.motor;
 
+import com.ferreteria.facturacion.model.Ambiente;
 import com.ferreteria.facturacion.wsfe.ServicioWsfe;
 import com.ferreteria.support.RelojControlableConfig;
+import java.util.Map;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
@@ -25,6 +27,6 @@ public class MotorDePruebaConfig {
     @Bean
     @Primary
     public WsfePorAmbiente wsfePorAmbienteDePrueba(WsfeDePrueba wsfe) {
-        return new WsfePorAmbiente(wsfe);
+        return new WsfePorAmbiente(Map.of(Ambiente.SIMULADOR, wsfe));
     }
 }

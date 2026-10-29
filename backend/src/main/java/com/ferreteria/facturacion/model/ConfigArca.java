@@ -29,8 +29,13 @@ import java.util.Map;
  * producción y sin registros abiertos, y deja el punto de venta en 1 (S3). Homologación y producción los fija el
  * certificado ({@link #fijarAmbienteDelCertificado}): desde el panel no se asignan, no se reemplazan ni se quitan, y de
  * producción no se vuelve. Quitar el ambiente exige la facturación apagada y ningún registro abierto; cambiarlo o cambiar
- * el punto de venta, ningún registro abierto. Hasta la conexión real (rama 6) la facturación se prende solo con el
- * simulador (S13). Los CHECK de V32 sostienen lo mismo en la base.
+ * el punto de venta, ningún registro abierto. La facturación se prende con el simulador o en homologación; en producción,
+ * recién con la rama 11 (rama 6, S16). Los CHECK de V32 sostienen lo mismo en la base.
+ *
+ * <p>El bloqueo de ARCA (rama 6, C4, columnas de V35): cuando WSAA rechaza el certificado ({@code cms.cert.*} o
+ * {@code coe.notAuthorized}), la facturación de la ferretería queda frenada con el código, el texto de ARCA y la hora, sin
+ * tocar la facturación habilitada: {@link #puedeFacturar()} da false y no se vuelve a llamar a WSAA. Lo levantan activar otro
+ * certificado o «Probar conexión» OK ({@link #levantarBloqueo()}).
  */
 @Entity
 @Table(name = "config_arca")
@@ -52,8 +57,15 @@ public class ConfigArca {
             "Primero deshabilitá la facturación: no se puede quitar el ambiente mientras esté habilitada.";
     static final String HABILITAR_SIN_AMBIENTE =
             "Para habilitar la facturación, la ferretería necesita un ambiente de ARCA y un punto de venta.";
-    /** Hasta la rama 6 no hay cliente real de ARCA: los registros quedarían pendientes sin poder autorizarse (S13). */
-    static final String SIN_CONEXION_REAL = "La facturación con ARCA se habilita cuando esté la conexión real.";
+    /**
+     * Producción espera a la rama 11 (la homologación con la piloto, y antes las ramas 7 y 8 y el contador): ninguna
+     * ferretería real factura en producción hasta entonces (rama 6, S16).
+     */
+    static final String PRODUCCION_NO_DISPONIBLE = "La facturación en producción todavía no está disponible.";
+
+    /** El largo de {@code config_arca.bloqueo_codigo} y {@code bloqueo_mensaje} (V35). */
+    static final int LARGO_BLOQUEO_CODIGO = 64;
+    static final int LARGO_BLOQUEO_MENSAJE = 500;
 
     /** El punto de venta más alto que carga el Dueño (S2). */
     public static final int PUNTO_VENTA_MAXIMO = 99998;
@@ -92,6 +104,18 @@ public class ConfigArca {
     /** Cuándo se prendió la facturación (UTC); null mientras esté apagada. */
     @Column(name = "habilitada_en")
     private Instant habilitadaEn;
+
+    /** El código de WSAA que frenó la facturación (C4); null sin bloqueo. */
+    @Column(name = "bloqueo_codigo", length = LARGO_BLOQUEO_CODIGO)
+    private String bloqueoCodigo;
+
+    /** El {@code faultstring} de ese rechazo; null sin bloqueo (o si ARCA no mandó texto). */
+    @Column(name = "bloqueo_mensaje", length = LARGO_BLOQUEO_MENSAJE)
+    private String bloqueoMensaje;
+
+    /** Cuándo se frenó (UTC); null sin bloqueo. */
+    @Column(name = "bloqueado_en")
+    private Instant bloqueadoEn;
 
     protected ConfigArca() {}
 
@@ -152,15 +176,15 @@ public class ConfigArca {
     /**
      * Prende la facturación y guarda {@code ahora} como su fecha de activación. Exige ambiente, punto de venta y los datos
      * de CU-01 completos: {@code datosFaltantes} son los nombres de los que faltan, como se le muestran al super admin. Si
-     * ya estaba prendida, no cambia nada (ni la fecha). En homologación o producción no se prende hasta la conexión real
-     * (rama 6, S13): sin cliente real de ARCA, los registros quedarían pendientes sin poder autorizarse.
+     * ya estaba prendida, no cambia nada (ni la fecha). Se prende con el simulador o en homologación; en producción no,
+     * hasta la rama 11 ({@link #PRODUCCION_NO_DISPONIBLE}, rama 6, S16).
      */
     public void habilitar(List<String> datosFaltantes, Instant ahora) {
         if (facturacionHabilitada) {
             return;
         }
-        if (ambiente == Ambiente.HOMOLOGACION || ambiente == Ambiente.PRODUCCION) {
-            throw new ReglaDeNegocioException(SIN_CONEXION_REAL);
+        if (ambiente == Ambiente.PRODUCCION) {
+            throw new ReglaDeNegocioException(PRODUCCION_NO_DISPONIBLE);
         }
         if (ambiente == null || puntoVenta == null) {
             throw new ReglaDeNegocioException(HABILITAR_SIN_AMBIENTE);
@@ -179,13 +203,42 @@ public class ConfigArca {
     }
 
     /**
-     * Si esta configuración deja facturar: la facturación habilitada, con ambiente y punto de venta. Es solo la parte de
-     * ARCA: la ferretería factura si además tiene completos los datos de CU-01 que la factura imprime, que el Dueño puede
-     * vaciar con la facturación prendida. La regla entera, la que miran la decisión de la venta y el alta del registro
-     * fiscal, es {@code PasosFiscales.puedeFacturar()}.
+     * Si esta configuración deja facturar: la facturación habilitada, con ambiente y punto de venta, y sin el bloqueo de ARCA
+     * (rama 6, C4). Es solo la parte de ARCA: la ferretería factura si además tiene completos los datos de CU-01 que la
+     * factura imprime, que el Dueño puede vaciar con la facturación prendida. La regla entera, la que miran la decisión de la
+     * venta y el alta del registro fiscal, es {@code PasosFiscales.puedeFacturar(Instant)}.
      */
     public boolean puedeFacturar() {
-        return facturacionHabilitada && ambiente != null && puntoVenta != null;
+        return facturacionHabilitada && ambiente != null && puntoVenta != null && !estaBloqueada();
+    }
+
+    /**
+     * Frena la facturación porque WSAA rechazó el certificado (C4): guarda el código, el texto de ARCA y la hora, recortados
+     * a lo que entra en {@code config_arca}. No toca la facturación habilitada. Otro rechazo reemplaza al anterior.
+     *
+     * @param codigo el código de WSAA, sin prefijo ({@code cms.cert.expired}, {@code coe.notAuthorized}…)
+     * @param mensaje el {@code faultstring}; null o vacío si no vino
+     * @param ahora la hora del {@code Clock} de quien llama
+     */
+    public void bloquear(String codigo, String mensaje, Instant ahora) {
+        if (codigo == null || codigo.isBlank() || ahora == null) {
+            throw new IllegalArgumentException("El bloqueo de ARCA lleva el código y la hora.");
+        }
+        this.bloqueoCodigo = recortar(codigo.strip(), LARGO_BLOQUEO_CODIGO);
+        this.bloqueoMensaje = mensaje == null || mensaje.isBlank() ? null : recortar(mensaje.strip(), LARGO_BLOQUEO_MENSAJE);
+        this.bloqueadoEn = ahora;
+    }
+
+    /** Levanta el bloqueo de ARCA (otro certificado activado, o «Probar conexión» OK). Sin bloqueo no cambia nada. */
+    public void levantarBloqueo() {
+        this.bloqueoCodigo = null;
+        this.bloqueoMensaje = null;
+        this.bloqueadoEn = null;
+    }
+
+    /** Si la facturación está frenada por un rechazo del certificado en WSAA (C4). */
+    public boolean estaBloqueada() {
+        return bloqueoCodigo != null;
     }
 
     /**
@@ -224,7 +277,9 @@ public class ConfigArca {
      * El ambiente que fija un certificado validado (rama 5, S16): el de la CA que lo firmó. Sin ambiente, toma el de la
      * CA; de homologación pasa a producción solo sin registros abiertos (409); de producción no se vuelve (400 en
      * {@code certificado}); con el simulador solo vale la CA del simulador (400 en {@code certificado}). El mismo ambiente
-     * no cambia nada. No toca el punto de venta ni la facturación: un certificado validado no la habilita.
+     * no cambia nada (renovar el certificado deja la facturación como estaba). No toca el punto de venta, y un certificado
+     * validado nunca habilita la facturación; si el ambiente cambia de uno a otro (de homologación a producción), la
+     * deshabilita ({@link #deshabilitar()}): la vuelve a prender el super admin (D3; rama 6, S14).
      */
     public void fijarAmbienteDelCertificado(Ambiente deLaCa, RegistrosFiscales registros) {
         if (ambiente == deLaCa) {
@@ -242,7 +297,18 @@ public class ConfigArca {
         if (registros.hayAbiertos()) {
             throw new ConflictException(CON_REGISTROS_ABIERTOS);
         }
+        if (ambiente != null) {
+            deshabilitar();
+        }
         this.ambiente = deLaCa;
+    }
+
+    /** Los primeros {@code largo} caracteres (code points: una letra fuera del plano básico no se parte). */
+    private static String recortar(String texto, int largo) {
+        if (texto.codePointCount(0, texto.length()) <= largo) {
+            return texto;
+        }
+        return texto.substring(0, texto.offsetByCodePoints(0, largo));
     }
 
     private static String faltanDatos(List<String> faltantes) {
@@ -265,4 +331,7 @@ public class ConfigArca {
     public Integer getPuntoVenta() { return puntoVenta; }
     public boolean isFacturacionHabilitada() { return facturacionHabilitada; }
     public Instant getHabilitadaEn() { return habilitadaEn; }
+    public String getBloqueoCodigo() { return bloqueoCodigo; }
+    public String getBloqueoMensaje() { return bloqueoMensaje; }
+    public Instant getBloqueadoEn() { return bloqueadoEn; }
 }
