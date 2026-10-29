@@ -9,6 +9,7 @@ import jakarta.persistence.Table;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.util.Objects;
 
 /**
  * Un renglon de la venta. COPIA la descripcion, la unidad, el precio y la alicuota del articulo al momento
@@ -111,6 +112,32 @@ public class ItemComprobante {
         item.costo = costoUnitario == null
                 ? null
                 : costoUnitario.multiply(calculado.cantidad()).setScale(2, RoundingMode.HALF_UP);
+        return item;
+    }
+
+    /**
+     * El renglon de la nota de credito o de la anulacion interna (CU-08, C3): la copia exacta del vendido, con su costo y en
+     * positivo (los lectores lo restan), colgado de la nota.
+     */
+    public static ItemComprobante copiaParaLaNota(ItemComprobante vendido, Long notaId) {
+        ItemComprobante item = new ItemComprobante();
+        item.ferreteriaId = vendido.ferreteriaId;
+        item.comprobanteId = Objects.requireNonNull(notaId, "Falta la nota de crédito del renglón.");
+        item.renglon = vendido.renglon;
+        item.articuloId = vendido.articuloId;
+        item.descripcion = vendido.descripcion;
+        item.unidad = vendido.unidad;
+        item.cantidad = vendido.cantidad;
+        item.precioUnitario = vendido.precioUnitario;
+        item.alicuotaIva = vendido.alicuotaIva;
+        item.bruto = vendido.bruto;
+        item.descuentoPorcentaje = vendido.descuentoPorcentaje;
+        item.total = vendido.total;
+        item.neto = vendido.neto;
+        item.iva = vendido.iva;
+        item.recargo = vendido.recargo;
+        item.costoUnitario = vendido.costoUnitario;
+        item.costo = vendido.costo;
         return item;
     }
 
