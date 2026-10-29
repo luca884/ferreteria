@@ -194,7 +194,7 @@ class CredencialArcaConcurrenciaIntegrationTest extends CredencialArcaTestBase {
                 TenantContext.setCurrentFerreteriaId(f.id());
                 try {
                     return new TransactionTemplate(transacciones).execute(t -> {
-                        boolean factura = facturacion.decidir(ReceptorVenta.sinCliente()).factura();
+                        boolean factura = facturacion.decidir(ReceptorVenta.sinCliente(), reloj.instant()).factura();
                         ventaDecidio.avisar();
                         ventaSigue.esperar();
                         return factura;

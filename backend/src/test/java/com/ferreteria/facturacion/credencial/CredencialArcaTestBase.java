@@ -94,7 +94,7 @@ abstract class CredencialArcaTestBase extends IntegrationTestBase {
                 f.id());
     }
 
-    /** La facturación prendida por SQL (hasta la rama 6 el panel no la prende en homologación ni producción, S13). */
+    /** La facturación prendida por SQL (en producción el panel no la prende hasta la rama 11: rama 6, S16). */
     void facturacionPrendida(Ferreteria f) {
         jdbc.update("update config_arca set punto_venta = 3, facturacion_habilitada = true, habilitada_en = "
                 + "'2026-10-01 12:00:00' where ferreteria_id = ?", f.id());
@@ -179,15 +179,20 @@ abstract class CredencialArcaTestBase extends IntegrationTestBase {
                 + "order by estado", f.id());
     }
 
-    /** Un registro fiscal PENDIENTE (abierto) de la ferretería, sobre una venta propia. */
-    void registroAbierto(Ferreteria f, String ambiente) {
+    /** Una venta propia de la ferretería, por SQL y sin registro fiscal: su id. */
+    long venta(Ferreteria f) {
         int numero = COMPROBANTES.incrementAndGet();
         long usuario = jdbc.queryForObject("select min(id) from usuario where ferreteria_id = ?", Long.class, f.id());
         jdbc.update("insert into comprobante (ferreteria_id, tipo, estado, numero, clave_idempotencia, usuario_id, neto, iva, "
                 + "total, subtotal) values (?, 'VENTA', 'SIN_FACTURAR', ?, ?, ?, 100, 21, 121, 121)",
                 f.id(), numero, unico("credencial"), usuario);
-        long comprobante = jdbc.queryForObject("select id from comprobante where ferreteria_id = ? and numero = ?",
-                Long.class, f.id(), numero);
+        return jdbc.queryForObject("select id from comprobante where ferreteria_id = ? and numero = ?", Long.class, f.id(),
+                numero);
+    }
+
+    /** Un registro fiscal PENDIENTE (abierto) de la ferretería, sobre una venta propia. */
+    void registroAbierto(Ferreteria f, String ambiente) {
+        long comprobante = venta(f);
         jdbc.update("insert into comprobante_fiscal (ferreteria_id, comprobante_id, ambiente, clase, letra, cbte_tipo, "
                 + "punto_venta, estado, receptor_doc_tipo, receptor_doc_nro, receptor_condicion_iva_id, emisor_cuit, "
                 + "emisor_razon_social, emisor_condicion_iva, emisor_domicilio_comercial, emisor_ingresos_brutos, "

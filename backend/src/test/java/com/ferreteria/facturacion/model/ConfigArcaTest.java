@@ -231,14 +231,29 @@ class ConfigArcaTest {
         assertThat(config.getHabilitadaEn()).isNull();
     }
 
-    @ParameterizedTest
-    @EnumSource(value = Ambiente.class, names = {"HOMOLOGACION", "PRODUCCION"})
-    @DisplayName("hasta la conexión real (rama 6), la facturación no se prende en homologación ni producción (S13)")
-    void habilitarNoSaleEnHomologacionNiProduccion(Ambiente ambiente) {
-        ConfigArca config = conAmbienteDelCertificado(ambiente);
+    @Test
+    @DisplayName("en homologación la facturación se prende con los datos de CU-01 completos (rama 6, S16)")
+    void habilitarEnHomologacion() {
+        ConfigArca config = conAmbienteDelCertificado(Ambiente.HOMOLOGACION);
+
+        assertRegla(() -> config.habilitar(List.of("Ingresos Brutos"), AHORA), "Para habilitar la facturación falta un "
+                + "dato de la ferretería: Ingresos Brutos. Lo carga el Dueño en «Datos de la ferretería».");
+        assertThat(config.isFacturacionHabilitada()).isFalse();
+
+        config.habilitar(List.of(), AHORA);
+
+        assertThat(config.isFacturacionHabilitada()).isTrue();
+        assertThat(config.getHabilitadaEn()).isEqualTo(AHORA);
+        assertThat(config.puedeFacturar()).isTrue();
+    }
+
+    @Test
+    @DisplayName("en producción la facturación sigue trabada hasta la rama 11, aun con los datos completos (S16)")
+    void habilitarEnProduccionSigueTrabada() {
+        ConfigArca config = conAmbienteDelCertificado(Ambiente.PRODUCCION);
 
         assertRegla(() -> config.habilitar(List.of(), AHORA),
-                "La facturación con ARCA se habilita cuando esté la conexión real.");
+                "La facturación en producción todavía no está disponible.");
         assertThat(config.isFacturacionHabilitada()).isFalse();
         assertThat(config.getHabilitadaEn()).isNull();
     }
@@ -308,6 +323,27 @@ class ConfigArcaTest {
         assertThat(conAbiertos.getAmbiente()).isEqualTo(Ambiente.HOMOLOGACION);
         assertThat(sinAbiertos.getAmbiente()).isEqualTo(Ambiente.PRODUCCION);
         assertThat(sinAbiertos.getPuntoVenta()).isEqualTo(3);
+    }
+
+    @Test
+    @DisplayName("con la facturación prendida en homologación, un certificado de producción deja PRODUCCION y la apaga; uno "
+            + "de homologación (el mismo ambiente) no la apaga (rama 6, S14)")
+    void elCambioDeAmbienteApagaLaFacturacion() {
+        ConfigArca aProduccion = conAmbienteDelCertificado(Ambiente.HOMOLOGACION);
+        aProduccion.habilitar(List.of(), AHORA);
+        ConfigArca renueva = conAmbienteDelCertificado(Ambiente.HOMOLOGACION);
+        renueva.habilitar(List.of(), AHORA);
+
+        aProduccion.fijarAmbienteDelCertificado(Ambiente.PRODUCCION, RegistrosFiscales.NINGUNO);
+        renueva.fijarAmbienteDelCertificado(Ambiente.HOMOLOGACION, RegistrosFiscales.NINGUNO);
+
+        assertThat(aProduccion.getAmbiente()).isEqualTo(Ambiente.PRODUCCION);
+        assertThat(aProduccion.isFacturacionHabilitada()).isFalse();
+        assertThat(aProduccion.getHabilitadaEn()).isNull();
+        assertThat(aProduccion.getPuntoVenta()).isEqualTo(3);
+        assertThat(renueva.getAmbiente()).isEqualTo(Ambiente.HOMOLOGACION);
+        assertThat(renueva.isFacturacionHabilitada()).isTrue();
+        assertThat(renueva.getHabilitadaEn()).isEqualTo(AHORA);
     }
 
     @Test

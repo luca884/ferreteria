@@ -26,6 +26,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Stream;
 import org.bouncycastle.asn1.ASN1ObjectIdentifier;
+import org.bouncycastle.asn1.ASN1String;
 import org.bouncycastle.asn1.x500.RDN;
 import org.bouncycastle.asn1.x500.X500Name;
 import org.bouncycastle.asn1.x500.X500NameBuilder;
@@ -167,6 +168,37 @@ class CredencialArcaIntegrationTest extends CredencialArcaTestBase {
                 .generatePrivate(new PKCS8EncodedKeySpec(claro));
         assertThat(privada.getModulus()).isEqualTo(((RSAPublicKey) publica).getModulus());
         assertThat(HexFormat.of().formatHex(cifrada)).doesNotContain(HexFormat.of().formatHex(claro).substring(0, 64));
+    }
+
+    @Test
+    @DisplayName("con una razón social de 150 caracteres, el CSR se parsea, su firma verifica y la O lleva los primeros 64 "
+            + "(code points, sin el espacio que quede al final del recorte)")
+    void laRazonSocialLargaSeRecortaEnLaO() throws Exception {
+        record Caso(String razonSocial, String o, int largo) {}
+        List<Caso> casos = List.of(
+                // Una letra fuera del plano básico (dos char de UTF-16) entre los primeros 64: se cuentan code points.
+                new Caso("Ferretería 𝔐ar del Plata " + "Ferretería Mar del Plata ".repeat(5),
+                        "Ferretería 𝔐ar del Plata Ferretería Mar del Plata Ferretería Mar", 64),
+                // El code point 64 es el espacio después de «Sur»: el recorte termina en él y strip() lo saca.
+                new Caso("Ferretería Mar del Plata ".repeat(2) + "Bulonería Sur " + "Ferretería Mar del Plata ".repeat(3)
+                        + "Tornillería", "Ferretería Mar del Plata Ferretería Mar del Plata Bulonería Sur", 63));
+
+        for (Caso caso : casos) {
+            assertThat(caso.razonSocial().codePointCount(0, caso.razonSocial().length())).isEqualTo(150);
+            Ferreteria f = ferreteria();
+            jdbc.update("update ferreteria set razon_social = ? where id = ?", caso.razonSocial(), f.id());
+
+            String pem = pedido(f);
+
+            PKCS10CertificationRequest csr = csr(pem);
+            assertThat(csr.isSignatureValid(new JcaContentVerifierProviderBuilder().build(publica(pem)))).isTrue();
+            RDN[] organizacion = csr.getSubject().getRDNs(BCStyle.O);
+            assertThat(organizacion).hasSize(1);
+            String o = ((ASN1String) organizacion[0].getFirst().getValue()).getString();
+            assertThat(o).isEqualTo(caso.o());
+            assertThat(o.codePointCount(0, o.length())).isEqualTo(caso.largo());
+            assertThat(valor(csr.getSubject(), BCStyle.SERIALNUMBER)).isEqualTo("CUIT " + f.cuit());
+        }
     }
 
     @Test
@@ -452,6 +484,30 @@ class CredencialArcaIntegrationTest extends CredencialArcaTestBase {
                 .containsEntry("ambiente", "PRODUCCION").containsEntry("huella", huella(deProduccion.getPublicKey())));
         assertThat(jdbc.queryForObject("select count(*) from credencial_arca where huella = ?", Integer.class, vieja))
                 .isZero();
+    }
+
+    @Test
+    @DisplayName("con la facturación habilitada en homologación, activar un certificado de producción deja PRODUCCION y la "
+            + "deshabilita; renovar el de homologación la deja prendida (rama 6, S14)")
+    void elCertificadoDeProduccionDeshabilitaLaFacturacion() throws Exception {
+        String admin = login("admin@demo.local");
+        Ferreteria aProduccion = ferreteria();
+        Ferreteria renueva = ferreteria();
+        for (Ferreteria f : List.of(aProduccion, renueva)) {
+            activa(f, CasDeArcaDePrueba.HOMOLOGACION);
+            putJson(URL + "/punto-venta", f.dueno(), "{\"puntoVenta\": 3}").andExpect(status().isOk());
+            patchAdmin(admin, f, "facturacion", "{\"habilitada\": true}").andExpect(status().isOk());
+        }
+
+        subir(aProduccion, pem(emitido(CasDeArcaDePrueba.PRODUCCION, pedido(aProduccion), aProduccion)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.ambiente", is("PRODUCCION")));
+        activa(renueva, CasDeArcaDePrueba.HOMOLOGACION);
+
+        assertThat(config(aProduccion)).containsEntry("ambiente", "PRODUCCION").containsEntry("punto_venta", 3)
+                .containsEntry("facturacion_habilitada", false);
+        assertThat(jdbc.queryForObject("select habilitada_en from config_arca where ferreteria_id = ?", Instant.class,
+                aProduccion.id())).isNull();
+        assertThat(config(renueva)).containsEntry("ambiente", "HOMOLOGACION").containsEntry("facturacion_habilitada", true);
     }
 
     @Test

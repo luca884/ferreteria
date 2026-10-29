@@ -9,10 +9,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.fasterxml.jackson.databind.JsonNode;
 import com.ferreteria.facturacion.api.FacturacionParaVenta;
 import com.ferreteria.facturacion.api.FacturacionParaVenta.ReceptorVenta;
+import com.ferreteria.facturacion.api.FacturacionParaVenta.RenglonParaFacturar;
 import com.ferreteria.facturacion.cripto.CifradorDeClaves;
 import com.ferreteria.facturacion.cripto.ContextoDeCifrado;
 import com.ferreteria.facturacion.cripto.Proposito;
 import com.ferreteria.tenant.TenantContext;
+import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.security.cert.X509Certificate;
 import java.time.Instant;
@@ -38,8 +40,8 @@ import org.springframework.transaction.support.TransactionTemplate;
 /**
  * Lo que la credencial de ARCA traba o avisa (rama 5): el aviso 30 días antes del vencimiento y la facturación bloqueada con
  * la credencial vencida o ilegible, solo en homologación o producción y solo en esa ferretería (S6, S8, S12); la
- * habilitación trabada hasta la conexión real (S13); el 403 del Vendedor y del super admin, y otra ferretería que no ve nada
- * (S11); y ningún secreto en el JSON ni en el log (S7).
+ * habilitación por ambiente (rama 6, S16: homologación sí, producción todavía no); el 403 del Vendedor y del super admin, y
+ * otra ferretería que no ve nada (S11); y ningún secreto en el JSON ni en el log (S7).
  */
 @ExtendWith(OutputCaptureExtension.class)
 class CredencialArcaBloqueoIntegrationTest extends CredencialArcaTestBase {
@@ -63,7 +65,7 @@ class CredencialArcaBloqueoIntegrationTest extends CredencialArcaTestBase {
         TenantContext.setCurrentFerreteriaId(f.id());
         try {
             boolean decide = new TransactionTemplate(transacciones)
-                    .execute(t -> facturacion.decidir(ReceptorVenta.sinCliente()).factura());
+                    .execute(t -> facturacion.decidir(ReceptorVenta.sinCliente(), reloj.instant()).factura());
             boolean mostrador = getJson("/api/ventas/facturacion", f.dueno()).get("factura").asBoolean();
             return List.of(decide, mostrador);
         } finally {
@@ -141,6 +143,37 @@ class CredencialArcaBloqueoIntegrationTest extends CredencialArcaTestBase {
     }
 
     @Test
+    @DisplayName("decidir y registrar usan el instante de la venta: con el reloj que avanza entre los dos y la credencial que "
+            + "vence en el medio, la venta decidida facturable se registra (rama 6, S15)")
+    void decidirYRegistrarUsanElMismoInstante() throws Exception {
+        Ferreteria f = ferreteria();
+        Instant hasta = AHORA.plus(DIA.multipliedBy(10));
+        subir(f, pem(emitido(CasDeArcaDePrueba.HOMOLOGACION, pedido(f), f, f.cuit(), AHORA.minus(DIA), hasta)))
+                .andExpect(status().isOk());
+        facturacionPrendida(f);
+        long venta = venta(f);
+        Instant instante = hasta.minusMillis(1);
+        reloj.fijar(instante);
+
+        TenantContext.setCurrentFerreteriaId(f.id());
+        long registro = new TransactionTemplate(transacciones).execute(t -> {
+            assertThat(facturacion.decidir(ReceptorVenta.sinCliente(), instante).factura()).isTrue();
+            reloj.fijar(hasta);
+            return facturacion.registrar(venta, ReceptorVenta.sinCliente(),
+                    List.of(new RenglonParaFacturar(new BigDecimal("21.00"), new BigDecimal("121.00"))), instante);
+        });
+        TenantContext.clear();
+
+        // El registro lleva el instante de la venta (en UTC), un milisegundo antes del vencimiento.
+        assertThat(jdbc.queryForMap("select comprobante_id, ambiente, estado, date_format(registrado_en, "
+                + "'%Y-%m-%d %H:%i:%s.%f') as registrado_en from comprobante_fiscal where id = ?", registro))
+                .containsEntry("comprobante_id", venta).containsEntry("ambiente", "HOMOLOGACION")
+                .containsEntry("estado", "PENDIENTE").containsEntry("registrado_en", "2026-11-07 13:15:29.999000");
+        // Con la hora de ahora (ya vencida) la venta siguiente no factura.
+        assertThat(factura(f)).containsExactly(false, false);
+    }
+
+    @Test
     @DisplayName("con el ambiente en PRODUCCION (por SQL) y una credencial de HOMOLOGACION, la venta no factura")
     void laCredencialDeOtroAmbienteNoFactura() throws Exception {
         Ferreteria f = ferreteria();
@@ -201,27 +234,34 @@ class CredencialArcaBloqueoIntegrationTest extends CredencialArcaTestBase {
                 .doesNotContain(Base64.getEncoder().encodeToString(conOtraClave));
     }
 
-    // ---- S13: el super admin no habilita homologación ni producción hasta la conexión real ----
+    // ---- S16 de la rama 6: el super admin habilita homologación; producción sigue trabada hasta la rama 11 ----
 
     @Test
-    @DisplayName("el super admin no prende la facturación con el ambiente del certificado: 422 y nada cambia")
-    void elSuperAdminNoHabilitaHomologacionNiProduccion() throws Exception {
+    @DisplayName("el super admin prende la facturación en homologación (200, y la venta factura con la credencial); en "
+            + "producción, 422 con el mensaje y nada cambia")
+    void elSuperAdminHabilitaHomologacionYNoProduccion() throws Exception {
         String admin = login("admin@demo.local");
-        for (AutoridadDePrueba ca : List.of(CasDeArcaDePrueba.HOMOLOGACION, CasDeArcaDePrueba.PRODUCCION)) {
-            Ferreteria f = ferreteria();
-            activa(f, ca);
+        Ferreteria homologacion = ferreteria();
+        activa(homologacion, CasDeArcaDePrueba.HOMOLOGACION);
+        Ferreteria produccion = ferreteria();
+        activa(produccion, CasDeArcaDePrueba.PRODUCCION);
+        for (Ferreteria f : List.of(homologacion, produccion)) {
             putJson(URL + "/punto-venta", f.dueno(), "{\"puntoVenta\": 3}").andExpect(status().isOk());
-
-            patchAdmin(admin, f, "facturacion", "{\"habilitada\": true}").andExpect(status().isUnprocessableEntity())
-                    .andExpect(jsonPath("$.message", is("La facturación con ARCA se habilita cuando esté la conexión real.")));
-
-            assertThat(config(f)).containsEntry("facturacion_habilitada", false);
         }
+
+        patchAdmin(admin, homologacion, "facturacion", "{\"habilitada\": true}").andExpect(status().isOk());
+        patchAdmin(admin, produccion, "facturacion", "{\"habilitada\": true}").andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.message", is("La facturación en producción todavía no está disponible.")));
+
+        assertThat(config(homologacion)).containsEntry("facturacion_habilitada", true);
+        assertThat(factura(homologacion)).containsExactly(true, true);
+        assertThat(config(produccion)).containsEntry("facturacion_habilitada", false);
+        assertThat(factura(produccion)).containsExactly(false, false);
     }
 
     @Test
-    @DisplayName("prender, apagar y volver a prender en homologación: ya prendida no cambia nada, apagarla anda y la vuelta es "
-            + "un 422 con el mensaje")
+    @DisplayName("prender, apagar y volver a prender en homologación: ya prendida no cambia nada, apagarla anda y la vuelta "
+            + "la prende otra vez")
     void apagarYVolverAPrenderEnHomologacion() throws Exception {
         String admin = login("admin@demo.local");
         Ferreteria f = ferreteria();
@@ -232,10 +272,10 @@ class CredencialArcaBloqueoIntegrationTest extends CredencialArcaTestBase {
         assertThat(config(f)).containsEntry("facturacion_habilitada", true);
         patchAdmin(admin, f, "facturacion", "{\"habilitada\": false}").andExpect(status().isOk());
         assertThat(config(f)).containsEntry("facturacion_habilitada", false);
-        patchAdmin(admin, f, "facturacion", "{\"habilitada\": true}").andExpect(status().isUnprocessableEntity())
-                .andExpect(jsonPath("$.message", is("La facturación con ARCA se habilita cuando esté la conexión real.")));
+        patchAdmin(admin, f, "facturacion", "{\"habilitada\": true}").andExpect(status().isOk());
 
-        assertThat(config(f)).containsEntry("facturacion_habilitada", false);
+        assertThat(config(f)).containsEntry("facturacion_habilitada", true);
+        assertThat(factura(f)).containsExactly(true, true);
     }
 
     @Test

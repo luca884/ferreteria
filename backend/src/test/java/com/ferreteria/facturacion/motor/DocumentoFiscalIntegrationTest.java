@@ -263,7 +263,7 @@ class DocumentoFiscalIntegrationTest extends MotorFiscalTestBase {
     void loQueAutorizaElSimuladorSaleX() {
         long venta = venta(ferreteriaId);
         enLaVenta(() -> {
-            assertThat(facturacion.decidir(ReceptorVenta.sinCliente()).factura()).isTrue();
+            assertThat(facturacion.decidir(ReceptorVenta.sinCliente(), AHORA).factura()).isTrue();
             return facturacion.registrar(venta, ReceptorVenta.sinCliente(),
                     List.of(new RenglonParaFacturar(new BigDecimal("21.00"), new BigDecimal("121.00"))), AHORA);
         });
@@ -405,7 +405,7 @@ class DocumentoFiscalIntegrationTest extends MotorFiscalTestBase {
         jdbc.update(sql, ferreteriaId);
 
         assertThat(facturacion.paraElMostrador()).isEmpty();
-        assertThat(enLaVenta(() -> facturacion.decidir(ReceptorVenta.sinCliente()).factura())).isFalse();
+        assertThat(enLaVenta(() -> facturacion.decidir(ReceptorVenta.sinCliente(), AHORA).factura())).isFalse();
     }
 
     @Test
@@ -420,7 +420,7 @@ class DocumentoFiscalIntegrationTest extends MotorFiscalTestBase {
         });
         // Contraprueba: decidir, en cambio, sí lo toma.
         enLaVenta(() -> {
-            facturacion.decidir(ReceptorVenta.sinCliente());
+            facturacion.decidir(ReceptorVenta.sinCliente(), AHORA);
             assertThatThrownBy(() -> enOtroHilo(() -> jdbc.queryForList(paraCambiarla, Long.class, ferreteriaId)))
                     .rootCause().hasMessageContaining("NOWAIT");
             return null;

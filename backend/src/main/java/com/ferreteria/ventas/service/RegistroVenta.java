@@ -87,7 +87,9 @@ import java.util.stream.Collectors;
  * mientras tanto). Con factura suma sus dos controles antes de escribir nada (el cliente sin CUIT o sin domicilio, y el tope
  * de identificacion de ARCA para la venta anonima) y, como ultimo hijo, da de alta el registro fiscal con el receptor leido
  * bajo el lock del cliente: editarlo despues no lo cambia. El CAE lo pide {@link VentaService} despues del commit. La venta,
- * sus movimientos de stock y su registro fiscal llevan el mismo instante, tomado una vez del {@code Clock}.
+ * sus movimientos de stock y su registro fiscal llevan el mismo instante, tomado una vez del {@code Clock} con el numerador
+ * tomado. {@code facturacion} decide con el instante leido antes de decidir y con ese mismo vuelve a mirar la credencial al
+ * dar de alta el registro (rama 6, S15).
  */
 @Service
 public class RegistroVenta {
@@ -190,8 +192,10 @@ public class RegistroVenta {
         List<RenglonVenta> calculados = RecargoVenta.repartir(sinRecargo, recargoDe(partes, formas));
         TotalesVenta totales = TotalesVenta.de(calculados);
         // CU-07 paso 3 (D5): solo la venta facturable pregunta si sale con factura. Toma config_arca en S hasta el commit,
-        // despues del cliente y antes del numerador (ver el orden de locks). Sin facturacion habilitada no hay factura.
-        Decision decision = pedido.facturable() ? facturacion.decidir(cliente.receptor()) : Decision.SIN_FACTURA;
+        // despues del cliente y antes del numerador (ver el orden de locks). Sin facturacion habilitada no hay factura. La
+        // decision y el alta del registro miran la credencial de ARCA en este mismo instante (rama 6 de facturacion, S15).
+        Instant decididaEn = reloj.instant();
+        Decision decision = pedido.facturable() ? facturacion.decidir(cliente.receptor(), decididaEn) : Decision.SIN_FACTURA;
         // D4: con factura, el cliente RI, Monotributista o Exento necesita su CUIT y su domicilio (antes de escribir nada).
         if (decision.factura() && !decision.receptorCompleto()) {
             throw VentaRechazadaException.clienteSinDatosFiscales(cliente.nombre());
@@ -208,7 +212,9 @@ public class RegistroVenta {
                 : null;
 
         long numero = numeradorRepository.siguienteScoped();
-        // S5: un solo instante para la venta, sus movimientos de stock y su registro fiscal.
+        // S5: un solo instante para la venta, sus movimientos de stock y su registro fiscal, leido con el numerador tomado:
+        // asi las fechas de una ferreteria siguen el orden de sus comprobantes (el motor atiende los registros por id y la
+        // CbteFch no puede ser anterior a la del ultimo autorizado).
         Instant instante = reloj.instant();
         LocalDateTime fecha = LocalDateTime.ofInstant(instante, HoraArgentina.ZONA);
         Comprobante comprobante = comprobanteRepository.save(
@@ -256,7 +262,8 @@ public class RegistroVenta {
         // CU-07 paso 3: el registro fiscal es el ultimo hijo, con el receptor leido bajo el lock del cliente y lo que se
         // cobra por renglon (con descuento y recargo: la suma es el total de la venta).
         if (decision.factura()) {
-            facturacion.registrar(comprobante.getId(), cliente.receptor(), renglonesParaFacturar(calculados), instante);
+            facturacion.registrar(comprobante.getId(), cliente.receptor(), renglonesParaFacturar(calculados), instante,
+                    decididaEn);
         }
 
         return new VentaRegistrada(comprobante, itemsGuardados, pagos, sinStock(stockResultante, articulos), false,

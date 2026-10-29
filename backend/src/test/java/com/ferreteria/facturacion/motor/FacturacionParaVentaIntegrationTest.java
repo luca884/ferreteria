@@ -81,7 +81,7 @@ class FacturacionParaVentaIntegrationTest extends MotorFiscalTestBase {
         TenantContext.setCurrentFerreteriaId(ferreteriaSinConfig(cuitNuevo()));
         ReceptorVenta riSinCuit = new ReceptorVenta(CondicionIva.RESPONSABLE_INSCRIPTO, null, null, "Corralón Sur SA", null);
 
-        Decision decision = enLaVenta(() -> facturacion.decidir(riSinCuit));
+        Decision decision = enLaVenta(() -> facturacion.decidir(riSinCuit, AHORA));
 
         assertThat(decision).isEqualTo(new Decision(false, true, null));
     }
@@ -94,7 +94,7 @@ class FacturacionParaVentaIntegrationTest extends MotorFiscalTestBase {
                 + "values (?, true, 'SIMULADOR', 1, false)", f);
         TenantContext.setCurrentFerreteriaId(f);
 
-        assertThat(enLaVenta(() -> facturacion.decidir(ReceptorVenta.sinCliente()))).isEqualTo(Decision.SIN_FACTURA);
+        assertThat(enLaVenta(() -> facturacion.decidir(ReceptorVenta.sinCliente(), AHORA))).isEqualTo(Decision.SIN_FACTURA);
     }
 
     @ParameterizedTest(name = "sin {0}")
@@ -104,13 +104,13 @@ class FacturacionParaVentaIntegrationTest extends MotorFiscalTestBase {
         jdbc.update("update ferreteria set " + columna + " = null where id = ?", ferreteriaId);
         ReceptorVenta riSinCuit = new ReceptorVenta(CondicionIva.RESPONSABLE_INSCRIPTO, null, null, "Corralón Sur SA", null);
 
-        assertThat(enLaVenta(() -> facturacion.decidir(riSinCuit))).isEqualTo(Decision.SIN_FACTURA);
+        assertThat(enLaVenta(() -> facturacion.decidir(riSinCuit, AHORA))).isEqualTo(Decision.SIN_FACTURA);
     }
 
     @Test
     @DisplayName("con la facturación habilitada factura, con el tope de identificación de ARCA ($ 10.000.000)")
     void conLaFacturacionHabilitadaFacturaConElTopeDeArca() {
-        Decision decision = enLaVenta(() -> facturacion.decidir(ReceptorVenta.sinCliente()));
+        Decision decision = enLaVenta(() -> facturacion.decidir(ReceptorVenta.sinCliente(), AHORA));
 
         assertThat(decision.factura()).isTrue();
         assertThat(decision.receptorCompleto()).isTrue();
@@ -144,7 +144,7 @@ class FacturacionParaVentaIntegrationTest extends MotorFiscalTestBase {
     @MethodSource("receptores")
     @DisplayName("receptor completo (D4): Consumidor Final, o RI, Monotributista o Exento con CUIT y domicilio")
     void receptorCompletoSegunLaCondicion(String caso, ReceptorVenta receptor, boolean completo) {
-        Decision decision = enLaVenta(() -> facturacion.decidir(receptor));
+        Decision decision = enLaVenta(() -> facturacion.decidir(receptor, AHORA));
 
         assertThat(decision.factura()).isTrue();
         assertThat(decision.receptorCompleto()).isEqualTo(completo);
@@ -156,7 +156,7 @@ class FacturacionParaVentaIntegrationTest extends MotorFiscalTestBase {
         String paraCambiarla = "select id from config_arca where ferreteria_id = ? for update nowait";
 
         enLaVenta(() -> {
-            facturacion.decidir(ReceptorVenta.sinCliente());
+            facturacion.decidir(ReceptorVenta.sinCliente(), AHORA);
             assertThatThrownBy(() -> enOtroHilo(() -> jdbc.queryForList(paraCambiarla, Long.class, ferreteriaId)))
                     .rootCause().hasMessageContaining("NOWAIT");
             return null;
@@ -170,7 +170,7 @@ class FacturacionParaVentaIntegrationTest extends MotorFiscalTestBase {
     void decidirYRegistrarExigenUnaTransaccion() {
         long venta = venta(ferreteriaId);
 
-        assertThatThrownBy(() -> facturacion.decidir(ReceptorVenta.sinCliente()))
+        assertThatThrownBy(() -> facturacion.decidir(ReceptorVenta.sinCliente(), AHORA))
                 .isInstanceOf(IllegalTransactionStateException.class);
         assertThatThrownBy(() -> facturacion.registrar(venta, ReceptorVenta.sinCliente(), renglones121(), AHORA))
                 .isInstanceOf(IllegalTransactionStateException.class);
@@ -189,7 +189,7 @@ class FacturacionParaVentaIntegrationTest extends MotorFiscalTestBase {
                 "N".repeat(130), "D".repeat(210));
 
         long id = enLaVenta(() -> {
-            facturacion.decidir(monotributista);
+            facturacion.decidir(monotributista, fecha);
             return facturacion.registrar(venta, monotributista, List.of(
                     new RenglonParaFacturar(new BigDecimal("21.00"), new BigDecimal("100.00")),
                     new RenglonParaFacturar(new BigDecimal("10.5"), new BigDecimal("50.00"))), fecha);
@@ -215,7 +215,7 @@ class FacturacionParaVentaIntegrationTest extends MotorFiscalTestBase {
         long venta = venta(ferreteriaId);
 
         assertThatThrownBy(() -> enLaVenta(() -> {
-            facturacion.decidir(ReceptorVenta.sinCliente());
+            facturacion.decidir(ReceptorVenta.sinCliente(), AHORA);
             return facturacion.registrar(venta, ReceptorVenta.sinCliente(),
                     List.of(new RenglonParaFacturar(new BigDecimal("15"), new BigDecimal("100.00"))), AHORA);
         })).isInstanceOf(IllegalArgumentException.class);
@@ -469,7 +469,7 @@ class FacturacionParaVentaIntegrationTest extends MotorFiscalTestBase {
     private long ventaFacturada() {
         long venta = venta(ferreteriaId);
         enLaVenta(() -> {
-            assertThat(facturacion.decidir(ReceptorVenta.sinCliente()).factura()).isTrue();
+            assertThat(facturacion.decidir(ReceptorVenta.sinCliente(), AHORA).factura()).isTrue();
             return facturacion.registrar(venta, ReceptorVenta.sinCliente(), renglones121(), AHORA);
         });
         return venta;
