@@ -166,3 +166,6 @@ app:
   facturacion:
     simulador:
       latencia: ${SIMULADOR_WSFE_LATENCIA:300ms}
+      # ARCA simulada caída (rama 7): mientras exista este archivo, el WSFEv1 del simulador no contesta. Se prende con
+      # «touch» y se apaga con «rm». Solo dev: fuera de este perfil no hay interruptor.
+      caida: ${SIMULADOR_WSFE_CAIDA:${java.io.tmpdir}/ferreteria-arca-caida}

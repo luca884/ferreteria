@@ -5,6 +5,7 @@ import com.ferreteria.facturacion.arca.Transporte;
 import com.ferreteria.facturacion.model.Ambiente;
 import com.ferreteria.facturacion.wsfe.PedidoNoLlegoException;
 import java.net.URI;
+import java.util.Optional;
 import org.springframework.stereotype.Component;
 
 /**
@@ -19,6 +20,7 @@ import org.springframework.stereotype.Component;
  *   <li>Cualquier otro destino es como un host que no existe: {@link PedidoNoLlegoException}. Así, un cliente de homologación o
  *       producción mal cableado con este transporte no recibe respuestas simuladas.</li>
  * </ul>
+ * En el perfil dev, {@link CaidaSimulada} puede dejar a WSFEv1 sin contestar (rama 7).
  * Todo es de la ferretería del request ({@code TenantContext}, la que fija el ejecutor fiscal). El bean se pide por su nombre,
  * {@value #BEAN}: hay más de un {@link Transporte}.
  */
@@ -32,12 +34,15 @@ public class SimuladorEnElBorde implements Transporte {
     private final URI wsfe;
     private final WsaaDelSimulador wsaaDelSimulador;
     private final WsfeDelSimulador wsfeDelSimulador;
+    private final Optional<CaidaSimulada> caida;
 
-    SimuladorEnElBorde(PropiedadesArca propiedades, WsaaDelSimulador wsaaDelSimulador, WsfeDelSimulador wsfeDelSimulador) {
+    SimuladorEnElBorde(PropiedadesArca propiedades, WsaaDelSimulador wsaaDelSimulador, WsfeDelSimulador wsfeDelSimulador,
+            Optional<CaidaSimulada> caida) {
         this.wsaa = propiedades.wsaa().de(Ambiente.SIMULADOR);
         this.wsfe = propiedades.wsfe().de(Ambiente.SIMULADOR);
         this.wsaaDelSimulador = wsaaDelSimulador;
         this.wsfeDelSimulador = wsfeDelSimulador;
+        this.caida = caida;
     }
 
     @Override
@@ -46,6 +51,9 @@ public class SimuladorEnElBorde implements Transporte {
             return wsaaDelSimulador.loginCms(pedido.sobre());
         }
         if (pedido.destino().equals(wsfe)) {
+            if (caida.isPresent() && caida.get().caida()) {
+                throw new PedidoNoLlegoException("ARCA simulada caída (perfil dev): no se mandó nada.");
+            }
             return wsfeDelSimulador.atender(pedido.soapAction(), pedido.sobre());
         }
         throw new PedidoNoLlegoException("El simulador de ARCA no atiende " + pedido.destino() + ": no se mandó nada.");
