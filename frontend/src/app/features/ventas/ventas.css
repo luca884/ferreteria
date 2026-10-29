@@ -90,3 +90,75 @@
   justify-content: flex-end;
   gap: var(--e-2);
 }
+
+/* La marca de la lista que pide reimprimir la factura: es lo que el Dueño tiene que hacer, no un dato más. */
+.marca.reimprimir {
+  color: var(--acento);
+}
+/* Lo que hizo la última acción de la bandeja, sobre la lista: el detalle se cierra si la venta sale de la bandeja. */
+.resultado-accion {
+  margin: 0 0 var(--e-4);
+  padding: var(--e-2) var(--e-3);
+  border: 1px solid var(--exito-borde);
+  border-left: 4px solid var(--exito);
+  border-radius: var(--radio);
+  background: var(--exito-fondo);
+  font-weight: 600;
+}
+
+/* La bandeja en el detalle (CU-16 punto 7): el estado, lo que dijo ARCA y las acciones de hoy. */
+.factura-bandeja {
+  display: flex;
+  flex-direction: column;
+  gap: var(--e-2);
+}
+.factura-bandeja p {
+  margin: 0;
+}
+.en-revision,
+.aviso-reimprimir {
+  padding: var(--e-2) var(--e-3);
+  border: 1px solid var(--advertencia-borde);
+  border-left: 4px solid var(--advertencia-marca);
+  border-radius: var(--radio);
+  background: var(--advertencia-fondo);
+  color: var(--advertencia);
+  font-weight: 600;
+}
+.errores-arca h3,
+.observaciones-arca h3 {
+  margin: 0 0 var(--e-1);
+  font-size: var(--texto-md);
+}
+.errores-arca ul,
+.observaciones-arca ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.errores-arca li,
+.observaciones-arca li {
+  padding: var(--e-1) 0;
+  border-bottom: 1px solid var(--borde);
+}
+.errores-arca .codigo,
+.observaciones-arca .codigo {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+/* La explicación en criollo va debajo del texto de ARCA, que se muestra tal cual. */
+.errores-arca .explicacion {
+  display: block;
+  margin-top: 2px;
+  color: var(--texto-suave);
+  font-size: var(--texto-sm);
+}
+.acciones-factura {
+  display: flex;
+  flex-direction: column;
+  gap: var(--e-2);
+}
+.acciones-factura .botones {
+  display: flex;
+  gap: var(--e-2);
+}

@@ -1,0 +1,67 @@
+<!-- El mousedown sobre el fondo no mueve el foco al body: si no, Esc y Enter (que escucha el diálogo) dejarían de andar. -->
+<div class="dialogo-fondo" (mousedown)="retenerFoco($event)">
+  <div
+    class="dialogo sin-factura"
+    tabindex="-1"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="dialogo-sin-factura-titulo"
+    aria-describedby="dialogo-sin-factura-definitivo"
+    appTrampaFoco
+    (keydown)="alTeclear($event)"
+  >
+    <h2 id="dialogo-sin-factura-titulo">Dejar sin factura la venta N.º {{ numero() }}</h2>
+
+    @if (error(); as texto) {
+      <p class="error error-servidor" role="alert">{{ texto }}</p>
+    }
+
+    <p id="dialogo-sin-factura-definitivo" class="definitivo">
+      Es definitivo: después no se puede reintentar la factura de esta venta.
+    </p>
+
+    <label class="campo-motivo" for="motivo-sin-factura">Motivo</label>
+    <input
+      #campoMotivo
+      id="motivo-sin-factura"
+      class="campo-motivo-input"
+      type="text"
+      autocomplete="off"
+      spellcheck="true"
+      [maxLength]="maximo"
+      [attr.aria-invalid]="errorMotivo() ? 'true' : null"
+      [attr.aria-describedby]="errorMotivo() ? 'error-motivo-sin-factura' : null"
+      [value]="motivo()"
+      (input)="motivo.set($any($event.target).value)"
+    />
+    <div class="pie-motivo">
+      @if (errorMotivo(); as mensaje) {
+        <small id="error-motivo-sin-factura" class="campo-error">{{ mensaje }}</small>
+      }
+      <small class="contador" aria-hidden="true">{{ motivo().length }}/{{ maximo }}</small>
+    </div>
+
+    <div class="dialogo-acciones">
+      <button
+        type="button"
+        class="cancelar"
+        data-tecla="Esc"
+        aria-keyshortcuts="Escape"
+        [disabled]="enVuelo()"
+        (click)="cancelarSinFactura()"
+      >
+        Cancelar
+      </button>
+      <button
+        type="button"
+        class="dejar-sin-factura peligro"
+        data-tecla="Enter"
+        aria-keyshortcuts="Enter"
+        [disabled]="enVuelo()"
+        (click)="confirmarSinFactura()"
+      >
+        Dejar sin factura
+      </button>
+    </div>
+  </div>
+</div>

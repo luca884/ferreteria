@@ -1,0 +1,16 @@
+@if (cuentas().length > 0) {
+  <div class="aviso-facturacion cuentas" role="status">
+    <span class="titulo">Facturas para revisar en Ventas:</span>
+    <ul>
+      @for (c of cuentas(); track c.clave) {
+        <li><a routerLink="/ventas" [queryParams]="{ fiscal: c.fiscal }">{{ c.texto }}</a></li>
+      }
+    </ul>
+  </div>
+}
+
+@if (bloqueo(); as texto) {
+  <p class="aviso-facturacion bloqueo" role="status">
+    <span class="texto">{{ texto }}</span>&ngsp;<a routerLink="/configuracion/facturacion">Ir a Facturación</a>
+  </p>
+}

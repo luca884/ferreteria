@@ -1,0 +1,25 @@
+@for (a of avisos(); track a.ventaId) {
+  <div class="aviso-cae" role="status">
+    <span class="texto">Llegó el CAE de la venta N.º {{ a.numero }}</span>
+    <span class="factura">{{ a.factura }}</span>
+    <span class="botones">
+      <button type="button" class="secundario chico" [disabled]="abriendo() !== null" (click)="reimprimir(a)">
+        Reimprimir factura
+      </button>
+      <button
+        type="button"
+        class="cerrar-aviso"
+        [attr.aria-label]="'Cerrar el aviso de la venta N.º ' + a.numero"
+        title="Cerrar el aviso"
+        (click)="cerrar(a)"
+      >
+        <span aria-hidden="true">×</span>
+      </button>
+    </span>
+    @if (error(); as e) {
+      @if (e.ventaId === a.ventaId) {
+        <p class="error" role="alert">{{ e.texto }}</p>
+      }
+    }
+  </div>
+}

@@ -32,6 +32,12 @@
     </p>
   }
 
+  <!-- Rama 7: lo que el Dueño tiene que revisar de la facturación (C4) y el CAE que llegó tarde (C7). No frenan la venta. -->
+  <app-avisos-facturacion />
+  @if (hayCajaAbierta()) {
+    <app-avisos-cae [puedeAbrir]="sinDialogo" (abrir)="reimprimirLlegada($event)" (cerrado)="alCerrarAviso()" />
+  }
+
   <app-primeros-pasos />
 
   @if (ticket.ticket().clienteNombre; as cliente) {

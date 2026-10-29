@@ -1,0 +1,43 @@
+/* Sin caja propia: los avisos son renglones más de la zona del buscador, y sin avisos no ocupa lugar. */
+:host {
+  display: contents;
+}
+
+/* Como el del certificado: avisa y lleva a donde se resuelve, pero no frena la venta. */
+.aviso-facturacion {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--e-1) var(--e-2);
+  margin: 0;
+  padding: var(--e-2) var(--e-3);
+  border: 1px solid var(--advertencia-borde);
+  border-left: 4px solid var(--advertencia-marca);
+  border-radius: var(--radio);
+  background: var(--advertencia-fondo);
+  color: var(--advertencia);
+  font-weight: 600;
+}
+.aviso-facturacion a {
+  color: inherit;
+}
+.aviso-facturacion ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--e-1) var(--e-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.aviso-facturacion li + li::before {
+  content: '·';
+  margin-right: var(--e-2);
+  color: var(--texto-tenue);
+}
+/* Facturación frenada: ninguna venta sale con factura hasta resolverlo. */
+.aviso-facturacion.bloqueo {
+  border-color: var(--error-borde);
+  border-left-color: var(--error);
+  background: var(--error-fondo);
+  color: var(--error);
+}

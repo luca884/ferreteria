@@ -3,6 +3,8 @@ import { Component, DestroyRef, computed, inject, signal, viewChild } from '@ang
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { EMPTY, Subject, Subscription, catchError, concatMap, map, switchMap, timer } from 'rxjs';
 import { AccionBotonera, Botonera } from './botonera';
+import { AvisosCae } from './avisos-cae';
+import { AvisosFacturacion } from './avisos-facturacion';
 import { CajaBusqueda } from './caja-busqueda';
 import { DialogoCantidad } from './dialogo-cantidad';
 import { ConfirmacionCobro, CuentaDelCobro, DialogoCobro, RotuloFactura } from './dialogo-cobro';
@@ -124,6 +126,8 @@ interface Escaneo {
 @Component({
   selector: 'app-mostrador',
   imports: [
+    AvisosCae,
+    AvisosFacturacion,
     BarraAcciones,
     Botonera,
     MontoPipe,
@@ -201,6 +205,14 @@ export class Mostrador {
   protected readonly accionCaja = computed(() =>
     this.cajaVigente()?.estado === 'DE_OTRO_DIA' ? 'Cerrar la caja' : 'Abrir la caja',
   );
+  /**
+   * Hay una caja abierta (de hoy o de otro día, sin cerrar): solo entonces se pregunta si llegó el CAE de sus ventas (C7,
+   * S14). Si no se pudo leer la caja, no se pregunta.
+   */
+  protected readonly hayCajaAbierta = computed(() => {
+    const estado = this.cajaVigente()?.estado;
+    return estado === 'ABIERTA' || estado === 'DE_OTRO_DIA';
+  });
   protected readonly ticket = inject(TicketStore);
   private readonly caja = viewChild.required(CajaBusqueda);
 
@@ -716,6 +728,19 @@ export class Mostrador {
     this.avisoCobro.set(null);
     this.soltarCuenta();
     this.dialogo.set({ tipo: 'factura', factura });
+  }
+
+  /**
+   * «Reimprimir factura» del aviso «Llegó el CAE» (C7): la hoja fiscal de esa venta se abre como la del cobro, sin vuelto.
+   * El aviso solo la entrega si no hay otro diálogo abierto (`sinDialogo`).
+   */
+  protected reimprimirLlegada(venta: VentaFacturada): void {
+    this.abrirFactura({ venta, vueltoCentavos: null });
+  }
+
+  /** Se cerró un aviso con su botón: el foco vuelve al buscador, para el lector. */
+  protected alCerrarAviso(): void {
+    this.enfocarSinDialogo();
   }
 
   /** «Venta N.º 7 cobrada: $ 3.000,00»; a cuenta corriente lo dice, y en un pago mixto cuánto fue a cuenta. */

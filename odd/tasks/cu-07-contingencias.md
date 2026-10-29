@@ -77,10 +77,11 @@ Restricciones (del mapa, L2):
   - `GET /api/ventas` suma el filtro `fiscal=PENDIENTES|RECHAZADAS` a los que ya tiene.
     - PENDIENTES: PENDIENTE, EN_CURSO, EN_VERIFICACION, CAE_NO_COINCIDE y SERIE_DESINCRONIZADA.
     - RECHAZADAS: RECHAZADO y FUERA_DE_FECHA.
-  - `GET /api/ventas/{id}`: el resumen fiscal suma `errores: [{ codigo, mensaje, explicacion|null }]`, `observaciones: [{ codigo, mensaje }]`, `motivoSinFactura|null`, `acciones: ["REINTENTAR", "DEJAR_SIN_FACTURA"]` (las que valen hoy), `fechaNuevaRequerida: boolean` y `reimprimir: boolean` (salió con ticket provisorio y ya está AUTORIZADO).
+  - `GET /api/ventas/{id}`: el resumen fiscal suma `errores: [{ codigo, mensaje, explicacion|null }]`, `observaciones: [{ codigo, mensaje }]` (los `codigo` son numéricos, como los de ARCA), `motivoSinFactura|null`, `sinFacturaPor|null` (el nombre del usuario), `sinFacturaEn|null` (fecha y hora de Buenos Aires sin zona, como `fecha`), `acciones: ["REINTENTAR", "DEJAR_SIN_FACTURA"]` (las que valen hoy), `fechaNuevaRequerida: boolean` y `reimprimir: boolean` (salió con ticket provisorio y ya está AUTORIZADO).
   - La lista lleva `reimprimir` y el estado fiscal en cada venta.
 - **C2 · Reintentar (Dueño):** `POST /api/ventas/{id}/factura/reintentar`, cuerpo `{ "fechaDeHoy": false }`.
   - Responde como el cobro: el resumen fiscal después de la espera corta (`app.facturacion.venta.espera`).
+  - Los 409 y el 422 van con el cuerpo de `VentaRechazadaResponse`: el código en `motivo` y el texto en `message`. Lo mismo en C3.
   - 409 `FECHA_NUEVA_REQUERIDA`: «La fecha de la venta ya no entra en ARCA. Confirmá que la factura salga con la fecha de hoy.»
   - 409 `SIN_FACTURA_RECHAZADA`: «Esta venta no tiene una factura rechazada para reintentar.»
   - 409 `FACTURACION_FRENADA`: «La facturación está frenada: <motivo>.» (deshabilitada, sin credencial vigente o bloqueada por ARCA).
@@ -99,7 +100,8 @@ Restricciones (del mapa, L2):
 - **C6 · Motor:** 602 y 10016 como en S3. El código y el texto de ARCA se guardan tal cual en el intento.
 - **C7 · Llegó el CAE (Vendedor y Dueño):** `GET /api/ventas/provisorias-autorizadas`.
   - 200: `[{ "ventaId": 1, "numero": 12, "factura": "Factura B 0001-00000045" }]`: las ventas que el usuario cobró en la caja abierta, que salieron con ticket provisorio y ya están AUTORIZADO.
-  - Sin caja abierta, lista vacía. La hoja se pide con el endpoint de la hoja fiscal, limitado a esas mismas ventas para el Vendedor.
+  - Sin caja abierta, lista vacía.
+  - La hoja se pide con `GET /api/ventas/{id}/factura` (Dueño y Vendedor; L6): responde lo mismo que `GET /api/ventas/{id}`, que es lo mismo que el cobro. El Vendedor solo puede pedir una venta de esta lista: cualquier otra, aunque exista, da 404 «Venta no encontrada». `GET /api/ventas/{id}` sigue siendo solo del Dueño.
 
 ## Tasks
 
@@ -117,7 +119,7 @@ Restricciones (del mapa, L2):
   - Evidencia: — · Risk: items 1 y 4 (estados nuevos y la caché de la serie bajo lease)
 - [ ] T4 · S2, S7, S8, C5 · ruta: delegada (writer «backend») · Aceptación: el job con su ejecutor, la pasada con tope, el molde de tenant, el backoff, el apagado, y la batería de S8 · Evidencia: — · Risk: items 4 y 5 (concurrencia; `drainingSeconds` si suma una espera)
 - [ ] T5 · S4, S5, S6 (backend), C1-C4, C7 · ruta: delegada (writer «backend») · Aceptación: los endpoints, la explicación de los códigos conocidos, el contrato JDK de `facturacion.api` para el reintento (cliente X → config_arca S → registro), roles, aislamiento y el límite del Vendedor · Evidencia: — · Risk: items 2 y 3 (acciones solo del Dueño; la respuesta de Ventas cambia)
-- [ ] T6 · S4, S5, S6 (frontend) · ruta: delegada (writer «frontend», en paralelo con T5 contra C1-C4 y C7) · Aceptación: el filtro y la bandeja en Ventas, el detalle con errores y acciones (la confirmación de la fecha de hoy y el diálogo del motivo), los avisos del Dueño y el de «llegó el CAE» en el mostrador · Evidencia: — · Risk: none
+- [x] T6 · S4, S5, S6 (frontend) · ruta: delegada (writer «frontend», en paralelo con T2-T3 contra C1-C4 y C7) + ajuste del padre (L6) · Aceptación: el filtro y la bandeja en Ventas, el detalle con errores y acciones (la confirmación de la fecha de hoy y el diálogo del motivo), los avisos del Dueño y el de «llegó el CAE» en el mostrador · Evidencia: RED→GREEN por regla (services TS2339/TS2307 → 28/28; `ventas.spec` 15 nuevos en rojo → 36/36; `dialogo-sin-factura` 6/6; `avisos-facturacion` 7/7; `avisos-cae` 7 en rojo contra un esqueleto → 7/7; `mostrador.spec` 8 de 9 en rojo → 320/320); frontend 141 archivos 3348/3348 y `ng build` OK (writer); ajuste del padre: RED TS2353/TS2339 → GREEN 51/51 en `ventas.spec`, `ventas.service.spec` y `avisos-cae.spec`. Falta ego-browser (T7) · Risk: item 1 bajo (clave nueva de localStorage `cae-descartados:{ferreteriaId}:{userId}`)
 - [ ] T7 · S9 · ruta: inline (suites) + `odd-verifier` · Aceptación: ARCA simulada caída en dev, ego-browser (ticket X, el job autoriza, aviso y reimpresión; Reintentar y Dejar sin factura), suite backend, suite frontend, `ng build`, `-Pimagen` y verificador sin bloqueantes · Evidencia: — · Risk: items 1 a 5
 - [ ] T8 · S2 (producción) · ruta: inline, después del deploy de Luca · Aceptación: los logs del job en producción sin errores y sin secretos · Evidencia: — · Risk: —
 
@@ -140,3 +142,14 @@ Restricciones (del mapa, L2):
   - Los supuestos S11 a S15 se le preguntan a Luca antes de implementarlos.
 - L4 (2026-10-29) Luca confirmó los cuatro supuestos de producto: «confirmo los cuatro como están, continuá». S11 a S14 pasan a decisiones; S15 sigue como supuesto técnico hasta que conteste el contador.
 - L5 (2026-10-29) T1 cerrada: la spec y este doc. Próximo paso: T2 (V36), con un writer «backend».
+- L6 (2026-10-29) T6 (writer «frontend»). El contrato tenía cuatro huecos y el padre los cerró:
+  - la hoja de C7: `GET /api/ventas/{id}` es solo del Dueño, así que se suma `GET /api/ventas/{id}/factura` para el Dueño y el Vendedor. Responde lo mismo que el cobro, y el Vendedor solo puede pedir sus ventas de C7 (cualquier otra da 404). No suma información: es la misma venta que el Vendedor ya cobró;
+  - el código de los 409 va en `motivo` (`VentaRechazadaResponse`);
+  - «Sin factura» suma quién y cuándo (`sinFacturaPor`, `sinFacturaEn`), como pide CU-16;
+  - los `codigo` de ARCA son numéricos.
+  - El padre ajustó el front a esto, test-first (`ventas.service.factura`, `avisos-cae` y el detalle con quién y cuándo).
+  - Decisiones del writer:
+    - después de cada acción se vuelven a leer la lista y el detalle;
+    - el aviso «llegó el CAE» existe solo con la caja ABIERTA o DE_OTRO_DIA, y los descartados se guardan en localStorage (`cae-descartados:{ferreteriaId}:{userId}`), recortados a lo que devuelve el servidor;
+    - las dos alertas se ven como «En revisión» en `ESTADO_FISCAL_LABELS`, y se suma `SIN_FACTURA: 'Sin factura'`;
+    - el aviso del bloqueo enlaza a Facturación, y las cuentas a `/ventas?fiscal=…`.
