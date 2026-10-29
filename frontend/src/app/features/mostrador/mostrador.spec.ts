@@ -251,7 +251,7 @@ describe('Mostrador', () => {
         { provide: ClientesService, useValue: clientesApi },
         { provide: FacturacionService, useValue: { configuracion: leerConfiguracionArca } },
         { provide: AvisosFacturacionService, useValue: { leer: leerAvisos } },
-        { provide: VentasService, useValue: { obtener: obtenerHoja } },
+        { provide: VentasService, useValue: { factura: obtenerHoja } },
         { provide: AuthService, useValue: { sesion: sesion.asReadonly() } },
         { provide: GENERAR_CLAVE, useValue: () => `clave-${++claves}` },
       ],
