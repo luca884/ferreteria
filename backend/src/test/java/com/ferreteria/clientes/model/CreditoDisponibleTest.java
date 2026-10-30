@@ -36,6 +36,18 @@ class CreditoDisponibleTest {
     }
 
     @Test
+    @DisplayName("L10: el disponible de un origen puntual (una nota de crédito): lo que le queda, 0 si está agotado o no está")
+    void disponibleDeUnOrigen() {
+        CreditoDisponible credito = new CreditoDisponible(List.of(recibo(1, 10, "500", "200"),
+                new Credito(Origen.notaDeCredito(7L), 20L, new BigDecimal("242"), new BigDecimal("142")),
+                new Credito(Origen.notaDeCredito(8L), 30L, new BigDecimal("100"), new BigDecimal("100"))));
+
+        assertThat(credito.disponibleDe(Origen.notaDeCredito(7L))).isEqualByComparingTo("100");
+        assertThat(credito.disponibleDe(Origen.notaDeCredito(8L))).isEqualByComparingTo("0");
+        assertThat(credito.disponibleDe(Origen.notaDeCredito(9L))).isEqualByComparingTo("0");
+    }
+
+    @Test
     @DisplayName("aplica FIFO por id de movimiento, sin importar el orden en que llegan, y reparte entre varios orígenes")
     void fifo() {
         CreditoDisponible credito = new CreditoDisponible(

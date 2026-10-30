@@ -191,6 +191,27 @@ public interface MovimientoCuentaClienteRepository extends TenantScopedRepositor
             + "com.ferreteria.clientes.model.TipoMovimientoCuenta.ANULACION) order by m.id")
     List<MovimientoCuentaCliente> deRecibo(@Param("fid") Long ferreteriaId, @Param("reciboId") Long reciboId);
 
+    /** La nota de crédito que anula una venta: la une con ella el pago a cuenta corriente que acreditó (CU-08). */
+    interface NotaDeVenta {
+        Long getVentaId();
+
+        Long getNotaId();
+    }
+
+    /**
+     * Las notas de crédito de esas ventas, por venta ascendente (L10): el renglón {@code NC} acredita el mismo pago que cargó
+     * el renglón {@code VENTA}. Lectura plana bajo el lock del cliente: los renglones NC solo se escriben con él tomado.
+     */
+    @Query("select distinct v.comprobanteId as ventaId, n.comprobanteId as notaId "
+            + "from MovimientoCuentaCliente n, MovimientoCuentaCliente v "
+            + "where n.ferreteriaId = :fid and n.clienteId = :clienteId "
+            + "and n.tipo = com.ferreteria.clientes.model.TipoMovimientoCuenta.NC "
+            + "and v.ferreteriaId = :fid and v.clienteId = :clienteId "
+            + "and v.tipo = com.ferreteria.clientes.model.TipoMovimientoCuenta.VENTA "
+            + "and v.pagoId = n.pagoId and v.comprobanteId in (:ventaIds) order by v.comprobanteId")
+    List<NotaDeVenta> notasDeVentas(@Param("fid") Long ferreteriaId, @Param("clienteId") Long clienteId,
+            @Param("ventaIds") List<Long> ventaIds);
+
     // ---------------------------------------------------------------------------------------------------------------
     // Extracto (CC-072..CC-080): consultas nativas, con :fid explícito, SOLO por los wrappers *Scoped.
     // ---------------------------------------------------------------------------------------------------------------
@@ -339,6 +360,10 @@ public interface MovimientoCuentaClienteRepository extends TenantScopedRepositor
 
     default List<MovimientoCuentaCliente> deReciboScoped(Long reciboId) {
         return deRecibo(TenantContext.requireFerreteriaId(), reciboId);
+    }
+
+    default List<NotaDeVenta> notasDeVentasScoped(Long clienteId, List<Long> ventaIds) {
+        return notasDeVentas(TenantContext.requireFerreteriaId(), clienteId, ventaIds);
     }
 
     default Page<MovimientoCuentaCliente> deClienteScoped(Long clienteId, Pageable pageable) {

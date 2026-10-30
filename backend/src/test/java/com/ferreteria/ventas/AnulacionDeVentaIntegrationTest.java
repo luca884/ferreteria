@@ -347,6 +347,18 @@ class AnulacionDeVentaIntegrationTest extends FacturaDelDuenoTestBase {
         return jdbc.queryForObject("select saldo from cliente where id = ?", BigDecimal.class, cliente);
     }
 
+    private void anularRecibo(Tienda t, long recibo) throws Exception {
+        postJson("/api/recibos/" + recibo + "/anulacion", login(t.emailDueno()), "{\"motivo\":\"Cobro mal cargado\"}")
+                .andExpect(status().isOk());
+    }
+
+    /** Ningún comprobante con pendiente y nada a cuenta: la cuenta queda cerrada. */
+    private void assertSinPendienteNiCredito(Tienda t, long cliente) throws Exception {
+        JsonNode pendientes = getJson("/api/clientes/" + cliente + "/cuenta-corriente/pendientes", login(t.emailDueno()));
+        assertThat(pendientes.get("aCuenta").decimalValue()).isEqualByComparingTo("0");
+        pendientes.get("comprobantes").forEach(p -> assertThat(p.get("pendiente").decimalValue()).isEqualByComparingTo("0"));
+    }
+
     /** El número interno de la venta, como lo nombra la referencia de su nota (S9). */
     private long numeroDe(long venta) {
         return jdbc.queryForObject("select numero from comprobante where id = ?", Long.class, venta);
@@ -442,6 +454,66 @@ class AnulacionDeVentaIntegrationTest extends FacturaDelDuenoTestBase {
         long notaId = json(anular(t, venta, null).andExpect(status().isCreated())).get("ventaId").asLong();
 
         assertThat(saldo(c)).isEqualByComparingTo("-242.00");
+        assertThat(imputadoPorLaNota(notaId, venta)).isEqualByComparingTo("0");
+        InvarianteCuenta.assertInvariante(jdbc, c);
+    }
+
+    @Test
+    @DisplayName("L10: si después de la NC se anula el recibo que pagaba la venta, la nota se vuelve a imputar a la venta "
+            + "anulada: no queda pendiente ni crédito suelto")
+    void anularElReciboDespuesDeLaNcReimputaLaNota() throws Exception {
+        Tienda t = tiendaQueFactura(RI);
+        long a = articulo(t, unico("Martillo"), "UNIDAD", "121.00", "10");
+        long c = clienteConCuenta(t);
+        long venta = venderACuenta(t, a, c, "0", null);
+        long recibo = json(cobrarACuenta(t, c, "242.00", venta).andExpect(status().isCreated())).get("id").asLong();
+        long notaId = json(anular(t, venta, null).andExpect(status().isCreated())).get("ventaId").asLong();
+        assertThat(imputadoPorLaNota(notaId, venta)).isEqualByComparingTo("0");
+
+        anularRecibo(t, recibo);
+
+        assertThat(saldo(c)).isEqualByComparingTo("0");
+        assertThat(imputadoPorLaNota(notaId, venta)).isEqualByComparingTo("242.00");
+        assertSinPendienteNiCredito(t, c);
+        InvarianteCuenta.assertInvariante(jdbc, c);
+    }
+
+    @Test
+    @DisplayName("L10: con un adelanto que pagó parte de la venta, la nota imputa el resto; al anular el recibo del adelanto, "
+            + "la nota le vuelve a imputar a la venta lo que el adelanto pagaba")
+    void anularElAdelantoDespuesDeLaNcReimputaLaNota() throws Exception {
+        Tienda t = tiendaQueFactura(RI);
+        long a = articulo(t, unico("Martillo"), "UNIDAD", "121.00", "10");
+        long c = clienteConCuenta(t);
+        long recibo = json(cobrarACuenta(t, c, "100.00", null).andExpect(status().isCreated())).get("id").asLong();
+        long venta = venderACuenta(t, a, c, "0", null);
+        long notaId = json(anular(t, venta, null).andExpect(status().isCreated())).get("ventaId").asLong();
+        assertThat(saldo(c)).isEqualByComparingTo("-100.00");
+        assertThat(imputadoPorLaNota(notaId, venta)).isEqualByComparingTo("142.00");
+
+        anularRecibo(t, recibo);
+
+        assertThat(saldo(c)).isEqualByComparingTo("0");
+        assertThat(imputadoPorLaNota(notaId, venta)).isEqualByComparingTo("242.00");
+        assertSinPendienteNiCredito(t, c);
+        InvarianteCuenta.assertInvariante(jdbc, c);
+    }
+
+    @Test
+    @DisplayName("L10: si el crédito de la nota ya lo consumió otra venta, al anular el recibo la venta anulada vuelve a deber "
+            + "solo lo que la nota no puede cubrir")
+    void anularElReciboConLaNotaYaConsumida() throws Exception {
+        Tienda t = tiendaQueFactura(RI);
+        long a = articulo(t, unico("Martillo"), "UNIDAD", "121.00", "20");
+        long c = clienteConCuenta(t);
+        long venta = venderACuenta(t, a, c, "0", null);
+        long recibo = json(cobrarACuenta(t, c, "242.00", venta).andExpect(status().isCreated())).get("id").asLong();
+        long notaId = json(anular(t, venta, null).andExpect(status().isCreated())).get("ventaId").asLong();
+        venderACuenta(t, a, c, "0", null); // consume los $ 242 a favor de la nota
+
+        anularRecibo(t, recibo);
+
+        assertThat(saldo(c)).isEqualByComparingTo("242.00");
         assertThat(imputadoPorLaNota(notaId, venta)).isEqualByComparingTo("0");
         InvarianteCuenta.assertInvariante(jdbc, c);
     }

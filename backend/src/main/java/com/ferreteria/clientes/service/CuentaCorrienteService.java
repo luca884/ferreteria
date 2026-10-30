@@ -24,6 +24,7 @@ import com.ferreteria.clientes.repository.ImputacionRepository.ImputadoDeRecargo
 import com.ferreteria.clientes.repository.MovimientoCuentaClienteRepository;
 import com.ferreteria.clientes.repository.MovimientoCuentaClienteRepository.DebitoDeComprobante;
 import com.ferreteria.clientes.repository.MovimientoCuentaClienteRepository.FilaDeCredito;
+import com.ferreteria.clientes.repository.MovimientoCuentaClienteRepository.NotaDeVenta;
 import com.ferreteria.common.exception.DatosInvalidosException;
 import com.ferreteria.common.exception.ResourceNotFoundException;
 import com.ferreteria.tenant.TenantContext;
@@ -575,6 +576,7 @@ public class CuentaCorrienteService implements CuentaCorrienteParaVenta, CuentaC
      *   <li>ids de las imputaciones del recibo (todas), {@code FOR UPDATE} por PK exacta en orden ascendente con lectura
      *       ACTUAL de su vigencia (una foto vieja no vería la baja que otra anulación confirmó) y baja de la vigencia: la
      *       ÚNICA mutación de imputaciones; debe afectar exactamente esas filas;
+     *   <li>las ventas ANULADAS que quedaron con pendiente se vuelven a pagar con el crédito de su propia nota (L10);
      *   <li>guarda UNA ANULACION (debe = total) y SUBE el saldo con un UPDATE relativo.
      * </ol>
      * Sin chequeo de límite (CC-065: anular puede dejar al cliente excedido) ni de activo (lo decide ventas).
@@ -587,6 +589,7 @@ public class CuentaCorrienteService implements CuentaCorrienteParaVenta, CuentaC
         cuentaBloqueada(clienteId); // ya la tiene tomada quien llama: acá se re-toma y se confirma que existe y es de la ferretería
         exigirCobroSinAnular(asiento);
         List<Long> comprobantesLiberados = darDeBajaLasImputacionesDelRecibo(clienteId, asiento.reciboId());
+        reimputarNotasDeVentasAnuladas(clienteId, comprobantesLiberados);
         MovimientoCuentaCliente guardado = libro.save(contraAsiento);
         int filas = clientes.sumarSaldoScoped(clienteId, asiento.total());
         if (filas != 1) {
@@ -651,6 +654,42 @@ public class CuentaCorrienteService implements CuentaCorrienteParaVenta, CuentaC
         }
         // GDS-20: la imputación de un recibo puede ir a un Recargo (sin comprobante): esos no figuran entre los comprobantes liberados.
         return bloqueadas.stream().map(FilaDeImputacion::getComprobanteId).filter(Objects::nonNull).distinct().sorted().toList();
+    }
+
+    /**
+     * L10: una venta anulada que el recibo pagaba vuelve a quedar con pendiente; su propia nota de crédito se lo cubre con lo
+     * que tenga sin imputar (si otra venta ya lo consumió, la venta anulada debe el resto). Mismo orden que la cobranza: las
+     * partidas de esas ventas por PK ascendente, lo imputado con {@code FOR UPDATE} (ya sin lo del recibo) y el crédito con
+     * lectura actual. Una imputación AUTOMÁTICA nueva por venta: la imputación solo se agrega, nunca se edita. Sin ventas
+     * anuladas entre las liberadas no toca nada.
+     */
+    private void reimputarNotasDeVentasAnuladas(Long clienteId, List<Long> liberados) {
+        if (liberados.isEmpty()) {
+            return;
+        }
+        List<NotaDeVenta> notas = libro.notasDeVentasScoped(clienteId, liberados);
+        if (notas.isEmpty()) {
+            return;
+        }
+        List<Long> ventas = notas.stream().map(NotaDeVenta::getVentaId).distinct().sorted().toList();
+        libro.bloquearPartidasScoped(clienteId, libro.idsDePartidasScoped(clienteId, ventas).stream().sorted().toList());
+        Map<Long, BigDecimal> imputado = new LinkedHashMap<>();
+        imputaciones.imputadoBloqueadoScoped(clienteId, ventas)
+                .forEach(fila -> imputado.merge(fila.getComprobanteId(), fila.getImporte(), BigDecimal::add));
+        Map<Long, BigDecimal> debe = new LinkedHashMap<>();
+        libro.debitosDeComprobantesScoped(clienteId, ventas).forEach(d -> debe.put(d.getComprobanteId(), d.getDebe()));
+        CreditoDisponible credito = creditoDisponible(clienteId);
+        Long ferreteriaId = TenantContext.requireFerreteriaId();
+        for (NotaDeVenta nota : notas) { // una nota por venta (uk_comprobante_asociado): no comparten crédito ni pendiente
+            Imputacion.Origen origen = Imputacion.Origen.notaDeCredito(nota.getNotaId());
+            BigDecimal pendiente = debe.getOrDefault(nota.getVentaId(), BigDecimal.ZERO)
+                    .subtract(imputado.getOrDefault(nota.getVentaId(), BigDecimal.ZERO));
+            BigDecimal aImputar = pendiente.min(credito.disponibleDe(origen));
+            if (aImputar.signum() > 0) {
+                imputaciones.save(Imputacion.de(ferreteriaId, clienteId, origen,
+                        Imputacion.Destino.comprobante(nota.getVentaId()), aImputar, true));
+            }
+        }
     }
 
     @Override

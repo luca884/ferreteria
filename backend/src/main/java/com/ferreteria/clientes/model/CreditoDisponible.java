@@ -49,6 +49,12 @@ public final class CreditoDisponible {
                 .reduce(BigDecimal.ZERO.setScale(ESCALA), BigDecimal::add);
     }
 
+    /** Lo que le queda sin imputar a ese origen; 0 si está agotado o no tiene crédito (L10: la nota de una venta anulada). */
+    public BigDecimal disponibleDe(Origen origen) {
+        return creditos.stream().filter(c -> c.origen().equals(origen)).map(Credito::disponible).filter(d -> d.signum() > 0)
+                .reduce(BigDecimal.ZERO.setScale(ESCALA), BigDecimal::add);
+    }
+
     /** Qué créditos pagan una deuda de {@code deuda}: del más viejo al más nuevo, hasta cubrirla o agotar el crédito. */
     public List<Aplicacion> aplicar(BigDecimal deuda) {
         if (deuda == null || deuda.signum() < 0) {
