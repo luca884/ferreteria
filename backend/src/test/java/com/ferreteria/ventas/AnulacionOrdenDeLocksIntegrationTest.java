@@ -12,6 +12,7 @@ import com.ferreteria.ventas.service.CajaService;
 import com.ferreteria.ventas.service.CobranzaPedido;
 import com.ferreteria.ventas.service.CobranzaService;
 import java.math.BigDecimal;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
@@ -80,6 +81,8 @@ class AnulacionOrdenDeLocksIntegrationTest extends CuentaCorrienteTestBase {
     private static final String IMPUTACION_FOR_UPDATE = "imputaciones FOR UPDATE por id";
     private static final String UPDATE_VIGENCIA = "update imputacion set vigente";
     private static final String NOTAS_DE_VENTAS = "select plano de las notas de las ventas liberadas";
+    private static final String PARTIDAS_FOR_UPDATE = "partidas del libro FOR UPDATE por id";
+    private static final String IMPUTACION_INSERT = "insert imputacion (AUTOMATICA de la nota)";
     private static final String LIBRO_INSERT = "insert libro (ANULACION)";
     private static final String SALDO_UPDATE = "update saldo del cliente";
 
@@ -105,6 +108,12 @@ class AnulacionOrdenDeLocksIntegrationTest extends CuentaCorrienteTestBase {
         }
         if (sql.startsWith("update recibo ")) {
             return UPDATE_RECIBO;
+        }
+        if (select && sql.contains(" from movimiento_cuenta_cliente ") && sql.endsWith(" for update")) {
+            return PARTIDAS_FOR_UPDATE;
+        }
+        if (sql.startsWith("insert into imputacion ")) {
+            return IMPUTACION_INSERT;
         }
         if (select && sql.contains(" from movimiento_cuenta_cliente ") && sql.indexOf("movimiento_cuenta_cliente")
                 != sql.lastIndexOf("movimiento_cuenta_cliente")) {
@@ -187,6 +196,52 @@ class AnulacionOrdenDeLocksIntegrationTest extends CuentaCorrienteTestBase {
                 .allSatisfy(p -> assertThat(p).doesNotStartWith("update").doesNotStartWith("insert").doesNotContain("FOR"));
         assertThat(saldo(cliente)).isEqualByComparingTo("300");
         assertInvariante(cliente);
+    }
+
+    @Test
+    @DisplayName("L10: si el recibo pagaba una venta anulada, la reimputación de su nota va después de la baja de la vigencia y antes del insert ANULACION: partidas FOR UPDATE por id → imputado FOR UPDATE → insert imputacion")
+    void ordenConReimputacionDeLaNota() {
+        Escenario e = escenario();
+        long cliente = cliente(e.f(), "5000");
+        VentaSuelta a = ventaEnLibro(e.f(), cliente, "300");
+        long recibo = cobro(e, cliente, "300", imputa(a.comprobanteId(), "300"));
+        notaEnLibro(e.f(), cliente, a, "300");
+
+        List<String> sql = anularTrazando(e, recibo);
+
+        List<String> pasos = pasos(sql);
+        List<String> hastaLaBaja = ORDEN_CON_IMPUTACIONES.subList(0, ORDEN_CON_IMPUTACIONES.indexOf(NOTAS_DE_VENTAS) + 1);
+        List<String> esperado = new ArrayList<>(hastaLaBaja);
+        esperado.addAll(List.of(
+                LIBRO_DE_RECIBO, // ids de las partidas de las ventas anuladas
+                PARTIDAS_FOR_UPDATE,
+                IMPUTACION_FOR_UPDATE, // lo imputado a esas ventas, ya sin lo del recibo
+                LIBRO_DE_RECIBO, // el debe de las ventas
+                PARTIDAS_FOR_UPDATE, // crédito disponible: lectura actual
+                IMPUTACION_FOR_UPDATE,
+                IMPUTACION_INSERT,
+                LIBRO_INSERT,
+                SALDO_UPDATE));
+        assertThat(hastaElSaldo(pasos)).as("pasos reales: %s", pasos).containsExactlyElementsOf(esperado);
+        assertThat(saldo(cliente)).isEqualByComparingTo("0");
+        assertInvariante(cliente);
+    }
+
+    /** La anulación interna de la venta, ya asentada en el libro como la dejaría {@code asentarNotaDeCredito}. */
+    private void notaEnLibro(Ferreteria f, long cliente, VentaSuelta venta, String monto) {
+        long numero = venta.numero() + 50_000_000L;
+        jdbc.update("insert into comprobante (ferreteria_id, tipo, estado, numero, clave_idempotencia, cliente_id, usuario_id, "
+                + "neto, iva, total, subtotal, comprobante_asociado_id, motivo_anulacion) "
+                + "values (?, 'NOTA_CREDITO', 'NO_FACTURABLE', ?, ?, ?, ?, 0, 0, ?, ?, ?, 'Error de carga')", f.id(), numero,
+                UUID.randomUUID().toString(), cliente, f.usuarioId(), new BigDecimal(monto), new BigDecimal(monto),
+                venta.comprobanteId());
+        long nota = jdbc.queryForObject("select id from comprobante where ferreteria_id = ? and numero = ?", Long.class,
+                f.id(), numero);
+        jdbc.update("insert into movimiento_cuenta_cliente (ferreteria_id, cliente_id, tipo, debe, haber, comprobante_id, "
+                + "pago_id, fecha, usuario_id, referencia) values (?, ?, 'NC', 0, ?, ?, ?, now(6), ?, ?)", f.id(), cliente,
+                new BigDecimal(monto), nota, venta.pagoId(), f.usuarioId(), "Anulación N.º " + numero + " (Venta N.º "
+                + venta.numero() + ")");
+        jdbc.update("update cliente set saldo = saldo - ? where id = ?", new BigDecimal(monto), cliente);
     }
 
     @Test

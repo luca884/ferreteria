@@ -19,7 +19,6 @@ import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -46,6 +45,7 @@ public abstract class MotorFiscalTestBase extends IntegrationTestBase {
     static final int FACTURA_A = 1;
 
     private static final AtomicInteger VENTAS = new AtomicInteger(1_000_000);
+    private static final AtomicInteger SECUENCIA_CUIT = new AtomicInteger(60_000_000);
 
     @Autowired
     MotorFiscal motor;
@@ -165,11 +165,14 @@ public abstract class MotorFiscalTestBase extends IntegrationTestBase {
         return String.valueOf(cuit).replaceFirst("(\\d{2})(\\d{8})(\\d)", "$1-$2-$3");
     }
 
-    /** Un CUIT nuevo de persona jurídica (30), con dígito verificador válido. */
+    /**
+     * Un CUIT nuevo de persona jurídica (30), con dígito verificador válido. Sale de una secuencia en el rango 30-6…, que
+     * ningún otro test usa: al azar chocaba con {@code uk_ferreteria_cuit} en la base compartida.
+     */
     public static long cuitNuevo() {
         int[] pesos = {5, 4, 3, 2, 7, 6, 5, 4, 3, 2};
         while (true) {
-            String base = "30" + String.format("%08d", ThreadLocalRandom.current().nextInt(100_000_000));
+            String base = "30" + String.format("%08d", SECUENCIA_CUIT.incrementAndGet());
             int suma = 0;
             for (int i = 0; i < pesos.length; i++) {
                 suma += (base.charAt(i) - '0') * pesos[i];
