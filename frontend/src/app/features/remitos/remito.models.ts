@@ -1,3 +1,4 @@
+import { DocumentoNoFiscal, FacturadoPor } from '../../shared/documento-no-fiscal/documento-no-fiscal.models';
 import { Unidad } from '../articulos/articulo.models';
 import { RenglonVentaRequest } from '../mostrador/venta.models';
 
@@ -70,6 +71,25 @@ export interface RemitoResponse {
   renglones: RenglonRemitoResponse[];
   /** Solo viene al emitir; en un remito repetido viene vacío. */
   sinStock?: RemitoSinStock[];
+  /** Solo en el detalle de un remito FACTURADO: la venta que lo facturó y, si tiene factura válida, cuál. */
+  facturadoPor?: FacturadoPor;
+}
+
+/** Lo que la hoja imprimible necesita de un remito. */
+export function documentoDeRemito(r: RemitoResponse): DocumentoNoFiscal {
+  return {
+    tipo: 'Remito',
+    numero: r.numero,
+    fecha: r.fecha,
+    clienteNombre: r.clienteNombre,
+    observaciones: r.observaciones,
+    renglones: r.renglones,
+    subtotal: r.subtotal,
+    descuentoPorcentaje: r.descuentoPorcentaje,
+    descuento: r.descuento,
+    total: r.total,
+    facturadoPor: r.facturadoPor,
+  };
 }
 
 /** Una fila del listado: lo justo para la grilla, sin renglones. */

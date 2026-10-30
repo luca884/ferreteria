@@ -1,0 +1,40 @@
+<!-- El mousedown sobre el fondo no mueve el foco al body: si no, Esc y Enter (que escucha el diálogo) dejarían de andar. -->
+<div class="dialogo-fondo" (mousedown)="retenerFoco($event)">
+  <div
+    class="dialogo documento"
+    tabindex="-1"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="documento-titulo"
+    appTrampaFoco
+    (keydown)="alTeclear($event)"
+  >
+    <h2 id="documento-titulo">{{ documento().tipo }} N.º {{ documento().numero }}</h2>
+
+    <article class="documento-imprimible">
+      <app-documento-no-fiscal-hoja [documento]="documento()" [emisor]="emisor()" />
+    </article>
+
+    <div class="dialogo-acciones">
+      <button
+        type="button"
+        class="cerrar"
+        data-tecla="Esc"
+        aria-keyshortcuts="Escape"
+        (click)="cerrar.emit()"
+      >
+        Cerrar
+      </button>
+      <button
+        #botonImprimir
+        type="button"
+        class="imprimir primario"
+        data-tecla="Enter"
+        aria-keyshortcuts="Enter"
+        (click)="imprimir()"
+      >
+        Imprimir
+      </button>
+    </div>
+  </div>
+</div>

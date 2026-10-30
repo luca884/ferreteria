@@ -1,0 +1,96 @@
+@let d = documento();
+@let e = emisor();
+<header class="encabezado">
+  <div class="emisor">
+    <p class="razon-social">{{ e.razonSocial }}</p>
+    @if (e.domicilioComercial; as domicilio) {
+      <p>Domicilio comercial: {{ domicilio }}</p>
+    }
+    <p>Condición frente al IVA: {{ condicionIva() }}</p>
+  </div>
+
+  <div class="letra">
+    <span class="grande">{{ letra }}</span>
+  </div>
+
+  <div class="comprobante">
+    <p class="tipo">{{ leyenda }}</p>
+    <p class="numero-interno">{{ d.tipo }} N.º {{ d.numero }}</p>
+    <p>Fecha: {{ fecha() }}</p>
+    @if (validoHasta(); as hasta) {
+      <p class="valido-hasta">Válido hasta {{ hasta }}</p>
+    }
+    <p>CUIT: {{ cuit() }}</p>
+    @if (e.ingresosBrutos; as iibb) {
+      <p>Ingresos Brutos: {{ iibb }}</p>
+    }
+    @if (inicioActividades(); as inicio) {
+      <p>Inicio de actividades: {{ inicio }}</p>
+    }
+  </div>
+</header>
+
+@if (d.clienteNombre; as cliente) {
+  <section class="receptor" aria-label="Cliente">
+    <p class="nombre">{{ cliente }}</p>
+  </section>
+}
+
+@if (d.facturadoPor; as f) {
+  <p class="facturado-por">
+    Facturado en la venta N.º {{ f.numero }}
+    @if (f.factura; as factura) {
+      · {{ factura }}
+    }
+  </p>
+}
+
+<table class="renglones">
+  <caption class="sr-only">
+    Renglones
+  </caption>
+  <thead>
+    <tr>
+      <th scope="col" class="num">Cantidad</th>
+      <th scope="col">Descripción</th>
+      <th scope="col" class="num">Precio unit.</th>
+      <th scope="col" class="num">Dto.</th>
+      <th scope="col" class="num">Importe</th>
+    </tr>
+  </thead>
+  <tbody>
+    @for (r of d.renglones; track r.renglon) {
+      <tr>
+        <td class="num">{{ r.cantidad | number: '1.0-3' }}</td>
+        <td>{{ r.descripcion }}</td>
+        <td class="num">{{ r.precioUnitario | monto }}</td>
+        <td class="num">
+          {{ r.descuentoPorcentaje > 0 ? (r.descuentoPorcentaje | number: '1.0-2') + ' %' : '' }}
+        </td>
+        <td class="num">{{ r.total | monto }}</td>
+      </tr>
+    }
+  </tbody>
+</table>
+
+<div class="totales">
+  @if (d.descuento > 0) {
+    <p>
+      Subtotal <span>{{ d.subtotal | monto }}</span>
+    </p>
+    <p>
+      Descuento
+      @if (porcentajeGeneral(); as porcentaje) {
+        ({{ porcentaje | number: '1.0-2' }} %)
+      }
+      <span>-{{ d.descuento | monto }}</span>
+    </p>
+  }
+  <p class="total">
+    Total <strong>{{ d.total | monto }}</strong>
+  </p>
+</div>
+
+@if (d.observaciones; as observaciones) {
+  <p class="observaciones"><strong>Observaciones:</strong> {{ observaciones }}</p>
+}

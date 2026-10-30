@@ -1,3 +1,4 @@
+import { DocumentoNoFiscal } from '../../shared/documento-no-fiscal/documento-no-fiscal.models';
 import { Unidad } from '../articulos/articulo.models';
 import { RenglonVentaRequest } from '../mostrador/venta.models';
 
@@ -77,6 +78,23 @@ export interface PresupuestoResponse {
   iva: number;
   total: number;
   renglones: RenglonPresupuestoResponse[];
+}
+
+/** Lo que la hoja imprimible necesita de un presupuesto: suma «Válido hasta», el último día de validez. */
+export function documentoDePresupuesto(p: PresupuestoResponse): DocumentoNoFiscal {
+  return {
+    tipo: 'Presupuesto',
+    numero: p.numero,
+    fecha: p.fecha,
+    validoHasta: p.vence,
+    clienteNombre: p.clienteNombre,
+    observaciones: p.observaciones,
+    renglones: p.renglones,
+    subtotal: p.subtotal,
+    descuentoPorcentaje: p.descuentoPorcentaje,
+    descuento: p.descuento,
+    total: p.total,
+  };
 }
 
 /** Una fila del listado: lo justo para la grilla, sin renglones. */

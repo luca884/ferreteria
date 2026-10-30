@@ -840,7 +840,7 @@ ul.error {
 /* ---------- Impresión ---------- */
 
 /*
- * Los imprimibles (el recibo, el extracto, la venta y la factura) viven en un diálogo fijo y con scroll, encima de la pantalla. Al imprimir
+ * Los imprimibles (el recibo, el extracto, la venta, la factura y el remito o presupuesto) viven en un diálogo fijo y con scroll, encima de la pantalla. Al imprimir
  * sale solo el artículo: todo lo que no lo contiene se saca con `display: none` (con `visibility: hidden` ocupa lugar y
  * deja hojas en blanco), y el diálogo, su fondo, el shell y el contenido dejan de ser fijos, con scroll o de alto fijo
  * (100vh): si no, Chrome repite el diálogo fijo en cada hoja (recibo) o el artículo queda en la columna angosta del
@@ -858,23 +858,28 @@ ul.error {
   size: A4;
   margin: 10mm;
 }
+/* El remito y el presupuesto (cu-07-remito-presupuesto-imprimible): A4 con el mismo margen que la factura. */
+@page documento {
+  size: A4;
+  margin: 10mm;
+}
 
 @media print {
-  body:has(:is(.recibo-imprimible, .extracto-imprimible, .venta-imprimible, .stock-imprimible, .controles-imprimible, .etiquetas-imprimible, .caja-imprimible, .factura-imprimible))
-    *:not(:has(:is(.recibo-imprimible, .extracto-imprimible, .venta-imprimible, .stock-imprimible, .controles-imprimible, .etiquetas-imprimible, .caja-imprimible, .factura-imprimible))):not(:is(.recibo-imprimible, .extracto-imprimible, .venta-imprimible, .stock-imprimible, .controles-imprimible, .etiquetas-imprimible, .caja-imprimible, .factura-imprimible)):not(
-      :is(.recibo-imprimible, .extracto-imprimible, .venta-imprimible, .stock-imprimible, .controles-imprimible, .etiquetas-imprimible, .caja-imprimible, .factura-imprimible) *
+  body:has(:is(.recibo-imprimible, .extracto-imprimible, .venta-imprimible, .stock-imprimible, .controles-imprimible, .etiquetas-imprimible, .caja-imprimible, .factura-imprimible, .documento-imprimible))
+    *:not(:has(:is(.recibo-imprimible, .extracto-imprimible, .venta-imprimible, .stock-imprimible, .controles-imprimible, .etiquetas-imprimible, .caja-imprimible, .factura-imprimible, .documento-imprimible))):not(:is(.recibo-imprimible, .extracto-imprimible, .venta-imprimible, .stock-imprimible, .controles-imprimible, .etiquetas-imprimible, .caja-imprimible, .factura-imprimible, .documento-imprimible)):not(
+      :is(.recibo-imprimible, .extracto-imprimible, .venta-imprimible, .stock-imprimible, .controles-imprimible, .etiquetas-imprimible, .caja-imprimible, .factura-imprimible, .documento-imprimible) *
     ) {
     display: none !important;
   }
-  app-shell:has(:is(.recibo-imprimible, .extracto-imprimible, .venta-imprimible, .stock-imprimible, .controles-imprimible, .etiquetas-imprimible, .caja-imprimible, .factura-imprimible)),
-  app-shell:has(:is(.recibo-imprimible, .extracto-imprimible, .venta-imprimible, .stock-imprimible, .controles-imprimible, .etiquetas-imprimible, .caja-imprimible, .factura-imprimible)) .contenido {
+  app-shell:has(:is(.recibo-imprimible, .extracto-imprimible, .venta-imprimible, .stock-imprimible, .controles-imprimible, .etiquetas-imprimible, .caja-imprimible, .factura-imprimible, .documento-imprimible)),
+  app-shell:has(:is(.recibo-imprimible, .extracto-imprimible, .venta-imprimible, .stock-imprimible, .controles-imprimible, .etiquetas-imprimible, .caja-imprimible, .factura-imprimible, .documento-imprimible)) .contenido {
     display: block !important;
     height: auto !important;
     overflow: visible !important;
     padding: 0 !important;
   }
-  .dialogo-fondo:has(:is(.recibo-imprimible, .extracto-imprimible, .venta-imprimible, .stock-imprimible, .controles-imprimible, .etiquetas-imprimible, .caja-imprimible, .factura-imprimible)),
-  .dialogo:has(:is(.recibo-imprimible, .extracto-imprimible, .venta-imprimible, .stock-imprimible, .controles-imprimible, .etiquetas-imprimible, .caja-imprimible, .factura-imprimible)) {
+  .dialogo-fondo:has(:is(.recibo-imprimible, .extracto-imprimible, .venta-imprimible, .stock-imprimible, .controles-imprimible, .etiquetas-imprimible, .caja-imprimible, .factura-imprimible, .documento-imprimible)),
+  .dialogo:has(:is(.recibo-imprimible, .extracto-imprimible, .venta-imprimible, .stock-imprimible, .controles-imprimible, .etiquetas-imprimible, .caja-imprimible, .factura-imprimible, .documento-imprimible)) {
     position: static !important;
     display: block !important;
     place-items: stretch !important;
@@ -891,7 +896,8 @@ ul.error {
   .stock-imprimible,
   .controles-imprimible,
   .caja-imprimible,
-  .factura-imprimible {
+  .factura-imprimible,
+  .documento-imprimible {
     color: #000;
   }
   .stock-imprimible tr,
@@ -906,7 +912,11 @@ ul.error {
   .factura-imprimible {
     page: factura;
   }
-  .factura-imprimible tr {
+  .documento-imprimible {
+    page: documento;
+  }
+  .factura-imprimible tr,
+  .documento-imprimible tr {
     break-inside: avoid;
   }
   .stock-imprimible thead,

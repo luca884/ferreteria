@@ -189,6 +189,7 @@
         </div>
       } @else {
         <div class="acciones">
+          <button type="button" class="secundario" [disabled]="leyendoEmisor() || cambiando() || pasando()" (click)="imprimir()">Imprimir</button>
           @if (p.estado !== 'ACEPTADO' && p.estado !== 'FACTURADO') {
             <button type="button" class="secundario" [disabled]="cambiando() || pasando()" (click)="cambiarEstado('ACEPTADO')">Aceptar</button>
           }
@@ -207,4 +208,10 @@
       <p class="ayuda">Cargando…</p>
     }
   </section>
+}
+
+@if (detalle(); as p) {
+  @if (emisor(); as datos) {
+    <app-documento-no-fiscal-imprimible [documento]="documentoDe(p)" [emisor]="datos" (cerrar)="cerrarImpresion()" />
+  }
 }

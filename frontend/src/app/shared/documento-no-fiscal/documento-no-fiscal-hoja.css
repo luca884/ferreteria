@@ -1,0 +1,91 @@
+:host {
+  display: flex;
+  flex-direction: column;
+  gap: var(--e-3);
+  font-size: var(--texto-sm);
+}
+p {
+  margin: 0;
+}
+
+/* Como la factura: el emisor a la izquierda, la letra en su recuadro al medio y el comprobante a la derecha. */
+.encabezado {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  border: 1px solid currentColor;
+}
+.emisor,
+.comprobante {
+  display: grid;
+  align-content: start;
+  gap: 2px;
+  padding: var(--e-2) var(--e-3);
+}
+.razon-social {
+  font-size: var(--texto-md);
+  font-weight: 700;
+  text-transform: uppercase;
+}
+.letra {
+  display: grid;
+  justify-items: center;
+  align-content: start;
+  padding: var(--e-1) var(--e-3);
+  border-inline: 1px solid currentColor;
+  border-bottom: 1px solid currentColor;
+}
+.grande {
+  font-size: 2.25rem;
+  font-weight: 700;
+  line-height: 1;
+}
+.tipo,
+.numero-interno {
+  font-size: var(--texto-md);
+  font-weight: 700;
+}
+.valido-hasta {
+  font-weight: 700;
+}
+
+.receptor {
+  padding: var(--e-2) var(--e-3);
+  border: 1px solid currentColor;
+}
+.nombre,
+.facturado-por {
+  font-weight: 700;
+}
+
+.renglones {
+  width: 100%;
+  border-collapse: collapse;
+}
+.renglones th,
+.renglones td {
+  padding: 4px 6px;
+  border-bottom: 1px solid var(--borde);
+  text-align: left;
+}
+.renglones .num {
+  text-align: right;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.totales {
+  display: grid;
+  gap: 2px;
+  justify-self: end;
+  min-width: 18rem;
+  margin-left: auto;
+}
+.totales p {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--e-4);
+  font-variant-numeric: tabular-nums;
+}
+.total {
+  font-size: var(--texto-md);
+}

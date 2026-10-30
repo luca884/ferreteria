@@ -1,0 +1,9 @@
+.documento {
+  width: min(820px, 100%);
+  max-height: calc(100vh - var(--e-8));
+  overflow-y: auto;
+}
+/* El diálogo recibe el foco con un clic en una zona sin controles: no necesita el aro. */
+.documento:focus {
+  outline: none;
+}

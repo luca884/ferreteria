@@ -11,6 +11,8 @@ import { AuthService } from '../../core/auth/auth.service';
 import { Articulo } from '../articulos/articulo.models';
 import { ArticulosService } from '../articulos/articulos.service';
 import { GENERAR_CLAVE } from '../mostrador/ticket.store';
+import { EmisorService } from '../../shared/documento-no-fiscal/emisor.service';
+import { emisorDePrueba } from '../../shared/documento-no-fiscal/documento-no-fiscal.testing';
 import { EstadoPresupuesto, PresupuestoResponse, PresupuestoResumen } from './presupuesto.models';
 import { Presupuestos } from './presupuestos';
 import { PresupuestosService } from './presupuestos.service';
@@ -26,6 +28,7 @@ describe('Presupuestos', () => {
   };
   let articulos: { obtener: ReturnType<typeof vi.fn> };
   let navegar: ReturnType<typeof vi.fn>;
+  let emisor: { obtener: ReturnType<typeof vi.fn> };
 
   const resumen = (numero: number, cambios: Partial<PresupuestoResumen> = {}): PresupuestoResumen => ({
     presupuestoId: numero * 10,
@@ -108,6 +111,7 @@ describe('Presupuestos', () => {
       cambiarEstado: vi.fn((id: number, estado: EstadoPresupuesto) => of(detalleDe(id / 10, { estado }))),
     };
     articulos = { obtener: vi.fn(() => of(articuloActual())) };
+    emisor = { obtener: vi.fn(() => of(emisorDePrueba())) };
     const sesion = signal({ userId: 7, nombre: 'Ana', email: 'ana@x.com', rol, ferreteriaId: 3, ferreteriaNombre: 'Tornillo' });
     await TestBed.configureTestingModule({
       imports: [Presupuestos],
@@ -116,6 +120,7 @@ describe('Presupuestos', () => {
         { provide: LOCALE_ID, useValue: 'es-AR' },
         { provide: PresupuestosService, useValue: api },
         { provide: ArticulosService, useValue: articulos },
+        { provide: EmisorService, useValue: emisor },
         { provide: AuthService, useValue: { sesion: sesion.asReadonly(), esDueno: () => rol === 'DUENO' } },
         { provide: GENERAR_CLAVE, useValue: () => 'clave-nueva' },
       ],
@@ -363,10 +368,10 @@ describe('Presupuestos', () => {
     });
 
     it.each<[EstadoPresupuesto, string[]]>([
-      ['PENDIENTE', ['Aceptar', 'Rechazar', 'Pasar a venta']],
-      ['ACEPTADO', ['Rechazar', 'Volver a pendiente', 'Pasar a venta']],
-      ['RECHAZADO', ['Aceptar', 'Volver a pendiente']],
-      ['FACTURADO', []],
+      ['PENDIENTE', ['Imprimir', 'Aceptar', 'Rechazar', 'Pasar a venta']],
+      ['ACEPTADO', ['Imprimir', 'Rechazar', 'Volver a pendiente', 'Pasar a venta']],
+      ['RECHAZADO', ['Imprimir', 'Aceptar', 'Volver a pendiente']],
+      ['FACTURADO', ['Imprimir']],
     ])('un %s ofrece %j', async (estado, esperados) => {
       await crear();
       api.obtener.mockReturnValue(of(detalleDe(12, { estado })));
@@ -432,7 +437,7 @@ describe('Presupuestos', () => {
       await click(boton('Aceptar', detalle()!));
 
       expect(alerta()).toContain('Ese presupuesto ya se facturó.');
-      expect(detalle()!.querySelectorAll('.acciones button')).toHaveLength(0);
+      expect(Array.from(detalle()!.querySelectorAll('.acciones button')).map((b) => normal(b.textContent))).toEqual(['Imprimir']);
     });
 
     it('con el cambio en curso los botones no se pueden apretar dos veces', async () => {
@@ -588,6 +593,47 @@ describe('Presupuestos', () => {
 
       expect(el().querySelector('.reemplazo')).toBeNull();
       expect(navegar).toHaveBeenCalledWith('/mostrador');
+    });
+  });
+
+  describe('imprimir', () => {
+    const dialogo = () => el().querySelector<HTMLElement>('app-documento-no-fiscal-imprimible');
+
+    it('«Imprimir» lee el emisor y abre la hoja del presupuesto con su número, «Válido hasta» y la X', async () => {
+      await crear();
+      await abrirDetalle(0);
+
+      await click(boton('Imprimir', detalle()!));
+
+      expect(emisor.obtener).toHaveBeenCalledTimes(1);
+      expect(dialogo()).not.toBeNull();
+      expect(normal(dialogo()!.querySelector('#documento-titulo')?.textContent)).toBe('Presupuesto N.º 12');
+      expect(normal(dialogo()!.querySelector('.valido-hasta')?.textContent)).toBe('Válido hasta 02/11/2026');
+      expect(normal(dialogo()!.querySelector('.letra')?.textContent)).toBe('X');
+      expect(normal(dialogo()!.textContent)).toContain('Tornillo SA');
+    });
+
+    it('el Vendedor y el Dueño lo imprimen; Esc cierra la hoja y deja el detalle', async () => {
+      await crear([resumen(12), resumen(11)], 'DUENO');
+      await abrirDetalle(0);
+      await click(boton('Imprimir', detalle()!));
+
+      dialogo()!.querySelector('[role="dialog"]')!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+      await refrescar();
+
+      expect(dialogo()).toBeNull();
+      expect(detalle()).not.toBeNull();
+    });
+
+    it('si el emisor no se pudo leer, avisa en el detalle y no abre la hoja', async () => {
+      await crear();
+      emisor.obtener.mockReturnValue(throwError(() => new HttpErrorResponse({ status: 500 })));
+      await abrirDetalle(0);
+
+      await click(boton('Imprimir', detalle()!));
+
+      expect(alerta()).toBe('No se pudieron leer los datos de la ferretería. Probá de nuevo.');
+      expect(dialogo()).toBeNull();
     });
   });
 });

@@ -9,6 +9,9 @@ import { AuthService } from '../../core/auth/auth.service';
 import { MontoPipe } from '../../core/formato/monto';
 import { BarraAcciones } from '../../shared/barra-acciones';
 import { porcentajeDescuentoGeneral } from '../../shared/descuento-general';
+import { DocumentoNoFiscalImprimible } from '../../shared/documento-no-fiscal/documento-no-fiscal-imprimible';
+import { EmisorService } from '../../shared/documento-no-fiscal/emisor.service';
+import { DatosFiscales } from '../datos-fiscales/datos-fiscales.service';
 import { ArticulosService } from '../articulos/articulos.service';
 import { fechaHoraLocal } from '../caja/caja.models';
 import { ArticuloMostrador } from '../mostrador/mostrador.models';
@@ -22,6 +25,7 @@ import {
   FiltroRemitos,
   RemitoResponse,
   RemitoResumen,
+  documentoDeRemito,
 } from './remito.models';
 import { RemitosService } from './remitos.service';
 
@@ -29,6 +33,7 @@ const MENSAJE_LISTA = 'No se pudieron cargar los remitos.';
 const MENSAJE_DETALLE = 'No se pudo cargar el remito.';
 const MENSAJE_ANULAR = 'No se pudo anular el remito. Probá de nuevo.';
 const MENSAJE_PRECIOS = 'No se pudieron leer los precios de hoy. Probá de nuevo.';
+const MENSAJE_EMISOR = 'No se pudieron leer los datos de la ferretería. Probá de nuevo.';
 const MENSAJE_NUMERO = 'El número tiene que ser un entero.';
 
 /**
@@ -38,7 +43,7 @@ const MENSAJE_NUMERO = 'El número tiene que ser un entero.';
  */
 @Component({
   selector: 'app-remitos',
-  imports: [BarraAcciones, DecimalPipe, MontoPipe],
+  imports: [BarraAcciones, DecimalPipe, DocumentoNoFiscalImprimible, MontoPipe],
   templateUrl: './remitos.html',
   styleUrl: './remitos.css',
 })
@@ -46,6 +51,7 @@ export class Remitos implements OnInit {
   private readonly api = inject(RemitosService);
   private readonly articulos = inject(ArticulosService);
   private readonly auth = inject(AuthService);
+  private readonly emisorApi = inject(EmisorService);
   private readonly router = inject(Router);
   private readonly generarClave = inject(GENERAR_CLAVE);
 
@@ -74,6 +80,9 @@ export class Remitos implements OnInit {
   protected readonly errorAccion = signal<string | null>(null);
   protected readonly anulando = signal(false);
   protected readonly pasando = signal(false);
+  /** Los datos del emisor con la hoja abierta (el remito se imprime); null con la hoja cerrada. */
+  protected readonly emisor = signal<DatosFiscales | null>(null);
+  protected readonly leyendoEmisor = signal(false);
   /** Hay que confirmar la anulación del remito abierto. */
   protected readonly confirmandoAnulacion = signal(false);
   /** Cuántos renglones tiene el ticket del mostrador que se reemplazaría; null si no hay nada por confirmar. */
@@ -133,6 +142,7 @@ export class Remitos implements OnInit {
   }
 
   private cerrarDetalle(): void {
+    this.emisor.set(null);
     this.elegido.set(null);
     this.detalle.set(null);
     this.errorAccion.set(null);
@@ -146,6 +156,7 @@ export class Remitos implements OnInit {
   }
 
   private abrir(id: number): void {
+    this.emisor.set(null);
     this.detalle.set(null);
     this.errorAccion.set(null);
     this.reemplazo.set(null);
@@ -160,6 +171,32 @@ export class Remitos implements OnInit {
       },
     });
   }
+
+  /**
+   * Imprimir (cu-07-remito-presupuesto-imprimible): lee los datos actuales del emisor y abre la hoja. Se leen en cada
+   * impresión: el remito no los congela.
+   */
+  protected imprimir(): void {
+    if (!this.detalle() || this.leyendoEmisor()) return;
+    this.errorAccion.set(null);
+    this.leyendoEmisor.set(true);
+    this.emisorApi.obtener().subscribe({
+      next: (datos) => {
+        this.leyendoEmisor.set(false);
+        this.emisor.set(datos);
+      },
+      error: () => {
+        this.leyendoEmisor.set(false);
+        this.errorAccion.set(MENSAJE_EMISOR);
+      },
+    });
+  }
+
+  protected cerrarImpresion(): void {
+    this.emisor.set(null);
+  }
+
+  protected readonly documentoDe = documentoDeRemito;
 
   protected pedirAnulacion(): void {
     if (!this.detalle() || this.anulando() || this.pasando()) return;

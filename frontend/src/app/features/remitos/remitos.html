@@ -163,7 +163,15 @@
       </div>
 
       @if (r.estado === 'FACTURADO') {
-        <p class="nota-estado">Ya se facturó.</p>
+        @if (r.facturadoPor; as f) {
+          <p class="nota-estado">
+            Facturado en la venta N.º {{ f.numero }}@if (f.factura; as factura) {
+              · {{ factura }}
+            }
+          </p>
+        } @else {
+          <p class="nota-estado">Ya se facturó.</p>
+        }
       } @else if (r.estado === 'ANULADO') {
         <p class="nota-estado">Está anulado: el stock ya volvió.</p>
       }
@@ -189,6 +197,7 @@
         </div>
       } @else {
         <div class="acciones">
+          <button type="button" class="secundario" [disabled]="leyendoEmisor() || anulando() || pasando()" (click)="imprimir()">Imprimir</button>
           @if (sePuedePasar(r) && esDueno()) {
             <button type="button" class="secundario" [disabled]="anulando() || pasando()" (click)="pedirAnulacion()">Anular</button>
           }
@@ -201,4 +210,10 @@
       <p class="ayuda">Cargando…</p>
     }
   </section>
+}
+
+@if (detalle(); as r) {
+  @if (emisor(); as datos) {
+    <app-documento-no-fiscal-imprimible [documento]="documentoDe(r)" [emisor]="datos" (cerrar)="cerrarImpresion()" />
+  }
 }
