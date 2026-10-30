@@ -38,8 +38,8 @@ Decisiones de producto (S6 a S9; Luca: «dale», 2026-10-29, L3):
 
 ## Tasks
 
-- [ ] T1 · S1-S9 · ruta: inline · Aceptación: commit docs con CU-08, CU-12 (pendiente, crédito, I2 con la NC) y el Modelo de datos · Evidencia: — · Risk: none
-- [ ] T2 · S1 · ruta: inline · Aceptación: V39 + `MigracionV39Test` (aplica, CHECK, FK, únicos, rollback con guarda, cadena con V28) · Evidencia: — · Risk: item 1 (CHECK no aditivo sobre `imputacion`)
+- [x] T1 · S1-S9 · ruta: delegada (W1, opus) · Aceptación: commit docs con CU-08, CU-12 (pendiente, crédito, I2 con la NC) y el Modelo de datos · Evidencia: readback con `rg` (sin «rama 10» pendiente ni el 422); commit `4948af8` · Risk: none
+- [x] T2 · S1 · ruta: delegada (W1, opus) · Aceptación: V39 + `MigracionV39Test` (aplica, CHECK, FK, únicos, rollback con guarda, cadena con V28) · Evidencia: RED 11 errores («No migration with a target version 39») → GREEN 11/11; `MigracionV6Test` con la V39 (25/0, padre); commit `2087c8c` · Risk: item 1 (CHECK no aditivo sobre `imputacion`)
 - [ ] T3 · S2, S3, S7 · ruta: inline · Aceptación: puerto, fábrica `nc`, origen NC de la imputación, NC como crédito en `creditoDisponible`, `InvarianteCuenta` ampliada y `ModulosArchTest`; tests de servicio de la imputación (a la factura, a favor, consumo posterior) · Evidencia: — · Risk: item 3 (puerto y lista cerrada), item 4 (locks y lecturas de crédito)
 - [ ] T4 · S3, S4, S6, S8 · ruta: inline · Aceptación: `RegistroAnulacionDeVenta` sin el 422, llamando al puerto con la parte a cuenta corriente, en NC y anulación interna; cliente activo para la venta a cuenta; S6 de `AnulacionDeVentaIntegrationTest` reescrito; concurrencia NC contra cobranza y venta del mismo cliente · Evidencia: — · Risk: item 4 (orden de locks)
 - [ ] T5 · S4, S9 · ruta: inline · Aceptación: extracto con la NC (backend y pantalla), confirmación de anular en Ventas si cambia el texto · Evidencia: — · Risk: none
@@ -60,3 +60,4 @@ Decisiones de producto (S6 a S9; Luca: «dale», 2026-10-29, L3):
   - el libro no tiene columna para el comprobante de la NC: `comprobante_id` en el renglón NC lo permite `ck_mcc_recibo_ref`.
   Desfases del plan: V38 → V39; «como V21» es el patrón, pero el CHECK es de V28; «MigracionV6Test» → `MigracionV39Test`.
 - L3 (2026-10-29) Luca confirmó S6 a S9: «dale». Por el contexto del padre (backstop de ~150k), la implementación va con writers `odd-implementer` (opus, caso 5) en serie: W1 = T1+T2, W2 = T3, W3 = T4+T5; el padre commitea cada unidad de riesgo aparte.
+- L4 (2026-10-29) W1 (opus): V39 en una sola ALTER (`nc_origen_id`, FK compuesta, índice, `uk_imputacion_nc_comprobante`, `uk_imputacion_nc_ajuste`, `ck_imputacion_origen_v39` = exactamente un origen). El renglón NC del libro entra sin cambiar el libro. El rollback suma una guarda en el libro (`tipo <> 'NC'`), porque una NC sin imputaciones (venta ya cobrada) no la detecta la guarda de `imputacion`; con `mysql --force` esa guarda no frena. Suite de W1: 5828 tests, 1 falla (`MigracionV6Test.historialDeMigraciones`, la lista de versiones, fuera de su superficie); la arregló el padre (`MigracionV6Test,MigracionV39Test` 25/0). Próximo: W2 = T3.
