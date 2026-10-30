@@ -31,7 +31,6 @@ ALTER TABLE imputacion
     DROP CHECK ck_rollback_v39_sin_nc,
     DROP CHECK ck_imputacion_origen_v39,
     ADD CONSTRAINT ck_imputacion_origen CHECK ((recibo_id IS NULL) <> (ajuste_origen_id IS NULL)),
-    DROP INDEX uk_imputacion_nc_comprobante,
     DROP INDEX uk_imputacion_nc_ajuste,
     DROP FOREIGN KEY fk_imputacion_nc_origen,
     DROP INDEX ix_imputacion_ferreteria_nc_origen,

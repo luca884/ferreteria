@@ -34,7 +34,8 @@ import org.testcontainers.containers.MySQLContainer;
  * Migracion V39 (CU-08 y CU-12, cu-08-nc-cuenta-corriente T2: S1): la nota de credito (o la anulacion interna) de una venta a
  * cuenta corriente es el tercer origen de credito de la imputacion. Nace imputacion.nc_origen_id con su FK compuesta al
  * comprobante NOTA_CREDITO, el CHECK de origen pasa a «exactamente uno de recibo, Descuento o NC» con nombre nuevo, y nacen
- * los unicos por par. El libro no cambia: su renglon NC ya entra con los CHECK de V20 a V28. Molde de MigracionV28Test y
+ * el unico por (NC, Recargo); a un comprobante la NC puede imputar mas de una vez (la reimputacion a la venta anulada cuando
+ * se anula el recibo que la pagaba, L10). El libro no cambia: su renglon NC ya entra con los CHECK de V20 a V28. Molde de MigracionV28Test y
  * MigracionV37Test: un MySQL de Testcontainers propio y una base nueva por test, migrada hasta la V38.
  */
 class MigracionV39Test {
@@ -77,13 +78,13 @@ class MigracionV39Test {
 
     @Test
     @DisplayName("esquema: imputacion gana nc_origen_id (bigint, nula) con su indice (ferreteria_id, nc_origen_id), el CHECK de "
-        + "origen cambia de nombre y nacen los unicos por par de la NC")
+        + "origen cambia de nombre y nace el unico (NC, Recargo)")
     void columnaIndicesYRestricciones() {
         migrarHasta("39");
 
         assertThat(columna("imputacion", "nc_origen_id")).isEqualTo("bigint YES");
         assertThat(indice("ix_imputacion_ferreteria_nc_origen")).containsExactly("ferreteria_id", "nc_origen_id");
-        assertThat(indice("uk_imputacion_nc_comprobante")).containsExactly("nc_origen_id", "comprobante_id");
+        assertThat(indice("uk_imputacion_nc_comprobante")).isEmpty();
         assertThat(indice("uk_imputacion_nc_ajuste")).containsExactly("nc_origen_id", "ajuste_destino_id");
         assertThat(restriccionesDe("imputacion", "CHECK")).contains("ck_imputacion_origen_v39", "ck_imputacion_destino")
             .doesNotContain("ck_imputacion_origen");
@@ -166,7 +167,7 @@ class MigracionV39Test {
     }
 
     @Test
-    @DisplayName("unicos por par: una NC imputa una sola vez a cada comprobante y a cada Recargo")
+    @DisplayName("unicos por par: una NC imputa una sola vez a cada Recargo, y a un comprobante puede volver a imputarle")
     void paresUnicos() {
         migrarHasta("39");
         Escenario e = escenario("a");
@@ -175,8 +176,7 @@ class MigracionV39Test {
         imputacion(e, null, null, nc, e.venta(), null);
         imputacion(e, null, null, nc, null, recargo);
 
-        assertThatThrownBy(() -> imputacion(e, null, null, nc, e.venta(), null))
-            .hasMessageContaining("uk_imputacion_nc_comprobante");
+        assertThatCode(() -> imputacion(e, null, null, nc, e.venta(), null)).doesNotThrowAnyException();
         assertThatThrownBy(() -> imputacion(e, null, null, nc, null, recargo)).hasMessageContaining("uk_imputacion_nc_ajuste");
         assertThatCode(() -> imputacion(e, null, null, nc, venta(e.ferreteria(), e.usuario()), null))
             .doesNotThrowAnyException();

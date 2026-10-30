@@ -27,9 +27,10 @@
 -- CHECK de origen. Las filas existentes tienen nc_origen_id NULL y exactamente uno de los otros dos: lo cumplen.
 -- ck_imputacion_destino no cambia: el destino de una NC es, como el de los otros, un comprobante o un Recargo.
 --
--- Unicos por par, como los de V28 (sin ferreteria_id: el id de la NC ya es de una sola ferreteria): una NC imputa una sola
--- vez a cada comprobante (uk_imputacion_nc_comprobante) y a cada Recargo (uk_imputacion_nc_ajuste). Las imputaciones de una
--- NC no se dan de baja (vigente queda en true): la NC no se anula.
+-- Unico por par, como los de V28 (sin ferreteria_id: el id de la NC ya es de una sola ferreteria): una NC imputa una sola
+-- vez a cada Recargo (uk_imputacion_nc_ajuste). A un comprobante, en cambio, puede imputar mas de una vez: cuando se anula
+-- el recibo que pagaba la venta anulada, la NC le vuelve a imputar lo que el recibo cubria (la imputacion solo se agrega,
+-- nunca se edita). Las imputaciones de una NC no se dan de baja (vigente queda en true): la NC no se anula.
 --
 -- Rollback: backend/src/test/resources/clientes/rollback-v39-nc-cuenta-corriente.sql, SOLO sin NC en la cuenta corriente (se
 -- niega con un solo renglon NC en el libro o una sola imputacion con nc_origen_id; con alguno se conserva todo).
@@ -38,8 +39,7 @@ ALTER TABLE imputacion
     ADD COLUMN nc_origen_id BIGINT NULL AFTER ajuste_origen_id,
     ADD INDEX ix_imputacion_ferreteria_nc_origen (ferreteria_id, nc_origen_id),
     ADD CONSTRAINT fk_imputacion_nc_origen FOREIGN KEY (ferreteria_id, nc_origen_id) REFERENCES comprobante (ferreteria_id, id),
-    ADD CONSTRAINT uk_imputacion_nc_comprobante UNIQUE (nc_origen_id, comprobante_id),
-    ADD CONSTRAINT uk_imputacion_nc_ajuste      UNIQUE (nc_origen_id, ajuste_destino_id),
+    ADD CONSTRAINT uk_imputacion_nc_ajuste UNIQUE (nc_origen_id, ajuste_destino_id),
     DROP CHECK ck_imputacion_origen,
     ADD CONSTRAINT ck_imputacion_origen_v39 CHECK (
         (recibo_id IS NOT NULL) + (ajuste_origen_id IS NOT NULL) + (nc_origen_id IS NOT NULL) = 1);
