@@ -93,22 +93,24 @@ public interface ImputacionRepository extends TenantScopedRepository<Imputacion,
     List<FilaImputadaARecargo> imputadoBloqueadoDeRecargos(@Param("fid") Long ferreteriaId,
             @Param("clienteId") Long clienteId, @Param("ajusteIds") List<Long> ajusteIds);
 
-    /** Una fila cruda de lo imputado de un crédito: su origen (recibo o Descuento) y el importe. */
+    /** Una fila cruda de lo imputado de un crédito: su origen (recibo, Descuento o nota de crédito) y el importe. */
     interface FilaImputadaDeCredito {
         Long getReciboId();
 
         Long getAjusteOrigenId();
 
+        Long getNcOrigenId();
+
         BigDecimal getImporte();
     }
 
     /**
-     * Todas las imputaciones vigentes del cliente, con su origen, con {@code FOR UPDATE}: lo que cada recibo y cada Descuento
-     * ya gastó, en LECTURA ACTUAL. La necesita el consumo automático de crédito (una venta o un Recargo nuevos): con la foto
+     * Todas las imputaciones vigentes del cliente, con su origen, con {@code FOR UPDATE}: lo que cada recibo, cada Descuento y
+     * cada nota de crédito ya gastó, en LECTURA ACTUAL. La necesita el consumo automático de crédito (una venta o un Recargo nuevos): con la foto
      * de REPEATABLE READ se vería crédito de más y se imputaría dos veces el mismo. Filas crudas, sin agregado (se suman en el
      * dominio). Mismo índice y mismo gap residual acotado al cliente que {@link #imputadoBloqueado}. Requiere transacción.
      */
-    @Query(value = "select recibo_id as reciboId, ajuste_origen_id as ajusteOrigenId, importe as importe "
+    @Query(value = "select recibo_id as reciboId, ajuste_origen_id as ajusteOrigenId, nc_origen_id as ncOrigenId, importe as importe "
             + "from imputacion force index (ix_imputacion_cliente) "
             + "where ferreteria_id = :fid and cliente_id = :clienteId and vigente = true for update", nativeQuery = true)
     List<FilaImputadaDeCredito> imputadoDeCreditosBloqueado(@Param("fid") Long ferreteriaId,

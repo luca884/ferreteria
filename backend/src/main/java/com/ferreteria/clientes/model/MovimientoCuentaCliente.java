@@ -205,6 +205,34 @@ public class MovimientoCuentaCliente {
         return movimiento;
     }
 
+    /**
+     * La nota de crédito (o la anulación interna) de UN pago a cuenta corriente de la venta anulada (CU-08): debe = 0, haber =
+     * monto (el de ese pago), con el pago de la venta, el comprobante NOTA_CREDITO y la referencia («Nota de crédito N.º n (Venta N.º v)»
+     * o «Anulación N.º n (Venta N.º v)»); sin recibo, ajuste, motivo ni exceso. Un pago se acredita una sola vez (UNIQUE (pago_id, tipo)).
+     */
+    public static MovimientoCuentaCliente nc(Long ferreteriaId, Long clienteId, Long notaId, Long pagoId, String referencia,
+            BigDecimal monto, LocalDateTime fecha, Long usuarioId) {
+        if (monto == null || monto.signum() <= 0) {
+            throw new IllegalArgumentException("El monto de una nota de crédito tiene que ser mayor que cero.");
+        }
+        if (notaId == null || pagoId == null) {
+            throw new IllegalArgumentException("Una nota de crédito referencia su comprobante y el pago que acredita.");
+        }
+        MovimientoCuentaCliente movimiento = new MovimientoCuentaCliente();
+        movimiento.ferreteriaId = ferreteriaId;
+        movimiento.clienteId = clienteId;
+        movimiento.tipo = TipoMovimientoCuenta.NC;
+        movimiento.debe = BigDecimal.ZERO;
+        movimiento.haber = monto;
+        movimiento.comprobanteId = notaId;
+        movimiento.pagoId = pagoId;
+        movimiento.referencia = referenciaValida(referencia);
+        movimiento.fecha = fecha;
+        movimiento.usuarioId = usuarioId;
+        movimiento.excedioLimite = false;
+        return movimiento;
+    }
+
     private static String referenciaValida(String referencia) {
         if (referencia == null || referencia.isBlank() || referencia.length() > MAX_REFERENCIA) {
             throw new IllegalArgumentException(

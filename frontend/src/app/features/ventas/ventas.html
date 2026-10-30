@@ -275,6 +275,7 @@
       <app-dialogo-anular
         [numero]="v.numero"
         [conMotivo]="anularConMotivo()"
+        [conCuentaCorriente]="anularConCuentaCorriente()"
         [enVuelo]="enVueloAccion()"
         [error]="errorAnular()"
         (confirmar)="anular($event)"

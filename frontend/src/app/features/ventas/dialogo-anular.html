@@ -18,6 +18,9 @@
         Se emite una nota de crédito y vuelve el stock.
       }
       La caja no cambia: si devolvés plata, cargá un egreso.
+      @if (conCuentaCorriente()) {
+        La parte a cuenta corriente se descuenta de la deuda del cliente.
+      }
     </p>
 
     @if (error(); as texto) {

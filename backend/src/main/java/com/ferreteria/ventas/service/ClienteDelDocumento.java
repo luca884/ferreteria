@@ -80,8 +80,8 @@ public class ClienteDelDocumento {
 
     /**
      * El cliente de una venta que se anula (CU-08): lo TOMA igual que una venta, en el mismo lugar del orden de locks
-     * (antes del comprobante y de cualquier numerador), aunque esté desactivado: la venta ya se hizo y anularla no le cambia
-     * nada al cliente. Mismo lock que {@link #resolverParaReintento}. Exige la transacción abierta de quien llama.
+     * (antes del comprobante y de cualquier numerador), aunque esté desactivado: la venta ya se hizo. Si la venta cargó algo a
+     * cuenta corriente, el 422 del cliente desactivado lo da el asiento de la nota (cu-08-nc-cuenta-corriente S8). Mismo lock que {@link #resolverParaReintento}. Exige la transacción abierta de quien llama.
      */
     public void tomarParaAnularVenta(Long clienteId) {
         resolverParaReintento(clienteId);

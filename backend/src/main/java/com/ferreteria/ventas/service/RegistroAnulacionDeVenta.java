@@ -1,7 +1,12 @@
 package com.ferreteria.ventas.service;
 
+import com.ferreteria.clientes.api.CuentaCorrienteParaVenta;
+import com.ferreteria.clientes.api.CuentaCorrienteParaVenta.AsientoNota;
+import com.ferreteria.clientes.api.CuentaCorrienteParaVenta.CargoPago;
+import com.ferreteria.clientes.api.CuentaCorrienteParaVenta.ClienteDesactivadoException;
 import com.ferreteria.common.HoraArgentina;
 import com.ferreteria.common.exception.DatosInvalidosException;
+import com.ferreteria.common.exception.ReglaDeNegocioException;
 import com.ferreteria.common.exception.ResourceNotFoundException;
 import com.ferreteria.facturacion.api.FacturaImpedidaException;
 import com.ferreteria.facturacion.api.FacturacionParaVenta;
@@ -32,15 +37,20 @@ import java.util.UUID;
  * Anula una venta en UNA transacción (CU-08 puntos 2 a 5; cu-08-nota-de-credito C1 y C3): da de alta su nota de crédito
  * (NOTA_CREDITO asociada a la venta, con su número interno), devuelve el stock y, del lado fiscal, da de alta el registro
  * PENDIENTE de la NC (la venta tiene su factura AUTORIZADO) o cierra sin CAE lo que tenga la venta (la anulación interna,
- * con motivo). No toma la caja ni escribe pagos (D11: la caja no cambia).
+ * con motivo). Si la venta cargó algo a cuenta corriente, la nota lo acredita en la cuenta del cliente (cu-08-nc-cuenta-corriente
+ * S3, S6: las dos vías igual), por el puerto de clientes. No toma la caja ni escribe pagos (D11: la caja no cambia).
  *
  * <p><b>Orden canónico de locks</b> (el prefijo de la venta y del «Reintentar»):
  * <pre>
  * CLIENTE (X, solo si la venta tiene uno) → la VENTA (X, FOR UPDATE: el comprobante) → [primeras lecturas planas: la nota,
  *   los pagos y los renglones de la venta] → registro fiscal vigente de la venta (X, tomarParaAnular; config_arca en S si
  *   está AUTORIZADO) → numerador (X) → comprobante de la nota → artículos/stock (X, id asc) → renglones de la nota
- *   → registro fiscal de la NC, o el de la venta a SIN_FACTURA
+ *   → [solo con pagos a cuenta corriente] la cuenta del cliente (el cliente ya está en X: partidas de la venta, id asc →
+ *   lo imputado FOR UPDATE → imputación y libro → saldo) → registro fiscal de la NC, o el de la venta a SIN_FACTURA
  * </pre>
+ * El asiento de la cuenta va después del stock, como en la venta a cuenta corriente (stock → libro), y dentro de clientes
+ * sigue el orden de la cobranza. La cobranza y la venta del mismo cliente esperan en la fila del cliente (paso 1): no hay
+ * ciclo con ellas (verificado en cu-08-nc-cuenta-corriente T4 con {@code AnulacionDeVentaIntegrationTest}).
  * La nota no lleva caja, así que no toma la caja en S: el cierre de caja no la espera ni la ve. El stock va antes que los
  * renglones de la nota, como en la venta: así los locks X de los artículos se toman antes que los S de las FK de los
  * renglones. Queda un ciclo posible con «Reintentar» sobre una venta sin cliente: ese toma el registro rechazado en X
@@ -73,12 +83,14 @@ public class RegistroAnulacionDeVenta {
     private final StockService stockService;
     private final FacturacionParaVenta facturacion;
     private final CajaRepository cajaRepository;
+    private final CuentaCorrienteParaVenta cuentaCorriente;
     private final Clock reloj;
 
     public RegistroAnulacionDeVenta(ClienteDelDocumento clienteDelDocumento, ComprobanteRepository comprobanteRepository,
             ItemComprobanteRepository itemRepository, PagoRepository pagoRepository,
             NumeradorComprobanteRepository numeradorRepository, StockService stockService,
-            FacturacionParaVenta facturacion, CajaRepository cajaRepository, Clock reloj) {
+            FacturacionParaVenta facturacion, CajaRepository cajaRepository, CuentaCorrienteParaVenta cuentaCorriente,
+            Clock reloj) {
         this.clienteDelDocumento = clienteDelDocumento;
         this.comprobanteRepository = comprobanteRepository;
         this.itemRepository = itemRepository;
@@ -87,6 +99,7 @@ public class RegistroAnulacionDeVenta {
         this.stockService = stockService;
         this.facturacion = facturacion;
         this.cajaRepository = cajaRepository;
+        this.cuentaCorriente = cuentaCorriente;
         this.reloj = reloj;
     }
 
@@ -103,9 +116,10 @@ public class RegistroAnulacionDeVenta {
     }
 
     /**
-     * Anula la venta, o lanza el rechazo que corresponda sin guardar nada: ya anulada 409, con un pago a cuenta corriente
-     * 422, la factura en envío o de otro ambiente 409, y el motivo de la anulación interna vacío o largo 400. Va en el
-     * orden del Javadoc de la clase. {@code motivo} solo vale en la anulación interna: en la NC se ignora (S13).
+     * Anula la venta, o lanza el rechazo que corresponda sin guardar nada: ya anulada 409, la factura en envío o de otro
+     * ambiente 409, el motivo de la anulación interna vacío o largo 400 y, si la venta cargó algo a cuenta corriente, el
+     * cliente desactivado 422 «El cliente está desactivado.» (S8; sin cuenta corriente se anula igual). Va en el orden del
+     * Javadoc de la clase. {@code motivo} solo vale en la anulación interna: en la NC se ignora (S13).
      */
     @Transactional
     public NotaRegistrada registrar(Long ventaId, Long clienteId, String motivo, long usuarioId) {
@@ -123,10 +137,11 @@ public class RegistroAnulacionDeVenta {
 
         // Recién ahora las lecturas planas: con la venta en X la foto ve la nota de cualquier anulación que confirmó antes.
         rechazoSiAnulada(ventaId);
-        // D11 y la rama 10: la venta a cuenta corriente todavía no se anula (su contra-asiento es de clientes).
-        if (pagoRepository.deComprobanteScoped(ventaId).stream().anyMatch(p -> p.getMedio() == MedioPago.CUENTA_CORRIENTE)) {
-            throw VentaRechazadaException.ventaACuentaCorriente();
-        }
+        // Solo la parte a cuenta corriente se acredita (S3); la de otros medios sigue D11: no se toca.
+        List<CargoPago> aCuenta = pagoRepository.deComprobanteScoped(ventaId).stream()
+                .filter(p -> p.getMedio() == MedioPago.CUENTA_CORRIENTE)
+                .map(p -> new CargoPago(p.getId(), p.getMonto()))
+                .toList();
         List<ItemComprobante> vendidos = itemRepository.deComprobanteScoped(ventaId);
 
         // 3. El registro fiscal vigente de la venta (X): decide la NC o la anulación interna.
@@ -153,13 +168,33 @@ public class RegistroAnulacionDeVenta {
                 .toList());
         itemRepository.saveAll(vendidos.stream().map(i -> ItemComprobante.copiaParaLaNota(i, nota.getId())).toList());
 
-        // 7. Lo fiscal, al final: el alta de la NC (el CAE se pide después del commit) o la venta a SIN_FACTURA.
+        // 7. La cuenta corriente (S3, S6), solo si la venta cargó algo: la nota acredita esos pagos, se imputa a la venta y
+        //    el resto queda a favor. Un cliente desactivado lo frena (S8) y el rollback deshace la nota y el stock.
+        if (!aCuenta.isEmpty()) {
+            try {
+                cuentaCorriente.asentarNotaDeCredito(new AsientoNota(clienteId, nota.getId(), nota.getNumero(),
+                        referencia(nota, venta), ventaId, aCuenta, usuarioId));
+            } catch (ClienteDesactivadoException e) {
+                throw new ReglaDeNegocioException(ClienteDesactivadoException.MENSAJE);
+            }
+        }
+
+        // 8. Lo fiscal, al final: el alta de la NC (el CAE se pide después del commit) o la venta a SIN_FACTURA.
         if (conCae) {
             facturacion.registrarNotaDeCredito(nota.getId(), ventaId);
         } else {
             facturacion.cerrarSinCae(ventaId, motivoInterno, usuarioId);
         }
         return new NotaRegistrada(nota.getId(), conCae);
+    }
+
+    /**
+     * Como la nombra el libro de la cuenta corriente: «Nota de crédito N.º n (Venta N.º v)», o «Anulación N.º n (Venta N.º
+     * v)» para la anulación interna (la nota con motivo). La venta que anula va en la referencia (S9).
+     */
+    static String referencia(Comprobante nota, Comprobante venta) {
+        return (nota.getMotivoAnulacion() != null ? "Anulación N.º " : "Nota de crédito N.º ") + nota.getNumero()
+                + " (Venta N.º " + venta.getNumero() + ")";
     }
 
     /**

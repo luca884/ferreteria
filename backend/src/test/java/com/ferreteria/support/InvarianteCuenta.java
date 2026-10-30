@@ -23,10 +23,11 @@ import org.springframework.jdbc.core.JdbcTemplate;
  *   <li><b>I2b</b>: por recibo, Σ imputaciones vigentes ≤ total, existe exactamente un COBRO, del mismo cliente, con haber =
  *       total; y si el recibo está ANULADO, existe exactamente una ANULACION del mismo cliente con debe = total y motivo.
  *   <li><b>I2c</b>: Σ pendientes (ventas y Recargos, con las imputaciones vigentes) − crédito sin imputar (Σ(total − Σ
- *       vigentes) de sus recibos EMITIDO y Σ(importe − Σ imputado) de sus Descuentos) + NC = saldo. Se cruza contra
- *       {@code recibo.estado} y {@code ajuste_cuenta}, no contra el libro: es otra fuente que el «aCuenta» del servicio. Un recibo
- *       ANULADO no deja crédito (su COBRO y su ANULACION se compensan). Desde V28 todo AJUSTE del libro tiene su
- *       {@code ajuste_cuenta} (ck_mcc_ajuste_ref): un saldo inicial sembrado con un AJUSTE es un Recargo o un Descuento.
+ *       vigentes) de sus recibos EMITIDO, Σ(importe − Σ imputado) de sus Descuentos y Σ(Σ haber de sus NC − Σ imputado) de sus
+ *       notas de crédito) = saldo. Se cruza contra {@code recibo.estado} y {@code ajuste_cuenta}, no contra el libro: es otra
+ *       fuente que el «aCuenta» del servicio. Un recibo ANULADO no deja crédito (su COBRO y su ANULACION se compensan). Desde
+ *       V28 todo AJUSTE del libro tiene su {@code ajuste_cuenta} (ck_mcc_ajuste_ref): un saldo inicial sembrado con un AJUSTE es
+ *       un Recargo o un Descuento.
  *   <li><b>I2d</b>: coherencia de cliente: la imputación, su origen (recibo o Descuento) y su destino (el débito VENTA del
  *       comprobante o el Recargo) son del mismo cliente, y el origen ajuste es un Descuento y el destino ajuste un Recargo.
  *   <li><b>I2f</b> (V28): cada ajuste tiene exactamente un AJUSTE en el libro, del mismo cliente, con el importe al debe (Recargo)
@@ -34,6 +35,10 @@ import org.springframework.jdbc.core.JdbcTemplate;
  *   <li><b>I2e</b> (CC-084): para cada recibo del cliente, {@code estado = ANULADO} ⇔ existe una ANULACION ⇔ todas sus
  *       imputaciones tienen {@code vigente = 0}; ninguna imputación no vigente con el recibo EMITIDO; y la auditoría de la
  *       anulación (caja y usuario) es de la misma ferretería.
+ *   <li><b>I2g</b> (V39, CU-08): por nota de crédito del cliente, el comprobante es una NOTA_CREDITO con su venta asociada;
+ *       exactamente un NC por cada pago a cuenta corriente de esa venta, del mismo cliente y con haber = ese pago; Σ imputaciones
+ *       con ella como origen ≤ Σ de esos haberes (nunca deja crédito negativo), todas vigentes y del mismo cliente; y ninguna
+ *       imputación sale de una nota sin sus NC en el libro del cliente.
  *   <li><b>I-inactivo</b> (CC-020/CC-040): un cliente desactivado tiene saldo 0.
  * </ul>
  *
@@ -47,6 +52,7 @@ public final class InvarianteCuenta {
     public static void assertInvariante(JdbcTemplate jdbc, long clienteId) {
         // Los tests de migración llaman al oráculo sobre esquemas anteriores a V28, sin ajustes: ahí esas partes no aplican.
         boolean conAjustes = conAjustes(jdbc);
+        boolean conNotasDeCredito = conNotasDeCredito(jdbc);
         assertI1(jdbc, clienteId);
         assertI2d(jdbc, clienteId, conAjustes); // la más específica primero: una imputación ajena también rompe I2a
         assertI2a(jdbc, clienteId, conAjustes);
@@ -55,8 +61,18 @@ public final class InvarianteCuenta {
         if (conAjustes) {
             assertI2f(jdbc, clienteId);
         }
-        assertI2c(jdbc, clienteId, conAjustes);
+        if (conNotasDeCredito) {
+            assertI2g(jdbc, clienteId);
+        }
+        assertI2c(jdbc, clienteId, conAjustes, conNotasDeCredito);
         assertInactivo(jdbc, clienteId);
+    }
+
+    /** Desde V39 la nota de crédito es un origen de la imputación ({@code imputacion.nc_origen_id}). */
+    private static boolean conNotasDeCredito(JdbcTemplate jdbc) {
+        Integer columnas = jdbc.queryForObject("select count(*) from information_schema.columns where table_schema = database() "
+                + "and table_name = 'imputacion' and column_name = 'nc_origen_id'", Integer.class);
+        return columnas != null && columnas > 0;
     }
 
     private static boolean conAjustes(JdbcTemplate jdbc) {
@@ -202,6 +218,45 @@ public final class InvarianteCuenta {
         }
     }
 
+    /** I2g (V39, CU-08): cada nota de crédito cuenta lo mismo en el libro, en la venta que anula y en sus imputaciones. */
+    private static void assertI2g(JdbcTemplate jdbc, long clienteId) {
+        List<Map<String, Object>> notas = jdbc.queryForList(
+                "select n.id, n.tipo, n.comprobante_asociado_id as venta, "
+                        + "(select count(*) from movimiento_cuenta_cliente m where m.comprobante_id = n.id and m.tipo = 'NC') as renglones, "
+                        + "(select count(*) from movimiento_cuenta_cliente m join pago p on p.id = m.pago_id "
+                        + "where m.comprobante_id = n.id and m.tipo = 'NC' and m.cliente_id = ? and p.comprobante_id = n.comprobante_asociado_id "
+                        + "and p.medio = 'CUENTA_CORRIENTE' and m.haber = p.monto and m.debe = 0 and m.motivo is null "
+                        + "and m.recibo_id is null and m.ajuste_id is null) as renglones_ok, "
+                        + "(select count(*) from pago p where p.comprobante_id = n.comprobante_asociado_id "
+                        + "and p.medio = 'CUENTA_CORRIENTE') as pagos_a_cuenta, "
+                        + "(select coalesce(sum(m.haber), 0) from movimiento_cuenta_cliente m where m.comprobante_id = n.id "
+                        + "and m.tipo = 'NC') as acreditado, "
+                        + "(select coalesce(sum(i.importe), 0) from imputacion i where i.nc_origen_id = n.id) as imputado, "
+                        + "(select count(*) from imputacion i where i.nc_origen_id = n.id and (i.vigente = 0 or i.cliente_id <> ?)) as imputaciones_mal "
+                        + "from comprobante n where n.id in (select m.comprobante_id from movimiento_cuenta_cliente m "
+                        + "where m.cliente_id = ? and m.tipo = 'NC')", clienteId, clienteId, clienteId);
+        for (Map<String, Object> nota : notas) {
+            Object id = nota.get("id");
+            BigDecimal acreditado = (BigDecimal) nota.get("acreditado");
+            assertThat(nota.get("tipo")).as("I2g: el comprobante %s de los NC es una NOTA_CREDITO", id).isEqualTo("NOTA_CREDITO");
+            assertThat(nota.get("venta")).as("I2g: la nota de crédito %s tiene su venta asociada", id).isNotNull();
+            long renglones = ((Number) nota.get("renglones")).longValue();
+            assertThat(renglones).as("I2g: la nota %s tiene un NC por cada pago a cuenta corriente de su venta", id)
+                    .isEqualTo(((Number) nota.get("pagos_a_cuenta")).longValue());
+            assertThat(((Number) nota.get("renglones_ok")).longValue()).as("I2g: cada NC de la nota %s es del cliente %d, de un "
+                    + "pago a cuenta de su venta y con haber = ese pago", id, clienteId).isEqualTo(renglones);
+            assertThat((BigDecimal) nota.get("imputado"))
+                    .as("I2g: Σ imputaciones de la nota %s ≤ lo que acreditó (%s)", id, acreditado).isLessThanOrEqualTo(acreditado);
+            assertThat(((Number) nota.get("imputaciones_mal")).longValue())
+                    .as("I2g: las imputaciones de la nota %s son vigentes y del cliente %d", id, clienteId).isZero();
+        }
+        Long sinNc = jdbc.queryForObject("select count(*) from imputacion i where i.cliente_id = ? and i.nc_origen_id is not null "
+                + "and not exists (select 1 from movimiento_cuenta_cliente m where m.comprobante_id = i.nc_origen_id "
+                + "and m.cliente_id = i.cliente_id and m.tipo = 'NC')", Long.class, clienteId);
+        assertThat(sinNc).as("I2g: toda imputación del cliente %d que sale de una nota de crédito tiene sus NC en el libro",
+                clienteId).isZero();
+    }
+
     /** I-inactivo: un cliente desactivado no puede tener saldo (CC-020, CC-040). */
     private static void assertInactivo(JdbcTemplate jdbc, long clienteId) {
         Boolean activo = jdbc.queryForObject("select activo from cliente where id = ?", Boolean.class, clienteId);
@@ -241,7 +296,7 @@ public final class InvarianteCuenta {
                 clienteId).isZero();
     }
 
-    private static void assertI2c(JdbcTemplate jdbc, long clienteId, boolean conAjustes) {
+    private static void assertI2c(JdbcTemplate jdbc, long clienteId, boolean conAjustes, boolean conNotasDeCredito) {
         BigDecimal saldo = jdbc.queryForObject("select saldo from cliente where id = ?", BigDecimal.class, clienteId);
         BigDecimal debitos = suma(jdbc, "select coalesce(sum(debe), 0) from movimiento_cuenta_cliente "
                 + "where cliente_id = ? and tipo = 'VENTA'", clienteId).add(!conAjustes ? BigDecimal.ZERO : suma(jdbc,
@@ -263,12 +318,18 @@ public final class InvarianteCuenta {
                     + "join ajuste_cuenta a on a.id = i.ajuste_origen_id where a.cliente_id = ? and i.vigente = 1", clienteId);
             credito = credito.add(descontado.subtract(imputadoDeDescuentos));
         }
-        // Antes de V28 un AJUSTE del libro no tenía ajuste_cuenta: se sumaba aparte, al lado de los pendientes, como la NC.
-        BigDecimal notasDeCredito = suma(jdbc, "select coalesce(sum(debe - haber), 0) from movimiento_cuenta_cliente "
-                + "where cliente_id = ? and tipo " + (conAjustes ? "= 'NC'" : "in ('AJUSTE', 'NC')"), clienteId);
-        assertThat(pendientes.subtract(credito).add(notasDeCredito))
-                .as("I2c: Σ pendientes (%s) − a cuenta (%s) + NC (%s) == saldo del cliente %d", pendientes, credito,
-                        notasDeCredito, clienteId)
+        // La nota de crédito es un crédito más: Σ haber de sus NC − Σ imputaciones con ella como origen (antes de V39 no hay).
+        BigDecimal acreditado = suma(jdbc, "select coalesce(sum(haber), 0) from movimiento_cuenta_cliente "
+                + "where cliente_id = ? and tipo = 'NC'", clienteId);
+        BigDecimal imputadoDeNotas = !conNotasDeCredito ? BigDecimal.ZERO : suma(jdbc, "select coalesce(sum(importe), 0) "
+                + "from imputacion where cliente_id = ? and nc_origen_id is not null and vigente = 1", clienteId);
+        credito = credito.add(acreditado.subtract(imputadoDeNotas));
+        // Antes de V28 un AJUSTE del libro no tenía ajuste_cuenta: se sumaba aparte, al lado de los pendientes.
+        BigDecimal ajustesSinCuenta = conAjustes ? BigDecimal.ZERO : suma(jdbc, "select coalesce(sum(debe - haber), 0) "
+                + "from movimiento_cuenta_cliente where cliente_id = ? and tipo = 'AJUSTE'", clienteId);
+        assertThat(pendientes.subtract(credito).add(ajustesSinCuenta))
+                .as("I2c: Σ pendientes (%s) − a cuenta, con las notas de crédito (%s) == saldo del cliente %d", pendientes,
+                        credito, clienteId)
                 .isEqualByComparingTo(saldo);
     }
 }

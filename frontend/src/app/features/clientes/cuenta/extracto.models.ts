@@ -16,7 +16,7 @@ export const TIPO_MOVIMIENTO_LABELS: Record<TipoMovimiento, string> = {
   COBRO: 'Cobro',
   ANULACION: 'Anulación',
   AJUSTE: 'Ajuste',
-  NC: 'NC',
+  NC: 'Nota de crédito',
 };
 
 /** Una línea del libro con el saldo del cliente DESPUÉS de ella (el campo se llama `saldo`, no `saldoDespues`). */
@@ -24,7 +24,10 @@ export interface LineaExtracto {
   id: number;
   fecha: string;
   tipo: TipoMovimiento;
-  /** «Venta N.º 7», «Recibo N.º 14», «Anulación Recibo N.º 14»: copiada al asentar el movimiento. */
+  /**
+   * «Venta N.º 7», «Recibo N.º 14», «Anulación Recibo N.º 14», «Nota de crédito N.º 9 (Venta N.º 7)» o «Anulación N.º 9
+   * (Venta N.º 7)» (la NC de una venta a cuenta corriente): copiada al asentar el movimiento.
+   */
   referencia: string;
   debe: number;
   haber: number;
@@ -32,7 +35,7 @@ export interface LineaExtracto {
   usuario: string | null;
   /** Solo en COBRO y ANULACION. */
   reciboId: number | null;
-  /** Solo en VENTA. */
+  /** En VENTA y en NC (el comprobante de la nota). */
   comprobanteId: number | null;
   /** El motivo de la anulación o del ajuste (solo en ANULACION y AJUSTE). */
   motivo: string | null;

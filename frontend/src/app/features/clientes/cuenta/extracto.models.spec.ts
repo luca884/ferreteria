@@ -39,13 +39,13 @@ describe('extracto.models (CC-073, CC-078, CC-096)', () => {
       expect([...TIPOS_MOVIMIENTO_CUENTA].sort()).toEqual(['ANULACION', 'AJUSTE', 'COBRO', 'NC', 'VENTA'].sort());
     });
 
-    it('cada tipo se lee en español: Venta, Cobro, Anulación, Ajuste y NC, en ese orden', () => {
+    it('cada tipo se lee en español: Venta, Cobro, Anulación, Ajuste y Nota de crédito, en ese orden', () => {
       expect(TIPOS_MOVIMIENTO_CUENTA.map((t) => TIPO_MOVIMIENTO_LABELS[t])).toEqual([
         'Venta',
         'Cobro',
         'Anulación',
         'Ajuste',
-        'NC',
+        'Nota de crédito',
       ]);
     });
   });

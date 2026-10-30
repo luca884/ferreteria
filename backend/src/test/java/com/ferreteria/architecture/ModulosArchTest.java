@@ -575,15 +575,15 @@ class ModulosArchTest {
         return new com.tngtech.archunit.base.DescribedPredicate<>("crear un asiento con la fábrica de " + entidad.getSimpleName()) {
             @Override
             public boolean test(JavaMethodCall call) {
-                return call.getTargetOwner().isEquivalentTo(entidad) && java.util.Set.of("venta", "cobro", "anulacion", "ajuste", "de")
-                        .contains(call.getName()); // "ajuste": el renglón AJUSTE del libro (GDS-20), también solo del servicio
+                return call.getTargetOwner().isEquivalentTo(entidad) && java.util.Set.of("venta", "cobro", "anulacion", "ajuste", "nc", "de")
+                        .contains(call.getName()); // "ajuste": el renglón AJUSTE del libro (GDS-20); "nc": el de la nota de crédito (CU-08)
             }
         };
     }
 
     /**
-     * (j, fábricas) Solo CuentaCorrienteService arma asientos del libro (venta, cobro y la {@code anulacion} nueva) y
-     * imputaciones: la fábrica es la otra mitad de «una sola puerta de escritura» (el {@code save} es la primera).
+     * (j, fábricas) Solo CuentaCorrienteService arma asientos del libro (venta, cobro, la {@code anulacion}, el ajuste y la
+     * {@code nc} de la nota de crédito) e imputaciones: la fábrica es la otra mitad de «una sola puerta de escritura» (el {@code save} es la primera).
      */
     @Test
     void soloLaCuentaCorrienteArmaLosAsientosDelLibroYLasImputaciones() {
@@ -597,8 +597,9 @@ class ModulosArchTest {
             assertThat(llamadores).as("quién arma %s", entidad.getSimpleName())
                     .containsExactly(CuentaCorrienteService.class.getName());
         }
-        // y la fábrica de la anulación existe en la entidad
+        // y las fábricas de la anulación y de la nota de crédito existen en la entidad
         assertThat(clases.get(MovimientoCuentaCliente.class).getMethods().stream().map(m -> m.getName())).contains("anulacion");
+        assertThat(clases.get(MovimientoCuentaCliente.class).getMethods().stream().map(m -> m.getName())).contains("nc");
     }
 
     /**

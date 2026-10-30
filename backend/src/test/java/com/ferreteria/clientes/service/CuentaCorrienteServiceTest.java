@@ -93,6 +93,7 @@ class CuentaCorrienteServiceTest {
         TenantContext.setCurrentFerreteriaId(FERRETERIA);
         // GDS-20: sin Descuentos ni Recargos salvo que un test los pida (un mock devolvería null en una suma)
         lenient().when(libro.creditoDeDescuentosScoped(anyLong())).thenReturn(BigDecimal.ZERO);
+        lenient().when(libro.creditoDeNotasDeCreditoScoped(anyLong())).thenReturn(BigDecimal.ZERO);
     }
 
     @AfterEach

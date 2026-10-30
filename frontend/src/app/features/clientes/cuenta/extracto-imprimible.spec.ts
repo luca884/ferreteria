@@ -212,6 +212,16 @@ describe('ExtractoImprimible (CC-099)', () => {
     expect(limpio(ajuste.textContent)).toContain('Motivo: Deuda vieja');
   });
 
+  it('la nota de crédito se imprime como «Nota de crédito» con su referencia, al haber y sin marca de anulado', async () => {
+    await abrir(
+      extracto([linea(1, { tipo: 'NC', referencia: 'Nota de crédito N.º 9', debe: 0, haber: 1200, saldo: 0 })]),
+    );
+
+    const [nota] = filas();
+    expect(celdas(nota).slice(1, 5)).toEqual(['Nota de crédito', 'Nota de crédito N.º 9', '', '$ 1.200,00']);
+    expect(nota.querySelector('.marca-anulado')).toBeNull();
+  });
+
   it('45 movimientos se imprimen los 45 (un solo extracto, sin paginar)', async () => {
     const todos = Array.from({ length: 45 }, (_, i) => linea(45 - i));
     await abrir(extracto(todos));

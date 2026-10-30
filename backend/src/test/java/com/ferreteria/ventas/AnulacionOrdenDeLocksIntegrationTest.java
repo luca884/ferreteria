@@ -79,6 +79,7 @@ class AnulacionOrdenDeLocksIntegrationTest extends CuentaCorrienteTestBase {
     private static final String IDS_IMPUTACION = "select plano de los ids de imputación";
     private static final String IMPUTACION_FOR_UPDATE = "imputaciones FOR UPDATE por id";
     private static final String UPDATE_VIGENCIA = "update imputacion set vigente";
+    private static final String NOTAS_DE_VENTAS = "select plano de las notas de las ventas liberadas";
     private static final String LIBRO_INSERT = "insert libro (ANULACION)";
     private static final String SALDO_UPDATE = "update saldo del cliente";
 
@@ -104,6 +105,10 @@ class AnulacionOrdenDeLocksIntegrationTest extends CuentaCorrienteTestBase {
         }
         if (sql.startsWith("update recibo ")) {
             return UPDATE_RECIBO;
+        }
+        if (select && sql.contains(" from movimiento_cuenta_cliente ") && sql.indexOf("movimiento_cuenta_cliente")
+                != sql.lastIndexOf("movimiento_cuenta_cliente")) {
+            return NOTAS_DE_VENTAS; // L10: el libro contra sí mismo, NC con VENTA por el pago
         }
         if (select && sql.contains(" from movimiento_cuenta_cliente ")) {
             return LIBRO_DE_RECIBO;
@@ -147,6 +152,7 @@ class AnulacionOrdenDeLocksIntegrationTest extends CuentaCorrienteTestBase {
             IDS_IMPUTACION,
             IMPUTACION_FOR_UPDATE,
             UPDATE_VIGENCIA,
+            NOTAS_DE_VENTAS,
             LIBRO_INSERT,
             SALDO_UPDATE);
 
@@ -166,7 +172,7 @@ class AnulacionOrdenDeLocksIntegrationTest extends CuentaCorrienteTestBase {
     // ---------------------------------------------------------------------------------------------------------------
 
     @Test
-    @DisplayName("el orden completo con imputaciones: cliente del recibo (tx aparte) → caja S → cliente X → recibo → update recibo → libro/ids → imputaciones FOR UPDATE por id → update vigencia → insert ANULACION → update saldo")
+    @DisplayName("el orden completo con imputaciones: cliente del recibo (tx aparte) → caja S → cliente X → recibo → update recibo → libro/ids → imputaciones FOR UPDATE por id → update vigencia → notas de las ventas liberadas (L10) → insert ANULACION → update saldo")
     void ordenCompletoConImputaciones() {
         Escenario e = escenario();
         long cliente = cliente(e.f(), "5000");

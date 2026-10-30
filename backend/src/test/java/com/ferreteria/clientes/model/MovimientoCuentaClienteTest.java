@@ -128,6 +128,31 @@ class MovimientoCuentaClienteTest {
     }
 
     @Test
+    @DisplayName("CU-08: una nota de crédito: tipo NC, debe = 0, haber = monto, con la nota y el pago que acredita; sin recibo, ajuste, motivo ni exceso; rechaza monto <= 0 y nota o pago nulos")
+    void notaDeCredito() {
+        MovimientoCuentaCliente m = MovimientoCuentaCliente.nc(3L, 7L, 40L, 30L, "Nota de crédito N.º 12",
+                new BigDecimal("500.00"), AHORA, 9L);
+
+        assertThat(m.getTipo()).isEqualTo(TipoMovimientoCuenta.NC);
+        assertThat(m.getDebe()).isEqualByComparingTo("0");
+        assertThat(m.getHaber()).isEqualByComparingTo("500.00");
+        assertThat(m.getComprobanteId()).isEqualTo(40L);
+        assertThat(m.getPagoId()).isEqualTo(30L);
+        assertThat(m.getReferencia()).isEqualTo("Nota de crédito N.º 12");
+        assertThat(m.getReciboId()).isNull();
+        assertThat(m.getAjusteId()).isNull();
+        assertThat(m.getMotivo()).isNull();
+        assertThat(m.isExcedioLimite()).isFalse();
+        assertThat(m.getAutorizadoPor()).isNull();
+        assertThatThrownBy(() -> MovimientoCuentaCliente.nc(3L, 7L, 40L, 30L, "Anulación N.º 12", BigDecimal.ZERO, AHORA, 9L))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> MovimientoCuentaCliente.nc(3L, 7L, null, 30L, "Anulación N.º 12", BigDecimal.TEN, AHORA, 9L))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> MovimientoCuentaCliente.nc(3L, 7L, 40L, null, "Anulación N.º 12", BigDecimal.TEN, AHORA, 9L))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
     @DisplayName("el tipo ANULACION existe (previsto para 3b) y todos los nombres caben en VARCHAR(10)")
     void tipoAnulacion() {
         assertThat(TipoMovimientoCuenta.valueOf("ANULACION")).isEqualTo(TipoMovimientoCuenta.ANULACION);
@@ -255,11 +280,11 @@ class MovimientoCuentaClienteTest {
     }
 
     @Test
-    @DisplayName("las fábricas públicas son venta, cobro, anulacion y ajuste (GDS-20)")
+    @DisplayName("las fábricas públicas son venta, cobro, anulacion, ajuste (GDS-20) y nc (CU-08)")
     void fabricas() {
         assertThat(Arrays.stream(MovimientoCuentaCliente.class.getDeclaredMethods())
                 .filter(m -> Modifier.isStatic(m.getModifiers()) && Modifier.isPublic(m.getModifiers()))
-                .map(Method::getName)).containsExactlyInAnyOrder("venta", "cobro", "anulacion", "ajuste");
+                .map(Method::getName)).containsExactlyInAnyOrder("venta", "cobro", "anulacion", "ajuste", "nc");
     }
 
     @Test

@@ -163,6 +163,10 @@ export class Ventas implements OnInit {
   });
   /** Sin la factura autorizada la venta se anula sin documento fiscal y pide el motivo (D12); el servidor decide. */
   protected readonly anularConMotivo = computed(() => this.fiscalElegido()?.estado !== 'AUTORIZADO');
+  /** La venta cargó algo a cuenta corriente: la confirmación avisa que se descuenta de la deuda del cliente. */
+  protected readonly anularConCuentaCorriente = computed(
+    () => this.detalle()?.pagos?.some((p) => p.medio === 'CUENTA_CORRIENTE') ?? false,
+  );
   protected readonly confirmandoAnular = signal(false);
   /** El rechazo de «Anular» (400 del motivo, 409, 422), tal cual, dentro de su diálogo. */
   protected readonly errorAnular = signal<string | null>(null);
