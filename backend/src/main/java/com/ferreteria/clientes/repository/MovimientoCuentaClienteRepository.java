@@ -130,7 +130,18 @@ public interface MovimientoCuentaClienteRepository extends TenantScopedRepositor
             + "and m.clienteId = :clienteId and m.tipo = com.ferreteria.clientes.model.TipoMovimientoCuenta.AJUSTE")
     BigDecimal creditoDeDescuentos(@Param("fid") Long ferreteriaId, @Param("clienteId") Long clienteId);
 
-    /** Una fila del libro que mueve crédito: un COBRO, su ANULACION o un Descuento (AJUSTE con haber). */
+    /**
+     * El crédito de las notas de crédito del cliente (CU-08): Σ haber de los {@code NC}. Con el de los recibos, el de los
+     * Descuentos y las imputaciones vigentes, el «a cuenta». 0 si no hay.
+     */
+    @Query("select coalesce(sum(m.haber), 0) from MovimientoCuentaCliente m where m.ferreteriaId = :fid "
+            + "and m.clienteId = :clienteId and m.tipo = com.ferreteria.clientes.model.TipoMovimientoCuenta.NC")
+    BigDecimal creditoDeNotasDeCredito(@Param("fid") Long ferreteriaId, @Param("clienteId") Long clienteId);
+
+    /**
+     * Una fila del libro que mueve crédito: un COBRO, su ANULACION, un Descuento (AJUSTE con haber) o una NC (CU-08, con el
+     * comprobante NOTA_CREDITO en {@code comprobanteId}).
+     */
     interface FilaDeCredito {
         Long getId();
 
@@ -140,21 +151,25 @@ public interface MovimientoCuentaClienteRepository extends TenantScopedRepositor
 
         Long getAjusteId();
 
+        Long getComprobanteId();
+
         BigDecimal getDebe();
 
         BigDecimal getHaber();
     }
 
     /**
-     * Las filas del libro que mueven crédito (COBRO, ANULACION y AJUSTE con haber), con {@code FOR UPDATE}: lectura ACTUAL,
+     * Las filas del libro que mueven crédito (COBRO, ANULACION, AJUSTE con haber y NC), con {@code FOR UPDATE}: lectura ACTUAL,
      * inmune a la foto de REPEATABLE READ (una venta o un Recargo nuevos consumen crédito y no pueden ver de menos ni de más).
      * Filas crudas. {@code force index (ix_mcc_cliente)} las recorre por (ferretería, cliente), con el mismo gap residual
      * acotado al cliente que {@code ImputacionRepository.imputadoBloqueado}; el mutex real es la fila del cliente. Requiere
      * transacción.
      */
-    @Query(value = "select id as id, tipo as tipo, recibo_id as reciboId, ajuste_id as ajusteId, debe as debe, haber as haber "
+    @Query(value = "select id as id, tipo as tipo, recibo_id as reciboId, ajuste_id as ajusteId, comprobante_id as comprobanteId, "
+            + "debe as debe, haber as haber "
             + "from movimiento_cuenta_cliente force index (ix_mcc_cliente) where ferreteria_id = :fid and cliente_id = :clienteId "
-            + "and (tipo in ('COBRO', 'ANULACION') or (tipo = 'AJUSTE' and haber > 0)) order by id for update", nativeQuery = true)
+            + "and (tipo in ('COBRO', 'ANULACION', 'NC') or (tipo = 'AJUSTE' and haber > 0)) order by id for update",
+            nativeQuery = true)
     List<FilaDeCredito> creditosBloqueados(@Param("fid") Long ferreteriaId, @Param("clienteId") Long clienteId);
 
     /** El renglón de ese ajuste en el libro del cliente (a lo sumo uno: uk_mcc_ajuste). */
@@ -296,6 +311,10 @@ public interface MovimientoCuentaClienteRepository extends TenantScopedRepositor
 
     default BigDecimal creditoDeDescuentosScoped(Long clienteId) {
         return creditoDeDescuentos(TenantContext.requireFerreteriaId(), clienteId);
+    }
+
+    default BigDecimal creditoDeNotasDeCreditoScoped(Long clienteId) {
+        return creditoDeNotasDeCredito(TenantContext.requireFerreteriaId(), clienteId);
     }
 
     default List<FilaDeCredito> creditosBloqueadosScoped(Long clienteId) {

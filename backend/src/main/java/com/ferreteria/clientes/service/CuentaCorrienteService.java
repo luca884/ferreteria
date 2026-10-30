@@ -45,7 +45,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
- * La cuenta corriente de los clientes (CC-001 a CC-010, CC-026 a CC-051). Es la ÚNICA clase que escribe el saldo del cliente,
+ * La cuenta corriente de los clientes (CC-001 a CC-010, CC-026 a CC-051, y la nota de crédito de CU-08). Es la ÚNICA clase que escribe el saldo del cliente,
  * el libro y las imputaciones (lo vigila ModulosArchTest): el saldo es una caché que siempre vale Σ(debe − haber) del libro, y
  * los tres se escriben juntos en la transacción de la venta o de la cobranza, bajo el lock de la fila del cliente (que es el
  * mutex de TODO el estado de cuenta: libro, imputaciones y saldo).
@@ -148,6 +148,114 @@ public class CuentaCorrienteService implements CuentaCorrienteParaVenta, CuentaC
         }
         // GDS-20: la deuda nueva consume sola el saldo a favor, del crédito más viejo al más nuevo, hasta lo que debe.
         consumirCredito(asiento.clienteId(), ferreteriaId, Imputacion.Destino.comprobante(asiento.comprobanteId()), total);
+    }
+
+    // ---------------------------------------------------------------------------------------------------------------
+    // Nota de crédito de una venta a cuenta corriente (CU-08 punto 4, CU-12)
+    // ---------------------------------------------------------------------------------------------------------------
+
+    /**
+     * Asienta la nota de crédito (o la anulación interna) de una venta a cuenta corriente. Una sola puerta de escritura, y se
+     * defiende sola: re-toma la fila del cliente y no confía en los pagos que le pasan. Sigue el orden de locks de la cobranza
+     * dentro de clientes:
+     * <ol>
+     *   <li>re-toma la fila del cliente ({@code cuentaBloqueada}: no-op si ya la tiene); desactivado →
+     *       {@link ClienteDesactivadoException} (S8: un cliente desactivado tiene saldo 0 y la nota lo dejaría a favor);
+     *   <li>los renglones VENTA de la venta (lectura plana, el libro es append-only): tienen que ser exactamente los pagos
+     *       pedidos, del mismo cliente y por el mismo monto (la nota acredita solo lo que la venta cargó a la cuenta);
+     *   <li>esas partidas {@code FOR UPDATE} por PK ascendente y lo imputado a la venta con {@code FOR UPDATE} (lectura actual);
+     *   <li>imputa a la venta min(pendiente, total), con la nota como origen y NO automática: es la imputación propia de la
+     *       nota (como la que pide un recibo); lo que una deuda posterior le consume después sí es automático;
+     *   <li>UN renglón NC al haber por pago y baja el saldo con un UPDATE relativo. Lo que no se imputó queda como crédito sin
+     *       imputar de la nota ({@link #creditoDisponible}).
+     * </ol>
+     * Sin chequeo de límite: baja la deuda.
+     */
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void asentarNotaDeCredito(AsientoNota asiento) {
+        List<CargoPago> pagos = validar(asiento);
+        Long clienteId = asiento.clienteId();
+        CuentaBloqueada cuenta = cuentaBloqueada(clienteId); // ya la tiene tomada la anulación: acá se re-toma y se confirma
+        if (!cuenta.getActivo()) {
+            throw new ClienteDesactivadoException();
+        }
+        Long ferreteriaId = TenantContext.requireFerreteriaId();
+        BigDecimal total = pagos.stream().map(CargoPago::monto).reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal deuda = exigirPagosDeLaVenta(clienteId, asiento.ventaId(), pagos);
+        imputarALaVentaAnulada(clienteId, ferreteriaId, asiento, deuda, total);
+        LocalDateTime fecha = LocalDateTime.now(reloj);
+        libro.saveAll(pagos.stream()
+                .map(p -> MovimientoCuentaCliente.nc(ferreteriaId, clienteId, asiento.notaId(), p.pagoId(),
+                        asiento.referencia(), p.monto(), fecha, asiento.usuarioId()))
+                .toList());
+        int filas = clientes.sumarSaldoScoped(clienteId, total.negate());
+        if (filas != 1) {
+            // El libro ya está escrito: sin la fila del saldo divergirían. Es un estado ilegal (500 y rollback), no un 4xx.
+            throw new IllegalStateException("El saldo del cliente " + clienteId
+                    + " no se actualizó (filas afectadas: " + filas + "): el libro y el saldo divergirían.");
+        }
+    }
+
+    /** Lo de programador (ventas ya armó todo): ids, al menos un pago, montos positivos de hasta 2 decimales, sin repetir. */
+    private static List<CargoPago> validar(AsientoNota asiento) {
+        if (asiento.clienteId() == null || asiento.notaId() == null || asiento.ventaId() == null) {
+            throw new IllegalArgumentException("La nota de crédito necesita el cliente, la nota y la venta que anula.");
+        }
+        List<CargoPago> pagos = asiento.pagos();
+        if (pagos == null || pagos.isEmpty()) {
+            throw new IllegalArgumentException("La nota de crédito acredita al menos un pago a cuenta corriente.");
+        }
+        Set<Long> vistos = new HashSet<>();
+        for (CargoPago pago : pagos) {
+            if (pago.pagoId() == null || !vistos.add(pago.pagoId())) {
+                throw new IllegalArgumentException("Cada pago a acreditar tiene su id y viene una sola vez.");
+            }
+            if (pago.monto() == null || pago.monto().signum() <= 0 || pago.monto().stripTrailingZeros().scale() > 2) {
+                throw new IllegalArgumentException("El monto de un pago a acreditar tiene que ser mayor que cero y de hasta 2 decimales.");
+            }
+        }
+        return pagos;
+    }
+
+    /**
+     * Los renglones VENTA de la venta en la cuenta de ESE cliente tienen que ser exactamente los pagos pedidos, cada uno por su
+     * monto: la nota acredita solo lo que la venta cargó a la cuenta corriente. Devuelve lo que la venta debe (Σ debe).
+     */
+    private BigDecimal exigirPagosDeLaVenta(Long clienteId, Long ventaId, List<CargoPago> pagos) {
+        Map<Long, BigDecimal> cargados = new LinkedHashMap<>();
+        for (MovimientoCuentaCliente renglon : libro.deComprobanteScoped(ventaId)) {
+            if (renglon.getTipo() == TipoMovimientoCuenta.VENTA && renglon.getClienteId().equals(clienteId)) {
+                cargados.put(renglon.getPagoId(), renglon.getDebe());
+            }
+        }
+        Map<Long, BigDecimal> pedidos = new LinkedHashMap<>();
+        pagos.forEach(p -> pedidos.put(p.pagoId(), p.monto()));
+        boolean iguales = cargados.keySet().equals(pedidos.keySet())
+                && pedidos.entrySet().stream().allMatch(e -> cargados.get(e.getKey()).compareTo(e.getValue()) == 0);
+        if (!iguales) {
+            throw new IllegalStateException("Los pagos de la nota de crédito " + pedidos + " no son los que la venta " + ventaId
+                    + " cargó a la cuenta del cliente " + clienteId + " " + cargados + ".");
+        }
+        return cargados.values().stream().reduce(BigDecimal.ZERO, BigDecimal::add);
+    }
+
+    /**
+     * Imputa a la venta anulada lo que todavía debe, hasta el total de la nota. Mismo orden y mismos locks que
+     * {@link #imputarContraPartidas}: sus partidas por PK ascendente y lo imputado con {@code FOR UPDATE} (una cobranza que
+     * imputó a la misma venta y ya confirmó se ve: nunca se imputa de más). Sin pendiente no guarda nada.
+     */
+    private void imputarALaVentaAnulada(Long clienteId, Long ferreteriaId, AsientoNota asiento, BigDecimal deuda,
+            BigDecimal total) {
+        List<Long> venta = List.of(asiento.ventaId());
+        libro.bloquearPartidasScoped(clienteId, libro.idsDePartidasScoped(clienteId, venta).stream().sorted().toList());
+        BigDecimal imputado = imputaciones.imputadoBloqueadoScoped(clienteId, venta).stream().map(FilaImputada::getImporte)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal aImputar = deuda.subtract(imputado).max(BigDecimal.ZERO).min(total);
+        if (aImputar.signum() > 0) {
+            imputaciones.save(Imputacion.de(ferreteriaId, clienteId, Imputacion.Origen.notaDeCredito(asiento.notaId()),
+                    Imputacion.Destino.comprobante(asiento.ventaId()), aImputar));
+        }
     }
 
     // ---------------------------------------------------------------------------------------------------------------
@@ -396,8 +504,9 @@ public class CuentaCorrienteService implements CuentaCorrienteParaVenta, CuentaC
     }
 
     /**
-     * Lo que cada recibo y cada Descuento del cliente tiene sin imputar. El importe neto de un recibo es su COBRO menos su
-     * ANULACION (un cobro anulado ya no es crédito, CC-064); el de un Descuento es el haber de su AJUSTE. Lo imputado es el
+     * Lo que cada recibo, cada Descuento y cada nota de crédito del cliente tiene sin imputar. El importe neto de un recibo es
+     * su COBRO menos su ANULACION (un cobro anulado ya no es crédito, CC-064); el de un Descuento es el haber de su AJUSTE; el
+     * de una nota de crédito, Σ haber de sus NC (uno por pago a cuenta de la venta anulada, CU-08). Lo imputado es el
      * vigente (la anulación del recibo ya dio de baja lo suyo). Ambas lecturas son bloqueantes ({@code FOR UPDATE}): lectura
      * actual, inmune a la foto de REPEATABLE READ.
      */
@@ -406,6 +515,8 @@ public class CuentaCorrienteService implements CuentaCorrienteParaVenta, CuentaC
         Map<Long, BigDecimal> importeDeRecibo = new LinkedHashMap<>();
         Map<Long, Long> movimientoDeDescuento = new LinkedHashMap<>();
         Map<Long, BigDecimal> importeDeDescuento = new LinkedHashMap<>();
+        Map<Long, Long> movimientoDeNota = new LinkedHashMap<>();
+        Map<Long, BigDecimal> importeDeNota = new LinkedHashMap<>();
         for (FilaDeCredito fila : libro.creditosBloqueadosScoped(clienteId)) {
             switch (TipoMovimientoCuenta.valueOf(fila.getTipo())) {
                 case COBRO -> {
@@ -417,16 +528,23 @@ public class CuentaCorrienteService implements CuentaCorrienteParaVenta, CuentaC
                     movimientoDeDescuento.put(fila.getAjusteId(), fila.getId());
                     importeDeDescuento.merge(fila.getAjusteId(), fila.getHaber(), BigDecimal::add);
                 }
+                case NC -> {
+                    movimientoDeNota.putIfAbsent(fila.getComprobanteId(), fila.getId()); // FIFO: el primer renglón de la nota
+                    importeDeNota.merge(fila.getComprobanteId(), fila.getHaber(), BigDecimal::add);
+                }
                 default -> throw new IllegalStateException("El libro devolvió un movimiento que no mueve crédito: " + fila.getTipo());
             }
         }
         Map<Long, BigDecimal> imputadoDeRecibo = new LinkedHashMap<>();
         Map<Long, BigDecimal> imputadoDeDescuento = new LinkedHashMap<>();
+        Map<Long, BigDecimal> imputadoDeNota = new LinkedHashMap<>();
         for (FilaImputadaDeCredito fila : imputaciones.imputadoDeCreditosBloqueadoScoped(clienteId)) {
             if (fila.getReciboId() != null) {
                 imputadoDeRecibo.merge(fila.getReciboId(), fila.getImporte(), BigDecimal::add);
-            } else {
+            } else if (fila.getAjusteOrigenId() != null) {
                 imputadoDeDescuento.merge(fila.getAjusteOrigenId(), fila.getImporte(), BigDecimal::add);
+            } else {
+                imputadoDeNota.merge(fila.getNcOrigenId(), fila.getImporte(), BigDecimal::add);
             }
         }
         List<CreditoDisponible.Credito> creditos = new ArrayList<>();
@@ -436,6 +554,9 @@ public class CuentaCorrienteService implements CuentaCorrienteParaVenta, CuentaC
         movimientoDeDescuento.forEach((ajusteId, movimientoId) -> creditos.add(new CreditoDisponible.Credito(
                 Imputacion.Origen.ajuste(ajusteId), movimientoId, importeDeDescuento.get(ajusteId),
                 imputadoDeDescuento.getOrDefault(ajusteId, BigDecimal.ZERO))));
+        movimientoDeNota.forEach((notaId, movimientoId) -> creditos.add(new CreditoDisponible.Credito(
+                Imputacion.Origen.notaDeCredito(notaId), movimientoId, importeDeNota.get(notaId),
+                imputadoDeNota.getOrDefault(notaId, BigDecimal.ZERO))));
         return new CreditoDisponible(creditos);
     }
 
@@ -594,8 +715,9 @@ public class CuentaCorrienteService implements CuentaCorrienteParaVenta, CuentaC
                 .collect(Collectors.toMap(ImputadoDeComprobante::getComprobanteId, ImputadoDeComprobante::getImputado));
         Map<Long, BigDecimal> imputadoARecargos = imputaciones.imputadoPorRecargoScoped(clienteId).stream()
                 .collect(Collectors.toMap(ImputadoDeRecargo::getAjusteId, ImputadoDeRecargo::getImputado));
-        // crédito (COBRO − ANULACION + Descuentos) − imputado VIGENTE: un cobro anulado ya no es crédito ni resta de ninguna deuda
+        // crédito (COBRO − ANULACION + Descuentos + NC) − imputado VIGENTE: un cobro anulado ya no es crédito ni resta de ninguna deuda
         BigDecimal aCuenta = libro.creditoNetoDeRecibosScoped(clienteId).add(libro.creditoDeDescuentosScoped(clienteId))
+                .add(libro.creditoDeNotasDeCreditoScoped(clienteId))
                 .subtract(imputaciones.totalImputadoScoped(clienteId));
         List<PendientesCuenta.Pendiente> pendientes = new PartidasAbiertas(debitosDe(debitos), imputadoAComprobantes,
                 imputadoARecargos).abiertas().stream()

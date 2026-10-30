@@ -99,11 +99,27 @@ class ImputacionTest {
     }
 
     @Test
+    @DisplayName("CU-08 (V39): la nota de crédito es un origen más: guarda nc_origen_id, sin recibo ni Descuento, vigente")
+    void origenNotaDeCredito() {
+        Imputacion imputacion = Imputacion.de(3L, 7L, Imputacion.Origen.notaDeCredito(90L), Imputacion.Destino.comprobante(20L),
+                BigDecimal.TEN);
+
+        assertThat(imputacion.getNcOrigenId()).isEqualTo(90L);
+        assertThat(imputacion.getReciboId()).isNull();
+        assertThat(imputacion.getAjusteOrigenId()).isNull();
+        assertThat(imputacion.getComprobanteId()).isEqualTo(20L);
+        assertThat(imputacion.isAutomatica()).isFalse();
+        assertThat(imputacion.isVigente()).isTrue();
+    }
+
+    @Test
     @DisplayName("GDS-20: exactamente un origen y exactamente un destino (los dos CHECK de la base, antes en el dominio)")
     void unSoloOrigenYUnSoloDestino() {
-        assertThatThrownBy(() -> Imputacion.de(3L, 7L, new Imputacion.Origen(55L, 82L), Imputacion.Destino.comprobante(20L),
+        assertThatThrownBy(() -> Imputacion.de(3L, 7L, new Imputacion.Origen(55L, 82L, null), Imputacion.Destino.comprobante(20L),
                 BigDecimal.TEN)).isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> Imputacion.de(3L, 7L, new Imputacion.Origen(null, null), Imputacion.Destino.comprobante(20L),
+        assertThatThrownBy(() -> Imputacion.de(3L, 7L, new Imputacion.Origen(55L, null, 90L), Imputacion.Destino.comprobante(20L),
+                BigDecimal.TEN)).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> Imputacion.de(3L, 7L, new Imputacion.Origen(null, null, null), Imputacion.Destino.comprobante(20L),
                 BigDecimal.TEN)).isInstanceOf(IllegalArgumentException.class);
         assertThatThrownBy(() -> Imputacion.de(3L, 7L, Imputacion.Origen.recibo(55L), new Imputacion.Destino(20L, 81L),
                 BigDecimal.TEN)).isInstanceOf(IllegalArgumentException.class);
@@ -132,8 +148,8 @@ class ImputacionTest {
 
         long columnas = Arrays.stream(Imputacion.class.getDeclaredFields()).filter(f -> f.isAnnotationPresent(Column.class))
                 .count();
-        // 6 de V21 + ajuste_origen_id, ajuste_destino_id y automatica de V28 (GDS-20)
-        assertThat(columnas).isEqualTo(9);
+        // 6 de V21 + ajuste_origen_id, ajuste_destino_id y automatica de V28 (GDS-20) + nc_origen_id de V39 (CU-08)
+        assertThat(columnas).isEqualTo(10);
         for (Field campo : Imputacion.class.getDeclaredFields()) {
             Column columna = campo.getAnnotation(Column.class);
             if (columna != null) {
