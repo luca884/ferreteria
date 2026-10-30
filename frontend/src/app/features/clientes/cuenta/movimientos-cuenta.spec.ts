@@ -191,12 +191,12 @@ describe('MovimientosCuenta (CC-074, CC-076, CC-078, CC-096)', () => {
       expect(celdas(segunda).slice(0, 7)).toEqual(['19/10/2026 08:05', 'Venta', 'Venta N.º 7', '$ 1.200,00', '', '$ 1.200,00', '—']);
     });
 
-    it('la columna «Tipo» va después de la fecha y dice el tipo de cada línea: Venta, Cobro, Anulación, Ajuste y NC', async () => {
+    it('la columna «Tipo» va después de la fecha y dice el tipo de cada línea: Venta, Cobro, Anulación, Ajuste y Nota de crédito', async () => {
       await crear({
         extracto: () =>
           of(
             extracto([
-              linea(5, { tipo: 'NC', referencia: 'NC N.º 3' }),
+              linea(5, { tipo: 'NC', referencia: 'Nota de crédito N.º 3', debe: 0, haber: 1200 }),
               linea(4, { tipo: 'AJUSTE', referencia: 'Ajuste' }),
               linea(3, { tipo: 'ANULACION', referencia: 'Anulación Recibo N.º 14', reciboId: 14, comprobanteId: null }),
               linea(2, { tipo: 'COBRO', referencia: 'Recibo N.º 14', reciboId: 14, comprobanteId: null }),
@@ -207,7 +207,7 @@ describe('MovimientosCuenta (CC-074, CC-076, CC-078, CC-096)', () => {
 
       const encabezados = Array.from(el().querySelectorAll('table.movimientos thead th')).map((c) => limpio(c.textContent));
       expect(encabezados.slice(0, 3)).toEqual(['Fecha', 'Tipo', 'Comprobante']);
-      expect(filas().map((f) => celdas(f)[1])).toEqual(['NC', 'Ajuste', 'Anulación', 'Cobro', 'Venta']);
+      expect(filas().map((f) => celdas(f)[1])).toEqual(['Nota de crédito', 'Ajuste', 'Anulación', 'Cobro', 'Venta']);
     });
 
     it('los importes que llegan como número entero se muestran siempre con 2 decimales', async () => {
@@ -344,7 +344,7 @@ describe('MovimientosCuenta (CC-074, CC-076, CC-078, CC-096)', () => {
         ['COBRO', 'Cobro'],
         ['ANULACION', 'Anulación'],
         ['AJUSTE', 'Ajuste'],
-        ['NC', 'NC'],
+        ['NC', 'Nota de crédito'],
       ]);
       expect(boton('Filtrar')).toBeDefined();
       expect(boton('Limpiar')).toBeDefined();
@@ -554,7 +554,7 @@ describe('MovimientosCuenta (CC-074, CC-076, CC-078, CC-096)', () => {
         linea(4, { tipo: 'ANULACION', referencia: 'Anulación Recibo N.º 13', debe: 500, haber: 0, reciboId: 13, comprobanteId: null, motivo: 'Error' }),
         linea(3, { tipo: 'VENTA' }),
         linea(2, { tipo: 'AJUSTE', referencia: 'Ajuste', comprobanteId: null }),
-        linea(1, { tipo: 'NC', referencia: 'NC', comprobanteId: null }),
+        linea(1, { tipo: 'NC', referencia: 'Anulación N.º 9', debe: 0, haber: 1200 }),
       ]);
 
     it('COBRO vigente: «Anular» y «Reimprimir»; anulado: solo «Reimprimir»; ANULACION: solo «Reimprimir»; el resto, nada', async () => {

@@ -838,6 +838,24 @@ describe('Ventas (consulta y reimpresión, G60)', () => {
       );
     });
 
+    it('una venta con un pago a cuenta corriente avisa en la confirmación que se descuenta de la deuda del cliente', async () => {
+      const aCuenta = { formaPagoId: 5, formaPago: 'Cuenta corriente', medio: 'CUENTA_CORRIENTE' as const, recargoPorcentaje: 0, recargo: 0 };
+      await abrirVenta(
+        ventaDePrueba({
+          ventaId: 50,
+          numero: 5,
+          fiscal: autorizada(),
+          anulacion: null,
+          pagos: [{ ...ventaDePrueba().pagos![0], monto: 970 }, { ...aCuenta, monto: 2000 }],
+        }),
+      );
+
+      boton('Anular', detalle()!)!.click();
+      await refrescar();
+
+      expect(textoDialogo()).toBe(`${CONFIRMACION} La parte a cuenta corriente se descuenta de la deuda del cliente.`);
+    });
+
     it('sin la factura autorizada pide el motivo y lo manda; los 400 del motivo y los 409 y 422 quedan en el diálogo', async () => {
       for (const fiscal of [undefined, { ...autorizada(), estado: 'RECHAZADO' as const }]) {
         TestBed.resetTestingModule();
@@ -854,10 +872,7 @@ describe('Ventas (consulta y reimpresión, G60)', () => {
         [error(400, { message: 'Datos inválidos', errors: { motivo: 'El motivo tiene hasta 200 caracteres.' } }), 'El motivo tiene hasta 200 caracteres.'],
         [error(409, { message: 'Esperá el CAE de la factura para anularla.', motivo: 'ESPERAR_CAE' }), 'Esperá el CAE de la factura para anularla.'],
         [error(409, { message: 'La venta ya fue anulada por Dueño el 29/10/2026 14:05.', motivo: 'VENTA_YA_ANULADA' }), 'La venta ya fue anulada por Dueño el 29/10/2026 14:05.'],
-        [
-          error(422, { message: 'La venta tiene un pago a cuenta corriente: todavía no se puede anular.', motivo: 'VENTA_A_CUENTA_CORRIENTE' }),
-          'La venta tiene un pago a cuenta corriente: todavía no se puede anular.',
-        ],
+        [error(422, { message: 'El cliente está desactivado.' }), 'El cliente está desactivado.'],
       ];
       for (const [respuesta, mensaje] of casos) {
         api.anular.mockReturnValueOnce(respuesta);

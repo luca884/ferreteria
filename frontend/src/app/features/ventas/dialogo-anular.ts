@@ -28,7 +28,8 @@ export function validarMotivoAnulacion(texto: string): string | null {
 
 /**
  * La confirmación de «Anular» (CU-08 punto 1, S15). Con `conMotivo` (la venta no tiene la factura autorizada: anulación
- * interna, D12) pide además el motivo, obligatorio y de hasta 200 caracteres (S13). Presentacional: Esc cancela; sin
+ * interna, D12) pide además el motivo, obligatorio y de hasta 200 caracteres (S13). Con `conCuentaCorriente` avisa que la
+ * parte a cuenta corriente se descuenta de la deuda del cliente (cu-08-nc-cuenta-corriente S7). Presentacional: Esc cancela; sin
  * motivo el foco arranca en Cancelar (lo seguro) y Enter activa el botón enfocado; con motivo arranca en el campo y Enter
  * confirma solo con un motivo válido. Mientras `enVuelo`, nada responde. El rechazo del servidor llega por `error` y el
  * diálogo no se cierra.
@@ -46,6 +47,8 @@ export class DialogoAnular {
   readonly numero = input.required<number>();
   /** Pedir el motivo: la venta se anula sin documento fiscal. */
   readonly conMotivo = input(false);
+  /** La venta cargó algo a cuenta corriente: la nota lo acredita en la cuenta del cliente. */
+  readonly conCuentaCorriente = input(false);
   /** El contenedor lo prende mientras el POST está en curso. */
   readonly enVuelo = input(false);
   /** El rechazo del servidor (400 del motivo, 409, 422), tal cual. */

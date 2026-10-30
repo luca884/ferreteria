@@ -7,7 +7,8 @@ import java.time.LocalDateTime;
 
 /**
  * Una línea del extracto (CC-078): el movimiento del libro y el saldo del cliente DESPUÉS de él. {@code debe} y {@code haber}
- * salen siempre con 2 decimales y uno de los dos es 0; {@code reciboId} solo en COBRO y ANULACION, {@code comprobanteId} en VENTA,
+ * salen siempre con 2 decimales y uno de los dos es 0; {@code reciboId} solo en COBRO y ANULACION, {@code comprobanteId} en VENTA
+ * y en NC (la nota de crédito o la anulación interna, que no se anula),
  * {@code motivo} en ANULACION, {@code excedioLimite} y {@code autorizadoPor} en VENTA; {@code anulado} es true en un COBRO cuyo
  * recibo tiene ANULACION. Los que no corresponden salen {@code null}.
  */

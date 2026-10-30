@@ -18,7 +18,9 @@ describe('DialogoAnular (CU-08, S2, S13, S15)', () => {
     fixture.detectChanges();
   }
 
-  async function abrir(extra: { conMotivo?: boolean; enVuelo?: boolean; error?: string | null } = {}) {
+  async function abrir(
+    extra: { conMotivo?: boolean; conCuentaCorriente?: boolean; enVuelo?: boolean; error?: string | null } = {},
+  ) {
     await TestBed.configureTestingModule({ imports: [DialogoAnular] }).compileComponents();
     fixture = TestBed.createComponent(DialogoAnular);
     confirmados = [];
@@ -57,6 +59,22 @@ describe('DialogoAnular (CU-08, S2, S13, S15)', () => {
 
     boton('Anular').click();
     expect(confirmados).toEqual([null]);
+  });
+
+  it('con cuenta corriente suma que la parte a cuenta se descuenta de la deuda del cliente, con y sin motivo', async () => {
+    for (const conMotivo of [false, true]) {
+      TestBed.resetTestingModule();
+      await abrir({ conMotivo, conCuentaCorriente: true });
+
+      const dialogo = el().querySelector('[role="alertdialog"]')!;
+      const mensaje = limpio(el().querySelector(`#${dialogo.getAttribute('aria-describedby')}`)?.textContent);
+      expect(mensaje).toBe(
+        (conMotivo
+          ? 'La venta no tiene factura: queda anulada con el motivo y vuelve el stock.'
+          : 'Se emite una nota de crédito y vuelve el stock.') +
+          ' La caja no cambia: si devolvés plata, cargá un egreso. La parte a cuenta corriente se descuenta de la deuda del cliente.',
+      );
+    }
   });
 
   it('sin CAE pide el motivo, obligatorio y de hasta 200, con los textos del servidor; manda el motivo recortado', async () => {

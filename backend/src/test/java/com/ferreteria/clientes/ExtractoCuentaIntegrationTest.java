@@ -19,6 +19,7 @@ import com.ferreteria.support.BarreraDeLocks;
 import com.ferreteria.support.BarreraDeLocks.Hito;
 import com.ferreteria.tenant.TenantContext;
 import com.ferreteria.ventas.model.MedioPago;
+import com.ferreteria.ventas.service.AnulacionDeVenta;
 import com.ferreteria.ventas.service.AnulacionService;
 import com.ferreteria.ventas.service.CobranzaPedido;
 import com.ferreteria.ventas.service.CobranzaService;
@@ -75,6 +76,9 @@ class ExtractoCuentaIntegrationTest extends CuentaCorrienteTestBase {
 
     @Autowired
     ClienteService clienteService;
+
+    @Autowired
+    AnulacionDeVenta anulacionDeVenta;
 
     /** Pausa a un hilo dentro del puerto de la cuenta: ya tiene el cliente y la caja tomados y no confirmó. */
     @SpyBean
@@ -238,6 +242,39 @@ class ExtractoCuentaIntegrationTest extends CuentaCorrienteTestBase {
         assertThat(adelanto.referencia()).startsWith("Recibo N.º ");
         assertThat(x.lineas()).allSatisfy(linea -> assertThat(linea.fecha()).isNotNull());
         assertInvariante(l.cliente());
+    }
+
+    @Test
+    @DisplayName("cu-08-nc-cuenta-corriente S4, S9: la nota de una venta a cuenta corriente sale al haber con su referencia y su "
+            + "comprobante, no figura anulada y el tipo NC la filtra")
+    void laNotaDeCreditoEnElExtracto() {
+        Escenario e = escenario();
+        long cliente = cliente(e.f(), "1000");
+        long venta = ventaCC(e, cliente, 300, false);
+        ventaCC(e, cliente, 200, false);
+        anulacionDeVenta.anular(venta, "Devolvió todo", e.f().usuarioId());
+        TenantContext.setCurrentFerreteriaId(e.f().id());
+        long nota = jdbc.queryForObject("select id from comprobante where comprobante_asociado_id = ?", Long.class, venta);
+        long numero = jdbc.queryForObject("select numero from comprobante where id = ?", Long.class, nota);
+
+        Extracto x = pedir(cliente, todo());
+        Extracto soloNc = pedir(cliente, filtro(null, null, TipoMovimientoCuenta.NC, 0, 100));
+
+        Linea linea = x.lineas().get(0);
+        assertThat(linea.tipo()).isEqualTo(TipoMovimientoCuenta.NC);
+        assertThat(linea.referencia()).isEqualTo("Anulación N.º " + numero);
+        assertThat(linea.comprobanteId()).isEqualTo(nota);
+        assertThat(linea.haber()).isEqualByComparingTo("300");
+        assertThat(linea.debe()).isEqualByComparingTo("0");
+        assertThat(linea.saldo()).isEqualByComparingTo("200");
+        assertThat(linea.reciboId()).isNull();
+        assertThat(linea.motivo()).isNull();
+        assertThat(linea.anulado()).as("una NC no se anula").isFalse();
+        assertThat(soloNc.lineas()).extracting(Linea::id).containsExactly(linea.id());
+        assertThat(soloNc.totalHaber()).isEqualByComparingTo("300");
+        assertThat(soloNc.totalDebe()).isEqualByComparingTo("0");
+        assertThat(soloNc.saldoFinal()).isEqualByComparingTo("200");
+        assertInvariante(cliente);
     }
 
     @Test
