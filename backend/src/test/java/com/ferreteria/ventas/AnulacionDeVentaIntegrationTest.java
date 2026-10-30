@@ -347,6 +347,12 @@ class AnulacionDeVentaIntegrationTest extends FacturaDelDuenoTestBase {
         return jdbc.queryForObject("select saldo from cliente where id = ?", BigDecimal.class, cliente);
     }
 
+    /** Un POST para correr en paralelo: devuelve el resultado sin exigir el estado. */
+    private MvcResult postSinEsperar(String url, String token, String cuerpo) throws Exception {
+        return mvc.perform(MockMvcRequestBuilders.post(url).header("Authorization", "Bearer " + token)
+                .contentType(MediaType.APPLICATION_JSON).content(cuerpo)).andReturn();
+    }
+
     private void anularRecibo(Tienda t, long recibo) throws Exception {
         postJson("/api/recibos/" + recibo + "/anulacion", login(t.emailDueno()), "{\"motivo\":\"Cobro mal cargado\"}")
                 .andExpect(status().isOk());
@@ -516,6 +522,88 @@ class AnulacionDeVentaIntegrationTest extends FacturaDelDuenoTestBase {
         assertThat(saldo(c)).isEqualByComparingTo("242.00");
         assertThat(imputadoPorLaNota(notaId, venta)).isEqualByComparingTo("0");
         InvarianteCuenta.assertInvariante(jdbc, c);
+    }
+
+    @Test
+    @DisplayName("L10: un recibo que pagaba dos ventas anuladas (una mixta, con anulación interna) y una viva: cada nota "
+            + "reimputa lo suyo, la viva vuelve a deber, y otra anulación del mismo recibo no suma imputaciones")
+    void anularUnReciboQuePagabaDosVentasAnuladasYUnaViva() throws Exception {
+        Tienda t = tiendaQueFactura(RI);
+        long a = articulo(t, unico("Martillo"), "UNIDAD", "121.00", "100");
+        long c = clienteConCuenta(t);
+        long v1 = venderACuenta(t, a, c, "0", null);
+        long v2 = venderACuenta(t, a, c, "142.00", null); // $ 100 a cuenta
+        long v3 = venderACuenta(t, a, c, "0", null);
+        String cobro = "{\"clave\":\"" + clave() + "\",\"clienteId\":" + c + ",\"medio\":\"EFECTIVO\",\"total\":442.00,"
+                + "\"imputaciones\":[{\"comprobanteId\":" + v1 + ",\"importe\":242.00},{\"comprobanteId\":" + v2
+                + ",\"importe\":100.00},{\"comprobanteId\":" + v3 + ",\"importe\":100.00}]}";
+        long recibo = json(postJson("/api/cobranzas", login(t.emailDueno()), cobro).andExpect(status().isCreated()))
+                .get("id").asLong();
+        long n1 = json(anular(t, v1, null).andExpect(status().isCreated())).get("ventaId").asLong();
+        long n2 = json(anular(t, v2, MOTIVO).andExpect(status().isCreated())).get("ventaId").asLong();
+        assertThat(saldo(c)).isEqualByComparingTo("-200.00"); // 242 + 100 + 242 − 442 − 242 − 100
+
+        anularRecibo(t, recibo);
+
+        assertThat(saldo(c)).isEqualByComparingTo("242.00");
+        assertThat(imputadoPorLaNota(n1, v1)).isEqualByComparingTo("242.00");
+        assertThat(imputadoPorLaNota(n2, v2)).isEqualByComparingTo("100.00");
+        postJson("/api/recibos/" + recibo + "/anulacion", login(t.emailDueno()), "{\"motivo\":\"Cobro mal cargado\"}");
+        assertThat(jdbc.queryForObject("select count(*) from imputacion where nc_origen_id in (?, ?)", Long.class, n1, n2))
+                .isEqualTo(2L);
+        assertThat(saldo(c)).isEqualByComparingTo("242.00");
+        InvarianteCuenta.assertInvariante(jdbc, c);
+    }
+
+    @Test
+    @DisplayName("L10: anular un recibo que reimputa la nota en paralelo con una cobranza del mismo cliente: entran las dos y "
+            + "la cuenta cierra")
+    void anularElReciboConReimputacionEnParaleloConUnaCobranza() throws Exception {
+        Tienda t = tiendaQueFactura(RI);
+        long a = articulo(t, unico("Martillo"), "UNIDAD", "121.00", "100");
+        String dueno = login(t.emailDueno());
+        for (int vuelta = 0; vuelta < 3; vuelta++) {
+            long c = clienteConCuenta(t);
+            long venta = venderACuenta(t, a, c, "0", null);
+            long recibo = json(cobrarACuenta(t, c, "242.00", venta).andExpect(status().isCreated())).get("id").asLong();
+            long notaId = json(anular(t, venta, null).andExpect(status().isCreated())).get("ventaId").asLong();
+            String adelanto = "{\"clave\":\"" + clave() + "\",\"clienteId\":" + c
+                    + ",\"medio\":\"EFECTIVO\",\"total\":100.00,\"imputaciones\":[]}";
+
+            List<MvcResult> r = enParalelo(List.of(
+                    () -> postSinEsperar("/api/recibos/" + recibo + "/anulacion", dueno, "{\"motivo\":\"Cobro mal cargado\"}"),
+                    () -> postSinEsperar("/api/cobranzas", dueno, adelanto)));
+
+            assertThat(r).extracting(x -> x.getResponse().getStatus()).containsExactly(200, 201);
+            assertThat(saldo(c)).isEqualByComparingTo("-100.00");
+            assertThat(imputadoPorLaNota(notaId, venta)).isEqualByComparingTo("242.00");
+            InvarianteCuenta.assertInvariante(jdbc, c);
+        }
+    }
+
+    @Test
+    @DisplayName("L10: anular un recibo que reimputa la nota en paralelo con la NC de otra venta del mismo cliente: entran las "
+            + "dos y no queda pendiente ni crédito")
+    void anularElReciboConReimputacionEnParaleloConOtraNc() throws Exception {
+        Tienda t = tiendaQueFactura(RI);
+        long a = articulo(t, unico("Martillo"), "UNIDAD", "121.00", "100");
+        String dueno = login(t.emailDueno());
+        for (int vuelta = 0; vuelta < 3; vuelta++) {
+            long c = clienteConCuenta(t);
+            long venta = venderACuenta(t, a, c, "0", null);
+            long otraVenta = venderACuenta(t, a, c, "0", null);
+            long recibo = json(cobrarACuenta(t, c, "242.00", venta).andExpect(status().isCreated())).get("id").asLong();
+            anular(t, venta, null).andExpect(status().isCreated());
+
+            List<MvcResult> r = enParalelo(List.of(
+                    () -> postSinEsperar("/api/recibos/" + recibo + "/anulacion", dueno, "{\"motivo\":\"Cobro mal cargado\"}"),
+                    () -> postSinEsperar("/api/ventas/" + otraVenta + "/anular", dueno, "{}")));
+
+            assertThat(r).extracting(x -> x.getResponse().getStatus()).containsExactly(200, 201);
+            assertThat(saldo(c)).isEqualByComparingTo("0");
+            assertSinPendienteNiCredito(t, c);
+            InvarianteCuenta.assertInvariante(jdbc, c);
+        }
     }
 
     @Test
