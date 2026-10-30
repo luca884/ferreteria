@@ -173,7 +173,7 @@ public class RegistroAnulacionDeVenta {
         if (!aCuenta.isEmpty()) {
             try {
                 cuentaCorriente.asentarNotaDeCredito(new AsientoNota(clienteId, nota.getId(), nota.getNumero(),
-                        referencia(nota), ventaId, aCuenta, usuarioId));
+                        referencia(nota, venta), ventaId, aCuenta, usuarioId));
             } catch (ClienteDesactivadoException e) {
                 throw new ReglaDeNegocioException(ClienteDesactivadoException.MENSAJE);
             }
@@ -189,11 +189,12 @@ public class RegistroAnulacionDeVenta {
     }
 
     /**
-     * Como la nombra el libro de la cuenta corriente y el stock: «Nota de crédito N.º n», o «Anulación N.º n» para la
-     * anulación interna (la nota con motivo).
+     * Como la nombra el libro de la cuenta corriente: «Nota de crédito N.º n (Venta N.º v)», o «Anulación N.º n (Venta N.º
+     * v)» para la anulación interna (la nota con motivo). La venta que anula va en la referencia (S9).
      */
-    static String referencia(Comprobante nota) {
-        return (nota.getMotivoAnulacion() != null ? "Anulación N.º " : "Nota de crédito N.º ") + nota.getNumero();
+    static String referencia(Comprobante nota, Comprobante venta) {
+        return (nota.getMotivoAnulacion() != null ? "Anulación N.º " : "Nota de crédito N.º ") + nota.getNumero()
+                + " (Venta N.º " + venta.getNumero() + ")";
     }
 
     /**

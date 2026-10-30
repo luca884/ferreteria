@@ -262,7 +262,8 @@ class ExtractoCuentaIntegrationTest extends CuentaCorrienteTestBase {
 
         Linea linea = x.lineas().get(0);
         assertThat(linea.tipo()).isEqualTo(TipoMovimientoCuenta.NC);
-        assertThat(linea.referencia()).isEqualTo("Anulación N.º " + numero);
+        long numeroVenta = jdbc.queryForObject("select numero from comprobante where id = ?", Long.class, venta);
+        assertThat(linea.referencia()).isEqualTo("Anulación N.º " + numero + " (Venta N.º " + numeroVenta + ")");
         assertThat(linea.comprobanteId()).isEqualTo(nota);
         assertThat(linea.haber()).isEqualByComparingTo("300");
         assertThat(linea.debe()).isEqualByComparingTo("0");

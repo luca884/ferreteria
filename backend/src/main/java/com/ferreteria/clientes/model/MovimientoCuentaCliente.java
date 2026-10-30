@@ -207,8 +207,8 @@ public class MovimientoCuentaCliente {
 
     /**
      * La nota de crédito (o la anulación interna) de UN pago a cuenta corriente de la venta anulada (CU-08): debe = 0, haber =
-     * monto (el de ese pago), con el pago de la venta, el comprobante NOTA_CREDITO y la referencia («Nota de crédito N.º n» o
-     * «Anulación N.º n»); sin recibo, ajuste, motivo ni exceso. Un pago se acredita una sola vez (UNIQUE (pago_id, tipo)).
+     * monto (el de ese pago), con el pago de la venta, el comprobante NOTA_CREDITO y la referencia («Nota de crédito N.º n (Venta N.º v)»
+     * o «Anulación N.º n (Venta N.º v)»); sin recibo, ajuste, motivo ni exceso. Un pago se acredita una sola vez (UNIQUE (pago_id, tipo)).
      */
     public static MovimientoCuentaCliente nc(Long ferreteriaId, Long clienteId, Long notaId, Long pagoId, String referencia,
             BigDecimal monto, LocalDateTime fecha, Long usuarioId) {

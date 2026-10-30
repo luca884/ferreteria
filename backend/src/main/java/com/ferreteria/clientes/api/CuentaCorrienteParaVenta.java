@@ -44,7 +44,7 @@ public interface CuentaCorrienteParaVenta {
 
     /**
      * La nota de crédito de una venta a cuenta corriente, ya guardada. {@code notaId} es el comprobante NOTA_CREDITO,
-     * {@code referencia} el texto que copia el libro («Nota de crédito N.º n» o «Anulación N.º n»), {@code ventaId} la venta
+     * {@code referencia} el texto que copia el libro («Nota de crédito N.º n (Venta N.º v)» o «Anulación N.º n (Venta N.º v)»), {@code ventaId} la venta
      * que anula y {@code pagos} sus pagos a cuenta corriente (solo esos: la parte en otros medios no se acredita).
      */
     record AsientoNota(Long clienteId, Long notaId, Long notaNumero, String referencia, Long ventaId, List<CargoPago> pagos,

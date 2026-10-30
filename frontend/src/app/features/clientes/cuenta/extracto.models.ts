@@ -25,8 +25,8 @@ export interface LineaExtracto {
   fecha: string;
   tipo: TipoMovimiento;
   /**
-   * «Venta N.º 7», «Recibo N.º 14», «Anulación Recibo N.º 14», «Nota de crédito N.º 9» o «Anulación N.º 9» (la NC de una
-   * venta a cuenta corriente): copiada al asentar el movimiento.
+   * «Venta N.º 7», «Recibo N.º 14», «Anulación Recibo N.º 14», «Nota de crédito N.º 9 (Venta N.º 7)» o «Anulación N.º 9
+   * (Venta N.º 7)» (la NC de una venta a cuenta corriente): copiada al asentar el movimiento.
    */
   referencia: string;
   debe: number;

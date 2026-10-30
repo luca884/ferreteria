@@ -347,6 +347,11 @@ class AnulacionDeVentaIntegrationTest extends FacturaDelDuenoTestBase {
         return jdbc.queryForObject("select saldo from cliente where id = ?", BigDecimal.class, cliente);
     }
 
+    /** El número interno de la venta, como lo nombra la referencia de su nota (S9). */
+    private long numeroDe(long venta) {
+        return jdbc.queryForObject("select numero from comprobante where id = ?", Long.class, venta);
+    }
+
     /** Los renglones NC del libro del cliente, en orden. */
     private List<Map<String, Object>> renglonesNc(long cliente) {
         return jdbc.queryForList("select comprobante_id, pago_id, haber, referencia from movimiento_cuenta_cliente "
@@ -390,7 +395,8 @@ class AnulacionDeVentaIntegrationTest extends FacturaDelDuenoTestBase {
         assertThat(renglonesNc(c)).singleElement().satisfies(m -> {
             assertThat(m).containsEntry("comprobante_id", notaId).containsEntry("pago_id", pagoACuenta(venta));
             assertThat((BigDecimal) m.get("haber")).isEqualByComparingTo("242.00");
-            assertThat(m.get("referencia")).isEqualTo("Nota de crédito N.º " + nota.get("numero").asLong());
+            assertThat(m.get("referencia")).isEqualTo("Nota de crédito N.º " + nota.get("numero").asLong()
+                    + " (Venta N.º " + numeroDe(venta) + ")");
         });
         assertThat(imputadoPorLaNota(notaId, venta)).isEqualByComparingTo("242.00");
         assertThat(getJson("/api/cajas/actual", dueno)).isEqualTo(cajaAntes);
@@ -455,7 +461,8 @@ class AnulacionDeVentaIntegrationTest extends FacturaDelDuenoTestBase {
         assertThat(nota.has("fiscal")).isFalse();
         assertThat(saldo(c)).isEqualByComparingTo("0");
         assertThat(renglonesNc(c)).singleElement()
-                .satisfies(m -> assertThat(m.get("referencia")).isEqualTo("Anulación N.º " + nota.get("numero").asLong()));
+                .satisfies(m -> assertThat(m.get("referencia")).isEqualTo("Anulación N.º " + nota.get("numero").asLong()
+                        + " (Venta N.º " + numeroDe(venta) + ")"));
         assertThat(imputadoPorLaNota(notaId, venta)).isEqualByComparingTo("242.00");
         InvarianteCuenta.assertInvariante(jdbc, c);
     }
