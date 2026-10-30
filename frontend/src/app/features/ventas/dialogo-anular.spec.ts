@@ -62,6 +62,11 @@ describe('DialogoAnular (CU-08, S2, S13, S15)', () => {
   it('sin CAE pide el motivo, obligatorio y de hasta 200, con los textos del servidor; manda el motivo recortado', async () => {
     await abrir({ conMotivo: true });
 
+    const dialogo = el().querySelector('[role="alertdialog"]')!;
+    const mensaje = limpio(el().querySelector(`#${dialogo.getAttribute('aria-describedby')}`)?.textContent);
+    expect(mensaje).toBe(
+      'La venta no tiene factura: queda anulada con el motivo y vuelve el stock. La caja no cambia: si devolvés plata, cargá un egreso.',
+    );
     expect(motivo()!.maxLength).toBe(200);
     expect(limpio(el().querySelector('label[for="motivo-anulacion"]')?.textContent)).toBe('Motivo');
     expect(document.activeElement).toBe(motivo());

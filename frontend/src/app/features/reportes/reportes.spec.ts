@@ -26,6 +26,7 @@ describe('Reportes de ventas', () => {
     ventasSinCosto: 1,
     notasDeCredito: { cantidad: 1, total: 121 },
     gananciaSinNotas: 123.48,
+    totalSinNotas: 466,
   };
 
   const filas: Record<string, unknown[]> = {
@@ -121,7 +122,8 @@ describe('Reportes de ventas', () => {
     const texto = Array.from(el().querySelectorAll('.resumen > div'))
       .map((d) => `${normal(d.querySelector('dt')?.textContent)} ${normal(d.querySelector('dd')?.textContent)}`)
       .join(' · ');
-    expect(texto).toContain('Ventas $ 345,00');
+    expect(texto).toContain('Ventas $ 466,00');
+    expect(texto).toContain('Total $ 345,00');
     expect(texto).toContain('Costo $ 100,00');
     expect(texto).toContain('IVA $ 59,87');
     expect(texto).toContain('Ganancia con NC $ 102,48');
@@ -131,15 +133,16 @@ describe('Reportes de ventas', () => {
     );
   });
 
-  it('el resumen suma el renglón «Notas de crédito» con cuántas y lo que restaron, y la ganancia sin NC y con NC (CU-08)', async () => {
+  it('el resumen muestra las ventas solas, el renglón «Notas de crédito» con cuántas y lo que restaron, el total que queda y la ganancia sin NC y con NC (CU-08)', async () => {
     await crear();
 
     const texto = Array.from(el().querySelectorAll('.resumen > div')).map(
       (d) => `${normal(d.querySelector('dt')?.textContent)} ${normal(d.querySelector('dd')?.textContent)}`,
     );
     expect(texto).toEqual([
-      'Ventas $ 345,00',
+      'Ventas $ 466,00',
       'Notas de crédito 1 · -$ 121,00',
+      'Total $ 345,00',
       'Neto $ 285,13',
       'IVA $ 59,87',
       'Costo $ 100,00',

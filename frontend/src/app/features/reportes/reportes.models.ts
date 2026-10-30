@@ -27,6 +27,7 @@ export interface Resumen {
   desde: string;
   hasta: string;
   cantidad: number;
+  /** El total con las notas de crédito restadas. */
   total: number;
   neto: number;
   iva: number;
@@ -38,6 +39,8 @@ export interface Resumen {
   notasDeCredito: { cantidad: number; total: number };
   /** La ganancia de las ventas solas (G66). */
   gananciaSinNotas: number;
+  /** El total de las ventas solas: el renglón «Ventas», antes de restar las notas de crédito. */
+  totalSinNotas: number;
 }
 
 export interface Filas<T> {

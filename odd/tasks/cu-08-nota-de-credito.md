@@ -53,11 +53,11 @@ Restricciones (del mapa, L2):
 
 Decisiones de producto (S11 a S16; Luca: «listo continua», 2026-10-29, L3):
 - S11 (confirmado por Luca el 2026-10-29): la anulación interna es un comprobante `NOTA_CREDITO` sin registro fiscal, con su número interno y su motivo. Así, los reportes, el stock y Ventas la tratan igual que la NC, y la venta anulada se ve con «Anulada por la NC N.º n» o «Anulada: <motivo>», con quién y cuándo.
-- S12 (confirmado por Luca el 2026-10-29): la NC y la anulación cuentan en la fecha en que se hacen, no en la de la venta, como en GDS. En el resumen de CU-15 hay un renglón «Notas de crédito» y «Ganancia sin NC» / «Ganancia con NC». «Por medio de pago» no las resta, porque no mueven plata.
+- S12 (confirmado por Luca el 2026-10-29): la NC y la anulación cuentan en la fecha en que se hacen, no en la de la venta, como en GDS. En el resumen de CU-15 hay un renglón «Notas de crédito» y «Ganancia sin NC» / «Ganancia con NC». «Ventas» muestra las ventas solas y un renglón «Total» lo que queda (L13). «Por medio de pago» no las resta, porque no mueven plata.
 - S13 (confirmado por Luca el 2026-10-29): la NC no pide motivo. La anulación interna pide un motivo obligatorio de hasta 200 caracteres, con los mismos mensajes que «Dejar sin factura».
 - S14 (confirmado por Luca el 2026-10-29): en Ventas, la NC y la anulación son renglones propios: «Nota de crédito» con el total en negativo y su factura. Desde su detalle se reimprime la NC.
 - S15 (confirmado por Luca el 2026-10-29): los textos son:
-  - confirmación: «¿Anular la venta N.º n? Se emite una nota de crédito y vuelve el stock. La caja no cambia: si devolvés plata, cargá un egreso.»;
+  - confirmación: «¿Anular la venta N.º n? Se emite una nota de crédito y vuelve el stock. La caja no cambia: si devolvés plata, cargá un egreso.» Sin CAE, la primera oración es «La venta no tiene factura: queda anulada con el motivo y vuelve el stock.» (L13);
   - 409: «Esperá el CAE de la factura para anularla.» y «La venta ya fue anulada por <usuario> el <fecha>.»;
   - 422: «La venta tiene un pago a cuenta corriente: todavía no se puede anular.»
 - S16 (confirmado por Luca el 2026-10-29): el remito de origen sigue «facturado» después de la NC. La NC devuelve el stock, pero no reabre el remito.
@@ -239,3 +239,9 @@ Orden: T1 → T2 → T3 ∥ T5 (superficies separadas: `facturacion` y los lecto
     - A4: el rollback de la V37 no exige que la V38 esté revertida, aunque el orden 38 → 37 está documentado;
     - A5: el texto de la confirmación de la anulación interna (igual que L11).
   - Próximo paso: T8 (Luca): merge, push y deploy, que aplica la V37 y la V38 en prod.
+- L13 (2026-10-29) Luca, sobre las advertencias: «dale me parece bien», a la recomendación de cambiar A1 y A5 y dejar A3 y A4.
+  - **A1:** el resumen suma `totalSinNotas`, las ventas solas, de forma aditiva, como `gananciaSinNotas`. La pantalla muestra «Ventas» (las ventas solas), «Notas de crédito» y «Total» (neto de NC). RED: NPE en `totalSinNotas` y TS2353 en el front → GREEN: `NotaDeCreditoEnLosLectoresIntegrationTest` + `ReporteVentas*Test` 29/29 y `reportes.spec` 23/23.
+  - **A5:** la anulación interna confirma con «La venta no tiene factura: queda anulada con el motivo y vuelve el stock. La caja no cambia: si devolvés plata, cargá un egreso.». El texto lo eligió el padre. RED 1 → GREEN: `dialogo-anular.spec` + `ventas.spec` 47/47.
+  - La spec y S12/S15 dicen esto.
+  - **Checks:** frontend 3367/3367 y `ng build` OK. La suite backend dio 5817, con 1 error: `DocumentoFiscalIntegrationTest`, `DuplicateKey` en `uk_ferreteria_cuit`. Es un flake de la base: `MotorFiscalTestBase` (de `c2d1bf4`, la rama no lo toca) sortea un CUIT de 8 cifras en la base compartida. Repetido solo, da 29/29.
+  - Próximo paso: T8 (Luca).

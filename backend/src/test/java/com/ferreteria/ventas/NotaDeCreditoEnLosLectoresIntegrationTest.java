@@ -156,6 +156,7 @@ class NotaDeCreditoEnLosLectoresIntegrationTest extends VentasTestBase {
         assertThat(r.get("costo").decimalValue()).isZero();
         assertThat(r.get("ganancia").decimalValue()).isZero();
         assertThat(r.get("gananciaSinNotas").decimalValue()).isEqualByComparingTo(ganancia);
+        assertThat(r.get("totalSinNotas").decimalValue()).isEqualByComparingTo("180.00");
         assertThat(r.get("notasDeCredito").get("cantidad").asInt()).isEqualTo(1);
         assertThat(r.get("notasDeCredito").get("total").decimalValue()).isEqualByComparingTo("180.00");
         assertThat(r.get("ventasSinCosto").asInt()).isZero();
@@ -176,6 +177,7 @@ class NotaDeCreditoEnLosLectoresIntegrationTest extends VentasTestBase {
         assertThat(deHoy.get("total").decimalValue()).isEqualByComparingTo("-180.00");
         assertThat(deHoy.get("ganancia").decimalValue()).isEqualByComparingTo(ganancia.negate());
         assertThat(deHoy.get("gananciaSinNotas").decimalValue()).isZero();
+        assertThat(deHoy.get("totalSinNotas").decimalValue()).isZero();
         assertThat(deHoy.get("notasDeCredito").get("total").decimalValue()).isEqualByComparingTo("180.00");
         JsonNode dias = reporte("por-periodo", ayer, hoy);
         assertThat(fila(dias, "periodo", ayer.toString()).get("total").decimalValue()).isEqualByComparingTo("180.00");

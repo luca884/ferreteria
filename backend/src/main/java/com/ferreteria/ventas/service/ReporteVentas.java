@@ -49,11 +49,11 @@ public class ReporteVentas {
 
     /**
      * {@code cantidad} son las ventas; los importes y {@code ganancia} van netos de las notas de credito, y
-     * {@code gananciaSinNotas} es la de las ventas solas.
+     * {@code totalSinNotas} y {@code gananciaSinNotas} son los de las ventas solas (el renglon «Ventas» de la pantalla).
      */
     public record Resumen(LocalDate desde, LocalDate hasta, int cantidad, BigDecimal total, BigDecimal neto,
             BigDecimal iva, BigDecimal costo, BigDecimal ganancia, int ventasSinCosto, NotasDeCredito notasDeCredito,
-            BigDecimal gananciaSinNotas) {}
+            BigDecimal gananciaSinNotas, BigDecimal totalSinNotas) {}
 
     /** El renglon «Notas de credito» del resumen: cuantas y su total, en positivo (lo que se resto). */
     public record NotasDeCredito(int cantidad, BigDecimal total) {}
@@ -160,7 +160,7 @@ public class ReporteVentas {
             }
         }
         return new Resumen(rango.desde(), rango.hasta(), cantidad, total, neto, iva, costo, ganancia, sinCosto,
-                new NotasDeCredito(notas, totalNotas), gananciaSinNotas);
+                new NotasDeCredito(notas, totalNotas), gananciaSinNotas, total.add(totalNotas));
     }
 
     @Transactional(readOnly = true)

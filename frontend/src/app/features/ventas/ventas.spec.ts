@@ -768,6 +768,8 @@ describe('Ventas (consulta y reimpresión, G60)', () => {
   describe('anular una venta (CU-08)', () => {
     const CONFIRMACION =
       '¿Anular la venta N.º 5? Se emite una nota de crédito y vuelve el stock. La caja no cambia: si devolvés plata, cargá un egreso.';
+    const CONFIRMACION_SIN_CAE =
+      '¿Anular la venta N.º 5? La venta no tiene factura: queda anulada con el motivo y vuelve el stock. La caja no cambia: si devolvés plata, cargá un egreso.';
     const dialogo = () => el().querySelector<HTMLElement>('app-dialogo-anular [role="alertdialog"]');
     const textoDialogo = () =>
       `${normal(dialogo()!.querySelector('h2')?.textContent)} ${normal(dialogo()!.querySelector('h2 + p')?.textContent)}`;
@@ -842,7 +844,7 @@ describe('Ventas (consulta y reimpresión, G60)', () => {
         await abrirVenta(ventaDePrueba({ ventaId: 50, numero: 5, fiscal, anulacion: null }));
         boton('Anular', detalle()!)!.click();
         await refrescar();
-        expect(textoDialogo()).toBe(CONFIRMACION);
+        expect(textoDialogo()).toBe(CONFIRMACION_SIN_CAE);
         expect(motivo(), String(fiscal?.estado)).not.toBeNull();
       }
 

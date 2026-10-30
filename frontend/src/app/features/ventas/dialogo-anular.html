@@ -12,7 +12,12 @@
   >
     <h2 id="dialogo-anular-titulo">¿Anular la venta N.º {{ numero() }}?</h2>
     <p id="dialogo-anular-mensaje">
-      Se emite una nota de crédito y vuelve el stock. La caja no cambia: si devolvés plata, cargá un egreso.
+      @if (conMotivo()) {
+        La venta no tiene factura: queda anulada con el motivo y vuelve el stock.
+      } @else {
+        Se emite una nota de crédito y vuelve el stock.
+      }
+      La caja no cambia: si devolvés plata, cargá un egreso.
     </p>
 
     @if (error(); as texto) {
