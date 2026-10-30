@@ -2,7 +2,7 @@ import { Component, ElementRef, afterNextRender, computed, input, output, viewCh
 import { MontoPipe } from '../../core/formato/monto';
 import { TrampaFoco } from '../trampa-foco';
 import { FacturaHoja } from './factura-hoja';
-import { VentaFacturada } from './factura.models';
+import { CLASE_NOTA_CREDITO, VentaFacturada } from './factura.models';
 
 /**
  * La factura de una venta para imprimir (CU-07 paso 5, D6): A4 con `window.print()`, una copia. Enter imprime y Esc cierra,
@@ -32,10 +32,15 @@ export class FacturaImprimible {
   readonly escaneoDescartado = output<void>();
 
   protected readonly documento = computed(() => this.venta().fiscal.documento);
-  /** «Factura B» o, si no es válida como factura, el número interno de la venta. */
+  /**
+   * «Factura B» o, si no es válida como factura, el número interno de la venta. La nota de crédito (CU-08): «Nota de
+   * crédito B» o «Nota de crédito N.º n».
+   */
   protected readonly titulo = computed(() => {
     const d = this.documento();
-    return d.validoComoFactura ? `Factura ${d.letra}` : `Venta N.º ${this.venta().numero}`;
+    const nota = this.venta().fiscal.clase === CLASE_NOTA_CREDITO;
+    if (d.validoComoFactura) return `${nota ? 'Nota de crédito' : 'Factura'} ${d.letra}`;
+    return `${nota ? 'Nota de crédito' : 'Venta'} N.º ${this.venta().numero}`;
   });
 
   private readonly botonImprimir = viewChild<ElementRef<HTMLButtonElement>>('botonImprimir');

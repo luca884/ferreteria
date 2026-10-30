@@ -1,0 +1,65 @@
+<!-- El mousedown sobre el fondo no mueve el foco al body: si no, Esc y Enter (que escucha el diálogo) dejarían de andar. -->
+<div class="dialogo-fondo" (mousedown)="retenerFoco($event)">
+  <div
+    class="dialogo anular"
+    tabindex="-1"
+    role="alertdialog"
+    aria-modal="true"
+    aria-labelledby="dialogo-anular-titulo"
+    aria-describedby="dialogo-anular-mensaje"
+    appTrampaFoco
+    (keydown)="alTeclear($event)"
+  >
+    <h2 id="dialogo-anular-titulo">¿Anular la venta N.º {{ numero() }}?</h2>
+    <p id="dialogo-anular-mensaje">
+      @if (conMotivo()) {
+        La venta no tiene factura: queda anulada con el motivo y vuelve el stock.
+      } @else {
+        Se emite una nota de crédito y vuelve el stock.
+      }
+      La caja no cambia: si devolvés plata, cargá un egreso.
+    </p>
+
+    @if (error(); as texto) {
+      <p class="error error-servidor" role="alert">{{ texto }}</p>
+    }
+
+    @if (conMotivo()) {
+      <label class="campo-motivo" for="motivo-anulacion">Motivo</label>
+      <input
+        #campoMotivo
+        id="motivo-anulacion"
+        class="campo-motivo-input"
+        type="text"
+        autocomplete="off"
+        spellcheck="true"
+        [maxLength]="maximo"
+        [attr.aria-invalid]="errorMotivo() ? 'true' : null"
+        [attr.aria-describedby]="errorMotivo() ? 'error-motivo-anulacion' : null"
+        [value]="motivo()"
+        (input)="motivo.set($any($event.target).value)"
+      />
+      <div class="pie-motivo">
+        @if (errorMotivo(); as mensaje) {
+          <small id="error-motivo-anulacion" class="campo-error">{{ mensaje }}</small>
+        }
+        <small class="contador" aria-hidden="true">{{ motivo().length }}/{{ maximo }}</small>
+      </div>
+    }
+
+    <div class="dialogo-acciones">
+      <button
+        #botonCancelar
+        type="button"
+        class="cancelar secundario"
+        data-tecla="Esc"
+        aria-keyshortcuts="Escape"
+        [disabled]="enVuelo()"
+        (click)="cancelarAnulacion()"
+      >
+        Cancelar
+      </button>
+      <button type="button" class="anular peligro" [disabled]="enVuelo()" (click)="confirmarAnulacion()">Anular</button>
+    </div>
+  </div>
+</div>

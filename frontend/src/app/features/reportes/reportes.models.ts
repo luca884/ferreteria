@@ -19,16 +19,28 @@ export type TipoReporte = (typeof REPORTES)[number]['tipo'];
 export type ReporteEnFilas = Exclude<TipoReporte, 'resumen' | 'movimientos-caja'>;
 export type Agrupar = 'DIA' | 'MES';
 
+/**
+ * Desde CU-08 los importes y `ganancia` van netos de las notas de crédito (y las anulaciones internas), que restan en su
+ * fecha; `cantidad` y `ventasSinCosto` cuentan solo ventas.
+ */
 export interface Resumen {
   desde: string;
   hasta: string;
   cantidad: number;
+  /** El total con las notas de crédito restadas. */
   total: number;
   neto: number;
   iva: number;
   costo: number;
+  /** La ganancia con NC: la de las ventas menos la de las notas de crédito. */
   ganancia: number;
   ventasSinCosto: number;
+  /** El renglón «Notas de crédito»: cuántas y su total en positivo (lo que se restó). */
+  notasDeCredito: { cantidad: number; total: number };
+  /** La ganancia de las ventas solas (G66). */
+  gananciaSinNotas: number;
+  /** El total de las ventas solas: el renglón «Ventas», antes de restar las notas de crédito. */
+  totalSinNotas: number;
 }
 
 export interface Filas<T> {

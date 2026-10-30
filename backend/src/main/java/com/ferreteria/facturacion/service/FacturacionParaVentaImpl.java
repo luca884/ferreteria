@@ -79,6 +79,10 @@ import org.springframework.transaction.support.TransactionTemplate;
  * <p>La bandeja de Ventas y «llegó el CAE» (cu-07-contingencias C1 y C7) también son lecturas, y lo que muestran lo decide
  * {@link BandejaFiscal}. Las dos acciones del Dueño (C2 y C3) las hace el motor; acá se traducen sus impedimentos a los del
  * puerto ({@link FacturaImpedidaException}), con el mismo texto.
+ *
+ * <p>La anulación de una venta (CU-08, rama 8) también la hace el motor, en la transacción de quien llama: la vía, la nota
+ * de crédito copiada de la factura y la anulación interna. La nota de crédito se autoriza como una factura, con
+ * {@link #autorizar} sobre su comprobante.
  */
 @Service
 public class FacturacionParaVentaImpl implements FacturacionParaVenta {
@@ -327,12 +331,41 @@ public class FacturacionParaVentaImpl implements FacturacionParaVenta {
         }
     }
 
+    // ---- La anulación de una venta (CU-08, rama 8; C1 de cu-08-nota-de-credito): la hace el motor ----
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public ViaDeAnulacion tomarParaAnular(long ventaId) {
+        try {
+            return switch (motor.tomarParaAnular(ventaId)) {
+                case NOTA_DE_CREDITO -> ViaDeAnulacion.NOTA_DE_CREDITO;
+                case ANULACION_INTERNA -> ViaDeAnulacion.ANULACION_INTERNA;
+            };
+        } catch (AccionFiscalImpedidaException e) {
+            throw traducida(e);
+        }
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public long registrarNotaDeCredito(long notaId, long ventaId) {
+        return motor.registrarNotaDeCredito(notaId, ventaId);
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void cerrarSinCae(long ventaId, String motivo, long usuarioId) {
+        motor.cerrarSinCae(ventaId, motivo, usuarioId);
+    }
+
     /** El impedimento del motor, con el mismo código y el mismo texto, como lo conoce el puerto. */
     private static FacturaImpedidaException traducida(AccionFiscalImpedidaException e) {
         FacturaImpedidaException.Impedimento impedimento = switch (e.impedimento()) {
             case SIN_FACTURA_RECHAZADA -> FacturaImpedidaException.Impedimento.SIN_FACTURA_RECHAZADA;
             case FECHA_NUEVA_REQUERIDA -> FacturaImpedidaException.Impedimento.FECHA_NUEVA_REQUERIDA;
             case FACTURACION_FRENADA -> FacturaImpedidaException.Impedimento.FACTURACION_FRENADA;
+            case ESPERAR_CAE -> FacturaImpedidaException.Impedimento.ESPERAR_CAE;
+            case OTRO_AMBIENTE -> FacturaImpedidaException.Impedimento.OTRO_AMBIENTE;
         };
         return new FacturaImpedidaException(impedimento, e.getMessage());
     }

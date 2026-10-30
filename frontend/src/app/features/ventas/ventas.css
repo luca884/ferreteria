@@ -90,6 +90,22 @@
   justify-content: flex-end;
   gap: var(--e-2);
 }
+/* «Anular» (CU-08) va aparte de «Imprimir», con una línea en el medio: no se aprieta por error. */
+.anular-venta {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: var(--e-3);
+  border-top: 1px solid var(--borde);
+}
+/* La venta anulada y la nota de crédito: se leen antes que el detalle. */
+.anulacion,
+.venta-anulada {
+  margin: 0;
+  font-weight: 600;
+}
+.marca.anulada {
+  color: var(--error);
+}
 
 /* La marca de la lista que pide reimprimir la factura: es lo que el Dueño tiene que hacer, no un dato más. */
 .marca.reimprimir {

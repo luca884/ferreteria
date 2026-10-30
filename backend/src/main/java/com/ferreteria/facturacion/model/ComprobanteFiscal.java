@@ -19,7 +19,8 @@ import org.hibernate.type.SqlTypes;
 /**
  * El registro fiscal de un comprobante (tabla {@code comprobante_fiscal}, V32): uno solo vigente por venta, con lo que va
  * a ARCA congelado al registrarlo (ambiente y punto de venta de la configuración, letra y CbteTipo del encuadre, receptor,
- * emisor e importes del desglose) y el estado de su autorización. Desde la V36 (rama 7), el reintento del Dueño no lo
+ * emisor e importes del desglose) y el estado de su autorización. Desde la V38 (rama 8), el de una nota de crédito lleva
+ * además la factura que anula, copiada de su registro ({@link #notaDeCredito}). Desde la V36 (rama 7), el reintento del Dueño no lo
  * reescribe: lo deja como historia ({@link #getReemplazadoEn()}) y da de alta otro, vigente, con la copia de ese momento.
  *
  * <p>Único escritor: el motor ({@code facturacion.motor}). La entidad no tiene setters, y Hibernate no la actualiza nunca
@@ -171,6 +172,29 @@ public class ComprobanteFiscal {
     @Column(name = "reemplazado_en")
     private Instant reemplazadoEn;
 
+    /**
+     * La factura que anula una nota de crédito (V38, rama 8): su registro y lo que va en {@code CbtesAsoc}, copiado de él
+     * al dar de alta la NC. Todo null en una factura.
+     */
+    @Column(name = "asociado_id", updatable = false)
+    private Long asociadoId;
+
+    @Column(name = "asociado_cbte_tipo", updatable = false)
+    private Integer asociadoCbteTipo;
+
+    @Column(name = "asociado_punto_venta", updatable = false)
+    private Integer asociadoPuntoVenta;
+
+    @Column(name = "asociado_numero", updatable = false)
+    private Long asociadoNumero;
+
+    /** La CUIT del emisor de la factura, los 11 dígitos sin guiones (como la pide {@code CbteAsoc}). */
+    @Column(name = "asociado_cuit", updatable = false, length = 11)
+    private String asociadoCuit;
+
+    @Column(name = "asociado_cbte_fch", updatable = false)
+    private LocalDate asociadoCbteFch;
+
     protected ComprobanteFiscal() {
     }
 
@@ -220,6 +244,59 @@ public class ComprobanteFiscal {
         return r;
     }
 
+    /**
+     * La nota de crédito total de una factura autorizada (CU-08, rama 8; C1 de cu-08-nota-de-credito), PENDIENTE y sin
+     * número, en la serie de su letra (CbteTipo 3, 8 o 13): todo lo que va a ARCA se copia del registro de la factura, nunca
+     * del cliente ni de los datos de hoy de la ferretería. El ambiente, el punto de venta y la letra; el receptor, el emisor
+     * y los importes; y, como asociado, la factura (su registro, CbteTipo, punto de venta, número, CUIT y CbteFch). El
+     * desglose por alícuota lo copia quien la da de alta.
+     *
+     * @param comprobanteId el comprobante de la nota de crédito (de la misma ferretería que la factura)
+     * @param factura el registro AUTORIZADO de la factura que se anula
+     * @param registradoEn la hora de la nota de crédito: de ella sale su CbteFch
+     */
+    public static ComprobanteFiscal notaDeCredito(long comprobanteId, ComprobanteFiscal factura, Instant registradoEn) {
+        Objects.requireNonNull(factura, "Falta la factura que se anula.");
+        Objects.requireNonNull(registradoEn, "Falta la hora de la nota de crédito.");
+        if (factura.clase != ClaseComprobante.FACTURA || factura.estado != EstadoFiscal.AUTORIZADO
+                || factura.numero == null || factura.cbteFch == null) {
+            throw new IllegalArgumentException("Una nota de crédito anula una factura autorizada, con su número y su CbteFch.");
+        }
+        ComprobanteFiscal r = new ComprobanteFiscal();
+        r.ferreteriaId = factura.ferreteriaId;
+        r.comprobanteId = comprobanteId;
+        r.ambiente = factura.ambiente;
+        r.clase = ClaseComprobante.NOTA_CREDITO;
+        r.letra = factura.letra;
+        r.cbteTipo = factura.letra.cbteTipo(ClaseComprobante.NOTA_CREDITO);
+        r.puntoVenta = factura.puntoVenta;
+        r.estado = EstadoFiscal.PENDIENTE;
+        r.receptorDocTipo = factura.receptorDocTipo;
+        r.receptorDocNro = factura.receptorDocNro;
+        r.receptorCondicionIvaId = factura.receptorCondicionIvaId;
+        r.receptorNombre = factura.receptorNombre;
+        r.receptorDomicilio = factura.receptorDomicilio;
+        r.emisorCuit = factura.emisorCuit;
+        r.emisorRazonSocial = factura.emisorRazonSocial;
+        r.emisorCondicionIva = factura.emisorCondicionIva;
+        r.emisorDomicilioComercial = factura.emisorDomicilioComercial;
+        r.emisorIngresosBrutos = factura.emisorIngresosBrutos;
+        r.emisorInicioActividades = factura.emisorInicioActividades;
+        r.impTotal = factura.impTotal;
+        r.impNeto = factura.impNeto;
+        r.impIva = factura.impIva;
+        r.impTotConc = factura.impTotConc;
+        r.impOpEx = factura.impOpEx;
+        r.registradoEn = registradoEn;
+        r.asociadoId = factura.id;
+        r.asociadoCbteTipo = factura.cbteTipo;
+        r.asociadoPuntoVenta = factura.puntoVenta;
+        r.asociadoNumero = factura.numero;
+        r.asociadoCuit = String.format("%011d", factura.cuitEmisora());
+        r.asociadoCbteFch = factura.cbteFch;
+        return r;
+    }
+
     /** La CUIT emisora como la pide WSFEv1: los 11 dígitos, sin guiones. */
     public long cuitEmisora() {
         return Long.parseLong(emisorCuit.replace("-", ""));
@@ -263,6 +340,17 @@ public class ComprobanteFiscal {
     public Long getUsuarioSinFacturaId() { return usuarioSinFacturaId; }
     public Instant getSinFacturaEn() { return sinFacturaEn; }
     public Instant getReemplazadoEn() { return reemplazadoEn; }
+    public Long getAsociadoId() { return asociadoId; }
+    public Integer getAsociadoCbteTipo() { return asociadoCbteTipo; }
+    public Integer getAsociadoPuntoVenta() { return asociadoPuntoVenta; }
+    public Long getAsociadoNumero() { return asociadoNumero; }
+    public String getAsociadoCuit() { return asociadoCuit; }
+    public LocalDate getAsociadoCbteFch() { return asociadoCbteFch; }
+
+    /** Una nota de crédito: lleva su factura asociada (V38). */
+    public boolean esNotaDeCredito() {
+        return clase == ClaseComprobante.NOTA_CREDITO;
+    }
 
     /** El registro de la venta que vale: el que no reemplazó ningún reintento. */
     public boolean esVigente() {

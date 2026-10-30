@@ -36,6 +36,7 @@ import java.time.ZoneId;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import org.springframework.dao.CannotAcquireLockException;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -75,6 +76,8 @@ public class PasosFiscales {
     static final int LARGO_MOTIVO = 200;
     static final String MOTIVO_VACIO = "Contá por qué la venta queda sin factura.";
     static final String MOTIVO_LARGO = "El motivo tiene hasta 200 caracteres.";
+    /** El motivo de la anulación interna (CU-08 punto 3, L4 de cu-08-nota-de-credito); el de largo es el mismo. */
+    static final String MOTIVO_DE_ANULACION_VACIO = "Contá por qué se anula la venta.";
 
     /** ARCA trabaja en hora de Buenos Aires: de ahí salen la CbteFch y el día del envío. */
     private static final ZoneId ZONA_ARCA = HoraArgentina.ZONA;
@@ -618,6 +621,9 @@ public class PasosFiscales {
         RegistroVigente reemplazado = registros.vigenteDeScoped(alta.comprobanteId())
                 .filter(r -> r.estado() == EstadoFiscal.RECHAZADO || r.estado() == EstadoFiscal.FUERA_DE_FECHA)
                 .orElseThrow(AccionFiscalImpedidaException::sinFacturaRechazada);
+        if (reemplazado.clase() == ClaseComprobante.NOTA_CREDITO) {
+            return reintentarNota(reemplazado, alta.comprobanteId(), fechaDeHoy, ahora);
+        }
         Emision emision = emision(ahora);
         if (emision.impedimento() != null) {
             throw AccionFiscalImpedidaException.facturacionFrenada(String.format(FACTURACION_FRENADA, emision.frenada()));
@@ -639,6 +645,148 @@ public class PasosFiscales {
             throw AccionFiscalImpedidaException.sinFacturaRechazada();
         }
         return alta(emision, alta, registradoEn);
+    }
+
+    /**
+     * «Reintentar» de una nota de crédito (rama 8, C1): la NC no copia al cliente ni a los renglones de hoy, ni al emisor de
+     * CU-01, sino otra vez a su factura asociada (que no cambia). El cerrojo es el de la anulación ({@link #exigirQueFacture}):
+     * la factura del ambiente de hoy y la ferretería facturando. La fecha, como en la factura: la del registro reemplazado si
+     * entra en la ventana de ARCA en la serie de la NC; si no, solo con {@code fechaDeHoy}.
+     */
+    private long reintentarNota(RegistroVigente reemplazado, long notaId, boolean fechaDeHoy, Instant ahora) {
+        ComprobanteFiscal factura = registros.findScoped(reemplazado.asociadoId()).orElseThrow();
+        exigirQueFacture(factura.getAmbiente(), ahora);
+        Instant registradoEn = ahora;
+        if (!fechaDeHoy) {
+            LocalDate ultima = series.ultimaCbteFchScoped(factura.getAmbiente(), factura.getPuntoVenta(),
+                    factura.getLetra().cbteTipo(ClaseComprobante.NOTA_CREDITO)).orElse(null);
+            if (!VentanaCbteFch.admite(LocalDate.ofInstant(reemplazado.registradoEn(), ZONA_ARCA),
+                    LocalDate.ofInstant(ahora, ZONA_ARCA), ultima)) {
+                throw AccionFiscalImpedidaException.fechaNuevaRequerida();
+            }
+            registradoEn = reemplazado.registradoEn();
+        }
+        if (registros.reemplazarScoped(reemplazado.id(), ahora) != 1) {
+            throw AccionFiscalImpedidaException.sinFacturaRechazada();
+        }
+        return altaDeNota(notaId, factura, registradoEn);
+    }
+
+    // ---- La anulación de una venta (rama 8, CU-08; C1 de cu-08-nota-de-credito) ----
+
+    /**
+     * Decide cómo se anula la venta del lado fiscal, con el registro vigente de su factura tomado con lock exclusivo hasta el
+     * fin de la transacción de quien llama (el paso «factura original» del orden de locks: después de la caja y el cliente,
+     * antes del numerador). Así, mientras dura la anulación, ni el job ni la venta siguiente de la serie lo mandan a ARCA: un
+     * PENDIENTE tomado acá lo encuentran después SIN_FACTURA, y uno que ya mandaron se ve acá EN_CURSO.
+     *
+     * <p>El registro se busca en la foto de la transacción y se toma por su clave primaria (sin lock de hueco): sin registro
+     * en la foto no lo tiene (el registro de una venta nace con ella), y si el tomado ya quedó reemplazado por un
+     * «Reintentar» que la foto no ve, la anulación se repite en una transacción nueva ({@link CannotAcquireLockException},
+     * que la fachada de la anulación reintenta como un deadlock). Con la factura AUTORIZADO, además toma
+     * {@code config_arca} con {@code FOR SHARE} ({@link #exigirQueFacture}): el panel no cambia el ambiente hasta el commit.
+     *
+     * @return NOTA_DE_CREDITO con la factura AUTORIZADO; ANULACION_INTERNA sin registro, o con uno PENDIENTE (sin número ni
+     *     envío abierto), RECHAZADO, FUERA_DE_FECHA o SIN_FACTURA
+     * @throws AccionFiscalImpedidaException ESPERAR_CAE con un envío en curso, en verificación o en revisión;
+     *     OTRO_AMBIENTE o FACTURACION_FRENADA si la factura autorizada no admite NC hoy. No cambia nada
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public ViaFiscalDeAnulacion tomarParaAnular(long ventaId, Instant ahora) {
+        Optional<RegistroVigente> vigente = registros.vigenteDeScoped(ventaId);
+        if (vigente.isEmpty()) {
+            return ViaFiscalDeAnulacion.ANULACION_INTERNA;
+        }
+        ComprobanteFiscalRepository.RegistroTomado tomado = registros.bloquearParaAnularScoped(vigente.get().id())
+                .orElseThrow();
+        if (tomado.reemplazado()) {
+            throw new CannotAcquireLockException("El registro fiscal de la venta " + ventaId + " cambió mientras se tomaba "
+                    + "para anularla: se repite en una transacción nueva.");
+        }
+        return switch (tomado.estado()) {
+            case AUTORIZADO -> {
+                exigirQueFacture(tomado.ambiente(), ahora);
+                yield ViaFiscalDeAnulacion.NOTA_DE_CREDITO;
+            }
+            case PENDIENTE, RECHAZADO, FUERA_DE_FECHA, SIN_FACTURA -> ViaFiscalDeAnulacion.ANULACION_INTERNA;
+            case EN_CURSO, EN_VERIFICACION, CAE_NO_COINCIDE, SERIE_DESINCRONIZADA ->
+                    throw AccionFiscalImpedidaException.esperarCae();
+        };
+    }
+
+    /**
+     * Da de alta el registro PENDIENTE de la nota de crédito {@code notaId} de la venta, copiado del registro de su factura
+     * ({@link ComprobanteFiscal#notaDeCredito}) con su desglose, y con {@code ahora} como fecha. Va en la transacción de
+     * quien llama, después de {@link #tomarParaAnular} con NOTA_DE_CREDITO: la factura ya está tomada y se lee de nuevo con
+     * su lock, de lo último confirmado. Devuelve el id del registro.
+     *
+     * @throws IllegalStateException si la venta (de la ferretería del request) no tiene su factura AUTORIZADO
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public long registrarNotaDeCredito(long notaId, long ventaId, Instant ahora) {
+        ComprobanteFiscal factura = registros.vigenteDeScoped(ventaId)
+                .flatMap(v -> registros.bloquearRegistroScoped(v.id()))
+                .filter(r -> !r.esNotaDeCredito() && r.getEstado() == EstadoFiscal.AUTORIZADO)
+                .orElseThrow(() -> new IllegalStateException("La venta " + ventaId + " no tiene una factura autorizada: "
+                        + "la nota de crédito va después de tomarParaAnular con NOTA_DE_CREDITO."));
+        return altaDeNota(notaId, factura, ahora);
+    }
+
+    /**
+     * La anulación interna (CU-08 punto 3, D12): el registro vigente PENDIENTE, RECHAZADO o FUERA_DE_FECHA de la venta pasa a
+     * SIN_FACTURA con el motivo (sin espacios de más; obligatorio, hasta {@value #LARGO_MOTIVO} caracteres), el usuario y
+     * {@code ahora}, con un UPDATE condicional como los del job ({@link ComprobanteFiscalRepository#cerrarSinCae}). Sin
+     * registro, o ya SIN_FACTURA, no hace nada. Va en la transacción de quien llama, después de {@link #tomarParaAnular} con
+     * ANULACION_INTERNA, y no limpia su contexto de persistencia.
+     *
+     * @throws DatosInvalidosException con el motivo vacío o largo (400 en {@code motivo})
+     * @throws IllegalStateException si el registro está en otro estado (no se lo tomó con {@link #tomarParaAnular})
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void cerrarSinCae(long ventaId, String motivo, long usuarioId, Instant ahora) {
+        String limpio = motivo == null ? "" : motivo.strip();
+        if (limpio.isEmpty()) {
+            throw new DatosInvalidosException(Map.of("motivo", MOTIVO_DE_ANULACION_VACIO));
+        }
+        if (limpio.codePointCount(0, limpio.length()) > LARGO_MOTIVO) {
+            throw new DatosInvalidosException(Map.of("motivo", MOTIVO_LARGO));
+        }
+        Optional<RegistroVigente> vigente = registros.vigenteDeScoped(ventaId);
+        if (vigente.isEmpty() || registros.cerrarSinCaeScoped(vigente.get().id(), limpio, usuarioId, ahora) == 1) {
+            return;
+        }
+        EstadoFiscal estado = registros.bloquearParaAnularScoped(vigente.get().id()).orElseThrow().estado();
+        if (estado != EstadoFiscal.SIN_FACTURA) {
+            throw new IllegalStateException("El registro fiscal de la venta " + ventaId + " está " + estado + ": la "
+                    + "anulación interna va después de tomarParaAnular con ANULACION_INTERNA.");
+        }
+    }
+
+    /**
+     * El cerrojo de la nota de crédito (C1): la factura tiene que ser del ambiente de hoy de {@code config_arca} (leído con
+     * {@code FOR SHARE}, así no cambia hasta el commit) y la ferretería tiene que facturar en {@code ahora}, con la regla
+     * del alta. Primero el ambiente, que no se arregla: sin ambiente en la configuración cuenta la facturación frenada.
+     *
+     * @throws AccionFiscalImpedidaException OTRO_AMBIENTE o FACTURACION_FRENADA
+     */
+    private void exigirQueFacture(Ambiente ambienteDeLaFactura, Instant ahora) {
+        Optional<ConfigArca> leida = configs.bloquearCompartidaScoped();
+        if (leida.map(ConfigArca::getAmbiente).filter(a -> a != ambienteDeLaFactura).isPresent()) {
+            throw AccionFiscalImpedidaException.otroAmbiente();
+        }
+        Emision emision = emision(leida, true, ahora);
+        if (emision.impedimento() != null) {
+            throw AccionFiscalImpedidaException.facturacionFrenada(String.format(FACTURACION_FRENADA, emision.frenada()));
+        }
+    }
+
+    /** El alta de la nota de crédito copiada de la factura, con el desglose de la factura. Devuelve el id del registro. */
+    private long altaDeNota(long notaId, ComprobanteFiscal factura, Instant registradoEn) {
+        ComprobanteFiscal nota = registros.save(ComprobanteFiscal.notaDeCredito(notaId, factura, registradoEn));
+        for (ComprobanteFiscalAlicuota alicuota : alicuotas.deRegistroScoped(factura.getId())) {
+            alicuotas.save(ComprobanteFiscalAlicuota.copiaDe(nota.getId(), alicuota));
+        }
+        return nota.getId();
     }
 
     private void renovarOFallar(long serieId, String dueno, Instant ahora, Instant vence) {

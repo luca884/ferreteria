@@ -85,6 +85,23 @@ public class MovimientoStock {
         return movimiento;
     }
 
+    /**
+     * Entrada por la nota de credito o la anulacion interna de una venta (CU-08, S5): guarda la cantidad devuelta
+     * (positiva) con la nota como comprobante.
+     */
+    public static MovimientoStock notaDeCredito(
+            Long ferreteriaId, Long articuloId, BigDecimal cantidadDevuelta, Long notaId, Long usuarioId,
+            LocalDateTime fecha) {
+        MovimientoStock movimiento = new MovimientoStock(fecha);
+        movimiento.ferreteriaId = ferreteriaId;
+        movimiento.articuloId = articuloId;
+        movimiento.tipo = TipoMovimiento.NOTA_CREDITO;
+        movimiento.cantidad = cantidadDevuelta;
+        movimiento.comprobanteId = notaId;
+        movimiento.usuarioId = usuarioId;
+        return movimiento;
+    }
+
     /** Salida por remito (RM-003): guarda la cantidad entregada (positiva) como cantidad negativa. */
     public static MovimientoStock remito(
             Long ferreteriaId, Long articuloId, BigDecimal cantidadEntregada, Long remitoId, Long usuarioId,

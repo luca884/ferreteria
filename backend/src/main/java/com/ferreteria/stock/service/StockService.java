@@ -169,6 +169,28 @@ public class StockService {
         return resultanteDeLosQueSalen;
     }
 
+    /**
+     * La nota de credito o la anulacion interna de una venta (CU-08, S5): vuelve todo lo vendido, con un movimiento
+     * NOTA_CREDITO por articulo (cantidad positiva) con la nota y su fecha. {@code devueltas} son los renglones de la venta:
+     * en una venta que salio de un remito suman lo que entrego el remito mas la diferencia de la venta
+     * ({@link #facturarRemito}), asi el stock vuelve a lo que habia antes del remito. Los articulos se toman por id
+     * ascendente (el orden de los locks) y el UPDATE va antes que los INSERT, como la venta. Devuelve el stock resultante.
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public Map<Long, BigDecimal> registrarNotaDeCredito(Long notaId, Long usuarioId, LocalDateTime fecha,
+            List<SalidaStock> devueltas) {
+        if (devueltas.isEmpty()) {
+            return Map.of();
+        }
+        Map<Long, BigDecimal> devueltoPorArticulo = sumarPorArticulo(devueltas);
+        Map<Long, BigDecimal> stockResultante = articulosParaVenta.ajustarStock(devueltoPorArticulo);
+        Long ferreteriaId = TenantContext.requireFerreteriaId();
+        movimientoRepository.saveAll(devueltoPorArticulo.entrySet().stream()
+                .map(e -> MovimientoStock.notaDeCredito(ferreteriaId, e.getKey(), e.getValue(), notaId, usuarioId, fecha))
+                .toList());
+        return stockResultante;
+    }
+
     /** Suma las cantidades de cada articulo, en orden de id (el orden de los locks). */
     private static Map<Long, BigDecimal> sumarPorArticulo(List<SalidaStock> salidas) {
         Map<Long, BigDecimal> porArticulo = new TreeMap<>();

@@ -45,8 +45,42 @@ export interface FiscalConsultado extends FiscalVenta {
   reimprimir?: boolean;
 }
 
+/** VENTA o NOTA_CREDITO (CU-08): la nota de crédito y la anulación interna son comprobantes propios. */
+export type TipoComprobante = 'VENTA' | 'NOTA_CREDITO';
+
+/** La venta que anula una nota de crédito: solo viene en una nota. */
+export interface VentaAnulada {
+  id: number;
+  numero: number;
+}
+
+/**
+ * Cómo se anuló una venta (CU-08, C4): con la nota de crédito N.º `numero`, o con la anulación interna (`interna`) y su
+ * motivo. `usuario` es quién y `fecha` cuándo (LocalDateTime ISO sin zona, hora de Buenos Aires).
+ */
+export interface Anulacion {
+  notaId: number;
+  numero: number;
+  interna: boolean;
+  motivo: string | null;
+  usuario: string | null;
+  fecha: string;
+}
+
+/**
+ * Lo que dice si un comprobante es una nota de crédito y cómo se anuló la venta (CU-08). Todo opcional: un servidor
+ * anterior no lo manda.
+ */
+export interface ComprobanteAnulable {
+  /** Sin `tipo` es una venta. */
+  tipo?: TipoComprobante;
+  ventaAnulada?: VentaAnulada;
+  /** Null si la venta no está anulada (siempre null en una nota). */
+  anulacion?: Anulacion | null;
+}
+
 /** Una fila del listado: lo justo para la grilla, sin renglones. */
-export interface VentaResumen {
+export interface VentaResumen extends ComprobanteAnulable {
   ventaId: number;
   numero: number;
   /** LocalDateTime ISO sin zona, hora de Buenos Aires. */
@@ -85,7 +119,7 @@ export interface RenglonConsultado extends RenglonVentaResponse {
 }
 
 /** La venta como al cobrarla, para verla y reimprimirla. */
-export interface VentaConsultada extends Omit<VentaResponse, 'renglones' | 'fiscal'> {
+export interface VentaConsultada extends Omit<VentaResponse, 'renglones' | 'fiscal'>, ComprobanteAnulable {
   renglones: RenglonConsultado[];
   /** Solo si la venta tiene registro fiscal: el de la venta más lo de la bandeja (C1). */
   fiscal?: FiscalConsultado;
@@ -97,6 +131,26 @@ export interface VentaConsultada extends Omit<VentaResponse, 'renglones' | 'fisc
   descuento: number;
   /** Quién la cobró. */
   usuario?: string;
+}
+
+export function esNotaDeCredito(comprobante: ComprobanteAnulable): boolean {
+  return comprobante.tipo === 'NOTA_CREDITO';
+}
+
+/**
+ * El nombre de un comprobante con su número: «Venta N.º 7», «Nota de crédito N.º 14» o, si la nota no tiene registro
+ * fiscal (la anulación interna, CU-08 D12), «Anulación N.º 14».
+ */
+export function tituloDeComprobante(comprobante: ComprobanteAnulable & { numero: number; fiscal?: unknown }): string {
+  if (!esNotaDeCredito(comprobante)) return `Venta N.º ${comprobante.numero}`;
+  return `${comprobante.fiscal ? 'Nota de crédito' : 'Anulación'} N.º ${comprobante.numero}`;
+}
+
+/** «Anulada por la NC N.º 14» o «Anulada: <motivo>», con quién y cuándo: «· Dueño, 29/10/2026 14:05». */
+export function textoDeAnulacion(anulacion: Anulacion, fecha: (iso: string) => string): string {
+  const como = anulacion.interna ? `Anulada: ${anulacion.motivo ?? ''}` : `Anulada por la NC N.º ${anulacion.numero}`;
+  const quien = [anulacion.usuario, fecha(anulacion.fecha)].filter((t) => !!t).join(', ');
+  return quien ? `${como} · ${quien}` : como;
 }
 
 /** El cliente de una venta tal como se muestra: sin cliente es Consumidor Final. */

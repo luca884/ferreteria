@@ -51,6 +51,17 @@ public class ComprobanteFiscalAlicuota {
         return a;
     }
 
+    /** La misma alícuota en otro registro: el desglose de la factura, copiado a su nota de crédito (rama 8). */
+    public static ComprobanteFiscalAlicuota copiaDe(long comprobanteFiscalId, ComprobanteFiscalAlicuota original) {
+        ComprobanteFiscalAlicuota a = new ComprobanteFiscalAlicuota();
+        a.ferreteriaId = original.ferreteriaId;
+        a.comprobanteFiscalId = comprobanteFiscalId;
+        a.ivaId = original.ivaId;
+        a.baseImp = original.baseImp;
+        a.importe = original.importe;
+        return a;
+    }
+
     public Long getId() { return id; }
     public Long getFerreteriaId() { return ferreteriaId; }
     public long getComprobanteFiscalId() { return comprobanteFiscalId; }

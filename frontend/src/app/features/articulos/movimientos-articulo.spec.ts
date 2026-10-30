@@ -89,6 +89,16 @@ describe('MovimientosArticulo', () => {
     expect(celdas(3)).toEqual(['22/10/2026 18:00', 'Venta', 'Venta N.º 12', '-2,5', '6', '—', '—']);
   });
 
+  it('la nota de crédito y la anulación interna (CU-08) se nombran «Nota de crédito», con el comprobante del servidor', async () => {
+    await crear(true, vi.fn(() => of(pagina([
+      { id: 6, fecha: '2026-10-24T11:00:00', tipo: 'NOTA_CREDITO', cantidad: 2, saldo: 13, comprobante: 'Nota de crédito N.º 14', usuario: 'Ana', motivo: null },
+      { id: 5, fecha: '2026-10-24T10:00:00', tipo: 'NOTA_CREDITO', cantidad: 1, saldo: 11, comprobante: 'Anulación N.º 13', usuario: 'Ana', motivo: null },
+    ]))));
+
+    expect(celdas(0)).toEqual(['24/10/2026 11:00', 'Nota de crédito', 'Nota de crédito N.º 14', '+2', '13', 'Ana', '—']);
+    expect(celdas(1).slice(1, 3)).toEqual(['Nota de crédito', 'Anulación N.º 13']);
+  });
+
   it('marca las salidas y las entradas para leerlas de un vistazo', async () => {
     await crear();
 

@@ -67,11 +67,17 @@
     @switch (r.tipo) {
       @case ('resumen') {
         <dl class="resumen panel">
-          <div><dt>Ventas</dt><dd>{{ r.datos.total | monto }}</dd></div>
+          <div><dt>Ventas</dt><dd>{{ r.datos.totalSinNotas | monto }}</dd></div>
+          <div class="notas-credito">
+            <dt>Notas de crédito</dt>
+            <dd>{{ r.datos.notasDeCredito.cantidad }} · {{ -r.datos.notasDeCredito.total | monto }}</dd>
+          </div>
+          <div class="total"><dt>Total</dt><dd>{{ r.datos.total | monto }}</dd></div>
           <div><dt>Neto</dt><dd>{{ r.datos.neto | monto }}</dd></div>
           <div><dt>IVA</dt><dd>{{ r.datos.iva | monto }}</dd></div>
           <div><dt>Costo</dt><dd>{{ r.datos.costo | monto }}</dd></div>
-          <div class="ganancia"><dt>Ganancia</dt><dd>{{ r.datos.ganancia | monto }}</dd></div>
+          <div><dt>Ganancia sin NC</dt><dd>{{ r.datos.gananciaSinNotas | monto }}</dd></div>
+          <div class="ganancia"><dt>Ganancia con NC</dt><dd>{{ r.datos.ganancia | monto }}</dd></div>
           <div><dt>Comprobantes</dt><dd>{{ r.datos.cantidad }}</dd></div>
         </dl>
       }

@@ -21,6 +21,12 @@ public final class AccionesFacturaRequests {
     /** «Dejar sin factura»: el motivo, obligatorio, de hasta 200 caracteres. */
     public record SinFactura(String motivo) {}
 
+    /**
+     * Anular la venta (CU-08 punto 6): el motivo solo vale en la anulación interna (obligatorio, hasta 200 caracteres); en
+     * la nota de crédito se ignora.
+     */
+    public record Anular(String motivo) {}
+
     /** Una venta de la caja abierta a la que le llegó el CAE (C7), con el texto de su factura. */
     public record ProvisoriaAutorizada(long ventaId, long numero, String factura) {}
 }

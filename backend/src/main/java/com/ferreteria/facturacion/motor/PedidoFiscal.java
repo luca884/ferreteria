@@ -3,6 +3,7 @@ package com.ferreteria.facturacion.motor;
 import com.ferreteria.facturacion.model.ComprobanteFiscal;
 import com.ferreteria.facturacion.model.ComprobanteFiscalAlicuota;
 import com.ferreteria.facturacion.wsfe.AlicIva;
+import com.ferreteria.facturacion.wsfe.CbteAsoc;
 import com.ferreteria.facturacion.wsfe.FeCabReq;
 import com.ferreteria.facturacion.wsfe.FeCaeDetRequest;
 import com.ferreteria.facturacion.wsfe.FeCaeReq;
@@ -37,8 +38,20 @@ final class PedidoFiscal {
         FeCaeDetRequest detalle = new FeCaeDetRequest(CONCEPTO_PRODUCTOS, registro.getReceptorDocTipo(),
                 registro.getReceptorDocNro(), numero, numero, cbteFch, registro.getImpTotal(), registro.getImpTotConc(),
                 registro.getImpNeto(), registro.getImpOpEx(), BigDecimal.ZERO, registro.getImpIva(), PESOS, BigDecimal.ONE,
-                registro.getReceptorCondicionIvaId(), iva, List.of(), null);
+                registro.getReceptorCondicionIvaId(), iva, asociados(registro), null);
         return new FeCaeReq(FeCabReq.de(registro.getPuntoVenta(), registro.getCbteTipo()), detalle);
+    }
+
+    /**
+     * {@code CbtesAsoc}: en una nota de crédito, la factura que anula, como se copió al darla de alta (rama 8); vacío en una
+     * factura. Sin asociado ARCA rechaza la NC con 10197, y con uno de otra clase, con 10040.
+     */
+    private static List<CbteAsoc> asociados(ComprobanteFiscal registro) {
+        if (!registro.esNotaDeCredito()) {
+            return List.of();
+        }
+        return List.of(new CbteAsoc(registro.getAsociadoCbteTipo(), registro.getAsociadoPuntoVenta(),
+                registro.getAsociadoNumero(), registro.getAsociadoCuit(), registro.getAsociadoCbteFch()));
     }
 
     /**

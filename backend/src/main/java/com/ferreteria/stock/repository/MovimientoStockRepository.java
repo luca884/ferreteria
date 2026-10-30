@@ -26,6 +26,10 @@ public interface MovimientoStockRepository extends TenantScopedRepository<Movimi
         String getMotivo();
         String getUsuario();
         Long getVentaNumero();
+        /** El tipo del comprobante de ventas (VENTA o NOTA_CREDITO, CU-08); null si el movimiento no tiene uno. */
+        String getVentaTipo();
+        /** El motivo de la anulacion interna (una NOTA_CREDITO con motivo, CU-08 C4); null en la nota con factura y en el resto. */
+        String getMotivoAnulacion();
         Long getRemitoNumero();
         String getCompraTipo();
         Integer getCompraPuntoVenta();
@@ -43,13 +47,14 @@ public interface MovimientoStockRepository extends TenantScopedRepository<Movimi
             select m.id as id, m.fecha as fecha, m.tipo as tipo, m.cantidad as cantidad, m.motivo as motivo,
                    (select u.nombre from usuario u where u.id = m.usuario_id and u.ferreteria_id = m.ferreteria_id)
                        as usuario,
-                   (select c.numero from comprobante c where c.id = m.comprobante_id and c.ferreteria_id = m.ferreteria_id)
-                       as ventaNumero,
+                   vc.numero as ventaNumero, vc.tipo as ventaTipo,
+                   vc.motivo_anulacion as motivoAnulacion,
                    (select r.numero from remito r where r.id = m.remito_id and r.ferreteria_id = m.ferreteria_id)
                        as remitoNumero,
                    co.tipo as compraTipo, co.punto_venta as compraPuntoVenta, co.numero as compraNumero,
                    p.nombre as proveedor
             from movimiento_stock m
+            left join comprobante vc on vc.id = m.comprobante_id and vc.ferreteria_id = m.ferreteria_id
             left join compra co on co.id = m.compra_id and co.ferreteria_id = m.ferreteria_id
             left join proveedor p on p.id = co.proveedor_id and p.ferreteria_id = m.ferreteria_id
             where m.ferreteria_id = :fid and m.articulo_id = :articuloId

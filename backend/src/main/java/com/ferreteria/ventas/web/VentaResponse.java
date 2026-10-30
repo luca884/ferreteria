@@ -15,7 +15,9 @@ import com.ferreteria.facturacion.api.FacturacionParaVenta.Transparencia;
 import com.ferreteria.ventas.model.EstadoComprobante;
 import com.ferreteria.ventas.model.ItemComprobante;
 import com.ferreteria.ventas.model.MedioPago;
+import com.ferreteria.ventas.service.VentaGestion.Anulacion;
 import com.ferreteria.ventas.service.VentaGestion.FiscalConsultado;
+import com.ferreteria.ventas.service.VentaGestion.VentaAnulada;
 import com.ferreteria.ventas.service.VentaGestion.VentaConsultada;
 import com.ferreteria.ventas.service.VentaRegistrada;
 
@@ -39,6 +41,10 @@ import java.util.List;
  * {@code remitoNumero} es el numero del remito del que sale la venta, para «Remito N.º» de la hoja; solo viene con
  * {@code remitoId}. En el detalle de la consulta {@code fiscal} suma lo de la bandeja ({@link FiscalConsultadoResponse},
  * cu-07-contingencias C1); al cobrar viene como siempre ({@link FiscalResponse}).
+ *
+ * <p>CU-08 (C4, como la lista): {@code tipo} es VENTA o NOTA_CREDITO; la nota de crédito (la respuesta de anular y su
+ * detalle) trae el {@code total} en positivo, sin pagos, y la {@code ventaAnulada}, que solo viene en una nota. En el detalle
+ * {@code anulacion} es como se anuló la venta, o null (siempre null en una nota y al cobrar).
  */
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public record VentaResponse(
@@ -46,7 +52,8 @@ public record VentaResponse(
         List<PagoResponse> pagos, List<RenglonResponse> renglones, List<SinStockResponse> sinStock, BigDecimal subtotal,
         BigDecimal descuentoPorcentaje, BigDecimal descuento, BigDecimal recargo, Long presupuestoId,
         Long remitoId, Long remitoNumero, boolean facturable, Long clienteId, String clienteNombre, String usuario,
-        Fiscal fiscal) {
+        Fiscal fiscal, String tipo, VentaAnuladaResponse ventaAnulada,
+        @JsonInclude(JsonInclude.Include.ALWAYS) AnulacionResponse anulacion) {
 
     /**
      * El {@code fiscal} de la venta: al cobrar, {@link FiscalResponse}; en el detalle, {@link FiscalConsultadoResponse}.
@@ -122,20 +129,22 @@ public record VentaResponse(
      * {@code cae}, {@code caeVencimiento}, {@code qr} y {@code qrModulos} en null, con la {@code marca} del caso.
      * {@code discriminaIva} es true en la A, válida o X (renglones sin IVA y el desglose por alícuota, S13).
      * {@code transparencia} solo en la B a Consumidor Final; {@code leyendaMonotributo} solo en la A a un Monotributista;
-     * {@code alicuotas} vacía en la C. Los nulos se mandan igual, como null.
+     * {@code alicuotas} vacía en la C. {@code comprobanteAsociado} es la factura que anula una nota de crédito (CU-08,
+     * S8: «Factura B 00001-00000045», o «X · <marca>» fuera de producción); null en una factura. Los nulos se mandan igual,
+     * como null.
      */
     @JsonInclude(JsonInclude.Include.ALWAYS)
     public record DocumentoResponse(boolean validoComoFactura, String letra, boolean discriminaIva, Integer codigo,
             String marca, Integer puntoVenta, Long numero, LocalDate fecha, String cae, LocalDate caeVencimiento,
             EmisorDelDocumento emisor, ReceptorDelDocumento receptor, BigDecimal total, BigDecimal neto, BigDecimal iva,
             BigDecimal noGravado, BigDecimal exento, List<AlicuotaDelDocumento> alicuotas, Transparencia transparencia,
-            String leyendaMonotributo, String qr, List<String> qrModulos) {
+            String leyendaMonotributo, String qr, List<String> qrModulos, String comprobanteAsociado) {
 
         static DocumentoResponse de(DocumentoFiscal d) {
             return new DocumentoResponse(d.validoComoFactura(), d.letra(), d.discriminaIva(), d.codigo(), d.marca(),
                     d.puntoVenta(), d.numero(), d.fecha(), d.cae(), d.caeVencimiento(), d.emisor(), d.receptor(),
                     d.total(), d.neto(), d.iva(), d.noGravado(), d.exento(), d.alicuotas(), d.transparencia(),
-                    d.leyendaMonotributo(), d.qr(), d.qrModulos());
+                    d.leyendaMonotributo(), d.qr(), d.qrModulos(), d.comprobanteAsociado());
         }
     }
 
@@ -157,16 +166,33 @@ public record VentaResponse(
 
     public record SinStockResponse(Long articuloId, String descripcion, BigDecimal stockActual) {}
 
+    /** La venta que anula una nota de crédito (CU-08). */
+    public record VentaAnuladaResponse(long id, long numero) {}
+
+    /**
+     * Cómo se anuló la venta (CU-08, C4), como en la lista: {@code interna} es la anulación interna (con {@code motivo});
+     * si no, la NC con CAE.
+     */
+    @JsonInclude(JsonInclude.Include.ALWAYS)
+    public record AnulacionResponse(long notaId, long numero, boolean interna, String motivo, String usuario,
+            LocalDateTime fecha) {}
+
     public static VentaResponse de(VentaRegistrada venta) {
-        return de(venta, null, FiscalResponse.de(venta.fiscal()));
+        return de(venta, null, FiscalResponse.de(venta.fiscal()), null, null);
     }
 
     /** La venta del detalle de la consulta (y de la hoja de C7): con quién la cobró y la factura con la bandeja. */
     public static VentaResponse de(VentaConsultada consultada) {
-        return de(consultada.venta(), consultada.usuario(), FiscalConsultadoResponse.de(consultada.fiscal()));
+        Anulacion a = consultada.anulacion();
+        VentaAnulada anulada = consultada.ventaAnulada();
+        return de(consultada.venta(), consultada.usuario(), FiscalConsultadoResponse.de(consultada.fiscal()),
+                anulada == null ? null : new VentaAnuladaResponse(anulada.id(), anulada.numero()),
+                a == null ? null : new AnulacionResponse(a.notaId(), a.numero(), a.interna(), a.motivo(), a.usuario(),
+                        a.fecha()));
     }
 
-    private static VentaResponse de(VentaRegistrada venta, String usuario, Fiscal fiscal) {
+    private static VentaResponse de(VentaRegistrada venta, String usuario, Fiscal fiscal,
+            VentaAnuladaResponse ventaAnulada, AnulacionResponse anulacion) {
         return new VentaResponse(
                 venta.comprobante().getId(), venta.comprobante().getNumero(), venta.comprobante().getTotal(),
                 venta.comprobante().getFecha(),
@@ -184,6 +210,7 @@ public record VentaResponse(
                 venta.comprobante().getRecargo(), venta.comprobante().getPresupuestoId(),
                 venta.comprobante().getRemitoId(), venta.remitoNumero(),
                 venta.comprobante().getEstado() != EstadoComprobante.NO_FACTURABLE,
-                venta.comprobante().getClienteId(), venta.comprobante().getClienteNombre(), usuario, fiscal);
+                venta.comprobante().getClienteId(), venta.comprobante().getClienteNombre(), usuario, fiscal,
+                venta.comprobante().getTipo().name(), ventaAnulada, anulacion);
     }
 }

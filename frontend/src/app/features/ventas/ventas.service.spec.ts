@@ -88,4 +88,17 @@ describe('VentasService', () => {
     expect(req.request.body).toEqual({ motivo: 'El cliente no quiere factura' });
     req.flush({});
   });
+
+  it('«Anular» es POST /ventas/{id}/anular: con el `motivo` en la anulación interna y sin él en la nota de crédito (CU-08)', () => {
+    service.anular(31, 'El cliente devolvió todo').subscribe();
+    const interna = http.expectOne((r) => r.url.endsWith('/ventas/31/anular'));
+    expect(interna.request.method).toBe('POST');
+    expect(interna.request.body).toEqual({ motivo: 'El cliente devolvió todo' });
+    interna.flush({});
+
+    service.anular(31, null).subscribe();
+    const nota = http.expectOne((r) => r.url.endsWith('/ventas/31/anular'));
+    expect(nota.request.body).toEqual({});
+    nota.flush({});
+  });
 });

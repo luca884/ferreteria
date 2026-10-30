@@ -16,7 +16,8 @@ import java.time.LocalDateTime;
 import java.util.Objects;
 
 /**
- * La venta (CU-07): un comprobante de tipo VENTA y estado SIN_FACTURAR (o NO_FACTURABLE si se marco asi). Los importes son los de
+ * La venta (CU-07): un comprobante de tipo VENTA y estado SIN_FACTURAR (o NO_FACTURABLE si se marco asi). Desde CU-08
+ * tambien la nota de credito y la anulacion interna ({@link #notaDeCredito}), de tipo NOTA_CREDITO. Los importes son los de
  * {@link TotalesVenta}: la suma de sus renglones. El cliente nulo es Consumidor Final. Sin relaciones JPA:
  * los items y el pago guardan el id del comprobante, como el resto del proyecto. Lo unico que cambiara
  * despues es el estado (fase 5, al facturar). La fecha (hora de Buenos Aires) la pone la venta con su {@code Clock}: es el
@@ -97,6 +98,16 @@ public class Comprobante {
     @Column(name = "remito_id", updatable = false)
     private Long remitoId;
 
+    /**
+     * La venta que anula esta NOTA_CREDITO (CU-08, V37: una sola por venta, de la misma ferreteria); null en una venta.
+     */
+    @Column(name = "comprobante_asociado_id", updatable = false)
+    private Long comprobanteAsociadoId;
+
+    /** El motivo de la anulacion interna (S13, hasta 200); null en la NC con CAE y en una venta. */
+    @Column(name = "motivo_anulacion", updatable = false, length = 200)
+    private String motivoAnulacion;
+
     protected Comprobante() {}
 
     public static Comprobante venta(
@@ -161,6 +172,51 @@ public class Comprobante {
         return comprobante;
     }
 
+    /**
+     * La nota de credito o la anulacion interna de la venta (CU-08, cu-08-nota-de-credito C3): una NOTA_CREDITO asociada a la
+     * venta, con su numero interno, su clave, quien y cuando la hizo. Copia en positivo los totales, el descuento, el
+     * recargo y el cliente de la venta (los lectores la restan); sin caja ni pagos (D11: la caja no cambia) y sin
+     * presupuesto ni remito (cada uno es de una sola venta). Los renglones se copian aparte, con
+     * {@link ItemComprobante#copiaParaLaNota}, cuando la nota ya tiene id.
+     *
+     * @param motivo el de la anulacion interna (sin espacios de mas), o null en la NC con CAE; la anulacion interna no se
+     *     factura nunca (NO_FACTURABLE)
+     * @throws IllegalArgumentException si no es una venta ya guardada o el motivo esta en blanco (quien anula valida antes)
+     */
+    public static Comprobante notaDeCredito(
+            Comprobante venta, long numero, String claveIdempotencia, long usuarioId, LocalDateTime fecha, String motivo) {
+        if (venta.tipo != TipoComprobante.VENTA || venta.id == null) {
+            throw new IllegalArgumentException("Solo se anula una venta ya guardada.");
+        }
+        if (motivo != null && motivo.isBlank()) {
+            throw new IllegalArgumentException("El motivo de la anulación no puede estar en blanco.");
+        }
+        Comprobante nota = new Comprobante();
+        nota.ferreteriaId = venta.ferreteriaId;
+        nota.tipo = TipoComprobante.NOTA_CREDITO;
+        nota.estado = motivo == null ? EstadoComprobante.SIN_FACTURAR : EstadoComprobante.NO_FACTURABLE;
+        nota.numero = numero;
+        nota.claveIdempotencia = Objects.requireNonNull(claveIdempotencia, "Falta la clave de la nota de crédito.");
+        nota.usuarioId = usuarioId;
+        nota.fecha = Objects.requireNonNull(fecha, "Falta la fecha de la nota de crédito.");
+        nota.clienteId = venta.clienteId;
+        nota.clienteNombre = venta.clienteNombre;
+        nota.neto = venta.neto;
+        nota.iva = venta.iva;
+        nota.total = venta.total;
+        nota.subtotal = venta.subtotal;
+        nota.descuentoPorcentaje = venta.descuentoPorcentaje;
+        nota.recargo = venta.recargo;
+        nota.comprobanteAsociadoId = venta.id;
+        nota.motivoAnulacion = motivo == null ? null : motivo.strip();
+        return nota;
+    }
+
+    /** Una NOTA_CREDITO con motivo: la anulacion interna de una venta sin CAE (D12), sin documento fiscal. */
+    public boolean esAnulacionInterna() {
+        return tipo == TipoComprobante.NOTA_CREDITO && motivoAnulacion != null;
+    }
+
     public Long getId() { return id; }
     public Long getFerreteriaId() { return ferreteriaId; }
     public TipoComprobante getTipo() { return tipo; }
@@ -180,4 +236,6 @@ public class Comprobante {
     public BigDecimal getRecargo() { return recargo; }
     public Long getPresupuestoId() { return presupuestoId; }
     public Long getRemitoId() { return remitoId; }
+    public Long getComprobanteAsociadoId() { return comprobanteAsociadoId; }
+    public String getMotivoAnulacion() { return motivoAnulacion; }
 }

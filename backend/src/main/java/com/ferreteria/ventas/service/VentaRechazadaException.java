@@ -1,6 +1,8 @@
 package com.ferreteria.ventas.service;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 
 /**
@@ -44,7 +46,17 @@ public class VentaRechazadaException extends RuntimeException {
         /** «Reintentar» (C2): la fecha de la venta ya no entra en ARCA y el Dueño no confirmó que salga con la de hoy. */
         FECHA_NUEVA_REQUERIDA(409),
         /** «Reintentar» (C2): la ferretería no factura hoy (deshabilitada, sin certificado vigente o bloqueada por ARCA). */
-        FACTURACION_FRENADA(409);
+        FACTURACION_FRENADA(409),
+        /** Anular (CU-08): la factura de la venta está en envío, en verificación o en revisión. */
+        ESPERAR_CAE(409),
+        /** Anular (CU-08): la factura es de otro ambiente de ARCA que el de hoy (cerrojo de ambiente). */
+        OTRO_AMBIENTE(409),
+        /** Anular (CU-08 punto 5): la venta ya tiene su nota de credito o su anulacion interna (una sola por venta). */
+        VENTA_YA_ANULADA(409),
+        /** Anular (CU-08 punto 5): lo que se pidio anular es una nota de credito. */
+        NOTA_DE_CREDITO_NO_SE_ANULA(409),
+        /** Anular (CU-08 punto 5): la venta tiene un pago a cuenta corriente; se podra anular desde la rama 10. */
+        VENTA_A_CUENTA_CORRIENTE(422);
 
         private final int estadoHttp;
 
@@ -122,6 +134,27 @@ public class VentaRechazadaException extends RuntimeException {
      */
     public static VentaRechazadaException facturaImpedida(Motivo motivo, String mensaje) {
         return new VentaRechazadaException(motivo, mensaje, List.of());
+    }
+
+    /** El quien y cuando del 409 de una venta ya anulada (CU-08, S15), como el del recibo ya anulado. */
+    private static final DateTimeFormatter CUANDO = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");
+
+    /** CU-08, S15: «La venta ya fue anulada por <usuario> el <fecha>.», con la fecha de la nota. */
+    public static VentaRechazadaException ventaYaAnulada(String anuladaPor, LocalDateTime fecha) {
+        return new VentaRechazadaException(Motivo.VENTA_YA_ANULADA,
+                "La venta ya fue anulada por " + anuladaPor + " el " + fecha.format(CUANDO) + ".", List.of());
+    }
+
+    /** CU-08 punto 5: «Una nota de crédito no se anula.» */
+    public static VentaRechazadaException notaDeCreditoNoSeAnula() {
+        return new VentaRechazadaException(Motivo.NOTA_DE_CREDITO_NO_SE_ANULA, "Una nota de crédito no se anula.",
+                List.of());
+    }
+
+    /** CU-08 punto 5, S15: «La venta tiene un pago a cuenta corriente: todavía no se puede anular.» */
+    public static VentaRechazadaException ventaACuentaCorriente() {
+        return new VentaRechazadaException(Motivo.VENTA_A_CUENTA_CORRIENTE,
+                "La venta tiene un pago a cuenta corriente: todavía no se puede anular.", List.of());
     }
 
     private final Motivo motivo;

@@ -16,16 +16,21 @@ import {
   numeroFiscal,
 } from '../../shared/factura/factura.models';
 import { fechaCompletaLocal } from '../clientes/cuenta/cobranza.models';
+import { DialogoAnular } from './dialogo-anular';
 import { DialogoSinFactura } from './dialogo-sin-factura';
 import { VentaHoja } from './venta-hoja';
 import { VentaImprimible } from './venta-imprimible';
 import {
+  Anulacion,
   FILTROS_FISCALES,
   FiltroFiscal,
   FiltroVentas,
   VentaConsultada,
   VentaResumen,
   clienteDeVenta,
+  esNotaDeCredito,
+  textoDeAnulacion,
+  tituloDeComprobante,
 } from './ventas.models';
 import { VentasService } from './ventas.service';
 
@@ -48,15 +53,25 @@ function motivoDelRechazo(err: unknown): string | null {
 
 /**
  * Consulta y reimpresión de ventas (G60), como la «Consulta de Facturas» de GDS: busca por número, fecha o cliente, muestra
- * la venta elegida y la reimprime. Sin anular ni borrar (GDS-15): anular es la nota de crédito (CU-08, fase 5). Solo el
- * Dueño: con el listado se podría sumar el efectivo del día y el cierre de caja dejaría de ser ciego.
+ * la venta elegida y la reimprime. Sin borrar (GDS-15): «Anular» (CU-08) emite la nota de crédito, o la anulación interna
+ * con motivo si la venta no tiene la factura autorizada, y las dos se ven como renglones propios. Solo el Dueño: con el
+ * listado se podría sumar el efectivo del día y el cierre de caja dejaría de ser ciego.
  *
  * También es la bandeja de las facturas pendientes y rechazadas (CU-16 punto 7, rama 7): el filtro «Facturas», los errores
  * y las observaciones de ARCA en el detalle, y las acciones que el servidor ofrece hoy («Reintentar» y «Dejar sin factura»).
  */
 @Component({
   selector: 'app-ventas',
-  imports: [BarraAcciones, Confirmacion, DialogoSinFactura, FacturaImprimible, MontoPipe, VentaHoja, VentaImprimible],
+  imports: [
+    BarraAcciones,
+    Confirmacion,
+    DialogoAnular,
+    DialogoSinFactura,
+    FacturaImprimible,
+    MontoPipe,
+    VentaHoja,
+    VentaImprimible,
+  ],
   templateUrl: './ventas.html',
   styleUrl: './ventas.css',
 })
@@ -67,6 +82,9 @@ export class Ventas implements OnInit {
 
   protected readonly fecha = fechaCompletaLocal;
   protected readonly cliente = clienteDeVenta;
+  protected readonly esNota = esNotaDeCredito;
+  protected readonly titulo = tituloDeComprobante;
+  protected readonly anulacion = (a: Anulacion) => textoDeAnulacion(a, fechaCompletaLocal);
 
   protected readonly pagina = signal<PageResponse<VentaResumen> | null>(null);
   protected readonly cargando = signal(false);
@@ -106,7 +124,8 @@ export class Ventas implements OnInit {
     if (!documento.validoComoFactura) return documento.marca ? `X · ${documento.marca}` : 'X';
     const { letra, puntoVenta, numero } = documento;
     const fiscal = puntoVenta != null && numero != null ? ` ${numeroFiscal(puntoVenta, numero)}` : '';
-    return `Factura ${letra}${fiscal} · Autorizada`;
+    const clase = this.esNota(this.detalle()!) ? 'Nota de crédito' : 'Factura';
+    return `${clase} ${letra}${fiscal} · Autorizada`;
   });
 
   /** El registro fiscal de la venta elegida, con lo de la bandeja (C1). */
@@ -137,6 +156,17 @@ export class Ventas implements OnInit {
   protected readonly pidiendoMotivo = signal(false);
   /** El rechazo de «Dejar sin factura», tal cual, dentro de su diálogo. */
   protected readonly errorMotivo = signal<string | null>(null);
+  /** «Anular» (CU-08): solo una venta que no está anulada; una nota de crédito no se anula. */
+  protected readonly puedeAnular = computed(() => {
+    const venta = this.detalle();
+    return venta !== null && !this.esNota(venta) && !venta.anulacion;
+  });
+  /** Sin la factura autorizada la venta se anula sin documento fiscal y pide el motivo (D12); el servidor decide. */
+  protected readonly anularConMotivo = computed(() => this.fiscalElegido()?.estado !== 'AUTORIZADO');
+  protected readonly confirmandoAnular = signal(false);
+  /** El rechazo de «Anular» (400 del motivo, 409, 422), tal cual, dentro de su diálogo. */
+  protected readonly errorAnular = signal<string | null>(null);
+
   /** Lo que hizo la última acción: el detalle se puede cerrar si la venta sale de la bandeja. */
   protected readonly resultadoAccion = signal<string | null>(null);
 
@@ -255,6 +285,8 @@ export class Ventas implements OnInit {
     this.confirmandoFecha.set(null);
     this.pidiendoMotivo.set(false);
     this.errorMotivo.set(null);
+    this.confirmandoAnular.set(false);
+    this.errorAnular.set(null);
   }
 
   protected elegir(fila: VentaResumen): void {
@@ -353,6 +385,47 @@ export class Ventas implements OnInit {
         if (this.elegida() !== id) return;
         const campos = erroresDeCampos(err);
         this.errorMotivo.set(campos.length > 0 ? campos.join(' ') : mensajeDe(err, MENSAJE_ACCION));
+      },
+    });
+  }
+
+  protected pedirAnular(): void {
+    if (this.enVueloAccion()) return;
+    this.errorAccion.set(null);
+    this.errorAnular.set(null);
+    this.confirmandoAnular.set(true);
+  }
+
+  protected cerrarAnular(): void {
+    this.confirmandoAnular.set(false);
+    this.errorAnular.set(null);
+  }
+
+  /**
+   * «Anular» (CU-08): manda el motivo solo si se pidió. Los rechazos quedan en el diálogo; al terminar se vuelve a leer la
+   * lista, como las acciones de la bandeja, y se abre el detalle de la nota nueva, desde donde se reimprime.
+   */
+  protected anular(motivo: string | null): void {
+    const venta = this.detalle();
+    if (!venta || this.enVueloAccion()) return;
+    const id = venta.ventaId;
+    this.enVueloAccion.set(true);
+    this.errorAnular.set(null);
+    this.api.anular(id, motivo).subscribe({
+      next: (nota) => {
+        this.terminarAccion();
+        this.confirmandoAnular.set(false);
+        const como = nota.fiscal ? 'la nota de crédito' : 'la anulación';
+        this.elegida.set(nota.ventaId);
+        this.detalle.set(null);
+        this.imprimiendo.set(false);
+        this.alTerminarAccion(nota.ventaId, `Se anuló la venta N.º ${venta.numero} con ${como} N.º ${nota.numero}.`);
+      },
+      error: (err: unknown) => {
+        this.terminarAccion();
+        if (this.elegida() !== id) return;
+        const campos = erroresDeCampos(err);
+        this.errorAnular.set(campos.length > 0 ? campos.join(' ') : mensajeDe(err, MENSAJE_ACCION));
       },
     });
   }

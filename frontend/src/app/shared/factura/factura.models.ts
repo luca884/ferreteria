@@ -94,7 +94,15 @@ export interface DocumentoFiscal {
   qr: string | null;
   /** Filas de la matriz del QR sin zona de silencio: '1' oscuro, '0' claro, todas del mismo largo. */
   qrModulos: string[] | null;
+  /**
+   * La factura que anula una nota de crédito (CU-08, S8): «Factura B 00001-00000045», o «X · <marca>» fuera de producción.
+   * Null (o ausente) en una factura.
+   */
+  comprobanteAsociado?: string | null;
 }
+
+/** La clase del registro fiscal (`fiscal.clase`): la nota de crédito se titula «NOTA DE CRÉDITO» (CU-08). */
+export const CLASE_NOTA_CREDITO = 'NOTA_CREDITO';
 
 /** El estado de la factura de la venta (rama 3) más el documento a imprimir. */
 export interface FiscalVenta {

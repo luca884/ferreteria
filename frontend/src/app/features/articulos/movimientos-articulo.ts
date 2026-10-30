@@ -16,6 +16,7 @@ const TIPOS: Record<TipoMovimientoStock, string> = {
   REMITO: 'Remito',
   ANULACION_REMITO: 'Anulación de remito',
   COMPRA: 'Compra',
+  NOTA_CREDITO: 'Nota de crédito',
 };
 
 const NUMERO = new Intl.NumberFormat('es-AR', { maximumFractionDigits: 3 });

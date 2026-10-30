@@ -54,4 +54,12 @@ export class VentasService {
   dejarSinFactura(id: number, motivo: string): Observable<unknown> {
     return this.http.post<unknown>(`${this.url}/${id}/factura/sin-factura`, { motivo });
   }
+
+  /**
+   * «Anular» (CU-08): con la factura autorizada, la nota de crédito (sin motivo); sin CAE, la anulación interna con el
+   * motivo. Responde 201 con la nota como la ve el detalle. 400 en `motivo`; 409 y 422 con `message` y `motivo`.
+   */
+  anular(id: number, motivo: string | null): Observable<VentaConsultada> {
+    return this.http.post<VentaConsultada>(`${this.url}/${id}/anular`, motivo === null ? {} : { motivo });
+  }
 }
