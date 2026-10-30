@@ -3,7 +3,6 @@ package com.ferreteria.ventas.web;
 import com.ferreteria.auth.security.AuthUser;
 import com.ferreteria.common.PageResponse;
 import com.ferreteria.ventas.model.EstadoRemito;
-import com.ferreteria.ventas.service.DetalleRemito;
 import com.ferreteria.ventas.service.RemitoEmitido;
 import com.ferreteria.ventas.service.RemitoGestion;
 import com.ferreteria.ventas.service.RemitoService;
@@ -64,16 +63,14 @@ public class RemitoController {
 
     @GetMapping("/{id}")
     public RemitoResponse detalle(@PathVariable Long id) {
-        DetalleRemito detalle = remitoGestion.detalle(id);
-        return RemitoResponse.de(detalle.remito(), detalle.items());
+        return RemitoResponse.de(remitoGestion.detalle(id));
     }
 
     /** Anula un EMITIDO y devuelve el stock. Solo el Dueno: la devolucion de mercaderia no la hace cualquier vendedor. */
     @PatchMapping("/{id}/anular")
     @PreAuthorize("hasRole('DUENO')")
     public RemitoResponse anular(@PathVariable Long id, @AuthenticationPrincipal AuthUser authUser) {
-        DetalleRemito detalle = remitoGestion.anular(id, authUser.userId());
-        return RemitoResponse.de(detalle.remito(), detalle.items());
+        return RemitoResponse.de(remitoGestion.anular(id, authUser.userId()));
     }
 
     /** Local: le gana al advice global. Los rechazos del ticket son los de la venta (404, 409 o 422). */

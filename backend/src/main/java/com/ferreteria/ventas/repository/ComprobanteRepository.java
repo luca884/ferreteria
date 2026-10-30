@@ -185,6 +185,17 @@ public interface ComprobanteRepository extends TenantScopedRepository<Comprobant
         return ids.isEmpty() ? List.of() : numerosDe(TenantContext.requireFerreteriaId(), ids);
     }
 
+    // ---- El remito facturado (cu-07-remito-presupuesto-imprimible, S2) ----
+
+    /** Las ventas (no las notas de credito) que cobraron ese remito, la mas vieja primero. */
+    @Query("select c from Comprobante c where c.ferreteriaId = :fid and c.remitoId = :remito "
+            + "and c.tipo = com.ferreteria.ventas.model.TipoComprobante.VENTA order by c.id")
+    List<Comprobante> ventasDelRemito(@Param("fid") Long ferreteriaId, @Param("remito") Long remitoId);
+
+    default List<Comprobante> ventasDelRemitoScoped(Long remitoId) {
+        return ventasDelRemito(TenantContext.requireFerreteriaId(), remitoId);
+    }
+
     // ---- Clientes que compraron un articulo (G29, Ctrl+A del listado de GDS) ----
 
     /** Un cliente que compro el articulo: cuantas ventas, cuanto en total y la fecha y hora de la ultima. */

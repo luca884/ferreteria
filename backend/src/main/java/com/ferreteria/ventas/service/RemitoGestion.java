@@ -2,12 +2,16 @@ package com.ferreteria.ventas.service;
 
 import com.ferreteria.common.exception.ConflictException;
 import com.ferreteria.common.exception.ResourceNotFoundException;
+import com.ferreteria.facturacion.api.FacturacionParaVenta;
+import com.ferreteria.facturacion.api.FacturacionParaVenta.ResumenFiscal;
 import com.ferreteria.stock.service.SalidaStock;
 import com.ferreteria.stock.service.StockService;
 import com.ferreteria.tenant.TenantContext;
+import com.ferreteria.ventas.model.Comprobante;
 import com.ferreteria.ventas.model.EstadoRemito;
 import com.ferreteria.ventas.model.ItemRemito;
 import com.ferreteria.ventas.model.Remito;
+import com.ferreteria.ventas.repository.ComprobanteRepository;
 import com.ferreteria.ventas.repository.ItemRemitoRepository;
 import com.ferreteria.ventas.repository.RemitoRepository;
 import org.springframework.data.domain.Page;
@@ -17,6 +21,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Listar, ver y anular los remitos de la ferreteria del request (RM-002, RM-005). Uno de otra ferreteria es
@@ -33,12 +38,16 @@ public class RemitoGestion {
     private final RemitoRepository remitoRepository;
     private final ItemRemitoRepository itemRepository;
     private final StockService stockService;
+    private final ComprobanteRepository comprobanteRepository;
+    private final FacturacionParaVenta facturacion;
 
-    public RemitoGestion(
-            RemitoRepository remitoRepository, ItemRemitoRepository itemRepository, StockService stockService) {
+    public RemitoGestion(RemitoRepository remitoRepository, ItemRemitoRepository itemRepository,
+            StockService stockService, ComprobanteRepository comprobanteRepository, FacturacionParaVenta facturacion) {
         this.remitoRepository = remitoRepository;
         this.itemRepository = itemRepository;
         this.stockService = stockService;
+        this.comprobanteRepository = comprobanteRepository;
+        this.facturacion = facturacion;
     }
 
     /** Los mas nuevos primero. {@code desde} y {@code hasta} son dias, ambos inclusive; un filtro nulo no filtra. */
@@ -51,11 +60,34 @@ public class RemitoGestion {
                 PageRequest.of(Math.max(page, 0), Math.min(Math.max(size, 1), TAMANO_MAXIMO)));
     }
 
+    /** El remito con sus renglones y, si esta FACTURADO, la venta que lo facturo (S2 de cu-07-remito-presupuesto-imprimible). */
     @Transactional(readOnly = true)
     public DetalleRemito detalle(Long id) {
         Remito remito = remitoRepository.findScoped(id)
                 .orElseThrow(() -> new ResourceNotFoundException(MENSAJE_NO_ENCONTRADO));
-        return new DetalleRemito(remito, itemRepository.deRemitoScoped(id));
+        DetalleRemito.FacturadoPor facturadoPor =
+                remito.getEstado() == EstadoRemito.FACTURADO ? facturadoPor(id) : null;
+        return new DetalleRemito(remito, itemRepository.deRemitoScoped(id), facturadoPor);
+    }
+
+    /**
+     * La venta que cobro el remito, de la ferreteria del request (nunca la nota de credito). La factura sale solo de
+     * {@code facturacion.resumenes}: un resumen que no es valido como factura (un X, un registro sin numero o una nota) no
+     * muestra letra ni numero fiscal.
+     */
+    private DetalleRemito.FacturadoPor facturadoPor(Long remitoId) {
+        List<Comprobante> ventas = comprobanteRepository.ventasDelRemitoScoped(remitoId);
+        if (ventas.isEmpty()) {
+            return null;
+        }
+        Comprobante venta = ventas.get(0);
+        Map<Long, ResumenFiscal> resumenes = facturacion.resumenes(List.of(venta.getId()));
+        ResumenFiscal fiscal = resumenes.get(venta.getId());
+        String factura = fiscal != null && fiscal.validoComoFactura() && fiscal.numero() != null
+                && "FACTURA".equals(fiscal.clase())
+                ? String.format("Factura %s %05d-%08d", fiscal.letra(), fiscal.puntoVenta(), fiscal.numero())
+                : null;
+        return new DetalleRemito.FacturadoPor(venta.getId(), venta.getNumero(), factura);
     }
 
     /**
