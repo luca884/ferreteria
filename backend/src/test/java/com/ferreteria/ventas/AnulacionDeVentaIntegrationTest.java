@@ -3,6 +3,7 @@ package com.ferreteria.ventas;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.ferreteria.facturacion.wsfe.Obs;
 import com.ferreteria.facturacion.wsfe.WsfeConFallas.Falla;
+import com.ferreteria.support.InvarianteCuenta;
 import com.ferreteria.support.BarreraDeLocks.Largada;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -305,30 +306,284 @@ class AnulacionDeVentaIntegrationTest extends FacturaDelDuenoTestBase {
                 .isEqualTo(pagosAntes);
     }
 
+    // ---- S3, S4, S6, S8 (cu-08-nc-cuenta-corriente): la venta a cuenta corriente ----
+
+    /** Un cliente RI con cuenta corriente habilitada (límite $ 1.000), con la forma «Cuenta corriente» activa. */
+    private long clienteConCuenta(Tienda t) {
+        activarFormaCuentaCorriente(t);
+        long c = cliente(t, unico("Corralón Sur SA"), RI, "CUIT", cuitDeCliente(), "Av. Colón 2000");
+        jdbc.update("update cliente set limite_cuenta_corriente = 1000 where id = ?", c);
+        return c;
+    }
+
+    /** Vende 2 × $ 121 = $ 242 al cliente como el Vendedor: {@code efectivo} en efectivo y el resto a cuenta corriente. */
+    private long venderACuenta(Tienda t, long articulo, long cliente, String efectivo, Boolean facturable) throws Exception {
+        Map<String, Object> cuerpo = mapa(clave(), null, "242.00", linea(articulo, "2", "121.00"));
+        cuerpo.remove("formaPagoId");
+        cuerpo.put("clienteId", cliente);
+        BigDecimal enEfectivo = new BigDecimal(efectivo);
+        List<Map<String, Object>> pagos = new ArrayList<>();
+        if (enEfectivo.signum() > 0) {
+            pagos.add(Map.of("formaPagoId", formaDe(t, "EFECTIVO"), "monto", enEfectivo));
+        }
+        pagos.add(Map.of("formaPagoId", formaDe(t, "CUENTA_CORRIENTE"), "monto",
+                new BigDecimal("242.00").subtract(enEfectivo)));
+        cuerpo.put("pagos", pagos);
+        if (facturable != null) {
+            cuerpo.put("facturable", facturable);
+        }
+        return json(postJson("/api/ventas", login(t.emailVendedor()), objectMapper.writeValueAsString(cuerpo))
+                .andExpect(status().isCreated())).get("ventaId").asLong();
+    }
+
+    /** Cobra {@code total} en efectivo al cliente como el Dueño; con {@code venta}, imputado entero a esa venta. */
+    private ResultActions cobrarACuenta(Tienda t, long cliente, String total, Long venta) throws Exception {
+        String imputaciones = venta == null ? "" : "{\"comprobanteId\":" + venta + ",\"importe\":" + total + "}";
+        return postJson("/api/cobranzas", login(t.emailDueno()), "{\"clave\":\"" + clave() + "\",\"clienteId\":" + cliente
+                + ",\"medio\":\"EFECTIVO\",\"total\":" + total + ",\"imputaciones\":[" + imputaciones + "]}");
+    }
+
+    private BigDecimal saldo(long cliente) {
+        return jdbc.queryForObject("select saldo from cliente where id = ?", BigDecimal.class, cliente);
+    }
+
+    /** Los renglones NC del libro del cliente, en orden. */
+    private List<Map<String, Object>> renglonesNc(long cliente) {
+        return jdbc.queryForList("select comprobante_id, pago_id, haber, referencia from movimiento_cuenta_cliente "
+                + "where cliente_id = ? and tipo = 'NC' order by id", cliente);
+    }
+
+    /** Lo que la nota imputó a la venta que anula. */
+    private BigDecimal imputadoPorLaNota(long nota, long venta) {
+        return jdbc.queryForObject("select coalesce(sum(importe), 0) from imputacion where nc_origen_id = ? "
+                + "and comprobante_id = ?", BigDecimal.class, nota, venta);
+    }
+
+    private long pagoACuenta(long venta) {
+        return jdbc.queryForObject("select id from pago where comprobante_id = ? and medio = 'CUENTA_CORRIENTE'", Long.class,
+                venta);
+    }
+
     @Test
-    @DisplayName("S6: una venta con un pago a cuenta corriente da 422 «La venta tiene un pago a cuenta corriente: todavía "
-            + "no se puede anular.» sin guardar nada")
-    void unaVentaACuentaCorrienteTodaviaNoSeAnula() throws Exception {
+    @DisplayName("S4, S6: una venta a cuenta corriente se anula (201): la NC acredita lo cargado, baja el saldo, se imputa a "
+            + "la venta y no toca la caja; otra ferretería recibe 404 y no cambia nada")
+    void unaVentaACuentaCorrienteSeAnula() throws Exception {
+        Tienda t = tiendaQueFactura(RI);
+        Tienda otra = tiendaQueFactura(RI);
+        long a = articulo(t, unico("Martillo"), "UNIDAD", "121.00", "10");
+        long c = clienteConCuenta(t);
+        long venta = venderACuenta(t, a, c, "0", null);
+        assertThat(estadoFiscal(venta)).isEqualTo("AUTORIZADO");
+        assertThat(saldo(c)).isEqualByComparingTo("242.00");
+        String dueno = login(t.emailDueno());
+        JsonNode cajaAntes = getJson("/api/cajas/actual", dueno);
+
+        anular(login(otra.emailDueno()), venta, "{}").andExpect(status().isNotFound());
+        assertThat(notasDe(venta)).isZero();
+        assertThat(saldo(c)).isEqualByComparingTo("242.00");
+
+        JsonNode nota = json(anular(t, venta, null).andExpect(status().isCreated()));
+
+        long notaId = nota.get("ventaId").asLong();
+        assertThat(nota.get("fiscal").get("estado").asText()).isEqualTo("AUTORIZADO");
+        assertThat(saldo(c)).isEqualByComparingTo("0");
+        assertThat(renglonesNc(c)).singleElement().satisfies(m -> {
+            assertThat(m).containsEntry("comprobante_id", notaId).containsEntry("pago_id", pagoACuenta(venta));
+            assertThat((BigDecimal) m.get("haber")).isEqualByComparingTo("242.00");
+            assertThat(m.get("referencia")).isEqualTo("Nota de crédito N.º " + nota.get("numero").asLong());
+        });
+        assertThat(imputadoPorLaNota(notaId, venta)).isEqualByComparingTo("242.00");
+        assertThat(getJson("/api/cajas/actual", dueno)).isEqualTo(cajaAntes);
+        assertThat(stock(a)).isEqualByComparingTo("10");
+        InvarianteCuenta.assertInvariante(jdbc, c);
+    }
+
+    @Test
+    @DisplayName("S3, S6: una venta mixta (efectivo $ 142 + cuenta corriente $ 100) acredita solo la parte a cuenta; la caja "
+            + "y los pagos no cambian")
+    void unaVentaMixtaAcreditaSoloLaParteACuenta() throws Exception {
         Tienda t = tiendaQueFactura(RI);
         long a = articulo(t, unico("Martillo"), "UNIDAD", "121.00", "10");
-        activarFormaCuentaCorriente(t);
-        long ri = cliente(t, unico("Corralón Sur SA"), RI, "CUIT", cuitDeCliente(), "Av. Colón 2000");
-        jdbc.update("update cliente set limite_cuenta_corriente = 1000 where id = ?", ri);
-        Map<String, Object> aCuenta = mapa(clave(), null, "242.00", linea(a, "2", "121.00"));
-        aCuenta.put("formaPagoId", formaDe(t, "CUENTA_CORRIENTE"));
-        aCuenta.put("clienteId", ri);
-        long venta = json(postJson("/api/ventas", login(t.emailVendedor()), objectMapper.writeValueAsString(aCuenta))
-                .andExpect(status().isCreated())).get("ventaId").asLong();
+        long c = clienteConCuenta(t);
+        long venta = venderACuenta(t, a, c, "142.00", null);
+        assertThat(saldo(c)).isEqualByComparingTo("100.00");
+        String dueno = login(t.emailDueno());
+        JsonNode cajaAntes = getJson("/api/cajas/actual", dueno);
+        long pagosAntes = jdbc.queryForObject("select count(*) from pago where ferreteria_id = ?", Long.class, t.id());
+
+        long notaId = json(anular(t, venta, null).andExpect(status().isCreated())).get("ventaId").asLong();
+
+        assertThat(saldo(c)).isEqualByComparingTo("0");
+        assertThat(renglonesNc(c)).singleElement()
+                .satisfies(m -> assertThat((BigDecimal) m.get("haber")).isEqualByComparingTo("100.00"));
+        assertThat(imputadoPorLaNota(notaId, venta)).isEqualByComparingTo("100.00");
+        assertThat(getJson("/api/cajas/actual", dueno)).isEqualTo(cajaAntes);
+        assertThat(jdbc.queryForObject("select count(*) from pago where ferreteria_id = ?", Long.class, t.id()))
+                .isEqualTo(pagosAntes);
+        InvarianteCuenta.assertInvariante(jdbc, c);
+    }
+
+    @Test
+    @DisplayName("S3: la NC de una venta a cuenta ya cobrada con un recibo deja el crédito a favor del cliente")
+    void laNcDeUnaVentaYaCobradaQuedaAFavor() throws Exception {
+        Tienda t = tiendaQueFactura(RI);
+        long a = articulo(t, unico("Martillo"), "UNIDAD", "121.00", "10");
+        long c = clienteConCuenta(t);
+        long venta = venderACuenta(t, a, c, "0", null);
+        cobrarACuenta(t, c, "242.00", venta).andExpect(status().isCreated());
+        assertThat(saldo(c)).isEqualByComparingTo("0");
+
+        long notaId = json(anular(t, venta, null).andExpect(status().isCreated())).get("ventaId").asLong();
+
+        assertThat(saldo(c)).isEqualByComparingTo("-242.00");
+        assertThat(imputadoPorLaNota(notaId, venta)).isEqualByComparingTo("0");
+        InvarianteCuenta.assertInvariante(jdbc, c);
+    }
+
+    @Test
+    @DisplayName("S6: la anulación interna (venta sin CAE) de una venta a cuenta corriente acredita igual, como «Anulación N.º n»")
+    void laAnulacionInternaAcreditaIgual() throws Exception {
+        Tienda t = tiendaQueFactura(RI);
+        long a = articulo(t, unico("Martillo"), "UNIDAD", "121.00", "10");
+        long c = clienteConCuenta(t);
+        long venta = venderACuenta(t, a, c, "0", false);
+        assertThat(saldo(c)).isEqualByComparingTo("242.00");
+
+        JsonNode nota = json(anular(t, venta, MOTIVO).andExpect(status().isCreated()));
+
+        long notaId = nota.get("ventaId").asLong();
+        assertThat(nota.has("fiscal")).isFalse();
+        assertThat(saldo(c)).isEqualByComparingTo("0");
+        assertThat(renglonesNc(c)).singleElement()
+                .satisfies(m -> assertThat(m.get("referencia")).isEqualTo("Anulación N.º " + nota.get("numero").asLong()));
+        assertThat(imputadoPorLaNota(notaId, venta)).isEqualByComparingTo("242.00");
+        InvarianteCuenta.assertInvariante(jdbc, c);
+    }
+
+    @Test
+    @DisplayName("S8: con el cliente desactivado, la venta a cuenta corriente da 422 «El cliente está desactivado.» y no se "
+            + "guarda nada: ni la nota, ni el stock, ni el libro")
+    void conElClienteDesactivadoLaVentaACuentaNoSeAnula() throws Exception {
+        Tienda t = tiendaQueFactura(RI);
+        long a = articulo(t, unico("Martillo"), "UNIDAD", "121.00", "10");
+        long c = clienteConCuenta(t);
+        long venta = venderACuenta(t, a, c, "0", null);
+        cobrarACuenta(t, c, "242.00", venta).andExpect(status().isCreated());
+        jdbc.update("update cliente set activo = false where id = ?", c);
         long antes = comprobantes(t);
+        long libroAntes = jdbc.queryForObject("select count(*) from movimiento_cuenta_cliente where cliente_id = ?",
+                Long.class, c);
 
-        JsonNode rechazo = json(anular(t, venta, MOTIVO).andExpect(status().isUnprocessableEntity()));
+        JsonNode rechazo = json(anular(t, venta, null).andExpect(status().isUnprocessableEntity()));
 
-        assertThat(rechazo.get("motivo").asText()).isEqualTo("VENTA_A_CUENTA_CORRIENTE");
-        assertThat(rechazo.get("message").asText())
-                .isEqualTo("La venta tiene un pago a cuenta corriente: todavía no se puede anular.");
+        assertThat(rechazo.get("message").asText()).isEqualTo("El cliente está desactivado.");
         assertThat(comprobantes(t)).isEqualTo(antes);
+        assertThat(notasDe(venta)).isZero();
         assertThat(stock(a)).isEqualByComparingTo("8");
+        assertThat(jdbc.queryForObject("select count(*) from movimiento_cuenta_cliente where cliente_id = ?", Long.class, c))
+                .isEqualTo(libroAntes);
+        assertThat(saldo(c)).isEqualByComparingTo("0");
         assertThat(estadoFiscal(venta)).isEqualTo("AUTORIZADO");
+        InvarianteCuenta.assertInvariante(jdbc, c);
+    }
+
+    @Test
+    @DisplayName("S8: una venta sin cuenta corriente se sigue anulando aunque su cliente esté desactivado")
+    void unaVentaSinCuentaSeAnulaConElClienteDesactivado() throws Exception {
+        Tienda t = tiendaQueFactura(RI);
+        long a = articulo(t, unico("Martillo"), "UNIDAD", "121.00", "10");
+        long c = cliente(t, unico("Corralón Sur SA"), RI, "CUIT", cuitDeCliente(), "Av. Colón 2000");
+        long venta = venderDos(t, a, c, null);
+        jdbc.update("update cliente set activo = false where id = ?", c);
+
+        anular(t, venta, null).andExpect(status().isCreated());
+
+        assertThat(notasDe(venta)).isOne();
+        assertThat(stock(a)).isEqualByComparingTo("10");
+        assertThat(renglonesNc(c)).isEmpty();
+        InvarianteCuenta.assertInvariante(jdbc, c);
+    }
+
+    @Test
+    @DisplayName("S4: dos anulaciones a la vez de una venta a cuenta corriente dan una 201 y una 409 VENTA_YA_ANULADA (choca "
+            + "uk_comprobante_asociado antes que uk_mcc_pago_tipo): una sola NC en el libro")
+    void dosAnulacionesALaVezDeUnaVentaACuenta() throws Exception {
+        Tienda t = tiendaQueFactura(RI);
+        long a = articulo(t, unico("Martillo"), "UNIDAD", "121.00", "10");
+        long c = clienteConCuenta(t);
+        long venta = venderACuenta(t, a, c, "0", null);
+        String token = login(t.emailDueno());
+        Callable<MvcResult> anulacion = () -> mvc.perform(MockMvcRequestBuilders.post("/api/ventas/" + venta + "/anular")
+                .header("Authorization", "Bearer " + token).contentType(MediaType.APPLICATION_JSON).content("{}"))
+                .andReturn();
+
+        List<MvcResult> respuestas = enParalelo(List.of(anulacion, anulacion));
+
+        assertThat(respuestas).extracting(r -> r.getResponse().getStatus()).containsExactlyInAnyOrder(201, 409);
+        MvcResult conflicto = respuestas.stream().filter(r -> r.getResponse().getStatus() == 409).findFirst().orElseThrow();
+        assertThat(objectMapper.readTree(conflicto.getResponse().getContentAsString(StandardCharsets.UTF_8))
+                .get("motivo").asText()).isEqualTo("VENTA_YA_ANULADA");
+        assertThat(notasDe(venta)).isOne();
+        assertThat(renglonesNc(c)).hasSize(1);
+        assertThat(saldo(c)).isEqualByComparingTo("0");
+        InvarianteCuenta.assertInvariante(jdbc, c);
+    }
+
+    @Test
+    @DisplayName("S5: la anulación de una venta a cuenta corriente en paralelo con una cobranza del mismo cliente: las dos "
+            + "entran, sin deadlocks, y el libro cierra")
+    void laAnulacionContraUnaCobranzaDelMismoCliente() throws Exception {
+        Tienda t = tiendaQueFactura(RI);
+        long a = articulo(t, unico("Martillo"), "UNIDAD", "121.00", "100");
+        String dueno = login(t.emailDueno());
+        for (int vuelta = 0; vuelta < 3; vuelta++) {
+            long c = clienteConCuenta(t);
+            long venta = venderACuenta(t, a, c, "0", null);
+            String cobro = "{\"clave\":\"" + clave() + "\",\"clienteId\":" + c
+                    + ",\"medio\":\"EFECTIVO\",\"total\":100.00,\"imputaciones\":[]}";
+
+            List<MvcResult> respuestas = enParalelo(List.of(
+                    () -> mvc.perform(MockMvcRequestBuilders.post("/api/ventas/" + venta + "/anular")
+                            .header("Authorization", "Bearer " + dueno).contentType(MediaType.APPLICATION_JSON)
+                            .content("{}")).andReturn(),
+                    () -> mvc.perform(MockMvcRequestBuilders.post("/api/cobranzas")
+                            .header("Authorization", "Bearer " + dueno).contentType(MediaType.APPLICATION_JSON)
+                            .content(cobro)).andReturn()));
+
+            assertThat(respuestas).extracting(r -> r.getResponse().getStatus()).containsExactly(201, 201);
+            assertThat(saldo(c)).as("242 − 242 de la NC − 100 del cobro").isEqualByComparingTo("-100.00");
+            InvarianteCuenta.assertInvariante(jdbc, c);
+        }
+    }
+
+    @Test
+    @DisplayName("S5: la anulación de una venta a cuenta corriente en paralelo con otra venta a cuenta del mismo cliente: las "
+            + "dos entran, sin deadlocks, y el libro cierra")
+    void laAnulacionContraUnaVentaACuentaDelMismoCliente() throws Exception {
+        Tienda t = tiendaQueFactura(RI);
+        long a = articulo(t, unico("Martillo"), "UNIDAD", "121.00", "100");
+        String dueno = login(t.emailDueno());
+        String vendedor = login(t.emailVendedor());
+        for (int vuelta = 0; vuelta < 3; vuelta++) {
+            long c = clienteConCuenta(t);
+            long venta = venderACuenta(t, a, c, "0", null);
+            Map<String, Object> otra = mapa(clave(), null, "121.00", linea(a, "1", "121.00"));
+            otra.put("formaPagoId", formaDe(t, "CUENTA_CORRIENTE"));
+            otra.put("clienteId", c);
+            String cuerpoOtra = objectMapper.writeValueAsString(otra);
+
+            List<MvcResult> respuestas = enParalelo(List.of(
+                    () -> mvc.perform(MockMvcRequestBuilders.post("/api/ventas/" + venta + "/anular")
+                            .header("Authorization", "Bearer " + dueno).contentType(MediaType.APPLICATION_JSON)
+                            .content("{}")).andReturn(),
+                    () -> mvc.perform(MockMvcRequestBuilders.post("/api/ventas")
+                            .header("Authorization", "Bearer " + vendedor).contentType(MediaType.APPLICATION_JSON)
+                            .content(cuerpoOtra)).andReturn()));
+
+            assertThat(respuestas).extracting(r -> r.getResponse().getStatus()).containsExactly(201, 201);
+            assertThat(saldo(c)).as("242 − 242 de la NC + 121 de la otra venta").isEqualByComparingTo("121.00");
+            InvarianteCuenta.assertInvariante(jdbc, c);
+        }
     }
 
     // ---- S2: quién ----

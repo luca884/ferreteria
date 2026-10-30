@@ -54,9 +54,7 @@ public class VentaRechazadaException extends RuntimeException {
         /** Anular (CU-08 punto 5): la venta ya tiene su nota de credito o su anulacion interna (una sola por venta). */
         VENTA_YA_ANULADA(409),
         /** Anular (CU-08 punto 5): lo que se pidio anular es una nota de credito. */
-        NOTA_DE_CREDITO_NO_SE_ANULA(409),
-        /** Anular (CU-08 punto 5): la venta tiene un pago a cuenta corriente; se podra anular desde la rama 10. */
-        VENTA_A_CUENTA_CORRIENTE(422);
+        NOTA_DE_CREDITO_NO_SE_ANULA(409);
 
         private final int estadoHttp;
 
@@ -149,12 +147,6 @@ public class VentaRechazadaException extends RuntimeException {
     public static VentaRechazadaException notaDeCreditoNoSeAnula() {
         return new VentaRechazadaException(Motivo.NOTA_DE_CREDITO_NO_SE_ANULA, "Una nota de crédito no se anula.",
                 List.of());
-    }
-
-    /** CU-08 punto 5, S15: «La venta tiene un pago a cuenta corriente: todavía no se puede anular.» */
-    public static VentaRechazadaException ventaACuentaCorriente() {
-        return new VentaRechazadaException(Motivo.VENTA_A_CUENTA_CORRIENTE,
-                "La venta tiene un pago a cuenta corriente: todavía no se puede anular.", List.of());
     }
 
     private final Motivo motivo;
