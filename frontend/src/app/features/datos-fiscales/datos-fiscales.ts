@@ -14,9 +14,14 @@ import { DatosFiscales, DatosFiscalesService } from './datos-fiscales.service';
 /** Los campos que se validan en la pantalla, con la misma clave que usa el servidor en sus errores. */
 type CampoFiscal = 'razonSocial' | 'domicilioComercial' | 'inicioActividades' | 'ingresosBrutos';
 
-/** Un inicio de actividades posterior a hoy (Buenos Aires): el servidor lo rechaza igual. */
-function noFutura(control: AbstractControl<string>): ValidationErrors | null {
-  return control.value && control.value > hoyEnBuenosAires() ? { futura: true } : null;
+/** El inicio de actividades más viejo que se acepta; el servidor tiene el mismo piso. */
+const INICIO_ACTIVIDADES_MINIMO = '1900-01-01';
+
+/** Un inicio de actividades posterior a hoy (Buenos Aires) o anterior al piso: el servidor lo rechaza igual. */
+function inicioActividadesValido(control: AbstractControl<string>): ValidationErrors | null {
+  if (!control.value) return null;
+  if (control.value > hoyEnBuenosAires()) return { futura: true };
+  return control.value < INICIO_ACTIVIDADES_MINIMO ? { anterior: true } : null;
 }
 
 const textoONulo = (texto: string) => (texto.trim() === '' ? null : texto.trim());
@@ -43,7 +48,7 @@ export class PaginaDatosFiscales implements OnInit {
     razonSocial: ['', [Validators.required, Validators.maxLength(150), Validators.pattern(/\S/)]],
     condicionIva: ['RESPONSABLE_INSCRIPTO' as CondicionIvaFerreteria],
     domicilioComercial: ['', Validators.maxLength(200)],
-    inicioActividades: ['', noFutura],
+    inicioActividades: ['', inicioActividadesValido],
     ingresosBrutos: ['', Validators.maxLength(50)],
   });
 
@@ -123,7 +128,9 @@ export class PaginaDatosFiscales implements OnInit {
       case 'domicilioComercial':
         return 'El domicilio admite hasta 200 caracteres.';
       case 'inicioActividades':
-        return 'El inicio de actividades no puede ser una fecha futura.';
+        return control.hasError('anterior')
+          ? 'El inicio de actividades no puede ser anterior al 1/1/1900.'
+          : 'El inicio de actividades no puede ser una fecha futura.';
       case 'ingresosBrutos':
         return 'Ingresos Brutos admite hasta 50 caracteres.';
     }

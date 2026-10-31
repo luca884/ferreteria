@@ -17,6 +17,9 @@ import java.util.Map;
 @Service
 public class DatosFiscalesService {
 
+    /** Piso del inicio de actividades: corta errores de tipeo sin rechazar una ferreteria vieja real. */
+    static final LocalDate INICIO_ACTIVIDADES_MINIMO = LocalDate.of(1900, 1, 1);
+
     private final FerreteriaRepository ferreteriaRepository;
 
     public DatosFiscalesService(FerreteriaRepository ferreteriaRepository) {
@@ -34,6 +37,10 @@ public class DatosFiscalesService {
         if (inicioActividades != null && inicioActividades.isAfter(HoraArgentina.hoy())) {
             throw new DatosInvalidosException(
                     Map.of("inicioActividades", "El inicio de actividades no puede ser una fecha futura."));
+        }
+        if (inicioActividades != null && inicioActividades.isBefore(INICIO_ACTIVIDADES_MINIMO)) {
+            throw new DatosInvalidosException(
+                    Map.of("inicioActividades", "El inicio de actividades no puede ser anterior al 1/1/1900."));
         }
         Ferreteria ferreteria = ferreteriaDelToken();
         ferreteria.actualizarDatosFiscales(razonSocial, condicionIva, domicilioComercial, inicioActividades,

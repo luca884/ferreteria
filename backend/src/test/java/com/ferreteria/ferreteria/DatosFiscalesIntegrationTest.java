@@ -229,4 +229,20 @@ class DatosFiscalesIntegrationTest extends IntegrationTestBase {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.inicioActividades", is(hoy)));
     }
+
+    @Test
+    void elInicioDeActividadesNoPuedeSerAnteriorA1900() throws Exception {
+        FerreteriaDePrueba f = ferreteriaNueva();
+        Map<String, Object> antes = jdbc.queryForMap("select * from ferreteria where id = ?", f.id());
+
+        putJson(URL, f.token(), datos("Tuerca SRL", "MONOTRIBUTISTA", null, "1899-12-31", null))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors.inicioActividades",
+                        is("El inicio de actividades no puede ser anterior al 1/1/1900.")));
+        assertThat(jdbc.queryForMap("select * from ferreteria where id = ?", f.id())).isEqualTo(antes);
+
+        putJson(URL, f.token(), datos("Tuerca SRL", "MONOTRIBUTISTA", null, "1900-01-01", null))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.inicioActividades", is("1900-01-01")));
+    }
 }

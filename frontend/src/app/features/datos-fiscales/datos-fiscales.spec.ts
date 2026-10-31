@@ -131,6 +131,19 @@ describe('PaginaDatosFiscales', () => {
     expect(texto('#inicioActividades-error')).toBe('El inicio de actividades no puede ser una fecha futura.');
   });
 
+  it('un inicio de actividades anterior al 1/1/1900 no se manda; el 1/1/1900 sí', async () => {
+    await crear();
+
+    await escribir('inicioActividades', '1899-12-31');
+    await enviar();
+    expect(guardar).not.toHaveBeenCalled();
+    expect(texto('#inicioActividades-error')).toBe('El inicio de actividades no puede ser anterior al 1/1/1900.');
+
+    await escribir('inicioActividades', '1900-01-01');
+    await enviar();
+    expect(guardar).toHaveBeenLastCalledWith(expect.objectContaining({ inicioActividades: '1900-01-01' }));
+  });
+
   it('Ingresos Brutos entra con el Convenio Multilateral escrito entero; más de 50 caracteres no se manda', async () => {
     await crear();
 
