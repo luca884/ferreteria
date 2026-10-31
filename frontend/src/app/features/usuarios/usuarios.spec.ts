@@ -1,7 +1,7 @@
 import { HttpErrorResponse } from '@angular/common/http';
 import { signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { of, throwError } from 'rxjs';
+import { Subject, of, throwError } from 'rxjs';
 import { vi } from 'vitest';
 import { Sesion } from '../../core/auth/auth.models';
 import { AuthService } from '../../core/auth/auth.service';
@@ -164,6 +164,36 @@ describe('Usuarios', () => {
     expect(el().querySelector('.alerta.exito')?.textContent).toContain('Se guardó «Lucía Pérez».');
     expect(input('nombre').value).toBe('');
     expect(input('password').value).toBe('');
+  });
+
+  it('mientras se guarda un alta los campos quedan bloqueados; al guardarse, el foco vuelve al nombre para el siguiente', async () => {
+    await crear([dueno, vendedor]);
+    const respuesta = new Subject<Usuario>();
+    servicio.crear.mockReturnValue(respuesta);
+    await altaCompleta();
+
+    await enviar();
+
+    expect(el().querySelector('form.alta')!.hasAttribute('inert')).toBe(true);
+
+    respuesta.next({ id: 99, activo: true, nombre: 'Lucía Pérez', email: 'lucia@tornillo.demo', rol: 'VENDEDOR' });
+    respuesta.complete();
+    await refrescar();
+
+    expect(el().querySelector('form.alta')!.hasAttribute('inert')).toBe(false);
+    expect(input('nombre').value).toBe('');
+    expect(document.activeElement).toBe(input('nombre'));
+  });
+
+  it('si el alta falla los campos se desbloquean con lo escrito', async () => {
+    await crear([dueno, vendedor]);
+    servicio.crear.mockReturnValue(throwError(() => errorHttp(409, 'Ya existe un usuario con ese email.')));
+    await altaCompleta();
+
+    await enviar();
+
+    expect(el().querySelector('form.alta')!.hasAttribute('inert')).toBe(false);
+    expect(input('nombre').value.trim()).toBe('Lucía Pérez');
   });
 
   it('no envía un alta incompleta o con la contraseña corta y lo avisa en el campo', async () => {

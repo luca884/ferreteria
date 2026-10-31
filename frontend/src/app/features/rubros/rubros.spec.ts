@@ -1,7 +1,7 @@
 import { HttpErrorResponse } from '@angular/common/http';
 import { signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { of, throwError } from 'rxjs';
+import { Subject, of, throwError } from 'rxjs';
 import { vi } from 'vitest';
 import { AuthService } from '../../core/auth/auth.service';
 import { Rubro } from './rubro.models';
@@ -227,6 +227,37 @@ describe('Rubros', () => {
       expect(el().querySelector('form h2')?.textContent).toContain('Nuevo rubro');
       expect(input('nombre').value).toBe('');
       expect(document.activeElement).toBe(input('nombre'));
+    });
+
+    it('mientras se guarda un alta los campos quedan bloqueados; al guardarse, el foco vuelve al nombre para el siguiente', async () => {
+      await crear([buloneria], true);
+      const respuesta = new Subject<Rubro>();
+      servicio.crear.mockReturnValue(respuesta);
+      await escribir('nombre', 'Plomería');
+      await escribir('margen', '35');
+
+      await enviar();
+
+      expect(el().querySelector('form.alta')!.hasAttribute('inert')).toBe(true);
+
+      respuesta.next({ id: 9, nombre: 'Plomería', margenPorcentaje: 35 });
+      respuesta.complete();
+      await refrescar();
+
+      expect(el().querySelector('form.alta')!.hasAttribute('inert')).toBe(false);
+      expect(input('nombre').value).toBe('');
+      expect(document.activeElement).toBe(input('nombre'));
+    });
+
+    it('si el alta falla los campos se desbloquean con lo escrito', async () => {
+      await crear([buloneria], true);
+      servicio.crear.mockReturnValue(throwError(() => errorHttp(409, 'Ya existe un rubro con ese nombre.')));
+      await escribir('nombre', 'Bulonería');
+
+      await enviar();
+
+      expect(el().querySelector('form.alta')!.hasAttribute('inert')).toBe(false);
+      expect(input('nombre').value).toBe('Bulonería');
     });
   });
 

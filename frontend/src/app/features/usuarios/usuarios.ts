@@ -156,6 +156,8 @@ export class Usuarios implements OnInit {
         this.usuarios.update((lista) => [...lista.filter((u) => u.id !== guardado.id), guardado].sort(porNombre));
         this.vaciarFormulario();
         this.guardando.set(false);
+        // El formulario estuvo inerte mientras guardaba: queda listo para el próximo alta, como con Nuevo.
+        this.enfocar('#nombre');
         this.aviso.set(`Se guardó «${guardado.nombre}».`);
         // D9: si el Dueño se editó a sí mismo, el shell tiene que mostrar el nombre nuevo sin esperar al próximo login.
         if (this.esPropio(guardado)) this.auth.refrescarSesion().subscribe({ error: () => undefined });

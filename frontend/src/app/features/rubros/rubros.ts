@@ -171,6 +171,8 @@ export class Rubros implements OnInit {
         this.rubros.update((lista) => [...lista.filter((r) => r.id !== rubro.id), rubro].sort(porNombre));
         this.vaciarFormulario();
         this.guardando.set(false);
+        // El formulario estuvo inerte mientras guardaba: queda listo para el próximo alta, como con Nuevo.
+        this.enfocar('#nombre');
         const recalculo =
           habiaMargenNuevo && recalculados !== null && recalculados > 0
             ? ` Se recalcularon ${recalculados} ${recalculados === 1 ? 'precio' : 'precios'}.`
