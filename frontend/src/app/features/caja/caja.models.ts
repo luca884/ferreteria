@@ -66,6 +66,11 @@ export interface DetalleCaja {
   cerradaPor: string | null;
   ventas: Record<MedioPago, number>;
   totalVentas: number;
+  /**
+   * Las ventas de esta caja que después se anularon (hallazgos T1): informativo, porque `ventas` y `totalVentas` son brutos
+   * (anular no mueve la caja). Ausente si el backend es anterior.
+   */
+  ventasAnuladas?: { cantidad: number; total: number };
   /** Lo cobrado de cuenta corriente por medio (CC-053): el efectivo suma al esperado, la transferencia es informativa. */
   cobranzas: Record<MedioPago, number>;
   totalCobranzas: number;

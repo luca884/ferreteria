@@ -1,6 +1,7 @@
 package com.ferreteria.ventas;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.ferreteria.facturacion.wsfe.Obs;
 import com.ferreteria.facturacion.wsfe.WsfeConFallas.Falla;
 import com.ferreteria.support.InvarianteCuenta;
@@ -291,19 +292,45 @@ class AnulacionDeVentaIntegrationTest extends FacturaDelDuenoTestBase {
     // ---- S6: la plata ----
 
     @Test
-    @DisplayName("S6: la caja no cambia con la NC")
+    @DisplayName("S6: la caja no cambia con la NC; solo el renglón informativo «Ventas anuladas» cuenta la venta, y no la "
+            + "que anula otra ferretería (hallazgos T1)")
     void laCajaNoCambia() throws Exception {
         Tienda t = tiendaQueFactura(RI);
+        Tienda otra = tiendaQueFactura(RI);
         long venta = ventaAutorizada(t);
+        long ventaDeLaOtra = ventaAutorizada(otra);
         String dueno = login(t.emailDueno());
-        JsonNode cajaAntes = getJson("/api/cajas/actual", dueno);
+        JsonNode vigenteAntes = getJson("/api/cajas/actual", dueno);
+        JsonNode cajaAntes = resumenDeLaCaja(dueno);
+        assertVentasAnuladas(cajaAntes, 0, "0");
         long pagosAntes = jdbc.queryForObject("select count(*) from pago where ferreteria_id = ?", Long.class, t.id());
 
         anular(t, venta, null).andExpect(status().isCreated());
+        anular(otra, ventaDeLaOtra, null).andExpect(status().isCreated());
 
-        assertThat(getJson("/api/cajas/actual", dueno)).isEqualTo(cajaAntes);
+        assertThat(getJson("/api/cajas/actual", dueno)).isEqualTo(vigenteAntes);
+        JsonNode cajaDespues = resumenDeLaCaja(dueno);
+        assertThat(sinVentasAnuladas(cajaDespues)).isEqualTo(sinVentasAnuladas(cajaAntes));
+        assertVentasAnuladas(cajaDespues, 1, "121.00");
+        assertVentasAnuladas(resumenDeLaCaja(login(otra.emailDueno())), 1, "121.00");
         assertThat(jdbc.queryForObject("select count(*) from pago where ferreteria_id = ?", Long.class, t.id()))
                 .isEqualTo(pagosAntes);
+    }
+
+    /** El resumen con cifras de la caja abierta, el que ve el Dueño (la vigente es ciega). */
+    private JsonNode resumenDeLaCaja(String token) throws Exception {
+        long caja = getJson("/api/cajas/actual", token).get("caja").get("id").asLong();
+        return getJson("/api/cajas/" + caja, token);
+    }
+
+    /** La caja sin «Ventas anuladas»: el único renglón que cambia con la NC, y es informativo (hallazgos T1). */
+    private static JsonNode sinVentasAnuladas(JsonNode caja) {
+        return caja.deepCopy() instanceof ObjectNode copia ? copia.without("ventasAnuladas") : caja;
+    }
+
+    private static void assertVentasAnuladas(JsonNode caja, int cantidad, String total) {
+        assertThat(caja.get("ventasAnuladas").get("cantidad").asInt()).isEqualTo(cantidad);
+        assertThat(caja.get("ventasAnuladas").get("total").decimalValue()).isEqualByComparingTo(total);
     }
 
     // ---- S3, S4, S6, S8 (cu-08-nc-cuenta-corriente): la venta a cuenta corriente ----

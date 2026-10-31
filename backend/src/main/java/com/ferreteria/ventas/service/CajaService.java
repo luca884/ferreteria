@@ -15,6 +15,7 @@ import com.ferreteria.ventas.model.MovimientoCaja;
 import com.ferreteria.ventas.model.ResumenCaja;
 import com.ferreteria.ventas.model.TipoMovimientoCaja;
 import com.ferreteria.ventas.repository.CajaRepository;
+import com.ferreteria.ventas.repository.ComprobanteRepository;
 import com.ferreteria.ventas.repository.MovimientoCajaRepository;
 import com.ferreteria.ventas.repository.PagoRepository;
 import com.ferreteria.ventas.repository.ReciboRepository;
@@ -57,14 +58,17 @@ public class CajaService {
     private final MovimientoCajaRepository movimientoRepository;
     private final PagoRepository pagoRepository;
     private final ReciboRepository reciboRepository;
+    private final ComprobanteRepository comprobanteRepository;
     private final Clock reloj;
 
     public CajaService(CajaRepository cajaRepository, MovimientoCajaRepository movimientoRepository,
-            PagoRepository pagoRepository, ReciboRepository reciboRepository, Clock reloj) {
+            PagoRepository pagoRepository, ReciboRepository reciboRepository,
+            ComprobanteRepository comprobanteRepository, Clock reloj) {
         this.cajaRepository = cajaRepository;
         this.movimientoRepository = movimientoRepository;
         this.pagoRepository = pagoRepository;
         this.reciboRepository = reciboRepository;
+        this.comprobanteRepository = comprobanteRepository;
         this.reloj = reloj;
     }
 
@@ -264,7 +268,8 @@ public class CajaService {
                         movimientos.stream().map(MovimientoCaja::getUsuarioId))
                 .filter(Objects::nonNull)
                 .forEach(usuarios::add);
-        return new DetalleCaja(caja, caja.estado(hoy()), resumen, movimientos, cajaRepository.nombresScoped(usuarios));
+        return new DetalleCaja(caja, caja.estado(hoy()), resumen, comprobanteRepository.anuladasDeLaCajaScoped(caja.getId()),
+                movimientos, cajaRepository.nombresScoped(usuarios));
     }
 
     private String nombre(Long usuarioId) {
