@@ -78,10 +78,8 @@
         <input
           id="valor"
           name="valor"
-          type="text"
-          inputmode="decimal"
-          autocomplete="off"
-          spellcheck="false"
+          appImporte
+          negativos
           formControlName="valor"
           [attr.aria-invalid]="errorDelValor() ? 'true' : null"
           [attr.aria-describedby]="describirValor()"

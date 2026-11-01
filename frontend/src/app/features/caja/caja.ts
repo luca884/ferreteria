@@ -3,9 +3,11 @@ import { HttpErrorResponse } from '@angular/common/http';
 import { RouterLink } from '@angular/router';
 import { erroresDeCampos, mensajeDe } from '../../core/api/api-error';
 import { AuthService } from '../../core/auth/auth.service';
+import { centavosDeImporte, textoDeImporte } from '../../core/formato/importe';
 import { MontoPipe, formatearMonto } from '../../core/formato/monto';
 import { BarraAcciones } from '../../shared/barra-acciones';
 import { Confirmacion } from '../../shared/confirmacion';
+import { ImporteInput } from '../../shared/importe-input';
 import {
   CajaVigente,
   DetalleCaja,
@@ -26,10 +28,10 @@ function efectivoInsuficiente(err: unknown): EfectivoInsuficiente | null {
   return (err.error.efectivo as EfectivoInsuficiente | undefined) ?? null;
 }
 
-/** Un número escrito en un campo (acepta coma decimal); NaN si está vacío o no se entiende. */
-function leerNumero(texto: string): number {
-  const limpio = texto.trim().replace(',', '.');
-  return limpio === '' ? NaN : Number(limpio);
+/** Un importe escrito en un campo con máscara («50.000,5»), en pesos; NaN si está vacío o no se entiende. */
+function leerImporteEnPesos(texto: string): number {
+  const centavos = centavosDeImporte(texto);
+  return centavos === null ? NaN : centavos / 100;
 }
 
 /**
@@ -39,7 +41,7 @@ function leerNumero(texto: string): number {
  */
 @Component({
   selector: 'app-caja',
-  imports: [BarraAcciones, Confirmacion, MontoPipe, ResumenCaja, RouterLink],
+  imports: [BarraAcciones, Confirmacion, ImporteInput, MontoPipe, ResumenCaja, RouterLink],
   templateUrl: './caja.html',
   styleUrl: './caja.css',
 })
@@ -116,7 +118,7 @@ export class Caja implements OnInit {
 
   private aplicar(vigente: CajaVigente): void {
     this.vigente.set(vigente);
-    this.efectivoInicial.set(String(vigente.efectivoPropuesto));
+    this.efectivoInicial.set(textoDeImporte(vigente.efectivoPropuesto));
     this.cargarEnVivo();
   }
 
@@ -137,7 +139,7 @@ export class Caja implements OnInit {
     evento.preventDefault();
     if (this.trabajando()) return;
     this.limpiarAvisos();
-    const efectivo = leerNumero(this.efectivoInicial());
+    const efectivo = leerImporteEnPesos(this.efectivoInicial());
     if (Number.isNaN(efectivo)) {
       this.errorApertura.set('Indicá el efectivo inicial.');
       return;
@@ -170,7 +172,7 @@ export class Caja implements OnInit {
     const caja = this.caja();
     if (!caja || this.trabajando()) return;
     this.limpiarAvisos();
-    const importe = leerNumero(this.importe());
+    const importe = leerImporteEnPesos(this.importe());
     const motivo = this.motivo().trim();
     this.errorImporte.set(importe > 0 ? null : 'El importe tiene que ser mayor a cero.');
     this.errorMotivo.set(motivo === '' ? 'Indicá el motivo.' : null);
@@ -221,7 +223,7 @@ export class Caja implements OnInit {
     evento.preventDefault();
     if (this.trabajando()) return;
     this.limpiarAvisos();
-    const contado = leerNumero(this.contado());
+    const contado = leerImporteEnPesos(this.contado());
     if (Number.isNaN(contado)) {
       this.errorContado.set('Indicá el efectivo contado.');
       return;
@@ -252,7 +254,7 @@ export class Caja implements OnInit {
         this.contado.set('');
         this.mensaje.set('Cerraste la caja.');
         this.vigente.set({ estado: 'SIN_CAJA', caja: null, efectivoPropuesto: contado });
-        this.efectivoInicial.set(String(contado));
+        this.efectivoInicial.set(textoDeImporte(contado));
       },
       error: (err: unknown) => {
         this.trabajando.set(false);

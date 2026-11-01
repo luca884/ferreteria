@@ -304,11 +304,7 @@
           <input
             id="limite-cuenta"
             name="limiteCuenta"
-            type="number"
-            inputmode="decimal"
-            step="0.01"
-            min="0"
-            autocomplete="off"
+            appImporte
             formControlName="limiteCuenta"
             [attr.aria-invalid]="errorLimite() ? 'true' : null"
             [attr.aria-describedby]="errorLimite() ? 'limite-cuenta-error' : 'limite-cuenta-pista'"

@@ -80,7 +80,7 @@ describe('PaginaConfiguracionPrecios', () => {
     await crear(true, vi.fn(() => of({ margenDefectoPorcentaje: 45.5, redondeoMultiplo: 0.5 })));
 
     expect(input('margen-defecto').value).toBe('45.5');
-    expect(input('redondeo').value).toBe('0.5');
+    expect(input('redondeo').value).toBe('0,50');
   });
 
   it('si no carga lo avisa y Reintentar vuelve a pedirla', async () => {
@@ -117,9 +117,21 @@ describe('PaginaConfiguracionPrecios', () => {
     expect(texto('app-confirmacion p')).toBe('Se recalcula el precio de 23 artículos.');
   });
 
+  it('el múltiplo del redondeo lleva la máscara de importes: 1000 se ve 1.000 y el control guarda 1000', async () => {
+    await crear();
+    await escribir('redondeo', '500');
+    await escribir('redondeo', '5000');
+    await escribir('redondeo', '1000');
+    await enviar();
+
+    expect(input('redondeo').value).toBe('1.000');
+    expect(input('redondeo').type).toBe('text');
+    expect(servicio.articulosQueCambian).toHaveBeenCalledWith({ margenDefectoPorcentaje: 30, redondeoMultiplo: 1000 });
+  });
+
   it('al confirmar guarda y dice cuántos precios cambiaron', async () => {
     await crear();
-    await escribir('redondeo', '0.5');
+    await escribir('redondeo', '0,5');
     await enviar();
 
     await clickEn('app-confirmacion button.confirmar');

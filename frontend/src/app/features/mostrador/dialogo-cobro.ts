@@ -10,11 +10,13 @@ import {
   viewChild,
   viewChildren,
 } from '@angular/core';
+import { centavosDeImporte, normalizarImporte } from '../../core/formato/importe';
 import { MontoPipe, formatearMonto } from '../../core/formato/monto';
+import { ImporteInput } from '../../shared/importe-input';
 import { TrampaFoco } from '../../shared/trampa-foco';
 import { CuentaCliente } from '../clientes/cliente.models';
 import { FormaPago } from '../formas-pago/forma-pago.models';
-import { desdeTexto, recargoDeCobro } from './centavos';
+import { recargoDeCobro } from './centavos';
 import { GuardaLector } from './guarda-lector';
 import { ExcesoCuentaCorriente, MedioPago, PagoCobro } from './venta.models';
 
@@ -70,7 +72,8 @@ const PORCENTAJE = new Intl.NumberFormat('es-AR', { maximumFractionDigits: 2 });
 /** El recargo de la forma en centésimas de punto porcentual (1000 = 10 %). */
 const puntosBase = (forma: FormaPago): number => Math.round(forma.recargoPorcentaje * 100);
 
-const centavosATexto = (c: number) => `${Math.floor(c / 100)},${String(c % 100).padStart(2, '0')}`;
+/** Los centavos como lo que se ve en un campo con máscara: «1.300,50» (puntos de miles y siempre 2 decimales). */
+const centavosATexto = (c: number) => `${normalizarImporte(String(Math.floor(c / 100)))},${String(c % 100).padStart(2, '0')}`;
 
 /**
  * Cobro (F4). Presentacional: abre en efectivo con el recibido igual al total, así F4 + Enter cobra.
@@ -78,7 +81,7 @@ const centavosATexto = (c: number) => `${Math.floor(c / 100)},${String(c % 100).
  */
 @Component({
   selector: 'app-dialogo-cobro',
-  imports: [MontoPipe, TrampaFoco],
+  imports: [ImporteInput, MontoPipe, TrampaFoco],
   template: `
     <!-- El mousedown sobre el fondo no mueve el foco al body: si no, Esc y Enter (que escucha el diálogo) dejarían de andar. -->
     <div class="dialogo-fondo" (mousedown)="retenerFoco($event)">
@@ -162,10 +165,7 @@ const centavosATexto = (c: number) => `${Math.floor(c / 100)},${String(c % 100).
                 {{ f.nombre }}
                 <input
                   #filaMonto
-                  type="text"
-                  inputmode="decimal"
-                  autocomplete="off"
-                  spellcheck="false"
+                  appImporte
                   [attr.data-forma]="f.id"
                   [disabled]="razonesMixto()[f.id] !== null"
                   [attr.aria-describedby]="razonesMixto()[f.id] ? 'razon-fila-' + f.id : null"
@@ -196,10 +196,7 @@ const centavosATexto = (c: number) => `${Math.floor(c / 100)},${String(c % 100).
               Recibido
               <input
                 #importe
-                type="text"
-                inputmode="decimal"
-                autocomplete="off"
-                spellcheck="false"
+                appImporte
                 [attr.aria-invalid]="errorRecibido() ? 'true' : null"
                 [attr.aria-describedby]="errorRecibido() ? 'dialogo-cobro-error' : null"
                 [value]="textoRecibido()"
@@ -630,12 +627,7 @@ export class DialogoCobro {
     const montos = this.montos();
     const leer = (texto: string | null | undefined): number | null => {
       if (texto === null || texto === undefined || texto.trim() === '') return 0;
-      try {
-        const c = desdeTexto(texto, 2);
-        return c >= 0 ? c : null;
-      } catch {
-        return null;
-      }
+      return centavosDeImporte(texto);
     };
     const razones = this.razonesMixto();
     const filas: Record<number, number | null> = {};
@@ -730,11 +722,7 @@ export class DialogoCobro {
   protected readonly textoRecibido = computed(() => this.escrito() ?? centavosATexto(this.aCobrarCentavos()));
 
   protected readonly recibido = computed<number | null>(() => {
-    try {
-      return desdeTexto(this.textoRecibido(), 2);
-    } catch {
-      return null;
-    }
+    return centavosDeImporte(this.textoRecibido());
   });
 
   protected readonly vueltoCentavos = computed(() => Math.max(0, (this.recibido() ?? 0) - this.aCobrarCentavos()));

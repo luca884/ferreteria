@@ -3,8 +3,10 @@ import { Component, OnInit, inject, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { erroresDeCampos, mensajeDe } from '../../core/api/api-error';
 import { AuthService } from '../../core/auth/auth.service';
+import { centavosDeImporte, textoDeImporte } from '../../core/formato/importe';
 import { MontoPipe } from '../../core/formato/monto';
 import { BarraAcciones } from '../../shared/barra-acciones';
+import { ImporteInput } from '../../shared/importe-input';
 import { Articulo } from '../articulos/articulo.models';
 import { ArticulosService } from '../articulos/articulos.service';
 import { hoyEnBuenosAires } from '../clientes/cuenta/cobranza.models';
@@ -37,7 +39,7 @@ interface RenglonEnCarga {
  */
 @Component({
   selector: 'app-nueva-compra',
-  imports: [BarraAcciones, DecimalPipe, MontoPipe, RouterLink],
+  imports: [BarraAcciones, DecimalPipe, ImporteInput, MontoPipe, RouterLink],
   templateUrl: './nueva-compra.html',
   styleUrl: './compras.css',
 })
@@ -125,7 +127,7 @@ export class NuevaCompra implements OnInit {
         descripcion: articulo.descripcion,
         moneda: articulo.moneda,
         cantidad: '1',
-        costo: String(articulo.costo),
+        costo: textoDeImporte(articulo.costo),
       },
     ]);
     this.descartarVistaPrevia();
@@ -228,7 +230,7 @@ export class NuevaCompra implements OnInit {
     const renglones = this.renglones().map((r) => ({
       articuloId: r.articuloId,
       cantidad: decimal(r.cantidad),
-      costoUnitario: decimal(r.costo),
+      costoUnitario: pesos(r.costo),
     }));
     if (renglones.some((r) => Number.isNaN(r.cantidad) || Number.isNaN(r.costoUnitario))) {
       faltan.push('Revisá la cantidad y el costo de cada renglón.');
@@ -271,4 +273,10 @@ function coincidenciaExacta(articulos: readonly Articulo[], termino: string): Ar
 function decimal(texto: string): number {
   const limpio = texto.trim().replace(',', '.');
   return /^\d+(\.\d+)?$/.test(limpio) ? Number(limpio) : Number.NaN;
+}
+
+/** Un costo escrito con la máscara de importes («1.234,5»), en pesos (o dólares); NaN si está vacío o no se entiende. */
+function pesos(texto: string): number {
+  const centavos = centavosDeImporte(texto);
+  return centavos === null ? Number.NaN : centavos / 100;
 }

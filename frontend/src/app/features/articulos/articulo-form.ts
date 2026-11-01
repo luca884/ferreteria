@@ -24,6 +24,7 @@ import { margenEfectivo, precioFinal } from '../../core/formato/precio-final';
 import { cantidadConUnidad } from '../../core/formato/unidad';
 import { BarraAcciones } from '../../shared/barra-acciones';
 import { Confirmacion } from '../../shared/confirmacion';
+import { ImporteInput } from '../../shared/importe-input';
 import { Proveedor } from '../proveedores/proveedor.models';
 import { ProveedoresService } from '../proveedores/proveedores.service';
 import { Rubro } from '../rubros/rubro.models';
@@ -146,6 +147,7 @@ const VOLVER_AL_LISTADO = { queryParamsHandling: 'preserve' } as const;
     DialogoAjusteStock,
     BarraAcciones,
     DesglosePrecioVista,
+    ImporteInput,
   ],
   templateUrl: './articulo-form.html',
   styleUrl: './articulo-form.css',

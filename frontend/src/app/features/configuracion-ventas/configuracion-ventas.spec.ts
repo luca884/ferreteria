@@ -47,7 +47,7 @@ describe('PaginaConfiguracionVentas', () => {
     await crear();
 
     expect(texto('app-barra-acciones h1')).toBe('Consumidor Final');
-    expect(input().value).toBe('10000000');
+    expect(input().value).toBe('10.000.000');
     expect(texto('#tope-pista')).toContain('$ 10.000.000');
     expect(texto('#tope-pista')).toContain('RG 5700/2025');
   });
@@ -55,10 +55,19 @@ describe('PaginaConfiguracionVentas', () => {
   it('guardar manda el tope nuevo y lo confirma', async () => {
     await crear();
 
-    await escribirYGuardar('250000.5');
+    await escribirYGuardar('250000,5');
 
     expect(guardar).toHaveBeenCalledWith({ topeConsumidorFinal: 250000.5 });
     expect(texto('.alerta.exito')).toBe('Se guardó el tope.');
+  });
+
+  it('el tope lleva la máscara de importes: 50000 se ve 50.000 y se manda 50000', async () => {
+    await crear();
+
+    await escribirYGuardar('50000');
+
+    expect(input().value).toBe('50.000');
+    expect(guardar).toHaveBeenCalledWith({ topeConsumidorFinal: 50000 });
   });
 
   it('un tope de 0 o vacío no se manda y lo explica', async () => {
@@ -84,7 +93,7 @@ describe('PaginaConfiguracionVentas', () => {
       ),
     );
 
-    await escribirYGuardar('100.5');
+    await escribirYGuardar('100,5');
 
     expect(texto('.errores-campos li')).toBe('El tope admite hasta 2 decimales.');
   });
@@ -100,7 +109,7 @@ describe('PaginaConfiguracionVentas', () => {
     el().querySelector<HTMLButtonElement>('button.reintentar')!.click();
     await refrescar();
 
-    expect(input().value).toBe('5000');
+    expect(input().value).toBe('5.000');
   });
 
   it('al Vendedor le avisa que es del Dueño y no pide nada', async () => {

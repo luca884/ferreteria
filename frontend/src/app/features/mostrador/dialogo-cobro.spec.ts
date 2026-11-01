@@ -87,7 +87,7 @@ describe('DialogoCobro', () => {
     expect(el().querySelector('[role="dialog"]')!.getAttribute('aria-modal')).toBe('true');
     expect(el().querySelector('.total')!.textContent!.trim()).toBe(`$${NBSP}3.630,00`);
     expect(elegidos()).toEqual(['Efectivo']);
-    expect(importe().value).toBe('3630,00');
+    expect(importe().value).toBe('3.630,00');
     expect(document.activeElement).toBe(importe());
   });
 
@@ -143,6 +143,22 @@ describe('DialogoCobro', () => {
 
     expect(vuelto()).toBe(`Vuelto $${NBSP}1.370,00`);
     expect(error()).toBeNull();
+  });
+
+  it('el recibido lleva la máscara: 50000 se ve 50.000 y se lee como cincuenta mil pesos; el punto no entra', async () => {
+    await abrir();
+
+    escribir('50000');
+    expect(importe().value).toBe('50.000');
+    expect(vuelto()).toBe(`Vuelto $${NBSP}46.370,00`);
+
+    escribir('5.000');
+    expect(importe().value).toBe('5.000');
+    escribir('1.5');
+    expect(importe().value).toBe('15');
+    tecla('Enter');
+    fixture.detectChanges();
+    expect(faltante()).toBe(`Faltan $${NBSP}3.615,00`);
   });
 
   it('con el recibido igual al total el vuelto es $ 0,00', async () => {
@@ -513,7 +529,7 @@ describe('DialogoCobro', () => {
     await estabilizar();
 
     expect(el().querySelector('.total')!.textContent!.trim()).toBe(`$${NBSP}3.650,00`);
-    expect(importe().value).toBe('3650,00');
+    expect(importe().value).toBe('3.650,00');
   });
 
   it('muestra el aviso que le pasa el contenedor', async () => {
@@ -582,6 +598,17 @@ describe('DialogoCobro', () => {
       expect(resumen()).toBe('Falta $ 3.630,00');
     });
 
+    it('el monto de cada forma lleva la máscara: 50000 se ve 50.000 y descuenta cincuenta mil', async () => {
+      await abrirMixto(10000000);
+
+      escribirMonto(1, '50000');
+
+      expect(monto(1).value).toBe('50.000');
+      expect(resumen()).toBe('Falta $ 50.000,00');
+      escribirMonto(1, '1.5');
+      expect(monto(1).value).toBe('15');
+    });
+
     it('al cargar una parte, lo que falta baja', async () => {
       await abrirMixto();
 
@@ -599,7 +626,7 @@ describe('DialogoCobro', () => {
 
       expect(evento.defaultPrevented).toBe(true);
       expect(document.activeElement).toBe(monto(2));
-      expect(monto(2).value).toBe('2630,00');
+      expect(monto(2).value).toBe('2.630,00');
       expect(resumen()).toBe('Completo');
       expect(confirmadas).toEqual([]);
     });
@@ -660,15 +687,13 @@ describe('DialogoCobro', () => {
       expect(error()).toBe('Los pagos tienen que sumar el total.');
     });
 
-    it('un importe que no es número avisa y no confirma', async () => {
+    it('un texto que no es número no entra al monto: queda vacío y no confirma', async () => {
       await abrirMixto();
       escribirMonto(1, 'abc');
 
-      tecla('Enter');
-      fixture.detectChanges();
-
+      expect(monto(1).value).toBe('');
       expect(confirmadas).toEqual([]);
-      expect(error()).toBe('Revisá los importes: usá números con hasta 2 decimales.');
+      expect(resumen()).toBe('Falta $ 3.630,00');
     });
 
     it('una sola forma cargada por el total confirma igual (es lo mismo que una forma única)', async () => {

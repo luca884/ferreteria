@@ -250,6 +250,27 @@ describe('NuevaCompra', () => {
     expect(boton('Confirmar compra')).toBeDefined();
   });
 
+  it('el costo lleva la máscara de importes: 50000 se ve 50.000 y se manda como cincuenta mil; el punto no entra', async () => {
+    await crear();
+    await cargarCompra();
+
+    await escribir('input[name="costo-0"]', '50000');
+    expect(campo<HTMLInputElement>('input[name="costo-0"]').value).toBe('50.000');
+    boton('Ver vista previa')!.click();
+    await refrescar();
+    expect(api.vistaPrevia).toHaveBeenLastCalledWith(
+      expect.objectContaining({ renglones: [{ articuloId: 1, cantidad: 20, costoUnitario: 50000 }] }),
+    );
+
+    await escribir('input[name="costo-0"]', '12.5');
+    expect(campo<HTMLInputElement>('input[name="costo-0"]').value).toBe('125');
+    boton('Ver vista previa')!.click();
+    await refrescar();
+    expect(api.vistaPrevia).toHaveBeenLastCalledWith(
+      expect.objectContaining({ renglones: [{ articuloId: 1, cantidad: 20, costoUnitario: 125 }] }),
+    );
+  });
+
   it('cambiar un renglón después de la vista previa la descarta', async () => {
     await crear();
     await cargarCompra();

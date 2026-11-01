@@ -193,10 +193,7 @@
           <input
             id="costo"
             name="costo"
-            type="number"
-            inputmode="decimal"
-            step="0.01"
-            min="0"
+            appImporte
             formControlName="costo"
             [attr.aria-invalid]="invalido('costo') ? 'true' : null"
             [attr.aria-describedby]="describir('costo')"
@@ -287,10 +284,7 @@
             <input
               id="precioFinalManual"
               name="precioFinal"
-              type="number"
-              inputmode="decimal"
-              step="0.01"
-              min="0"
+              appImporte
               formControlName="precioFinal"
               [attr.aria-invalid]="errorLocalDelPrecio() || errorServidor('precioFinal') ? 'true' : null"
               [attr.aria-describedby]="describirPrecioManual()"
@@ -358,9 +352,8 @@
                   <label [for]="'ajuste-precio-valor-' + i">Valor del ajuste {{ i + 1 }}</label>
                   <input
                     [id]="'ajuste-precio-valor-' + i"
-                    type="number"
-                    inputmode="decimal"
-                    step="0.01"
+                    appImporte
+                    negativos
                     formControlName="valor"
                     [attr.aria-invalid]="errorLocalDeFila(i, 'valor') || errorServidorDeFila(i, 'valor') ? 'true' : null"
                     [attr.aria-describedby]="describirFila(i, 'valor')"

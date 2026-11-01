@@ -2063,7 +2063,7 @@ describe('Mostrador', () => {
         'Cambió el precio de "Martillo": ahora $ 1.650,00.',
       );
       expect(normal(renglonesTicket()[0].textContent)).toContain('$ 1.650,00');
-      expect(dialogo()!.querySelector('input')!.value).toBe('3300,00');
+      expect(dialogo()!.querySelector('input')!.value).toBe('3.300,00');
 
       await tecla('Enter');
 
