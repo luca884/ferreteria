@@ -123,7 +123,8 @@
   </div>
 
   @if (auth.esDueno()) {
-    <form class="alta panel" [formGroup]="form" (ngSubmit)="guardar()" novalidate>
+    <!-- Mientras guarda no se escribe: la respuesta vacía el formulario y lo escrito se perdería (hallazgos T3). -->
+    <form class="alta panel" [formGroup]="form" (ngSubmit)="guardar()" novalidate [attr.inert]="guardando() ? '' : null">
       <h2>{{ editandoId() === null ? 'Nuevo proveedor' : 'Editar proveedor' }}</h2>
       <div class="campo nombre-campo">
         <label for="nombre">Nombre</label>

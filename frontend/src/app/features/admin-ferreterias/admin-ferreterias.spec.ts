@@ -217,6 +217,36 @@ describe('AdminFerreterias', () => {
   });
 
   describe('alta', () => {
+    it('mientras se guarda un alta los campos quedan bloqueados; al guardarse, el foco vuelve a la razón social para la siguiente', async () => {
+      await crear();
+      const respuesta = new Subject<FerreteriaAdmin>();
+      servicio.alta.mockReturnValue(respuesta);
+      await altaCompleta();
+
+      await enviar();
+
+      expect(el().querySelector('form.alta')!.hasAttribute('inert')).toBe(true);
+
+      respuesta.next({ ...arco, id: 50, razonSocial: 'Nueva Ferretería SA' });
+      respuesta.complete();
+      await refrescar();
+
+      expect(el().querySelector('form.alta')!.hasAttribute('inert')).toBe(false);
+      expect(input('razonSocial').value).toBe('');
+      expect(document.activeElement).toBe(input('razonSocial'));
+    });
+
+    it('si el alta falla los campos se desbloquean con lo escrito', async () => {
+      await crear();
+      servicio.alta.mockReturnValue(throwError(() => errorHttp(500, 'Algo falló')));
+      await altaCompleta();
+
+      await enviar();
+
+      expect(el().querySelector('form.alta')!.hasAttribute('inert')).toBe(false);
+      expect(input('razonSocial').value).toBe('  Nueva Ferretería SA ');
+    });
+
     it('el IVA ofrece Responsable inscripto, Monotributista y Exento', async () => {
       await crear();
 

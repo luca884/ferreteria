@@ -106,7 +106,7 @@ describe('Caja (CU-10)', () => {
     it('sin caja muestra la apertura con el efectivo propuesto (el contado del último cierre)', async () => {
       await crear(sinCaja(7000));
 
-      expect((input('efectivo-inicial') as HTMLInputElement).valueAsNumber).toBe(7000);
+      expect((input('efectivo-inicial') as HTMLInputElement).value).toBe('7.000');
       expect(el().querySelector('form.cierre')).toBeNull();
       expect(el().querySelector('form.movimiento')).toBeNull();
     });
@@ -123,14 +123,25 @@ describe('Caja (CU-10)', () => {
       expect(normal(el().querySelector('.alerta.exito')?.textContent)).toBe('Abriste la caja.');
     });
 
-    it('un efectivo negativo no se manda', async () => {
+    it('el efectivo lleva la máscara de importes: 50000 se ve 50.000 y abre con cincuenta mil; el punto no entra', async () => {
       await crear(sinCaja());
 
-      await escribir('efectivo-inicial', '-1');
+      await escribir('efectivo-inicial', '50000');
+      expect((input('efectivo-inicial') as HTMLInputElement).value).toBe('50.000');
+      await enviar('form.apertura');
+      expect(servicio.abrir).toHaveBeenLastCalledWith(50000);
+    });
+
+    it('el punto tecleado no entra, la coma sí y el menos tampoco: no hay efectivo negativo', async () => {
+      await crear(sinCaja());
+
+      await escribir('efectivo-inicial', '1.234,5');
+      expect((input('efectivo-inicial') as HTMLInputElement).value).toBe('1.234,5');
+      await escribir('efectivo-inicial', '-1.5');
+      expect((input('efectivo-inicial') as HTMLInputElement).value).toBe('15');
       await enviar('form.apertura');
 
-      expect(servicio.abrir).not.toHaveBeenCalled();
-      expect(normal(el().querySelector('.campo-error')?.textContent)).toBe('El efectivo no puede ser negativo.');
+      expect(servicio.abrir).toHaveBeenCalledWith(15);
     });
 
     it('si otro usuario ya la abrió, muestra el mensaje del servidor', async () => {
@@ -171,6 +182,17 @@ describe('Caja (CU-10)', () => {
       expect(servicio.registrarMovimiento).toHaveBeenCalledWith(4, { tipo: 'GASTO', importe: 300, motivo: 'Cadete' });
       expect(normal(el().querySelector('.alerta.exito')?.textContent)).toBe('Se cargó el gasto de $ 300,00.');
       expect((input('motivo-movimiento') as HTMLInputElement).value).toBe('');
+    });
+
+    it('el importe lleva la máscara: 50000 se ve 50.000 y se manda como cincuenta mil', async () => {
+      await crear(conCaja());
+
+      await escribir('importe-movimiento', '50000');
+      await escribir('motivo-movimiento', 'Flete');
+      expect((input('importe-movimiento') as HTMLInputElement).value).toBe('50.000');
+      await enviar('form.movimiento');
+
+      expect(servicio.registrarMovimiento).toHaveBeenCalledWith(4, { tipo: 'INGRESO', importe: 50000, motivo: 'Flete' });
     });
 
     it('sin importe o sin motivo no se manda', async () => {
@@ -358,6 +380,16 @@ describe('Caja (CU-10)', () => {
       expect(resumen).toContain('Efectivo contado $ 5.650,00');
       expect(resumen).toContain('Faltan $ 50,00');
       expect(el().querySelector('form.apertura')).not.toBeNull();
+    });
+
+    it('el contado lleva la máscara: 50000 se ve 50.000 y se confirma con cincuenta mil', async () => {
+      await crear(conCaja());
+
+      await escribir('efectivo-contado', '50000');
+      expect((input('efectivo-contado') as HTMLInputElement).value).toBe('50.000');
+      await enviar('form.cierre');
+
+      expect(normal(el().querySelector('[role="alertdialog"]')?.textContent)).toContain('$ 50.000,00 contados');
     });
 
     it('cancelar la confirmación no cierra nada', async () => {

@@ -135,6 +135,29 @@ describe('ResumenCaja (CC-025)', () => {
     expect(limpio(linea('Diferencia')!.querySelector('strong'))).toBe('Sin diferencia');
   });
 
+  describe('ventas anuladas (hallazgos T1)', () => {
+    it('después de «Total de ventas», cuántas ventas de la caja se anularon y por cuánto, como renglón informativo', async () => {
+      await crear(detalle({ ventasAnuladas: { cantidad: 2, total: 1500 } }));
+
+      const nombres = lineas().map((l) => limpio(l.querySelector('span')));
+      expect(nombres[nombres.indexOf('Total de ventas') + 1]).toBe('Ventas anuladas (2)');
+      const fila = linea('Ventas anuladas (2)')!;
+      expect(limpio(fila.querySelector('strong'))).toMatch(/^\$\s1\.500,00$/);
+      expect(fila.classList.contains('informativo')).toBe(true);
+      expect(limpio(fila.querySelector('small'))).toBe('ya están en el total de ventas: anular no cambia la caja');
+      expect(limpio(linea('Efectivo esperado')!.querySelector('strong'))).toContain('6.000');
+    });
+
+    it('sin ventas anuladas, o con un backend que no lo manda, no hay renglón', async () => {
+      await crear(detalle({ ventasAnuladas: { cantidad: 0, total: 0 } }));
+      expect(lineas().some((l) => limpio(l.querySelector('span')).startsWith('Ventas anuladas'))).toBe(false);
+
+      TestBed.resetTestingModule();
+      await crear(detalle());
+      expect(lineas().some((l) => limpio(l.querySelector('span')).startsWith('Ventas anuladas'))).toBe(false);
+    });
+  });
+
   describe('anulaciones de cobranzas (CC-081, CC-082, CC-100)', () => {
     const SIN: Record<string, number> = { EFECTIVO: 0, DEBITO: 0, CREDITO: 0, TRANSFERENCIA: 0, CUENTA_CORRIENTE: 0 };
     /** El ejemplo del spec: inicial 5.000; cobranza 700 en efectivo anulada: el esperado vuelve a 5.000 + ventas. */

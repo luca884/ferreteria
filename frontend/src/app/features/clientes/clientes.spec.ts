@@ -1,7 +1,7 @@
 import { HttpErrorResponse } from '@angular/common/http';
 import { signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { of, throwError } from 'rxjs';
+import { Subject, of, throwError } from 'rxjs';
 import { Router, provideRouter } from '@angular/router';
 import { vi } from 'vitest';
 import { PageResponse } from '../../core/api/page.models';
@@ -240,6 +240,36 @@ describe('Clientes', () => {
         telefono: '223 555',
       });
       expect(texto('.alerta.exito')).toBe('Se guardó «Juan Pérez».');
+    });
+
+    it('mientras se guarda un alta los campos quedan bloqueados; al guardarse, el foco vuelve a la razón social para el siguiente', async () => {
+      await crear();
+      const respuesta = new Subject<Cliente>();
+      servicio.crear.mockReturnValue(respuesta);
+      await escribir('razon-social', 'Juan Pérez');
+
+      await enviar('form.alta');
+
+      expect(el().querySelector('form.alta')!.hasAttribute('inert')).toBe(true);
+
+      respuesta.next({ ...ana, id: 99, razonSocial: 'Juan Pérez' });
+      respuesta.complete();
+      await refrescar();
+
+      expect(el().querySelector('form.alta')!.hasAttribute('inert')).toBe(false);
+      expect(input('razon-social').value).toBe('');
+      expect(document.activeElement).toBe(input('razon-social'));
+    });
+
+    it('si el alta falla los campos se desbloquean con lo escrito', async () => {
+      await crear();
+      servicio.crear.mockReturnValue(throwError(() => errorHttp(500, 'Algo falló')));
+      await escribir('razon-social', 'Juan Pérez');
+
+      await enviar('form.alta');
+
+      expect(el().querySelector('form.alta')!.hasAttribute('inert')).toBe(false);
+      expect(input('razon-social').value).toBe('Juan Pérez');
     });
 
     it('manda el documento completo con su tipo, y la condición de IVA elegida', async () => {
@@ -567,6 +597,24 @@ describe('Clientes', () => {
     const seccion = () => el().querySelector('fieldset.cuenta-corriente');
     const habilitar = () => input('cuenta-habilitada');
     const limite = () => input('limite-cuenta');
+
+    /** Lo que hace el navegador al teclear: cambia el valor, mueve el cursor y avisa con `input`. */
+    async function teclear(id: string, texto: string) {
+      const campo = input(id);
+      for (const letra of texto) {
+        const cursor = campo.selectionStart ?? campo.value.length;
+        campo.value = campo.value.slice(0, cursor) + letra + campo.value.slice(campo.selectionEnd ?? cursor);
+        campo.setSelectionRange(cursor + 1, cursor + 1);
+        campo.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+      await refrescar();
+    }
+
+    /** Pone el límite sin pasar por el teclado: la máscara no deja escribir un negativo ni más de 2 decimales. */
+    async function ponerLimite(valor: number) {
+      fixture.componentInstance['form'].controls.limiteCuenta.setValue(valor);
+      await refrescar();
+    }
     const desactivar = () => barra('.desactivar')!;
 
     async function tildar(id: string, valor: boolean) {
@@ -618,7 +666,7 @@ describe('Clientes', () => {
 
         expect(dicho(seccion()?.querySelector('legend'))).toBe('Cuenta corriente');
         expect(habilitar().checked).toBe(true);
-        expect(limite().value).toBe('5000');
+        expect(limite().value).toBe('5.000');
         expect(limite().disabled).toBe(false);
       });
 
@@ -791,6 +839,19 @@ describe('Clientes', () => {
         expect(servicio.cambiarLimite).toHaveBeenCalledWith(7, null);
       });
 
+      it('el límite lleva la máscara de importes: 50000 se ve 50.000 y viaja como 50000', async () => {
+        await crear([sinCuenta]);
+        conCambiarLimite();
+        await editarFila(0);
+        await tildar('cuenta-habilitada', true);
+
+        await teclear('limite-cuenta', '50000');
+        expect(limite().value).toBe('50.000');
+        await enviar('form.alta');
+
+        expect(servicio.cambiarLimite).toHaveBeenCalledWith(expect.any(Number), 50000);
+      });
+
       it('un límite 0 está permitido: habilita la cuenta sin crédito', async () => {
         await crear([sinCuenta]);
         conCambiarLimite();
@@ -823,11 +884,11 @@ describe('Clientes', () => {
         await editarFila(0);
         await tildar('cuenta-habilitada', true);
 
-        await escribir('limite-cuenta', '-1');
+        await ponerLimite(-1);
         await enviar('form.alta');
         expect(texto('#limite-cuenta-error')).toBe('El límite no puede ser negativo.');
 
-        await escribir('limite-cuenta', '10.001');
+        await ponerLimite(10.001);
         await enviar('form.alta');
         expect(texto('#limite-cuenta-error')).toBe('El límite admite hasta 2 decimales.');
 

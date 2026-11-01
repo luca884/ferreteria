@@ -9,6 +9,7 @@ import com.ferreteria.ventas.model.Caja;
 import com.ferreteria.ventas.model.EstadoCaja;
 import com.ferreteria.ventas.model.MedioPago;
 import com.ferreteria.ventas.model.ResumenCaja;
+import com.ferreteria.ventas.model.VentasAnuladas;
 import com.ferreteria.ventas.service.CajaVigente;
 import com.ferreteria.ventas.service.DetalleCaja;
 import java.math.BigDecimal;
@@ -27,6 +28,8 @@ class CajaResponsesTest {
 
     private static final ObjectMapper JSON = new ObjectMapper().registerModule(new JavaTimeModule());
 
+    private static final VentasAnuladas NINGUNA_ANULADA = new VentasAnuladas(0, BigDecimal.ZERO);
+
     private static BigDecimal bd(String valor) {
         return new BigDecimal(valor);
     }
@@ -42,7 +45,8 @@ class CajaResponsesTest {
     void detalleExponeLasCobranzas() throws Exception {
         ResumenCaja resumen = ResumenCaja.de(bd("5000.00"), Map.of(MedioPago.EFECTIVO, bd("1000.00")),
                 Map.of(MedioPago.EFECTIVO, bd("700.00"), MedioPago.TRANSFERENCIA, bd("300.00")), Map.of(), Map.of());
-        DetalleCaja detalle = new DetalleCaja(caja(), EstadoCaja.ABIERTA, resumen, List.of(), Map.of(9L, "Ana"));
+        DetalleCaja detalle = new DetalleCaja(caja(), EstadoCaja.ABIERTA, resumen, NINGUNA_ANULADA, List.of(),
+                Map.of(9L, "Ana"));
 
         CajaResponses.Detalle respuesta = CajaResponses.Detalle.de(detalle);
 
@@ -61,7 +65,8 @@ class CajaResponsesTest {
     @DisplayName("una caja sin recibos (como las de antes de 3a) muestra todas las cobranzas en 0")
     void cajaViejaCobranzasEnCero() {
         ResumenCaja resumen = ResumenCaja.de(bd("5000.00"), Map.of(), Map.of(), Map.of(), Map.of());
-        DetalleCaja detalle = new DetalleCaja(caja(), EstadoCaja.ABIERTA, resumen, List.of(), Map.of(9L, "Ana"));
+        DetalleCaja detalle = new DetalleCaja(caja(), EstadoCaja.ABIERTA, resumen, NINGUNA_ANULADA, List.of(),
+                Map.of(9L, "Ana"));
 
         CajaResponses.Detalle respuesta = CajaResponses.Detalle.de(detalle);
 
@@ -93,7 +98,8 @@ class CajaResponsesTest {
         ResumenCaja resumen = ResumenCaja.de(bd("5000.00"), Map.of(MedioPago.EFECTIVO, bd("1800.00")),
                 Map.of(MedioPago.EFECTIVO, bd("700.00")), Map.of(MedioPago.EFECTIVO, bd("700.00"), MedioPago.TRANSFERENCIA, bd("300.00")),
                 Map.of());
-        DetalleCaja detalle = new DetalleCaja(caja(), EstadoCaja.ABIERTA, resumen, List.of(), Map.of(9L, "Ana"));
+        DetalleCaja detalle = new DetalleCaja(caja(), EstadoCaja.ABIERTA, resumen, NINGUNA_ANULADA, List.of(),
+                Map.of(9L, "Ana"));
 
         CajaResponses.Detalle respuesta = CajaResponses.Detalle.de(detalle);
 
@@ -115,7 +121,8 @@ class CajaResponsesTest {
     @DisplayName("una caja vieja (sin anulaciones) muestra todas las anulaciones en 0")
     void cajaViejaAnulacionesEnCero() {
         ResumenCaja resumen = ResumenCaja.de(bd("5000.00"), Map.of(), Map.of(), Map.of(), Map.of());
-        DetalleCaja detalle = new DetalleCaja(caja(), EstadoCaja.ABIERTA, resumen, List.of(), Map.of(9L, "Ana"));
+        DetalleCaja detalle = new DetalleCaja(caja(), EstadoCaja.ABIERTA, resumen, NINGUNA_ANULADA, List.of(),
+                Map.of(9L, "Ana"));
 
         CajaResponses.Detalle respuesta = CajaResponses.Detalle.de(detalle);
 

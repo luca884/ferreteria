@@ -4,6 +4,7 @@ import { erroresDeCampos, mensajeDe } from '../../core/api/api-error';
 import { AuthService } from '../../core/auth/auth.service';
 import { BarraAcciones } from '../../shared/barra-acciones';
 import { Confirmacion } from '../../shared/confirmacion';
+import { ImporteInput } from '../../shared/importe-input';
 import { ConfiguracionPrecios } from '../articulos/articulo.models';
 import { ConfiguracionPreciosGuardada, ConfiguracionPreciosService } from './configuracion-precios.service';
 
@@ -19,7 +20,7 @@ interface CambioPendiente {
  */
 @Component({
   selector: 'app-configuracion-precios',
-  imports: [ReactiveFormsModule, BarraAcciones, Confirmacion],
+  imports: [ReactiveFormsModule, BarraAcciones, Confirmacion, ImporteInput],
   templateUrl: './configuracion-precios.html',
   styleUrl: './configuracion-precios.css',
 })

@@ -1,5 +1,6 @@
+import { centavosDeImporte, normalizarImporte } from '../../../core/formato/importe';
 import { formatearMonto } from '../../../core/formato/monto';
-import { aCentavos, desdeTexto } from '../../mostrador/centavos';
+import { aCentavos } from '../../mostrador/centavos';
 
 /**
  * Contrato de la cobranza de cuenta corriente (CC-028..CC-039), tipado contra los DTO del backend: PendientesResponse,
@@ -180,14 +181,9 @@ export function aCuentaCentavos(totalCentavos: number, imputadosCentavos: readon
   return totalCentavos - imputadosCentavos.reduce((suma, c) => suma + c, 0);
 }
 
-/** Un importe escrito, en centavos; null si no es un número de hasta 2 decimales (o es negativo). */
+/** Un importe escrito con la máscara («1.234,5»: puntos de miles, coma de centavos), en centavos; null si no se entiende. */
 export function leerImporte(texto: string): number | null {
-  try {
-    const centavos = desdeTexto(texto, 2);
-    return centavos >= 0 ? centavos : null;
-  } catch {
-    return null;
-  }
+  return centavosDeImporte(texto);
 }
 
 /** Una fila de la tabla de imputación: la partida con el texto que se ve, su importe en centavos y su error en línea. */
@@ -228,9 +224,9 @@ export function renglonesDeImputacion(filas: readonly FilaImputacion[]): Imputac
   return filas.filter((f) => f.centavos > 0).map((f) => imputacionDe(f, f.centavos / 100));
 }
 
-/** Los centavos como lo que se escribe en un campo: «300,50» (coma decimal, sin separador de miles). */
+/** Los centavos como lo que se ve en un campo con máscara: «1.300,50» (puntos de miles y siempre 2 decimales). */
 export function centavosATexto(centavos: number): string {
-  return `${Math.floor(centavos / 100)},${String(centavos % 100).padStart(2, '0')}`;
+  return `${normalizarImporte(String(Math.floor(centavos / 100)))},${String(centavos % 100).padStart(2, '0')}`;
 }
 
 export const MENSAJE_DECIMALES = 'Usá un número con hasta 2 decimales.';

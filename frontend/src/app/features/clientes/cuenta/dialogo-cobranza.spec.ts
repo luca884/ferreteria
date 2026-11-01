@@ -448,14 +448,29 @@ describe('DialogoCobranza (CC-032, CC-033, CC-034, CC-043, CC-051)', () => {
       ]);
     });
 
-    it('acepta el punto o la coma como separador decimal', async () => {
+    it('la coma separa los centavos y el punto tecleado no entra', async () => {
       await abrir();
 
       await escribirTotal('100.5');
-      expect(filas()[0].value).toBe('100,50');
+      expect(total().value).toBe('1.005');
 
       await escribirTotal('100,5');
+      expect(total().value).toBe('100,5');
       expect(filas()[0].value).toBe('100,50');
+    });
+
+    it('el total lleva la máscara: 50000 se ve 50.000, las filas sugeridas llevan puntos de miles y se manda cincuenta mil', async () => {
+      await abrir([pendiente(1, 1, 80000)]);
+
+      await escribirTotal('50000');
+      expect(total().value).toBe('50.000');
+      expect(filas().map((f) => f.value)).toEqual(['50.000,00']);
+
+      await escribir(fila(1), '20000');
+      expect(fila(1).value).toBe('20.000');
+      tecla('Enter');
+      expect(confirmadas[0].total).toBe(50000);
+      expect(confirmadas[0].imputaciones).toEqual([{ comprobanteId: 1, importe: 20000 }]);
     });
   });
 
@@ -473,15 +488,15 @@ describe('DialogoCobranza (CC-032, CC-033, CC-034, CC-043, CC-051)', () => {
       expect(texto('#error-total')).toBe('El total tiene que ser mayor que cero.');
     });
 
-    it('un total con más de 2 decimales o que no es un número es inválido', async () => {
+    it('un total con más de 2 decimales o con letras se corta al escribir: la máscara no deja un texto inválido', async () => {
       await abrir();
 
       await escribirTotal('10,123');
-      expect(texto('#error-total')).toBe('Usá un número con hasta 2 decimales.');
+      expect(total().value).toBe('10,12');
+      expect(texto('#error-total')).toBeNull();
 
       await escribirTotal('abc');
-      expect(texto('#error-total')).toBe('Usá un número con hasta 2 decimales.');
-      expect(total().getAttribute('aria-invalid')).toBe('true');
+      expect(total().value).toBe('');
     });
 
     it('un total más grande que el máximo es inválido (el servidor lo rechazaría)', async () => {
@@ -515,15 +530,16 @@ describe('DialogoCobranza (CC-032, CC-033, CC-034, CC-043, CC-051)', () => {
       expect(fila(32).getAttribute('aria-invalid')).toBeNull();
     });
 
-    it('un importe de fila con más de 2 decimales o que no es un número es inválido', async () => {
+    it('un importe de fila con más de 2 decimales o con letras se corta al escribir: la máscara no deja un texto inválido', async () => {
       await abrir();
       await escribirTotal('1000');
 
       await escribirFila(31, '10,555');
-      expect(texto('#error-fila-31')).toBe('Usá un número con hasta 2 decimales.');
+      expect(fila(31).value).toBe('10,55');
+      expect(texto('#error-fila-31')).toBeNull();
 
       await escribirFila(31, 'x');
-      expect(texto('#error-fila-31')).toBe('Usá un número con hasta 2 decimales.');
+      expect(fila(31).value).toBe('');
     });
 
     it('lo imputado no puede superar el total: error del conjunto y no confirma', async () => {

@@ -177,6 +177,23 @@ describe('DialogoAjuste (GDS-20, G59: Recargo y Descuento de la cuenta del clien
       expect(el().querySelector('.a-cuenta')).toBeNull();
     });
 
+    it('con el importe 50000 las filas sugeridas y las que se escriben llevan puntos de miles y se mandan como pesos', async () => {
+      await abrir('DESCUENTO', { pendientes: [venta(31, 7, 80000)], saldo: 80000 });
+
+      await escribir(importe(), '50000');
+      await escribir(motivo(), 'Deuda vieja del cliente');
+      expect(importe().value).toBe('50.000');
+      expect(filaVenta(31).value).toBe('50.000,00');
+
+      await escribir(filaVenta(31), '20000');
+      expect(filaVenta(31).value).toBe('20.000');
+      await clic('Continuar');
+      await clic('Confirmar descuento');
+
+      expect(confirmados[0].importe).toBe(50000);
+      expect(confirmados[0].imputaciones).toEqual([{ comprobanteId: 31, importe: 20000 }]);
+    });
+
     it('lo que sobra de las deudas queda «a cuenta»', async () => {
       await abrir('DESCUENTO');
       await escribir(importe(), '1000');
@@ -249,11 +266,18 @@ describe('DialogoAjuste (GDS-20, G59: Recargo y Descuento de la cuenta del clien
       expect(el().querySelector('.efecto-saldo')).toBeNull();
     });
 
-    it('un importe con más de 2 decimales o en cero se marca apenas se escribe', async () => {
+    it('el importe lleva la máscara: 50000 se ve 50.000, el punto no entra y los decimales se cortan en 2', async () => {
       await abrir('RECARGO');
 
-      await escribir(importe(), '1,234');
-      expect(texto('#error-importe')).toBe('Usá un número con hasta 2 decimales.');
+      await escribir(importe(), '50000');
+      expect(importe().value).toBe('50.000');
+      await escribir(importe(), '1.234,567');
+      expect(importe().value).toBe('1.234,56');
+      expect(texto('#error-importe')).toBeNull();
+    });
+
+    it('un importe en cero se marca apenas se escribe', async () => {
+      await abrir('RECARGO');
 
       await escribir(importe(), '0');
       expect(texto('#error-importe')).toBe('El importe tiene que ser mayor que cero.');

@@ -36,6 +36,14 @@
     <li class="subtotal">
       <span>Total de ventas</span>&ngsp;<strong>{{ detalle().totalVentas | monto }}</strong>
     </li>
+    @if (detalle().ventasAnuladas; as anuladas) {
+      @if (anuladas.cantidad > 0) {
+        <li class="informativo">
+          <span>Ventas anuladas ({{ anuladas.cantidad }})</span>&ngsp;<strong>{{ anuladas.total | monto }}</strong>
+          <small class="nota-informativa">ya están en el total de ventas: anular no cambia la caja</small>
+        </li>
+      }
+    }
     <li class="con-nota">
       <span>Cobranzas en efectivo</span>&ngsp;<strong>{{ detalle().cobranzas.EFECTIVO | monto }}</strong>
       <small class="nota-informativa">suma al efectivo esperado</small>

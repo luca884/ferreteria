@@ -199,6 +199,24 @@ describe('Reportes de ventas', () => {
     await elegir('por-medio-pago');
 
     expect(primeraFila()).toBe('Efectivo 2 $ 300,00');
+    expect(normal(el().querySelector('.aclaracion')?.textContent)).toBe(
+      'Es lo que entró por cada forma de pago: no resta las notas de crédito, porque no devuelven plata. El total con las notas restadas está en «Resumen».',
+    );
+  });
+
+  it('por usuario aclara que las ventas incluyen las anuladas y el total ya resta las notas de crédito', async () => {
+    await crear();
+    await elegir('por-usuario');
+
+    expect(normal(el().querySelector('.aclaracion')?.textContent)).toBe(
+      '«Ventas» cuenta todas las emitidas, también las que después se anularon; el total y la ganancia ya restan las notas de crédito.',
+    );
+  });
+
+  it('el resumen no lleva aclaración: ya muestra las notas de crédito en su renglón', async () => {
+    await crear();
+
+    expect(el().querySelector('.aclaracion')).toBeNull();
   });
 
   it('por día o mes deja elegir cómo agrupar y lo manda', async () => {

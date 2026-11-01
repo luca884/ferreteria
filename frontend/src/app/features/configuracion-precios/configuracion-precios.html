@@ -82,11 +82,7 @@
           <input
             id="redondeo"
             name="redondeoMultiplo"
-            type="number"
-            inputmode="decimal"
-            step="0.01"
-            min="0"
-            autocomplete="off"
+            appImporte
             formControlName="redondeoMultiplo"
             [attr.aria-invalid]="invalido('redondeoMultiplo') ? 'true' : null"
             [attr.aria-describedby]="invalido('redondeoMultiplo') ? 'redondeo-pista redondeo-error' : 'redondeo-pista'"

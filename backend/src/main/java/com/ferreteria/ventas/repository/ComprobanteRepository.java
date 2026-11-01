@@ -3,6 +3,7 @@ package com.ferreteria.ventas.repository;
 import com.ferreteria.tenant.TenantContext;
 import com.ferreteria.tenant.TenantScopedRepository;
 import com.ferreteria.ventas.model.Comprobante;
+import com.ferreteria.ventas.model.VentasAnuladas;
 import jakarta.persistence.LockModeType;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -175,6 +176,17 @@ public interface ComprobanteRepository extends TenantScopedRepository<Comprobant
 
     default List<Comprobante> notasDeScoped(Collection<Long> ventaIds) {
         return ventaIds.isEmpty() ? List.of() : notasDe(TenantContext.requireFerreteriaId(), ventaIds);
+    }
+
+    /** Cuantas ventas de esa caja tienen nota de credito (o anulacion interna) y su total, en una sola fila. */
+    @Query("select count(n), coalesce(sum(n.total), 0) from Comprobante n, Comprobante v where n.ferreteriaId = :fid "
+            + "and n.tipo = com.ferreteria.ventas.model.TipoComprobante.NOTA_CREDITO and v.id = n.comprobanteAsociadoId "
+            + "and v.ferreteriaId = :fid and v.cajaId = :caja")
+    List<Object[]> anuladasDeLaCaja(@Param("fid") Long ferreteriaId, @Param("caja") Long cajaId);
+
+    default VentasAnuladas anuladasDeLaCajaScoped(Long cajaId) {
+        Object[] fila = anuladasDeLaCaja(TenantContext.requireFerreteriaId(), cajaId).get(0);
+        return new VentasAnuladas(((Number) fila[0]).longValue(), new BigDecimal(fila[1].toString()));
     }
 
     /** El id y el numero de esos comprobantes de la ferreteria (las ventas que anulan las NC de una pagina). */

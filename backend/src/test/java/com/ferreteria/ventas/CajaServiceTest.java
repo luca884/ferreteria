@@ -11,6 +11,7 @@ import static org.mockito.Mockito.when;
 import com.ferreteria.common.HoraArgentina;
 import com.ferreteria.ventas.model.Caja;
 import com.ferreteria.ventas.repository.CajaRepository;
+import com.ferreteria.ventas.repository.ComprobanteRepository;
 import com.ferreteria.ventas.repository.MovimientoCajaRepository;
 import com.ferreteria.tenant.TenantContext;
 import com.ferreteria.ventas.model.MedioPago;
@@ -58,11 +59,14 @@ class CajaServiceTest {
     @Mock
     ReciboRepository recibos;
 
+    @Mock
+    ComprobanteRepository comprobantes;
+
     CajaService service;
 
     @BeforeEach
     void preparar() {
-        service = new CajaService(cajas, movimientos, pagos, recibos, RELOJ);
+        service = new CajaService(cajas, movimientos, pagos, recibos, comprobantes, RELOJ);
     }
 
     private static Caja abiertaEl(LocalDateTime apertura) {

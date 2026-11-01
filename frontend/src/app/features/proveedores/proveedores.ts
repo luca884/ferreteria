@@ -92,6 +92,8 @@ export class Proveedores implements OnInit {
         this.ponerEnLista(proveedor);
         this.vaciarFormulario();
         this.guardando.set(false);
+        // El formulario estuvo inerte mientras guardaba: queda listo para el próximo alta, como con Nuevo.
+        this.enfocar('#nombre');
       },
       error: (err: unknown) => {
         this.guardando.set(false);

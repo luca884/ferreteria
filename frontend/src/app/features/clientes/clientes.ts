@@ -15,6 +15,7 @@ import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { erroresDeCampos, mensajeDe } from '../../core/api/api-error';
 import { AuthService } from '../../core/auth/auth.service';
 import { BarraAcciones } from '../../shared/barra-acciones';
+import { ImporteInput } from '../../shared/importe-input';
 import { formatearMonto } from '../../core/formato/monto';
 import { FilasElegibles } from '../../shared/filas-elegibles';
 import { FormaPago } from '../formas-pago/forma-pago.models';
@@ -51,7 +52,7 @@ const sinVacios = (texto: string): string | undefined => texto.trim() || undefin
  */
 @Component({
   selector: 'app-clientes',
-  imports: [ReactiveFormsModule, RouterLink, BarraAcciones],
+  imports: [ReactiveFormsModule, RouterLink, BarraAcciones, ImporteInput],
   templateUrl: './clientes.html',
   styleUrl: './clientes.css',
 })
@@ -248,6 +249,8 @@ export class Clientes implements OnInit {
   private terminarGuardado(guardado: Cliente): void {
     this.vaciarFormulario();
     this.guardando.set(false);
+    // El formulario estuvo inerte mientras guardaba: queda listo para el próximo alta, como con Nuevo.
+    this.enfocar('#razon-social');
     this.aviso.set(`Se guardó «${guardado.razonSocial}».`);
     this.cargar(this.pagina().page);
   }

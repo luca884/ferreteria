@@ -85,6 +85,10 @@
         @if (r.datos.filas.length === 0) {
           <p class="ayuda estado-vacio" role="status">No hubo ventas entre esas fechas.</p>
         } @else {
+          <p class="ayuda aclaracion">
+            «Ventas» cuenta todas las emitidas, también las que después se anularon; el total y la ganancia ya restan las
+            notas de crédito.
+          </p>
           <table>
             <caption class="sr-only">Ventas por usuario, de mayor a menor total.</caption>
             <thead>
@@ -112,6 +116,10 @@
         @if (r.datos.filas.length === 0) {
           <p class="ayuda estado-vacio" role="status">No hubo ventas entre esas fechas.</p>
         } @else {
+          <p class="ayuda aclaracion">
+            Es lo que entró por cada forma de pago: no resta las notas de crédito, porque no devuelven plata. El total con
+            las notas restadas está en «Resumen».
+          </p>
           <table>
             <caption class="sr-only">Ventas por forma de pago, de mayor a menor monto.</caption>
             <thead>

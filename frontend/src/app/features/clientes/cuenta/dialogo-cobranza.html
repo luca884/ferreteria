@@ -29,10 +29,7 @@
       <input
         #campoTotal
         id="total-cobranza"
-        type="text"
-        inputmode="decimal"
-        autocomplete="off"
-        spellcheck="false"
+        appImporte
         [readOnly]="congelado()"
         [attr.aria-invalid]="errorTotal() ? 'true' : null"
         [attr.aria-describedby]="errorTotal() ? 'error-total' : null"
@@ -86,10 +83,7 @@
               <td class="num">{{ f.pendiente | monto }}</td>
               <td class="num">
                 <input
-                  type="text"
-                  inputmode="decimal"
-                  autocomplete="off"
-                  spellcheck="false"
+                  appImporte
                   placeholder="0,00"
                   [readOnly]="congelado()"
                   [attr.data-comprobante]="f.comprobanteId"

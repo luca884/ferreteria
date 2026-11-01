@@ -160,7 +160,8 @@
     }
   </div>
 
-  <form class="alta panel" [formGroup]="form" (ngSubmit)="guardar()" novalidate>
+  <!-- Mientras guarda no se escribe: la respuesta vacía el formulario y lo escrito se perdería (hallazgos T3). -->
+  <form class="alta panel" [formGroup]="form" (ngSubmit)="guardar()" novalidate [attr.inert]="guardando() ? '' : null">
     <h2>{{ editando() === null ? 'Nuevo cliente' : 'Editar cliente' }}</h2>
     <div class="campo">
       <label for="razon-social">Razón social</label>
@@ -303,11 +304,7 @@
           <input
             id="limite-cuenta"
             name="limiteCuenta"
-            type="number"
-            inputmode="decimal"
-            step="0.01"
-            min="0"
-            autocomplete="off"
+            appImporte
             formControlName="limiteCuenta"
             [attr.aria-invalid]="errorLimite() ? 'true' : null"
             [attr.aria-describedby]="errorLimite() ? 'limite-cuenta-error' : 'limite-cuenta-pista'"

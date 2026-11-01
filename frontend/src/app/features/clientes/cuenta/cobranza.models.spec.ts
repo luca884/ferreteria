@@ -116,11 +116,12 @@ describe('cobranza.models', () => {
   });
 
   describe('centavosATexto', () => {
-    it('escribe los centavos como un importe editable, con coma y 2 decimales (sin separador de miles)', () => {
+    it('escribe los centavos como un importe editable, con puntos de miles, coma y 2 decimales', () => {
       expect(centavosATexto(30050)).toBe('300,50');
       expect(centavosATexto(5)).toBe('0,05');
       expect(centavosATexto(0)).toBe('0,00');
-      expect(centavosATexto(123456789)).toBe('1234567,89');
+      expect(centavosATexto(123456789)).toBe('1.234.567,89');
+      expect(centavosATexto(100000)).toBe('1.000,00');
     });
   });
 
@@ -185,6 +186,8 @@ describe('cobranza.models', () => {
     it('leerImporte lee hasta 2 decimales en centavos; null si no es un número o es negativo', () => {
       expect(leerImporte('300,50')).toBe(30050);
       expect(leerImporte('0')).toBe(0);
+      expect(leerImporte('50.000')).toBe(5000000);
+      expect(leerImporte('1.234,5')).toBe(123450);
       expect(leerImporte('1,234')).toBeNull();
       expect(leerImporte('-1')).toBeNull();
       expect(leerImporte('x')).toBeNull();

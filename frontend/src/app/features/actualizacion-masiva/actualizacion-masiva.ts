@@ -20,6 +20,7 @@ import { FormControl, FormGroup, ReactiveFormsModule } from '@angular/forms';
 import { erroresDeCampos } from '../../core/api/api-error';
 import { AuthService } from '../../core/auth/auth.service';
 import { BarraAcciones } from '../../shared/barra-acciones';
+import { ImporteInput } from '../../shared/importe-input';
 import { Proveedor } from '../proveedores/proveedor.models';
 import { ProveedoresService } from '../proveedores/proveedores.service';
 import { Rubro } from '../rubros/rubro.models';
@@ -43,15 +44,12 @@ const MENSAJE_CONFLICTO =
 /** Errores con un motivo que el Dueño puede corregir: se muestra el mensaje del servidor. */
 const ESTADOS_CON_MENSAJE = [400, 403, 404, 409];
 
-/** Un número con coma o punto decimal y signo opcional; nada de notación científica, hexa ni miles. */
-const NUMERO = /^[+-]?\d+(?:[.,]\d+)?$/;
-
 /** Los modos que cambian el precio final y dejan a los artículos con precio manual (CU-14). */
 const MODOS_DE_PRECIO: readonly ModoMasivo[] = ['PRECIO_PORCENTAJE', 'PRECIO_MONTO'];
 
 @Component({
   selector: 'app-actualizacion-masiva',
-  imports: [ReactiveFormsModule, DecimalPipe, MontoPipe, BarraAcciones],
+  imports: [ReactiveFormsModule, DecimalPipe, MontoPipe, BarraAcciones, ImporteInput],
   templateUrl: './actualizacion-masiva.html',
   styleUrl: './actualizacion-masiva.css',
 })
@@ -79,7 +77,7 @@ export class ActualizacionMasiva implements OnInit {
   /** Mensajes por campo de un 400 de validación del backend; si hay, se muestran en vez de `error`. */
   protected readonly erroresCampos = signal<string[]>([]);
 
-  /** Filtro, modo y valor. El valor es texto: acepta coma o punto decimal y se envía como número. */
+  /** Filtro, modo y valor. El valor lo escribe la máscara de importes (hasta 2 decimales y signo) y es un número o null. */
   protected readonly form = new FormGroup({
     proveedorId: new FormControl<number | null>(null),
     rubroId: new FormControl<number | null>(null),
@@ -87,7 +85,7 @@ export class ActualizacionMasiva implements OnInit {
     q: new FormControl('', { nonNullable: true }),
     incluirInactivos: new FormControl(false, { nonNullable: true }),
     modo: new FormControl<ModoMasivo | null>(null),
-    valor: new FormControl('', { nonNullable: true }),
+    valor: new FormControl<number | null>(null),
   });
 
   /**
@@ -141,7 +139,7 @@ export class ActualizacionMasiva implements OnInit {
     const f = this.formulario();
     return (
       (f.modo ?? null) !== null &&
-      parsearValor(f.valor ?? '') !== null &&
+      f.valor !== null &&
       this.errorDelValor() === null &&
       !this.generando() &&
       !this.aplicando()
@@ -151,7 +149,7 @@ export class ActualizacionMasiva implements OnInit {
   /** Mensaje junto al campo cuando el número escrito está fuera de rango (lo mismo que valida el backend). */
   protected readonly errorDelValor = computed(() => {
     const f = this.formulario();
-    const valor = parsearValor(f.valor ?? '');
+    const valor = f.valor;
     if (valor === null || f.modo === null || f.modo === undefined) return null;
     if (f.modo === 'COSTO_MONTO' || f.modo === 'PRECIO_MONTO') return valor === 0 ? 'El monto no puede ser cero.' : null;
     if (f.modo === 'MARGEN') {
@@ -307,7 +305,7 @@ export class ActualizacionMasiva implements OnInit {
         this.descartarVistaPrevia();
         // Operación y porcentaje se limpian (el filtro queda): no se puede aplicar dos veces por error.
         // El cambio del formulario limpia los mensajes; el resultado se muestra recién después.
-        this.form.patchValue({ modo: null, valor: '' });
+        this.form.patchValue({ modo: null, valor: null });
         this.resultado.set(resultado);
       },
       error: (err: unknown) => {
@@ -391,7 +389,7 @@ export class ActualizacionMasiva implements OnInit {
   /** El pedido tal como lo escribió el Dueño; null si falta el modo o el valor no es un número. */
   private armarPedido(): PedidoMasivo | null {
     const f = this.form.getRawValue();
-    const valor = parsearValor(f.valor);
+    const valor = f.valor;
     if (f.modo === null || valor === null) return null;
     return {
       proveedorId: f.proveedorId,
@@ -413,12 +411,6 @@ function filtroVacio(pedido: PedidoMasivo): boolean {
     (pedido.importacionId ?? null) === null &&
     pedido.q === null
   );
-}
-
-/** El valor escrito como número (coma o punto decimal); null si no es un número. */
-function parsearValor(texto: string): number | null {
-  const limpio = texto.trim();
-  return NUMERO.test(limpio) ? Number(limpio.replace(',', '.')) : null;
 }
 
 /** Sin `emitEvent`: soltar la selección no debe descartar la vista previa ni borrar el mensaje de error. */

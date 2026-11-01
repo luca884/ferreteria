@@ -123,9 +123,7 @@
           <td class="num">
             <input
               [name]="'costo-' + i"
-              type="text"
-              inputmode="decimal"
-              autocomplete="off"
+              appImporte
               [attr.aria-label]="'Costo de ' + r.descripcion"
               [value]="r.costo"
               (input)="editar(i, 'costo', $any($event.target).value)"

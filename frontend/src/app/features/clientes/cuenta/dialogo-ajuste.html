@@ -31,10 +31,7 @@
         <input
           #campoImporte
           id="importe-ajuste"
-          type="text"
-          inputmode="decimal"
-          autocomplete="off"
-          spellcheck="false"
+          appImporte
           [readOnly]="congelado()"
           [attr.aria-invalid]="errorImporte() ? 'true' : null"
           [attr.aria-describedby]="errorImporte() ? 'error-importe' : null"
@@ -91,10 +88,7 @@
                   <td class="num">{{ f.pendiente | monto }}</td>
                   <td class="num">
                     <input
-                      type="text"
-                      inputmode="decimal"
-                      autocomplete="off"
-                      spellcheck="false"
+                      appImporte
                       placeholder="0,00"
                       [readOnly]="congelado()"
                       [attr.data-comprobante]="f.comprobanteId"

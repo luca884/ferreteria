@@ -247,6 +247,29 @@ describe('ArticuloForm', () => {
     return (campo.options[campo.selectedIndex]?.textContent ?? '').trim();
   };
 
+  /** Lo que hace el navegador al teclear: cambia el valor, mueve el cursor y avisa con `input`. */
+  async function teclear(id: string, texto: string) {
+    const campo = input(id);
+    for (const letra of texto) {
+      const cursor = campo.selectionStart ?? campo.value.length;
+      campo.value = campo.value.slice(0, cursor) + letra + campo.value.slice(campo.selectionEnd ?? cursor);
+      campo.setSelectionRange(cursor + 1, cursor + 1);
+      campo.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+    await refrescar();
+  }
+
+  /** El formulario por dentro: la máscara no deja teclear un negativo ni más de 2 decimales en los importes. */
+  const formulario = () =>
+    fixture.componentInstance as unknown as {
+      form: {
+        controls: {
+          costo: { setValue(v: number | null): void };
+          ajustesPrecio: { at(i: number): { controls: { valor: { setValue(v: number | null): void } } } };
+        };
+      };
+    };
+
   async function enviar() {
     el().querySelector('form')!.dispatchEvent(new Event('submit'));
     await refrescar();
@@ -328,7 +351,7 @@ describe('ArticuloForm', () => {
       await escribir('codigoBarras', ' 7790001000012 ');
       await escribir('codigoProveedor', 'AB-12');
       await escribir('descripcion', '  Tornillo hexagonal 1/4 ');
-      await escribir('costo', '99.5');
+      await escribir('costo', '99,5');
       await escribir('margen', '35');
       await escribir('stockMinimo', '4.5');
       await escribir('ubicacion', ' Pasillo 2 ');
@@ -356,6 +379,19 @@ describe('ArticuloForm', () => {
         activo: true,
         ajustesPrecio: [],
       });
+    });
+
+    it('el costo lleva la máscara de importes: 50000 se ve 50.000 y se manda 50000; el punto no entra', async () => {
+      await crearComponente();
+      await completarMinimos();
+
+      input('costo').value = '';
+      await teclear('costo', '5.0000');
+      expect(input('costo').value).toBe('50.000');
+      expect(input('costo').type).toBe('text');
+      await enviar();
+
+      expect(servicio.crear).toHaveBeenCalledWith(expect.objectContaining({ costo: 50000 }));
     });
 
     it('respeta un margen propio de 0 (no lo confunde con heredado)', async () => {
@@ -416,7 +452,7 @@ describe('ArticuloForm', () => {
       await crearComponente();
       await completarMinimos();
 
-      await escribir('costo', '-1');
+      formulario().form.controls.costo.setValue(-1);
       await enviar();
       await escribir('costo', '100');
       await escribir('margen', '-5');
@@ -1482,14 +1518,27 @@ describe('ArticuloForm', () => {
 
         await tildar('precioManual', true);
 
-        expect(input('precioFinalManual').value).toBe('1234.5');
+        expect(input('precioFinalManual').value).toBe('1.234,50');
+      });
+
+      it('el precio manual lleva la máscara de importes: 50000 se ve 50.000 y se manda 50000', async () => {
+        await crearComponente();
+        await completarMinimos();
+        await tildar('precioManual', true);
+        input('precioFinalManual').value = '';
+
+        await teclear('precioFinalManual', '50000');
+        expect(input('precioFinalManual').value).toBe('50.000');
+        await enviar();
+
+        expect(enviadoAlta()).toMatchObject({ precioManual: true, precioFinal: 50000 });
       });
 
       it('en el alta manda precioManual y el precio escrito', async () => {
         await crearComponente();
         await completarMinimos();
         await tildar('precioManual', true);
-        await escribir('precioFinalManual', '2500.5');
+        await escribir('precioFinalManual', '2500,5');
 
         await enviar();
 
@@ -1500,7 +1549,7 @@ describe('ArticuloForm', () => {
         await crearComponente({ id: '5', articulo: manual() });
 
         expect(input('precioManual').checked).toBe(true);
-        expect(input('precioFinalManual').value).toBe('2000');
+        expect(input('precioFinalManual').value).toBe('2.000');
 
         await enviar();
 
@@ -1640,7 +1689,7 @@ describe('ArticuloForm', () => {
         await agregar();
         await ajuste(0, ' Flete ', '%', '10');
         await agregar();
-        await ajuste(1, '', '$', '-5.5');
+        await ajuste(1, '', '$', '-5,5');
 
         await enviar();
 
@@ -1648,6 +1697,26 @@ describe('ArticuloForm', () => {
           { nombre: 'Flete', tipo: 'PORCENTAJE', valor: 10 },
           { nombre: null, tipo: 'MONTO', valor: -5.5 },
         ]);
+      });
+
+      it('el valor del ajuste lleva la máscara en ambos modos: -1500,5 se ve -1.500,5 y se manda -1500.5', async () => {
+        await crearComponente();
+        await completarMinimos();
+        await agregar();
+
+        await elegir('ajuste-precio-tipo-0', '$');
+        await teclear('ajuste-precio-valor-0', '-1500,5');
+        expect(input('ajuste-precio-valor-0').value).toBe('-1.500,5');
+        await elegir('ajuste-precio-tipo-0', '%');
+        input('ajuste-precio-valor-0').value = '';
+        await teclear('ajuste-precio-valor-0', '-12,345');
+        expect(input('ajuste-precio-valor-0').value).toBe('-12,34');
+        await elegir('ajuste-precio-tipo-0', '$');
+        input('ajuste-precio-valor-0').value = '';
+        await teclear('ajuste-precio-valor-0', '-1500,5');
+        await enviar();
+
+        expect(enviadoAlta().ajustesPrecio).toEqual([{ nombre: null, tipo: 'MONTO', valor: -1500.5 }]);
       });
 
       it('abre con los ajustes del artículo y quitarlos todos manda la lista vacía (borra)', async () => {
@@ -1684,7 +1753,9 @@ describe('ArticuloForm', () => {
 
         expect(texto('#ajuste-precio-valor-0-error')).toBe('El valor del ajuste es obligatorio.');
 
-        await escribir('ajuste-precio-valor-0', '1.005');
+        formulario().form.controls.ajustesPrecio.at(0).controls.valor.setValue(1.005);
+        input('ajuste-precio-valor-0').dispatchEvent(new Event('blur'));
+        await refrescar();
         expect(texto('#ajuste-precio-valor-0-error')).toBe('El valor del ajuste admite hasta 2 decimales.');
 
         await escribir('ajuste-precio-valor-0', '1000.01');

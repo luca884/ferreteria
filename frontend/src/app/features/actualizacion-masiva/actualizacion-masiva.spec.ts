@@ -308,7 +308,7 @@ describe('ActualizacionMasiva', () => {
       expect(boton().disabled).toBe(false);
     });
 
-    it.each(['abc', '', '   ', '1,2,3', '12,5%', '1.234,5', '0x10', 'Infinity'])(
+    it.each(['abc', '', '   ', 'Infinity'])(
       'un valor que no es un número (%j) deja el botón deshabilitado',
       async (valor) => {
         await crearComponente();
@@ -356,7 +356,6 @@ describe('ActualizacionMasiva', () => {
 
     it.each([
       ['12,5', 12.5],
-      ['12.5', 12.5],
       ['-20', -20],
       ['  7  ', 7],
       ['0', 0],
@@ -370,6 +369,33 @@ describe('ActualizacionMasiva', () => {
       const pedido = servicio.vistaPrevia.mock.calls[0][0];
       expect(typeof pedido.valor).toBe('number');
       expect(pedido.valor).toBe(esperado);
+    });
+
+    it.each([
+      ['50000', '50.000', 50000],
+      ['12.5', '125', 125],
+      ['1,2,3', '1,23', 1.23],
+      ['12,5%', '12,5', 12.5],
+      ['0x10', '10', 10],
+      ['-1500,5', '-1.500,5', -1500.5],
+    ])('el valor lleva la máscara de importes: al escribir %j se ve %j y se envía %f', async (escrito, visto, esperado) => {
+      await crearComponente();
+      await completar('Sumar o restar un monto al costo', escrito);
+
+      expect(q<HTMLInputElement>('#valor').value).toBe(visto);
+      await generar();
+
+      expect(servicio.vistaPrevia).toHaveBeenCalledWith(expect.objectContaining({ modo: 'COSTO_MONTO', valor: esperado }));
+    });
+
+    it('en los modos de porcentaje y de margen también hay máscara: dos decimales y el menos', async () => {
+      await crearComponente();
+      await elegir('#modo', 'Cambiar el precio final en %');
+
+      await escribir('#valor', '-10,555');
+
+      expect(q<HTMLInputElement>('#valor').value).toBe('-10,55');
+      expect(q<HTMLInputElement>('#valor').type).toBe('text');
     });
 
     it('envía el proveedor, el rubro, el texto sin espacios sobrantes y la casilla marcada', async () => {
