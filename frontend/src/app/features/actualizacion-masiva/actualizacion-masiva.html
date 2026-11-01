@@ -262,11 +262,11 @@
         }
 
         <h2 class="titulo-confirmar">4. Confirmar</h2>
-        @if (confirmandoTodo()) {
+        @if (confirmando(); as alcance) {
           <!-- No modal: toma el foco al abrirse y Esc la cancela, devolviéndolo al botón de actualizar. -->
           <section
             #confirmacionEl
-            class="confirmacion-total"
+            class="confirmacion"
             role="alertdialog"
             aria-labelledby="titulo-confirmacion"
             aria-describedby="detalle-confirmacion"
@@ -278,11 +278,15 @@
               {{ plural(vp.conteos.modificados, 'artículo', 'artículos') }}
             </h3>
             <p id="detalle-confirmacion">
-              No elegiste ningún filtro: el cambio alcanza a todo el catálogo. Revisá la vista previa antes
-              de seguir.
+              @if (alcance === 'todo') {
+                No elegiste ningún filtro: el cambio alcanza a todo el catálogo.
+              }
+              Revisá la vista previa antes de seguir. Esta acción no se puede deshacer.
             </p>
             <div class="fila">
-              <button type="button" class="confirmar-todo primario" (click)="confirmar()">Sí, modificar todo</button>
+              <button type="button" class="confirmar-si primario" (click)="confirmar()">
+                {{ alcance === 'todo' ? 'Sí, modificar todo' : 'Sí, actualizar' }}
+              </button>
               <button type="button" class="secundario cancelar" (click)="cancelarConfirmacion()">
                 Cancelar
               </button>

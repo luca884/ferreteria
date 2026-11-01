@@ -70,8 +70,11 @@ export class ActualizacionMasiva implements OnInit {
   private readonly pedidoVigente = signal<PedidoMasivo | null>(null);
   protected readonly generando = signal(false);
   protected readonly aplicando = signal(false);
-  /** Con el filtro vacío, el primer clic abre una segunda confirmación y recién el segundo aplica. */
-  protected readonly confirmandoTodo = signal(false);
+  /**
+   * El primer clic abre la confirmación (el cambio no se puede deshacer) y recién el segundo aplica.
+   * `todo`: sin filtro, alcanza a todo el catálogo; `filtrado`: alcanza solo a lo filtrado.
+   */
+  protected readonly confirmando = signal<'todo' | 'filtrado' | null>(null);
   protected readonly resultado = signal<ResultadoMasivo | null>(null);
   protected readonly error = signal<string | null>(null);
   /** Mensajes por campo de un 400 de validación del backend; si hay, se muestran en vez de `error`. */
@@ -284,19 +287,19 @@ export class ActualizacionMasiva implements OnInit {
   }
 
   /**
-   * Aplica lo que muestra la vista previa. Con el filtro vacío el primer clic solo abre la segunda
-   * confirmación (alcanza a todo el catálogo). Con `modificados` en 0 no hay nada que aplicar.
+   * Aplica lo que muestra la vista previa. El primer clic solo abre la confirmación; con el filtro
+   * vacío avisa que alcanza a todo el catálogo. Con `modificados` en 0 no hay nada que aplicar.
    */
   protected confirmar(): void {
     const vistaPrevia = this.vistaPrevia();
     const pedido = this.pedidoVigente();
     if (this.aplicando() || vistaPrevia === null || pedido === null) return;
     if (vistaPrevia.conteos.modificados === 0) return;
-    if (filtroVacio(pedido) && !this.confirmandoTodo()) {
-      this.confirmandoTodo.set(true);
+    if (this.confirmando() === null) {
+      this.confirmando.set(filtroVacio(pedido) ? 'todo' : 'filtrado');
       return;
     }
-    this.confirmandoTodo.set(false);
+    this.confirmando.set(null);
     this.limpiarMensajes();
     this.aplicando.set(true);
     this.service.aplicar({ ...pedido, huella: vistaPrevia.huella }).subscribe({
@@ -317,9 +320,9 @@ export class ActualizacionMasiva implements OnInit {
     });
   }
 
-  /** Cierra la segunda confirmación y el foco vuelve al botón que la abrió (reaparece en el próximo render). */
+  /** Cierra la confirmación y el foco vuelve al botón que la abrió (reaparece en el próximo render). */
   protected cancelarConfirmacion(): void {
-    this.confirmandoTodo.set(false);
+    this.confirmando.set(null);
     afterNextRender(() => this.confirmarEl()?.nativeElement.focus(), { injector: this.injector });
   }
 
@@ -334,7 +337,7 @@ export class ActualizacionMasiva implements OnInit {
   private descartarVistaPrevia(): void {
     this.vistaPrevia.set(null);
     this.pedidoVigente.set(null);
-    this.confirmandoTodo.set(false);
+    this.confirmando.set(null);
   }
 
   /** Carga (o recarga) los dos selectores; un proveedor o rubro elegido que ya no existe vuelve a "Todos". */

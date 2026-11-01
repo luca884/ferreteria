@@ -972,7 +972,7 @@ describe('ActualizacionMasiva', () => {
     const botonConfirmar = () => q<HTMLButtonElement>('button.confirmar');
     const botonPorTexto = (etiqueta: string) =>
       Array.from(el().querySelectorAll('button')).find((b) => b.textContent?.trim() === etiqueta);
-    const hayConfirmacion = () => el().querySelector('.confirmacion-total') !== null;
+    const hayConfirmacion = () => el().querySelector('.confirmacion') !== null;
 
     /** Filtro con proveedor por defecto (no vacío); `preparar` lo reemplaza para probar los demás filtros. */
     async function conVistaPrevia(
@@ -986,8 +986,16 @@ describe('ActualizacionMasiva', () => {
       await generar();
     }
 
-    async function confirmar() {
+    /** Primer clic: abre la confirmación, todavía no aplica. */
+    async function abrirConfirmacion() {
       botonConfirmar().click();
+      await asentar();
+    }
+
+    /** Recorrido completo: abre la confirmación y la acepta. */
+    async function confirmar() {
+      await abrirConfirmacion();
+      q<HTMLButtonElement>('.confirmar-si').click();
       await asentar();
     }
 
@@ -1017,15 +1025,45 @@ describe('ActualizacionMasiva', () => {
     });
 
     describe('con un filtro que no está vacío', () => {
-      it('un clic aplica directamente, con la huella de la vista previa', async () => {
+      it('un clic abre la confirmación con el aviso de que no se puede deshacer y todavía no aplica', async () => {
+        await conVistaPrevia(vistaPrevia(3));
+
+        await abrirConfirmacion();
+
+        expect(servicio.aplicar).not.toHaveBeenCalled();
+        expect(hayConfirmacion()).toBe(true);
+        expect(texto('.confirmacion h3')).toBe('Vas a modificar 3 artículos');
+        expect(texto('.confirmacion p')).toBe(
+          'Revisá la vista previa antes de seguir. Esta acción no se puede deshacer.',
+        );
+        expect(botonPorTexto('Sí, actualizar')).toBeDefined();
+        expect(botonPorTexto('Cancelar')).toBeDefined();
+      });
+
+      it('"Sí, actualizar" aplica una sola vez, con la huella de la vista previa', async () => {
         await conVistaPrevia(vistaPrevia(3));
         servicio.aplicar.mockReturnValue(of(resultado(3)));
+        await abrirConfirmacion();
 
-        await confirmar();
+        botonPorTexto('Sí, actualizar')!.click();
+        await asentar();
 
         expect(servicio.aplicar).toHaveBeenCalledTimes(1);
         expect(servicio.aplicar).toHaveBeenCalledWith(pedidoConProveedor);
         expect(hayConfirmacion()).toBe(false);
+      });
+
+      it('"Cancelar" cierra la confirmación sin aplicar y el foco vuelve al botón de actualizar', async () => {
+        await conVistaPrevia(vistaPrevia(3));
+        await abrirConfirmacion();
+
+        botonPorTexto('Cancelar')!.click();
+        await asentar();
+
+        expect(servicio.aplicar).not.toHaveBeenCalled();
+        expect(hayConfirmacion()).toBe(false);
+        expect(el().querySelector('.vista-previa')).not.toBeNull();
+        expect(document.activeElement).toBe(botonConfirmar());
       });
 
       it('aplica con la huella de la vista previa vigente y no con una vieja', async () => {
@@ -1099,13 +1137,15 @@ describe('ActualizacionMasiva', () => {
         expect(el().querySelector('.resumen')).toBeNull();
       });
 
-      it('dos clics rápidos mandan una sola solicitud y el botón dice "Actualizando…"', async () => {
+      it('dos clics rápidos en "Sí, actualizar" mandan una sola solicitud y el botón dice "Actualizando…"', async () => {
         await conVistaPrevia(vistaPrevia(3));
         const enVuelo = new Subject<ResultadoMasivo>();
         servicio.aplicar.mockReturnValue(enVuelo);
+        await abrirConfirmacion();
+        const si = botonPorTexto('Sí, actualizar')!;
 
-        botonConfirmar().click();
-        botonConfirmar().click();
+        si.click();
+        si.click();
         await asentar();
 
         expect(servicio.aplicar).toHaveBeenCalledTimes(1);
@@ -1180,13 +1220,13 @@ describe('ActualizacionMasiva', () => {
       it('un clic abre "Vas a modificar N artículos" y todavía no aplica', async () => {
         await conVistaPrevia(vistaPrevia(120, 130), sinFiltro);
 
-        await confirmar();
+        await abrirConfirmacion();
 
         expect(servicio.aplicar).not.toHaveBeenCalled();
         expect(hayConfirmacion()).toBe(true);
-        expect(texto('.confirmacion-total h3')).toBe('Vas a modificar 120 artículos');
-        expect(texto('.confirmacion-total p')).toBe(
-          'No elegiste ningún filtro: el cambio alcanza a todo el catálogo. Revisá la vista previa antes de seguir.',
+        expect(texto('.confirmacion h3')).toBe('Vas a modificar 120 artículos');
+        expect(texto('.confirmacion p')).toBe(
+          'No elegiste ningún filtro: el cambio alcanza a todo el catálogo. Revisá la vista previa antes de seguir. Esta acción no se puede deshacer.',
         );
         expect(botonPorTexto('Sí, modificar todo')).toBeDefined();
         expect(botonPorTexto('Cancelar')).toBeDefined();
@@ -1195,15 +1235,15 @@ describe('ActualizacionMasiva', () => {
       it('con un solo artículo dice "Vas a modificar 1 artículo"', async () => {
         await conVistaPrevia(vistaPrevia(1, 4), sinFiltro);
 
-        await confirmar();
+        await abrirConfirmacion();
 
-        expect(texto('.confirmacion-total h3')).toBe('Vas a modificar 1 artículo');
+        expect(texto('.confirmacion h3')).toBe('Vas a modificar 1 artículo');
       });
 
       it('"Sí, modificar todo" aplica una sola vez y muestra "Se actualizaron 120 artículos."', async () => {
         await conVistaPrevia(vistaPrevia(120), sinFiltro);
         servicio.aplicar.mockReturnValue(of(resultado(120)));
-        await confirmar();
+        await abrirConfirmacion();
 
         botonPorTexto('Sí, modificar todo')!.click();
         await asentar();
@@ -1226,7 +1266,7 @@ describe('ActualizacionMasiva', () => {
       it('dos clics rápidos en "Sí, modificar todo" mandan una sola solicitud', async () => {
         await conVistaPrevia(vistaPrevia(120), sinFiltro);
         servicio.aplicar.mockReturnValue(new Subject<ResultadoMasivo>());
-        await confirmar();
+        await abrirConfirmacion();
         const si = botonPorTexto('Sí, modificar todo')!;
 
         si.click();
@@ -1240,7 +1280,7 @@ describe('ActualizacionMasiva', () => {
 
       it('"Cancelar" cierra la confirmación sin aplicar y conserva la vista previa', async () => {
         await conVistaPrevia(vistaPrevia(120), sinFiltro);
-        await confirmar();
+        await abrirConfirmacion();
 
         botonPorTexto('Cancelar')!.click();
         await asentar();
@@ -1254,9 +1294,9 @@ describe('ActualizacionMasiva', () => {
       it('al abrirse la confirmación toma el foco y se describe con su explicación', async () => {
         await conVistaPrevia(vistaPrevia(120), sinFiltro);
 
-        await confirmar();
+        await abrirConfirmacion();
 
-        const seccion = q('.confirmacion-total');
+        const seccion = q('.confirmacion');
         expect(document.activeElement).toBe(seccion);
         const id = seccion.getAttribute('aria-describedby')!;
         expect(el().querySelector(`[id="${id}"]`)!.textContent).toContain('No elegiste ningún filtro');
@@ -1264,9 +1304,9 @@ describe('ActualizacionMasiva', () => {
 
       it('Esc cancela la confirmación y el foco vuelve al botón de actualizar', async () => {
         await conVistaPrevia(vistaPrevia(120), sinFiltro);
-        await confirmar();
+        await abrirConfirmacion();
 
-        q('.confirmacion-total').dispatchEvent(
+        q('.confirmacion').dispatchEvent(
           new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }),
         );
         await asentar();
@@ -1278,11 +1318,11 @@ describe('ActualizacionMasiva', () => {
 
       it('después de cancelar, un nuevo clic vuelve a pedir la confirmación', async () => {
         await conVistaPrevia(vistaPrevia(120), sinFiltro);
-        await confirmar();
+        await abrirConfirmacion();
         botonPorTexto('Cancelar')!.click();
         await asentar();
 
-        await confirmar();
+        await abrirConfirmacion();
 
         expect(hayConfirmacion()).toBe(true);
         expect(servicio.aplicar).not.toHaveBeenCalled();
@@ -1292,7 +1332,7 @@ describe('ActualizacionMasiva', () => {
         for (const cambiar of [() => elegir('#rubro', 'Pinturas'), () => escribir('#valor', '12')]) {
           TestBed.resetTestingModule();
           await conVistaPrevia(vistaPrevia(120), sinFiltro);
-          await confirmar();
+          await abrirConfirmacion();
           expect(hayConfirmacion()).toBe(true);
 
           await cambiar();
@@ -1321,14 +1361,15 @@ describe('ActualizacionMasiva', () => {
         ['solo el rubro', () => elegir('#rubro', 'Pinturas'), false],
       ];
 
-      it.each(filtros)('%s', async (_nombre, preparar, pideConfirmacion) => {
+      it.each(filtros)('%s', async (_nombre, preparar, avisaTodoElCatalogo) => {
         await conVistaPrevia(vistaPrevia(3), preparar);
-        servicio.aplicar.mockReturnValue(of(resultado(3)));
 
-        await confirmar();
+        await abrirConfirmacion();
 
-        expect(hayConfirmacion()).toBe(pideConfirmacion);
-        expect(servicio.aplicar).toHaveBeenCalledTimes(pideConfirmacion ? 0 : 1);
+        expect(hayConfirmacion()).toBe(true);
+        expect(texto('.confirmacion p').includes('todo el catálogo')).toBe(avisaTodoElCatalogo);
+        expect(botonPorTexto(avisaTodoElCatalogo ? 'Sí, modificar todo' : 'Sí, actualizar')).toBeDefined();
+        expect(servicio.aplicar).not.toHaveBeenCalled();
       });
     });
   });
@@ -1371,6 +1412,8 @@ describe('ActualizacionMasiva', () => {
     async function aplicarConError(err: unknown) {
       servicio.aplicar.mockReturnValue(throwError(() => err));
       botonConfirmar().click();
+      await asentar();
+      q<HTMLButtonElement>('.confirmar-si').click();
       await asentar();
     }
 
@@ -1521,14 +1564,14 @@ describe('ActualizacionMasiva', () => {
         await generar();
         botonConfirmar().click();
         await asentar();
-        expect(el().querySelector('.confirmacion-total')).not.toBeNull();
+        expect(el().querySelector('.confirmacion')).not.toBeNull();
         servicio.aplicar.mockReturnValue(throwError(() => errorHttp(409, MENSAJE_409)));
 
-        q<HTMLButtonElement>('.confirmar-todo').click();
+        q<HTMLButtonElement>('.confirmar-si').click();
         await asentar();
 
         expect(alerta().textContent).toContain(MENSAJE_409);
-        expect(el().querySelector('.confirmacion-total')).toBeNull();
+        expect(el().querySelector('.confirmacion')).toBeNull();
         expect(el().querySelector('.vista-previa')).toBeNull();
         expect(servicio.aplicar).toHaveBeenCalledTimes(1);
       });
@@ -1540,6 +1583,8 @@ describe('ActualizacionMasiva', () => {
         servicio.aplicar.mockReturnValue(of({ conteos: vistaPrevia.conteos, entradasDeHistorial: 3 }));
 
         botonConfirmar().click();
+        await asentar();
+        q<HTMLButtonElement>('.confirmar-si').click();
         await asentar();
 
         expect(el().querySelector('[role="alert"]')).toBeNull();
@@ -1652,6 +1697,8 @@ describe('ActualizacionMasiva', () => {
       await completar('Cambiar el costo en %', '10');
       await generar();
       q<HTMLButtonElement>('button.confirmar').click();
+      await asentar();
+      q<HTMLButtonElement>('.confirmar-si').click();
       await asentar();
     }
 
@@ -1982,6 +2029,8 @@ describe('ActualizacionMasiva', () => {
 
         q<HTMLButtonElement>('button.confirmar').click();
         await asentar();
+        q<HTMLButtonElement>('.confirmar-si').click();
+        await asentar();
 
         expect(servicio.aplicar).toHaveBeenCalledWith(
           expect.objectContaining({ modo: 'COSTO_MONTO', valor: 5, huella: 'huella-1' }),
@@ -2194,6 +2243,8 @@ describe('ActualizacionMasiva', () => {
 
       q<HTMLButtonElement>('button.confirmar').click();
       await asentar();
+      q<HTMLButtonElement>('.confirmar-si').click();
+      await asentar();
 
       expect(servicio.aplicar).toHaveBeenCalledWith(
         expect.objectContaining({ modo: 'PRECIO_PORCENTAJE', valor: 12, huella: 'huella-1' }),
@@ -2331,7 +2382,7 @@ describe('ActualizacionMasiva', () => {
       expect(el().querySelector('button.confirmar')).toBeNull();
     });
 
-    it('con solo la importación elegida NO pide la segunda confirmación de «todo el catálogo»', async () => {
+    it('con solo la importación elegida la confirmación NO avisa «todo el catálogo»', async () => {
       await crearComponente(true, importaciones);
       await elegir('#importacion', 'Tersuave · tersuave.csv · 14/10 15:45');
       await completar('Cambiar el costo en %', '10');
@@ -2340,8 +2391,11 @@ describe('ActualizacionMasiva', () => {
 
       q<HTMLButtonElement>('button.confirmar').click();
       await asentar();
+      expect(texto('.confirmacion p')).not.toContain('todo el catálogo');
+      q<HTMLButtonElement>('.confirmar-si').click();
+      await asentar();
 
-      expect(el().querySelector('.confirmacion-total')).toBeNull();
+      expect(el().querySelector('.confirmacion')).toBeNull();
       expect(servicio.aplicar).toHaveBeenCalledWith(expect.objectContaining({ importacionId: 9, huella: 'huella-1' }));
     });
 
@@ -2353,7 +2407,7 @@ describe('ActualizacionMasiva', () => {
       q<HTMLButtonElement>('button.confirmar').click();
       await asentar();
 
-      expect(el().querySelector('.confirmacion-total')).not.toBeNull();
+      expect(texto('.confirmacion p')).toContain('todo el catálogo');
       expect(servicio.aplicar).not.toHaveBeenCalled();
     });
 
