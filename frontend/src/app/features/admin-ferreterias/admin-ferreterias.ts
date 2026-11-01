@@ -214,6 +214,8 @@ export class AdminFerreterias implements OnInit {
         this.ferreterias.update((lista) => [...lista, creada].sort(porRazonSocial));
         this.vaciarFormulario();
         this.guardando.set(false);
+        // El formulario estuvo inerte mientras guardaba: queda listo para la próxima alta.
+        this.enfocar('#razonSocial');
         this.aviso.set(`Se creó «${creada.razonSocial}».`);
       },
       error: (err: unknown) => {

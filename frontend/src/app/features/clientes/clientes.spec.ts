@@ -1,7 +1,7 @@
 import { HttpErrorResponse } from '@angular/common/http';
 import { signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { of, throwError } from 'rxjs';
+import { Subject, of, throwError } from 'rxjs';
 import { Router, provideRouter } from '@angular/router';
 import { vi } from 'vitest';
 import { PageResponse } from '../../core/api/page.models';
@@ -240,6 +240,36 @@ describe('Clientes', () => {
         telefono: '223 555',
       });
       expect(texto('.alerta.exito')).toBe('Se guardó «Juan Pérez».');
+    });
+
+    it('mientras se guarda un alta los campos quedan bloqueados; al guardarse, el foco vuelve a la razón social para el siguiente', async () => {
+      await crear();
+      const respuesta = new Subject<Cliente>();
+      servicio.crear.mockReturnValue(respuesta);
+      await escribir('razon-social', 'Juan Pérez');
+
+      await enviar('form.alta');
+
+      expect(el().querySelector('form.alta')!.hasAttribute('inert')).toBe(true);
+
+      respuesta.next({ ...ana, id: 99, razonSocial: 'Juan Pérez' });
+      respuesta.complete();
+      await refrescar();
+
+      expect(el().querySelector('form.alta')!.hasAttribute('inert')).toBe(false);
+      expect(input('razon-social').value).toBe('');
+      expect(document.activeElement).toBe(input('razon-social'));
+    });
+
+    it('si el alta falla los campos se desbloquean con lo escrito', async () => {
+      await crear();
+      servicio.crear.mockReturnValue(throwError(() => errorHttp(500, 'Algo falló')));
+      await escribir('razon-social', 'Juan Pérez');
+
+      await enviar('form.alta');
+
+      expect(el().querySelector('form.alta')!.hasAttribute('inert')).toBe(false);
+      expect(input('razon-social').value).toBe('Juan Pérez');
     });
 
     it('manda el documento completo con su tipo, y la condición de IVA elegida', async () => {

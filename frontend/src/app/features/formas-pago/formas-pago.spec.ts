@@ -1,7 +1,7 @@
 import { HttpErrorResponse } from '@angular/common/http';
 import { signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { of, throwError } from 'rxjs';
+import { Subject, of, throwError } from 'rxjs';
 import { vi } from 'vitest';
 import { AuthService } from '../../core/auth/auth.service';
 import { FormaPago, FormaPagoRequest } from './forma-pago.models';
@@ -190,6 +190,37 @@ describe('FormasPago', () => {
     expect(el().querySelector('.alerta.exito')?.textContent).toContain('Se guardó «Visa 6 cuotas».');
     expect(input('nombre').value).toBe('');
     expect(input('recargo').value).toBe('0');
+  });
+
+  it('mientras se guarda un alta los campos quedan bloqueados; al guardarse, el foco vuelve al nombre para el siguiente', async () => {
+    await crear([efectivo]);
+    const respuesta = new Subject<FormaPago>();
+    servicio.crear.mockReturnValue(respuesta);
+    await escribir('nombre', 'Débito');
+    await elegirMedio('DEBITO');
+
+    await enviar();
+
+    expect(el().querySelector('form.alta')!.hasAttribute('inert')).toBe(true);
+
+    respuesta.next(debito);
+    respuesta.complete();
+    await refrescar();
+
+    expect(el().querySelector('form.alta')!.hasAttribute('inert')).toBe(false);
+    expect(input('nombre').value).toBe('');
+    expect(document.activeElement).toBe(input('nombre'));
+  });
+
+  it('si el alta falla los campos se desbloquean con lo escrito', async () => {
+    await crear([efectivo]);
+    servicio.crear.mockReturnValue(throwError(() => errorHttp(500, 'Algo falló')));
+    await escribir('nombre', 'Débito');
+
+    await enviar();
+
+    expect(el().querySelector('form.alta')!.hasAttribute('inert')).toBe(false);
+    expect(input('nombre').value).toBe('Débito');
   });
 
   it('no envía un nombre vacío y lo avisa en el campo', async () => {

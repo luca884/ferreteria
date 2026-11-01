@@ -133,6 +133,8 @@ export class FormasPago implements OnInit {
         this.formas.update((lista) => [...lista.filter((f) => f.id !== guardada.id), guardada].sort(porOrden));
         this.vaciarFormulario();
         this.guardando.set(false);
+        // El formulario estuvo inerte mientras guardaba: queda listo para el próximo alta, como con Nuevo.
+        this.enfocar('#nombre');
         this.aviso.set(`Se guardó «${guardada.nombre}».`);
       },
       error: (err: unknown) => {

@@ -98,7 +98,8 @@
       }
     </div>
 
-    <form class="alta panel" [formGroup]="form" (ngSubmit)="guardar()" novalidate>
+    <!-- Mientras guarda no se escribe: la respuesta vacía el formulario y lo escrito se perdería (hallazgos T3). -->
+    <form class="alta panel" [formGroup]="form" (ngSubmit)="guardar()" novalidate [attr.inert]="guardando() ? '' : null">
       <h2>{{ editando() === null ? 'Nueva forma de pago' : 'Editar forma de pago' }}</h2>
       <div class="campo nombre">
         <label for="nombre">Nombre</label>

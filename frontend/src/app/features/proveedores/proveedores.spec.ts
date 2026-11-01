@@ -1,7 +1,7 @@
 import { HttpErrorResponse } from '@angular/common/http';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { signal } from '@angular/core';
-import { Observable, of, throwError } from 'rxjs';
+import { Observable, Subject, of, throwError } from 'rxjs';
 import { vi } from 'vitest';
 import { AuthService } from '../../core/auth/auth.service';
 import { Proveedor } from './proveedor.models';
@@ -326,6 +326,37 @@ describe('Proveedores', () => {
       const textos = textoFilas();
       expect(textos).toHaveLength(3);
       expect(textos[0]).toContain('Alba');
+    });
+
+    it('mientras se guarda un alta los campos quedan bloqueados; al guardarse, el foco vuelve al nombre para el siguiente', async () => {
+      await crearComponente(true);
+      const respuesta = new Subject<Proveedor>();
+      servicio.crear.mockReturnValue(respuesta);
+      await escribir('#nombre', 'Alba');
+
+      await enviarFormulario();
+
+      expect(el().querySelector('form.alta')!.hasAttribute('inert')).toBe(true);
+
+      respuesta.next({ id: 3, nombre: 'Alba', cuit: null, activo: true });
+      respuesta.complete();
+      await refrescar();
+
+      const nombre = el().querySelector<HTMLInputElement>('#nombre')!;
+      expect(el().querySelector('form.alta')!.hasAttribute('inert')).toBe(false);
+      expect(nombre.value).toBe('');
+      expect(document.activeElement).toBe(nombre);
+    });
+
+    it('si el alta falla los campos se desbloquean con lo escrito', async () => {
+      await crearComponente(true);
+      servicio.crear.mockReturnValue(throwError(() => new HttpErrorResponse({ status: 500 })));
+      await escribir('#nombre', 'Alba');
+
+      await enviarFormulario();
+
+      expect(el().querySelector('form.alta')!.hasAttribute('inert')).toBe(false);
+      expect(el().querySelector<HTMLInputElement>('#nombre')!.value).toBe('Alba');
     });
 
     it('no llama al servicio si el nombre está vacío', async () => {

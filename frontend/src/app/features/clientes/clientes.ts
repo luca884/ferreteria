@@ -248,6 +248,8 @@ export class Clientes implements OnInit {
   private terminarGuardado(guardado: Cliente): void {
     this.vaciarFormulario();
     this.guardando.set(false);
+    // El formulario estuvo inerte mientras guardaba: queda listo para el próximo alta, como con Nuevo.
+    this.enfocar('#razon-social');
     this.aviso.set(`Se guardó «${guardado.razonSocial}».`);
     this.cargar(this.pagina().page);
   }
