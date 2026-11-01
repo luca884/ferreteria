@@ -10,6 +10,8 @@ Objetivo: corregir los hallazgos de la carga de la Ferretería de Prueba del 202
 
 - S1: «cualquier inconveniente que se encuentre o limitacion la registras para corregirla» (Luca, 2026-10-30).
 - S2: «dale, armá el plan empezando por los reportes» (Luca, 2026-10-31).
+- S3: «que directamente no deje ingresar ni , ni . , solo al escribir el numero automaicamente luego se pongo el . y el , , se entiende?? a medida que escribo el numero se v corriendo para un costado y aparecen luego el . y la , donde corresponden» (Luca, 2026-11-01). Opción elegida: «dale, B» = solo los miles automáticos; la coma se puede escribir para los centavos (hasta 2 decimales) y el punto nunca. `50000` se ve `50.000`.
+- S4 (supuesto del agente): alcance de S3 = los campos de plata (importes en pesos o en dólares). Cantidades, porcentajes y punto de venta siguen como están. Los dos campos que según el modo son $ o % (valor del ajuste de precio del artículo y valor de la actualización masiva) llevan la máscara en ambos modos: aceptan hasta 2 decimales en los dos y conservan el menos.
 
 ## Contexto verificado
 
@@ -26,7 +28,11 @@ Cada tarea que agrega algo fuera de la spec espera el OK de Luca antes de implem
 - [x] T3 · Foco después de guardar en Usuarios y Rubros: reproducir a mano antes de tocar código. **Causa**: no era el foco, era una carrera. Lo que se escribe mientras vuelve el guardado anterior lo borra `vaciarFormulario()`, y el clic en «Agregar» se pierde porque el botón está deshabilitado. Arreglo: el formulario queda `inert` mientras guarda y, al guardar, el foco vuelve a Nombre (como «Nuevo»).
 - [~] T4 · Cobranza y descuento: la imputación FIFO arranca precargada. **Descartada (2026-11-01, no se reproduce)**: la sugerencia aparece al escribir el total, como pide `docs/spec.md:211`. El «0,00» que vio la carga es el placeholder de las filas antes de escribir el total.
 - [x] T13 · La carrera de T3 en Clientes, Proveedores, Formas de pago y Admin › Ferreterías: el mismo arreglo (`inert` mientras guarda y foco al primer campo al guardar). Pedido: «dale, aplicalo en las 4» (Luca, 2026-11-01).
-- [ ] T14 · Importes sin punto ni coma escritos a mano: «que directamente no deje ingresar ni , ni . , solo al escribir el numero automaicamente luego se pongo el . y el , […] a medida que escribo el numero se v corriendo para un costado y aparecen luego el . y la , donde corresponden» (Luca, 2026-11-01). Falta definir cómo se escriben los centavos.
+- [ ] T14 · Máscara de importes (S3, S4). Ruta: base inline; pantallas en dos writers en paralelo (superficies disjuntas).
+  - [x] T14.1 · Base compartida: `core/formato/importe.ts` (`normalizarImporte`, `centavosDeImporte`, `textoDeImporte`, `posicionTrasNormalizar`) y la directiva `shared/importe-input.ts` (`input[appImporte]`: texto con teclado numérico; normaliza en captura antes del `(input)` del componente; con `formControl`/`formControlName` es un CVA cuyo modelo es el número en pesos o null; `[decimales]`, `negativos`). RED: módulos y parámetro inexistentes. GREEN 44/44.
+  - [ ] T14.2 · Campos con señal de texto: caja (importe del movimiento, efectivo contado, efectivo inicial), cuenta del cliente (total de la cobranza, importe del ajuste y las filas de imputación de los dos diálogos; `leerImporte` y `centavosATexto` con puntos de miles), mostrador (montos del pago mixto y «Recibido» de `dialogo-cobro`) y compras (costo del renglón).
+  - [ ] T14.3 · Campos de formularios reactivos: clientes (límite de la cuenta), margen y redondeo (múltiplo del redondeo), consumidor final (tope), artículo (costo, precio final manual y valor del ajuste de precio, con negativos) y actualización masiva (valor, con negativos).
+  - [ ] T14.4 · Verificación en ego-browser de cada pantalla y suite completa.
 - [ ] T5 · Actualización masiva: confirmación antes de aplicar, con aviso de que no tiene deshacer.
 - [ ] T6 · Compras: el costo precargado con coma decimal.
 - [ ] T7 · Ajuste de stock: la vista previa no muestra una cantidad inválida.
