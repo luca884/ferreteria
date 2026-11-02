@@ -132,9 +132,12 @@ describe('Mostrador', () => {
     buscar: ReturnType<typeof vi.fn>;
     crear: ReturnType<typeof vi.fn>;
     cuenta: ReturnType<typeof vi.fn>;
+    obtener: ReturnType<typeof vi.fn>;
   };
   /** C3: qué comprobante sale al cobrar. Por defecto la ferretería no factura, como antes de la fase 5; null: la lectura falla. */
   let facturacionDelServidor: FacturacionDelMostrador | null;
+  /** T11: el estado HTTP con que falla `GET /api/clientes/{id}`; null lo responde con el cliente. */
+  let falloLeerCliente: number | null;
   let leerFacturacion: ReturnType<typeof vi.fn>;
   /** S12: la configuración de ARCA del Dueño. Por defecto sin certificado; null: la lectura falla. */
   let configuracionArca: ConfiguracionFacturacion | null;
@@ -226,6 +229,12 @@ describe('Mostrador', () => {
       crear: vi.fn(),
       // La cuenta corriente del cliente del ticket (CC-017): por defecto sin habilitar; los tests la fijan.
       cuenta: vi.fn(() => of({ habilitada: false })),
+      // T11: el cliente de un ticket sin su condición de IVA (viene de un presupuesto o un remito).
+      obtener: vi.fn((id: number) =>
+        falloLeerCliente === null
+          ? of([CLIENTE_ANA, CLIENTE_NORTE].find((c) => c.id === id))
+          : throwError(() => new HttpErrorResponse({ status: falloLeerCliente! })),
+      ),
     };
     const sesion = signal({
       userId: 7,
@@ -298,6 +307,7 @@ describe('Mostrador', () => {
     localStorage.clear();
     vi.useFakeTimers();
     facturacionDelServidor = { factura: false, ambiente: null, letras: null };
+    falloLeerCliente = null;
     configuracionArca = configuracionConCertificado(null);
     avisosDelServidor = { rechazadas: 0, pendientesViejas: 0, enRevision: 0, bloqueo: null };
     provisorias = [];
@@ -4678,7 +4688,68 @@ describe('Mostrador', () => {
       expect(rotulo()).toBe('Factura A · Ferretería Norte SRL SIMULADO');
     });
 
-    it('un ticket guardado antes, con cliente pero sin su condición, dice solo «Factura»', async () => {
+    /** Un ticket guardado con cliente pero sin su condición de IVA: el que arma «Pasar a venta» de un presupuesto o remito. */
+    function ticketSinCondicion() {
+      localStorage.setItem(
+        'ticket:3:7',
+        JSON.stringify({
+          v: 1,
+          clave: 'vieja',
+          elegido: 0,
+          clienteId: 2,
+          clienteNombre: 'Ferretería Norte SRL',
+          presupuestoId: 5,
+          presupuestoNumero: 12,
+          renglones: [
+            {
+              articuloId: 1,
+              codigoInterno: 'COD-1',
+              descripcion: 'Martillo',
+              unidad: 'UNIDAD',
+              precioCentavos: 150000,
+              cantidadMilesimas: 1000,
+              stockActual: 10,
+              stockMinimo: 5,
+            },
+          ],
+        }),
+      );
+    }
+
+    it('un ticket con cliente pero sin su condición (de un presupuesto o remito) la pide y dice «Factura A · <razón social>»', async () => {
+      ticketSinCondicion();
+      facturacionDelServidor = { factura: true, ambiente: 'SIMULADOR', letras: LETRAS };
+      await crear();
+
+      await tecla('F4');
+
+      expect(clientesApi.obtener).toHaveBeenCalledExactlyOnceWith(2);
+      expect(rotulo()).toBe('Factura A · Ferretería Norte SRL SIMULADO');
+    });
+
+    it('si no se puede leer el cliente, el cobro dice solo «Factura» y la venta sigue', async () => {
+      ticketSinCondicion();
+      falloLeerCliente = 500;
+      facturacionDelServidor = { factura: true, ambiente: 'PRODUCCION', letras: LETRAS };
+      await crear();
+
+      await tecla('F4');
+
+      expect(rotulo()).toBe('Factura');
+      expect(el().querySelector('app-dialogo-cobro')).not.toBeNull();
+    });
+
+    it('con la condición ya en el ticket (elegido con F9) no vuelve a pedir el cliente', async () => {
+      await conMartillos();
+      await tecla('F9');
+      await tecla('ArrowDown');
+      await tecla('Enter');
+
+      expect(clientesApi.obtener).not.toHaveBeenCalled();
+    });
+
+    it('un ticket guardado antes, con cliente pero sin su condición, dice solo «Factura» si el cliente no se puede leer', async () => {
+      falloLeerCliente = 404;
       localStorage.setItem(
         'ticket:3:7',
         JSON.stringify({

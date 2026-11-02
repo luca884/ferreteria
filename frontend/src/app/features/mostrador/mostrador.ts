@@ -348,6 +348,7 @@ export class Mostrador {
     this.leerCaja();
     this.leerFormas();
     this.leerFacturacion();
+    this.completarCondicionDelCliente();
     // Solo el Dueño configura la facturación: al Vendedor el servidor le respondería 403.
     if (this.esDueno()) this.leerCertificado();
     this.busquedas
@@ -409,6 +410,26 @@ export class Mostrador {
       .listar(true)
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({ next: (formas) => this.formasPago.set(formas), error: () => undefined });
+  }
+
+  /**
+   * T11: el ticket que arma «Pasar a venta» (de un presupuesto o un remito) trae el cliente sin su condición de IVA, y sin
+   * ella el cobro no sabe la letra. Se lee el cliente de hoy, que es con el que el servidor factura. Si falla, el rótulo
+   * queda en «Factura» y no se frena nada; si el cajero cambió de cliente mientras tanto, no se toca.
+   */
+  private completarCondicionDelCliente(): void {
+    const { clienteId, clienteCondicionIva } = this.ticket.ticket();
+    if (clienteId === undefined || clienteCondicionIva) return;
+    this.clientes
+      .obtener(clienteId)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (cliente) => {
+          const actual = this.ticket.ticket();
+          if (actual.clienteId === cliente.id && !actual.clienteCondicionIva) this.ticket.elegirCliente(cliente);
+        },
+        error: () => undefined,
+      });
   }
 
   /** Lee qué comprobante sale al cobrar. Si no se puede, el cobro no muestra rótulo (como sin facturación). */
