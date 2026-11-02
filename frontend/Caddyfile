@@ -7,6 +7,16 @@
 }
 
 :{$PORT:8080} {
+	# Cabeceras de seguridad (hallazgo 6 de la revisión del 01/11). El JWT vive en localStorage: la CSP deja correr solo
+	# los scripts del propio sitio. style-src lleva 'unsafe-inline' porque Angular inyecta los estilos de los componentes
+	# con <style>; por eso el build no inlinea el CSS crítico (angular.json, inlineCritical), que necesita un <script>.
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+	}
+
 	# El front le pide la API a su mismo origen (environment.ts), como el proxy de ng serve en local.
 	handle /api/* {
 		reverse_proxy {$BACKEND_HOST:backend.railway.internal:8080}
