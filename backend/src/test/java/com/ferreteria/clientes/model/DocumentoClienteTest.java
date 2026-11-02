@@ -36,7 +36,7 @@ class DocumentoClienteTest {
         void rechazaDigitoVerificador() {
             assertThatThrownBy(() -> DocumentoCliente.normalizar(TipoDocumento.CUIT, "20123456787"))
                     .isInstanceOf(DocumentoInvalidoException.class)
-                    .hasMessage("El CUIT no es válido: revisá el dígito verificador.");
+                    .hasMessage("El CUIT no es válido: revisá los números, el último no coincide.");
         }
 
         @Test
@@ -51,7 +51,7 @@ class DocumentoClienteTest {
         void verificadorDiezNoExiste(String cuit) {
             assertThatThrownBy(() -> DocumentoCliente.normalizar(TipoDocumento.CUIT, cuit))
                     .isInstanceOf(DocumentoInvalidoException.class)
-                    .hasMessage("El CUIT no es válido: revisá el dígito verificador.");
+                    .hasMessage("El CUIT no es válido: revisá los números, el último no coincide.");
         }
 
         @ParameterizedTest
@@ -76,7 +76,7 @@ class DocumentoClienteTest {
         @DisplayName("el mensaje del CUIL nombra al CUIL")
         void mensajeDelCuil() {
             assertThatThrownBy(() -> DocumentoCliente.normalizar(TipoDocumento.CUIL, "20123456787"))
-                    .hasMessage("El CUIL no es válido: revisá el dígito verificador.");
+                    .hasMessage("El CUIL no es válido: revisá los números, el último no coincide.");
         }
     }
 

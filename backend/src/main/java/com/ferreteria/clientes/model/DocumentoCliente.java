@@ -39,7 +39,7 @@ public final class DocumentoCliente {
             throw new DocumentoInvalidoException("El " + nombre + " no es válido: revisá los dos primeros dígitos.");
         }
         if (digitoVerificador(digitos) != digitos.charAt(10) - '0') {
-            throw new DocumentoInvalidoException("El " + nombre + " no es válido: revisá el dígito verificador.");
+            throw new DocumentoInvalidoException("El " + nombre + " no es válido: revisá los números, el último no coincide.");
         }
         return digitos;
     }

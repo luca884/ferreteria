@@ -417,17 +417,31 @@ describe('DialogoCliente (F9)', () => {
       expect(elegidos).toEqual([]);
     });
 
-    it('los errores por campo del servidor (400) se listan', async () => {
+    it('el error del servidor (400) sobre el documento sale debajo del campo, no arriba', async () => {
+      const mensaje = 'El CUIT no es válido: revisá los números, el último no coincide.';
+      await abrir();
+      servicio.crear.mockReturnValue(throwError(() => errorHttp(400, 'Datos inválidos', { numeroDocumento: mensaje })));
+      await abrirAlta();
+      await escribirAlta('nuevo-razon-social', 'Ana');
+
+      await guardar();
+
+      expect(texto('#nuevo-numero-error')).toBe(mensaje);
+      expect(el().querySelector('form.alta-rapida [role="alert"]')).toBeNull();
+      expect(elegidos).toEqual([]);
+    });
+
+    it('los demás errores por campo del servidor (400) se listan arriba', async () => {
       await abrir();
       servicio.crear.mockReturnValue(
-        throwError(() => errorHttp(400, 'Datos inválidos', { numeroDocumento: 'El CUIT no es válido: revisá el dígito verificador.' })),
+        throwError(() => errorHttp(400, 'Datos inválidos', { telefono: 'El teléfono es demasiado largo.' })),
       );
       await abrirAlta();
       await escribirAlta('nuevo-razon-social', 'Ana');
 
       await guardar();
 
-      expect(texto('form.alta-rapida [role="alert"]')).toContain('El CUIT no es válido: revisá el dígito verificador.');
+      expect(texto('form.alta-rapida [role="alert"]')).toContain('El teléfono es demasiado largo.');
     });
 
     it('«Volver a buscar» deja el formulario y vuelve a la búsqueda', async () => {

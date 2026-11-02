@@ -6,11 +6,21 @@ import { HttpErrorResponse } from '@angular/common/http';
  * pantalla muestra el `message` genérico.
  */
 export function erroresDeCampos(err: unknown): string[] {
-  if (!(err instanceof HttpErrorResponse)) return [];
+  return Object.values(erroresPorCampo(err));
+}
+
+/**
+ * Los mismos mensajes que {@link erroresDeCampos}, con el nombre de su campo (`{ numeroDocumento: '…' }`), para
+ * mostrar cada uno debajo de su campo. Objeto vacío si el error no es HTTP o no trae `errors`.
+ */
+export function erroresPorCampo(err: unknown): Record<string, string> {
+  if (!(err instanceof HttpErrorResponse)) return {};
   const errors: unknown = err.error?.errors;
-  if (errors === null || typeof errors !== 'object') return [];
-  return Object.values(errors).filter(
-    (mensaje): mensaje is string => typeof mensaje === 'string' && mensaje.trim() !== '',
+  if (errors === null || typeof errors !== 'object') return {};
+  return Object.fromEntries(
+    Object.entries(errors).filter(
+      (par): par is [string, string] => typeof par[1] === 'string' && par[1].trim() !== '',
+    ),
   );
 }
 

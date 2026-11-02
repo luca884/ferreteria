@@ -152,7 +152,7 @@ class ClienteIntegrationTest extends IntegrationTestBase {
         JsonNode dni = json(crear(token, clienteConDoc("B", "DNI", "123")).andExpect(status().isBadRequest()));
 
         assertThat(cuit.get("errors").get("numeroDocumento").asText())
-                .isEqualTo("El CUIT no es válido: revisá el dígito verificador.");
+                .isEqualTo("El CUIT no es válido: revisá los números, el último no coincide.");
         assertThat(dni.get("errors").get("numeroDocumento").asText()).isEqualTo("El DNI tiene que tener 7 u 8 dígitos.");
         assertThat(jdbc.queryForObject("select count(*) from cliente where ferreteria_id = ?", Long.class, t.id()))
                 .isZero();

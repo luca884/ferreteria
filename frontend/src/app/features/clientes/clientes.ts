@@ -12,7 +12,7 @@ import {
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { Router, RouterLink } from '@angular/router';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
-import { erroresDeCampos, mensajeDe } from '../../core/api/api-error';
+import { erroresDeCampos, erroresPorCampo, mensajeDe } from '../../core/api/api-error';
 import { AuthService } from '../../core/auth/auth.service';
 import { BarraAcciones } from '../../shared/barra-acciones';
 import { ImporteInput } from '../../shared/importe-input';
@@ -223,9 +223,14 @@ export class Clientes implements OnInit {
       next: (guardado) => (cambiaLimite ? this.guardarLimite(guardado, limite) : this.terminarGuardado(guardado)),
       error: (err: unknown) => {
         this.guardando.set(false);
-        const porCampo = erroresDeCampos(err);
-        if (porCampo.length > 0) this.erroresCampos.set(porCampo);
-        else this.error.set(mensajeDe(err, 'No se pudo guardar el cliente.'));
+        // Los errores de un campo que el formulario muestra van debajo de ese campo; el resto, en la lista de arriba.
+        const { tipoDocumento, numeroDocumento, domicilio, ...otros } = erroresPorCampo(err);
+        this.errorTipo.set(tipoDocumento ?? null);
+        this.errorNumero.set(numeroDocumento ?? null);
+        this.errorDomicilio.set(domicilio ?? null);
+        this.erroresCampos.set(Object.values(otros));
+        if (tipoDocumento || numeroDocumento || domicilio) this.enfocar('form.alta [aria-invalid="true"]');
+        else if (Object.keys(otros).length === 0) this.error.set(mensajeDe(err, 'No se pudo guardar el cliente.'));
       },
     });
   }

@@ -1,7 +1,7 @@
 import { Component, ElementRef, afterNextRender, inject, input, output, signal, viewChild, Injector } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { Subject, catchError, debounceTime, map, merge, of, switchMap } from 'rxjs';
-import { erroresDeCampos, mensajeDe } from '../../core/api/api-error';
+import { erroresPorCampo, mensajeDe } from '../../core/api/api-error';
 import { formatearMonto } from '../../core/formato/monto';
 import { TrampaFoco } from '../../shared/trampa-foco';
 import {
@@ -435,9 +435,14 @@ export class DialogoCliente {
       },
       error: (err: unknown) => {
         this.guardando.set(false);
-        const porCampo = erroresDeCampos(err);
-        if (porCampo.length > 0) this.erroresCampos.set(porCampo);
-        else this.errorAlta.set(mensajeDe(err, 'No se pudo guardar el cliente.'));
+        // Los errores de un campo del formulario van debajo de ese campo; el resto, en la lista de arriba.
+        const { razonSocial, tipoDocumento, numeroDocumento, ...otros } = erroresPorCampo(err);
+        this.errorNombre.set(razonSocial ?? null);
+        this.errorTipo.set(tipoDocumento ?? null);
+        this.errorNumero.set(numeroDocumento ?? null);
+        this.erroresCampos.set(Object.values(otros));
+        if (!razonSocial && !tipoDocumento && !numeroDocumento && Object.keys(otros).length === 0)
+          this.errorAlta.set(mensajeDe(err, 'No se pudo guardar el cliente.'));
       },
     });
   }

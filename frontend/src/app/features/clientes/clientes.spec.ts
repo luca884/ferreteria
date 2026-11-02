@@ -346,18 +346,40 @@ describe('Clientes', () => {
       expect(servicio.buscar.mock.calls.length).toBe(pedidos + 1);
     });
 
-    it('los errores por campo del servidor (400) se listan', async () => {
+    it('el error del servidor (400) sobre el documento sale debajo del campo, no arriba', async () => {
+      const mensaje = 'El CUIT no es válido: revisá los números, el último no coincide.';
       await crear();
-      servicio.crear.mockReturnValue(
-        throwError(() => errorHttp(400, 'Datos inválidos', { numeroDocumento: 'El CUIT no es válido: revisá el dígito verificador.' })),
-      );
+      servicio.crear.mockReturnValue(throwError(() => errorHttp(400, 'Datos inválidos', { numeroDocumento: mensaje })));
       await escribir('razon-social', 'Ana');
       await elegirEn('tipo-documento', 'CUIT');
-      await escribir('numero-documento', '20123456787');
+      await escribir('numero-documento', '20284567897');
 
       await enviar('form.alta');
 
-      expect(texto('.errores-campos')).toContain('El CUIT no es válido: revisá el dígito verificador.');
+      expect(texto('#numero-documento-error')).toBe(mensaje);
+      expect(input('numero-documento').getAttribute('aria-invalid')).toBe('true');
+      expect(el().querySelector('.errores-campos')).toBeNull();
+      expect(input('numero-documento').value).toBe('20284567897');
+    });
+
+    it('los errores del servidor sobre el tipo y el domicilio también van a su campo; los demás se listan arriba', async () => {
+      await crear();
+      servicio.crear.mockReturnValue(
+        throwError(() =>
+          errorHttp(400, 'Datos inválidos', {
+            tipoDocumento: 'Elegí el tipo de documento.',
+            domicilio: 'Falta el domicilio.',
+            telefono: 'El teléfono es demasiado largo.',
+          }),
+        ),
+      );
+      await escribir('razon-social', 'Ana');
+
+      await enviar('form.alta');
+
+      expect(texto('#tipo-documento-error')).toBe('Elegí el tipo de documento.');
+      expect(texto('#domicilio-error')).toBe('Falta el domicilio.');
+      expect(texto('.errores-campos')).toContain('El teléfono es demasiado largo.');
     });
 
     it('un documento repetido (409) muestra el mensaje del servidor y conserva lo escrito', async () => {
@@ -512,7 +534,7 @@ describe('Clientes', () => {
       expect(texto('#domicilio-error')).toBe(FALTA_DOMICILIO);
     });
 
-    it('los errores por campo del servidor (400) sobre el CUIT y el domicilio se listan', async () => {
+    it('los errores por campo del servidor (400) sobre el CUIT y el domicilio salen debajo de cada campo', async () => {
       await crear();
       servicio.crear.mockReturnValue(
         throwError(() => errorHttp(400, 'Datos inválidos', { numeroDocumento: FALTA_CUIT, domicilio: FALTA_DOMICILIO })),
@@ -521,8 +543,9 @@ describe('Clientes', () => {
 
       await enviar('form.alta');
 
-      expect(texto('.errores-campos')).toContain(FALTA_CUIT);
-      expect(texto('.errores-campos')).toContain(FALTA_DOMICILIO);
+      expect(texto('#numero-documento-error')).toBe(FALTA_CUIT);
+      expect(texto('#domicilio-error')).toBe(FALTA_DOMICILIO);
+      expect(el().querySelector('.errores-campos')).toBeNull();
     });
   });
 

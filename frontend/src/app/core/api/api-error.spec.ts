@@ -1,6 +1,22 @@
 import { HttpErrorResponse } from '@angular/common/http';
 
-import { erroresDeCampos, esOcupado, mensajeDe } from './api-error';
+import { erroresDeCampos, erroresPorCampo, esOcupado, mensajeDe } from './api-error';
+
+describe('erroresPorCampo', () => {
+  const http400 = (error: unknown) => new HttpErrorResponse({ status: 400, error });
+
+  it('devuelve cada mensaje con el nombre de su campo, sin los que no son texto o están en blanco', () => {
+    const err = http400({ errors: { numeroDocumento: 'El CUIT no es válido.', b: 7, c: '  ', d: null } });
+
+    expect(erroresPorCampo(err)).toEqual({ numeroDocumento: 'El CUIT no es válido.' });
+  });
+
+  it('devuelve un objeto vacío si no hay errors o el error no es HTTP', () => {
+    expect(erroresPorCampo(http400({ status: 409, message: 'Duplicado' }))).toEqual({});
+    expect(erroresPorCampo(http400({ message: 'x', errors: null }))).toEqual({});
+    expect(erroresPorCampo(new Error('boom'))).toEqual({});
+  });
+});
 
 describe('erroresDeCampos', () => {
   const http400 = (error: unknown) => new HttpErrorResponse({ status: 400, error });
