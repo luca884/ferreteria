@@ -29,7 +29,11 @@ public class TopeDeDescuento {
         verificar(renglones, descuentoGlobal, usuarioId, Autorizados.NINGUNO);
     }
 
-    /** Al pasar a venta un presupuesto o un remito, sus descuentos ya estan autorizados por quien lo emitio. */
+    /**
+     * Al pasar a venta un presupuesto o un remito, sus descuentos ya estan autorizados por quien lo emitio, pero solo para
+     * los articulos que el documento tenia y hasta su cantidad (hallazgo 2 de la revision del 01/11, Luca 2026-11-02): un
+     * articulo agregado, o con mas cantidad, vuelve al tope del usuario, tambien contra el descuento general.
+     */
     void verificar(List<Renglon> renglones, BigDecimal descuentoGlobal, Long usuarioId, Autorizados autorizados) {
         topes.topeDe(usuarioId).ifPresent(tope -> verificar(renglones, descuentoGlobal, tope, autorizados));
     }
@@ -48,8 +52,10 @@ public class TopeDeDescuento {
         for (int i = 0; i < renglones.size(); i++) {
             Renglon renglon = renglones.get(i);
             BigDecimal propio = renglon.descuentoPorcentaje();
-            BigDecimal delDocumento = autorizados.renglones().getOrDefault(renglon.articuloId(), BigDecimal.ZERO);
-            BigDecimal efectivoDelDocumento = efectivo(delDocumento, autorizados.global());
+            Autorizado delArticulo = autorizados.renglones().get(renglon.articuloId());
+            boolean cubierto = delArticulo != null && renglon.cantidad().compareTo(delArticulo.cantidad()) <= 0;
+            BigDecimal delDocumento = cubierto ? delArticulo.descuento() : BigDecimal.ZERO;
+            BigDecimal efectivoDelDocumento = cubierto ? efectivo(delDocumento, autorizados.global()) : BigDecimal.ZERO;
             if (propio.compareTo(tope.max(delDocumento)) > 0) {
                 errores.put("renglones[" + i + "].descuentoPorcentaje", "Tu tope de descuento es " + texto + " %.");
             } else if (efectivo(propio, descuentoGlobal).compareTo(tope.max(efectivoDelDocumento)) > 0) {
@@ -62,9 +68,16 @@ public class TopeDeDescuento {
         }
     }
 
-    /** Los descuentos que ya trae el documento que se pasa a venta: el global y el de cada articulo. */
-    record Autorizados(BigDecimal global, Map<Long, BigDecimal> renglones) {
+    /**
+     * Los descuentos que ya trae el documento que se pasa a venta: el global y, por articulo, su descuento y su cantidad
+     * (un articulo no se repite en un documento).
+     */
+    record Autorizados(BigDecimal global, Map<Long, Autorizado> renglones) {
         static final Autorizados NINGUNO = new Autorizados(BigDecimal.ZERO, Map.of());
+    }
+
+    /** El descuento del renglon del documento y la cantidad hasta la que vale. */
+    record Autorizado(BigDecimal descuento, BigDecimal cantidad) {
     }
 
     /** 100 − (100 − r)(100 − g) / 100, exacto. */

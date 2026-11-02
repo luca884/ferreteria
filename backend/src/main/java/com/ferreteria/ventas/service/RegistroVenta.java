@@ -495,19 +495,19 @@ public class RegistroVenta {
     /** Pasos 3 y 4 de C-008: busca los articulos y las formas de pago y valida en orden de precedencia, sin escribir. */
     /**
      * CU-07: los descuentos del presupuesto o remito que se pasa a venta ya los autorizo quien lo emitio; el tope del
-     * usuario solo frena lo que se agregue o se suba (Luca, 2026-10-22).
+     * usuario solo frena lo que se agregue o se suba (Luca, 2026-10-22), tambien la cantidad (Luca, 2026-11-02).
      */
     private TopeDeDescuento.Autorizados autorizados(Presupuesto presupuesto, Remito remito) {
         if (presupuesto != null) {
-            Map<Long, BigDecimal> renglones = new HashMap<>();
-            itemPresupuestoRepository.dePresupuestoScoped(presupuesto.getId())
-                    .forEach(i -> renglones.put(i.getArticuloId(), i.getDescuentoPorcentaje()));
+            Map<Long, TopeDeDescuento.Autorizado> renglones = new HashMap<>();
+            itemPresupuestoRepository.dePresupuestoScoped(presupuesto.getId()).forEach(i -> renglones.put(
+                    i.getArticuloId(), new TopeDeDescuento.Autorizado(i.getDescuentoPorcentaje(), i.getCantidad())));
             return new TopeDeDescuento.Autorizados(presupuesto.getDescuentoPorcentaje(), renglones);
         }
         if (remito != null) {
-            Map<Long, BigDecimal> renglones = new HashMap<>();
-            itemRemitoRepository.deRemitoScoped(remito.getId())
-                    .forEach(i -> renglones.put(i.getArticuloId(), i.getDescuentoPorcentaje()));
+            Map<Long, TopeDeDescuento.Autorizado> renglones = new HashMap<>();
+            itemRemitoRepository.deRemitoScoped(remito.getId()).forEach(i -> renglones.put(
+                    i.getArticuloId(), new TopeDeDescuento.Autorizado(i.getDescuentoPorcentaje(), i.getCantidad())));
             return new TopeDeDescuento.Autorizados(remito.getDescuentoPorcentaje(), renglones);
         }
         return TopeDeDescuento.Autorizados.NINGUNO;

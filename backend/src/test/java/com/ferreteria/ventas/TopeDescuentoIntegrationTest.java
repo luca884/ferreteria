@@ -308,4 +308,105 @@ class TopeDescuentoIntegrationTest extends VentasTestBase {
                 .isEqualTo("Sumado al descuento general, pasa tu tope de descuento de 10 %.");
         assertThat(ventas(t)).isZero();
     }
+
+    // ---- Hallazgo 2 de la revision del 01/11: el descuento del documento vale solo para sus articulos y cantidades ----
+
+    /** Un renglon con su descuento propio ({@code null}: sin descuento). Precio 100. */
+    private record Con(long articulo, String cantidad, String descuento) {}
+
+    private Map<String, Object> cuerpoCon(String total, String global, Con... renglones) {
+        Linea[] lineas = java.util.Arrays.stream(renglones).map(r -> linea(r.articulo(), r.cantidad(), "100.00"))
+                .toArray(Linea[]::new);
+        Map<String, Object> cuerpo = mapa(clave(), "EFECTIVO", total, lineas);
+        for (int i = 0; i < renglones.length; i++) {
+            if (renglones[i].descuento() != null) {
+                ((Map<String, Object>) ((List<?>) cuerpo.get("renglones")).get(i))
+                        .put("descuentoPorcentaje", new BigDecimal(renglones[i].descuento()));
+            }
+        }
+        if (global != null) {
+            cuerpo.put("descuentoPorcentaje", new BigDecimal(global));
+        }
+        return cuerpo;
+    }
+
+    private Map<String, Object> documentoCon(String total, String global, Con... renglones) {
+        Map<String, Object> cuerpo = cuerpoCon(total, global, renglones);
+        cuerpo.remove("formaPagoId");
+        return cuerpo;
+    }
+
+    private String ventaDesdeCon(String campo, long id, String total, String global, Con... renglones)
+            throws Exception {
+        Map<String, Object> cuerpo = cuerpoCon(total, global, renglones);
+        cuerpo.put(campo, id);
+        return objectMapper.writeValueAsString(cuerpo);
+    }
+
+    private static final List<List<String>> DOCUMENTOS = List.of(
+            List.of("/api/presupuestos", "presupuestoId"), List.of("/api/remitos", "remitoId"));
+
+    @Test
+    @DisplayName("con más cantidad que la del documento, el renglón vuelve al tope del vendedor; con la misma, entra")
+    void masCantidadQueElDocumentoVuelveAlTope() throws Exception {
+        for (List<String> documento : DOCUMENTOS) {
+            Tienda t = tienda();
+            topeDelVendedor(t, "10");
+            long a = articulo(t, "Tornillo", "UNIDAD", "100.00", "100");
+            long id = emitir(documento.get(0), login(t.emailDueno()), documentoCon("160.00", null, new Con(a, "2", "20.00")),
+                    documento.get(1));
+            String vendedor = login(t.emailVendedor());
+
+            JsonNode error = json(postJson("/api/ventas", vendedor,
+                    ventaDesdeCon(documento.get(1), id, "240.00", null, new Con(a, "3", "20.00")))
+                    .andExpect(status().isBadRequest()));
+
+            assertThat(error.get("errors").get("renglones[0].descuentoPorcentaje").asText())
+                    .as(documento.get(0)).isEqualTo("Tu tope de descuento es 10 %.");
+            assertThat(ventas(t)).as(documento.get(0)).isZero();
+            postJson("/api/ventas", vendedor, ventaDesdeCon(documento.get(1), id, "160.00", null,
+                    new Con(a, "2", "20.00"))).andExpect(status().isCreated());
+        }
+    }
+
+    @Test
+    @DisplayName("un artículo que el documento no tenía no hereda su descuento general")
+    void unArticuloAgregadoNoHeredaElGlobalDelDocumento() throws Exception {
+        for (List<String> documento : DOCUMENTOS) {
+            Tienda t = tienda();
+            topeDelVendedor(t, "10");
+            long a = articulo(t, "Tornillo", "UNIDAD", "100.00", "100");
+            long b = articulo(t, "Tuerca", "UNIDAD", "100.00", "100");
+            long id = emitir(documento.get(0), login(t.emailDueno()), documentoCon("80.00", "20.00", new Con(a, "1", null)),
+                    documento.get(1));
+
+            JsonNode error = json(postJson("/api/ventas", login(t.emailVendedor()),
+                    ventaDesdeCon(documento.get(1), id, "160.00", "20.00", new Con(a, "1", null), new Con(b, "1", null)))
+                    .andExpect(status().isBadRequest()));
+
+            assertThat(error.get("errors").has("renglones[0].descuentoPorcentaje")).as(documento.get(0)).isFalse();
+            assertThat(error.get("errors").get("renglones[1].descuentoPorcentaje").asText()).as(documento.get(0))
+                    .isEqualTo("Sumado al descuento general, pasa tu tope de descuento de 10 %.");
+            assertThat(ventas(t)).as(documento.get(0)).isZero();
+        }
+    }
+
+    @Test
+    @DisplayName("un artículo que el documento no tenía no puede llevar el descuento de otro renglón del documento")
+    void unArticuloAgregadoNoUsaElDescuentoDeOtroRenglon() throws Exception {
+        Tienda t = tienda();
+        topeDelVendedor(t, "10");
+        long a = articulo(t, "Tornillo", "UNIDAD", "100.00", "100");
+        long b = articulo(t, "Tuerca", "UNIDAD", "100.00", "100");
+        long presupuesto = emitir("/api/presupuestos", login(t.emailDueno()),
+                documentoCon("60.00", null, new Con(a, "1", "40.00")), "presupuestoId");
+
+        JsonNode error = json(postJson("/api/ventas", login(t.emailVendedor()), ventaDesdeCon("presupuestoId",
+                presupuesto, "120.00", null, new Con(a, "1", "40.00"), new Con(b, "1", "40.00")))
+                .andExpect(status().isBadRequest()));
+
+        assertThat(error.get("errors").has("renglones[0].descuentoPorcentaje")).isFalse();
+        assertThat(error.get("errors").get("renglones[1].descuentoPorcentaje").asText())
+                .isEqualTo("Tu tope de descuento es 10 %.");
+    }
 }
