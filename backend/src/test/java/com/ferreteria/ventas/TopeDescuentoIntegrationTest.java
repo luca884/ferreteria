@@ -370,6 +370,22 @@ class TopeDescuentoIntegrationTest extends VentasTestBase {
     }
 
     @Test
+    @DisplayName("con metros, una milésima más que el documento ya vuelve al tope del vendedor")
+    void unaMilesimaMasQueElDocumentoVuelveAlTope() throws Exception {
+        Tienda t = tienda();
+        topeDelVendedor(t, "10");
+        long cable = articulo(t, "Cable", "METRO", "100.00", "100");
+        long presupuesto = emitir("/api/presupuestos", login(t.emailDueno()),
+                documentoCon("120.00", null, new Con(cable, "1.5", "20.00")), "presupuestoId");
+        String vendedor = login(t.emailVendedor());
+
+        postJson("/api/ventas", vendedor, ventaDesdeCon("presupuestoId", presupuesto, "120.08", null,
+                new Con(cable, "1.501", "20.00"))).andExpect(status().isBadRequest());
+        postJson("/api/ventas", vendedor, ventaDesdeCon("presupuestoId", presupuesto, "120.00", null,
+                new Con(cable, "1.5", "20.00"))).andExpect(status().isCreated());
+    }
+
+    @Test
     @DisplayName("un artículo que el documento no tenía no hereda su descuento general")
     void unArticuloAgregadoNoHeredaElGlobalDelDocumento() throws Exception {
         for (List<String> documento : DOCUMENTOS) {

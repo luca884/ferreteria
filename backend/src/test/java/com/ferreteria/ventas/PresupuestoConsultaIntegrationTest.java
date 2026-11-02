@@ -185,6 +185,24 @@ class PresupuestoConsultaIntegrationTest extends VentasTestBase {
     }
 
     @Test
+    @DisplayName("sobre un rechazado, un estado no válido es 400 y el de otra ferretería es 404, antes que el 403")
+    void reactivarUnRechazadoRespetaElOrdenDeLosErrores() throws Exception {
+        Tienda t = tiendaSinCaja();
+        long a = articulo(t, "Tornillo", "UNIDAD", "100.00", "10");
+        String vendedor = login(t.emailVendedor());
+        long id = presupuesto(vendedor, a, "1", "100.00", "100.00").get("presupuestoId").asLong();
+        cambiarEstado(vendedor, id, "RECHAZADO").andExpect(status().isOk());
+
+        cambiarEstado(vendedor, id, "FACTURADO").andExpect(status().isBadRequest());
+        cambiarEstado(vendedor, id, "pendiente").andExpect(status().isBadRequest());
+        Tienda otra = tiendaSinCaja();
+        cambiarEstado(login(otra.emailVendedor()), id, "ACEPTADO").andExpect(status().isNotFound());
+        cambiarEstado(login(otra.emailDueno()), id, "ACEPTADO").andExpect(status().isNotFound());
+        assertThat(jdbc.queryForObject("select estado from presupuesto where id = ?", String.class, id))
+                .isEqualTo("RECHAZADO");
+    }
+
+    @Test
     @DisplayName("pasar a FACTURADO a mano, un estado que no existe o la falta del estado dan 400 y no cambian nada")
     void estadoNoValido() throws Exception {
         Tienda t = tiendaSinCaja();
