@@ -411,7 +411,52 @@ describe('PaginaFacturacion', () => {
     });
   });
 
+  describe('estado de la facturación', () => {
+    it('habilitada: lo dice arriba de todo', async () => {
+      await crear(config({ facturacionHabilitada: true }));
+
+      expect(texto('.estado-facturacion')).toBe('Facturación habilitada: las ventas facturables salen con factura.');
+      expect(el().querySelector('.estado-facturacion')!.compareDocumentPosition(el().querySelector('.secciones')!)).toBe(
+        Node.DOCUMENT_POSITION_FOLLOWING,
+      );
+    });
+
+    it('habilitada en el simulador: aclara que las facturas no tienen validez fiscal', async () => {
+      await crear(config({ ambiente: 'SIMULADOR', simulador: true, facturacionHabilitada: true }));
+
+      expect(texto('.estado-facturacion')).toBe(
+        'Facturación habilitada: las ventas facturables salen con factura. Es el simulador: las facturas no tienen validez fiscal.',
+      );
+    });
+
+    it('no habilitada: dice que las ventas quedan sin factura y quién la habilita', async () => {
+      await crear(config({ facturacionHabilitada: false }));
+
+      expect(texto('.estado-facturacion')).toBe(
+        'Facturación no habilitada: las ventas facturables se cobran igual y quedan sin factura. La habilita el administrador del sistema, con los datos de la ferretería completos y el ambiente asignado.',
+      );
+    });
+  });
+
   describe('simulador', () => {
+    it('no muestra los pasos de ARCA ni el CUIT de homologación: dice que alcanza con firmar con el simulador', async () => {
+      await crear(config({ ambiente: 'SIMULADOR', simulador: true }));
+
+      expect(el().querySelector('ol.guia')).toBeNull();
+      expect(el().querySelector('[name="cuitPedido"]')).toBeNull();
+      expect(texto('.guia-simulador')).toBe(
+        'En el simulador no hace falta ir a ARCA: generá el pedido y firmalo con «Firmar con el simulador».',
+      );
+      expect(boton('button.generar-pedido')).not.toBeNull();
+    });
+
+    it('fuera del simulador no aparece esa línea', async () => {
+      await crear();
+
+      expect(el().querySelector('.guia-simulador')).toBeNull();
+      expect(el().querySelector('ol.guia')).not.toBeNull();
+    });
+
     it('con el simulador y un pedido pendiente, lo firma con un clic, rotulado como simulación', async () => {
       await crear(config({ ambiente: 'SIMULADOR', simulador: true, pedido: PEDIDO }));
       expect(texto('button.firmar-simulador')).toBe('Firmar con el simulador');

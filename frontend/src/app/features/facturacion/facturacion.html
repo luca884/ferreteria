@@ -26,6 +26,18 @@
       <button type="button" class="secundario chico reintentar" (click)="cargar()">Reintentar</button>
     </div>
   } @else if (config(); as c) {
+    <p class="alerta estado-facturacion" [class.exito]="c.facturacionHabilitada" [class.advertencia]="!c.facturacionHabilitada">
+      @if (c.facturacionHabilitada) {
+        <strong>Facturación habilitada:</strong> las ventas facturables salen con factura.
+        @if (c.simulador) {
+          Es el simulador: las facturas no tienen validez fiscal.
+        }
+      } @else {
+        <strong>Facturación no habilitada:</strong> las ventas facturables se cobran igual y quedan sin factura. La
+        habilita el administrador del sistema, con los datos de la ferretería completos y el ambiente asignado.
+      }
+    </p>
+
     @if (c.avisos.length > 0) {
       <ul class="alerta advertencia avisos" role="status">
         @for (aviso of c.avisos; track $index) {
@@ -196,22 +208,28 @@
       <section class="seccion pedido" aria-labelledby="titulo-pedido">
         <h2 id="titulo-pedido">Obtener o renovar el certificado</h2>
 
-        <ol class="guia">
-          <li>Generá el pedido de certificado (.csr) acá abajo y bajalo.</li>
-          <li>
-            Entrá a ARCA con tu clave fiscal y abrí «Administración de certificados digitales» (en homologación, «WSASS
-            - Autogestión Certificados Homologación»).
-          </li>
-          <li>
-            Creá un alias (por ejemplo, «facturacion») y subí el pedido. Para renovar, usá «Agregar certificado» en el
-            mismo alias.
-          </li>
-          <li>Bajá el certificado (.crt) que te da ARCA y subilo acá.</li>
-          <li>
-            En «Administrador de relaciones de clave fiscal», autorizá ese alias para el servicio «wsfe» (Facturación
-            Electrónica). En homologación, la autorización se crea en el mismo WSASS.
-          </li>
-        </ol>
+        @if (c.simulador) {
+          <p class="pista guia-simulador">
+            En el simulador no hace falta ir a ARCA: generá el pedido y firmalo con «Firmar con el simulador».
+          </p>
+        } @else {
+          <ol class="guia">
+            <li>Generá el pedido de certificado (.csr) acá abajo y bajalo.</li>
+            <li>
+              Entrá a ARCA con tu clave fiscal y abrí «Administración de certificados digitales» (en homologación,
+              «WSASS - Autogestión Certificados Homologación»).
+            </li>
+            <li>
+              Creá un alias (por ejemplo, «facturacion») y subí el pedido. Para renovar, usá «Agregar certificado» en el
+              mismo alias.
+            </li>
+            <li>Bajá el certificado (.crt) que te da ARCA y subilo acá.</li>
+            <li>
+              En «Administrador de relaciones de clave fiscal», autorizá ese alias para el servicio «wsfe» (Facturación
+              Electrónica). En homologación, la autorización se crea en el mismo WSASS.
+            </li>
+          </ol>
+        }
 
         @if (c.pedido; as pedido) {
           <p class="pedido-pendiente">
@@ -219,7 +237,7 @@
           </p>
         }
 
-        @if (c.ambiente !== 'PRODUCCION') {
+        @if (c.ambiente !== 'PRODUCCION' && !c.simulador) {
           <div class="campo cuit-pedido">
             <label for="cuitPedido">CUIT del certificado (solo para homologación)</label>
             <input
