@@ -77,7 +77,16 @@ describe('refresco del menú lateral desde Configuración › Cotización', () =
         provideRouter([]),
         provideHttpClient(),
         provideHttpClientTesting(),
-        { provide: AuthService, useValue: { esDueno: signal(true), esSuperAdmin: signal(false), sesion: signal(null), logout: () => undefined } },
+        {
+          provide: AuthService,
+          useValue: {
+            esDueno: signal(true),
+            esSuperAdmin: signal(false),
+            sesion: signal(null),
+            debeCambiarContrasena: signal(false),
+            logout: () => undefined,
+          },
+        },
       ],
     }).compileComponents();
     http = TestBed.inject(HttpTestingController);
