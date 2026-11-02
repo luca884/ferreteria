@@ -2028,10 +2028,10 @@ describe('Importaciones', () => {
       expect(el().querySelector('button.confirmar')).toBeNull();
     });
 
-    it('"Crear los artículos nuevos" arranca apagado', async () => {
+    it('"Crear los artículos nuevos" arranca tildada: confirmar sin mirarla no deja nuevos sin crear', async () => {
       await conVistaPrevia();
 
-      expect(q<HTMLInputElement>('#crearNuevos').checked).toBe(false);
+      expect(q<HTMLInputElement>('#crearNuevos').checked).toBe(true);
     });
 
     it('confirma mandando las filas elegidas y los contadores de lo elegido', async () => {
@@ -2042,7 +2042,7 @@ describe('Importaciones', () => {
 
       expect(servicio.aplicar).toHaveBeenCalledWith(archivoActual, {
         ...datosBase,
-        crearNuevos: false,
+        crearNuevos: true,
         conteosEsperados: conteos,
         filasElegidas: todasLasFilas,
       });
@@ -2115,8 +2115,6 @@ describe('Importaciones', () => {
       q<HTMLButtonElement>('button.generar').click();
       await asentar();
       servicio.aplicar.mockReturnValue(of(importacion));
-      q<HTMLInputElement>('#crearNuevos').click();
-      await asentar();
 
       await confirmar();
 
@@ -2139,6 +2137,8 @@ describe('Importaciones', () => {
       q<HTMLButtonElement>('button.generar').click();
       await asentar();
       servicio.aplicar.mockReturnValue(of(importacion));
+      q<HTMLInputElement>('#crearNuevos').click();
+      await asentar();
 
       await confirmar();
 
@@ -2367,9 +2367,14 @@ describe('Importaciones', () => {
         await asentar();
       };
       const tarjetas = () => Array.from(el().querySelectorAll('.tarjeta')).map((t) => texto(t));
+      const conVistaPreviaSinCrearNuevos = async () => {
+        await conVistaPrevia();
+        q<HTMLInputElement>('#crearNuevos').click();
+        await asentar();
+      };
 
       it('con crear nuevos apagado, si solo quedan filas nuevas Confirmar se deshabilita y explica la casilla', async () => {
-        await conVistaPrevia();
+        await conVistaPreviaSinCrearNuevos();
         await desmarcarTodas();
 
         casillaDeLaFila(4).click();
@@ -2383,7 +2388,7 @@ describe('Importaciones', () => {
       });
 
       it('las tarjetas siguen contando la nueva elegida: el backend la cuenta para la deriva', async () => {
-        await conVistaPrevia();
+        await conVistaPreviaSinCrearNuevos();
         await desmarcarTodas();
 
         casillaDeLaFila(4).click();
@@ -2394,7 +2399,7 @@ describe('Importaciones', () => {
       });
 
       it('al encender crear nuevos la nueva elegida se aplica y Confirmar se habilita', async () => {
-        await conVistaPrevia();
+        await conVistaPreviaSinCrearNuevos();
         await desmarcarTodas();
         casillaDeLaFila(4).click();
         await asentar();
@@ -2412,7 +2417,7 @@ describe('Importaciones', () => {
       });
 
       it('al volver a apagarlo, vuelve el aviso y Confirmar no hace nada', async () => {
-        await conVistaPrevia();
+        await conVistaPreviaSinCrearNuevos();
         await desmarcarTodas();
         casillaDeLaFila(4).click();
         await asentar();
@@ -2428,7 +2433,7 @@ describe('Importaciones', () => {
       });
 
       it('con crear nuevos apagado y nuevas elegidas, avisa junto a la casilla que no se van a crear', async () => {
-        await conVistaPrevia();
+        await conVistaPreviaSinCrearNuevos();
         await desmarcarTodas();
         casillaDeLaFila(4).click();
         await asentar();
@@ -2442,7 +2447,7 @@ describe('Importaciones', () => {
       });
 
       it('sin el aviso si la casilla está encendida o no hay nuevas elegidas', async () => {
-        await conVistaPrevia();
+        await conVistaPreviaSinCrearNuevos();
         await desmarcarTodas();
         casillaDeLaFila(2).click();
         await asentar();
@@ -2458,7 +2463,7 @@ describe('Importaciones', () => {
       });
 
       it('el resultado avisa cuántos artículos nuevos no se crearon', async () => {
-        await conVistaPrevia();
+        await conVistaPreviaSinCrearNuevos();
         await desmarcarTodas();
         casillaDeLaFila(4).click();
         await asentar();
@@ -2475,9 +2480,8 @@ describe('Importaciones', () => {
 
       it('el resultado no avisa nada si se crearon los nuevos', async () => {
         await conVistaPrevia();
-        await desmarcarTodas();
+        await desmarcarTodas(); // con la casilla tildada, como arranca
         casillaDeLaFila(4).click();
-        q<HTMLInputElement>('#crearNuevos').click();
         await asentar();
 
         servicio.aplicar.mockReturnValue(of(importacion));
@@ -2488,7 +2492,7 @@ describe('Importaciones', () => {
       });
 
       it('si junto a la nueva hay otra fila elegida, Confirmar queda habilitado aun con crear nuevos apagado', async () => {
-        await conVistaPrevia();
+        await conVistaPreviaSinCrearNuevos();
         await desmarcarTodas();
 
         casillaDeLaFila(4).click();
@@ -2725,6 +2729,31 @@ describe('Importaciones', () => {
 
         expect(seleccionado('#columnaCodigo')).toBe('A · Codigo');
         expect(seleccionado('#rubro')).toBe('Sin rubro (margen por defecto)');
+      });
+
+      it('al importar otra lista, «Crear los artículos nuevos» vuelve a arrancar tildada', async () => {
+        await crearComponente();
+        servicio.vistaPrevia.mockReturnValue(of(vistaPrevia));
+        servicio.aplicar.mockReturnValue(of(importacion));
+        await elegir('#proveedor', 'Sinteplast');
+        await elegirArchivo(lista());
+        q<HTMLButtonElement>('button.generar').click();
+        await asentar();
+        q<HTMLInputElement>('#crearNuevos').click();
+        await asentar();
+        q<HTMLButtonElement>('button.confirmar').click();
+        await asentar();
+        Array.from(el().querySelectorAll('button'))
+          .find((b) => b.textContent?.trim() === 'Importar otra lista')!
+          .click();
+        await asentar();
+
+        await elegir('#proveedor', 'Sinteplast');
+        await elegirArchivo(lista());
+        q<HTMLButtonElement>('button.generar').click();
+        await asentar();
+
+        expect(q<HTMLInputElement>('#crearNuevos').checked).toBe(true);
       });
     });
   });

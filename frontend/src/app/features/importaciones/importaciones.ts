@@ -146,7 +146,8 @@ export class Importaciones implements OnInit {
   /** El backend detectó que la lista cambió desde la vista previa (409) y no se pudo pedir la nueva. */
   protected readonly conflicto = signal(false);
   protected readonly rubros = signal<Rubro[]>([]);
-  protected readonly crearNuevos = signal(false);
+  /** Arranca tildada: quien confirma sin mirarla crea los nuevos en vez de perderlos sin poder deshacer. */
+  protected readonly crearNuevos = signal(true);
   /** Cuántas filas elegidas antes de un 409 ya no están en la vista previa nueva; 0 si no hay nada que avisar. */
   protected readonly filasPerdidas = signal(0);
   protected readonly advertenciasMostradas = signal(ADVERTENCIAS_POR_TANDA);
@@ -458,7 +459,7 @@ export class Importaciones implements OnInit {
     this.hojasElegidas.set([0]);
     this.propuestaVigente.set(null);
     this.proveedorId.set(null);
-    this.crearNuevos.set(false);
+    this.crearNuevos.set(true);
     this.mapeoForm.reset(mapeoVacio());
     this.listaForm.reset({ listaIncluyeIva: false });
   }
