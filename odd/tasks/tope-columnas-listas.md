@@ -2,7 +2,7 @@
 
 Objetivo: una lista CSV, Excel o PDF con columnas de más se rechaza antes de agotar la memoria del servidor compartido · Por qué: hallazgo 4 (MEDIA) de la revisión de seguridad del 01/11: un CSV de 25 MB con `a;a;a;…` en una línea, o un `.xlsx` con una celda en la columna XFD por fila, arman millones de celdas, dan `OutOfMemoryError` y fallan los pedidos de todas las ferreterías.
 Rama: `fix/cu-04-tope-columnas` desde `30444b4` · Entrega: single-pr · Runner: backend `./mvnw test -Dtest=<Clase>` / `./mvnw test`; imagen `./mvnw test -Pimagen` · Mirror Engram: `odd/tope-columnas-listas/tasks` (ok)
-Ruteo: caso 5 (alto riesgo: item 4 concurrencia, item 5 imagen) · Pronóstico: ~450 líneas (real: 738, más de 400; single-pr sin dividir) · Estado: T1-T5 hechos, T6 en curso
+Ruteo: caso 5 (alto riesgo: item 4 concurrencia, item 5 imagen) · Pronóstico: ~450 líneas (real: 738, más de 400; single-pr sin dividir) · Estado: terminado; falta push/PR (los corre Luca)
 
 ## Specs
 
@@ -28,7 +28,7 @@ Propuesta aprobada por Luca («okey me parece bien»):
 - [x] T3 · S1 S2 S5 · PDF: `TablaDePdf.controlarTamano` antes de `repartir` · RED 2 fallas en `TablaDePdfTest` → GREEN 18/18, `LectorPdfTest` 20/20 · `dc0c541` · Risk: item 2
 - [x] T4 · S3 · `TurnoDeLectura` (sacado de `LectorPdf`, que ahora lo usa con su propio aviso) en `LectorDeListas` para CSV y Excel · RED compilación en `LectorDeListasTest` → GREEN: `TurnoDeLecturaTest` 6/6, `LectorDeListasTest` 22/22, `LectorPdfTest` 20/20 · `908f06e` · Risk: item 4
 - [x] T5 · S4 · `backend/Dockerfile`: `-XX:+ExitOnOutOfMemoryError` · RED `ImagenDeProduccionTest#laJvmSeCierraSiSeQuedaSinMemoria` (-Pimagen) → GREEN pendiente en T6 · `c7e4057` · Risk: item 5
-- [ ] T6 · todas · suites backend y `-Pimagen`, ego-browser (importar una lista real y una patológica), `odd-verifier` · Risk: item 2 · `./mvnw test` 5921/0 fallas · `./mvnw test -Pimagen` 11/11 (incluye T5 GREEN) · las 4 listas de `Lista/` se leen idénticas a `931f6e5` (filas, celdas sin las vacías del final y hash) · ego-browser: CSV con dato en la columna 201 → «La lista tiene datos en más de 200 columnas. Dejá solo las columnas que usás.»; CSV con 5.000 `;` vacíos al final → 3 filas · 3 columnas; LISTA 336.xlsx → 70 hojas, columnas A-I · `odd-verifier` pendiente
+- [x] T6 · todas · suites backend y `-Pimagen`, ego-browser (importar una lista real y una patológica), `odd-verifier` · Risk: item 2 · `./mvnw test` 5921/0 fallas · `./mvnw test -Pimagen` 11/11 (incluye T5 GREEN) · las 4 listas de `Lista/` se leen idénticas a `931f6e5` (filas, celdas sin las vacías del final y hash) · ego-browser: CSV con dato en la columna 201 → «La lista tiene datos en más de 200 columnas. Dejá solo las columnas que usás.»; CSV con 5.000 `;` vacíos al final → 3 filas · 3 columnas; LISTA 336.xlsx → 70 hojas, columnas A-I · `odd-verifier`: S1-S5 PASS, sin bloqueantes (L6)
 
 ## Log
 
@@ -53,3 +53,4 @@ Propuesta aprobada por Luca («okey me parece bien»):
   - El escaneo del CSV imita a commons-csv: una comilla abre comillas solo al principio del campo. Con el «toggle» de `detectarDelimitador`, `a"b;…` escondía los separadores y salteaba el tope. Un registro con más de 200 campos y los del final vacíos se recorta del texto antes de parsear.
   - `TurnoDeLectura` reemplaza el semáforo de `LectorPdf`, que mantiene su turno aparte y su aviso.
   - `-XX:+ExitOnOutOfMemoryError` sale con código distinto de 0; `backend/railway.json` tiene `ON_FAILURE` con `restartPolicyMaxRetries: 3`.
+- L6 (2026-11-02) `odd-verifier` (Opus): S1-S5 PASS, sin bloqueantes. Re-parseó el texto escaneado con el mismo `CSVFormat` en ~170.000 CSV al azar: ningún registro pasó de 200 campos. Las lecturas válidas coinciden con `931f6e5` (sin las vacías del final). El turno no pierde permisos ni ferreterías con interrupciones, errores ni `OutOfMemoryError` (16 hilos × 300 lecturas). Avisos, ninguno con entrada realista: `=""` o U+2003 después de 300 campos vacíos cuentan como dato en el escaneo; un registro de más de 200 campos que termina en una comilla abierta con solo espacios ahora se acepta; con datos más allá de la 200 y un error de comillas gana el aviso de columnas; al recortar, la memoria llega a ~3× el texto un momento; `restartPolicyMaxRetries: 3` podría agotarse con varios OOM seguidos; un segundo CSV/Excel de la misma ferretería mientras se lee el primero da 400 en el acto (lo pide S3). Se sumaron dos pruebas del verifier como tests (`LectorCsvTest` 35/35).

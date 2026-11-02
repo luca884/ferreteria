@@ -291,6 +291,22 @@ class LectorCsvTest {
     }
 
     @Test
+    void unaComillaDespuesDeUnEspacioTampocoEscondeLosSeparadores() {
+        assertThatThrownBy(() -> lector.leer(bytes("x; \"" + ";".repeat(300) + "b\n")))
+            .isInstanceOf(BadRequestException.class)
+            .hasMessage(MENSAJE_COLUMNAS);
+    }
+
+    @Test
+    void recortarUnCampoVacioEntreComillasDeVariasLineasConservaLosNumerosDeFila() {
+        LecturaLista lectura = lector.leer(bytes("a" + ";".repeat(300) + "\" \n \n \"\nb;c\n"));
+
+        assertThat(lectura.filas()).extracting(FilaLeida::numero).containsExactly(1, 2);
+        assertThat(textos(lectura.filas().get(0))).containsExactly("a");
+        assertThat(textos(lectura.filas().get(1))).containsExactly("b", "c");
+    }
+
+    @Test
     void unMillonDeCeldasSeLee() {
         String lista = (fila(200) + "\n").repeat(5_000);
 
