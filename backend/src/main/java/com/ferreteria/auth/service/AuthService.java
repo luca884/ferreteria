@@ -28,22 +28,30 @@ public class AuthService {
     private final FerreteriaRepository ferreteriaRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
+    private final LimiteDeIntentos limiteDeIntentos;
     /** Hash de una contrasena que nadie tiene: contra el se compara cuando el email no existe. */
     private final String hashSenuelo;
 
     public AuthService(UsuarioRepository usuarioRepository,
                        FerreteriaRepository ferreteriaRepository,
                        PasswordEncoder passwordEncoder,
-                       JwtService jwtService) {
+                       JwtService jwtService,
+                       LimiteDeIntentos limiteDeIntentos) {
         this.usuarioRepository = usuarioRepository;
         this.ferreteriaRepository = ferreteriaRepository;
         this.passwordEncoder = passwordEncoder;
         this.jwtService = jwtService;
+        this.limiteDeIntentos = limiteDeIntentos;
         this.hashSenuelo = passwordEncoder.encode(UUID.randomUUID().toString());
     }
 
+    /**
+     * Login con límite de intentos por email y por IP ({@link LimiteDeIntentos}): pasado el límite da 429 antes de buscar al
+     * usuario y sin gastar el bcrypt. La contraseña correcta borra la racha del email, aunque la ferretería esté suspendida.
+     */
     @Transactional(readOnly = true)
-    public LoginResponse login(LoginRequest request) {
+    public LoginResponse login(LoginRequest request, String ip) {
+        limiteDeIntentos.reservar(request.email(), ip);
         Optional<Usuario> encontrado = usuarioRepository.findByEmailIgnoreCase(request.email().trim());
         // Siempre un bcrypt, exista o no el email y este o no activo: el tiempo de respuesta no revela cuentas.
         boolean coincide = passwordEncoder.matches(request.password(),
@@ -52,6 +60,7 @@ public class AuthService {
                 .filter(u -> coincide)
                 .filter(Usuario::isActivo)
                 .orElseThrow(CredencialesInvalidasException::new);
+        limiteDeIntentos.exito(request.email());
 
         Ferreteria ferreteria = null;
         if (usuario.getFerreteriaId() != null) {

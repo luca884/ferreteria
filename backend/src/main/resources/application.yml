@@ -47,6 +47,12 @@ spring:
 
 server:
   port: ${PORT:8080}
+  # La IP del cliente (límite de intentos del login): el borde de Railway la pone en X-Real-IP y Caddy la reenvía tal cual.
+  # El RemoteIpValve solo la toma si el pedido viene de un proxy interno (rangos privados, incluida la red privada IPv6 de
+  # Railway); si no, queda la dirección de la conexión. Con el header solo, Spring Boot ya arma el valve.
+  tomcat:
+    remoteip:
+      remote-ip-header: X-Real-IP
   # Con SIGTERM (Railway, en cada deploy) deja de aceptar pedidos y termina los que están en curso antes de apagarse.
   shutdown: graceful
   error:
@@ -70,6 +76,11 @@ app:
     expiration-ms: ${JWT_EXPIRATION_MS:43200000}
   cors:
     allowed-origins: ${CORS_ORIGINS:http://localhost:4200}
+  login:
+    # Límite de intentos (LimiteDeIntentos): 5 fallos seguidos bloquean el email 1, 5 y 15 minutos; 20 intentos por minuto
+    # por IP. El perfil test los sube: toda la suite con MockMvc viene de 127.0.0.1.
+    max-fallos-por-email: 5
+    max-intentos-por-ip: 20
   cotizacion:
     # Fuente principal y respaldo de la cotizacion. Los tests apuntan las dos a 127.0.0.1:9 (application-test.yml).
     dolarapi:

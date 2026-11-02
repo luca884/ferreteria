@@ -19,6 +19,8 @@ import com.ferreteria.auth.security.AuthUser;
 import com.ferreteria.common.exception.DatosInvalidosException;
 import com.ferreteria.ferreteria.model.Ferreteria;
 import com.ferreteria.ferreteria.repository.FerreteriaRepository;
+import com.ferreteria.support.RelojControlable;
+import java.time.Instant;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -32,6 +34,9 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 class AuthServiceTest {
 
     private static final String SENUELO = "$2a$10$senuelo";
+    private static final String IP = "203.0.113.7";
+
+    private LimiteDeIntentos limite;
 
     private UsuarioRepository usuarios;
     private FerreteriaRepository ferreterias;
@@ -46,7 +51,79 @@ class AuthServiceTest {
         when(encoder.encode(anyString())).thenReturn(SENUELO);
         ferreterias = mock(FerreteriaRepository.class);
         jwt = mock(JwtService.class);
-        auth = new AuthService(usuarios, ferreterias, encoder, jwt);
+        limite = new LimiteDeIntentos(new RelojControlable(Instant.parse("2026-11-02T12:00:00Z")), 5, 20);
+        auth = new AuthService(usuarios, ferreterias, encoder, jwt, limite);
+    }
+
+    // ---- límite de intentos (hallazgo 1 de la revisión de seguridad) ----
+
+    @Test
+    @DisplayName("con el email bloqueado el login da 429 sin buscar al usuario ni gastar el bcrypt")
+    void bloqueadoNoGastaBcrypt() {
+        for (int i = 0; i < 5; i++) {
+            limite.reservar("u@demo.local", "10.0.0." + i);
+        }
+
+        assertThatThrownBy(() -> auth.login(new LoginRequest("u@demo.local", "demo1234"), IP))
+                .isInstanceOf(DemasiadosIntentosException.class)
+                .hasMessage("Demasiados intentos. Probá de nuevo en 1 minuto.");
+        verify(encoder, never()).matches(anyString(), anyString());
+        verify(usuarios, never()).findByEmailIgnoreCase(anyString());
+    }
+
+    @Test
+    @DisplayName("5 contraseñas malas bloquean el email: el sexto intento da 429 aunque la contraseña sea buena")
+    void cincoFallosBloquean() {
+        deFerreteria(true, false);
+        ferreteria(true);
+        for (int i = 0; i < 5; i++) {
+            assertThatThrownBy(() -> auth.login(new LoginRequest("u@demo.local", "demo1234"), IP))
+                    .isExactlyInstanceOf(CredencialesInvalidasException.class);
+        }
+        when(encoder.matches("demo1234", "$2a$10$real")).thenReturn(true);
+
+        assertThatThrownBy(() -> auth.login(new LoginRequest("u@demo.local", "demo1234"), IP))
+                .isInstanceOf(DemasiadosIntentosException.class);
+        verify(encoder, times(5)).matches("demo1234", "$2a$10$real");
+    }
+
+    @Test
+    @DisplayName("un login correcto borra la racha de fallos del email")
+    void exitoBorraLaRacha() {
+        deFerreteria(true, false);
+        ferreteria(true);
+        for (int i = 0; i < 4; i++) {
+            assertThatThrownBy(() -> auth.login(new LoginRequest("u@demo.local", "demo1234"), IP))
+                    .isExactlyInstanceOf(CredencialesInvalidasException.class);
+        }
+        when(encoder.matches("demo1234", "$2a$10$real")).thenReturn(true);
+        auth.login(new LoginRequest("u@demo.local", "demo1234"), IP);
+        when(encoder.matches("demo1234", "$2a$10$real")).thenReturn(false);
+        for (int i = 0; i < 4; i++) {
+            assertThatThrownBy(() -> auth.login(new LoginRequest("u@demo.local", "demo1234"), IP))
+                    .isExactlyInstanceOf(CredencialesInvalidasException.class);
+        }
+
+        assertThatThrownBy(() -> auth.login(new LoginRequest("u@demo.local", "demo1234"), IP))
+                .isExactlyInstanceOf(CredencialesInvalidasException.class);
+    }
+
+    @Test
+    @DisplayName("la contraseña correcta de una ferretería suspendida también borra la racha")
+    void suspendidaBorraLaRacha() {
+        deFerreteria(true, true);
+        ferreteria(false);
+        for (int i = 0; i < 4; i++) {
+            limite.reservar("u@demo.local", "10.0.0." + i);
+        }
+        assertThatThrownBy(() -> auth.login(new LoginRequest("u@demo.local", "demo1234"), IP))
+                .isExactlyInstanceOf(FerreteriaSuspendidaException.class);
+
+        for (int i = 0; i < 4; i++) {
+            limite.reservar("u@demo.local", "10.0.1." + i);
+        }
+        assertThatThrownBy(() -> auth.login(new LoginRequest("u@demo.local", "demo1234"), IP))
+                .isExactlyInstanceOf(FerreteriaSuspendidaException.class);
     }
 
     @Test
@@ -54,7 +131,7 @@ class AuthServiceTest {
     void emailInexistentePagaBcrypt() {
         when(usuarios.findByEmailIgnoreCase("nadie@demo.local")).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> auth.login(new LoginRequest("nadie@demo.local", "demo1234")))
+        assertThatThrownBy(() -> auth.login(new LoginRequest("nadie@demo.local", "demo1234"), IP))
                 .isInstanceOf(CredencialesInvalidasException.class);
         verify(encoder, times(1)).matches("demo1234", SENUELO);
     }
@@ -68,7 +145,7 @@ class AuthServiceTest {
         when(encoder.matches("demo1234", "$2a$10$real")).thenReturn(true);
         when(usuarios.findByEmailIgnoreCase("baja@demo.local")).thenReturn(Optional.of(inactivo));
 
-        assertThatThrownBy(() -> auth.login(new LoginRequest("baja@demo.local", "demo1234")))
+        assertThatThrownBy(() -> auth.login(new LoginRequest("baja@demo.local", "demo1234"), IP))
                 .isInstanceOf(CredencialesInvalidasException.class);
         verify(encoder, times(1)).matches("demo1234", "$2a$10$real");
     }
@@ -100,7 +177,7 @@ class AuthServiceTest {
         deFerreteria(true, true);
         ferreteria(false);
 
-        assertThatThrownBy(() -> auth.login(new LoginRequest("u@demo.local", "demo1234")))
+        assertThatThrownBy(() -> auth.login(new LoginRequest("u@demo.local", "demo1234"), IP))
                 .isExactlyInstanceOf(FerreteriaSuspendidaException.class)
                 .isInstanceOf(CredencialesInvalidasException.class)
                 .hasMessage("Tu ferretería está suspendida. Contactá al proveedor.");
@@ -113,7 +190,7 @@ class AuthServiceTest {
         deFerreteria(true, false);
         ferreteria(false);
 
-        assertThatThrownBy(() -> auth.login(new LoginRequest("u@demo.local", "demo1234")))
+        assertThatThrownBy(() -> auth.login(new LoginRequest("u@demo.local", "demo1234"), IP))
                 .isExactlyInstanceOf(CredencialesInvalidasException.class)
                 .hasMessage(GENERICO);
         verify(encoder, times(1)).matches("demo1234", "$2a$10$real");
@@ -125,7 +202,7 @@ class AuthServiceTest {
         deFerreteria(false, true);
         ferreteria(false);
 
-        assertThatThrownBy(() -> auth.login(new LoginRequest("u@demo.local", "demo1234")))
+        assertThatThrownBy(() -> auth.login(new LoginRequest("u@demo.local", "demo1234"), IP))
                 .isExactlyInstanceOf(CredencialesInvalidasException.class)
                 .hasMessage(GENERICO);
     }
@@ -135,7 +212,7 @@ class AuthServiceTest {
     void emailInexistenteSigueGenerico() {
         when(usuarios.findByEmailIgnoreCase("nadie@demo.local")).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> auth.login(new LoginRequest("nadie@demo.local", "demo1234")))
+        assertThatThrownBy(() -> auth.login(new LoginRequest("nadie@demo.local", "demo1234"), IP))
                 .isExactlyInstanceOf(CredencialesInvalidasException.class)
                 .hasMessage(GENERICO);
         verify(encoder, times(1)).matches("demo1234", SENUELO);
@@ -147,7 +224,7 @@ class AuthServiceTest {
         deFerreteria(true, true);
         when(ferreterias.findById(3L)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> auth.login(new LoginRequest("u@demo.local", "demo1234")))
+        assertThatThrownBy(() -> auth.login(new LoginRequest("u@demo.local", "demo1234"), IP))
                 .isExactlyInstanceOf(CredencialesInvalidasException.class)
                 .hasMessage(GENERICO);
     }
@@ -163,7 +240,7 @@ class AuthServiceTest {
         when(usuarios.findByEmailIgnoreCase("admin@demo.local")).thenReturn(Optional.of(admin));
         when(jwt.generarToken(admin)).thenReturn("token");
 
-        assertThat(auth.login(new LoginRequest("admin@demo.local", "demo1234")).token()).isEqualTo("token");
+        assertThat(auth.login(new LoginRequest("admin@demo.local", "demo1234"), IP).token()).isEqualTo("token");
         verify(ferreterias, never()).findById(any());
     }
 
@@ -265,7 +342,7 @@ class AuthServiceTest {
         when(ferreteria.isActiva()).thenReturn(true);
         when(ferreterias.findById(3L)).thenReturn(Optional.of(ferreteria));
 
-        assertThat(auth.login(new LoginRequest("u@demo.local", "demo1234")).sesion().debeCambiarContrasena()).isTrue();
+        assertThat(auth.login(new LoginRequest("u@demo.local", "demo1234"), IP).sesion().debeCambiarContrasena()).isTrue();
         assertThat(auth.sesionActual(new AuthUser(7L, "u@demo.local", Rol.VENDEDOR, 3L)).debeCambiarContrasena()).isTrue();
 
         usuario.cambiarPropiaContrasena("otro");

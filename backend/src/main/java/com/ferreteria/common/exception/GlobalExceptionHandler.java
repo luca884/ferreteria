@@ -3,6 +3,7 @@ package com.ferreteria.common.exception;
 import com.fasterxml.jackson.databind.JsonMappingException;
 import com.fasterxml.jackson.databind.exc.InvalidFormatException;
 import com.ferreteria.auth.service.CredencialesInvalidasException;
+import com.ferreteria.auth.service.DemasiadosIntentosException;
 import com.ferreteria.common.ApiError;
 import com.ferreteria.tenant.MissingTenantException;
 import org.slf4j.Logger;
@@ -78,6 +79,14 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(CredencialesInvalidasException.class)
     public ResponseEntity<ApiError> credenciales(CredencialesInvalidasException ex) {
         return build(HttpStatus.UNAUTHORIZED, ex.getMessage());
+    }
+
+    /** Login pasado de su límite de intentos: 429 con los segundos que faltan en Retry-After. */
+    @ExceptionHandler(DemasiadosIntentosException.class)
+    public ResponseEntity<ApiError> demasiadosIntentos(DemasiadosIntentosException ex) {
+        return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                .header(HttpHeaders.RETRY_AFTER, String.valueOf(ex.segundos()))
+                .body(ApiError.of(HttpStatus.TOO_MANY_REQUESTS.value(), ex.getMessage()));
     }
 
     @ExceptionHandler(AccessDeniedException.class)

@@ -6,6 +6,7 @@ import com.ferreteria.auth.dto.LoginResponse;
 import com.ferreteria.auth.dto.SesionResponse;
 import com.ferreteria.auth.security.AuthUser;
 import com.ferreteria.auth.service.AuthService;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -27,9 +28,13 @@ public class AuthController {
         this.authService = authService;
     }
 
+    /**
+     * La IP es la del cliente: en Railway el {@code RemoteIpValve} la toma de {@code X-Real-IP} cuando el pedido viene de
+     * un proxy interno (Caddy); si no, es la de la conexión (server.tomcat.remoteip en application.yml).
+     */
     @PostMapping("/login")
-    public LoginResponse login(@Valid @RequestBody LoginRequest request) {
-        return authService.login(request);
+    public LoginResponse login(@Valid @RequestBody LoginRequest request, HttpServletRequest http) {
+        return authService.login(request, http.getRemoteAddr());
     }
 
     @GetMapping("/me")
