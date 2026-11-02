@@ -41,6 +41,11 @@ class UsuariosIntegrationTest extends UsuariosTestBase {
         return objectMapper.readTree(cuerpo).get("id").asLong();
     }
 
+    /** El alta prende la marca de contraseña por cambiar (hallazgo 5: con ella solo anda /api/auth): la apaga como si ya la hubiera cambiado. */
+    private void yaCambioLaContrasena(String email) {
+        jdbc.update("update usuario set debe_cambiar_contrasena = false where email = ?", email);
+    }
+
     private ResultActions activar(long id, boolean activo, String token) throws Exception {
         return mvc.perform(patch("/api/usuarios/" + id + "/activo").header("Authorization", "Bearer " + token)
                 .contentType(MediaType.APPLICATION_JSON).content(json("activo", activo)));
@@ -53,6 +58,7 @@ class UsuariosIntegrationTest extends UsuariosTestBase {
     void flujoDeCierre() throws Exception {
         String email = unico("vendedor") + "@usuarios.test";
         long id = crearVendedor(email);
+        yaCambioLaContrasena(email);
         String tokenVendedor = login(email);
         getResult("/api/rubros", tokenVendedor).andExpect(status().isOk());
 
@@ -322,6 +328,7 @@ class UsuariosIntegrationTest extends UsuariosTestBase {
     void cambioDeRolCortaElToken() throws Exception {
         String email = unico("v") + "@usuarios.test";
         long id = crearVendedor(email);
+        yaCambioLaContrasena(email);
         String tokenViejo = login(email);
 
         putJson("/api/usuarios/" + id, dueno, json("nombre", "Ahora Dueño", "email", email, "rol", "DUENO"))

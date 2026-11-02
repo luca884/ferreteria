@@ -49,18 +49,32 @@ class CambioContrasenaIntegrationTest extends UsuariosTestBase {
     }
 
     @Test
-    @DisplayName("con la marca prendida, el login y /api/auth/me la devuelven, el resto de la API sigue andando y cambiarla la apaga")
+    @DisplayName("hallazgo 5: con la marca prendida, el login y /api/auth/me andan, el resto de la API da 403 y cambiarla la apaga")
     void marcaEnLaSesion() throws Exception {
         jdbc.update("update usuario set debe_cambiar_contrasena = true where email = ?", email);
         intentarLogin(email, "demo1234").andExpect(status().isOk())
                 .andExpect(jsonPath("$.sesion.debeCambiarContrasena", is(true)));
         getResult("/api/auth/me", token).andExpect(jsonPath("$.debeCambiarContrasena", is(true)));
-        getResult("/api/rubros", token).andExpect(status().isOk());
+        getResult("/api/rubros", token).andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.message", is("Cambiá tu contraseña para seguir.")));
 
         cambiar(token, json("passwordActual", "demo1234", "passwordNueva", "clave-nueva-99")).andExpect(status().isNoContent());
 
         getResult("/api/auth/me", token).andExpect(jsonPath("$.debeCambiarContrasena", is(false)));
+        getResult("/api/rubros", token).andExpect(status().isOk());
         assertThat(marca()).isFalse();
+    }
+
+    @Test
+    @DisplayName("hallazgo 5: con la marca prendida, escribir por la API da 403 y no guarda nada")
+    void marcaFrenaLasEscrituras() throws Exception {
+        jdbc.update("update usuario set debe_cambiar_contrasena = true where email = ?", email);
+        long antes = jdbc.queryForObject("select count(*) from rubro", Long.class);
+
+        postJson("/api/rubros", token, json("nombre", unico("Rubro"))).andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.message", is("Cambiá tu contraseña para seguir.")));
+
+        assertThat(jdbc.queryForObject("select count(*) from rubro", Long.class)).isEqualTo(antes);
     }
 
     @Test

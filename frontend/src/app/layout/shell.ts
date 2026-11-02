@@ -1,7 +1,7 @@
 import { Component, computed, inject, signal } from '@angular/core';
-import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { takeUntilDestroyed, toObservable } from '@angular/core/rxjs-interop';
 import { Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
-import { EMPTY, catchError, filter, interval, merge, startWith, switchMap } from 'rxjs';
+import { EMPTY, catchError, filter, interval, merge, pairwise, startWith, switchMap } from 'rxjs';
 import { ROL_LABELS } from '../core/auth/auth.models';
 import { AuthService } from '../core/auth/auth.service';
 import { Cotizacion } from '../core/cotizacion/cotizacion.models';
@@ -43,10 +43,15 @@ export class Shell {
 
   constructor() {
     // Se lee al abrir, cada 5 minutos y cuando la configuración o un recálculo avisan que la cotización cambió.
-    // El super admin no tiene ferretería: la cotización es un dato de ferretería y no se le pide.
-    merge(interval(INTERVALO_COTIZACION_MS).pipe(startWith(0)), this.cotizaciones.refrescos$)
+    // El super admin no tiene ferretería: la cotización es un dato de ferretería y no se le pide. Con la contraseña
+    // por cambiar tampoco (el servidor responde 403, hallazgo 5): se lee en cuanto el usuario la cambia.
+    const contrasenaCambiada$ = toObservable(this.auth.debeCambiarContrasena).pipe(
+      pairwise(),
+      filter(([antes, ahora]) => antes && !ahora),
+    );
+    merge(interval(INTERVALO_COTIZACION_MS).pipe(startWith(0)), this.cotizaciones.refrescos$, contrasenaCambiada$)
       .pipe(
-        filter(() => !this.auth.esSuperAdmin()),
+        filter(() => !this.auth.esSuperAdmin() && !this.auth.debeCambiarContrasena()),
         // Un pedido nuevo deja sin efecto a uno anterior que siga en camino.
         switchMap(() => this.cotizaciones.obtener().pipe(catchError(() => EMPTY))),
         takeUntilDestroyed(),

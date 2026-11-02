@@ -21,8 +21,19 @@ public class SesionVigente {
         this.usuarioRepository = usuarioRepository;
     }
 
+    /** Como queda la sesion del token en este request. */
+    public enum Estado {
+        /** El usuario fue dado de baja, cambio de rol o su ferreteria esta suspendida: el token ya no vale. */
+        CERRADA,
+        VIGENTE,
+        /** Vale, pero el usuario tiene que cambiar la contraseña que le dieron antes de usar el resto de la API. */
+        DEBE_CAMBIAR_CONTRASENA
+    }
+
     @Transactional(readOnly = true)
-    public boolean vigente(AuthUser user) {
-        return usuarioRepository.sesionVigente(user.userId(), user.rol(), user.ferreteriaId(), EstadoFerreteria.ACTIVA);
+    public Estado estado(AuthUser user) {
+        return usuarioRepository.sesionVigente(user.userId(), user.rol(), user.ferreteriaId(), EstadoFerreteria.ACTIVA)
+                .map(debeCambiar -> debeCambiar ? Estado.DEBE_CAMBIAR_CONTRASENA : Estado.VIGENTE)
+                .orElse(Estado.CERRADA);
     }
 }

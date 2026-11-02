@@ -80,15 +80,16 @@ public interface UsuarioRepository extends TenantScopedRepository<Usuario, Long>
 
     /**
      * La sesion del token sigue vigente: el usuario existe, esta activo, tiene el mismo rol y la misma ferreteria
-     * que dice el token, y esa ferreteria esta activa. El super admin no tiene ferreteria.
+     * que dice el token, y esa ferreteria esta activa. El super admin no tiene ferreteria. Devuelve la marca de
+     * contraseña por cambiar del usuario, o vacio si la sesion ya no vale.
      */
     @Query("""
-            select count(u) > 0 from Usuario u
+            select u.debeCambiarContrasena from Usuario u
             where u.id = :usuarioId and u.activo = true and u.rol = :rol
               and ((:ferreteriaId is null and u.ferreteriaId is null)
                 or (u.ferreteriaId = :ferreteriaId and exists (
                       select 1 from Ferreteria f where f.id = u.ferreteriaId and f.estado = :activa)))
             """)
-    boolean sesionVigente(@Param("usuarioId") Long usuarioId, @Param("rol") Rol rol,
+    Optional<Boolean> sesionVigente(@Param("usuarioId") Long usuarioId, @Param("rol") Rol rol,
                           @Param("ferreteriaId") Long ferreteriaId, @Param("activa") EstadoFerreteria activa);
 }

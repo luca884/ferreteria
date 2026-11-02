@@ -66,6 +66,10 @@ class FerreteriasAdminIntegrationTest extends PlataformaTestBase {
         assertThat(jdbc.queryForObject("select count(*) from usuario where ferreteria_id = ? and rol = 'DUENO' and activo = true",
                 Long.class, id)).isEqualTo(1L);
         String dueno = login(email);
+        // Hallazgo 5: con la contraseña que le dio el super admin, el Dueño solo puede cambiarla.
+        getResult("/api/rubros", dueno).andExpect(status().isForbidden());
+        putJson("/api/auth/password", dueno, json("passwordActual", "demo1234", "passwordNueva", "clave-nueva-99"))
+                .andExpect(status().isNoContent());
         getResult("/api/rubros", dueno).andExpect(status().isOk());
         getResult("/api/formas-pago", dueno).andExpect(status().isOk());
     }
@@ -159,6 +163,8 @@ class FerreteriasAdminIntegrationTest extends PlataformaTestBase {
     void suspenderYReactivar() throws Exception {
         String email = emailNuevo();
         long id = altaOk(cuitNuevo(), email);
+        // El alta prende la marca de contraseña por cambiar (hallazgo 5): se apaga como si ya la hubiera cambiado.
+        jdbc.update("update usuario set debe_cambiar_contrasena = false where email = ?", email);
         String dueno = login(email);
         long usuariosAntes = jdbc.queryForObject("select count(*) from usuario where ferreteria_id = ?", Long.class, id);
         long formasAntes = jdbc.queryForObject("select count(*) from forma_pago where ferreteria_id = ?", Long.class, id);

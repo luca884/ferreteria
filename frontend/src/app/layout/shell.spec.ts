@@ -1,5 +1,5 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { Component, signal } from '@angular/core';
+import { Component, WritableSignal, signal } from '@angular/core';
 import { Router, Routes, provideRouter } from '@angular/router';
 import { Observable, Subject, of, throwError } from 'rxjs';
 import { vi } from 'vitest';
@@ -53,6 +53,7 @@ describe('Shell', () => {
             esDueno: signal(dueno),
             esSuperAdmin: signal(sesion?.rol === 'SUPER_ADMIN'),
             sesion: signal(sesion),
+            debeCambiarContrasena: marca,
             logout: () => undefined,
           },
         },
@@ -66,10 +67,13 @@ describe('Shell', () => {
   }
 
   let refrescos: Subject<void>;
+  /** La marca de contraseña por cambiar de la sesión (hallazgo 5); los tests la prenden y la apagan. */
+  let marca: WritableSignal<boolean>;
 
   beforeEach(() => {
     obtener = vi.fn(() => of(COTIZACION));
     refrescos = new Subject<void>();
+    marca = signal(false);
   });
 
   const enlaces = (el: HTMLElement) =>
@@ -524,6 +528,23 @@ describe('Shell', () => {
       await mostrar(el);
 
       expect(texto(el.querySelector('app-cotizacion-lateral'))).toContain('Oficial venta 1.100,00');
+    });
+
+    it('hallazgo 5: con la contraseña por cambiar no la pide (el servidor da 403) y la pide en cuanto se cambia', async () => {
+      vi.useFakeTimers();
+      marca.set(true);
+      const el = await mostrar(await render(false));
+      expect(obtener).not.toHaveBeenCalled();
+      expect(texto(el.querySelector('app-cotizacion-lateral'))).toContain('Sin datos de cotización por ahora.');
+
+      vi.advanceTimersByTime(5 * MINUTO);
+      expect(obtener).not.toHaveBeenCalled();
+
+      marca.set(false);
+      await mostrar(el);
+
+      expect(obtener).toHaveBeenCalledTimes(1);
+      expect(texto(el.querySelector('app-cotizacion-lateral'))).toContain('Oficial venta 1.000,00');
     });
 
     it('al destruir el shell se frena el intervalo: no vuelve a pedir', async () => {
