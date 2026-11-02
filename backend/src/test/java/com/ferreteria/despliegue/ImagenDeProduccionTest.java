@@ -180,6 +180,17 @@ class ImagenDeProduccionTest {
         assertThat(entorno.lines()).contains("MALLOC_ARENA_MAX=2");
     }
 
+    /**
+     * Si igual se quedara sin memoria, la JVM se cierra y Railway la reinicia, en vez de seguir atendiendo a todas las
+     * ferreterias degradada (hallazgo 4 de la revision del 01/11).
+     */
+    @Test
+    void laJvmSeCierraSiSeQuedaSinMemoria() throws Exception {
+        String comando = API.execInContainer("sh", "-c", "tr '\\0' ' ' < /proc/1/cmdline").getStdout();
+
+        assertThat(comando).contains("-XX:+ExitOnOutOfMemoryError");
+    }
+
     @Test
     void laImagenCorreEnAmd64ComoEnRailway() throws Exception {
         assertThat(API.execInContainer("uname", "-m").getStdout().strip()).isEqualTo("x86_64");

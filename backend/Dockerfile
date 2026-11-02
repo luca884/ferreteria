@@ -22,5 +22,6 @@ EXPOSE 8080
 ENV MALLOC_ARENA_MAX=2
 # java -jar: en el jar empaquetado el lector de PDF arranca su JVM con PropertiesLauncher.
 # El tope de 768 MB es para las listas grandes. G1 explícito (con 1 vCPU la JVM elegiría Serial) y GC periódico cada 5 min
-# en reposo (JEP 346): pasado un pico devuelve la memoria que sobra hasta dejar entre 10 % y 30 % libre.
-ENTRYPOINT ["java", "-Xmx768m", "-XX:+UseG1GC", "-XX:G1PeriodicGCInterval=300000", "-XX:MinHeapFreeRatio=10", "-XX:MaxHeapFreeRatio=30", "-jar", "app.jar"]
+# en reposo (JEP 346): pasado un pico devuelve la memoria que sobra hasta dejar entre 10 % y 30 % libre. Si igual se
+# queda sin memoria, se cierra y Railway la reinicia, en vez de seguir atendiendo degradada.
+ENTRYPOINT ["java", "-Xmx768m", "-XX:+ExitOnOutOfMemoryError", "-XX:+UseG1GC", "-XX:G1PeriodicGCInterval=300000", "-XX:MinHeapFreeRatio=10", "-XX:MaxHeapFreeRatio=30", "-jar", "app.jar"]
