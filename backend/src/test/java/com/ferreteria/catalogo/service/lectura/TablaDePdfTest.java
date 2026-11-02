@@ -254,4 +254,61 @@ class TablaDePdfTest {
             .isInstanceOf(BadRequestException.class)
             .hasMessage("La lista tiene más de 20.000 filas. Dividila en archivos más chicos.");
     }
+
+    // ---- tope de columnas y de celdas (hallazgo 4 de la revision del 01/11) ----
+
+    /** Linea {@code numero} (50 por pagina) con una palabra en cada una de las {@code columnas} indicadas. */
+    private static List<PalabraPdf> lineaEnColumnas(int numero, List<Integer> columnas) {
+        List<PalabraPdf> palabras = new ArrayList<>();
+        for (int columna : columnas) {
+            double x = 10 + columna * 40;
+            String texto = "c" + columna;
+            palabras.add(new PalabraPdf(1 + numero / 50, x, x + texto.length() * ANCHO_LETRA,
+                10 + (numero % 50) * 15, TAMANO, texto));
+        }
+        return palabras;
+    }
+
+    private static List<Integer> primeras(int cantidad) {
+        return java.util.stream.IntStream.range(0, cantidad).boxed().toList();
+    }
+
+    @Test
+    void doscientasColumnasSeArman() {
+        List<PalabraPdf> palabras = new ArrayList<>();
+        palabras.addAll(lineaEnColumnas(0, primeras(200)));
+        palabras.addAll(lineaEnColumnas(1, primeras(200)));
+
+        List<FilaLeida> filas = TablaDePdf.armar(palabras);
+
+        assertThat(filas.get(1).celdas()).hasSize(200);
+        assertThat(filas.get(1).celda(199).texto()).isEqualTo("c199");
+    }
+
+    @Test
+    void masDeDoscientasColumnasRechazanLaListaAntesDeArmarla() {
+        List<PalabraPdf> palabras = new ArrayList<>();
+        palabras.addAll(lineaEnColumnas(0, primeras(201)));
+        palabras.addAll(lineaEnColumnas(1, primeras(201)));
+
+        assertThatThrownBy(() -> TablaDePdf.armar(palabras))
+            .isInstanceOf(BadRequestException.class)
+            .hasMessage("La lista tiene datos en más de 200 columnas. Dejá solo las columnas que usás.");
+    }
+
+    @Test
+    void masDeUnMillonDeCeldasRechazanLaListaAntesDeArmarla() {
+        // 5.001 lineas x 200 columnas, con 12 palabras por linea que van rotando: cada columna tiene texto en el
+        // 6 % de las lineas (no es debil) y el PDF tiene 60.000 palabras, muy por debajo del tope de 500.000.
+        List<PalabraPdf> palabras = new ArrayList<>();
+        for (int i = 0; i < 5_001; i++) {
+            int desde = (i * 12) % 200;
+            palabras.addAll(lineaEnColumnas(i, java.util.stream.IntStream.range(0, 12)
+                .map(j -> (desde + j) % 200).sorted().boxed().toList()));
+        }
+
+        assertThatThrownBy(() -> TablaDePdf.armar(palabras))
+            .isInstanceOf(BadRequestException.class)
+            .hasMessage("La lista es demasiado grande para leerla. Dividila en archivos más chicos.");
+    }
 }

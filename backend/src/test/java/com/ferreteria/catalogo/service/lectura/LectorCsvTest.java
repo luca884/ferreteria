@@ -107,9 +107,9 @@ class LectorCsvTest {
     @Test
     void unaCeldaComoTextoDeExcelSeLeeComoSuTexto() {
         // La exportacion de articulos escribe los codigos asi, para que Excel no les saque los ceros (GDS-19).
-        LecturaLista lectura = lector.leer(bytes("Codigo;Barras;Prov;Desc\n=\"0012\";=\"AB\"\"C\";\"=\"\"a;b\"\"\";=\"\"\n"));
+        LecturaLista lectura = lector.leer(bytes("Codigo;Barras;Prov;Desc\n=\"0012\";=\"AB\"\"C\";\"=\"\"a;b\"\"\";=\"\";fin\n"));
 
-        assertThat(textos(lectura.filas().get(1))).containsExactly("0012", "AB\"C", "a;b", "");
+        assertThat(textos(lectura.filas().get(1))).containsExactly("0012", "AB\"C", "a;b", "", "fin");
     }
 
     @Test
@@ -228,5 +228,81 @@ class LectorCsvTest {
         assertThat(lectura.filas()).extracting(FilaLeida::hoja).containsOnly(0);
         assertThat(lectura.filas()).extracting(FilaLeida::numero).containsExactly(1, 2, 3);
         assertThat(textos(lectura.filas().get(2))).containsExactly("A-2", "Tuerca", "100");
+    }
+
+    // ---- tope de columnas y de celdas (hallazgo 4 de la revision del 01/11) ----
+
+    private static final String MENSAJE_COLUMNAS =
+        "La lista tiene datos en más de 200 columnas. Dejá solo las columnas que usás.";
+    private static final String MENSAJE_GRANDE =
+        "La lista es demasiado grande para leerla. Dividila en archivos más chicos.";
+
+    private static String fila(int columnas) {
+        return String.join(";", java.util.Collections.nCopies(columnas, "1"));
+    }
+
+    @Test
+    void doscientasColumnasConDatosSeLeen() {
+        LecturaLista lectura = lector.leer(bytes(fila(200) + "\n"));
+
+        assertThat(lectura.filas().get(0).celdas()).hasSize(200);
+    }
+
+    @Test
+    void unDatoEnLaColumna201RechazaLaLista() {
+        assertThatThrownBy(() -> lector.leer(bytes("a;b\n" + fila(201) + "\n")))
+            .isInstanceOf(BadRequestException.class)
+            .hasMessage(MENSAJE_COLUMNAS);
+    }
+
+    @Test
+    void unaLineaDeVeinticincoMegasDeSeparadoresSeRechazaSinLeerla() {
+        String ataque = "a;".repeat(12_500_000);
+
+        assertThatThrownBy(() -> lector.leer(bytes(ataque)))
+            .isInstanceOf(BadRequestException.class)
+            .hasMessage(MENSAJE_COLUMNAS);
+    }
+
+    @Test
+    void lasColumnasVaciasDelFinalSeIgnoran() {
+        LecturaLista lectura = lector.leer(bytes("a;b" + "; ".repeat(5_000) + "\n1;2" + ";".repeat(300) + "\n"));
+
+        assertThat(lectura.filas()).hasSize(2);
+        assertThat(textos(lectura.filas().get(0))).containsExactly("a", "b");
+        assertThat(textos(lectura.filas().get(1))).containsExactly("1", "2");
+        assertThat(lectura.filas()).extracting(FilaLeida::numero).containsExactly(1, 2);
+    }
+
+    @Test
+    void losSeparadoresEntreComillasNoSonColumnas() {
+        LecturaLista lectura = lector.leer(bytes("\"" + ";".repeat(500) + "\";b\n\"x\"\"" + ";\n".repeat(300) + "\";c\n"));
+
+        assertThat(textos(lectura.filas().get(0))).containsExactly(";".repeat(500), "b");
+        assertThat(textos(lectura.filas().get(1))).containsExactly(("x\"" + ";\n".repeat(300)).trim(), "c");
+    }
+
+    @Test
+    void unaComillaEnMedioDelCampoNoEscondeLosSeparadores() {
+        // Para el CSV una comilla solo abre comillas al principio del campo: aca es un caracter mas.
+        assertThatThrownBy(() -> lector.leer(bytes("a\"b;" + fila(300) + "\n")))
+            .isInstanceOf(BadRequestException.class)
+            .hasMessage(MENSAJE_COLUMNAS);
+    }
+
+    @Test
+    void unMillonDeCeldasSeLee() {
+        String lista = (fila(200) + "\n").repeat(5_000);
+
+        assertThat(lector.leer(bytes(lista)).filas()).hasSize(5_000);
+    }
+
+    @Test
+    void masDeUnMillonDeCeldasRechazaLaLista() {
+        String lista = (fila(200) + "\n").repeat(5_000) + "1\n";
+
+        assertThatThrownBy(() -> lector.leer(bytes(lista)))
+            .isInstanceOf(BadRequestException.class)
+            .hasMessage(MENSAJE_GRANDE);
     }
 }

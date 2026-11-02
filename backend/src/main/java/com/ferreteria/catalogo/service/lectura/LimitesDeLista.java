@@ -34,7 +34,22 @@ public final class LimitesDeLista {
      */
     public static final int MAXIMO_COLUMNAS_DE_MUESTRA = 200;
 
+    /**
+     * Columnas con datos que se aceptan por fila. Las vacias del final no cuentan (un Excel con formato hasta la
+     * columna XFD); un dato mas alla rechaza la lista mientras se lee, antes de armarla en memoria.
+     */
+    public static final int MAXIMO_COLUMNAS = 200;
+
+    /**
+     * Celdas que un lector arma como mucho en todo el libro (20.000 filas x 50 columnas). Cuenta, por fila, hasta
+     * la ultima columna con datos: las vacias del medio tambien ocupan memoria.
+     */
+    public static final int MAXIMO_CELDAS = 1_000_000;
+
     private static final String MENSAJE = "La lista tiene más de 20.000 filas. Dividila en archivos más chicos.";
+
+    private static final String MENSAJE_COLUMNAS =
+            "La lista tiene datos en más de 200 columnas. Dejá solo las columnas que usás.";
 
     private static final String MENSAJE_GRANDE =
             "La lista es demasiado grande para leerla. Dividila en archivos más chicos.";
@@ -49,5 +64,26 @@ public final class LimitesDeLista {
 
     public static BadRequestException demasiadasFilas() {
         return new BadRequestException(MENSAJE);
+    }
+
+    public static BadRequestException demasiadasColumnas() {
+        return new BadRequestException(MENSAJE_COLUMNAS);
+    }
+
+    /** Lleva la cuenta de celdas de una lectura: cada fila se suma ANTES de armarla. */
+    public static final class TopeDeCeldas {
+
+        private long celdas;
+
+        /** {@code ancho}: columnas hasta la ultima con datos de la fila (0 si no tiene datos). */
+        public void sumarFila(int ancho) {
+            if (ancho > MAXIMO_COLUMNAS) {
+                throw demasiadasColumnas();
+            }
+            celdas += ancho;
+            if (celdas > MAXIMO_CELDAS) {
+                throw demasiadoGrande();
+            }
+        }
     }
 }

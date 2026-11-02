@@ -34,9 +34,12 @@ public class LectorCsv implements LectorDeLista {
     /** Un CSV es una sola hoja, la 0: todas sus filas llevan hoja 0. */
     @Override
     public LecturaLista leer(byte[] contenido) {
-        String texto = decodificar(contenido);
+        String decodificado = decodificar(contenido);
+        char delimitador = detectarDelimitador(decodificado);
+        // commons-csv arma el registro entero antes de devolverlo: los topes se controlan antes de parsear.
+        String texto = escanear(decodificado, delimitador);
         CSVFormat formato = CSVFormat.DEFAULT.builder()
-            .setDelimiter(detectarDelimitador(texto))
+            .setDelimiter(delimitador)
             .setTrim(true)
             .setIgnoreEmptyLines(false)
             .get();
@@ -58,12 +61,115 @@ public class LectorCsv implements LectorDeLista {
         return new LecturaLista(List.of(HOJA), filas);
     }
 
+    /** Las celdas hasta la ultima con datos: las vacias del final no se guardan. */
     private static List<Celda> celdas(CSVRecord registro) {
         List<Celda> celdas = new ArrayList<>(registro.size());
+        int ancho = 0;
         for (String valor : registro) {
-            celdas.add(new Celda(sinFormulaDeTexto(valor), null));
+            Celda celda = new Celda(sinFormulaDeTexto(valor), null);
+            celdas.add(celda);
+            if (!celda.vacia()) {
+                ancho = celdas.size();
+            }
         }
-        return celdas;
+        return new ArrayList<>(celdas.subList(0, ancho));
+    }
+
+    /**
+     * Recorre el texto como lo parte commons-csv (una comilla abre comillas solo al principio del campo; adentro,
+     * dos comillas son una) sin crear objetos. Por registro, cuenta hasta la ultima columna con datos contra
+     * {@link LimitesDeLista.TopeDeCeldas}: un dato mas alla de la columna 200 o mas de un millon de celdas rechazan
+     * la lista antes de armarla. Si un registro tiene mas de 200 campos pero los del final estan vacios, se los
+     * saca del texto, para que el parser no arme miles de campos vacios.
+     */
+    private static String escanear(String texto, char delimitador) {
+        EscaneoCsv escaneo = new EscaneoCsv();
+        boolean principioDeCampo = true;
+        boolean entreComillas = false;
+        int largo = texto.length();
+        for (int i = 0; i < largo; i++) {
+            char c = texto.charAt(i);
+            if (entreComillas) {
+                if (c == '"' && i + 1 < largo && texto.charAt(i + 1) == '"') {
+                    escaneo.dato();
+                    i++;
+                } else if (c == '"') {
+                    entreComillas = false;
+                } else if (c > ' ') {
+                    escaneo.dato();
+                }
+            } else if (c == delimitador) {
+                escaneo.separador(i);
+                principioDeCampo = true;
+            } else if (c == '\n' || c == '\r') {
+                int fin = i;
+                if (c == '\r' && i + 1 < largo && texto.charAt(i + 1) == '\n') {
+                    i++;
+                }
+                escaneo.finDeRegistro(fin, i + 1);
+                principioDeCampo = true;
+            } else if (principioDeCampo && c == '"') {
+                entreComillas = true;
+                principioDeCampo = false;
+            } else {
+                principioDeCampo = false;
+                if (c > ' ') {
+                    escaneo.dato();
+                }
+            }
+        }
+        // El ultimo registro, aunque no tenga fin de linea o le queden comillas abiertas.
+        escaneo.finDeRegistro(largo, largo);
+        return escaneo.sinRecortes(texto);
+    }
+
+    /** Lo que {@link #escanear} lleva del registro en curso y los tramos vacios a sacar del texto. */
+    private static final class EscaneoCsv {
+
+        private final LimitesDeLista.TopeDeCeldas tope = new LimitesDeLista.TopeDeCeldas();
+        private final List<int[]> recortes = new ArrayList<>();
+        private int campo;
+        private int ultimaConDatos = -1;
+        /** Donde termina lo que tiene datos del registro: el separador que sigue al ultimo campo con datos. */
+        private int corte;
+
+        void dato() {
+            if (campo >= LimitesDeLista.MAXIMO_COLUMNAS) {
+                throw LimitesDeLista.demasiadasColumnas();
+            }
+            ultimaConDatos = campo;
+        }
+
+        void separador(int posicion) {
+            if (ultimaConDatos == campo) {
+                corte = posicion;
+            }
+            campo++;
+        }
+
+        /** {@code fin}: donde empieza el fin de linea; {@code siguiente}: donde empieza el proximo registro. */
+        void finDeRegistro(int fin, int siguiente) {
+            tope.sumarFila(ultimaConDatos + 1);
+            if (campo >= LimitesDeLista.MAXIMO_COLUMNAS) {
+                recortes.add(new int[] {corte, fin});
+            }
+            campo = 0;
+            ultimaConDatos = -1;
+            corte = siguiente;
+        }
+
+        String sinRecortes(String texto) {
+            if (recortes.isEmpty()) {
+                return texto;
+            }
+            StringBuilder recortado = new StringBuilder(texto.length());
+            int desde = 0;
+            for (int[] recorte : recortes) {
+                recortado.append(texto, desde, recorte[0]);
+                desde = recorte[1];
+            }
+            return recortado.append(texto, desde, texto.length()).toString();
+        }
     }
 
     /**

@@ -87,6 +87,7 @@ public class LectorExcel implements LectorDeLista {
             nombres.add(libro.getSheetName(i));
         }
         List<FilaLeida> filas = new ArrayList<>();
+        LimitesDeLista.TopeDeCeldas tope = new LimitesDeLista.TopeDeCeldas();
         for (int indiceHoja = 0; indiceHoja < nombres.size(); indiceHoja++) {
             Sheet hoja = libro.getSheetAt(indiceHoja);
             for (int r = Math.max(hoja.getFirstRowNum(), 0); r <= hoja.getLastRowNum(); r++) {
@@ -94,7 +95,7 @@ public class LectorExcel implements LectorDeLista {
                 if (row == null) {
                     continue;
                 }
-                FilaLeida fila = new FilaLeida(indiceHoja, r + 1, celdas(row));
+                FilaLeida fila = new FilaLeida(indiceHoja, r + 1, celdas(row, tope));
                 if (!fila.vacia()) {
                     // Tope grueso: no se sigue armando la lista una vez pasado.
                     if (filas.size() >= LimitesDeLista.MAXIMO_FILAS_LEIDAS) {
@@ -107,12 +108,28 @@ public class LectorExcel implements LectorDeLista {
         return new LecturaLista(nombres, filas);
     }
 
-    private List<Celda> celdas(Row row) {
-        int total = Math.max(row.getLastCellNum(), 0);
-        List<Celda> celdas = new ArrayList<>(total);
-        for (int c = 0; c < total; c++) {
-            celdas.add(celda(row.getCell(c)));
+    /**
+     * Las celdas hasta la ultima con datos. Recorre solo las celdas que existen (no hasta {@code getLastCellNum}):
+     * una celda vacia con formato en la columna XFD no arma 16.384 celdas por fila. Un dato mas alla de la
+     * columna 200 rechaza la lista antes de seguir.
+     */
+    private List<Celda> celdas(Row row, LimitesDeLista.TopeDeCeldas tope) {
+        List<Celda> celdas = new ArrayList<>();
+        for (Cell cell : row) {
+            Celda celda = celda(cell);
+            if (celda.vacia()) {
+                continue;
+            }
+            int columna = cell.getColumnIndex();
+            if (columna >= LimitesDeLista.MAXIMO_COLUMNAS) {
+                throw LimitesDeLista.demasiadasColumnas();
+            }
+            while (celdas.size() < columna) {
+                celdas.add(Celda.VACIA);
+            }
+            celdas.add(celda);
         }
+        tope.sumarFila(celdas.size());
         return celdas;
     }
 

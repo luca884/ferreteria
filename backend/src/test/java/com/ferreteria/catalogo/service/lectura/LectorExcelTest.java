@@ -361,4 +361,67 @@ class LectorExcelTest {
         assertThat(ParserPorcentaje.parsear(sinFormato).valor()).isEqualByComparingTo("0.21");
         assertThat(AlicuotaDeFila.interpretar(sinFormato, null, null).esError()).isTrue();
     }
+
+    // ---- tope de columnas y de celdas (hallazgo 4 de la revision del 01/11) ----
+
+    private static final String MENSAJE_COLUMNAS =
+        "La lista tiene datos en más de 200 columnas. Dejá solo las columnas que usás.";
+
+    private static List<Object> filaDe(int columnas, Object ultimo) {
+        List<Object> valores = new java.util.ArrayList<>(java.util.Collections.nCopies(columnas - 1, null));
+        valores.add(ultimo);
+        return valores;
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"xlsx", "xls"})
+    void unDatoEnLaColumna200SeLee(String formato) {
+        LecturaLista lectura = leer(formato, List.of(filaDe(200, "x")));
+
+        assertThat(lectura.filas().get(0).celda(199).texto()).isEqualTo("x");
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"xlsx", "xls"})
+    void unDatoEnLaColumna201RechazaLaLista(String formato) {
+        assertThatThrownBy(() -> leer(formato, List.of(fila("a"), filaDe(201, "x"))))
+            .isInstanceOf(BadRequestException.class)
+            .hasMessage(MENSAJE_COLUMNAS);
+    }
+
+    @Test
+    void unaCeldaVaciaConFormatoEnLaColumnaXfdNoRechazaNiSeArma() throws IOException {
+        byte[] xlsx;
+        try (var libro = new org.apache.poi.xssf.usermodel.XSSFWorkbook();
+             var salida = new java.io.ByteArrayOutputStream()) {
+            var conFormato = libro.createCellStyle();
+            conFormato.setFillForegroundColor(org.apache.poi.ss.usermodel.IndexedColors.YELLOW.getIndex());
+            conFormato.setFillPattern(org.apache.poi.ss.usermodel.FillPatternType.SOLID_FOREGROUND);
+            var hoja = libro.createSheet("Lista");
+            for (int r = 0; r < 3; r++) {
+                var row = hoja.createRow(r);
+                row.createCell(0).setCellValue("A-" + r);
+                row.createCell(1).setCellValue(10 + r);
+                row.createCell(16_383).setCellStyle(conFormato);
+            }
+            libro.write(salida);
+            xlsx = salida.toByteArray();
+        }
+
+        LecturaLista lectura = lector.leer(xlsx);
+
+        assertThat(lectura.filas()).hasSize(3);
+        assertThat(lectura.filas().get(2).celdas()).extracting(Celda::texto).containsExactly("A-2", "12");
+    }
+
+    @Test
+    void masDeUnMillonDeCeldasRechazaLaLista() {
+        List<List<Object>> filas = new java.util.ArrayList<>(
+            java.util.Collections.nCopies(5_000, filaDe(200, 1)));
+        filas.add(fila(1));
+
+        assertThatThrownBy(() -> leer("xls", filas))
+            .isInstanceOf(BadRequestException.class)
+            .hasMessage(DEMASIADO_GRANDE);
+    }
 }

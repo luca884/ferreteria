@@ -64,6 +64,7 @@ final class TablaDePdf {
         }
         List<List<PalabraPdf>> deTabla = lineas.stream().filter(TablaDePdf::esDeTabla).toList();
         List<Columna> columnas = unirDebiles(unirHuecosSinVariedad(columnas(deTabla), deTabla), deTabla.size());
+        controlarTamano(lineas.size(), deTabla.size(), columnas.size());
 
         List<List<String>> celdas = new ArrayList<>(lineas.size());
         List<List<String>> celdasDeTabla = new ArrayList<>();
@@ -83,6 +84,20 @@ final class TablaDePdf {
             filas.add(new FilaLeida(0, i + 1, celdas.get(i).stream().map(texto -> new Celda(texto, null)).toList()));
         }
         return filas;
+    }
+
+    /**
+     * Antes de repartir: cada columna sale de un texto, asi que mas de 200 son datos mas alla de la columna 200; y
+     * cada linea de la tabla arma una celda por columna (las demas, una sola).
+     */
+    private static void controlarTamano(int lineas, int lineasDeTabla, int columnas) {
+        if (columnas > LimitesDeLista.MAXIMO_COLUMNAS) {
+            throw LimitesDeLista.demasiadasColumnas();
+        }
+        long celdas = (long) lineasDeTabla * Math.max(columnas, 1) + (lineas - lineasDeTabla);
+        if (celdas > LimitesDeLista.MAXIMO_CELDAS) {
+            throw LimitesDeLista.demasiadoGrande();
+        }
     }
 
     /** Las lineas en orden de lectura: por pagina, de arriba abajo, y cada una de izquierda a derecha. */
