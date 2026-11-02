@@ -3978,6 +3978,21 @@ describe('Mostrador', () => {
       },
     );
 
+    it('un 403 por devolver stock siendo Vendedor muestra el mensaje en el cobro y conserva el remito y el ticket', async () => {
+      const mensaje = 'Facturar menos de lo que entregó el remito devuelve stock: lo tiene que hacer el Dueño.';
+      ticketDelRemito();
+      await crear();
+      await tecla('F4');
+      await tecla('Enter');
+
+      await fallarCobro(403, { status: 403, message: mensaje, timestamp: '2026-11-02T10:00:00' });
+
+      expect(dialogo()).not.toBeNull();
+      expect(normal(el().querySelector('app-dialogo-cobro .aviso')?.textContent)).toBe(mensaje);
+      expect(normal(origen()?.textContent)).toBe('Venta del remito N.º 5');
+      expect(renglonesTicket()).toHaveLength(1);
+    });
+
     it('después de soltarlo, el reintento vende sin el remito y con la misma clave', async () => {
       ticketDelRemito();
       await crear();
