@@ -13,17 +13,22 @@ import { Component, ElementRef, input, output, signal, viewChild } from '@angula
       role="group"
       aria-labelledby="rotulo-archivo"
       [class.arrastrando]="arrastrando()"
+      [class.deshabilitada]="deshabilitado()"
+      [attr.aria-disabled]="deshabilitado()"
       (dragover)="sobre($event)"
       (dragleave)="arrastrando.set(false)"
       (drop)="soltar($event)"
     >
-      <button type="button" class="elegir-archivo secundario" (click)="abrir()">Elegir archivo…</button>
+      <button type="button" class="elegir-archivo secundario" [disabled]="deshabilitado()" (click)="abrir()">
+        Elegir archivo…
+      </button>
       <span class="nombre-archivo" aria-live="polite">{{ archivo()?.name ?? 'Ningún archivo elegido' }}</span>
       <input
         #entrada
         id="archivo"
         type="file"
         hidden
+        [disabled]="deshabilitado()"
         accept=".xlsx,.xls,.csv,.pdf"
         (change)="elegir()"
       />
@@ -44,12 +49,15 @@ import { Component, ElementRef, input, output, signal, viewChild } from '@angula
       background: var(--superficie);
     }
     .zona-archivo.arrastrando { border-color: var(--acento); background: var(--acento-suave); }
+    .zona-archivo.deshabilitada { opacity: 0.6; cursor: not-allowed; }
     .nombre-archivo { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   `,
 })
 export class SelectorArchivo {
   readonly archivo = input<File | null>(null);
   readonly elegido = output<File | null>();
+  /** Mientras se trabaja con la lista elegida no se elige otra: ni con el botón ni soltando un archivo. */
+  readonly deshabilitado = input(false);
 
   protected readonly arrastrando = signal(false);
   private readonly entrada = viewChild.required<ElementRef<HTMLInputElement>>('entrada');
@@ -66,13 +74,15 @@ export class SelectorArchivo {
   }
 
   protected sobre(evento: DragEvent): void {
+    // Aun deshabilitada se evita lo de siempre: que el navegador abra el archivo soltado.
     evento.preventDefault();
-    this.arrastrando.set(true);
+    this.arrastrando.set(!this.deshabilitado());
   }
 
   protected soltar(evento: DragEvent): void {
     evento.preventDefault();
     this.arrastrando.set(false);
+    if (this.deshabilitado()) return;
     const archivo = evento.dataTransfer?.files?.[0];
     if (archivo) this.elegido.emit(archivo);
   }

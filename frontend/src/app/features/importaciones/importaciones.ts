@@ -3,6 +3,7 @@ import { DecimalPipe } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
 import {
   Component,
+  DestroyRef,
   ElementRef,
   OnInit,
   afterRenderEffect,
@@ -53,6 +54,17 @@ import { FILAS_POR_PAGINA, VistaPreviaTabla } from './vista-previa-tabla';
 /** El backend rechaza más de 25 MB; se controla antes de subir para no gastar el pedido. */
 const MAX_BYTES = 25 * 1024 * 1024;
 const EXTENSIONES = ['.xlsx', '.xls', '.csv', '.pdf'];
+/**
+ * Mientras se lee la lista el aviso cambia cada {@link SEGUNDOS_POR_AVISO} s, para que se note que sigue trabajando;
+ * el último se queda hasta que termina.
+ */
+const AVISOS_DE_LECTURA = [
+  'Leyendo la lista…',
+  'Escaneando filas y columnas…',
+  'Preparando la vista de la planilla…',
+  'Sigue leyendo: las listas grandes tardan un poco más…',
+];
+const SEGUNDOS_POR_AVISO = 3;
 /** Las advertencias se muestran de a tandas; «Ver más» suma otra. */
 const ADVERTENCIAS_POR_TANDA = 100;
 
@@ -118,6 +130,7 @@ export class Importaciones implements OnInit {
   private readonly proveedoresService = inject(ProveedoresService);
   private readonly rubrosService = inject(RubrosService);
   protected readonly auth = inject(AuthService);
+  private readonly alDestruir = inject(DestroyRef).onDestroy(() => this.detenerAvisos());
 
   protected readonly proveedores = signal<Proveedor[]>([]);
   protected readonly proveedorId = signal<number | null>(null);
@@ -127,6 +140,8 @@ export class Importaciones implements OnInit {
   /** La hoja que se ve en la grilla. Cambiarla no toca ningún dato ni vuelve a llamar al servicio. */
   protected readonly hojaVista = signal(0);
   protected readonly cargandoMuestra = signal(false);
+  protected readonly avisoDeLectura = signal(AVISOS_DE_LECTURA[0]);
+  private rotacionDeAvisos: ReturnType<typeof setInterval> | null = null;
   protected readonly error = signal<string | null>(null);
   /** Mensajes por campo de un 400 de validación del backend; si hay, se muestran en vez de `error`. */
   protected readonly erroresCampos = signal<string[]>([]);
@@ -142,6 +157,13 @@ export class Importaciones implements OnInit {
   protected readonly seleccion = signal<Seleccion>(marcarNinguna());
   protected readonly generando = signal(false);
   protected readonly aplicando = signal(false);
+  /**
+   * El servidor lee el archivo al traer la muestra, al generar la vista previa y al importar; mientras tanto no se elige
+   * otro (la misma ferreteria no puede leer dos listas a la vez).
+   */
+  protected readonly trabajandoConLaLista = computed(
+    () => this.cargandoMuestra() || this.generando() || this.aplicando(),
+  );
   protected readonly resumen = signal<Importacion | null>(null);
   /** El backend detectó que la lista cambió desde la vista previa (409) y no se pudo pedir la nueva. */
   protected readonly conflicto = signal(false);
@@ -706,19 +728,40 @@ export class Importaciones implements OnInit {
     if (archivo === null) return;
     this.limpiarMensajes();
     this.cargandoMuestra.set(true);
+    this.rotarAvisos();
     this.service.muestra(archivo).subscribe({
       next: (muestra) => {
         if (this.archivo() !== archivo) return;
         this.muestra.set(muestra);
         this.precargarMapeo();
         this.cargandoMuestra.set(false);
+        this.detenerAvisos();
       },
       error: (err: unknown) => {
         if (this.archivo() !== archivo) return;
         this.cargandoMuestra.set(false);
+        this.detenerAvisos();
         this.error.set(mensajeDe(err, 'No se pudo leer la lista.'));
       },
     });
+  }
+
+  private rotarAvisos(): void {
+    this.detenerAvisos();
+    let indice = 0;
+    this.avisoDeLectura.set(AVISOS_DE_LECTURA[indice]);
+    this.rotacionDeAvisos = setInterval(() => {
+      indice = Math.min(indice + 1, AVISOS_DE_LECTURA.length - 1);
+      this.avisoDeLectura.set(AVISOS_DE_LECTURA[indice]);
+      if (indice === AVISOS_DE_LECTURA.length - 1) this.detenerAvisos();
+    }, SEGUNDOS_POR_AVISO * 1000);
+  }
+
+  private detenerAvisos(): void {
+    if (this.rotacionDeAvisos !== null) {
+      clearInterval(this.rotacionDeAvisos);
+      this.rotacionDeAvisos = null;
+    }
   }
 }
 

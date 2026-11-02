@@ -61,12 +61,16 @@
           }
         </select>
       </div>
-      <app-selector-archivo [archivo]="archivo()" (elegido)="elegirArchivo($event)" />
+      <app-selector-archivo
+        [archivo]="archivo()"
+        [deshabilitado]="trabajandoConLaLista()"
+        (elegido)="elegirArchivo($event)"
+      />
     </div>
   </section>
 
   @if (cargandoMuestra()) {
-    <p class="ayuda" role="status">Leyendo la lista…</p>
+    <p class="ayuda leyendo" role="status">{{ avisoDeLectura() }}</p>
   }
 
   @if (muestra(); as m) {

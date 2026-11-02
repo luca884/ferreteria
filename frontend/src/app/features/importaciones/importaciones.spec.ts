@@ -2664,6 +2664,102 @@ describe('Importaciones', () => {
         expect(q('.nombre-archivo').textContent?.trim()).toBe('lista.pdf');
       });
 
+      describe('mientras se trabaja con la lista no se elige otro archivo', () => {
+        const soltarArchivo = async (archivo: File) => {
+          const soltar = new Event('drop', { bubbles: true, cancelable: true });
+          Object.defineProperty(soltar, 'dataTransfer', { value: { files: [archivo] } });
+          q('.zona-archivo').dispatchEvent(soltar);
+          await asentar();
+        };
+
+        it('mientras se lee la lista, el botón está deshabilitado y soltar otro archivo no hace nada', async () => {
+          await crearComponente();
+          const enVuelo = new Subject<Muestra>();
+          servicio.muestra.mockReturnValue(enVuelo);
+          await elegirArchivo(lista());
+
+          expect(q<HTMLButtonElement>('button.elegir-archivo').disabled).toBe(true);
+          expect(q<HTMLInputElement>('#archivo').disabled).toBe(true);
+          expect(q('.zona-archivo').getAttribute('aria-disabled')).toBe('true');
+          await soltarArchivo(new File(['y'], 'otra.csv'));
+          expect(servicio.muestra).toHaveBeenCalledTimes(1);
+          expect(q('.nombre-archivo').textContent?.trim()).toBe('lista.xlsx');
+
+          enVuelo.next(muestra);
+          enVuelo.complete();
+          await asentar();
+          expect(q<HTMLButtonElement>('button.elegir-archivo').disabled).toBe(false);
+          await soltarArchivo(new File(['y'], 'otra.csv'));
+          expect(servicio.muestra).toHaveBeenCalledTimes(2);
+        });
+
+        it('si la lectura falla, se puede elegir otro archivo', async () => {
+          await crearComponente();
+          servicio.muestra.mockReturnValue(throwError(() => errorHttp(400, 'No se pudo leer el CSV.')));
+          await elegirArchivo(lista());
+
+          expect(q<HTMLButtonElement>('button.elegir-archivo').disabled).toBe(false);
+        });
+
+        it('mientras se genera la vista previa o se importa, tampoco', async () => {
+          await crearComponente();
+          await elegir('#proveedor', 'Sinteplast');
+          await elegirArchivo(lista());
+          servicio.vistaPrevia.mockReturnValue(new Subject());
+
+          q<HTMLButtonElement>('button.generar').click();
+          await asentar();
+
+          expect(q<HTMLButtonElement>('button.elegir-archivo').disabled).toBe(true);
+        });
+
+        it('el aviso de lectura cambia cada 3 segundos y se queda en el último', async () => {
+          await crearComponente();
+          servicio.muestra.mockReturnValue(new Subject<Muestra>());
+          vi.useFakeTimers();
+          try {
+            await elegirArchivo(lista());
+            const aviso = () => q('.leyendo').textContent?.trim();
+
+            expect(aviso()).toBe('Leyendo la lista…');
+            vi.advanceTimersByTime(3000);
+            fixture.detectChanges();
+            expect(aviso()).toBe('Escaneando filas y columnas…');
+            vi.advanceTimersByTime(3000);
+            fixture.detectChanges();
+            expect(aviso()).toBe('Preparando la vista de la planilla…');
+            vi.advanceTimersByTime(3000);
+            fixture.detectChanges();
+            expect(aviso()).toBe('Sigue leyendo: las listas grandes tardan un poco más…');
+            vi.advanceTimersByTime(30000);
+            fixture.detectChanges();
+            expect(aviso()).toBe('Sigue leyendo: las listas grandes tardan un poco más…');
+          } finally {
+            vi.useRealTimers();
+          }
+        });
+
+        it('cada archivo nuevo arranca el aviso desde el principio', async () => {
+          await crearComponente();
+          vi.useFakeTimers();
+          try {
+            const primera = new Subject<Muestra>();
+            servicio.muestra.mockReturnValue(primera);
+            await elegirArchivo(lista());
+            vi.advanceTimersByTime(9000);
+            primera.error(errorHttp(400, 'No se pudo leer el CSV.'));
+            fixture.detectChanges();
+
+            servicio.muestra.mockReturnValue(new Subject<Muestra>());
+            await elegirArchivo(new File(['y'], 'otra.csv'));
+
+            expect(q('.leyendo').textContent?.trim()).toBe('Leyendo la lista…');
+          } finally {
+            vi.useRealTimers();
+          }
+        });
+      });
+
       it('una imagen soltada se rechaza', async () => {
         await crearComponente();
         const soltar = new Event('drop', { bubbles: true, cancelable: true });

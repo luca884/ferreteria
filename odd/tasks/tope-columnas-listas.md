@@ -2,7 +2,7 @@
 
 Objetivo: una lista CSV, Excel o PDF con columnas de más se rechaza antes de agotar la memoria del servidor compartido · Por qué: hallazgo 4 (MEDIA) de la revisión de seguridad del 01/11: un CSV de 25 MB con `a;a;a;…` en una línea, o un `.xlsx` con una celda en la columna XFD por fila, arman millones de celdas, dan `OutOfMemoryError` y fallan los pedidos de todas las ferreterías.
 Rama: `fix/cu-04-tope-columnas` desde `30444b4` · Entrega: single-pr · Runner: backend `./mvnw test -Dtest=<Clase>` / `./mvnw test`; imagen `./mvnw test -Pimagen` · Mirror Engram: `odd/tope-columnas-listas/tasks` (ok)
-Ruteo: caso 5 (alto riesgo: item 4 concurrencia, item 5 imagen) · Pronóstico: ~450 líneas (real: 738, más de 400; single-pr sin dividir) · Estado: terminado; falta push/PR (los corre Luca)
+Ruteo: caso 5 (alto riesgo: item 4 concurrencia, item 5 imagen) · Pronóstico: ~450 líneas (real: 738, más de 400; single-pr sin dividir) · Estado: terminado (T1-T7); falta push/PR (los corre Luca) y decidir `restartPolicyMaxRetries`
 
 ## Specs
 
@@ -20,6 +20,8 @@ Propuesta aprobada por Luca («okey me parece bien»):
   - **CSV:** escaneo previo del texto, carácter por carácter y sin crear objetos, que cuenta separadores por línea respetando las comillas, ANTES de `CSVFormat.parse`: `commons-csv` 1.14.1 arma el registro entero antes de devolverlo y solo tiene `setMaxRows` (verificado con `javap`), así que contar en `celdas()` llega tarde.
   - **Excel:** `row.cellIterator()` (solo las celdas que existen) en vez de `0..getLastCellNum()` con `Celda.VACIA` de relleno; contar y cortar mientras se lee.
   - **PDF:** `TablaDePdf` ya calcula líneas y columnas antes de `repartir`: chequear ahí (columnas > 200 o líneas × columnas > 1.000.000) antes de armar celdas.
+- S6 (2026-11-02): "lo de subir otro archivo mientras carga  la lista, tendriamos que hacer que eso no se pueda hacer, al moment ode subirlo, este cargando se muestre al go preparando visualizando escaneando archivo o cosas asi cada X segundos, y obviamente evitar que se puedan subir a la par en la misma ferreteria" — Implementación: el selector de archivo (botón y arrastrar y soltar) queda deshabilitado mientras se lee la lista, se genera la vista previa o se importa; mientras se lee, el aviso cambia cada 3 s («Leyendo la lista…» → «Escaneando filas y columnas…» → «Preparando la vista de la planilla…» → «Sigue leyendo: las listas grandes tardan un poco más…», que queda). En el servidor, S3 ya rechaza una segunda lectura de la misma ferretería.
+  - Fuera de alcance (agendado para después del proyecto, no se requiere ahora): «cuando el proyecto este completo hacer que se puedan subir vairos y lo hagan en cola o en paralelo».
 
 ## Tasks
 
@@ -29,6 +31,7 @@ Propuesta aprobada por Luca («okey me parece bien»):
 - [x] T4 · S3 · `TurnoDeLectura` (sacado de `LectorPdf`, que ahora lo usa con su propio aviso) en `LectorDeListas` para CSV y Excel · RED compilación en `LectorDeListasTest` → GREEN: `TurnoDeLecturaTest` 6/6, `LectorDeListasTest` 22/22, `LectorPdfTest` 20/20 · `908f06e` · Risk: item 4
 - [x] T5 · S4 · `backend/Dockerfile`: `-XX:+ExitOnOutOfMemoryError` · RED `ImagenDeProduccionTest#laJvmSeCierraSiSeQuedaSinMemoria` (-Pimagen) → GREEN pendiente en T6 · `c7e4057` · Risk: item 5
 - [x] T6 · todas · suites backend y `-Pimagen`, ego-browser (importar una lista real y una patológica), `odd-verifier` · Risk: item 2 · `./mvnw test` 5921/0 fallas · `./mvnw test -Pimagen` 11/11 (incluye T5 GREEN) · las 4 listas de `Lista/` se leen idénticas a `931f6e5` (filas, celdas sin las vacías del final y hash) · ego-browser: CSV con dato en la columna 201 → «La lista tiene datos en más de 200 columnas. Dejá solo las columnas que usás.»; CSV con 5.000 `;` vacíos al final → 3 filas · 3 columnas; LISTA 336.xlsx → 70 hojas, columnas A-I · `odd-verifier`: S1-S5 PASS, sin bloqueantes (L6)
+- [x] T7 · S6 · frontend: `SelectorArchivo` con `deshabilitado` (botón, input y soltar) y aviso que rota en `Importaciones` · RED 4 fallas en `importaciones.spec.ts` → GREEN 192/192 · suite 3504/3504 · `ng build` ok (aviso de presupuesto previo en `dialogo-cobro.ts`, sin tocar) · ego-browser con subida lenta: aviso a los 0/3,1/6,1/9,2 s, botón e input deshabilitados hasta el paso 2 (17,7 s) · Risk: ninguno
 
 ## Log
 
