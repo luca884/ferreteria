@@ -148,6 +148,20 @@ class LimiteDeIntentosTest {
         }
 
         @Test
+        @DisplayName("las variantes que MySQL da por iguales (tildes, ancho completo, invisibles, ß) comparten la racha")
+        void variantesDeLaCollation() {
+            fallar("dueno@x.test", OTRA_IP);
+            fallar("duenó@x.test", OTRA_IP);
+            fallar("due­no@x.test", OTRA_IP);
+            fallar("ｄｕｅｎｏ@x.test", OTRA_IP);
+            fallar("DUENO@x.test", OTRA_IP);
+            assertThat(segundosDe(() -> limite.reservar("dueno@x.test", OTRA_IP))).isEqualTo(60);
+
+            fallarVeces(5, "straße@x.test");
+            assertThat(segundosDe(() -> limite.reservar("strasse@x.test", OTRA_IP))).isEqualTo(60);
+        }
+
+        @Test
         @DisplayName("otro email no se ve afectado")
         void otroEmail() {
             fallarVeces(5, "dueno@x.test");

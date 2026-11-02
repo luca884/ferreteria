@@ -1,5 +1,6 @@
 package com.ferreteria.auth.service;
 
+import java.text.Normalizer;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -7,6 +8,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.regex.Pattern;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -32,6 +34,7 @@ public class LimiteDeIntentos {
     static final Duration OLVIDO = Duration.ofHours(1);
     static final Duration VENTANA_IP = Duration.ofMinutes(1);
     private static final Duration CADA_CUANTO_PURGAR = Duration.ofMinutes(1);
+    private static final Pattern MARCAS_E_INVISIBLES = Pattern.compile("[\\p{M}\\p{Cf}]");
 
     private record RachaDeEmail(int fallos, int nivel, Instant bloqueadoHasta, Instant ultimo) {
         boolean bloqueada(Instant ahora) {
@@ -158,7 +161,13 @@ public class LimiteDeIntentos {
         return Math.max(1, (Duration.between(ahora, hasta).toMillis() + 999) / 1000);
     }
 
-    private static String normalizar(String email) {
-        return email.trim().toLowerCase(Locale.ROOT);
+    /**
+     * Se acerca a la collation de la columna (utf8mb4_0900_ai_ci): sin tildes, ancho completo a normal (NFKD), sin
+     * caracteres invisibles (soft hyphen, ancho cero) y ß como ss. Para un usuario existente la clave ya es su email
+     * guardado; esto hace que las variantes de un email inexistente también compartan la racha y no delaten si existe.
+     */
+    static String normalizar(String email) {
+        String descompuesto = Normalizer.normalize(email.trim(), Normalizer.Form.NFKD);
+        return MARCAS_E_INVISIBLES.matcher(descompuesto).replaceAll("").toLowerCase(Locale.ROOT).replace("ß", "ss");
     }
 }

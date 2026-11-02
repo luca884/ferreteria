@@ -75,6 +75,22 @@ class LimiteDeIntentosLoginIntegrationTest extends UsuariosTestBase {
     }
 
     @Test
+    @DisplayName("bloqueado el email, las variantes que la base da por iguales (tilde, invisible, ancho completo) dan 429")
+    void variantesDelEmailBloqueado() throws Exception {
+        for (int i = 0; i < 5; i++) {
+            login(email, "equivocada", ip);
+        }
+
+        for (String variante : new String[] {
+                email.replaceFirst("o", "ó"),
+                email.replaceFirst("@", "­@"),
+                "ｄｕｅｎｏ" + email.substring("dueno".length())}) {
+            HttpResponse<String> respuesta = login(variante, "demo1234", ip);
+            assertThat(respuesta.statusCode()).as(variante).isEqualTo(429);
+        }
+    }
+
+    @Test
     @DisplayName("el bloqueo es del email: desde otra IP también da 429, y otro email entra")
     void elBloqueoEsDelEmail() throws Exception {
         for (int i = 0; i < 5; i++) {

@@ -58,7 +58,7 @@ class AuthServiceTest {
     // ---- límite de intentos (hallazgo 1 de la revisión de seguridad) ----
 
     @Test
-    @DisplayName("con el email bloqueado el login da 429 sin buscar al usuario ni gastar el bcrypt")
+    @DisplayName("con el email bloqueado el login da 429 sin gastar el bcrypt")
     void bloqueadoNoGastaBcrypt() {
         for (int i = 0; i < 5; i++) {
             limite.reservar("u@demo.local", "10.0.0." + i);
@@ -68,7 +68,23 @@ class AuthServiceTest {
                 .isInstanceOf(DemasiadosIntentosException.class)
                 .hasMessage("Demasiados intentos. Probá de nuevo en 1 minuto.");
         verify(encoder, never()).matches(anyString(), anyString());
-        verify(usuarios, never()).findByEmailIgnoreCase(anyString());
+    }
+
+    @Test
+    @DisplayName("la racha es del usuario encontrado: otra forma de escribir su email que la base acepta también da 429")
+    void rachaDelUsuarioEncontrado() {
+        Usuario usuario = deFerreteria(true, false);
+        when(usuario.getEmail()).thenReturn("u@demo.local");
+        ferreteria(true);
+        when(usuarios.findByEmailIgnoreCase("otra-forma@demo.local")).thenReturn(Optional.of(usuario));
+        for (int i = 0; i < 5; i++) {
+            assertThatThrownBy(() -> auth.login(new LoginRequest("u@demo.local", "demo1234"), IP))
+                    .isExactlyInstanceOf(CredencialesInvalidasException.class);
+        }
+        when(encoder.matches("demo1234", "$2a$10$real")).thenReturn(true);
+
+        assertThatThrownBy(() -> auth.login(new LoginRequest("otra-forma@demo.local", "demo1234"), IP))
+                .isInstanceOf(DemasiadosIntentosException.class);
     }
 
     @Test

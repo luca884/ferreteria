@@ -51,8 +51,11 @@ public class AuthService {
      */
     @Transactional(readOnly = true)
     public LoginResponse login(LoginRequest request, String ip) {
-        limiteDeIntentos.reservar(request.email(), ip);
         Optional<Usuario> encontrado = usuarioRepository.findByEmailIgnoreCase(request.email().trim());
+        // La racha es del email guardado, no del tipeado: la columna (utf8mb4_0900_ai_ci) da por iguales variantes con
+        // tildes, ancho completo, invisibles o ß, y con el texto tal cual cada variante tendría su propio límite.
+        String clave = encontrado.map(Usuario::getEmail).orElse(request.email());
+        limiteDeIntentos.reservar(clave, ip);
         // Siempre un bcrypt, exista o no el email y este o no activo: el tiempo de respuesta no revela cuentas.
         boolean coincide = passwordEncoder.matches(request.password(),
                 encontrado.map(Usuario::getPasswordHash).orElse(hashSenuelo));
@@ -60,7 +63,7 @@ public class AuthService {
                 .filter(u -> coincide)
                 .filter(Usuario::isActivo)
                 .orElseThrow(CredencialesInvalidasException::new);
-        limiteDeIntentos.exito(request.email());
+        limiteDeIntentos.exito(clave);
 
         Ferreteria ferreteria = null;
         if (usuario.getFerreteriaId() != null) {
