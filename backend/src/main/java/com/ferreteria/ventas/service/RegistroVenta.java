@@ -9,6 +9,7 @@ import com.ferreteria.common.exception.ConflictException;
 import com.ferreteria.common.exception.DatosInvalidosException;
 import com.ferreteria.common.exception.ReglaDeNegocioException;
 import com.ferreteria.common.exception.ResourceNotFoundException;
+import com.ferreteria.common.exception.SoloDelDuenoException;
 import com.ferreteria.facturacion.api.FacturacionParaVenta;
 import com.ferreteria.facturacion.api.FacturacionParaVenta.Decision;
 import com.ferreteria.facturacion.api.FacturacionParaVenta.RenglonParaFacturar;
@@ -99,6 +100,8 @@ public class RegistroVenta {
     static final String MENSAJE_PRESUPUESTO_Y_REMITO = "Una venta sale de un presupuesto o de un remito, no de los dos.";
     static final String MENSAJE_CLIENTE_PARA_CUENTA = "Elegí el cliente para vender a cuenta corriente.";
     static final String MENSAJE_SOLO_EL_DUENO_AUTORIZA = "Autorizar el exceso es solo del Dueño";
+    static final String MENSAJE_SOLO_EL_DUENO_DEVUELVE =
+            "Facturar menos de lo que entregó el remito devuelve stock: lo tiene que hacer el Dueño.";
 
     private final ArticulosParaVenta articulosParaVenta;
     private final StockService stockService;
@@ -184,6 +187,10 @@ public class RegistroVenta {
         ClienteDelDocumento.Elegido cliente = clienteDelDocumento.resolverParaVenta(pedido.clienteId());
 
         Validado validado = validar(pedido, usuarioId, autorizados(presupuesto, remito));
+        // Hallazgo 3: facturar el remito por menos de lo que entrego devuelve stock, como anularlo: solo el Dueño. Despues
+        // de validar el ticket (sus 400 van primero) y antes de escribir nada.
+        List<SalidaStock> entregadas = entregadasDe(remito);
+        verificarQueNoDevuelveStock(pedido.renglones(), entregadas, usuarioEsDueno);
         Map<Long, ArticuloVendible> articulos = validado.articulos();
         Map<Long, FormaPago> formas = validado.formas();
 
@@ -233,7 +240,7 @@ public class RegistroVenta {
                 .toList();
         Map<Long, BigDecimal> stockResultante = remito == null
                 ? stockService.registrarVenta(comprobante.getId(), usuarioId, fecha, salidas)
-                : facturarRemito(remito, comprobante, usuarioId, salidas, fecha);
+                : facturarRemito(remito, comprobante, usuarioId, salidas, entregadas, fecha);
 
         List<ItemComprobante> items = new ArrayList<>();
         for (int i = 0; i < pedido.renglones().size(); i++) {
@@ -483,13 +490,41 @@ public class RegistroVenta {
      * El stock de una venta que sale de un remito: el remito ya descontó lo que entregó, asi que solo se mueve la
      * diferencia (RM-006). Devuelve el stock resultante de los articulos que salen de mas.
      */
-    private Map<Long, BigDecimal> facturarRemito(
-            Remito remito, Comprobante comprobante, Long usuarioId, List<SalidaStock> vendidas, LocalDateTime fecha) {
-        List<SalidaStock> entregadas = itemRemitoRepository.deRemitoScoped(remito.getId()).stream()
-                .map(i -> new SalidaStock(i.getArticuloId(), i.getCantidad()))
-                .toList();
+    private Map<Long, BigDecimal> facturarRemito(Remito remito, Comprobante comprobante, Long usuarioId,
+            List<SalidaStock> vendidas, List<SalidaStock> entregadas, LocalDateTime fecha) {
         return stockService.facturarRemito(comprobante.getId(), remito.getId(), remito.getNumero(), usuarioId, fecha,
                 vendidas, entregadas);
+    }
+
+    /** Lo que entregó el remito, por renglon; vacio si la venta no sale de uno. */
+    private List<SalidaStock> entregadasDe(Remito remito) {
+        if (remito == null) {
+            return List.of();
+        }
+        return itemRemitoRepository.deRemitoScoped(remito.getId()).stream()
+                .map(i -> new SalidaStock(i.getArticuloId(), i.getCantidad()))
+                .toList();
+    }
+
+    /**
+     * Hallazgo 3 de la revision de seguridad: si algun articulo del remito se vende en menos cantidad de la que entrego (o
+     * no se vende), esa diferencia vuelve al stock y la venta anula el remito en parte. Anular un remito es solo del
+     * Dueño, asi que esta venta tambien. Vender igual o mas, o agregar articulos, sigue libre.
+     */
+    private static void verificarQueNoDevuelveStock(List<Renglon> renglones, List<SalidaStock> entregadas,
+            boolean usuarioEsDueno) {
+        if (usuarioEsDueno || entregadas.isEmpty()) {
+            return;
+        }
+        Map<Long, BigDecimal> vendido = new HashMap<>();
+        renglones.forEach(r -> vendido.merge(r.articuloId(), r.cantidad(), BigDecimal::add));
+        Map<Long, BigDecimal> entregado = new HashMap<>();
+        entregadas.forEach(e -> entregado.merge(e.articuloId(), e.cantidad(), BigDecimal::add));
+        boolean devuelve = entregado.entrySet().stream()
+                .anyMatch(e -> e.getValue().compareTo(vendido.getOrDefault(e.getKey(), BigDecimal.ZERO)) > 0);
+        if (devuelve) {
+            throw new SoloDelDuenoException(MENSAJE_SOLO_EL_DUENO_DEVUELVE);
+        }
     }
 
     /** Pasos 3 y 4 de C-008: busca los articulos y las formas de pago y valida en orden de precedencia, sin escribir. */

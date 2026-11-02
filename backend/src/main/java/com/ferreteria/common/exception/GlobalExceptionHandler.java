@@ -94,6 +94,11 @@ public class GlobalExceptionHandler {
         return build(HttpStatus.FORBIDDEN, "No tenés permiso para hacer esto");
     }
 
+    @ExceptionHandler(SoloDelDuenoException.class)
+    public ResponseEntity<ApiError> soloDelDueno(SoloDelDuenoException ex) {
+        return build(HttpStatus.FORBIDDEN, ex.getMessage());
+    }
+
     /** Un usuario sin ferreteria (super admin) pidiendo datos de una ferreteria. */
     @ExceptionHandler(MissingTenantException.class)
     public ResponseEntity<ApiError> missingTenant(MissingTenantException ex) {

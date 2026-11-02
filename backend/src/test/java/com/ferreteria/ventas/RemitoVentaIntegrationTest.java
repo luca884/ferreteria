@@ -100,14 +100,13 @@ class RemitoVentaIntegrationTest extends VentasTestBase {
     }
 
     @Test
-    @DisplayName("si se vende de menos, vuelve la diferencia: remito de 3 y venta de 1 devuelve 2")
+    @DisplayName("si el Dueño vende de menos, vuelve la diferencia: remito de 3 y venta de 1 devuelve 2")
     void ventaDeMenos() throws Exception {
         Tienda t = tienda();
         long a = articulo(t, "Tornillo", "UNIDAD", "100.00", "10");
-        String token = login(t.emailVendedor());
-        long r = remito(token, a, "3", "100.00", "300.00").get("remitoId").asLong();
+        long r = remito(login(t.emailVendedor()), a, "3", "100.00", "300.00").get("remitoId").asLong();
 
-        JsonNode venta = json(venderRemito(token, clave(), r, "100.00", linea(a, "1", "100.00"))
+        JsonNode venta = json(venderRemito(login(t.emailDueno()), clave(), r, "100.00", linea(a, "1", "100.00"))
                 .andExpect(status().isCreated()));
 
         assertThat(stock(a)).isEqualByComparingTo("9");
@@ -117,20 +116,74 @@ class RemitoVentaIntegrationTest extends VentasTestBase {
     }
 
     @Test
-    @DisplayName("un articulo que el remito no tenia sale entero y uno del remito que no se vendio vuelve entero")
+    @DisplayName("con el Dueño, un articulo que el remito no tenia sale entero y uno del remito que no se vendio vuelve entero")
     void articulosQueCambian() throws Exception {
         Tienda t = tienda();
         long a = articulo(t, "Tornillo", "UNIDAD", "100.00", "10");
         long b = articulo(t, "Clavo", "UNIDAD", "50.00", "10");
-        String token = login(t.emailVendedor());
-        long r = remito(token, a, "2", "100.00", "200.00").get("remitoId").asLong();
+        long r = remito(login(t.emailVendedor()), a, "2", "100.00", "200.00").get("remitoId").asLong();
 
-        JsonNode venta = json(venderRemito(token, clave(), r, "150.00", linea(b, "3", "50.00"))
+        JsonNode venta = json(venderRemito(login(t.emailDueno()), clave(), r, "150.00", linea(b, "3", "50.00"))
                 .andExpect(status().isCreated()));
 
         assertThat(stock(a)).isEqualByComparingTo("10");
         assertThat(stock(b)).isEqualByComparingTo("7");
         assertThat(diferencias(venta.get("ventaId").asLong())).hasSize(2);
+    }
+
+    @Test
+    @DisplayName("hallazgo 3: el Vendedor no factura un remito por menos de lo que entrego: 403 y no cambia nada")
+    void vendedorNoDevuelveStock() throws Exception {
+        Tienda t = tienda();
+        long a = articulo(t, "Bolsa de cemento", "UNIDAD", "100.00", "10");
+        String token = login(t.emailVendedor());
+        long r = remito(token, a, "3", "100.00", "300.00").get("remitoId").asLong();
+
+        JsonNode rechazo = json(venderRemito(token, clave(), r, "100.00", linea(a, "1", "100.00"))
+                .andExpect(status().isForbidden()));
+
+        assertThat(rechazo.get("message").asText())
+                .isEqualTo("Facturar menos de lo que entregó el remito devuelve stock: lo tiene que hacer el Dueño.");
+        assertThat(estado(r)).isEqualTo("EMITIDO");
+        assertThat(stock(a)).isEqualByComparingTo("7");
+        assertThat(comprobantes(t)).isZero();
+    }
+
+    @Test
+    @DisplayName("hallazgo 3: el Vendedor no saca del ticket un articulo del remito: 403 y no cambia nada")
+    void vendedorNoSacaUnArticuloDelRemito() throws Exception {
+        Tienda t = tienda();
+        long a = articulo(t, "Bolsa de cemento", "UNIDAD", "100.00", "10");
+        long b = articulo(t, "Caño", "UNIDAD", "50.00", "10");
+        String token = login(t.emailVendedor());
+        Map<String, Object> pedido = mapa(clave(), null, "300.00", linea(a, "2", "100.00"), linea(b, "2", "50.00"));
+        pedido.remove("formaPagoId");
+        long r = json(postJson("/api/remitos", token, objectMapper.writeValueAsString(pedido))
+                .andExpect(status().isCreated())).get("remitoId").asLong();
+
+        venderRemito(token, clave(), r, "200.00", linea(a, "2", "100.00")).andExpect(status().isForbidden());
+
+        assertThat(estado(r)).isEqualTo("EMITIDO");
+        assertThat(stock(a)).isEqualByComparingTo("8");
+        assertThat(stock(b)).isEqualByComparingTo("8");
+        assertThat(comprobantes(t)).isZero();
+    }
+
+    @Test
+    @DisplayName("hallazgo 3: el Vendedor agrega un articulo sin sacar los del remito: se vende")
+    void vendedorAgregaSinSacar() throws Exception {
+        Tienda t = tienda();
+        long a = articulo(t, "Bolsa de cemento", "UNIDAD", "100.00", "10");
+        long b = articulo(t, "Caño", "UNIDAD", "50.00", "10");
+        String token = login(t.emailVendedor());
+        long r = remito(token, a, "2", "100.00", "200.00").get("remitoId").asLong();
+
+        venderRemito(token, clave(), r, "250.00", linea(a, "2", "100.00"), linea(b, "1", "50.00"))
+                .andExpect(status().isCreated());
+
+        assertThat(estado(r)).isEqualTo("FACTURADO");
+        assertThat(stock(a)).isEqualByComparingTo("8");
+        assertThat(stock(b)).isEqualByComparingTo("9");
     }
 
     @Test
