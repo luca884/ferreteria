@@ -117,6 +117,28 @@ describe('Login', () => {
       expect(descripciones(campo('email'))).toEqual(['Email o contraseña incorrectos.']);
     });
 
+    it('un 429 muestra el aviso del servidor con los minutos que faltan', async () => {
+      await crear();
+      const auth = TestBed.inject(AuthService) as unknown as { login: ReturnType<typeof vi.fn> };
+      const mensaje = 'Demasiados intentos. Probá de nuevo en 5 minutos.';
+      auth.login.mockReturnValue(throwError(() => new HttpErrorResponse({ status: 429, error: { message: mensaje } })));
+
+      await ingresar();
+
+      expect(descripciones(campo('email'))).toEqual([mensaje]);
+      expect(descripciones(campo('password'))).toEqual([mensaje]);
+    });
+
+    it('un 429 sin mensaje igual avisa que hubo demasiados intentos', async () => {
+      await crear();
+      const auth = TestBed.inject(AuthService) as unknown as { login: ReturnType<typeof vi.fn> };
+      auth.login.mockReturnValue(throwError(() => new HttpErrorResponse({ status: 429 })));
+
+      await ingresar();
+
+      expect(descripciones(campo('email'))).toEqual(['Demasiados intentos. Probá de nuevo en unos minutos.']);
+    });
+
     it('un 401 de ferretería suspendida muestra el mensaje del servidor', async () => {
       await crear();
       const auth = TestBed.inject(AuthService) as unknown as { login: ReturnType<typeof vi.fn> };

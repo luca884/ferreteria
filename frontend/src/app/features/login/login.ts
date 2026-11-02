@@ -9,6 +9,8 @@ import { esRutaPropia } from '../../core/auth/ruta-propia';
 /** El `message` genérico del 401 del backend (CredencialesInvalidasException). */
 const GENERICO_DEL_SERVIDOR = 'Email o contraseña incorrectos';
 
+const SIN_CONEXION = 'No pudimos conectar con el servidor. Probá de nuevo.';
+
 /** Los campos en el orden de la pantalla: al enviar con errores se enfoca el primero que falla. */
 const CAMPOS = ['email', 'password'] as const;
 type Campo = (typeof CAMPOS)[number];
@@ -67,13 +69,17 @@ export class Login {
       next: () => void this.router.navigateByUrl(this.destino()),
       error: (err: unknown) => {
         this.enviando.set(false);
-        this.error.set(
-          err instanceof HttpErrorResponse && err.status === 401
-            ? this.mensajeDeCredenciales(err)
-            : 'No pudimos conectar con el servidor. Probá de nuevo.',
-        );
+        this.error.set(this.mensajeDeError(err));
       },
     });
+  }
+
+  private mensajeDeError(err: unknown): string {
+    if (!(err instanceof HttpErrorResponse)) return SIN_CONEXION;
+    if (err.status === 401) return this.mensajeDeCredenciales(err);
+    // Límite de intentos: el servidor dice cuántos minutos faltan.
+    if (err.status === 429) return mensajeDe(err, 'Demasiados intentos. Probá de nuevo en unos minutos.');
+    return SIN_CONEXION;
   }
 
   /** El servidor explica un 401 solo cuando hay algo que decir (ferretería suspendida); si no, el texto de siempre. */
