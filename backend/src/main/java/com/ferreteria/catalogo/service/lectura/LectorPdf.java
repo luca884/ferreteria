@@ -3,7 +3,6 @@ package com.ferreteria.catalogo.service.lectura;
 import com.ferreteria.catalogo.model.FilaLeida;
 import com.ferreteria.catalogo.model.LecturaLista;
 import com.ferreteria.common.exception.BadRequestException;
-import com.ferreteria.tenant.TenantContext;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
@@ -13,9 +12,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -62,8 +58,7 @@ public class LectorPdf implements LectorDeLista {
     private final Topes topes;
     private final Class<?> principal;
     private final Optional<Path> nice;
-    private final Semaphore turno = new Semaphore(1, true);
-    private final Set<Long> ferreteriasConPdf = ConcurrentHashMap.newKeySet();
+    private final TurnoDeLectura turno;
 
     public LectorPdf() {
         this(TOPES, ExtractorPdf.class);
@@ -79,48 +74,18 @@ public class LectorPdf implements LectorDeLista {
         this.topes = topes;
         this.principal = principal;
         this.nice = nice;
+        this.turno = new TurnoDeLectura(topes.espera(), OCUPADO);
     }
 
     @Override
     public LecturaLista leer(byte[] contenido) {
-        List<PalabraPdf> palabras = conTurno(contenido);
+        // Un PDF por vez, y cada ferreteria espera uno solo (TurnoDeLectura).
+        List<PalabraPdf> palabras = turno.conTurno(() -> leerAparte(contenido));
         if (palabras.isEmpty()) {
             throw new BadRequestException(SIN_TEXTO);
         }
         List<FilaLeida> filas = TablaDePdf.armar(palabras);
         return new LecturaLista(List.of(HOJA), filas);
-    }
-
-    /**
-     * Una ferreteria que ya tiene un PDF leyendose o esperando turno no espera otro: asi los pedidos que esperan no pasan
-     * de uno por ferreteria y ninguna le saca el turno a las demas. Sin ferreteria (tests, medicion) solo hay turno.
-     */
-    private List<PalabraPdf> conTurno(byte[] contenido) {
-        Optional<Long> ferreteria = TenantContext.currentFerreteriaId();
-        if (ferreteria.isPresent() && !ferreteriasConPdf.add(ferreteria.get())) {
-            throw new BadRequestException(OCUPADO);
-        }
-        try {
-            esperarTurno();
-            try {
-                return leerAparte(contenido);
-            } finally {
-                turno.release();
-            }
-        } finally {
-            ferreteria.ifPresent(ferreteriasConPdf::remove);
-        }
-    }
-
-    private void esperarTurno() {
-        try {
-            if (!turno.tryAcquire(topes.espera().toMillis(), TimeUnit.MILLISECONDS)) {
-                throw new BadRequestException(OCUPADO);
-            }
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new IllegalStateException("Se interrumpió la espera para leer el PDF", e);
-        }
     }
 
     private List<PalabraPdf> leerAparte(byte[] contenido) {

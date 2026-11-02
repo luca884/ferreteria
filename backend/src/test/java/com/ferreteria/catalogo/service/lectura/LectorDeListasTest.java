@@ -255,4 +255,46 @@ class LectorDeListasTest {
             .isInstanceOf(BadRequestException.class)
             .hasMessage(MENSAJE_LIMITE);
     }
+
+    @Test
+    void mientrasSeLeeUnCsvOtroCsvUnExcelEsperanSuTurnoYUnPdfNo() throws Exception {
+        java.util.concurrent.CountDownLatch leyendo = new java.util.concurrent.CountDownLatch(1);
+        java.util.concurrent.CountDownLatch terminar = new java.util.concurrent.CountDownLatch(1);
+        LectorCsv lento = new LectorCsv() {
+            @Override
+            public LecturaLista leer(byte[] contenido) {
+                leyendo.countDown();
+                try {
+                    terminar.await(10, java.util.concurrent.TimeUnit.SECONDS);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+                return super.leer(contenido);
+            }
+        };
+        LectorDeListas conTurno = new LectorDeListas(new LectorExcel(), lento, new LectorPdf(),
+            new TurnoDeLectura(java.time.Duration.ofMillis(300)));
+        byte[] csv = "Codigo;Precio\nA-1;10\n".getBytes(StandardCharsets.UTF_8);
+        byte[] xlsx = ListasDePrueba.xlsx(List.of(java.util.Arrays.asList("A-1", 10)));
+        java.util.concurrent.ExecutorService otro = java.util.concurrent.Executors.newSingleThreadExecutor();
+        try {
+            var primero = otro.submit(() -> conTurno.leer(csv));
+            assertThat(leyendo.await(5, java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+
+            for (byte[] archivo : List.of(csv, xlsx)) {
+                assertThatThrownBy(() -> conTurno.leer(archivo))
+                    .isInstanceOf(BadRequestException.class)
+                    .hasMessage("Ya se está leyendo otra lista. Probá de nuevo en un momento.");
+            }
+            assertThat(conTurno.leer(ListasDePrueba.pdf(List.of(List.of("A-1", "10")))).filas())
+                .as("el PDF tiene su propio turno").isNotEmpty();
+
+            terminar.countDown();
+            assertThat(primero.get().filas()).hasSize(2);
+            assertThat(conTurno.leer(xlsx).filas()).hasSize(1);
+        } finally {
+            terminar.countDown();
+            otro.shutdownNow();
+        }
+    }
 }
