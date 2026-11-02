@@ -128,10 +128,16 @@ class AjusteCuentaIntegrationTest extends CuentaCorrienteTestBase {
 
     // ---- consultas de la base ----
 
-    private Long ultimoNumeroDeAjuste(long ferreteriaId) {
-        List<Long> filas = jdbc.queryForList("select ultimo_numero from numerador_ajuste_cuenta where ferreteria_id = ?",
-                Long.class, ferreteriaId);
+    private Long ultimoNumeroDeAjuste(long ferreteriaId, String tipo) {
+        List<Long> filas = jdbc.queryForList("select ultimo_numero from numerador_ajuste_cuenta where ferreteria_id = ? "
+                + "and tipo = ?", Long.class, ferreteriaId, tipo);
         return filas.isEmpty() ? null : filas.get(0);
+    }
+
+    /** Cuántas filas tiene el numerador de ajustes de la ferretería, de cualquier tipo: 0 si nunca se consumió un número. */
+    private long numeradoresDeAjuste(long ferreteriaId) {
+        return jdbc.queryForObject("select count(*) from numerador_ajuste_cuenta where ferreteria_id = ?", Long.class,
+                ferreteriaId);
     }
 
     private long ajustes(long cliente) {
@@ -246,27 +252,41 @@ class AjusteCuentaIntegrationTest extends CuentaCorrienteTestBase {
         assertThat(((Number) asiento.get("ajuste_id")).longValue()).isEqualTo(r.get("ajusteId").asLong());
         assertThat(((Number) asiento.get("usuario_id")).longValue()).isEqualTo(c.f().usuarioId());
         assertThat(saldo(c.cliente())).isEqualByComparingTo("1150.50");
-        assertThat(ultimoNumeroDeAjuste(c.f().id())).isEqualTo(1L);
+        assertThat(ultimoNumeroDeAjuste(c.f().id(), "RECARGO")).isEqualTo(1L);
         assertCuenta(c);
     }
 
     @Test
-    @DisplayName("S1: la numeración es una por ferretería y correlativa entre Recargos y Descuentos; no usa la caja")
+    @DisplayName("S1 (cu-12-numeracion-ajustes): Recargos y Descuentos se numeran cada uno por su lado, por ferretería y "
+        + "correlativos, como GDS (G95); no usa la caja")
     void numeracion() throws Exception {
         Ferreteria f = ferreteria(); // sin caja abierta a propósito: ajustar la cuenta no mueve efectivo
         Logins logins = logins(f);
         Caso c = new Caso(f, login(logins.dueno()), login(logins.vendedor()), cliente(f, "1000.00"));
         Caso otro = new Caso(f, c.dueno(), c.vendedor(), cliente(f, "1000.00"));
+        Ferreteria g = ferreteria();
+        Logins loginsG = logins(g);
+        Caso deOtraFerreteria = new Caso(g, login(loginsG.dueno()), login(loginsG.vendedor()), cliente(g, "1000.00"));
 
-        JsonNode a = recargo(c, "10.00");
-        JsonNode b = descuento(otro, "5.00");
-        JsonNode d = recargo(c, "1.00");
+        JsonNode recargo1 = recargo(c, "10.00");
+        JsonNode descuento1 = descuento(otro, "5.00");
+        JsonNode recargo2 = recargo(c, "1.00");
+        JsonNode descuento2 = descuento(c, "1.00");
+        JsonNode descuentoDeG = descuento(deOtraFerreteria, "1.00");
 
-        assertThat(a.get("numero").asLong()).isEqualTo(1L);
-        assertThat(b.get("numero").asLong()).isEqualTo(2L);
-        assertThat(b.get("referencia").asText()).isEqualTo("Descuento N.º 2");
-        assertThat(d.get("numero").asLong()).isEqualTo(3L);
-        assertThat(ultimoNumeroDeAjuste(f.id())).isEqualTo(3L);
+        assertThat(recargo1.get("numero").asLong()).isEqualTo(1L);
+        assertThat(recargo1.get("referencia").asText()).isEqualTo("Recargo N.º 1");
+        assertThat(descuento1.get("numero").asLong()).isEqualTo(1L);
+        assertThat(descuento1.get("referencia").asText()).isEqualTo("Descuento N.º 1");
+        assertThat(recargo2.get("referencia").asText()).isEqualTo("Recargo N.º 2");
+        assertThat(descuento2.get("referencia").asText()).isEqualTo("Descuento N.º 2");
+        assertThat(descuentoDeG.get("referencia").asText()).isEqualTo("Descuento N.º 1");
+        assertThat(ultimoNumeroDeAjuste(f.id(), "RECARGO")).isEqualTo(2L);
+        assertThat(ultimoNumeroDeAjuste(f.id(), "DESCUENTO")).isEqualTo(2L);
+        assertThat(ultimoNumeroDeAjuste(g.id(), "RECARGO")).isNull();
+        assertThat(ultimoNumeroDeAjuste(g.id(), "DESCUENTO")).isEqualTo(1L);
+        assertThat(jdbc.queryForList("select referencia from movimiento_cuenta_cliente where cliente_id = ? and tipo = 'AJUSTE' "
+            + "order by id", String.class, c.cliente())).containsExactly("Recargo N.º 1", "Recargo N.º 2", "Descuento N.º 2");
     }
 
     @Test
@@ -593,7 +613,7 @@ class AjusteCuentaIntegrationTest extends CuentaCorrienteTestBase {
         assertThat(otroContenido.get("message").asText()).isEqualTo("Este ajuste ya se registró con otros datos");
         assertThat(ajustes(c.cliente())).isEqualTo(1);
         assertThat(movimientos(c.cliente())).isEqualTo(movimientos);
-        assertThat(ultimoNumeroDeAjuste(c.f().id())).isEqualTo(1L);
+        assertThat(ultimoNumeroDeAjuste(c.f().id(), "DESCUENTO")).isEqualTo(1L);
         assertCuenta(c);
     }
 
@@ -637,7 +657,7 @@ class AjusteCuentaIntegrationTest extends CuentaCorrienteTestBase {
         assertThat(crudo).contains("\"pendiente\":50.00");
         assertThat(ajustes(c.cliente())).isZero();
         assertThat(movimientos(c.cliente())).isEqualTo(movimientos);
-        assertThat(ultimoNumeroDeAjuste(c.f().id())).as("el número no se consumió").isNull();
+        assertThat(numeradoresDeAjuste(c.f().id())).as("el número no se consumió").isZero();
         assertCuenta(c);
     }
 
@@ -689,7 +709,7 @@ class AjusteCuentaIntegrationTest extends CuentaCorrienteTestBase {
         assertThat(ninguno.get("errors").has("imputaciones[0].comprobanteId")).isTrue();
         assertThat(claves(vacio.get("errors"))).contains("clave", "tipo", "importe", "motivo");
         assertThat(ajustes(c.cliente())).isZero();
-        assertThat(ultimoNumeroDeAjuste(c.f().id())).isNull();
+        assertThat(numeradoresDeAjuste(c.f().id())).isZero();
     }
 
     @Test
@@ -703,7 +723,7 @@ class AjusteCuentaIntegrationTest extends CuentaCorrienteTestBase {
 
         assertThat(error.get("message").asText()).isEqualTo("El cliente está desactivado.");
         assertThat(ajustes(c.cliente())).isZero();
-        assertThat(ultimoNumeroDeAjuste(c.f().id())).isNull();
+        assertThat(numeradoresDeAjuste(c.f().id())).isZero();
     }
 
     // ================================================================== S7: roles y aislamiento por ferretería
@@ -720,7 +740,7 @@ class AjusteCuentaIntegrationTest extends CuentaCorrienteTestBase {
                 .content(pedido(clave(), "RECARGO", "10.00", "Interés por mora"))).andExpect(status().isUnauthorized());
 
         assertThat(ajustes(c.cliente())).isZero();
-        assertThat(ultimoNumeroDeAjuste(c.f().id())).isNull();
+        assertThat(numeradoresDeAjuste(c.f().id())).isZero();
     }
 
     @Test
@@ -746,7 +766,7 @@ class AjusteCuentaIntegrationTest extends CuentaCorrienteTestBase {
         imputandoRecargoAjeno.andExpect(status().isNotFound());
         assertThat(ajustes(a.cliente())).as("A conserva solo su Recargo").isEqualTo(1);
         assertThat(ajustes(b.cliente())).isZero();
-        assertThat(ultimoNumeroDeAjuste(b.f().id())).isNull();
+        assertThat(numeradoresDeAjuste(b.f().id())).isZero();
         assertThat(saldo(a.cliente())).isEqualByComparingTo("600.00");
         assertThat(pendientes(b).get("comprobantes")).isEmpty();
         // la misma clave en la otra ferretería es independiente: es un ajuste nuevo

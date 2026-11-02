@@ -99,7 +99,7 @@ public class RegistroAjuste {
             return yaRegistrado.get();
         }
 
-        long numero = numerador.siguienteScoped();
+        long numero = numerador.siguienteScoped(pedido.tipoAjuste());
         AjusteCuenta ajuste = ajustes.save(AjusteCuenta.nuevo(ferreteriaId, pedido.clienteId(), numero, pedido.tipoAjuste(),
                 pedido.importe(), pedido.motivo(), pedido.clave(), LocalDateTime.now(reloj), usuarioId));
         // Si la deuda cambió (ImputacionInvalidaException) se revierte todo, ajuste y numerador incluidos.
