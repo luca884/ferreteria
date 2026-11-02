@@ -10,7 +10,8 @@ services:
       MYSQL_ROOT_PASSWORD: root
       TZ: UTC
     ports:
-      - "3307:3306"
+      # Solo desde esta máquina: con 0.0.0.0, cualquiera en la misma red entra con root/root (hallazgo 9).
+      - "127.0.0.1:3307:3306"
     volumes:
       - ferreteria-mysql:/var/lib/mysql
     healthcheck:
