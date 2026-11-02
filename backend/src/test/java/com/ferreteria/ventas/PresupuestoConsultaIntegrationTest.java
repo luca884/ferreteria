@@ -150,8 +150,9 @@ class PresupuestoConsultaIntegrationTest extends VentasTestBase {
 
         JsonNode aceptado = json(cambiarEstado(vendedor, id, "ACEPTADO").andExpect(status().isOk()));
         JsonNode repetido = json(cambiarEstado(vendedor, id, "ACEPTADO").andExpect(status().isOk()));
-        JsonNode rechazado = json(cambiarEstado(login(t.emailDueno()), id, "RECHAZADO").andExpect(status().isOk()));
-        JsonNode pendiente = json(cambiarEstado(vendedor, id, "PENDIENTE").andExpect(status().isOk()));
+        String dueno = login(t.emailDueno());
+        JsonNode rechazado = json(cambiarEstado(dueno, id, "RECHAZADO").andExpect(status().isOk()));
+        JsonNode pendiente = json(cambiarEstado(dueno, id, "PENDIENTE").andExpect(status().isOk()));
 
         assertThat(aceptado.get("estado").asText()).isEqualTo("ACEPTADO");
         assertThat(aceptado.get("renglones")).hasSize(1);
@@ -162,6 +163,25 @@ class PresupuestoConsultaIntegrationTest extends VentasTestBase {
                 .isEqualTo("PENDIENTE");
         assertThat(stock(a)).isEqualByComparingTo("10");
         assertThat(movimientos(t)).isZero();
+    }
+
+    @Test
+    @DisplayName("un rechazado lo reactiva solo el Dueño: el Vendedor recibe 403 y el presupuesto sigue rechazado")
+    void reactivarUnRechazadoEsDelDueno() throws Exception {
+        Tienda t = tiendaSinCaja();
+        long a = articulo(t, "Tornillo", "UNIDAD", "100.00", "10");
+        String vendedor = login(t.emailVendedor());
+        long id = presupuesto(vendedor, a, "1", "100.00", "100.00").get("presupuestoId").asLong();
+        cambiarEstado(vendedor, id, "RECHAZADO").andExpect(status().isOk());
+
+        for (String estado : new String[] {"PENDIENTE", "ACEPTADO"}) {
+            cambiarEstado(vendedor, id, estado).andExpect(status().isForbidden());
+            assertThat(jdbc.queryForObject("select estado from presupuesto where id = ?", String.class, id))
+                    .as(estado).isEqualTo("RECHAZADO");
+        }
+        cambiarEstado(vendedor, id, "RECHAZADO").andExpect(status().isOk());
+        JsonNode aceptado = json(cambiarEstado(login(t.emailDueno()), id, "ACEPTADO").andExpect(status().isOk()));
+        assertThat(aceptado.get("estado").asText()).isEqualTo("ACEPTADO");
     }
 
     @Test
