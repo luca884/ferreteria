@@ -418,7 +418,16 @@ class ImagenDeProduccionTest {
 
         JsonNode login = login(EMAIL_DUENO, CLAVE_DUENO);
         assertThat(login.path("sesion").path("rol").asText()).isEqualTo("DUENO");
-        return login.path("token").asText();
+        String token = login.path("token").asText();
+        // La contraseña la eligió el super admin: hasta cambiarla, la API solo deja hacer eso (hallazgo 5).
+        assertThat(login.path("sesion").path("debeCambiarContrasena").asBoolean()).isTrue();
+        ResponseEntity<String> cambio = http.put().uri("/api/auth/password")
+            .header("Authorization", "Bearer " + token)
+            .contentType(MediaType.APPLICATION_JSON)
+            .body(Map.of("passwordActual", CLAVE_DUENO, "passwordNueva", CLAVE_DUENO + "-propia"))
+            .retrieve().toEntity(String.class);
+        assertThat(cambio.getStatusCode().value()).as(cambio.getBody()).isEqualTo(204);
+        return token;
     }
 
     private static JsonNode login(String email, String clave) throws Exception {
