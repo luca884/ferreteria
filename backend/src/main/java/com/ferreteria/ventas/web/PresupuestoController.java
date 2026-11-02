@@ -1,5 +1,6 @@
 package com.ferreteria.ventas.web;
 
+import com.ferreteria.auth.model.Rol;
 import com.ferreteria.auth.security.AuthUser;
 import com.ferreteria.common.PageResponse;
 import com.ferreteria.ventas.model.EstadoPresupuesto;
@@ -67,10 +68,14 @@ public class PresupuestoController {
         return PresupuestoResponse.de(detalle.presupuesto(), detalle.items());
     }
 
-    /** Pasa a PENDIENTE, ACEPTADO o RECHAZADO. FACTURADO solo lo pone la venta hecha desde el presupuesto. */
+    /**
+     * Pasa a PENDIENTE, ACEPTADO o RECHAZADO. FACTURADO solo lo pone la venta hecha desde el presupuesto. Sacarlo de
+     * RECHAZADO es solo del Dueño.
+     */
     @PatchMapping("/{id}/estado")
-    public PresupuestoResponse cambiarEstado(@PathVariable Long id, @RequestBody CambiarEstadoPresupuestoRequest request) {
-        DetallePresupuesto detalle = presupuestoGestion.cambiarEstado(id, request.estado());
+    public PresupuestoResponse cambiarEstado(@PathVariable Long id, @RequestBody CambiarEstadoPresupuestoRequest request,
+            @AuthenticationPrincipal AuthUser authUser) {
+        DetallePresupuesto detalle = presupuestoGestion.cambiarEstado(id, request.estado(), authUser.rol() == Rol.DUENO);
         return PresupuestoResponse.de(detalle.presupuesto(), detalle.items());
     }
 

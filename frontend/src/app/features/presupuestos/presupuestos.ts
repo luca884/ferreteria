@@ -58,6 +58,7 @@ export class Presupuestos implements OnInit {
   private readonly generarClave = inject(GENERAR_CLAVE);
 
   protected readonly estados = ESTADOS_PRESUPUESTO;
+  protected readonly esDueno = this.auth.esDueno;
   protected readonly etiqueta = ETIQUETA_ESTADO;
   protected readonly fechaHora = fechaHoraLocal;
   protected readonly porcentajeGeneral = porcentajeDescuentoGeneral;

@@ -9,6 +9,7 @@ import com.ferreteria.ventas.repository.ItemPresupuestoRepository;
 import com.ferreteria.ventas.repository.PresupuestoRepository;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -27,6 +28,7 @@ public class PresupuestoGestion {
     static final String MENSAJE_NO_ENCONTRADO = "Presupuesto no encontrado";
     static final String MENSAJE_ESTADO = "Estado no válido.";
     static final String MENSAJE_FACTURADO = "Ese presupuesto ya se facturó.";
+    static final String MENSAJE_SOLO_EL_DUENO_REACTIVA = "Un presupuesto rechazado lo reactiva solo el Dueño.";
 
     /** Los estados que se eligen a mano: FACTURADO solo lo pone la venta hecha desde el presupuesto. */
     private static final Set<String> ESTADOS_MANUALES = Set.of(
@@ -59,10 +61,12 @@ public class PresupuestoGestion {
 
     /**
      * Pasa el presupuesto a PENDIENTE, ACEPTADO o RECHAZADO, en cualquier orden entre ellos. Con lock exclusivo, para
-     * ordenarse con la venta que lo factura. Cualquier otro valor es 400 y uno ya FACTURADO, 409.
+     * ordenarse con la venta que lo factura. Cualquier otro valor es 400 y uno ya FACTURADO, 409. Sacar un presupuesto de
+     * RECHAZADO es solo del Dueño (403): un RECHAZADO no se cobra, y reactivarlo dejaba a un Vendedor usar el descuento
+     * del Dueño (hallazgo 2 de la revision del 01/11).
      */
     @Transactional
-    public DetallePresupuesto cambiarEstado(Long id, String estado) {
+    public DetallePresupuesto cambiarEstado(Long id, String estado, boolean esDueno) {
         Presupuesto presupuesto = presupuestoRepository.paraCambiarScoped(id)
                 .orElseThrow(() -> new ResourceNotFoundException(MENSAJE_NO_ENCONTRADO));
         if (estado == null || !ESTADOS_MANUALES.contains(estado)) {
@@ -71,7 +75,11 @@ public class PresupuestoGestion {
         if (presupuesto.getEstado() == EstadoPresupuesto.FACTURADO) {
             throw new ConflictException(MENSAJE_FACTURADO);
         }
-        presupuesto.cambiarEstado(EstadoPresupuesto.valueOf(estado));
+        EstadoPresupuesto nuevo = EstadoPresupuesto.valueOf(estado);
+        if (!esDueno && presupuesto.getEstado() == EstadoPresupuesto.RECHAZADO && nuevo != EstadoPresupuesto.RECHAZADO) {
+            throw new AccessDeniedException(MENSAJE_SOLO_EL_DUENO_REACTIVA);
+        }
+        presupuesto.cambiarEstado(nuevo);
         return new DetallePresupuesto(presupuesto, itemRepository.dePresupuestoScoped(id));
     }
 }
