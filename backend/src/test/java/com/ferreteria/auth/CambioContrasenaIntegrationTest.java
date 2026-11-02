@@ -56,7 +56,8 @@ class CambioContrasenaIntegrationTest extends UsuariosTestBase {
                 .andExpect(jsonPath("$.sesion.debeCambiarContrasena", is(true)));
         getResult("/api/auth/me", token).andExpect(jsonPath("$.debeCambiarContrasena", is(true)));
         getResult("/api/rubros", token).andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.message", is("Cambiá tu contraseña para seguir.")));
+                .andExpect(jsonPath("$.message", is("Cambiá tu contraseña para seguir.")))
+                .andExpect(jsonPath("$.motivo", is("CONTRASENA_POR_CAMBIAR")));
 
         cambiar(token, json("passwordActual", "demo1234", "passwordNueva", "clave-nueva-99")).andExpect(status().isNoContent());
 

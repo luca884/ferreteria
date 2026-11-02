@@ -11,6 +11,7 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.filter.OncePerRequestFilter;
+import org.springframework.web.util.UrlPathHelper;
 
 import java.io.IOException;
 import java.util.List;
@@ -46,7 +47,9 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 response.setStatus(403);
                 response.setContentType(MediaType.APPLICATION_JSON_VALUE);
                 response.setCharacterEncoding("UTF-8");
-                response.getWriter().write("{\"status\":403,\"message\":\"" + MENSAJE_CAMBIAR_CONTRASENA + "\"}");
+                // motivo: el frontend relee la sesion y lleva a «Mi contraseña» (auth.interceptor.ts).
+                response.getWriter().write("{\"status\":403,\"message\":\"" + MENSAJE_CAMBIAR_CONTRASENA
+                        + "\",\"motivo\":\"CONTRASENA_POR_CAMBIAR\"}");
                 return;
             }
             if (estado != SesionVigente.Estado.CERRADA) {
@@ -64,11 +67,16 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
      * lo exige tambien a quien use la API directo con ese token.
      */
     private static boolean permitidoSinCambiar(HttpServletRequest request) {
+        // La ruta decodificada, la misma con la que Spring MVC elige el controlador: con la URI cruda, /%61pi/rubros
+        // pasaba como si no fuera de la API y llegaba a /api/rubros. Se permite una lista cerrada; el resto, 403.
         String metodo = request.getMethod();
-        String ruta = request.getRequestURI();
+        String ruta = RUTAS.getPathWithinApplication(request);
         return ("GET".equals(metodo) && "/api/auth/me".equals(ruta))
                 || ("PUT".equals(metodo) && "/api/auth/password".equals(ruta))
                 || ("POST".equals(metodo) && "/api/auth/login".equals(ruta))
-                || !ruta.startsWith("/api/");
+                || "/actuator/health".equals(ruta);
     }
+
+    /** Decodifica la ruta y saca el contenido despues de ';', como el mapeo de Spring MVC. */
+    private static final UrlPathHelper RUTAS = new UrlPathHelper();
 }
