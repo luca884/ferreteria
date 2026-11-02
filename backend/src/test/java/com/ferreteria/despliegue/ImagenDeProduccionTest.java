@@ -166,6 +166,20 @@ class ImagenDeProduccionTest {
         assertThat(logs).doesNotContain(AVISO_DE_ZONA);
     }
 
+    /**
+     * Railway cobra la memoria que el proceso tiene tomada. G1 con GC periódico (JEP 346) devuelve la que sobra después de
+     * un pico (una importación grande) y glibc con 2 arenas no la fragmenta por hilo; el tope de 768 MB sigue igual.
+     */
+    @Test
+    void laJvmDevuelveLaMemoriaQueNoUsa() throws Exception {
+        String comando = API.execInContainer("sh", "-c", "tr '\\0' ' ' < /proc/1/cmdline").getStdout();
+        String entorno = API.execInContainer("sh", "-c", "tr '\\0' '\\n' < /proc/1/environ").getStdout();
+
+        assertThat(comando).contains("-Xmx768m", "-XX:+UseG1GC", "-XX:G1PeriodicGCInterval=300000",
+                "-XX:MinHeapFreeRatio=10", "-XX:MaxHeapFreeRatio=30");
+        assertThat(entorno.lines()).contains("MALLOC_ARENA_MAX=2");
+    }
+
     @Test
     void laImagenCorreEnAmd64ComoEnRailway() throws Exception {
         assertThat(API.execInContainer("uname", "-m").getStdout().strip()).isEqualTo("x86_64");
