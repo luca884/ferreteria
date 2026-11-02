@@ -1,6 +1,6 @@
 import { Component, ElementRef, afterNextRender, inject, input, output, signal, viewChild, Injector } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { Subject, catchError, debounceTime, merge, of, switchMap } from 'rxjs';
+import { Subject, catchError, debounceTime, map, merge, of, switchMap } from 'rxjs';
 import { erroresDeCampos, mensajeDe } from '../../core/api/api-error';
 import { formatearMonto } from '../../core/formato/monto';
 import { TrampaFoco } from '../../shared/trampa-foco';
@@ -84,6 +84,16 @@ const ESPERA_MS = 250;
                 </li>
               }
             </ul>
+            @if (total() > resultados().length) {
+              <p class="hay-mas">
+                @if (consultaBuscada() === '') {
+                  Se ven {{ resultados().length }} de {{ total() }} clientes. Escribí el nombre, CUIT o DNI para buscar
+                  los demás.
+                } @else {
+                  Se ven {{ resultados().length }} de {{ total() }} resultados. Escribí más para afinar la búsqueda.
+                }
+              </p>
+            }
           } @else if (!cargando() && !errorBusqueda()) {
             <p class="sin-resultados">No hay clientes con esa búsqueda.</p>
           }
@@ -238,9 +248,13 @@ const ESPERA_MS = 250;
       font-size: var(--texto-sm);
       font-variant-numeric: tabular-nums;
     }
-    .sin-resultados {
+    .sin-resultados,
+    .hay-mas {
       margin: 0;
       color: var(--texto-suave);
+    }
+    .hay-mas {
+      font-size: var(--texto-sm);
     }
     .alta-rapida {
       display: flex;
@@ -291,6 +305,10 @@ export class DialogoCliente {
 
   protected readonly consulta = signal('');
   protected readonly resultados = signal<Cliente[]>([]);
+  /** Cuántos clientes cumplen la búsqueda, aunque solo se vean los primeros: si son más, se avisa. */
+  protected readonly total = signal(0);
+  /** El texto de la búsqueda que trajo los resultados (no lo que se está tipeando todavía). */
+  protected readonly consultaBuscada = signal('');
   protected readonly resaltado = signal(0);
   protected readonly cargando = signal(true);
   protected readonly errorBusqueda = signal(false);
@@ -316,6 +334,7 @@ export class DialogoCliente {
         switchMap((q) => {
           this.cargando.set(true);
           return this.service.buscar({ q, soloActivos: true, page: 0, size: RESULTADOS }).pipe(
+            map((pagina) => ({ q, pagina })),
             catchError(() => of(null)),
           );
         }),
@@ -324,7 +343,9 @@ export class DialogoCliente {
       .subscribe((respuesta) => {
         this.cargando.set(false);
         this.errorBusqueda.set(respuesta === null);
-        this.resultados.set(respuesta?.items ?? []);
+        this.resultados.set(respuesta?.pagina.items ?? []);
+        this.total.set(respuesta?.pagina.totalElements ?? 0);
+        this.consultaBuscada.set(respuesta?.q.trim() ?? '');
         this.resaltado.set(0);
       });
     afterNextRender(() => this.buscador()?.nativeElement.focus());

@@ -45,9 +45,9 @@ describe('DialogoCliente (F9)', () => {
     await estabilizar();
   }
 
-  async function abrir(lista: Cliente[] = [ana, norte], actual: string | null = null) {
+  async function abrir(lista: Cliente[] = [ana, norte], actual: string | null = null, total = lista.length) {
     servicio = {
-      buscar: vi.fn(() => of(pagina(lista))),
+      buscar: vi.fn(() => of({ ...pagina(lista), totalElements: total })),
       crear: vi.fn((r: ClienteRequest) => of({ id: 99, activo: true, cuentaCorrienteHabilitada: false, ...r } as Cliente)),
     };
     await TestBed.configureTestingModule({
@@ -114,6 +114,39 @@ describe('DialogoCliente (F9)', () => {
       await estabilizar();
 
       expect(texto('[role="alert"]')).toBe('No se pudo buscar clientes. Probá de nuevo.');
+    });
+
+    describe('aviso de que hay más clientes de los que se ven', () => {
+      const ocho = Array.from({ length: 8 }, (_, i): Cliente => ({ ...ana, id: 100 + i, razonSocial: `Cliente ${i + 1}` }));
+      it('sin escribir: «Se ven 8 de 13 clientes. Escribí el nombre, CUIT o DNI para buscar los demás.»', async () => {
+        await abrir(ocho, null, 13);
+
+        expect(texto('.hay-mas')).toBe('Se ven 8 de 13 clientes. Escribí el nombre, CUIT o DNI para buscar los demás.');
+      });
+
+      it('con una búsqueda que pasa de 8: «Se ven 8 de 23 resultados. Escribí más para afinar la búsqueda.»', async () => {
+        await abrir();
+        servicio.buscar.mockReturnValue(of({ ...pagina(ocho), totalElements: 23 }));
+
+        await escribir('cli');
+        vi.advanceTimersByTime(250);
+        await estabilizar();
+
+        expect(texto('.hay-mas')).toBe('Se ven 8 de 23 resultados. Escribí más para afinar la búsqueda.');
+      });
+
+      it('si entran todos no aparece', async () => {
+        await abrir(ocho);
+
+        expect(opciones()).toHaveLength(8);
+        expect(el().querySelector('.hay-mas')).toBeNull();
+      });
+
+      it('sin resultados no aparece', async () => {
+        await abrir([]);
+
+        expect(el().querySelector('.hay-mas')).toBeNull();
+      });
     });
   });
 
