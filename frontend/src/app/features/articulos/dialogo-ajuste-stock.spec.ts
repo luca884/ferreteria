@@ -163,6 +163,63 @@ describe('DialogoAjusteStock', () => {
       expect(texto('.vista-previa .quedara')).toBe('12 unidades');
       expect(texto('.vista-previa .diferencia')).toBe('+2 unidades');
     });
+
+    describe('con una cantidad que el artículo no acepta muestra «—» en vez del resultado', () => {
+      it('1,5 en un artículo por unidad: «—» en vivo y también junto al error al confirmar', async () => {
+        await abrir(tornillo(0));
+        await escribir('#motivo', 'INGRESO_MERCADERIA');
+
+        await escribir('#cantidad', '1,5');
+        expect(texto('.vista-previa .quedara')).toBe('—');
+
+        await confirmar();
+        expect(texto('#cantidad-error')).toBe(
+          'Este artículo se cuenta por unidad: la cantidad tiene que ser un número entero.',
+        );
+        expect(texto('.vista-previa .quedara')).toBe('—');
+      });
+
+      it('stock real con decimales en un artículo por unidad: «—» en el resultado y en la diferencia', async () => {
+        await abrir(tornillo(10));
+
+        await escribir('#stock-real', '12,5');
+
+        expect(texto('.vista-previa .quedara')).toBe('—');
+        expect(texto('.vista-previa .diferencia')).toBe('—');
+      });
+
+      it.each([
+        ['más de 3 decimales', '2,1234'],
+        ['más del máximo', '1000000000000'],
+      ])('%s en metros', async (_caso, valor) => {
+        await abrir(tornillo(150, 'METRO'));
+        await escribir('#motivo', 'INGRESO_MERCADERIA');
+
+        await escribir('#cantidad', valor);
+
+        expect(texto('.vista-previa .quedara')).toBe('—');
+      });
+
+      it('stock real negativo', async () => {
+        await abrir(tornillo(10));
+
+        await escribir('#stock-real', '-3');
+
+        expect(texto('.vista-previa .quedara')).toBe('—');
+        expect(texto('.vista-previa .diferencia')).toBe('—');
+      });
+
+      it('sacar más de lo que hay no es un error de formato: sigue mostrando el resultado negativo', async () => {
+        await abrir(tornillo(2));
+        await escribir('#motivo', 'ROTURA');
+
+        await escribir('#cantidad', '5');
+        await confirmar();
+
+        expect(texto('#cantidad-error')).toBe('No podés sacar 5: hay 2 unidades.');
+        expect(texto('.vista-previa .quedara')).toBe('-3 unidades');
+      });
+    });
   });
 
   describe('grupos de opciones con flechas (roving tabindex)', () => {

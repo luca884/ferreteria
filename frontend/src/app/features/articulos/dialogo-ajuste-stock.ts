@@ -489,23 +489,35 @@ export class DialogoAjusteStock {
   private readonly dialogo = viewChild.required<ElementRef<HTMLDialogElement>>('dialogo');
   private readonly campoNumero = viewChild<ElementRef<HTMLInputElement>>('numero');
 
-  /** Diferencia (con signo) contra el stock actual, en vivo; null si lo escrito no es un número. */
-  protected readonly diferencia = computed(() => {
+  /**
+   * Lo escrito, solo si el artículo lo acepta: sin signo, hasta el máximo, entero en UNIDAD y hasta 3 decimales
+   * (las reglas de formato de `validar()`). Si no, null y la vista previa muestra «—» en vez de un resultado
+   * imposible. Sacar más de lo que hay no es de formato: su resultado negativo explica el error.
+   */
+  private readonly leidoValido = computed(() => {
     const leido = leerNumero(this.valorTexto());
+    if (!leido || leido.valor < 0 || leido.valor > MAXIMO || leido.decimales > 3) return null;
+    if (this.articulo().unidad === 'UNIDAD' && leido.decimales > 0) return null;
+    return leido;
+  });
+
+  /** Diferencia (con signo) contra el stock actual, en vivo; null si lo escrito no es válido. */
+  protected readonly diferencia = computed(() => {
+    const leido = this.leidoValido();
     if (!leido) return null;
     return (Math.round(leido.valor * 1000) - Math.round(this.articulo().stockActual * 1000)) / 1000;
   });
 
-  /** Cantidad con signo del modo sumar o restar; null si lo escrito no es un número sin signo. */
+  /** Cantidad con signo del modo sumar o restar; null si lo escrito no es válido. */
   private readonly delta = computed(() => {
-    const leido = leerNumero(this.valorTexto());
-    if (!leido || leido.valor < 0) return null;
+    const leido = this.leidoValido();
+    if (!leido) return null;
     return this.signo() === 'SALE' ? -leido.valor : leido.valor;
   });
 
   /** Stock resultante en vivo: lo contado en el conteo, o el actual más o menos la cantidad. */
   protected readonly queda = computed(() => {
-    if (this.modo() === 'STOCK_REAL') return leerNumero(this.valorTexto())?.valor ?? null;
+    if (this.modo() === 'STOCK_REAL') return this.leidoValido()?.valor ?? null;
     const d = this.delta();
     if (d === null) return null;
     return (Math.round(this.articulo().stockActual * 1000) + Math.round(d * 1000)) / 1000;
