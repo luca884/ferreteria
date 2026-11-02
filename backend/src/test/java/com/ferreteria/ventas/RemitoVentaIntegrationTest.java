@@ -170,6 +170,79 @@ class RemitoVentaIntegrationTest extends VentasTestBase {
     }
 
     @Test
+    @DisplayName("hallazgo 3: mezcla (uno de mas y otro de menos) con el Vendedor: 403 y no cambia nada")
+    void vendedorMezclaDeMasYDeMenos() throws Exception {
+        Tienda t = tienda();
+        long a = articulo(t, "Bolsa de cemento", "UNIDAD", "100.00", "10");
+        long b = articulo(t, "Caño", "UNIDAD", "50.00", "10");
+        String token = login(t.emailVendedor());
+        Map<String, Object> pedido = mapa(clave(), null, "300.00", linea(a, "2", "100.00"), linea(b, "2", "50.00"));
+        pedido.remove("formaPagoId");
+        long r = json(postJson("/api/remitos", token, objectMapper.writeValueAsString(pedido))
+                .andExpect(status().isCreated())).get("remitoId").asLong();
+
+        venderRemito(token, clave(), r, "350.00", linea(a, "3", "100.00"), linea(b, "1", "50.00"))
+                .andExpect(status().isForbidden());
+
+        assertThat(estado(r)).isEqualTo("EMITIDO");
+        assertThat(stock(a)).isEqualByComparingTo("8");
+        assertThat(stock(b)).isEqualByComparingTo("8");
+        assertThat(comprobantes(t)).isZero();
+    }
+
+    @Test
+    @DisplayName("hallazgo 3: por metro, una milesima menos con el Vendedor es 403; la misma cantidad con otra escala se vende")
+    void vendedorDecimales() throws Exception {
+        Tienda t = tienda();
+        long a = articulo(t, "Cable", "METRO", "100.00", "10");
+        String token = login(t.emailVendedor());
+        long r = remito(token, a, "2.500", "100.00", "250.00").get("remitoId").asLong();
+
+        venderRemito(token, clave(), r, "249.90", linea(a, "2.499", "100.00")).andExpect(status().isForbidden());
+        assertThat(stock(a)).isEqualByComparingTo("7.5");
+
+        venderRemito(token, clave(), r, "250.00", linea(a, "2.5", "100.00")).andExpect(status().isCreated());
+        assertThat(estado(r)).isEqualTo("FACTURADO");
+        assertThat(stock(a)).isEqualByComparingTo("7.5");
+    }
+
+    @Test
+    @DisplayName("hallazgo 3: el 403 no consume el numerador ni la clave: la venta siguiente es la N+1 y el Dueño usa la misma clave")
+    void rechazoNoConsumeNumeradorNiClave() throws Exception {
+        Tienda t = tienda();
+        long a = articulo(t, "Tornillo", "UNIDAD", "100.00", "10");
+        String vendedor = login(t.emailVendedor());
+        vender(vendedor, clave(), "100.00", linea(a, "1", "100.00")).andExpect(status().isCreated());
+        long r = remito(vendedor, a, "3", "100.00", "300.00").get("remitoId").asLong();
+        String k = clave();
+
+        venderRemito(vendedor, k, r, "100.00", linea(a, "1", "100.00")).andExpect(status().isForbidden());
+        JsonNode delDueno = json(venderRemito(login(t.emailDueno()), k, r, "100.00", linea(a, "1", "100.00"))
+                .andExpect(status().isCreated()));
+
+        assertThat(delDueno.get("numero").asLong()).isEqualTo(2);
+        venderRemito(vendedor, k, r, "100.00", linea(a, "1", "100.00")).andExpect(status().isOk());
+        assertThat(stock(a)).isEqualByComparingTo("8");
+    }
+
+    @Test
+    @DisplayName("hallazgo 3: los errores del ticket y del remito salen antes que el 403")
+    void ordenDeErrores() throws Exception {
+        Tienda t = tienda();
+        long a = articulo(t, "Tornillo", "UNIDAD", "100.00", "10");
+        String token = login(t.emailVendedor());
+        long r = remito(token, a, "3", "100.00", "300.00").get("remitoId").asLong();
+
+        // precio viejo: PRECIOS_CAMBIADOS
+        venderRemito(token, clave(), r, "90.00", linea(a, "1", "90.00")).andExpect(status().isConflict());
+        venderRemito(token, clave(), r, "0.00", linea(a, "0", "100.00")).andExpect(status().isBadRequest());
+        venderRemito(token, clave(), 999_999_999L, "100.00", linea(a, "1", "100.00")).andExpect(status().isNotFound());
+        venderRemito(login(t.emailDueno()), clave(), r, "300.00", linea(a, "3", "100.00")).andExpect(status().isCreated());
+        // ya facturado
+        venderRemito(token, clave(), r, "100.00", linea(a, "1", "100.00")).andExpect(status().isConflict());
+    }
+
+    @Test
     @DisplayName("hallazgo 3: el Vendedor agrega un articulo sin sacar los del remito: se vende")
     void vendedorAgregaSinSacar() throws Exception {
         Tienda t = tienda();

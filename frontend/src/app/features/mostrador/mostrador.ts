@@ -856,7 +856,8 @@ export class Mostrador {
     const rechazo = rechazoDe(err);
     if (!rechazo) {
       if (esCobro && this.origenNoSirve(err)) return;
-      // Un 403 al cobrar: autorizar el exceso de la cuenta corriente es solo del Dueño. El ticket y el cobro siguen.
+      // Un 403 al cobrar: autorizar el exceso de la cuenta corriente, o facturar un remito por menos de lo que entregó
+      // (devuelve stock), es solo del Dueño. Se muestra el mensaje del servidor; el ticket y el cobro siguen.
       if (err instanceof HttpErrorResponse && err.status === 403) {
         this.avisoCobro.set(mensajeDe(err, MENSAJE_SIN_PERMISO));
         return;
