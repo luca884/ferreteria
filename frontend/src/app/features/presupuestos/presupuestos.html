@@ -190,13 +190,14 @@
       } @else {
         <div class="acciones">
           <button type="button" class="secundario" [disabled]="leyendoEmisor() || cambiando() || pasando()" (click)="imprimir()">Imprimir</button>
-          @if (p.estado !== 'ACEPTADO' && p.estado !== 'FACTURADO') {
+          <!-- Un rechazado lo reactiva solo el Dueño (el servidor da 403 al Vendedor). -->
+          @if (p.estado === 'PENDIENTE' || (p.estado === 'RECHAZADO' && esDueno())) {
             <button type="button" class="secundario" [disabled]="cambiando() || pasando()" (click)="cambiarEstado('ACEPTADO')">Aceptar</button>
           }
           @if (p.estado !== 'RECHAZADO' && p.estado !== 'FACTURADO') {
             <button type="button" class="secundario" [disabled]="cambiando() || pasando()" (click)="cambiarEstado('RECHAZADO')">Rechazar</button>
           }
-          @if (p.estado === 'ACEPTADO' || p.estado === 'RECHAZADO') {
+          @if (p.estado === 'ACEPTADO' || (p.estado === 'RECHAZADO' && esDueno())) {
             <button type="button" class="secundario" [disabled]="cambiando() || pasando()" (click)="cambiarEstado('PENDIENTE')">Volver a pendiente</button>
           }
           @if (sePuedePasar(p)) {

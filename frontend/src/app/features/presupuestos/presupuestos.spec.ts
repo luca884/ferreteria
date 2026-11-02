@@ -370,9 +370,9 @@ describe('Presupuestos', () => {
     it.each<[EstadoPresupuesto, string[]]>([
       ['PENDIENTE', ['Imprimir', 'Aceptar', 'Rechazar', 'Pasar a venta']],
       ['ACEPTADO', ['Imprimir', 'Rechazar', 'Volver a pendiente', 'Pasar a venta']],
-      ['RECHAZADO', ['Imprimir', 'Aceptar', 'Volver a pendiente']],
+      ['RECHAZADO', ['Imprimir']],
       ['FACTURADO', ['Imprimir']],
-    ])('un %s ofrece %j', async (estado, esperados) => {
+    ])('al Vendedor, un %s le ofrece %j', async (estado, esperados) => {
       await crear();
       api.obtener.mockReturnValue(of(detalleDe(12, { estado })));
 
@@ -380,6 +380,16 @@ describe('Presupuestos', () => {
 
       const acciones = Array.from(detalle()!.querySelectorAll<HTMLButtonElement>('.acciones button')).map((b) => normal(b.textContent));
       expect(acciones).toEqual(esperados);
+    });
+
+    it('al Dueño, un RECHAZADO le ofrece reactivarlo: un rechazado lo reactiva solo el Dueño', async () => {
+      await crear(undefined, 'DUENO');
+      api.obtener.mockReturnValue(of(detalleDe(12, { estado: 'RECHAZADO' })));
+
+      await abrirDetalle(0);
+
+      const acciones = Array.from(detalle()!.querySelectorAll<HTMLButtonElement>('.acciones button')).map((b) => normal(b.textContent));
+      expect(acciones).toEqual(['Imprimir', 'Aceptar', 'Volver a pendiente']);
     });
 
     it('uno vencido se puede pasar a venta: el precio de hoy no depende del vencimiento', async () => {
@@ -415,8 +425,8 @@ describe('Presupuestos', () => {
       expect(boton('Aceptar', detalle()!)).toBeUndefined();
     });
 
-    it('Rechazar y Volver a pendiente mandan su estado', async () => {
-      await crear();
+    it('Rechazar y Volver a pendiente mandan su estado (el Dueño, que es quien reactiva un rechazado)', async () => {
+      await crear(undefined, 'DUENO');
       await abrirDetalle(0);
 
       await click(boton('Rechazar', detalle()!));
