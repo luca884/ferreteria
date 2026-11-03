@@ -10,6 +10,8 @@ import { PageResponse } from '../../core/api/page.models';
 import { AuthService } from '../../core/auth/auth.service';
 import { Articulo } from '../articulos/articulo.models';
 import { ArticulosService } from '../articulos/articulos.service';
+import { Cliente } from '../clientes/cliente.models';
+import { ClientesService } from '../clientes/clientes.service';
 import { GENERAR_CLAVE } from '../mostrador/ticket.store';
 import { EmisorService } from '../../shared/documento-no-fiscal/emisor.service';
 import { emisorDePrueba } from '../../shared/documento-no-fiscal/documento-no-fiscal.testing';
@@ -27,6 +29,7 @@ describe('Remitos', () => {
     anular: ReturnType<typeof vi.fn>;
   };
   let articulos: { obtener: ReturnType<typeof vi.fn> };
+  let clientes: { obtener: ReturnType<typeof vi.fn> };
   let navegar: ReturnType<typeof vi.fn>;
   let emisor: { obtener: ReturnType<typeof vi.fn> };
 
@@ -107,6 +110,10 @@ describe('Remitos', () => {
       anular: vi.fn((id: number) => of(detalleDe(id / 10, { estado: 'ANULADO' }))),
     };
     articulos = { obtener: vi.fn(() => of(articuloActual())) };
+    // La condición de IVA de hoy del cliente del documento: con ella el cobro sabe la letra desde el primer momento.
+    clientes = {
+      obtener: vi.fn((id: number) => of({ id, razonSocial: 'Ferretería Norte SRL', condicionIva: 'RESPONSABLE_INSCRIPTO' } as Cliente)),
+    };
     emisor = { obtener: vi.fn(() => of(emisorDePrueba())) };
     const sesion = signal({ userId: 7, nombre: 'Ana', email: 'ana@x.com', rol, ferreteriaId: 3, ferreteriaNombre: 'Tornillo' });
     await TestBed.configureTestingModule({
@@ -116,6 +123,7 @@ describe('Remitos', () => {
         { provide: LOCALE_ID, useValue: 'es-AR' },
         { provide: RemitosService, useValue: api },
         { provide: ArticulosService, useValue: articulos },
+        { provide: ClientesService, useValue: clientes },
         { provide: EmisorService, useValue: emisor },
         { provide: AuthService, useValue: { sesion: sesion.asReadonly(), esDueno: () => rol === 'DUENO' } },
         { provide: GENERAR_CLAVE, useValue: () => 'clave-nueva' },
@@ -503,11 +511,36 @@ describe('Remitos', () => {
       expect(ticketGuardado()).toMatchObject({ clienteId: 7, clienteNombre: 'Ferretería Norte SRL' });
     });
 
+    it('también lee la condición de IVA de hoy del cliente y la deja en el ticket (para que el cobro diga la letra)', async () => {
+      await crear();
+      api.obtener.mockReturnValue(of(detalleDe(5, { clienteId: 7, clienteNombre: 'Ferretería Norte SRL' })));
+      await abrirDetalle(0);
+
+      await click(boton('Pasar a venta', detalle()!));
+
+      expect(clientes.obtener).toHaveBeenCalledExactlyOnceWith(7);
+      expect(ticketGuardado()).toMatchObject({ clienteId: 7, clienteCondicionIva: 'RESPONSABLE_INSCRIPTO' });
+    });
+
+    it('si el cliente no se puede leer, el ticket se arma igual, sin condición, y se abre el mostrador', async () => {
+      await crear();
+      clientes.obtener.mockReturnValue(throwError(() => new HttpErrorResponse({ status: 404 })));
+      api.obtener.mockReturnValue(of(detalleDe(5, { clienteId: 7, clienteNombre: 'Ferretería Norte SRL' })));
+      await abrirDetalle(0);
+
+      await click(boton('Pasar a venta', detalle()!));
+
+      expect(ticketGuardado()).toMatchObject({ clienteId: 7, clienteNombre: 'Ferretería Norte SRL' });
+      expect(ticketGuardado().clienteCondicionIva).toBeUndefined();
+      expect(navegar).toHaveBeenCalledWith('/mostrador');
+    });
+
     it('con el cliente de texto libre (sin clienteId) el ticket queda sin cliente: Consumidor Final', async () => {
       await pasar();
 
       expect(ticketGuardado().clienteId).toBeUndefined();
       expect(ticketGuardado().clienteNombre).toBeUndefined();
+      expect(clientes.obtener).not.toHaveBeenCalled();
     });
 
     it('lee el precio de hoy de cada artículo, deja el ticket guardado con el remito y abre el mostrador', async () => {

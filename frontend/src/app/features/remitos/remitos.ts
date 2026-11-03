@@ -14,6 +14,7 @@ import { EmisorService } from '../../shared/documento-no-fiscal/emisor.service';
 import { DatosFiscales } from '../datos-fiscales/datos-fiscales.service';
 import { ArticulosService } from '../articulos/articulos.service';
 import { fechaHoraLocal } from '../caja/caja.models';
+import { ClientesService } from '../clientes/clientes.service';
 import { ArticuloMostrador } from '../mostrador/mostrador.models';
 import { ticketDeRemito } from '../mostrador/ticket';
 import { guardarTicket, ticketGuardado } from '../mostrador/ticket.storage';
@@ -50,6 +51,7 @@ const MENSAJE_NUMERO = 'El número tiene que ser un entero.';
 export class Remitos implements OnInit {
   private readonly api = inject(RemitosService);
   private readonly articulos = inject(ArticulosService);
+  private readonly clientes = inject(ClientesService);
   private readonly auth = inject(AuthService);
   private readonly emisorApi = inject(EmisorService);
   private readonly router = inject(Router);
@@ -282,20 +284,30 @@ export class Remitos implements OnInit {
   private armarTicket(remito: RemitoResponse): void {
     const ids = [...new Set(remito.renglones.map((r) => r.articuloId))];
     this.pasando.set(true);
-    forkJoin(
-      ids.map((id) =>
-        this.articulos.obtener(id).pipe(
-          map((articulo): [number, ArticuloMostrador | null] => [id, articulo]),
-          catchError((err: unknown) =>
-            err instanceof HttpErrorResponse && err.status === 404
-              ? of<[number, ArticuloMostrador | null]>([id, null])
-              : throwError(() => err),
+    // La condición de IVA del cliente de hoy: si no se puede leer, el ticket se arma igual y el mostrador lo reintenta.
+    const condicion$ = remito.clienteId
+      ? this.clientes.obtener(remito.clienteId).pipe(
+          map((cliente) => cliente.condicionIva),
+          catchError(() => of(undefined)),
+        )
+      : of(undefined);
+    forkJoin([
+      forkJoin(
+        ids.map((id) =>
+          this.articulos.obtener(id).pipe(
+            map((articulo): [number, ArticuloMostrador | null] => [id, articulo]),
+            catchError((err: unknown) =>
+              err instanceof HttpErrorResponse && err.status === 404
+                ? of<[number, ArticuloMostrador | null]>([id, null])
+                : throwError(() => err),
+            ),
           ),
         ),
       ),
-    ).subscribe({
-      next: (leidos) => {
-        guardarTicket(this.auth, ticketDeRemito(remito, new Map(leidos), this.generarClave()));
+      condicion$,
+    ]).subscribe({
+      next: ([leidos, condicion]) => {
+        guardarTicket(this.auth, ticketDeRemito(remito, new Map(leidos), this.generarClave(), condicion));
         this.pasando.set(false);
         void this.router.navigateByUrl('/mostrador');
       },

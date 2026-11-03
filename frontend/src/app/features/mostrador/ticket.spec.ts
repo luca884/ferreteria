@@ -943,4 +943,26 @@ describe('ticket con cliente (CL-005)', () => {
     expect(remitoConCliente.clienteId).toBe(7);
     expect(remitoConCliente.clienteNombre).toBe('Ferretería Norte SRL');
   });
+
+  it('con la condición de IVA del cliente de hoy, el ticket del presupuesto y del remito la lleva; sin cliente, no', () => {
+    const presupuesto = {
+      presupuestoId: 8, numero: 12, estado: 'PENDIENTE', fecha: '2026-10-18T10:00:00', vence: '2026-11-02',
+      vencido: false, subtotal: 0, descuentoPorcentaje: 0, descuento: 0, neto: 0, iva: 0, total: 0, renglones: [],
+      clienteId: 7, clienteNombre: 'Ferretería Norte SRL',
+    } as PresupuestoResponse;
+    const remito = {
+      remitoId: 8, numero: 5, estado: 'EMITIDO', fecha: '2026-10-18T10:00:00', subtotal: 0, descuentoPorcentaje: 0,
+      descuento: 0, neto: 0, iva: 0, total: 0, renglones: [], clienteId: 7, clienteNombre: 'Ferretería Norte SRL',
+    } as RemitoResponse;
+
+    expect(ticketDePresupuesto(presupuesto, new Map(), 'k', 'RESPONSABLE_INSCRIPTO').clienteCondicionIva).toBe(
+      'RESPONSABLE_INSCRIPTO',
+    );
+    expect(ticketDeRemito(remito, new Map(), 'k', 'MONOTRIBUTISTA').clienteCondicionIva).toBe('MONOTRIBUTISTA');
+    expect(ticketDePresupuesto(presupuesto, new Map(), 'k').clienteCondicionIva).toBeUndefined();
+    expect(
+      ticketDePresupuesto({ ...presupuesto, clienteId: undefined, clienteNombre: 'Juan' }, new Map(), 'k', 'MONOTRIBUTISTA')
+        .clienteCondicionIva,
+    ).toBeUndefined();
+  });
 });

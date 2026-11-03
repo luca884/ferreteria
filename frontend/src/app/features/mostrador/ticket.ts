@@ -328,11 +328,14 @@ function renglonesDeOrigen(
  * presupuesto, pero con el nombre, el precio y el stock de HOY de cada artículo (`actuales`, por id; null o ausente es
  * que ya no existe). El que ya no se puede vender (dado de baja, sin precio, borrado) no se pierde en silencio: queda
  * marcado, con el precio del presupuesto, para que el cajero lo vea y lo quite. Deja elegido el primero marcado.
+ * `condicionIva` es la del cliente de HOY (se lee al pasar a venta): con ella el cobro sabe la letra de la factura. No va
+ * en el presupuesto porque sería una foto vieja.
  */
 export function ticketDePresupuesto(
   p: PresupuestoResponse,
   actuales: ReadonlyMap<number, ArticuloMostrador | null>,
   clave: string,
+  condicionIva?: CondicionIva,
 ): Ticket {
   const renglones = renglonesDeOrigen(p.renglones, actuales);
   const primero = renglones.findIndex((r) => r.problema !== undefined);
@@ -344,7 +347,9 @@ export function ticketDePresupuesto(
     ...(p.descuentoPorcentaje > 0 ? { descuentoGlobalBp: Math.round(p.descuentoPorcentaje * 100) } : {}),
     presupuestoId: p.presupuestoId,
     presupuestoNumero: p.numero,
-    ...(p.clienteId && p.clienteNombre ? { clienteId: p.clienteId, clienteNombre: p.clienteNombre } : {}),
+    ...(p.clienteId && p.clienteNombre
+      ? { clienteId: p.clienteId, clienteNombre: p.clienteNombre, ...(condicionIva ? { clienteCondicionIva: condicionIva } : {}) }
+      : {}),
   };
 }
 
@@ -353,6 +358,7 @@ export function ticketDeRemito(
   r: RemitoResponse,
   actuales: ReadonlyMap<number, ArticuloMostrador | null>,
   clave: string,
+  condicionIva?: CondicionIva,
 ): Ticket {
   const renglones = renglonesDeOrigen(r.renglones, actuales);
   const primero = renglones.findIndex((x) => x.problema !== undefined);
@@ -364,7 +370,9 @@ export function ticketDeRemito(
     ...(r.descuentoPorcentaje > 0 ? { descuentoGlobalBp: Math.round(r.descuentoPorcentaje * 100) } : {}),
     remitoId: r.remitoId,
     remitoNumero: r.numero,
-    ...(r.clienteId && r.clienteNombre ? { clienteId: r.clienteId, clienteNombre: r.clienteNombre } : {}),
+    ...(r.clienteId && r.clienteNombre
+      ? { clienteId: r.clienteId, clienteNombre: r.clienteNombre, ...(condicionIva ? { clienteCondicionIva: condicionIva } : {}) }
+      : {}),
   };
 }
 

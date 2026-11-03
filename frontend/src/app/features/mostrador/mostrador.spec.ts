@@ -138,6 +138,8 @@ describe('Mostrador', () => {
   let facturacionDelServidor: FacturacionDelMostrador | null;
   /** T11: el estado HTTP con que falla `GET /api/clientes/{id}`; null lo responde con el cliente. */
   let falloLeerCliente: number | null;
+  /** Si un test la arma, la lectura del cliente del ticket responde cuando él lo decide (una respuesta lenta). */
+  let respuestaClienteLenta: Subject<Cliente> | null;
   let leerFacturacion: ReturnType<typeof vi.fn>;
   /** S12: la configuración de ARCA del Dueño. Por defecto sin certificado; null: la lectura falla. */
   let configuracionArca: ConfiguracionFacturacion | null;
@@ -231,9 +233,11 @@ describe('Mostrador', () => {
       cuenta: vi.fn(() => of({ habilitada: false })),
       // T11: el cliente de un ticket sin su condición de IVA (viene de un presupuesto o un remito).
       obtener: vi.fn((id: number) =>
-        falloLeerCliente === null
-          ? of([CLIENTE_ANA, CLIENTE_NORTE].find((c) => c.id === id))
-          : throwError(() => new HttpErrorResponse({ status: falloLeerCliente! })),
+        respuestaClienteLenta
+          ? respuestaClienteLenta
+          : falloLeerCliente === null
+            ? of([CLIENTE_ANA, CLIENTE_NORTE].find((c) => c.id === id))
+            : throwError(() => new HttpErrorResponse({ status: falloLeerCliente! })),
       ),
     };
     const sesion = signal({
@@ -308,6 +312,7 @@ describe('Mostrador', () => {
     vi.useFakeTimers();
     facturacionDelServidor = { factura: false, ambiente: null, letras: null };
     falloLeerCliente = null;
+    respuestaClienteLenta = null;
     configuracionArca = configuracionConCertificado(null);
     avisosDelServidor = { rechazadas: 0, pendientesViejas: 0, enRevision: 0, bloqueo: null };
     provisorias = [];
@@ -4704,7 +4709,7 @@ describe('Mostrador', () => {
     });
 
     /** Un ticket guardado con cliente pero sin su condición de IVA: el que arma «Pasar a venta» de un presupuesto o remito. */
-    function ticketSinCondicion() {
+    function ticketSinCondicion(condicion?: Cliente['condicionIva']) {
       localStorage.setItem(
         'ticket:3:7',
         JSON.stringify({
@@ -4713,6 +4718,7 @@ describe('Mostrador', () => {
           elegido: 0,
           clienteId: 2,
           clienteNombre: 'Ferretería Norte SRL',
+          ...(condicion ? { clienteCondicionIva: condicion } : {}),
           presupuestoId: 5,
           presupuestoNumero: 12,
           renglones: [
@@ -4754,13 +4760,42 @@ describe('Mostrador', () => {
       expect(el().querySelector('app-dialogo-cobro')).not.toBeNull();
     });
 
-    it('con la condición ya en el ticket (elegido con F9) no vuelve a pedir el cliente', async () => {
+    it('con la condición ya en el ticket (armado con ella) no vuelve a pedir el cliente', async () => {
+      ticketSinCondicion('RESPONSABLE_INSCRIPTO');
+      facturacionDelServidor = { factura: true, ambiente: 'SIMULADOR', letras: LETRAS };
+      await crear();
+
+      await tecla('F4');
+
+      expect(clientesApi.obtener).not.toHaveBeenCalled();
+      expect(rotulo()).toBe('Factura A · Ferretería Norte SRL SIMULADO');
+    });
+
+    it('con el cliente elegido con F9 (ya trae su condición) tampoco lo vuelve a pedir', async () => {
       await conMartillos();
       await tecla('F9');
       await tecla('ArrowDown');
       await tecla('Enter');
 
       expect(clientesApi.obtener).not.toHaveBeenCalled();
+    });
+
+    it('si el cajero cambia de cliente con F9 antes de que llegue la lectura lenta, la respuesta tardía no lo pisa', async () => {
+      ticketSinCondicion();
+      respuestaClienteLenta = new Subject<Cliente>();
+      facturacionDelServidor = { factura: true, ambiente: 'SIMULADOR', letras: LETRAS };
+      await crear();
+      expect(clientesApi.obtener).toHaveBeenCalledExactlyOnceWith(2);
+
+      await tecla('F9');
+      await tecla('Enter');
+      respuestaClienteLenta.next(CLIENTE_NORTE);
+      respuestaClienteLenta.complete();
+      await refrescar();
+
+      await tecla('F4');
+      expect(rotulo()).toContain('Ana Gómez');
+      expect(rotulo()).not.toContain('Norte');
     });
 
     it('un ticket guardado antes, con cliente pero sin su condición, dice solo «Factura» si el cliente no se puede leer', async () => {
