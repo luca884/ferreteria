@@ -13,6 +13,7 @@ import {
   PruebaConexion,
 } from './facturacion.models';
 import { FacturacionService } from './facturacion.service';
+import { FacturacionDelMostrador } from '../mostrador/venta.models';
 
 describe('PaginaFacturacion', () => {
   let fixture: ComponentFixture<PaginaFacturacion>;
@@ -24,7 +25,10 @@ describe('PaginaFacturacion', () => {
     subirCertificado: ReturnType<typeof vi.fn>;
     firmarConSimulador: ReturnType<typeof vi.fn>;
     probarConexion: ReturnType<typeof vi.fn>;
+    emision: ReturnType<typeof vi.fn>;
   };
+  /** Lo que dice el mostrador cuando la ferretería sí emite (GET /api/ventas/facturacion). */
+  const EMITE: FacturacionDelMostrador = { factura: true, ambiente: 'HOMOLOGACION', letras: null };
 
   const CREDENCIAL: CredencialArca = {
     cuit: '30999999995',
@@ -89,8 +93,14 @@ describe('PaginaFacturacion', () => {
 
   const fallo = (status: number, error: object) => throwError(() => new HttpErrorResponse({ status, error }));
 
-  async function crear(inicial: ConfiguracionFacturacion = config(), dueno = true, carga?: Observable<never>) {
+  async function crear(
+    inicial: ConfiguracionFacturacion = config(),
+    dueno = true,
+    carga?: Observable<never>,
+    emision: Observable<FacturacionDelMostrador> = of(EMITE),
+  ) {
     api = {
+      emision: vi.fn(() => emision),
       configuracion: vi.fn(() => carga ?? of(inicial)),
       guardarPuntoVenta: vi.fn((puntoVenta: number) => of({ ...inicial, puntoVenta })),
       generarPedido: vi.fn(() => of(CSR)),
@@ -347,6 +357,18 @@ describe('PaginaFacturacion', () => {
       expect(el().querySelector('[name="cuitPedido"]')).toBeNull();
     });
 
+    it('si la ferretería pasa al simulador, lo escrito en el CUIT (que ya no se ve) no se manda', async () => {
+      await crear();
+      await escribir('cuitPedido', '20123456789');
+      api.guardarPuntoVenta.mockReturnValueOnce(of(config({ ambiente: 'SIMULADOR', simulador: true, puntoVenta: 1 })));
+      await click('button.guardar-punto-venta');
+      expect(el().querySelector('[name="cuitPedido"]')).toBeNull();
+
+      await click('button.generar-pedido');
+
+      expect(api.generarPedido).toHaveBeenCalledExactlyOnceWith(null);
+    });
+
     it('si un certificado pasa la ferretería a producción, lo escrito en el CUIT ya no se manda y el rechazo se ve', async () => {
       await crear(config({ pedido: PEDIDO }));
       await escribir('cuitPedido', '20123456789');
@@ -427,6 +449,32 @@ describe('PaginaFacturacion', () => {
       expect(texto('.estado-facturacion')).toBe(
         'Facturación habilitada: las ventas facturables salen con factura. Es el simulador: las facturas no tienen validez fiscal.',
       );
+    });
+
+    it('habilitada pero el mostrador no emite (falta el certificado, está vencido o ARCA frenó): no dice que salen con factura', async () => {
+      await crear(config({ facturacionHabilitada: true }), true, undefined, of({ ...EMITE, factura: false }));
+
+      expect(texto('.estado-facturacion')).toBe(
+        'Facturación habilitada, pero todavía no emite: las ventas facturables se cobran igual y quedan sin factura hasta que el certificado, el ambiente y el punto de venta estén en orden.',
+      );
+      expect(el().querySelector('.estado-facturacion')!.classList).toContain('advertencia');
+      expect(el().querySelector('.estado-facturacion')!.classList).not.toContain('exito');
+    });
+
+    it('lo que subir un certificado cambia se vuelve a preguntar: pasa de «todavía no emite» a «salen con factura»', async () => {
+      await crear(config({ facturacionHabilitada: true, pedido: PEDIDO }), true, undefined, of({ ...EMITE, factura: false }));
+      expect(texto('.estado-facturacion')).toContain('todavía no emite');
+
+      api.emision.mockReturnValue(of(EMITE));
+      api.subirCertificado.mockReturnValueOnce(of(config({ facturacionHabilitada: true, credencial: CREDENCIAL })));
+      await elegirArchivo(new File([PEM], 'vigente.crt'));
+      await esperar(() => expect(texto('.estado-facturacion')).toBe('Facturación habilitada: las ventas facturables salen con factura.'));
+    });
+
+    it('si no se puede preguntar al mostrador, queda lo que dice la configuración', async () => {
+      await crear(config({ facturacionHabilitada: true }), true, undefined, fallo(500, { message: 'Error' }));
+
+      expect(texto('.estado-facturacion')).toBe('Facturación habilitada: las ventas facturables salen con factura.');
     });
 
     it('no habilitada: dice que las ventas quedan sin factura y quién la habilita', async () => {

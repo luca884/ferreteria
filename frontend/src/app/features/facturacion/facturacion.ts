@@ -65,6 +65,13 @@ export class PaginaFacturacion implements OnInit {
   protected readonly cuitPedido = new FormControl('', { nonNullable: true });
 
   protected readonly config = signal<ConfiguracionFacturacion | null>(null);
+  /** Lo que dice el mostrador (la regla real del servidor); null si no se pudo preguntar: queda la configuración. */
+  protected readonly emite = signal<boolean | null>(null);
+  /** El campo del CUIT del pedido solo existe fuera de producción y del simulador: lo que se manda es lo que se ve. */
+  protected readonly pideCuit = computed(() => {
+    const c = this.config();
+    return c !== null && c.ambiente !== 'PRODUCCION' && !c.simulador;
+  });
   protected readonly cargando = signal(true);
   protected readonly cargaFallida = signal(false);
   /** Hay un pedido al servidor en curso: las acciones esperan. */
@@ -127,8 +134,8 @@ export class PaginaFacturacion implements OnInit {
   protected generarPedido(): void {
     this.confirmandoPedido.set(false);
     this.limpiar();
-    // En producción el campo no está (el pedido lleva la CUIT de la ferretería): no se manda lo que hubiera quedado escrito.
-    const conCuit = this.config()?.ambiente !== 'PRODUCCION';
+    // En producción y en el simulador el campo no está (el pedido lleva la CUIT de la ferretería): no se manda lo que hubiera quedado escrito.
+    const conCuit = this.pideCuit();
     const cuit = conCuit ? this.cuitPedido.value.replace(/[\s.-]/g, '') : '';
     this.ocupado.set(true);
     this.service.generarPedido(cuit === '' ? null : cuit).subscribe({
@@ -279,5 +286,10 @@ export class PaginaFacturacion implements OnInit {
   private mostrar(config: ConfiguracionFacturacion): void {
     this.config.set(config);
     this.formPuntoVenta.reset({ puntoVenta: config.puntoVenta });
+    // Cada cambio de la configuración (certificado, punto de venta, prueba de conexión) puede cambiar si se emite.
+    this.service.emision().subscribe({
+      next: (emision) => this.emite.set(emision.factura),
+      error: () => this.emite.set(null),
+    });
   }
 }

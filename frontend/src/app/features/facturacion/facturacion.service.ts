@@ -2,6 +2,7 @@ import { HttpClient } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import { environment } from '../../../environments/environment';
+import { FacturacionDelMostrador } from '../mostrador/venta.models';
 import { ConfiguracionFacturacion, PedidoCertificado, PruebaConexion } from './facturacion.models';
 
 /** La API del Dueño para la facturación con ARCA (contrato C1). El Vendedor y el super admin reciben 403. */
@@ -12,6 +13,14 @@ export class FacturacionService {
 
   configuracion(): Observable<ConfiguracionFacturacion> {
     return this.http.get<ConfiguracionFacturacion>(`${this.url}/configuracion`);
+  }
+
+  /**
+   * Lo que el mostrador sabe de la emisión (`factura`): la regla real del servidor, que además de «habilitada» pide ambiente,
+   * punto de venta, certificado vigente y que ARCA no haya frenado la facturación. También lo puede leer el Dueño.
+   */
+  emision(): Observable<FacturacionDelMostrador> {
+    return this.http.get<FacturacionDelMostrador>(`${environment.apiUrl}/ventas/facturacion`);
   }
 
   /** 400 fuera de 1 a 99998; 409 si está trabado (simulador o facturas en trámite). */

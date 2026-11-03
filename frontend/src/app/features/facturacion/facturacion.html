@@ -26,8 +26,15 @@
       <button type="button" class="secundario chico reintentar" (click)="cargar()">Reintentar</button>
     </div>
   } @else if (config(); as c) {
-    <p class="alerta estado-facturacion" [class.exito]="c.facturacionHabilitada" [class.advertencia]="!c.facturacionHabilitada">
-      @if (c.facturacionHabilitada) {
+    <p
+      class="alerta estado-facturacion"
+      [class.exito]="c.facturacionHabilitada && emite() !== false"
+      [class.advertencia]="!c.facturacionHabilitada || emite() === false"
+    >
+      @if (c.facturacionHabilitada && emite() === false) {
+        <strong>Facturación habilitada, pero todavía no emite:</strong> las ventas facturables se cobran igual y quedan sin
+        factura hasta que el certificado, el ambiente y el punto de venta estén en orden.
+      } @else if (c.facturacionHabilitada) {
         <strong>Facturación habilitada:</strong> las ventas facturables salen con factura.
         @if (c.simulador) {
           Es el simulador: las facturas no tienen validez fiscal.
@@ -237,7 +244,7 @@
           </p>
         }
 
-        @if (c.ambiente !== 'PRODUCCION' && !c.simulador) {
+        @if (pideCuit()) {
           <div class="campo cuit-pedido">
             <label for="cuitPedido">CUIT del certificado (solo para homologación)</label>
             <input
