@@ -111,6 +111,22 @@ public interface ComprobanteFiscalRepository extends TenantScopedRepository<Comp
         return contarNumerosDespuesDe(TenantContext.requireFerreteriaId(), id, ambiente, puntoVenta, cbteTipo, ultimo);
     }
 
+    /**
+     * La hora más nueva de los registros en trámite de la serie (PENDIENTE, EN_CURSO y EN_VERIFICACION): de ella sale la
+     * CbteFch más nueva que la cola va a mandar antes que un registro que se da de alta ahora (FIFO por id). Vacío sin
+     * ninguno. Solo lectura (cu-07-advertencias-contingencias S1).
+     */
+    @Query("select max(c.registradoEn) from ComprobanteFiscal c where c.ferreteriaId = :fid and c.ambiente = :ambiente "
+            + "and c.puntoVenta = :puntoVenta and c.cbteTipo = :cbteTipo and c.estado in ("
+            + "com.ferreteria.facturacion.model.EstadoFiscal.PENDIENTE, com.ferreteria.facturacion.model.EstadoFiscal.EN_CURSO, "
+            + "com.ferreteria.facturacion.model.EstadoFiscal.EN_VERIFICACION)")
+    Optional<Instant> ultimaHoraEnTramite(@Param("fid") Long ferreteriaId, @Param("ambiente") Ambiente ambiente,
+            @Param("puntoVenta") int puntoVenta, @Param("cbteTipo") int cbteTipo);
+
+    default Optional<Instant> ultimaHoraEnTramiteScoped(Ambiente ambiente, int puntoVenta, int cbteTipo) {
+        return ultimaHoraEnTramite(TenantContext.requireFerreteriaId(), ambiente, puntoVenta, cbteTipo);
+    }
+
     /** PENDIENTE → EN_CURSO con el número y la CbteFch del intento que se guarda en la misma transacción. */
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query(value = """

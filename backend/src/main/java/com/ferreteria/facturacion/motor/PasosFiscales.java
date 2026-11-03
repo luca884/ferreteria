@@ -561,13 +561,13 @@ public class PasosFiscales {
 
     /**
      * Solo lectura, para el detalle de Ventas (C1, «fecha nueva»): si la fecha del registro entra hoy (el {@code Clock}) en
-     * la ventana de ARCA, con el último autorizado que conoce su serie ({@link VentanaCbteFch}). Es la regla de
+     * la ventana de ARCA, con el último autorizado o en trámite de su serie ({@link VentanaCbteFch},
+     * {@link #ultimaParaReintentar}). Es la regla de
      * {@link #reintentar} con la serie del registro; si al reintentar cambia la letra, el reintento decide con la nueva.
      */
     @Transactional(readOnly = true)
     public boolean fechaEntraHoy(ComprobanteFiscal registro) {
-        LocalDate ultima = series.ultimaCbteFchScoped(registro.getAmbiente(), registro.getPuntoVenta(),
-                registro.getCbteTipo()).orElse(null);
+        LocalDate ultima = ultimaParaReintentar(registro.getAmbiente(), registro.getPuntoVenta(), registro.getCbteTipo());
         return VentanaCbteFch.admite(LocalDate.ofInstant(registro.getRegistradoEn(), ZONA_ARCA),
                 LocalDate.ofInstant(reloj.instant(), ZONA_ARCA), ultima);
     }
@@ -603,7 +603,8 @@ public class PasosFiscales {
      *
      * <p>La fecha nunca cambia sola: el registro nuevo lleva la hora del reemplazado (la de la venta, o la de hoy que el
      * Dueño ya confirmó en un reintento anterior) si su CbteFch entra en la ventana de ARCA ({@link VentanaCbteFch}, con el
-     * último autorizado que conoce la serie de la letra nueva); si no entra, solo con {@code fechaDeHoy} lleva
+     * último autorizado o en trámite de la serie de la letra nueva, {@link #ultimaParaReintentar}); si no entra, solo con
+     * {@code fechaDeHoy} lleva
      * {@code ahora}. Con {@code fechaDeHoy}, lleva {@code ahora} siempre.
      *
      * <p>Exige la transacción de quien llama, que ya tomó al cliente con lock exclusivo: acá se toman, en orden,
@@ -633,8 +634,7 @@ public class PasosFiscales {
             ConfigArca config = emision.config();
             int cbteTipo = EncuadreFiscal.de(emision.emisor().condicionIva(), alta.receptor().condicionIva())
                     .cbteTipo(ClaseComprobante.FACTURA);
-            LocalDate ultima = series.ultimaCbteFchScoped(config.getAmbiente(), config.getPuntoVenta(), cbteTipo)
-                    .orElse(null);
+            LocalDate ultima = ultimaParaReintentar(config.getAmbiente(), config.getPuntoVenta(), cbteTipo);
             if (!VentanaCbteFch.admite(LocalDate.ofInstant(reemplazado.registradoEn(), ZONA_ARCA),
                     LocalDate.ofInstant(ahora, ZONA_ARCA), ultima)) {
                 throw AccionFiscalImpedidaException.fechaNuevaRequerida();
@@ -658,8 +658,8 @@ public class PasosFiscales {
         exigirQueFacture(factura.getAmbiente(), ahora);
         Instant registradoEn = ahora;
         if (!fechaDeHoy) {
-            LocalDate ultima = series.ultimaCbteFchScoped(factura.getAmbiente(), factura.getPuntoVenta(),
-                    factura.getLetra().cbteTipo(ClaseComprobante.NOTA_CREDITO)).orElse(null);
+            LocalDate ultima = ultimaParaReintentar(factura.getAmbiente(), factura.getPuntoVenta(),
+                    factura.getLetra().cbteTipo(ClaseComprobante.NOTA_CREDITO));
             if (!VentanaCbteFch.admite(LocalDate.ofInstant(reemplazado.registradoEn(), ZONA_ARCA),
                     LocalDate.ofInstant(ahora, ZONA_ARCA), ultima)) {
                 throw AccionFiscalImpedidaException.fechaNuevaRequerida();
@@ -670,6 +670,22 @@ public class PasosFiscales {
             throw AccionFiscalImpedidaException.sinFacturaRechazada();
         }
         return altaDeNota(notaId, factura, registradoEn);
+    }
+
+    /**
+     * La CbteFch contra la que se mide la fecha de un reintento ({@link VentanaCbteFch}): la más nueva entre la del último
+     * autorizado que conoce la serie y la de los registros en trámite de la serie. El reintento se da de alta con un id
+     * nuevo y la cola los manda antes (FIFO por id): con una fecha anterior a la de alguno, ARCA lo rechazaría por el 10016
+     * (cu-07-advertencias-contingencias S1). Null si no hay ninguna.
+     */
+    private LocalDate ultimaParaReintentar(Ambiente ambiente, int puntoVenta, int cbteTipo) {
+        LocalDate autorizada = series.ultimaCbteFchScoped(ambiente, puntoVenta, cbteTipo).orElse(null);
+        LocalDate enTramite = registros.ultimaHoraEnTramiteScoped(ambiente, puntoVenta, cbteTipo)
+                .map(hora -> LocalDate.ofInstant(hora, ZONA_ARCA)).orElse(null);
+        if (autorizada == null || (enTramite != null && enTramite.isAfter(autorizada))) {
+            return enTramite;
+        }
+        return autorizada;
     }
 
     // ---- La anulación de una venta (rama 8, CU-08; C1 de cu-08-nota-de-credito) ----

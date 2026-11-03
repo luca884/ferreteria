@@ -234,6 +234,52 @@ class AccionesDelDuenoIntegrationTest extends MotorFiscalTestBase {
     }
 
     @Test
+    @DisplayName("A1: con un pendiente de un día posterior en la serie, la fecha de la venta ya no entra (iría detrás y ARCA "
+            + "la rechazaría): el detalle lo marca, sin confirmar da FECHA_NUEVA_REQUERIDA y no cambia nada; confirmada, el "
+            + "motor autoriza las dos")
+    void laFechaNoEntraSiLaSerieTieneUnPendientePosterior() {
+        long venta = venta(ferreteriaId);
+        motor.registrar(new AltaFiscal(venta, ReceptorFiscal.sinCliente(), RENGLONES), AHORA.minus(Duration.ofDays(2)));
+        wsfe.fallas().rechazarConObservaciones(new Obs(10015, "Receptor no identificado"));
+        assertThat(atenderB()).isEqualTo(Atencion.TERMINADA);
+        long pendiente = registrarFacturaB();
+        List<Map<String, Object>> antes = jdbc.queryForList("select * from comprobante_fiscal where comprobante_id = ?",
+                venta);
+
+        assertThat(pasos.fechaEntraHoy(pasos.registro(vigenteDe(venta)))).isFalse();
+        assertThatThrownBy(() -> enLaVenta(() -> motor.reintentar(new AltaFiscal(venta, ReceptorFiscal.sinCliente(),
+                RENGLONES), false))).isInstanceOfSatisfying(AccionFiscalImpedidaException.class,
+                        e -> assertThat(e.impedimento()).isEqualTo(Impedimento.FECHA_NUEVA_REQUERIDA));
+        assertThat(jdbc.queryForList("select * from comprobante_fiscal where comprobante_id = ?", venta)).isEqualTo(antes);
+
+        long nuevo = enLaVenta(() -> motor.reintentar(new AltaFiscal(venta, ReceptorFiscal.sinCliente(), RENGLONES), true));
+        assertThat(atenderB()).isEqualTo(Atencion.TERMINADA);
+        assertThat(registro(pendiente)).containsEntry("estado", "AUTORIZADO").containsEntry("numero", 1L);
+        assertThat(registro(nuevo)).containsEntry("estado", "AUTORIZADO").containsEntry("numero", 2L);
+    }
+
+    @Test
+    @DisplayName("A1: un pendiente del mismo día (o de uno anterior) no impide reintentar con la fecha de la venta")
+    void unPendienteDelMismoDiaNoImpide() {
+        long venta = venta(ferreteriaId);
+        Instant haceDosDias = AHORA.minus(Duration.ofDays(2));
+        motor.registrar(new AltaFiscal(venta, ReceptorFiscal.sinCliente(), RENGLONES), haceDosDias);
+        wsfe.fallas().rechazarConObservaciones(new Obs(10015, "Receptor no identificado"));
+        assertThat(atenderB()).isEqualTo(Atencion.TERMINADA);
+        long pendiente = motor.registrar(new AltaFiscal(venta(ferreteriaId), ReceptorFiscal.sinCliente(), RENGLONES),
+                haceDosDias.plus(Duration.ofHours(3)));
+
+        assertThat(pasos.fechaEntraHoy(pasos.registro(vigenteDe(venta)))).isTrue();
+        long nuevo = enLaVenta(() -> motor.reintentar(new AltaFiscal(venta, ReceptorFiscal.sinCliente(), RENGLONES),
+                false));
+
+        assertThat(pasos.registro(nuevo).getRegistradoEn()).isEqualTo(haceDosDias);
+        assertThat(atenderB()).isEqualTo(Atencion.TERMINADA);
+        assertThat(registro(pendiente)).containsEntry("estado", "AUTORIZADO");
+        assertThat(registro(nuevo)).containsEntry("estado", "AUTORIZADO");
+    }
+
+    @Test
     @DisplayName("con la facturación frenada da FACTURACION_FRENADA «La facturación está frenada: <motivo>.» (C2), con el "
             + "motivo de la regla del alta en corto, y no cambia nada")
     void conLaFacturacionFrenada() {

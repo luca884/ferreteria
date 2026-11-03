@@ -368,6 +368,34 @@ class NotaDeCreditoIntegrationTest extends MotorFiscalTestBase {
     }
 
     @Test
+    @DisplayName("A1: con una NC pendiente de un día posterior en la serie, la fecha de la NC rechazada ya no entra: sin "
+            + "confirmar da FECHA_NUEVA_REQUERIDA")
+    void unaNcRechazadaConUnaPendientePosteriorPideLaFechaDeHoy() {
+        Factura f = facturaAutorizada("B");
+        long nota = venta(ferreteriaId);
+        long rechazada = enLaVenta(() -> {
+            facturacion.tomarParaAnular(f.venta());
+            return facturacion.registrarNotaDeCredito(nota, f.venta());
+        });
+        wsfe.fallas().rechazarConObservaciones(new Obs(10237, "Importe mayor que el del comprobante asociado"));
+        assertThat(motor.atender(Ambiente.SIMULADOR, 1, 8)).isEqualTo(Atencion.TERMINADA);
+        assertThat(estado(rechazada)).isEqualTo("RECHAZADO");
+        reloj.avanzar(Duration.ofDays(1));
+        Factura otra = facturaAutorizada("B");
+        long otraNota = venta(ferreteriaId);
+        enLaVenta(() -> {
+            facturacion.tomarParaAnular(otra.venta());
+            return facturacion.registrarNotaDeCredito(otraNota, otra.venta());
+        });
+
+        impedida(() -> facturacion.reintentar(nota, OTRO_CLIENTE,
+                List.of(new RenglonParaFacturar(new BigDecimal("21.00"), new BigDecimal("999.00"))), false),
+                Impedimento.FECHA_NUEVA_REQUERIDA,
+                "La fecha de la venta ya no entra en ARCA. Confirmá que la factura salga con la fecha de hoy.");
+        assertThat(vigenteDe(nota)).isEqualTo(rechazada);
+    }
+
+    @Test
     @DisplayName("«Reintentar» de una NC de otro ambiente da OTRO_AMBIENTE y no cambia nada")
     void reintentarUnaNcDeOtroAmbiente() {
         Factura f = facturaAutorizada("B");
