@@ -33,6 +33,7 @@ public final class BandejaFiscal {
     private static final JsonMapper JSON = JsonMapper.builder().build();
     private static final DateTimeFormatter FECHA = DateTimeFormatter.ofPattern("dd/MM/yyyy");
     private static final String QUE_HACER = "Reintentá con la fecha de hoy o dejala sin factura.";
+    private static final String QUE_HACER_NC = "Reintentá con la fecha de hoy.";
 
     private static final Set<EstadoFiscal> PENDIENTES = EnumSet.of(EstadoFiscal.PENDIENTE, EstadoFiscal.EN_CURSO,
             EstadoFiscal.EN_VERIFICACION, EstadoFiscal.CAE_NO_COINCIDE, EstadoFiscal.SERIE_DESINCRONIZADA);
@@ -94,19 +95,28 @@ public final class BandejaFiscal {
      * vuelven atrás (el día avanza y la última autorizada solo crece), así que lo que se lee hoy explica por qué el motor la
      * dejó fuera de fecha. Null si ninguna vale (S4).
      *
-     * @param fecha la CbteFch de la venta (la fecha de Buenos Aires de su hora)
+     * <p>Las reglas son las del 10016 del manual WSFEv1 4.8 (p. 42-43): para productos, la CbteFch va de N−5 a N+5 del
+     * envío, y «Deberá ser mayor o igual al del ultimo comprobante emitido para ese tipo y punto de venta». En una nota de
+     * crédito la serie es la de las NC: la que la frena es otra NC, y el texto no ofrece dejarla sin factura, porque la NC
+     * no tiene esa acción (S5).
+     *
+     * @param fecha la CbteFch del comprobante (la fecha de Buenos Aires de su hora)
      * @param hoy el día de hoy en Buenos Aires
-     * @param ultimaAutorizada la CbteFch del último autorizado de la serie; null si no se conoce
+     * @param ultimaAutorizada la CbteFch del último autorizado de su serie; null si no se conoce
+     * @param notaDeCredito true si el registro es una nota de crédito
      */
-    public static String motivoFueraDeFecha(LocalDate fecha, LocalDate hoy, LocalDate ultimaAutorizada) {
+    public static String motivoFueraDeFecha(LocalDate fecha, LocalDate hoy, LocalDate ultimaAutorizada,
+            boolean notaDeCredito) {
+        String comprobante = notaDeCredito ? "esta nota de crédito" : "esta venta";
+        String queHacer = notaDeCredito ? QUE_HACER_NC : QUE_HACER;
         if (fecha.isBefore(hoy.minusDays(VentanaCbteFch.DIAS))) {
-            return String.format("ARCA ya no acepta la fecha de esta venta (%s): admite hasta %d días antes de hoy. %s",
-                    FECHA.format(fecha), VentanaCbteFch.DIAS, QUE_HACER);
+            return String.format("ARCA ya no acepta la fecha de %s (%s): admite hasta %d días antes de hoy. %s",
+                    comprobante, FECHA.format(fecha), VentanaCbteFch.DIAS, queHacer);
         }
         if (ultimaAutorizada != null && fecha.isBefore(ultimaAutorizada)) {
-            return String.format("ARCA ya no acepta la fecha de esta venta (%s): ya hay una factura autorizada con fecha "
-                    + "posterior (%s) y las fechas no pueden ir para atrás. %s", FECHA.format(fecha),
-                    FECHA.format(ultimaAutorizada), QUE_HACER);
+            return String.format("ARCA ya no acepta la fecha de %s (%s): ya hay una %s autorizada con fecha posterior (%s) "
+                    + "y las fechas no pueden ir para atrás. %s", comprobante, FECHA.format(fecha),
+                    notaDeCredito ? "nota de crédito" : "factura", FECHA.format(ultimaAutorizada), queHacer);
         }
         return null;
     }

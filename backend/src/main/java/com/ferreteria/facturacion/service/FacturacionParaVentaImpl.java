@@ -292,7 +292,7 @@ public class FacturacionParaVentaImpl implements FacturacionParaVenta {
             return null;
         }
         PasosFiscales.FechasDelRegistro f = pasos.fechasDelRegistro(registro);
-        return BandejaFiscal.motivoFueraDeFecha(f.fecha(), f.hoy(), f.ultimaAutorizada());
+        return BandejaFiscal.motivoFueraDeFecha(f.fecha(), f.hoy(), f.ultimaAutorizada(), registro.esNotaDeCredito());
     }
 
     @Override

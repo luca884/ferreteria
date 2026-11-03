@@ -396,6 +396,36 @@ class NotaDeCreditoIntegrationTest extends MotorFiscalTestBase {
     }
 
     @Test
+    @DisplayName("S5: una NC fuera de fecha dice el motivo con «nota de crédito» y sin ofrecer dejarla sin factura: pasaron "
+            + "más de 5 días, o la serie de NC ya autorizó una de fecha posterior")
+    void elMotivoDeUnaNcFueraDeFecha() {
+        Factura f = facturaAutorizada("B");
+        long nota = venta(ferreteriaId);
+        long registro = enLaVenta(() -> {
+            facturacion.tomarParaAnular(f.venta());
+            return facturacion.registrarNotaDeCredito(nota, f.venta());
+        });
+        assertThat(jdbc.update("update comprobante_fiscal set estado = 'FUERA_DE_FECHA' where id = ? and estado = "
+                + "'PENDIENTE'", registro)).isOne();
+        reloj.avanzar(Duration.ofDays(2));
+        Factura otra = facturaAutorizada("B");
+        long otraNota = venta(ferreteriaId);
+        enLaVenta(() -> {
+            facturacion.tomarParaAnular(otra.venta());
+            return facturacion.registrarNotaDeCredito(otraNota, otra.venta());
+        });
+        assertThat(motor.atender(Ambiente.SIMULADOR, 1, 8)).isEqualTo(Atencion.TERMINADA);
+
+        assertThat(facturacion.consulta(nota).orElseThrow().motivoFueraDeFecha()).isEqualTo("ARCA ya no acepta la fecha "
+                + "de esta nota de crédito (28/10/2026): ya hay una nota de crédito autorizada con fecha posterior "
+                + "(30/10/2026) y las fechas no pueden ir para atrás. Reintentá con la fecha de hoy.");
+
+        reloj.avanzar(Duration.ofDays(4));
+        assertThat(facturacion.consulta(nota).orElseThrow().motivoFueraDeFecha()).isEqualTo("ARCA ya no acepta la fecha "
+                + "de esta nota de crédito (28/10/2026): admite hasta 5 días antes de hoy. Reintentá con la fecha de hoy.");
+    }
+
+    @Test
     @DisplayName("«Reintentar» de una NC de otro ambiente da OTRO_AMBIENTE y no cambia nada")
     void reintentarUnaNcDeOtroAmbiente() {
         Factura f = facturaAutorizada("B");
