@@ -124,6 +124,14 @@ describe('DialogoCliente (F9)', () => {
         expect(texto('.hay-mas')).toBe('Se ven 8 de 13 clientes. Escribí el nombre, CUIT o DNI para buscar los demás.');
       });
 
+      it('lo anuncia un lector de pantalla (región de estado) y usa el estilo de ayuda de siempre', async () => {
+        await abrir(ocho, null, 13);
+
+        const aviso = el().querySelector('.hay-mas')!;
+        expect(aviso.getAttribute('role')).toBe('status');
+        expect(aviso.classList).toContain('ayuda');
+      });
+
       it('con una búsqueda que pasa de 8: «Se ven 8 de 23 resultados. Escribí más para afinar la búsqueda.»', async () => {
         await abrir();
         servicio.buscar.mockReturnValue(of({ ...pagina(ocho), totalElements: 23 }));
@@ -431,17 +439,62 @@ describe('DialogoCliente (F9)', () => {
       expect(elegidos).toEqual([]);
     });
 
-    it('los demás errores por campo del servidor (400) se listan arriba', async () => {
+    it('con un error de campo del servidor, el foco va a ese campo (no queda en el botón que se deshabilitó)', async () => {
       await abrir();
       servicio.crear.mockReturnValue(
-        throwError(() => errorHttp(400, 'Datos inválidos', { telefono: 'El teléfono es demasiado largo.' })),
+        throwError(() => errorHttp(400, 'Datos inválidos', { numeroDocumento: 'El CUIT no es válido.' })),
       );
       await abrirAlta();
       await escribirAlta('nuevo-razon-social', 'Ana');
 
       await guardar();
 
-      expect(texto('form.alta-rapida [role="alert"]')).toContain('El teléfono es demasiado largo.');
+      expect(document.activeElement).toBe(el().querySelector('#nuevo-numero'));
+      expect(el().querySelector('#nuevo-numero')!.getAttribute('aria-invalid')).toBe('true');
+    });
+
+    it('con un error que no es de un campo (409), el foco vuelve a «Guardar y elegir»', async () => {
+      await abrir();
+      servicio.crear.mockReturnValue(throwError(() => errorHttp(409, 'Ya existe un cliente con ese tipo y número de documento.')));
+      await abrirAlta();
+      await escribirAlta('nuevo-razon-social', 'Ana');
+
+      await guardar();
+
+      expect(document.activeElement).toBe(boton('Guardar y elegir'));
+    });
+
+    it('el error del servidor (400) sobre el teléfono sale debajo del campo y se borra al editarlo', async () => {
+      await abrir();
+      servicio.crear.mockReturnValue(
+        throwError(() => errorHttp(400, 'Datos inválidos', { telefono: 'El teléfono es demasiado largo.' })),
+      );
+      await abrirAlta();
+      await escribirAlta('nuevo-razon-social', 'Ana');
+      await escribirAlta('nuevo-telefono', '1'.repeat(35));
+
+      await guardar();
+
+      expect(texto('#nuevo-telefono-error')).toBe('El teléfono es demasiado largo.');
+      expect(el().querySelector('#nuevo-telefono')!.getAttribute('aria-invalid')).toBe('true');
+      expect(el().querySelector('form.alta-rapida [role="alert"]')).toBeNull();
+
+      await escribirAlta('nuevo-telefono', '223 555');
+
+      expect(el().querySelector('#nuevo-telefono-error')).toBeNull();
+    });
+
+    it('los demás errores por campo del servidor (400) se listan arriba', async () => {
+      await abrir();
+      servicio.crear.mockReturnValue(
+        throwError(() => errorHttp(400, 'Datos inválidos', { condicionIva: 'La condición frente al IVA no es válida.' })),
+      );
+      await abrirAlta();
+      await escribirAlta('nuevo-razon-social', 'Ana');
+
+      await guardar();
+
+      expect(texto('form.alta-rapida [role="alert"]')).toContain('La condición frente al IVA no es válida.');
     });
 
     it('«Volver a buscar» deja el formulario y vuelve a la búsqueda', async () => {

@@ -1,7 +1,19 @@
-import { Component, ElementRef, afterNextRender, inject, input, output, signal, viewChild, Injector } from '@angular/core';
+import {
+  Component,
+  ElementRef,
+  afterNextRender,
+  computed,
+  inject,
+  input,
+  output,
+  signal,
+  viewChild,
+  Injector,
+} from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { Subject, catchError, debounceTime, map, merge, of, switchMap } from 'rxjs';
 import { erroresPorCampo, mensajeDe } from '../../core/api/api-error';
+import { PageResponse } from '../../core/api/page.models';
 import { formatearMonto } from '../../core/formato/monto';
 import { TrampaFoco } from '../../shared/trampa-foco';
 import {
@@ -85,7 +97,7 @@ const ESPERA_MS = 250;
               }
             </ul>
             @if (total() > resultados().length) {
-              <p class="hay-mas">
+              <p class="ayuda hay-mas" role="status">
                 @if (consultaBuscada() === '') {
                   Se ven {{ resultados().length }} de {{ total() }} clientes. Escribí el nombre, CUIT o DNI para buscar
                   los demás.
@@ -178,8 +190,13 @@ const ESPERA_MS = 250;
               name="telefono"
               inputmode="tel"
               autocomplete="off"
-              (input)="nuevoTelefono.set($any($event.target).value)"
+              [attr.aria-invalid]="errorTelefono() ? 'true' : null"
+              [attr.aria-describedby]="errorTelefono() ? 'nuevo-telefono-error' : null"
+              (input)="nuevoTelefono.set($any($event.target).value); limpiarErrores()"
             />
+            @if (errorTelefono(); as mensaje) {
+              <span id="nuevo-telefono-error" class="campo-error">{{ mensaje }}</span>
+            }
             <div class="dialogo-acciones">
               <button type="button" class="secundario" (click)="volverABuscar()">Volver a buscar</button>
               <button type="submit" class="aceptar primario" [disabled]="guardando()">Guardar y elegir</button>
@@ -248,12 +265,13 @@ const ESPERA_MS = 250;
       font-size: var(--texto-sm);
       font-variant-numeric: tabular-nums;
     }
-    .sin-resultados,
-    .hay-mas {
+    .sin-resultados {
       margin: 0;
       color: var(--texto-suave);
     }
+    /* El aviso usa el estilo global .ayuda (color y ancho); acá solo el margen y el tamaño. */
     .hay-mas {
+      margin: 0;
       font-size: var(--texto-sm);
     }
     .alta-rapida {
@@ -275,6 +293,7 @@ const ESPERA_MS = 250;
 export class DialogoCliente {
   private readonly service = inject(ClientesService);
   private readonly injector = inject(Injector);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
 
   /** La razón social del cliente que ya tiene el ticket; null es Consumidor Final. */
   readonly actual = input<string | null>(null);
@@ -304,11 +323,13 @@ export class DialogoCliente {
   }
 
   protected readonly consulta = signal('');
-  protected readonly resultados = signal<Cliente[]>([]);
+  /** La última búsqueda que respondió, con el texto que la trajo; null si todavía no hubo o falló. */
+  private readonly respuesta = signal<{ q: string; pagina: PageResponse<Cliente> } | null>(null);
+  protected readonly resultados = computed(() => this.respuesta()?.pagina.items ?? []);
   /** Cuántos clientes cumplen la búsqueda, aunque solo se vean los primeros: si son más, se avisa. */
-  protected readonly total = signal(0);
+  protected readonly total = computed(() => this.respuesta()?.pagina.totalElements ?? 0);
   /** El texto de la búsqueda que trajo los resultados (no lo que se está tipeando todavía). */
-  protected readonly consultaBuscada = signal('');
+  protected readonly consultaBuscada = computed(() => this.respuesta()?.q.trim() ?? '');
   protected readonly resaltado = signal(0);
   protected readonly cargando = signal(true);
   protected readonly errorBusqueda = signal(false);
@@ -322,6 +343,7 @@ export class DialogoCliente {
   protected readonly errorNombre = signal<string | null>(null);
   protected readonly errorTipo = signal<string | null>(null);
   protected readonly errorNumero = signal<string | null>(null);
+  protected readonly errorTelefono = signal<string | null>(null);
   protected readonly errorAlta = signal<string | null>(null);
   protected readonly erroresCampos = signal<string[]>([]);
 
@@ -343,9 +365,7 @@ export class DialogoCliente {
       .subscribe((respuesta) => {
         this.cargando.set(false);
         this.errorBusqueda.set(respuesta === null);
-        this.resultados.set(respuesta?.pagina.items ?? []);
-        this.total.set(respuesta?.pagina.totalElements ?? 0);
-        this.consultaBuscada.set(respuesta?.q.trim() ?? '');
+        this.respuesta.set(respuesta);
         this.resaltado.set(0);
       });
     afterNextRender(() => this.buscador()?.nativeElement.focus());
@@ -404,6 +424,7 @@ export class DialogoCliente {
     this.errorNombre.set(null);
     this.errorTipo.set(null);
     this.errorNumero.set(null);
+    this.errorTelefono.set(null);
     this.errorAlta.set(null);
     this.erroresCampos.set([]);
   }
@@ -436,13 +457,25 @@ export class DialogoCliente {
       error: (err: unknown) => {
         this.guardando.set(false);
         // Los errores de un campo del formulario van debajo de ese campo; el resto, en la lista de arriba.
-        const { razonSocial, tipoDocumento, numeroDocumento, ...otros } = erroresPorCampo(err);
+        const { razonSocial, tipoDocumento, numeroDocumento, telefono, ...otros } = erroresPorCampo(err);
         this.errorNombre.set(razonSocial ?? null);
         this.errorTipo.set(tipoDocumento ?? null);
         this.errorNumero.set(numeroDocumento ?? null);
+        this.errorTelefono.set(telefono ?? null);
         this.erroresCampos.set(Object.values(otros));
-        if (!razonSocial && !tipoDocumento && !numeroDocumento && Object.keys(otros).length === 0)
+        if (!razonSocial && !tipoDocumento && !numeroDocumento && !telefono && Object.keys(otros).length === 0)
           this.errorAlta.set(mensajeDe(err, 'No se pudo guardar el cliente.'));
+        // El botón se deshabilitó mientras guardaba y el foco se perdió: va al primer campo con error o, si no hay, al botón.
+        afterNextRender(
+          () => {
+            const raiz: HTMLElement = this.host.nativeElement;
+            const destino =
+              raiz.querySelector<HTMLElement>('form.alta-rapida [aria-invalid="true"]') ??
+              raiz.querySelector<HTMLElement>('form.alta-rapida button[type="submit"]');
+            destino?.focus();
+          },
+          { injector: this.injector },
+        );
       },
     });
   }
