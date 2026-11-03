@@ -77,7 +77,8 @@ public final class PlantillaDeMigracion {
         return plantilla;
     }
 
-    private static void clonar(String plantilla, String base) {
+    /** Copia todas las tablas de {@code plantilla} en {@code base}, que tiene que existir y estar vacia. */
+    static void clonar(String plantilla, String base) {
         try (Connection c = conexion(); Statement s = c.createStatement()) {
             List<String> tablas = new ArrayList<>();
             try (ResultSet rs = s.executeQuery("select table_name from information_schema.tables where table_schema = '"

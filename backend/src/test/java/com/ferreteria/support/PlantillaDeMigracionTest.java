@@ -93,6 +93,36 @@ class PlantillaDeMigracionTest {
     }
 
     @Test
+    @DisplayName("el clon tiene la misma charset y collation por defecto que una base migrada")
+    void mismaCharsetYCollation() {
+        String directa = PlantillaDeMigracion.baseVacia("directa_charset");
+        migrar(directa, "40");
+        String clon = PlantillaDeMigracion.baseEnLaVersion("clon_charset", "40");
+
+        assertThat(charsetYCollation(clon)).isEqualTo(charsetYCollation(directa));
+    }
+
+    @Test
+    @DisplayName("el clon conserva el hueco del AUTO_INCREMENT que dejan filas borradas: el proximo id es el mismo")
+    void conservaElHuecoDelAutoIncrement() {
+        String origen = PlantillaDeMigracion.baseEnLaVersion("hueco", "1");
+        JdbcTemplate jdbcOrigen = jdbc(origen);
+        jdbcOrigen.update("insert into ferreteria (razon_social, cuit, condicion_iva) "
+            + "values ('Borrada', '30-71234567-9', 'RESPONSABLE_INSCRIPTO')");
+        jdbcOrigen.update("delete from ferreteria");
+        String clon = PlantillaDeMigracion.baseVacia("hueco_clon");
+        PlantillaDeMigracion.clonar(origen, clon);
+
+        assertThat(esquema(clon).get("auto_increment ferreteria")).isEqualTo("2");
+        assertThat(esquema(clon)).isEqualTo(esquema(origen));
+    }
+
+    private static Map<String, Object> charsetYCollation(String base) {
+        return jdbc(base).queryForMap("select default_character_set_name, default_collation_name "
+            + "from information_schema.schemata where schema_name = ?", base);
+    }
+
+    @Test
     @DisplayName("cada clon es una base propia: lo que escribe un test no lo ve otro clon de la misma version")
     void cadaClonEsIndependiente() {
         String uno = PlantillaDeMigracion.baseEnLaVersion("uno", "1");
