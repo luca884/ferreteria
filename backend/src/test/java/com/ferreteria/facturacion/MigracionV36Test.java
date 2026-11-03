@@ -19,8 +19,6 @@ import java.util.Properties;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 import org.flywaydb.core.Flyway;
-import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -33,6 +31,8 @@ import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.springframework.util.StreamUtils;
 import org.testcontainers.containers.MySQLContainer;
 
+import com.ferreteria.support.PlantillaDeMigracion;
+
 /**
  * Migracion V36 (rama 7 de facturacion, cu-07-contingencias T2: S10, S5, S6 y S2): el registro fiscal versionado (varios por
  * venta, uno solo vigente: el reintento del Dueño deja el anterior como historia), el estado SIN_FACTURA con su motivo,
@@ -42,8 +42,7 @@ import org.testcontainers.containers.MySQLContainer;
  */
 class MigracionV36Test {
 
-    private static final MySQLContainer<?> MYSQL = new MySQLContainer<>("mysql:8.4");
-    private static final AtomicInteger CONTADOR = new AtomicInteger();
+    private static final MySQLContainer<?> MYSQL = PlantillaDeMigracion.MYSQL;
     private static final AtomicInteger COMPROBANTES = new AtomicInteger();
     private static final List<String> COLUMNAS_DEL_REGISTRO = List.of("ticket_provisorio", "motivo_sin_factura",
         "usuario_sin_factura_id", "sin_factura_en", "reemplazado_en");
@@ -56,26 +55,10 @@ class MigracionV36Test {
     private String url;
     private JdbcTemplate jdbc;
 
-    @BeforeAll
-    static void arrancar() {
-        MYSQL.start();
-    }
-
-    @AfterAll
-    static void parar() {
-        MYSQL.stop();
-    }
-
     @BeforeEach
-    void baseNuevaEnLaVersion35() throws SQLException {
-        String base = "v36_" + CONTADOR.incrementAndGet();
-        try (Connection c = DriverManager.getConnection(MYSQL.getJdbcUrl(), "root", MYSQL.getPassword());
-             Statement s = c.createStatement()) {
-            s.execute("create database " + base + " character set utf8mb4");
-        }
-        url = MYSQL.getJdbcUrl().replaceFirst("/[^/?]+(\\?|$)", "/" + base + "$1");
+    void baseNuevaEnLaVersion35() {
+        url = PlantillaDeMigracion.url(PlantillaDeMigracion.baseEnLaVersion("v36", "35"));
         jdbc = new JdbcTemplate(new DriverManagerDataSource(url, "root", MYSQL.getPassword()));
-        flyway("classpath:db/migration").target("35").load().migrate();
     }
 
     private org.flywaydb.core.api.configuration.FluentConfiguration flyway(String... ubicaciones) {

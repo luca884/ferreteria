@@ -15,11 +15,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 import org.flywaydb.core.Flyway;
-import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -32,6 +29,8 @@ import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.springframework.util.StreamUtils;
 import org.testcontainers.containers.MySQLContainer;
 
+import com.ferreteria.support.PlantillaDeMigracion;
+
 /**
  * Migracion V34 (rama 5 de facturacion, S15): la credencial de ARCA de cada ferreteria (credencial_arca: a lo sumo una
  * PENDIENTE y una ACTIVA) y la CA del simulador (ca_simulador: una por ferreteria), con la clave privada cifrada. Aditiva:
@@ -41,8 +40,7 @@ import org.testcontainers.containers.MySQLContainer;
  */
 class MigracionV34Test {
 
-    private static final MySQLContainer<?> MYSQL = new MySQLContainer<>("mysql:8.4");
-    private static final AtomicInteger CONTADOR = new AtomicInteger();
+    private static final MySQLContainer<?> MYSQL = PlantillaDeMigracion.MYSQL;
     private static final List<String> TABLAS_NUEVAS = List.of("credencial_arca", "ca_simulador");
     private static final String CUIT_A = "30-78601330-1";
     private static final String CUIT_B = "30-78601332-6";
@@ -51,26 +49,10 @@ class MigracionV34Test {
     private String url;
     private JdbcTemplate jdbc;
 
-    @BeforeAll
-    static void arrancar() {
-        MYSQL.start();
-    }
-
-    @AfterAll
-    static void parar() {
-        MYSQL.stop();
-    }
-
     @BeforeEach
-    void baseNuevaEnLaVersion33() throws SQLException {
-        String base = "v34_" + CONTADOR.incrementAndGet();
-        try (Connection c = DriverManager.getConnection(MYSQL.getJdbcUrl(), "root", MYSQL.getPassword());
-             Statement s = c.createStatement()) {
-            s.execute("create database " + base + " character set utf8mb4");
-        }
-        url = MYSQL.getJdbcUrl().replaceFirst("/[^/?]+(\\?|$)", "/" + base + "$1");
+    void baseNuevaEnLaVersion33() {
+        url = PlantillaDeMigracion.url(PlantillaDeMigracion.baseEnLaVersion("v34", "33"));
         jdbc = new JdbcTemplate(new DriverManagerDataSource(url, "root", MYSQL.getPassword()));
-        flyway("classpath:db/migration").target("33").load().migrate();
     }
 
     private org.flywaydb.core.api.configuration.FluentConfiguration flyway(String... ubicaciones) {

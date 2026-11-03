@@ -8,7 +8,6 @@ import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.sql.Connection;
 import java.sql.DriverManager;
-import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -17,8 +16,6 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.flywaydb.core.Flyway;
-import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -30,6 +27,8 @@ import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.springframework.util.StreamUtils;
 import org.testcontainers.containers.MySQLContainer;
 
+import com.ferreteria.support.PlantillaDeMigracion;
+
 /**
  * Migracion V39 (CU-08 y CU-12, cu-08-nc-cuenta-corriente T2: S1): la nota de credito (o la anulacion interna) de una venta a
  * cuenta corriente es el tercer origen de credito de la imputacion. Nace imputacion.nc_origen_id con su FK compuesta al
@@ -40,33 +39,16 @@ import org.testcontainers.containers.MySQLContainer;
  */
 class MigracionV39Test {
 
-    private static final MySQLContainer<?> MYSQL = new MySQLContainer<>("mysql:8.4");
-    private static final AtomicInteger CONTADOR = new AtomicInteger();
+    private static final MySQLContainer<?> MYSQL = PlantillaDeMigracion.MYSQL;
     private static final AtomicInteger NUMEROS = new AtomicInteger();
 
     private String url;
     private JdbcTemplate jdbc;
 
-    @BeforeAll
-    static void arrancar() {
-        MYSQL.start();
-    }
-
-    @AfterAll
-    static void parar() {
-        MYSQL.stop();
-    }
-
     @BeforeEach
-    void baseNuevaEnLaVersion38() throws SQLException {
-        String base = "v39_" + CONTADOR.incrementAndGet();
-        try (Connection c = DriverManager.getConnection(MYSQL.getJdbcUrl(), "root", MYSQL.getPassword());
-             Statement s = c.createStatement()) {
-            s.execute("create database " + base + " character set utf8mb4");
-        }
-        url = MYSQL.getJdbcUrl().replaceFirst("/[^/?]+(\\?|$)", "/" + base + "$1");
+    void baseNuevaEnLaVersion38() {
+        url = PlantillaDeMigracion.url(PlantillaDeMigracion.baseEnLaVersion("v39", "38"));
         jdbc = new JdbcTemplate(new DriverManagerDataSource(url, "root", MYSQL.getPassword()));
-        migrarHasta("38");
     }
 
     private void migrarHasta(String version) {

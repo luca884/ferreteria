@@ -5,18 +5,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.math.BigDecimal;
-import java.sql.Connection;
-import java.sql.DriverManager;
-import java.sql.SQLException;
-import java.sql.Statement;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.flywaydb.core.Flyway;
 import org.flywaydb.core.api.output.MigrateResult;
-import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -27,6 +21,8 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.testcontainers.containers.MySQLContainer;
 
+import com.ferreteria.support.PlantillaDeMigracion;
+
 /**
  * Migracion V22 (CC-094, CC-095, CC-061, CC-001): el recibo gana estado y auditoria de anulacion, el libro gana el motivo
  * (obligatorio en ANULACION y AJUSTE) y la imputacion gana la vigencia. Usa un MySQL de Testcontainers propio y una base nueva
@@ -34,34 +30,17 @@ import org.testcontainers.containers.MySQLContainer;
  */
 class MigracionV22Test {
 
-    private static final MySQLContainer<?> MYSQL = new MySQLContainer<>("mysql:8.4");
-    private static final AtomicInteger CONTADOR = new AtomicInteger();
+    private static final MySQLContainer<?> MYSQL = PlantillaDeMigracion.MYSQL;
     private static final AtomicInteger CUITS = new AtomicInteger();
     private static final AtomicInteger NUMEROS = new AtomicInteger();
 
     private String url;
     private JdbcTemplate jdbc;
 
-    @BeforeAll
-    static void arrancar() {
-        MYSQL.start();
-    }
-
-    @AfterAll
-    static void parar() {
-        MYSQL.stop();
-    }
-
     @BeforeEach
-    void baseNuevaEnLaVersion21() throws SQLException {
-        String base = "v22_" + CONTADOR.incrementAndGet();
-        try (Connection c = DriverManager.getConnection(MYSQL.getJdbcUrl(), "root", MYSQL.getPassword());
-                Statement s = c.createStatement()) {
-            s.execute("create database " + base + " character set utf8mb4");
-        }
-        url = MYSQL.getJdbcUrl().replaceFirst("/[^/?]+(\\?|$)", "/" + base + "$1");
+    void baseNuevaEnLaVersion21() {
+        url = PlantillaDeMigracion.url(PlantillaDeMigracion.baseEnLaVersion("v22", "21"));
         jdbc = new JdbcTemplate(new DriverManagerDataSource(url, "root", MYSQL.getPassword()));
-        migrarHasta("21");
     }
 
     private MigrateResult migrarHasta(String version) {

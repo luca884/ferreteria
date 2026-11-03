@@ -8,16 +8,12 @@ import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.sql.Connection;
 import java.sql.DriverManager;
-import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
-import java.util.concurrent.atomic.AtomicInteger;
 import org.flywaydb.core.Flyway;
-import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -27,6 +23,8 @@ import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.springframework.util.StreamUtils;
 import org.testcontainers.containers.MySQLContainer;
 
+import com.ferreteria.support.PlantillaDeMigracion;
+
 /**
  * Migracion V27 (tope de Consumidor Final, GDS-32): ferreteria suma tope_consumidor_final DECIMAL(15,2) NOT NULL con
  * default 10.000.000,00 (RG 5700/2025) y un CHECK de mayor que cero. Aditiva: las ferreterias existentes quedan con el
@@ -35,32 +33,15 @@ import org.testcontainers.containers.MySQLContainer;
  */
 class MigracionV27Test {
 
-    private static final MySQLContainer<?> MYSQL = new MySQLContainer<>("mysql:8.4");
-    private static final AtomicInteger CONTADOR = new AtomicInteger();
+    private static final MySQLContainer<?> MYSQL = PlantillaDeMigracion.MYSQL;
 
     private String url;
     private JdbcTemplate jdbc;
 
-    @BeforeAll
-    static void arrancar() {
-        MYSQL.start();
-    }
-
-    @AfterAll
-    static void parar() {
-        MYSQL.stop();
-    }
-
     @BeforeEach
-    void baseNuevaEnLaVersion26() throws SQLException {
-        String base = "v27_" + CONTADOR.incrementAndGet();
-        try (Connection c = DriverManager.getConnection(MYSQL.getJdbcUrl(), "root", MYSQL.getPassword());
-             Statement s = c.createStatement()) {
-            s.execute("create database " + base + " character set utf8mb4");
-        }
-        url = MYSQL.getJdbcUrl().replaceFirst("/[^/?]+(\\?|$)", "/" + base + "$1");
+    void baseNuevaEnLaVersion26() {
+        url = PlantillaDeMigracion.url(PlantillaDeMigracion.baseEnLaVersion("v27", "26"));
         jdbc = new JdbcTemplate(new DriverManagerDataSource(url, "root", MYSQL.getPassword()));
-        flyway("classpath:db/migration").target("26").load().migrate();
     }
 
     private org.flywaydb.core.api.configuration.FluentConfiguration flyway(String... ubicaciones) {

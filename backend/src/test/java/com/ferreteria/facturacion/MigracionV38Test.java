@@ -21,8 +21,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 import org.flywaydb.core.Flyway;
 import org.flywaydb.core.api.MigrationVersion;
-import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -34,6 +32,8 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.springframework.util.StreamUtils;
 import org.testcontainers.containers.MySQLContainer;
+
+import com.ferreteria.support.PlantillaDeMigracion;
 
 /**
  * Migracion V38 (rama 8 de facturacion, cu-08-nota-de-credito T3: S3 y S8, C2): el comprobante asociado de la nota de
@@ -47,8 +47,7 @@ import org.testcontainers.containers.MySQLContainer;
  */
 class MigracionV38Test {
 
-    private static final MySQLContainer<?> MYSQL = new MySQLContainer<>("mysql:8.4");
-    private static final AtomicInteger CONTADOR = new AtomicInteger();
+    private static final MySQLContainer<?> MYSQL = PlantillaDeMigracion.MYSQL;
     private static final AtomicInteger COMPROBANTES = new AtomicInteger();
     private static final List<String> COLUMNAS_DEL_ASOCIADO = List.of("asociado_id", "asociado_cbte_tipo",
         "asociado_punto_venta", "asociado_numero", "asociado_cuit", "asociado_cbte_fch");
@@ -60,25 +59,9 @@ class MigracionV38Test {
     /** La ultima version anterior a la 38 que hay en el classpath (36 sin la V37, 37 con ella). */
     private String anterior;
 
-    @BeforeAll
-    static void arrancar() {
-        MYSQL.start();
-    }
-
-    @AfterAll
-    static void parar() {
-        MYSQL.stop();
-    }
-
     @BeforeEach
-    void baseNuevaEnLaVersionAnterior() throws SQLException {
-        String base = "v38_" + CONTADOR.incrementAndGet();
-        try (Connection c = DriverManager.getConnection(MYSQL.getJdbcUrl(), "root", MYSQL.getPassword());
-             Statement s = c.createStatement()) {
-            s.execute("create database " + base + " character set utf8mb4");
-        }
-        url = MYSQL.getJdbcUrl().replaceFirst("/[^/?]+(\\?|$)", "/" + base + "$1");
-        jdbc = new JdbcTemplate(new DriverManagerDataSource(url, "root", MYSQL.getPassword()));
+    void baseNuevaEnLaVersionAnterior() {
+        url = PlantillaDeMigracion.url(PlantillaDeMigracion.baseVacia("v38_info"));
         MigrationVersion la38 = MigrationVersion.fromVersion("38");
         anterior = Arrays.stream(flyway("classpath:db/migration").load().info().all())
             .map(m -> m.getVersion())
@@ -86,7 +69,8 @@ class MigracionV38Test {
             .max(MigrationVersion::compareTo)
             .orElseThrow()
             .getVersion();
-        flyway("classpath:db/migration").target(anterior).load().migrate();
+        url = PlantillaDeMigracion.url(PlantillaDeMigracion.baseEnLaVersion("v38", anterior));
+        jdbc = new JdbcTemplate(new DriverManagerDataSource(url, "root", MYSQL.getPassword()));
     }
 
     private org.flywaydb.core.api.configuration.FluentConfiguration flyway(String... ubicaciones) {
