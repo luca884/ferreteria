@@ -22,10 +22,25 @@ public final class Cuit {
         if (escrito == null || escrito.isBlank()) {
             return null;
         }
-        String digitos = escrito.replaceAll("[\\s.\\-]", "");
+        String digitos = soloDigitos(escrito, "CUIT");
+        verificar(digitos, "CUIT");
+        return digitos.substring(0, 2) + "-" + digitos.substring(2, 10) + "-" + digitos.substring(10);
+    }
+
+    /**
+     * Los 11 digitos de lo escrito, sin guiones, puntos ni espacios. Lanza IllegalArgumentException si no son 11 (tambien
+     * si viene vacio). {@code nombre} es como se llama el documento en el mensaje: CUIT, o CUIL para un cliente.
+     */
+    public static String soloDigitos(String escrito, String nombre) {
+        String digitos = escrito == null ? "" : escrito.replaceAll("[\\s.\\-]", "");
         if (!digitos.matches("\\d{11}")) {
-            throw new IllegalArgumentException("El CUIT tiene que tener 11 números, por ejemplo 30-12345678-1.");
+            throw new IllegalArgumentException("El " + nombre + " tiene que tener 11 números, por ejemplo 30-12345678-1.");
         }
+        return digitos;
+    }
+
+    /** Comprueba el ultimo digito de 11 digitos ({@link #soloDigitos}). Lanza IllegalArgumentException si no coincide. */
+    public static void verificar(String digitos, String nombre) {
         int suma = 0;
         for (int i = 0; i < PESOS.length; i++) {
             suma += (digitos.charAt(i) - '0') * PESOS[i];
@@ -35,9 +50,8 @@ public final class Cuit {
             verificador = 0;
         }
         if (verificador == 10 || verificador != digitos.charAt(10) - '0') {
-            throw new IllegalArgumentException("El CUIT no es válido: revisá los números, el último no coincide.");
+            throw new IllegalArgumentException("El " + nombre + " no es válido: revisá los números, el último no coincide.");
         }
-        return digitos.substring(0, 2) + "-" + digitos.substring(2, 10) + "-" + digitos.substring(10);
     }
 
     /** True si el CUIT (ya normalizado, con o sin guiones) empieza con 20, 23, 24, 27, 30, 33 o 34. */

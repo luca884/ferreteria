@@ -1,6 +1,6 @@
 package com.ferreteria.clientes.model;
 
-import java.util.Set;
+import com.ferreteria.common.Cuit;
 
 /**
  * Valida y normaliza el documento de un cliente (CL-002). Se guarda solo con dígitos: lo que se tipea puede traer puntos,
@@ -9,9 +9,6 @@ import java.util.Set;
  * prefijo), así que ninguno se acepta.
  */
 public final class DocumentoCliente {
-
-    private static final int[] PESOS = {5, 4, 3, 2, 7, 6, 5, 4, 3, 2};
-    private static final Set<String> PREFIJOS = Set.of("20", "23", "24", "27", "30", "33", "34");
 
     private DocumentoCliente() {}
 
@@ -31,30 +28,20 @@ public final class DocumentoCliente {
         return digitos;
     }
 
-    private static String cuit(String nombre, String digitos) {
-        if (!digitos.matches("\\d{11}")) {
-            throw new DocumentoInvalidoException("El " + nombre + " tiene que tener 11 dígitos.");
+    /**
+     * El largo y el dígito verificador son los de {@link Cuit} (un solo código y un solo texto para proveedores, ferreterías
+     * y clientes); acá quedan el nombre CUIL y el prefijo, que se revisa antes del verificador.
+     */
+    private static String cuit(String nombre, String escrito) {
+        try {
+            String digitos = Cuit.soloDigitos(escrito, nombre);
+            if (!Cuit.tienePrefijoValido(digitos)) {
+                throw new DocumentoInvalidoException("El " + nombre + " no es válido: revisá los dos primeros dígitos.");
+            }
+            Cuit.verificar(digitos, nombre);
+            return digitos;
+        } catch (IllegalArgumentException e) {
+            throw new DocumentoInvalidoException(e.getMessage());
         }
-        if (!PREFIJOS.contains(digitos.substring(0, 2))) {
-            throw new DocumentoInvalidoException("El " + nombre + " no es válido: revisá los dos primeros dígitos.");
-        }
-        if (digitoVerificador(digitos) != digitos.charAt(10) - '0') {
-            throw new DocumentoInvalidoException("El " + nombre + " no es válido: revisá los números, el último no coincide.");
-        }
-        return digitos;
-    }
-
-    /** El verificador esperado de los primeros 10 dígitos, o -1 si la cuenta da 10 (no hay verificador válido). */
-    private static int digitoVerificador(String digitos) {
-        int suma = 0;
-        for (int i = 0; i < PESOS.length; i++) {
-            suma += (digitos.charAt(i) - '0') * PESOS[i];
-        }
-        int verificador = 11 - suma % 11;
-        return switch (verificador) {
-            case 11 -> 0;
-            case 10 -> -1;
-            default -> verificador;
-        };
     }
 }

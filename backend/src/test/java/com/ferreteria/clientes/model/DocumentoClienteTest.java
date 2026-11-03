@@ -64,12 +64,28 @@ class DocumentoClienteTest {
         }
 
         @ParameterizedTest
-        @ValueSource(strings = {"2012345678", "201234567866", "abc", "30-7123456"})
-        @DisplayName("rechaza si no tiene 11 dígitos")
+        @ValueSource(strings = {"2012345678", "201234567866", "abc", "30-7123456", "   ", ""})
+        @DisplayName("rechaza si no tiene 11 dígitos, con el mismo texto que el CUIT de un proveedor")
         void rechazaLargo(String cuit) {
             assertThatThrownBy(() -> DocumentoCliente.normalizar(TipoDocumento.CUIT, cuit))
                     .isInstanceOf(DocumentoInvalidoException.class)
-                    .hasMessage("El CUIT tiene que tener 11 dígitos.");
+                    .hasMessage("El CUIT tiene que tener 11 números, por ejemplo 30-12345678-1.");
+        }
+
+        @Test
+        @DisplayName("un número nulo se rechaza como uno que no tiene 11 dígitos")
+        void rechazaNulo() {
+            assertThatThrownBy(() -> DocumentoCliente.normalizar(TipoDocumento.CUIT, null))
+                    .isInstanceOf(DocumentoInvalidoException.class)
+                    .hasMessage("El CUIT tiene que tener 11 números, por ejemplo 30-12345678-1.");
+        }
+
+        @Test
+        @DisplayName("el mensaje de largo del CUIL nombra al CUIL")
+        void mensajeDeLargoDelCuil() {
+            assertThatThrownBy(() -> DocumentoCliente.normalizar(TipoDocumento.CUIL, "123"))
+                    .isInstanceOf(DocumentoInvalidoException.class)
+                    .hasMessage("El CUIL tiene que tener 11 números, por ejemplo 30-12345678-1.");
         }
 
         @Test
