@@ -373,14 +373,20 @@ public interface ComprobanteFiscalRepository extends TenantScopedRepository<Comp
      * pendientes de CAE (PENDIENTE, EN_CURSO y EN_VERIFICACION) registradas antes de {@code limite}, y en revisión
      * (CAE_NO_COINCIDE y SERIE_DESINCRONIZADA). Por {@code ix_comprobante_fiscal_estado}: las autorizadas, que son casi
      * todas, ni se leen. Una sola fila con las tres cuentas.
+     *
+     * <p>Un reintento con la fecha de la venta copia su {@code registrado_en}: la pendiente cuenta desde el reintento, que es
+     * el {@code reemplazado_en} del registro que reemplazó (cu-07-advertencias-contingencias S3). El reintento siempre es
+     * posterior a la venta, así que alcanza con que ningún registro de la venta haya sido reemplazado desde el límite.
      */
     @Query(value = """
-            select coalesce(sum(estado in ('RECHAZADO', 'FUERA_DE_FECHA')), 0),
-              coalesce(sum(estado in ('PENDIENTE', 'EN_CURSO', 'EN_VERIFICACION') and registrado_en < :limite), 0),
-              coalesce(sum(estado in ('CAE_NO_COINCIDE', 'SERIE_DESINCRONIZADA')), 0)
-            from comprobante_fiscal
-            where ferreteria_id = :fid and reemplazado_en is null
-              and estado in ('RECHAZADO', 'FUERA_DE_FECHA', 'PENDIENTE', 'EN_CURSO', 'EN_VERIFICACION', 'CAE_NO_COINCIDE',
+            select coalesce(sum(c.estado in ('RECHAZADO', 'FUERA_DE_FECHA')), 0),
+              coalesce(sum(c.estado in ('PENDIENTE', 'EN_CURSO', 'EN_VERIFICACION') and c.registrado_en < :limite
+                and not exists (select 1 from comprobante_fiscal p where p.ferreteria_id = c.ferreteria_id
+                  and p.comprobante_id = c.comprobante_id and p.reemplazado_en >= :limite)), 0),
+              coalesce(sum(c.estado in ('CAE_NO_COINCIDE', 'SERIE_DESINCRONIZADA')), 0)
+            from comprobante_fiscal c
+            where c.ferreteria_id = :fid and c.reemplazado_en is null
+              and c.estado in ('RECHAZADO', 'FUERA_DE_FECHA', 'PENDIENTE', 'EN_CURSO', 'EN_VERIFICACION', 'CAE_NO_COINCIDE',
                 'SERIE_DESINCRONIZADA')
             """, nativeQuery = true)
     List<Object[]> avisos(@Param("fid") Long ferreteriaId, @Param("limite") Instant limite);

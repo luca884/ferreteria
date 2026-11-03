@@ -1,6 +1,7 @@
 package com.ferreteria.ventas;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.ferreteria.facturacion.wsfe.WsfeConFallas.Falla;
 import com.ferreteria.support.RelojControlableConfig;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -53,6 +54,31 @@ class AvisosDelMostradorIntegrationTest extends FacturaDelDuenoTestBase {
         assertThat(justo.get("pendientesViejas").asInt()).isZero();
         assertThat(vieja.get("pendientesViejas").asInt()).isEqualTo(1);
         assertThat(vieja.get("rechazadas").asInt()).isEqualTo(2);
+    }
+
+    @Test
+    @DisplayName("A11: un reintento con la fecha de la venta que queda pendiente cuenta los 30 minutos desde el reintento, "
+            + "no desde la venta")
+    void unReintentoCuentaDesdeElReintento() throws Exception {
+        Tienda t = tiendaQueFactura(RI);
+        long venta = ventaRechazada(t);
+        String dueno = login(t.emailDueno());
+        reloj.avanzar(Duration.ofHours(2));
+        wsfe.fallas().programar(Falla.NO_LLEGA);
+        reintentar(dueno, venta, "{\"fechaDeHoy\": false}").andExpect(status().isOk());
+        assertThat(registrosDe(venta)).hasSize(2);
+        assertThat(registrosDe(venta).get(1)).containsEntry("estado", "PENDIENTE")
+                .containsEntry("registrado_en", registrosDe(venta).get(0).get("registrado_en"));
+
+        JsonNode recien = getJson(URL, dueno);
+        reloj.avanzar(Duration.ofMinutes(30));
+        JsonNode justo = getJson(URL, dueno);
+        reloj.avanzar(Duration.ofSeconds(1));
+        JsonNode vieja = getJson(URL, dueno);
+
+        assertThat(recien.get("pendientesViejas").asInt()).isZero();
+        assertThat(justo.get("pendientesViejas").asInt()).isZero();
+        assertThat(vieja.get("pendientesViejas").asInt()).isOne();
     }
 
     @Test
