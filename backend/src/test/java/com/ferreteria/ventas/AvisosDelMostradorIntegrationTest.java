@@ -82,6 +82,21 @@ class AvisosDelMostradorIntegrationTest extends FacturaDelDuenoTestBase {
     }
 
     @Test
+    @DisplayName("A11: el reintento de una venta no hace nueva a la pendiente vieja de otra venta")
+    void elReintentoDeUnaVentaNoTapaOtraPendienteVieja() throws Exception {
+        Tienda t = tiendaQueFactura(RI);
+        long rechazada = ventaRechazada(t);
+        ventaPendiente(t, t.emailVendedor());
+        String dueno = login(t.emailDueno());
+        reloj.avanzar(Duration.ofMinutes(31));
+        wsfe.fallas().programar(Falla.NO_LLEGA);
+
+        reintentar(dueno, rechazada, "{\"fechaDeHoy\": false}").andExpect(status().isOk());
+
+        assertThat(getJson(URL, dueno).get("pendientesViejas").asInt()).isOne();
+    }
+
+    @Test
     @DisplayName("con la facturación bloqueada por ARCA trae el texto del bloqueo de «Facturación», tal cual")
     void traeElBloqueo() throws Exception {
         Tienda t = tiendaQueFactura(RI);

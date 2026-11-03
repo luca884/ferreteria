@@ -160,6 +160,21 @@ class BandejaDeFacturasIntegrationTest extends FacturaDelDuenoTestBase {
     }
 
     @Test
+    @DisplayName("A10: si valen las dos condiciones, dice la de los 5 días")
+    void conLasDosCondicionesDiceLaDeLosCincoDias() throws Exception {
+        Tienda t = tiendaQueFactura(RI);
+        ventaAutorizada(t);
+        long venta = ventaPendiente(t, t.emailVendedor());
+        fueraDeFecha(venta);
+        reloj.avanzar(Duration.ofDays(6));
+        assertThat(jdbc.update("update serie_fiscal set ultima_cbte_fch = '2026-11-03' where ferreteria_id = ?", t.id()))
+                .isOne();
+
+        assertThat(detalle(t, venta).get("fiscal").get("motivoFueraDeFecha").asText())
+                .contains("admite hasta 5 días antes de hoy").doesNotContain("autorizada con fecha posterior");
+    }
+
+    @Test
     @DisplayName("A10: la fuera de fecha por el 10016 de ARCA ya trae su error y no suma otro motivo")
     void laFueraDeFechaDeArcaNoSumaMotivo() throws Exception {
         Tienda t = tiendaQueFactura(RI);

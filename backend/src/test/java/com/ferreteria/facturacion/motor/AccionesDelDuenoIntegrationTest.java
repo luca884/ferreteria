@@ -259,6 +259,42 @@ class AccionesDelDuenoIntegrationTest extends MotorFiscalTestBase {
     }
 
     @Test
+    @DisplayName("A1: un registro EN_VERIFICACION de un día posterior en la serie también impide la fecha de la venta")
+    void unoEnVerificacionPosteriorTambienImpide() {
+        long venta = venta(ferreteriaId);
+        motor.registrar(new AltaFiscal(venta, ReceptorFiscal.sinCliente(), RENGLONES), AHORA.minus(Duration.ofDays(2)));
+        wsfe.fallas().rechazarConObservaciones(new Obs(10015, "Receptor no identificado"));
+        assertThat(atenderB()).isEqualTo(Atencion.TERMINADA);
+        long enVerificacion = registrarFacturaB();
+        assertThat(jdbc.update("update comprobante_fiscal set estado = 'EN_VERIFICACION', numero = 1, cbte_fch = ? "
+                + "where id = ?", java.sql.Date.valueOf(HOY), enVerificacion)).isOne();
+
+        assertThat(pasos.fechaEntraHoy(pasos.registro(vigenteDe(venta)))).isFalse();
+        assertThatThrownBy(() -> enLaVenta(() -> motor.reintentar(new AltaFiscal(venta, ReceptorFiscal.sinCliente(),
+                RENGLONES), false))).isInstanceOfSatisfying(AccionFiscalImpedidaException.class,
+                        e -> assertThat(e.impedimento()).isEqualTo(Impedimento.FECHA_NUEVA_REQUERIDA));
+    }
+
+    @Test
+    @DisplayName("A1: un pendiente posterior de otra ferretería, en una serie igual, no impide la fecha de la venta")
+    void unPendienteDeOtraFerreteriaNoImpide() {
+        long venta = venta(ferreteriaId);
+        Instant haceDosDias = AHORA.minus(Duration.ofDays(2));
+        motor.registrar(new AltaFiscal(venta, ReceptorFiscal.sinCliente(), RENGLONES), haceDosDias);
+        wsfe.fallas().rechazarConObservaciones(new Obs(10015, "Receptor no identificado"));
+        assertThat(atenderB()).isEqualTo(Atencion.TERMINADA);
+        long otra = ferreteriaConFacturacion(cuitNuevo());
+        TenantContext.setCurrentFerreteriaId(otra);
+        motor.registrar(new AltaFiscal(venta(otra), ReceptorFiscal.sinCliente(), RENGLONES));
+        TenantContext.setCurrentFerreteriaId(ferreteriaId);
+
+        long nuevo = enLaVenta(() -> motor.reintentar(new AltaFiscal(venta, ReceptorFiscal.sinCliente(), RENGLONES),
+                false));
+
+        assertThat(pasos.registro(nuevo).getRegistradoEn()).isEqualTo(haceDosDias);
+    }
+
+    @Test
     @DisplayName("A1: un pendiente del mismo día (o de uno anterior) no impide reintentar con la fecha de la venta")
     void unPendienteDelMismoDiaNoImpide() {
         long venta = venta(ferreteriaId);
