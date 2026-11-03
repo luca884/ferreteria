@@ -20,7 +20,7 @@ Restricciones: los tests de migraciones tienen que seguir probando lo mismo: bas
 - [x] T3 · S1, S3 · ruta: inline · Aceptación: mutación de una migración detectada; suite completa medida contra L2 · Evidencia: mutación de la V32 detectada (L3); `./mvnw test` 5967/0 (5964 + los 3 de `PlantillaDeMigracionTest`), BUILD SUCCESS, 14:51 de reloj; suma por clase 14,9 min (antes 28,4), migraciones 5,3 min (antes 18,1) · Risk: —
 - [x] T4 · S1, S2, S3 · ruta: delegada (Verification trigger: Risk item 6) · Aceptación: `odd-verifier` sin bloqueantes · Evidencia: PASS sin bloqueantes (L4); sondas como tests (`mismaCharsetYCollation`, `conservaElHuecoDelAutoIncrement`), `PlantillaDeMigracionTest` 5/0 · Risk: —
 
-- [x] T5 · S1 · ruta: inline · Aceptación: surefire con 3 JVM por defecto (`forkCount` en el pom, `-DforkCount=1` lo pisa); dos corridas seguidas de la suite sin fallas · Evidencia: `help:effective-pom` da 3 y con `-DforkCount=1` da 1; suite 5969/0 en 8:13 y 5969/0 en 9:01 (con `caffeinate -i`); una corrida intermedia falló por suspensión de la Mac (L6); `-Pimagen` 11/0 · Risk: item 5 (configuración del build) e item 4 (tests sensibles a la CPU compartida)
+- [x] T5 · S1 · ruta: inline · Aceptación: surefire con 3 JVM por defecto (`forkCount` en el pom, `-DforkCount=1` lo pisa); dos corridas seguidas de la suite sin fallas · Evidencia: `help:effective-pom` da 3 y con `-DforkCount=1` da 1; suite 5969/0 en 8:13 y 5969/0 en 9:01 (con `caffeinate -i`); una corrida intermedia falló por suspensión de la Mac (L6); `-Pimagen` 11/0 · Risk: none (reevaluado al cerrar: es la configuración local de surefire, no CI, deploy ni dependencias; las JVM no comparten estado; lo cubren dos suites verdes y `-Pimagen`)
 
 ## Log
 
