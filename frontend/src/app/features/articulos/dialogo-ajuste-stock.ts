@@ -1,5 +1,4 @@
 import { DOCUMENT } from '@angular/common';
-import { HttpErrorResponse } from '@angular/common/http';
 import {
   Component,
   DestroyRef,
@@ -13,6 +12,7 @@ import {
   signal,
   viewChild,
 } from '@angular/core';
+import { erroresPorCampo, mensajeDe } from '../../core/api/api-error';
 import { cantidadConUnidad } from '../../core/formato/unidad';
 import {
   AjusteStockResponse,
@@ -689,21 +689,16 @@ export class DialogoAjusteStock {
         },
         error: (err: unknown) => {
           this.guardando.set(false);
-          const delServidor = err instanceof HttpErrorResponse ? err.error?.errors : null;
-          if (delServidor && typeof delServidor === 'object' && Object.keys(delServidor).length > 0) {
+          const entradas = Object.entries(erroresPorCampo(err));
+          if (entradas.length > 0) {
             // Cada error va junto a su campo; el de un campo que no está a la vista (el otro modo) va arriba de
             // los botones, para que no se pierda.
             const visibles: string[] = ['motivo', 'detalle', this.modo() === 'CANTIDAD' ? 'cantidad' : 'stockReal'];
-            const entradas = Object.entries(delServidor as Record<string, string>);
             this.errores.set(Object.fromEntries(entradas.filter(([campo]) => visibles.includes(campo))));
             const ocultos = entradas.filter(([campo]) => !visibles.includes(campo)).map(([, mensaje]) => mensaje);
             this.errorGeneral.set(ocultos.length > 0 ? ocultos.join(' ') : null);
           } else {
-            this.errorGeneral.set(
-              err instanceof HttpErrorResponse && err.error?.message
-                ? err.error.message
-                : 'No se pudo ajustar el stock.',
-            );
+            this.errorGeneral.set(mensajeDe(err, 'No se pudo ajustar el stock.'));
           }
         },
       });

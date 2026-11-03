@@ -1154,6 +1154,28 @@ describe('ArticuloForm', () => {
       expect(el().querySelectorAll('.error li').length).toBe(2);
     });
 
+    it('un error por campo sin texto no suma una línea vacía a la lista de arriba', async () => {
+      await crearComponente();
+      await completarMinimos();
+      servicio.crear.mockReturnValue(
+        throwError(
+          () =>
+            new HttpErrorResponse({
+              status: 400,
+              error: {
+                message: 'Datos inválidos',
+                errors: { costo: 'El costo admite hasta 2 decimales', descripcion: '  ' },
+              },
+            }),
+        ),
+      );
+
+      await enviar();
+
+      expect(errorDe('costo')).toBe('El costo admite hasta 2 decimales');
+      expect(el().querySelectorAll('.error li').length).toBe(1);
+    });
+
     it('un 409 con códigos repetidos marca cada campo', async () => {
       await crearComponente();
       await completarMinimos();

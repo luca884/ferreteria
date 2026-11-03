@@ -682,6 +682,26 @@ describe('DialogoAjusteStock', () => {
       expect(texto('.error[role="alert"]')).toBe('Indicá el stock real.');
     });
 
+    it('un error por campo sin texto no se traga la respuesta: se muestra el mensaje general', async () => {
+      await abrir(tornillo(10));
+      servicio.ajustarStock.mockReturnValue(
+        throwError(
+          () =>
+            new HttpErrorResponse({
+              status: 400,
+              error: { message: 'Datos inválidos', errors: { cantidad: '' } },
+            }),
+        ),
+      );
+      await escribir('#motivo', 'INGRESO_MERCADERIA');
+      await escribir('#cantidad', '5');
+
+      await confirmar();
+
+      expect(texto('.error[role="alert"]')).toBe('Datos inválidos');
+      expect(el().querySelector('#cantidad-error')).toBeNull();
+    });
+
     it('el 422 de un artículo dado de baja se muestra arriba de los botones', async () => {
       await abrir(tornillo(10));
       servicio.ajustarStock.mockReturnValue(

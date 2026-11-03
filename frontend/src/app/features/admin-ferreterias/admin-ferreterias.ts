@@ -1,9 +1,8 @@
-import { HttpErrorResponse } from '@angular/common/http';
 import { Component, DestroyRef, ElementRef, Injector, OnInit, afterNextRender, computed, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { Observable } from 'rxjs';
-import { mensajeDe } from '../../core/api/api-error';
+import { erroresPorCampo, mensajeDe } from '../../core/api/api-error';
 import { normalizarCuit, validarCuit } from '../../core/formato/cuit';
 import { BarraAcciones } from '../../shared/barra-acciones';
 import { Confirmacion } from '../../shared/confirmacion';
@@ -414,12 +413,3 @@ function textoConfirmacion({ accion, ferreteria: f }: PedidoDeCambio): TextoConf
   }
 }
 
-/** Los `errors` de un 400 o 409 (`{ campo: mensaje }`, con claves anidadas como `dueno.email`); vacío si no los trae. */
-function erroresPorCampo(err: unknown): Record<string, string> {
-  if (!(err instanceof HttpErrorResponse)) return {};
-  const errors: unknown = err.error?.errors;
-  if (errors === null || typeof errors !== 'object') return {};
-  return Object.fromEntries(
-    Object.entries(errors).filter(([, m]) => typeof m === 'string' && m.trim() !== ''),
-  ) as Record<string, string>;
-}

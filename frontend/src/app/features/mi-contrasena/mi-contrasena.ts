@@ -1,6 +1,5 @@
-import { HttpErrorResponse } from '@angular/common/http';
 import { Component, inject, signal, viewChild } from '@angular/core';
-import { erroresDeCampos, mensajeDe } from '../../core/api/api-error';
+import { erroresDeCampos, erroresPorCampo, mensajeDe } from '../../core/api/api-error';
 import { Router } from '@angular/router';
 import { AuthService } from '../../core/auth/auth.service';
 import { BarraAcciones } from '../../shared/barra-acciones';
@@ -48,9 +47,8 @@ export class MiContrasena {
       },
       error: (err: unknown) => {
         this.enviando.set(false);
-        const errors: unknown = err instanceof HttpErrorResponse ? err.error?.errors : undefined;
-        const actual = (errors as Record<string, unknown> | null | undefined)?.['passwordActual'];
-        if (typeof actual === 'string' && actual.trim() !== '') this.errorActual.set(actual);
+        const actual = erroresPorCampo(err)['passwordActual'];
+        if (actual !== undefined) this.errorActual.set(actual);
         else {
           const porCampo = erroresDeCampos(err);
           this.error.set(porCampo.length > 0 ? porCampo.join(' ') : mensajeDe(err, 'No se pudo cambiar la contraseña.'));

@@ -13,7 +13,7 @@ import {
 } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { catchError, forkJoin, map, of } from 'rxjs';
-import { erroresDeCampos } from '../../core/api/api-error';
+import { erroresPorCampo, mensajeDe } from '../../core/api/api-error';
 import { AuthService } from '../../core/auth/auth.service';
 import { Avisos } from '../../core/avisos/avisos';
 import { Cotizacion } from '../../core/cotizacion/cotizacion.models';
@@ -858,16 +858,6 @@ function esVersionVencida(err: unknown): boolean {
     (err.status === 409 && mensaje === MENSAJE_ARTICULO_MODIFICADO) ||
     (err.status === 400 && mensaje === MENSAJE_FALTA_VERSION)
   );
-}
-
-function mensajeDe(err: unknown, porDefecto: string): string {
-  return err instanceof HttpErrorResponse && err.error?.message ? err.error.message : porDefecto;
-}
-
-/** Los `errors` de un 400/409 del backend (campo → mensaje); vacío si no trae. */
-function erroresPorCampo(err: unknown): Record<string, string> {
-  if (erroresDeCampos(err).length === 0) return {};
-  return (err as HttpErrorResponse).error.errors as Record<string, string>;
 }
 
 function formatearPorcentaje(valor: number): string {
