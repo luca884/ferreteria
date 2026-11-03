@@ -20,6 +20,8 @@
 
     <properties>
         <java.version>17</java.version>
+        <!-- JVM de surefire en paralelo (ver maven-surefire-plugin); -DforkCount=1 la pisa. -->
+        <forkCount>3</forkCount>
         <flyway.version>11.20.0</flyway.version>
         <jjwt.version>0.12.5</jjwt.version>
         <testcontainers.version>1.21.4</testcontainers.version>
@@ -196,6 +198,12 @@
                     <excludedGroups>imagen,arca-real</excludedGroups>
                     <!-- Sin esto, -Dtest=ImagenDeProduccionTest sin -Pimagen (o -Pimagen sin el test) termina verde con 0 tests. -->
                     <failIfNoTests>true</failIfNoTests>
+                    <!-- Tres JVM en paralelo, cada una con su propio MySQL (bloque static de IntegrationTestBase y
+                         PlantillaDeMigracion): nada se comparte entre JVM. Medido el 2026-11-03 en 10 CPU: 1 JVM 14:51,
+                         3 JVM 8:50, 5 JVM 9:31 (Docker se satura). Dentro de una JVM las clases siguen de a una: los
+                         tests de integracion comparten una base. -DforkCount=1 vuelve al modo anterior. -->
+                    <forkCount>${forkCount}</forkCount>
+                    <reuseForks>true</reuseForks>
                 </configuration>
             </plugin>
         </plugins>
