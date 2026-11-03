@@ -89,6 +89,14 @@ class DocumentoClienteTest {
         }
 
         @Test
+        @DisplayName("con prefijo y verificador equivocados, el prefijo se avisa primero y nombra al CUIL")
+        void prefijoAntesQueVerificadorEnUnCuil() {
+            assertThatThrownBy(() -> DocumentoCliente.normalizar(TipoDocumento.CUIL, "10123456785"))
+                    .isInstanceOf(DocumentoInvalidoException.class)
+                    .hasMessage("El CUIL no es válido: revisá los dos primeros dígitos.");
+        }
+
+        @Test
         @DisplayName("el mensaje del CUIL nombra al CUIL")
         void mensajeDelCuil() {
             assertThatThrownBy(() -> DocumentoCliente.normalizar(TipoDocumento.CUIL, "20123456787"))

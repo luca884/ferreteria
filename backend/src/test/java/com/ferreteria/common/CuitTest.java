@@ -69,6 +69,21 @@ class CuitTest {
                 .hasMessage("El CUIT tiene que tener 11 números, por ejemplo 30-12345678-1.");
     }
 
+    @Test
+    @DisplayName("como lo llama el simulador de ARCA (número rellenado a 11 dígitos): el 0 tiene verificador pero no prefijo; un negativo o uno de 12 dígitos no es un CUIT")
+    void comoLoLlamaElSimulador() {
+        String formato = "El CUIT tiene que tener 11 números, por ejemplo 30-12345678-1.";
+
+        assertThat(Cuit.normalizar(String.format("%011d", 0L))).isEqualTo("00-00000000-0");
+        assertThat(Cuit.tienePrefijoValido(Cuit.normalizar(String.format("%011d", 0L)))).isFalse();
+        assertThatThrownBy(() -> Cuit.normalizar(String.format("%011d", -5L)))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage(formato);
+        assertThatThrownBy(() -> Cuit.normalizar(String.format("%011d", 100_000_000_000L)))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage(formato);
+    }
+
     @ParameterizedTest
     @ValueSource(strings = {"30-12345678-9", "30-87654321-1", "20-00000001-0", "20-00000001-9"})
     @DisplayName("un verificador que no cierra (o un resto 10, que no existe) no es valido")
