@@ -108,6 +108,7 @@
     }
     <div class="fila-generar">
       <button
+        #generarEl
         type="button"
         class="generar primario"
         [disabled]="!puedeGenerar()"
@@ -298,7 +299,7 @@
             type="button"
             class="confirmar primario"
             [disabled]="aplicando() || vp.conteos.modificados === 0"
-            (click)="confirmar()"
+            (click)="abrirConfirmacion()"
           >
             @if (aplicando()) {
               Actualizando…

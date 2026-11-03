@@ -181,6 +181,7 @@ export class ActualizacionMasiva implements OnInit {
   private readonly resumenEl = viewChild<ElementRef<HTMLElement>>('resumenEl');
   private readonly confirmacionEl = viewChild<ElementRef<HTMLElement>>('confirmacionEl');
   private readonly confirmarEl = viewChild<ElementRef<HTMLButtonElement>>('confirmarEl');
+  private readonly generarEl = viewChild<ElementRef<HTMLButtonElement>>('generarEl');
   private readonly injector = inject(Injector);
 
   /** Sube con cada cambio: una respuesta en vuelo de un pedido viejo se descarta. */
@@ -219,7 +220,7 @@ export class ActualizacionMasiva implements OnInit {
       el.focus({ preventScroll: true });
       el.scrollIntoView?.({ block: 'nearest', behavior: 'smooth' });
     });
-    // La segunda confirmación se anuncia y se contesta con el teclado sin buscarla.
+    // La confirmación se anuncia y se contesta con el teclado sin buscarla.
     effect(() => this.confirmacionEl()?.nativeElement.focus());
   }
 
@@ -287,18 +288,24 @@ export class ActualizacionMasiva implements OnInit {
   }
 
   /**
-   * Aplica lo que muestra la vista previa. El primer clic solo abre la confirmación; con el filtro
-   * vacío avisa que alcanza a todo el catálogo. Con `modificados` en 0 no hay nada que aplicar.
+   * Abre la confirmación del botón «Actualizar N artículos»; con el filtro vacío avisa que alcanza a
+   * todo el catálogo. Nunca aplica: dos activaciones seguidas antes de que se redibuje el botón no
+   * pueden saltearse la confirmación. Con `modificados` en 0 no hay nada que aplicar.
    */
-  protected confirmar(): void {
+  protected abrirConfirmacion(): void {
     const vistaPrevia = this.vistaPrevia();
     const pedido = this.pedidoVigente();
     if (this.aplicando() || vistaPrevia === null || pedido === null) return;
     if (vistaPrevia.conteos.modificados === 0) return;
-    if (this.confirmando() === null) {
-      this.confirmando.set(filtroVacio(pedido) ? 'todo' : 'filtrado');
-      return;
-    }
+    this.confirmando.set(filtroVacio(pedido) ? 'todo' : 'filtrado');
+  }
+
+  /** Aplica lo que muestra la vista previa. Solo se llega desde la confirmación ya abierta. */
+  protected confirmar(): void {
+    const vistaPrevia = this.vistaPrevia();
+    const pedido = this.pedidoVigente();
+    if (this.aplicando() || vistaPrevia === null || pedido === null) return;
+    if (vistaPrevia.conteos.modificados === 0 || this.confirmando() === null) return;
     this.confirmando.set(null);
     this.limpiarMensajes();
     this.aplicando.set(true);
@@ -316,6 +323,8 @@ export class ActualizacionMasiva implements OnInit {
         // Sea cual sea el motivo, el botón vuelve recién con una vista previa nueva.
         this.descartarVistaPrevia();
         this.mostrarError(err);
+        // La confirmación y el botón de actualizar se fueron con el foco adentro: lo que sigue es la vista previa.
+        afterNextRender(() => this.generarEl()?.nativeElement.focus(), { injector: this.injector });
       },
     });
   }

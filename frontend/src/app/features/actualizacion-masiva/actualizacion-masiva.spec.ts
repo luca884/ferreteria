@@ -1053,6 +1053,19 @@ describe('ActualizacionMasiva', () => {
         expect(hayConfirmacion()).toBe(false);
       });
 
+      it('dos clics rápidos en "Actualizar N artículos" solo abren la confirmación: no aplican', async () => {
+        await conVistaPrevia(vistaPrevia(3));
+        servicio.aplicar.mockReturnValue(new Subject<ResultadoMasivo>());
+        const actualizar = botonConfirmar();
+
+        actualizar.click();
+        actualizar.click();
+        await asentar();
+
+        expect(servicio.aplicar).not.toHaveBeenCalled();
+        expect(hayConfirmacion()).toBe(true);
+      });
+
       it('"Cancelar" cierra la confirmación sin aplicar y el foco vuelve al botón de actualizar', async () => {
         await conVistaPrevia(vistaPrevia(3));
         await abrirConfirmacion();
@@ -1276,6 +1289,20 @@ describe('ActualizacionMasiva', () => {
         expect(servicio.aplicar).toHaveBeenCalledTimes(1);
         expect(botonConfirmar().textContent?.trim()).toBe('Actualizando…');
         expect(hayConfirmacion()).toBe(false);
+      });
+
+      it('dos clics rápidos en "Actualizar N artículos" no se saltean la confirmación de todo el catálogo', async () => {
+        await conVistaPrevia(vistaPrevia(120), sinFiltro);
+        servicio.aplicar.mockReturnValue(new Subject<ResultadoMasivo>());
+        const actualizar = botonConfirmar();
+
+        actualizar.click();
+        actualizar.click();
+        await asentar();
+
+        expect(servicio.aplicar).not.toHaveBeenCalled();
+        expect(hayConfirmacion()).toBe(true);
+        expect(texto('.confirmacion p')).toContain('todo el catálogo');
       });
 
       it('"Cancelar" cierra la confirmación sin aplicar y conserva la vista previa', async () => {
@@ -1547,6 +1574,15 @@ describe('ActualizacionMasiva', () => {
         expect(alerta().textContent).not.toContain('Error interno del servidor');
         expect(el().querySelector('button.confirmar')).toBeNull();
         formularioIntacto();
+      });
+
+      it('tras un error al aplicar el foco va a "Ver vista previa": la confirmación y el botón de actualizar ya no están', async () => {
+        await conVistaPrevia();
+
+        await aplicarConError(errorHttp(409, MENSAJE_409));
+
+        expect(el().querySelector('.confirmacion')).toBeNull();
+        expect(document.activeElement).toBe(boton());
       });
 
       it('un error de aplicar deja de mostrar "Actualizando…" y se puede pedir otra vista previa', async () => {

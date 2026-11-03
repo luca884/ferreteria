@@ -31,7 +31,7 @@
   align-items: center;
   gap: var(--e-3);
 }
-/* La segunda confirmación toma el foco por código: no lleva el anillo de un control. */
+/* La confirmación toma el foco por código: no lleva el anillo de un control. */
 .confirmacion:focus {
   outline: none;
 }
