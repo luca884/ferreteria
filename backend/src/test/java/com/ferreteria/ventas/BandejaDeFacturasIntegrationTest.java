@@ -96,7 +96,7 @@ class BandejaDeFacturasIntegrationTest extends FacturaDelDuenoTestBase {
         assertThat(textos(fiscal.get("acciones"))).containsExactly("REINTENTAR", "DEJAR_SIN_FACTURA");
         assertThat(fiscal.get("fechaNuevaRequerida").asBoolean()).isFalse();
         assertThat(fiscal.get("reimprimir").asBoolean()).isFalse();
-        for (String nulo : List.of("motivoSinFactura", "sinFacturaPor", "sinFacturaEn")) {
+        for (String nulo : List.of("motivoSinFactura", "sinFacturaPor", "sinFacturaEn", "motivoFueraDeFecha")) {
             assertThat(fiscal.has(nulo)).as("fiscal.%s presente", nulo).isTrue();
             assertThat(fiscal.get(nulo).isNull()).as("fiscal.%s en null", nulo).isTrue();
         }
@@ -118,6 +118,61 @@ class BandejaDeFacturasIntegrationTest extends FacturaDelDuenoTestBase {
         JsonNode fiscal = detalle(t, venta).get("fiscal");
         assertThat(fiscal.get("fechaNuevaRequerida").asBoolean()).isTrue();
         assertThat(textos(fiscal.get("acciones"))).containsExactly("REINTENTAR", "DEJAR_SIN_FACTURA");
+    }
+
+    @Test
+    @DisplayName("A10: una fuera de fecha que dejó el motor (sin errores de ARCA) dice el motivo: pasaron más de 5 días; "
+            + "mientras la fecha todavía entraría, no dice nada")
+    void elDetalleDeUnaFueraDeFechaPorLosCincoDias() throws Exception {
+        Tienda t = tiendaQueFactura(RI);
+        long venta = ventaPendiente(t, t.emailVendedor());
+        fueraDeFecha(venta);
+        JsonNode recien = detalle(t, venta).get("fiscal");
+
+        reloj.avanzar(Duration.ofDays(6));
+        JsonNode fiscal = detalle(t, venta).get("fiscal");
+
+        assertThat(recien.has("motivoFueraDeFecha")).isTrue();
+        assertThat(recien.get("motivoFueraDeFecha").isNull()).isTrue();
+        assertThat(fiscal.get("errores")).isEmpty();
+        assertThat(fiscal.get("motivoFueraDeFecha").asText()).isEqualTo("ARCA ya no acepta la fecha de esta venta "
+                + "(28/10/2026): admite hasta 5 días antes de hoy. Reintentá con la fecha de hoy o dejala sin factura.");
+    }
+
+    @Test
+    @DisplayName("A10: una fuera de fecha cuya serie ya autorizó una factura de un día posterior dice ese motivo, con las dos "
+            + "fechas")
+    void elDetalleDeUnaFueraDeFechaPorUnaAutorizadaPosterior() throws Exception {
+        Tienda t = tiendaQueFactura(RI);
+        ventaAutorizada(t);
+        long venta = ventaPendiente(t, t.emailVendedor());
+        fueraDeFecha(venta);
+        reloj.avanzar(Duration.ofDays(2));
+        // La serie autorizó otra factura hoy (cobrar otro día pide abrir otra caja).
+        assertThat(jdbc.update("update serie_fiscal set ultima_cbte_fch = '2026-10-30' where ferreteria_id = ?", t.id()))
+                .isOne();
+
+        JsonNode fiscal = detalle(t, venta).get("fiscal");
+
+        assertThat(fiscal.get("motivoFueraDeFecha").asText()).isEqualTo("ARCA ya no acepta la fecha de esta venta "
+                + "(28/10/2026): ya hay una factura autorizada con fecha posterior (30/10/2026) y las fechas no pueden ir "
+                + "para atrás. Reintentá con la fecha de hoy o dejala sin factura.");
+    }
+
+    @Test
+    @DisplayName("A10: la fuera de fecha por el 10016 de ARCA ya trae su error y no suma otro motivo")
+    void laFueraDeFechaDeArcaNoSumaMotivo() throws Exception {
+        Tienda t = tiendaQueFactura(RI);
+        long venta = ventaPendiente(t, t.emailVendedor());
+        fueraDeFecha(venta);
+        jdbc.update("update comprobante_fiscal set errores = '[{\"code\":10016,\"msg\":\"La fecha no es válida.\"}]' "
+                + "where comprobante_id = ? and reemplazado_en is null", venta);
+        reloj.avanzar(Duration.ofDays(6));
+
+        JsonNode fiscal = detalle(t, venta).get("fiscal");
+
+        assertThat(fiscal.get("errores")).singleElement().satisfies(e -> assertThat(e.get("codigo").asInt()).isEqualTo(10016));
+        assertThat(fiscal.get("motivoFueraDeFecha").isNull()).isTrue();
     }
 
     @Test

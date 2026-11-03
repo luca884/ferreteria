@@ -573,6 +573,21 @@ public class PasosFiscales {
     }
 
     /**
+     * Solo lectura, para el motivo de una FUERA_DE_FECHA en el detalle de Ventas (cu-07-advertencias-contingencias S2): la
+     * CbteFch de la venta, el día de hoy (el {@code Clock}) y la del último autorizado que conoce su serie (null si no).
+     */
+    @Transactional(readOnly = true)
+    public FechasDelRegistro fechasDelRegistro(ComprobanteFiscal registro) {
+        LocalDate ultima = series.ultimaCbteFchScoped(registro.getAmbiente(), registro.getPuntoVenta(),
+                registro.getCbteTipo()).orElse(null);
+        return new FechasDelRegistro(LocalDate.ofInstant(registro.getRegistradoEn(), ZONA_ARCA),
+                LocalDate.ofInstant(reloj.instant(), ZONA_ARCA), ultima);
+    }
+
+    /** Lo que devuelve {@link #fechasDelRegistro}. */
+    public record FechasDelRegistro(LocalDate fecha, LocalDate hoy, LocalDate ultimaAutorizada) {}
+
+    /**
      * «Dejar sin factura»: el registro vigente RECHAZADO o FUERA_DE_FECHA de la venta pasa a SIN_FACTURA con el motivo
      * (sin espacios de más; obligatorio, hasta {@value #LARGO_MOTIVO} caracteres), el usuario y la hora del {@code Clock}.
      * Es definitivo (S12).

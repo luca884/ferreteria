@@ -41,6 +41,8 @@ export interface FiscalConsultado extends FiscalVenta {
   acciones?: AccionFiscal[];
   /** La fecha de la venta ya no entra en ARCA: reintentar pide confirmar la fecha de hoy. */
   fechaNuevaRequerida?: boolean;
+  /** Por qué ARCA ya no acepta la fecha de una fuera de fecha sin errores de ARCA (lo arma el servidor), o null. */
+  motivoFueraDeFecha?: string | null;
   /** Salió con ticket provisorio y ya está AUTORIZADO: hay que reimprimir la factura. */
   reimprimir?: boolean;
 }

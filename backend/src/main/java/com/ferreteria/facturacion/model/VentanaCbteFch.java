@@ -11,7 +11,7 @@ import java.time.YearMonth;
 public final class VentanaCbteFch {
 
     /** Para productos (concepto 1), la CbteFch va de N−5 a N+5 del día del envío, con los dos extremos incluidos. */
-    static final int DIAS = 5;
+    public static final int DIAS = 5;
 
     private VentanaCbteFch() {
     }

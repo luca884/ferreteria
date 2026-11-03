@@ -542,6 +542,21 @@ describe('Ventas (consulta y reimpresión, G60)', () => {
       expect(normal(detalle()!.querySelector('.errores-arca h3')?.textContent)).toBe('Errores de ARCA');
     });
 
+    it('una fuera de fecha sin errores de ARCA dice el motivo que manda el servidor; sin motivo, no muestra nada', async () => {
+      const motivo =
+        'ARCA ya no acepta la fecha de esta venta (28/10/2026): admite hasta 5 días antes de hoy. ' +
+        'Reintentá con la fecha de hoy o dejala sin factura.';
+      await abrirCon(rechazada({ estado: 'FUERA_DE_FECHA', errores: [], motivoFueraDeFecha: motivo }));
+
+      expect(normal(detalle()!.querySelector('.estado-factura')?.textContent)).toBe('Estado de la factura: Fuera de fecha');
+      expect(normal(detalle()!.querySelector('.motivo-fuera-de-fecha')?.textContent)).toBe(motivo);
+      expect(detalle()!.querySelector('.errores-arca')).toBeNull();
+
+      TestBed.resetTestingModule();
+      await abrirCon(rechazada({ motivoFueraDeFecha: null }));
+      expect(detalle()!.querySelector('.motivo-fuera-de-fecha')).toBeNull();
+    });
+
     it('una autorizada muestra las observaciones de ARCA tal cual, sin acciones', async () => {
       await abrirCon({
         ...fiscalDe(documentoB()),

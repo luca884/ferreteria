@@ -283,7 +283,16 @@ public class FacturacionParaVentaImpl implements FacturacionParaVenta {
     public Optional<FacturaConsultada> consulta(long comprobanteId) {
         return lectura.execute(s -> registros.deComprobanteScoped(comprobanteId)
                 .map(r -> BandejaFiscal.consultada(r, HojaFiscal.de(r, pasos.alicuotas(r.getId()), estadoDe(r)),
-                        BandejaFiscal.rechazada(r) && !pasos.fechaEntraHoy(r))));
+                        BandejaFiscal.rechazada(r) && !pasos.fechaEntraHoy(r), motivoFueraDeFecha(r))));
+    }
+
+    /** El motivo de una FUERA_DE_FECHA (cu-07-advertencias-contingencias S2); null en los demás estados. */
+    private String motivoFueraDeFecha(ComprobanteFiscal registro) {
+        if (registro.getEstado() != EstadoFiscal.FUERA_DE_FECHA) {
+            return null;
+        }
+        PasosFiscales.FechasDelRegistro f = pasos.fechasDelRegistro(registro);
+        return BandejaFiscal.motivoFueraDeFecha(f.fecha(), f.hoy(), f.ultimaAutorizada());
     }
 
     @Override

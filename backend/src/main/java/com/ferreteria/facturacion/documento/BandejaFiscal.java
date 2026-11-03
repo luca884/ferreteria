@@ -11,6 +11,9 @@ import com.ferreteria.facturacion.api.FacturacionParaVenta.FacturaConsultada;
 import com.ferreteria.facturacion.api.FacturacionParaVenta.ObservacionArca;
 import com.ferreteria.facturacion.model.ComprobanteFiscal;
 import com.ferreteria.facturacion.model.EstadoFiscal;
+import com.ferreteria.facturacion.model.VentanaCbteFch;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.List;
@@ -28,6 +31,8 @@ import java.util.Set;
 public final class BandejaFiscal {
 
     private static final JsonMapper JSON = JsonMapper.builder().build();
+    private static final DateTimeFormatter FECHA = DateTimeFormatter.ofPattern("dd/MM/yyyy");
+    private static final String QUE_HACER = "Reintentá con la fecha de hoy o dejala sin factura.";
 
     private static final Set<EstadoFiscal> PENDIENTES = EnumSet.of(EstadoFiscal.PENDIENTE, EstadoFiscal.EN_CURSO,
             EstadoFiscal.EN_VERIFICACION, EstadoFiscal.CAE_NO_COINCIDE, EstadoFiscal.SERIE_DESINCRONIZADA);
@@ -55,11 +60,13 @@ public final class BandejaFiscal {
     }
 
     /**
-     * La factura en el detalle de Ventas, con {@code documento} de la misma lectura del registro y
-     * {@code fechaNuevaRequerida} ya calculada por quien conoce la serie y el reloj.
+     * La factura en el detalle de Ventas, con {@code documento} de la misma lectura del registro, y
+     * {@code fechaNuevaRequerida} y {@code motivoFueraDeFecha} ({@link #motivoFueraDeFecha}) ya calculados por quien conoce
+     * la serie y el reloj. El motivo se muestra solo en una FUERA_DE_FECHA sin errores de ARCA: la del 10016 ya trae el
+     * suyo.
      */
     public static FacturaConsultada consultada(ComprobanteFiscal registro, DocumentoFiscal documento,
-            boolean fechaNuevaRequerida) {
+            boolean fechaNuevaRequerida, String motivoFueraDeFecha) {
         boolean autorizada = registro.getEstado() == EstadoFiscal.AUTORIZADO;
         List<ErrorArca> errores = new ArrayList<>(errores(registro.getErrores()));
         List<ObservacionArca> observaciones = new ArrayList<>();
@@ -74,9 +81,34 @@ public final class BandejaFiscal {
         boolean rechazada = rechazada(registro);
         List<AccionFiscal> acciones = rechazada ? List.of(AccionFiscal.REINTENTAR, AccionFiscal.DEJAR_SIN_FACTURA)
                 : List.of();
+        String motivo = registro.getEstado() == EstadoFiscal.FUERA_DE_FECHA && errores.isEmpty() ? motivoFueraDeFecha
+                : null;
         return new FacturaConsultada(documento, errores, observaciones, registro.getMotivoSinFactura(),
                 registro.getUsuarioSinFacturaId(), registro.getSinFacturaEn(), acciones, rechazada && fechaNuevaRequerida,
-                reimprimir(registro));
+                motivo, reimprimir(registro));
+    }
+
+    /**
+     * Por qué ARCA ya no acepta la fecha de la venta (cu-07-advertencias-contingencias S2): pasaron más de
+     * {@value VentanaCbteFch#DIAS} días o la serie ya autorizó una factura de una fecha posterior. Las dos condiciones no
+     * vuelven atrás (el día avanza y la última autorizada solo crece), así que lo que se lee hoy explica por qué el motor la
+     * dejó fuera de fecha. Null si ninguna vale (S4).
+     *
+     * @param fecha la CbteFch de la venta (la fecha de Buenos Aires de su hora)
+     * @param hoy el día de hoy en Buenos Aires
+     * @param ultimaAutorizada la CbteFch del último autorizado de la serie; null si no se conoce
+     */
+    public static String motivoFueraDeFecha(LocalDate fecha, LocalDate hoy, LocalDate ultimaAutorizada) {
+        if (fecha.isBefore(hoy.minusDays(VentanaCbteFch.DIAS))) {
+            return String.format("ARCA ya no acepta la fecha de esta venta (%s): admite hasta %d días antes de hoy. %s",
+                    FECHA.format(fecha), VentanaCbteFch.DIAS, QUE_HACER);
+        }
+        if (ultimaAutorizada != null && fecha.isBefore(ultimaAutorizada)) {
+            return String.format("ARCA ya no acepta la fecha de esta venta (%s): ya hay una factura autorizada con fecha "
+                    + "posterior (%s) y las fechas no pueden ir para atrás. %s", FECHA.format(fecha),
+                    FECHA.format(ultimaAutorizada), QUE_HACER);
+        }
+        return null;
     }
 
     /**

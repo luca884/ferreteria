@@ -222,11 +222,13 @@ public interface FacturacionParaVenta {
      * @param acciones las que valen hoy: las dos con un registro RECHAZADO o FUERA_DE_FECHA; ninguna en los demás
      * @param fechaNuevaRequerida true si es RECHAZADO o FUERA_DE_FECHA y la fecha de la venta ya no entra en ARCA hoy
      *     (reintentar pide confirmar la de hoy)
+     * @param motivoFueraDeFecha por qué ARCA ya no acepta la fecha de una FUERA_DE_FECHA que no trae errores de ARCA (la
+     *     dejó el motor); null en las demás (cu-07-advertencias-contingencias S2)
      * @param reimprimir true si salió con el ticket provisorio y ya está AUTORIZADO
      */
     record FacturaConsultada(DocumentoFiscal documento, List<ErrorArca> errores, List<ObservacionArca> observaciones,
             String motivoSinFactura, Long usuarioSinFacturaId, Instant sinFacturaEn, List<AccionFiscal> acciones,
-            boolean fechaNuevaRequerida, boolean reimprimir) {
+            boolean fechaNuevaRequerida, String motivoFueraDeFecha, boolean reimprimir) {
 
         public FacturaConsultada {
             Objects.requireNonNull(documento, "Falta la hoja de la factura.");

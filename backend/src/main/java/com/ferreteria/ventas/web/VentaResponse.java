@@ -100,14 +100,15 @@ public record VentaResponse(
      * @param sinFacturaEn cuándo, en hora de Buenos Aires sin zona (como {@code fecha}), o null
      * @param acciones las que valen hoy: REINTENTAR y DEJAR_SIN_FACTURA en una rechazada o fuera de fecha
      * @param fechaNuevaRequerida la fecha de la venta ya no entra en ARCA: reintentar pide confirmar la de hoy
+     * @param motivoFueraDeFecha por qué ARCA ya no acepta la fecha de una fuera de fecha sin errores de ARCA, o null
      * @param reimprimir salió con ticket provisorio y ya está AUTORIZADO
      */
     @JsonInclude(JsonInclude.Include.ALWAYS)
     public record FiscalConsultadoResponse(String estado, String clase, String letra, int puntoVenta, Long numero,
             String cae, LocalDate caeVencimiento, String ambiente, DocumentoResponse documento,
             List<ErrorArca> errores, List<ObservacionArca> observaciones, String motivoSinFactura, String sinFacturaPor,
-            LocalDateTime sinFacturaEn, List<AccionFiscal> acciones, boolean fechaNuevaRequerida, boolean reimprimir)
-            implements Fiscal {
+            LocalDateTime sinFacturaEn, List<AccionFiscal> acciones, boolean fechaNuevaRequerida,
+            String motivoFueraDeFecha, boolean reimprimir) implements Fiscal {
 
         public static FiscalConsultadoResponse de(FiscalConsultado consultado) {
             if (consultado == null) {
@@ -119,7 +120,7 @@ public record VentaResponse(
                     e.caeVencimiento(), e.ambiente(), DocumentoResponse.de(f.documento()), f.errores(), f.observaciones(),
                     f.motivoSinFactura(), consultado.sinFacturaPor(),
                     f.sinFacturaEn() == null ? null : LocalDateTime.ofInstant(f.sinFacturaEn(), HoraArgentina.ZONA),
-                    f.acciones(), f.fechaNuevaRequerida(), f.reimprimir());
+                    f.acciones(), f.fechaNuevaRequerida(), f.motivoFueraDeFecha(), f.reimprimir());
         }
     }
 

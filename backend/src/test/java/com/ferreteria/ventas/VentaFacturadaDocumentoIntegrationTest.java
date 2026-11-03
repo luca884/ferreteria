@@ -118,7 +118,7 @@ class VentaFacturadaDocumentoIntegrationTest extends VentaFacturadaTestBase {
         for (String lista : List.of("errores", "observaciones", "acciones")) {
             assertThat(delDetalle.remove(lista)).as(lista).isNotNull().isEmpty();
         }
-        for (String nulo : List.of("motivoSinFactura", "sinFacturaPor", "sinFacturaEn")) {
+        for (String nulo : List.of("motivoSinFactura", "sinFacturaPor", "sinFacturaEn", "motivoFueraDeFecha")) {
             assertThat(delDetalle.remove(nulo).isNull()).as(nulo).isTrue();
         }
         for (String marca : List.of("fechaNuevaRequerida", "reimprimir")) {

@@ -181,6 +181,9 @@
                 Motivo: {{ f.motivoSinFactura }}@if (f.sinFacturaPor && f.sinFacturaEn) {&ngsp;· {{ f.sinFacturaPor }}, {{ fecha(f.sinFacturaEn) }}}
               </p>
             }
+            @if (f.motivoFueraDeFecha) {
+              <p class="motivo-fuera-de-fecha">{{ f.motivoFueraDeFecha }}</p>
+            }
             @if (f.reimprimir) {
               <p class="aviso-reimprimir">
                 Salió con ticket provisorio y ARCA ya la autorizó: reimprimí la factura para el cliente.

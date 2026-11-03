@@ -132,6 +132,7 @@
   margin: 0;
 }
 .en-revision,
+.motivo-fuera-de-fecha,
 .aviso-reimprimir {
   padding: var(--e-2) var(--e-3);
   border: 1px solid var(--advertencia-borde);

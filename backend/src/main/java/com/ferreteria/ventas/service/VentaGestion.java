@@ -289,7 +289,7 @@ public class VentaGestion {
         return new FacturaConsultada(f.documento(), f.errores(), f.observaciones(), f.motivoSinFactura(),
                 f.usuarioSinFacturaId(), f.sinFacturaEn(),
                 f.acciones().stream().filter(a -> a != AccionFiscal.DEJAR_SIN_FACTURA).toList(), f.fechaNuevaRequerida(),
-                f.reimprimir());
+                f.motivoFueraDeFecha(), f.reimprimir());
     }
 
     /** Barra invertida, % y _ como texto: el escape de LIKE en MySQL es la barra invertida. */
