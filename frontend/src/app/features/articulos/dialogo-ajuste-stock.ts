@@ -67,12 +67,66 @@ const MAXIMO = 999_999_999_999.999;
 
 const NUMERO = new Intl.NumberFormat('es-AR', { maximumFractionDigits: 3 });
 
+/** Lo escrito en el campo numérico, ya leído: «-0» también lleva signo (`negativo`), aunque valga cero. */
+interface Lectura {
+  valor: number;
+  decimales: number;
+  negativo: boolean;
+}
+
 /** «145,5» o «145.5» → número y cuántos decimales se escribieron; null si no es un número. */
-function leerNumero(texto: string): { valor: number; decimales: number } | null {
+function leerNumero(texto: string): Lectura | null {
   const limpio = texto.trim().includes(',') ? texto.trim().replace(/\./g, '').replace(',', '.') : texto.trim();
   if (!/^-?\d+(\.\d+)?$/.test(limpio)) return null;
-  return { valor: Number(limpio), decimales: limpio.split('.')[1]?.replace(/0+$/, '').length ?? 0 };
+  return {
+    valor: Number(limpio),
+    decimales: limpio.split('.')[1]?.replace(/0+$/, '').length ?? 0,
+    negativo: limpio.startsWith('-'),
+  };
 }
+
+type ErrorDeFormato = 'NEGATIVO' | 'MAXIMO' | 'DECIMALES_UNIDAD' | 'DECIMALES';
+
+/**
+ * La única regla de formato de una cantidad o de un stock real (la misma que AjusteStock.java): sin signo, hasta
+ * el máximo, entero en UNIDAD y hasta 3 decimales. La usan la vista previa y `validar()`, así no pueden discrepar.
+ */
+function errorDeFormato(leido: Lectura, unidad: Unidad): ErrorDeFormato | null {
+  if (leido.negativo) return 'NEGATIVO';
+  if (leido.valor > MAXIMO) return 'MAXIMO';
+  if (unidad === 'UNIDAD' && leido.decimales > 0) return 'DECIMALES_UNIDAD';
+  if (leido.decimales > 3) return 'DECIMALES';
+  return null;
+}
+
+interface MensajesDelCampo {
+  vacio: string;
+  noEsNumero: string;
+  formato: Record<ErrorDeFormato, string>;
+}
+
+const MENSAJES: Record<'cantidad' | 'stockReal', MensajesDelCampo> = {
+  cantidad: {
+    vacio: 'Escribí la cantidad que entra o sale.',
+    noEsNumero: 'Escribí un número, por ejemplo 12 o 2,5.',
+    formato: {
+      NEGATIVO: 'Escribí la cantidad sin signo y elegí si entra o sale.',
+      MAXIMO: 'La cantidad es demasiado grande: el máximo es 999.999.999.999,999.',
+      DECIMALES_UNIDAD: 'Este artículo se cuenta por unidad: la cantidad tiene que ser un número entero.',
+      DECIMALES: 'La cantidad admite hasta 3 decimales.',
+    },
+  },
+  stockReal: {
+    vacio: 'Escribí el stock real que contaste.',
+    noEsNumero: 'Escribí un número, por ejemplo 12 o 145,5.',
+    formato: {
+      NEGATIVO: 'El stock real no puede ser negativo.',
+      MAXIMO: 'El stock real es demasiado grande: el máximo es 999.999.999.999,999.',
+      DECIMALES_UNIDAD: 'Este artículo se cuenta por unidad: el stock real tiene que ser un número entero.',
+      DECIMALES: 'El stock real admite hasta 3 decimales.',
+    },
+  },
+};
 
 /**
  * CU-09 Ajustar stock, como panel lateral derecho. El Dueño suma o resta lo que entra o sale, o carga el stock
@@ -490,15 +544,13 @@ export class DialogoAjusteStock {
   private readonly campoNumero = viewChild<ElementRef<HTMLInputElement>>('numero');
 
   /**
-   * Lo escrito, solo si el artículo lo acepta: sin signo, hasta el máximo, entero en UNIDAD y hasta 3 decimales
-   * (las reglas de formato de `validar()`). Si no, null y la vista previa muestra «—» en vez de un resultado
-   * imposible. Sacar más de lo que hay no es de formato: su resultado negativo explica el error.
+   * Lo escrito, solo si el artículo lo acepta según `errorDeFormato`. Si no, null y la vista previa muestra «—» en
+   * vez de un resultado imposible. Sacar más de lo que hay o pasarse del máximo al sumar no es de formato: el
+   * resultado que se ve (negativo o enorme) explica el error.
    */
   private readonly leidoValido = computed(() => {
     const leido = leerNumero(this.valorTexto());
-    if (!leido || leido.valor < 0 || leido.valor > MAXIMO || leido.decimales > 3) return null;
-    if (this.articulo().unidad === 'UNIDAD' && leido.decimales > 0) return null;
-    return leido;
+    return leido && errorDeFormato(leido, this.articulo().unidad) === null ? leido : null;
   });
 
   /** Diferencia (con signo) contra el stock actual, en vivo; null si lo escrito no es válido. */
@@ -625,7 +677,7 @@ export class DialogoAjusteStock {
           ? { modo: 'CANTIDAD', cantidad: this.delta()!, motivo: this.motivo()!, detalle: detalle === '' ? null : detalle }
           : {
               modo: 'STOCK_REAL',
-              stockReal: leerNumero(this.valorTexto())!.valor,
+              stockReal: this.leidoValido()!.valor,
               motivo: this.motivo()!,
               detalle: detalle === '' ? null : detalle,
             },
@@ -672,30 +724,21 @@ export class DialogoAjusteStock {
   /** Las mismas reglas que AjusteStock.java y MotivoAjuste.java, todas juntas. */
   private validar(): Partial<Record<Campo, string>> {
     const errores: Partial<Record<Campo, string>> = {};
+    const campo = this.modo() === 'CANTIDAD' ? 'cantidad' : 'stockReal';
+    const mensajes = MENSAJES[campo];
     const texto = this.valorTexto().trim();
     const leido = leerNumero(texto);
-    if (this.modo() === 'CANTIDAD') {
-      if (texto === '') errores.cantidad = 'Escribí la cantidad que entra o sale.';
-      else if (!leido) errores.cantidad = 'Escribí un número, por ejemplo 12 o 2,5.';
-      else if (leido.valor < 0) errores.cantidad = 'Escribí la cantidad sin signo y elegí si entra o sale.';
-      else if (leido.valor === 0) errores.cantidad = 'La cantidad no puede ser cero.';
-      else if (leido.valor > MAXIMO)
-        errores.cantidad = 'La cantidad es demasiado grande: el máximo es 999.999.999.999,999.';
-      else if (this.articulo().unidad === 'UNIDAD' && leido.decimales > 0)
-        errores.cantidad = 'Este artículo se cuenta por unidad: la cantidad tiene que ser un número entero.';
-      else if (leido.decimales > 3) errores.cantidad = 'La cantidad admite hasta 3 decimales.';
-      else if (this.signo() === 'SALE' && this.queda()! < 0)
-        errores.cantidad = `No podés sacar ${String(leido.valor).replace('.', ',')}: hay ${this.conUnidad(this.articulo().stockActual)}.`;
-    } else if (texto === '') errores.stockReal = 'Escribí el stock real que contaste.';
-    else if (!leido) errores.stockReal = 'Escribí un número, por ejemplo 12 o 145,5.';
-    else if (leido.valor < 0) errores.stockReal = 'El stock real no puede ser negativo.';
-    else if (leido.valor > MAXIMO)
-      errores.stockReal = 'El stock real es demasiado grande: el máximo es 999.999.999.999,999.';
-    else if (this.articulo().unidad === 'UNIDAD' && leido.decimales > 0)
-      errores.stockReal = 'Este artículo se cuenta por unidad: el stock real tiene que ser un número entero.';
-    else if (leido.decimales > 3) errores.stockReal = 'El stock real admite hasta 3 decimales.';
-    else if (this.diferencia() === 0)
-      errores.stockReal = 'El stock real es igual al actual: no hay nada que ajustar.';
+    const formato = leido && errorDeFormato(leido, this.articulo().unidad);
+    if (texto === '') errores[campo] = mensajes.vacio;
+    else if (!leido) errores[campo] = mensajes.noEsNumero;
+    else if (formato) errores[campo] = mensajes.formato[formato];
+    else if (campo === 'stockReal') {
+      if (this.diferencia() === 0) errores.stockReal = 'El stock real es igual al actual: no hay nada que ajustar.';
+    } else if (leido.valor === 0) errores.cantidad = 'La cantidad no puede ser cero.';
+    else if (this.queda()! < 0 && this.signo() === 'SALE')
+      errores.cantidad = `No podés sacar ${String(leido.valor).replace('.', ',')}: hay ${this.conUnidad(this.articulo().stockActual)}.`;
+    else if (this.queda()! > MAXIMO)
+      errores.cantidad = 'El stock quedaría demasiado grande: el máximo es 999.999.999.999,999.';
 
     if (!this.motivo()) errores.motivo = 'Elegí el motivo del ajuste.';
     else if (this.motivo() === 'OTRO' && this.detalle().trim() === '')

@@ -386,6 +386,94 @@ describe('DialogoAjusteStock', () => {
     expect(servicio.ajustarStock).not.toHaveBeenCalled();
   });
 
+  describe('las reglas de formato valen igual para el conteo y para sumar o restar', () => {
+    const MAXIMO_TEXTO = 'el máximo es 999.999.999.999,999.';
+
+    it('stock real: más del máximo y más de 3 decimales dan su error', async () => {
+      await abrir(tornillo(10, 'METRO'));
+      await escribir('#motivo', 'CONTEO');
+
+      await escribir('#stock-real', '1000000000000');
+      await confirmar();
+      expect(texto('#stock-real-error')).toBe(`El stock real es demasiado grande: ${MAXIMO_TEXTO}`);
+
+      await escribir('#stock-real', '2,1234');
+      await confirmar();
+      expect(texto('#stock-real-error')).toBe('El stock real admite hasta 3 decimales.');
+      expect(servicio.ajustarStock).not.toHaveBeenCalled();
+    });
+
+    it('cantidad: más del máximo y más de 3 decimales dan su error', async () => {
+      await abrir(tornillo(10, 'METRO'));
+      await escribir('#motivo', 'INGRESO_MERCADERIA');
+
+      await escribir('#cantidad', '1000000000000');
+      await confirmar();
+      expect(texto('#cantidad-error')).toBe(`La cantidad es demasiado grande: ${MAXIMO_TEXTO}`);
+
+      await escribir('#cantidad', '2,1234');
+      await confirmar();
+      expect(texto('#cantidad-error')).toBe('La cantidad admite hasta 3 decimales.');
+      expect(servicio.ajustarStock).not.toHaveBeenCalled();
+    });
+
+    it('«-0» es un número con signo: no es válido ni en la vista previa ni al confirmar (stock real)', async () => {
+      await abrir(tornillo(10));
+      await escribir('#motivo', 'CONTEO');
+
+      await escribir('#stock-real', '-0');
+      expect(texto('.vista-previa .quedara')).toBe('—');
+      expect(texto('.vista-previa .diferencia')).toBe('—');
+      await confirmar();
+
+      expect(texto('#stock-real-error')).toBe('El stock real no puede ser negativo.');
+      expect(servicio.ajustarStock).not.toHaveBeenCalled();
+    });
+
+    it('«-0» es un número con signo: no es válido ni en la vista previa ni al confirmar (cantidad)', async () => {
+      await abrir(tornillo(10));
+      await escribir('#motivo', 'INGRESO_MERCADERIA');
+
+      await escribir('#cantidad', '-0');
+      expect(texto('.vista-previa .quedara')).toBe('—');
+      await confirmar();
+
+      expect(texto('#cantidad-error')).toBe('Escribí la cantidad sin signo y elegí si entra o sale.');
+      expect(servicio.ajustarStock).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('tope del stock resultante al sumar (como el backend)', () => {
+    it('no deja mandar un ingreso que lo pasa del máximo y lo explica junto al campo', async () => {
+      await abrir(tornillo(999_999_999_999, 'METRO'));
+      await escribir('#motivo', 'INGRESO_MERCADERIA');
+      await escribir('#cantidad', '5');
+
+      await confirmar();
+
+      expect(texto('#cantidad-error')).toBe(
+        'El stock quedaría demasiado grande: el máximo es 999.999.999.999,999.',
+      );
+      expect(servicio.ajustarStock).not.toHaveBeenCalled();
+    });
+
+    it('un ingreso que llega justo al máximo se manda', async () => {
+      await abrir(tornillo(999_999_999_999, 'METRO'));
+      await escribir('#motivo', 'INGRESO_MERCADERIA');
+      await escribir('#cantidad', '0,999');
+
+      await confirmar();
+
+      expect(el().querySelector('#cantidad-error')).toBeNull();
+      expect(servicio.ajustarStock).toHaveBeenCalledWith(7, {
+        modo: 'CANTIDAD',
+        cantidad: 0.999,
+        motivo: 'INGRESO_MERCADERIA',
+        detalle: null,
+      });
+    });
+  });
+
   it('si el stock real es igual al actual no hay nada que ajustar', async () => {
     await abrir(tornillo(10));
     await escribir('#stock-real', '10');
