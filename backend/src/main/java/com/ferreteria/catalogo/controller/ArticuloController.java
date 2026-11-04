@@ -7,6 +7,7 @@ import com.ferreteria.catalogo.dto.ArticuloRequest;
 import com.ferreteria.catalogo.dto.ArticuloResponse;
 import com.ferreteria.catalogo.dto.ArticuloVendedorResponse;
 import com.ferreteria.catalogo.dto.BusquedaMostradorResponse;
+import com.ferreteria.catalogo.dto.CodigoSiguienteResponse;
 import com.ferreteria.catalogo.dto.DesglosePrecioResponse;
 import com.ferreteria.catalogo.service.ArticuloService;
 import com.ferreteria.catalogo.service.BusquedaMostradorService;
@@ -83,6 +84,13 @@ public class ArticuloController {
     @PreAuthorize("hasRole('DUENO')")
     public DesglosePrecioResponse desglosar(@PathVariable Long id) {
         return desglosePrecioService.obtener(id);
+    }
+
+    /** El codigo interno sugerido para el alta (solo el Dueno, que es quien da de alta); null si no hay sugerencia. */
+    @GetMapping("/codigo-siguiente")
+    @PreAuthorize("hasRole('DUENO')")
+    public CodigoSiguienteResponse codigoSiguiente() {
+        return new CodigoSiguienteResponse(articuloService.codigoSiguiente());
     }
 
     @PostMapping

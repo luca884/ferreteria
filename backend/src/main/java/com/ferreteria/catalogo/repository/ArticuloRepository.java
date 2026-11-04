@@ -304,6 +304,22 @@ public interface ArticuloRepository extends TenantScopedRepository<Articulo, Lon
                 PageRequest.of(0, limite));
     }
 
+    /**
+     * Codigos internos de los articulos cargados a mano, del mas nuevo al mas viejo (incluye los dados de baja). Un
+     * articulo cuyo codigo interno es igual al del proveedor cuenta como importado: la importacion los crea asi.
+     */
+    @Query("""
+            select a.codigoInterno from Articulo a
+            where a.ferreteriaId = :fid and (a.codigoProveedor is null or a.codigoProveedor <> a.codigoInterno)
+            order by a.id desc
+            """)
+    List<String> codigosCargadosAMano(@Param("fid") Long ferreteriaId, Pageable pagina);
+
+    /** El codigo interno del ultimo articulo cargado a mano de la ferreteria del request; vacio si no hay. */
+    default Optional<String> ultimoCodigoCargadoAManoScoped() {
+        return codigosCargadosAMano(TenantContext.requireFerreteriaId(), PageRequest.of(0, 1)).stream().findFirst();
+    }
+
     /** Incluye los dados de baja. idPropio excluye al articulo que se esta editando (null en el alta). */
     default boolean existeCodigoInternoScoped(String codigo, Long idPropio) {
         return existeCodigoInterno(TenantContext.requireFerreteriaId(), codigo, idPropio);

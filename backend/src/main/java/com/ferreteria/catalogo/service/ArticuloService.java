@@ -7,6 +7,7 @@ import com.ferreteria.catalogo.dto.ValidacionAjustes;
 import com.ferreteria.catalogo.model.Ajustes;
 import com.ferreteria.catalogo.model.Articulo;
 import com.ferreteria.catalogo.model.ArticuloSinListaException;
+import com.ferreteria.catalogo.model.CodigoSiguiente;
 import com.ferreteria.catalogo.model.CambioPrecio;
 import com.ferreteria.catalogo.model.ContextoPrecio;
 import com.ferreteria.catalogo.model.DatosArticulo;
@@ -102,6 +103,19 @@ public class ArticuloService {
     @Transactional(readOnly = true)
     public ArticuloResponse obtener(Long id) {
         return conCostoAl(ArticuloResponse.from(buscar(id)));
+    }
+
+    /**
+     * El codigo interno que se sugiere en el alta (mejoras-ferreteros-bloque-1, S3): el ultimo cargado a mano de la
+     * ferreteria del request mas uno ({@link CodigoSiguiente}), libre. Null si no hay ninguno o no termina en numero.
+     * Es solo una sugerencia: el guardado sigue validando que el codigo no este ocupado.
+     */
+    @Transactional(readOnly = true)
+    public String codigoSiguiente() {
+        return articuloRepository.ultimoCodigoCargadoAManoScoped()
+                .flatMap(ultimo -> CodigoSiguiente.despuesDe(ultimo,
+                        codigo -> articuloRepository.existeCodigoInternoScoped(codigo, null)))
+                .orElse(null);
     }
 
     @Transactional
