@@ -6,7 +6,7 @@ Pronóstico: ~2500 líneas cambiadas (agregadas + borradas, sin generados; ver L
 
 ## Specs
 
-Alcance: leer una factura de proveedor en PDF con texto y completar con ella el formulario de compra de CU-13, que después pasa por la vista previa y la confirmación de siempre. · Fuera de alcance: factura por foto o escáner (OCR; el relevamiento lo deja para el futuro), pago de la compra, IVA y libro IVA Compras, alta rápida de artículos.
+Alcance: leer una factura de proveedor en PDF con texto y completar con ella el formulario de compra de CU-13, que después pasa por la vista previa y la confirmación de siempre. · Fuera de alcance: factura por foto o escáner (OCR; el relevamiento lo deja para el futuro), guardar el PDF original de la factura (un «tal vez» para cuando el proyecto esté terminado, L6), pago de la compra, IVA y libro IVA Compras, alta rápida de artículos.
 Restricciones: reglas de arquitectura de `CLAUDE.md` (tenant solo del JWT, `*Scoped`, 404 entre ferreterías, test de aislamiento por endpoint, plata en `BigDecimal`). El PDF se lee con el proceso aparte de CU-04 (`LectorPdf` → `ExtractorPdf`: 256 MB, 30 s, tope de palabras, un PDF por vez). Las facturas reales no se versionan (`Facturas/` en `.gitignore`, con el patrón `[Ff]acturas/`); los tests usan facturas armadas con datos inventados.
 
 - S1: relevamiento (Engram `producto/relevamiento-ferreteros-2026-11`): "Carga de facturas de proveedor por PDF." — Aceptación: por definir con las decisiones de L3.
@@ -64,3 +64,4 @@ Restricciones: reglas de arquitectura de `CLAUDE.md` (tenant solo del JWT, `*Sco
     - `RecargoCosto(nombre, porcentaje)`. Supuestos de S6: nombre de 1 a 40, % entre −99,99 y 99,99, distinto de 0, 2 decimales, hasta 5 recargos.
     - Costo real = costo × (1 + Σ % / 100), a 2 decimales HALF_UP, y entra al cálculo en lugar del costo.
     - V46: `articulo.recargos_costo` y `compra.recargos`, JSON NOT NULL con default `JSON_ARRAY()`, como `ajustes_precio` en V24.
+- L6 (2026-11-04) Luca, textual: "pienso que no estaria mal tampoco guardar los archivos en crudo, pero no lo se, ahora no es necesario pero lo dejaria como un tal vez para cuando el proyecto este listo" — Queda fuera de esta feature, anotado como futuro en el relevamiento (Engram `producto/relevamiento-ferreteros-2026-11`).
