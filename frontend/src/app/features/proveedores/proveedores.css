@@ -4,6 +4,10 @@
 .nombre {
   font-weight: 600;
 }
+.buscar {
+  width: 220px;
+  max-width: 100%;
+}
 .etiqueta.de-baja {
   margin-left: var(--e-2);
   background: var(--superficie-3);

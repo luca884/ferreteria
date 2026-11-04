@@ -1,6 +1,7 @@
 import { HttpErrorResponse } from '@angular/common/http';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { signal } from '@angular/core';
+import { Router, provideRouter } from '@angular/router';
 import { Observable, Subject, of, throwError } from 'rxjs';
 import { vi } from 'vitest';
 import { AuthService } from '../../core/auth/auth.service';
@@ -26,7 +27,7 @@ describe('Proveedores', () => {
   const errorHttp = (status: number, message: string) =>
     new HttpErrorResponse({ status, error: { status, message } });
 
-  async function crearComponente(dueno: boolean, lista: Proveedor[] = [sinteplast, tersuave]) {
+  async function crearComponente(dueno: boolean, lista: Proveedor[] = [sinteplast, tersuave], url?: string) {
     esDueno = signal(dueno);
     servicio = {
       listar: vi.fn((incluirInactivos = false) => of(incluirInactivos ? [...lista, viejo] : lista)),
@@ -38,10 +39,12 @@ describe('Proveedores', () => {
     await TestBed.configureTestingModule({
       imports: [Proveedores],
       providers: [
+        provideRouter([]),
         { provide: ProveedoresService, useValue: servicio },
         { provide: AuthService, useValue: { esDueno } },
       ],
     }).compileComponents();
+    if (url) await TestBed.inject(Router).navigateByUrl(url);
     fixture = TestBed.createComponent(Proveedores);
     fixture.detectChanges();
     await fixture.whenStable();
@@ -134,6 +137,62 @@ describe('Proveedores', () => {
     expect(el().querySelector('.barra-estado')?.textContent?.trim()).toBe('1 proveedor');
   });
 
+  describe('buscar proveedor (mejoras-ferreteros-bloque-2, S3)', () => {
+    const buscador = () => el().querySelector<HTMLInputElement>('input[type="search"]#buscar-proveedor')!;
+
+    async function escribir(texto: string) {
+      buscador().value = texto;
+      buscador().dispatchEvent(new Event('input'));
+      await refrescar();
+    }
+
+    it('escribir filtra la lista por nombre, sin distinguir mayúsculas ni tildes', async () => {
+      await crearComponente(true);
+
+      await escribir('TERS');
+
+      expect(textoFilas()).toHaveLength(1);
+      expect(textoFilas()[0]).toContain('Tersuave');
+    });
+
+    it('también encuentra por contacto', async () => {
+      await crearComponente(true, [sinteplast, { ...tersuave, contacto: 'Ana Núñez' }]);
+
+      await escribir('nunez');
+
+      expect(textoFilas()).toHaveLength(1);
+      expect(textoFilas()[0]).toContain('Tersuave');
+    });
+
+    it('con ?q= en la dirección abre filtrada y con el texto en el buscador (lo usa el buscador del menú)', async () => {
+      await crearComponente(false, [sinteplast, tersuave], '/?q=Sinteplast');
+      await refrescar();
+
+      expect(buscador().value).toBe('Sinteplast');
+      expect(textoFilas()).toHaveLength(1);
+      expect(textoFilas()[0]).toContain('Sinteplast');
+    });
+
+    it('si nada coincide lo dice, y borrar el texto vuelve a mostrar todos', async () => {
+      await crearComponente(true);
+
+      await escribir('zzz');
+      expect(filas()).toHaveLength(0);
+      expect(el().textContent).toContain('Ningún proveedor coincide con «zzz».');
+
+      await escribir('');
+      expect(filas()).toHaveLength(2);
+    });
+
+    it('la barra de estado dice cuántos se ven de cuántos', async () => {
+      await crearComponente(true);
+
+      await escribir('sin');
+
+      expect(el().querySelector('.barra-estado')?.textContent?.replace(/\s+/g, ' ')).toContain('1 de 2 proveedores');
+    });
+  });
+
   it('muestra un aviso si no hay proveedores', async () => {
     await crearComponente(true, []);
 
@@ -152,6 +211,7 @@ describe('Proveedores', () => {
     await TestBed.configureTestingModule({
       imports: [Proveedores],
       providers: [
+        provideRouter([]),
         { provide: ProveedoresService, useValue: servicio },
         { provide: AuthService, useValue: { esDueno } },
       ],

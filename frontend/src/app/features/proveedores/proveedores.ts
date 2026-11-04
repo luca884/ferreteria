@@ -1,10 +1,23 @@
 import { HttpErrorResponse } from '@angular/common/http';
-import { Component, ElementRef, Injector, OnInit, afterNextRender, computed, inject, signal } from '@angular/core';
+import {
+  Component,
+  DestroyRef,
+  ElementRef,
+  Injector,
+  OnInit,
+  afterNextRender,
+  computed,
+  inject,
+  signal,
+} from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
+import { ActivatedRoute } from '@angular/router';
 import { Observable } from 'rxjs';
 import { erroresDeCampos } from '../../core/api/api-error';
 import { AuthService } from '../../core/auth/auth.service';
 import { normalizarCuit, validarCuit } from '../../core/formato/cuit';
+import { contiene } from '../../core/formato/texto';
 import { BarraAcciones } from '../../shared/barra-acciones';
 import { Confirmacion } from '../../shared/confirmacion';
 import { FilasElegibles } from '../../shared/filas-elegibles';
@@ -25,11 +38,21 @@ export class Proveedores implements OnInit {
   private readonly service = inject(ProveedoresService);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   private readonly injector = inject(Injector);
+  private readonly route = inject(ActivatedRoute);
+  private readonly destroyRef = inject(DestroyRef);
   protected readonly auth = inject(AuthService);
 
   protected readonly proveedores = signal<Proveedor[]>([]);
+  /** Lo escrito en «Buscar proveedor» (o el `?q=` del buscador del menú, bloque 2 S3): filtra por nombre o contacto. */
+  protected readonly filtro = signal('');
+  protected readonly visibles = computed(() => {
+    const filtro = this.filtro().trim();
+    return filtro === ''
+      ? this.proveedores()
+      : this.proveedores().filter((p) => contiene(p.nombre, filtro) || contiene(p.contacto ?? '', filtro));
+  });
   /** Fila elegida en la grilla (solo el Dueño, que es quien tiene acciones): la barra actúa sobre ella; Enter edita. */
-  protected readonly filas = new FilasElegibles(this.proveedores, () => this.auth.esDueno(), (p) => this.editar(p));
+  protected readonly filas = new FilasElegibles(this.visibles, () => this.auth.esDueno(), (p) => this.editar(p));
   protected readonly cargando = signal(true);
   /** La lista no se pudo traer: se avisa con Reintentar en lugar de «Todavía no hay proveedores». */
   protected readonly cargaFallida = signal(false);
@@ -58,6 +81,9 @@ export class Proveedores implements OnInit {
   });
 
   ngOnInit(): void {
+    this.route.queryParamMap
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((params) => this.filtro.set(params.get('q')?.trim() ?? ''));
     this.cargar();
   }
 

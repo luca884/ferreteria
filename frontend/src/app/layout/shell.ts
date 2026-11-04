@@ -6,6 +6,7 @@ import { ROL_LABELS } from '../core/auth/auth.models';
 import { AuthService } from '../core/auth/auth.service';
 import { Cotizacion } from '../core/cotizacion/cotizacion.models';
 import { CotizacionService } from '../core/cotizacion/cotizacion.service';
+import { BuscadorMenu } from './buscador-menu';
 import { CotizacionLateral } from './cotizacion-lateral';
 import { IconoDelMenu } from './icono-menu';
 import { MOSTRADOR, Seccion, gruposPara, seccionDe } from './menu';
@@ -33,7 +34,7 @@ export function iniciales(nombre: string): string {
  */
 @Component({
   selector: 'app-shell',
-  imports: [RouterOutlet, RouterLink, RouterLinkActive, CotizacionLateral, IconoDelMenu],
+  imports: [RouterOutlet, RouterLink, RouterLinkActive, CotizacionLateral, IconoDelMenu, BuscadorMenu],
   templateUrl: './shell.html',
   styleUrl: './shell.css',
   host: { '[attr.data-seccion]': 'seccion()' },

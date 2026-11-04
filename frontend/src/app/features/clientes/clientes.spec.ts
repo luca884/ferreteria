@@ -74,6 +74,7 @@ describe('Clientes', () => {
     dueno = true,
     buscar = vi.fn(() => of(pagina(lista))),
     formasActivas: FormaPago[] | Error = CON_CUENTA_CORRIENTE,
+    url?: string,
   ) {
     formasApi = {
       listar: vi.fn(() => (formasActivas instanceof Error ? throwError(() => formasActivas) : of(formasActivas))),
@@ -98,6 +99,7 @@ describe('Clientes', () => {
         { provide: AuthService, useValue: { esDueno: signal(dueno) } },
       ],
     }).compileComponents();
+    if (url) await TestBed.inject(Router).navigateByUrl(url);
     fixture = TestBed.createComponent(Clientes);
     await refrescar();
   }
@@ -172,6 +174,24 @@ describe('Clientes', () => {
   });
 
   describe('búsqueda y páginas', () => {
+    it('con ?q= en la dirección abre buscando ese texto, con el texto en el buscador (bloque 2, S3)', async () => {
+      await crear([ana, norte, viejo], true, undefined, CON_CUENTA_CORRIENTE, '/?q=Norte');
+
+      expect(servicio.buscar).toHaveBeenCalledTimes(1);
+      expect(servicio.buscar).toHaveBeenCalledWith({ q: 'Norte', soloActivos: false, page: 0 });
+      expect(input('q').value).toBe('Norte');
+    });
+
+    it('si el buscador del menú cambia ?q= con la pantalla abierta, vuelve a buscar', async () => {
+      await crear();
+
+      await TestBed.inject(Router).navigateByUrl('/?q=Ana');
+      await refrescar();
+
+      expect(servicio.buscar).toHaveBeenLastCalledWith({ q: 'Ana', soloActivos: false, page: 0 });
+      expect(input('q').value).toBe('Ana');
+    });
+
     it('buscar manda q y vuelve a la página 0', async () => {
       await crear();
       await escribir('q', '  perez ');

@@ -19,9 +19,9 @@ Restricciones: reglas de arquitectura de `CLAUDE.md` (tenant solo del JWT, `*Sco
 
 ## Tasks
 
-- [ ] T1 · S1 · ruta: inline · Aceptación: menú desde una lista de grupos (ruta, rótulo, ícono, solo Dueño), grupos desplegables, grupo actual abierto · Evidencia: — · Risk: none
-- [ ] T2 · S2 · ruta: inline · Aceptación: tokens de tono por sección y la pantalla toma el de su grupo · Evidencia: — · Risk: none
-- [ ] T3 · S3 · ruta: inline · Aceptación: buscador del menú (opciones, clientes, proveedores, artículos); Clientes y Proveedores leen `?q=` · Evidencia: — · Risk: none
+- [x] T1 · S1 · ruta: inline · Aceptación: menú desde una lista de grupos (ruta, rótulo, ícono, solo Dueño), grupos desplegables, grupo actual abierto · Evidencia: RED 17/45 `shell.spec.ts` → GREEN 45/45; `layout/**` + `app*` 106/106; commit `3c4e939` (`layout/menu.ts`, `layout/icono-menu.ts`) · Risk: none
+- [x] T2 · S2 · ruta: inline · Aceptación: tokens de tono por sección y la pantalla toma el de su grupo · Evidencia: en el mismo RED/GREEN (`data-seccion` del shell y de cada grupo); tokens `--tono-*` en `styles.css`, filete arriba del contenido y opción activa con el tono; commit `3c4e939` · Risk: none
+- [x] T3 · S3 · ruta: inline · Aceptación: buscador del menú (opciones, clientes, proveedores, artículos); Clientes y Proveedores leen `?q=` · Evidencia: RED de compilación (faltaban `core/formato/texto` y `layout/buscador-menu`; los casos `?q=` de Clientes y Proveedores no se vieron fallar uno por uno) → GREEN 5 archivos, 197/197; Proveedores suma «Buscar proveedor» (nombre o contacto) · Risk: none
 - [ ] T4 · S4 · ruta: inline · Aceptación: dos botones en el cobro, sin Enter con facturación activa · Evidencia: — · Risk: none
 - [ ] T5 · S5, S6 · ruta: inline · Aceptación: `GET /api/articulos/bajo-minimo` suma código del proveedor y última compra (fecha y proveedor) con aislamiento · Evidencia: — · Risk: item 3 (DTO de bajo mínimo, solo suma campos)
 - [ ] T6 · S5, S6 · ruta: inline · Aceptación: columnas «Cód. proveedor» y «Última compra» en Stock bajo mínimo; «Cód. proveedor» en Artículos; `Prov:` en resultados y ficha del Mostrador · Evidencia: — · Risk: none

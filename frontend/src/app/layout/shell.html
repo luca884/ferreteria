@@ -10,6 +10,10 @@
     </div>
   </div>
 
+  @if (!auth.esSuperAdmin()) {
+    <app-buscador-menu />
+  }
+
   <nav aria-label="Secciones">
     @if (auth.esSuperAdmin()) {
       <a routerLink="/admin/ferreterias" routerLinkActive="activo" ariaCurrentWhenActive="page">

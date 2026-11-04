@@ -10,7 +10,7 @@ import {
   signal,
 } from '@angular/core';
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
-import { Router, RouterLink } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { erroresDeCampos, erroresPorCampo, mensajeDe } from '../../core/api/api-error';
 import { AuthService } from '../../core/auth/auth.service';
@@ -62,6 +62,8 @@ export class Clientes implements OnInit {
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   private readonly injector = inject(Injector);
   private readonly router = inject(Router);
+  private readonly route = inject(ActivatedRoute);
+  private readonly destroyRef = inject(DestroyRef);
   protected readonly auth = inject(AuthService);
 
   protected readonly tiposDocumento = TIPOS_DOCUMENTO;
@@ -149,7 +151,11 @@ export class Clientes implements OnInit {
   }
 
   ngOnInit(): void {
-    this.cargar(0);
+    // `?q=` lo pone el buscador del menú (bloque 2, S3): abre buscando ese texto, también con la pantalla ya abierta.
+    this.route.queryParamMap.pipe(takeUntilDestroyed(this.destroyRef)).subscribe((params) => {
+      this.q.set(params.get('q')?.trim() ?? '');
+      this.buscar();
+    });
     // Solo el Dueño edita la cuenta corriente: el Vendedor no necesita las formas.
     if (this.auth.esDueno()) {
       this.formasPago.listar(true).subscribe({ next: (formas) => this.formasActivas.set(formas), error: () => undefined });

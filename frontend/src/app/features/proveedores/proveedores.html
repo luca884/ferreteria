@@ -30,6 +30,17 @@
     }
     <span class="separador-barra" aria-hidden="true"></span>
   }
+  <input
+    id="buscar-proveedor"
+    class="buscar"
+    type="search"
+    autocomplete="off"
+    spellcheck="false"
+    placeholder="Buscar proveedor…"
+    aria-label="Buscar proveedor"
+    [value]="filtro()"
+    (input)="filtro.set($any($event.target).value)"
+  />
   <label class="casilla inactivos" for="inactivos">
     <input
       id="inactivos"
@@ -75,6 +86,8 @@
       </div>
     } @else if (proveedores().length === 0) {
       <p class="ayuda estado-vacio">Todavía no hay proveedores.</p>
+    } @else if (visibles().length === 0) {
+      <p class="ayuda estado-vacio">Ningún proveedor coincide con «{{ filtro().trim() }}».</p>
     } @else {
       <div class="grilla-marco">
         <table [attr.role]="auth.esDueno() ? 'grid' : null" aria-label="Proveedores">
@@ -86,7 +99,7 @@
             </tr>
           </thead>
           <tbody>
-            @for (proveedor of proveedores(); track proveedor.id; let i = $index) {
+            @for (proveedor of visibles(); track proveedor.id; let i = $index) {
               <tr
                 [class.editando]="proveedor.id === editandoId()"
                 [class.inactivo]="!proveedor.activo"
@@ -112,11 +125,15 @@
         </table>
       </div>
       <p class="barra-estado">
-        <span
-          >{{ activos() }} {{ activos() === 1 ? 'proveedor' : 'proveedores' }}@if (deBaja() > 0) {
-            · {{ deBaja() }} de baja
-          }</span
-        >
+        @if (visibles().length < proveedores().length) {
+          <span>{{ visibles().length }} de {{ proveedores().length }} proveedores</span>
+        } @else {
+          <span
+            >{{ activos() }} {{ activos() === 1 ? 'proveedor' : 'proveedores' }}@if (deBaja() > 0) {
+              · {{ deBaja() }} de baja
+            }</span
+          >
+        }
         @if (filas.elegido(); as actual) {
           <span class="elegido">· Elegido: <strong>{{ actual.nombre }}</strong> · Enter edita</span>
         }

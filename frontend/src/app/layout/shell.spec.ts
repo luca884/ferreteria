@@ -7,6 +7,8 @@ import { Sesion } from '../core/auth/auth.models';
 import { AuthService } from '../core/auth/auth.service';
 import { Cotizacion } from '../core/cotizacion/cotizacion.models';
 import { CotizacionService } from '../core/cotizacion/cotizacion.service';
+import { ClientesService } from '../features/clientes/clientes.service';
+import { ProveedoresService } from '../features/proveedores/proveedores.service';
 import { Shell } from './shell';
 
 const COTIZACION: Cotizacion = {
@@ -61,6 +63,8 @@ describe('Shell', () => {
           },
         },
         { provide: CotizacionService, useValue: { obtener, refrescos$: refrescos } },
+        { provide: ClientesService, useValue: { buscar: () => of({ items: [], page: 0, size: 5, totalElements: 0, totalPages: 0 }) } },
+        { provide: ProveedoresService, useValue: { listar: () => of([]) } },
       ],
     }).compileComponents();
     fixture = TestBed.createComponent(Shell);
@@ -313,6 +317,28 @@ describe('Shell', () => {
         expect(el.querySelector(`#${id}`), grupo).not.toBeNull();
       }
     });
+  });
+
+  it('el buscador va arriba de las secciones, para el Dueño y el Vendedor; el super admin no lo tiene (bloque 2, S3)', async () => {
+    for (const dueno of [false, true]) {
+      TestBed.resetTestingModule();
+      const el = await render(dueno);
+
+      const buscador = el.querySelector('aside app-buscador-menu');
+      expect(buscador, dueno ? 'Dueño' : 'Vendedor').not.toBeNull();
+      expect(buscador!.compareDocumentPosition(el.querySelector('aside nav')!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    }
+
+    TestBed.resetTestingModule();
+    const admin = await render(false, {
+      userId: 1,
+      nombre: 'Admin',
+      email: 'admin@demo.local',
+      rol: 'SUPER_ADMIN',
+      ferreteriaId: null,
+      ferreteriaNombre: null,
+    });
+    expect(admin.querySelector('app-buscador-menu')).toBeNull();
   });
 
   describe('color por sección (mejoras-ferreteros-bloque-2, S2)', () => {
