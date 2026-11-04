@@ -256,7 +256,7 @@ class DolarDePreciosServiceTest extends CotizacionTestBase {
     }
 
     @Test
-    @DisplayName("dentro del umbral (5 % por defecto), sin vigente o con otro tipo elegido no hay nada que confirmar")
+    @DisplayName("dentro del umbral, sin vigente o con otro tipo elegido no hay nada que confirmar")
     void nadaQueConfirmar() {
         configuracion(a, c -> {
             c.setCasaPrecios("t18-oficial");
@@ -279,6 +279,7 @@ class DolarDePreciosServiceTest extends CotizacionTestBase {
         cotizacion("USD", "t18-oficial", "1050", "1060", HACE_UN_RATO.plusSeconds(60));
         configuracion(a, c -> {
             c.setCasaPrecios("t18-oficial");
+            c.setUmbralDesvioPorcentaje(new BigDecimal("5"));
             c.fijarVigente(new BigDecimal("1000.0000"), "t18-oficial", LadoCotizacion.VENTA, HACE_UN_RATO);
         });
         configuracion(b, c -> {
@@ -287,7 +288,6 @@ class DolarDePreciosServiceTest extends CotizacionTestBase {
             c.fijarVigente(new BigDecimal("1000.0000"), "t18-oficial", LadoCotizacion.VENTA, HACE_UN_RATO);
         });
 
-        assertThat(configuracionDe(a).getUmbralDesvioPorcentaje()).isEqualByComparingTo("5");
         assertThat(como(a, dolar::aConfirmar)).isPresent();
         assertThat(como(a, () -> dolar.reclamarRecalculoDelDia(HOY_A_LAS_9))).isEmpty();
         assertThat(como(b, dolar::aConfirmar)).isEmpty();
@@ -324,7 +324,7 @@ class DolarDePreciosServiceTest extends CotizacionTestBase {
         assertThat(configuracionDe(a).getVigente()).isEqualByComparingTo("1000");
         assertThat(configuracionDe(a).getUltimoRecalculoDia()).isNull();
 
-        // Llega un valor normal (1050: justo el umbral por defecto): se aplica solo y la sospechosa queda superada.
+        // Llega un valor normal (1050, dentro del umbral): se aplica solo y la sospechosa queda superada.
         cotizacion("USD", "t18-oficial", "1040", "1050", HACE_UN_RATO.plusSeconds(120));
         assertThat(como(a, () -> dolar.reclamarRecalculoDelDia(HOY_A_LAS_9)))
                 .hasValueSatisfying(v -> assertThat(v).isEqualByComparingTo("1050"));

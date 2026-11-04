@@ -42,42 +42,42 @@ class RecalculoConReintentoTest {
     @Test
     @DisplayName("recalcularAhora: un choque y despues un exito: 2 llamadas y el resultado del segundo")
     void ahoraUnChoqueYUnExito() {
-        when(servicio.recalcularAhora(9L, false)).thenThrow(choque()).thenReturn(respuesta(2));
+        when(servicio.recalcularAhora(9L, false, null)).thenThrow(choque()).thenReturn(respuesta(2));
 
         assertThat(reintento.recalcularAhora(9L, false)).isEqualTo(respuesta(2));
 
-        verify(servicio, times(2)).recalcularAhora(9L, false);
+        verify(servicio, times(2)).recalcularAhora(9L, false, null);
     }
 
     @Test
     @DisplayName("recalcularAhora: 3 choques seguidos: sale el OptimisticLockingFailureException despues de 3 llamadas")
     void ahoraTresChoques() {
-        when(servicio.recalcularAhora(9L, false)).thenThrow(choque());
+        when(servicio.recalcularAhora(9L, false, null)).thenThrow(choque());
 
         assertThatThrownBy(() -> reintento.recalcularAhora(9L, false))
                 .isInstanceOf(ObjectOptimisticLockingFailureException.class);
 
-        verify(servicio, times(3)).recalcularAhora(9L, false);
+        verify(servicio, times(3)).recalcularAhora(9L, false, null);
     }
 
     @Test
     @DisplayName("recalcularAhora: otra excepcion, por ejemplo el 409 de sin cotizacion, no se reintenta")
     void ahoraOtraExcepcionNoSeReintenta() {
-        when(servicio.recalcularAhora(9L, false)).thenThrow(new ConflictException(DolarDePrecios.SIN_COTIZACION));
+        when(servicio.recalcularAhora(9L, false, null)).thenThrow(new ConflictException(DolarDePrecios.SIN_COTIZACION));
 
         assertThatThrownBy(() -> reintento.recalcularAhora(9L, false)).isInstanceOf(ConflictException.class);
 
-        verify(servicio, times(1)).recalcularAhora(9L, false);
+        verify(servicio, times(1)).recalcularAhora(9L, false, null);
     }
 
     @Test
     @DisplayName("recalcularAhora: sin choque, una sola llamada")
     void ahoraSinChoque() {
-        when(servicio.recalcularAhora(9L, false)).thenReturn(respuesta(1));
+        when(servicio.recalcularAhora(9L, false, null)).thenReturn(respuesta(1));
 
         assertThat(reintento.recalcularAhora(9L, false)).isEqualTo(respuesta(1));
 
-        verify(servicio, times(1)).recalcularAhora(9L, false);
+        verify(servicio, times(1)).recalcularAhora(9L, false, null);
     }
 
     @Test
@@ -134,6 +134,6 @@ class RecalculoConReintentoTest {
             org.springframework.transaction.support.TransactionSynchronizationManager.setActualTransactionActive(false);
         }
 
-        verify(servicio, times(0)).recalcularAhora(9L, false);
+        verify(servicio, times(0)).recalcularAhora(9L, false, null);
     }
 }

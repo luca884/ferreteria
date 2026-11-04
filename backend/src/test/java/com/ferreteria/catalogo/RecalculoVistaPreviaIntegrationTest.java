@@ -96,6 +96,7 @@ class RecalculoVistaPreviaIntegrationTest extends CotizacionTestBase {
     void vistaPreviaConDesvio() throws Exception {
         configuracion(a, c -> {
             c.setCasaPrecios("t41-oficial");
+            c.setUmbralDesvioPorcentaje(new BigDecimal("5"));
             c.fijarVigente(new BigDecimal("1000.0000"), "t41-oficial", LadoCotizacion.VENTA, HACE_UN_RATO);
         });
         Long usd = articuloUsd(a, "T41-USD", "10.00", "15730.00");

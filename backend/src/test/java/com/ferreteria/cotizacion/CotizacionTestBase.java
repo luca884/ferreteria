@@ -53,12 +53,20 @@ public abstract class CotizacionTestBase extends IntegrationTestBase {
         return email;
     }
 
-    /** Reemplaza la configuracion de la ferreteria por una por defecto con los cambios pedidos. */
+    /**
+     * El aviso del dolar con el que se escribieron los tests de recalculo (antes era un 20 % fijo). Mueven el dolar de
+     * 1.000 a 1.100 o 1.200 para probar versiones, historial y el dia del recalculo, no el aviso: con el 5 % por defecto
+     * esos saltos quedarian a confirmar. Los tests del aviso fijan el suyo con setUmbralDesvioPorcentaje.
+     */
+    protected static final BigDecimal UMBRAL_DE_LOS_TESTS = new BigDecimal("20");
+
+    /** Reemplaza la configuracion de la ferreteria por una por defecto (con el aviso al 20 %) y los cambios pedidos. */
     protected ConfiguracionCotizacion configuracion(Long ferreteriaId, Consumer<ConfiguracionCotizacion> cambios) {
         borrarConfiguracion(ferreteriaId);
         TenantContext.setCurrentFerreteriaId(ferreteriaId);
         try {
             ConfiguracionCotizacion config = ConfiguracionCotizacion.porDefecto(ferreteriaId);
+            config.setUmbralDesvioPorcentaje(UMBRAL_DE_LOS_TESTS);
             cambios.accept(config);
             return configuraciones.saveAndFlush(config);
         } finally {

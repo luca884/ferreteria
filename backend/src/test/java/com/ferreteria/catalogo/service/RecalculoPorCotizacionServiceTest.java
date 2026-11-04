@@ -47,7 +47,7 @@ class RecalculoPorCotizacionServiceTest {
     @Test
     @DisplayName("recalcularAhora fija el ultimo dolar, recalcula con ese valor a nombre del Dueno y devuelve {cotizacion, cantidad}")
     void recalcularAhora() {
-        when(dolar.fijarUltima(false)).thenReturn(bd("1100"));
+        when(dolar.fijarUltima(false, null)).thenReturn(bd("1100"));
         when(recalculo.porCotizacion(bd("1100"), DUENO)).thenReturn(new RecalculoPreciosService.ResultadoPorCotizacion(3, List.of()));
 
         RecalculoCotizacionResponse respuesta = service.recalcularAhora(DUENO, false);
@@ -55,14 +55,14 @@ class RecalculoPorCotizacionServiceTest {
         assertThat(respuesta.cotizacion()).isEqualByComparingTo("1100");
         assertThat(respuesta.articulosRecalculados()).isEqualTo(3);
         InOrder orden = inOrder(dolar, recalculo);
-        orden.verify(dolar).fijarUltima(false);
+        orden.verify(dolar).fijarUltima(false, null);
         orden.verify(recalculo).porCotizacion(bd("1100"), DUENO);
     }
 
     @Test
     @DisplayName("recalcularAhora usa el valor que fijo el puerto, no uno fijo: con 950 recalcula con 950 y a nombre de otro Dueno")
     void recalcularAhoraConOtroValor() {
-        when(dolar.fijarUltima(false)).thenReturn(bd("950"));
+        when(dolar.fijarUltima(false, null)).thenReturn(bd("950"));
         when(recalculo.porCotizacion(bd("950"), 12L)).thenReturn(new RecalculoPreciosService.ResultadoPorCotizacion(0, List.of()));
 
         RecalculoCotizacionResponse respuesta = service.recalcularAhora(12L, false);
@@ -75,19 +75,19 @@ class RecalculoPorCotizacionServiceTest {
     @Test
     @DisplayName("con la confirmacion del Dueno se la pasa al puerto: acepta el dolar que se aleja mas del 20 % (H09)")
     void recalcularAhoraConfirmandoElDesvio() {
-        when(dolar.fijarUltima(true)).thenReturn(bd("11"));
+        when(dolar.fijarUltima(true, null)).thenReturn(bd("11"));
         when(recalculo.porCotizacion(bd("11"), DUENO)).thenReturn(new RecalculoPreciosService.ResultadoPorCotizacion(1, List.of()));
 
         RecalculoCotizacionResponse respuesta = service.recalcularAhora(DUENO, true);
 
         assertThat(respuesta.cotizacion()).isEqualByComparingTo("11");
-        verify(dolar, never()).fijarUltima(false);
+        verify(dolar, never()).fijarUltima(false, null);
     }
 
     @Test
     @DisplayName("con la cotizacion apagada propaga el 409 y no toca ningun precio")
     void apagadaPropagaElConflicto() {
-        when(dolar.fijarUltima(false)).thenThrow(new ConflictException("La cotización está apagada"));
+        when(dolar.fijarUltima(false, null)).thenThrow(new ConflictException("La cotización está apagada"));
 
         assertThatThrownBy(() -> service.recalcularAhora(DUENO, false))
                 .isInstanceOf(ConflictException.class)
@@ -98,7 +98,7 @@ class RecalculoPorCotizacionServiceTest {
     @Test
     @DisplayName("sin ninguna cotizacion guardada propaga el 409 y no toca ningun precio")
     void sinValorPropagaElConflicto() {
-        when(dolar.fijarUltima(false))
+        when(dolar.fijarUltima(false, null))
                 .thenThrow(new ConflictException("Todavía no hay cotización del dólar. Probá en unos minutos"));
 
         assertThatThrownBy(() -> service.recalcularAhora(DUENO, false))
