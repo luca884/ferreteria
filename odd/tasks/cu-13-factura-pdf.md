@@ -2,7 +2,7 @@
 
 Objetivo: que el Dueño suba la factura del proveedor en PDF y la compra (CU-13) quede completa para revisar y confirmar · Por qué: pedido del relevamiento de ferreteros locales, bloque 3 ("Carga de facturas de proveedor por PDF").
 Rama: `feat/cu-13-factura-pdf` desde `d22c9e2` · Entrega: single-pr · Ruteo: caso 5 (Opus de punta a punta: diseño incierto y lectura de archivos de afuera) · Runner: backend `./mvnw test -Dtest=<Clase>` / `./mvnw test`; frontend `npx ng test --watch=false [--include=<spec>]`, `npx ng build` · Mirror Engram: `odd/cu-13-factura-pdf/tasks`
-Pronóstico: ~1500 líneas cambiadas (agregadas + borradas, sin generados), provisorio hasta cerrar el diseño · Heurística por tarea: ~400 (no es límite)
+Pronóstico: ~2500 líneas cambiadas (agregadas + borradas, sin generados; ver L5) · Heurística por tarea: ~400 (no es límite)
 
 ## Specs
 
@@ -11,17 +11,22 @@ Restricciones: reglas de arquitectura de `CLAUDE.md` (tenant solo del JWT, `*Sco
 
 - S1: relevamiento (Engram `producto/relevamiento-ferreteros-2026-11`): "Carga de facturas de proveedor por PDF." — Aceptación: por definir con las decisiones de L3.
 - S2: Luca (2026-11-04): "dale, arrancá con la feature y agregá facturas al gitignore, y proba la reconstruccion tambien de este pdf y vemos si realmente capta toda la informaicon que da el archivo" — Aceptación: `Facturas/` ignorada por git; la reconstrucción probada sobre la factura real, con lo que capta y lo que no. — Checks: `git check-ignore Facturas/`; corrida de `ExtractorPdf` y `TablaDePdf` sobre la factura (L2).
+- S4: Luca (2026-11-04): "claro por ejemplo eso de ebalaja y carga eso estaria bueno, si se va a agregar a los productos, a la hora de ir a un producto por ejemlpo la soldadora que en una de las columnas diga eso embalaje y carga y abajo de eso el porcentaje, entonces el dueno al entrar a un producto puede ver exactamente todo el desglose del precio del proucto, se entiende?? como lo podemos hacer a eso" — Decidido (Luca: «en cada artículo»): cada artículo guarda sus **recargos del costo** con nombre y % (por ejemplo «Embalaje y carga 4,44 %»), que se aplican sobre el costo antes del margen y el IVA: costo real = costo × (1 + Σ % / 100). La compra los completa con los de la factura y el Dueño los puede editar a mano. La ficha del artículo muestra el **desglose del precio** en casilleros (concepto arriba, valor abajo): costo, cada recargo con su % y su importe, costo real, margen, IVA y precio final (y la lista, las bonificaciones y los ajustes cuando el artículo los tiene). — Aceptación: con la factura de L2, la soldadora queda con costo 235.971,56, «Embalaje y carga 4,44 %» (+ 10.477,14) y costo real 246.448,70, y el precio sale del costo real.
+- S5: Luca (2026-11-04): "y otra cosa me gusto lo del ultimo costo y la factura, se puede hacer que al hacer click en ese texto de la factura, te rediriga a esa factura o por lo menos te lo muestre" — Acordado: la ficha muestra la última compra del artículo («Factura A 0013-00605684 del 24/09/2026») y el texto lleva al detalle de esa compra en Compras. — Aceptación: clic en el texto → detalle de la compra con sus renglones.
+- S6 (supuestos, a confirmar al cierre): el PDF original no se guarda (el link va al detalle de la compra); el texto dice «Última compra» y no «Último costo», porque una lista o un cambio a mano pueden mover el costo después; una compra pisa los recargos de sus artículos con los de la factura (vacíos si no tiene), igual que pisa el costo; un renglón cuyo código no tiene artículo lo resuelve el Dueño (elige el artículo o saca el renglón); el proveedor sale del CUIT de la factura y, si no hay uno con ese CUIT, lo elige el Dueño; solo es recargo sobre el total un cargo cuyo importe es su % de la suma de los netos; el costo que copia la venta para la ganancia (CU-15) y el aviso de margen negativo usan el costo real; un recargo lleva nombre de 1 a 40 caracteres y un % entre −99,99 y 99,99 distinto de 0, con hasta 5 por artículo.
 - S3 (propuesta, a confirmar): el PDF completa el encabezado (tipo, punto de venta, número, fecha y el proveedor por su CUIT) y los renglones (el artículo por el código del proveedor, la cantidad y el costo unitario sin IVA). El Dueño revisa, resuelve los renglones sin artículo y sigue con la vista previa de CU-13.
 
 ## Tasks
 
 - [x] T1 · S2 · ruta: inline · Aceptación: `Facturas/` en `.gitignore` · Evidencia: `git check-ignore -v Facturas/ facturas/` → `.gitignore:25:[Ff]acturas/`; `git status` ya no la lista · Risk: none
 - [x] T2 · S2 · ruta: inline · Aceptación: reconstrucción probada sobre la factura real · Evidencia: L2 · Risk: none
-- [ ] T3 · S1, S3 · ruta: inline · Provisoria: lector de renglones de factura (dominio puro, test-first con factura inventada): por línea, código, cantidad, unitario y neto con cantidad × unitario = neto, más el control contra «Transporte» y el subtotal · Evidencia: — · Risk: —
-- [ ] T4 · S1, S3 · ruta: inline · Provisoria: encabezado (letra, punto de venta, número, fecha, CUIT del proveedor) · Evidencia: — · Risk: —
-- [ ] T5 · S1, S3 · ruta: inline · Provisoria: endpoint que recibe el PDF y devuelve el borrador de la compra (solo Dueño, aislamiento entre ferreterías) · Evidencia: — · Risk: —
-- [ ] T6 · S1, S3 · ruta: inline · Provisoria: pantalla de Compras: subir el PDF, formulario completo, renglones sin artículo marcados · Evidencia: — · Risk: —
-- [ ] T7 · todas · ruta: inline · Cierre: suite backend y frontend, `ng build`, prueba en la app real con ego-browser, spec actualizada · Evidencia: — · Risk: —
+- [ ] T3 · S1, S3 · ruta: delegada (Writer trigger: T3 y T4 en paralelo, archivos disjuntos, ~400 líneas cada una) · Lector de factura en PDF según el diseño de L5 (dominio puro + la lectura aparte de CU-04), test-first con facturas inventadas · Evidencia: — · Risk: none (lectura nueva; el proceso aparte de CU-04 no cambia)
+- [ ] T4 · S4 · ruta: delegada (Writer trigger: ídem) · Recargos del costo en el dominio y en el cálculo del precio según L5: migración V46, las tres entradas del precio, margen negativo, costo que copia la venta, espejo del frontend y casos compartidos · Evidencia: — · Risk: item 1 (migración V46) e item 3 (cálculo del precio compartido por listas, masivo, compras, cotización y cascada)
+- [ ] T5 · S4 · ruta: inline · Recargos en la ficha del artículo: request y response, edición como los ajustes de CU-14, precio en vivo y desglose con cada recargo · Evidencia: — · Risk: —
+- [ ] T6 · S1, S3, S4, S6 · ruta: inline · Compra con recargos y lectura de la factura: `CompraRequest` y `compra.recargos`, la compra pisa costo y recargos, vista previa con el costo real; `POST /api/compras/factura-pdf` (solo Dueño; proveedor por CUIT, artículos por código del proveedor; aislamiento entre ferreterías) · Evidencia: — · Risk: —
+- [ ] T7 · S1, S3, S6 · ruta: inline · Pantalla de Compras: subir el PDF, formulario completo con recargos, renglones sin artículo marcados, aviso de si la lectura cuadra con la factura · Evidencia: — · Risk: —
+- [ ] T8 · S5 · ruta: inline · Última compra en la ficha con link al detalle (`UltimaCompra` con id, tipo, punto de venta y número; ruta o parámetro que abre esa compra en Compras) · Evidencia: — · Risk: —
+- [ ] T9 · todas · ruta: inline · Cierre: suite backend y frontend, `ng build`, prueba en la app real con ego-browser y la factura real, spec actualizada, odd-verifier (items 1 y 3) · Evidencia: — · Risk: —
 
 ## Log
 
@@ -37,3 +42,25 @@ Restricciones: reglas de arquitectura de `CLAUDE.md` (tenant solo del JWT, `*Sco
   - Números en formato US en toda la factura (`235,971.56`); los totales se ven en formato AR en la imagen pero el texto los trae en US. Cantidades con decimal (`1.0`, `12.0`). Códigos como `9960110.5`, `MKT100020`, `R2780219`.
   - Conclusión: la información está completa y se puede autocontrolar con la aritmética de la propia factura; hace falta un lector de factura propio (por línea), no el de columnas de CU-04.
 - L3 (2026-11-04) Decisiones abiertas: D1 qué hacer con cargos sobre el total como «EMBALAJE Y CARGA 4.44%» (prorratear en el costo de cada renglón o no); D2 renglones cuyo código no tiene artículo; D3 diseñar con más facturas de otros proveedores. Hallazgo aparte (no es de esta feature): la factura dice que el comprador es monotributista y CU-13 carga el costo sin IVA. · Próximo paso: D1 con Luca.
+- L4 (2026-11-04) D1 resuelta: el embalaje se suma al costo como recargo con nombre, guardado en cada artículo (S4); se agrega el link a la compra (S5). D2 queda como supuesto en S6. Se descartó usar los ajustes de CU-14: van sobre el precio final y dejarían mal el costo y la ganancia. · Próximo paso: mapear los usos del costo (odd-explorer) y rearmar las tareas.
+- L5 (2026-11-04) Mapa (odd-explorer) y diseño. Pronóstico corregido: ~2500 líneas.
+  - **Precio:** tres entradas que tienen que aprender los recargos. `Articulo.precioCon` (`Articulo.java:649`) cubre la edición, la cascada de rubro, la cotización, la compra y CU-14. `ArticuloVigente.precioCon` (`ArticuloVigente.java:46`) cubre CU-05 (`PlanificadorMasivo.java:130-139`). `PlanificadorImportacion.precioDelAlta` (`:378`) cubre las altas de CU-04. Todas terminan en `PrecioCalculator.precioFinal` (`PrecioCalculator.java:55/65/94`). El frontend repite la cuenta (`core/formato/precio-final.ts`, `cadena-de-precio.ts`) con los casos compartidos `backend/src/test/resources/catalogo/casos-precio.json` y `casos-cadena-precio.json`. El desglose actual sale de `CadenaDePrecio` / `DesglosePrecioService` y `articulos/desglose-precio.ts`.
+  - **Otros usos del costo que pasan a costo real:** `MargenNegativo.java:23` y el costo que copia la venta (`ArticulosParaVentaService.java:96-101` → `ItemComprobante`, la ganancia de CU-15). Siguen con el costo base: el control «pisar costo» de CU-04 (`ArticuloService.java:263-276`) y la exportación.
+  - **Módulos:** `compras` solo ve `catalogo.api..` (`ModulosArchTest.java:109-116`). El lector va en `catalogo.service.lectura`, con un puerto en `catalogo.api`, sin tocar ArchUnit.
+  - **Última compra:** `UltimasCompras.UltimaCompra` trae solo fecha y proveedor (`CompraRepository.java:48-62`). El detalle de la compra no tiene ruta: es un panel en `compras.html:98-102`, y las rutas son `compras` y `compras/nueva` (`app.routes.ts:103-111`).
+  - **Diseño de T3 (lector de factura, puro sobre las palabras con posición):**
+    1. Líneas por página y línea base, con la misma tolerancia de `TablaDePdf`.
+    2. Formato de números por mayoría en el documento: US `1,234.56` o AR `1.234,56`.
+    3. Renglón: línea cuya primera palabra es el código y que trae números q, u, n, en ese orden, con q × u = n redondeado a 2 decimales. Opcionalmente trae una bonificación b % entre u y n, y entonces q × u × (1 − b/100) = n (±0,01). Si hay varias ternas, gana la de n más a la derecha. Del renglón salen el código, la cantidad, la descripción (las palabras entre q y u), el costo unitario (u con la bonificación, a 2 decimales) y el neto.
+    4. Recargo sobre el total: después del último renglón, una línea con un p % y un importe a tal que la suma de netos × p / 100 = a (±0,01). El nombre son las palabras antes de p, sin «:». El signo sale del importe.
+    5. Control: CUADRA si después del último renglón aparece un número igual a la suma de netos + los recargos (±0,01); si no, SIN_CONTROL.
+    6. Encabezado (líneas antes del primer renglón):
+       - Punto de venta y número: primer `(\d{4,5})\s*-\s*(\d{8})`.
+       - Letra: por «Código 01|06|11» (CbteTipo de ARCA: 1 = A, 6 = B, 11 = C). Si no está, una palabra suelta «A», «B» o «C». Si no aparece ninguna, null.
+       - Fecha: primera dd/mm/aaaa que no esté en una línea con «ACTIV», «VTO» o «VENC».
+       - CUIT: todos los CUIT válidos por dígito verificador (`\d{2}-\d{8}-\d` o 11 dígitos), en orden.
+    7. Sin renglones reconocidos devuelve la lista vacía, no un error.
+  - **Diseño de T4:**
+    - `RecargoCosto(nombre, porcentaje)`. Supuestos de S6: nombre de 1 a 40, % entre −99,99 y 99,99, distinto de 0, 2 decimales, hasta 5 recargos.
+    - Costo real = costo × (1 + Σ % / 100), a 2 decimales HALF_UP, y entra al cálculo en lugar del costo.
+    - V46: `articulo.recargos_costo` y `compra.recargos`, JSON NOT NULL con default `JSON_ARRAY()`, como `ajustes_precio` en V24.
