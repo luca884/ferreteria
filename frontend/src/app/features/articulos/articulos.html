@@ -115,6 +115,7 @@
         <thead>
           <tr>
             <th>Código</th>
+            <th>Cód. proveedor</th>
             <th>Descripción</th>
             @if (auth.esDueno()) {
               <th class="num">Costo</th>
@@ -140,6 +141,7 @@
               (keydown)="filas.alTeclear($event, articulo, i)"
             >
               <td class="codigo">{{ articulo.codigoInterno }}</td>
+              <td class="codigo-proveedor">{{ articulo.codigoProveedor ?? '—' }}</td>
               <td class="descripcion">{{ articulo.descripcion }}</td>
               @if (auth.esDueno()) {
                 <td class="num costo">{{ formatearCosto(articulo.costo, articulo.moneda) }}</td>

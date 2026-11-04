@@ -15,6 +15,7 @@ describe('StockBajoMinimo', () => {
     {
       articuloId: 3,
       codigoInterno: 'C-003',
+      codigoProveedor: null,
       descripcion: 'Arandela',
       rubro: null,
       proveedor: null,
@@ -24,10 +25,13 @@ describe('StockBajoMinimo', () => {
       stockActual: -3,
       stockMinimo: 5,
       aReponer: 8,
+      ultimaCompraFecha: null,
+      ultimaCompraProveedor: null,
     },
     {
       articuloId: 1,
       codigoInterno: 'A-001',
+      codigoProveedor: 'AN-77',
       descripcion: 'Cable 2,5 mm',
       rubro: 'Pinturas',
       proveedor: 'Andina Norte',
@@ -37,6 +41,8 @@ describe('StockBajoMinimo', () => {
       stockActual: 12.5,
       stockMinimo: 50,
       aReponer: 37.5,
+      ultimaCompraFecha: '2026-10-12',
+      ultimaCompraProveedor: 'Bulonera Sur',
     },
   ];
 
@@ -80,16 +86,30 @@ describe('StockBajoMinimo', () => {
     expect(listar).toHaveBeenCalledWith('DESCRIPCION');
   });
 
-  it('lista cada artículo con código, descripción, rubro, proveedor, costo, stock, mínimo y cuánto reponer', async () => {
+  it('lista cada artículo con código, código del proveedor, descripción, rubro, proveedor, última compra, costo, stock, mínimo y cuánto reponer', async () => {
     await crear();
 
+    expect(Array.from(el().querySelectorAll('thead th')).map((th) => th.textContent?.trim())).toEqual([
+      'Código',
+      'Cód. proveedor',
+      'Descripción',
+      'Rubro',
+      'Proveedor',
+      'Última compra',
+      'Costo',
+      'Stock',
+      'Mínimo',
+      'A reponer',
+    ]);
     expect(filasTabla()).toHaveLength(2);
-    expect(celdas(0)).toEqual(['C-003', 'Arandela', '—', '—', formatearCosto(100, 'ARS'), '-3', '5', '8']);
+    expect(celdas(0)).toEqual(['C-003', '—', 'Arandela', '—', '—', '—', formatearCosto(100, 'ARS'), '-3', '5', '8']);
     expect(celdas(1)).toEqual([
       'A-001',
+      'AN-77',
       'Cable 2,5 mm',
       'Pinturas',
       'Andina Norte',
+      '12/10/2026 · Bulonera Sur',
       formatearCosto(10.5, 'USD'),
       '12,5',
       '50',

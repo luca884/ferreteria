@@ -1,5 +1,6 @@
 import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import { AuthService } from '../../core/auth/auth.service';
+import { formatearFecha } from '../../core/formato/fecha-hora';
 import { formatearCosto } from '../../core/formato/monto';
 import { BarraAcciones } from '../../shared/barra-acciones';
 import { ArticuloBajoMinimo, ORDENES, OrdenBajoMinimo } from './stock-bajo-minimo.models';
@@ -54,6 +55,9 @@ export class StockBajoMinimo implements OnInit {
 
   protected readonly costo = (f: ArticuloBajoMinimo) => formatearCosto(f.costo, f.moneda);
   protected readonly numero = (n: number) => NUMERO.format(n);
+  /** «12/10/2026 · Bulonera Sur» (bloque 2, S6); sin compras, un guion. */
+  protected readonly ultimaCompra = (f: ArticuloBajoMinimo) =>
+    f.ultimaCompraFecha ? `${formatearFecha(f.ultimaCompraFecha)} · ${f.ultimaCompraProveedor}` : '—';
 
   ngOnInit(): void {
     if (this.auth.esDueno()) this.cargar();

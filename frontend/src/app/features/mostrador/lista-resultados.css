@@ -80,6 +80,11 @@
   font-family: var(--fuente-mono);
   font-size: var(--texto-xs);
 }
+/* Bloque 2, S5: el código del proveedor resalta entre los códigos. */
+.codigo-proveedor {
+  color: var(--texto);
+  font-weight: 600;
+}
 .costo-al {
   color: var(--texto-tenue);
   font-size: var(--texto-2xs);

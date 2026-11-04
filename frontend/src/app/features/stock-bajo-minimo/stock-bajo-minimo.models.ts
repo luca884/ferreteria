@@ -10,10 +10,14 @@ export const ORDENES: readonly { valor: OrdenBajoMinimo; texto: string }[] = [
   { valor: 'PROVEEDOR', texto: 'Proveedor' },
 ];
 
-/** Un artículo con stock menor al mínimo. A reponer es mínimo menos stock. Sin rubro o proveedor, null. */
+/**
+ * Un artículo con stock menor al mínimo. A reponer es mínimo menos stock. Sin rubro o proveedor, null. El código del
+ * proveedor y la última compra (fecha ISO y proveedor de esa compra) son del bloque 2 (S5, S6); null si no hay.
+ */
 export interface ArticuloBajoMinimo {
   articuloId: number;
   codigoInterno: string;
+  codigoProveedor: string | null;
   descripcion: string;
   rubro: string | null;
   proveedor: string | null;
@@ -23,4 +27,6 @@ export interface ArticuloBajoMinimo {
   stockActual: number;
   stockMinimo: number;
   aReponer: number;
+  ultimaCompraFecha: string | null;
+  ultimaCompraProveedor: string | null;
 }

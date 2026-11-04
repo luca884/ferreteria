@@ -54,9 +54,11 @@
           <thead>
             <tr>
               <th scope="col">Código</th>
+              <th scope="col">Cód. proveedor</th>
               <th scope="col">Descripción</th>
               <th scope="col">Rubro</th>
               <th scope="col">Proveedor</th>
+              <th scope="col">Última compra</th>
               <th scope="col" class="num">Costo</th>
               <th scope="col" class="num">Stock</th>
               <th scope="col" class="num">Mínimo</th>
@@ -67,9 +69,11 @@
             @for (f of lista; track f.articuloId) {
               <tr>
                 <td>{{ f.codigoInterno }}</td>
+                <td class="codigo-proveedor">{{ f.codigoProveedor ?? '—' }}</td>
                 <td>{{ f.descripcion }}</td>
                 <td>{{ f.rubro ?? '—' }}</td>
                 <td>{{ f.proveedor ?? '—' }}</td>
+                <td class="ultima-compra">{{ ultimaCompra(f) }}</td>
                 <td class="num">{{ costo(f) }}</td>
                 <td class="num" [class.negativo]="f.stockActual < 0">{{ numero(f.stockActual) }}</td>
                 <td class="num">{{ numero(f.stockMinimo) }}</td>

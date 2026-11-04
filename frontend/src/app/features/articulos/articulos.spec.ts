@@ -190,6 +190,20 @@ describe('Articulos', () => {
     expect(texto('.costo-al')).toBe('20/05/2026');
   });
 
+  it('bloque 2, S5: la columna «Cód. proveedor» va después de «Código», para el Dueño y el Vendedor; sin código, un guion', async () => {
+    const primera = pagina([articulo(1, { codigoProveedor: 'BS-4471' }), articulo(2, { codigoProveedor: null })]);
+    await crearComponente(true, primera);
+
+    const encabezados = Array.from(el().querySelectorAll('thead th')).map((th) => th.textContent!.trim());
+    expect(encabezados.slice(0, 2)).toEqual(['Código', 'Cód. proveedor']);
+    expect(texto('.codigo-proveedor')).toBe('BS-4471');
+    expect(texto('.codigo-proveedor', 1)).toBe('—');
+
+    TestBed.resetTestingModule();
+    await crearComponente(false, primera);
+    expect(texto('.codigo-proveedor')).toBe('BS-4471');
+  });
+
   it('el stock lleva la unidad en singular o plural y el negativo va en rojo', async () => {
     await crearComponente(
       true,

@@ -27,8 +27,11 @@
           <span class="baja">Dado de baja</span>
         }
         <span class="codigos"
-          >{{ articulo.codigoInterno
-          }}{{ articulo.codigoBarras ? ' · ' + articulo.codigoBarras : '' }}</span
+          >{{ articulo.codigoInterno }}{{ articulo.codigoBarras ? ' · ' + articulo.codigoBarras : '' }}@if (
+            articulo.codigoProveedor
+          ) {
+            · <strong class="codigo-proveedor">Prov: {{ articulo.codigoProveedor }}</strong>
+          }</span
         >
         @if (formatearFecha(articulo.costoAl); as fecha) {
           <span class="costo-al">Costo al {{ fecha }}</span>

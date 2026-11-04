@@ -108,6 +108,13 @@ describe('ListaResultados', () => {
     expect(texto('.ubicacion')).toBe('Pasillo 2');
   });
 
+  it('bloque 2, S5: con código del proveedor lo suma resaltado: «TOR-001 · 7790001 · Prov: BS-4471»', async () => {
+    await crear([articulo(1, { codigoInterno: 'TOR-001', codigoBarras: '7790001', codigoProveedor: 'BS-4471' })]);
+
+    expect(texto('.codigos')).toBe('TOR-001 · 7790001 · Prov: BS-4471');
+    expect(texto('.codigos .codigo-proveedor')).toBe('Prov: BS-4471');
+  });
+
   it('sin código de barras muestra solo el código interno, y sin ubicación un guion', async () => {
     await crear([articulo(1, { codigoInterno: 'MAR-007', codigoBarras: null, ubicacion: null })]);
 

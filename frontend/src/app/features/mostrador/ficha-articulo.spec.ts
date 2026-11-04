@@ -64,9 +64,16 @@ describe('FichaArticulo', () => {
     expect(texto('.costo-al')).toBe('—');
   });
 
-  it('sin código de barras ni ubicación muestra guiones', async () => {
-    await crear({ ...tornillo, codigoBarras: null, ubicacion: null });
+  it('bloque 2, S5: muestra el código del proveedor', async () => {
+    await crear(tornillo);
 
+    expect(texto('.codigo-proveedor')).toBe('PROV-99');
+  });
+
+  it('sin código de barras, del proveedor ni ubicación muestra guiones', async () => {
+    await crear({ ...tornillo, codigoBarras: null, codigoProveedor: null, ubicacion: null });
+
+    expect(texto('.codigo-proveedor')).toBe('—');
     expect(texto('.codigo-barras')).toBe('—');
     expect(texto('.ubicacion')).toBe('—');
   });
