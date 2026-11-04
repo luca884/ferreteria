@@ -312,6 +312,77 @@ describe('Proveedores', () => {
     });
   });
 
+  describe('contacto (mejoras-ferreteros-bloque-1, S4)', () => {
+    it('el formulario tiene contacto, teléfono, WhatsApp y correo, opcionales, con su etiqueta', async () => {
+      await crearComponente(true);
+
+      for (const [id, etiqueta] of [
+        ['contacto', 'Contacto (opcional)'],
+        ['telefono', 'Teléfono (opcional)'],
+        ['whatsapp', 'WhatsApp (opcional)'],
+        ['email', 'Correo (opcional)'],
+      ]) {
+        expect(el().querySelector(`label[for="${id}"]`)?.textContent?.trim()).toBe(etiqueta);
+        expect(el().querySelector<HTMLInputElement>(`#${id}`)!.name).toBe(id);
+      }
+      expect(el().querySelector<HTMLInputElement>('#telefono')!.type).toBe('tel');
+      expect(el().querySelector<HTMLInputElement>('#email')!.type).toBe('email');
+    });
+
+    it('el alta manda el contacto sin espacios sobrantes', async () => {
+      await crearComponente(true);
+      servicio.crear.mockReturnValue(of({ id: 3, nombre: 'Alba', cuit: null, activo: true, contacto: 'Juan' }));
+
+      await escribir('#nombre', 'Alba');
+      await escribir('#contacto', ' Juan ');
+      await escribir('#telefono', '223 555-1234');
+      await escribir('#whatsapp', '2235551234');
+      await escribir('#email', 'ventas@alba.com');
+      await enviarFormulario();
+
+      expect(servicio.crear).toHaveBeenCalledWith({
+        nombre: 'Alba',
+        cuit: null,
+        activo: true,
+        contacto: 'Juan',
+        telefono: '223 555-1234',
+        whatsapp: '2235551234',
+        email: 'ventas@alba.com',
+      });
+    });
+
+    it('editar precarga el contacto guardado', async () => {
+      await crearComponente(true, [{ ...sinteplast, contacto: 'Ana', telefono: '111', whatsapp: null, email: 'a@b.com' }]);
+
+      await enBarra(0, 'editar');
+
+      expect(el().querySelector<HTMLInputElement>('#contacto')!.value).toBe('Ana');
+      expect(el().querySelector<HTMLInputElement>('#telefono')!.value).toBe('111');
+      expect(el().querySelector<HTMLInputElement>('#whatsapp')!.value).toBe('');
+      expect(el().querySelector<HTMLInputElement>('#email')!.value).toBe('a@b.com');
+    });
+
+    it('la lista muestra el contacto y el teléfono, o «—» si no hay', async () => {
+      await crearComponente(true, [{ ...sinteplast, contacto: 'Ana', telefono: '111' }, tersuave]);
+
+      expect(Array.from(el().querySelectorAll('thead th')).map((th) => th.textContent?.trim())).toContain('Contacto');
+      expect(filas()[0].querySelector('.contacto')?.textContent?.replace(/\s+/g, ' ').trim()).toBe('Ana · 111');
+      expect(filas()[1].querySelector('.contacto')?.textContent?.trim()).toBe('—');
+    });
+
+    it('un correo inválido no se manda y lo explica', async () => {
+      await crearComponente(true);
+
+      await escribir('#nombre', 'Alba');
+      await escribir('#email', 'no-es-correo');
+      await enviarFormulario();
+
+      expect(servicio.crear).not.toHaveBeenCalled();
+      expect(el().querySelector('#email')!.getAttribute('aria-invalid')).toBe('true');
+      expect(el().querySelector('#email-error')?.textContent?.trim()).toBe('El correo no es válido.');
+    });
+  });
+
   describe('alta', () => {
     it('crea el proveedor sin espacios sobrantes, sin CUIT vacío, y lo suma ordenado', async () => {
       await crearComponente(true);
@@ -322,7 +393,15 @@ describe('Proveedores', () => {
       await escribir('#cuit', '');
       await enviarFormulario();
 
-      expect(servicio.crear).toHaveBeenCalledWith({ nombre: 'Alba', cuit: null, activo: true });
+      expect(servicio.crear).toHaveBeenCalledWith({
+        nombre: 'Alba',
+        cuit: null,
+        activo: true,
+        contacto: null,
+        telefono: null,
+        whatsapp: null,
+        email: null,
+      });
       const textos = textoFilas();
       expect(textos).toHaveLength(3);
       expect(textos[0]).toContain('Alba');
@@ -446,6 +525,10 @@ describe('Proveedores', () => {
         nombre: 'Sinteplast SA',
         cuit: '30-12345678-1',
         activo: true,
+        contacto: null,
+        telefono: null,
+        whatsapp: null,
+        email: null,
       });
       expect(servicio.crear).not.toHaveBeenCalled();
       const textos = textoFilas();
@@ -625,7 +708,7 @@ describe('Proveedores', () => {
 
       await enviarFormulario();
 
-      expect(servicio.crear).toHaveBeenCalledWith({ nombre: 'Alba', cuit: '30-12345678-1', activo: true });
+      expect(servicio.crear).toHaveBeenCalledWith(expect.objectContaining({ nombre: 'Alba', cuit: '30-12345678-1' }));
     });
 
     it('al salir del campo le pone los guiones', async () => {

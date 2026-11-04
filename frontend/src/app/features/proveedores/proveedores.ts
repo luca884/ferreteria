@@ -51,6 +51,10 @@ export class Proveedores implements OnInit {
   protected readonly form = inject(FormBuilder).nonNullable.group({
     nombre: ['', [Validators.required, Validators.maxLength(100)]],
     cuit: ['', [validarCuit]],
+    contacto: ['', [Validators.maxLength(100)]],
+    telefono: ['', [Validators.maxLength(30)]],
+    whatsapp: ['', [Validators.maxLength(30)]],
+    email: ['', [Validators.email, Validators.maxLength(120)]],
   });
 
   ngOnInit(): void {
@@ -74,12 +78,16 @@ export class Proveedores implements OnInit {
       this.enfocar('form.alta [aria-invalid="true"]');
       return;
     }
-    const { nombre, cuit } = this.form.getRawValue();
+    const { nombre, cuit, contacto, telefono, whatsapp, email } = this.form.getRawValue();
     const normalizado = normalizarCuit(cuit);
     const request: ProveedorRequest = {
       nombre: nombre.trim(),
       cuit: 'cuit' in normalizado ? normalizado.cuit : null,
       activo: true,
+      contacto: textoOpcional(contacto),
+      telefono: textoOpcional(telefono),
+      whatsapp: textoOpcional(whatsapp),
+      email: textoOpcional(email),
     };
     const id = this.editandoId();
     const llamada: Observable<Proveedor> =
@@ -112,7 +120,14 @@ export class Proveedores implements OnInit {
     this.limpiarMensajes();
     this.filas.elegidoId.set(proveedor.id);
     this.editandoId.set(proveedor.id);
-    this.form.reset({ nombre: proveedor.nombre, cuit: proveedor.cuit ?? '' });
+    this.form.reset({
+      nombre: proveedor.nombre,
+      cuit: proveedor.cuit ?? '',
+      contacto: proveedor.contacto ?? '',
+      telefono: proveedor.telefono ?? '',
+      whatsapp: proveedor.whatsapp ?? '',
+      email: proveedor.email ?? '',
+    });
   }
 
   protected cancelar(): void {
@@ -130,7 +145,13 @@ export class Proveedores implements OnInit {
     this.aDarDeBaja.set(this.filas.elegido());
   }
 
-  protected invalido(campo: 'nombre' | 'cuit'): boolean {
+  /** «Ana · 223 555-1234», lo que haya de los dos; «—» si no hay ninguno. */
+  protected contactoDe(proveedor: Proveedor): string {
+    const partes = [proveedor.contacto, proveedor.telefono].filter((p): p is string => !!p);
+    return partes.length > 0 ? partes.join(' · ') : '—';
+  }
+
+  protected invalido(campo: 'nombre' | 'cuit' | 'contacto' | 'telefono' | 'whatsapp' | 'email'): boolean {
     const control = this.form.controls[campo];
     return control.touched && control.invalid;
   }
@@ -199,7 +220,7 @@ export class Proveedores implements OnInit {
 
   private vaciarFormulario(): void {
     this.editandoId.set(null);
-    this.form.reset({ nombre: '', cuit: '' });
+    this.form.reset({ nombre: '', cuit: '', contacto: '', telefono: '', whatsapp: '', email: '' });
   }
 
   /** Carga la lista; también la usa Reintentar después de una carga fallida. */
@@ -219,6 +240,11 @@ export class Proveedores implements OnInit {
       },
     });
   }
+}
+
+function textoOpcional(valor: string): string | null {
+  const limpio = valor.trim();
+  return limpio === '' ? null : limpio;
 }
 
 function mensajeDe(err: unknown, porDefecto: string): string {

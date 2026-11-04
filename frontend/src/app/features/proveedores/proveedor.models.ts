@@ -11,10 +11,20 @@ export interface Proveedor {
   bonificacion1?: number | null;
   bonificacion2?: number | null;
   bonificacion3?: number | null;
+  /** Datos para comunicarse con el proveedor; todos opcionales. */
+  contacto?: string | null;
+  telefono?: string | null;
+  whatsapp?: string | null;
+  email?: string | null;
 }
 
 export interface ProveedorRequest {
   nombre: string;
   cuit: string | null;
   activo: boolean;
+  /** Ausente o null: sin ese dato. La pantalla de proveedores los manda siempre. */
+  contacto?: string | null;
+  telefono?: string | null;
+  whatsapp?: string | null;
+  email?: string | null;
 }

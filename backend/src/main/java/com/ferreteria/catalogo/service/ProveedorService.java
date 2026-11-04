@@ -55,6 +55,7 @@ public class ProveedorService {
                             + ", pero está dado de baja. Reactivalo para volver a usarlo.");
         });
         Proveedor proveedor = new Proveedor(TenantContext.requireFerreteriaId(), nombre, cuit);
+        actualizarContacto(proveedor, request);
         if (Boolean.FALSE.equals(request.activo())) {
             proveedor.desactivar();
         }
@@ -72,7 +73,18 @@ public class ProveedorService {
         // Sin activo en el pedido se conserva el estado actual: un PUT no reactiva por omision.
         boolean activo = request.activo() == null ? proveedor.isActivo() : request.activo();
         proveedor.actualizar(nombre, cuit, activo);
+        actualizarContacto(proveedor, request);
         return ProveedorResponse.from(proveedor);
+    }
+
+    /** El contacto va completo en cada pedido: un dato ausente o en blanco queda vacio. */
+    private static void actualizarContacto(Proveedor proveedor, ProveedorRequest request) {
+        proveedor.actualizarContacto(texto(request.contacto()), texto(request.telefono()), texto(request.whatsapp()),
+                texto(request.email()));
+    }
+
+    private static String texto(String valor) {
+        return valor == null || valor.isBlank() ? null : valor.strip();
     }
 
     /** Vuelve a activar un proveedor dado de baja. No revalida el CUIT: solo cambia el estado. */

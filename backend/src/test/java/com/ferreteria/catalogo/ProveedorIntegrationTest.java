@@ -522,4 +522,89 @@ class ProveedorIntegrationTest extends IntegrationTestBase {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.nombre", is(nombre)));
     }
+
+    // --- Contacto (mejoras-ferreteros-bloque-1, S4) ---
+
+    private String conContacto(String nombre, String contacto, String telefono, String whatsapp, String email)
+            throws Exception {
+        var body = objectMapper.createObjectNode().put("nombre", nombre).put("contacto", contacto)
+                .put("telefono", telefono).put("whatsapp", whatsapp).put("email", email);
+        return objectMapper.writeValueAsString(body);
+    }
+
+    @Test
+    void altaConContactoLoGuardaYLoDevuelve() throws Exception {
+        String nombre = unico("Contacto");
+
+        String cuerpo = postJson("/api/proveedores", duenoA,
+                conContacto(nombre, " Juan Pérez ", "223 555-1234", "2235551234", "ventas@prov.com.ar"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.contacto", is("Juan Pérez")))
+                .andExpect(jsonPath("$.telefono", is("223 555-1234")))
+                .andExpect(jsonPath("$.whatsapp", is("2235551234")))
+                .andExpect(jsonPath("$.email", is("ventas@prov.com.ar")))
+                .andReturn().getResponse().getContentAsString();
+        long id = objectMapper.readTree(cuerpo).get("id").asLong();
+
+        assertThat(jdbc.queryForMap("select contacto, telefono, whatsapp, email from proveedor where id = ?", id))
+                .containsEntry("contacto", "Juan Pérez").containsEntry("telefono", "223 555-1234")
+                .containsEntry("whatsapp", "2235551234").containsEntry("email", "ventas@prov.com.ar");
+    }
+
+    @Test
+    void sinContactoQuedaVacioYUnoEnBlancoTambien() throws Exception {
+        long id = crear(duenoA, unico("SinContacto")).get("id").asLong();
+
+        putJson("/api/proveedores/" + id, duenoA, conContacto(unico("SinContacto"), "  ", "", null, null))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.contacto").doesNotExist())
+                .andExpect(jsonPath("$.telefono").doesNotExist());
+
+        assertThat(jdbc.queryForObject("select contacto from proveedor where id = ?", String.class, id)).isNull();
+    }
+
+    @Test
+    void editarElContactoLoCambia() throws Exception {
+        String nombre = unico("EditaContacto");
+        long id = crear(duenoA, nombre).get("id").asLong();
+
+        putJson("/api/proveedores/" + id, duenoA, conContacto(nombre, "Ana", "111", null, "ana@prov.com"))
+                .andExpect(status().isOk());
+
+        getResult("/api/proveedores/" + id, duenoA)
+                .andExpect(jsonPath("$.contacto", is("Ana")))
+                .andExpect(jsonPath("$.telefono", is("111")))
+                .andExpect(jsonPath("$.email", is("ana@prov.com")));
+    }
+
+    @Test
+    void unCorreoInvalidoOLargosDeMasDan400EnEspanol() throws Exception {
+        String nombre = unico("Invalido");
+
+        postJson("/api/proveedores", duenoA, conContacto(nombre, null, null, null, "no-es-correo"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors.email", is("El correo no es válido.")));
+        postJson("/api/proveedores", duenoA, conContacto(nombre, null, "1".repeat(31), null, null))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors.telefono", is("El teléfono admite hasta 30 caracteres.")));
+        postJson("/api/proveedores", duenoA, conContacto(nombre, "x".repeat(101), null, null, null))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors.contacto", is("El contacto admite hasta 100 caracteres.")));
+    }
+
+    @Test
+    void elVendedorVeElContactoYOtraFerreteriaNoLoVe() throws Exception {
+        String nombre = unico("VeContacto");
+        String cuerpo = postJson("/api/proveedores", duenoA, conContacto(nombre, "Luis", "222", "333", null))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        long id = objectMapper.readTree(cuerpo).get("id").asLong();
+
+        getResult("/api/proveedores/" + id, vendedorA)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.contacto", is("Luis")))
+                .andExpect(jsonPath("$.telefono", is("222")))
+                .andExpect(jsonPath("$.whatsapp", is("333")));
+        getResult("/api/proveedores/" + id, duenoB).andExpect(status().isNotFound());
+    }
 }

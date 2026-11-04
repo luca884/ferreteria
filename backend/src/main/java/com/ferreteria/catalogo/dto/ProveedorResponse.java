@@ -15,7 +15,11 @@ public record ProveedorResponse(
         boolean listaIncluyeIva,
         BigDecimal bonificacion1,
         BigDecimal bonificacion2,
-        BigDecimal bonificacion3) implements ProveedorLectura {
+        BigDecimal bonificacion3,
+        String contacto,
+        String telefono,
+        String whatsapp,
+        String email) implements ProveedorLectura {
 
     public static ProveedorResponse from(Proveedor proveedor) {
         return new ProveedorResponse(
@@ -27,6 +31,10 @@ public record ProveedorResponse(
                 proveedor.isListaIncluyeIva(),
                 proveedor.getBonificacion1(),
                 proveedor.getBonificacion2(),
-                proveedor.getBonificacion3());
+                proveedor.getBonificacion3(),
+                proveedor.getContacto(),
+                proveedor.getTelefono(),
+                proveedor.getWhatsapp(),
+                proveedor.getEmail());
     }
 }

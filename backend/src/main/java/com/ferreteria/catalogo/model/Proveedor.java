@@ -49,6 +49,19 @@ public class Proveedor {
     @Column(precision = 5, scale = 2)
     private BigDecimal bonificacion3;
 
+    /** La persona con la que se habla en el proveedor. */
+    @Column(length = 100)
+    private String contacto;
+
+    @Column(length = 30)
+    private String telefono;
+
+    @Column(length = 30)
+    private String whatsapp;
+
+    @Column(length = 120)
+    private String email;
+
     protected Proveedor() {}
 
     public Proveedor(Long ferreteriaId, String nombre, String cuit) {
@@ -61,6 +74,14 @@ public class Proveedor {
         this.nombre = nombre;
         this.cuit = cuit;
         this.activo = activo;
+    }
+
+    /** Los datos para comunicarse con el proveedor; cada uno puede faltar (null). */
+    public void actualizarContacto(String contacto, String telefono, String whatsapp, String email) {
+        this.contacto = contacto;
+        this.telefono = telefono;
+        this.whatsapp = whatsapp;
+        this.email = email;
     }
 
     /** Baja logica: los articulos que lo referencian conservan la referencia. */
@@ -99,4 +120,8 @@ public class Proveedor {
     public BigDecimal getBonificacion1() { return bonificacion1; }
     public BigDecimal getBonificacion2() { return bonificacion2; }
     public BigDecimal getBonificacion3() { return bonificacion3; }
+    public String getContacto() { return contacto; }
+    public String getTelefono() { return telefono; }
+    public String getWhatsapp() { return whatsapp; }
+    public String getEmail() { return email; }
 }
