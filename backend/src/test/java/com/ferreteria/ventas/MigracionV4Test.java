@@ -120,14 +120,14 @@ class MigracionV4Test extends IntegrationTestBase {
     }
 
     @Test
-    @DisplayName("tipo, estado y medio son VARCHAR sin CHECK (la fase 5 suma valores); solo los descuentos de V11, los recargos de V13, el costo de V26 y la nota de credito de V37 (que ata NOTA_CREDITO a su venta, sin cerrar los valores) tienen el suyo")
+    @DisplayName("tipo, estado y medio son VARCHAR sin CHECK (la fase 5 suma valores); solo los descuentos de V11, el recargo del pago de V45 (con signo: los de comprobante y renglon de V13 se fueron con el descuento en efectivo), el costo de V26 y la nota de credito de V37 (que ata NOTA_CREDITO a su venta, sin cerrar los valores) tienen el suyo")
     void sinCheckEnTipoEstadoYMedio() {
         Integer checks = jdbc.queryForObject(
                 "select count(*) from information_schema.table_constraints "
                         + "where table_schema = database() and constraint_type = 'CHECK' and table_name in "
                         + "('comprobante','item_comprobante','pago','movimiento_stock','numerador_comprobante') "
                         + "and constraint_name not in ('ck_comprobante_descuento','ck_item_comprobante_descuento',"
-                        + "'ck_comprobante_recargo','ck_item_comprobante_recargo','ck_pago_recargo','ck_item_comprobante_costo',"
+                        + "'ck_pago_recargo_v45','ck_item_comprobante_costo',"
                         + "'ck_comprobante_nota_de_credito')",
                 Integer.class);
 
