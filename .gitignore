@@ -20,8 +20,9 @@ frontend/.angular/
 .atl/
 .claude/worktrees/
 
-# Listas reales de proveedores (datos de terceros, no se versionan)
+# Listas y facturas reales de proveedores (datos de terceros, no se versionan)
 Lista/
+[Ff]acturas/
 
 # Secretos
 .env
