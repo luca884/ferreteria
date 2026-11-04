@@ -64,7 +64,7 @@ public class Pago {
         pago.medio = forma.getMedio();
         pago.formaPagoId = forma.getId();
         pago.formaPagoNombre = forma.getNombre();
-        pago.recargoPorcentaje = forma.getRecargoPorcentaje();
+        pago.recargoPorcentaje = forma.ajustePorcentaje();
         pago.recargo = recargo;
         pago.monto = parte.add(recargo);
         return pago;

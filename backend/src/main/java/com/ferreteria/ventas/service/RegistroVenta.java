@@ -254,7 +254,7 @@ public class RegistroVenta {
         for (ConfirmarVenta.PagoPedido parte : partes) {
             FormaPago forma = formas.get(parte.formaPagoId());
             pagos.add(pagoRepository.save(Pago.de(ferreteriaId, comprobante.getId(), forma, parte.monto(),
-                    RecargoVenta.deCobro(parte.monto(), forma.getRecargoPorcentaje()))));
+                    RecargoVenta.deCobro(parte.monto(), forma.ajustePorcentaje()))));
         }
 
         if (importeCuenta.signum() > 0) {
@@ -288,7 +288,7 @@ public class RegistroVenta {
         for (ConfirmarVenta.PagoPedido parte : partes) {
             FormaPago forma = formas.get(parte.formaPagoId());
             if (forma.getMedio() == MedioPago.CUENTA_CORRIENTE) {
-                importe = importe.add(parte.monto()).add(RecargoVenta.deCobro(parte.monto(), forma.getRecargoPorcentaje()));
+                importe = importe.add(parte.monto()).add(RecargoVenta.deCobro(parte.monto(), forma.ajustePorcentaje()));
             }
         }
         return importe;
@@ -422,7 +422,7 @@ public class RegistroVenta {
         for (ConfirmarVenta.PagoPedido pago : pagos) {
             FormaPago forma = pago.formaPagoId() == null ? null : formas.get(pago.formaPagoId());
             if (forma != null && pago.monto() != null && pago.monto().signum() > 0) {
-                recargo = recargo.add(RecargoVenta.deCobro(pago.monto(), forma.getRecargoPorcentaje()));
+                recargo = recargo.add(RecargoVenta.deCobro(pago.monto(), forma.ajustePorcentaje()));
             }
         }
         return recargo;

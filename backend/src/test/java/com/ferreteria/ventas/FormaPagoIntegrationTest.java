@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
@@ -318,6 +319,52 @@ class FormaPagoIntegrationTest extends VentasTestBase {
         putJson("/api/formas-pago/" + deB, login(a.emailDueno()), CREDITO_6).andExpect(status().isNotFound());
         assertThat(jdbc.queryForObject("select nombre from forma_pago where id = ?", String.class, deB))
                 .isEqualTo("Crédito");
+    }
+
+    @Test
+    @DisplayName("descuento en efectivo: el Dueño lo guarda y la lista lo muestra; fuera de 0 a 99,99 es 400; con recargo es 422; el de otra ferretería es 404")
+    void descuentoDeLaForma() throws Exception {
+        Tienda a = tienda();
+        Tienda b = tienda();
+        String dueno = login(a.emailDueno());
+        long efectivo = idDe(getJson("/api/formas-pago", dueno), "Efectivo");
+        long credito = idDe(getJson("/api/formas-pago", dueno), "Crédito");
+        long deB = idDe(getJson("/api/formas-pago", login(b.emailDueno())), "Efectivo");
+        String conDescuento = "{\"nombre\": \"Efectivo\", \"medio\": \"EFECTIVO\", \"descuentoPorcentaje\": 10.50}";
+
+        JsonNode guardada = cuerpo(putJson("/api/formas-pago/" + efectivo, dueno, conDescuento)
+                .andExpect(status().isOk()));
+        JsonNode alto = cuerpo(putJson("/api/formas-pago/" + efectivo, dueno,
+                "{\"nombre\": \"Efectivo\", \"medio\": \"EFECTIVO\", \"descuentoPorcentaje\": 100}")
+                .andExpect(status().isBadRequest()));
+        JsonNode negativo = cuerpo(putJson("/api/formas-pago/" + efectivo, dueno,
+                "{\"nombre\": \"Efectivo\", \"medio\": \"EFECTIVO\", \"descuentoPorcentaje\": -1}")
+                .andExpect(status().isBadRequest()));
+        JsonNode largo = cuerpo(putJson("/api/formas-pago/" + efectivo, dueno,
+                "{\"nombre\": \"Efectivo\", \"medio\": \"EFECTIVO\", \"descuentoPorcentaje\": 10.123}")
+                .andExpect(status().isBadRequest()));
+        JsonNode ambos = cuerpo(putJson("/api/formas-pago/" + credito, dueno,
+                "{\"nombre\": \"Crédito\", \"medio\": \"CREDITO\", \"recargoPorcentaje\": 5, \"descuentoPorcentaje\": 5}")
+                .andExpect(status().isUnprocessableEntity()));
+        putJson("/api/formas-pago/" + deB, dueno, conDescuento).andExpect(status().isNotFound());
+        putJson("/api/formas-pago/" + efectivo, login(a.emailVendedor()), conDescuento)
+                .andExpect(status().isForbidden());
+
+        assertThat(guardada.get("descuentoPorcentaje").decimalValue()).isEqualByComparingTo("10.50");
+        JsonNode lista = getJson("/api/formas-pago", dueno);
+        for (JsonNode forma : lista) {
+            assertThat(forma.get("descuentoPorcentaje").decimalValue()).as(forma.get("nombre").asText())
+                    .isEqualByComparingTo(forma.get("id").asLong() == efectivo ? "10.50" : "0");
+        }
+        assertThat(alto.get("errors").get("descuentoPorcentaje").asText())
+                .isEqualTo("El descuento tiene que estar entre 0 y 99,99 %.");
+        assertThat(negativo.get("errors").get("descuentoPorcentaje").asText())
+                .isEqualTo("El descuento tiene que estar entre 0 y 99,99 %.");
+        assertThat(largo.get("errors").get("descuentoPorcentaje").asText())
+                .isEqualTo("El descuento admite hasta 2 decimales.");
+        assertThat(ambos.get("message").asText()).isEqualTo("Una forma de pago lleva recargo o descuento, no los dos.");
+        assertThat(jdbc.queryForObject("select descuento_porcentaje from forma_pago where id = ?", BigDecimal.class, deB))
+                .isEqualByComparingTo("0");
     }
 
     @Test
