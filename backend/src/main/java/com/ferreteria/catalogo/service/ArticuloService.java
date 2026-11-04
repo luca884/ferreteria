@@ -224,10 +224,6 @@ public class ArticuloService {
     }
 
     /**
-     * La respuesta con su «costo al» (GDS-05), leido de la base: el historial que se acaba de guardar ya cuenta, porque
-     * la consulta nativa escribe antes lo pendiente.
-     */
-    /**
      * Pone el articulo en oferta (ofertas, S1), reemplazando la que tuviera. Solo cambia la oferta: el precio normal
      * y su historial quedan como estan. Mismo orden que los ajustes: 404, version, y despues las validaciones.
      */
@@ -251,6 +247,10 @@ public class ArticuloService {
         return conCostoAl(ArticuloResponse.from(articulo, stockVigente(id, articulo)));
     }
 
+    /**
+     * La respuesta con su «costo al» (GDS-05), leido de la base: el historial que se acaba de guardar ya cuenta, porque
+     * la consulta nativa escribe antes lo pendiente.
+     */
     private ArticuloResponse conCostoAl(ArticuloResponse respuesta) {
         return respuesta.conCostoAl(articuloRepository.costoAlScoped(List.of(respuesta.id())).get(respuesta.id()));
     }

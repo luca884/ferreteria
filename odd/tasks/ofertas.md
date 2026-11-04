@@ -39,3 +39,15 @@ Restricciones: reglas de arquitectura de `CLAUDE.md` (tenant solo del JWT, `*Sco
   - Como Vendedor: resumen «En oferta a $ 12.000,00 (precio normal $ 13.552,00) hasta el 30/11/2026.» sin formulario, y la ficha del mostrador con la marca.
   - Arreglos de CSS que salieron de la prueba: en la ficha del mostrador el precio tachado era muy chico y estaba pegado (ahora `--texto-md` con aire); en los resultados la marca se estiraba a todo el ancho (ahora `align-self: flex-start`, 58 px). Specs de esas pantallas 27/27.
   - Base local restaurada (sin oferta, «Vitrina 1»); el precio quedó en $ 13.552 por el recálculo de arriba.
+- L5 (2026-11-04) `odd-verifier` (opus) sobre `6a803f8..5de6e34`, de S1 a S4: **pass, sin blockers**.
+  - El único que lee `ArticuloVendible.precioFinal` es `ValidacionTicket`; los demás consumidores solo usan stock o rubros.
+  - Las etiquetas no imprimen precio, y la exportación, el desglose y compras siguen leyendo el precio normal.
+  - El filtro JPQL y `Oferta.precioSobre` coinciden en 599 casos sobre MySQL; `precioDeOferta` del front coincide con una referencia exacta en 20.104 casos.
+  - Sus probes se commitearon como regresión: `OfertaRegresionIntegrationTest` (4/4: paridad del filtro, PUT rechazado sin cambiar la fila, otra ferretería no ve nada, sin oferta solo campos nulos) y `oferta-regresion.spec.ts` (1/1). Se sacó el probe del artículo dado de baja, que solo imprimía.
+
+  Advisories:
+  1. El backend acepta poner oferta en un artículo dado de baja (200); la pantalla lo oculta y la spec no lo define. No se aplica.
+  2. El javadoc de `conCostoAl` estaba arriba de `ponerOferta`. Corregido.
+  3. Con un monto mayor o igual al precio normal, el mensaje dice «tiene que ser menor al precio normal», aunque el precio quedaría en 0 o menos. Fuera de dominio; no se aplica.
+  4. Con un precio fijo de más de 2 decimales, la vista previa redondea y el backend da 400. No se aplica.
+  5. La casilla dice «Solo en oferta» y la spec, «En oferta». Queda «Solo en oferta», porque se lee mejor como filtro.
