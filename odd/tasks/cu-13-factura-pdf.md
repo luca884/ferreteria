@@ -74,3 +74,12 @@ Restricciones: reglas de arquitectura de `CLAUDE.md` (tenant solo del JWT, `*Sco
   - La compra calcula el precio una sola vez con el costo y los recargos (`Articulo.ajustarCostoYRecargosAutomatico`). Antes, si los ajustes de CU-14 no entraban recién con los recargos nuevos, el precio quedaba a medio camino (costo nuevo con los recargos viejos). RED en `ArticuloRecargosCostoTest.costoYRecargosEnUnSoloPaso` (no compilaba), después GREEN junto con los tests de compras.
   - Desvíos de alcance aceptados de los writers: `TipoPaso` (T5) y un `sed` en `articulo-form.spec.ts` (3 líneas).
   - Comportamiento nuevo de T6, para confirmar al cierre: reintentar con la misma clave y otros recargos da 409.
+- L9 (2026-11-04) Cierre, verificación:
+  - **Suites:** backend 6144/6144. La primera corrida dio 2 regresiones de T8: `ArticuloResponseTest.camposAditivosAlFinal` (el orden del JSON no tenía `ultimaCompra`) y `ArticuloServiceTest.obtener` (sin @Mock de `UltimasCompras`); corregidas en `test: la respuesta del artículo…`. Frontend 154 archivos en verde. `ng build` OK.
+  - **App real con ego-browser** (Docker local, V46 aplicada sobre la base con datos, factura real de `Facturas/`). Se cargó por API, como Dueño de «El Tornillo», el proveedor «BTA Herramientas (prueba)» con CUIT 30-65716216-3 y los artículos 965433, 969052 y 9932151. Recorrida:
+    - **Lectura del PDF:** «La lectura cuadra con el total de la factura ($ 1.707.999,65 + recargos).». Completó el proveedor BTA, Factura A, punto de venta 13, número 605684, fecha 24/09/2026, los 3 renglones con su cantidad y su costo, el recargo «EMBALAJE Y CARGA» 4,44 % y 50 renglones «Sin artículo», que se quitaron.
+    - **Vista previa:** la soldadora pasa de costo 235.971,56 a costo real 246.448,70, con precio 354.023,56.
+    - **Ficha de la soldadora:** el desglose muestra Costo $ 235.971,56 | EMBALAJE Y CARGA 4,44 % + $ 10.477,14 | Costo real $ 246.448,70 | Margen 30 % | IVA 10,5 % | Precio final $ 354.023,56, y debajo «Última compra: Factura A 00013-00605684 del 24/09/2026».
+    - **Link:** lleva a `/compras/2`, con el detalle de la compra y «EMBALAJE Y CARGA 4,44 %».
+    - **Ya existía:** los pasos intermedios del desglose se muestran con 4 decimales (por ejemplo IVA «$ 354.023,5576»). Es así por diseño desde antes (`casos-cadena-precio.json`: «Los pasos intermedios van a 4 decimales HALF_UP»).
+  - **Pendiente:** el resultado del odd-verifier (items 1 y 3).
