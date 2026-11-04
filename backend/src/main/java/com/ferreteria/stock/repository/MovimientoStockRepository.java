@@ -59,29 +59,35 @@ public interface MovimientoStockRepository extends TenantScopedRepository<Movimi
             left join proveedor p on p.id = co.proveedor_id and p.ferreteria_id = m.ferreteria_id
             where m.ferreteria_id = :fid and m.articulo_id = :articuloId
               and (:desde is null or m.fecha >= :desde) and (:hasta is null or m.fecha < :hasta)
-            order by m.fecha desc, m.id desc
+            order by m.id desc
             """,
             countQuery = "select count(*) " + DE_ARTICULO)
     Page<MovimientoListado> deArticulo(@Param("fid") Long ferreteriaId, @Param("articuloId") Long articuloId,
                                        @Param("desde") LocalDateTime desde, @Param("hasta") LocalDateTime hasta,
                                        Pageable pageable);
 
-    /** Lo que sumaron los movimientos del articulo posteriores a uno dado (por fecha y, a igual fecha, por id). */
+    /**
+     * Lo que sumaron los movimientos del articulo dados de alta despues de uno (por id). El orden del libro es el id y no
+     * la fecha: el movimiento se inserta en la misma transaccion que mueve el stock, con el articulo bloqueado, asi que el
+     * id es el orden en que se aplico. Una fecha corrida (una fila con el DEFAULT de MySQL en UTC) no rompe el saldo.
+     */
     @Query(nativeQuery = true, value = """
             select coalesce(sum(m.cantidad), 0) from movimiento_stock m
-            where m.ferreteria_id = :fid and m.articulo_id = :articuloId
-              and (m.fecha > :fecha or (m.fecha = :fecha and m.id > :id))
+            where m.ferreteria_id = :fid and m.articulo_id = :articuloId and m.id > :id
             """)
     BigDecimal sumaPosterior(@Param("fid") Long ferreteriaId, @Param("articuloId") Long articuloId,
-                             @Param("fecha") LocalDateTime fecha, @Param("id") Long id);
+                             @Param("id") Long id);
 
-    /** Movimientos del articulo de la ferreteria del request, el mas nuevo primero; desde inclusive, hasta exclusivo. */
+    /**
+     * Movimientos del articulo de la ferreteria del request, el ultimo dado de alta primero (por id, el orden del saldo;
+     * ver {@link #sumaPosterior}); desde inclusive, hasta exclusivo, filtran por fecha.
+     */
     default Page<MovimientoListado> deArticuloScoped(
             Long articuloId, LocalDateTime desde, LocalDateTime hasta, Pageable pageable) {
         return deArticulo(TenantContext.requireFerreteriaId(), articuloId, desde, hasta, pageable);
     }
 
-    default BigDecimal sumaPosteriorScoped(Long articuloId, LocalDateTime fecha, Long id) {
-        return sumaPosterior(TenantContext.requireFerreteriaId(), articuloId, fecha, id);
+    default BigDecimal sumaPosteriorScoped(Long articuloId, Long id) {
+        return sumaPosterior(TenantContext.requireFerreteriaId(), articuloId, id);
     }
 }

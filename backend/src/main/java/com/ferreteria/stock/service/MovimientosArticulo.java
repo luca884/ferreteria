@@ -17,8 +17,8 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Movimientos de stock de un articulo (G29, GDS-17), como el historico de GDS: el mas nuevo primero, cada uno con el
- * saldo que dejo y el comprobante que lo origino.
+ * Movimientos de stock de un articulo (G29, GDS-17), como el historico de GDS: el ultimo dado de alta primero (por id, el
+ * orden en que se aplico al stock), cada uno con el saldo que dejo y el comprobante que lo origino.
  */
 @Service
 public class MovimientosArticulo {
@@ -58,7 +58,7 @@ public class MovimientosArticulo {
         }
         MovimientoListado primero = filas.getContent().get(0);
         BigDecimal saldo = stockActual.subtract(
-                movimientoRepository.sumaPosteriorScoped(articuloId, primero.getFecha(), primero.getId()));
+                movimientoRepository.sumaPosteriorScoped(articuloId, primero.getId()));
         List<Movimiento> movimientos = new ArrayList<>();
         for (MovimientoListado fila : filas) {
             movimientos.add(new Movimiento(fila.getId(), fila.getFecha(), fila.getTipo(), fila.getCantidad(), saldo,
