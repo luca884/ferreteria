@@ -82,6 +82,9 @@ class ArticuloServiceTest {
     @Mock
     DolarDePrecios dolarDePrecios;
 
+    @Mock
+    com.ferreteria.catalogo.api.UltimasCompras ultimasCompras;
+
     @InjectMocks
     ArticuloService service;
 
