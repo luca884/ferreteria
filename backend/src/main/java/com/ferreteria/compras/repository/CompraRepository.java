@@ -47,10 +47,10 @@ public interface CompraRepository extends TenantScopedRepository<Compra, Long> {
 
     /**
      * Cada compra de esos articulos en la ferreteria, la mas nueva primero por articulo (fecha del comprobante y, a
-     * igual fecha, orden de carga). Filas (articulo_id, fecha, proveedor_nombre).
+     * igual fecha, orden de carga). Filas (articulo_id, fecha, proveedor_nombre, id, tipo, punto_venta, numero).
      */
     @Query(nativeQuery = true, value = """
-            select ic.articulo_id, c.fecha, c.proveedor_nombre
+            select ic.articulo_id, c.fecha, c.proveedor_nombre, c.id, c.tipo, c.punto_venta, c.numero
             from item_compra ic
             join compra c on c.id = ic.compra_id and c.ferreteria_id = ic.ferreteria_id
             where ic.ferreteria_id = :fid and ic.articulo_id in (:articulos)

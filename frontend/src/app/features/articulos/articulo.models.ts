@@ -91,6 +91,15 @@ export interface RecargoCosto {
 }
 
 /** Lo que devuelve el backend, igual para Dueño y Vendedor (ambos ven costo y margen). */
+/** La última compra de un artículo en su ficha: lleva al detalle de la compra. */
+export interface UltimaCompra {
+  compraId: number;
+  /** «Factura A 00013-00605684». */
+  comprobante: string;
+  /** AAAA-MM-DD. */
+  fecha: string;
+}
+
 export interface Articulo {
   id: number;
   codigoInterno: string;
@@ -140,6 +149,8 @@ export interface Articulo {
   ajustesPrecio?: AjustePrecio[];
   /** CU-13, solo para el Dueño (el Vendedor no lo recibe): los recargos del costo; el precio sale del costo real. */
   recargosCosto?: RecargoCosto[];
+  /** CU-13 S5, solo para el Dueño (el Vendedor no lo recibe): la última compra del artículo; null si nunca se compró. */
+  ultimaCompra?: UltimaCompra | null;
   /** GDS-05, para el Dueño y el Vendedor: desde cuándo está al día el costo (AAAA-MM-DD). */
   costoAl?: string | null;
   /** Ofertas (S3), para el Dueño y el Vendedor: la oferta guardada, vigente o vencida; null sin oferta. */

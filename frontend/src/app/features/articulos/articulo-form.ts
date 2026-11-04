@@ -16,6 +16,7 @@ import { catchError, forkJoin, map, of } from 'rxjs';
 import { erroresPorCampo, mensajeDe } from '../../core/api/api-error';
 import { AuthService } from '../../core/auth/auth.service';
 import { Avisos } from '../../core/avisos/avisos';
+import { formatearFecha } from '../../core/formato/fecha-hora';
 import { Cotizacion } from '../../core/cotizacion/cotizacion.models';
 import { CotizacionService } from '../../core/cotizacion/cotizacion.service';
 import { MontoPipe, formatearCotizacion, formatearTexto } from '../../core/formato/monto';
@@ -51,6 +52,7 @@ import {
   UNIDADES,
   UNIDAD_LABELS,
   Unidad,
+  UltimaCompra,
   errorDeValorDeAjustePrecio,
   monedaDe,
 } from './articulo.models';
@@ -218,6 +220,10 @@ export class ArticuloForm implements OnInit {
   protected readonly cotizacion = signal<Cotizacion | null>(null);
   /** El artículo tal como lo devolvió el backend; null en el alta. */
   protected readonly articulo = signal<Articulo | null>(null);
+  /** La última compra del artículo (solo la ficha del Dueño); se guarda aparte porque las respuestas de guardar no la traen. */
+  protected readonly ultimaCompra = signal<UltimaCompra | null>(null);
+  /** «24/09/2026», la fecha de la última compra como se muestra. */
+  protected readonly fechaUltimaCompra = computed(() => formatearFecha(this.ultimaCompra()?.fecha));
   protected readonly cargando = signal(true);
   /** El código interno con el que arrancó el alta (último cargado más uno); null si no hubo sugerencia. */
   protected readonly codigoSugerido = signal<string | null>(null);
@@ -887,6 +893,7 @@ export class ArticuloForm implements OnInit {
         this.cotizacion.set(cotizacion);
         if (articulo) {
           this.articulo.set(articulo);
+          this.ultimaCompra.set(articulo.ultimaCompra ?? null);
           this.llenarFormulario(articulo);
           this.desglose.set(desglose);
           this.cargarAjustes(articulo, desglose);

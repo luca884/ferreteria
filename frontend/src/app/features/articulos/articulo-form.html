@@ -649,6 +649,14 @@
       </div>
     </app-desglose-precio>
   }
+
+  @if (auth.esDueno() && ultimaCompra(); as compra) {
+    <p class="ultima-compra">
+      Última compra:
+      <a [routerLink]="['/compras', compra.compraId]">{{ compra.comprobante }}</a>
+      del {{ fechaUltimaCompra() }}
+    </p>
+  }
 }
 
 @if (confirmandoDescarte()) {

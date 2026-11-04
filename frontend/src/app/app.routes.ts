@@ -109,6 +109,12 @@ export const routes: Routes = [
         title: titulo('Nueva compra'),
         loadComponent: () => import('./features/compras/nueva-compra').then((m) => m.NuevaCompra),
       },
+      // El detalle de una compra por su id (link de «Última compra» en la ficha del artículo): la misma pantalla. Va después de «nueva», que no es un id.
+      {
+        path: 'compras/:id',
+        title: titulo('Compras'),
+        loadComponent: () => import('./features/compras/compras').then((m) => m.Compras),
+      },
       // Sin guard de rol, como las otras pantallas del Dueño: al Vendedor el API le responde 403 y la pantalla lo avisa sin mostrar datos.
       {
         path: 'ventas',

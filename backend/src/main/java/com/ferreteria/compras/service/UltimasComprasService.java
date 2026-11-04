@@ -1,6 +1,7 @@
 package com.ferreteria.compras.service;
 
 import com.ferreteria.catalogo.api.UltimasCompras;
+import com.ferreteria.compras.model.TipoCompra;
 import com.ferreteria.compras.repository.CompraRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -29,7 +30,10 @@ public class UltimasComprasService implements UltimasCompras {
         // Vienen la mas nueva primero por articulo: la primera de cada uno es la ultima.
         for (Object[] fila : compraRepository.comprasDeScoped(articuloIds)) {
             Long articulo = ((Number) fila[0]).longValue();
-            ultimas.putIfAbsent(articulo, new UltimaCompra(fecha(fila[1]), (String) fila[2]));
+            ultimas.putIfAbsent(articulo, new UltimaCompra(((Number) fila[3]).longValue(),
+                    TipoCompra.valueOf((String) fila[4]).comprobante(((Number) fila[5]).intValue(),
+                            ((Number) fila[6]).longValue()),
+                    fecha(fila[1]), (String) fila[2]));
         }
         return ultimas;
     }

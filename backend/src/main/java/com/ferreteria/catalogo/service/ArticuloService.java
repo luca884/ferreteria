@@ -2,7 +2,10 @@ package com.ferreteria.catalogo.service;
 
 import com.ferreteria.catalogo.dto.AjustesRequest;
 import com.ferreteria.catalogo.dto.ArticuloRequest;
+import com.ferreteria.catalogo.api.UltimasCompras;
+import com.ferreteria.catalogo.api.UltimasCompras.UltimaCompra;
 import com.ferreteria.catalogo.dto.ArticuloResponse;
+import com.ferreteria.catalogo.dto.UltimaCompraResponse;
 import com.ferreteria.catalogo.dto.OfertaRequest;
 import com.ferreteria.catalogo.dto.ValidacionAjustes;
 import com.ferreteria.catalogo.model.Ajustes;
@@ -63,6 +66,7 @@ public class ArticuloService {
     private final ConfiguracionPreciosService configuracionPreciosService;
     private final DolarDePrecios dolarDePrecios;
     private final Validator validator;
+    private final UltimasCompras ultimasCompras;
 
     public ArticuloService(
             ArticuloRepository articuloRepository,
@@ -71,7 +75,8 @@ public class ArticuloService {
             HistorialPrecioRepository historialPrecioRepository,
             ConfiguracionPreciosService configuracionPreciosService,
             DolarDePrecios dolarDePrecios,
-            Validator validator) {
+            Validator validator,
+            UltimasCompras ultimasCompras) {
         this.articuloRepository = articuloRepository;
         this.rubroRepository = rubroRepository;
         this.proveedorRepository = proveedorRepository;
@@ -79,6 +84,7 @@ public class ArticuloService {
         this.configuracionPreciosService = configuracionPreciosService;
         this.dolarDePrecios = dolarDePrecios;
         this.validator = validator;
+        this.ultimasCompras = ultimasCompras;
     }
 
     /**
@@ -114,7 +120,9 @@ public class ArticuloService {
     /** Un articulo de otra ferreteria da 404, igual que uno que no existe. Tambien devuelve los inactivos. */
     @Transactional(readOnly = true)
     public ArticuloResponse obtener(Long id) {
-        return conCostoAl(ArticuloResponse.from(buscar(id)));
+        ArticuloResponse ficha = conCostoAl(ArticuloResponse.from(buscar(id)));
+        UltimaCompra ultima = ultimasCompras.deLosArticulos(List.of(id)).get(id);
+        return ultima == null ? ficha : ficha.conUltimaCompra(UltimaCompraResponse.de(ultima));
     }
 
     /**

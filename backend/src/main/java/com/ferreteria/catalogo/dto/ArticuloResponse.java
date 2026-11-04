@@ -53,7 +53,9 @@ public record ArticuloResponse(
         /** Ofertas (S3): la oferta guardada, vigente o vencida; null sin oferta. */
         OfertaResponse oferta,
         /** CU-13: recargos del costo, en el orden en que se cargaron; solo los ve quien ve el costo. */
-        List<RecargoCosto> recargosCosto) implements ArticuloLectura {
+        List<RecargoCosto> recargosCosto,
+        /** cu-13-factura-pdf S5: la ultima compra del articulo (solo la ficha del Dueño); null si nunca se compro. */
+        UltimaCompraResponse ultimaCompra) implements ArticuloLectura {
 
     /** Igual que {@link #from(Articulo)} pero con el stock indicado (el vigente en la base, no el de la entidad leida). */
     public static ArticuloResponse from(Articulo articulo, BigDecimal stockActual) {
@@ -64,7 +66,7 @@ public record ArticuloResponse(
                 base.ubicacion(), base.activo(), base.precioListaProveedor(), base.ajuste1(), base.ajuste2(),
                 base.ajuste3(), base.bonificacion1(), base.bonificacion2(), base.bonificacion3(),
                 base.listaIncluyeIva(), base.version(), base.precioManual(), base.ajustesPrecio(), base.costoAl(),
-                base.oferta(), base.recargosCosto());
+                base.oferta(), base.recargosCosto(), base.ultimaCompra());
     }
 
     /** La misma respuesta con la fecha de {@link #costoAl}, que sale de la base y no de la entidad. */
@@ -73,7 +75,16 @@ public record ArticuloResponse(
                 proveedorId, costo, moneda, margenPorcentaje, alicuotaIva, precioFinal, unidad, stockActual, stockMinimo,
                 ubicacion, activo, precioListaProveedor, ajuste1, ajuste2, ajuste3, bonificacion1, bonificacion2,
                 bonificacion3, listaIncluyeIva, version, precioManual, ajustesPrecio, fecha, oferta,
-                recargosCosto);
+                recargosCosto, ultimaCompra);
+    }
+
+    /** La misma respuesta con su ultima compra (null si nunca se compro). */
+    public ArticuloResponse conUltimaCompra(UltimaCompraResponse compra) {
+        return new ArticuloResponse(id, codigoInterno, codigoBarras, codigoProveedor, descripcion, rubroId,
+                proveedorId, costo, moneda, margenPorcentaje, alicuotaIva, precioFinal, unidad, stockActual, stockMinimo,
+                ubicacion, activo, precioListaProveedor, ajuste1, ajuste2, ajuste3, bonificacion1, bonificacion2,
+                bonificacion3, listaIncluyeIva, version, precioManual, ajustesPrecio, costoAl, oferta,
+                recargosCosto, compra);
     }
 
     public static ArticuloResponse from(Articulo articulo) {
@@ -108,6 +119,7 @@ public record ArticuloResponse(
                 articulo.getAjustesPrecio().lista(),
                 null,
                 OfertaResponse.de(articulo, HoraArgentina.hoy()),
-                articulo.getRecargosCosto().lista());
+                articulo.getRecargosCosto().lista(),
+                null);
     }
 }

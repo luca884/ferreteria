@@ -815,6 +815,33 @@ describe('ArticuloForm', () => {
     });
   });
 
+  describe('última compra (cu-13-factura-pdf, S5)', () => {
+    const ultimaCompra = { compraId: 77, comprobante: 'Factura A 00013-00605684', fecha: '2026-09-24' };
+
+    it('el Dueño ve el comprobante de la última compra como link a su detalle, con la fecha', async () => {
+      await crearComponente({ id: '5', articulo: articuloGuardado({ ultimaCompra }) });
+
+      const bloque = el().querySelector('.ultima-compra')!;
+      expect(bloque.textContent).toContain('Última compra:');
+      expect(bloque.textContent).toContain('del 24/09/2026');
+      const link = bloque.querySelector('a')!;
+      expect(link.textContent?.trim()).toBe('Factura A 00013-00605684');
+      expect(link.getAttribute('href')).toBe('/compras/77');
+    });
+
+    it('sin compras no muestra nada', async () => {
+      await crearComponente({ id: '5', articulo: articuloGuardado({ ultimaCompra: null }) });
+
+      expect(el().querySelector('.ultima-compra')).toBeNull();
+    });
+
+    it('el Vendedor no la ve', async () => {
+      await crearComponente({ dueno: false, id: '5', articulo: articuloGuardado({ ultimaCompra }) });
+
+      expect(el().querySelector('.ultima-compra')).toBeNull();
+    });
+  });
+
   describe('Vendedor', () => {
     it('ve el artículo en solo lectura: campos deshabilitados y sin botón Guardar', async () => {
       await crearComponente({ dueno: false, id: '5' });

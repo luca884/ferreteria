@@ -81,6 +81,9 @@ class ArticuloServiceAjustesTest {
     @Mock
     DolarDePrecios dolarDePrecios;
 
+    @Mock
+    com.ferreteria.catalogo.api.UltimasCompras ultimasCompras;
+
     private static ValidatorFactory fabricaDeValidadores;
 
     ArticuloService service;
@@ -100,7 +103,7 @@ class ArticuloServiceAjustesTest {
         TenantContext.setCurrentFerreteriaId(FERRETERIA);
         service = new ArticuloService(articuloRepository, rubroRepository, proveedorRepository,
                 historialPrecioRepository, configuracionPreciosService, dolarDePrecios,
-                fabricaDeValidadores.getValidator());
+                fabricaDeValidadores.getValidator(), ultimasCompras);
     }
 
     @AfterEach

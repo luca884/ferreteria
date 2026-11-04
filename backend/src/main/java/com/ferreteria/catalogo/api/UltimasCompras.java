@@ -16,7 +16,10 @@ public interface UltimasCompras {
      */
     Map<Long, UltimaCompra> deLosArticulos(Collection<Long> articuloIds);
 
-    /** Fecha del comprobante y nombre del proveedor tal como quedo en la compra. */
-    record UltimaCompra(LocalDate fecha, String proveedor) {
+    /**
+     * Id de la compra, texto de su comprobante («Factura A 00013-00605684»), fecha del comprobante y nombre del
+     * proveedor tal como quedo en la compra.
+     */
+    record UltimaCompra(Long compraId, String comprobante, LocalDate fecha, String proveedor) {
     }
 }
