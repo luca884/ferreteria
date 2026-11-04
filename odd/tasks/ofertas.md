@@ -51,3 +51,4 @@ Restricciones: reglas de arquitectura de `CLAUDE.md` (tenant solo del JWT, `*Sco
   3. Con un monto mayor o igual al precio normal, el mensaje dice «tiene que ser menor al precio normal», aunque el precio quedaría en 0 o menos. Fuera de dominio; no se aplica.
   4. Con un precio fijo de más de 2 decimales, la vista previa redondea y el backend da 400. No se aplica.
   5. La casilla dice «Solo en oferta» y la spec, «En oferta». Queda «Solo en oferta», porque se lee mejor como filtro.
+- L6 (2026-11-04) Luca confirma los supuestos de S1: «sí, confirmo».
