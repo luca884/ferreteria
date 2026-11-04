@@ -405,11 +405,11 @@ public interface ArticuloRepository extends TenantScopedRepository<Articulo, Lon
      * Los articulos activos con stock menor al minimo (y minimo cargado, mayor a cero), en el orden pedido: DESCRIPCION,
      * CODIGO, RUBRO o PROVEEDOR. Sin rubro o sin proveedor van al final; el desempate es la descripcion. Rubro y
      * proveedor se unen por la ferreteria del articulo. Filas (id, codigo, descripcion, rubro, proveedor, costo, moneda,
-     * unidad, stock, minimo).
+     * unidad, stock, minimo, codigo del proveedor).
      */
     @Query(nativeQuery = true, value = """
             select a.id, a.codigo_interno, a.descripcion, r.nombre, p.nombre, a.costo, a.moneda, a.unidad,
-                   a.stock_actual, a.stock_minimo
+                   a.stock_actual, a.stock_minimo, a.codigo_proveedor
             from articulo a
             left join rubro r on r.id = a.rubro_id and r.ferreteria_id = a.ferreteria_id
             left join proveedor p on p.id = a.proveedor_id and p.ferreteria_id = a.ferreteria_id
@@ -426,9 +426,9 @@ public interface ArticuloRepository extends TenantScopedRepository<Articulo, Lon
     /** Los articulos de la ferreteria del request bajo el stock minimo, en ese orden (CU-09, G72). */
     default List<ArticuloBajoMinimo> bajoMinimoScoped(OrdenBajoMinimo orden) {
         return bajoMinimo(TenantContext.requireFerreteriaId(), orden.name()).stream()
-                .map(f -> ArticuloBajoMinimo.de((Long) f[0], (String) f[1], (String) f[2], (String) f[3],
-                        (String) f[4], (BigDecimal) f[5], (String) f[6], (String) f[7], (BigDecimal) f[8],
-                        (BigDecimal) f[9]))
+                .map(f -> ArticuloBajoMinimo.de((Long) f[0], (String) f[1], (String) f[10], (String) f[2],
+                        (String) f[3], (String) f[4], (BigDecimal) f[5], (String) f[6], (String) f[7],
+                        (BigDecimal) f[8], (BigDecimal) f[9]))
                 .toList();
     }
 

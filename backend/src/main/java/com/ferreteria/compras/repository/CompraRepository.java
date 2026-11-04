@@ -10,6 +10,8 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.time.LocalDate;
+import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 
 public interface CompraRepository extends TenantScopedRepository<Compra, Long> {
@@ -41,5 +43,23 @@ public interface CompraRepository extends TenantScopedRepository<Compra, Long> {
 
     default Page<Compra> buscarScoped(Long proveedorId, LocalDate desde, LocalDate hasta, Pageable pageable) {
         return buscar(TenantContext.requireFerreteriaId(), proveedorId, desde, hasta, pageable);
+    }
+
+    /**
+     * Cada compra de esos articulos en la ferreteria, la mas nueva primero por articulo (fecha del comprobante y, a
+     * igual fecha, orden de carga). Filas (articulo_id, fecha, proveedor_nombre).
+     */
+    @Query(nativeQuery = true, value = """
+            select ic.articulo_id, c.fecha, c.proveedor_nombre
+            from item_compra ic
+            join compra c on c.id = ic.compra_id and c.ferreteria_id = ic.ferreteria_id
+            where ic.ferreteria_id = :fid and ic.articulo_id in (:articulos)
+            order by ic.articulo_id, c.fecha desc, c.registrada desc, c.id desc
+            """)
+    List<Object[]> comprasDe(@Param("fid") Long ferreteriaId, @Param("articulos") Collection<Long> articuloIds);
+
+    /** Las compras de esos articulos en la ferreteria del request; ver {@link #comprasDe}. */
+    default List<Object[]> comprasDeScoped(Collection<Long> articuloIds) {
+        return comprasDe(TenantContext.requireFerreteriaId(), articuloIds);
     }
 }

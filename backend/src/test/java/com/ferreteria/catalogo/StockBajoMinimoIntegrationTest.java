@@ -26,6 +26,7 @@ class StockBajoMinimoIntegrationTest extends AjustesTestBase {
     void sembrar() throws Exception {
         a = ferreteria("30-79091001-1", "Minimo A");
         b = ferreteria("30-79091002-2", "Minimo B");
+        borrarCompras(a, b);
         borrarDatosDe(a, b);
         duenoA = login(usuario(a, "dueno-minimo-a@test.local", "DUENO"));
         usuario(a, "vendedor-minimo-a@test.local", "VENDEDOR");
@@ -48,7 +49,97 @@ class StockBajoMinimoIntegrationTest extends AjustesTestBase {
 
     @AfterEach
     void limpiar() {
+        borrarCompras(a, b);
         borrarDatosDe(a, b);
+    }
+
+    private void borrarCompras(Long... ferreterias) {
+        for (Long id : ferreterias) {
+            jdbc.update("delete from item_compra where ferreteria_id = ?", id);
+            jdbc.update("delete from compra where ferreteria_id = ?", id);
+        }
+    }
+
+    private Long idDe(Long ferreteriaId, String codigo) {
+        return jdbc.queryForObject("select id from articulo where ferreteria_id = ? and codigo_interno = ?", Long.class,
+                ferreteriaId, codigo);
+    }
+
+    /** Una compra (factura A) con un renglón por artículo, cargada por SQL con la fecha del comprobante. */
+    private void compra(Long ferreteriaId, Long proveedorId, String proveedorNombre, long numero, String fecha,
+                        Long... articulos) {
+        Long usuario = usuarioDe(ferreteriaId);
+        jdbc.update("insert into compra (ferreteria_id, proveedor_id, proveedor_nombre, tipo, punto_venta, numero, fecha,"
+                + " moneda, neto, clave_idempotencia, usuario_id) values (?, ?, ?, 'FA', 1, ?, ?, 'ARS', 100, ?, ?)",
+                ferreteriaId, proveedorId, proveedorNombre, numero, java.sql.Date.valueOf(fecha),
+                java.util.UUID.randomUUID().toString(), usuario);
+        Long compraId = jdbc.queryForObject("select id from compra where ferreteria_id = ? and numero = ? and proveedor_id = ?",
+                Long.class, ferreteriaId, numero, proveedorId);
+        int renglon = 1;
+        for (Long articulo : articulos) {
+            jdbc.update("insert into item_compra (ferreteria_id, compra_id, renglon, articulo_id, codigo_interno, descripcion,"
+                    + " unidad, cantidad, costo_unitario, subtotal, costo_anterior, precio_anterior, precio_nuevo)"
+                    + " values (?, ?, ?, ?, 'X', 'X', 'UNIDAD', 1, 100, 100, 100, 160, 160)",
+                    ferreteriaId, compraId, renglon++, articulo);
+        }
+    }
+
+    private Long usuarioDe(Long ferreteriaId) {
+        return jdbc.queryForObject("select min(id) from usuario where ferreteria_id = ?", Long.class, ferreteriaId);
+    }
+
+    @Test
+    @DisplayName("bloque 2, S5: cada fila trae el codigo del proveedor del articulo (null si no tiene)")
+    void codigoDelProveedor() throws Exception {
+        jdbc.update("update articulo set codigo_proveedor = 'BS-4471' where id = ?", idDe(a, "B-002"));
+
+        JsonNode filas = getJson(URL, duenoA);
+
+        assertThat(filas.get(2).get("codigoInterno").asText()).isEqualTo("B-002");
+        assertThat(filas.get(2).get("codigoProveedor").asText()).isEqualTo("BS-4471");
+        assertThat(filas.get(0).get("codigoProveedor").isNull()).isTrue();
+    }
+
+    @Test
+    @DisplayName("bloque 2, S6: cada fila trae la fecha y el proveedor de la ultima compra del articulo; sin compras, null")
+    void ultimaCompra() throws Exception {
+        Long sur = jdbc.queryForObject("select id from proveedor where ferreteria_id = ? and nombre = 'Bulonera Sur'",
+                Long.class, a);
+        Long norte = jdbc.queryForObject("select id from proveedor where ferreteria_id = ? and nombre = 'Andina Norte'",
+                Long.class, a);
+        Long tuerca = idDe(a, "B-002");
+        Long cable = idDe(a, "A-001");
+        compra(a, sur, "Bulonera Sur", 10, "2026-09-01", tuerca, cable);
+        compra(a, norte, "Andina Norte", 11, "2026-10-12", tuerca);
+        // Cargada despues pero con un comprobante mas viejo: la ultima es la de fecha mas nueva.
+        compra(a, sur, "Bulonera Sur", 12, "2026-08-20", tuerca);
+
+        JsonNode filas = getJson(URL, duenoA);
+
+        JsonNode filaTuerca = filas.get(2);
+        assertThat(filaTuerca.get("codigoInterno").asText()).isEqualTo("B-002");
+        assertThat(filaTuerca.get("ultimaCompraFecha").asText()).isEqualTo("2026-10-12");
+        assertThat(filaTuerca.get("ultimaCompraProveedor").asText()).isEqualTo("Andina Norte");
+        JsonNode filaCable = filas.get(1);
+        assertThat(filaCable.get("ultimaCompraFecha").asText()).isEqualTo("2026-09-01");
+        assertThat(filaCable.get("ultimaCompraProveedor").asText()).isEqualTo("Bulonera Sur");
+        JsonNode arandela = filas.get(0);
+        assertThat(arandela.get("ultimaCompraFecha").isNull()).isTrue();
+        assertThat(arandela.get("ultimaCompraProveedor").isNull()).isTrue();
+    }
+
+    @Test
+    @DisplayName("bloque 2, S6: la ultima compra sale solo de las compras de la ferreteria que pide")
+    void ultimaCompraAislada() throws Exception {
+        Long ajeno = idDe(b, "G-007");
+        Long proveedorB = proveedor(b, "Proveedor de B");
+        compra(b, proveedorB, "Proveedor de B", 20, "2026-10-30", ajeno);
+
+        JsonNode deA = getJson(URL, duenoA);
+        JsonNode deB = getJson(URL, login("dueno-minimo-b@test.local"));
+
+        assertThat(deA.findValues("ultimaCompraProveedor")).isNotEmpty().allMatch(JsonNode::isNull);
+        assertThat(deB.get(0).get("ultimaCompraProveedor").asText()).isEqualTo("Proveedor de B");
     }
 
     private Long cargar(Long ferreteriaId, String codigo, String descripcion, String unidad, String stock, String minimo,
