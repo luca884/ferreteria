@@ -85,3 +85,15 @@ Restricciones: reglas de arquitectura de `CLAUDE.md` (tenant solo del JWT, `*Sco
   - **Pendiente:** el resultado del odd-verifier (items 1 y 3).
 - L10 (2026-11-04) Luca, textual: "dale, ajustá el IVA a 2 decimales" — El casillero del IVA del desglose se muestra con 2 decimales (`desglose-precio.ts`). El cálculo y los casos compartidos siguen con 4 decimales en los pasos intermedios, y los demás pasos se muestran igual que antes. RED en `desglose-precio.spec.ts` (el IVA de la soldadora esperado «$ 387.663,81»); se actualizaron 3 expectativas viejas que fijaban el IVA con 4 decimales. GREEN: frontend 154 archivos, 3720/3720. En la app, la soldadora muestra IVA «$ 354.023,56».
 - L11 (2026-11-04) Luca, textual: "dale, pasalos todos a 2 decimales" — Todos los casilleros del desglose se muestran con 2 decimales (`desglose-precio.ts` usa el formato de precio por defecto). El cálculo y los casos compartidos no cambian. RED: 3 expectativas pasadas a 2 decimales (margen «$ 1.144,85» y paso en dólares «US$ 8,81»). GREEN: frontend 154 archivos, 3720/3720. En la app se vio solo la soldadora (L10); el resto lo cubren los specs.
+- L12 (2026-11-04) odd-verifier (opus) sobre `214b3cf`: **FAIL, 1 blocker.**
+  - **B1.** La línea del IVA de una Factura A con todos los renglones al 21 % (`IVA 21% X`, con X = suma de netos × 21 %) se lee como recargo «IVA 21 %», y el control da CUADRA. Al confirmar, el IVA entra en el costo real y el precio lo vuelve a sumar (con costo 100, el precio pasa de 157,30 a 190,34). Lo mismo pasa con una percepción calculada sobre el neto. Causa: la regla de S6 («su importe es ese % de la suma de los netos») deja pasar los impuestos (`FacturaDePdf.java:214-233`). Probes: `FacturaDePdfProbeTest` y `VerificadorCu13ProbeIntegrationTest`, en el scratch del verificador (`verif-R3gC/head`).
+  - **Advisories:**
+    - A1: un descuento impreso en positivo se toma como recargo positivo.
+    - A2: una bonificación sin «%» deja el renglón sin leer.
+    - A3: con «Inicio de Act.» (sin «ACTIV») toma esa fecha.
+    - A4: el formato de ARCA en línea («Punto de Venta: 00002 Comp. Nro: 00000123», sin guion) no da punto de venta ni número.
+    - A5: `fijarRecargosDeCosto*` solo se usan en tests, y hay dos javadocs apilados en `Articulo.java:529-538`.
+    - A6: `obtener` consulta la última compra también para el Vendedor (no se filtra nada).
+    - A7: el costo unitario se redondea a 2 decimales, como ya pasaba antes.
+  - **Lo que dio bien:** precios sin recargos idénticos (20.000 casos al azar), V46 sobre datos de V45, idempotencia, aislamiento, `ultimaCompra` y la ruta.
+  - **Próximo paso:** decisión de Luca sobre B1 y una tanda de corrección (B1, A1, A3, A4 y los probes como tests de regresión).
