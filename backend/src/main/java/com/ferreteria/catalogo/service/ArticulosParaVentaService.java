@@ -6,6 +6,7 @@ import com.ferreteria.catalogo.model.Articulo;
 import com.ferreteria.catalogo.model.Moneda;
 import com.ferreteria.catalogo.model.Unidad;
 import com.ferreteria.catalogo.repository.ArticuloRepository;
+import com.ferreteria.common.HoraArgentina;
 import com.ferreteria.cotizacion.api.DolarDePrecios;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
@@ -84,7 +85,8 @@ public class ArticulosParaVentaService implements ArticulosParaVenta {
                 articulo.getDescripcion(),
                 articulo.getUnidad().name(),
                 articulo.getUnidad() != Unidad.UNIDAD,
-                articulo.getPrecioFinal(),
+                // Ofertas (S2): se vende al precio de oferta vigente hoy; si no hay, al normal.
+                articulo.precioVigenteEl(HoraArgentina.hoy()),
                 articulo.getAlicuotaIva().name(),
                 articulo.getAlicuotaIva().porcentaje(),
                 articulo.isActivo(),

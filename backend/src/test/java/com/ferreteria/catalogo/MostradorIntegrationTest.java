@@ -150,7 +150,7 @@ class MostradorIntegrationTest extends IntegrationTestBase {
             JsonNode a = r.get("items").get(0);
             assertThat(campos(a)).containsExactlyInAnyOrder("id", "codigoInterno", "codigoBarras", "codigoProveedor",
                     "descripcion", "precioFinal", "unidad", "stockActual", "stockMinimo", "ubicacion", "activo",
-                    "costoAl");
+                    "costoAl", "enOferta", "precioNormal");
             assertThat(campos(a)).doesNotContain("costo", "margen", "margenPorcentaje", "margenPropio",
                     "precioListaProveedor", "alicuotaIva", "rubro", "rubroId", "proveedor", "proveedorId");
             assertThat(a.get("activo").asBoolean()).isTrue();
