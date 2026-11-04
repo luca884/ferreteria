@@ -177,11 +177,11 @@ describe('Articulos', () => {
     expect(texto('.stock')).toBe('12,5 metros');
   });
 
-  it('la columna Costo al dice desde cuándo está al día el costo (GDS-05), para el Dueño y el Vendedor', async () => {
+  it('la columna «Última actualización» dice desde cuándo está al día el costo (GDS-05), para el Dueño y el Vendedor', async () => {
     const primera = pagina([articulo(1, { costoAl: '2026-05-20' }), articulo(2, { costoAl: null })]);
     await crearComponente(true, primera);
 
-    expect(Array.from(el().querySelectorAll('thead th')).map((th) => th.textContent!.trim())).toContain('Costo al');
+    expect(Array.from(el().querySelectorAll('thead th')).map((th) => th.textContent!.trim())).toContain('Última actualización');
     expect(texto('.costo-al')).toBe('20/05/2026');
     expect(texto('.costo-al', 1)).toBe('—');
 

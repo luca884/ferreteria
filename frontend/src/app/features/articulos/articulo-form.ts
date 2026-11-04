@@ -182,6 +182,8 @@ export class ArticuloForm implements OnInit {
   /** El artículo tal como lo devolvió el backend; null en el alta. */
   protected readonly articulo = signal<Articulo | null>(null);
   protected readonly cargando = signal(true);
+  /** El código interno con el que arrancó el alta (último cargado más uno); null si no hubo sugerencia. */
+  protected readonly codigoSugerido = signal<string | null>(null);
   protected readonly guardando = signal(false);
   protected readonly error = signal<string | null>(null);
   protected readonly aviso = signal<string | null>(null);
@@ -749,8 +751,13 @@ export class ArticuloForm implements OnInit {
         : of(null),
       // Sin cotización tampoco: el precio en dólares no se calcula y el backend valida al guardar.
       cotizacion: this.cotizaciones.obtener().pipe(catchError(() => of(null))),
+      // Solo en el alta del Dueño: el código siguiente al último cargado. Si falla, el alta sigue con el campo vacío.
+      codigoSugerido:
+        this.id === null && this.auth.esDueno()
+          ? this.service.codigoSiguiente().pipe(catchError(() => of(null)))
+          : of(null),
     }).subscribe({
-      next: ({ rubros, proveedores, articulo, desglose, configuracion, cotizacion }) => {
+      next: ({ rubros, proveedores, articulo, desglose, configuracion, cotizacion, codigoSugerido }) => {
         this.rubros.set(rubros);
         this.proveedores.set(proveedores.filter((p) => p.activo));
         this.configuracion.set(configuracion);
@@ -760,6 +767,10 @@ export class ArticuloForm implements OnInit {
           this.llenarFormulario(articulo);
           this.desglose.set(desglose);
           this.cargarAjustes(articulo, desglose);
+        }
+        if (codigoSugerido) {
+          this.codigoSugerido.set(codigoSugerido);
+          this.form.controls.codigoInterno.setValue(codigoSugerido);
         }
         if (!this.auth.esDueno()) this.form.disable();
         this.cargando.set(false);

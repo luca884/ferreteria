@@ -1,6 +1,6 @@
 import { HttpClient, HttpParams, HttpResponse } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
-import { Observable } from 'rxjs';
+import { Observable, map } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import { PageResponse } from '../../core/api/page.models';
 import {
@@ -50,6 +50,13 @@ export class ArticulosService {
 
   crear(request: ArticuloRequest): Observable<Articulo> {
     return this.http.post<Articulo>(this.url, request);
+  }
+
+  /** El código interno sugerido para el alta (último cargado a mano más uno); null si no hay sugerencia. Solo el Dueño. */
+  codigoSiguiente(): Observable<string | null> {
+    return this.http
+      .get<{ codigo: string | null }>(`${this.url}/codigo-siguiente`)
+      .pipe(map((respuesta) => respuesta.codigo));
   }
 
   actualizar(id: number, request: ArticuloRequest): Observable<Articulo> {

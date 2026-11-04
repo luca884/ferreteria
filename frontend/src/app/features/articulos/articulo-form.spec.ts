@@ -140,6 +140,7 @@ describe('ArticuloForm', () => {
     desglose: ReturnType<typeof vi.fn>;
     guardarAjustes: ReturnType<typeof vi.fn>;
     configuracionPrecios: ReturnType<typeof vi.fn>;
+    codigoSiguiente: ReturnType<typeof vi.fn>;
   };
   let navigate: ReturnType<typeof vi.spyOn>;
 
@@ -156,6 +157,8 @@ describe('ArticuloForm', () => {
       sinConfiguracion?: boolean;
       /** Lo que responde GET /cotizacion; 'falla' si no se puede leer. */
       cotizacion?: Cotizacion | 'falla';
+      /** Lo que responde GET /articulos/codigo-siguiente; por defecto, sin sugerencia. */
+      codigoSugerido?: string | null | 'falla';
     } = {},
   ) {
     const {
@@ -165,6 +168,7 @@ describe('ArticuloForm', () => {
       desglose = desgloseSinLista(),
       sinConfiguracion = false,
       cotizacion = cotizacionActiva(),
+      codigoSugerido = null,
     } = opciones;
     servicio = {
       obtener: vi.fn(() =>
@@ -182,6 +186,9 @@ describe('ArticuloForm', () => {
         sinConfiguracion
           ? throwError(() => errorHttp(500, 'Error interno'))
           : of({ margenDefectoPorcentaje: 30, redondeoMultiplo: 10 }),
+      ),
+      codigoSiguiente: vi.fn(() =>
+        codigoSugerido === 'falla' ? throwError(() => errorHttp(500, 'Error interno')) : of(codigoSugerido),
       ),
     };
     await TestBed.configureTestingModule({
@@ -280,6 +287,57 @@ describe('ArticuloForm', () => {
     await escribir('descripcion', 'Tornillo');
     await escribir('costo', '100');
   }
+
+  describe('código interno sugerido (mejoras-ferreteros-bloque-1, S3)', () => {
+    it('el alta arranca con el código siguiente al último cargado y lo explica', async () => {
+      await crearComponente({ codigoSugerido: '003' });
+
+      expect(servicio.codigoSiguiente).toHaveBeenCalledTimes(1);
+      expect(input('codigoInterno').value).toBe('003');
+      expect(el().querySelector('#codigoInterno-sugerido')?.textContent?.trim()).toBe(
+        'Sugerido: el último código cargado más uno. Podés cambiarlo.',
+      );
+      expect(input('codigoInterno').getAttribute('aria-describedby')).toContain('codigoInterno-sugerido');
+    });
+
+    it('se puede cambiar: se guarda el que se escribió', async () => {
+      await crearComponente({ codigoSugerido: '003' });
+
+      await escribir('codigoInterno', 'TAL-1');
+      await escribir('descripcion', 'Taladro');
+      await escribir('costo', '100');
+      await enviar();
+
+      expect(servicio.crear).toHaveBeenCalledWith(expect.objectContaining({ codigoInterno: 'TAL-1' }));
+    });
+
+    it('sin sugerencia el código arranca vacío y no hay pista', async () => {
+      await crearComponente({ codigoSugerido: null });
+
+      expect(input('codigoInterno').value).toBe('');
+      expect(el().querySelector('#codigoInterno-sugerido')).toBeNull();
+    });
+
+    it('si falla el pedido de la sugerencia, el alta funciona igual', async () => {
+      await crearComponente({ codigoSugerido: 'falla' });
+
+      expect(el().querySelector('form')).not.toBeNull();
+      expect(input('codigoInterno').value).toBe('');
+    });
+
+    it('al editar un artículo no se pide sugerencia', async () => {
+      await crearComponente({ id: '7', codigoSugerido: '003' });
+
+      expect(servicio.codigoSiguiente).not.toHaveBeenCalled();
+      expect(el().querySelector('#codigoInterno-sugerido')).toBeNull();
+    });
+
+    it('el Vendedor no da de alta: no se pide sugerencia', async () => {
+      await crearComponente({ dueno: false, codigoSugerido: '003' });
+
+      expect(servicio.codigoSiguiente).not.toHaveBeenCalled();
+    });
+  });
 
   describe('alta', () => {
     it('arranca con IVA 21 %, unidad Unidad, stock mínimo 0 y sin datos de solo lectura', async () => {

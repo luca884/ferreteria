@@ -98,9 +98,16 @@
           spellcheck="false"
           placeholder="Ej: TOR-001…"
           [attr.aria-invalid]="invalido('codigoInterno') ? 'true' : null"
-          [attr.aria-describedby]="describir('codigoInterno')"
+          [attr.aria-describedby]="
+            codigoSugerido() ? describir('codigoInterno', 'codigoInterno-sugerido') : describir('codigoInterno')
+          "
           (input)="limpiarErrorDe('codigoInterno')"
         />
+        @if (codigoSugerido()) {
+          <span id="codigoInterno-sugerido" class="pista">
+            Sugerido: el último código cargado más uno. Podés cambiarlo.
+          </span>
+        }
         @if (errorLocal('codigoInterno')) {
           <span id="codigoInterno-error" class="campo-error">
             {{
