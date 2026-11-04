@@ -37,3 +37,16 @@ Restricciones: reglas de arquitectura de `CLAUDE.md` (tenant solo del JWT, `*Sco
   - Caja: ventas en efectivo $ 24.393,60. Ventas → detalle de la 11: mismas líneas y «Efectivo $ 24.393,60».
   - Observación (ya pasaba con el recargo): en la factura el renglón muestra el precio unitario sin el ajuste ($ 13.552,00) y el importe con él ($ 24.393,60); el subtotal y la línea del descuento explican la diferencia.
   - Base local: «Efectivo» vuelve a «Sin descuento»; quedan la venta 11 y la caja del 04/11 abierta. Backend, front y MySQL detenidos.
+- L5 (2026-11-04) `odd-verifier` (opus) sobre `5a1b3ac..cab3461`, de S1 a S4: **pass, sin blockers**.
+  - Corrió en clones de scratch: 295 tests de verificación y probes, 190 de regresión de lectores (anulación, caja, cierre, NC, reportes, Consumidor Final, facturada, mixto, recargo, oferta), 700/700 en los specs del front que tocó la feature y `ng build` en HEAD y en el baseline.
+  - Paridad Java↔TS: 3000 casos de `deCobro` y 2000 de `repartir` con signo dan igual, con espejo exacto.
+  - Sus probes se commitearon como regresión: `DescuentoEfectivoRegresionIntegrationTest` (10/10: reintento idempotente; mixto neto cero y negativo; reportes; anulación interna; mixto con cuenta corriente; cuenta corriente en 0; el 422 no toca la fila; tope del Vendedor; oferta; Factura A con dos alícuotas), `dialogo-cobro-descuento-regresion.spec.ts` (3/3) y `venta-imprimible-descuento-regresion.spec.ts` (2/2).
+  - No se commitearon: el probe de paridad (genera un JSON de 266 kB; la paridad ya la cubren `casos-totales.json` y las semillas fijas de cada lado) y el caso de 99,99 % sobre $ 0,01, que es fuera de dominio y solo observaba.
+
+  Advisories:
+  1. Los supuestos de S1 y S3 están pendientes de confirmación de Luca.
+  2. V45 no tiene nota `-- Rollback:`. No se agrega en el SQL porque ya corrió en la base local y cambiarlo rompe el checksum de Flyway. Rollback: borrar `ck_pago_recargo_v45`, `ck_forma_pago_recargo_o_descuento`, `ck_forma_pago_descuento` y la columna `descuento_porcentaje`. Los CHECK `>= 0` de V13 solo se pueden reponer si no hay ventas con recargo negativo.
+  3. Un PUT con solo `descuentoPorcentaje` sobre una forma con recargo da 422, porque el recargo se conserva. El front siempre manda los dos. Queda fijado por el test de regresión.
+  4. En el mixto se ve solo el neto: −10 y +10 no muestran línea, y −4 y +6 muestran «Recargo $ 2,00». Coherente con S2.
+  5. Ya pasaban: el aviso CSS de `dialogo-cobro` (4,64 → 4,68 kB); en la Factura B/C el precio unitario va sin el ajuste; la Factura A no muestra la línea del ajuste (tampoco el recargo). Fuera de dominio: con 99,99 % un importe chico queda en $ 0,00.
+  6. El diálogo usa «−» (U+2212) y la hoja y la factura, «-» ASCII como la línea «Descuento» que ya existía.
