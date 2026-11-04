@@ -26,12 +26,13 @@ function entradaDe(caso: Caso): EntradaCadena {
     cotizacion: 'cotizacion' in caso ? caso.cotizacion : null,
     margen: caso.margen,
     multiplo: caso.multiplo,
+    recargos: 'recargos' in caso ? caso.recargos : undefined,
   };
 }
 
 describe('cadena de precio', () => {
   it('el JSON compartido trae los casos de R-219, R-209, R-212 y R-210', () => {
-    expect(datos.casos.length).toBe(21);
+    expect(datos.casos.length).toBe(24);
     expect(datos.casos.filter((c) => c.moneda === 'USD').length).toBeGreaterThanOrEqual(2);
     expect(datos.casos.filter((c) => !c.coincide).length).toBeGreaterThanOrEqual(3);
   });
@@ -85,6 +86,31 @@ describe('cadena de precio', () => {
       expect(cadena.pasos.map((p) => [p.tipo, p.importe])).toEqual(
         caso.pasos.map((p) => [p.tipo, p.importe]),
       );
+    });
+
+    it('con recargos del costo (CU-13): un paso por recargo con su nombre y el costo real, de donde parte el margen', () => {
+      const caso = datos.casos.find((c) => c.nombre.includes('235971,56'))!;
+      const cadena = cadenaDePrecio(entradaDe(caso));
+
+      expect(cadena.pasos.map((p) => [p.tipo, p.porcentaje, p.importe])).toEqual([
+        ['LISTA', null, '235971.5600'],
+        ['COSTO', null, '235971.56'],
+        ['RECARGO', '4.44', '10477.14'],
+        ['COSTO_REAL', null, '246448.70'],
+        ['MARGEN', '30', '320383.3100'],
+        ['IVA', '21', '387663.8051'],
+        ['REDONDEO', null, '10'],
+        ['PRECIO_FINAL', null, '387670.00'],
+      ]);
+      expect(cadena.pasos.find((p) => p.tipo === 'RECARGO')?.nombre).toBe('Embalaje y carga');
+    });
+
+    it('un recargo ilegible deja la cadena en el costo, sin precio', () => {
+      const caso = datos.casos[0];
+      const cadena = cadenaDePrecio({ ...entradaDe(caso), recargos: [{ nombre: 'x', porcentaje: 'abc' }] });
+
+      expect(cadena.precio).toBeNull();
+      expect(cadena.pasos.at(-1)?.tipo).toBe('COSTO');
     });
 
     it('el 333,33 con -10 muestra 299,9970 en el paso del ajuste y 300,00 de costo', () => {

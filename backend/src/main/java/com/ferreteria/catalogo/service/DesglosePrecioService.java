@@ -76,7 +76,7 @@ public class DesglosePrecioService {
                 configuracion.margenDefectoPorcentaje(),
                 configuracion.redondeoMultiplo(),
                 articulo.getPrecioFinal());
-        CadenaDePrecio cadena = CadenaDePrecio.de(entrada);
+        CadenaDePrecio cadena = CadenaDePrecio.de(entrada, articulo.getRecargosCosto());
 
         Bonificaciones bonificaciones = tieneLista ? articulo.bonificacionesGuardadas() : Bonificaciones.NINGUNA;
         Ajustes ajustes = tieneLista ? articulo.getAjustes() : Ajustes.NINGUNO;
@@ -101,6 +101,7 @@ public class DesglosePrecioService {
                 configuracion.redondeoMultiplo(),
                 articulo.getPrecioFinal(),
                 articulo.isPrecioManual(),
-                articulo.getAjustesPrecio().lista());
+                articulo.getAjustesPrecio().lista(),
+                articulo.getRecargosCosto().lista());
     }
 }

@@ -42,10 +42,19 @@ class CasosCompartidosCadenaTest {
         return valores;
     }
 
+    /** Los recargos del costo (CU-13) de un caso; sin la clave, ninguno. */
+    private static RecargosDeCosto recargos(JsonNode caso) {
+        List<RecargoCosto> lista = new ArrayList<>();
+        for (JsonNode recargo : caso.path("recargos")) {
+            lista.add(new RecargoCosto(recargo.get("nombre").asText(), bd(recargo.get("porcentaje"))));
+        }
+        return new RecargosDeCosto(lista);
+    }
+
     @Test
     @DisplayName("el JSON trae los siete casos de R-219, los de R-209 y los de R-212, con dolares incluidos")
     void hayCasos() {
-        assertThat(casos.size()).isGreaterThanOrEqualTo(20);
+        assertThat(casos.size()).isGreaterThanOrEqualTo(24);
         long enDolares = 0;
         for (JsonNode caso : casos) {
             if (caso.get("moneda").asText().equals("USD")) {
@@ -85,8 +94,9 @@ class CasosCompartidosCadenaTest {
                 laBonificacion, losAjustes);
             // El costo guardado puede ser distinto del de la lista (a mano o por un masivo): el precio sale del guardado.
             BigDecimal costoGuardado = caso.has("costoGuardado") ? bd(caso.get("costoGuardado")) : costo;
-            BigDecimal precio = PrecioCalculator.precioFinal(
-                costoGuardado, bd(caso.get("margen")), alicuota, bd(caso.get("multiplo")), cotizacion);
+            RecargosDeCosto recargos = recargos(caso);
+            BigDecimal precio = PrecioCalculator.precioFinal(costoGuardado, recargos, bd(caso.get("margen")), alicuota,
+                bd(caso.get("multiplo")), cotizacion, null);
 
             assertThat(costo).as(nombre + ": costo").isEqualTo(bd(caso.get("costo")));
             assertThat(precio).as(nombre + ": precio").isEqualTo(bd(caso.get("precio")));
@@ -94,7 +104,7 @@ class CasosCompartidosCadenaTest {
             CadenaDePrecio cadena = CadenaDePrecio.de(new EntradaCadena(true, bd(caso.get("lista")),
                 caso.get("incluyeIva").asBoolean(), alicuota, laBonificacion, losAjustes, costoGuardado,
                 usd ? Moneda.USD : Moneda.ARS, usd ? cotizacion : null, false, bd(caso.get("margen")), null, null,
-                bd(caso.get("multiplo")), precio));
+                bd(caso.get("multiplo")), precio), recargos);
 
             JsonNode esperados = caso.get("pasos");
             assertThat(cadena.pasos()).as(nombre + ": cantidad de pasos").hasSize(esperados.size());

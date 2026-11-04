@@ -12,6 +12,10 @@ public enum TipoPaso {
     AJUSTE,
     /** El costo guardado en el articulo. */
     COSTO,
+    /** Un recargo del costo (CU-13); el importe es lo que suma al costo (negativo si descuenta) y el porcentaje, el del recargo. */
+    RECARGO,
+    /** El costo con todos sus recargos (CU-13): de este costo parten la cotizacion, el margen y el IVA. */
+    COSTO_REAL,
     /** El costo pasado a pesos con la cotizacion (solo articulos en dolares). */
     COTIZACION,
     MARGEN,

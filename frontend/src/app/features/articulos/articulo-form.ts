@@ -20,7 +20,7 @@ import { Cotizacion } from '../../core/cotizacion/cotizacion.models';
 import { CotizacionService } from '../../core/cotizacion/cotizacion.service';
 import { MontoPipe, formatearCotizacion, formatearTexto } from '../../core/formato/monto';
 import { igualesPorValor } from '../../core/formato/cadena-de-precio';
-import { margenEfectivo, precioFinal } from '../../core/formato/precio-final';
+import { RecargoDeCosto, costoRealExacto, exacto, margenEfectivo, precioFinal } from '../../core/formato/precio-final';
 import { cantidadConUnidad } from '../../core/formato/unidad';
 import { BarraAcciones } from '../../shared/barra-acciones';
 import { Confirmacion } from '../../shared/confirmacion';
@@ -33,6 +33,7 @@ import {
   ALICUOTAS_IVA,
   ALICUOTA_IVA_LABELS,
   AjustePrecio,
+  RecargoCosto,
   AjusteStockResponse,
   AlicuotaIva,
   Articulo,
@@ -78,6 +79,12 @@ function textoONull(valor: string): string | null {
 /** El tope del importe del backend (`TopeDeImporte`): 13 dígitos enteros. */
 const PRECIO_MAXIMO_EXCLUSIVO = 10_000_000_000_000;
 const NOMBRE_AJUSTE_MAXIMO = 40;
+const NOMBRE_RECARGO_MAXIMO = 40;
+/** Lo que valida el backend de los recargos del costo (CU-13): hasta 5, nombre de 1 a 40, % de -99,99 a 99,99 sin 0. */
+export const MAXIMO_RECARGOS = 5;
+export const MENSAJE_NOMBRE_RECARGO = 'El nombre del recargo es obligatorio (hasta 40 caracteres).';
+export const MENSAJE_PORCENTAJE_RECARGO = 'El porcentaje del recargo debe estar entre -99,99 y 99,99, y no puede ser 0.';
+export const MENSAJE_DECIMALES_RECARGO = 'El porcentaje del recargo tiene hasta 2 decimales.';
 export const MENSAJE_PRECIO_MANUAL = 'El precio tiene que ser mayor a 0.';
 export const MENSAJE_PRECIO_GRANDE = 'El precio es demasiado grande.';
 
@@ -115,6 +122,33 @@ function filaDeAjuste(ajuste?: AjustePrecio): FilaAjustePrecio {
   });
 }
 
+/** El % de un recargo del costo: de -99,99 a 99,99, distinto de 0 y con hasta 2 decimales. */
+function porcentajeDeRecargoValido(control: AbstractControl<number | null>): ValidationErrors | null {
+  const valor = control.value;
+  if (valor === null || valor === undefined || valor === 0 || valor < -99.99 || valor > 99.99) {
+    return { porcentajeRecargo: MENSAJE_PORCENTAJE_RECARGO };
+  }
+  const decimal = exacto(valor);
+  return decimal && decimal.escala > 2 ? { porcentajeRecargo: MENSAJE_DECIMALES_RECARGO } : null;
+}
+
+type FilaRecargoCosto = FormGroup<{
+  nombre: FormControl<string>;
+  porcentaje: FormControl<number | null>;
+}>;
+
+function filaDeRecargo(recargo?: RecargoCosto): FilaRecargoCosto {
+  return new FormGroup({
+    nombre: new FormControl(recargo?.nombre ?? '', {
+      nonNullable: true,
+      validators: [noVacio, Validators.maxLength(NOMBRE_RECARGO_MAXIMO)],
+    }),
+    porcentaje: new FormControl<number | null>(recargo?.porcentaje ?? null, {
+      validators: [porcentajeDeRecargoValido],
+    }),
+  });
+}
+
 /** Campos del formulario que pueden traer un error del backend (los mismos nombres que el JSON). */
 type CampoArticulo =
   | 'codigoInterno'
@@ -132,7 +166,8 @@ type CampoArticulo =
   | 'stockMinimo';
 
 /** Campos del precio de CU-14 que también pueden traer un error del backend. */
-type CampoPrecio = 'precioFinal' | 'ajustesPrecio';
+type CampoPrecio = 'precioFinal' | 'ajustesPrecio' | 'recargosCosto';
+type CampoDeRecargo = 'nombre' | 'porcentaje';
 type CampoDeAjuste = 'nombre' | 'tipo' | 'valor';
 
 /** Al guardar o cancelar se vuelve al listado con la búsqueda, la página y los inactivos de la dirección. */
@@ -234,6 +269,8 @@ export class ArticuloForm implements OnInit {
     precioFinal: new FormControl<number | null>({ value: null, disabled: true }, [precioManualValido]),
     /** CU-14: los ajustes sobre el precio final, sin límite; el formulario manda siempre la lista entera. */
     ajustesPrecio: new FormArray<FilaAjustePrecio>([]),
+    /** CU-13: los recargos del costo (hasta 5); el formulario manda siempre la lista entera. */
+    recargosCosto: new FormArray<FilaRecargoCosto>([]),
   });
 
   /**
@@ -330,6 +367,29 @@ export class ArticuloForm implements OnInit {
   protected readonly hayAjustesPrecio = computed(() => this.valores().ajustesPrecio.length > 0);
   protected readonly esPrecioManual = computed(() => this.valores().precioManual);
 
+  /** Los recargos del costo que ya se pueden contar: una fila a medio escribir o inválida no entra en la cuenta. */
+  private readonly recargosEnVivo = computed<RecargoDeCosto[]>(() => {
+    const filas = this.form.controls.recargosCosto.controls;
+    return this.valores()
+      .recargosCosto.map((r, i) => ({ nombre: r.nombre.trim(), porcentaje: r.porcentaje, fila: filas[i] }))
+      .filter((r) => r.nombre !== '' && r.fila?.controls.porcentaje.valid)
+      .map(({ nombre, porcentaje }) => ({ nombre, porcentaje }));
+  });
+
+  protected readonly hayRecargosCosto = computed(() => this.valores().recargosCosto.length > 0);
+  protected readonly puedeAgregarRecargo = computed(() => this.valores().recargosCosto.length < MAXIMO_RECARGOS);
+
+  /** «Costo real» con los recargos escritos (el costo más la suma de sus %); null sin recargos o sin costo. */
+  protected readonly costoRealEnVivo = computed(() => {
+    const v = this.valores();
+    const recargos = this.recargosEnVivo();
+    if (recargos.length === 0 || v.costo === null) return null;
+    const real = costoRealExacto(v.costo, recargos);
+    if (!real) return null;
+    const centavos = real.entero.toString().padStart(3, '0');
+    return formatearTexto(`${centavos.slice(0, -2)}.${centavos.slice(-2)}`, v.moneda);
+  });
+
   /** Precio final con lo que hay cargado, con la misma cuenta y redondeo que el backend. */
   protected readonly precioEnVivo = computed(() => {
     const config = this.configuracion();
@@ -343,7 +403,14 @@ export class ArticuloForm implements OnInit {
     );
     // En pesos la cotización vale 1; en dólares es el vigente (null = sin precio).
     const cotizacion = v.moneda === 'USD' ? this.dolarDePrecios() : undefined;
-    return precioFinal(v.costo, margen, v.alicuotaIva, config.redondeoMultiplo, cotizacion);
+    return precioFinal(
+      v.costo,
+      margen,
+      v.alicuotaIva,
+      config.redondeoMultiplo,
+      cotizacion,
+      this.recargosEnVivo(),
+    );
   });
 
   ngOnInit(): void {
@@ -469,6 +536,49 @@ export class ArticuloForm implements OnInit {
     this.filasAjuste()[indice]?.controls.valor.updateValueAndValidity();
     this.limpiarErrorDeFila(indice, 'tipo');
     this.limpiarErrorDeFila(indice, 'valor');
+  }
+
+  protected filasRecargo(): FilaRecargoCosto[] {
+    return this.form.controls.recargosCosto.controls;
+  }
+
+  /** El error del backend de los recargos: es uno solo (`recargosCosto`), sin posición. */
+  protected errorServidorDeRecargos(): string | null {
+    return this.erroresServidor()['recargosCosto'] ?? null;
+  }
+
+  /** Escribir en un recargo borra el error del backend de la lista, que depende de todas las filas. */
+  protected limpiarErrorDeRecargos(): void {
+    this.limpiarErroresDe((clave) => clave === 'recargosCosto');
+  }
+
+  /** El error de validación propio de un campo de una fila de recargos (ya tocado); null si no hay. */
+  protected errorLocalDeRecargo(indice: number, campo: CampoDeRecargo): string | null {
+    const control = this.filasRecargo()[indice]?.controls[campo];
+    if (!control?.touched || !control.invalid) return null;
+    if (campo === 'nombre') return MENSAJE_NOMBRE_RECARGO;
+    return (control.errors?.['porcentajeRecargo'] as string | undefined) ?? null;
+  }
+
+  /** Ids para aria-describedby de un campo de una fila de recargos: su error propio y el del backend, si se ven. */
+  protected describirRecargo(indice: number, campo: CampoDeRecargo): string | null {
+    const ids: string[] = [];
+    if (this.errorLocalDeRecargo(indice, campo)) ids.push(`recargo-costo-${campo}-${indice}-error`);
+    if (this.errorServidorDeRecargos()) ids.push('recargosCosto-error-servidor');
+    return ids.length > 0 ? ids.join(' ') : null;
+  }
+
+  protected agregarRecargo(): void {
+    if (!this.puedeAgregarRecargo()) return;
+    this.form.controls.recargosCosto.push(filaDeRecargo());
+    this.form.markAsDirty();
+    this.limpiarErrorDeRecargos();
+  }
+
+  protected quitarRecargo(indice: number): void {
+    this.form.controls.recargosCosto.removeAt(indice);
+    this.form.markAsDirty();
+    this.limpiarErrorDeRecargos();
   }
 
   /** Error de validación propio visible (el campo ya se tocó). */
@@ -824,6 +934,9 @@ export class ArticuloForm implements OnInit {
     filas.clear();
     for (const ajuste of articulo.ajustesPrecio ?? []) filas.push(filaDeAjuste(ajuste));
     filas.controls.forEach((fila) => fila.controls.valor.updateValueAndValidity());
+    const recargos = this.form.controls.recargosCosto;
+    recargos.clear();
+    for (const recargo of articulo.recargosCosto ?? []) recargos.push(filaDeRecargo(recargo));
   }
 
   private fallarCarga(mensaje: string): void {
@@ -870,6 +983,8 @@ export class ArticuloForm implements OnInit {
         tipo: a.tipo,
         valor: a.valor ?? 0,
       })),
+      // Siempre la lista del formulario (CU-13): una lista vacía borra los recargos.
+      recargosCosto: v.recargosCosto.map((r) => ({ nombre: r.nombre.trim(), porcentaje: r.porcentaje ?? 0 })),
     };
   }
 }

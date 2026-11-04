@@ -223,6 +223,16 @@ public class Articulo {
      * escrito (mayor a 0 y dentro de DECIMAL(15,2), validado antes de tocar nada); con false se libera y se recalcula.
      */
     public Optional<CambioPrecio> actualizar(DatosArticulo datos, PedidoDePrecio pedido, ContextoPrecio ctx) {
+        return actualizar(datos, pedido, null, ctx);
+    }
+
+    /**
+     * Igual que {@link #actualizar(DatosArticulo, PedidoDePrecio, ContextoPrecio)} con los recargos del costo (CU-13)
+     * que pide el Dueño en la ficha: null conserva los de hoy y una lista (aunque este vacia) los reemplaza. Entran
+     * antes de calcular el precio, asi el costo real ya los incluye; con precio manual se guardan y el precio no cambia.
+     */
+    public Optional<CambioPrecio> actualizar(
+            DatosArticulo datos, PedidoDePrecio pedido, RecargosDeCosto recargos, ContextoPrecio ctx) {
         BigDecimal precioManualPedido = Boolean.TRUE.equals(pedido.manual()) ? precioManualValido(pedido.precio()) : null;
         BigDecimal costoAnterior = this.costo;
         BigDecimal precioAnterior = this.precioFinal;
@@ -244,6 +254,9 @@ public class Articulo {
         this.activo = datos.activo();
         if (pedido.ajustes() != null) {
             this.ajustesPrecio = new ArrayList<>(pedido.ajustes().lista());
+        }
+        if (recargos != null) {
+            this.recargosCosto = new ArrayList<>(recargos.lista());
         }
         if (pedido.manual() != null) {
             this.precioManual = pedido.manual();

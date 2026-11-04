@@ -8,10 +8,13 @@ import com.ferreteria.catalogo.model.Articulo;
 import com.ferreteria.catalogo.model.Bonificaciones;
 import com.ferreteria.catalogo.model.ContextoPrecio;
 import com.ferreteria.catalogo.model.DatosArticulo;
+import com.ferreteria.catalogo.model.RecargoCosto;
+import com.ferreteria.catalogo.model.RecargosDeCosto;
 import com.ferreteria.catalogo.model.Unidad;
 import java.lang.reflect.RecordComponent;
 import java.math.BigDecimal;
 import java.util.Arrays;
+import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -87,7 +90,7 @@ class ArticuloResponseTest {
                 "proveedorId", "costo", "moneda", "margenPorcentaje", "alicuotaIva", "precioFinal", "unidad",
                 "stockActual", "stockMinimo", "ubicacion", "activo", "precioListaProveedor");
         assertThat(nombres).endsWith("ajuste1", "ajuste2", "ajuste3", "bonificacion1", "bonificacion2", "bonificacion3",
-                "listaIncluyeIva", "version", "precioManual", "ajustesPrecio", "costoAl", "oferta");
+                "listaIncluyeIva", "version", "precioManual", "ajustesPrecio", "costoAl", "oferta", "recargosCosto");
     }
 
     @Test
@@ -107,5 +110,20 @@ class ArticuloResponseTest {
         assertThat(Arrays.stream(ArticuloRequest.class.getRecordComponents()).map(RecordComponent::getName))
                 .noneMatch(n -> n.matches("ajuste\\d") || n.startsWith("bonificacion") || n.equals("listaIncluyeIva"))
                 .contains("ajustesPrecio");
+    }
+
+    @Test
+    @DisplayName("recargos del costo (CU-13): los dos from los traen; el del Vendedor no tiene ese campo")
+    void recargosDelCosto() {
+        Articulo articulo = articulo();
+        articulo.fijarRecargosDeCosto(new RecargosDeCosto(List.of(new RecargoCosto("Embalaje y carga", bd("4.44")))),
+                new ContextoPrecio(null, bd("30"), bd("10")));
+
+        assertThat(ArticuloResponse.from(articulo).recargosCosto()).containsExactly(new RecargoCosto("Embalaje y carga", bd("4.44")));
+        assertThat(ArticuloResponse.from(articulo, bd("7")).recargosCosto()).hasSize(1);
+        assertThat(ArticuloResponse.from(articulo).conCostoAl(null).recargosCosto()).hasSize(1);
+        assertThat(ArticuloResponse.from(articulo()).recargosCosto()).isEmpty();
+        assertThat(Arrays.stream(ArticuloVendedorResponse.class.getRecordComponents()).map(RecordComponent::getName))
+                .doesNotContain("recargosCosto");
     }
 }

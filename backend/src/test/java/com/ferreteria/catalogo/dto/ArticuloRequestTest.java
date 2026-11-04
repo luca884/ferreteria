@@ -1,6 +1,7 @@
 package com.ferreteria.catalogo.dto;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.ferreteria.catalogo.model.AlicuotaIva;
 import com.ferreteria.catalogo.model.Articulo;
@@ -8,7 +9,11 @@ import com.ferreteria.catalogo.model.ContextoPrecio;
 import com.ferreteria.catalogo.model.DatosArticulo;
 import com.ferreteria.catalogo.model.Moneda;
 import com.ferreteria.catalogo.model.Unidad;
+import com.ferreteria.catalogo.model.RecargoCosto;
+import com.ferreteria.common.exception.DatosInvalidosException;
 import java.math.BigDecimal;
+import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -22,6 +27,11 @@ class ArticuloRequestTest {
     private static ArticuloRequest pedido(Moneda moneda) {
         return new ArticuloRequest("TORN-001", null, null, "Tornillo", null, null, bd("10"), null, null,
                 Unidad.UNIDAD, null, null, null, moneda);
+    }
+
+    private static ArticuloRequest conRecargos(List<RecargoCostoRequest> recargos) {
+        return new ArticuloRequest("TORN-001", null, null, "Tornillo", null, null, bd("10"), null, null,
+                Unidad.UNIDAD, null, null, null, null, null, null, null, null, recargos);
     }
 
     @Test
@@ -81,5 +91,32 @@ class ArticuloRequestTest {
         // 10 x 1,30 x 1,21 = 15,73 -> multiplo de 10: 20
         assertThat(ars.precioFinal()).isEqualByComparingTo("20");
         assertThat(ArticuloResponse.from(enDolares, bd("3")).moneda()).isEqualTo(Moneda.USD);
+    }
+
+    @Test
+    @DisplayName("recargos del costo (CU-13): sin la clave el pedido conserva los de hoy (null); con ella, la lista del pedido")
+    void recargosDelCostoEnElPedido() {
+        ArticuloRequest sinClave = pedido(null);
+        ArticuloRequest conClave = conRecargos(List.of(
+                new RecargoCostoRequest("  Embalaje y carga ", bd("4.44")), new RecargoCostoRequest("Flete", bd("-1.5"))));
+        ArticuloRequest vacia = conRecargos(List.of());
+
+        assertThat(sinClave.toRecargosDeCosto()).isNull();
+        assertThat(conClave.toRecargosDeCosto().lista()).containsExactly(
+                new RecargoCosto("Embalaje y carga", bd("4.44")), new RecargoCosto("Flete", bd("-1.50")));
+        assertThat(vacia.toRecargosDeCosto().estaVacia()).isTrue();
+    }
+
+    @Test
+    @DisplayName("un recargo invalido en el pedido da 400 en recargosCosto con el mensaje del dominio, y uno null tambien")
+    void recargoInvalidoEnElPedido() {
+        assertThatThrownBy(() -> conRecargos(List.of(new RecargoCostoRequest("Flete", bd("0"))))
+                .toRecargosDeCosto())
+                .isInstanceOf(DatosInvalidosException.class)
+                .extracting(e -> ((DatosInvalidosException) e).errors())
+                .isEqualTo(Map.of("recargosCosto", "El porcentaje del recargo debe estar entre -99,99 y 99,99, y no puede ser 0."));
+        assertThatThrownBy(() -> conRecargos(java.util.Collections.singletonList(null))
+                .toRecargosDeCosto())
+                .isInstanceOf(DatosInvalidosException.class);
     }
 }

@@ -35,7 +35,7 @@
   background: var(--info-fondo);
   font-weight: 600;
 }
-/* La aclaración de un ajuste (precio manual) queda pegada a su nombre. */
+/* La aclaración (el % de un recargo, o el aviso de un ajuste con precio manual) queda pegada a su nombre. */
 .paso-aclaracion {
   margin-right: auto;
 }
@@ -44,20 +44,26 @@
   color: var(--advertencia);
   font-weight: 600;
 }
+/* Casilleros: el concepto arriba y el valor abajo; los pasos se acomodan en filas. */
 .pasos {
-  display: grid;
-  gap: var(--e-1);
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--e-2);
   margin: 0;
   padding: 0;
   list-style: none;
 }
 .paso {
   display: flex;
-  align-items: baseline;
+  flex-direction: column;
   justify-content: space-between;
-  gap: var(--e-3);
-  padding: var(--e-1) var(--e-3);
-  border-bottom: 1px dashed var(--borde);
+  gap: var(--e-1);
+  min-width: 9rem;
+  max-width: 14rem;
+  padding: var(--e-2) var(--e-3);
+  border: 1px solid var(--borde);
+  border-radius: var(--radio);
+  background: var(--superficie);
 }
 .paso-importe {
   font-variant-numeric: tabular-nums;

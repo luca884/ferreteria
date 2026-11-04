@@ -643,4 +643,53 @@ describe('DesglosePrecioVista', () => {
       expect(el().querySelector('[data-tipo="AJUSTE_PRECIO"]')).toBeNull();
     });
   });
+
+  describe('recargos del costo (CU-13)', () => {
+    /** La soldadora de la factura: costo 235.971,56 y «Embalaje y carga» 4,44 %, sin lista de proveedor. */
+    const soldadora = () =>
+      sinLista({
+        costoGuardado: 235971.56,
+        precioFinal: 387670,
+        recargosCosto: [{ nombre: 'Embalaje y carga', porcentaje: 4.44 }],
+      });
+
+    it('muestra casilleros: costo, cada recargo con su % y su importe, costo real, margen, IVA y precio final', async () => {
+      await crear(soldadora());
+
+      expect(textos('.paso-nombre')).toEqual([
+        'Costo',
+        'Embalaje y carga',
+        'Costo real',
+        'Margen de 30 %',
+        'IVA de 21 %',
+        'Redondeo hacia arriba al múltiplo de 10',
+        'Precio final',
+      ]);
+      expect(textos('[data-tipo="RECARGO"] .paso-aclaracion')).toEqual(['4,44 %']);
+      expect(textos('.paso-importe')).toEqual([
+        '$ 235.971,56',
+        '+ $ 10.477,14',
+        '$ 246.448,70',
+        '$ 320.383,31',
+        '$ 387.663,8051',
+        '$ 387.670,00',
+      ]);
+    });
+
+    it('un recargo negativo lleva el signo menos y sin recargos no hay casilleros nuevos', async () => {
+      await crear(
+        sinLista({ costoGuardado: 1000, recargosCosto: [{ nombre: 'Bonificación extra', porcentaje: -2.5 }] }),
+      );
+
+      expect(textos('[data-tipo="RECARGO"] .paso-importe')).toEqual(['\u2212 $ 25,00']);
+      expect(textos('[data-tipo="RECARGO"] .paso-aclaracion')).toEqual(['-2,5 %']);
+    });
+
+    it('un artículo sin recargos no muestra ni el recargo ni el costo real', async () => {
+      await crear(desgloseBase());
+
+      expect(el().querySelector('[data-tipo="RECARGO"]')).toBeNull();
+      expect(el().querySelector('[data-tipo="COSTO_REAL"]')).toBeNull();
+    });
+  });
 });

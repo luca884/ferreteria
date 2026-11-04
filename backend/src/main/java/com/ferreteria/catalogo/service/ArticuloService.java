@@ -137,7 +137,7 @@ public class ArticuloService {
         ContextoPrecio ctx = contextoDePrecio(datos, false);
 
         Articulo articulo = new Articulo(TenantContext.requireFerreteriaId());
-        Optional<CambioPrecio> cambio = articulo.actualizar(datos, request.toPedidoDePrecio(), ctx);
+        Optional<CambioPrecio> cambio = articulo.actualizar(datos, request.toPedidoDePrecio(), request.toRecargosDeCosto(), ctx);
         // Primero el articulo: el historial necesita el id que genera la base.
         Articulo guardado = articuloRepository.save(articulo);
         guardarHistorial(guardado, cambio, usuarioId);
@@ -156,7 +156,7 @@ public class ArticuloService {
 
         Moneda monedaAnterior = articulo.getMoneda();
         // El articulo ya esta administrado por JPA: los cambios se escriben al terminar la transaccion.
-        Optional<CambioPrecio> cambio = articulo.actualizar(datos, request.toPedidoDePrecio(), ctx);
+        Optional<CambioPrecio> cambio = articulo.actualizar(datos, request.toPedidoDePrecio(), request.toRecargosDeCosto(), ctx);
         guardarHistorial(articulo, cambio, usuarioId, monedaAnterior != articulo.getMoneda() ? monedaAnterior : null);
         // Escribe ahora: un choque con otra escritura sale como 409 y la respuesta trae la version NUEVA.
         escribirOChocar();

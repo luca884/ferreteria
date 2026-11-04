@@ -1,5 +1,5 @@
 {
-  "descripcion": "Costo de lista, precio final y pasos del desglose (CadenaDePrecio). Cada caso trae lista, si incluye IVA, bonificaciones, ajustes, margen, multiplo y moneda con su cotizacion; el costo, el precio y los importes de los pasos son los esperados, como string decimal para no pasar por double. Los pasos intermedios van a 4 decimales HALF_UP y el costo y el precio a 2. Los generan fracciones exactas en Python, no el codigo. Lo leen CasosCompartidosCadenaTest (backend) y cadena-de-precio.spec.ts (frontend).",
+  "descripcion": "Costo de lista, precio final y pasos del desglose (CadenaDePrecio). Cada caso trae lista, si incluye IVA, bonificaciones, ajustes, margen, multiplo y moneda con su cotizacion; el costo, el precio y los importes de los pasos son los esperados, como string decimal para no pasar por double. Los pasos intermedios van a 4 decimales HALF_UP y el costo y el precio a 2. Un caso puede traer recargos del costo (CU-13): despues del COSTO van un paso RECARGO por cada uno, con su importe (costo x % / 100 a 2 decimales), y el COSTO_REAL (costo x (1 + suma de % / 100) a 2 decimales), del que parten la cotizacion, el margen y el IVA. Los generan fracciones exactas en Python, no el codigo. Lo leen CasosCompartidosCadenaTest (backend) y cadena-de-precio.spec.ts (frontend).",
   "casos": [
     {
       "nombre": "R-219: lista 1000, bonificacion 10, ajustes -5 y +3",
@@ -1194,6 +1194,208 @@
         {
           "tipo": "PRECIO_FINAL",
           "importe": "14950.00"
+        }
+      ]
+    },
+    {
+      "nombre": "CU-13: factura real, costo 235971,56 con Embalaje y carga 4,44",
+      "lista": "235971.56",
+      "incluyeIva": false,
+      "alicuota": "IVA_21",
+      "bonificaciones": [
+        null,
+        null,
+        null
+      ],
+      "ajustes": [
+        null,
+        null,
+        null
+      ],
+      "margen": "30",
+      "multiplo": "10",
+      "moneda": "ARS",
+      "costo": "235971.56",
+      "costoGuardado": "235971.56",
+      "coincide": true,
+      "recargos": [
+        {
+          "nombre": "Embalaje y carga",
+          "porcentaje": "4.44"
+        }
+      ],
+      "precio": "387670.00",
+      "pasos": [
+        {
+          "tipo": "LISTA",
+          "importe": "235971.5600"
+        },
+        {
+          "tipo": "COSTO",
+          "importe": "235971.56"
+        },
+        {
+          "tipo": "RECARGO",
+          "importe": "10477.14"
+        },
+        {
+          "tipo": "COSTO_REAL",
+          "importe": "246448.70"
+        },
+        {
+          "tipo": "MARGEN",
+          "importe": "320383.3100"
+        },
+        {
+          "tipo": "IVA",
+          "importe": "387663.8051"
+        },
+        {
+          "tipo": "REDONDEO",
+          "importe": "10"
+        },
+        {
+          "tipo": "PRECIO_FINAL",
+          "importe": "387670.00"
+        }
+      ]
+    },
+    {
+      "nombre": "CU-13: dos recargos (4,44 y -2,5) suman 1,94 y se redondean una vez",
+      "lista": "1000.00",
+      "incluyeIva": false,
+      "alicuota": "IVA_21",
+      "bonificaciones": [
+        null,
+        null,
+        null
+      ],
+      "ajustes": [
+        null,
+        null,
+        null
+      ],
+      "margen": "30",
+      "multiplo": "10",
+      "moneda": "ARS",
+      "costo": "1000.00",
+      "costoGuardado": "1000.00",
+      "coincide": true,
+      "recargos": [
+        {
+          "nombre": "Embalaje y carga",
+          "porcentaje": "4.44"
+        },
+        {
+          "nombre": "Bonificacion extra",
+          "porcentaje": "-2.5"
+        }
+      ],
+      "precio": "1610.00",
+      "pasos": [
+        {
+          "tipo": "LISTA",
+          "importe": "1000.0000"
+        },
+        {
+          "tipo": "COSTO",
+          "importe": "1000.00"
+        },
+        {
+          "tipo": "RECARGO",
+          "importe": "44.40"
+        },
+        {
+          "tipo": "RECARGO",
+          "importe": "-25.00"
+        },
+        {
+          "tipo": "COSTO_REAL",
+          "importe": "1019.40"
+        },
+        {
+          "tipo": "MARGEN",
+          "importe": "1325.2200"
+        },
+        {
+          "tipo": "IVA",
+          "importe": "1603.5162"
+        },
+        {
+          "tipo": "REDONDEO",
+          "importe": "10"
+        },
+        {
+          "tipo": "PRECIO_FINAL",
+          "importe": "1610.00"
+        }
+      ]
+    },
+    {
+      "nombre": "CU-13: USD 10 con recargo de 5, dolar 1000",
+      "lista": "10.00",
+      "incluyeIva": false,
+      "alicuota": "IVA_21",
+      "bonificaciones": [
+        null,
+        null,
+        null
+      ],
+      "ajustes": [
+        null,
+        null,
+        null
+      ],
+      "margen": "30",
+      "multiplo": "10",
+      "moneda": "USD",
+      "cotizacion": "1000.00",
+      "costo": "10.00",
+      "costoGuardado": "10.00",
+      "coincide": true,
+      "recargos": [
+        {
+          "nombre": "Flete",
+          "porcentaje": "5"
+        }
+      ],
+      "precio": "16520.00",
+      "pasos": [
+        {
+          "tipo": "LISTA",
+          "importe": "10.0000"
+        },
+        {
+          "tipo": "COSTO",
+          "importe": "10.00"
+        },
+        {
+          "tipo": "RECARGO",
+          "importe": "0.50"
+        },
+        {
+          "tipo": "COSTO_REAL",
+          "importe": "10.50"
+        },
+        {
+          "tipo": "COTIZACION",
+          "importe": "10500.0000"
+        },
+        {
+          "tipo": "MARGEN",
+          "importe": "13650.0000"
+        },
+        {
+          "tipo": "IVA",
+          "importe": "16516.5000"
+        },
+        {
+          "tipo": "REDONDEO",
+          "importe": "10"
+        },
+        {
+          "tipo": "PRECIO_FINAL",
+          "importe": "16520.00"
         }
       ]
     }

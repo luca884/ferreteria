@@ -1,4 +1,13 @@
-import { Alicuota, Decimal, Exacto, PORCENTAJE_IVA, exacto, precioFinalCentavos } from './precio-final';
+import {
+  Alicuota,
+  Decimal,
+  Exacto,
+  PORCENTAJE_IVA,
+  RecargoDeCosto,
+  costoRealExacto,
+  exacto,
+  precioFinalCentavos,
+} from './precio-final';
 
 /**
  * La cadena del desglose del precio, calculada en la pantalla con la misma cuenta que CostoDeLista.java y
@@ -12,17 +21,23 @@ export type TipoPaso =
   | 'BONIFICACION'
   | 'AJUSTE'
   | 'COSTO'
+  | 'RECARGO'
+  | 'COSTO_REAL'
   | 'COTIZACION'
   | 'MARGEN'
   | 'IVA'
   | 'REDONDEO'
   | 'PRECIO_FINAL';
 
-/** Un paso: el importe al que se llega, como texto decimal; `porcentaje` es el del paso, si tiene. */
+/**
+ * Un paso: el importe al que se llega, como texto decimal; `porcentaje` es el del paso, si tiene. En un RECARGO el
+ * importe es lo que suma al costo (negativo si descuenta) y `nombre` es el del recargo.
+ */
 export interface Paso {
   tipo: TipoPaso;
   porcentaje: string | null;
   importe: string;
+  nombre?: string;
 }
 
 export interface EntradaCadena {
@@ -43,6 +58,11 @@ export interface EntradaCadena {
   cotizacion: Decimal;
   margen: Decimal;
   multiplo: Decimal;
+  /**
+   * Los recargos del costo (CU-13): después del costo va un paso RECARGO por cada uno y el COSTO_REAL, y de ahí
+   * parten la cotización, el margen y el IVA. Ausente o vacío: la cadena de siempre.
+   */
+  recargos?: readonly RecargoDeCosto[] | null;
   /**
    * El precio final GUARDADO en el artículo: el desglose lo muestra tal cual en el último paso (R-209) y no lo
    * recalcula. Sin él, el último paso es el precio recalculado (el precio en vivo).
@@ -193,8 +213,9 @@ export function igualesPorValor(a: Decimal, b: Decimal): boolean {
 }
 
 /**
- * Los pasos de C-204: lista → IVA de la lista → bonificaciones → ajustes → costo → cotización (USD) → margen → IVA →
- * redondeo → precio final. Después del costo todo parte del costo GUARDADO, que puede no ser el de la lista.
+ * Los pasos de C-204: lista → IVA de la lista → bonificaciones → ajustes → costo → recargos del costo y costo real
+ * (CU-13) → cotización (USD) → margen → IVA → redondeo → precio final. Después del costo todo parte del costo
+ * GUARDADO, que puede no ser el de la lista, con sus recargos (el costo real).
  */
 export function cadenaDePrecio(entrada: EntradaCadena): CadenaDePrecio {
   const pasos: Paso[] = [];
@@ -213,6 +234,26 @@ export function cadenaDePrecio(entrada: EntradaCadena): CadenaDePrecio {
   if (!costo) return { pasos, costoDeLista: costoLista, coincide, precio: null };
   pasos.push({ tipo: 'COSTO', porcentaje: null, importe: texto(dividir(aFraccion(costo), 2), 2) });
 
+  // El costo real es el de RecargosDeCosto.java (un solo redondeo); cada recargo se muestra con su propio importe.
+  let costoReal = costo;
+  const recargos = entrada.recargos ?? [];
+  if (recargos.length > 0) {
+    const real = costoRealExacto(entrada.costoGuardado, recargos);
+    if (!real) return { pasos, costoDeLista: costoLista, coincide, precio: null };
+    for (const recargo of recargos) {
+      const p = exacto(recargo.porcentaje)!;
+      const importe = dividir({ n: costo.entero * p.entero, d: diez(costo.escala + p.escala) * CIEN }, 2);
+      pasos.push({
+        tipo: 'RECARGO',
+        porcentaje: String(recargo.porcentaje).trim(),
+        importe: texto(importe, 2),
+        nombre: recargo.nombre ?? '',
+      });
+    }
+    pasos.push({ tipo: 'COSTO_REAL', porcentaje: null, importe: texto(real.entero, 2) });
+    costoReal = real;
+  }
+
   const margen = exacto(entrada.margen);
   const cotizacion = exacto(entrada.cotizacion);
   const usd = entrada.moneda === 'USD';
@@ -221,7 +262,7 @@ export function cadenaDePrecio(entrada: EntradaCadena): CadenaDePrecio {
     return { pasos, costoDeLista: costoLista, coincide, precio: null };
   }
 
-  let acumulado = aFraccion(costo);
+  let acumulado = aFraccion(costoReal);
   if (usd) {
     acumulado = por(acumulado, aFraccion(cotizacion!));
     pasos.push({ tipo: 'COTIZACION', porcentaje: null, importe: mostrado(acumulado) });
@@ -251,6 +292,7 @@ export function cadenaDePrecio(entrada: EntradaCadena): CadenaDePrecio {
     entrada.alicuota,
     entrada.multiplo,
     usd ? entrada.cotizacion : undefined,
+    recargos,
   );
   const precio = centavos === null ? null : texto(centavos, 2);
   // El último paso es el precio GUARDADO si se lo da (como el backend); el recalculado queda en `precio`.

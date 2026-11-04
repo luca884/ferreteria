@@ -5,6 +5,7 @@ import com.ferreteria.catalogo.model.AlicuotaIva;
 import com.ferreteria.catalogo.model.Moneda;
 import com.ferreteria.catalogo.model.OrigenMargen;
 import com.ferreteria.catalogo.model.PasoDePrecio;
+import com.ferreteria.catalogo.model.RecargoCosto;
 
 import java.math.BigDecimal;
 import java.util.List;
@@ -51,10 +52,13 @@ public record DesglosePrecioResponse(
         /** CU-14: el precio final lo escribio el Dueño; los pasos no llegan a el. */
         boolean precioManual,
         /** CU-14: ajustes sobre el precio final, entre el redondeo y el precio final (sin efecto con precio manual). */
-        List<AjustePrecio> ajustesPrecio) {
+        List<AjustePrecio> ajustesPrecio,
+        /** CU-13: recargos del costo; los pasos RECARGO los traen con su importe, en este mismo orden. */
+        List<RecargoCosto> recargosCosto) {
 
     public DesglosePrecioResponse {
         pasos = List.copyOf(pasos);
         ajustesPrecio = ajustesPrecio == null ? List.of() : List.copyOf(ajustesPrecio);
+        recargosCosto = recargosCosto == null ? List.of() : List.copyOf(recargosCosto);
     }
 }

@@ -17,6 +17,8 @@ import com.ferreteria.catalogo.model.DatosArticulo;
 import com.ferreteria.catalogo.model.Moneda;
 import com.ferreteria.catalogo.model.OrigenMargen;
 import com.ferreteria.catalogo.model.PasoDePrecio;
+import com.ferreteria.catalogo.model.RecargoCosto;
+import com.ferreteria.catalogo.model.RecargosDeCosto;
 import com.ferreteria.catalogo.model.Rubro;
 import com.ferreteria.catalogo.model.TipoPaso;
 import com.ferreteria.catalogo.model.Unidad;
@@ -349,6 +351,27 @@ class DesglosePrecioServiceTest {
 
         assertThat(respuesta.cotizacion()).isNull();
         assertThat(tipos(respuesta).get(tipos(respuesta).size() - 1)).isEqualTo(TipoPaso.COSTO);
+    }
+
+    // ---- recargos del costo (CU-13) ----
+
+    @Test
+    @DisplayName("con recargos del costo: la respuesta los trae y los pasos suman un RECARGO y el costo real antes del margen")
+    void conRecargosDelCosto() throws Exception {
+        configuracion();
+        Articulo articulo = articulo("235971.56", "30.00", null, 7L, Moneda.ARS, null, null);
+        articulo.fijarRecargosDeCosto(new RecargosDeCosto(List.of(new RecargoCosto("Embalaje y carga", bd("4.44")))),
+                new ContextoPrecio(null, bd("30.00"), bd("10.00")));
+        encontrar(articulo);
+
+        DesglosePrecioResponse respuesta = service.obtener(ID);
+
+        assertThat(respuesta.recargosCosto()).containsExactly(new RecargoCosto("Embalaje y carga", bd("4.44")));
+        assertThat(tipos(respuesta)).containsExactly(TipoPaso.COSTO, TipoPaso.RECARGO, TipoPaso.COSTO_REAL,
+                TipoPaso.MARGEN, TipoPaso.IVA, TipoPaso.REDONDEO, TipoPaso.PRECIO_FINAL);
+        assertThat(paso(respuesta, TipoPaso.RECARGO).importe()).isEqualByComparingTo("10477.14");
+        assertThat(paso(respuesta, TipoPaso.COSTO_REAL).importe()).isEqualByComparingTo("246448.70");
+        assertThat(respuesta.costoGuardado()).isEqualByComparingTo("235971.56");
     }
 
     // ---- 404 ----

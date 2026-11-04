@@ -403,6 +403,7 @@ describe('ArticuloForm', () => {
         ubicacion: null,
         activo: true,
         ajustesPrecio: [],
+        recargosCosto: [],
       });
       expect(servicio.actualizar).not.toHaveBeenCalled();
     });
@@ -440,6 +441,7 @@ describe('ArticuloForm', () => {
         ubicacion: 'Pasillo 2',
         activo: true,
         ajustesPrecio: [],
+        recargosCosto: [],
       });
     });
 
@@ -737,6 +739,7 @@ describe('ArticuloForm', () => {
         ubicacion: 'Pasillo 2',
         activo: true,
         ajustesPrecio: [],
+        recargosCosto: [],
       });
       expect(enviado).not.toHaveProperty('stockActual');
       expect(enviado).not.toHaveProperty('precioFinal');
@@ -1933,6 +1936,146 @@ describe('ArticuloForm', () => {
         expect(el().querySelector('#precioManual')).toBeNull();
         expect(el().querySelector('button.agregar-ajuste-precio')).toBeNull();
       });
+    });
+  });
+
+  describe('recargos del costo (CU-13)', () => {
+    const limpio = (texto: string | null | undefined) => (texto ?? '').replace(/[\s ]+/g, ' ').trim();
+    const texto = (selector: string) => limpio(el().querySelector(selector)?.textContent);
+    const filas = () => el().querySelectorAll('.recargo-costo').length;
+    const botonAgregar = () => el().querySelector<HTMLButtonElement>('button.agregar-recargo-costo')!;
+
+    async function agregar() {
+      botonAgregar().click();
+      await refrescar();
+    }
+    async function recargo(i: number, nombre: string, porcentaje: string) {
+      await escribir(`recargo-costo-nombre-${i}`, nombre);
+      await escribir(`recargo-costo-porcentaje-${i}`, porcentaje);
+    }
+
+    it('el Dueño ve la sección con su botón «Agregar» y sin filas, antes de los ajustes sobre el precio final', async () => {
+      await crearComponente();
+
+      expect(texto('fieldset.recargos-costo legend')).toBe('Recargos del costo (antes del margen)');
+      expect(texto('button.agregar-recargo-costo')).toBe('Agregar');
+      expect(filas()).toBe(0);
+      const secciones = Array.from(el().querySelectorAll('fieldset.recargos-costo, fieldset.ajustes-precio'));
+      expect(secciones.map((f) => f.className)).toEqual(['recargos-costo', 'ajustes-precio']);
+    });
+
+    it('«Agregar» suma una fila con nombre y porcentaje, cada uno con su label, y «Quitar» la saca', async () => {
+      await crearComponente();
+
+      await agregar();
+      await agregar();
+      expect(filas()).toBe(2);
+      expect(limpio(el().querySelector('label[for="recargo-costo-nombre-1"]')?.textContent)).toBe('Nombre del recargo 2');
+      expect(limpio(el().querySelector('label[for="recargo-costo-porcentaje-1"]')?.textContent)).toBe(
+        'Porcentaje del recargo 2 (%)',
+      );
+
+      el().querySelector<HTMLButtonElement>('button.quitar-recargo-costo')!.click();
+      await refrescar();
+      expect(filas()).toBe(1);
+    });
+
+    it('tiene hasta 5 recargos: con 5 «Agregar» se apaga', async () => {
+      await crearComponente();
+
+      for (let i = 0; i < 5; i++) await agregar();
+
+      expect(filas()).toBe(5);
+      expect(botonAgregar().disabled).toBe(true);
+    });
+
+    it('el precio en vivo parte del costo real y se muestra el costo real', async () => {
+      await crearComponente();
+      await escribir('costo', '100');
+      expect(texto('.precio-en-vivo strong')).toBe('$ 160,00');
+
+      await agregar();
+      await recargo(0, 'Embalaje y carga', '10');
+
+      expect(texto('.precio-en-vivo strong')).toBe('$ 180,00');
+      expect(texto('#costo-real-en-vivo')).toBe('Costo real: $ 110,00');
+    });
+
+    it('manda recargosCosto con la lista del formulario y los nombres sin espacios sobrantes', async () => {
+      await crearComponente();
+      await completarMinimos();
+      await agregar();
+      await recargo(0, ' Embalaje y carga ', '4,44');
+      await agregar();
+      await recargo(1, 'Descuento', '-2,5');
+
+      await enviar();
+
+      expect(servicio.crear.mock.calls[0][0].recargosCosto).toEqual([
+        { nombre: 'Embalaje y carga', porcentaje: 4.44 },
+        { nombre: 'Descuento', porcentaje: -2.5 },
+      ]);
+    });
+
+    it('en la edición llena las filas con los recargos del artículo y manda la lista vacía si se quitan', async () => {
+      await crearComponente({
+        id: '5',
+        articulo: articuloGuardado({ recargosCosto: [{ nombre: 'Embalaje y carga', porcentaje: 4.44 }] }),
+      });
+
+      expect(filas()).toBe(1);
+      expect(input('recargo-costo-nombre-0').value).toBe('Embalaje y carga');
+
+      el().querySelector<HTMLButtonElement>('button.quitar-recargo-costo')!.click();
+      await refrescar();
+      await enviar();
+
+      expect(servicio.actualizar.mock.calls[0][1].recargosCosto).toEqual([]);
+    });
+
+    it('un recargo sin nombre o con 0 % marca el error y no guarda', async () => {
+      await crearComponente();
+      await completarMinimos();
+      await agregar();
+      await recargo(0, '', '0');
+
+      await enviar();
+
+      expect(servicio.crear).not.toHaveBeenCalled();
+      expect(texto('#recargo-costo-nombre-0-error')).toBe('El nombre del recargo es obligatorio (hasta 40 caracteres).');
+      expect(texto('#recargo-costo-porcentaje-0-error')).toBe(
+        'El porcentaje del recargo debe estar entre -99,99 y 99,99, y no puede ser 0.',
+      );
+    });
+
+    it('muestra el error del servidor de la lista y lo limpia al escribir', async () => {
+      await crearComponente({ id: '5' });
+      await agregar();
+      await recargo(0, 'Flete', '5');
+      servicio.actualizar.mockReturnValue(
+        throwError(
+          () =>
+            new HttpErrorResponse({
+              status: 400,
+              error: {
+                message: 'Datos inválidos',
+                errors: { recargosCosto: 'Los recargos del costo no pueden sumar -100 % o menos.' },
+              },
+            }),
+        ),
+      );
+
+      await enviar();
+      expect(texto('#recargosCosto-error-servidor')).toBe('Los recargos del costo no pueden sumar -100 % o menos.');
+
+      await escribir('recargo-costo-porcentaje-0', '6');
+      expect(el().querySelector('#recargosCosto-error-servidor')).toBeNull();
+    });
+
+    it('el Vendedor no ve la sección: no recibe los recargos', async () => {
+      await crearComponente({ dueno: false, id: '5' });
+
+      expect(el().querySelector('fieldset.recargos-costo')).toBeNull();
     });
   });
 

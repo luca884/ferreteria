@@ -163,7 +163,8 @@ legend {
 .precio-manual {
   grid-column: 1 / -1;
 }
-.ajustes-precio {
+.ajustes-precio,
+.recargos-costo {
   grid-column: 1 / -1;
   display: grid;
   gap: var(--e-2);
@@ -173,16 +174,19 @@ legend {
   border: 1px solid var(--borde);
   border-radius: var(--radio);
 }
-.ajustes-precio legend {
+.ajustes-precio legend,
+.recargos-costo legend {
   float: none;
   width: auto;
   padding: 0 var(--e-1);
   font-size: var(--texto-base);
 }
-.ajustes-precio .pista {
+.ajustes-precio .pista,
+.recargos-costo .pista {
   margin: 0;
 }
-.ajustes-precio-lista {
+.ajustes-precio-lista,
+.recargos-costo-lista {
   display: grid;
   gap: var(--e-3);
 }
@@ -195,14 +199,27 @@ legend {
 .ajuste-precio .quitar-ajuste-precio {
   align-self: end;
 }
-.agregar-ajuste-precio {
+.agregar-ajuste-precio,
+.agregar-recargo-costo {
   justify-self: start;
 }
+/* CU-13: cada recargo del costo es nombre, porcentaje y «Quitar». */
+.recargo-costo {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) auto;
+  gap: var(--e-3);
+  align-items: start;
+}
+.recargo-costo .quitar-recargo-costo {
+  align-self: end;
+}
 @media (max-width: 700px) {
-  .ajuste-precio {
+  .ajuste-precio,
+  .recargo-costo {
     grid-template-columns: minmax(0, 1fr);
   }
-  .ajuste-precio .quitar-ajuste-precio {
+  .ajuste-precio .quitar-ajuste-precio,
+  .recargo-costo .quitar-recargo-costo {
     justify-self: start;
   }
 }

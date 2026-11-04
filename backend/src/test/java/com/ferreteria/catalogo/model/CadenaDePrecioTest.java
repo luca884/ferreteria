@@ -88,10 +88,14 @@ class CadenaDePrecioTest {
         }
 
         CadenaDePrecio cadena() {
+            return cadena(RecargosDeCosto.NINGUNO);
+        }
+
+        CadenaDePrecio cadena(RecargosDeCosto recargos) {
             return CadenaDePrecio.de(new EntradaCadena(tieneLista, bd(lista), incluyeIva, iva, bonificaciones, ajustes,
                 bd(costoGuardado), moneda, cotizacion == null ? null : bd(cotizacion), congelada,
                 margenPropio == null ? null : bd(margenPropio), margenRubro == null ? null : bd(margenRubro),
-                margenDefecto == null ? null : bd(margenDefecto), bd("10"), bd(precioGuardado)));
+                margenDefecto == null ? null : bd(margenDefecto), bd("10"), bd(precioGuardado)), recargos);
         }
     }
 
@@ -281,5 +285,21 @@ class CadenaDePrecioTest {
     @DisplayName("un articulo en pesos nunca marca cotizacion congelada, aunque la entrada lo diga")
     void enPesosNoMarcaCongelada() {
         assertThat(new Entrada().congelada().cadena().cotizacionCongelada()).isFalse();
+    }
+
+    @Test
+    @DisplayName("con recargos del costo (CU-13): despues del costo van un paso por recargo y el costo real, y de ahi parte el margen")
+    void conRecargosDelCosto() {
+        RecargosDeCosto recargos = new RecargosDeCosto(List.of(new RecargoCosto("Embalaje y carga", bd("4.44"))));
+
+        CadenaDePrecio cadena = new Entrada().lista("235971.56").bonificaciones(null).ajustes(null, null, null)
+            .costoGuardado("235971.56").precioGuardado("387670.00").cadena(recargos);
+
+        assertThat(tipos(cadena)).containsExactly(TipoPaso.LISTA, TipoPaso.COSTO, TipoPaso.RECARGO, TipoPaso.COSTO_REAL,
+            TipoPaso.MARGEN, TipoPaso.IVA, TipoPaso.REDONDEO, TipoPaso.PRECIO_FINAL);
+        assertThat(importes(cadena)).containsExactly("235971.5600", "235971.56", "10477.14", "246448.70", "320383.3100",
+            "387663.8051", "10", "387670.00");
+        assertThat(cadena.pasos().get(2).porcentaje()).isEqualByComparingTo("4.44");
+        assertThat(cadena.costoDeLista()).isEqualTo(bd("235971.56"));
     }
 }

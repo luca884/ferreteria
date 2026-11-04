@@ -5,6 +5,7 @@ import com.ferreteria.catalogo.model.AlicuotaIva;
 import com.ferreteria.catalogo.model.DatosArticulo;
 import com.ferreteria.catalogo.model.Moneda;
 import com.ferreteria.catalogo.model.PedidoDePrecio;
+import com.ferreteria.catalogo.model.RecargosDeCosto;
 import com.ferreteria.catalogo.model.Unidad;
 import com.ferreteria.common.exception.DatosInvalidosException;
 import jakarta.validation.Valid;
@@ -92,7 +93,24 @@ public record ArticuloRequest(
         BigDecimal precioFinal,
 
         /** Ajustes sobre el precio final (CU-14), sin limite; null conserva los de hoy (alta: ninguno). */
-        List<@Valid @NotNull(message = "El ajuste no puede estar vacío.") AjustePrecioRequest> ajustesPrecio) {
+        List<@Valid @NotNull(message = "El ajuste no puede estar vacío.") AjustePrecioRequest> ajustesPrecio,
+
+        /**
+         * Recargos del costo (CU-13), hasta 5: el costo real es el costo mas la suma de sus %. null conserva los de hoy
+         * (alta: ninguno) y una lista vacia los borra. Los valida el dominio, con un 400 en {@code recargosCosto}.
+         */
+        List<RecargoCostoRequest> recargosCosto) {
+
+    /** Pedido sin recargos del costo (CU-13): conserva los de hoy. */
+    public ArticuloRequest(
+            String codigoInterno, String codigoBarras, String codigoProveedor, String descripcion, Long rubroId,
+            Long proveedorId, BigDecimal costo, BigDecimal margenPorcentaje, AlicuotaIva alicuotaIva, Unidad unidad,
+            BigDecimal stockMinimo, String ubicacion, Boolean activo, Moneda moneda, Long version,
+            Boolean precioManual, BigDecimal precioFinal, List<AjustePrecioRequest> ajustesPrecio) {
+        this(codigoInterno, codigoBarras, codigoProveedor, descripcion, rubroId, proveedorId, costo, margenPorcentaje,
+                alicuotaIva, unidad, stockMinimo, ubicacion, activo, moneda, version, precioManual, precioFinal,
+                ajustesPrecio, null);
+    }
 
     /** Pedido sin nada del precio (CU-14): conserva la marca de precio manual y los ajustes. */
     public ArticuloRequest(
@@ -100,7 +118,7 @@ public record ArticuloRequest(
             Long proveedorId, BigDecimal costo, BigDecimal margenPorcentaje, AlicuotaIva alicuotaIva, Unidad unidad,
             BigDecimal stockMinimo, String ubicacion, Boolean activo, Moneda moneda, Long version) {
         this(codigoInterno, codigoBarras, codigoProveedor, descripcion, rubroId, proveedorId, costo, margenPorcentaje,
-                alicuotaIva, unidad, stockMinimo, ubicacion, activo, moneda, version, null, null, null);
+                alicuotaIva, unidad, stockMinimo, ubicacion, activo, moneda, version, null, null, null, null);
     }
 
     /** Pedido sin version: sirve para el alta, que no la usa; un PUT sin ella da 400. */
@@ -171,6 +189,22 @@ public record ArticuloRequest(
         }
         return new PedidoDePrecio(precioManual, precioFinal,
                 new AjustesDePrecio(ajustesPrecio.stream().map(AjustePrecioRequest::toAjuste).toList()));
+    }
+
+    /**
+     * Los recargos del costo que pide (CU-13): null si el pedido no trae la clave (conserva los de hoy). Un recargo
+     * invalido (o null) da 400 en {@code recargosCosto}, con el mensaje del dominio.
+     */
+    public RecargosDeCosto toRecargosDeCosto() {
+        if (recargosCosto == null) {
+            return null;
+        }
+        return new RecargosDeCosto(recargosCosto.stream().map(recargo -> {
+            if (recargo == null) {
+                throw new DatosInvalidosException(Map.of("recargosCosto", "El recargo no puede estar vacío."));
+            }
+            return recargo.toRecargo();
+        }).toList());
     }
 
     private static String blancoANull(String texto) {

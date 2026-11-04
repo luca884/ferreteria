@@ -1,6 +1,6 @@
 import { Component, computed, effect, input, signal, untracked } from '@angular/core';
 import { FormControl, FormGroup, ReactiveFormsModule } from '@angular/forms';
-import { CadenaDePrecio, cadenaDePrecio, costoDeLista } from '../../core/formato/cadena-de-precio';
+import { CadenaDePrecio, Paso, cadenaDePrecio, costoDeLista } from '../../core/formato/cadena-de-precio';
 import { formatearFechaHora } from '../../core/formato/fecha-hora';
 import { formatearCotizacion, formatearTexto } from '../../core/formato/monto';
 import { Decimal, exacto } from '../../core/formato/precio-final';
@@ -82,6 +82,7 @@ export function cadenaDelDesglose(
     cotizacion: d.cotizacion,
     margen: d.margen,
     multiplo: d.multiplo,
+    recargos: d.recargosCosto,
   });
 }
 
@@ -90,7 +91,15 @@ const FORMATO_PORCENTAJE = new Intl.NumberFormat('es-AR', { maximumFractionDigit
 const porcentaje = (valor: number) => FORMATO_PORCENTAJE.format(valor);
 
 /** Hasta el costo el importe está en la moneda del artículo; de la cotización en adelante, en pesos. */
-const EN_MONEDA_DEL_ARTICULO = ['LISTA', 'SIN_IVA', 'BONIFICACION', 'AJUSTE', 'COSTO'];
+const EN_MONEDA_DEL_ARTICULO = [
+  'LISTA',
+  'SIN_IVA',
+  'BONIFICACION',
+  'AJUSTE',
+  'COSTO',
+  'RECARGO',
+  'COSTO_REAL',
+];
 
 /** Una lista legible: «10 %», «10 % y 5 %», «10 %, 5 % y 2,5 %». */
 function unirConY(items: string[]): string {
@@ -104,7 +113,7 @@ interface PasoMostrado {
   nombre: string;
   /** null en el redondeo y en los ajustes sobre el precio final: la cuenta la hace el backend. */
   importe: string | null;
-  /** Una aclaración debajo del nombre (los ajustes de un precio manual). */
+  /** Una aclaración debajo del nombre (los ajustes de un precio manual, el % de un recargo del costo). */
   aclaracion?: string;
 }
 
@@ -148,6 +157,7 @@ export class DesglosePrecioVista {
     const mostrados = this.cadena().pasos.map((paso) => {
       const moneda: Moneda = EN_MONEDA_DEL_ARTICULO.includes(paso.tipo) ? d.moneda : 'ARS';
       const pct = paso.porcentaje === null ? null : Number(paso.porcentaje);
+      if (paso.tipo === 'RECARGO') return this.recargoMostrado(paso, moneda);
       const importe = paso.tipo === 'REDONDEO' ? null : formatearTexto(paso.importe, moneda, 4);
       return { tipo: paso.tipo, nombre: this.nombreDe(paso.tipo, pct, paso.importe), importe };
     });
@@ -221,6 +231,18 @@ export class DesglosePrecioVista {
     return ids.join(' ');
   }
 
+  /** Un recargo del costo (CU-13): el nombre, su % debajo y lo que suma al costo con su signo («+ $ 10.477,14»). */
+  private recargoMostrado(paso: Paso, moneda: Moneda): PasoMostrado {
+    const negativo = paso.importe.startsWith('-');
+    const magnitud = negativo ? paso.importe.slice(1) : paso.importe;
+    return {
+      tipo: paso.tipo,
+      nombre: paso.nombre || 'Recargo',
+      aclaracion: `${porcentaje(Number(paso.porcentaje))} %`,
+      importe: `${negativo ? '\u2212' : '+'} ${formatearTexto(magnitud, moneda)}`,
+    };
+  }
+
   private nombreDe(tipo: string, pct: number | null, importe: string): string {
     const d = this.desglose();
     switch (tipo) {
@@ -239,6 +261,8 @@ export class DesglosePrecioVista {
           : 'Ajuste propio de 0 %';
       case 'COSTO':
         return 'Costo';
+      case 'COSTO_REAL':
+        return 'Costo real';
       case 'COTIZACION':
         return `Pasado a pesos con el dólar a ${formatearCotizacion(d.cotizacion)}`;
       case 'MARGEN':

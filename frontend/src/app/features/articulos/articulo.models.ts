@@ -84,6 +84,12 @@ export function textoDeAjustePrecio(ajuste: AjustePrecio): string {
   return `${nombre} ${signo}${valor}`;
 }
 
+/** Un recargo con nombre sobre el costo (CU-13), por ejemplo «Embalaje y carga» 4,44 %; negativo es descuento. */
+export interface RecargoCosto {
+  nombre: string;
+  porcentaje: number;
+}
+
 /** Lo que devuelve el backend, igual para Dueño y Vendedor (ambos ven costo y margen). */
 export interface Articulo {
   id: number;
@@ -132,6 +138,8 @@ export interface Articulo {
    */
   precioManual?: boolean;
   ajustesPrecio?: AjustePrecio[];
+  /** CU-13, solo para el Dueño (el Vendedor no lo recibe): los recargos del costo; el precio sale del costo real. */
+  recargosCosto?: RecargoCosto[];
   /** GDS-05, para el Dueño y el Vendedor: desde cuándo está al día el costo (AAAA-MM-DD). */
   costoAl?: string | null;
   /** Ofertas (S3), para el Dueño y el Vendedor: la oferta guardada, vigente o vencida; null sin oferta. */
@@ -295,6 +303,8 @@ export interface ArticuloRequest {
   precioManual?: boolean | null;
   precioFinal?: number | null;
   ajustesPrecio?: AjustePrecio[] | null;
+  /** CU-13: los recargos del costo (hasta 5). null conserva los guardados y una lista vacía los borra: el formulario siempre manda la lista. */
+  recargosCosto?: RecargoCosto[] | null;
 }
 
 /** Un paso del desglose, en el orden en que se aplican; `importe` va a 4 decimales en los intermedios. */
@@ -305,6 +315,8 @@ export interface PasoDePrecio {
     | 'BONIFICACION'
     | 'AJUSTE'
     | 'COSTO'
+    | 'RECARGO'
+    | 'COSTO_REAL'
     | 'COTIZACION'
     | 'MARGEN'
     | 'IVA'
@@ -352,6 +364,8 @@ export interface DesglosePrecio {
   /** CU-14: el precio es manual (no sale de la fórmula) y los ajustes sobre el precio final calculado. */
   precioManual?: boolean;
   ajustesPrecio?: AjustePrecio[];
+  /** CU-13: los recargos del costo, en el orden de los pasos RECARGO. */
+  recargosCosto?: RecargoCosto[];
 }
 
 /**

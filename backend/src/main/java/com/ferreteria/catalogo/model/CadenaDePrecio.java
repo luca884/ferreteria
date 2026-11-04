@@ -11,8 +11,8 @@ import java.util.List;
  *
  * <p>Los importes de lista, bonificaciones y ajustes son el producto exacto hasta ese paso, dividido UNA vez a 4
  * decimales HALF_UP solo para mostrarlo: no alimentan ningun calculo. El costo de la lista sale de
- * {@link CostoDeLista}. Despues del costo los pasos parten del costo GUARDADO, con productos exactos como
- * {@link PrecioCalculator}.
+ * {@link CostoDeLista}. Despues del costo los pasos parten del costo GUARDADO (con sus recargos, el costo real), con
+ * productos exactos como {@link PrecioCalculator}.
  *
  * @param costoDeLista el costo que sale de la lista con los ajustes y las bonificaciones guardadas; null sin lista
  * @param coincide     si el costo guardado es igual por valor al de la lista; null sin lista
@@ -36,6 +36,14 @@ public record CadenaDePrecio(
     }
 
     public static CadenaDePrecio de(EntradaCadena entrada) {
+        return de(entrada, RecargosDeCosto.NINGUNO);
+    }
+
+    /**
+     * La cadena con los recargos del costo (CU-13): despues del COSTO va un paso RECARGO por cada uno y el COSTO_REAL, y
+     * de ese costo parten la cotizacion, el margen y el IVA. Sin recargos no hay pasos nuevos y la cadena es la de siempre.
+     */
+    public static CadenaDePrecio de(EntradaCadena entrada, RecargosDeCosto recargos) {
         List<PasoDePrecio> pasos = new ArrayList<>();
         BigDecimal costoDeLista = null;
         Boolean coincide = null;
@@ -46,6 +54,7 @@ public record CadenaDePrecio(
             coincide = costoDeLista.compareTo(entrada.costoGuardado()) == 0;
         }
         pasos.add(new PasoDePrecio(TipoPaso.COSTO, null, entrada.costoGuardado()));
+        BigDecimal costoReal = pasosDeRecargos(entrada.costoGuardado(), recargos, pasos);
 
         BigDecimal margen = PrecioCalculator.margenEfectivo(
             entrada.margenPropio(), entrada.margenRubro(), entrada.margenDefecto());
@@ -54,7 +63,7 @@ public record CadenaDePrecio(
         BigDecimal cotizacion = entrada.moneda() == Moneda.USD ? entrada.cotizacion() : null;
         // Un articulo en dolares sin ninguna cotizacion no se puede pasar a pesos: la cadena termina en el costo.
         if (entrada.moneda() == Moneda.ARS || cotizacion != null) {
-            pasosDePrecio(entrada, margen, cotizacion, pasos);
+            pasosDePrecio(entrada, costoReal, margen, cotizacion, pasos);
         }
         boolean congelada = entrada.moneda() == Moneda.USD && entrada.cotizacionCongelada();
         return new CadenaDePrecio(pasos, costoDeLista, coincide, margen, origen, cotizacion, congelada);
@@ -86,9 +95,27 @@ public record CadenaDePrecio(
         }
     }
 
-    /** COTIZACION (solo USD), MARGEN, IVA, REDONDEO (si hay multiplo) y el PRECIO_FINAL guardado, siempre desde el costo guardado. */
-    private static void pasosDePrecio(EntradaCadena entrada, BigDecimal margen, BigDecimal cotizacion, List<PasoDePrecio> pasos) {
-        BigDecimal numerador = entrada.costoGuardado();
+    /**
+     * Un RECARGO por cada recargo (costo x % / 100, a 2 decimales HALF_UP, solo para mostrar) y el COSTO_REAL, que es el
+     * de {@link RecargosDeCosto#aplicar}. Devuelve el costo real; sin recargos, el costo tal cual y ningun paso.
+     */
+    private static BigDecimal pasosDeRecargos(BigDecimal costo, RecargosDeCosto recargos, List<PasoDePrecio> pasos) {
+        if (recargos.estaVacia()) {
+            return costo;
+        }
+        for (RecargoCosto recargo : recargos.lista()) {
+            BigDecimal importe = costo.multiply(recargo.porcentaje()).divide(CIEN, 2, RoundingMode.HALF_UP);
+            pasos.add(new PasoDePrecio(TipoPaso.RECARGO, recargo.porcentaje(), importe));
+        }
+        BigDecimal costoReal = recargos.aplicar(costo);
+        pasos.add(new PasoDePrecio(TipoPaso.COSTO_REAL, null, costoReal));
+        return costoReal;
+    }
+
+    /** COTIZACION (solo USD), MARGEN, IVA, REDONDEO (si hay multiplo) y el PRECIO_FINAL guardado, desde el costo real. */
+    private static void pasosDePrecio(EntradaCadena entrada, BigDecimal costoReal, BigDecimal margen,
+                                      BigDecimal cotizacion, List<PasoDePrecio> pasos) {
+        BigDecimal numerador = costoReal;
         if (cotizacion != null) {
             numerador = numerador.multiply(cotizacion);
             pasos.add(new PasoDePrecio(TipoPaso.COTIZACION, null, mostrado(numerador, BigDecimal.ONE)));

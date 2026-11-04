@@ -246,6 +246,74 @@
           }
         </div>
 
+        <fieldset class="recargos-costo" aria-describedby="recargos-costo-pista">
+          <legend>Recargos del costo (antes del margen)</legend>
+          <p id="recargos-costo-pista" class="pista">
+            Se suman al costo para sacar el costo real, del que sale el precio. Por ejemplo «Embalaje y carga» 4,44 %.
+            Negativo descuenta.
+          </p>
+          <div formArrayName="recargosCosto" class="recargos-costo-lista">
+            @for (fila of filasRecargo(); track fila; let i = $index) {
+              <div class="recargo-costo" [formGroupName]="i">
+                <div class="campo">
+                  <label [for]="'recargo-costo-nombre-' + i">Nombre del recargo {{ i + 1 }}</label>
+                  <input
+                    [id]="'recargo-costo-nombre-' + i"
+                    formControlName="nombre"
+                    autocomplete="off"
+                    placeholder="Ej: Embalaje y carga"
+                    [attr.aria-invalid]="errorLocalDeRecargo(i, 'nombre') ? 'true' : null"
+                    [attr.aria-describedby]="describirRecargo(i, 'nombre')"
+                    (input)="limpiarErrorDeRecargos()"
+                  />
+                  @if (errorLocalDeRecargo(i, 'nombre'); as mensaje) {
+                    <span [id]="'recargo-costo-nombre-' + i + '-error'" class="campo-error">{{ mensaje }}</span>
+                  }
+                </div>
+                <div class="campo">
+                  <label [for]="'recargo-costo-porcentaje-' + i">Porcentaje del recargo {{ i + 1 }} (%)</label>
+                  <input
+                    [id]="'recargo-costo-porcentaje-' + i"
+                    appImporte
+                    negativos
+                    formControlName="porcentaje"
+                    [attr.aria-invalid]="errorLocalDeRecargo(i, 'porcentaje') ? 'true' : null"
+                    [attr.aria-describedby]="describirRecargo(i, 'porcentaje')"
+                    (input)="limpiarErrorDeRecargos()"
+                  />
+                  @if (errorLocalDeRecargo(i, 'porcentaje'); as mensaje) {
+                    <span [id]="'recargo-costo-porcentaje-' + i + '-error'" class="campo-error">{{ mensaje }}</span>
+                  }
+                </div>
+                <button
+                  type="button"
+                  class="secundario chico quitar-recargo-costo"
+                  [attr.aria-label]="'Quitar el recargo ' + (i + 1)"
+                  (click)="quitarRecargo(i)"
+                >
+                  Quitar
+                </button>
+              </div>
+            }
+          </div>
+          @if (errorServidorDeRecargos(); as mensaje) {
+            <span id="recargosCosto-error-servidor" class="campo-error" data-error-de="recargosCosto">{{ mensaje }}</span>
+          }
+          @if (costoRealEnVivo(); as costoReal) {
+            <span id="costo-real-en-vivo" class="costo-real-en-vivo">Costo real: <strong>{{ costoReal }}</strong></span>
+          }
+          <button
+            type="button"
+            class="secundario chico agregar-recargo-costo"
+            [disabled]="!puedeAgregarRecargo()"
+            (click)="agregarRecargo()"
+          >
+            Agregar
+          </button>
+          @if (!puedeAgregarRecargo()) {
+            <span class="pista">Un artículo tiene hasta 5 recargos.</span>
+          }
+        </fieldset>
       }
 
       <div class="campo">
