@@ -87,7 +87,7 @@ class ArticuloResponseTest {
                 "proveedorId", "costo", "moneda", "margenPorcentaje", "alicuotaIva", "precioFinal", "unidad",
                 "stockActual", "stockMinimo", "ubicacion", "activo", "precioListaProveedor");
         assertThat(nombres).endsWith("ajuste1", "ajuste2", "ajuste3", "bonificacion1", "bonificacion2", "bonificacion3",
-                "listaIncluyeIva", "version", "precioManual", "ajustesPrecio", "costoAl");
+                "listaIncluyeIva", "version", "precioManual", "ajustesPrecio", "costoAl", "oferta");
     }
 
     @Test
