@@ -15,7 +15,8 @@ import java.math.BigDecimal;
 
 /**
  * Una forma de pago de la ferreteria (GDS-11): "Visa 6 cuotas", "Mercado Pago"... Pertenece a un {@link MedioPago}, que
- * es el que suma la caja, y trae su recargo en %. No se borra, se desactiva: los pagos la van a referenciar.
+ * es el que suma la caja, y trae su recargo o su descuento en %. No se borra, se desactiva: los pagos la van a
+ * referenciar.
  */
 @Entity
 @Table(name = "forma_pago")
@@ -40,6 +41,10 @@ public class FormaPago {
     @Column(name = "recargo_porcentaje", nullable = false, precision = 5, scale = 2)
     private BigDecimal recargoPorcentaje;
 
+    /** Descuento por pagar con esta forma (descuento en efectivo): 10.00 significa 10 %. De 0 a 99,99. */
+    @Column(name = "descuento_porcentaje", nullable = false, precision = 5, scale = 2)
+    private BigDecimal descuentoPorcentaje;
+
     @Column(nullable = false)
     private boolean activa;
 
@@ -49,19 +54,29 @@ public class FormaPago {
     protected FormaPago() {}
 
     public static FormaPago de(Long ferreteriaId, String nombre, MedioPago medio, BigDecimal recargoPorcentaje,
-            boolean activa, int orden) {
+            BigDecimal descuentoPorcentaje, boolean activa, int orden) {
         FormaPago forma = new FormaPago();
         forma.ferreteriaId = ferreteriaId;
-        forma.actualizar(nombre, medio, recargoPorcentaje, activa, orden);
+        forma.actualizar(nombre, medio, recargoPorcentaje, descuentoPorcentaje, activa, orden);
         return forma;
     }
 
-    public void actualizar(String nombre, MedioPago medio, BigDecimal recargoPorcentaje, boolean activa, int orden) {
+    public void actualizar(String nombre, MedioPago medio, BigDecimal recargoPorcentaje,
+            BigDecimal descuentoPorcentaje, boolean activa, int orden) {
         this.nombre = nombre;
         this.medio = medio;
         this.recargoPorcentaje = recargoPorcentaje;
+        this.descuentoPorcentaje = descuentoPorcentaje;
         this.activa = activa;
         this.orden = orden;
+    }
+
+    /**
+     * Lo que la forma le suma (positivo, recargo) o le resta (negativo, descuento) a la parte que paga, en %. Una forma
+     * lleva uno de los dos, nunca ambos.
+     */
+    public BigDecimal ajustePorcentaje() {
+        return recargoPorcentaje.subtract(descuentoPorcentaje);
     }
 
     public Long getId() { return id; }
@@ -69,6 +84,7 @@ public class FormaPago {
     public String getNombre() { return nombre; }
     public MedioPago getMedio() { return medio; }
     public BigDecimal getRecargoPorcentaje() { return recargoPorcentaje; }
+    public BigDecimal getDescuentoPorcentaje() { return descuentoPorcentaje; }
     public boolean isActiva() { return activa; }
     public int getOrden() { return orden; }
 }

@@ -55,8 +55,11 @@ public class FormaPagoService {
             throw new ConflictException(NOMBRE_REPETIDO);
         }
         int orden = datos.orden() != null ? datos.orden() : repositorio.maxOrdenScoped() + 1;
+        BigDecimal recargo = alCrear(datos, datos.recargoPorcentaje());
+        BigDecimal descuento = alCrear(datos, datos.descuentoPorcentaje());
+        validarRecargoODescuento(recargo, descuento);
         return repositorio.save(FormaPago.de(TenantContext.requireFerreteriaId(), nombre, datos.medio(),
-                recargoAlCrear(datos), datos.activa() == null || datos.activa(), orden));
+                recargo, descuento, datos.activa() == null || datos.activa(), orden));
     }
 
     /** Una forma de otra ferreteria da 404, igual que una que no existe. */
@@ -74,26 +77,34 @@ public class FormaPagoService {
         if (dejaDeSerEfectivoActivo && !repositorio.existeOtraActivaDeMedioScoped(MedioPago.EFECTIVO, id)) {
             throw new ReglaDeNegocioException("Tiene que quedar al menos una forma de pago en efectivo.");
         }
-        forma.actualizar(nombre, datos.medio(),
-                recargoAlActualizar(datos, forma), activa,
+        BigDecimal recargo = alActualizar(datos, datos.recargoPorcentaje(), forma.getRecargoPorcentaje());
+        BigDecimal descuento = alActualizar(datos, datos.descuentoPorcentaje(), forma.getDescuentoPorcentaje());
+        validarRecargoODescuento(recargo, descuento);
+        forma.actualizar(nombre, datos.medio(), recargo, descuento, activa,
                 datos.orden() != null ? datos.orden() : forma.getOrden());
         return forma;
     }
 
-    /** Sin recargo vale 0, y la cuenta corriente nunca lleva recargo (CC-023). */
-    private static BigDecimal recargoAlCrear(DatosFormaPago datos) {
-        if (datos.medio() == MedioPago.CUENTA_CORRIENTE || datos.recargoPorcentaje() == null) {
+    /** Recargo o descuento: sin valor es 0, y la cuenta corriente nunca lleva ninguno de los dos (CC-023). */
+    private static BigDecimal alCrear(DatosFormaPago datos, BigDecimal porcentaje) {
+        if (datos.medio() == MedioPago.CUENTA_CORRIENTE || porcentaje == null) {
             return BigDecimal.ZERO;
         }
-        return datos.recargoPorcentaje();
+        return porcentaje;
     }
 
-    /** Sin recargo en el pedido conserva el que tenia, salvo la cuenta corriente, que siempre queda en 0 (CC-023). */
-    private static BigDecimal recargoAlActualizar(DatosFormaPago datos, FormaPago forma) {
+    /** Recargo o descuento: sin valor conserva el que tenia, salvo la cuenta corriente, que queda en 0 (CC-023). */
+    private static BigDecimal alActualizar(DatosFormaPago datos, BigDecimal porcentaje, BigDecimal actual) {
         if (datos.medio() == MedioPago.CUENTA_CORRIENTE) {
             return BigDecimal.ZERO;
         }
-        return datos.recargoPorcentaje() != null ? datos.recargoPorcentaje() : forma.getRecargoPorcentaje();
+        return porcentaje != null ? porcentaje : actual;
+    }
+
+    private static void validarRecargoODescuento(BigDecimal recargo, BigDecimal descuento) {
+        if (recargo.signum() > 0 && descuento.signum() > 0) {
+            throw new ReglaDeNegocioException("Una forma de pago lleva recargo o descuento, no los dos.");
+        }
     }
 
     /**

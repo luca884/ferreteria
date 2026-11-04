@@ -13,8 +13,8 @@ import jakarta.validation.constraints.Size;
 import java.math.BigDecimal;
 
 /**
- * Alta y edicion de una forma de pago (RC-008). El recargo, activa y orden son opcionales: al crear valen 0, activa y el
- * siguiente al ultimo; al editar se conserva lo que no viene.
+ * Alta y edicion de una forma de pago (RC-008). El recargo, el descuento, activa y orden son opcionales: al crear valen 0,
+ * 0, activa y el siguiente al ultimo; al editar se conserva lo que no viene.
  */
 public record FormaPagoRequest(
         @NotBlank(message = "El nombre es obligatorio.")
@@ -32,9 +32,14 @@ public record FormaPagoRequest(
         Boolean activa,
 
         @Min(value = 0, message = "El orden no puede ser negativo.")
-        Integer orden) {
+        Integer orden,
+
+        @DecimalMin(value = "0.00", message = "El descuento tiene que estar entre 0 y 99,99 %.")
+        @DecimalMax(value = "99.99", message = "El descuento tiene que estar entre 0 y 99,99 %.")
+        @Digits(integer = 2, fraction = 2, message = "El descuento admite hasta 2 decimales.")
+        BigDecimal descuentoPorcentaje) {
 
     public DatosFormaPago aDatos() {
-        return new DatosFormaPago(nombre, medio, recargoPorcentaje, activa, orden);
+        return new DatosFormaPago(nombre, medio, recargoPorcentaje, descuentoPorcentaje, activa, orden);
     }
 }

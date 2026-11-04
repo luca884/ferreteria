@@ -93,11 +93,77 @@ class RecargoVentaTest {
         assertThat(RecargoVenta.repartir(renglones, BigDecimal.ZERO)).isEqualTo(renglones);
     }
 
+    @ParameterizedTest(name = "{0} al {1} % es {2}")
+    @CsvSource({
+            "1000.00, -10.00, -100.00",
+            "0.05,    -10.00, -0.01",
+            "0.04,    -10.00, 0.00",
+            "1234.57, -12.35, -152.47",
+            "100.00,  -99.99, -99.99"})
+    @DisplayName("descuento por forma de pago: el % negativo da un recargo negativo, HALF_UP lejos del cero, espejo del positivo")
+    void recargoNegativoDeUnPago(String monto, String porcentaje, String esperado) {
+        assertThat(RecargoVenta.deCobro(bd(monto), bd(porcentaje))).isEqualByComparingTo(esperado);
+    }
+
     @Test
-    @DisplayName("un recargo negativo se rechaza")
-    void recargoNegativo() {
-        assertThatThrownBy(() -> RecargoVenta.repartir(List.of(renglon("100.00")), bd("-1.00")))
+    @DisplayName("un recargo negativo se reparte como el positivo, en espejo: los centavos van a los restos mayores")
+    void recargoNegativoEnEspejo() {
+        RenglonVenta cinco = RenglonVenta.de(bd("0.05"), BigDecimal.ONE, IVA_21);
+
+        List<RenglonVenta> unico = RecargoVenta.repartir(List.of(renglon("1000.00")), bd("-100.00"));
+        List<RenglonVenta> proporcion = RecargoVenta.repartir(List.of(renglon("300.00"), renglon("100.00")),
+                bd("-40.00"));
+        List<RenglonVenta> centavos = RecargoVenta.repartir(List.of(cinco, cinco, cinco), bd("-0.02"));
+
+        assertThat(unico.get(0).total()).isEqualByComparingTo("900.00");
+        assertThat(proporcion.get(0).recargo()).isEqualByComparingTo("-30.00");
+        assertThat(proporcion.get(1).recargo()).isEqualByComparingTo("-10.00");
+        assertThat(centavos).extracting(RenglonVenta::recargo)
+                .usingElementComparator(BigDecimal::compareTo)
+                .containsExactly(bd("-0.01"), bd("-0.01"), bd("0.00"));
+    }
+
+    @Test
+    @DisplayName("un recargo negativo mayor que el total se rechaza: la venta no puede quedar negativa")
+    void recargoNegativoMayorQueElTotal() {
+        assertThatThrownBy(() -> RecargoVenta.repartir(List.of(renglon("100.00")), bd("-100.01")))
                 .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    @DisplayName("2.000 tickets al azar con recargo negativo (semilla fija): suma exacta, ningun renglon negativo ni positivo de mas")
+    void propiedadDeCoherenciaNegativa() {
+        Random azar = new Random(23L);
+
+        for (int ticket = 0; ticket < 2000; ticket++) {
+            List<RenglonVenta> renglones = new ArrayList<>();
+            int cantidad = 1 + azar.nextInt(10);
+            for (int i = 0; i < cantidad; i++) {
+                BigDecimal precio = BigDecimal.valueOf(1 + azar.nextInt(500_000), 2);
+                BigDecimal cant = BigDecimal.valueOf(1 + azar.nextInt(20_000), 3);
+                renglones.add(RenglonVenta.de(precio, cant, ALICUOTAS[azar.nextInt(ALICUOTAS.length)]));
+            }
+            BigDecimal totalSinRecargo = renglones.stream().map(RenglonVenta::total).reduce(BigDecimal.ZERO,
+                    BigDecimal::add);
+            if (totalSinRecargo.signum() == 0) {
+                continue;
+            }
+            BigDecimal porcentaje = BigDecimal.valueOf(-(1 + azar.nextInt(9_999)), 2);
+            BigDecimal recargo = RecargoVenta.deCobro(totalSinRecargo, porcentaje);
+
+            List<RenglonVenta> repartidos = RecargoVenta.repartir(renglones, recargo);
+
+            BigDecimal suma = BigDecimal.ZERO;
+            for (int i = 0; i < repartidos.size(); i++) {
+                RenglonVenta r = repartidos.get(i);
+                assertThat(r.recargo().signum()).as("recargo %d del ticket %d", i, ticket).isLessThanOrEqualTo(0);
+                assertThat(r.total().signum()).as("total %d del ticket %d", i, ticket).isGreaterThanOrEqualTo(0);
+                assertThat(r.neto().add(r.iva())).as("neto + iva %d del ticket %d", i, ticket)
+                        .isEqualByComparingTo(r.total());
+                suma = suma.add(r.recargo());
+            }
+            assertThat(suma).as("suma de recargos del ticket %d", ticket).isEqualByComparingTo(recargo);
+        }
     }
 
     @Test

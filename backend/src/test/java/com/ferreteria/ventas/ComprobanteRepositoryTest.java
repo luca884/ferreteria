@@ -73,7 +73,7 @@ class ComprobanteRepositoryTest extends IntegrationTestBase {
             itemRepository.saveAll(List.of(ItemComprobante.de(e.ferreteriaId(), guardado.getId(), 1, e.articuloId(),
                     "Cable unipolar", "METRO", "IVA_21", null, renglon)));
             FormaPago visa = formaPagoRepository.save(FormaPago.de(e.ferreteriaId(), "Visa débito", MedioPago.DEBITO,
-                    new BigDecimal("5.00"), true, 1));
+                    new BigDecimal("5.00"), BigDecimal.ZERO, true, 1));
             pagoRepository.save(Pago.de(e.ferreteriaId(), guardado.getId(), visa, totales.total(), new BigDecimal("0.50")));
             return guardado.getId();
         });

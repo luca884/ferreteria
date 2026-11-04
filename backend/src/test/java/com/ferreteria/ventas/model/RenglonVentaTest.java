@@ -216,10 +216,23 @@ class RenglonVentaTest {
     }
 
     @Test
-    @DisplayName("un recargo negativo se rechaza")
-    void recargoNegativo() {
+    @DisplayName("descuento por forma de pago (recargo negativo): 100 - 10 da 90, neto 74,38 e IVA 15,62")
+    void conRecargoNegativo() {
+        RenglonVenta r = RenglonVenta.de(bd("100.00"), BigDecimal.ONE, bd("21.00")).conRecargo(bd("-10.00"));
+
+        assertThat(r.recargo()).isEqualByComparingTo("-10.00");
+        assertThat(r.total()).isEqualByComparingTo("90.00");
+        assertThat(r.neto()).isEqualByComparingTo("74.38");
+        assertThat(r.iva()).isEqualByComparingTo("15.62");
+        assertThat(r.totalSinRecargo()).isEqualByComparingTo("100.00");
+    }
+
+    @Test
+    @DisplayName("un recargo negativo puede dejar el renglon en 0, pero no por debajo")
+    void recargoNegativoNoPasaDelTotal() {
         RenglonVenta r = RenglonVenta.de(bd("100.00"), BigDecimal.ONE, bd("21.00"));
 
-        assertThatThrownBy(() -> r.conRecargo(bd("-0.01"))).isInstanceOf(IllegalArgumentException.class);
+        assertThat(r.conRecargo(bd("-100.00")).total()).isEqualByComparingTo("0.00");
+        assertThatThrownBy(() -> r.conRecargo(bd("-100.01"))).isInstanceOf(IllegalArgumentException.class);
     }
 }

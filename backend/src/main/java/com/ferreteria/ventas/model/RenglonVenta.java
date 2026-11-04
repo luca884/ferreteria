@@ -42,12 +42,15 @@ public record RenglonVenta(BigDecimal precioUnitario, BigDecimal cantidad, BigDe
         return total.subtract(recargo);
     }
 
-    /** El mismo renglon con ese recargo (el que tenia se reemplaza, no se acumula) y neto e IVA del total nuevo. */
+    /**
+     * El mismo renglon con ese recargo (el que tenia se reemplaza, no se acumula) y neto e IVA del total nuevo. Negativo
+     * es el descuento de la forma de pago: puede dejar el renglon en 0, nunca por debajo.
+     */
     public RenglonVenta conRecargo(BigDecimal nuevoRecargo) {
-        if (nuevoRecargo.signum() < 0) {
-            throw new IllegalArgumentException("El recargo no puede ser negativo: " + nuevoRecargo);
-        }
         BigDecimal nuevoTotal = totalSinRecargo().add(nuevoRecargo);
+        if (nuevoTotal.signum() < 0) {
+            throw new IllegalArgumentException("El descuento de la forma de pago supera el renglon: " + nuevoRecargo);
+        }
         BigDecimal nuevoNeto = netoDe(nuevoTotal, porcentajeIva);
         return new RenglonVenta(precioUnitario, cantidad, bruto, descuentoPorcentaje, descuentoGlobalPorcentaje,
                 nuevoTotal, nuevoNeto, nuevoTotal.subtract(nuevoNeto), porcentajeIva, nuevoRecargo);

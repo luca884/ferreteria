@@ -58,7 +58,12 @@ class FormaPagoServiceTest {
     }
 
     private static FormaPago forma(long id, String nombre, MedioPago medio, String recargo, boolean activa) {
-        FormaPago forma = FormaPago.de(FERRETERIA, nombre, medio, bd(recargo), activa, (int) id);
+        return forma(id, nombre, medio, recargo, "0", activa);
+    }
+
+    private static FormaPago forma(long id, String nombre, MedioPago medio, String recargo, String descuento,
+            boolean activa) {
+        FormaPago forma = FormaPago.de(FERRETERIA, nombre, medio, bd(recargo), bd(descuento), activa, (int) id);
         try {
             Field campo = FormaPago.class.getDeclaredField("id");
             campo.setAccessible(true);
@@ -70,7 +75,78 @@ class FormaPagoServiceTest {
     }
 
     private static DatosFormaPago datos(String nombre, MedioPago medio, String recargo, Boolean activa, Integer orden) {
-        return new DatosFormaPago(nombre, medio, recargo == null ? null : bd(recargo), activa, orden);
+        return datos(nombre, medio, recargo, null, activa, orden);
+    }
+
+    private static DatosFormaPago datos(String nombre, MedioPago medio, String recargo, String descuento,
+            Boolean activa, Integer orden) {
+        return new DatosFormaPago(nombre, medio, recargo == null ? null : bd(recargo),
+                descuento == null ? null : bd(descuento), activa, orden);
+    }
+
+    @Test
+    @DisplayName("descuento en efectivo: crear con descuento lo guarda; sin descuento vale 0; el ajuste es recargo - descuento")
+    void crearConDescuento() {
+        when(repositorio.contarScoped()).thenReturn(4L);
+        when(repositorio.save(any(FormaPago.class))).thenAnswer(i -> i.getArgument(0));
+
+        FormaPago contado = service.crear(datos("Contado", MedioPago.EFECTIVO, null, "10.00", null, null));
+        FormaPago visa = service.crear(datos("Visa", MedioPago.CREDITO, "15.00", null, null, null));
+
+        assertThat(contado.getDescuentoPorcentaje()).isEqualByComparingTo("10.00");
+        assertThat(contado.getRecargoPorcentaje()).isEqualByComparingTo("0");
+        assertThat(contado.ajustePorcentaje()).isEqualByComparingTo("-10.00");
+        assertThat(visa.getDescuentoPorcentaje()).isEqualByComparingTo("0");
+        assertThat(visa.ajustePorcentaje()).isEqualByComparingTo("15.00");
+    }
+
+    @Test
+    @DisplayName("descuento en efectivo: una forma lleva recargo o descuento, no los dos (crear y actualizar, también con lo que conserva)")
+    void recargoYDescuentoSeExcluyen() {
+        when(repositorio.contarScoped()).thenReturn(4L);
+        FormaPago visa = forma(10, "Visa", MedioPago.CREDITO, "5.00", true);
+        when(repositorio.findScoped(10L)).thenReturn(Optional.of(visa));
+        String mensaje = "Una forma de pago lleva recargo o descuento, no los dos.";
+
+        assertThatThrownBy(() -> service.crear(datos("Mixta", MedioPago.EFECTIVO, "5", "10", null, null)))
+                .isInstanceOf(ReglaDeNegocioException.class).hasMessage(mensaje);
+        assertThatThrownBy(() -> service.actualizar(10L, datos("Visa", MedioPago.CREDITO, null, "10", null, null)))
+                .isInstanceOf(ReglaDeNegocioException.class).hasMessage(mensaje);
+        verify(repositorio, never()).save(any());
+        assertThat(visa.getDescuentoPorcentaje()).isEqualByComparingTo("0");
+        assertThat(visa.getRecargoPorcentaje()).isEqualByComparingTo("5.00");
+    }
+
+    @Test
+    @DisplayName("descuento en efectivo: actualizar cambia el descuento y sin descuento en el pedido conserva el que tenia")
+    void actualizarDescuento() {
+        FormaPago efectivo = forma(1, "Efectivo", MedioPago.EFECTIVO, "0", "5.00", true);
+        when(repositorio.findScoped(1L)).thenReturn(Optional.of(efectivo));
+
+        service.actualizar(1L, datos("Efectivo", MedioPago.EFECTIVO, "0", null, true, null));
+        assertThat(efectivo.getDescuentoPorcentaje()).isEqualByComparingTo("5.00");
+
+        service.actualizar(1L, datos("Efectivo", MedioPago.EFECTIVO, "0", "12.50", true, null));
+        assertThat(efectivo.getDescuentoPorcentaje()).isEqualByComparingTo("12.50");
+
+        service.actualizar(1L, datos("Efectivo", MedioPago.EFECTIVO, "0", "0", true, null));
+        assertThat(efectivo.getDescuentoPorcentaje()).isEqualByComparingTo("0");
+    }
+
+    @Test
+    @DisplayName("descuento en efectivo: la cuenta corriente nunca lleva descuento, como el recargo (crear y actualizar)")
+    void cuentaCorrienteSinDescuento() {
+        when(repositorio.contarScoped()).thenReturn(5L);
+        when(repositorio.save(any(FormaPago.class))).thenAnswer(i -> i.getArgument(0));
+        FormaPago efectivo = forma(1, "Efectivo viejo", MedioPago.EFECTIVO, "0", "10.00", true);
+        when(repositorio.findScoped(1L)).thenReturn(Optional.of(efectivo));
+        when(repositorio.existeOtraActivaDeMedioScoped(MedioPago.EFECTIVO, 1L)).thenReturn(true);
+
+        FormaPago fiado = service.crear(datos("Fiado", MedioPago.CUENTA_CORRIENTE, null, "10", null, null));
+        service.actualizar(1L, datos("Efectivo viejo", MedioPago.CUENTA_CORRIENTE, null, null, null, null));
+
+        assertThat(fiado.getDescuentoPorcentaje()).isEqualByComparingTo("0");
+        assertThat(efectivo.getDescuentoPorcentaje()).isEqualByComparingTo("0");
     }
 
     @Test

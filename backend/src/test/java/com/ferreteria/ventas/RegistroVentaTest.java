@@ -215,7 +215,8 @@ class RegistroVentaTest {
     }
 
     static FormaPago forma(MedioPago medio, String recargo, boolean activa) {
-        FormaPago forma = FormaPago.de(FERRETERIA, nombreDe(medio), medio, bd(recargo), activa, medio.ordinal() + 1);
+        FormaPago forma = FormaPago.de(FERRETERIA, nombreDe(medio), medio, bd(recargo), BigDecimal.ZERO, activa,
+                medio.ordinal() + 1);
         ReflectionTestUtils.setField(forma, "id", formaId(medio));
         return forma;
     }
@@ -1663,7 +1664,8 @@ class RegistroVentaTest {
     }
 
     FormaPago formaConId(MedioPago medio, Long id) {
-        FormaPago forma = FormaPago.de(FERRETERIA, "Otra " + nombreDe(medio), medio, bd("0.00"), true, 9);
+        FormaPago forma = FormaPago.de(FERRETERIA, "Otra " + nombreDe(medio), medio, bd("0.00"), BigDecimal.ZERO, true,
+                9);
         ReflectionTestUtils.setField(forma, "id", id);
         return forma;
     }

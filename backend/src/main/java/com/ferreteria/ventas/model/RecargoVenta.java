@@ -11,7 +11,8 @@ import java.util.List;
  * El recargo de la forma de pago (GDS-11, RC-004). El de un pago es su monto por el % de la forma, a centavos HALF_UP.
  * El de la venta (la suma de los de sus pagos) se reparte entre los renglones en proporcion a su total ya descontado:
  * cada uno se queda con la parte entera en centavos y los centavos que sobran van de a uno a los restos mayores (a
- * igual resto, al primer renglon), asi ningun recargo es negativo y la suma da exacto. Dominio puro.
+ * igual resto, al primer renglon), asi la suma da exacto y ningun renglon cambia de signo. El recargo negativo es el
+ * descuento de la forma de pago (descuento en efectivo): mismo calculo en espejo. Dominio puro.
  */
 public final class RecargoVenta {
 
@@ -25,10 +26,11 @@ public final class RecargoVenta {
         return monto.multiply(porcentaje).divide(CIEN, ESCALA, RoundingMode.HALF_UP);
     }
 
+    /**
+     * Negativo es el descuento de la forma de pago: se reparte su valor absoluto igual que un recargo y a cada renglon le
+     * toca su parte con signo menos (espejo exacto). No puede superar el total.
+     */
     public static List<RenglonVenta> repartir(List<RenglonVenta> renglones, BigDecimal recargo) {
-        if (recargo.signum() < 0) {
-            throw new IllegalArgumentException("El recargo no puede ser negativo: " + recargo);
-        }
         if (recargo.signum() == 0) {
             return renglones;
         }
@@ -37,8 +39,12 @@ public final class RecargoVenta {
         if (suma.signum() == 0) {
             throw new IllegalArgumentException("No hay un total sobre el que repartir el recargo.");
         }
+        if (recargo.negate().compareTo(suma) > 0) {
+            throw new IllegalArgumentException("El descuento de la forma de pago supera el total: " + recargo);
+        }
+        int signo = recargo.signum();
         int n = renglones.size();
-        BigInteger recargoCentavos = centavos(recargo);
+        BigInteger recargoCentavos = centavos(recargo.abs());
         BigInteger sumaCentavos = centavos(suma);
         BigInteger[] partes = new BigInteger[n];
         BigInteger[] restos = new BigInteger[n];
@@ -63,7 +69,8 @@ public final class RecargoVenta {
         }
         List<RenglonVenta> resultado = new ArrayList<>();
         for (int i = 0; i < n; i++) {
-            resultado.add(renglones.get(i).conRecargo(new BigDecimal(partes[i], ESCALA)));
+            BigInteger parte = signo < 0 ? partes[i].negate() : partes[i];
+            resultado.add(renglones.get(i).conRecargo(new BigDecimal(parte, ESCALA)));
         }
         return resultado;
     }
