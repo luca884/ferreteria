@@ -14,7 +14,7 @@ import java.util.List;
  * La configuracion de cotizacion de la ferreteria. {@code vigente} y {@code vigenteDesde} son el dolar con el que se
  * calcularon sus precios la ultima vez (vacios si todavia no se fijo ninguno): un cambio de {@code dolarPrecios} o de
  * {@code ladoPrecios} no los toca hasta el proximo recalculo. {@code aConfirmar} es el dolar nuevo que se aleja mas
- * del 20 % del vigente y espera la confirmacion del Dueno (auditoria H09), o null si no hay ninguno.
+ * del umbral de la ferreteria ({@code umbralDesvio}) del vigente y espera la confirmacion del Dueno (auditoria H09), o null si no hay ninguno.
  */
 public record ConfiguracionCotizacionResponse(
         boolean activa,
@@ -22,6 +22,7 @@ public record ConfiguracionCotizacionResponse(
         LadoCotizacion ladoPrecios,
         List<String> visibles,
         String horaRecalculo,
+        BigDecimal umbralDesvio,
         BigDecimal vigente,
         Instant vigenteDesde,
         AConfirmar aConfirmar) {
@@ -33,7 +34,7 @@ public record ConfiguracionCotizacionResponse(
     public static ConfiguracionCotizacionResponse de(ConfiguracionCotizacion c, DolarAConfirmar aConfirmar) {
         return new ConfiguracionCotizacionResponse(c.isActiva(),
                 CatalogoCotizaciones.codigo(CatalogoCotizaciones.USD, c.getCasaPrecios()), c.getLadoPrecios(),
-                c.getVisibles(), c.getHoraRecalculo().format(HORA), c.getVigente(), c.getVigenteDesde(),
+                c.getVisibles(), c.getHoraRecalculo().format(HORA), c.getUmbralDesvioPorcentaje(), c.getVigente(), c.getVigenteDesde(),
                 aConfirmar == null ? null : new AConfirmar(aConfirmar.nuevo(), aConfirmar.vigente(),
                         aConfirmar.desvioPorcentaje(), aConfirmar.mensaje()));
     }

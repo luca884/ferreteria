@@ -1,0 +1,49 @@
+# mejoras-ferreteros-bloque-1
+
+Objetivo: primer bloque de cambios pedidos por ferreteros locales (aviso del dólar configurable con vista previa, código interno sugerido, contacto de proveedores, teléfono de usuarios, «Última actualización») · Por qué: correcciones de usuarios reales de sistemas similares.
+Rama: `feat/mejoras-ferreteros-bloque-1` desde `01767ae` · Entrega: single-pr · Ruteo: caso 5 (Opus de punta a punta, aprobado por Luca) · Runner: backend `./mvnw test -Dtest=<Clase>` / `./mvnw test`; frontend `npx ng test --watch=false [--include=<spec>]`, `npx ng build` · Mirror Engram: `odd/mejoras-ferreteros-bloque-1/tasks` (ok)
+Pronóstico: ~1500 líneas cambiadas (agregadas + borradas, sin generados) · Heurística por tarea: ~400 (no es límite)
+
+## Specs
+
+Alcance: bloque 1 del relevamiento (S1–S6). · Fuera de alcance: bloques 2 y 3 (menú agrupado, buscador, colores, aviso post-venta, ofertas, descuento en efectivo, facturas de proveedor) y lo de "proyecto terminado" (fotos).
+Restricciones: reglas de arquitectura de `CLAUDE.md` (tenant solo del JWT, `*Scoped`, 404 entre ferreterías, `BigDecimal`, Flyway, test de aislamiento por endpoint nuevo).
+
+- S1: "Dolar margen 5% avise, en el sistema tenemos que si de una actualizacion del dolar a otra, si pasa del 20% del anterioir valor ya sea para arriba o para abajo que se avise y notifique haber si quiere modificar los productos con ese precio nuevo, estaria bueno mostrar como una vista previa siempre en esos cambios, que ahora sea del 5% el aviso, eso tambien estaria bueno que lo peuda modificar el dueno solamente" — Acordado: umbral por ferretería, 5 % por defecto, solo el Dueño lo cambia, entre 1 % y 50 %. Debajo del umbral el recálculo diario se aplica solo como hoy; por encima, no se toca nada hasta que el Dueño confirma. — Aceptación: con el dólar 6 % arriba del vigente y umbral 5, el diario no aplica y «Recalcular ahora» pide confirmación; con umbral 10, se aplica. Un Vendedor no puede cambiar el umbral. — Checks: `DesvioDeCotizacionTest`, tests de `DolarDePreciosService` y de la configuración.
+- S2: vista previa — Acordado (Luca: "dale me gusta tambien lo de recalcular ahora, y te muetra la vista previa con todos los articulos me parece correcto"): antes de aplicar un dólar que supera el umbral, y SIEMPRE antes de «Recalcular ahora», se muestra una tabla con todos los artículos en dólares: código, descripción, precio actual, precio nuevo y diferencia. Se aplica recién cuando el Dueño confirma. — Aceptación: la vista previa no cambia ningún precio ni escribe historial; confirmar aplica el mismo dólar que se vio (si cambió entre medio, 409 y nueva vista previa). — Checks: test de integración del endpoint + aislamiento entre ferreterías; spec del componente.
+- S3: "Alta producto, ultimo producto código, cuando se haga un alta de produto, que en el codigo del producto le aparezca el ultimo codigo mas uno, por ejemplo el ultimo producto cargado tiene el codigo 002 ahora cuando queiras cargar un producto que yaaparezca cargador 003  para el nuevo producto, se puede modificar igualmente ese valor pero siempre comprobar que ese numero este disponible" — Acordado: último artículo cargado A MANO (no importado), +1 al número final manteniendo prefijo y ceros (`002`→`003`, `TOR-009`→`TOR-010`), al agotarse los dígitos se suma uno ("cuando termine el digito le sumas otro": `999`→`1000`), se saltean los ocupados; si el código no termina en número, no se sugiere. Editable; la unicidad ya la valida el guardado. — Aceptación: el alta abre con el código sugerido; el sugerido nunca está ocupado; otra ferretería no influye. — Checks: test del dominio de la regla + test de integración con aislamiento + spec del formulario.
+- S4: "Proveedores telefono, contacto, esos dos datos agreegarlos a los proveedores" — Acordado: nombre de contacto, teléfono, WhatsApp y correo, todos opcionales (como los clientes). — Aceptación: se guardan, se editan y se muestran. — Checks: tests del proveedor + spec.
+- S5: "y verificar si en los perfiles en general ocmo dueno y vendedor tambien tengan" — Acordado: teléfono opcional en usuarios. — Aceptación: se guarda y se edita. — Checks: tests de usuarios + spec.
+- S6: "Última actualización, en lista en general de productos" — Hallazgo: ya existe como «Costo al» (`frontend/src/app/features/articulos/articulos.html:126`). Acordado: renombrarla a «Última actualización». — Checks: spec del listado.
+- S7 (supuesto): "Dolar banco nación, siempre se toma el dolar del banco nacion" — Verificado el 2026-11-03: `USD:oficial` de dolarapi (default actual, editable) coincide con el billete de bna.com.ar (1520/1570). Sin cambios.
+
+## Tasks
+
+- [ ] T1 · S1 · ruta: inline · Aceptación: umbral por ferretería (migración, default 5), validado 1–50, solo Dueño; `DesvioDeCotizacion` usa el umbral de la ferretería · Evidencia: — · Risk: item 1 (migración + cambia cuándo se aplican precios)
+- [ ] T2 · S2 · ruta: inline · Aceptación: endpoint de vista previa sin efectos + confirmación con el dólar visto · Evidencia: — · Risk: item 3 (contrato de `POST /api/cotizacion/recalculo`)
+- [ ] T3 · S1, S2 · ruta: inline · Aceptación: pantalla de cotización con umbral y vista previa antes de aplicar · Evidencia: — · Risk: none
+- [ ] T4 · S3 · ruta: inline · Aceptación: regla del código siguiente + endpoint con aislamiento · Evidencia: — · Risk: none
+- [ ] T5 · S3 · ruta: inline · Aceptación: el alta abre con el código sugerido · Evidencia: — · Risk: none
+- [ ] T6 · S4 · ruta: inline · Aceptación: contacto en proveedores (migración + API + pantalla) · Evidencia: — · Risk: item 1 (migración)
+- [ ] T7 · S5 · ruta: inline · Aceptación: teléfono en usuarios (migración + API + pantalla) · Evidencia: — · Risk: item 1 (migración)
+- [ ] T8 · S6 · ruta: inline · Aceptación: columna «Última actualización» · Evidencia: — · Risk: none
+
+## Log
+
+- L1 (2026-11-03) Pedido original, textual (relevamiento completo; este doc cubre el bloque 1):
+  > tengo algunas correciones que me dieron personas realcionadas al mundo de la ferreteria locales y que utilizan programas como estos, te dejo algnunas recomendaciones de cambios que me dijo
+  > Última actualización, en lista en general de productos,
+  > Dolar dia de hoy, ver si se actualiza por dolar hoy
+  > Alta producto, ultimo producto código, cuando se haga un alta de produto, que en el codigo del producto le aparezca el ultimo codigo mas uno, por ejemplo el ultimo producto cargado tiene el codigo 002 ahora cuando queiras cargar un producto que yaaparezca cargador 003  para el nuevo producto, se puede modificar igualmente ese valor pero siempre comprobar que ese numero este disponible
+  > Margen predeterminado en rubros, en rrubros que se pueda establecer un margen en general para todos los rubros y obviamente para cada uno en particular
+  > Proveedores telefono, contacto, esos dos datos agreegarlos a los proveedores, y verificar si en los perfiles en general ocmo dueno y vendedor tambien tengan
+  > Stock mínimo, a quien fue comprado prveedor y cuando ultimo, cuando fue la ultima vez que se compro ese producto
+  > Dolar banco nación, siempre se toma el dolar del banco nacion, verificar eso en el proyeto hoy en ida, igualmente te deberia poder cambiarlo, pero por predeterminado en dolar nacion
+  > Dolar que agarre, lo anterioir dicho
+  > Dolar margen 5% avise, en el sistema tenemos que si de una actualizacion del dolar a otra, si pasa del 20% del anterioir valor ya sea para arriba o para abajo que se avise y notifique haber si quiere modificar los productos con ese precio nuevo, estaria bueno mostrar como una vista previa siempre en esos cambios, que ahora sea del 5% el aviso, eso tambien estaria bueno que lo peuda modificar el dueno solamente
+  > Oferta, que se puedan hacer ofertas
+  > Descuento efectivo opción
+  > Dejar ventas mas fácil, [...] (bloque 2)
+  > (resto del relevamiento: bloques 2 y 3, en Engram `producto/relevamiento-ferreteros-2026-11`)
+- L2 (2026-11-03) Decisiones de Luca: orden de bloques ("dale me parece perfecto"); ruteo caso 5 ("dale me parece bien"); regla del código ("si, me parece bien" + "cuando termine el digito le sumas otro"); contacto de proveedores y teléfono de usuarios ("dale me parece correct"); dólar con umbral y vista previa ("dale me gusta tambien lo de recalcular ahora, y te muetra la vista previa con todos los articulos me parece correcto").
+- L3 (2026-11-03) Exploración: umbral fijo `DesvioDeCotizacion.java:15` (20 %), usado en `DolarDePreciosService.java:141`; recálculo en `RecalculoPreciosService.java:100` (`porCotizacion`, MANDATORY); endpoint `RecalculoCotizacionController.java:33` (`?confirmaDesvio`); pantalla `configuracion-cotizacion.ts:90`. Código interno `VARCHAR(30)` único por ferretería (`V2__articulos_y_precios.sql:40`), importación copia el código del proveedor (`ImportacionService` ~268). Proveedor sin contacto (`Proveedor.java`). Última migración: V40. · Próximo paso: T1.

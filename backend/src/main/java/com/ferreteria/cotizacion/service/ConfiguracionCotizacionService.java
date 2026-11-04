@@ -3,6 +3,7 @@ package com.ferreteria.cotizacion.service;
 import com.ferreteria.common.exception.DatosInvalidosException;
 import com.ferreteria.cotizacion.model.CatalogoCotizaciones;
 import com.ferreteria.cotizacion.model.ConfiguracionCotizacion;
+import com.ferreteria.cotizacion.model.DesvioDeCotizacion;
 import com.ferreteria.cotizacion.repository.ConfiguracionCotizacionRepository;
 import com.ferreteria.cotizacion.web.dto.ConfiguracionCotizacionRequest;
 import com.ferreteria.tenant.TenantContext;
@@ -63,6 +64,9 @@ public class ConfiguracionCotizacionService {
         if (pedido.activa() == null) {
             errores.put("activa", "Indicá si la cotización está activada.");
         }
+        if (pedido.umbralDesvio() != null && !DesvioDeCotizacion.umbralValido(pedido.umbralDesvio())) {
+            errores.put("umbralDesvio", "El aviso del dólar tiene que estar entre 1 % y 50 %, con hasta 2 decimales.");
+        }
         if (!errores.isEmpty()) {
             throw new DatosInvalidosException(errores);
         }
@@ -73,6 +77,9 @@ public class ConfiguracionCotizacionService {
         configuracion.setLadoPrecios(pedido.ladoPrecios());
         configuracion.setVisibles(visibles);
         configuracion.setHoraRecalculo(hora);
+        if (pedido.umbralDesvio() != null) {
+            configuracion.setUmbralDesvioPorcentaje(pedido.umbralDesvio());
+        }
         return repositorio.save(configuracion);
     }
 

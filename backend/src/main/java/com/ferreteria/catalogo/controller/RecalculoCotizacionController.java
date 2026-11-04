@@ -27,7 +27,7 @@ public class RecalculoCotizacionController {
 
     /**
      * 200 con la cotizacion usada y cuantos articulos cambiaron; 409 si la cotizacion esta apagada, si no hay ningun
-     * valor o si el dolar se aleja mas del 20 % del vigente y el Dueno no lo confirmo con {@code ?confirmaDesvio=true}.
+     * valor o si el dolar se aleja mas del umbral de la ferreteria del vigente y el Dueno no lo confirmo con {@code ?confirmaDesvio=true}.
      */
     @PostMapping("/recalculo")
     @PreAuthorize("hasRole('DUENO')")

@@ -64,6 +64,13 @@ public class ConfiguracionCotizacion {
     @Column(name = "hora_recalculo", nullable = false)
     private LocalTime horaRecalculo = HORA_POR_DEFECTO;
 
+    /**
+     * Porcentaje de diferencia contra el vigente por encima del cual un dolar nuevo espera la confirmacion del Dueno
+     * ({@link DesvioDeCotizacion}).
+     */
+    @Column(name = "umbral_desvio_porcentaje", nullable = false, precision = 5, scale = 2)
+    private BigDecimal umbralDesvioPorcentaje = DesvioDeCotizacion.UMBRAL_POR_DEFECTO;
+
     /** Dolar con el que se calcularon por ultima vez los precios de esta ferreteria; null si nunca se fijo. */
     @Column(precision = 15, scale = 4)
     private BigDecimal vigente;
@@ -85,7 +92,7 @@ public class ConfiguracionCotizacion {
 
     protected ConfiguracionCotizacion() {}
 
-    /** Activada, dolar oficial vendedor, se muestra el oficial, recalculo a las 08:00 y sin dolar vigente. */
+    /** Activada, dolar oficial vendedor, se muestra el oficial, recalculo a las 08:00, aviso al 5 % y sin dolar vigente. */
     public static ConfiguracionCotizacion porDefecto(Long ferreteriaId) {
         ConfiguracionCotizacion configuracion = new ConfiguracionCotizacion();
         configuracion.ferreteriaId = ferreteriaId;
@@ -106,6 +113,7 @@ public class ConfiguracionCotizacion {
     public void setVisibles(List<String> visibles) { this.visibles = List.copyOf(visibles); }
     public void setHoraRecalculo(LocalTime horaRecalculo) { this.horaRecalculo = horaRecalculo; }
     public void setUltimoRecalculoDia(LocalDate ultimoRecalculoDia) { this.ultimoRecalculoDia = ultimoRecalculoDia; }
+    public void setUmbralDesvioPorcentaje(BigDecimal umbral) { this.umbralDesvioPorcentaje = umbral; }
 
     public Long getId() { return id; }
     public Long getFerreteriaId() { return ferreteriaId; }
@@ -119,4 +127,5 @@ public class ConfiguracionCotizacion {
     public LadoCotizacion getVigenteLado() { return vigenteLado; }
     public Instant getVigenteDesde() { return vigenteDesde; }
     public LocalDate getUltimoRecalculoDia() { return ultimoRecalculoDia; }
+    public BigDecimal getUmbralDesvioPorcentaje() { return umbralDesvioPorcentaje; }
 }

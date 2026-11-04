@@ -115,6 +115,66 @@ class ConfiguracionCotizacionIntegrationTest extends CotizacionTestBase {
                 .andExpect(status().isOk());
     }
 
+    // ---- umbral del aviso del dolar (mejoras-ferreteros-bloque-1, S1) ----
+
+    private static String conUmbral(String umbral) {
+        return valido().replace("}", ",\"umbralDesvio\":" + umbral + "}");
+    }
+
+    private BigDecimal umbralGuardado(Long ferreteriaId) {
+        return jdbc.queryForObject("select umbral_desvio_porcentaje from configuracion_cotizacion where ferreteria_id = ?",
+                BigDecimal.class, ferreteriaId);
+    }
+
+    @Test
+    @DisplayName("sin configuracion propia el aviso del dolar es al 5 %")
+    void umbralPorDefecto() throws Exception {
+        assertThat(getJson(URL, login(duenoA)).get("umbralDesvio").decimalValue()).isEqualByComparingTo("5");
+    }
+
+    @Test
+    @DisplayName("el Dueño guarda el aviso al 8 %, lo relee y B sigue en 5 %")
+    void guardaElUmbral() throws Exception {
+        String token = login(duenoA);
+
+        JsonNode guardada = cuerpo(putJson(URL, token, conUmbral("8")).andExpect(status().isOk()));
+
+        assertThat(guardada.get("umbralDesvio").decimalValue()).isEqualByComparingTo("8");
+        assertThat(getJson(URL, token).get("umbralDesvio").decimalValue()).isEqualByComparingTo("8");
+        assertThat(umbralGuardado(a)).isEqualByComparingTo("8");
+        assertThat(getJson(URL, login(duenoB)).get("umbralDesvio").decimalValue()).isEqualByComparingTo("5");
+    }
+
+    @Test
+    @DisplayName("un PUT sin umbralDesvio conserva el que estaba")
+    void sinUmbralConservaElGuardado() throws Exception {
+        String token = login(duenoA);
+        putJson(URL, token, conUmbral("12.5")).andExpect(status().isOk());
+
+        putJson(URL, token, valido()).andExpect(status().isOk());
+
+        assertThat(umbralGuardado(a)).isEqualByComparingTo("12.5");
+    }
+
+    @Test
+    @DisplayName("un aviso fuera de 1 % a 50 % o con mas de 2 decimales: 400 en español y no cambia nada")
+    void umbralInvalido() throws Exception {
+        String mensaje = "El aviso del dólar tiene que estar entre 1 % y 50 %, con hasta 2 decimales.";
+        for (String umbral : List.of("0.5", "50.01", "5.001", "-5")) {
+            rechaza(conUmbral(umbral), "umbralDesvio", mensaje);
+            assertThat(umbralGuardado(a)).isEqualByComparingTo("5");
+        }
+    }
+
+    @Test
+    @DisplayName("el Vendedor no puede cambiar el aviso del dolar")
+    void elVendedorNoCambiaElUmbral() throws Exception {
+        putJson(URL, login(vendedorA), conUmbral("30")).andExpect(status().isForbidden());
+
+        assertThat(jdbc.queryForObject("select count(*) from configuracion_cotizacion where ferreteria_id = ?",
+                Integer.class, a)).isZero();
+    }
+
     // ---- roles ----
 
     @Test

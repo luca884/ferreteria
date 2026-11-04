@@ -6,7 +6,7 @@ import java.math.BigDecimal;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
-/** Dominio puro: un dolar que se aleja mas del 20 % del vigente no se aplica solo (auditoria H09). */
+/** Dominio puro: un dolar que se aleja mas del umbral de la ferreteria del vigente no se aplica solo (auditoria H09). */
 class DesvioDeCotizacionTest {
 
     private static BigDecimal bd(String valor) {
@@ -22,25 +22,52 @@ class DesvioDeCotizacionTest {
     }
 
     @Test
-    @DisplayName("exactamente 20 % se acepta solo; 20,01 % ya hay que confirmarlo, hacia arriba o hacia abajo")
+    @DisplayName("el umbral por defecto es 5 %")
+    void umbralPorDefecto() {
+        assertThat(DesvioDeCotizacion.UMBRAL_POR_DEFECTO).isEqualByComparingTo("5");
+    }
+
+    @Test
+    @DisplayName("exactamente el umbral se acepta solo; un poco mas ya hay que confirmarlo, hacia arriba o hacia abajo")
     void borde() {
-        assertThat(DesvioDeCotizacion.hayQueConfirmar(bd("1000"), bd("1200"))).isFalse();
-        assertThat(DesvioDeCotizacion.hayQueConfirmar(bd("1000"), bd("800"))).isFalse();
-        assertThat(DesvioDeCotizacion.hayQueConfirmar(bd("1000"), bd("1200.1"))).isTrue();
-        assertThat(DesvioDeCotizacion.hayQueConfirmar(bd("1000"), bd("799.9"))).isTrue();
+        assertThat(DesvioDeCotizacion.hayQueConfirmar(bd("1000"), bd("1050"), bd("5"))).isFalse();
+        assertThat(DesvioDeCotizacion.hayQueConfirmar(bd("1000"), bd("950"), bd("5"))).isFalse();
+        assertThat(DesvioDeCotizacion.hayQueConfirmar(bd("1000"), bd("1050.1"), bd("5"))).isTrue();
+        assertThat(DesvioDeCotizacion.hayQueConfirmar(bd("1000"), bd("949.9"), bd("5"))).isTrue();
+    }
+
+    @Test
+    @DisplayName("el umbral es el de la ferreteria: 6 % pide confirmar con umbral 5 y se acepta solo con umbral 10")
+    void umbralDeLaFerreteria() {
+        assertThat(DesvioDeCotizacion.hayQueConfirmar(bd("1000"), bd("1060"), bd("5"))).isTrue();
+        assertThat(DesvioDeCotizacion.hayQueConfirmar(bd("1000"), bd("1060"), bd("10"))).isFalse();
+        assertThat(DesvioDeCotizacion.hayQueConfirmar(bd("1000"), bd("1200"), bd("20"))).isFalse();
+        assertThat(DesvioDeCotizacion.hayQueConfirmar(bd("1000"), bd("1200.1"), bd("20"))).isTrue();
     }
 
     @Test
     @DisplayName("el caso de la auditoria: 1450 a 14,5 hay que confirmarlo")
     void cienVecesMenos() {
-        assertThat(DesvioDeCotizacion.hayQueConfirmar(bd("1450"), bd("14.5"))).isTrue();
+        assertThat(DesvioDeCotizacion.hayQueConfirmar(bd("1450"), bd("14.5"), bd("50"))).isTrue();
     }
 
     @Test
     @DisplayName("sin anterior (el primer dolar) o con anterior en cero no hay nada que confirmar")
     void sinAnterior() {
-        assertThat(DesvioDeCotizacion.hayQueConfirmar(null, bd("1450"))).isFalse();
-        assertThat(DesvioDeCotizacion.hayQueConfirmar(BigDecimal.ZERO, bd("1450"))).isFalse();
+        assertThat(DesvioDeCotizacion.hayQueConfirmar(null, bd("1450"), bd("5"))).isFalse();
+        assertThat(DesvioDeCotizacion.hayQueConfirmar(BigDecimal.ZERO, bd("1450"), bd("5"))).isFalse();
+    }
+
+    @Test
+    @DisplayName("el umbral valido va de 1 a 50 %, con hasta 2 decimales")
+    void umbralValido() {
+        assertThat(DesvioDeCotizacion.umbralValido(bd("1"))).isTrue();
+        assertThat(DesvioDeCotizacion.umbralValido(bd("50"))).isTrue();
+        assertThat(DesvioDeCotizacion.umbralValido(bd("7.25"))).isTrue();
+        assertThat(DesvioDeCotizacion.umbralValido(bd("0.99"))).isFalse();
+        assertThat(DesvioDeCotizacion.umbralValido(bd("50.01"))).isFalse();
+        assertThat(DesvioDeCotizacion.umbralValido(bd("5.001"))).isFalse();
+        assertThat(DesvioDeCotizacion.umbralValido(null)).isFalse();
     }
 
     @Test

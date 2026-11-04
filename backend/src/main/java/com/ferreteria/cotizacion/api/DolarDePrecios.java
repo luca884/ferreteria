@@ -26,21 +26,21 @@ public interface DolarDePrecios {
      * «Recalcular ahora»: fija el ultimo valor guardado como vigente y lo devuelve.
      *
      * @throws com.ferreteria.common.exception.ConflictException (409) si la cotizacion esta apagada, no hay ningun valor
-     *         o el valor se aleja mas del 20 % del vigente y hay que confirmarlo
+     *         o el valor se aleja mas del umbral de la ferreteria del vigente y hay que confirmarlo
      */
     BigDecimal fijarUltima();
 
     /**
      * Igual que {@link #fijarUltima()}, pero con {@code confirmaDesvio} el Dueno acepta un dolar que se aleja mas del
-     * 20 % del vigente (auditoria H09). Sin confirmarlo, ese dolar da 409 con el aviso y no se fija nada.
+     * umbral de la ferreteria del vigente (auditoria H09). Sin confirmarlo, ese dolar da 409 con el aviso y no se fija nada.
      */
     BigDecimal fijarUltima(boolean confirmaDesvio);
 
     /**
      * Para el job diario: reclama el recalculo del dia con un UPDATE condicional (idempotente) y, si le toca, fija el
      * ultimo valor guardado como vigente y lo devuelve. Vacio si todavia no es la hora, ya se hizo hoy, la cotizacion
-     * esta apagada, no hay ningun valor o el valor se aleja mas del 20 % del vigente (en esos dos casos no marca el
-     * dia: se reintenta hasta que llegue un valor normal o el Dueno lo confirme).
+     * esta apagada, no hay ningun valor o el valor se aleja mas del umbral de la ferreteria del vigente (en esos dos
+     * casos no marca el dia: se reintenta hasta que llegue un valor normal o el Dueno lo confirme).
      *
      * @param ahoraBuenosAires la fecha y hora actuales en Buenos Aires
      */

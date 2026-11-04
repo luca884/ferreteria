@@ -243,7 +243,7 @@ class DolarDePreciosServiceTest extends CotizacionTestBase {
     }
 
     @Test
-    @DisplayName("un dolar a mas del 20 % del vigente queda a confirmar, con el aviso armado")
+    @DisplayName("un dolar a mas del umbral del vigente queda a confirmar, con el aviso armado")
     void aConfirmar() {
         aConVigente1000YElMercadoEn14Coma5();
 
@@ -256,13 +256,13 @@ class DolarDePreciosServiceTest extends CotizacionTestBase {
     }
 
     @Test
-    @DisplayName("dentro del 20 %, sin vigente o con otro tipo elegido no hay nada que confirmar")
+    @DisplayName("dentro del umbral (5 % por defecto), sin vigente o con otro tipo elegido no hay nada que confirmar")
     void nadaQueConfirmar() {
         configuracion(a, c -> {
             c.setCasaPrecios("t18-oficial");
-            c.fijarVigente(new BigDecimal("900.0000"), "t18-oficial", LadoCotizacion.VENTA, HACE_UN_RATO);
+            c.fijarVigente(new BigDecimal("960.0000"), "t18-oficial", LadoCotizacion.VENTA, HACE_UN_RATO);
         });
-        assertThat(como(a, dolar::aConfirmar)).isEmpty(); // 900 a 1000: 11 %
+        assertThat(como(a, dolar::aConfirmar)).isEmpty(); // 960 a 1000: 4,17 %
 
         assertThat(como(b, dolar::aConfirmar)).isEmpty(); // B nunca fijo un vigente
 
@@ -271,6 +271,28 @@ class DolarDePreciosServiceTest extends CotizacionTestBase {
             c.fijarVigente(new BigDecimal("500.0000"), "t18-oficial", LadoCotizacion.VENTA, HACE_UN_RATO);
         });
         assertThat(como(a, dolar::aConfirmar)).isEmpty();
+    }
+
+    @Test
+    @DisplayName("el umbral es el de cada ferreteria: 1000 a 1060 (6 %) queda a confirmar con 5 y se aplica solo con 10")
+    void umbralDeCadaFerreteria() {
+        cotizacion("USD", "t18-oficial", "1050", "1060", HACE_UN_RATO.plusSeconds(60));
+        configuracion(a, c -> {
+            c.setCasaPrecios("t18-oficial");
+            c.fijarVigente(new BigDecimal("1000.0000"), "t18-oficial", LadoCotizacion.VENTA, HACE_UN_RATO);
+        });
+        configuracion(b, c -> {
+            c.setCasaPrecios("t18-oficial");
+            c.setUmbralDesvioPorcentaje(new BigDecimal("10"));
+            c.fijarVigente(new BigDecimal("1000.0000"), "t18-oficial", LadoCotizacion.VENTA, HACE_UN_RATO);
+        });
+
+        assertThat(configuracionDe(a).getUmbralDesvioPorcentaje()).isEqualByComparingTo("5");
+        assertThat(como(a, dolar::aConfirmar)).isPresent();
+        assertThat(como(a, () -> dolar.reclamarRecalculoDelDia(HOY_A_LAS_9))).isEmpty();
+        assertThat(como(b, dolar::aConfirmar)).isEmpty();
+        assertThat(como(b, () -> dolar.reclamarRecalculoDelDia(HOY_A_LAS_9)))
+                .hasValueSatisfying(v -> assertThat(v).isEqualByComparingTo("1060"));
     }
 
     @Test
@@ -302,7 +324,7 @@ class DolarDePreciosServiceTest extends CotizacionTestBase {
         assertThat(configuracionDe(a).getVigente()).isEqualByComparingTo("1000");
         assertThat(configuracionDe(a).getUltimoRecalculoDia()).isNull();
 
-        // Llega un valor normal (dentro del 20 %): se aplica solo y la sospechosa queda superada.
+        // Llega un valor normal (1050: justo el umbral por defecto): se aplica solo y la sospechosa queda superada.
         cotizacion("USD", "t18-oficial", "1040", "1050", HACE_UN_RATO.plusSeconds(120));
         assertThat(como(a, () -> dolar.reclamarRecalculoDelDia(HOY_A_LAS_9)))
                 .hasValueSatisfying(v -> assertThat(v).isEqualByComparingTo("1050"));
@@ -310,17 +332,17 @@ class DolarDePreciosServiceTest extends CotizacionTestBase {
     }
 
     @Test
-    @DisplayName("la sospechosa de A no frena a B, que tiene otro vigente y la acepta dentro del 20 %")
+    @DisplayName("la sospechosa de A no frena a B, que tiene otro vigente y la acepta dentro de su umbral")
     void cadaFerreteriaConfirmaLaSuya() {
         aConVigente1000YElMercadoEn14Coma5();
         configuracion(b, c -> {
             c.setCasaPrecios("t18-oficial");
             c.setLadoPrecios(LadoCotizacion.COMPRA);
-            c.fijarVigente(new BigDecimal("13.0000"), "t18-oficial", LadoCotizacion.COMPRA, HACE_UN_RATO);
+            c.fijarVigente(new BigDecimal("13.5000"), "t18-oficial", LadoCotizacion.COMPRA, HACE_UN_RATO);
         });
 
         assertThat(como(a, dolar::aConfirmar)).isPresent();
-        assertThat(como(b, dolar::aConfirmar)).isEmpty(); // 13 a 14: 7,7 %
+        assertThat(como(b, dolar::aConfirmar)).isEmpty(); // 13,5 a 14: 3,7 %
         assertThat(como(b, () -> dolar.fijarUltima())).isEqualByComparingTo("14");
         assertThat(configuracionDe(a).getVigente()).isEqualByComparingTo("1000");
     }

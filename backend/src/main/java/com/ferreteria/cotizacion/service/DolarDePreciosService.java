@@ -26,7 +26,7 @@ import java.util.Optional;
  * que los recalculados a las 08:00. Nunca se pasa solo a otro tipo de dolar: si el tipo elegido no tiene valor, no hay
  * vigente.
  *
- * <p>Un dolar que se aleja mas del 20 % del vigente ({@link DesvioDeCotizacion}) no se aplica solo: el recalculo diario
+ * <p>Un dolar que se aleja mas del umbral de la ferreteria del vigente ({@link DesvioDeCotizacion}) no se aplica solo: el recalculo diario
  * lo saltea y «Recalcular ahora» da 409 hasta que el Dueno de ESA ferreteria lo confirme. La tabla cotizacion es global
  * y no se toca: la comparacion es contra el vigente de cada ferreteria, asi una nunca confirma por otra.
  */
@@ -91,7 +91,7 @@ public class DolarDePreciosService implements DolarDePrecios {
 
     /**
      * El dolar nuevo que el Dueno tiene que confirmar antes de que cambie los precios; vacio si no hay ninguno (dentro
-     * del 20 %, sin vigente fijado, con otro tipo o lado elegido despues, o con la cotizacion apagada).
+     * del umbral, sin vigente fijado, con otro tipo o lado elegido despues, o con la cotizacion apagada).
      */
     @Transactional(readOnly = true)
     public Optional<DolarAConfirmar> aConfirmar() {
@@ -138,7 +138,8 @@ public class DolarDePreciosService implements DolarDePrecios {
         BigDecimal vigente = configuracion.getVigente();
         boolean mismoDolar = configuracion.getCasaPrecios().equals(configuracion.getVigenteCasa())
                 && configuracion.getLadoPrecios() == configuracion.getVigenteLado();
-        if (!mismoDolar || !DesvioDeCotizacion.hayQueConfirmar(vigente, valor)) {
+        if (!mismoDolar
+                || !DesvioDeCotizacion.hayQueConfirmar(vigente, valor, configuracion.getUmbralDesvioPorcentaje())) {
             return Optional.empty();
         }
         return Optional.of(DolarAConfirmar.de(configuracion.getCasaPrecios(), configuracion.getLadoPrecios(), vigente,
