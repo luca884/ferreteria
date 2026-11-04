@@ -118,12 +118,17 @@
     <p>Importe no gravado <span>{{ d.noGravado | monto }}</span></p>
     <p>Importe exento <span>{{ d.exento | monto }}</span></p>
   } @else {
-    @if ((v.descuento ?? 0) > 0) {
+    @if ((v.descuento ?? 0) > 0 || (v.recargo ?? 0) < 0) {
       <p>Subtotal <span>{{ v.subtotal | monto }}</span></p>
+    }
+    @if ((v.descuento ?? 0) > 0) {
       <p>Descuento <span>-{{ v.descuento | monto }}</span></p>
     }
     @if ((v.recargo ?? 0) > 0) {
       <p>Recargo <span>{{ v.recargo | monto }}</span></p>
+    } @else if ((v.recargo ?? 0) < 0) {
+      <!-- El descuento de la forma de pago (descuento en efectivo) se guarda como recargo negativo. -->
+      <p>Descuento por forma de pago <span>-{{ -v.recargo! | monto }}</span></p>
     }
   }
   <p class="total">Total <strong>{{ d.total | monto }}</strong></p>

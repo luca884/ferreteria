@@ -99,6 +99,16 @@ describe('FacturaHoja (CU-07 paso 5, S5, S6, S12, S13)', () => {
     expect(lineas('.totales')).toEqual(['Subtotal $ 1.300,00', 'Descuento -$ 130,00', 'Recargo $ 40,00', 'Total $ 1.210,00']);
   });
 
+  it('B con descuento de la forma (recargo negativo): subtotal y «Descuento por forma de pago», sin «Recargo»', async () => {
+    await crear(documentoB(), ventaParaFactura({ subtotal: 1300, descuento: 0, recargo: -90 }));
+
+    expect(lineas('.totales')).toEqual([
+      'Subtotal $ 1.300,00',
+      'Descuento por forma de pago -$ 90,00',
+      'Total $ 1.210,00',
+    ]);
+  });
+
   it('B a un cliente Exento: su nombre, documento y «IVA EXENTO», sin «A CONSUMIDOR FINAL» ni transparencia', async () => {
     await crear(
       documentoB({

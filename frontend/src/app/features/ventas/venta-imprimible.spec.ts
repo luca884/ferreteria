@@ -84,6 +84,16 @@ describe('VentaImprimible', () => {
     expect(LEYENDA_VENTA_INTERNA).toBe('Comprobante interno, no válido como factura');
   });
 
+  it('con descuento de la forma (recargo negativo): subtotal y «Descuento por forma de pago», sin «Recargo»', async () => {
+    await abrir(ventaDePrueba({ descuento: 0, descuentoPorcentaje: 0, subtotal: 3000, recargo: -300, total: 2700 }));
+
+    const hoja = texto('.venta-imprimible')!;
+    expect(hoja).toContain('Subtotal $ 3.000,00');
+    expect(hoja).toContain('Descuento por forma de pago -$ 300,00');
+    expect(hoja).not.toContain('Recargo');
+    expect(texto('.total')).toContain('$ 2.700,00');
+  });
+
   it('sin cliente dice «Consumidor Final» y sin descuento ni recargo no muestra esas líneas', async () => {
     await abrir(ventaDePrueba({ clienteNombre: undefined, descuento: 0, descuentoPorcentaje: 0, recargo: 0 }));
 
