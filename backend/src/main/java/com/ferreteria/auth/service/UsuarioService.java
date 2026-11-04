@@ -58,6 +58,7 @@ public class UsuarioService {
         Usuario usuario = Usuario.nuevo(TenantContext.requireFerreteriaId(), EmailUnico.normalizar(datos.email()),
                 passwordEncoder.encode(datos.password()), datos.nombre().trim(), datos.rol());
         usuario.cambiarTopeDescuento(datos.topeDescuento());
+        usuario.cambiarTelefono(datos.telefono());
         return guardar(usuario);
     }
 
@@ -82,6 +83,7 @@ public class UsuarioService {
         }
         usuario.actualizar(datos.nombre().trim(), EmailUnico.normalizar(datos.email()), datos.rol());
         usuario.cambiarTopeDescuento(datos.topeDescuento());
+        usuario.cambiarTelefono(datos.telefono());
         return guardar(usuario);
     }
 

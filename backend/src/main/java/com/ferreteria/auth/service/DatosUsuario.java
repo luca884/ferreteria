@@ -4,4 +4,11 @@ import com.ferreteria.auth.model.Rol;
 import java.math.BigDecimal;
 
 /** Alta de un usuario de la ferretería. */
-public record DatosUsuario(String nombre, String email, Rol rol, String password, BigDecimal topeDescuento) {}
+public record DatosUsuario(String nombre, String email, Rol rol, String password, BigDecimal topeDescuento,
+                           String telefono) {
+
+    /** Sin telefono. */
+    public DatosUsuario(String nombre, String email, Rol rol, String password, BigDecimal topeDescuento) {
+        this(nombre, email, rol, password, topeDescuento, null);
+    }
+}

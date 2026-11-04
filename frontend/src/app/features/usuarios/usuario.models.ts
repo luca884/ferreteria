@@ -16,6 +16,8 @@ export interface Usuario {
   activo: boolean;
   /** CU-07: el descuento máximo que puede dar en el mostrador; null = sin tope. El Dueño nunca tiene. */
   topeDescuento?: number | null;
+  /** Opcional; null o ausente: sin teléfono. */
+  telefono?: string | null;
 }
 
 /** Alta: la contraseña la escribe el Dueño (8 a 72 caracteres) y se la dice en persona. */
@@ -25,14 +27,18 @@ export interface UsuarioRequest {
   rol: RolDeFerreteria;
   password: string;
   topeDescuento: number | null;
+  /** Ausente o null: sin teléfono. La pantalla de usuarios lo manda siempre. */
+  telefono?: string | null;
 }
 
-/** Edición: nombre, email, rol y tope de descuento. La contraseña tiene su propio endpoint. */
+/** Edición: nombre, email, rol, tope de descuento y teléfono. La contraseña tiene su propio endpoint. */
 export interface EdicionUsuarioRequest {
   nombre: string;
   email: string;
   rol: RolDeFerreteria;
   topeDescuento: number | null;
+  /** Ausente o null: lo borra. */
+  telefono?: string | null;
 }
 
 /** «12,5»: hasta 2 enteros y 2 decimales, con coma o punto. */

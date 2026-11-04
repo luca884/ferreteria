@@ -76,6 +76,7 @@ export class Usuarios implements OnInit {
     password: ['', [Validators.required, Validators.minLength(8), Validators.maxLength(72), noSoloEspacios]],
     /** CU-07: solo para un Vendedor; vacío = sin tope. */
     topeDescuento: ['', topeValido],
+    telefono: ['', [Validators.maxLength(30)]],
   });
 
   constructor() {
@@ -136,13 +137,14 @@ export class Usuarios implements OnInit {
       this.enfocar('form.alta [aria-invalid="true"]');
       return;
     }
-    const { nombre, email, rol, password, topeDescuento } = this.form.getRawValue();
+    const { nombre, email, rol, password, topeDescuento, telefono } = this.form.getRawValue();
     const usuario = this.editando();
     const datos: EdicionUsuarioRequest = {
       nombre: nombre.trim(),
       email: email.trim(),
       rol,
       topeDescuento: rol === 'VENDEDOR' ? (leerTope(topeDescuento) ?? null) : null,
+      telefono: telefono.trim() === '' ? null : telefono.trim(),
     };
     this.limpiarErroresForm();
     this.aviso.set(null);
@@ -186,6 +188,7 @@ export class Usuarios implements OnInit {
       rol: usuario.rol,
       password: '',
       topeDescuento: usuario.topeDescuento == null ? '' : String(usuario.topeDescuento).replace('.', ','),
+      telefono: usuario.telefono ?? '',
     });
     this.limpiarErroresForm();
   }
@@ -256,7 +259,7 @@ export class Usuarios implements OnInit {
     });
   }
 
-  protected invalido(campo: 'nombre' | 'email' | 'password' | 'topeDescuento'): boolean {
+  protected invalido(campo: 'nombre' | 'email' | 'password' | 'topeDescuento' | 'telefono'): boolean {
     const control = this.form.controls[campo];
     return control.touched && control.invalid;
   }
@@ -284,6 +287,6 @@ export class Usuarios implements OnInit {
     this.editando.set(null);
     this.form.controls.password.enable({ emitEvent: false });
     this.ajustarRol(null);
-    this.form.reset({ nombre: '', email: '', rol: 'VENDEDOR', password: '', topeDescuento: '' });
+    this.form.reset({ nombre: '', email: '', rol: 'VENDEDOR', password: '', topeDescuento: '', telefono: '' });
   }
 }

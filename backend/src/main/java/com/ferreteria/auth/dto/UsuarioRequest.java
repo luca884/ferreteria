@@ -33,7 +33,11 @@ public record UsuarioRequest(
         @DecimalMin(value = "0", message = TopeDescuento.MENSAJE)
         @DecimalMax(value = "99.99", message = TopeDescuento.MENSAJE)
         @Digits(integer = 2, fraction = 2, message = TopeDescuento.MENSAJE)
-        BigDecimal topeDescuento) {
+        BigDecimal topeDescuento,
+
+        /** Opcional (mejoras-ferreteros-bloque-1, S5). */
+        @Size(max = 30, message = "El teléfono admite hasta 30 caracteres.")
+        String telefono) {
 
     /** El email llega con los espacios que el usuario haya escrito: se recorta antes de validar. */
     public UsuarioRequest{
@@ -41,6 +45,6 @@ public record UsuarioRequest(
     }
 
     public DatosUsuario aDatos() {
-        return new DatosUsuario(nombre, email, rol, password, topeDescuento);
+        return new DatosUsuario(nombre, email, rol, password, topeDescuento, telefono);
     }
 }

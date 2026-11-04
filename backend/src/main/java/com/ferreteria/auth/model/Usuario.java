@@ -48,6 +48,10 @@ public class Usuario {
     @Column(name = "tope_descuento", precision = 5, scale = 2)
     private BigDecimal topeDescuento;
 
+    /** Opcional (mejoras-ferreteros-bloque-1, S5). */
+    @Column(length = 30)
+    private String telefono;
+
     /**
      * Su contraseña la eligió otra persona (al crearlo o al resetearla): el frontend le pide cambiarla antes de usar
      * cualquier pantalla. Cambiar la propia contraseña la apaga y nunca la prende. El backend no bloquea otros endpoints.
@@ -95,6 +99,11 @@ public class Usuario {
         this.topeDescuento = rol == Rol.DUENO ? null : tope;
     }
 
+    /** En blanco o ausente queda sin telefono; se guarda sin los espacios de los costados. */
+    public void cambiarTelefono(String telefono) {
+        this.telefono = telefono == null || telefono.isBlank() ? null : telefono.strip();
+    }
+
     public void cambiarActivo(boolean activo) {
         this.activo = activo;
     }
@@ -126,5 +135,6 @@ public class Usuario {
     public boolean isActivo() { return activo; }
     public boolean isDebeCambiarContrasena() { return debeCambiarContrasena; }
     public BigDecimal getTopeDescuento() { return topeDescuento; }
+    public String getTelefono() { return telefono; }
     public LocalDateTime getCreadoEn() { return creadoEn; }
 }

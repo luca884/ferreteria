@@ -29,7 +29,11 @@ public record EdicionUsuarioRequest(
         @DecimalMin(value = "0", message = TopeDescuento.MENSAJE)
         @DecimalMax(value = "99.99", message = TopeDescuento.MENSAJE)
         @Digits(integer = 2, fraction = 2, message = TopeDescuento.MENSAJE)
-        BigDecimal topeDescuento) {
+        BigDecimal topeDescuento,
+
+        /** Opcional (mejoras-ferreteros-bloque-1, S5); ausente o en blanco lo borra. */
+        @Size(max = 30, message = "El teléfono admite hasta 30 caracteres.")
+        String telefono) {
 
     /** El email llega con los espacios que el usuario haya escrito: se recorta antes de validar. */
     public EdicionUsuarioRequest{
@@ -37,6 +41,6 @@ public record EdicionUsuarioRequest(
     }
 
     public DatosEdicion aDatos() {
-        return new DatosEdicion(nombre, email, rol, topeDescuento);
+        return new DatosEdicion(nombre, email, rol, topeDescuento, telefono);
     }
 }

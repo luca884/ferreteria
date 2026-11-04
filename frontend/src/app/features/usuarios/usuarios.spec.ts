@@ -118,9 +118,9 @@ describe('Usuarios', () => {
     await refrescar();
 
     expect(filas().map(celdas)).toEqual([
-      ['Ana Baja', 'ana@tornillo.demo', 'Vendedor', 'Desactivado', 'Sin tope'],
-      ['Dueño El Tornillo', 'dueno@tornillo.demo', 'Dueño', 'Activo', '—'],
-      ['Vendedor Uno', 'vendedor@tornillo.demo', 'Vendedor', 'Activo', 'Sin tope'],
+      ['Ana Baja', 'ana@tornillo.demo', 'Vendedor', 'Desactivado', 'Sin tope', '—'],
+      ['Dueño El Tornillo', 'dueno@tornillo.demo', 'Dueño', 'Activo', '—', '—'],
+      ['Vendedor Uno', 'vendedor@tornillo.demo', 'Vendedor', 'Activo', 'Sin tope', '—'],
     ]);
     expect(filas()[0].classList.contains('inactivo')).toBe(true);
   });
@@ -159,6 +159,7 @@ describe('Usuarios', () => {
       rol: 'VENDEDOR',
       password: 'clave1234',
       topeDescuento: null,
+      telefono: null,
     });
     expect(filas().map((f) => celdas(f)[0])).toEqual(['Dueño El Tornillo', 'Lucía Pérez', 'Vendedor Uno']);
     expect(el().querySelector('.alerta.exito')?.textContent).toContain('Se guardó «Lucía Pérez».');
@@ -283,6 +284,45 @@ describe('Usuarios', () => {
     expect(el().querySelector('#password')).toBeNull();
   });
 
+  describe('teléfono (mejoras-ferreteros-bloque-1, S5)', () => {
+    it('el alta manda el teléfono sin espacios sobrantes y la lista lo muestra', async () => {
+      await crear([dueno, vendedor]);
+      servicio.crear.mockReturnValue(
+        of({ id: 9, nombre: 'Lucía Pérez', email: 'lucia@tornillo.demo', rol: 'VENDEDOR', activo: true, telefono: '223 555-1234' }),
+      );
+
+      await altaCompleta();
+      await escribir('telefono', ' 223 555-1234 ');
+      await enviar();
+
+      expect(servicio.crear).toHaveBeenCalledWith(expect.objectContaining({ telefono: '223 555-1234' }));
+      expect(el().querySelector('label[for="telefono"]')?.textContent?.trim()).toBe('Teléfono (opcional)');
+      expect(input('telefono').type).toBe('tel');
+      const lucia = filas().find((f) => celdas(f)[0] === 'Lucía Pérez')!;
+      expect(lucia.querySelector('.telefono')?.textContent?.trim()).toBe('223 555-1234');
+    });
+
+    it('editar precarga el teléfono, y sin teléfono la lista dice «—»', async () => {
+      await crear([dueno, { ...vendedor, telefono: '111' }]);
+
+      expect(filas()[0].querySelector('.telefono')?.textContent?.trim()).toBe('—');
+      await editarFila(1);
+
+      expect(input('telefono').value).toBe('111');
+    });
+
+    it('un teléfono de más de 30 caracteres no se manda y lo explica', async () => {
+      await crear([dueno, vendedor]);
+
+      await altaCompleta();
+      await escribir('telefono', '1'.repeat(31));
+      await enviar();
+
+      expect(servicio.crear).not.toHaveBeenCalled();
+      expect(el().querySelector('#telefono-error')?.textContent?.trim()).toBe('El teléfono admite hasta 30 caracteres.');
+    });
+  });
+
   it('guarda la edición con PUT, reemplaza la fila y avisa', async () => {
     await crear([dueno, vendedor]);
 
@@ -295,6 +335,7 @@ describe('Usuarios', () => {
       email: 'vendedor@tornillo.demo',
       rol: 'DUENO',
       topeDescuento: null,
+      telefono: null,
     });
     expect(celdas(filas()[1])[2]).toBe('Dueño');
     expect(el().querySelector('.alerta.exito')?.textContent).toContain('Se guardó «Vendedor Uno».');
