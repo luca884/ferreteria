@@ -119,7 +119,7 @@ describe('DesglosePrecioVista', () => {
         '$ 880,65',
         '$ 880,65',
         '$ 1.144,845',
-        '$ 1.385,2625',
+        '$ 1.385,26',
         '$ 1.390,00',
       ]);
       expect(textos('.paso-nombre')).toEqual([
@@ -402,7 +402,7 @@ describe('DesglosePrecioVista', () => {
         '$ 855,00',
         '$ 855,00',
         '$ 1.111,50',
-        '$ 1.344,915',
+        '$ 1.344,92',
         '$ 1.350,00',
       ]);
       expect(grupo.getRawValue().ajuste2).toBeNull();
@@ -671,9 +671,15 @@ describe('DesglosePrecioVista', () => {
         '+ $ 10.477,14',
         '$ 246.448,70',
         '$ 320.383,31',
-        '$ 387.663,8051',
+        '$ 387.663,81',
         '$ 387.670,00',
       ]);
+    });
+
+    it('el IVA se muestra con 2 decimales aunque el paso venga con 4', async () => {
+      await crear(soldadora());
+
+      expect(textos('[data-tipo="IVA"] .paso-importe')).toEqual(['$ 387.663,81']);
     });
 
     it('un recargo negativo lleva el signo menos y sin recargos no hay casilleros nuevos', async () => {
