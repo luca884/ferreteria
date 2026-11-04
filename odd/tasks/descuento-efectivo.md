@@ -50,3 +50,4 @@ Restricciones: reglas de arquitectura de `CLAUDE.md` (tenant solo del JWT, `*Sco
   4. En el mixto se ve solo el neto: −10 y +10 no muestran línea, y −4 y +6 muestran «Recargo $ 2,00». Coherente con S2.
   5. Ya pasaban: el aviso CSS de `dialogo-cobro` (4,64 → 4,68 kB); en la Factura B/C el precio unitario va sin el ajuste; la Factura A no muestra la línea del ajuste (tampoco el recargo). Fuera de dominio: con 99,99 % un importe chico queda en $ 0,00.
   6. El diálogo usa «−» (U+2212) y la hoja y la factura, «-» ASCII como la línea «Descuento» que ya existía.
+- L6 (2026-11-04) Luca confirma los supuestos de S1 y S3 (recargo y descuento excluyentes, «Cuenta corriente» en 0, etiqueta «Descuento por forma de pago», «Con descuento» solo del Vendedor): «si, confirmo».
