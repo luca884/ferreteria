@@ -148,7 +148,8 @@ class RecalculoVistaPreviaIntegrationTest extends CotizacionTestBase {
     void confirmaConElDolarVisto() throws Exception {
         Long usd = articuloUsd(a, "T41-USD", "10.00", "15730.00");
 
-        postJson(URL + "?dolar=1100.0000", duenoA, "{}")
+        // Otra cantidad de decimales que la guardada (1100.0000): es el mismo dolar.
+        postJson(URL + "?dolar=1100.0", duenoA, "{}")
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.articulosRecalculados", is(1)));
 
