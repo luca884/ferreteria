@@ -62,8 +62,18 @@ a.accion-barra {
   box-shadow: none;
 }
 
+/* Bloque 2: con «Cód. proveedor» la grilla suma una columna; los códigos y el IVA no se parten
+   y la descripción cede ancho para que la tabla entre sin scroll lateral. */
+.codigo,
+.codigo-proveedor,
+.iva {
+  white-space: nowrap;
+}
+th.actualizacion {
+  white-space: normal;
+}
 .descripcion {
-  min-width: 16rem;
+  min-width: 10rem;
   font-weight: 500;
 }
 .precio {

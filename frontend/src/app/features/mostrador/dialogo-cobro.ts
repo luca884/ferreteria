@@ -217,15 +217,15 @@ const centavosATexto = (c: number) => `${normalizarImporte(String(Math.floor(c /
         @if (eligeFactura()) {
           <!-- Bloque 2, S4: facturar o no se elige con un clic; Enter no cobra, para que nadie facture sin querer. -->
           <p class="pista-factura">Elegí con un clic si la venta se factura.</p>
-          <div class="dialogo-acciones">
-            <button type="button" class="cancelar" data-tecla="Esc" aria-keyshortcuts="Escape" (click)="cancelar.emit()">
-              Cancelar
-            </button>
+          <div class="dialogo-acciones elige-factura">
             <button type="button" class="sin-factura secundario" (click)="confirmarCobro(true)">
               {{ autoriza() ? 'Autorizar exceso y cobrar sin factura' : 'Cobrar sin factura' }}
             </button>
             <button type="button" class="facturar primario" (click)="confirmarCobro(false)">
               {{ autoriza() ? 'Autorizar exceso, cobrar y facturar' : 'Cobrar y facturar con ARCA' }}
+            </button>
+            <button type="button" class="cancelar" data-tecla="Esc" aria-keyshortcuts="Escape" (click)="cancelar.emit()">
+              Cancelar
             </button>
           </div>
         } @else {
@@ -509,9 +509,17 @@ const centavosATexto = (c: number) => `${normalizarImporte(String(Math.floor(c /
     .dialogo-acciones button {
       min-height: 48px;
     }
-    .dialogo-acciones .cobrar,
-    .dialogo-acciones .facturar {
+    .dialogo-acciones .cobrar {
       padding-inline: var(--e-6);
+    }
+    /* Las dos formas de cobrar, lado a lado y del mismo ancho; Cancelar abajo. */
+    .elige-factura {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+    }
+    .elige-factura .cancelar {
+      grid-column: 1 / -1;
+      justify-self: start;
     }
     .pista-factura,
     .sin-arca {
