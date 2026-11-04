@@ -1,0 +1,32 @@
+# ofertas
+
+Objetivo: que el Dueño ponga un artículo en oferta (precio fijo o descuento sobre el precio final, con fecha de fin opcional) y que se venda a ese precio, marcado «Oferta» · Por qué: pedido del relevamiento de ferreteros locales, bloque 3 ("Oferta, que se puedan hacer ofertas").
+Rama: `feat/ofertas` desde `6a803f8` (punta de `feat/mejoras-ferreteros-bloque-2`, sin mergear) · Entrega: single-pr · Ruteo: caso 5 (Opus de punta a punta; Luca: «dale, arrancá por ofertas») · Runner: backend `./mvnw test -Dtest=<Clase>` / `./mvnw test`; frontend `npx ng test --watch=false [--include=<spec>]`, `npx ng build` · Mirror Engram: `odd/ofertas/tasks`
+Pronóstico: ~1300 líneas cambiadas (agregadas + borradas, sin generados) · Heurística por tarea: ~400 (no es límite)
+
+## Specs
+
+Alcance: ofertas por artículo. · Fuera de alcance: descuento en efectivo y facturas de proveedor en PDF (resto del bloque 3), ofertas masivas (por rubro o proveedor), la oferta en las etiquetas impresas y en los reportes. · Pruebas visibles: local con Docker (Railway dado de baja).
+Restricciones: reglas de arquitectura de `CLAUDE.md` (tenant solo del JWT, `*Scoped`, 404 entre ferreterías, test de aislamiento por endpoint nuevo o ampliado, plata en `BigDecimal`, migración Flyway).
+
+- S1: "Oferta, que se puedan hacer ofertas" / relevamiento (Engram `producto/relevamiento-ferreteros-2026-11`): "Oferta = a un producto se le fija un precio o se le baja X al precio final y queda marcado \"en oferta\"" — Acordado (Luca: «dale, fecha de fin opcional como recomendás»): la oferta es una capa aparte del precio normal; el precio normal se sigue recalculando como siempre (listas, masivo, compras, cotización, precio manual) y cuando la oferta termina el artículo vuelve solo a su precio. Tres formas: **precio fijo**, **descuento en %** o **descuento en $** sobre el precio final. Fecha «hasta» **opcional**: si está, la oferta vale hasta ese día inclusive (hora argentina) y vence sola; si no, dura hasta que el Dueño la saca. — Supuestos (propuestos a Luca sin objeción, a confirmar al cierre): solo el Dueño la pone o la saca; se carga de a un artículo desde su ficha; el precio de oferta tiene que ser mayor a 0 y menor al precio normal al cargarla (el % va de 0,01 a 99,99; el monto, menor al precio normal); el % se redondea al centavo hacia arriba, como los ajustes del precio, sin el múltiplo de la ferretería; la fecha «hasta» no puede ser anterior a hoy; si después el precio normal baja por debajo de la oferta, se vende al menor de los dos; una oferta vencida queda guardada pero no aplica (el Dueño la puede sacar o renovar). — Aceptación: con oferta vigente el precio de venta es el de oferta; vencida o quitada, el normal. — Checks: tests de dominio de la oferta y de `Articulo`; migración sobre datos existentes.
+- S2: (mismo pedido) — Acordado: el precio que se vende es el de oferta en el mostrador, los presupuestos y los remitos; a ARCA va como precio unitario, sin nada aparte. El Vendedor puede sumar su descuento de siempre, dentro de su tope. — Aceptación: una venta de un artículo en oferta se registra al precio de oferta; un ticket armado antes de que la oferta empiece o termine avisa el cambio de precio como hoy. — Checks: tests de integración de venta, presupuesto y remito.
+- S3: "queda marcado \"en oferta\"" — Acordado: en el Mostrador, resultados y ficha con la marca «Oferta», el precio normal tachado y el de oferta; en Artículos, la marca y un filtro «En oferta» (solo vigentes); en la ficha del artículo, una sección «Oferta» (solo Dueño) con el tipo, el valor, la fecha «hasta» opcional y el precio que resulta. — Checks: specs del formulario del artículo, de la lista de artículos y del mostrador.
+- S4: aislamiento entre ferreterías (regla 7 de `CLAUDE.md`): poner o sacar la oferta de un artículo de otra ferretería da 404; el filtro «En oferta» nunca trae artículos de otra. — Checks: test de integración del endpoint.
+
+## Tasks
+
+- [x] T1 · S1 · ruta: inline · Aceptación: `Oferta` (tipo, valor, hasta) en el dominio, `Articulo` con oferta y precio vigente a una fecha, migración V44 · Evidencia: RED de compilación `ArticuloOfertaTest` (faltaban `Oferta` y `TipoOferta`); `MigracionV44Test` RED 2 veces por el CHECK (un NULL en tipo o valor daba UNKNOWN y pasaba) → GREEN con `IS NOT NULL` explícito; `ArticuloOfertaTest` 15/15, `MigracionV44Test` 3/3, `MigracionV6Test` con la 44, `Articulo*Test` + `TenantScopingArchTest` + `ModulosArchTest`: 21 clases, 537/537 · Risk: item 1 (migración)
+- [ ] T2 · S1, S3, S4 · ruta: inline · Aceptación: `PUT` y `DELETE /api/articulos/{id}/oferta` (Dueño), oferta en las respuestas del artículo y filtro `enOferta`, con aislamiento · Risk: item 3 (respuestas del artículo suman campos)
+- [ ] T3 · S2 · ruta: inline · Aceptación: venta, presupuesto y remito al precio vigente (`ArticulosParaVentaService`, búsqueda del mostrador) · Risk: item 3 (precio que consumen ventas)
+- [ ] T4 · S3 · ruta: inline · Aceptación: sección «Oferta» en la ficha del artículo; marca y filtro en Artículos · Risk: none
+- [ ] T5 · S3 · ruta: inline · Aceptación: marca «Oferta» y precio tachado en el Mostrador (resultados y ficha) · Risk: none
+- [ ] T6 · S1–S4 · ruta: inline · Aceptación: suites completas, `ng build` y prueba en la app real · Risk: según el cierre
+
+## Log
+
+- L1 (2026-11-04) Pedido original, textual (relevamiento de ferreteros, bloque 3; L1 de `odd/tasks/mejoras-ferreteros-bloque-1.md`):
+  > Oferta, que se puedan hacer ofertas
+  Definición del relevamiento (Engram `producto/relevamiento-ferreteros-2026-11`): "OFERTAS y DESCUENTO EN EFECTIVO son cosas distintas. Oferta = a un producto se le fija un precio o se le baja X al precio final y queda marcado \"en oferta\"."
+- L2 (2026-11-04) Decisiones de Luca: arrancar el bloque 3 por ofertas, caso 5 («dale, arrancá por ofertas»); fecha de fin opcional («dale, fecha de fin opcional como recomendás»). GDS solo tiene la marca «En promoción» (G20) y el precio fijo manual (GDS-27): no cubre la vigencia.
+- L3 (2026-11-04) Exploración: precio en `Articulo.precioFinal` con precio manual y ajustes (CU-14); el precio que usan las ventas sale de un solo lugar, `ArticulosParaVentaService.vendible` (`:81-91`), y `ValidacionTicket` lo compara con el del renglón (`:186`); el mostrador arma `ArticuloMostradorResponse` y `ArticuloVendedorResponse`. Última migración: V43. · Próximo paso: T1.

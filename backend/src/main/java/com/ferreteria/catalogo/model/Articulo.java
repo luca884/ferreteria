@@ -16,6 +16,7 @@ import org.hibernate.type.SqlTypes;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -38,6 +39,12 @@ public class Articulo {
     static final String PRECIO_MANUAL_DEMASIADO_GRANDE = "El precio es demasiado grande.";
     static final String PRECIO_MANUAL_CON_DECIMALES = "El precio admite hasta 2 decimales.";
     static final String AJUSTES_DEMASIADO_GRANDES = "Con los ajustes del precio final, el precio queda demasiado grande.";
+    static final String OFERTA_VALOR_INVALIDO = "El valor tiene que ser mayor a 0.";
+    static final String OFERTA_CON_DECIMALES = "El valor admite hasta 2 decimales.";
+    static final String OFERTA_PORCENTAJE_FUERA_DE_RANGO = "El descuento va de 0,01 % a 99,99 %.";
+    static final String OFERTA_NO_BAJA_EL_PRECIO = "El precio de oferta tiene que ser menor al precio normal.";
+    static final String OFERTA_VENCIDA = "La fecha de fin no puede ser anterior a hoy.";
+    private static final BigDecimal OFERTA_PORCENTAJE_MAXIMO = new BigDecimal("99.99");
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -169,6 +176,17 @@ public class Articulo {
     /** La ultima importacion de lista que toco este articulo; null si nunca lo toco una (alta manual, por ejemplo). */
     @Column(name = "ultima_importacion_id")
     private Long ultimaImportacionId;
+
+    /** La oferta (ofertas, S1): las tres columnas van juntas, todas null sin oferta. No toca {@link #precioFinal}. */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "oferta_tipo", length = 20)
+    private TipoOferta ofertaTipo;
+
+    @Column(name = "oferta_valor", precision = 15, scale = 2)
+    private BigDecimal ofertaValor;
+
+    @Column(name = "oferta_hasta")
+    private LocalDate ofertaHasta;
 
     @Column(nullable = false)
     private boolean activo = true;
@@ -518,6 +536,65 @@ public class Articulo {
         this.precioManual = false;
         this.precioFinal = precioNuevo;
         return CambioPrecio.entre(this.costo, this.costo, precioAnterior, this.precioFinal);
+    }
+
+    /**
+     * Pone el articulo en oferta (ofertas, S1), reemplazando la que tuviera. El valor es mayor a 0 con hasta 2
+     * decimales; el % va de 0,01 a 99,99; el precio que deja tiene que quedar por debajo del normal de hoy; la fecha de
+     * fin, si esta, no puede ser anterior a hoy. Si no, 400 en {@code valor} o {@code hasta}.
+     */
+    public void fijarOferta(Oferta oferta, LocalDate hoy) {
+        BigDecimal valor = ofertaValorValido(oferta);
+        if (oferta.hasta() != null && oferta.hasta().isBefore(hoy)) {
+            throw new DatosInvalidosException(Map.of("hasta", OFERTA_VENCIDA));
+        }
+        Oferta aDosDecimales = new Oferta(oferta.tipo(), valor, oferta.hasta());
+        if (aDosDecimales.precioSobre(precioFinal).isEmpty()) {
+            throw new DatosInvalidosException(Map.of("valor", OFERTA_NO_BAJA_EL_PRECIO));
+        }
+        this.ofertaTipo = aDosDecimales.tipo();
+        this.ofertaValor = aDosDecimales.valor();
+        this.ofertaHasta = aDosDecimales.hasta();
+    }
+
+    private static BigDecimal ofertaValorValido(Oferta oferta) {
+        BigDecimal valor = oferta.valor();
+        if (valor.signum() <= 0) {
+            throw new DatosInvalidosException(Map.of("valor", OFERTA_VALOR_INVALIDO));
+        }
+        if (valor.stripTrailingZeros().scale() > 2) {
+            throw new DatosInvalidosException(Map.of("valor", OFERTA_CON_DECIMALES));
+        }
+        if (oferta.tipo() == TipoOferta.DESCUENTO_PORCENTAJE && valor.compareTo(OFERTA_PORCENTAJE_MAXIMO) > 0) {
+            throw new DatosInvalidosException(Map.of("valor", OFERTA_PORCENTAJE_FUERA_DE_RANGO));
+        }
+        return valor.setScale(2, RoundingMode.UNNECESSARY);
+    }
+
+    /** Saca la oferta: el articulo vuelve a venderse a su precio normal. */
+    public void quitarOferta() {
+        this.ofertaTipo = null;
+        this.ofertaValor = null;
+        this.ofertaHasta = null;
+    }
+
+    /** La oferta guardada, vigente o vencida. */
+    public Optional<Oferta> getOferta() {
+        return ofertaTipo == null ? Optional.empty() : Optional.of(new Oferta(ofertaTipo, ofertaValor, ofertaHasta));
+    }
+
+    /** El precio de oferta ese dia, si la oferta esta vigente y deja el precio por debajo del normal. */
+    public Optional<BigDecimal> precioDeOfertaEl(LocalDate dia) {
+        return getOferta().filter(o -> o.vigenteEl(dia)).flatMap(o -> o.precioSobre(precioFinal));
+    }
+
+    /** El precio al que se vende ese dia: el de oferta si aplica, si no el normal. */
+    public BigDecimal precioVigenteEl(LocalDate dia) {
+        return precioDeOfertaEl(dia).orElse(precioFinal);
+    }
+
+    public boolean enOfertaEl(LocalDate dia) {
+        return precioDeOfertaEl(dia).isPresent();
     }
 
     /** Anota la importacion de lista que toco este articulo por ultima vez. */
