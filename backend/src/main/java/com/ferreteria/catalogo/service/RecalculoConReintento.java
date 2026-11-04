@@ -5,6 +5,7 @@ import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.Optional;
 import java.util.function.Supplier;
@@ -34,7 +35,12 @@ public class RecalculoConReintento {
 
     /** «Recalcular ahora» (ver {@link RecalculoPorCotizacionService#recalcularAhora}). */
     public RecalculoCotizacionResponse recalcularAhora(Long usuarioId, boolean confirmaDesvio) {
-        return conReintento(() -> recalculoPorCotizacionService.recalcularAhora(usuarioId, confirmaDesvio));
+        return recalcularAhora(usuarioId, confirmaDesvio, null);
+    }
+
+    /** «Recalcular ahora» con el dolar de la vista previa (ver {@link RecalculoPorCotizacionService#recalcularAhora}). */
+    public RecalculoCotizacionResponse recalcularAhora(Long usuarioId, boolean confirmaDesvio, BigDecimal dolarVisto) {
+        return conReintento(() -> recalculoPorCotizacionService.recalcularAhora(usuarioId, confirmaDesvio, dolarVisto));
     }
 
     /** El recalculo del dia (ver {@link RecalculoPorCotizacionService#recalcularDelDia}). */

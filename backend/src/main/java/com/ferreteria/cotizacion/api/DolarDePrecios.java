@@ -37,6 +37,20 @@ public interface DolarDePrecios {
     BigDecimal fijarUltima(boolean confirmaDesvio);
 
     /**
+     * Igual que {@link #fijarUltima(boolean)}, pero si {@code dolarVisto} no es null tiene que ser el ultimo valor
+     * guardado: el que el Dueno vio en la vista previa. Si cambio entre medio, 409 y no se fija nada.
+     */
+    BigDecimal fijarUltima(boolean confirmaDesvio, BigDecimal dolarVisto);
+
+    /**
+     * Vista previa de «Recalcular ahora»: el dolar que se fijaria, sin fijar nada.
+     *
+     * @throws com.ferreteria.common.exception.ConflictException (409) si la cotizacion esta apagada o no hay ningun
+     *         valor
+     */
+    DolarPropuesto proponerUltima();
+
+    /**
      * Para el job diario: reclama el recalculo del dia con un UPDATE condicional (idempotente) y, si le toca, fija el
      * ultimo valor guardado como vigente y lo devuelve. Vacio si todavia no es la hora, ya se hizo hoy, la cotizacion
      * esta apagada, no hay ningun valor o el valor se aleja mas del umbral de la ferreteria del vigente (en esos dos

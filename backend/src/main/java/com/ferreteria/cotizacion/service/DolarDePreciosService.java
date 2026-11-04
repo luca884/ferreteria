@@ -2,10 +2,12 @@ package com.ferreteria.cotizacion.service;
 
 import com.ferreteria.common.exception.ConflictException;
 import com.ferreteria.cotizacion.api.DolarDePrecios;
+import com.ferreteria.cotizacion.api.DolarPropuesto;
 import com.ferreteria.cotizacion.model.CatalogoCotizaciones;
 import com.ferreteria.cotizacion.model.ConfiguracionCotizacion;
 import com.ferreteria.cotizacion.model.DesvioDeCotizacion;
 import com.ferreteria.cotizacion.model.DolarAConfirmar;
+import com.ferreteria.cotizacion.model.FormatoPesos;
 import com.ferreteria.cotizacion.model.LadoCotizacion;
 import com.ferreteria.cotizacion.repository.ConfiguracionCotizacionRepository;
 import com.ferreteria.cotizacion.repository.CotizacionRepository;
@@ -76,17 +78,41 @@ public class DolarDePreciosService implements DolarDePrecios {
     @Override
     @Transactional
     public BigDecimal fijarUltima(boolean confirmaDesvio) {
+        return fijarUltima(confirmaDesvio, null);
+    }
+
+    @Override
+    @Transactional
+    public BigDecimal fijarUltima(boolean confirmaDesvio, BigDecimal dolarVisto) {
         ConfiguracionCotizacion configuracion = configuracionService.obtener();
-        if (!configuracion.isActiva()) {
-            throw new ConflictException(COTIZACION_APAGADA);
+        BigDecimal valor = ultimoAplicable(configuracion);
+        if (dolarVisto != null && dolarVisto.compareTo(valor) != 0) {
+            throw new ConflictException("El dólar cambió desde la vista previa (" + FormatoPesos.de(dolarVisto) + " → "
+                    + FormatoPesos.de(valor) + "). Revisala de nuevo.");
         }
-        BigDecimal valor = ultimoGuardado(configuracion).orElseThrow(() -> new ConflictException(SIN_COTIZACION));
         Optional<DolarAConfirmar> aConfirmar = aConfirmar(configuracion, valor);
         if (aConfirmar.isPresent() && !confirmaDesvio) {
             throw new ConflictException(aConfirmar.get().mensaje());
         }
         fijar(configuracion, valor);
         return valor;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public DolarPropuesto proponerUltima() {
+        ConfiguracionCotizacion configuracion = configuracionService.leer();
+        BigDecimal valor = ultimoAplicable(configuracion);
+        return new DolarPropuesto(valor, configuracion.getVigente(),
+                aConfirmar(configuracion, valor).map(DolarAConfirmar::mensaje).orElse(null));
+    }
+
+    /** El ultimo valor guardado del dolar de precios; 409 si la cotizacion esta apagada o no hay ninguno. */
+    private BigDecimal ultimoAplicable(ConfiguracionCotizacion configuracion) {
+        if (!configuracion.isActiva()) {
+            throw new ConflictException(COTIZACION_APAGADA);
+        }
+        return ultimoGuardado(configuracion).orElseThrow(() -> new ConflictException(SIN_COTIZACION));
     }
 
     /**

@@ -6,6 +6,7 @@ import com.ferreteria.catalogo.model.ContextosDePrecio;
 import com.ferreteria.catalogo.model.HistorialPrecio;
 import com.ferreteria.catalogo.model.Moneda;
 import com.ferreteria.catalogo.model.OrigenPrecio;
+import com.ferreteria.catalogo.model.PrecioPlaneado;
 import com.ferreteria.catalogo.model.RecalculoAutomatico;
 import com.ferreteria.catalogo.model.Rubro;
 import com.ferreteria.catalogo.repository.ArticuloRepository;
@@ -21,6 +22,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 
 /**
@@ -115,6 +117,40 @@ public class RecalculoPreciosService {
             historialPrecioRepository.saveAll(historial);
         }
         return new ResultadoPorCotizacion(historial.size(), avisos);
+    }
+
+    /** Como quedaria un articulo en dolares con el dolar nuevo; si no cambia, nuevo y actual son iguales. */
+    public record FilaVistaPrevia(Long articuloId, String codigoInterno, String descripcion, boolean activo,
+                                  BigDecimal precioActual, BigDecimal precioNuevo) {
+    }
+
+    /** Las filas por codigo interno y los avisos de los articulos que conservarian su precio (S7). */
+    public record VistaPreviaPorCotizacion(List<FilaVistaPrevia> filas, List<String> avisos) {
+    }
+
+    /**
+     * Vista previa de {@link #porCotizacion}: los mismos articulos (todos los en dolares de la ferreteria del request,
+     * activos e inactivos) con el precio que tendrian con {@code dolar}. No cambia ningun articulo ni escribe historial:
+     * usa el calculo que no modifica la entidad.
+     */
+    @Transactional(readOnly = true)
+    public VistaPreviaPorCotizacion vistaPreviaPorCotizacion(BigDecimal dolar) {
+        ConfiguracionPrecios configuracion = configuracionPreciosService.actual();
+        ContextosDePrecio contextos = ContextosDePrecio.armar(
+                rubroRepository.listarScoped(), configuracion.margenDefectoPorcentaje(),
+                configuracion.redondeoMultiplo(), dolar);
+
+        List<FilaVistaPrevia> filas = new ArrayList<>();
+        List<String> avisos = new ArrayList<>();
+        for (Articulo articulo : articuloRepository.enDolaresScoped()) {
+            PrecioPlaneado planeado = articulo.precioConCostoAutomatico(articulo.getCosto(),
+                    contextos.de(articulo.getRubroId()));
+            planeado.aviso().ifPresent(avisos::add);
+            filas.add(new FilaVistaPrevia(articulo.getId(), articulo.getCodigoInterno(), articulo.getDescripcion(),
+                    articulo.isActivo(), articulo.getPrecioFinal(), planeado.precio()));
+        }
+        filas.sort(Comparator.comparing(FilaVistaPrevia::codigoInterno));
+        return new VistaPreviaPorCotizacion(filas, avisos);
     }
 
     /**

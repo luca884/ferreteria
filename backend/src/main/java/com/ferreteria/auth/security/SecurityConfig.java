@@ -58,6 +58,7 @@ public class SecurityConfig {
                         .requestMatchers("/api/facturacion/**").hasRole("DUENO")
                         // «Recalcular ahora» tambien: el GET de la cotizacion (/api/cotizacion) sigue siendo de todos.
                         .requestMatchers(HttpMethod.POST, "/api/cotizacion/recalculo").hasRole("DUENO")
+                        .requestMatchers("/api/cotizacion/recalculo/**").hasRole("DUENO")
                         // Editar los ajustes de un articulo es solo del Dueño; el 403 va antes de leer el cuerpo.
                         .requestMatchers(HttpMethod.PUT, "/api/articulos/*/ajustes").hasRole("DUENO")
                         // Cobrar la cuenta corriente, ver un recibo y los pendientes de cobro son solo del Dueño (CC-028): el

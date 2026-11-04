@@ -1,7 +1,9 @@
 package com.ferreteria.catalogo.service;
 
 import com.ferreteria.catalogo.dto.RecalculoCotizacionResponse;
+import com.ferreteria.catalogo.dto.VistaPreviaRecalculoResponse;
 import com.ferreteria.cotizacion.api.DolarDePrecios;
+import com.ferreteria.cotizacion.api.DolarPropuesto;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -37,8 +39,28 @@ public class RecalculoPorCotizacionService {
      */
     @Transactional
     public RecalculoCotizacionResponse recalcularAhora(Long usuarioId, boolean confirmaDesvio) {
-        BigDecimal dolar = dolarDePrecios.fijarUltima(confirmaDesvio);
+        return recalcularAhora(usuarioId, confirmaDesvio, null);
+    }
+
+    /**
+     * Igual que {@link #recalcularAhora(Long, boolean)}, con el dolar que el Dueno vio en la vista previa: si cambio
+     * entre medio, 409 y no se toca nada (mejoras-ferreteros-bloque-1, S2). Null no lo compara.
+     */
+    @Transactional
+    public RecalculoCotizacionResponse recalcularAhora(Long usuarioId, boolean confirmaDesvio, BigDecimal dolarVisto) {
+        BigDecimal dolar = dolarDePrecios.fijarUltima(confirmaDesvio, dolarVisto);
         return respuesta(dolar, recalculoPreciosService.porCotizacion(dolar, usuarioId));
+    }
+
+    /**
+     * Vista previa de «Recalcular ahora» (solo el Dueno): el dolar que se fijaria y como quedaria cada articulo en
+     * dolares, sin tocar nada. 409 si la cotizacion esta apagada o no hay ningun valor.
+     */
+    @Transactional(readOnly = true)
+    public VistaPreviaRecalculoResponse vistaPrevia() {
+        DolarPropuesto propuesto = dolarDePrecios.proponerUltima();
+        return VistaPreviaRecalculoResponse.de(propuesto,
+                recalculoPreciosService.vistaPreviaPorCotizacion(propuesto.valor()));
     }
 
     /**
