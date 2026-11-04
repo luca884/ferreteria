@@ -139,6 +139,8 @@ describe('ArticuloForm', () => {
     ajustarStock: ReturnType<typeof vi.fn>;
     desglose: ReturnType<typeof vi.fn>;
     guardarAjustes: ReturnType<typeof vi.fn>;
+    ponerOferta: ReturnType<typeof vi.fn>;
+    quitarOferta: ReturnType<typeof vi.fn>;
     configuracionPrecios: ReturnType<typeof vi.fn>;
     codigoSiguiente: ReturnType<typeof vi.fn>;
   };
@@ -182,6 +184,8 @@ describe('ArticuloForm', () => {
         desglose instanceof HttpErrorResponse ? throwError(() => desglose) : of(desglose),
       ),
       guardarAjustes: vi.fn(() => of(articuloConLista())),
+      ponerOferta: vi.fn(),
+      quitarOferta: vi.fn(),
       configuracionPrecios: vi.fn(() =>
         sinConfiguracion
           ? throwError(() => errorHttp(500, 'Error interno'))
@@ -2422,6 +2426,37 @@ describe('ArticuloForm', () => {
         await enviar();
 
         expect(servicio.actualizar.mock.calls.map(([, pedido]) => pedido.version)).toEqual([3, 4]);
+      });
+
+      it('después de guardar la oferta, el PUT del artículo manda la versión que devolvió (ofertas)', async () => {
+        await crearComponente(conVersion(3));
+        servicio.ponerOferta.mockReturnValue(
+          of(
+            articuloConLista({
+              version: 4,
+              oferta: { tipo: 'PRECIO_FIJO', valor: 1, hasta: null, vigente: true, precioOferta: 1 },
+            }),
+          ),
+        );
+        const valor = el().querySelector<HTMLInputElement>('app-oferta-articulo #oferta-valor')!;
+        valor.value = '1';
+        valor.dispatchEvent(new Event('input'));
+        await refrescar();
+        el().querySelector<HTMLButtonElement>('app-oferta-articulo button[type="submit"]')!.click();
+        await refrescar();
+        expect(el().querySelector('app-oferta-articulo .resumen-oferta')).not.toBeNull();
+        await escribir('descripcion', 'Después de la oferta');
+
+        await enviar();
+
+        expect(servicio.ponerOferta.mock.calls[0][1]).toEqual(expect.objectContaining({ version: 3 }));
+        expect(servicio.actualizar.mock.calls[0][1]).toEqual(expect.objectContaining({ version: 4 }));
+      });
+
+      it('la sección de la oferta no está en el alta', async () => {
+        await crearComponente();
+
+        expect(el().querySelector('app-oferta-articulo')).toBeNull();
       });
 
       it('dos guardados de ajustes seguidos, sin recargar la página, mandan la versión nueva', async () => {

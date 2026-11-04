@@ -91,6 +91,16 @@
     />
     Mostrar dados de baja
   </label>
+  <label class="casilla en-oferta" for="en-oferta">
+    <input
+      id="en-oferta"
+      name="en-oferta"
+      type="checkbox"
+      [checked]="soloEnOferta()"
+      (change)="cambiarSoloEnOferta($any($event.target).checked)"
+    />
+    Solo en oferta
+  </label>
 </app-barra-acciones>
 
 @if (aviso(); as mensaje) {
@@ -142,7 +152,12 @@
             >
               <td class="codigo">{{ articulo.codigoInterno }}</td>
               <td class="codigo-proveedor">{{ articulo.codigoProveedor ?? '—' }}</td>
-              <td class="descripcion">{{ articulo.descripcion }}</td>
+              <td class="descripcion">
+                {{ articulo.descripcion }}
+                @if (articulo.oferta?.vigente) {
+                  <span class="marca-oferta">Oferta</span>
+                }
+              </td>
               @if (auth.esDueno()) {
                 <td class="num costo">{{ formatearCosto(articulo.costo, articulo.moneda) }}</td>
                 <td class="num margen">
@@ -154,7 +169,14 @@
                 </td>
               }
               <td class="iva">{{ alicuotaLabels[articulo.alicuotaIva] }}</td>
-              <td class="num precio">{{ articulo.precioFinal | monto }}</td>
+              <td class="num precio">
+                @if (articulo.oferta?.precioOferta; as precioOferta) {
+                  <span class="precio-oferta">{{ precioOferta | monto }}</span>
+                  <s class="precio-normal" aria-label="Precio normal">{{ articulo.precioFinal | monto }}</s>
+                } @else {
+                  {{ articulo.precioFinal | monto }}
+                }
+              </td>
               <td class="num stock" [class.negativo]="articulo.stockActual < 0">
                 {{ cantidadConUnidad(articulo.stockActual, articulo.unidad) }}
               </td>

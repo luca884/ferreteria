@@ -55,6 +55,7 @@ import {
 } from './articulo.models';
 import { ArticulosService } from './articulos.service';
 import { DialogoAjusteStock } from './dialogo-ajuste-stock';
+import { OfertaArticulo } from './oferta-articulo';
 import {
   DesglosePrecioVista,
   GrupoAjustes,
@@ -148,6 +149,7 @@ const VOLVER_AL_LISTADO = { queryParamsHandling: 'preserve' } as const;
     BarraAcciones,
     DesglosePrecioVista,
     ImporteInput,
+    OfertaArticulo,
   ],
   templateUrl: './articulo-form.html',
   styleUrl: './articulo-form.css',
@@ -725,6 +727,17 @@ export class ArticuloForm implements OnInit {
       },
       error: (err: unknown) => this.error.set(mensajeDe(err, 'No se pudo reactivar el artículo.')),
     });
+  }
+
+  /**
+   * Ofertas (S1): la sección guardó con su propio pedido. Se toma la versión nueva (y la oferta) de la respuesta para
+   * que el próximo guardado del artículo no dé 409; lo escrito en el formulario queda como está.
+   */
+  protected ofertaCambiada(articulo: Articulo): void {
+    const actual = this.articulo();
+    if (!actual) return;
+    this.articulo.set({ ...actual, version: articulo.version, oferta: articulo.oferta ?? null });
+    this.aviso.set(articulo.oferta ? 'Oferta guardada.' : 'Oferta sacada.');
   }
 
   protected stockAjustado(ajuste: AjusteStockResponse): void {

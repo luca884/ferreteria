@@ -547,6 +547,14 @@
     </div>
   </form>
 
+  @if (articulo(); as actual) {
+    <app-oferta-articulo
+      [articulo]="actual"
+      [editable]="auth.esDueno() && actual.activo"
+      (cambiado)="ofertaCambiada($event)"
+    />
+  }
+
   @if (desglose(); as d) {
     <app-desglose-precio
       class="desglose"

@@ -749,6 +749,31 @@ tr.inactivo td {
   white-space: nowrap;
 }
 
+/* Ofertas (S3): la marca del artículo en oferta, en la lista de artículos y en el mostrador. */
+.marca-oferta {
+  display: inline-block;
+  margin-left: var(--e-1);
+  padding: 1px 6px;
+  border: 1px solid var(--advertencia-borde);
+  border-radius: var(--radio-sm);
+  background: var(--advertencia-insignia);
+  color: var(--advertencia);
+  font-size: var(--texto-2xs);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+/* El precio normal tachado al lado del de oferta. */
+.precio-normal {
+  margin-left: var(--e-1);
+  color: var(--texto-tenue);
+  font-size: var(--texto-xs);
+  font-weight: 400;
+}
+
 /* ---------- Avisos ---------- */
 
 .alerta {

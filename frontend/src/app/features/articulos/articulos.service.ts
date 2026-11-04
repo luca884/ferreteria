@@ -14,6 +14,7 @@ import {
   DesglosePrecio,
   FiltroMovimientos,
   MovimientoStock,
+  OfertaRequest,
 } from './articulo.models';
 
 @Injectable({ providedIn: 'root' })
@@ -26,11 +27,13 @@ export class ArticulosService {
     page: number,
     size: number,
     incluirInactivos: boolean,
+    enOferta = false,
   ): Observable<PageResponse<Articulo>> {
     let params = new HttpParams()
       .set('page', page)
       .set('size', size)
       .set('incluirInactivos', incluirInactivos);
+    if (enOferta) params = params.set('enOferta', true);
     const termino = q.trim();
     if (termino !== '') params = params.set('q', termino);
     return this.http.get<PageResponse<Articulo>>(this.url, { params });
@@ -71,6 +74,16 @@ export class ArticulosService {
   /** Los tres ajustes del artículo (solo el Dueño); es un pedido propio, aparte del PUT del artículo. */
   guardarAjustes(id: number, request: AjustesRequest): Observable<Articulo> {
     return this.http.put<Articulo>(`${this.url}/${id}/ajustes`, request);
+  }
+
+  /** Ofertas (S1, solo el Dueño): pone o reemplaza la oferta; devuelve el artículo con la versión nueva. */
+  ponerOferta(id: number, request: OfertaRequest): Observable<Articulo> {
+    return this.http.put<Articulo>(`${this.url}/${id}/oferta`, request);
+  }
+
+  /** Saca la oferta; devuelve el artículo con la versión nueva. */
+  quitarOferta(id: number): Observable<Articulo> {
+    return this.http.delete<Articulo>(`${this.url}/${id}/oferta`);
   }
 
   desactivar(id: number): Observable<void> {

@@ -53,6 +53,8 @@ export class Articulos implements OnInit {
   /** Búsqueda ya aplicada: la que se manda al servidor, no lo que se está tipeando. */
   protected readonly busquedaAplicada = signal('');
   protected readonly incluirInactivos = signal(false);
+  /** Ofertas (S3): solo los que hoy tienen una oferta que baja el precio. */
+  protected readonly soloEnOferta = signal(false);
   /** El CSV se está bajando: Exportar queda deshabilitado. */
   protected readonly exportando = signal(false);
   /** Fila elegida en la página (solo el Dueño, que es quien tiene acciones): la barra actúa sobre ella; Enter edita. */
@@ -80,6 +82,7 @@ export class Articulos implements OnInit {
     this.busquedaAplicada.set(q);
     this.form.setValue({ q });
     this.incluirInactivos.set(params.get('inactivos') === '1');
+    this.soloEnOferta.set(params.get('oferta') === '1');
     if (Number.isInteger(elegido) && elegido > 0) {
       this.filas.elegidoId.set(elegido);
       this.enfocarElegidaAlCargar = true;
@@ -100,6 +103,11 @@ export class Articulos implements OnInit {
 
   protected cambiarInactivos(incluir: boolean): void {
     this.incluirInactivos.set(incluir);
+    this.cargar(0);
+  }
+
+  protected cambiarSoloEnOferta(solo: boolean): void {
+    this.soloEnOferta.set(solo);
     this.cargar(0);
   }
 
@@ -222,7 +230,7 @@ export class Articulos implements OnInit {
     this.cargando.set(true);
     this.error.set(null);
     this.service
-      .buscar(this.busquedaAplicada(), page, TAMANO_PAGINA, this.incluirInactivos())
+      .buscar(this.busquedaAplicada(), page, TAMANO_PAGINA, this.incluirInactivos(), this.soloEnOferta())
       .subscribe({
         next: (resultado) => {
           if (retrocederSiVacia && resultado.items.length === 0 && page > 0) {
@@ -250,6 +258,7 @@ export class Articulos implements OnInit {
     if (this.busquedaAplicada() !== '') queryParams['q'] = this.busquedaAplicada();
     if (page > 0) queryParams['pagina'] = page + 1;
     if (this.incluirInactivos()) queryParams['inactivos'] = 1;
+    if (this.soloEnOferta()) queryParams['oferta'] = 1;
     void this.router.navigate([], { relativeTo: this.route, queryParams, replaceUrl: true });
   }
 }

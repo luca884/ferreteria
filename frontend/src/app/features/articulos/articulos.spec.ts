@@ -147,7 +147,7 @@ describe('Articulos', () => {
     await crearComponente(true);
 
     expect(servicio.buscar).toHaveBeenCalledTimes(1);
-    expect(servicio.buscar).toHaveBeenCalledWith('', 0, 20, false);
+    expect(servicio.buscar).toHaveBeenCalledWith('', 0, 20, false, false);
     expect(filas()).toHaveLength(2);
   });
 
@@ -274,12 +274,12 @@ describe('Articulos', () => {
     await crearComponente(true, pagina([articulo(1)], 0, 3, 45));
     servicio.buscar.mockReturnValue(of(pagina([articulo(3)], 1, 3, 45)));
     await clickEn('button.siguiente');
-    expect(servicio.buscar).toHaveBeenLastCalledWith('', 1, 20, false);
+    expect(servicio.buscar).toHaveBeenLastCalledWith('', 1, 20, false, false);
 
     servicio.buscar.mockReturnValue(of(pagina([articulo(9)], 0, 1, 1)));
     await buscarTexto('  torni ');
 
-    expect(servicio.buscar).toHaveBeenLastCalledWith('torni', 0, 20, false);
+    expect(servicio.buscar).toHaveBeenLastCalledWith('torni', 0, 20, false, false);
     expect(texto('.codigo')).toBe('COD-9');
   });
 
@@ -295,7 +295,7 @@ describe('Articulos', () => {
     boton.click();
     await refrescar();
 
-    expect(servicio.buscar).toHaveBeenLastCalledWith('torni', 0, 20, false);
+    expect(servicio.buscar).toHaveBeenLastCalledWith('torni', 0, 20, false, false);
   });
 
   it('el buscador no autocompleta ni corrige y su ejemplo termina en «…»', async () => {
@@ -315,12 +315,12 @@ describe('Articulos', () => {
     servicio.buscar.mockReturnValue(of(pagina([articulo(21)], 1, 3, 45)));
 
     await clickEn('button.siguiente');
-    expect(servicio.buscar).toHaveBeenLastCalledWith('torni', 1, 20, false);
+    expect(servicio.buscar).toHaveBeenLastCalledWith('torni', 1, 20, false, false);
     expect(texto('.codigo')).toBe('COD-21');
 
     servicio.buscar.mockReturnValue(of(pagina([articulo(5)], 0, 3, 45)));
     await clickEn('button.anterior');
-    expect(servicio.buscar).toHaveBeenLastCalledWith('torni', 0, 20, false);
+    expect(servicio.buscar).toHaveBeenLastCalledWith('torni', 0, 20, false, false);
     expect(texto('.codigo')).toBe('COD-5');
   });
 
@@ -367,7 +367,7 @@ describe('Articulos', () => {
     check.dispatchEvent(new Event('change'));
     await refrescar();
 
-    expect(servicio.buscar).toHaveBeenLastCalledWith('', 0, 20, true);
+    expect(servicio.buscar).toHaveBeenLastCalledWith('', 0, 20, true, false);
     expect(texto('.estado', 0)).toBe('Activo');
     expect(texto('.estado', 1)).toBe('De baja');
   });
@@ -376,7 +376,7 @@ describe('Articulos', () => {
     it('al entrar los lee de la dirección (volver de editar conserva el contexto)', async () => {
       await crearComponente(true, pagina([articulo(41)], 2, 3, 45), null, '/?q=torni&pagina=3&inactivos=1');
 
-      expect(servicio.buscar).toHaveBeenCalledWith('torni', 2, 20, true);
+      expect(servicio.buscar).toHaveBeenCalledWith('torni', 2, 20, true, false);
       expect(el().querySelector<HTMLInputElement>('#q')!.value).toBe('torni');
       expect(el().querySelector<HTMLInputElement>('#inactivos')!.checked).toBe(true);
     });
@@ -405,7 +405,7 @@ describe('Articulos', () => {
     it('una página que no es un número arranca en la primera', async () => {
       await crearComponente(true, undefined, null, '/?pagina=abc');
 
-      expect(servicio.buscar).toHaveBeenCalledWith('', 0, 20, false);
+      expect(servicio.buscar).toHaveBeenCalledWith('', 0, 20, false, false);
     });
 
     it('al buscar, paginar o tildar inactivos los deja en la dirección', async () => {
@@ -433,12 +433,68 @@ describe('Articulos', () => {
       check.checked = true;
       check.dispatchEvent(new Event('change'));
       await refrescar();
-      expect(servicio.buscar).toHaveBeenLastCalledWith('torni', 0, 20, true);
+      expect(servicio.buscar).toHaveBeenLastCalledWith('torni', 0, 20, true, false);
       expect(navegar).toHaveBeenLastCalledWith([], {
         relativeTo: route,
         queryParams: { q: 'torni', inactivos: 1 },
         replaceUrl: true,
       });
+    });
+  });
+
+  describe('ofertas (S3)', () => {
+    const enOferta = (id: number, vigente = true): Articulo =>
+      articulo(id, {
+        precioFinal: 1000,
+        oferta: {
+          tipo: 'PRECIO_FIJO',
+          valor: 800,
+          hasta: null,
+          vigente,
+          precioOferta: vigente ? 800 : null,
+        },
+      });
+
+    it('un artículo con oferta vigente lleva la marca y el precio de oferta con el normal tachado', async () => {
+      await crearComponente(false, pagina([enOferta(1), articulo(2)]));
+
+      expect(texto('.marca-oferta', 0)).toBe('Oferta');
+      expect(texto('.precio .precio-oferta', 0)).toBe(`$${NBSP}800,00`);
+      expect(texto('.precio s', 0)).toBe(`$${NBSP}1.000,00`);
+      expect(filas()[1].querySelector('.marca-oferta')).toBeNull();
+      expect(texto('.precio', 1)).toBe(`$${NBSP}170,00`);
+    });
+
+    it('una oferta vencida no se marca y se ve el precio normal', async () => {
+      await crearComponente(false, pagina([enOferta(1, false)]));
+
+      expect(filas()[0].querySelector('.marca-oferta')).toBeNull();
+      expect(texto('.precio', 0)).toBe(`$${NBSP}1.000,00`);
+    });
+
+    it('«Solo en oferta» filtra desde la primera página y queda en la dirección', async () => {
+      await crearComponente(false, pagina([articulo(1)], 0, 3, 45));
+      const route = TestBed.inject(ActivatedRoute);
+      servicio.buscar.mockReturnValue(of(pagina([enOferta(7)])));
+
+      const check = el().querySelector<HTMLInputElement>('#en-oferta')!;
+      check.checked = true;
+      check.dispatchEvent(new Event('change'));
+      await refrescar();
+
+      expect(servicio.buscar).toHaveBeenLastCalledWith('', 0, 20, false, true);
+      expect(navegar).toHaveBeenLastCalledWith([], {
+        relativeTo: route,
+        queryParams: { oferta: 1 },
+        replaceUrl: true,
+      });
+    });
+
+    it('al volver con ?oferta=1 arranca con el filtro tildado', async () => {
+      await crearComponente(false, pagina([enOferta(7)]), null, '/?oferta=1');
+
+      expect(el().querySelector<HTMLInputElement>('#en-oferta')!.checked).toBe(true);
+      expect(servicio.buscar).toHaveBeenCalledWith('', 0, 20, false, true);
     });
   });
 
@@ -725,7 +781,7 @@ describe('Articulos', () => {
 
     expect(nativo).not.toHaveBeenCalled();
     expect(servicio.desactivar).toHaveBeenCalledWith(1);
-    expect(servicio.buscar).toHaveBeenLastCalledWith('', 0, 20, false);
+    expect(servicio.buscar).toHaveBeenLastCalledWith('', 0, 20, false, false);
     expect(el().querySelector('app-confirmacion')).toBeNull();
     expect(filas()).toHaveLength(1);
     expect(texto('.codigo')).toBe('COD-2');
@@ -753,8 +809,8 @@ describe('Articulos', () => {
 
     await darDeBaja(0);
 
-    expect(servicio.buscar).toHaveBeenNthCalledWith(1, '', 1, 20, false);
-    expect(servicio.buscar).toHaveBeenNthCalledWith(2, '', 0, 20, false);
+    expect(servicio.buscar).toHaveBeenNthCalledWith(1, '', 1, 20, false, false);
+    expect(servicio.buscar).toHaveBeenNthCalledWith(2, '', 0, 20, false, false);
     expect(texto('.codigo')).toBe('COD-1');
   });
 
@@ -871,7 +927,7 @@ describe('Articulos', () => {
       input.dispatchEvent(new Event('input'));
       await refrescar();
 
-      expect(servicio.buscar).toHaveBeenLastCalledWith('', 0, 20, false);
+      expect(servicio.buscar).toHaveBeenLastCalledWith('', 0, 20, false, false);
       expect(el().textContent).not.toContain('No hay artículos que coincidan');
       expect(filas()).toHaveLength(1);
     });

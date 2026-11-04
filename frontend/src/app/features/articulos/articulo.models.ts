@@ -134,6 +134,58 @@ export interface Articulo {
   ajustesPrecio?: AjustePrecio[];
   /** GDS-05, para el Dueño y el Vendedor: desde cuándo está al día el costo (AAAA-MM-DD). */
   costoAl?: string | null;
+  /** Ofertas (S3), para el Dueño y el Vendedor: la oferta guardada, vigente o vencida; null sin oferta. */
+  oferta?: Oferta | null;
+}
+
+/** Ofertas (S1): cómo fija la oferta el precio de venta. */
+export type TipoOferta = 'PRECIO_FIJO' | 'DESCUENTO_PORCENTAJE' | 'DESCUENTO_MONTO';
+
+export const TIPOS_OFERTA: readonly TipoOferta[] = ['PRECIO_FIJO', 'DESCUENTO_PORCENTAJE', 'DESCUENTO_MONTO'];
+
+export const TIPO_OFERTA_LABELS: Record<TipoOferta, string> = {
+  PRECIO_FIJO: 'Precio fijo',
+  DESCUENTO_PORCENTAJE: 'Descuento en %',
+  DESCUENTO_MONTO: 'Descuento en $',
+};
+
+/**
+ * La oferta guardada del artículo. `vigente` y `precioOferta` son los de hoy: vencida, o si ya no baja el precio
+ * normal, vuelve con `vigente` false y sin precio.
+ */
+export interface Oferta {
+  tipo: TipoOferta;
+  valor: number;
+  /** Último día de la oferta (AAAA-MM-DD), inclusive; null dura hasta que el Dueño la saca. */
+  hasta: string | null;
+  vigente: boolean;
+  precioOferta: number | null;
+}
+
+export interface OfertaRequest {
+  tipo: TipoOferta;
+  valor: number;
+  hasta: string | null;
+  version?: number;
+}
+
+/**
+ * El precio que deja la oferta sobre ese precio normal, con la misma regla que el backend (`Oferta.precioSobre`): el %
+ * al centavo hacia arriba; null si no queda por encima de 0 ni por debajo del normal.
+ */
+export function precioDeOferta(precioNormal: number, tipo: TipoOferta, valor: number): number | null {
+  const normalEnCentavos = Math.round(precioNormal * 100);
+  let centavos: number;
+  if (tipo === 'PRECIO_FIJO') {
+    centavos = Math.round(valor * 100);
+  } else if (tipo === 'DESCUENTO_MONTO') {
+    centavos = normalEnCentavos - Math.round(valor * 100);
+  } else {
+    // centavos x (100 - %) con el % en centésimos, para no arrastrar errores de coma flotante.
+    const restoEnCentesimos = 10000 - Math.round(valor * 100);
+    centavos = Math.ceil((normalEnCentavos * restoEnCentesimos) / 10000);
+  }
+  return centavos > 0 && centavos < normalEnCentavos ? centavos / 100 : null;
 }
 
 /** Lo que responde el servidor (409) cuando otro cambio modificó el artículo después de cargarlo. */

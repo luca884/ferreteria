@@ -1,0 +1,54 @@
+:host {
+  display: block;
+}
+
+.oferta-articulo {
+  margin: var(--e-4) 0;
+  padding: var(--e-3) var(--e-4);
+  border: 1px solid var(--borde);
+  border-radius: var(--radio-lg);
+  background: var(--superficie);
+}
+
+h2 {
+  margin: 0 0 var(--e-2);
+  font-size: var(--texto-md, 1rem);
+}
+
+.resumen-oferta {
+  margin: 0 0 var(--e-3);
+  color: var(--texto-suave);
+}
+.resumen-oferta.vigente {
+  color: var(--advertencia);
+  font-weight: 600;
+}
+
+.campos-oferta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--e-3);
+}
+.campos-oferta label {
+  display: flex;
+  flex-direction: column;
+  gap: var(--e-1);
+  min-width: 10rem;
+}
+
+.error-campo {
+  color: var(--error);
+  font-size: var(--texto-xs);
+}
+
+.precio-resultante {
+  flex-basis: 100%;
+  margin: 0;
+  min-height: 1.25rem;
+}
+
+.acciones-oferta {
+  display: flex;
+  gap: var(--e-2);
+}

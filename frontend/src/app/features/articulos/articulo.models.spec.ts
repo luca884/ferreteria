@@ -10,6 +10,7 @@ import {
   UNIDADES,
   UNIDAD_LABELS,
   errorDeValorDeAjustePrecio,
+  precioDeOferta,
   monedaDe,
   textoDeAjustePrecio,
 } from './articulo.models';
@@ -127,5 +128,25 @@ describe('articulo.models', () => {
       expect(textoDeAjustePrecio({ nombre: null, tipo: 'MONTO', valor: -5 })).toBe(`Ajuste \u2212$${NBSP}5,00`);
       expect(textoDeAjustePrecio({ nombre: '  ', tipo: 'MONTO', valor: 1234.5 })).toBe(`Ajuste +$${NBSP}1.234,50`);
     });
+  });
+});
+
+describe('precioDeOferta (ofertas, misma regla que Oferta.precioSobre)', () => {
+  it('precio fijo y descuento en $ dan el precio tal cual', () => {
+    expect(precioDeOferta(1000, 'PRECIO_FIJO', 800)).toBe(800);
+    expect(precioDeOferta(163.35, 'DESCUENTO_MONTO', 13.35)).toBe(150);
+  });
+
+  it('el descuento en % va al centavo hacia arriba', () => {
+    // 163,35 x 0,90 = 147,015 -> 147,02
+    expect(precioDeOferta(163.35, 'DESCUENTO_PORCENTAJE', 10)).toBe(147.02);
+    // 163,35 x 0,0001 = 0,016335 -> 0,02
+    expect(precioDeOferta(163.35, 'DESCUENTO_PORCENTAJE', 99.99)).toBe(0.02);
+  });
+
+  it('null si no baja el precio o lo deja en 0 o menos', () => {
+    expect(precioDeOferta(1000, 'PRECIO_FIJO', 1000)).toBeNull();
+    expect(precioDeOferta(1000, 'DESCUENTO_MONTO', 1000)).toBeNull();
+    expect(precioDeOferta(0.01, 'DESCUENTO_PORCENTAJE', 10)).toBeNull();
   });
 });

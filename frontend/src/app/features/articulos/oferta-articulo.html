@@ -1,0 +1,77 @@
+@if (editable() || oferta()) {
+  <section class="oferta-articulo" aria-labelledby="oferta-titulo">
+    <h2 id="oferta-titulo">Oferta</h2>
+
+    @if (resumen(); as texto) {
+      <p class="resumen-oferta" [class.vigente]="oferta()?.vigente">{{ texto }}</p>
+    }
+
+    @if (editable()) {
+      <form class="campos-oferta" [formGroup]="form" (ngSubmit)="guardar()" novalidate>
+        <label for="oferta-tipo">
+          Tipo
+          <select id="oferta-tipo" formControlName="tipo" [attr.aria-describedby]="errores().tipo ? 'oferta-tipo-error' : null">
+            @for (tipo of tipos; track tipo) {
+              <option [value]="tipo">{{ tipoLabels[tipo] }}</option>
+            }
+          </select>
+          @if (errores().tipo; as mensaje) {
+            <span id="oferta-tipo-error" class="error-campo">{{ mensaje }}</span>
+          }
+        </label>
+
+        <label for="oferta-valor">
+          {{ form.controls.tipo.value === 'DESCUENTO_PORCENTAJE' ? 'Descuento (%)' : form.controls.tipo.value === 'DESCUENTO_MONTO' ? 'Descuento ($)' : 'Precio de oferta ($)' }}
+          <input
+            id="oferta-valor"
+            type="number"
+            inputmode="decimal"
+            step="0.01"
+            min="0.01"
+            formControlName="valor"
+            [attr.aria-invalid]="errores().valor ? true : null"
+            [attr.aria-describedby]="errores().valor ? 'oferta-valor-error' : 'oferta-precio-resultante'"
+          />
+          @if (errores().valor; as mensaje) {
+            <span id="oferta-valor-error" class="error-campo">{{ mensaje }}</span>
+          }
+        </label>
+
+        <label for="oferta-hasta">
+          Hasta (opcional)
+          <input
+            id="oferta-hasta"
+            type="date"
+            formControlName="hasta"
+            [attr.aria-invalid]="errores().hasta ? true : null"
+            [attr.aria-describedby]="errores().hasta ? 'oferta-hasta-error' : null"
+          />
+          @if (errores().hasta; as mensaje) {
+            <span id="oferta-hasta-error" class="error-campo">{{ mensaje }}</span>
+          }
+        </label>
+
+        <p id="oferta-precio-resultante" class="precio-resultante" aria-live="polite">
+          @if (precioResultante(); as precio) {
+            Precio de oferta: <strong>{{ precio | monto }}</strong>
+          } @else if (precioResultante() === null) {
+            Con ese valor el precio no baja.
+          }
+        </p>
+
+        <div class="acciones-oferta">
+          <button type="submit" [disabled]="!puedeGuardar()">
+            {{ guardando() ? 'Guardando…' : 'Guardar oferta' }}
+          </button>
+          @if (oferta()) {
+            <button type="button" class="secundario" [disabled]="guardando()" (click)="sacar()">Sacar oferta</button>
+          }
+        </div>
+      </form>
+    }
+
+    @if (error(); as mensaje) {
+      <p class="error" role="alert">{{ mensaje }}</p>
+    }
+  </section>
+}
