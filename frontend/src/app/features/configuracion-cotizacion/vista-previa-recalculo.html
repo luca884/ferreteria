@@ -1,0 +1,68 @@
+<section class="vista-previa" aria-labelledby="vista-previa-titulo">
+  <h3 id="vista-previa-titulo">Vista previa</h3>
+  @if (vista().aviso; as aviso) {
+    <p class="alerta advertencia aviso-desvio" role="alert">{{ aviso }}</p>
+  }
+  <p class="resumen">{{ resumen() }}</p>
+
+  @if (vista().articulos.length > 0) {
+    <div class="tabla-contenedor">
+      <table>
+        <thead>
+          <tr>
+            <th scope="col">Código</th>
+            <th scope="col">Descripción</th>
+            <th scope="col" class="numero">Precio actual</th>
+            <th scope="col" class="numero">Precio nuevo</th>
+            <th scope="col" class="numero">Diferencia</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (fila of vista().articulos; track fila.id) {
+            <tr [class.sin-cambio]="fila.diferencia === 0">
+              <td>{{ fila.codigoInterno }}</td>
+              <td>
+                {{ fila.descripcion }}
+                @if (!fila.activo) {
+                  <span class="inactivo">(inactivo)</span>
+                }
+              </td>
+              <td class="numero">{{ monto(fila.precioActual) }}</td>
+              <td class="numero">{{ monto(fila.precioNuevo) }}</td>
+              <td class="numero" [class.sube]="fila.diferencia > 0" [class.baja]="fila.diferencia < 0">
+                {{ diferencia(fila.diferencia) }}
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+
+  @if (vista().avisos.length > 0) {
+    <div class="alerta advertencia avisos-vista-previa" role="alert">
+      <ul>
+        @for (mensaje of vista().avisos; track $index) {
+          <li>{{ mensaje }}</li>
+        }
+      </ul>
+    </div>
+  }
+
+  <div class="acciones">
+    <button type="button" class="secundario cancelar-recalculo" [disabled]="aplicando()" (click)="cancelar.emit()">
+      Cancelar
+    </button>
+    @if (vista().articulos.length > 0) {
+      <button type="button" class="primario aplicar-recalculo" [disabled]="aplicando()" (click)="aplicar.emit()">
+        @if (aplicando()) {
+          Aplicando…
+        } @else if (vista().superaUmbral) {
+          Confirmar y aplicar
+        } @else {
+          Aplicar
+        }
+      </button>
+    }
+  </div>
+</section>

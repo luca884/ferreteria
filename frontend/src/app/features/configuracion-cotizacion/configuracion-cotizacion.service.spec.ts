@@ -15,7 +15,7 @@ describe('ConfiguracionCotizacionService', () => {
     dolarPrecios: 'USD:oficial',
     ladoPrecios: 'VENTA',
     visibles: ['USD:oficial', 'EUR:oficial'],
-    horaRecalculo: '08:00',
+    horaRecalculo: '08:00', umbralDesvio: 5,
     vigente: 1000,
     vigenteDesde: '2026-10-16T11:00:00Z',
     aConfirmar: null,
@@ -46,7 +46,7 @@ describe('ConfiguracionCotizacionService', () => {
       dolarPrecios: 'USD:bolsa',
       ladoPrecios: 'COMPRA',
       visibles: ['USD:bolsa'],
-      horaRecalculo: '09:30',
+      horaRecalculo: '09:30', umbralDesvio: 8,
     };
     let guardada: ConfiguracionCotizacion | undefined;
     service.guardar(pedido).subscribe((c) => (guardada = c));
@@ -64,7 +64,7 @@ describe('ConfiguracionCotizacionService', () => {
   it('un 400 llega con el mensaje de cada campo del backend', () => {
     let error: unknown;
     service
-      .guardar({ activa: true, dolarPrecios: 'EUR:oficial', ladoPrecios: 'VENTA', visibles: [], horaRecalculo: '25:00' })
+      .guardar({ activa: true, dolarPrecios: 'EUR:oficial', ladoPrecios: 'VENTA', visibles: [], horaRecalculo: '25:00', umbralDesvio: 5 })
       .subscribe({ error: (e: unknown) => (error = e) });
 
     http.expectOne((r) => r.url.endsWith('/configuracion-cotizacion')).flush(
@@ -91,7 +91,7 @@ describe('ConfiguracionCotizacionService', () => {
       dolarPrecios: 'USD:oficial',
       ladoPrecios: 'VENTA',
       visibles: ['USD:oficial', 'USD:blue'],
-      horaRecalculo: '08:00',
+      horaRecalculo: '08:00', umbralDesvio: 5,
     };
     let avisos: number;
 

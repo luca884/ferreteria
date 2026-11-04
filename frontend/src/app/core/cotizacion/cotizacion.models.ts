@@ -30,7 +30,7 @@ export interface PreciosCotizacion {
   lado: LadoCotizacion;
   valor: number | null;
   desde: string | null;
-  /** Dólar nuevo que se aleja más del 20 % del vigente y espera que el Dueño lo confirme; null si no hay. */
+  /** Dólar nuevo que se aleja más del aviso de la ferretería y espera que el Dueño lo confirme; null si no hay. */
   aConfirmar: number | null;
 }
 
@@ -43,6 +43,35 @@ export interface Cotizacion {
   ultimaRespuesta: string | null;
   visibles: TipoCotizacion[];
   precios: PreciosCotizacion;
+}
+
+/** Un artículo en dólares en la vista previa del recálculo. */
+export interface FilaVistaPrevia {
+  id: number;
+  codigoInterno: string;
+  descripcion: string;
+  activo: boolean;
+  precioActual: number;
+  precioNuevo: number;
+  /** Precio nuevo menos actual; 0 si no cambia. */
+  diferencia: number;
+}
+
+/** Lo que devuelve `GET /cotizacion/recalculo/vista-previa` (solo el Dueño): no cambia nada. */
+export interface VistaPreviaRecalculo {
+  /** El dólar con el que se recalcularía: hay que mandarlo al aplicar. */
+  dolar: number;
+  /** El dólar con el que están hoy los precios; null si nunca se fijó uno. */
+  vigente: number | null;
+  /** El dólar se aleja más del aviso de la ferretería: aplicar exige confirmarlo. */
+  superaUmbral: boolean;
+  /** El aviso armado por el backend cuando supera el umbral; null si no. */
+  aviso: string | null;
+  articulosQueCambian: number;
+  /** Todos los artículos en dólares, por código. */
+  articulos: FilaVistaPrevia[];
+  /** Artículos que conservarían su precio porque sus ajustes lo dejarían en 0 o menos. */
+  avisos: string[];
 }
 
 /** Lo que devuelve `POST /cotizacion/recalculo`. */

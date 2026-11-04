@@ -10,10 +10,12 @@ export interface ConfiguracionCotizacion {
   visibles: string[];
   /** `HH:mm`, hora de Buenos Aires. */
   horaRecalculo: string;
+  /** Porcentaje (1 a 50) por encima del cual un dólar nuevo espera la confirmación del Dueño; 5 por defecto. */
+  umbralDesvio: number;
   /** El dólar con el que se calcularon los precios la última vez; null si todavía no se fijó ninguno. */
   vigente: number | null;
   vigenteDesde: string | null;
-  /** Un dólar nuevo que se aleja más del 20 % del vigente: los precios no cambian hasta que el Dueño lo confirme. */
+  /** Un dólar nuevo que se aleja más de `umbralDesvio` del vigente: los precios no cambian hasta que el Dueño lo confirme. */
   aConfirmar: DolarAConfirmar | null;
 }
 

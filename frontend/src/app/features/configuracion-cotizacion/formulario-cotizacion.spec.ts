@@ -13,6 +13,7 @@ describe('FormularioCotizacion', () => {
     ladoPrecios: 'VENTA',
     visibles: ['USD:oficial', 'EUR:oficial'],
     horaRecalculo: '08:00',
+    umbralDesvio: 5,
     vigente: 1000,
     vigenteDesde: '2026-10-16T11:00:00Z',
     aConfirmar: null,
@@ -151,6 +152,7 @@ describe('FormularioCotizacion', () => {
         ladoPrecios: 'COMPRA',
         visibles: ['USD:blue', 'EUR:oficial'],
         horaRecalculo: '09:30',
+        umbralDesvio: 5,
       },
     ]);
   });
@@ -167,6 +169,7 @@ describe('FormularioCotizacion', () => {
         ladoPrecios: 'VENTA',
         visibles: ['USD:oficial', 'EUR:oficial'],
         horaRecalculo: '08:00',
+        umbralDesvio: 5,
       },
     ]);
   });
@@ -203,6 +206,40 @@ describe('FormularioCotizacion', () => {
     expect(guardados).toEqual([]);
     expect(texto(q('#horaRecalculo-error'))).toBe('Indicá la hora del recálculo, por ejemplo 08:00.');
     expect(q('#horaRecalculo').getAttribute('aria-invalid')).toBe('true');
+  });
+
+  describe('aviso del dólar', () => {
+    it('muestra el porcentaje guardado y explica qué hace', async () => {
+      await crear({ ...configuracion, umbralDesvio: 7.5 });
+
+      expect(q<HTMLInputElement>('#umbralDesvio').value).toBe('7.5');
+      expect(texto(q('label[for="umbralDesvio"]'))).toBe('Avisar si el dólar cambia más de (%)');
+      expect(texto(q('#umbralDesvio-pista'))).toBe(
+        'Si el dólar nuevo se aleja más de este porcentaje del anterior, los precios no cambian hasta que lo confirmes.',
+      );
+    });
+
+    it('guardar emite el porcentaje editado', async () => {
+      await crear();
+
+      await escribir(q<HTMLInputElement>('#umbralDesvio'), '8');
+      await enviar();
+
+      expect(guardados[0].umbralDesvio).toBe(8);
+    });
+
+    for (const invalido of ['', '0.5', '60']) {
+      it(`con «${invalido}» no guarda y lo explica en el campo`, async () => {
+        await crear();
+        await escribir(q<HTMLInputElement>('#umbralDesvio'), invalido);
+
+        await enviar();
+
+        expect(guardados).toEqual([]);
+        expect(texto(q('#umbralDesvio-error'))).toBe('El aviso del dólar tiene que estar entre 1 % y 50 %.');
+        expect(q('#umbralDesvio').getAttribute('aria-invalid')).toBe('true');
+      });
+    }
   });
 
   it('el error de visibles desaparece al marcar una', async () => {

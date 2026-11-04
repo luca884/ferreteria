@@ -4,7 +4,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { Observable, Subject, of, throwError } from 'rxjs';
 import { vi } from 'vitest';
 import { AuthService } from '../../core/auth/auth.service';
-import { RecalculoCotizacion } from '../../core/cotizacion/cotizacion.models';
+import { RecalculoCotizacion, VistaPreviaRecalculo } from '../../core/cotizacion/cotizacion.models';
 import { CotizacionService } from '../../core/cotizacion/cotizacion.service';
 import { ConfiguracionCotizacion, ConfiguracionCotizacionRequest } from './configuracion-cotizacion.models';
 import { PaginaConfiguracionCotizacion } from './configuracion-cotizacion';
@@ -14,7 +14,10 @@ describe('PaginaConfiguracionCotizacion', () => {
   let fixture: ComponentFixture<PaginaConfiguracionCotizacion>;
   let obtener: ReturnType<typeof vi.fn<() => Observable<ConfiguracionCotizacion>>>;
   let guardar: ReturnType<typeof vi.fn<(pedido: ConfiguracionCotizacionRequest) => Observable<ConfiguracionCotizacion>>>;
-  let recalcular: ReturnType<typeof vi.fn<(confirmaDesvio?: boolean) => Observable<RecalculoCotizacion>>>;
+  let recalcular: ReturnType<
+    typeof vi.fn<(confirmaDesvio?: boolean, dolar?: number) => Observable<RecalculoCotizacion>>
+  >;
+  let vistaPrevia: ReturnType<typeof vi.fn<() => Observable<VistaPreviaRecalculo>>>;
 
   const configuracion: ConfiguracionCotizacion = {
     activa: true,
@@ -22,6 +25,7 @@ describe('PaginaConfiguracionCotizacion', () => {
     ladoPrecios: 'VENTA',
     visibles: ['USD:oficial'],
     horaRecalculo: '08:00',
+    umbralDesvio: 5,
     vigente: 1000,
     vigenteDesde: '2026-10-16T11:00:00Z',
     aConfirmar: null,
@@ -36,6 +40,26 @@ describe('PaginaConfiguracionCotizacion', () => {
     aConfirmar: { nuevo: 14.5, vigente: 1450, desvioPorcentaje: 99, mensaje: mensajeAConfirmar },
   };
 
+  const vista: VistaPreviaRecalculo = {
+    dolar: 1100,
+    vigente: 1000,
+    superaUmbral: false,
+    aviso: null,
+    articulosQueCambian: 1,
+    articulos: [
+      { id: 1, codigoInterno: 'TAL-1', descripcion: 'Taladro', activo: true, precioActual: 15730, precioNuevo: 17310, diferencia: 1580 },
+      { id: 2, codigoInterno: 'TOR-1', descripcion: 'Tornillo', activo: false, precioActual: 100, precioNuevo: 100, diferencia: 0 },
+    ],
+    avisos: [],
+  };
+  const vistaConDesvio: VistaPreviaRecalculo = {
+    ...vista,
+    dolar: 14.5,
+    vigente: 1450,
+    superaUmbral: true,
+    aviso: mensajeAConfirmar,
+  };
+
   const errorHttp = (status: number, error: unknown) => new HttpErrorResponse({ status, error });
 
   async function crear(dueno = true): Promise<HTMLElement> {
@@ -44,7 +68,7 @@ describe('PaginaConfiguracionCotizacion', () => {
       providers: [
         { provide: AuthService, useValue: { esDueno: signal(dueno) } },
         { provide: ConfiguracionCotizacionService, useValue: { obtener, guardar } },
-        { provide: CotizacionService, useValue: { recalcular } },
+        { provide: CotizacionService, useValue: { recalcular, vistaPrevia } },
       ],
     }).compileComponents();
     fixture = TestBed.createComponent(PaginaConfiguracionCotizacion);
@@ -68,6 +92,18 @@ describe('PaginaConfiguracionCotizacion', () => {
     await refrescar();
   }
 
+  const botonAplicar = () => q<HTMLButtonElement>('button.aplicar-recalculo');
+
+  /** «Recalcular ahora» abre la vista previa; «Aplicar» recién llama al POST. */
+  async function recalcularYAplicar() {
+    await hacerClick(botonRecalcular());
+    await hacerClick(botonAplicar());
+  }
+
+  function reemplazarEnServicio(cambios: Partial<{ recalcular: typeof recalcular; vistaPrevia: typeof vistaPrevia }>) {
+    Object.assign(TestBed.inject(CotizacionService), cambios);
+  }
+
   async function enviarFormulario() {
     q<HTMLFormElement>('form').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
     await refrescar();
@@ -84,6 +120,7 @@ describe('PaginaConfiguracionCotizacion', () => {
     obtener = vi.fn(() => of(configuracion));
     guardar = vi.fn((pedido) => of({ ...configuracion, ...pedido }));
     recalcular = vi.fn(() => of({ cotizacion: 1100, articulosRecalculados: 3 }));
+    vistaPrevia = vi.fn(() => of(vista));
   });
 
   it('el Dueño ve la pantalla «Cotización» con la configuración cargada en el formulario', async () => {
@@ -151,6 +188,7 @@ describe('PaginaConfiguracionCotizacion', () => {
         ladoPrecios: 'VENTA',
         visibles: ['USD:oficial', 'USD:blue'],
         horaRecalculo: '08:00',
+        umbralDesvio: 5,
       });
       expect(texto(q('.alerta.exito'))).toBe('Se guardó la configuración.');
       expect(q('.alerta.exito').getAttribute('role')).toBe('status');
@@ -205,8 +243,8 @@ describe('PaginaConfiguracionCotizacion', () => {
     });
   });
 
-  describe('dólar a confirmar (más del 20 % de diferencia)', () => {
-    it('sin dólar a confirmar no hay aviso ni botón «Confirmar»', async () => {
+  describe('dólar a confirmar (supera el aviso de la ferretería)', () => {
+    it('sin dólar a confirmar no hay aviso ni botón para revisarlo', async () => {
       await crear();
 
       expect(el().querySelector('.dolar-a-confirmar')).toBeNull();
@@ -220,30 +258,139 @@ describe('PaginaConfiguracionCotizacion', () => {
       const aviso = q('.recalculo .dolar-a-confirmar');
       expect(aviso.getAttribute('role')).toBe('alert');
       expect(texto(aviso.querySelector('p'))).toBe(mensajeAConfirmar);
-      expect(texto(q('button.confirmar-dolar'))).toBe('Confirmar');
+      expect(texto(q('button.confirmar-dolar'))).toBe('Ver vista previa');
     });
 
-    it('«Confirmar» recalcula con confirmaDesvio y el aviso se va al releer la configuración', async () => {
+    it('«Ver vista previa» no aplica nada: muestra cómo quedarían los precios con el aviso', async () => {
       obtener = vi.fn(() => of(conDolarAConfirmar));
+      vistaPrevia = vi.fn(() => of(vistaConDesvio));
       await crear();
-      obtener.mockReturnValue(of({ ...configuracion, vigente: 14.5, aConfirmar: null }));
-      recalcular = vi.fn(() => of({ cotizacion: 14.5, articulosRecalculados: 2 }));
-      (TestBed.inject(CotizacionService) as unknown as { recalcular: typeof recalcular }).recalcular = recalcular;
 
       await hacerClick(q('button.confirmar-dolar'));
 
-      expect(recalcular).toHaveBeenCalledExactlyOnceWith(true);
-      expect(texto(q('.resultado'))).toBe('Se recalcularon 2 artículos con el dólar a 14,50.');
-      expect(el().querySelector('.dolar-a-confirmar')).toBeNull();
+      expect(vistaPrevia).toHaveBeenCalledTimes(1);
+      expect(recalcular).not.toHaveBeenCalled();
+      expect(texto(q('.vista-previa .aviso-desvio'))).toBe(mensajeAConfirmar);
+      expect(texto(botonAplicar())).toBe('Confirmar y aplicar');
     });
 
-    it('«Recalcular ahora» no confirma: llama sin confirmaDesvio', async () => {
+    it('«Confirmar y aplicar» recalcula con confirmaDesvio y el dólar visto, y el aviso se va al releer', async () => {
       obtener = vi.fn(() => of(conDolarAConfirmar));
+      vistaPrevia = vi.fn(() => of(vistaConDesvio));
+      await crear();
+      obtener.mockReturnValue(of({ ...configuracion, vigente: 14.5, aConfirmar: null }));
+      reemplazarEnServicio({ recalcular: vi.fn(() => of({ cotizacion: 14.5, articulosRecalculados: 2 })) });
+      const servicio = TestBed.inject(CotizacionService) as unknown as { recalcular: typeof recalcular };
+
+      await hacerClick(q('button.confirmar-dolar'));
+      await hacerClick(botonAplicar());
+
+      expect(servicio.recalcular).toHaveBeenCalledExactlyOnceWith(true, 14.5);
+      expect(texto(q('.resultado'))).toBe('Se recalcularon 2 artículos con el dólar a 14,50.');
+      expect(el().querySelector('.dolar-a-confirmar')).toBeNull();
+      expect(el().querySelector('.vista-previa')).toBeNull();
+    });
+  });
+
+  describe('vista previa de «Recalcular ahora»', () => {
+    it('«Recalcular ahora» pide la vista previa y no cambia ningún precio todavía', async () => {
       await crear();
 
       await hacerClick(botonRecalcular());
 
-      expect(recalcular).toHaveBeenCalledExactlyOnceWith(false);
+      expect(vistaPrevia).toHaveBeenCalledTimes(1);
+      expect(recalcular).not.toHaveBeenCalled();
+      expect(el().querySelector('.resultado')).toBeNull();
+    });
+
+    it('muestra todos los artículos en dólares: código, descripción, precio actual, nuevo y diferencia', async () => {
+      await crear();
+
+      await hacerClick(botonRecalcular());
+
+      expect(texto(q('.vista-previa .resumen'))).toBe(
+        'Con el dólar a 1.100,00 cambia el precio de 1 de los 2 artículos en dólares.',
+      );
+      const encabezados = Array.from(el().querySelectorAll('.vista-previa th')).map(texto);
+      expect(encabezados).toEqual(['Código', 'Descripción', 'Precio actual', 'Precio nuevo', 'Diferencia']);
+      const filas = Array.from(el().querySelectorAll('.vista-previa tbody tr'));
+      expect(filas).toHaveLength(2);
+      expect(Array.from(filas[0].querySelectorAll('td')).map(texto)).toEqual([
+        'TAL-1',
+        'Taladro',
+        '$ 15.730,00',
+        '$ 17.310,00',
+        '+$ 1.580,00',
+      ]);
+      expect(Array.from(filas[1].querySelectorAll('td')).map(texto)).toEqual([
+        'TOR-1',
+        'Tornillo (inactivo)',
+        '$ 100,00',
+        '$ 100,00',
+        '—',
+      ]);
+      expect(el().querySelector('.vista-previa .aviso-desvio')).toBeNull();
+      expect(texto(botonAplicar())).toBe('Aplicar');
+    });
+
+    it('sin artículos en dólares lo dice y no ofrece aplicar', async () => {
+      vistaPrevia = vi.fn(() => of({ ...vista, articulos: [], articulosQueCambian: 0 }));
+      await crear();
+
+      await hacerClick(botonRecalcular());
+
+      expect(texto(q('.vista-previa .resumen'))).toBe('No hay artículos cargados en dólares.');
+      expect(el().querySelector('button.aplicar-recalculo')).toBeNull();
+    });
+
+    it('«Aplicar» recalcula con el dólar que se vio, sin confirmaDesvio', async () => {
+      await crear();
+
+      await recalcularYAplicar();
+
+      expect(recalcular).toHaveBeenCalledExactlyOnceWith(false, 1100);
+      expect(el().querySelector('.vista-previa')).toBeNull();
+    });
+
+    it('«Cancelar» cierra la vista previa sin aplicar nada', async () => {
+      await crear();
+      await hacerClick(botonRecalcular());
+
+      await hacerClick(q('button.cancelar-recalculo'));
+
+      expect(el().querySelector('.vista-previa')).toBeNull();
+      expect(recalcular).not.toHaveBeenCalled();
+    });
+
+    it('lista los artículos que conservarían su precio por sus ajustes', async () => {
+      const aviso = 'No se cambió el precio de TOR-1 (Tornillo): con sus ajustes quedaría en 0 o menos.';
+      vistaPrevia = vi.fn(() => of({ ...vista, avisos: [aviso] }));
+      await crear();
+
+      await hacerClick(botonRecalcular());
+
+      expect(texto(q('.vista-previa .avisos-vista-previa'))).toContain(aviso);
+    });
+
+    it('un 409 al pedir la vista previa se muestra en la pantalla', async () => {
+      vistaPrevia = vi.fn(() => throwError(() => errorHttp(409, { message: 'La cotización está apagada' })));
+      await crear();
+
+      await hacerClick(botonRecalcular());
+
+      expect(texto(q('.recalculo [role="alert"]'))).toBe('La cotización está apagada');
+      expect(el().querySelector('.vista-previa')).toBeNull();
+    });
+
+    it('si el dólar cambió desde la vista previa, se muestra el 409 y se cierra la vista previa', async () => {
+      const mensaje = 'El dólar cambió desde la vista previa ($ 1.100,00 → $ 1.120,00). Revisala de nuevo.';
+      recalcular = vi.fn(() => throwError(() => errorHttp(409, { message: mensaje })));
+      await crear();
+
+      await recalcularYAplicar();
+
+      expect(texto(q('.recalculo [role="alert"]'))).toBe(mensaje);
+      expect(el().querySelector('.vista-previa')).toBeNull();
     });
   });
 
@@ -257,10 +404,10 @@ describe('PaginaConfiguracionCotizacion', () => {
       expect(texto(botonRecalcular())).toBe('Recalcular ahora');
     });
 
-    it('«Recalcular ahora» llama al POST y dice cuántos artículos cambiaron y con qué cotización', async () => {
+    it('al aplicar la vista previa llama al POST y dice cuántos artículos cambiaron y con qué cotización', async () => {
       await crear();
 
-      await hacerClick(botonRecalcular());
+      await recalcularYAplicar();
 
       expect(recalcular).toHaveBeenCalledTimes(1);
       expect(texto(q('.resultado'))).toBe('Se recalcularon 3 artículos con el dólar a 1.100,00.');
@@ -273,7 +420,7 @@ describe('PaginaConfiguracionCotizacion', () => {
       recalcular = vi.fn(() => of({ cotizacion: 1100, articulosRecalculados: 2, avisos: [aviso] }));
       await crear();
 
-      await hacerClick(botonRecalcular());
+      await recalcularYAplicar();
 
       expect(texto(q('.resultado'))).toBe('Se recalcularon 2 artículos con el dólar a 1.100,00.');
       expect(texto(q('.avisos-salteados'))).toContain(aviso);
@@ -283,7 +430,7 @@ describe('PaginaConfiguracionCotizacion', () => {
     it('sin artículos salteados no muestra la advertencia', async () => {
       await crear();
 
-      await hacerClick(botonRecalcular());
+      await recalcularYAplicar();
 
       expect(el().querySelector('.avisos-salteados')).toBeNull();
     });
@@ -291,12 +438,11 @@ describe('PaginaConfiguracionCotizacion', () => {
     it('con un solo artículo, singular; sin cambios, lo dice', async () => {
       recalcular = vi.fn(() => of({ cotizacion: 1000, articulosRecalculados: 1 }));
       await crear();
-      await hacerClick(botonRecalcular());
+      await recalcularYAplicar();
       expect(texto(q('.resultado'))).toBe('Se recalculó 1 artículo con el dólar a 1.000,00.');
 
-      recalcular = vi.fn(() => of({ cotizacion: 1000, articulosRecalculados: 0 }));
-      (TestBed.inject(CotizacionService) as unknown as { recalcular: typeof recalcular }).recalcular = recalcular;
-      await hacerClick(botonRecalcular());
+      reemplazarEnServicio({ recalcular: vi.fn(() => of({ cotizacion: 1000, articulosRecalculados: 0 })) });
+      await recalcularYAplicar();
       expect(texto(q('.resultado'))).toBe('Ningún artículo cambió de precio con el dólar a 1.000,00.');
     });
 
@@ -308,7 +454,7 @@ describe('PaginaConfiguracionCotizacion', () => {
       await crear();
       expect(texto(q('.vigente'))).toBe('Los precios en dólares se calcularon con el dólar a 1.000,00 (16/10 08:00).');
 
-      await hacerClick(botonRecalcular());
+      await recalcularYAplicar();
 
       expect(obtener).toHaveBeenCalledTimes(2);
       expect(texto(q('.vigente'))).toBe('Los precios en dólares se calcularon con el dólar a 1.100,00 (16/10 10:00).');
@@ -321,16 +467,34 @@ describe('PaginaConfiguracionCotizacion', () => {
       expect(texto(q('.vigente'))).toBe('Todavía no se calcularon precios con el dólar de esta ferretería.');
     });
 
-    it('mientras recalcula el botón queda deshabilitado y no se puede pedir dos veces', async () => {
-      const pendiente = new Subject<RecalculoCotizacion>();
-      recalcular = vi.fn(() => pendiente);
+    it('mientras pide la vista previa el botón queda deshabilitado y no se puede pedir dos veces', async () => {
+      const pendiente = new Subject<VistaPreviaRecalculo>();
+      vistaPrevia = vi.fn(() => pendiente);
       await crear();
 
       await hacerClick(botonRecalcular());
       expect(botonRecalcular().disabled).toBe(true);
-      expect(texto(botonRecalcular())).toBe('Recalculando…');
-
+      expect(texto(botonRecalcular())).toBe('Preparando vista previa…');
       botonRecalcular().click();
+      expect(vistaPrevia).toHaveBeenCalledTimes(1);
+
+      pendiente.next(vista);
+      pendiente.complete();
+      await refrescar();
+      expect(el().querySelector('.vista-previa')).not.toBeNull();
+    });
+
+    it('mientras aplica, «Aplicar» y «Recalcular ahora» quedan deshabilitados y no se puede pedir dos veces', async () => {
+      const pendiente = new Subject<RecalculoCotizacion>();
+      recalcular = vi.fn(() => pendiente);
+      await crear();
+
+      await recalcularYAplicar();
+      expect(botonAplicar().disabled).toBe(true);
+      expect(texto(botonAplicar())).toBe('Aplicando…');
+      expect(botonRecalcular().disabled).toBe(true);
+
+      botonAplicar().click();
       expect(recalcular).toHaveBeenCalledTimes(1);
 
       pendiente.next({ cotizacion: 1100, articulosRecalculados: 2 });
@@ -347,7 +511,7 @@ describe('PaginaConfiguracionCotizacion', () => {
       );
       await crear();
 
-      await hacerClick(botonRecalcular());
+      await recalcularYAplicar();
 
       expect(texto(q('.recalculo [role="alert"]'))).toBe('Todavía no hay cotización del dólar. Probá en unos minutos');
       expect(el().querySelector('.resultado')).toBeNull();
@@ -355,11 +519,12 @@ describe('PaginaConfiguracionCotizacion', () => {
 
     it('un resultado viejo se borra al volver a recalcular con error', async () => {
       await crear();
-      await hacerClick(botonRecalcular());
+      await recalcularYAplicar();
       expect(el().querySelector('.resultado')).not.toBeNull();
 
-      recalcular = vi.fn(() => throwError(() => errorHttp(409, { message: 'La cotización está apagada' })));
-      (TestBed.inject(CotizacionService) as unknown as { recalcular: typeof recalcular }).recalcular = recalcular;
+      reemplazarEnServicio({
+        vistaPrevia: vi.fn(() => throwError(() => errorHttp(409, { message: 'La cotización está apagada' }))),
+      });
       await hacerClick(botonRecalcular());
 
       expect(el().querySelector('.resultado')).toBeNull();

@@ -49,6 +49,26 @@
         <span id="horaRecalculo-error" class="campo-error">Indicá la hora del recálculo, por ejemplo 08:00.</span>
       }
     </div>
+    <div class="campo">
+      <label for="umbralDesvio">Avisar si el dólar cambia más de (%)</label>
+      <input
+        id="umbralDesvio"
+        type="number"
+        inputmode="decimal"
+        min="1"
+        max="50"
+        step="0.01"
+        formControlName="umbralDesvio"
+        [attr.aria-invalid]="errorUmbral ? 'true' : null"
+        [attr.aria-describedby]="errorUmbral ? 'umbralDesvio-pista umbralDesvio-error' : 'umbralDesvio-pista'"
+      />
+      <span id="umbralDesvio-pista" class="pista">
+        Si el dólar nuevo se aleja más de este porcentaje del anterior, los precios no cambian hasta que lo confirmes.
+      </span>
+      @if (errorUmbral) {
+        <span id="umbralDesvio-error" class="campo-error">El aviso del dólar tiene que estar entre 1 % y 50 %.</span>
+      }
+    </div>
   </fieldset>
 
   <fieldset

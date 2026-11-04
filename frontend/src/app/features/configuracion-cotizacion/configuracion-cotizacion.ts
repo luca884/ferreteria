@@ -1,7 +1,7 @@
 import { Component, OnInit, inject, signal } from '@angular/core';
 import { erroresDeCampos, mensajeDe } from '../../core/api/api-error';
 import { AuthService } from '../../core/auth/auth.service';
-import { RecalculoCotizacion } from '../../core/cotizacion/cotizacion.models';
+import { RecalculoCotizacion, VistaPreviaRecalculo } from '../../core/cotizacion/cotizacion.models';
 import { CotizacionService } from '../../core/cotizacion/cotizacion.service';
 import { formatearCotizacion } from '../../core/formato/monto';
 import { formatearFechaHora } from '../../core/formato/fecha-hora';
@@ -12,6 +12,7 @@ import {
 } from './configuracion-cotizacion.models';
 import { ConfiguracionCotizacionService } from './configuracion-cotizacion.service';
 import { FormularioCotizacion } from './formulario-cotizacion';
+import { VistaPreviaRecalculoComponent } from './vista-previa-recalculo';
 
 /**
  * Configuración › Cotización (solo el Dueño). Contenedor: habla con los servicios y decide qué mensajes mostrar; el
@@ -20,7 +21,7 @@ import { FormularioCotizacion } from './formulario-cotizacion';
  */
 @Component({
   selector: 'app-configuracion-cotizacion',
-  imports: [BarraAcciones, FormularioCotizacion],
+  imports: [BarraAcciones, FormularioCotizacion, VistaPreviaRecalculoComponent],
   templateUrl: './configuracion-cotizacion.html',
   styleUrl: './configuracion-cotizacion.css',
 })
@@ -38,6 +39,10 @@ export class PaginaConfiguracionCotizacion implements OnInit {
   protected readonly erroresGuardado = signal<string[]>([]);
   /** Cualquier otro error al guardar (403, 409, sin conexión…). */
   protected readonly errorGuardado = signal<string | null>(null);
+  /** Se está pidiendo la vista previa de «Recalcular ahora». */
+  protected readonly preparando = signal(false);
+  /** Cómo quedarían los precios en dólares; null mientras no se pidió o después de aplicar o cancelar. */
+  protected readonly vistaPrevia = signal<VistaPreviaRecalculo | null>(null);
   protected readonly recalculando = signal(false);
   protected readonly resultado = signal<string | null>(null);
   /** Artículos que conservaron su precio en el último recálculo: sus ajustes lo dejarían en 0 o menos. */
@@ -86,16 +91,39 @@ export class PaginaConfiguracionCotizacion implements OnInit {
     });
   }
 
-  /** `confirmaDesvio`: el botón «Confirmar» del aviso de un dólar que se aleja más del 20 % del vigente. */
-  protected recalcular(confirmaDesvio = false): void {
-    if (this.recalculando() || this.motivoSinRecalculo() !== null) return;
-    this.recalculando.set(true);
+  /**
+   * «Recalcular ahora» y «Ver vista previa» del aviso del dólar: primero se muestra cómo quedarían los precios, sin
+   * cambiar nada. Recién «Aplicar» recalcula (mejoras-ferreteros-bloque-1, S2).
+   */
+  protected pedirVistaPrevia(): void {
+    if (this.ocupado() || this.motivoSinRecalculo() !== null) return;
+    this.preparando.set(true);
+    this.vistaPrevia.set(null);
     this.resultado.set(null);
     this.avisosSalteados.set([]);
     this.errorRecalculo.set(null);
-    this.cotizaciones.recalcular(confirmaDesvio).subscribe({
+    this.cotizaciones.vistaPrevia().subscribe({
+      next: (vista) => {
+        this.preparando.set(false);
+        this.vistaPrevia.set(vista);
+      },
+      error: (err: unknown) => {
+        this.preparando.set(false);
+        this.errorRecalculo.set(mensajeDe(err, 'No se pudo preparar la vista previa.'));
+      },
+    });
+  }
+
+  /** Aplica la vista previa con el dólar que se vio; si supera el aviso, lo confirma. */
+  protected aplicar(): void {
+    const vista = this.vistaPrevia();
+    if (vista === null || this.recalculando()) return;
+    this.recalculando.set(true);
+    this.errorRecalculo.set(null);
+    this.cotizaciones.recalcular(vista.superaUmbral, vista.dolar).subscribe({
       next: (recalculo: RecalculoCotizacion) => {
         this.recalculando.set(false);
+        this.vistaPrevia.set(null);
         this.resultado.set(describirRecalculo(recalculo));
         this.avisosSalteados.set(recalculo.avisos ?? []);
         // El dólar vigente cambió: se vuelve a leer para mostrarlo (sin tapar el formulario si falla).
@@ -103,9 +131,19 @@ export class PaginaConfiguracionCotizacion implements OnInit {
       },
       error: (err: unknown) => {
         this.recalculando.set(false);
+        // Lo que se veía ya no vale (por ejemplo, el dólar cambió): se cierra y se vuelve a pedir.
+        this.vistaPrevia.set(null);
         this.errorRecalculo.set(mensajeDe(err, 'No se pudieron recalcular los precios.'));
       },
     });
+  }
+
+  protected cancelarVistaPrevia(): void {
+    if (!this.recalculando()) this.vistaPrevia.set(null);
+  }
+
+  protected ocupado(): boolean {
+    return this.preparando() || this.recalculando();
   }
 
   /** Por qué «Recalcular ahora» no se puede usar, para decirlo al lado del botón; null si se puede. */

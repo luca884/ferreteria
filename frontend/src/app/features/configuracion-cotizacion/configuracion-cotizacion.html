@@ -50,26 +50,27 @@
             <button
               type="button"
               class="confirmar-dolar"
-              [disabled]="recalculando() || motivoSinRecalculo() !== null"
-              (click)="recalcular(true)"
+              [disabled]="ocupado() || motivoSinRecalculo() !== null"
+              (click)="pedirVistaPrevia()"
             >
-              Confirmar
+              Ver vista previa
             </button>
           </div>
         }
         <div class="recalculo-fila">
           <p class="recalculo-texto">
-            El cambio se aplica en el próximo recálculo. Si no querés esperar, podés recalcular ahora.
+            El cambio se aplica en el próximo recálculo. Si no querés esperar, podés recalcular ahora: antes de cambiar
+            nada vas a ver cómo quedan los precios.
           </p>
           <button
             type="button"
             class="primario recalcular"
-            [disabled]="recalculando() || motivoSinRecalculo() !== null"
+            [disabled]="ocupado() || motivoSinRecalculo() !== null"
             [attr.aria-describedby]="motivoSinRecalculo() ? 'motivo-sin-recalculo' : null"
-            (click)="recalcular()"
+            (click)="pedirVistaPrevia()"
           >
-            @if (recalculando()) {
-              Recalculando…
+            @if (preparando()) {
+              Preparando vista previa…
             } @else {
               Recalcular ahora
             }
@@ -77,6 +78,14 @@
         </div>
         @if (motivoSinRecalculo(); as motivo) {
           <p id="motivo-sin-recalculo" class="pista">{{ motivo }}</p>
+        }
+        @if (vistaPrevia(); as vista) {
+          <app-vista-previa-recalculo
+            [vista]="vista"
+            [aplicando]="recalculando()"
+            (aplicar)="aplicar()"
+            (cancelar)="cancelarVistaPrevia()"
+          />
         }
         @if (resultado(); as mensaje) {
           <p class="alerta exito resultado" role="status">{{ mensaje }}</p>

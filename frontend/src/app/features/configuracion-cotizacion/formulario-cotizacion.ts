@@ -48,6 +48,9 @@ export class FormularioCotizacion {
       Object.fromEntries(OPCIONES_COTIZACION.map((o) => [o.codigo, new FormControl(false, { nonNullable: true })])),
     ),
     horaRecalculo: new FormControl('', { nonNullable: true, validators: [Validators.required] }),
+    umbralDesvio: new FormControl<number | null>(null, {
+      validators: [Validators.required, Validators.min(1), Validators.max(50)],
+    }),
   });
 
   /** Recién después de apretar «Guardar» se muestran los errores: no se grita mientras se está tipeando. */
@@ -82,9 +85,13 @@ export class FormularioCotizacion {
     return this.intentoGuardar && this.form.controls.horaRecalculo.invalid;
   }
 
+  protected get errorUmbral(): boolean {
+    return this.intentoGuardar && this.form.controls.umbralDesvio.invalid;
+  }
+
   protected enviar(): void {
     this.intentoGuardar = true;
-    if (this.sinVisibles || this.form.controls.horaRecalculo.invalid) {
+    if (this.sinVisibles || this.form.controls.horaRecalculo.invalid || this.form.controls.umbralDesvio.invalid) {
       afterNextRender(
         () => this.host.nativeElement.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus(),
         { injector: this.injector },
@@ -99,6 +106,8 @@ export class FormularioCotizacion {
       // En el orden del catálogo, no en el orden en que se fueron marcando.
       visibles: OPCIONES_COTIZACION.filter((o) => v.visibles[o.codigo]).map((o) => o.codigo),
       horaRecalculo: v.horaRecalculo,
+      // Validado arriba: no es null.
+      umbralDesvio: Number(v.umbralDesvio),
     });
   }
 }
@@ -110,5 +119,6 @@ function valoresDe(c: ConfiguracionCotizacion) {
     ladoPrecios: c.ladoPrecios,
     visibles: Object.fromEntries(OPCIONES_COTIZACION.map((o) => [o.codigo, c.visibles.includes(o.codigo)])),
     horaRecalculo: c.horaRecalculo,
+    umbralDesvio: c.umbralDesvio,
   };
 }

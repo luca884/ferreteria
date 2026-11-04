@@ -1,7 +1,7 @@
 import { HttpErrorResponse, provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
-import { Cotizacion, RecalculoCotizacion } from './cotizacion.models';
+import { Cotizacion, RecalculoCotizacion, VistaPreviaRecalculo } from './cotizacion.models';
 import { CotizacionService } from './cotizacion.service';
 
 describe('CotizacionService', () => {
@@ -88,13 +88,45 @@ describe('CotizacionService', () => {
     expect(req.request.params.has('confirmaDesvio')).toBe(false);
   });
 
-  it('confirmar un dólar que se aleja más del 20 % manda ?confirmaDesvio=true', () => {
+  it('confirmar un dólar que supera el aviso manda ?confirmaDesvio=true', () => {
     service.recalcular(true).subscribe();
 
     const req = http.expectOne((r) => r.url.endsWith('/cotizacion/recalculo'));
     expect(req.request.method).toBe('POST');
     expect(req.request.params.get('confirmaDesvio')).toBe('true');
     req.flush({ cotizacion: 11, articulosRecalculados: 1 });
+  });
+
+  it('aplicar la vista previa manda el dólar que se vio en ?dolar=', () => {
+    service.recalcular(false, 1100.5).subscribe();
+
+    const req = http.expectOne((r) => r.url.endsWith('/cotizacion/recalculo'));
+    expect(req.request.params.get('dolar')).toBe('1100.5');
+    expect(req.request.params.has('confirmaDesvio')).toBe(false);
+    req.flush({ cotizacion: 1100.5, articulosRecalculados: 1 });
+  });
+
+  it('la vista previa pide GET /cotizacion/recalculo/vista-previa y no avisa al menú lateral', () => {
+    let avisos = 0;
+    service.refrescos$.subscribe(() => avisos++);
+    let resultado: VistaPreviaRecalculo | undefined;
+
+    service.vistaPrevia().subscribe((r) => (resultado = r));
+
+    const req = http.expectOne((r) => r.url.endsWith('/cotizacion/recalculo/vista-previa'));
+    expect(req.request.method).toBe('GET');
+    const cuerpo: VistaPreviaRecalculo = {
+      dolar: 1100,
+      vigente: 1000,
+      superaUmbral: true,
+      aviso: 'El dólar…',
+      articulosQueCambian: 0,
+      articulos: [],
+      avisos: [],
+    };
+    req.flush(cuerpo);
+    expect(resultado).toEqual(cuerpo);
+    expect(avisos).toBe(0);
   });
 
   describe('aviso de refresco para el menú lateral', () => {

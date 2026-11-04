@@ -24,7 +24,7 @@ describe('refresco del menú lateral desde Configuración › Cotización', () =
     dolarPrecios: 'USD:oficial',
     ladoPrecios: 'VENTA',
     visibles: ['USD:oficial'],
-    horaRecalculo: '08:00',
+    horaRecalculo: '08:00', umbralDesvio: 5,
     vigente: 1000,
     vigenteDesde: '2026-10-16T11:00:00Z',
     aConfirmar: null,
@@ -138,8 +138,28 @@ describe('refresco del menú lateral desde Configuración › Cotización', () =
     expect(lateral()).not.toContain('Blue');
   });
 
+  /** «Recalcular ahora» muestra la vista previa (que no avisa al lateral) y «Aplicar» recién llama al POST. */
+  async function aplicarVistaPrevia() {
+    const el = pagina.nativeElement as HTMLElement;
+    el.querySelector<HTMLButtonElement>('button.recalcular')!.click();
+    http.expectOne((r) => r.method === 'GET' && r.url.endsWith('/cotizacion/recalculo/vista-previa')).flush({
+      dolar: 1100,
+      vigente: 1000,
+      superaUmbral: false,
+      aviso: null,
+      articulosQueCambian: 1,
+      articulos: [
+        { id: 1, codigoInterno: 'T-1', descripcion: 'T', activo: true, precioActual: 1, precioNuevo: 2, diferencia: 1 },
+      ],
+      avisos: [],
+    });
+    await estabilizar();
+    expect(pedidosDeCotizacion().length).toBe(0);
+    el.querySelector<HTMLButtonElement>('button.aplicar-recalculo')!.click();
+  }
+
   it('después de «Recalcular ahora» exitoso el lateral vuelve a pedir la cotización', async () => {
-    (pagina.nativeElement as HTMLElement).querySelector<HTMLButtonElement>('button.recalcular')!.click();
+    await aplicarVistaPrevia();
     http
       .expectOne((r) => r.method === 'POST' && r.url.endsWith('/cotizacion/recalculo'))
       .flush({ cotizacion: 1100, articulosRecalculados: 3 });
@@ -154,7 +174,7 @@ describe('refresco del menú lateral desde Configuración › Cotización', () =
   });
 
   it('si «Recalcular ahora» falla el lateral no vuelve a pedir la cotización', async () => {
-    (pagina.nativeElement as HTMLElement).querySelector<HTMLButtonElement>('button.recalcular')!.click();
+    await aplicarVistaPrevia();
     http
       .expectOne((r) => r.method === 'POST' && r.url.endsWith('/cotizacion/recalculo'))
       .flush({ message: 'apagada' }, { status: 409, statusText: 'Conflict' });

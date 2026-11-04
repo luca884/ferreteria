@@ -1,0 +1,79 @@
+:host {
+  display: block;
+  margin-top: var(--e-4);
+}
+
+.vista-previa h3 {
+  margin: 0 0 var(--e-2);
+}
+
+.resumen {
+  margin: 0 0 var(--e-3);
+  font-weight: 500;
+}
+
+/* Puede haber cientos de artículos: la tabla se desplaza sola y deja los botones a la vista. */
+.tabla-contenedor {
+  max-height: 420px;
+  overflow: auto;
+  border: 1px solid var(--borde);
+  border-radius: 8px;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+th,
+td {
+  padding: var(--e-2) var(--e-3);
+  border-bottom: 1px solid var(--borde-suave);
+  text-align: left;
+}
+
+thead th {
+  position: sticky;
+  top: 0;
+  background: var(--superficie);
+  color: var(--texto-suave);
+  font-weight: 600;
+}
+
+.numero {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.sin-cambio td {
+  color: var(--texto-tenue);
+}
+
+.sube {
+  color: var(--advertencia);
+}
+
+.baja {
+  color: var(--exito);
+}
+
+.inactivo {
+  color: var(--texto-tenue);
+  font-size: 0.9em;
+}
+
+.avisos-vista-previa {
+  margin-top: var(--e-3);
+}
+.avisos-vista-previa ul {
+  margin: 0;
+  padding-left: var(--e-6);
+}
+
+.acciones {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--e-2);
+  margin-top: var(--e-3);
+}
