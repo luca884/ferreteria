@@ -98,9 +98,54 @@
   --celda-y: 10px;
   --celda-x: 12px;
 
+  /*
+   * Tono por sección (mejoras-ferreteros-bloque-2, S2): sutil, solo para distinguir una parte de otra. Cada tono da
+   * ≥ 4,5:1 sobre blanco y sobre su fondo suave. Lo toma el elemento con `data-seccion` (el shell, el grupo del menú)
+   * y lo heredan sus hijos como --tono y --tono-suave.
+   */
+  --tono-mostrador: #1d4ed8;
+  --tono-mostrador-suave: #eff6ff;
+  --tono-ventas: #0e7490;
+  --tono-ventas-suave: #ecfeff;
+  --tono-articulos: #b45309;
+  --tono-articulos-suave: #fffbeb;
+  --tono-compras: #6d28d9;
+  --tono-compras-suave: #f5f3ff;
+  --tono-precios: #047857;
+  --tono-precios-suave: #ecfdf5;
+  --tono-configuracion: #475569;
+  --tono-configuracion-suave: #f1f5f9;
+  --tono: var(--acento-fuerte);
+  --tono-suave: var(--acento-suave);
+
   --foco: 0 0 0 3px color-mix(in srgb, var(--acento) 35%, transparent);
   --transicion: 150ms ease;
   color-scheme: light;
+}
+
+[data-seccion='mostrador'] {
+  --tono: var(--tono-mostrador);
+  --tono-suave: var(--tono-mostrador-suave);
+}
+[data-seccion='ventas'] {
+  --tono: var(--tono-ventas);
+  --tono-suave: var(--tono-ventas-suave);
+}
+[data-seccion='articulos'] {
+  --tono: var(--tono-articulos);
+  --tono-suave: var(--tono-articulos-suave);
+}
+[data-seccion='compras'] {
+  --tono: var(--tono-compras);
+  --tono-suave: var(--tono-compras-suave);
+}
+[data-seccion='precios'] {
+  --tono: var(--tono-precios);
+  --tono-suave: var(--tono-precios-suave);
+}
+[data-seccion='configuracion'] {
+  --tono: var(--tono-configuracion);
+  --tono-suave: var(--tono-configuracion-suave);
 }
 
 *,

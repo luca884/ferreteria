@@ -32,6 +32,9 @@ const COTIZACION: Cotizacion = {
 @Component({ template: '' })
 class Vacia {}
 
+/** Cualquier ruta abre una pantalla vacía: alcanza para que el shell sepa en qué sección está. */
+const TODAS: Routes = [{ path: '**', component: Vacia }];
+
 describe('Shell', () => {
   let fixture: ComponentFixture<Shell>;
 
@@ -66,6 +69,17 @@ describe('Shell', () => {
     return fixture.nativeElement as HTMLElement;
   }
 
+  async function estable(): Promise<void> {
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+  }
+
+  async function irA(url: string): Promise<void> {
+    await TestBed.inject(Router).navigateByUrl(url);
+    await estable();
+  }
+
   let refrescos: Subject<void>;
   /** La marca de contraseña por cambiar de la sesión (hallazgo 5); los tests la prenden y la apagan. */
   let marca: WritableSignal<boolean>;
@@ -78,6 +92,25 @@ describe('Shell', () => {
 
   const enlaces = (el: HTMLElement) =>
     Array.from(el.querySelectorAll('nav a')).map((a) => a.textContent?.trim());
+
+  const grupos = (el: HTMLElement) =>
+    Array.from(el.querySelectorAll('nav button.grupo')).map((g) => g.textContent?.trim());
+
+  const boton = (el: HTMLElement, grupo: string) =>
+    Array.from(el.querySelectorAll<HTMLButtonElement>('nav button.grupo')).find(
+      (g) => g.textContent?.trim() === grupo,
+    )!;
+
+  /** Las opciones de un grupo abierto, en orden. */
+  const opcionesDe = (el: HTMLElement, grupo: string) => {
+    const lista = el.querySelector(`#${boton(el, grupo).getAttribute('aria-controls')}`);
+    return Array.from(lista?.querySelectorAll('a') ?? []).map((a) => a.textContent?.trim());
+  };
+
+  async function abrirTodos(el: HTMLElement): Promise<void> {
+    el.querySelectorAll<HTMLButtonElement>('nav button.grupo[aria-expanded="false"]').forEach((g) => g.click());
+    await estable();
+  }
 
   describe('super admin', () => {
     const SUPER_ADMIN: Sesion = {
@@ -122,6 +155,7 @@ describe('Shell', () => {
       for (const dueno of [false, true]) {
         TestBed.resetTestingModule();
         const el = await render(dueno);
+        await abrirTodos(el);
 
         expect(enlaces(el)).not.toContain('Ferreterías');
         expect(el.querySelector('a[href="/admin/ferreterias"]')).toBeNull();
@@ -129,180 +163,192 @@ describe('Shell', () => {
     });
   });
 
-  it('las secciones van en el menú lateral', async () => {
-    const el = await render(true);
+  describe('menú agrupado (mejoras-ferreteros-bloque-2, S1)', () => {
+    it('las secciones van en el menú lateral', async () => {
+      const el = await render(true);
 
-    const nav = el.querySelector('aside nav[aria-label="Secciones"]');
-    expect(nav).not.toBeNull();
-    expect(nav!.querySelectorAll('a').length).toBe(23);
+      expect(el.querySelector('aside nav[aria-label="Secciones"]')).not.toBeNull();
+    });
+
+    it('el Dueño ve «Mostrador» fijo arriba y los grupos Ventas, Artículos, Compras, Precios y Configuración', async () => {
+      const el = await render(true);
+
+      expect(el.querySelector('nav a')?.textContent?.trim()).toBe('Mostrador');
+      expect(el.querySelector('nav a')?.getAttribute('href')).toBe('/mostrador');
+      expect(grupos(el)).toEqual(['Ventas', 'Artículos', 'Compras', 'Precios', 'Configuración']);
+    });
+
+    it('el Dueño ve en cada grupo sus opciones, en orden y con su ruta', async () => {
+      const el = await render(true);
+      await abrirTodos(el);
+
+      expect(opcionesDe(el, 'Ventas')).toEqual(['Presupuestos', 'Remitos', 'Caja', 'Clientes', 'Ventas', 'Reportes']);
+      expect(opcionesDe(el, 'Artículos')).toEqual([
+        'Artículos',
+        'Rubros',
+        'Stock bajo mínimo',
+        'Etiquetas',
+        'Controles de datos',
+      ]);
+      expect(opcionesDe(el, 'Compras')).toEqual(['Proveedores', 'Compras']);
+      expect(opcionesDe(el, 'Precios')).toEqual(['Importar lista', 'Actualizar precios', 'Margen y redondeo', 'Cotización']);
+      expect(opcionesDe(el, 'Configuración')).toEqual([
+        'Formas de pago',
+        'Consumidor Final',
+        'Datos de la ferretería',
+        'Facturación',
+        'Usuarios',
+      ]);
+      const rutas: Record<string, string> = {
+        Mostrador: '/mostrador',
+        Presupuestos: '/presupuestos',
+        Remitos: '/remitos',
+        Caja: '/caja',
+        Clientes: '/clientes',
+        Ventas: '/ventas',
+        Reportes: '/reportes',
+        Artículos: '/articulos',
+        Rubros: '/rubros',
+        'Stock bajo mínimo': '/stock-bajo-minimo',
+        Etiquetas: '/etiquetas',
+        'Controles de datos': '/controles-de-datos',
+        Proveedores: '/proveedores',
+        Compras: '/compras',
+        'Importar lista': '/importaciones',
+        'Actualizar precios': '/actualizacion-masiva',
+        'Margen y redondeo': '/configuracion/precios',
+        Cotización: '/configuracion/cotizacion',
+        'Formas de pago': '/configuracion/formas-pago',
+        'Consumidor Final': '/configuracion/ventas',
+        'Datos de la ferretería': '/configuracion/datos-fiscales',
+        Facturación: '/configuracion/facturacion',
+        Usuarios: '/usuarios',
+      };
+      for (const [rotulo, ruta] of Object.entries(rutas)) {
+        expect(el.querySelector(`nav a[href="${ruta}"]`)?.textContent?.trim(), ruta).toBe(rotulo);
+      }
+      expect(el.querySelectorAll('nav a').length).toBe(23);
+    });
+
+    it('el Vendedor ve Mostrador, Ventas (Presupuestos, Remitos, Caja, Clientes), Artículos (Artículos, Rubros) y Compras (Proveedores)', async () => {
+      const el = await render(false);
+      await abrirTodos(el);
+
+      expect(grupos(el)).toEqual(['Ventas', 'Artículos', 'Compras']);
+      expect(opcionesDe(el, 'Ventas')).toEqual(['Presupuestos', 'Remitos', 'Caja', 'Clientes']);
+      expect(opcionesDe(el, 'Artículos')).toEqual(['Artículos', 'Rubros']);
+      expect(opcionesDe(el, 'Compras')).toEqual(['Proveedores']);
+      expect(enlaces(el)).toEqual(['Mostrador', 'Presupuestos', 'Remitos', 'Caja', 'Clientes', 'Artículos', 'Rubros', 'Proveedores']);
+      for (const ruta of [
+        '/ventas',
+        '/reportes',
+        '/stock-bajo-minimo',
+        '/etiquetas',
+        '/controles-de-datos',
+        '/compras',
+        '/importaciones',
+        '/actualizacion-masiva',
+        '/configuracion/precios',
+        '/configuracion/cotizacion',
+        '/configuracion/formas-pago',
+        '/configuracion/ventas',
+        '/configuracion/datos-fiscales',
+        '/configuracion/facturacion',
+        '/usuarios',
+      ]) {
+        expect(el.querySelector(`a[href="${ruta}"]`), ruta).toBeNull();
+      }
+    });
+
+    it('fuera de una sección los grupos arrancan cerrados: solo se ve «Mostrador»', async () => {
+      const el = await render(true);
+
+      expect(enlaces(el)).toEqual(['Mostrador']);
+      for (const grupo of grupos(el)) {
+        expect(boton(el, grupo!).getAttribute('aria-expanded'), grupo).toBe('false');
+      }
+    });
+
+    it('un clic en el grupo lo abre y otro lo cierra', async () => {
+      const el = await render(true);
+      const compras = boton(el, 'Compras');
+
+      compras.click();
+      await estable();
+      expect(compras.getAttribute('aria-expanded')).toBe('true');
+      expect(enlaces(el)).toEqual(['Mostrador', 'Proveedores', 'Compras']);
+
+      compras.click();
+      await estable();
+      expect(compras.getAttribute('aria-expanded')).toBe('false');
+      expect(enlaces(el)).toEqual(['Mostrador']);
+    });
+
+    it('el grupo de la pantalla abierta arranca abierto y su opción se marca con aria-current="page"', async () => {
+      const el = await render(true, null, TODAS);
+
+      await irA('/rubros');
+
+      expect(boton(el, 'Artículos').getAttribute('aria-expanded')).toBe('true');
+      expect(boton(el, 'Ventas').getAttribute('aria-expanded')).toBe('false');
+      expect(el.querySelector('nav a[href="/rubros"]')!.getAttribute('aria-current')).toBe('page');
+      expect(el.querySelector('nav a[href="/mostrador"]')!.hasAttribute('aria-current')).toBe(false);
+    });
+
+    it('una pantalla interna abre el grupo de su sección (la cuenta de un cliente abre Ventas)', async () => {
+      const el = await render(true, null, TODAS);
+
+      await irA('/clientes/5/cuenta');
+
+      expect(boton(el, 'Ventas').getAttribute('aria-expanded')).toBe('true');
+    });
+
+    it('cada grupo controla su lista de opciones', async () => {
+      const el = await render(true);
+      await abrirTodos(el);
+
+      for (const grupo of grupos(el)) {
+        const id = boton(el, grupo!).getAttribute('aria-controls');
+        expect(id, grupo).toBeTruthy();
+        expect(el.querySelector(`#${id}`), grupo).not.toBeNull();
+      }
+    });
   });
 
-  it('«Presupuestos» va después de «Mostrador» y lleva a /presupuestos, para el Vendedor y para el Dueño (GDS-13)', async () => {
-    for (const dueno of [false, true]) {
-      TestBed.resetTestingModule();
-      const el = await render(dueno);
+  describe('color por sección (mejoras-ferreteros-bloque-2, S2)', () => {
+    it.each([
+      ['/mostrador', 'mostrador'],
+      ['/presupuestos', 'ventas'],
+      ['/clientes/5/cuenta', 'ventas'],
+      ['/rubros', 'articulos'],
+      ['/articulos/nuevo', 'articulos'],
+      ['/compras/nueva', 'compras'],
+      ['/configuracion/cotizacion', 'precios'],
+      ['/configuracion/ventas', 'configuracion'],
+      ['/usuarios', 'configuracion'],
+    ])('en %s el shell lleva la sección «%s»', async (url, seccion) => {
+      const el = await render(true, null, TODAS);
 
-      expect(enlaces(el).slice(0, 2)).toEqual(['Mostrador', 'Presupuestos']);
-      expect(el.querySelector('nav a[href="/presupuestos"]')).not.toBeNull();
-    }
-  });
+      await irA(url);
 
-  it('«Remitos» va después de «Presupuestos» y lleva a /remitos, para el Vendedor y para el Dueño (G55)', async () => {
-    for (const dueno of [false, true]) {
-      TestBed.resetTestingModule();
-      const el = await render(dueno);
+      expect(el.getAttribute('data-seccion')).toBe(seccion);
+    });
 
-      expect(enlaces(el).slice(1, 3)).toEqual(['Presupuestos', 'Remitos']);
-      expect(el.querySelector('nav a[href="/remitos"]')).not.toBeNull();
-    }
-  });
+    it('una pantalla fuera del menú (Cambiar mi contraseña) no lleva sección', async () => {
+      const el = await render(true, null, TODAS);
 
-  it('«Caja» va después de «Clientes» y lleva a /caja, para el Vendedor y para el Dueño (CU-10)', async () => {
-    for (const dueno of [false, true]) {
-      TestBed.resetTestingModule();
-      const el = await render(dueno);
+      await irA('/mi-contrasena');
 
-      expect(enlaces(el).slice(2, 5)).toEqual(['Remitos', 'Clientes', 'Caja']);
-      expect(el.querySelector('nav a[href="/caja"]')).not.toBeNull();
-    }
-  });
+      expect(el.hasAttribute('data-seccion')).toBe(false);
+    });
 
-  it('el Dueño ve Mostrador, Artículos, Rubros, Proveedores, Compras, Ventas, Reportes y, bajo «Precios», Importar lista, Actualizar precios, Margen y redondeo y Cotización, y bajo «Cobro», Formas de pago y Consumidor Final, bajo «Facturación», Datos de la ferretería y Facturación, y bajo «Equipo», Usuarios', async () => {
-    const el = await render(true);
+    it('cada grupo lleva su sección, para tomar su tono', async () => {
+      const el = await render(true);
 
-    expect(enlaces(el)).toEqual([
-      'Mostrador',
-      'Presupuestos',
-      'Remitos',
-      'Clientes',
-      'Caja',
-      'Artículos',
-      'Rubros',
-      'Proveedores',
-      'Compras',
-      'Ventas',
-      'Reportes',
-      'Stock bajo mínimo',
-      'Etiquetas',
-      'Controles de datos',
-      'Importar lista',
-      'Actualizar precios',
-      'Margen y redondeo',
-      'Cotización',
-      'Formas de pago',
-      'Consumidor Final',
-      'Datos de la ferretería',
-      'Facturación',
-      'Usuarios',
-    ]);
-    expect(Array.from(el.querySelectorAll('nav .grupo')).map((g) => g.textContent?.trim())).toEqual([
-      'Precios',
-      'Cobro',
-      'Facturación',
-      'Equipo',
-    ]);
-    expect(el.querySelector('a[href="/importaciones"]')).not.toBeNull();
-  });
-
-  it('el Dueño ve "Actualizar precios", que lleva a /actualizacion-masiva, después de "Importar lista"', async () => {
-    const el = await render(true);
-
-    const nombres = enlaces(el);
-    expect(nombres.indexOf('Actualizar precios')).toBe(nombres.indexOf('Importar lista') + 1);
-    const enlace = el.querySelector('nav a[href="/actualizacion-masiva"]');
-    expect(enlace).not.toBeNull();
-    expect(enlace!.textContent?.trim()).toBe('Actualizar precios');
-  });
-
-  it('el Dueño ve «Cotización» al final del grupo «Precios» (justo antes de «Formas de pago») y lleva a /configuracion/cotizacion', async () => {
-    const el = await render(true);
-
-    const nombres = enlaces(el);
-    expect(nombres.indexOf('Cotización')).toBe(nombres.indexOf('Formas de pago') - 1);
-    const enlace = el.querySelector('nav a[href="/configuracion/cotizacion"]');
-    expect(enlace).not.toBeNull();
-    expect(enlace!.textContent?.trim()).toBe('Cotización');
-  });
-
-  it('el Vendedor y el Dueño ven «Clientes», entre «Remitos» y «Caja», y lleva a /clientes', async () => {
-    for (const dueno of [false, true]) {
-      TestBed.resetTestingModule();
-      const el = await render(dueno);
-
-      const nombres = enlaces(el);
-      expect(nombres.indexOf('Clientes')).toBe(nombres.indexOf('Remitos') + 1);
-      expect(nombres.indexOf('Clientes')).toBe(nombres.indexOf('Caja') - 1);
-      expect(el.querySelector('nav a[href="/clientes"]')!.textContent?.trim()).toBe('Clientes');
-    }
-  });
-
-  it('el Dueño ve «Formas de pago» bajo «Cobro» y lleva a /configuracion/formas-pago; el Vendedor no la ve', async () => {
-    const el = await render(true);
-
-    const nombres = enlaces(el);
-    expect(nombres.indexOf('Formas de pago')).toBe(nombres.indexOf('Consumidor Final') - 1);
-    expect(el.querySelector('nav a[href="/configuracion/formas-pago"]')).not.toBeNull();
-
-    TestBed.resetTestingModule();
-    const vendedor = await render(false);
-    expect(vendedor.querySelector('nav a[href="/configuracion/formas-pago"]')).toBeNull();
-    expect(enlaces(vendedor)).not.toContain('Formas de pago');
-  });
-
-  it('el Dueño ve «Consumidor Final» al final de «Cobro», antes de «Datos de la ferretería», y lleva a /configuracion/ventas; el Vendedor no la ve (GDS-32)', async () => {
-    const el = await render(true);
-
-    const nombres = enlaces(el);
-    expect(nombres.indexOf('Consumidor Final')).toBe(nombres.indexOf('Datos de la ferretería') - 1);
-    expect(el.querySelector('nav a[href="/configuracion/ventas"]')).not.toBeNull();
-
-    TestBed.resetTestingModule();
-    const vendedor = await render(false);
-    expect(vendedor.querySelector('nav a[href="/configuracion/ventas"]')).toBeNull();
-  });
-
-  it('el Dueño ve «Datos de la ferretería» primera en el grupo «Facturación», justo antes del enlace «Facturación», y lleva a /configuracion/datos-fiscales; el Vendedor no la ve ni ve el grupo (CU-01)', async () => {
-    const el = await render(true);
-
-    const nombres = enlaces(el);
-    expect(nombres.indexOf('Datos de la ferretería')).toBe(nombres.indexOf('Facturación') - 1);
-    expect(el.querySelector('nav a[href="/configuracion/datos-fiscales"]')!.textContent?.trim()).toBe(
-      'Datos de la ferretería',
-    );
-
-    TestBed.resetTestingModule();
-    const vendedor = await render(false);
-    expect(vendedor.querySelector('nav a[href="/configuracion/datos-fiscales"]')).toBeNull();
-    expect(Array.from(vendedor.querySelectorAll('nav .grupo')).map((g) => g.textContent?.trim())).not.toContain(
-      'Facturación',
-    );
-  });
-
-  it('el Dueño ve «Facturación» al final del grupo «Facturación», antes de «Usuarios», y lleva a /configuracion/facturacion; el Vendedor no la ve (CU-01)', async () => {
-    const el = await render(true);
-
-    const nombres = enlaces(el);
-    expect(nombres.indexOf('Facturación')).toBe(nombres.indexOf('Usuarios') - 1);
-    expect(el.querySelector('nav a[href="/configuracion/facturacion"]')!.textContent?.trim()).toBe('Facturación');
-
-    TestBed.resetTestingModule();
-    const vendedor = await render(false);
-    expect(vendedor.querySelector('nav a[href="/configuracion/facturacion"]')).toBeNull();
-  });
-
-  it('el Dueño ve «Usuarios» bajo «Equipo», al final del menú, y lleva a /usuarios', async () => {
-    const el = await render(true);
-
-    expect(enlaces(el).at(-1)).toBe('Usuarios');
-    expect(el.querySelector('nav a[href="/usuarios"]')!.textContent?.trim()).toBe('Usuarios');
-  });
-
-  it('el Vendedor no ve «Usuarios» ni el grupo «Equipo»', async () => {
-    const el = await render(false);
-
-    expect(enlaces(el)).not.toContain('Usuarios');
-    expect(el.querySelector('nav a[href="/usuarios"]')).toBeNull();
-    expect(Array.from(el.querySelectorAll('nav .grupo')).map((g) => g.textContent?.trim())).not.toContain('Equipo');
+      expect(
+        Array.from(el.querySelectorAll('nav button.grupo')).map((g) => g.getAttribute('data-seccion')),
+      ).toEqual(['ventas', 'articulos', 'compras', 'precios', 'configuracion']);
+    });
   });
 
   it('todo rol ve «Cambiar mi contraseña» en el bloque del usuario, que lleva a /mi-contrasena', async () => {
@@ -314,63 +360,6 @@ describe('Shell', () => {
       expect(enlace).not.toBeNull();
       expect(enlace!.textContent?.trim()).toBe('Cambiar mi contraseña');
     }
-  });
-
-  it('el Dueño ve «Margen y redondeo» antes de «Cotización» y lleva a /configuracion/precios', async () => {
-    const el = await render(true);
-
-    const nombres = enlaces(el);
-    expect(nombres.indexOf('Margen y redondeo')).toBe(nombres.indexOf('Cotización') - 1);
-    const enlace = el.querySelector('nav a[href="/configuracion/precios"]');
-    expect(enlace!.textContent?.trim()).toBe('Margen y redondeo');
-  });
-
-  it('el Vendedor no ve «Margen y redondeo» en el menú', async () => {
-    const el = await render(false);
-
-    expect(el.querySelector('nav a[href="/configuracion/precios"]')).toBeNull();
-  });
-
-  it('el Vendedor no ve «Cotización» en el menú (sí ve el bloque de cotización)', async () => {
-    const el = await render(false);
-
-    expect(el.querySelector('nav a[href="/configuracion/cotizacion"]')).toBeNull();
-    expect(enlaces(el)).not.toContain('Cotización');
-    expect(el.querySelector('app-cotizacion-lateral')).not.toBeNull();
-  });
-
-  it('el Vendedor no ve "Importar lista", "Actualizar precios" ni el grupo «Precios»', async () => {
-    const el = await render(false);
-
-    expect(enlaces(el)).toEqual([
-      'Mostrador',
-      'Presupuestos',
-      'Remitos',
-      'Clientes',
-      'Caja',
-      'Artículos',
-      'Rubros',
-      'Proveedores',
-    ]);
-    expect(el.querySelector('a[href="/actualizacion-masiva"]')).toBeNull();
-    expect(el.querySelector('a[href="/compras"]')).toBeNull();
-    expect(el.querySelector('a[href="/reportes"]')).toBeNull();
-    expect(el.querySelector('a[href="/stock-bajo-minimo"]')).toBeNull();
-    expect(el.querySelector('a[href="/controles-de-datos"]')).toBeNull();
-    expect(el.querySelector('a[href="/etiquetas"]')).toBeNull();
-    expect(el.querySelector('a[href="/ventas"]')).toBeNull();
-    expect(el.querySelector('nav .grupo')).toBeNull();
-  });
-
-  it('la sección abierta se marca con aria-current="page"', async () => {
-    const el = await render(true, null, [{ path: 'rubros', component: Vacia }]);
-
-    await TestBed.inject(Router).navigateByUrl('/rubros');
-    fixture.detectChanges();
-    await fixture.whenStable();
-
-    expect(el.querySelector('nav a[href="/rubros"]')!.getAttribute('aria-current')).toBe('page');
-    expect(el.querySelector('nav a[href="/mostrador"]')!.hasAttribute('aria-current')).toBe(false);
   });
 
   it('el primer elemento es el enlace «Saltar al contenido», que lleva el foco al contenido', async () => {
@@ -451,16 +440,6 @@ describe('Shell', () => {
     expect(el.querySelector('.ferreteria')?.textContent?.trim()).toBe('Panel de administración');
   });
 
-  it('"Mostrador" es el primer enlace y lleva a /mostrador, para el Vendedor y para el Dueño', async () => {
-    for (const dueno of [false, true]) {
-      TestBed.resetTestingModule();
-      const el = await render(dueno);
-
-      const primero = el.querySelector('nav a');
-      expect(primero?.textContent?.trim()).toBe('Mostrador');
-      expect(primero?.getAttribute('href')).toBe('/mostrador');
-    }
-  });
   describe('cotización en el menú lateral', () => {
     const MINUTO = 60_000;
     const texto = (e: Element | null) => e?.textContent?.replace(/\s+/g, ' ').trim() ?? '';

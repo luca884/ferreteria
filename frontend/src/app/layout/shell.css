@@ -108,21 +108,67 @@ nav a:hover {
   background: var(--superficie-3);
   color: var(--texto);
 }
+/* La opción abierta toma el tono de su sección (bloque 2, S2). */
 nav a.activo {
-  background: var(--acento-suave);
-  color: var(--acento-fuerte);
+  background: var(--tono-suave);
+  color: var(--tono);
   font-weight: 600;
 }
 nav a:focus-visible {
   outline-offset: -2px;
 }
+
+/* Cabecera de grupo: un botón que abre y cierra sus opciones, con un punto del tono de la sección. */
 .grupo {
-  padding: 16px 10px 6px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 34px;
+  margin-top: 6px;
+  padding: 6px 10px;
+  border: 0;
+  border-radius: var(--radio);
+  background: transparent;
   color: var(--texto-tenue);
   font-size: var(--texto-2xs);
   font-weight: 600;
   letter-spacing: 0.06em;
+  text-align: left;
   text-transform: uppercase;
+  cursor: pointer;
+}
+.grupo::before {
+  content: '';
+  flex: 0 0 auto;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--tono);
+}
+.grupo:hover {
+  background: var(--superficie-3);
+  color: var(--texto);
+}
+.grupo[aria-expanded='true'] {
+  color: var(--tono);
+}
+.flecha {
+  width: 12px;
+  height: 12px;
+  margin-left: auto;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  transition: transform var(--transicion);
+}
+.grupo[aria-expanded='true'] .flecha {
+  transform: rotate(90deg);
+}
+.opciones {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
 
 .usuario {
@@ -184,8 +230,12 @@ nav a:focus-visible {
   font-size: var(--texto-xs);
 }
 
-/* La pantalla scrollea acá; su barra de acciones anula este padding a los costados y queda fija arriba. */
+/*
+ * La pantalla scrollea acá; su barra de acciones anula este padding a los costados y queda fija arriba. El filete de
+ * arriba lleva el tono de la sección abierta (bloque 2, S2).
+ */
 .contenido {
+  border-top: 3px solid var(--tono);
   display: flex;
   flex-direction: column;
   min-width: 0;
