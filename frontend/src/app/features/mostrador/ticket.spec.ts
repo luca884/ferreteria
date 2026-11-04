@@ -276,6 +276,15 @@ describe('ticket (puro)', () => {
       expect(pedido.renglones).toEqual([{ articuloId: 1, cantidad: 1, precioUnitario: 170 }]);
     });
 
+    it('aRequest con el descuento de la forma (recargo negativo): el total mostrado lo resta y los renglones no cambian', () => {
+      const t = agregar(ticketVacio('c'), art());
+
+      const pedido = aRequest(t, 1, -1700);
+
+      expect(pedido.totalMostrado).toBe(153);
+      expect(pedido.renglones).toEqual([{ articuloId: 1, cantidad: 1, precioUnitario: 170 }]);
+    });
+
     it('aRequest manda autorizaExceso true solo si se autoriza el exceso del límite (CC-013)', () => {
       const t = agregar(ticketVacio('c'), art());
 

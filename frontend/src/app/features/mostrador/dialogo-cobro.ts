@@ -69,8 +69,11 @@ const VUELTO_MAXIMO_CENTAVOS = 100_000_000;
 
 const PORCENTAJE = new Intl.NumberFormat('es-AR', { maximumFractionDigits: 2 });
 
-/** El recargo de la forma en centésimas de punto porcentual (1000 = 10 %). */
-const puntosBase = (forma: FormaPago): number => Math.round(forma.recargoPorcentaje * 100);
+/** El ajuste de la forma en %: positivo es recargo y negativo, descuento (una forma lleva uno o el otro). */
+const ajuste = (forma: FormaPago): number => forma.recargoPorcentaje - forma.descuentoPorcentaje;
+
+/** El ajuste de la forma en centésimas de punto porcentual (1000 = 10 %; -1000, 10 % de descuento). */
+const puntosBase = (forma: FormaPago): number => Math.round(ajuste(forma) * 100);
 
 /** Los centavos como lo que se ve en un campo con máscara: «1.300,50» (puntos de miles y siempre 2 decimales). */
 const centavosATexto = (c: number) => `${normalizarImporte(String(Math.floor(c / 100)))},${String(c % 100).padStart(2, '0')}`;
@@ -119,6 +122,11 @@ const centavosATexto = (c: number) => `${normalizarImporte(String(Math.floor(c /
           <p class="recargo">
             Recargo{{ porcentajeDeLaForma() }} <strong>{{ recargoCentavos() / 100 | monto }}</strong>
           </p>
+        } @else if (recargoCentavos() < 0) {
+          <p class="descuento-forma">
+            Descuento por forma de pago{{ porcentajeDeLaForma() }}
+            <strong>−{{ -recargoCentavos() / 100 | monto }}</strong>
+          </p>
         }
         @if (aviso(); as texto) {
           <p class="aviso" role="status">{{ texto }}</p>
@@ -143,6 +151,8 @@ const centavosATexto = (c: number) => `${normalizarImporte(String(Math.floor(c /
                 {{ o.nombre }}
                 @if (o.recargo) {
                   <small class="marca-recargo">+{{ o.recargo }}&nbsp;%</small>
+                } @else if (o.descuento) {
+                  <small class="marca-recargo marca-descuento">−{{ o.descuento }}&nbsp;%</small>
                 }
               </button>
             }
@@ -382,8 +392,9 @@ const centavosATexto = (c: number) => `${normalizarImporte(String(Math.floor(c /
       font-size: var(--texto-xs);
       font-weight: 600;
     }
-    /* El recargo de la forma elegida: la cuenta de cuánto se suma al total. */
-    .recargo {
+    /* El recargo (o el descuento) de la forma elegida: la cuenta de cuánto se suma (o se resta) al total. */
+    .recargo,
+    .descuento-forma {
       display: flex;
       justify-content: space-between;
       margin: 0;
@@ -391,7 +402,8 @@ const centavosATexto = (c: number) => `${normalizarImporte(String(Math.floor(c /
       font-size: var(--texto-sm);
       font-weight: 600;
     }
-    .recargo strong {
+    .recargo strong,
+    .descuento-forma strong {
       color: var(--texto);
       font-variant-numeric: tabular-nums;
     }
@@ -615,17 +627,21 @@ export class DialogoCobro {
     return razones;
   });
 
-  /** Una opción por forma, con la marca de su recargo y, si hoy no se puede elegir, su razón; y «Mixto» al final. */
+  /**
+   * Una opción por forma, con la marca de su recargo o su descuento y, si hoy no se puede elegir, su razón; y «Mixto»
+   * al final.
+   */
   protected readonly opciones = computed<
-    { id: Opcion; nombre: string; recargo: string | null; deshabilitada: string | null }[]
+    { id: Opcion; nombre: string; recargo: string | null; descuento: string | null; deshabilitada: string | null }[]
   >(() => [
     ...this.formas().map((f) => ({
       id: f.id as Opcion,
       nombre: f.nombre,
       recargo: f.recargoPorcentaje > 0 ? PORCENTAJE.format(f.recargoPorcentaje) : null,
+      descuento: f.descuentoPorcentaje > 0 ? PORCENTAJE.format(f.descuentoPorcentaje) : null,
       deshabilitada: this.razonDeLaForma(f),
     })),
-    { id: 'MIXTO' as Opcion, nombre: 'Mixto', recargo: null, deshabilitada: null },
+    { id: 'MIXTO' as Opcion, nombre: 'Mixto', recargo: null, descuento: null, deshabilitada: null },
   ]);
 
   /**
@@ -753,10 +769,11 @@ export class DialogoCobro {
   /** El total que se cobra: el del ticket más el recargo. */
   protected readonly aCobrarCentavos = computed(() => this.totalCentavos() + this.recargoCentavos());
 
-  /** « (10 %)» al lado del recargo de una forma única; nada en el mixto, donde cada parte tiene el suyo. */
+  /** « (10 %)» al lado del recargo o del descuento de una forma única; nada en el mixto, donde cada parte tiene el suyo. */
   protected readonly porcentajeDeLaForma = computed(() => {
     const forma = this.formaElegida();
-    return forma && forma.recargoPorcentaje > 0 ? ` (${PORCENTAJE.format(forma.recargoPorcentaje)} %)` : '';
+    const porcentaje = forma ? Math.abs(ajuste(forma)) : 0;
+    return porcentaje > 0 ? ` (${PORCENTAJE.format(porcentaje)} %)` : '';
   });
 
   /** Mientras no escribió, el recibido acompaña al total a cobrar (también si cambia por un 409). */

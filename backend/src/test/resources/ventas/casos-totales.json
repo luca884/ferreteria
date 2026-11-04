@@ -24,6 +24,8 @@
     { "nombre": "recargo-reparto", "renglones": ["c1", "c3"], "recargo": "446.33", "recargoPorRenglon": ["363.00", "83.33"], "total": "4909.66", "neto": "4057.57", "iva": "852.09" },
     { "nombre": "recargo-centavos", "renglones": ["cinco-centavos", "cinco-centavos", "cinco-centavos"], "recargo": "0.02", "recargoPorRenglon": ["0.01", "0.01", "0.00"], "total": "0.17", "neto": "0.14", "iva": "0.03" },
     { "nombre": "recargo-alicuotas", "renglones": ["iva-10-5", "cien"], "recargo": "18.00", "recargoPorRenglon": ["8.00", "10.00"], "total": "198.00", "neto": "170.55", "iva": "27.45" },
-    { "nombre": "recargo-con-descuentos", "renglones": ["dto-renglon-10"], "descuentoGlobal": "10.00", "recargo": "8.10", "recargoPorRenglon": ["8.10"], "total": "89.10", "neto": "73.64", "iva": "15.46" }
+    { "nombre": "recargo-con-descuentos", "renglones": ["dto-renglon-10"], "descuentoGlobal": "10.00", "recargo": "8.10", "recargoPorRenglon": ["8.10"], "total": "89.10", "neto": "73.64", "iva": "15.46" },
+    { "nombre": "descuento-forma-simple", "renglones": ["cien"], "recargo": "-10.00", "recargoPorRenglon": ["-10.00"], "total": "90.00", "neto": "74.38", "iva": "15.62" },
+    { "nombre": "descuento-forma-centavos", "renglones": ["cinco-centavos", "cinco-centavos", "cinco-centavos"], "recargo": "-0.02", "recargoPorRenglon": ["-0.01", "-0.01", "0.00"], "total": "0.13", "neto": "0.10", "iva": "0.03" }
   ]
 }

@@ -47,10 +47,10 @@ class CasosCompartidosTotalesTest {
     }
 
     @Test
-    @DisplayName("el JSON trae los 5 casos de renglon del diseno, C1, C3, el renglon de C2 y los de descuentos")
+    @DisplayName("el JSON trae los 5 casos de renglon del diseno, C1, C3, el renglon de C2, los de descuentos y los del descuento de la forma")
     void elJsonTieneLosCasos() {
         assertThat(casos.get("renglones").size()).isEqualTo(11);
-        assertThat(casos.get("tickets").size()).isEqualTo(11);
+        assertThat(casos.get("tickets").size()).isEqualTo(13);
     }
 
     @Test

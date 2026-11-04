@@ -848,6 +848,79 @@ describe('DialogoCobro', () => {
     });
   });
 
+  describe('formas de pago con descuento (descuento en efectivo)', () => {
+    const contado = forma(1, 'Contado', 'EFECTIVO', 0, 10);
+    const conDescuento = [contado, forma(2, 'Débito', 'DEBITO'), forma(7, 'Visa', 'CREDITO', 10)];
+    const descuento = () =>
+      el().querySelector('.descuento-forma')?.textContent?.replace(/[ \t\r\n]+/g, ' ').trim() ?? null;
+    const recargo = () => el().querySelector('.recargo')?.textContent?.replace(/[ \t\r\n]+/g, ' ').trim() ?? null;
+    const total = () => el().querySelector('.total')!.textContent!.trim();
+    const monto = (id: number) => el().querySelector<HTMLInputElement>(`input[data-forma="${id}"]`)!;
+
+    function escribirMonto(id: number, texto: string) {
+      monto(id).value = texto;
+      monto(id).dispatchEvent(new Event('input', { bubbles: true }));
+      fixture.detectChanges();
+    }
+
+    it('la opción lleva la marca «−10 %» y la de recargo sigue con «+10 %»', async () => {
+      await abrir(10000, conDescuento);
+
+      const nombres = Array.from(el().querySelectorAll('button[role="radio"]')).map((b) =>
+        b.textContent!.replace(/\s+/g, ' ').trim(),
+      );
+      expect(nombres).toEqual(['Contado −10 %', 'Débito', 'Visa +10 %', 'Mixto']);
+      expect(medio('Contado').querySelector('.marca-descuento')).not.toBeNull();
+    });
+
+    it('en efectivo con 10 %: la cabecera muestra el total descontado, la línea del descuento y el recibido arranca ahí', async () => {
+      await abrir(10000, conDescuento);
+
+      expect(total()).toBe(`$${NBSP}90,00`);
+      expect(descuento()).toBe(`Descuento por forma de pago (10 %) −$${NBSP}10,00`);
+      expect(recargo()).toBeNull();
+      expect(importe().value).toBe('90,00');
+      escribir('100');
+      expect(vuelto()).toBe(`Vuelto $${NBSP}10,00`);
+    });
+
+    it('el descuento se redondea a centavos HALF_UP lejos del cero, igual que el servidor', async () => {
+      await abrir(3335, conDescuento);
+
+      // 33,35 x 10 % = 3,335 -> 3,34
+      expect(descuento()).toBe(`Descuento por forma de pago (10 %) −$${NBSP}3,34`);
+      expect(total()).toBe(`$${NBSP}30,01`);
+    });
+
+    it('al confirmar emite el descuento como recargo negativo en centavos', async () => {
+      await abrir(10000, conDescuento);
+
+      tecla('Enter');
+
+      expect(confirmadas).toEqual([
+        { formaPagoId: 1, medio: 'EFECTIVO', recibidoCentavos: 9000, recargoCentavos: -1000 },
+      ]);
+    });
+
+    it('pago mixto: el descuento va solo sobre la parte en efectivo y se compensa con el recargo de otra', async () => {
+      await abrir(10000, conDescuento);
+      medio('Mixto').click();
+      await estabilizar();
+
+      escribirMonto(1, '60');
+      escribirMonto(2, '40');
+      expect(descuento()).toBe(`Descuento por forma de pago −$${NBSP}6,00`);
+      expect(total()).toBe(`$${NBSP}94,00`);
+
+      escribirMonto(2, '');
+      escribirMonto(1, '40');
+      escribirMonto(7, '60');
+      expect(descuento()).toBeNull();
+      expect(recargo()).toBe(`Recargo $${NBSP}2,00`);
+      expect(total()).toBe(`$${NBSP}102,00`);
+    });
+  });
+
   describe('formas de pago con recargo (GDS-11)', () => {
     const visa6 = forma(7, 'Visa 6 cuotas', 'CREDITO', 10);
     const formasConVisa = [...FORMAS, visa6];

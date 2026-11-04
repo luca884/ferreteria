@@ -99,6 +99,21 @@ describe('recargo de la forma de pago (GDS-11)', () => {
     expect(() => repartirRecargo([0], 100)).toThrow();
   });
 
+  it('descuento de la forma: recargoDeCobro con % negativo, HALF_UP lejos del cero como el backend', () => {
+    expect(recargoDeCobro(100000, -1000)).toBe(-10000);
+    expect(recargoDeCobro(5, -1000)).toBe(-1);
+    expect(recargoDeCobro(4, -1000)).toBe(0);
+    expect(recargoDeCobro(123457, -1235)).toBe(-15247);
+    expect(recargoDeCobro(10000, -9999)).toBe(-9999);
+  });
+
+  it('descuento de la forma: repartirRecargo en espejo, y no puede superar el total', () => {
+    expect(repartirRecargo([30000, 10000], -4000)).toEqual([-3000, -1000]);
+    expect(repartirRecargo([5, 5, 5], -2)).toEqual([-1, -1, 0]);
+    expect(repartirRecargo([10000], -10000)).toEqual([-10000]);
+    expect(() => repartirRecargo([10000], -10001)).toThrow();
+  });
+
   it('repartirRecargo: lo repartido suma el recargo y ninguno es negativo (semilla fija)', () => {
     let semilla = 11;
     const azar = (tope: number) => {
