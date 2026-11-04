@@ -512,6 +512,37 @@ describe('DialogoCobro', () => {
       tecla('Enter');
       expect(confirmadas).toHaveLength(1);
     });
+
+    // Regresiones del verificador: Enter con el foco en un botón tampoco cobra, y no se cobra dos veces.
+    it('Enter con el foco en «Cobrar y facturar con ARCA» no cobra y frena la acción del botón', async () => {
+      await abrirEligiendo();
+      facturar().focus();
+
+      const evento = tecla('Enter', facturar());
+
+      expect(evento.defaultPrevented).toBe(true);
+      expect(confirmadas).toEqual([]);
+    });
+
+    it('Enter con el foco en «Cobrar sin factura» no cobra', async () => {
+      await abrirEligiendo();
+      sinFactura().focus();
+
+      const evento = tecla('Enter', sinFactura());
+
+      expect(evento.defaultPrevented).toBe(true);
+      expect(confirmadas).toEqual([]);
+    });
+
+    it('un clic en «Cobrar y facturar» después de uno en «sin factura» no cobra dos veces', async () => {
+      await abrirEligiendo();
+
+      sinFactura().click();
+      facturar().click();
+
+      expect(confirmadas).toHaveLength(1);
+      expect(confirmadas[0].noFacturable).toBe(true);
+    });
   });
 
   describe('no facturable sin facturación con ARCA (NF-003)', () => {

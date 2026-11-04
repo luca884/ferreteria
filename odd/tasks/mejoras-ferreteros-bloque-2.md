@@ -49,3 +49,17 @@ Restricciones: reglas de arquitectura de `CLAUDE.md` (tenant solo del JWT, `*Sco
   - (a) Artículos: con la columna nueva, la grilla medía 1078 px en un marco de 1008 px; «BUL-002» y «21 %» se partían y «Estado» quedaba fuera de vista. Ahora códigos e IVA no se parten, el encabezado «Última actualización» usa dos líneas y la descripción baja su mínimo de 16rem a 10rem. Resultado: 1008/1008, sin scroll lateral.
   - (b) Cobro: «Cobrar y facturar con ARCA» caía sola en una segunda fila. Ahora las dos formas de cobrar van lado a lado y del mismo ancho, con Cancelar abajo, y el orden del DOM sigue al visual.
   - Son cambios de CSS y de orden de botones; los tests que ya había (469/469 enfocados) siguen verdes y no se agregó ninguno.
+- L6 (2026-11-03) `odd-verifier` (opus) sobre `c269e4f..e93cedd`, de S1 a S7: **pass, sin blockers**. Sus probes se commitearon como regresión:
+  - `StockBajoMinimoIntegrationTest`, 12/12: desempates por `registrada` y por id, nombre copiado del proveedor, el código del proveedor en los 4 órdenes con los 14 campos del JSON, y aislamiento con compras de las dos ferreterías.
+  - `layout/menu.spec.ts` (nuevo): ruta → sección y opciones por rol.
+  - `buscador-menu.spec`: el vendedor no ve opciones del Dueño.
+  - `dialogo-cobro.spec`: Enter con el foco en cada botón no cobra; no se cobra dos veces.
+  - Enfocados del front 133/133.
+
+  Advisories, ninguna se aplica:
+  1. Con los dos botones, Enter en un pago mixto incompleto ya no muestra «Revisá los importes…». Al hacer clic sí sale. Es efecto de S4.
+  2. `ultimaCompraAislada` no ejercita el filtro `ic.ferreteria_id` porque la FK compuesta de V29 ya impide el cruce. No hay fuga.
+  3. `comprasDe` trae todo el historial de compras y se queda con la primera en Java. El costo crece con las compras; 1500 artículos tardaron 66 ms.
+  4. El listado impreso de bajo mínimo tiene 12 columnas y no se probó en papel.
+  5. La barra espaciadora activa el botón enfocado. No es Enter, así que S4 se cumple.
+  6. Si no se puede leer `/facturacion` en una ferretería sin ARCA, aparece «Cobrar y facturar con ARCA», pero el servidor no factura.

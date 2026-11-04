@@ -202,4 +202,100 @@ class StockBajoMinimoIntegrationTest extends AjustesTestBase {
 
         assertThat(getJson(URL, duenoA)).isEmpty();
     }
+
+    // Regresiones del verificador del bloque 2 (S5, S6): desempates de la última compra, nombre copiado y forma del JSON.
+
+    private void compraCon(Long fid, Long provId, String provNombre, long numero, String fecha, String registrada,
+                           Long... articulos) {
+        jdbc.update("insert into compra (ferreteria_id, proveedor_id, proveedor_nombre, tipo, punto_venta, numero, fecha,"
+                + " moneda, neto, clave_idempotencia, usuario_id, registrada) values (?, ?, ?, 'FA', 1, ?, ?, 'ARS', 100, ?, ?, ?)",
+                fid, provId, provNombre, numero, java.sql.Date.valueOf(fecha), java.util.UUID.randomUUID().toString(),
+                usuarioDe(fid), java.sql.Timestamp.valueOf(registrada));
+        Long compraId = jdbc.queryForObject("select id from compra where ferreteria_id = ? and numero = ? and proveedor_id = ?",
+                Long.class, fid, numero, provId);
+        int renglon = 1;
+        for (Long articulo : articulos) {
+            jdbc.update("insert into item_compra (ferreteria_id, compra_id, renglon, articulo_id, codigo_interno, descripcion,"
+                    + " unidad, cantidad, costo_unitario, subtotal, costo_anterior, precio_anterior, precio_nuevo)"
+                    + " values (?, ?, ?, ?, 'X', 'X', 'UNIDAD', 1, 100, 100, 100, 160, 160)", fid, compraId, renglon++, articulo);
+        }
+    }
+
+    private Long prov(String nombre) {
+        return jdbc.queryForObject("select id from proveedor where ferreteria_id = ? and nombre = ?", Long.class, a, nombre);
+    }
+
+    private JsonNode filaDeCodigo(JsonNode filas, String codigo) {
+        for (JsonNode f : filas) {
+            if (f.get("codigoInterno").asText().equals(codigo)) return f;
+        }
+        throw new AssertionError("No está " + codigo);
+    }
+
+    @Test
+    @DisplayName("a igual fecha gana la compra registrada más tarde, aunque tenga el id menor")
+    void igualFechaGanaLaRegistradaMasNueva() throws Exception {
+        Long tuerca = idDe(a, "B-002");
+        compraCon(a, prov("Andina Norte"), "Andina Norte", 30, "2026-10-12", "2026-10-12 18:00:00", tuerca);
+        compraCon(a, prov("Bulonera Sur"), "Bulonera Sur", 31, "2026-10-12", "2026-10-12 09:00:00", tuerca);
+
+        JsonNode fila = filaDeCodigo(getJson(URL, duenoA), "B-002");
+        assertThat(fila.get("ultimaCompraFecha").asText()).isEqualTo("2026-10-12");
+        assertThat(fila.get("ultimaCompraProveedor").asText()).isEqualTo("Andina Norte");
+    }
+
+    @Test
+    @DisplayName("a igual fecha y hora de registro gana la última cargada")
+    void empateTotalGanaLaUltimaCargada() throws Exception {
+        Long tuerca = idDe(a, "B-002");
+        compraCon(a, prov("Bulonera Sur"), "Bulonera Sur", 40, "2026-10-12", "2026-10-12 09:00:00", tuerca);
+        compraCon(a, prov("Andina Norte"), "Andina Norte", 41, "2026-10-12", "2026-10-12 09:00:00", tuerca);
+
+        assertThat(filaDeCodigo(getJson(URL, duenoA), "B-002").get("ultimaCompraProveedor").asText())
+                .isEqualTo("Andina Norte");
+    }
+
+    @Test
+    @DisplayName("el proveedor de la última compra es el nombre copiado en la compra, aunque después se renombre")
+    void proveedorConElNombreDeLaCompra() throws Exception {
+        Long tuerca = idDe(a, "B-002");
+        compraCon(a, prov("Bulonera Sur"), "Bulonera Sur", 50, "2026-10-12", "2026-10-12 09:00:00", tuerca);
+        jdbc.update("update proveedor set nombre = 'Bulonera Sur SRL' where id = ?", prov("Bulonera Sur"));
+
+        assertThat(filaDeCodigo(getJson(URL, duenoA), "B-002").get("ultimaCompraProveedor").asText())
+                .isEqualTo("Bulonera Sur");
+    }
+
+    @Test
+    @DisplayName("en cada orden el código del proveedor va con su artículo y la fila tiene los 14 campos")
+    void ordenesYCampos() throws Exception {
+        jdbc.update("update articulo set codigo_proveedor = concat('P-', codigo_interno) where ferreteria_id = ?", a);
+        for (String orden : new String[] {"DESCRIPCION", "CODIGO", "RUBRO", "PROVEEDOR"}) {
+            JsonNode filas = getJson(URL + "?orden=" + orden, duenoA);
+            assertThat(filas).hasSize(3);
+            for (JsonNode f : filas) {
+                assertThat(f.get("codigoProveedor").asText()).isEqualTo("P-" + f.get("codigoInterno").asText());
+                java.util.List<String> nombres = new java.util.ArrayList<>();
+                f.fieldNames().forEachRemaining(nombres::add);
+                assertThat(nombres).containsExactlyInAnyOrder("articuloId", "codigoInterno", "codigoProveedor",
+                        "descripcion", "rubro", "proveedor", "costo", "moneda", "unidad", "stockActual", "stockMinimo",
+                        "aReponer", "ultimaCompraFecha", "ultimaCompraProveedor");
+            }
+        }
+    }
+
+    @Test
+    @DisplayName("cada ferretería ve solo sus compras, aunque las dos tengan una")
+    void aislamientoConComprasDeLasDos() throws Exception {
+        Long tuerca = idDe(a, "B-002");
+        compraCon(a, prov("Bulonera Sur"), "Bulonera Sur", 70, "2026-09-01", "2026-09-01 09:00:00", tuerca);
+        Long ajeno = idDe(b, "G-007");
+        compraCon(b, proveedor(b, "Proveedor de B"), "Proveedor de B", 71, "2026-10-30", "2026-10-30 09:00:00", ajeno);
+
+        JsonNode deA = getJson(URL, duenoA);
+        assertThat(deA.findValuesAsText("ultimaCompraProveedor")).doesNotContain("Proveedor de B");
+        assertThat(filaDeCodigo(deA, "B-002").get("ultimaCompraFecha").asText()).isEqualTo("2026-09-01");
+        assertThat(getJson(URL, login("dueno-minimo-b@test.local")).findValuesAsText("ultimaCompraProveedor"))
+                .containsExactly("Proveedor de B");
+    }
 }

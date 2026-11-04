@@ -198,4 +198,28 @@ describe('BuscadorMenu (mejoras-ferreteros-bloque-2, S3)', () => {
 
     expect(caja().value).toBe('');
   });
+
+  // Regresiones del verificador: el vendedor no encuentra opciones del Dueño.
+  it('al vendedor no le ofrece ninguna opción solo del Dueño', async () => {
+    vi.useFakeTimers();
+    await render(false);
+    const busquedas = ['compras', 'stock', 'etiq', 'reportes', 'cotiz', 'margen', 'import', 'usuarios', 'formas'];
+    for (const q of [...busquedas, 'factur', 'consumidor', 'controles', 'actualizar', 'datos']) {
+      await escribir(q);
+      const opciones = resultados().filter(
+        (r) => !['/clientes', '/proveedores', '/articulos'].some((x) => r.href?.startsWith(x + '?')),
+      );
+      expect([q, opciones]).toEqual([q, []]);
+    }
+    await escribir('vent');
+    expect(resultados().filter((r) => r.href === '/ventas')).toEqual([]);
+  });
+
+  it('«prov» ofrece la opción Proveedores', async () => {
+    vi.useFakeTimers();
+    await render(false);
+    await escribir('prov');
+
+    expect(resultados()).toContainEqual({ texto: 'Proveedores', href: '/proveedores' });
+  });
 });
