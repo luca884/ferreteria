@@ -33,6 +33,13 @@
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.02em;
 }
+/* Ofertas (S3): el precio normal tachado se lee al lado del precio grande, sin competir con él. */
+.precio .precio-normal {
+  display: inline-block;
+  margin-left: var(--e-2);
+  font-size: var(--texto-md);
+  letter-spacing: 0;
+}
 .datos {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

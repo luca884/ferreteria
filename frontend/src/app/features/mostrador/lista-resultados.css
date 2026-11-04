@@ -63,6 +63,11 @@
   letter-spacing: 0.04em;
   text-transform: uppercase;
 }
+/* Ofertas (S3): la marca no se estira a lo ancho de la columna, como «Dado de baja». */
+.marca-oferta {
+  align-self: flex-start;
+  margin-left: 0;
+}
 .datos {
   display: flex;
   flex-direction: column;
