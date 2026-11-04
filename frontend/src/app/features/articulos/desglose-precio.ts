@@ -158,9 +158,8 @@ export class DesglosePrecioVista {
       const moneda: Moneda = EN_MONEDA_DEL_ARTICULO.includes(paso.tipo) ? d.moneda : 'ARS';
       const pct = paso.porcentaje === null ? null : Number(paso.porcentaje);
       if (paso.tipo === 'RECARGO') return this.recargoMostrado(paso, moneda);
-      // Los pasos intermedios vienen a 4 decimales; el IVA se muestra en pesos y centavos, como un precio (Luca, 2026-11-04).
-      const decimales = paso.tipo === 'IVA' ? 2 : 4;
-      const importe = paso.tipo === 'REDONDEO' ? null : formatearTexto(paso.importe, moneda, decimales);
+      // Los pasos intermedios vienen a 4 decimales; se muestran en pesos y centavos, como un precio (Luca, 2026-11-04).
+      const importe = paso.tipo === 'REDONDEO' ? null : formatearTexto(paso.importe, moneda);
       return { tipo: paso.tipo, nombre: this.nombreDe(paso.tipo, pct, paso.importe), importe };
     });
     // Los ajustes sobre el precio final van entre el redondeo y el precio final; el importe lo calcula el backend.
