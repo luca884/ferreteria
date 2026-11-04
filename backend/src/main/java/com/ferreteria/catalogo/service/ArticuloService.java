@@ -3,6 +3,7 @@ package com.ferreteria.catalogo.service;
 import com.ferreteria.catalogo.dto.AjustesRequest;
 import com.ferreteria.catalogo.dto.ArticuloRequest;
 import com.ferreteria.catalogo.dto.ArticuloResponse;
+import com.ferreteria.catalogo.dto.OfertaRequest;
 import com.ferreteria.catalogo.dto.ValidacionAjustes;
 import com.ferreteria.catalogo.model.Ajustes;
 import com.ferreteria.catalogo.model.Articulo;
@@ -21,6 +22,7 @@ import com.ferreteria.catalogo.repository.ArticuloRepository;
 import com.ferreteria.catalogo.repository.HistorialPrecioRepository;
 import com.ferreteria.catalogo.repository.ProveedorRepository;
 import com.ferreteria.catalogo.repository.RubroRepository;
+import com.ferreteria.common.HoraArgentina;
 import com.ferreteria.common.PageResponse;
 import com.ferreteria.common.exception.ArticuloModificado;
 import com.ferreteria.common.exception.BadRequestException;
@@ -86,11 +88,21 @@ public class ArticuloService {
      */
     @Transactional(readOnly = true)
     public PageResponse<ArticuloResponse> listar(String q, int page, int size, boolean incluirInactivos) {
+        return listar(q, page, size, incluirInactivos, false);
+    }
+
+    /** Con {@code enOferta}, solo los que tienen hoy una oferta que baja el precio normal (ofertas, S3). */
+    @Transactional(readOnly = true)
+    public PageResponse<ArticuloResponse> listar(
+            String q, int page, int size, boolean incluirInactivos, boolean enOferta) {
         PageRequest pageable = PageRequest.of(
                 Math.max(page, 0), Math.min(Math.max(size, 1), TAMANO_MAXIMO),
                 Sort.by(Sort.Order.asc("descripcion"), Sort.Order.asc("id")));
+        String patron = FiltroArticulos.patronDeBusqueda(q);
         PageResponse<ArticuloResponse> pagina = PageResponse.from(
-                articuloRepository.buscarScoped(FiltroArticulos.patronDeBusqueda(q), incluirInactivos, pageable),
+                enOferta
+                        ? articuloRepository.buscarEnOfertaScoped(patron, incluirInactivos, HoraArgentina.hoy(), pageable)
+                        : articuloRepository.buscarScoped(patron, incluirInactivos, pageable),
                 ArticuloResponse::from);
         // Una sola consulta para el «costo al» de toda la pagina (GDS-05).
         Map<Long, LocalDate> costoAl = articuloRepository.costoAlScoped(
@@ -215,6 +227,30 @@ public class ArticuloService {
      * La respuesta con su «costo al» (GDS-05), leido de la base: el historial que se acaba de guardar ya cuenta, porque
      * la consulta nativa escribe antes lo pendiente.
      */
+    /**
+     * Pone el articulo en oferta (ofertas, S1), reemplazando la que tuviera. Solo cambia la oferta: el precio normal
+     * y su historial quedan como estan. Mismo orden que los ajustes: 404, version, y despues las validaciones.
+     */
+    @Transactional
+    public ArticuloResponse ponerOferta(Long id, OfertaRequest request) {
+        Articulo articulo = articuloRepository.findParaEditarScoped(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Artículo no encontrado"));
+        verificarVersion(articulo, request.version());
+        articulo.fijarOferta(request.toOferta(), HoraArgentina.hoy());
+        escribirOChocar();
+        return conCostoAl(ArticuloResponse.from(articulo, stockVigente(id, articulo)));
+    }
+
+    /** Saca la oferta: el articulo vuelve a venderse a su precio normal. Sin oferta no cambia nada. */
+    @Transactional
+    public ArticuloResponse quitarOferta(Long id) {
+        Articulo articulo = articuloRepository.findParaEditarScoped(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Artículo no encontrado"));
+        articulo.quitarOferta();
+        escribirOChocar();
+        return conCostoAl(ArticuloResponse.from(articulo, stockVigente(id, articulo)));
+    }
+
     private ArticuloResponse conCostoAl(ArticuloResponse respuesta) {
         return respuesta.conCostoAl(articuloRepository.costoAlScoped(List.of(respuesta.id())).get(respuesta.id()));
     }

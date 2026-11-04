@@ -26,7 +26,9 @@ public record ArticuloVendedorResponse(
         String ubicacion,
         boolean activo,
         /** GDS-05: es una fecha, no deja deducir el costo (como en la busqueda de la venta de GDS). */
-        LocalDate costoAl) implements ArticuloLectura {
+        LocalDate costoAl,
+        /** Ofertas (S3): la ve tambien el Vendedor; no deja deducir el costo. */
+        OfertaResponse oferta) implements ArticuloLectura {
 
     public static ArticuloVendedorResponse from(ArticuloResponse completo) {
         return new ArticuloVendedorResponse(
@@ -44,6 +46,7 @@ public record ArticuloVendedorResponse(
                 completo.stockMinimo(),
                 completo.ubicacion(),
                 completo.activo(),
-                completo.costoAl());
+                completo.costoAl(),
+                completo.oferta());
     }
 }

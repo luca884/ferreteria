@@ -59,6 +59,36 @@ public interface ArticuloRepository extends TenantScopedRepository<Articulo, Lon
             @Param("incluirInactivos") boolean incluirInactivos,
             Pageable pageable);
 
+    /**
+     * Ofertas (S3): los del listado con una oferta vigente ese dia que baja el precio normal, la misma regla que
+     * {@link com.ferreteria.catalogo.model.Oferta#precioSobre}. En el %, el precio de oferta al centavo hacia arriba es
+     * {@code ceiling(precio x (100 - %)) / 100}; como {@code precio x 100} es entero, eso baja el precio si
+     * {@code precio x (100 - %) <= precio x 100 - 1} (y es mayor a 0 si el precio lo es). Sin {@code ceiling}, que el
+     * parser de JPQL de Spring Data no acepta.
+     */
+    String FILTRO_EN_OFERTA = FILTRO_ARTICULOS + """
+              and a.ofertaTipo is not null
+              and (a.ofertaHasta is null or a.ofertaHasta >= :hoy)
+              and ((a.ofertaTipo = com.ferreteria.catalogo.model.TipoOferta.PRECIO_FIJO
+                    and a.ofertaValor < a.precioFinal)
+                   or (a.ofertaTipo = com.ferreteria.catalogo.model.TipoOferta.DESCUENTO_MONTO
+                    and a.ofertaValor < a.precioFinal)
+                   or (a.ofertaTipo = com.ferreteria.catalogo.model.TipoOferta.DESCUENTO_PORCENTAJE
+                    and a.precioFinal > 0
+                    and a.precioFinal * (100 - a.ofertaValor) <= a.precioFinal * 100 - 1))
+            """;
+
+    @Query(value = "select a " + FILTRO_EN_OFERTA, countQuery = "select count(a) " + FILTRO_EN_OFERTA)
+    Page<Articulo> buscarEnOferta(
+            @Param("fid") Long ferreteriaId,
+            @Param("proveedorId") Long proveedorId,
+            @Param("rubroId") Long rubroId,
+            @Param("importacionId") Long importacionId,
+            @Param("q") String q,
+            @Param("incluirInactivos") boolean incluirInactivos,
+            @Param("hoy") LocalDate hoy,
+            Pageable pageable);
+
     /** Los articulos del filtro (actualizacion masiva), todos y en orden ascendente de id. */
     @Query("select a " + FILTRO_ARTICULOS + " order by a.id")
     List<Articulo> filtrar(
@@ -272,6 +302,10 @@ public interface ArticuloRepository extends TenantScopedRepository<Articulo, Lon
 
     default Page<Articulo> buscarScoped(String q, boolean incluirInactivos, Pageable pageable) {
         return buscar(TenantContext.requireFerreteriaId(), null, null, null, q, incluirInactivos, pageable);
+    }
+
+    default Page<Articulo> buscarEnOfertaScoped(String q, boolean incluirInactivos, LocalDate hoy, Pageable pageable) {
+        return buscarEnOferta(TenantContext.requireFerreteriaId(), null, null, null, q, incluirInactivos, hoy, pageable);
     }
 
     /** Los articulos de la ferreteria que cumplen el filtro, por id ascendente (CU-05). */

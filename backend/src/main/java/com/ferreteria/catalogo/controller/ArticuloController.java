@@ -9,6 +9,7 @@ import com.ferreteria.catalogo.dto.ArticuloVendedorResponse;
 import com.ferreteria.catalogo.dto.BusquedaMostradorResponse;
 import com.ferreteria.catalogo.dto.CodigoSiguienteResponse;
 import com.ferreteria.catalogo.dto.DesglosePrecioResponse;
+import com.ferreteria.catalogo.dto.OfertaRequest;
 import com.ferreteria.catalogo.service.ArticuloService;
 import com.ferreteria.catalogo.service.BusquedaMostradorService;
 import com.ferreteria.catalogo.service.DesglosePrecioService;
@@ -56,8 +57,9 @@ public class ArticuloController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size,
             @RequestParam(defaultValue = "false") boolean incluirInactivos,
+            @RequestParam(defaultValue = "false") boolean enOferta,
             @AuthenticationPrincipal AuthUser authUser) {
-        PageResponse<ArticuloResponse> pagina = articuloService.listar(q, page, size, incluirInactivos);
+        PageResponse<ArticuloResponse> pagina = articuloService.listar(q, page, size, incluirInactivos, enOferta);
         return new PageResponse<>(pagina.items().stream().map(a -> segunRol(a, authUser)).toList(),
                 pagina.page(), pagina.size(), pagina.totalElements(), pagina.totalPages());
     }
@@ -116,6 +118,23 @@ public class ArticuloController {
     public ArticuloResponse editarAjustes(
             @PathVariable Long id, @RequestBody AjustesRequest request, @AuthenticationPrincipal AuthUser authUser) {
         return articuloService.editarAjustes(id, request, authUser.userId());
+    }
+
+    /**
+     * Pone el articulo en oferta (ofertas, S1; solo Dueno). Sin @Valid: el servicio valida despues del 404. El precio
+     * normal no cambia.
+     */
+    @PutMapping("/{id}/oferta")
+    @PreAuthorize("hasRole('DUENO')")
+    public ArticuloResponse ponerOferta(@PathVariable Long id, @RequestBody OfertaRequest request) {
+        return articuloService.ponerOferta(id, request);
+    }
+
+    /** Saca la oferta; devuelve el articulo con la version nueva (la pantalla la usa en el proximo guardado). */
+    @DeleteMapping("/{id}/oferta")
+    @PreAuthorize("hasRole('DUENO')")
+    public ArticuloResponse quitarOferta(@PathVariable Long id) {
+        return articuloService.quitarOferta(id);
     }
 
     /** Vuelve a activar un articulo dado de baja; no toca precios ni stock. */
