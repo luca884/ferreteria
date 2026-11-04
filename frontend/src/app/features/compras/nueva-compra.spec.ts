@@ -11,7 +11,7 @@ import { Articulo } from '../articulos/articulo.models';
 import { ArticulosService } from '../articulos/articulos.service';
 import { GENERAR_CLAVE } from '../mostrador/ticket.store';
 import { ProveedoresService } from '../proveedores/proveedores.service';
-import { CompraResponse, PlanCompra } from './compra.models';
+import { BorradorDeFactura, CompraResponse, PlanCompra } from './compra.models';
 import { ComprasService } from './compras.service';
 import { NuevaCompra } from './nueva-compra';
 
@@ -19,7 +19,11 @@ registerLocaleData(localeEsAr);
 
 describe('NuevaCompra', () => {
   let fixture: ComponentFixture<NuevaCompra>;
-  let api: { vistaPrevia: ReturnType<typeof vi.fn>; registrar: ReturnType<typeof vi.fn> };
+  let api: {
+    vistaPrevia: ReturnType<typeof vi.fn>;
+    registrar: ReturnType<typeof vi.fn>;
+    leerFactura: ReturnType<typeof vi.fn>;
+  };
   let articulos: { buscar: ReturnType<typeof vi.fn> };
   let proveedores: { listar: ReturnType<typeof vi.fn> };
 
@@ -54,8 +58,47 @@ describe('NuevaCompra', () => {
         precioNuevo: 330.33,
         subtotal: 4200,
         advertencia: 'El costo sube un 110 % (de 100,00 a 210,00). Revisá que sea correcto.',
+        costoRealAnterior: 100,
+        costoRealNuevo: 210,
       },
     ],
+    recargos: [],
+  };
+
+  const borrador: BorradorDeFactura = {
+    proveedorId: 4,
+    proveedorNombre: 'Bulonera Sur',
+    cuits: ['30657162163'],
+    tipo: 'FA',
+    puntoVenta: 13,
+    numero: 605684,
+    fecha: '2026-09-24',
+    recargos: [{ nombre: 'Embalaje y carga', porcentaje: 4.44, importe: 75835.18 }],
+    renglones: [
+      {
+        codigo: 'TOR-P',
+        descripcion: 'TORNILLO 1/4',
+        cantidad: 12,
+        costoUnitario: 210.5,
+        neto: 2526,
+        articuloId: 1,
+        articuloDescripcion: 'Tornillo 1/4',
+        cantidadNoEntera: false,
+      },
+      {
+        codigo: 'X-99',
+        descripcion: 'PIEZA RARA',
+        cantidad: 3,
+        costoUnitario: 1500,
+        neto: 4500,
+        articuloId: null,
+        articuloDescripcion: null,
+        cantidadNoEntera: false,
+      },
+    ],
+    sumaNetos: 1707999.65,
+    control: 'CUADRA',
+    cantidadNoEntera: false,
   };
 
   const compra = {
@@ -68,6 +111,7 @@ describe('NuevaCompra', () => {
     api = {
       vistaPrevia: vi.fn(() => of(plan)),
       registrar: vi.fn(() => of({ compra, repetida: false })),
+      leerFactura: vi.fn(() => of(borrador)),
     };
     articulos = { buscar: vi.fn(() => of({ items: [tornillo], page: 0, size: 8, totalElements: 1, totalPages: 1 })) };
     proveedores = { listar: vi.fn(() => of([{ id: 4, nombre: 'Bulonera Sur', cuit: null, activo: true }])) };
@@ -98,6 +142,8 @@ describe('NuevaCompra', () => {
   const campo = <T extends HTMLElement>(selector: string) => el().querySelector(selector) as T;
   const boton = (texto: string) =>
     [...el().querySelectorAll('button')].find((b) => b.textContent?.trim() === texto) as HTMLButtonElement | undefined;
+
+  const porEtiqueta = (etiqueta: string) => campo<HTMLButtonElement>(`button[aria-label="${etiqueta}"]`);
 
   async function escribir(selector: string, valor: string) {
     const input = campo<HTMLInputElement | HTMLSelectElement>(selector);
@@ -378,5 +424,231 @@ describe('NuevaCompra', () => {
     expect(api.vistaPrevia).not.toHaveBeenCalled();
     expect(el().querySelector('[role=alert]')?.textContent).toContain('Elegí el proveedor.');
     expect(el().querySelector('[role=alert]')?.textContent).toContain('Agregá al menos un artículo.');
+  });
+
+  async function subirPdf(nombre = 'factura.pdf') {
+    const input = campo<HTMLInputElement>('input[name=facturaPdf]');
+    Object.defineProperty(input, 'files', { value: [new File(['%PDF'], nombre, { type: 'application/pdf' })], configurable: true });
+    input.dispatchEvent(new Event('change'));
+    await refrescar();
+  }
+
+  describe('factura en PDF', () => {
+    it('el selector solo acepta PDF', async () => {
+      await crear();
+
+      expect(campo<HTMLInputElement>('input[name=facturaPdf]').accept).toContain('.pdf');
+    });
+
+    it('muestra «Leyendo la factura…» mientras espera y después completa el formulario', async () => {
+      await crear();
+      const respuesta = new Subject<BorradorDeFactura>();
+      api.leerFactura.mockReturnValue(respuesta);
+
+      await subirPdf();
+      expect(el().textContent).toContain('Leyendo la factura…');
+
+      respuesta.next(borrador);
+      await refrescar();
+
+      expect(el().textContent).not.toContain('Leyendo la factura…');
+      expect(campo<HTMLSelectElement>('select[name=proveedor]').value).toBe('4');
+      expect(campo<HTMLSelectElement>('select[name=tipo]').value).toBe('FA');
+      expect(campo<HTMLInputElement>('input[name=puntoVenta]').value).toBe('13');
+      expect(campo<HTMLInputElement>('input[name=numero]').value).toBe('605684');
+      expect(campo<HTMLInputElement>('input[name=fecha]').value).toBe('2026-09-24');
+      expect(campo<HTMLInputElement>('input[name="cantidad-0"]').value).toBe('12');
+      expect(campo<HTMLInputElement>('input[name="costo-0"]').value).toBe('210,50');
+      expect(el().querySelector('table.renglones')!.textContent).toContain('Tornillo 1/4');
+      expect(campo<HTMLInputElement>('input[name="recargo-nombre-0"]').value).toBe('Embalaje y carga');
+      expect(campo<HTMLInputElement>('input[name="recargo-porcentaje-0"]').value).toBe('4,44');
+    });
+
+    it('lista aparte el renglón sin artículo y no deja ver la vista previa hasta resolverlo', async () => {
+      await crear();
+      await subirPdf();
+
+      const sin = el().querySelector('.sin-articulo')!.textContent!;
+      expect(sin).toContain('Sin artículo: X-99 — PIEZA RARA (3 × $');
+      expect(sin).toContain('1.500,00');
+
+      boton('Ver vista previa')!.click();
+      await refrescar();
+      expect(api.vistaPrevia).not.toHaveBeenCalled();
+      expect(el().querySelector('[role=alert]')!.textContent).toContain('Resolvé los renglones sin artículo.');
+    });
+
+    it('«Quitar» saca el renglón sin artículo y la vista previa ya se puede pedir', async () => {
+      await crear();
+      await subirPdf();
+
+      porEtiqueta('Quitar sin artículo X-99').click();
+      await refrescar();
+      boton('Ver vista previa')!.click();
+      await refrescar();
+
+      expect(el().querySelector('.sin-articulo')).toBeNull();
+      expect(api.vistaPrevia).toHaveBeenCalledTimes(1);
+      expect(api.vistaPrevia.mock.calls[0][0]).toEqual({
+        proveedorId: 4,
+        tipo: 'FA',
+        puntoVenta: 13,
+        numero: 605684,
+        fecha: '2026-09-24',
+        renglones: [{ articuloId: 1, cantidad: 12, costoUnitario: 210.5 }],
+        recargos: [{ nombre: 'Embalaje y carga', porcentaje: 4.44 }],
+      });
+    });
+
+    it('«Elegir artículo» agrega el artículo elegido con la cantidad y el costo de la factura', async () => {
+      await crear();
+      await subirPdf();
+      articulos.buscar.mockReturnValue(
+        of({ items: [{ ...tornillo, id: 2, codigoInterno: 'RAR-1', descripcion: 'Pieza rara' }], page: 0, size: 8, totalElements: 1, totalPages: 1 }),
+      );
+
+      boton('Elegir artículo')!.click();
+      await refrescar();
+      await escribir('input[name=busqueda]', 'rara');
+      campo<HTMLFormElement>('form.buscador').dispatchEvent(new Event('submit'));
+      await refrescar();
+      el().querySelector<HTMLButtonElement>('.resultados button')!.click();
+      await refrescar();
+
+      expect(el().querySelector('.sin-articulo')).toBeNull();
+      expect(campo<HTMLInputElement>('input[name="cantidad-1"]').value).toBe('3');
+      expect(campo<HTMLInputElement>('input[name="costo-1"]').value).toBe('1.500');
+    });
+
+    it('avisa si la lectura cuadra con el total de la factura', async () => {
+      await crear();
+      await subirPdf();
+
+      expect(el().querySelector('.control-factura')!.textContent).toContain(
+        'La lectura cuadra con el total de la factura ($',
+      );
+      expect(el().querySelector('.control-factura')!.textContent).toContain('1.707.999,65 + recargos).');
+    });
+
+    it('sin control, pide revisar los renglones antes de confirmar', async () => {
+      await crear();
+      api.leerFactura.mockReturnValue(of({ ...borrador, control: 'SIN_CONTROL' }));
+      await subirPdf();
+
+      expect(el().querySelector('.control-factura')!.textContent).toContain(
+        'No pudimos comprobar el total de la factura: revisá los renglones antes de confirmar.',
+      );
+    });
+
+    it('sin proveedor para el CUIT lo avisa y deja elegirlo', async () => {
+      await crear();
+      api.leerFactura.mockReturnValue(of({ ...borrador, proveedorId: null, proveedorNombre: null, cuits: ['30657162163', '20111111112'] }));
+      await subirPdf();
+
+      expect(campo<HTMLSelectElement>('select[name=proveedor]').value).toBe('');
+      expect(el().textContent).toContain('No encontramos un proveedor con el CUIT 30657162163, 20111111112. Elegilo de la lista.');
+    });
+
+    it('marca el renglón con cantidad no entera', async () => {
+      await crear();
+      api.leerFactura.mockReturnValue(
+        of({ ...borrador, renglones: [{ ...borrador.renglones[0], cantidad: 1.5, cantidadNoEntera: true }] }),
+      );
+      await subirPdf();
+
+      expect(el().querySelector('table.renglones .aviso-fila')!.textContent).toContain('La cantidad no es entera');
+    });
+
+    it('muestra el mensaje del backend si no se puede leer el PDF', async () => {
+      await crear();
+      api.leerFactura.mockReturnValue(
+        throwError(() => new HttpErrorResponse({ status: 400, error: { message: 'El PDF no tiene texto para leer (parece escaneado). Cargá la compra a mano.' } })),
+      );
+      await subirPdf();
+
+      expect(el().querySelector('[role=alert]')!.textContent).toContain('El PDF no tiene texto para leer');
+    });
+  });
+
+  describe('recargos del costo', () => {
+    it('una compra a mano manda el mismo pedido de siempre, sin la clave recargos', async () => {
+      await crear();
+      await cargarCompra();
+
+      boton('Ver vista previa')!.click();
+      await refrescar();
+
+      expect('recargos' in api.vistaPrevia.mock.calls[0][0]).toBe(false);
+    });
+
+    it('«Agregar» suma un recargo (hasta 5), «Quitar» lo saca y se mandan en la vista previa y al confirmar', async () => {
+      await crear();
+      await cargarCompra();
+      for (let i = 0; i < 5; i++) boton('Agregar recargo')!.click();
+      await refrescar();
+      expect(el().querySelectorAll('input[name^="recargo-nombre-"]')).toHaveLength(5);
+      expect(boton('Agregar recargo')!.disabled).toBe(true);
+      for (let i = 4; i >= 1; i--) {
+        porEtiqueta(`Quitar el recargo ${i + 1}`).click();
+        await refrescar();
+      }
+      await escribir('input[name="recargo-nombre-0"]', 'Flete');
+      await escribir('input[name="recargo-porcentaje-0"]', '-2,5');
+
+      boton('Ver vista previa')!.click();
+      await refrescar();
+      boton('Confirmar compra')!.click();
+      await refrescar();
+
+      expect(api.vistaPrevia.mock.calls[0][0].recargos).toEqual([{ nombre: 'Flete', porcentaje: -2.5 }]);
+      expect(api.registrar.mock.calls[0][0].recargos).toEqual([{ nombre: 'Flete', porcentaje: -2.5 }]);
+    });
+
+    it('muestra el error del servidor de los recargos junto al editor', async () => {
+      await crear();
+      await cargarCompra();
+      api.vistaPrevia.mockReturnValue(
+        throwError(() => new HttpErrorResponse({ status: 400, error: { errors: { recargosCosto: 'Un recargo no puede ser 0 %.' } } })),
+      );
+
+      boton('Agregar recargo')!.click();
+      await refrescar();
+      await escribir('input[name="recargo-nombre-0"]', 'Flete');
+      await escribir('input[name="recargo-porcentaje-0"]', '0');
+      boton('Ver vista previa')!.click();
+      await refrescar();
+
+      expect(el().querySelector('.recargos-costo')!.textContent).toContain('Un recargo no puede ser 0 %.');
+    });
+
+    it('la vista previa muestra el costo real de antes y de ahora cuando la compra tiene recargos', async () => {
+      await crear();
+      await cargarCompra();
+      api.vistaPrevia.mockReturnValue(
+        of({
+          ...plan,
+          recargos: [{ nombre: 'Flete', porcentaje: 10 }],
+          renglones: [{ ...plan.renglones[0], costoRealAnterior: 110, costoRealNuevo: 231 }],
+        }),
+      );
+
+      boton('Ver vista previa')!.click();
+      await refrescar();
+
+      const vista = el().querySelector('section.vista-previa')!.textContent!;
+      expect(vista).toContain('Costo real antes');
+      expect(vista).toContain('Costo real nuevo');
+      expect(vista).toContain('231,00');
+    });
+
+    it('sin recargos la vista previa no muestra las columnas de costo real', async () => {
+      await crear();
+      await cargarCompra();
+
+      boton('Ver vista previa')!.click();
+      await refrescar();
+
+      expect(el().querySelector('section.vista-previa')!.textContent).not.toContain('Costo real');
+    });
   });
 });

@@ -1,7 +1,7 @@
 import { DecimalPipe } from '@angular/common';
 import { Component, OnInit, inject, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
-import { erroresDeCampos, mensajeDe } from '../../core/api/api-error';
+import { erroresPorCampo, mensajeDe } from '../../core/api/api-error';
 import { AuthService } from '../../core/auth/auth.service';
 import { centavosDeImporte, textoDeImporte } from '../../core/formato/importe';
 import { MontoPipe } from '../../core/formato/monto';
@@ -13,14 +13,26 @@ import { hoyEnBuenosAires } from '../clientes/cuenta/cobranza.models';
 import { GENERAR_CLAVE } from '../mostrador/ticket.store';
 import { Proveedor } from '../proveedores/proveedor.models';
 import { ProveedoresService } from '../proveedores/proveedores.service';
-import { CompraRequest, CompraResponse, ETIQUETA_TIPO_COMPRA, PlanCompra, TIPOS_COMPRA, TipoCompra } from './compra.models';
+import {
+  BorradorDeFactura,
+  CompraRequest,
+  CompraResponse,
+  ETIQUETA_TIPO_COMPRA,
+  PlanCompra,
+  TIPOS_COMPRA,
+  TipoCompra,
+} from './compra.models';
 import { ComprasService } from './compras.service';
 
 const RESULTADOS_POR_BUSQUEDA = 8;
 const MENSAJE_PROVEEDORES = 'No se pudieron cargar los proveedores.';
 const MENSAJE_BUSQUEDA = 'No se pudo buscar. Probá de nuevo.';
 const MENSAJE_VISTA_PREVIA = 'No se pudo armar la vista previa. Probá de nuevo.';
+const MENSAJE_LEER_FACTURA = 'No se pudo leer la factura. Probá de nuevo o cargá la compra a mano.';
+const AVISO_CANTIDAD_NO_ENTERA = 'La cantidad no es entera: revisala contra la factura.';
 const MENSAJE_REGISTRAR = 'No se pudo registrar la compra. Probá de nuevo: si ya se guardó, no se duplica.';
+/** Lo que valida el backend: hasta 5 recargos del costo por compra. */
+const MAXIMO_RECARGOS = 5;
 
 /** Un renglón mientras se carga: la cantidad y el costo son el texto de los campos. */
 interface RenglonEnCarga {
@@ -30,6 +42,31 @@ interface RenglonEnCarga {
   moneda: string;
   cantidad: string;
   costo: string;
+  /** Una advertencia de la lectura de la factura (por ejemplo, una cantidad con decimales). */
+  aviso?: string;
+}
+
+/** Un recargo del costo mientras se carga: el porcentaje es el texto del campo («4,44», «-2,5»). */
+interface RecargoEnCarga {
+  nombre: string;
+  porcentaje: string;
+}
+
+/** Un renglón de la factura cuyo código no tiene artículo: el Dueño elige el artículo o lo quita. */
+interface RenglonSinArticulo {
+  codigo: string;
+  descripcion: string;
+  cantidad: number;
+  costoUnitario: number;
+  cantidadNoEntera: boolean;
+}
+
+/** Lo que dejó la última lectura de una factura en PDF, para avisar debajo del selector. */
+interface LecturaDeFactura {
+  control: BorradorDeFactura['control'];
+  sumaNetos: number;
+  /** Los CUIT leídos cuando ninguno es de un proveedor; null si el proveedor se encontró. */
+  cuitsSinProveedor: string[] | null;
 }
 
 /**
@@ -64,6 +101,16 @@ export class NuevaCompra implements OnInit {
   protected readonly resultados = signal<Articulo[]>([]);
   protected readonly buscando = signal(false);
   protected readonly renglones = signal<RenglonEnCarga[]>([]);
+
+  protected readonly recargos = signal<RecargoEnCarga[]>([]);
+  protected readonly errorRecargos = signal<string | null>(null);
+  protected readonly maximoRecargos = MAXIMO_RECARGOS;
+
+  protected readonly leyendo = signal(false);
+  protected readonly lectura = signal<LecturaDeFactura | null>(null);
+  protected readonly sinArticulo = signal<RenglonSinArticulo[]>([]);
+  /** El renglón sin artículo para el que se está buscando uno: el próximo artículo elegido lo resuelve. */
+  protected readonly resolviendo = signal<RenglonSinArticulo | null>(null);
 
   protected readonly plan = signal<PlanCompra | null>(null);
   protected readonly trabajando = signal(false);
@@ -119,6 +166,8 @@ export class NuevaCompra implements OnInit {
       return;
     }
     this.aviso.set(null);
+    // Si se estaba resolviendo un renglón de la factura, el artículo toma su cantidad y su costo.
+    const resuelto = this.resolviendo();
     this.renglones.update((lista) => [
       ...lista,
       {
@@ -126,10 +175,116 @@ export class NuevaCompra implements OnInit {
         codigoInterno: articulo.codigoInterno,
         descripcion: articulo.descripcion,
         moneda: articulo.moneda,
-        cantidad: '1',
-        costo: textoDeImporte(articulo.costo),
+        cantidad: resuelto ? String(resuelto.cantidad) : '1',
+        costo: textoDeImporte(resuelto ? resuelto.costoUnitario : articulo.costo),
+        ...(resuelto?.cantidadNoEntera ? { aviso: AVISO_CANTIDAD_NO_ENTERA } : {}),
       },
     ]);
+    if (resuelto) {
+      this.sinArticulo.update((lista) => lista.filter((r) => r !== resuelto));
+      this.resolviendo.set(null);
+    }
+    this.descartarVistaPrevia();
+  }
+
+  /** Lee la factura del proveedor en PDF y completa el formulario con el borrador; después se revisa y se sigue de siempre. */
+  protected leerFactura(evento: Event): void {
+    const campoArchivo = evento.target as HTMLInputElement;
+    const archivo = campoArchivo.files?.[0];
+    if (!archivo || this.leyendo()) return;
+    campoArchivo.value = '';
+    this.leyendo.set(true);
+    this.errores.set([]);
+    this.api.leerFactura(archivo).subscribe({
+      next: (borrador) => {
+        this.leyendo.set(false);
+        this.completarCon(borrador);
+      },
+      error: (err: unknown) => {
+        this.leyendo.set(false);
+        this.mostrarError(err, MENSAJE_LEER_FACTURA);
+      },
+    });
+  }
+
+  /** Reemplaza lo cargado por lo leído. Los renglones sin artículo (o con uno ya cargado) quedan aparte. */
+  private completarCon(borrador: BorradorDeFactura): void {
+    if (borrador.proveedorId !== null) this.proveedorId.set(String(borrador.proveedorId));
+    if (borrador.tipo !== null) this.tipo.set(borrador.tipo);
+    if (borrador.puntoVenta !== null) this.puntoVenta.set(String(borrador.puntoVenta));
+    if (borrador.numero !== null) this.numero.set(String(borrador.numero));
+    if (borrador.fecha !== null) this.fecha.set(borrador.fecha);
+    const encontrados: RenglonEnCarga[] = [];
+    const aparte: RenglonSinArticulo[] = [];
+    for (const r of borrador.renglones) {
+      if (r.articuloId === null || encontrados.some((e) => e.articuloId === r.articuloId)) {
+        aparte.push({
+          codigo: r.codigo,
+          descripcion: r.descripcion,
+          cantidad: r.cantidad,
+          costoUnitario: r.costoUnitario,
+          cantidadNoEntera: r.cantidadNoEntera,
+        });
+        continue;
+      }
+      encontrados.push({
+        articuloId: r.articuloId,
+        codigoInterno: r.codigo,
+        descripcion: r.articuloDescripcion ?? r.descripcion,
+        moneda: 'ARS',
+        cantidad: String(r.cantidad),
+        costo: textoDeImporte(r.costoUnitario),
+        ...(r.cantidadNoEntera ? { aviso: AVISO_CANTIDAD_NO_ENTERA } : {}),
+      });
+    }
+    this.renglones.set(encontrados);
+    this.sinArticulo.set(aparte);
+    this.resolviendo.set(null);
+    this.aviso.set(null);
+    this.errorRecargos.set(null);
+    this.recargos.set(borrador.recargos.map((r) => ({ nombre: r.nombre, porcentaje: textoDeImporte(r.porcentaje) })));
+    this.lectura.set({
+      control: borrador.control,
+      sumaNetos: borrador.sumaNetos,
+      cuitsSinProveedor: borrador.proveedorId === null ? borrador.cuits : null,
+    });
+    this.descartarVistaPrevia();
+  }
+
+  /** Para este renglón de la factura se busca un artículo en el buscador de arriba. */
+  protected elegirArticulo(renglon: RenglonSinArticulo): void {
+    this.resolviendo.set(renglon);
+    this.aviso.set(`Buscá y elegí el artículo para ${renglon.codigo} — ${renglon.descripcion}.`);
+  }
+
+  protected quitarSinArticulo(renglon: RenglonSinArticulo): void {
+    this.sinArticulo.update((lista) => lista.filter((r) => r !== renglon));
+    if (this.resolviendo() === renglon) {
+      this.resolviendo.set(null);
+      this.aviso.set(null);
+    }
+    this.descartarVistaPrevia();
+  }
+
+  protected agregarRecargo(): void {
+    if (this.recargos().length >= MAXIMO_RECARGOS) return;
+    this.recargos.update((lista) => [...lista, { nombre: '', porcentaje: '' }]);
+    this.editoRecargos();
+  }
+
+  protected editarRecargo(indice: number, campo: keyof RecargoEnCarga, valor: string): void {
+    this.recargos.update((lista) => lista.map((r, i) => (i === indice ? { ...r, [campo]: valor } : r)));
+    this.editoRecargos();
+  }
+
+  protected quitarRecargo(indice: number): void {
+    this.recargos.update((lista) => lista.filter((_, i) => i !== indice));
+    this.editoRecargos();
+  }
+
+  /** Tocar un recargo borra el error del servidor (depende de toda la lista) y descarta la vista previa. */
+  private editoRecargos(): void {
+    this.errorRecargos.set(null);
     this.descartarVistaPrevia();
   }
 
@@ -166,6 +321,7 @@ export class NuevaCompra implements OnInit {
     if (!pedido || this.trabajando()) return;
     this.trabajando.set(true);
     this.errores.set([]);
+    this.errorRecargos.set(null);
     this.registrada.set(null);
     const pedida = this.version;
     this.api.vistaPrevia(pedido).subscribe({
@@ -187,6 +343,7 @@ export class NuevaCompra implements OnInit {
     if (!pedido || !this.plan() || this.trabajando()) return;
     this.trabajando.set(true);
     this.errores.set([]);
+    this.errorRecargos.set(null);
     this.api.registrar({ ...pedido, clave: this.clave }).subscribe({
       next: ({ compra }) => {
         this.trabajando.set(false);
@@ -208,6 +365,11 @@ export class NuevaCompra implements OnInit {
     this.busqueda.set('');
     this.aviso.set(null);
     this.plan.set(null);
+    this.recargos.set([]);
+    this.errorRecargos.set(null);
+    this.sinArticulo.set([]);
+    this.resolviendo.set(null);
+    this.lectura.set(null);
   }
 
   /** Lo que se vio en la vista previa deja de valer: para confirmar hay que volver a verla (y nace otra clave). */
@@ -226,7 +388,8 @@ export class NuevaCompra implements OnInit {
     const numero = entero(this.numero());
     if (numero === null) faltan.push('El número tiene que ser un número entero.');
     if (this.fecha() === '') faltan.push('Falta la fecha.');
-    if (this.renglones().length === 0) faltan.push('Agregá al menos un artículo.');
+    if (this.sinArticulo().length > 0) faltan.push('Resolvé los renglones sin artículo.');
+    else if (this.renglones().length === 0) faltan.push('Agregá al menos un artículo.');
     const renglones = this.renglones().map((r) => ({
       articuloId: r.articuloId,
       cantidad: decimal(r.cantidad),
@@ -234,6 +397,10 @@ export class NuevaCompra implements OnInit {
     }));
     if (renglones.some((r) => Number.isNaN(r.cantidad) || Number.isNaN(r.costoUnitario))) {
       faltan.push('Revisá la cantidad y el costo de cada renglón.');
+    }
+    const recargos = this.recargos().map((r) => ({ nombre: r.nombre.trim(), porcentaje: porcentaje(r.porcentaje) }));
+    if (recargos.some((r) => r.nombre === '' || Number.isNaN(r.porcentaje))) {
+      faltan.push('Revisá el nombre y el porcentaje de cada recargo.');
     }
     if (faltan.length > 0) {
       this.errores.set(faltan);
@@ -246,12 +413,19 @@ export class NuevaCompra implements OnInit {
       numero: numero!,
       fecha: this.fecha(),
       renglones,
+      // Sin recargos no viaja la clave: el pedido de una compra a mano queda como siempre.
+      ...(recargos.length > 0 ? { recargos } : {}),
     };
   }
 
   private mostrarError(err: unknown, porDefecto: string): void {
-    const campos = erroresDeCampos(err);
-    this.errores.set(campos.length > 0 ? campos : [mensajeDe(err, porDefecto)]);
+    const campos = erroresPorCampo(err);
+    // El error de los recargos va junto a su editor; el resto, en el aviso de siempre.
+    this.errorRecargos.set(campos['recargosCosto'] ?? null);
+    const otros = Object.entries(campos)
+      .filter(([campo]) => campo !== 'recargosCosto')
+      .map(([, mensaje]) => mensaje);
+    this.errores.set(otros.length > 0 || this.errorRecargos() ? otros : [mensajeDe(err, porDefecto)]);
   }
 }
 
@@ -273,6 +447,14 @@ function coincidenciaExacta(articulos: readonly Articulo[], termino: string): Ar
 function decimal(texto: string): number {
   const limpio = texto.trim().replace(',', '.');
   return /^\d+(\.\d+)?$/.test(limpio) ? Number(limpio) : Number.NaN;
+}
+
+/** Un porcentaje escrito con la máscara de importes (con menos adelante si es negativo); NaN si está vacío o no se entiende. */
+function porcentaje(texto: string): number {
+  const limpio = texto.trim();
+  const negativo = limpio.startsWith('-');
+  const centavos = centavosDeImporte(negativo ? limpio.slice(1) : limpio);
+  return centavos === null ? Number.NaN : (negativo ? -centavos : centavos) / 100;
 }
 
 /** Un costo escrito con la máscara de importes («1.234,5»), en pesos (o dólares); NaN si está vacío o no se entiende. */

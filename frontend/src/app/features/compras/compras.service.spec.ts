@@ -66,4 +66,14 @@ describe('ComprasService', () => {
     expect(req.request.method).toBe('GET');
     req.flush(compra);
   });
+
+  it('lee la factura en PDF con un POST multipart a /compras/factura-pdf con el campo archivo', () => {
+    const archivo = new File(['%PDF'], 'factura.pdf', { type: 'application/pdf' });
+    service.leerFactura(archivo).subscribe();
+    const req = http.expectOne((r) => r.url.endsWith('/compras/factura-pdf'));
+    expect(req.request.method).toBe('POST');
+    expect(req.request.body instanceof FormData).toBe(true);
+    expect((req.request.body as FormData).get('archivo')).toBe(archivo);
+    req.flush({});
+  });
 });

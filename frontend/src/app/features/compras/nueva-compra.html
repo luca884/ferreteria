@@ -18,6 +18,36 @@
     </p>
   }
 
+  <div class="factura-pdf">
+    <label>
+      Leer factura en PDF
+      <input
+        name="facturaPdf"
+        type="file"
+        accept=".pdf,application/pdf"
+        [disabled]="leyendo()"
+        (change)="leerFactura($event)"
+      />
+    </label>
+    @if (leyendo()) {
+      <p class="ayuda" role="status">Leyendo la factura…</p>
+    }
+  </div>
+  @if (lectura(); as l) {
+    @if (l.cuitsSinProveedor && proveedorId() === '') {
+      <p class="ayuda" role="status">
+        No encontramos un proveedor con el CUIT {{ l.cuitsSinProveedor.join(', ') }}. Elegilo de la lista.
+      </p>
+    }
+    <p class="control-factura" [class.exito]="l.control === 'CUADRA'" [class.advertencia-lectura]="l.control !== 'CUADRA'" role="status">
+      @if (l.control === 'CUADRA') {
+        La lectura cuadra con el total de la factura ({{ l.sumaNetos | monto }} + recargos).
+      } @else {
+        No pudimos comprobar el total de la factura: revisá los renglones antes de confirmar.
+      }
+    </p>
+  }
+
   <fieldset class="encabezado">
     <legend>Comprobante</legend>
     <label>
@@ -108,7 +138,12 @@
     <tbody>
       @for (r of renglones(); track r.articuloId; let i = $index) {
         <tr>
-          <td>{{ r.codigoInterno }} · {{ r.descripcion }}{{ r.moneda === 'USD' ? ' (USD)' : '' }}</td>
+          <td>
+            {{ r.codigoInterno }} · {{ r.descripcion }}{{ r.moneda === 'USD' ? ' (USD)' : '' }}
+            @if (r.aviso; as texto) {
+              <span class="aviso-fila">{{ texto }}</span>
+            }
+          </td>
           <td class="num">
             <input
               [name]="'cantidad-' + i"
@@ -136,9 +171,80 @@
       }
     </tbody>
   </table>
-  @if (renglones().length === 0) {
+  @if (renglones().length === 0 && sinArticulo().length === 0) {
     <p class="ayuda estado-vacio">Todavía no agregaste artículos.</p>
   }
+
+  @if (sinArticulo().length > 0) {
+    <ul class="sin-articulo" aria-label="Renglones sin artículo">
+      @for (r of sinArticulo(); track r) {
+        <li [class.resolviendo]="resolviendo() === r">
+          <span>
+            Sin artículo: {{ r.codigo }} — {{ r.descripcion }} ({{ r.cantidad | number: '1.0-3' }} × {{ r.costoUnitario | monto }})
+            @if (r.cantidadNoEntera) {
+              <span class="aviso-fila">La cantidad no es entera: revisala contra la factura.</span>
+            }
+          </span>
+          <button type="button" class="secundario chico" (click)="elegirArticulo(r)">Elegir artículo</button>
+          <button
+            type="button"
+            class="secundario chico"
+            [attr.aria-label]="'Quitar sin artículo ' + r.codigo"
+            (click)="quitarSinArticulo(r)"
+          >
+            Quitar
+          </button>
+        </li>
+      }
+    </ul>
+  }
+
+  <fieldset class="recargos-costo">
+    <legend>Recargos del costo</legend>
+    <p class="ayuda">
+      Se suman al costo de cada artículo de la compra antes del margen (por ejemplo «Embalaje y carga» 4,44 %). Negativo
+      descuenta. Hasta {{ maximoRecargos }}.
+    </p>
+    @for (recargo of recargos(); track $index; let i = $index) {
+      <div class="recargo-costo">
+        <label>
+          Nombre del recargo {{ i + 1 }}
+          <input
+            [name]="'recargo-nombre-' + i"
+            autocomplete="off"
+            maxlength="40"
+            placeholder="Ej: Embalaje y carga"
+            [value]="recargo.nombre"
+            (input)="editarRecargo(i, 'nombre', $any($event.target).value)"
+          />
+        </label>
+        <label>
+          Porcentaje del recargo {{ i + 1 }} (%)
+          <input
+            [name]="'recargo-porcentaje-' + i"
+            appImporte
+            negativos
+            [value]="recargo.porcentaje"
+            (input)="editarRecargo(i, 'porcentaje', $any($event.target).value)"
+          />
+        </label>
+        <button
+          type="button"
+          class="secundario chico"
+          [attr.aria-label]="'Quitar el recargo ' + (i + 1)"
+          (click)="quitarRecargo(i)"
+        >
+          Quitar
+        </button>
+      </div>
+    }
+    @if (errorRecargos(); as mensaje) {
+      <span class="campo-error" role="alert">{{ mensaje }}</span>
+    }
+    <button type="button" class="secundario chico" [disabled]="recargos().length >= maximoRecargos" (click)="agregarRecargo()">
+      Agregar recargo
+    </button>
+  </fieldset>
 
   @if (errores().length > 0) {
     <div class="error" role="alert">
@@ -169,6 +275,10 @@
             <th scope="col" class="num">Cantidad</th>
             <th scope="col" class="num">Costo antes</th>
             <th scope="col" class="num">Costo nuevo</th>
+            @if (p.recargos.length > 0) {
+              <th scope="col" class="num">Costo real antes</th>
+              <th scope="col" class="num">Costo real nuevo</th>
+            }
             <th scope="col" class="num">Precio antes</th>
             <th scope="col" class="num">Precio nuevo</th>
             <th scope="col" class="num">Subtotal</th>
@@ -186,6 +296,10 @@
               <td class="num">{{ r.cantidad | number: '1.0-3' }}</td>
               <td class="num">{{ r.costoAnterior | monto }}</td>
               <td class="num">{{ r.costoNuevo | monto }}</td>
+              @if (p.recargos.length > 0) {
+                <td class="num">{{ r.costoRealAnterior | monto }}</td>
+                <td class="num">{{ r.costoRealNuevo | monto }}</td>
+              }
               <td class="num">{{ r.precioAnterior | monto }}</td>
               <td class="num">{{ r.precioNuevo | monto }}</td>
               <td class="num">{{ r.subtotal | monto }}</td>

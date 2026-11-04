@@ -1,6 +1,6 @@
 import { DecimalPipe } from '@angular/common';
 import { Component, OnInit, inject, signal } from '@angular/core';
-import { RouterLink } from '@angular/router';
+import { ActivatedRoute, RouterLink } from '@angular/router';
 import { PageResponse } from '../../core/api/page.models';
 import { AuthService } from '../../core/auth/auth.service';
 import { MontoPipe } from '../../core/formato/monto';
@@ -32,6 +32,7 @@ export function fechaDeCompra(fecha: string): string {
 export class Compras implements OnInit {
   private readonly api = inject(ComprasService);
   private readonly proveedoresApi = inject(ProveedoresService);
+  private readonly route = inject(ActivatedRoute);
   protected readonly auth = inject(AuthService);
   protected readonly fecha = fechaDeCompra;
 
@@ -56,6 +57,9 @@ export class Compras implements OnInit {
     // Con los dados de baja: una compra vieja puede ser de un proveedor que ya no está activo.
     this.proveedoresApi.listar(true).subscribe({ next: (lista) => this.proveedores.set(lista), error: () => undefined });
     this.cargar(0);
+    // `/compras/:id` abre esa compra, como si se hubiera elegido en la lista (un id ajeno o inexistente da el aviso de siempre).
+    const id = Number(this.route.snapshot.paramMap.get('id'));
+    if (Number.isInteger(id) && id > 0) this.abrir(id);
   }
 
   protected cargar(numeroDePagina: number): void {
@@ -94,7 +98,10 @@ export class Compras implements OnInit {
   }
 
   protected elegir(fila: CompraResumen): void {
-    const id = fila.id;
+    this.abrir(fila.id);
+  }
+
+  private abrir(id: number): void {
     this.elegida.set(id);
     this.detalle.set(null);
     this.errorDetalle.set(null);

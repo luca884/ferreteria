@@ -107,6 +107,13 @@
           {{ c.proveedorNombre }} · {{ fecha(c.fecha) }} · Neto {{ c.neto | monto
           }}{{ c.moneda === 'USD' ? ' (USD)' : '' }}
         </p>
+        @if (c.recargos.length > 0) {
+          <ul class="recargos" aria-label="Recargos del costo">
+            @for (recargo of c.recargos; track $index) {
+              <li>{{ recargo.nombre }} {{ recargo.porcentaje | number: '1.0-2' }} %</li>
+            }
+          </ul>
+        }
         <table>
           <thead>
             <tr>

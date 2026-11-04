@@ -2,7 +2,7 @@ import { registerLocaleData } from '@angular/common';
 import localeEsAr from '@angular/common/locales/es-AR';
 import { LOCALE_ID, signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { provideRouter } from '@angular/router';
+import { ActivatedRoute, convertToParamMap, provideRouter } from '@angular/router';
 import { of, throwError } from 'rxjs';
 import { vi } from 'vitest';
 import { PageResponse } from '../../core/api/page.models';
@@ -52,6 +52,7 @@ describe('Compras', () => {
     moneda: 'ARS',
     neto: 2200,
     registrada: '2026-10-21T10:15:00',
+    recargos: [],
     renglones: [
       {
         renglon: 1,
@@ -69,14 +70,18 @@ describe('Compras', () => {
     ],
   });
 
-  async function crear(items: CompraResumen[] = [resumen(2), resumen(1)], rol = 'DUENO') {
-    api = { listar: vi.fn(() => of(pagina(items))), obtener: vi.fn((id: number) => of(detalle(id))) };
+  async function crear(items: CompraResumen[] = [resumen(2), resumen(1)], rol = 'DUENO', id: string | null = null, falla = false) {
+    api = {
+      listar: vi.fn(() => of(pagina(items))),
+      obtener: vi.fn((id: number) => (falla ? throwError(() => new Error('404')) : of(detalle(id)))),
+    };
     proveedores = { listar: vi.fn(() => of([{ id: 4, nombre: 'Bulonera Sur', cuit: null, activo: true }])) };
     const sesion = signal({ userId: 7, nombre: 'Ana', email: 'ana@x.com', rol, ferreteriaId: 3, ferreteriaNombre: 'Tornillo' });
     await TestBed.configureTestingModule({
       imports: [Compras],
       providers: [
         provideRouter([]),
+        { provide: ActivatedRoute, useValue: { snapshot: { paramMap: convertToParamMap(id === null ? {} : { id }) } } },
         { provide: LOCALE_ID, useValue: 'es-AR' },
         { provide: ComprasService, useValue: api },
         { provide: ProveedoresService, useValue: proveedores },
@@ -160,5 +165,29 @@ describe('Compras', () => {
     (el().querySelector('form.filtros') as HTMLFormElement).dispatchEvent(new Event('submit'));
     await refrescar();
     expect(el().querySelector('[role=alert]')?.textContent).toContain('No se pudieron cargar las compras.');
+  });
+
+  it('el detalle muestra los recargos de la compra con su porcentaje', async () => {
+    await crear();
+    api.obtener.mockReturnValue(of({ ...detalle(2), recargos: [{ nombre: 'Embalaje y carga', porcentaje: 4.44 }] }));
+
+    (el().querySelector('table.compras tbody tr button') as HTMLButtonElement).click();
+    await refrescar();
+
+    expect(el().querySelector('section.detalle .recargos')!.textContent).toContain('Embalaje y carga 4,44 %');
+  });
+
+  it('con el parámetro id en la ruta abre el detalle de esa compra', async () => {
+    await crear([resumen(2)], 'DUENO', '9');
+
+    expect(api.obtener).toHaveBeenCalledWith(9);
+    expect(el().querySelector('section.detalle')!.textContent).toContain('Factura A 00003-00000009');
+  });
+
+  it('con un id desconocido o de otra ferretería muestra el aviso de que no se pudo cargar', async () => {
+    await crear([resumen(2)], 'DUENO', '77', true);
+
+    expect(api.obtener).toHaveBeenCalledWith(77);
+    expect(el().querySelector('section.detalle [role=alert]')!.textContent).toContain('No se pudo cargar la compra.');
   });
 });

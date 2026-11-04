@@ -3,7 +3,7 @@ import { Injectable, inject } from '@angular/core';
 import { Observable, map } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import { PageResponse } from '../../core/api/page.models';
-import { CompraRegistrada, CompraRequest, CompraResponse, CompraResumen, FiltroCompras, PlanCompra } from './compra.models';
+import { BorradorDeFactura, CompraRegistrada, CompraRequest, CompraResponse, CompraResumen, FiltroCompras, PlanCompra } from './compra.models';
 
 const TAMANIO_POR_DEFECTO = 20;
 
@@ -23,6 +23,13 @@ export class ComprasService {
     return this.http
       .post<CompraResponse>(this.url, pedido, { observe: 'response' })
       .pipe(map((res) => ({ compra: res.body as CompraResponse, repetida: res.status === 200 })));
+  }
+
+  /** Lee la factura del proveedor en PDF y devuelve el borrador de la compra, sin guardar nada. */
+  leerFactura(archivo: File): Observable<BorradorDeFactura> {
+    const datos = new FormData();
+    datos.append('archivo', archivo);
+    return this.http.post<BorradorDeFactura>(`${this.url}/factura-pdf`, datos);
   }
 
   /** Las de la ferretería, más nuevas primero. Un filtro sin elegir no se manda. */

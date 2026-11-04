@@ -79,3 +79,68 @@ tr.advertencia td {
   border-radius: 6px;
   background: var(--exito-fondo, #e7f6ec);
 }
+
+.factura-pdf {
+  margin-bottom: 0.75rem;
+}
+
+.control-factura {
+  padding: 0.5rem 0.75rem;
+  border-radius: 6px;
+}
+
+.advertencia-lectura {
+  background: var(--advertencia-fondo, #fff7e0);
+  color: var(--advertencia-texto, #8a5a00);
+}
+
+.sin-articulo {
+  list-style: none;
+  margin: 0 0 1rem;
+  padding: 0;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.sin-articulo li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: center;
+  padding: 0.5rem 0.75rem;
+  border-radius: 6px;
+  background: var(--advertencia-fondo, #fff7e0);
+}
+
+.sin-articulo li.resolviendo {
+  outline: 2px solid var(--advertencia-texto, #8a5a00);
+}
+
+.recargos-costo {
+  display: grid;
+  gap: 0.75rem;
+  margin: 0 0 1rem;
+  border: 1px solid var(--borde, #d8dee8);
+  border-radius: 8px;
+  padding: 0.75rem 1rem 1rem;
+}
+
+.recargos-costo .ayuda {
+  margin: 0;
+}
+
+.recargo-costo {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.75rem;
+}
+
+.recargos-costo button:last-child {
+  justify-self: start;
+}
+
+.recargos {
+  margin: 0 0 1rem;
+  padding-left: 1.25rem;
+}

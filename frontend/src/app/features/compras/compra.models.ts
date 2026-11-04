@@ -10,6 +10,12 @@ export const ETIQUETA_TIPO_COMPRA: Record<TipoCompra, string> = {
   REM: 'Remito',
 };
 
+/** Un recargo con nombre sobre el costo (por ejemplo «Embalaje y carga» 4,44 %); negativo es descuento. */
+export interface RecargoCompra {
+  nombre: string;
+  porcentaje: number;
+}
+
 export interface RenglonCompraRequest {
   articuloId: number;
   cantidad: number;
@@ -27,6 +33,8 @@ export interface CompraRequest {
   /** aaaa-mm-dd */
   fecha: string;
   renglones: RenglonCompraRequest[];
+  /** Los recargos del costo (hasta 5). Sin la clave, la compra los borra de sus artículos. */
+  recargos?: RecargoCompra[];
 }
 
 export interface RenglonPlaneado {
@@ -42,6 +50,9 @@ export interface RenglonPlaneado {
   subtotal: number;
   /** Variación fuerte (más de ±50 %) o null. */
   advertencia: string | null;
+  /** El costo con los recargos de antes y de la compra; solo difieren del costo cuando la compra trae recargos. */
+  costoRealAnterior: number;
+  costoRealNuevo: number;
 }
 
 /** La vista previa: qué haría la compra con el costo y el precio de cada artículo. No guarda nada. */
@@ -53,6 +64,7 @@ export interface PlanCompra {
   bajan: number;
   iguales: number;
   renglones: RenglonPlaneado[];
+  recargos: RecargoCompra[];
 }
 
 export interface RenglonCompraResponse {
@@ -83,6 +95,7 @@ export interface CompraResponse {
   neto: number;
   registrada: string;
   renglones: RenglonCompraResponse[];
+  recargos: RecargoCompra[];
 }
 
 /** 201 es nueva; 200 es la misma clave ya registrada con el mismo contenido. */
@@ -109,4 +122,35 @@ export interface FiltroCompras {
   proveedorId?: number;
   desde?: string;
   hasta?: string;
+}
+
+/** Lo que el backend leyó de la factura en PDF (CU-13): el borrador de la compra, sin guardar nada. */
+export interface BorradorDeFactura {
+  /** Null si ningún CUIT leído es de un proveedor activo. */
+  proveedorId: number | null;
+  proveedorNombre: string | null;
+  cuits: string[];
+  tipo: 'FA' | 'FB' | 'FC' | null;
+  puntoVenta: number | null;
+  numero: number | null;
+  /** aaaa-mm-dd */
+  fecha: string | null;
+  recargos: (RecargoCompra & { importe: number })[];
+  renglones: RenglonDeFactura[];
+  sumaNetos: number;
+  /** CUADRA: la suma de la factura coincide con la leída. */
+  control: 'CUADRA' | 'SIN_CONTROL';
+  cantidadNoEntera: boolean;
+}
+
+export interface RenglonDeFactura {
+  codigo: string;
+  descripcion: string;
+  cantidad: number;
+  costoUnitario: number;
+  neto: number;
+  /** Null si el código del proveedor no tiene artículo. */
+  articuloId: number | null;
+  articuloDescripcion: string | null;
+  cantidadNoEntera: boolean;
 }
