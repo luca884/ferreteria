@@ -43,6 +43,7 @@ const formaDe = (id: number, nombre: string, medio: FormaPago['medio'], recargoP
   nombre,
   medio,
   recargoPorcentaje,
+  descuentoPorcentaje: 0,
   activa: true,
   orden: id,
 });

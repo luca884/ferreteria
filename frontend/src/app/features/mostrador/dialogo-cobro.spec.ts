@@ -5,11 +5,18 @@ import { ConfirmacionCobro, CuentaDelCobro, DialogoCobro } from './dialogo-cobro
 
 const NBSP = ' ';
 
-const forma = (id: number, nombre: string, medio: FormaPago['medio'], recargoPorcentaje = 0): FormaPago => ({
+const forma = (
+  id: number,
+  nombre: string,
+  medio: FormaPago['medio'],
+  recargoPorcentaje = 0,
+  descuentoPorcentaje = 0,
+): FormaPago => ({
   id,
   nombre,
   medio,
   recargoPorcentaje,
+  descuentoPorcentaje,
   activa: true,
   orden: id,
 });

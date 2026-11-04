@@ -20,8 +20,9 @@
   <p class="ayuda estado-vacio" role="status">Solo el Dueño puede configurar las formas de pago.</p>
 } @else {
   <p class="ayuda">
-    El recargo se suma al total de lo que el cliente paga con esa forma (por ejemplo, Visa 6 cuotas). El medio es el que
-    cuenta la caja. Las formas no se borran: se desactivan, y dejan de ofrecerse al cobrar.
+    El recargo se suma al total de lo que el cliente paga con esa forma (por ejemplo, Visa 6 cuotas) y el descuento se
+    resta (por ejemplo, Efectivo). Una forma lleva uno o el otro. El medio es el que cuenta la caja. Las formas no se
+    borran: se desactivan, y dejan de ofrecerse al cobrar.
   </p>
 
   @if (aviso(); as mensaje) {
@@ -59,6 +60,7 @@
                 <th>Nombre</th>
                 <th>Medio</th>
                 <th class="num">Recargo</th>
+                <th class="num">Descuento</th>
                 <th>Estado</th>
               </tr>
             </thead>
@@ -78,6 +80,7 @@
                   <td class="nombre">{{ forma.nombre }}</td>
                   <td>{{ etiquetaMedio[forma.medio] }}</td>
                   <td class="num">{{ recargoTexto(forma) }}</td>
+                  <td class="num">{{ descuentoTexto(forma) }}</td>
                   <td class="estado">
                     {{ forma.activa ? 'Activa' : 'Inactiva' }}
                     @if (esperaActivacion(forma)) {
@@ -162,6 +165,42 @@
               El recargo es obligatorio.
             } @else {
               El recargo tiene que estar entre 0 y 200&nbsp;%.
+            }
+          </span>
+        }
+      </div>
+      <div class="campo margen">
+        <label for="descuento">Descuento %</label>
+        <input
+          id="descuento"
+          name="descuentoPorcentaje"
+          type="number"
+          inputmode="decimal"
+          step="0.01"
+          min="0"
+          max="99.99"
+          autocomplete="off"
+          formControlName="descuentoPorcentaje"
+          [attr.aria-invalid]="invalido('descuentoPorcentaje') ? 'true' : null"
+          [attr.aria-describedby]="
+            medioElegido() === 'CUENTA_CORRIENTE'
+              ? 'descuento-pista'
+              : invalido('descuentoPorcentaje')
+                ? 'descuento-error'
+                : null
+          "
+        />
+        @if (medioElegido() === 'CUENTA_CORRIENTE') {
+          <span id="descuento-pista" class="pista">La cuenta corriente va siempre sin descuento.</span>
+        }
+        @if (invalido('descuentoPorcentaje')) {
+          <span id="descuento-error" class="campo-error">
+            @if (form.controls.descuentoPorcentaje.errors?.['required']) {
+              El descuento es obligatorio.
+            } @else if (form.controls.descuentoPorcentaje.invalid) {
+              El descuento tiene que estar entre 0 y 99,99&nbsp;%.
+            } @else {
+              Una forma de pago lleva recargo o descuento, no los dos.
             }
           </span>
         }

@@ -52,8 +52,8 @@ describe('Clientes', () => {
 
   /** Las formas activas de una ferretería que ya ofrece la cuenta corriente: el caso en que no hay nada que avisar. */
   const CON_CUENTA_CORRIENTE: FormaPago[] = [
-    { id: 1, nombre: 'Efectivo', medio: 'EFECTIVO', recargoPorcentaje: 0, activa: true, orden: 1 },
-    { id: 5, nombre: 'Cuenta corriente', medio: 'CUENTA_CORRIENTE', recargoPorcentaje: 0, activa: true, orden: 5 },
+    { id: 1, nombre: 'Efectivo', medio: 'EFECTIVO', recargoPorcentaje: 0, descuentoPorcentaje: 0, activa: true, orden: 1 },
+    { id: 5, nombre: 'Cuenta corriente', medio: 'CUENTA_CORRIENTE', recargoPorcentaje: 0, descuentoPorcentaje: 0, activa: true, orden: 5 },
   ];
 
   let fixture: ComponentFixture<Clientes>;

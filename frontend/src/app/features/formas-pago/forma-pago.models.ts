@@ -8,6 +8,11 @@ export interface FormaPago {
   medio: MedioPago;
   /** Recargo en %, de 0 a 200. Se suma al total de la parte de la venta que se paga con esta forma. */
   recargoPorcentaje: number;
+  /**
+   * Descuento en %, de 0 a 99,99 (descuento en efectivo). Se resta de la parte de la venta que se paga con esta forma.
+   * Una forma lleva recargo o descuento, nunca los dos.
+   */
+  descuentoPorcentaje: number;
   activa: boolean;
   orden: number;
 }
@@ -16,5 +21,6 @@ export interface FormaPagoRequest {
   nombre: string;
   medio: MedioPago;
   recargoPorcentaje: number;
+  descuentoPorcentaje: number;
   activa: boolean;
 }

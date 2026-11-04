@@ -9,7 +9,7 @@ import {
   signal,
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
+import { AbstractControl, FormBuilder, ReactiveFormsModule, ValidationErrors, Validators } from '@angular/forms';
 import { erroresDeCampos, mensajeDe } from '../../core/api/api-error';
 import { AuthService } from '../../core/auth/auth.service';
 import { BarraAcciones } from '../../shared/barra-acciones';
@@ -19,13 +19,15 @@ import { FormaPago, FormaPagoRequest } from './forma-pago.models';
 import { FormasPagoService } from './formas-pago.service';
 
 const RECARGO_MAXIMO = 200;
+const DESCUENTO_MAXIMO = 99.99;
 const porOrden = (a: FormaPago, b: FormaPago) => a.orden - b.orden || a.nombre.localeCompare(b.nombre);
 const porcentaje = new Intl.NumberFormat('es-AR', { maximumFractionDigits: 2 });
 
 /**
  * Configuración › Formas de pago (GDS-11, solo el Dueño). Cada forma ("Visa 6 cuotas", "Mercado Pago") pertenece a un
- * medio (el que suma la caja) y trae su recargo en %, que el mostrador suma al total de lo que se paga con ella. No se
- * borran: se desactivan, y las desactivadas dejan de ofrecerse al cobrar. Contenedor: habla con el servicio.
+ * medio (el que suma la caja) y trae su recargo en %, que el mostrador suma al total de lo que se paga con ella, o su
+ * descuento en % (descuento en efectivo), que le resta; nunca los dos. No se borran: se desactivan, y las desactivadas
+ * dejan de ofrecerse al cobrar. Contenedor: habla con el servicio.
  */
 @Component({
   selector: 'app-formas-pago',
@@ -56,30 +58,39 @@ export class FormasPago implements OnInit {
   /** La forma que se está editando; null mientras se da de alta una nueva. */
   protected readonly editando = signal<FormaPago | null>(null);
 
-  protected readonly form = inject(FormBuilder).nonNullable.group({
-    nombre: ['', [Validators.required, Validators.maxLength(60), Validators.pattern(/\S/)]],
-    medio: ['EFECTIVO' as MedioPago],
-    recargoPorcentaje: [
-      0 as number | null,
-      [Validators.required, Validators.min(0), Validators.max(RECARGO_MAXIMO)],
-    ],
-    activa: [true],
-  });
+  protected readonly form = inject(FormBuilder).nonNullable.group(
+    {
+      nombre: ['', [Validators.required, Validators.maxLength(60), Validators.pattern(/\S/)]],
+      medio: ['EFECTIVO' as MedioPago],
+      recargoPorcentaje: [
+        0 as number | null,
+        [Validators.required, Validators.min(0), Validators.max(RECARGO_MAXIMO)],
+      ],
+      descuentoPorcentaje: [
+        0 as number | null,
+        [Validators.required, Validators.min(0), Validators.max(DESCUENTO_MAXIMO)],
+      ],
+      activa: [true],
+    },
+    { validators: recargoODescuento },
+  );
 
   /** El medio y el estado elegidos en el formulario: la pista y el recargo bloqueado dependen de ellos. */
   protected readonly medioElegido = signal<MedioPago>('EFECTIVO');
   protected readonly activaElegida = signal(true);
 
   constructor() {
-    // Cuenta corriente no admite recargo (CC-023): se fija en 0 y se bloquea; con otro medio vuelve a poder editarse.
+    // Cuenta corriente no admite recargo ni descuento (CC-023): se fijan en 0 y se bloquean; con otro medio vuelven a
+    // poder editarse.
     this.form.controls.medio.valueChanges.pipe(takeUntilDestroyed(inject(DestroyRef))).subscribe((medio) => {
       this.medioElegido.set(medio);
-      const recargo = this.form.controls.recargoPorcentaje;
-      if (medio === 'CUENTA_CORRIENTE') {
-        recargo.setValue(0);
-        recargo.disable();
-      } else if (recargo.disabled) {
-        recargo.enable();
+      for (const control of [this.form.controls.recargoPorcentaje, this.form.controls.descuentoPorcentaje]) {
+        if (medio === 'CUENTA_CORRIENTE') {
+          control.setValue(0);
+          control.disable();
+        } else if (control.disabled) {
+          control.enable();
+        }
       }
     });
     this.form.controls.activa.valueChanges
@@ -116,11 +127,13 @@ export class FormasPago implements OnInit {
       this.enfocar('form.alta [aria-invalid="true"]');
       return;
     }
-    const { nombre, medio, recargoPorcentaje, activa } = this.form.getRawValue();
+    const { nombre, medio, recargoPorcentaje, descuentoPorcentaje, activa } = this.form.getRawValue();
+    const cuentaCorriente = medio === 'CUENTA_CORRIENTE';
     const request: FormaPagoRequest = {
       nombre: nombre.trim(),
       medio,
-      recargoPorcentaje: medio === 'CUENTA_CORRIENTE' ? 0 : (recargoPorcentaje ?? 0),
+      recargoPorcentaje: cuentaCorriente ? 0 : (recargoPorcentaje ?? 0),
+      descuentoPorcentaje: cuentaCorriente ? 0 : (descuentoPorcentaje ?? 0),
       activa,
     };
     const forma = this.editando();
@@ -156,6 +169,7 @@ export class FormasPago implements OnInit {
       nombre: forma.nombre,
       medio: forma.medio,
       recargoPorcentaje: forma.recargoPorcentaje,
+      descuentoPorcentaje: forma.descuentoPorcentaje,
       activa: forma.activa,
     });
     this.limpiarErrores();
@@ -182,8 +196,15 @@ export class FormasPago implements OnInit {
     return forma.recargoPorcentaje === 0 ? 'Sin recargo' : `${porcentaje.format(forma.recargoPorcentaje)}\u00a0%`;
   }
 
-  protected invalido(campo: 'nombre' | 'recargoPorcentaje'): boolean {
+  protected descuentoTexto(forma: FormaPago): string {
+    return forma.descuentoPorcentaje === 0
+      ? 'Sin descuento'
+      : `${porcentaje.format(forma.descuentoPorcentaje)}\u00a0%`;
+  }
+
+  protected invalido(campo: 'nombre' | 'recargoPorcentaje' | 'descuentoPorcentaje'): boolean {
     const control = this.form.controls[campo];
+    if (campo === 'descuentoPorcentaje' && control.touched && this.form.hasError('recargoYDescuento')) return true;
     return control.touched && control.invalid;
   }
 
@@ -201,6 +222,13 @@ export class FormasPago implements OnInit {
 
   private vaciarFormulario(): void {
     this.editando.set(null);
-    this.form.reset({ nombre: '', medio: 'EFECTIVO', recargoPorcentaje: 0, activa: true });
+    this.form.reset({ nombre: '', medio: 'EFECTIVO', recargoPorcentaje: 0, descuentoPorcentaje: 0, activa: true });
   }
+}
+
+/** Una forma lleva recargo o descuento, no los dos (lo mismo valida el backend con 422). */
+function recargoODescuento(grupo: AbstractControl): ValidationErrors | null {
+  const recargo = Number(grupo.get('recargoPorcentaje')?.value ?? 0);
+  const descuento = Number(grupo.get('descuentoPorcentaje')?.value ?? 0);
+  return recargo > 0 && descuento > 0 ? { recargoYDescuento: true } : null;
 }

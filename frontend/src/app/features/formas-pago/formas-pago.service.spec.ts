@@ -13,6 +13,7 @@ describe('FormasPagoService', () => {
     nombre: 'Crédito',
     medio: 'CREDITO',
     recargoPorcentaje: 0,
+    descuentoPorcentaje: 0,
     activa: true,
     orden: 3,
   };
@@ -54,6 +55,7 @@ describe('FormasPagoService', () => {
       nombre: 'Visa 6 cuotas',
       medio: 'CREDITO',
       recargoPorcentaje: 18.5,
+      descuentoPorcentaje: 0,
       activa: true,
     };
     let creada: FormaPago | undefined;
@@ -68,7 +70,13 @@ describe('FormasPagoService', () => {
   });
 
   it('actualiza con PUT /formas-pago/{id}', () => {
-    const request: FormaPagoRequest = { nombre: 'Crédito', medio: 'CREDITO', recargoPorcentaje: 10, activa: false };
+    const request: FormaPagoRequest = {
+      nombre: 'Crédito',
+      medio: 'CREDITO',
+      recargoPorcentaje: 10,
+      descuentoPorcentaje: 0,
+      activa: false,
+    };
     let actualizada: FormaPago | undefined;
     service.actualizar(3, request).subscribe((f) => (actualizada = f));
 

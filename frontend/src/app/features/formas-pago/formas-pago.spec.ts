@@ -9,14 +9,15 @@ import { FormasPago } from './formas-pago';
 import { FormasPagoService } from './formas-pago.service';
 
 describe('FormasPago', () => {
-  const efectivo: FormaPago = { id: 1, nombre: 'Efectivo', medio: 'EFECTIVO', recargoPorcentaje: 0, activa: true, orden: 1 };
-  const debito: FormaPago = { id: 2, nombre: 'Débito', medio: 'DEBITO', recargoPorcentaje: 0, activa: true, orden: 2 };
-  const visa6: FormaPago = { id: 3, nombre: 'Visa 6 cuotas', medio: 'CREDITO', recargoPorcentaje: 18.5, activa: true, orden: 3 };
+  const efectivo: FormaPago = { id: 1, nombre: 'Efectivo', medio: 'EFECTIVO', recargoPorcentaje: 0, descuentoPorcentaje: 0, activa: true, orden: 1 };
+  const debito: FormaPago = { id: 2, nombre: 'Débito', medio: 'DEBITO', recargoPorcentaje: 0, descuentoPorcentaje: 0, activa: true, orden: 2 };
+  const visa6: FormaPago = { id: 3, nombre: 'Visa 6 cuotas', medio: 'CREDITO', recargoPorcentaje: 18.5, descuentoPorcentaje: 0, activa: true, orden: 3 };
   const mercadoPago: FormaPago = {
     id: 4,
     nombre: 'Mercado Pago',
     medio: 'TRANSFERENCIA',
     recargoPorcentaje: 5,
+    descuentoPorcentaje: 0,
     activa: false,
     orden: 4,
   };
@@ -118,10 +119,106 @@ describe('FormasPago', () => {
       Array.from(f.querySelectorAll('td')).map((td) => (td.textContent ?? '').replace(/\s+/g, ' ').trim()),
     );
     expect(celdas).toEqual([
-      ['Efectivo', 'Efectivo', 'Sin recargo', 'Activa'],
-      ['Visa 6 cuotas', 'Crédito', '18,5 %', 'Activa'],
-      ['Mercado Pago', 'Transferencia', '5 %', 'Inactiva'],
+      ['Efectivo', 'Efectivo', 'Sin recargo', 'Sin descuento', 'Activa'],
+      ['Visa 6 cuotas', 'Crédito', '18,5 %', 'Sin descuento', 'Activa'],
+      ['Mercado Pago', 'Transferencia', '5 %', 'Sin descuento', 'Inactiva'],
     ]);
+  });
+
+  describe('descuento en efectivo', () => {
+    const contado: FormaPago = { ...efectivo, descuentoPorcentaje: 10.5 };
+
+    it('la lista muestra el descuento de cada forma', async () => {
+      await crear([contado, visa6]);
+
+      const columna = filas().map((f) => (f.querySelectorAll('td')[3].textContent ?? '').replace(/\s+/g, ' ').trim());
+      expect(el().querySelectorAll('th')[3].textContent?.trim()).toBe('Descuento');
+      expect(columna).toEqual(['10,5 %', 'Sin descuento']);
+    });
+
+    it('el formulario arranca sin descuento y da de alta una forma con su descuento', async () => {
+      await crear([efectivo]);
+      expect(input('descuento').value).toBe('0');
+
+      await escribir('nombre', 'Contado');
+      await escribir('descuento', '10');
+      await enviar();
+
+      expect(servicio.crear).toHaveBeenCalledWith({
+        nombre: 'Contado',
+        medio: 'EFECTIVO',
+        recargoPorcentaje: 0,
+        descuentoPorcentaje: 10,
+        activa: true,
+      });
+      expect(input('descuento').value).toBe('0');
+    });
+
+    it('no envía un descuento vacío, negativo ni de 100 o más; acepta 99,99', async () => {
+      await crear([efectivo]);
+      await escribir('nombre', 'Contado');
+
+      for (const [valor, mensaje] of [
+        ['', 'El descuento es obligatorio.'],
+        ['-1', 'El descuento tiene que estar entre 0 y 99,99 %.'],
+        ['100', 'El descuento tiene que estar entre 0 y 99,99 %.'],
+      ]) {
+        await escribir('descuento', valor);
+        await enviar();
+        expect(texto('#descuento-error')).toBe(mensaje);
+        expect(input('descuento').getAttribute('aria-invalid')).toBe('true');
+      }
+      expect(servicio.crear).not.toHaveBeenCalled();
+
+      await escribir('descuento', '99.99');
+      await enviar();
+      expect(servicio.crear).toHaveBeenCalledWith(expect.objectContaining({ descuentoPorcentaje: 99.99 }));
+    });
+
+    it('no envía recargo y descuento a la vez, y lo avisa en el descuento', async () => {
+      await crear([efectivo]);
+      await escribir('nombre', 'Rara');
+      await escribir('recargo', '5');
+      await escribir('descuento', '10');
+      await enviar();
+
+      expect(texto('#descuento-error')).toBe('Una forma de pago lleva recargo o descuento, no los dos.');
+      expect(servicio.crear).not.toHaveBeenCalled();
+
+      await escribir('recargo', '0');
+      await enviar();
+      expect(servicio.crear).toHaveBeenCalledWith(
+        expect.objectContaining({ recargoPorcentaje: 0, descuentoPorcentaje: 10 }),
+      );
+    });
+
+    it('editar precarga el descuento y el PUT lo manda', async () => {
+      await crear([contado, visa6]);
+
+      await editarFila(0);
+      expect(input('descuento').value).toBe('10.5');
+      await escribir('descuento', '12');
+      await enviar();
+
+      expect(servicio.actualizar).toHaveBeenCalledWith(1, expect.objectContaining({ descuentoPorcentaje: 12 }));
+    });
+
+    it('con cuenta corriente el descuento queda en 0 y bloqueado, y se manda 0', async () => {
+      await crear([efectivo]);
+      await escribir('nombre', 'Fiado');
+      await escribir('descuento', '9');
+
+      await elegirMedio('CUENTA_CORRIENTE');
+      expect(input('descuento').value).toBe('0');
+      expect(input('descuento').disabled).toBe(true);
+      expect(texto('#descuento-pista')).toContain('sin descuento');
+      await enviar();
+
+      expect(servicio.crear).toHaveBeenCalledWith(expect.objectContaining({ descuentoPorcentaje: 0 }));
+
+      await elegirMedio('EFECTIVO');
+      expect(input('descuento').disabled).toBe(false);
+    });
   });
 
   it('una forma inactiva se marca en la fila', async () => {
@@ -183,6 +280,7 @@ describe('FormasPago', () => {
       nombre: 'Visa 6 cuotas',
       medio: 'CREDITO',
       recargoPorcentaje: 18.5,
+      descuentoPorcentaje: 0,
       activa: true,
     });
     expect(filas()).toHaveLength(3);
@@ -339,6 +437,7 @@ describe('FormasPago', () => {
       nombre: 'Visa 6 cuotas',
       medio: 'CREDITO',
       recargoPorcentaje: 25,
+      descuentoPorcentaje: 0,
       activa: false,
     });
     expect(servicio.crear).not.toHaveBeenCalled();
@@ -355,6 +454,7 @@ describe('FormasPago', () => {
       nombre: 'Cuenta corriente',
       medio: 'CUENTA_CORRIENTE',
       recargoPorcentaje: 0,
+      descuentoPorcentaje: 0,
       activa: false,
       orden: 5,
     };
@@ -430,6 +530,7 @@ describe('FormasPago', () => {
         nombre: 'Cuenta corriente',
         medio: 'CUENTA_CORRIENTE',
         recargoPorcentaje: 0,
+        descuentoPorcentaje: 0,
         activa: true,
       });
       expect(filas()[1].textContent).toContain('Activa');
@@ -447,6 +548,7 @@ describe('FormasPago', () => {
         nombre: 'Fiado',
         medio: 'CUENTA_CORRIENTE',
         recargoPorcentaje: 0,
+        descuentoPorcentaje: 0,
         activa: true,
       });
     });
