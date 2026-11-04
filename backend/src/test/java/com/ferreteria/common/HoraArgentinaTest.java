@@ -7,7 +7,9 @@ import com.ferreteria.stock.model.MovimientoStock;
 import com.ferreteria.ventas.model.Comprobante;
 import com.ferreteria.ventas.model.TotalesVenta;
 import java.math.BigDecimal;
+import java.time.Clock;
 import java.time.Duration;
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.TimeZone;
@@ -55,5 +57,34 @@ class HoraArgentinaTest {
         TotalesVenta totales = new TotalesVenta(new BigDecimal("121.00"), new BigDecimal("100.00"), new BigDecimal("21.00"));
         assertThat(Comprobante.venta(1L, 1, "clave", 1L, totales, null, ahora).getFecha()).isEqualTo(ahora);
         assertThat(MovimientoStock.ajuste(1L, 1L, BigDecimal.ONE, "Conteo", 1L, ahora).getFecha()).isEqualTo(ahora);
+    }
+
+    /*
+     * En Linux el reloj de Java da nanosegundos y MySQL guarda microsegundos (DATETIME(6)) redondeando: la respuesta de
+     * una cobranza o una anulacion no coincidiria con la repetida ni con el GET (CU-12 punto 3). La hora de la aplicacion
+     * se recorta a microsegundos antes de usarse.
+     */
+
+    @Test
+    @DisplayName("enMicrosegundos recorta los nanosegundos sueltos (sin redondear) y conserva la zona")
+    void enMicrosegundosRecorta() {
+        Clock base = Clock.fixed(Instant.parse("2026-11-04T22:30:06.675534999Z"), BUENOS_AIRES);
+
+        Clock reloj = HoraArgentina.enMicrosegundos(base);
+
+        assertThat(reloj.instant()).isEqualTo(Instant.parse("2026-11-04T22:30:06.675534Z"));
+        assertThat(reloj.getZone()).isEqualTo(BUENOS_AIRES);
+    }
+
+    @Test
+    @DisplayName("el reloj de la aplicacion y ahora() no tienen nanosegundos sueltos")
+    void sinNanosegundosSueltos() {
+        Clock reloj = new RelojConfig().reloj();
+
+        assertThat(reloj.getZone()).isEqualTo(BUENOS_AIRES);
+        for (int i = 0; i < 1_000; i++) {
+            assertThat(reloj.instant().getNano() % 1_000).isZero();
+            assertThat(HoraArgentina.ahora().getNano() % 1_000).isZero();
+        }
     }
 }
