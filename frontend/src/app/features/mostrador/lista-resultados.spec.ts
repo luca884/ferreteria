@@ -115,6 +115,16 @@ describe('ListaResultados', () => {
     expect(texto('.codigos .codigo-proveedor')).toBe('Prov: BS-4471');
   });
 
+  it('ofertas, S3: un artículo en oferta lleva la marca, el precio de oferta y el normal tachado', async () => {
+    await crear([articulo(1, { precioFinal: 800, enOferta: true, precioNormal: 1000 }), articulo(2)]);
+
+    expect(texto('.marca-oferta')).toBe('Oferta');
+    expect(texto('.precio .precio-oferta')).toBe(`$${NBSP}800,00`);
+    expect(texto('.precio s')).toBe(`$${NBSP}1.000,00`);
+    expect(texto('.marca-oferta', 1)).toBe('');
+    expect(texto('.precio', 1)).toBe(`$${NBSP}170,00`);
+  });
+
   it('sin código de barras muestra solo el código interno, y sin ubicación un guion', async () => {
     await crear([articulo(1, { codigoInterno: 'MAR-007', codigoBarras: null, ubicacion: null })]);
 

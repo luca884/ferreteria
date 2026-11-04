@@ -26,6 +26,9 @@
         @if (!articulo.activo) {
           <span class="baja">Dado de baja</span>
         }
+        @if (articulo.enOferta) {
+          <span class="marca-oferta">Oferta</span>
+        }
         <span class="codigos"
           >{{ articulo.codigoInterno }}{{ articulo.codigoBarras ? ' · ' + articulo.codigoBarras : '' }}@if (
             articulo.codigoProveedor
@@ -37,7 +40,14 @@
           <span class="costo-al">Costo al {{ fecha }}</span>
         }
       </div>
-      <span class="precio">{{ articulo.precioFinal | monto }}</span>
+      <span class="precio">
+        @if (articulo.enOferta && articulo.precioNormal) {
+          <span class="precio-oferta">{{ articulo.precioFinal | monto }}</span>
+          <s class="precio-normal" aria-label="Precio normal">{{ articulo.precioNormal | monto }}</s>
+        } @else {
+          {{ articulo.precioFinal | monto }}
+        }
+      </span>
       <span class="stock" [attr.data-stock]="estadoStock(articulo)">
         {{ cantidadConUnidad(articulo.stockActual, articulo.unidad) }}
       </span>

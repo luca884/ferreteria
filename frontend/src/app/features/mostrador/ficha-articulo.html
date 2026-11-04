@@ -1,6 +1,18 @@
 <article class="ficha">
-  <h2 class="descripcion">{{ articulo().descripcion }}</h2>
-  <p class="precio">{{ articulo().precioFinal | monto }}</p>
+  <h2 class="descripcion">
+    {{ articulo().descripcion }}
+    @if (articulo().enOferta) {
+      <span class="marca-oferta">Oferta</span>
+    }
+  </h2>
+  <p class="precio">
+    @if (articulo().enOferta && articulo().precioNormal) {
+      <span class="precio-oferta">{{ articulo().precioFinal | monto }}</span>
+      <s class="precio-normal" aria-label="Precio normal">{{ articulo().precioNormal | monto }}</s>
+    } @else {
+      {{ articulo().precioFinal | monto }}
+    }
+  </p>
   <dl class="datos">
     <div>
       <dt>Stock</dt>

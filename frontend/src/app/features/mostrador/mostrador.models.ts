@@ -18,6 +18,10 @@ export interface ArticuloMostrador {
   activo: boolean;
   /** GDS-05: desde cuándo está al día el costo (AAAA-MM-DD). Es una fecha, no el costo. */
   costoAl?: string | null;
+  /** Ofertas (S3): hoy se vende al precio de oferta; `precioFinal` ya es ese precio, el que se cobra. */
+  enOferta?: boolean;
+  /** Ofertas (S3): el precio sin la oferta, para mostrarlo tachado; null si no está en oferta. */
+  precioNormal?: number | null;
 }
 
 export interface BusquedaMostrador {

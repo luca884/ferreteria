@@ -70,6 +70,21 @@ describe('FichaArticulo', () => {
     expect(texto('.codigo-proveedor')).toBe('PROV-99');
   });
 
+  it('ofertas, S3: en oferta muestra la marca, el precio de oferta y el normal tachado', async () => {
+    await crear({ ...tornillo, precioFinal: 1000, enOferta: true, precioNormal: 1234.5 });
+
+    expect(texto('.marca-oferta')).toBe('Oferta');
+    expect(texto('.precio .precio-oferta')).toBe(`$${NBSP}1.000,00`);
+    expect(texto('.precio s')).toBe(`$${NBSP}1.234,50`);
+  });
+
+  it('sin oferta no hay marca', async () => {
+    await crear(tornillo);
+
+    expect(el().querySelector('.marca-oferta')).toBeNull();
+    expect(texto('.precio')).toBe(`$${NBSP}1.234,50`);
+  });
+
   it('sin código de barras, del proveedor ni ubicación muestra guiones', async () => {
     await crear({ ...tornillo, codigoBarras: null, codigoProveedor: null, ubicacion: null });
 
