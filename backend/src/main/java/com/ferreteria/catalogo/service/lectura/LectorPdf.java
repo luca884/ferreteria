@@ -79,13 +79,22 @@ public class LectorPdf implements LectorDeLista {
 
     @Override
     public LecturaLista leer(byte[] contenido) {
+        List<FilaLeida> filas = TablaDePdf.armar(palabras(contenido));
+        return new LecturaLista(List.of(HOJA), filas);
+    }
+
+    /**
+     * Las palabras con posicion de un PDF con texto, leidas en la JVM aparte con sus topes y su turno. Es el camino que
+     * comparten la lista de precios y {@link LectorDeFacturaPdf}: un solo turno y los mismos avisos para un PDF
+     * escaneado, protegido, danado o demasiado grande.
+     */
+    List<PalabraPdf> palabras(byte[] contenido) {
         // Un PDF por vez, y cada ferreteria espera uno solo (TurnoDeLectura).
         List<PalabraPdf> palabras = turno.conTurno(() -> leerAparte(contenido));
         if (palabras.isEmpty()) {
             throw new BadRequestException(SIN_TEXTO);
         }
-        List<FilaLeida> filas = TablaDePdf.armar(palabras);
-        return new LecturaLista(List.of(HOJA), filas);
+        return palabras;
     }
 
     private List<PalabraPdf> leerAparte(byte[] contenido) {

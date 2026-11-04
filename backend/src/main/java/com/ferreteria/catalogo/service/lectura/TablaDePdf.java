@@ -100,8 +100,11 @@ final class TablaDePdf {
         }
     }
 
-    /** Las lineas en orden de lectura: por pagina, de arriba abajo, y cada una de izquierda a derecha. */
-    private static List<List<PalabraPdf>> lineas(List<PalabraPdf> palabras) {
+    /**
+     * Las lineas en orden de lectura: por pagina, de arriba abajo, y cada una de izquierda a derecha. Tambien las usa
+     * {@link FacturaDePdf}, con la misma tolerancia de linea base.
+     */
+    static List<List<PalabraPdf>> lineas(List<PalabraPdf> palabras) {
         List<PalabraPdf> ordenadas = new ArrayList<>(palabras);
         ordenadas.sort(Comparator.comparingInt(PalabraPdf::pagina)
             .thenComparingDouble(PalabraPdf::base)
