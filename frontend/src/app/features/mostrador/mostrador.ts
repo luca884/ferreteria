@@ -222,6 +222,11 @@ export class Mostrador {
    */
   private readonly facturacion = signal<FacturacionDelMostrador | null>(null);
   /**
+   * Bloque 2, S4: el cobro hace elegir con un clic entre facturar con ARCA o no, salvo que el servidor haya dicho que la
+   * ferretería no factura. Mientras se lee, o si no se pudo leer, también: Enter nunca factura sin querer.
+   */
+  protected readonly eligeFactura = computed(() => this.facturacion()?.factura !== false);
+  /**
    * El rótulo del cobro: «Factura <letra> · Consumidor Final» o «Factura <letra> · <cliente>», con la letra que el servidor
    * dio para la condición del cliente; un ticket guardado sin esa condición dice solo «Factura». null si no se factura.
    */

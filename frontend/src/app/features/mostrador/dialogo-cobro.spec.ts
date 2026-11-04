@@ -73,6 +73,16 @@ describe('DialogoCobro', () => {
     await estabilizar();
   }
 
+  /** La ferretería factura (o no se sabe todavía): el cajero elige con un clic (bloque 2, S4). */
+  async function abrirEligiendo(totalCentavos = 363000, formas: FormaPago[] = FORMAS) {
+    await abrir(totalCentavos, formas);
+    fixture.componentRef.setInput('eligeFactura', true);
+    await estabilizar();
+  }
+
+  const facturar = () => el().querySelector<HTMLButtonElement>('button.facturar')!;
+  const sinFactura = () => el().querySelector<HTMLButtonElement>('button.sin-factura')!;
+
   beforeEach(() => {
     vi.useFakeTimers();
   });
@@ -384,21 +394,17 @@ describe('DialogoCobro', () => {
       expect(autorizando()).toBeUndefined();
     });
 
-    it('muestra el rótulo con la marca del ambiente; tildar «No facturable» lo cambia por «Sin factura»', async () => {
-      await abrir();
+    it('muestra el rótulo con la marca del ambiente', async () => {
+      await abrirEligiendo();
       fixture.componentRef.setInput('rotuloFactura', { texto: 'Factura A · Ferretería Norte SRL', ambiente: 'SIMULADO' });
       await estabilizar();
 
       expect(comprobante()).toBe('Factura A · Ferretería Norte SRL SIMULADO');
       expect(normal(el().querySelector('.comprobante .ambiente')?.textContent)).toBe('SIMULADO');
-
-      casilla().click();
-      await estabilizar();
-      expect(comprobante()).toBe('Sin factura');
     });
 
     it('en producción el rótulo va sin marca', async () => {
-      await abrir();
+      await abrirEligiendo();
       fixture.componentRef.setInput('rotuloFactura', { texto: 'Factura B · Consumidor Final', ambiente: null });
       await estabilizar();
 
@@ -406,25 +412,109 @@ describe('DialogoCobro', () => {
       expect(el().querySelector('.comprobante .ambiente')).toBeNull();
     });
 
-    it('mientras viaja una venta que se factura dice «Autorizando con ARCA…»; si es no facturable, no', async () => {
-      await abrir();
+    it('mientras viaja una venta que se factura dice «Autorizando con ARCA…»; si se cobró sin factura, no', async () => {
+      await abrirEligiendo();
       fixture.componentRef.setInput('rotuloFactura', { texto: 'Factura B · Consumidor Final', ambiente: null });
       await estabilizar();
       expect(autorizando()).toBeUndefined();
 
+      facturar().click();
       fixture.componentRef.setInput('enVuelo', true);
       await estabilizar();
       expect(autorizando()).toBeDefined();
 
-      fixture.componentRef.setInput('enVuelo', false);
-      casilla().click();
+      TestBed.resetTestingModule();
+      await abrirEligiendo();
+      fixture.componentRef.setInput('rotuloFactura', { texto: 'Factura B · Consumidor Final', ambiente: null });
+      await estabilizar();
+      sinFactura().click();
       fixture.componentRef.setInput('enVuelo', true);
       await estabilizar();
       expect(autorizando()).toBeUndefined();
+      expect(comprobante()).toBe('Sin factura');
     });
   });
 
-  describe('no facturable (NF-003)', () => {
+  describe('facturar o no, con un clic (mejoras-ferreteros-bloque-2, S4)', () => {
+    it('con facturación no hay casilla: hay «Cobrar sin factura» y «Cobrar y facturar con ARCA», y ninguno es Enter', async () => {
+      await abrirEligiendo();
+
+      expect(el().querySelector('input[type="checkbox"]')).toBeNull();
+      expect(sinFactura().textContent?.trim()).toBe('Cobrar sin factura');
+      expect(facturar().textContent?.trim()).toBe('Cobrar y facturar con ARCA');
+      expect(el().querySelector('[data-tecla="Enter"]')).toBeNull();
+      expect(el().querySelector('[aria-keyshortcuts="Enter"]')).toBeNull();
+      expect(el().textContent).toContain('Elegí con un clic si la venta se factura.');
+    });
+
+    it('Enter no cobra: hay que elegir con el clic', async () => {
+      await abrirEligiendo();
+
+      tecla('Enter');
+
+      expect(confirmadas).toEqual([]);
+    });
+
+    it('«Cobrar y facturar con ARCA» cobra sin la marca: la factura el servidor', async () => {
+      await abrirEligiendo();
+
+      facturar().click();
+
+      expect(confirmadas).toEqual([{ formaPagoId: 1, medio: 'EFECTIVO', recibidoCentavos: 363000, recargoCentavos: 0 }]);
+    });
+
+    it('«Cobrar sin factura» cobra con noFacturable true', async () => {
+      await abrirEligiendo();
+
+      sinFactura().click();
+
+      expect(confirmadas).toEqual([
+        { formaPagoId: 1, medio: 'EFECTIVO', recibidoCentavos: 363000, recargoCentavos: 0, noFacturable: true },
+      ]);
+    });
+
+    it('en el pago mixto completo Enter tampoco cobra; el botón sí, con los pagos', async () => {
+      await abrirEligiendo(10000);
+      medio('Mixto').click();
+      await estabilizar();
+      const filas = Array.from(el().querySelectorAll<HTMLInputElement>('.fila-pago input'));
+      filas[0].value = '40,00';
+      filas[0].dispatchEvent(new Event('input', { bubbles: true }));
+      filas[1].value = '60,00';
+      filas[1].dispatchEvent(new Event('input', { bubbles: true }));
+      await estabilizar();
+
+      tecla('Enter', filas[1]);
+      expect(confirmadas).toEqual([]);
+
+      sinFactura().click();
+      expect(confirmadas).toHaveLength(1);
+      expect(confirmadas[0].noFacturable).toBe(true);
+      expect(confirmadas[0].pagos).toHaveLength(2);
+    });
+
+    it('un segundo clic mientras se cobra no emite', async () => {
+      await abrirEligiendo();
+
+      facturar().click();
+      sinFactura().click();
+
+      expect(confirmadas).toHaveLength(1);
+    });
+
+    it('sin facturación (el servidor dijo que no factura) queda «Cobrar» con Enter y lo avisa', async () => {
+      await abrir();
+
+      expect(el().querySelector('button.sin-factura')).toBeNull();
+      expect(el().querySelector('button.facturar')).toBeNull();
+      expect(el().querySelector('button.cobrar')?.getAttribute('data-tecla')).toBe('Enter');
+      expect(el().textContent).toContain('Sin factura: la facturación con ARCA no está activa.');
+      tecla('Enter');
+      expect(confirmadas).toHaveLength(1);
+    });
+  });
+
+  describe('no facturable sin facturación con ARCA (NF-003)', () => {
     const casilla = () => el().querySelector('input[type="checkbox"]') as HTMLInputElement;
 
     it('trae la casilla «No facturable» sin tildar', async () => {

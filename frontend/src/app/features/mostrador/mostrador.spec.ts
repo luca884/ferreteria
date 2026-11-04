@@ -4612,8 +4612,8 @@ describe('Mostrador', () => {
     }
 
     /** Factura habilitada en el simulador, con las letras del servidor; y el ticket de 2 martillos ($ 3.000,00). */
-    async function conMartillos(ambiente: FacturacionDelMostrador['ambiente'] = 'SIMULADOR') {
-      facturacionDelServidor = { factura: true, ambiente, letras: LETRAS };
+    async function conMartillos(ambiente: FacturacionDelMostrador['ambiente'] = 'SIMULADOR', factura = true) {
+      facturacionDelServidor = factura ? { factura: true, ambiente, letras: LETRAS } : { factura: false, ambiente: null, letras: null };
       await crear();
       for (let i = 0; i < 2; i++) {
         await escribir('M');
@@ -4665,7 +4665,9 @@ describe('Mostrador', () => {
         input.dispatchEvent(new Event('input'));
         await refrescar();
       }
-      await tecla('Enter');
+      // Bloque 2, S4: con facturación se elige con un clic, no con Enter.
+      el().querySelector<HTMLButtonElement>('app-dialogo-cobro button.facturar')!.click();
+      await refrescar();
       cobros[0].respuesta.next(respuesta);
       cobros[0].respuesta.complete();
       await refrescar();
@@ -4760,6 +4762,34 @@ describe('Mostrador', () => {
       expect(el().querySelector('app-dialogo-cobro')).not.toBeNull();
     });
 
+    it('bloque 2, S4: con facturación el cobro pide elegir con un clic si se factura', async () => {
+      facturacionDelServidor = { factura: true, ambiente: 'PRODUCCION', letras: LETRAS };
+      await conMartillos();
+
+      await tecla('F4');
+
+      expect(el().querySelector('app-dialogo-cobro button.facturar')?.textContent?.trim()).toBe('Cobrar y facturar con ARCA');
+      expect(el().querySelector('app-dialogo-cobro button.sin-factura')).not.toBeNull();
+    });
+
+    it('bloque 2, S4: si no se pudo leer la facturación también pide elegir: Enter nunca factura sin querer', async () => {
+      facturacionDelServidor = null;
+      await conMartillos();
+
+      await tecla('F4');
+
+      expect(el().querySelector('app-dialogo-cobro button.facturar')).not.toBeNull();
+    });
+
+    it('bloque 2, S4: si el servidor dijo que no factura, queda «Cobrar» con Enter', async () => {
+      await conMartillos(null, false);
+
+      await tecla('F4');
+
+      expect(el().querySelector('app-dialogo-cobro button.facturar')).toBeNull();
+      expect(el().querySelector('app-dialogo-cobro button.cobrar')?.getAttribute('data-tecla')).toBe('Enter');
+    });
+
     it('con la condición ya en el ticket (armado con ella) no vuelve a pedir el cliente', async () => {
       ticketSinCondicion('RESPONSABLE_INSCRIPTO');
       facturacionDelServidor = { factura: true, ambiente: 'SIMULADOR', letras: LETRAS };
@@ -4851,7 +4881,8 @@ describe('Mostrador', () => {
       await conMartillos();
       await tecla('F4');
 
-      await tecla('Enter');
+      el().querySelector<HTMLButtonElement>('app-dialogo-cobro button.facturar')!.click();
+      await refrescar();
 
       expect(normal(el().querySelector('app-dialogo-cobro')?.textContent)).toContain('Autorizando con ARCA…');
     });

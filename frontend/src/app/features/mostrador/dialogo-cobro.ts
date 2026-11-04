@@ -214,19 +214,36 @@ const centavosATexto = (c: number) => `${normalizarImporte(String(Math.floor(c /
             }
           </div>
         }
-        <label class="no-facturable">
-          <input type="checkbox" [checked]="noFacturable()" (change)="noFacturable.set($any($event.target).checked)" />
-          No facturable
-          <small>cobra igual, pero no se factura</small>
-        </label>
-        <div class="dialogo-acciones">
-          <button type="button" class="cancelar" data-tecla="Esc" aria-keyshortcuts="Escape" (click)="cancelar.emit()">
-            Cancelar
-          </button>
-          <button type="button" class="cobrar primario" data-tecla="Enter" aria-keyshortcuts="Enter" (click)="confirmarCobro()">
-            {{ autoriza() ? 'Autorizar exceso y cobrar' : 'Cobrar' }}
-          </button>
-        </div>
+        @if (eligeFactura()) {
+          <!-- Bloque 2, S4: facturar o no se elige con un clic; Enter no cobra, para que nadie facture sin querer. -->
+          <p class="pista-factura">Elegí con un clic si la venta se factura.</p>
+          <div class="dialogo-acciones">
+            <button type="button" class="cancelar" data-tecla="Esc" aria-keyshortcuts="Escape" (click)="cancelar.emit()">
+              Cancelar
+            </button>
+            <button type="button" class="sin-factura secundario" (click)="confirmarCobro(true)">
+              {{ autoriza() ? 'Autorizar exceso y cobrar sin factura' : 'Cobrar sin factura' }}
+            </button>
+            <button type="button" class="facturar primario" (click)="confirmarCobro(false)">
+              {{ autoriza() ? 'Autorizar exceso, cobrar y facturar' : 'Cobrar y facturar con ARCA' }}
+            </button>
+          </div>
+        } @else {
+          <p class="sin-arca">Sin factura: la facturación con ARCA no está activa.</p>
+          <label class="no-facturable">
+            <input type="checkbox" [checked]="noFacturable()" (change)="noFacturable.set($any($event.target).checked)" />
+            No facturable
+            <small>cobra igual, pero no se factura nunca</small>
+          </label>
+          <div class="dialogo-acciones">
+            <button type="button" class="cancelar" data-tecla="Esc" aria-keyshortcuts="Escape" (click)="cancelar.emit()">
+              Cancelar
+            </button>
+            <button type="button" class="cobrar primario" data-tecla="Enter" aria-keyshortcuts="Enter" (click)="confirmarCobro()">
+              {{ autoriza() ? 'Autorizar exceso y cobrar' : 'Cobrar' }}
+            </button>
+          </div>
+        }
       </div>
     </div>
   `,
@@ -486,11 +503,21 @@ const centavosATexto = (c: number) => `${normalizarImporte(String(Math.floor(c /
     .efectivo .error {
       grid-column: 1 / -1;
     }
+    .dialogo-acciones {
+      flex-wrap: wrap;
+    }
     .dialogo-acciones button {
       min-height: 48px;
     }
-    .dialogo-acciones .cobrar {
+    .dialogo-acciones .cobrar,
+    .dialogo-acciones .facturar {
       padding-inline: var(--e-6);
+    }
+    .pista-factura,
+    .sin-arca {
+      margin: 0;
+      color: var(--texto-suave);
+      font-size: var(--texto-sm);
     }
   `,
 })
@@ -515,6 +542,12 @@ export class DialogoCobro {
   readonly avisoLimite = input<ExcesoCuentaCorriente | null>(null);
   /** Qué factura sale (CU-07 paso 5). null: la ferretería no factura y no se dice nada, como antes. */
   readonly rotuloFactura = input<RotuloFactura | null>(null);
+  /**
+   * Bloque 2, S4: la ferretería factura con ARCA, o todavía no se sabe. Entonces no hay casilla: el cajero elige con un
+   * clic «Cobrar sin factura» o «Cobrar y facturar con ARCA», y Enter no cobra. false: el servidor dijo que no factura;
+   * queda «Cobrar» con Enter y la casilla «No facturable», como antes.
+   */
+  readonly eligeFactura = input(false);
 
   readonly confirmar = output<ConfirmacionCobro>();
   readonly cancelar = output<void>();
@@ -826,7 +859,12 @@ export class DialogoCobro {
       this.enterEnMixto(evento.target as HTMLElement);
       return;
     }
-    this.confirmarCobro();
+    this.confirmarConEnter();
+  }
+
+  /** Con la elección de factura a la vista (bloque 2, S4) Enter no cobra: solo el clic en uno de los dos botones. */
+  private confirmarConEnter(): void {
+    if (!this.eligeFactura()) this.confirmarCobro();
   }
 
   /**
@@ -835,7 +873,7 @@ export class DialogoCobro {
    */
   private enterEnMixto(origen: HTMLElement): void {
     if (this.importesMixtoValidos() && this.restoCentavos() === 0) {
-      this.confirmarCobro();
+      this.confirmarConEnter();
       return;
     }
     const filas = this.filasMonto().map((f) => f.nativeElement);
@@ -845,7 +883,7 @@ export class DialogoCobro {
     while (j < filas.length && filas[j].disabled) j++;
     const siguiente = filas[j];
     if (!this.importesMixtoValidos() || !siguiente || this.restoCentavos() < 0) {
-      this.confirmarCobro();
+      this.confirmarConEnter();
       return;
     }
     const forma = this.formas()[j];
@@ -858,16 +896,18 @@ export class DialogoCobro {
     siguiente.select();
   }
 
-  protected confirmarCobro(): void {
+  /** `noFacturable` lo pasa el botón que se eligió (bloque 2, S4); sin él vale la casilla. */
+  protected confirmarCobro(noFacturable?: boolean): void {
     if (this.enVuelo() || this.bloqueado()) return;
     if (this.seleccion() === 'MIXTO') {
-      this.confirmarMixto();
+      this.confirmarMixto(noFacturable);
       return;
     }
     const forma = this.formaElegida();
     if (!forma || this.razonDeLaForma(forma) !== null) return;
     const efectivo = forma.medio === 'EFECTIVO';
     if (efectivo && (this.recibido() === null || this.errorRecibido() !== null || this.faltaCentavos() > 0)) return;
+    if (noFacturable !== undefined) this.noFacturable.set(noFacturable);
     this.bloqueado.set(true);
     this.confirmar.emit({
       formaPagoId: forma.id,
@@ -879,7 +919,7 @@ export class DialogoCobro {
     });
   }
 
-  private confirmarMixto(): void {
+  private confirmarMixto(noFacturable: boolean | undefined): void {
     if (!this.importesMixtoValidos()) {
       this.mensajeMixto.set(MENSAJE_IMPORTES);
       return;
@@ -888,6 +928,7 @@ export class DialogoCobro {
       this.mensajeMixto.set(MENSAJE_SUMA);
       return;
     }
+    if (noFacturable !== undefined) this.noFacturable.set(noFacturable);
     const c = this.centavosMixto();
     const pagos = this.formas()
       .filter((f) => (c[f.id] ?? 0) > 0)
