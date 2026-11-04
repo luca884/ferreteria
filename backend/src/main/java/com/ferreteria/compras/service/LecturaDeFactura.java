@@ -24,10 +24,7 @@ import java.util.TreeMap;
 @Service
 public class LecturaDeFactura {
 
-    static final String SIN_TEXTO = "El PDF no tiene texto para leer (parece escaneado). Cargá la compra a mano.";
     static final String SIN_RENGLONES = "No se encontraron renglones en la factura. Cargá la compra a mano.";
-    /** El comienzo del aviso de PDF escaneado de la lectura de listas: es el que hay que cambiar por el de la factura. */
-    private static final String SIN_TEXTO_DE_LA_LISTA = "El PDF no tiene texto para leer.";
 
     private final LectorDeFacturas lector;
     private final ProveedoresParaCompra proveedores;
@@ -74,16 +71,9 @@ public class LecturaDeFactura {
                 cantidadNoEntera);
     }
 
-    /** Un PDF escaneado avisa con el texto de la factura; los demas errores de lectura quedan como vienen. */
+    /** El aviso del PDF escaneado ya viene con el texto de la factura ({@code LectorDeFacturaPdf}). */
     private FacturaLeida leerPdf(byte[] pdf) {
-        try {
-            return lector.leer(pdf);
-        } catch (BadRequestException e) {
-            if (e.getMessage() != null && e.getMessage().startsWith(SIN_TEXTO_DE_LA_LISTA)) {
-                throw new BadRequestException(SIN_TEXTO);
-            }
-            throw e;
-        }
+        return lector.leer(pdf);
     }
 
     private static TipoCompra tipo(String letra) {

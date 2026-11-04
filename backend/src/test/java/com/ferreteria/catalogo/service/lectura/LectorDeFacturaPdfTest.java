@@ -43,10 +43,9 @@ class LectorDeFacturaPdfTest {
     }
 
     @Test
-    void unPdfSinTextoAvisaConElMismoMensajeQueLaListaDePrecios() {
+    void unPdfSinTextoAvisaConElTextoDeLaFacturaYNoElDeLaLista() {
         assertThatThrownBy(() -> lector.leer(ListasDePrueba.pdfSinTexto()))
             .isInstanceOf(BadRequestException.class)
-            .hasMessage("El PDF no tiene texto para leer. Pedile al proveedor la lista en Excel o en un PDF que no "
-                + "sea escaneado.");
+            .hasMessage("El PDF no tiene texto para leer (parece escaneado). Cargá la compra a mano.");
     }
 }

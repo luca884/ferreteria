@@ -12,6 +12,9 @@ import org.springframework.stereotype.Component;
 @Component
 public class LectorDeFacturaPdf implements LectorDeFacturas {
 
+    /** El PDF escaneado de una factura: el de la lista de precios pide la lista en Excel, que aca no aplica. */
+    static final String SIN_TEXTO = "El PDF no tiene texto para leer (parece escaneado). Cargá la compra a mano.";
+
     private final LectorPdf lectorPdf;
 
     public LectorDeFacturaPdf(LectorPdf lectorPdf) {
@@ -20,6 +23,6 @@ public class LectorDeFacturaPdf implements LectorDeFacturas {
 
     @Override
     public FacturaLeida leer(byte[] pdf) {
-        return FacturaDePdf.leer(lectorPdf.palabras(pdf));
+        return FacturaDePdf.leer(lectorPdf.palabras(pdf, SIN_TEXTO));
     }
 }

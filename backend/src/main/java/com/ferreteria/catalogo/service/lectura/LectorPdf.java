@@ -89,10 +89,15 @@ public class LectorPdf implements LectorDeLista {
      * escaneado, protegido, danado o demasiado grande.
      */
     List<PalabraPdf> palabras(byte[] contenido) {
+        return palabras(contenido, SIN_TEXTO);
+    }
+
+    /** Igual que {@link #palabras(byte[])}, con el aviso propio de quien lee (una factura) para el PDF sin texto. */
+    List<PalabraPdf> palabras(byte[] contenido, String avisoSinTexto) {
         // Un PDF por vez, y cada ferreteria espera uno solo (TurnoDeLectura).
         List<PalabraPdf> palabras = turno.conTurno(() -> leerAparte(contenido));
         if (palabras.isEmpty()) {
-            throw new BadRequestException(SIN_TEXTO);
+            throw new BadRequestException(avisoSinTexto);
         }
         return palabras;
     }

@@ -103,6 +103,24 @@ class ArticuloRecargosCostoTest {
     }
 
     @Test
+    @DisplayName("la compra fija costo y recargos en un solo paso: si los ajustes no entran, queda el precio de antes")
+    void costoYRecargosEnUnSoloPaso() {
+        Articulo articulo = articulo();
+        articulo.fijarAjustesDePrecio(new AjustesDePrecio(List.of(
+            new AjustePrecio("Bonificación", TipoAjustePrecio.MONTO, bd("-100")))), CTX);
+        assertThat(articulo.getPrecioFinal()).isEqualTo(bd("63.35"));
+        RecargosDeCosto mitad = new RecargosDeCosto(List.of(new RecargoCosto("Descuento", bd("-50"))));
+
+        // Con costo 120 y los recargos de hoy el precio daria 96,02; con -50 % el costo real es 60 y daria -1,99.
+        RecalculoAutomatico resultado = articulo.ajustarCostoYRecargosAutomatico(bd("120"), mitad, CTX);
+
+        assertThat(resultado.aviso()).isPresent();
+        assertThat(articulo.getCosto()).isEqualByComparingTo("120");
+        assertThat(articulo.getRecargosCosto()).isEqualTo(mitad);
+        assertThat(articulo.getPrecioFinal()).isEqualTo(bd("63.35"));
+    }
+
+    @Test
     @DisplayName("los ajustes de CU-14 se aplican sobre el precio calculado con el costo real")
     void ajustesSobreElCostoReal() {
         Articulo articulo = articulo();

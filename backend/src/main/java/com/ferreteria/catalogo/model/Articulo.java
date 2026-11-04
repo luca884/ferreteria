@@ -530,6 +530,18 @@ public class Articulo {
      * ajustes del precio final dejarian el precio en 0 o menos, el articulo conserva su precio y el resultado trae el
      * aviso (S7), como {@link #ajustarCostoAutomatico}.
      */
+    /**
+     * La compra (CU-13): fija el costo y los recargos que trae (vacios, los borra) y calcula el precio una sola vez, con
+     * los dos. Si los ajustes de CU-14 dejarian el precio fuera de rango, quedan el costo y los recargos nuevos, el
+     * precio de antes y el aviso, como {@link #ajustarCostoAutomatico}; nunca un precio a medio camino.
+     */
+    public RecalculoAutomatico ajustarCostoYRecargosAutomatico(BigDecimal costoNuevo, RecargosDeCosto nuevos,
+                                                              ContextoPrecio ctx) {
+        RecargosDeCosto recargos = nuevos == null ? RecargosDeCosto.NINGUNO : nuevos;
+        this.recargosCosto = new ArrayList<>(recargos.lista());
+        return ajustarCostoAutomatico(costoNuevo, ctx);
+    }
+
     public RecalculoAutomatico fijarRecargosDeCostoAutomatico(RecargosDeCosto nuevos, ContextoPrecio ctx) {
         RecargosDeCosto recargos = nuevos == null ? RecargosDeCosto.NINGUNO : nuevos;
         try {

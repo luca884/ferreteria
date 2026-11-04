@@ -12,7 +12,6 @@ import com.ferreteria.catalogo.model.MargenNegativo;
 import com.ferreteria.catalogo.model.Moneda;
 import com.ferreteria.catalogo.model.OrigenPrecio;
 import com.ferreteria.catalogo.model.PrecioPlaneado;
-import com.ferreteria.catalogo.model.RecalculoAutomatico;
 import com.ferreteria.catalogo.model.RecargoCosto;
 import com.ferreteria.catalogo.model.RecargosDeCosto;
 import com.ferreteria.catalogo.model.VariacionFuerte;
@@ -124,15 +123,11 @@ public class ArticulosParaCompraService implements ArticulosParaCompra {
             BigDecimal precioAnterior = articulo.getPrecioFinal();
             BigDecimal costoRealAnterior = articulo.costoReal();
             ContextoPrecio ctx = contextos.de(articulo.getRubroId());
-            // Primero el costo (con los recargos de hoy) y despues los recargos de la compra, que pisan a los del articulo
-            // (vacios, los borran) y dejan el precio con el costo real. Sin cambio de recargos, solo el costo, como siempre.
-            // Si el ultimo paso no puede fijar el precio (ajustes fuera de rango), el aviso es el de ese paso. El historial
-            // es un solo cambio entre el estado de antes y el de despues.
-            RecalculoAutomatico resultado = articulo.ajustarCostoAutomatico(costos.get(articulo.getId()), ctx);
-            Optional<String> aviso = resultado.aviso();
-            if (!articulo.getRecargosCosto().equals(recargos)) {
-                aviso = articulo.fijarRecargosDeCostoAutomatico(recargos, ctx).aviso();
-            }
+            // El costo y los recargos de la compra (que pisan a los del articulo; vacios, los borran) en un solo calculo
+            // del precio: si los ajustes no entran, queda el precio de antes con el aviso. El historial es un solo cambio
+            // entre el estado de antes y el de despues.
+            Optional<String> aviso = articulo
+                    .ajustarCostoYRecargosAutomatico(costos.get(articulo.getId()), recargos, ctx).aviso();
             CambioPrecio.entre(costoAnterior, articulo.getCosto(), precioAnterior, articulo.getPrecioFinal())
                     .ifPresent(c -> historial.add(HistorialPrecio.de(articulo, c, OrigenPrecio.COMPRA, usuarioId)));
             aplicados.add(costoDeCompra(
