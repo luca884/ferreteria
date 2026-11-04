@@ -11,6 +11,12 @@ export const PORCENTAJE_IVA: Record<Alicuota, string> = {
   IVA_27: '27',
 };
 
+/** Un recargo con nombre sobre el costo (CU-13): solo importa el porcentaje para la cuenta. */
+export interface RecargoDeCosto {
+  nombre?: string;
+  porcentaje: Decimal;
+}
+
 /** Un decimal exacto: valor = entero / 10^escala. */
 export interface Exacto {
   entero: bigint;
@@ -32,6 +38,26 @@ export function exacto(valor: Decimal): Exacto | null {
 
 const diez = (n: number) => 10n ** BigInt(n);
 
+/** Cociente entero de dos positivos, la mitad hacia arriba (HALF_UP). */
+const mitadArriba = (a: bigint, b: bigint) => (2n * a + b) / (2n * b);
+
+/**
+ * El costo real como lo calcula RecargosDeCosto.java: costo × (1 + Σ % / 100), a 2 decimales HALF_UP. Sin recargos
+ * devuelve el costo tal cual. `null` si el costo o algún porcentaje no se pueden leer, o si el costo es negativo.
+ */
+export function costoRealExacto(costo: Decimal, recargos: readonly RecargoDeCosto[] | null | undefined): Exacto | null {
+  const c = exacto(costo);
+  if (!c || c.entero < 0n) return null;
+  if (!recargos || recargos.length === 0) return c;
+  const porcentajes = recargos.map((r) => exacto(r.porcentaje));
+  if (porcentajes.some((p) => p === null)) return null;
+  const escala = Math.max(...porcentajes.map((p) => p!.escala));
+  const suma = porcentajes.reduce((acc, p) => acc + p!.entero * diez(escala - p!.escala), 0n);
+  // costo real en centavos = costo × (100 + Σ%) / 100 × 100, con todo exacto hasta el único redondeo.
+  const centavos = mitadArriba(c.entero * (100n * diez(escala) + suma) * 100n, diez(c.escala + escala) * 100n);
+  return { entero: centavos, escala: 2 };
+}
+
 /** Cociente entero hacia arriba de dos positivos. */
 const techo = (a: bigint, b: bigint) => (a + b - 1n) / b;
 
@@ -40,7 +66,8 @@ const techo = (a: bigint, b: bigint) => (a + b - 1n) / b;
  * redondeado hacia arriba al múltiplo (sin múltiplo, o con uno ≤ 0, hacia arriba al centavo). Cuenta exacta con
  * BigInt, sin errores de coma flotante; la cotización (pesos por dólar) es un factor más antes del único redondeo.
  * Sin el parámetro vale 1 (artículo en pesos). `null` si falta el costo o el margen, si alguno es negativo, o si
- * la cotización no es mayor que 0.
+ * la cotización no es mayor que 0. Con `recargos` (CU-13) parte del costo real: costo × (1 + Σ % / 100) a 2 decimales
+ * HALF_UP; sin ellos, o con una lista vacía, da lo mismo que antes.
  */
 export function precioFinal(
   costo: Decimal,
@@ -48,8 +75,9 @@ export function precioFinal(
   alicuota: Alicuota,
   multiplo: Decimal,
   cotizacion: Decimal = '1',
+  recargos?: readonly RecargoDeCosto[] | null,
 ): number | null {
-  const centavos = precioFinalCentavos(costo, margen, alicuota, multiplo, cotizacion);
+  const centavos = precioFinalCentavos(costo, margen, alicuota, multiplo, cotizacion, recargos);
   return centavos === null ? null : Number(centavos) / 100;
 }
 
@@ -63,8 +91,10 @@ export function precioFinalCentavos(
   alicuota: Alicuota,
   multiplo: Decimal,
   cotizacion: Decimal = '1',
+  recargos?: readonly RecargoDeCosto[] | null,
 ): bigint | null {
-  const c = exacto(costo);
+  // El cálculo parte del costo real (CU-13): el costo con sus recargos.
+  const c = costoRealExacto(costo, recargos);
   const m = exacto(margen);
   const iva = exacto(PORCENTAJE_IVA[alicuota]);
   const cot = exacto(cotizacion);

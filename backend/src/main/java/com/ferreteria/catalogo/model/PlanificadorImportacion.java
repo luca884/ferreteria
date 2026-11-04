@@ -331,7 +331,7 @@ public final class PlanificadorImportacion {
         ContextoPrecio contexto = rubroDelPrecio == null
             ? entrada.contextoSinRubro()
             : entrada.contextoPorRubro().getOrDefault(rubroDelPrecio, entrada.contextoSinRubro());
-        BigDecimal precio = precioDelAlta(costo, alicuota, moneda, contexto);
+        BigDecimal precio = precioDelAlta(costo, RecargosDeCosto.NINGUNO, alicuota, moneda, contexto);
         if (barras.esValor()) {
             acumulado.barrasEnUso.add(NormalizadorCodigo.clave(barras.codigo()));
         }
@@ -372,10 +372,15 @@ public final class PlanificadorImportacion {
         return rubroId;
     }
 
-    /** El precio final del alta en pesos con el contexto dado (el de su rubro, o el de los articulos sin rubro). */
-    private static BigDecimal precioDelAlta(BigDecimal costo, AlicuotaIva alicuota, Moneda moneda, ContextoPrecio ctx) {
+    /**
+     * El precio final del alta en pesos con el contexto dado (el de su rubro, o el de los articulos sin rubro). Un alta
+     * no trae recargos del costo (CU-13), pero el calculo parte del costo real igual que el resto.
+     */
+    static BigDecimal precioDelAlta(BigDecimal costo, RecargosDeCosto recargos, AlicuotaIva alicuota, Moneda moneda,
+                                    ContextoPrecio ctx) {
         BigDecimal margen = PrecioCalculator.margenEfectivo(null, ctx.margenRubro(), ctx.margenDefecto());
-        return PrecioCalculator.precioFinal(costo, margen, alicuota, ctx.redondeoMultiplo(), ctx.cotizacionPara(moneda));
+        return PrecioCalculator.precioFinal(costo, recargos, margen, alicuota, ctx.redondeoMultiplo(),
+            ctx.cotizacionPara(moneda), null);
     }
 
     /**

@@ -98,6 +98,17 @@ public final class PrecioCalculator {
     }
 
     /**
+     * Igual que la de seis parametros, con los recargos del costo del articulo (CU-13): el calculo parte del costo real
+     * ({@link RecargosDeCosto#aplicar}) y no del costo. Sin recargos da lo mismo que la otra.
+     */
+    public static BigDecimal precioFinal(BigDecimal costo, RecargosDeCosto recargos, BigDecimal margenPorcentaje,
+                                         AlicuotaIva iva, BigDecimal multiplo, BigDecimal cotizacion,
+                                         AjustesDePrecio ajustes) {
+        BigDecimal costoReal = recargos == null ? costo : recargos.aplicar(costo);
+        return precioFinal(costoReal, margenPorcentaje, iva, multiplo, cotizacion, ajustes);
+    }
+
+    /**
      * Hacia arriba al multiplo, escala 2. Un multiplo null o menor o igual a 0 significa "sin multiplo": hacia arriba
      * al centavo.
      */

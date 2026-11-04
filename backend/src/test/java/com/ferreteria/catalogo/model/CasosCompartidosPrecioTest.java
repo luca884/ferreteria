@@ -7,6 +7,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
 import java.io.InputStream;
 import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.List;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -52,10 +54,37 @@ class CasosCompartidosPrecioTest {
         for (JsonNode caso : casos) {
             // La cotizacion es opcional: si el caso no la trae, vale 1 (pesos).
             BigDecimal cotizacion = caso.has("cotizacion") ? bd(caso, "cotizacion") : BigDecimal.ONE;
-            BigDecimal precio = PrecioCalculator.precioFinal(bd(caso, "costo"), bd(caso, "margen"),
-                    AlicuotaIva.valueOf(caso.get("alicuota").asText()), bd(caso, "multiplo"), cotizacion);
+            BigDecimal precio = PrecioCalculator.precioFinal(bd(caso, "costo"), recargos(caso), bd(caso, "margen"),
+                    AlicuotaIva.valueOf(caso.get("alicuota").asText()), bd(caso, "multiplo"), cotizacion, null);
 
             assertThat(precio).as(caso.get("nombre").asText()).isEqualTo(bd(caso, "precio"));
         }
+    }
+
+    /** Los recargos del costo (CU-13) son opcionales: sin el campo, el articulo no tiene ninguno. */
+    private static RecargosDeCosto recargos(JsonNode caso) {
+        List<RecargoCosto> lista = new ArrayList<>();
+        if (caso.has("recargos")) {
+            for (JsonNode recargo : caso.get("recargos")) {
+                lista.add(new RecargoCosto(recargo.get("nombre").asText(), new BigDecimal(recargo.get("porcentaje").asText())));
+            }
+        }
+        return new RecargosDeCosto(lista);
+    }
+
+    @Test
+    @DisplayName("los casos con recargos traen el costo real y el JSON incluye el de la factura (4.44 % sobre 235971.56)")
+    void casosConRecargos() {
+        long conRecargos = 0;
+        for (JsonNode caso : casos) {
+            if (caso.has("costoReal")) {
+                conRecargos++;
+                assertThat(recargos(caso).aplicar(bd(caso, "costo"))).as(caso.get("nombre").asText())
+                        .isEqualTo(bd(caso, "costoReal"));
+            }
+        }
+        assertThat(conRecargos).isGreaterThanOrEqualTo(6);
+        assertThat(new RecargosDeCosto(List.of(new RecargoCosto("Embalaje y carga", new BigDecimal("4.44"))))
+                .aplicar(new BigDecimal("235971.56"))).isEqualTo(new BigDecimal("246448.70"));
     }
 }

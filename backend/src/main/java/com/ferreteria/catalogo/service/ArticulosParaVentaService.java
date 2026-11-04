@@ -93,11 +93,11 @@ public class ArticulosParaVentaService implements ArticulosParaVenta {
                 costoEnPesos(articulo, dolar));
     }
 
-    /** El costo sin IVA en pesos, a 4 decimales; null si el articulo esta en USD y no hay dolar. */
+    /** El costo real (con los recargos del costo, CU-13) sin IVA en pesos, a 4 decimales; null si el articulo esta en USD y no hay dolar. */
     private static BigDecimal costoEnPesos(Articulo articulo, BigDecimal dolar) {
         if (articulo.getMoneda() != Moneda.USD) {
-            return articulo.getCosto().setScale(4, RoundingMode.HALF_UP);
+            return articulo.costoReal().setScale(4, RoundingMode.HALF_UP);
         }
-        return dolar == null ? null : articulo.getCosto().multiply(dolar).setScale(4, RoundingMode.HALF_UP);
+        return dolar == null ? null : articulo.costoReal().multiply(dolar).setScale(4, RoundingMode.HALF_UP);
     }
 }

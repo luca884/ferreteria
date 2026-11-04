@@ -136,7 +136,7 @@ public final class PlanificadorMasivo {
             return Fila.conError(MOTIVO_DEMASIADO_GRANDE);
         }
         // Misma regla que Articulo: con costo 0 el calculado es 0 y un ajuste que lo deja en 0 no es error.
-        BigDecimal calculado = PrecioCalculator.precioFinal(costoNuevo, margenNuevo, articulo.alicuotaIva(),
+        BigDecimal calculado = PrecioCalculator.precioFinal(articulo.costoReal(costoNuevo), margenNuevo, articulo.alicuotaIva(),
             contexto.redondeoMultiplo(), contexto.cotizacionPara(articulo.moneda()));
         if (!articulo.precioManual() && AjustesDePrecio.dejanElPrecioEnCeroOMenos(calculado, precioNuevo)) {
             return Fila.conError(MOTIVO_AJUSTES_EN_CERO);
@@ -174,8 +174,8 @@ public final class PlanificadorMasivo {
         }
         String advertencia = MargenNegativo.junto(
             VariacionFuerte.mensaje(Sujeto.PRECIO, articulo.precioFinal(), precioNuevo),
-            MargenNegativo.mensaje(articulo.costo(), contexto.cotizacionPara(articulo.moneda()), articulo.alicuotaIva(),
-                precioNuevo));
+            MargenNegativo.mensaje(articulo.costo(), articulo.recargosCosto(),
+                contexto.cotizacionPara(articulo.moneda()), articulo.alicuotaIva(), precioNuevo));
         boolean modificado = distintos(articulo.precioFinal(), precioNuevo) || !articulo.precioManual();
         return new Fila(null, articulo.costo(), margenAnterior, margenAnterior, articulo.margenPorcentaje(),
             precioNuevo, advertencia, modificado);

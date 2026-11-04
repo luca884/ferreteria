@@ -116,6 +116,14 @@ public class Articulo {
     @Column(name = "ajustes_precio", nullable = false)
     private List<AjustePrecio> ajustesPrecio = new ArrayList<>();
 
+    /**
+     * Recargos con nombre sobre el costo (CU-13, S4): se suman y dan el costo real, que reemplaza al costo en el
+     * calculo del precio, en el aviso de margen negativo y en el costo que copia la venta.
+     */
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "recargos_costo", nullable = false)
+    private List<RecargoCosto> recargosCosto = new ArrayList<>();
+
     @Enumerated(EnumType.STRING)
     @JdbcTypeCode(SqlTypes.VARCHAR)
     @Column(nullable = false, length = 10)
@@ -293,8 +301,17 @@ public class Articulo {
      * ajustes lo dejarian en 0 o menos, el de hoy con el aviso. No cambia nada.
      */
     public PrecioPlaneado precioConCostoAutomatico(BigDecimal costoNuevo, ContextoPrecio ctx) {
+        return precioConCostoAutomatico(costoNuevo, getRecargosCosto(), ctx);
+    }
+
+    /**
+     * Igual, con los recargos del costo que traeria la compra (CU-13) en lugar de los que tiene hoy el articulo: la vista
+     * previa muestra el precio con el costo real nuevo.
+     */
+    public PrecioPlaneado precioConCostoAutomatico(BigDecimal costoNuevo, RecargosDeCosto recargos, ContextoPrecio ctx) {
         try {
-            return new PrecioPlaneado(precioConCosto(costoNuevo, ctx), Optional.empty());
+            BigDecimal precio = precioManual ? precioFinal : precioCon(costoNuevo, recargos, getAjustesPrecio(), ctx);
+            return new PrecioPlaneado(precio, Optional.empty());
         } catch (AjustesFueraDeRangoException e) {
             return new PrecioPlaneado(precioFinal, Optional.of(avisoDePrecioSalteado(e)));
         }
@@ -481,13 +498,43 @@ public class Articulo {
     }
 
     /**
+     * Reemplaza los recargos del costo (CU-13, S4) y recalcula el precio con el costo real, salvo con precio manual: ahi
+     * se guardan igual y el precio no cambia (CU-14). Si el precio quedaria en 0 o menos con los ajustes, o no entra en
+     * DECIMAL(15,2), lanza y no cambia nada.
+     */
+    public Optional<CambioPrecio> fijarRecargosDeCosto(RecargosDeCosto nuevos, ContextoPrecio ctx) {
+        RecargosDeCosto recargos = nuevos == null ? RecargosDeCosto.NINGUNO : nuevos;
+        BigDecimal precioAnterior = this.precioFinal;
+        BigDecimal precioNuevo = precioManual ? this.precioFinal : precioCon(costo, recargos, getAjustesPrecio(), ctx);
+
+        this.recargosCosto = new ArrayList<>(recargos.lista());
+        this.precioFinal = precioNuevo;
+        return CambioPrecio.entre(this.costo, this.costo, precioAnterior, this.precioFinal);
+    }
+
+    /**
+     * Igual que {@link #fijarRecargosDeCosto} para un recalculo automatico (compras): los recargos se guardan y, si los
+     * ajustes del precio final dejarian el precio en 0 o menos, el articulo conserva su precio y el resultado trae el
+     * aviso (S7), como {@link #ajustarCostoAutomatico}.
+     */
+    public RecalculoAutomatico fijarRecargosDeCostoAutomatico(RecargosDeCosto nuevos, ContextoPrecio ctx) {
+        RecargosDeCosto recargos = nuevos == null ? RecargosDeCosto.NINGUNO : nuevos;
+        try {
+            return RecalculoAutomatico.de(fijarRecargosDeCosto(recargos, ctx));
+        } catch (AjustesFueraDeRangoException e) {
+            this.recargosCosto = new ArrayList<>(recargos.lista());
+            return new RecalculoAutomatico(Optional.empty(), Optional.of(avisoDePrecioSalteado(e)));
+        }
+    }
+
+    /**
      * Fija los ajustes sobre el precio final (CU-14) y recalcula el precio, salvo con precio manual: ahi se guardan
      * para cuando se libere el precio. Si el precio quedaria en 0 o menos no cambia nada.
      */
     public Optional<CambioPrecio> fijarAjustesDePrecio(AjustesDePrecio nuevos, ContextoPrecio ctx) {
         AjustesDePrecio ajustes = nuevos == null ? AjustesDePrecio.NINGUNO : nuevos;
         BigDecimal precioAnterior = this.precioFinal;
-        BigDecimal precioNuevo = precioManual ? this.precioFinal : precioCon(costo, ajustes, ctx);
+        BigDecimal precioNuevo = precioManual ? this.precioFinal : precioCon(costo, getRecargosCosto(), ajustes, ctx);
 
         this.ajustesPrecio = new ArrayList<>(ajustes.lista());
         this.precioFinal = precioNuevo;
@@ -531,7 +578,7 @@ public class Articulo {
             return Optional.empty();
         }
         BigDecimal precioAnterior = this.precioFinal;
-        BigDecimal precioNuevo = precioCon(costo, getAjustesPrecio(), ctx);
+        BigDecimal precioNuevo = precioCon(costo, getRecargosCosto(), getAjustesPrecio(), ctx);
 
         this.precioManual = false;
         this.precioFinal = precioNuevo;
@@ -631,7 +678,12 @@ public class Articulo {
         if (precioManual) {
             return precioFinal;
         }
-        return precioCon(costoNuevo, getAjustesPrecio(), ctx);
+        return precioCon(costoNuevo, getRecargosCosto(), getAjustesPrecio(), ctx);
+    }
+
+    /** El costo real de hoy (CU-13): el costo mas sus recargos. */
+    public BigDecimal costoReal() {
+        return getRecargosCosto().aplicar(costo);
     }
 
     /** El aviso de margen negativo con ese costo, solo con precio manual (CU-14, {@link MargenNegativo}). */
@@ -639,17 +691,19 @@ public class Articulo {
         if (!precioManual) {
             return Optional.empty();
         }
-        return MargenNegativo.mensaje(costoNuevo, ctx.cotizacionPara(moneda), alicuotaIva, precioFinal);
+        return MargenNegativo.mensaje(costoNuevo, getRecargosCosto(), ctx.cotizacionPara(moneda), alicuotaIva, precioFinal);
     }
 
     /**
      * La regla de precios con los ajustes sobre el precio final; el precio tiene que entrar en DECIMAL(15,2). Un costo
-     * 0 sigue dando precio 0 (como antes de CU-14), pero los ajustes no pueden llevar el precio a 0 o menos.
+     * 0 sigue dando precio 0 (como antes de CU-14), pero los ajustes no pueden llevar el precio a 0 o menos. El calculo
+     * parte del costo real: el costo con los recargos (CU-13).
      */
-    private BigDecimal precioCon(BigDecimal costoNuevo, AjustesDePrecio ajustes, ContextoPrecio ctx) {
+    private BigDecimal precioCon(BigDecimal costoNuevo, RecargosDeCosto recargos, AjustesDePrecio ajustes,
+                                 ContextoPrecio ctx) {
         BigDecimal margen = PrecioCalculator.margenEfectivo(margenPorcentaje, ctx.margenRubro(), ctx.margenDefecto());
         BigDecimal calculado = PrecioCalculator.precioFinal(
-                costoNuevo, margen, alicuotaIva, ctx.redondeoMultiplo(), ctx.cotizacionPara(moneda));
+                costoNuevo, recargos, margen, alicuotaIva, ctx.redondeoMultiplo(), ctx.cotizacionPara(moneda), null);
         BigDecimal precio = ajustes.aplicar(calculado, ctx.redondeoMultiplo());
         if (!TopeDeImporte.entra(precio)) {
             // Si el calculado ya no entra, la culpa es del costo y el margen; si entra, de los ajustes.
@@ -680,6 +734,7 @@ public class Articulo {
     public BigDecimal getPrecioFinal() { return precioFinal; }
     public boolean isPrecioManual() { return precioManual; }
     public AjustesDePrecio getAjustesPrecio() { return new AjustesDePrecio(ajustesPrecio); }
+    public RecargosDeCosto getRecargosCosto() { return new RecargosDeCosto(recargosCosto); }
     public Unidad getUnidad() { return unidad; }
     public BigDecimal getStockActual() { return stockActual; }
     public BigDecimal getStockMinimo() { return stockMinimo; }

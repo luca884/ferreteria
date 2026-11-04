@@ -33,6 +33,12 @@ public final class MargenNegativo {
             + "). Revisá el precio manual.");
     }
 
+    /** Igual que la de arriba, con el costo real del articulo (CU-13): el costo mas sus recargos. */
+    public static Optional<String> mensaje(BigDecimal costo, RecargosDeCosto recargos, BigDecimal cotizacion,
+                                           AlicuotaIva iva, BigDecimal precioFinal) {
+        return mensaje(recargos.aplicar(costo), cotizacion, iva, precioFinal);
+    }
+
     /** La advertencia de una fila: la que ya tenia (variacion fuerte) y despues la de margen negativo, o null. */
     public static String junto(Optional<String> advertencia, Optional<String> margenNegativo) {
         if (advertencia.isPresent() && margenNegativo.isPresent()) {
