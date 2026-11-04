@@ -9,9 +9,11 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.DateTimeException;
 import java.time.LocalDate;
+import java.text.Normalizer;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 import java.util.Set;
 import java.util.regex.Matcher;
@@ -24,7 +26,8 @@ import java.util.regex.Pattern;
  * <ul>
  *   <li>un renglon es una linea cuya primera palabra es el codigo y que trae tres numeros, cantidad, unitario y neto,
  *       con cantidad x unitario = neto (con una bonificacion en % entre el unitario y el neto, tambien);</li>
- *   <li>un recargo es una linea despues del ultimo renglon con un % y un importe que es ese % de la suma de netos;</li>
+ *   <li>un recargo es una linea despues del ultimo renglon con un % y un importe que es ese % de la suma de netos,
+ *       que no es un impuesto (IVA, percepciones, IIBB...); un descuento o bonificacion es un recargo negativo;</li>
  *   <li>la lectura cuadra si despues del ultimo renglon hay un total igual a la suma de netos mas los recargos.</li>
  * </ul>
  * Los numeros pueden venir en formato US (1,234.56) o argentino (1.234,56): se elige el que usa la mayoria del
@@ -41,7 +44,17 @@ final class FacturaDePdf {
     private static final Pattern PUNTO_DE_VENTA_Y_NUMERO = Pattern.compile("(?<!\\d)(\\d{4,5})\\s*-\\s*(\\d{8})(?!\\d)");
     private static final Pattern CODIGO_DE_COMPROBANTE = Pattern.compile("(?i)c[oó]d(?:igo|\\.)?\\s*:?\\s*(\\d{2})(?!\\d)");
     private static final Pattern FECHA = Pattern.compile("(?<!\\d)(\\d{2})/(\\d{2})/(\\d{4})(?!\\d)");
-    private static final Pattern NO_ES_LA_FECHA = Pattern.compile("(?i)ACTIV|VTO|VENC");
+    /** Una etiqueta que deja la fecha que sigue como otra cosa (inicio de actividades, vencimiento): no es la emision. */
+    private static final Pattern NO_ES_LA_FECHA = Pattern.compile("(?i)INIC|ACTIV|\\bACT\\.|VTO|VENC");
+    /** El comprobante en el formato de ARCA en linea: «Punto de Venta: 00002 Comp. Nro: 00000123». */
+    private static final Pattern PUNTO_DE_VENTA_Y_NUMERO_ARCA = Pattern.compile(
+        "punto\\s+de\\s+venta[\\s.:]*(\\d{1,5})\\s+comp(?:robante)?[\\s.:]*(?:nro|n[º°o]|n[uú]mero)?[\\s.:]*(\\d{1,8})",
+        Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
+    /** Un nombre de impuesto (IVA, percepciones, IIBB, impuestos internos, ganancias), ya sin acentos y en minusculas. */
+    private static final Pattern ES_UN_IMPUESTO = Pattern.compile(
+        "\\biva\\b|\\bi\\.v\\.a|percep|\\biibb\\b|i\\.i\\.b\\.b|ingresos\\s+brutos|impuestos?\\s+internos?|ganancias");
+    /** Un nombre que dice que el cargo resta: descuento o bonificacion. */
+    private static final Pattern ES_UN_DESCUENTO = Pattern.compile("descuento|bonificaci|bonif");
     private static final Pattern CUIT = Pattern.compile("(?<!\\d)(?:\\d{2}-\\d{8}-\\d|\\d{11})(?!\\d)");
     private static final int[] PESOS_DEL_CUIT = {5, 4, 3, 2, 7, 6, 5, 4, 3, 2};
 
@@ -210,7 +223,11 @@ final class FacturaDePdf {
 
     // ---- recargos y control ----
 
-    /** Un % y un importe que es ese % de la suma de netos; una percepcion cuyo importe no lo es, queda afuera. */
+    /**
+     * Un % y un importe que es ese % de la suma de netos. Los impuestos (IVA, percepciones, IIBB, impuestos internos,
+     * ganancias) nunca son recargos del costo. El signo sale del importe impreso, del % impreso o del nombre
+     * (descuento, bonificacion): cualquiera de los tres lo vuelve negativo.
+     */
     private static List<Recargo> recargos(List<Linea> pie, BigDecimal suma) {
         List<Recargo> recargos = new ArrayList<>();
         for (Linea linea : pie) {
@@ -220,12 +237,21 @@ final class FacturaDePdf {
                 if (!porcentaje.porcentaje() || porcentaje.valor() == null || porcentaje.valor().signum() == 0) {
                     continue;
                 }
-                BigDecimal esperado = suma.multiply(porcentaje.valor()).divide(CIEN);
                 List<Palabra> antes = palabras.subList(0, p);
+                String nombre = nombre(antes);
+                if (esUnImpuesto(nombre)) {
+                    break;
+                }
+                BigDecimal esperado = suma.multiply(porcentaje.valor().abs()).divide(CIEN);
                 palabras.stream().filter(Palabra::esNumero)
-                    .filter(importe -> coinciden(esperado, importe.valor())).findFirst()
-                    .ifPresent(importe -> recargos.add(new Recargo(nombre(antes),
-                        aCentavos(porcentaje.valor()), aCentavos(importe.valor()))));
+                    .filter(importe -> coinciden(esperado, importe.valor().abs())).findFirst()
+                    .ifPresent(importe -> {
+                        boolean resta = porcentaje.valor().signum() < 0 || importe.valor().signum() < 0
+                            || esUnDescuento(nombre);
+                        BigDecimal signo = resta ? BigDecimal.ONE.negate() : BigDecimal.ONE;
+                        recargos.add(new Recargo(nombre, aCentavos(porcentaje.valor().abs().multiply(signo)),
+                            aCentavos(importe.valor().abs().multiply(signo))));
+                    });
                 break;
             }
         }
@@ -237,6 +263,18 @@ final class FacturaDePdf {
         String nombre = String.join(" ", antes.stream().map(Palabra::texto).filter(t -> !t.equals(":")).toList())
             .replaceAll("\\s*:$", "").trim();
         return nombre.isEmpty() ? "Recargo" : nombre;
+    }
+
+    private static String sinAcentos(String texto) {
+        return Normalizer.normalize(texto, Normalizer.Form.NFD).replaceAll("\\p{M}", "").toLowerCase(Locale.ROOT);
+    }
+
+    private static boolean esUnImpuesto(String nombre) {
+        return ES_UN_IMPUESTO.matcher(sinAcentos(nombre)).find();
+    }
+
+    private static boolean esUnDescuento(String nombre) {
+        return ES_UN_DESCUENTO.matcher(sinAcentos(nombre)).find();
     }
 
     private static Control control(List<Linea> pie, BigDecimal suma, List<Recargo> recargos) {
@@ -260,7 +298,12 @@ final class FacturaDePdf {
                 puntoDeVenta = Integer.valueOf(comprobante.group(1));
                 numero = Long.valueOf(comprobante.group(2));
             }
-            if (fecha == null && !NO_ES_LA_FECHA.matcher(linea.texto()).find()) {
+            Matcher enLinea = PUNTO_DE_VENTA_Y_NUMERO_ARCA.matcher(linea.texto());
+            if (numero == null && enLinea.find()) {
+                puntoDeVenta = Integer.valueOf(enLinea.group(1));
+                numero = Long.valueOf(enLinea.group(2));
+            }
+            if (fecha == null) {
                 fecha = primeraFecha(linea.texto());
             }
             Matcher cuit = CUIT.matcher(linea.texto());
@@ -312,9 +355,19 @@ final class FacturaDePdf {
         return null;
     }
 
+    /**
+     * La primera fecha de la linea que no viene justo despues de una etiqueta de inicio, actividad o vencimiento: se
+     * mira el texto entre la fecha anterior (o el comienzo de la linea) y esta.
+     */
     private static LocalDate primeraFecha(String texto) {
         Matcher fecha = FECHA.matcher(texto);
+        int desde = 0;
         while (fecha.find()) {
+            String antes = texto.substring(desde, fecha.start());
+            desde = fecha.end();
+            if (NO_ES_LA_FECHA.matcher(antes).find()) {
+                continue;
+            }
             try {
                 return LocalDate.of(Integer.parseInt(fecha.group(3)), Integer.parseInt(fecha.group(2)),
                     Integer.parseInt(fecha.group(1)));
