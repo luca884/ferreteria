@@ -22,7 +22,11 @@ public record CompraResponse(
         String moneda,
         BigDecimal neto,
         LocalDateTime registrada,
-        List<Renglon> renglones) {
+        List<Renglon> renglones,
+        List<Recargo> recargos) {
+
+    public record Recargo(String nombre, BigDecimal porcentaje) {
+    }
 
     public record Renglon(
             Integer renglon,
@@ -47,6 +51,7 @@ public record CompraResponse(
     public static CompraResponse de(Compra c, List<ItemCompra> items) {
         return new CompraResponse(c.getId(), c.getTipo(), c.getPuntoVenta(), c.getNumero(), c.comprobante(),
                 c.getFecha(), c.getProveedorId(), c.getProveedorNombre(), c.getMoneda(), c.getNeto(), c.getRegistrada(),
-                items.stream().map(Renglon::de).toList());
+                items.stream().map(Renglon::de).toList(),
+                c.getRecargos().stream().map(r -> new Recargo(r.nombre(), r.porcentaje())).toList());
     }
 }

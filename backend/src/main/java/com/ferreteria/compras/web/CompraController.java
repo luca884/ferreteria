@@ -2,10 +2,12 @@ package com.ferreteria.compras.web;
 
 import com.ferreteria.auth.security.AuthUser;
 import com.ferreteria.common.PageResponse;
+import com.ferreteria.common.exception.BadRequestException;
 import com.ferreteria.common.exception.DatosInvalidosException;
 import com.ferreteria.compras.service.CompraConsulta;
 import com.ferreteria.compras.service.CompraRegistrada;
 import com.ferreteria.compras.service.CompraService;
+import com.ferreteria.compras.service.LecturaDeFactura;
 import jakarta.validation.Valid;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
@@ -18,10 +20,16 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
 
+import org.springframework.web.multipart.MultipartFile;
+
+import java.io.IOException;
 import java.time.LocalDate;
 import java.util.Map;
+
+import static org.springframework.http.MediaType.MULTIPART_FORM_DATA_VALUE;
 
 /**
  * Compras al proveedor (CU-13, tramo 1). Solo el Dueno: la compra cambia costos y precios. La ferreteria y el usuario
@@ -34,10 +42,26 @@ public class CompraController {
 
     private final CompraService compraService;
     private final CompraConsulta compraConsulta;
+    private final LecturaDeFactura lecturaDeFactura;
 
-    public CompraController(CompraService compraService, CompraConsulta compraConsulta) {
+    public CompraController(CompraService compraService, CompraConsulta compraConsulta,
+                            LecturaDeFactura lecturaDeFactura) {
         this.compraService = compraService;
         this.compraConsulta = compraConsulta;
+        this.lecturaDeFactura = lecturaDeFactura;
+    }
+
+    /**
+     * Lee la factura del proveedor en PDF (parte "archivo", con los topes de tamano de las listas de CU-04) y devuelve el
+     * borrador de la compra: proveedor por CUIT, renglones con su articulo por codigo del proveedor. No guarda nada.
+     */
+    @PostMapping(path = "/factura-pdf", consumes = MULTIPART_FORM_DATA_VALUE)
+    public BorradorDeFacturaResponse facturaPdf(@RequestPart("archivo") MultipartFile archivo) {
+        try {
+            return BorradorDeFacturaResponse.de(lecturaDeFactura.leer(archivo.getBytes()));
+        } catch (IOException e) {
+            throw new BadRequestException("No se pudo leer el archivo. Verificá que no esté dañado.");
+        }
     }
 
     /** Lo que haria la compra, sin guardar nada. Con las mismas validaciones que registrar, incluido el 409. */

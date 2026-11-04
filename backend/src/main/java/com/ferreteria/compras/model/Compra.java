@@ -15,6 +15,8 @@ import org.hibernate.type.SqlTypes;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * La factura o el remito del proveedor (CU-13, tramo 1). Inmutable: el tramo 1 no anula ni edita una compra. El neto es
@@ -58,6 +60,11 @@ public class Compra {
     @Column(nullable = false, updatable = false, precision = 15, scale = 2)
     private BigDecimal neto;
 
+    /** Los recargos del costo que traia la compra (CU-13): se copian a cada articulo, igual que el costo. */
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(nullable = false, updatable = false)
+    private List<RecargoCompra> recargos = new ArrayList<>();
+
     @Column(name = "clave_idempotencia", nullable = false, updatable = false, length = 36)
     private String claveIdempotencia;
 
@@ -71,7 +78,8 @@ public class Compra {
 
     public static Compra registrar(
             Long ferreteriaId, Long proveedorId, String proveedorNombre, TipoCompra tipo, int puntoVenta, long numero,
-            LocalDate fecha, String moneda, BigDecimal neto, String claveIdempotencia, Long usuarioId) {
+            LocalDate fecha, String moneda, BigDecimal neto, List<RecargoCompra> recargos, String claveIdempotencia,
+            Long usuarioId) {
         Compra compra = new Compra();
         compra.ferreteriaId = ferreteriaId;
         compra.proveedorId = proveedorId;
@@ -82,6 +90,7 @@ public class Compra {
         compra.fecha = fecha;
         compra.moneda = moneda;
         compra.neto = neto;
+        compra.recargos = new ArrayList<>(recargos);
         compra.claveIdempotencia = claveIdempotencia;
         compra.usuarioId = usuarioId;
         return compra;
@@ -102,6 +111,7 @@ public class Compra {
     public LocalDate getFecha() { return fecha; }
     public String getMoneda() { return moneda; }
     public BigDecimal getNeto() { return neto; }
+    public List<RecargoCompra> getRecargos() { return List.copyOf(recargos); }
     public String getClaveIdempotencia() { return claveIdempotencia; }
     public Long getUsuarioId() { return usuarioId; }
     public LocalDateTime getRegistrada() { return registrada; }

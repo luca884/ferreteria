@@ -425,6 +425,18 @@ public interface ArticuloRepository extends TenantScopedRepository<Articulo, Lon
         return rubros;
     }
 
+    /** Los articulos activos del proveedor con alguno de esos codigos de proveedor (CU-13, lectura de la factura). */
+    @Query("select a from Articulo a where a.ferreteriaId = :fid and a.proveedorId = :proveedorId "
+            + "and a.activo = true and a.codigoProveedor in :codigos order by a.id")
+    List<Articulo> activosDeProveedorPorCodigo(
+            @Param("fid") Long ferreteriaId,
+            @Param("proveedorId") Long proveedorId,
+            @Param("codigos") Collection<String> codigos);
+
+    default List<Articulo> activosDeProveedorPorCodigoScoped(Long proveedorId, Collection<String> codigos) {
+        return activosDeProveedorPorCodigo(TenantContext.requireFerreteriaId(), proveedorId, codigos);
+    }
+
     /** Los articulos de la ferreteria con esos ids (activos o no), por id ascendente. */
     default List<Articulo> porIdsScoped(Collection<Long> ids) {
         return porIds(TenantContext.requireFerreteriaId(), ids);

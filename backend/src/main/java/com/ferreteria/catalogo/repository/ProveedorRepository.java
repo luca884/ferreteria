@@ -15,6 +15,8 @@ public interface ProveedorRepository extends TenantScopedRepository<Proveedor, L
 
     Optional<Proveedor> findFirstByFerreteriaIdAndNombreIgnoreCase(Long ferreteriaId, String nombre);
 
+    Optional<Proveedor> findFirstByFerreteriaIdAndCuitAndActivoTrueOrderByIdAsc(Long ferreteriaId, String cuit);
+
     boolean existsByFerreteriaIdAndNombreIgnoreCaseAndIdNot(Long ferreteriaId, String nombre, Long id);
 
     /** Ordenados por nombre: solo los activos o, con incluirInactivos, tambien los dados de baja. */
@@ -33,5 +35,10 @@ public interface ProveedorRepository extends TenantScopedRepository<Proveedor, L
     /** Para editar: busca otro proveedor con ese nombre, excluyendo el propio. */
     default boolean existeOtroConNombreScoped(String nombre, Long idPropio) {
         return existsByFerreteriaIdAndNombreIgnoreCaseAndIdNot(TenantContext.requireFerreteriaId(), nombre, idPropio);
+    }
+
+    /** El proveedor activo con ese CUIT (guardado con guiones, 30-12345678-1). */
+    default Optional<Proveedor> buscarActivoPorCuitScoped(String cuit) {
+        return findFirstByFerreteriaIdAndCuitAndActivoTrueOrderByIdAsc(TenantContext.requireFerreteriaId(), cuit);
     }
 }

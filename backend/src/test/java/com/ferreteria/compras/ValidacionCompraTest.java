@@ -86,6 +86,6 @@ class ValidacionCompraTest {
 
     private static CostoDeCompra costo(Long id, String descripcion, String unidad, String moneda) {
         return new CostoDeCompra(id, "C-" + id, descripcion, unidad, moneda, true,
-                BigDecimal.TEN, BigDecimal.TEN, BigDecimal.TEN, BigDecimal.TEN, null);
+                BigDecimal.TEN, BigDecimal.TEN, BigDecimal.TEN, BigDecimal.TEN, null, BigDecimal.TEN, BigDecimal.TEN);
     }
 }

@@ -2,7 +2,9 @@ package com.ferreteria.catalogo.service;
 
 import com.ferreteria.catalogo.api.ArticulosParaCompra;
 import com.ferreteria.catalogo.api.CostoDeCompra;
+import com.ferreteria.catalogo.api.RecargoDeCompra;
 import com.ferreteria.catalogo.model.Articulo;
+import com.ferreteria.catalogo.model.CambioPrecio;
 import com.ferreteria.catalogo.model.ContextoPrecio;
 import com.ferreteria.catalogo.model.ContextosDePrecio;
 import com.ferreteria.catalogo.model.HistorialPrecio;
@@ -11,6 +13,8 @@ import com.ferreteria.catalogo.model.Moneda;
 import com.ferreteria.catalogo.model.OrigenPrecio;
 import com.ferreteria.catalogo.model.PrecioPlaneado;
 import com.ferreteria.catalogo.model.RecalculoAutomatico;
+import com.ferreteria.catalogo.model.RecargoCosto;
+import com.ferreteria.catalogo.model.RecargosDeCosto;
 import com.ferreteria.catalogo.model.VariacionFuerte;
 import com.ferreteria.catalogo.repository.ArticuloRepository;
 import com.ferreteria.catalogo.repository.HistorialPrecioRepository;
@@ -25,6 +29,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -52,8 +57,28 @@ public class ArticulosParaCompraService implements ArticulosParaCompra {
     }
 
     @Override
+    public List<RecargoDeCompra> validarRecargos(List<RecargoDeCompra> recargos) {
+        return aRecargos(recargos).lista().stream()
+                .map(r -> new RecargoDeCompra(r.nombre(), r.porcentaje()))
+                .toList();
+    }
+
+    @Override
     @Transactional(readOnly = true)
-    public List<CostoDeCompra> planear(Map<Long, BigDecimal> costos) {
+    public List<ArticuloPorCodigo> porCodigoDeProveedor(Long proveedorId, Collection<String> codigos) {
+        if (codigos.isEmpty()) {
+            return List.of();
+        }
+        return articuloRepository.activosDeProveedorPorCodigoScoped(proveedorId, codigos).stream()
+                .map(a -> new ArticuloPorCodigo(a.getCodigoProveedor(), a.getId(), a.getDescripcion(),
+                        a.getUnidad().name()))
+                .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<CostoDeCompra> planear(Map<Long, BigDecimal> costos, List<RecargoDeCompra> pedidos) {
+        RecargosDeCosto recargos = aRecargos(pedidos);
         if (costos.isEmpty()) {
             return List.of();
         }
@@ -62,15 +87,28 @@ public class ArticulosParaCompraService implements ArticulosParaCompra {
         return articulos.stream().map(articulo -> {
             BigDecimal costoNuevo = costos.get(articulo.getId());
             ContextoPrecio ctx = contextos.de(articulo.getRubroId());
-            PrecioPlaneado planeado = articulo.precioConCostoAutomatico(costoNuevo, ctx);
+            PrecioPlaneado planeado = articulo.precioConCostoAutomatico(costoNuevo, recargos, ctx);
+            Optional<String> margenNegativo = articulo.isPrecioManual()
+                    ? MargenNegativo.mensaje(costoNuevo, recargos, ctx.cotizacionPara(articulo.getMoneda()),
+                            articulo.getAlicuotaIva(), articulo.getPrecioFinal())
+                    : Optional.empty();
             return costoDeCompra(articulo, articulo.getCosto(), costoNuevo, articulo.getPrecioFinal(),
-                    planeado.precio(), articulo.margenNegativoCon(costoNuevo, ctx), planeado.aviso());
+                    planeado.precio(), margenNegativo, planeado.aviso(),
+                    articulo.costoReal(), recargos.aplicar(costoNuevo));
         }).toList();
+    }
+
+    /** Sobrescrito para que la transaccion obligatoria valga tambien sin recargos (un default de la interfaz no la tendria). */
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public List<CostoDeCompra> aplicar(Map<Long, BigDecimal> costos, Long usuarioId) {
+        return aplicar(costos, List.of(), usuarioId);
     }
 
     @Override
     @Transactional(propagation = Propagation.MANDATORY)
-    public List<CostoDeCompra> aplicar(Map<Long, BigDecimal> costos, Long usuarioId) {
+    public List<CostoDeCompra> aplicar(Map<Long, BigDecimal> costos, List<RecargoDeCompra> pedidos, Long usuarioId) {
+        RecargosDeCosto recargos = aRecargos(pedidos);
         if (costos.isEmpty()) {
             return List.of();
         }
@@ -84,17 +122,33 @@ public class ArticulosParaCompraService implements ArticulosParaCompra {
         for (Articulo articulo : articulos) {
             BigDecimal costoAnterior = articulo.getCosto();
             BigDecimal precioAnterior = articulo.getPrecioFinal();
+            BigDecimal costoRealAnterior = articulo.costoReal();
             ContextoPrecio ctx = contextos.de(articulo.getRubroId());
+            // Primero el costo (con los recargos de hoy) y despues los recargos de la compra, que pisan a los del articulo
+            // (vacios, los borran) y dejan el precio con el costo real. Sin cambio de recargos, solo el costo, como siempre.
+            // Si el ultimo paso no puede fijar el precio (ajustes fuera de rango), el aviso es el de ese paso. El historial
+            // es un solo cambio entre el estado de antes y el de despues.
             RecalculoAutomatico resultado = articulo.ajustarCostoAutomatico(costos.get(articulo.getId()), ctx);
-            resultado.cambio().ifPresent(c -> historial.add(HistorialPrecio.de(articulo, c, OrigenPrecio.COMPRA, usuarioId)));
+            Optional<String> aviso = resultado.aviso();
+            if (!articulo.getRecargosCosto().equals(recargos)) {
+                aviso = articulo.fijarRecargosDeCostoAutomatico(recargos, ctx).aviso();
+            }
+            CambioPrecio.entre(costoAnterior, articulo.getCosto(), precioAnterior, articulo.getPrecioFinal())
+                    .ifPresent(c -> historial.add(HistorialPrecio.de(articulo, c, OrigenPrecio.COMPRA, usuarioId)));
             aplicados.add(costoDeCompra(
                     articulo, costoAnterior, articulo.getCosto(), precioAnterior, articulo.getPrecioFinal(),
-                    articulo.margenNegativoCon(articulo.getCosto(), ctx), resultado.aviso()));
+                    articulo.margenNegativoCon(articulo.getCosto(), ctx), aviso,
+                    costoRealAnterior, articulo.costoReal()));
         }
         if (!historial.isEmpty()) {
             historialPrecioRepository.saveAll(historial);
         }
         return aplicados;
+    }
+
+    private static RecargosDeCosto aRecargos(List<RecargoDeCompra> pedidos) {
+        List<RecargoDeCompra> lista = pedidos == null ? List.of() : pedidos;
+        return new RecargosDeCosto(lista.stream().map(r -> new RecargoCosto(r.nombre(), r.porcentaje())).toList());
     }
 
     /** Contextos de la ferreteria; el dolar vigente se pide solo si hay algun articulo en USD (sin cotizacion: 409). */
@@ -109,7 +163,8 @@ public class ArticulosParaCompraService implements ArticulosParaCompra {
 
     private static CostoDeCompra costoDeCompra(Articulo articulo, BigDecimal costoAnterior, BigDecimal costoNuevo,
                                                BigDecimal precioAnterior, BigDecimal precioNuevo,
-                                               Optional<String> margenNegativo, Optional<String> precioSalteado) {
+                                               Optional<String> margenNegativo, Optional<String> precioSalteado,
+                                               BigDecimal costoRealAnterior, BigDecimal costoRealNuevo) {
         String conMargen = MargenNegativo.junto(
                 VariacionFuerte.mensaje(VariacionFuerte.Sujeto.COSTO, costoAnterior, costoNuevo)
                         .or(() -> VariacionFuerte.mensaje(VariacionFuerte.Sujeto.PRECIO, precioAnterior, precioNuevo)),
@@ -118,6 +173,7 @@ public class ArticulosParaCompraService implements ArticulosParaCompra {
         String advertencia = MargenNegativo.junto(Optional.ofNullable(conMargen), precioSalteado);
         return new CostoDeCompra(articulo.getId(), articulo.getCodigoInterno(), articulo.getDescripcion(),
                 articulo.getUnidad().name(), articulo.getMoneda().name(), articulo.isActivo(),
-                costoAnterior, costoNuevo, precioAnterior, precioNuevo, advertencia);
+                costoAnterior, costoNuevo, precioAnterior, precioNuevo, advertencia,
+                costoRealAnterior, costoRealNuevo);
     }
 }

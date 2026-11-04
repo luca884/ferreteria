@@ -1,5 +1,6 @@
 package com.ferreteria.compras.web;
 
+import com.ferreteria.catalogo.api.RecargoDeCompra;
 import com.ferreteria.compras.model.TipoCompra;
 import com.ferreteria.compras.service.RegistrarCompra;
 import jakarta.validation.Valid;
@@ -19,7 +20,8 @@ import java.util.List;
 /**
  * La compra que carga el Dueno (CU-13), para la vista previa y para registrarla. La clave de idempotencia solo la exige
  * registrar. No tiene ferreteria ni usuario: salen del JWT. Aca solo se valida la forma; lo que depende del proveedor y de
- * los articulos lo valida el servicio.
+ * los articulos lo valida el servicio. Los {@code recargos} son opcionales (sin ellos, la compra los borra de sus
+ * articulos).
  */
 public record CompraRequest(
         @Pattern(regexp = "(?i)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}",
@@ -47,7 +49,16 @@ public record CompraRequest(
 
         @NotEmpty(message = "La compra no tiene artículos.")
         @Size(max = 500, message = "La compra admite hasta 500 renglones.")
-        List<@NotNull(message = "Hay un renglón vacío en la compra.") @Valid RenglonRequest> renglones) {
+        List<@NotNull(message = "Hay un renglón vacío en la compra.") @Valid RenglonRequest> renglones,
+
+        List<@NotNull(message = "Hay un recargo vacío en la compra.") RecargoRequest> recargos) {
+
+    /**
+     * Un recargo sobre el costo (por ejemplo «Embalaje y carga» 4,44). Sus reglas (nombre, rango, 2 decimales, hasta 5) las
+     * valida catalogo, las mismas que las de los recargos del articulo.
+     */
+    public record RecargoRequest(String nombre, BigDecimal porcentaje) {
+    }
 
     public record RenglonRequest(
             @NotNull(message = "Elegí el artículo.")
@@ -67,6 +78,8 @@ public record CompraRequest(
     public RegistrarCompra aPedido() {
         return new RegistrarCompra(clave, proveedorId, tipo, puntoVenta, numero, fecha, renglones.stream()
                 .map(r -> new RegistrarCompra.RenglonCompra(r.articuloId(), r.cantidad(), r.costoUnitario()))
-                .toList());
+                .toList(),
+                recargos == null ? List.of()
+                        : recargos.stream().map(r -> new RecargoDeCompra(r.nombre(), r.porcentaje())).toList());
     }
 }

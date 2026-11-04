@@ -3,6 +3,7 @@ package com.ferreteria.compras.service;
 import com.ferreteria.catalogo.api.ArticulosParaCompra;
 import com.ferreteria.catalogo.api.CostoDeCompra;
 import com.ferreteria.catalogo.api.ProveedoresParaCompra;
+import com.ferreteria.catalogo.api.RecargoDeCompra;
 import com.ferreteria.catalogo.api.ProveedoresParaCompra.ProveedorDeCompra;
 import com.ferreteria.common.HoraArgentina;
 import com.ferreteria.common.exception.ConflictException;
@@ -10,6 +11,7 @@ import com.ferreteria.common.exception.DatosInvalidosException;
 import com.ferreteria.common.exception.ResourceNotFoundException;
 import com.ferreteria.compras.model.Compra;
 import com.ferreteria.compras.model.ItemCompra;
+import com.ferreteria.compras.model.RecargoCompra;
 import com.ferreteria.compras.repository.CompraRepository;
 import com.ferreteria.compras.repository.ItemCompraRepository;
 import com.ferreteria.compras.service.PlanCompra.RenglonPlaneado;
@@ -72,7 +74,8 @@ public class RegistroCompra {
         Long ferreteriaId = TenantContext.requireFerreteriaId();
         Compra compra = compraRepository.save(Compra.registrar(ferreteriaId, pedido.proveedorId(),
                 plan.proveedorNombre(), pedido.tipo(), pedido.puntoVenta(), pedido.numero(), pedido.fecha(),
-                plan.moneda(), plan.neto(), pedido.clave(), usuarioId));
+                plan.moneda(), plan.neto(), plan.recargos().stream().map(RecargoCompra::de).toList(), pedido.clave(),
+                usuarioId));
 
         stockService.registrarCompra(compra.getId(), usuarioId, pedido.renglones().stream()
                 .map(r -> new SalidaStock(r.articuloId(), r.cantidad()))
@@ -81,7 +84,7 @@ public class RegistroCompra {
         Map<Long, BigDecimal> costos = new LinkedHashMap<>();
         pedido.renglones().forEach(r -> costos.put(r.articuloId(), r.costoUnitario()));
         Map<Long, CostoDeCompra> aplicados = new HashMap<>();
-        articulosParaCompra.aplicar(costos, usuarioId).forEach(c -> aplicados.put(c.articuloId(), c));
+        articulosParaCompra.aplicar(costos, plan.recargos(), usuarioId).forEach(c -> aplicados.put(c.articuloId(), c));
 
         List<ItemCompra> items = new ArrayList<>();
         for (int i = 0; i < pedido.renglones().size(); i++) {
@@ -122,21 +125,23 @@ public class RegistroCompra {
 
     private PlanCompra validarYPlanear(RegistrarCompra pedido) {
         ValidacionCompra.forma(pedido, HoraArgentina.hoy());
+        List<RecargoDeCompra> recargos = articulosParaCompra.validarRecargos(pedido.recargos());
         ProveedorDeCompra proveedor = proveedores.buscar(pedido.proveedorId())
                 .orElseThrow(() -> new ResourceNotFoundException("Proveedor no encontrado"));
 
         Map<Long, BigDecimal> costos = new LinkedHashMap<>();
         pedido.renglones().forEach(r -> costos.put(r.articuloId(), r.costoUnitario()));
-        List<CostoDeCompra> planeados = articulosParaCompra.planear(costos);
+        List<CostoDeCompra> planeados = articulosParaCompra.planear(costos, recargos);
         ValidacionCompra.articulos(pedido, planeados);
         if (!proveedor.activo()) {
             throw new DatosInvalidosException(Map.of("proveedorId", "El proveedor está dado de baja."));
         }
         comprobanteLibre(pedido);
-        return plan(pedido, proveedor, planeados);
+        return plan(pedido, proveedor, planeados, recargos);
     }
 
-    private static PlanCompra plan(RegistrarCompra pedido, ProveedorDeCompra proveedor, List<CostoDeCompra> planeados) {
+    private static PlanCompra plan(RegistrarCompra pedido, ProveedorDeCompra proveedor, List<CostoDeCompra> planeados,
+                                   List<RecargoDeCompra> recargos) {
         Map<Long, CostoDeCompra> porId = new HashMap<>();
         planeados.forEach(c -> porId.put(c.articuloId(), c));
         List<RenglonPlaneado> renglones = new ArrayList<>();
@@ -158,10 +163,14 @@ public class RegistroCompra {
                 iguales++;
             }
         }
-        return new PlanCompra(proveedor.nombre(), planeados.get(0).moneda(), renglones, neto, suben, bajan, iguales);
+        return new PlanCompra(proveedor.nombre(), planeados.get(0).moneda(), renglones, neto, suben, bajan, iguales,
+                recargos);
     }
 
-    /** Proveedor, comprobante, fecha y renglones (articulo, cantidad y costo), por valor: 10 y 10.00 son lo mismo. */
+    /**
+     * Proveedor, comprobante, fecha, renglones (articulo, cantidad y costo) y recargos, por valor: 10 y 10.00 son lo
+     * mismo.
+     */
     private static boolean mismoContenido(RegistrarCompra pedido, Compra compra, List<ItemCompra> items) {
         if (!pedido.proveedorId().equals(compra.getProveedorId()) || pedido.tipo() != compra.getTipo()
                 || pedido.puntoVenta() != compra.getPuntoVenta() || pedido.numero() != compra.getNumero()
@@ -174,6 +183,22 @@ public class RegistroCompra {
             if (!renglon.articuloId().equals(guardado.getArticuloId())
                     || renglon.cantidad().compareTo(guardado.getCantidad()) != 0
                     || renglon.costoUnitario().compareTo(guardado.getCostoUnitario()) != 0) {
+                return false;
+            }
+        }
+        return mismosRecargos(pedido.recargos(), compra.getRecargos());
+    }
+
+    /** Los recargos del pedido (como llegaron, sin normalizar) contra los guardados, por valor y en orden. */
+    private static boolean mismosRecargos(List<RecargoDeCompra> pedidos, List<RecargoCompra> guardados) {
+        if (pedidos.size() != guardados.size()) {
+            return false;
+        }
+        for (int i = 0; i < pedidos.size(); i++) {
+            RecargoDeCompra pedido = pedidos.get(i);
+            RecargoCompra guardado = guardados.get(i);
+            if (pedido.nombre() == null || !pedido.nombre().strip().equals(guardado.nombre())
+                    || pedido.porcentaje() == null || pedido.porcentaje().compareTo(guardado.porcentaje()) != 0) {
                 return false;
             }
         }
