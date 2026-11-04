@@ -1,6 +1,7 @@
 package com.ferreteria.common;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 
 import com.ferreteria.common.config.RelojConfig;
 import com.ferreteria.stock.model.MovimientoStock;
@@ -12,6 +13,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.time.ZoneOffset;
 import java.util.TimeZone;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -74,6 +76,29 @@ class HoraArgentinaTest {
 
         assertThat(reloj.instant()).isEqualTo(Instant.parse("2026-11-04T22:30:06.675534Z"));
         assertThat(reloj.getZone()).isEqualTo(BUENOS_AIRES);
+    }
+
+    @Test
+    @DisplayName("el reloj recortado cumple el contrato de Clock: millis() funciona y coincide con instant()")
+    void millisDelReloj() {
+        Clock fijo = HoraArgentina.enMicrosegundos(
+                Clock.fixed(Instant.parse("2026-11-04T22:30:06.675534999Z"), BUENOS_AIRES));
+        Clock reloj = new RelojConfig().reloj();
+
+        assertThat(fijo.millis()).isEqualTo(Instant.parse("2026-11-04T22:30:06.675Z").toEpochMilli());
+        assertThatCode(reloj::millis).doesNotThrowAnyException();
+        assertThatCode(() -> Clock.offset(reloj, Duration.ofSeconds(1)).millis()).doesNotThrowAnyException();
+    }
+
+    @Test
+    @DisplayName("withZone cambia la zona y conserva el recorte")
+    void withZoneConservaElRecorte() {
+        Clock base = Clock.fixed(Instant.parse("2026-11-04T22:30:06.675534999Z"), BUENOS_AIRES);
+
+        Clock enUtc = HoraArgentina.enMicrosegundos(base).withZone(ZoneOffset.UTC);
+
+        assertThat(enUtc.getZone()).isEqualTo(ZoneOffset.UTC);
+        assertThat(enUtc.instant()).isEqualTo(Instant.parse("2026-11-04T22:30:06.675534Z"));
     }
 
     @Test
