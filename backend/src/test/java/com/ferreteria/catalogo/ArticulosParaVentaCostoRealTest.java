@@ -29,7 +29,8 @@ class ArticulosParaVentaCostoRealTest extends IntegrationTestBase {
     @Test
     @DisplayName("con recargos copia el costo real; sin recargos, el costo de siempre")
     void copiaElCostoReal() {
-        String cuit = String.format("30-%08d-%d", 79900000 + SECUENCIA.incrementAndGet(), 1);
+        // Rango propio: StockServiceIntegrationTest usa 79900000 y, en la misma JVM (mismo MySQL), chocaban.
+        String cuit = String.format("30-%08d-%d", 79300000 + SECUENCIA.incrementAndGet(), 1);
         jdbc.update("insert into ferreteria (razon_social, cuit, condicion_iva) values (?, ?, 'RESPONSABLE_INSCRIPTO')",
                 "Costo real " + cuit, cuit);
         Long f = jdbc.queryForObject("select id from ferreteria where cuit = ?", Long.class, cuit);
