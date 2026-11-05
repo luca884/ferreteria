@@ -206,6 +206,66 @@ class LectorPdfTest {
     }
 
     @Test
+    void armarLaTablaDeUnaListaTambienOcupaElTurno() throws Exception {
+        // Armar la tabla de una lista gasta CPU como interpretar una factura, y corria con el turno ya suelto.
+        Topes esperaCorta = new Topes(TOPES.palabras(), TOPES.memoria(), TOPES.tiempo(), Duration.ofMillis(300));
+        java.util.concurrent.CountDownLatch armando = new java.util.concurrent.CountDownLatch(1);
+        java.util.concurrent.CountDownLatch terminar = new java.util.concurrent.CountDownLatch(1);
+        LectorPdf conArmadoLento = new LectorPdf(esperaCorta, palabras -> {
+            armando.countDown();
+            try {
+                terminar.await(30, TimeUnit.SECONDS);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+            return TablaDePdf.armar(palabras);
+        });
+        ExecutorService otro = Executors.newSingleThreadExecutor();
+        try {
+            Future<LecturaLista> primero = otro.submit(() -> conArmadoLento.leer(ListasDePrueba.pdf(LISTA)));
+            assertThat(armando.await(30, TimeUnit.SECONDS)).isTrue();
+
+            assertThatThrownBy(() -> conArmadoLento.palabras(ListasDePrueba.pdf(LISTA)))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessage(OCUPADO);
+
+            terminar.countDown();
+            LecturaLista lectura = primero.get(30, TimeUnit.SECONDS);
+            assertThat(lectura.hojas()).containsExactly("PDF");
+            assertThat(lectura.filas()).hasSize(LISTA.size());
+        } finally {
+            terminar.countDown();
+            otro.shutdownNow();
+        }
+    }
+
+    @Test
+    void siArmarLaTablaFallaElTurnoSeSueltaYLaMismaFerreteriaVuelveALeer() {
+        Topes esperaCorta = new Topes(TOPES.palabras(), TOPES.memoria(), TOPES.tiempo(), Duration.ofMillis(300));
+        LectorPdf queFalla = new LectorPdf(esperaCorta, palabras -> {
+            throw LimitesDeLista.demasiadasColumnas();
+        });
+
+        for (int i = 0; i < 2; i++) {
+            assertThatThrownBy(() -> queFalla.leer(ListasDePrueba.pdf(LISTA)))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessage("La lista tiene datos en más de 200 columnas. Dejá solo las columnas que usás.");
+        }
+    }
+
+    @Test
+    void unaListaEnPdfSinTextoAvisaSinArmarLaTabla() {
+        LectorPdf sinArmar = new LectorPdf(TOPES, palabras -> {
+            throw new AssertionError("no se arma la tabla de un PDF sin texto");
+        });
+
+        assertThatThrownBy(() -> sinArmar.leer(ListasDePrueba.pdfSinTexto()))
+            .isInstanceOf(BadRequestException.class)
+            .hasMessage("El PDF no tiene texto para leer. Pedile al proveedor la lista en Excel o en un PDF que no sea "
+                + "escaneado.");
+    }
+
+    @Test
     void unPdfSinTextoAvisaAntesDeInterpretar() {
         assertThatThrownBy(() -> lector.leer(ListasDePrueba.pdfSinTexto(), "sin texto", palabras -> {
             throw new AssertionError("no se interpreta un PDF sin texto");

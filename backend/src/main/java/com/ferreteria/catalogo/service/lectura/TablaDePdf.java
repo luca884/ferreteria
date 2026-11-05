@@ -181,38 +181,83 @@ final class TablaDePdf {
     /**
      * Une las columnas separadas por un hueco angosto (no mas ancho que la separacion de bloques) cuando a su izquierda
      * todas las lineas tienen la misma palabra. Solo cuentan las lineas con una palabra a cada lado del hueco.
+     *
+     * <p>Una sola pasada: la columna de la derecha de cada hueco es siempre una de las originales, asi que las palabras
+     * que la preceden se juntan una vez al principio ({@link #antesDeCadaColumna}). Mirar todas las palabras por cada
+     * hueco tardaba casi dos minutos con un PDF armado a proposito.
      */
     private static List<Columna> unirHuecosSinVariedad(List<Columna> columnas, List<List<PalabraPdf>> deTabla) {
+        if (columnas.size() < 2) {
+            return columnas;
+        }
         double angosto = SEPARACION_DE_BLOQUES * tamanoTipico(deTabla);
-        int i = 0;
-        while (i < columnas.size() - 1) {
-            Columna izquierda = columnas.get(i);
-            Columna derecha = columnas.get(i + 1);
-            if (derecha.inicio - izquierda.fin <= angosto && palabrasDistintasAntesDe(izquierda, derecha, deTabla) < 2) {
+        List<List<PalabraPdf>> antesDe = antesDeCadaColumna(columnas, deTabla);
+        List<Columna> unidas = new ArrayList<>();
+        Columna izquierda = columnas.get(0);
+        for (int k = 1; k < columnas.size(); k++) {
+            Columna derecha = columnas.get(k);
+            if (derecha.inicio - izquierda.fin <= angosto && !variasPalabrasAntesDe(izquierda, antesDe.get(k))) {
                 izquierda.fin = derecha.fin;
                 izquierda.lineas = Math.max(izquierda.lineas, derecha.lineas);
-                columnas.remove(i + 1);
             } else {
-                i++;
+                unidas.add(izquierda);
+                izquierda = derecha;
             }
         }
-        return columnas;
+        unidas.add(izquierda);
+        return unidas;
     }
 
-    /** Las palabras distintas que terminan en la columna izquierda justo antes de una que arranca en la derecha. */
-    private static long palabrasDistintasAntesDe(Columna izquierda, Columna derecha, List<List<PalabraPdf>> deTabla) {
-        List<String> antes = new ArrayList<>();
+    /**
+     * Por cada columna, las palabras que van justo antes, en la misma linea, de una que arranca en ella. Las columnas
+     * no se tocan entre si y van en orden, asi que la de cada palabra sale por busqueda binaria.
+     */
+    private static List<List<PalabraPdf>> antesDeCadaColumna(List<Columna> columnas, List<List<PalabraPdf>> deTabla) {
+        List<List<PalabraPdf>> antesDe = new ArrayList<>(columnas.size());
+        for (int k = 0; k < columnas.size(); k++) {
+            antesDe.add(new ArrayList<>(0));
+        }
         for (List<PalabraPdf> linea : deTabla) {
             for (int j = 1; j < linea.size(); j++) {
-                PalabraPdf anterior = linea.get(j - 1);
-                PalabraPdf siguiente = linea.get(j);
-                if (anterior.derecha() >= izquierda.inicio && anterior.derecha() <= izquierda.fin
-                    && siguiente.izquierda() >= derecha.inicio && siguiente.izquierda() <= derecha.fin) {
-                    antes.add(anterior.texto());
+                int k = indiceQueContiene(columnas, linea.get(j).izquierda());
+                if (k >= 0) {
+                    antesDe.get(k).add(linea.get(j - 1));
                 }
             }
         }
-        return antes.stream().distinct().limit(2).count();
+        return antesDe;
+    }
+
+    /** El indice de la columna con {@code inicio <= x <= fin}, o -1 si x cae en un hueco. */
+    private static int indiceQueContiene(List<Columna> columnas, double x) {
+        int bajo = 0;
+        int alto = columnas.size() - 1;
+        int ultimaQueEmpiezaAntes = -1;
+        while (bajo <= alto) {
+            int medio = (bajo + alto) >>> 1;
+            if (columnas.get(medio).inicio <= x) {
+                ultimaQueEmpiezaAntes = medio;
+                bajo = medio + 1;
+            } else {
+                alto = medio - 1;
+            }
+        }
+        return ultimaQueEmpiezaAntes >= 0 && x <= columnas.get(ultimaQueEmpiezaAntes).fin ? ultimaQueEmpiezaAntes : -1;
+    }
+
+    /** Si entre las palabras que terminan en la columna izquierda hay al menos dos distintas. */
+    private static boolean variasPalabrasAntesDe(Columna izquierda, List<PalabraPdf> anteriores) {
+        String primera = null;
+        for (PalabraPdf anterior : anteriores) {
+            if (anterior.derecha() >= izquierda.inicio && anterior.derecha() <= izquierda.fin) {
+                if (primera == null) {
+                    primera = anterior.texto();
+                } else if (!primera.equals(anterior.texto())) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     /** La mediana del tamano de letra de las palabras de la tabla. */
@@ -221,29 +266,55 @@ final class TablaDePdf {
         return tamanos.length == 0 ? 1 : Math.max(1, tamanos[tamanos.length / 2]);
     }
 
-    /** Une cada columna debil con la vecina mas cercana (a igual distancia, con la de la izquierda). */
+    /**
+     * Une cada columna debil con la vecina mas cercana (a igual distancia, con la de la izquierda), empezando siempre por
+     * la primera debil. Las de antes de esa no son debiles y una union nunca les baja las lineas, asi que despues de
+     * unir se sigue desde la de la derecha: una sola pasada, con las vecinas enlazadas, en lugar de volver a empezar y
+     * correr la lista en cada union.
+     */
     private static List<Columna> unirDebiles(List<Columna> columnas, int lineasDeTabla) {
         double minimo = FRACCION_COLUMNA_DEBIL * lineasDeTabla;
-        boolean unio = true;
-        while (unio && columnas.size() > 1) {
-            unio = false;
-            for (int i = 0; i < columnas.size(); i++) {
-                Columna debil = columnas.get(i);
-                if (debil.lineas >= minimo) {
-                    continue;
-                }
-                double aLaIzquierda = i > 0 ? debil.inicio - columnas.get(i - 1).fin : Double.MAX_VALUE;
-                double aLaDerecha = i + 1 < columnas.size() ? columnas.get(i + 1).inicio - debil.fin : Double.MAX_VALUE;
-                Columna vecina = columnas.get(aLaIzquierda <= aLaDerecha ? i - 1 : i + 1);
-                vecina.inicio = Math.min(vecina.inicio, debil.inicio);
-                vecina.fin = Math.max(vecina.fin, debil.fin);
-                vecina.lineas = Math.max(vecina.lineas, debil.lineas);
-                columnas.remove(i);
-                unio = true;
-                break;
+        int total = columnas.size();
+        int[] anterior = new int[total];
+        int[] siguiente = new int[total];
+        boolean[] unida = new boolean[total];
+        for (int i = 0; i < total; i++) {
+            anterior[i] = i - 1;
+            siguiente[i] = i + 1;
+        }
+        int quedan = total;
+        int i = 0;
+        while (i < total && quedan > 1) {
+            Columna debil = columnas.get(i);
+            if (debil.lineas >= minimo) {
+                i = siguiente[i];
+                continue;
+            }
+            int izquierda = anterior[i];
+            int derecha = siguiente[i];
+            double aLaIzquierda = izquierda >= 0 ? debil.inicio - columnas.get(izquierda).fin : Double.MAX_VALUE;
+            double aLaDerecha = derecha < total ? columnas.get(derecha).inicio - debil.fin : Double.MAX_VALUE;
+            Columna vecina = columnas.get(aLaIzquierda <= aLaDerecha ? izquierda : derecha);
+            vecina.inicio = Math.min(vecina.inicio, debil.inicio);
+            vecina.fin = Math.max(vecina.fin, debil.fin);
+            vecina.lineas = Math.max(vecina.lineas, debil.lineas);
+            unida[i] = true;
+            quedan--;
+            if (izquierda >= 0) {
+                siguiente[izquierda] = derecha;
+            }
+            if (derecha < total) {
+                anterior[derecha] = izquierda;
+            }
+            i = derecha;
+        }
+        List<Columna> quedaron = new ArrayList<>(quedan);
+        for (int k = 0; k < total; k++) {
+            if (!unida[k]) {
+                quedaron.add(columnas.get(k));
             }
         }
-        return columnas;
+        return quedaron;
     }
 
     /** Las palabras de una linea de la tabla, cada una en su columna; nunca vuelve a una columna anterior. */

@@ -2,10 +2,12 @@ package com.ferreteria.catalogo.service.lectura;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 
 import com.ferreteria.catalogo.model.Celda;
 import com.ferreteria.catalogo.model.FilaLeida;
 import com.ferreteria.common.exception.BadRequestException;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -310,5 +312,124 @@ class TablaDePdfTest {
         assertThatThrownBy(() -> TablaDePdf.armar(palabras))
             .isInstanceOf(BadRequestException.class)
             .hasMessage("La lista es demasiado grande para leerla. Dividila en archivos más chicos.");
+    }
+
+    /** 40 lineas con «aa» en x=10 y «cc» en x=100, y un texto extra en las lineas indicadas (una columna debil). */
+    private static List<PalabraPdf> dosColumnasFuertesCon(Object... lineaXYTexto) {
+        List<PalabraPdf> palabras = new ArrayList<>();
+        for (int l = 0; l < 40; l++) {
+            List<Object> partes = new ArrayList<>(List.of(10, "aa", 100, "cc"));
+            for (int i = 0; i < lineaXYTexto.length; i += 3) {
+                if ((int) lineaXYTexto[i] == l) {
+                    partes.addAll(List.of(lineaXYTexto[i + 1], lineaXYTexto[i + 2]));
+                }
+            }
+            List<PalabraPdf> deLaLinea = linea(1, 100 + l * 15, partes.toArray());
+            palabras.addAll(deLaLinea);
+        }
+        return palabras;
+    }
+
+    @Test
+    void unaColumnaDebilAIgualDistanciaDeSusVecinasSeUneConLaDeLaIzquierda() {
+        // «bb» en 55..65: 35 hasta «aa» (termina en 20) y 35 hasta «cc» (empieza en 100); esta en 1 de 40 lineas.
+        List<FilaLeida> filas = TablaDePdf.armar(dosColumnasFuertesCon(5, 55, "bb"));
+
+        assertThat(filas).allSatisfy(fila -> assertThat(fila.celdas()).hasSize(2));
+        assertThat(textos(filas.get(5))).containsExactly("aa bb", "cc");
+        assertThat(textos(filas.get(0))).containsExactly("aa", "cc");
+    }
+
+    @Test
+    void unaDebilQueAbsorbeAOtraSigueSiendoDebilYSeVuelveAUnir() {
+        // «w1» (40..50) esta a 7 de «w2» (57..67) y a 20 de «aa»: se une con «w2», que queda en 40..67, sigue debil y
+        // ahora esta a 20 de «aa» y a 33 de «cc», asi que se une con «aa». El hueco de 7 es mas ancho que el angosto (5).
+        List<FilaLeida> filas = TablaDePdf.armar(dosColumnasFuertesCon(3, 40, "w1", 7, 57, "w2"));
+
+        assertThat(filas).allSatisfy(fila -> assertThat(fila.celdas()).hasSize(2));
+        assertThat(textos(filas.get(3))).containsExactly("aa w1", "cc");
+        assertThat(textos(filas.get(7))).containsExactly("aa w2", "cc");
+    }
+
+    @Test
+    void unaDebilEnLaPrimeraYOtraEnLaUltimaColumnaSeUnenConSuUnicaVecina() {
+        List<FilaLeida> filas = TablaDePdf.armar(dosColumnasFuertesCon(2, -40, "ff", 9, 150, "zz"));
+
+        assertThat(filas).allSatisfy(fila -> assertThat(fila.celdas()).hasSize(2));
+        assertThat(textos(filas.get(2))).containsExactly("ff aa", "cc");
+        assertThat(textos(filas.get(9))).containsExactly("aa", "cc zz");
+    }
+
+    @Test
+    void unHuecoAngostoConPalabrasDistintasQueTerminanJustoEnElBordeSigueSeparandoColumnas() {
+        // Como los codigos de M-S: el codigo termina justo en el fin de su columna y la descripcion arranca justo en el
+        // inicio de la suya, a un espacio comun. Los codigos son distintos, asi que son dos columnas.
+        List<PalabraPdf> palabras = new ArrayList<>();
+        palabras.addAll(linea(1, 100, 10, "A1 Tornillo", 200, "100"));
+        palabras.addAll(linea(1, 115, 10, "B2 Tuerca", 200, "200"));
+        palabras.addAll(linea(1, 130, 10, "C3 Arandela", 200, "300"));
+
+        List<FilaLeida> filas = TablaDePdf.armar(palabras);
+
+        assertThat(textos(filas.get(0))).containsExactly("A1", "Tornillo", "100");
+        assertThat(textos(filas.get(1))).containsExactly("B2", "Tuerca", "200");
+    }
+
+    /**
+     * El peor PDF del tope de palabras para los huecos angostos: 4 lineas con 125.000 palabras cada una, a la misma x
+     * en todas, separadas por huecos mas anchos que el de tramos juntos y mas angostos que el de bloques, y un hueco
+     * ancho en el medio. Cada hueco angosto es una columna candidata (unas 125.000) que hay que mirar.
+     */
+    private static List<PalabraPdf> huecosAngostosEnCuatroLineas(boolean mismaPalabra) {
+        int porLinea = LectorPdf.MAXIMO_PALABRAS / 4;
+        List<PalabraPdf> palabras = new ArrayList<>(LectorPdf.MAXIMO_PALABRAS);
+        for (int l = 0; l < 4; l++) {
+            for (int j = 0; j < porLinea; j++) {
+                double x = j * 2.8 + (j >= porLinea / 2 ? 50 : 0);
+                palabras.add(new PalabraPdf(0, x, x + 2, l * 12, 2, mismaPalabra ? "a" : "p" + l + "-" + j));
+            }
+        }
+        return palabras;
+    }
+
+    @Test
+    void huecosAngostosConLaMismaPalabraEnElTopeDePalabrasSeArmanEnPocoTiempo() {
+        List<PalabraPdf> palabras = huecosAngostosEnCuatroLineas(true);
+
+        List<FilaLeida> filas = assertTimeoutPreemptively(Duration.ofSeconds(2), () -> TablaDePdf.armar(palabras));
+
+        int mitad = LectorPdf.MAXIMO_PALABRAS / 8;
+        String unaMitad = String.join(" ", Collections.nCopies(mitad, "a"));
+        assertThat(filas).hasSize(4);
+        assertThat(filas).allSatisfy(fila -> assertThat(textos(fila)).containsExactly(unaMitad, unaMitad));
+    }
+
+    @Test
+    void muchasColumnasDebilesEnElTopeDePalabrasSeUnenEnPocoTiempo() {
+        // 100 lineas y 250.000 columnas: cada columna tiene texto en 2 lineas (mas que el 1 % tolerado, menos que el 5 %
+        // de una columna que no es debil), con palabras distintas y huecos anchos. Todas son debiles y terminan en una.
+        int columnas = LectorPdf.MAXIMO_PALABRAS / 2;
+        List<PalabraPdf> palabras = new ArrayList<>(LectorPdf.MAXIMO_PALABRAS);
+        for (int c = 0; c < columnas; c++) {
+            double x = c * 3.0;
+            for (int l : new int[] {(2 * c) % 100, (2 * c + 1) % 100}) {
+                palabras.add(new PalabraPdf(0, x, x + 2, l * 12, 10, "c" + c));
+            }
+        }
+
+        List<FilaLeida> filas = assertTimeoutPreemptively(Duration.ofSeconds(2), () -> TablaDePdf.armar(palabras));
+
+        assertThat(filas).hasSize(100);
+        assertThat(filas).allSatisfy(fila -> assertThat(fila.celdas()).hasSize(1));
+        assertThat(textos(filas.get(0)).get(0)).startsWith("c0 c50 c100 ");
+    }
+
+    @Test
+    void huecosAngostosConPalabrasDistintasEnElTopeDePalabrasSeRechazanEnPocoTiempo() {
+        List<PalabraPdf> palabras = huecosAngostosEnCuatroLineas(false);
+
+        assertTimeoutPreemptively(Duration.ofSeconds(2), () -> assertThatThrownBy(() -> TablaDePdf.armar(palabras))
+            .isInstanceOf(BadRequestException.class)
+            .hasMessage("La lista tiene datos en más de 200 columnas. Dejá solo las columnas que usás."));
     }
 }

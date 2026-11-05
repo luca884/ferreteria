@@ -60,6 +60,7 @@ public class LectorPdf implements LectorDeLista {
     private final Class<?> principal;
     private final Optional<Path> nice;
     private final TurnoDeLectura turno;
+    private final Function<List<PalabraPdf>, List<FilaLeida>> armar;
 
     public LectorPdf() {
         this(TOPES, ExtractorPdf.class);
@@ -67,20 +68,32 @@ public class LectorPdf implements LectorDeLista {
 
     /** Con otros topes o con otro proceso en lugar de {@link ExtractorPdf}, para probarlos. */
     LectorPdf(Topes topes, Class<?> principal) {
-        this(topes, principal, NICE.stream().filter(Files::isExecutable).findFirst());
+        this(topes, principal, NICE.stream().filter(Files::isExecutable).findFirst(), TablaDePdf::armar);
     }
 
     /** Sin {@code nice} (una maquina que no lo tiene), para probar que la JVM aparte arranca igual. */
     LectorPdf(Topes topes, Class<?> principal, Optional<Path> nice) {
+        this(topes, principal, nice, TablaDePdf::armar);
+    }
+
+    /** Con otra forma de armar la tabla en lugar de {@link TablaDePdf#armar}, para probar que ocupa el turno. */
+    LectorPdf(Topes topes, Function<List<PalabraPdf>, List<FilaLeida>> armar) {
+        this(topes, ExtractorPdf.class, NICE.stream().filter(Files::isExecutable).findFirst(), armar);
+    }
+
+    private LectorPdf(Topes topes, Class<?> principal, Optional<Path> nice,
+                      Function<List<PalabraPdf>, List<FilaLeida>> armar) {
         this.topes = topes;
         this.principal = principal;
         this.nice = nice;
         this.turno = new TurnoDeLectura(topes.espera(), OCUPADO);
+        this.armar = armar;
     }
 
+    /** Armar la tabla tambien gasta CPU: corre con el turno tomado, como la interpretacion de una factura. */
     @Override
     public LecturaLista leer(byte[] contenido) {
-        List<FilaLeida> filas = TablaDePdf.armar(palabras(contenido));
+        List<FilaLeida> filas = leer(contenido, SIN_TEXTO, armar);
         return new LecturaLista(List.of(HOJA), filas);
     }
 
