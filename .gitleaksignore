@@ -1,0 +1,6 @@
+# Falsos positivos de gitleaks revisados el 2026-11-05: datos de prueba, no secretos.
+# SinSecretosEnLogsTest: token y sign inventados para probar que no se loguean.
+eeadd3672ccc63258fd212d6e37a8619236e32f7:backend/src/test/java/com/ferreteria/facturacion/arca/SinSecretosEnLogsTest.java:generic-api-key:40
+eeadd3672ccc63258fd212d6e37a8619236e32f7:backend/src/test/java/com/ferreteria/facturacion/arca/SinSecretosEnLogsTest.java:generic-api-key:42
+# CredencialArcaIntegrationTest: encabezado de clave privada cortado e inválido, para probar que se rechaza.
+77c0cb8f44f06fcd5b83c49afd7143188c2dca10:backend/src/test/java/com/ferreteria/facturacion/credencial/CredencialArcaIntegrationTest.java:private-key:323
