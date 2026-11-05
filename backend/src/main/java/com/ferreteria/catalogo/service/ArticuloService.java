@@ -32,6 +32,7 @@ import com.ferreteria.common.exception.BadRequestException;
 import com.ferreteria.common.exception.ConflictException;
 import com.ferreteria.common.exception.DatosInvalidosException;
 import com.ferreteria.common.exception.ErroresDeValidacion;
+import com.ferreteria.common.exception.ReglaDeNegocioException;
 import com.ferreteria.common.exception.ResourceNotFoundException;
 import com.ferreteria.cotizacion.api.DolarDePrecios;
 import com.ferreteria.ferreteria.model.ConfiguracionPrecios;
@@ -233,13 +234,18 @@ public class ArticuloService {
 
     /**
      * Pone el articulo en oferta (ofertas, S1), reemplazando la que tuviera. Solo cambia la oferta: el precio normal
-     * y su historial quedan como estan. Mismo orden que los ajustes: 404, version, y despues las validaciones.
+     * y su historial quedan como estan. Mismo orden que los ajustes: 404, version, y despues las validaciones. Un
+     * articulo dado de baja no se pone en oferta (422), como no se le ajusta el stock; sacarle la que tenia, si.
      */
     @Transactional
     public ArticuloResponse ponerOferta(Long id, OfertaRequest request) {
         Articulo articulo = articuloRepository.findParaEditarScoped(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Artículo no encontrado"));
         verificarVersion(articulo, request.version());
+        if (!articulo.isActivo()) {
+            throw new ReglaDeNegocioException(
+                    "\"" + articulo.getDescripcion() + "\" está dado de baja. Reactivalo para ponerle una oferta.");
+        }
         articulo.fijarOferta(request.toOferta(), HoraArgentina.hoy());
         escribirOChocar();
         return conCostoAl(ArticuloResponse.from(articulo, stockVigente(id, articulo)));
