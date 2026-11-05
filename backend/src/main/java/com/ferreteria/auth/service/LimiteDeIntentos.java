@@ -40,6 +40,8 @@ public class LimiteDeIntentos {
     static final Duration VENTANA_IP = Duration.ofMinutes(1);
     private static final Duration CADA_CUANTO_PURGAR = Duration.ofMinutes(1);
     private static final Pattern MARCAS_E_INVISIBLES = Pattern.compile("[\\p{M}\\p{Cf}]");
+    /** Lo único que puede tener una IPv6 escrita como texto (sin la zona): se lee sin consultar el DNS. */
+    private static final Pattern DIRECCION_IPV6 = Pattern.compile("[0-9A-Fa-f:.]+");
 
     private record RachaDeEmail(int fallos, int nivel, Instant bloqueadoHasta, Instant ultimo) {
         boolean bloqueada(Instant ahora) {
@@ -197,15 +199,21 @@ public class LimiteDeIntentos {
     /**
      * La clave del límite por IP. Una IPv6 cuenta por su /64: un proveedor le da al cliente un /64 entero, y rotando
      * dentro de él cada intento tendría su propio límite (revisión de seguridad del 2026-11-05, hallazgo 3). Una IPv4
-     * escrita como IPv6 ({@code ::ffff:a.b.c.d}) es esa IPv4. Solo se interpreta un texto con «:», que siempre es una
-     * dirección literal: {@link InetAddress#getByName} no consulta el DNS para él.
+     * escrita como IPv6 ({@code ::ffff:a.b.c.d}) es esa IPv4 y la zona ({@code %eth0}) no cuenta. Solo se interpreta un
+     * texto hecho de dígitos hexadecimales, «:» y «.»: {@link InetAddress#getByName} lo lee como dirección literal y no
+     * consulta el DNS (con un texto como {@code zz:1} sí lo haría). Cualquier otro texto queda tal cual.
      */
     static String claveDeIp(String ip) {
         if (ip == null || ip.indexOf(':') < 0) {
             return ip;
         }
+        int zona = ip.indexOf('%');
+        String sinZona = zona < 0 ? ip : ip.substring(0, zona);
+        if (!DIRECCION_IPV6.matcher(sinZona).matches()) {
+            return ip;
+        }
         try {
-            InetAddress direccion = InetAddress.getByName(ip);
+            InetAddress direccion = InetAddress.getByName(sinZona);
             if (direccion instanceof Inet4Address) {
                 return direccion.getHostAddress();
             }

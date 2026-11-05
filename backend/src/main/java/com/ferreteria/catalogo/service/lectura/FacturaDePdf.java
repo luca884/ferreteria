@@ -43,6 +43,12 @@ final class FacturaDePdf {
      */
     static final int MAXIMO_NUMEROS_POR_RENGLON = 30;
 
+    /**
+     * Un texto mas largo no es un numero: cada terna multiplica y redondea sus numeros, y con miles de digitos un PDF
+     * de pocos MB tardaba un minuto con el turno de lectura tomado. 20 caracteres alcanzan para 1.234.567.890.100,00.
+     */
+    static final int MAXIMO_CARACTERES_DE_UN_NUMERO = 20;
+
     private static final BigDecimal CIEN = BigDecimal.valueOf(100);
     /** Diferencia de centavos que se tolera al verificar una cuenta contra lo impreso. */
     private static final BigDecimal TOLERANCIA = new BigDecimal("0.01");
@@ -140,6 +146,9 @@ final class FacturaDePdf {
 
     private static BigDecimal numero(String texto, Formato formato) {
         String limpio = sinPorcentaje(texto);
+        if (limpio.length() > MAXIMO_CARACTERES_DE_UN_NUMERO) {
+            return null;
+        }
         if (formato == Formato.US) {
             return NUMERO_US.matcher(limpio).matches() ? new BigDecimal(limpio.replace(",", "")) : null;
         }

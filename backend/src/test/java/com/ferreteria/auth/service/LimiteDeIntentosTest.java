@@ -266,6 +266,16 @@ class LimiteDeIntentosTest {
         }
 
         @Test
+        @DisplayName("la zona de una IPv6 (%eth0) no cambia la clave, y un texto que no es una dirección queda tal cual, sin DNS")
+        void claveDeIpConZonaYTextosQueNoSonDirecciones() {
+            assertThat(LimiteDeIntentos.claveDeIp("fe80::1%nope1")).isEqualTo(LimiteDeIntentos.claveDeIp("fe80::2%nope2"))
+                    .isEqualTo(LimiteDeIntentos.claveDeIp("fe80::3"));
+            for (String texto : new String[] {"zz:1", "g:", "abc:def", "localhost:80", "[::1]"}) {
+                assertThat(LimiteDeIntentos.claveDeIp(texto)).as(texto).isEqualTo(texto);
+            }
+        }
+
+        @Test
         @DisplayName("una IPv4 escrita como IPv6 (::ffff:a.b.c.d) es esa IPv4, y las IPv4 siguen contando de a una")
         void ipv4MapeadaYIpv4() {
             for (int i = 0; i < 20; i++) {

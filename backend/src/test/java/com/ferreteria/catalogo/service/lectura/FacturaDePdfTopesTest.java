@@ -63,6 +63,33 @@ class FacturaDePdfTopesTest {
     }
 
     @Test
+    void numerosDeMilesDeDigitosNoSonNumerosYSeLeenAlInstante() {
+        // B1 del verificador: el tope de numeros por linea no acota lo que cuesta cada terna con numeros enormes.
+        String enorme = "1".repeat(10_000) + "," + "1".repeat(10_000);
+        List<String> lineas = new ArrayList<>();
+        for (int i = 0; i < 3; i++) {
+            lineas.add("X" + i + " " + String.join(" ", Collections.nCopies(FacturaDePdf.MAXIMO_NUMEROS_POR_RENGLON, enorme)));
+        }
+        // En formato argentino, como los numeros enormes: el formato se elige por la mayoria del documento.
+        lineas.add("A1 2,0 TUERCA 50,00 100,00");
+        List<PalabraPdf> palabras = pagina(lineas);
+
+        FacturaLeida factura = assertTimeoutPreemptively(Duration.ofSeconds(1), () -> FacturaDePdf.leer(palabras));
+
+        assertThat(factura.renglones()).extracting(Renglon::codigo).containsExactly("A1");
+    }
+
+    @Test
+    void unNumeroDeVeinteCaracteresSeSigueLeyendo() {
+        List<PalabraPdf> palabras = pagina(List.of("A1 10.000,00 TUERCA 123.456.789,01 1.234.567.890.100,00"));
+
+        FacturaLeida factura = FacturaDePdf.leer(palabras);
+
+        assertThat(factura.renglones()).singleElement()
+            .satisfies(renglon -> assertThat(renglon.neto()).isEqualByComparingTo("1234567890100.00"));
+    }
+
+    @Test
     void unRenglonConMuchosNumerosEnLaDescripcionSeSigueLeyendo() {
         // Medidas, cantidades por caja y codigos en la descripcion: 20 numeros en total, con la terna al final.
         List<PalabraPdf> palabras = pagina(List.of(
