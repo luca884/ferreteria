@@ -59,6 +59,9 @@ final class LibroXlsx {
     /** Caracteres de texto que las celdas leidas guardan en memoria en todo el libro (una lista real: unos pocos millones). */
     static final long MAXIMO_TEXTO_RETENIDO = 32L * 1024 * 1024;
 
+    /** Elementos abiertos a la vez en una parte (ver {@link ConProfundidad}). */
+    static final int MAXIMO_PROFUNDIDAD = 64;
+
     /** Estilos de celda: Excel admite unos 64.000. */
     static final int MAXIMO_ESTILOS = 100_000;
 
@@ -416,6 +419,10 @@ final class LibroXlsx {
         @Override
         public void characters(char[] ch, int inicio, int largo) {
             if (enValor) {
+                // Un valor partido por comentarios o elementos (cada < reinicia el tramo) tampoco pasa el tope de uno.
+                if (valor.length() + largo > MAXIMO_SIN_MARCA) {
+                    throw LimitesDeLista.demasiadoGrande();
+                }
                 valor.append(ch, inicio, largo);
             } else if (enLinea != null) {
                 enLinea.caracteres(ch, inicio, largo);
@@ -583,9 +590,42 @@ final class LibroXlsx {
             throw new IOException("Falta la parte " + parte);
         }
         try (InputStream datos = new Acotado(zip.getInputStream(entrada), maximo)) {
-            fabrica().newSAXParser().parse(datos, manejador);
+            fabrica().newSAXParser().parse(datos, new ConProfundidad(manejador));
         } catch (SAXException | ParserConfigurationException e) {
             throw new IOException("No se pudo leer la parte " + parte, e);
+        }
+    }
+
+    /**
+     * Corta un XML con mas de {@link #MAXIMO_PROFUNDIDAD} elementos abiertos a la vez: el parser guarda cada nivel abierto
+     * y el JDK no los limita, asi que millones de niveles agotarian la memoria antes del tope de bytes. Una hoja real
+     * anida 5 o 6 ({@code worksheet > sheetData > row > c > is > r > t}).
+     */
+    private static final class ConProfundidad extends DefaultHandler {
+        private final DefaultHandler manejador;
+        private int profundidad;
+
+        ConProfundidad(DefaultHandler manejador) {
+            this.manejador = manejador;
+        }
+
+        @Override
+        public void startElement(String uri, String local, String qName, Attributes atributos) throws SAXException {
+            if (++profundidad > MAXIMO_PROFUNDIDAD) {
+                throw LimitesDeLista.demasiadoGrande();
+            }
+            manejador.startElement(uri, local, qName, atributos);
+        }
+
+        @Override
+        public void endElement(String uri, String local, String qName) throws SAXException {
+            profundidad--;
+            manejador.endElement(uri, local, qName);
+        }
+
+        @Override
+        public void characters(char[] ch, int inicio, int largo) throws SAXException {
+            manejador.characters(ch, inicio, largo);
         }
     }
 

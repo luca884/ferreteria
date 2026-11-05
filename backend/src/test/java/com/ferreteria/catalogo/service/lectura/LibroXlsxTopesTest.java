@@ -119,6 +119,29 @@ class LibroXlsxTopesTest {
     }
 
     @Test
+    void unValorPartidoConComentariosTambienTieneTope() {
+        // Cada comentario empieza con < y reinicia el tramo; el valor de la celda igual no pasa de un mega.
+        byte[] xlsx = conPartes(base(), Map.of("xl/worksheets/sheet1.xml", hoja(salida -> {
+            salida.write("<row r=\"1\"><c r=\"A1\"><v>".getBytes(StandardCharsets.UTF_8));
+            repetir(salida, "1".repeat(1000) + "<!---->", 2_000);
+            salida.write("</v></c></row>".getBytes(StandardCharsets.UTF_8));
+        })));
+
+        assertThatThrownBy(() -> lector.leer(xlsx)).isInstanceOf(BadRequestException.class).hasMessage(DEMASIADO_GRANDE);
+    }
+
+    @Test
+    void elementosAnidadosSinFinDicenDemasiadoGrande() {
+        // El parser guarda cada nivel abierto: millones de niveles agotan la memoria antes del tope de bytes.
+        byte[] xlsx = conPartes(base(), Map.of("xl/worksheets/sheet1.xml", hoja(salida -> {
+            salida.write("<row r=\"1\">".getBytes(StandardCharsets.UTF_8));
+            repetir(salida, "<a>", 100_000);
+        })));
+
+        assertThatThrownBy(() -> lector.leer(xlsx)).isInstanceOf(BadRequestException.class).hasMessage(DEMASIADO_GRANDE);
+    }
+
+    @Test
     void unComentarioLargoConMenoresAdentroTambienTieneTope() {
         // El parser junta el comentario entero: un < adentro no lo corta.
         byte[] xlsx = conPartes(base(), Map.of("xl/worksheets/sheet1.xml", hoja(salida -> {
