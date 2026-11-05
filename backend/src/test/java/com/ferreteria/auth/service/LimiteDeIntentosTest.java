@@ -252,6 +252,31 @@ class LimiteDeIntentosTest {
         }
 
         @Test
+        @DisplayName("hallazgo 3: las IPv6 cuentan por su /64, que es lo que tiene un cliente; otro /64 no se ve afectado")
+        void ipv6PorSuSesentaYCuatro() {
+            for (int i = 0; i < 20; i++) {
+                limite.reservar("u" + i + "@x.test", "2001:db8:1:2:" + Integer.toHexString(i) + "::" + (i + 1));
+            }
+
+            assertThatThrownBy(() -> limite.reservar("otro@x.test", "2001:db8:1:2:ffff:ffff:ffff:ffff"))
+                    .isInstanceOf(DemasiadosIntentosException.class);
+            assertThatThrownBy(() -> limite.reservar("otro@x.test", "2001:0db8:0001:0002:0000:0000:0000:0001"))
+                    .as("la misma IPv6 escrita entera").isInstanceOf(DemasiadosIntentosException.class);
+            assertThatCode(() -> limite.reservar("otro@x.test", "2001:db8:1:3::1")).doesNotThrowAnyException();
+        }
+
+        @Test
+        @DisplayName("una IPv4 escrita como IPv6 (::ffff:a.b.c.d) es esa IPv4, y las IPv4 siguen contando de a una")
+        void ipv4MapeadaYIpv4() {
+            for (int i = 0; i < 20; i++) {
+                limite.reservar("u" + i + "@x.test", "::ffff:" + IP);
+            }
+
+            assertThatThrownBy(() -> limite.reservar("otro@x.test", IP)).isInstanceOf(DemasiadosIntentosException.class);
+            assertThatCode(() -> limite.reservar("otro@x.test", "203.0.113.8")).doesNotThrowAnyException();
+        }
+
+        @Test
         @DisplayName("cerrado el minuto, la IP vuelve a tener sus 20 intentos")
         void ventanaNueva() {
             for (int i = 0; i < 20; i++) {

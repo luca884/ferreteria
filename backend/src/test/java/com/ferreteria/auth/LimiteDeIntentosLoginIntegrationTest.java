@@ -18,8 +18,8 @@ import org.springframework.test.context.TestPropertySource;
 
 /**
  * Límite de intentos del login (hallazgo 1 de la revisión de seguridad) contra un Tomcat real: MockMvc no pasa por el
- * {@code RemoteIpValve}, que es el que toma la IP del cliente de {@code X-Real-IP} (lo pone el borde de Railway y Caddy lo
- * reenvía tal cual). Con los límites de producción: el perfil test los sube para el resto de la suite.
+ * {@code RemoteIpValve}, que es el que toma la IP del cliente de {@code X-Real-IP} (lo pone Caddy,
+ * {@code frontend/Caddyfile}). Con los límites de producción: el perfil test los sube para el resto de la suite.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @TestPropertySource(properties = {"app.login.max-fallos-por-email=5", "app.login.max-intentos-por-ip=20"})

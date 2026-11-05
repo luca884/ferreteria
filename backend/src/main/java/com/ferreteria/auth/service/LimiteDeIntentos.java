@@ -1,9 +1,13 @@
 package com.ferreteria.auth.service;
 
+import java.net.Inet4Address;
+import java.net.InetAddress;
+import java.net.UnknownHostException;
 import java.text.Normalizer;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.ConcurrentHashMap;
@@ -127,7 +131,7 @@ public class LimiteDeIntentos {
     /** Reserva el intento de la IP; devuelve true si con este llegó al tope (se registra una vez por bloqueo). */
     private boolean reservarIp(String ip, Instant ahora) {
         long[] espera = {0};
-        VentanaDeIp despues = ips.compute(ip, (clave, ventana) -> {
+        VentanaDeIp despues = ips.compute(claveDeIp(ip), (clave, ventana) -> {
             if (ventana == null || ventana.vencida(ahora)) {
                 return new VentanaDeIp(ahora, 1);
             }
@@ -188,6 +192,29 @@ public class LimiteDeIntentos {
         emails.entrySet().removeIf(e -> e.getValue().olvidada(ahora));
         cambios.entrySet().removeIf(e -> e.getValue().olvidada(ahora));
         ips.entrySet().removeIf(e -> e.getValue().vencida(ahora));
+    }
+
+    /**
+     * La clave del límite por IP. Una IPv6 cuenta por su /64: un proveedor le da al cliente un /64 entero, y rotando
+     * dentro de él cada intento tendría su propio límite (revisión de seguridad del 2026-11-05, hallazgo 3). Una IPv4
+     * escrita como IPv6 ({@code ::ffff:a.b.c.d}) es esa IPv4. Solo se interpreta un texto con «:», que siempre es una
+     * dirección literal: {@link InetAddress#getByName} no consulta el DNS para él.
+     */
+    static String claveDeIp(String ip) {
+        if (ip == null || ip.indexOf(':') < 0) {
+            return ip;
+        }
+        try {
+            InetAddress direccion = InetAddress.getByName(ip);
+            if (direccion instanceof Inet4Address) {
+                return direccion.getHostAddress();
+            }
+            byte[] bytes = direccion.getAddress();
+            Arrays.fill(bytes, 8, bytes.length, (byte) 0);
+            return InetAddress.getByAddress(bytes).getHostAddress() + "/64";
+        } catch (UnknownHostException e) {
+            return ip;
+        }
     }
 
     private static long segundosHasta(Instant ahora, Instant hasta) {

@@ -47,7 +47,7 @@ spring:
 
 server:
   port: ${PORT:8080}
-  # La IP del cliente (límite de intentos del login): el borde de Railway la pone en X-Real-IP y Caddy la reenvía tal cual.
+  # La IP del cliente (límite de intentos del login): Caddy la calcula y la pone en X-Real-IP (frontend/Caddyfile).
   # El RemoteIpValve solo la toma si el pedido viene de un proxy interno (rangos privados, incluida la red privada IPv6 de
   # Railway); si no, queda la dirección de la conexión. Con el header solo, Spring Boot ya arma el valve.
   tomcat:
