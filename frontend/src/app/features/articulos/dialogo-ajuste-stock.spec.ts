@@ -357,6 +357,27 @@ describe('DialogoAjusteStock', () => {
       expect(texto('#stock-real-error')).toBe('¿Quisiste decir 1500 o 1,5? Usá la coma para los decimales.');
     });
 
+    it('«-1.500» no pregunta: avisa que no puede ser negativo, lo haya querido como 1500 o como 1,5', async () => {
+      await abrir(tornillo(10, 'KILO'));
+      await escribir('#motivo', 'CONTEO');
+
+      await escribir('#stock-real', '-1.500');
+      expect(texto('.diferencia')).toBe('—');
+      await confirmar();
+      expect(texto('#stock-real-error')).toBe('El stock real no puede ser negativo.');
+
+      await escribir('#stock-real', '  -2.000  ');
+      await confirmar();
+      expect(texto('#stock-real-error')).toBe('El stock real no puede ser negativo.');
+
+      await escribir('#motivo', 'INGRESO_MERCADERIA');
+      await elegirModo('CANTIDAD');
+      await escribir('#cantidad', '-1.500');
+      await confirmar();
+      expect(texto('#cantidad-error')).toBe('Escribí la cantidad sin signo y elegí si entra o sale.');
+      expect(servicio.ajustarStock).not.toHaveBeenCalled();
+    });
+
     it('lo demás se lee como antes: «145.5», «1.500,25» y «0.250» (un 0 delante no es de miles)', async () => {
       await abrir(tornillo(1000, 'METRO'));
 

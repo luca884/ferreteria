@@ -77,17 +77,18 @@ interface Lectura {
 /**
  * «1.500» sin coma puede ser 1500 (punto de miles) o 1,5: no se adivina, se pregunta. Solo con 1 a 3 cifras sin 0
  * delante y exactamente 3 después del punto; «0.250» y «1000.250» no pueden ser de miles y se leen con decimales.
+ * «-1.500» no se pregunta: se lea como se lea es negativo, y avisa eso.
  */
-const AMBIGUO = /^(-?)([1-9]\d{0,2})\.(\d{3})$/;
+const AMBIGUO = /^([1-9]\d{0,2})\.(\d{3})$/;
 
 /** La pregunta para un número ambiguo, o null si no lo es. */
 function preguntaSiEsAmbiguo(texto: string): string | null {
   const partes = AMBIGUO.exec(texto.trim());
   if (!partes) return null;
-  const [, signo, entero, resto] = partes;
+  const [, entero, resto] = partes;
   const decimales = resto.replace(/0+$/, '');
   const conComa = decimales ? `${entero},${decimales}` : entero;
-  return `¿Quisiste decir ${signo}${entero}${resto} o ${signo}${conComa}? Usá la coma para los decimales.`;
+  return `¿Quisiste decir ${entero}${resto} o ${conComa}? Usá la coma para los decimales.`;
 }
 
 /** «145,5» o «145.5» → número y cuántos decimales se escribieron; null si no es un número o si es ambiguo. */
