@@ -16,6 +16,7 @@ import {
   aplicarDescuentoGlobal,
   aplicarDescuentoRenglon,
   moverElegido,
+  elegir,
   parsearCantidad,
   parsearDescuento,
   subtotalDelTicket,
@@ -145,6 +146,18 @@ describe('ticket (puro)', () => {
       expect(parsearCantidad('0,0015')).toBeNull();
       expect(parsearCantidad('abc')).toBeNull();
       expect(parsearCantidad('')).toBeNull();
+    });
+  });
+
+  describe('elegir', () => {
+    it('elige el renglón del índice', () => {
+      expect(elegir(conTres(), 0).elegido).toBe(0);
+    });
+
+    it('un índice fuera del ticket no cambia nada', () => {
+      const t = conTres();
+      expect(elegir(t, 3)).toBe(t);
+      expect(elegir(t, -1)).toBe(t);
     });
   });
 

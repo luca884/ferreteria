@@ -44,6 +44,16 @@ describe('TicketLista', () => {
     fixture.detectChanges();
   }
 
+  it('un clic en un renglón avisa su índice para elegirlo', async () => {
+    await crear([renglon({ articuloId: 1 }), renglon({ articuloId: 2 })]);
+    const elegidos: number[] = [];
+    fixture.componentInstance.elegir.subscribe((i) => elegidos.push(i));
+
+    (filas()[1] as HTMLElement).click();
+
+    expect(elegidos).toEqual([1]);
+  });
+
   it('un renglón con descuento lo dice y su total sale ya descontado', async () => {
     await crear([renglon({ precioCentavos: 10000, cantidadMilesimas: 2000, descuentoBp: 1050 })]);
 

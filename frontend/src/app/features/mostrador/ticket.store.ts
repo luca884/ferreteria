@@ -15,6 +15,7 @@ import {
   elegirCliente,
   marcarProblemas,
   moverElegido,
+  elegir,
   quitar,
   quitarCliente,
   soltarPresupuesto,
@@ -90,6 +91,10 @@ export class TicketStore {
 
   moverElegido(delta: -1 | 1): void {
     this._ticket.update((t) => moverElegido(t, delta));
+  }
+
+  elegir(indice: number): void {
+    this._ticket.update((t) => elegir(t, indice));
   }
 
   actualizarPrecios(cambios: readonly { articuloId: number; precioActual: number }[]): void {

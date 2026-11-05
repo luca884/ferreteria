@@ -1,3 +1,4 @@
+import { HttpErrorResponse } from '@angular/common/http';
 import { Component, OnInit, inject, signal } from '@angular/core';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { PageResponse } from '../../core/api/page.models';
@@ -9,6 +10,7 @@ import { Articulo, FiltroMovimientos, MovimientoStock, TipoMovimientoStock } fro
 import { ArticulosService } from './articulos.service';
 
 const MENSAJE_LISTA = 'No se pudieron cargar los movimientos.';
+const MENSAJE_INEXISTENTE = 'El artículo no existe.';
 
 const TIPOS: Record<TipoMovimientoStock, string> = {
   VENTA: 'Venta',
@@ -45,6 +47,8 @@ export class MovimientosArticulo implements OnInit {
   protected readonly pagina = signal<PageResponse<MovimientoStock> | null>(null);
   protected readonly cargando = signal(false);
   protected readonly error = signal<string | null>(null);
+  /** Un artículo inexistente o de otra ferretería (404) no se arregla pidiendo de nuevo. */
+  protected readonly reintentable = signal(true);
 
   /** Lo que escribió el usuario en los filtros (todavía sin aplicar). */
   protected readonly desde = signal('');
@@ -71,9 +75,11 @@ export class MovimientosArticulo implements OnInit {
         this.pagina.set(pagina);
         this.cargando.set(false);
       },
-      error: () => {
+      error: (err: unknown) => {
+        const inexistente = err instanceof HttpErrorResponse && err.status === 404;
         this.cargando.set(false);
-        this.error.set(MENSAJE_LISTA);
+        this.reintentable.set(!inexistente);
+        this.error.set(inexistente ? MENSAJE_INEXISTENTE : MENSAJE_LISTA);
       },
     });
   }

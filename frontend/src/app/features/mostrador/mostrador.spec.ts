@@ -1190,6 +1190,19 @@ describe('Mostrador', () => {
       expect(dialogo()!.textContent).toContain('Artículo 1');
     });
 
+    it('un clic en un renglón lo elige: F3 usa ese renglón y el foco vuelve al buscador', async () => {
+      await conTicket();
+      const primero = fixture.nativeElement.querySelectorAll('.renglon')[0] as HTMLElement;
+
+      primero.click();
+      await refrescar();
+
+      expect(primero.classList).toContain('elegido');
+      expect(document.activeElement).toBe(campo());
+      await tecla('F3');
+      expect(dialogo()!.textContent).toContain('Artículo 1');
+    });
+
     it('una cantidad inválida no cierra el diálogo ni cambia el ticket', async () => {
       await conTicket();
       await tecla('F3');

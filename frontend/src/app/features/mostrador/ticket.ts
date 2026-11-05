@@ -163,6 +163,12 @@ export function quitar(t: Ticket, indice: number): Ticket {
   return { ...t, renglones, elegido };
 }
 
+/** Elige el renglón del índice (clic en la grilla). Un índice fuera del ticket no cambia nada. */
+export function elegir(t: Ticket, indice: number): Ticket {
+  if (indice < 0 || indice >= t.renglones.length) return t;
+  return { ...t, elegido: indice };
+}
+
 /** ↑ (-1) y ↓ (+1) sin salir del rango. Sin elegido, parte del último. */
 export function moverElegido(t: Ticket, delta: -1 | 1): Ticket {
   if (t.renglones.length === 0) return t;
