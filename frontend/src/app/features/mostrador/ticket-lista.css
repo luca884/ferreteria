@@ -36,6 +36,10 @@ td {
   padding-block: 12px;
 }
 
+.renglon {
+  /* Un clic lo elige para F3, F7 y F10. */
+  cursor: pointer;
+}
 .renglon td {
   background: var(--superficie);
 }

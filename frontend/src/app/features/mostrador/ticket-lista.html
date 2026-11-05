@@ -24,6 +24,7 @@
         [class.con-problema]="!!r.problema"
         [class.con-faltante]="sinStock(r)"
         [attr.aria-current]="i === elegido() ? 'true' : null"
+        (click)="elegir.emit(i)"
       >
         <td class="num cantidad">{{ r.cantidadMilesimas / 1000 | number: '1.0-3' }}{{ sufijo[r.unidad] }}</td>
         <td class="codigo">{{ r.codigoInterno }}</td>

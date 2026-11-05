@@ -1,5 +1,5 @@
 import { DecimalPipe } from '@angular/common';
-import { Component, ElementRef, afterRenderEffect, input, viewChildren } from '@angular/core';
+import { Component, ElementRef, afterRenderEffect, input, output, viewChildren } from '@angular/core';
 import { MontoPipe } from '../../core/formato/monto';
 import { Unidad } from '../articulos/articulo.models';
 import { totalRenglon } from './centavos';
@@ -28,6 +28,8 @@ export class TicketLista {
   readonly elegido = input<number | null>(null);
   /** Con la lista de resultados encima, el aviso de ticket vacío asomaría por debajo: se oculta. */
   readonly conMensajeVacio = input(true);
+  /** Clic en un renglón: su índice, para elegirlo (F3, F7 y F10 actúan sobre el elegido). */
+  readonly elegir = output<number>();
 
   protected readonly sufijo = SUFIJO_UNIDAD;
   protected readonly sinStock = sinStock;

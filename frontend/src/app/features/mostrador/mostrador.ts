@@ -494,6 +494,13 @@ export class Mostrador {
     this.enfocarSinDialogo();
   }
 
+  /** Clic en un renglón del ticket: queda elegido y el foco vuelve al buscador, así el lector sigue andando. */
+  protected elegirRenglon(indice: number): void {
+    if (this.dialogo()) return;
+    this.ticket.elegir(indice);
+    this.enfocarSinDialogo();
+  }
+
   /** Con un diálogo abierto el buscador no le roba el foco (R-039). */
   private enfocarSinDialogo(): void {
     if (!this.dialogo()) this.caja().enfocar();
