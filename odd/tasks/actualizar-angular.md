@@ -35,4 +35,4 @@ Pedido (2026-11-05):
   - A1: la evidencia de T1 no nombraba `rolldown` ni algunos binarios opcionales nuevos. **Corregido** en T1.
   - A2 (upstream, inofensivo): `oxc-parser` 0.156 instala `@oxc-parser/binding-wasm32-wasi` con `@emnapi` 2.0.0-alpha.6 también en macOS; es opcional y de desarrollo.
   - A3 (no lo causa el cambio): npm 11 lista 5 paquetes con scripts de instalación sin `allowScripts` (esbuild, lmdb, `@parcel/watcher`, fsevents, msgpackr-extract).
-  - Probes sugeridos (`npm audit` en CI, lockfile en sync): el repo no tiene CI desde que se dio de baja Railway; quedan anotados, sin cambio.
+  - Probes sugeridos (`npm audit` en CI, lockfile en sync): el repo no tiene CI (no hay `.github/`); quedan anotados, sin cambio.
