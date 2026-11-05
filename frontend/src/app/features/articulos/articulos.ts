@@ -1,8 +1,8 @@
 import { DecimalPipe } from '@angular/common';
-import { HttpErrorResponse } from '@angular/common/http';
 import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule } from '@angular/forms';
 import { ActivatedRoute, Params, Router, RouterLink } from '@angular/router';
+import { mensajeDe } from '../../core/api/api-error';
 import { PageResponse } from '../../core/api/page.models';
 import { AuthService } from '../../core/auth/auth.service';
 import { descargar } from '../../core/archivos/descarga';
@@ -261,8 +261,4 @@ export class Articulos implements OnInit {
     if (this.soloEnOferta()) queryParams['oferta'] = 1;
     void this.router.navigate([], { relativeTo: this.route, queryParams, replaceUrl: true });
   }
-}
-
-function mensajeDe(err: unknown, porDefecto: string): string {
-  return err instanceof HttpErrorResponse && err.error?.message ? err.error.message : porDefecto;
 }

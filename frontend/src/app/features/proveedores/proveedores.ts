@@ -14,7 +14,7 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
 import { Observable } from 'rxjs';
-import { erroresDeCampos } from '../../core/api/api-error';
+import { erroresDeCampos, mensajeDe } from '../../core/api/api-error';
 import { AuthService } from '../../core/auth/auth.service';
 import { normalizarCuit, validarCuit } from '../../core/formato/cuit';
 import { contiene } from '../../core/formato/texto';
@@ -271,8 +271,4 @@ export class Proveedores implements OnInit {
 function textoOpcional(valor: string): string | null {
   const limpio = valor.trim();
   return limpio === '' ? null : limpio;
-}
-
-function mensajeDe(err: unknown, porDefecto: string): string {
-  return err instanceof HttpErrorResponse && err.error?.message ? err.error.message : porDefecto;
 }

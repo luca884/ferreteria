@@ -233,13 +233,14 @@ describe('Mostrador', () => {
       // La cuenta corriente del cliente del ticket (CC-017): por defecto sin habilitar; los tests la fijan.
       cuenta: vi.fn(() => of({ habilitada: false })),
       // T11: el cliente de un ticket sin su condición de IVA (viene de un presupuesto o un remito).
-      obtener: vi.fn((id: number) =>
-        respuestaClienteLenta
-          ? respuestaClienteLenta
-          : falloLeerCliente === null
-            ? of([CLIENTE_ANA, CLIENTE_NORTE].find((c) => c.id === id))
-            : throwError(() => new HttpErrorResponse({ status: falloLeerCliente! })),
-      ),
+      // Un id que el mock no conoce falla con un mensaje claro, no con un TypeError más adelante.
+      obtener: vi.fn((id: number) => {
+        if (respuestaClienteLenta) return respuestaClienteLenta;
+        if (falloLeerCliente !== null) return throwError(() => new HttpErrorResponse({ status: falloLeerCliente! }));
+        const cliente = [CLIENTE_ANA, CLIENTE_NORTE].find((c) => c.id === id);
+        if (cliente === undefined) throw new Error(`El mock de obtener no conoce el cliente ${id}`);
+        return of(cliente);
+      }),
     };
     const sesion = signal({
       userId: 7,
