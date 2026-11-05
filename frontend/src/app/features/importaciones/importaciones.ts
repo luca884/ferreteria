@@ -16,7 +16,7 @@ import {
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { FormControl, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
 import { map } from 'rxjs';
-import { erroresDeCampos } from '../../core/api/api-error';
+import { erroresDeCampos, mensajeDe } from '../../core/api/api-error';
 import { AuthService } from '../../core/auth/auth.service';
 import { BarraAcciones } from '../../shared/barra-acciones';
 import { Proveedor } from '../proveedores/proveedor.models';
@@ -763,8 +763,4 @@ export class Importaciones implements OnInit {
       this.rotacionDeAvisos = null;
     }
   }
-}
-
-function mensajeDe(err: unknown, porDefecto: string): string {
-  return err instanceof HttpErrorResponse && err.error?.message ? err.error.message : porDefecto;
 }

@@ -17,7 +17,7 @@ import {
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormControl, FormGroup, ReactiveFormsModule } from '@angular/forms';
-import { erroresDeCampos } from '../../core/api/api-error';
+import { erroresDeCampos, mensajeDe } from '../../core/api/api-error';
 import { AuthService } from '../../core/auth/auth.service';
 import { BarraAcciones } from '../../shared/barra-acciones';
 import { ImporteInput } from '../../shared/importe-input';
@@ -393,7 +393,7 @@ export class ActualizacionMasiva implements OnInit {
 
   private mostrarError(err: unknown): void {
     this.erroresCampos.set(erroresDeCampos(err));
-    this.error.set(mensajeDe(err));
+    this.error.set(mensajeDelError(err));
     // Un proveedor o rubro que no se encuentra suele ser uno que se borró: se refrescan las listas.
     if (err instanceof HttpErrorResponse && err.status === 404) this.cargarSelectores();
   }
@@ -436,11 +436,9 @@ function soltarSiNoExiste(control: FormControl<number | null>, lista: { id: numb
  * El mensaje del servidor si el error es de los que el Dueño puede corregir (400, 403, 404, 409); el 409
  * tiene su texto propio si no vino ninguno. Cualquier otro error (500, sin conexión) lleva el genérico.
  */
-function mensajeDe(err: unknown): string {
+function mensajeDelError(err: unknown): string {
   if (!(err instanceof HttpErrorResponse) || !ESTADOS_CON_MENSAJE.includes(err.status)) {
     return MENSAJE_GENERICO;
   }
-  const mensaje: unknown = err.error?.message;
-  if (typeof mensaje === 'string' && mensaje.trim() !== '') return mensaje;
-  return err.status === 409 ? MENSAJE_CONFLICTO : MENSAJE_GENERICO;
+  return mensajeDe(err, err.status === 409 ? MENSAJE_CONFLICTO : MENSAJE_GENERICO);
 }
