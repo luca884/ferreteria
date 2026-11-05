@@ -87,6 +87,7 @@ export class Etiquetas {
         }
         this.resultados.set(respuesta.items);
         this.buscado.set(q);
+        this.seleccionarBuscador();
       },
       error: () => {
         this.buscando.set(false);
@@ -107,6 +108,19 @@ export class Etiquetas {
         ? lista.map((i) => (i.articulo.id === articulo.id ? { ...i, copias: Math.min(i.copias + 1, MAX_COPIAS) } : i))
         : [...lista, { articulo, copias: 1, codigo: codigoParaEtiqueta(articulo) }],
     );
+    this.seleccionarBuscador();
+  }
+
+  /**
+   * Tras una búsqueda por descripción (o al sumar uno de sus resultados) el texto queda a la vista y seleccionado: lo
+   * próximo que se escribe lo reemplaza en vez de pegarse.
+   */
+  private seleccionarBuscador(): void {
+    const campo = this.campo()?.nativeElement;
+    if (campo) {
+      campo.focus();
+      campo.select();
+    }
   }
 
   /** El campo se limpia también a mano: el lector tipea y manda Enter antes de que la vista se actualice. */

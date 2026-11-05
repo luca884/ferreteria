@@ -132,6 +132,27 @@ describe('Etiquetas', () => {
     expect(etiquetas()).toHaveLength(2);
   });
 
+  it('tras buscar por descripción, y al sumar un resultado, el texto queda seleccionado para escribir otra búsqueda encima', async () => {
+    await crear(true, () => of(lista(tornillo, tuerca)));
+    document.body.appendChild(fixture.nativeElement);
+    const seleccionado = () =>
+      document.activeElement === buscador() &&
+      buscador().selectionStart === 0 &&
+      buscador().selectionEnd === buscador().value.length;
+
+    try {
+      await buscarTexto('tornillo');
+      expect(buscador().value).toBe('tornillo');
+      expect(seleccionado()).toBe(true);
+
+      await agregarResultado(0);
+      expect(seleccionado()).toBe(true);
+      expect(el().querySelector('.resultados')).not.toBeNull();
+    } finally {
+      fixture.nativeElement.remove();
+    }
+  });
+
   it('un artículo dado de baja no se puede sumar', async () => {
     await crear(true, () => of(lista(dadoDeBaja)));
 
