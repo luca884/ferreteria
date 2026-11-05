@@ -22,7 +22,8 @@ import org.springframework.test.context.TestPropertySource;
  * {@code frontend/Caddyfile}). Con los límites de producción: el perfil test los sube para el resto de la suite.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-@TestPropertySource(properties = {"app.login.max-fallos-por-email=5", "app.login.max-intentos-por-ip=20"})
+@TestPropertySource(properties = {"app.login.max-fallos-por-email-e-ip=5", "app.login.max-fallos-por-email=50",
+        "app.login.max-intentos-por-ip=20"})
 class LimiteDeIntentosLoginIntegrationTest extends UsuariosTestBase {
 
     private static final String AVISO = "Demasiados intentos. Probá de nuevo en 1 minuto.";
@@ -91,14 +92,30 @@ class LimiteDeIntentosLoginIntegrationTest extends UsuariosTestBase {
     }
 
     @Test
-    @DisplayName("el bloqueo es del email: desde otra IP también da 429, y otro email entra")
-    void elBloqueoEsDelEmail() throws Exception {
+    @DisplayName("hallazgo 6: 5 fallos bloquean el email desde esa IP; desde otra IP el dueño entra, y otro email también")
+    void elBloqueoEsDelEmailDesdeEsaIp() throws Exception {
         for (int i = 0; i < 5; i++) {
             login(email, "equivocada", ip);
         }
 
-        assertThat(login(email, "demo1234", "198.51.100." + IPS.incrementAndGet()).statusCode()).isEqualTo(429);
+        assertThat(login(email, "demo1234", ip).statusCode()).as("desde la IP de los fallos").isEqualTo(429);
+        assertThat(login(email, "demo1234", "198.51.100." + IPS.incrementAndGet()).statusCode())
+                .as("hallazgo 6: el dueño entra desde la PC de su ferretería").isEqualTo(200);
         assertThat(login("dueno@tornillo.demo", "demo1234", ip).statusCode()).isEqualTo(200);
+    }
+
+    @Test
+    @DisplayName("hallazgo 6: 50 fallos desde IPs distintas bloquean el email desde todas, aunque sea la contraseña buena")
+    void cincuentaFallosDesdeIpsDistintasBloqueanElEmail() throws Exception {
+        for (int i = 0; i < 50; i++) {
+            assertThat(login(email, "equivocada", "198.18." + (i / 250) + "." + (i % 250)).statusCode()).isEqualTo(401);
+        }
+
+        HttpResponse<String> bloqueado = login(email, "demo1234", "198.51.100." + IPS.incrementAndGet());
+
+        assertThat(bloqueado.statusCode()).isEqualTo(429);
+        assertThat(bloqueado.headers().firstValue("Retry-After")).hasValue("60");
+        assertThat(cuerpo(bloqueado).get("message").asText()).isEqualTo(AVISO);
     }
 
     @Test

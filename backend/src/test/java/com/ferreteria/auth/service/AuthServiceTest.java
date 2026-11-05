@@ -52,17 +52,17 @@ class AuthServiceTest {
         when(encoder.encode(anyString())).thenReturn(SENUELO);
         ferreterias = mock(FerreteriaRepository.class);
         jwt = mock(JwtService.class);
-        limite = new LimiteDeIntentos(new RelojControlable(Instant.parse("2026-11-02T12:00:00Z")), 5, 20);
+        limite = new LimiteDeIntentos(new RelojControlable(Instant.parse("2026-11-02T12:00:00Z")), 5, 50, 20);
         auth = new AuthService(usuarios, ferreterias, encoder, jwt, limite);
     }
 
     // ---- límite de intentos (hallazgo 1 de la revisión de seguridad) ----
 
     @Test
-    @DisplayName("con el email bloqueado el login da 429 sin gastar el bcrypt")
+    @DisplayName("con el email bloqueado desde esa IP el login da 429 sin gastar el bcrypt")
     void bloqueadoNoGastaBcrypt() {
         for (int i = 0; i < 5; i++) {
-            limite.reservar("u@demo.local", "10.0.0." + i);
+            limite.reservar("u@demo.local", IP);
         }
 
         assertThatThrownBy(() -> auth.login(new LoginRequest("u@demo.local", "demo1234"), IP))
@@ -131,13 +131,13 @@ class AuthServiceTest {
         deFerreteria(true, true);
         ferreteria(false);
         for (int i = 0; i < 4; i++) {
-            limite.reservar("u@demo.local", "10.0.0." + i);
+            limite.reservar("u@demo.local", IP);
         }
         assertThatThrownBy(() -> auth.login(new LoginRequest("u@demo.local", "demo1234"), IP))
                 .isExactlyInstanceOf(FerreteriaSuspendidaException.class);
 
         for (int i = 0; i < 4; i++) {
-            limite.reservar("u@demo.local", "10.0.1." + i);
+            limite.reservar("u@demo.local", IP);
         }
         assertThatThrownBy(() -> auth.login(new LoginRequest("u@demo.local", "demo1234"), IP))
                 .isExactlyInstanceOf(FerreteriaSuspendidaException.class);

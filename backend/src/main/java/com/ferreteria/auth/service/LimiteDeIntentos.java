@@ -22,20 +22,28 @@ import org.springframework.stereotype.Component;
  * Límite de intentos del login, en memoria (una sola instancia del backend; se reinicia con cada deploy).
  *
  * <ul>
- *   <li><b>Por email:</b> cada {@code maxFallosPorEmail} intentos sin un login correcto en el medio, el email queda bloqueado
- *       1, 5 y después 15 minutos (tope). La racha se olvida tras 1 hora sin intentos; un login correcto la borra.</li>
+ *   <li><b>Por email + IP:</b> cada {@code maxFallosPorEmailEIp} fallos sin un login correcto en el medio, ese email queda
+ *       bloqueado desde esa IP 1, 5, 15 y después 30 minutos (tope). Quien se equivoca o prueba contraseñas ajenas se
+ *       bloquea a sí mismo: el dueño sigue entrando desde la PC de su ferretería (revisión de seguridad del 2026-11-05,
+ *       hallazgo 6). Un login correcto borra esta racha.</li>
+ *   <li><b>Por email, desde cualquier IP:</b> cada {@code maxFallosPorEmail} fallos, con la misma escalera. Frena al que
+ *       prueba desde muchas IPs. Un login correcto no la borra (si no, ese atacante empezaría de cero cada vez que el dueño
+ *       entra): solo devuelve su propio intento.</li>
  *   <li><b>Por IP:</b> {@code maxIntentosPorIp} intentos por ventana fija de 1 minuto, correctos o no.</li>
- *   <li><b>Cambiar mi contraseña:</b> la contraseña actual, por usuario, con las reglas del email y su propia racha.</li>
+ *   <li><b>Cambiar mi contraseña:</b> la contraseña actual, por usuario, con las reglas del email + IP y su propia racha.</li>
  * </ul>
+ * Las rachas se olvidan tras 1 hora sin fallos.
  *
- * <p>{@link #reservar} va antes del bcrypt: cuenta el intento como fallo de entrada y {@link #exito} lo borra si la
+ * <p>{@link #reservar} va antes del bcrypt: cuenta el intento como fallo de entrada y {@link #exito} lo descuenta si la
  * contraseña era buena. Así N pedidos en paralelo no pasan todos antes de que se registre el primer fallo. Lo rechazado no
- * se evalúa ni suma. Cada clave se actualiza con {@code compute} (atómico por clave).
+ * se evalúa ni suma en ningún contador: insistir bloqueado no bloquea la cuenta. Cada clave se actualiza con
+ * {@code compute} (atómico por clave).
  */
 @Component
 public class LimiteDeIntentos {
 
-    static final List<Duration> BLOQUEOS = List.of(Duration.ofMinutes(1), Duration.ofMinutes(5), Duration.ofMinutes(15));
+    static final List<Duration> BLOQUEOS = List.of(Duration.ofMinutes(1), Duration.ofMinutes(5), Duration.ofMinutes(15),
+            Duration.ofMinutes(30));
     static final Duration OLVIDO = Duration.ofHours(1);
     static final Duration VENTANA_IP = Duration.ofMinutes(1);
     private static final Duration CADA_CUANTO_PURGAR = Duration.ofMinutes(1);
@@ -43,7 +51,7 @@ public class LimiteDeIntentos {
     /** Lo único que puede tener una IPv6 escrita como texto (sin la zona): se lee sin consultar el DNS. */
     private static final Pattern DIRECCION_IPV6 = Pattern.compile("[0-9A-Fa-f:.]+");
 
-    private record RachaDeEmail(int fallos, int nivel, Instant bloqueadoHasta, Instant ultimo) {
+    private record Racha(int fallos, int nivel, Instant bloqueadoHasta, Instant ultimo) {
         boolean bloqueada(Instant ahora) {
             return bloqueadoHasta != null && ahora.isBefore(bloqueadoHasta);
         }
@@ -66,18 +74,24 @@ public class LimiteDeIntentos {
     private static final Logger log = LoggerFactory.getLogger(LimiteDeIntentos.class);
 
     private final Clock reloj;
+    private final int maxFallosPorEmailEIp;
     private final int maxFallosPorEmail;
     private final int maxIntentosPorIp;
-    private final ConcurrentHashMap<String, RachaDeEmail> emails = new ConcurrentHashMap<>();
+    /** Las rachas de cada email, desde cualquier IP. */
+    private final ConcurrentHashMap<String, Racha> emails = new ConcurrentHashMap<>();
+    /** Las rachas de cada email desde cada IP (clave: email, espacio, clave de la IP). */
+    private final ConcurrentHashMap<String, Racha> pares = new ConcurrentHashMap<>();
     /** Las rachas de «Cambiar mi contraseña», por id de usuario. */
-    private final ConcurrentHashMap<Long, RachaDeEmail> cambios = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<Long, Racha> cambios = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, VentanaDeIp> ips = new ConcurrentHashMap<>();
     private final AtomicReference<Instant> ultimaPurga;
 
     public LimiteDeIntentos(Clock reloj,
+                            @Value("${app.login.max-fallos-por-email-e-ip}") int maxFallosPorEmailEIp,
                             @Value("${app.login.max-fallos-por-email}") int maxFallosPorEmail,
                             @Value("${app.login.max-intentos-por-ip}") int maxIntentosPorIp) {
         this.reloj = reloj;
+        this.maxFallosPorEmailEIp = maxFallosPorEmailEIp;
         this.maxFallosPorEmail = maxFallosPorEmail;
         this.maxIntentosPorIp = maxIntentosPorIp;
         this.ultimaPurga = new AtomicReference<>(reloj.instant());
@@ -85,38 +99,52 @@ public class LimiteDeIntentos {
 
     /**
      * Reserva un intento para el email desde la IP, o tira {@link DemasiadosIntentosException} con los segundos que faltan.
-     * Primero la IP: un intento rechazado por la IP no le suma un fallo al email.
+     * Primero la IP, después el email (solo se mira, sin contar) y el email + IP: un intento rechazado por cualquiera de
+     * ellos no suma en los otros. Si se acepta, cuenta como fallo del email + IP y del email.
      */
     public void reservar(String email, String ip) {
         Instant ahora = reloj.instant();
         purgarSiToca(ahora);
-        if (reservarIp(ip, ahora)) {
+        String claveIp = claveDeIp(ip);
+        String clave = normalizar(email);
+        if (reservarIp(claveIp, ahora)) {
             log.warn("Login: la IP {} llegó a {} intentos en el minuto; se bloquea hasta que cierre", ip, maxIntentosPorIp);
         }
-        Duration bloqueo = reservarEmail(normalizar(email), ahora);
-        if (bloqueo != null) {
-            log.warn("Login: {} fallos seguidos de {} (último desde la IP {}); se bloquea el email {} min",
-                    maxFallosPorEmail, normalizar(email), ip, bloqueo.toMinutes());
+        rechazarSiEstaBloqueada(emails.get(clave), ahora);
+        Duration bloqueoDelPar = reservarRacha(pares, par(clave, claveIp), ahora, maxFallosPorEmailEIp);
+        if (bloqueoDelPar != null) {
+            log.warn("Login: {} fallos seguidos de {} desde la IP {}; se bloquea {} min desde esa IP",
+                    maxFallosPorEmailEIp, clave, ip, bloqueoDelPar.toMinutes());
+        }
+        Duration bloqueoDelEmail = reservarRacha(emails, clave, ahora, maxFallosPorEmail);
+        if (bloqueoDelEmail != null) {
+            log.warn("Login: {} fallos de {} desde distintas IPs (el último desde {}); se bloquea el email {} min",
+                    maxFallosPorEmail, clave, ip, bloqueoDelEmail.toMinutes());
         }
     }
 
-    /** La contraseña era buena: la racha del email se borra. La IP no se descuenta. */
-    public void exito(String email) {
-        emails.remove(normalizar(email));
+    /**
+     * La contraseña era buena: la racha del email desde esa IP se borra, y al email se le devuelve el intento que se
+     * reservó (sin borrar los fallos de otras IPs). La IP no se descuenta.
+     */
+    public void exito(String email, String ip) {
+        String clave = normalizar(email);
+        pares.remove(par(clave, claveDeIp(ip)));
+        devolverIntento(clave);
     }
 
     /**
      * Reserva un intento de «Cambiar mi contraseña» del usuario, antes de comparar la actual, con las mismas reglas que el
-     * email del login y una racha propia (revisión de seguridad del 2026-11-05, hallazgo 7: con un token robado se probaba
-     * la contraseña actual sin freno). Tira {@link DemasiadosIntentosException} si está bloqueado.
+     * email + IP del login y una racha propia (revisión de seguridad del 2026-11-05, hallazgo 7: con un token robado se
+     * probaba la contraseña actual sin freno). Tira {@link DemasiadosIntentosException} si está bloqueado.
      */
     public void reservarCambioDeContrasena(long usuarioId) {
         Instant ahora = reloj.instant();
         purgarSiToca(ahora);
-        Duration bloqueo = reservarRacha(cambios, usuarioId, ahora, maxFallosPorEmail);
+        Duration bloqueo = reservarRacha(cambios, usuarioId, ahora, maxFallosPorEmailEIp);
         if (bloqueo != null) {
             log.warn("Cambio de contraseña: {} actuales incorrectas seguidas del usuario {}; se bloquea {} min",
-                    maxFallosPorEmail, usuarioId, bloqueo.toMinutes());
+                    maxFallosPorEmailEIp, usuarioId, bloqueo.toMinutes());
         }
     }
 
@@ -125,15 +153,19 @@ public class LimiteDeIntentos {
         cambios.remove(usuarioId);
     }
 
-    /** Cuántos emails, usuarios e IPs hay en memoria (para el test de la purga). */
+    /** Cuántos emails, pares email + IP, usuarios e IPs hay en memoria (para el test de la purga). */
     int entradas() {
-        return emails.size() + cambios.size() + ips.size();
+        return emails.size() + pares.size() + cambios.size() + ips.size();
+    }
+
+    private static String par(String email, String claveIp) {
+        return email + " " + claveIp;
     }
 
     /** Reserva el intento de la IP; devuelve true si con este llegó al tope (se registra una vez por bloqueo). */
-    private boolean reservarIp(String ip, Instant ahora) {
+    private boolean reservarIp(String claveIp, Instant ahora) {
         long[] espera = {0};
-        VentanaDeIp despues = ips.compute(claveDeIp(ip), (clave, ventana) -> {
+        VentanaDeIp despues = ips.compute(claveIp, (clave, ventana) -> {
             if (ventana == null || ventana.vencida(ahora)) {
                 return new VentanaDeIp(ahora, 1);
             }
@@ -149,22 +181,40 @@ public class LimiteDeIntentos {
         return despues.intentos() == maxIntentosPorIp;
     }
 
-    /** Reserva el intento del email; devuelve el bloqueo que empieza con este intento, o null si no empieza ninguno. */
-    private Duration reservarEmail(String email, Instant ahora) {
-        return reservarRacha(emails, email, ahora, maxFallosPorEmail);
+    private static void rechazarSiEstaBloqueada(Racha racha, Instant ahora) {
+        if (racha != null && racha.bloqueada(ahora)) {
+            throw new DemasiadosIntentosException(segundosHasta(ahora, racha.bloqueadoHasta()));
+        }
     }
 
+    /**
+     * Le devuelve al email el intento que reservó un login correcto. Si ese intento fue el que llegó al tope y empezó el
+     * bloqueo, el bloqueo se deshace: el login correcto nunca bloquea la cuenta.
+     */
+    private void devolverIntento(String clave) {
+        emails.computeIfPresent(clave, (k, racha) -> {
+            if (racha.bloqueadoHasta() == null) {
+                int fallos = racha.fallos() - 1;
+                return fallos <= 0 && racha.nivel() == 0 ? null : new Racha(Math.max(0, fallos), racha.nivel(), null,
+                        racha.ultimo());
+            }
+            if (racha.fallos() >= maxFallosPorEmail) {
+                return new Racha(racha.fallos() - 1, Math.max(0, racha.nivel() - 1), null, racha.ultimo());
+            }
+            return racha;
+        });
+    }
     /**
      * Reserva un intento de la racha de {@code clave} en {@code rachas}: tira {@link DemasiadosIntentosException} si esta
      * bloqueada, y si no devuelve el bloqueo que empieza con este intento, o null si no empieza ninguno.
      */
-    private static <K> Duration reservarRacha(ConcurrentHashMap<K, RachaDeEmail> rachas, K clave, Instant ahora,
+    private static <K> Duration reservarRacha(ConcurrentHashMap<K, Racha> rachas, K clave, Instant ahora,
                                               int maxFallos) {
         long[] espera = {0};
         Duration[] empieza = {null};
         rachas.compute(clave, (k, racha) -> {
             if (racha == null || racha.olvidada(ahora)) {
-                racha = new RachaDeEmail(0, 0, null, ahora);
+                racha = new Racha(0, 0, null, ahora);
             }
             if (racha.bloqueada(ahora)) {
                 espera[0] = segundosHasta(ahora, racha.bloqueadoHasta());
@@ -173,11 +223,11 @@ public class LimiteDeIntentos {
             // Vencido el bloqueo arranca una ronda nueva de fallos; el nivel se mantiene.
             int fallos = (racha.bloqueadoHasta() != null ? 0 : racha.fallos()) + 1;
             if (fallos < maxFallos) {
-                return new RachaDeEmail(fallos, racha.nivel(), null, ahora);
+                return new Racha(fallos, racha.nivel(), null, ahora);
             }
             Duration bloqueo = BLOQUEOS.get(Math.min(racha.nivel(), BLOQUEOS.size() - 1));
             empieza[0] = bloqueo;
-            return new RachaDeEmail(fallos, racha.nivel() + 1, ahora.plus(bloqueo), ahora);
+            return new Racha(fallos, racha.nivel() + 1, ahora.plus(bloqueo), ahora);
         });
         if (espera[0] > 0) {
             throw new DemasiadosIntentosException(espera[0]);
@@ -192,6 +242,7 @@ public class LimiteDeIntentos {
             return;
         }
         emails.entrySet().removeIf(e -> e.getValue().olvidada(ahora));
+        pares.entrySet().removeIf(e -> e.getValue().olvidada(ahora));
         cambios.entrySet().removeIf(e -> e.getValue().olvidada(ahora));
         ips.entrySet().removeIf(e -> e.getValue().vencida(ahora));
     }

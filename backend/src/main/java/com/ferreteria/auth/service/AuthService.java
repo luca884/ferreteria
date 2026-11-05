@@ -63,7 +63,7 @@ public class AuthService {
                 .filter(u -> coincide)
                 .filter(Usuario::isActivo)
                 .orElseThrow(CredencialesInvalidasException::new);
-        limiteDeIntentos.exito(clave);
+        limiteDeIntentos.exito(clave, ip);
 
         Ferreteria ferreteria = null;
         if (usuario.getFerreteriaId() != null) {

@@ -6,7 +6,7 @@ Pronóstico: ~350 líneas cambiadas · Ruteo: caso 5 (Opus de punta a punta: seg
 
 ## Specs
 
-Alcance: hallazgos 3, 5 y 7 del informe · Fuera de alcance: el bajo 6 (bloqueo de una cuenta ajena: decisión de Luca, arreglar o riesgo aceptado), `ClienteJson` sin `NumeroDelPedido` (anotado), el deploy (Railway está dado de baja desde el 2026-11-03).
+Alcance: hallazgos 3, 5 y 7 del informe, y el 6 desde el 2026-11-05 (S4, decisión de Luca) · Fuera de alcance: `ClienteJson` sin `NumeroDelPedido` (anotado), el deploy (Railway está dado de baja desde el 2026-11-03).
 
 Pedido (2026-11-05):
 - «Dale, arrancá» (sobre la propuesta: el 3, el 5 y el 7 en una rama, test-first, probados de punta a punta contra la app levantada en `main` y en la rama).
@@ -18,6 +18,15 @@ Pedido (2026-11-05):
   - Supuesto: las mismas reglas que el email del login (5 fallos seguidos bloquean 1, 5 y después 15 minutos; la racha se olvida tras 1 hora), con contador propio por usuario.
 - S3: medio 3, «El límite de intentos por IP confía en un header que pone el cliente» — Aceptación: Caddy pone `X-Real-IP` con la IP del cliente que calcula él (`{client_ip}`, con `trusted_proxies` y lectura de derecha a izquierda de `X-Forwarded-For`), pisando el que mande el cliente. El límite por IP cuenta las IPv6 por su /64; IPv4 sigue igual — Checks: `LimiteDeIntentosTest`; prueba de punta a punta con Caddy en Docker delante del backend local: en `main` 25 logins con un `X-Real-IP` distinto cada uno no dan 429; en la rama el 21.º da 429.
   - Pendiente fuera de alcance: confirmar en Railway (cuando vuelva) qué IP ve Caddy del borde y que el borde agrega la IP del cliente a `X-Forwarded-For`.
+- S4: bajo 6, «Cualquiera puede dejar bloqueada una cuenta». Luca: «hay que arreglarlo, deberia cada X erorres X minutos de espera y asi sucesivamente hasta un limite de media hora». Propuesta aprobada («dale me sirve»): 5 fallos por email + IP, 50 por email desde cualquier IP, escalera 1, 5, 15 y 30 minutos.
+  - Aceptación:
+    - 5 contraseñas malas para un email desde una IP bloquean ese email solo desde esa IP, 1, 5, 15 y después 30 minutos (tope). Desde otra IP, el dueño entra.
+    - 50 fallos para un email desde cualquier IP bloquean el email desde todas, con la misma escalera.
+    - Los intentos rechazados (por la IP, por el email + IP o por el email) no suman fallos en ningún lado: insistir bloqueado no bloquea la cuenta.
+    - «Cambiar mi contraseña» usa la misma escalera, con tope de 30 minutos.
+    - El aviso y el 429 no cambian.
+  - Checks: `LimiteDeIntentosTest`, `AuthServiceTest`, `LimiteDeIntentosLoginIntegrationTest` (Tomcat real, `X-Real-IP`), suite; punta a punta con la app levantada.
+  - Supuesto: un login correcto borra la racha de su email + IP, pero no la del email: si no, alguien que prueba desde muchas IPs empezaría de cero cada vez que el dueño entra. La racha del email se olvida tras 1 hora sin fallos, como las otras.
 
 ## Tasks
 
@@ -26,6 +35,8 @@ Pedido (2026-11-05):
 - [x] T3 · S3 · ruta: inline · Aceptación: RED (dos IPv6 del mismo /64 no comparten el límite) → GREEN; Caddyfile con `header_up X-Real-IP {client_ip}` · Evidencia: RED `ipv6PorSuSesentaYCuatro` e `ipv4MapeadaYIpv4` → GREEN `LimiteDeIntentosTest` 23/23. `claveDeIp`: IPv6 a su /64, `::ffff:a.b.c.d` a la IPv4; solo interpreta textos con «:» (sin DNS). Caddyfile: `trusted_proxies static {$PROXIES_DE_CONFIANZA:private_ranges}` + `trusted_proxies_strict` + `header_up X-Real-IP {client_ip}`; `caddy validate` (v2.11.7) «Valid configuration» y `caddy adapt` con dos rangos en la variable da `"ranges":["10.0.0.0/8","100.64.0.0/10"]`. README (Deploy → Frontend) con la verificación después de un deploy · Commit `60d671e` · Risk: item 2, item 5 (config del proxy)
 - [x] T4 · S1 S2 S3 · ruta: inline · Aceptación: suites backend y frontend, `ng build`, prueba de punta a punta contra `main` y contra la rama con la app levantada · Evidencia: suite backend 6240/6240 (8 min 51 s) y, después de la corrección del verificador (`7d7912b`), 6243/6243 (9 min 25 s); suite frontend 3857/3857 (155 archivos); `ng build` OK (el aviso de presupuesto de `dialogo-cobro.ts` ya estaba en `main`). Punta a punta y ego-browser: ver L3 · Risk: —
 - [x] T5 · S1 S2 S3 · ruta: `odd-verifier` (opus) · Aceptación: pass sin blockers · Evidencia: primera pasada **fail** con B1 (L4); corrección de B1 y A1 en `7d7912b` → recheck: **B1 resuelto** (L5) · Risk: —
+
+- [ ] T6 · S4 · ruta: inline · Aceptación: RED (5 fallos desde la IP de un tercero bloquean al dueño desde la suya) → GREEN; integración contra Tomcat real; suite; punta a punta · Risk: item 2 (seguridad), item 3 (cambia el significado de `app.login.max-fallos-por-email`)
 
 ## Log
 

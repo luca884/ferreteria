@@ -18,6 +18,7 @@ app:
   # Todo MockMvc viene de 127.0.0.1 y el limitador es uno por contexto: sin esto la suite chocaría con el límite del login.
   # LimiteDeIntentosLoginIntegrationTest vuelve a los valores de producción.
   login:
+    max-fallos-por-email-e-ip: 1000000
     max-fallos-por-email: 1000000
     max-intentos-por-ip: 1000000
   # Ningun test toca la red ni corre tareas solas: sin scheduler y con las fuentes apuntando a un puerto donde no escucha nadie.

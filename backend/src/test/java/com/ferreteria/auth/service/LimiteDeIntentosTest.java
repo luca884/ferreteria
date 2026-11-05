@@ -27,6 +27,10 @@ class LimiteDeIntentosTest {
 
     private static final String IP = "203.0.113.7";
     private static final String OTRA_IP = "198.51.100.9";
+    /** La PC del mostrador desde la que entra el dueño. */
+    private static final String IP_DEL_DUENO = "192.0.2.10";
+    /** Alguien que prueba contraseñas del dueño desde otro lado (hallazgo 6). */
+    private static final String IP_DE_UN_TERCERO = "192.0.2.66";
 
     private RelojControlable reloj;
     private LimiteDeIntentos limite;
@@ -34,7 +38,7 @@ class LimiteDeIntentosTest {
     @BeforeEach
     void armar() {
         reloj = new RelojControlable(Instant.parse("2026-11-02T12:00:00Z"));
-        limite = new LimiteDeIntentos(reloj, 5, 20);
+        limite = new LimiteDeIntentos(reloj, 5, 50, 20);
     }
 
     /** Un intento fallido: pasa el límite y no hay éxito después. */
@@ -42,9 +46,17 @@ class LimiteDeIntentosTest {
         limite.reservar(email, ip);
     }
 
+    /** Fallos del email desde la IP del dueño. */
     private void fallarVeces(int veces, String email) {
         for (int i = 0; i < veces; i++) {
-            fallar(email, "10.0.0." + i);
+            fallar(email, IP_DEL_DUENO);
+        }
+    }
+
+    /** Un fallo del email desde cada una de {@code veces} IPs distintas. */
+    private void fallarDesdeIpsDistintas(int veces, String email) {
+        for (int i = 0; i < veces; i++) {
+            fallar(email, "10.9." + (i / 250) + "." + (i % 250));
         }
     }
 
@@ -58,15 +70,29 @@ class LimiteDeIntentosTest {
     }
 
     @Nested
-    @DisplayName("por email")
-    class PorEmail {
+    @DisplayName("por email + IP (hallazgo 6: el bloqueo es de quien se equivoca, no de la cuenta)")
+    class PorEmailEIp {
 
         @Test
-        @DisplayName("5 fallos se evalúan y el sexto intento queda bloqueado 1 minuto")
+        @DisplayName("5 fallos se evalúan y el sexto intento desde esa IP queda bloqueado 1 minuto")
         void cincoFallosBloqueanUnMinuto() {
             fallarVeces(5, "dueno@x.test");
 
-            assertThat(segundosDe(() -> limite.reservar("dueno@x.test", OTRA_IP))).isEqualTo(60);
+            assertThat(segundosDe(() -> limite.reservar("dueno@x.test", IP_DEL_DUENO))).isEqualTo(60);
+        }
+
+        @Test
+        @DisplayName("hallazgo 6: 5 fallos de un tercero bloquean su IP, y el dueño sigue entrando desde la suya")
+        void unTerceroNoBloqueaAlDueno() {
+            for (int i = 0; i < 5; i++) {
+                fallar("dueno@x.test", IP_DE_UN_TERCERO);
+            }
+            for (int i = 0; i < 100; i++) {
+                assertThatThrownBy(() -> limite.reservar("dueno@x.test", IP_DE_UN_TERCERO))
+                        .as("el tercero insiste bloqueado").isInstanceOf(DemasiadosIntentosException.class);
+            }
+
+            assertThatCode(() -> limite.reservar("dueno@x.test", IP_DEL_DUENO)).doesNotThrowAnyException();
         }
 
         @Test
@@ -74,31 +100,35 @@ class LimiteDeIntentosTest {
         void mensaje() {
             fallarVeces(5, "dueno@x.test");
 
-            assertThatThrownBy(() -> limite.reservar("dueno@x.test", OTRA_IP))
+            assertThatThrownBy(() -> limite.reservar("dueno@x.test", IP_DEL_DUENO))
                     .hasMessage("Demasiados intentos. Probá de nuevo en 1 minuto.");
             reloj.avanzar(Duration.ofSeconds(60));
             fallarVeces(5, "dueno@x.test");
             reloj.avanzar(Duration.ofSeconds(61));
-            assertThatThrownBy(() -> limite.reservar("dueno@x.test", OTRA_IP))
+            assertThatThrownBy(() -> limite.reservar("dueno@x.test", IP_DEL_DUENO))
                     .hasMessage("Demasiados intentos. Probá de nuevo en 4 minutos.");
         }
 
         @Test
-        @DisplayName("el bloqueo crece a 5 y a 15 minutos, y no pasa de 15")
+        @DisplayName("cada 5 fallos el bloqueo crece: 1, 5, 15 y 30 minutos, y no pasa de media hora")
         void bloqueoCreciente() {
             fallarVeces(5, "dueno@x.test");
             reloj.avanzar(Duration.ofMinutes(1));
 
             fallarVeces(5, "dueno@x.test");
-            assertThat(segundosDe(() -> limite.reservar("dueno@x.test", OTRA_IP))).isEqualTo(300);
+            assertThat(segundosDe(() -> limite.reservar("dueno@x.test", IP_DEL_DUENO))).isEqualTo(300);
             reloj.avanzar(Duration.ofMinutes(5));
 
             fallarVeces(5, "dueno@x.test");
-            assertThat(segundosDe(() -> limite.reservar("dueno@x.test", OTRA_IP))).isEqualTo(900);
+            assertThat(segundosDe(() -> limite.reservar("dueno@x.test", IP_DEL_DUENO))).isEqualTo(900);
             reloj.avanzar(Duration.ofMinutes(15));
 
             fallarVeces(5, "dueno@x.test");
-            assertThat(segundosDe(() -> limite.reservar("dueno@x.test", OTRA_IP))).isEqualTo(900);
+            assertThat(segundosDe(() -> limite.reservar("dueno@x.test", IP_DEL_DUENO))).isEqualTo(1800);
+            reloj.avanzar(Duration.ofMinutes(30));
+
+            fallarVeces(5, "dueno@x.test");
+            assertThat(segundosDe(() -> limite.reservar("dueno@x.test", IP_DEL_DUENO))).isEqualTo(1800);
         }
 
         @Test
@@ -106,24 +136,24 @@ class LimiteDeIntentosTest {
         void vencidoVuelveAEvaluar() {
             fallarVeces(5, "dueno@x.test");
             reloj.avanzar(Duration.ofSeconds(30));
-            assertThat(segundosDe(() -> limite.reservar("dueno@x.test", OTRA_IP))).isEqualTo(30);
+            assertThat(segundosDe(() -> limite.reservar("dueno@x.test", IP_DEL_DUENO))).isEqualTo(30);
             reloj.avanzar(Duration.ofSeconds(30));
 
-            assertThatCode(() -> limite.reservar("dueno@x.test", OTRA_IP)).doesNotThrowAnyException();
+            assertThatCode(() -> limite.reservar("dueno@x.test", IP_DEL_DUENO)).doesNotThrowAnyException();
         }
 
         @Test
-        @DisplayName("un login correcto vuelve el contador y el nivel a cero")
+        @DisplayName("un login correcto vuelve el contador y el nivel de esa IP a cero")
         void exitoResetea() {
             fallarVeces(5, "dueno@x.test");
             reloj.avanzar(Duration.ofMinutes(1));
             fallarVeces(4, "dueno@x.test");
-            limite.reservar("dueno@x.test", OTRA_IP);
-            limite.exito("dueno@x.test");
+            limite.reservar("dueno@x.test", IP_DEL_DUENO);
+            limite.exito("dueno@x.test", IP_DEL_DUENO);
 
             fallarVeces(4, "dueno@x.test");
-            assertThatCode(() -> limite.reservar("dueno@x.test", OTRA_IP)).doesNotThrowAnyException();
-            assertThat(segundosDe(() -> limite.reservar("dueno@x.test", OTRA_IP))).isEqualTo(60);
+            assertThatCode(() -> limite.reservar("dueno@x.test", IP_DEL_DUENO)).doesNotThrowAnyException();
+            assertThat(segundosDe(() -> limite.reservar("dueno@x.test", IP_DEL_DUENO))).isEqualTo(60);
         }
 
         @Test
@@ -135,7 +165,7 @@ class LimiteDeIntentosTest {
             reloj.avanzar(Duration.ofMinutes(5).plusHours(1));
 
             fallarVeces(5, "dueno@x.test");
-            assertThat(segundosDe(() -> limite.reservar("dueno@x.test", OTRA_IP))).isEqualTo(60);
+            assertThat(segundosDe(() -> limite.reservar("dueno@x.test", IP_DEL_DUENO))).isEqualTo(60);
         }
 
         @Test
@@ -144,7 +174,7 @@ class LimiteDeIntentosTest {
             fallarVeces(3, "Dueno@X.test");
             fallarVeces(2, "  dueno@x.TEST ");
 
-            assertThat(segundosDe(() -> limite.reservar("dueno@x.test", OTRA_IP))).isEqualTo(60);
+            assertThat(segundosDe(() -> limite.reservar("dueno@x.test", IP_DEL_DUENO))).isEqualTo(60);
         }
 
         @Test
@@ -158,7 +188,18 @@ class LimiteDeIntentosTest {
             assertThat(segundosDe(() -> limite.reservar("dueno@x.test", OTRA_IP))).isEqualTo(60);
 
             fallarVeces(5, "straße@x.test");
-            assertThat(segundosDe(() -> limite.reservar("strasse@x.test", OTRA_IP))).isEqualTo(60);
+            assertThat(segundosDe(() -> limite.reservar("strasse@x.test", IP_DEL_DUENO))).isEqualTo(60);
+        }
+
+        @Test
+        @DisplayName("una IPv6 del mismo /64 es la misma IP también para el email")
+        void ipv6DelMismoSesentaYCuatro() {
+            for (int i = 1; i <= 5; i++) {
+                fallar("dueno@x.test", "2001:db8:1:2::" + i);
+            }
+
+            assertThatThrownBy(() -> limite.reservar("dueno@x.test", "2001:db8:1:2::99"))
+                    .isInstanceOf(DemasiadosIntentosException.class);
         }
 
         @Test
@@ -166,7 +207,85 @@ class LimiteDeIntentosTest {
         void otroEmail() {
             fallarVeces(5, "dueno@x.test");
 
+            assertThatCode(() -> limite.reservar("vendedor@x.test", IP_DEL_DUENO)).doesNotThrowAnyException();
+        }
+    }
+
+    @Nested
+    @DisplayName("por email, desde cualquier IP (frena al que prueba desde muchas IPs)")
+    class PorEmailDesdeCualquierIp {
+
+        @Test
+        @DisplayName("50 fallos desde IPs distintas bloquean el email 1 minuto desde todas, aunque sea una IP nueva")
+        void cincuentaFallosBloqueanElEmail() {
+            fallarDesdeIpsDistintas(49, "dueno@x.test");
+            assertThatCode(() -> limite.reservar("dueno@x.test", IP_DEL_DUENO)).doesNotThrowAnyException();
+
+            assertThat(segundosDe(() -> limite.reservar("dueno@x.test", OTRA_IP))).isEqualTo(60);
+            assertThat(segundosDe(() -> limite.reservar("dueno@x.test", IP_DEL_DUENO))).isEqualTo(60);
             assertThatCode(() -> limite.reservar("vendedor@x.test", OTRA_IP)).doesNotThrowAnyException();
+        }
+
+        @Test
+        @DisplayName("el bloqueo del email crece igual: 1, 5, 15 y 30 minutos")
+        void bloqueoCreciente() {
+            long[] esperados = {60, 300, 900, 1800, 1800};
+            for (long esperado : esperados) {
+                fallarDesdeIpsDistintas(50, "dueno@x.test");
+                assertThat(segundosDe(() -> limite.reservar("dueno@x.test", IP_DEL_DUENO))).isEqualTo(esperado);
+                reloj.avanzar(Duration.ofSeconds(esperado));
+            }
+        }
+
+        @Test
+        @DisplayName("los intentos rechazados no suman: un tercero que insiste bloqueado nunca bloquea la cuenta")
+        void rechazadosNoSuman() {
+            for (int i = 0; i < 5; i++) {
+                fallar("dueno@x.test", IP_DE_UN_TERCERO);
+            }
+            for (int i = 0; i < 200; i++) {
+                assertThatThrownBy(() -> limite.reservar("dueno@x.test", IP_DE_UN_TERCERO))
+                        .isInstanceOf(DemasiadosIntentosException.class);
+            }
+            fallarDesdeIpsDistintas(44, "dueno@x.test");
+
+            assertThatCode(() -> limite.reservar("dueno@x.test", IP_DEL_DUENO)).doesNotThrowAnyException();
+        }
+
+        @Test
+        @DisplayName("un login correcto no borra la racha del email: el que prueba desde muchas IPs no vuelve a empezar")
+        void exitoNoBorraLaRachaDelEmail() {
+            fallarDesdeIpsDistintas(45, "dueno@x.test");
+            limite.reservar("dueno@x.test", IP_DEL_DUENO);
+            limite.exito("dueno@x.test", IP_DEL_DUENO);
+            fallarDesdeIpsDistintas(5, "dueno@x.test");
+
+            assertThat(segundosDe(() -> limite.reservar("dueno@x.test", OTRA_IP))).isEqualTo(60);
+        }
+
+        @Test
+        @DisplayName("los logins correctos no cuentan como fallos del email: el dueño que entra 60 veces en una hora no se bloquea")
+        void loginsCorrectosNoCuentan() {
+            for (int i = 0; i < 60; i++) {
+                if (i % 15 == 0) {
+                    reloj.avanzar(Duration.ofMinutes(1));
+                }
+                limite.reservar("dueno@x.test", IP_DEL_DUENO);
+                limite.exito("dueno@x.test", IP_DEL_DUENO);
+            }
+
+            assertThatCode(() -> limite.reservar("dueno@x.test", OTRA_IP)).doesNotThrowAnyException();
+        }
+
+        @Test
+        @DisplayName("si el intento que llega al tope es un login correcto, la cuenta no queda bloqueada")
+        void elLoginCorrectoQueLlegaAlTopeNoBloquea() {
+            fallarDesdeIpsDistintas(49, "dueno@x.test");
+            limite.reservar("dueno@x.test", IP_DEL_DUENO);
+            limite.exito("dueno@x.test", IP_DEL_DUENO);
+
+            assertThatCode(() -> limite.reservar("dueno@x.test", OTRA_IP)).doesNotThrowAnyException();
+            assertThat(segundosDe(() -> limite.reservar("dueno@x.test", OTRA_IP))).isEqualTo(60);
         }
     }
 
@@ -191,7 +310,7 @@ class LimiteDeIntentosTest {
         }
 
         @Test
-        @DisplayName("el bloqueo crece a 5 y a 15 minutos, como el del login")
+        @DisplayName("el bloqueo crece como el del login: 1, 5, 15 y 30 minutos, y no pasa de media hora")
         void bloqueoCreciente() {
             fallarCambio(5, 7L);
             reloj.avanzar(Duration.ofMinutes(1));
@@ -200,6 +319,12 @@ class LimiteDeIntentosTest {
             reloj.avanzar(Duration.ofMinutes(5));
             fallarCambio(5, 7L);
             assertThat(segundosDe(() -> limite.reservarCambioDeContrasena(7L))).isEqualTo(900);
+            reloj.avanzar(Duration.ofMinutes(15));
+            fallarCambio(5, 7L);
+            assertThat(segundosDe(() -> limite.reservarCambioDeContrasena(7L))).isEqualTo(1800);
+            reloj.avanzar(Duration.ofMinutes(30));
+            fallarCambio(5, 7L);
+            assertThat(segundosDe(() -> limite.reservarCambioDeContrasena(7L))).isEqualTo(1800);
         }
 
         @Test
@@ -231,7 +356,7 @@ class LimiteDeIntentosTest {
 
             limite.reservar("nuevo@x.test", IP);
 
-            assertThat(limite.entradas()).isEqualTo(2);
+            assertThat(limite.entradas()).isEqualTo(3);
         }
     }
 
@@ -305,7 +430,7 @@ class LimiteDeIntentosTest {
         void exitosCuentan() {
             for (int i = 0; i < 20; i++) {
                 limite.reservar("dueno@x.test", IP);
-                limite.exito("dueno@x.test");
+                limite.exito("dueno@x.test", IP);
             }
 
             assertThatThrownBy(() -> limite.reservar("dueno@x.test", IP)).isInstanceOf(DemasiadosIntentosException.class);
@@ -322,8 +447,12 @@ class LimiteDeIntentosTest {
                         .isInstanceOf(DemasiadosIntentosException.class);
             }
 
-            fallarVeces(4, "dueno@x.test");
-            assertThatCode(() -> limite.reservar("dueno@x.test", OTRA_IP)).doesNotThrowAnyException();
+            reloj.avanzar(Duration.ofMinutes(1));
+
+            for (int i = 0; i < 4; i++) {
+                fallar("dueno@x.test", IP);
+            }
+            assertThatCode(() -> limite.reservar("dueno@x.test", IP)).doesNotThrowAnyException();
         }
     }
 
@@ -337,13 +466,19 @@ class LimiteDeIntentosTest {
 
         limite.reservar("nuevo@x.test", IP);
 
-        assertThat(limite.entradas()).isEqualTo(2);
+        assertThat(limite.entradas()).as("el email, su par con la IP y la IP del intento nuevo").isEqualTo(3);
     }
 
     @Test
-    @DisplayName("con intentos en paralelo sobre el mismo email se evalúan exactamente 5")
+    @DisplayName("con intentos en paralelo sobre el mismo email desde la misma IP se evalúan exactamente 5")
+    void concurrenciaPorEmailEIp() throws Exception {
+        assertThat(evaluadosEnParalelo(i -> "dueno@x.test", i -> IP)).isEqualTo(5);
+    }
+
+    @Test
+    @DisplayName("con intentos en paralelo sobre el mismo email desde IPs distintas se evalúan exactamente 50")
     void concurrenciaPorEmail() throws Exception {
-        assertThat(evaluadosEnParalelo(i -> "dueno@x.test", i -> "10.2.0." + (i % 200))).isEqualTo(5);
+        assertThat(evaluadosEnParalelo(i -> "dueno@x.test", i -> "10.2.0." + (i % 200))).isEqualTo(50);
     }
 
     @Test
