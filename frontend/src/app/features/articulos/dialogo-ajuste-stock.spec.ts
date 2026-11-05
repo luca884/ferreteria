@@ -302,6 +302,56 @@ describe('DialogoAjusteStock', () => {
     expect(texto('.diferencia')).toBe('-4,5 metros');
   });
 
+  describe('«1.500» sin coma puede ser 1500 o 1,5: lo pregunta en vez de adivinar', () => {
+    it('stock real: «—» en vivo y la pregunta al confirmar, sin mandar nada', async () => {
+      await abrir(tornillo(10, 'KILO'));
+      await escribir('#motivo', 'CONTEO');
+
+      await escribir('#stock-real', '1.500');
+      expect(texto('.diferencia')).toBe('—');
+
+      await confirmar();
+      expect(texto('#stock-real-error')).toBe('¿Quisiste decir 1500 o 1,5? Usá la coma para los decimales.');
+
+      await escribir('#stock-real', '12.345');
+      await confirmar();
+      expect(texto('#stock-real-error')).toBe('¿Quisiste decir 12345 o 12,345? Usá la coma para los decimales.');
+
+      await escribir('#stock-real', '2.000');
+      await confirmar();
+      expect(texto('#stock-real-error')).toBe('¿Quisiste decir 2000 o 2? Usá la coma para los decimales.');
+      expect(servicio.ajustarStock).not.toHaveBeenCalled();
+    });
+
+    it('cantidad: «—» en vivo y la pregunta al confirmar, también en un artículo por unidad', async () => {
+      await abrir(tornillo(3));
+      await escribir('#motivo', 'INGRESO_MERCADERIA');
+
+      await escribir('#cantidad', '1.500');
+      expect(texto('.vista-previa .quedara')).toBe('—');
+
+      await confirmar();
+      expect(texto('#cantidad-error')).toBe('¿Quisiste decir 1500 o 1,5? Usá la coma para los decimales.');
+      expect(servicio.ajustarStock).not.toHaveBeenCalled();
+    });
+
+    it('lo demás se lee como antes: «145.5», «1.500,25» y «0.250» (un 0 delante no es de miles)', async () => {
+      await abrir(tornillo(1000, 'METRO'));
+
+      await escribir('#stock-real', '145.5');
+      expect(texto('.diferencia')).toBe('-854,5 metros');
+
+      await escribir('#stock-real', '1.500,25');
+      expect(texto('.diferencia')).toBe('+500,25 metros');
+
+      await escribir('#stock-real', '1000.250');
+      expect(texto('.diferencia')).toBe('+0,25 metros');
+
+      await escribir('#stock-real', '0.250');
+      expect(texto('.diferencia')).toBe('-999,75 metros');
+    });
+  });
+
   it('desde un stock negativo, contar 0 suma lo que faltaba', async () => {
     await abrir(tornillo(-3));
 

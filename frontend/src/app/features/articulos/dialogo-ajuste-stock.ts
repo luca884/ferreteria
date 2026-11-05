@@ -74,8 +74,25 @@ interface Lectura {
   negativo: boolean;
 }
 
-/** «145,5» o «145.5» → número y cuántos decimales se escribieron; null si no es un número. */
+/**
+ * «1.500» sin coma puede ser 1500 (punto de miles) o 1,5: no se adivina, se pregunta. Solo con 1 a 3 cifras sin 0
+ * delante y exactamente 3 después del punto; «0.250» y «1000.250» no pueden ser de miles y se leen con decimales.
+ */
+const AMBIGUO = /^(-?)([1-9]\d{0,2})\.(\d{3})$/;
+
+/** La pregunta para un número ambiguo, o null si no lo es. */
+function preguntaSiEsAmbiguo(texto: string): string | null {
+  const partes = AMBIGUO.exec(texto.trim());
+  if (!partes) return null;
+  const [, signo, entero, resto] = partes;
+  const decimales = resto.replace(/0+$/, '');
+  const conComa = decimales ? `${entero},${decimales}` : entero;
+  return `¿Quisiste decir ${signo}${entero}${resto} o ${signo}${conComa}? Usá la coma para los decimales.`;
+}
+
+/** «145,5» o «145.5» → número y cuántos decimales se escribieron; null si no es un número o si es ambiguo. */
 function leerNumero(texto: string): Lectura | null {
+  if (preguntaSiEsAmbiguo(texto)) return null;
   const limpio = texto.trim().includes(',') ? texto.trim().replace(/\./g, '').replace(',', '.') : texto.trim();
   if (!/^-?\d+(\.\d+)?$/.test(limpio)) return null;
   return {
@@ -724,7 +741,9 @@ export class DialogoAjusteStock {
     const texto = this.valorTexto().trim();
     const leido = leerNumero(texto);
     const formato = leido && errorDeFormato(leido, this.articulo().unidad);
+    const pregunta = preguntaSiEsAmbiguo(texto);
     if (texto === '') errores[campo] = mensajes.vacio;
+    else if (pregunta) errores[campo] = pregunta;
     else if (!leido) errores[campo] = mensajes.noEsNumero;
     else if (formato) errores[campo] = mensajes.formato[formato];
     else if (campo === 'stockReal') {
