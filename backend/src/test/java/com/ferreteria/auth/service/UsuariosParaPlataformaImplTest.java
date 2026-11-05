@@ -86,7 +86,7 @@ class UsuariosParaPlataformaImplTest {
     @Test
     @DisplayName("crearDueno guarda un DUENO activo de esa ferretería, con el email normalizado y la contraseña hasheada")
     void crearDueno() {
-        long id = puerto.crearDueno(5L, "  Ana  ", "  ANA@Tienda.com ", "clave1234");
+        long id = puerto.crearDueno(5L, "  Ana  ", "  ANA@Tienda.com ", "clave-segura-77");
 
         ArgumentCaptor<Usuario> guardado = ArgumentCaptor.forClass(Usuario.class);
         verify(usuarios).saveAndFlush(guardado.capture());
@@ -115,7 +115,7 @@ class UsuariosParaPlataformaImplTest {
     void crearDuenoEmailRepetido() {
         when(usuarios.saveAndFlush(any(Usuario.class))).thenThrow(duplicado());
 
-        assertThatThrownBy(() -> puerto.crearDueno(5L, "Ana", "a@b.com", "clave1234"))
+        assertThatThrownBy(() -> puerto.crearDueno(5L, "Ana", "a@b.com", "clave-segura-77"))
                 .isInstanceOf(EmailEnUsoException.class);
     }
 
@@ -126,7 +126,7 @@ class UsuariosParaPlataformaImplTest {
                 new SQLException("Data too long", "22001", 1406));
         when(usuarios.saveAndFlush(any(Usuario.class))).thenThrow(otro);
 
-        assertThatThrownBy(() -> puerto.crearDueno(5L, "Ana", "a@b.com", "clave1234")).isSameAs(otro);
+        assertThatThrownBy(() -> puerto.crearDueno(5L, "Ana", "a@b.com", "clave-segura-77")).isSameAs(otro);
     }
 
     @Test
@@ -164,7 +164,7 @@ class UsuariosParaPlataformaImplTest {
     void resetearAjeno() {
         when(usuarios.duenoDe(5L, 9L)).thenReturn(Optional.empty());
 
-        assertThat(puerto.resetearContrasenaDeDueno(5L, 9L, "clave1234")).isFalse();
+        assertThat(puerto.resetearContrasenaDeDueno(5L, 9L, "clave-segura-77")).isFalse();
         verify(usuarios, never()).saveAndFlush(any());
     }
 
@@ -175,7 +175,7 @@ class UsuariosParaPlataformaImplTest {
         d.cambiarPropiaContrasena("propio");
         when(usuarios.duenoDe(5L, 9L)).thenReturn(Optional.of(d));
 
-        assertThat(puerto.resetearContrasenaDeDueno(5L, 9L, "clave1234")).isTrue();
+        assertThat(puerto.resetearContrasenaDeDueno(5L, 9L, "clave-segura-77")).isTrue();
         assertThat(d.getPasswordHash()).isEqualTo("hash-nuevo");
         assertThat(d.isDebeCambiarContrasena()).isTrue();
         verify(usuarios).saveAndFlush(d);
