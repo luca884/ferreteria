@@ -1,7 +1,8 @@
 import { TestBed } from '@angular/core/testing';
 import { signal } from '@angular/core';
-import { Route, Router, provideRouter } from '@angular/router';
+import { NavigationStart, Route, Router, provideRouter } from '@angular/router';
 import { authGuard } from './core/auth/auth.guard';
+import { Rol, Sesion } from './core/auth/auth.models';
 import { AuthService } from './core/auth/auth.service';
 import { inicioPorRol } from './core/auth/inicio-por-rol';
 import { ActualizacionMasiva } from './features/actualizacion-masiva/actualizacion-masiva';
@@ -31,234 +32,205 @@ import { Remitos } from './features/remitos/remitos';
 import { routes } from './app.routes';
 
 describe('rutas', () => {
-  const hijas = (): Route[] => routes.find((r) => r.path === '')?.children ?? [];
+  const padre = (): Route => routes.find((r) => r.path === '')!;
+  const hijas = (): Route[] => padre().children ?? [];
+  const ruta = (path: string): Route => {
+    const encontrada = hijas().find((r) => r.path === path);
+    expect(encontrada, path).toBeDefined();
+    return encontrada!;
+  };
+  const componente = (path: string) => (ruta(path).loadComponent as () => Promise<unknown>)();
 
-  it('la ruta presupuestos carga la pantalla de presupuestos, sin guard de rol: la usan el Vendedor y el Dueño', async () => {
-    const padre = routes.find((r) => r.path === '');
-    const ruta = hijas().find((r) => r.path === 'presupuestos');
-
-    expect(ruta).toBeDefined();
-    expect(await (ruta!.loadComponent as () => Promise<unknown>)()).toBe(Presupuestos);
-    expect(ruta!.canActivate).toBeUndefined();
-    expect(padre!.canActivate).toEqual([authGuard]);
+  it.each<[string, unknown]>([
+    ['mostrador', Mostrador],
+    ['presupuestos', Presupuestos],
+    ['remitos', Remitos],
+    ['clientes/:id/cuenta', CuentaCliente],
+    ['caja', Caja],
+    ['caja/historial', HistorialCajas],
+    ['articulos', Articulos],
+    ['articulos/nuevo', ArticuloForm],
+    ['articulos/:id', ArticuloForm],
+    ['articulos/:id/movimientos', MovimientosArticulo],
+    ['proveedores', Proveedores],
+    ['compras', Compras],
+    ['compras/nueva', NuevaCompra],
+    ['compras/:id', Compras],
+    ['ventas', Ventas],
+    ['reportes', Reportes],
+    ['stock-bajo-minimo', StockBajoMinimo],
+    ['controles-de-datos', ControlesDeDatos],
+    ['importaciones', Importaciones],
+    ['actualizacion-masiva', ActualizacionMasiva],
+    ['configuracion/cotizacion', PaginaConfiguracionCotizacion],
+    ['configuracion/precios', PaginaConfiguracionPrecios],
+    ['configuracion/ventas', PaginaConfiguracionVentas],
+    ['configuracion/datos-fiscales', PaginaDatosFiscales],
+    ['configuracion/facturacion', PaginaFacturacion],
+    ['configuracion/formas-pago', FormasPago],
+  ])('la ruta %s carga su pantalla', async (path, pantalla) => {
+    expect(await componente(path)).toBe(pantalla);
   });
 
-  it('la ruta remitos carga la pantalla de remitos, sin guard de rol: la usan el Vendedor y el Dueño (anular lo valida el servidor)', async () => {
-    const ruta = hijas().find((r) => r.path === 'remitos');
+  // ---- roles (guards-por-rol, S1 y S2) ----
 
-    expect(ruta).toBeDefined();
-    expect(await (ruta!.loadComponent as () => Promise<unknown>)()).toBe(Remitos);
-    expect(ruta!.canActivate).toBeUndefined();
-  });
+  const AMBOS: Rol[] = ['DUENO', 'VENDEDOR'];
+  const DUENO: Rol[] = ['DUENO'];
+  const MAPA: Record<string, Rol[]> = {
+    mostrador: AMBOS,
+    presupuestos: AMBOS,
+    remitos: AMBOS,
+    clientes: AMBOS,
+    caja: AMBOS,
+    rubros: AMBOS,
+    articulos: AMBOS,
+    'articulos/:id': AMBOS,
+    proveedores: AMBOS,
+    'clientes/:id/cuenta': DUENO,
+    'caja/historial': DUENO,
+    'articulos/nuevo': DUENO,
+    'articulos/:id/movimientos': DUENO,
+    'articulos/:id/clientes': DUENO,
+    compras: DUENO,
+    'compras/nueva': DUENO,
+    'compras/:id': DUENO,
+    ventas: DUENO,
+    reportes: DUENO,
+    'stock-bajo-minimo': DUENO,
+    'controles-de-datos': DUENO,
+    etiquetas: DUENO,
+    importaciones: DUENO,
+    'actualizacion-masiva': DUENO,
+    'configuracion/cotizacion': DUENO,
+    'configuracion/precios': DUENO,
+    'configuracion/ventas': DUENO,
+    'configuracion/datos-fiscales': DUENO,
+    'configuracion/facturacion': DUENO,
+    'configuracion/formas-pago': DUENO,
+    usuarios: DUENO,
+    'admin/ferreterias': ['SUPER_ADMIN'],
+    'mi-contrasena': ['DUENO', 'VENDEDOR', 'SUPER_ADMIN'],
+  };
 
-  it('la ruta proveedores carga el componente Proveedores', async () => {
-    const ruta = hijas().find((r) => r.path === 'proveedores');
+  it('cada pantalla del shell declara exactamente los roles del mapa, y no hay pantallas fuera del mapa', () => {
+    const pantallas = hijas().filter((r) => !r.redirectTo);
 
-    expect(ruta).toBeDefined();
-    expect(await (ruta!.loadComponent as () => Promise<unknown>)()).toBe(Proveedores);
-  });
-
-  it('la ruta importaciones carga el componente Importaciones', async () => {
-    const ruta = hijas().find((r) => r.path === 'importaciones');
-
-    expect(ruta).toBeDefined();
-    expect(await (ruta!.loadComponent as () => Promise<unknown>)()).toBe(Importaciones);
-  });
-
-  it('las rutas compras y compras/nueva cargan el listado y la carga, sin guard propio (el Vendedor ve el aviso)', async () => {
-    const compras = hijas().find((r) => r.path === 'compras');
-    const nueva = hijas().find((r) => r.path === 'compras/nueva');
-
-    expect(await (compras!.loadComponent as () => Promise<unknown>)()).toBe(Compras);
-    expect(await (nueva!.loadComponent as () => Promise<unknown>)()).toBe(NuevaCompra);
-    expect(compras!.canActivate).toBeUndefined();
-    expect(nueva!.canActivate).toBeUndefined();
-    expect(compras!.title).toBe('Compras · Ferretería');
-    expect(nueva!.title).toBe('Nueva compra · Ferretería');
-  });
-
-  it('la ruta reportes carga los reportes de ventas, sin guard propio (el Vendedor ve el aviso)', async () => {
-    const reportes = hijas().find((r) => r.path === 'reportes');
-
-    expect(await (reportes!.loadComponent as () => Promise<unknown>)()).toBe(Reportes);
-    expect(reportes!.canActivate).toBeUndefined();
-    expect(reportes!.title).toBe('Reportes · Ferretería');
-  });
-
-  it('la ruta controles-de-datos carga los controles de datos, sin guard propio (el Vendedor ve el aviso)', async () => {
-    const ruta = hijas().find((r) => r.path === 'controles-de-datos');
-
-    expect(ruta).toBeDefined();
-    expect(await (ruta!.loadComponent as () => Promise<unknown>)()).toBe(ControlesDeDatos);
-    expect(ruta!.canActivate).toBeUndefined();
-    expect(ruta!.title).toBe('Controles de datos · Ferretería');
-  });
-
-  it('la ruta stock-bajo-minimo carga el listado de stock bajo mínimo, sin guard propio (el Vendedor ve el aviso)', async () => {
-    const ruta = hijas().find((r) => r.path === 'stock-bajo-minimo');
-
-    expect(ruta).toBeDefined();
-    expect(await (ruta!.loadComponent as () => Promise<unknown>)()).toBe(StockBajoMinimo);
-    expect(ruta!.canActivate).toBeUndefined();
-    expect(ruta!.title).toBe('Stock bajo mínimo · Ferretería');
-  });
-
-  it('la ruta ventas carga la consulta de ventas, sin guard propio (el Vendedor ve el aviso)', async () => {
-    const ventas = hijas().find((r) => r.path === 'ventas');
-
-    expect(await (ventas!.loadComponent as () => Promise<unknown>)()).toBe(Ventas);
-    expect(ventas!.canActivate).toBeUndefined();
-    expect(ventas!.title).toBe('Ventas · Ferretería');
-  });
-
-  it('la ruta actualizacion-masiva carga el componente ActualizacionMasiva', async () => {
-    const ruta = hijas().find((r) => r.path === 'actualizacion-masiva');
-
-    expect(ruta).toBeDefined();
-    expect(await (ruta!.loadComponent as () => Promise<unknown>)()).toBe(ActualizacionMasiva);
-  });
-
-  it('la ruta actualizacion-masiva no tiene guard propio: solo el authGuard del padre, como importaciones', () => {
-    const padre = routes.find((r) => r.path === '');
-    const masiva = hijas().find((r) => r.path === 'actualizacion-masiva');
-    const importaciones = hijas().find((r) => r.path === 'importaciones');
-
-    expect(masiva).toBeDefined();
-    expect(masiva!.canActivate).toBeUndefined();
-    expect(masiva!.canActivate).toEqual(importaciones!.canActivate);
-    expect(padre!.canActivate).toEqual([authGuard]);
-  });
-
-  it('la ruta configuracion/cotizacion carga la pantalla de configuración de cotización', async () => {
-    const ruta = hijas().find((r) => r.path === 'configuracion/cotizacion');
-
-    expect(ruta).toBeDefined();
-    expect(await (ruta!.loadComponent as () => Promise<unknown>)()).toBe(PaginaConfiguracionCotizacion);
-  });
-
-  it('la ruta configuracion/precios carga la pantalla de margen y redondeo, sin guard propio (la pantalla le avisa al Vendedor)', async () => {
-    const ruta = hijas().find((r) => r.path === 'configuracion/precios');
-
-    expect(ruta).toBeDefined();
-    expect(await (ruta!.loadComponent as () => Promise<unknown>)()).toBe(PaginaConfiguracionPrecios);
-    expect(ruta!.canActivate).toBeUndefined();
-  });
-
-  it('configuracion/cotizacion no tiene guard propio, como las otras pantallas del Dueño: la pantalla le avisa al Vendedor', () => {
-    const padre = routes.find((r) => r.path === '');
-    const cotizacion = hijas().find((r) => r.path === 'configuracion/cotizacion');
-    const importaciones = hijas().find((r) => r.path === 'importaciones');
-
-    expect(cotizacion).toBeDefined();
-    expect(cotizacion!.canActivate).toBeUndefined();
-    expect(cotizacion!.canActivate).toEqual(importaciones!.canActivate);
-    expect(padre!.canActivate).toEqual([authGuard]);
-  });
-
-  it('la ruta configuracion/ventas carga el tope de Consumidor Final, sin guard propio (la pantalla le avisa al Vendedor)', async () => {
-    const ruta = hijas().find((r) => r.path === 'configuracion/ventas');
-
-    expect(ruta).toBeDefined();
-    expect(await (ruta!.loadComponent as () => Promise<unknown>)()).toBe(PaginaConfiguracionVentas);
-    expect(ruta!.canActivate).toBeUndefined();
-    expect(ruta!.title).toBe('Consumidor Final · Ferretería');
-  });
-
-  it('la ruta configuracion/datos-fiscales carga los datos de la ferretería, sin guard propio (la pantalla le avisa al Vendedor)', async () => {
-    const ruta = hijas().find((r) => r.path === 'configuracion/datos-fiscales');
-
-    expect(ruta).toBeDefined();
-    expect(await (ruta!.loadComponent as () => Promise<unknown>)()).toBe(PaginaDatosFiscales);
-    expect(ruta!.canActivate).toBeUndefined();
-    expect(ruta!.title).toBe('Datos de la ferretería · Ferretería');
-  });
-
-  it('la ruta configuracion/facturacion carga la configuración de ARCA, sin guard propio (la pantalla le avisa al Vendedor)', async () => {
-    const ruta = hijas().find((r) => r.path === 'configuracion/facturacion');
-
-    expect(ruta).toBeDefined();
-    expect(await (ruta!.loadComponent as () => Promise<unknown>)()).toBe(PaginaFacturacion);
-    expect(ruta!.canActivate).toBeUndefined();
-    expect(ruta!.title).toBe('Facturación · Ferretería');
-  });
-
-  it('la ruta configuracion/formas-pago carga la pantalla de formas de pago, sin guard propio (la pantalla le avisa al Vendedor)', async () => {
-    const padre = routes.find((r) => r.path === '');
-    const ruta = hijas().find((r) => r.path === 'configuracion/formas-pago');
-    const importaciones = hijas().find((r) => r.path === 'importaciones');
-
-    expect(ruta).toBeDefined();
-    expect(await (ruta!.loadComponent as () => Promise<unknown>)()).toBe(FormasPago);
-    expect(ruta!.canActivate).toBeUndefined();
-    expect(ruta!.canActivate).toEqual(importaciones!.canActivate);
-    expect(padre!.canActivate).toEqual([authGuard]);
-  });
-
-  it('la ruta articulos carga el componente Articulos', async () => {
-    const ruta = hijas().find((r) => r.path === 'articulos');
-
-    expect(ruta).toBeDefined();
-    expect(await (ruta!.loadComponent as () => Promise<unknown>)()).toBe(Articulos);
-  });
-
-  it('las rutas articulos/nuevo y articulos/:id cargan el formulario de artículo', async () => {
-    for (const path of ['articulos/nuevo', 'articulos/:id']) {
-      const ruta = hijas().find((r) => r.path === path);
-
-      expect(ruta, path).toBeDefined();
-      expect(await (ruta!.loadComponent as () => Promise<unknown>)(), path).toBe(ArticuloForm);
+    expect(pantallas.map((r) => r.path).sort()).toEqual(Object.keys(MAPA).sort());
+    for (const r of pantallas) {
+      expect([...(r.data?.['roles'] ?? [])].sort(), r.path).toEqual([...MAPA[r.path!]].sort());
     }
   });
 
-  it('la ruta articulos/:id/movimientos carga los movimientos de stock del artículo (G29)', async () => {
-    const ruta = hijas().find((r) => r.path === 'articulos/:id/movimientos');
-
-    expect(ruta).toBeDefined();
-    expect(await (ruta!.loadComponent as () => Promise<unknown>)()).toBe(MovimientosArticulo);
+  it('el shell exige sesión y, en cada hija, el cambio de contraseña y el rol', () => {
+    expect(padre().canActivate).toEqual([authGuard]);
+    expect(padre().canActivateChild?.length).toBe(2);
   });
+
+  function navegarComo(rol: Rol, debeCambiarContrasena = false) {
+    TestBed.resetTestingModule();
+    TestBed.configureTestingModule({
+      providers: [
+        provideRouter(routes),
+        {
+          provide: AuthService,
+          useValue: {
+            autenticado: signal(true),
+            debeCambiarContrasena: signal(debeCambiarContrasena),
+            sesion: signal({ rol } as Sesion),
+          },
+        },
+      ],
+    });
+    return TestBed.inject(Router);
+  }
+
+  /** Navega y cuenta los NavigationStart: más de 2 sería un loop de redirecciones. */
+  async function navegar(router: Router, url: string): Promise<number> {
+    let inicios = 0;
+    const sub = router.events.subscribe((e) => {
+      if (e instanceof NavigationStart) inicios++;
+    });
+    await router.navigateByUrl(url);
+    sub.unsubscribe();
+    return inicios;
+  }
+
+  const INICIO: Record<Rol, string> = { DUENO: '/mostrador', VENDEDOR: '/mostrador', SUPER_ADMIN: '/admin/ferreterias' };
+  const recorrido = Object.entries(MAPA).flatMap(([path, roles]) =>
+    (['DUENO', 'VENDEDOR', 'SUPER_ADMIN'] as Rol[]).map((rol) => {
+      const url = '/' + path.replace(':id', '7');
+      return [rol, url, roles.includes(rol) ? url : INICIO[rol]] as const;
+    }),
+  );
+
+  it.each(recorrido)('%s en %s termina en %s, sin loop', async (rol, url, esperado) => {
+    const router = navegarComo(rol);
+
+    const inicios = await navegar(router, url);
+
+    expect(router.url).toBe(esperado);
+    expect(inicios).toBeLessThanOrEqual(2);
+  });
+
+  it.each<[Rol, string]>([
+    ['DUENO', '/ventas'],
+    ['VENDEDOR', '/ventas'],
+    ['VENDEDOR', '/admin/ferreterias'],
+    ['SUPER_ADMIN', '/mostrador'],
+  ])('con el cambio de contraseña pendiente, %s en %s termina en «Mi contraseña», sin loop', async (rol, url) => {
+    const router = navegarComo(rol, true);
+
+    const inicios = await navegar(router, url);
+
+    expect(router.url).toBe('/mi-contrasena');
+    expect(inicios).toBeLessThanOrEqual(3);
+  });
+
+  it.each(['/', '/no-existe'])('el super admin en %s va a Ferreterías', async (url) => {
+    const router = navegarComo('SUPER_ADMIN');
+
+    await navegar(router, url);
+
+    expect(router.url).toBe('/admin/ferreterias');
+  });
+
+  it.each(['/admin/ferreterias', '/ventas', '/configuracion/facturacion', '/usuarios', '/clientes/3/cuenta'])(
+    'el Vendedor que escribe %s vuelve al Mostrador',
+    async (url) => {
+      const router = navegarComo('VENDEDOR');
+
+      await router.navigateByUrl(url);
+
+      expect(router.url).toBe('/mostrador');
+    },
+  );
+
+  it.each(['/mostrador', '/articulos/5', '/usuarios'])(
+    'el super admin que escribe %s vuelve a Ferreterías',
+    async (url) => {
+      const router = navegarComo('SUPER_ADMIN');
+
+      await router.navigateByUrl(url);
+
+      expect(router.url).toBe('/admin/ferreterias');
+    },
+  );
+
+  it('el Dueño que escribe la pantalla del super admin vuelve al Mostrador', async () => {
+    const router = navegarComo('DUENO');
+
+    await router.navigateByUrl('/admin/ferreterias');
+
+    expect(router.url).toBe('/mostrador');
+  });
+
+  // ---- orden, inicio y comodín ----
 
   it('articulos/nuevo va antes que articulos/:id para que "nuevo" no se tome como id', () => {
     const paths = hijas().map((r) => r.path);
 
     expect(paths.indexOf('articulos/nuevo')).toBeGreaterThanOrEqual(0);
     expect(paths.indexOf('articulos/nuevo')).toBeLessThan(paths.indexOf('articulos/:id'));
-  });
-
-  it('la ruta caja carga la pantalla Caja y caja/historial el historial, sin guard de rol (CU-10)', async () => {
-    const caja = hijas().find((r) => r.path === 'caja');
-    const historial = hijas().find((r) => r.path === 'caja/historial');
-
-    expect(await (caja!.loadComponent as () => Promise<unknown>)()).toBe(Caja);
-    expect(await (historial!.loadComponent as () => Promise<unknown>)()).toBe(HistorialCajas);
-    expect(caja!.canActivate).toBeUndefined();
-    expect(historial!.canActivate).toBeUndefined();
-  });
-
-  it('la ruta clientes/:id/cuenta carga la cuenta del cliente, sin guard de rol: el contenedor maneja «sinPermiso» (CC-043)', async () => {
-    const padre = routes.find((r) => r.path === '');
-    const ruta = hijas().find((r) => r.path === 'clientes/:id/cuenta');
-
-    expect(ruta).toBeDefined();
-    expect(ruta!.path).toContain(':id');
-    expect(await (ruta!.loadComponent as () => Promise<unknown>)()).toBe(CuentaCliente);
-    expect(ruta!.canActivate).toBeUndefined();
-    expect(padre!.canActivate).toEqual([authGuard]);
-  });
-
-  it('la ruta mostrador carga el componente Mostrador', async () => {
-    const ruta = hijas().find((r) => r.path === 'mostrador');
-
-    expect(ruta).toBeDefined();
-    expect(await (ruta!.loadComponent as () => Promise<unknown>)()).toBe(Mostrador);
-  });
-
-  it('la ruta mostrador no tiene guard de rol: solo el authGuard del padre', () => {
-    const padre = routes.find((r) => r.path === '');
-    const mostrador = hijas().find((r) => r.path === 'mostrador');
-
-    expect(mostrador).toBeDefined();
-    expect(mostrador!.canActivate).toBeUndefined();
-    expect(padre!.canActivate).toEqual([authGuard]);
   });
 
   it('la ruta por defecto redirige según el rol con inicioPorRol', () => {
@@ -292,6 +264,15 @@ describe('rutas', () => {
     expect(titulo(hijas(), 'configuracion/precios')).toBe('Margen y redondeo · Ferretería');
     expect(titulo(hijas(), 'configuracion/formas-pago')).toBe('Formas de pago · Ferretería');
     expect(titulo(hijas(), 'clientes/:id/cuenta')).toBe('Cuenta corriente · Ferretería');
+    expect(titulo(hijas(), 'compras')).toBe('Compras · Ferretería');
+    expect(titulo(hijas(), 'compras/nueva')).toBe('Nueva compra · Ferretería');
+    expect(titulo(hijas(), 'reportes')).toBe('Reportes · Ferretería');
+    expect(titulo(hijas(), 'ventas')).toBe('Ventas · Ferretería');
+    expect(titulo(hijas(), 'stock-bajo-minimo')).toBe('Stock bajo mínimo · Ferretería');
+    expect(titulo(hijas(), 'controles-de-datos')).toBe('Controles de datos · Ferretería');
+    expect(titulo(hijas(), 'configuracion/ventas')).toBe('Consumidor Final · Ferretería');
+    expect(titulo(hijas(), 'configuracion/datos-fiscales')).toBe('Datos de la ferretería · Ferretería');
+    expect(titulo(hijas(), 'configuracion/facturacion')).toBe('Facturación · Ferretería');
   });
 
   it('sin sesión, /mostrador redirige al login recordando adónde quería ir', async () => {
