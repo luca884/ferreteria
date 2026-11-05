@@ -112,7 +112,7 @@ class PoliticaDeContrasenaTest {
     @Test
     @DisplayName("una común de menos de 8 rellenada con espacios hasta pasar el largo también falla con el mensaje de común")
     void comunCortaConEspaciosFalla() {
-        for (String comun : new String[] {"  qwerty  ", "  123456  ", "\tdragon\t\t", "  Abcd    "}) {
+        for (String comun : new String[] {"  qwerty  ", "  123456  ", "\tdragon\t\t", "  Abcd    ", "  1234  ", " qwerty ", "qwerty  "}) {
             assertThatThrownBy(() -> PoliticaDeContrasena.validar("password", comun))
                     .as(comun)
                     .isInstanceOfSatisfying(DatosInvalidosException.class, e -> assertThat(e.errors().get("password"))

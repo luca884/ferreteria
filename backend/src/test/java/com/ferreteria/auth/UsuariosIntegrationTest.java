@@ -141,9 +141,11 @@ class UsuariosIntegrationTest extends UsuariosTestBase {
     @Test
     @DisplayName("una contraseña común da 400 en password con el mensaje exacto; no se crea nada (S1c)")
     void contrasenaComun() throws Exception {
-        crear("Ana", unico("a") + "@usuarios.test", "VENDEDOR", "Password1")
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.errors.password", is("Esa contraseña es muy común. Elegí otra más difícil de adivinar.")));
+        for (String comun : List.of("Password1", "  qwerty  ")) {
+            crear("Ana", unico("a") + "@usuarios.test", "VENDEDOR", comun)
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.errors.password", is("Esa contraseña es muy común. Elegí otra más difícil de adivinar.")));
+        }
         assertThat(jdbc.queryForObject("select count(*) from usuario where ferreteria_id = ?", Long.class, ferreteria))
                 .isEqualTo(1L);
     }
