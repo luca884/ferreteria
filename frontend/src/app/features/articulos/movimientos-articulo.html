@@ -28,7 +28,9 @@
   @if (error(); as texto) {
     <div class="error con-accion" role="alert">
       <span>{{ texto }}</span>
-      <button type="button" class="secundario chico reintentar" (click)="cargar(pagina()?.page ?? 0)">Reintentar</button>
+      @if (reintentable()) {
+        <button type="button" class="secundario chico reintentar" (click)="cargar(pagina()?.page ?? 0)">Reintentar</button>
+      }
     </div>
   }
 

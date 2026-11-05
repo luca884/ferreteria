@@ -124,6 +124,13 @@ describe('ClientesArticulo', () => {
     expect(filas()).toHaveLength(2);
   });
 
+  it('un artículo de otra ferretería o inexistente (404) dice que no existe, sin Reintentar', async () => {
+    await crear(true, vi.fn(() => throwError(() => new HttpErrorResponse({ status: 404 }))));
+
+    expect(texto('[role="alert"] span')).toBe('El artículo no existe.');
+    expect(el().querySelector('button.reintentar')).toBeNull();
+  });
+
   it('el Vendedor ve el aviso y no se pide nada al servidor', async () => {
     await crear(false);
 

@@ -1,3 +1,4 @@
+import { HttpErrorResponse } from '@angular/common/http';
 import { Component, OnInit, inject, signal } from '@angular/core';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { AuthService } from '../../core/auth/auth.service';
@@ -8,6 +9,7 @@ import { Articulo, ClientesDelArticulo } from './articulo.models';
 import { ArticulosService } from './articulos.service';
 
 const MENSAJE_LISTA = 'No se pudieron cargar los clientes.';
+const MENSAJE_INEXISTENTE = 'El artículo no existe.';
 
 const NUMERO = new Intl.NumberFormat('es-AR', { maximumFractionDigits: 3 });
 
@@ -32,6 +34,8 @@ export class ClientesArticulo implements OnInit {
   protected readonly pagina = signal<ClientesDelArticulo | null>(null);
   protected readonly cargando = signal(false);
   protected readonly error = signal<string | null>(null);
+  /** Un artículo inexistente o de otra ferretería (404) no se arregla pidiendo de nuevo. */
+  protected readonly reintentable = signal(true);
 
   ngOnInit(): void {
     if (!this.auth.esDueno()) return;
@@ -57,9 +61,11 @@ export class ClientesArticulo implements OnInit {
         this.pagina.set(pagina);
         this.cargando.set(false);
       },
-      error: () => {
+      error: (err: unknown) => {
+        const inexistente = err instanceof HttpErrorResponse && err.status === 404;
         this.cargando.set(false);
-        this.error.set(MENSAJE_LISTA);
+        this.reintentable.set(!inexistente);
+        this.error.set(inexistente ? MENSAJE_INEXISTENTE : MENSAJE_LISTA);
       },
     });
   }
