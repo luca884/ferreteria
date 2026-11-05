@@ -1,0 +1,33 @@
+# revision-seguridad-altos
+
+Objetivo: cerrar los dos hallazgos altos de la revisión de seguridad del 2026-11-05 (un pedido de un usuario logueado tira el backend de todas las ferreterías) · Por qué: un .xlsx de 4 MB o un número con exponente gigante agotan la memoria o la CPU del servidor compartido. Informe: vault `Projects/Ferreteria/wiki/revision-seguridad-2026-11-05.md`.
+Rama: `fix/revision-seguridad-altos` desde `0d87faf` · Entrega: single-pr · Runner: `cd backend && ./mvnw test -Dtest=<Clase>` / suite `./mvnw test` · Mirror Engram: `odd/revision-seguridad-altos/tasks`
+Pronóstico: ~650 líneas cambiadas · Ruteo: caso 5 (Opus de punta a punta: seguridad, alto riesgo item 2)
+
+## Specs
+
+Alcance: la lectura de .xlsx (`catalogo/service/lectura/LectorExcel`) y la conversión de números que llegan en el pedido (cuerpo JSON y parámetros de la URL) · Fuera de alcance: los hallazgos medios y bajos (salvo lo que el arreglo de la entrada ya cubre), el .xls (ver T3), el frontend.
+
+Pedido (2026-11-05):
+- «Dale, arrancá con los dos altos»
+
+- S1: alto 1, «un .xlsx de 4 MB tira el backend de todas las ferreterías» — Aceptación: un .xlsx se lee sin armar el libro entero en memoria (lectura por eventos de la hoja). Los topes de filas, columnas y celdas cortan la lectura mientras se lee. Las partes del archivo tienen tope sobre los bytes reales descomprimidos (no sobre lo que declara el zip), y las que POI arma enteras en memoria (libro, estilos, cadenas compartidas, relaciones) tienen un tope chico. Un archivo que pasa un tope dice «La lista es demasiado grande para leerla. Dividila en archivos más chicos.» o el mensaje de filas o columnas que ya existe. Lo que hoy se lee igual se sigue leyendo igual: mismos textos, números, porcentajes, fórmulas con su valor guardado, errores, hojas y filas (los tests de `LectorExcelTest` siguen en verde) — Checks: `LectorExcelTest`; un test que lee el archivo del hallazgo en una JVM con poca memoria (`-Xmx256m`): antes muere por falta de memoria, después responde con el mensaje; una lista real de 20.000 filas en esa misma JVM se lee entera.
+- S2: alto 2, «un parámetro de la URL tira el backend» — Aceptación: un número del pedido (cuerpo JSON o parámetro de la URL) con más de 100 posiciones de exponente, como `1E+1000000000` o `1E-1000000000`, se rechaza con 400 antes de llegar a la lógica. Los números normales no cambian. Cubre `POST /api/cotizacion/recalculo?dolar=`, `GET /api/clientes/{id}/cuenta?importe=` (lo puede usar el Vendedor), `GET /api/configuracion/precios/articulos-que-cambian` y los porcentajes del cuerpo (recargos, ofertas: hallazgo medio 4) — Checks: test unitario del conversor y del deserializador; tests de integración de los tres parámetros y de un recargo en el cuerpo, con tope de tiempo.
+
+## Tasks
+
+- [x] T1 · S2 · ruta: inline · Aceptación: deserializador JSON y conversor de parámetros que rechazan escala fuera de [-100, 100]; RED (tests de integración pasan el tope de tiempo o dan 409/200) → GREEN (400 rápido) · Evidencia: RED `NumeroDelPedidoIntegrationTest` 5/5 fallan (dólar 409, importe 404, redondeo `1E-1000` 200, los dos recargos con el mensaje de rango del servicio) → GREEN 5/5 y `NumeroDelPedidoTest` 19/19; ArchUnit 76/76. Un `Converter` no alcanzaba para la URL: si falla, Spring reintenta con su `CustomNumberEditor` y lo lee igual; va como editor del binder (`@InitBinder`) · Risk: item 2 (seguridad), item 3 (todo `BigDecimal` del pedido pasa por acá)
+- [ ] T2 · S1 · ruta: inline · Aceptación: lectura de .xlsx por eventos con topes sobre los bytes reales; RED (JVM de 256 MB muere con el archivo del hallazgo) → GREEN; `LectorExcelTest` en verde · Risk: item 2, item 3 (toda lista Excel pasa por acá)
+- [ ] T3 · S1 · ruta: inline · Aceptación: medir el .xls más pesado que entra en 25 MB en una JVM de 768 MB; si no entra, se reporta como decisión · Risk: item 2
+- [ ] T4 · S1 S2 · ruta: inline · Aceptación: suite backend; ego-browser importando una lista .xlsx real · Risk: —
+- [ ] T5 · S1 S2 · ruta: `odd-verifier` (opus) · Aceptación: pass sin blockers · Risk: —
+
+## Log
+
+- L1 (2026-11-05) Pedido original, textual: ver «Pedido» en Specs.
+- L2 (2026-11-05) Exploración:
+  - `LectorExcel.java:80-81`: `WorkbookFactory.create(InputStream)` arma el DOM de todas las hojas antes de los topes; `OPCPackage.open(InputStream)` además infla todas las partes en memoria. Los topes de POI son por parte (`MAXIMO_ENTRADA_ZIP_BYTES` 256 MB, arreglo de 50 MB).
+  - `TurnoDeLectura`: una lectura de lista a la vez en todo el servidor.
+  - `DolarDePreciosService.java:89-91` formatea el `dolar` del pedido. `Cupo.exceso()` hace `saldo.add(importe)`: con `importe=1E+10000000`, 1,4 s de CPU (medido); el costo crece con el exponente. `compareTo` es barato con cualquier exponente.
+  - Los números de las listas (CSV, PDF) se leen con regex sin exponente; los de Excel salen de un `double`. El riesgo es solo lo que llega en el pedido.
+  - `GlobalExceptionHandler` ya da 400 para un cuerpo ilegible y para un parámetro con tipo inválido.
