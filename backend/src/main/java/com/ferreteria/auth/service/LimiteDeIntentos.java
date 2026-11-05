@@ -51,7 +51,11 @@ public class LimiteDeIntentos {
     /** Lo único que puede tener una IPv6 escrita como texto (sin la zona): se lee sin consultar el DNS. */
     private static final Pattern DIRECCION_IPV6 = Pattern.compile("[0-9A-Fa-f:.]+");
 
-    private record Racha(int fallos, int nivel, Instant bloqueadoHasta, Instant ultimo) {
+    /**
+     * Una racha: sus fallos, cuántos bloqueos lleva, hasta cuándo está bloqueada, la hora del último intento y la del
+     * anterior (para que un login correcto, al devolver su intento, devuelva también la hora).
+     */
+    private record Racha(int fallos, int nivel, Instant bloqueadoHasta, Instant ultimo, Instant anterior) {
         boolean bloqueada(Instant ahora) {
             return bloqueadoHasta != null && ahora.isBefore(bloqueadoHasta);
         }
@@ -193,17 +197,21 @@ public class LimiteDeIntentos {
      */
     private void devolverIntento(String clave) {
         emails.computeIfPresent(clave, (k, racha) -> {
+            // La hora vuelve a la del intento anterior: un login correcto no mantiene viva la racha (se olvida tras 1 hora
+            // sin fallos aunque el dueño entre seguido).
             if (racha.bloqueadoHasta() == null) {
                 int fallos = racha.fallos() - 1;
                 return fallos <= 0 && racha.nivel() == 0 ? null : new Racha(Math.max(0, fallos), racha.nivel(), null,
-                        racha.ultimo());
+                        racha.anterior(), racha.anterior());
             }
             if (racha.fallos() >= maxFallosPorEmail) {
-                return new Racha(racha.fallos() - 1, Math.max(0, racha.nivel() - 1), null, racha.ultimo());
+                return new Racha(racha.fallos() - 1, Math.max(0, racha.nivel() - 1), null, racha.anterior(),
+                        racha.anterior());
             }
             return racha;
         });
     }
+
     /**
      * Reserva un intento de la racha de {@code clave} en {@code rachas}: tira {@link DemasiadosIntentosException} si esta
      * bloqueada, y si no devuelve el bloqueo que empieza con este intento, o null si no empieza ninguno.
@@ -214,7 +222,7 @@ public class LimiteDeIntentos {
         Duration[] empieza = {null};
         rachas.compute(clave, (k, racha) -> {
             if (racha == null || racha.olvidada(ahora)) {
-                racha = new Racha(0, 0, null, ahora);
+                racha = new Racha(0, 0, null, ahora, ahora);
             }
             if (racha.bloqueada(ahora)) {
                 espera[0] = segundosHasta(ahora, racha.bloqueadoHasta());
@@ -223,11 +231,11 @@ public class LimiteDeIntentos {
             // Vencido el bloqueo arranca una ronda nueva de fallos; el nivel se mantiene.
             int fallos = (racha.bloqueadoHasta() != null ? 0 : racha.fallos()) + 1;
             if (fallos < maxFallos) {
-                return new Racha(fallos, racha.nivel(), null, ahora);
+                return new Racha(fallos, racha.nivel(), null, ahora, racha.ultimo());
             }
             Duration bloqueo = BLOQUEOS.get(Math.min(racha.nivel(), BLOQUEOS.size() - 1));
             empieza[0] = bloqueo;
-            return new Racha(fallos, racha.nivel() + 1, ahora.plus(bloqueo), ahora);
+            return new Racha(fallos, racha.nivel() + 1, ahora.plus(bloqueo), ahora, racha.ultimo());
         });
         if (espera[0] > 0) {
             throw new DemasiadosIntentosException(espera[0]);

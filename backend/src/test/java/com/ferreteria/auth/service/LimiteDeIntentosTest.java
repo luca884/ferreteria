@@ -278,6 +278,39 @@ class LimiteDeIntentosTest {
         }
 
         @Test
+        @DisplayName("los logins correctos no mantienen viva la racha: 2 horas sin fallos la olvidan aunque el dueño entre seguido")
+        void loginsCorrectosNoRenuevanLaRacha() {
+            fallarDesdeIpsDistintas(49, "dueno@x.test");
+            reloj.avanzar(Duration.ofMinutes(50));
+            limite.reservar("dueno@x.test", IP_DEL_DUENO);
+            limite.exito("dueno@x.test", IP_DEL_DUENO);
+            reloj.avanzar(Duration.ofMinutes(50));
+            limite.reservar("dueno@x.test", IP_DEL_DUENO);
+            limite.exito("dueno@x.test", IP_DEL_DUENO);
+            reloj.avanzar(Duration.ofMinutes(20));
+
+            fallar("dueno@x.test", "8.8.8.8");
+            assertThatCode(() -> limite.reservar("dueno@x.test", OTRA_IP)).doesNotThrowAnyException();
+        }
+
+        @Test
+        @DisplayName("después de 3 bloqueos, horas sin fallos con logins correctos dejan el bloqueo siguiente en 1 minuto")
+        void loginsCorrectosNoMantienenElNivel() {
+            for (long esperado : new long[] {60, 300, 900}) {
+                fallarDesdeIpsDistintas(50, "dueno@x.test");
+                reloj.avanzar(Duration.ofSeconds(esperado));
+            }
+            for (int i = 0; i < 8; i++) {
+                reloj.avanzar(Duration.ofMinutes(40));
+                limite.reservar("dueno@x.test", IP_DEL_DUENO);
+                limite.exito("dueno@x.test", IP_DEL_DUENO);
+            }
+
+            fallarDesdeIpsDistintas(50, "dueno@x.test");
+            assertThat(segundosDe(() -> limite.reservar("dueno@x.test", IP_DEL_DUENO))).isEqualTo(60);
+        }
+
+        @Test
         @DisplayName("si el intento que llega al tope es un login correcto, la cuenta no queda bloqueada")
         void elLoginCorrectoQueLlegaAlTopeNoBloquea() {
             fallarDesdeIpsDistintas(49, "dueno@x.test");

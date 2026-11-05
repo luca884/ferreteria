@@ -47,7 +47,8 @@ public class AuthService {
 
     /**
      * Login con límite de intentos por email y por IP ({@link LimiteDeIntentos}): pasado el límite da 429 antes de buscar al
-     * usuario y sin gastar el bcrypt. La contraseña correcta borra la racha del email, aunque la ferretería esté suspendida.
+     * usuario y sin gastar el bcrypt. La contraseña correcta borra la racha del email desde esa IP (y al email le devuelve su
+     * intento), aunque la ferretería esté suspendida.
      */
     @Transactional(readOnly = true)
     public LoginResponse login(LoginRequest request, String ip) {
