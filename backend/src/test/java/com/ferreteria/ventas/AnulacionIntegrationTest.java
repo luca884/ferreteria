@@ -8,6 +8,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.ferreteria.clientes.CuentaCorrienteTestBase;
+import com.ferreteria.common.HoraArgentina;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
@@ -147,8 +148,9 @@ class AnulacionIntegrationTest extends CuentaCorrienteTestBase {
         assertThat(anulado.get("estado").asText()).isEqualTo("ANULADO");
         assertThat(anulado.get("anuladoPor").asText()).isEqualTo("Dueno CC");
         assertThat(anulado.get("motivoAnulacion").asText()).isEqualTo(MOTIVO);
-        assertThat(LocalDateTime.parse(anulado.get("fechaAnulacion").asText())).isBetween(LocalDateTime.now().minusMinutes(5),
-                LocalDateTime.now().plusMinutes(5));
+        // La app guarda la hora de Buenos Aires (HoraArgentina), no la de la JVM, que en Linux suele estar en UTC.
+        assertThat(LocalDateTime.parse(anulado.get("fechaAnulacion").asText())).isBetween(HoraArgentina.ahora().minusMinutes(5),
+                HoraArgentina.ahora().plusMinutes(5));
         assertThat(anulado.get("numero")).isEqualTo(cobro.get("numero"));
         assertThat(anulado.get("total").decimalValue()).isEqualByComparingTo("1000");
         assertThat(anulado.get("aCuenta").decimalValue()).isEqualByComparingTo("300");

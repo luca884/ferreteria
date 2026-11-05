@@ -101,6 +101,29 @@ class MovimientosArticuloIntegrationTest extends VentasTestBase {
         assertThat(viejos.get("items").get(0).get("saldo").decimalValue()).isEqualByComparingTo("8");
     }
 
+    /**
+     * Una fecha corrida (como el AJUSTE demo de V1003, que tomaba el DEFAULT CURRENT_TIMESTAMP de MySQL en UTC y quedaba
+     * unas 3 horas en el futuro) no puede romper el saldo: el orden del libro es el de alta del movimiento (id), que es
+     * el orden en que se aplico al stock, no la fecha.
+     */
+    @Test
+    @DisplayName("un movimiento con la fecha corrida al futuro no corrompe el saldo: el orden es el de alta (id)")
+    void fechaCorridaNoCorrompeElSaldo() throws Exception {
+        jdbc.update("update movimiento_stock set fecha = fecha + interval 3 hour where articulo_id = ? and tipo = 'VENTA'",
+                articulo);
+
+        JsonNode items = getJson(url(articulo), dueno).get("items");
+
+        assertThat(items.findValuesAsText("tipo")).containsExactly("AJUSTE", "COMPRA", "REMITO", "VENTA");
+        assertThat(items.findValues("saldo")).extracting(JsonNode::decimalValue)
+                .usingElementComparator(java.math.BigDecimal::compareTo)
+                .containsExactly(dec("11"), dec("12"), dec("7"), dec("8"));
+        JsonNode segundaPagina = getJson(url(articulo) + "?page=1&size=2", dueno).get("items");
+        assertThat(segundaPagina.findValues("saldo")).extracting(JsonNode::decimalValue)
+                .usingElementComparator(java.math.BigDecimal::compareTo)
+                .containsExactly(dec("7"), dec("8"));
+    }
+
     @Test
     @DisplayName("un articulo de otra ferreteria o inexistente da 404, y el Vendedor recibe 403")
     void aislamientoYPermisos() throws Exception {

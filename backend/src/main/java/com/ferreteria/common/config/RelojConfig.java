@@ -10,6 +10,7 @@ import java.time.ZoneId;
 /**
  * El reloj del sistema, inyectable para poder fijarlo en los tests. Lleva la zona de Buenos Aires para las cuentas de
  * hora local (la hora del recalculo diario); las fechas que se guardan en la base siguen siendo {@code Instant}.
+ * Recortado a microsegundos, como lo guarda MySQL ({@link HoraArgentina#enMicrosegundos}).
  */
 @Configuration
 public class RelojConfig {
@@ -18,6 +19,6 @@ public class RelojConfig {
 
     @Bean
     public Clock reloj() {
-        return Clock.system(BUENOS_AIRES);
+        return HoraArgentina.enMicrosegundos(Clock.system(BUENOS_AIRES));
     }
 }
