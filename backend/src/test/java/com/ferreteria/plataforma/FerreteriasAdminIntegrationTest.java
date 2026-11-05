@@ -104,6 +104,18 @@ class FerreteriasAdminIntegrationTest extends PlataformaTestBase {
     }
 
     @Test
+    @DisplayName("alta: un dueño con una contraseña común da 400 en dueno.password con el mensaje exacto (S1c)")
+    void altaConContrasenaComun() throws Exception {
+        String cuit = cuitNuevo();
+        ObjectNode c = altaValida(cuit, emailNuevo());
+        ((ObjectNode) c.get("dueno")).put("password", "Mardelplata");
+
+        alta(admin, c).andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors['dueno.password']").value("Esa contraseña es muy común. Elegí otra más difícil de adivinar."));
+        assertThat(jdbc.queryForObject("select count(*) from ferreteria where cuit = ?", Long.class, cuit)).isZero();
+    }
+
+    @Test
     @DisplayName("alta: sin el objeto dueno da 400 en dueno")
     void sinDueno() throws Exception {
         ObjectNode c = altaValida(cuitNuevo(), emailNuevo());

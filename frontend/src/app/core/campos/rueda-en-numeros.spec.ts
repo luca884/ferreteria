@@ -43,6 +43,14 @@ describe('rueda del mouse en los campos numéricos', () => {
     expect(rueda(precio).defaultPrevented).toBe(false);
   });
 
+  it('con el foco en un número, la rueda sobre otro número sin foco no se cancela', () => {
+    const conFoco = campo('number');
+    const otro = campo('number');
+    conFoco.focus();
+
+    expect(rueda(otro).defaultPrevented).toBe(false);
+  });
+
   it('sobre un campo de texto con el foco o sobre otro elemento no se toca', () => {
     const texto = campo('text');
     texto.focus();

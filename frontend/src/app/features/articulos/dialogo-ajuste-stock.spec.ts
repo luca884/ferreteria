@@ -335,6 +335,28 @@ describe('DialogoAjusteStock', () => {
       expect(servicio.ajustarStock).not.toHaveBeenCalled();
     });
 
+    it('«1.000» en un artículo por unidad pregunta (antes mandaba 1 sin avisar)', async () => {
+      await abrir(tornillo(1000));
+      await escribir('#motivo', 'CONTEO');
+
+      await escribir('#stock-real', '1.000');
+      expect(texto('.diferencia')).toBe('—');
+
+      await confirmar();
+      expect(texto('#stock-real-error')).toBe('¿Quisiste decir 1000 o 1? Usá la coma para los decimales.');
+      expect(servicio.ajustarStock).not.toHaveBeenCalled();
+    });
+
+    it('con espacios alrededor también pregunta', async () => {
+      await abrir(tornillo(10, 'METRO'));
+      await escribir('#motivo', 'CONTEO');
+
+      await escribir('#stock-real', '  1.500  ');
+      await confirmar();
+
+      expect(texto('#stock-real-error')).toBe('¿Quisiste decir 1500 o 1,5? Usá la coma para los decimales.');
+    });
+
     it('lo demás se lee como antes: «145.5», «1.500,25» y «0.250» (un 0 delante no es de miles)', async () => {
       await abrir(tornillo(1000, 'METRO'));
 
