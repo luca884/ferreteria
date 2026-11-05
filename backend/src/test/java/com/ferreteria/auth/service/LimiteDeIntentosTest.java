@@ -171,6 +171,71 @@ class LimiteDeIntentosTest {
     }
 
     @Nested
+    @DisplayName("cambiar mi contraseña (hallazgo 7 de la revisión del 2026-11-05)")
+    class CambioDeContrasena {
+
+        private void fallarCambio(int veces, long usuario) {
+            for (int i = 0; i < veces; i++) {
+                limite.reservarCambioDeContrasena(usuario);
+            }
+        }
+
+        @Test
+        @DisplayName("5 actuales malas se evalúan y el sexto intento queda bloqueado 1 minuto, con el mismo aviso")
+        void cincoFallosBloqueanUnMinuto() {
+            fallarCambio(5, 7L);
+
+            assertThat(segundosDe(() -> limite.reservarCambioDeContrasena(7L))).isEqualTo(60);
+            assertThatThrownBy(() -> limite.reservarCambioDeContrasena(7L))
+                    .hasMessage("Demasiados intentos. Probá de nuevo en 1 minuto.");
+        }
+
+        @Test
+        @DisplayName("el bloqueo crece a 5 y a 15 minutos, como el del login")
+        void bloqueoCreciente() {
+            fallarCambio(5, 7L);
+            reloj.avanzar(Duration.ofMinutes(1));
+            fallarCambio(5, 7L);
+            assertThat(segundosDe(() -> limite.reservarCambioDeContrasena(7L))).isEqualTo(300);
+            reloj.avanzar(Duration.ofMinutes(5));
+            fallarCambio(5, 7L);
+            assertThat(segundosDe(() -> limite.reservarCambioDeContrasena(7L))).isEqualTo(900);
+        }
+
+        @Test
+        @DisplayName("una actual correcta borra la racha")
+        void exitoResetea() {
+            fallarCambio(4, 7L);
+            limite.exitoCambioDeContrasena(7L);
+
+            fallarCambio(4, 7L);
+            assertThatCode(() -> limite.reservarCambioDeContrasena(7L)).doesNotThrowAnyException();
+        }
+
+        @Test
+        @DisplayName("otro usuario no se ve afectado, y la racha no se mezcla con la del login")
+        void cadaUsuarioYCadaOperacionTieneSuRacha() {
+            fallarCambio(5, 7L);
+
+            assertThatCode(() -> limite.reservarCambioDeContrasena(8L)).doesNotThrowAnyException();
+            assertThatCode(() -> limite.reservar("7", IP)).doesNotThrowAnyException();
+            fallarVeces(5, "dueno@x.test");
+            assertThatCode(() -> limite.reservarCambioDeContrasena(9L)).doesNotThrowAnyException();
+        }
+
+        @Test
+        @DisplayName("la racha vencida se purga")
+        void purga() {
+            fallarCambio(3, 7L);
+            reloj.avanzar(Duration.ofHours(1).plusSeconds(1));
+
+            limite.reservar("nuevo@x.test", IP);
+
+            assertThat(limite.entradas()).isEqualTo(2);
+        }
+    }
+
+    @Nested
     @DisplayName("por IP")
     class PorIp {
 

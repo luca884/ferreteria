@@ -90,7 +90,8 @@ public class AuthService {
 
     /**
      * Cada usuario cambia la propia contraseña pidiendo la actual. Una actual incorrecta es un error del campo (400), nunca
-     * un 401: el front desloguea ante cualquier 401.
+     * un 401: el front desloguea ante cualquier 401. Las actuales incorrectas tienen el límite de {@link LimiteDeIntentos}:
+     * pasado, 429 sin gastar el bcrypt.
      *
      * <p>Deuda conocida (R-013): los tokens ya emitidos siguen valiendo hasta que vencen (12 horas); cambiar la contraseña
      * no los invalida.
@@ -99,9 +100,11 @@ public class AuthService {
     public void cambiarContrasena(AuthUser authUser, String actual, String nueva) {
         Usuario usuario = usuarioRepository.findById(authUser.userId())
                 .orElseThrow(() -> new ResourceNotFoundException("Usuario no encontrado"));
+        limiteDeIntentos.reservarCambioDeContrasena(authUser.userId());
         if (!passwordEncoder.matches(actual, usuario.getPasswordHash())) {
             throw new DatosInvalidosException(Map.of("passwordActual", "La contraseña actual no es correcta."));
         }
+        limiteDeIntentos.exitoCambioDeContrasena(authUser.userId());
         // Con la marca, repetir la que eligió otra persona no es cambiarla: la marca seguiría apagándose sin rotar nada.
         if (usuario.isDebeCambiarContrasena() && nueva.equals(actual)) {
             throw new DatosInvalidosException(Map.of("passwordNueva", "Elegí una contraseña distinta de la que te dieron."));

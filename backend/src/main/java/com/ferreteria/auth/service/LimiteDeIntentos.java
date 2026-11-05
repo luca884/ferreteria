@@ -21,6 +21,7 @@ import org.springframework.stereotype.Component;
  *   <li><b>Por email:</b> cada {@code maxFallosPorEmail} intentos sin un login correcto en el medio, el email queda bloqueado
  *       1, 5 y después 15 minutos (tope). La racha se olvida tras 1 hora sin intentos; un login correcto la borra.</li>
  *   <li><b>Por IP:</b> {@code maxIntentosPorIp} intentos por ventana fija de 1 minuto, correctos o no.</li>
+ *   <li><b>Cambiar mi contraseña:</b> la contraseña actual, por usuario, con las reglas del email y su propia racha.</li>
  * </ul>
  *
  * <p>{@link #reservar} va antes del bcrypt: cuenta el intento como fallo de entrada y {@link #exito} lo borra si la
@@ -62,6 +63,8 @@ public class LimiteDeIntentos {
     private final int maxFallosPorEmail;
     private final int maxIntentosPorIp;
     private final ConcurrentHashMap<String, RachaDeEmail> emails = new ConcurrentHashMap<>();
+    /** Las rachas de «Cambiar mi contraseña», por id de usuario. */
+    private final ConcurrentHashMap<Long, RachaDeEmail> cambios = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, VentanaDeIp> ips = new ConcurrentHashMap<>();
     private final AtomicReference<Instant> ultimaPurga;
 
@@ -96,9 +99,29 @@ public class LimiteDeIntentos {
         emails.remove(normalizar(email));
     }
 
-    /** Cuántos emails e IPs hay en memoria (para el test de la purga). */
+    /**
+     * Reserva un intento de «Cambiar mi contraseña» del usuario, antes de comparar la actual, con las mismas reglas que el
+     * email del login y una racha propia (revisión de seguridad del 2026-11-05, hallazgo 7: con un token robado se probaba
+     * la contraseña actual sin freno). Tira {@link DemasiadosIntentosException} si está bloqueado.
+     */
+    public void reservarCambioDeContrasena(long usuarioId) {
+        Instant ahora = reloj.instant();
+        purgarSiToca(ahora);
+        Duration bloqueo = reservarRacha(cambios, usuarioId, ahora, maxFallosPorEmail);
+        if (bloqueo != null) {
+            log.warn("Cambio de contraseña: {} actuales incorrectas seguidas del usuario {}; se bloquea {} min",
+                    maxFallosPorEmail, usuarioId, bloqueo.toMinutes());
+        }
+    }
+
+    /** La contraseña actual era buena: la racha del cambio se borra. */
+    public void exitoCambioDeContrasena(long usuarioId) {
+        cambios.remove(usuarioId);
+    }
+
+    /** Cuántos emails, usuarios e IPs hay en memoria (para el test de la purga). */
     int entradas() {
-        return emails.size() + ips.size();
+        return emails.size() + cambios.size() + ips.size();
     }
 
     /** Reserva el intento de la IP; devuelve true si con este llegó al tope (se registra una vez por bloqueo). */
@@ -122,9 +145,18 @@ public class LimiteDeIntentos {
 
     /** Reserva el intento del email; devuelve el bloqueo que empieza con este intento, o null si no empieza ninguno. */
     private Duration reservarEmail(String email, Instant ahora) {
+        return reservarRacha(emails, email, ahora, maxFallosPorEmail);
+    }
+
+    /**
+     * Reserva un intento de la racha de {@code clave} en {@code rachas}: tira {@link DemasiadosIntentosException} si esta
+     * bloqueada, y si no devuelve el bloqueo que empieza con este intento, o null si no empieza ninguno.
+     */
+    private static <K> Duration reservarRacha(ConcurrentHashMap<K, RachaDeEmail> rachas, K clave, Instant ahora,
+                                              int maxFallos) {
         long[] espera = {0};
         Duration[] empieza = {null};
-        emails.compute(email, (clave, racha) -> {
+        rachas.compute(clave, (k, racha) -> {
             if (racha == null || racha.olvidada(ahora)) {
                 racha = new RachaDeEmail(0, 0, null, ahora);
             }
@@ -134,7 +166,7 @@ public class LimiteDeIntentos {
             }
             // Vencido el bloqueo arranca una ronda nueva de fallos; el nivel se mantiene.
             int fallos = (racha.bloqueadoHasta() != null ? 0 : racha.fallos()) + 1;
-            if (fallos < maxFallosPorEmail) {
+            if (fallos < maxFallos) {
                 return new RachaDeEmail(fallos, racha.nivel(), null, ahora);
             }
             Duration bloqueo = BLOQUEOS.get(Math.min(racha.nivel(), BLOQUEOS.size() - 1));
@@ -154,6 +186,7 @@ public class LimiteDeIntentos {
             return;
         }
         emails.entrySet().removeIf(e -> e.getValue().olvidada(ahora));
+        cambios.entrySet().removeIf(e -> e.getValue().olvidada(ahora));
         ips.entrySet().removeIf(e -> e.getValue().vencida(ahora));
     }
 

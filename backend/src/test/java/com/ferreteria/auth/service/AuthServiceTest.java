@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.entry;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -281,6 +282,43 @@ class AuthServiceTest {
                         assertThat(e.errors()).containsExactly(
                                 entry("passwordActual", "La contraseña actual no es correcta.")));
         assertThat(usuario.getPasswordHash()).isEqualTo("$2a$10$actual");
+    }
+
+    @Test
+    @DisplayName("hallazgo 7: 5 actuales malas bloquean el cambio; el sexto intento da 429 sin gastar el bcrypt, aunque sea la buena")
+    void cambiarContrasenaBloqueadaNoGastaBcrypt() {
+        Usuario usuario = yo();
+        when(encoder.matches("mala", "$2a$10$actual")).thenReturn(false);
+        for (int i = 0; i < 5; i++) {
+            assertThatThrownBy(() -> auth.cambiarContrasena(YO, "mala", "nueva-clave-99"))
+                    .isInstanceOf(DatosInvalidosException.class);
+        }
+
+        assertThatThrownBy(() -> auth.cambiarContrasena(YO, "buena", "nueva-clave-99"))
+                .isInstanceOf(DemasiadosIntentosException.class)
+                .hasMessage("Demasiados intentos. Probá de nuevo en 1 minuto.");
+        verify(encoder, never()).matches(eq("buena"), anyString());
+        assertThat(usuario.getPasswordHash()).isEqualTo("$2a$10$actual");
+    }
+
+    @Test
+    @DisplayName("hallazgo 7: una actual buena borra la racha del cambio, aunque la nueva no sirva")
+    void cambiarContrasenaConActualBuenaBorraLaRacha() {
+        yo();
+        when(encoder.matches("mala", "$2a$10$actual")).thenReturn(false);
+        when(encoder.matches("buena", "$2a$10$actual")).thenReturn(true);
+        for (int i = 0; i < 4; i++) {
+            assertThatThrownBy(() -> auth.cambiarContrasena(YO, "mala", "nueva-clave-99"))
+                    .isInstanceOf(DatosInvalidosException.class);
+        }
+        assertThatThrownBy(() -> auth.cambiarContrasena(YO, "buena", "corta")).isInstanceOf(DatosInvalidosException.class);
+
+        for (int i = 0; i < 4; i++) {
+            assertThatThrownBy(() -> auth.cambiarContrasena(YO, "mala", "nueva-clave-99"))
+                    .isInstanceOf(DatosInvalidosException.class);
+        }
+        assertThatThrownBy(() -> auth.cambiarContrasena(YO, "mala", "nueva-clave-99"))
+                .isInstanceOf(DatosInvalidosException.class);
     }
 
     @Test
