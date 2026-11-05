@@ -125,6 +125,26 @@ class CambioContrasenaIntegrationTest extends UsuariosTestBase {
     }
 
     @Test
+    @DisplayName("una nueva común da 400 en passwordNueva con el mensaje exacto y no cambia nada (S1c)")
+    void nuevaComun() throws Exception {
+        cambiar(token, json("passwordActual", "demo1234", "passwordNueva", "  Qwerty123  "))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors.passwordNueva", is("Esa contraseña es muy común. Elegí otra más difícil de adivinar.")));
+
+        assertThat(jdbcHash()).isEqualTo(HASH_DEMO);
+        intentarLogin(email, "demo1234").andExpect(status().isOk());
+    }
+
+    @Test
+    @DisplayName("una contraseña común que ya estaba guardada sigue sirviendo para entrar: la lista solo mira las nuevas (S1c)")
+    void comunGuardadaSigueEntrando() throws Exception {
+        jdbc.update("update usuario set password_hash = ? where email = ?",
+                new org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder().encode("12345678"), email);
+
+        intentarLogin(email, "12345678").andExpect(status().isOk());
+    }
+
+    @Test
     @DisplayName("una nueva de solo espacios da 400 en passwordNueva con el mensaje exacto y no cambia nada (W3)")
     void nuevaEnBlanco() throws Exception {
         cambiar(token, json("passwordActual", "demo1234", "passwordNueva", " ".repeat(8)))

@@ -94,7 +94,7 @@ class UsuarioServiceTest {
     @Test
     @DisplayName("crear guarda un usuario de la ferreteria del JWT con email normalizado y la contraseña hasheada")
     void crearGuardaConLaFerreteriaDelContexto() {
-        Usuario creado = servicio.crear(datos(Rol.VENDEDOR, "clave1234"));
+        Usuario creado = servicio.crear(datos(Rol.VENDEDOR, "clave-segura-77"));
 
         ArgumentCaptor<Usuario> capturado = ArgumentCaptor.forClass(Usuario.class);
         verify(usuarios).saveAndFlush(capturado.capture());
@@ -113,14 +113,14 @@ class UsuarioServiceTest {
     void crearSinTenantFalla() {
         TenantContext.clear();
 
-        assertThatThrownBy(() -> servicio.crear(datos(Rol.DUENO, "clave1234"))).isInstanceOf(MissingTenantException.class);
+        assertThatThrownBy(() -> servicio.crear(datos(Rol.DUENO, "clave-segura-77"))).isInstanceOf(MissingTenantException.class);
     }
 
     @Test
     @DisplayName("crear rechaza SUPER_ADMIN y rol nulo con 400 en el campo rol")
     void crearRechazaRolInvalido() {
         for (Rol rol : new Rol[] {Rol.SUPER_ADMIN, null}) {
-            assertThatThrownBy(() -> servicio.crear(datos(rol, "clave1234")))
+            assertThatThrownBy(() -> servicio.crear(datos(rol, "clave-segura-77")))
                     .isInstanceOfSatisfying(DatosInvalidosException.class, e -> {
                         assertThat(e.errors()).containsOnlyKeys("rol");
                         assertThat(e.errors().get("rol")).isEqualTo("El rol tiene que ser Dueño o Vendedor.");
@@ -143,7 +143,7 @@ class UsuarioServiceTest {
     void crearConEmailEnUso() {
         when(emailUnico.enUso("  ANA@Tornillo.com ")).thenReturn(true);
 
-        assertThatThrownBy(() -> servicio.crear(datos(Rol.VENDEDOR, "clave1234")))
+        assertThatThrownBy(() -> servicio.crear(datos(Rol.VENDEDOR, "clave-segura-77")))
                 .isInstanceOfSatisfying(ConflictException.class, e -> {
                     assertThat(e.getMessage()).isEqualTo("Ese email ya está en uso.");
                     assertThat(e.errors()).containsOnlyKeys("email");
@@ -157,7 +157,7 @@ class UsuarioServiceTest {
     void crearConDuplicadoDeLaBase() {
         when(usuarios.saveAndFlush(any(Usuario.class))).thenThrow(duplicado());
 
-        assertThatThrownBy(() -> servicio.crear(datos(Rol.VENDEDOR, "clave1234")))
+        assertThatThrownBy(() -> servicio.crear(datos(Rol.VENDEDOR, "clave-segura-77")))
                 .isInstanceOfSatisfying(ConflictException.class, e -> assertThat(e.errors()).containsOnlyKeys("email"));
     }
 
@@ -168,7 +168,7 @@ class UsuarioServiceTest {
                 new SQLException("Data too long", "22001", 1406));
         when(usuarios.saveAndFlush(any(Usuario.class))).thenThrow(otro);
 
-        assertThatThrownBy(() -> servicio.crear(datos(Rol.VENDEDOR, "clave1234"))).isSameAs(otro);
+        assertThatThrownBy(() -> servicio.crear(datos(Rol.VENDEDOR, "clave-segura-77"))).isSameAs(otro);
     }
 
     // ---- actualizar ----
