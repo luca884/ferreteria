@@ -17,10 +17,10 @@ Pedido (2026-11-04): «Vamos con los hallazgos del qa», en respuesta a la lista
 
 ## Tasks
 
-- [ ] T1 · S1 · ruta: inline · Evidencia: — · Risk: —
-- [ ] T2 · S2 S4 · ruta: inline · Evidencia: — · Risk: —
-- [ ] T3 · S3 S4 · ruta: inline · Evidencia: — · Risk: —
-- [ ] T4 · S1-S3 · ruta: inline · Aceptación: suite frontend, `ng build` y prueba en la app real con ego-browser · Evidencia: — · Risk: —
+- [x] T1 · S1 · ruta: inline · Evidencia: RED (no compilaba: no existía `elegir`) → GREEN `ticket.spec`, `ticket-lista.spec` y `mostrador.spec`, 401/401 · commit `687ce64` · Risk: —
+- [x] T2 · S2 S4 · ruta: inline · Evidencia: RED («No se pudieron cargar…» en vez de «El artículo no existe.») → GREEN `movimientos-articulo.spec` y `clientes-articulo.spec`, 20/20 · commit `829f6f8` · Risk: —
+- [x] T3 · S3 S4 · ruta: inline · Evidencia: RED (el texto no quedaba seleccionado) → GREEN `etiquetas.spec`, 15/15 · commit `9ad0ee8` · Risk: —
+- [x] T4 · S1-S3 · ruta: inline · Aceptación: suite frontend, `ng build` y prueba en la app real con ego-browser · Evidencia: suite frontend 154 archivos y 3727/3727; `ng build` OK (con el aviso de presupuesto de estilos de `dialogo-cobro`, que ya estaba). App local con el Dueño de El Tornillo: el clic en el 2.º renglón lo elige, el foco vuelve al buscador y F3 abre «Cantidad de Tornillo hexagonal…»; `/articulos/6/movimientos` y `/articulos/6/clientes` (artículo de La Tuerca) muestran «El artículo no existe.» sin Reintentar; en Etiquetas, «tornillo» queda seleccionado (0-8) después de buscar y de agregar, y al tipear «bulon» lo reemplaza · Risk: —
 
 ## Log
 
