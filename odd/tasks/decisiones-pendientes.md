@@ -23,7 +23,7 @@ Propuesta aprobada por Luca («dale, vamos con las tres recomendaciones»):
 
 - [x] T1 · S1 S2 · ruta: inline · Aceptación: `PoliticaDeContrasena` rechaza las de la lista en los cinco flujos · Evidencia: RED 7/72 (los 7 casos nuevos: 2 unitarios, alta y reset en `UsuariosIntegrationTest`, cambio propio, alta y reset del super admin) → GREEN 147/0 con `UsuarioServiceTest`, `AuthServiceTest`, `FerreteriasAdminServiceTest` (en `UsuarioServiceTest` «clave1234» pasó a «clave-segura-77»: ahora es común) · Risk: item 2 (seguridad)
 - [x] T2 · S3 S4 · ruta: inline · Aceptación: aviso de número ambiguo en el ajuste de stock · Evidencia: RED 2/49 (stock real y cantidad; el caso que fija «145.5», «1.500,25», «1000.250» y «0.250» ya pasaba) → GREEN 49/49 `dialogo-ajuste-stock.spec.ts`; los ceros finales se sacan en la pregunta («2.000» → «¿2000 o 2?») · Risk: none
-- [ ] T3 · S5 S6 · ruta: inline · Aceptación: listener global de la rueda · Evidencia: — · Risk: none
+- [x] T3 · S5 S6 · ruta: inline · Aceptación: listener global de la rueda · Evidencia: RED 1/4 (`core/campos/rueda-en-numeros.spec.ts` con los providers de `appConfig`; los 3 que fijan lo que no se toca ya pasaban) → GREEN 4/4; `provideRuedaSinCambiarNumeros()` en `app.config.ts`, listener en captura con `passive: false` que se quita al destruir la app · Risk: none
 - [ ] T4 · todas · ruta: inline + `odd-verifier` · Aceptación: suites backend y frontend, `ng build`, punta a punta con la app y verifier PASS · Evidencia: — · Risk: item 2
 
 ## Log
