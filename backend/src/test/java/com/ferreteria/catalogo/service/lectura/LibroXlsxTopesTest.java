@@ -157,6 +157,24 @@ class LibroXlsxTopesTest {
     }
 
     @Test
+    void unXlsCifradoConLaContrasenaPorDefectoDeExcelNoSeDescifra() throws IOException {
+        // Con el .xls cifrado, la cabecera de la tabla de cadenas viene cifrada (su tope no la ve) y POI la descifraba sola.
+        byte[] cifrado;
+        org.apache.poi.hssf.record.crypto.Biff8EncryptionKey.setCurrentUserPassword("VelvetSweatshop");
+        try (var libro = new org.apache.poi.hssf.usermodel.HSSFWorkbook(); var salida = new ByteArrayOutputStream()) {
+            libro.createSheet("Lista").createRow(0).createCell(0).setCellValue("A-1");
+            libro.write(salida);
+            cifrado = salida.toByteArray();
+        } finally {
+            org.apache.poi.hssf.record.crypto.Biff8EncryptionKey.setCurrentUserPassword(null);
+        }
+
+        assertThatThrownBy(() -> lector.leer(cifrado))
+            .isInstanceOf(BadRequestException.class)
+            .hasMessage("El archivo está protegido con contraseña.");
+    }
+
+    @Test
     void unXlsxCifradoConLaContrasenaPorDefectoDeExcelNoSeDescifra() {
         // POI probaba "VelvetSweatshop" y leia el .xlsx de adentro entero en memoria, sin los topes.
         byte[] cifrado = ListasDePrueba.xlsxProtegido(List.of(Arrays.asList("a", 1)), "VelvetSweatshop");

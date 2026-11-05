@@ -216,7 +216,7 @@ class LectorExcelTest {
         for (Exception tope : topes) {
             LectorExcel conTope = new LectorExcel() {
                 @Override
-                Workbook abrir(byte[] contenido) throws IOException {
+                LecturaLista leerXls(byte[] contenido) throws IOException {
                     if (tope instanceof IOException io) throw io;
                     throw (RuntimeException) tope;
                 }
@@ -225,6 +225,19 @@ class LectorExcelTest {
                 .isInstanceOf(BadRequestException.class)
                 .hasMessage(DEMASIADO_GRANDE);
         }
+    }
+
+    @Test
+    void unExcelDeLaVersion5ConFlujoBookDiceQueEsMuyViejo() throws IOException {
+        var salida = new java.io.ByteArrayOutputStream();
+        try (var sistema = new org.apache.poi.poifs.filesystem.POIFSFileSystem()) {
+            sistema.createDocument(new java.io.ByteArrayInputStream(new byte[100]), "Book");
+            sistema.writeFilesystem(salida);
+        }
+
+        assertThatThrownBy(() -> lector.leer(salida.toByteArray()))
+            .isInstanceOf(BadRequestException.class)
+            .hasMessage("Es un Excel muy viejo. Guardalo como .xlsx e intentá de nuevo.");
     }
 
     @Test
@@ -262,9 +275,9 @@ class LectorExcelTest {
         int aperturas;
 
         @Override
-        Workbook abrir(byte[] contenido) throws IOException {
+        LecturaLista leerXls(byte[] contenido) throws IOException {
             aperturas++;
-            return super.abrir(contenido);
+            return super.leerXls(contenido);
         }
 
         @Override

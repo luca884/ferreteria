@@ -56,6 +56,42 @@ class LectorExcelMemoriaTest {
     }
 
     @Test
+    void unXlsChicoDeCeldasEnBlancoConFormatoSeLeeSinAgotarLaMemoria() throws Exception {
+        // 65.536 x 50 celdas en blanco con estilo: 8 MB (MulBlank, 2 bytes por celda) y un objeto por celda con usermodel.
+        Path bomba = GeneradorDeXls.generar(carpeta, "blancas.xls", 65_536, 50, "blancas", "1500m");
+
+        LecturaEnJvmChica.Resultado resultado = LecturaEnJvmChica.leer(bomba, "256m");
+
+        assertThat(resultado.texto()).as("salida de la JVM chica (codigo %d)", resultado.salida())
+            .contains("FILAS 0");
+        assertThat(resultado.salida()).isZero();
+    }
+
+    @Test
+    void unXlsConMasDeUnMillonDeCadenasDistintasEsDemasiadoGrandeSinArmarLaTabla() throws Exception {
+        // POI arma la tabla de cadenas compartidas entera antes de avisarla (~150 bytes por cadena: 4,5 millones de cadenas
+        // de un caracter caben en 25 MB y piden ~700 MB): se rechaza por la cantidad que declara su cabecera.
+        Path bomba = GeneradorDeXls.generar(carpeta, "cadenas.xls", 5_001, 200, "cadenas", "1500m");
+
+        LecturaEnJvmChica.Resultado resultado = LecturaEnJvmChica.leer(bomba, "256m");
+
+        assertThat(resultado.texto()).as("salida de la JVM chica (codigo %d)", resultado.salida())
+            .contains("400 La lista es demasiado grande para leerla. Dividila en archivos más chicos.");
+        assertThat(resultado.salida()).isZero();
+    }
+
+    @Test
+    void unXlsConUnMillonDeCadenasDistintasEnElTopeSeLeeConPocaMemoria() throws Exception {
+        Path lista = GeneradorDeXls.generar(carpeta, "un-millon.xls", 5_000, 200, "cadenas", "1500m");
+
+        LecturaEnJvmChica.Resultado resultado = LecturaEnJvmChica.leer(lista, "256m");
+
+        assertThat(resultado.texto()).as("salida de la JVM chica (codigo %d)", resultado.salida())
+            .contains("FILAS 5000");
+        assertThat(resultado.salida()).isZero();
+    }
+
+    @Test
     void unaListaRealDeVeinteMilFilasSeLeeEnteraConPocaMemoria() throws Exception {
         Path lista = xlsx(20_000, 9, true);
 
