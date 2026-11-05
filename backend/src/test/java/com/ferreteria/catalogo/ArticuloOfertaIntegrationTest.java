@@ -179,6 +179,22 @@ class ArticuloOfertaIntegrationTest extends IntegrationTestBase {
     }
 
     @Test
+    @DisplayName("un articulo dado de baja no se pone en oferta (422), pero se le puede sacar la que tenia")
+    void dadoDeBaja() throws Exception {
+        long id = articulo(duenoA, "Oferta de baja");
+        ponerOferta(duenoA, id, "PRECIO_FIJO", "900", null).andExpect(status().isOk());
+        jdbc.update("update articulo set activo = false where id = ?", id);
+
+        ponerOferta(duenoA, id, "PRECIO_FIJO", "800", null).andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.message")
+                        .value("\"Oferta de baja\" está dado de baja. Reactivalo para ponerle una oferta."));
+        assertThat((BigDecimal) columnasDeOferta(id).get("oferta_valor")).isEqualByComparingTo("900");
+
+        delete(URL + "/" + id + "/oferta", duenoA).andExpect(status().isOk());
+        assertThat(columnasDeOferta(id).get("oferta_tipo")).isNull();
+    }
+
+    @Test
     @DisplayName("sin la version es 400; con una version vieja, 409")
     void version() throws Exception {
         long id = articulo(duenoA, "Oferta version");

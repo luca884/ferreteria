@@ -2,6 +2,7 @@ package com.ferreteria.catalogo.model;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.ferreteria.common.HoraArgentina;
 import java.lang.reflect.Field;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -72,11 +73,13 @@ class HistorialPrecioTest {
     void fechaEsAhora() throws Exception {
         Articulo articulo = articulo(7L, 55L);
         CambioPrecio cambio = new CambioPrecio(null, bd("100.00"), null, bd("170.00"));
-        LocalDateTime antes = LocalDateTime.now();
+        // Con la hora de la app (Buenos Aires, recortada a microsegundos): LocalDateTime.now() usa la zona de la JVM y,
+        // en Linux, trae nanosegundos, así que fallaba en un servidor en UTC.
+        LocalDateTime antes = HoraArgentina.ahora();
 
         HistorialPrecio historial = HistorialPrecio.de(articulo, cambio, OrigenPrecio.MANUAL, 3L);
 
-        assertThat(historial.getFecha()).isBetween(antes, LocalDateTime.now());
+        assertThat(historial.getFecha()).isBetween(antes, HoraArgentina.ahora());
     }
 
     @Test
