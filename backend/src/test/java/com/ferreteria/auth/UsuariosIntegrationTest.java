@@ -139,6 +139,18 @@ class UsuariosIntegrationTest extends UsuariosTestBase {
     }
 
     @Test
+    @DisplayName("una contraseña común da 400 en password con el mensaje exacto; no se crea nada (S1c)")
+    void contrasenaComun() throws Exception {
+        for (String comun : List.of("Password1", "  qwerty  ")) {
+            crear("Ana", unico("a") + "@usuarios.test", "VENDEDOR", comun)
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.errors.password", is("Esa contraseña es muy común. Elegí otra más difícil de adivinar.")));
+        }
+        assertThat(jdbc.queryForObject("select count(*) from usuario where ferreteria_id = ?", Long.class, ferreteria))
+                .isEqualTo(1L);
+    }
+
+    @Test
     @DisplayName("una contraseña de solo espacios da 400 en password con el mensaje exacto; no se crea nada (W3)")
     void contrasenaEnBlanco() throws Exception {
         crear("Ana", unico("a") + "@usuarios.test", "VENDEDOR", " ".repeat(8))
@@ -392,6 +404,19 @@ class UsuariosIntegrationTest extends UsuariosTestBase {
 
         putJson("/api/usuarios/" + id + "/password", dueno, json("password", "corta"))
                 .andExpect(status().isBadRequest()).andExpect(jsonPath("$.errors.password").exists());
+    }
+
+    @Test
+    @DisplayName("resetear con una contraseña común da 400 en password con el mensaje exacto y no cambia el hash (S1c)")
+    void resetearComun() throws Exception {
+        long id = crearVendedor(unico("v") + "@usuarios.test");
+        String hashAntes = jdbc.queryForObject("select password_hash from usuario where id = ?", String.class, id);
+
+        putJson("/api/usuarios/" + id + "/password", dueno, json("password", "ferreteria123"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors.password", is("Esa contraseña es muy común. Elegí otra más difícil de adivinar.")));
+
+        assertThat(jdbc.queryForObject("select password_hash from usuario where id = ?", String.class, id)).isEqualTo(hashAntes);
     }
 
     @Test

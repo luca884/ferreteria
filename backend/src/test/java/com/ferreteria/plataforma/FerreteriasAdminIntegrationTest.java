@@ -90,7 +90,8 @@ class FerreteriasAdminIntegrationTest extends PlataformaTestBase {
                 new Caso("dueno.nombre", c -> ((ObjectNode) c.get("dueno")).put("nombre", " ")),
                 new Caso("dueno.email", c -> ((ObjectNode) c.get("dueno")).put("email", "no-es-email")),
                 new Caso("dueno.password", c -> ((ObjectNode) c.get("dueno")).put("password", "corta")),
-                new Caso("dueno.password", c -> ((ObjectNode) c.get("dueno")).put("password", "        ")));
+                new Caso("dueno.password", c -> ((ObjectNode) c.get("dueno")).put("password", "        ")),
+                new Caso("dueno.password", c -> ((ObjectNode) c.get("dueno")).put("password", "Mardelplata")));
 
         for (Caso caso : casos) {
             ObjectNode c = altaValida(cuit, email);
@@ -100,6 +101,18 @@ class FerreteriasAdminIntegrationTest extends PlataformaTestBase {
         }
         assertThat(jdbc.queryForObject("select count(*) from ferreteria where cuit = ?", Long.class, cuit)).isZero();
         assertThat(jdbc.queryForObject("select count(*) from usuario where email = ?", Long.class, email)).isZero();
+    }
+
+    @Test
+    @DisplayName("alta: un dueño con una contraseña común da 400 en dueno.password con el mensaje exacto (S1c)")
+    void altaConContrasenaComun() throws Exception {
+        String cuit = cuitNuevo();
+        ObjectNode c = altaValida(cuit, emailNuevo());
+        ((ObjectNode) c.get("dueno")).put("password", "Mardelplata");
+
+        alta(admin, c).andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors['dueno.password']").value("Esa contraseña es muy común. Elegí otra más difícil de adivinar."));
+        assertThat(jdbc.queryForObject("select count(*) from ferreteria where cuit = ?", Long.class, cuit)).isZero();
     }
 
     @Test
@@ -249,6 +262,9 @@ class FerreteriasAdminIntegrationTest extends PlataformaTestBase {
                 .andExpect(status().isBadRequest()).andExpect(jsonPath("$.errors.password").exists());
         putJson(BASE + "/" + id + "/duenos/" + duenoDe(id) + "/password", admin, json("password", "        "))
                 .andExpect(status().isBadRequest()).andExpect(jsonPath("$.errors.password").exists());
+        putJson(BASE + "/" + id + "/duenos/" + duenoDe(id) + "/password", admin, json("password", "argentina1"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors.password").value("Esa contraseña es muy común. Elegí otra más difícil de adivinar."));
     }
 
     // ---- roles ----

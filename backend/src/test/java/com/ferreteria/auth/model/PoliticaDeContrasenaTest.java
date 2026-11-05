@@ -44,14 +44,14 @@ class PoliticaDeContrasenaTest {
     @Test
     @DisplayName("una contraseña con espacios en el medio o en los bordes, pero con otros caracteres, pasa")
     void conEspaciosYLetrasPasa() {
-        assertThatCode(() -> PoliticaDeContrasena.validar("password", "  abcd  ")).doesNotThrowAnyException();
+        assertThatCode(() -> PoliticaDeContrasena.validar("password", "  kq7w  ")).doesNotThrowAnyException();
         assertThatCode(() -> PoliticaDeContrasena.validar("password", "mi clave 1")).doesNotThrowAnyException();
     }
 
     @Test
     @DisplayName("8 y 72 caracteres pasan")
     void ochoYSetentaYDosPasan() {
-        assertThatCode(() -> PoliticaDeContrasena.validar("password", "a".repeat(8))).doesNotThrowAnyException();
+        assertThatCode(() -> PoliticaDeContrasena.validar("password", "kq7wz2pm")).doesNotThrowAnyException();
         assertThatCode(() -> PoliticaDeContrasena.validar("password", "a".repeat(72))).doesNotThrowAnyException();
     }
 
@@ -82,6 +82,64 @@ class PoliticaDeContrasenaTest {
     void nulaFalla() {
         assertThatThrownBy(() -> PoliticaDeContrasena.validar("password", null))
                 .isInstanceOf(DatosInvalidosException.class);
+    }
+
+    @Test
+    @DisplayName("una contraseña de la lista (de SecLists o de las locales) falla en el campo indicado con el mensaje de común")
+    void comunFalla() {
+        for (String comun : new String[] {"password", "12345678", "qwertyuiop", "ferreteria123", "mardelplata", "contraseña1"}) {
+            assertThatThrownBy(() -> PoliticaDeContrasena.validar("passwordNueva", comun))
+                    .as(comun)
+                    .isInstanceOfSatisfying(DatosInvalidosException.class, e -> {
+                        assertThat(e.errors()).containsOnlyKeys("passwordNueva");
+                        assertThat(e.errors().get("passwordNueva"))
+                                .isEqualTo("Esa contraseña es muy común. Elegí otra más difícil de adivinar.");
+                    });
+        }
+    }
+
+    @Test
+    @DisplayName("la lista se compara sin distinguir mayúsculas y sin los espacios de los costados")
+    void comunSinMayusculasNiEspacios() {
+        for (String comun : new String[] {"PassWord", "  qwerty123  ", "ARGENTINA\t"}) {
+            assertThatThrownBy(() -> PoliticaDeContrasena.validar("password", comun))
+                    .as(comun)
+                    .isInstanceOfSatisfying(DatosInvalidosException.class, e -> assertThat(e.errors().get("password"))
+                            .isEqualTo("Esa contraseña es muy común. Elegí otra más difícil de adivinar."));
+        }
+    }
+
+    @Test
+    @DisplayName("una común de menos de 8 rellenada con espacios hasta pasar el largo también falla con el mensaje de común")
+    void comunCortaConEspaciosFalla() {
+        for (String comun : new String[] {"  qwerty  ", "  123456  ", "\tdragon\t\t", "  Abcd    ", "  1234  ", " qwerty ", "qwerty  "}) {
+            assertThatThrownBy(() -> PoliticaDeContrasena.validar("password", comun))
+                    .as(comun)
+                    .isInstanceOfSatisfying(DatosInvalidosException.class, e -> assertThat(e.errors().get("password"))
+                            .isEqualTo("Esa contraseña es muy común. Elegí otra más difícil de adivinar."));
+        }
+    }
+
+    @Test
+    @DisplayName("la lista tiene más de 9000 entradas, incluidas las cortas, y cada una ya está en minúsculas, sin espacios en los costados y con hasta 72 caracteres")
+    void listaBienFormada() throws Exception {
+        try (var in = PoliticaDeContrasena.class.getResourceAsStream(PoliticaDeContrasena.LISTA_COMUNES)) {
+            assertThat(in).isNotNull();
+            var entradas = new String(in.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8).lines()
+                    .filter(linea -> !linea.startsWith("#"))
+                    .toList();
+            assertThat(entradas).hasSizeGreaterThan(9000).doesNotHaveDuplicates().contains("qwerty", "123456").allSatisfy(e -> {
+                assertThat(e).isEqualTo(e.strip().toLowerCase(java.util.Locale.ROOT));
+                assertThat(e.length()).isBetween(1, PoliticaDeContrasena.MAX);
+            });
+        }
+    }
+
+    @Test
+    @DisplayName("una contraseña que contiene una común pero no es igual pasa")
+    void contieneUnaComunPasa() {
+        assertThatCode(() -> PoliticaDeContrasena.validar("password", "password de la caja 7")).doesNotThrowAnyException();
+        assertThatCode(() -> PoliticaDeContrasena.validar("password", "demo1234")).doesNotThrowAnyException();
     }
 
     @Test
