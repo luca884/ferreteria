@@ -266,6 +266,12 @@ class LectorExcelTest {
             aperturas++;
             return super.abrir(contenido);
         }
+
+        @Override
+        LecturaLista leerXlsx(byte[] contenido) throws IOException {
+            aperturas++;
+            return super.leerXlsx(contenido);
+        }
     }
 
     private static byte[] libro(String formato, Map<String, List<List<Object>>> hojas) {

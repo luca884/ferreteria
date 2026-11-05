@@ -9,9 +9,13 @@ import java.io.IOException;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import org.apache.poi.EncryptedDocumentException;
 import org.apache.poi.hssf.OldExcelFormatException;
 import org.apache.poi.openxml4j.util.ZipSecureFile;
+import org.apache.poi.poifs.crypt.Decryptor;
+import org.apache.poi.poifs.filesystem.FileMagic;
+import org.apache.poi.poifs.filesystem.POIFSFileSystem;
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.CellType;
 import org.apache.poi.ss.usermodel.FormulaError;
@@ -25,9 +29,10 @@ import org.apache.poi.util.RecordFormatException;
 import org.springframework.stereotype.Component;
 
 /**
- * Lee .xlsx y .xls con el mismo codigo (POI usermodel). Las formulas usan el valor cacheado y los numeros
- * se convierten con {@link NumberToTextConverter}, nunca con {@code new BigDecimal(double)}. Una celda numerica
- * con formato de porcentaje lo avisa ({@code Celda.porcentaje}).
+ * Lee .xlsx y .xls con el mismo resultado. El .xls con POI usermodel; el .xlsx con {@link LibroXlsx}, que lee cada hoja
+ * de corrido en lugar de armar el libro en memoria (hallazgo alto 1 de la revision del 05/11) y da las mismas celdas. Las
+ * formulas usan el valor cacheado y los numeros se convierten con {@link NumberToTextConverter}, nunca con
+ * {@code new BigDecimal(double)}. Una celda numerica con formato de porcentaje lo avisa ({@code Celda.porcentaje}).
  */
 @Component
 public class LectorExcel implements LectorDeLista {
@@ -47,17 +52,42 @@ public class LectorExcel implements LectorDeLista {
      */
     @Override
     public LecturaLista leer(byte[] contenido) {
-        try (Workbook libro = abrir(contenido)) {
-            return leerLibro(libro);
-        } catch (BadRequestException e) {
-            throw e;
+        try {
+            if (FileMagic.valueOf(contenido) == FileMagic.OOXML) {
+                return leerXlsx(contenido);
+            }
+            try (Workbook libro = abrir(contenido)) {
+                return leerLibro(libro);
+            }
         } catch (EncryptedDocumentException e) {
             throw new BadRequestException("El archivo está protegido con contraseña.");
         } catch (OldExcelFormatException e) {
             throw new BadRequestException("Es un Excel muy viejo. Guardalo como .xlsx e intentá de nuevo.");
         } catch (IOException | RuntimeException e) {
+            Optional<BadRequestException> tope = topePasado(e);
+            if (tope.isPresent()) {
+                throw tope.get();
+            }
             throw superaUnTope(e) ? LimitesDeLista.demasiadoGrande() : new BadRequestException(ARCHIVO_DANADO);
         }
+    }
+
+    /**
+     * Un tope de la lectura (filas, columnas, tamano) sale tal cual aunque venga envuelto (el parser SAX o un map lo
+     * envuelven).
+     */
+    private static Optional<BadRequestException> topePasado(Throwable error) {
+        for (Throwable t = error; t != null; t = t.getCause() == t ? null : t.getCause()) {
+            if (t instanceof BadRequestException tope) {
+                return Optional.of(tope);
+            }
+        }
+        return Optional.empty();
+    }
+
+    /** Lee un .xlsx sin armar el libro en memoria ({@link LibroXlsx}); es el unico lugar donde se abre uno. */
+    LecturaLista leerXlsx(byte[] contenido) throws IOException {
+        return LibroXlsx.leer(contenido);
     }
 
     /**
@@ -76,8 +106,20 @@ public class LectorExcel implements LectorDeLista {
         return false;
     }
 
-    /** Abre el libro; es el unico lugar donde se abre, asi un test puede contar las aperturas. */
+    /**
+     * Abre un .xls (o lo que no es un .xlsx); es el unico lugar donde se abre, asi un test puede contar las aperturas. Un
+     * archivo cifrado se rechaza sin descifrarlo: POI probaria la contraseña por defecto de Excel y armaria el .xlsx de
+     * adentro entero en memoria, sin los topes de {@link LibroXlsx}.
+     */
     Workbook abrir(byte[] contenido) throws IOException {
+        if (FileMagic.valueOf(contenido) == FileMagic.OLE2) {
+            POIFSFileSystem sistema = new POIFSFileSystem(new ByteArrayInputStream(contenido));
+            if (sistema.getRoot().hasEntryCaseInsensitive(Decryptor.DEFAULT_POIFS_ENTRY)) {
+                sistema.close();
+                throw new EncryptedDocumentException("Archivo cifrado");
+            }
+            return WorkbookFactory.create(sistema);
+        }
         return WorkbookFactory.create(new ByteArrayInputStream(contenido));
     }
 
