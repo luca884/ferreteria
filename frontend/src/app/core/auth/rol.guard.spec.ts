@@ -48,7 +48,12 @@ describe('rolGuard', () => {
 
   it('una ruta sin roles declarados está cerrada para todos', () => {
     expect(correr('DUENO', {})).toBe('/mostrador');
+    expect(correr('VENDEDOR', {})).toBe('/mostrador');
     expect(correr('SUPER_ADMIN', {})).toBe('/admin/ferreterias');
+  });
+
+  it('un rol que la app no conoce va al login, sin loop entre su inicio y el guard', () => {
+    expect(correr('CAJERO' as Rol, conRoles(DUENO_Y_VENDEDOR))).toBe('/login');
   });
 
   it('sin sesión va al login', () => {

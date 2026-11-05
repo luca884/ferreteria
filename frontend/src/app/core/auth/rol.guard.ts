@@ -21,12 +21,12 @@ export function conRoles(roles: readonly Rol[]): Data {
  * Control de rol de cada pantalla del shell, además del 403 del servidor (seguridad en las dos capas). La ruta declara
  * sus roles con {@link conRoles}; una ruta sin roles queda cerrada para todos, así una pantalla nueva no se abre por
  * olvido. Quien no tiene permiso, aunque escriba la URL a mano, vuelve a su inicio sin aviso, como con una URL que no
- * existe; sin sesión, al login.
+ * existe; sin sesión, o con un rol que la app no conoce (su inicio también lo rechazaría, en loop), al login.
  */
 export const rolGuard: CanActivateChildFn = (ruta) => {
   const router = inject(Router);
   const rol = inject(AuthService).sesion()?.rol;
-  if (!rol) return router.createUrlTree(['/login']);
+  if (!rol || !TODOS_LOS_ROLES.includes(rol)) return router.createUrlTree(['/login']);
   const roles = ruta.data['roles'] as readonly Rol[] | undefined;
   if (roles?.includes(rol)) return true;
   return router.createUrlTree(['/' + inicioDe(rol)]);

@@ -1,6 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import { signal } from '@angular/core';
-import { Route, Router, provideRouter } from '@angular/router';
+import { NavigationStart, Route, Router, provideRouter } from '@angular/router';
 import { authGuard } from './core/auth/auth.guard';
 import { Rol, Sesion } from './core/auth/auth.models';
 import { AuthService } from './core/auth/auth.service';
@@ -126,7 +126,8 @@ describe('rutas', () => {
     expect(padre().canActivateChild?.length).toBe(2);
   });
 
-  function navegarComo(rol: Rol) {
+  function navegarComo(rol: Rol, debeCambiarContrasena = false) {
+    TestBed.resetTestingModule();
     TestBed.configureTestingModule({
       providers: [
         provideRouter(routes),
@@ -134,7 +135,7 @@ describe('rutas', () => {
           provide: AuthService,
           useValue: {
             autenticado: signal(true),
-            debeCambiarContrasena: signal(false),
+            debeCambiarContrasena: signal(debeCambiarContrasena),
             sesion: signal({ rol } as Sesion),
           },
         },
@@ -142,6 +143,56 @@ describe('rutas', () => {
     });
     return TestBed.inject(Router);
   }
+
+  /** Navega y cuenta los NavigationStart: más de 2 sería un loop de redirecciones. */
+  async function navegar(router: Router, url: string): Promise<number> {
+    let inicios = 0;
+    const sub = router.events.subscribe((e) => {
+      if (e instanceof NavigationStart) inicios++;
+    });
+    await router.navigateByUrl(url);
+    sub.unsubscribe();
+    return inicios;
+  }
+
+  const INICIO: Record<Rol, string> = { DUENO: '/mostrador', VENDEDOR: '/mostrador', SUPER_ADMIN: '/admin/ferreterias' };
+  const recorrido = Object.entries(MAPA).flatMap(([path, roles]) =>
+    (['DUENO', 'VENDEDOR', 'SUPER_ADMIN'] as Rol[]).map((rol) => {
+      const url = '/' + path.replace(':id', '7');
+      return [rol, url, roles.includes(rol) ? url : INICIO[rol]] as const;
+    }),
+  );
+
+  it.each(recorrido)('%s en %s termina en %s, sin loop', async (rol, url, esperado) => {
+    const router = navegarComo(rol);
+
+    const inicios = await navegar(router, url);
+
+    expect(router.url).toBe(esperado);
+    expect(inicios).toBeLessThanOrEqual(2);
+  });
+
+  it.each<[Rol, string]>([
+    ['DUENO', '/ventas'],
+    ['VENDEDOR', '/ventas'],
+    ['VENDEDOR', '/admin/ferreterias'],
+    ['SUPER_ADMIN', '/mostrador'],
+  ])('con el cambio de contraseña pendiente, %s en %s termina en «Mi contraseña», sin loop', async (rol, url) => {
+    const router = navegarComo(rol, true);
+
+    const inicios = await navegar(router, url);
+
+    expect(router.url).toBe('/mi-contrasena');
+    expect(inicios).toBeLessThanOrEqual(3);
+  });
+
+  it.each(['/', '/no-existe'])('el super admin en %s va a Ferreterías', async (url) => {
+    const router = navegarComo('SUPER_ADMIN');
+
+    await navegar(router, url);
+
+    expect(router.url).toBe('/admin/ferreterias');
+  });
 
   it.each(['/admin/ferreterias', '/ventas', '/configuracion/facturacion', '/usuarios', '/clientes/3/cuenta'])(
     'el Vendedor que escribe %s vuelve al Mostrador',
