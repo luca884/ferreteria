@@ -887,9 +887,16 @@ export class DialogoCobro {
     this.confirmarConEnter();
   }
 
-  /** Con la elección de factura a la vista (bloque 2, S4) Enter no cobra: solo el clic en uno de los dos botones. */
+  /**
+   * Con la elección de factura a la vista (bloque 2, S4) Enter no cobra: solo el clic en uno de los dos botones. En el
+   * pago mixto igual avisa si los importes no cierran, para que Enter no quede mudo.
+   */
   private confirmarConEnter(): void {
-    if (!this.eligeFactura()) this.confirmarCobro();
+    if (!this.eligeFactura()) {
+      this.confirmarCobro();
+      return;
+    }
+    if (this.seleccion() === 'MIXTO') this.avisarSiElMixtoNoCierra();
   }
 
   /**
@@ -944,15 +951,21 @@ export class DialogoCobro {
     });
   }
 
-  private confirmarMixto(noFacturable: boolean | undefined): void {
+  /** Muestra por qué el pago mixto no se puede cobrar todavía; true si no cierra. */
+  private avisarSiElMixtoNoCierra(): boolean {
     if (!this.importesMixtoValidos()) {
       this.mensajeMixto.set(MENSAJE_IMPORTES);
-      return;
+      return true;
     }
     if (this.restoCentavos() !== 0) {
       this.mensajeMixto.set(MENSAJE_SUMA);
-      return;
+      return true;
     }
+    return false;
+  }
+
+  private confirmarMixto(noFacturable: boolean | undefined): void {
+    if (this.avisarSiElMixtoNoCierra()) return;
     if (noFacturable !== undefined) this.noFacturable.set(noFacturable);
     const c = this.centavosMixto();
     const pagos = this.formas()

@@ -500,6 +500,39 @@ describe('DialogoCobro', () => {
       expect(confirmadas[0].pagos).toHaveLength(2);
     });
 
+    it('en el pago mixto que no suma el total, Enter no cobra pero avisa', async () => {
+      await abrirEligiendo(10000);
+      medio('Mixto').click();
+      await estabilizar();
+      const filas = Array.from(el().querySelectorAll<HTMLInputElement>('.fila-pago input'));
+      const ultima = filas[filas.length - 1];
+      ultima.value = '40,00';
+      ultima.dispatchEvent(new Event('input', { bubbles: true }));
+      await estabilizar();
+
+      tecla('Enter', ultima);
+      fixture.detectChanges();
+
+      expect(confirmadas).toEqual([]);
+      expect(error()).toBe('Los pagos tienen que sumar el total.');
+    });
+
+    it('en el pago mixto que se pasa del total, Enter no cobra pero avisa', async () => {
+      await abrirEligiendo(10000);
+      medio('Mixto').click();
+      await estabilizar();
+      const filas = Array.from(el().querySelectorAll<HTMLInputElement>('.fila-pago input'));
+      filas[0].value = '150,00';
+      filas[0].dispatchEvent(new Event('input', { bubbles: true }));
+      await estabilizar();
+
+      tecla('Enter', filas[0]);
+      fixture.detectChanges();
+
+      expect(confirmadas).toEqual([]);
+      expect(error()).toBe('Los pagos tienen que sumar el total.');
+    });
+
     it('un segundo clic mientras se cobra no emite', async () => {
       await abrirEligiendo();
 
