@@ -1,3 +1,4 @@
+import { HttpErrorResponse } from '@angular/common/http';
 import { Component, inject, signal, viewChild } from '@angular/core';
 import { erroresDeCampos, erroresPorCampo, mensajeDe } from '../../core/api/api-error';
 import { Router } from '@angular/router';
@@ -51,7 +52,12 @@ export class MiContrasena {
         if (actual !== undefined) this.errorActual.set(actual);
         else {
           const porCampo = erroresDeCampos(err);
-          this.error.set(porCampo.length > 0 ? porCampo.join(' ') : mensajeDe(err, 'No se pudo cambiar la contraseña.'));
+          // 429: demasiadas actuales incorrectas seguidas; el servidor dice cuántos minutos faltan.
+          const otro =
+            err instanceof HttpErrorResponse && err.status === 429
+              ? 'Demasiados intentos. Probá de nuevo en unos minutos.'
+              : 'No se pudo cambiar la contraseña.';
+          this.error.set(porCampo.length > 0 ? porCampo.join(' ') : mensajeDe(err, otro));
         }
       },
     });

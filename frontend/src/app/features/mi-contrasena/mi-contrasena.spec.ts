@@ -126,6 +126,29 @@ describe('MiContrasena', () => {
     );
   });
 
+  it('un 429 (demasiadas actuales incorrectas) muestra el aviso del servidor, no navega ni desloguea', async () => {
+    await abrir();
+    const mensaje = 'Demasiados intentos. Probá de nuevo en 5 minutos.';
+    auth.cambiarContrasena.mockReturnValue(throwError(() => errorHttp(429, mensaje)));
+
+    await enviar();
+
+    expect(el().querySelector('app-contrasena-form [role="alert"]')?.textContent).toContain(mensaje);
+    expect(navegar).not.toHaveBeenCalled();
+    expect(auth.logout).not.toHaveBeenCalled();
+  });
+
+  it('un 429 sin mensaje igual avisa que hubo demasiados intentos', async () => {
+    await abrir();
+    auth.cambiarContrasena.mockReturnValue(throwError(() => new HttpErrorResponse({ status: 429 })));
+
+    await enviar();
+
+    expect(el().querySelector('app-contrasena-form [role="alert"]')?.textContent).toContain(
+      'Demasiados intentos. Probá de nuevo en unos minutos.',
+    );
+  });
+
   it('el aviso de éxito se va si se vuelve a intentar con un error', async () => {
     await abrir();
     await enviar();

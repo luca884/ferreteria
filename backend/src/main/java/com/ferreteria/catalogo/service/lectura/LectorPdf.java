@@ -13,6 +13,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Function;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -89,17 +90,23 @@ public class LectorPdf implements LectorDeLista {
      * escaneado, protegido, danado o demasiado grande.
      */
     List<PalabraPdf> palabras(byte[] contenido) {
-        return palabras(contenido, SIN_TEXTO);
+        return leer(contenido, SIN_TEXTO, Function.identity());
     }
 
-    /** Igual que {@link #palabras(byte[])}, con el aviso propio de quien lee (una factura) para el PDF sin texto. */
-    List<PalabraPdf> palabras(byte[] contenido, String avisoSinTexto) {
+    /**
+     * Lee las palabras como {@link #palabras(byte[])} y las interpreta sin soltar el turno, con el aviso propio de quien
+     * lee (una factura) para el PDF sin texto. Interpretar tambien gasta CPU: con el turno, una sola a la vez en el
+     * servidor (revision de seguridad del 2026-11-05, hallazgo 5).
+     */
+    <T> T leer(byte[] contenido, String avisoSinTexto, Function<List<PalabraPdf>, T> interpretar) {
         // Un PDF por vez, y cada ferreteria espera uno solo (TurnoDeLectura).
-        List<PalabraPdf> palabras = turno.conTurno(() -> leerAparte(contenido));
-        if (palabras.isEmpty()) {
-            throw new BadRequestException(avisoSinTexto);
-        }
-        return palabras;
+        return turno.conTurno(() -> {
+            List<PalabraPdf> palabras = leerAparte(contenido);
+            if (palabras.isEmpty()) {
+                throw new BadRequestException(avisoSinTexto);
+            }
+            return interpretar.apply(palabras);
+        });
     }
 
     private List<PalabraPdf> leerAparte(byte[] contenido) {
