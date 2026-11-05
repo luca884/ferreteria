@@ -35,6 +35,14 @@ import java.util.regex.Pattern;
  */
 final class FacturaDePdf {
 
+    /**
+     * Una linea con mas numeros no es un renglon. Buscar la terna es cubico en los numeros de la linea: sin tope, un PDF
+     * armado a proposito con una linea de miles de numeros ocupaba la CPU durante minutos (revision de seguridad del
+     * 2026-11-05, hallazgo 5). Un renglon real trae la cantidad, el unitario, el neto, alguna bonificacion y los numeros de
+     * la descripcion (medidas, unidades por caja).
+     */
+    static final int MAXIMO_NUMEROS_POR_RENGLON = 30;
+
     private static final BigDecimal CIEN = BigDecimal.valueOf(100);
     /** Diferencia de centavos que se tolera al verificar una cuenta contra lo impreso. */
     private static final BigDecimal TOLERANCIA = new BigDecimal("0.01");
@@ -165,7 +173,8 @@ final class FacturaDePdf {
 
     /**
      * Cantidad, unitario y neto: tres numeros de la linea (despues del codigo) con cantidad x unitario = neto. Gana el
-     * neto mas a la derecha, con el unitario mas cercano y la cantidad mas cercana al codigo.
+     * neto mas a la derecha, con el unitario mas cercano y la cantidad mas cercana al codigo. Una linea con mas de
+     * {@link #MAXIMO_NUMEROS_POR_RENGLON} numeros no es un renglon.
      */
     private static Optional<Renglon> renglon(List<Palabra> palabras) {
         List<Integer> numeros = new ArrayList<>();
@@ -174,13 +183,17 @@ final class FacturaDePdf {
                 numeros.add(i);
             }
         }
+        if (numeros.size() > MAXIMO_NUMEROS_POR_RENGLON) {
+            return Optional.empty();
+        }
+        Bonificaciones bonificaciones = new Bonificaciones(palabras);
         for (int k = numeros.size() - 1; k >= 2; k--) {
             for (int j = k - 1; j >= 1; j--) {
-                List<BigDecimal> bonificaciones = bonificaciones(palabras, numeros.get(j), numeros.get(k));
-                if (bonificaciones.size() > 1) {
+                int entre = bonificaciones.cuantasEntre(numeros.get(j), numeros.get(k));
+                if (entre > 1) {
                     continue;
                 }
-                BigDecimal bonificacion = bonificaciones.stream().findFirst().orElse(BigDecimal.ZERO);
+                BigDecimal bonificacion = entre == 0 ? BigDecimal.ZERO : bonificaciones.ultimaAntesDe(numeros.get(k));
                 for (int i = 0; i < j; i++) {
                     Optional<Renglon> renglon = terna(palabras, numeros.get(i), numeros.get(j), numeros.get(k),
                         bonificacion);
@@ -193,15 +206,36 @@ final class FacturaDePdf {
         return Optional.empty();
     }
 
-    /** Los % entre el unitario y el neto: ninguno si el renglon no tiene bonificacion. */
-    private static List<BigDecimal> bonificaciones(List<Palabra> palabras, int unitario, int neto) {
-        List<BigDecimal> bonificaciones = new ArrayList<>();
-        for (int i = unitario + 1; i < neto; i++) {
-            if (palabras.get(i).porcentaje() && palabras.get(i).valor() != null) {
-                bonificaciones.add(palabras.get(i).valor());
+    /**
+     * Los % de la linea (una bonificacion va entre el unitario y el neto), contados una sola vez: cuantos hay entre dos
+     * palabras y cual es el ultimo antes de una salen al instante, sin recorrer la linea por cada par de numeros.
+     */
+    private static final class Bonificaciones {
+
+        /** {@code antes[i]}: cuantos % hay en las palabras {@code 0..i-1}. */
+        private final int[] antes;
+        /** {@code ultima[i]}: el valor del ultimo % en las palabras {@code 0..i-1}, o null. */
+        private final BigDecimal[] ultima;
+
+        Bonificaciones(List<Palabra> palabras) {
+            antes = new int[palabras.size() + 1];
+            ultima = new BigDecimal[palabras.size() + 1];
+            for (int i = 0; i < palabras.size(); i++) {
+                Palabra palabra = palabras.get(i);
+                boolean esBonificacion = palabra.porcentaje() && palabra.valor() != null;
+                antes[i + 1] = antes[i] + (esBonificacion ? 1 : 0);
+                ultima[i + 1] = esBonificacion ? palabra.valor() : ultima[i];
             }
         }
-        return bonificaciones;
+
+        /** Cuantos % hay estrictamente entre el unitario y el neto. */
+        int cuantasEntre(int unitario, int neto) {
+            return antes[neto] - antes[unitario + 1];
+        }
+
+        BigDecimal ultimaAntesDe(int neto) {
+            return ultima[neto];
+        }
     }
 
     private static Optional<Renglon> terna(List<Palabra> palabras, int iq, int iu, int in, BigDecimal bonificacion) {

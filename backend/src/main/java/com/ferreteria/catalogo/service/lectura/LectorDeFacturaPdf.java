@@ -6,8 +6,8 @@ import org.springframework.stereotype.Component;
 
 /**
  * Lee una factura de proveedor en PDF con texto (CU-13). Las palabras salen por el mismo camino que una lista de
- * precios ({@link LectorPdf#palabras}: JVM aparte, 256 MB, 30 s, tope de palabras, un PDF por vez) y {@link FacturaDePdf}
- * las interpreta.
+ * precios ({@link LectorPdf#leer}: JVM aparte, 256 MB, 30 s, tope de palabras, un PDF por vez) y {@link FacturaDePdf}
+ * las interpreta sin soltar el turno.
  */
 @Component
 public class LectorDeFacturaPdf implements LectorDeFacturas {
@@ -23,6 +23,6 @@ public class LectorDeFacturaPdf implements LectorDeFacturas {
 
     @Override
     public FacturaLeida leer(byte[] pdf) {
-        return FacturaDePdf.leer(lectorPdf.palabras(pdf, SIN_TEXTO));
+        return lectorPdf.leer(pdf, SIN_TEXTO, FacturaDePdf::leer);
     }
 }

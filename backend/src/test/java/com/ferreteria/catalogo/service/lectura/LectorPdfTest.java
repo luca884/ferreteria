@@ -172,6 +172,49 @@ class LectorPdfTest {
     }
 
     @Test
+    void interpretarLasPalabrasTambienOcupaElTurno() throws Exception {
+        // Hallazgo 5 de la revision del 2026-11-05: interpretar una factura gasta CPU y corria con el turno ya suelto.
+        Topes esperaCorta = new Topes(TOPES.palabras(), TOPES.memoria(), TOPES.tiempo(), Duration.ofMillis(300));
+        LectorPdf conEsperaCorta = new LectorPdf(esperaCorta, ExtractorPdf.class);
+        java.util.concurrent.CountDownLatch interpretando = new java.util.concurrent.CountDownLatch(1);
+        java.util.concurrent.CountDownLatch terminar = new java.util.concurrent.CountDownLatch(1);
+        ExecutorService otro = Executors.newSingleThreadExecutor();
+        try {
+            Future<Integer> primero = otro.submit(() -> conEsperaCorta.leer(ListasDePrueba.pdf(LISTA), "sin texto",
+                palabras -> {
+                    interpretando.countDown();
+                    try {
+                        terminar.await(30, TimeUnit.SECONDS);
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                    }
+                    return palabras.size();
+                }));
+            assertThat(interpretando.await(30, TimeUnit.SECONDS)).isTrue();
+
+            assertThatThrownBy(() -> conEsperaCorta.palabras(ListasDePrueba.pdf(LISTA)))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessage(OCUPADO);
+
+            terminar.countDown();
+            assertThat(primero.get(30, TimeUnit.SECONDS)).isPositive();
+            assertThat(conEsperaCorta.palabras(ListasDePrueba.pdf(LISTA))).isNotEmpty();
+        } finally {
+            terminar.countDown();
+            otro.shutdownNow();
+        }
+    }
+
+    @Test
+    void unPdfSinTextoAvisaAntesDeInterpretar() {
+        assertThatThrownBy(() -> lector.leer(ListasDePrueba.pdfSinTexto(), "sin texto", palabras -> {
+            throw new AssertionError("no se interpreta un PDF sin texto");
+        }))
+            .isInstanceOf(BadRequestException.class)
+            .hasMessage("sin texto");
+    }
+
+    @Test
     void elProcesoQueLeeCorreConLaPrioridadMasBajaYUnSoloProcesador() {
         LectorPdf lector = new LectorPdf(TOPES, HijosDePrueba.DicePrioridadYProcesadores.class);
 
