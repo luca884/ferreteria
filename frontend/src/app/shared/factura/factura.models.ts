@@ -137,6 +137,8 @@ export interface RenglonParaFactura {
   /** Con IVA. */
   precioUnitario: number;
   alicuotaIva: string;
+  /** Precio × cantidad, antes de descuentos y recargo: el «Importe» de la hoja sin IVA discriminado (B, C, X). */
+  bruto: number;
   total: number;
   neto: number;
 }

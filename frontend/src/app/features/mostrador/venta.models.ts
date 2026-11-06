@@ -70,6 +70,8 @@ export interface RenglonVentaResponse {
   cantidad: number;
   precioUnitario: number;
   alicuotaIva: string;
+  /** Precio × cantidad, antes de descuentos y recargo. */
+  bruto: number;
   total: number;
   neto: number;
   iva: number;

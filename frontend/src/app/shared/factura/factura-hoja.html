@@ -97,12 +97,13 @@
       </tr>
     </thead>
     <tbody>
+      <!-- El importe es precio × cantidad: los descuentos y el recargo van abajo, así todo suma a la vista (QA B-2). -->
       @for (r of v.renglones; track r.renglon) {
         <tr>
           <td class="num">{{ r.cantidad | number: '1.0-3' }}</td>
           <td>{{ r.descripcion }}</td>
           <td class="num">{{ r.precioUnitario | monto }}</td>
-          <td class="num">{{ r.total | monto }}</td>
+          <td class="num">{{ r.bruto | monto }}</td>
         </tr>
       }
     </tbody>
@@ -118,7 +119,7 @@
     <p>Importe no gravado <span>{{ d.noGravado | monto }}</span></p>
     <p>Importe exento <span>{{ d.exento | monto }}</span></p>
   } @else {
-    @if ((v.descuento ?? 0) > 0 || (v.recargo ?? 0) < 0) {
+    @if ((v.descuento ?? 0) > 0 || (v.recargo ?? 0) !== 0) {
       <p>Subtotal <span>{{ v.subtotal | monto }}</span></p>
     }
     @if ((v.descuento ?? 0) > 0) {

@@ -148,6 +148,7 @@ export const ventaParaFactura = (cambios: Partial<VentaParaFactura> = {}): Venta
       cantidad: 2,
       precioUnitario: 605,
       alicuotaIva: 'IVA_21',
+      bruto: 1210,
       total: 1210,
       neto: 1000,
     },
