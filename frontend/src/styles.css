@@ -830,6 +830,12 @@ ul.error {
   font-size: var(--texto-sm);
   font-weight: 500;
 }
+/* Un aviso debajo del campo que no bloquea guardar (el EAN-13 con el verificador mal). */
+.campo-aviso {
+  color: var(--advertencia);
+  font-size: var(--texto-sm);
+  font-weight: 500;
+}
 
 /* ---------- Diálogos ---------- */
 

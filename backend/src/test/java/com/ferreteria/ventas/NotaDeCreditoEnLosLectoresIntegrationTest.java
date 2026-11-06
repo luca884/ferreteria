@@ -186,17 +186,16 @@ class NotaDeCreditoEnLosLectoresIntegrationTest extends VentasTestBase {
     }
 
     @Test
-    @DisplayName("por usuario: la venta es del Vendedor y la NC del Dueño, que la hizo")
-    void porUsuarioLaNotaEsDeQuienLaHizo() throws Exception {
+    @DisplayName("por usuario: la NC resta al Vendedor, que hizo la venta anulada; el Dueño que anuló no aparece (QA 05/11)")
+    void porUsuarioLaNotaRestaAQuienVendio() throws Exception {
         JsonNode r = reporte("por-usuario", ayer, hoy);
 
+        assertThat(r.get("filas")).hasSize(1);
         JsonNode vendedor = fila(r, "nombre", "Vendedor Ventas");
-        JsonNode delDueno = fila(r, "nombre", "Dueno Ventas");
         assertThat(vendedor.get("cantidad").asInt()).isEqualTo(1);
-        assertThat(vendedor.get("total").decimalValue()).isEqualByComparingTo("180.00");
-        assertThat(delDueno.get("cantidad").asInt()).isZero();
-        assertThat(delDueno.get("total").decimalValue()).isEqualByComparingTo("-180.00");
-        assertThat(vendedor.get("ganancia").decimalValue().add(delDueno.get("ganancia").decimalValue())).isZero();
+        assertThat(vendedor.get("total").decimalValue()).isZero();
+        assertThat(vendedor.get("ganancia").decimalValue()).isZero();
+        assertThat(vendedor.get("ventasSinCosto").asInt()).isZero();
     }
 
     @Test

@@ -99,7 +99,7 @@
                 <button type="button" class="enlace" [attr.aria-pressed]="elegida() === fila.ventaId">
                   {{ fila.numero }}
                 </button>
-                @if (!fila.facturable) {
+                @if (!fila.facturable && !esNota(fila)) {
                   <span class="marca">No facturable</span>
                 }
                 @if (esNota(fila)) {

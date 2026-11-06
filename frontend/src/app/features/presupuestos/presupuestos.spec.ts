@@ -362,6 +362,15 @@ describe('Presupuestos', () => {
       expect(alerta()).toContain('No se pudo cargar el presupuesto.');
     });
 
+    it('con un id desconocido o de otra ferretería (404) dice que no se encontró el presupuesto (QA 05/11)', async () => {
+      await crear();
+      api.obtener.mockReturnValue(throwError(() => new HttpErrorResponse({ status: 404 })));
+
+      await abrirDetalle(0);
+
+      expect(alerta()).toContain('No se encontró el presupuesto.');
+    });
+
     it('si se elige otro mientras el primero carga, vale el último', async () => {
       await crear();
       const lento = new Subject<PresupuestoResponse>();

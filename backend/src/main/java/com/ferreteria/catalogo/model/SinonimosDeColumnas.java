@@ -39,7 +39,9 @@ public final class SinonimosDeColumnas {
         SINONIMOS.put(Campo.COSTO, List.of("PRECIO X UNIDAD", "LISTA UNIDAD", "PRECIO UNITARIO", "LISTA", "PRECIO",
             "COSTO", "PRECIO LISTA", "PRECIO DE LISTA"));
         SINONIMOS.put(Campo.MONEDA, List.of("MON", "MONEDA", "DIVISA"));
-        SINONIMOS.put(Campo.SIN_IVA, List.of("SIN IVA", "PRECIO SIN IVA", "NETO", "PRECIO NETO"));
+        // «s/IVA» normaliza a «S IVA» (la barra es un separador).
+        SINONIMOS.put(Campo.SIN_IVA, List.of("SIN IVA", "PRECIO SIN IVA", "NETO", "PRECIO NETO", "S IVA",
+            "PRECIO S IVA", "P S IVA", "PRECIO UNITARIO S IVA", "UNITARIO S IVA"));
         SINONIMOS.put(Campo.CON_IVA, List.of("CON IVA", "PRECIO CON IVA"));
         SINONIMOS.put(Campo.IVA, List.of("IVA", "ALICUOTA", "ALICUOTA IVA", "PORCENTAJE IVA"));
         SINONIMOS.put(Campo.AJUSTE1, List.of("DESCUENTO 1", "DESC 1", "DTO 1", "RECARGO 1", "AJUSTE 1"));

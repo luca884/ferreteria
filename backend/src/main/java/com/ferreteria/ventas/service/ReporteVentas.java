@@ -27,8 +27,9 @@ import org.springframework.transaction.annotation.Transactional;
  * dia o mes, por articulo, por rubro y con descuento, de un rango de dias de Buenos Aires. Solo ventas: los presupuestos
  * y los remitos no son comprobantes, y las cobranzas no son ventas.
  *
- * <p>Desde CU-08 (C4) las notas de credito y las anulaciones internas RESTAN en su fecha (no en la de la venta), atribuidas
- * a quien las hizo: el total, el neto, el IVA, el costo y la ganancia van netos. No cuentan como ventas en
+ * <p>Desde CU-08 (C4) las notas de credito y las anulaciones internas RESTAN en su fecha (no en la de la venta): el total,
+ * el neto, el IVA, el costo y la ganancia van netos. «Por usuario» se las resta a quien hizo la venta anulada, no a quien
+ * anulo (QA 05/11). No cuentan como ventas en
  * {@code cantidad} ni en {@code ventasSinCosto}; el resumen las muestra aparte ({@code notasDeCredito}) junto con la
  * ganancia sin ellas ({@code gananciaSinNotas}, G66). «Por medio de pago» no las resta (no mueven plata) y «Con descuento»
  * lista solo ventas.
@@ -225,13 +226,17 @@ public class ReporteVentas {
                 .toList();
     }
 
-    /** Las ventas y las notas de credito del rango; las de una nota, con los importes en negativo (restan). */
+    /**
+     * Las ventas y las notas de credito del rango; las de una nota, con los importes en negativo (restan) y atribuidas a
+     * quien hizo la venta anulada (QA 05/11: «Por usuario» mide lo que vendio cada uno, y anular es del Dueño).
+     */
     private List<Venta> ventas(Rango rango) {
         return comprobantes.ventasDelRangoScoped(inicio(rango), fin(rango)).stream()
                 .map(f -> {
                     boolean nota = f[8] == TipoComprobante.NOTA_CREDITO;
                     BigDecimal costo = entero(f[7]) == 0 ? (BigDecimal) f[6] : null;
-                    return new Venta((LocalDateTime) f[1], (Long) f[2], signo((BigDecimal) f[3], nota),
+                    Long usuario = nota && f[9] != null ? (Long) f[9] : (Long) f[2];
+                    return new Venta((LocalDateTime) f[1], usuario, signo((BigDecimal) f[3], nota),
                             signo((BigDecimal) f[4], nota), signo((BigDecimal) f[5], nota),
                             costo == null ? null : signo(costo, nota), nota);
                 })

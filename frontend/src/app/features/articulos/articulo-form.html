@@ -535,11 +535,16 @@
           formControlName="codigoBarras"
           autocomplete="off"
           spellcheck="false"
-          placeholder="Ej: 7790001000012…"
+          placeholder="Ej: 7790001000019…"
           [attr.aria-invalid]="invalido('codigoBarras') ? 'true' : null"
-          [attr.aria-describedby]="describir('codigoBarras')"
+          [attr.aria-describedby]="
+            avisoCodigoBarras() ? describir('codigoBarras', 'codigoBarras-aviso') : describir('codigoBarras')
+          "
           (input)="limpiarErrorDe('codigoBarras')"
         />
+        @if (avisoCodigoBarras(); as mensaje) {
+          <span id="codigoBarras-aviso" class="pista campo-aviso">{{ mensaje }}</span>
+        }
         @if (errorServidor('codigoBarras'); as mensaje) {
           <span id="codigoBarras-error-servidor" class="campo-error" data-error-de="codigoBarras">{{ mensaje }}</span>
         }
