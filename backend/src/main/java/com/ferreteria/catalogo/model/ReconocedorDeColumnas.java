@@ -165,6 +165,13 @@ public final class ReconocedorDeColumnas {
                 columnas.put(campo, columna);
             }
         }
+        // Una columna sin IVA sola, sin otra de costo, ES el costo: el costo del articulo va sin IVA (QA 05/11, «Precio
+        // s/IVA»). Entra con la prioridad mas baja de COSTO: cualquier sinonimo de costo le gana.
+        if (columnas.containsKey(Campo.SIN_IVA) && !columnas.containsKey(Campo.CON_IVA)
+                && !columnas.containsKey(Campo.COSTO)) {
+            columnas.put(Campo.COSTO, columnas.get(Campo.SIN_IVA));
+            prioridades.put(Campo.COSTO, SinonimosDeColumnas.cantidad(Campo.COSTO) - 1);
+        }
         // El par de IVA vale solo si se reconocen las dos columnas.
         if (!columnas.containsKey(Campo.SIN_IVA) || !columnas.containsKey(Campo.CON_IVA)) {
             columnas.remove(Campo.SIN_IVA);

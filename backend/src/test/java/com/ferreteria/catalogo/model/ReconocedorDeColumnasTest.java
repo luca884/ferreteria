@@ -242,6 +242,25 @@ class ReconocedorDeColumnasTest {
     }
 
     @Test
+    @DisplayName("una columna sin IVA sola, sin otra de costo, es el costo: «Precio s/IVA» o «Neto» (QA 05/11)")
+    void sinIvaSolaEsCosto() {
+        LecturaLista precioSinIva = lecturaDe("Hoja1", List.of(
+            fila("Código", "Artículo", "Precio s/IVA"), fila("A-1", "Tornillo", 100)));
+        LecturaLista neto = lecturaDe("Hoja1", List.of(
+            fila("Código", "Artículo", "Neto"), fila("A-1", "Tornillo", 100)));
+        LecturaLista listaYSinIva = lecturaDe("Hoja1", List.of(
+            fila("Código", "Artículo", "Lista", "Sin IVA"), fila("A-1", "Tornillo", 100, 100)));
+
+        ReconocedorDeColumnas.Propuesta conPrecio = ReconocedorDeColumnas.reconocer(precioSinIva).propuesta();
+        assertThat(conPrecio.columnaCosto()).isEqualTo(2);
+        assertThat(conPrecio.columnaSinIva()).isNull();
+        assertThat(ReconocedorDeColumnas.reconocer(neto).propuesta().columnaCosto()).isEqualTo(2);
+        // Con una columna de costo reconocida, la de sin IVA sola se sigue descartando.
+        assertThat(ReconocedorDeColumnas.reconocer(listaYSinIva).propuesta().columnaCosto()).isEqualTo(2);
+        assertThat(ReconocedorDeColumnas.reconocer(listaYSinIva).propuesta().columnaSinIva()).isNull();
+    }
+
+    @Test
     @DisplayName("reconoce tambien % IVA, descuentos, codigo de barras, unidad y rubro")
     void otrosCampos() {
         LecturaLista lectura = lecturaDe("Hoja1", List.of(
