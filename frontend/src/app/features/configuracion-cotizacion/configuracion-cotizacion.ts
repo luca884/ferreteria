@@ -156,6 +156,10 @@ export class PaginaConfiguracionCotizacion implements OnInit {
 
   protected textoVigente(c: ConfiguracionCotizacion): string {
     if (c.vigente === null) return 'Todavía no se calcularon precios con el dólar de esta ferretería.';
+    // Sin dólar fijado, la importación calcula con el último publicado: el back lo manda como vigente, sin fecha.
+    if (c.vigenteDesde === null) {
+      return `Los precios en dólares se calculan con el último dólar publicado, a ${formatearCotizacion(c.vigente)}.`;
+    }
     const desde = formatearFechaHora(c.vigenteDesde);
     const base = `Los precios en dólares se calcularon con el dólar a ${formatearCotizacion(c.vigente)}`;
     return desde ? `${base} (${desde}).` : `${base}.`;

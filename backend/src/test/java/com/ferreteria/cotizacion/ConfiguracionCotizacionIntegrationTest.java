@@ -84,8 +84,43 @@ class ConfiguracionCotizacionIntegrationTest extends CotizacionTestBase {
         assertThat(r.get("ladoPrecios").asText()).isEqualTo("VENTA");
         assertThat(r.get("visibles")).extracting(JsonNode::asText).containsExactly("USD:oficial");
         assertThat(r.get("horaRecalculo").asText()).isEqualTo("08:00");
+        assertThat(r.get("vigenteDesde").isNull()).isTrue();
+    }
+
+    @Test
+    @DisplayName("sin dólar fijado, vigente es el último publicado de la casa y el lado elegidos, el mismo con el que calcula "
+            + "una importación, y sin fecha (QA 05/11)")
+    void sinFijarVigenteEsElUltimoPublicado() throws Exception {
+        cotizacion("USD", "oficial", "1000.00", "1050.00", Instant.parse("2026-11-05T12:00:00Z"));
+
+        JsonNode r = getJson(URL, login(duenoA));
+
+        assertThat(r.get("vigente").decimalValue()).isEqualByComparingTo("1050");
+        assertThat(r.get("vigenteDesde").isNull()).isTrue();
+    }
+
+    @Test
+    @DisplayName("sin dólar fijado ni publicado, vigente es null")
+    void sinFijarNiPublicadoVigenteEsNull() throws Exception {
+        jdbc.update("delete from cotizacion where moneda = 'USD' and casa = 'oficial'");
+
+        JsonNode r = getJson(URL, login(duenoA));
+
         assertThat(r.get("vigente").isNull()).isTrue();
         assertThat(r.get("vigenteDesde").isNull()).isTrue();
+    }
+
+    @Test
+    @DisplayName("con dólar fijado, vigente es el fijado con su fecha aunque haya uno publicado más nuevo")
+    void conDolarFijadoVigenteEsElFijado() throws Exception {
+        cotizacion("USD", "oficial", "1080.00", "1100.00", Instant.parse("2026-11-05T12:00:00Z"));
+        configuracion(a, c -> c.fijarVigente(new BigDecimal("1000.0000"), "oficial", LadoCotizacion.VENTA,
+                Instant.parse("2026-10-16T11:00:00Z")));
+
+        JsonNode r = getJson(URL, login(duenoA));
+
+        assertThat(r.get("vigente").decimalValue()).isEqualByComparingTo("1000");
+        assertThat(Instant.parse(r.get("vigenteDesde").asText())).isEqualTo(Instant.parse("2026-10-16T11:00:00Z"));
     }
 
     @Test

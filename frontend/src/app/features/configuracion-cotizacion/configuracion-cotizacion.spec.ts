@@ -467,6 +467,13 @@ describe('PaginaConfiguracionCotizacion', () => {
       expect(texto(q('.vigente'))).toBe('Todavía no se calcularon precios con el dólar de esta ferretería.');
     });
 
+    it('sin dólar fijado pero con uno publicado dice que calcula con ese, sin fecha (QA 05/11)', async () => {
+      obtener = vi.fn(() => of({ ...configuracion, vigente: 1050, vigenteDesde: null }));
+      await crear();
+
+      expect(texto(q('.vigente'))).toBe('Los precios en dólares se calculan con el último dólar publicado, a 1.050,00.');
+    });
+
     it('mientras pide la vista previa el botón queda deshabilitado y no se puede pedir dos veces', async () => {
       const pendiente = new Subject<VistaPreviaRecalculo>();
       vistaPrevia = vi.fn(() => pendiente);
