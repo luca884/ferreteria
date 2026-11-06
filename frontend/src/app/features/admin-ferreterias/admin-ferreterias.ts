@@ -100,6 +100,8 @@ export class AdminFerreterias implements OnInit {
   protected readonly erroresServidor = signal<Record<string, string>>({});
   protected readonly errorForm = signal<string | null>(null);
   protected readonly guardando = signal(false);
+  /** Se intentó crear con el formulario inválido: desde ahí cada campo muestra su error aunque no se haya escrito. */
+  private readonly intentoCrear = signal(false);
   protected readonly cambiando = signal(false);
   /** El cambio que espera confirmación, sobre la ferretería que estaba elegida al pedirlo. */
   protected readonly aConfirmar = signal<PedidoDeCambio | null>(null);
@@ -164,12 +166,17 @@ export class AdminFerreterias implements OnInit {
     });
   }
 
-  /** El mensaje del campo: primero lo que dijo el servidor, y si no, lo que falla en el formulario una vez tocado. */
+  /**
+   * El mensaje del campo: primero lo que dijo el servidor, y si no, lo que falla en el formulario una vez que saliste
+   * de un campo en el que escribiste, o después de intentar crear. Salir de un campo vacío sin escribir no avisa: el
+   * foco vuelve a la razón social después de cada alta y avisaba «obligatoria» con solo tocar otra cosa. QA 05/11.
+   */
   protected mensaje(campo: CampoFerreteria): string | null {
     const delServidor = this.erroresServidor()[campo];
     if (delServidor) return delServidor;
     const control = this.form.get(campo);
     if (!control || !control.touched || control.valid) return null;
+    if (!control.dirty && !this.intentoCrear()) return null;
     switch (campo) {
       case 'razonSocial':
         return control.hasError('maxlength')
@@ -204,6 +211,7 @@ export class AdminFerreterias implements OnInit {
     // Un envío por vez: el botón deshabilitado y el formulario inerte llegan recién en el próximo render.
     if (this.guardando()) return;
     if (this.form.invalid) {
+      this.intentoCrear.set(true);
       this.form.markAllAsTouched();
       this.enfocar('form.alta [aria-invalid="true"]');
       return;
@@ -353,6 +361,7 @@ export class AdminFerreterias implements OnInit {
   }
 
   private vaciarFormulario(): void {
+    this.intentoCrear.set(false);
     this.form.reset(
       { razonSocial: '', cuit: '', condicionIva: 'RESPONSABLE_INSCRIPTO', dueno: { nombre: '', email: '', password: '' } },
       { emitEvent: false },

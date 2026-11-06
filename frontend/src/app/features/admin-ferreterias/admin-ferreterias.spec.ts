@@ -265,6 +265,87 @@ describe('AdminFerreterias', () => {
       expect(texto('form.alta')).not.toContain('obligatori');
     });
 
+    describe('clics en «Crear ferretería» (QA 05/11)', () => {
+      const clic = (detail: number) =>
+        el()
+          .querySelector<HTMLButtonElement>('form.alta button[type="submit"]')!
+          .dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, detail }));
+
+      it('un clic de teclado (Enter o Espacio, sin conteo de clics) sí envía', async () => {
+        await crear();
+        await altaCompleta();
+
+        clic(0);
+        await refrescar();
+
+        expect(servicio.alta).toHaveBeenCalledTimes(1);
+      });
+
+      it('un triple clic manda un solo pedido y no deja errores', async () => {
+        await crear();
+        await altaCompleta();
+
+        clic(1);
+        await refrescar();
+        clic(2);
+        await refrescar();
+        clic(3);
+        await refrescar();
+
+        expect(servicio.alta).toHaveBeenCalledTimes(1);
+        expect(texto('form.alta')).not.toContain('obligatori');
+      });
+
+      it('con el alta en vuelo, un segundo clic simple no vuelve a enviar', async () => {
+        await crear();
+        servicio.alta.mockReturnValue(new Subject<FerreteriaAdmin>());
+        await altaCompleta();
+
+        clic(1);
+        clic(1);
+        await refrescar();
+
+        expect(servicio.alta).toHaveBeenCalledTimes(1);
+      });
+
+      it('si el alta falla, el clic siguiente vuelve a enviar', async () => {
+        await crear();
+        servicio.alta.mockReturnValueOnce(throwError(() => errorHttp(500, 'Falló')));
+        await altaCompleta();
+
+        clic(1);
+        await refrescar();
+        clic(1);
+        await refrescar();
+
+        expect(servicio.alta).toHaveBeenCalledTimes(2);
+      });
+    });
+
+    it('después del alta, salir de la razón social vacía sin escribir no muestra errores (QA 05/11)', async () => {
+      await crear();
+      await altaCompleta();
+      await enviar();
+      expect(document.activeElement).toBe(input('razonSocial'));
+
+      input('razonSocial').dispatchEvent(new Event('blur'));
+      await refrescar();
+
+      expect(texto('form.alta')).not.toContain('obligatori');
+      expect(el().querySelector('form.alta [aria-invalid="true"]')).toBeNull();
+    });
+
+    it('si escribís en un campo, lo borrás y salís, sí avisa que es obligatorio', async () => {
+      await crear();
+
+      await escribir('razonSocial', 'Arco');
+      await escribir('razonSocial', '');
+      input('razonSocial').dispatchEvent(new Event('blur'));
+      await refrescar();
+
+      expect(texto('form.alta')).toContain('La razón social es obligatoria.');
+    });
+
     it('si el alta falla los campos se desbloquean con lo escrito', async () => {
       await crear();
       servicio.alta.mockReturnValue(throwError(() => errorHttp(500, 'Algo falló')));
