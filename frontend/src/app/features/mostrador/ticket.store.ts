@@ -52,7 +52,8 @@ export class TicketStore {
     effect(() => {
       const t = this._ticket();
       if (!this.storageKey) return;
-      if (t.renglones.length === 0) borrar(this.storageKey);
+      // Un ticket vacío con cliente elegido (F9) también se guarda: si no, un F5 lo perdía (QA 05/11, B-3).
+      if (t.renglones.length === 0 && t.clienteId === undefined) borrar(this.storageKey);
       else escribir(this.storageKey, JSON.stringify(t));
     });
   }
@@ -125,7 +126,8 @@ export class TicketStore {
    * condición de IVA, si viene, para anticipar la letra de la factura en el cobro.
    */
   elegirCliente(cliente: { id: number; razonSocial: string; condicionIva?: CondicionIva }): void {
-    this._ticket.update((t) => elegirCliente(t, cliente));
+    // La clave nace con el ticket guardado: el ticket vacío con cliente también se guarda y se lee con ella.
+    this._ticket.update((t) => elegirCliente(t.clave ? t : { ...t, clave: this.generarClave() }, cliente));
   }
 
   /** Vuelve a Consumidor Final. */

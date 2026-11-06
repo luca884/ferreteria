@@ -62,6 +62,18 @@ export interface ResultadoCantidad {
 export const PROBLEMA_DADO_DE_BAJA = 'Artículo dado de baja';
 export const PROBLEMA_INEXISTENTE = 'Ya no está disponible';
 export const PROBLEMA_SIN_PRECIO = 'Sin precio';
+const PROBLEMAS_DEL_ARTICULO: readonly string[] = [PROBLEMA_DADO_DE_BAJA, PROBLEMA_INEXISTENTE, PROBLEMA_SIN_PRECIO];
+
+/**
+ * El renglón sin la marca de un rechazo del servidor (un 400, como «pasa tu tope de descuento»): cambiar el descuento la
+ * deja vieja y el próximo cobro la vuelve a validar. Las marcas del artículo (baja, sin precio, inexistente) quedan,
+ * porque cambiar el descuento no las arregla. QA 05/11, A-5.
+ */
+function sinMarcaDeRechazo(r: RenglonTicket): RenglonTicket {
+  if (r.problema === undefined || PROBLEMAS_DEL_ARTICULO.includes(r.problema)) return r;
+  const { problema: _marca, ...renglon } = r;
+  return renglon;
+}
 
 const DESCUENTO_MAXIMO_BP = 9999;
 const MENSAJE_DESCUENTO = 'El descuento tiene que estar entre 0 y 99,99 %.';
@@ -97,14 +109,14 @@ export function parsearDescuento(texto: string): number | null {
 export function aplicarDescuentoRenglon(t: Ticket, indice: number, bp: number): ResultadoCantidad {
   if (!t.renglones[indice]) return { error: 'Ese renglón no existe.' };
   if (!descuentoValido(bp)) return { error: MENSAJE_DESCUENTO };
-  const renglones = t.renglones.map((r, j) => (j === indice ? { ...r, descuentoBp: bp } : r));
+  const renglones = t.renglones.map((r, j) => (j === indice ? { ...sinMarcaDeRechazo(r), descuentoBp: bp } : r));
   return { ticket: { ...t, renglones } };
 }
 
 /** Pone (o saca, con 0) el descuento global del ticket. */
 export function aplicarDescuentoGlobal(t: Ticket, bp: number): ResultadoCantidad {
   if (!descuentoValido(bp)) return { error: MENSAJE_DESCUENTO };
-  return { ticket: { ...t, descuentoGlobalBp: bp } };
+  return { ticket: { ...t, descuentoGlobalBp: bp, renglones: t.renglones.map(sinMarcaDeRechazo) } };
 }
 
 /** Suma 1 en el renglón del artículo (o lo crea) y lo deja elegido; refresca precio y stock vistos. */

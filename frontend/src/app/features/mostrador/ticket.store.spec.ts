@@ -465,6 +465,33 @@ describe('TicketStore', () => {
       expect(b.ticket().clienteNombre).toBe('Ferretería Norte SRL');
     });
 
+    it('con el ticket vacío, el cliente elegido se guarda y sobrevive a un F5 (QA 05/11, B-3)', () => {
+      const a = crear();
+      a.elegirCliente(norte);
+      TestBed.tick();
+
+      const b = crear();
+
+      expect(b.ticket().renglones).toEqual([]);
+      expect(b.ticket().clienteId).toBe(7);
+      expect(b.ticket().clienteNombre).toBe('Ferretería Norte SRL');
+    });
+
+    it('con el ticket vacío, quitar el cliente o vaciar no deja nada guardado', () => {
+      const a = crear();
+      a.elegirCliente(norte);
+      TestBed.tick();
+      a.quitarCliente();
+      TestBed.tick();
+      expect(crear().ticket().clienteId).toBeUndefined();
+
+      a.elegirCliente(norte);
+      TestBed.tick();
+      a.vaciar();
+      TestBed.tick();
+      expect(crear().ticket().clienteId).toBeUndefined();
+    });
+
     it('quitarCliente vuelve a Consumidor Final y queda guardado así', () => {
       const a = crear();
       a.agregar(art(1));

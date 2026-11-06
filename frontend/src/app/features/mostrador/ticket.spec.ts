@@ -2,6 +2,9 @@ import { PresupuestoResponse } from '../presupuestos/presupuesto.models';
 import { RemitoResponse } from '../remitos/remito.models';
 import { ArticuloMostrador } from './mostrador.models';
 import {
+  PROBLEMA_DADO_DE_BAJA,
+  PROBLEMA_INEXISTENTE,
+  PROBLEMA_SIN_PRECIO,
   Ticket,
   agregar,
   elegirCliente,
@@ -253,6 +256,42 @@ describe('ticket (puro)', () => {
     it('quitar un renglón con problema no deja marcas en los demás', () => {
       const t = quitar(marcarProblemas(conTres(), [{ articuloId: 2, mensaje: 'x' }]), 1);
       expect(t.renglones.every((r) => r.problema === undefined)).toBe(true);
+    });
+
+    it('cambiar el descuento del renglón saca su marca de tope; las de los otros renglones quedan (QA 05/11, A-5)', () => {
+      const tope = 'Sumado al descuento general, pasa tu tope de descuento de 10 %.';
+      const marcado = marcarProblemas(conTres(), [
+        { articuloId: 1, mensaje: tope },
+        { articuloId: 2, mensaje: tope },
+      ]);
+
+      const t = aplicarDescuentoRenglon(marcado, 0, 500).ticket!;
+
+      expect(t.renglones.map((r) => r.problema)).toEqual([undefined, tope, undefined]);
+    });
+
+    it('cambiar el descuento general saca las marcas de tope de todos los renglones (QA 05/11, A-5)', () => {
+      const tope = 'Sumado al descuento general, pasa tu tope de descuento de 10 %.';
+      const marcado = marcarProblemas(conTres(), [
+        { articuloId: 1, mensaje: tope },
+        { articuloId: 3, mensaje: tope },
+      ]);
+
+      const t = aplicarDescuentoGlobal(marcado, 500).ticket!;
+
+      expect(t.renglones.map((r) => r.problema)).toEqual([undefined, undefined, undefined]);
+    });
+
+    it('cambiar un descuento no saca las marcas del artículo: dado de baja, sin precio o que ya no está', () => {
+      const marcado = marcarProblemas(conTres(), [
+        { articuloId: 1, mensaje: PROBLEMA_DADO_DE_BAJA },
+        { articuloId: 2, mensaje: PROBLEMA_SIN_PRECIO },
+        { articuloId: 3, mensaje: PROBLEMA_INEXISTENTE },
+      ]);
+
+      const t = aplicarDescuentoGlobal(aplicarDescuentoRenglon(marcado, 0, 500).ticket!, 500).ticket!;
+
+      expect(t.renglones.map((r) => r.problema)).toEqual([PROBLEMA_DADO_DE_BAJA, PROBLEMA_SIN_PRECIO, PROBLEMA_INEXISTENTE]);
     });
   });
 
