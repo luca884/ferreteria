@@ -175,6 +175,21 @@ type CampoDeAjuste = 'nombre' | 'tipo' | 'valor';
 /** Al guardar o cancelar se vuelve al listado con la búsqueda, la página y los inactivos de la dirección. */
 const VOLVER_AL_LISTADO = { queryParamsHandling: 'preserve' } as const;
 
+const MENSAJE_EAN = 'No parece un EAN-13 válido: el último dígito no coincide. Revisalo antes de guardar.';
+
+/**
+ * El aviso de un EAN-13 con el dígito verificador mal (QA 05/11): 13 dígitos cuya suma ponderada (1 y 3) no cierra en
+ * módulo 10. Es un aviso y no un error: hay códigos internos de 13 dígitos que no son EAN, así que se guarda igual. Otra
+ * longitud, letras o vacío no son un EAN y no se evalúan.
+ */
+export function avisoDeEan13(codigo: string | null | undefined): string | null {
+  const texto = (codigo ?? '').trim();
+  if (!/^\d{13}$/.test(texto)) return null;
+  const suma = [...texto.slice(0, 12)].reduce((total, digito, i) => total + Number(digito) * (i % 2 === 0 ? 1 : 3), 0);
+  const verificador = (10 - (suma % 10)) % 10;
+  return verificador === Number(texto[12]) ? null : MENSAJE_EAN;
+}
+
 @Component({
   selector: 'app-articulo-form',
   imports: [
@@ -337,6 +352,9 @@ export class ArticuloForm implements OnInit {
   private readonly valores = toSignal(this.form.valueChanges.pipe(map(() => this.form.getRawValue())), {
     initialValue: this.form.getRawValue(),
   });
+
+  /** Aviso, no error: un código de barras de 13 dígitos cuyo verificador no cierra. Se guarda igual (QA 05/11). */
+  protected readonly avisoCodigoBarras = computed(() => avisoDeEan13(this.valores().codigoBarras));
 
   /** De dónde sale el margen cuando el campo está vacío: «Hereda 35 % de Bulonería». */
   protected readonly herencia = computed(() => {

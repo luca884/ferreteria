@@ -663,6 +663,31 @@ describe('ArticuloForm', () => {
     });
   });
 
+  describe('aviso de EAN-13 con el dígito verificador mal (decisiones-qa, S2)', () => {
+    const aviso = () =>
+      el().querySelector('#codigoBarras-aviso')?.textContent?.replace(/\s+/g, ' ').trim() ?? null;
+
+    it('con 13 dígitos y el verificador mal avisa debajo del campo, sin marcar el campo como inválido', async () => {
+      await crearComponente();
+
+      await escribir('codigoBarras', '7790001000012');
+
+      expect(aviso()).toBe('No parece un EAN-13 válido: el último dígito no coincide. Revisalo antes de guardar.');
+      expect(input('codigoBarras').getAttribute('aria-invalid')).toBeNull();
+      expect(input('codigoBarras').getAttribute('aria-describedby')).toContain('codigoBarras-aviso');
+      expect(el().querySelector('[data-error-de="codigoBarras"]')).toBeNull();
+    });
+
+    it('con el verificador bien, con otra longitud, con letras o vacío no avisa', async () => {
+      await crearComponente();
+
+      for (const valor of ['7790001000019', ' 7790001000019 ', '779000100001', '77900010000190', '779000100001A', '']) {
+        await escribir('codigoBarras', valor);
+        expect(aviso(), `con «${valor}»`).toBeNull();
+      }
+    });
+  });
+
   describe('edición', () => {
     it('carga el artículo por id de la ruta y completa el formulario', async () => {
       await crearComponente({ id: '5' });
