@@ -36,6 +36,8 @@ import { VentasService } from './ventas.service';
 
 const MENSAJE_LISTA = 'No se pudieron cargar las ventas.';
 const MENSAJE_DETALLE = 'No se pudo cargar la venta.';
+/** Una venta que no existe o es de otra ferretería: el servidor da 404 en los dos casos (regla 3 de CLAUDE.md). */
+const MENSAJE_NO_ENCONTRADA = 'No se encontró la venta.';
 const MENSAJE_NUMERO = 'El número tiene que ser un entero.';
 const MENSAJE_ACCION = 'No se pudo hacer. Probá de nuevo.';
 /** C2: el texto del 409 FECHA_NUEVA_REQUERIDA, también para confirmar antes cuando el detalle ya lo anticipa. */
@@ -310,8 +312,10 @@ export class Ventas implements OnInit {
         // Si mientras tanto se eligió otra, esta respuesta ya no importa.
         if (this.elegida() === id) this.detalle.set(venta);
       },
-      error: () => {
-        if (this.elegida() === id) this.errorDetalle.set(MENSAJE_DETALLE);
+      error: (err: unknown) => {
+        if (this.elegida() !== id) return;
+        const noEsta = err instanceof HttpErrorResponse && err.status === 404;
+        this.errorDetalle.set(noEsta ? MENSAJE_NO_ENCONTRADA : MENSAJE_DETALLE);
       },
     });
   }

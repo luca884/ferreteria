@@ -420,6 +420,16 @@ describe('Ventas (consulta y reimpresión, G60)', () => {
     expect(normal(detalle()!.querySelector('[role="alert"]')?.textContent)).toBe('No se pudo cargar la venta.');
   });
 
+  it('con un id desconocido o de otra ferretería (404) dice que no se encontró la venta (QA 05/11)', async () => {
+    await crear();
+    api.obtener.mockReturnValue(throwError(() => new HttpErrorResponse({ status: 404 })));
+
+    filas()[0].click();
+    await refrescar();
+
+    expect(normal(detalle()!.querySelector('[role="alert"]')?.textContent)).toBe('No se encontró la venta.');
+  });
+
   describe('bandeja de pendientes y rechazadas (CU-16 punto 7, C1, C2, C3)', () => {
     const MARCA_RECHAZADA = 'SIN FACTURA — ARCA no la autorizó';
     const MENSAJE_FECHA = 'La fecha de la venta ya no entra en ARCA. Confirmá que la factura salga con la fecha de hoy.';
@@ -946,6 +956,16 @@ describe('Ventas (consulta y reimpresión, G60)', () => {
       ]);
       expect(celdas(filas()[1])[0]).toBe('14 Nota de crédito · Venta N.º 7');
       expect(celdas(filas()[1])[1]).toBe('B 00001-00000003');
+    });
+
+    it('la anulación interna no lleva la marca «No facturable»: esa es una decisión del cobro, no de la nota (QA 05/11)', async () => {
+      await crear([
+        resumenDePrueba(15, { tipo: 'NOTA_CREDITO', ventaAnulada: { id: 40, numero: 4 }, fiscal: null, facturable: false }),
+        resumenDePrueba(4, { facturable: false }),
+      ]);
+
+      expect(celdas(filas()[0])[0]).toBe('15 Anulación · Venta N.º 4');
+      expect(celdas(filas()[1])[0]).toBe('4 No facturable');
     });
 
     it('el detalle de la nota dice qué venta anula, no ofrece Anular y reimprime la nota de crédito', async () => {

@@ -14,9 +14,9 @@
     </div>
   }
 </dl>
-@if (!venta().facturable || origen()) {
+@if ((!venta().facturable && !esNota()) || origen()) {
   <p class="notas">
-    @if (!venta().facturable) {
+    @if (!venta().facturable && !esNota()) {
       <span class="no-facturable">No facturable</span>
     }
     @if (origen(); as texto) {

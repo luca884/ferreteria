@@ -34,6 +34,8 @@ import { PresupuestosService } from './presupuestos.service';
 
 const MENSAJE_LISTA = 'No se pudieron cargar los presupuestos.';
 const MENSAJE_DETALLE = 'No se pudo cargar el presupuesto.';
+/** Un presupuesto que no existe o es de otra ferretería: el servidor da 404 en los dos casos (regla 3 de CLAUDE.md). */
+const MENSAJE_NO_ENCONTRADO = 'No se encontró el presupuesto.';
 const MENSAJE_ESTADO = 'No se pudo cambiar el estado. Probá de nuevo.';
 const MENSAJE_PRECIOS = 'No se pudieron leer los precios de hoy. Probá de nuevo.';
 const MENSAJE_EMISOR = 'No se pudieron leer los datos de la ferretería. Probá de nuevo.';
@@ -167,8 +169,10 @@ export class Presupuestos implements OnInit {
         // Si mientras tanto se eligió otro, esta respuesta ya no importa.
         if (this.elegido() === id) this.detalle.set(presupuesto);
       },
-      error: () => {
-        if (this.elegido() === id) this.errorAccion.set(MENSAJE_DETALLE);
+      error: (err: unknown) => {
+        if (this.elegido() !== id) return;
+        const noEsta = err instanceof HttpErrorResponse && err.status === 404;
+        this.errorAccion.set(noEsta ? MENSAJE_NO_ENCONTRADO : MENSAJE_DETALLE);
       },
     });
   }
