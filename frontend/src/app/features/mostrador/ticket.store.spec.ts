@@ -3,6 +3,7 @@ import { TestBed } from '@angular/core/testing';
 import { AuthService } from '../../core/auth/auth.service';
 import { Sesion } from '../../core/auth/auth.models';
 import { ArticuloMostrador } from './mostrador.models';
+import { aRequest } from './ticket';
 import { GENERAR_CLAVE, TicketStore } from './ticket.store';
 
 function art(id = 1, over: Partial<ArticuloMostrador> = {}): ArticuloMostrador {
@@ -475,6 +476,71 @@ describe('TicketStore', () => {
       expect(b.ticket().renglones).toEqual([]);
       expect(b.ticket().clienteId).toBe(7);
       expect(b.ticket().clienteNombre).toBe('Ferretería Norte SRL');
+    });
+
+    it('la clave que nace al elegir el cliente no cambia en toda la venta: renglones, otro cliente, descuentos y F5', () => {
+      const a = crear();
+      a.elegirCliente(norte);
+      const clave = a.ticket().clave;
+
+      a.agregar(art(1));
+      a.elegirCliente({ id: 8, razonSocial: 'Sur SA', condicionIva: 'RESPONSABLE_INSCRIPTO' });
+      a.aplicarDescuentoGlobal(500);
+      a.aplicarDescuentoRenglon(0, 100);
+      TestBed.tick();
+      const b = crear();
+      b.agregar(art(2));
+
+      expect(clave).not.toBe('');
+      expect(a.ticket().clave).toBe(clave);
+      expect(b.ticket().clave).toBe(clave);
+    });
+
+    it('después de cobrar todo, el próximo cliente arranca una venta con otra clave', () => {
+      const a = crear();
+      a.elegirCliente(norte);
+      a.agregar(art(1));
+      const primera = a.ticket().clave;
+
+      a.descontarVendido(aRequest(a.ticket(), 1));
+      TestBed.tick();
+
+      expect(localStorage.getItem('ticket:3:7')).toBeNull();
+      expect(a.ticket().clienteId).toBeUndefined();
+      a.elegirCliente(norte);
+      expect(a.ticket().clave).not.toBe('');
+      expect(a.ticket().clave).not.toBe(primera);
+    });
+
+    it('un ticket guardado vacío con cliente pero sin clave se descarta', () => {
+      localStorage.setItem(
+        'ticket:3:7',
+        JSON.stringify({ v: 1, clave: '', renglones: [], elegido: null, clienteId: 7, clienteNombre: 'Ferretería Norte SRL' }),
+      );
+
+      expect(crear().ticket().clienteId).toBeUndefined();
+    });
+
+    it('en un ticket que viene de un presupuesto, elegir el cliente conserva su clave y el presupuesto', () => {
+      localStorage.setItem(
+        'ticket:3:7',
+        JSON.stringify({
+          v: 1,
+          clave: 'P',
+          renglones: [{ articuloId: 1, codigoInterno: 'C1', descripcion: 'A1', unidad: 'UNIDAD', precioCentavos: 17000, cantidadMilesimas: 1000, stockActual: 1, stockMinimo: 0 }],
+          elegido: 0,
+          presupuestoId: 1,
+          presupuestoNumero: 1,
+          clienteId: 8,
+          clienteNombre: 'Sur SA',
+        }),
+      );
+      const b = crear();
+
+      b.elegirCliente({ id: 8, razonSocial: 'Sur SA', condicionIva: 'RESPONSABLE_INSCRIPTO' });
+
+      expect(b.ticket().clave).toBe('P');
+      expect(b.ticket().presupuestoId).toBe(1);
     });
 
     it('con el ticket vacío, quitar el cliente o vaciar no deja nada guardado', () => {

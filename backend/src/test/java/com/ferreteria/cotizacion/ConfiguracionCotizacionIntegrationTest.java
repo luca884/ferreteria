@@ -124,6 +124,37 @@ class ConfiguracionCotizacionIntegrationTest extends CotizacionTestBase {
     }
 
     @Test
+    @DisplayName("sin dólar fijado, el PUT responde con el último publicado de la casa y el lado recién guardados")
+    void putSinFijarDevuelveElDeLaCasaYLadoNuevos() throws Exception {
+        cotizacion("USD", "blue", "1400.00", "1450.00", Instant.parse("2026-11-05T12:00:00Z"));
+        String token = login(duenoA);
+
+        JsonNode venta = cuerpo(putJson(URL, token, json(true, "USD:blue", "VENTA", "[\"USD:oficial\"]", "08:00"))
+                .andExpect(status().isOk()));
+        JsonNode compra = cuerpo(putJson(URL, token, json(true, "USD:blue", "COMPRA", "[\"USD:oficial\"]", "08:00"))
+                .andExpect(status().isOk()));
+
+        assertThat(venta.get("vigente").decimalValue()).isEqualByComparingTo("1450");
+        assertThat(compra.get("vigente").decimalValue()).isEqualByComparingTo("1400");
+        assertThat(compra.get("vigenteDesde").isNull()).isTrue();
+        assertThat(getJson(URL, token).get("vigente").decimalValue()).isEqualByComparingTo("1400");
+    }
+
+    @Test
+    @DisplayName("el dólar fijado de una ferretería no se ve en otra: la que no fijó ninguno ve el último publicado")
+    void elDolarFijadoNoSeVeEnOtraFerreteria() throws Exception {
+        cotizacion("USD", "oficial", "1000.00", "1050.00", Instant.parse("2026-11-05T12:00:00Z"));
+        configuracion(a, c -> c.fijarVigente(new BigDecimal("999.0000"), "oficial", LadoCotizacion.VENTA,
+                Instant.parse("2026-10-16T11:00:00Z")));
+
+        JsonNode deB = getJson(URL, login(duenoB));
+
+        assertThat(deB.get("vigente").decimalValue()).isEqualByComparingTo("1050");
+        assertThat(deB.get("vigenteDesde").isNull()).isTrue();
+        assertThat(getJson(URL, login(duenoA)).get("vigente").decimalValue()).isEqualByComparingTo("999");
+    }
+
+    @Test
     @DisplayName("el Dueño guarda oficial compra y al releer ve oficial compra, con el resto de lo que mando")
     void guardaYRelee() throws Exception {
         String token = login(duenoA);
