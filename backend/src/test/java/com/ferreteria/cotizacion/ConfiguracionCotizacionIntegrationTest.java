@@ -41,11 +41,13 @@ class ConfiguracionCotizacionIntegrationTest extends CotizacionTestBase {
         vendedorA = usuario(a, "vendedor-t23a@test.local", "VENDEDOR");
         duenoB = usuario(b, "dueno-t23b@test.local", "DUENO");
         borrarConfiguracion(a, b);
+        borrarDolaresReales();
     }
 
     @AfterEach
     void limpiar() {
         borrarConfiguracion(a, b);
+        borrarDolaresReales();
         if (articuloUsdA != null) {
             jdbc.update("delete from historial_precio where articulo_id = ?", articuloUsdA);
             jdbc.update("delete from articulo where id = ?", articuloUsdA);
@@ -57,6 +59,14 @@ class ConfiguracionCotizacionIntegrationTest extends CotizacionTestBase {
         return "{\"activa\":" + activa + ",\"dolarPrecios\":" + (dolar == null ? "null" : "\"" + dolar + "\"")
                 + ",\"ladoPrecios\":" + (lado == null ? "null" : "\"" + lado + "\"") + ",\"visibles\":" + visibles
                 + ",\"horaRecalculo\":" + (hora == null ? "null" : "\"" + hora + "\"") + "}";
+    }
+
+    /**
+     * Las cotizaciones son globales: el oficial y el blue que cargan estos tests no pueden quedar para otras clases que
+     * prueban «sin dolar» (importacion, controles de datos, margen y redondeo).
+     */
+    private void borrarDolaresReales() {
+        jdbc.update("delete from cotizacion where moneda = 'USD' and casa in ('oficial', 'blue')");
     }
 
     private static String valido() {
