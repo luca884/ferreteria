@@ -37,6 +37,7 @@ describe('VentaService', () => {
         cantidad: 3,
         precioUnitario: 170,
         alicuotaIva: 'IVA_21',
+        bruto: 510,
         total: 510,
         neto: 421.49,
         iva: 88.51,
