@@ -114,7 +114,7 @@
 
 @if (cambioPendiente(); as cambio) {
   <app-confirmacion
-    titulo="¿Cambiar el margen y el redondeo?"
+    [titulo]="cambio.titulo"
     [mensaje]="mensajeCambio(cambio)"
     textoConfirmar="Guardar y recalcular"
     foco="confirmar"

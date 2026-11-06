@@ -122,25 +122,13 @@ describe('ExtractoImprimible (CC-099)', () => {
     expect(texto('.tipo-filtro')).toContain('Cobro');
   });
 
-  it('con documento, el encabezado lo lleva legible debajo del cliente', async () => {
+  it('el impreso lleva la razón social del cliente y no su documento (CU-12.6, QA 05/11)', async () => {
     await abrir(extracto([linea(1)], { tipoDocumento: 'CUIT', numeroDocumento: '30712345671' }));
 
-    expect(texto('.documento dt')).toBe('Documento');
-    expect(texto('.documento dd')).toBe('CUIT 30-71234567-1');
-    const datos = Array.from(el().querySelectorAll('dl.datos > div')).map((d) => d.className);
-    expect(datos.indexOf('documento')).toBe(datos.indexOf('cliente') + 1);
-  });
-
-  it('con DNI lo muestra con puntos', async () => {
-    await abrir(extracto([linea(1)], { tipoDocumento: 'DNI', numeroDocumento: '12345678' }));
-
-    expect(texto('.documento dd')).toBe('DNI 12.345.678');
-  });
-
-  it('un cliente sin documento no muestra el renglón', async () => {
-    await abrir(extracto([linea(1)], { tipoDocumento: null, numeroDocumento: null }));
-
+    expect(texto('.cliente')).toContain('Ana Gómez');
     expect(el().querySelector('.documento')).toBeNull();
+    expect(el().textContent).not.toContain('30-71234567-1');
+    expect(el().textContent).not.toContain('Documento');
   });
 
   it('sin fechas dice «todo el historial» y sin tipo dice «Todos»', async () => {

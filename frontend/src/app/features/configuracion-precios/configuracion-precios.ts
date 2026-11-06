@@ -8,10 +8,20 @@ import { ImporteInput } from '../../shared/importe-input';
 import { ConfiguracionPrecios } from '../articulos/articulo.models';
 import { ConfiguracionPreciosGuardada, ConfiguracionPreciosService } from './configuracion-precios.service';
 
-/** Cambio pendiente de confirmar: cuántos artículos cambian de precio (null si no se pudo contar). */
+/** Cambio pendiente de confirmar: cuántos artículos cambian de precio (null si no se pudo contar) y el título. */
 interface CambioPendiente {
   nueva: ConfiguracionPrecios;
   articulos: number | null;
+  titulo: string;
+}
+
+/** El título nombra solo lo que cambió (QA 05/11); sin configuración guardada, los dos. */
+function tituloCambio(anterior: ConfiguracionPrecios | null, nueva: ConfiguracionPrecios): string {
+  const margen = anterior === null || anterior.margenDefectoPorcentaje !== nueva.margenDefectoPorcentaje;
+  const redondeo = anterior === null || anterior.redondeoMultiplo !== nueva.redondeoMultiplo;
+  if (margen && !redondeo) return '¿Cambiar el margen?';
+  if (redondeo && !margen) return '¿Cambiar el redondeo?';
+  return '¿Cambiar el margen y el redondeo?';
 }
 
 /**
@@ -84,16 +94,17 @@ export class PaginaConfiguracionPrecios implements OnInit {
       return;
     }
     // Cambia algún valor: se recalculan precios. Se avisa cuántos antes, como con el margen de un rubro.
+    const titulo = tituloCambio(anterior, nueva);
     this.guardando.set(true);
     this.service.articulosQueCambian(nueva).subscribe({
       next: (articulos) => {
         this.guardando.set(false);
         if (articulos === 0) this.enviar(nueva);
-        else this.cambioPendiente.set({ nueva, articulos });
+        else this.cambioPendiente.set({ nueva, articulos, titulo });
       },
       error: () => {
         this.guardando.set(false);
-        this.cambioPendiente.set({ nueva, articulos: null });
+        this.cambioPendiente.set({ nueva, articulos: null, titulo });
       },
     });
   }

@@ -2,7 +2,6 @@ import { Component, ElementRef, afterNextRender, computed, inject, input, output
 import { AuthService } from '../../../core/auth/auth.service';
 import { MontoPipe } from '../../../core/formato/monto';
 import { TrampaFoco } from '../../../shared/trampa-foco';
-import { documentoLegible } from '../cliente.models';
 import { fechaCompletaLocal } from './cobranza.models';
 import { Extracto, TIPO_MOVIMIENTO_LABELS, TOPE_IMPRESION, muestraMotivo, textoPeriodo } from './extracto.models';
 
@@ -26,7 +25,7 @@ function emitidoEl(ahora: Date): string {
 }
 
 /**
- * El extracto de una cuenta, para ver e imprimir (CC-099). Presentacional: recibe el extracto COMPLETO que pidió el padre
+ * El extracto de una cuenta, para ver e imprimir (CC-099). Lleva la razón social del cliente y no su documento (CU-12.6). Presentacional: recibe el extracto COMPLETO que pidió el padre
  * (`impresion=true`, hasta TOPE_IMPRESION líneas, en un solo pedido). Enter imprime con `window.print()` y Esc cierra. Es un
  * resumen INTERNO, no un comprobante fiscal: la leyenda lo dice. Si el extracto vino `truncado`, el aviso es parte del
  * documento (sale en la pantalla y en la impresión): se imprime lo que hay, los primeros movimientos. Al imprimir solo sale
@@ -52,7 +51,6 @@ export class ExtractoImprimible {
   protected readonly emitido = emitidoEl(new Date());
 
   protected readonly ferreteria = computed(() => this.auth.sesion()?.ferreteriaNombre ?? null);
-  protected readonly documento = computed(() => documentoLegible(this.extracto()));
   protected readonly periodo = computed(() => textoPeriodo(this.extracto().desde, this.extracto().hasta));
   protected readonly tipo = computed(() => {
     const tipo = this.extracto().tipo;

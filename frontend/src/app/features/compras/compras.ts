@@ -1,4 +1,5 @@
 import { DecimalPipe } from '@angular/common';
+import { HttpErrorResponse } from '@angular/common/http';
 import { Component, OnInit, inject, signal } from '@angular/core';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { PageResponse } from '../../core/api/page.models';
@@ -12,6 +13,8 @@ import { ComprasService } from './compras.service';
 
 const MENSAJE_LISTA = 'No se pudieron cargar las compras.';
 const MENSAJE_DETALLE = 'No se pudo cargar la compra.';
+/** Una compra que no existe o es de otra ferretería: el servidor da 404 en los dos casos (regla 3 de CLAUDE.md). */
+const MENSAJE_NO_ENCONTRADA = 'No se encontró la compra.';
 
 /** «20/10/2026» de una fecha «aaaa-mm-dd», leída del texto: no pasa por la zona del navegador. */
 export function fechaDeCompra(fecha: string): string {
@@ -110,8 +113,10 @@ export class Compras implements OnInit {
         // Si mientras tanto se eligió otra, esta respuesta ya no importa.
         if (this.elegida() === id) this.detalle.set(compra);
       },
-      error: () => {
-        if (this.elegida() === id) this.errorDetalle.set(MENSAJE_DETALLE);
+      error: (err: unknown) => {
+        if (this.elegida() !== id) return;
+        const noEsta = err instanceof HttpErrorResponse && err.status === 404;
+        this.errorDetalle.set(noEsta ? MENSAJE_NO_ENCONTRADA : MENSAJE_DETALLE);
       },
     });
   }

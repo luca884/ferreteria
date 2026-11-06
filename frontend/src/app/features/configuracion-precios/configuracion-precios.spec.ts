@@ -113,8 +113,23 @@ describe('PaginaConfiguracionPrecios', () => {
 
     expect(servicio.articulosQueCambian).toHaveBeenCalledWith({ margenDefectoPorcentaje: 35, redondeoMultiplo: 0 });
     expect(servicio.guardar).not.toHaveBeenCalled();
-    expect(texto('app-confirmacion h2')).toBe('¿Cambiar el margen y el redondeo?');
+    expect(texto('app-confirmacion h2')).toBe('¿Cambiar el margen?');
     expect(texto('app-confirmacion p')).toBe('Se recalcula el precio de 23 artículos.');
+  });
+
+  it('el título de la confirmación nombra solo lo que cambió (QA 05/11)', async () => {
+    await crear();
+    await escribir('redondeo', '10');
+    await enviar();
+
+    expect(texto('app-confirmacion h2')).toBe('¿Cambiar el redondeo?');
+
+    el().querySelector<HTMLButtonElement>('app-confirmacion button.cancelar')!.click();
+    await refrescar();
+    await escribir('margen-defecto', '35');
+    await enviar();
+
+    expect(texto('app-confirmacion h2')).toBe('¿Cambiar el margen y el redondeo?');
   });
 
   it('el múltiplo del redondeo lleva la máscara de importes: 1000 se ve 1.000 y el control guarda 1000', async () => {

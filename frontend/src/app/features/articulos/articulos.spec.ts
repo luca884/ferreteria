@@ -768,6 +768,17 @@ describe('Articulos', () => {
     await refrescar();
   }
 
+  it('el diálogo de baja dice lo que pasa en el mostrador: sale marcado y no se puede vender (QA 05/11, H06)', async () => {
+    await crearComponente(true);
+
+    await elegir(0);
+    await clickEn('app-barra-acciones button.desactivar');
+
+    const mensaje = el().querySelector('app-confirmacion p')?.textContent ?? '';
+    expect(mensaje).toContain('En el mostrador sale marcado como dado de baja y no se puede vender.');
+    expect(mensaje).not.toContain('en el mostrador, pero');
+  });
+
   it('da de baja con el diálogo propio (no el confirm del navegador) y recarga la página actual', async () => {
     await crearComponente(true);
     const nativo = vi.spyOn(window, 'confirm');
