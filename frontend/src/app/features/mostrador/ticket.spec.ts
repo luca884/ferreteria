@@ -299,6 +299,25 @@ describe('ticket (puro)', () => {
       expect(t.renglones[0].problemaDeDescuento).toBeUndefined();
     });
 
+    it('la marca de descuento y su mensaje viajan juntos: precios, agregar, cantidad, quitar, marcar otra vez y vender una parte', () => {
+      const tope = 'Tu tope de descuento es 10 %.';
+      const marcas = (x: Ticket) => x.renglones.map((r) => [r.problema ?? null, r.problemaDeDescuento ?? null]);
+      let t = marcarProblemas(agregar(agregar(ticketVacio('k'), art()), cable()), [
+        { articuloId: 1, mensaje: tope, deDescuento: true },
+      ]);
+      t = actualizarPrecios(t, [{ articuloId: 1, precioActual: 200 }]);
+      t = agregar(t, art());
+      t = cambiarCantidad(t, 0, 3000).ticket!;
+
+      expect(marcas(t)).toEqual([[tope, true], [null, null]]);
+      expect(marcas(quitar(t, 1))).toEqual([[tope, true]]);
+      const deBaja = marcarProblemas(t, [{ articuloId: 1, mensaje: PROBLEMA_DADO_DE_BAJA }]);
+      expect(marcas(aplicarDescuentoGlobal(deBaja, 0).ticket!)).toEqual([[PROBLEMA_DADO_DE_BAJA, null], [null, null]]);
+      expect(marcas(marcarProblemas(t, []))).toEqual([[null, null], [null, null]]);
+      const pedido = aRequest({ ...t, renglones: [{ ...t.renglones[0], cantidadMilesimas: 1000 }] }, 1);
+      expect(marcas(descontarVendido(t, pedido, () => 'n'))).toEqual([[tope, true], [null, null]]);
+    });
+
     it('cambiar el descuento general saca las marcas de tope de todos los renglones (QA 05/11, A-5)', () => {
       const tope = 'Sumado al descuento general, pasa tu tope de descuento de 10 %.';
       const marcado = marcarProblemas(conTres(), [

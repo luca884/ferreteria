@@ -81,10 +81,12 @@ describe('ticket.storage', () => {
   });
 
   it('una marca de descuento que no es true deja el ticket roto', () => {
-    const renglon = { ...ticket.renglones[0], problema: 'x', problemaDeDescuento: 'si' };
-    localStorage.setItem('ticket:3:7', JSON.stringify({ ...ticket, renglones: [renglon] }));
+    for (const mala of ['si', 'true', false, 1, null]) {
+      const renglon = { ...ticket.renglones[0], problema: 'x', problemaDeDescuento: mala };
+      localStorage.setItem('ticket:3:7', JSON.stringify({ ...ticket, renglones: [renglon] }));
 
-    expect(ticketGuardado(auth())).toBeNull();
+      expect(ticketGuardado(auth())).toBeNull();
+    }
   });
 
   describe('cliente (CL-005)', () => {

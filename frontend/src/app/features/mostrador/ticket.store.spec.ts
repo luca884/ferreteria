@@ -440,6 +440,56 @@ describe('TicketStore', () => {
     });
   });
 
+  describe('marca de un rechazo por el descuento (QA 05/11, A-5)', () => {
+    const tope = 'Tu tope de descuento es 10 %.';
+
+    it('sobrevive a un F5 y se va al cambiar el descuento', () => {
+      const a = crear();
+      a.agregar(art(1));
+      a.marcarProblemas([{ articuloId: 1, mensaje: tope, deDescuento: true }]);
+      TestBed.tick();
+
+      const b = crear();
+      expect(b.ticket().renglones[0]).toMatchObject({ problema: tope, problemaDeDescuento: true });
+      b.aplicarDescuentoGlobal(0);
+
+      expect(b.ticket().renglones[0].problema).toBeUndefined();
+      expect(b.ticket().renglones[0].problemaDeDescuento).toBeUndefined();
+    });
+
+    it('un ticket guardado antes de la marca se lee igual y su marca no se borra al cambiar descuentos', () => {
+      const viejo = {
+        v: 1,
+        clave: 'vieja',
+        renglones: [
+          {
+            articuloId: 1,
+            codigoInterno: 'COD-1',
+            descripcion: 'Artículo 1',
+            unidad: 'UNIDAD',
+            precioCentavos: 17000,
+            cantidadMilesimas: 1000,
+            stockActual: 12,
+            stockMinimo: 5,
+            descuentoBp: 2000,
+            problema: tope,
+          },
+        ],
+        elegido: 0,
+      };
+      localStorage.setItem('ticket:3:7', JSON.stringify(viejo));
+
+      const a = crear();
+      expect(a.ticket()).toEqual(viejo);
+      a.aplicarDescuentoGlobal(100);
+      a.aplicarDescuentoRenglon(0, 500);
+      TestBed.tick();
+
+      expect(a.ticket().renglones[0].problema).toBe(tope);
+      expect(JSON.parse(localStorage.getItem('ticket:3:7')!).renglones[0].problemaDeDescuento).toBeUndefined();
+    });
+  });
+
   describe('cliente (CL-005)', () => {
     const norte = { id: 7, razonSocial: 'Ferretería Norte SRL' };
 
