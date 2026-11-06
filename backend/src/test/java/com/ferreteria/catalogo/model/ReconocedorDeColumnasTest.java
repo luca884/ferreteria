@@ -130,6 +130,24 @@ class ReconocedorDeColumnasTest {
     }
 
     @Test
+    @DisplayName("con «Código» y «Código del proveedor», el código es el del proveedor; con «Código» solo, sigue siendo ese")
+    void codigoDelProveedorAntesQueCodigo() {
+        LecturaLista ambas = lecturaDe("Hoja1", List.of(
+            fila("Código", "Código del proveedor", "Descripción", "Costo"),
+            fila("T-1", "PROV-9", "Tornillo", 100)));
+        LecturaLista abreviada = lecturaDe("Hoja1", List.of(
+            fila("Cod", "Cod. proveedor", "Descripción", "Costo"),
+            fila("T-1", "PROV-9", "Tornillo", 100)));
+        LecturaLista sola = lecturaDe("Hoja1", List.of(
+            fila("Código", "Descripción", "Costo"),
+            fila("T-1", "Tornillo", 100)));
+
+        assertThat(ReconocedorDeColumnas.reconocer(ambas).propuesta().columnaCodigo()).isEqualTo(1);
+        assertThat(ReconocedorDeColumnas.reconocer(abreviada).propuesta().columnaCodigo()).isEqualTo(1);
+        assertThat(ReconocedorDeColumnas.reconocer(sola).propuesta().columnaCodigo()).isZero();
+    }
+
+    @Test
     @DisplayName("con el encabezado en la fila 1, los datos arrancan en la 2")
     void filaDeDatosDespuesDelEncabezado() {
         ReconocedorDeColumnas.Reconocimiento reconocimiento = ReconocedorDeColumnas.reconocer(ListasReales.leida(ListasReales.lista336ChicaHojas()));

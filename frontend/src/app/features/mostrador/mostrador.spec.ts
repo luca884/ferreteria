@@ -4684,6 +4684,7 @@ describe('Mostrador', () => {
               cantidad: 2,
               precioUnitario: 1500,
               alicuotaIva: 'IVA_21',
+              bruto: 3000,
               total: 3000,
               neto: 2479.34,
               iva: 520.66,

@@ -30,8 +30,10 @@ public final class SinonimosDeColumnas {
     private static final Map<Campo, List<String>> SINONIMOS = new EnumMap<>(Campo.class);
 
     static {
-        SINONIMOS.put(Campo.CODIGO, List.of("CODIGO", "COD", "CODIGO PROVEEDOR", "CODIGO DEL PROVEEDOR",
-            "COD PROVEEDOR", "CODIGO ARTICULO", "COD ARTICULO", "SKU", "REFERENCIA"));
+        // El del proveedor va antes que «Código» solo: si el archivo trae los dos, «Código» suele ser el interno de
+        // otro sistema (QA 2026-11-05, B y C).
+        SINONIMOS.put(Campo.CODIGO, List.of("CODIGO PROVEEDOR", "CODIGO DEL PROVEEDOR", "COD PROVEEDOR", "CODIGO",
+            "COD", "CODIGO ARTICULO", "COD ARTICULO", "SKU", "REFERENCIA"));
         SINONIMOS.put(Campo.DESCRIPCION, List.of("DESCRIPCION", "ARTICULO", "DETALLE", "PRODUCTO", "NOMBRE",
             "DENOMINACION"));
         SINONIMOS.put(Campo.COSTO, List.of("PRECIO X UNIDAD", "LISTA UNIDAD", "PRECIO UNITARIO", "LISTA", "PRECIO",

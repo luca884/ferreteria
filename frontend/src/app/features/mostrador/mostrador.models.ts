@@ -1,4 +1,4 @@
-import { Unidad } from '../articulos/articulo.models';
+import { Articulo, Unidad } from '../articulos/articulo.models';
 
 export type TipoResultadoMostrador = 'EXACTO' | 'LISTA' | 'SIN_RESULTADOS';
 
@@ -22,6 +22,32 @@ export interface ArticuloMostrador {
   enOferta?: boolean;
   /** Ofertas (S3): el precio sin la oferta, para mostrarlo tachado; null si no está en oferta. */
   precioNormal?: number | null;
+}
+
+/**
+ * Un artículo de la ficha (`ArticulosService.obtener`) como lo ve el mostrador: con el precio que se cobra hoy, el de
+ * la oferta vigente si la hay, igual que `ArticuloMostradorResponse` del backend. La ficha trae `precioFinal` normal y
+ * la oferta aparte, ya calculada para hoy por el servidor (`vigente` y `precioOferta`).
+ */
+export function comoArticuloMostrador(articulo: Articulo): ArticuloMostrador {
+  const precioOferta = articulo.oferta?.vigente ? articulo.oferta.precioOferta : null;
+  const enOferta = precioOferta != null;
+  return {
+    id: articulo.id,
+    codigoInterno: articulo.codigoInterno,
+    codigoBarras: articulo.codigoBarras,
+    codigoProveedor: articulo.codigoProveedor,
+    descripcion: articulo.descripcion,
+    precioFinal: enOferta ? precioOferta : articulo.precioFinal,
+    unidad: articulo.unidad,
+    stockActual: articulo.stockActual,
+    stockMinimo: articulo.stockMinimo,
+    ubicacion: articulo.ubicacion,
+    activo: articulo.activo,
+    costoAl: articulo.costoAl,
+    enOferta,
+    precioNormal: enOferta ? articulo.precioFinal : null,
+  };
 }
 
 export interface BusquedaMostrador {

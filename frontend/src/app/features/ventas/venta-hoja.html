@@ -39,13 +39,13 @@
     </tr>
   </thead>
   <tbody>
-    @for (r of venta().renglones; track r.renglon) {
+    @for (r of renglones(); track r.renglon) {
       <tr>
         <td>{{ r.descripcion }}</td>
         <td class="num">{{ r.cantidad | number: '1.0-3' }}</td>
         <td class="num">{{ r.precioUnitario | monto }}</td>
-        <td class="num">{{ r.descuentoPorcentaje > 0 ? (r.descuentoPorcentaje | number: '1.0-2') + ' %' : '' }}</td>
-        <td class="num">{{ r.total | monto }}</td>
+        <td class="num">{{ r.descuentoEfectivo > 0 ? (r.descuentoEfectivo | number: '1.0-2') + ' %' : '' }}</td>
+        <td class="num">{{ r.totalSinRecargo | monto }}</td>
       </tr>
     }
   </tbody>

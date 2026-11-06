@@ -558,6 +558,30 @@ describe('Remitos', () => {
       expect(navegar).toHaveBeenCalledWith('/mostrador');
     });
 
+    it('con una oferta vigente hoy, el renglón lleva el precio de oferta, como en la búsqueda del mostrador', async () => {
+      await crear();
+      articulos.obtener.mockReturnValue(
+        of(articuloActual({ oferta: { tipo: 'PRECIO_FIJO', valor: 1500, hasta: null, vigente: true, precioOferta: 1500 } })),
+      );
+      await abrirDetalle(0);
+
+      await click(boton('Pasar a venta', detalle()!));
+
+      expect(ticketGuardado().renglones).toMatchObject([{ articuloId: 1, precioCentavos: 150000 }]);
+    });
+
+    it('con una oferta vencida, el renglón lleva el precio normal', async () => {
+      await crear();
+      articulos.obtener.mockReturnValue(
+        of(articuloActual({ oferta: { tipo: 'PRECIO_FIJO', valor: 1500, hasta: '2026-01-31', vigente: false, precioOferta: null } })),
+      );
+      await abrirDetalle(0);
+
+      await click(boton('Pasar a venta', detalle()!));
+
+      expect(ticketGuardado().renglones).toMatchObject([{ articuloId: 1, precioCentavos: 180000 }]);
+    });
+
     it('pide cada artículo una sola vez', async () => {
       await crear();
       api.obtener.mockReturnValue(

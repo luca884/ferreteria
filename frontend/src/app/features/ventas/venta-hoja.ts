@@ -24,6 +24,18 @@ export class VentaHoja {
   /** La nota de crédito (CU-08) dice quién la hizo, no quién cobró. */
   protected readonly esNota = computed(() => esNotaDeCredito(this.venta()));
   protected readonly porcentajeGeneral = computed(() => porcentajeDescuentoGeneral(this.venta()));
+  /**
+   * Los renglones como suman a la vista (QA B-2 y C): «Dto.» es el efectivo, el del renglón con el global encima
+   * (5 % y 10 % dan 14,5 %), y el total va sin el recargo de la forma de pago, que se muestra abajo.
+   */
+  protected readonly renglones = computed(() => {
+    const global = this.venta().descuentoPorcentaje;
+    return this.venta().renglones.map((r) => ({
+      ...r,
+      descuentoEfectivo: 100 - ((100 - r.descuentoPorcentaje) * (100 - global)) / 100,
+      totalSinRecargo: Math.round((r.total - (r.recargo ?? 0)) * 100) / 100,
+    }));
+  });
   /** De dónde salió la venta, si no se armó en el mostrador. */
   protected readonly origen = computed(() => {
     const v = this.venta();

@@ -1,4 +1,5 @@
-import { ArticuloMostrador, estadoStock } from './mostrador.models';
+import { Articulo } from '../articulos/articulo.models';
+import { ArticuloMostrador, comoArticuloMostrador, estadoStock } from './mostrador.models';
 
 describe('estadoStock', () => {
   const con = (
@@ -35,5 +36,35 @@ describe('estadoStock', () => {
 
   it('con stock fraccionario positivo y mínimo 0 es normal', () => {
     expect(estadoStock(con(0.5, 0))).toBe('normal');
+  });
+});
+
+describe('comoArticuloMostrador (medios-qa, S1)', () => {
+  const ficha = (cambios: Partial<Articulo> = {}) =>
+    ({
+      id: 1,
+      codigoInterno: 'COD-1',
+      codigoBarras: null,
+      codigoProveedor: null,
+      descripcion: 'Martillo',
+      precioFinal: 1800,
+      unidad: 'UNIDAD',
+      stockActual: 10,
+      stockMinimo: 5,
+      ubicacion: null,
+      activo: true,
+      ...cambios,
+    }) as Articulo;
+
+  it('con una oferta vigente, el precio que se cobra es el de oferta y el normal queda aparte', () => {
+    const articulo = ficha({ oferta: { tipo: 'PRECIO_FIJO', valor: 1500, hasta: null, vigente: true, precioOferta: 1500 } });
+
+    expect(comoArticuloMostrador(articulo)).toMatchObject({ precioFinal: 1500, enOferta: true, precioNormal: 1800 });
+  });
+
+  it('con una oferta vencida, queda el precio normal y sin oferta', () => {
+    const articulo = ficha({ oferta: { tipo: 'PRECIO_FIJO', valor: 1500, hasta: '2026-01-31', vigente: false, precioOferta: null } });
+
+    expect(comoArticuloMostrador(articulo)).toMatchObject({ precioFinal: 1800, enOferta: false, precioNormal: null });
   });
 });

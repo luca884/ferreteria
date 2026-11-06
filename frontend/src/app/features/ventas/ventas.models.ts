@@ -114,9 +114,7 @@ export interface FiltroVentas {
 }
 
 export interface RenglonConsultado extends RenglonVentaResponse {
-  /** Precio × cantidad, antes de descuentos. */
-  bruto: number;
-  /** Descuento del renglón en %, el global incluido. */
+  /** Descuento propio del renglón en %; el global va en la venta (`descuentoPorcentaje`). */
   descuentoPorcentaje: number;
 }
 

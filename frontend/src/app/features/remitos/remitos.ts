@@ -15,7 +15,7 @@ import { DatosFiscales } from '../datos-fiscales/datos-fiscales.service';
 import { ArticulosService } from '../articulos/articulos.service';
 import { fechaHoraLocal } from '../caja/caja.models';
 import { ClientesService } from '../clientes/clientes.service';
-import { ArticuloMostrador } from '../mostrador/mostrador.models';
+import { ArticuloMostrador, comoArticuloMostrador } from '../mostrador/mostrador.models';
 import { ticketDeRemito } from '../mostrador/ticket';
 import { guardarTicket, ticketGuardado } from '../mostrador/ticket.storage';
 import { GENERAR_CLAVE } from '../mostrador/ticket.store';
@@ -295,7 +295,7 @@ export class Remitos implements OnInit {
       forkJoin(
         ids.map((id) =>
           this.articulos.obtener(id).pipe(
-            map((articulo): [number, ArticuloMostrador | null] => [id, articulo]),
+            map((articulo): [number, ArticuloMostrador | null] => [id, comoArticuloMostrador(articulo)]),
             catchError((err: unknown) =>
               err instanceof HttpErrorResponse && err.status === 404
                 ? of<[number, ArticuloMostrador | null]>([id, null])
