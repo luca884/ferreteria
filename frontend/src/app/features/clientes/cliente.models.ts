@@ -16,6 +16,16 @@ export const CONDICION_IVA_LABELS: Record<CondicionIva, string> = {
   EXENTO: 'Exento',
 };
 
+/** CU-11 (D4): Responsable inscripto, Monotributista y Exento llevan CUIT y domicilio; Consumidor final, no. */
+export function requiereDatosFiscales(condicion: CondicionIva): boolean {
+  return condicion !== 'CONSUMIDOR_FINAL';
+}
+
+/** CU-11 (D4): los mismos mensajes que da el servidor cuando a un RI, Monotributista o Exento le falta el CUIT o el domicilio. */
+export const FALTA_CUIT = 'Falta el CUIT: es obligatorio para Responsable Inscripto, Monotributista o Exento.';
+export const NO_ES_CUIT = 'Para Responsable Inscripto, Monotributista o Exento el documento tiene que ser el CUIT.';
+export const FALTA_DOMICILIO = 'Falta el domicilio: es obligatorio para Responsable Inscripto, Monotributista o Exento.';
+
 /** Contrato de /api/clientes, tipado contra ClienteResponse (CL-003). Lo que no se cargó no viaja. */
 export interface Cliente {
   id: number;

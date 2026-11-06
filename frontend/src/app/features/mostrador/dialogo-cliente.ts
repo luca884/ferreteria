@@ -17,11 +17,18 @@ import { PageResponse } from '../../core/api/page.models';
 import { formatearMonto } from '../../core/formato/monto';
 import { TrampaFoco } from '../../shared/trampa-foco';
 import {
+  CONDICIONES_IVA,
+  CONDICION_IVA_LABELS,
   Cliente,
   ClienteRequest,
+  CondicionIva,
+  FALTA_CUIT,
+  FALTA_DOMICILIO,
+  NO_ES_CUIT,
   TIPOS_DOCUMENTO,
   TipoDocumento,
   documentoLegible,
+  requiereDatosFiscales,
 } from '../clientes/cliente.models';
 import { ClientesService } from '../clientes/clientes.service';
 
@@ -147,6 +154,16 @@ const ESPERA_MS = 250;
             @if (errorNombre(); as mensaje) {
               <span id="nuevo-razon-social-error" class="campo-error">{{ mensaje }}</span>
             }
+            <label class="campo" for="nuevo-condicion">Condición frente al IVA</label>
+            <select
+              id="nuevo-condicion"
+              name="condicionIva"
+              (change)="nuevaCondicion.set($any($event.target).value); limpiarErrores()"
+            >
+              @for (c of condiciones; track c) {
+                <option [value]="c" [selected]="c === nuevaCondicion()">{{ condicionLabels[c] }}</option>
+              }
+            </select>
             <div class="fila-doc">
               <div>
                 <label class="campo" for="nuevo-tipo">Documento</label>
@@ -184,6 +201,21 @@ const ESPERA_MS = 250;
                 }
               </div>
             </div>
+            @if (pideDatosFiscales()) {
+              <label class="campo" for="nuevo-domicilio">Domicilio</label>
+              <input
+                id="nuevo-domicilio"
+                name="domicilio"
+                autocomplete="off"
+                [value]="nuevoDomicilio()"
+                [attr.aria-invalid]="errorDomicilio() ? 'true' : null"
+                [attr.aria-describedby]="errorDomicilio() ? 'nuevo-domicilio-error' : null"
+                (input)="nuevoDomicilio.set($any($event.target).value); limpiarErrores()"
+              />
+              @if (errorDomicilio(); as mensaje) {
+                <span id="nuevo-domicilio-error" class="campo-error">{{ mensaje }}</span>
+              }
+            }
             <label class="campo" for="nuevo-telefono">Teléfono <small>(opcional)</small></label>
             <input
               id="nuevo-telefono"
@@ -308,6 +340,8 @@ export class DialogoCliente {
   private readonly razonSocial = viewChild<ElementRef<HTMLInputElement>>('razonSocial');
 
   protected readonly tipos = TIPOS_DOCUMENTO;
+  protected readonly condiciones = CONDICIONES_IVA;
+  protected readonly condicionLabels = CONDICION_IVA_LABELS;
   protected readonly documentoLegible = documentoLegible;
 
   /**
@@ -339,11 +373,17 @@ export class DialogoCliente {
   protected readonly nuevoTipo = signal<TipoDocumento | ''>('');
   protected readonly nuevoNumero = signal('');
   protected readonly nuevoTelefono = signal('');
+  /** QA 05/11 (A-12): con la condición, el alta rápida sirve para hacerle una A a un cliente nuevo sin salir de la venta. */
+  protected readonly nuevaCondicion = signal<CondicionIva>('CONSUMIDOR_FINAL');
+  protected readonly nuevoDomicilio = signal('');
+  /** CU-11 (D4): RI, Monotributista y Exento llevan CUIT y domicilio, igual que en el alta de Clientes. */
+  protected readonly pideDatosFiscales = computed(() => requiereDatosFiscales(this.nuevaCondicion()));
   protected readonly guardando = signal(false);
   protected readonly errorNombre = signal<string | null>(null);
   protected readonly errorTipo = signal<string | null>(null);
   protected readonly errorNumero = signal<string | null>(null);
   protected readonly errorTelefono = signal<string | null>(null);
+  protected readonly errorDomicilio = signal<string | null>(null);
   protected readonly errorAlta = signal<string | null>(null);
   protected readonly erroresCampos = signal<string[]>([]);
 
@@ -425,6 +465,7 @@ export class DialogoCliente {
     this.errorTipo.set(null);
     this.errorNumero.set(null);
     this.errorTelefono.set(null);
+    this.errorDomicilio.set(null);
     this.errorAlta.set(null);
     this.erroresCampos.set([]);
   }
@@ -439,13 +480,23 @@ export class DialogoCliente {
     if (!nombre) this.errorNombre.set('La razón social es obligatoria.');
     if (numero && !tipo) this.errorTipo.set('Elegí el tipo de documento.');
     if (tipo && !numero) this.errorNumero.set('Falta el número de documento.');
-    if (this.errorNombre() || this.errorTipo() || this.errorNumero()) return;
+    const condicionIva = this.nuevaCondicion();
+    const fiscal = requiereDatosFiscales(condicionIva);
+    const domicilio = fiscal ? this.nuevoDomicilio().trim() : '';
+    if (fiscal) {
+      // Lo mismo que el alta de Clientes y el servidor (CU-11, D4), para avisar en cada campo antes de mandar.
+      if (!tipo && !numero) this.errorNumero.set(FALTA_CUIT);
+      else if (tipo && tipo !== 'CUIT') this.errorTipo.set(NO_ES_CUIT);
+      if (!domicilio) this.errorDomicilio.set(FALTA_DOMICILIO);
+    }
+    if (this.errorNombre() || this.errorTipo() || this.errorNumero() || this.errorDomicilio()) return;
 
     const telefono = this.nuevoTelefono().trim();
     const request: ClienteRequest = {
       razonSocial: nombre,
       ...(tipo && numero ? { tipoDocumento: tipo, numeroDocumento: numero } : {}),
-      condicionIva: 'CONSUMIDOR_FINAL',
+      condicionIva,
+      ...(domicilio ? { domicilio } : {}),
       ...(telefono ? { telefono } : {}),
     };
     this.guardando.set(true);
@@ -457,13 +508,15 @@ export class DialogoCliente {
       error: (err: unknown) => {
         this.guardando.set(false);
         // Los errores de un campo del formulario van debajo de ese campo; el resto, en la lista de arriba.
-        const { razonSocial, tipoDocumento, numeroDocumento, telefono, ...otros } = erroresPorCampo(err);
+        const { razonSocial, tipoDocumento, numeroDocumento, telefono, domicilio, ...otros } = erroresPorCampo(err);
         this.errorNombre.set(razonSocial ?? null);
         this.errorTipo.set(tipoDocumento ?? null);
         this.errorNumero.set(numeroDocumento ?? null);
         this.errorTelefono.set(telefono ?? null);
+        this.errorDomicilio.set(domicilio ?? null);
         this.erroresCampos.set(Object.values(otros));
-        if (!razonSocial && !tipoDocumento && !numeroDocumento && !telefono && Object.keys(otros).length === 0)
+        const enUnCampo = razonSocial || tipoDocumento || numeroDocumento || telefono || domicilio;
+        if (!enUnCampo && Object.keys(otros).length === 0)
           this.errorAlta.set(mensajeDe(err, 'No se pudo guardar el cliente.'));
         // El botón se deshabilitó mientras guardaba y el foco se perdió: va al primer campo con error o, si no hay, al botón.
         afterNextRender(
