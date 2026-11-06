@@ -727,7 +727,10 @@ export class DialogoCobro {
       (this.exceso() !== null || this.avisoLimite()?.puedeAutorizar === true),
   );
 
-  /** Lo que se dice de la cuenta debajo de los medios: el exceso (Dueño), el disponible (Dueño) o «Alcanza» (Vendedor). */
+  /**
+   * Lo que se dice de la cuenta debajo de los medios: el exceso (Dueño), saldo, límite y disponible (Dueño, CU-07.4) o
+   * «Alcanza» (Vendedor, que no ve cifras).
+   */
   protected readonly infoCuenta = computed<string | null>(() => {
     const exceso = this.exceso();
     if (exceso) {
@@ -738,7 +741,10 @@ export class DialogoCobro {
       return null;
     }
     if (this.esDueno()) {
-      return cuenta.cuenta.disponible === undefined ? null : `Disponible ${formatearMonto(cuenta.cuenta.disponible)}`;
+      const { saldo, limite, disponible } = cuenta.cuenta;
+      if (disponible === undefined) return null;
+      if (saldo === undefined || limite === undefined) return `Disponible ${formatearMonto(disponible)}`;
+      return `Saldo ${formatearMonto(saldo)} · Límite ${formatearMonto(limite)} · Disponible ${formatearMonto(disponible)}`;
     }
     return cuenta.cuenta.alcanza ? 'Alcanza' : null;
   });

@@ -4467,7 +4467,7 @@ describe('Mostrador', () => {
         await tecla('F4');
         await elegirCC();
 
-        expect(lineaCuenta()).toBe('Disponible $ 9.000,00');
+        expect(lineaCuenta()).toBe('Saldo $ 1.000,00 · Límite $ 10.000,00 · Disponible $ 9.000,00');
         expect(normal(botonCobrar().textContent)).toBe('Cobrar');
       });
     });
