@@ -46,12 +46,14 @@ public interface ComprobanteRepository extends TenantScopedRepository<Comprobant
 
     /**
      * Una fila por venta o nota de credito: id, fecha, usuario (el que la hizo: la NC es de quien anulo), total, neto, IVA,
-     * la suma del costo de sus renglones, cuantos renglones no tienen costo y el tipo. Los importes van en positivo.
+     * la suma del costo de sus renglones, cuantos renglones no tienen costo, el tipo y, en una nota, el usuario que hizo la
+     * venta anulada (null en una venta). Los importes van en positivo.
      */
     @Query("select c.id, c.fecha, c.usuarioId, c.total, c.neto, c.iva, sum(i.costo), "
-            + "sum(case when i.costo is null then 1 else 0 end), c.tipo "
-            + "from Comprobante c, ItemComprobante i where i.comprobanteId = c.id and" + COMPROBANTES_DEL_RANGO
-            + " group by c.id, c.fecha, c.usuarioId, c.total, c.neto, c.iva, c.tipo order by c.fecha, c.id")
+            + "sum(case when i.costo is null then 1 else 0 end), c.tipo, v.usuarioId "
+            + "from Comprobante c join ItemComprobante i on i.comprobanteId = c.id "
+            + "left join Comprobante v on v.id = c.comprobanteAsociadoId where" + COMPROBANTES_DEL_RANGO
+            + " group by c.id, c.fecha, c.usuarioId, c.total, c.neto, c.iva, c.tipo, v.usuarioId order by c.fecha, c.id")
     List<Object[]> ventasDelRango(@Param("fid") Long ferreteriaId, @Param("desde") LocalDateTime desde,
             @Param("hasta") LocalDateTime hasta);
 
