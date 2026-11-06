@@ -202,6 +202,41 @@ describe('FacturaHoja (CU-07 paso 5, S5, S6, S12, S13)', () => {
     esperarPieFiscal();
   });
 
+  /** 2 martillos a $ 605 y 1 clavo a $ 121, con 10 % de descuento global (medios-qa, verificador). */
+  const conDescuentoGlobal = () => {
+    const base = ventaParaFactura().renglones[0];
+    return ventaParaFactura({
+      renglones: [
+        { ...base, bruto: 1210, total: 1089, neto: 900 },
+        { ...base, renglon: 2, descripcion: 'Clavo', cantidad: 1, precioUnitario: 121, bruto: 121, total: 108.9, neto: 90 },
+      ],
+      subtotal: 1331,
+      descuento: 133.1,
+      recargo: 0,
+    });
+  };
+
+  it('A con descuento global: no cambia, sigue con los renglones sin IVA ya descontados y sin subtotal ni descuento', async () => {
+    await crear(documentoARI({ neto: 990, total: 1197.9 }), conDescuentoGlobal());
+
+    expect(filas('.renglones')).toEqual([
+      ['2', 'Martillo', '$ 450,00', '21 %', '$ 900,00'],
+      ['1', 'Clavo', '$ 90,00', '21 %', '$ 90,00'],
+    ]);
+    expect(lineas('.totales')[0]).toBe('Importe neto gravado $ 990,00');
+    expect(lineas('.totales').join(' ')).not.toMatch(/Subtotal|Descuento/);
+  });
+
+  it('nota de crédito B con descuento global: importes a precio × cantidad y abajo subtotal, descuento y total, como la B', async () => {
+    await crear(documentoB({ codigo: 8, numero: 3, total: 1197.9 }), conDescuentoGlobal(), 'NOTA_CREDITO');
+
+    expect(filas('.renglones')).toEqual([
+      ['2', 'Martillo', '$ 605,00', '$ 1.210,00'],
+      ['1', 'Clavo', '$ 121,00', '$ 121,00'],
+    ]);
+    expect(lineas('.totales')).toEqual(['Subtotal $ 1.331,00', 'Descuento -$ 133,10', 'Total $ 1.197,90']);
+  });
+
   it('C: sin IVA en los renglones ni en el pie', async () => {
     await crear(documentoC());
 
