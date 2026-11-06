@@ -1,5 +1,6 @@
 package com.ferreteria.cotizacion.web;
 
+import com.ferreteria.cotizacion.model.ConfiguracionCotizacion;
 import com.ferreteria.cotizacion.service.ConfiguracionCotizacionService;
 import com.ferreteria.cotizacion.service.DolarDePreciosService;
 import com.ferreteria.cotizacion.web.dto.ConfiguracionCotizacionRequest;
@@ -31,14 +32,18 @@ public class ConfiguracionCotizacionController {
     @GetMapping
     @PreAuthorize("hasRole('DUENO')")
     public ConfiguracionCotizacionResponse obtener() {
-        return ConfiguracionCotizacionResponse.de(configuracionService.obtener(), dolarDePrecios.aConfirmar().orElse(null));
+        return respuesta(configuracionService.obtener());
     }
 
     /** Guardar no recalcula ningun precio: el cambio se aplica en el proximo recalculo. */
     @PutMapping
     @PreAuthorize("hasRole('DUENO')")
     public ConfiguracionCotizacionResponse actualizar(@RequestBody ConfiguracionCotizacionRequest pedido) {
-        return ConfiguracionCotizacionResponse.de(configuracionService.actualizar(pedido),
+        return respuesta(configuracionService.actualizar(pedido));
+    }
+
+    private ConfiguracionCotizacionResponse respuesta(ConfiguracionCotizacion configuracion) {
+        return ConfiguracionCotizacionResponse.de(configuracion, dolarDePrecios.vigente().orElse(null),
                 dolarDePrecios.aConfirmar().orElse(null));
     }
 }

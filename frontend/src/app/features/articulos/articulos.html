@@ -226,7 +226,7 @@
 @if (aDarDeBaja(); as articulo) {
   <app-confirmacion
     [titulo]="'¿Dar de baja ' + articulo.descripcion + '?'"
-    mensaje="Deja de aparecer en el listado y en el mostrador, pero conserva su historial de precios. La podés reactivar cuando quieras."
+    mensaje="Deja de aparecer en el listado. En el mostrador sale marcado como dado de baja y no se puede vender. Conserva su historial de precios y lo podés reactivar cuando quieras."
     textoConfirmar="Dar de baja"
     [peligro]="true"
     (confirmar)="desactivar()"

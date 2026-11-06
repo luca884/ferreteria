@@ -396,6 +396,63 @@ describe('DialogoCliente (F9)', () => {
       expect(texto('#nuevo-razon-social-error')).toBe('La razón social es obligatoria.');
     });
 
+    it('pide la condición frente al IVA, con Consumidor final por defecto y sin domicilio a la vista (QA 05/11, A-12)', async () => {
+      await abrir();
+      await abrirAlta();
+
+      const condicion = el().querySelector<HTMLSelectElement>('#nuevo-condicion')!;
+      expect(Array.from(condicion.options).map((o) => o.textContent?.trim())).toEqual([
+        'Consumidor final',
+        'Responsable inscripto',
+        'Monotributista',
+        'Exento',
+      ]);
+      expect(condicion.value).toBe('CONSUMIDOR_FINAL');
+      expect(el().querySelector('#nuevo-domicilio')).toBeNull();
+    });
+
+    it('un Responsable inscripto sin CUIT ni domicilio se marca antes de mandar, con los mensajes del alta de Clientes', async () => {
+      await abrir();
+      await abrirAlta();
+      await escribirAlta('nuevo-razon-social', 'Constructora Sur SA');
+      await escribirAlta('nuevo-condicion', 'RESPONSABLE_INSCRIPTO');
+
+      await guardar();
+
+      expect(servicio.crear).not.toHaveBeenCalled();
+      expect(texto('#nuevo-numero-error')).toBe('Falta el CUIT: es obligatorio para Responsable Inscripto, Monotributista o Exento.');
+      expect(texto('#nuevo-domicilio-error')).toBe(
+        'Falta el domicilio: es obligatorio para Responsable Inscripto, Monotributista o Exento.',
+      );
+
+      await escribirAlta('nuevo-tipo', 'DNI');
+      await escribirAlta('nuevo-numero', '30111222');
+      await guardar();
+      expect(servicio.crear).not.toHaveBeenCalled();
+      expect(texto('#nuevo-tipo-error')).toBe('Para Responsable Inscripto, Monotributista o Exento el documento tiene que ser el CUIT.');
+    });
+
+    it('crea un Responsable inscripto con CUIT y domicilio y lo elige con su condición (para hacerle la A)', async () => {
+      await abrir();
+      await abrirAlta();
+      await escribirAlta('nuevo-razon-social', 'Constructora Sur SA');
+      await escribirAlta('nuevo-condicion', 'RESPONSABLE_INSCRIPTO');
+      await escribirAlta('nuevo-tipo', 'CUIT');
+      await escribirAlta('nuevo-numero', '30-71234567-1');
+      await escribirAlta('nuevo-domicilio', '  Av. Luro 3000 ');
+
+      await guardar();
+
+      expect(servicio.crear).toHaveBeenCalledWith({
+        razonSocial: 'Constructora Sur SA',
+        tipoDocumento: 'CUIT',
+        numeroDocumento: '30-71234567-1',
+        condicionIva: 'RESPONSABLE_INSCRIPTO',
+        domicilio: 'Av. Luro 3000',
+      });
+      expect(elegidos[0].condicionIva).toBe('RESPONSABLE_INSCRIPTO');
+    });
+
     it('el número sin tipo, o el tipo sin número, se marca antes de mandar', async () => {
       await abrir();
       await abrirAlta();

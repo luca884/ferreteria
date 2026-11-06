@@ -1,3 +1,4 @@
+import { HttpErrorResponse } from '@angular/common/http';
 import { registerLocaleData } from '@angular/common';
 import localeEsAr from '@angular/common/locales/es-AR';
 import { LOCALE_ID, signal } from '@angular/core';
@@ -70,10 +71,10 @@ describe('Compras', () => {
     ],
   });
 
-  async function crear(items: CompraResumen[] = [resumen(2), resumen(1)], rol = 'DUENO', id: string | null = null, falla = false) {
+  async function crear(items: CompraResumen[] = [resumen(2), resumen(1)], rol = 'DUENO', id: string | null = null, falla: number | null = null) {
     api = {
       listar: vi.fn(() => of(pagina(items))),
-      obtener: vi.fn((id: number) => (falla ? throwError(() => new Error('404')) : of(detalle(id)))),
+      obtener: vi.fn((id: number) => (falla ? throwError(() => new HttpErrorResponse({ status: falla })) : of(detalle(id)))),
     };
     proveedores = { listar: vi.fn(() => of([{ id: 4, nombre: 'Bulonera Sur', cuit: null, activo: true }])) };
     const sesion = signal({ userId: 7, nombre: 'Ana', email: 'ana@x.com', rol, ferreteriaId: 3, ferreteriaNombre: 'Tornillo' });
@@ -184,10 +185,16 @@ describe('Compras', () => {
     expect(el().querySelector('section.detalle')!.textContent).toContain('Factura A 00003-00000009');
   });
 
-  it('con un id desconocido o de otra ferretería muestra el aviso de que no se pudo cargar', async () => {
-    await crear([resumen(2)], 'DUENO', '77', true);
+  it('con un id desconocido o de otra ferretería (404) dice que no se encontró la compra (QA 05/11)', async () => {
+    await crear([resumen(2)], 'DUENO', '77', 404);
 
     expect(api.obtener).toHaveBeenCalledWith(77);
+    expect(el().querySelector('section.detalle [role=alert]')!.textContent).toContain('No se encontró la compra.');
+  });
+
+  it('con otro error dice que no se pudo cargar la compra', async () => {
+    await crear([resumen(2)], 'DUENO', '77', 500);
+
     expect(el().querySelector('section.detalle [role=alert]')!.textContent).toContain('No se pudo cargar la compra.');
   });
 });

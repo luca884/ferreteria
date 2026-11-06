@@ -792,6 +792,18 @@ describe('DialogoCobro', () => {
       expect(confirmadas).toEqual([]);
     });
 
+    it('Tab es la navegación normal: no sugiere el resto (como GDS, G53: lo sugiere Enter; QA 05/11 B-4)', async () => {
+      await abrirMixto();
+      escribirMonto(1, '1000');
+
+      const evento = tecla('Tab');
+      await estabilizar();
+
+      expect(evento.defaultPrevented).toBe(false);
+      expect(monto(2).value).toBe('');
+      expect(confirmadas).toEqual([]);
+    });
+
     it('con todo cubierto, Enter confirma los pagos en orden y sin forma única ni recibido', async () => {
       await abrirMixto();
       escribirMonto(1, '1000');
@@ -1305,13 +1317,13 @@ describe('DialogoCobro', () => {
         expect(textoDelDialogo()).not.toMatch(/Disponible|límite|saldo/);
       });
 
-      it('el Dueño que alcanza ve «Disponible $ D»', async () => {
+      it('el Dueño que alcanza ve saldo, límite y disponible (CU-07.4, QA 05/11 C-5)', async () => {
         await abrirCC({ cuenta: DUENO_ALCANZA, esDueno: true });
 
         opcionCC().click();
         await estabilizar();
 
-        expect(lineaCuenta()).toBe(`Disponible $ 7.000,00`);
+        expect(lineaCuenta()).toBe(`Saldo $ 3.000,00 · Límite $ 10.000,00 · Disponible $ 7.000,00`);
       });
 
       it('el Dueño que no alcanza la puede elegir y ve cuánto se pasa, con el límite y el saldo', async () => {

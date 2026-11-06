@@ -37,7 +37,8 @@ function esRenglon(r: unknown): r is RenglonTicket {
     typeof x['stockActual'] === 'number' &&
     typeof x['stockMinimo'] === 'number' &&
     (x['descuentoBp'] === undefined || descuentoGuardadoValido(x['descuentoBp'])) &&
-    (x['problema'] === undefined || typeof x['problema'] === 'string')
+    (x['problema'] === undefined || typeof x['problema'] === 'string') &&
+    (x['problemaDeDescuento'] === undefined || x['problemaDeDescuento'] === true)
   );
 }
 

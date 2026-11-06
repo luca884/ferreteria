@@ -41,11 +41,13 @@ class ConfiguracionCotizacionIntegrationTest extends CotizacionTestBase {
         vendedorA = usuario(a, "vendedor-t23a@test.local", "VENDEDOR");
         duenoB = usuario(b, "dueno-t23b@test.local", "DUENO");
         borrarConfiguracion(a, b);
+        borrarDolaresReales();
     }
 
     @AfterEach
     void limpiar() {
         borrarConfiguracion(a, b);
+        borrarDolaresReales();
         if (articuloUsdA != null) {
             jdbc.update("delete from historial_precio where articulo_id = ?", articuloUsdA);
             jdbc.update("delete from articulo where id = ?", articuloUsdA);
@@ -57,6 +59,14 @@ class ConfiguracionCotizacionIntegrationTest extends CotizacionTestBase {
         return "{\"activa\":" + activa + ",\"dolarPrecios\":" + (dolar == null ? "null" : "\"" + dolar + "\"")
                 + ",\"ladoPrecios\":" + (lado == null ? "null" : "\"" + lado + "\"") + ",\"visibles\":" + visibles
                 + ",\"horaRecalculo\":" + (hora == null ? "null" : "\"" + hora + "\"") + "}";
+    }
+
+    /**
+     * Las cotizaciones son globales: el oficial y el blue que cargan estos tests no pueden quedar para otras clases que
+     * prueban «sin dolar» (importacion, controles de datos, margen y redondeo).
+     */
+    private void borrarDolaresReales() {
+        jdbc.update("delete from cotizacion where moneda = 'USD' and casa in ('oficial', 'blue')");
     }
 
     private static String valido() {
@@ -84,8 +94,74 @@ class ConfiguracionCotizacionIntegrationTest extends CotizacionTestBase {
         assertThat(r.get("ladoPrecios").asText()).isEqualTo("VENTA");
         assertThat(r.get("visibles")).extracting(JsonNode::asText).containsExactly("USD:oficial");
         assertThat(r.get("horaRecalculo").asText()).isEqualTo("08:00");
+        assertThat(r.get("vigenteDesde").isNull()).isTrue();
+    }
+
+    @Test
+    @DisplayName("sin dólar fijado, vigente es el último publicado de la casa y el lado elegidos, el mismo con el que calcula "
+            + "una importación, y sin fecha (QA 05/11)")
+    void sinFijarVigenteEsElUltimoPublicado() throws Exception {
+        cotizacion("USD", "oficial", "1000.00", "1050.00", Instant.parse("2026-11-05T12:00:00Z"));
+
+        JsonNode r = getJson(URL, login(duenoA));
+
+        assertThat(r.get("vigente").decimalValue()).isEqualByComparingTo("1050");
+        assertThat(r.get("vigenteDesde").isNull()).isTrue();
+    }
+
+    @Test
+    @DisplayName("sin dólar fijado ni publicado, vigente es null")
+    void sinFijarNiPublicadoVigenteEsNull() throws Exception {
+        jdbc.update("delete from cotizacion where moneda = 'USD' and casa = 'oficial'");
+
+        JsonNode r = getJson(URL, login(duenoA));
+
         assertThat(r.get("vigente").isNull()).isTrue();
         assertThat(r.get("vigenteDesde").isNull()).isTrue();
+    }
+
+    @Test
+    @DisplayName("con dólar fijado, vigente es el fijado con su fecha aunque haya uno publicado más nuevo")
+    void conDolarFijadoVigenteEsElFijado() throws Exception {
+        cotizacion("USD", "oficial", "1080.00", "1100.00", Instant.parse("2026-11-05T12:00:00Z"));
+        configuracion(a, c -> c.fijarVigente(new BigDecimal("1000.0000"), "oficial", LadoCotizacion.VENTA,
+                Instant.parse("2026-10-16T11:00:00Z")));
+
+        JsonNode r = getJson(URL, login(duenoA));
+
+        assertThat(r.get("vigente").decimalValue()).isEqualByComparingTo("1000");
+        assertThat(Instant.parse(r.get("vigenteDesde").asText())).isEqualTo(Instant.parse("2026-10-16T11:00:00Z"));
+    }
+
+    @Test
+    @DisplayName("sin dólar fijado, el PUT responde con el último publicado de la casa y el lado recién guardados")
+    void putSinFijarDevuelveElDeLaCasaYLadoNuevos() throws Exception {
+        cotizacion("USD", "blue", "1400.00", "1450.00", Instant.parse("2026-11-05T12:00:00Z"));
+        String token = login(duenoA);
+
+        JsonNode venta = cuerpo(putJson(URL, token, json(true, "USD:blue", "VENTA", "[\"USD:oficial\"]", "08:00"))
+                .andExpect(status().isOk()));
+        JsonNode compra = cuerpo(putJson(URL, token, json(true, "USD:blue", "COMPRA", "[\"USD:oficial\"]", "08:00"))
+                .andExpect(status().isOk()));
+
+        assertThat(venta.get("vigente").decimalValue()).isEqualByComparingTo("1450");
+        assertThat(compra.get("vigente").decimalValue()).isEqualByComparingTo("1400");
+        assertThat(compra.get("vigenteDesde").isNull()).isTrue();
+        assertThat(getJson(URL, token).get("vigente").decimalValue()).isEqualByComparingTo("1400");
+    }
+
+    @Test
+    @DisplayName("el dólar fijado de una ferretería no se ve en otra: la que no fijó ninguno ve el último publicado")
+    void elDolarFijadoNoSeVeEnOtraFerreteria() throws Exception {
+        cotizacion("USD", "oficial", "1000.00", "1050.00", Instant.parse("2026-11-05T12:00:00Z"));
+        configuracion(a, c -> c.fijarVigente(new BigDecimal("999.0000"), "oficial", LadoCotizacion.VENTA,
+                Instant.parse("2026-10-16T11:00:00Z")));
+
+        JsonNode deB = getJson(URL, login(duenoB));
+
+        assertThat(deB.get("vigente").decimalValue()).isEqualByComparingTo("1050");
+        assertThat(deB.get("vigenteDesde").isNull()).isTrue();
+        assertThat(getJson(URL, login(duenoA)).get("vigente").decimalValue()).isEqualByComparingTo("999");
     }
 
     @Test

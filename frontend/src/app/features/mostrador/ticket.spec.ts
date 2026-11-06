@@ -2,6 +2,9 @@ import { PresupuestoResponse } from '../presupuestos/presupuesto.models';
 import { RemitoResponse } from '../remitos/remito.models';
 import { ArticuloMostrador } from './mostrador.models';
 import {
+  PROBLEMA_DADO_DE_BAJA,
+  PROBLEMA_INEXISTENTE,
+  PROBLEMA_SIN_PRECIO,
   Ticket,
   agregar,
   elegirCliente,
@@ -253,6 +256,90 @@ describe('ticket (puro)', () => {
     it('quitar un renglón con problema no deja marcas en los demás', () => {
       const t = quitar(marcarProblemas(conTres(), [{ articuloId: 2, mensaje: 'x' }]), 1);
       expect(t.renglones.every((r) => r.problema === undefined)).toBe(true);
+    });
+
+    it('cambiar el descuento del renglón saca su marca de tope; las de los otros renglones quedan (QA 05/11, A-5)', () => {
+      const tope = 'Sumado al descuento general, pasa tu tope de descuento de 10 %.';
+      const marcado = marcarProblemas(conTres(), [
+        { articuloId: 1, mensaje: tope, deDescuento: true },
+        { articuloId: 2, mensaje: tope, deDescuento: true },
+      ]);
+
+      const t = aplicarDescuentoRenglon(marcado, 0, 500).ticket!;
+
+      expect(t.renglones.map((r) => r.problema)).toEqual([undefined, tope, undefined]);
+      expect(t.renglones.map((r) => r.problemaDeDescuento)).toEqual([undefined, true, undefined]);
+    });
+
+    it('cambiar un descuento no saca la marca de un rechazo que no fue del descuento, como la cantidad', () => {
+      const cantidad = 'Tornillo se vende por unidad: usá un número entero.';
+      const marcado = marcarProblemas(conTres(), [
+        { articuloId: 1, mensaje: cantidad },
+        { articuloId: 2, mensaje: 'Tu tope de descuento es 10 %.', deDescuento: true },
+      ]);
+
+      const t = aplicarDescuentoGlobal(aplicarDescuentoRenglon(marcado, 0, 500).ticket!, 500).ticket!;
+
+      expect(t.renglones.map((r) => r.problema)).toEqual([cantidad, undefined, undefined]);
+    });
+
+    it('un descuento inválido no toca las marcas', () => {
+      const marcado = marcarProblemas(conTres(), [{ articuloId: 1, mensaje: 'Tu tope de descuento es 10 %.', deDescuento: true }]);
+
+      expect(aplicarDescuentoGlobal(marcado, 10000).ticket).toBeUndefined();
+      expect(aplicarDescuentoRenglon(marcado, 0, 10000).ticket).toBeUndefined();
+    });
+
+    it('volver a marcar limpia la marca de descuento anterior', () => {
+      const marcado = marcarProblemas(conTres(), [{ articuloId: 1, mensaje: 'Tu tope de descuento es 10 %.', deDescuento: true }]);
+
+      const t = marcarProblemas(marcado, [{ articuloId: 1, mensaje: PROBLEMA_DADO_DE_BAJA }]);
+
+      expect(t.renglones[0]).toMatchObject({ problema: PROBLEMA_DADO_DE_BAJA });
+      expect(t.renglones[0].problemaDeDescuento).toBeUndefined();
+    });
+
+    it('la marca de descuento y su mensaje viajan juntos: precios, agregar, cantidad, quitar, marcar otra vez y vender una parte', () => {
+      const tope = 'Tu tope de descuento es 10 %.';
+      const marcas = (x: Ticket) => x.renglones.map((r) => [r.problema ?? null, r.problemaDeDescuento ?? null]);
+      let t = marcarProblemas(agregar(agregar(ticketVacio('k'), art()), cable()), [
+        { articuloId: 1, mensaje: tope, deDescuento: true },
+      ]);
+      t = actualizarPrecios(t, [{ articuloId: 1, precioActual: 200 }]);
+      t = agregar(t, art());
+      t = cambiarCantidad(t, 0, 3000).ticket!;
+
+      expect(marcas(t)).toEqual([[tope, true], [null, null]]);
+      expect(marcas(quitar(t, 1))).toEqual([[tope, true]]);
+      const deBaja = marcarProblemas(t, [{ articuloId: 1, mensaje: PROBLEMA_DADO_DE_BAJA }]);
+      expect(marcas(aplicarDescuentoGlobal(deBaja, 0).ticket!)).toEqual([[PROBLEMA_DADO_DE_BAJA, null], [null, null]]);
+      expect(marcas(marcarProblemas(t, []))).toEqual([[null, null], [null, null]]);
+      const pedido = aRequest({ ...t, renglones: [{ ...t.renglones[0], cantidadMilesimas: 1000 }] }, 1);
+      expect(marcas(descontarVendido(t, pedido, () => 'n'))).toEqual([[tope, true], [null, null]]);
+    });
+
+    it('cambiar el descuento general saca las marcas de tope de todos los renglones (QA 05/11, A-5)', () => {
+      const tope = 'Sumado al descuento general, pasa tu tope de descuento de 10 %.';
+      const marcado = marcarProblemas(conTres(), [
+        { articuloId: 1, mensaje: tope, deDescuento: true },
+        { articuloId: 3, mensaje: tope, deDescuento: true },
+      ]);
+
+      const t = aplicarDescuentoGlobal(marcado, 500).ticket!;
+
+      expect(t.renglones.map((r) => r.problema)).toEqual([undefined, undefined, undefined]);
+    });
+
+    it('cambiar un descuento no saca las marcas del artículo: dado de baja, sin precio o que ya no está', () => {
+      const marcado = marcarProblemas(conTres(), [
+        { articuloId: 1, mensaje: PROBLEMA_DADO_DE_BAJA },
+        { articuloId: 2, mensaje: PROBLEMA_SIN_PRECIO },
+        { articuloId: 3, mensaje: PROBLEMA_INEXISTENTE },
+      ]);
+
+      const t = aplicarDescuentoGlobal(aplicarDescuentoRenglon(marcado, 0, 500).ticket!, 500).ticket!;
+
+      expect(t.renglones.map((r) => r.problema)).toEqual([PROBLEMA_DADO_DE_BAJA, PROBLEMA_SIN_PRECIO, PROBLEMA_INEXISTENTE]);
     });
   });
 

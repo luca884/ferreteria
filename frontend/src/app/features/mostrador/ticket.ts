@@ -25,6 +25,8 @@ export interface RenglonTicket {
   stockMinimo: number;
   /** Motivo por el que el servidor rechazó este renglón (dado de baja, ya no existe). */
   problema?: string;
+  /** El rechazo fue por el descuento del renglón (por ejemplo, el tope): cambiar un descuento lo deja viejo. */
+  problemaDeDescuento?: true;
 }
 
 export interface Ticket {
@@ -63,6 +65,17 @@ export const PROBLEMA_DADO_DE_BAJA = 'Artículo dado de baja';
 export const PROBLEMA_INEXISTENTE = 'Ya no está disponible';
 export const PROBLEMA_SIN_PRECIO = 'Sin precio';
 
+/**
+ * El renglón sin la marca de un rechazo por su descuento (un 400 como «Tu tope de descuento es 10 %.»): cambiar el
+ * descuento la deja vieja y el próximo cobro lo vuelve a validar. Las demás marcas quedan (baja, sin precio,
+ * inexistente, cantidad), porque cambiar el descuento no las arregla. QA 05/11, A-5.
+ */
+function sinMarcaDeDescuento(r: RenglonTicket): RenglonTicket {
+  if (!r.problemaDeDescuento) return r;
+  const { problema: _marca, problemaDeDescuento: _deDescuento, ...renglon } = r;
+  return renglon;
+}
+
 const DESCUENTO_MAXIMO_BP = 9999;
 const MENSAJE_DESCUENTO = 'El descuento tiene que estar entre 0 y 99,99 %.';
 
@@ -97,14 +110,14 @@ export function parsearDescuento(texto: string): number | null {
 export function aplicarDescuentoRenglon(t: Ticket, indice: number, bp: number): ResultadoCantidad {
   if (!t.renglones[indice]) return { error: 'Ese renglón no existe.' };
   if (!descuentoValido(bp)) return { error: MENSAJE_DESCUENTO };
-  const renglones = t.renglones.map((r, j) => (j === indice ? { ...r, descuentoBp: bp } : r));
+  const renglones = t.renglones.map((r, j) => (j === indice ? { ...sinMarcaDeDescuento(r), descuentoBp: bp } : r));
   return { ticket: { ...t, renglones } };
 }
 
 /** Pone (o saca, con 0) el descuento global del ticket. */
 export function aplicarDescuentoGlobal(t: Ticket, bp: number): ResultadoCantidad {
   if (!descuentoValido(bp)) return { error: MENSAJE_DESCUENTO };
-  return { ticket: { ...t, descuentoGlobalBp: bp } };
+  return { ticket: { ...t, descuentoGlobalBp: bp, renglones: t.renglones.map(sinMarcaDeDescuento) } };
 }
 
 /** Suma 1 en el renglón del artículo (o lo crea) y lo deja elegido; refresca precio y stock vistos. */
@@ -193,18 +206,25 @@ export function actualizarPrecios(
   return { ...t, renglones };
 }
 
+/** Por qué el servidor rechazó un renglón; `deDescuento` si el error vino de su descuento (por ejemplo, el tope). */
+export interface ProblemaDeRenglon {
+  articuloId: number;
+  mensaje: string;
+  deDescuento?: boolean;
+}
+
 /**
  * Marca los renglones rechazados y limpia las marcas anteriores del resto. Deja elegido el primer renglón
  * con problema, para que F10 / F3 actúen sobre el que hay que arreglar.
  */
-export function marcarProblemas(
-  t: Ticket,
-  problemas: readonly { articuloId: number; mensaje: string }[],
-): Ticket {
-  const porId = new Map(problemas.map((p) => [p.articuloId, p.mensaje]));
-  const renglones: RenglonTicket[] = t.renglones.map(({ problema: _anterior, ...r }) => {
-    const mensaje = porId.get(r.articuloId);
-    return mensaje === undefined ? r : { ...r, problema: mensaje };
+export function marcarProblemas(t: Ticket, problemas: readonly ProblemaDeRenglon[]): Ticket {
+  const porId = new Map(problemas.map((p) => [p.articuloId, p]));
+  const renglones: RenglonTicket[] = t.renglones.map(({ problema: _anterior, problemaDeDescuento: _deDescuento, ...r }) => {
+    const problema = porId.get(r.articuloId);
+    if (problema === undefined) return r;
+    return problema.deDescuento
+      ? { ...r, problema: problema.mensaje, problemaDeDescuento: true }
+      : { ...r, problema: problema.mensaje };
   });
   const primero = renglones.findIndex((r) => r.problema !== undefined);
   return { ...t, renglones, elegido: primero >= 0 ? primero : t.elegido };

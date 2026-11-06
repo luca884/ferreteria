@@ -27,8 +27,12 @@ import {
   ClienteRequest,
   CondicionIva,
   TIPOS_DOCUMENTO,
+  FALTA_CUIT,
+  FALTA_DOMICILIO,
+  NO_ES_CUIT,
   TipoDocumento,
   documentoLegible,
+  requiereDatosFiscales,
 } from './cliente.models';
 import { ClientesService } from './clientes.service';
 
@@ -37,10 +41,6 @@ const TAMANO_PAGINA = 20;
 /** El tope del límite de cuenta corriente: el mismo que acepta el servidor (13 enteros y 2 decimales). */
 const LIMITE_MAXIMO = 9_999_999_999_999.99;
 const MOTIVO_NO_DESACTIVAR = 'No se puede desactivar: el cliente tiene saldo en cuenta corriente.';
-/** CU-11 (D4): los mismos mensajes que da el servidor cuando a un RI, Monotributista o Exento le falta el CUIT o el domicilio. */
-const FALTA_CUIT = 'Falta el CUIT: es obligatorio para Responsable Inscripto, Monotributista o Exento.';
-const NO_ES_CUIT = 'Para Responsable Inscripto, Monotributista o Exento el documento tiene que ser el CUIT.';
-const FALTA_DOMICILIO = 'Falta el domicilio: es obligatorio para Responsable Inscripto, Monotributista o Exento.';
 
 /** El texto sin espacios de los bordes; undefined si queda vacío, así el pedido no manda campos en blanco. */
 const sinVacios = (texto: string): string | undefined => texto.trim() || undefined;
@@ -123,7 +123,7 @@ export class Clientes implements OnInit {
     initialValue: this.form.controls.condicionIva.value,
   });
   /** CU-11 (D4): Responsable inscripto, Monotributista y Exento llevan CUIT y domicilio; Consumidor final, no. */
-  protected readonly pideDatosFiscales = computed(() => this.condicionElegida() !== 'CONSUMIDOR_FINAL');
+  protected readonly pideDatosFiscales = computed(() => requiereDatosFiscales(this.condicionElegida()));
 
   /** Las formas de pago activas, para avisar si falta la de cuenta corriente. null mientras no se leyeron (o no se pudo). */
   private readonly formasActivas = signal<readonly FormaPago[] | null>(null);
