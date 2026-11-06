@@ -9,6 +9,7 @@ import com.ferreteria.support.ListasDePrueba;
 import com.ferreteria.support.ListasReales;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.mock.mockito.SpyBean;
@@ -299,6 +300,33 @@ class ImportacionIntegrationTest extends CotizacionTestBase {
                 new Object[] {archivo("lista.xlsx", new byte[0]), "No se pudo leer el archivo. Verificá que no esté dañado."},
                 new Object[] {archivo("lista.xlsx", zipRoto), "No se pudo leer el archivo. Verificá que no esté dañado."},
                 new Object[] {archivo("lista.xlsx", ListasDePrueba.docx()), "No se pudo leer el archivo. Verificá que no esté dañado."});
+    }
+
+    @Test
+    @DisplayName("la exportación de Artículos (CSV o guardada como Excel) da 400 con el aviso en los tres endpoints, sin escribir nada")
+    void laExportacionDeArticulosSeRechazaEnLosTresEndpoints() throws Exception {
+        long proveedor = crearProveedor(duenoA, unico("P"));
+        byte[] exportado = getResult("/api/articulos/exportacion", duenoA)
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsByteArray();
+        List<Object> encabezado = List.of("Código", "Código de barras", "Código del proveedor", "Descripción", "Rubro",
+                "Proveedor", "Unidad", "Moneda", "Costo", "IVA %", "Margen %", "Precio final", "Precio manual", "Stock",
+                "Stock mínimo", "Ubicación", "Activo");
+        byte[] comoExcel = ListasDePrueba.xlsx(List.of(encabezado, List.of("A-1", "", "P-1", "Tornillo", "", "", "Unidad",
+                "ARS", 100, 21, "Heredado", 150, "No", 10, 0, "", "Sí")));
+        String aviso = "Este archivo es una exportación de Artículos, no una lista de un proveedor: su costo ya trae "
+                + "las bonificaciones y los ajustes, y se aplicarían otra vez. Para cambiar precios en masa usá "
+                + "Actualizar precios.";
+
+        for (MockMultipartFile archivo : List.of(archivo("articulos-2026-11-05.csv", exportado),
+                archivo("articulos.xlsx", comoExcel))) {
+            for (String url : ENDPOINTS) {
+                postMultipart(url, duenoA, archivo, MUESTRA.equals(url) ? null : datosPara(url, proveedor))
+                        .andExpect(status().isBadRequest())
+                        .andExpect(jsonPath("$.message", is(aviso)));
+            }
+        }
+        assertThat(contar("select count(*) from importacion_lista where proveedor_id = ?", proveedor)).isZero();
     }
 
     @Test

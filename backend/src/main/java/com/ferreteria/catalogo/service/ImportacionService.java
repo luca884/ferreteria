@@ -79,6 +79,11 @@ import java.util.Set;
 @Service
 public class ImportacionService {
 
+    /** La exportación de Artículos no es una lista de un proveedor (medios-qa, S6). */
+    static final String MENSAJE_EXPORTACION_DE_ARTICULOS = "Este archivo es una exportación de Artículos, no una lista "
+            + "de un proveedor: su costo ya trae las bonificaciones y los ajustes, y se aplicarían otra vez. Para "
+            + "cambiar precios en masa usá Actualizar precios.";
+
     private final LectorDeListas lector;
     private final ProveedorRepository proveedorRepository;
     private final RubroRepository rubroRepository;
@@ -118,7 +123,7 @@ public class ImportacionService {
      * El libro se lee una sola vez y no se toca la base: la propuesta sale solo del archivo.
      */
     public MuestraResponse muestra(ArchivoLista archivo) {
-        LecturaLista lectura = lector.leer(archivo.contenido());
+        LecturaLista lectura = leer(archivo);
         ReconocedorDeColumnas.Reconocimiento reconocimiento = ReconocedorDeColumnas.reconocer(lectura);
         List<MuestraResponse.HojaMuestra> hojas = new ArrayList<>();
         for (ReconocedorDeColumnas.HojaReconocida hoja : reconocimiento.hojas()) {
@@ -300,6 +305,32 @@ public class ImportacionService {
     // ---- preparar ----
 
     /**
+     * Lee el archivo y rechaza la exportación de Artículos (GDS-19): su «Costo» ya trae el IVA quitado, las
+     * bonificaciones y los ajustes, y la importación los aplicaría otra vez. Se reconoce por su encabezado completo en
+     * cualquier fila (el CSV tal cual o guardado como Excel). Luca eligió rechazarla con aviso (medios-qa, S6).
+     */
+    private LecturaLista leer(ArchivoLista archivo) {
+        LecturaLista lectura = lector.leer(archivo.contenido());
+        if (lectura.filas().stream().anyMatch(ImportacionService::esEncabezadoDeLaExportacion)) {
+            throw new BadRequestException(MENSAJE_EXPORTACION_DE_ARTICULOS);
+        }
+        return lectura;
+    }
+
+    private static boolean esEncabezadoDeLaExportacion(FilaLeida fila) {
+        List<String> encabezado = ExportacionArticulosService.ENCABEZADO;
+        if (fila.celdas().size() < encabezado.size()) {
+            return false;
+        }
+        for (int columna = 0; columna < encabezado.size(); columna++) {
+            if (!encabezado.get(columna).equalsIgnoreCase(fila.celda(columna).texto().strip())) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
      * Todo lo que se lee, ANTES de mutar nada (asi Hibernate no hace flush a mitad del recorrido): el libro entero
      * (UNA lectura), los articulos del proveedor en una consulta, un contexto de precio por rubro y otro sin rubro
      * (con el dolar vigente de la ferreteria), los rubros por nombre, y los codigos internos y de barras ocupados. Las
@@ -309,7 +340,7 @@ public class ImportacionService {
     private Preparacion preparar(
             Proveedor proveedor, ArchivoLista archivo, MapeoLista mapeo, boolean listaIncluyeIva,
             Bonificaciones bonificaciones, Long rubroElegidoId) {
-        LecturaLista lectura = lector.leer(archivo.contenido());
+        LecturaLista lectura = leer(archivo);
         for (int hoja : mapeo.hojasElegidas()) {
             if (hoja >= lectura.hojas().size()) {
                 throw new BadRequestException("La hoja elegida no existe en el archivo.");
