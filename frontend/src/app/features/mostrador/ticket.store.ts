@@ -14,6 +14,7 @@ import {
   descontarVendido,
   elegirCliente,
   marcarProblemas,
+  ProblemaDeRenglon,
   moverElegido,
   elegir,
   quitar,
@@ -102,7 +103,7 @@ export class TicketStore {
     this._ticket.update((t) => actualizarPrecios(t, cambios));
   }
 
-  marcarProblemas(problemas: readonly { articuloId: number; mensaje: string }[]): void {
+  marcarProblemas(problemas: readonly ProblemaDeRenglon[]): void {
     this._ticket.update((t) => marcarProblemas(t, problemas));
   }
 

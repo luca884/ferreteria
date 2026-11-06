@@ -69,6 +69,24 @@ describe('ticket.storage', () => {
     expect(ticketGuardado(auth())).toBeNull();
   });
 
+  it('la marca de un rechazo por el descuento se guarda y se lee con el renglón', () => {
+    const marcado: Ticket = {
+      ...ticket,
+      renglones: [{ ...ticket.renglones[0], problema: 'Tu tope de descuento es 10 %.', problemaDeDescuento: true }],
+    };
+
+    guardarTicket(auth(), marcado);
+
+    expect(ticketGuardado(auth())).toEqual(marcado);
+  });
+
+  it('una marca de descuento que no es true deja el ticket roto', () => {
+    const renglon = { ...ticket.renglones[0], problema: 'x', problemaDeDescuento: 'si' };
+    localStorage.setItem('ticket:3:7', JSON.stringify({ ...ticket, renglones: [renglon] }));
+
+    expect(ticketGuardado(auth())).toBeNull();
+  });
+
   describe('cliente (CL-005)', () => {
     const guardarCrudo = (extra: Record<string, unknown>) =>
       localStorage.setItem('ticket:3:7', JSON.stringify({ ...ticket, presupuestoId: undefined, presupuestoNumero: undefined, ...extra }));

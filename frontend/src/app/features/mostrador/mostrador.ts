@@ -989,7 +989,9 @@ export class Mostrador {
     const problemas = entradas.flatMap(([campo, mensaje]) => {
       const indice = /^renglones\[(\d+)\]\./.exec(campo)?.[1];
       const renglon = indice === undefined ? undefined : renglones[Number(indice)];
-      return renglon ? [{ articuloId: renglon.articuloId, mensaje }] : [];
+      // Un error del descuento del renglón (el tope, por ejemplo) se va solo al cambiar un descuento. QA 05/11, A-5.
+      const deDescuento = /^renglones\[\d+\]\.descuentoPorcentaje$/.test(campo);
+      return renglon ? [{ articuloId: renglon.articuloId, mensaje, deDescuento }] : [];
     });
     if (problemas.length === 0) {
       this.avisoCobro.set(texto);

@@ -2320,6 +2320,35 @@ describe('Mostrador', () => {
       expect(cobros[1].pedido.clave).toBe('clave-1');
     });
 
+    it('después de un 400, cambiar el descuento total saca la marca del tope y deja la de cantidad (QA 05/11, A-5)', async () => {
+      await crear();
+      await escanear('M', martillo());
+      await escanear('S', articulo(2, { descripcion: 'Serrucho', precioFinal: 100 }));
+      await tecla('F4');
+      await tecla('Enter');
+      await fallarCobro(0, 400, {
+        status: 400,
+        message: 'Datos inválidos',
+        errors: {
+          'renglones[0].descuentoPorcentaje': 'Tu tope de descuento es 10 %.',
+          'renglones[1].cantidad': 'Serrucho se vende por unidad: usá un número entero.',
+        },
+      });
+      expect(normal(renglonesTicket()[0].querySelector('.problema')?.textContent)).toBe('Tu tope de descuento es 10 %.');
+
+      await tecla('F6');
+      const campo = el().querySelector<HTMLInputElement>('app-dialogo-descuento input')!;
+      campo.value = '5';
+      campo.dispatchEvent(new Event('input'));
+      await refrescar();
+      await tecla('Enter');
+
+      expect(renglonesTicket()[0].querySelector('.problema')).toBeNull();
+      expect(normal(renglonesTicket()[1].querySelector('.problema')?.textContent)).toBe(
+        'Serrucho se vende por unidad: usá un número entero.',
+      );
+    });
+
     it('un 400 que no es de un renglón muestra los mensajes del servidor en el diálogo', async () => {
       await conMartillos();
       await tecla('F4');
