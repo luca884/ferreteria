@@ -112,7 +112,7 @@
         <p class="barra-estado">
           <span>{{ ferreterias().length }} {{ ferreterias().length === 1 ? 'ferretería' : 'ferreterías' }}</span>
           @if (filas.elegido(); as actual) {
-            <span class="elegido">· Elegida: <strong>{{ actual.razonSocial }}</strong> · Enter edita</span>
+            <span class="elegido">· Elegida: <strong>{{ actual.razonSocial }}</strong></span>
           }
         </p>
       }
@@ -227,7 +227,7 @@
           </div>
         </fieldset>
         <div class="acciones-alta">
-          <button type="submit" [disabled]="guardando()">Crear ferretería</button>
+          <button type="submit" [disabled]="guardando()" (click)="sinDobleClic($event)">Crear ferretería</button>
         </div>
       </form>
     }

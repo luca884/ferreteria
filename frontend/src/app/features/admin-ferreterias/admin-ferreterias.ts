@@ -192,7 +192,17 @@ export class AdminFerreterias implements OnInit {
     }
   }
 
+  /**
+   * El segundo clic de un doble clic en «Crear ferretería» no envía: el primero ya creó la ferretería y vació el
+   * formulario, y el segundo lo mandaba vacío (errores de obligatorio) o repetido (CUIT ya usado). QA 05/11.
+   */
+  protected sinDobleClic(evento: MouseEvent): void {
+    if (evento.detail > 1) evento.preventDefault();
+  }
+
   protected guardar(): void {
+    // Un envío por vez: el botón deshabilitado y el formulario inerte llegan recién en el próximo render.
+    if (this.guardando()) return;
     if (this.form.invalid) {
       this.form.markAllAsTouched();
       this.enfocar('form.alta [aria-invalid="true"]');

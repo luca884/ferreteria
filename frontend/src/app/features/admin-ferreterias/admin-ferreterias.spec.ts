@@ -236,6 +236,35 @@ describe('AdminFerreterias', () => {
       expect(document.activeElement).toBe(input('razonSocial'));
     });
 
+    it('un segundo envío mientras se guarda no sale: un solo pedido (QA 05/11)', async () => {
+      await crear();
+      const respuesta = new Subject<FerreteriaAdmin>();
+      servicio.alta.mockReturnValue(respuesta);
+      await altaCompleta();
+
+      el().querySelector('form.alta')!.dispatchEvent(new Event('submit'));
+      el().querySelector('form.alta')!.dispatchEvent(new Event('submit'));
+      await refrescar();
+
+      expect(servicio.alta).toHaveBeenCalledTimes(1);
+    });
+
+    it('el segundo clic de un doble clic en «Crear ferretería» no envía el formulario ya vacío: sin errores ni otro pedido (QA 05/11)', async () => {
+      await crear();
+      await altaCompleta();
+      const boton = el().querySelector<HTMLButtonElement>('form.alta button[type="submit"]')!;
+
+      boton.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, detail: 1 }));
+      await refrescar();
+      boton.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, detail: 2 }));
+      await refrescar();
+
+      expect(servicio.alta).toHaveBeenCalledTimes(1);
+      expect(texto('.alerta.exito')).toContain('Se creó «Nueva Ferretería SA».');
+      expect(el().querySelector('form.alta [aria-invalid="true"]')).toBeNull();
+      expect(texto('form.alta')).not.toContain('obligatori');
+    });
+
     it('si el alta falla los campos se desbloquean con lo escrito', async () => {
       await crear();
       servicio.alta.mockReturnValue(throwError(() => errorHttp(500, 'Algo falló')));
@@ -416,6 +445,15 @@ describe('AdminFerreterias', () => {
       filas()[0].dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
       await refrescar();
       formularioDeAlta();
+    });
+
+    it('la barra de la fila elegida no promete «Enter edita»: el super admin no edita (QA 05/11)', async () => {
+      await crear();
+
+      await elegir(0);
+
+      expect(texto('.barra-estado')).toContain('Elegida:');
+      expect(texto('.barra-estado')).not.toContain('Enter edita');
     });
 
     it('la ayuda avisa que los datos los edita el Dueño', async () => {
