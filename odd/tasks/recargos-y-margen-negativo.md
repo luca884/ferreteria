@@ -1,7 +1,7 @@
 # recargos-y-margen-negativo
 
 Objetivo: que la vista previa de Actualizar precios muestre los recargos del costo y los ajustes del precio, y que la ficha avise el margen negativo del precio manual · Por qué: hallazgos #97 y #26 del recorrido de pantallas; Luca aprobó la tanda
-Rama: `feat/recargos-y-margen-negativo` desde `acc81898` · Entrega: single-pr · Runner: backend `./mvnw test -Dtest=<Clase>` / `./mvnw test`; frontend `npx ng test --watch=false --include=<spec>` / `npx ng test --watch=false` · Mirror Engram: `odd/recargos-y-margen-negativo/tasks` (ok) · Estado: ABIERTA · Modelo: Opus de punta a punta (Luca: «dale, aprobado, andá con Opus»)
+Rama: `feat/recargos-y-margen-negativo` desde `acc81898` · Entrega: single-pr · Runner: backend `./mvnw test -Dtest=<Clase>` / `./mvnw test`; frontend `npx ng test --watch=false --include=<spec>` / `npx ng test --watch=false` · Mirror Engram: `odd/recargos-y-margen-negativo/tasks` (ok) · Estado: CERRADA · Modelo: Opus de punta a punta (Luca: «dale, aprobado, andá con Opus»)
 Pronóstico: ~420 líneas cambiadas (agregadas + borradas, sin generados) · Heurística por tarea: ~400 (no es límite)
 
 ## Specs
@@ -27,3 +27,26 @@ Restricciones: mensajes al usuario en español rioplatense; los campos nuevos de
 - L2 (2026-11-07) Exploración (odd-explorer): los recargos (`Articulo.java:123-125`) y los ajustes (`:114-117`) son del artículo; el costo real es `RecargosDeCosto.aplicar` (HALF_UP a 2 decimales). La fila del masivo (`CambioMasivo.java:18-33`) no trae recargos ni ajustes, aunque `ArticuloVigente` los tiene al planificar (`PlanificadorMasivo.java:87-91`); el precio calculado ya se arma en `evaluar` y `evaluarCambioDeRubro` (`calculado`). Antecedente: Compras muestra «Costo real» solo con recargos (`nueva-compra.html:307-310`). El margen negativo está solo en Java (`MargenNegativo.java:23-34`); la ficha ya tiene `costoRealExacto` y `precioFinalCentavos` exactos con BigInt (`core/formato/precio-final.ts`), y `casos-precio.json` es el antecedente de casos compartidos (`CasosCompartidosPrecioTest`, `precio-final.spec.ts`). La vista previa de Importar lista no tiene las columnas de #35 (S3).
 - L3 (2026-11-07) T1 y T2 hechas. `RecargosDeCosto` suma `porcentajeTotal()`. La `Fila` del planificador lleva `precioSinAjustes`, que sale del `calculado` que ya armaban `evaluar` y `evaluarCambioDeRubro`; los modos de precio final y el artículo ya en el destino lo dejan en null. El test HTTP nuevo (`laVistaPreviaTraeLosRecargosElCostoRealYElPrecioSinAjustes`) no se vio en RED: se escribió con el backend ya hecho; fija que los cuatro campos viajan en el JSON y que sin recargos ni ajustes van en null. En el front los campos son opcionales, como `moneda` y los rubros, así que los fixtures viejos siguen valiendo y la fila sin datos queda igual (test). Próximo paso: T3.
 - L4 (2026-11-07) T3 y T4 hechas. La regla del front (`avisoMargenNegativo`) hace la misma cuenta exacta con BigInt que `MargenNegativo.mensaje`, y los dos lados leen los 12 casos de `casos-margen-negativo.json` (el de #26, margen 0 justo, un centavo menos, recargos, dólares con y sin recargos, redondeo HALF_UP del costo en pesos, IVA 10,5 y 0, costo 0). `Intl` pone un espacio duro después del `$`; la spec compara con los espacios normalizados. En la ficha, `avisoDeMargen` sale de `valores()`, `recargosEnVivo()` y `dolarDePrecios()`; no avisa con el precio inválido ni en dólares sin dólar vigente, y entra en el `aria-describedby` del precio. Solo el Dueño ve el bloque del precio manual, así que el aviso no le muestra el costo al Vendedor. Próximo paso: suites, `ng build`, `odd-verifier` (Risk item 3 de T1) y QA en ego-browser.
+- L5 (2026-11-07) Suites: backend 6373/6373 (BUILD SUCCESS), frontend 4284/4284, `ng build` OK (solo la advertencia de presupuesto de `dialogo-cobro.ts`, previa). QA en ego-browser con el Dueño de El Tornillo, sobre la rama (backend dev y front locales). Capturas en `evidencia/recargos-y-margen-negativo/01`–`02` del vault. S1: Bulonería y «Cambiar el costo en %» 10 dan:
+  - TOR-001: «$ 115,00 → $ 126,50» y debajo «Costo real: $ 120,11 → $ 132,12 (recargos 4,44 %)»; precio «$ 196,20 → $ 215,82». 132,12 × 1,35 × 1,21 = 215,82.
+  - BUL-002: «Costo real: $ 48,04 → $ 52,85 (recargos 4,44 %)», precio «$ 87,20 → $ 95,93».
+  - REC-001 (ajuste −10 %): precio «$ 1.960,20 → $ 2.156,22» y debajo «Sin ajustes: $ 2.395,80».
+
+  No se aplicó. S2: en la ficha de TOR-001, «Precio manual» con 100 muestra «Margen negativo: el costo ($ 120,11) supera el precio sin IVA ($ 82,64). Revisá el precio manual.» debajo del precio, en el `aria-describedby` y con «Guardar» habilitado. Con 200 el aviso se va. Se salió con «Cancelar» → «Descartar». La base quedó igual (TOR-001 115,00 / 196,20, sin precio manual).
+- L6 (2026-11-07) `odd-verifier` (Opus): **pass, sin blockers**.
+  - Diferencial base (`acc81898`) contra la rama: 90.000 planes al azar en los seis modos dan la salida idéntica byte a byte, salvo los cuatro campos nuevos: conteos, cambios, errores, advertencias, `huella`, `enPesos`, `enDolares` y el aviso de mezcla.
+  - S1: 524.889 chequeos sin fallas.
+  - S2: 200.000 casos al azar TS contra Java sin diferencias, más 24 casos borde. Las sondas de la ficha pasan, también la del Vendedor, que no ve el aviso ni el costo.
+  - S3: nada de la importación cambió.
+
+  Advertencias:
+  1. Con el margen apenas negativo, los dos importes redondeados se leen iguales («$ 120,11» contra «$ 120,11»). Ya pasaba en las vistas previas; `MargenNegativo.java` no cambió.
+  2. Fuera de dominio, la copia TS no avisa con un precio negativo y acepta un recargo de 0 %. La ficha no deja llegar a ninguno de los dos.
+  3. Faltaban casos de prueba, no había defectos.
+
+  Sus sondas quedaron como regresión:
+  - 13 casos más en `casos-margen-negativo.json`: IVA 2,5, 5 y 27, importes grandes, recargos negativos, precio con 1 decimal, medio centavo en dólares y el de los dos importes iguales.
+  - 9 casos en `articulo-form.spec.ts`: alícuota y moneda en vivo, quitar el recargo, un recargo sin nombre, precio 0 y vacío, la edición guarda con el aviso, el Vendedor y el dólar que no se pudo leer.
+  - `propiedadEnTodosLosModosConPlanesAlAzar` en `CambioMasivoRecargosYAjustesTest`: 3.000 planes con semilla fija.
+
+  Checks: back 11/11 (`CambioMasivoRecargosYAjustesTest`, `CasosCompartidosMargenNegativoTest`); front 248/248 (`margen-negativo.spec.ts`, `articulo-form.spec.ts`). Las suites completas se corrieron antes de sumar estos tests, que no tocan código de producción.

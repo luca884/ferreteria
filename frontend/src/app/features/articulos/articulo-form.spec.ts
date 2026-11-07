@@ -1901,6 +1901,119 @@ describe('ArticuloForm', () => {
 
         expect(aviso()).toBeNull();
       });
+
+      // Sondas del verificador (odd-verifier, 2026-11-07), como regresión.
+      it('sigue a la alícuota en vivo', async () => {
+        await crearComponente();
+        await precioManual('1000', '1150');
+        expect(texto('#precioFinalManual-aviso')).toBe(
+          'Margen negativo: el costo ($ 1.000,00) supera el precio sin IVA ($ 950,41). Revisá el precio manual.',
+        );
+
+        await elegir('alicuotaIva', '10,5 %');
+        expect(aviso()).toBeNull();
+        expect(describePrecio()).toBeNull();
+
+        await elegir('alicuotaIva', '27 %');
+        expect(texto('#precioFinalManual-aviso')).toBe(
+          'Margen negativo: el costo ($ 1.000,00) supera el precio sin IVA ($ 905,51). Revisá el precio manual.',
+        );
+      });
+
+      it('sigue a la moneda en vivo', async () => {
+        await crearComponente();
+        await precioManual('10', '10000');
+        expect(aviso()).toBeNull();
+
+        await elegir('moneda', 'Dólares (USD)');
+        // Cambiar la moneda borra el costo (comportamiento previo): sin costo no hay aviso.
+        expect(aviso()).toBeNull();
+        await escribir('costo', '10');
+        expect(texto('#precioFinalManual-aviso')).toBe(
+          'Margen negativo: el costo ($ 10.000,00) supera el precio sin IVA ($ 8.264,46). Revisá el precio manual.',
+        );
+
+        await elegir('moneda', 'Pesos (ARS)');
+        await escribir('costo', '10');
+        expect(aviso()).toBeNull();
+      });
+
+      it('quitar el recargo saca el aviso', async () => {
+        await crearComponente();
+        await precioManual('1000', '1250');
+        el().querySelector<HTMLButtonElement>('button.agregar-recargo-costo')!.click();
+        await refrescar();
+        await escribir('recargo-costo-nombre-0', 'EMBALAJE');
+        await escribir('recargo-costo-porcentaje-0', '4,44');
+        expect(aviso()).not.toBeNull();
+
+        el().querySelector<HTMLButtonElement>('button.quitar-recargo-costo')!.click();
+        await refrescar();
+
+        expect(aviso()).toBeNull();
+      });
+
+      it('un recargo sin nombre no entra en la cuenta, igual que en el precio en vivo', async () => {
+        await crearComponente();
+        await precioManual('1000', '1250');
+        el().querySelector<HTMLButtonElement>('button.agregar-recargo-costo')!.click();
+        await refrescar();
+
+        await escribir('recargo-costo-porcentaje-0', '4,44');
+
+        expect(aviso()).toBeNull();
+      });
+
+      it('con precio 0 está el error y no el aviso', async () => {
+        await crearComponente();
+        await precioManual('1200', '0');
+        input('precioFinalManual').dispatchEvent(new Event('blur'));
+        await refrescar();
+
+        expect(aviso()).toBeNull();
+        expect(describePrecio() ?? '').not.toContain('precioFinalManual-aviso');
+      });
+
+      it('con el precio vacío no hay aviso', async () => {
+        await crearComponente();
+        await escribir('costo', '1200');
+        await tildar('precioManual', true);
+
+        await escribir('precioFinalManual', '');
+
+        expect(aviso()).toBeNull();
+      });
+
+      it('la edición con el aviso a la vista guarda igual', async () => {
+        await crearComponente({ id: '5', articulo: manual({ costo: 1200, alicuotaIva: 'IVA_21', precioFinal: 1000 }) });
+        expect(aviso()).not.toBeNull();
+
+        await enviar();
+
+        expect(servicio.actualizar).toHaveBeenCalledTimes(1);
+        expect(enviadoEdicion()).toMatchObject({ precioManual: true, precioFinal: 1000 });
+      });
+
+      it('el Vendedor no ve el aviso ni el costo', async () => {
+        await crearComponente({
+          dueno: false,
+          id: '5',
+          articulo: manual({ costo: 1200, alicuotaIva: 'IVA_21', precioFinal: 1000 }),
+        });
+
+        expect(aviso()).toBeNull();
+        expect(el().textContent ?? '').not.toContain('Margen negativo');
+        expect(el().textContent ?? '').not.toContain('1.200,00');
+      });
+
+      it('en dólares, si no se pudo leer el dólar, no avisa', async () => {
+        await crearComponente({ cotizacion: 'falla' });
+        await elegir('moneda', 'Dólares (USD)');
+
+        await precioManual('10', '1');
+
+        expect(aviso()).toBeNull();
+      });
     });
 
     describe('ajustes sobre el precio final', () => {
