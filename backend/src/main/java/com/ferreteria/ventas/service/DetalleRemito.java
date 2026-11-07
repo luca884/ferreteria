@@ -9,12 +9,14 @@ import java.util.List;
 /**
  * Un remito con sus renglones, en el orden del ticket. {@code facturadoPor} es la venta que lo facturo y solo viene en el
  * detalle de un remito FACTURADO; en cualquier otro caso, y en la anulacion, es null. {@code usuario} es el nombre de
- * quien lo emitio y solo viene en el detalle (informacion-y-links, S4).
+ * quien lo emitio y solo viene en el detalle (informacion-y-links, S4). {@code anuladoPor} es el nombre de quien lo anulo
+ * (#81) y solo viene en el detalle y en la anulacion de un remito anulado desde la V47; en cualquier otro caso, null.
  */
-public record DetalleRemito(Remito remito, List<ItemRemito> items, FacturadoPor facturadoPor, String usuario) {
+public record DetalleRemito(Remito remito, List<ItemRemito> items, FacturadoPor facturadoPor, String usuario,
+        String anuladoPor) {
 
     public DetalleRemito(Remito remito, List<ItemRemito> items) {
-        this(remito, items, null, null);
+        this(remito, items, null, null, null);
     }
 
     /**

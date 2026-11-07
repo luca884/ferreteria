@@ -187,22 +187,17 @@
           <p class="nota-estado">Ya se facturó.</p>
         }
       } @else if (r.estado === 'ANULADO') {
-        <p class="nota-estado">Está anulado: el stock ya volvió.</p>
+        <p class="nota-estado">
+          Está anulado: el stock ya volvió.
+          @if (r.anuladoPor && r.fechaAnulacion) {
+            Lo anuló {{ r.anuladoPor }} el {{ fechaCompleta(r.fechaAnulacion) }}.
+          }
+        </p>
       }
 
-      <!-- Las preguntas arrancan con el foco en Cancelar (así quedan a la vista aunque el cuerpo tenga scroll); Esc
-           las cancela solas, sin cerrar el pop-up. -->
-      @if (confirmandoAnulacion()) {
-        <div class="confirmacion" role="alert" (keydown.escape)="cancelarConEsc($event)">
-          <p>Anular devuelve al stock lo que salió con el remito N.º {{ r.numero }}. No se puede deshacer.</p>
-          <div class="acciones">
-            <button #cancelarPregunta type="button" class="secundario" [disabled]="anulando()" (click)="noAnular()">
-              Cancelar
-            </button>
-            <button type="button" class="primario" [disabled]="anulando()" (click)="anular()">Anular el remito</button>
-          </div>
-        </div>
-      } @else if (reemplazo(); as renglones) {
+      <!-- La pregunta arranca con el foco en Cancelar (así queda a la vista aunque el cuerpo tenga scroll); Esc la
+           cancela sola, sin cerrar el pop-up. -->
+      @if (reemplazo(); as renglones) {
         <div class="reemplazo" role="alert" (keydown.escape)="cancelarConEsc($event)">
           <p>
             El mostrador ya tiene un ticket con {{ renglones }} {{ renglones === 1 ? 'renglón' : 'renglones' }}. Si
@@ -239,5 +234,17 @@
 @if (detalle(); as r) {
   @if (emisor(); as datos) {
     <app-documento-no-fiscal-imprimible [documento]="documentoDe(r)" [emisor]="datos" (cerrar)="cerrarImpresion()" />
+  }
+  <!-- Anular, como anular una venta: modal con el botón rojo de peligro (#70/#81). Esc la cancela sin cerrar el pop-up. -->
+  @if (confirmandoAnulacion()) {
+    <app-confirmacion
+      [titulo]="'¿Anular el remito N.º ' + r.numero + '?'"
+      [mensaje]="'Anular devuelve al stock lo que salió con el remito N.º ' + r.numero + '. No se puede deshacer.'"
+      textoConfirmar="Anular el remito"
+      [peligro]="true"
+      [enVuelo]="anulando()"
+      (confirmar)="anular()"
+      (cancelar)="noAnular()"
+    />
   }
 }

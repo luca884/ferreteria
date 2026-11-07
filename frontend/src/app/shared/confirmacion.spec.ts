@@ -83,6 +83,33 @@ describe('Confirmacion', () => {
     expect(confirmadas).toBe(0);
   });
 
+  it('en vuelo los dos botones quedan deshabilitados y Esc y Enter no hacen nada', async () => {
+    await abrir({ titulo: '¿Anular el remito N.º 5?', textoConfirmar: 'Anular el remito', peligro: true, enVuelo: true });
+
+    expect(boton('confirmar').disabled).toBe(true);
+    expect(boton('cancelar').disabled).toBe(true);
+    // Con los botones deshabilitados el foco no queda en ninguno: la tecla llega al diálogo.
+    const dialogo = el().querySelector<HTMLElement>('[role="alertdialog"]')!;
+    const enDialogo = (key: string) => {
+      const evento = new KeyboardEvent('keydown', { key, cancelable: true, bubbles: true });
+      dialogo.dispatchEvent(evento);
+      return evento;
+    };
+    const esc = enDialogo('Escape');
+    const enter = enDialogo('Enter');
+    expect(canceladas).toBe(0);
+    expect(confirmadas).toBe(0);
+    expect(esc.defaultPrevented).toBe(true);
+    expect(enter.defaultPrevented).toBe(true);
+  });
+
+  it('sin enVuelo los botones arrancan habilitados (el valor por defecto)', async () => {
+    await baja();
+
+    expect(boton('confirmar').disabled).toBe(false);
+    expect(boton('cancelar').disabled).toBe(false);
+  });
+
   it('los botones confirman y cancelan', async () => {
     await baja();
 

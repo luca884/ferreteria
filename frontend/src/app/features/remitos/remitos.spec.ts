@@ -159,6 +159,8 @@ describe('Remitos', () => {
     );
   const boton = (texto: string, dentro: ParentNode = el()) =>
     Array.from(dentro.querySelectorAll<HTMLButtonElement>('button')).find((b) => normal(b.textContent) === texto);
+  /** La confirmación de anular: el modal compartido, fuera del pop-up del detalle (#70/#81). */
+  const confirmacion = () => el().querySelector<HTMLElement>('app-confirmacion [role="alertdialog"]');
   const alerta = () => normal(el().querySelector('[role="alert"]')?.textContent);
 
   async function abrirDetalle(indice = 0) {
@@ -497,6 +499,19 @@ describe('Remitos', () => {
 
       expect(normal(detalle()!.querySelector('.nota-estado')?.textContent)).toBe('Está anulado: el stock ya volvió.');
     });
+
+    it('uno anulado dice quién lo anuló y cuándo (#81)', async () => {
+      await crear();
+      api.obtener.mockReturnValue(
+        of(detalleDe(5, { estado: 'ANULADO', anuladoPor: 'Dueño Tornillo', fechaAnulacion: '2026-11-07T10:30:00' })),
+      );
+
+      await abrirDetalle(0);
+
+      expect(normal(detalle()!.querySelector('.nota-estado')?.textContent)).toBe(
+        'Está anulado: el stock ya volvió. Lo anuló Dueño Tornillo el 07/11/2026 10:30.',
+      );
+    });
   });
 
   describe('anular', () => {
@@ -506,10 +521,25 @@ describe('Remitos', () => {
 
       await click(boton('Anular', detalle()!));
 
-      expect(normal(el().querySelector('.confirmacion')?.textContent)).toContain(
+      expect(normal(confirmacion()?.textContent)).toContain(
         'Anular devuelve al stock lo que salió con el remito N.º 5.',
       );
       expect(api.anular).not.toHaveBeenCalled();
+    });
+
+    it('la pregunta es un modal como el de anular una venta: título con el número y el botón rojo de peligro (#70/#81)', async () => {
+      await crear([resumen(5)], 'DUENO');
+      await abrirDetalle(0);
+
+      await click(boton('Anular', detalle()!));
+
+      expect(confirmacion()!.getAttribute('aria-modal')).toBe('true');
+      expect(normal(confirmacion()!.querySelector('h2')?.textContent)).toBe('¿Anular el remito N.º 5?');
+      expect(normal(confirmacion()?.textContent)).toContain('No se puede deshacer.');
+      const anular = boton('Anular el remito', confirmacion()!)!;
+      expect(anular.classList).toContain('peligro');
+      expect(anular.classList).not.toContain('primario');
+      expect(el().querySelector('.confirmacion')).toBeNull();
     });
 
     it('Cancelar lo deja como estaba', async () => {
@@ -517,9 +547,9 @@ describe('Remitos', () => {
       await abrirDetalle(0);
       await click(boton('Anular', detalle()!));
 
-      await click(boton('Cancelar', el().querySelector<HTMLElement>('.confirmacion')!));
+      await click(boton('Cancelar', confirmacion()!));
 
-      expect(el().querySelector('.confirmacion')).toBeNull();
+      expect(confirmacion()).toBeNull();
       expect(api.anular).not.toHaveBeenCalled();
       expect(boton('Anular', detalle()!)).toBeDefined();
     });
@@ -529,7 +559,7 @@ describe('Remitos', () => {
       await abrirDetalle(0);
       await click(boton('Anular', detalle()!));
       api.anular.mockReturnValue(new Subject<RemitoResponse>());
-      await click(boton('Anular el remito', el().querySelector<HTMLElement>('.confirmacion')!));
+      await click(boton('Anular el remito', confirmacion()!));
 
       // Chrome saca el foco del botón que se deshabilita y lo deja en el body; jsdom no, así que se hace a mano.
       (document.activeElement as HTMLElement | null)?.blur();
@@ -537,7 +567,7 @@ describe('Remitos', () => {
       await refrescar();
 
       expect(detalle()).not.toBeNull();
-      expect(el().querySelector('.confirmacion')).not.toBeNull();
+      expect(confirmacion()).not.toBeNull();
     });
 
     it('la pregunta toma el foco en Cancelar (así queda a la vista) y Esc la cancela sin cerrar el detalle', async () => {
@@ -545,13 +575,12 @@ describe('Remitos', () => {
       await abrirDetalle(0);
       await click(boton('Anular', detalle()!));
 
-      const confirmacion = el().querySelector<HTMLElement>('.dialogo-detalle-cuerpo .confirmacion')!;
-      expect(document.activeElement).toBe(boton('Cancelar', confirmacion));
+      expect(document.activeElement).toBe(boton('Cancelar', confirmacion()!));
 
       escape();
       await refrescar();
 
-      expect(el().querySelector('.confirmacion')).toBeNull();
+      expect(confirmacion()).toBeNull();
       expect(detalle()).not.toBeNull();
       expect(api.anular).not.toHaveBeenCalled();
     });
@@ -561,12 +590,12 @@ describe('Remitos', () => {
       await abrirDetalle(0);
       await click(boton('Anular', detalle()!));
 
-      await click(boton('Anular el remito', el().querySelector<HTMLElement>('.confirmacion')!));
+      await click(boton('Anular el remito', confirmacion()!));
 
       expect(api.anular).toHaveBeenCalledWith(50);
       expect(normal(detalle()!.querySelector('.estado')?.textContent)).toBe('Anulado');
       expect(celdas(filas()[0])[4]).toBe('Anulado');
-      expect(el().querySelector('.confirmacion')).toBeNull();
+      expect(confirmacion()).toBeNull();
       expect(acciones().map((b) => normal(b.textContent))).toEqual(['Imprimir']);
     });
 
@@ -579,7 +608,7 @@ describe('Remitos', () => {
       );
       api.obtener.mockReturnValue(of(detalleDe(5, { estado: 'FACTURADO' })));
 
-      await click(boton('Anular el remito', el().querySelector<HTMLElement>('.confirmacion')!));
+      await click(boton('Anular el remito', confirmacion()!));
 
       expect(alerta()).toContain('Ese remito ya se facturó.');
       expect(acciones().map((b) => normal(b.textContent))).toEqual(['Imprimir']);
@@ -592,7 +621,7 @@ describe('Remitos', () => {
       await click(boton('Anular', detalle()!));
       api.anular.mockReturnValue(throwError(() => new HttpErrorResponse({ status: 500 })));
 
-      await click(boton('Anular el remito', el().querySelector<HTMLElement>('.confirmacion')!));
+      await click(boton('Anular el remito', confirmacion()!));
 
       expect(alerta()).toContain('No se pudo anular el remito. Probá de nuevo.');
     });
@@ -603,9 +632,9 @@ describe('Remitos', () => {
       await click(boton('Anular', detalle()!));
       api.anular.mockReturnValue(new Subject<RemitoResponse>());
 
-      await click(boton('Anular el remito', el().querySelector<HTMLElement>('.confirmacion')!));
+      await click(boton('Anular el remito', confirmacion()!));
 
-      const botones = Array.from(el().querySelectorAll<HTMLButtonElement>('.confirmacion button'));
+      const botones = Array.from(confirmacion()!.querySelectorAll<HTMLButtonElement>('button'));
       expect(botones.every((b) => b.disabled)).toBe(true);
     });
   });

@@ -87,6 +87,9 @@ export interface RemitoResponse {
   facturadoPor?: FacturadoPor;
   /** Quién lo emitió (su nombre): solo en el detalle (informacion-y-links, S4). */
   usuario?: string;
+  /** Cuándo se anuló (LocalDateTime ISO sin zona) y quién: solo si se anuló desde la V47 (#81). */
+  fechaAnulacion?: string;
+  anuladoPor?: string;
 }
 
 /**

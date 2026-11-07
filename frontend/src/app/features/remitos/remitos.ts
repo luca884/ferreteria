@@ -19,6 +19,7 @@ import { AuthService } from '../../core/auth/auth.service';
 import { MontoPipe } from '../../core/formato/monto';
 import { cantidadConUnidad } from '../../core/formato/unidad';
 import { BarraAcciones } from '../../shared/barra-acciones';
+import { Confirmacion } from '../../shared/confirmacion';
 import { porcentajeDescuentoGeneral } from '../../shared/descuento-general';
 import { DialogoDetalle } from '../../shared/dialogo-detalle';
 import { idsDeLaRuta } from '../../shared/documento-por-ruta';
@@ -27,6 +28,7 @@ import { EmisorService } from '../../shared/documento-no-fiscal/emisor.service';
 import { DatosFiscales } from '../datos-fiscales/datos-fiscales.service';
 import { ArticulosService } from '../articulos/articulos.service';
 import { fechaHoraLocal } from '../caja/caja.models';
+import { fechaCompletaLocal } from '../clientes/cuenta/cobranza.models';
 import { ClientesService } from '../clientes/clientes.service';
 import { ArticuloMostrador, comoArticuloMostrador } from '../mostrador/mostrador.models';
 import { ticketDeRemito } from '../mostrador/ticket';
@@ -61,7 +63,7 @@ const MENSAJE_NUMERO = 'El número tiene que ser un entero.';
  */
 @Component({
   selector: 'app-remitos',
-  imports: [BarraAcciones, DecimalPipe, DialogoDetalle, DocumentoNoFiscalImprimible, MontoPipe, RouterLink],
+  imports: [BarraAcciones, Confirmacion, DecimalPipe, DialogoDetalle, DocumentoNoFiscalImprimible, MontoPipe, RouterLink],
   templateUrl: './remitos.html',
   styleUrl: './remitos.css',
 })
@@ -78,6 +80,8 @@ export class Remitos implements OnInit {
   protected readonly estados = ESTADOS_REMITO;
   protected readonly etiqueta = ETIQUETA_ESTADO_REMITO;
   protected readonly fechaHora = fechaHoraLocal;
+  /** Con año, como la anulación de una venta: un remito se puede anular mucho después (#81). */
+  protected readonly fechaCompleta = fechaCompletaLocal;
   protected readonly cantidadConUnidad = cantidadConUnidad;
   protected readonly diferencia = textoDeDiferencia;
   protected readonly color = COLOR_ESTADO_REMITO;
@@ -130,7 +134,7 @@ export class Remitos implements OnInit {
   });
   protected readonly puedeAnular = computed(() => this.puedePasar() && this.esDueno());
 
-  /** El «Cancelar» de la pregunta abierta (anular o reemplazar): toma el foco al aparecer, así queda a la vista. */
+  /** El «Cancelar» de la pregunta de reemplazar el ticket: toma el foco al aparecer, así queda a la vista. */
   private readonly cancelarPregunta = viewChild<ElementRef<HTMLButtonElement>>('cancelarPregunta');
 
   constructor() {
@@ -348,12 +352,13 @@ export class Remitos implements OnInit {
     this.reemplazo.set(null);
   }
 
-  /** Esc en una pregunta (anular o reemplazar) la cancela a ella sola: el pop-up del detalle sigue abierto. */
+  /**
+   * Esc en la pregunta de reemplazar el ticket la cancela a ella sola: el pop-up del detalle sigue abierto. La de anular es
+   * el modal compartido, que maneja su Esc.
+   */
   protected cancelarConEsc(evento: Event): void {
     evento.preventDefault();
     evento.stopPropagation();
-    if (this.anulando()) return;
-    this.noAnular();
     this.noReemplazar();
   }
 

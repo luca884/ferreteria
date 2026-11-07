@@ -8,6 +8,7 @@ import org.springframework.test.web.servlet.ResultActions;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -157,6 +158,32 @@ class RemitoConsultaIntegrationTest extends VentasTestBase {
             assertThat(m.get("comprobante_id")).isNull();
         });
         assertThat(movimientos(t)).isEqualTo(4);
+    }
+
+    @Test
+    @DisplayName("el remito anulado dice quien lo anulo y cuando, en la anulacion y en el detalle; repetirla no lo cambia (#81)")
+    void anuladoDiceQuienYCuando() throws Exception {
+        Tienda t = tiendaSinCaja();
+        long a = articulo(t, "Tornillo", "UNIDAD", "100.00", "10");
+        String vendedor = login(t.emailVendedor());
+        String duenio = login(t.emailDueno());
+        long id = remito(vendedor, a, "2", "100.00", "200.00").get("remitoId").asLong();
+        assertThat(getJson("/api/remitos/" + id, duenio).has("anuladoPor")).isFalse();
+        assertThat(getJson("/api/remitos/" + id, duenio).has("fechaAnulacion")).isFalse();
+
+        LocalDateTime antes = HoraArgentina.ahora().minusSeconds(1);
+        JsonNode anulado = json(anular(duenio, id).andExpect(status().isOk()));
+        JsonNode detalle = getJson("/api/remitos/" + id, vendedor);
+        JsonNode repetida = json(anular(duenio, id).andExpect(status().isOk()));
+
+        for (JsonNode r : List.of(anulado, detalle, repetida)) {
+            assertThat(r.get("anuladoPor").asText()).isEqualTo("Dueno Ventas");
+            assertThat(r.get("usuario").asText()).isEqualTo("Vendedor Ventas");
+            assertThat(LocalDateTime.parse(r.get("fechaAnulacion").asText())).isAfter(antes);
+        }
+        assertThat(repetida.get("fechaAnulacion").asText()).isEqualTo(anulado.get("fechaAnulacion").asText());
+        assertThat(jdbc.queryForObject("select usuario_anulacion_id from remito where id = ?", Long.class, id))
+                .isNotNull();
     }
 
     @Test
