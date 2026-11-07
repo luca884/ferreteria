@@ -78,6 +78,22 @@
         {{ filtrada() ? 'No hay ventas con esos filtros.' : 'Todavía no hay ventas.' }}
       </p>
     } @else {
+      @if (actual.totalPages > 1) {
+        <nav class="paginas" aria-label="Páginas de ventas">
+          <button type="button" class="secundario chico" [disabled]="actual.page === 0" (click)="cargar(actual.page - 1)">
+            Anterior
+          </button>
+          <span>Página {{ actual.page + 1 }} de {{ actual.totalPages }}</span>
+          <button
+            type="button"
+            class="secundario chico"
+            [disabled]="actual.page + 1 >= actual.totalPages"
+            (click)="cargar(actual.page + 1)"
+          >
+            Siguiente
+          </button>
+        </nav>
+      }
       <table class="ventas">
         <caption class="sr-only">
           Ventas, las más nuevas primero. Elegí una para ver su detalle y reimprimirla.
@@ -122,7 +138,7 @@
                   }
                 }
               </td>
-              <td>{{ fecha(fila.fecha) }}</td>
+              <td class="fecha">{{ fecha(fila.fecha) }}</td>
               <td>{{ cliente(fila.clienteNombre) }}</td>
               <td>{{ fila.usuario ?? '—' }}</td>
               <td class="num">{{ (esNota(fila) ? -fila.total : fila.total) | monto }}</td>
@@ -130,23 +146,6 @@
           }
         </tbody>
       </table>
-
-      @if (actual.totalPages > 1) {
-        <nav class="paginas" aria-label="Páginas de ventas">
-          <button type="button" class="secundario chico" [disabled]="actual.page === 0" (click)="cargar(actual.page - 1)">
-            Anterior
-          </button>
-          <span>Página {{ actual.page + 1 }} de {{ actual.totalPages }}</span>
-          <button
-            type="button"
-            class="secundario chico"
-            [disabled]="actual.page + 1 >= actual.totalPages"
-            (click)="cargar(actual.page + 1)"
-          >
-            Siguiente
-          </button>
-        </nav>
-      }
     }
   } @else if (cargando()) {
     <p class="ayuda estado-vacio">Cargando…</p>
