@@ -33,6 +33,11 @@ public record RecargosDeCosto(List<RecargoCosto> lista) {
         return lista.isEmpty();
     }
 
+    /** La suma de los % de los recargos (4.44 es 4,44 %); 0 sin recargos. */
+    public BigDecimal porcentajeTotal() {
+        return suma(lista);
+    }
+
     /** El costo real: sin recargos devuelve el costo tal cual (misma escala); con recargos, a 2 decimales HALF_UP. */
     public BigDecimal aplicar(BigDecimal costo) {
         if (lista.isEmpty()) {

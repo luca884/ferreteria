@@ -30,6 +30,7 @@ import { Moneda } from '../articulos/articulo.models';
 import { Importacion } from '../importaciones/importacion.models';
 import { ImportacionesService } from '../importaciones/importaciones.service';
 import {
+  CambioMasivo,
   ConteosMasivos,
   ModoMasivo,
   PedidoMasivo,
@@ -279,6 +280,17 @@ export class ActualizacionMasiva implements OnInit {
   /** Un costo en la moneda del artículo: `$ 100,00` o `US$ 10,00`. */
   protected costo(valor: number, moneda: Moneda | undefined): string {
     return formatearCosto(valor, moneda);
+  }
+
+  /**
+   * #97: el costo real de la fila (el costo más los recargos), «$ A → $ B» o uno solo si no cambia; null sin
+   * recargos. Con él la cuenta costo × margen × IVA cierra en la vista previa.
+   */
+  protected costoRealDe(c: CambioMasivo): string | null {
+    if (c.recargosPorcentaje == null || c.costoRealAnterior == null || c.costoRealNuevo == null) return null;
+    const nuevo = this.costo(c.costoRealNuevo, c.moneda);
+    if (c.costoRealAnterior === c.costoRealNuevo) return nuevo;
+    return `${this.costo(c.costoRealAnterior, c.moneda)} → ${nuevo}`;
   }
 
   /** El nombre del rubro para la vista previa: «Sin rubro» si no tiene; «—» si ya no está en la lista. */

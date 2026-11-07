@@ -694,6 +694,97 @@ describe('ActualizacionMasiva', () => {
       ]);
     });
 
+    describe('recargos del costo y ajustes del precio (#97)', () => {
+      const detalles = (td: Element) =>
+        Array.from(td.querySelectorAll('.detalle-fila')).map((p) => p.textContent?.replace(/\s+/g, ' ').trim());
+
+      it('con recargos, el costo suma el costo real antes y después y la suma de los recargos', async () => {
+        await conVistaPrevia({
+          cambios: [
+            cambio({
+              costoAnterior: 115,
+              costoNuevo: 126.5,
+              recargosPorcentaje: 4.44,
+              costoRealAnterior: 120.11,
+              costoRealNuevo: 132.12,
+            }),
+          ],
+        });
+
+        const tds = filasDeCambios()[0].querySelectorAll('td');
+        expect(detalles(tds[2])).toEqual(['Costo real: $ 120,11 → $ 132,12 (recargos 4,44 %)']);
+        expect(celdas(filasDeCambios()[0])[2]).toBe('$ 115,00 → $ 126,50 Costo real: $ 120,11 → $ 132,12 (recargos 4,44 %)');
+        expect(detalles(tds[5])).toEqual([]);
+      });
+
+      it('con recargos y el costo sin cambio, el costo real va una sola vez (TOR-001)', async () => {
+        await conVistaPrevia({
+          cambios: [
+            cambio({
+              costoAnterior: 115,
+              costoNuevo: 115,
+              margenNuevo: 40,
+              recargosPorcentaje: 4.44,
+              costoRealAnterior: 120.11,
+              costoRealNuevo: 120.11,
+            }),
+          ],
+        });
+
+        expect(detalles(filasDeCambios()[0].querySelectorAll('td')[2])).toEqual([
+          'Costo real: $ 120,11 (recargos 4,44 %)',
+        ]);
+      });
+
+      it('en dólares, el costo real va en dólares', async () => {
+        await conVistaPrevia({
+          cambios: [
+            cambio({
+              moneda: 'USD',
+              costoAnterior: 10,
+              costoNuevo: 11,
+              recargosPorcentaje: 10,
+              costoRealAnterior: 11,
+              costoRealNuevo: 12.1,
+            }),
+          ],
+        });
+
+        expect(detalles(filasDeCambios()[0].querySelectorAll('td')[2])).toEqual([
+          'Costo real: US$ 11,00 → US$ 12,10 (recargos 10 %)',
+        ]);
+      });
+
+      it('con ajustes, el precio suma el precio calculado sin los ajustes', async () => {
+        await conVistaPrevia({
+          cambios: [cambio({ margenNuevo: 40, precioAnterior: 179.69, precioNuevo: 186.34, precioSinAjustes: 169.4 })],
+        });
+
+        const tds = filasDeCambios()[0].querySelectorAll('td');
+        expect(detalles(tds[5])).toEqual(['Sin ajustes: $ 169,40']);
+        expect(celdas(filasDeCambios()[0])[5]).toBe('$ 179,69 → $ 186,34 Sin ajustes: $ 169,40');
+        expect(detalles(tds[2])).toEqual([]);
+      });
+
+      it('sin recargos ni ajustes (los campos en null) la fila queda como antes', async () => {
+        await conVistaPrevia({
+          cambios: [
+            cambio({ recargosPorcentaje: null, costoRealAnterior: null, costoRealNuevo: null, precioSinAjustes: null }),
+          ],
+        });
+
+        expect(el().querySelectorAll('table.cambios .detalle-fila')).toHaveLength(0);
+        expect(celdas(filasDeCambios()[0])).toEqual([
+          'A1',
+          'Tornillo 8mm',
+          `$ 100,00 → $ 110,00`,
+          '30 %',
+          '21 %',
+          `$ 160,00 → $ 180,00`,
+        ]);
+      });
+    });
+
     it('resalta la advertencia de la fila que la trae y solo de esa (MARGEN 300)', async () => {
       const advertencia = 'El precio sube un 206,25 % (de 160,00 a 490,00). Revisá que sea correcto.';
       await conVistaPrevia({

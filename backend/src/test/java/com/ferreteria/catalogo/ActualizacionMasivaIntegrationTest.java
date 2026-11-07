@@ -1232,6 +1232,45 @@ class ActualizacionMasivaIntegrationTest extends IntegrationTestBase {
         assertThat(decimal(conAjuste, "precio_final")).isEqualByComparingTo("200.00");
     }
 
+    /** #97: la fila trae los recargos, el costo real y el precio sin ajustes; sin recargos ni ajustes van en null. */
+    @Test
+    void laVistaPreviaTraeLosRecargosElCostoRealYElPrecioSinAjustes() throws Exception {
+        Tenant t = crearTenant();
+        jdbc.update("update ferreteria set redondeo_multiplo = 0 where id = ?", t.ferreteriaId());
+        long conRecargo = insertarArticulo(t, "115.00", "190.83");
+        jdbc.update("update articulo set recargos_costo = ? where id = ?",
+                "[{\"nombre\":\"EMBALAJE Y CARGA\",\"porcentaje\":4.44}]", conRecargo);
+        long conAjuste = insertarArticulo(t, "100.00", "173.03");
+        jdbc.update("update articulo set ajustes_precio = ? where id = ?",
+                "[{\"nombre\":\"Flete\",\"tipo\":\"PORCENTAJE\",\"valor\":10}]", conAjuste);
+        long sinNada = insertarArticulo(t, "100.00", "157.30");
+
+        JsonNode cambios = vistaPrevia(t.dueno(), pedido("COSTO_PORCENTAJE", "10")).get("cambios");
+
+        assertThat(cambios).hasSize(3);
+        JsonNode recargo = cambios.get(0);
+        assertThat(recargo.get("articuloId").asLong()).isEqualTo(conRecargo);
+        assertThat(dec(recargo.get("recargosPorcentaje"))).isEqualByComparingTo("4.44");
+        // 115 x 1,0444 = 120,11; 126,50 x 1,0444 = 132,12.
+        assertThat(dec(recargo.get("costoRealAnterior"))).isEqualByComparingTo("120.11");
+        assertThat(dec(recargo.get("costoRealNuevo"))).isEqualByComparingTo("132.12");
+        assertThat(recargo.get("precioSinAjustes").isNull()).isTrue();
+
+        JsonNode ajuste = cambios.get(1);
+        assertThat(ajuste.get("articuloId").asLong()).isEqualTo(conAjuste);
+        // 110 x 1,30 x 1,21 = 173,03; +10 % = 190,34.
+        assertThat(dec(ajuste.get("precioSinAjustes"))).isEqualByComparingTo("173.03");
+        assertThat(dec(ajuste.get("precioNuevo"))).isEqualByComparingTo("190.34");
+        assertThat(ajuste.get("recargosPorcentaje").isNull()).isTrue();
+
+        JsonNode nada = cambios.get(2);
+        assertThat(nada.get("articuloId").asLong()).isEqualTo(sinNada);
+        for (String campo : List.of("recargosPorcentaje", "costoRealAnterior", "costoRealNuevo", "precioSinAjustes")) {
+            assertThat(nada.has(campo)).as(campo).isTrue();
+            assertThat(nada.get(campo).isNull()).as(campo).isTrue();
+        }
+    }
+
     @Test
     void precioFinalMasDiezPorCientoDejaPrecioManualSinTocarElCostoYGuardaHistorialMasivo() throws Exception {
         Tenant t = crearTenant();
