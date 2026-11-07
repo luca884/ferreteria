@@ -108,9 +108,10 @@
   --celda-x: 12px;
 
   /*
-   * Tono por sección (mejoras-ferreteros-bloque-2, S2): sutil, solo para distinguir una parte de otra. Cada tono da
-   * ≥ 4,5:1 sobre blanco y sobre su fondo suave. Lo toma el elemento con `data-seccion` (el shell, el grupo del menú)
-   * y lo heredan sus hijos como --tono y --tono-suave.
+   * Tono por sección (mejoras-ferreteros-bloque-2, S2; más marcado en arreglos-configuracion, #5): tiñe la barra de
+   * arriba de cada pantalla y rellena la opción abierta del menú. Cada tono da ≥ 4,5:1 sobre blanco, sobre su fondo
+   * suave y con letra blanca encima. Configuración era gris pizarra y no se distinguía: pasó a rosa. Lo toma el
+   * elemento con `data-seccion` (el shell, el grupo del menú) y lo heredan sus hijos como --tono y --tono-suave.
    */
   --tono-mostrador: #1d4ed8;
   --tono-mostrador-suave: #eff6ff;
@@ -122,8 +123,8 @@
   --tono-compras-suave: #f5f3ff;
   --tono-precios: #047857;
   --tono-precios-suave: #ecfdf5;
-  --tono-configuracion: #475569;
-  --tono-configuracion-suave: #f1f5f9;
+  --tono-configuracion: #be185d;
+  --tono-configuracion-suave: #fdf2f8;
   --tono: var(--acento-fuerte);
   --tono-suave: var(--acento-suave);
 
@@ -441,6 +442,7 @@ button:disabled[data-tecla]::after {
 /*
  * <app-barra-acciones>: la pantalla la pone primera en su plantilla con su <h1> y sus acciones adentro.
  * Ocupa todo el ancho del área de contenido (anula el padding del shell) y queda fija arriba al scrollear.
+ * Lleva el tono de la sección abierta: fondo suave, filete abajo y el título en el tono (#5).
  */
 app-barra-acciones {
   position: sticky;
@@ -453,13 +455,14 @@ app-barra-acciones {
   min-height: var(--alto-barra);
   margin: 0 calc(-1 * var(--pantalla-x)) var(--pantalla-y);
   padding: 8px var(--pantalla-x);
-  border-bottom: 1px solid var(--borde);
-  background: var(--superficie);
+  border-bottom: 2px solid var(--tono);
+  background: var(--tono-suave);
 }
 app-barra-acciones h1 {
   margin-right: var(--e-3);
   font-size: var(--texto-lg);
   font-weight: 600;
+  color: var(--tono);
 }
 
 /* Botón de la barra: tecla (o ícono) arriba y nombre abajo, como en un programa de mostrador. */
