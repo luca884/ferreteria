@@ -228,8 +228,20 @@ describe('FormularioCotizacion', () => {
       expect(guardados[0].horaRecalculo).toBe('08:15');
     });
 
+    it('acepta de 00:00 a 23:59', async () => {
+      for (const [escrita, guardada] of [['00:00', '00:00'], ['23:59', '23:59'], ['0:05', '00:05']]) {
+        await crear();
+        await escribir(q<HTMLInputElement>('#horaRecalculo'), escrita);
+
+        await enviar();
+
+        expect(guardados[0]?.horaRecalculo, escrita).toBe(guardada);
+        TestBed.resetTestingModule();
+      }
+    });
+
     it('una hora que no existe no guarda y muestra el mismo error', async () => {
-      for (const invalida of ['25:00', '8 AM', '08:60']) {
+      for (const invalida of ['25:00', '24:00', '8 AM', '08:60', '0800']) {
         await crear();
         await escribir(q<HTMLInputElement>('#horaRecalculo'), invalida);
 

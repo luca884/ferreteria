@@ -206,6 +206,7 @@ describe('PaginaConfiguracionPrecios', () => {
     await enviar();
 
     expect(texto('app-confirmacion p')).toBe('Se recalcula el precio de los artículos que dependen de estos valores.');
+    expect(el().querySelector('app-confirmacion table')).toBeNull();
   });
 
   it('muestra los artículos que conservaron el precio por sus ajustes', async () => {
@@ -340,6 +341,23 @@ describe('PaginaConfiguracionPrecios', () => {
 
       expect(el().querySelector('#redondeo-ejemplo')).toBeNull();
       expect(input('redondeo').getAttribute('aria-describedby')).toBe('redondeo-pista');
+    });
+
+    it('con el múltiplo guardado, el ejemplo se ve al abrir la pantalla', async () => {
+      await crear(true, vi.fn(() => of({ ...actual, redondeoMultiplo: 10 })));
+
+      expect(ejemplo()).toBe(
+        'Con 10, un precio de $ 909.788,60 queda en $ 909.790,00. Siempre hacia arriba, así no perdés margen.',
+      );
+    });
+
+    it('con un múltiplo fuera de rango o vacío no hay ejemplo', async () => {
+      await crear();
+
+      for (const valor of ['2000', '']) {
+        await escribir('redondeo', valor);
+        expect(el().querySelector('#redondeo-ejemplo'), valor).toBeNull();
+      }
     });
   });
 });

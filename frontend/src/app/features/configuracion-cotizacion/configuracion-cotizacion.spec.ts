@@ -372,6 +372,8 @@ describe('PaginaConfiguracionCotizacion', () => {
 
       expect(texto(q('.vista-previa .resumen'))).toBe('No hay artículos cargados en dólares.');
       expect(el().querySelector('button.aplicar-recalculo')).toBeNull();
+      expect(el().querySelector('.vista-previa .sin-cambios')).toBeNull();
+      expect(el().querySelector('.vista-previa table')).toBeNull();
     });
 
     it('«Aplicar» recalcula con el dólar que se vio, sin confirmaDesvio', async () => {
