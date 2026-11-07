@@ -4,7 +4,7 @@ import { NavigationEnd, Router, RouterLink, RouterLinkActive, RouterOutlet } fro
 import { EMPTY, catchError, filter, interval, merge, pairwise, startWith, switchMap } from 'rxjs';
 import { ROL_LABELS } from '../core/auth/auth.models';
 import { AuthService } from '../core/auth/auth.service';
-import { Avisos } from '../core/avisos/avisos';
+import { Aviso, Avisos } from '../core/avisos/avisos';
 import { Cotizacion } from '../core/cotizacion/cotizacion.models';
 import { CotizacionService } from '../core/cotizacion/cotizacion.service';
 import { BuscadorMenu } from './buscador-menu';
@@ -54,7 +54,7 @@ export class Shell {
    * El aviso que dejó la pantalla anterior y ninguna tomó al abrirse (por ejemplo, «Cambiaste tu contraseña.»: el Dueño
    * y el Vendedor llegan a pantallas distintas). Se toma al terminar cada navegación, así que la siguiente lo saca.
    */
-  protected readonly avisoAlLlegar = signal<string | null>(null);
+  protected readonly avisoAlLlegar = signal<Aviso | null>(null);
 
   protected readonly grupos = computed(() => gruposPara(this.auth.esDueno()));
   private readonly url = signal(this.router.url);

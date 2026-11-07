@@ -416,10 +416,25 @@ describe('Shell', () => {
     const aviso = el.querySelector('main .aviso-al-llegar');
     expect(aviso?.textContent?.trim()).toBe('Cambiaste tu contraseña.');
     expect(aviso?.getAttribute('role')).toBe('status');
+    expect(aviso?.classList.contains('exito')).toBe(true);
+    expect(aviso?.classList.contains('advertencia')).toBe(false);
 
     await irA('/ventas');
 
     expect(el.querySelector('.aviso-al-llegar')).toBeNull();
+  });
+
+  it('un aviso de advertencia (el de «No tenés acceso a …») sale en amarillo, no en el verde de éxito', async () => {
+    const el = await render(true, null, TODAS);
+    TestBed.inject(Avisos).dejar('No tenés acceso a Ventas.', 'advertencia');
+
+    await irA('/mostrador');
+
+    const aviso = el.querySelector('main .aviso-al-llegar');
+    expect(aviso?.textContent?.trim()).toBe('No tenés acceso a Ventas.');
+    expect(aviso?.getAttribute('role')).toBe('status');
+    expect(aviso?.classList.contains('advertencia')).toBe(true);
+    expect(aviso?.classList.contains('exito')).toBe(false);
   });
 
   it('sin aviso pendiente no muestra nada', async () => {

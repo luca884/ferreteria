@@ -49,7 +49,7 @@ export class Articulos implements OnInit {
   protected readonly cargando = signal(true);
   protected readonly error = signal<string | null>(null);
   /** Aviso de éxito (guardado en el formulario, reactivación, ajuste de stock). */
-  protected readonly aviso = signal<string | null>(this.avisos.tomar());
+  protected readonly aviso = signal<string | null>(this.avisos.tomar()?.texto ?? null);
   /** Búsqueda ya aplicada: la que se manda al servidor, no lo que se está tipeando. */
   protected readonly busquedaAplicada = signal('');
   protected readonly incluirInactivos = signal(false);
