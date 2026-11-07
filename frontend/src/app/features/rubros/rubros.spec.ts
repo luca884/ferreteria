@@ -412,6 +412,23 @@ describe('Rubros', () => {
       expect(el().querySelector('.alerta.exito')?.textContent).toContain('Se recalcularon 23 precios.');
     });
 
+    it('si cambian el nombre y el margen juntos, la confirmación usa el nombre nuevo', async () => {
+      await crear([buloneria], true);
+      servicio.vistaPreviaMargen.mockReturnValue(of(vista(1, [tornillo])));
+      await editarFila(0);
+      await escribir('nombre', 'Bulones');
+      await escribir('margen', '45');
+
+      await enviar();
+
+      const dialogo = el().querySelector('app-confirmacion')!;
+      expect(dialogo.querySelector('h2')?.textContent?.trim()).toBe('¿Cambiar el margen de Bulones de 35 % a 45 %?');
+
+      await clickEn('app-confirmacion button.confirmar');
+
+      expect(servicio.actualizar).toHaveBeenCalledWith(1, { nombre: 'Bulones', margenPorcentaje: 45 });
+    });
+
     it('si el backend saltea artículos por sus ajustes al cambiar el margen, los lista como advertencia', async () => {
       const aviso =
         'No se cambió el precio de TOR-1 (Tornillo): con sus ajustes quedaría en 0 o menos. Revisá sus ajustes.';
