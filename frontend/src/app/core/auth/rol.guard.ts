@@ -27,11 +27,13 @@ export function conRoles(roles: readonly Rol[]): Data {
  */
 export const rolGuard: CanActivateChildFn = (ruta) => {
   const router = inject(Router);
-  const rol = inject(AuthService).sesion()?.rol;
+  const auth = inject(AuthService);
+  const rol = auth.sesion()?.rol;
   if (!rol || !TODOS_LOS_ROLES.includes(rol)) return router.createUrlTree(['/login']);
   const roles = ruta.data['roles'] as readonly Rol[] | undefined;
   if (roles?.includes(rol)) return true;
-  inject(Avisos).dejar(`No tenés acceso a ${pantallaDe(ruta)}.`, 'advertencia');
+  // Con la contraseña por cambiar, `contrasenaGuard` (que corre junto con este) lo manda a cambiarla, no a su inicio.
+  if (!auth.debeCambiarContrasena()) inject(Avisos).dejar(`No tenés acceso a ${pantallaDe(ruta)}.`, 'advertencia');
   return router.createUrlTree(['/' + inicioDe(rol)]);
 };
 

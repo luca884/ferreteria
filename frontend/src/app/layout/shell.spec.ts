@@ -424,6 +424,27 @@ describe('Shell', () => {
     expect(el.querySelector('.aviso-al-llegar')).toBeNull();
   });
 
+  it('un aviso que llega sin cambiar de pantalla (navegación a la misma URL) se muestra ahí y no queda para la siguiente', async () => {
+    const el = await render(true, null, TODAS);
+    await irA('/mostrador');
+    TestBed.inject(Avisos).dejar('No tenés acceso a Ventas.', 'advertencia');
+
+    await irA('/mostrador');
+
+    expect(el.querySelector('main .aviso-al-llegar.advertencia')?.textContent?.trim()).toBe('No tenés acceso a Ventas.');
+    expect(TestBed.inject(Avisos).tomar()).toBeNull();
+  });
+
+  it('volver a la misma URL sin aviso pendiente no borra el que se está mostrando', async () => {
+    const el = await render(true, null, TODAS);
+    TestBed.inject(Avisos).dejar('Cambiaste tu contraseña.');
+    await irA('/mostrador');
+
+    await irA('/mostrador');
+
+    expect(el.querySelector('main .aviso-al-llegar')?.textContent?.trim()).toBe('Cambiaste tu contraseña.');
+  });
+
   it('un aviso de advertencia (el de «No tenés acceso a …») sale en amarillo, no en el verde de éxito', async () => {
     const el = await render(true, null, TODAS);
     TestBed.inject(Avisos).dejar('No tenés acceso a Ventas.', 'advertencia');

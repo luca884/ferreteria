@@ -25,7 +25,7 @@ Restricciones: solo frontend salvo que un S lo pida (ninguno lo pide hoy); test-
 - [x] T4 · S4 · ruta: inline · Aceptación: aviso «No tenés acceso a …» al redirigir · Evidencia: RED (no compila: `Avisos.dejar` sin tipo y `tomar()` de texto) → GREEN 519/519 en `avisos`, `rol.guard`, `shell`, `articulos/**` y `mi-contrasena/**`. `Avisos` guarda `{ texto, tipo }` (`exito` por defecto, `advertencia`); el guard deja «No tenés acceso a <pantalla>.» con el nombre del título de la ruta («Ventas · Ferretería» → «Ventas»; sin título, «esa pantalla») y sigue redirigiendo igual; el shell pinta `.alerta.exito` o `.alerta.advertencia` · Risk: item 3 (`Avisos` es compartido: Artículos y Cambiar contraseña cambian a `tomar()?.texto` / `{ texto, tipo }`) → `odd-verifier` en T7
 - [x] T5 · S5 · ruta: inline · Aceptación: Rubros con ancho acotado · Evidencia: excepción a test-first (solo CSS, ningún spec cubre estilos): `rubros.css` centra todo menos la barra en `--ancho-medio`, como Caja; ego-browser a 1920: `.listado` 880 px desde x=626, tabla 522 px (antes ~1300) · Risk: none
 - [x] T6 · S6 · ruta: inline · Aceptación: prototipo en el navegador, decisión de Luca y luego el cambio · Evidencia: prototipo en ego-browser con «Hoy», A, B, C y «B + Config. rosa» (Usuarios y Artículos); decisión L6. Excepción a test-first (solo CSS): `styles.css` (tonos, `app-barra-acciones`) y `layout/shell.css` (`nav a.activo`, `.contenido`). ego-browser a 1920, estilos calculados: Mostrador, Ventas, Artículos, Compras y Configuración con barra `--tono-suave`, filete y título en `--tono`, opción activa rellena con letra blanca, filete de 4 px · Risk: none (solo estilos; toda pantalla con barra cambia de color, que es lo pedido)
-- [ ] T7 · cierre · Aceptación: S7 en el navegador; suite frontend; `npx ng build`; ego-browser a 1920 en cada hallazgo con capturas para Luca; verificador solo si el Risk de alguna tarea nombra un ítem; Obsidian: `cambios/arreglos-configuracion.md`, marcar los hallazgos en la nota del recorrido y `estado-actual.md` · Evidencia: — · Risk: —
+- [x] T7 · cierre · Aceptación: S7 en el navegador; suite frontend; `npx ng build`; ego-browser a 1920 en cada hallazgo con capturas para Luca; verificador solo si el Risk de alguna tarea nombra un ítem; Obsidian: `cambios/arreglos-configuracion.md`, marcar los hallazgos en la nota del recorrido y `estado-actual.md` · Evidencia: L7 · Risk: —
 
 ## Log
 
@@ -36,7 +36,36 @@ Restricciones: solo frontend salvo que un S lo pida (ninguno lo pide hoy); test-
   > dale, vamos con tus recomendaciones, sumá Clientes
   Desactivar como «Dar de baja» de Proveedores (botón en la barra, confirmación al desactivar, reactivar directo) en Usuarios, Formas de pago y Clientes, sin el checkbox «Activa» en Editar; la guía del certificado siempre visible (también en el simulador) y «Subir certificado (.crt)» siempre visible, deshabilitado sin pedido con «Primero generá el pedido de certificado.»; el aviso «No tenés acceso a <pantalla>.» por `Avisos`, en color de advertencia; el color de la sección se decide con un prototipo en el navegador.
 - L4 (2026-11-07) Próximo paso: T1 a T5 en orden; T6 con el prototipo; T7 cierre.
+- L5 (2026-11-07) T2: en Formas de pago el botón dice «Activar», no «Reactivar», porque la forma «Cuenta corriente» nace inactiva y su pista ya decía «Activala» (ahora «Activala con «Activar» para vender a cuenta corriente.»). En Usuarios y Clientes queda «Reactivar». El aviso de la confirmación sigue la ayuda de cada pantalla (Usuarios: «Mostrar desactivados»; Clientes: «Solo activos»).
 - L6 (2026-11-07) Decisión de Luca sobre el color de la sección (S6), textual:
   > vamos con la C y la config rosa
   El blanco sobre cada tono da ≥ 4,5:1 (el más justo, Artículos `#b45309`, ~5:1); el rosa `#be185d` da ~6:1 sobre blanco.
-- L5 (2026-11-07) T2: en Formas de pago el botón dice «Activar», no «Reactivar», porque la forma «Cuenta corriente» nace inactiva y su pista ya decía «Activala» (ahora «Activala con «Activar» para vender a cuenta corriente.»). En Usuarios y Clientes queda «Reactivar». El aviso de la confirmación sigue la ayuda de cada pantalla (Usuarios: «Mostrar desactivados»; Clientes: «Solo activos»).
+- L7 (2026-11-07) T7, cierre:
+  - S7: el arreglo del grupo 1 ya lo resolvía. ego-browser a 1920 midió 12 px entre «Repetí la contraseña nueva» y «Cambiar contraseña», en Usuarios › Resetear y en Ferreterías › Resetear del Dueño.
+  - ego-browser a 1920 en la app local (8080/4200):
+    - Usuarios: «¿Desactivar a Prueba T3 7358?» con el foco en Cancelar; Esc no cambia nada; al confirmar queda Desactivado y la barra pasa a «Reactivar», que lo reactiva sin preguntar.
+    - Formas de pago: la ayuda nueva y sin el checkbox; «¿Desactivar «Lento FP A»?» → Inactiva → «Activar» → Activa.
+    - Clientes: con saldo, `aria-disabled`, el motivo y ningún diálogo; «¿Desactivar a Lenta Dos?» → Inactivo → Reactivar.
+    - Facturación:
+      - El Tornillo: CUIT y pedido «30-00000001-5»;
+      - La Tuerca, sin pedido: guía del simulador, y subir y firmar deshabilitados con «Primero generá el pedido de certificado.».
+    - Vendedor con `/ventas` recargando: llega al Mostrador con «No tenés acceso a Ventas.» (`.advertencia`), y el aviso se va al ir a Caja.
+    - Tonos calculados en las cinco secciones.
+    - Rubros: 880/522 px.
+  - Capturas: Obsidian `evidencia/arreglos-configuracion/01-12`.
+  - `odd-verifier` (opus): **pass**, sin blockers.
+    - Matriz del guard: 36 rutas × 5 roles iguales a la base.
+    - Las hojas impresas dan el mismo CUIT con entradas reales.
+    - Los consumidores de `Avisos` están tipados.
+    - Advertencias causadas por el cambio, corregidas con su test:
+      - A1: una redirección a la misma URL (el Vendedor en el Mostrador que va a Ventas desde la app) termina en `NavigationSkipped`, no en `NavigationEnd`, y el aviso quedaba para la pantalla siguiente (en Artículos, en verde). Ahora el shell lo toma también en `NavigationSkipped`, sin borrar el que ya se muestra.
+      - A2: con la contraseña por cambiar, `rolGuard` corre igual junto a `contrasenaGuard` y el aviso aparecía en «Cambiar mi contraseña». Ahora no lo deja.
+      - Evidencia: RED 2 (`shell.spec.ts`, `rol.guard.spec.ts`) → GREEN 522/522.
+    - A3: las hojas cambian solo con entradas que el backend no manda (un CUIT con guiones ahora sale bien; antes salía «30--7123456-7-8»).
+    - A4: el aviso de presupuesto de `dialogo-cobro`, que ya estaba en la base.
+  - Después de los arreglos:
+    - suite frontend 4097/4097;
+    - `ng build` OK, solo con el aviso de presupuesto de `dialogo-cobro.ts`, que ya estaba en `main`;
+    - backend sin cambios (`git diff --stat 25f573a -- backend` vacío): no se corre su suite.
+  - Líneas: ~820 en 7 commits (más que el pronóstico de ~500; sigue single-pr).
+  - Próximo paso: push, PR y merge (Luca).

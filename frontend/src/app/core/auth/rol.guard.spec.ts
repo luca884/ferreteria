@@ -9,12 +9,18 @@ import { contrasenaGuard } from './contrasena.guard';
 import { DUENO_Y_VENDEDOR, SOLO_DUENO, SOLO_SUPER_ADMIN, conRoles, rolGuard } from './rol.guard';
 
 describe('rolGuard', () => {
-  function correr(rol: Rol | null, data: Data, path = 'pantalla', title?: string) {
+  function correr(rol: Rol | null, data: Data, path = 'pantalla', title?: string, debeCambiarContrasena = false) {
     TestBed.resetTestingModule();
     TestBed.configureTestingModule({
       providers: [
         provideRouter([]),
-        { provide: AuthService, useValue: { sesion: signal(rol ? ({ rol } as Sesion) : null) } },
+        {
+          provide: AuthService,
+          useValue: {
+            sesion: signal(rol ? ({ rol } as Sesion) : null),
+            debeCambiarContrasena: signal(debeCambiarContrasena),
+          },
+        },
       ],
     });
     const resultado = TestBed.runInInjectionContext(() =>
@@ -48,6 +54,11 @@ describe('rolGuard', () => {
   it('una ruta sin título dice «esa pantalla»', () => {
     expect(correr('VENDEDOR', conRoles(SOLO_DUENO))).toBe('/mostrador');
     expect(TestBed.inject(Avisos).tomar()?.texto).toBe('No tenés acceso a esa pantalla.');
+  });
+
+  it('con la contraseña por cambiar no deja aviso: el guard de contraseña lo manda a cambiarla, no a su inicio', () => {
+    expect(correr('VENDEDOR', conRoles(SOLO_DUENO), 'ventas', 'Ventas · Ferretería', true)).toBe('/mostrador');
+    expect(TestBed.inject(Avisos).tomar()).toBeNull();
   });
 
   it('quien entra no deja aviso', () => {
