@@ -61,8 +61,11 @@
     <p class="error" role="alert">{{ texto }}</p>
   }
 
-  @if (resultadoAccion(); as texto) {
-    <p class="resultado-accion" role="status">{{ texto }}</p>
+  <!-- Con el detalle abierto el resultado va en el pop-up: acá lo taparía el velo. -->
+  @if (elegida() === null) {
+    @if (resultadoAccion(); as texto) {
+      <p class="resultado-accion" role="status">{{ texto }}</p>
+    }
   }
 
   @if (error(); as texto) {
@@ -152,12 +155,14 @@
   }
 
   @if (elegida() !== null) {
-    <section class="detalle" aria-label="Detalle de la venta">
+    <app-dialogo-detalle [titulo]="tituloDetalle()" (cerrar)="cerrarDetalle()">
+      @if (resultadoAccion(); as texto) {
+        <p class="resultado-accion" role="status">{{ texto }}</p>
+      }
       @if (errorDetalle(); as texto) {
         <p class="error" role="alert">{{ texto }}</p>
       }
       @if (detalle(); as v) {
-        <h2>{{ titulo(v) }}</h2>
         @if (v.ventaAnulada; as anulada) {
           <p class="venta-anulada">Anula la venta N.º {{ anulada.numero }}</p>
         }
@@ -238,17 +243,6 @@
           </div>
         }
         <app-venta-hoja [venta]="v" />
-        <div class="acciones">
-          <button type="button" class="primario" (click)="imprimiendo.set(true)">
-            {{ fiscalElegido()?.reimprimir ? 'Reimprimir factura' : 'Imprimir' }}
-          </button>
-        </div>
-        @if (puedeAnular()) {
-          <!-- Separado de «Imprimir» y sin atajo de teclado (CU-08 punto 1): anular no se hace de pasada. -->
-          <div class="anular-venta">
-            <button type="button" class="peligro" [disabled]="enVueloAccion()" (click)="pedirAnular()">Anular</button>
-          </div>
-        }
         @if (imprimiendo()) {
           @if (facturada(); as f) {
             <app-factura-imprimible [venta]="f" (cerrar)="imprimiendo.set(false)" />
@@ -259,7 +253,19 @@
       } @else if (!errorDetalle()) {
         <p class="ayuda">Cargando…</p>
       }
-    </section>
+      <!-- Al pie, cada botón en su propio @if: así se proyecta a su lugar. Anular va solo a la izquierda, lejos de
+           «Imprimir» y sin atajo de teclado (CU-08 punto 1): anular no se hace de pasada. -->
+      @if (puedeAnular()) {
+        <button accion-peligro type="button" class="peligro" [disabled]="enVueloAccion()" (click)="pedirAnular()">
+          Anular
+        </button>
+      }
+      @if (detalle()) {
+        <button accion type="button" class="primario" (click)="imprimiendo.set(true)">
+          {{ fiscalElegido()?.reimprimir ? 'Reimprimir factura' : 'Imprimir' }}
+        </button>
+      }
+    </app-dialogo-detalle>
   }
 
   @if (confirmandoFecha(); as mensaje) {

@@ -107,6 +107,24 @@ describe('DialogoDetalle', () => {
     expect(anfitrion().cerradas).toBe(2);
   });
 
+  it('Esc cierra aunque el foco se haya caído al body (el botón que lo tenía desapareció)', () => {
+    (document.activeElement as HTMLElement).blur();
+    expect(document.activeElement).toBe(document.body);
+
+    tecla('Escape');
+
+    expect(anfitrion().cerradas).toBe(1);
+  });
+
+  it('un Esc que ya atendió otro diálogo no cierra el detalle', () => {
+    const evento = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true });
+    evento.preventDefault();
+
+    porId('campo').dispatchEvent(evento);
+
+    expect(anfitrion().cerradas).toBe(0);
+  });
+
   it('la ✕ y el botón Cerrar del pie cierran', async () => {
     equis().click();
     expect(anfitrion().cerradas).toBe(1);

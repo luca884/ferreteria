@@ -16,6 +16,8 @@ let siguienteId = 0;
 @Component({
   selector: 'app-dialogo-detalle',
   imports: [TrampaFoco],
+  // En el documento y no en el pop-up: si el botón que tenía el foco desaparece (Anular, al terminar), el foco cae al body.
+  host: { '(document:keydown)': 'alTeclear($event)' },
   template: `
     <!-- El mousedown sobre el velo no mueve el foco al body: si no, Esc (que escucha el pop-up) dejaría de andar. -->
     <div class="dialogo-fondo" (mousedown)="retenerFoco($event)">
@@ -27,7 +29,6 @@ let siguienteId = 0;
         aria-modal="true"
         appTrampaFoco
         [attr.aria-labelledby]="id"
-        (keydown)="alTeclear($event)"
       >
         <header class="dialogo-detalle-cabecera">
           <h2 [id]="id">{{ titulo() }}</h2>
@@ -77,10 +78,10 @@ export class DialogoDetalle {
   }
 
   protected alTeclear(evento: KeyboardEvent): void {
-    if (evento.key !== 'Escape') return;
-    // Un Esc que viene de otro diálogo abierto adentro (Imprimir) es de ese, aunque no corte la propagación.
+    if (evento.key !== 'Escape' || evento.defaultPrevented) return;
+    // Un Esc que viene de otro diálogo (Imprimir adentro, Anular al lado) es de ese, aunque no corte la propagación.
     const desde = evento.target instanceof Element ? evento.target.closest('[aria-modal="true"]') : null;
-    if (desde !== this.dialogo().nativeElement) return;
+    if (desde !== null && desde !== this.dialogo().nativeElement) return;
     evento.preventDefault();
     evento.stopPropagation();
     this.cerrar.emit();
