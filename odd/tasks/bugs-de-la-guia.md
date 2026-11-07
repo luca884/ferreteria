@@ -52,7 +52,7 @@ Restricciones: los arreglos de CSS no se pueden medir con Vitest (jsdom no calcu
 - [x] T1 · S1–S5 · ruta: inline · Aceptación: la de cada S · Evidencia: S1–S2 RED 2/138 → GREEN 139/139; S3 RED 3/36 → GREEN caja 99/99; S4 RED compile + 19/580 → GREEN 1369/1369 (46 archivos); S5 RED 1/139 → GREEN 139/139; ego-browser a 1280×800 (L3) · Risk: item 3 (S4: helper de formato que usan 8 hojas)
 - [x] T2 · S6–S13, S25 · ruta: inline · Aceptación: la de cada S, medida a 1280×800 · Evidencia: RED→GREEN por pantalla (clientes 577/577, proveedores 58/58, admin 64/64, stock 10/10, ventas+reportes 92/92, artículos 461/461, masivo 224/224, layout 104/104); ego-browser a 1280×800 (L4) · Risk: none
 - [x] T3 · S14–S17 · ruta: inline · Aceptación: la de cada S · Evidencia: S14 RED 5/279 → GREEN 783/783 (las 5 pantallas); S15 RED 3/8 y 1/17 → GREEN 25/25; ego-browser (L5) · Risk: item 3 (S15: interceptor de todos los pedidos)
-- [ ] T4 · S18–S24 · ruta: inline · Aceptación: la de cada S · Evidencia: — · Risk: item 3 (S19: parámetro nuevo del endpoint de exportar)
+- [x] T4 · S18–S24 · ruta: delegada (Writer trigger: backstop de ~150k), dos `odd-implementer` con Opus en paralelo y superficies disjuntas: W1 S19–S20 (exportar y lista de Artículos), W2 S18, S21–S24 (hojas, desglose, importación, compra) · Aceptación: la de cada S · Evidencia: W1 Export IT 11/11, TenantScopingArchTest 26/26, artículos 467/467; W2 S18 RED 2/12 → GREEN hojas 178/178; S21 RED 1/45 → GREEN 265/265; S22+S24 RED 2/204 → GREEN importaciones 363/363; S23 RED 3/54 → GREEN compras 73/73; ego-browser a 1280×800 (L6) · Risk: item 3 (S19: parámetro nuevo del endpoint de exportar)
 
 ## Log
 
@@ -89,3 +89,12 @@ Restricciones: los arreglos de CSS no se pueden medir con Vitest (jsdom no calcu
   - S14 y S16: en Formas de pago, Usuarios, Rubros, Clientes y Proveedores, `invalido()` pasa a `touched && dirty && invalid` y `guardar()` suma `markAllAsDirty()` (Angular 22.2.4 lo tiene). Un campo sin escribir avisa recién al intentar guardar; uno escrito y borrado avisa al salir, como antes (test que lo fija). En ego-browser (Formas de pago, El Tornillo): foco en el nombre, tocar una fila, Desactivar, Esc y tocar otra fila no muestran el aviso; Agregar vacío muestra «El nombre es obligatorio.».
   - S15 y S17: el interceptor agrega `sesion=cerrada` al `/login` solo si había token (sin sesión no hay nada que avisar; test que lo fija), y el login muestra «Tu sesión se cerró. Ingresá de nuevo.» (`role="status"`). En ego-browser: Dueño de La Rambla en Artículos, se suspende La Rambla por la API del admin, «Buscar» lleva a `/login?returnUrl=%2Farticulos&sesion=cerrada` con el aviso; al reintentar sale además «Tu ferretería está suspendida. Contactá al proveedor.». La Rambla quedó reactivada (ACTIVA).
   - Próximo paso: T4.
+- L6 (2026-11-07) T4 hecha por dos `odd-implementer`; los diffs quedaron dentro de sus superficies. Verificado en ego-browser (El Tornillo, 1280×800):
+  - S19: `enOferta` opcional en `GET /api/articulos/exportacion` (por defecto `false`, como antes) y `paraExportarEnOfertaScoped` con el mismo filtro de oferta del listado. Con «Solo en oferta» la grilla muestra BUL-002 y REC-001 y el CSV trae esos dos. La primera prueba bajó 4143 filas porque el backend levantado era anterior al cambio; reiniciado, bajó 2.
+  - S20: el Vendedor ve «Ver ficha» en la barra y «· Enter abre la ficha»; Enter abre `/articulos/462` de solo lectura, sin costo ni margen.
+  - S18: el renglón de la hoja lleva `unidad`; el presupuesto N.º 5 imprime «25,5 metros» y «1 unidad».
+  - S21: REC-001 muestra «Descuento gremio −10 % · − $ 217,80», con el mismo «+ / −» que ya usaban los recargos del desglose (helper `conSigno`). Con precio manual o sin precio calculado, el ajuste sigue sin monto.
+  - S22 y S24: las vacías se arman en el front (`filasConVacias`) con su número, hasta 20 por hueco. Planilla con filas 1, 3, 4, 6 y 60: el visor muestra 2, 5 y de 7 a 26 vacías y sigue con la 60; «5 filas · 3 columnas».
+  - S23: tras buscar queda marcado el primero y Enter lo suma; si el texto cambió, Enter vuelve a buscar (con «llave» no sumó nada).
+  - S3, revisado de paso: la caja del Vendedor dice «Ingresos y gastos» y no nombra retiros.
+  - Próximo paso: suites completas, `ng build` y `odd-verifier`.

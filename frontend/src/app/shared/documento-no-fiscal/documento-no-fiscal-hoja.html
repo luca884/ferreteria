@@ -61,7 +61,7 @@
   <tbody>
     @for (r of d.renglones; track r.renglon) {
       <tr>
-        <td class="num">{{ r.cantidad | number: '1.0-3' }}</td>
+        <td class="num">{{ cantidadConUnidad(r.cantidad, r.unidad) }}</td>
         <td>{{ r.descripcion }}</td>
         <td class="num">{{ r.precioUnitario | monto }}</td>
         <td class="num">

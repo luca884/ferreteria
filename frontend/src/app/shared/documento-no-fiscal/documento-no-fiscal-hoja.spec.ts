@@ -64,13 +64,33 @@ describe('DocumentoNoFiscalHoja', () => {
         .filter((c) => c !== '')
         .join(' '),
     );
-    expect(filas[0]).toBe('2 Martillo $ 1.000,00 10 % $ 1.800,00');
-    expect(filas[1]).toBe('1,5 Clavos $ 400,00 $ 600,00');
+    expect(filas[0]).toBe('2 unidades Martillo $ 1.000,00 10 % $ 1.800,00');
+    expect(filas[1]).toBe('1,5 kilos Clavos $ 400,00 $ 600,00');
     const totales = texto('.totales')!;
     expect(totales).toContain('Subtotal $ 2.600,00');
     expect(totales).toContain('Descuento −$ 200,00');
     expect(texto('.total')).toBe('Total $ 2.400,00');
     expect(texto('.observaciones')).toContain('Entregar por la puerta de atrás');
+  });
+
+  // Bugs de la guía, S18: la hoja del presupuesto y del remito mostraba la cantidad sin la unidad («26,5» en vez de
+  // «26,5 metros»).
+  it('la cantidad sale con su unidad, en singular solo para 1, como en el resto de la app', async () => {
+    const renglon = documentoDePrueba().renglones[0];
+    await armar(
+      documentoDePrueba({
+        renglones: [
+          { ...renglon, renglon: 1, descripcion: 'Cable', unidad: 'METRO', cantidad: 26.5 },
+          { ...renglon, renglon: 2, descripcion: 'Martillo', unidad: 'UNIDAD', cantidad: 1 },
+          { ...renglon, renglon: 3, descripcion: 'Pintura', unidad: 'LITRO', cantidad: 1250 },
+        ],
+      }),
+    );
+
+    const cantidades = Array.from(el().querySelectorAll('tbody tr')).map((f) =>
+      limpio(f.querySelector('td')?.textContent),
+    );
+    expect(cantidades).toEqual(['26,5 metros', '1 unidad', '1.250 litros']);
   });
 
   it('sin cliente, sin descuento y sin observaciones no muestra esas partes', async () => {
@@ -96,6 +116,7 @@ describe('DocumentoNoFiscalHoja', () => {
           {
             renglon: 1,
             descripcion: 'Martillo',
+            unidad: 'UNIDAD',
             cantidad: 1,
             precioUnitario: 1000,
             descuentoPorcentaje: 0,

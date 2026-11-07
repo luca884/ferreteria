@@ -610,6 +610,55 @@ describe('DesglosePrecioVista', () => {
       expect(textos('.paso-importe').at(-1)).toBe('$ 1.450,00');
     });
 
+    // Bugs de la guía, S21: el casillero «Flete +5 %» no mostraba el monto, y los recargos del costo sí.
+    it('cada ajuste muestra su monto con su signo: el % sobre el precio calculado y el $ tal cual', async () => {
+      // Precio calculado $ 1.390,00: 10 % son $ 139,00 y -3,33 % son $ 46,287, que se ven como $ 46,29.
+      await crear(
+        desgloseBase({
+          precioFinal: 1480,
+          ajustesPrecio: [
+            { nombre: 'Flete', tipo: 'PORCENTAJE', valor: 10 },
+            { nombre: 'Contado', tipo: 'PORCENTAJE', valor: -3.33 },
+            { nombre: null, tipo: 'MONTO', valor: -5 },
+            { nombre: 'Embalaje', tipo: 'MONTO', valor: 12.5 },
+          ],
+        }),
+      );
+
+      expect(textos('[data-tipo="AJUSTE_PRECIO"] .paso-nombre')).toEqual([
+        'Flete +10 %',
+        'Contado \u22123,33 %',
+        'Ajuste \u2212$ 5,00',
+        'Embalaje +$ 12,50',
+      ]);
+      expect(textos('[data-tipo="AJUSTE_PRECIO"] .paso-importe')).toEqual([
+        '+ $ 139,00',
+        '\u2212 $ 46,29',
+        '\u2212 $ 5,00',
+        '+ $ 12,50',
+      ]);
+      // El precio se redondea otra vez después de los ajustes (CU-14): la suma de los montos no se corrige.
+      expect(textos('.paso-importe').at(-1)).toBe('$ 1.480,00');
+    });
+
+    // Bugs de la guía, S21: sin precio calculado no hay sobre qué aplicar el ajuste, así que no se inventa un monto.
+    it('sin precio calculado (dólares sin cotización) el ajuste no muestra monto', async () => {
+      await crear(
+        desgloseBase({
+          moneda: 'USD',
+          precioLista: 10,
+          cotizacion: null,
+          ajustesPrecio: [
+            { nombre: 'Flete', tipo: 'PORCENTAJE', valor: 10 },
+            { nombre: null, tipo: 'MONTO', valor: -5 },
+          ],
+        }),
+      );
+
+      expect(textos('[data-tipo="AJUSTE_PRECIO"] .paso-nombre')).toEqual(['Flete +10 %', 'Ajuste \u2212$ 5,00']);
+      expect(el().querySelector('[data-tipo="AJUSTE_PRECIO"] .paso-importe')).toBeNull();
+    });
+
     it('sin ajustes ni precio manual no suma líneas ni avisos', async () => {
       await crear(desgloseBase({ ajustesPrecio: [], precioManual: false }));
 
@@ -633,6 +682,8 @@ describe('DesglosePrecioVista', () => {
       expect(textos('[data-tipo="AJUSTE_PRECIO"] .paso-aclaracion')).toEqual([
         'no se aplican mientras el precio sea manual',
       ]);
+      // Bugs de la guía, S21: con precio manual el ajuste no se aplica, así que tampoco muestra monto.
+      expect(el().querySelector('[data-tipo="AJUSTE_PRECIO"] .paso-importe')).toBeNull();
       expect(textos('.paso-importe').at(-1)).toBe('$ 2.000,00');
     });
 

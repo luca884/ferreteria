@@ -129,7 +129,7 @@
           class="visor"
           role="table"
           aria-label="Contenido de la lista"
-          [attr.aria-rowcount]="hoja.filas.length + 1"
+          [attr.aria-rowcount]="filasDelVisor().length + 1"
           [attr.aria-colcount]="columnas().length + 1"
           [style.--alto-fila]="altoFila() + 'px'"
           [style.--ancho-columna]="anchoColumna() + 'px'"
@@ -160,7 +160,7 @@
             (scroll)="sincronizarEncabezado($event)"
           >
             <div
-              *cdkVirtualFor="let fila of hoja.filas; trackBy: porNumero; let i = index"
+              *cdkVirtualFor="let fila of filasDelVisor(); trackBy: porNumero; let i = index"
               class="visor-fila"
               role="row"
               [class.previa]="esPrevia(fila.numero)"

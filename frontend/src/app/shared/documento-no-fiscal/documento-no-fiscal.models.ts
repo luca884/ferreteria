@@ -17,6 +17,8 @@ export const LETRA_DOCUMENTO_NO_FISCAL = 'X';
 export interface RenglonDocumentoNoFiscal {
   renglon: number;
   descripcion: string;
+  /** La cantidad sale con su unidad, como en el resto de la app («26,5 metros», «1 unidad»). */
+  unidad: UnidadDeMedida;
   cantidad: number;
   precioUnitario: number;
   descuentoPorcentaje: number;

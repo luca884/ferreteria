@@ -106,8 +106,10 @@ export class NuevaCompra implements OnInit {
   protected readonly resultados = signal<Articulo[]>([]);
   /** Cuántos artículos encontró la búsqueda: se ven hasta {@link RESULTADOS_POR_BUSQUEDA}. */
   protected readonly totalResultados = signal(0);
-  /** La opción que marcan las flechas; -1 si ninguna (Enter busca). */
+  /** La opción marcada: tras buscar, la primera, y después la de las flechas; -1 si ninguna (Enter busca). */
   protected readonly activo = signal(-1);
+  /** El texto que originó los resultados a la vista: si sigue igual, Enter agrega la opción marcada y no busca. */
+  private readonly consultaMostrada = signal('');
   protected readonly opcionActiva = computed(() =>
     this.activo() >= 0 && this.activo() < this.resultados().length ? `resultado-compra-${this.activo()}` : null,
   );
@@ -166,7 +168,9 @@ export class NuevaCompra implements OnInit {
         }
         this.resultados.set(pagina.items);
         this.totalResultados.set(pagina.totalElements);
-        this.activo.set(-1);
+        // Como en el Mostrador: queda marcada la primera y Enter la agrega sin apretar ↓.
+        this.consultaMostrada.set(termino);
+        this.activo.set(0);
       },
       error: () => {
         this.buscando.set(false);
@@ -181,7 +185,10 @@ export class NuevaCompra implements OnInit {
     this.activo.set(-1);
   }
 
-  /** Flechas para moverse por los resultados y Enter para agregar el marcado (como en el Mostrador). */
+  /**
+   * Flechas para moverse por los resultados y Enter para agregar el marcado, como en el Mostrador. Si el texto cambió
+   * desde la última búsqueda, los resultados son de otra cosa: Enter sigue de largo y el formulario busca.
+   */
   protected alTeclear(evento: KeyboardEvent): void {
     const cantidad = this.resultados().length;
     if (cantidad === 0) return;
@@ -191,7 +198,11 @@ export class NuevaCompra implements OnInit {
     } else if (evento.key === 'ArrowUp') {
       evento.preventDefault();
       this.activo.update((i) => Math.max(i - 1, 0));
-    } else if (evento.key === 'Enter' && this.opcionActiva() !== null) {
+    } else if (
+      evento.key === 'Enter' &&
+      this.opcionActiva() !== null &&
+      this.busqueda().trim() === this.consultaMostrada()
+    ) {
       evento.preventDefault();
       this.agregar(this.resultados()[this.activo()]);
     }

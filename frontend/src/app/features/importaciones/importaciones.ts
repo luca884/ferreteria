@@ -23,7 +23,17 @@ import { Proveedor } from '../proveedores/proveedor.models';
 import { ProveedoresService } from '../proveedores/proveedores.service';
 import { Rubro } from '../rubros/rubro.models';
 import { RubrosService } from '../rubros/rubros.service';
-import { AvisoDeFila, Conteos, Importacion, Muestra, PropuestaDeMapeo, VistaPrevia, VistaPreviaRequest } from './importacion.models';
+import {
+  AvisoDeFila,
+  Conteos,
+  FilaDeMuestra,
+  HojaDeMuestra,
+  Importacion,
+  Muestra,
+  PropuestaDeMapeo,
+  VistaPrevia,
+  VistaPreviaRequest,
+} from './importacion.models';
 import { ImportacionesService } from './importaciones.service';
 import { HojasLista } from './hojas-lista';
 import { MapeoColumnas, OpcionColumna } from './mapeo-columnas';
@@ -112,6 +122,31 @@ const TARJETAS: { etiqueta: string; clave: keyof Conteos }[] = [
 ];
 
 const rango = (cantidad: number) => Array.from({ length: cantidad }, (_, i) => i);
+
+/** Cada hueco de la numeración se rellena con hasta estas filas vacías; uno más largo muestra estas y sigue. */
+const MAXIMO_VACIAS_POR_HUECO = 20;
+
+/**
+ * Las filas del visor: las que manda el servidor (solo las que tienen datos, con su número original) y, entre
+ * ellas, las vacías de la planilla, con su número. Un hueco de más de {@link MAXIMO_VACIAS_POR_HUECO} filas muestra
+ * solo esas y sigue: una celda suelta en la fila 900.000 no arma cientos de miles de filas, y el salto se ve en la
+ * columna «Fila».
+ */
+function filasConVacias(hoja: HojaDeMuestra): FilaDeMuestra[] {
+  // Todas las vacías comparten las mismas celdas: se leen, nunca se modifican.
+  const celdasVacias = Array.from({ length: hoja.columnas }, () => '');
+  const filas: FilaDeMuestra[] = [];
+  let anterior: number | null = null;
+  for (const fila of hoja.filas) {
+    if (anterior !== null) {
+      const hasta = Math.min(fila.numero, anterior + 1 + MAXIMO_VACIAS_POR_HUECO);
+      for (let numero = anterior + 1; numero < hasta; numero++) filas.push({ numero, celdas: celdasVacias });
+    }
+    filas.push(fila);
+    anterior = fila.numero;
+  }
+  return filas;
+}
 
 @Component({
   selector: 'app-importaciones',
@@ -232,6 +267,14 @@ export class Importaciones implements OnInit {
   });
 
   protected readonly hojaActual = computed(() => this.muestra()?.hojas[this.hojaVista()] ?? null);
+  /**
+   * Lo que se dibuja en el visor: las filas de la hoja con las vacías entre ellas. El alto del marco y `aria-rowcount`
+   * cuentan estas; «N filas» cuenta solo las que tienen datos (`hojaActual().filas`).
+   */
+  protected readonly filasDelVisor = computed(() => {
+    const hoja = this.hojaActual();
+    return hoja ? filasConVacias(hoja) : [];
+  });
   protected readonly nombresDeHojas = computed(() => this.muestra()?.hojas.map((h) => h.nombre) ?? []);
   protected readonly hojasParaLista = computed(
     () => this.muestra()?.hojas.map((h) => ({ indice: h.indice, nombre: h.nombre })) ?? [],
@@ -328,7 +371,7 @@ export class Importaciones implements OnInit {
    */
   protected readonly altoMarco = computed(() => {
     const maximo = FILAS_VISIBLES * ALTO_FILA_BASE;
-    const ocupan = (this.hojaActual()?.filas.length ?? 0) * this.altoFila() + HOLGURA_SCROLL_HORIZONTAL;
+    const ocupan = this.filasDelVisor().length * this.altoFila() + HOLGURA_SCROLL_HORIZONTAL;
     return Math.min(ocupan, maximo);
   });
   protected readonly anchoTotal = computed(
