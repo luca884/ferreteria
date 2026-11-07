@@ -86,6 +86,24 @@ class CajaIntegrationTest extends VentasTestBase {
             assertThat(actual.get("estado").asText()).isEqualTo("SIN_CAJA");
             assertThat(actual.get("caja").isNull()).isTrue();
             assertThat(actual.get("efectivoPropuesto").decimalValue()).isEqualByComparingTo("0");
+            // Nunca hubo un cierre: la pantalla dice «Es la primera apertura», no «el efectivo contado en el último cierre».
+            assertThat(actual.has("hayCierreAnterior")).isTrue();
+            assertThat(actual.get("hayCierreAnterior").asBoolean()).isFalse();
+        }
+
+        @Test
+        @DisplayName("si el último cierre contó $ 0 también propone $ 0, pero ahí sí hubo un cierre anterior")
+        void ultimoCierreEnCero() throws Exception {
+            Tienda t = tiendaSinCaja();
+            String vendedor = login(t.emailVendedor());
+            long primera = abrir(vendedor, "0");
+            postJson("/api/cajas/" + primera + "/cierre", vendedor, cierre("0")).andExpect(status().isOk());
+
+            JsonNode actual = getJson("/api/cajas/actual", vendedor);
+
+            assertThat(actual.get("estado").asText()).isEqualTo("SIN_CAJA");
+            assertThat(actual.get("efectivoPropuesto").decimalValue()).isEqualByComparingTo("0");
+            assertThat(actual.get("hayCierreAnterior").asBoolean()).isTrue();
         }
 
         @Test
@@ -1133,8 +1151,11 @@ class CajaIntegrationTest extends VentasTestBase {
             String duenoAjeno = login(ajena.emailDueno());
 
             assertThat(getJson("/api/cajas", duenoAjeno).get("totalElements").asLong()).isZero();
-            assertThat(getJson("/api/cajas/actual", duenoAjeno).get("efectivoPropuesto").decimalValue())
-                    .isEqualByComparingTo("0");
+            JsonNode actualAjeno = getJson("/api/cajas/actual", duenoAjeno);
+            assertThat(actualAjeno.get("efectivoPropuesto").decimalValue()).isEqualByComparingTo("0");
+            // El cierre de la otra ferreteria no cuenta: para esta es la primera apertura.
+            assertThat(actualAjeno.get("hayCierreAnterior").asBoolean()).isFalse();
+            assertThat(getJson("/api/cajas/actual", vendedor).get("hayCierreAnterior").asBoolean()).isTrue();
         }
 
         @Test

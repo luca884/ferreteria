@@ -125,7 +125,14 @@
   } @else {
     <form class="apertura panel" (submit)="abrir($event)" novalidate>
       <h2>Abrir la caja</h2>
-      <p class="ayuda">Sin caja abierta no se puede vender. Se propone el efectivo contado en el último cierre.</p>
+      <p class="ayuda">
+        Sin caja abierta no se puede vender.
+        @if (primeraApertura()) {
+          Es la primera apertura: contá el efectivo que hay en la caja.
+        } @else {
+          Se propone el efectivo contado en el último cierre.
+        }
+      </p>
       <div class="fila-campos">
         <div class="campo">
           <label for="efectivo-inicial">Efectivo inicial</label>

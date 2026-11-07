@@ -77,7 +77,7 @@ class CajaResponsesTest {
     @Test
     @DisplayName("la caja abierta y el estado vigente (lo que ve el Vendedor) NO llevan cobranzas ni ninguna cifra: cierre ciego intacto")
     void vigenteYAbiertaSinCifras() throws Exception {
-        CajaVigente vigente = new CajaVigente(caja(), EstadoCaja.ABIERTA, "Ana", bd("5000.00"));
+        CajaVigente vigente = new CajaVigente(caja(), EstadoCaja.ABIERTA, "Ana", bd("5000.00"), true);
 
         JsonNode abierta = JSON.valueToTree(CajaResponses.CajaAbierta.de(vigente));
         JsonNode estado = JSON.valueToTree(CajaResponses.Vigente.de(vigente));
@@ -133,7 +133,7 @@ class CajaResponsesTest {
     @Test
     @DisplayName("la caja abierta y el estado vigente (lo que ve el Vendedor) NO llevan anulaciones: cierre ciego intacto")
     void vigenteYAbiertaSinAnulaciones() throws Exception {
-        CajaVigente vigente = new CajaVigente(caja(), EstadoCaja.ABIERTA, "Ana", bd("5000.00"));
+        CajaVigente vigente = new CajaVigente(caja(), EstadoCaja.ABIERTA, "Ana", bd("5000.00"), true);
 
         JsonNode abierta = JSON.valueToTree(CajaResponses.CajaAbierta.de(vigente));
         JsonNode estado = JSON.valueToTree(CajaResponses.Vigente.de(vigente));

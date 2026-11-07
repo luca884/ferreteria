@@ -41,14 +41,18 @@ public final class CajaResponses {
         }
     }
 
-    /** Estado de la caja de la ferreteria: SIN_CAJA, ABIERTA o DE_OTRO_DIA, y el efectivo propuesto para abrir. */
-    public record Vigente(String estado, CajaAbierta caja, BigDecimal efectivoPropuesto) {
+    /**
+     * Estado de la caja de la ferreteria: SIN_CAJA, ABIERTA o DE_OTRO_DIA, y el efectivo propuesto para abrir.
+     * {@code hayCierreAnterior} dice si ese efectivo sale de un cierre real o es 0 porque nunca se cerro una caja.
+     */
+    public record Vigente(String estado, CajaAbierta caja, BigDecimal efectivoPropuesto, boolean hayCierreAnterior) {
 
         static Vigente de(CajaVigente vigente) {
             if (vigente.caja() == null) {
-                return new Vigente("SIN_CAJA", null, vigente.efectivoPropuesto());
+                return new Vigente("SIN_CAJA", null, vigente.efectivoPropuesto(), vigente.hayCierreAnterior());
             }
-            return new Vigente(vigente.estado().name(), CajaAbierta.de(vigente), vigente.efectivoPropuesto());
+            return new Vigente(vigente.estado().name(), CajaAbierta.de(vigente), vigente.efectivoPropuesto(),
+                    vigente.hayCierreAnterior());
         }
     }
 

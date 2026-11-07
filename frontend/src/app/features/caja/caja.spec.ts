@@ -22,8 +22,18 @@ describe('Caja (CU-10)', () => {
     efectivoInicial: 5000,
     ...cambios,
   });
-  const sinCaja = (propuesto = 0): CajaVigente => ({ estado: 'SIN_CAJA', caja: null, efectivoPropuesto: propuesto });
-  const conCaja = (caja = abierta()): CajaVigente => ({ estado: caja.estado as 'ABIERTA', caja, efectivoPropuesto: 0 });
+  const sinCaja = (propuesto = 0, hayCierreAnterior = true): CajaVigente => ({
+    estado: 'SIN_CAJA',
+    caja: null,
+    efectivoPropuesto: propuesto,
+    hayCierreAnterior,
+  });
+  const conCaja = (caja = abierta()): CajaVigente => ({
+    estado: caja.estado as 'ABIERTA',
+    caja,
+    efectivoPropuesto: 0,
+    hayCierreAnterior: true,
+  });
 
   const detalle = (cambios: Partial<DetalleCaja> = {}): DetalleCaja => ({
     id: 4,
@@ -109,6 +119,31 @@ describe('Caja (CU-10)', () => {
       expect((input('efectivo-inicial') as HTMLInputElement).value).toBe('7.000');
       expect(el().querySelector('form.cierre')).toBeNull();
       expect(el().querySelector('form.movimiento')).toBeNull();
+    });
+
+    it('la primera apertura (nunca hubo un cierre) pide contar el efectivo de la caja, sin hablar de un cierre que no existe (arreglos-confusos, S3)', async () => {
+      await crear(sinCaja(0, false));
+
+      const ayuda = normal(el().querySelector('form.apertura .ayuda')?.textContent);
+      expect(ayuda).toBe('Sin caja abierta no se puede vender. Es la primera apertura: contá el efectivo que hay en la caja.');
+      expect(ayuda).not.toContain('último cierre');
+    });
+
+    it('con un cierre anterior sigue diciendo que se propone el contado del último cierre, aunque haya contado $ 0 (arreglos-confusos, S3)', async () => {
+      await crear(sinCaja(0, true));
+
+      const ayuda = normal(el().querySelector('form.apertura .ayuda')?.textContent);
+      expect(ayuda).toBe('Sin caja abierta no se puede vender. Se propone el efectivo contado en el último cierre.');
+    });
+
+    it('al cerrar la caja en esta misma sesión, la apertura que sigue ya habla del último cierre (arreglos-confusos, S3)', async () => {
+      await crear(conCaja());
+      await escribir('efectivo-contado', '5700');
+      await enviar('form.cierre');
+      boton('Cerrar la caja')!.click();
+      await refrescar();
+
+      expect(normal(el().querySelector('form.apertura .ayuda')?.textContent)).toContain('Se propone el efectivo contado en el último cierre.');
     });
 
     it('abre con el monto editado y queda la caja abierta', async () => {

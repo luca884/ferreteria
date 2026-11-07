@@ -29,6 +29,8 @@ export interface CajaVigente {
   caja: CajaAbierta | null;
   /** El contado del último cierre (o 0): lo que se propone para abrir. */
   efectivoPropuesto: number;
+  /** Si alguna vez se cerró una caja: distingue «nunca hubo un cierre» de «el último cierre contó 0». */
+  hayCierreAnterior: boolean;
 }
 
 export interface MovimientoCajaRequest {

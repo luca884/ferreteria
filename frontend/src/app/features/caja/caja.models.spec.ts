@@ -15,6 +15,7 @@ describe('caja.models', () => {
   const vigente = (estado: CajaVigente['estado'], fechaApertura = '2026-10-16T08:30:00'): CajaVigente => ({
     estado,
     efectivoPropuesto: 0,
+    hayCierreAnterior: true,
     caja:
       estado === 'SIN_CAJA'
         ? null
@@ -167,6 +168,7 @@ describe('caja.models', () => {
           estado: 'SIN_CAJA',
           caja: null,
           efectivoPropuesto: 0,
+          hayCierreAnterior: true,
           // @ts-expect-error la caja vigente tampoco
           totalAnulaciones: 1,
         };
@@ -190,6 +192,7 @@ describe('caja.models', () => {
         estado: 'SIN_CAJA',
         caja: null,
         efectivoPropuesto: 0,
+        hayCierreAnterior: true,
         // @ts-expect-error la caja vigente tampoco
         totalCobranzas: 1,
       };
