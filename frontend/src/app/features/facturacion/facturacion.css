@@ -2,9 +2,10 @@
   display: block;
   width: 100%;
 }
-/* La barra de acciones va a todo el ancho; el resto no se estira de más. */
+/* La barra de acciones va a todo el ancho; el resto, en una columna centrada del mismo ancho. */
 :host > :not(app-barra-acciones) {
-  max-width: 1040px;
+  max-width: var(--ancho-formulario);
+  margin-inline: auto;
 }
 
 .avisos {
@@ -21,7 +22,6 @@
 .seccion {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  max-width: 640px;
   gap: var(--e-3);
   min-width: 0;
   padding: var(--e-4) var(--e-5) var(--e-5);

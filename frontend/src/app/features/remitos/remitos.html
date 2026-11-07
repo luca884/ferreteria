@@ -72,7 +72,7 @@
                 {{ fila.numero }}
               </button>
             </td>
-            <td>{{ fechaHora(fila.fecha) }}</td>
+            <td class="fecha">{{ fechaHora(fila.fecha) }}</td>
             <td>{{ fila.clienteNombre ?? '—' }}</td>
             <td class="num">{{ fila.total | monto }}</td>
             <td>{{ etiqueta[fila.estado] }}</td>

@@ -73,10 +73,10 @@
                 {{ fila.numero }}
               </button>
             </td>
-            <td>{{ fechaHora(fila.fecha) }}</td>
+            <td class="fecha">{{ fechaHora(fila.fecha) }}</td>
             <td>{{ fila.clienteNombre ?? '—' }}</td>
             <td class="num">{{ fila.total | monto }}</td>
-            <td>{{ dia(fila.vence) }}</td>
+            <td class="fecha">{{ dia(fila.vence) }}</td>
             <td>
               {{ etiqueta[fila.estado] }}
               @if (fila.vencido) {

@@ -69,6 +69,13 @@
   --e-6: 24px;
   --e-8: 32px;
 
+  /*
+   * Anchos del contenido debajo de la barra de acciones (que siempre va a todo el ancho):
+   * las pantallas con tabla se centran hasta --ancho-pantalla; los formularios solos, en una columna de --ancho-formulario.
+   */
+  --ancho-pantalla: 1400px;
+  --ancho-formulario: 640px;
+
   /* Radios: más cerrados adentro, más abiertos en contenedores */
   --radio-sm: 4px;
   --radio: 8px;
