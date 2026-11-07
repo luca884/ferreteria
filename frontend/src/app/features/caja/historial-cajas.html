@@ -73,10 +73,20 @@
     <p class="ayuda estado-vacio">Cargando…</p>
   }
 
-  @if (errorDetalle(); as texto) {
-    <p class="error" role="alert">{{ texto }}</p>
-  }
-  @if (detalle(); as elegido) {
-    <app-resumen-caja [detalle]="elegido" />
+  @if (elegida() !== null) {
+    <app-dialogo-detalle [titulo]="tituloDetalle()" (cerrar)="cerrarDetalle()">
+      @if (errorDetalle(); as texto) {
+        <p class="error" role="alert">{{ texto }}</p>
+      }
+      @if (detalle(); as elegido) {
+        <!-- Su «Imprimir» va al pie del pop-up: la hoja imprimible es la misma. -->
+        <app-resumen-caja #resumen [detalle]="elegido" [conImprimir]="false" />
+      } @else if (!errorDetalle()) {
+        <p class="ayuda">Cargando…</p>
+      }
+      @if (detalle()) {
+        <button accion type="button" class="primario" (click)="resumen()?.imprimir()">Imprimir</button>
+      }
+    </app-dialogo-detalle>
   }
 }
