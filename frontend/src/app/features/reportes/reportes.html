@@ -186,7 +186,7 @@
               @for (f of r.datos.filas; track f.articuloId) {
                 <tr>
                   <td>{{ f.descripcion }}</td>
-                  <td class="num">{{ f.cantidad }}</td>
+                  <td class="num">{{ cantidadConUnidad(f.cantidad, f.unidad) }}</td>
                   <td class="num">{{ f.total | monto }}</td>
                   <td class="num">{{ f.ganancia | monto }}</td>
                 </tr>

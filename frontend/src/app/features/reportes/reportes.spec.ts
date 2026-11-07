@@ -34,7 +34,36 @@ describe('Reportes de ventas', () => {
     'por-medio-pago': [{ formaPago: 'Efectivo', medio: 'EFECTIVO', cantidad: 2, monto: 300 }],
     'por-periodo': [{ periodo: '2026-10-22', cantidad: 3, total: 345, ganancia: 102.48, ventasSinCosto: 1 }],
     'por-articulo': [
-      { articuloId: 7, descripcion: 'Tornillo', cantidad: 3, total: 300, ganancia: 85.29, renglonesSinCosto: 1, renglones: 2 },
+      {
+        articuloId: 7,
+        descripcion: 'Tornillo',
+        cantidad: 3,
+        total: 300,
+        ganancia: 85.29,
+        renglonesSinCosto: 1,
+        renglones: 2,
+        unidad: 'UNIDAD',
+      },
+      {
+        articuloId: 9,
+        descripcion: 'Cable',
+        cantidad: 26.5,
+        total: 2650,
+        ganancia: 900,
+        renglonesSinCosto: 0,
+        renglones: 1,
+        unidad: 'METRO',
+      },
+      {
+        articuloId: 11,
+        descripcion: 'Lija',
+        cantidad: 1,
+        total: 100,
+        ganancia: 40,
+        renglonesSinCosto: 0,
+        renglones: 1,
+        unidad: 'UNIDAD',
+      },
     ],
     'por-rubro': [{ rubro: 'Bulones', renglones: 2, total: 300, ganancia: 85.29, renglonesSinCosto: 1 }],
     'con-descuento': [
@@ -236,10 +265,18 @@ describe('Reportes de ventas', () => {
     await crear();
     await elegir('por-articulo');
 
-    expect(primeraFila()).toBe('Tornillo 3 $ 300,00 $ 85,29');
+    expect(primeraFila()).toBe('Tornillo 3 unidades $ 300,00 $ 85,29');
     expect(normal(el().querySelector('.aviso-costo')?.textContent)).toBe(
       '1 renglón sin costo registrado: la ganancia no lo incluye.',
     );
+  });
+
+  it('por artículo escribe la cantidad en formato argentino y con su unidad: «26,5 metros», «1 unidad» (arreglos-confusos, S4)', async () => {
+    await crear();
+    await elegir('por-articulo');
+
+    const filas = Array.from(el().querySelectorAll('tbody tr')).map((tr) => normal(tr.querySelectorAll('td')[1].textContent));
+    expect(filas).toEqual(['3 unidades', '26,5 metros', '1 unidad']);
   });
 
   it('por rubro muestra el rubro con sus renglones', async () => {

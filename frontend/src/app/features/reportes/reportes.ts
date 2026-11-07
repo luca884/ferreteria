@@ -3,6 +3,7 @@ import { Observable, map } from 'rxjs';
 import { erroresDeCampos, mensajeDe } from '../../core/api/api-error';
 import { AuthService } from '../../core/auth/auth.service';
 import { MontoPipe } from '../../core/formato/monto';
+import { cantidadConUnidad } from '../../core/formato/unidad';
 import { BarraAcciones } from '../../shared/barra-acciones';
 import { emitidoEl } from '../../shared/emitido';
 import { TIPOS_MOVIMIENTO, TIPO_MOVIMIENTO_LABELS, TipoMovimientoCaja, fechaHoraLocal } from '../caja/caja.models';
@@ -58,6 +59,7 @@ export class Reportes implements OnInit {
   protected readonly auth = inject(AuthService);
 
   protected readonly opciones = REPORTES;
+  protected readonly cantidadConUnidad = cantidadConUnidad;
   protected readonly tipo = signal<TipoReporte>('resumen');
   protected readonly desde = signal(hoyEnBuenosAires());
   protected readonly hasta = signal(hoyEnBuenosAires());

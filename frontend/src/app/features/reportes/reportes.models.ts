@@ -1,3 +1,4 @@
+import { UnidadDeMedida } from '../../core/formato/unidad';
 import { TipoMovimientoCaja } from '../caja/caja.models';
 
 /**
@@ -82,6 +83,8 @@ export interface PorArticulo {
   ganancia: number;
   renglonesSinCosto: number;
   renglones: number;
+  /** La unidad del renglón vendido: la cantidad se escribe con ella («26,5 metros»). */
+  unidad: UnidadDeMedida;
 }
 
 export interface PorRubro {

@@ -75,14 +75,16 @@ public interface ComprobanteRepository extends TenantScopedRepository<Comprobant
     /**
      * Por articulo: id, descripcion (la mayor de las copiadas), cantidad, total de los renglones, ganancia de los
      * renglones con costo (neto - costo), renglones vendidos sin costo y renglones vendidos. Los renglones de una nota de
-     * credito restan la cantidad, el total y la ganancia (CU-08, C4), y no se cuentan como renglones.
+     * credito restan la cantidad, el total y la ganancia (CU-08, C4), y no se cuentan como renglones. Al final, la
+     * unidad copiada en los renglones (la mayor, como la descripcion): la pantalla escribe «26,5 metros».
      */
     @Query("select i.articuloId, max(i.descripcion), "
             + "sum(case when " + ES_NOTA + " then -i.cantidad else i.cantidad end), "
             + "sum(case when " + ES_NOTA + " then -i.total else i.total end), "
             + "sum(case when i.costo is null then 0 when " + ES_NOTA + " then i.costo - i.neto else i.neto - i.costo end), "
             + "sum(case when i.costo is null and not " + ES_NOTA + " then 1 else 0 end), "
-            + "sum(case when " + ES_NOTA + " then 0 else 1 end) "
+            + "sum(case when " + ES_NOTA + " then 0 else 1 end), "
+            + "max(i.unidad) "
             + "from ItemComprobante i, Comprobante c where i.comprobanteId = c.id and" + COMPROBANTES_DEL_RANGO
             + " group by i.articuloId order by sum(case when " + ES_NOTA + " then -i.total else i.total end) desc, "
             + "i.articuloId")

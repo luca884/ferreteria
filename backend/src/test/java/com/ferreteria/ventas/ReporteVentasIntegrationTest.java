@@ -215,6 +215,20 @@ class ReporteVentasIntegrationTest extends VentasTestBase {
     }
 
     @Test
+    @DisplayName("por articulo: cada fila trae la unidad del renglon vendido, para escribir «26,5 metros» (arreglos-confusos, S4)")
+    void porArticuloTraeLaUnidad() throws Exception {
+        long cable = articulo(t, "Cable", "METRO", "100.00", "100");
+        id(vender(login(t.emailVendedor()), clave(), "2650.00", linea(cable, "26.5", "100.00")));
+
+        JsonNode r = reporte("por-articulo", hoyAHoy());
+
+        JsonNode metros = fila(r, "articuloId", String.valueOf(cable));
+        assertThat(bd(metros.get("cantidad"))).isEqualByComparingTo("26.5");
+        assertThat(metros.get("unidad").asText()).isEqualTo("METRO");
+        assertThat(fila(r, "articuloId", String.valueOf(tornillo)).get("unidad").asText()).isEqualTo("UNIDAD");
+    }
+
+    @Test
     @DisplayName("por rubro: el rubro de hoy de cada articulo, y «Sin rubro» para los que no tienen")
     void porRubro() throws Exception {
         JsonNode r = reporte("por-rubro", hoyAHoy());
