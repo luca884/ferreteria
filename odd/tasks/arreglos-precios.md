@@ -24,8 +24,8 @@ Restricciones: test-first; backend solo para agregar campos opcionales a respues
 
 ## Tasks
 
-- [ ] T1 · S1 · ruta: inline · Aceptación: alto de la planilla según las filas · Evidencia: — · Risk: —
-- [ ] T2 · S2 · ruta: inline · Aceptación: ayuda y aviso de «La lista incluye IVA» · Evidencia: — · Risk: —
+- [x] T1 · S1 · ruta: inline · Aceptación: alto de la planilla según las filas · Evidencia: RED 2 de 197 en `importaciones.spec.ts` → GREEN 197/197; `altoMarco` pasa a `computed`: filas × alto de fila (con el zoom) + 18 px para la barra horizontal, hasta 450 px; sale el `min-height: 150px` del `.visor-cuerpo`; el test «el marco no cambia de alto» con el zoom pasa a una hoja de 100 filas (con pocas filas, ahora el marco crece al acercar para que entren) · commit `8a036e6` · Risk: none
+- [x] T2 · S2 · ruta: inline · Aceptación: ayuda y aviso de «La lista incluye IVA» · Evidencia: RED 3 de 201 → GREEN 201/201 en `importaciones.spec.ts`; `#lista-incluye-iva-ayuda` siempre, `#lista-incluye-iva-aviso` (`role="status"`) con `avisoIva()`, los dos en el `aria-describedby` de la casilla; el aviso no bloquea la vista previa · commit `8a036e6` · Risk: none
 - [ ] T3 · S3 · ruta: inline · Aceptación: descripción en las filas con error (backend + front) · Evidencia: — · Risk: —
 - [ ] T4 · S4, S5 · ruta: inline · Aceptación: textos por operación, rótulos e IVA % en la vista previa (backend + front) · Evidencia: — · Risk: —
 - [ ] T5 · S6, S7 · ruta: inline · Aceptación: cantidad con miles, muestra de precios (backend + front) y ejemplo del redondeo · Evidencia: — · Risk: —

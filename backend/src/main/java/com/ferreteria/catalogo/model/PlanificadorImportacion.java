@@ -608,7 +608,8 @@ public final class PlanificadorImportacion {
     }
 
     private static AvisoDeFila aviso(FilaDeDatos d, String mensaje) {
-        return new AvisoDeFila(d.avisoHoja(), d.numero(), d.codigo().isEmpty() ? null : d.codigo(), mensaje);
+        return new AvisoDeFila(d.avisoHoja(), d.numero(), d.codigo().isEmpty() ? null : d.codigo(), mensaje,
+            d.descripcion().isEmpty() ? null : d.descripcion());
     }
 
     private static BigDecimal costoCalculado(BigDecimal precioLista, AlicuotaIva alicuota, Ajustes ajustes,

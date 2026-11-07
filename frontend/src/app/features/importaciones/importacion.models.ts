@@ -183,12 +183,16 @@ export interface FilaSinCambio {
   descripcion: string;
 }
 
-/** `fila` y `codigo` son null en las advertencias generales (p. ej. cambio de encabezado); `hoja` también si no corresponde. */
+/**
+ * `fila` y `codigo` son null en las advertencias generales (p. ej. cambio de encabezado); `hoja` también si no
+ * corresponde. `descripcion` es la de la fila, para saber qué artículo es; null si la fila no tiene o no es de una fila.
+ */
 export interface AvisoDeFila {
   hoja: number | null;
   fila: number | null;
   codigo: string | null;
   mensaje: string;
+  descripcion?: string | null;
 }
 
 export interface ArticuloAusente {
