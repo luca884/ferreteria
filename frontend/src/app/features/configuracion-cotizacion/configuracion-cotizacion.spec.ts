@@ -303,7 +303,7 @@ describe('PaginaConfiguracionCotizacion', () => {
       expect(el().querySelector('.resultado')).toBeNull();
     });
 
-    it('muestra todos los artículos en dólares: código, descripción, precio actual, nuevo y diferencia', async () => {
+    it('muestra solo los artículos que cambian de precio: código, descripción, precio actual, nuevo y diferencia', async () => {
       await crear();
 
       await hacerClick(botonRecalcular());
@@ -314,7 +314,7 @@ describe('PaginaConfiguracionCotizacion', () => {
       const encabezados = Array.from(el().querySelectorAll('.vista-previa th')).map(texto);
       expect(encabezados).toEqual(['Código', 'Descripción', 'Precio actual', 'Precio nuevo', 'Diferencia']);
       const filas = Array.from(el().querySelectorAll('.vista-previa tbody tr'));
-      expect(filas).toHaveLength(2);
+      expect(filas).toHaveLength(1);
       expect(Array.from(filas[0].querySelectorAll('td')).map(texto)).toEqual([
         'TAL-1',
         'Taladro',
@@ -322,15 +322,46 @@ describe('PaginaConfiguracionCotizacion', () => {
         '$ 17.310,00',
         '+$ 1.580,00',
       ]);
-      expect(Array.from(filas[1].querySelectorAll('td')).map(texto)).toEqual([
+      expect(el().querySelector('.vista-previa .sin-cambios')).toBeNull();
+      expect(el().querySelector('.vista-previa .aviso-desvio')).toBeNull();
+      expect(texto(botonAplicar())).toBe('Aplicar');
+    });
+
+    it('un inactivo que cambia de precio aparece marcado', async () => {
+      vistaPrevia = vi.fn(() =>
+        of({
+          ...vista,
+          articulosQueCambian: 1,
+          articulos: [{ ...vista.articulos[1], precioNuevo: 110, diferencia: 10 }],
+        }),
+      );
+      await crear();
+
+      await hacerClick(botonRecalcular());
+
+      const filas = Array.from(el().querySelectorAll('.vista-previa tbody tr'));
+      expect(Array.from(filas[0].querySelectorAll('td')).map(texto)).toEqual([
         'TOR-1',
         'Tornillo (inactivo)',
         '$ 100,00',
-        '$ 100,00',
-        '—',
+        '$ 110,00',
+        '+$ 10,00',
       ]);
-      expect(el().querySelector('.vista-previa .aviso-desvio')).toBeNull();
-      expect(texto(botonAplicar())).toBe('Aplicar');
+    });
+
+    it('si no cambia ningún precio lo dice y no lista los artículos', async () => {
+      vistaPrevia = vi.fn(() =>
+        of({ ...vista, dolar: 1000, articulosQueCambian: 0, articulos: [vista.articulos[1]] }),
+      );
+      await crear();
+
+      await hacerClick(botonRecalcular());
+
+      expect(texto(q('.vista-previa .resumen'))).toBe(
+        'Con el dólar a 1.000,00 cambia el precio de 0 del único artículo en dólares.',
+      );
+      expect(texto(q('.vista-previa .sin-cambios'))).toBe('No cambia ningún precio.');
+      expect(el().querySelector('.vista-previa table')).toBeNull();
     });
 
     it('sin artículos en dólares lo dice y no ofrece aplicar', async () => {
@@ -395,11 +426,16 @@ describe('PaginaConfiguracionCotizacion', () => {
   });
 
   describe('recálculo', () => {
-    it('dice «El cambio se aplica en el próximo recálculo» con «Recalcular ahora» al lado, en el mismo bloque', async () => {
+    it('explica que los precios se recalculan solos cada día a la hora guardada, con «Recalcular ahora» al lado', async () => {
       await crear();
 
       const bloque = q('.recalculo');
-      expect(texto(bloque)).toContain('El cambio se aplica en el próximo recálculo');
+      expect(texto(q('.recalculo-texto'))).toBe(
+        'Los precios en dólares se recalculan solos todos los días a las 08:00, también después de cambiar el dólar ' +
+          'o el valor que usan. Si no querés esperar, podés recalcular ahora: antes de cambiar nada vas a ver cómo ' +
+          'quedan los precios.',
+      );
+      expect(texto(bloque)).not.toContain('El cambio se aplica');
       expect(bloque.contains(botonRecalcular())).toBe(true);
       expect(texto(botonRecalcular())).toBe('Recalcular ahora');
     });
@@ -452,12 +488,12 @@ describe('PaginaConfiguracionCotizacion', () => {
         .mockReturnValueOnce(of(configuracion))
         .mockReturnValue(of({ ...configuracion, vigente: 1100, vigenteDesde: '2026-10-16T13:00:00Z' }));
       await crear();
-      expect(texto(q('.vigente'))).toBe('Los precios en dólares se calcularon con el dólar a 1.000,00 (16/10 08:00).');
+      expect(texto(q('.vigente'))).toBe('Los precios en dólares se recalcularon el 16/10 08:00 con el dólar a 1.000,00.');
 
       await recalcularYAplicar();
 
       expect(obtener).toHaveBeenCalledTimes(2);
-      expect(texto(q('.vigente'))).toBe('Los precios en dólares se calcularon con el dólar a 1.100,00 (16/10 10:00).');
+      expect(texto(q('.vigente'))).toBe('Los precios en dólares se recalcularon el 16/10 10:00 con el dólar a 1.100,00.');
     });
 
     it('si todavía no se fijó ningún dólar lo dice', async () => {
@@ -546,6 +582,7 @@ describe('PaginaConfiguracionCotizacion', () => {
       const motivo = q('#motivo-sin-recalculo');
       expect(texto(motivo)).toBe('La cotización está apagada. Activala y guardá para poder recalcular.');
       expect(botonRecalcular().getAttribute('aria-describedby')).toContain('motivo-sin-recalculo');
+      expect(texto(q('.recalculo-texto'))).toBe('Con la cotización apagada, los precios en dólares no se recalculan solos.');
 
       botonRecalcular().click();
       expect(recalcular).not.toHaveBeenCalled();

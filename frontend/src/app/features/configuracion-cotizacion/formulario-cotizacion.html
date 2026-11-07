@@ -22,7 +22,7 @@
       <span id="dolarPrecios-pista" class="pista">Un solo tipo de dólar. Los artículos en USD usan este.</span>
     </div>
 
-    <fieldset class="campo lado" aria-describedby="lado-pista">
+    <fieldset class="campo lado">
       <legend>Valor que usan los precios</legend>
       @for (lado of lados; track lado) {
         <label class="casilla" [for]="'lado-' + lado">
@@ -30,14 +30,17 @@
           {{ ayudaLado[lado] }}
         </label>
       }
-      <span id="lado-pista" class="pista">Por defecto, el vendedor.</span>
     </fieldset>
 
     <div class="campo">
       <label for="horaRecalculo">Hora del recálculo diario</label>
       <input
         id="horaRecalculo"
-        type="time"
+        type="text"
+        inputmode="numeric"
+        autocomplete="off"
+        maxlength="5"
+        placeholder="08:00"
         formControlName="horaRecalculo"
         [attr.aria-invalid]="errorHora ? 'true' : null"
         [attr.aria-describedby]="errorHora ? 'horaRecalculo-pista horaRecalculo-error' : 'horaRecalculo-pista'"

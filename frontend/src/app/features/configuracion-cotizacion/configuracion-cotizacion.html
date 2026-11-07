@@ -58,10 +58,7 @@
           </div>
         }
         <div class="recalculo-fila">
-          <p class="recalculo-texto">
-            El cambio se aplica en el próximo recálculo. Si no querés esperar, podés recalcular ahora: antes de cambiar
-            nada vas a ver cómo quedan los precios.
-          </p>
+          <p class="recalculo-texto">{{ textoRecalculo(actual) }}</p>
           <button
             type="button"
             class="primario recalcular"

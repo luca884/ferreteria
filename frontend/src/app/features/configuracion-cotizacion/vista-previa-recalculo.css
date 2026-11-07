@@ -46,7 +46,8 @@ thead th {
   white-space: nowrap;
 }
 
-.sin-cambio td {
+.sin-cambios {
+  margin: 0 0 var(--e-3);
   color: var(--texto-tenue);
 }
 

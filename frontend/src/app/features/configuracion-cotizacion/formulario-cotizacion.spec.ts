@@ -208,6 +208,53 @@ describe('FormularioCotizacion', () => {
     expect(q('#horaRecalculo').getAttribute('aria-invalid')).toBe('true');
   });
 
+  describe('hora del recálculo en 24 h', () => {
+    it('es un campo de texto que muestra la hora como en Argentina, sin AM ni PM', async () => {
+      await crear({ ...configuracion, horaRecalculo: '20:30' });
+
+      const hora = q<HTMLInputElement>('#horaRecalculo');
+      expect(hora.type).toBe('text');
+      expect(hora.getAttribute('inputmode')).toBe('numeric');
+      expect(hora.getAttribute('placeholder')).toBe('08:00');
+      expect(hora.value).toBe('20:30');
+    });
+
+    it('acepta la hora con un solo dígito y la manda con dos', async () => {
+      await crear();
+      await escribir(q<HTMLInputElement>('#horaRecalculo'), '8:15');
+
+      await enviar();
+
+      expect(guardados[0].horaRecalculo).toBe('08:15');
+    });
+
+    it('una hora que no existe no guarda y muestra el mismo error', async () => {
+      for (const invalida of ['25:00', '8 AM', '08:60']) {
+        await crear();
+        await escribir(q<HTMLInputElement>('#horaRecalculo'), invalida);
+
+        await enviar();
+
+        expect(guardados, invalida).toEqual([]);
+        expect(texto(q('#horaRecalculo-error'))).toBe('Indicá la hora del recálculo, por ejemplo 08:00.');
+        expect(q('#horaRecalculo').getAttribute('aria-invalid')).toBe('true');
+        TestBed.resetTestingModule();
+      }
+    });
+  });
+
+  it('cada lado explica cuál es, sin hablar del «vendedor»', async () => {
+    await crear();
+
+    expect(texto(q('label[for="lado-VENTA"]'))).toBe(
+      'Venta: el valor más alto, el que pagás si comprás dólares (recomendado)',
+    );
+    expect(texto(q('label[for="lado-COMPRA"]'))).toBe('Compra: el valor más bajo, el que te pagan si vendés dólares');
+    expect(el().querySelector('#lado-pista')).toBeNull();
+    expect(el().textContent).not.toContain('vendedor');
+    expect(q('fieldset.lado').hasAttribute('aria-describedby')).toBe(false);
+  });
+
   describe('aviso del dólar', () => {
     it('muestra el porcentaje guardado y explica qué hace', async () => {
       await crear({ ...configuracion, umbralDesvio: 7.5 });

@@ -19,6 +19,9 @@ export class VistaPreviaRecalculoComponent {
 
   protected readonly monto = formatearMonto;
 
+  /** Solo los que cambian de precio: con el dólar igual, listar todos con «—» no dice nada. */
+  protected readonly queCambian = computed(() => this.vista().articulos.filter((fila) => fila.diferencia !== 0));
+
   protected readonly resumen = computed(() => {
     const v = this.vista();
     if (v.articulos.length === 0) return 'No hay artículos cargados en dólares.';
