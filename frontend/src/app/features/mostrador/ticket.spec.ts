@@ -225,6 +225,27 @@ describe('ticket (puro)', () => {
       const r = cambiarCantidad(t, 0, 300).ticket!;
       expect(sinStock(r.renglones[0])).toBe(false);
     });
+
+    describe('renglón de un remito: mira solo lo que sale en la venta, como el servidor (arreglos-confusos, S7)', () => {
+      const delRemito = (cantidadMilesimas: number, stockActual: number) => ({
+        ...agregar(ticketVacio('k'), art({ stockActual })).renglones[0],
+        cantidadMilesimas,
+        remitidoMilesimas: 300000,
+      });
+
+      it('lo que el remito ya entregó no cuenta: 300 remitidos y 0 en stock no avisa', () => {
+        expect(sinStock(delRemito(300000, 0))).toBe(false);
+      });
+
+      it('vender menos de lo remitido no avisa ni con stock negativo', () => {
+        expect(sinStock(delRemito(200000, -5))).toBe(false);
+      });
+
+      it('la diferencia sí: 305 con 300 remitidos sale 5 y avisa con 4 en stock, no con 5', () => {
+        expect(sinStock(delRemito(305000, 4))).toBe(true);
+        expect(sinStock(delRemito(305000, 5))).toBe(false);
+      });
+    });
   });
 
   describe('actualizarPrecios y marcarProblemas', () => {
@@ -739,12 +760,41 @@ describe('ticket (puro)', () => {
             unidad: 'UNIDAD',
             precioCentavos: 12000,
             cantidadMilesimas: 2500,
+            remitidoMilesimas: 2500,
             descuentoBp: 1050,
             stockActual: 7,
             stockMinimo: 2,
           },
         ],
       });
+    });
+
+    it('cada renglón recuerda lo que entregó el remito; el del presupuesto no (arreglos-confusos, S7)', () => {
+      const actuales = new Map([[1, art()]]);
+
+      expect(ticketDeRemito(remito([renglon({ cantidad: 300 })]), actuales, 'c').renglones[0].remitidoMilesimas).toBe(
+        300000,
+      );
+      const p = { ...remito([renglon()]), presupuestoId: 3, vence: '2026-11-20', vencido: false } as unknown as PresupuestoResponse;
+      expect('remitidoMilesimas' in ticketDePresupuesto(p, actuales, 'c').renglones[0]).toBe(false);
+    });
+
+    it('agregar más del mismo artículo conserva lo remitido', () => {
+      const t = ticketDeRemito(remito([renglon({ cantidad: 2 })]), new Map([[1, art()]]), 'c');
+
+      expect(agregar(t, art()).renglones[0]).toMatchObject({ cantidadMilesimas: 3000, remitidoMilesimas: 2000 });
+    });
+
+    it('soltarRemito también olvida lo remitido: la venta pasa a ser común y mueve todo', () => {
+      const t = ticketDeRemito(remito([renglon()]), new Map([[1, art()]]), 'c');
+
+      expect('remitidoMilesimas' in soltarRemito(t).renglones[0]).toBe(false);
+    });
+
+    it('lo remitido no viaja en el pedido de la venta', () => {
+      const t = ticketDeRemito(remito([renglon()]), new Map([[1, art()]]), 'c');
+
+      expect('remitidoMilesimas' in aRequest(t, 1).renglones[0]).toBe(false);
     });
 
     it('un artículo dado de baja, sin precio o que ya no existe queda marcado, con el precio del remito', () => {

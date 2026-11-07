@@ -20,6 +20,12 @@ export interface RenglonTicket {
   cantidadMilesimas: number;
   /** Descuento propio del renglón, en centésimas de punto porcentual (1000 = 10 %). Ausente es 0. */
   descuentoBp?: number;
+  /**
+   * Lo que entregó el remito del que sale la venta, en milésimas: ya salió del stock, así que el aviso de sin stock mira
+   * solo lo que sale de más (como el servidor, spec «Sin doble descuento de stock»). Ausente si el renglón no viene de
+   * un remito; un ticket guardado antes de este campo no lo tiene.
+   */
+  remitidoMilesimas?: number;
   /** Stock que se vio al agregar: solo para advertir, el servidor decide. */
   stockActual: number;
   stockMinimo: number;
@@ -198,9 +204,13 @@ export function moverElegido(t: Ticket, delta: -1 | 1): Ticket {
   return { ...t, elegido };
 }
 
-/** La cantidad supera el stock visto. Justo en 0 no advierte. */
+/**
+ * Lo que sale en la venta supera el stock visto. Justo en 0 no advierte. En un renglón de un remito sale solo lo que
+ * pasa de lo remitido; si no pasa, no sale nada y no advierte.
+ */
 export function sinStock(r: RenglonTicket): boolean {
-  return r.cantidadMilesimas > aMilesimas(r.stockActual);
+  const sale = r.cantidadMilesimas - (r.remitidoMilesimas ?? 0);
+  return sale > 0 && sale > aMilesimas(r.stockActual);
 }
 
 export function actualizarPrecios(
@@ -306,7 +316,8 @@ export function soltarPresupuesto(t: Ticket): Ticket {
 /** Saca el remito del ticket: la venta sigue como una venta común (el remito no cambia). */
 export function soltarRemito(t: Ticket): Ticket {
   const { remitoId: _id, remitoNumero: _numero, ...resto } = t;
-  return resto;
+  const renglones = resto.renglones.map(({ remitidoMilesimas: _remitido, ...r }) => r);
+  return { ...resto, renglones };
 }
 
 /** Lo que un renglón de un presupuesto o de un remito aporta al ticket de la venta que sale de él. */
@@ -394,7 +405,11 @@ export function ticketDeRemito(
   clave: string,
   condicionIva?: CondicionIva,
 ): Ticket {
-  const renglones = renglonesDeOrigen(r.renglones, actuales);
+  // Un artículo no se repite en un remito: cada renglón del ticket es uno del remito, en el mismo orden.
+  const renglones = renglonesDeOrigen(r.renglones, actuales).map((x, i) => ({
+    ...x,
+    remitidoMilesimas: Math.round(r.renglones[i].cantidad * 1000),
+  }));
   const primero = renglones.findIndex((x) => x.problema !== undefined);
   return {
     v: 1,

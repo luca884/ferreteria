@@ -89,6 +89,41 @@ describe('ticket.storage', () => {
     }
   });
 
+  describe('lo remitido de cada renglón (arreglos-confusos, S7)', () => {
+    const delRemito: Ticket = {
+      ...ticket,
+      presupuestoId: undefined,
+      presupuestoNumero: undefined,
+      remitoId: 8,
+      remitoNumero: 5,
+      renglones: [{ ...ticket.renglones[0], remitidoMilesimas: 2000 }],
+    };
+    const sinUndefined = (t: Ticket) => JSON.parse(JSON.stringify(t)) as Ticket;
+
+    it('se guarda y se lee con el renglón', () => {
+      guardarTicket(auth(), delRemito);
+
+      expect(ticketGuardado(auth())).toEqual(sinUndefined(delRemito));
+    });
+
+    it('un ticket guardado antes del cambio, sin el campo, sigue cargando igual', () => {
+      const viejo = { ...delRemito, renglones: [ticket.renglones[0]] };
+      localStorage.setItem('ticket:3:7', JSON.stringify(viejo));
+
+      expect(ticketGuardado(auth())).toEqual(sinUndefined(viejo));
+      expect('remitidoMilesimas' in ticketGuardado(auth())!.renglones[0]).toBe(false);
+    });
+
+    it('un valor que no es una cantidad en milésimas mayor que 0 deja el ticket roto', () => {
+      for (const malo of [0, -1000, 1.5, '2000', null]) {
+        const renglon = { ...ticket.renglones[0], remitidoMilesimas: malo };
+        localStorage.setItem('ticket:3:7', JSON.stringify({ ...delRemito, renglones: [renglon] }));
+
+        expect(ticketGuardado(auth())).toBeNull();
+      }
+    });
+  });
+
   describe('cliente (CL-005)', () => {
     const guardarCrudo = (extra: Record<string, unknown>) =>
       localStorage.setItem('ticket:3:7', JSON.stringify({ ...ticket, presupuestoId: undefined, presupuestoNumero: undefined, ...extra }));
