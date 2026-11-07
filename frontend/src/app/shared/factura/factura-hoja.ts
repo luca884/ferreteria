@@ -1,5 +1,6 @@
 import { DecimalPipe } from '@angular/common';
 import { Component, computed, input } from '@angular/core';
+import { cuitConGuiones } from '../../core/formato/cuit';
 import { formatearFecha } from '../../core/formato/fecha-hora';
 import { MontoPipe } from '../../core/formato/monto';
 import { ALICUOTA_IVA_LABELS, AlicuotaIva } from '../../features/articulos/articulo.models';
@@ -51,10 +52,7 @@ export class FacturaHoja {
     return this.valido() && puntoVenta != null && numero != null ? numeroFiscal(puntoVenta, numero) : null;
   });
   /** «30-71234567-8». */
-  protected readonly cuitEmisor = computed(() => {
-    const cuit = this.documento().emisor.cuit;
-    return `${cuit.slice(0, 2)}-${cuit.slice(2, 10)}-${cuit.slice(10)}`;
-  });
+  protected readonly cuitEmisor = computed(() => cuitConGuiones(this.documento().emisor.cuit));
   protected readonly documentoReceptor = computed(() => documentoLegible(this.documento().receptor));
   /** El CAE y su vencimiento, solo en la factura válida. */
   protected readonly cae = computed(() => {

@@ -1,10 +1,10 @@
 import { Component, computed, inject, signal } from '@angular/core';
 import { takeUntilDestroyed, toObservable } from '@angular/core/rxjs-interop';
-import { NavigationEnd, Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
+import { NavigationEnd, NavigationSkipped, Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { EMPTY, catchError, filter, interval, merge, pairwise, startWith, switchMap } from 'rxjs';
 import { ROL_LABELS } from '../core/auth/auth.models';
 import { AuthService } from '../core/auth/auth.service';
-import { Avisos } from '../core/avisos/avisos';
+import { Aviso, Avisos } from '../core/avisos/avisos';
 import { Cotizacion } from '../core/cotizacion/cotizacion.models';
 import { CotizacionService } from '../core/cotizacion/cotizacion.service';
 import { BuscadorMenu } from './buscador-menu';
@@ -54,7 +54,7 @@ export class Shell {
    * El aviso que dejó la pantalla anterior y ninguna tomó al abrirse (por ejemplo, «Cambiaste tu contraseña.»: el Dueño
    * y el Vendedor llegan a pantallas distintas). Se toma al terminar cada navegación, así que la siguiente lo saca.
    */
-  protected readonly avisoAlLlegar = signal<string | null>(null);
+  protected readonly avisoAlLlegar = signal<Aviso | null>(null);
 
   protected readonly grupos = computed(() => gruposPara(this.auth.esDueno()));
   private readonly url = signal(this.router.url);
@@ -71,6 +71,17 @@ export class Shell {
       .subscribe((evento) => {
         this.abrirElDe(evento.urlAfterRedirects);
         this.avisoAlLlegar.set(this.avisos.tomar());
+      });
+    // Una redirección a la pantalla en la que ya se está (el Vendedor en el Mostrador que va a Ventas) no termina en
+    // NavigationEnd: el aviso que dejó el guard se muestra acá mismo, en vez de quedar para la pantalla siguiente.
+    this.router.events
+      .pipe(
+        filter((evento) => evento instanceof NavigationSkipped),
+        takeUntilDestroyed(),
+      )
+      .subscribe(() => {
+        const aviso = this.avisos.tomar();
+        if (aviso) this.avisoAlLlegar.set(aviso);
       });
 
     // Se lee al abrir, cada 5 minutos y cuando la configuración o un recálculo avisan que la cotización cambió.

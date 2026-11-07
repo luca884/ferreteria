@@ -72,7 +72,9 @@
 </aside>
 <main #contenido id="contenido" class="contenido" tabindex="-1">
   @if (avisoAlLlegar(); as aviso) {
-    <p class="alerta exito aviso-al-llegar" role="status">{{ aviso }}</p>
+    <p class="alerta aviso-al-llegar" [class.exito]="aviso.tipo === 'exito'" [class.advertencia]="aviso.tipo === 'advertencia'" role="status">
+      {{ aviso.texto }}
+    </p>
   }
   <router-outlet />
 </main>

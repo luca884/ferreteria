@@ -1,5 +1,12 @@
 :host {
   display: block;
+  width: 100%;
+}
+/* La barra va a todo el ancho; la tabla tiene dos columnas y a todo el ancho el nombre quedaba lejos del margen (#13):
+ * el resto va centrado en --ancho-medio, como Caja. */
+:host > :not(app-barra-acciones) {
+  max-width: var(--ancho-medio);
+  margin-inline: auto;
 }
 .nombre {
   font-weight: 600;

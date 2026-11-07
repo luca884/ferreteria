@@ -1,5 +1,6 @@
 import { DecimalPipe } from '@angular/common';
 import { Component, computed, input } from '@angular/core';
+import { cuitConGuiones } from '../../core/formato/cuit';
 import { formatearFecha } from '../../core/formato/fecha-hora';
 import { MontoPipe } from '../../core/formato/monto';
 import { CONDICION_IVA_FERRETERIA_LABELS } from '../../features/admin-ferreterias/ferreteria-admin.models';
@@ -42,10 +43,5 @@ export class DocumentoNoFiscalHoja {
     porcentajeDescuentoGeneral(this.documento()),
   );
   /** «30-71234567-8», venga con guiones o solo con dígitos. */
-  protected readonly cuit = computed(() => {
-    const digitos = this.emisor().cuit.replace(/\D/g, '');
-    return digitos.length === 11
-      ? `${digitos.slice(0, 2)}-${digitos.slice(2, 10)}-${digitos.slice(10)}`
-      : this.emisor().cuit;
-  });
+  protected readonly cuit = computed(() => cuitConGuiones(this.emisor().cuit));
 }

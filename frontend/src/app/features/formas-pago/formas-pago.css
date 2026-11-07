@@ -17,18 +17,6 @@ tr.inactiva td {
   margin: var(--e-1) 0 0;
   padding-left: var(--e-6);
 }
-.campo.activa {
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  gap: var(--e-2);
-}
-.campo.activa {
-  flex-wrap: wrap;
-}
-.campo.activa .pista {
-  flex-basis: 100%;
-}
 .estado .pista-activar {
   display: block;
   white-space: normal;

@@ -209,7 +209,7 @@ describe('MiContrasena', () => {
 
       await enviar();
 
-      expect(TestBed.inject(Avisos).tomar()).toBe('Cambiaste tu contraseña.');
+      expect(TestBed.inject(Avisos).tomar()).toEqual({ texto: 'Cambiaste tu contraseña.', tipo: 'exito' });
     });
 
     it('si el cambio falla no navega y el aviso sigue', async () => {

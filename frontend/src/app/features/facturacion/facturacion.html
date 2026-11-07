@@ -108,7 +108,7 @@
           <dl class="credencial">
             <div>
               <dt>CUIT</dt>
-              <dd>{{ credencial.cuit }}</dd>
+              <dd>{{ cuitConGuiones(credencial.cuit) }}</dd>
             </div>
             <div>
               <dt>Emisor</dt>
@@ -216,9 +216,13 @@
         <h2 id="titulo-pedido">Obtener o renovar el certificado</h2>
 
         @if (c.simulador) {
-          <p class="pista guia-simulador">
-            En el simulador no hace falta ir a ARCA: generá el pedido y firmalo con «Firmar con el simulador».
-          </p>
+          <ol class="guia guia-simulador">
+            <li>Generá el pedido de certificado acá abajo.</li>
+            <li>
+              Firmalo con «Firmar con el simulador»: el certificado queda activo enseguida. En el simulador no hace falta
+              ir a ARCA.
+            </li>
+          </ol>
         } @else {
           <ol class="guia">
             <li>Generá el pedido de certificado (.csr) acá abajo y bajalo.</li>
@@ -240,7 +244,7 @@
 
         @if (c.pedido; as pedido) {
           <p class="pedido-pendiente">
-            Hay un pedido pendiente del {{ fechaHora(pedido.creadoEn) }}, para la CUIT {{ pedido.cuit }}.
+            Hay un pedido pendiente del {{ fechaHora(pedido.creadoEn) }}, para la CUIT {{ cuitConGuiones(pedido.cuit) }}.
           </p>
         }
 
@@ -286,39 +290,47 @@
           }
         </div>
 
-        @if (hayPedido()) {
-          <div class="campo subir">
-            <div class="fila">
-              <button
-                type="button"
-                class="primario subir-certificado"
-                aria-describedby="certificado-pista"
-                [disabled]="ocupado()"
-                (click)="entrada.click()"
-              >
-                Subir certificado (.crt)
-              </button>
-            </div>
-            <input #entrada id="certificado" type="file" hidden accept=".crt,.pem,.cer" (change)="alElegirCertificado(entrada)" />
-            <span id="certificado-pista" class="pista">
-              El archivo que bajaste de ARCA (.crt, .pem o .cer), de hasta 16 KB.
-            </span>
-            @if (errorCertificado(); as texto) {
-              <span id="certificado-error" class="campo-error" role="alert">{{ texto }}</span>
-            }
+        <!-- Subir y firmar se ven siempre, así el circuito queda a la vista; sin pedido no hay con qué. -->
+        <div class="campo subir">
+          <div class="fila">
+            <button
+              type="button"
+              class="primario subir-certificado"
+              [attr.aria-describedby]="hayPedido() ? 'certificado-pista' : 'certificado-motivo certificado-pista'"
+              [disabled]="ocupado() || !hayPedido()"
+              (click)="entrada.click()"
+            >
+              Subir certificado (.crt)
+            </button>
           </div>
-
-          @if (c.simulador) {
-            <div class="simulador">
-              <button type="button" class="secundario firmar-simulador" [disabled]="ocupado()" (click)="firmarConSimulador()">
-                Firmar con el simulador
-              </button>
-              <span class="pista">
-                Solo para pruebas: la CA del simulador firma el pedido y el certificado sirve únicamente en el simulador,
-                no con ARCA.
-              </span>
-            </div>
+          <input #entrada id="certificado" type="file" hidden accept=".crt,.pem,.cer" (change)="alElegirCertificado(entrada)" />
+          @if (!hayPedido()) {
+            <span id="certificado-motivo" class="pista motivo">Primero generá el pedido de certificado.</span>
           }
+          <span id="certificado-pista" class="pista">
+            El archivo que bajaste de ARCA (.crt, .pem o .cer), de hasta 16 KB.
+          </span>
+          @if (errorCertificado(); as texto) {
+            <span id="certificado-error" class="campo-error" role="alert">{{ texto }}</span>
+          }
+        </div>
+
+        @if (c.simulador) {
+          <div class="simulador">
+            <button
+              type="button"
+              class="secundario firmar-simulador"
+              [attr.aria-describedby]="hayPedido() ? null : 'certificado-motivo'"
+              [disabled]="ocupado() || !hayPedido()"
+              (click)="firmarConSimulador()"
+            >
+              Firmar con el simulador
+            </button>
+            <span class="pista">
+              Solo para pruebas: la CA del simulador firma el pedido y el certificado sirve únicamente en el simulador,
+              no con ARCA.
+            </span>
+          </div>
         }
       </section>
     </div>

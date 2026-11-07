@@ -108,10 +108,11 @@ nav a:hover {
   background: var(--superficie-3);
   color: var(--texto);
 }
-/* La opción abierta toma el tono de su sección (bloque 2, S2). */
-nav a.activo {
-  background: var(--tono-suave);
-  color: var(--tono);
+/* La opción abierta va rellena con el tono de su sección (bloque 2, S2; más marcada en #5), también al pasar el mouse. */
+nav a.activo,
+nav a.activo:hover {
+  background: var(--tono);
+  color: var(--acento-texto);
   font-weight: 600;
 }
 nav a:focus-visible {
@@ -237,7 +238,7 @@ nav a:focus-visible {
  * llegar abajo (arreglos-confusos, S1).
  */
 .contenido {
-  border-top: 3px solid var(--tono);
+  border-top: 4px solid var(--tono);
   display: flex;
   flex-direction: column;
   min-width: 0;

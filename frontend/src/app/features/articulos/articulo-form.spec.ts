@@ -1466,7 +1466,7 @@ describe('ArticuloForm', () => {
 
       await enviar();
 
-      expect(TestBed.inject(Avisos).tomar()).toBe('Se guardó «Tornillo».');
+      expect(TestBed.inject(Avisos).tomar()).toEqual({ texto: 'Se guardó «Tornillo».', tipo: 'exito' });
       expect(navigate).toHaveBeenCalledWith(['/articulos'], VOLVER_AL_LISTADO);
     });
 

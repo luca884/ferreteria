@@ -5,6 +5,7 @@ import { AbstractControl, FormBuilder, ReactiveFormsModule, ValidationErrors, Va
 import { erroresDeCampos, mensajeDe } from '../../core/api/api-error';
 import { AuthService } from '../../core/auth/auth.service';
 import { BarraAcciones } from '../../shared/barra-acciones';
+import { Confirmacion } from '../../shared/confirmacion';
 import { CONTRASENA_SOLO_ESPACIOS, ContrasenaForm, NuevaContrasena, noSoloEspacios } from '../../shared/contrasena-form';
 import { FilasElegibles } from '../../shared/filas-elegibles';
 import {
@@ -30,7 +31,7 @@ const topeValido = (control: AbstractControl<string>): ValidationErrors | null =
  */
 @Component({
   selector: 'app-usuarios',
-  imports: [ReactiveFormsModule, BarraAcciones, ContrasenaForm],
+  imports: [ReactiveFormsModule, BarraAcciones, ContrasenaForm, Confirmacion],
   templateUrl: './usuarios.html',
   styleUrl: './usuarios.css',
 })
@@ -60,6 +61,8 @@ export class Usuarios implements OnInit {
   protected readonly erroresCampos = signal<string[]>([]);
   protected readonly guardando = signal(false);
   protected readonly cambiando = signal(false);
+  /** El usuario que se está por desactivar: espera la confirmación. */
+  protected readonly aDesactivar = signal<Usuario | null>(null);
   /** El usuario que se está editando; null mientras se da de alta uno nuevo. */
   protected readonly editando = signal<Usuario | null>(null);
   /** El usuario al que se le está reseteando la contraseña; null si no hay reset abierto. */
@@ -206,10 +209,23 @@ export class Usuarios implements OnInit {
     this.enfocar('#nombre');
   }
 
-  /** Desactiva al elegido, o lo reactiva si ya está desactivado. Sobre uno mismo el botón no se ofrece; el servidor igual dice 422. */
-  protected cambiarActivo(): void {
+  /** Desactivar pide confirmación (un clic deja al empleado sin acceso); reactivar es directo. */
+  protected alternarActivo(): void {
     const usuario = this.filas.elegido();
     if (!usuario || this.cambiando()) return;
+    if (usuario.activo) this.aDesactivar.set(usuario);
+    else this.cambiarActivo(usuario);
+  }
+
+  protected confirmarDesactivar(): void {
+    const usuario = this.aDesactivar();
+    this.aDesactivar.set(null);
+    if (usuario) this.cambiarActivo(usuario);
+  }
+
+  /** Sobre uno mismo el botón no se ofrece; el servidor igual dice 422. */
+  private cambiarActivo(usuario: Usuario): void {
+    if (this.cambiando()) return;
     this.aviso.set(null);
     this.error.set(null);
     this.cambiando.set(true);
