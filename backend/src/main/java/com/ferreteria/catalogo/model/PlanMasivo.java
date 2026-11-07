@@ -10,7 +10,7 @@ import java.util.List;
  *
  * <p>{@code enPesos} y {@code enDolares} cuentan todo el alcance, con o sin error. {@code advertenciaMezcla} es
  * null salvo que el modo sea {@code COSTO_MONTO} y el alcance tenga las dos monedas. Viven aca y no en
- * {@link ConteosMasivos} para no cambiar sus ocho campos.
+ * {@link ConteosMasivos} para no sumarle campos por moneda.
  */
 public record PlanMasivo(
         ConteosMasivos conteos,

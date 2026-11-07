@@ -2480,6 +2480,65 @@ describe('ActualizacionMasiva', () => {
       ]);
     });
 
+    describe('las tarjetas siguen el modo de la vista previa en pantalla', () => {
+      // yaEnElDestino 2 a propósito: los otros modos lo ignoran.
+      const conYa: VistaPreviaMasiva = { ...vistaPreviaBase, conteos: { ...conteosBase, yaEnElDestino: 2 } };
+      const tarjetasEnPantalla = () =>
+        Array.from(el().querySelectorAll('.tarjeta')).map((t) => t.textContent?.replace(/\s+/g, ' ').trim());
+      const SIN_PARTIR = ['Artículos 5', 'Suben 2', 'Bajan 0', 'Sin cambio de precio 2', 'Con error 1', 'Con advertencia 0'];
+      const PARTIDA = [
+        'Artículos 5',
+        'Suben 2',
+        'Bajan 0',
+        'Ya en el destino 2',
+        'Solo cambia el rubro 0',
+        'Con error 1',
+        'Con advertencia 0',
+      ];
+
+      it.each([
+        ['Cambiar el costo en %', '10'],
+        ['Fijar el margen', '45'],
+        ['Sumar o restar un monto al costo', '50'],
+        ['Cambiar el precio final en %', '10'],
+        ['Sumar o restar un monto al precio final', '-20'],
+      ])('«%s» sigue con «Sin cambio de precio» aunque llegue yaEnElDestino', async (modo, valor) => {
+        await crearComponente();
+        servicio.vistaPrevia.mockReturnValue(of(conYa));
+        await completar(modo, valor);
+        await generar();
+
+        expect(tarjetasEnPantalla()).toEqual(SIN_PARTIR);
+      });
+
+      it('después de «Cambiar el rubro», cambiar el modo borra las tarjetas y el modo nuevo no las parte', async () => {
+        await crearComponente();
+        servicio.vistaPrevia.mockReturnValue(of(conYa));
+        await elegir('#modo', MODO);
+        await elegir('#rubroDestino', 'Herramientas');
+        await generar();
+        expect(tarjetasEnPantalla()).toEqual(PARTIDA);
+
+        await completar('Cambiar el costo en %', '10');
+        expect(tarjetasEnPantalla()).toEqual([]);
+        await generar();
+
+        expect(tarjetasEnPantalla()).toEqual(SIN_PARTIR);
+      });
+
+      it('una vista previa de otro modo y después «Cambiar el rubro» en el formulario no deja tarjetas viejas', async () => {
+        await crearComponente();
+        servicio.vistaPrevia.mockReturnValue(of(conYa));
+        await completar('Cambiar el costo en %', '10');
+        await generar();
+        expect(tarjetasEnPantalla()).toEqual(SIN_PARTIR);
+
+        await elegir('#modo', MODO);
+
+        expect(tarjetasEnPantalla()).toEqual([]);
+      });
+    });
+
     it('la confirmación nombra el destino y aplicar manda el destino y la huella, sin valor', async () => {
       await conVistaPreviaDelRubro();
       servicio.aplicar.mockReturnValue(of({ conteos: vistaPreviaDelRubro.conteos, entradasDeHistorial: 1 }));
