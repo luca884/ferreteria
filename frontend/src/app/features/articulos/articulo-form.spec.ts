@@ -161,6 +161,8 @@ describe('ArticuloForm', () => {
       cotizacion?: Cotizacion | 'falla';
       /** Lo que responde GET /articulos/codigo-siguiente; por defecto, sin sugerencia. */
       codigoSugerido?: string | null | 'falla';
+      /** Los parámetros de la dirección (por ejemplo, los que manda «Crear artículo» de Nueva compra). */
+      query?: Record<string, string>;
     } = {},
   ) {
     const {
@@ -171,6 +173,7 @@ describe('ArticuloForm', () => {
       sinConfiguracion = false,
       cotizacion = cotizacionActiva(),
       codigoSugerido = null,
+      query = {},
     } = opciones;
     servicio = {
       obtener: vi.fn(() =>
@@ -215,7 +218,7 @@ describe('ArticuloForm', () => {
         {
           provide: ActivatedRoute,
           useValue: {
-            snapshot: { paramMap: convertToParamMap(id === null ? {} : { id }) },
+            snapshot: { paramMap: convertToParamMap(id === null ? {} : { id }), queryParamMap: convertToParamMap(query) },
           },
         },
       ],
@@ -291,6 +294,47 @@ describe('ArticuloForm', () => {
     await escribir('descripcion', 'Tornillo');
     await escribir('costo', '100');
   }
+
+  describe('alta desde Nueva compra (arreglos-compras, S8)', () => {
+    const datosDeLaCompra = {
+      descripcion: 'Tornillo hexagonal 1/4',
+      codigoProveedor: 'DBS-100',
+      proveedorId: '11',
+      costo: '578378',
+    };
+
+    it('el alta arranca con la descripción, el código y el proveedor de la factura y el costo con dos decimales', async () => {
+      await crearComponente({ query: datosDeLaCompra, codigoSugerido: '003' });
+
+      expect(input('descripcion').value).toBe('Tornillo hexagonal 1/4');
+      expect(input('codigoProveedor').value).toBe('DBS-100');
+      expect(select('proveedor').selectedOptions[0].textContent).toContain('Tersuave');
+      expect(input('costo').value).toBe('578.378,00');
+      expect(input('codigoInterno').value).toBe('003');
+    });
+
+    it('un proveedor que no existe o un costo que no es número se ignoran', async () => {
+      await crearComponente({ query: { ...datosDeLaCompra, proveedorId: '999', costo: 'abc' } });
+
+      expect(input('descripcion').value).toBe('Tornillo hexagonal 1/4');
+      expect(select('proveedor').selectedOptions[0].textContent).toContain('Sin proveedor');
+      expect(input('costo').value).toBe('');
+    });
+
+    it('al editar un artículo los parámetros se ignoran', async () => {
+      await crearComponente({ id: '7', query: { ...datosDeLaCompra, descripcion: 'Otra cosa' } });
+
+      expect(input('descripcion').value).toBe('Tornillo hexagonal 1/4');
+      expect(input('codigoProveedor').value).toBe('AB-12');
+    });
+
+    it('sin parámetros el alta queda como siempre', async () => {
+      await crearComponente();
+
+      expect(input('descripcion').value).toBe('');
+      expect(input('codigoProveedor').value).toBe('');
+    });
+  });
 
   describe('código interno sugerido (mejoras-ferreteros-bloque-1, S3)', () => {
     it('el alta arranca con el código siguiente al último cargado y lo explica', async () => {

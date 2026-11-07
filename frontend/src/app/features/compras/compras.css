@@ -220,3 +220,22 @@ tr.advertencia td {
   gap: var(--e-3);
   margin-bottom: var(--e-4);
 }
+
+.totales {
+  margin: 1rem 0 0 auto;
+  min-width: 16rem;
+  max-width: 22rem;
+}
+
+.totales p {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.totales .total {
+  font-size: 1.25rem;
+  font-weight: 700;
+}

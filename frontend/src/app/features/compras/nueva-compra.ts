@@ -31,6 +31,7 @@ const MENSAJE_PROVEEDORES = 'No se pudieron cargar los proveedores.';
 const MENSAJE_BUSQUEDA = 'No se pudo buscar. Probá de nuevo.';
 const MENSAJE_VISTA_PREVIA = 'No se pudo armar la vista previa. Probá de nuevo.';
 const MENSAJE_LEER_FACTURA = 'No se pudo leer la factura. Probá de nuevo o cargá la compra a mano.';
+const MENSAJE_SIN_ARTICULO = 'Resolvé los renglones sin artículo.';
 const AVISO_CANTIDAD_NO_ENTERA = 'La cantidad no es entera: revisala contra la factura.';
 const MENSAJE_REGISTRAR = 'No se pudo registrar la compra. Probá de nuevo: si ya se guardó, no se duplica.';
 /** Lo que valida el backend: hasta 5 recargos del costo por compra. */
@@ -226,6 +227,7 @@ export class NuevaCompra implements OnInit {
     if (resuelto) {
       this.sinArticulo.update((lista) => lista.filter((r) => r !== resuelto));
       this.resolviendo.set(null);
+      this.olvidarCartelSinArticulo();
     }
     this.descartarVistaPrevia();
   }
@@ -305,7 +307,30 @@ export class NuevaCompra implements OnInit {
       this.resolviendo.set(null);
       this.aviso.set(null);
     }
+    this.olvidarCartelSinArticulo();
     this.descartarVistaPrevia();
+  }
+
+  /**
+   * Abre el alta de artículos en otra pestaña (así no se pierde la compra) con lo que dice la factura: descripción,
+   * código del proveedor, el proveedor de la compra (si ya se eligió) y el costo.
+   */
+  protected crearArticulo(renglon: RenglonSinArticulo): void {
+    const parametros = new URLSearchParams({
+      descripcion: renglon.descripcion,
+      codigoProveedor: renglon.codigo,
+    });
+    if (this.proveedorId() !== '') parametros.set('proveedorId', this.proveedorId());
+    parametros.set('costo', String(renglon.costoUnitario));
+    for (const [clave, valor] of [...parametros]) if (valor === '') parametros.delete(clave);
+    window.open(`/articulos/nuevo?${parametros}`, '_blank', 'noopener');
+  }
+
+  /** Cuando ya no queda ningún renglón sin artículo, el cartel de «Resolvé los renglones» es un error viejo. */
+  private olvidarCartelSinArticulo(): void {
+    if (this.sinArticulo().length === 0) {
+      this.errores.update((lista) => lista.filter((e) => e !== MENSAJE_SIN_ARTICULO));
+    }
   }
 
   protected agregarRecargo(): void {
@@ -431,7 +456,7 @@ export class NuevaCompra implements OnInit {
     const numero = entero(this.numero());
     if (numero === null) faltan.push('El número tiene que ser un número entero.');
     if (this.fecha() === '') faltan.push('Falta la fecha.');
-    if (this.sinArticulo().length > 0) faltan.push('Resolvé los renglones sin artículo.');
+    if (this.sinArticulo().length > 0) faltan.push(MENSAJE_SIN_ARTICULO);
     else if (this.renglones().length === 0) faltan.push('Agregá al menos un artículo.');
     const renglones = this.renglones().map((r) => ({
       articuloId: r.articuloId,

@@ -922,6 +922,7 @@ export class ArticuloForm implements OnInit {
           this.codigoSugerido.set(codigoSugerido);
           this.form.controls.codigoInterno.setValue(codigoSugerido);
         }
+        if (this.id === null) this.precargarDeLaDireccion();
         if (!this.auth.esDueno()) this.form.disable();
         this.cargando.set(false);
       },
@@ -934,6 +935,25 @@ export class ArticuloForm implements OnInit {
         );
       },
     });
+  }
+
+  /**
+   * Solo en el alta: «Crear artículo» de Nueva compra manda lo que dice la factura en la dirección (descripción, código
+   * del proveedor, proveedor y costo). Un proveedor que no está entre los activos o un costo que no es un número mayor
+   * que cero se ignoran; el código interno sigue siendo el sugerido.
+   */
+  private precargarDeLaDireccion(): void {
+    const parametros = this.route.snapshot.queryParamMap;
+    const descripcion = textoONull(parametros.get('descripcion') ?? '');
+    const codigoProveedor = textoONull(parametros.get('codigoProveedor') ?? '');
+    const proveedorId = Number(parametros.get('proveedorId'));
+    const costo = Number(parametros.get('costo'));
+    const cambios: Partial<{ descripcion: string; codigoProveedor: string; proveedorId: number; costo: number }> = {};
+    if (descripcion) cambios.descripcion = descripcion.slice(0, 200);
+    if (codigoProveedor) cambios.codigoProveedor = codigoProveedor.slice(0, 40);
+    if (this.proveedores().some((p) => p.id === proveedorId)) cambios.proveedorId = proveedorId;
+    if (Number.isFinite(costo) && costo > 0 && costo < PRECIO_MAXIMO_EXCLUSIVO) cambios.costo = costo;
+    this.form.patchValue(cambios);
   }
 
   /** Los campos del formulario con lo que devolvió el servidor. */

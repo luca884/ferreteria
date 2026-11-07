@@ -60,9 +60,16 @@ describe('NuevaCompra', () => {
         advertencia: 'El costo sube un 110 % (de 100,00 a 210,00). Revisá que sea correcto.',
         costoRealAnterior: 100,
         costoRealNuevo: 210,
+        stockAnterior: 0,
+        stockNuevo: 20,
+        alicuotaIva: 21,
       },
     ],
     recargos: [],
+    subtotalSinIva: 2200,
+    recargosImporte: 0,
+    iva: [{ porcentaje: 21, base: 2200, importe: 462 }],
+    total: 2662,
   };
 
   const borrador: BorradorDeFactura = {
@@ -669,6 +676,85 @@ describe('NuevaCompra', () => {
       expect(resuelto.querySelector('.codigo-proveedor')?.textContent?.trim()).toBe('Cód. proveedor X-99');
     });
 
+    describe('resolver un renglón sin artículo (arreglos-compras, S8)', () => {
+      const alerta = () => el().querySelector('[role=alert]')?.textContent ?? '';
+
+      async function intentarVistaPrevia() {
+        boton('Ver vista previa')!.click();
+        await refrescar();
+      }
+
+      it('«Quitar» borra el cartel «Resolvé los renglones sin artículo.» sin tocar otro error', async () => {
+        await crear();
+        await subirPdf();
+        await escribir('input[name=puntoVenta]', '');
+        await intentarVistaPrevia();
+        expect(alerta()).toContain('Resolvé los renglones sin artículo.');
+
+        porEtiqueta('Quitar sin artículo X-99').click();
+        await refrescar();
+
+        expect(alerta()).not.toContain('Resolvé los renglones sin artículo.');
+        expect(alerta()).toContain('El punto de venta tiene que ser un número entero.');
+      });
+
+      it('al elegir el artículo del último renglón sin artículo el cartel se va', async () => {
+        await crear();
+        await subirPdf();
+        await intentarVistaPrevia();
+        articulos.buscar.mockReturnValue(
+          of({ items: [{ ...tornillo, id: 2, codigoInterno: 'RAR-1', descripcion: 'Pieza rara' }], page: 0, size: 8, totalElements: 1, totalPages: 1 }),
+        );
+
+        boton('Elegir artículo')!.click();
+        await refrescar();
+        await escribir('input[name=busqueda]', 'rara');
+        campo<HTMLFormElement>('form.buscador').dispatchEvent(new Event('submit'));
+        await refrescar();
+        el().querySelector<HTMLElement>('.resultados [role=option]')!.click();
+        await refrescar();
+
+        expect(el().querySelector('[role=alert]')).toBeNull();
+      });
+
+      it('«Crear artículo» abre el alta en otra pestaña con la descripción, el código, el proveedor y el costo de la factura', async () => {
+        await crear();
+        await subirPdf();
+        const abrir = vi.spyOn(window, 'open').mockReturnValue(null);
+
+        boton('Crear artículo')!.click();
+
+        expect(abrir).toHaveBeenCalledTimes(1);
+        const [url, destino, opciones] = abrir.mock.calls[0];
+        const direccion = new URL(String(url), 'http://localhost');
+        expect(direccion.pathname).toBe('/articulos/nuevo');
+        expect(Object.fromEntries(direccion.searchParams)).toEqual({
+          descripcion: 'PIEZA RARA',
+          codigoProveedor: 'X-99',
+          proveedorId: '4',
+          costo: '1500',
+        });
+        expect(destino).toBe('_blank');
+        expect(opciones).toBe('noopener');
+        // La compra sigue en pantalla: el renglón sin artículo no se quitó.
+        expect(el().querySelector('.sin-articulo')).not.toBeNull();
+        abrir.mockRestore();
+      });
+
+      it('sin proveedor elegido «Crear artículo» no manda el proveedor', async () => {
+        await crear();
+        await subirPdf();
+        await escribir('select[name=proveedor]', '');
+        const abrir = vi.spyOn(window, 'open').mockReturnValue(null);
+
+        boton('Crear artículo')!.click();
+
+        const direccion = new URL(String(abrir.mock.calls[0][0]), 'http://localhost');
+        expect(direccion.searchParams.has('proveedorId')).toBe(false);
+        abrir.mockRestore();
+      });
+    });
+
     describe('códigos de los renglones (arreglos-compras, S7)', () => {
       const articuloDe = (fila: number) => el().querySelectorAll('table.renglones tbody tr')[fila].querySelector('td')!;
 
@@ -849,6 +935,67 @@ describe('NuevaCompra', () => {
       expect(vista).toContain('Costo real antes');
       expect(vista).toContain('Costo real nuevo');
       expect(vista).toContain('231,00');
+    });
+
+    /** Cada línea de los totales como «rótulo importe», con el espacio duro de Intl normalizado. */
+    function lineasDeTotales(): string[] {
+      return [...el().querySelectorAll('section.vista-previa .totales p')].map((linea) =>
+        [...linea.children].map((c) => c.textContent!.trim()).join(' ').replace(/\s+/g, ' '),
+      );
+    }
+
+    it('la vista previa muestra el stock de hoy y el que queda después de la compra', async () => {
+      await crear();
+      await cargarCompra();
+
+      boton('Ver vista previa')!.click();
+      await refrescar();
+
+      const vista = el().querySelector('section.vista-previa')!;
+      expect(vista.querySelector('thead')!.textContent).toContain('Stock antes → después');
+      expect(vista.querySelector('tbody td.stock')!.textContent!.replace(/\s+/g, ' ').trim()).toBe('0 → 20');
+    });
+
+    it('los totales muestran neto, recargos, subtotal sin IVA, el IVA de cada alícuota y el total', async () => {
+      await crear();
+      await cargarCompra();
+      api.vistaPrevia.mockReturnValue(
+        of({
+          ...plan,
+          recargos: [{ nombre: 'Flete', porcentaje: 10 }],
+          neto: 2500,
+          subtotalSinIva: 2750,
+          recargosImporte: 250,
+          iva: [
+            { porcentaje: 10.5, base: 330, importe: 34.65 },
+            { porcentaje: 21, base: 2420, importe: 508.2 },
+          ],
+          total: 3292.85,
+        }),
+      );
+
+      boton('Ver vista previa')!.click();
+      await refrescar();
+
+      expect(lineasDeTotales()).toEqual([
+        'Neto $ 2.500,00',
+        'Recargos $ 250,00',
+        'Subtotal sin IVA $ 2.750,00',
+        'IVA 10,5 % $ 34,65',
+        'IVA 21 % $ 508,20',
+        'Total $ 3.292,85',
+      ]);
+    });
+
+    it('sin IVA (Factura C o Remito) los totales no tienen líneas de IVA y no hay recargos si no los hay', async () => {
+      await crear();
+      await cargarCompra();
+      api.vistaPrevia.mockReturnValue(of({ ...plan, iva: [], total: 2200 }));
+
+      boton('Ver vista previa')!.click();
+      await refrescar();
+
+      expect(lineasDeTotales()).toEqual(['Neto $ 2.200,00', 'Subtotal sin IVA $ 2.200,00', 'Total $ 2.200,00']);
     });
 
     it('sin recargos la vista previa no muestra las columnas de costo real', async () => {

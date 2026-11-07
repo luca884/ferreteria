@@ -54,7 +54,16 @@ class CompraControllerIntegrationTest extends IntegrationTestBase {
                 .andExpect(jsonPath("$.renglones[0].precioAnterior").value(157.30))
                 .andExpect(jsonPath("$.renglones[0].precioNuevo").value(173.03))
                 .andExpect(jsonPath("$.renglones[0].subtotal").value(2200.00))
-                .andExpect(jsonPath("$.renglones[0].advertencia").doesNotExist());
+                .andExpect(jsonPath("$.renglones[0].advertencia").doesNotExist())
+                .andExpect(jsonPath("$.renglones[0].stockAnterior").value(0))
+                .andExpect(jsonPath("$.renglones[0].stockNuevo").value(20))
+                .andExpect(jsonPath("$.renglones[0].alicuotaIva").value(21.0))
+                .andExpect(jsonPath("$.subtotalSinIva").value(2200.00))
+                .andExpect(jsonPath("$.recargosImporte").value(0))
+                .andExpect(jsonPath("$.iva[0].porcentaje").value(21.0))
+                .andExpect(jsonPath("$.iva[0].base").value(2200.00))
+                .andExpect(jsonPath("$.iva[0].importe").value(462.00))
+                .andExpect(jsonPath("$.total").value(2662.00));
         assertThat(jdbc.queryForObject("select count(*) from compra where ferreteria_id = ?", Integer.class, tienda.id()))
                 .isZero();
     }

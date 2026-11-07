@@ -53,6 +53,18 @@ export interface RenglonPlaneado {
   /** El costo con los recargos de antes y de la compra; solo difieren del costo cuando la compra trae recargos. */
   costoRealAnterior: number;
   costoRealNuevo: number;
+  /** El stock de hoy y el que queda después de la compra (anterior + cantidad). */
+  stockAnterior: number;
+  stockNuevo: number;
+  /** Porcentaje de IVA del artículo (21, 10,5…). */
+  alicuotaIva: number;
+}
+
+/** Una línea de IVA de la vista previa: la base de esa alícuota (con los recargos) y su importe. */
+export interface IvaPorAlicuota {
+  porcentaje: number;
+  base: number;
+  importe: number;
 }
 
 /** La vista previa: qué haría la compra con el costo y el precio de cada artículo. No guarda nada. */
@@ -65,6 +77,13 @@ export interface PlanCompra {
   iguales: number;
   renglones: RenglonPlaneado[];
   recargos: RecargoCompra[];
+  /** El neto con los recargos de la compra; los recargos son la diferencia con el neto. */
+  subtotalSinIva: number;
+  recargosImporte: number;
+  /** Por alícuota; vacío en Factura C y Remito. */
+  iva: IvaPorAlicuota[];
+  /** Subtotal más IVA; en Factura C y Remito es el subtotal. */
+  total: number;
 }
 
 export interface RenglonCompraResponse {

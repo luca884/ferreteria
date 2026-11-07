@@ -213,6 +213,7 @@
               }
             </span>
             <button type="button" class="secundario chico" (click)="elegirArticulo(r)">Elegir artículo</button>
+            <button type="button" class="secundario chico" (click)="crearArticulo(r)">Crear artículo</button>
             <button
               type="button"
               class="secundario chico"
@@ -292,7 +293,7 @@
     <section class="vista-previa" aria-label="Vista previa de la compra">
       <h2>Vista previa</h2>
       <p class="datos">
-        {{ p.proveedorNombre }}{{ p.moneda === 'USD' ? ' · en dólares' : '' }} · Neto {{ p.neto | monto }} ·
+        {{ p.proveedorNombre }}{{ p.moneda === 'USD' ? ' · en dólares' : '' }} ·
         {{ p.suben }} {{ p.suben === 1 ? 'sube' : 'suben' }} · {{ p.bajan }} {{ p.bajan === 1 ? 'baja' : 'bajan' }} ·
         {{ p.iguales }} {{ p.iguales === 1 ? 'igual' : 'iguales' }}
       </p>
@@ -309,6 +310,7 @@
             }
             <th scope="col" class="num">Precio antes</th>
             <th scope="col" class="num">Precio nuevo</th>
+            <th scope="col" class="num">Stock antes → después</th>
             <th scope="col" class="num">Subtotal</th>
           </tr>
         </thead>
@@ -330,11 +332,35 @@
               }
               <td class="num">{{ r.precioAnterior | monto }}</td>
               <td class="num">{{ r.precioNuevo | monto }}</td>
+              <td class="num stock">
+                {{ r.stockAnterior | number: '1.0-3' }} → {{ r.stockNuevo | number: '1.0-3' }}
+              </td>
               <td class="num">{{ r.subtotal | monto }}</td>
             </tr>
           }
         </tbody>
       </table>
+      <div class="totales">
+        <p>
+          <span>Neto</span><span>{{ p.neto | monto }}</span>
+        </p>
+        @if (p.recargos.length > 0) {
+          <p>
+            <span>Recargos</span><span>{{ p.recargosImporte | monto }}</span>
+          </p>
+        }
+        <p>
+          <span>Subtotal sin IVA</span><span>{{ p.subtotalSinIva | monto }}</span>
+        </p>
+        @for (i of p.iva; track i.porcentaje) {
+          <p>
+            <span>IVA {{ i.porcentaje | number: '1.0-2' }} %</span><span>{{ i.importe | monto }}</span>
+          </p>
+        }
+        <p class="total">
+          <span>Total</span><span>{{ p.total | monto }}</span>
+        </p>
+      </div>
       <div class="acciones">
         <button type="button" class="primario" [disabled]="trabajando()" (click)="confirmar()">Confirmar compra</button>
       </div>

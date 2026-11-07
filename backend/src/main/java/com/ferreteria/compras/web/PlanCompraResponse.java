@@ -16,9 +16,16 @@ public record PlanCompraResponse(
         int bajan,
         int iguales,
         List<Renglon> renglones,
-        List<Recargo> recargos) {
+        List<Recargo> recargos,
+        BigDecimal subtotalSinIva,
+        BigDecimal recargosImporte,
+        List<Iva> iva,
+        BigDecimal total) {
 
     public record Recargo(String nombre, BigDecimal porcentaje) {
+    }
+
+    public record Iva(BigDecimal porcentaje, BigDecimal base, BigDecimal importe) {
     }
 
     public record Renglon(
@@ -34,7 +41,10 @@ public record PlanCompraResponse(
             BigDecimal subtotal,
             String advertencia,
             BigDecimal costoRealAnterior,
-            BigDecimal costoRealNuevo) {
+            BigDecimal costoRealNuevo,
+            BigDecimal stockAnterior,
+            BigDecimal stockNuevo,
+            BigDecimal alicuotaIva) {
     }
 
     public static PlanCompraResponse de(PlanCompra plan) {
@@ -43,8 +53,11 @@ public record PlanCompraResponse(
                     CostoDeCompra c = r.costo();
                     return new Renglon(c.articuloId(), c.codigoInterno(), c.descripcion(), c.unidad(), r.cantidad(),
                             c.costoAnterior(), c.costoNuevo(), c.precioAnterior(), c.precioNuevo(), r.subtotal(),
-                            c.advertencia(), c.costoRealAnterior(), c.costoRealNuevo());
+                            c.advertencia(), c.costoRealAnterior(), c.costoRealNuevo(), c.stockActual(),
+                            c.stockActual().add(r.cantidad()), c.alicuotaIva());
                 }).toList(),
-                plan.recargos().stream().map(r -> new Recargo(r.nombre(), r.porcentaje())).toList());
+                plan.recargos().stream().map(r -> new Recargo(r.nombre(), r.porcentaje())).toList(),
+                plan.subtotalSinIva(), plan.recargosImporte(),
+                plan.iva().stream().map(i -> new Iva(i.porcentaje(), i.base(), i.importe())).toList(), plan.total());
     }
 }

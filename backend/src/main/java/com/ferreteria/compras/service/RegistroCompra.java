@@ -10,6 +10,7 @@ import com.ferreteria.common.exception.ConflictException;
 import com.ferreteria.common.exception.DatosInvalidosException;
 import com.ferreteria.common.exception.ResourceNotFoundException;
 import com.ferreteria.compras.model.Compra;
+import com.ferreteria.compras.model.TipoCompra;
 import com.ferreteria.compras.model.ItemCompra;
 import com.ferreteria.compras.model.RecargoCompra;
 import com.ferreteria.compras.repository.CompraRepository;
@@ -23,12 +24,14 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.TreeMap;
 
 /**
  * Registra una compra (CU-13) en UNA transaccion: valida, guarda la cabecera, suma el stock (articulos por id
@@ -163,8 +166,32 @@ public class RegistroCompra {
                 iguales++;
             }
         }
+        BigDecimal factor = BigDecimal.valueOf(100).add(
+                recargos.stream().map(RecargoDeCompra::porcentaje).reduce(BigDecimal.ZERO, BigDecimal::add));
+        BigDecimal subtotalSinIva = conRecargos(neto, factor);
+        List<PlanCompra.IvaPorAlicuota> iva = pedido.tipo() == TipoCompra.FA || pedido.tipo() == TipoCompra.FB
+                ? ivaPorAlicuota(renglones, factor) : List.of();
+        BigDecimal total = iva.stream().map(PlanCompra.IvaPorAlicuota::importe).reduce(subtotalSinIva, BigDecimal::add);
         return new PlanCompra(proveedor.nombre(), planeados.get(0).moneda(), renglones, neto, suben, bajan, iguales,
-                recargos);
+                recargos, subtotalSinIva, subtotalSinIva.subtract(neto), iva, total);
+    }
+
+    /** Aplica el factor de los recargos al importe, al centavo (HALF_UP): el mismo calculo del costo real. */
+    private static BigDecimal conRecargos(BigDecimal importe, BigDecimal factor) {
+        return importe.multiply(factor).movePointLeft(2).setScale(2, RoundingMode.HALF_UP);
+    }
+
+    /** Por alicuota (de menor a mayor): la base de sus renglones con los recargos y el IVA de esa base, al centavo. */
+    private static List<PlanCompra.IvaPorAlicuota> ivaPorAlicuota(List<RenglonPlaneado> renglones, BigDecimal factor) {
+        Map<BigDecimal, BigDecimal> netoPorAlicuota = new TreeMap<>();
+        for (RenglonPlaneado r : renglones) {
+            netoPorAlicuota.merge(r.costo().alicuotaIva().setScale(2, RoundingMode.UNNECESSARY), r.subtotal(), BigDecimal::add);
+        }
+        return netoPorAlicuota.entrySet().stream().map(e -> {
+            BigDecimal base = conRecargos(e.getValue(), factor);
+            BigDecimal importe = base.multiply(e.getKey()).movePointLeft(2).setScale(2, RoundingMode.HALF_UP);
+            return new PlanCompra.IvaPorAlicuota(e.getKey(), base, importe);
+        }).toList();
     }
 
     /**
