@@ -4,6 +4,7 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { EMPTY, Subject, catchError, forkJoin, map, of, switchMap, throwError, timer } from 'rxjs';
 import { AuthService } from '../../core/auth/auth.service';
 import { BarraAcciones } from '../../shared/barra-acciones';
+import { Confirmacion } from '../../shared/confirmacion';
 import { ArticulosService } from '../articulos/articulos.service';
 import { ArticuloMostrador, comoArticuloMostrador } from '../mostrador/mostrador.models';
 import { MostradorService } from '../mostrador/mostrador.service';
@@ -11,6 +12,8 @@ import { Barra, CodigoDeBarras, barras, codigoParaEtiqueta } from './codigo-barr
 import { claveDeEtiquetas, guardarEtiquetas, leerEtiquetas } from './etiquetas.storage';
 
 const MAX_COPIAS = 999;
+
+const ENTERO = new Intl.NumberFormat('es-AR');
 
 /** Como el mostrador: se busca solo cuando se deja de escribir este tiempo. */
 const ESPERA_MS = 250;
@@ -41,7 +44,7 @@ interface Etiqueta {
  */
 @Component({
   selector: 'app-etiquetas',
-  imports: [BarraAcciones],
+  imports: [BarraAcciones, Confirmacion],
   templateUrl: './etiquetas.html',
   styleUrl: './etiquetas.css',
 })
@@ -69,6 +72,8 @@ export class Etiquetas {
   protected readonly errorDeCarga = signal(false);
   /** Lo que salió de la lista guardada al traerla (dados de baja o que ya no existen). */
   protected readonly avisoLista = signal<string | null>(null);
+  /** «Vaciar» pregunta antes (`app-confirmacion`), como «Vaciar» del Mostrador. */
+  protected readonly confirmandoVaciar = signal(false);
   /** Mientras la lista guardada no se cargó, lo guardado no se pisa. */
   private guardable = true;
   private readonly campo = viewChild<ElementRef<HTMLInputElement>>('campo');
@@ -289,8 +294,15 @@ export class Etiquetas {
     this.columnas.set(valor === '5' ? 5 : 4);
   }
 
-  /** Saca todo, también lo guardado (aunque la lista guardada no se haya podido cargar). */
+  /** Lo que se pierde al vaciar, como en el Mostrador. */
+  protected mensajeVaciar(): string {
+    const n = this.items().length;
+    return n === 1 ? 'Se saca 1 artículo.' : `Se sacan ${ENTERO.format(n)} artículos.`;
+  }
+
+  /** Saca todo, también lo guardado (aunque la lista guardada no se haya podido cargar). Se llega confirmando. */
   protected vaciar(): void {
+    this.confirmandoVaciar.set(false);
     this.guardable = true;
     this.errorDeCarga.set(false);
     this.avisoLista.set(null);

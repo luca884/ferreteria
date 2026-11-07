@@ -406,17 +406,63 @@ describe('Etiquetas', () => {
       ]);
     });
 
-    it('«Vaciar» saca todo y borra lo guardado; sin artículos está deshabilitado', async () => {
+    const dialogo = () => el().querySelector('app-confirmacion');
+
+    it('«Vaciar» pregunta antes, como el Mostrador: dice cuántos salen y el foco arranca en Cancelar', async () => {
       await crear(true, () => of(lista(tornillo, tuerca)));
-      expect(vaciar().disabled).toBe(true);
       await buscarTexto('t');
       await agregarResultado(0);
       await agregarResultado(1);
 
-      expect(vaciar().disabled).toBe(false);
       vaciar().click();
       await refrescar();
 
+      expect(dialogo()?.querySelector('h2')?.textContent?.trim()).toBe('¿Vaciar la lista de etiquetas?');
+      expect(dialogo()?.querySelector('p')?.textContent?.trim()).toBe('Se sacan 2 artículos.');
+      const confirmar = dialogo()!.querySelector<HTMLButtonElement>('button.confirmar')!;
+      expect(confirmar.textContent?.trim()).toBe('Vaciar');
+      expect(confirmar.classList).toContain('peligro');
+      expect(document.activeElement).toBe(dialogo()!.querySelector('button.cancelar'));
+      expect(filasLista()).toHaveLength(2);
+      expect(guardado()).toEqual([
+        { id: 1, copias: 1 },
+        { id: 2, copias: 1 },
+      ]);
+    });
+
+    it('«Cancelar» deja la lista y lo guardado como estaban', async () => {
+      await crear(true, () => of(lista(tornillo, tuerca)));
+      await buscarTexto('t');
+      await agregarResultado(0);
+      await agregarResultado(1);
+      vaciar().click();
+      await refrescar();
+
+      dialogo()!.querySelector<HTMLButtonElement>('button.cancelar')!.click();
+      await refrescar();
+
+      expect(dialogo()).toBeNull();
+      expect(filasLista()).toHaveLength(2);
+      expect(guardado()).toEqual([
+        { id: 1, copias: 1 },
+        { id: 2, copias: 1 },
+      ]);
+    });
+
+    it('confirmar «Vaciar» saca todo y borra lo guardado; sin artículos está deshabilitado', async () => {
+      await crear(true, () => of(lista(tornillo, tuerca)));
+      expect(vaciar().disabled).toBe(true);
+      await buscarTexto('t');
+      await agregarResultado(0);
+
+      expect(vaciar().disabled).toBe(false);
+      vaciar().click();
+      await refrescar();
+      expect(dialogo()?.querySelector('p')?.textContent?.trim()).toBe('Se saca 1 artículo.');
+      dialogo()!.querySelector<HTMLButtonElement>('button.confirmar')!.click();
+      await refrescar();
+
+      expect(dialogo()).toBeNull();
       expect(filasLista()).toHaveLength(0);
       expect(el().querySelector('.etiquetas-imprimible')).toBeNull();
       expect(localStorage.getItem('etiquetas:1:7')).toBeNull();
