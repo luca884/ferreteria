@@ -3,8 +3,8 @@ import localeEsAr from '@angular/common/locales/es-AR';
 import { HttpErrorResponse } from '@angular/common/http';
 import { LOCALE_ID, signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { Router, provideRouter } from '@angular/router';
-import { Subject, of, throwError } from 'rxjs';
+import { ActivatedRoute, ParamMap, Router, convertToParamMap, provideRouter } from '@angular/router';
+import { BehaviorSubject, Subject, of, throwError } from 'rxjs';
 import { vi } from 'vitest';
 import { PageResponse } from '../../core/api/page.models';
 import { AuthService } from '../../core/auth/auth.service';
@@ -31,6 +31,8 @@ describe('Remitos', () => {
   let articulos: { obtener: ReturnType<typeof vi.fn> };
   let clientes: { obtener: ReturnType<typeof vi.fn> };
   let navegar: ReturnType<typeof vi.fn>;
+  /** El `:id` de `/remitos/:id`: emitir otro es navegar a otro con la pantalla ya abierta. */
+  let parametros: BehaviorSubject<ParamMap>;
   let emisor: { obtener: ReturnType<typeof vi.fn> };
 
   const resumen = (numero: number, cambios: Partial<RemitoResumen> = {}): RemitoResumen => ({
@@ -103,7 +105,8 @@ describe('Remitos', () => {
       ...cambios,
     }) as Articulo;
 
-  async function crear(items: RemitoResumen[] = [resumen(5), resumen(4)], rol = 'VENDEDOR') {
+  async function crear(items: RemitoResumen[] = [resumen(5), resumen(4)], rol = 'VENDEDOR', id: string | null = null) {
+    parametros = new BehaviorSubject<ParamMap>(convertToParamMap(id === null ? {} : { id }));
     api = {
       listar: vi.fn(() => of(pagina(items))),
       obtener: vi.fn((id: number) => of(detalleDe(id / 10))),
@@ -120,6 +123,7 @@ describe('Remitos', () => {
       imports: [Remitos],
       providers: [
         provideRouter([]),
+        { provide: ActivatedRoute, useValue: { paramMap: parametros } },
         { provide: LOCALE_ID, useValue: 'es-AR' },
         { provide: RemitosService, useValue: api },
         { provide: ArticulosService, useValue: articulos },
@@ -879,6 +883,165 @@ describe('Remitos', () => {
       await abrirDetalle(0);
 
       expect(normal(detalle()!.querySelector('.nota-estado')?.textContent)).toBe('Facturado en la venta N.º 33');
+    });
+  });
+
+  describe('un remito elegido desde la dirección (informacion-y-links, S2)', () => {
+    const esc = () =>
+      (document.activeElement ?? document.body).dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }),
+      );
+
+    it('`/remitos/:id` abre ese remito aunque no esté en la página de la lista, y la lista no lo cierra', async () => {
+      await crear([resumen(5)], 'VENDEDOR', '90');
+
+      expect(api.obtener).toHaveBeenCalledWith(90);
+      expect(normal(detalle()!.querySelector('h2')!.textContent)).toBe('Remito N.º 9');
+      expect(filas()).toHaveLength(1);
+    });
+
+    it('cerrarlo deja la lista sin el remito en la dirección', async () => {
+      await crear([resumen(5)], 'VENDEDOR', '90');
+
+      esc();
+      await refrescar();
+
+      expect(detalle()).toBeNull();
+      expect(navegar).toHaveBeenCalledWith('/remitos');
+    });
+
+    it('abierto desde la lista, cerrarlo no cambia la dirección', async () => {
+      await crear();
+      filas()[0].click();
+      await refrescar();
+
+      esc();
+      await refrescar();
+
+      expect(detalle()).toBeNull();
+      expect(navegar).not.toHaveBeenCalled();
+    });
+
+    it('uno de otra ferretería o inexistente (404) da el aviso de siempre', async () => {
+      await crear([resumen(5)]);
+      api.obtener.mockReturnValue(throwError(() => new HttpErrorResponse({ status: 404 })));
+      parametros.next(convertToParamMap({ id: '77' }));
+      await refrescar();
+
+      expect(normal(detalle()!.querySelector('.error')!.textContent)).toBe('No se encontró el remito.');
+    });
+
+    it('otro en la dirección con la pantalla abierta abre ese', async () => {
+      await crear([resumen(5)], 'VENDEDOR', '90');
+      parametros.next(convertToParamMap({ id: '120' }));
+      await refrescar();
+
+      expect(api.obtener).toHaveBeenLastCalledWith(120);
+      expect(normal(detalle()!.querySelector('h2')!.textContent)).toBe('Remito N.º 12');
+    });
+  });
+
+  describe('unidades, quién lo emitió y el link a la venta (informacion-y-links, S2 a S4)', () => {
+    it('la cantidad sale con su unidad y los datos dicen quién lo emitió', async () => {
+      await crear();
+      const base = detalleDe(5);
+      api.obtener.mockReturnValue(
+        of({
+          ...base,
+          usuario: 'Ana Vendedora',
+          renglones: [
+            { ...base.renglones[0], descripcion: 'Cable', unidad: 'METRO', cantidad: 25.5 },
+            { ...base.renglones[0], renglon: 2, cantidad: 1 },
+          ],
+        }),
+      );
+
+      await abrirDetalle(0);
+
+      const cantidades = Array.from(detalle()!.querySelectorAll('.renglones tbody tr')).map((tr) =>
+        normal(tr.querySelectorAll('td')[1].textContent),
+      );
+      expect(cantidades).toEqual(['25,5 metros', '1 unidad']);
+      expect(normal(detalle()!.querySelector('.datos')!.textContent)).toContain('· Emitió Ana Vendedora');
+    });
+
+    it('para el Dueño, «Facturado en la venta N.º n» es un link al pop-up de esa venta', async () => {
+      await crear(undefined, 'DUENO');
+      api.obtener.mockReturnValue(of(detalleDe(5, { estado: 'FACTURADO', facturadoPor: { ventaId: 40, numero: 33 } })));
+
+      await abrirDetalle(0);
+
+      expect(normal(detalle()!.querySelector('.nota-estado')!.textContent)).toBe('Facturado en la venta N.º 33');
+      expect(detalle()!.querySelector('.nota-estado a')!.getAttribute('href')).toBe('/ventas/40');
+    });
+
+    it('el Vendedor no ve Ventas: para él es texto', async () => {
+      await crear(undefined, 'VENDEDOR');
+      api.obtener.mockReturnValue(of(detalleDe(5, { estado: 'FACTURADO', facturadoPor: { ventaId: 40, numero: 33 } })));
+
+      await abrirDetalle(0);
+
+      expect(normal(detalle()!.querySelector('.nota-estado')!.textContent)).toBe('Facturado en la venta N.º 33');
+      expect(detalle()!.querySelector('.nota-estado a')).toBeNull();
+    });
+  });
+
+  describe('remito facturado en parte (informacion-y-links, S5)', () => {
+    const diferencias = () =>
+      Array.from(detalle()!.querySelectorAll('.diferencias li')).map((li) => normal(li.textContent));
+
+    it('dice, por artículo, cuánto se facturó de lo remitido y cuánto volvió al stock', async () => {
+      await crear();
+      api.obtener.mockReturnValue(
+        of(
+          detalleDe(2, {
+            estado: 'FACTURADO',
+            facturadoPor: {
+              ventaId: 200,
+              numero: 20,
+              diferencias: [
+                { articuloId: 3, descripcion: 'Bulon 3/8', unidad: 'UNIDAD', remitido: 300, facturado: 250 },
+                { articuloId: 4, descripcion: 'Cable', unidad: 'METRO', remitido: 25.5, facturado: 0 },
+                { articuloId: 5, descripcion: 'Tarugo', unidad: 'UNIDAD', remitido: 10, facturado: 12 },
+              ],
+            },
+          }),
+        ),
+      );
+
+      await abrirDetalle(0);
+
+      expect(diferencias()).toEqual([
+        'Bulon 3/8: se facturaron 250 de 300 unidades; 50 unidades volvieron al stock.',
+        'Cable: se facturaron 0 de 25,5 metros; 25,5 metros volvieron al stock.',
+        'Tarugo: se facturaron 12 de 10 unidades.',
+      ]);
+    });
+
+    it('si se facturó todo igual, no agrega nada', async () => {
+      await crear();
+      api.obtener.mockReturnValue(of(detalleDe(2, { estado: 'FACTURADO', facturadoPor: { ventaId: 200, numero: 20 } })));
+
+      await abrirDetalle(0);
+
+      expect(detalle()!.querySelector('.diferencias')).toBeNull();
+    });
+  });
+
+  describe('el estado en una pastilla de color (informacion-y-links, S4, L7)', () => {
+    it.each([
+      ['EMITIDO', 'Emitido', 'neutro'],
+      ['FACTURADO', 'Facturado', 'exito'],
+      ['ANULADO', 'Anulado', 'peligro'],
+    ] as const)('%s sale como «%s» en la pastilla %s', async (estado, texto, color) => {
+      await crear();
+      api.obtener.mockReturnValue(of(detalleDe(5, { estado })));
+
+      await abrirDetalle(0);
+
+      const pastilla = detalle()!.querySelector('.dialogo-detalle-marcas .pastilla')!;
+      expect(normal(pastilla.textContent)).toBe(texto);
+      expect(pastilla.classList).toContain(`pastilla-${color}`);
     });
   });
 });

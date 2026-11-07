@@ -9,16 +9,19 @@ import {
   signal,
   viewChild,
 } from '@angular/core';
-import { Router } from '@angular/router';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { catchError, forkJoin, map, of, throwError } from 'rxjs';
 import { HttpErrorResponse } from '@angular/common/http';
 import { mensajeDe } from '../../core/api/api-error';
 import { PageResponse } from '../../core/api/page.models';
 import { AuthService } from '../../core/auth/auth.service';
 import { MontoPipe } from '../../core/formato/monto';
+import { cantidadConUnidad } from '../../core/formato/unidad';
 import { BarraAcciones } from '../../shared/barra-acciones';
 import { porcentajeDescuentoGeneral } from '../../shared/descuento-general';
 import { DialogoDetalle } from '../../shared/dialogo-detalle';
+import { idsDeLaRuta } from '../../shared/documento-por-ruta';
 import { DocumentoNoFiscalImprimible } from '../../shared/documento-no-fiscal/documento-no-fiscal-imprimible';
 import { EmisorService } from '../../shared/documento-no-fiscal/emisor.service';
 import { DatosFiscales } from '../datos-fiscales/datos-fiscales.service';
@@ -30,6 +33,7 @@ import { ticketDePresupuesto } from '../mostrador/ticket';
 import { guardarTicket, ticketGuardado } from '../mostrador/ticket.storage';
 import { GENERAR_CLAVE } from '../mostrador/ticket.store';
 import {
+  COLOR_ESTADO_PRESUPUESTO,
   ESTADOS_PRESUPUESTO,
   ETIQUETA_ESTADO,
   EstadoManual,
@@ -58,7 +62,7 @@ const MENSAJE_NUMERO = 'El número tiene que ser un entero.';
  */
 @Component({
   selector: 'app-presupuestos',
-  imports: [BarraAcciones, DecimalPipe, DialogoDetalle, DocumentoNoFiscalImprimible, MontoPipe],
+  imports: [BarraAcciones, DecimalPipe, DialogoDetalle, DocumentoNoFiscalImprimible, MontoPipe, RouterLink],
   templateUrl: './presupuestos.html',
   styleUrl: './presupuestos.css',
 })
@@ -69,12 +73,15 @@ export class Presupuestos implements OnInit {
   private readonly auth = inject(AuthService);
   private readonly emisorApi = inject(EmisorService);
   private readonly router = inject(Router);
+  private readonly route = inject(ActivatedRoute);
   private readonly generarClave = inject(GENERAR_CLAVE);
 
   protected readonly estados = ESTADOS_PRESUPUESTO;
   protected readonly esDueno = this.auth.esDueno;
   protected readonly etiqueta = ETIQUETA_ESTADO;
   protected readonly fechaHora = fechaHoraLocal;
+  protected readonly cantidadConUnidad = cantidadConUnidad;
+  protected readonly color = COLOR_ESTADO_PRESUPUESTO;
   protected readonly porcentajeGeneral = porcentajeDescuentoGeneral;
   protected readonly dia = fechaDia;
 
@@ -93,6 +100,8 @@ export class Presupuestos implements OnInit {
   protected readonly filtrada = signal(false);
 
   protected readonly elegido = signal<number | null>(null);
+  /** El presupuesto se abrió por `/presupuestos/:id` (un link desde otro documento): la lista no lo cierra y al cerrarlo se vuelve a `/presupuestos`. */
+  private abiertoPorRuta = false;
   protected readonly detalle = signal<PresupuestoResponse | null>(null);
   protected readonly errorAccion = signal<string | null>(null);
   protected readonly cambiando = signal(false);
@@ -134,6 +143,14 @@ export class Presupuestos implements OnInit {
 
   constructor() {
     afterRenderEffect(() => this.cancelarPregunta()?.nativeElement.focus());
+    // `/presupuestos/:id` abre ese presupuesto, aunque no esté en la página de la lista (un id ajeno o inexistente da el aviso de siempre).
+    idsDeLaRuta(this.route)
+      .pipe(takeUntilDestroyed())
+      .subscribe((id) => {
+        this.abiertoPorRuta = true;
+        this.elegido.set(id);
+        this.abrir(id);
+      });
   }
 
   ngOnInit(): void {
@@ -150,7 +167,7 @@ export class Presupuestos implements OnInit {
         // Un detalle abierto de un presupuesto que la lista nueva ya no muestra confunde: se cierra (no a mitad de una acción).
         const elegido = this.elegido();
         const ocupado = this.cambiando() || this.pasando();
-        if (elegido !== null && !ocupado && !pagina.items.some((x) => x.presupuestoId === elegido)) this.cerrarDetalle();
+        if (elegido !== null && !ocupado && !this.abiertoPorRuta && !pagina.items.some((x) => x.presupuestoId === elegido)) this.cerrarDetalle();
       },
       error: () => {
         this.cargando.set(false);
@@ -195,6 +212,11 @@ export class Presupuestos implements OnInit {
     this.detalle.set(null);
     this.errorAccion.set(null);
     this.reemplazo.set(null);
+    // Abierto por `/presupuestos/:id`: la dirección deja de nombrar un presupuesto que ya no se ve.
+    if (this.abiertoPorRuta) {
+      this.abiertoPorRuta = false;
+      void this.router.navigateByUrl('/presupuestos');
+    }
   }
 
   protected elegir(fila: PresupuestoResumen): void {

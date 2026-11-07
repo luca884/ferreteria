@@ -109,3 +109,10 @@
   margin: 0;
   font-weight: 600;
 }
+
+/* Lo que la venta facturó distinto de lo remitido (informacion-y-links, S5). */
+.diferencias {
+  margin: 0;
+  padding-left: var(--e-5);
+  color: var(--texto-suave);
+}

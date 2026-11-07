@@ -18,7 +18,16 @@ import { DocumentoNoFiscal } from './documento-no-fiscal.models';
 export class DocumentoNoFiscalImprimible {
   readonly documento = input.required<DocumentoNoFiscal>();
   readonly emisor = input.required<DatosFiscales>();
+  /** Mensaje del contenedor (un escaneo descartado en el mostrador): se ve en el diálogo y no se imprime. */
+  readonly aviso = input<string | null>(null);
+  /**
+   * Recibe cada tecla y dice si el Enter cierra una ráfaga del lector (el mostrador le pasa su `GuardaLector`, como a la
+   * factura): ese Enter no imprime. Por defecto nada es un escaneo.
+   */
+  readonly esEscaneo = input<(evento: KeyboardEvent) => boolean>(() => false);
   readonly cerrar = output<void>();
+  /** Un escaneo llegó con la hoja abierta: se ignora y el contenedor avisa. */
+  readonly escaneoDescartado = output<void>();
 
   private readonly botonImprimir = viewChild<ElementRef<HTMLButtonElement>>('botonImprimir');
 
@@ -40,12 +49,21 @@ export class DocumentoNoFiscalImprimible {
       evento.preventDefault();
       evento.stopPropagation();
       this.cerrar.emit();
-    } else if (evento.key === 'Enter') {
-      // En un botón, Enter es su clic: acá solo cuando el foco está en otra parte.
-      if ((evento.target as HTMLElement).tagName === 'BUTTON') return;
+      return;
+    }
+    const eraEscaneo = this.esEscaneo()(evento);
+    if (evento.key !== 'Enter') return;
+    if (eraEscaneo) {
+      // También sobre un botón: anular el keydown evita su clic.
       evento.preventDefault();
       evento.stopPropagation();
-      this.imprimir();
+      this.escaneoDescartado.emit();
+      return;
     }
+    // En un botón, Enter es su clic: acá solo cuando el foco está en otra parte.
+    if ((evento.target as HTMLElement).tagName === 'BUTTON') return;
+    evento.preventDefault();
+    evento.stopPropagation();
+    this.imprimir();
   }
 }

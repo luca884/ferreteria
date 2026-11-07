@@ -103,3 +103,13 @@ table {
     color: #000;
   }
 }
+
+/* La fila de totales de «Por artículo» (informacion-y-links, S6): separada de los artículos y en negrita. */
+.fila-total th,
+.fila-total td {
+  border-top: 2px solid var(--borde);
+  font-weight: 700;
+}
+.fila-total th {
+  text-align: left;
+}

@@ -286,6 +286,19 @@ describe('Reportes de ventas', () => {
     expect(filas).toEqual(['3 unidades', '26,5 metros', '1 unidad']);
   });
 
+  it('por artículo termina con una fila de totales que suma total y ganancia, sin sumar la cantidad (informacion-y-links, S6)', async () => {
+    await crear();
+    await elegir('por-articulo');
+
+    const pie = el().querySelector('table tfoot tr')!;
+    expect(Array.from(pie.querySelectorAll('th, td')).map((c) => normal(c.textContent))).toEqual([
+      'Total',
+      '',
+      '$ 3.050,00',
+      '$ 1.025,29',
+    ]);
+  });
+
   it('por rubro muestra el rubro con sus renglones', async () => {
     await crear();
     await elegir('por-rubro');

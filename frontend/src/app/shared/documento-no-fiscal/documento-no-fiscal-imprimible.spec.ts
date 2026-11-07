@@ -80,4 +80,31 @@ describe('DocumentoNoFiscalImprimible', () => {
   it('arranca con el foco en Imprimir', () => {
     expect(document.activeElement).toBe(boton('Imprimir'));
   });
+
+  describe('abierta desde el mostrador (informacion-y-links, S1)', () => {
+    it('un Enter que cierra un escaneo no imprime (tampoco sobre el botón) y avisa', () => {
+      let descartados = 0;
+      fixture.componentInstance.escaneoDescartado.subscribe(() => descartados++);
+      const esEscaneo = vi.fn((evento: KeyboardEvent) => evento.key === 'Enter');
+      fixture.componentRef.setInput('esEscaneo', esEscaneo);
+      fixture.detectChanges();
+
+      tecla('7');
+      const enter = tecla('Enter', boton('Imprimir'));
+
+      expect(esEscaneo).toHaveBeenCalledTimes(2);
+      expect(enter.defaultPrevented).toBe(true);
+      expect(imprimir).not.toHaveBeenCalled();
+      expect(descartados).toBe(1);
+    });
+
+    it('muestra el aviso del contenedor (el escaneo descartado), fuera de lo que se imprime', () => {
+      fixture.componentRef.setInput('aviso', 'Cerrá el diálogo antes de escanear.');
+      fixture.detectChanges();
+
+      const aviso = el().querySelector('[role="status"]')!;
+      expect(limpio(aviso.textContent)).toBe('Cerrá el diálogo antes de escanear.');
+      expect(el().querySelector('article.documento-imprimible')!.contains(aviso)).toBe(false);
+    });
+  });
 });

@@ -27,6 +27,10 @@ import { esOcupado, mensajeDe } from '../../core/api/api-error';
 import { MontoPipe, formatearMonto } from '../../core/formato/monto';
 import { BarraAcciones } from '../../shared/barra-acciones';
 import { FacturaImprimible } from '../../shared/factura/factura-imprimible';
+import { DocumentoNoFiscalImprimible } from '../../shared/documento-no-fiscal/documento-no-fiscal-imprimible';
+import { DocumentoNoFiscal } from '../../shared/documento-no-fiscal/documento-no-fiscal.models';
+import { EmisorService } from '../../shared/documento-no-fiscal/emisor.service';
+import { DatosFiscales } from '../datos-fiscales/datos-fiscales.service';
 import { VentaFacturada } from '../../shared/factura/factura.models';
 import { aCentavos } from './centavos';
 import {
@@ -55,9 +59,9 @@ import { CajaVigente, avisoParaVender } from '../caja/caja.models';
 import { CajaService } from '../caja/caja.service';
 import { FormaPago } from '../formas-pago/forma-pago.models';
 import { FormasPagoService } from '../formas-pago/formas-pago.service';
-import { DatosPresupuesto, PresupuestoResponse } from '../presupuestos/presupuesto.models';
+import { DatosPresupuesto, PresupuestoResponse, documentoDePresupuesto } from '../presupuestos/presupuesto.models';
 import { PresupuestosService } from '../presupuestos/presupuestos.service';
-import { DatosRemito, RemitoEmitido } from '../remitos/remito.models';
+import { DatosRemito, RemitoEmitido, documentoDeRemito } from '../remitos/remito.models';
 import { RemitosService } from '../remitos/remitos.service';
 import { VencimientoCertificado, vencimientoParaElMostrador } from '../facturacion/facturacion.models';
 import { FacturacionService } from '../facturacion/facturacion.service';
@@ -86,7 +90,9 @@ type Dialogo =
   | { tipo: 'presupuesto' }
   | { tipo: 'remito' }
   | { tipo: 'cliente' }
-  | { tipo: 'factura'; factura: FacturaCobrada };
+  | { tipo: 'factura'; factura: FacturaCobrada }
+  /** La hoja del presupuesto recién guardado o del remito recién emitido (informacion-y-links, S1). */
+  | { tipo: 'documento'; documento: DocumentoNoFiscal; emisor: DatosFiscales };
 
 /**
  * La factura de la venta recién cobrada (CU-07 paso 5, D7): la respuesta del cobro tal cual, para abrirla y reimprimirla sin
@@ -114,6 +120,8 @@ interface Aviso {
   advertencia?: string;
   /** La factura de la venta cobrada: el aviso ofrece «Reimprimir factura» mientras está. */
   factura?: FacturaCobrada;
+  /** El presupuesto o el remito recién guardado: el aviso lleva el link a su detalle, donde se vuelve a imprimir. */
+  documento?: { texto: string; ruta: string };
 }
 
 /** Un escaneo (Enter): `seq` dice si sigue siendo lo último que hizo el vendedor. */
@@ -146,6 +154,7 @@ interface Escaneo {
     TotalesTicket,
     RouterLink,
     FacturaImprimible,
+    DocumentoNoFiscalImprimible,
   ],
   templateUrl: './mostrador.html',
   styleUrl: './mostrador.css',
@@ -160,6 +169,7 @@ export class Mostrador {
   private readonly ventas = inject(VentaService);
   private readonly presupuestos = inject(PresupuestosService);
   private readonly remitos = inject(RemitosService);
+  private readonly emisorApi = inject(EmisorService);
   private readonly cajas = inject(CajaService);
   private readonly formas = inject(FormasPagoService);
   private readonly clientes = inject(ClientesService);
@@ -702,7 +712,7 @@ export class Mostrador {
   /** Un escaneo llegó con un diálogo abierto: el diálogo lo descartó y acá se avisa. */
   protected escaneoDescartado(): void {
     const tipo = this.dialogo()?.tipo;
-    if (tipo === 'cobro' || tipo === 'presupuesto' || tipo === 'remito' || tipo === 'factura') {
+    if (tipo === 'cobro' || tipo === 'presupuesto' || tipo === 'remito' || tipo === 'factura' || tipo === 'documento') {
       this.avisoCobro.set(AVISO_ESCANEO_CON_DIALOGO);
     }
     else this.avisar({ texto: AVISO_ESCANEO_CON_DIALOGO, grave: false, tipo: 'otro' });
@@ -822,20 +832,45 @@ export class Mostrador {
       });
   }
 
-  /** El presupuesto quedó guardado: el ticket se vacía (no se vendió nada) y se avisa el número. */
+  /**
+   * El presupuesto quedó guardado: el ticket se vacía (no se vendió nada), se avisa el número con el link a su detalle y se
+   * abre su hoja para imprimir (informacion-y-links, S1).
+   */
   private alGuardar(presupuesto: PresupuestoResponse): void {
-    this.enVuelo.set(false);
     this.ticket.vaciar();
     this.siguiendoTicket.set(true);
-    this.avisar(
-      {
-        texto: `Presupuesto N.º ${presupuesto.numero} guardado: ${formatearMonto(presupuesto.total)}`,
-        grave: false,
-        tipo: 'otro',
-      },
-      AVISO_COBRADA_MS,
-    );
-    this.cerrarDialogo();
+    const aviso: Aviso = {
+      texto: `Presupuesto N.º ${presupuesto.numero} guardado: ${formatearMonto(presupuesto.total)}`,
+      grave: false,
+      tipo: 'persistente',
+      documento: { texto: 'Ver el presupuesto', ruta: `/presupuestos/${presupuesto.presupuestoId}` },
+    };
+    this.avisar(aviso);
+    this.abrirHoja(documentoDePresupuesto(presupuesto), aviso);
+  }
+
+  /**
+   * La hoja del documento recién guardado, con los datos de la ferretería de hoy (S1): Enter imprime y Esc la cierra. El
+   * diálogo del presupuesto o del remito sigue «en vuelo» hasta tenerlos. Si no se pueden leer, el documento ya quedó
+   * guardado: se cierra el diálogo y el aviso dice que se imprime desde su link.
+   */
+  private abrirHoja(documento: DocumentoNoFiscal, aviso: Aviso): void {
+    this.emisorApi
+      .obtener()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (emisor) => {
+          this.enVuelo.set(false);
+          this.avisoCobro.set(null);
+          this.dialogo.set({ tipo: 'documento', documento, emisor });
+        },
+        error: () => {
+          this.enVuelo.set(false);
+          const sinHoja = `No se pudo abrir la hoja para imprimirlo: abrilo con «${aviso.documento?.texto}» e imprimilo desde ahí.`;
+          this.avisar({ ...aviso, advertencia: aviso.advertencia ? `${aviso.advertencia} ${sinHoja}` : sinHoja });
+          this.cerrarDialogo();
+        },
+      });
   }
 
   /** Enter en el diálogo del remito: lo emite con la clave del ticket (la misma en cada reintento). */
@@ -853,9 +888,11 @@ export class Mostrador {
       });
   }
 
-  /** El remito quedó emitido (y descontó el stock): el ticket se vacía, se avisa el número y lo que quedó sin stock. */
+  /**
+   * El remito quedó emitido (y descontó el stock): el ticket se vacía, se avisa el número con el link a su detalle y lo que
+   * quedó sin stock, y se abre su hoja para imprimir: acompaña la mercadería (informacion-y-links, S1).
+   */
   private alEmitir(remito: RemitoEmitido['remito']): void {
-    this.enVuelo.set(false);
     this.ticket.vaciar();
     this.siguiendoTicket.set(true);
     const sinStock = (remito.sinStock ?? [])
@@ -864,11 +901,12 @@ export class Mostrador {
     const aviso: Aviso = {
       texto: `Remito N.º ${remito.numero} emitido: ${formatearMonto(remito.total)}`,
       grave: false,
-      tipo: sinStock ? 'persistente' : 'otro',
+      tipo: 'persistente',
+      documento: { texto: 'Ver el remito', ruta: `/remitos/${remito.remitoId}` },
       ...(sinStock ? { advertencia: `Sin stock: ${sinStock}.` } : {}),
     };
-    this.avisar(aviso, sinStock ? undefined : AVISO_COBRADA_MS);
-    this.cerrarDialogo();
+    this.avisar(aviso);
+    this.abrirHoja(documentoDeRemito(remito), aviso);
   }
 
   private alFallarCobro(err: unknown): void {

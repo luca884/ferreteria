@@ -8,12 +8,14 @@ import com.ferreteria.facturacion.api.FacturacionParaVenta.FacturaConsultada;
 import com.ferreteria.facturacion.api.FacturacionParaVenta.ResumenFiscal;
 import com.ferreteria.ventas.model.Caja;
 import com.ferreteria.ventas.model.Comprobante;
+import com.ferreteria.ventas.model.Presupuesto;
 import com.ferreteria.ventas.model.Remito;
 import com.ferreteria.ventas.model.TipoComprobante;
 import com.ferreteria.ventas.repository.CajaRepository;
 import com.ferreteria.ventas.repository.ComprobanteRepository;
 import com.ferreteria.ventas.repository.ItemComprobanteRepository;
 import com.ferreteria.ventas.repository.PagoRepository;
+import com.ferreteria.ventas.repository.PresupuestoRepository;
 import com.ferreteria.ventas.repository.RemitoRepository;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -80,10 +82,10 @@ public class VentaGestion {
      * {@code anulacion} y una nota de credito, la {@code ventaAnulada}; lo que no corresponde es null.
      */
     public record VentaConsultada(VentaRegistrada venta, String usuario, FiscalConsultado fiscal, Anulacion anulacion,
-            VentaAnulada ventaAnulada) {
+            VentaAnulada ventaAnulada, Long presupuestoNumero) {
 
         public VentaConsultada(VentaRegistrada venta, String usuario, FiscalConsultado fiscal) {
-            this(venta, usuario, fiscal, null, null);
+            this(venta, usuario, fiscal, null, null, null);
         }
     }
 
@@ -98,16 +100,18 @@ public class VentaGestion {
     private final PagoRepository pagoRepository;
     private final CajaRepository cajaRepository;
     private final RemitoRepository remitoRepository;
+    private final PresupuestoRepository presupuestoRepository;
     private final FacturacionParaVenta facturacion;
 
     public VentaGestion(ComprobanteRepository comprobanteRepository, ItemComprobanteRepository itemRepository,
             PagoRepository pagoRepository, CajaRepository cajaRepository, RemitoRepository remitoRepository,
-            FacturacionParaVenta facturacion) {
+            PresupuestoRepository presupuestoRepository, FacturacionParaVenta facturacion) {
         this.comprobanteRepository = comprobanteRepository;
         this.itemRepository = itemRepository;
         this.pagoRepository = pagoRepository;
         this.cajaRepository = cajaRepository;
         this.remitoRepository = remitoRepository;
+        this.presupuestoRepository = presupuestoRepository;
         this.facturacion = facturacion;
     }
 
@@ -181,11 +185,15 @@ public class VentaGestion {
         Long remitoNumero = venta.getRemitoId() == null
                 ? null
                 : remitoRepository.findScoped(venta.getRemitoId()).map(Remito::getNumero).orElse(null);
+        // «Salió del presupuesto N.º n» (informacion-y-links, S2): como el remito, el de la ferreteria del request.
+        Long presupuestoNumero = venta.getPresupuestoId() == null
+                ? null
+                : presupuestoRepository.findScoped(venta.getPresupuestoId()).map(Presupuesto::getNumero).orElse(null);
         FiscalConsultado fiscal = fiscalDe(venta).orElse(null);
         return new VentaConsultada(new VentaRegistrada(venta, itemRepository.deComprobanteScoped(id),
                 pagoRepository.deComprobanteScoped(id), List.of(), false, false,
                 fiscal == null ? null : fiscal.factura().documento(), remitoNumero), usuario, fiscal,
-                anulacionDe(venta), ventaAnuladaDe(venta));
+                anulacionDe(venta), ventaAnuladaDe(venta), presupuestoNumero);
     }
 
     /** Como se anulo la venta (CU-08, C4), o null si no esta anulada o es una nota. */

@@ -164,7 +164,7 @@
       }
       @if (detalle(); as v) {
         @if (v.ventaAnulada; as anulada) {
-          <p class="venta-anulada">Anula la venta N.º {{ anulada.numero }}</p>
+          <p class="venta-anulada">Anula la <a [routerLink]="'/ventas/' + anulada.id">venta N.º {{ anulada.numero }}</a></p>
         }
         @if (v.anulacion; as a) {
           <p class="anulacion">{{ anulacion(a) }}</p>
@@ -242,7 +242,7 @@
             }
           </div>
         }
-        <app-venta-hoja [venta]="v" />
+        <app-venta-hoja [venta]="v" [conLinks]="true" />
         @if (imprimiendo()) {
           @if (facturada(); as f) {
             <app-factura-imprimible [venta]="f" (cerrar)="imprimiendo.set(false)" />

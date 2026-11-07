@@ -65,6 +65,9 @@
       @if (nota.factura; as factura) {
         <button type="button" class="secundario chico reimprimir" (click)="abrirFactura(factura)">Reimprimir factura</button>
       }
+      @if (nota.documento; as documento) {
+        <a class="ver-documento" [routerLink]="documento.ruta">{{ documento.texto }}</a>
+      }
     </p>
     @if (nota.advertencia) {
       <p class="aviso advertencia" role="status">{{ nota.advertencia }}</p>
@@ -222,6 +225,16 @@
         [eligeFactura]="eligeFactura()"
         (confirmar)="cobrar($event)"
         (cancelar)="cerrarDialogo()"
+        (escaneoDescartado)="escaneoDescartado()"
+      />
+    }
+    @case ('documento') {
+      <app-documento-no-fiscal-imprimible
+        [documento]="abierto.documento"
+        [emisor]="abierto.emisor"
+        [aviso]="avisoCobro()"
+        [esEscaneo]="esEscaneo"
+        (cerrar)="cerrarDialogo()"
         (escaneoDescartado)="escaneoDescartado()"
       />
     }

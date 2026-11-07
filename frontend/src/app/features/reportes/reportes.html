@@ -194,6 +194,16 @@
                 </tr>
               }
             </tbody>
+            @if (totalesPorArticulo(); as t) {
+              <tfoot>
+                <tr class="fila-total">
+                  <th scope="row">Total</th>
+                  <td></td>
+                  <td class="num">{{ t.total | monto }}</td>
+                  <td class="num">{{ t.ganancia | monto }}</td>
+                </tr>
+              </tfoot>
+            }
           </table>
         }
       }

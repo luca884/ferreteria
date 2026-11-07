@@ -125,8 +125,8 @@ app-caja-busqueda {
   margin: 0 var(--e-1);
   color: var(--texto-tenue);
 }
-/* La factura de la venta cobrada se reimprime desde el aviso (D7), hasta el próximo renglón. */
-.aviso .reimprimir {
+/* «Reimprimir factura» (D7) y «Ver el presupuesto/remito» del aviso, hasta el próximo renglón. */
+.aviso :is(button, a) {
   margin-left: var(--e-3);
 }
 .aviso.advertencia,

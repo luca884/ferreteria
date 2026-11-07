@@ -19,15 +19,17 @@
     @if (!venta().facturable && !esNota()) {
       <span class="no-facturable">No facturable</span>
     }
-    @if (origen(); as texto) {
-      <span>{{ texto }}</span>
+    @if (origen(); as o) {
+      <span
+        >{{ o.texto }}@if (o.numero; as numero) {@if (conLinks() && o.ruta) {<a [routerLink]="o.ruta">{{ numero }}</a>} @else {{{ numero }}}}</span
+      >
     }
   </p>
 }
 
 <table class="renglones">
   <caption class="sr-only">
-    Renglones de la venta
+    {{ renglonesDe() }}
   </caption>
   <thead>
     <tr>
@@ -42,7 +44,7 @@
     @for (r of renglones(); track r.renglon) {
       <tr>
         <td>{{ r.descripcion }}</td>
-        <td class="num">{{ r.cantidad | number: '1.0-3' }}</td>
+        <td class="num">{{ cantidadConUnidad(r.cantidad, r.unidad) }}</td>
         <td class="num">{{ r.precioUnitario | monto }}</td>
         <td class="num">{{ r.descuentoEfectivo > 0 ? (r.descuentoEfectivo | number: '1.0-2') + ' %' : '' }}</td>
         <td class="num">{{ r.totalSinRecargo | monto }}</td>

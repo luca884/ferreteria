@@ -39,7 +39,8 @@ import java.util.List;
  * factura al terminar la espera del CAE, o el actual en la venta repetida) y en el detalle de la consulta, con la hoja
  * imprimible en {@code documento} (cu-07-factura-mostrador C1); la venta sin registro fiscal no lo trae.
  * {@code remitoNumero} es el numero del remito del que sale la venta, para «Remito N.º» de la hoja; solo viene con
- * {@code remitoId}. En el detalle de la consulta {@code fiscal} suma lo de la bandeja ({@link FiscalConsultadoResponse},
+ * {@code remitoId}. {@code presupuestoNumero} es el del presupuesto del que salio, solo en el detalle de la consulta
+ * (informacion-y-links, S2). En el detalle de la consulta {@code fiscal} suma lo de la bandeja ({@link FiscalConsultadoResponse},
  * cu-07-contingencias C1); al cobrar viene como siempre ({@link FiscalResponse}).
  *
  * <p>CU-08 (C4, como la lista): {@code tipo} es VENTA o NOTA_CREDITO; la nota de crédito (la respuesta de anular y su
@@ -51,7 +52,7 @@ public record VentaResponse(
         Long ventaId, Long numero, BigDecimal total, LocalDateTime fecha, Long formaPagoId, MedioPago medioPago,
         List<PagoResponse> pagos, List<RenglonResponse> renglones, List<SinStockResponse> sinStock, BigDecimal subtotal,
         BigDecimal descuentoPorcentaje, BigDecimal descuento, BigDecimal recargo, Long presupuestoId,
-        Long remitoId, Long remitoNumero, boolean facturable, Long clienteId, String clienteNombre, String usuario,
+        Long remitoId, Long remitoNumero, Long presupuestoNumero, boolean facturable, Long clienteId, String clienteNombre, String usuario,
         Fiscal fiscal, String tipo, VentaAnuladaResponse ventaAnulada,
         @JsonInclude(JsonInclude.Include.ALWAYS) AnulacionResponse anulacion) {
 
@@ -179,7 +180,7 @@ public record VentaResponse(
             LocalDateTime fecha) {}
 
     public static VentaResponse de(VentaRegistrada venta) {
-        return de(venta, null, FiscalResponse.de(venta.fiscal()), null, null);
+        return de(venta, null, FiscalResponse.de(venta.fiscal()), null, null, null);
     }
 
     /** La venta del detalle de la consulta (y de la hoja de C7): con quién la cobró y la factura con la bandeja. */
@@ -189,11 +190,11 @@ public record VentaResponse(
         return de(consultada.venta(), consultada.usuario(), FiscalConsultadoResponse.de(consultada.fiscal()),
                 anulada == null ? null : new VentaAnuladaResponse(anulada.id(), anulada.numero()),
                 a == null ? null : new AnulacionResponse(a.notaId(), a.numero(), a.interna(), a.motivo(), a.usuario(),
-                        a.fecha()));
+                        a.fecha()), consultada.presupuestoNumero());
     }
 
     private static VentaResponse de(VentaRegistrada venta, String usuario, Fiscal fiscal,
-            VentaAnuladaResponse ventaAnulada, AnulacionResponse anulacion) {
+            VentaAnuladaResponse ventaAnulada, AnulacionResponse anulacion, Long presupuestoNumero) {
         return new VentaResponse(
                 venta.comprobante().getId(), venta.comprobante().getNumero(), venta.comprobante().getTotal(),
                 venta.comprobante().getFecha(),
@@ -209,7 +210,7 @@ public record VentaResponse(
                 venta.comprobante().getSubtotal()
                         .subtract(venta.comprobante().getTotal().subtract(venta.comprobante().getRecargo())),
                 venta.comprobante().getRecargo(), venta.comprobante().getPresupuestoId(),
-                venta.comprobante().getRemitoId(), venta.remitoNumero(),
+                venta.comprobante().getRemitoId(), venta.remitoNumero(), presupuestoNumero,
                 venta.comprobante().getEstado() != EstadoComprobante.NO_FACTURABLE,
                 venta.comprobante().getClienteId(), venta.comprobante().getClienteNombre(), usuario, fiscal,
                 venta.comprobante().getTipo().name(), ventaAnulada, anulacion);
