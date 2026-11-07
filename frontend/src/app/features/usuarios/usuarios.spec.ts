@@ -471,22 +471,49 @@ describe('Usuarios', () => {
       barra('button.desactivar').removeAttribute('disabled');
       barra('button.desactivar').click();
       await refrescar();
+      el().querySelector<HTMLButtonElement>('app-confirmacion button.confirmar')!.click();
+      await refrescar();
 
       expect(el().querySelector('.error')?.textContent).toContain('No podés desactivarte a vos mismo.');
     });
   });
 
   describe('desactivar y reactivar', () => {
-    it('desactiva al elegido con PATCH y marca la fila', async () => {
+    it('desactivar pide confirmación; al confirmar, PATCH y marca la fila', async () => {
       await crear([dueno, vendedor]);
 
       await elegir(1);
       expect(barra('button.desactivar').textContent?.trim()).toBe('Desactivar');
+      expect(barra('button.desactivar').classList.contains('peligro')).toBe(true);
       barra('button.desactivar').click();
       await refrescar();
 
-      expect(servicio.cambiarActivo).toHaveBeenCalledWith(2, false);
+      expect(servicio.cambiarActivo).not.toHaveBeenCalled();
+      expect(el().querySelector('app-confirmacion h2')?.textContent).toBe('¿Desactivar a Vendedor Uno?');
+      expect(el().querySelector('app-confirmacion p')?.textContent).toBe(
+        'Pierde el acceso en el acto; sus ventas se conservan. Lo podés reactivar desde «Mostrar desactivados».',
+      );
+      el().querySelector<HTMLButtonElement>('app-confirmacion button.confirmar')!.click();
+      await refrescar();
+
+      expect(servicio.cambiarActivo).toHaveBeenCalledExactlyOnceWith(2, false);
+      expect(el().querySelector('app-confirmacion')).toBeNull();
       expect(celdas(filas()[1])[3]).toBe('Desactivado');
+    });
+
+    it.each(['cancelar', 'Escape'])('con %s no desactiva', async (forma) => {
+      await crear([dueno, vendedor]);
+
+      await elegir(1);
+      barra('button.desactivar').click();
+      await refrescar();
+      if (forma === 'cancelar') el().querySelector<HTMLButtonElement>('app-confirmacion button.cancelar')!.click();
+      else el().querySelector('app-confirmacion .dialogo')!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+      await refrescar();
+
+      expect(el().querySelector('app-confirmacion')).toBeNull();
+      expect(servicio.cambiarActivo).not.toHaveBeenCalled();
+      expect(celdas(filas()[1])[3]).toBe('Activo');
     });
 
     it('un desactivado se reactiva', async () => {
@@ -496,9 +523,11 @@ describe('Usuarios', () => {
 
       await elegir(0);
       expect(barra('button.desactivar').textContent?.trim()).toBe('Reactivar');
+      expect(barra('button.desactivar').classList.contains('peligro')).toBe(false);
       barra('button.desactivar').click();
       await refrescar();
 
+      expect(el().querySelector('app-confirmacion')).toBeNull();
       expect(servicio.cambiarActivo).toHaveBeenCalledWith(3, true);
       expect(celdas(filas()[0])[3]).toBe('Activo');
     });

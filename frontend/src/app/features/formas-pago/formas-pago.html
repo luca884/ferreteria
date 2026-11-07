@@ -13,6 +13,15 @@
       </svg>
       Editar
     </button>
+    <button
+      type="button"
+      class="accion-barra desactivar"
+      [class.peligro]="filas.elegido()?.activa !== false"
+      [disabled]="!filas.elegido() || cambiando()"
+      (click)="alternarActiva()"
+    >
+      {{ filas.elegido()?.activa === false ? 'Activar' : 'Desactivar' }}
+    </button>
   }
 </app-barra-acciones>
 
@@ -22,7 +31,7 @@
   <p class="ayuda">
     El recargo se suma al total de lo que el cliente paga con esa forma (por ejemplo, Visa 6 cuotas) y el descuento se
     resta (por ejemplo, Efectivo). Una forma lleva uno o el otro. El medio es el que cuenta la caja. Las formas no se
-    borran: se desactivan, y dejan de ofrecerse al cobrar.
+    borran: se desactivan con «Desactivar» de la barra, y dejan de ofrecerse al cobrar.
   </p>
 
   @if (aviso(); as mensaje) {
@@ -84,7 +93,7 @@
                   <td class="estado">
                     {{ forma.activa ? 'Activa' : 'Inactiva' }}
                     @if (esperaActivacion(forma)) {
-                      <small class="pista-activar">Activala para vender a cuenta corriente.</small>
+                      <small class="pista-activar">Activala con «Activar» para vender a cuenta corriente.</small>
                     }
                   </td>
                 </tr>
@@ -205,13 +214,6 @@
           </span>
         }
       </div>
-      <div class="campo activa">
-        <input id="activa" name="activa" type="checkbox" formControlName="activa" />
-        <label for="activa">Activa (se ofrece al cobrar)</label>
-        @if (medioElegido() === 'CUENTA_CORRIENTE' && !activaElegida()) {
-          <span id="activa-pista" class="pista">Activala para vender a cuenta corriente.</span>
-        }
-      </div>
       <div class="acciones-alta">
         <button type="submit" [disabled]="guardando()">
           {{ editando() === null ? 'Agregar' : 'Guardar cambios' }}
@@ -222,4 +224,15 @@
       </div>
     </form>
   </div>
+}
+
+@if (aDesactivar(); as forma) {
+  <app-confirmacion
+    [titulo]="'¿Desactivar «' + forma.nombre + '»?'"
+    mensaje="Deja de ofrecerse al cobrar; las ventas hechas con ella se conservan. La podés volver a activar con «Activar»."
+    textoConfirmar="Desactivar"
+    [peligro]="true"
+    (confirmar)="confirmarDesactivar()"
+    (cancelar)="aDesactivar.set(null)"
+  />
 }

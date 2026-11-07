@@ -16,10 +16,11 @@
     <button
       type="button"
       class="accion-barra desactivar"
+      [class.peligro]="filas.elegido()?.activo !== false"
       [disabled]="!filas.elegido() || cambiando()"
       [attr.aria-disabled]="motivoNoDesactivar() ? 'true' : null"
       [attr.aria-describedby]="motivoNoDesactivar() ? 'motivo-desactivar' : null"
-      (click)="cambiarActivo()"
+      (click)="alternarActivo()"
     >
       {{ filas.elegido()?.activo === false ? 'Reactivar' : 'Desactivar' }}
     </button>
@@ -329,3 +330,14 @@
     </div>
   </form>
 </div>
+
+@if (aDesactivar(); as cliente) {
+  <app-confirmacion
+    [titulo]="'¿Desactivar a ' + cliente.razonSocial + '?'"
+    mensaje="No se va a poder elegir en el mostrador; sus ventas y documentos se conservan. Lo podés reactivar destildando «Solo activos»."
+    textoConfirmar="Desactivar"
+    [peligro]="true"
+    (confirmar)="confirmarDesactivar()"
+    (cancelar)="aDesactivar.set(null)"
+  />
+}

@@ -16,9 +16,10 @@
     <button
       type="button"
       class="accion-barra desactivar"
+      [class.peligro]="filas.elegido()?.activo !== false"
       [disabled]="!filas.elegido() || cambiando() || esPropio(filas.elegido())"
       [attr.aria-describedby]="esPropio(filas.elegido()) ? 'motivo-desactivar' : null"
-      (click)="cambiarActivo()"
+      (click)="alternarActivo()"
     >
       {{ filas.elegido()?.activo === false ? 'Reactivar' : 'Desactivar' }}
     </button>
@@ -269,4 +270,15 @@
       </form>
     }
   </div>
+}
+
+@if (aDesactivar(); as usuario) {
+  <app-confirmacion
+    [titulo]="'¿Desactivar a ' + usuario.nombre + '?'"
+    mensaje="Pierde el acceso en el acto; sus ventas se conservan. Lo podés reactivar desde «Mostrar desactivados»."
+    textoConfirmar="Desactivar"
+    [peligro]="true"
+    (confirmar)="confirmarDesactivar()"
+    (cancelar)="aDesactivar.set(null)"
+  />
 }

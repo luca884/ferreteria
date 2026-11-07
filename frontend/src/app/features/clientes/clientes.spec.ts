@@ -578,25 +578,56 @@ describe('Clientes', () => {
   });
 
   describe('desactivar (solo el Dueño)', () => {
-    it('el Dueño desactiva al elegido y la fila pasa a Inactivo', async () => {
+    const confirmar = async () => {
+      el().querySelector<HTMLButtonElement>('app-confirmacion button.confirmar')!.click();
+      await refrescar();
+    };
+
+    it('el Dueño desactiva al elegido después de confirmar y la fila pasa a Inactivo', async () => {
       await crear();
       await elegir(0);
 
       barra('.desactivar')!.click();
       await refrescar();
 
-      expect(servicio.cambiarActivo).toHaveBeenCalledWith(1, false);
+      expect(servicio.cambiarActivo).not.toHaveBeenCalled();
+      expect(barra('.desactivar')!.classList.contains('peligro')).toBe(true);
+      expect(texto('app-confirmacion h2')).toBe('¿Desactivar a Ana Gómez?');
+      expect(texto('app-confirmacion p')).toBe(
+        'No se va a poder elegir en el mostrador; sus ventas y documentos se conservan. Lo podés reactivar destildando «Solo activos».',
+      );
+      await confirmar();
+
+      expect(servicio.cambiarActivo).toHaveBeenCalledExactlyOnceWith(1, false);
+      expect(el().querySelector('app-confirmacion')).toBeNull();
       expect(filas()[0].textContent).toContain('Inactivo');
     });
 
-    it('en un cliente inactivo el botón dice Reactivar y lo reactiva', async () => {
+    it.each(['cancelar', 'Escape'])('con %s no lo desactiva', async (forma) => {
+      await crear();
+      await elegir(0);
+
+      barra('.desactivar')!.click();
+      await refrescar();
+      if (forma === 'cancelar') el().querySelector<HTMLButtonElement>('app-confirmacion button.cancelar')!.click();
+      else el().querySelector('app-confirmacion .dialogo')!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+      await refrescar();
+
+      expect(el().querySelector('app-confirmacion')).toBeNull();
+      expect(servicio.cambiarActivo).not.toHaveBeenCalled();
+      expect(filas()[0].textContent).toContain('Activo');
+    });
+
+    it('en un cliente inactivo el botón dice Reactivar y lo reactiva sin preguntar', async () => {
       await crear();
       await elegir(2);
 
       expect(barra('.desactivar')!.textContent!.trim()).toBe('Reactivar');
+      expect(barra('.desactivar')!.classList.contains('peligro')).toBe(false);
       barra('.desactivar')!.click();
       await refrescar();
 
+      expect(el().querySelector('app-confirmacion')).toBeNull();
       expect(servicio.cambiarActivo).toHaveBeenCalledWith(3, true);
     });
 
@@ -619,6 +650,7 @@ describe('Clientes', () => {
 
       barra('.desactivar')!.click();
       await refrescar();
+      await confirmar();
 
       expect(texto('p.error')).toBe('No permitido');
       expect(filas()[0].textContent).toContain('Activo');
@@ -1100,6 +1132,7 @@ describe('Clientes', () => {
         desactivar().click();
         await refrescar();
 
+        expect(el().querySelector('app-confirmacion')).toBeNull();
         expect(servicio.cambiarActivo).not.toHaveBeenCalled();
       });
 
@@ -1110,6 +1143,8 @@ describe('Clientes', () => {
         expect(desactivar().hasAttribute('aria-disabled')).toBe(false);
         expect(el().querySelector('#motivo-desactivar')).toBeNull();
         desactivar().click();
+        await refrescar();
+        el().querySelector<HTMLButtonElement>('app-confirmacion button.confirmar')!.click();
         await refrescar();
 
         expect(servicio.cambiarActivo).toHaveBeenCalledWith(9, false);
@@ -1140,6 +1175,8 @@ describe('Clientes', () => {
         await elegir(0);
 
         desactivar().click();
+        await refrescar();
+        el().querySelector<HTMLButtonElement>('app-confirmacion button.confirmar')!.click();
         await refrescar();
 
         expect(texto('p.error')).toBe(RAZON);

@@ -15,6 +15,7 @@ import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { erroresDeCampos, erroresPorCampo, mensajeDe } from '../../core/api/api-error';
 import { AuthService } from '../../core/auth/auth.service';
 import { BarraAcciones } from '../../shared/barra-acciones';
+import { Confirmacion } from '../../shared/confirmacion';
 import { ImporteInput } from '../../shared/importe-input';
 import { formatearMonto } from '../../core/formato/monto';
 import { FilasElegibles } from '../../shared/filas-elegibles';
@@ -52,7 +53,7 @@ const sinVacios = (texto: string): string | undefined => texto.trim() || undefin
  */
 @Component({
   selector: 'app-clientes',
-  imports: [ReactiveFormsModule, RouterLink, BarraAcciones, ImporteInput],
+  imports: [ReactiveFormsModule, RouterLink, BarraAcciones, ImporteInput, Confirmacion],
   templateUrl: './clientes.html',
   styleUrl: './clientes.css',
 })
@@ -94,6 +95,8 @@ export class Clientes implements OnInit {
   protected readonly errorDomicilio = signal<string | null>(null);
   protected readonly guardando = signal(false);
   protected readonly cambiando = signal(false);
+  /** El cliente que se está por desactivar: espera la confirmación. */
+  protected readonly aDesactivar = signal<Cliente | null>(null);
   /** El cliente que se está editando; null mientras se da de alta uno nuevo. */
   protected readonly editando = signal<Cliente | null>(null);
 
@@ -316,11 +319,23 @@ export class Clientes implements OnInit {
     this.enfocar('#razon-social');
   }
 
-  /** Solo el Dueño: desactiva al elegido, o lo reactiva si ya está desactivado. */
-  protected cambiarActivo(): void {
+  /** Solo el Dueño: desactivar pide confirmación; reactivar es directo. */
+  protected alternarActivo(): void {
     const cliente = this.filas.elegido();
     // Con saldo no se desactiva (el botón explica por qué); el servidor lo vuelve a controlar.
     if (!cliente || this.cambiando() || this.motivoNoDesactivar()) return;
+    if (cliente.activo) this.aDesactivar.set(cliente);
+    else this.cambiarActivo(cliente);
+  }
+
+  protected confirmarDesactivar(): void {
+    const cliente = this.aDesactivar();
+    this.aDesactivar.set(null);
+    if (cliente) this.cambiarActivo(cliente);
+  }
+
+  private cambiarActivo(cliente: Cliente): void {
+    if (this.cambiando()) return;
     this.aviso.set(null);
     this.error.set(null);
     this.cambiando.set(true);

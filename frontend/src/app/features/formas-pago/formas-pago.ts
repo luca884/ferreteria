@@ -13,6 +13,7 @@ import { AbstractControl, FormBuilder, ReactiveFormsModule, ValidationErrors, Va
 import { erroresDeCampos, mensajeDe } from '../../core/api/api-error';
 import { AuthService } from '../../core/auth/auth.service';
 import { BarraAcciones } from '../../shared/barra-acciones';
+import { Confirmacion } from '../../shared/confirmacion';
 import { FilasElegibles } from '../../shared/filas-elegibles';
 import { MEDIOS_PAGO, MEDIO_PAGO_LABELS, MedioPago } from '../mostrador/venta.models';
 import { FormaPago, FormaPagoRequest } from './forma-pago.models';
@@ -31,7 +32,7 @@ const porcentaje = new Intl.NumberFormat('es-AR', { maximumFractionDigits: 2 });
  */
 @Component({
   selector: 'app-formas-pago',
-  imports: [ReactiveFormsModule, BarraAcciones],
+  imports: [ReactiveFormsModule, BarraAcciones, Confirmacion],
   templateUrl: './formas-pago.html',
   styleUrl: './formas-pago.css',
 })
@@ -57,6 +58,10 @@ export class FormasPago implements OnInit {
   protected readonly guardando = signal(false);
   /** La forma que se está editando; null mientras se da de alta una nueva. */
   protected readonly editando = signal<FormaPago | null>(null);
+  /** Activar o desactivar desde la barra, en curso. */
+  protected readonly cambiando = signal(false);
+  /** La forma que se está por desactivar: espera la confirmación. */
+  protected readonly aDesactivar = signal<FormaPago | null>(null);
 
   protected readonly form = inject(FormBuilder).nonNullable.group(
     {
@@ -70,14 +75,12 @@ export class FormasPago implements OnInit {
         0 as number | null,
         [Validators.required, Validators.min(0), Validators.max(DESCUENTO_MAXIMO)],
       ],
-      activa: [true],
     },
     { validators: recargoODescuento },
   );
 
-  /** El medio y el estado elegidos en el formulario: la pista y el recargo bloqueado dependen de ellos. */
+  /** El medio elegido en el formulario: el recargo bloqueado depende de él. */
   protected readonly medioElegido = signal<MedioPago>('EFECTIVO');
-  protected readonly activaElegida = signal(true);
 
   constructor() {
     // Cuenta corriente no admite recargo ni descuento (CC-023): se fijan en 0 y se bloquean; con otro medio vuelven a
@@ -93,9 +96,6 @@ export class FormasPago implements OnInit {
         }
       }
     });
-    this.form.controls.activa.valueChanges
-      .pipe(takeUntilDestroyed(inject(DestroyRef)))
-      .subscribe((activa) => this.activaElegida.set(activa));
     // Al escribir se va el aviso de error del backend: ya no corresponde a lo que hay en el formulario.
     this.form.valueChanges.pipe(takeUntilDestroyed(inject(DestroyRef))).subscribe(() => this.limpiarErrores());
   }
@@ -127,16 +127,17 @@ export class FormasPago implements OnInit {
       this.enfocar('form.alta [aria-invalid="true"]');
       return;
     }
-    const { nombre, medio, recargoPorcentaje, descuentoPorcentaje, activa } = this.form.getRawValue();
+    const { nombre, medio, recargoPorcentaje, descuentoPorcentaje } = this.form.getRawValue();
     const cuentaCorriente = medio === 'CUENTA_CORRIENTE';
+    const forma = this.editando();
+    // El estado no se edita acá: lo cambia «Desactivar» / «Activar» de la barra; un alta nace activa.
     const request: FormaPagoRequest = {
       nombre: nombre.trim(),
       medio,
       recargoPorcentaje: cuentaCorriente ? 0 : (recargoPorcentaje ?? 0),
       descuentoPorcentaje: cuentaCorriente ? 0 : (descuentoPorcentaje ?? 0),
-      activa,
+      activa: forma?.activa ?? true,
     };
-    const forma = this.editando();
     this.limpiarErrores();
     this.aviso.set(null);
     this.guardando.set(true);
@@ -170,7 +171,6 @@ export class FormasPago implements OnInit {
       medio: forma.medio,
       recargoPorcentaje: forma.recargoPorcentaje,
       descuentoPorcentaje: forma.descuentoPorcentaje,
-      activa: forma.activa,
     });
     this.limpiarErrores();
   }
@@ -185,6 +185,40 @@ export class FormasPago implements OnInit {
     this.aviso.set(null);
     this.cancelar();
     this.enfocar('#nombre');
+  }
+
+  /** Desactivar pide confirmación; activar es directo. */
+  protected alternarActiva(): void {
+    const forma = this.filas.elegido();
+    if (!forma || this.cambiando()) return;
+    if (forma.activa) this.aDesactivar.set(forma);
+    else this.cambiarActiva(forma, true);
+  }
+
+  protected confirmarDesactivar(): void {
+    const forma = this.aDesactivar();
+    this.aDesactivar.set(null);
+    if (forma) this.cambiarActiva(forma, false);
+  }
+
+  /** Manda la forma como está guardada, con el estado nuevo (el PUT es del recurso entero). */
+  private cambiarActiva(forma: FormaPago, activa: boolean): void {
+    const { nombre, medio, recargoPorcentaje, descuentoPorcentaje } = forma;
+    this.aviso.set(null);
+    this.limpiarErrores();
+    this.cambiando.set(true);
+    this.service.actualizar(forma.id, { nombre, medio, recargoPorcentaje, descuentoPorcentaje, activa }).subscribe({
+      next: (cambiada) => {
+        this.formas.update((lista) => [...lista.filter((f) => f.id !== cambiada.id), cambiada].sort(porOrden));
+        // Si es la que está en el formulario, guardar la edición no le vuelve a cambiar el estado.
+        if (this.editando()?.id === cambiada.id) this.editando.set(cambiada);
+        this.cambiando.set(false);
+      },
+      error: (err: unknown) => {
+        this.cambiando.set(false);
+        this.error.set(mensajeDe(err, 'No se pudo cambiar el estado de la forma de pago.'));
+      },
+    });
   }
 
   /** La forma de cuenta corriente que todavía no se activó: hasta entonces no se ofrece al cobrar. */
@@ -222,7 +256,7 @@ export class FormasPago implements OnInit {
 
   private vaciarFormulario(): void {
     this.editando.set(null);
-    this.form.reset({ nombre: '', medio: 'EFECTIVO', recargoPorcentaje: 0, descuentoPorcentaje: 0, activa: true });
+    this.form.reset({ nombre: '', medio: 'EFECTIVO', recargoPorcentaje: 0, descuentoPorcentaje: 0 });
   }
 }
 

@@ -20,7 +20,7 @@ Restricciones: solo frontend salvo que un S lo pida (ninguno lo pide hoy); test-
 ## Tasks
 
 - [x] T1 · S1 · ruta: inline · Aceptación: CUIT con guiones en Facturación · Evidencia: RED: `cuit.spec.ts` no compila (falta `cuitConGuiones`) y `facturacion.spec.ts` 2 de 37 → GREEN 103/103 en `cuit`, `facturacion`, `shared/factura` y `shared/documento-no-fiscal`; `cuitConGuiones` (`core/formato/cuit.ts`) reemplaza las dos copias de `factura-hoja.ts` y `documento-no-fiscal-hoja.ts` · Risk: none (las hojas dan lo mismo con 11 dígitos; sus specs siguen verdes)
-- [ ] T2 · S2 · ruta: inline · Aceptación: desactivar con botón y confirmación en Usuarios, Formas de pago y Clientes · Evidencia: — · Risk: —
+- [x] T2 · S2 · ruta: inline · Aceptación: desactivar con botón y confirmación en Usuarios, Formas de pago y Clientes · Evidencia: RED 21 de 176 en `usuarios.spec.ts`, `clientes.spec.ts` y `formas-pago.spec.ts` → GREEN 176/176 (más el estilo `peligro` en «Desactivar», como «Dar de baja»); Formas de pago sin el control `activa`: el PUT de una edición manda el estado guardado y el alta nace activa; si se desactiva la que está en el formulario, la edición no la reactiva (L5) · Risk: none (solo frontend; los endpoints no cambian)
 - [ ] T3 · S3 · ruta: inline · Aceptación: guía siempre visible y subir certificado con su motivo · Evidencia: — · Risk: —
 - [ ] T4 · S4 · ruta: inline · Aceptación: aviso «No tenés acceso a …» al redirigir · Evidencia: — · Risk: —
 - [ ] T5 · S5 · ruta: inline · Aceptación: Rubros con ancho acotado · Evidencia: — · Risk: —
@@ -36,3 +36,4 @@ Restricciones: solo frontend salvo que un S lo pida (ninguno lo pide hoy); test-
   > dale, vamos con tus recomendaciones, sumá Clientes
   Desactivar como «Dar de baja» de Proveedores (botón en la barra, confirmación al desactivar, reactivar directo) en Usuarios, Formas de pago y Clientes, sin el checkbox «Activa» en Editar; la guía del certificado siempre visible (también en el simulador) y «Subir certificado (.crt)» siempre visible, deshabilitado sin pedido con «Primero generá el pedido de certificado.»; el aviso «No tenés acceso a <pantalla>.» por `Avisos`, en color de advertencia; el color de la sección se decide con un prototipo en el navegador.
 - L4 (2026-11-07) Próximo paso: T1 a T5 en orden; T6 con el prototipo; T7 cierre.
+- L5 (2026-11-07) T2: en Formas de pago el botón dice «Activar», no «Reactivar», porque la forma «Cuenta corriente» nace inactiva y su pista ya decía «Activala» (ahora «Activala con «Activar» para vender a cuenta corriente.»). En Usuarios y Clientes queda «Reactivar». El aviso de la confirmación sigue la ayuda de cada pantalla (Usuarios: «Mostrar desactivados»; Clientes: «Solo activos»).

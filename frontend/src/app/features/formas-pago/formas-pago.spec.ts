@@ -75,9 +75,8 @@ describe('FormasPago', () => {
     await refrescar();
   }
 
-  async function tildarActiva(activa: boolean) {
-    input('activa').checked = activa;
-    input('activa').dispatchEvent(new Event('change'));
+  async function confirmar() {
+    el().querySelector<HTMLButtonElement>('app-confirmacion button.confirmar')!.click();
     await refrescar();
   }
 
@@ -252,7 +251,7 @@ describe('FormasPago', () => {
     expect(filas()).toHaveLength(1);
   });
 
-  it('el formulario ofrece los cinco medios con su nombre y arranca en efectivo, sin recargo y activa', async () => {
+  it('el formulario ofrece los cinco medios con su nombre y arranca en efectivo, sin recargo y sin el checkbox «Activa»', async () => {
     await crear([efectivo]);
 
     const opciones = Array.from(select('medio').options).map((o) => [o.value, o.textContent?.trim()]);
@@ -265,7 +264,7 @@ describe('FormasPago', () => {
     ]);
     expect(select('medio').value).toBe('EFECTIVO');
     expect(input('recargo').value).toBe('0');
-    expect(input('activa').checked).toBe(true);
+    expect(el().querySelector('#activa')).toBeNull();
   });
 
   it('da de alta una forma con su recargo, la agrega a la lista en su orden y avisa', async () => {
@@ -422,7 +421,23 @@ describe('FormasPago', () => {
     expect(input('nombre').value).toBe('Mercado Pago');
     expect(select('medio').value).toBe('TRANSFERENCIA');
     expect(input('recargo').value).toBe('5');
-    expect(input('activa').checked).toBe(false);
+    expect(el().querySelector('#activa')).toBeNull();
+  });
+
+  it('editar una forma inactiva y guardarla la deja inactiva', async () => {
+    await crear([efectivo, mercadoPago]);
+
+    await editarFila(1);
+    await escribir('recargo', '6');
+    await enviar();
+
+    expect(servicio.actualizar).toHaveBeenCalledWith(4, {
+      nombre: 'Mercado Pago',
+      medio: 'TRANSFERENCIA',
+      recargoPorcentaje: 6,
+      descuentoPorcentaje: 0,
+      activa: false,
+    });
   });
 
   it('guarda los cambios con PUT, reemplaza la fila y avisa', async () => {
@@ -430,7 +445,6 @@ describe('FormasPago', () => {
 
     await editarFila(1);
     await escribir('recargo', '25');
-    await tildarActiva(false);
     await enviar();
 
     expect(servicio.actualizar).toHaveBeenCalledWith(3, {
@@ -438,12 +452,11 @@ describe('FormasPago', () => {
       medio: 'CREDITO',
       recargoPorcentaje: 25,
       descuentoPorcentaje: 0,
-      activa: false,
+      activa: true,
     });
     expect(servicio.crear).not.toHaveBeenCalled();
     expect(filas()).toHaveLength(2);
     expect((filas()[1].textContent ?? '').replace(/\s+/g, ' ')).toContain('25 %');
-    expect(filas()[1].textContent).toContain('Inactiva');
     expect(el().querySelector('.alerta.exito')?.textContent).toContain('Se guardó «Visa 6 cuotas».');
     expect(el().querySelector('form h2')?.textContent).toContain('Nueva forma de pago');
   });
@@ -459,12 +472,12 @@ describe('FormasPago', () => {
       orden: 5,
     };
 
-    it('la forma sembrada se lista inactiva con la pista para activarla', async () => {
+    it('la forma sembrada se lista inactiva con la pista para activarla con el botón', async () => {
       await crear([efectivo, cuentaCorriente]);
 
       expect(filas()[1].textContent).toContain('Cuenta corriente');
       expect(filas()[1].textContent).toContain('Inactiva');
-      expect(filas()[1].textContent).toContain('Activala para vender a cuenta corriente');
+      expect(texto('tbody tr:nth-child(2) .pista-activar')).toBe('Activala con «Activar» para vender a cuenta corriente.');
       expect(filas()[0].textContent).not.toContain('Activala');
     });
 
@@ -508,23 +521,25 @@ describe('FormasPago', () => {
       expect(input('recargo').value).toBe('18.5');
     });
 
-    it('editar la forma de cuenta corriente la carga con el recargo bloqueado y la pista de activarla', async () => {
+    it('editar la forma de cuenta corriente la carga con el recargo bloqueado', async () => {
       await crear([efectivo, cuentaCorriente]);
 
       await editarFila(1);
 
       expect(select('medio').value).toBe('CUENTA_CORRIENTE');
       expect(input('recargo').disabled).toBe(true);
-      expect(input('activa').checked).toBe(false);
-      expect(texto('#activa-pista')).toContain('Activala para vender a cuenta corriente');
     });
 
-    it('activarla manda el PUT con activa true y recargo 0', async () => {
+    it('«Activar» de la barra la activa sin preguntar: PUT con activa true y recargo 0', async () => {
       await crear([efectivo, cuentaCorriente]);
 
-      await editarFila(1);
-      await tildarActiva(true);
-      await enviar();
+      await elegir(1);
+      expect(barra('button.desactivar')!.textContent?.trim()).toBe('Activar');
+      expect(barra('button.desactivar')!.classList.contains('peligro')).toBe(false);
+      barra('button.desactivar')!.click();
+      await refrescar();
+
+      expect(el().querySelector('app-confirmacion')).toBeNull();
 
       expect(servicio.actualizar).toHaveBeenCalledWith(5, {
         nombre: 'Cuenta corriente',
@@ -560,9 +575,10 @@ describe('FormasPago', () => {
       throwError(() => errorHttp(422, 'Tiene que quedar al menos una forma de pago en efectivo.')),
     );
 
-    await editarFila(0);
-    await tildarActiva(false);
-    await enviar();
+    await elegir(0);
+    barra('button.desactivar')!.click();
+    await refrescar();
+    await confirmar();
 
     expect(el().querySelector('.error')?.textContent).toContain(
       'Tiene que quedar al menos una forma de pago en efectivo.',
@@ -592,12 +608,92 @@ describe('FormasPago', () => {
     expect(input('nombre').value).toBe('');
   });
 
-  it('Editar de la barra está apagado sin fila elegida', async () => {
+  it('Editar y Desactivar de la barra están apagados sin fila elegida', async () => {
     await crear([efectivo]);
 
     expect(barra('button.editar')!.disabled).toBe(true);
+    expect(barra('button.desactivar')!.disabled).toBe(true);
     await elegir(0);
     expect(barra('button.editar')!.disabled).toBe(false);
+    expect(barra('button.desactivar')!.disabled).toBe(false);
+  });
+
+  describe('desactivar desde la barra', () => {
+    it('el texto de la pantalla dice cómo se desactivan', async () => {
+      await crear([efectivo]);
+
+      expect(texto('p.ayuda')).toContain(
+        'Las formas no se borran: se desactivan con «Desactivar» de la barra, y dejan de ofrecerse al cobrar.',
+      );
+    });
+
+    it('«Desactivar» pide confirmación; al confirmar manda el PUT con activa false y marca la fila', async () => {
+      await crear([efectivo, visa6]);
+
+      await elegir(1);
+      expect(barra('button.desactivar')!.textContent?.trim()).toBe('Desactivar');
+      expect(barra('button.desactivar')!.classList.contains('peligro')).toBe(true);
+      barra('button.desactivar')!.click();
+      await refrescar();
+
+      expect(servicio.actualizar).not.toHaveBeenCalled();
+      expect(texto('app-confirmacion h2')).toBe('¿Desactivar «Visa 6 cuotas»?');
+      expect(texto('app-confirmacion p')).toBe(
+        'Deja de ofrecerse al cobrar; las ventas hechas con ella se conservan. La podés volver a activar con «Activar».',
+      );
+      await confirmar();
+
+      expect(servicio.actualizar).toHaveBeenCalledExactlyOnceWith(3, {
+        nombre: 'Visa 6 cuotas',
+        medio: 'CREDITO',
+        recargoPorcentaje: 18.5,
+        descuentoPorcentaje: 0,
+        activa: false,
+      });
+      expect(el().querySelector('app-confirmacion')).toBeNull();
+      expect(filas()[1].textContent).toContain('Inactiva');
+      expect(barra('button.desactivar')!.textContent?.trim()).toBe('Activar');
+    });
+
+    it.each(['cancelar', 'Escape'])('con %s no la desactiva', async (forma) => {
+      await crear([efectivo, visa6]);
+
+      await elegir(1);
+      barra('button.desactivar')!.click();
+      await refrescar();
+      if (forma === 'cancelar') el().querySelector<HTMLButtonElement>('app-confirmacion button.cancelar')!.click();
+      else el().querySelector('app-confirmacion .dialogo')!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+      await refrescar();
+
+      expect(el().querySelector('app-confirmacion')).toBeNull();
+      expect(servicio.actualizar).not.toHaveBeenCalled();
+      expect(filas()[1].textContent).toContain('Activa');
+    });
+
+    it('si se desactiva la que se está editando, guardar la edición no la vuelve a activar', async () => {
+      await crear([efectivo, visa6]);
+
+      await editarFila(1);
+      barra('button.desactivar')!.click();
+      await refrescar();
+      await confirmar();
+      await escribir('recargo', '20');
+      await enviar();
+
+      expect(servicio.actualizar).toHaveBeenLastCalledWith(3, {
+        nombre: 'Visa 6 cuotas',
+        medio: 'CREDITO',
+        recargoPorcentaje: 20,
+        descuentoPorcentaje: 0,
+        activa: false,
+      });
+    });
+
+    it('el Vendedor no ve el botón', async () => {
+      await crear([efectivo], false);
+
+      expect(barra('button.desactivar')).toBeNull();
+    });
   });
 
   it('doble clic en la fila la edita', async () => {
