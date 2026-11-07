@@ -57,6 +57,13 @@ describe('refresco del menú lateral desde Configuración › Cotización', () =
 
   const texto = (e: Element | null) => e?.textContent?.replace(/\s+/g, ' ').trim() ?? '';
   const lateral = () => texto((shell.nativeElement as HTMLElement).querySelector('app-cotizacion-lateral'));
+  /** Las líneas de la tabla del lateral: «Blue 1.150,00 1.200,00». */
+  const filasLateral = () =>
+    Array.from((shell.nativeElement as HTMLElement).querySelectorAll('app-cotizacion-lateral tr.tipo')).map((tr) =>
+      Array.from(tr.querySelectorAll('th, td'))
+        .map((c) => texto(c))
+        .join(' '),
+    );
 
   async function estabilizar() {
     shell.detectChanges();
@@ -123,8 +130,8 @@ describe('refresco del menú lateral desde Configuración › Cotización', () =
     releidos[0].flush(conBlueYEuro);
     await estabilizar();
 
-    expect(lateral()).toContain('Blue venta 1.200,00');
-    expect(lateral()).toContain('Euro venta 1.500,00');
+    expect(filasLateral()).toContain('Blue 1.150,00 1.200,00');
+    expect(filasLateral()).toContain('Euro 1.450,00 1.500,00');
   });
 
   it('si el guardado falla el lateral no vuelve a pedir la cotización', async () => {
@@ -170,7 +177,7 @@ describe('refresco del menú lateral desde Configuración › Cotización', () =
     releidos[0].flush(conBlueYEuro);
     await estabilizar();
 
-    expect(lateral()).toContain('Blue venta 1.200,00');
+    expect(filasLateral()).toContain('Blue 1.150,00 1.200,00');
   });
 
   it('si «Recalcular ahora» falla el lateral no vuelve a pedir la cotización', async () => {

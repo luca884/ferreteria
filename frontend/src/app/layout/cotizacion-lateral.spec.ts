@@ -5,6 +5,8 @@ import { CotizacionLateral } from './cotizacion-lateral';
 
 describe('CotizacionLateral', () => {
   let fixture: ComponentFixture<CotizacionLateral>;
+  /** Donde el navegador recuerda si el bloque quedó plegado. */
+  const CLAVE = 'cotizacion-lateral-abierta';
 
   const oficial: TipoCotizacion = {
     codigo: 'USD:oficial',
@@ -40,6 +42,9 @@ describe('CotizacionLateral', () => {
     ...cambios,
   });
 
+  beforeEach(() => localStorage.removeItem(CLAVE));
+  afterEach(() => localStorage.removeItem(CLAVE));
+
   async function crear(valor: Cotizacion | null, esDueno = false): Promise<HTMLElement> {
     await TestBed.configureTestingModule({ imports: [CotizacionLateral], providers: [provideRouter([])] }).compileComponents();
     fixture = TestBed.createComponent(CotizacionLateral);
@@ -50,14 +55,188 @@ describe('CotizacionLateral', () => {
     return fixture.nativeElement as HTMLElement;
   }
 
+  async function refrescar() {
+    fixture.detectChanges();
+    await fixture.whenStable();
+  }
+
   const texto = (e: Element | null) => e?.textContent?.replace(/\s+/g, ' ').trim() ?? '';
-  const lineas = (el: HTMLElement) => Array.from(el.querySelectorAll('.linea')).map((l) => texto(l));
+  const resumen = (el: HTMLElement) => texto(el.querySelector('.resumen'));
+  const filas = (el: HTMLElement) =>
+    Array.from(el.querySelectorAll('table.cotizaciones tbody tr.tipo')).map((tr) =>
+      Array.from(tr.querySelectorAll('th, td')).map((c) => texto(c)),
+    );
+  const desplegar = (el: HTMLElement) => el.querySelector<HTMLButtonElement>('button.desplegar')!;
 
-  it('muestra «Oficial venta 1.000,00» y la fecha y hora del valor «16/10 08:00»', async () => {
-    const el = await crear(cotizacion());
+  describe('el dólar de los precios, arriba', () => {
+    it('muestra «Dólar de los precios» con el tipo, el lado y el valor', async () => {
+      const el = await crear(cotizacion());
 
-    expect(lineas(el)).toContain('Oficial venta 1.000,00 Precios');
-    expect(texto(el.querySelector('.fecha'))).toBe('16/10 08:00');
+      expect(resumen(el)).toBe('Dólar de los precios Oficial venta 1.000,00');
+    });
+
+    it('con el lado compra, dice compra y su valor', async () => {
+      const el = await crear(
+        cotizacion({ precios: { codigo: 'USD:oficial', lado: 'COMPRA', valor: 950, desde: null, aConfirmar: null } }),
+      );
+
+      expect(resumen(el)).toBe('Dólar de los precios Oficial compra 950,00');
+    });
+
+    it('si el dólar de los precios no está entre los visibles, lo nombra igual', async () => {
+      const el = await crear(cotizacion({ visibles: [euro] }));
+
+      expect(resumen(el)).toBe('Dólar de los precios Dólar venta 1.000,00');
+    });
+
+    it('sin dólar aplicado todavía no muestra el resumen', async () => {
+      const el = await crear(
+        cotizacion({ precios: { codigo: 'USD:oficial', lado: 'VENTA', valor: null, desde: null, aConfirmar: null } }),
+      );
+
+      expect(el.querySelector('.resumen')).toBeNull();
+    });
+  });
+
+  describe('la tabla de las cotizaciones', () => {
+    it('arranca desplegada: una línea por tipo con la compra y la venta', async () => {
+      const el = await crear(cotizacion({ visibles: [oficial, euro] }));
+
+      const encabezados = Array.from(el.querySelectorAll('table.cotizaciones thead th')).map((t) => texto(t));
+      expect(encabezados).toEqual(['Moneda', 'Compra', 'Venta']);
+      expect(filas(el)).toEqual([
+        ['Oficial', '950,00', '1.000,00'],
+        ['Euro', '1.080,00', '1.130,50'],
+      ]);
+      expect(desplegar(el).getAttribute('aria-expanded')).toBe('true');
+      expect(texto(desplegar(el))).toBe('Ocultar las cotizaciones');
+    });
+
+    it('resalta el valor que usan los precios, y solo ese: con compra, la compra', async () => {
+      const el = await crear(
+        cotizacion({
+          visibles: [oficial, euro],
+          precios: { codigo: 'USD:oficial', lado: 'COMPRA', valor: 950, desde: null, aConfirmar: null },
+        }),
+      );
+
+      const resaltados = Array.from(el.querySelectorAll('table.cotizaciones .de-precios')).map((c) => texto(c));
+      expect(resaltados).toEqual(['950,00']);
+    });
+
+    it('muestra euro y real si son visibles, sin resaltarlos', async () => {
+      const real: TipoCotizacion = { ...euro, codigo: 'BRL:oficial', nombre: 'Real', compra: 190, venta: 200 };
+      const el = await crear(cotizacion({ visibles: [oficial, euro, real] }));
+
+      expect(filas(el)).toEqual([
+        ['Oficial', '950,00', '1.000,00'],
+        ['Euro', '1.080,00', '1.130,50'],
+        ['Real', '190,00', '200,00'],
+      ]);
+      expect(el.querySelectorAll('table.cotizaciones .de-precios').length).toBe(1);
+    });
+
+    it('una sola fecha, la más reciente, rotulada; la de cada tipo, al pasar el mouse por su línea', async () => {
+      const el = await crear(cotizacion({ visibles: [oficial, euro] }));
+
+      expect(Array.from(el.querySelectorAll('.fecha')).map((f) => texto(f))).toEqual(['Cotización del 16/10 09:00']);
+      const titulos = Array.from(el.querySelectorAll('table.cotizaciones tbody tr.tipo')).map((tr) =>
+        tr.getAttribute('title'),
+      );
+      expect(titulos).toEqual(['Oficial: cotización del 16/10 08:00', 'Euro: cotización del 16/10 09:00']);
+    });
+
+    it('un tipo sin valor guardado dice que todavía no hay datos, sin fecha', async () => {
+      const sinDatos: TipoCotizacion = {
+        ...euro,
+        compra: null,
+        venta: null,
+        fuente: null,
+        actualizadaEn: null,
+        obtenidaEn: null,
+      };
+      const el = await crear(cotizacion({ visibles: [sinDatos] }));
+
+      expect(filas(el)).toEqual([['Euro', 'Todavía no hay datos']]);
+      expect(el.querySelector('.fecha')).toBeNull();
+    });
+
+    it('avisa la antigüedad de un tipo que ninguna fuente renovó, aunque el resto esté fresco (R-029)', async () => {
+      const mep: TipoCotizacion = {
+        ...oficial,
+        codigo: 'USD:bolsa',
+        nombre: 'MEP',
+        compra: 1040,
+        venta: 1050,
+        // 10:00 UTC = 07:00 de Buenos Aires.
+        obtenidaEn: '2026-10-16T10:00:00Z',
+        desactualizada: true,
+        esDePrecios: false,
+      };
+      const el = await crear(cotizacion({ visibles: [oficial, mep] }));
+
+      const viejos = Array.from(el.querySelectorAll('.vieja')).map((v) => texto(v));
+      expect(viejos).toEqual(['No se renueva desde el 16/10 07:00']);
+    });
+  });
+
+  describe('plegar y desplegar', () => {
+    it('al plegarla quedan el dólar de los precios y el botón para verlas; al desplegarla vuelve la tabla', async () => {
+      const el = await crear(cotizacion({ visibles: [oficial, euro] }));
+
+      desplegar(el).click();
+      await refrescar();
+
+      expect(desplegar(el).getAttribute('aria-expanded')).toBe('false');
+      expect(texto(desplegar(el))).toBe('Ver las 2 cotizaciones');
+      expect(el.querySelector('table.cotizaciones')).toBeNull();
+      expect(el.querySelector('.fecha')).toBeNull();
+      expect(resumen(el)).toBe('Dólar de los precios Oficial venta 1.000,00');
+
+      desplegar(el).click();
+      await refrescar();
+
+      expect(desplegar(el).getAttribute('aria-expanded')).toBe('true');
+      expect(filas(el)).toHaveLength(2);
+    });
+
+    it('el botón controla la tabla', async () => {
+      const el = await crear(cotizacion());
+
+      const id = desplegar(el).getAttribute('aria-controls');
+      expect(id).toBeTruthy();
+      expect(el.querySelector(`[id="${id}"]`)?.contains(el.querySelector('table.cotizaciones'))).toBe(true);
+    });
+
+    it('con un solo tipo, plegada dice «Ver la cotización»', async () => {
+      const el = await crear(cotizacion());
+
+      desplegar(el).click();
+      await refrescar();
+
+      expect(texto(desplegar(el))).toBe('Ver la cotización');
+    });
+
+    it('el navegador recuerda si quedó plegada', async () => {
+      const el = await crear(cotizacion());
+
+      desplegar(el).click();
+      await refrescar();
+      expect(localStorage.getItem(CLAVE)).toBe('false');
+
+      desplegar(el).click();
+      await refrescar();
+      expect(localStorage.getItem(CLAVE)).toBe('true');
+    });
+
+    it('si la dejaste plegada, arranca plegada', async () => {
+      localStorage.setItem(CLAVE, 'false');
+
+      const el = await crear(cotizacion());
+
+      expect(desplegar(el).getAttribute('aria-expanded')).toBe('false');
+      expect(el.querySelector('table.cotizaciones')).toBeNull();
+    });
   });
 
   describe('dólar a confirmar (H09)', () => {
@@ -67,16 +246,17 @@ describe('CotizacionLateral', () => {
         precios: { codigo: 'USD:oficial', lado: 'VENTA', valor: 1535, desde: '2026-10-16T11:00:00Z', aConfirmar: 14.5 },
       });
 
-    it('la línea de los precios muestra el dólar aplicado, no el crudo, y marca el nuevo «a confirmar»', async () => {
+    it('el dólar de los precios muestra el aplicado, no el crudo, y marca el nuevo «a confirmar»', async () => {
       const el = await crear(aConfirmar());
 
-      expect(lineas(el)).toContain('Oficial venta 1.535,00 Precios 14,50 a confirmar');
+      expect(resumen(el)).toBe('Dólar de los precios Oficial venta 1.535,00 14,50 a confirmar');
+      expect(texto(el.querySelector('table.cotizaciones .de-precios'))).toBe('1.535,00');
     });
 
-    it('la otra línea del mismo tipo sigue con su valor crudo y sin marca', async () => {
+    it('el otro lado del mismo tipo sigue con su valor crudo', async () => {
       const el = await crear(aConfirmar());
 
-      expect(lineas(el)).toContain('Oficial compra 950,00');
+      expect(filas(el)).toEqual([['Oficial', '950,00', '1.535,00']]);
     });
 
     it('sin valor a confirmar no hay marca', async () => {
@@ -101,59 +281,6 @@ describe('CotizacionLateral', () => {
     });
   });
 
-  it('muestra la compra y la venta de cada tipo', async () => {
-    const el = await crear(cotizacion());
-
-    expect(lineas(el)).toEqual(['Oficial compra 950,00', 'Oficial venta 1.000,00 Precios']);
-  });
-
-  it('marca el lado del dólar de los precios: con compra, la marca va en la compra', async () => {
-    const el = await crear(
-      cotizacion({ precios: { codigo: 'USD:oficial', lado: 'COMPRA', valor: 950, desde: null, aConfirmar: null } }),
-    );
-
-    expect(lineas(el)).toEqual(['Oficial compra 950,00 Precios', 'Oficial venta 1.000,00']);
-    expect(el.querySelectorAll('.marca').length).toBe(1);
-  });
-
-  it('muestra siempre la fecha y la hora de cada valor, en cada tipo', async () => {
-    const el = await crear(cotizacion({ visibles: [oficial, euro] }));
-
-    expect(Array.from(el.querySelectorAll('.fecha')).map((f) => texto(f))).toEqual(['16/10 08:00', '16/10 09:00']);
-  });
-
-  it('muestra euro y real si son visibles, sin marca de dólar de precios', async () => {
-    const real: TipoCotizacion = { ...euro, codigo: 'BRL:oficial', nombre: 'Real', compra: 190, venta: 200 };
-    const el = await crear(cotizacion({ visibles: [oficial, euro, real] }));
-
-    expect(lineas(el)).toEqual([
-      'Oficial compra 950,00',
-      'Oficial venta 1.000,00 Precios',
-      'Euro compra 1.080,00',
-      'Euro venta 1.130,50',
-      'Real compra 190,00',
-      'Real venta 200,00',
-    ]);
-    expect(el.querySelectorAll('.marca').length).toBe(1);
-  });
-
-  it('un tipo sin valor guardado dice que todavía no hay datos, sin fecha', async () => {
-    const sinDatos: TipoCotizacion = {
-      ...euro,
-      compra: null,
-      venta: null,
-      fuente: null,
-      actualizadaEn: null,
-      obtenidaEn: null,
-    };
-    const el = await crear(cotizacion({ visibles: [sinDatos] }));
-
-    expect(texto(el)).toContain('Euro');
-    expect(texto(el)).toContain('Todavía no hay datos');
-    expect(el.querySelector('.fecha')).toBeNull();
-    expect(el.querySelector('.linea')).toBeNull();
-  });
-
   describe('aviso amarillo de cotización desactualizada', () => {
     it('aparece solo si la respuesta trae desactualizada, con la fecha y hora de la cotización que se usa', async () => {
       const el = await crear(cotizacion({ desactualizada: true, ultimaRespuesta: '2026-10-16T11:00:00Z' }));
@@ -166,7 +293,7 @@ describe('CotizacionLateral', () => {
       const viernes = { ...oficial, actualizadaEn: '2026-10-09T22:00:00Z' };
       const el = await crear(cotizacion({ visibles: [viernes], desactualizada: false }));
 
-      expect(texto(el.querySelector('.fecha'))).toBe('09/10 19:00');
+      expect(texto(el.querySelector('.fecha'))).toBe('Cotización del 09/10 19:00');
       expect(el.querySelector('.aviso.desactualizada')).toBeNull();
     });
 
@@ -202,24 +329,6 @@ describe('CotizacionLateral', () => {
     });
   });
 
-  it('avisa la antigüedad de un tipo que ninguna fuente renovó, aunque el resto esté fresco (R-029)', async () => {
-    const mep: TipoCotizacion = {
-      ...oficial,
-      codigo: 'USD:bolsa',
-      nombre: 'MEP',
-      compra: 1040,
-      venta: 1050,
-      // 10:00 UTC = 07:00 de Buenos Aires.
-      obtenidaEn: '2026-10-16T10:00:00Z',
-      desactualizada: true,
-      esDePrecios: false,
-    };
-    const el = await crear(cotizacion({ visibles: [oficial, mep] }));
-
-    const viejos = Array.from(el.querySelectorAll('.vieja')).map((v) => texto(v));
-    expect(viejos).toEqual(['No se renueva desde el 16/10 07:00']);
-  });
-
   describe('enlace «Configurar»', () => {
     it('el Dueño lo ve y lleva a la configuración de cotización', async () => {
       const el = await crear(cotizacion(), true);
@@ -232,7 +341,7 @@ describe('CotizacionLateral', () => {
     it('el Vendedor ve la cotización pero no el enlace', async () => {
       const el = await crear(cotizacion(), false);
 
-      expect(lineas(el)).toContain('Oficial venta 1.000,00 Precios');
+      expect(resumen(el)).toBe('Dólar de los precios Oficial venta 1.000,00');
       expect(el.querySelector('a')).toBeNull();
     });
   });
@@ -241,7 +350,8 @@ describe('CotizacionLateral', () => {
     const el = await crear(null);
 
     expect(texto(el)).toContain('Sin datos de cotización por ahora.');
-    expect(el.querySelector('.linea')).toBeNull();
+    expect(el.querySelector('table')).toBeNull();
+    expect(el.querySelector('button.desplegar')).toBeNull();
   });
 
   it('el bloque tiene un título «Cotización» y es una región con nombre', async () => {

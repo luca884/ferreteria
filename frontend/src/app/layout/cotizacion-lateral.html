@@ -13,36 +13,66 @@
   </div>
 
   @if (cotizacion()) {
-    <ul class="tipos">
-      @for (tipo of tipos(); track tipo.codigo) {
-        <li class="tipo">
-          @if (tipo.lineas.length === 0) {
-            <span class="nombre">{{ tipo.nombre }}</span>
-            <span class="sin-datos">Todavía no hay datos</span>
+    @if (resumen(); as r) {
+      <p class="resumen">
+        <span class="rotulo">Dólar de los precios</span>&ngsp;<span class="linea-precios">
+          <span class="tipo-precios">{{ r.etiqueta }}</span>&ngsp;<strong class="valor">{{ r.valor }}</strong>
+        </span>
+        @if (r.aConfirmar) {
+          @if (esDueno()) {
+            &ngsp;<a class="a-confirmar" routerLink="/configuracion/cotizacion" title="La fuente trajo un dólar muy distinto: confirmalo para que cambie los precios">{{ r.aConfirmar }} a confirmar</a>
           } @else {
-            @for (linea of tipo.lineas; track linea.etiqueta) {
-              <div class="linea" [class.de-precios]="linea.dePrecios">
-                <span class="etiqueta">{{ linea.etiqueta }}</span>&ngsp;<strong class="valor">{{ linea.valor }}</strong>
-                @if (linea.dePrecios) {
-                  &ngsp;<span class="marca" title="Es el dólar en el que cotizan los precios">Precios</span>
+            &ngsp;<span class="a-confirmar" title="La fuente trajo un dólar muy distinto: los precios no cambian hasta que el Dueño lo confirme">{{ r.aConfirmar }} a confirmar</span>
+          }
+        }
+      </p>
+    }
+
+    <button
+      type="button"
+      class="desplegar"
+      [attr.aria-expanded]="abierta()"
+      [attr.aria-controls]="idCuerpo"
+      (click)="alternar()"
+    >
+      {{ textoDesplegar() }}
+      <svg class="flecha" [class.arriba]="abierta()" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"></path></svg>
+    </button>
+
+    <div class="cuerpo" [id]="idCuerpo">
+      @if (abierta()) {
+        <table class="cotizaciones">
+          <thead>
+            <tr>
+              <th scope="col"><span class="sr-only">Moneda</span></th>
+              <th scope="col" class="num">Compra</th>
+              <th scope="col" class="num">Venta</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (fila of filas(); track fila.codigo) {
+              <tr class="tipo" [attr.title]="fila.titulo || null">
+                <th scope="row">{{ fila.nombre }}</th>
+                @if (fila.conDatos) {
+                  <td class="num" [class.de-precios]="fila.ladoDePrecios === 'COMPRA'"><span>{{ fila.compra }}</span></td>
+                  <td class="num" [class.de-precios]="fila.ladoDePrecios === 'VENTA'"><span>{{ fila.venta }}</span></td>
+                } @else {
+                  <td colspan="2" class="sin-datos">Todavía no hay datos</td>
                 }
-                @if (linea.aConfirmar) {
-                  @if (esDueno()) {
-                    &ngsp;<a class="a-confirmar" routerLink="/configuracion/cotizacion" title="La fuente trajo un dólar muy distinto: confirmalo para que cambie los precios">{{ linea.aConfirmar }} a confirmar</a>
-                  } @else {
-                    &ngsp;<span class="a-confirmar" title="La fuente trajo un dólar muy distinto: los precios no cambian hasta que el Dueño lo confirme">{{ linea.aConfirmar }} a confirmar</span>
-                  }
-                }
-              </div>
+              </tr>
+              @if (fila.sinRenovarDesde) {
+                <tr class="aviso-tipo">
+                  <td colspan="3" class="vieja">No se renueva desde el {{ fila.sinRenovarDesde }}</td>
+                </tr>
+              }
             }
-            <time class="fecha">{{ tipo.fecha }}</time>
-          }
-          @if (tipo.sinRenovarDesde) {
-            <span class="vieja">No se renueva desde el {{ tipo.sinRenovarDesde }}</span>
-          }
-        </li>
+          </tbody>
+        </table>
+        @if (fecha(); as f) {
+          <p class="fecha">Cotización del {{ f }}</p>
+        }
       }
-    </ul>
+    </div>
   } @else {
     <p class="sin-datos">Sin datos de cotización por ahora.</p>
   }
