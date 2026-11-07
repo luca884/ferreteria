@@ -2,16 +2,22 @@ package com.ferreteria.catalogo.service;
 
 import com.ferreteria.catalogo.dto.RubroRequest;
 import com.ferreteria.catalogo.dto.RubroResponse;
+import com.ferreteria.catalogo.dto.VistaPreviaMargenRubroResponse;
 import com.ferreteria.catalogo.model.Rubro;
-import com.ferreteria.catalogo.repository.ArticuloRepository;
 import com.ferreteria.catalogo.repository.RubroRepository;
 import com.ferreteria.common.exception.ConflictException;
+import com.ferreteria.common.exception.DatosInvalidosException;
+import com.ferreteria.common.exception.ErroresDeValidacion;
 import com.ferreteria.common.exception.ResourceNotFoundException;
 import com.ferreteria.tenant.TenantContext;
+import jakarta.validation.ConstraintViolation;
+import jakarta.validation.Validator;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.util.List;
+import java.util.Set;
 
 @Service
 public class RubroService {
@@ -20,15 +26,15 @@ public class RubroService {
 
     private final RecalculoPreciosService recalculoPreciosService;
 
-    private final ArticuloRepository articuloRepository;
+    private final Validator validator;
 
     public RubroService(
             RubroRepository rubroRepository,
             RecalculoPreciosService recalculoPreciosService,
-            ArticuloRepository articuloRepository) {
+            Validator validator) {
         this.rubroRepository = rubroRepository;
         this.recalculoPreciosService = recalculoPreciosService;
-        this.articuloRepository = articuloRepository;
+        this.validator = validator;
     }
 
     @Transactional(readOnly = true)
@@ -74,13 +80,34 @@ public class RubroService {
     }
 
     /**
-     * Cuantos articulos activos del rubro no tienen margen propio: los que se recalculan si cambia su margen.
-     * Un rubro ajeno da 404.
+     * Antes de cambiar el margen del rubro: los articulos que cambiarian de precio con {@code margenPorcentaje}, con el
+     * de hoy y el nuevo, hasta el tope de detalle del masivo, y cuantos son en total. No guarda nada. Un rubro ajeno da
+     * 404 antes que el 400 de un margen fuera de rango; el margen se valida con las mismas reglas que al guardar el rubro.
      */
     @Transactional(readOnly = true)
-    public long contarArticulosQueHeredan(Long id) {
-        buscar(id);
-        return articuloRepository.contarHeredanMargenDeRubroScoped(id);
+    public VistaPreviaMargenRubroResponse vistaPreviaMargen(Long id, BigDecimal margenPorcentaje) {
+        Rubro rubro = buscar(id);
+        validarMargen(margenPorcentaje);
+        return VistaPreviaMargenRubroResponse.de(
+                recalculoPreciosService.preciosQueCambianPorMargenDeRubro(rubro, margenPorcentaje),
+                ActualizacionMasivaService.MAXIMO_DETALLE);
+    }
+
+    /** Las restricciones de {@code margenPorcentaje} en {@link RubroRequest}, con el formato de la validacion del cuerpo. */
+    private void validarMargen(BigDecimal margenPorcentaje) {
+        Set<ConstraintViolation<RubroRequest>> violaciones =
+                validator.validateValue(RubroRequest.class, "margenPorcentaje", margenPorcentaje);
+        if (violaciones.isEmpty()) {
+            return;
+        }
+        ErroresDeValidacion errores = new ErroresDeValidacion();
+        for (ConstraintViolation<RubroRequest> violacion : violaciones) {
+            errores.agregar(
+                    violacion.getPropertyPath().toString(),
+                    violacion.getConstraintDescriptor().getAnnotation().annotationType().getSimpleName(),
+                    violacion.getMessage());
+        }
+        throw new DatosInvalidosException(errores.mensajes());
     }
 
     private Rubro buscar(Long id) {

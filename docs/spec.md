@@ -88,7 +88,7 @@ Son 12 casos de uso (CU-01 a CU-12), agrupados en cinco módulos: Configuración
 **CU-05 Actualizar precios masivamente** (Dueño)
 
 1. Filtra por proveedor, rubro o búsqueda.
-2. Aplica un porcentaje de aumento al costo, cambia el margen o cambia el precio final en % o en $ (este último deja los artículos con precio manual, CU-14).
+2. Aplica un porcentaje de aumento al costo, cambia el margen o cambia el precio final en % o en $ (este último deja los artículos con precio manual, CU-14), o **cambia el rubro**: pasa los artículos del filtro a otro rubro de la ferretería. Con el rubro nuevo cambia el margen heredado y por eso el precio; los que tienen margen propio o precio manual cambian de rubro sin cambiar de precio («Solo cambia el rubro»), y los que ya están en ese rubro quedan sin cambio. El historial de precios registra solo los artículos cuyo precio cambió. GDS cambia el rubro de a uno (G11); este cambio en bloque es propio.
 3. Ve la vista previa y confirma.
 
 ### Venta
@@ -342,7 +342,7 @@ Estas reglas se codifican en el dominio y se cubren con tests unitarios antes qu
 ### Precios
 
 - El costo del proveedor se guarda **sin IVA**. Precio neto = costo × (1 + margen). Precio final = neto × (1 + alícuota de IVA).
-- El margen se define por artículo; si no tiene, hereda el del rubro; si no, el margen por defecto de la ferretería.
+- El margen se define por artículo; si no tiene, hereda el del rubro; si no, el margen por defecto de la ferretería. Al cambiar el margen de un rubro, antes de guardar la pantalla de Rubros muestra la lista de los artículos activos que heredan ese margen y cambian de precio (código, descripción, precio de hoy y precio nuevo; hasta 1.000, con el total) y pide confirmación; los de precio manual no cuentan. Si ninguno cambia, guarda sin preguntar.
 - Sobre el precio final calculado se suman los ajustes del artículo, todos sobre el mismo precio calculado (CU-14). Un artículo con precio manual conserva el precio que escribió el Dueño y no usa la fórmula (CU-14).
 - Redondeo: el precio final se redondea hacia arriba a un múltiplo que elige el Dueño (CU-03, «Margen y redondeo»), como GDS. Con múltiplo 0 no se redondea y el precio queda con centavos (escala 2, hacia arriba al centavo). Toda ferretería arranca en 0 (H11, migración V9); desde 2026-10-23 el Dueño lo puede cambiar.
 - Todo cambio de costo o precio guarda historial: fecha, valor anterior, valor nuevo y origen (importación, masivo, manual, compra).

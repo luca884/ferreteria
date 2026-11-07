@@ -20,7 +20,8 @@ import org.junit.jupiter.api.Test;
 /**
  * Aislamiento de la actualizacion masiva con {@code importacionId} y {@code COSTO_MONTO} (regla 7, R-220, T-227):
  * una importacion de otra ferreteria o inexistente da 404, el filtro vacio y el filtro por importacion no tocan los
- * articulos de la otra ferreteria, el Vendedor recibe 403 y un {@code ferreteriaId} del cuerpo se ignora.
+ * articulos de la otra ferreteria, el Vendedor recibe 403 y un {@code ferreteriaId} del cuerpo se ignora. Con
+ * {@code CAMBIAR_RUBRO}, un rubro destino de otra ferreteria o inexistente da 404 y no cambia nada.
  * CUIT 30-78407001-1 (A) y 30-78407002-2 (B).
  */
 class ActualizacionMasivaAislamientoIntegrationTest extends AjustesTestBase {
@@ -142,6 +143,33 @@ class ActualizacionMasivaAislamientoIntegrationTest extends AjustesTestBase {
                 .andExpect(status().isNotFound()).andExpect(jsonPath("$.message", is(NO_ENCONTRADA)));
         postJson(APLICAR, duenoA, pedido("COSTO_PORCENTAJE", "10", 999_999L).put("huella", "abc").toString())
                 .andExpect(status().isNotFound()).andExpect(jsonPath("$.message", is(NO_ENCONTRADA)));
+    }
+
+    // ---- rubro destino de CAMBIAR_RUBRO (CU-05, #14) ----
+
+    @Test
+    @DisplayName("cambiar el rubro a un rubro de B: 404 del rubro en la vista previa y en aplicar, y nada cambia")
+    void rubroDestinoAjenoDa404() throws Exception {
+        Long rubroB = rubro(b, "Rubro de B", "60");
+        Long rubroA = rubro(a, "Rubro de A", "40");
+        List<Map<String, Object>> antesA = filasDe(deA);
+        List<Map<String, Object>> antesB = filasDe(deB);
+
+        for (Long destino : new Long[] {rubroB, 999_999L}) {
+            ObjectNode pedido = objectMapper.createObjectNode().put("modo", "CAMBIAR_RUBRO").put("rubroDestinoId", destino);
+            postJson(VISTA_PREVIA, duenoA, pedido.toString()).andExpect(status().isNotFound())
+                    .andExpect(jsonPath("$.message", is("Rubro no encontrado")));
+            postJson(APLICAR, duenoA, pedido.deepCopy().put("huella", "abc").toString()).andExpect(status().isNotFound())
+                    .andExpect(jsonPath("$.message", is("Rubro no encontrado")));
+        }
+
+        assertThat(filasDe(deA)).isEqualTo(antesA);
+        bIntactoSegun(antesB);
+        assertThat(historialDeLaFerreteria(a)).isZero();
+        // Con un rubro propio la misma vista previa anda: el 404 es por el rubro ajeno, no por el modo.
+        postJson(VISTA_PREVIA, duenoA, objectMapper.createObjectNode().put("modo", "CAMBIAR_RUBRO")
+                .put("rubroDestinoId", rubroA).toString())
+                .andExpect(status().isOk()).andExpect(jsonPath("$.conteos.total", is(3)));
     }
 
     // ---- alcance ----

@@ -11,7 +11,12 @@ public enum ModoMasivo {
     /** Cambia el precio final en un porcentaje; el articulo queda con precio manual (CU-14). No toca el costo. */
     PRECIO_PORCENTAJE,
     /** Suma un monto en pesos al precio final; el articulo queda con precio manual (CU-14). No toca el costo. */
-    PRECIO_MONTO;
+    PRECIO_MONTO,
+    /**
+     * Pasa los articulos a otro rubro (que ya existe) y recalcula el precio con el margen de ese rubro. No lleva valor:
+     * lleva el rubro destino. Los de margen propio o precio manual cambian de rubro pero no de precio.
+     */
+    CAMBIAR_RUBRO;
 
     /** Los modos que cambian el precio final y lo dejan manual. */
     public boolean esDePrecioFinal() {

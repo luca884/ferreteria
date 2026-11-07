@@ -42,10 +42,28 @@ class OperacionMasivaTest {
     }
 
     @Test
-    @DisplayName("ModoMasivo tiene exactamente COSTO_PORCENTAJE, COSTO_MONTO y MARGEN")
+    @DisplayName("ModoMasivo tiene exactamente los cinco modos de valor y CAMBIAR_RUBRO")
     void modos() {
         assertThat(Arrays.stream(ModoMasivo.values()).map(Enum::name))
-            .containsExactly("COSTO_PORCENTAJE", "COSTO_MONTO", "MARGEN", "PRECIO_PORCENTAJE", "PRECIO_MONTO");
+            .containsExactly("COSTO_PORCENTAJE", "COSTO_MONTO", "MARGEN", "PRECIO_PORCENTAJE", "PRECIO_MONTO",
+                "CAMBIAR_RUBRO");
+    }
+
+    @Test
+    @DisplayName("CAMBIAR_RUBRO lleva el rubro destino y no lleva valor; los otros modos no llevan destino")
+    void cambiarRubro() {
+        OperacionMasiva operacion = OperacionMasiva.cambiarRubro(5L);
+
+        assertThat(operacion.modo()).isEqualTo(ModoMasivo.CAMBIAR_RUBRO);
+        assertThat(operacion.rubroDestinoId()).isEqualTo(5L);
+        assertThat(operacion.valor()).isNull();
+        assertThat(operacion).isEqualTo(OperacionMasiva.cambiarRubro(5L)).isNotEqualTo(OperacionMasiva.cambiarRubro(6L));
+        assertThat(new OperacionMasiva(ModoMasivo.MARGEN, bd("30")).rubroDestinoId()).isNull();
+        assertThatThrownBy(() -> OperacionMasiva.cambiarRubro(null)).isInstanceOf(NullPointerException.class);
+        assertThatThrownBy(() -> new OperacionMasiva(ModoMasivo.CAMBIAR_RUBRO, bd("10"), 5L))
+            .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> new OperacionMasiva(ModoMasivo.MARGEN, bd("10"), 5L))
+            .isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test
@@ -53,7 +71,7 @@ class OperacionMasivaTest {
     void recordsDelPlan() {
         ConteosMasivos conteos = new ConteosMasivos(5, 2, 0, 2, 1, 0, 0, 3);
         CambioMasivo cambio = new CambioMasivo(1L, "INT-1", "Articulo 1", bd("100.00"), bd("110.00"),
-            bd("30.00"), bd("30.00"), bd("160.00"), bd("180.00"), true, null, Moneda.ARS, bd("21.00"));
+            bd("30.00"), bd("30.00"), bd("160.00"), bd("180.00"), true, null, Moneda.ARS, bd("21.00"), 2L, 3L);
         ErrorMasivo error = new ErrorMasivo(4L, "INT-4", "Articulo 4", "El costo nuevo da 0. Revisá el porcentaje.");
         PlanMasivo plan = new PlanMasivo(conteos, java.util.List.of(cambio), java.util.List.of(error), "abc", 5, 0, null);
 
@@ -67,6 +85,8 @@ class OperacionMasivaTest {
         assertThat(plan.conteos().modificados()).isEqualTo(3);
         assertThat(plan.cambios().get(0).articuloId()).isEqualTo(1L);
         assertThat(plan.cambios().get(0).advertencia()).isNull();
+        assertThat(plan.cambios().get(0).rubroAnteriorId()).isEqualTo(2L);
+        assertThat(plan.cambios().get(0).rubroNuevoId()).isEqualTo(3L);
         assertThat(plan.errores().get(0).motivo()).isEqualTo("El costo nuevo da 0. Revisá el porcentaje.");
         assertThat(plan.huella()).isEqualTo("abc");
     }

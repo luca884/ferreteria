@@ -83,6 +83,36 @@ public class RecalculoPreciosService {
         return avisos;
     }
 
+    /** Un articulo que cambiaria de precio con el margen nuevo del rubro: el precio de hoy y el nuevo. */
+    public record PrecioQueCambia(Long articuloId, String codigo, String descripcion, BigDecimal precioActual,
+                                  BigDecimal precioNuevo) {
+    }
+
+    /**
+     * Vista previa de {@link #porCambioDeMargenDeRubro} con {@code margenNuevo} (que todavia no se guardo): los mismos
+     * herederos, el mismo contexto de precio y el mismo 409 si hay alguno en USD sin cotizacion, pero calculado sin tocar
+     * el rubro ni los articulos. Devuelve solo los que cambiarian de precio, por descripcion: un precio manual o uno que
+     * el redondeo deja igual no cambia y no viene; el que sus ajustes dejarian en 0 o menos tampoco (conserva el suyo).
+     */
+    @Transactional(readOnly = true)
+    public List<PrecioQueCambia> preciosQueCambianPorMargenDeRubro(Rubro rubro, BigDecimal margenNuevo) {
+        ConfiguracionPrecios configuracion = configuracionPreciosService.actual();
+        List<Articulo> herederos = articuloRepository.heredanMargenDeRubroPorDescripcionScoped(rubro.getId());
+        ContextoPrecio ctx = new ContextoPrecio(
+                margenNuevo, configuracion.margenDefectoPorcentaje(), configuracion.redondeoMultiplo(),
+                dolarVigenteSiHayArticulosEnDolares(herederos));
+
+        List<PrecioQueCambia> cambian = new ArrayList<>();
+        for (Articulo articulo : herederos) {
+            BigDecimal precioNuevo = articulo.precioConCostoAutomatico(articulo.getCosto(), ctx).precio();
+            if (precioNuevo.compareTo(articulo.getPrecioFinal()) != 0) {
+                cambian.add(new PrecioQueCambia(articulo.getId(), articulo.getCodigoInterno(), articulo.getDescripcion(),
+                        articulo.getPrecioFinal(), precioNuevo));
+            }
+        }
+        return cambian;
+    }
+
     /**
      * Cuantos articulos cambiaron de precio en un recalculo por cotizacion y los avisos de los que se saltearon porque
      * sus ajustes sobre el precio final los dejarian en 0 o menos (S7).

@@ -162,7 +162,8 @@ public interface ArticuloRepository extends TenantScopedRepository<Articulo, Lon
     List<Articulo> findAllByFerreteriaIdAndRubroIdAndMargenPorcentajeIsNullAndActivoTrue(
             Long ferreteriaId, Long rubroId);
 
-    long countByFerreteriaIdAndRubroIdAndMargenPorcentajeIsNullAndActivoTrue(Long ferreteriaId, Long rubroId);
+    List<Articulo> findAllByFerreteriaIdAndRubroIdAndMargenPorcentajeIsNullAndActivoTrueOrderByDescripcionAscIdAsc(
+            Long ferreteriaId, Long rubroId);
 
     List<Articulo> findAllByFerreteriaIdAndRubroIdIsNullAndMargenPorcentajeIsNullAndActivoTrueAndPrecioManualFalseOrderById(
             Long ferreteriaId);
@@ -392,17 +393,21 @@ public interface ArticuloRepository extends TenantScopedRepository<Articulo, Lon
     }
 
     /**
+     * Los mismos herederos que {@link #heredanMargenDeRubroScoped} (tambien los de precio manual), por descripcion y
+     * despues por alta: la vista previa del margen nuevo los lista en ese orden. La coleccion de la base ordena sin
+     * distinguir mayusculas ni tildes.
+     */
+    default List<Articulo> heredanMargenDeRubroPorDescripcionScoped(Long rubroId) {
+        return findAllByFerreteriaIdAndRubroIdAndMargenPorcentajeIsNullAndActivoTrueOrderByDescripcionAscIdAsc(
+                TenantContext.requireFerreteriaId(), rubroId);
+    }
+
+    /**
      * Los articulos en dolares de la ferreteria, activos e inactivos: el recalculo por cotizacion los incluye a todos
      * para que al reactivarse no se vendan a un precio viejo (la cascada de rubro, en cambio, solo toca los activos).
      */
     default List<Articulo> enDolaresScoped() {
         return enDolares(TenantContext.requireFerreteriaId());
-    }
-
-    /** Cuantos articulos heredan el margen del rubro, sin cargarlos (aviso antes de cambiar el margen). */
-    default long contarHeredanMargenDeRubroScoped(Long rubroId) {
-        return countByFerreteriaIdAndRubroIdAndMargenPorcentajeIsNullAndActivoTrue(
-                TenantContext.requireFerreteriaId(), rubroId);
     }
 
     /**

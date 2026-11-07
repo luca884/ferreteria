@@ -32,6 +32,7 @@ import java.lang.reflect.Field;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
+import org.assertj.core.api.recursive.comparison.RecursiveComparisonConfiguration;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -189,6 +190,53 @@ class RecalculoPreciosServiceTest {
         service.porCambioDeMargenDeRubro(rubro("50.00"), USUARIO);
 
         verify(historialPrecioRepository, never()).saveAll(anyList());
+    }
+
+    // ---- vista previa del margen nuevo del rubro (mejoras-rubros, S1) ----
+
+    /** 1640 y 1640.00 son el mismo precio: los importes se comparan por valor, no por escala. */
+    private static final RecursiveComparisonConfiguration IMPORTES_POR_VALOR = RecursiveComparisonConfiguration.builder()
+            .withComparatorForType(BigDecimal::compareTo, BigDecimal.class)
+            .build();
+
+    @Test
+    @DisplayName("vista previa del margen: con el margen nuevo y sin guardar nada, solo los que cambian de precio (ni el manual ni el que el redondeo deja igual)")
+    void vistaPreviaDelMargenTraeSoloLosQueCambian() throws Exception {
+        configuracionPorDefecto();
+        // Con 35 %: costo 1000 vale 1640 y costo 100 vale 170. Con 36 %: 1650 y 170 (el redondeo lo deja igual).
+        Articulo cambia = heredero(13L, "1000.00");
+        Articulo igual = heredero(12L, "100.00");
+        Articulo manual = heredero(14L, "1000.00");
+        manual.fijarPrecioManual(bd("1640"));
+        Articulo otroQueCambia = heredero(11L, "2000.00");
+        when(articuloRepository.heredanMargenDeRubroPorDescripcionScoped(RUBRO_ID))
+                .thenReturn(List.of(cambia, igual, manual, otroQueCambia));
+        Rubro rubro = rubro("35.00");
+
+        List<RecalculoPreciosService.PrecioQueCambia> cambian =
+                service.preciosQueCambianPorMargenDeRubro(rubro, bd("36.00"));
+
+        // En el orden del repositorio (por descripcion): 2000 x 1,36 x 1,21 = 3291,20 -> 3300 (con 35 %, 3270).
+        assertThat(cambian).usingRecursiveFieldByFieldElementComparator(IMPORTES_POR_VALOR).containsExactly(
+                new RecalculoPreciosService.PrecioQueCambia(13L, "COD-13", "Articulo 13", bd("1640.00"), bd("1650.00")),
+                new RecalculoPreciosService.PrecioQueCambia(11L, "COD-11", "Articulo 11", bd("3270.00"), bd("3300.00")));
+        assertThat(rubro.getMargenPorcentaje()).isEqualByComparingTo("35");
+        assertThat(cambia.getPrecioFinal()).isEqualByComparingTo("1640");
+        assertThat(manual.getPrecioFinal()).isEqualByComparingTo("1640");
+        verifyNoInteractions(historialPrecioRepository);
+    }
+
+    @Test
+    @DisplayName("vista previa del margen: con un heredero USD y ninguna cotizacion da el mismo 409 que el guardado")
+    void vistaPreviaDelMargenSinCotizacionDa409() throws Exception {
+        configuracionPorDefecto();
+        when(dolarDePrecios.vigente()).thenReturn(Optional.empty());
+        when(articuloRepository.heredanMargenDeRubroPorDescripcionScoped(RUBRO_ID))
+                .thenReturn(List.of(heredero(11L, "100.00"), usdHeredero(61L)));
+
+        assertThatThrownBy(() -> service.preciosQueCambianPorMargenDeRubro(rubro("35.00"), bd("50.00")))
+                .isInstanceOf(ConflictException.class)
+                .hasMessage("Todavía no hay cotización del dólar. Probá en unos minutos");
     }
 
     // ---- porCotizacion (T-026) ----

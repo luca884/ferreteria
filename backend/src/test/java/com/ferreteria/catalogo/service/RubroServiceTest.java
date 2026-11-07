@@ -12,22 +12,28 @@ import static org.mockito.Mockito.when;
 
 import com.ferreteria.catalogo.dto.RubroRequest;
 import com.ferreteria.catalogo.dto.RubroResponse;
+import com.ferreteria.catalogo.dto.VistaPreviaMargenRubroResponse;
 import com.ferreteria.catalogo.model.Rubro;
-import com.ferreteria.catalogo.repository.ArticuloRepository;
 import com.ferreteria.catalogo.repository.RubroRepository;
+import com.ferreteria.catalogo.service.RecalculoPreciosService.PrecioQueCambia;
 import com.ferreteria.common.exception.ConflictException;
 import com.ferreteria.common.exception.ResourceNotFoundException;
 import com.ferreteria.tenant.TenantContext;
+import jakarta.validation.Validation;
+import jakarta.validation.ValidatorFactory;
 import java.lang.reflect.Field;
 import java.math.BigDecimal;
+import java.util.List;
 import java.util.Optional;
+import java.util.stream.LongStream;
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -44,15 +50,24 @@ class RubroServiceTest {
     @Mock
     RecalculoPreciosService recalculoPreciosService;
 
-    @Mock
-    ArticuloRepository articuloRepository;
+    private static ValidatorFactory fabricaDeValidadores;
 
-    @InjectMocks
     RubroService service;
+
+    @BeforeAll
+    static void abrirValidador() {
+        fabricaDeValidadores = Validation.buildDefaultValidatorFactory();
+    }
+
+    @AfterAll
+    static void cerrarValidador() {
+        fabricaDeValidadores.close();
+    }
 
     @BeforeEach
     void tenant() {
         TenantContext.setCurrentFerreteriaId(FERRETERIA);
+        service = new RubroService(rubroRepository, recalculoPreciosService, fabricaDeValidadores.getValidator());
     }
 
     @AfterEach
@@ -151,5 +166,38 @@ class RubroServiceTest {
 
         verifyNoInteractions(recalculoPreciosService);
         verify(rubroRepository, never()).save(any());
+    }
+
+    // ---- vista previa del margen nuevo (mejoras-rubros, S1) ----
+
+    private static List<PrecioQueCambia> preciosQueCambian(long cuantos) {
+        return LongStream.rangeClosed(1, cuantos)
+                .mapToObj(i -> new PrecioQueCambia(i, "COD-" + i, "Articulo " + i, bd("170.00"), bd("190.00")))
+                .toList();
+    }
+
+    @Test
+    @DisplayName("vista previa del margen: cantidad es el total y la lista llega hasta el tope del masivo (1.000); pasado el tope, se recorta y lo avisa")
+    void vistaPreviaDelMargenConElTopeDelMasivo() throws Exception {
+        Rubro rubro = rubroExistente("Buloneria", "35.00");
+        int tope = ActualizacionMasivaService.MAXIMO_DETALLE;
+        when(recalculoPreciosService.preciosQueCambianPorMargenDeRubro(rubro, bd("50.00")))
+                .thenReturn(preciosQueCambian(tope), preciosQueCambian(tope + 1L));
+
+        VistaPreviaMargenRubroResponse justo = service.vistaPreviaMargen(RUBRO_ID, bd("50.00"));
+        VistaPreviaMargenRubroResponse pasado = service.vistaPreviaMargen(RUBRO_ID, bd("50.00"));
+
+        assertThat(justo.cantidad()).isEqualTo(1_000);
+        assertThat(justo.articulos()).hasSize(1_000);
+        assertThat(justo.recortado()).isFalse();
+        assertThat(pasado.cantidad()).isEqualTo(1_001);
+        assertThat(pasado.articulos()).hasSize(1_000);
+        assertThat(pasado.articulos().get(0))
+                .isEqualTo(new VistaPreviaMargenRubroResponse.Fila(1L, "COD-1", "Articulo 1", bd("170.00"), bd("190.00")));
+        assertThat(pasado.articulos().get(999).id()).isEqualTo(1_000L);
+        assertThat(pasado.recortado()).isTrue();
+        // Es una vista previa: el rubro sigue con su margen y no corre la cascada.
+        assertThat(rubro.getMargenPorcentaje()).isEqualByComparingTo("35");
+        verify(recalculoPreciosService, never()).porCambioDeMargenDeRubro(any(), any());
     }
 }

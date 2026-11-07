@@ -69,7 +69,7 @@ class VendedorSinCostoIntegrationTest extends IntegrationTestBase {
     }
 
     @Test
-    @DisplayName("rubros: el Vendedor ve el nombre sin el margen; cuantos heredan el margen es solo del Dueno")
+    @DisplayName("rubros: el Vendedor ve el nombre sin el margen; la vista previa del margen nuevo es solo del Dueno")
     void rubros() throws Exception {
         JsonNode rubrosVendedor = getJson("/api/rubros", vendedorA);
         long rubroId = rubrosVendedor.get(0).get("id").asLong();
@@ -77,8 +77,10 @@ class VendedorSinCostoIntegrationTest extends IntegrationTestBase {
         sinClaves(rubrosVendedor.get(0), List.of("margenPorcentaje"));
         sinClaves(getJson("/api/rubros/" + rubroId, vendedorA), List.of("margenPorcentaje"));
         conClaves(getJson("/api/rubros/" + rubroId, duenoA), List.of("id", "nombre", "margenPorcentaje"));
-        getResult("/api/rubros/" + rubroId + "/articulos-que-heredan", vendedorA).andExpect(status().isForbidden());
-        getResult("/api/rubros/" + rubroId + "/articulos-que-heredan", duenoA).andExpect(status().isOk());
+        getResult("/api/rubros/" + rubroId + "/vista-previa-margen?margenPorcentaje=36", vendedorA)
+                .andExpect(status().isForbidden());
+        getResult("/api/rubros/" + rubroId + "/vista-previa-margen?margenPorcentaje=36", duenoA)
+                .andExpect(status().isOk());
     }
 
     @Test

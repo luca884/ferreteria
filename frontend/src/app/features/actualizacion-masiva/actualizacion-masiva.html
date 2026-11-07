@@ -71,30 +71,45 @@
           <option ngValue="COSTO_MONTO">Sumar o restar un monto al costo</option>
           <option ngValue="PRECIO_PORCENTAJE">Cambiar el precio final en %</option>
           <option ngValue="PRECIO_MONTO">Sumar o restar un monto al precio final</option>
+          <option ngValue="CAMBIAR_RUBRO">Cambiar el rubro</option>
         </select>
       </div>
-      <div class="campo">
-        <label for="valor">{{ etiquetaDelValor() }}</label>
-        <!-- Solo el monto del precio final tiene moneda fija (pesos); el del costo va en la de cada artículo. -->
-        <app-campo-moneda [moneda]="monedaDelValor()">
-          <input
-            id="valor"
-            name="valor"
-            appImporte
-            negativos
-            formControlName="valor"
-            [attr.aria-invalid]="errorDelValor() ? 'true' : null"
-            [attr.aria-describedby]="describirValor()"
-            (keydown.enter)="alEnter($event)"
-          />
-        </app-campo-moneda>
-        @if (pistaDelValor(); as pista) {
-          <span id="valor-pista" class="pista">{{ pista }}</span>
-        }
-        @if (errorDelValor(); as mensaje) {
-          <span id="valor-error" class="campo-error">{{ mensaje }}</span>
-        }
-      </div>
+      @if (eligeRubroDestino()) {
+        <!-- Cambiar el rubro no lleva valor: en su lugar se elige el rubro al que pasan los artículos. -->
+        <div class="campo">
+          <label for="rubroDestino">Rubro destino</label>
+          <select id="rubroDestino" formControlName="rubroDestinoId" aria-describedby="rubro-destino-pista">
+            <option [ngValue]="null">Elegí el rubro</option>
+            @for (rubro of rubros(); track rubro.id) {
+              <option [ngValue]="rubro.id">{{ rubro.nombre }}</option>
+            }
+          </select>
+          <span id="rubro-destino-pista" class="pista">{{ pistaRubroDestino }}</span>
+        </div>
+      } @else {
+        <div class="campo">
+          <label for="valor">{{ etiquetaDelValor() }}</label>
+          <!-- Solo el monto del precio final tiene moneda fija (pesos); el del costo va en la de cada artículo. -->
+          <app-campo-moneda [moneda]="monedaDelValor()">
+            <input
+              id="valor"
+              name="valor"
+              appImporte
+              negativos
+              formControlName="valor"
+              [attr.aria-invalid]="errorDelValor() ? 'true' : null"
+              [attr.aria-describedby]="describirValor()"
+              (keydown.enter)="alEnter($event)"
+            />
+          </app-campo-moneda>
+          @if (pistaDelValor(); as pista) {
+            <span id="valor-pista" class="pista">{{ pista }}</span>
+          }
+          @if (errorDelValor(); as mensaje) {
+            <span id="valor-error" class="campo-error">{{ mensaje }}</span>
+          }
+        </div>
+      }
     </div>
     @if (cambiaElPrecioFinal()) {
       <p class="aviso aviso-precio-manual">
@@ -189,6 +204,9 @@
                 <tr>
                   <th>Código</th>
                   <th>Descripción</th>
+                  @if (vistaPreviaDeRubro()) {
+                    <th>Rubro</th>
+                  }
                   <th class="num">Costo (sin IVA)</th>
                   <th class="num">Margen (%)</th>
                   <th class="num">IVA (%)</th>
@@ -205,6 +223,9 @@
                         <p class="advertencia">{{ c.advertencia }}</p>
                       }
                     </td>
+                    @if (vistaPreviaDeRubro()) {
+                      <td>{{ nombreDeRubro(c.rubroAnteriorId) }}&nbsp;→ {{ nombreDeRubro(c.rubroNuevoId) }}</td>
+                    }
                     <td class="num">
                       @if (c.costoAnterior === c.costoNuevo) {
                         {{ costo(c.costoNuevo, c.moneda) }}
@@ -225,6 +246,9 @@
                     <td class="num">
                       @if (c.precioAnterior === c.precioNuevo) {
                         {{ c.precioNuevo | monto }}
+                        @if (vistaPreviaDeRubro()) {
+                          <p class="solo-rubro">Solo cambia el rubro</p>
+                        }
                       } @else {
                         {{ c.precioAnterior | monto }}&nbsp;→ {{ c.precioNuevo | monto }}
                       }
@@ -279,6 +303,9 @@
             <p id="detalle-confirmacion">
               @if (alcance === 'todo') {
                 No elegiste ningún filtro: el cambio alcanza a todo el catálogo.
+              }
+              @if (destinoVigente(); as destino) {
+                Los artículos pasan al rubro {{ destino }}.
               }
               Revisá la vista previa antes de seguir. Esta acción no se puede deshacer.
             </p>

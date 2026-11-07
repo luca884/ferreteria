@@ -3,18 +3,21 @@ import { Moneda } from '../articulos/articulo.models';
 /**
  * Qué hace la operación: `COSTO_PORCENTAJE` sube o baja el costo en %; `COSTO_MONTO` le suma o resta un monto
  * (en la moneda de cada artículo); `MARGEN` fija el margen propio; `PRECIO_PORCENTAJE` y `PRECIO_MONTO` cambian
- * el precio final en % o en pesos y dejan a los artículos con precio manual (CU-14).
+ * el precio final en % o en pesos y dejan a los artículos con precio manual (CU-14); `CAMBIAR_RUBRO` pasa los
+ * artículos a otro rubro y el precio se recalcula con el margen de ese rubro.
  */
 export type ModoMasivo =
   | 'COSTO_PORCENTAJE'
   | 'COSTO_MONTO'
   | 'MARGEN'
   | 'PRECIO_PORCENTAJE'
-  | 'PRECIO_MONTO';
+  | 'PRECIO_MONTO'
+  | 'CAMBIAR_RUBRO';
 
 /**
  * Filtro (todo opcional: vacío alcanza a todo el catálogo activo), modo y valor. El texto en blanco
- * viaja como null. El valor es un número (en pantalla se escribe con coma o con punto).
+ * viaja como null. El valor es un número (en pantalla se escribe con coma o con punto). Con `CAMBIAR_RUBRO`
+ * no viaja el valor y viaja `rubroDestinoId`; con los otros modos, al revés.
  */
 export interface PedidoMasivo {
   proveedorId: number | null;
@@ -24,7 +27,9 @@ export interface PedidoMasivo {
   q: string | null;
   incluirInactivos: boolean;
   modo: ModoMasivo;
-  valor: number;
+  valor?: number;
+  /** El rubro al que pasan los artículos, solo con `CAMBIAR_RUBRO`. */
+  rubroDestinoId?: number;
 }
 
 /** Lo mismo que la vista previa más la huella que ésta devolvió: si algo cambió, el backend responde 409. */
@@ -67,6 +72,9 @@ export interface CambioMasivo {
   moneda?: Moneda;
   /** El IVA del artículo (21 es 21 %): el costo va sin IVA y el precio de venta lo incluye. */
   ivaPorcentaje: number;
+  /** El rubro de hoy (null: sin rubro) y el de después: el destino con `CAMBIAR_RUBRO`, el mismo con los otros modos. */
+  rubroAnteriorId?: number | null;
+  rubroNuevoId?: number | null;
 }
 
 /** Un artículo del alcance que no se puede actualizar. */

@@ -705,6 +705,43 @@ class ArticuloTest {
         assertThat(articulo.isActivo()).isFalse();
     }
 
+    // --- actualizacion masiva (CU-05): cambiarRubro ---
+
+    @Test
+    @DisplayName("cambiarRubro: el heredado pasa al rubro y toma su margen (160 -> 200 con el 60 %), costo igual")
+    void cambiarRubroRecalculaConElMargenDelDestino() {
+        Articulo articulo = articuloCon("100", null);
+
+        Optional<CambioPrecio> cambio = articulo.cambiarRubro(77L, ctx("60"));
+
+        assertThat(articulo.getRubroId()).isEqualTo(77L);
+        assertThat(articulo.getMargenPorcentaje()).isNull();
+        assertThat(articulo.getCosto()).isEqualByComparingTo("100");
+        assertThat(articulo.getPrecioFinal()).isEqualTo(bd("200.00"));
+        assertThat(cambio).isPresent();
+        assertThat(cambio.get().costoAnterior()).isEqualByComparingTo("100");
+        assertThat(cambio.get().costoNuevo()).isEqualByComparingTo("100");
+        assertThat(cambio.get().precioAnterior()).isEqualByComparingTo("160");
+        assertThat(cambio.get().precioNuevo()).isEqualByComparingTo("200");
+    }
+
+    @Test
+    @DisplayName("cambiarRubro: con margen propio o precio manual cambia el rubro y no el precio, y devuelve vacio")
+    void cambiarRubroSinCambioDePrecio() {
+        Articulo propio = articuloCon("100", "35");
+        Articulo manual = articuloCon("100", null);
+        manual.fijarPrecioManual(bd("500"));
+
+        assertThat(propio.cambiarRubro(77L, ctx("60"))).isEmpty();
+        assertThat(manual.cambiarRubro(77L, ctx("60"))).isEmpty();
+
+        assertThat(propio.getRubroId()).isEqualTo(77L);
+        assertThat(propio.getPrecioFinal()).isEqualTo(bd("170.00"));
+        assertThat(manual.getRubroId()).isEqualTo(77L);
+        assertThat(manual.getPrecioFinal()).isEqualByComparingTo("500");
+        assertThat(manual.isPrecioManual()).isTrue();
+    }
+
     // --- moneda ---
 
     /** Contexto con margen por defecto 30, multiplo 10 y el dolar indicado. */

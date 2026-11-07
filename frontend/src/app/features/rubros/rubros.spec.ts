@@ -4,7 +4,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { Subject, of, throwError } from 'rxjs';
 import { vi } from 'vitest';
 import { AuthService } from '../../core/auth/auth.service';
-import { Rubro } from './rubro.models';
+import { ArticuloQueCambia, Rubro, VistaPreviaMargen } from './rubro.models';
 import { Rubros } from './rubros';
 import { RubrosService } from './rubros.service';
 
@@ -17,18 +17,33 @@ describe('Rubros', () => {
     listar: ReturnType<typeof vi.fn>;
     crear: ReturnType<typeof vi.fn>;
     actualizar: ReturnType<typeof vi.fn>;
-    articulosQueHeredan: ReturnType<typeof vi.fn>;
+    vistaPreviaMargen: ReturnType<typeof vi.fn>;
   };
 
   const errorHttp = (status: number, message: string) =>
     new HttpErrorResponse({ status, error: { status, message } });
+
+  const tornillo: ArticuloQueCambia = {
+    id: 7,
+    codigo: 'TOR-1',
+    descripcion: 'Tornillo hexagonal',
+    precioActual: 1640,
+    precioNuevo: 1650,
+  };
+
+  /** La vista previa del margen: `cantidad` artículos cambian de precio; la lista trae los que se pasen. */
+  const vista = (cantidad: number, articulos: ArticuloQueCambia[] = [], recortado = false): VistaPreviaMargen => ({
+    cantidad,
+    articulos,
+    recortado,
+  });
 
   async function crear(lista: Rubro[], dueno = false, listar = vi.fn(() => of(lista))) {
     servicio = {
       listar,
       crear: vi.fn(),
       actualizar: vi.fn((id: number, r: { nombre: string; margenPorcentaje: number }) => of({ id, ...r })),
-      articulosQueHeredan: vi.fn(() => of(23)),
+      vistaPreviaMargen: vi.fn(() => of(vista(23, [tornillo]))),
     };
     await TestBed.configureTestingModule({
       imports: [Rubros],
@@ -352,27 +367,43 @@ describe('Rubros', () => {
       await escribir('nombre', 'Bulonería y tornillería');
       await enviar();
 
-      expect(servicio.articulosQueHeredan).not.toHaveBeenCalled();
+      expect(servicio.vistaPreviaMargen).not.toHaveBeenCalled();
       expect(servicio.actualizar).toHaveBeenCalledWith(1, { nombre: 'Bulonería y tornillería', margenPorcentaje: 35 });
       expect(filas()[0].textContent).toContain('Bulonería y tornillería');
       expect(input('nombre').value).toBe('');
       expect(el().querySelector('.alerta.exito')?.textContent).toContain('Se guardó «Bulonería y tornillería».');
     });
 
-    it('si cambia el margen avisa cuántos artículos cambian de precio antes de guardar', async () => {
+    it('si cambia el margen muestra los precios que cambian, con el de hoy y el nuevo, antes de guardar', async () => {
       await crear([buloneria], true);
+      const arandela: ArticuloQueCambia = {
+        id: 9,
+        codigo: 'ARA-2',
+        descripcion: 'Arandela plana',
+        precioActual: 120.5,
+        precioNuevo: 130,
+      };
+      servicio.vistaPreviaMargen.mockReturnValue(of(vista(23, [arandela, tornillo])));
       await editarFila(0);
       await escribir('margen', '40');
 
       await enviar();
 
-      expect(servicio.articulosQueHeredan).toHaveBeenCalledWith(1);
+      expect(servicio.vistaPreviaMargen).toHaveBeenCalledWith(1, 40);
       expect(servicio.actualizar).not.toHaveBeenCalled();
       const dialogo = el().querySelector('app-confirmacion')!;
       expect(dialogo.querySelector('h2')?.textContent).toContain('¿Cambiar el margen de Bulonería de 35 % a 40 %?');
-      expect(dialogo.querySelector('p')?.textContent).toContain(
-        'Se recalcula el precio de 23 artículos que usan el margen del rubro.',
+      expect(dialogo.querySelector('p')?.textContent).toContain('23 artículos cambian de precio.');
+      const encabezados = Array.from(dialogo.querySelectorAll('table.ejemplos th')).map((t) => t.textContent?.trim());
+      expect(encabezados).toEqual(['Código', 'Descripción', 'Precio de hoy', 'Precio nuevo']);
+      const celdas = Array.from(dialogo.querySelectorAll('table.ejemplos tbody tr')).map((tr) =>
+        Array.from(tr.querySelectorAll('td')).map((td) => td.textContent?.replace(/\s/g, ' ').trim()),
       );
+      expect(celdas).toEqual([
+        ['ARA-2', 'Arandela plana', '$ 120,50', '$ 130,00'],
+        ['TOR-1', 'Tornillo hexagonal', '$ 1.640,00', '$ 1.650,00'],
+      ]);
+      expect(dialogo.textContent).not.toContain('Se muestran los primeros');
 
       await clickEn('app-confirmacion button.confirmar');
 
@@ -420,9 +451,9 @@ describe('Rubros', () => {
       expect(input('margen').value).toBe('40');
     });
 
-    it('si ningún artículo hereda el margen guarda sin preguntar', async () => {
+    it('si ningún precio cambia guarda sin preguntar', async () => {
       await crear([buloneria], true);
-      servicio.articulosQueHeredan.mockReturnValue(of(0));
+      servicio.vistaPreviaMargen.mockReturnValue(of(vista(0)));
       await editarFila(0);
       await escribir('margen', '40');
 
@@ -434,20 +465,48 @@ describe('Rubros', () => {
 
     it('un solo artículo va en singular', async () => {
       await crear([buloneria], true);
-      servicio.articulosQueHeredan.mockReturnValue(of(1));
+      servicio.vistaPreviaMargen.mockReturnValue(of(vista(1, [tornillo])));
       await editarFila(0);
       await escribir('margen', '40');
 
       await enviar();
 
-      expect(el().querySelector('app-confirmacion p')?.textContent).toContain(
-        'Se recalcula el precio de 1 artículo que usa el margen del rubro.',
-      );
+      expect(el().querySelector('app-confirmacion p')?.textContent).toContain('1 artículo cambia de precio.');
     });
 
-    it('si no se puede contar, igual avisa con un texto claro', async () => {
+    it('si la lista vino recortada avisa cuántos se muestran de cuántos', async () => {
       await crear([buloneria], true);
-      servicio.articulosQueHeredan.mockReturnValue(throwError(() => errorHttp(500, 'x')));
+      const primeros = Array.from({ length: 1000 }, (_, i) => ({ ...tornillo, id: i + 1, codigo: `TOR-${i + 1}` }));
+      servicio.vistaPreviaMargen.mockReturnValue(of(vista(1234, primeros, true)));
+      await editarFila(0);
+      await escribir('margen', '40');
+
+      await enviar();
+
+      const dialogo = el().querySelector('app-confirmacion')!;
+      expect(dialogo.querySelector('p')?.textContent).toContain('1.234 artículos cambian de precio.');
+      expect(dialogo.querySelectorAll('table.ejemplos tbody tr')).toHaveLength(1000);
+      expect(dialogo.textContent).toContain('Se muestran los primeros 1.000 de 1.234.');
+    });
+
+    it('si falta la cotización del dólar muestra el mensaje del backend y no guarda', async () => {
+      await crear([buloneria], true);
+      const sinCotizacion = 'Todavía no hay cotización del dólar. Probá en unos minutos';
+      servicio.vistaPreviaMargen.mockReturnValue(throwError(() => errorHttp(409, sinCotizacion)));
+      await editarFila(0);
+      await escribir('margen', '40');
+
+      await enviar();
+
+      expect(el().querySelector('app-confirmacion')).toBeNull();
+      expect(servicio.actualizar).not.toHaveBeenCalled();
+      expect(el().querySelector('p.error[role="alert"]')?.textContent).toContain(sinCotizacion);
+      expect(input('margen').value).toBe('40');
+    });
+
+    it('si no se puede traer la vista previa, igual avisa con un texto claro', async () => {
+      await crear([buloneria], true);
+      servicio.vistaPreviaMargen.mockReturnValue(throwError(() => errorHttp(500, 'x')));
       await editarFila(0);
       await escribir('margen', '40');
 
@@ -456,6 +515,7 @@ describe('Rubros', () => {
       expect(el().querySelector('app-confirmacion p')?.textContent).toContain(
         'Se recalcula el precio de los artículos que usan el margen del rubro.',
       );
+      expect(el().querySelector('app-confirmacion table')).toBeNull();
     });
 
     it('Cancelar la edición vuelve al alta', async () => {

@@ -24,12 +24,19 @@ import java.util.HexFormat;
  * Los decimales van a escala 2 sin redondear: un valor con mas decimales lanza, para que un error
  * de programacion no se oculte hasheando distinto. La q lleva su largo para que un {@code |} dentro
  * del texto no se confunda con un separador.
+ *
+ * <p>Solo con {@code CAMBIAR_RUBRO} (sufijos opcionales, asi los otros modos hashean igual que antes): la linea op
+ * lleva {@code ~} como valor y el rubro destino ({@code op|CAMBIAR_RUBRO|~|destinoId}), y cada articulo lleva su
+ * rubro de hoy despues del precio anterior ({@code |rubro:id} o {@code |rubro:~}). Si alguien cambia el rubro de un
+ * articulo entre la vista previa y aplicar, la huella difiere y aplicar da 409.
  */
 final class HuellaMasiva {
 
     private static final String SIN_VALOR = "~";
 
     private final MessageDigest digest;
+    /** Si cada articulo lleva su rubro de hoy: solo al cambiar el rubro. */
+    private final boolean conRubro;
 
     HuellaMasiva(OperacionMasiva operacion, FiltroArticulos filtro) {
         try {
@@ -37,8 +44,10 @@ final class HuellaMasiva {
         } catch (NoSuchAlgorithmException e) {
             throw new IllegalStateException("SHA-256 no está disponible.", e);
         }
+        this.conRubro = operacion.modo() == ModoMasivo.CAMBIAR_RUBRO;
         linea("v2");
-        linea("op|" + operacion.modo() + "|" + decimal(operacion.valor()));
+        linea("op|" + operacion.modo() + "|" + opcional(operacion.valor())
+            + (conRubro ? "|" + id(operacion.rubroDestinoId()) : ""));
         linea("filtro|" + id(filtro.proveedorId()) + "|" + id(filtro.rubroId()) + "|" + id(filtro.importacionId())
             + "|" + filtro.incluirInactivos()
             + "|" + texto(filtro.q()));
@@ -60,9 +69,14 @@ final class HuellaMasiva {
         return HexFormat.of().formatHex(digest.digest());
     }
 
-    private static String anterior(ArticuloVigente a) {
+    private String anterior(ArticuloVigente a) {
         return "a|" + a.id() + "|" + a.activo() + "|" + decimal(a.costo()) + "|" + opcional(a.margenPorcentaje())
-            + "|" + decimal(a.precioFinal()) + precioManualYAjustes(a);
+            + "|" + decimal(a.precioFinal()) + rubro(a) + precioManualYAjustes(a);
+    }
+
+    /** {@code CAMBIAR_RUBRO}: el rubro de hoy del articulo; en los otros modos nada, como antes. */
+    private String rubro(ArticuloVigente a) {
+        return conRubro ? "|rubro:" + id(a.rubroId()) : "";
     }
 
     /**

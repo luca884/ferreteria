@@ -14,3 +14,16 @@
 .campo.nombre {
   font-weight: normal;
 }
+
+/* Los precios que cambian, en la confirmación del margen: chica y con scroll propio, para que entre en el diálogo. */
+.precios-que-cambian {
+  max-height: min(50vh, 420px);
+}
+.ejemplos {
+  font-size: var(--texto-sm);
+}
+/* El código y los precios en una línea: solo la descripción se parte. */
+.ejemplos td:first-child,
+.ejemplos .num {
+  white-space: nowrap;
+}

@@ -1,7 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
-import { Rubro } from './rubro.models';
+import { Rubro, VistaPreviaMargen } from './rubro.models';
 import { RubrosService } from './rubros.service';
 
 describe('RubrosService', () => {
@@ -32,14 +32,20 @@ describe('RubrosService', () => {
     expect(actualizado?.margenPorcentaje).toBe(40);
   });
 
-  it('cuenta los artículos que heredan el margen con GET /rubros/{id}/articulos-que-heredan', () => {
-    let cantidad: number | undefined;
-    service.articulosQueHeredan(1).subscribe((n) => (cantidad = n));
+  it('pide la vista previa del margen nuevo con GET /rubros/{id}/vista-previa-margen?margenPorcentaje=', () => {
+    const vista: VistaPreviaMargen = {
+      cantidad: 1,
+      articulos: [{ id: 7, codigo: 'TOR-1', descripcion: 'Tornillo', precioActual: 1640, precioNuevo: 1650 }],
+      recortado: false,
+    };
+    let recibida: VistaPreviaMargen | undefined;
+    service.vistaPreviaMargen(1, 40.5).subscribe((v) => (recibida = v));
 
-    const req = http.expectOne((r) => r.url.endsWith('/rubros/1/articulos-que-heredan'));
+    const req = http.expectOne((r) => r.url.endsWith('/rubros/1/vista-previa-margen'));
     expect(req.request.method).toBe('GET');
-    req.flush({ cantidad: 23 });
+    expect(req.request.params.get('margenPorcentaje')).toBe('40.5');
+    req.flush(vista);
 
-    expect(cantidad).toBe(23);
+    expect(recibida).toEqual(vista);
   });
 });

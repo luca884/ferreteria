@@ -257,7 +257,7 @@ class ActualizacionMasivaIntegrationTest extends IntegrationTestBase {
         Tenant a = crearTenant();
         insertarArticulo(a, "100.00", "160.00");
         String mensaje = "Elegí qué querés hacer: cambiar el costo en porcentaje, sumarle un monto al costo, fijar el "
-                + "margen o cambiar el precio final en porcentaje o en monto.";
+                + "margen, cambiar el precio final en porcentaje o en monto, o cambiar el rubro.";
 
         for (String url : ENDPOINTS) {
             // "OTRO": modo es String, asi que no es el error de Jackson para enumeraciones.
@@ -1271,6 +1271,109 @@ class ActualizacionMasivaIntegrationTest extends IntegrationTestBase {
         postJson(VISTA_PREVIA, t.dueno(), pedido("PRECIO_MONTO", "0").toString())
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.errors.montoDistintoDeCero", is("El monto no puede ser cero.")));
+    }
+
+    // --- Cambiar el rubro (CU-05, #14) ---
+
+    /** Pedido de cambio de rubro: sin valor, con el destino. */
+    private ObjectNode cambiarRubro(long destino) {
+        return pedido("CAMBIAR_RUBRO", null).put("rubroDestinoId", destino);
+    }
+
+    private long rubroDe(long articuloId) {
+        return jdbc.queryForObject("select rubro_id from articulo where id = ?", Long.class, articuloId);
+    }
+
+    @Test
+    void cambiarElRubroConElFiltroDeUnProveedorMueveLosTresYSoloElHeredadoCambiaDePrecioConHistorial() throws Exception {
+        Tenant t = crearTenant();
+        long proveedor = crearProveedor(t);
+        long origen = crearRubro(t, "40");
+        long destino = crearRubro(t, "60");
+        // 100 x 1,40 x 1,21 = 169,40 -> 170; con el 60 % del destino, 193,60 -> 200. Margen propio 50: 190 en los dos.
+        long heredado = insertarArticulo(t, proveedor, origen, "100.00", null, "170.00", true);
+        long propio = insertarArticulo(t, proveedor, origen, "100.00", "50.00", "190.00", true);
+        long manual = insertarArticulo(t, proveedor, origen, "100.00", null, "500.00", true);
+        jdbc.update("update articulo set precio_manual = true where id = ?", manual);
+        long deOtroProveedor = insertarArticulo(t, null, origen, "100.00", null, "170.00", true);
+        ObjectNode pedido = cambiarRubro(destino).put("proveedorId", proveedor);
+        List<Map<String, Object>> antes = articulos(t);
+
+        JsonNode previa = vistaPrevia(t.dueno(), pedido);
+
+        assertThat(articulos(t)).isEqualTo(antes);
+        assertThat(previa.at("/conteos/total").asInt()).isEqualTo(3);
+        assertThat(previa.at("/conteos/modificados").asInt()).isEqualTo(3);
+        assertThat(previa.at("/conteos/suben").asInt()).isEqualTo(1);
+        assertThat(previa.at("/conteos/sinCambioDePrecio").asInt()).isEqualTo(2);
+        JsonNode cambios = previa.get("cambios");
+        assertThat(cambios).hasSize(3);
+        assertThat(cambios.get(0).get("articuloId").asLong()).isEqualTo(heredado);
+        assertThat(dec(cambios.get(0).get("precioAnterior"))).isEqualByComparingTo("170.00");
+        assertThat(dec(cambios.get(0).get("precioNuevo"))).isEqualByComparingTo("200.00");
+        assertThat(dec(cambios.get(1).get("precioNuevo"))).isEqualByComparingTo("190.00");
+        assertThat(dec(cambios.get(2).get("precioNuevo"))).isEqualByComparingTo("500.00");
+        for (JsonNode cambio : cambios) {
+            assertThat(cambio.get("rubroAnteriorId").asLong()).isEqualTo(origen);
+            assertThat(cambio.get("rubroNuevoId").asLong()).isEqualTo(destino);
+        }
+
+        JsonNode resultado = aplicar(t.dueno(), pedido, previa);
+
+        assertThat(resultado.at("/conteos/modificados").asInt()).isEqualTo(3);
+        assertThat(resultado.get("entradasDeHistorial").asInt()).isEqualTo(1);
+        assertThat(List.of(rubroDe(heredado), rubroDe(propio), rubroDe(manual))).containsOnly(destino);
+        assertThat(rubroDe(deOtroProveedor)).isEqualTo(origen);
+        assertThat(decimal(heredado, "precio_final")).isEqualByComparingTo("200.00");
+        assertThat(decimal(propio, "precio_final")).isEqualByComparingTo("190.00");
+        assertThat(decimal(manual, "precio_final")).isEqualByComparingTo("500.00");
+        assertThat(jdbc.queryForObject("select precio_manual from articulo where id = ?", Boolean.class, manual))
+                .isTrue();
+        assertThat(entradas(heredado)).singleElement().satisfies(e -> {
+            assertThat(e.get("origen")).isEqualTo("MASIVO");
+            assertThat((BigDecimal) e.get("precio_anterior")).isEqualByComparingTo("170.00");
+            assertThat((BigDecimal) e.get("precio_nuevo")).isEqualByComparingTo("200.00");
+        });
+        assertThat(entradas(propio)).isEmpty();
+        assertThat(entradas(manual)).isEmpty();
+    }
+
+    @Test
+    void cambiarElRubroSinDestinoOConValorYUnDestinoConOtroModoDan400PorCampo() throws Exception {
+        Tenant t = crearTenant();
+        long destino = crearRubro(t, "60");
+        insertarArticulo(t, "100.00", "160.00");
+        List<Map<String, Object>> antes = articulos(t);
+
+        for (String url : ENDPOINTS) {
+            postJson(url, t.dueno(), conHuella(pedido("CAMBIAR_RUBRO", null), "abc").toString())
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.errors.rubroDestinoElegido", is("Elegí el rubro al que pasan los artículos.")));
+            postJson(url, t.dueno(), conHuella(pedido("CAMBIAR_RUBRO", "10").put("rubroDestinoId", destino), "abc").toString())
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.errors.sinValorAlCambiarRubro", is("Al cambiar el rubro no va un valor.")));
+            postJson(url, t.dueno(), conHuella(pedido("MARGEN", "30").put("rubroDestinoId", destino), "abc").toString())
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.errors.rubroDestinoSoloAlCambiarRubro",
+                            is("El rubro destino va solo al cambiar el rubro.")));
+        }
+
+        assertThat(articulos(t)).isEqualTo(antes);
+        assertThat(historial(t)).isZero();
+    }
+
+    @Test
+    void siCambiaElRubroDeUnArticuloEntreLaVistaPreviaYAplicarElCambioDeRubroDa409() throws Exception {
+        Escenario e = escenarioDeDeriva();
+        // Otro rubro con el mismo margen (40): mover el articulo ahi no cambia su precio, solo su rubro.
+        long otro = crearRubro(e.tenant(), "40");
+        long destino = crearRubro(e.tenant(), "60");
+        ObjectNode pedido = cambiarRubro(destino).put("proveedorId", e.proveedor());
+        JsonNode previa = vistaPrevia(e.tenant().dueno(), pedido);
+
+        editarArticulo(e.tenant(), e.articulos().get(1), c -> c.put("rubroId", otro));
+
+        assertConflicto(e.tenant(), pedido, previa.get("huella").asText());
     }
 
     // FIN-DE-TESTS
