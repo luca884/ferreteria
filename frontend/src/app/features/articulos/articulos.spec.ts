@@ -343,6 +343,14 @@ describe('Articulos', () => {
     expect(siguiente().disabled).toBe(true);
   });
 
+  it('el paginador va arriba de la tabla: no hay que bajar hasta el final para pasar de página', async () => {
+    await crearComponente(true, pagina([articulo(1)], 0, 3, 45));
+
+    const paginador = el().querySelector('nav.paginacion')!;
+    const tabla = el().querySelector('table')!;
+    expect(paginador.compareDocumentPosition(tabla) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
   it('un solo artículo va en singular', async () => {
     await crearComponente(true, pagina([articulo(1)], 0, 1, 1));
 

@@ -139,6 +139,17 @@ describe('Ventas (consulta y reimpresión, G60)', () => {
     expect(normal(el().querySelector('table.ventas thead')?.textContent)).toContain('Factura');
   });
 
+  it('el paginador va arriba de la tabla: no hay que bajar hasta el final para pasar de página', async () => {
+    await crear();
+    api.listar.mockReturnValue(of(pagina([resumenDePrueba(5)], { totalPages: 2 })));
+
+    await buscar();
+
+    const paginador = el().querySelector('nav.paginas')!;
+    const tabla = el().querySelector('table.ventas')!;
+    expect(paginador.compareDocumentPosition(tabla) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
   it('filtra por número de factura con `numeroFiscal`; un formato que el servidor no acepta muestra su mensaje en los filtros', async () => {
     await crear();
     campo('numeroFiscal', ' 00001-00000012 ');

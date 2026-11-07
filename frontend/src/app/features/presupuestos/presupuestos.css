@@ -3,7 +3,13 @@
   width: 100%;
 }
 :host > :not(app-barra-acciones) {
-  max-width: 1040px;
+  max-width: var(--ancho-pantalla);
+  margin-inline: auto;
+}
+/* Las fechas no se parten entre renglones: cada fila queda de una línea. */
+.fecha {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }
 
 .filtros {

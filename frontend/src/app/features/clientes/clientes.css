@@ -48,7 +48,7 @@ tr.inactivo td {
   display: flex;
   align-items: center;
   gap: var(--e-3);
-  margin-top: var(--e-3);
+  margin-bottom: var(--e-3);
 }
 .num {
   text-align: right;

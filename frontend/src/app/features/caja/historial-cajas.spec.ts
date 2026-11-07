@@ -52,10 +52,10 @@ describe('HistorialCajas (CU-10)', () => {
   let fixture: ComponentFixture<HistorialCajas>;
   let servicio: Record<'historial' | 'detalle', ReturnType<typeof vi.fn>>;
 
-  async function crear(dueno: boolean) {
+  async function crear(dueno: boolean, totalPages = 1) {
     servicio = {
       historial: vi.fn(() =>
-        of({ items: [cerrada(8, 100), cerrada(7, -20)], page: 0, size: 20, totalElements: 2, totalPages: 1 }),
+        of({ items: [cerrada(8, 100), cerrada(7, -20)], page: 0, size: 20, totalElements: 2, totalPages }),
       ),
       detalle: vi.fn(() => of(detalle)),
     };
@@ -85,6 +85,14 @@ describe('HistorialCajas (CU-10)', () => {
     expect(filas).toHaveLength(2);
     expect(normal(filas[0].textContent)).toContain('Sobran $ 100,00');
     expect(normal(filas[1].textContent)).toContain('Faltan $ 20,00');
+  });
+
+  it('el paginador va arriba de la tabla: no hay que bajar hasta el final para pasar de página', async () => {
+    await crear(true, 2);
+
+    const paginador = el().querySelector('nav.paginas')!;
+    const tabla = el().querySelector('table.cajas')!;
+    expect(paginador.compareDocumentPosition(tabla) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
   it('al elegir una caja muestra su detalle con los movimientos y quién la abrió y cerró', async () => {

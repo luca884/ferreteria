@@ -1,6 +1,9 @@
 :host {
   display: block;
+  width: 100%;
 }
-.formulario {
-  max-width: 28rem;
+/* La barra de acciones va a todo el ancho; el resto, en una columna centrada del mismo ancho. */
+:host > :not(app-barra-acciones) {
+  max-width: var(--ancho-formulario);
+  margin-inline: auto;
 }

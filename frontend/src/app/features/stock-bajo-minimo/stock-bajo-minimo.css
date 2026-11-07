@@ -3,7 +3,14 @@
   width: 100%;
 }
 :host > :not(app-barra-acciones) {
-  max-width: 1040px;
+  max-width: var(--ancho-pantalla);
+  margin-inline: auto;
+}
+/* Los códigos y la fecha no se parten entre renglones. */
+.codigo,
+.codigo-proveedor,
+.ultima-compra {
+  white-space: nowrap;
 }
 
 .filtros {

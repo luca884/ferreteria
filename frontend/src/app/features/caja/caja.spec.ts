@@ -465,6 +465,32 @@ describe('Caja (CU-10)', () => {
 
       expect(el().querySelector('a[href="/caja/historial"]')).not.toBeNull();
     });
+
+    it('con la caja abierta ve el resumen y los ingresos, gastos y retiros antes de «Cerrar la caja»', async () => {
+      await crear(conCaja(), true);
+
+      const titulos = Array.from(el().querySelectorAll('h2')).map((h) => normal(h.textContent));
+      expect(titulos.indexOf('Resumen de la caja')).toBeGreaterThan(-1);
+      expect(titulos.indexOf('Ingresos, gastos y retiros')).toBeGreaterThan(-1);
+      expect(titulos.indexOf('Resumen de la caja')).toBeLessThan(titulos.indexOf('Cerrar la caja'));
+      expect(titulos.indexOf('Ingresos, gastos y retiros')).toBeLessThan(titulos.indexOf('Cerrar la caja'));
+    });
+  });
+
+  describe('texto explicativo', () => {
+    const texto =
+      'Abrí la caja al empezar el día con el efectivo que hay. Durante el día cargá los ingresos, gastos y retiros. Al terminar, cerrala contando el efectivo que quedó.';
+    const ayudas = () => Array.from(el().querySelectorAll('p.ayuda')).map((p) => normal(p.textContent));
+
+    it('explica cómo se usa la caja cuando está cerrada', async () => {
+      await crear(sinCaja());
+      expect(ayudas()).toContain(texto);
+    });
+
+    it('y también con la caja abierta', async () => {
+      await crear(conCaja());
+      expect(ayudas()).toContain(texto);
+    });
   });
 
   describe('hoja impresa', () => {

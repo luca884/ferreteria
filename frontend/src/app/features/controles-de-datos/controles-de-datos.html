@@ -65,7 +65,7 @@
           <tbody>
             @for (f of lista; track f.articuloId) {
               <tr>
-                <td>{{ f.codigoInterno }}</td>
+                <td class="codigo">{{ f.codigoInterno }}</td>
                 <td><a [routerLink]="['/articulos', f.articuloId]">{{ f.descripcion }}</a></td>
                 <td>{{ f.rubro ?? '—' }}</td>
                 <td>{{ f.proveedor ?? '—' }}</td>

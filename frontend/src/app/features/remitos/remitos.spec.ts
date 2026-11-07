@@ -174,6 +174,15 @@ describe('Remitos', () => {
   beforeEach(() => localStorage.clear());
 
   describe('listado', () => {
+    it('explica de dónde salen los remitos y qué se hace acá', async () => {
+      await crear();
+
+      const ayudas = Array.from(el().querySelectorAll('p.ayuda')).map((p) => normal(p.textContent));
+      expect(ayudas).toContain(
+        'Los remitos se emiten en el Mostrador con el botón «Remito». Acá los consultás, los imprimís, los anulás y los pasás a venta para cobrarlos.',
+      );
+    });
+
     it('al abrir trae la primera página y muestra cada remito', async () => {
       await crear();
 
@@ -226,6 +235,16 @@ describe('Remitos', () => {
 
       await click(boton('Anterior'));
       expect(api.listar).toHaveBeenLastCalledWith({ page: 0 });
+    });
+
+    it('el paginador va arriba de la tabla: no hay que bajar hasta el final para pasar de página', async () => {
+      await crear();
+      api.listar.mockReturnValue(of(pagina([resumen(5)], { page: 0, totalPages: 2, totalElements: 21 })));
+      await buscar();
+
+      const paginador = el().querySelector('nav.paginas')!;
+      const tabla = el().querySelector('table.remitos')!;
+      expect(paginador.compareDocumentPosition(tabla) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     });
   });
 

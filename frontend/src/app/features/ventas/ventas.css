@@ -2,8 +2,15 @@
   display: block;
   width: 100%;
 }
+/* La barra de acciones va a todo el ancho; el resto, centrado y con margen a los costados en pantallas grandes. */
 :host > :not(app-barra-acciones) {
-  max-width: 1040px;
+  max-width: var(--ancho-pantalla);
+  margin-inline: auto;
+}
+/* La fecha no se parte entre renglones: cada fila queda de una línea. */
+.fecha {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }
 
 .filtros {

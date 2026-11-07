@@ -120,6 +120,34 @@
       <p class="ayuda estado-vacio">Todavía no hay artículos.</p>
     }
   } @else {
+    <nav class="paginacion barra-estado" aria-label="Paginación">
+      @if (filas.elegido(); as actual) {
+        <span class="elegido">
+          Elegido: <strong>{{ actual.descripcion }}</strong>
+          @if (actual.activo) {
+            · Enter edita
+          } @else {
+            · <span id="motivo-sin-ajuste">«{{ actual.descripcion }}» está dado de baja. Reactivalo para ajustar el stock.</span>
+          }
+        </span>
+      }
+      <span class="separador"></span>
+      <span>
+        Página {{ resultado.page + 1 }} de {{ resultado.totalPages }} · {{ resultado.totalElements }}
+        {{ resultado.totalElements === 1 ? 'artículo' : 'artículos' }}
+      </span>
+      <button type="button" class="secundario chico anterior" [disabled]="resultado.page === 0" (click)="anterior()">
+        Anterior
+      </button>
+      <button
+        type="button"
+        class="secundario chico siguiente"
+        [disabled]="resultado.page + 1 >= resultado.totalPages"
+        (click)="siguiente()"
+      >
+        Siguiente
+      </button>
+    </nav>
     <div class="grilla-marco">
       <table [attr.role]="auth.esDueno() ? 'grid' : null" aria-label="Artículos">
         <thead>
@@ -191,35 +219,6 @@
         </tbody>
       </table>
     </div>
-
-    <nav class="paginacion barra-estado" aria-label="Paginación">
-      @if (filas.elegido(); as actual) {
-        <span class="elegido">
-          Elegido: <strong>{{ actual.descripcion }}</strong>
-          @if (actual.activo) {
-            · Enter edita
-          } @else {
-            · <span id="motivo-sin-ajuste">«{{ actual.descripcion }}» está dado de baja. Reactivalo para ajustar el stock.</span>
-          }
-        </span>
-      }
-      <span class="separador"></span>
-      <span>
-        Página {{ resultado.page + 1 }} de {{ resultado.totalPages }} · {{ resultado.totalElements }}
-        {{ resultado.totalElements === 1 ? 'artículo' : 'artículos' }}
-      </span>
-      <button type="button" class="secundario chico anterior" [disabled]="resultado.page === 0" (click)="anterior()">
-        Anterior
-      </button>
-      <button
-        type="button"
-        class="secundario chico siguiente"
-        [disabled]="resultado.page + 1 >= resultado.totalPages"
-        (click)="siguiente()"
-      >
-        Siguiente
-      </button>
-    </nav>
   }
 }
 

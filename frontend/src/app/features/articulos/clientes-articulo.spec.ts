@@ -109,6 +109,14 @@ describe('ClientesArticulo', () => {
     expect(servicio.clientes).toHaveBeenLastCalledWith(7, 1);
   });
 
+  it('el paginador va arriba de la tabla: no hay que bajar hasta el final para pasar de página', async () => {
+    await crear(true, vi.fn(() => of(pagina(clientes, 0, 0, 3))));
+
+    const paginador = el().querySelector('nav.paginas')!;
+    const tabla = el().querySelector('table.clientes')!;
+    expect(paginador.compareDocumentPosition(tabla) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
   it('si no carga lo avisa y Reintentar vuelve a pedir', async () => {
     const listar = vi
       .fn()

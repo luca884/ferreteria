@@ -99,8 +99,10 @@ th.actualizacion {
   color: var(--texto-suave);
 }
 
+/* Va arriba de la grilla: el margen de .barra-estado pasa abajo. */
 .paginacion {
   flex-wrap: wrap;
+  margin: 0 0 var(--e-2);
 }
 .paginacion .separador {
   flex: 1;

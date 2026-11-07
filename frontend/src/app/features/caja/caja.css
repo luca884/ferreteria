@@ -2,9 +2,10 @@
   display: block;
   width: 100%;
 }
-/* La barra de acciones va a todo el ancho; el resto no se estira de más. */
+/* La barra de acciones va a todo el ancho; el resto, centrado en una columna media: el concepto y el importe del resumen quedan cerca. */
 :host > :not(app-barra-acciones) {
-  max-width: 880px;
+  max-width: var(--ancho-medio);
+  margin-inline: auto;
 }
 :host > .panel,
 :host > app-resumen-caja {

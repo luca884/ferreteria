@@ -178,6 +178,15 @@ describe('Presupuestos', () => {
   beforeEach(() => localStorage.clear());
 
   describe('listado', () => {
+    it('explica de dónde salen los presupuestos y qué se hace acá', async () => {
+      await crear();
+
+      const ayudas = Array.from(el().querySelectorAll('p.ayuda')).map((p) => normal(p.textContent));
+      expect(ayudas).toContain(
+        'Los presupuestos se arman en el Mostrador con F8. Acá los consultás, los imprimís, los marcás como aceptados o rechazados y los pasás a venta con los precios de hoy.',
+      );
+    });
+
     it('al abrir trae la primera página y muestra cada presupuesto', async () => {
       await crear();
 
@@ -230,6 +239,16 @@ describe('Presupuestos', () => {
 
       await click(boton('Anterior'));
       expect(api.listar).toHaveBeenLastCalledWith({ page: 0 });
+    });
+
+    it('el paginador va arriba de la tabla: no hay que bajar hasta el final para pasar de página', async () => {
+      await crear();
+      api.listar.mockReturnValue(of(pagina([resumen(12)], { page: 0, totalPages: 2, totalElements: 21 })));
+      await buscar();
+
+      const paginador = el().querySelector('nav.paginas')!;
+      const tabla = el().querySelector('table.presupuestos')!;
+      expect(paginador.compareDocumentPosition(tabla) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     });
   });
 

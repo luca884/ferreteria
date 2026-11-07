@@ -143,6 +143,13 @@ describe('Reportes de ventas', () => {
     fixture.detectChanges();
   }
 
+  it('explica cómo se usa y que las notas de crédito y las anulaciones restan', async () => {
+    await crear();
+
+    const ayudas = Array.from(el().querySelectorAll('p.ayuda')).map((p) => normal(p.textContent));
+    expect(ayudas).toContain('Elegí un reporte y el período. Las notas de crédito y las anulaciones restan de las ventas.');
+  });
+
   it('arranca con el resumen de hoy: ventas, costo, IVA, ganancia, comprobantes y el aviso de las ventas sin costo', async () => {
     await crear();
 

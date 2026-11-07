@@ -2,6 +2,11 @@
   <h1>Remitos</h1>
 </app-barra-acciones>
 
+<p class="ayuda">
+  Los remitos se emiten en el Mostrador con el botón «Remito». Acá los consultás, los imprimís, los anulás y los pasás a venta
+  para cobrarlos.
+</p>
+
 <form class="filtros" (submit)="buscar($event)">
   <label>
     Estado
@@ -51,6 +56,22 @@
       {{ filtrada() ? 'No hay remitos con esos filtros.' : 'Todavía no hay remitos.' }}
     </p>
   } @else {
+    @if (actual.totalPages > 1) {
+      <nav class="paginas" aria-label="Páginas de remitos">
+        <button type="button" class="secundario chico" [disabled]="actual.page === 0" (click)="cargar(actual.page - 1)">
+          Anterior
+        </button>
+        <span>Página {{ actual.page + 1 }} de {{ actual.totalPages }}</span>
+        <button
+          type="button"
+          class="secundario chico"
+          [disabled]="actual.page + 1 >= actual.totalPages"
+          (click)="cargar(actual.page + 1)"
+        >
+          Siguiente
+        </button>
+      </nav>
+    }
     <table class="remitos">
       <caption class="sr-only">
         Remitos, los más nuevos primero. Elegí uno para ver su detalle.
@@ -72,7 +93,7 @@
                 {{ fila.numero }}
               </button>
             </td>
-            <td>{{ fechaHora(fila.fecha) }}</td>
+            <td class="fecha">{{ fechaHora(fila.fecha) }}</td>
             <td>{{ fila.clienteNombre ?? '—' }}</td>
             <td class="num">{{ fila.total | monto }}</td>
             <td>{{ etiqueta[fila.estado] }}</td>
@@ -80,23 +101,6 @@
         }
       </tbody>
     </table>
-
-    @if (actual.totalPages > 1) {
-      <nav class="paginas" aria-label="Páginas de remitos">
-        <button type="button" class="secundario chico" [disabled]="actual.page === 0" (click)="cargar(actual.page - 1)">
-          Anterior
-        </button>
-        <span>Página {{ actual.page + 1 }} de {{ actual.totalPages }}</span>
-        <button
-          type="button"
-          class="secundario chico"
-          [disabled]="actual.page + 1 >= actual.totalPages"
-          (click)="cargar(actual.page + 1)"
-        >
-          Siguiente
-        </button>
-      </nav>
-    }
   }
 } @else if (cargando()) {
   <p class="ayuda estado-vacio">Cargando…</p>

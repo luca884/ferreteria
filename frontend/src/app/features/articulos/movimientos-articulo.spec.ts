@@ -130,6 +130,14 @@ describe('MovimientosArticulo', () => {
     expect(servicio.movimientos).toHaveBeenLastCalledWith(7, { page: 1 });
   });
 
+  it('el paginador va arriba de la tabla: no hay que bajar hasta el final para pasar de página', async () => {
+    await crear(true, vi.fn(() => of(pagina(movimientos, 0, 3))));
+
+    const paginador = el().querySelector('nav.paginas')!;
+    const tabla = el().querySelector('table.movimientos')!;
+    expect(paginador.compareDocumentPosition(tabla) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
   it('sin movimientos lo dice, con o sin filtros', async () => {
     await crear(true, vi.fn(() => of(pagina([]))));
     expect(texto('.estado-vacio')).toBe('Este artículo todavía no tiene movimientos de stock.');
