@@ -488,6 +488,11 @@ describe('Ventas (consulta y reimpresión, G60)', () => {
     await refrescar();
 
     expect(normal(detalle()!.textContent)).toContain('Salió de un remito');
+    // En el detalle, el origen es un link al pop-up del remito (informacion-y-links, S2).
+    api.obtener.mockReturnValue(of(ventaDePrueba({ remitoId: 4, remitoNumero: 2 })));
+    filas()[1].click();
+    await refrescar();
+    expect(detalle()!.querySelector('.notas a')!.getAttribute('href')).toBe('/remitos/4');
   });
 
   it('el detalle ofrece Imprimir y, aparte, Anular (CU-08), sin atajo de teclado; nunca Borrar (GDS-15)', async () => {
@@ -1215,6 +1220,32 @@ describe('Ventas (consulta y reimpresión, G60)', () => {
 
       expect(api.obtener).toHaveBeenLastCalledWith(120);
       expect(normal(detalle()!.querySelector('h2')!.textContent)).toBe('Venta N.º 12');
+    });
+  });
+
+  describe('links y datos del detalle (informacion-y-links, S2 y S4)', () => {
+    it('«Anula la venta N.º n» de la nota de crédito es un link al pop-up de esa venta', async () => {
+      await crear();
+      api.obtener.mockReturnValue(of(ventaDePrueba({ ventaId: 140, numero: 14, tipo: 'NOTA_CREDITO', ventaAnulada: { id: 70, numero: 7 } })));
+      filas()[0].click();
+      await refrescar();
+
+      const link = detalle()!.querySelector<HTMLAnchorElement>('.venta-anulada a')!;
+      expect(normal(detalle()!.querySelector('.venta-anulada')!.textContent)).toBe('Anula la venta N.º 7');
+      expect(link.getAttribute('href')).toBe('/ventas/70');
+    });
+
+    it('una X con número dice su número, como la lista: «X 00001-00000011 · <marca>»', async () => {
+      await crear();
+      api.obtener.mockReturnValue(
+        of(ventaDePrueba({ fiscal: fiscalDe(documentoX(MARCA_SIMULADO), { ambiente: 'SIMULADOR', numero: 11 }) })),
+      );
+      filas()[0].click();
+      await refrescar();
+
+      expect(normal(detalle()!.querySelector('.linea-fiscal')?.textContent)).toBe(
+        'X 00001-00000011 · SIMULADO — sin validez fiscal',
+      );
     });
   });
 });

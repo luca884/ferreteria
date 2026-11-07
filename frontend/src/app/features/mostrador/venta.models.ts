@@ -128,6 +128,8 @@ export interface VentaResponse {
   descuento?: number;
   /** El número del remito del que salió la venta, para «Remito N.º» de la factura (C1). */
   remitoNumero?: number | null;
+  /** El número del presupuesto del que salió la venta: solo en el detalle (informacion-y-links, S2). */
+  presupuestoNumero?: number | null;
   /** Solo si la venta tiene registro fiscal (C1): su estado y el documento a imprimir. */
   fiscal?: FiscalVenta;
 }

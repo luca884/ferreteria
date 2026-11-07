@@ -1,7 +1,7 @@
 import { HttpErrorResponse } from '@angular/common/http';
 import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { ActivatedRoute, Router } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { erroresDeCampos, mensajeDe } from '../../core/api/api-error';
 import { PageResponse } from '../../core/api/page.models';
 import { AuthService } from '../../core/auth/auth.service';
@@ -77,6 +77,7 @@ function motivoDelRechazo(err: unknown): string | null {
     MontoPipe,
     VentaHoja,
     VentaImprimible,
+    RouterLink,
   ],
   templateUrl: './ventas.html',
   styleUrl: './ventas.css',
@@ -136,7 +137,12 @@ export class Ventas implements OnInit {
   protected readonly lineaFiscal = computed<string | null>(() => {
     const documento = this.facturada()?.fiscal.documento;
     if (!documento) return null;
-    if (!documento.validoComoFactura) return documento.marca ? `X · ${documento.marca}` : 'X';
+    if (!documento.validoComoFactura) {
+      // El número de la X, como en la lista (informacion-y-links, S4): sale del registro, el documento no lo trae.
+      const { puntoVenta, numero } = this.facturada()!.fiscal;
+      const x = numero != null ? `X ${numeroFiscal(puntoVenta, numero)}` : 'X';
+      return documento.marca ? `${x} · ${documento.marca}` : x;
+    }
     const { letra, puntoVenta, numero } = documento;
     const fiscal = puntoVenta != null && numero != null ? ` ${numeroFiscal(puntoVenta, numero)}` : '';
     const clase = this.esNota(this.detalle()!) ? 'Nota de crédito' : 'Factura';

@@ -154,7 +154,7 @@
           @for (r of p.renglones; track r.renglon) {
             <tr>
               <td>{{ r.descripcion }}</td>
-              <td class="num">{{ r.cantidad | number: '1.0-3' }}</td>
+              <td class="num">{{ cantidadConUnidad(r.cantidad, r.unidad) }}</td>
               <td class="num">{{ r.precioUnitario | monto }}</td>
               <td class="num">{{ r.descuentoPorcentaje > 0 ? (r.descuentoPorcentaje | number: '1.0-2') + ' %' : '' }}</td>
               <td class="num">{{ r.total | monto }}</td>
@@ -180,7 +180,8 @@
       @if (p.estado === 'FACTURADO') {
         <p class="nota-estado">
           @if (p.facturadoPor; as f) {
-            Vendido en la venta N.º {{ f.numero }}
+            Vendido en la
+            @if (esDueno()) {<a [routerLink]="'/ventas/' + f.ventaId">venta N.º {{ f.numero }}</a>} @else {venta N.º {{ f.numero }}}
             @if (f.factura; as factura) {
               · {{ factura }}
             }

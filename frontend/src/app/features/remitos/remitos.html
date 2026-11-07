@@ -120,6 +120,9 @@
         @if (r.clienteNombre) {
           · Cliente {{ r.clienteNombre }}
         }
+        @if (r.usuario) {
+          · Emitió {{ r.usuario }}
+        }
       </p>
       @if (r.observaciones) {
         <p class="observaciones">{{ r.observaciones }}</p>
@@ -142,7 +145,7 @@
           @for (x of r.renglones; track x.renglon) {
             <tr>
               <td>{{ x.descripcion }}</td>
-              <td class="num">{{ x.cantidad | number: '1.0-3' }}</td>
+              <td class="num">{{ cantidadConUnidad(x.cantidad, x.unidad) }}</td>
               <td class="num">{{ x.precioUnitario | monto }}</td>
               <td class="num">{{ x.descuentoPorcentaje > 0 ? (x.descuentoPorcentaje | number: '1.0-2') + ' %' : '' }}</td>
               <td class="num">{{ x.total | monto }}</td>
@@ -168,7 +171,8 @@
       @if (r.estado === 'FACTURADO') {
         @if (r.facturadoPor; as f) {
           <p class="nota-estado">
-            Facturado en la venta N.º {{ f.numero }}@if (f.factura; as factura) {
+            Facturado en la
+            @if (esDueno()) {<a [routerLink]="'/ventas/' + f.ventaId">venta N.º {{ f.numero }}</a>} @else {venta N.º {{ f.numero }}}@if (f.factura; as factura) {
               · {{ factura }}
             }
           </p>

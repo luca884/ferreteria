@@ -1,5 +1,7 @@
 import { DecimalPipe } from '@angular/common';
 import { Component, computed, input } from '@angular/core';
+import { RouterLink } from '@angular/router';
+import { cantidadConUnidad } from '../../core/formato/unidad';
 import { MontoPipe } from '../../core/formato/monto';
 import { porcentajeDescuentoGeneral } from '../../shared/descuento-general';
 import { fechaCompletaLocal } from '../clientes/cuenta/cobranza.models';
@@ -11,12 +13,16 @@ import { VentaConsultada, clienteDeVenta, esNotaDeCredito } from './ventas.model
  */
 @Component({
   selector: 'app-venta-hoja',
-  imports: [DecimalPipe, MontoPipe],
+  imports: [DecimalPipe, MontoPipe, RouterLink],
   templateUrl: './venta-hoja.html',
   styleUrl: './venta-hoja.css',
 })
 export class VentaHoja {
   readonly venta = input.required<VentaConsultada>();
+  /** En el detalle, el origen es un link a su pop-up (informacion-y-links, S2); en la hoja para imprimir, texto. */
+  readonly conLinks = input(false);
+
+  protected readonly cantidadConUnidad = cantidadConUnidad;
 
   protected readonly fecha = computed(() => fechaCompletaLocal(this.venta().fecha));
   protected readonly cliente = computed(() => clienteDeVenta(this.venta().clienteNombre));
@@ -36,11 +42,27 @@ export class VentaHoja {
       totalSinRecargo: Math.round((r.total - (r.recargo ?? 0)) * 100) / 100,
     }));
   });
-  /** De dónde salió la venta, si no se armó en el mostrador. */
-  protected readonly origen = computed(() => {
+  /**
+   * De dónde salió la venta, si no se armó en el mostrador: «Salió del remito N.º 2», con la ruta de su pop-up. Sin el
+   * número (un servidor anterior) dice «Salió de un remito», sin link.
+   */
+  protected readonly origen = computed<{ texto: string; numero: string | null; ruta: string | null } | null>(() => {
     const v = this.venta();
-    if (v.presupuestoId !== undefined) return 'Salió de un presupuesto';
-    if (v.remitoId !== undefined) return 'Salió de un remito';
+    if (v.presupuestoId != null) {
+      return v.presupuestoNumero != null
+        ? { texto: 'Salió del ', numero: `presupuesto N.º ${v.presupuestoNumero}`, ruta: `/presupuestos/${v.presupuestoId}` }
+        : { texto: 'Salió de un presupuesto', numero: null, ruta: null };
+    }
+    if (v.remitoId != null) {
+      return v.remitoNumero != null
+        ? { texto: 'Salió del ', numero: `remito N.º ${v.remitoNumero}`, ruta: `/remitos/${v.remitoId}` }
+        : { texto: 'Salió de un remito', numero: null, ruta: null };
+    }
     return null;
+  });
+  /** El caption de los renglones, como el comprobante: «de la nota de crédito» o «de la anulación» (la interna). */
+  protected readonly renglonesDe = computed(() => {
+    if (!this.esNota()) return 'Renglones de la venta';
+    return this.venta().fiscal ? 'Renglones de la nota de crédito' : 'Renglones de la anulación';
   });
 }

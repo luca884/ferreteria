@@ -16,14 +16,15 @@ import java.util.List;
  * El remito guardado (RM-004). Sin costo ni margen. El subtotal es antes de descuentos; {@code descuento} es lo descontado
  * en toda la venta y {@code descuentoPorcentaje} el global. {@code sinStock} lista los articulos que quedaron con stock
  * negativo al emitirlo y solo viene al emitir (en un remito repetido viene vacio). {@code facturadoPor} es la venta que lo
- * facturo y solo viene en el detalle de un remito FACTURADO.
+ * facturo y solo viene en el detalle de un remito FACTURADO. {@code usuario} es quien lo emitio y solo viene en el detalle
+ * (informacion-y-links, S4).
  */
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public record RemitoResponse(
         Long remitoId, Long numero, EstadoRemito estado, LocalDateTime fecha, Long clienteId, String clienteNombre,
         String observaciones, BigDecimal subtotal, BigDecimal descuentoPorcentaje, BigDecimal descuento, BigDecimal neto, BigDecimal iva,
         BigDecimal total, List<RenglonResponse> renglones, List<SinStockResponse> sinStock,
-        FacturadoPorResponse facturadoPor) {
+        FacturadoPorResponse facturadoPor, String usuario) {
 
     /** La venta que facturo el remito; {@code factura} («Factura B 00001-00000012») solo si la venta tiene una valida. */
     @JsonInclude(JsonInclude.Include.NON_NULL)
@@ -49,22 +50,23 @@ public record RemitoResponse(
     public static RemitoResponse de(RemitoEmitido emitido) {
         return de(emitido.remito(), emitido.items(), emitido.sinStock().stream()
                 .map(s -> new SinStockResponse(s.articuloId(), s.descripcion(), s.stockActual()))
-                .toList(), null);
+                .toList(), null, null);
     }
 
     public static RemitoResponse de(Remito r, List<ItemRemito> items) {
-        return de(r, items, null, null);
+        return de(r, items, null, null, null);
     }
 
     public static RemitoResponse de(DetalleRemito detalle) {
-        return de(detalle.remito(), detalle.items(), null, FacturadoPorResponse.de(detalle.facturadoPor()));
+        return de(detalle.remito(), detalle.items(), null, FacturadoPorResponse.de(detalle.facturadoPor()),
+                detalle.usuario());
     }
 
     private static RemitoResponse de(Remito r, List<ItemRemito> items, List<SinStockResponse> sinStock,
-            FacturadoPorResponse facturadoPor) {
+            FacturadoPorResponse facturadoPor, String usuario) {
         return new RemitoResponse(r.getId(), r.getNumero(), r.getEstado(), r.getFecha(), r.getClienteId(),
                 r.getClienteNombre(), r.getObservaciones(), r.getSubtotal(), r.getDescuentoPorcentaje(),
                 r.getSubtotal().subtract(r.getTotal()), r.getNeto(), r.getIva(), r.getTotal(),
-                items.stream().map(RenglonResponse::de).toList(), sinStock, facturadoPor);
+                items.stream().map(RenglonResponse::de).toList(), sinStock, facturadoPor, usuario);
     }
 }

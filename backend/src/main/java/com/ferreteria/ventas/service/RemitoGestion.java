@@ -11,6 +11,7 @@ import com.ferreteria.ventas.model.Comprobante;
 import com.ferreteria.ventas.model.EstadoRemito;
 import com.ferreteria.ventas.model.ItemRemito;
 import com.ferreteria.ventas.model.Remito;
+import com.ferreteria.ventas.repository.CajaRepository;
 import com.ferreteria.ventas.repository.ComprobanteRepository;
 import com.ferreteria.ventas.repository.ItemRemitoRepository;
 import com.ferreteria.ventas.repository.RemitoRepository;
@@ -40,14 +41,17 @@ public class RemitoGestion {
     private final StockService stockService;
     private final ComprobanteRepository comprobanteRepository;
     private final FacturacionParaVenta facturacion;
+    private final CajaRepository cajaRepository;
 
     public RemitoGestion(RemitoRepository remitoRepository, ItemRemitoRepository itemRepository,
-            StockService stockService, ComprobanteRepository comprobanteRepository, FacturacionParaVenta facturacion) {
+            StockService stockService, ComprobanteRepository comprobanteRepository, FacturacionParaVenta facturacion,
+            CajaRepository cajaRepository) {
         this.remitoRepository = remitoRepository;
         this.itemRepository = itemRepository;
         this.stockService = stockService;
         this.comprobanteRepository = comprobanteRepository;
         this.facturacion = facturacion;
+        this.cajaRepository = cajaRepository;
     }
 
     /** Los mas nuevos primero. {@code desde} y {@code hasta} son dias, ambos inclusive; un filtro nulo no filtra. */
@@ -60,14 +64,18 @@ public class RemitoGestion {
                 PageRequest.of(Math.max(page, 0), Math.min(Math.max(size, 1), TAMANO_MAXIMO)));
     }
 
-    /** El remito con sus renglones y, si esta FACTURADO, la venta que lo facturo (S2 de cu-07-remito-presupuesto-imprimible). */
+    /**
+     * El remito con sus renglones, quien lo emitio (informacion-y-links, S4) y, si esta FACTURADO, la venta que lo facturo
+     * (S2 de cu-07-remito-presupuesto-imprimible).
+     */
     @Transactional(readOnly = true)
     public DetalleRemito detalle(Long id) {
         Remito remito = remitoRepository.findScoped(id)
                 .orElseThrow(() -> new ResourceNotFoundException(MENSAJE_NO_ENCONTRADO));
         DetalleRemito.FacturadoPor facturadoPor =
                 remito.getEstado() == EstadoRemito.FACTURADO ? facturadoPor(id) : null;
-        return new DetalleRemito(remito, itemRepository.deRemitoScoped(id), facturadoPor);
+        String usuario = cajaRepository.nombresScoped(List.of(remito.getUsuarioId())).get(remito.getUsuarioId());
+        return new DetalleRemito(remito, itemRepository.deRemitoScoped(id), facturadoPor, usuario);
     }
 
     /**

@@ -940,4 +940,49 @@ describe('Remitos', () => {
       expect(normal(detalle()!.querySelector('h2')!.textContent)).toBe('Remito N.º 12');
     });
   });
+
+  describe('unidades, quién lo emitió y el link a la venta (informacion-y-links, S2 a S4)', () => {
+    it('la cantidad sale con su unidad y los datos dicen quién lo emitió', async () => {
+      await crear();
+      const base = detalleDe(5);
+      api.obtener.mockReturnValue(
+        of({
+          ...base,
+          usuario: 'Ana Vendedora',
+          renglones: [
+            { ...base.renglones[0], descripcion: 'Cable', unidad: 'METRO', cantidad: 25.5 },
+            { ...base.renglones[0], renglon: 2, cantidad: 1 },
+          ],
+        }),
+      );
+
+      await abrirDetalle(0);
+
+      const cantidades = Array.from(detalle()!.querySelectorAll('.renglones tbody tr')).map((tr) =>
+        normal(tr.querySelectorAll('td')[1].textContent),
+      );
+      expect(cantidades).toEqual(['25,5 metros', '1 unidad']);
+      expect(normal(detalle()!.querySelector('.datos')!.textContent)).toContain('· Emitió Ana Vendedora');
+    });
+
+    it('para el Dueño, «Facturado en la venta N.º n» es un link al pop-up de esa venta', async () => {
+      await crear(undefined, 'DUENO');
+      api.obtener.mockReturnValue(of(detalleDe(5, { estado: 'FACTURADO', facturadoPor: { ventaId: 40, numero: 33 } })));
+
+      await abrirDetalle(0);
+
+      expect(normal(detalle()!.querySelector('.nota-estado')!.textContent)).toBe('Facturado en la venta N.º 33');
+      expect(detalle()!.querySelector('.nota-estado a')!.getAttribute('href')).toBe('/ventas/40');
+    });
+
+    it('el Vendedor no ve Ventas: para él es texto', async () => {
+      await crear(undefined, 'VENDEDOR');
+      api.obtener.mockReturnValue(of(detalleDe(5, { estado: 'FACTURADO', facturadoPor: { ventaId: 40, numero: 33 } })));
+
+      await abrirDetalle(0);
+
+      expect(normal(detalle()!.querySelector('.nota-estado')!.textContent)).toBe('Facturado en la venta N.º 33');
+      expect(detalle()!.querySelector('.nota-estado a')).toBeNull();
+    });
+  });
 });

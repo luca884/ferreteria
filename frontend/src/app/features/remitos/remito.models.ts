@@ -73,6 +73,8 @@ export interface RemitoResponse {
   sinStock?: RemitoSinStock[];
   /** Solo en el detalle de un remito FACTURADO: la venta que lo facturó y, si tiene factura válida, cuál. */
   facturadoPor?: FacturadoPor;
+  /** Quién lo emitió (su nombre): solo en el detalle (informacion-y-links, S4). */
+  usuario?: string;
 }
 
 /** Lo que la hoja imprimible necesita de un remito. */

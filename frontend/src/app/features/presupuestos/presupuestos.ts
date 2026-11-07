@@ -10,13 +10,14 @@ import {
   viewChild,
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { ActivatedRoute, Router } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { catchError, forkJoin, map, of, throwError } from 'rxjs';
 import { HttpErrorResponse } from '@angular/common/http';
 import { mensajeDe } from '../../core/api/api-error';
 import { PageResponse } from '../../core/api/page.models';
 import { AuthService } from '../../core/auth/auth.service';
 import { MontoPipe } from '../../core/formato/monto';
+import { cantidadConUnidad } from '../../core/formato/unidad';
 import { BarraAcciones } from '../../shared/barra-acciones';
 import { porcentajeDescuentoGeneral } from '../../shared/descuento-general';
 import { DialogoDetalle } from '../../shared/dialogo-detalle';
@@ -60,7 +61,7 @@ const MENSAJE_NUMERO = 'El número tiene que ser un entero.';
  */
 @Component({
   selector: 'app-presupuestos',
-  imports: [BarraAcciones, DecimalPipe, DialogoDetalle, DocumentoNoFiscalImprimible, MontoPipe],
+  imports: [BarraAcciones, DecimalPipe, DialogoDetalle, DocumentoNoFiscalImprimible, MontoPipe, RouterLink],
   templateUrl: './presupuestos.html',
   styleUrl: './presupuestos.css',
 })
@@ -78,6 +79,7 @@ export class Presupuestos implements OnInit {
   protected readonly esDueno = this.auth.esDueno;
   protected readonly etiqueta = ETIQUETA_ESTADO;
   protected readonly fechaHora = fechaHoraLocal;
+  protected readonly cantidadConUnidad = cantidadConUnidad;
   protected readonly porcentajeGeneral = porcentajeDescuentoGeneral;
   protected readonly dia = fechaDia;
 

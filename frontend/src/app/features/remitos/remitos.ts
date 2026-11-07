@@ -11,12 +11,13 @@ import {
   viewChild,
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { ActivatedRoute, Router } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { catchError, forkJoin, map, of, throwError } from 'rxjs';
 import { mensajeDe } from '../../core/api/api-error';
 import { PageResponse } from '../../core/api/page.models';
 import { AuthService } from '../../core/auth/auth.service';
 import { MontoPipe } from '../../core/formato/monto';
+import { cantidadConUnidad } from '../../core/formato/unidad';
 import { BarraAcciones } from '../../shared/barra-acciones';
 import { porcentajeDescuentoGeneral } from '../../shared/descuento-general';
 import { DialogoDetalle } from '../../shared/dialogo-detalle';
@@ -58,7 +59,7 @@ const MENSAJE_NUMERO = 'El número tiene que ser un entero.';
  */
 @Component({
   selector: 'app-remitos',
-  imports: [BarraAcciones, DecimalPipe, DialogoDetalle, DocumentoNoFiscalImprimible, MontoPipe],
+  imports: [BarraAcciones, DecimalPipe, DialogoDetalle, DocumentoNoFiscalImprimible, MontoPipe, RouterLink],
   templateUrl: './remitos.html',
   styleUrl: './remitos.css',
 })
@@ -75,6 +76,7 @@ export class Remitos implements OnInit {
   protected readonly estados = ESTADOS_REMITO;
   protected readonly etiqueta = ETIQUETA_ESTADO_REMITO;
   protected readonly fechaHora = fechaHoraLocal;
+  protected readonly cantidadConUnidad = cantidadConUnidad;
   protected readonly porcentajeGeneral = porcentajeDescuentoGeneral;
   protected readonly esDueno = () => this.auth.esDueno();
 

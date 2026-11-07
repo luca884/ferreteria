@@ -898,4 +898,43 @@ describe('Presupuestos', () => {
       expect(normal(detalle()!.querySelector('h2')!.textContent)).toBe('Presupuesto N.º 12');
     });
   });
+
+  describe('unidades y el link a la venta (informacion-y-links, S2 y S3)', () => {
+    it('la cantidad sale con su unidad', async () => {
+      await crear();
+      const base = detalleDe(12);
+      api.obtener.mockReturnValue(
+        of({
+          ...base,
+          renglones: [
+            { ...base.renglones[0], descripcion: 'Cable', unidad: 'METRO', cantidad: 25.5 },
+            { ...base.renglones[0], renglon: 2, cantidad: 1 },
+          ],
+        }),
+      );
+
+      await abrirDetalle(0);
+
+      const cantidades = Array.from(detalle()!.querySelectorAll('.renglones tbody tr')).map((tr) =>
+        normal(tr.querySelectorAll('td')[1].textContent),
+      );
+      expect(cantidades).toEqual(['25,5 metros', '1 unidad']);
+    });
+
+    it('para el Dueño, «Vendido en la venta N.º n» es un link al pop-up de esa venta; para el Vendedor, texto', async () => {
+      await crear(undefined, 'DUENO');
+      api.obtener.mockReturnValue(of(detalleDe(12, { estado: 'FACTURADO', facturadoPor: { ventaId: 80, numero: 19 } })));
+      await abrirDetalle(0);
+
+      expect(normal(detalle()!.querySelector('.nota-estado')!.textContent)).toBe('Vendido en la venta N.º 19');
+      expect(detalle()!.querySelector('.nota-estado a')!.getAttribute('href')).toBe('/ventas/80');
+
+      TestBed.resetTestingModule();
+      await crear(undefined, 'VENDEDOR');
+      api.obtener.mockReturnValue(of(detalleDe(12, { estado: 'FACTURADO', facturadoPor: { ventaId: 80, numero: 19 } })));
+      await abrirDetalle(0);
+
+      expect(detalle()!.querySelector('.nota-estado a')).toBeNull();
+    });
+  });
 });
