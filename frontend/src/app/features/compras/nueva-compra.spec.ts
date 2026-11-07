@@ -556,6 +556,14 @@ describe('NuevaCompra', () => {
 
       expect(boton('Ver vista previa')!.classList).toContain('primario');
     });
+
+    it('«Ver compras» es un botón de la barra, como los de las otras pantallas (no un link suelto)', async () => {
+      await crear();
+
+      const verCompras = el().querySelector<HTMLAnchorElement>('app-barra-acciones a[href="/compras"]')!;
+      expect(verCompras.textContent?.trim()).toBe('Ver compras');
+      expect([...verCompras.classList]).toEqual(expect.arrayContaining(['btn', 'accion-barra']));
+    });
   });
 
   describe('factura en PDF', () => {
