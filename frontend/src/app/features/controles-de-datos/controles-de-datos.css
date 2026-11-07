@@ -58,11 +58,18 @@ table {
   color: var(--texto-suave);
   font-size: var(--texto-sm);
 }
+.costo-real {
+  display: block;
+  margin-top: 2px;
+  color: var(--texto-suave);
+  font-size: var(--texto-sm);
+}
 
 @media print {
   .control,
   .emitido,
-  .manual {
+  .manual,
+  .costo-real {
     color: #000;
   }
   a {

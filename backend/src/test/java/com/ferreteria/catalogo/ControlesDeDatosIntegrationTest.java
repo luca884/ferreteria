@@ -25,6 +25,7 @@ class ControlesDeDatosIntegrationTest extends AjustesTestBase {
     private Long a;
     private Long b;
     private Long bulones;
+    private Long sur;
     private String duenoA;
 
     @BeforeEach
@@ -38,7 +39,7 @@ class ControlesDeDatosIntegrationTest extends AjustesTestBase {
         jdbc.update("insert into configuracion_cotizacion (ferreteria_id, vigente) values (?, 1000.0000)", a);
 
         bulones = rubro(a, "Bulones", "30");
-        Long sur = proveedor(a, "Bulonera Sur");
+        sur = proveedor(a, "Bulonera Sur");
         cargar(a, "C-001", "Clavo", "ARS", "0.00", "100.00", "IVA_21", bulones, sur);
         cargar(a, "A-002", "Abrazadera", "ARS", "0.00", "50.00", "IVA_21", null, null);
         cargar(a, "T-003", "Tuerca", "ARS", "100.00", "120.00", "IVA_21", bulones, sur);
@@ -111,6 +112,57 @@ class ControlesDeDatosIntegrationTest extends AjustesTestBase {
         borrarConfiguracion(a);
 
         assertThat(codigos("MARGEN_NEGATIVO", duenoA)).containsExactly("P-006", "T-003");
+    }
+
+    @Test
+    @DisplayName("margen negativo con el costo real (CU-13): los recargos cuentan, y si los dos importes se leen iguales no sale")
+    void margenNegativoConElCostoReal() throws Exception {
+        // Costo real 110 contra 107,44 sin IVA: sale por el flete (con el costo base, 100, no salia).
+        recargos(cargar(a, "K-012", "Cable con flete", "ARS", "100.00", "130.00", "IVA_21", bulones, sur),
+                "[{\"nombre\": \"Flete\", \"porcentaje\": 10.00}]");
+        // Costo real 120,11 contra 120,1074 sin IVA: se leen iguales («$ 120,11»), no sale (S4).
+        recargos(cargar(a, "E-013", "Embalado", "ARS", "115.00", "145.33", "IVA_21", bulones, sur),
+                "[{\"nombre\": \"EMBALAJE Y CARGA\", \"porcentaje\": 4.44}]");
+        // Costo real 90 contra 95,04 sin IVA: la bonificacion lo saca (con el costo base, 100, salia).
+        recargos(cargar(a, "Z-014", "Bonificado", "ARS", "100.00", "115.00", "IVA_21", bulones, sur),
+                "[{\"nombre\": \"Bonificacion\", \"porcentaje\": -10.00}]");
+
+        JsonNode filas = getJson(URL + "?control=MARGEN_NEGATIVO", duenoA);
+
+        assertThat(filas.findValuesAsText("codigoInterno")).containsExactly("K-012", "P-006", "S-005", "T-003");
+        JsonNode cable = filas.get(0);
+        assertThat(cable.get("costo").decimalValue()).isEqualByComparingTo("100.00");
+        assertThat(cable.get("costoReal").decimalValue()).isEqualByComparingTo("110.00");
+        assertThat(filas.get(1).get("costoReal").isNull()).isTrue();
+    }
+
+    @Test
+    @DisplayName("margen negativo sin dolar guardado: un articulo en USD con recargos tampoco sale")
+    void margenNegativoSinDolarConRecargos() throws Exception {
+        recargos(cargar(a, "V-015", "Valvula USD", "USD", "1.00", "1000.00", "IVA_21", bulones, null),
+                "[{\"nombre\": \"Flete\", \"porcentaje\": 10.00}]");
+        assertThat(codigos("MARGEN_NEGATIVO", duenoA)).containsExactly("P-006", "S-005", "T-003", "V-015");
+
+        borrarConfiguracion(a);
+
+        assertThat(codigos("MARGEN_NEGATIVO", duenoA)).containsExactly("P-006", "T-003");
+    }
+
+    @Test
+    @DisplayName("los otros controles tambien traen el costo real del articulo con recargos")
+    void costoRealEnLosOtrosControles() throws Exception {
+        recargos(cargar(a, "M-016", "Manguera", "ARS", "100.00", "200.00", "IVA_0", bulones, sur),
+                "[{\"nombre\": \"Flete\", \"porcentaje\": 5.00}]");
+
+        JsonNode filas = getJson(URL + "?control=IVA_CERO", duenoA);
+
+        assertThat(filas.findValuesAsText("codigoInterno")).containsExactly("L-007", "M-016");
+        assertThat(filas.get(0).get("costoReal").isNull()).isTrue();
+        assertThat(filas.get(1).get("costoReal").decimalValue()).isEqualByComparingTo("105.00");
+    }
+
+    private void recargos(Long articuloId, String json) {
+        jdbc.update("update articulo set recargos_costo = ? where id = ?", json, articuloId);
     }
 
     @Test

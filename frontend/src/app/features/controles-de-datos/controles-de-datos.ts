@@ -53,6 +53,9 @@ export class ControlesDeDatos implements OnInit {
   protected readonly elegido = computed(() => this.controles.find((c) => c.valor === this.control())!);
 
   protected readonly costo = (f: ArticuloEnControl) => formatearCosto(f.costo, f.moneda);
+  /** El costo con los recargos (CU-13), con el que se mide el margen negativo; null sin recargos. */
+  protected readonly costoReal = (f: ArticuloEnControl) =>
+    f.costoReal == null ? null : formatearCosto(f.costoReal, f.moneda);
   protected readonly precio = (f: ArticuloEnControl) => formatearMonto(f.precioFinal);
   protected readonly iva = (f: ArticuloEnControl) => ALICUOTA_IVA_LABELS[f.alicuotaIva];
 
