@@ -158,6 +158,30 @@ describe('ContrasenaForm', () => {
     expect(el().querySelector<HTMLButtonElement>('button[type="submit"]')!.disabled).toBe(true);
   });
 
+  it('avisa `editado` cuando el usuario escribe en cualquier campo, y no al reiniciar (arreglos-confusos, S8b)', async () => {
+    await abrir({ pedirActual: true });
+    let editados = 0;
+    fixture.componentInstance.editado.subscribe(() => editados++);
+
+    await escribir('actual', 'v');
+    await escribir('nueva', 'n');
+    await escribir('confirmacion', 'c');
+    expect(editados).toBe(3);
+
+    fixture.componentInstance.reiniciar();
+    await refrescar();
+    expect(editados).toBe(3);
+  });
+
+  it('los campos tienen aire entre sí (arreglos-confusos, S8d)', async () => {
+    await abrir({ pedirActual: true });
+
+    const form = getComputedStyle(el().querySelector('form')!);
+    expect(form.display).toBe('flex');
+    expect(form.flexDirection).toBe('column');
+    expect(form.getPropertyValue('row-gap') || form.getPropertyValue('gap')).not.toBe('');
+  });
+
   it('reiniciar vacía los campos y los errores', async () => {
     await abrir({ pedirActual: true });
     await escribir('actual', 'vieja1234');

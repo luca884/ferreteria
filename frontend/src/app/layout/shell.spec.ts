@@ -5,6 +5,7 @@ import { Observable, Subject, of, throwError } from 'rxjs';
 import { vi } from 'vitest';
 import { Sesion } from '../core/auth/auth.models';
 import { AuthService } from '../core/auth/auth.service';
+import { Avisos } from '../core/avisos/avisos';
 import { Cotizacion } from '../core/cotizacion/cotizacion.models';
 import { CotizacionService } from '../core/cotizacion/cotizacion.service';
 import { ClientesService } from '../features/clientes/clientes.service';
@@ -406,6 +407,29 @@ describe('Shell', () => {
     expect(evento.defaultPrevented).toBe(true);
   });
 
+  it('muestra arriba del contenido el aviso que dejó la pantalla anterior, y lo saca en la navegación siguiente (arreglos-confusos, S8a)', async () => {
+    const el = await render(true, null, TODAS);
+    TestBed.inject(Avisos).dejar('Cambiaste tu contraseña.');
+
+    await irA('/mostrador');
+
+    const aviso = el.querySelector('main .aviso-al-llegar');
+    expect(aviso?.textContent?.trim()).toBe('Cambiaste tu contraseña.');
+    expect(aviso?.getAttribute('role')).toBe('status');
+
+    await irA('/ventas');
+
+    expect(el.querySelector('.aviso-al-llegar')).toBeNull();
+  });
+
+  it('sin aviso pendiente no muestra nada', async () => {
+    const el = await render(true, null, TODAS);
+
+    await irA('/mostrador');
+
+    expect(el.querySelector('.aviso-al-llegar')).toBeNull();
+  });
+
   it('el contenido está posicionado: el `caption.sr-only` (position:absolute) no se escapa y estira el documento (arreglos-confusos, S1)', async () => {
     const el = await render(true);
 
@@ -542,12 +566,12 @@ describe('Shell', () => {
       expect(texto(el.querySelector('app-cotizacion-lateral'))).toContain('Oficial venta 1.100,00');
     });
 
-    it('hallazgo 5: con la contraseña por cambiar no la pide (el servidor da 403) y la pide en cuanto se cambia', async () => {
+    it('hallazgo 5: con la contraseña por cambiar no la pide (el servidor da 403) ni la muestra, y la pide en cuanto se cambia (arreglos-confusos, S8c)', async () => {
       vi.useFakeTimers();
       marca.set(true);
       const el = await mostrar(await render(false));
       expect(obtener).not.toHaveBeenCalled();
-      expect(texto(el.querySelector('app-cotizacion-lateral'))).toContain('Sin datos de cotización por ahora.');
+      expect(el.querySelector('app-cotizacion-lateral')).toBeNull();
 
       vi.advanceTimersByTime(5 * MINUTO);
       expect(obtener).not.toHaveBeenCalled();

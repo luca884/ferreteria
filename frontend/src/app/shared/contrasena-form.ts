@@ -1,4 +1,5 @@
 import { Component, inject, input, output } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import {
   AbstractControl,
   FormBuilder,
@@ -102,6 +103,13 @@ const coincide = (grupo: AbstractControl): ValidationErrors | null =>
       </div>
     </form>
   `,
+  styles: `
+    form {
+      display: flex;
+      flex-direction: column;
+      gap: var(--e-3);
+    }
+  `,
 })
 export class ContrasenaForm {
   readonly pedirActual = input(false);
@@ -113,6 +121,8 @@ export class ContrasenaForm {
   readonly textoEnviar = input('Guardar contraseña');
 
   readonly enviar = output<NuevaContrasena>();
+  /** El usuario escribió en algún campo: el contenedor saca los errores del servidor, que quedaron viejos. */
+  readonly editado = output<void>();
 
   protected readonly min = CONTRASENA_MIN;
   protected readonly max = CONTRASENA_MAX;
@@ -126,6 +136,11 @@ export class ContrasenaForm {
     },
     { validators: coincide },
   );
+
+  constructor() {
+    // reiniciar() no emite (emitEvent: false): solo cuenta lo que escribe el usuario.
+    this.form.valueChanges.pipe(takeUntilDestroyed()).subscribe(() => this.editado.emit());
+  }
 
   protected actualInvalida(): boolean {
     const actual = this.form.controls.actual;
@@ -157,6 +172,6 @@ export class ContrasenaForm {
 
   /** Vacía los campos y saca los errores (después de un cambio exitoso). */
   reiniciar(): void {
-    this.form.reset({ actual: '', nueva: '', confirmacion: '' });
+    this.form.reset({ actual: '', nueva: '', confirmacion: '' }, { emitEvent: false });
   }
 }

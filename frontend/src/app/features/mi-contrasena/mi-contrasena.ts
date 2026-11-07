@@ -3,6 +3,7 @@ import { Component, inject, signal, viewChild } from '@angular/core';
 import { erroresDeCampos, erroresPorCampo, mensajeDe } from '../../core/api/api-error';
 import { Router } from '@angular/router';
 import { AuthService } from '../../core/auth/auth.service';
+import { Avisos } from '../../core/avisos/avisos';
 import { BarraAcciones } from '../../shared/barra-acciones';
 import { ContrasenaForm, NuevaContrasena } from '../../shared/contrasena-form';
 
@@ -20,6 +21,7 @@ import { ContrasenaForm, NuevaContrasena } from '../../shared/contrasena-form';
 export class MiContrasena {
   private readonly auth = inject(AuthService);
   private readonly router = inject(Router);
+  private readonly avisos = inject(Avisos);
   private readonly formulario = viewChild.required(ContrasenaForm);
 
   /** La contraseña la eligió otra persona: se pide cambiarla antes de seguir y al cambiarla se va al inicio. */
@@ -28,6 +30,12 @@ export class MiContrasena {
   protected readonly errorActual = signal<string | null>(null);
   protected readonly error = signal<string | null>(null);
   protected readonly enviando = signal(false);
+
+  /** Lo que el servidor dijo del intento anterior queda viejo en cuanto el usuario corrige algo. */
+  protected limpiarErrores(): void {
+    this.errorActual.set(null);
+    this.error.set(null);
+  }
 
   protected cambiar(datos: NuevaContrasena): void {
     this.aviso.set(null);
@@ -40,7 +48,8 @@ export class MiContrasena {
         this.enviando.set(false);
         this.formulario().reiniciar();
         if (eraObligatorio) {
-          // La raíz redirige con inicioPorRol: cada rol cae en su pantalla de siempre.
+          // La raíz redirige con inicioPorRol: cada rol cae en su pantalla de siempre, y el shell muestra el aviso.
+          this.avisos.dejar('Cambiaste tu contraseña.');
           void this.router.navigateByUrl('/');
           return;
         }

@@ -4,6 +4,7 @@ import { NavigationEnd, Router, RouterLink, RouterLinkActive, RouterOutlet } fro
 import { EMPTY, catchError, filter, interval, merge, pairwise, startWith, switchMap } from 'rxjs';
 import { ROL_LABELS } from '../core/auth/auth.models';
 import { AuthService } from '../core/auth/auth.service';
+import { Avisos } from '../core/avisos/avisos';
 import { Cotizacion } from '../core/cotizacion/cotizacion.models';
 import { CotizacionService } from '../core/cotizacion/cotizacion.service';
 import { BuscadorMenu } from './buscador-menu';
@@ -48,6 +49,12 @@ export class Shell {
 
   /** Lo último que se leyó; si un pedido falla se conserva, y null hasta la primera respuesta. */
   protected readonly cotizacion = signal<Cotizacion | null>(null);
+  private readonly avisos = inject(Avisos);
+  /**
+   * El aviso que dejó la pantalla anterior y ninguna tomó al abrirse (por ejemplo, «Cambiaste tu contraseña.»: el Dueño
+   * y el Vendedor llegan a pantallas distintas). Se toma al terminar cada navegación, así que la siguiente lo saca.
+   */
+  protected readonly avisoAlLlegar = signal<string | null>(null);
 
   protected readonly grupos = computed(() => gruposPara(this.auth.esDueno()));
   private readonly url = signal(this.router.url);
@@ -61,7 +68,10 @@ export class Shell {
         filter((evento): evento is NavigationEnd => evento instanceof NavigationEnd),
         takeUntilDestroyed(),
       )
-      .subscribe((evento) => this.abrirElDe(evento.urlAfterRedirects));
+      .subscribe((evento) => {
+        this.abrirElDe(evento.urlAfterRedirects);
+        this.avisoAlLlegar.set(this.avisos.tomar());
+      });
 
     // Se lee al abrir, cada 5 minutos y cuando la configuración o un recálculo avisan que la cotización cambió.
     // El super admin no tiene ferretería: la cotización es un dato de ferretería y no se le pide. Con la contraseña
