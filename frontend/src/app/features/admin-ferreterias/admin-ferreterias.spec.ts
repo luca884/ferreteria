@@ -335,6 +335,20 @@ describe('AdminFerreterias', () => {
       expect(el().querySelector('form.alta [aria-invalid="true"]')).toBeNull();
     });
 
+    it('después del alta, sacar el foco de la razón social sin escribir no la deja «tocada e inválida»: styles.css pinta de rojo esa combinación aunque no haya mensaje (arreglos-confusos, S2)', async () => {
+      await crear();
+      await altaCompleta();
+      await enviar();
+      expect(document.activeElement).toBe(input('razonSocial'));
+
+      // Lo que pasa al abrir un diálogo (Reactivar, Suspender…) o al hacer clic afuera: blur y focusout reales.
+      (document.activeElement as HTMLElement).blur();
+      await refrescar();
+
+      expect(el().querySelector('form.alta input.ng-touched.ng-invalid')).toBeNull();
+      expect(el().querySelector('form.alta [aria-invalid="true"]')).toBeNull();
+    });
+
     it('si escribís en un campo, lo borrás y salís, sí avisa que es obligatorio', async () => {
       await crear();
 
