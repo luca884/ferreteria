@@ -20,6 +20,9 @@ import java.math.BigDecimal;
  * @param precioSinAjustes el precio calculado nuevo, antes de los ajustes sobre el precio final (CU-14); null si el
  *                         articulo no tiene ajustes o queda con precio manual. Con esto y el costo real la cuenta
  *                         costo x margen x IVA cierra en la vista previa (#97)
+ * @param precioManual  true si el articulo tiene precio manual y la operacion no es de precio final: el costo o el
+ *                      margen cambian y el precio queda (CU-14 punto 1). false en los modos de precio final, donde
+ *                      todos quedan con precio manual al precio nuevo
  */
 public record CambioMasivo(
         Long articuloId,
@@ -40,5 +43,6 @@ public record CambioMasivo(
         BigDecimal recargosPorcentaje,
         BigDecimal costoRealAnterior,
         BigDecimal costoRealNuevo,
-        BigDecimal precioSinAjustes) {
+        BigDecimal precioSinAjustes,
+        boolean precioManual) {
 }

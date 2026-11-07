@@ -1271,6 +1271,29 @@ class ActualizacionMasivaIntegrationTest extends IntegrationTestBase {
         }
     }
 
+    /** La fila marca el precio manual que el costo no mueve (G17); en los modos de precio final, no. */
+    @Test
+    void laVistaPreviaMarcaElPrecioManualQueNoCambia() throws Exception {
+        Tenant t = crearTenant();
+        long manual = insertarArticulo(t, "100.00", "500.00");
+        jdbc.update("update articulo set precio_manual = true where id = ?", manual);
+        long calculado = insertarArticulo(t, "100.00", "157.30");
+
+        JsonNode porCosto = vistaPrevia(t.dueno(), pedido("COSTO_PORCENTAJE", "10")).get("cambios");
+
+        assertThat(porCosto).hasSize(2);
+        assertThat(porCosto.get(0).get("articuloId").asLong()).isEqualTo(manual);
+        assertThat(porCosto.get(0).get("precioManual").asBoolean()).isTrue();
+        assertThat(dec(porCosto.get(0).get("precioNuevo"))).isEqualByComparingTo("500.00");
+        assertThat(porCosto.get(1).get("articuloId").asLong()).isEqualTo(calculado);
+        assertThat(porCosto.get(1).get("precioManual").asBoolean()).isFalse();
+
+        JsonNode porPrecio = vistaPrevia(t.dueno(), pedido("PRECIO_PORCENTAJE", "10")).get("cambios");
+
+        assertThat(porPrecio).hasSize(2);
+        assertThat(porPrecio.findValues("precioManual")).allSatisfy(v -> assertThat(v.asBoolean()).isFalse());
+    }
+
     @Test
     void precioFinalMasDiezPorCientoDejaPrecioManualSinTocarElCostoYGuardaHistorialMasivo() throws Exception {
         Tenant t = crearTenant();
