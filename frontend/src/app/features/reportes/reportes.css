@@ -110,6 +110,14 @@ table {
   border-top: 2px solid var(--borde);
   font-weight: 700;
 }
+/* «Total» es un th de fila: sin el fondo gris, las mayúsculas chicas ni el sticky del encabezado de columna (bugs de
+   la guía, S9), con la letra de las otras celdas del pie. */
 .fila-total th {
+  position: static;
+  background: none;
+  color: var(--texto);
+  font-size: inherit;
+  letter-spacing: normal;
+  text-transform: none;
   text-align: left;
 }

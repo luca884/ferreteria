@@ -120,11 +120,11 @@
                     <span class="etiqueta de-baja">De baja</span>
                   }
                 </td>
-                <td [class.mono]="!!proveedor.cuit">{{ proveedor.cuit || '—' }}</td>
+                <td class="cuit" [class.mono]="!!proveedor.cuit">{{ proveedor.cuit || '—' }}</td>
                 <td class="contacto">{{ proveedor.contacto || '—' }}</td>
-                <td>{{ proveedor.telefono || '—' }}</td>
-                <td>{{ proveedor.whatsapp || '—' }}</td>
-                <td>{{ proveedor.email || '—' }}</td>
+                <td class="telefono">{{ proveedor.telefono || '—' }}</td>
+                <td class="whatsapp">{{ proveedor.whatsapp || '—' }}</td>
+                <td class="correo">{{ proveedor.email || '—' }}</td>
               </tr>
             }
           </tbody>

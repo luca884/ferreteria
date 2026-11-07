@@ -126,8 +126,6 @@
           Elegido: <strong>{{ actual.descripcion }}</strong>
           @if (actual.activo) {
             · Enter edita
-          } @else {
-            · <span id="motivo-sin-ajuste">«{{ actual.descripcion }}» está dado de baja. Reactivalo para ajustar el stock.</span>
           }
         </span>
       }
@@ -148,6 +146,15 @@
         Siguiente
       </button>
     </nav>
+    <!-- El motivo de Ajustar stock deshabilitado, en su línea (reservada, para que la grilla no salte): dentro del
+         paginador lo partía en dos (bugs de la guía, S12). -->
+    <p class="motivo-linea">
+      @if (filas.elegido(); as actual) {
+        @if (!actual.activo) {
+          <span id="motivo-sin-ajuste">«{{ actual.descripcion }}» está dado de baja. Reactivalo para ajustar el stock.</span>
+        }
+      }
+    </p>
     <div class="grilla-marco">
       <table [attr.role]="auth.esDueno() ? 'grid' : null" aria-label="Artículos">
         <thead>

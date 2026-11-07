@@ -359,6 +359,14 @@ export class Clientes implements OnInit {
   }
 
   /** El saldo del Dueño: lo que debe; «a favor» si es negativo; vacío si el servidor no lo mandó. */
+  /** El documento en dos partes: el renglón se parte entre el tipo y el número, nunca dentro del número. */
+  protected partesDocumento(cliente: Cliente): { tipo: string; numero: string } | null {
+    const texto = documentoLegible(cliente);
+    if (!texto) return null;
+    const espacio = texto.indexOf(' ');
+    return { tipo: texto.slice(0, espacio), numero: texto.slice(espacio + 1) };
+  }
+
   protected saldoTexto(cliente: Cliente): string {
     if (cliente.saldo === undefined) return '';
     return cliente.saldo < 0 ? `${formatearMonto(-cliente.saldo)} a favor` : formatearMonto(cliente.saldo);

@@ -137,6 +137,33 @@ describe('Proveedores', () => {
     expect(el().querySelector('.barra-estado')?.textContent?.trim()).toBe('1 proveedor');
   });
 
+  // Bugs de la guía, S6: a 1280 px el CUIT se partía en sus guiones y el teléfono en su espacio (hasta 3 renglones).
+  it('el CUIT, el teléfono y el WhatsApp no se parten en renglones', async () => {
+    await crearComponente(true, [{ ...tersuave, telefono: '223 555-1234', whatsapp: '2235551234' }]);
+
+    const celdas = filas()[0].querySelectorAll<HTMLElement>('td');
+    const cuit = filas()[0].querySelector<HTMLElement>('td.cuit')!;
+    const telefono = filas()[0].querySelector<HTMLElement>('td.telefono')!;
+    const whatsapp = filas()[0].querySelector<HTMLElement>('td.whatsapp')!;
+
+    expect(celdas).toHaveLength(6);
+    expect(cuit.textContent!.trim()).toBe('30-12345678-9');
+    expect(telefono.textContent!.trim()).toBe('223 555-1234');
+    expect(whatsapp.textContent!.trim()).toBe('2235551234');
+    for (const celda of [cuit, telefono, whatsapp]) {
+      expect(getComputedStyle(celda).whiteSpace).toBe('nowrap');
+    }
+  });
+
+  it('el correo sí se puede partir: con el CUIT y el teléfono enteros, sin esto la tabla se corría de costado a 1280 px', async () => {
+    await crearComponente(true, [{ ...tersuave, email: 'ventas@distribuidora-del-sur.com.ar' }]);
+
+    const correo = filas()[0].querySelector<HTMLElement>('td.correo')!;
+
+    expect(correo.textContent!.trim()).toBe('ventas@distribuidora-del-sur.com.ar');
+    expect(getComputedStyle(correo).overflowWrap).toBe('anywhere');
+  });
+
   describe('buscar proveedor (mejoras-ferreteros-bloque-2, S3)', () => {
     const buscador = () => el().querySelector<HTMLInputElement>('input[type="search"]#buscar-proveedor')!;
 

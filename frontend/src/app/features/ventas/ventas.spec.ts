@@ -1108,6 +1108,8 @@ describe('Ventas (consulta y reimpresión, G60)', () => {
       ]);
       expect(celdas(filas()[1])[0]).toBe('14 Nota de crédito · Venta N.º 7');
       expect(celdas(filas()[1])[1]).toBe('B 00001-00000003');
+      // Bugs de la guía, S10: «Venta N.º 7» no se parte entre renglones (espacios duros).
+      expect(filas()[1].querySelector('.marca.nota')!.textContent).toContain('Venta N.º 7');
     });
 
     it('la anulación interna no lleva la marca «No facturable»: esa es una decisión del cobro, no de la nota (QA 05/11)', async () => {

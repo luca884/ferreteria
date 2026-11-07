@@ -112,6 +112,7 @@ describe('Clientes', () => {
 
   const el = () => fixture.nativeElement as HTMLElement;
   const texto = (selector: string) => el().querySelector(selector)?.textContent?.replace(/\s+/g, ' ').trim();
+  const normalizar = (t: string | null) => (t ?? '').replace(/\s+/g, ' ').trim();
   const filas = () => Array.from(el().querySelectorAll<HTMLTableRowElement>('tbody tr'));
   const input = (id: string) => el().querySelector<HTMLInputElement>(`#${id}`)!;
   const select = (id: string) => el().querySelector<HTMLSelectElement>(`#${id}`)!;
@@ -153,6 +154,52 @@ describe('Clientes', () => {
       expect(filas()[1].textContent).toContain('CUIT 30-71234567-1');
       expect(filas()[1].textContent).toContain('Responsable inscripto');
       expect(filas()[2].textContent).toContain('Inactivo');
+    });
+
+    // Bugs de la guía, S8: a 1280 px, con el alta al costado, Saldo y Límite quedaban detrás del scroll de costado. La
+    // tabla se angosta partiendo lo que se puede partir; el número del documento y los importes nunca se parten.
+    it('a 1280 px entra entera: el documento parte entre el tipo y el número, nunca dentro del número', async () => {
+      await crear();
+
+      const celda = filas()[1].querySelector<HTMLElement>('td.documento')!;
+      const numero = celda.querySelector<HTMLElement>('.numero-documento')!;
+
+      expect(normalizar(celda.textContent)).toBe('CUIT 30-71234567-1');
+      expect(numero.textContent).toBe('30-71234567-1');
+      expect(getComputedStyle(celda).whiteSpace).not.toBe('nowrap');
+      expect(getComputedStyle(numero).whiteSpace).toBe('nowrap');
+    });
+
+    it('y el saldo, el contacto y los encabezados pueden ir en dos renglones, con menos margen en las celdas', async () => {
+      await crear([{ ...norte, saldo: -5000 }]);
+
+      const saldo = filas()[0].querySelectorAll<HTMLElement>('td.num')[0];
+      const contacto = filas()[0].querySelector<HTMLElement>('td.contacto')!;
+      const encabezado = el().querySelector<HTMLElement>('thead th')!;
+
+      expect(normalizar(saldo.textContent)).toBe('$ 5.000,00 a favor');
+      expect(getComputedStyle(saldo).whiteSpace).toBe('normal');
+      expect(getComputedStyle(contacto).overflowWrap).toBe('anywhere');
+      expect(getComputedStyle(encabezado).whiteSpace).toBe('normal');
+      for (const celdaDeLaTabla of [encabezado, saldo]) {
+        expect(getComputedStyle(celdaDeLaTabla).paddingLeft).toBe('10px');
+        expect(getComputedStyle(celdaDeLaTabla).paddingRight).toBe('10px');
+      }
+    });
+
+    it('Saldo y Límite van antes que Contacto: si a 1280 px algo queda detrás del scroll, es el contacto', async () => {
+      await crear();
+      const encabezados = () => Array.from(el().querySelectorAll('thead th')).map((th) => normalizar(th.textContent));
+
+      expect(encabezados()).toEqual(['Razón social', 'Documento', 'Condición de IVA', 'Estado', 'Saldo', 'Límite', 'Contacto']);
+      expect(normalizar(filas()[0].querySelector('td:last-child')!.textContent)).toBe('2234567890');
+    });
+
+    it('el Vendedor, sin Saldo ni Límite, ve el contacto al final', async () => {
+      await crear(undefined, false);
+      const encabezados = Array.from(el().querySelectorAll('thead th')).map((th) => normalizar(th.textContent));
+
+      expect(encabezados).toEqual(['Razón social', 'Documento', 'Condición de IVA', 'Estado', 'Contacto']);
     });
 
     it('sin clientes dice que todavía no hay', async () => {

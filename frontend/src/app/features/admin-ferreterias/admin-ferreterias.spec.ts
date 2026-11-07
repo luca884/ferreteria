@@ -216,6 +216,29 @@ describe('AdminFerreterias', () => {
     expect(filas()).toHaveLength(1);
   });
 
+  // Bugs de la guía, S6: a 1280 px la tabla de 11 columnas se corría de costado. Además de pasar el alta abajo en las
+  // pantallas angostas (media query, se ve en el navegador), los encabezados y el email se pueden partir.
+  it('los encabezados se pueden partir, el email del Dueño después de la arroba, y el CUIT y el estado no', async () => {
+    await crear();
+
+    const tabla = el().querySelector<HTMLElement>('table[aria-label="Ferreterías"]')!;
+    const conEmail = filas().find((f) => f.querySelector('td.email')!.textContent!.includes('@'))!;
+    const email = conEmail.querySelector<HTMLElement>('td.email')!;
+    const encabezado = tabla.querySelector<HTMLElement>('thead th')!;
+
+    expect(getComputedStyle(encabezado).whiteSpace).toBe('normal');
+    // El texto no cambia; solo se marca dónde se puede partir: «dueno@» / «dominio».
+    expect(email.textContent!.trim()).toMatch(/^[^@\s]+@[^@\s]+$/);
+    expect(email.querySelector('wbr')?.previousSibling?.textContent).toMatch(/@$/);
+    expect(getComputedStyle(email).overflowWrap).toBe('break-word');
+    expect(getComputedStyle(conEmail.querySelector<HTMLElement>('td.cuit')!).whiteSpace).toBe('nowrap');
+    expect(getComputedStyle(conEmail.querySelector<HTMLElement>('td.estado')!).whiteSpace).toBe('nowrap');
+    for (const celda of [encabezado, email]) {
+      expect(getComputedStyle(celda).paddingLeft).toBe('10px');
+      expect(getComputedStyle(celda).paddingRight).toBe('10px');
+    }
+  });
+
   describe('alta', () => {
     it('mientras se guarda un alta los campos quedan bloqueados; al guardarse, el foco vuelve a la razón social para la siguiente', async () => {
       await crear();

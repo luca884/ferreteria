@@ -21,6 +21,28 @@ tr.inactivo td {
 .cuit {
   white-space: nowrap;
 }
+/* La tabla tiene 11 columnas y, con el alta al costado, a 1280 px se corría de costado (bugs de la guía, S6). Los
+   encabezados se pueden partir, el email después de la arroba, las celdas tienen un poco menos de margen y, hasta
+   1640 px (donde ya no entra al lado del alta), el alta va abajo. */
+table[aria-label='Ferreterías'] th,
+table[aria-label='Ferreterías'] td {
+  padding-left: 10px;
+  padding-right: 10px;
+}
+table[aria-label='Ferreterías'] th {
+  white-space: normal;
+}
+.email {
+  overflow-wrap: break-word;
+}
+@media (min-width: 901px) and (max-width: 1640px) {
+  .listado.con-alta {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .listado .alta {
+    position: static;
+  }
+}
 .numero {
   text-align: right;
 }

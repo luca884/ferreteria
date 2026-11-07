@@ -148,8 +148,9 @@ a.a-confirmar:focus-visible {
   padding-bottom: 2px;
   font-size: var(--texto-2xs);
 }
+/* 32 %: con el margen de la compra (abajo), «Mayorista» sigue entrando sin cortarse. */
 .cotizaciones thead th:first-child {
-  width: 36%;
+  width: 32%;
 }
 .cotizaciones tbody th {
   padding-left: var(--e-1);
@@ -169,6 +170,10 @@ a.a-confirmar:focus-visible {
 }
 .cotizaciones .num:last-child {
   padding-right: var(--e-1);
+}
+/* Un margen entre compra y venta: sin él se leían pegadas («1.520,001.570,00»), más con una de las dos resaltada. */
+.cotizaciones td.num:not(:last-child) {
+  padding-right: var(--e-2);
 }
 .cotizaciones .de-precios:last-child {
   padding-right: 0;

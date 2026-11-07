@@ -209,6 +209,16 @@ describe('ActualizacionMasiva', () => {
     });
   });
 
+  // Bugs de la guía, S13: con la pista abajo del Valor, la fila alineaba por abajo y «Operación» quedaba más bajo.
+  it('los campos de «2. Qué cambio» se alinean arriba: el rótulo «Operación» queda a la altura del Valor', async () => {
+    await crearComponente();
+
+    const fila = el().querySelector<HTMLElement>('#modo')!.closest<HTMLElement>('.fila')!;
+
+    expect(fila.classList).toContain('fila-cambio');
+    expect(getComputedStyle(fila).alignItems).toBe('flex-start');
+  });
+
   describe('permisos (R-023)', () => {
     it('el Vendedor ve el aviso y ni el formulario ni el botón', async () => {
       await crearComponente(false);

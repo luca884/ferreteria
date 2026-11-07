@@ -50,7 +50,7 @@ Restricciones: los arreglos de CSS no se pueden medir con Vitest (jsdom no calcu
 ## Tasks
 
 - [x] T1 · S1–S5 · ruta: inline · Aceptación: la de cada S · Evidencia: S1–S2 RED 2/138 → GREEN 139/139; S3 RED 3/36 → GREEN caja 99/99; S4 RED compile + 19/580 → GREEN 1369/1369 (46 archivos); S5 RED 1/139 → GREEN 139/139; ego-browser a 1280×800 (L3) · Risk: item 3 (S4: helper de formato que usan 8 hojas)
-- [ ] T2 · S6–S13, S25 · ruta: inline · Aceptación: la de cada S, medida a 1280×800 · Evidencia: — · Risk: none
+- [x] T2 · S6–S13, S25 · ruta: inline · Aceptación: la de cada S, medida a 1280×800 · Evidencia: RED→GREEN por pantalla (clientes 577/577, proveedores 58/58, admin 64/64, stock 10/10, ventas+reportes 92/92, artículos 461/461, masivo 224/224, layout 104/104); ego-browser a 1280×800 (L4) · Risk: none
 - [ ] T3 · S14–S17 · ruta: inline · Aceptación: la de cada S · Evidencia: — · Risk: item 3 (S15: interceptor de todos los pedidos)
 - [ ] T4 · S18–S24 · ruta: inline · Aceptación: la de cada S · Evidencia: — · Risk: item 3 (S19: parámetro nuevo del endpoint de exportar)
 
@@ -74,3 +74,14 @@ Restricciones: los arreglos de CSS no se pueden medir con Vitest (jsdom no calcu
   - S4: `formatearRestado` y `RestadoPipe` en `core/formato/monto.ts`; las 8 plantillas, `resumen-caja.ts` y el descuento por forma de pago del cobro lo usan. `formatearMonto` de un negativo (la anulación en la lista de Ventas) sigue con su guion. En ego-browser, el ticket con 10 % de descuento dice «Descuento −$ 156,96» (U+2212).
   - S5: reproducido en ego-browser. Justo después de cambiar de forma con la flecha se ven dos marcadas: la anterior se apaga con la transición de 150 ms del botón global, y además conserva el hover del mouse apoyado. Con `.medio { transition: none }`, la anterior queda solo con el gris del hover.
   - Próximo paso: T2.
+- L4 (2026-11-07) T2 hecha. Todo medido en ego-browser a 1280×800, antes y después.
+  - S8 Clientes: la tabla medía 820 px y entraban 663. Se parte entre el tipo y el número del documento (el número nunca), el saldo («a favor»), el contacto y los encabezados, con 10 px de margen en las celdas. Igual queda en 689 px: los mínimos son el número del CUIT y los encabezados de una palabra («CONTACTO», «ESTADO»). Con S25: Saldo y Límite van antes que Contacto, que quedó al final; a 1280 px quedan 25 px de Contacto detrás del scroll. El Vendedor ve Contacto después de Estado.
+  - S6 Proveedores: CUIT, teléfono y WhatsApp en un renglón. Así la tabla pasaba a desbordar 11 px (antes el CUIT partido le dejaba lugar): el correo se puede partir en cualquier lado y entra (678 de 678).
+  - S6 Admin: 11 columnas, 1125 px contra 663. Entre 901 y 1640 px el alta va abajo de la tabla (sticky apagado); los encabezados se parten, el email solo después de la arroba (`<wbr>`, `break-word`) y las celdas llevan 10 px de margen: 1019 de 1019. A 1700 px el alta sigue al costado.
+  - S7: la columna del nombre pasa de 36 % a 32 % («Mayorista» sigue entrando) y la compra lleva `var(--e-2)` a la derecha: entre compra y venta quedan de 7 a 16 px, con o sin resaltado.
+  - S9: `.fila-total th` sin fondo, mayúsculas, sticky ni letra chica (computado igual que su `td`).
+  - S10: `Venta&nbsp;N.º&nbsp;n`; en Ventas, «Venta N.º n» queda en un renglón en las tres notas.
+  - S11: la fecha de la última compra en un span `nowrap`; el proveedor se parte. Sin desborde (1068 de 1068).
+  - S12: el motivo va en una `p.motivo-linea` reservada entre el paginador y la grilla (como Clientes), con el mismo id y texto; el paginador queda en una línea (46 px).
+  - S13: `fila-cambio` con `align-items: flex-start`: «Operación» y «Porcentaje (%)» a la misma altura (318 y 318; antes 356 y 318).
+  - Próximo paso: T3.

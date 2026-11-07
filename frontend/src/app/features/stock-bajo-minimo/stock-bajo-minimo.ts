@@ -55,9 +55,12 @@ export class StockBajoMinimo implements OnInit {
 
   protected readonly costo = (f: ArticuloBajoMinimo) => formatearCosto(f.costo, f.moneda);
   protected readonly numero = (n: number) => NUMERO.format(n);
-  /** «12/10/2026 · Bulonera Sur» (bloque 2, S6); sin compras, un guion. */
+  /**
+   * «12/10/2026 · Bulonera Sur» (bloque 2, S6), en dos partes: la fecha no se parte y el proveedor puede bajar de
+   * renglón (bugs de la guía, S11). Sin compras, null y la celda muestra un guion.
+   */
   protected readonly ultimaCompra = (f: ArticuloBajoMinimo) =>
-    f.ultimaCompraFecha ? `${formatearFecha(f.ultimaCompraFecha)} · ${f.ultimaCompraProveedor}` : '—';
+    f.ultimaCompraFecha ? { fecha: formatearFecha(f.ultimaCompraFecha), proveedor: f.ultimaCompraProveedor } : null;
 
   ngOnInit(): void {
     if (this.auth.esDueno()) this.cargar();

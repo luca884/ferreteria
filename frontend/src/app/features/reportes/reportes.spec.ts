@@ -7,6 +7,7 @@ import { provideRouter } from '@angular/router';
 import { of, throwError } from 'rxjs';
 import { vi } from 'vitest';
 import { AuthService } from '../../core/auth/auth.service';
+import { cargarEstilosGlobales } from '../clientes/cuenta/estilos-globales.testing';
 import { Reportes } from './reportes';
 import { ReporteMovimientos, Resumen } from './reportes.models';
 import { ReportesService } from './reportes.service';
@@ -297,6 +298,23 @@ describe('Reportes de ventas', () => {
       '$ 3.050,00',
       '$ 1.025,29',
     ]);
+  });
+
+  // Bugs de la guía, S9: el «Total» es un th y heredaba el fondo gris, las mayúsculas chicas y el sticky del encabezado.
+  it('la celda «Total» del pie va con el fondo y la letra de su fila, no con los del encabezado de columna', async () => {
+    cargarEstilosGlobales();
+    await crear();
+    await elegir('por-articulo');
+
+    const total = el().querySelector<HTMLElement>('table tfoot th')!;
+    const vecina = total.closest('tr')!.querySelector<HTMLElement>('td')!;
+    const estilo = getComputedStyle(total);
+
+    expect(normal(total.textContent)).toBe('Total');
+    expect(['transparent', 'rgba(0, 0, 0, 0)']).toContain(estilo.backgroundColor);
+    expect(estilo.position).toBe('static');
+    expect(estilo.textTransform).toBe('none');
+    expect(estilo.fontSize).toBe(getComputedStyle(vecina).fontSize);
   });
 
   it('por rubro muestra el rubro con sus renglones', async () => {

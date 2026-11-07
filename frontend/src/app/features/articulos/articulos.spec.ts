@@ -675,6 +675,9 @@ describe('Articulos', () => {
       expect(ajustar.disabled).toBe(true);
       const motivo = el().querySelector(`#${ajustar.getAttribute('aria-describedby')}`);
       expect(motivo?.textContent?.trim()).toBe('«Tuerca vieja» está dado de baja. Reactivalo para ajustar el stock.');
+      // Bugs de la guía, S10.4/S12: el aviso va en su propia línea, fuera del paginador, que si no se partía en dos.
+      expect(motivo!.closest('nav.paginacion')).toBeNull();
+      expect(el().querySelector('nav.paginacion')!.textContent).not.toContain('dado de baja');
 
       await elegir(0);
       expect(barra('button.desactivar')).not.toBeNull();
