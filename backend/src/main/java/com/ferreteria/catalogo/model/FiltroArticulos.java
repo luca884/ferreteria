@@ -33,13 +33,23 @@ public record FiltroArticulos(Long proveedorId, Long rubroId, String q, boolean 
 
     /** null si q esta vacia; si no, %q% con \, % y _ escapados para que se busquen como texto. */
     public static String patronDeBusqueda(String q) {
+        String escapado = escapado(q);
+        return escapado == null ? null : "%" + escapado + "%";
+    }
+
+    /** Como {@link #patronDeBusqueda} pero q%: lo que empieza con lo buscado (el orden del listado). */
+    public static String prefijoDeBusqueda(String q) {
+        String escapado = escapado(q);
+        return escapado == null ? null : escapado + "%";
+    }
+
+    private static String escapado(String q) {
         if (q == null || q.isBlank()) {
             return null;
         }
-        String escapado = q.trim()
+        return q.trim()
                 .replace("\\", "\\\\")
                 .replace("%", "\\%")
                 .replace("_", "\\_");
-        return "%" + escapado + "%";
     }
 }

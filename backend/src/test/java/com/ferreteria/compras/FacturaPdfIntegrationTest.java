@@ -107,6 +107,31 @@ class FacturaPdfIntegrationTest extends ComprasTestBase {
     }
 
     @Test
+    @DisplayName("cada renglon con articulo trae su codigo interno y su moneda; uno sin articulo no trae ninguno (arreglos-compras, S7)")
+    void renglonConCodigoInternoYMoneda() throws Exception {
+        jdbc.update("update articulo set moneda = 'USD' where codigo_interno = 'TUE-1' and ferreteria_id = ?",
+                tienda.id());
+        byte[] pdf = ListasDePrueba.pdf(List.of(
+                List.of("FACTURA", "Codigo 01", "0004 - 00001234"),
+                List.of("FECHA:", "03/11/2026", "C.U.I.T.: " + cuitProveedor),
+                List.of("TOR-9", "2", "TORNILLO", "2.00", "4.00"),
+                List.of("TUE-9", "1", "TUERCA", "3.00", "3.00"),
+                List.of("OTRO-1", "1", "OTRA COSA", "3.00", "3.00"),
+                List.of("TOTAL", "10.00")));
+
+        postMultipart("/api/compras/factura-pdf", dueno, archivo("factura.pdf", pdf), null)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.renglones[0].codigo").value("TOR-9"))
+                .andExpect(jsonPath("$.renglones[0].articuloCodigoInterno").value("TOR-1"))
+                .andExpect(jsonPath("$.renglones[0].articuloMoneda").value("ARS"))
+                .andExpect(jsonPath("$.renglones[1].articuloCodigoInterno").value("TUE-1"))
+                .andExpect(jsonPath("$.renglones[1].articuloMoneda").value("USD"))
+                .andExpect(jsonPath("$.renglones[2].articuloId").doesNotExist())
+                .andExpect(jsonPath("$.renglones[2].articuloCodigoInterno").doesNotExist())
+                .andExpect(jsonPath("$.renglones[2].articuloMoneda").doesNotExist());
+    }
+
+    @Test
     @DisplayName("un PDF sin texto y una factura sin renglones avisan con el texto de la factura: 400")
     void erroresDeLectura() throws Exception {
         postMultipart("/api/compras/factura-pdf", dueno, archivo("escaneada.pdf", ListasDePrueba.pdfSinTexto()), null)

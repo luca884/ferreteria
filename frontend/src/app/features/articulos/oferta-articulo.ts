@@ -4,6 +4,8 @@ import { FormControl, FormGroup, ReactiveFormsModule } from '@angular/forms';
 import { erroresPorCampo, mensajeDe } from '../../core/api/api-error';
 import { formatearFecha } from '../../core/formato/fecha-hora';
 import { MontoPipe, formatearMonto } from '../../core/formato/monto';
+import { CampoMoneda } from '../../shared/campo-moneda';
+import { ImporteInput } from '../../shared/importe-input';
 import { Articulo, TIPOS_OFERTA, TIPO_OFERTA_LABELS, TipoOferta, precioDeOferta } from './articulo.models';
 import { ArticulosService } from './articulos.service';
 
@@ -21,7 +23,7 @@ function hoyEnArgentina(): string {
  */
 @Component({
   selector: 'app-oferta-articulo',
-  imports: [ReactiveFormsModule, MontoPipe],
+  imports: [CampoMoneda, ImporteInput, ReactiveFormsModule, MontoPipe],
   templateUrl: './oferta-articulo.html',
   styleUrl: './oferta-articulo.css',
 })

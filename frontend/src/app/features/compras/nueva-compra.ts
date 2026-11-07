@@ -1,12 +1,14 @@
 import { DecimalPipe } from '@angular/common';
-import { Component, OnInit, inject, signal } from '@angular/core';
+import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { erroresPorCampo, mensajeDe } from '../../core/api/api-error';
 import { AuthService } from '../../core/auth/auth.service';
-import { centavosDeImporte, textoDeImporte } from '../../core/formato/importe';
-import { MontoPipe } from '../../core/formato/monto';
+import { centavosDeImporte, textoDeImporte, textoDePlata } from '../../core/formato/importe';
+import { MontoPipe, formatearCosto } from '../../core/formato/monto';
 import { BarraAcciones } from '../../shared/barra-acciones';
+import { CampoMoneda } from '../../shared/campo-moneda';
 import { ImporteInput } from '../../shared/importe-input';
+import { SelectorArchivo } from '../../shared/selector-archivo';
 import { Articulo } from '../articulos/articulo.models';
 import { ArticulosService } from '../articulos/articulos.service';
 import { hoyEnBuenosAires } from '../clientes/cuenta/cobranza.models';
@@ -29,6 +31,7 @@ const MENSAJE_PROVEEDORES = 'No se pudieron cargar los proveedores.';
 const MENSAJE_BUSQUEDA = 'No se pudo buscar. Probá de nuevo.';
 const MENSAJE_VISTA_PREVIA = 'No se pudo armar la vista previa. Probá de nuevo.';
 const MENSAJE_LEER_FACTURA = 'No se pudo leer la factura. Probá de nuevo o cargá la compra a mano.';
+const MENSAJE_SIN_ARTICULO = 'Resolvé los renglones sin artículo.';
 const AVISO_CANTIDAD_NO_ENTERA = 'La cantidad no es entera: revisala contra la factura.';
 const MENSAJE_REGISTRAR = 'No se pudo registrar la compra. Probá de nuevo: si ya se guardó, no se duplica.';
 /** Lo que valida el backend: hasta 5 recargos del costo por compra. */
@@ -38,6 +41,8 @@ const MAXIMO_RECARGOS = 5;
 interface RenglonEnCarga {
   articuloId: number;
   codigoInterno: string;
+  /** El código con el que lo factura el proveedor; se muestra chico si no es el interno. */
+  codigoProveedor: string | null;
   descripcion: string;
   moneda: string;
   cantidad: string;
@@ -76,7 +81,7 @@ interface LecturaDeFactura {
  */
 @Component({
   selector: 'app-nueva-compra',
-  imports: [BarraAcciones, DecimalPipe, ImporteInput, MontoPipe, RouterLink],
+  imports: [BarraAcciones, DecimalPipe, CampoMoneda, ImporteInput, MontoPipe, RouterLink, SelectorArchivo],
   templateUrl: './nueva-compra.html',
   styleUrl: './compras.css',
 })
@@ -99,6 +104,13 @@ export class NuevaCompra implements OnInit {
 
   protected readonly busqueda = signal('');
   protected readonly resultados = signal<Articulo[]>([]);
+  /** Cuántos artículos encontró la búsqueda: se ven hasta {@link RESULTADOS_POR_BUSQUEDA}. */
+  protected readonly totalResultados = signal(0);
+  /** La opción que marcan las flechas; -1 si ninguna (Enter busca). */
+  protected readonly activo = signal(-1);
+  protected readonly opcionActiva = computed(() =>
+    this.activo() >= 0 && this.activo() < this.resultados().length ? `resultado-compra-${this.activo()}` : null,
+  );
   protected readonly buscando = signal(false);
   protected readonly renglones = signal<RenglonEnCarga[]>([]);
 
@@ -107,6 +119,8 @@ export class NuevaCompra implements OnInit {
   protected readonly maximoRecargos = MAXIMO_RECARGOS;
 
   protected readonly leyendo = signal(false);
+  /** El PDF elegido, para que el selector diga cuál se leyó. */
+  protected readonly archivoFactura = signal<File | null>(null);
   protected readonly lectura = signal<LecturaDeFactura | null>(null);
   protected readonly sinArticulo = signal<RenglonSinArticulo[]>([]);
   /** El renglón sin artículo para el que se está buscando uno: el próximo artículo elegido lo resuelve. */
@@ -151,12 +165,40 @@ export class NuevaCompra implements OnInit {
           return;
         }
         this.resultados.set(pagina.items);
+        this.totalResultados.set(pagina.totalElements);
+        this.activo.set(-1);
       },
       error: () => {
         this.buscando.set(false);
         this.errores.set([MENSAJE_BUSQUEDA]);
       },
     });
+  }
+
+  /** Escribir otra cosa deja sin opción activa: el próximo Enter busca. */
+  protected escribirBusqueda(texto: string): void {
+    this.busqueda.set(texto);
+    this.activo.set(-1);
+  }
+
+  /** Flechas para moverse por los resultados y Enter para agregar el marcado (como en el Mostrador). */
+  protected alTeclear(evento: KeyboardEvent): void {
+    const cantidad = this.resultados().length;
+    if (cantidad === 0) return;
+    if (evento.key === 'ArrowDown') {
+      evento.preventDefault();
+      this.activo.update((i) => Math.min(i + 1, cantidad - 1));
+    } else if (evento.key === 'ArrowUp') {
+      evento.preventDefault();
+      this.activo.update((i) => Math.max(i - 1, 0));
+    } else if (evento.key === 'Enter' && this.opcionActiva() !== null) {
+      evento.preventDefault();
+      this.agregar(this.resultados()[this.activo()]);
+    }
+  }
+
+  protected costoDe(articulo: Articulo): string {
+    return formatearCosto(articulo.costo, articulo.moneda === 'USD' ? 'USD' : 'ARS');
   }
 
   /** Agrega el artículo con cantidad 1 y su costo de hoy; si ya está, solo avisa. */
@@ -173,26 +215,27 @@ export class NuevaCompra implements OnInit {
       {
         articuloId: articulo.id,
         codigoInterno: articulo.codigoInterno,
+        // Un renglón de la factura muestra el código de la factura, para cotejarlo con el papel.
+        codigoProveedor: resuelto ? resuelto.codigo : (articulo.codigoProveedor ?? null),
         descripcion: articulo.descripcion,
         moneda: articulo.moneda,
         cantidad: resuelto ? String(resuelto.cantidad) : '1',
-        costo: textoDeImporte(resuelto ? resuelto.costoUnitario : articulo.costo),
+        costo: textoDePlata(resuelto ? resuelto.costoUnitario : articulo.costo),
         ...(resuelto?.cantidadNoEntera ? { aviso: AVISO_CANTIDAD_NO_ENTERA } : {}),
       },
     ]);
     if (resuelto) {
       this.sinArticulo.update((lista) => lista.filter((r) => r !== resuelto));
       this.resolviendo.set(null);
+      this.olvidarCartelSinArticulo();
     }
     this.descartarVistaPrevia();
   }
 
   /** Lee la factura del proveedor en PDF y completa el formulario con el borrador; después se revisa y se sigue de siempre. */
-  protected leerFactura(evento: Event): void {
-    const campoArchivo = evento.target as HTMLInputElement;
-    const archivo = campoArchivo.files?.[0];
+  protected leerFactura(archivo: File | null): void {
     if (!archivo || this.leyendo()) return;
-    campoArchivo.value = '';
+    this.archivoFactura.set(archivo);
     this.leyendo.set(true);
     this.errores.set([]);
     this.api.leerFactura(archivo).subscribe({
@@ -229,11 +272,12 @@ export class NuevaCompra implements OnInit {
       }
       encontrados.push({
         articuloId: r.articuloId,
-        codigoInterno: r.codigo,
+        codigoInterno: r.articuloCodigoInterno ?? r.codigo,
+        codigoProveedor: r.codigo,
         descripcion: r.articuloDescripcion ?? r.descripcion,
-        moneda: 'ARS',
+        moneda: r.articuloMoneda ?? 'ARS',
         cantidad: String(r.cantidad),
-        costo: textoDeImporte(r.costoUnitario),
+        costo: textoDePlata(r.costoUnitario),
         ...(r.cantidadNoEntera ? { aviso: AVISO_CANTIDAD_NO_ENTERA } : {}),
       });
     }
@@ -263,7 +307,30 @@ export class NuevaCompra implements OnInit {
       this.resolviendo.set(null);
       this.aviso.set(null);
     }
+    this.olvidarCartelSinArticulo();
     this.descartarVistaPrevia();
+  }
+
+  /**
+   * Abre el alta de artículos en otra pestaña (así no se pierde la compra) con lo que dice la factura: descripción,
+   * código del proveedor, el proveedor de la compra (si ya se eligió) y el costo.
+   */
+  protected crearArticulo(renglon: RenglonSinArticulo): void {
+    const parametros = new URLSearchParams({
+      descripcion: renglon.descripcion,
+      codigoProveedor: renglon.codigo,
+    });
+    if (this.proveedorId() !== '') parametros.set('proveedorId', this.proveedorId());
+    parametros.set('costo', String(renglon.costoUnitario));
+    for (const [clave, valor] of [...parametros]) if (valor === '') parametros.delete(clave);
+    window.open(`/articulos/nuevo?${parametros}`, '_blank', 'noopener');
+  }
+
+  /** Cuando ya no queda ningún renglón sin artículo, el cartel de «Resolvé los renglones» es un error viejo. */
+  private olvidarCartelSinArticulo(): void {
+    if (this.sinArticulo().length === 0) {
+      this.errores.update((lista) => lista.filter((e) => e !== MENSAJE_SIN_ARTICULO));
+    }
   }
 
   protected agregarRecargo(): void {
@@ -370,6 +437,7 @@ export class NuevaCompra implements OnInit {
     this.sinArticulo.set([]);
     this.resolviendo.set(null);
     this.lectura.set(null);
+    this.archivoFactura.set(null);
   }
 
   /** Lo que se vio en la vista previa deja de valer: para confirmar hay que volver a verla (y nace otra clave). */
@@ -388,7 +456,7 @@ export class NuevaCompra implements OnInit {
     const numero = entero(this.numero());
     if (numero === null) faltan.push('El número tiene que ser un número entero.');
     if (this.fecha() === '') faltan.push('Falta la fecha.');
-    if (this.sinArticulo().length > 0) faltan.push('Resolvé los renglones sin artículo.');
+    if (this.sinArticulo().length > 0) faltan.push(MENSAJE_SIN_ARTICULO);
     else if (this.renglones().length === 0) faltan.push('Agregá al menos un artículo.');
     const renglones = this.renglones().map((r) => ({
       articuloId: r.articuloId,

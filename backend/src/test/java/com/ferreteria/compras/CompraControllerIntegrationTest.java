@@ -54,7 +54,16 @@ class CompraControllerIntegrationTest extends IntegrationTestBase {
                 .andExpect(jsonPath("$.renglones[0].precioAnterior").value(157.30))
                 .andExpect(jsonPath("$.renglones[0].precioNuevo").value(173.03))
                 .andExpect(jsonPath("$.renglones[0].subtotal").value(2200.00))
-                .andExpect(jsonPath("$.renglones[0].advertencia").doesNotExist());
+                .andExpect(jsonPath("$.renglones[0].advertencia").doesNotExist())
+                .andExpect(jsonPath("$.renglones[0].stockAnterior").value(0))
+                .andExpect(jsonPath("$.renglones[0].stockNuevo").value(20))
+                .andExpect(jsonPath("$.renglones[0].alicuotaIva").value(21.0))
+                .andExpect(jsonPath("$.subtotalSinIva").value(2200.00))
+                .andExpect(jsonPath("$.recargosImporte").value(0))
+                .andExpect(jsonPath("$.iva[0].porcentaje").value(21.0))
+                .andExpect(jsonPath("$.iva[0].base").value(2200.00))
+                .andExpect(jsonPath("$.iva[0].importe").value(462.00))
+                .andExpect(jsonPath("$.total").value(2662.00));
         assertThat(jdbc.queryForObject("select count(*) from compra where ferreteria_id = ?", Integer.class, tienda.id()))
                 .isZero();
     }
@@ -143,6 +152,27 @@ class CompraControllerIntegrationTest extends IntegrationTestBase {
                 .andExpect(jsonPath("$.message").value("Artículo no encontrado"));
         assertThat(jdbc.queryForObject("select costo from articulo where id = ?", String.class, tornillo))
                 .isEqualTo("100.00");
+    }
+
+    @Test
+    @DisplayName("otra ferreteria no puede pedir la vista previa con el proveedor ni el articulo ajenos: 404, y no se escribe nada (sonda del verificador)")
+    void vistaPreviaAislada() throws Exception {
+        Tienda otra = tienda();
+        String duenoOtra = login(otra.emailDueno());
+        long proveedorOtra = proveedor(otra.id(), "Otro proveedor");
+        long articuloOtra = articulo(otra.id(), "TOR-1", "Tornillo otra", "100.00", "157.30");
+
+        postJson("/api/compras/vista-previa", duenoOtra, cuerpo(null, proveedor, 7, articuloOtra, "1", "1"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.message").value("Proveedor no encontrado"));
+        postJson("/api/compras/vista-previa", duenoOtra, cuerpo(null, proveedorOtra, 7, tornillo, "1", "1"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.message").value("Artículo no encontrado"));
+        assertThat(jdbc.queryForMap("select stock_actual, costo from articulo where id = ?", tornillo))
+                .containsEntry("stock_actual", new java.math.BigDecimal("0.000"))
+                .containsEntry("costo", new java.math.BigDecimal("100.00"));
+        assertThat(jdbc.queryForObject("select count(*) from compra where ferreteria_id in (?, ?)", Integer.class,
+                tienda.id(), otra.id())).isZero();
     }
 
     @Test

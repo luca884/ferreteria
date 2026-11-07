@@ -3,6 +3,7 @@ import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { erroresDeCampos, mensajeDe } from '../../core/api/api-error';
 import { AuthService } from '../../core/auth/auth.service';
 import { BarraAcciones } from '../../shared/barra-acciones';
+import { CampoMoneda } from '../../shared/campo-moneda';
 import { ImporteInput } from '../../shared/importe-input';
 import { ConfiguracionVentasService } from './configuracion-ventas.service';
 
@@ -12,7 +13,7 @@ import { ConfiguracionVentasService } from './configuracion-ventas.service';
  */
 @Component({
   selector: 'app-configuracion-ventas',
-  imports: [ReactiveFormsModule, BarraAcciones, ImporteInput],
+  imports: [ReactiveFormsModule, BarraAcciones, CampoMoneda, ImporteInput],
   templateUrl: './configuracion-ventas.html',
   styleUrl: './configuracion-ventas.css',
 })

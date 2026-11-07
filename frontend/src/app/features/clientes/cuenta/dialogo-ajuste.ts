@@ -13,6 +13,7 @@ import {
   viewChild,
 } from '@angular/core';
 import { MontoPipe } from '../../../core/formato/monto';
+import { CampoMoneda } from '../../../shared/campo-moneda';
 import { ImporteInput } from '../../../shared/importe-input';
 import { TrampaFoco } from '../../../shared/trampa-foco';
 import { fechaHoraLocal } from '../../caja/caja.models';
@@ -52,7 +53,7 @@ type Paso = 'datos' | 'confirmar';
  */
 @Component({
   selector: 'app-dialogo-ajuste',
-  imports: [ImporteInput, MontoPipe, TrampaFoco],
+  imports: [CampoMoneda, ImporteInput, MontoPipe, TrampaFoco],
   templateUrl: './dialogo-ajuste.html',
   styleUrl: './dialogo-ajuste.css',
 })

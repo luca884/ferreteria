@@ -171,12 +171,6 @@ export class Proveedores implements OnInit {
     this.aDarDeBaja.set(this.filas.elegido());
   }
 
-  /** «Ana · 223 555-1234», lo que haya de los dos; «—» si no hay ninguno. */
-  protected contactoDe(proveedor: Proveedor): string {
-    const partes = [proveedor.contacto, proveedor.telefono].filter((p): p is string => !!p);
-    return partes.length > 0 ? partes.join(' · ') : '—';
-  }
-
   protected invalido(campo: 'nombre' | 'cuit' | 'contacto' | 'telefono' | 'whatsapp' | 'email'): boolean {
     const control = this.form.controls[campo];
     return control.touched && control.invalid;

@@ -161,6 +161,8 @@ describe('ArticuloForm', () => {
       cotizacion?: Cotizacion | 'falla';
       /** Lo que responde GET /articulos/codigo-siguiente; por defecto, sin sugerencia. */
       codigoSugerido?: string | null | 'falla';
+      /** Los parámetros de la dirección (por ejemplo, los que manda «Crear artículo» de Nueva compra). */
+      query?: Record<string, string>;
     } = {},
   ) {
     const {
@@ -171,6 +173,7 @@ describe('ArticuloForm', () => {
       sinConfiguracion = false,
       cotizacion = cotizacionActiva(),
       codigoSugerido = null,
+      query = {},
     } = opciones;
     servicio = {
       obtener: vi.fn(() =>
@@ -215,7 +218,7 @@ describe('ArticuloForm', () => {
         {
           provide: ActivatedRoute,
           useValue: {
-            snapshot: { paramMap: convertToParamMap(id === null ? {} : { id }) },
+            snapshot: { paramMap: convertToParamMap(id === null ? {} : { id }), queryParamMap: convertToParamMap(query) },
           },
         },
       ],
@@ -291,6 +294,47 @@ describe('ArticuloForm', () => {
     await escribir('descripcion', 'Tornillo');
     await escribir('costo', '100');
   }
+
+  describe('alta desde Nueva compra (arreglos-compras, S8)', () => {
+    const datosDeLaCompra = {
+      descripcion: 'Tornillo hexagonal 1/4',
+      codigoProveedor: 'DBS-100',
+      proveedorId: '11',
+      costo: '578378',
+    };
+
+    it('el alta arranca con la descripción, el código y el proveedor de la factura y el costo con dos decimales', async () => {
+      await crearComponente({ query: datosDeLaCompra, codigoSugerido: '003' });
+
+      expect(input('descripcion').value).toBe('Tornillo hexagonal 1/4');
+      expect(input('codigoProveedor').value).toBe('DBS-100');
+      expect(select('proveedor').selectedOptions[0].textContent).toContain('Tersuave');
+      expect(input('costo').value).toBe('578.378,00');
+      expect(input('codigoInterno').value).toBe('003');
+    });
+
+    it('un proveedor que no existe o un costo que no es número se ignoran', async () => {
+      await crearComponente({ query: { ...datosDeLaCompra, proveedorId: '999', costo: 'abc' } });
+
+      expect(input('descripcion').value).toBe('Tornillo hexagonal 1/4');
+      expect(select('proveedor').selectedOptions[0].textContent).toContain('Sin proveedor');
+      expect(input('costo').value).toBe('');
+    });
+
+    it('al editar un artículo los parámetros se ignoran', async () => {
+      await crearComponente({ id: '7', query: { ...datosDeLaCompra, descripcion: 'Otra cosa' } });
+
+      expect(input('descripcion').value).toBe('Tornillo hexagonal 1/4');
+      expect(input('codigoProveedor').value).toBe('AB-12');
+    });
+
+    it('sin parámetros el alta queda como siempre', async () => {
+      await crearComponente();
+
+      expect(input('descripcion').value).toBe('');
+      expect(input('codigoProveedor').value).toBe('');
+    });
+  });
 
   describe('código interno sugerido (mejoras-ferreteros-bloque-1, S3)', () => {
     it('el alta arranca con el código siguiente al último cargado y lo explica', async () => {
@@ -698,7 +742,8 @@ describe('ArticuloForm', () => {
       expect(input('codigoBarras').value).toBe('7790001000012');
       expect(input('codigoProveedor').value).toBe('AB-12');
       expect(input('descripcion').value).toBe('Tornillo hexagonal 1/4');
-      expect(input('costo').value).toBe('100');
+      // Campo de plata: el costo cargado se ve con dos decimales (arreglos-compras, S6).
+      expect(input('costo').value).toBe('100,00');
       expect(input('margen').value).toBe('35');
       expect(input('stockMinimo').value).toBe('3');
       expect(input('ubicacion').value).toBe('Pasillo 2');
@@ -1047,7 +1092,7 @@ describe('ArticuloForm', () => {
 
     it('no convierte nada: al volver a pesos el costo también queda vacío', async () => {
       await crearComponente({ id: '5', articulo: articuloGuardado({ moneda: 'USD', costo: 10 }) });
-      expect(input('costo').value).toBe('10');
+      expect(input('costo').value).toBe('10,00');
 
       await elegir('moneda', 'Pesos (ARS)');
 
@@ -1058,7 +1103,7 @@ describe('ArticuloForm', () => {
       await crearComponente({ id: '5', articulo: articuloGuardado({ moneda: 'USD', costo: 10 }) });
 
       expect(elegida('moneda')).toBe('Dólares (USD)');
-      expect(input('costo').value).toBe('10');
+      expect(input('costo').value).toBe('10,00');
     });
 
     it('avisa al lado del selector que cambiar la moneda borra el costo', async () => {
@@ -1648,7 +1693,7 @@ describe('ArticuloForm', () => {
         await tildar('precioManual', true);
 
         expect(etiquetaDe('precioFinalManual')).toBe('Precio final (con IVA)');
-        expect(input('precioFinalManual').value).toBe('160');
+        expect(input('precioFinalManual').value).toBe('160,00');
         expect(el().querySelector('.precio-en-vivo')).toBeNull();
       });
 
@@ -1688,7 +1733,7 @@ describe('ArticuloForm', () => {
         await crearComponente({ id: '5', articulo: manual() });
 
         expect(input('precioManual').checked).toBe(true);
-        expect(input('precioFinalManual').value).toBe('2.000');
+        expect(input('precioFinalManual').value).toBe('2.000,00');
 
         await enviar();
 
@@ -1871,7 +1916,7 @@ describe('ArticuloForm', () => {
         expect(filas()).toBe(2);
         expect(input('ajuste-precio-nombre-0').value).toBe('Flete');
         expect(elegida('ajuste-precio-tipo-1')).toBe('$');
-        expect(input('ajuste-precio-valor-1').value).toBe('-5');
+        expect(input('ajuste-precio-valor-1').value).toBe('-5,00');
 
         await quitar(1);
         await quitar(0);
@@ -2300,7 +2345,7 @@ describe('ArticuloForm', () => {
 
         await clicAjustes();
 
-        expect(input('costo').value).toBe('855');
+        expect(input('costo').value).toBe('855,00');
       });
 
       it('lo escrito en el resto del formulario se conserva al guardar ajustes', async () => {
@@ -2682,7 +2727,7 @@ describe('ArticuloForm', () => {
         await refrescar();
 
         // El costo del formulario es el de la respuesta, no el viejo.
-        expect(input('costo').value).toBe('855');
+        expect(input('costo').value).toBe('855,00');
         expect(input('ajuste2').value).toBe('');
         expect(limpio(el().querySelector('[data-foco-ajustes]')?.textContent)).toContain('Se guardaron los ajustes');
         expect(el().querySelector('button.recargar')).not.toBeNull();
@@ -2709,7 +2754,7 @@ describe('ArticuloForm', () => {
         botonAjustes().click();
         await refrescar();
 
-        expect(input('costo').value).toBe('855');
+        expect(input('costo').value).toBe('855,00');
         await enviar();
         expect(servicio.actualizar).not.toHaveBeenCalled();
 
@@ -2762,7 +2807,7 @@ describe('ArticuloForm', () => {
         expect(servicio.obtener).toHaveBeenCalledTimes(2);
         expect(servicio.desglose).toHaveBeenCalledTimes(2);
         expect(input('descripcion').value).toBe('Lo que dejó la importación');
-        expect(input('costo').value).toBe('990');
+        expect(input('costo').value).toBe('990,00');
         expect(botonRecargar()).toBeNull();
         expect(limpio(aviso()?.textContent)).toBe('Se recargó el artículo con los últimos cambios.');
         // y el próximo guardado ya manda la versión nueva

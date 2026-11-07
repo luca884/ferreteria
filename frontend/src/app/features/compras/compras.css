@@ -18,10 +18,23 @@
   margin-bottom: 1rem;
 }
 
+/* Cada parte de Nueva compra es una sección con su título, como los pasos de Importar lista. */
+.paso {
+  margin-bottom: var(--e-4);
+}
+
+.paso > h2 {
+  padding-bottom: var(--e-2);
+  border-bottom: 1px solid var(--borde);
+}
+
+.factura-pdf {
+  max-width: 640px;
+  margin-bottom: 0.75rem;
+}
+
 .encabezado {
-  border: 1px solid var(--borde, #d8dee8);
-  border-radius: 8px;
-  padding: 0.75rem 1rem 1rem;
+  margin-bottom: 0;
 }
 
 .encabezado input[name='puntoVenta'] {
@@ -32,18 +45,67 @@
   width: 9rem;
 }
 
+/* Resultados de «Agregar artículo»: una lista alineada, como la del Mostrador. */
 .resultados {
-  list-style: none;
-  margin: 0 0 1rem;
-  padding: 0;
+  max-width: var(--ancho-medio);
+  margin: 0 0 0.5rem;
+  border: 1px solid var(--borde);
+  border-radius: var(--radio-lg);
+  background: var(--superficie);
+  overflow: hidden;
+}
+
+.resultados-encabezado,
+.resultados li {
   display: grid;
-  gap: 0.25rem;
+  grid-template-columns: 9rem minmax(0, 1fr) 9rem 5rem;
+  gap: var(--e-4);
+  align-items: center;
+  padding: 7px var(--e-4);
+}
+
+.resultados-encabezado {
+  border-bottom: 1px solid var(--borde);
+  background: var(--superficie-2);
+  color: var(--texto-tenue);
+  font-size: var(--texto-2xs);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.resultados ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }
 
 .resultados li {
-  display: flex;
-  gap: 0.75rem;
-  align-items: baseline;
+  border-bottom: 1px solid var(--borde-suave);
+  cursor: pointer;
+}
+
+.resultados li:last-child {
+  border-bottom: 0;
+}
+
+.resultados li:hover {
+  background: var(--superficie-2);
+}
+
+.resultados li[aria-selected='true'] {
+  background: var(--acento-suave);
+  box-shadow: inset 3px 0 0 var(--acento);
+}
+
+.resultados .codigo {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.resultados-cantidad {
+  margin: 0 0 1rem;
 }
 
 .renglones input {
@@ -61,6 +123,12 @@ tr.elegida {
 
 tr.advertencia td {
   background: var(--advertencia-fondo, #fff7e0);
+}
+
+.codigo-proveedor {
+  margin-left: var(--e-2);
+  font-size: 0.85em;
+  color: var(--texto-suave);
 }
 
 .aviso-fila {
@@ -87,10 +155,6 @@ tr.advertencia td {
   padding: 0.5rem 0.75rem;
   border-radius: 6px;
   background: var(--exito-fondo, #e7f6ec);
-}
-
-.factura-pdf {
-  margin-bottom: 0.75rem;
 }
 
 .control-factura {
@@ -128,10 +192,6 @@ tr.advertencia td {
 .recargos-costo {
   display: grid;
   gap: 0.75rem;
-  margin: 0 0 1rem;
-  border: 1px solid var(--borde, #d8dee8);
-  border-radius: 8px;
-  padding: 0.75rem 1rem 1rem;
 }
 
 .recargos-costo .ayuda {
@@ -159,4 +219,23 @@ tr.advertencia td {
   align-items: center;
   gap: var(--e-3);
   margin-bottom: var(--e-4);
+}
+
+.totales {
+  margin: 1rem 0 0 auto;
+  min-width: 16rem;
+  max-width: 22rem;
+}
+
+.totales p {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.totales .total {
+  font-size: 1.25rem;
+  font-weight: 700;
 }

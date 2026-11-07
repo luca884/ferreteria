@@ -3,6 +3,7 @@ package com.ferreteria.compras;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.ferreteria.catalogo.api.RecargoDeCompra;
 import com.ferreteria.common.exception.ConflictException;
 import com.ferreteria.common.exception.DatosInvalidosException;
 import com.ferreteria.common.exception.ResourceNotFoundException;
@@ -221,6 +222,117 @@ class CompraServiceIntegrationTest extends IntegrationTestBase {
                 .isEqualByComparingTo("100.00");
         assertThat(jdbc.queryForObject("select count(*) from compra where ferreteria_id = ?", Integer.class, ferreteria))
                 .isZero();
+    }
+
+    @Test
+    @DisplayName("la vista previa trae el stock antes y despues de cada renglon (S4)")
+    void vistaPreviaConStock() {
+        PlanCompra plan = compraService.vistaPrevia(pedido(null, 99L,
+                new RenglonCompra(tornillo, new BigDecimal("20"), new BigDecimal("110.00")),
+                new RenglonCompra(tuerca, new BigDecimal("6"), new BigDecimal("50.00"))));
+
+        assertThat(plan.renglones().get(0).costo().stockActual()).isEqualByComparingTo("10");
+        assertThat(plan.renglones().get(1).costo().stockActual()).isEqualByComparingTo("4");
+        assertThat(plan.renglones().get(0).costo().alicuotaIva()).isEqualByComparingTo("21");
+    }
+
+    @Test
+    @DisplayName("Factura A: subtotal con los recargos, IVA por alicuota a 2 decimales y total (S4)")
+    void totalesDeFacturaA() {
+        jdbc.update("update articulo set alicuota_iva = 'IVA_10_5' where id = ?", tuerca);
+        RegistrarCompra pedido = new RegistrarCompra(null, proveedor, TipoCompra.FA, 3, 99L, AYER,
+                List.of(new RenglonCompra(tornillo, new BigDecimal("20"), new BigDecimal("110.00")),
+                        new RenglonCompra(tuerca, new BigDecimal("6"), new BigDecimal("50.00"))),
+                List.of(new RecargoDeCompra("Flete", new BigDecimal("10"))));
+
+        PlanCompra plan = compraService.vistaPrevia(pedido);
+
+        assertThat(plan.neto()).isEqualByComparingTo("2500.00");
+        assertThat(plan.subtotalSinIva()).isEqualByComparingTo("2750.00");
+        assertThat(plan.recargosImporte()).isEqualByComparingTo("250.00");
+        assertThat(plan.iva()).hasSize(2);
+        assertThat(plan.iva().get(0).porcentaje()).isEqualByComparingTo("10.5");
+        assertThat(plan.iva().get(0).base()).isEqualByComparingTo("330.00");
+        assertThat(plan.iva().get(0).importe()).isEqualByComparingTo("34.65");
+        assertThat(plan.iva().get(1).porcentaje()).isEqualByComparingTo("21");
+        assertThat(plan.iva().get(1).base()).isEqualByComparingTo("2420.00");
+        assertThat(plan.iva().get(1).importe()).isEqualByComparingTo("508.20");
+        assertThat(plan.total()).isEqualByComparingTo("3292.85");
+    }
+
+    @Test
+    @DisplayName("Factura C y Remito: sin lineas de IVA, el total es el subtotal (S4)")
+    void totalesSinIva() {
+        for (TipoCompra tipo : List.of(TipoCompra.FC, TipoCompra.REM)) {
+            PlanCompra plan = compraService.vistaPrevia(new RegistrarCompra(null, proveedor, tipo, 3, 99L, AYER,
+                    List.of(new RenglonCompra(tornillo, new BigDecimal("20"), new BigDecimal("110.00")))));
+
+            assertThat(plan.iva()).isEmpty();
+            assertThat(plan.subtotalSinIva()).isEqualByComparingTo("2200.00");
+            assertThat(plan.recargosImporte()).isEqualByComparingTo("0");
+            assertThat(plan.total()).isEqualByComparingTo("2200.00");
+        }
+    }
+
+    @Test
+    @DisplayName("Factura B con alicuotas 0, 10,5, 21 y 27, recargos de signo distinto y centavos: la cuenta a mano (sonda del verificador)")
+    void totalesDeFacturaBConAlicuotasMixtas() {
+        Long b105 = articulo(ferreteria, "B105", "Articulo B105", "UNIDAD", "100.00", "157.30", "0", true);
+        Long c27 = articulo(ferreteria, "C27", "Articulo C27", "UNIDAD", "100.00", "157.30", "3", true);
+        Long d0 = articulo(ferreteria, "D0", "Articulo D0", "UNIDAD", "100.00", "157.30", "0", true);
+        Long e21 = articulo(ferreteria, "E21", "Articulo E21", "METRO", "100.00", "157.30", "10.5", true);
+        jdbc.update("update articulo set alicuota_iva = 'IVA_10_5' where id = ?", b105);
+        jdbc.update("update articulo set alicuota_iva = 'IVA_27' where id = ?", c27);
+        jdbc.update("update articulo set alicuota_iva = 'IVA_0' where id = ?", d0);
+
+        PlanCompra plan = compraService.vistaPrevia(new RegistrarCompra(null, proveedor, TipoCompra.FB, 3, 99L, AYER,
+                List.of(new RenglonCompra(tornillo, new BigDecimal("3"), new BigDecimal("123.45")),
+                        new RenglonCompra(b105, new BigDecimal("2"), new BigDecimal("99.99")),
+                        new RenglonCompra(c27, new BigDecimal("1"), new BigDecimal("0.50")),
+                        new RenglonCompra(d0, new BigDecimal("4"), new BigDecimal("10.00")),
+                        new RenglonCompra(e21, new BigDecimal("1.5"), new BigDecimal("33.33"))),
+                List.of(new RecargoDeCompra("Flete", new BigDecimal("4.44")),
+                        new RecargoDeCompra("Bonif", new BigDecimal("-2")))));
+
+        // neto 370.35 + 199.98 + 0.50 + 40.00 + 50.00 (49.995 HALF_UP) = 660.83; factor 102.44 %
+        assertThat(plan.neto()).isEqualByComparingTo("660.83");
+        assertThat(plan.subtotalSinIva()).isEqualByComparingTo("676.95");
+        assertThat(plan.recargosImporte()).isEqualByComparingTo("16.12");
+        assertThat(plan.iva()).hasSize(4);
+        assertThat(plan.iva().get(0).porcentaje()).isEqualByComparingTo("0");
+        assertThat(plan.iva().get(0).base()).isEqualByComparingTo("40.98");
+        assertThat(plan.iva().get(0).importe()).isEqualByComparingTo("0");
+        assertThat(plan.iva().get(1).porcentaje()).isEqualByComparingTo("10.5");
+        assertThat(plan.iva().get(1).base()).isEqualByComparingTo("204.86");
+        assertThat(plan.iva().get(1).importe()).isEqualByComparingTo("21.51");
+        assertThat(plan.iva().get(2).porcentaje()).isEqualByComparingTo("21");
+        assertThat(plan.iva().get(2).base()).isEqualByComparingTo("430.61");
+        assertThat(plan.iva().get(2).importe()).isEqualByComparingTo("90.43");
+        assertThat(plan.iva().get(3).porcentaje()).isEqualByComparingTo("27");
+        assertThat(plan.iva().get(3).base()).isEqualByComparingTo("0.51");
+        assertThat(plan.iva().get(3).importe()).isEqualByComparingTo("0.14");
+        assertThat(plan.total()).isEqualByComparingTo("789.03");
+    }
+
+    @Test
+    @DisplayName("el IVA y el recargo redondean HALF_UP justo en el limite: 0,105 sube a 0,11 y 0,505 a 0,51 (sonda del verificador)")
+    void redondeoHalfUp() {
+        PlanCompra sinRecargo = compraService.vistaPrevia(new RegistrarCompra(null, proveedor, TipoCompra.FB, 3, 99L,
+                AYER, List.of(new RenglonCompra(tornillo, BigDecimal.ONE, new BigDecimal("0.50")))));
+
+        assertThat(sinRecargo.iva().get(0).importe()).isEqualByComparingTo("0.11");
+        assertThat(sinRecargo.total()).isEqualByComparingTo("0.61");
+        assertThat(sinRecargo.recargosImporte()).isEqualByComparingTo("0");
+
+        PlanCompra conRecargo = compraService.vistaPrevia(new RegistrarCompra(null, proveedor, TipoCompra.FA, 3, 99L,
+                AYER, List.of(new RenglonCompra(tornillo, BigDecimal.ONE, new BigDecimal("0.50"))),
+                List.of(new RecargoDeCompra("Flete", BigDecimal.ONE))));
+
+        assertThat(conRecargo.subtotalSinIva()).isEqualByComparingTo("0.51");
+        assertThat(conRecargo.recargosImporte()).isEqualByComparingTo("0.01");
+        assertThat(conRecargo.iva().get(0).base()).isEqualByComparingTo("0.51");
+        assertThat(conRecargo.iva().get(0).importe()).isEqualByComparingTo("0.11");
+        assertThat(conRecargo.total()).isEqualByComparingTo("0.62");
     }
 
     @Test

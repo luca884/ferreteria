@@ -37,6 +37,8 @@ public record BorradorDeFacturaResponse(
             BigDecimal neto,
             Long articuloId,
             String articuloDescripcion,
+            String articuloCodigoInterno,
+            String articuloMoneda,
             boolean cantidadNoEntera) {
     }
 
@@ -45,7 +47,8 @@ public record BorradorDeFacturaResponse(
                 b.puntoVenta(), b.numero(), b.fecha(),
                 b.recargos().stream().map(r -> new Recargo(r.nombre(), r.porcentaje(), r.importe())).toList(),
                 b.renglones().stream().map(r -> new Renglon(r.codigo(), r.descripcion(), r.cantidad(),
-                        r.costoUnitario(), r.neto(), r.articuloId(), r.articuloDescripcion(), r.cantidadNoEntera()))
+                        r.costoUnitario(), r.neto(), r.articuloId(), r.articuloDescripcion(),
+                        r.articuloCodigoInterno(), r.articuloMoneda(), r.cantidadNoEntera()))
                         .toList(),
                 b.sumaNetos(), b.control().name(), b.cantidadNoEntera());
     }

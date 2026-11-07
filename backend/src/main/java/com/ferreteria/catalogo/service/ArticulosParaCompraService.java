@@ -70,7 +70,7 @@ public class ArticulosParaCompraService implements ArticulosParaCompra {
         }
         return articuloRepository.activosDeProveedorPorCodigoScoped(proveedorId, codigos).stream()
                 .map(a -> new ArticuloPorCodigo(a.getCodigoProveedor(), a.getId(), a.getDescripcion(),
-                        a.getUnidad().name()))
+                        a.getUnidad().name(), a.getCodigoInterno(), a.getMoneda().name()))
                 .toList();
     }
 
@@ -169,6 +169,6 @@ public class ArticulosParaCompraService implements ArticulosParaCompra {
         return new CostoDeCompra(articulo.getId(), articulo.getCodigoInterno(), articulo.getDescripcion(),
                 articulo.getUnidad().name(), articulo.getMoneda().name(), articulo.isActivo(),
                 costoAnterior, costoNuevo, precioAnterior, precioNuevo, advertencia,
-                costoRealAnterior, costoRealNuevo);
+                costoRealAnterior, costoRealNuevo, articulo.getStockActual(), articulo.getAlicuotaIva().porcentaje());
     }
 }

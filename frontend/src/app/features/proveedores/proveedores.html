@@ -96,6 +96,9 @@
               <th>Nombre</th>
               <th>CUIT</th>
               <th>Contacto</th>
+              <th>Teléfono</th>
+              <th>WhatsApp</th>
+              <th>Correo</th>
             </tr>
           </thead>
           <tbody>
@@ -117,8 +120,11 @@
                     <span class="etiqueta de-baja">De baja</span>
                   }
                 </td>
-                <td class="mono">{{ proveedor.cuit ?? '—' }}</td>
-                <td class="contacto">{{ contactoDe(proveedor) }}</td>
+                <td [class.mono]="!!proveedor.cuit">{{ proveedor.cuit || '—' }}</td>
+                <td class="contacto">{{ proveedor.contacto || '—' }}</td>
+                <td>{{ proveedor.telefono || '—' }}</td>
+                <td>{{ proveedor.whatsapp || '—' }}</td>
+                <td>{{ proveedor.email || '—' }}</td>
               </tr>
             }
           </tbody>

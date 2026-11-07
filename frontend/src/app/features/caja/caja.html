@@ -55,14 +55,16 @@
           </div>
           <div class="campo">
             <label for="importe-movimiento">Importe</label>
-            <input
-              id="importe-movimiento"
-              appImporte
-              [value]="importe()"
-              [attr.aria-invalid]="errorImporte() ? 'true' : null"
-              [attr.aria-describedby]="errorImporte() ? 'importe-movimiento-error' : null"
-              (input)="importe.set($any($event.target).value); faltaEfectivo.set(null)"
-            />
+            <app-campo-moneda>
+              <input
+                id="importe-movimiento"
+                appImporte
+                [value]="importe()"
+                [attr.aria-invalid]="errorImporte() ? 'true' : null"
+                [attr.aria-describedby]="errorImporte() ? 'importe-movimiento-error' : null"
+                (input)="importe.set($any($event.target).value); faltaEfectivo.set(null)"
+              />
+            </app-campo-moneda>
             @if (errorImporte(); as texto) {
               <span id="importe-movimiento-error" class="campo-error">{{ texto }}</span>
             }
@@ -112,14 +114,16 @@
       <div class="fila-campos">
         <div class="campo">
           <label for="efectivo-contado">Efectivo contado</label>
-          <input
-            id="efectivo-contado"
-            appImporte
-            [value]="contado()"
-            [attr.aria-invalid]="errorContado() ? 'true' : null"
-            [attr.aria-describedby]="errorContado() ? 'efectivo-contado-error' : null"
-            (input)="contado.set($any($event.target).value)"
-          />
+          <app-campo-moneda>
+            <input
+              id="efectivo-contado"
+              appImporte
+              [value]="contado()"
+              [attr.aria-invalid]="errorContado() ? 'true' : null"
+              [attr.aria-describedby]="errorContado() ? 'efectivo-contado-error' : null"
+              (input)="contado.set($any($event.target).value)"
+            />
+          </app-campo-moneda>
           @if (errorContado(); as texto) {
             <span id="efectivo-contado-error" class="campo-error">{{ texto }}</span>
           }
@@ -141,14 +145,16 @@
       <div class="fila-campos">
         <div class="campo">
           <label for="efectivo-inicial">Efectivo inicial</label>
-          <input
-            id="efectivo-inicial"
-            appImporte
-            [value]="efectivoInicial()"
-            [attr.aria-invalid]="errorApertura() ? 'true' : null"
-            [attr.aria-describedby]="errorApertura() ? 'efectivo-inicial-error' : null"
-            (input)="efectivoInicial.set($any($event.target).value)"
-          />
+          <app-campo-moneda>
+            <input
+              id="efectivo-inicial"
+              appImporte
+              [value]="efectivoInicial()"
+              [attr.aria-invalid]="errorApertura() ? 'true' : null"
+              [attr.aria-describedby]="errorApertura() ? 'efectivo-inicial-error' : null"
+              (input)="efectivoInicial.set($any($event.target).value)"
+            />
+          </app-campo-moneda>
           @if (errorApertura(); as texto) {
             <span id="efectivo-inicial-error" class="campo-error">{{ texto }}</span>
           }

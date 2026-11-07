@@ -16,6 +16,7 @@ import { erroresDeCampos, erroresPorCampo, mensajeDe } from '../../core/api/api-
 import { AuthService } from '../../core/auth/auth.service';
 import { BarraAcciones } from '../../shared/barra-acciones';
 import { Confirmacion } from '../../shared/confirmacion';
+import { CampoMoneda } from '../../shared/campo-moneda';
 import { ImporteInput } from '../../shared/importe-input';
 import { formatearMonto } from '../../core/formato/monto';
 import { FilasElegibles } from '../../shared/filas-elegibles';
@@ -53,7 +54,7 @@ const sinVacios = (texto: string): string | undefined => texto.trim() || undefin
  */
 @Component({
   selector: 'app-clientes',
-  imports: [ReactiveFormsModule, RouterLink, BarraAcciones, ImporteInput, Confirmacion],
+  imports: [ReactiveFormsModule, RouterLink, BarraAcciones, CampoMoneda, ImporteInput, Confirmacion],
   templateUrl: './clientes.html',
   styleUrl: './clientes.css',
 })

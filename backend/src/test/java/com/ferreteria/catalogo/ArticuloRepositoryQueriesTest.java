@@ -105,7 +105,7 @@ class ArticuloRepositoryQueriesTest {
     void sinFiltroDevuelveSoloLosActivosDeLaFerreteriaOrdenadosPorDescripcion() {
         catalogoDeBusqueda("30-71000001-1", "30-71000002-2");
 
-        Page<Articulo> pagina = articuloRepository.buscarScoped(null, false, POR_DESCRIPCION);
+        Page<Articulo> pagina = articuloRepository.buscarScoped(null, null, false, POR_DESCRIPCION);
 
         assertThat(codigos(pagina)).containsExactly("MART-001", "DESC-1", "DESC-2", "TORN-001");
         assertThat(pagina.getTotalElements()).isEqualTo(4);
@@ -115,7 +115,7 @@ class ArticuloRepositoryQueriesTest {
     void incluirInactivosTraeTambienLosDadosDeBaja() {
         catalogoDeBusqueda("30-71000003-3", "30-71000004-4");
 
-        Page<Articulo> pagina = articuloRepository.buscarScoped(null, true, POR_DESCRIPCION);
+        Page<Articulo> pagina = articuloRepository.buscarScoped(null, null, true, POR_DESCRIPCION);
 
         assertThat(codigos(pagina)).contains("OLD-001").hasSize(5);
     }
@@ -124,13 +124,13 @@ class ArticuloRepositoryQueriesTest {
     void laBusquedaNoDistingueMayusculasYBuscaEnDescripcionYEnLosTresCodigos() {
         catalogoDeBusqueda("30-71000005-5", "30-71000006-6");
 
-        assertThat(codigos(articuloRepository.buscarScoped("%TORNI%", false, POR_DESCRIPCION)))
+        assertThat(codigos(articuloRepository.buscarScoped("%TORNI%", null, false, POR_DESCRIPCION)))
                 .containsExactly("TORN-001");
-        assertThat(codigos(articuloRepository.buscarScoped("%mart-0%", false, POR_DESCRIPCION)))
+        assertThat(codigos(articuloRepository.buscarScoped("%mart-0%", null, false, POR_DESCRIPCION)))
                 .containsExactly("MART-001");
-        assertThat(codigos(articuloRepository.buscarScoped("%7790001000012%", false, POR_DESCRIPCION)))
+        assertThat(codigos(articuloRepository.buscarScoped("%7790001000012%", null, false, POR_DESCRIPCION)))
                 .containsExactly("TORN-001");
-        assertThat(codigos(articuloRepository.buscarScoped("%ab-12%", false, POR_DESCRIPCION)))
+        assertThat(codigos(articuloRepository.buscarScoped("%ab-12%", null, false, POR_DESCRIPCION)))
                 .containsExactly("TORN-001");
     }
 
@@ -138,9 +138,9 @@ class ArticuloRepositoryQueriesTest {
     void laBusquedaCombinadaConInactivosEncuentraElDadoDeBaja() {
         catalogoDeBusqueda("30-71000007-7", "30-71000008-8");
 
-        assertThat(codigos(articuloRepository.buscarScoped("%torni%", false, POR_DESCRIPCION)))
+        assertThat(codigos(articuloRepository.buscarScoped("%torni%", null, false, POR_DESCRIPCION)))
                 .containsExactly("TORN-001");
-        assertThat(codigos(articuloRepository.buscarScoped("%torni%", true, POR_DESCRIPCION)))
+        assertThat(codigos(articuloRepository.buscarScoped("%torni%", null, true, POR_DESCRIPCION)))
                 .containsExactly("TORN-001", "OLD-001");
     }
 
@@ -149,10 +149,10 @@ class ArticuloRepositoryQueriesTest {
         catalogoDeBusqueda("30-71000009-9", "30-71000010-0");
 
         // "%50\%%" = contiene "50%": no debe traer "50x".
-        assertThat(codigos(articuloRepository.buscarScoped("%50\\%%", false, POR_DESCRIPCION)))
+        assertThat(codigos(articuloRepository.buscarScoped("%50\\%%", null, false, POR_DESCRIPCION)))
                 .containsExactly("DESC-1");
         // Sin escapar, el % de "50%" seria un comodin y trae las dos ofertas.
-        assertThat(codigos(articuloRepository.buscarScoped("%50%%", false, POR_DESCRIPCION)))
+        assertThat(codigos(articuloRepository.buscarScoped("%50%%", null, false, POR_DESCRIPCION)))
                 .containsExactly("DESC-1", "DESC-2");
     }
 
@@ -160,7 +160,7 @@ class ArticuloRepositoryQueriesTest {
     void laPaginacionCuentaElTotalDeLaFerreteria() {
         catalogoDeBusqueda("30-71000011-1", "30-71000012-2");
 
-        Page<Articulo> pagina = articuloRepository.buscarScoped(null, false, PageRequest.of(1, 3, Sort.by("descripcion")));
+        Page<Articulo> pagina = articuloRepository.buscarScoped(null, null, false, PageRequest.of(1, 3, Sort.by("descripcion")));
 
         assertThat(pagina.getContent()).hasSize(1);
         assertThat(pagina.getTotalElements()).isEqualTo(4);
@@ -578,7 +578,7 @@ class ArticuloRepositoryQueriesTest {
         PageRequest todo = PageRequest.of(0, 100, Sort.by("id"));
 
         List<Articulo> filtrados = articuloRepository.filtrarScoped(new FiltroArticulos(null, null, null, false));
-        Page<Articulo> buscados = articuloRepository.buscarScoped(null, false, todo);
+        Page<Articulo> buscados = articuloRepository.buscarScoped(null, null, false, todo);
 
         assertThat(filtrados).hasSize(9);
         assertThat(codigos(filtrados)).containsExactlyElementsOf(codigos(buscados));
@@ -617,7 +617,7 @@ class ArticuloRepositoryQueriesTest {
         esperados.forEach((q, codigos) -> {
             FiltroArticulos filtro = new FiltroArticulos(null, null, q, true);
 
-            Page<Articulo> listado = articuloRepository.buscarScoped(FiltroArticulos.patronDeBusqueda(q), true, todo);
+            Page<Articulo> listado = articuloRepository.buscarScoped(FiltroArticulos.patronDeBusqueda(q), null, true, todo);
             List<Articulo> alcance = articuloRepository.filtrarScoped(filtro);
 
             assertThat(codigos(listado)).as("listado con q=[%s]", q).containsExactlyElementsOf(codigos);

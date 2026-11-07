@@ -79,20 +79,22 @@
 
         <div class="campo">
           <label for="redondeo">Redondear a múltiplos de ($)</label>
-          <input
-            id="redondeo"
-            name="redondeoMultiplo"
-            appImporte
-            formControlName="redondeoMultiplo"
-            [attr.aria-invalid]="invalido('redondeoMultiplo') ? 'true' : null"
-            [attr.aria-describedby]="
-              invalido('redondeoMultiplo')
-                ? 'redondeo-pista redondeo-error'
-                : ejemploRedondeo()
-                  ? 'redondeo-pista redondeo-ejemplo'
-                  : 'redondeo-pista'
-            "
-          />
+          <app-campo-moneda>
+            <input
+              id="redondeo"
+              name="redondeoMultiplo"
+              appImporte
+              formControlName="redondeoMultiplo"
+              [attr.aria-invalid]="invalido('redondeoMultiplo') ? 'true' : null"
+              [attr.aria-describedby]="
+                invalido('redondeoMultiplo')
+                  ? 'redondeo-pista redondeo-error'
+                  : ejemploRedondeo()
+                    ? 'redondeo-pista redondeo-ejemplo'
+                    : 'redondeo-pista'
+              "
+            />
+          </app-campo-moneda>
           <span id="redondeo-pista" class="pista">
             El precio final se redondea hacia arriba a un múltiplo de este valor. Con 0 no se redondea: el precio queda
             con centavos.

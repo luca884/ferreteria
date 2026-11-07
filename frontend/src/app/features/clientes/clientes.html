@@ -302,14 +302,16 @@
         }
         <div class="campo">
           <label for="limite-cuenta">Límite $</label>
-          <input
-            id="limite-cuenta"
-            name="limiteCuenta"
-            appImporte
-            formControlName="limiteCuenta"
-            [attr.aria-invalid]="errorLimite() ? 'true' : null"
-            [attr.aria-describedby]="errorLimite() ? 'limite-cuenta-error' : 'limite-cuenta-pista'"
-          />
+          <app-campo-moneda>
+            <input
+              id="limite-cuenta"
+              name="limiteCuenta"
+              appImporte
+              formControlName="limiteCuenta"
+              [attr.aria-invalid]="errorLimite() ? 'true' : null"
+              [attr.aria-describedby]="errorLimite() ? 'limite-cuenta-error' : 'limite-cuenta-pista'"
+            />
+          </app-campo-moneda>
           @if (errorLimite(); as mensaje) {
             <span id="limite-cuenta-error" class="campo-error">{{ mensaje }}</span>
           } @else {

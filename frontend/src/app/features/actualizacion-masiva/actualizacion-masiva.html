@@ -75,16 +75,19 @@
       </div>
       <div class="campo">
         <label for="valor">{{ etiquetaDelValor() }}</label>
-        <input
-          id="valor"
-          name="valor"
-          appImporte
-          negativos
-          formControlName="valor"
-          [attr.aria-invalid]="errorDelValor() ? 'true' : null"
-          [attr.aria-describedby]="describirValor()"
-          (keydown.enter)="alEnter($event)"
-        />
+        <!-- Solo el monto del precio final tiene moneda fija (pesos); el del costo va en la de cada artículo. -->
+        <app-campo-moneda [moneda]="monedaDelValor()">
+          <input
+            id="valor"
+            name="valor"
+            appImporte
+            negativos
+            formControlName="valor"
+            [attr.aria-invalid]="errorDelValor() ? 'true' : null"
+            [attr.aria-describedby]="describirValor()"
+            (keydown.enter)="alEnter($event)"
+          />
+        </app-campo-moneda>
         @if (pistaDelValor(); as pista) {
           <span id="valor-pista" class="pista">{{ pista }}</span>
         }

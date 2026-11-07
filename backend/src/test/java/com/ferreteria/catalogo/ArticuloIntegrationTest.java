@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.ferreteria.support.IntegrationTestBase;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
@@ -135,6 +136,34 @@ class ArticuloIntegrationTest extends IntegrationTestBase {
         assertThat(pagina.get("totalPages").asInt()).isEqualTo(3);
         assertThat(pagina.get("items").get(0).get("descripcion").asText()).isEqualTo(marca + " item 21");
         assertThat(pagina.get("items").get(19).get("descripcion").asText()).isEqualTo(marca + " item 40");
+    }
+
+    @Test
+    @DisplayName("con busqueda, primero los que empiezan con lo buscado (descripcion o codigo interno), despues el resto, cada grupo por descripcion (arreglos-compras, S5)")
+    void conBusquedaPrimeroLosQueEmpiezanConLoBuscado() throws Exception {
+        String marca = unico("CLV");
+        ObjectNode barreta = pedido("BAR-" + marca);
+        barreta.put("descripcion", "Barreta saca" + marca);
+        crear(duenoA, barreta);
+        ObjectNode dos = pedido("X2-" + marca);
+        dos.put("descripcion", marca + " 2 pulgadas");
+        crear(duenoA, dos);
+        ObjectNode uno = pedido("X1-" + marca);
+        uno.put("descripcion", marca + " 1 pulgada");
+        crear(duenoA, uno);
+        ObjectNode porCodigo = pedido(marca + "-9");
+        porCodigo.put("descripcion", "Arandela sin la marca");
+        crear(duenoA, porCodigo);
+
+        JsonNode primera = getJson("/api/articulos?q=" + marca.toLowerCase() + "&size=3", duenoA);
+        JsonNode segunda = getJson("/api/articulos?q=" + marca.toLowerCase() + "&size=3&page=1", duenoA);
+
+        List<String> orden = new ArrayList<>();
+        primera.get("items").forEach(n -> orden.add(n.get("descripcion").asText()));
+        segunda.get("items").forEach(n -> orden.add(n.get("descripcion").asText()));
+        assertThat(orden).containsExactly(
+                "Arandela sin la marca", marca + " 1 pulgada", marca + " 2 pulgadas", "Barreta saca" + marca);
+        assertThat(primera.get("totalElements").asLong()).isEqualTo(4);
     }
 
     @Test

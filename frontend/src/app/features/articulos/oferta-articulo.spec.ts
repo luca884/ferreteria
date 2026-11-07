@@ -95,6 +95,31 @@ describe('OfertaArticulo', () => {
     expect(emitidos).toEqual([guardado]);
   });
 
+  it('el precio de oferta y el descuento en $ son campos de plata con máscara: 1500 se ve 1.500 y al salir 1.500,00', async () => {
+    await crear(articulo());
+    const valor = () => el().querySelector<HTMLInputElement>('#oferta-valor')!;
+
+    expect(valor().closest('app-campo-moneda')).not.toBeNull();
+    await escribir('#oferta-valor', '500');
+    expect(valor().value).toBe('500');
+    await escribir('#oferta-tipo', 'DESCUENTO_MONTO');
+    expect(valor().closest('app-campo-moneda')).not.toBeNull();
+    await escribir('#oferta-valor', '1500');
+    expect(valor().value).toBe('1.500');
+    valor().dispatchEvent(new Event('blur'));
+    expect(valor().value).toBe('1.500,00');
+  });
+
+  it('el descuento en % sigue siendo un número común, sin signo de plata', async () => {
+    await crear(articulo());
+
+    await escribir('#oferta-tipo', 'DESCUENTO_PORCENTAJE');
+
+    const valor = el().querySelector<HTMLInputElement>('#oferta-valor')!;
+    expect(valor.type).toBe('number');
+    expect(valor.closest('app-campo-moneda')).toBeNull();
+  });
+
   it('un descuento en % con fecha de fin muestra el precio redondeado como el servidor', async () => {
     await crear(articulo());
     servicio.ponerOferta.mockReturnValue(of(articulo(vigente)));
@@ -137,7 +162,7 @@ describe('OfertaArticulo', () => {
     expect(texto('.resumen-oferta')).toBe(
       `En oferta a $${NBSP}800,00 (precio normal $${NBSP}1.000,00) hasta el 30/11/2026.`,
     );
-    expect(el().querySelector<HTMLInputElement>('#oferta-valor')!.value).toBe('800');
+    expect(el().querySelector<HTMLInputElement>('#oferta-valor')!.value).toBe('800,00');
     boton('Sacar oferta')!.click();
     await refrescar();
 

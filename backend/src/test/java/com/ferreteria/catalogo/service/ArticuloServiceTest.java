@@ -771,11 +771,11 @@ class ArticuloServiceTest {
     // ---- listar ----
 
     private Pageable listarYCapturarPageable(String q, int page, int size, boolean incluirInactivos) {
-        when(articuloRepository.buscarScoped(any(), anyBoolean(), any(Pageable.class)))
+        when(articuloRepository.buscarScoped(any(), any(), anyBoolean(), any(Pageable.class)))
                 .thenReturn(Page.empty());
         service.listar(q, page, size, incluirInactivos);
         ArgumentCaptor<Pageable> pageable = ArgumentCaptor.forClass(Pageable.class);
-        verify(articuloRepository).buscarScoped(any(), anyBoolean(), pageable.capture());
+        verify(articuloRepository).buscarScoped(any(), any(), anyBoolean(), pageable.capture());
         return pageable.getValue();
     }
 
@@ -808,28 +808,31 @@ class ArticuloServiceTest {
     @Test
     @DisplayName("listar: q en blanco o null no filtra; q se arma como %texto% sin espacios sobrantes")
     void listarArmaElPatronDeBusqueda() {
-        when(articuloRepository.buscarScoped(any(), anyBoolean(), any(Pageable.class))).thenReturn(Page.empty());
+        when(articuloRepository.buscarScoped(any(), any(), anyBoolean(), any(Pageable.class))).thenReturn(Page.empty());
 
         service.listar(null, 0, 20, false);
         service.listar("   ", 0, 20, false);
         service.listar(" torni ", 0, 20, true);
 
         ArgumentCaptor<String> q = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<String> prefijo = ArgumentCaptor.forClass(String.class);
         ArgumentCaptor<Boolean> inactivos = ArgumentCaptor.forClass(Boolean.class);
         verify(articuloRepository, times(3))
-                .buscarScoped(q.capture(), inactivos.capture(), any(Pageable.class));
+                .buscarScoped(q.capture(), prefijo.capture(), inactivos.capture(), any(Pageable.class));
         assertThat(q.getAllValues()).containsExactly(null, null, "%torni%");
+        // El prefijo (arreglos-compras, S5): lo que empieza con lo buscado va primero.
+        assertThat(prefijo.getAllValues()).containsExactly(null, null, "torni%");
         assertThat(inactivos.getAllValues()).containsExactly(false, false, true);
     }
 
     @Test
     @DisplayName("listar: escapa \\, % y _ para que se busquen como texto literal")
     void listarEscapaLosComodines() {
-        when(articuloRepository.buscarScoped(any(), anyBoolean(), any(Pageable.class))).thenReturn(Page.empty());
+        when(articuloRepository.buscarScoped(any(), any(), anyBoolean(), any(Pageable.class))).thenReturn(Page.empty());
 
         service.listar("50%_a\\b", 0, 20, false);
 
-        verify(articuloRepository).buscarScoped(eq("%50\\%\\_a\\\\b%"), eq(false), any(Pageable.class));
+        verify(articuloRepository).buscarScoped(eq("%50\\%\\_a\\\\b%"), eq("50\\%\\_a\\\\b%"), eq(false), any(Pageable.class));
     }
 
     @Test
@@ -837,7 +840,7 @@ class ArticuloServiceTest {
     void listarDevuelveLaPagina() throws Exception {
         Articulo articulo = existente(55L);
         Page<Articulo> pagina = new PageImpl<>(List.of(articulo), PageRequest.of(1, 20), 21);
-        when(articuloRepository.buscarScoped(any(), anyBoolean(), any(Pageable.class))).thenReturn(pagina);
+        when(articuloRepository.buscarScoped(any(), any(), anyBoolean(), any(Pageable.class))).thenReturn(pagina);
 
         PageResponse<ArticuloResponse> respuesta = service.listar(null, 1, 20, false);
 

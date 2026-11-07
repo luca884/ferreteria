@@ -197,15 +197,17 @@
 
         <div class="campo">
           <label for="costo">{{ enDolares() ? 'Costo en dólares (sin IVA)' : 'Costo (sin IVA)' }}</label>
-          <input
-            id="costo"
-            name="costo"
-            appImporte
-            formControlName="costo"
-            [attr.aria-invalid]="invalido('costo') ? 'true' : null"
-            [attr.aria-describedby]="describir('costo')"
-            (input)="limpiarErrorDe('costo')"
-          />
+          <app-campo-moneda [moneda]="enDolares() ? 'USD' : 'ARS'">
+            <input
+              id="costo"
+              name="costo"
+              appImporte
+              formControlName="costo"
+              [attr.aria-invalid]="invalido('costo') ? 'true' : null"
+              [attr.aria-describedby]="describir('costo')"
+              (input)="limpiarErrorDe('costo')"
+            />
+          </app-campo-moneda>
           @if (errorLocal('costo')) {
             <span id="costo-error" class="campo-error">
               {{
@@ -356,15 +358,17 @@
         @if (esPrecioManual()) {
           <div class="campo">
             <label for="precioFinalManual">Precio final (con IVA)</label>
-            <input
-              id="precioFinalManual"
-              name="precioFinal"
-              appImporte
-              formControlName="precioFinal"
-              [attr.aria-invalid]="errorLocalDelPrecio() || errorServidor('precioFinal') ? 'true' : null"
-              [attr.aria-describedby]="describirPrecioManual()"
-              (input)="limpiarErrorDe('precioFinal')"
-            />
+            <app-campo-moneda>
+              <input
+                id="precioFinalManual"
+                name="precioFinal"
+                appImporte
+                formControlName="precioFinal"
+                [attr.aria-invalid]="errorLocalDelPrecio() || errorServidor('precioFinal') ? 'true' : null"
+                [attr.aria-describedby]="describirPrecioManual()"
+                (input)="limpiarErrorDe('precioFinal')"
+              />
+            </app-campo-moneda>
             @if (errorLocalDelPrecio(); as mensaje) {
               <span id="precioFinalManual-error" class="campo-error">{{ mensaje }}</span>
             }
@@ -425,15 +429,18 @@
                 </div>
                 <div class="campo">
                   <label [for]="'ajuste-precio-valor-' + i">Valor del ajuste {{ i + 1 }}</label>
-                  <input
-                    [id]="'ajuste-precio-valor-' + i"
-                    appImporte
-                    negativos
-                    formControlName="valor"
-                    [attr.aria-invalid]="errorLocalDeFila(i, 'valor') || errorServidorDeFila(i, 'valor') ? 'true' : null"
-                    [attr.aria-describedby]="describirFila(i, 'valor')"
-                    (input)="limpiarErrorDeFila(i, 'valor')"
-                  />
+                  <!-- El ajuste en monto es plata (en pesos, como el precio); en porcentaje, no lleva signo. -->
+                  <app-campo-moneda [moneda]="fila.controls.tipo.value === 'MONTO' ? 'ARS' : null">
+                    <input
+                      [id]="'ajuste-precio-valor-' + i"
+                      appImporte
+                      negativos
+                      formControlName="valor"
+                      [attr.aria-invalid]="errorLocalDeFila(i, 'valor') || errorServidorDeFila(i, 'valor') ? 'true' : null"
+                      [attr.aria-describedby]="describirFila(i, 'valor')"
+                      (input)="limpiarErrorDeFila(i, 'valor')"
+                    />
+                  </app-campo-moneda>
                   @if (errorLocalDeFila(i, 'valor'); as mensaje) {
                     <span [id]="'ajuste-precio-valor-' + i + '-error'" class="campo-error">{{ mensaje }}</span>
                   }

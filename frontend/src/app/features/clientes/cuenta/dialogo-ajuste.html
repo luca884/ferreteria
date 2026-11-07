@@ -28,16 +28,18 @@
 
       <label class="campo-importe" for="importe-ajuste">
         Importe del {{ etiqueta().toLowerCase() }}
-        <input
-          #campoImporte
-          id="importe-ajuste"
-          appImporte
-          [readOnly]="congelado()"
-          [attr.aria-invalid]="errorImporte() ? 'true' : null"
-          [attr.aria-describedby]="errorImporte() ? 'error-importe' : null"
-          [value]="importeTexto()"
-          (input)="escribirImporte($any($event.target).value)"
-        />
+        <app-campo-moneda>
+          <input
+            #campoImporte
+            id="importe-ajuste"
+            appImporte
+            [readOnly]="congelado()"
+            [attr.aria-invalid]="errorImporte() ? 'true' : null"
+            [attr.aria-describedby]="errorImporte() ? 'error-importe' : null"
+            [value]="importeTexto()"
+            (input)="escribirImporte($any($event.target).value)"
+          />
+        </app-campo-moneda>
       </label>
       @if (errorImporte(); as mensaje) {
         <small id="error-importe" class="campo-error">{{ mensaje }}</small>
@@ -87,18 +89,20 @@
                   </th>
                   <td class="num">{{ f.pendiente | monto }}</td>
                   <td class="num">
-                    <input
-                      appImporte
-                      placeholder="0,00"
-                      [readOnly]="congelado()"
-                      [attr.data-comprobante]="f.comprobanteId"
-                      [attr.data-ajuste]="f.ajusteId ?? null"
-                      [attr.aria-label]="'Importe a imputar a ' + f.referencia"
-                      [attr.aria-invalid]="f.error ? 'true' : null"
-                      [attr.aria-describedby]="f.error ? 'error-fila-' + f.idCampo : null"
-                      [value]="f.texto"
-                      (input)="escribirFila(f.clave, $any($event.target).value)"
-                    />
+                    <app-campo-moneda>
+                      <input
+                        appImporte
+                        placeholder="0,00"
+                        [readOnly]="congelado()"
+                        [attr.data-comprobante]="f.comprobanteId"
+                        [attr.data-ajuste]="f.ajusteId ?? null"
+                        [attr.aria-label]="'Importe a imputar a ' + f.referencia"
+                        [attr.aria-invalid]="f.error ? 'true' : null"
+                        [attr.aria-describedby]="f.error ? 'error-fila-' + f.idCampo : null"
+                        [value]="f.texto"
+                        (input)="escribirFila(f.clave, $any($event.target).value)"
+                      />
+                    </app-campo-moneda>
                     @if (f.error; as mensaje) {
                       <small class="campo-error" [id]="'error-fila-' + f.idCampo">{{ mensaje }}</small>
                     }

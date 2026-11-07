@@ -1,17 +1,19 @@
 import { Component, ElementRef, input, output, signal, viewChild } from '@angular/core';
 
+let siguienteId = 0;
+
 /**
- * Elegir el archivo de la lista sin el input nativo (que sale en inglés): botón «Elegir archivo…»,
- * nombre del archivo y zona para arrastrar y soltar. El input real queda oculto detrás del botón.
+ * Elegir un archivo sin el input nativo (que sale en inglés): botón «Elegir archivo…», nombre del archivo y zona para
+ * arrastrar y soltar. El input real queda oculto detrás del botón. Sin datos propios es el de la lista de precios.
  */
 @Component({
   selector: 'app-selector-archivo',
   template: `
-    <span class="rotulo" id="rotulo-archivo">Archivo de la lista</span>
+    <span class="rotulo" [id]="rotuloId">{{ rotulo() }}</span>
     <div
       class="zona-archivo"
       role="group"
-      aria-labelledby="rotulo-archivo"
+      [attr.aria-labelledby]="rotuloId"
       [class.arrastrando]="arrastrando()"
       [class.deshabilitada]="deshabilitado()"
       [attr.aria-disabled]="deshabilitado()"
@@ -19,26 +21,43 @@ import { Component, ElementRef, input, output, signal, viewChild } from '@angula
       (dragleave)="arrastrando.set(false)"
       (drop)="soltar($event)"
     >
-      <button type="button" class="elegir-archivo secundario" [disabled]="deshabilitado()" (click)="abrir()">
+      <button
+        type="button"
+        class="elegir-archivo secundario"
+        [disabled]="deshabilitado()"
+        (click)="abrir()"
+      >
         Elegir archivo…
       </button>
-      <span class="nombre-archivo" aria-live="polite">{{ archivo()?.name ?? 'Ningún archivo elegido' }}</span>
+      <span class="nombre-archivo" aria-live="polite">{{
+        archivo()?.name ?? 'Ningún archivo elegido'
+      }}</span>
       <input
         #entrada
-        id="archivo"
+        [id]="entradaId()"
         type="file"
         hidden
         [disabled]="deshabilitado()"
-        accept=".xlsx,.xls,.csv,.pdf"
+        [accept]="acepta()"
         (change)="elegir()"
       />
     </div>
-    <span class="ayuda">Excel (.xlsx, .xls), CSV o PDF, hasta 25&nbsp;MB. También podés arrastrarlo hasta acá.</span>
+    <span class="ayuda">{{ ayuda() }}</span>
   `,
   styles: `
-    :host { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 180px; }
-    .rotulo { font-weight: 600; }
-    .ayuda { color: var(--texto-suave); }
+    :host {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      flex: 1;
+      min-width: 180px;
+    }
+    .rotulo {
+      font-weight: 600;
+    }
+    .ayuda {
+      color: var(--texto-suave);
+    }
     .zona-archivo {
       display: flex;
       align-items: center;
@@ -48,17 +67,35 @@ import { Component, ElementRef, input, output, signal, viewChild } from '@angula
       border-radius: 8px;
       background: var(--superficie);
     }
-    .zona-archivo.arrastrando { border-color: var(--acento); background: var(--acento-suave); }
-    .zona-archivo.deshabilitada { opacity: 0.6; cursor: not-allowed; }
-    .nombre-archivo { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .zona-archivo.arrastrando {
+      border-color: var(--acento);
+      background: var(--acento-suave);
+    }
+    .zona-archivo.deshabilitada {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+    .nombre-archivo {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
   `,
 })
 export class SelectorArchivo {
   readonly archivo = input<File | null>(null);
   readonly elegido = output<File | null>();
-  /** Mientras se trabaja con la lista elegida no se elige otra: ni con el botón ni soltando un archivo. */
+  /** Mientras se trabaja con el archivo elegido no se elige otro: ni con el botón ni soltando un archivo. */
   readonly deshabilitado = input(false);
+  readonly rotulo = input('Archivo de la lista');
+  /** El `accept` del input: qué archivos ofrece el navegador. */
+  readonly acepta = input('.xlsx,.xls,.csv,.pdf');
+  readonly ayuda = input(
+    'Excel (.xlsx, .xls), CSV o PDF, hasta 25 MB. También podés arrastrarlo hasta acá.',
+  );
+  readonly entradaId = input('archivo');
 
+  protected readonly rotuloId = `selector-archivo-${++siguienteId}`;
   protected readonly arrastrando = signal(false);
   private readonly entrada = viewChild.required<ElementRef<HTMLInputElement>>('entrada');
 

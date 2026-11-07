@@ -60,9 +60,16 @@ describe('NuevaCompra', () => {
         advertencia: 'El costo sube un 110 % (de 100,00 a 210,00). Revisá que sea correcto.',
         costoRealAnterior: 100,
         costoRealNuevo: 210,
+        stockAnterior: 0,
+        stockNuevo: 20,
+        alicuotaIva: 21,
       },
     ],
     recargos: [],
+    subtotalSinIva: 2200,
+    recargosImporte: 0,
+    iva: [{ porcentaje: 21, base: 2200, importe: 462 }],
+    total: 2662,
   };
 
   const borrador: BorradorDeFactura = {
@@ -83,6 +90,8 @@ describe('NuevaCompra', () => {
         neto: 2526,
         articuloId: 1,
         articuloDescripcion: 'Tornillo 1/4',
+        articuloCodigoInterno: 'TOR-1',
+        articuloMoneda: 'ARS',
         cantidadNoEntera: false,
       },
       {
@@ -93,6 +102,8 @@ describe('NuevaCompra', () => {
         neto: 4500,
         articuloId: null,
         articuloDescripcion: null,
+        articuloCodigoInterno: null,
+        articuloMoneda: null,
         cantidadNoEntera: false,
       },
     ],
@@ -161,7 +172,7 @@ describe('NuevaCompra', () => {
     await escribir('input[name=busqueda]', 'tor');
     campo<HTMLFormElement>('form.buscador').dispatchEvent(new Event('submit'));
     await refrescar();
-    [...el().querySelectorAll<HTMLButtonElement>('.resultados button')][0].click();
+    [...el().querySelectorAll<HTMLElement>('.resultados [role=option]')][0].click();
     await refrescar();
     await escribir('input[name="cantidad-0"]', '20');
     await escribir('input[name="costo-0"]', '210');
@@ -204,15 +215,107 @@ describe('NuevaCompra', () => {
     campo<HTMLFormElement>('form.buscador').dispatchEvent(new Event('submit'));
     await refrescar();
 
-    el().querySelector<HTMLButtonElement>('.resultados button')!.click();
+    el().querySelector<HTMLElement>('.resultados [role=option]')!.click();
     await refrescar();
-    el().querySelector<HTMLButtonElement>('.resultados button')!.click();
+    el().querySelector<HTMLElement>('.resultados [role=option]')!.click();
     await refrescar();
 
     expect(el().querySelectorAll('table.renglones tbody tr')).toHaveLength(1);
     expect(campo<HTMLInputElement>('input[name="cantidad-0"]').value).toBe('1');
-    expect(campo<HTMLInputElement>('input[name="costo-0"]').value).toBe('100');
+    expect(campo<HTMLInputElement>('input[name="costo-0"]').value).toBe('100,00');
     expect(el().textContent).toContain('Tornillo 1/4 ya está en la compra.');
+  });
+
+  describe('resultados de la búsqueda (arreglos-compras, S5)', () => {
+    const clavo = { ...tornillo, id: 2, codigoInterno: 'CLA-1', descripcion: 'Clavo 1 pulgada', costo: 578378, stockActual: 12 };
+    const barreta = { ...tornillo, id: 3, codigoInterno: 'BAR-1', descripcion: 'Barreta sacaclavos', costo: 9500, stockActual: 0 };
+    const opciones = () => [...el().querySelectorAll<HTMLElement>('.resultados [role=option]')];
+    const caja = () => campo<HTMLInputElement>('input[name=busqueda]');
+
+    async function buscarClavo(totalElements = 2) {
+      articulos.buscar.mockReturnValue(of({ items: [clavo, barreta], page: 0, size: 8, totalElements, totalPages: 1 }));
+      await escribir('input[name=busqueda]', 'clavo');
+      campo<HTMLFormElement>('form.buscador').dispatchEvent(new Event('submit'));
+      await refrescar();
+    }
+
+    async function tecla(key: string) {
+      const evento = new KeyboardEvent('keydown', { key, cancelable: true });
+      caja().dispatchEvent(evento);
+      await refrescar();
+      return evento;
+    }
+
+    it('es una lista alineada: código, descripción, costo y stock en columnas', async () => {
+      await crear();
+      await buscarClavo();
+
+      expect([...el().querySelectorAll('.resultados-encabezado span')].map((s) => s.textContent?.trim())).toEqual([
+        'Código',
+        'Descripción',
+        'Costo',
+        'Stock',
+      ]);
+      const celdas = (o: HTMLElement) =>
+        [...o.querySelectorAll('span')].map((s) => s.textContent?.replace(/\s+/g, ' ').trim());
+      expect(celdas(opciones()[0])).toEqual(['CLA-1', 'Clavo 1 pulgada', '$ 578.378,00', '12']);
+      expect(celdas(opciones()[1])).toEqual(['BAR-1', 'Barreta sacaclavos', '$ 9.500,00', '0']);
+      expect(el().querySelector('.resultados [role=listbox]')).not.toBeNull();
+    });
+
+    it('con más resultados que los que se ven, dice cuántos hay: «8 de N: escribí más para achicar.»', async () => {
+      await crear();
+      await buscarClavo(27);
+
+      expect(el().querySelector('.resultados-cantidad')?.textContent?.trim()).toBe('2 de 27: escribí más para achicar.');
+    });
+
+    it('si se ven todos, no avisa la cantidad', async () => {
+      await crear();
+      await buscarClavo(2);
+
+      expect(el().querySelector('.resultados-cantidad')).toBeNull();
+    });
+
+    it('las flechas mueven la opción activa y Enter agrega esa, sin buscar de nuevo', async () => {
+      await crear();
+      await buscarClavo();
+      articulos.buscar.mockClear();
+
+      expect(opciones().map((o) => o.getAttribute('aria-selected'))).toEqual(['false', 'false']);
+      await tecla('ArrowDown');
+      await tecla('ArrowDown');
+      expect(opciones().map((o) => o.getAttribute('aria-selected'))).toEqual(['false', 'true']);
+      expect(caja().getAttribute('aria-activedescendant')).toBe(opciones()[1].id);
+      await tecla('ArrowUp');
+      expect(opciones().map((o) => o.getAttribute('aria-selected'))).toEqual(['true', 'false']);
+
+      const enter = await tecla('Enter');
+
+      expect(enter.defaultPrevented).toBe(true);
+      expect(articulos.buscar).not.toHaveBeenCalled();
+      expect(el().querySelector('table.renglones tbody tr')?.textContent).toContain('CLA-1 · Clavo 1 pulgada');
+    });
+
+    it('sin opción activa, Enter busca como siempre', async () => {
+      await crear();
+      await buscarClavo();
+
+      const enter = await tecla('Enter');
+
+      expect(enter.defaultPrevented).toBe(false);
+      expect(el().querySelectorAll('table.renglones tbody tr')).toHaveLength(0);
+    });
+
+    it('al escribir otra cosa, ninguna opción queda activa', async () => {
+      await crear();
+      await buscarClavo();
+      await tecla('ArrowDown');
+
+      await escribir('input[name=busqueda]', 'clavos');
+
+      expect(opciones().map((o) => o.getAttribute('aria-selected'))).toEqual(['false', 'false']);
+    });
   });
 
   describe('Enter con un código exacto (lector)', () => {
@@ -426,18 +529,76 @@ describe('NuevaCompra', () => {
     expect(el().querySelector('[role=alert]')?.textContent).toContain('Agregá al menos un artículo.');
   });
 
+  const entradaPdf = () => campo<HTMLInputElement>('app-selector-archivo input[type=file]');
+  const nombrePdf = () => el().querySelector('app-selector-archivo .nombre-archivo')?.textContent?.trim();
+
   async function subirPdf(nombre = 'factura.pdf') {
-    const input = campo<HTMLInputElement>('input[name=facturaPdf]');
+    const input = entradaPdf();
     Object.defineProperty(input, 'files', { value: [new File(['%PDF'], nombre, { type: 'application/pdf' })], configurable: true });
     input.dispatchEvent(new Event('change'));
     await refrescar();
   }
 
+  describe('lenguaje visual (arreglos-compras, S3)', () => {
+    it('no usa recuadros fieldset: cada parte es una sección con su título', async () => {
+      await crear();
+
+      expect(el().querySelectorAll('fieldset').length).toBe(0);
+      expect([...el().querySelectorAll('section.paso > h2')].map((h) => h.textContent?.trim())).toEqual([
+        'Comprobante',
+        'Artículos',
+        'Recargos del costo',
+      ]);
+    });
+
+    it('«Ver vista previa» es el botón principal', async () => {
+      await crear();
+
+      expect(boton('Ver vista previa')!.classList).toContain('primario');
+    });
+
+    it('«Ver compras» es un botón de la barra, como los de las otras pantallas (no un link suelto)', async () => {
+      await crear();
+
+      const verCompras = el().querySelector<HTMLAnchorElement>('app-barra-acciones a[href="/compras"]')!;
+      expect(verCompras.textContent?.trim()).toBe('Ver compras');
+      expect([...verCompras.classList]).toEqual(expect.arrayContaining(['btn', 'accion-barra']));
+    });
+  });
+
   describe('factura en PDF', () => {
     it('el selector solo acepta PDF', async () => {
       await crear();
 
-      expect(campo<HTMLInputElement>('input[name=facturaPdf]').accept).toContain('.pdf');
+      expect(entradaPdf().accept).toContain('.pdf');
+    });
+
+    it('el selector está en castellano y, después de leer, muestra el nombre del PDF (arreglos-compras, S3 y S7)', async () => {
+      await crear();
+
+      expect(el().querySelector('app-selector-archivo .rotulo')?.textContent?.trim()).toBe('Leer factura en PDF');
+      expect(el().querySelector('app-selector-archivo button')?.textContent?.trim()).toBe('Elegir archivo…');
+      expect(nombrePdf()).toBe('Ningún archivo elegido');
+      expect(entradaPdf().hidden).toBe(true);
+
+      await subirPdf('factura-bulonera-1234.pdf');
+
+      expect(nombrePdf()).toBe('factura-bulonera-1234.pdf');
+    });
+
+    it('al registrar la compra, el selector vuelve a «Ningún archivo elegido»', async () => {
+      await crear();
+      api.leerFactura.mockReturnValue(
+        of({ ...borrador, renglones: borrador.renglones.filter((r) => r.articuloId !== null) }),
+      );
+      await subirPdf('factura-bulonera-1234.pdf');
+      boton('Ver vista previa')!.click();
+      await refrescar();
+
+      boton('Confirmar compra')!.click();
+      await refrescar();
+
+      expect(nombrePdf()).toBe('Ningún archivo elegido');
     });
 
     it('muestra «Leyendo la factura…» mientras espera y después completa el formulario', async () => {
@@ -512,12 +673,155 @@ describe('NuevaCompra', () => {
       await escribir('input[name=busqueda]', 'rara');
       campo<HTMLFormElement>('form.buscador').dispatchEvent(new Event('submit'));
       await refrescar();
-      el().querySelector<HTMLButtonElement>('.resultados button')!.click();
+      el().querySelector<HTMLElement>('.resultados [role=option]')!.click();
       await refrescar();
 
       expect(el().querySelector('.sin-articulo')).toBeNull();
       expect(campo<HTMLInputElement>('input[name="cantidad-1"]').value).toBe('3');
-      expect(campo<HTMLInputElement>('input[name="costo-1"]').value).toBe('1.500');
+      expect(campo<HTMLInputElement>('input[name="costo-1"]').value).toBe('1.500,00');
+      // El renglón resuelto muestra el código de la factura, para cotejar con el papel.
+      const resuelto = el().querySelectorAll('table.renglones tbody tr')[1];
+      expect(resuelto.querySelector('.codigo-proveedor')?.textContent?.trim()).toBe('Cód. proveedor X-99');
+    });
+
+    describe('resolver un renglón sin artículo (arreglos-compras, S8)', () => {
+      const alerta = () => el().querySelector('[role=alert]')?.textContent ?? '';
+
+      async function intentarVistaPrevia() {
+        boton('Ver vista previa')!.click();
+        await refrescar();
+      }
+
+      it('«Quitar» borra el cartel «Resolvé los renglones sin artículo.» sin tocar otro error', async () => {
+        await crear();
+        await subirPdf();
+        await escribir('input[name=puntoVenta]', '');
+        await intentarVistaPrevia();
+        expect(alerta()).toContain('Resolvé los renglones sin artículo.');
+
+        porEtiqueta('Quitar sin artículo X-99').click();
+        await refrescar();
+
+        expect(alerta()).not.toContain('Resolvé los renglones sin artículo.');
+        expect(alerta()).toContain('El punto de venta tiene que ser un número entero.');
+      });
+
+      it('al elegir el artículo del último renglón sin artículo el cartel se va', async () => {
+        await crear();
+        await subirPdf();
+        await intentarVistaPrevia();
+        articulos.buscar.mockReturnValue(
+          of({ items: [{ ...tornillo, id: 2, codigoInterno: 'RAR-1', descripcion: 'Pieza rara' }], page: 0, size: 8, totalElements: 1, totalPages: 1 }),
+        );
+
+        boton('Elegir artículo')!.click();
+        await refrescar();
+        await escribir('input[name=busqueda]', 'rara');
+        campo<HTMLFormElement>('form.buscador').dispatchEvent(new Event('submit'));
+        await refrescar();
+        el().querySelector<HTMLElement>('.resultados [role=option]')!.click();
+        await refrescar();
+
+        expect(el().querySelector('[role=alert]')).toBeNull();
+      });
+
+      it('«Crear artículo» abre el alta en otra pestaña con la descripción, el código, el proveedor y el costo de la factura', async () => {
+        await crear();
+        await subirPdf();
+        const abrir = vi.spyOn(window, 'open').mockReturnValue(null);
+
+        boton('Crear artículo')!.click();
+
+        expect(abrir).toHaveBeenCalledTimes(1);
+        const [url, destino, opciones] = abrir.mock.calls[0];
+        const direccion = new URL(String(url), 'http://localhost');
+        expect(direccion.pathname).toBe('/articulos/nuevo');
+        expect(Object.fromEntries(direccion.searchParams)).toEqual({
+          descripcion: 'PIEZA RARA',
+          codigoProveedor: 'X-99',
+          proveedorId: '4',
+          costo: '1500',
+        });
+        expect(destino).toBe('_blank');
+        expect(opciones).toBe('noopener');
+        // La compra sigue en pantalla: el renglón sin artículo no se quitó.
+        expect(el().querySelector('.sin-articulo')).not.toBeNull();
+        abrir.mockRestore();
+      });
+
+      it('sin proveedor elegido «Crear artículo» no manda el proveedor', async () => {
+        await crear();
+        await subirPdf();
+        await escribir('select[name=proveedor]', '');
+        const abrir = vi.spyOn(window, 'open').mockReturnValue(null);
+
+        boton('Crear artículo')!.click();
+
+        const direccion = new URL(String(abrir.mock.calls[0][0]), 'http://localhost');
+        expect(direccion.searchParams.has('proveedorId')).toBe(false);
+        abrir.mockRestore();
+      });
+    });
+
+    describe('códigos de los renglones (arreglos-compras, S7)', () => {
+      const articuloDe = (fila: number) => el().querySelectorAll('table.renglones tbody tr')[fila].querySelector('td')!;
+
+      it('un renglón leído muestra el código interno y, chico al lado, el del proveedor', async () => {
+        await crear();
+        await subirPdf();
+
+        expect(articuloDe(0).textContent).toContain('TOR-1 · Tornillo 1/4');
+        expect(articuloDe(0).textContent).not.toContain('TOR-P ·');
+        expect(articuloDe(0).querySelector('.codigo-proveedor')?.textContent?.trim()).toBe('Cód. proveedor TOR-P');
+      });
+
+      it('un artículo en dólares leído del PDF queda en dólares', async () => {
+        await crear();
+        api.leerFactura.mockReturnValue(
+          of({ ...borrador, renglones: [{ ...borrador.renglones[0], articuloMoneda: 'USD' }] }),
+        );
+        await subirPdf();
+
+        expect(articuloDe(0).textContent).toContain('(USD)');
+        expect(el().querySelector('table.renglones app-campo-moneda .signo')?.textContent?.trim()).toBe('US$');
+      });
+
+      it('el costo es un campo de plata: «$» adentro y dos decimales (arreglos-compras, S6)', async () => {
+        await crear();
+        await subirPdf();
+
+        expect(el().querySelector('table.renglones app-campo-moneda .signo')?.textContent?.trim()).toBe('$');
+        expect(campo<HTMLInputElement>('input[name="costo-0"]').value).toBe('210,50');
+        // El porcentaje del recargo no es plata: sin signo y como se leyó.
+        expect(campo<HTMLInputElement>('input[name="recargo-porcentaje-0"]').closest('app-campo-moneda')).toBeNull();
+        expect(campo<HTMLInputElement>('input[name="recargo-porcentaje-0"]').value).toBe('4,44');
+      });
+
+      it('agregado a mano: muestra el código del proveedor si es distinto del interno, y si es el mismo no lo repite', async () => {
+        await crear();
+        articulos.buscar.mockReturnValue(
+          of({
+            items: [
+              { ...tornillo, codigoProveedor: 'TOR-P' },
+              { ...tornillo, id: 2, codigoInterno: 'DBS-100', codigoProveedor: 'DBS-100', descripcion: 'Bulón' },
+            ],
+            page: 0,
+            size: 8,
+            totalElements: 2,
+            totalPages: 1,
+          }),
+        );
+        await escribir('input[name=busqueda]', 'tor');
+        campo<HTMLFormElement>('form.buscador').dispatchEvent(new Event('submit'));
+        await refrescar();
+        el().querySelectorAll<HTMLElement>('.resultados [role=option]')[0].click();
+        await refrescar();
+        el().querySelectorAll<HTMLElement>('.resultados [role=option]')[1].click();
+        await refrescar();
+
+        expect(articuloDe(0).querySelector('.codigo-proveedor')?.textContent?.trim()).toBe('Cód. proveedor TOR-P');
+        expect(articuloDe(1).querySelector('.codigo-proveedor')).toBeNull();
+      });
     });
 
     it('avisa si la lectura cuadra con el total de la factura', async () => {
@@ -639,6 +943,67 @@ describe('NuevaCompra', () => {
       expect(vista).toContain('Costo real antes');
       expect(vista).toContain('Costo real nuevo');
       expect(vista).toContain('231,00');
+    });
+
+    /** Cada línea de los totales como «rótulo importe», con el espacio duro de Intl normalizado. */
+    function lineasDeTotales(): string[] {
+      return [...el().querySelectorAll('section.vista-previa .totales p')].map((linea) =>
+        [...linea.children].map((c) => c.textContent!.trim()).join(' ').replace(/\s+/g, ' '),
+      );
+    }
+
+    it('la vista previa muestra el stock de hoy y el que queda después de la compra', async () => {
+      await crear();
+      await cargarCompra();
+
+      boton('Ver vista previa')!.click();
+      await refrescar();
+
+      const vista = el().querySelector('section.vista-previa')!;
+      expect(vista.querySelector('thead')!.textContent).toContain('Stock antes → después');
+      expect(vista.querySelector('tbody td.stock')!.textContent!.replace(/\s+/g, ' ').trim()).toBe('0 → 20');
+    });
+
+    it('los totales muestran neto, recargos, subtotal sin IVA, el IVA de cada alícuota y el total', async () => {
+      await crear();
+      await cargarCompra();
+      api.vistaPrevia.mockReturnValue(
+        of({
+          ...plan,
+          recargos: [{ nombre: 'Flete', porcentaje: 10 }],
+          neto: 2500,
+          subtotalSinIva: 2750,
+          recargosImporte: 250,
+          iva: [
+            { porcentaje: 10.5, base: 330, importe: 34.65 },
+            { porcentaje: 21, base: 2420, importe: 508.2 },
+          ],
+          total: 3292.85,
+        }),
+      );
+
+      boton('Ver vista previa')!.click();
+      await refrescar();
+
+      expect(lineasDeTotales()).toEqual([
+        'Neto $ 2.500,00',
+        'Recargos $ 250,00',
+        'Subtotal sin IVA $ 2.750,00',
+        'IVA 10,5 % $ 34,65',
+        'IVA 21 % $ 508,20',
+        'Total $ 3.292,85',
+      ]);
+    });
+
+    it('sin IVA (Factura C o Remito) los totales no tienen líneas de IVA y no hay recargos si no los hay', async () => {
+      await crear();
+      await cargarCompra();
+      api.vistaPrevia.mockReturnValue(of({ ...plan, iva: [], total: 2200 }));
+
+      boton('Ver vista previa')!.click();
+      await refrescar();
+
+      expect(lineasDeTotales()).toEqual(['Neto $ 2.200,00', 'Subtotal sin IVA $ 2.200,00', 'Total $ 2.200,00']);
     });
 
     it('sin recargos la vista previa no muestra las columnas de costo real', async () => {

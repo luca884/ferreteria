@@ -126,6 +126,10 @@ describe('Compras', () => {
     expect(filas[0].textContent).toContain('Bulonera Sur');
     expect(filas[0].textContent).toContain('2.200,00');
     expect(el().querySelector('a[href="/compras/nueva"]')?.textContent).toContain('Nueva compra');
+    // Botón de la barra, como «+ Nuevo» de Proveedores o Artículos (arreglos-compras, S3).
+    expect([...el().querySelector('a[href="/compras/nueva"]')!.classList]).toEqual(
+      expect.arrayContaining(['btn', 'accion-barra', 'primario']),
+    );
   });
 
   it('filtra por proveedor y fechas, y limpiar vuelve a todas', async () => {

@@ -40,14 +40,16 @@
 
         <div class="campo">
           <label for="tope">Tope de venta a Consumidor Final ($)</label>
-          <input
-            id="tope"
-            name="topeConsumidorFinal"
-            appImporte
-            formControlName="topeConsumidorFinal"
-            [attr.aria-invalid]="invalido() ? 'true' : null"
-            [attr.aria-describedby]="invalido() ? 'tope-pista tope-error' : 'tope-pista'"
-          />
+          <app-campo-moneda>
+            <input
+              id="tope"
+              name="topeConsumidorFinal"
+              appImporte
+              formControlName="topeConsumidorFinal"
+              [attr.aria-invalid]="invalido() ? 'true' : null"
+              [attr.aria-describedby]="invalido() ? 'tope-pista tope-error' : 'tope-pista'"
+            />
+          </app-campo-moneda>
           <span id="tope-pista" class="pista">
             ARCA pide identificar al comprador desde $ 10.000.000 (RG 5700/2025). Si cambia, actualizalo acá.
           </span>
