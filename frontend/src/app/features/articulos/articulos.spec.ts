@@ -517,6 +517,7 @@ describe('Articulos', () => {
       expect(barra('button.editar')).not.toBeNull();
       expect(barra('button.ajustar-stock')).not.toBeNull();
       expect(barra('button.desactivar')?.textContent).toContain('Dar de baja');
+      expect(barra('button.ver-ficha')).toBeNull();
       expect(el().querySelectorAll('tbody button, tbody a')).toHaveLength(0);
     });
 
@@ -593,6 +594,18 @@ describe('Articulos', () => {
 
       expect(barra('button.clientes')).toBeNull();
     });
+
+    it('«Ver ficha» de la barra le abre al Vendedor la ficha del elegido, aunque esté de baja (bugs de la guía, S20)', async () => {
+      await crearComponente(false, pagina([articulo(7), articulo(8, { activo: false })]));
+
+      await elegir(1);
+      await clickEn('app-barra-acciones button.ver-ficha');
+
+      expect(navegar).toHaveBeenCalledWith(['/articulos', 8], {
+        queryParams: { elegido: 8 },
+        queryParamsHandling: 'merge',
+      });
+    });
   });
 
   describe('exportar a CSV (GDS-19)', () => {
@@ -633,8 +646,17 @@ describe('Articulos', () => {
 
       await clickEn('app-barra-acciones button.exportar');
 
-      expect(servicio.exportar).toHaveBeenCalledWith('tuerca', true);
+      expect(servicio.exportar).toHaveBeenCalledWith('tuerca', true, false);
       expect(enlace?.download).toBe('articulos-2026-10-23.csv');
+    });
+
+    it('con «Solo en oferta» tildado baja solo los artículos en oferta (bugs de la guía, S19)', async () => {
+      await crearComponente(true, pagina([articulo(1)]), null, '/?oferta=1');
+      servicio.exportar.mockReturnValue(of(archivo()));
+
+      await clickEn('app-barra-acciones button.exportar');
+
+      expect(servicio.exportar).toHaveBeenCalledWith('', false, true);
     });
 
     it('mientras baja, Exportar queda deshabilitado y dice Exportando…', async () => {
@@ -685,19 +707,44 @@ describe('Articulos', () => {
       expect(barra('button.ajustar-stock')!.disabled).toBe(false);
     });
 
-    it('el Vendedor no ve ninguna acción ni elige filas', async () => {
-      await crearComponente(false, pagina([articulo(7)]));
+    it('el Vendedor no ve las acciones del Dueño: en la barra solo tiene «Ver ficha» (bugs de la guía, S20)', async () => {
+      await crearComponente(false, pagina([articulo(7), articulo(8, { activo: false, descripcion: 'Tuerca vieja' })]));
+
+      await elegir(1);
 
       expect(el().querySelector('a.nuevo')).toBeNull();
       expect(el().querySelector('button.editar')).toBeNull();
       expect(el().querySelector('button.desactivar')).toBeNull();
+      expect(el().querySelector('button.reactivar')).toBeNull();
       expect(el().querySelector('button.ajustar-stock')).toBeNull();
+      expect(el().querySelector('button.movimientos')).toBeNull();
+      expect(el().querySelector('button.clientes')).toBeNull();
+      expect(el().querySelector('button.exportar')).toBeNull();
+      const acciones = Array.from(el().querySelectorAll('app-barra-acciones .accion-barra'));
+      expect(acciones.map((a) => a.textContent?.trim())).toEqual(['Ver ficha']);
       expect(el().textContent).not.toContain('Dar de baja');
+      expect(el().textContent).not.toContain('Reactivalo para ajustar el stock');
       expect(el().textContent).not.toContain('Acciones');
+    });
 
-      await elegir(0);
-      expect(filas()[0].getAttribute('tabindex')).toBeNull();
-      expect(filas()[0].getAttribute('aria-selected')).toBeNull();
+    // Bugs de la guía, S20: antes el Vendedor no elegía filas y no tenía cómo abrir la ficha de solo lectura que ya
+    // le muestra la ruta articulos/:id (H07). Ahora elige filas como el Dueño, para abrirla.
+    it('el Vendedor elige filas como el Dueño: resaltada, aria-selected y en el orden de Tab', async () => {
+      await crearComponente(false, pagina([articulo(7), articulo(8)]));
+      expect(barra('button.ver-ficha')!.disabled).toBe(true);
+      expect(filas().map((f) => f.getAttribute('tabindex'))).toEqual(['0', '-1']);
+
+      await elegir(1);
+
+      expect(elegidas()).toEqual([filas()[1]]);
+      expect(filas()[0].getAttribute('aria-selected')).toBe('false');
+      expect(filas().map((f) => f.getAttribute('tabindex'))).toEqual(['-1', '0']);
+      expect(el().querySelector('table')!.getAttribute('role')).toBe('grid');
+      expect(barra('button.ver-ficha')!.disabled).toBe(false);
+      expect(el().querySelector('.elegido')?.textContent?.replace(/\s+/g, ' ')).toContain(
+        'Elegido: Artículo 8 · Enter abre la ficha',
+      );
+      expect(navegar).not.toHaveBeenCalledWith(['/articulos', 8], expect.anything());
     });
   });
 
@@ -761,13 +808,25 @@ describe('Articulos', () => {
       });
     });
 
-    it('para el Vendedor Enter y doble clic no hacen nada', async () => {
-      await crearComponente(false, pagina([articulo(7)]));
+    // Bugs de la guía, S20: antes Enter y doble clic no hacían nada para el Vendedor; ahora abren la ficha de solo
+    // lectura, con la misma dirección de vuelta que Editar.
+    it('para el Vendedor Enter y doble clic abren la ficha de solo lectura', async () => {
+      await crearComponente(false, pagina([articulo(7), articulo(8)]));
 
       await teclaEnFila(0, 'Enter');
-      filas()[0].dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
 
-      expect(navegar).not.toHaveBeenCalledWith(['/articulos', 7], expect.anything());
+      expect(navegar).toHaveBeenLastCalledWith(['/articulos', 7], {
+        queryParams: { elegido: 7 },
+        queryParamsHandling: 'merge',
+      });
+
+      filas()[1].querySelector('.descripcion')!.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
+      await refrescar();
+
+      expect(navegar).toHaveBeenLastCalledWith(['/articulos', 8], {
+        queryParams: { elegido: 8 },
+        queryParamsHandling: 'merge',
+      });
     });
   });
 

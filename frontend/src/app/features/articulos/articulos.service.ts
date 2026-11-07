@@ -39,9 +39,13 @@ export class ArticulosService {
     return this.http.get<PageResponse<Articulo>>(this.url, { params });
   }
 
-  /** CSV con todos los artículos de esa búsqueda (solo el Dueño); el nombre viene en Content-Disposition. */
-  exportar(q: string, incluirInactivos: boolean): Observable<HttpResponse<Blob>> {
+  /**
+   * CSV con todos los artículos de esa búsqueda (solo el Dueño); el nombre viene en Content-Disposition. Con
+   * `enOferta`, solo los que hoy tienen una oferta que baja el precio, como `buscar`.
+   */
+  exportar(q: string, incluirInactivos: boolean, enOferta = false): Observable<HttpResponse<Blob>> {
     let params = new HttpParams().set('incluirInactivos', incluirInactivos);
+    if (enOferta) params = params.set('enOferta', true);
     const termino = q.trim();
     if (termino !== '') params = params.set('q', termino);
     return this.http.get(`${this.url}/exportacion`, { params, observe: 'response', responseType: 'blob' });

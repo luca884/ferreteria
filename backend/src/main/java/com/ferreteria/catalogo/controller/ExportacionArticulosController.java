@@ -33,11 +33,12 @@ public class ExportacionArticulosController {
     @PreAuthorize("hasRole('DUENO')")
     public ResponseEntity<byte[]> exportar(
             @RequestParam(required = false) String q,
-            @RequestParam(defaultValue = "false") boolean incluirInactivos) {
+            @RequestParam(defaultValue = "false") boolean incluirInactivos,
+            @RequestParam(defaultValue = "false") boolean enOferta) {
         String archivo = "articulos-" + LocalDate.now(reloj) + ".csv";
         return ResponseEntity.ok()
                 .contentType(CSV)
                 .header(HttpHeaders.CONTENT_DISPOSITION, ContentDisposition.attachment().filename(archivo).build().toString())
-                .body(service.exportar(q, incluirInactivos));
+                .body(service.exportar(q, incluirInactivos, enOferta));
     }
 }

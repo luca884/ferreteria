@@ -57,11 +57,14 @@ export class Articulos implements OnInit {
   protected readonly soloEnOferta = signal(false);
   /** El CSV se está bajando: Exportar queda deshabilitado. */
   protected readonly exportando = signal(false);
-  /** Fila elegida en la página (solo el Dueño, que es quien tiene acciones): la barra actúa sobre ella; Enter edita. */
+  /**
+   * Fila elegida en la página: la barra actúa sobre ella y Enter abre la ficha. El Dueño la edita; el Vendedor la ve
+   * de solo lectura, sin costos (H07; bugs de la guía, S20).
+   */
   protected readonly filas = new FilasElegibles(
     computed(() => this.pagina()?.items ?? []),
-    () => this.auth.esDueno(),
-    (a) => this.editar(a),
+    () => true,
+    (a) => this.abrirFicha(a),
   );
   /** Artículo que se está por dar de baja (diálogo de confirmación abierto). */
   protected readonly aDarDeBaja = signal<Articulo | null>(null);
@@ -122,11 +125,12 @@ export class Articulos implements OnInit {
   }
 
   /**
-   * Editar (barra, Enter o doble clic): la dirección del listado viaja al formulario para poder volver, con el
-   * artículo como `elegido` para que al volver siga elegido.
+   * Editar del Dueño o «Ver ficha» del Vendedor (barra, Enter o doble clic): la misma ruta, que al Vendedor le muestra
+   * la ficha de solo lectura. La dirección del listado viaja a la ficha para poder volver, con el artículo como
+   * `elegido` para que al volver siga elegido.
    */
-  protected editar(articulo: Articulo | null = this.filas.elegido()): void {
-    if (!articulo || !this.auth.esDueno()) return;
+  protected abrirFicha(articulo: Articulo | null = this.filas.elegido()): void {
+    if (!articulo) return;
     void this.router.navigate(['/articulos', articulo.id], {
       queryParams: { elegido: articulo.id },
       queryParamsHandling: 'merge',
@@ -179,12 +183,15 @@ export class Articulos implements OnInit {
     void this.router.navigate(['/articulos', articulo.id, 'clientes']);
   }
 
-  /** Baja en CSV lo que muestra la pantalla: la búsqueda aplicada y los inactivos, todas las páginas (GDS-19). */
+  /**
+   * Baja en CSV lo que muestra la pantalla: la búsqueda aplicada, los inactivos y «Solo en oferta», todas las páginas
+   * (GDS-19; bugs de la guía, S19).
+   */
   protected exportar(): void {
     if (!this.auth.esDueno() || this.exportando()) return;
     this.limpiarMensajes();
     this.exportando.set(true);
-    this.service.exportar(this.busquedaAplicada(), this.incluirInactivos()).subscribe({
+    this.service.exportar(this.busquedaAplicada(), this.incluirInactivos(), this.soloEnOferta()).subscribe({
       next: (respuesta) => {
         this.exportando.set(false);
         descargar(respuesta, 'articulos.csv');

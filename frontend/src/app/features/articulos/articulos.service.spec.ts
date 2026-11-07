@@ -90,6 +90,17 @@ describe('ArticulosService', () => {
     const req = http.expectOne((r) => r.url.endsWith('/articulos/exportacion'));
     expect(req.request.params.has('q')).toBe(false);
     expect(req.request.params.get('incluirInactivos')).toBe('false');
+    expect(req.request.params.has('enOferta')).toBe(false);
+    req.flush(new Blob(['']));
+  });
+
+  it('exporta con enOferta=true cuando la lista tiene «Solo en oferta» (bugs de la guía, S19)', () => {
+    service.exportar('torni', false, true).subscribe();
+
+    const req = http.expectOne((r) => r.url.endsWith('/articulos/exportacion'));
+    expect(req.request.params.get('enOferta')).toBe('true');
+    expect(req.request.params.get('q')).toBe('torni');
+    expect(req.request.params.get('incluirInactivos')).toBe('false');
     req.flush(new Blob(['']));
   });
 
