@@ -613,8 +613,7 @@ describe('Importaciones', () => {
         });
 
         it('el zoom escala la fila y la fuente del marco, y el marco no cambia de alto', async () => {
-          await crearComponente();
-          await elegirArchivo(lista());
+          await conMuestra(muestraGrande(100, 3));
           const marco = () => q('.visor');
           const altoDelMarco = marco().style.getPropertyValue('--alto-marco');
 
@@ -625,6 +624,48 @@ describe('Importaciones', () => {
           expect(marco().style.getPropertyValue('--ancho-columna')).toBe('132px');
           expect(marco().style.getPropertyValue('--fuente')).toBe('15.4px');
           expect(marco().style.getPropertyValue('--alto-marco')).toBe(altoDelMarco);
+        });
+      });
+
+      describe('alto del marco', () => {
+        const altoDelMarco = () => q('.visor').style.getPropertyValue('--alto-marco');
+
+        it('con pocas filas mide lo que ocupan, más lugar para la barra de scroll, y no queda casi vacío', async () => {
+          await conMuestra(muestraGrande(2, 3));
+
+          expect(altoDelMarco()).toBe(`${2 * 30 + 18}px`);
+        });
+
+        it('con 15 filas queda en el alto de siempre: 15 filas al 100 %', async () => {
+          await conMuestra(muestraGrande(15, 3));
+
+          expect(altoDelMarco()).toBe('450px');
+        });
+
+        it('con más de 15 filas también queda en el alto de siempre', async () => {
+          await conMuestra(muestraGrande(40, 3));
+
+          expect(altoDelMarco()).toBe('450px');
+        });
+
+        it('con pocas filas, al acercar el marco crece para que sigan entrando', async () => {
+          await conMuestra(muestraGrande(2, 3));
+
+          q<HTMLButtonElement>('button[aria-label="Acercar"]').click();
+          await asentar();
+
+          expect(altoDelMarco()).toBe(`${2 * 33 + 18}px`);
+        });
+
+        it('al acercar no pasa del alto de siempre', async () => {
+          await conMuestra(muestraGrande(14, 3));
+
+          for (let i = 0; i < 3; i++) {
+            q<HTMLButtonElement>('button[aria-label="Acercar"]').click();
+            await asentar();
+          }
+
+          expect(altoDelMarco()).toBe('450px');
         });
       });
 
@@ -1258,6 +1299,73 @@ describe('Importaciones', () => {
 
       expect(el().querySelector('.vista-previa')).toBeNull();
       expect(q('button.generar').textContent).toContain('Ver vista previa');
+    });
+
+    describe('«La lista incluye IVA»', () => {
+      const casilla = () => q<HTMLInputElement>('#listaIncluyeIva');
+      const aviso = () => el().querySelector('#lista-incluye-iva-aviso');
+
+      async function conCosto(columna: string) {
+        await crearComponente();
+        await elegir('#proveedor', 'Sinteplast');
+        await elegirArchivo(lista());
+        await elegir('#columnaCosto', columna);
+      }
+
+      it('explica cuándo marcarla, siempre a la vista y asociado a la casilla', async () => {
+        await conCosto('C');
+
+        const ayuda = q('#lista-incluye-iva-ayuda');
+        expect(ayuda.textContent?.trim()).toBe('Marcala solo si la columna del costo ya trae el IVA adentro.');
+        expect(casilla().getAttribute('aria-describedby')).toBe('lista-incluye-iva-ayuda');
+        expect(aviso()).toBeNull();
+      });
+
+      it('marcada con el costo en la columna sin IVA, avisa sin bloquear; desmarcada, el aviso se va', async () => {
+        await conCosto('C');
+        servicio.vistaPrevia.mockReturnValue(of(vistaPrevia));
+        await elegir('#columnaSinIva', 'C');
+        await elegir('#columnaConIva', 'B');
+
+        casilla().click();
+        await asentar();
+
+        expect(aviso()?.textContent?.trim()).toBe(
+          'La columna del costo es la del precio sin IVA: si marcás «La lista incluye IVA», el costo queda más bajo de lo que es.',
+        );
+        expect(casilla().getAttribute('aria-describedby')).toBe('lista-incluye-iva-ayuda lista-incluye-iva-aviso');
+
+        await escribir('#filaDesde', '2');
+        await generar();
+        expect(servicio.vistaPrevia).toHaveBeenCalled();
+
+        casilla().click();
+        await asentar();
+        expect(aviso()).toBeNull();
+      });
+
+      it('desmarcada con el costo en la columna con IVA, avisa; marcada, el aviso se va', async () => {
+        await conCosto('C');
+        await elegir('#columnaSinIva', 'B');
+        await elegir('#columnaConIva', 'C');
+
+        expect(aviso()?.textContent?.trim()).toBe(
+          'La columna del costo es la del precio con IVA: marcá «La lista incluye IVA» para no sumarle el IVA dos veces.',
+        );
+
+        casilla().click();
+        await asentar();
+        expect(aviso()).toBeNull();
+      });
+
+      it('sin las columnas de IVA elegidas no avisa nada, marcada o no', async () => {
+        await conCosto('C');
+
+        casilla().click();
+        await asentar();
+
+        expect(aviso()).toBeNull();
+      });
     });
 
     it('manda archivo, proveedor, mapeo con hojas, IVA, bonificaciones y el rubro de los nuevos', async () => {

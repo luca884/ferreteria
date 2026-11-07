@@ -27,6 +27,18 @@
   flex: 1;
   min-width: 180px;
 }
+/* La casilla del IVA con su ayuda abajo y, si contradice el mapeo, el aviso. */
+.fila.incluye-iva {
+  flex-direction: column;
+  gap: var(--e-1);
+}
+.fila.incluye-iva .casilla {
+  align-self: flex-start;
+}
+.fila.incluye-iva .ayuda,
+.fila.incluye-iva .alerta {
+  margin: 0;
+}
 .paso .ayuda {
   margin-bottom: var(--e-3);
 }
@@ -59,7 +71,7 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* Visor tipo planilla: marco de alto fijo (~15 filas al 100 %), scroll en los dos sentidos. */
+/* Visor tipo planilla: marco de ~15 filas al 100 % (menos si la hoja tiene menos), scroll en los dos sentidos. */
 .visor {
   --alto-fila: 30px;
   --ancho-columna: 120px;
@@ -87,7 +99,6 @@
 .visor-cuerpo {
   width: 100%;
   height: min(var(--alto-marco), 40vh);
-  min-height: 150px;
 }
 .visor-fila {
   border-bottom: 1px solid var(--borde);
