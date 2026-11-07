@@ -5,7 +5,11 @@
   }
   <p class="resumen">{{ resumen() }}</p>
 
-  @if (vista().articulos.length > 0) {
+  @if (vista().articulos.length > 0 && queCambian().length === 0) {
+    <p class="sin-cambios">No cambia ningún precio.</p>
+  }
+
+  @if (queCambian().length > 0) {
     <div class="tabla-contenedor">
       <table>
         <thead>
@@ -18,8 +22,8 @@
           </tr>
         </thead>
         <tbody>
-          @for (fila of vista().articulos; track fila.id) {
-            <tr [class.sin-cambio]="fila.diferencia === 0">
+          @for (fila of queCambian(); track fila.id) {
+            <tr>
               <td>{{ fila.codigoInterno }}</td>
               <td>
                 {{ fila.descripcion }}

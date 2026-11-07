@@ -160,6 +160,14 @@ describe('seleccion-filas', () => {
       expect(filas[0].clave).toBe('0:9');
     });
 
+    it('la fila con error lleva la descripción que manda el servidor, para saber qué artículo es', () => {
+      const filas = unirFilas(
+        vistaPrevia({ errores: [{ ...error(0, 7), descripcion: 'Tornillo sin precio' }, error(0, 9)] }),
+      );
+
+      expect(filas.map((f) => f.descripcion)).toEqual(['Tornillo sin precio', '']);
+    });
+
     it('una vista previa sin filas da una lista vacía', () => {
       expect(unirFilas(vistaPrevia({}))).toEqual([]);
     });

@@ -1,3 +1,4 @@
+import { Component } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { Confirmacion } from './confirmacion';
 
@@ -120,5 +121,49 @@ describe('Confirmacion', () => {
     await abrir({ titulo: '¿Descartar?', textoConfirmar: 'Descartar', textoCancelar: 'Seguir editando' });
 
     expect(boton('cancelar').textContent!.trim()).toBe('Seguir editando');
+  });
+
+  describe('contenido proyectado', () => {
+    @Component({
+      imports: [Confirmacion],
+      template: `
+        <app-confirmacion titulo="¿Cambiar el redondeo?" mensaje="Se recalcula el precio de 3 artículos." textoConfirmar="Guardar">
+          <table class="ejemplos"><tr><td>TOR-001</td></tr></table>
+        </app-confirmacion>
+      `,
+    })
+    class ConTabla {}
+
+    @Component({
+      imports: [Confirmacion],
+      template: `<app-confirmacion titulo="¿Borrar?" mensaje="Se borra." textoConfirmar="Borrar" />`,
+    })
+    class SinContenido {}
+
+    const hijosDelDialogo = (raiz: HTMLElement) =>
+      [...raiz.querySelector('.dialogo')!.children].map((hijo) => hijo.tagName + (hijo.className ? '.' + hijo.className : ''));
+
+    it('va entre el mensaje y los botones, y el foco y las teclas siguen igual', async () => {
+      const host = TestBed.createComponent(ConTabla);
+      host.detectChanges();
+      await host.whenStable();
+      const raiz = host.nativeElement as HTMLElement;
+      const confirmacion = host.debugElement.children[0].componentInstance as Confirmacion;
+      let canceladas = 0;
+      confirmacion.cancelar.subscribe(() => canceladas++);
+
+      expect(hijosDelDialogo(raiz)).toEqual(['H2', 'P', 'TABLE.ejemplos', 'DIV.dialogo-acciones']);
+      expect(document.activeElement?.classList).toContain('cancelar');
+      document.activeElement!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+      expect(canceladas).toBe(1);
+    });
+
+    it('sin nada proyectado no agrega nada entre el mensaje y los botones', async () => {
+      const host = TestBed.createComponent(SinContenido);
+      host.detectChanges();
+      await host.whenStable();
+
+      expect(hijosDelDialogo(host.nativeElement as HTMLElement)).toEqual(['H2', 'P', 'DIV.dialogo-acciones']);
+    });
   });
 });

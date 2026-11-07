@@ -66,7 +66,7 @@ class PlanificadorLista336Test {
 
         assertThat(plan.salteadas()).isEqualTo(1);
         assertThat(plan.errores()).containsExactly(new AvisoDeFila(0, 7, "TOR-005",
-            "El costo calculado es 0. Revisá el precio de lista y las bonificaciones."));
+            "El costo calculado es 0. Revisá el precio de lista y las bonificaciones.", "Tornillo sin precio"));
     }
 
     @Test

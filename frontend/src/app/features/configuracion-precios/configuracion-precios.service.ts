@@ -10,6 +10,20 @@ export interface ConfiguracionPreciosGuardada extends ConfiguracionPrecios {
   avisos: string[];
 }
 
+/** Un artículo cuyo precio cambiaría con los valores nuevos: el de hoy y el nuevo. */
+export interface EjemploDePrecio {
+  codigo: string;
+  descripcion: string;
+  precioActual: number;
+  precioNuevo: number;
+}
+
+/** Cuántos artículos se recalcularían y unos pocos ejemplos de los que cambian de precio (vacío si ninguno). */
+export interface ArticulosQueCambian {
+  cantidad: number;
+  ejemplos: EjemploDePrecio[];
+}
+
 @Injectable({ providedIn: 'root' })
 export class ConfiguracionPreciosService {
   private readonly http = inject(HttpClient);
@@ -19,16 +33,16 @@ export class ConfiguracionPreciosService {
     return this.http.get<ConfiguracionPrecios>(this.url);
   }
 
-  /** Cuántos artículos se recalcularían con estos valores. No guarda nada. */
-  articulosQueCambian(nueva: ConfiguracionPrecios): Observable<number> {
+  /** Cuántos artículos se recalcularían con estos valores, con unos ejemplos. No guarda nada. */
+  articulosQueCambian(nueva: ConfiguracionPrecios): Observable<ArticulosQueCambian> {
     return this.http
-      .get<{ cantidad: number }>(`${this.url}/articulos-que-cambian`, {
+      .get<ArticulosQueCambian>(`${this.url}/articulos-que-cambian`, {
         params: {
           margenDefectoPorcentaje: nueva.margenDefectoPorcentaje,
           redondeoMultiplo: nueva.redondeoMultiplo,
         },
       })
-      .pipe(map((r) => r.cantidad));
+      .pipe(map((r) => ({ cantidad: r.cantidad, ejemplos: r.ejemplos ?? [] })));
   }
 
   /** Guarda y el backend recalcula los precios que dependen de estos valores. */

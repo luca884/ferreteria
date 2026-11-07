@@ -85,15 +85,8 @@
           [attr.aria-describedby]="describirValor()"
           (keydown.enter)="alEnter($event)"
         />
-        @if (esMonto()) {
-          <span id="valor-pista" class="pista">
-            Positivo sube el costo, negativo lo baja. Se suma en la moneda de cada artículo.
-          </span>
-        }
-        @if (esMontoDePrecio()) {
-          <span id="valor-pista" class="pista">
-            Positivo sube el precio final, negativo lo baja. Siempre en pesos.
-          </span>
+        @if (pistaDelValor(); as pista) {
+          <span id="valor-pista" class="pista">{{ pista }}</span>
         }
         @if (errorDelValor(); as mensaje) {
           <span id="valor-error" class="campo-error">{{ mensaje }}</span>
@@ -193,9 +186,10 @@
                 <tr>
                   <th>Código</th>
                   <th>Descripción</th>
-                  <th class="num">Costo</th>
+                  <th class="num">Costo (sin IVA)</th>
                   <th class="num">Margen (%)</th>
-                  <th class="num">Precio</th>
+                  <th class="num">IVA (%)</th>
+                  <th class="num">Precio de venta (con IVA)</th>
                 </tr>
               </thead>
               <tbody>
@@ -224,6 +218,7 @@
                         {{ c.margenNuevo | number: '1.0-2' }}&nbsp;%
                       }
                     </td>
+                    <td class="num">{{ c.ivaPorcentaje | number: '1.0-2' }}&nbsp;%</td>
                     <td class="num">
                       @if (c.precioAnterior === c.precioNuevo) {
                         {{ c.precioNuevo | monto }}

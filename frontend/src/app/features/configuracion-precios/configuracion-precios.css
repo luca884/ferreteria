@@ -41,6 +41,23 @@
   font-weight: 650;
 }
 
+/* La muestra de precios de la confirmación: chica, para que entre en el diálogo. */
+.ejemplos {
+  width: 100%;
+  margin-bottom: var(--e-4);
+  font-size: var(--texto-sm);
+}
+.ejemplos caption {
+  margin-bottom: var(--e-1);
+  font-weight: 650;
+  text-align: left;
+}
+/* El código y los precios en una línea: solo la descripción se parte. */
+.ejemplos td:first-child,
+.ejemplos .num {
+  white-space: nowrap;
+}
+
 .acciones-form {
   display: flex;
   gap: var(--e-3);

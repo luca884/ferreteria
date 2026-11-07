@@ -80,6 +80,8 @@ const FUENTE_BASE = 14;
 const FILAS_VISIBLES = 15;
 /** Espacio extra del encabezado para absorber la barra de scroll vertical del marco. */
 const HOLGURA_ENCABEZADO = 24;
+/** Lugar para la barra de scroll horizontal cuando el marco se achica a las pocas filas de la hoja. */
+const HOLGURA_SCROLL_HORIZONTAL = 18;
 
 const ZOOM_MINIMO = 50;
 const ZOOM_MAXIMO = 200;
@@ -208,6 +210,26 @@ export class Importaciones implements OnInit {
     camposReconocidos(this.propuestaVigente(), this.valoresMapeo()),
   );
 
+  private readonly listaIncluyeIva = toSignal(this.listaForm.controls.listaIncluyeIva.valueChanges, {
+    initialValue: this.listaForm.controls.listaIncluyeIva.value,
+  });
+
+  /**
+   * La casilla contradice el mapeo cuando el costo es la misma columna que el precio sin IVA (y está marcada: se le
+   * restaría un IVA que no tiene) o que el precio con IVA (y no está marcada: el IVA se sumaría dos veces). No bloquea.
+   */
+  protected readonly avisoIva = computed(() => {
+    const { columnaCosto, columnaSinIva, columnaConIva } = this.valoresMapeo();
+    if (columnaCosto == null) return null;
+    if (this.listaIncluyeIva() && columnaCosto === columnaSinIva) {
+      return 'La columna del costo es la del precio sin IVA: si marcás «La lista incluye IVA», el costo queda más bajo de lo que es.';
+    }
+    if (!this.listaIncluyeIva() && columnaCosto === columnaConIva) {
+      return 'La columna del costo es la del precio con IVA: marcá «La lista incluye IVA» para no sumarle el IVA dos veces.';
+    }
+    return null;
+  });
+
   protected readonly hojaActual = computed(() => this.muestra()?.hojas[this.hojaVista()] ?? null);
   protected readonly nombresDeHojas = computed(() => this.muestra()?.hojas.map((h) => h.nombre) ?? []);
   protected readonly hojasParaLista = computed(
@@ -299,8 +321,15 @@ export class Importaciones implements OnInit {
   protected readonly anchoColumna = computed(() => (ANCHO_COLUMNA_BASE * this.zoom()) / 100);
   protected readonly anchoNumero = computed(() => (ANCHO_NUMERO_BASE * this.zoom()) / 100);
   protected readonly fuente = computed(() => (FUENTE_BASE * this.zoom()) / 100);
-  /** Fijo: el marco muestra ~15 filas al 100 % y, al acercar, se ven menos (como en una planilla). */
-  protected readonly altoMarco = FILAS_VISIBLES * ALTO_FILA_BASE;
+  /**
+   * El marco muestra ~15 filas al 100 % y, al acercar, se ven menos (como en una planilla). Con una hoja de pocas
+   * filas se achica a lo que ocupan, para no dejar un cuadro casi vacío.
+   */
+  protected readonly altoMarco = computed(() => {
+    const maximo = FILAS_VISIBLES * ALTO_FILA_BASE;
+    const ocupan = (this.hojaActual()?.filas.length ?? 0) * this.altoFila() + HOLGURA_SCROLL_HORIZONTAL;
+    return Math.min(ocupan, maximo);
+  });
   protected readonly anchoTotal = computed(
     () => this.anchoNumero() + this.columnas().length * this.anchoColumna() + HOLGURA_ENCABEZADO,
   );

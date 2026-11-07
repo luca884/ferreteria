@@ -1,5 +1,6 @@
 package com.ferreteria.catalogo.service;
 
+import com.ferreteria.catalogo.dto.ArticulosQueCambianResponse;
 import com.ferreteria.catalogo.dto.ConfiguracionPreciosGuardadaResponse;
 import com.ferreteria.ferreteria.model.ConfiguracionPrecios;
 import com.ferreteria.ferreteria.service.ConfiguracionPreciosService;
@@ -12,6 +13,9 @@ import org.springframework.transaction.annotation.Transactional;
  */
 @Service
 public class CambioConfiguracionPreciosService {
+
+    /** Cuantos ejemplos de precio de hoy y nuevo se muestran antes de confirmar. */
+    static final int EJEMPLOS = 5;
 
     private final ConfiguracionPreciosService configuracionPreciosService;
     private final RecalculoPreciosService recalculoPreciosService;
@@ -32,9 +36,15 @@ public class CambioConfiguracionPreciosService {
                 resultado.articulosRecalculados(), resultado.avisos());
     }
 
-    /** Cuantos articulos se recalcularian con la configuracion nueva: el aviso antes de confirmar. */
+    /**
+     * Cuantos articulos se recalcularian con la configuracion nueva y hasta {@value #EJEMPLOS} de los que cambian de
+     * precio: el aviso antes de confirmar.
+     */
     @Transactional(readOnly = true)
-    public long contarArticulosQueCambian(ConfiguracionPrecios nueva) {
-        return recalculoPreciosService.contarPorCambioDeConfiguracion(configuracionPreciosService.actual(), nueva);
+    public ArticulosQueCambianResponse articulosQueCambian(ConfiguracionPrecios nueva) {
+        ConfiguracionPrecios actual = configuracionPreciosService.actual();
+        return new ArticulosQueCambianResponse(
+                recalculoPreciosService.contarPorCambioDeConfiguracion(actual, nueva),
+                recalculoPreciosService.ejemplosPorCambioDeConfiguracion(actual, nueva, EJEMPLOS));
     }
 }

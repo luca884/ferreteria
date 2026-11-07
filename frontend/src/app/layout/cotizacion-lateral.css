@@ -5,10 +5,12 @@
 }
 
 .cotizacion {
+  /* Posicionado: el texto oculto de la tabla (.sr-only) queda adentro y no estira la página. */
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: var(--e-2);
-  padding: var(--e-3) var(--e-2) 0;
+  padding: var(--e-3) var(--e-1) 0;
   border-top: 1px solid var(--borde);
 }
 
@@ -43,44 +45,37 @@
   line-height: 1.35;
 }
 
-.tipos {
+/* Arriba: el dólar de los precios, resaltado como en la tabla. */
+.resumen {
   display: flex;
-  flex-direction: column;
-  gap: var(--e-2);
+  flex-wrap: wrap;
+  gap: 2px var(--e-1);
   margin: 0;
-  padding: 0;
-  list-style: none;
-}
-.tipo {
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
   padding: 0 var(--e-1);
   font-size: var(--texto-sm);
   line-height: 1.3;
 }
-.nombre {
-  font-weight: 600;
+.rotulo {
+  flex-basis: 100%;
+  color: var(--texto-tenue);
+  font-size: var(--texto-xs);
 }
-.linea {
+.linea-precios {
   display: flex;
-  flex-wrap: wrap;
+  flex: 1;
   align-items: baseline;
-  gap: 0 var(--e-1);
+  justify-content: space-between;
+  gap: var(--e-1);
   color: var(--texto-menu);
 }
-.valor {
-  margin-left: auto;
-  color: var(--texto);
-  font-weight: 600;
-}
-.marca {
-  padding: 0 5px;
+.linea-precios .valor,
+.cotizaciones .de-precios span {
+  padding: 1px 4px;
   border-radius: var(--radio-sm);
   background: var(--acento-anillo);
   color: var(--acento-profundo);
-  font-size: var(--texto-2xs);
-  font-weight: 700;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
 }
 .a-confirmar {
   flex-basis: 100%;
@@ -93,21 +88,114 @@ a.a-confirmar:hover,
 a.a-confirmar:focus-visible {
   text-decoration: underline;
 }
-.fecha {
-  color: var(--texto-tenue);
+
+/* El botón que pliega la tabla: un enlace de texto, no un botón con caja. */
+.desplegar {
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start;
+  gap: 4px;
+  min-height: 0;
+  margin: 0 var(--e-1);
+  padding: 0;
+  border: 0;
+  background: none;
+  box-shadow: none;
+  color: var(--acento);
   font-size: var(--texto-xs);
+  font-weight: 600;
+  cursor: pointer;
 }
+.desplegar:hover {
+  background: none;
+  text-decoration: underline;
+}
+.flecha {
+  transition: transform var(--transicion);
+}
+.flecha.arriba {
+  transform: rotate(180deg);
+}
+
+.cuerpo {
+  display: flex;
+  flex-direction: column;
+  gap: var(--e-1);
+}
+.cuerpo:empty {
+  display: none;
+}
+
+/* La tabla: una línea por tipo. Anula el estilo de las grillas de la app (encabezado fijo, bordes, mayúsculas). */
+.cotizaciones {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: collapse;
+  background: none;
+  font-size: var(--texto-xs);
+  line-height: 1.35;
+  font-variant-numeric: tabular-nums;
+}
+.cotizaciones th,
+.cotizaciones td {
+  position: static;
+  padding: 2px 0;
+  border: 0;
+  background: none;
+  vertical-align: baseline;
+}
+.cotizaciones thead th {
+  padding-bottom: 2px;
+  font-size: var(--texto-2xs);
+}
+.cotizaciones thead th:first-child {
+  width: 36%;
+}
+.cotizaciones tbody th {
+  padding-left: var(--e-1);
+  overflow: hidden;
+  color: var(--texto-menu);
+  font-size: var(--texto-xs);
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cotizaciones td {
+  color: var(--texto);
+  font-weight: 600;
+  text-align: right;
+}
+.cotizaciones .num:last-child {
+  padding-right: var(--e-1);
+}
+.cotizaciones .de-precios:last-child {
+  padding-right: 0;
+}
+.cotizaciones tbody tr:hover td {
+  background: none;
+}
+
+.fecha,
 .sin-datos,
 .vieja {
+  margin: 0;
   color: var(--texto-tenue);
   font-size: var(--texto-xs);
 }
-.vieja {
+.fecha {
+  padding: 0 var(--e-1);
+}
+.cotizaciones .sin-datos {
+  font-weight: 400;
+  text-align: left;
+}
+.cotizaciones .vieja {
+  padding: 0 var(--e-1) 2px;
   color: var(--advertencia);
   font-weight: 500;
-}
-.sin-datos {
-  margin: 0;
+  text-align: left;
 }
 
 .configurar {

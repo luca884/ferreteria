@@ -10,6 +10,7 @@ import java.math.BigDecimal;
  *                      del rubro o el de la ferreteria
  * @param advertencia texto de la variacion fuerte, o null
  * @param moneda      moneda del articulo: los costos van en ella y los precios siempre en pesos
+ * @param ivaPorcentaje IVA del articulo (21.00 es 21 %): el costo va sin IVA y el precio de venta lo incluye
  */
 public record CambioMasivo(
         Long articuloId,
@@ -23,5 +24,6 @@ public record CambioMasivo(
         BigDecimal precioNuevo,
         boolean margenHeredado,
         String advertencia,
-        Moneda moneda) {
+        Moneda moneda,
+        BigDecimal ivaPorcentaje) {
 }

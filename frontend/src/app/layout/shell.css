@@ -172,14 +172,23 @@ nav a:focus-visible {
   gap: 2px;
 }
 
+/*
+ * Fijo abajo aunque el menú no entre en la pantalla (muchas cotizaciones, un grupo abierto): el resto scrollea por
+ * detrás. El margen negativo tapa el relleno inferior del lateral, así no se ve el menú pasar por debajo.
+ */
 .usuario {
+  position: sticky;
+  bottom: -14px;
+  z-index: 1;
   display: flex;
   align-items: center;
   gap: 10px;
   flex-wrap: wrap;
   margin-top: auto;
-  padding: 12px 4px 0 8px;
+  margin-bottom: -14px;
+  padding: 12px 4px 14px 8px;
   border-top: 1px solid var(--borde);
+  background: var(--superficie);
 }
 .cambiar-contrasena {
   flex-basis: 100%;

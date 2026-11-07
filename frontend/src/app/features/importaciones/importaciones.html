@@ -135,7 +135,7 @@
           [style.--ancho-columna]="anchoColumna() + 'px'"
           [style.--ancho-numero]="anchoNumero() + 'px'"
           [style.--fuente]="fuente() + 'px'"
-          [style.--alto-marco]="altoMarco + 'px'"
+          [style.--alto-marco]="altoMarco() + 'px'"
         >
           <div #encabezadoVisor class="visor-encabezado" role="row">
             <div class="visor-encabezado-fila" [style.width]="anchoTotal() + 'px'">
@@ -201,11 +201,22 @@
       <app-mapeo-columnas [grupo]="mapeoForm" [opciones]="opciones()" [reconocidos]="reconocidos()" />
 
       <form class="mapeo" [formGroup]="listaForm" novalidate>
-        <div class="fila">
+        <div class="fila incluye-iva">
           <label class="casilla" for="listaIncluyeIva">
-            <input id="listaIncluyeIva" type="checkbox" formControlName="listaIncluyeIva" />
+            <input
+              id="listaIncluyeIva"
+              type="checkbox"
+              formControlName="listaIncluyeIva"
+              [attr.aria-describedby]="
+                avisoIva() ? 'lista-incluye-iva-ayuda lista-incluye-iva-aviso' : 'lista-incluye-iva-ayuda'
+              "
+            />
             La lista incluye IVA
           </label>
+          <p id="lista-incluye-iva-ayuda" class="ayuda">Marcala solo si la columna del costo ya trae el IVA adentro.</p>
+          @if (avisoIva(); as aviso) {
+            <p id="lista-incluye-iva-aviso" class="alerta advertencia" role="status">{{ aviso }}</p>
+          }
         </div>
 
         <div class="fila">

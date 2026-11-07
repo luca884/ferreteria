@@ -160,9 +160,22 @@ export class PaginaConfiguracionCotizacion implements OnInit {
     if (c.vigenteDesde === null) {
       return `Los precios en dólares se calculan con el último dólar publicado, a ${formatearCotizacion(c.vigente)}.`;
     }
+    // La fecha es la del último recálculo aplicado, no la del dato de la fuente (esa va en el menú).
     const desde = formatearFechaHora(c.vigenteDesde);
-    const base = `Los precios en dólares se calcularon con el dólar a ${formatearCotizacion(c.vigente)}`;
-    return desde ? `${base} (${desde}).` : `${base}.`;
+    const dolar = `con el dólar a ${formatearCotizacion(c.vigente)}`;
+    return desde
+      ? `Los precios en dólares se recalcularon el ${desde} ${dolar}.`
+      : `Los precios en dólares se recalcularon ${dolar}.`;
+  }
+
+  /** Cuándo se recalculan solos los precios en dólares (lo guardado, no lo que se está editando). */
+  protected textoRecalculo(c: ConfiguracionCotizacion): string {
+    if (!c.activa) return 'Con la cotización apagada, los precios en dólares no se recalculan solos.';
+    return (
+      `Los precios en dólares se recalculan solos todos los días a las ${c.horaRecalculo}, también después de ` +
+      'cambiar el dólar o el valor que usan. Si no querés esperar, podés recalcular ahora: antes de cambiar nada ' +
+      'vas a ver cómo quedan los precios.'
+    );
   }
 }
 

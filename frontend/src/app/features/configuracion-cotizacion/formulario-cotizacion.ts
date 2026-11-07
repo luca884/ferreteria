@@ -10,9 +10,17 @@ import {
 const LADOS: readonly LadoCotizacion[] = ['VENTA', 'COMPRA'];
 
 const AYUDA_LADO: Record<LadoCotizacion, string> = {
-  VENTA: 'Venta (lo que paga quien compra)',
-  COMPRA: 'Compra (lo que cobra quien vende)',
+  VENTA: 'Venta: el valor más alto, el que pagás si comprás dólares (recomendado)',
+  COMPRA: 'Compra: el valor más bajo, el que te pagan si vendés dólares',
 };
+
+/** Hora en 24 h, con la hora de uno o dos dígitos: 8:15, 08:15, 20:30. */
+const HORA_24 = /^([01]?\d|2[0-3]):[0-5]\d$/;
+
+/** La hora con dos dígitos, como la espera el servidor: 8:15 → 08:15. */
+function horaConDosDigitos(hora: string): string {
+  return hora.trim().padStart(5, '0');
+}
 
 /**
  * Formulario de la configuración de cotización (presentacional): recibe la configuración guardada, emite el pedido
@@ -47,7 +55,11 @@ export class FormularioCotizacion {
     visibles: new FormGroup(
       Object.fromEntries(OPCIONES_COTIZACION.map((o) => [o.codigo, new FormControl(false, { nonNullable: true })])),
     ),
-    horaRecalculo: new FormControl('', { nonNullable: true, validators: [Validators.required] }),
+    // Texto y no <input type="time">: ese muestra «08:00 AM» según el navegador; acá se usa 24 h.
+    horaRecalculo: new FormControl('', {
+      nonNullable: true,
+      validators: [Validators.required, Validators.pattern(HORA_24)],
+    }),
     umbralDesvio: new FormControl<number | null>(null, {
       validators: [Validators.required, Validators.min(1), Validators.max(50)],
     }),
@@ -105,7 +117,7 @@ export class FormularioCotizacion {
       ladoPrecios: v.ladoPrecios,
       // En el orden del catálogo, no en el orden en que se fueron marcando.
       visibles: OPCIONES_COTIZACION.filter((o) => v.visibles[o.codigo]).map((o) => o.codigo),
-      horaRecalculo: v.horaRecalculo,
+      horaRecalculo: horaConDosDigitos(v.horaRecalculo),
       // Validado arriba: no es null.
       umbralDesvio: Number(v.umbralDesvio),
     });

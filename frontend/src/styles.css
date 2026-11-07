@@ -893,6 +893,11 @@ ul.error {
   font-size: var(--texto-md);
 }
 
+/* La confirmación de Margen y redondeo con sus ejemplos de precio: más ancha, para que la tabla no se apriete. */
+.dialogo:has(table.ejemplos) {
+  width: min(640px, 100%);
+}
+
 /* El detalle en pop-up (app-dialogo-detalle): grande, con el cuerpo con scroll propio y la cabecera y el pie fijos. */
 .dialogo.dialogo-detalle {
   width: min(860px, 100%);

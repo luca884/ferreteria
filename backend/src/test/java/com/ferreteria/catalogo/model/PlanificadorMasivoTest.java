@@ -84,6 +84,11 @@ class PlanificadorMasivoTest {
             return this;
         }
 
+        Art iva(AlicuotaIva valor) {
+            this.iva = valor;
+            return this;
+        }
+
         ArticuloVigente vigente() {
             return new ArticuloVigente(id, "INT-" + id, "PROV-" + id, "Articulo " + id, bd(costo), bd(precioFinal),
                 margen == null ? null : bd(margen), rubroId, iva, activo, moneda, Ajustes.NINGUNO, precioManual,
@@ -121,6 +126,15 @@ class PlanificadorMasivoTest {
     /** Ferreteria con el dolar vigente en 1000 pesos. */
     private static ContextosDePrecio contextosConDolar() {
         return new ContextosDePrecio(Map.of(), new ContextoPrecio(null, bd("30.00"), bd("10"), bd("1000")));
+    }
+
+    @Test
+    @DisplayName("cada cambio trae el IVA del articulo, para que la vista previa muestre de donde sale el precio")
+    void cambioConIva() {
+        PlanMasivo plan = costoPorcentaje("10", Art.art(1, "100.00"), Art.art(2, "100.00").iva(AlicuotaIva.IVA_10_5));
+
+        assertThat(plan.cambios()).extracting(CambioMasivo::ivaPorcentaje)
+            .containsExactly(bd("21.00"), bd("10.50"));
     }
 
     // ------------------------------------------------------------------ precio final en % o en $ (CU-14 punto 4)

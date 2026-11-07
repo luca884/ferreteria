@@ -1,19 +1,35 @@
-import { Component, OnInit, inject, signal } from '@angular/core';
+import { Component, OnInit, computed, inject, signal } from '@angular/core';
+import { toSignal } from '@angular/core/rxjs-interop';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { erroresDeCampos, mensajeDe } from '../../core/api/api-error';
 import { AuthService } from '../../core/auth/auth.service';
+import { MontoPipe, formatearMonto } from '../../core/formato/monto';
+import { precioFinalCentavos } from '../../core/formato/precio-final';
 import { BarraAcciones } from '../../shared/barra-acciones';
 import { Confirmacion } from '../../shared/confirmacion';
 import { ImporteInput } from '../../shared/importe-input';
 import { ConfiguracionPrecios } from '../articulos/articulo.models';
-import { ConfiguracionPreciosGuardada, ConfiguracionPreciosService } from './configuracion-precios.service';
+import {
+  ConfiguracionPreciosGuardada,
+  ConfiguracionPreciosService,
+  EjemploDePrecio,
+} from './configuracion-precios.service';
 
-/** Cambio pendiente de confirmar: cuántos artículos cambian de precio (null si no se pudo contar) y el título. */
+/**
+ * Cambio pendiente de confirmar: cuántos artículos se recalculan (null si no se pudo contar), unos ejemplos de los que
+ * cambian de precio y el título.
+ */
 interface CambioPendiente {
   nueva: ConfiguracionPrecios;
   articulos: number | null;
+  ejemplos: EjemploDePrecio[];
   titulo: string;
 }
+
+const ENTERO = new Intl.NumberFormat('es-AR');
+const MULTIPLO = new Intl.NumberFormat('es-AR', { maximumFractionDigits: 2 });
+/** El precio del ejemplo del redondeo: el del recorrido con Luca (S7). */
+const PRECIO_DE_EJEMPLO = '909788.60';
 
 /** El título nombra solo lo que cambió (QA 05/11); sin configuración guardada, los dos. */
 function tituloCambio(anterior: ConfiguracionPrecios | null, nueva: ConfiguracionPrecios): string {
@@ -30,7 +46,7 @@ function tituloCambio(anterior: ConfiguracionPrecios | null, nueva: Configuracio
  */
 @Component({
   selector: 'app-configuracion-precios',
-  imports: [ReactiveFormsModule, BarraAcciones, Confirmacion, ImporteInput],
+  imports: [ReactiveFormsModule, BarraAcciones, Confirmacion, ImporteInput, MontoPipe],
   templateUrl: './configuracion-precios.html',
   styleUrl: './configuracion-precios.css',
 })
@@ -55,6 +71,26 @@ export class PaginaConfiguracionPrecios implements OnInit {
   /** Cualquier otro error al guardar (409 sin cotización, sin conexión…). */
   protected readonly errorGuardado = signal<string | null>(null);
   protected readonly cambioPendiente = signal<CambioPendiente | null>(null);
+
+  private readonly multiploEscrito = toSignal(this.form.controls.redondeoMultiplo.valueChanges, {
+    initialValue: this.form.controls.redondeoMultiplo.value,
+  });
+
+  /**
+   * Cómo queda un precio con el múltiplo escrito, con la misma cuenta que el servidor (hacia arriba). Con 0, vacío o un
+   * valor inválido no hay ejemplo: queda la pista de siempre.
+   */
+  protected readonly ejemploRedondeo = computed(() => {
+    const multiplo = Number(this.multiploEscrito());
+    if (!Number.isFinite(multiplo) || multiplo <= 0 || this.form.controls.redondeoMultiplo.invalid) return null;
+    // Con margen 0 e IVA 0, el precio final es el precio de ejemplo redondeado al múltiplo.
+    const centavos = precioFinalCentavos(PRECIO_DE_EJEMPLO, '0', 'IVA_0', String(multiplo));
+    if (centavos === null) return null;
+    return (
+      `Con ${MULTIPLO.format(multiplo)}, un precio de ${formatearMonto(Number(PRECIO_DE_EJEMPLO))} queda en ` +
+      `${formatearMonto(Number(centavos) / 100)}. Siempre hacia arriba, así no perdés margen.`
+    );
+  });
 
   ngOnInit(): void {
     if (this.auth.esDueno()) this.cargar();
@@ -97,14 +133,14 @@ export class PaginaConfiguracionPrecios implements OnInit {
     const titulo = tituloCambio(anterior, nueva);
     this.guardando.set(true);
     this.service.articulosQueCambian(nueva).subscribe({
-      next: (articulos) => {
+      next: ({ cantidad, ejemplos }) => {
         this.guardando.set(false);
-        if (articulos === 0) this.enviar(nueva);
-        else this.cambioPendiente.set({ nueva, articulos, titulo });
+        if (cantidad === 0) this.enviar(nueva);
+        else this.cambioPendiente.set({ nueva, articulos: cantidad, ejemplos, titulo });
       },
       error: () => {
         this.guardando.set(false);
-        this.cambioPendiente.set({ nueva, articulos: null, titulo });
+        this.cambioPendiente.set({ nueva, articulos: null, ejemplos: [], titulo });
       },
     });
   }
@@ -119,7 +155,7 @@ export class PaginaConfiguracionPrecios implements OnInit {
     if (cambio.articulos === null) return 'Se recalcula el precio de los artículos que dependen de estos valores.';
     return cambio.articulos === 1
       ? 'Se recalcula el precio de 1 artículo.'
-      : `Se recalcula el precio de ${cambio.articulos} artículos.`;
+      : `Se recalcula el precio de ${ENTERO.format(cambio.articulos)} artículos.`;
   }
 
   protected invalido(campo: 'margenDefectoPorcentaje' | 'redondeoMultiplo'): boolean {

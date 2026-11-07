@@ -1,6 +1,7 @@
 package com.ferreteria.catalogo.model;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.tuple;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
@@ -556,7 +557,7 @@ class PlanificadorImportacionTest {
                     filaDe(4, "A-1", "x", "120", "ARG"))
                 .planificar();
 
-            assertThat(plan.errores()).containsExactly(new AvisoDeFila(2, "N-USD", APAGADA));
+            assertThat(plan.errores()).containsExactly(new AvisoDeFila(null, 2, "N-USD", APAGADA, "Nuevo"));
             assertThat(plan.altas()).extracting(AltaPlaneada::codigo).containsExactly("N-ARS");
             assertThat(plan.cambios()).extracting(CambioPlaneado::fila).containsExactly(4);
         }
@@ -569,7 +570,7 @@ class PlanificadorImportacionTest {
                 .filas(filaDe(2, "A-1", "x", "10", "USD"))
                 .planificar();
 
-            assertThat(plan.errores()).containsExactly(new AvisoDeFila(2, "A-1", APAGADA));
+            assertThat(plan.errores()).containsExactly(new AvisoDeFila(null, 2, "A-1", APAGADA, "x"));
             assertThat(plan.cambiosDeMoneda()).isEmpty();
             assertThat(plan.conteos()).isEqualTo(new ConteosImportacion(0, 0, 0, 0, 0, 1));
         }
@@ -598,7 +599,7 @@ class PlanificadorImportacionTest {
                 .planificar();
 
             assertThat(plan.errores()).containsExactly(
-                new AvisoDeFila(2, "N-USD", SIN_COTIZACION), new AvisoDeFila(3, "U-1", SIN_COTIZACION));
+                new AvisoDeFila(null, 2, "N-USD", SIN_COTIZACION, "Nuevo"), new AvisoDeFila(null, 3, "U-1", SIN_COTIZACION, "x"));
             assertThat(plan.cambios()).extracting(CambioPlaneado::fila).containsExactly(4);
             assertThat(plan.altas()).extracting(AltaPlaneada::codigo).containsExactly("N-ARS");
         }
@@ -779,7 +780,7 @@ class PlanificadorImportacionTest {
                 .planificar();
 
             assertThat(plan.errores()).containsExactly(
-                new AvisoDeFila(2, "A-1", IVA_19), new AvisoDeFila(3, "N-1", IVA_19));
+                new AvisoDeFila(null, 2, "A-1", IVA_19, "x"), new AvisoDeFila(null, 3, "N-1", IVA_19, "Nuevo"));
             assertThat(plan.cambios()).isEmpty();
             assertThat(plan.altas()).extracting(AltaPlaneada::codigo).containsExactly("N-2");
         }
@@ -981,7 +982,7 @@ class PlanificadorImportacionTest {
 
             String mensaje = "El código aparece repetido en la lista (TORNILLOS fila 5 y TUERCAS fila 9).";
             assertThat(plan.errores()).containsExactly(
-                new AvisoDeFila(0, 5, "A-1", mensaje), new AvisoDeFila(1, 9, "a-1", mensaje));
+                new AvisoDeFila(0, 5, "A-1", mensaje, "x"), new AvisoDeFila(1, 9, "a-1", mensaje, "x"));
             assertThat(plan.altas()).isEmpty();
             assertThat(plan.conteos().conError()).isEqualTo(2);
         }
@@ -994,8 +995,8 @@ class PlanificadorImportacionTest {
                 .planificar();
 
             assertThat(plan.errores()).containsExactly(
-                new AvisoDeFila(1, 4, "A-1", "El código aparece repetido en la lista (filas 4 y 9)."),
-                new AvisoDeFila(1, 9, "A-1", "El código aparece repetido en la lista (filas 4 y 9)."));
+                new AvisoDeFila(1, 4, "A-1", "El código aparece repetido en la lista (filas 4 y 9).", "x"),
+                new AvisoDeFila(1, 9, "A-1", "El código aparece repetido en la lista (filas 4 y 9).", "x"));
         }
 
         @Test
@@ -1197,8 +1198,8 @@ class PlanificadorImportacionTest {
                     filaDe(3, "N-2", "Tuerca", "100", "", "", "", "", "", "", "", "7790000000001"))
                 .planificar();
 
-            assertThat(plan.errores()).containsExactly(new AvisoDeFila(2, "N-1",
-                "Ya existe un artículo activo con el código de barras 7791234567890."));
+            assertThat(plan.errores()).containsExactly(new AvisoDeFila(null, 2, "N-1",
+                "Ya existe un artículo activo con el código de barras 7791234567890.", "Tornillo"));
             assertThat(plan.altas()).extracting(AltaPlaneada::codigo).containsExactly("N-2");
         }
 
@@ -1278,7 +1279,7 @@ class PlanificadorImportacionTest {
         void faltaElCodigo() {
             PlanImportacion plan = escenario().filas(fila(7, "  ", "Algo", "100")).planificar();
 
-            assertThat(plan.errores()).containsExactly(new AvisoDeFila(7, null, "Falta el código del proveedor."));
+            assertThat(plan.errores()).containsExactly(new AvisoDeFila(null, 7, null, "Falta el código del proveedor.", "Algo"));
             assertThat(plan.conteos().conError()).isEqualTo(1);
         }
 
@@ -1295,7 +1296,7 @@ class PlanificadorImportacionTest {
                 .planificar();
 
             assertThat(plan.errores()).containsExactly(
-                new AvisoDeFila(2, de41, "El código tiene más de 40 caracteres."));
+                new AvisoDeFila(null, 2, de41, "El código tiene más de 40 caracteres.", "x"));
             assertThat(plan.cambios()).extracting(CambioPlaneado::fila).containsExactly(3);
         }
 
@@ -1331,10 +1332,21 @@ class PlanificadorImportacionTest {
                 .planificar();
 
             assertThat(plan.errores()).containsExactly(
-                new AvisoDeFila(2, "A-1", "El costo está vacío o no es un número."),
-                new AvisoDeFila(3, "A-2", "El costo está vacío o no es un número."),
-                new AvisoDeFila(4, "A-3", "El costo está vacío o no es un número."),
-                new AvisoDeFila(5, "A-4", "El costo está vacío o no es un número."));
+                new AvisoDeFila(null, 2, "A-1", "El costo está vacío o no es un número.", "x"),
+                new AvisoDeFila(null, 3, "A-2", "El costo está vacío o no es un número.", "x"),
+                new AvisoDeFila(null, 4, "A-3", "El costo está vacío o no es un número.", "x"),
+                new AvisoDeFila(null, 5, "A-4", "El costo está vacío o no es un número.", "x"));
+        }
+
+        @Test
+        @DisplayName("la fila con error trae su descripcion, para saber que articulo es sin abrir la lista; sin descripcion, null")
+        void errorConDescripcion() {
+            PlanImportacion plan = escenario()
+                .filas(fila(2, "A-1", "Tornillo 1/4", null), fila(3, "A-2", "", "abc"))
+                .planificar();
+
+            assertThat(plan.errores()).extracting(AvisoDeFila::fila, AvisoDeFila::descripcion)
+                .containsExactly(tuple(2, "Tornillo 1/4"), tuple(3, null));
         }
 
         @Test
@@ -1343,8 +1355,8 @@ class PlanificadorImportacionTest {
             PlanImportacion plan = escenario().filas(fila(2, "A-1", "x", "-10"), fila(3, "A-2", "x", "-0,01")).planificar();
 
             assertThat(plan.errores()).containsExactly(
-                new AvisoDeFila(2, "A-1", "El costo no puede ser negativo."),
-                new AvisoDeFila(3, "A-2", "El costo no puede ser negativo."));
+                new AvisoDeFila(null, 2, "A-1", "El costo no puede ser negativo.", "x"),
+                new AvisoDeFila(null, 3, "A-2", "El costo no puede ser negativo.", "x"));
         }
 
         @Test
@@ -1357,8 +1369,8 @@ class PlanificadorImportacionTest {
                 .planificar();
 
             assertThat(plan.errores()).containsExactly(
-                new AvisoDeFila(2, "A-1", mensaje), new AvisoDeFila(3, "A-2", mensaje),
-                new AvisoDeFila(4, "A-3", mensaje));
+                new AvisoDeFila(null, 2, "A-1", mensaje, "x"), new AvisoDeFila(null, 3, "A-2", mensaje, "x"),
+                new AvisoDeFila(null, 4, "A-3", mensaje, "x"));
         }
 
         @Test
@@ -1394,8 +1406,8 @@ class PlanificadorImportacionTest {
                 .planificar();
 
             assertThat(plan.errores()).containsExactly(
-                new AvisoDeFila(2, "A-1", "El costo es demasiado grande."),
-                new AvisoDeFila(4, "A-3", "El costo es demasiado grande."));
+                new AvisoDeFila(null, 2, "A-1", "El costo es demasiado grande.", "x"),
+                new AvisoDeFila(null, 4, "A-3", "El costo es demasiado grande.", "x"));
         }
 
         @Test
@@ -1452,7 +1464,7 @@ class PlanificadorImportacionTest {
 
             String mensaje = "El código aparece repetido en la lista (filas 4 y 9).";
             assertThat(plan.errores()).containsExactly(
-                new AvisoDeFila(4, "ABC-1", mensaje), new AvisoDeFila(9, "abc-1", mensaje));
+                new AvisoDeFila(null, 4, "ABC-1", mensaje, "x"), new AvisoDeFila(null, 9, "abc-1", mensaje, "x"));
             assertThat(plan.conteos()).isEqualTo(new ConteosImportacion(0, 0, 0, 0, 0, 2));
             assertThat(plan.cambios()).isEmpty();
             assertThat(plan.sinCambio()).isEmpty();
@@ -1926,7 +1938,7 @@ class PlanificadorImportacionTest {
                 .planificar();
 
             assertThat(plan.advertencias()).containsExactly(
-                new AvisoDeFila(5, "A-1", "El costo sube un 60 % (de 100,00 a 160,00). Revisá que sea correcto."));
+                new AvisoDeFila(null, 5, "A-1", "El costo sube un 60 % (de 100,00 a 160,00). Revisá que sea correcto.", "x"));
             assertThat(plan.cambios().get(0).variacionFuerte()).isTrue();
             assertThat(plan.conteos()).isEqualTo(new ConteosImportacion(1, 0, 0, 0, 0, 0));
         }
@@ -1940,7 +1952,7 @@ class PlanificadorImportacionTest {
                 .planificar();
 
             assertThat(plan.advertencias()).containsExactly(
-                new AvisoDeFila(5, "A-1", "El costo baja un 60 % (de 100,00 a 40,00). Revisá que sea correcto."));
+                new AvisoDeFila(null, 5, "A-1", "El costo baja un 60 % (de 100,00 a 40,00). Revisá que sea correcto.", "x"));
             assertThat(plan.cambios().get(0).variacionFuerte()).isTrue();
             assertThat(plan.conteos()).isEqualTo(new ConteosImportacion(0, 1, 0, 0, 0, 0));
         }
@@ -2120,8 +2132,8 @@ class PlanificadorImportacionTest {
                 .filas(fila(2, de31, "Algo", "10"), fila(3, "B".repeat(30), "Algo", "10"))
                 .planificar();
 
-            assertThat(plan.errores()).containsExactly(new AvisoDeFila(2, de31,
-                "No se puede crear como artículo nuevo: el código tiene más de 30 caracteres."));
+            assertThat(plan.errores()).containsExactly(new AvisoDeFila(null, 2, de31,
+                "No se puede crear como artículo nuevo: el código tiene más de 30 caracteres.", "Algo"));
             assertThat(plan.altas()).extracting(AltaPlaneada::fila).containsExactly(3);
             assertThat(plan.conteos()).isEqualTo(new ConteosImportacion(0, 0, 1, 0, 0, 1));
         }
@@ -2134,8 +2146,8 @@ class PlanificadorImportacionTest {
                 .filas(fila(2, "valv-1", "Valvula", "10"), fila(3, "VALV-2", "Valvula", "10"))
                 .planificar();
 
-            assertThat(plan.errores()).containsExactly(new AvisoDeFila(2, "valv-1",
-                "No se puede crear como artículo nuevo: ya existe un artículo con el código interno valv-1."));
+            assertThat(plan.errores()).containsExactly(new AvisoDeFila(null, 2, "valv-1",
+                "No se puede crear como artículo nuevo: ya existe un artículo con el código interno valv-1.", "Valvula"));
             assertThat(plan.altas()).extracting(AltaPlaneada::codigo).containsExactly("VALV-2");
         }
 
@@ -2179,8 +2191,8 @@ class PlanificadorImportacionTest {
             PlanImportacion plan = escenario().filas(fila(4, "N-1", descripcion, "10")).planificar();
 
             assertThat(plan.altas().get(0).descripcion()).isEqualTo("d".repeat(200));
-            assertThat(plan.advertencias()).containsExactly(new AvisoDeFila(4, "N-1",
-                "La descripción tenía más de 200 caracteres y se cortó a 200."));
+            assertThat(plan.advertencias()).containsExactly(new AvisoDeFila(null, 4, "N-1",
+                "La descripción tenía más de 200 caracteres y se cortó a 200.", descripcion));
             assertThat(plan.errores()).isEmpty();
         }
 

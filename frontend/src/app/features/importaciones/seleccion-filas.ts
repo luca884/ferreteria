@@ -103,7 +103,7 @@ export function unirFilas(vistaPrevia: VistaPrevia): FilaDeVista[] {
       fila,
       tipo: 'conError',
       codigo: error.codigo ?? '',
-      descripcion: '',
+      descripcion: error.descripcion ?? '',
       cambio: null,
       alta: null,
       mensaje: error.mensaje,
