@@ -71,9 +71,11 @@
 
   /*
    * Anchos del contenido debajo de la barra de acciones (que siempre va a todo el ancho):
-   * las pantallas con tabla se centran hasta --ancho-pantalla; los formularios solos, en una columna de --ancho-formulario.
+   * las pantallas con tabla se centran hasta --ancho-pantalla; los formularios solos, en una columna de --ancho-formulario;
+   * Caja, con su resumen de concepto e importe, en --ancho-medio para que no queden lejos uno del otro.
    */
   --ancho-pantalla: 1400px;
+  --ancho-medio: 880px;
   --ancho-formulario: 640px;
 
   /* Radios: más cerrados adentro, más abiertos en contenedores */

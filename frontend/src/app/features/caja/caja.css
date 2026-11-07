@@ -2,9 +2,9 @@
   display: block;
   width: 100%;
 }
-/* La barra de acciones va a todo el ancho; el resto, centrado y con margen a los costados en pantallas grandes. */
+/* La barra de acciones va a todo el ancho; el resto, centrado en una columna media: el concepto y el importe del resumen quedan cerca. */
 :host > :not(app-barra-acciones) {
-  max-width: var(--ancho-pantalla);
+  max-width: var(--ancho-medio);
   margin-inline: auto;
 }
 :host > .panel,
