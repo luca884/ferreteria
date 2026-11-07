@@ -63,14 +63,14 @@
       @if (porcentajeGeneral(); as porcentaje) {
         ({{ porcentaje | number: '1.0-2' }} %)
       }
-      <span>-{{ venta().descuento | monto }}</span>
+      <span>{{ venta().descuento | restado }}</span>
     </p>
   }
   @if ((venta().recargo ?? 0) > 0) {
     <p>Recargo <span>{{ venta().recargo | monto }}</span></p>
   } @else if ((venta().recargo ?? 0) < 0) {
     <!-- El descuento de la forma de pago (descuento en efectivo) se guarda como recargo negativo. -->
-    <p>Descuento por forma de pago <span>-{{ -venta().recargo! | monto }}</span></p>
+    <p>Descuento por forma de pago <span>{{ -venta().recargo! | restado }}</span></p>
   }
   <p class="total">Total <strong>{{ venta().total | monto }}</strong></p>
 </div>

@@ -335,7 +335,7 @@ describe('Ventas (consulta y reimpresión, G60)', () => {
     expect(d).toContain('Venta N.º 5');
     expect(d).toContain('Martillo');
     expect(d).toContain('Subtotal $ 3.000,00');
-    expect(d).toContain('Descuento (10 %) -$ 300,00');
+    expect(d).toContain('Descuento (10 %) −$ 300,00');
     expect(d).toContain('Recargo $ 270,00');
     expect(d).toContain('Total $ 2.970,00');
     expect(d).toContain('Crédito 1 pago $ 2.970,00');
@@ -438,7 +438,7 @@ describe('Ventas (consulta y reimpresión, G60)', () => {
     await refrescar();
 
     const totales = normal(detalle()!.querySelector('.totales')?.textContent);
-    expect(totales).toContain('Descuento -$ 300,00');
+    expect(totales).toContain('Descuento −$ 300,00');
     expect(totales).not.toContain('(0 %)');
   });
 
@@ -451,7 +451,7 @@ describe('Ventas (consulta y reimpresión, G60)', () => {
     await refrescar();
 
     const totales = normal(detalle()!.querySelector('.totales')?.textContent);
-    expect(totales).toContain('Descuento -$ 300,00');
+    expect(totales).toContain('Descuento −$ 300,00');
     expect(totales).not.toContain('(10 %)');
   });
 

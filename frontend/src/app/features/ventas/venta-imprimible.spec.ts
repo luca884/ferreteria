@@ -76,7 +76,7 @@ describe('VentaImprimible', () => {
     expect(hoja).toContain('Ana Vendedora');
     expect(hoja).toContain('Martillo');
     expect(hoja).toContain('Subtotal $ 3.000,00');
-    expect(hoja).toContain('Descuento (10 %) -$ 300,00');
+    expect(hoja).toContain('Descuento (10 %) −$ 300,00');
     expect(hoja).toContain('Recargo $ 270,00');
     expect(texto('.total')).toContain('$ 2.970,00');
     expect(hoja).toContain('Crédito 1 pago $ 2.970,00');
@@ -89,7 +89,7 @@ describe('VentaImprimible', () => {
 
     const hoja = texto('.venta-imprimible')!;
     expect(hoja).toContain('Subtotal $ 3.000,00');
-    expect(hoja).toContain('Descuento por forma de pago -$ 300,00');
+    expect(hoja).toContain('Descuento por forma de pago −$ 300,00');
     expect(hoja).not.toContain('Recargo');
     expect(texto('.total')).toContain('$ 2.700,00');
   });

@@ -16,7 +16,7 @@ import { catchError, forkJoin, map, of, throwError } from 'rxjs';
 import { mensajeDe } from '../../core/api/api-error';
 import { PageResponse } from '../../core/api/page.models';
 import { AuthService } from '../../core/auth/auth.service';
-import { MontoPipe } from '../../core/formato/monto';
+import { MontoPipe, RestadoPipe } from '../../core/formato/monto';
 import { cantidadConUnidad } from '../../core/formato/unidad';
 import { BarraAcciones } from '../../shared/barra-acciones';
 import { Confirmacion } from '../../shared/confirmacion';
@@ -63,7 +63,7 @@ const MENSAJE_NUMERO = 'El número tiene que ser un entero.';
  */
 @Component({
   selector: 'app-remitos',
-  imports: [BarraAcciones, Confirmacion, DecimalPipe, DialogoDetalle, DocumentoNoFiscalImprimible, MontoPipe, RouterLink],
+  imports: [BarraAcciones, Confirmacion, DecimalPipe, DialogoDetalle, DocumentoNoFiscalImprimible, MontoPipe, RestadoPipe, RouterLink],
   templateUrl: './remitos.html',
   styleUrl: './remitos.css',
 })

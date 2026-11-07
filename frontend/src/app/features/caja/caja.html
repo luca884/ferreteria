@@ -6,7 +6,7 @@
 </app-barra-acciones>
 
 <p class="ayuda">
-  Abrí la caja al empezar el día con el efectivo que hay. Durante el día cargá los ingresos, gastos y retiros. Al terminar,
+  Abrí la caja al empezar el día con el efectivo que hay. Durante el día cargá los {{ movimientosQueCarga() }}. Al terminar,
   cerrala contando el efectivo que quedó.
 </p>
 
@@ -39,7 +39,7 @@
 
     @if (!esDeOtroDia()) {
       <form class="movimiento panel" (submit)="registrarMovimiento($event)" novalidate>
-        <h2>Ingresos, gastos y retiros</h2>
+        <h2>{{ auth.esDueno() ? 'Ingresos, gastos y retiros' : 'Ingresos y gastos' }}</h2>
         <div class="fila-campos">
           <div class="campo">
             <label for="tipo-movimiento">Tipo</label>

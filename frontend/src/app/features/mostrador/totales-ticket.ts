@@ -1,5 +1,5 @@
 import { Component, computed, input } from '@angular/core';
-import { MontoPipe } from '../../core/formato/monto';
+import { MontoPipe, RestadoPipe } from '../../core/formato/monto';
 import { subtotalTicket, totalTicket } from './centavos';
 import { RenglonTicket } from './ticket';
 
@@ -9,7 +9,7 @@ import { RenglonTicket } from './ticket';
  */
 @Component({
   selector: 'app-totales-ticket',
-  imports: [MontoPipe],
+  imports: [MontoPipe, RestadoPipe],
   template: `
     <section class="totales" aria-label="Totales">
       <div class="cabecera">
@@ -20,7 +20,7 @@ import { RenglonTicket } from './ticket';
       </div>
       @if (descuentoCentavos() > 0) {
         <p class="linea subtotal">Subtotal <span>{{ subtotalCentavos() / 100 | monto }}</span></p>
-        <p class="linea descuento">Descuento <span>-{{ descuentoCentavos() / 100 | monto }}</span></p>
+        <p class="linea descuento">Descuento <span>{{ descuentoCentavos() / 100 | restado }}</span></p>
       }
       <!-- <output>: un resultado calculado que admite nombre (un aria-label en un <p> se ignora). -->
       <output class="total" aria-labelledby="totales-etiqueta">{{ totalCentavos() / 100 | monto }}</output>

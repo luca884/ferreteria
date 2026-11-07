@@ -2,7 +2,7 @@ import { DecimalPipe } from '@angular/common';
 import { Component, computed, input } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { cantidadConUnidad } from '../../core/formato/unidad';
-import { MontoPipe } from '../../core/formato/monto';
+import { MontoPipe, RestadoPipe } from '../../core/formato/monto';
 import { porcentajeDescuentoGeneral } from '../../shared/descuento-general';
 import { fechaCompletaLocal } from '../clientes/cuenta/cobranza.models';
 import { VentaConsultada, clienteDeVenta, esNotaDeCredito } from './ventas.models';
@@ -13,7 +13,7 @@ import { VentaConsultada, clienteDeVenta, esNotaDeCredito } from './ventas.model
  */
 @Component({
   selector: 'app-venta-hoja',
-  imports: [DecimalPipe, MontoPipe, RouterLink],
+  imports: [DecimalPipe, MontoPipe, RestadoPipe, RouterLink],
   templateUrl: './venta-hoja.html',
   styleUrl: './venta-hoja.css',
 })

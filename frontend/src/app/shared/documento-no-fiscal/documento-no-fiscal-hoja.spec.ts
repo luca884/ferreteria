@@ -68,7 +68,7 @@ describe('DocumentoNoFiscalHoja', () => {
     expect(filas[1]).toBe('1,5 Clavos $ 400,00 $ 600,00');
     const totales = texto('.totales')!;
     expect(totales).toContain('Subtotal $ 2.600,00');
-    expect(totales).toContain('Descuento -$ 200,00');
+    expect(totales).toContain('Descuento −$ 200,00');
     expect(texto('.total')).toBe('Total $ 2.400,00');
     expect(texto('.observaciones')).toContain('Entregar por la puerta de atrás');
   });
@@ -109,7 +109,7 @@ describe('DocumentoNoFiscalHoja', () => {
       }),
     );
 
-    expect(texto('.totales')).toContain('Descuento (10 %) -$ 100,00');
+    expect(texto('.totales')).toContain('Descuento (10 %) −$ 100,00');
   });
 
   it('el presupuesto dice «Presupuesto N.º n» y «Válido hasta dd/MM/aaaa»', async () => {

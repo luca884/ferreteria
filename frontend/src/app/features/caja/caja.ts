@@ -51,6 +51,11 @@ export class Caja implements OnInit {
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   protected readonly auth = inject(AuthService);
 
+  /** Los movimientos que carga el usuario: el Vendedor no hace retiros (CU-10 punto 4), así que su texto no los nombra. */
+  protected readonly movimientosQueCarga = computed(() =>
+    this.auth.esDueno() ? 'ingresos, gastos y retiros' : 'ingresos y gastos',
+  );
+
   protected readonly vigente = signal<CajaVigente | null>(null);
   protected readonly cargando = signal(true);
   protected readonly cargaFallida = signal(false);

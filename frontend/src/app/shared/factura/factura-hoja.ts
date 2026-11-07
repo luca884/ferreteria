@@ -2,7 +2,7 @@ import { DecimalPipe } from '@angular/common';
 import { Component, computed, input } from '@angular/core';
 import { cuitConGuiones } from '../../core/formato/cuit';
 import { formatearFecha } from '../../core/formato/fecha-hora';
-import { MontoPipe } from '../../core/formato/monto';
+import { MontoPipe, RestadoPipe } from '../../core/formato/monto';
 import { ALICUOTA_IVA_LABELS, AlicuotaIva } from '../../features/articulos/articulo.models';
 import { documentoLegible } from '../../features/clientes/cliente.models';
 import { barras } from '../../features/etiquetas/codigo-barras';
@@ -22,7 +22,7 @@ const SILENCIO_QR = 4;
  */
 @Component({
   selector: 'app-factura-hoja',
-  imports: [DecimalPipe, MontoPipe],
+  imports: [DecimalPipe, MontoPipe, RestadoPipe],
   templateUrl: './factura-hoja.html',
   styleUrl: './factura-hoja.css',
 })

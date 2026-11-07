@@ -504,9 +504,13 @@ describe('Caja (CU-10)', () => {
   });
 
   describe('texto explicativo', () => {
+    // El Vendedor no hace retiros (CU-10 punto 4): su texto no los nombra (bugs de la guía, S3).
     const texto =
+      'Abrí la caja al empezar el día con el efectivo que hay. Durante el día cargá los ingresos y gastos. Al terminar, cerrala contando el efectivo que quedó.';
+    const textoDueno =
       'Abrí la caja al empezar el día con el efectivo que hay. Durante el día cargá los ingresos, gastos y retiros. Al terminar, cerrala contando el efectivo que quedó.';
     const ayudas = () => Array.from(el().querySelectorAll('p.ayuda')).map((p) => normal(p.textContent));
+    const titulos = () => Array.from(el().querySelectorAll('h2')).map((h) => normal(h.textContent));
 
     it('explica cómo se usa la caja cuando está cerrada', async () => {
       await crear(sinCaja());
@@ -516,6 +520,18 @@ describe('Caja (CU-10)', () => {
     it('y también con la caja abierta', async () => {
       await crear(conCaja());
       expect(ayudas()).toContain(texto);
+    });
+
+    it('el título del formulario del Vendedor dice «Ingresos y gastos»', async () => {
+      await crear(conCaja());
+      expect(titulos()).toContain('Ingresos y gastos');
+      expect(titulos()).not.toContain('Ingresos, gastos y retiros');
+    });
+
+    it('el Dueño, que sí hace retiros, sigue leyendo «ingresos, gastos y retiros»', async () => {
+      await crear(conCaja(), true);
+      expect(ayudas()).toContain(textoDueno);
+      expect(titulos()).toContain('Ingresos, gastos y retiros');
     });
   });
 

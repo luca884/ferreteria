@@ -83,7 +83,7 @@
       @if (porcentajeGeneral(); as porcentaje) {
         ({{ porcentaje | number: '1.0-2' }} %)
       }
-      <span>-{{ d.descuento | monto }}</span>
+      <span>{{ d.descuento | restado }}</span>
     </p>
   }
   <p class="total">

@@ -1,6 +1,6 @@
 import { ChangeDetectorRef, Component, computed, inject, input, signal } from '@angular/core';
 import { AuthService } from '../../core/auth/auth.service';
-import { MontoPipe, formatearMonto } from '../../core/formato/monto';
+import { MontoPipe, formatearRestado } from '../../core/formato/monto';
 import { emitidoEl } from '../../shared/emitido';
 import { MEDIOS_PAGO, MEDIO_PAGO_LABELS } from '../mostrador/venta.models';
 import { DetalleCaja, TIPO_MOVIMIENTO_LABELS, TipoMovimientoCaja, fechaHoraLocal, textoDiferencia } from './caja.models';
@@ -41,7 +41,7 @@ export class ResumenCaja {
 
   /** Una anulación, los gastos o los retiros se muestran restando: «−$ 700,00»; en 0 no lleva signo. */
   protected restado(importe: number): string {
-    return importe > 0 ? `−${formatearMonto(importe)}` : formatearMonto(importe);
+    return formatearRestado(importe);
   }
 
   /** Un gasto o un retiro sacan plata de la caja: se muestran restando y en rojo (#72). */

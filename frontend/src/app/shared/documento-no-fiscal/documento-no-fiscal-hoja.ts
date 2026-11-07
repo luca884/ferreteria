@@ -2,7 +2,7 @@ import { DecimalPipe } from '@angular/common';
 import { Component, computed, input } from '@angular/core';
 import { cuitConGuiones } from '../../core/formato/cuit';
 import { formatearFecha } from '../../core/formato/fecha-hora';
-import { MontoPipe } from '../../core/formato/monto';
+import { MontoPipe, RestadoPipe } from '../../core/formato/monto';
 import { CONDICION_IVA_FERRETERIA_LABELS } from '../../features/admin-ferreterias/ferreteria-admin.models';
 import { fechaCompletaLocal } from '../../features/clientes/cuenta/cobranza.models';
 import { DatosFiscales } from '../../features/datos-fiscales/datos-fiscales.service';
@@ -21,7 +21,7 @@ import {
  */
 @Component({
   selector: 'app-documento-no-fiscal-hoja',
-  imports: [DecimalPipe, MontoPipe],
+  imports: [DecimalPipe, MontoPipe, RestadoPipe],
   templateUrl: './documento-no-fiscal-hoja.html',
   styleUrl: './documento-no-fiscal-hoja.css',
 })
