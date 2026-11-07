@@ -35,8 +35,11 @@
   display: flex;
   align-items: center;
   gap: var(--e-3);
-  padding: var(--e-2) 0;
+  padding: var(--e-2);
   border-bottom: 1px solid var(--borde);
+}
+.resultados li.resaltado {
+  background: var(--acento-suave);
 }
 .resultados .codigo-interno {
   font-variant-numeric: tabular-nums;

@@ -2,6 +2,7 @@ import { HttpClient } from '@angular/common/http';
 import { Injectable, computed, inject, signal } from '@angular/core';
 import { Observable, tap } from 'rxjs';
 import { environment } from '../../../environments/environment';
+import { AL_CERRAR_SESION } from './al-cerrar-sesion';
 import { LoginResponse, Sesion } from './auth.models';
 
 const TOKEN_KEY = 'ferreteria.token';
@@ -11,6 +12,7 @@ const SESION_KEY = 'ferreteria.sesion';
 @Injectable({ providedIn: 'root' })
 export class AuthService {
   private readonly http = inject(HttpClient);
+  private readonly alCerrarSesion = inject(AL_CERRAR_SESION, { optional: true }) ?? [];
 
   private readonly _token = signal<string | null>(leer(TOKEN_KEY));
   private readonly _sesion = signal<Sesion | null>(leerJson<Sesion>(SESION_KEY));
@@ -65,6 +67,16 @@ export class AuthService {
   }
 
   logout(): void {
+    const sesion = this._sesion();
+    if (sesion) {
+      for (const paso of this.alCerrarSesion) {
+        try {
+          paso(sesion);
+        } catch {
+          /* el cierre sigue igual */
+        }
+      }
+    }
     this._token.set(null);
     this._sesion.set(null);
     borrar(TOKEN_KEY);

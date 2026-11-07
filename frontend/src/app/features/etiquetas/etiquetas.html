@@ -1,6 +1,7 @@
 <app-barra-acciones>
   <h1>Etiquetas</h1>
   @if (auth.esDueno()) {
+    <button type="button" class="accion-barra vaciar" [disabled]="items().length === 0" (click)="vaciar()">Vaciar</button>
     <button
       type="button"
       class="accion-barra primario imprimir"
@@ -29,7 +30,8 @@
           autocomplete="off"
           placeholder="Código o descripción"
           [value]="busqueda()"
-          (input)="busqueda.set($any($event.target).value)"
+          (input)="alEscribir($any($event.target).value)"
+          (keydown)="alTeclear($event)"
         />
       </label>
       <button type="submit" class="secundario" [disabled]="buscando()">Buscar</button>
@@ -46,11 +48,20 @@
   @if (error(); as texto) {
     <p class="error" role="alert">{{ texto }}</p>
   }
+  @if (errorDeCarga()) {
+    <p class="error error-lista" role="alert">
+      No se pudo cargar la lista guardada.
+      <button type="button" class="secundario chico" (click)="cargarGuardada()">Reintentar</button>
+    </p>
+  }
+  @if (avisoLista(); as texto) {
+    <p class="ayuda aviso-lista" role="status">{{ texto }}</p>
+  }
 
   @if (resultados().length > 0) {
     <ul class="resultados" aria-label="Artículos encontrados">
-      @for (a of resultados(); track a.id) {
-        <li>
+      @for (a of resultados(); track a.id; let i = $index) {
+        <li [class.resaltado]="i === resaltado()" [attr.aria-current]="i === resaltado() ? 'true' : null">
           <span class="codigo-interno">{{ a.codigoInterno }}</span>
           <span class="descripcion">{{ a.descripcion }}</span>
           @if (!a.activo) {
@@ -67,7 +78,11 @@
   }
 
   @if (items().length === 0) {
-    <p class="ayuda estado-vacio">Buscá o escaneá los artículos que querés etiquetar.</p>
+    @if (cargando()) {
+      <p class="ayuda cargando-lista" role="status">Cargando la lista guardada…</p>
+    } @else {
+      <p class="ayuda estado-vacio">Buscá o escaneá los artículos que querés etiquetar.</p>
+    }
   } @else {
     <table class="lista">
       <caption class="sr-only">Artículos a etiquetar y cuántas copias de cada uno</caption>

@@ -1,9 +1,13 @@
+import { HttpErrorResponse } from '@angular/common/http';
 import { signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { Observable, of, throwError } from 'rxjs';
 import { vi } from 'vitest';
+import { Sesion } from '../../core/auth/auth.models';
 import { AuthService } from '../../core/auth/auth.service';
+import { Articulo } from '../articulos/articulo.models';
+import { ArticulosService } from '../articulos/articulos.service';
 import { ArticuloMostrador, BusquedaMostrador } from '../mostrador/mostrador.models';
 import { MostradorService } from '../mostrador/mostrador.service';
 import { barras, codigoParaEtiqueta } from './codigo-barras';
@@ -30,20 +34,53 @@ describe('Etiquetas', () => {
 
   let fixture: ComponentFixture<Etiquetas>;
   let buscar: ReturnType<typeof vi.fn>;
+  let obtener: ReturnType<typeof vi.fn>;
 
-  async function crear(dueno = true, respuesta: (q: string) => Observable<BusquedaMostrador> = () => of(lista())) {
+  const sesion = (userId = 7): Sesion => ({
+    userId,
+    nombre: 'Dueño',
+    email: 'dueno@tornillo.demo',
+    rol: 'DUENO',
+    ferreteriaId: 1,
+    ferreteriaNombre: 'El Tornillo',
+  });
+  /** La ficha del artículo como la devuelve el servidor (lo que la pantalla usa de ella). */
+  const ficha = (a: ArticuloMostrador): Articulo => ({ ...a, oferta: null }) as unknown as Articulo;
+  const noExiste = () => throwError(() => new HttpErrorResponse({ status: 404 }));
+
+  async function crear(
+    dueno = true,
+    respuesta: (q: string) => Observable<BusquedaMostrador> = () => of(lista()),
+    opciones: { userId?: number; obtener?: (id: number) => Observable<Articulo> } = {},
+  ) {
     buscar = vi.fn(respuesta);
+    obtener = vi.fn(opciones.obtener ?? ((id: number) => of(ficha(articulo(id)))));
     await TestBed.configureTestingModule({
       imports: [Etiquetas],
       providers: [
         provideRouter([]),
         { provide: MostradorService, useValue: { buscar } },
-        { provide: AuthService, useValue: { esDueno: signal(dueno) } },
+        { provide: ArticulosService, useValue: { obtener } },
+        { provide: AuthService, useValue: { esDueno: signal(dueno), sesion: signal(sesion(opciones.userId)) } },
       ],
     }).compileComponents();
     fixture = TestBed.createComponent(Etiquetas);
     await refrescar();
   }
+
+  /** Sale de la pantalla y vuelve a entrar (otra instancia del componente, lo guardado queda). */
+  async function volver(opciones: { userId?: number; obtener?: (id: number) => Observable<Articulo> } = {}) {
+    fixture.destroy();
+    TestBed.resetTestingModule();
+    await crear(true, () => of(lista()), opciones);
+  }
+
+  const guardado = (clave = 'etiquetas:1:7') => {
+    const raw = localStorage.getItem(clave);
+    return raw ? JSON.parse(raw).items : null;
+  };
+  const guardar = (items: Array<{ id: number; copias: number }>, clave = 'etiquetas:1:7') =>
+    localStorage.setItem(clave, JSON.stringify({ v: 1, items }));
 
   const lista = (...items: ArticuloMostrador[]): BusquedaMostrador => ({
     tipo: items.length ? 'LISTA' : 'SIN_RESULTADOS',
@@ -84,7 +121,13 @@ describe('Etiquetas', () => {
     await refrescar();
   }
 
-  afterEach(() => vi.restoreAllMocks());
+  const vaciar = () => el().querySelector<HTMLButtonElement>('button.vaciar')!;
+
+  beforeEach(() => localStorage.clear());
+  afterEach(() => {
+    vi.restoreAllMocks();
+    localStorage.clear();
+  });
 
   it('el título va en la barra; sin artículos no hay hoja e Imprimir está deshabilitado', async () => {
     await crear();
@@ -274,5 +317,244 @@ describe('Etiquetas', () => {
     imprimir().click();
 
     expect(print).toHaveBeenCalled();
+  });
+
+  describe('la lista se guarda (#24)', () => {
+    it('lo que se suma queda guardado y vuelve al entrar otra vez, con los datos actuales del artículo', async () => {
+      await crear(true, () => of(exacto(tornillo)));
+      await buscarTexto('4006381333931');
+      await copias(0, '3');
+      expect(guardado()).toEqual([{ id: 1, copias: 3 }]);
+
+      await volver({ obtener: () => of(ficha({ ...tornillo, descripcion: 'Tornillo hexagonal 1/4 zincado' })) });
+
+      expect(obtener).toHaveBeenCalledWith(1);
+      expect(filasLista()).toHaveLength(1);
+      expect(texto('.lista tbody tr .descripcion')).toBe('Tornillo hexagonal 1/4 zincado');
+      expect(filasLista()[0].querySelector<HTMLInputElement>('input.copias')!.value).toBe('3');
+      expect(etiquetas()).toHaveLength(3);
+      expect(etiquetas()[0].querySelector('.codigo')!.textContent!.trim()).toBe('4006381333931');
+    });
+
+    it('quitar un artículo también queda guardado', async () => {
+      await crear(true, () => of(lista(tornillo, tuerca)));
+      await buscarTexto('t');
+      await agregarResultado(0);
+      await agregarResultado(1);
+
+      filasLista()[0].querySelector<HTMLButtonElement>('button.quitar')!.click();
+      await refrescar();
+
+      expect(guardado()).toEqual([{ id: 2, copias: 1 }]);
+    });
+
+    it('otro usuario no ve la lista guardada', async () => {
+      guardar([{ id: 1, copias: 2 }]);
+
+      await crear(true, () => of(lista()), { userId: 8 });
+
+      expect(obtener).not.toHaveBeenCalled();
+      expect(filasLista()).toHaveLength(0);
+      expect(guardado()).toEqual([{ id: 1, copias: 2 }]);
+    });
+
+    it('un artículo dado de baja o que ya no existe sale de la lista y se avisa', async () => {
+      guardar([
+        { id: 1, copias: 2 },
+        { id: 3, copias: 1 },
+        { id: 9, copias: 4 },
+      ]);
+
+      await crear(true, () => of(lista()), {
+        obtener: (id) => (id === 9 ? noExiste() : of(ficha(id === 1 ? tornillo : dadoDeBaja))),
+      });
+
+      expect(filasLista()).toHaveLength(1);
+      expect(texto('.lista tbody tr .descripcion')).toBe('Tornillo hexagonal 1/4');
+      expect(texto('.aviso-lista')).toBe(
+        'Salió de la lista por estar dado de baja: «Tornillo viejo». Salió de la lista 1 artículo que ya no existe.',
+      );
+      expect(guardado()).toEqual([{ id: 1, copias: 2 }]);
+    });
+
+    it('si no se pudo cargar la lista guardada lo avisa, no la pisa y se puede reintentar', async () => {
+      guardar([{ id: 1, copias: 2 }]);
+      let falla = true;
+      await crear(true, () => of(exacto(tuerca)), {
+        obtener: () => (falla ? throwError(() => new HttpErrorResponse({ status: 500 })) : of(ficha(tornillo))),
+      });
+
+      expect(texto('.error-lista')).toBe('No se pudo cargar la lista guardada. Reintentar');
+      expect(filasLista()).toHaveLength(0);
+
+      await buscarTexto('TOR-002');
+      expect(filasLista()).toHaveLength(1);
+      expect(guardado()).toEqual([{ id: 1, copias: 2 }]);
+
+      falla = false;
+      el().querySelector<HTMLButtonElement>('.error-lista button')!.click();
+      await refrescar();
+
+      expect(el().querySelector('.error-lista')).toBeNull();
+      expect(Array.from(el().querySelectorAll('.lista tbody tr .descripcion')).map((d) => d.textContent?.trim())).toEqual([
+        'Tornillo hexagonal 1/4',
+        'Tuerca 1/4',
+      ]);
+      expect(guardado()).toEqual([
+        { id: 1, copias: 2 },
+        { id: 2, copias: 1 },
+      ]);
+    });
+
+    it('«Vaciar» saca todo y borra lo guardado; sin artículos está deshabilitado', async () => {
+      await crear(true, () => of(lista(tornillo, tuerca)));
+      expect(vaciar().disabled).toBe(true);
+      await buscarTexto('t');
+      await agregarResultado(0);
+      await agregarResultado(1);
+
+      expect(vaciar().disabled).toBe(false);
+      vaciar().click();
+      await refrescar();
+
+      expect(filasLista()).toHaveLength(0);
+      expect(el().querySelector('.etiquetas-imprimible')).toBeNull();
+      expect(localStorage.getItem('etiquetas:1:7')).toBeNull();
+      expect(vaciar().disabled).toBe(true);
+    });
+
+    it('Imprimir no vacía la lista', async () => {
+      await crear(true, () => of(exacto(tornillo)));
+      await buscarTexto('TOR-001');
+      vi.spyOn(window, 'print').mockImplementation(() => undefined);
+
+      imprimir().click();
+      await refrescar();
+
+      expect(filasLista()).toHaveLength(1);
+      expect(guardado()).toEqual([{ id: 1, copias: 1 }]);
+    });
+  });
+
+  describe('sugiere mientras escribís (#25)', () => {
+    afterEach(() => vi.useRealTimers());
+
+    async function escribir(q: string) {
+      buscador().value = q;
+      buscador().dispatchEvent(new Event('input'));
+      fixture.detectChanges();
+    }
+    async function esperar(ms: number) {
+      await vi.advanceTimersByTimeAsync(ms);
+      fixture.detectChanges();
+    }
+    async function tecla(key: string) {
+      buscador().dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }));
+      fixture.detectChanges();
+    }
+    async function enter() {
+      buscador().form!.dispatchEvent(new Event('submit', { cancelable: true }));
+      fixture.detectChanges();
+    }
+    const descripciones = () =>
+      Array.from(el().querySelectorAll('.resultados li .descripcion')).map((d) => d.textContent?.trim());
+    const resaltado = () => el().querySelector('.resultados li.resaltado .descripcion')?.textContent?.trim();
+
+    it('250 ms después de la última tecla busca solo, sin tocar Buscar, y resalta el primero', async () => {
+      vi.useFakeTimers();
+      await crear(true, () => of(lista(tornillo, tuerca)));
+
+      await escribir('to');
+      await esperar(200);
+      await escribir('tor');
+      await esperar(249);
+      expect(buscar).not.toHaveBeenCalled();
+
+      await esperar(1);
+      expect(buscar).toHaveBeenCalledTimes(1);
+      expect(buscar).toHaveBeenCalledWith('tor');
+      expect(descripciones()).toEqual(['Tornillo hexagonal 1/4', 'Tuerca 1/4']);
+      expect(resaltado()).toBe('Tornillo hexagonal 1/4');
+      expect(filasLista()).toHaveLength(0);
+    });
+
+    it('↓ y ↑ mueven el resaltado sin salirse de la lista, y Enter suma el resaltado sin buscar otra vez', async () => {
+      vi.useFakeTimers();
+      await crear(true, () => of(lista(tornillo, tuerca)));
+      await escribir('tor');
+      await esperar(250);
+
+      await tecla('ArrowUp');
+      expect(resaltado()).toBe('Tornillo hexagonal 1/4');
+      await tecla('ArrowDown');
+      await tecla('ArrowDown');
+      expect(resaltado()).toBe('Tuerca 1/4');
+
+      await enter();
+
+      expect(buscar).toHaveBeenCalledTimes(1);
+      expect(filasLista()).toHaveLength(1);
+      expect(texto('.lista tbody tr .descripcion')).toBe('Tuerca 1/4');
+      await tecla('ArrowUp');
+      expect(resaltado()).toBe('Tornillo hexagonal 1/4');
+    });
+
+    it('un código exacto que llega como sugerencia no se suma solo: queda resaltado para el Enter', async () => {
+      vi.useFakeTimers();
+      await crear(true, () => of(exacto(tornillo)));
+
+      await escribir('4006381333931');
+      await esperar(250);
+
+      expect(filasLista()).toHaveLength(0);
+      expect(resaltado()).toBe('Tornillo hexagonal 1/4');
+      await enter();
+      expect(filasLista()).toHaveLength(1);
+    });
+
+    it('Enter antes de que lleguen las sugerencias (el lector) busca como antes: el código exacto se suma una sola vez', async () => {
+      vi.useFakeTimers();
+      await crear(true, () => of(exacto(tornillo)));
+
+      await escribir('4006381333931');
+      await enter();
+      await esperar(300);
+
+      expect(buscar).toHaveBeenCalledTimes(1);
+      expect(filasLista()).toHaveLength(1);
+      expect(filasLista()[0].querySelector<HTMLInputElement>('input.copias')!.value).toBe('1');
+      expect(buscador().value).toBe('');
+      expect(el().querySelector('.resultados')).toBeNull();
+    });
+
+    it('borrar el texto saca las sugerencias y no busca', async () => {
+      vi.useFakeTimers();
+      await crear(true, () => of(lista(tornillo, tuerca)));
+      await escribir('tor');
+      await esperar(250);
+
+      await escribir('');
+      await esperar(300);
+
+      expect(buscar).toHaveBeenCalledTimes(1);
+      expect(el().querySelector('.resultados')).toBeNull();
+      expect(el().querySelector('.resultados-vacio')).toBeNull();
+    });
+
+    it('si la sugerencia falla lo avisa y la próxima tecla vuelve a buscar', async () => {
+      vi.useFakeTimers();
+      let falla = true;
+      await crear(true, () => (falla ? throwError(() => new Error('caído')) : of(lista(tuerca))));
+
+      await escribir('tu');
+      await esperar(250);
+      expect(texto('.error')).toBe('No se pudo buscar el artículo.');
+
+      falla = false;
+      await escribir('tue');
+      await esperar(250);
+      expect(el().querySelector('.error')).toBeNull();
+      expect(descripciones()).toEqual(['Tuerca 1/4']);
+    });
   });
 });

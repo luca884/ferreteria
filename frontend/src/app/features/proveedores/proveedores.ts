@@ -12,7 +12,7 @@ import {
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
-import { ActivatedRoute } from '@angular/router';
+import { ActivatedRoute, RouterLink } from '@angular/router';
 import { Observable } from 'rxjs';
 import { erroresDeCampos, mensajeDe } from '../../core/api/api-error';
 import { AuthService } from '../../core/auth/auth.service';
@@ -21,6 +21,7 @@ import { contiene } from '../../core/formato/texto';
 import { BarraAcciones } from '../../shared/barra-acciones';
 import { Confirmacion } from '../../shared/confirmacion';
 import { FilasElegibles } from '../../shared/filas-elegibles';
+import { resumenDeLista } from './lista-del-proveedor';
 import { Proveedor, ProveedorRequest } from './proveedor.models';
 import { ProveedoresService } from './proveedores.service';
 
@@ -30,7 +31,7 @@ const mismoNombre = (a: string, b: string) => a.trim().localeCompare(b.trim(), '
 
 @Component({
   selector: 'app-proveedores',
-  imports: [ReactiveFormsModule, Confirmacion, BarraAcciones],
+  imports: [ReactiveFormsModule, RouterLink, Confirmacion, BarraAcciones],
   templateUrl: './proveedores.html',
   styleUrl: './proveedores.css',
 })
@@ -63,6 +64,12 @@ export class Proveedores implements OnInit {
   protected readonly guardando = signal(false);
   /** Id del proveedor que se está editando; null mientras se da de alta uno nuevo. */
   protected readonly editandoId = signal<number | null>(null);
+  /** Los datos de la lista del proveedor que se edita (#44); undefined en el alta. */
+  protected readonly listaDelEditado = computed(() => {
+    const id = this.editandoId();
+    const proveedor = id === null ? undefined : this.proveedores().find((p) => p.id === id);
+    return proveedor ? resumenDeLista(proveedor) : undefined;
+  });
   protected readonly incluirInactivos = signal(false);
   protected readonly aDarDeBaja = signal<Proveedor | null>(null);
   /** El alta chocó con un proveedor dado de baja: se ofrece reactivarlo. */

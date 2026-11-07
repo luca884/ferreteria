@@ -258,6 +258,42 @@
           </span>
         }
       </div>
+      @if (listaDelEditado() !== undefined) {
+        <section class="lista-proveedor" aria-labelledby="lista-proveedor-titulo">
+          <h3 id="lista-proveedor-titulo">Lista de precios</h3>
+          @if (listaDelEditado(); as lista) {
+            <dl>
+              <dt>La lista incluye IVA</dt>
+              <dd>{{ lista.incluyeIva ? 'Sí' : 'No' }}</dd>
+              <dt>Bonificaciones</dt>
+              <dd>{{ lista.bonificaciones }}</dd>
+              @if (lista.mapeo; as mapeo) {
+                @if (mapeo.moneda; as moneda) {
+                  <dt>Moneda</dt>
+                  <dd>{{ moneda }}</dd>
+                }
+                <dt>Datos desde la fila</dt>
+                <dd>{{ mapeo.filaDesde }}</dd>
+                <dt>Columnas</dt>
+                <dd>
+                  <ul class="columnas">
+                    @for (columna of mapeo.columnas; track columna) {
+                      <li>{{ columna }}</li>
+                    }
+                  </ul>
+                </dd>
+              }
+            </dl>
+            @if (!lista.mapeo) {
+              <p class="ayuda sin-lista">Todavía no se importó ninguna lista de este proveedor.</p>
+            }
+          }
+          <p class="ayuda nota-lista">
+            Los datos de la lista se fijan al confirmar una importación en
+            <a routerLink="/importaciones">Importar lista</a>.
+          </p>
+        </section>
+      }
       <div class="acciones-alta">
         <button type="submit" [disabled]="guardando()">
           {{ editandoId() === null ? 'Agregar' : 'Guardar cambios' }}

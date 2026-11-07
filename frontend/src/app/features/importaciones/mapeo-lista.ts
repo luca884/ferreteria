@@ -40,6 +40,17 @@ export const TITULO_DE_COLUMNA: Record<CampoDeColumna, string> = {
   columnaRubro: 'Columna del rubro',
 };
 
+/** La letra de la planilla de una columna (base 0): 0 → A, 26 → AA. */
+export function letraDeColumna(indice: number): string {
+  let resto = indice;
+  let texto = '';
+  do {
+    texto = String.fromCharCode(65 + (resto % 26)) + texto;
+    resto = Math.floor(resto / 26) - 1;
+  } while (resto >= 0);
+  return texto;
+}
+
 /** Lo opcional que viaja solo si tiene columna. */
 const CAMPOS_OPCIONALES = CAMPOS_DE_COLUMNA.filter(
   (campo) => campo !== 'columnaCodigo' && campo !== 'columnaDescripcion' && campo !== 'columnaCosto',
