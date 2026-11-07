@@ -1,5 +1,14 @@
 import { DecimalPipe } from '@angular/common';
-import { Component, OnInit, inject, signal } from '@angular/core';
+import {
+  Component,
+  ElementRef,
+  OnInit,
+  afterRenderEffect,
+  computed,
+  inject,
+  signal,
+  viewChild,
+} from '@angular/core';
 import { Router } from '@angular/router';
 import { catchError, forkJoin, map, of, throwError } from 'rxjs';
 import { HttpErrorResponse } from '@angular/common/http';
@@ -9,6 +18,7 @@ import { AuthService } from '../../core/auth/auth.service';
 import { MontoPipe } from '../../core/formato/monto';
 import { BarraAcciones } from '../../shared/barra-acciones';
 import { porcentajeDescuentoGeneral } from '../../shared/descuento-general';
+import { DialogoDetalle } from '../../shared/dialogo-detalle';
 import { DocumentoNoFiscalImprimible } from '../../shared/documento-no-fiscal/documento-no-fiscal-imprimible';
 import { EmisorService } from '../../shared/documento-no-fiscal/emisor.service';
 import { DatosFiscales } from '../datos-fiscales/datos-fiscales.service';
@@ -48,7 +58,7 @@ const MENSAJE_NUMERO = 'El número tiene que ser un entero.';
  */
 @Component({
   selector: 'app-presupuestos',
-  imports: [BarraAcciones, DecimalPipe, DocumentoNoFiscalImprimible, MontoPipe],
+  imports: [BarraAcciones, DecimalPipe, DialogoDetalle, DocumentoNoFiscalImprimible, MontoPipe],
   templateUrl: './presupuestos.html',
   styleUrl: './presupuestos.css',
 })
@@ -92,6 +102,39 @@ export class Presupuestos implements OnInit {
   protected readonly leyendoEmisor = signal(false);
   /** Cuántos renglones tiene el ticket del mostrador que se reemplazaría; null si no hay nada por confirmar. */
   protected readonly reemplazo = signal<number | null>(null);
+
+  /** El título del pop-up: de la fila mientras el detalle carga, para que se sepa qué presupuesto se abrió. */
+  protected readonly tituloDetalle = computed(() => {
+    const id = this.elegido();
+    const numero = this.detalle()?.numero ?? this.pagina()?.items.find((p) => p.presupuestoId === id)?.numero;
+    return numero !== undefined ? `Presupuesto N.º ${numero}` : 'Detalle del presupuesto';
+  });
+  /** El presupuesto cuyas acciones van al pie: ninguno mientras carga o mientras se pregunta si se reemplaza el ticket. */
+  protected readonly enPie = computed(() => (this.reemplazo() === null ? this.detalle() : null));
+  /** Un rechazado lo reactiva solo el Dueño (el servidor da 403 al Vendedor). */
+  protected readonly puedeAceptar = computed(() => {
+    const estado = this.enPie()?.estado;
+    return estado === 'PENDIENTE' || (estado === 'RECHAZADO' && this.esDueno());
+  });
+  protected readonly puedeRechazar = computed(() => {
+    const estado = this.enPie()?.estado;
+    return estado !== undefined && estado !== 'RECHAZADO' && estado !== 'FACTURADO';
+  });
+  protected readonly puedeVolver = computed(() => {
+    const estado = this.enPie()?.estado;
+    return estado === 'ACEPTADO' || (estado === 'RECHAZADO' && this.esDueno());
+  });
+  protected readonly puedePasar = computed(() => {
+    const p = this.enPie();
+    return p !== null && this.sePuedePasar(p);
+  });
+
+  /** El «Cancelar» de la pregunta de reemplazar el ticket: toma el foco al aparecer, así queda a la vista. */
+  private readonly cancelarPregunta = viewChild<ElementRef<HTMLButtonElement>>('cancelarPregunta');
+
+  constructor() {
+    afterRenderEffect(() => this.cancelarPregunta()?.nativeElement.focus());
+  }
 
   ngOnInit(): void {
     this.cargar(0);
@@ -146,7 +189,7 @@ export class Presupuestos implements OnInit {
     this.cargar(0);
   }
 
-  private cerrarDetalle(): void {
+  protected cerrarDetalle(): void {
     this.emisor.set(null);
     this.elegido.set(null);
     this.detalle.set(null);
@@ -270,6 +313,13 @@ export class Presupuestos implements OnInit {
 
   protected noReemplazar(): void {
     this.reemplazo.set(null);
+  }
+
+  /** Esc en la pregunta la cancela a ella sola: el pop-up del detalle sigue abierto. */
+  protected cancelarConEsc(evento: Event): void {
+    evento.preventDefault();
+    evento.stopPropagation();
+    this.noReemplazar();
   }
 
   /**

@@ -58,24 +58,7 @@
   margin-bottom: var(--e-4);
 }
 
-.detalle {
-  display: flex;
-  flex-direction: column;
-  gap: var(--e-3);
-  margin-bottom: var(--e-6);
-  padding: var(--e-4);
-  border: 1px solid var(--borde);
-  border-radius: var(--radio-lg);
-  background: var(--superficie);
-}
-.detalle header {
-  display: flex;
-  align-items: baseline;
-  gap: var(--e-3);
-}
-.detalle h2 {
-  margin: 0;
-}
+/* El estado, al lado del título del pop-up. */
 .estado {
   font-weight: 700;
 }

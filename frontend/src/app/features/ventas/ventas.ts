@@ -7,6 +7,7 @@ import { AuthService } from '../../core/auth/auth.service';
 import { MontoPipe } from '../../core/formato/monto';
 import { BarraAcciones } from '../../shared/barra-acciones';
 import { Confirmacion } from '../../shared/confirmacion';
+import { DialogoDetalle } from '../../shared/dialogo-detalle';
 import { FacturaImprimible } from '../../shared/factura/factura-imprimible';
 import {
   ESTADOS_EN_REVISION,
@@ -68,6 +69,7 @@ function motivoDelRechazo(err: unknown): string | null {
     BarraAcciones,
     Confirmacion,
     DialogoAnular,
+    DialogoDetalle,
     DialogoSinFactura,
     FacturaImprimible,
     MontoPipe,
@@ -111,6 +113,12 @@ export class Ventas implements OnInit {
   protected readonly detalle = signal<VentaConsultada | null>(null);
   protected readonly errorDetalle = signal<string | null>(null);
   protected readonly imprimiendo = signal(false);
+  /** El título del pop-up: de la fila mientras el detalle carga, para que se sepa qué venta se abrió. */
+  protected readonly tituloDetalle = computed(() => {
+    const id = this.elegida();
+    const comprobante = this.detalle() ?? this.pagina()?.items.find((v) => v.ventaId === id);
+    return comprobante ? this.titulo(comprobante) : 'Detalle de la venta';
+  });
   /** La venta elegida, si tiene registro fiscal con su documento: «Imprimir» imprime la factura (CU-16). */
   protected readonly facturada = computed<VentaFacturada | null>(() => {
     const venta = this.detalle();
@@ -277,7 +285,7 @@ export class Ventas implements OnInit {
     this.fiscal.set(FILTROS_FISCALES.find((f) => f === valor) ?? '');
   }
 
-  private cerrarDetalle(): void {
+  protected cerrarDetalle(): void {
     this.elegida.set(null);
     this.detalle.set(null);
     this.errorDetalle.set(null);

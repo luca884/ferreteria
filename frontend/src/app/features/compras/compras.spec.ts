@@ -3,8 +3,8 @@ import { registerLocaleData } from '@angular/common';
 import localeEsAr from '@angular/common/locales/es-AR';
 import { LOCALE_ID, signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { ActivatedRoute, convertToParamMap, provideRouter } from '@angular/router';
-import { of, throwError } from 'rxjs';
+import { ActivatedRoute, Router, convertToParamMap, provideRouter } from '@angular/router';
+import { Subject, of, throwError } from 'rxjs';
 import { vi } from 'vitest';
 import { PageResponse } from '../../core/api/page.models';
 import { AuthService } from '../../core/auth/auth.service';
@@ -160,7 +160,7 @@ describe('Compras', () => {
     await refrescar();
 
     expect(api.obtener).toHaveBeenCalledWith(2);
-    const detalleTexto = el().querySelector('section.detalle')!.textContent!;
+    const detalleTexto = el().querySelector('app-dialogo-detalle [role=dialog]')!.textContent!;
     expect(detalleTexto).toContain('Factura A 00003-00000002');
     expect(detalleTexto).toContain('Tornillo 1/4');
     expect(detalleTexto).toContain('100,00');
@@ -186,26 +186,95 @@ describe('Compras', () => {
     (el().querySelector('table.compras tbody tr button') as HTMLButtonElement).click();
     await refrescar();
 
-    expect(el().querySelector('section.detalle .recargos')!.textContent).toContain('Embalaje y carga 4,44 %');
+    expect(el().querySelector('app-dialogo-detalle [role=dialog] .recargos')!.textContent).toContain('Embalaje y carga 4,44 %');
   });
 
   it('con el parámetro id en la ruta abre el detalle de esa compra', async () => {
     await crear([resumen(2)], 'DUENO', '9');
 
     expect(api.obtener).toHaveBeenCalledWith(9);
-    expect(el().querySelector('section.detalle')!.textContent).toContain('Factura A 00003-00000009');
+    expect(el().querySelector('app-dialogo-detalle [role=dialog]')!.textContent).toContain('Factura A 00003-00000009');
   });
 
   it('con un id desconocido o de otra ferretería (404) dice que no se encontró la compra (QA 05/11)', async () => {
     await crear([resumen(2)], 'DUENO', '77', 404);
 
     expect(api.obtener).toHaveBeenCalledWith(77);
-    expect(el().querySelector('section.detalle [role=alert]')!.textContent).toContain('No se encontró la compra.');
+    expect(el().querySelector('app-dialogo-detalle [role=dialog] [role=alert]')!.textContent).toContain('No se encontró la compra.');
   });
 
   it('con otro error dice que no se pudo cargar la compra', async () => {
     await crear([resumen(2)], 'DUENO', '77', 500);
 
-    expect(el().querySelector('section.detalle [role=alert]')!.textContent).toContain('No se pudo cargar la compra.');
+    expect(el().querySelector('app-dialogo-detalle [role=dialog] [role=alert]')!.textContent).toContain('No se pudo cargar la compra.');
+  });
+
+  describe('el detalle en un pop-up (detalle-en-popup)', () => {
+    const popup = () => el().querySelector<HTMLElement>('app-dialogo-detalle [role="dialog"]');
+    const escape = () =>
+      (document.activeElement ?? document.body).dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }),
+      );
+
+    function espiarNavegacion() {
+      return vi.spyOn(TestBed.inject(Router), 'navigateByUrl').mockResolvedValue(true);
+    }
+
+    it('elegir una compra la abre en un pop-up encima de la lista, titulado con el comprobante y solo con Cerrar al pie', async () => {
+      await crear();
+
+      (el().querySelector('table.compras tbody tr button') as HTMLButtonElement).click();
+      await refrescar();
+
+      const pop = popup()!;
+      expect(pop.getAttribute('aria-modal')).toBe('true');
+      expect(pop.closest('.dialogo-fondo')).not.toBeNull();
+      expect(pop.querySelector('.dialogo-detalle-cabecera h2')!.textContent!.trim()).toBe('Factura A 00003-00000002');
+      expect(pop.querySelector('.dialogo-detalle-cuerpo table')).not.toBeNull();
+      expect([...pop.querySelectorAll('.dialogo-detalle-pie button')].map((b) => b.textContent!.trim())).toEqual(['Cerrar']);
+      expect(el().querySelectorAll('table.compras tbody tr')).toHaveLength(2);
+      expect(document.activeElement).toBe(pop.querySelector('button[aria-label="Cerrar"]'));
+    });
+
+    it('mientras carga, el pop-up ya se titula con el comprobante de la fila', async () => {
+      await crear();
+      api.obtener.mockReturnValue(new Subject<CompraResponse>());
+
+      (el().querySelectorAll('table.compras tbody tr button')[1] as HTMLButtonElement).click();
+      await refrescar();
+
+      expect(popup()!.querySelector('h2')!.textContent!.trim()).toBe('Factura A 00003-00000001');
+      expect(popup()!.querySelector('.dialogo-detalle-cuerpo')!.textContent!.trim()).toBe('Cargando…');
+    });
+
+    it('abierta desde la lista, Esc y la ✕ la cierran sin cambiar de página', async () => {
+      await crear();
+      const navegar = espiarNavegacion();
+      (el().querySelector('table.compras tbody tr button') as HTMLButtonElement).click();
+      await refrescar();
+
+      escape();
+      await refrescar();
+      expect(popup()).toBeNull();
+
+      (el().querySelector('table.compras tbody tr button') as HTMLButtonElement).click();
+      await refrescar();
+      popup()!.querySelector<HTMLButtonElement>('button[aria-label="Cerrar"]')!.click();
+      await refrescar();
+      expect(popup()).toBeNull();
+      expect(navegar).not.toHaveBeenCalled();
+    });
+
+    it('abierta por `/compras/:id` (la ficha del artículo), cerrarla vuelve a `/compras`', async () => {
+      await crear([resumen(2)], 'DUENO', '9');
+      const navegar = espiarNavegacion();
+      expect(popup()).not.toBeNull();
+
+      escape();
+      await refrescar();
+
+      expect(popup()).toBeNull();
+      expect(navegar).toHaveBeenCalledWith('/compras');
+    });
   });
 });

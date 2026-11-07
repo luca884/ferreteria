@@ -21,6 +21,8 @@ export class ResumenCaja {
   private readonly vista = inject(ChangeDetectorRef);
 
   readonly detalle = input.required<DetalleCaja>();
+  /** En false no lleva su botón «Imprimir»: lo pone quien lo muestra (el pie del pop-up del historial) y llama a `imprimir()`. */
+  readonly conImprimir = input(true);
 
   protected readonly ferreteria = computed(() => this.auth.sesion()?.ferreteriaNombre ?? null);
   protected readonly emitido = signal(emitidoEl(new Date()));
@@ -31,7 +33,7 @@ export class ResumenCaja {
   protected readonly fechaHora = fechaHoraLocal;
 
   /** La hora de «Emitido el» es la de imprimir, no la de abrir la pantalla: se renueva antes de abrir el diálogo. */
-  protected imprimir(): void {
+  imprimir(): void {
     this.emitido.set(emitidoEl(new Date()));
     this.vista.detectChanges();
     window.print();

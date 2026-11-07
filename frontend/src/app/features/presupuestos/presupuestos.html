@@ -114,18 +114,19 @@
 }
 
 @if (elegido() !== null) {
-  <section class="detalle" aria-label="Detalle del presupuesto">
-    @if (errorAccion(); as texto) {
-      <p class="error" role="alert">{{ texto }}</p>
-    }
+  <app-dialogo-detalle [titulo]="tituloDetalle()" (cerrar)="cerrarDetalle()">
     @if (detalle(); as p) {
-      <header>
-        <h2>Presupuesto N.º {{ p.numero }}</h2>
+      <span cabecera class="marcas">
         <span class="estado">{{ etiqueta[p.estado] }}</span>
         @if (p.vencido) {
           <span class="vencido">Vencido</span>
         }
-      </header>
+      </span>
+    }
+    @if (errorAccion(); as texto) {
+      <p class="error" role="alert">{{ texto }}</p>
+    }
+    @if (detalle(); as p) {
       <p class="datos">
         {{ fechaHora(p.fecha) }} · Vence {{ dia(p.vence) }}
         @if (p.clienteNombre) {
@@ -190,38 +191,49 @@
       }
 
       @if (reemplazo(); as renglones) {
-        <div class="reemplazo" role="alert">
+        <!-- Arranca con el foco en Cancelar (así queda a la vista aunque el cuerpo tenga scroll); Esc la cancela sola. -->
+        <div class="reemplazo" role="alert" (keydown.escape)="cancelarConEsc($event)">
           <p>
             El mostrador ya tiene un ticket con {{ renglones }} {{ renglones === 1 ? 'renglón' : 'renglones' }}. Si
             seguís, se reemplaza por el de este presupuesto.
           </p>
           <div class="acciones">
-            <button type="button" class="secundario" (click)="noReemplazar()">Cancelar</button>
+            <button #cancelarPregunta type="button" class="secundario" (click)="noReemplazar()">Cancelar</button>
             <button type="button" class="primario" (click)="reemplazar()">Reemplazar el ticket</button>
           </div>
-        </div>
-      } @else {
-        <div class="acciones">
-          <button type="button" class="secundario" [disabled]="leyendoEmisor() || cambiando() || pasando()" (click)="imprimir()">Imprimir</button>
-          <!-- Un rechazado lo reactiva solo el Dueño (el servidor da 403 al Vendedor). -->
-          @if (p.estado === 'PENDIENTE' || (p.estado === 'RECHAZADO' && esDueno())) {
-            <button type="button" class="secundario" [disabled]="cambiando() || pasando()" (click)="cambiarEstado('ACEPTADO')">Aceptar</button>
-          }
-          @if (p.estado !== 'RECHAZADO' && p.estado !== 'FACTURADO') {
-            <button type="button" class="secundario" [disabled]="cambiando() || pasando()" (click)="cambiarEstado('RECHAZADO')">Rechazar</button>
-          }
-          @if (p.estado === 'ACEPTADO' || (p.estado === 'RECHAZADO' && esDueno())) {
-            <button type="button" class="secundario" [disabled]="cambiando() || pasando()" (click)="cambiarEstado('PENDIENTE')">Volver a pendiente</button>
-          }
-          @if (sePuedePasar(p)) {
-            <button type="button" class="primario" [disabled]="cambiando() || pasando()" (click)="pasarAVenta()">Pasar a venta</button>
-          }
         </div>
       }
     } @else if (!errorAccion()) {
       <p class="ayuda">Cargando…</p>
     }
-  </section>
+    <!-- Al pie, cada botón en su propio @if: así se proyecta a su lugar. Mientras se pregunta si se reemplaza el ticket
+         del mostrador, el pie no ofrece nada (la pregunta tiene sus botones). -->
+    @if (enPie()) {
+      <button accion type="button" class="secundario" [disabled]="leyendoEmisor() || cambiando() || pasando()" (click)="imprimir()">
+        Imprimir
+      </button>
+    }
+    @if (puedeAceptar()) {
+      <button accion type="button" class="secundario" [disabled]="cambiando() || pasando()" (click)="cambiarEstado('ACEPTADO')">
+        Aceptar
+      </button>
+    }
+    @if (puedeRechazar()) {
+      <button accion type="button" class="secundario" [disabled]="cambiando() || pasando()" (click)="cambiarEstado('RECHAZADO')">
+        Rechazar
+      </button>
+    }
+    @if (puedeVolver()) {
+      <button accion type="button" class="secundario" [disabled]="cambiando() || pasando()" (click)="cambiarEstado('PENDIENTE')">
+        Volver a pendiente
+      </button>
+    }
+    @if (puedePasar()) {
+      <button accion type="button" class="primario" [disabled]="cambiando() || pasando()" (click)="pasarAVenta()">
+        Pasar a venta
+      </button>
+    }
+  </app-dialogo-detalle>
 }
 
 @if (detalle(); as p) {

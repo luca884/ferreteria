@@ -1,6 +1,15 @@
 import { DecimalPipe } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
-import { Component, OnInit, inject, signal } from '@angular/core';
+import {
+  Component,
+  ElementRef,
+  OnInit,
+  afterRenderEffect,
+  computed,
+  inject,
+  signal,
+  viewChild,
+} from '@angular/core';
 import { Router } from '@angular/router';
 import { catchError, forkJoin, map, of, throwError } from 'rxjs';
 import { mensajeDe } from '../../core/api/api-error';
@@ -9,6 +18,7 @@ import { AuthService } from '../../core/auth/auth.service';
 import { MontoPipe } from '../../core/formato/monto';
 import { BarraAcciones } from '../../shared/barra-acciones';
 import { porcentajeDescuentoGeneral } from '../../shared/descuento-general';
+import { DialogoDetalle } from '../../shared/dialogo-detalle';
 import { DocumentoNoFiscalImprimible } from '../../shared/documento-no-fiscal/documento-no-fiscal-imprimible';
 import { EmisorService } from '../../shared/documento-no-fiscal/emisor.service';
 import { DatosFiscales } from '../datos-fiscales/datos-fiscales.service';
@@ -46,7 +56,7 @@ const MENSAJE_NUMERO = 'El número tiene que ser un entero.';
  */
 @Component({
   selector: 'app-remitos',
-  imports: [BarraAcciones, DecimalPipe, DocumentoNoFiscalImprimible, MontoPipe],
+  imports: [BarraAcciones, DecimalPipe, DialogoDetalle, DocumentoNoFiscalImprimible, MontoPipe],
   templateUrl: './remitos.html',
   styleUrl: './remitos.css',
 })
@@ -91,6 +101,30 @@ export class Remitos implements OnInit {
   protected readonly confirmandoAnulacion = signal(false);
   /** Cuántos renglones tiene el ticket del mostrador que se reemplazaría; null si no hay nada por confirmar. */
   protected readonly reemplazo = signal<number | null>(null);
+
+  /** El título del pop-up: de la fila mientras el detalle carga, para que se sepa qué remito se abrió. */
+  protected readonly tituloDetalle = computed(() => {
+    const id = this.elegido();
+    const numero = this.detalle()?.numero ?? this.pagina()?.items.find((r) => r.remitoId === id)?.numero;
+    return numero !== undefined ? `Remito N.º ${numero}` : 'Detalle del remito';
+  });
+  /** El remito cuyas acciones van al pie: ninguno mientras carga o mientras se pregunta algo (anular, reemplazar). */
+  protected readonly enPie = computed(() =>
+    this.confirmandoAnulacion() || this.reemplazo() !== null ? null : this.detalle(),
+  );
+  /** Anular y pasar a venta, solo un remito emitido; anular, solo el Dueño. */
+  protected readonly puedePasar = computed(() => {
+    const r = this.enPie();
+    return r !== null && this.sePuedePasar(r);
+  });
+  protected readonly puedeAnular = computed(() => this.puedePasar() && this.esDueno());
+
+  /** El «Cancelar» de la pregunta abierta (anular o reemplazar): toma el foco al aparecer, así queda a la vista. */
+  private readonly cancelarPregunta = viewChild<ElementRef<HTMLButtonElement>>('cancelarPregunta');
+
+  constructor() {
+    afterRenderEffect(() => this.cancelarPregunta()?.nativeElement.focus());
+  }
 
   ngOnInit(): void {
     this.cargar(0);
@@ -143,6 +177,15 @@ export class Remitos implements OnInit {
     this.aplicados = {};
     this.filtrada.set(false);
     this.cargar(0);
+  }
+
+  /**
+   * Esc, la ✕ o Cerrar: mientras se anula no se cierra, porque el resultado (el remito anulado o el rechazo) se muestra
+   * en el detalle y se perdería.
+   */
+  protected cerrarPopup(): void {
+    if (this.anulando()) return;
+    this.cerrarDetalle();
   }
 
   private cerrarDetalle(): void {
@@ -279,6 +322,15 @@ export class Remitos implements OnInit {
 
   protected noReemplazar(): void {
     this.reemplazo.set(null);
+  }
+
+  /** Esc en una pregunta (anular o reemplazar) la cancela a ella sola: el pop-up del detalle sigue abierto. */
+  protected cancelarConEsc(evento: Event): void {
+    evento.preventDefault();
+    evento.stopPropagation();
+    if (this.anulando()) return;
+    this.noAnular();
+    this.noReemplazar();
   }
 
   /**

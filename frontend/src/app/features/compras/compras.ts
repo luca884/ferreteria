@@ -1,11 +1,12 @@
 import { DecimalPipe } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
-import { Component, OnInit, inject, signal } from '@angular/core';
-import { ActivatedRoute, RouterLink } from '@angular/router';
+import { Component, OnInit, computed, inject, signal } from '@angular/core';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { PageResponse } from '../../core/api/page.models';
 import { AuthService } from '../../core/auth/auth.service';
 import { MontoPipe } from '../../core/formato/monto';
 import { BarraAcciones } from '../../shared/barra-acciones';
+import { DialogoDetalle } from '../../shared/dialogo-detalle';
 import { Proveedor } from '../proveedores/proveedor.models';
 import { ProveedoresService } from '../proveedores/proveedores.service';
 import { CompraResponse, CompraResumen, FiltroCompras } from './compra.models';
@@ -28,7 +29,7 @@ export function fechaDeCompra(fecha: string): string {
  */
 @Component({
   selector: 'app-compras',
-  imports: [BarraAcciones, DecimalPipe, MontoPipe, RouterLink],
+  imports: [BarraAcciones, DecimalPipe, DialogoDetalle, MontoPipe, RouterLink],
   templateUrl: './compras.html',
   styleUrl: './compras.css',
 })
@@ -36,6 +37,7 @@ export class Compras implements OnInit {
   private readonly api = inject(ComprasService);
   private readonly proveedoresApi = inject(ProveedoresService);
   private readonly route = inject(ActivatedRoute);
+  private readonly router = inject(Router);
   protected readonly auth = inject(AuthService);
   protected readonly fecha = fechaDeCompra;
 
@@ -54,6 +56,15 @@ export class Compras implements OnInit {
   protected readonly elegida = signal<number | null>(null);
   protected readonly detalle = signal<CompraResponse | null>(null);
   protected readonly errorDetalle = signal<string | null>(null);
+  /** La compra se abrió por `/compras/:id` (la ficha del artículo): al cerrarla se vuelve a `/compras`. */
+  private abiertaPorRuta = false;
+
+  /** El título del pop-up: de la fila mientras el detalle carga, para que se sepa qué compra se abrió. */
+  protected readonly tituloDetalle = computed(() => {
+    const id = this.elegida();
+    const comprobante = this.detalle()?.comprobante ?? this.pagina()?.items.find((c) => c.id === id)?.comprobante;
+    return comprobante ?? 'Detalle de la compra';
+  });
 
   ngOnInit(): void {
     if (!this.auth.esDueno()) return;
@@ -62,7 +73,10 @@ export class Compras implements OnInit {
     this.cargar(0);
     // `/compras/:id` abre esa compra, como si se hubiera elegido en la lista (un id ajeno o inexistente da el aviso de siempre).
     const id = Number(this.route.snapshot.paramMap.get('id'));
-    if (Number.isInteger(id) && id > 0) this.abrir(id);
+    if (Number.isInteger(id) && id > 0) {
+      this.abiertaPorRuta = true;
+      this.abrir(id);
+    }
   }
 
   protected cargar(numeroDePagina: number): void {
@@ -98,6 +112,17 @@ export class Compras implements OnInit {
     this.aplicados = {};
     this.filtrada.set(false);
     this.cargar(0);
+  }
+
+  protected cerrarDetalle(): void {
+    this.elegida.set(null);
+    this.detalle.set(null);
+    this.errorDetalle.set(null);
+    // Abierta por `/compras/:id`: la dirección deja de nombrar una compra que ya no se ve.
+    if (this.abiertaPorRuta) {
+      this.abiertaPorRuta = false;
+      void this.router.navigateByUrl('/compras');
+    }
   }
 
   protected elegir(fila: CompraResumen): void {

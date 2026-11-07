@@ -73,36 +73,11 @@
   margin-bottom: var(--e-4);
 }
 
-.detalle {
-  display: flex;
-  flex-direction: column;
-  gap: var(--e-3);
-  margin-bottom: var(--e-6);
-  padding: var(--e-4);
-  border: 1px solid var(--borde);
-  border-radius: var(--radio-lg);
-  background: var(--superficie);
-}
-.detalle h2 {
-  margin: 0;
-}
 /* La factura de la venta, en una línea: el detalle de siempre sigue abajo. */
 .linea-fiscal {
   margin: 0;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
-}
-.acciones {
-  display: flex;
-  justify-content: flex-end;
-  gap: var(--e-2);
-}
-/* «Anular» (CU-08) va aparte de «Imprimir», con una línea en el medio: no se aprieta por error. */
-.anular-venta {
-  display: flex;
-  justify-content: flex-end;
-  padding-top: var(--e-3);
-  border-top: 1px solid var(--borde);
 }
 /* La venta anulada y la nota de crédito: se leen antes que el detalle. */
 .anulacion,
@@ -118,7 +93,10 @@
 .marca.reimprimir {
   color: var(--acento);
 }
-/* Lo que hizo la última acción de la bandeja, sobre la lista: el detalle se cierra si la venta sale de la bandeja. */
+/*
+ * Lo que hizo la última acción de la bandeja: arriba del pop-up, o sobre la lista si el detalle se cerró porque la venta
+ * salió de la bandeja.
+ */
 .resultado-accion {
   margin: 0 0 var(--e-4);
   padding: var(--e-2) var(--e-3);

@@ -107,15 +107,14 @@
 }
 
 @if (elegido() !== null) {
-  <section class="detalle" aria-label="Detalle del remito">
+  <app-dialogo-detalle [titulo]="tituloDetalle()" (cerrar)="cerrarPopup()">
+    @if (detalle(); as r) {
+      <span cabecera class="estado">{{ etiqueta[r.estado] }}</span>
+    }
     @if (errorAccion(); as texto) {
       <p class="error" role="alert">{{ texto }}</p>
     }
     @if (detalle(); as r) {
-      <header>
-        <h2>Remito N.º {{ r.numero }}</h2>
-        <span class="estado">{{ etiqueta[r.estado] }}</span>
-      </header>
       <p class="datos">
         {{ fechaHora(r.fecha) }}
         @if (r.clienteNombre) {
@@ -180,40 +179,50 @@
         <p class="nota-estado">Está anulado: el stock ya volvió.</p>
       }
 
+      <!-- Las preguntas arrancan con el foco en Cancelar (así quedan a la vista aunque el cuerpo tenga scroll); Esc
+           las cancela solas, sin cerrar el pop-up. -->
       @if (confirmandoAnulacion()) {
-        <div class="confirmacion" role="alert">
+        <div class="confirmacion" role="alert" (keydown.escape)="cancelarConEsc($event)">
           <p>Anular devuelve al stock lo que salió con el remito N.º {{ r.numero }}. No se puede deshacer.</p>
           <div class="acciones">
-            <button type="button" class="secundario" [disabled]="anulando()" (click)="noAnular()">Cancelar</button>
+            <button #cancelarPregunta type="button" class="secundario" [disabled]="anulando()" (click)="noAnular()">
+              Cancelar
+            </button>
             <button type="button" class="primario" [disabled]="anulando()" (click)="anular()">Anular el remito</button>
           </div>
         </div>
       } @else if (reemplazo(); as renglones) {
-        <div class="reemplazo" role="alert">
+        <div class="reemplazo" role="alert" (keydown.escape)="cancelarConEsc($event)">
           <p>
             El mostrador ya tiene un ticket con {{ renglones }} {{ renglones === 1 ? 'renglón' : 'renglones' }}. Si
             seguís, se reemplaza por el de este remito.
           </p>
           <div class="acciones">
-            <button type="button" class="secundario" (click)="noReemplazar()">Cancelar</button>
+            <button #cancelarPregunta type="button" class="secundario" (click)="noReemplazar()">Cancelar</button>
             <button type="button" class="primario" (click)="reemplazar()">Reemplazar el ticket</button>
           </div>
-        </div>
-      } @else {
-        <div class="acciones">
-          <button type="button" class="secundario" [disabled]="leyendoEmisor() || anulando() || pasando()" (click)="imprimir()">Imprimir</button>
-          @if (sePuedePasar(r) && esDueno()) {
-            <button type="button" class="secundario" [disabled]="anulando() || pasando()" (click)="pedirAnulacion()">Anular</button>
-          }
-          @if (sePuedePasar(r)) {
-            <button type="button" class="primario" [disabled]="anulando() || pasando()" (click)="pasarAVenta()">Pasar a venta</button>
-          }
         </div>
       }
     } @else if (!errorAccion()) {
       <p class="ayuda">Cargando…</p>
     }
-  </section>
+    <!-- Al pie, cada botón en su propio @if: así se proyecta a su lugar. Anular (solo el Dueño) va solo a la izquierda. -->
+    @if (puedeAnular()) {
+      <button accion-peligro type="button" class="peligro" [disabled]="anulando() || pasando()" (click)="pedirAnulacion()">
+        Anular
+      </button>
+    }
+    @if (enPie()) {
+      <button accion type="button" class="secundario" [disabled]="leyendoEmisor() || anulando() || pasando()" (click)="imprimir()">
+        Imprimir
+      </button>
+    }
+    @if (puedePasar()) {
+      <button accion type="button" class="primario" [disabled]="anulando() || pasando()" (click)="pasarAVenta()">
+        Pasar a venta
+      </button>
+    }
+  </app-dialogo-detalle>
 }
 
 @if (detalle(); as r) {

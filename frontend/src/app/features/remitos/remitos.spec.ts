@@ -144,7 +144,15 @@ describe('Remitos', () => {
   const normal = (t: string | null | undefined) => (t ?? '').replace(/\s+/g, ' ').trim();
   const filas = () => Array.from(el().querySelectorAll<HTMLElement>('table.remitos tbody tr'));
   const celdas = (fila: HTMLElement) => Array.from(fila.querySelectorAll('td')).map((c) => normal(c.textContent));
-  const detalle = () => el().querySelector<HTMLElement>('section.detalle');
+  /** El detalle del remito elegido: el pop-up (detalle-en-popup). */
+  const detalle = () => el().querySelector<HTMLElement>('app-dialogo-detalle [role="dialog"]');
+  /** Las acciones del pie del pop-up, de izquierda a derecha, sin «Cerrar» (que tiene siempre). */
+  const acciones = () =>
+    Array.from(detalle()!.querySelectorAll<HTMLButtonElement>('.dialogo-detalle-pie button:not(.cerrar)'));
+  const escape = () =>
+    (document.activeElement ?? document.body).dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }),
+    );
   const boton = (texto: string, dentro: ParentNode = el()) =>
     Array.from(dentro.querySelectorAll<HTMLButtonElement>('button')).find((b) => normal(b.textContent) === texto);
   const alerta = () => normal(el().querySelector('[role="alert"]')?.textContent);
@@ -406,9 +414,56 @@ describe('Remitos', () => {
       expect(normal(detalle()!.querySelector('h2')?.textContent)).toBe('Remito N.º 4');
     });
 
+    it('el detalle se abre en un pop-up encima de la lista: Anular solo a la izquierda y «Pasar a venta» como principal (#65)', async () => {
+      await crear([resumen(5), resumen(4)], 'DUENO');
+
+      await abrirDetalle(0);
+
+      const pop = detalle()!;
+      expect(pop.getAttribute('aria-modal')).toBe('true');
+      expect(pop.closest('.dialogo-fondo')).not.toBeNull();
+      const cabecera = pop.querySelector('.dialogo-detalle-cabecera')!;
+      expect(normal(cabecera.querySelector('h2')?.textContent)).toBe('Remito N.º 5');
+      expect(normal(cabecera.querySelector('.estado')?.textContent)).toBe('Emitido');
+      expect(pop.querySelector('.dialogo-detalle-cuerpo table.renglones')).not.toBeNull();
+      const anular = boton('Anular', pop)!;
+      expect(anular.closest('.pie-peligro')).not.toBeNull();
+      expect(anular.classList).toContain('peligro');
+      const pasar = boton('Pasar a venta', pop)!;
+      expect(pasar.closest('.pie-acciones')).not.toBeNull();
+      expect(pasar.classList).toContain('primario');
+      expect(filas()).toHaveLength(2);
+      expect(document.activeElement).toBe(pop.querySelector('button[aria-label="Cerrar"]'));
+    });
+
+    it('mientras el detalle carga, el pop-up ya se titula con el remito de la fila', async () => {
+      await crear();
+      api.obtener.mockReturnValue(new Subject<RemitoResponse>());
+
+      await abrirDetalle(1);
+
+      expect(normal(detalle()!.querySelector('h2')?.textContent)).toBe('Remito N.º 4');
+      expect(normal(detalle()!.querySelector('.dialogo-detalle-cuerpo')?.textContent)).toBe('Cargando…');
+    });
+
+    it('Esc y la ✕ cierran el pop-up; la lista queda como estaba', async () => {
+      await crear();
+      await abrirDetalle(0);
+
+      escape();
+      await refrescar();
+      expect(detalle()).toBeNull();
+
+      await abrirDetalle(1);
+      await click(detalle()!.querySelector<HTMLButtonElement>('button[aria-label="Cerrar"]')!);
+      expect(detalle()).toBeNull();
+      expect(filas()).toHaveLength(2);
+      expect(api.listar).toHaveBeenCalledTimes(1);
+    });
+
     it.each<[EstadoRemito, string, string[]]>([
       ['EMITIDO', 'VENDEDOR', ['Imprimir', 'Pasar a venta']],
-      ['EMITIDO', 'DUENO', ['Imprimir', 'Anular', 'Pasar a venta']],
+      ['EMITIDO', 'DUENO', ['Anular', 'Imprimir', 'Pasar a venta']],
       ['FACTURADO', 'DUENO', ['Imprimir']],
       ['FACTURADO', 'VENDEDOR', ['Imprimir']],
       ['ANULADO', 'DUENO', ['Imprimir']],
@@ -418,8 +473,7 @@ describe('Remitos', () => {
 
       await abrirDetalle(0);
 
-      const acciones = Array.from(detalle()!.querySelectorAll<HTMLButtonElement>('.acciones button')).map((b) => normal(b.textContent));
-      expect(acciones).toEqual(esperados);
+      expect(acciones().map((b) => normal(b.textContent))).toEqual(esperados);
     });
 
     it('uno facturado dice que ya se facturó', async () => {
@@ -466,6 +520,38 @@ describe('Remitos', () => {
       expect(boton('Anular', detalle()!)).toBeDefined();
     });
 
+    it('con la anulación en curso y el foco caído al body (los botones se deshabilitaron), Esc no cierra el pop-up ni la pregunta', async () => {
+      await crear([resumen(5)], 'DUENO');
+      await abrirDetalle(0);
+      await click(boton('Anular', detalle()!));
+      api.anular.mockReturnValue(new Subject<RemitoResponse>());
+      await click(boton('Anular el remito', el().querySelector<HTMLElement>('.confirmacion')!));
+
+      // Chrome saca el foco del botón que se deshabilita y lo deja en el body; jsdom no, así que se hace a mano.
+      (document.activeElement as HTMLElement | null)?.blur();
+      document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+      await refrescar();
+
+      expect(detalle()).not.toBeNull();
+      expect(el().querySelector('.confirmacion')).not.toBeNull();
+    });
+
+    it('la pregunta toma el foco en Cancelar (así queda a la vista) y Esc la cancela sin cerrar el detalle', async () => {
+      await crear([resumen(5)], 'DUENO');
+      await abrirDetalle(0);
+      await click(boton('Anular', detalle()!));
+
+      const confirmacion = el().querySelector<HTMLElement>('.dialogo-detalle-cuerpo .confirmacion')!;
+      expect(document.activeElement).toBe(boton('Cancelar', confirmacion));
+
+      escape();
+      await refrescar();
+
+      expect(el().querySelector('.confirmacion')).toBeNull();
+      expect(detalle()).not.toBeNull();
+      expect(api.anular).not.toHaveBeenCalled();
+    });
+
     it('Anular el remito lo anula, actualiza el detalle y la fila del listado', async () => {
       await crear([resumen(5)], 'DUENO');
       await abrirDetalle(0);
@@ -477,7 +563,7 @@ describe('Remitos', () => {
       expect(normal(detalle()!.querySelector('.estado')?.textContent)).toBe('Anulado');
       expect(celdas(filas()[0])[4]).toBe('Anulado');
       expect(el().querySelector('.confirmacion')).toBeNull();
-      expect(Array.from(detalle()!.querySelectorAll('.acciones button')).map((b) => normal(b.textContent))).toEqual(['Imprimir']);
+      expect(acciones().map((b) => normal(b.textContent))).toEqual(['Imprimir']);
     });
 
     it('si ya se facturó (409) muestra el mensaje del servidor y vuelve a leer el remito', async () => {
@@ -492,7 +578,7 @@ describe('Remitos', () => {
       await click(boton('Anular el remito', el().querySelector<HTMLElement>('.confirmacion')!));
 
       expect(alerta()).toContain('Ese remito ya se facturó.');
-      expect(Array.from(detalle()!.querySelectorAll('.acciones button')).map((b) => normal(b.textContent))).toEqual(['Imprimir']);
+      expect(acciones().map((b) => normal(b.textContent))).toEqual(['Imprimir']);
       expect(celdas(filas()[0])[4]).toBe('Facturado');
     });
 
@@ -693,6 +779,21 @@ describe('Remitos', () => {
         expect(el().querySelector('.reemplazo')).toBeNull();
         expect(ticketGuardado().clave).toBe('clave-vieja');
         expect(navegar).not.toHaveBeenCalled();
+      });
+
+      it('la pregunta toma el foco en Cancelar, el pie no ofrece otras acciones y Esc la cancela sin cerrar el detalle', async () => {
+        await pedirPasar();
+
+        const reemplazo = el().querySelector<HTMLElement>('.dialogo-detalle-cuerpo .reemplazo')!;
+        expect(document.activeElement).toBe(boton('Cancelar', reemplazo));
+        expect(acciones()).toEqual([]);
+
+        escape();
+        await refrescar();
+
+        expect(el().querySelector('.reemplazo')).toBeNull();
+        expect(detalle()).not.toBeNull();
+        expect(ticketGuardado().clave).toBe('clave-vieja');
       });
 
       it('Reemplazar el ticket lo cambia por el del remito y abre el mostrador', async () => {

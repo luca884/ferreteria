@@ -94,14 +94,11 @@
   }
 
   @if (elegida() !== null) {
-    <section class="detalle" aria-label="Detalle de la compra">
+    <app-dialogo-detalle [titulo]="tituloDetalle()" (cerrar)="cerrarDetalle()">
       @if (errorDetalle(); as texto) {
         <p class="error" role="alert">{{ texto }}</p>
       }
       @if (detalle(); as c) {
-        <header>
-          <h2>{{ c.comprobante }}</h2>
-        </header>
         <p class="datos">
           {{ c.proveedorNombre }} · {{ fecha(c.fecha) }} · Neto {{ c.neto | monto
           }}{{ c.moneda === 'USD' ? ' (USD)' : '' }}
@@ -139,7 +136,9 @@
             }
           </tbody>
         </table>
+      } @else if (!errorDetalle()) {
+        <p class="ayuda">Cargando…</p>
       }
-    </section>
+    </app-dialogo-detalle>
   }
 }

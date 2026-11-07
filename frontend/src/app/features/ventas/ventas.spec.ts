@@ -75,7 +75,12 @@ describe('Ventas (consulta y reimpresión, G60)', () => {
   const normal = (t: string | null | undefined) => (t ?? '').replace(/\s+/g, ' ').trim();
   const filas = () => Array.from(el().querySelectorAll<HTMLElement>('table.ventas tbody tr'));
   const celdas = (fila: HTMLElement) => Array.from(fila.querySelectorAll('td')).map((c) => normal(c.textContent));
-  const detalle = () => el().querySelector<HTMLElement>('section.detalle');
+  /** El detalle de la venta elegida: el pop-up (detalle-en-popup). */
+  const detalle = () => el().querySelector<HTMLElement>('app-dialogo-detalle [role="dialog"]');
+  const escape = () =>
+    (document.activeElement ?? document.body).dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }),
+    );
   const boton = (texto: string, dentro: ParentNode = el()) =>
     Array.from(dentro.querySelectorAll<HTMLButtonElement>('button')).find((b) => normal(b.textContent) === texto);
 
@@ -329,6 +334,91 @@ describe('Ventas (consulta y reimpresión, G60)', () => {
     expect(d).toContain('Ana Vendedora');
   });
 
+  it('el detalle se abre en un pop-up encima de la lista, con el título arriba y el foco en la ✕ (#78)', async () => {
+    await crear();
+
+    filas()[0].click();
+    await refrescar();
+
+    const pop = detalle()!;
+    expect(pop.getAttribute('aria-modal')).toBe('true');
+    expect(pop.closest('.dialogo-fondo')).not.toBeNull();
+    expect(normal(pop.querySelector('.dialogo-detalle-cabecera h2')?.textContent)).toBe('Venta N.º 5');
+    expect(pop.querySelector('.dialogo-detalle-cuerpo app-venta-hoja')).not.toBeNull();
+    expect(filas()).toHaveLength(2);
+    expect(document.activeElement).toBe(pop.querySelector('button[aria-label="Cerrar"]'));
+  });
+
+  it('mientras el detalle carga, el pop-up ya se titula con la venta de la fila', async () => {
+    await crear();
+    api.obtener.mockReturnValue(new Subject<VentaConsultada>());
+
+    filas()[1].click();
+    await refrescar();
+
+    expect(normal(detalle()!.querySelector('h2')?.textContent)).toBe('Venta N.º 4');
+    expect(normal(detalle()!.querySelector('.dialogo-detalle-cuerpo')?.textContent)).toBe('Cargando…');
+  });
+
+  it('Esc y la ✕ cierran el pop-up; la lista queda como estaba', async () => {
+    await crear();
+    filas()[0].click();
+    await refrescar();
+
+    escape();
+    await refrescar();
+    expect(detalle()).toBeNull();
+    expect(filas()[0].classList).not.toContain('elegida');
+
+    filas()[1].click();
+    await refrescar();
+    detalle()!.querySelector<HTMLButtonElement>('button[aria-label="Cerrar"]')!.click();
+    await refrescar();
+    expect(detalle()).toBeNull();
+    expect(filas()).toHaveLength(2);
+    expect(api.listar).toHaveBeenCalledTimes(1);
+  });
+
+  it('con Anular abierto encima, Esc cierra solo ese y el detalle sigue abierto', async () => {
+    await crear();
+    filas()[0].click();
+    await refrescar();
+    boton('Anular', detalle()!)!.click();
+    await refrescar();
+    expect(el().querySelector('app-dialogo-anular')).not.toBeNull();
+
+    escape();
+    await refrescar();
+
+    expect(el().querySelector('app-dialogo-anular')).toBeNull();
+    expect(detalle()).not.toBeNull();
+  });
+
+  it('con la anulación en vuelo y el foco caído al body (el botón se deshabilitó), Esc no cierra el pop-up ni el diálogo de Anular', async () => {
+    await crear();
+    api.anular.mockReturnValue(new Subject<VentaConsultada>());
+    api.obtener.mockReturnValue(
+      of(ventaDePrueba({ ventaId: 50, numero: 5, fiscal: { ...fiscalDe(documentoB()), acciones: [], reimprimir: false }, anulacion: null })),
+    );
+    filas()[0].click();
+    await refrescar();
+    boton('Anular', detalle()!)!.click();
+    await refrescar();
+    const confirmar = el().querySelector<HTMLButtonElement>('app-dialogo-anular [role="alertdialog"] button.anular')!;
+    confirmar.focus();
+    confirmar.click();
+    await refrescar();
+    expect(api.anular).toHaveBeenCalled();
+
+    // Chrome saca el foco del botón que se deshabilita y lo deja en el body; jsdom no, así que se hace a mano.
+    (document.activeElement as HTMLElement | null)?.blur();
+    document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+    await refrescar();
+
+    expect(el().querySelector('app-dialogo-anular')).not.toBeNull();
+    expect(detalle()).not.toBeNull();
+  });
+
   it('con descuento por renglón el total no muestra un porcentaje general que no es el del importe', async () => {
     await crear();
     const base = ventaDePrueba();
@@ -398,10 +488,15 @@ describe('Ventas (consulta y reimpresión, G60)', () => {
     await refrescar();
 
     const acciones = Array.from(detalle()!.querySelectorAll('button')).map((b) => normal(b.textContent));
-    expect(acciones).toEqual(['Imprimir', 'Anular']);
+    expect(acciones).toEqual(['✕', 'Anular', 'Cerrar', 'Imprimir']);
+    // Al pie: Anular solo a la izquierda; a la derecha Cerrar e Imprimir como principal.
     const anular = boton('Anular', detalle()!)!;
-    expect(anular.closest('.anular-venta')).not.toBeNull();
-    expect(anular.closest('.acciones')).toBeNull();
+    expect(anular.closest('.pie-peligro')).not.toBeNull();
+    expect(anular.closest('.pie-acciones')).toBeNull();
+    expect(anular.classList).toContain('peligro');
+    const imprimir = boton('Imprimir', detalle()!)!;
+    expect(imprimir.closest('.pie-acciones')).not.toBeNull();
+    expect(imprimir.classList).toContain('primario');
     expect(anular.getAttribute('aria-keyshortcuts')).toBeNull();
     expect(anular.getAttribute('data-tecla')).toBeNull();
   });
@@ -641,6 +736,15 @@ describe('Ventas (consulta y reimpresión, G60)', () => {
       expect(boton('Dejar sin factura', detalle()!)).toBeDefined();
     });
 
+    it('«Reintentar» y «Dejar sin factura» siguen en el cuerpo del pop-up, con lo de ARCA, y no en el pie', async () => {
+      await abrirCon(rechazada());
+
+      const cuerpo = detalle()!.querySelector('.dialogo-detalle-cuerpo')!;
+      expect(boton('Reintentar', cuerpo)).toBeDefined();
+      expect(boton('Dejar sin factura', cuerpo)).toBeDefined();
+      expect(cuerpo.querySelector('.errores-arca')).not.toBeNull();
+    });
+
     it('«Reintentar» manda `fechaDeHoy: false`, dice «Autorizando con ARCA…» mientras espera y después refresca el detalle y la lista', async () => {
       await abrirCon(rechazada());
       const respuesta = new Subject<unknown>();
@@ -666,6 +770,9 @@ describe('Ventas (consulta y reimpresión, G60)', () => {
       expect(normal(detalle()!.querySelector('.linea-fiscal')?.textContent)).toBe('Factura B 00001-00000012 · Autorizada');
       expect(boton('Reintentar', detalle()!)).toBeUndefined();
       expect(normal(el().querySelector('.resultado-accion')?.textContent)).toBe('Se reintentó la factura de la venta N.º 5.');
+      // Con el pop-up abierto el mensaje va adentro: el de la lista queda tapado por el velo.
+      expect(detalle()!.querySelector('.dialogo-detalle-cuerpo .resultado-accion')).not.toBeNull();
+      expect(el().querySelectorAll('.resultado-accion')).toHaveLength(1);
     });
 
     it('con `fechaNuevaRequerida` pide confirmar la fecha de hoy antes de mandar nada; Cancelar no manda', async () => {
@@ -735,6 +842,27 @@ describe('Ventas (consulta y reimpresión, G60)', () => {
       }
       expect(api.listar).not.toHaveBeenCalled();
       expect(api.obtener).not.toHaveBeenCalled();
+    });
+
+    it('con «Dejar sin factura» en vuelo y el foco caído al body (el botón se deshabilitó), Esc no cierra el pop-up ni el diálogo', async () => {
+      await abrirCon(rechazada());
+      api.dejarSinFactura.mockReturnValue(new Subject<unknown>());
+      boton('Dejar sin factura', detalle()!)!.click();
+      await refrescar();
+      const motivo = dialogoMotivo()!.querySelector<HTMLInputElement>('input')!;
+      motivo.value = 'El cliente no quiso factura';
+      motivo.dispatchEvent(new Event('input'));
+      boton('Dejar sin factura', dialogoMotivo()!)!.click();
+      await refrescar();
+      expect(api.dejarSinFactura).toHaveBeenCalled();
+
+      // Chrome saca el foco del botón que se deshabilita y lo deja en el body; jsdom no, así que se hace a mano.
+      (document.activeElement as HTMLElement | null)?.blur();
+      document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+      await refrescar();
+
+      expect(dialogoMotivo()).not.toBeNull();
+      expect(detalle()).not.toBeNull();
     });
 
     it('«Dejar sin factura» abre el diálogo del motivo, lo manda y después refresca el detalle y la lista', async () => {

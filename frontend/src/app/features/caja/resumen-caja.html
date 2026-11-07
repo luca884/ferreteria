@@ -7,7 +7,9 @@
   </header>
   <div class="titulo">
     <h2 id="resumen-titulo">Resumen de la caja</h2>
-    <button type="button" class="secundario chico imprimir" (click)="imprimir()">Imprimir</button>
+    @if (conImprimir()) {
+      <button type="button" class="secundario chico imprimir" (click)="imprimir()">Imprimir</button>
+    }
   </div>
   <p class="quien">
     Abrió {{ detalle().abiertaPor }} · {{ fechaHora(detalle().fechaApertura) }}

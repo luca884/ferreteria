@@ -67,6 +67,19 @@ describe('ResumenCaja (CC-025)', () => {
       expect(limpio(el().querySelector('button.imprimir'))).toBe('Imprimir');
     });
 
+    it('con `conImprimir` en false no lleva su botón (lo pone el pie del pop-up del historial), y `imprimir()` imprime igual', async () => {
+      await crear(detalle());
+      fixture.componentRef.setInput('conImprimir', false);
+      fixture.detectChanges();
+      const imprimir = vi.spyOn(window, 'print').mockImplementation(() => undefined);
+
+      expect(el().querySelector('button.imprimir')).toBeNull();
+      expect(limpio(el().querySelector('#resumen-titulo'))).toBe('Resumen de la caja');
+      fixture.componentInstance.imprimir();
+
+      expect(imprimir).toHaveBeenCalledOnce();
+    });
+
     it('el encabezado de la hoja trae la ferretería y cuándo se emitió', async () => {
       await crear(detalle());
 

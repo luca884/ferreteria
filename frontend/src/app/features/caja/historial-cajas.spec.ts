@@ -3,7 +3,7 @@ import localeEsAr from '@angular/common/locales/es-AR';
 import { LOCALE_ID, signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
-import { of } from 'rxjs';
+import { Subject, of, throwError } from 'rxjs';
 import { vi } from 'vitest';
 import { AuthService } from '../../core/auth/auth.service';
 import { CajaCerrada, DetalleCaja } from './caja.models';
@@ -121,6 +121,85 @@ describe('HistorialCajas (CU-10)', () => {
     const resumen = normal(el().querySelector('app-resumen-caja')?.textContent);
     expect(resumen).toContain('Cobranzas en efectivo $ 700,00');
     expect(resumen).toContain('Cobranzas por transferencia $ 300,00');
+  });
+
+  describe('el detalle en un pop-up (#73, #74)', () => {
+    const popup = () => el().querySelector<HTMLElement>('app-dialogo-detalle [role="dialog"]');
+
+    async function refrescar() {
+      fixture.detectChanges();
+      await fixture.whenStable();
+      fixture.detectChanges();
+    }
+
+    async function abrir(indice = 0) {
+      el().querySelectorAll<HTMLButtonElement>('table.cajas tbody tr button')[indice].click();
+      await refrescar();
+    }
+
+    it('«Ver detalle» abre el resumen en un pop-up encima de la lista, titulado con la apertura de la caja', async () => {
+      await crear(true);
+      const apertura = normal(el().querySelector('tbody tr td')?.textContent);
+
+      await abrir(0);
+
+      const pop = popup()!;
+      expect(pop.getAttribute('aria-modal')).toBe('true');
+      expect(pop.closest('.dialogo-fondo')).not.toBeNull();
+      expect(normal(pop.querySelector('.dialogo-detalle-cabecera h2')?.textContent)).toBe(`Caja del ${apertura}`);
+      expect(pop.querySelector('.dialogo-detalle-cuerpo app-resumen-caja .caja-imprimible')).not.toBeNull();
+      expect(el().querySelectorAll('table.cajas tbody tr')).toHaveLength(2);
+      expect(document.activeElement).toBe(pop.querySelector('button[aria-label="Cerrar"]'));
+    });
+
+    it('«Imprimir» va al pie como principal (el resumen ya no lleva el suyo) e imprime la hoja', async () => {
+      await crear(true);
+      await abrir(0);
+      const imprimir = vi.spyOn(window, 'print').mockImplementation(() => undefined);
+
+      const pop = popup()!;
+      expect(pop.querySelector('app-resumen-caja button.imprimir')).toBeNull();
+      const boton = pop.querySelector<HTMLButtonElement>('.dialogo-detalle-pie .pie-acciones button.primario')!;
+      expect(normal(boton.textContent)).toBe('Imprimir');
+      boton.click();
+
+      expect(imprimir).toHaveBeenCalledOnce();
+      imprimir.mockRestore();
+    });
+
+    it('Esc y la ✕ cierran el pop-up', async () => {
+      await crear(true);
+      await abrir(0);
+
+      (document.activeElement ?? document.body).dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }),
+      );
+      await refrescar();
+      expect(popup()).toBeNull();
+
+      await abrir(1);
+      popup()!.querySelector<HTMLButtonElement>('button[aria-label="Cerrar"]')!.click();
+      await refrescar();
+      expect(popup()).toBeNull();
+      expect(el().querySelector('app-resumen-caja')).toBeNull();
+    });
+
+    it('mientras carga dice «Cargando…» y, si el detalle no se pudo traer, avisa adentro del pop-up', async () => {
+      await crear(true);
+      servicio.detalle.mockReturnValue(new Subject<DetalleCaja>());
+      await abrir(0);
+      expect(normal(popup()!.querySelector('.dialogo-detalle-cuerpo')?.textContent)).toBe('Cargando…');
+
+      servicio.detalle.mockReturnValue(throwError(() => new Error('caída')));
+      popup()!.querySelector<HTMLButtonElement>('button[aria-label="Cerrar"]')!.click();
+      await refrescar();
+      await abrir(1);
+
+      expect(normal(popup()!.querySelector('.dialogo-detalle-cuerpo [role="alert"]')?.textContent)).toBe(
+        'No se pudo cargar el detalle de la caja.',
+      );
+      expect(popup()!.querySelector('.dialogo-detalle-pie .pie-acciones button.primario')).toBeNull();
+    });
   });
 
   it('el vendedor ve un aviso y no se pide el historial', async () => {
