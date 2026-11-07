@@ -422,12 +422,36 @@ describe('Proveedores', () => {
       expect(el().querySelector<HTMLInputElement>('#email')!.value).toBe('a@b.com');
     });
 
-    it('la lista muestra el contacto y el teléfono, o «—» si no hay', async () => {
-      await crearComponente(true, [{ ...sinteplast, contacto: 'Ana', telefono: '111' }, tersuave]);
+    it('la lista muestra cada dato de contacto en su columna, o «—» si no hay (arreglos-compras, S2)', async () => {
+      await crearComponente(true, [
+        { ...sinteplast, contacto: 'Ana', telefono: '223 555-1234', whatsapp: '223 15 555-0000', email: 'ana@sinteplast.com' },
+        tersuave,
+      ]);
 
-      expect(Array.from(el().querySelectorAll('thead th')).map((th) => th.textContent?.trim())).toContain('Contacto');
-      expect(filas()[0].querySelector('.contacto')?.textContent?.replace(/\s+/g, ' ').trim()).toBe('Ana · 111');
-      expect(filas()[1].querySelector('.contacto')?.textContent?.trim()).toBe('—');
+      const textos = (fila: HTMLElement) => Array.from(fila.querySelectorAll('td')).map((td) => td.textContent?.trim());
+      expect(Array.from(el().querySelectorAll('thead th')).map((th) => th.textContent?.trim())).toEqual([
+        'Nombre',
+        'CUIT',
+        'Contacto',
+        'Teléfono',
+        'WhatsApp',
+        'Correo',
+      ]);
+      expect(textos(filas()[0]).slice(2)).toEqual(['Ana', '223 555-1234', '223 15 555-0000', 'ana@sinteplast.com']);
+      expect(textos(filas()[1]).slice(2)).toEqual(['—', '—', '—', '—']);
+    });
+
+    it('sin CUIT, el «—» no va en letra monoespaciada; un CUIT cargado sí (arreglos-compras, S1)', async () => {
+      await crearComponente(true, [
+        { ...sinteplast, cuit: '30-71234567-1' },
+        { ...tersuave, cuit: null },
+      ]);
+
+      const cuit = (fila: HTMLElement) => fila.querySelectorAll('td')[1];
+      expect(cuit(filas()[0]).textContent?.trim()).toBe('30-71234567-1');
+      expect(cuit(filas()[0]).classList).toContain('mono');
+      expect(cuit(filas()[1]).textContent?.trim()).toBe('—');
+      expect(cuit(filas()[1]).classList).not.toContain('mono');
     });
 
     it('un correo inválido no se manda y lo explica', async () => {
