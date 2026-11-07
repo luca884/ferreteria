@@ -21,6 +21,7 @@ import { Cotizacion } from '../../core/cotizacion/cotizacion.models';
 import { CotizacionService } from '../../core/cotizacion/cotizacion.service';
 import { MontoPipe, formatearCotizacion, formatearTexto } from '../../core/formato/monto';
 import { igualesPorValor } from '../../core/formato/cadena-de-precio';
+import { avisoMargenNegativo } from '../../core/formato/margen-negativo';
 import { RecargoDeCosto, costoRealExacto, exacto, margenEfectivo, precioFinal } from '../../core/formato/precio-final';
 import { cantidadConUnidad } from '../../core/formato/unidad';
 import { BarraAcciones } from '../../shared/barra-acciones';
@@ -416,6 +417,20 @@ export class ArticuloForm implements OnInit {
     return formatearTexto(`${centavos.slice(0, -2)}.${centavos.slice(-2)}`, v.moneda);
   });
 
+  /**
+   * #26: con precio manual, el aviso de margen negativo mientras se escribe, con la regla y el texto de las vistas
+   * previas (CU-14 punto 2): el costo real en pesos supera el precio sin IVA. No impide guardar. Con el precio a medio
+   * escribir o inválido no hay aviso (ya está su error), y en dólares sin dólar vigente no hay cuenta.
+   */
+  protected readonly avisoDeMargen = computed(() => {
+    const v = this.valores();
+    if (!v.precioManual || v.precioFinal === null || this.form.controls.precioFinal.invalid) return null;
+    // En pesos la cotización vale 1; en dólares es el vigente (null = sin cuenta).
+    const cotizacion = v.moneda === 'USD' ? this.dolarDePrecios() : undefined;
+    if (cotizacion === null) return null;
+    return avisoMargenNegativo(v.costo, this.recargosEnVivo(), cotizacion, v.alicuotaIva, v.precioFinal);
+  });
+
   /** Precio final con lo que hay cargado, con la misma cuenta y redondeo que el backend. */
   protected readonly precioEnVivo = computed(() => {
     const config = this.configuracion();
@@ -513,6 +528,7 @@ export class ArticuloForm implements OnInit {
     const ids: string[] = [];
     if (this.errorLocalDelPrecio()) ids.push('precioFinalManual-error');
     if (this.errorServidor('precioFinal')) ids.push('precioFinalManual-error-servidor');
+    if (this.avisoDeMargen()) ids.push('precioFinalManual-aviso');
     return ids.length > 0 ? ids.join(' ') : null;
   }
 

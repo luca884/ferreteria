@@ -232,6 +232,11 @@
                       } @else {
                         {{ costo(c.costoAnterior, c.moneda) }}&nbsp;→ {{ costo(c.costoNuevo, c.moneda) }}
                       }
+                      @if (costoRealDe(c); as real) {
+                        <p class="detalle-fila">
+                          Costo real: {{ real }} (recargos {{ c.recargosPorcentaje | number: '1.0-2' }}&nbsp;%)
+                        </p>
+                      }
                     </td>
                     <td class="num">
                       @if (c.margenAnterior !== c.margenNuevo) {
@@ -251,6 +256,9 @@
                         }
                       } @else {
                         {{ c.precioAnterior | monto }}&nbsp;→ {{ c.precioNuevo | monto }}
+                      }
+                      @if (c.precioSinAjustes != null) {
+                        <p class="detalle-fila">Sin ajustes: {{ c.precioSinAjustes | monto }}</p>
                       }
                     </td>
                   </tr>

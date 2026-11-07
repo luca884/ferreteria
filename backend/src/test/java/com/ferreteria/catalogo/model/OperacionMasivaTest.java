@@ -71,7 +71,8 @@ class OperacionMasivaTest {
     void recordsDelPlan() {
         ConteosMasivos conteos = new ConteosMasivos(5, 2, 0, 2, 1, 0, 0, 3, 0);
         CambioMasivo cambio = new CambioMasivo(1L, "INT-1", "Articulo 1", bd("100.00"), bd("110.00"),
-            bd("30.00"), bd("30.00"), bd("160.00"), bd("180.00"), true, null, Moneda.ARS, bd("21.00"), 2L, 3L);
+            bd("30.00"), bd("30.00"), bd("160.00"), bd("180.00"), true, null, Moneda.ARS, bd("21.00"), 2L, 3L,
+            bd("4.44"), bd("104.44"), bd("114.88"), bd("170.00"));
         ErrorMasivo error = new ErrorMasivo(4L, "INT-4", "Articulo 4", "El costo nuevo da 0. Revisá el porcentaje.");
         PlanMasivo plan = new PlanMasivo(conteos, java.util.List.of(cambio), java.util.List.of(error), "abc", 5, 0, null);
 
@@ -87,6 +88,10 @@ class OperacionMasivaTest {
         assertThat(plan.cambios().get(0).advertencia()).isNull();
         assertThat(plan.cambios().get(0).rubroAnteriorId()).isEqualTo(2L);
         assertThat(plan.cambios().get(0).rubroNuevoId()).isEqualTo(3L);
+        assertThat(plan.cambios().get(0).recargosPorcentaje()).isEqualByComparingTo("4.44");
+        assertThat(plan.cambios().get(0).costoRealAnterior()).isEqualByComparingTo("104.44");
+        assertThat(plan.cambios().get(0).costoRealNuevo()).isEqualByComparingTo("114.88");
+        assertThat(plan.cambios().get(0).precioSinAjustes()).isEqualByComparingTo("170.00");
         assertThat(plan.errores().get(0).motivo()).isEqualTo("El costo nuevo da 0. Revisá el porcentaje.");
         assertThat(plan.huella()).isEqualTo("abc");
     }

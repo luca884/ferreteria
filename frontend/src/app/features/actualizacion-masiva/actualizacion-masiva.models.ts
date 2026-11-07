@@ -77,6 +77,13 @@ export interface CambioMasivo {
   /** El rubro de hoy (null: sin rubro) y el de después: el destino con `CAMBIAR_RUBRO`, el mismo con los otros modos. */
   rubroAnteriorId?: number | null;
   rubroNuevoId?: number | null;
+  /** La suma de los % de los recargos del costo (CU-13); null si el artículo no tiene recargos. */
+  recargosPorcentaje?: number | null;
+  /** El costo real (costo más recargos) de hoy y el de después, en la moneda del artículo; null sin recargos. */
+  costoRealAnterior?: number | null;
+  costoRealNuevo?: number | null;
+  /** El precio calculado nuevo, antes de los ajustes (CU-14); null sin ajustes o con precio manual. */
+  precioSinAjustes?: number | null;
 }
 
 /** Un artículo del alcance que no se puede actualizar. */

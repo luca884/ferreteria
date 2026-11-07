@@ -84,11 +84,16 @@ public final class PlanificadorMasivo {
                 conAdvertencia++;
             }
             if (fila.modificado()) {
+                boolean conRecargos = !articulo.recargosCosto().estaVacia();
                 cambios.add(new CambioMasivo(articulo.id(), articulo.codigoInterno(), articulo.descripcion(),
                     articulo.costo(), fila.costoNuevo(), fila.margenAnterior(), fila.margenNuevo(),
                     articulo.precioFinal(), fila.precioNuevo(), fila.margenPropioNuevo() == null, fila.advertencia(),
                     articulo.moneda(), articulo.alicuotaIva().porcentaje(), articulo.rubroId(),
-                    operacion.rubroDespues(articulo.rubroId())));
+                    operacion.rubroDespues(articulo.rubroId()),
+                    conRecargos ? articulo.recargosCosto().porcentajeTotal() : null,
+                    conRecargos ? articulo.costoReal(articulo.costo()) : null,
+                    conRecargos ? articulo.costoReal(fila.costoNuevo()) : null,
+                    fila.precioSinAjustes()));
             }
         }
 
@@ -109,14 +114,22 @@ public final class PlanificadorMasivo {
             + ImporteArgentino.formatoCompacto(operacion.valor(), Moneda.USD) + " en los de dólares.";
     }
 
-    /** Lo que la operacion hace con un articulo: o un error, o los valores nuevos. */
+    /**
+     * Lo que la operacion hace con un articulo: o un error, o los valores nuevos. {@code precioSinAjustes} es el precio
+     * calculado nuevo antes de los ajustes, o null si no tiene ajustes o queda con precio manual.
+     */
     private record Fila(String motivoDeError, BigDecimal costoNuevo, BigDecimal margenAnterior,
                         BigDecimal margenNuevo, BigDecimal margenPropioNuevo, BigDecimal precioNuevo,
-                        String advertencia, boolean modificado) {
+                        String advertencia, boolean modificado, BigDecimal precioSinAjustes) {
 
         static Fila conError(String motivo) {
-            return new Fila(motivo, null, null, null, null, null, null, false);
+            return new Fila(motivo, null, null, null, null, null, null, false, null);
         }
+    }
+
+    /** El precio calculado si los ajustes cuentan (sin precio manual y con ajustes); si no, null. */
+    private static BigDecimal sinAjustes(ArticuloVigente articulo, BigDecimal calculado) {
+        return articulo.precioManual() || articulo.ajustesPrecio().estaVacia() ? null : calculado;
     }
 
     private static Fila evaluar(ArticuloVigente articulo, OperacionMasiva operacion, ContextoPrecio contexto) {
@@ -160,7 +173,7 @@ public final class PlanificadorMasivo {
         return new Fila(null, costoNuevo, margenAnterior, margenNuevo, margenPropioNuevo, precioNuevo,
             MargenNegativo.junto(advertencia, articulo.margenNegativo(
                 costoNuevo, articulo.alicuotaIva(), contexto.cotizacionPara(articulo.moneda()))),
-            modificado);
+            modificado, sinAjustes(articulo, calculado));
     }
 
     /**
@@ -187,7 +200,7 @@ public final class PlanificadorMasivo {
                 contexto.cotizacionPara(articulo.moneda()), articulo.alicuotaIva(), precioNuevo));
         boolean modificado = distintos(articulo.precioFinal(), precioNuevo) || !articulo.precioManual();
         return new Fila(null, articulo.costo(), margenAnterior, margenAnterior, articulo.margenPorcentaje(),
-            precioNuevo, advertencia, modificado);
+            precioNuevo, advertencia, modificado, null);
     }
 
     /**
@@ -202,7 +215,7 @@ public final class PlanificadorMasivo {
             articulo.margenPorcentaje(), actual.margenRubro(), actual.margenDefecto());
         if (destinoId.equals(articulo.rubroId())) {
             return new Fila(null, articulo.costo(), margenAnterior, margenAnterior, articulo.margenPorcentaje(),
-                articulo.precioFinal(), null, false);
+                articulo.precioFinal(), null, false, null);
         }
         BigDecimal margenNuevo = PrecioCalculator.margenEfectivo(
             articulo.margenPorcentaje(), destino.margenRubro(), destino.margenDefecto());
@@ -222,7 +235,7 @@ public final class PlanificadorMasivo {
             VariacionFuerte.mensaje(Sujeto.PRECIO, articulo.precioFinal(), precioNuevo),
             articulo.margenNegativo(articulo.costo(), articulo.alicuotaIva(), cotizacion));
         return new Fila(null, articulo.costo(), margenAnterior, margenNuevo, articulo.margenPorcentaje(), precioNuevo,
-            advertencia, true);
+            advertencia, true, sinAjustes(articulo, calculado));
     }
 
     /** El costo despues de la operacion: sin cambios en MARGEN, porcentual o con un monto sumado en los otros dos. */
