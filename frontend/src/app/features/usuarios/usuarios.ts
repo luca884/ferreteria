@@ -137,6 +137,7 @@ export class Usuarios implements OnInit {
     if (!this.conTope()) this.form.controls.topeDescuento.setValue('', { emitEvent: false });
     if (this.form.invalid) {
       this.form.markAllAsTouched();
+      this.form.markAllAsDirty();
       this.enfocar('form.alta [aria-invalid="true"]');
       return;
     }
@@ -277,7 +278,8 @@ export class Usuarios implements OnInit {
 
   protected invalido(campo: 'nombre' | 'email' | 'password' | 'topeDescuento' | 'telefono'): boolean {
     const control = this.form.controls[campo];
-    return control.touched && control.invalid;
+    // Sin escribir nada, avisa recién al intentar guardar, que lo marca modificado (bugs de la guía, S14).
+    return control.touched && control.dirty && control.invalid;
   }
 
   /** Sobre uno mismo el rol no se cambia: el selector queda deshabilitado. */

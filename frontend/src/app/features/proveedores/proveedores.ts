@@ -108,6 +108,7 @@ export class Proveedores implements OnInit {
   protected guardar(): void {
     if (this.form.invalid) {
       this.form.markAllAsTouched();
+      this.form.markAllAsDirty();
       this.enfocar('form.alta [aria-invalid="true"]');
       return;
     }
@@ -180,7 +181,8 @@ export class Proveedores implements OnInit {
 
   protected invalido(campo: 'nombre' | 'cuit' | 'contacto' | 'telefono' | 'whatsapp' | 'email'): boolean {
     const control = this.form.controls[campo];
-    return control.touched && control.invalid;
+    // Sin escribir nada, avisa recién al intentar guardar, que lo marca modificado (bugs de la guía, S14).
+    return control.touched && control.dirty && control.invalid;
   }
 
   protected desactivar(): void {

@@ -82,6 +82,7 @@ export class Rubros implements OnInit {
   protected guardar(): void {
     if (this.form.invalid) {
       this.form.markAllAsTouched();
+      this.form.markAllAsDirty();
       this.enfocar('form.alta [aria-invalid="true"]');
       return;
     }
@@ -167,7 +168,8 @@ export class Rubros implements OnInit {
 
   protected invalido(campo: 'nombre' | 'margenPorcentaje'): boolean {
     const control = this.form.controls[campo];
-    return control.touched && control.invalid;
+    // Sin escribir nada, avisa recién al intentar guardar, que lo marca modificado (bugs de la guía, S14).
+    return control.touched && control.dirty && control.invalid;
   }
 
   /** Después de pintar, enfoca el primer elemento que coincida. */

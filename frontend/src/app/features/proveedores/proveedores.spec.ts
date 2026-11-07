@@ -852,6 +852,18 @@ describe('Proveedores', () => {
 
       expect(el().querySelector('.nombre-campo .campo-error')?.textContent).toContain('El nombre es obligatorio.');
     });
+
+    // Bugs de la guía, S14: el alta vacía no avisa por pasar por el campo; avisa al intentar guardar.
+    it('pasar por el nombre vacío no lo marca', async () => {
+      await crearComponente(true);
+
+      const nombre = el().querySelector<HTMLInputElement>('#nombre')!;
+      nombre.dispatchEvent(new Event('focus'));
+      nombre.dispatchEvent(new Event('blur'));
+      fixture.detectChanges();
+
+      expect(el().querySelector('.nombre-campo .campo-error')).toBeNull();
+    });
   });
 
   describe('datos de la lista, de solo lectura (#44)', () => {

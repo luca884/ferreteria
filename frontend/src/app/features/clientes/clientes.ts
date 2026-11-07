@@ -218,6 +218,7 @@ export class Clientes implements OnInit {
     if (this.auth.esDueno()) this.errorLimite.set(this.validarLimite());
     if (this.form.invalid || this.errorTipo() || this.errorNumero() || this.errorDomicilio() || this.errorLimite()) {
       this.form.markAllAsTouched();
+      this.form.markAllAsDirty();
       this.enfocar('form.alta [aria-invalid="true"]');
       return;
     }
@@ -383,7 +384,8 @@ export class Clientes implements OnInit {
 
   protected invalido(campo: 'razonSocial' | 'email'): boolean {
     const control = this.form.controls[campo];
-    return control.touched && control.invalid;
+    // Sin escribir nada, avisa recién al intentar guardar, que lo marca modificado (bugs de la guía, S14).
+    return control.touched && control.dirty && control.invalid;
   }
 
   /** Lo que se manda: solo lo cargado y sin espacios de más. El documento lo valida y normaliza el servidor. */

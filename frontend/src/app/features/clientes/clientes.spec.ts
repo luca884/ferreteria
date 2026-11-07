@@ -302,6 +302,19 @@ describe('Clientes', () => {
   });
 
   describe('alta y edición', () => {
+    // Bugs de la guía, S14: el alta vacía no avisa por pasar por el campo; avisa al intentar guardar.
+    it('pasar por la razón social vacía no avisa; intentar guardar sí', async () => {
+      await crear();
+
+      input('razon-social').dispatchEvent(new Event('focus'));
+      input('razon-social').dispatchEvent(new Event('blur'));
+      await refrescar();
+      expect(el().querySelector('#razon-social-error')).toBeNull();
+
+      await enviar('form.alta');
+      expect(el().querySelector('#razon-social-error')?.textContent).toContain('obligatoria');
+    });
+
     it('crea con la razón social obligatoria y manda solo lo cargado, sin espacios de más', async () => {
       await crear();
       await escribir('razon-social', '  Juan Pérez  ');

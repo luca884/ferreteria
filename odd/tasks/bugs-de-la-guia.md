@@ -51,7 +51,7 @@ Restricciones: los arreglos de CSS no se pueden medir con Vitest (jsdom no calcu
 
 - [x] T1 · S1–S5 · ruta: inline · Aceptación: la de cada S · Evidencia: S1–S2 RED 2/138 → GREEN 139/139; S3 RED 3/36 → GREEN caja 99/99; S4 RED compile + 19/580 → GREEN 1369/1369 (46 archivos); S5 RED 1/139 → GREEN 139/139; ego-browser a 1280×800 (L3) · Risk: item 3 (S4: helper de formato que usan 8 hojas)
 - [x] T2 · S6–S13, S25 · ruta: inline · Aceptación: la de cada S, medida a 1280×800 · Evidencia: RED→GREEN por pantalla (clientes 577/577, proveedores 58/58, admin 64/64, stock 10/10, ventas+reportes 92/92, artículos 461/461, masivo 224/224, layout 104/104); ego-browser a 1280×800 (L4) · Risk: none
-- [ ] T3 · S14–S17 · ruta: inline · Aceptación: la de cada S · Evidencia: — · Risk: item 3 (S15: interceptor de todos los pedidos)
+- [x] T3 · S14–S17 · ruta: inline · Aceptación: la de cada S · Evidencia: S14 RED 5/279 → GREEN 783/783 (las 5 pantallas); S15 RED 3/8 y 1/17 → GREEN 25/25; ego-browser (L5) · Risk: item 3 (S15: interceptor de todos los pedidos)
 - [ ] T4 · S18–S24 · ruta: inline · Aceptación: la de cada S · Evidencia: — · Risk: item 3 (S19: parámetro nuevo del endpoint de exportar)
 
 ## Log
@@ -85,3 +85,7 @@ Restricciones: los arreglos de CSS no se pueden medir con Vitest (jsdom no calcu
   - S12: el motivo va en una `p.motivo-linea` reservada entre el paginador y la grilla (como Clientes), con el mismo id y texto; el paginador queda en una línea (46 px).
   - S13: `fila-cambio` con `align-items: flex-start`: «Operación» y «Porcentaje (%)» a la misma altura (318 y 318; antes 356 y 318).
   - Próximo paso: T3.
+- L5 (2026-11-07) T3 hecha.
+  - S14 y S16: en Formas de pago, Usuarios, Rubros, Clientes y Proveedores, `invalido()` pasa a `touched && dirty && invalid` y `guardar()` suma `markAllAsDirty()` (Angular 22.2.4 lo tiene). Un campo sin escribir avisa recién al intentar guardar; uno escrito y borrado avisa al salir, como antes (test que lo fija). En ego-browser (Formas de pago, El Tornillo): foco en el nombre, tocar una fila, Desactivar, Esc y tocar otra fila no muestran el aviso; Agregar vacío muestra «El nombre es obligatorio.».
+  - S15 y S17: el interceptor agrega `sesion=cerrada` al `/login` solo si había token (sin sesión no hay nada que avisar; test que lo fija), y el login muestra «Tu sesión se cerró. Ingresá de nuevo.» (`role="status"`). En ego-browser: Dueño de La Rambla en Artículos, se suspende La Rambla por la API del admin, «Buscar» lleva a `/login?returnUrl=%2Farticulos&sesion=cerrada` con el aviso; al reintentar sale además «Tu ferretería está suspendida. Contactá al proveedor.». La Rambla quedó reactivada (ACTIVA).
+  - Próximo paso: T4.

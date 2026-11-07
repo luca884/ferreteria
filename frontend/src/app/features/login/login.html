@@ -8,6 +8,9 @@
       <h1>Ferretería</h1>
     </div>
     <p class="sub">Ingresá con tu usuario</p>
+    @if (sesionCerrada) {
+      <p class="alerta advertencia sesion-cerrada" role="status">Tu sesión se cerró. Ingresá de nuevo.</p>
+    }
 
     <div class="campo">
       <label for="email">Email</label>

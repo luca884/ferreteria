@@ -124,6 +124,7 @@ export class FormasPago implements OnInit {
   protected guardar(): void {
     if (this.form.invalid) {
       this.form.markAllAsTouched();
+      this.form.markAllAsDirty();
       this.enfocar('form.alta [aria-invalid="true"]');
       return;
     }
@@ -239,7 +240,8 @@ export class FormasPago implements OnInit {
   protected invalido(campo: 'nombre' | 'recargoPorcentaje' | 'descuentoPorcentaje'): boolean {
     const control = this.form.controls[campo];
     if (campo === 'descuentoPorcentaje' && control.touched && this.form.hasError('recargoYDescuento')) return true;
-    return control.touched && control.invalid;
+    // Sin escribir nada, avisa recién al intentar guardar, que lo marca modificado (bugs de la guía, S14).
+    return control.touched && control.dirty && control.invalid;
   }
 
   /** Después de pintar, enfoca el primer elemento que coincida. */
