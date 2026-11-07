@@ -20,6 +20,12 @@ export function normalizarCuit(escrito: string): { cuit: string | null } | { err
   return { cuit: `${digitos.slice(0, 2)}-${digitos.slice(2, 10)}-${digitos[10]}` };
 }
 
+/** Para mostrar un CUIT guardado: «30-71234567-8», venga con guiones o solo con dígitos; si no son 11 números, tal cual. */
+export function cuitConGuiones(cuit: string): string {
+  const digitos = cuit.replace(/\D/g, '');
+  return digitos.length === 11 ? `${digitos.slice(0, 2)}-${digitos.slice(2, 10)}-${digitos.slice(10)}` : cuit;
+}
+
 /** Validador de formulario: `{ cuit: mensaje }` si el CUIT escrito no es válido; vacío es válido. */
 export function validarCuit(control: AbstractControl<string | null>): ValidationErrors | null {
   const resultado = normalizarCuit(control.value ?? '');

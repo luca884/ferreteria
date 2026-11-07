@@ -217,7 +217,7 @@ describe('PaginaFacturacion', () => {
       await crear(config({ credencial: CREDENCIAL }));
 
       const credencial = texto('.credencial');
-      expect(credencial).toContain('30999999995');
+      expect(credencial).toContain('30-99999999-5');
       expect(credencial).toContain('Computadores Test');
       expect(credencial).toContain('Homologación');
       expect(credencial).toContain('Del 28/10/2026 al 27/10/2028');
@@ -299,7 +299,7 @@ describe('PaginaFacturacion', () => {
       await click('button.generar-pedido');
       expect(api.generarPedido).toHaveBeenCalledExactlyOnceWith(null);
       expect(texto('.alerta.exito')).toBe('Se generó el pedido de certificado: bajalo y subilo en ARCA.');
-      expect(texto('.pedido-pendiente')).toBe('Hay un pedido pendiente del 28/10 18:40, para la CUIT 30999999995.');
+      expect(texto('.pedido-pendiente')).toBe('Hay un pedido pendiente del 28/10 18:40, para la CUIT 30-99999999-5.');
 
       await click('button.descargar-pedido');
       expect(texto('button.descargar-pedido')).toBe('Descargar pedido (.csr)');

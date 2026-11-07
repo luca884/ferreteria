@@ -108,7 +108,7 @@
           <dl class="credencial">
             <div>
               <dt>CUIT</dt>
-              <dd>{{ credencial.cuit }}</dd>
+              <dd>{{ cuitConGuiones(credencial.cuit) }}</dd>
             </div>
             <div>
               <dt>Emisor</dt>
@@ -240,7 +240,7 @@
 
         @if (c.pedido; as pedido) {
           <p class="pedido-pendiente">
-            Hay un pedido pendiente del {{ fechaHora(pedido.creadoEn) }}, para la CUIT {{ pedido.cuit }}.
+            Hay un pedido pendiente del {{ fechaHora(pedido.creadoEn) }}, para la CUIT {{ cuitConGuiones(pedido.cuit) }}.
           </p>
         }
 

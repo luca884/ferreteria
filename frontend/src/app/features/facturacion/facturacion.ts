@@ -4,6 +4,7 @@ import { FormControl, FormGroup, ReactiveFormsModule } from '@angular/forms';
 import { erroresDeCampos, mensajeDe } from '../../core/api/api-error';
 import { descargar } from '../../core/archivos/descarga';
 import { AuthService } from '../../core/auth/auth.service';
+import { cuitConGuiones } from '../../core/formato/cuit';
 import { formatearFecha, formatearFechaHora } from '../../core/formato/fecha-hora';
 import { BarraAcciones } from '../../shared/barra-acciones';
 import { Confirmacion } from '../../shared/confirmacion';
@@ -59,6 +60,7 @@ export class PaginaFacturacion implements OnInit {
   protected readonly pasos = PASO_PRUEBA_LABELS;
   protected readonly fecha = formatearFecha;
   protected readonly fechaHora = formatearFechaHora;
+  protected readonly cuitConGuiones = cuitConGuiones;
   protected readonly detalleDelEstado = detalleDelEstado;
 
   protected readonly formPuntoVenta = new FormGroup({ puntoVenta: new FormControl<number | null>(null) });

@@ -1,5 +1,5 @@
 import { FormControl } from '@angular/forms';
-import { normalizarCuit, validarCuit } from './cuit';
+import { cuitConGuiones, normalizarCuit, validarCuit } from './cuit';
 
 /** Los mismos casos que backend/src/test/java/com/ferreteria/catalogo/model/CuitTest.java. */
 describe('CUIT', () => {
@@ -36,6 +36,17 @@ describe('CUIT', () => {
       });
     },
   );
+
+  it.each([
+    ['30999999995', '30-99999999-5'],
+    ['30-99999999-5', '30-99999999-5'],
+  ])('para mostrar, %s sale con guiones', (guardado, mostrado) => {
+    expect(cuitConGuiones(guardado)).toBe(mostrado);
+  });
+
+  it('para mostrar, lo que no son 11 números sale tal cual', () => {
+    expect(cuitConGuiones('3099')).toBe('3099');
+  });
 
   it('el validador de formulario devuelve el mensaje o null', () => {
     expect(validarCuit(new FormControl('30-12345678-1'))).toBeNull();
