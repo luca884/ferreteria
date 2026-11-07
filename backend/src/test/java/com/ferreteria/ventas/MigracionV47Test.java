@@ -38,21 +38,22 @@ class MigracionV47Test {
     }
 
     @Test
-    @DisplayName("los remitos de antes quedan igual, tambien los ya anulados, sin quien ni cuando")
+    @DisplayName("los remitos de antes quedan igual (emitidos, anulados y facturados), sin quien ni cuando")
     void losRemitosExistentesQuedanIgual() {
         long f = ferreteria("30-78999961-1");
-        long emitido = remito(f, 1, "EMITIDO");
-        long anulado = remito(f, 2, "ANULADO");
-        Map<String, Object> emitidoAntes = jdbc.queryForMap("select * from remito where id = ?", emitido);
-        Map<String, Object> anuladoAntes = jdbc.queryForMap("select * from remito where id = ?", anulado);
+        long[] remitos = {remito(f, 1, "EMITIDO"), remito(f, 2, "ANULADO"), remito(f, 3, "FACTURADO")};
+        Map<Long, Map<String, Object>> antes = new HashMap<>();
+        for (long id : remitos) {
+            antes.put(id, jdbc.queryForMap("select * from remito where id = ?", id));
+        }
 
         migrarALa47();
 
-        for (long id : new long[] {emitido, anulado}) {
+        for (long id : remitos) {
             Map<String, Object> despues = new HashMap<>(jdbc.queryForMap("select * from remito where id = ?", id));
             assertThat(despues.remove("fecha_anulacion")).isNull();
             assertThat(despues.remove("usuario_anulacion_id")).isNull();
-            assertThat(despues).isEqualTo(id == emitido ? emitidoAntes : anuladoAntes);
+            assertThat(despues).isEqualTo(antes.get(id));
         }
     }
 
@@ -63,6 +64,7 @@ class MigracionV47Test {
         long otra = ferreteria("30-78999961-3");
         long emitido = remito(f, 1, "EMITIDO");
         long anulado = remito(f, 2, "ANULADO");
+        long facturado = remito(f, 3, "FACTURADO");
         migrarALa47();
         long dueno = usuario(f);
         long ajeno = usuario(otra);
@@ -72,6 +74,8 @@ class MigracionV47Test {
                 .hasMessageContaining("ck_remito_anulacion");
         assertThatThrownBy(() -> jdbc.update(fijar, null, dueno, anulado)).hasMessageContaining("ck_remito_anulacion");
         assertThatThrownBy(() -> jdbc.update(fijar, "2026-11-07 10:00:00", dueno, emitido))
+                .hasMessageContaining("ck_remito_anulacion");
+        assertThatThrownBy(() -> jdbc.update(fijar, "2026-11-07 10:00:00", dueno, facturado))
                 .hasMessageContaining("ck_remito_anulacion");
         assertThatThrownBy(() -> jdbc.update(fijar, "2026-11-07 10:00:00", ajeno, anulado))
                 .hasMessageContaining("fk_remito_usuario_anulacion");

@@ -142,6 +142,9 @@ class VentaConsumidorFinalIntegrationTest extends VentasTestBase {
         assertThat(facturacion.get("topeConsumidorFinal").decimalValue()).isEqualByComparingTo("1000");
         assertThat(getJson("/api/ventas/facturacion", login(porDefecto.emailDueno())).get("topeConsumidorFinal")
                 .decimalValue()).isEqualByComparingTo("10000000");
+        // Sin factura no rige el de ARCA: un tope del Dueño más alto llega tal cual.
+        assertThat(getJson("/api/ventas/facturacion", login(conTope("20000000").emailVendedor()))
+                .get("topeConsumidorFinal").decimalValue()).isEqualByComparingTo("20000000");
     }
 
     @Test

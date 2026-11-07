@@ -187,6 +187,61 @@ class RemitoConsultaIntegrationTest extends VentasTestBase {
     }
 
     @Test
+    @DisplayName("otro Dueno que repite la anulacion no pisa quien ni cuando la hizo (#81)")
+    void otroDuenoNoPisaQuienAnulo() throws Exception {
+        Tienda t = tiendaSinCaja();
+        long a = articulo(t, "Tornillo", "UNIDAD", "100.00", "10");
+        String duenio = login(t.emailDueno());
+        long id = remito(duenio, a, "2", "100.00", "200.00").get("remitoId").asLong();
+        String hash = jdbc.queryForObject("select password_hash from usuario where email = ?", String.class,
+                t.emailDueno());
+        String otro = "dueno2-" + t.id() + "@ventas.demo";
+        jdbc.update("insert into usuario (ferreteria_id, email, password_hash, nombre, rol) "
+                + "values (?, ?, ?, 'Otra Duena', 'DUENO')", t.id(), otro, hash);
+        long primerDueno = jdbc.queryForObject("select id from usuario where email = ?", Long.class, t.emailDueno());
+
+        JsonNode primera = json(anular(duenio, id).andExpect(status().isOk()));
+        JsonNode segunda = json(anular(login(otro), id).andExpect(status().isOk()));
+
+        assertThat(segunda.get("anuladoPor").asText()).isEqualTo("Dueno Ventas");
+        assertThat(segunda.get("fechaAnulacion").asText()).isEqualTo(primera.get("fechaAnulacion").asText());
+        assertThat(anulacion(id)).containsEntry("usuario_anulacion_id", primerDueno);
+        assertThat(stock(a)).isEqualByComparingTo("10");
+    }
+
+    @Test
+    @DisplayName("un facturado (409) o un remito de otra ferreteria (404) no guardan quien ni cuando (#81)")
+    void sinAnulacionNoGuardaQuienNiCuando() throws Exception {
+        Tienda t = tiendaSinCaja();
+        Tienda otra = tiendaSinCaja();
+        long a = articulo(t, "Tornillo", "UNIDAD", "100.00", "10");
+        String duenio = login(t.emailDueno());
+        long ajeno = remito(duenio, a, "2", "100.00", "200.00").get("remitoId").asLong();
+        long facturado = remito(duenio, a, "2", "100.00", "200.00").get("remitoId").asLong();
+        jdbc.update("update remito set estado = 'FACTURADO' where id = ?", facturado);
+
+        anular(login(otra.emailDueno()), ajeno).andExpect(status().isNotFound());
+        anular(duenio, facturado).andExpect(status().isConflict());
+
+        for (long id : new long[] {ajeno, facturado}) {
+            assertThat(anulacion(id)).containsEntry("fecha_anulacion", null).containsEntry("usuario_anulacion_id", null);
+        }
+        assertThat(estado(ajeno)).isEqualTo("EMITIDO");
+        anular(duenio, ajeno).andExpect(status().isOk());
+        getResult("/api/remitos/" + ajeno, login(otra.emailDueno())).andExpect(status().isNotFound());
+    }
+
+    /** Quien y cuando quedaron guardados en la fila del remito (V47). */
+    private Map<String, Object> anulacion(long id) {
+        Map<String, Object> fila = jdbc.queryForMap("select fecha_anulacion, usuario_anulacion_id from remito where id = ?", id);
+        Map<String, Object> normalizada = new java.util.HashMap<>(fila);
+        if (fila.get("usuario_anulacion_id") instanceof Number n) {
+            normalizada.put("usuario_anulacion_id", n.longValue());
+        }
+        return normalizada;
+    }
+
+    @Test
     @DisplayName("anular un remito de un articulo sin stock lo deja como estaba antes de emitirlo")
     void anularCompensaElStockNegativo() throws Exception {
         Tienda t = tiendaSinCaja();

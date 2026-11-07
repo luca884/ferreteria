@@ -1743,6 +1743,38 @@ describe('DialogoCobro', () => {
       expect(avisoTope()).toBe(AVISO);
     });
 
+    it('el descuento de la forma cuenta: con 10 % en efectivo baja del tope y no avisa; con Débito, sí', async () => {
+      await abrirConTope(100000, [forma(1, 'Efectivo', 'EFECTIVO', 0, 10), ...FORMAS.slice(1)]);
+      expect(avisoTope()).toBeNull();
+
+      medio('Débito').click();
+      await estabilizar();
+
+      expect(avisoTope()).toBe(AVISO);
+    });
+
+    it('en el mixto cuenta el recargo de cada parte: 900 en Visa +20 % llega al tope; en efectivo, no', async () => {
+      const escribirMonto = (id: number, texto: string) => {
+        const campo = el().querySelector<HTMLInputElement>(`input[data-forma="${id}"]`)!;
+        campo.value = texto;
+        campo.dispatchEvent(new Event('input', { bubbles: true }));
+        fixture.detectChanges();
+      };
+      await abrirConTope(90000, [...FORMAS, forma(7, 'Visa', 'CREDITO', 20)]);
+      medio('Mixto').click();
+      await estabilizar();
+      expect(avisoTope()).toBeNull();
+
+      escribirMonto(7, '900');
+      await estabilizar();
+      expect(avisoTope()).toBe(AVISO);
+
+      escribirMonto(7, '0');
+      escribirMonto(1, '900');
+      await estabilizar();
+      expect(avisoTope()).toBeNull();
+    });
+
     it('sin el tope (todavía no se leyó) no avisa', async () => {
       await abrirConTope(100000, FORMAS, null);
 
