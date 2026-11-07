@@ -419,13 +419,52 @@ describe('Presupuestos', () => {
       expect(boton('Pasar a venta', detalle()!)).toBeDefined();
     });
 
-    it('uno facturado dice que ya se facturó', async () => {
+    it('uno pasado a venta dice «Vendido» y en qué venta, sin hablar de factura si la venta no tiene (arreglos-confusos, S5)', async () => {
+      await crear();
+      api.obtener.mockReturnValue(of(detalleDe(12, { estado: 'FACTURADO', facturadoPor: { ventaId: 80, numero: 19 } })));
+
+      await abrirDetalle(0);
+
+      expect(normal(detalle()!.querySelector('.estado')?.textContent)).toBe('Vendido');
+      expect(normal(detalle()!.querySelector('.nota-estado')?.textContent)).toBe('Vendido en la venta N.º 19');
+      expect(detalle()!.textContent).not.toContain('Facturado');
+      expect(detalle()!.textContent).not.toContain('facturó');
+    });
+
+    it('si la venta tiene una factura válida, la suma a la nota: «Vendido en la venta N.º 19 · Factura B 00001-00000012» (arreglos-confusos, S5)', async () => {
+      await crear();
+      api.obtener.mockReturnValue(
+        of(
+          detalleDe(12, {
+            estado: 'FACTURADO',
+            facturadoPor: { ventaId: 80, numero: 19, factura: 'Factura B 00001-00000012' },
+          }),
+        ),
+      );
+
+      await abrirDetalle(0);
+
+      expect(normal(detalle()!.querySelector('.nota-estado')?.textContent)).toBe(
+        'Vendido en la venta N.º 19 · Factura B 00001-00000012',
+      );
+    });
+
+    it('si el servidor no manda la venta, dice «Ya se vendió.» (arreglos-confusos, S5)', async () => {
       await crear();
       api.obtener.mockReturnValue(of(detalleDe(12, { estado: 'FACTURADO' })));
 
       await abrirDetalle(0);
 
-      expect(normal(detalle()!.querySelector('.nota-estado')?.textContent)).toBe('Ya se facturó.');
+      expect(normal(detalle()!.querySelector('.nota-estado')?.textContent)).toBe('Ya se vendió.');
+    });
+
+    it('uno que no se pasó a venta no lleva nota de venta', async () => {
+      await crear();
+      api.obtener.mockReturnValue(of(detalleDe(12, { estado: 'ACEPTADO' })));
+
+      await abrirDetalle(0);
+
+      expect(detalle()!.querySelector('.nota-estado')).toBeNull();
     });
   });
 

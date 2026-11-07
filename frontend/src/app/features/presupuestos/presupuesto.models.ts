@@ -1,4 +1,4 @@
-import { DocumentoNoFiscal } from '../../shared/documento-no-fiscal/documento-no-fiscal.models';
+import { DocumentoNoFiscal, FacturadoPor } from '../../shared/documento-no-fiscal/documento-no-fiscal.models';
 import { Unidad } from '../articulos/articulo.models';
 import { RenglonVentaRequest } from '../mostrador/venta.models';
 
@@ -11,7 +11,7 @@ export const ETIQUETA_ESTADO: Record<EstadoPresupuesto, string> = {
   PENDIENTE: 'Pendiente',
   ACEPTADO: 'Aceptado',
   RECHAZADO: 'Rechazado',
-  FACTURADO: 'Facturado',
+  FACTURADO: 'Vendido',
 };
 
 /** «dd/MM/aaaa» de un día «aaaa-mm-dd», leído del texto: no pasa por la zona del navegador. */
@@ -78,6 +78,8 @@ export interface PresupuestoResponse {
   iva: number;
   total: number;
   renglones: RenglonPresupuestoResponse[];
+  /** La venta que lo cobró: solo viene en el detalle de uno pasado a venta (`FACTURADO`). */
+  facturadoPor?: FacturadoPor;
 }
 
 /** Lo que la hoja imprimible necesita de un presupuesto: suma «Válido hasta», el último día de validez. */

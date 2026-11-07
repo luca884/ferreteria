@@ -38,7 +38,7 @@
 
 @if (d.facturadoPor; as f) {
   <p class="facturado-por">
-    Facturado en la venta N.º {{ f.numero }}
+    {{ d.tipo === 'Presupuesto' ? 'Vendido' : 'Facturado' }} en la venta N.º {{ f.numero }}
     @if (f.factura; as factura) {
       · {{ factura }}
     }

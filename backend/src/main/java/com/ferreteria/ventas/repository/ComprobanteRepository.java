@@ -212,6 +212,17 @@ public interface ComprobanteRepository extends TenantScopedRepository<Comprobant
         return ventasDelRemito(TenantContext.requireFerreteriaId(), remitoId);
     }
 
+    // ---- El presupuesto pasado a venta (arreglos-confusos, S5) ----
+
+    /** Las ventas (no las notas de credito) que cobraron ese presupuesto, la mas vieja primero. */
+    @Query("select c from Comprobante c where c.ferreteriaId = :fid and c.presupuestoId = :presupuesto "
+            + "and c.tipo = com.ferreteria.ventas.model.TipoComprobante.VENTA order by c.id")
+    List<Comprobante> ventasDelPresupuesto(@Param("fid") Long ferreteriaId, @Param("presupuesto") Long presupuestoId);
+
+    default List<Comprobante> ventasDelPresupuestoScoped(Long presupuestoId) {
+        return ventasDelPresupuesto(TenantContext.requireFerreteriaId(), presupuestoId);
+    }
+
     // ---- Clientes que compraron un articulo (G29, Ctrl+A del listado de GDS) ----
 
     /** Un cliente que compro el articulo: cuantas ventas, cuanto en total y la fecha y hora de la ultima. */

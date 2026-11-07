@@ -135,6 +135,19 @@ describe('DocumentoNoFiscalHoja', () => {
     expect(texto('.facturado-por')).toBe('Facturado en la venta N.º 33');
   });
 
+  it('un presupuesto pasado a venta dice «Vendido en la venta», nunca «Facturado» (arreglos-confusos, S5)', async () => {
+    await armar(
+      documentoDePrueba({
+        tipo: 'Presupuesto',
+        validoHasta: '2026-11-06',
+        facturadoPor: { ventaId: 40, numero: 33, factura: 'Factura B 00001-00000012' },
+      }),
+    );
+
+    expect(texto('.facturado-por')).toBe('Vendido en la venta N.º 33 · Factura B 00001-00000012');
+    expect(limpio(el().textContent)).not.toContain('Facturado');
+  });
+
   it('un remito que no está facturado ni es presupuesto no dice ni «Facturado» ni «Válido hasta»', async () => {
     await armar();
 

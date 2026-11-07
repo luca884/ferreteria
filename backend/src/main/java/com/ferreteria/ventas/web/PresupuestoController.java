@@ -65,7 +65,7 @@ public class PresupuestoController {
     @GetMapping("/{id}")
     public PresupuestoResponse detalle(@PathVariable Long id) {
         DetallePresupuesto detalle = presupuestoGestion.detalle(id);
-        return PresupuestoResponse.de(detalle.presupuesto(), detalle.items());
+        return PresupuestoResponse.de(detalle);
     }
 
     /**
@@ -76,7 +76,7 @@ public class PresupuestoController {
     public PresupuestoResponse cambiarEstado(@PathVariable Long id, @RequestBody CambiarEstadoPresupuestoRequest request,
             @AuthenticationPrincipal AuthUser authUser) {
         DetallePresupuesto detalle = presupuestoGestion.cambiarEstado(id, request.estado(), authUser.rol() == Rol.DUENO);
-        return PresupuestoResponse.de(detalle.presupuesto(), detalle.items());
+        return PresupuestoResponse.de(detalle);
     }
 
     /** Local: le gana al advice global. Los rechazos del ticket son los de la venta (404, 409 o 422). */
