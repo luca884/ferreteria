@@ -475,7 +475,8 @@ export function descontarVendido(
   for (const r of pedido.renglones) {
     vendido.set(r.articuloId, (vendido.get(r.articuloId) ?? 0) + Math.round(r.cantidad * 1000));
   }
-  const renglones = t.renglones.flatMap((r) => {
+  // Lo que sobra es una venta común (sin remito de origen): no se lleva lo remitido, como en soltarRemito.
+  const renglones = t.renglones.flatMap(({ remitidoMilesimas: _remitido, ...r }) => {
     const resta = r.cantidadMilesimas - (vendido.get(r.articuloId) ?? 0);
     return resta > 0 ? [{ ...r, cantidadMilesimas: resta }] : [];
   });

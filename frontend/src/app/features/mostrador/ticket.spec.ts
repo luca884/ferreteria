@@ -956,6 +956,23 @@ describe('ticket (puro)', () => {
       expect(r.elegido).toBe(0);
     });
 
+    it('lo que sobra de un ticket de remito es una venta común: no se lleva lo remitido (arreglos-confusos, S7; verificador A1)', () => {
+      const t = ticketDeRemito(
+        { ...({} as RemitoResponse), remitoId: 8, numero: 5, descuentoPorcentaje: 0, renglones: [{ articuloId: 1, descripcion: 'Tornillo', unidad: 'UNIDAD', cantidad: 2, descuentoPorcentaje: 0, precioUnitario: 100 }] } as unknown as RemitoResponse,
+        new Map([[1, art({ stockActual: 0 })]]),
+        'k',
+      );
+      const pedido = aRequest(t, 1);
+      const conEscaneo = agregar(t, art({ stockActual: 0 }));
+
+      const r = descontarVendido(conEscaneo, pedido, nueva);
+
+      expect(r.remitoId).toBeUndefined();
+      expect(r.renglones[0].cantidadMilesimas).toBe(1000);
+      expect('remitidoMilesimas' in r.renglones[0]).toBe(false);
+      expect(sinStock(r.renglones[0])).toBe(true);
+    });
+
     it('si a un renglón enviado se le sumó cantidad, queda la diferencia', () => {
       const t = agregar(agregar(ticketVacio('k'), art()), art());
       const pedido = aRequest(t, 1);
