@@ -18,6 +18,13 @@ export const ETIQUETA_ESTADO_REMITO: Record<EstadoRemito, string> = {
   ANULADO: 'Anulado',
 };
 
+/** El color de la pastilla del estado en el detalle (informacion-y-links, S4): `styles.css` → `.pastilla-*`. */
+export const COLOR_ESTADO_REMITO: Record<EstadoRemito, 'neutro' | 'exito' | 'peligro'> = {
+  EMITIDO: 'neutro',
+  FACTURADO: 'exito',
+  ANULADO: 'peligro',
+};
+
 export const CLIENTE_REMITO_MAXIMO = 80;
 export const OBSERVACIONES_REMITO_MAXIMO = 200;
 

@@ -117,7 +117,7 @@
   <app-dialogo-detalle [titulo]="tituloDetalle()" (cerrar)="cerrarDetalle()">
     @if (detalle(); as p) {
       <span cabecera class="marcas">
-        <span class="estado">{{ etiqueta[p.estado] }}</span>
+        <span class="estado pastilla" [class]="'pastilla-' + color[p.estado]">{{ etiqueta[p.estado] }}</span>
         @if (p.vencido) {
           <span class="vencido">Vencido</span>
         }

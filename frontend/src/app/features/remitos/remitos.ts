@@ -33,6 +33,7 @@ import { ticketDeRemito } from '../mostrador/ticket';
 import { guardarTicket, ticketGuardado } from '../mostrador/ticket.storage';
 import { GENERAR_CLAVE } from '../mostrador/ticket.store';
 import {
+  COLOR_ESTADO_REMITO,
   ESTADOS_REMITO,
   ETIQUETA_ESTADO_REMITO,
   EstadoRemito,
@@ -79,6 +80,7 @@ export class Remitos implements OnInit {
   protected readonly fechaHora = fechaHoraLocal;
   protected readonly cantidadConUnidad = cantidadConUnidad;
   protected readonly diferencia = textoDeDiferencia;
+  protected readonly color = COLOR_ESTADO_REMITO;
   protected readonly porcentajeGeneral = porcentajeDescuentoGeneral;
   protected readonly esDueno = () => this.auth.esDueno();
 

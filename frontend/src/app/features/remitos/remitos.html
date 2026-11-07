@@ -109,7 +109,7 @@
 @if (elegido() !== null) {
   <app-dialogo-detalle [titulo]="tituloDetalle()" (cerrar)="cerrarPopup()">
     @if (detalle(); as r) {
-      <span cabecera class="estado">{{ etiqueta[r.estado] }}</span>
+      <span cabecera class="estado pastilla" [class]="'pastilla-' + color[r.estado]">{{ etiqueta[r.estado] }}</span>
     }
     @if (errorAccion(); as texto) {
       <p class="error" role="alert">{{ texto }}</p>

@@ -33,6 +33,7 @@ import { ticketDePresupuesto } from '../mostrador/ticket';
 import { guardarTicket, ticketGuardado } from '../mostrador/ticket.storage';
 import { GENERAR_CLAVE } from '../mostrador/ticket.store';
 import {
+  COLOR_ESTADO_PRESUPUESTO,
   ESTADOS_PRESUPUESTO,
   ETIQUETA_ESTADO,
   EstadoManual,
@@ -80,6 +81,7 @@ export class Presupuestos implements OnInit {
   protected readonly etiqueta = ETIQUETA_ESTADO;
   protected readonly fechaHora = fechaHoraLocal;
   protected readonly cantidadConUnidad = cantidadConUnidad;
+  protected readonly color = COLOR_ESTADO_PRESUPUESTO;
   protected readonly porcentajeGeneral = porcentajeDescuentoGeneral;
   protected readonly dia = fechaDia;
 

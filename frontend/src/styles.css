@@ -1083,3 +1083,34 @@ ul.error {
     display: table-header-group;
   }
 }
+
+/*
+ * El estado de un presupuesto o un remito en el encabezado de su detalle (informacion-y-links, S4): una pastilla con el
+ * color del estado. Neutro lo que espera, acento lo aceptado, verde lo vendido o facturado, rojo lo anulado o rechazado.
+ */
+.pastilla {
+  display: inline-block;
+  padding: 2px var(--e-2);
+  border: 1px solid var(--borde);
+  border-radius: 999px;
+  background: var(--superficie-3);
+  color: var(--texto);
+  font-size: var(--texto-sm);
+  font-weight: 700;
+  line-height: 1.4;
+}
+.pastilla-acento {
+  border-color: var(--acento-borde);
+  background: var(--acento-suave);
+  color: var(--acento-fuerte);
+}
+.pastilla-exito {
+  border-color: var(--exito-borde);
+  background: var(--exito-fondo);
+  color: var(--exito);
+}
+.pastilla-peligro {
+  border-color: var(--error-borde);
+  background: var(--error-fondo);
+  color: var(--error);
+}

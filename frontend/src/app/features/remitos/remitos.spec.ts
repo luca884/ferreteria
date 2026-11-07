@@ -1027,4 +1027,21 @@ describe('Remitos', () => {
       expect(detalle()!.querySelector('.diferencias')).toBeNull();
     });
   });
+
+  describe('el estado en una pastilla de color (informacion-y-links, S4, L7)', () => {
+    it.each([
+      ['EMITIDO', 'Emitido', 'neutro'],
+      ['FACTURADO', 'Facturado', 'exito'],
+      ['ANULADO', 'Anulado', 'peligro'],
+    ] as const)('%s sale como «%s» en la pastilla %s', async (estado, texto, color) => {
+      await crear();
+      api.obtener.mockReturnValue(of(detalleDe(5, { estado })));
+
+      await abrirDetalle(0);
+
+      const pastilla = detalle()!.querySelector('.dialogo-detalle-marcas .pastilla')!;
+      expect(normal(pastilla.textContent)).toBe(texto);
+      expect(pastilla.classList).toContain(`pastilla-${color}`);
+    });
+  });
 });

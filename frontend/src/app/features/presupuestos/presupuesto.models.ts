@@ -14,6 +14,14 @@ export const ETIQUETA_ESTADO: Record<EstadoPresupuesto, string> = {
   FACTURADO: 'Vendido',
 };
 
+/** El color de la pastilla del estado en el detalle (informacion-y-links, S4): `styles.css` → `.pastilla-*`. */
+export const COLOR_ESTADO_PRESUPUESTO: Record<EstadoPresupuesto, 'neutro' | 'acento' | 'exito' | 'peligro'> = {
+  PENDIENTE: 'neutro',
+  ACEPTADO: 'acento',
+  FACTURADO: 'exito',
+  RECHAZADO: 'peligro',
+};
+
 /** «dd/MM/aaaa» de un día «aaaa-mm-dd», leído del texto: no pasa por la zona del navegador. */
 export function fechaDia(dia: string | null | undefined): string {
   if (!dia) return '';
