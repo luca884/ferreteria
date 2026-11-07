@@ -52,6 +52,8 @@
   font-weight: 650;
   text-align: left;
 }
+/* El código y los precios en una línea: solo la descripción se parte. */
+.ejemplos td:first-child,
 .ejemplos .num {
   white-space: nowrap;
 }
