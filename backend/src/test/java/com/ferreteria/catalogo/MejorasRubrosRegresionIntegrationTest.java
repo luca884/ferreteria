@@ -113,6 +113,9 @@ class MejorasRubrosRegresionIntegrationTest extends CotizacionTestBase {
         JsonNode previa = json(postJson(VP, dueno, pedido.toString()).andExpect(status().isOk()).andReturn());
         assertThat(previa.at("/conteos/total").asInt()).isEqualTo(3);
         assertThat(previa.at("/conteos/modificados").asInt()).isEqualTo(2);
+        assertThat(previa.at("/conteos/suben").asInt()).isEqualTo(1);
+        assertThat(previa.at("/conteos/sinCambioDePrecio").asInt()).isEqualTo(2);
+        assertThat(previa.at("/conteos/yaEnElDestino").asInt()).isEqualTo(1);
         List<Long> enCambios = new ArrayList<>();
         previa.get("cambios").forEach(c -> enCambios.add(c.get("articuloId").asLong()));
         assertThat(enCambios).containsExactly(sinRubro, propio);
@@ -131,6 +134,24 @@ class MejorasRubrosRegresionIntegrationTest extends CotizacionTestBase {
         assertThat(historialDe(sinRubro)).hasSize(1);
         assertThat(historialDe(propio)).isEmpty();
         assertThat(historialDe(yaEsta)).isEmpty();
+    }
+
+    @Test
+    void losOtrosModosDevuelvenYaEnElDestinoEnCeroAunqueHayaArticulosEnUnRubro() throws Exception {
+        Long rubro = rubro(a, "MR-Rubro", "60");
+        art("MR-EN-RUBRO", "ARS", "100.00", "200.00", rubro, null, false);
+        art("MR-SIN", "ARS", "100.00", "160.00", null, null, false);
+        String[][] pasos = {{"COSTO_PORCENTAJE", "10"}, {"COSTO_MONTO", "50"}, {"MARGEN", "45"},
+            {"PRECIO_PORCENTAJE", "10"}, {"PRECIO_MONTO", "-20"}};
+
+        for (String[] paso : pasos) {
+            ObjectNode pedido = objectMapper.createObjectNode().put("modo", paso[0]).put("q", "MR-")
+                    .put("valor", new BigDecimal(paso[1]));
+            JsonNode previa = json(postJson(VP, dueno, pedido.toString()).andExpect(status().isOk()).andReturn());
+            assertThat(previa.at("/conteos/total").asInt()).as(paso[0]).isEqualTo(2);
+            assertThat(previa.at("/conteos/yaEnElDestino").isInt()).as(paso[0]).isTrue();
+            assertThat(previa.at("/conteos/yaEnElDestino").asInt()).as(paso[0]).isZero();
+        }
     }
 
     @Test

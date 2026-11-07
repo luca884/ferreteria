@@ -49,6 +49,8 @@ export interface ConteosMasivos {
   conAdvertencia: number;
   /** Artículos que cambian el costo, el precio o el margen propio. */
   modificados: number;
+  /** Artículos que ya están en el rubro destino (solo en `CAMBIAR_RUBRO`); también cuentan en `sinCambioDePrecio`. */
+  yaEnElDestino: number;
 }
 
 /**

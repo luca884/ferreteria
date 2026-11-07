@@ -1005,12 +1005,15 @@ class PlanificadorMasivoTest {
         }
 
         @Test
-        @DisplayName("ConteosMasivos no cambia: sigue con sus 8 campos")
+        @DisplayName("las monedas no van en ConteosMasivos: sus 9 campos son los de antes más yaEnElDestino (cambiar el rubro)")
         void conteosSinCambios() {
             PlanMasivo plan = planificar(ModoMasivo.COSTO_MONTO, "100", contextosConDolar(), tresPesosYDosDolares());
 
             assertThat(plan.conteos().total()).isEqualTo(5);
-            assertThat(ConteosMasivos.class.getRecordComponents()).hasSize(8);
+            assertThat(java.util.Arrays.stream(ConteosMasivos.class.getRecordComponents())
+                .map(java.lang.reflect.RecordComponent::getName))
+                .containsExactly("total", "suben", "bajan", "sinCambioDePrecio", "conError", "pasanAMargenPropio",
+                    "conAdvertencia", "modificados", "yaEnElDestino");
         }
 
         @Test
@@ -1120,7 +1123,7 @@ class PlanificadorMasivoTest {
         void alcanceVacio() {
             PlanMasivo plan = costoPorcentaje("10");
 
-            assertThat(plan.conteos()).isEqualTo(new ConteosMasivos(0, 0, 0, 0, 0, 0, 0, 0));
+            assertThat(plan.conteos()).isEqualTo(new ConteosMasivos(0, 0, 0, 0, 0, 0, 0, 0, 0));
             assertThat(plan.cambios()).isEmpty();
             assertThat(plan.errores()).isEmpty();
             assertThat(plan.huella()).matches("[0-9a-f]{64}");
@@ -1406,7 +1409,7 @@ class PlanificadorMasivoTest {
             CambioMasivo manual = plan.cambios().get(2);
             assertThat(manual.precioNuevo()).isEqualByComparingTo(manual.precioAnterior()).isEqualByComparingTo("500.00");
             assertThat(plan.errores()).isEmpty();
-            assertThat(plan.conteos()).isEqualTo(new ConteosMasivos(3, 1, 0, 2, 0, 0, 0, 3));
+            assertThat(plan.conteos()).isEqualTo(new ConteosMasivos(3, 1, 0, 2, 0, 0, 0, 3, 0));
         }
 
         @Test
@@ -1418,7 +1421,19 @@ class PlanificadorMasivoTest {
                 Art.art(3, "100.00").rubro(2).precio("999.00"));
 
             assertThat(plan.cambios()).extracting(CambioMasivo::articuloId).containsExactly(1L);
-            assertThat(plan.conteos()).isEqualTo(new ConteosMasivos(3, 1, 0, 2, 0, 0, 0, 1));
+            assertThat(plan.conteos()).isEqualTo(new ConteosMasivos(3, 1, 0, 2, 0, 0, 0, 1, 2));
+        }
+
+        @Test
+        @DisplayName("sin cambio de precio se parte en ya en el destino (1) y solo cambia el rubro (el margen propio, 1)")
+        void yaEnElDestinoSeCuentaAparteDeLosQueSoloCambianDeRubro() {
+            PlanMasivo plan = cambiarRubro(2,
+                Art.art(1, "100.00").rubro(1).precio("170.00"),
+                Art.art(2, "100.00").rubro(1).margen("50").precio("190.00"),
+                Art.art(3, "100.00").rubro(2).precio("200.00"));
+
+            assertThat(plan.conteos()).isEqualTo(new ConteosMasivos(3, 1, 0, 2, 0, 0, 0, 2, 1));
+            assertTotalCuadra(plan.conteos());
         }
 
         @Test

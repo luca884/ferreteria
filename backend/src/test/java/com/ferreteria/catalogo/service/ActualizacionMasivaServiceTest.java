@@ -476,7 +476,7 @@ class ActualizacionMasivaServiceTest {
 
             VistaPreviaMasivaResponse respuesta = service.vistaPrevia(pedidoMasDiez());
 
-            assertThat(respuesta.conteos()).isEqualTo(new ConteosMasivos(0, 0, 0, 0, 0, 0, 0, 0));
+            assertThat(respuesta.conteos()).isEqualTo(new ConteosMasivos(0, 0, 0, 0, 0, 0, 0, 0, 0));
             assertThat(respuesta.cambios()).isEmpty();
             assertThat(respuesta.errores()).isEmpty();
             assertThat(respuesta.detalleRecortado()).isFalse();
@@ -592,7 +592,7 @@ class ActualizacionMasivaServiceTest {
 
             ActualizacionMasivaResponse respuesta = service.aplicar(aplicarMasDiez(huella), USUARIO);
 
-            assertThat(respuesta.conteos()).isEqualTo(new ConteosMasivos(2, 0, 0, 0, 2, 0, 0, 0));
+            assertThat(respuesta.conteos()).isEqualTo(new ConteosMasivos(2, 0, 0, 0, 2, 0, 0, 0, 0));
             assertThat(respuesta.entradasDeHistorial()).isZero();
             verificarSinEscrituras();
             assertThat(uno.getCosto()).isEqualByComparingTo("0.00");
@@ -610,7 +610,7 @@ class ActualizacionMasivaServiceTest {
             ActualizacionMasivaResponse respuesta = service.aplicar(
                     aplicarPedido(null, null, null, false, "MARGEN", "30", huella), USUARIO);
 
-            assertThat(respuesta.conteos()).isEqualTo(new ConteosMasivos(1, 0, 0, 1, 0, 0, 0, 0));
+            assertThat(respuesta.conteos()).isEqualTo(new ConteosMasivos(1, 0, 0, 1, 0, 0, 0, 0, 0));
             assertThat(respuesta.entradasDeHistorial()).isZero();
             verificarSinEscrituras();
         }
@@ -702,7 +702,7 @@ class ActualizacionMasivaServiceTest {
             assertThat(historial.get(0).getPrecioNuevo()).isEqualByComparingTo("180.00");
             assertThat(historial.get(1).getCostoNuevo()).isEqualByComparingTo("220.00");
             assertThat(historial.get(1).getPrecioNuevo()).isEqualByComparingTo("360.00");
-            assertThat(respuesta.conteos()).isEqualTo(new ConteosMasivos(2, 2, 0, 0, 0, 0, 0, 2));
+            assertThat(respuesta.conteos()).isEqualTo(new ConteosMasivos(2, 2, 0, 0, 0, 0, 0, 2, 0));
             assertThat(respuesta.entradasDeHistorial()).isEqualTo(2);
             verify(articuloRepository, never()).save(any());
             verify(articuloRepository, never()).saveAll(any());
@@ -1186,7 +1186,7 @@ class ActualizacionMasivaServiceTest {
                 assertThat(cambio.precioNuevo()).isEqualByComparingTo("1740");
                 assertThat(cambio.moneda()).isEqualTo(Moneda.ARS);
             });
-            assertThat(respuesta.conteos()).isEqualTo(new ConteosMasivos(1, 1, 0, 0, 0, 0, 0, 1));
+            assertThat(respuesta.conteos()).isEqualTo(new ConteosMasivos(1, 1, 0, 0, 0, 0, 0, 1, 0));
             verifyNoInteractions(historialPrecioRepository);
         }
 
@@ -1425,7 +1425,7 @@ class ActualizacionMasivaServiceTest {
             assertThat(historial.get(0).getOrigen()).isEqualTo(OrigenPrecio.MASIVO);
             assertThat(historial.get(0).getPrecioAnterior()).isEqualByComparingTo("170.00");
             assertThat(historial.get(0).getPrecioNuevo()).isEqualByComparingTo("190.00");
-            assertThat(respuesta.conteos()).isEqualTo(new ConteosMasivos(3, 1, 0, 2, 0, 0, 0, 2));
+            assertThat(respuesta.conteos()).isEqualTo(new ConteosMasivos(3, 1, 0, 2, 0, 0, 0, 2, 1));
             assertThat(respuesta.entradasDeHistorial()).isEqualTo(1);
         }
 

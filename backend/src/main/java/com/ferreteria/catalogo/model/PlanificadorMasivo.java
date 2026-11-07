@@ -42,6 +42,7 @@ public final class PlanificadorMasivo {
         int suben = 0;
         int bajan = 0;
         int sinCambioDePrecio = 0;
+        int yaEnElDestino = 0;
         int pasanAMargenPropio = 0;
         int conAdvertencia = 0;
         int enPesos = 0;
@@ -73,6 +74,9 @@ public final class PlanificadorMasivo {
             } else {
                 sinCambioDePrecio++;
             }
+            if (operacion.modo() == ModoMasivo.CAMBIAR_RUBRO && operacion.rubroDestinoId().equals(articulo.rubroId())) {
+                yaEnElDestino++;
+            }
             if (operacion.modo() == ModoMasivo.MARGEN && articulo.margenPorcentaje() == null) {
                 pasanAMargenPropio++;
             }
@@ -89,7 +93,7 @@ public final class PlanificadorMasivo {
         }
 
         ConteosMasivos conteos = new ConteosMasivos(ordenados.size(), suben, bajan, sinCambioDePrecio,
-            errores.size(), pasanAMargenPropio, conAdvertencia, cambios.size());
+            errores.size(), pasanAMargenPropio, conAdvertencia, cambios.size(), yaEnElDestino);
         return new PlanMasivo(conteos, cambios, errores, huella.calcular(), enPesos, enDolares,
             advertenciaMezcla(operacion, enPesos, enDolares));
     }

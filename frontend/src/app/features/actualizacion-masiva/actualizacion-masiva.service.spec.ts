@@ -24,6 +24,7 @@ describe('ActualizacionMasivaService', () => {
     pasanAMargenPropio: 0,
     conAdvertencia: 0,
     modificados: 3,
+    yaEnElDestino: 0,
   };
   const pedido: PedidoMasivo = {
     proveedorId: 7,

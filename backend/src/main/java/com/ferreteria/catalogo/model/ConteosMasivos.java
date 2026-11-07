@@ -7,6 +7,8 @@ package com.ferreteria.catalogo.model;
  * @param pasanAMargenPropio articulos sin error cuyo margen propio es hoy nulo (solo en MARGEN)
  * @param conAdvertencia     articulos sin error con variacion fuerte
  * @param modificados        articulos sin error que cambian el costo, el precio o el margen propio
+ * @param yaEnElDestino      articulos que ya estan en el rubro destino (solo en CAMBIAR_RUBRO; tambien cuentan en
+ *                           sinCambioDePrecio, y la pantalla los muestra aparte de los que solo cambian de rubro)
  */
 public record ConteosMasivos(
         int total,
@@ -16,5 +18,6 @@ public record ConteosMasivos(
         int conError,
         int pasanAMargenPropio,
         int conAdvertencia,
-        int modificados) {
+        int modificados,
+        int yaEnElDestino) {
 }

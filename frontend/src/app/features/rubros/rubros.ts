@@ -125,8 +125,9 @@ export class Rubros implements OnInit {
     if (cambio) this.enviar(this.service.actualizar(cambio.rubro.id, cambio.request), cambio.vista?.cantidad ?? null);
   }
 
+  /** Con el nombre que se está guardando: si cambian el nombre y el margen juntos, ya va el nuevo. */
   protected tituloCambio(cambio: CambioDeMargen): string {
-    return `¿Cambiar el margen de ${cambio.rubro.nombre} de ${porcentaje(cambio.rubro.margenPorcentaje)} % a ${porcentaje(cambio.request.margenPorcentaje)} %?`;
+    return `¿Cambiar el margen de ${cambio.request.nombre} de ${porcentaje(cambio.rubro.margenPorcentaje)} % a ${porcentaje(cambio.request.margenPorcentaje)} %?`;
   }
 
   protected mensajeCambio(cambio: CambioDeMargen): string {

@@ -1,7 +1,7 @@
 <app-barra-acciones>
   <h1>Etiquetas</h1>
   @if (auth.esDueno()) {
-    <button type="button" class="accion-barra vaciar" [disabled]="items().length === 0" (click)="vaciar()">Vaciar</button>
+    <button type="button" class="accion-barra vaciar" [disabled]="items().length === 0" (click)="confirmandoVaciar.set(true)">Vaciar</button>
     <button
       type="button"
       class="accion-barra primario imprimir"
@@ -157,5 +157,16 @@
         </div>
       }
     </section>
+  }
+
+  @if (confirmandoVaciar()) {
+    <app-confirmacion
+      titulo="¿Vaciar la lista de etiquetas?"
+      [mensaje]="mensajeVaciar()"
+      textoConfirmar="Vaciar"
+      [peligro]="true"
+      (confirmar)="vaciar()"
+      (cancelar)="confirmandoVaciar.set(false)"
+    />
   }
 }
