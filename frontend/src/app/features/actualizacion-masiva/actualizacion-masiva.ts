@@ -46,6 +46,9 @@ const ESTADOS_CON_MENSAJE = [400, 403, 404, 409];
 
 /** Los modos que cambian el precio final y dejan a los artículos con precio manual (CU-14). */
 const MODOS_DE_PRECIO: readonly ModoMasivo[] = ['PRECIO_PORCENTAJE', 'PRECIO_MONTO'];
+/** Lo que pasa con el precio al cambiar el costo (misma regla que el servidor: el precio manual no se toca). */
+const RECALCULA_CON_EL_MARGEN =
+  'El precio se recalcula con el margen de cada artículo. Los de precio manual quedan con su precio.';
 
 @Component({
   selector: 'app-actualizacion-masiva',
@@ -128,8 +131,21 @@ export class ActualizacionMasiva implements OnInit {
       : 'Este proveedor no tiene importaciones';
   });
 
-  protected readonly esMonto = computed(() => this.formulario().modo === 'COSTO_MONTO');
-  protected readonly esMontoDePrecio = computed(() => this.formulario().modo === 'PRECIO_MONTO');
+  /** Qué hace la operación elegida, debajo del valor. Las del precio final en % se explican con el aviso de abajo. */
+  protected readonly pistaDelValor = computed(() => {
+    switch (this.formulario().modo) {
+      case 'COSTO_PORCENTAJE':
+        return RECALCULA_CON_EL_MARGEN;
+      case 'COSTO_MONTO':
+        return `Positivo sube el costo, negativo lo baja. Se suma en la moneda de cada artículo. ${RECALCULA_CON_EL_MARGEN}`;
+      case 'MARGEN':
+        return 'El artículo pasa a tener margen propio y deja de seguir el del rubro.';
+      case 'PRECIO_MONTO':
+        return 'Positivo sube el precio final, negativo lo baja. Siempre en pesos.';
+      default:
+        return null;
+    }
+  });
 
   /** Con un modo del precio final se avisa, sin bloquear, que los artículos quedan con precio manual. */
   protected readonly cambiaElPrecioFinal = computed(() => {
@@ -224,10 +240,10 @@ export class ActualizacionMasiva implements OnInit {
     effect(() => this.confirmacionEl()?.nativeElement.focus());
   }
 
-  /** Ids para aria-describedby del valor: la pista del monto y, si hay, el error. */
+  /** Ids para aria-describedby del valor: la pista de la operación y, si hay, el error. */
   protected describirValor(): string | null {
     const ids = [
-      ...(this.esMonto() || this.esMontoDePrecio() ? ['valor-pista'] : []),
+      ...(this.pistaDelValor() ? ['valor-pista'] : []),
       ...(this.errorDelValor() ? ['valor-error'] : []),
     ];
     return ids.length > 0 ? ids.join(' ') : null;

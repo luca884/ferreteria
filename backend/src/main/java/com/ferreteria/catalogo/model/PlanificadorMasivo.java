@@ -79,7 +79,7 @@ public final class PlanificadorMasivo {
                 cambios.add(new CambioMasivo(articulo.id(), articulo.codigoInterno(), articulo.descripcion(),
                     articulo.costo(), fila.costoNuevo(), fila.margenAnterior(), fila.margenNuevo(),
                     articulo.precioFinal(), fila.precioNuevo(), fila.margenPropioNuevo() == null, fila.advertencia(),
-                    articulo.moneda()));
+                    articulo.moneda(), articulo.alicuotaIva().porcentaje()));
             }
         }
 

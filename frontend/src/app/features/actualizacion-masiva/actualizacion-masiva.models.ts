@@ -65,6 +65,8 @@ export interface CambioMasivo {
   advertencia: string | null;
   /** La moneda del artículo: los costos van en ella y los precios, siempre en pesos. Pesos si el servidor no la manda. */
   moneda?: Moneda;
+  /** El IVA del artículo (21 es 21 %): el costo va sin IVA y el precio de venta lo incluye. */
+  ivaPorcentaje: number;
 }
 
 /** Un artículo del alcance que no se puede actualizar. */

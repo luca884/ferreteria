@@ -182,7 +182,10 @@ describe('ActualizacionMasiva', () => {
       await escribir('#valor', '1001');
 
       expect(q('#valor').getAttribute('aria-invalid')).toBe('true');
-      expect(descripciones('#valor')).toEqual(['El margen tiene que estar entre 0 y 1.000.']);
+      expect(descripciones('#valor')).toEqual([
+        'El artículo pasa a tener margen propio y deja de seguir el del rubro.',
+        'El margen tiene que estar entre 0 y 1.000.',
+      ]);
     });
 
     it('«Ver vista previa» deshabilitado dice qué falta', async () => {
@@ -556,6 +559,7 @@ describe('ActualizacionMasiva', () => {
       precioNuevo: 180,
       margenHeredado: false,
       advertencia: null,
+      ivaPorcentaje: 21,
       ...sobre,
     });
     const errorDeFila: ErrorMasivo = {
@@ -629,19 +633,27 @@ describe('ActualizacionMasiva', () => {
       ]);
     });
 
-    it('la tabla muestra código, descripción y costo, margen y precio como "anterior → nuevo"', async () => {
+    it('la tabla muestra código, descripción, costo sin IVA, margen, IVA y precio de venta, con "anterior → nuevo"', async () => {
       await conVistaPrevia({ cambios: [cambio()] });
 
       const encabezados = Array.from(el().querySelectorAll('table.cambios thead th')).map((t) =>
         t.textContent?.trim(),
       );
-      expect(encabezados).toEqual(['Código', 'Descripción', 'Costo', 'Margen (%)', 'Precio']);
+      expect(encabezados).toEqual([
+        'Código',
+        'Descripción',
+        'Costo (sin IVA)',
+        'Margen (%)',
+        'IVA (%)',
+        'Precio de venta (con IVA)',
+      ]);
       expect(filasDeCambios()).toHaveLength(1);
       expect(celdas(filasDeCambios()[0])).toEqual([
         'A1',
         'Tornillo 8mm',
         `$ 100,00 → $ 110,00`,
         '30 %',
+        '21 %',
         `$ 160,00 → $ 180,00`,
       ]);
       // La flecha y el «%» no quedan solos al principio de un renglón.
@@ -664,6 +676,7 @@ describe('ActualizacionMasiva', () => {
             margenNuevo: 50,
             precioAnterior: 20000,
             precioNuevo: 25670,
+            ivaPorcentaje: 10.5,
           }),
         ],
       });
@@ -674,6 +687,7 @@ describe('ActualizacionMasiva', () => {
         'Taladro',
         `$ 12.345,60 → $ 13.580,16`,
         '30 % → 50 %',
+        '10,5 %',
         `$ 20.000,00 → $ 25.670,00`,
       ]);
     });
@@ -810,6 +824,7 @@ describe('ActualizacionMasiva', () => {
       precioNuevo: 180,
       margenHeredado: false,
       advertencia: null,
+      ivaPorcentaje: 21,
     };
     const conCambios: VistaPreviaMasiva = { ...vistaPreviaBase, cambios: [unCambio] };
 
@@ -947,6 +962,7 @@ describe('ActualizacionMasiva', () => {
       precioNuevo: 180,
       margenHeredado: false,
       advertencia: null,
+      ivaPorcentaje: 21,
     };
     const vistaPrevia = (modificados: number, total = modificados): VistaPreviaMasiva => ({
       ...vistaPreviaBase,
@@ -1421,6 +1437,7 @@ describe('ActualizacionMasiva', () => {
           precioNuevo: 180,
           margenHeredado: false,
           advertencia: null,
+          ivaPorcentaje: 21,
         },
       ],
     };
@@ -1715,6 +1732,7 @@ describe('ActualizacionMasiva', () => {
       precioNuevo: 180,
       margenHeredado: false,
       advertencia: null,
+      ivaPorcentaje: 21,
     };
     const resultado: ResultadoMasivo = {
       conteos: { ...conteosBase, modificados: 3 },
@@ -1847,7 +1865,8 @@ describe('ActualizacionMasiva', () => {
   });
   describe('modo «Sumar o restar un monto al costo» (R-207, R-208)', () => {
     const MODO_MONTO = 'Sumar o restar un monto al costo';
-    const PISTA = 'Positivo sube el costo, negativo lo baja. Se suma en la moneda de cada artículo.';
+    const RECALCULA = 'El precio se recalcula con el margen de cada artículo. Los de precio manual quedan con su precio.';
+    const PISTA = `Positivo sube el costo, negativo lo baja. Se suma en la moneda de cada artículo. ${RECALCULA}`;
     const MEZCLA =
       'La selección mezcla artículos en pesos y en dólares. El monto de 5 se suma tal cual a cada costo: $ 5 en los de pesos y US$ 5 en los de dólares.';
 
@@ -1864,6 +1883,7 @@ describe('ActualizacionMasiva', () => {
       margenHeredado: false,
       advertencia: null,
       moneda: 'USD',
+      ivaPorcentaje: 21,
     };
     const cambioPesos: CambioMasivo = {
       ...cambioDolares,
@@ -1875,6 +1895,7 @@ describe('ActualizacionMasiva', () => {
       precioAnterior: 170,
       precioNuevo: 180,
       moneda: 'ARS',
+      ivaPorcentaje: 21,
     };
     const celdas = (fila: Element) =>
       Array.from(fila.querySelectorAll('td')).map((c) => c.textContent?.replace(/\s+/g, ' ').trim());
@@ -1917,12 +1938,20 @@ describe('ActualizacionMasiva', () => {
         expect(describedby('#valor')).toEqual([PISTA]);
       });
 
-      it('con las otras operaciones no aparece esa pista', async () => {
+      it('«Cambiar el costo en %» explica que el precio se recalcula con el margen y que el manual queda', async () => {
         await crearComponente();
         await completar('Cambiar el costo en %', '10');
 
-        expect(el().querySelector('#valor-pista')).toBeNull();
-        expect(q('#valor').hasAttribute('aria-describedby')).toBe(false);
+        expect(describedby('#valor')).toEqual([RECALCULA]);
+      });
+
+      it('«Fijar el margen» explica que el artículo pasa a tener margen propio', async () => {
+        await crearComponente();
+        await completar('Fijar el margen', '35');
+
+        expect(describedby('#valor')).toEqual([
+          'El artículo pasa a tener margen propio y deja de seguir el del rubro.',
+        ]);
       });
 
       it('pide la vista previa con modo COSTO_MONTO y el monto como número, también negativo', async () => {
@@ -1985,7 +2014,7 @@ describe('ActualizacionMasiva', () => {
 
         const [dolares] = filas();
         expect(dolares[2]).toBe('US$ 10,00 → US$ 15,00');
-        expect(dolares[4]).toBe('$ 15.730,00 → $ 23.600,00');
+        expect(dolares[5]).toBe('$ 15.730,00 → $ 23.600,00');
       });
 
       it('un artículo en pesos usa «$» en el costo', async () => {
@@ -2123,6 +2152,7 @@ describe('ActualizacionMasiva', () => {
       precioNuevo: 120,
       margenHeredado: false,
       advertencia,
+      ivaPorcentaje: 21,
     });
 
     it('«Cambiar el precio final en %» se rotula «Porcentaje (%)» y pide el modo PRECIO_PORCENTAJE', async () => {
@@ -2244,7 +2274,7 @@ describe('ActualizacionMasiva', () => {
       );
       expect(celdas[2]).toBe('$ 100,00');
       expect(celdas[3]).toBe('60 %');
-      expect(celdas[4]).toBe('$ 160,00 → $ 120,00');
+      expect(celdas[5]).toBe('$ 160,00 → $ 120,00');
     });
 
     it('el aviso de margen negativo se lee solo en la fila, y después del de variación fuerte si vienen los dos', async () => {
