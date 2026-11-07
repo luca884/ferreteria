@@ -93,6 +93,19 @@ class ExportacionArticulosIntegrationTest extends AjustesTestBase {
     }
 
     @Test
+    @DisplayName("con busqueda sale en el orden de la pantalla: primero los que empiezan con lo buscado (arreglos-compras, S5)")
+    void conBusquedaElOrdenDeLaPantalla() throws Exception {
+        cargar(a, "K-1", "Barreta sacaclavos", "UNIDAD", "ARS", "1.00", "2.00", "0.000", "0.000");
+        cargar(a, "K-2", "Clavo 2 pulgadas", "UNIDAD", "ARS", "1.00", "2.00", "0.000", "0.000");
+        cargar(a, "K-3", "Clavo 1 pulgada", "UNIDAD", "ARS", "1.00", "2.00", "0.000", "0.000");
+
+        String[] lineas = csv(exportar("?q=clavo", duenoA)).split("\r\n");
+
+        assertThat(java.util.Arrays.stream(lineas).skip(1).map(l -> l.split(";")[3]).toList())
+                .containsExactly("Clavo 1 pulgada", "Clavo 2 pulgadas", "Barreta sacaclavos");
+    }
+
+    @Test
     @DisplayName("respeta la busqueda y los inactivos de la pantalla; el texto que parece formula lleva apostrofo")
     void respetaElFiltro() throws Exception {
         assertThat(csv(exportar("?q=tuerca", duenoA))).isEqualTo(ENCABEZADO + "\r\n"

@@ -1,10 +1,10 @@
 import { DecimalPipe } from '@angular/common';
-import { Component, OnInit, inject, signal } from '@angular/core';
+import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { erroresPorCampo, mensajeDe } from '../../core/api/api-error';
 import { AuthService } from '../../core/auth/auth.service';
 import { centavosDeImporte, textoDeImporte } from '../../core/formato/importe';
-import { MontoPipe } from '../../core/formato/monto';
+import { MontoPipe, formatearCosto } from '../../core/formato/monto';
 import { BarraAcciones } from '../../shared/barra-acciones';
 import { ImporteInput } from '../../shared/importe-input';
 import { SelectorArchivo } from '../../shared/selector-archivo';
@@ -102,6 +102,13 @@ export class NuevaCompra implements OnInit {
 
   protected readonly busqueda = signal('');
   protected readonly resultados = signal<Articulo[]>([]);
+  /** Cuántos artículos encontró la búsqueda: se ven hasta {@link RESULTADOS_POR_BUSQUEDA}. */
+  protected readonly totalResultados = signal(0);
+  /** La opción que marcan las flechas; -1 si ninguna (Enter busca). */
+  protected readonly activo = signal(-1);
+  protected readonly opcionActiva = computed(() =>
+    this.activo() >= 0 && this.activo() < this.resultados().length ? `resultado-compra-${this.activo()}` : null,
+  );
   protected readonly buscando = signal(false);
   protected readonly renglones = signal<RenglonEnCarga[]>([]);
 
@@ -156,12 +163,40 @@ export class NuevaCompra implements OnInit {
           return;
         }
         this.resultados.set(pagina.items);
+        this.totalResultados.set(pagina.totalElements);
+        this.activo.set(-1);
       },
       error: () => {
         this.buscando.set(false);
         this.errores.set([MENSAJE_BUSQUEDA]);
       },
     });
+  }
+
+  /** Escribir otra cosa deja sin opción activa: el próximo Enter busca. */
+  protected escribirBusqueda(texto: string): void {
+    this.busqueda.set(texto);
+    this.activo.set(-1);
+  }
+
+  /** Flechas para moverse por los resultados y Enter para agregar el marcado (como en el Mostrador). */
+  protected alTeclear(evento: KeyboardEvent): void {
+    const cantidad = this.resultados().length;
+    if (cantidad === 0) return;
+    if (evento.key === 'ArrowDown') {
+      evento.preventDefault();
+      this.activo.update((i) => Math.min(i + 1, cantidad - 1));
+    } else if (evento.key === 'ArrowUp') {
+      evento.preventDefault();
+      this.activo.update((i) => Math.max(i - 1, 0));
+    } else if (evento.key === 'Enter' && this.opcionActiva() !== null) {
+      evento.preventDefault();
+      this.agregar(this.resultados()[this.activo()]);
+    }
+  }
+
+  protected costoDe(articulo: Articulo): string {
+    return formatearCosto(articulo.costo, articulo.moneda === 'USD' ? 'USD' : 'ARS');
   }
 
   /** Agrega el artículo con cantidad 1 y su costo de hoy; si ya está, solo avisa. */

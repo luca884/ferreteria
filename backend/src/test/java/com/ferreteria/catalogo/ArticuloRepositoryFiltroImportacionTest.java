@@ -214,7 +214,7 @@ class ArticuloRepositoryFiltroImportacionTest {
     void elListadoIgnoraElFiltroPorImportacion() {
         Escenario e = escenario("30-78406017-7", "30-78406018-8");
 
-        assertThat(codigos(articuloRepository.buscarScoped(null, false, PageRequest.of(0, 20, org.springframework.data.domain.Sort.by("codigoInterno"))).getContent()))
+        assertThat(codigos(articuloRepository.buscarScoped(null, null, false, PageRequest.of(0, 20, org.springframework.data.domain.Sort.by("codigoInterno"))).getContent()))
                 .containsExactly("A", "B", "C", "D");
     }
 

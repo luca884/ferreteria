@@ -105,23 +105,43 @@
           type="search"
           autocomplete="off"
           placeholder="Código o descripción"
+          role="combobox"
+          aria-autocomplete="list"
+          aria-controls="resultados-compra"
+          [attr.aria-expanded]="resultados().length > 0"
+          [attr.aria-activedescendant]="opcionActiva()"
           [value]="busqueda()"
-          (input)="busqueda.set($any($event.target).value)"
+          (input)="escribirBusqueda($any($event.target).value)"
+          (keydown)="alTeclear($event)"
         />
       </label>
       <button type="submit" class="secundario" [disabled]="buscando()">Buscar</button>
     </form>
     @if (resultados().length > 0) {
-      <ul class="resultados" aria-label="Artículos encontrados">
-        @for (a of resultados(); track a.id) {
-          <li>
-            <button type="button" class="enlace" (click)="agregar(a)">
-              {{ a.codigoInterno }} · {{ a.descripcion }}
-            </button>
-            <span class="ayuda">Costo {{ a.costo | monto }}{{ a.moneda === 'USD' ? ' (USD)' : '' }}</span>
-          </li>
-        }
-      </ul>
+      <div class="resultados">
+        <div class="resultados-encabezado" aria-hidden="true">
+          <span>Código</span>
+          <span>Descripción</span>
+          <span class="num">Costo</span>
+          <span class="num">Stock</span>
+        </div>
+        <!-- El mousedown no le saca el foco al buscador: las flechas y el Enter siguen ahí. -->
+        <ul id="resultados-compra" role="listbox" aria-label="Artículos encontrados" (mousedown)="$event.preventDefault()">
+          @for (a of resultados(); track a.id; let i = $index) {
+            <li role="option" [id]="'resultado-compra-' + i" [attr.aria-selected]="i === activo()" (click)="agregar(a)">
+              <span class="codigo">{{ a.codigoInterno }}</span>
+              <span class="descripcion">{{ a.descripcion }}</span>
+              <span class="num">{{ costoDe(a) }}</span>
+              <span class="num">{{ a.stockActual | number: '1.0-3' }}</span>
+            </li>
+          }
+        </ul>
+      </div>
+      @if (totalResultados() > resultados().length) {
+        <p class="ayuda resultados-cantidad">
+          {{ resultados().length }} de {{ totalResultados() }}: escribí más para achicar.
+        </p>
+      }
     }
     @if (aviso(); as texto) {
       <p class="ayuda" role="status">{{ texto }}</p>

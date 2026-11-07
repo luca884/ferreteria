@@ -165,7 +165,7 @@ describe('NuevaCompra', () => {
     await escribir('input[name=busqueda]', 'tor');
     campo<HTMLFormElement>('form.buscador').dispatchEvent(new Event('submit'));
     await refrescar();
-    [...el().querySelectorAll<HTMLButtonElement>('.resultados button')][0].click();
+    [...el().querySelectorAll<HTMLElement>('.resultados [role=option]')][0].click();
     await refrescar();
     await escribir('input[name="cantidad-0"]', '20');
     await escribir('input[name="costo-0"]', '210');
@@ -208,15 +208,107 @@ describe('NuevaCompra', () => {
     campo<HTMLFormElement>('form.buscador').dispatchEvent(new Event('submit'));
     await refrescar();
 
-    el().querySelector<HTMLButtonElement>('.resultados button')!.click();
+    el().querySelector<HTMLElement>('.resultados [role=option]')!.click();
     await refrescar();
-    el().querySelector<HTMLButtonElement>('.resultados button')!.click();
+    el().querySelector<HTMLElement>('.resultados [role=option]')!.click();
     await refrescar();
 
     expect(el().querySelectorAll('table.renglones tbody tr')).toHaveLength(1);
     expect(campo<HTMLInputElement>('input[name="cantidad-0"]').value).toBe('1');
     expect(campo<HTMLInputElement>('input[name="costo-0"]').value).toBe('100');
     expect(el().textContent).toContain('Tornillo 1/4 ya está en la compra.');
+  });
+
+  describe('resultados de la búsqueda (arreglos-compras, S5)', () => {
+    const clavo = { ...tornillo, id: 2, codigoInterno: 'CLA-1', descripcion: 'Clavo 1 pulgada', costo: 578378, stockActual: 12 };
+    const barreta = { ...tornillo, id: 3, codigoInterno: 'BAR-1', descripcion: 'Barreta sacaclavos', costo: 9500, stockActual: 0 };
+    const opciones = () => [...el().querySelectorAll<HTMLElement>('.resultados [role=option]')];
+    const caja = () => campo<HTMLInputElement>('input[name=busqueda]');
+
+    async function buscarClavo(totalElements = 2) {
+      articulos.buscar.mockReturnValue(of({ items: [clavo, barreta], page: 0, size: 8, totalElements, totalPages: 1 }));
+      await escribir('input[name=busqueda]', 'clavo');
+      campo<HTMLFormElement>('form.buscador').dispatchEvent(new Event('submit'));
+      await refrescar();
+    }
+
+    async function tecla(key: string) {
+      const evento = new KeyboardEvent('keydown', { key, cancelable: true });
+      caja().dispatchEvent(evento);
+      await refrescar();
+      return evento;
+    }
+
+    it('es una lista alineada: código, descripción, costo y stock en columnas', async () => {
+      await crear();
+      await buscarClavo();
+
+      expect([...el().querySelectorAll('.resultados-encabezado span')].map((s) => s.textContent?.trim())).toEqual([
+        'Código',
+        'Descripción',
+        'Costo',
+        'Stock',
+      ]);
+      const celdas = (o: HTMLElement) =>
+        [...o.querySelectorAll('span')].map((s) => s.textContent?.replace(/\s+/g, ' ').trim());
+      expect(celdas(opciones()[0])).toEqual(['CLA-1', 'Clavo 1 pulgada', '$ 578.378,00', '12']);
+      expect(celdas(opciones()[1])).toEqual(['BAR-1', 'Barreta sacaclavos', '$ 9.500,00', '0']);
+      expect(el().querySelector('.resultados [role=listbox]')).not.toBeNull();
+    });
+
+    it('con más resultados que los que se ven, dice cuántos hay: «8 de N: escribí más para achicar.»', async () => {
+      await crear();
+      await buscarClavo(27);
+
+      expect(el().querySelector('.resultados-cantidad')?.textContent?.trim()).toBe('2 de 27: escribí más para achicar.');
+    });
+
+    it('si se ven todos, no avisa la cantidad', async () => {
+      await crear();
+      await buscarClavo(2);
+
+      expect(el().querySelector('.resultados-cantidad')).toBeNull();
+    });
+
+    it('las flechas mueven la opción activa y Enter agrega esa, sin buscar de nuevo', async () => {
+      await crear();
+      await buscarClavo();
+      articulos.buscar.mockClear();
+
+      expect(opciones().map((o) => o.getAttribute('aria-selected'))).toEqual(['false', 'false']);
+      await tecla('ArrowDown');
+      await tecla('ArrowDown');
+      expect(opciones().map((o) => o.getAttribute('aria-selected'))).toEqual(['false', 'true']);
+      expect(caja().getAttribute('aria-activedescendant')).toBe(opciones()[1].id);
+      await tecla('ArrowUp');
+      expect(opciones().map((o) => o.getAttribute('aria-selected'))).toEqual(['true', 'false']);
+
+      const enter = await tecla('Enter');
+
+      expect(enter.defaultPrevented).toBe(true);
+      expect(articulos.buscar).not.toHaveBeenCalled();
+      expect(el().querySelector('table.renglones tbody tr')?.textContent).toContain('CLA-1 · Clavo 1 pulgada');
+    });
+
+    it('sin opción activa, Enter busca como siempre', async () => {
+      await crear();
+      await buscarClavo();
+
+      const enter = await tecla('Enter');
+
+      expect(enter.defaultPrevented).toBe(false);
+      expect(el().querySelectorAll('table.renglones tbody tr')).toHaveLength(0);
+    });
+
+    it('al escribir otra cosa, ninguna opción queda activa', async () => {
+      await crear();
+      await buscarClavo();
+      await tecla('ArrowDown');
+
+      await escribir('input[name=busqueda]', 'clavos');
+
+      expect(opciones().map((o) => o.getAttribute('aria-selected'))).toEqual(['false', 'false']);
+    });
   });
 
   describe('Enter con un código exacto (lector)', () => {
@@ -566,7 +658,7 @@ describe('NuevaCompra', () => {
       await escribir('input[name=busqueda]', 'rara');
       campo<HTMLFormElement>('form.buscador').dispatchEvent(new Event('submit'));
       await refrescar();
-      el().querySelector<HTMLButtonElement>('.resultados button')!.click();
+      el().querySelector<HTMLElement>('.resultados [role=option]')!.click();
       await refrescar();
 
       expect(el().querySelector('.sin-articulo')).toBeNull();
@@ -616,9 +708,9 @@ describe('NuevaCompra', () => {
         await escribir('input[name=busqueda]', 'tor');
         campo<HTMLFormElement>('form.buscador').dispatchEvent(new Event('submit'));
         await refrescar();
-        el().querySelectorAll<HTMLButtonElement>('.resultados button')[0].click();
+        el().querySelectorAll<HTMLElement>('.resultados [role=option]')[0].click();
         await refrescar();
-        el().querySelectorAll<HTMLButtonElement>('.resultados button')[1].click();
+        el().querySelectorAll<HTMLElement>('.resultados [role=option]')[1].click();
         await refrescar();
 
         expect(articuloDe(0).querySelector('.codigo-proveedor')?.textContent?.trim()).toBe('Cód. proveedor TOR-P');

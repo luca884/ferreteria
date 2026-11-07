@@ -89,9 +89,9 @@ public class ArticuloService {
     }
 
     /**
-     * Pagina ordenada por descripcion y, para desempatar, por id: con descripciones repetidas el orden
-     * tiene que ser total o un articulo puede repetirse o perderse entre dos paginas. q busca sin
-     * distinguir mayusculas en codigos y descripcion.
+     * Con q, primero los que empiezan con lo buscado (descripcion o codigo interno); despues, pagina ordenada por
+     * descripcion y, para desempatar, por id: con descripciones repetidas el orden tiene que ser total o un articulo
+     * puede repetirse o perderse entre dos paginas. q busca sin distinguir mayusculas en codigos y descripcion.
      */
     @Transactional(readOnly = true)
     public PageResponse<ArticuloResponse> listar(String q, int page, int size, boolean incluirInactivos) {
@@ -106,10 +106,12 @@ public class ArticuloService {
                 Math.max(page, 0), Math.min(Math.max(size, 1), TAMANO_MAXIMO),
                 Sort.by(Sort.Order.asc("descripcion"), Sort.Order.asc("id")));
         String patron = FiltroArticulos.patronDeBusqueda(q);
+        String prefijo = FiltroArticulos.prefijoDeBusqueda(q);
         PageResponse<ArticuloResponse> pagina = PageResponse.from(
                 enOferta
-                        ? articuloRepository.buscarEnOfertaScoped(patron, incluirInactivos, HoraArgentina.hoy(), pageable)
-                        : articuloRepository.buscarScoped(patron, incluirInactivos, pageable),
+                        ? articuloRepository.buscarEnOfertaScoped(patron, prefijo, incluirInactivos, HoraArgentina.hoy(),
+                                pageable)
+                        : articuloRepository.buscarScoped(patron, prefijo, incluirInactivos, pageable),
                 ArticuloResponse::from);
         // Una sola consulta para el «costo al» de toda la pagina (GDS-05).
         Map<Long, LocalDate> costoAl = articuloRepository.costoAlScoped(

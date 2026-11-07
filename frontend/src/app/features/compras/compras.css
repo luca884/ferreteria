@@ -45,18 +45,67 @@
   width: 9rem;
 }
 
+/* Resultados de «Agregar artículo»: una lista alineada, como la del Mostrador. */
 .resultados {
-  list-style: none;
-  margin: 0 0 1rem;
-  padding: 0;
+  max-width: var(--ancho-medio);
+  margin: 0 0 0.5rem;
+  border: 1px solid var(--borde);
+  border-radius: var(--radio-lg);
+  background: var(--superficie);
+  overflow: hidden;
+}
+
+.resultados-encabezado,
+.resultados li {
   display: grid;
-  gap: 0.25rem;
+  grid-template-columns: 9rem minmax(0, 1fr) 9rem 5rem;
+  gap: var(--e-4);
+  align-items: center;
+  padding: 7px var(--e-4);
+}
+
+.resultados-encabezado {
+  border-bottom: 1px solid var(--borde);
+  background: var(--superficie-2);
+  color: var(--texto-tenue);
+  font-size: var(--texto-2xs);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.resultados ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }
 
 .resultados li {
-  display: flex;
-  gap: 0.75rem;
-  align-items: baseline;
+  border-bottom: 1px solid var(--borde-suave);
+  cursor: pointer;
+}
+
+.resultados li:last-child {
+  border-bottom: 0;
+}
+
+.resultados li:hover {
+  background: var(--superficie-2);
+}
+
+.resultados li[aria-selected='true'] {
+  background: var(--acento-suave);
+  box-shadow: inset 3px 0 0 var(--acento);
+}
+
+.resultados .codigo {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.resultados-cantidad {
+  margin: 0 0 1rem;
 }
 
 .renglones input {

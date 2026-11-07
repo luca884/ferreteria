@@ -49,13 +49,24 @@ public interface ArticuloRepository extends TenantScopedRepository<Articulo, Lon
                    or a.codigoProveedor like :q escape '\\')
             """;
 
-    @Query(value = "select a " + FILTRO_ARTICULOS, countQuery = "select count(a) " + FILTRO_ARTICULOS)
+    /**
+     * Con busqueda, primero los que empiezan con lo buscado en la descripcion o el codigo interno ({@code prefijo}, el
+     * patron {@code q%}; null no prioriza a ninguno). En el listado, el Sort de la pagina (descripcion e id) va despues.
+     */
+    String PRIMERO_LOS_QUE_EMPIEZAN = """
+             order by case when a.descripcion like :prefijo escape '\\' or a.codigoInterno like :prefijo escape '\\'
+                           then 0 else 1 end
+            """;
+
+    @Query(value = "select a " + FILTRO_ARTICULOS + PRIMERO_LOS_QUE_EMPIEZAN,
+            countQuery = "select count(a) " + FILTRO_ARTICULOS)
     Page<Articulo> buscar(
             @Param("fid") Long ferreteriaId,
             @Param("proveedorId") Long proveedorId,
             @Param("rubroId") Long rubroId,
             @Param("importacionId") Long importacionId,
             @Param("q") String q,
+            @Param("prefijo") String prefijo,
             @Param("incluirInactivos") boolean incluirInactivos,
             Pageable pageable);
 
@@ -78,13 +89,15 @@ public interface ArticuloRepository extends TenantScopedRepository<Articulo, Lon
                     and a.precioFinal * (100 - a.ofertaValor) <= a.precioFinal * 100 - 1))
             """;
 
-    @Query(value = "select a " + FILTRO_EN_OFERTA, countQuery = "select count(a) " + FILTRO_EN_OFERTA)
+    @Query(value = "select a " + FILTRO_EN_OFERTA + PRIMERO_LOS_QUE_EMPIEZAN,
+            countQuery = "select count(a) " + FILTRO_EN_OFERTA)
     Page<Articulo> buscarEnOferta(
             @Param("fid") Long ferreteriaId,
             @Param("proveedorId") Long proveedorId,
             @Param("rubroId") Long rubroId,
             @Param("importacionId") Long importacionId,
             @Param("q") String q,
+            @Param("prefijo") String prefijo,
             @Param("incluirInactivos") boolean incluirInactivos,
             @Param("hoy") LocalDate hoy,
             Pageable pageable);
@@ -99,14 +112,15 @@ public interface ArticuloRepository extends TenantScopedRepository<Articulo, Lon
             @Param("q") String q,
             @Param("incluirInactivos") boolean incluirInactivos);
 
-    /** Los articulos del filtro, todos y en el orden del listado: descripcion e id (GDS-19). */
-    @Query("select a " + FILTRO_ARTICULOS + " order by a.descripcion, a.id")
+    /** Los articulos del filtro, todos y en el orden del listado: los que empiezan con lo buscado, descripcion e id (GDS-19). */
+    @Query("select a " + FILTRO_ARTICULOS + PRIMERO_LOS_QUE_EMPIEZAN + ", a.descripcion, a.id")
     List<Articulo> paraExportar(
             @Param("fid") Long ferreteriaId,
             @Param("proveedorId") Long proveedorId,
             @Param("rubroId") Long rubroId,
             @Param("importacionId") Long importacionId,
             @Param("q") String q,
+            @Param("prefijo") String prefijo,
             @Param("incluirInactivos") boolean incluirInactivos);
 
     @Query("select count(a) " + FILTRO_ARTICULOS)
@@ -300,12 +314,15 @@ public interface ArticuloRepository extends TenantScopedRepository<Articulo, Lon
             """)
     List<String> codigosBarrasActivosEn(@Param("fid") Long ferreteriaId, @Param("codigos") List<String> codigos);
 
-    default Page<Articulo> buscarScoped(String q, boolean incluirInactivos, Pageable pageable) {
-        return buscar(TenantContext.requireFerreteriaId(), null, null, null, q, incluirInactivos, pageable);
+    /** {@code q} y {@code prefijo} ya vienen como patrones ({@link FiltroArticulos}); el Sort de la pagina va despues del prefijo. */
+    default Page<Articulo> buscarScoped(String q, String prefijo, boolean incluirInactivos, Pageable pageable) {
+        return buscar(TenantContext.requireFerreteriaId(), null, null, null, q, prefijo, incluirInactivos, pageable);
     }
 
-    default Page<Articulo> buscarEnOfertaScoped(String q, boolean incluirInactivos, LocalDate hoy, Pageable pageable) {
-        return buscarEnOferta(TenantContext.requireFerreteriaId(), null, null, null, q, incluirInactivos, hoy, pageable);
+    default Page<Articulo> buscarEnOfertaScoped(String q, String prefijo, boolean incluirInactivos, LocalDate hoy,
+                                                Pageable pageable) {
+        return buscarEnOferta(TenantContext.requireFerreteriaId(), null, null, null, q, prefijo, incluirInactivos, hoy,
+                pageable);
     }
 
     /** Los articulos de la ferreteria que cumplen el filtro, por id ascendente (CU-05). */
@@ -317,7 +334,7 @@ public interface ArticuloRepository extends TenantScopedRepository<Articulo, Lon
     /** Los articulos de la ferreteria que muestra el listado con esa busqueda, todos y en su orden (GDS-19). */
     default List<Articulo> paraExportarScoped(String q, boolean incluirInactivos) {
         return paraExportar(TenantContext.requireFerreteriaId(), null, null, null,
-                FiltroArticulos.patronDeBusqueda(q), incluirInactivos);
+                FiltroArticulos.patronDeBusqueda(q), FiltroArticulos.prefijoDeBusqueda(q), incluirInactivos);
     }
 
     /** Cuantos articulos de la ferreteria cumplen el filtro, sin cargarlos (CU-05). */
