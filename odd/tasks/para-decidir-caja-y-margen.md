@@ -52,3 +52,15 @@ Restricciones: mensajes al usuario en español rioplatense; los campos nuevos de
   - Próximo paso: T6.
 - L5 (2026-11-07) T6 hecha: `precioManual` = `articulo.precioManual() && !modo.esDePrecioFinal()`, último campo de `CambioMasivo`; en el front es opcional, como los de #97. En «Cambiar el rubro» con precio manual la celda dice «Solo cambia el rubro» y «Precio manual: no cambia», que explica por qué. Próximo paso: T7.
 - L6 (2026-11-07) T7 hecha. `CambioPlaneado` suma los tres campos al final, armados en `PlanificadorImportacion.cambio` (el costo real nuevo sale del costo de la lista en la moneda nueva). En «Detalle» la línea va después de moneda, IVA y ajustes, con cada lado en su moneda. Próximo paso: suites, `ng build`, `odd-verifier` (Risk item 3 en T4–T7) y QA en ego-browser.
+- L7 (2026-11-07) Checks completos y QA.
+  - Suites: backend `./mvnw test` 6386/6386 (BUILD SUCCESS); frontend `npx ng test --watch=false` 4320/4320; `npx ng build` OK, con la advertencia de presupuesto de `dialogo-cobro.ts`, que ya estaba.
+  - QA en ego-browser con el Dueño de El Tornillo, sobre la rama (backend dev en 8080, front en 4200). Capturas `01`–`09` en `evidencia/para-decidir-caja-y-margen/` del vault:
+    - S1: el detalle de la caja del 07/11 11:26 dice «Gastos −$ 800,00» y «Retiros −$ 5.000,00», como sus movimientos.
+    - S2: en la cuenta de «Herrería Don Ramón», la columna «Saldo» dice «$ 5.000,00 a favor» y los saldos deudores quedan igual. El selector del Mostrador dice «Saldo $ 5.000,00 a favor · Límite $ 50.000,00».
+    - S3: con la caja 22 pasada un rato al 06/11, Caja dice «La caja del 06/11 sigue abierta. Cerrala antes de vender o cargar movimientos.», sin el formulario de movimientos. El Mostrador dice «… Cerrala antes de vender.».
+    - S4: en la ficha de TOR-001 con «Precio manual», 145,32 avisa «el costo ($ 120,11) supera el precio sin IVA ($ 120,10)» y 145,33 no avisa. No se guardó.
+    - S5, con TOR-001 manual a $ 142 por un rato (sin IVA 117,36: entre el costo base 115 y el real 120,11): el control «Margen negativo» lo lista con «Costo real: $ 120,11». Por HTTP, `main` en 8081 devuelve `[]` y la rama devuelve TOR-001 con `costoReal` 120.11.
+    - S6: en «Cambiar el costo en %» 10 sobre Bulonería, TOR-001 dice «$ 142,00 · Precio manual: no cambia» y BUL-002 no lleva la línea. No se aplicó.
+    - S7: una lista de una fila (DBS-100 a $ 200) da en «Detalle» «Costo real: $ 120,11 → $ 208,88 (recargos 4,44 %)». No se confirmó.
+  - Base local: la fecha de la caja 22 y TOR-001 volvieron a como estaban (115,00 / 196,20, sin precio manual, sin historial nuevo). Se apagaron el backend, el front, `main` en 8081 (su worktree se borró) y `ferreteria-mysql`.
+  - Próximo paso: el resultado del `odd-verifier`.
