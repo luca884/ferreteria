@@ -298,12 +298,19 @@ export class ActualizacionMasiva implements OnInit {
     this.cargarSelectores();
   }
 
+  /** Con «Cambiar el rubro», «Sin cambio de precio» se parte en los que ya están en el destino y los que solo se mueven. */
   protected tarjetasDe(conteos: ConteosMasivos): { etiqueta: string; valor: number }[] {
+    const sinCambio = this.vistaPreviaDeRubro()
+      ? [
+          { etiqueta: 'Ya en el destino', valor: conteos.yaEnElDestino },
+          { etiqueta: 'Solo cambia el rubro', valor: conteos.sinCambioDePrecio - conteos.yaEnElDestino },
+        ]
+      : [{ etiqueta: 'Sin cambio de precio', valor: conteos.sinCambioDePrecio }];
     return [
       { etiqueta: 'Artículos', valor: conteos.total },
       { etiqueta: 'Suben', valor: conteos.suben },
       { etiqueta: 'Bajan', valor: conteos.bajan },
-      { etiqueta: 'Sin cambio de precio', valor: conteos.sinCambioDePrecio },
+      ...sinCambio,
       { etiqueta: 'Con error', valor: conteos.conError },
       { etiqueta: 'Con advertencia', valor: conteos.conAdvertencia },
     ];

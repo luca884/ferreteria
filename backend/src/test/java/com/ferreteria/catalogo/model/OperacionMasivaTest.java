@@ -69,7 +69,7 @@ class OperacionMasivaTest {
     @Test
     @DisplayName("los records del plan guardan sus campos con los nombres de la spec")
     void recordsDelPlan() {
-        ConteosMasivos conteos = new ConteosMasivos(5, 2, 0, 2, 1, 0, 0, 3);
+        ConteosMasivos conteos = new ConteosMasivos(5, 2, 0, 2, 1, 0, 0, 3, 0);
         CambioMasivo cambio = new CambioMasivo(1L, "INT-1", "Articulo 1", bd("100.00"), bd("110.00"),
             bd("30.00"), bd("30.00"), bd("160.00"), bd("180.00"), true, null, Moneda.ARS, bd("21.00"), 2L, 3L);
         ErrorMasivo error = new ErrorMasivo(4L, "INT-4", "Articulo 4", "El costo nuevo da 0. Revisá el porcentaje.");

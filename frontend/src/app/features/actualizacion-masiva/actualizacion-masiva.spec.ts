@@ -40,6 +40,7 @@ describe('ActualizacionMasiva', () => {
     pasanAMargenPropio: 0,
     conAdvertencia: 0,
     modificados: 3,
+    yaEnElDestino: 0,
   };
   const vistaPreviaBase: VistaPreviaMasiva = {
     conteos: conteosBase,
@@ -2388,9 +2389,9 @@ describe('ActualizacionMasiva', () => {
       Array.from(el().querySelectorAll('table.cambios thead th')).map((t) => t.textContent?.trim());
 
     /** Proveedor Sinteplast, «Cambiar el rubro» a Herramientas, y la vista previa. */
-    async function conVistaPreviaDelRubro() {
+    async function conVistaPreviaDelRubro(vistaPrevia: VistaPreviaMasiva = vistaPreviaDelRubro) {
       await crearComponente();
-      servicio.vistaPrevia.mockReturnValue(of(vistaPreviaDelRubro));
+      servicio.vistaPrevia.mockReturnValue(of(vistaPrevia));
       await elegir('#proveedor', 'Sinteplast');
       await elegir('#modo', MODO);
       await elegir('#rubroDestino', 'Herramientas');
@@ -2457,6 +2458,26 @@ describe('ActualizacionMasiva', () => {
         ['S-3', 'Lija', 'Sin rubro → Herramientas', '$ 10,00', '30 % → 40 %', '21 %', '$ 20,00 Solo cambia el rubro'],
       ]);
       expect(el().querySelectorAll('table.cambios .solo-rubro')).toHaveLength(2);
+    });
+
+    it('«Sin cambio de precio» se parte en «Ya en el destino» y «Solo cambia el rubro»', async () => {
+      await conVistaPreviaDelRubro({
+        ...vistaPreviaDelRubro,
+        conteos: { ...vistaPreviaDelRubro.conteos, modificados: 2, yaEnElDestino: 1 },
+      });
+
+      const tarjetas = Array.from(el().querySelectorAll('.tarjeta')).map((t) =>
+        t.textContent?.replace(/\s+/g, ' ').trim(),
+      );
+      expect(tarjetas).toEqual([
+        'Artículos 3',
+        'Suben 1',
+        'Bajan 0',
+        'Ya en el destino 1',
+        'Solo cambia el rubro 1',
+        'Con error 0',
+        'Con advertencia 0',
+      ]);
     });
 
     it('la confirmación nombra el destino y aplicar manda el destino y la huella, sin valor', async () => {
