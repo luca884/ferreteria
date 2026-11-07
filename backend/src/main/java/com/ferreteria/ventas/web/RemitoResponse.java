@@ -28,12 +28,25 @@ public record RemitoResponse(
 
     /** La venta que facturo el remito; {@code factura} («Factura B 00001-00000012») solo si la venta tiene una valida. */
     @JsonInclude(JsonInclude.Include.NON_NULL)
-    public record FacturadoPorResponse(Long ventaId, Long numero, String factura) {
+    public record FacturadoPorResponse(Long ventaId, Long numero, String factura, List<DiferenciaResponse> diferencias) {
 
+        /** {@code diferencias} solo viene si la venta facturo algun articulo en otra cantidad (informacion-y-links, S5). */
         static FacturadoPorResponse de(DetalleRemito.FacturadoPor f) {
-            return f == null ? null : new FacturadoPorResponse(f.ventaId(), f.numero(), f.factura());
+            if (f == null) {
+                return null;
+            }
+            List<DiferenciaResponse> diferencias = f.diferencias().stream()
+                    .map(d -> new DiferenciaResponse(d.articuloId(), d.descripcion(), d.unidad(), d.remitido(),
+                            d.facturado()))
+                    .toList();
+            return new FacturadoPorResponse(f.ventaId(), f.numero(), f.factura(),
+                    diferencias.isEmpty() ? null : diferencias);
         }
     }
+
+    /** Un articulo que la venta facturo en otra cantidad que la remitida. */
+    public record DiferenciaResponse(Long articuloId, String descripcion, String unidad, BigDecimal remitido,
+            BigDecimal facturado) {}
 
     public record RenglonResponse(
             Integer renglon, Long articuloId, String descripcion, String unidad, BigDecimal cantidad,

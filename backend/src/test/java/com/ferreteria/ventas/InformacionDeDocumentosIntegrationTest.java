@@ -84,4 +84,39 @@ class InformacionDeDocumentosIntegrationTest extends VentaFacturadaTestBase {
         mvc.perform(get("/api/ventas/" + ventaId).header("Authorization", "Bearer " + ajeno))
                 .andExpect(status().isNotFound());
     }
+
+    @Test
+    @DisplayName("S5: el remito facturado en parte dice, por artículo, cuánto se facturó de lo remitido; si se facturó todo, nada")
+    void remitoFacturadoEnParte() throws Exception {
+        Tienda t = tiendaQueFactura(RI);
+        long bulon = articulo(t, "Bulon 3/8", "UNIDAD", "121.00", "400");
+        long cable = articulo(t, "Cable", "METRO", "100.00", "100");
+        String dueno = login(t.emailDueno());
+        long parcial = json(postJson("/api/remitos", dueno, objectMapper.writeValueAsString(mapaRemito(
+                linea(bulon, "300", "121.00"), linea(cable, "2.5", "100.00"))))
+                .andExpect(status().isCreated())).get("remitoId").asLong();
+        vender(t, "remitoId", parcial, "30500.00", linea(bulon, "250", "121.00"), linea(cable, "2.5", "100.00"));
+        long completo = remito(dueno, bulon, "1", "121.00", "121.00").get("remitoId").asLong();
+        vender(t, "remitoId", completo, "121.00", linea(bulon, "1", "121.00"));
+
+        JsonNode diferencias = getJson("/api/remitos/" + parcial, dueno).get("facturadoPor").get("diferencias");
+        JsonNode sinDiferencias = getJson("/api/remitos/" + completo, dueno).get("facturadoPor");
+
+        assertThat(diferencias).hasSize(1);
+        JsonNode d = diferencias.get(0);
+        assertThat(d.get("articuloId").asLong()).isEqualTo(bulon);
+        assertThat(d.get("descripcion").asText()).isEqualTo("Bulon 3/8");
+        assertThat(d.get("unidad").asText()).isEqualTo("UNIDAD");
+        assertThat(d.get("remitido").decimalValue()).isEqualByComparingTo("300");
+        assertThat(d.get("facturado").decimalValue()).isEqualByComparingTo("250");
+        assertThat(sinDiferencias.has("diferencias")).isFalse();
+        mvc.perform(get("/api/remitos/" + parcial).header("Authorization", "Bearer " + login(tiendaQueFactura(RI).emailDueno())))
+                .andExpect(status().isNotFound());
+    }
+
+    private Map<String, Object> mapaRemito(Linea... lineas) {
+        Map<String, Object> cuerpo = mapa(clave(), null, "36550.00", lineas);
+        cuerpo.remove("formaPagoId");
+        return cuerpo;
+    }
 }

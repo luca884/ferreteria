@@ -985,4 +985,46 @@ describe('Remitos', () => {
       expect(detalle()!.querySelector('.nota-estado a')).toBeNull();
     });
   });
+
+  describe('remito facturado en parte (informacion-y-links, S5)', () => {
+    const diferencias = () =>
+      Array.from(detalle()!.querySelectorAll('.diferencias li')).map((li) => normal(li.textContent));
+
+    it('dice, por artículo, cuánto se facturó de lo remitido y cuánto volvió al stock', async () => {
+      await crear();
+      api.obtener.mockReturnValue(
+        of(
+          detalleDe(2, {
+            estado: 'FACTURADO',
+            facturadoPor: {
+              ventaId: 200,
+              numero: 20,
+              diferencias: [
+                { articuloId: 3, descripcion: 'Bulon 3/8', unidad: 'UNIDAD', remitido: 300, facturado: 250 },
+                { articuloId: 4, descripcion: 'Cable', unidad: 'METRO', remitido: 25.5, facturado: 0 },
+                { articuloId: 5, descripcion: 'Tarugo', unidad: 'UNIDAD', remitido: 10, facturado: 12 },
+              ],
+            },
+          }),
+        ),
+      );
+
+      await abrirDetalle(0);
+
+      expect(diferencias()).toEqual([
+        'Bulon 3/8: se facturaron 250 de 300 unidades; 50 unidades volvieron al stock.',
+        'Cable: se facturaron 0 de 25,5 metros; 25,5 metros volvieron al stock.',
+        'Tarugo: se facturaron 12 de 10 unidades.',
+      ]);
+    });
+
+    it('si se facturó todo igual, no agrega nada', async () => {
+      await crear();
+      api.obtener.mockReturnValue(of(detalleDe(2, { estado: 'FACTURADO', facturadoPor: { ventaId: 200, numero: 20 } })));
+
+      await abrirDetalle(0);
+
+      expect(detalle()!.querySelector('.diferencias')).toBeNull();
+    });
+  });
 });

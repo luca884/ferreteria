@@ -176,6 +176,13 @@
               · {{ factura }}
             }
           </p>
+          @if (f.diferencias?.length) {
+            <ul class="diferencias">
+              @for (d of f.diferencias; track d.articuloId) {
+                <li>{{ diferencia(d) }}</li>
+              }
+            </ul>
+          }
         } @else {
           <p class="nota-estado">Ya se facturó.</p>
         }

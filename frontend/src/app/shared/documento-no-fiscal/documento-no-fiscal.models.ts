@@ -1,3 +1,4 @@
+import { UnidadDeMedida } from '../../core/formato/unidad';
 /**
  * Lo que la hoja no fiscal del remito y del presupuesto (cu-07-remito-presupuesto-imprimible) necesita saber del
  * documento. Cada pantalla arma el suyo con `documentoDeRemito` / `documentoDePresupuesto`, así la hoja no conoce ni el
@@ -28,6 +29,17 @@ export interface FacturadoPor {
   numero: number;
   /** «Factura B 00001-00000012». */
   factura?: string;
+  /** Solo en un remito: los artículos que la venta facturó en otra cantidad (informacion-y-links, S5). */
+  diferencias?: DiferenciaFacturada[];
+}
+
+/** Un artículo del remito que la venta facturó en otra cantidad: si fue menos, la diferencia volvió al stock. */
+export interface DiferenciaFacturada {
+  articuloId: number;
+  descripcion: string;
+  unidad: UnidadDeMedida;
+  remitido: number;
+  facturado: number;
 }
 
 export interface DocumentoNoFiscal {

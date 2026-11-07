@@ -40,6 +40,7 @@ import {
   RemitoResponse,
   RemitoResumen,
   documentoDeRemito,
+  textoDeDiferencia,
 } from './remito.models';
 import { RemitosService } from './remitos.service';
 
@@ -77,6 +78,7 @@ export class Remitos implements OnInit {
   protected readonly etiqueta = ETIQUETA_ESTADO_REMITO;
   protected readonly fechaHora = fechaHoraLocal;
   protected readonly cantidadConUnidad = cantidadConUnidad;
+  protected readonly diferencia = textoDeDiferencia;
   protected readonly porcentajeGeneral = porcentajeDescuentoGeneral;
   protected readonly esDueno = () => this.auth.esDueno();
 

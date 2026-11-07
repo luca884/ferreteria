@@ -1,4 +1,9 @@
-import { DocumentoNoFiscal, FacturadoPor } from '../../shared/documento-no-fiscal/documento-no-fiscal.models';
+import { cantidadConUnidad } from '../../core/formato/unidad';
+import {
+  DiferenciaFacturada,
+  DocumentoNoFiscal,
+  FacturadoPor,
+} from '../../shared/documento-no-fiscal/documento-no-fiscal.models';
 import { Unidad } from '../articulos/articulo.models';
 import { RenglonVentaRequest } from '../mostrador/venta.models';
 
@@ -75,6 +80,17 @@ export interface RemitoResponse {
   facturadoPor?: FacturadoPor;
   /** Quién lo emitió (su nombre): solo en el detalle (informacion-y-links, S4). */
   usuario?: string;
+}
+
+/**
+ * «Bulon 3/8: se facturaron 250 de 300 unidades; 50 unidades volvieron al stock.» (informacion-y-links, S5). Si se facturó
+ * de más, no volvió nada: «se facturaron 12 de 10 unidades.».
+ */
+export function textoDeDiferencia(d: DiferenciaFacturada): string {
+  const facturado = cantidadConUnidad(d.facturado, d.unidad).split(' ')[0];
+  const base = `${d.descripcion}: se facturaron ${facturado} de ${cantidadConUnidad(d.remitido, d.unidad)}`;
+  const vuelto = Math.round((d.remitido - d.facturado) * 1000) / 1000;
+  return vuelto > 0 ? `${base}; ${cantidadConUnidad(vuelto, d.unidad)} volvieron al stock.` : `${base}.`;
 }
 
 /** Lo que la hoja imprimible necesita de un remito. */
