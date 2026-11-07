@@ -6,6 +6,7 @@ import com.ferreteria.common.PageResponse;
 import com.ferreteria.facturacion.api.FacturacionParaVenta;
 import com.ferreteria.facturacion.api.FacturacionParaVenta.Bandeja;
 import com.ferreteria.ventas.service.AnulacionDeVenta;
+import com.ferreteria.ventas.service.ConsumidorFinal;
 import com.ferreteria.ventas.service.FacturaDeLaVenta;
 import com.ferreteria.ventas.service.VentaGestion;
 import com.ferreteria.ventas.service.VentaRechazadaException;
@@ -52,10 +53,12 @@ public class VentaController {
     private final FacturaDeLaVenta facturaDeLaVenta;
     private final FacturacionParaVenta facturacion;
     private final AnulacionDeVenta anulacionDeVenta;
+    private final ConsumidorFinal consumidorFinal;
 
     public VentaController(VentaService ventaService, VentaGestion ventaGestion, FacturaDeLaVenta facturaDeLaVenta,
-            FacturacionParaVenta facturacion, AnulacionDeVenta anulacionDeVenta) {
+            FacturacionParaVenta facturacion, AnulacionDeVenta anulacionDeVenta, ConsumidorFinal consumidorFinal) {
         this.anulacionDeVenta = anulacionDeVenta;
+        this.consumidorFinal = consumidorFinal;
         this.ventaService = ventaService;
         this.ventaGestion = ventaGestion;
         this.facturaDeLaVenta = facturaDeLaVenta;
@@ -102,12 +105,12 @@ public class VentaController {
     }
 
     /**
-     * Lo que el cobro anticipa del comprobante (S3, C3): si factura, el ambiente y la letra por condicion del cliente. El
-     * Dueno y el Vendedor (sin {@code @PreAuthorize}): no muestra ventas.
+     * Lo que el cobro anticipa del comprobante (S3, C3): si factura, el ambiente y la letra por condicion del cliente, y el
+     * tope de Consumidor Final que rige (#57). El Dueno y el Vendedor (sin {@code @PreAuthorize}): no muestra ventas.
      */
     @GetMapping("/facturacion")
     public FacturacionMostradorResponse facturacion() {
-        return FacturacionMostradorResponse.de(facturacion.paraElMostrador());
+        return FacturacionMostradorResponse.de(facturacion.paraElMostrador(), consumidorFinal::topeVigente);
     }
 
     /** La venta como al cobrarla (renglones y pagos), quien la cobro y su factura, para verla y reimprimirla. */

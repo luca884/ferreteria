@@ -223,6 +223,7 @@
         [avisoLimite]="avisoLimite()"
         [rotuloFactura]="rotuloFactura()"
         [eligeFactura]="eligeFactura()"
+        [topeConsumidorFinal]="facturacion()?.topeConsumidorFinal ?? null"
         (confirmar)="cobrar($event)"
         (cancelar)="cerrarDialogo()"
         (escaneoDescartado)="escaneoDescartado()"

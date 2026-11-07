@@ -262,6 +262,20 @@ class VentaFacturadaCerrojoIntegrationTest extends VentaFacturadaTestBase {
     }
 
     @Test
+    @DisplayName("GET /api/ventas/facturacion: con factura, el tope del cobro es el menor entre el del Dueño y el de ARCA (#57)")
+    void conFacturaElTopeEsElMenor() throws Exception {
+        Tienda arriba = tiendaQueFactura(RI);
+        jdbc.update("update ferreteria set tope_consumidor_final = 20000000 where id = ?", arriba.id());
+        Tienda abajo = tiendaQueFactura(RI);
+        jdbc.update("update ferreteria set tope_consumidor_final = 1000 where id = ?", abajo.id());
+
+        assertThat(getJson("/api/ventas/facturacion", login(arriba.emailVendedor())).get("topeConsumidorFinal")
+                .decimalValue()).isEqualByComparingTo("10000000");
+        assertThat(getJson("/api/ventas/facturacion", login(abajo.emailVendedor())).get("topeConsumidorFinal")
+                .decimalValue()).isEqualByComparingTo("1000");
+    }
+
+    @Test
     @DisplayName("con CU-01 incompleto o la facturación apagada, «factura» es false, y la venta del CU-01 incompleto sale sin «fiscal»")
     void sinFacturacionNoAnticipaNada() throws Exception {
         Tienda incompleta = tiendaQueFactura(RI);
