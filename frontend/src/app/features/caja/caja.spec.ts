@@ -417,6 +417,18 @@ describe('Caja (CU-10)', () => {
       expect(el().querySelector('form.apertura')).not.toBeNull();
     });
 
+    it('después del cierre «Abrir la caja» queda arriba del resumen, sin tener que bajar (#92)', async () => {
+      await crear(conCaja());
+      await escribir('efectivo-contado', '5650');
+      await enviar('form.cierre');
+      boton('Cerrar la caja')!.click();
+      await refrescar();
+
+      const apertura = el().querySelector('form.apertura')!;
+      const resumen = el().querySelector('app-resumen-caja')!;
+      expect(apertura.compareDocumentPosition(resumen) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    });
+
     it('el contado lleva la máscara: 50000 se ve 50.000 y se confirma con cincuenta mil', async () => {
       await crear(conCaja());
 

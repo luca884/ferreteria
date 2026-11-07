@@ -30,7 +30,7 @@
         </div>
         <div class="saldo-inicial">
           <dt>Saldo inicial</dt>
-          <dd>{{ extracto().saldoInicial | monto }}</dd>
+          <dd>{{ textoDeSaldo(extracto().saldoInicial) }}</dd>
         </div>
       </dl>
 
@@ -85,7 +85,7 @@
         </div>
         <div class="saldo-final">
           <dt>Saldo final</dt>
-          <dd>{{ extracto().saldoFinal | monto }}</dd>
+          <dd>{{ textoDeSaldo(extracto().saldoFinal) }}</dd>
         </div>
       </dl>
 

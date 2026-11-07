@@ -79,9 +79,10 @@
   color: var(--texto-suave);
   font-size: var(--texto-sm);
 }
-/* La referencia de la fila es un dato más: sin el fondo ni el sticky del encabezado de columna (styles.css). */
+/* La referencia de la fila es un dato más: sin el fondo, el sticky ni la letra chica del encabezado de columna (styles.css). */
 .imputaciones tbody th {
   position: static;
+  font-size: inherit;
   background: transparent;
   font-weight: 500;
   letter-spacing: normal;

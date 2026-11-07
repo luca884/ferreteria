@@ -136,6 +136,14 @@ describe('DialogoCobranza (CC-032, CC-033, CC-034, CC-043, CC-051)', () => {
       expect(encabezado.position).toBe('sticky');
     });
 
+    it('la referencia va con la letra del resto de la fila, no la chica del encabezado (#77)', async () => {
+      await abrir();
+
+      const referencia = el().querySelector<HTMLElement>('tbody th')!;
+      const celda = referencia.closest('tr')!.querySelector<HTMLElement>('td')!;
+      expect(getComputedStyle(referencia).fontSize).toBe(getComputedStyle(celda).fontSize);
+    });
+
     it('las celdas de una fila (referencia, pendiente e importe) se alinean al centro, junto al campo', async () => {
       await abrir();
 

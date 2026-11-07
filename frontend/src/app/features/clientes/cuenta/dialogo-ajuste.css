@@ -80,6 +80,7 @@
 /* La referencia de la fila es un dato más: sin el fondo ni el sticky del encabezado de columna (styles.css). */
 .imputacion tbody th {
   position: static;
+  font-size: inherit;
   background: transparent;
   font-weight: 600;
   letter-spacing: normal;

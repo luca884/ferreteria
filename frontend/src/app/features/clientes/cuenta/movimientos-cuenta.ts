@@ -3,6 +3,7 @@ import { Component, DestroyRef, computed, effect, inject, input, output, signal,
 import { Subscription } from 'rxjs';
 import { erroresDeCampos, mensajeDe } from '../../../core/api/api-error';
 import { MontoPipe } from '../../../core/formato/monto';
+import { textoDeSaldo } from './ajuste.models';
 import { fechaCompletaLocal } from './cobranza.models';
 import {
   Extracto,
@@ -65,6 +66,8 @@ export class MovimientosCuenta {
   protected readonly tipoLabels = TIPO_MOVIMIENTO_LABELS;
   protected readonly fecha = fechaCompletaLocal;
   protected readonly muestraMotivo = muestraMotivo;
+  /** El saldo como arriba en la cuenta: «$ 500,00 a favor» si es negativo (#84). */
+  protected readonly textoDeSaldo = textoDeSaldo;
   protected readonly puedeAnular = puedeAnular;
   protected readonly puedeVerRecibo = puedeVerRecibo;
 
