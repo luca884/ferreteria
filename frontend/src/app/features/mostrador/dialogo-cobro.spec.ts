@@ -107,6 +107,8 @@ describe('DialogoCobro', () => {
     // El foco entra y le saca el «,00» para seguir tecleando (arreglos-compras, advisory 1).
     expect(importe().value).toBe('3.630');
     expect(document.activeElement).toBe(importe());
+    // Seleccionado entero: lo que se teclee reemplaza el total.
+    expect([importe().selectionStart, importe().selectionEnd]).toEqual([0, 5]);
   });
 
   it('«Recibido» es un campo de plata: lleva el «$» adentro y completa los decimales al salir (arreglos-compras, S6)', async () => {
@@ -807,9 +809,22 @@ describe('DialogoCobro', () => {
 
       expect(evento.defaultPrevented).toBe(true);
       expect(document.activeElement).toBe(monto(2));
-      expect(monto(2).value).toBe('2.630,00');
+      // Con el foco adentro, la sugerencia se ve sin el «,00» (arreglos-compras, advisory 1).
+      expect(monto(2).value).toBe('2.630');
       expect(resumen()).toBe('Completo');
       expect(confirmadas).toEqual([]);
+    });
+
+    it('después de Enter, la sugerencia queda seleccionada entera y lo que se teclea la reemplaza (arreglos-compras, B2)', async () => {
+      await abrirMixto();
+      escribirMonto(1, '1000');
+
+      tecla('Enter');
+      await estabilizar();
+
+      expect([monto(2).selectionStart, monto(2).selectionEnd]).toEqual([0, 5]);
+      escribirMonto(2, '5');
+      expect(resumen()).toBe('Falta $ 2.625,00');
     });
 
     it('Tab es la navegación normal: no sugiere el resto (como GDS, G53: lo sugiere Enter; QA 05/11 B-4)', async () => {
@@ -1672,7 +1687,8 @@ describe('DialogoCobro', () => {
         await estabilizar();
 
         expect(document.activeElement).toBe(monto(3));
-        expect(monto(3).value).toBe('60,00');
+        expect(monto(3).value).toBe('60');
+        expect([monto(3).selectionStart, monto(3).selectionEnd]).toEqual([0, 2]);
       });
     });
   });

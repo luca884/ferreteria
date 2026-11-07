@@ -61,3 +61,38 @@ Restricciones: test-first; los campos nuevos del backend son opcionales y van en
     - 7: si la lectura del PDF falla, el selector igual muestra el nombre del archivo.
   - Probes que se commitean como regresión: totales de FB con alícuotas mixtas y recargos ±, HALF_UP en el límite, la vista previa desde otra ferretería, el orden sin búsqueda en pantalla y exportación, y el blur sin modificar el control.
   - El lote de corrección va a un `odd-implementer` (sonnet). Después, recheck del verificador solo sobre B1 y el advisory 1.
+- L10 (2026-11-07) Lote de corrección (`odd-implementer`, sonnet), commit `fcf105c`.
+  - **Qué cambió:**
+    - **Mostrador:** «Recibido» y los montos del Mixto van dentro de `app-campo-moneda`. La precarga ya daba dos decimales (`centavosATexto`).
+    - **Oferta:** como `#oferta-valor` sirve a los tres tipos, el template alterna con `@if`: «Descuento (%)» sigue numérico, y «Descuento ($)» y «Precio de oferta ($)» pasan a `appImporte` con el signo.
+    - **`ImporteInput`:** ganó `alEntrar()` en el `focus`.
+    - Sale el JSDoc huérfano.
+    - Los probes del verificador quedan como tests. Pasan desde el inicio porque fijan comportamiento que ya era correcto.
+  - **RED → GREEN:**
+    - `importe-input.spec.ts`: 13/14 (`'9.500,00'` en vez de `'9.500'`) → 14/14.
+    - `dialogo-cobro.spec.ts` contra el `.ts` de HEAD: 121/126 → 126/126.
+    - `oferta-articulo.spec.ts`: 11/13 → 13/13.
+    - «Recibido» abre con foco automático, así que ahora se ve «3.630» y no «3.630,00». Se ajustaron 3 aserciones de valor inicial («3.630», «90», «105»).
+  - **Checks:**
+    - Suite del front: 160 archivos / 4187 tests en verde.
+    - Backend focalizado: `CompraServiceIntegrationTest` 22/22, `CompraControllerIntegrationTest` 8/8, `ExportacionArticulosIntegrationTest` 10/10.
+    - `npx ng build`: OK, con el aviso de presupuesto de `dialogo-cobro.ts`, que ya estaba (ahora pasa por 789 bytes).
+  - **Barrido:** con `rg` sobre los `.ts` y `type="number"` no quedan campos de plata sin signo. Los 13 `type="number"` que quedan son porcentajes o cantidades.
+  - **Navegador** (ego-browser, La Tuerca, artículo 7, sin guardar):
+    - Escribir «3500» muestra «3.500»; al salir, «3.500,00».
+    - Al entrar con un clic, «9.500,00» pasa a «9.500»; con «0» al final da «95.000», y al salir, «95.000,00».
+    - Al cambiar a «Descuento en %» el campo es numérico y sin signo. Con «Descuento en $» vuelve el «$».
+    - Capturas: `evidencia/arreglos-compras/15-oferta-precio-fijo.png` y `16-oferta-descuento-monto.png`.
+    - El cobro del Mostrador no se probó en vivo. En El Tornillo la caja del 06/11 sigue abierta y bloquea vender, y en La Tuerca no hay caja abierta; no se tocaron datos para habilitarlo. Lo cubren `dialogo-cobro.spec.ts` y el recheck.
+- L11 (2026-11-07) Recheck (`odd-verifier`, opus, `8379544..fcf105c`): **fail**, con un blocker nuevo.
+  - B1 pasa: no quedan campos de plata sin signo. El cambio de tipo de la oferta conserva el valor y manda un número.
+  - El advisory 1 pasa en lo pedido.
+  - Suite del front: 4187/4187. Backend, las 3 clases: 22/22, 8/8 y 10/10.
+  - **B2 (lo causa `alEntrar`):** en el pago Mixto, después de Enter la sugerencia de la fila siguiente ya no queda seleccionada, y lo que se teclea se descarta.
+    - La secuencia es esta: `enterEnMixto` (`dialogo-cobro.ts:941-947`) pone «2.630,00» y hace `focus()` + `select()`; `alEntrar` lo recorta a «2.630»; después el binding `[value]` (`:184`) vuelve a escribir «2.630,00». Esa escritura manda el cursor al final.
+    - En `8379544`, un «5» reemplazaba la sugerencia y el resumen decía «Falta $ 2.625,00». En `fcf105c` se descarta y el resumen dice «Completo».
+    - Se confirmó la causa sacando el `(focus)`.
+  - Advisories:
+    - con el campo enfocado, un valor escrito desde el código deja «,00» con el cursor al final; ya pasaba en `8379544`;
+    - en el diálogo de cobro, `padding: 0 14px` (`dialogo-cobro.ts:451-455`, `:508-511`) le gana a la reserva para el «$», así que un monto de más de unos 13 caracteres en «Recibido» lo pisaría.
+  - Por los límites de corrección, un hallazgo nuevo no lleva otro lote: queda como **Needs your decision** para Luca.

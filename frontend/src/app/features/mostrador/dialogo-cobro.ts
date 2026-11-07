@@ -1,9 +1,12 @@
 import {
   Component,
   ElementRef,
+  Injector,
+  afterNextRender,
   afterRenderEffect,
   computed,
   effect,
+  inject,
   input,
   output,
   signal,
@@ -452,7 +455,8 @@ const centavosATexto = (c: number) => `${normalizarImporte(String(Math.floor(c /
       width: 100%;
       min-width: 0;
       height: 58px;
-      padding: 0 14px;
+      /* A la izquierda, el lugar del «$» de app-campo-moneda. */
+      padding: 0 14px 0 1.75rem;
       border-width: 2px;
       border-radius: var(--radio-lg);
       font-family: var(--fuente-mono);
@@ -507,7 +511,7 @@ const centavosATexto = (c: number) => `${normalizarImporte(String(Math.floor(c /
     }
     .fila-pago input {
       height: 46px;
-      padding: 0 14px;
+      padding: 0 14px 0 1.75rem;
       font-family: var(--fuente-mono);
       font-size: 1.25rem;
       font-weight: 600;
@@ -689,6 +693,7 @@ export class DialogoCobro {
   private readonly filasMonto = viewChildren<ElementRef<HTMLInputElement>>('filaMonto');
   private readonly botonesMedio = viewChildren<ElementRef<HTMLButtonElement>>('botonMedio');
   private readonly guarda = new GuardaLector();
+  private readonly injector = inject(Injector);
   private readonly bloqueado = signal(false);
   private estuvoEnVuelo = false;
 
@@ -939,12 +944,17 @@ export class DialogoCobro {
     }
     const forma = this.formas()[j];
     if ((this.montos()[forma.id] ?? null) === null) {
-      const texto = centavosATexto(this.restoCentavos());
-      this.escribirMonto(forma.id, texto);
-      siguiente.value = texto;
+      this.escribirMonto(forma.id, centavosATexto(this.restoCentavos()));
     }
-    siguiente.focus();
-    siguiente.select();
+    // Después del render: al entrar, el campo le saca el «,00» a la sugerencia; si el binding la escribiera después del
+    // foco, el cursor iría al final y se perdería la selección (arreglos-compras, B2).
+    afterNextRender(
+      () => {
+        siguiente.focus();
+        siguiente.select();
+      },
+      { injector: this.injector },
+    );
   }
 
   /** `noFacturable` lo pasa el botón que se eligió (bloque 2, S4); sin él vale la casilla. */
