@@ -33,6 +33,7 @@ import {
   armarMapeo,
   camposReconocidos,
   crearFormMapeo,
+  letraDeColumna,
   mapeoVacio,
   precargarMapeo,
 } from './mapeo-lista';
@@ -400,13 +401,7 @@ export class Importaciones implements OnInit {
   }
 
   protected letra(indice: number): string {
-    let resto = indice;
-    let texto = '';
-    do {
-      texto = String.fromCharCode(65 + (resto % 26)) + texto;
-      resto = Math.floor(resto / 26) - 1;
-    } while (resto >= 0);
-    return texto;
+    return letraDeColumna(indice);
   }
 
   protected acercar(): void {

@@ -826,4 +826,91 @@ describe('Proveedores', () => {
       expect(el().querySelector('.nombre-campo .campo-error')?.textContent).toContain('El nombre es obligatorio.');
     });
   });
+
+  describe('datos de la lista, de solo lectura (#44)', () => {
+    const conLista: Proveedor = {
+      ...tersuave,
+      listaIncluyeIva: true,
+      bonificacion1: 10,
+      bonificacion2: 2.5,
+      bonificacion3: null,
+      mapeoLista: {
+        hoja: 0,
+        filaDesde: 5,
+        columnaCodigo: 0,
+        columnaDescripcion: 1,
+        columnaCosto: 3,
+        columnaAjuste1: 27,
+        monedaFija: 'USD',
+        encabezados: { codigo: 'COD', descripcion: 'DESCRIPCION', costo: 'PRECIO', ajuste1: 'DTO' },
+      },
+    };
+    const seccion = () => el().querySelector<HTMLElement>('form .lista-proveedor');
+    const dato = (titulo: string) => {
+      const dt = Array.from(seccion()!.querySelectorAll('dt')).find((d) => d.textContent?.trim() === titulo);
+      return dt?.nextElementSibling?.textContent?.replace(/\s+/g, ' ').trim();
+    };
+
+    it('al editar un proveedor con lista importada muestra el IVA, las bonificaciones, la moneda y las columnas', async () => {
+      await crearComponente(true, [sinteplast, conLista]);
+
+      await enBarra(1, 'editar');
+
+      expect(seccion()?.querySelector('h3')?.textContent?.trim()).toBe('Lista de precios');
+      expect(dato('La lista incluye IVA')).toBe('Sí');
+      expect(dato('Bonificaciones')).toBe('10 % + 2,5 % (en cascada)');
+      expect(dato('Moneda')).toBe('USD para toda la lista');
+      expect(dato('Datos desde la fila')).toBe('5');
+      expect(Array.from(seccion()!.querySelectorAll('.columnas li')).map((li) => li.textContent?.trim())).toEqual([
+        'Código: A · COD',
+        'Descripción: B · DESCRIPCION',
+        'Costo: D · PRECIO',
+        'Descuento o recargo 1: AB · DTO',
+      ]);
+      expect(seccion()!.querySelector('.nota-lista')?.textContent?.replace(/\s+/g, ' ').trim()).toBe(
+        'Los datos de la lista se fijan al confirmar una importación en Importar lista.',
+      );
+      expect(seccion()!.querySelector('a')?.getAttribute('href')).toBe('/importaciones');
+      expect(seccion()!.querySelectorAll('input, select, textarea')).toHaveLength(0);
+    });
+
+    it('sin IVA, una sola bonificación y una columna sin encabezado', async () => {
+      await crearComponente(true, [
+        {
+          ...conLista,
+          listaIncluyeIva: false,
+          bonificacion1: null,
+          bonificacion2: 15,
+          mapeoLista: { ...conLista.mapeoLista!, monedaFija: null, encabezados: null },
+        },
+      ]);
+
+      await enBarra(0, 'editar');
+
+      expect(dato('La lista incluye IVA')).toBe('No');
+      expect(dato('Bonificaciones')).toBe('15 %');
+      expect(dato('Moneda')).toBeUndefined();
+      expect(Array.from(seccion()!.querySelectorAll('.columnas li')).map((li) => li.textContent?.trim())[0]).toBe(
+        'Código: A',
+      );
+    });
+
+    it('un proveedor sin lista importada lo dice', async () => {
+      await crearComponente(true);
+
+      await enBarra(0, 'editar');
+
+      expect(seccion()?.querySelector('dl')).toBeNull();
+      expect(seccion()?.querySelector('.sin-lista')?.textContent?.trim()).toBe(
+        'Todavía no se importó ninguna lista de este proveedor.',
+      );
+      expect(seccion()?.querySelector('.nota-lista a')?.getAttribute('href')).toBe('/importaciones');
+    });
+
+    it('en el alta no aparece', async () => {
+      await crearComponente(true, [conLista]);
+
+      expect(seccion()).toBeNull();
+    });
+  });
 });
