@@ -3,7 +3,7 @@ import { AuthService } from '../../core/auth/auth.service';
 import { MontoPipe, formatearMonto } from '../../core/formato/monto';
 import { emitidoEl } from '../../shared/emitido';
 import { MEDIOS_PAGO, MEDIO_PAGO_LABELS } from '../mostrador/venta.models';
-import { DetalleCaja, TIPO_MOVIMIENTO_LABELS, fechaHoraLocal, textoDiferencia } from './caja.models';
+import { DetalleCaja, TIPO_MOVIMIENTO_LABELS, TipoMovimientoCaja, fechaHoraLocal, textoDiferencia } from './caja.models';
 
 /**
  * Totales de una caja: ventas por medio de pago, ingresos, gastos, retiros, efectivo esperado y movimientos. Presentacional.
@@ -42,6 +42,11 @@ export class ResumenCaja {
   /** Una anulación se muestra restando: «−$ 700,00»; en 0 no lleva signo. */
   protected restado(importe: number): string {
     return importe > 0 ? `−${formatearMonto(importe)}` : formatearMonto(importe);
+  }
+
+  /** Un gasto o un retiro sacan plata de la caja: se muestran restando y en rojo (#72). */
+  protected esEgreso(tipo: TipoMovimientoCaja): boolean {
+    return tipo === 'GASTO' || tipo === 'RETIRO';
   }
 
   protected readonly textoDiferencia = computed(() => {

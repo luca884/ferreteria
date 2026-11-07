@@ -107,7 +107,11 @@
             <td>{{ tipoLabels[movimiento.tipo] }}</td>
             <td>{{ movimiento.motivo }}</td>
             <td>{{ movimiento.usuario }}</td>
-            <td class="num">{{ movimiento.importe | monto }}</td>
+            @if (esEgreso(movimiento.tipo)) {
+              <td class="num egreso">{{ restado(movimiento.importe) }}</td>
+            } @else {
+              <td class="num">{{ movimiento.importe | monto }}</td>
+            }
           </tr>
         }
       </tbody>

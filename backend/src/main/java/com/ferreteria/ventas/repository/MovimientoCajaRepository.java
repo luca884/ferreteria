@@ -15,7 +15,7 @@ import java.util.Map;
 
 public interface MovimientoCajaRepository extends TenantScopedRepository<MovimientoCaja, Long> {
 
-    @Query("select m from MovimientoCaja m where m.ferreteriaId = :fid and m.cajaId = :cajaId order by m.fecha, m.id")
+    @Query("select m from MovimientoCaja m where m.ferreteriaId = :fid and m.cajaId = :cajaId order by m.fecha desc, m.id desc")
     List<MovimientoCaja> deCaja(@Param("fid") Long ferreteriaId, @Param("cajaId") Long cajaId);
 
     @Query("select m.tipo, sum(m.importe) from MovimientoCaja m where m.ferreteriaId = :fid and m.cajaId = :cajaId "
@@ -32,7 +32,7 @@ public interface MovimientoCajaRepository extends TenantScopedRepository<Movimie
         return delRango(TenantContext.requireFerreteriaId(), desde, hasta);
     }
 
-    /** Los movimientos de la caja, en el orden en que se cargaron. */
+    /** Los movimientos de la caja, del mas nuevo al mas viejo, como las demas listas (#72). */
     default List<MovimientoCaja> deCajaScoped(Long cajaId) {
         return deCaja(TenantContext.requireFerreteriaId(), cajaId);
     }

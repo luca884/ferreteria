@@ -211,6 +211,26 @@ class CajaIntegrationTest extends VentasTestBase {
         }
 
         @Test
+        @DisplayName("el detalle de la caja lista los movimientos del mas nuevo al mas viejo, como las demas listas (#72)")
+        void detalleListaLosMovimientosDelMasNuevoAlMasViejo() throws Exception {
+            Tienda t = tiendaSinCaja();
+            String dueno = login(t.emailDueno());
+            long caja = abrir(dueno, "0");
+            postJson("/api/cajas/" + caja + "/movimientos", dueno, movimiento("INGRESO", "300", "Cambio"))
+                    .andExpect(status().isCreated());
+            postJson("/api/cajas/" + caja + "/movimientos", dueno, movimiento("GASTO", "150", "Cadete"))
+                    .andExpect(status().isCreated());
+            postJson("/api/cajas/" + caja + "/movimientos", dueno, movimiento("RETIRO", "100", "Banco"))
+                    .andExpect(status().isCreated());
+
+            JsonNode movimientos = getJson("/api/cajas/" + caja, dueno).get("movimientos");
+
+            List<String> motivos = new java.util.ArrayList<>();
+            movimientos.forEach(m -> motivos.add(m.get("motivo").asText()));
+            assertThat(motivos).containsExactly("Banco", "Cadete", "Cambio");
+        }
+
+        @Test
         @DisplayName("el retiro es solo del dueño: el vendedor recibe 403 y no se guarda nada")
         void retiroSoloDueno() throws Exception {
             Tienda t = tiendaSinCaja();
