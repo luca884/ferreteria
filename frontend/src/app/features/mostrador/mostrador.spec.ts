@@ -28,6 +28,8 @@ import { VentaService } from './venta.service';
 import { ConfirmarVentaRequest, FacturacionDelMostrador, ProvisoriaAutorizada, VentaCobrada } from './venta.models';
 import { MARCA_SIMULADO, documentoB, documentoX, fiscalDe } from '../../shared/factura/factura.testing';
 import { FiscalVenta } from '../../shared/factura/factura.models';
+import { EmisorService } from '../../shared/documento-no-fiscal/emisor.service';
+import { emisorDePrueba } from '../../shared/documento-no-fiscal/documento-no-fiscal.testing';
 import { ConfiguracionFacturacion, CredencialArca } from '../facturacion/facturacion.models';
 import { FacturacionService } from '../facturacion/facturacion.service';
 import { VentaConsultada } from '../ventas/ventas.models';
@@ -153,6 +155,8 @@ describe('Mostrador', () => {
   let leerProvisorias: ReturnType<typeof vi.fn>;
   /** La hoja fiscal que se reimprime cuando llega el CAE (GET /ventas/{id}). */
   let obtenerHoja: ReturnType<typeof vi.fn>;
+  /** Los datos de la ferretería para la hoja del presupuesto o del remito recién guardado (informacion-y-links, S1). */
+  let leerEmisor: ReturnType<typeof vi.fn>;
 
   /** CU-10: por defecto la caja está abierta hoy, como la encuentra el vendedor al empezar. */
   const cajaAbierta: CajaVigente = {
@@ -192,6 +196,7 @@ describe('Mostrador', () => {
     );
     leerAvisos = vi.fn(() => of(avisosDelServidor));
     leerProvisorias = vi.fn(() => of(provisorias));
+    leerEmisor = vi.fn(() => of(emisorDePrueba()));
     obtenerHoja = vi.fn((ventaId: number) =>
       of(ventaDePrueba({ ventaId, numero: ventaId / 10, fiscal: fiscalDe(documentoB({ numero: 45 })) })),
     );
@@ -261,6 +266,7 @@ describe('Mostrador', () => {
         { provide: VentaService, useValue: ventas },
         { provide: PresupuestosService, useValue: presupuestosApi },
         { provide: RemitosService, useValue: remitosApi },
+        { provide: EmisorService, useValue: { obtener: leerEmisor } },
         { provide: CajaService, useValue: cajas },
         { provide: FormasPagoService, useValue: formasApi },
         { provide: ArticulosService, useValue: articulosApi },
@@ -3211,6 +3217,7 @@ describe('Mostrador', () => {
     const normal = (t: string | null | undefined) => (t ?? '').replace(/\s+/g, ' ').trim();
     const dialogo = () => el().querySelector<HTMLElement>('[role="dialog"], [role="alertdialog"]');
     const dialogoPresupuesto = () => el().querySelector<HTMLElement>('app-dialogo-presupuesto [role="dialog"]');
+    const hoja = () => el().querySelector<HTMLElement>('app-documento-no-fiscal-imprimible [role="dialog"]');
     const aviso = () => normal(el().querySelector('.aviso')?.textContent);
     const totalGrande = () => normal(el().querySelector('app-totales-ticket .total')?.textContent);
     const sinCaja: CajaVigente = { estado: 'SIN_CAJA', caja: null, efectivoPropuesto: 0, hayCierreAnterior: false };
@@ -3353,30 +3360,86 @@ describe('Mostrador', () => {
       expect(guardados[0].pedido.totalMostrado).toBe(2700);
     });
 
-    it('al guardarse vacía el ticket, cierra el diálogo, avisa el número y devuelve el foco al buscador', async () => {
+    it('al guardarse vacía el ticket, avisa el número y abre la hoja; Esc la cierra y devuelve el foco al buscador', async () => {
       await conMartillos();
       await tecla('F8');
       await tecla('Enter');
 
       await guardarOk(0, presupuestoGuardado(12, 3000));
+
+      expect(dialogoPresupuesto()).toBeNull();
+      expect(hoja()).not.toBeNull();
+      expect(renglonesTicket()).toHaveLength(0);
+      expect(aviso()).toBe('Presupuesto N.º 12 guardado: $ 3.000,00 Ver el presupuesto');
+      expect(localStorage.getItem('ticket:3:7')).toBeNull();
+
+      await tecla('Escape');
 
       expect(dialogo()).toBeNull();
-      expect(renglonesTicket()).toHaveLength(0);
-      expect(aviso()).toBe('Presupuesto N.º 12 guardado: $ 3.000,00');
       expect(document.activeElement).toBe(campo());
-      expect(localStorage.getItem('ticket:3:7')).toBeNull();
     });
 
-    it('el aviso de presupuesto guardado se va solo a los 5 segundos', async () => {
+    it('el aviso de presupuesto guardado queda con su link hasta el próximo renglón (se imprime o se abre después)', async () => {
       await conMartillos();
       await tecla('F8');
       await tecla('Enter');
       await guardarOk(0, presupuestoGuardado(12, 3000));
-      expect(aviso()).toContain('Presupuesto N.º 12 guardado');
+      await tecla('Escape');
 
       await avanzar(5000);
 
-      expect(aviso()).toBe('');
+      expect(aviso()).toContain('Presupuesto N.º 12 guardado');
+      const link = el().querySelector<HTMLAnchorElement>('.aviso a')!;
+      expect(normal(link.textContent)).toBe('Ver el presupuesto');
+      expect(link.getAttribute('href')).toBe('/presupuestos/8');
+    });
+
+    describe('la hoja al guardar (informacion-y-links, S1)', () => {
+      let imprimir: ReturnType<typeof vi.spyOn>;
+      beforeEach(() => (imprimir = vi.spyOn(window, 'print').mockImplementation(() => undefined)));
+      afterEach(() => imprimir.mockRestore());
+
+      it('es la hoja del presupuesto guardado, con los datos de la ferretería de hoy: Enter imprime', async () => {
+        await conMartillos();
+        await tecla('F8');
+        await tecla('Enter');
+        await guardarOk(0, presupuestoGuardado(12, 3000));
+
+        expect(leerEmisor).toHaveBeenCalledTimes(1);
+        expect(normal(hoja()!.querySelector('h2')!.textContent)).toBe('Presupuesto N.º 12');
+        await tecla('Enter', hoja()!);
+
+        expect(imprimir).toHaveBeenCalledTimes(1);
+      });
+
+      it('si falla el guardado no se abre la hoja', async () => {
+        await conMartillos();
+        await tecla('F8');
+        await tecla('Enter');
+
+        await fallarGuardado(0, 500);
+
+        expect(hoja()).toBeNull();
+        expect(leerEmisor).not.toHaveBeenCalled();
+        expect(dialogoPresupuesto()).not.toBeNull();
+      });
+
+      it('sin los datos de la ferretería el presupuesto queda guardado, sin hoja, y avisa que se imprime desde su link', async () => {
+        await conMartillos();
+        leerEmisor.mockReturnValue(throwError(() => new HttpErrorResponse({ status: 500 })));
+        await tecla('F8');
+        await tecla('Enter');
+
+        await guardarOk(0, presupuestoGuardado(12, 3000));
+
+        expect(dialogo()).toBeNull();
+        expect(renglonesTicket()).toHaveLength(0);
+        expect(aviso()).toContain('Presupuesto N.º 12 guardado');
+        expect(normal(el().querySelector('.aviso.advertencia')?.textContent)).toBe(
+          'No se pudo abrir la hoja para imprimirlo: abrilo con «Ver el presupuesto» e imprimilo desde ahí.',
+        );
+        expect(document.activeElement).toBe(campo());
+      });
     });
 
     it('con el POST en curso Esc no cierra el diálogo y Enter no manda otro', async () => {
@@ -3523,6 +3586,7 @@ describe('Mostrador', () => {
     const normal = (t: string | null | undefined) => (t ?? '').replace(/\s+/g, ' ').trim();
     const dialogo = () => el().querySelector<HTMLElement>('[role="dialog"], [role="alertdialog"]');
     const dialogoRemito = () => el().querySelector<HTMLElement>('app-dialogo-remito [role="dialog"]');
+    const hoja = () => el().querySelector<HTMLElement>('app-documento-no-fiscal-imprimible [role="dialog"]');
     const aviso = () => normal(el().querySelector('.aviso')?.textContent);
     const advertencia = () => normal(el().querySelector('.aviso.advertencia')?.textContent);
     const totalGrande = () => normal(el().querySelector('app-totales-ticket .total')?.textContent);
@@ -3668,30 +3732,96 @@ describe('Mostrador', () => {
       expect(emitidos[0].pedido.totalMostrado).toBe(2700);
     });
 
-    it('al emitirse vacía el ticket, cierra el diálogo, avisa el número y devuelve el foco al buscador', async () => {
+    it('al emitirse vacía el ticket, avisa el número y abre la hoja; Esc la cierra y devuelve el foco al buscador', async () => {
       await conMartillos();
       await abrirRemito();
       await tecla('Enter');
 
       await emitirOk(0, remitoEmitido(5, 3000));
+
+      expect(dialogoRemito()).toBeNull();
+      expect(hoja()).not.toBeNull();
+      expect(renglonesTicket()).toHaveLength(0);
+      expect(aviso()).toBe('Remito N.º 5 emitido: $ 3.000,00 Ver el remito');
+      expect(localStorage.getItem('ticket:3:7')).toBeNull();
+
+      await tecla('Escape');
 
       expect(dialogo()).toBeNull();
-      expect(renglonesTicket()).toHaveLength(0);
-      expect(aviso()).toBe('Remito N.º 5 emitido: $ 3.000,00');
       expect(document.activeElement).toBe(campo());
-      expect(localStorage.getItem('ticket:3:7')).toBeNull();
     });
 
-    it('el aviso de remito emitido se va solo a los 5 segundos', async () => {
+    it('el aviso de remito emitido queda con su link hasta el próximo renglón (se imprime o se abre después)', async () => {
       await conMartillos();
       await abrirRemito();
       await tecla('Enter');
       await emitirOk(0, remitoEmitido(5, 3000));
-      expect(aviso()).toContain('Remito N.º 5 emitido');
+      await tecla('Escape');
 
       await avanzar(5000);
 
-      expect(aviso()).toBe('');
+      expect(aviso()).toContain('Remito N.º 5 emitido');
+      const link = el().querySelector<HTMLAnchorElement>('.aviso a')!;
+      expect(normal(link.textContent)).toBe('Ver el remito');
+      expect(link.getAttribute('href')).toBe('/remitos/8');
+    });
+
+    describe('la hoja al emitir (informacion-y-links, S1)', () => {
+      let imprimir: ReturnType<typeof vi.spyOn>;
+      beforeEach(() => (imprimir = vi.spyOn(window, 'print').mockImplementation(() => undefined)));
+      afterEach(() => imprimir.mockRestore());
+
+      it('es la hoja del remito emitido, con los datos de la ferretería de hoy: Enter imprime', async () => {
+        await conMartillos();
+        await abrirRemito();
+        await tecla('Enter');
+        await emitirOk(0, remitoEmitido(5, 3000));
+
+        expect(leerEmisor).toHaveBeenCalledTimes(1);
+        expect(normal(hoja()!.querySelector('h2')!.textContent)).toBe('Remito N.º 5');
+        await tecla('Enter', hoja()!);
+
+        expect(imprimir).toHaveBeenCalledTimes(1);
+      });
+
+      it('si falla la emisión no se abre la hoja', async () => {
+        await conMartillos();
+        await abrirRemito();
+        await tecla('Enter');
+
+        await fallarEmision(0, 500);
+
+        expect(hoja()).toBeNull();
+        expect(leerEmisor).not.toHaveBeenCalled();
+        expect(dialogoRemito()).not.toBeNull();
+      });
+
+      it('sin los datos de la ferretería el remito queda emitido, sin hoja, y avisa que se imprime desde su link', async () => {
+        await conMartillos();
+        leerEmisor.mockReturnValue(throwError(() => new HttpErrorResponse({ status: 500 })));
+        await abrirRemito();
+        await tecla('Enter');
+
+        await emitirOk(0, remitoEmitido(5, 3000));
+
+        expect(dialogo()).toBeNull();
+        expect(aviso()).toContain('Remito N.º 5 emitido');
+        expect(advertencia()).toBe(
+          'No se pudo abrir la hoja para imprimirlo: abrilo con «Ver el remito» e imprimilo desde ahí.',
+        );
+        expect(document.activeElement).toBe(campo());
+      });
+
+      it('con sin stock, la hoja se abre igual y el aviso de sin stock queda', async () => {
+        await conMartillos();
+        await abrirRemito();
+        await tecla('Enter');
+
+        await emitirOk(0, remitoEmitido(5, 3000, [{ articuloId: 1, descripcion: 'Martillo', stockActual: -2 }]));
+
+        expect(hoja()).not.toBeNull();
+        expect(advertencia()).toBe('Sin stock: "Martillo" quedó en -2.');
+      });
     });
 
     it('si quedó un artículo sin stock lo avisa aparte y el aviso queda hasta el próximo renglón', async () => {

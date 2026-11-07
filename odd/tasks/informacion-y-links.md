@@ -20,7 +20,7 @@ Restricciones: multi-tenant (reglas 1 a 3 y 7 de CLAUDE.md: todo dato nuevo de u
 
 - [x] T1 · todas · ruta: inline · Aceptación: mapeo con `path:line` de cada S en el Log (de dónde sale cada dato, qué ya expone el backend, cómo `/compras/:id` abre el pop-up); sin cambios de código · Evidencia: L5 · Risk: none
 - [x] T2 · S2 · ruta: inline · Aceptación: Ventas, Presupuestos y Remitos se abren con un documento elegido desde la URL · Evidencia: RED 4 en `ventas.spec.ts`, 8 en `presupuestos.spec.ts` + `remitos.spec.ts`, 9 en `app.routes.spec.ts` → GREEN 60, 126 y 161; `shared/documento-por-ruta.ts` · Risk: none
-- [ ] T3 · S1 · ruta: inline · Aceptación: hoja imprimible al guardar el presupuesto y al emitir el remito, link en el aviso · Evidencia: — · Risk: none
+- [x] T3 · S1 · ruta: inline · Aceptación: hoja imprimible al guardar el presupuesto y al emitir el remito, link en el aviso · Evidencia: RED 2 en `documento-no-fiscal-imprimible.spec.ts` (guarda del lector y aviso, como la factura) y 9 en `mostrador.spec.ts` → GREEN 6 y 306; diálogos de presupuesto y remito 41 ✔. El aviso pasa a quedar hasta el próximo renglón (lleva el link) · Risk: none
 - [ ] T4 · S2 S3 S4 · ruta: inline · Aceptación: links, unidades y datos que faltan en los tres detalles · Evidencia: — · Risk: según T1 (si se suma un dato a una respuesta del backend: aditivo, con caso de otra ferretería)
 - [ ] T5 · S5 · ruta: inline · Aceptación: remito facturado en parte · Evidencia: — · Risk: según T1
 - [ ] T6 · S6 · ruta: inline · Aceptación: fila de totales · Evidencia: — · Risk: none

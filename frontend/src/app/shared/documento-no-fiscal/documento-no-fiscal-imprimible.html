@@ -10,6 +10,9 @@
     (keydown)="alTeclear($event)"
   >
     <h2 id="documento-titulo">{{ documento().tipo }} N.º {{ documento().numero }}</h2>
+    @if (aviso(); as texto) {
+      <p class="aviso" role="status">{{ texto }}</p>
+    }
 
     <article class="documento-imprimible">
       <app-documento-no-fiscal-hoja [documento]="documento()" [emisor]="emisor()" />

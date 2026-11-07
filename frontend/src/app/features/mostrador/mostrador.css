@@ -126,8 +126,12 @@ app-caja-busqueda {
   color: var(--texto-tenue);
 }
 /* La factura de la venta cobrada se reimprime desde el aviso (D7), hasta el próximo renglón. */
-.aviso .reimprimir {
+.aviso .reimprimir,
+.aviso .ver-documento {
   margin-left: var(--e-3);
+}
+.aviso .ver-documento {
+  font-weight: 600;
 }
 .aviso.advertencia,
 .mensaje.advertencia {

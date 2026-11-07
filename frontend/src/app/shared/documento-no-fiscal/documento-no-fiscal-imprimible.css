@@ -7,3 +7,13 @@
 .documento:focus {
   outline: none;
 }
+
+/* El aviso del mostrador (un escaneo descartado), como el de la factura: en el diálogo, no en la hoja. */
+.aviso {
+  padding: var(--e-2) var(--e-3);
+  border: 1px solid var(--advertencia-borde);
+  border-left: 4px solid var(--advertencia-marca);
+  border-radius: var(--radio);
+  background: var(--advertencia-fondo);
+  font-weight: 600;
+}
