@@ -1,7 +1,9 @@
 package com.ferreteria.ferreteria;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.is;
+import static org.hamcrest.Matchers.startsWith;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -193,12 +195,53 @@ class ConfiguracionPreciosIntegrationTest extends IntegrationTestBase {
     }
 
     @Test
+    void elConteoTraeEjemplosConElPrecioDeHoyYElNuevoSinGuardarNada() throws Exception {
+        String dueno = ferreteriaConConfiguracionPropia();
+        Catalogo catalogo = catalogo(dueno);
+
+        // Multiplo 0: el heredero pasa de 1800 a 1754,50 y el de margen propio de 1600 a 1573; el inactivo y el
+        // manual no se recalculan, asi que no son ejemplo.
+        getResult(URL_CONTEO + "?margenDefectoPorcentaje=45&redondeoMultiplo=0", dueno)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.cantidad", is(2)))
+                .andExpect(jsonPath("$.ejemplos", hasSize(2)))
+                .andExpect(jsonPath("$.ejemplos[0].codigo", startsWith("CFG")))
+                .andExpect(jsonPath("$.ejemplos[0].descripcion", is("Articulo de configuracion")))
+                .andExpect(jsonPath("$.ejemplos[0].precioActual", is(1800.0)))
+                .andExpect(jsonPath("$.ejemplos[0].precioNuevo", is(1754.5)))
+                .andExpect(jsonPath("$.ejemplos[1].precioActual", is(1600.0)))
+                .andExpect(jsonPath("$.ejemplos[1].precioNuevo", is(1573.0)));
+
+        assertThat(precio(catalogo.heredero())).isEqualByComparingTo("1800");
+        assertThat(precio(catalogo.margenPropio())).isEqualByComparingTo("1600");
+    }
+
+    @Test
+    void losEjemplosSonComoMuchoCincoYSoloDeLosQueCambianDePrecio() throws Exception {
+        String dueno = ferreteriaConConfiguracionPropia();
+        for (int i = 0; i < 6; i++) {
+            articulo(dueno, null, true, null);
+        }
+
+        getResult(URL_CONTEO + "?margenDefectoPorcentaje=60&redondeoMultiplo=50", dueno)
+                .andExpect(jsonPath("$.cantidad", is(6)))
+                .andExpect(jsonPath("$.ejemplos", hasSize(5)));
+        // Con multiplo 100 los dos siguen en 1800 y 1600: se recalculan, pero ninguno cambia de precio.
+        String otra = ferreteriaConConfiguracionPropia();
+        catalogo(otra);
+        getResult(URL_CONTEO + "?margenDefectoPorcentaje=45&redondeoMultiplo=100", otra)
+                .andExpect(jsonPath("$.cantidad", is(2)))
+                .andExpect(jsonPath("$.ejemplos", hasSize(0)));
+    }
+
+    @Test
     void sinCambiosNoSeRecalculaNada() throws Exception {
         String dueno = ferreteriaConConfiguracionPropia();
         catalogo(dueno);
 
         getResult(URL_CONTEO + "?margenDefectoPorcentaje=45.00&redondeoMultiplo=50", dueno)
-                .andExpect(jsonPath("$.cantidad", is(0)));
+                .andExpect(jsonPath("$.cantidad", is(0)))
+                .andExpect(jsonPath("$.ejemplos", hasSize(0)));
         putJson("/api/configuracion-precios", dueno, configuracion("45.00", "50.00"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.articulosRecalculados", is(0)));
@@ -217,9 +260,10 @@ class ConfiguracionPreciosIntegrationTest extends IntegrationTestBase {
         getResult("/api/configuracion-precios", tornillo)
                 .andExpect(jsonPath("$.margenDefectoPorcentaje", is(30.0)))
                 .andExpect(jsonPath("$.redondeoMultiplo", is(10.0)));
-        // El conteo de la otra ferreteria no ve los articulos de El Tornillo.
+        // El conteo de la otra ferreteria no ve los articulos de El Tornillo, ni como ejemplo.
         getResult(URL_CONTEO + "?margenDefectoPorcentaje=80&redondeoMultiplo=1", otra)
-                .andExpect(jsonPath("$.cantidad", is(0)));
+                .andExpect(jsonPath("$.cantidad", is(0)))
+                .andExpect(jsonPath("$.ejemplos", hasSize(0)));
     }
 
     @Test

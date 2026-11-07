@@ -3,6 +3,7 @@ package com.ferreteria.catalogo.service;
 import com.ferreteria.catalogo.model.Articulo;
 import com.ferreteria.catalogo.model.ContextoPrecio;
 import com.ferreteria.catalogo.model.ContextosDePrecio;
+import com.ferreteria.catalogo.model.EjemploDePrecio;
 import com.ferreteria.catalogo.model.HistorialPrecio;
 import com.ferreteria.catalogo.model.Moneda;
 import com.ferreteria.catalogo.model.OrigenPrecio;
@@ -202,6 +203,46 @@ public class RecalculoPreciosService {
             return articuloRepository.contarActivosConPrecioCalculadoScoped();
         }
         return cambioElMargen(anterior, nueva) ? articuloRepository.contarHeredanMargenPorDefectoScoped() : 0;
+    }
+
+    /**
+     * Hasta {@code maximo} articulos, por orden de alta, de los que {@link #porCambioDeConfiguracion} cambiaria de
+     * precio, con el de hoy y el nuevo. No cambia nada. Sin cotizacion guardada, los que estan en dolares no tienen
+     * precio nuevo que mostrar y se saltean (al guardar, el 409 lo avisa).
+     */
+    @Transactional(readOnly = true)
+    public List<EjemploDePrecio> ejemplosPorCambioDeConfiguracion(
+            ConfiguracionPrecios anterior, ConfiguracionPrecios nueva, int maximo) {
+        boolean cambioElMultiplo = cambioElMultiplo(anterior, nueva);
+        if (!cambioElMultiplo && !cambioElMargen(anterior, nueva)) {
+            return List.of();
+        }
+        List<Articulo> afectados = cambioElMultiplo
+                ? articuloRepository.activosConPrecioCalculadoScoped()
+                : articuloRepository.heredanMargenPorDefectoScoped();
+        List<Rubro> rubros = cambioElMultiplo ? rubroRepository.listarScoped() : List.of();
+        BigDecimal dolar = afectados.stream().anyMatch(articulo -> articulo.getMoneda() == Moneda.USD)
+                ? dolarDePrecios.vigente().orElse(null)
+                : null;
+        ContextosDePrecio contextos = ContextosDePrecio.armar(rubros, nueva.margenDefectoPorcentaje(),
+                nueva.redondeoMultiplo(), dolar);
+
+        List<EjemploDePrecio> ejemplos = new ArrayList<>();
+        for (Articulo articulo : afectados) {
+            if (ejemplos.size() == maximo) {
+                break;
+            }
+            if (articulo.getMoneda() == Moneda.USD && dolar == null) {
+                continue;
+            }
+            BigDecimal precioNuevo = articulo.precioConCostoAutomatico(
+                    articulo.getCosto(), contextos.de(articulo.getRubroId())).precio();
+            if (precioNuevo.compareTo(articulo.getPrecioFinal()) != 0) {
+                ejemplos.add(new EjemploDePrecio(articulo.getCodigoInterno(), articulo.getDescripcion(),
+                        articulo.getPrecioFinal(), precioNuevo));
+            }
+        }
+        return ejemplos;
     }
 
     // compareTo y no equals: 35 y 35.00 son el mismo valor.

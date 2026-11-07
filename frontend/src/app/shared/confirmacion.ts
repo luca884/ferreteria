@@ -6,7 +6,8 @@ let siguienteId = 0;
 /**
  * Diálogo de confirmación genérico (bajas, descartar cambios, avisos antes de guardar), con el estilo de los
  * diálogos de la app. Presentacional: el contenedor decide qué hacer. Esc cancela y Enter activa el botón
- * enfocado; por defecto el foco arranca en Cancelar (lo seguro) y `foco="confirmar"` lo pone en la acción.
+ * enfocado; por defecto el foco arranca en Cancelar (lo seguro) y `foco="confirmar"` lo pone en la acción. Lo que se
+ * proyecta adentro (p. ej. una tabla de ejemplos) va debajo del mensaje.
  */
 @Component({
   selector: 'app-confirmacion',
@@ -26,6 +27,7 @@ let siguienteId = 0;
         @if (mensaje(); as texto) {
           <p [id]="id + '-mensaje'">{{ texto }}</p>
         }
+        <ng-content />
         <div class="dialogo-acciones">
           <button
             #cancelarBtn

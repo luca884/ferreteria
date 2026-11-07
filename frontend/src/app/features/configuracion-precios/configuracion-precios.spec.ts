@@ -5,7 +5,11 @@ import { of, throwError } from 'rxjs';
 import { vi } from 'vitest';
 import { AuthService } from '../../core/auth/auth.service';
 import { PaginaConfiguracionPrecios } from './configuracion-precios';
-import { ConfiguracionPreciosService } from './configuracion-precios.service';
+import {
+  ArticulosQueCambian,
+  ConfiguracionPreciosService,
+  EjemploDePrecio,
+} from './configuracion-precios.service';
 
 describe('PaginaConfiguracionPrecios', () => {
   const actual = { margenDefectoPorcentaje: 30, redondeoMultiplo: 0 };
@@ -18,11 +22,12 @@ describe('PaginaConfiguracionPrecios', () => {
   };
 
   const errorHttp = (status: number, error: object) => new HttpErrorResponse({ status, error });
+  const conteo = (cantidad: number, ejemplos: EjemploDePrecio[] = []): ArticulosQueCambian => ({ cantidad, ejemplos });
 
   async function crear(dueno = true, obtener = vi.fn(() => of(actual))) {
     servicio = {
       obtener,
-      articulosQueCambian: vi.fn(() => of(23)),
+      articulosQueCambian: vi.fn(() => of(conteo(23))),
       guardar: vi.fn((c: typeof actual) => of({ ...c, articulosRecalculados: 5, avisos: [] })),
     };
     await TestBed.configureTestingModule({
@@ -44,7 +49,8 @@ describe('PaginaConfiguracionPrecios', () => {
 
   const el = () => fixture.nativeElement as HTMLElement;
   const input = (id: string) => el().querySelector<HTMLInputElement>(`#${id}`)!;
-  const texto = (selector: string) => el().querySelector(selector)?.textContent?.trim();
+  const normal = (t: string | null | undefined) => t?.replace(/\s+/g, ' ').trim();
+  const texto = (selector: string) => normal(el().querySelector(selector)?.textContent);
 
   async function escribir(id: string, valor: string) {
     input(id).value = valor;
@@ -169,7 +175,7 @@ describe('PaginaConfiguracionPrecios', () => {
 
   it('si ningún artículo cambia guarda sin preguntar', async () => {
     await crear();
-    servicio.articulosQueCambian.mockReturnValue(of(0));
+    servicio.articulosQueCambian.mockReturnValue(of(conteo(0)));
     servicio.guardar.mockReturnValue(of({ margenDefectoPorcentaje: 35, redondeoMultiplo: 0, articulosRecalculados: 0, avisos: [] }));
     await escribir('margen-defecto', '35');
 
@@ -182,7 +188,7 @@ describe('PaginaConfiguracionPrecios', () => {
 
   it('dice 1 artículo y 1 precio en singular', async () => {
     await crear();
-    servicio.articulosQueCambian.mockReturnValue(of(1));
+    servicio.articulosQueCambian.mockReturnValue(of(conteo(1)));
     servicio.guardar.mockReturnValue(of({ margenDefectoPorcentaje: 35, redondeoMultiplo: 0, articulosRecalculados: 1, avisos: [] }));
     await escribir('margen-defecto', '35');
     await enviar();
@@ -204,7 +210,7 @@ describe('PaginaConfiguracionPrecios', () => {
 
   it('muestra los artículos que conservaron el precio por sus ajustes', async () => {
     await crear();
-    servicio.articulosQueCambian.mockReturnValue(of(0));
+    servicio.articulosQueCambian.mockReturnValue(of(conteo(0)));
     servicio.guardar.mockReturnValue(
       of({ margenDefectoPorcentaje: 35, redondeoMultiplo: 0, articulosRecalculados: 0, avisos: ['No se cambió el precio de A1.'] }),
     );
@@ -217,7 +223,7 @@ describe('PaginaConfiguracionPrecios', () => {
 
   it('muestra el error del backend, como el 409 sin cotización', async () => {
     await crear();
-    servicio.articulosQueCambian.mockReturnValue(of(0));
+    servicio.articulosQueCambian.mockReturnValue(of(conteo(0)));
     servicio.guardar.mockReturnValue(
       throwError(() => errorHttp(409, { status: 409, message: 'Todavía no hay cotización del dólar. Probá en unos minutos' })),
     );
@@ -251,5 +257,89 @@ describe('PaginaConfiguracionPrecios', () => {
     expect(texto('#redondeo-pista')).toBe(
       'El precio final se redondea hacia arriba a un múltiplo de este valor. Con 0 no se redondea: el precio queda con centavos.',
     );
+  });
+
+  it('la cantidad de artículos lleva el punto de miles, como en el resto de la app', async () => {
+    await crear();
+    servicio.articulosQueCambian.mockReturnValue(of(conteo(4142)));
+    await escribir('margen-defecto', '35');
+
+    await enviar();
+
+    expect(texto('app-confirmacion p')).toBe('Se recalcula el precio de 4.142 artículos.');
+  });
+
+  it('la confirmación muestra los ejemplos que manda el servidor, con el precio de hoy y el nuevo', async () => {
+    await crear();
+    servicio.articulosQueCambian.mockReturnValue(
+      of(
+        conteo(4142, [
+          { codigo: 'TOR-001', descripcion: 'Tornillo 1/4', precioActual: 909788.6, precioNuevo: 909790 },
+          { codigo: 'CLA-002', descripcion: 'Clavo 2"', precioActual: 1200, precioNuevo: 1210.5 },
+        ]),
+      ),
+    );
+    await escribir('redondeo', '10');
+
+    await enviar();
+
+    const encabezados = Array.from(el().querySelectorAll('app-confirmacion table.ejemplos th')).map((t) =>
+      t.textContent?.trim(),
+    );
+    expect(encabezados).toEqual(['Código', 'Descripción', 'Precio de hoy', 'Precio nuevo']);
+    const filas = Array.from(el().querySelectorAll('app-confirmacion table.ejemplos tbody tr')).map((tr) =>
+      Array.from(tr.querySelectorAll('td')).map((td) => normal(td.textContent)),
+    );
+    expect(filas).toEqual([
+      ['TOR-001', 'Tornillo 1/4', '$ 909.788,60', '$ 909.790,00'],
+      ['CLA-002', 'Clavo 2"', '$ 1.200,00', '$ 1.210,50'],
+    ]);
+    expect(texto('app-confirmacion caption')).toBe('Por ejemplo');
+  });
+
+  it('sin ejemplos la confirmación no muestra la tabla', async () => {
+    await crear();
+    await escribir('margen-defecto', '35');
+
+    await enviar();
+
+    expect(el().querySelector('app-confirmacion')).not.toBeNull();
+    expect(el().querySelector('app-confirmacion table')).toBeNull();
+  });
+
+  describe('ejemplo del redondeo', () => {
+    const ejemplo = () => texto('#redondeo-ejemplo');
+
+    it('con 10 y con 100 muestra cómo queda un precio, siempre hacia arriba', async () => {
+      await crear();
+
+      await escribir('redondeo', '10');
+      expect(ejemplo()).toBe(
+        'Con 10, un precio de $ 909.788,60 queda en $ 909.790,00. Siempre hacia arriba, así no perdés margen.',
+      );
+      expect(input('redondeo').getAttribute('aria-describedby')).toBe('redondeo-pista redondeo-ejemplo');
+
+      await escribir('redondeo', '100');
+      expect(ejemplo()).toBe(
+        'Con 100, un precio de $ 909.788,60 queda en $ 909.800,00. Siempre hacia arriba, así no perdés margen.',
+      );
+    });
+
+    it('con un múltiplo con decimales redondea igual que el servidor', async () => {
+      await crear();
+
+      await escribir('redondeo', '0,5');
+
+      expect(ejemplo()).toBe(
+        'Con 0,5, un precio de $ 909.788,60 queda en $ 909.789,00. Siempre hacia arriba, así no perdés margen.',
+      );
+    });
+
+    it('con 0 no hay ejemplo: queda el texto de siempre', async () => {
+      await crear();
+
+      expect(el().querySelector('#redondeo-ejemplo')).toBeNull();
+      expect(input('redondeo').getAttribute('aria-describedby')).toBe('redondeo-pista');
+    });
   });
 });

@@ -1,7 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
-import { ConfiguracionPreciosService } from './configuracion-precios.service';
+import { ArticulosQueCambian, ConfiguracionPreciosService } from './configuracion-precios.service';
 
 describe('ConfiguracionPreciosService', () => {
   let service: ConfiguracionPreciosService;
@@ -28,17 +28,18 @@ describe('ConfiguracionPreciosService', () => {
     expect(margen).toBe(30);
   });
 
-  it('cuenta los artículos que cambian con los valores nuevos en la consulta', () => {
-    let cantidad: number | undefined;
-    service.articulosQueCambian({ margenDefectoPorcentaje: 35, redondeoMultiplo: 0.5 }).subscribe((n) => (cantidad = n));
+  it('cuenta los artículos que cambian con los valores nuevos en la consulta y trae los ejemplos', () => {
+    let respuesta: ArticulosQueCambian | undefined;
+    service.articulosQueCambian({ margenDefectoPorcentaje: 35, redondeoMultiplo: 0.5 }).subscribe((r) => (respuesta = r));
 
     const req = http.expectOne((r) => r.url.endsWith('/configuracion-precios/articulos-que-cambian'));
     expect(req.request.method).toBe('GET');
     expect(req.request.params.get('margenDefectoPorcentaje')).toBe('35');
     expect(req.request.params.get('redondeoMultiplo')).toBe('0.5');
-    req.flush({ cantidad: 12 });
+    const ejemplos = [{ codigo: 'TOR-001', descripcion: 'Tornillo', precioActual: 100, precioNuevo: 110 }];
+    req.flush({ cantidad: 12, ejemplos });
 
-    expect(cantidad).toBe(12);
+    expect(respuesta).toEqual({ cantidad: 12, ejemplos });
   });
 
   it('guarda con PUT /configuracion-precios y devuelve cuántos precios cambiaron', () => {

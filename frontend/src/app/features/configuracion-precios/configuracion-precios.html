@@ -85,12 +85,21 @@
             appImporte
             formControlName="redondeoMultiplo"
             [attr.aria-invalid]="invalido('redondeoMultiplo') ? 'true' : null"
-            [attr.aria-describedby]="invalido('redondeoMultiplo') ? 'redondeo-pista redondeo-error' : 'redondeo-pista'"
+            [attr.aria-describedby]="
+              invalido('redondeoMultiplo')
+                ? 'redondeo-pista redondeo-error'
+                : ejemploRedondeo()
+                  ? 'redondeo-pista redondeo-ejemplo'
+                  : 'redondeo-pista'
+            "
           />
           <span id="redondeo-pista" class="pista">
             El precio final se redondea hacia arriba a un múltiplo de este valor. Con 0 no se redondea: el precio queda
             con centavos.
           </span>
+          @if (ejemploRedondeo(); as ejemplo) {
+            <span id="redondeo-ejemplo" class="pista">{{ ejemplo }}</span>
+          }
           @if (invalido('redondeoMultiplo') && form.controls.redondeoMultiplo.errors; as errores) {
             <span id="redondeo-error" class="campo-error">
               @if (errores['required']) {
@@ -120,5 +129,29 @@
     foco="confirmar"
     (confirmar)="confirmarCambio()"
     (cancelar)="cambioPendiente.set(null)"
-  />
+  >
+    @if (cambio.ejemplos.length > 0) {
+      <table class="ejemplos">
+        <caption>Por ejemplo</caption>
+        <thead>
+          <tr>
+            <th scope="col">Código</th>
+            <th scope="col">Descripción</th>
+            <th scope="col" class="num">Precio de hoy</th>
+            <th scope="col" class="num">Precio nuevo</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (e of cambio.ejemplos; track e.codigo) {
+            <tr>
+              <td>{{ e.codigo }}</td>
+              <td>{{ e.descripcion }}</td>
+              <td class="num">{{ e.precioActual | monto }}</td>
+              <td class="num">{{ e.precioNuevo | monto }}</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    }
+  </app-confirmacion>
 }

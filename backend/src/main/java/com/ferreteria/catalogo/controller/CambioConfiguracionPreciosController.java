@@ -1,6 +1,7 @@
 package com.ferreteria.catalogo.controller;
 
 import com.ferreteria.auth.security.AuthUser;
+import com.ferreteria.catalogo.dto.ArticulosQueCambianResponse;
 import com.ferreteria.catalogo.dto.ConfiguracionPreciosGuardadaResponse;
 import com.ferreteria.catalogo.dto.ConfiguracionPreciosRequest;
 import com.ferreteria.catalogo.service.CambioConfiguracionPreciosService;
@@ -16,7 +17,6 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.math.BigDecimal;
-import java.util.Map;
 
 /**
  * El Dueño cambia el margen por defecto y el multiplo de redondeo de la ferreteria del token. El GET de la misma
@@ -40,12 +40,12 @@ public class CambioConfiguracionPreciosController {
         return cambioConfiguracionPreciosService.guardar(request.aConfiguracion(), authUser.userId());
     }
 
-    /** Cuantos articulos se recalcularian si se guardan estos valores. No guarda nada. */
+    /** Cuantos articulos se recalcularian si se guardan estos valores, con unos ejemplos. No guarda nada. */
     @GetMapping("/articulos-que-cambian")
     @PreAuthorize("hasRole('DUENO')")
-    public Map<String, Long> articulosQueCambian(
+    public ArticulosQueCambianResponse articulosQueCambian(
             @RequestParam BigDecimal margenDefectoPorcentaje, @RequestParam BigDecimal redondeoMultiplo) {
-        return Map.of("cantidad", cambioConfiguracionPreciosService.contarArticulosQueCambian(
-                new ConfiguracionPrecios(margenDefectoPorcentaje, redondeoMultiplo)));
+        return cambioConfiguracionPreciosService.articulosQueCambian(
+                new ConfiguracionPrecios(margenDefectoPorcentaje, redondeoMultiplo));
     }
 }
