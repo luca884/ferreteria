@@ -13,6 +13,8 @@
 @if (!auth.esDueno()) {
   <p class="ayuda estado-vacio" role="status">Los reportes son solo del dueño.</p>
 } @else {
+  <p class="ayuda">Elegí un reporte y el período. Las notas de crédito y las anulaciones restan de las ventas.</p>
+
   <form class="filtros panel" (submit)="consultar($event)" novalidate>
     <div class="fila-campos">
       <div class="campo">

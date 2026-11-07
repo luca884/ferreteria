@@ -178,6 +178,15 @@ describe('Presupuestos', () => {
   beforeEach(() => localStorage.clear());
 
   describe('listado', () => {
+    it('explica de dónde salen los presupuestos y qué se hace acá', async () => {
+      await crear();
+
+      const ayudas = Array.from(el().querySelectorAll('p.ayuda')).map((p) => normal(p.textContent));
+      expect(ayudas).toContain(
+        'Los presupuestos se arman en el Mostrador con F8. Acá los consultás, los imprimís, los marcás como aceptados o rechazados y los pasás a venta con los precios de hoy.',
+      );
+    });
+
     it('al abrir trae la primera página y muestra cada presupuesto', async () => {
       await crear();
 
