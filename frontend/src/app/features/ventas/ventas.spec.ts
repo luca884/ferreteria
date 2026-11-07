@@ -394,6 +394,31 @@ describe('Ventas (consulta y reimpresión, G60)', () => {
     expect(detalle()).not.toBeNull();
   });
 
+  it('con la anulación en vuelo y el foco caído al body (el botón se deshabilitó), Esc no cierra el pop-up ni el diálogo de Anular', async () => {
+    await crear();
+    api.anular.mockReturnValue(new Subject<VentaConsultada>());
+    api.obtener.mockReturnValue(
+      of(ventaDePrueba({ ventaId: 50, numero: 5, fiscal: { ...fiscalDe(documentoB()), acciones: [], reimprimir: false }, anulacion: null })),
+    );
+    filas()[0].click();
+    await refrescar();
+    boton('Anular', detalle()!)!.click();
+    await refrescar();
+    const confirmar = el().querySelector<HTMLButtonElement>('app-dialogo-anular [role="alertdialog"] button.anular')!;
+    confirmar.focus();
+    confirmar.click();
+    await refrescar();
+    expect(api.anular).toHaveBeenCalled();
+
+    // Chrome saca el foco del botón que se deshabilita y lo deja en el body; jsdom no, así que se hace a mano.
+    (document.activeElement as HTMLElement | null)?.blur();
+    document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+    await refrescar();
+
+    expect(el().querySelector('app-dialogo-anular')).not.toBeNull();
+    expect(detalle()).not.toBeNull();
+  });
+
   it('con descuento por renglón el total no muestra un porcentaje general que no es el del importe', async () => {
     await crear();
     const base = ventaDePrueba();
@@ -817,6 +842,27 @@ describe('Ventas (consulta y reimpresión, G60)', () => {
       }
       expect(api.listar).not.toHaveBeenCalled();
       expect(api.obtener).not.toHaveBeenCalled();
+    });
+
+    it('con «Dejar sin factura» en vuelo y el foco caído al body (el botón se deshabilitó), Esc no cierra el pop-up ni el diálogo', async () => {
+      await abrirCon(rechazada());
+      api.dejarSinFactura.mockReturnValue(new Subject<unknown>());
+      boton('Dejar sin factura', detalle()!)!.click();
+      await refrescar();
+      const motivo = dialogoMotivo()!.querySelector<HTMLInputElement>('input')!;
+      motivo.value = 'El cliente no quiso factura';
+      motivo.dispatchEvent(new Event('input'));
+      boton('Dejar sin factura', dialogoMotivo()!)!.click();
+      await refrescar();
+      expect(api.dejarSinFactura).toHaveBeenCalled();
+
+      // Chrome saca el foco del botón que se deshabilita y lo deja en el body; jsdom no, así que se hace a mano.
+      (document.activeElement as HTMLElement | null)?.blur();
+      document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+      await refrescar();
+
+      expect(dialogoMotivo()).not.toBeNull();
+      expect(detalle()).not.toBeNull();
     });
 
     it('«Dejar sin factura» abre el diálogo del motivo, lo manda y después refresca el detalle y la lista', async () => {

@@ -179,7 +179,16 @@ export class Remitos implements OnInit {
     this.cargar(0);
   }
 
-  protected cerrarDetalle(): void {
+  /**
+   * Esc, la ✕ o Cerrar: mientras se anula no se cierra, porque el resultado (el remito anulado o el rechazo) se muestra
+   * en el detalle y se perdería.
+   */
+  protected cerrarPopup(): void {
+    if (this.anulando()) return;
+    this.cerrarDetalle();
+  }
+
+  private cerrarDetalle(): void {
     this.emisor.set(null);
     this.elegido.set(null);
     this.detalle.set(null);

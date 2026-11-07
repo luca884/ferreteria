@@ -1,10 +1,11 @@
 import { Component, signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { DialogoDetalle } from './dialogo-detalle';
+import { TrampaFoco } from './trampa-foco';
 
 /** Una lista con una fila que abre su detalle, como Ventas: Anular a la izquierda e Imprimir como principal. */
 @Component({
-  imports: [DialogoDetalle],
+  imports: [DialogoDetalle, TrampaFoco],
   template: `
     <button id="fila" type="button">Venta N.º 20</button>
     @if (abierto()) {
@@ -23,11 +24,18 @@ import { DialogoDetalle } from './dialogo-detalle';
         </button>
       </app-dialogo-detalle>
     }
+    @if (alLado()) {
+      <div id="al-lado" role="alertdialog" aria-modal="true" appTrampaFoco>
+        <button type="button" disabled>Anular</button>
+      </div>
+    }
   `,
 })
 class Anfitrion {
   readonly abierto = signal(true);
   readonly anidado = signal(false);
+  /** Un diálogo abierto al lado del detalle (Anular en Ventas), con su trampa de foco. */
+  readonly alLado = signal(false);
   cerradas = 0;
   anuladas = 0;
   impresas = 0;
@@ -118,6 +126,16 @@ describe('DialogoDetalle', () => {
     tecla('Escape');
 
     expect(anfitrion().cerradas).toBe(1);
+  });
+
+  it('con otro diálogo abierto al lado y el foco caído al body (su botón se deshabilitó), Esc no cierra el detalle', async () => {
+    anfitrion().alLado.set(true);
+    await estabilizar();
+    (document.activeElement as HTMLElement).blur();
+
+    tecla('Escape', document.body);
+
+    expect(anfitrion().cerradas).toBe(0);
   });
 
   it('un Esc que ya atendió otro diálogo no cierra el detalle', () => {

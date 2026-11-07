@@ -107,7 +107,7 @@
 }
 
 @if (elegido() !== null) {
-  <app-dialogo-detalle [titulo]="tituloDetalle()" (cerrar)="cerrarDetalle()">
+  <app-dialogo-detalle [titulo]="tituloDetalle()" (cerrar)="cerrarPopup()">
     @if (detalle(); as r) {
       <span cabecera class="estado">{{ etiqueta[r.estado] }}</span>
     }

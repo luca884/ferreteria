@@ -39,9 +39,14 @@ export class TrampaFoco implements OnDestroy {
     abiertas.push(this);
   }
 
+  /** Es la del diálogo de arriba: no hay otro abierto después (Anular al lado del detalle, una hoja para imprimir). */
+  esLaDeArriba(): boolean {
+    return abiertas[abiertas.length - 1] === this;
+  }
+
   protected alTeclear(evento: KeyboardEvent): void {
     if (evento.key !== 'Tab' || evento.defaultPrevented) return;
-    if (abiertas[abiertas.length - 1] !== this) return;
+    if (!this.esLaDeArriba()) return;
     const controles = Array.from(this.host.querySelectorAll<HTMLElement>(ENFOCABLES));
     if (controles.length === 0) {
       evento.preventDefault();

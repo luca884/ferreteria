@@ -520,6 +520,22 @@ describe('Remitos', () => {
       expect(boton('Anular', detalle()!)).toBeDefined();
     });
 
+    it('con la anulación en curso y el foco caído al body (los botones se deshabilitaron), Esc no cierra el pop-up ni la pregunta', async () => {
+      await crear([resumen(5)], 'DUENO');
+      await abrirDetalle(0);
+      await click(boton('Anular', detalle()!));
+      api.anular.mockReturnValue(new Subject<RemitoResponse>());
+      await click(boton('Anular el remito', el().querySelector<HTMLElement>('.confirmacion')!));
+
+      // Chrome saca el foco del botón que se deshabilita y lo deja en el body; jsdom no, así que se hace a mano.
+      (document.activeElement as HTMLElement | null)?.blur();
+      document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+      await refrescar();
+
+      expect(detalle()).not.toBeNull();
+      expect(el().querySelector('.confirmacion')).not.toBeNull();
+    });
+
     it('la pregunta toma el foco en Cancelar (así queda a la vista) y Esc la cancela sin cerrar el detalle', async () => {
       await crear([resumen(5)], 'DUENO');
       await abrirDetalle(0);

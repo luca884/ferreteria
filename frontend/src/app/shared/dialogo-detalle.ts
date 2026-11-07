@@ -70,6 +70,7 @@ export class DialogoDetalle {
 
   protected readonly id = `dialogo-detalle-${++siguienteId}`;
   private readonly dialogo = viewChild.required<ElementRef<HTMLElement>>('dialogo');
+  private readonly trampa = viewChild.required(TrampaFoco);
   private readonly equis = viewChild.required<ElementRef<HTMLButtonElement>>('equis');
 
   constructor() {
@@ -83,6 +84,9 @@ export class DialogoDetalle {
 
   protected alTeclear(evento: KeyboardEvent): void {
     if (evento.key !== 'Escape' || evento.defaultPrevented) return;
+    // Con otro diálogo abierto encima, Esc es de ese aunque el foco se le haya caído al body (Chrome lo saca del botón
+    // que se deshabilita mientras se anula): cerrar acá también se llevaría al de arriba en plena acción.
+    if (!this.trampa().esLaDeArriba()) return;
     // Un Esc que viene de otro diálogo (Imprimir adentro, Anular al lado) es de ese, aunque no corte la propagación.
     const desde = evento.target instanceof Element ? evento.target.closest('[aria-modal="true"]') : null;
     if (desde !== null && desde !== this.dialogo().nativeElement) return;
