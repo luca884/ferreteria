@@ -215,7 +215,7 @@ describe('NuevaCompra', () => {
 
     expect(el().querySelectorAll('table.renglones tbody tr')).toHaveLength(1);
     expect(campo<HTMLInputElement>('input[name="cantidad-0"]').value).toBe('1');
-    expect(campo<HTMLInputElement>('input[name="costo-0"]').value).toBe('100');
+    expect(campo<HTMLInputElement>('input[name="costo-0"]').value).toBe('100,00');
     expect(el().textContent).toContain('Tornillo 1/4 ya está en la compra.');
   });
 
@@ -663,7 +663,7 @@ describe('NuevaCompra', () => {
 
       expect(el().querySelector('.sin-articulo')).toBeNull();
       expect(campo<HTMLInputElement>('input[name="cantidad-1"]').value).toBe('3');
-      expect(campo<HTMLInputElement>('input[name="costo-1"]').value).toBe('1.500');
+      expect(campo<HTMLInputElement>('input[name="costo-1"]').value).toBe('1.500,00');
       // El renglón resuelto muestra el código de la factura, para cotejar con el papel.
       const resuelto = el().querySelectorAll('table.renglones tbody tr')[1];
       expect(resuelto.querySelector('.codigo-proveedor')?.textContent?.trim()).toBe('Cód. proveedor X-99');
@@ -689,6 +689,18 @@ describe('NuevaCompra', () => {
         await subirPdf();
 
         expect(articuloDe(0).textContent).toContain('(USD)');
+        expect(el().querySelector('table.renglones app-campo-moneda .signo')?.textContent?.trim()).toBe('US$');
+      });
+
+      it('el costo es un campo de plata: «$» adentro y dos decimales (arreglos-compras, S6)', async () => {
+        await crear();
+        await subirPdf();
+
+        expect(el().querySelector('table.renglones app-campo-moneda .signo')?.textContent?.trim()).toBe('$');
+        expect(campo<HTMLInputElement>('input[name="costo-0"]').value).toBe('210,50');
+        // El porcentaje del recargo no es plata: sin signo y como se leyó.
+        expect(campo<HTMLInputElement>('input[name="recargo-porcentaje-0"]').closest('app-campo-moneda')).toBeNull();
+        expect(campo<HTMLInputElement>('input[name="recargo-porcentaje-0"]').value).toBe('4,44');
       });
 
       it('agregado a mano: muestra el código del proveedor si es distinto del interno, y si es el mismo no lo repite', async () => {

@@ -3,10 +3,11 @@ import { HttpErrorResponse } from '@angular/common/http';
 import { RouterLink } from '@angular/router';
 import { erroresDeCampos, mensajeDe } from '../../core/api/api-error';
 import { AuthService } from '../../core/auth/auth.service';
-import { centavosDeImporte, textoDeImporte } from '../../core/formato/importe';
+import { centavosDeImporte, textoDePlata } from '../../core/formato/importe';
 import { MontoPipe, formatearMonto } from '../../core/formato/monto';
 import { BarraAcciones } from '../../shared/barra-acciones';
 import { Confirmacion } from '../../shared/confirmacion';
+import { CampoMoneda } from '../../shared/campo-moneda';
 import { ImporteInput } from '../../shared/importe-input';
 import {
   CajaVigente,
@@ -41,7 +42,7 @@ function leerImporteEnPesos(texto: string): number {
  */
 @Component({
   selector: 'app-caja',
-  imports: [BarraAcciones, Confirmacion, ImporteInput, MontoPipe, ResumenCaja, RouterLink],
+  imports: [BarraAcciones, Confirmacion, CampoMoneda, ImporteInput, MontoPipe, ResumenCaja, RouterLink],
   templateUrl: './caja.html',
   styleUrl: './caja.css',
 })
@@ -120,7 +121,7 @@ export class Caja implements OnInit {
 
   private aplicar(vigente: CajaVigente): void {
     this.vigente.set(vigente);
-    this.efectivoInicial.set(textoDeImporte(vigente.efectivoPropuesto));
+    this.efectivoInicial.set(textoDePlata(vigente.efectivoPropuesto));
     this.cargarEnVivo();
   }
 
@@ -261,7 +262,7 @@ export class Caja implements OnInit {
         this.contado.set('');
         this.mensaje.set('Cerraste la caja.');
         this.vigente.set({ estado: 'SIN_CAJA', caja: null, efectivoPropuesto: contado, hayCierreAnterior: true });
-        this.efectivoInicial.set(textoDeImporte(contado));
+        this.efectivoInicial.set(textoDePlata(contado));
       },
       error: (err: unknown) => {
         this.trabajando.set(false);

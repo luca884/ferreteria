@@ -3,9 +3,10 @@ import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { erroresPorCampo, mensajeDe } from '../../core/api/api-error';
 import { AuthService } from '../../core/auth/auth.service';
-import { centavosDeImporte, textoDeImporte } from '../../core/formato/importe';
+import { centavosDeImporte, textoDeImporte, textoDePlata } from '../../core/formato/importe';
 import { MontoPipe, formatearCosto } from '../../core/formato/monto';
 import { BarraAcciones } from '../../shared/barra-acciones';
+import { CampoMoneda } from '../../shared/campo-moneda';
 import { ImporteInput } from '../../shared/importe-input';
 import { SelectorArchivo } from '../../shared/selector-archivo';
 import { Articulo } from '../articulos/articulo.models';
@@ -79,7 +80,7 @@ interface LecturaDeFactura {
  */
 @Component({
   selector: 'app-nueva-compra',
-  imports: [BarraAcciones, DecimalPipe, ImporteInput, MontoPipe, RouterLink, SelectorArchivo],
+  imports: [BarraAcciones, DecimalPipe, CampoMoneda, ImporteInput, MontoPipe, RouterLink, SelectorArchivo],
   templateUrl: './nueva-compra.html',
   styleUrl: './compras.css',
 })
@@ -218,7 +219,7 @@ export class NuevaCompra implements OnInit {
         descripcion: articulo.descripcion,
         moneda: articulo.moneda,
         cantidad: resuelto ? String(resuelto.cantidad) : '1',
-        costo: textoDeImporte(resuelto ? resuelto.costoUnitario : articulo.costo),
+        costo: textoDePlata(resuelto ? resuelto.costoUnitario : articulo.costo),
         ...(resuelto?.cantidadNoEntera ? { aviso: AVISO_CANTIDAD_NO_ENTERA } : {}),
       },
     ]);
@@ -274,7 +275,7 @@ export class NuevaCompra implements OnInit {
         descripcion: r.articuloDescripcion ?? r.descripcion,
         moneda: r.articuloMoneda ?? 'ARS',
         cantidad: String(r.cantidad),
-        costo: textoDeImporte(r.costoUnitario),
+        costo: textoDePlata(r.costoUnitario),
         ...(r.cantidadNoEntera ? { aviso: AVISO_CANTIDAD_NO_ENTERA } : {}),
       });
     }

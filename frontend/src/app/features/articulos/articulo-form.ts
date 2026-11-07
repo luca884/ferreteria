@@ -25,6 +25,7 @@ import { RecargoDeCosto, costoRealExacto, exacto, margenEfectivo, precioFinal } 
 import { cantidadConUnidad } from '../../core/formato/unidad';
 import { BarraAcciones } from '../../shared/barra-acciones';
 import { Confirmacion } from '../../shared/confirmacion';
+import { CampoMoneda } from '../../shared/campo-moneda';
 import { ImporteInput } from '../../shared/importe-input';
 import { Proveedor } from '../proveedores/proveedor.models';
 import { ProveedoresService } from '../proveedores/proveedores.service';
@@ -200,6 +201,7 @@ export function avisoDeEan13(codigo: string | null | undefined): string | null {
     DialogoAjusteStock,
     BarraAcciones,
     DesglosePrecioVista,
+    CampoMoneda,
     ImporteInput,
     OfertaArticulo,
   ],

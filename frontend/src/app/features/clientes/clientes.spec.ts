@@ -749,7 +749,7 @@ describe('Clientes', () => {
 
         expect(dicho(seccion()?.querySelector('legend'))).toBe('Cuenta corriente');
         expect(habilitar().checked).toBe(true);
-        expect(limite().value).toBe('5.000');
+        expect(limite().value).toBe('5.000,00');
         expect(limite().disabled).toBe(false);
       });
 

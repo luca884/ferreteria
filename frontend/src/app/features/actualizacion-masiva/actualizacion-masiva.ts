@@ -20,6 +20,7 @@ import { FormControl, FormGroup, ReactiveFormsModule } from '@angular/forms';
 import { erroresDeCampos, mensajeDe } from '../../core/api/api-error';
 import { AuthService } from '../../core/auth/auth.service';
 import { BarraAcciones } from '../../shared/barra-acciones';
+import { CampoMoneda } from '../../shared/campo-moneda';
 import { ImporteInput } from '../../shared/importe-input';
 import { Proveedor } from '../proveedores/proveedor.models';
 import { ProveedoresService } from '../proveedores/proveedores.service';
@@ -52,7 +53,7 @@ const RECALCULA_CON_EL_MARGEN =
 
 @Component({
   selector: 'app-actualizacion-masiva',
-  imports: [ReactiveFormsModule, DecimalPipe, MontoPipe, BarraAcciones, ImporteInput],
+  imports: [ReactiveFormsModule, DecimalPipe, MontoPipe, BarraAcciones, CampoMoneda, ImporteInput],
   templateUrl: './actualizacion-masiva.html',
   styleUrl: './actualizacion-masiva.css',
 })
@@ -109,6 +110,9 @@ export class ActualizacionMasiva implements OnInit {
     if (modo === 'MARGEN') return 'Margen (%)';
     return modo === 'COSTO_MONTO' || modo === 'PRECIO_MONTO' ? 'Monto' : 'Porcentaje (%)';
   });
+
+  /** El signo del valor (arreglos-compras, S6): solo el monto del precio final es siempre en pesos. */
+  protected readonly monedaDelValor = computed(() => (this.formulario().modo === 'PRECIO_MONTO' ? 'ARS' : null));
 
   /** Las importaciones que se ofrecen, de la más reciente a la más vieja y, con proveedor elegido, solo las suyas. */
   protected readonly importacionesOfrecidas = computed(() => {

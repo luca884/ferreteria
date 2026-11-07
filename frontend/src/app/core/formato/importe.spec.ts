@@ -1,4 +1,4 @@
-import { centavosDeImporte, normalizarImporte, posicionTrasNormalizar, textoDeImporte } from './importe';
+import { centavosDeImporte, normalizarImporte, posicionTrasNormalizar, textoDeImporte, textoDePlata } from './importe';
 
 describe('normalizarImporte', () => {
   it.each([
@@ -89,6 +89,21 @@ describe('textoDeImporte', () => {
     [-5, '-5'],
   ])('%s se escribe «%s»', (valor, texto) => {
     expect(textoDeImporte(valor)).toBe(texto);
+  });
+});
+
+describe('textoDePlata (arreglos-compras, S6)', () => {
+  it.each([
+    [null, ''],
+    [undefined, ''],
+    [0, '0,00'],
+    [578378, '578.378,00'],
+    [35.06, '35,06'],
+    [1234.5, '1.234,50'],
+    [-1234.5, '-1.234,50'],
+    [-5, '-5,00'],
+  ])('%s se escribe «%s»: siempre con dos decimales', (valor, texto) => {
+    expect(textoDePlata(valor)).toBe(texto);
   });
 });
 

@@ -116,7 +116,7 @@ describe('Caja (CU-10)', () => {
     it('sin caja muestra la apertura con el efectivo propuesto (el contado del último cierre)', async () => {
       await crear(sinCaja(7000));
 
-      expect((input('efectivo-inicial') as HTMLInputElement).value).toBe('7.000');
+      expect((input('efectivo-inicial') as HTMLInputElement).value).toBe('7.000,00');
       expect(el().querySelector('form.cierre')).toBeNull();
       expect(el().querySelector('form.movimiento')).toBeNull();
     });

@@ -7,6 +7,7 @@ import { MontoPipe, formatearMonto } from '../../core/formato/monto';
 import { precioFinalCentavos } from '../../core/formato/precio-final';
 import { BarraAcciones } from '../../shared/barra-acciones';
 import { Confirmacion } from '../../shared/confirmacion';
+import { CampoMoneda } from '../../shared/campo-moneda';
 import { ImporteInput } from '../../shared/importe-input';
 import { ConfiguracionPrecios } from '../articulos/articulo.models';
 import {
@@ -46,7 +47,7 @@ function tituloCambio(anterior: ConfiguracionPrecios | null, nueva: Configuracio
  */
 @Component({
   selector: 'app-configuracion-precios',
-  imports: [ReactiveFormsModule, BarraAcciones, Confirmacion, ImporteInput, MontoPipe],
+  imports: [ReactiveFormsModule, BarraAcciones, Confirmacion, CampoMoneda, ImporteInput, MontoPipe],
   templateUrl: './configuracion-precios.html',
   styleUrl: './configuracion-precios.css',
 })

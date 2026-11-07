@@ -698,7 +698,8 @@ describe('ArticuloForm', () => {
       expect(input('codigoBarras').value).toBe('7790001000012');
       expect(input('codigoProveedor').value).toBe('AB-12');
       expect(input('descripcion').value).toBe('Tornillo hexagonal 1/4');
-      expect(input('costo').value).toBe('100');
+      // Campo de plata: el costo cargado se ve con dos decimales (arreglos-compras, S6).
+      expect(input('costo').value).toBe('100,00');
       expect(input('margen').value).toBe('35');
       expect(input('stockMinimo').value).toBe('3');
       expect(input('ubicacion').value).toBe('Pasillo 2');
@@ -1047,7 +1048,7 @@ describe('ArticuloForm', () => {
 
     it('no convierte nada: al volver a pesos el costo también queda vacío', async () => {
       await crearComponente({ id: '5', articulo: articuloGuardado({ moneda: 'USD', costo: 10 }) });
-      expect(input('costo').value).toBe('10');
+      expect(input('costo').value).toBe('10,00');
 
       await elegir('moneda', 'Pesos (ARS)');
 
@@ -1058,7 +1059,7 @@ describe('ArticuloForm', () => {
       await crearComponente({ id: '5', articulo: articuloGuardado({ moneda: 'USD', costo: 10 }) });
 
       expect(elegida('moneda')).toBe('Dólares (USD)');
-      expect(input('costo').value).toBe('10');
+      expect(input('costo').value).toBe('10,00');
     });
 
     it('avisa al lado del selector que cambiar la moneda borra el costo', async () => {
@@ -1648,7 +1649,7 @@ describe('ArticuloForm', () => {
         await tildar('precioManual', true);
 
         expect(etiquetaDe('precioFinalManual')).toBe('Precio final (con IVA)');
-        expect(input('precioFinalManual').value).toBe('160');
+        expect(input('precioFinalManual').value).toBe('160,00');
         expect(el().querySelector('.precio-en-vivo')).toBeNull();
       });
 
@@ -1688,7 +1689,7 @@ describe('ArticuloForm', () => {
         await crearComponente({ id: '5', articulo: manual() });
 
         expect(input('precioManual').checked).toBe(true);
-        expect(input('precioFinalManual').value).toBe('2.000');
+        expect(input('precioFinalManual').value).toBe('2.000,00');
 
         await enviar();
 
@@ -1871,7 +1872,7 @@ describe('ArticuloForm', () => {
         expect(filas()).toBe(2);
         expect(input('ajuste-precio-nombre-0').value).toBe('Flete');
         expect(elegida('ajuste-precio-tipo-1')).toBe('$');
-        expect(input('ajuste-precio-valor-1').value).toBe('-5');
+        expect(input('ajuste-precio-valor-1').value).toBe('-5,00');
 
         await quitar(1);
         await quitar(0);
@@ -2300,7 +2301,7 @@ describe('ArticuloForm', () => {
 
         await clicAjustes();
 
-        expect(input('costo').value).toBe('855');
+        expect(input('costo').value).toBe('855,00');
       });
 
       it('lo escrito en el resto del formulario se conserva al guardar ajustes', async () => {
@@ -2682,7 +2683,7 @@ describe('ArticuloForm', () => {
         await refrescar();
 
         // El costo del formulario es el de la respuesta, no el viejo.
-        expect(input('costo').value).toBe('855');
+        expect(input('costo').value).toBe('855,00');
         expect(input('ajuste2').value).toBe('');
         expect(limpio(el().querySelector('[data-foco-ajustes]')?.textContent)).toContain('Se guardaron los ajustes');
         expect(el().querySelector('button.recargar')).not.toBeNull();
@@ -2709,7 +2710,7 @@ describe('ArticuloForm', () => {
         botonAjustes().click();
         await refrescar();
 
-        expect(input('costo').value).toBe('855');
+        expect(input('costo').value).toBe('855,00');
         await enviar();
         expect(servicio.actualizar).not.toHaveBeenCalled();
 
@@ -2762,7 +2763,7 @@ describe('ArticuloForm', () => {
         expect(servicio.obtener).toHaveBeenCalledTimes(2);
         expect(servicio.desglose).toHaveBeenCalledTimes(2);
         expect(input('descripcion').value).toBe('Lo que dejó la importación');
-        expect(input('costo').value).toBe('990');
+        expect(input('costo').value).toBe('990,00');
         expect(botonRecargar()).toBeNull();
         expect(limpio(aviso()?.textContent)).toBe('Se recargó el artículo con los últimos cambios.');
         // y el próximo guardado ya manda la versión nueva

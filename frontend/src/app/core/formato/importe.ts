@@ -44,6 +44,14 @@ export function textoDeImporte(valor: number | null | undefined): string {
   return centavos % 100 === 0 ? entera : `${entera},${String(centavos % 100).padStart(2, '0')}`;
 }
 
+/** Plata como se escribe en el campo, siempre con dos decimales: «578.378,00», «-1.234,50» (arreglos-compras, S6). */
+export function textoDePlata(valor: number | null | undefined): string {
+  if (valor === null || valor === undefined) return '';
+  const centavos = Math.round(Math.abs(valor) * 100);
+  const signo = valor < 0 && centavos > 0 ? '-' : '';
+  return `${signo}${agruparMiles(String(Math.trunc(centavos / 100)))},${String(centavos % 100).padStart(2, '0')}`;
+}
+
 /**
  * Dónde queda el cursor después de normalizar: detrás de la misma cantidad de dígitos y comas que tenía antes, así
  * los puntos que aparecen o desaparecen no lo corren.

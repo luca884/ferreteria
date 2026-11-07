@@ -181,13 +181,15 @@
               />
             </td>
             <td class="num">
-              <input
-                [name]="'costo-' + i"
-                appImporte
-                [attr.aria-label]="'Costo de ' + r.descripcion"
-                [value]="r.costo"
-                (input)="editar(i, 'costo', $any($event.target).value)"
-              />
+              <app-campo-moneda [moneda]="r.moneda === 'USD' ? 'USD' : 'ARS'">
+                <input
+                  [name]="'costo-' + i"
+                  appImporte
+                  [attr.aria-label]="'Costo de ' + r.descripcion"
+                  [value]="r.costo"
+                  (input)="editar(i, 'costo', $any($event.target).value)"
+                />
+              </app-campo-moneda>
             </td>
             <td>
               <button type="button" class="secundario chico" (click)="quitar(i)">Quitar</button>
