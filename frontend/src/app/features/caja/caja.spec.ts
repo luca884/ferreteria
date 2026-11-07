@@ -429,6 +429,20 @@ describe('Caja (CU-10)', () => {
       expect(apertura.compareDocumentPosition(resumen) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     });
 
+    it('al cerrar la caja la página vuelve arriba: el aviso y «Abrir la caja» quedan a la vista (#92)', async () => {
+      await crear(conCaja());
+      const subir = vi.fn();
+      (fixture.nativeElement as HTMLElement).scrollIntoView = subir;
+      await escribir('efectivo-contado', '5650');
+      await enviar('form.cierre');
+      expect(subir).not.toHaveBeenCalled();
+
+      boton('Cerrar la caja')!.click();
+      await refrescar();
+
+      expect(subir).toHaveBeenCalledExactlyOnceWith({ block: 'start' });
+    });
+
     it('el contado lleva la máscara: 50000 se ve 50.000 y se confirma con cincuenta mil', async () => {
       await crear(conCaja());
 

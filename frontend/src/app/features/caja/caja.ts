@@ -1,4 +1,4 @@
-import { Component, OnInit, computed, inject, signal } from '@angular/core';
+import { Component, ElementRef, OnInit, computed, inject, signal } from '@angular/core';
 import { HttpErrorResponse } from '@angular/common/http';
 import { RouterLink } from '@angular/router';
 import { erroresDeCampos, mensajeDe } from '../../core/api/api-error';
@@ -48,6 +48,7 @@ function leerImporteEnPesos(texto: string): number {
 })
 export class Caja implements OnInit {
   private readonly cajas = inject(CajaService);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   protected readonly auth = inject(AuthService);
 
   protected readonly vigente = signal<CajaVigente | null>(null);
@@ -263,6 +264,9 @@ export class Caja implements OnInit {
         this.mensaje.set('Cerraste la caja.');
         this.vigente.set({ estado: 'SIN_CAJA', caja: null, efectivoPropuesto: contado, hayCierreAnterior: true });
         this.efectivoInicial.set(textoDePlata(contado));
+        // El aviso y «Abrir la caja» van arriba del resumen: se vuelve arriba para verlos sin subir a buscarlos (#92). La
+        // pantalla scrollea en el contenedor del shell, no en la ventana; jsdom no implementa scrollIntoView.
+        this.host.nativeElement.scrollIntoView?.({ block: 'start' });
       },
       error: (err: unknown) => {
         this.trabajando.set(false);
