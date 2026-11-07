@@ -89,6 +89,20 @@ export class Reportes implements OnInit {
     }));
   });
 
+  /**
+   * La fila de totales de «Por artículo» (informacion-y-links, S6): total y ganancia sumados en centavos; la cantidad no,
+   * porque mezcla unidades. Null en los otros reportes.
+   */
+  protected readonly totalesPorArticulo = computed(() => {
+    const r = this.resultado();
+    if (r?.tipo !== 'por-articulo') return null;
+    const enCentavos = (valores: number[]) => sumar(valores.map((v) => Math.round(v * 100))) / 100;
+    return {
+      total: enCentavos(r.datos.filas.map((f) => f.total)),
+      ganancia: enCentavos(r.datos.filas.map((f) => f.ganancia)),
+    };
+  });
+
   /** El aviso de las ventas o renglones sin costo del reporte que se muestra. */
   protected readonly avisoCosto = computed(() => {
     const r = this.resultado();
