@@ -289,7 +289,9 @@ class VentaFacturadaDocumentoIntegrationTest extends VentaFacturadaTestBase {
             assertThat(facturacion.get("letras").get("RESPONSABLE_INSCRIPTO").asText()).isEqualTo("A");
             assertThat(facturacion.get("letras").get("MONOTRIBUTISTA").asText()).isEqualTo("A");
             assertThat(facturacion.get("letras").get("EXENTO").asText()).isEqualTo("B");
-            assertThat(facturacion.size()).isEqualTo(3);
+            // #57: el tope de Consumidor Final que rige, para que el cobro lo avise de entrada.
+            assertThat(facturacion.get("topeConsumidorFinal").decimalValue()).isEqualByComparingTo("10000000");
+            assertThat(facturacion.size()).isEqualTo(4);
         }
         JsonNode sin = getJson("/api/ventas/facturacion", login(sinFacturacion.emailVendedor()));
         assertThat(sin.get("factura").asBoolean()).isFalse();
