@@ -426,18 +426,68 @@ describe('NuevaCompra', () => {
     expect(el().querySelector('[role=alert]')?.textContent).toContain('Agregá al menos un artículo.');
   });
 
+  const entradaPdf = () => campo<HTMLInputElement>('app-selector-archivo input[type=file]');
+  const nombrePdf = () => el().querySelector('app-selector-archivo .nombre-archivo')?.textContent?.trim();
+
   async function subirPdf(nombre = 'factura.pdf') {
-    const input = campo<HTMLInputElement>('input[name=facturaPdf]');
+    const input = entradaPdf();
     Object.defineProperty(input, 'files', { value: [new File(['%PDF'], nombre, { type: 'application/pdf' })], configurable: true });
     input.dispatchEvent(new Event('change'));
     await refrescar();
   }
 
+  describe('lenguaje visual (arreglos-compras, S3)', () => {
+    it('no usa recuadros fieldset: cada parte es una sección con su título', async () => {
+      await crear();
+
+      expect(el().querySelectorAll('fieldset').length).toBe(0);
+      expect([...el().querySelectorAll('section.paso > h2')].map((h) => h.textContent?.trim())).toEqual([
+        'Comprobante',
+        'Artículos',
+        'Recargos del costo',
+      ]);
+    });
+
+    it('«Ver vista previa» es el botón principal', async () => {
+      await crear();
+
+      expect(boton('Ver vista previa')!.classList).toContain('primario');
+    });
+  });
+
   describe('factura en PDF', () => {
     it('el selector solo acepta PDF', async () => {
       await crear();
 
-      expect(campo<HTMLInputElement>('input[name=facturaPdf]').accept).toContain('.pdf');
+      expect(entradaPdf().accept).toContain('.pdf');
+    });
+
+    it('el selector está en castellano y, después de leer, muestra el nombre del PDF (arreglos-compras, S3 y S7)', async () => {
+      await crear();
+
+      expect(el().querySelector('app-selector-archivo .rotulo')?.textContent?.trim()).toBe('Leer factura en PDF');
+      expect(el().querySelector('app-selector-archivo button')?.textContent?.trim()).toBe('Elegir archivo…');
+      expect(nombrePdf()).toBe('Ningún archivo elegido');
+      expect(entradaPdf().hidden).toBe(true);
+
+      await subirPdf('factura-bulonera-1234.pdf');
+
+      expect(nombrePdf()).toBe('factura-bulonera-1234.pdf');
+    });
+
+    it('al registrar la compra, el selector vuelve a «Ningún archivo elegido»', async () => {
+      await crear();
+      api.leerFactura.mockReturnValue(
+        of({ ...borrador, renglones: borrador.renglones.filter((r) => r.articuloId !== null) }),
+      );
+      await subirPdf('factura-bulonera-1234.pdf');
+      boton('Ver vista previa')!.click();
+      await refrescar();
+
+      boton('Confirmar compra')!.click();
+      await refrescar();
+
+      expect(nombrePdf()).toBe('Ningún archivo elegido');
     });
 
     it('muestra «Leyendo la factura…» mientras espera y después completa el formulario', async () => {

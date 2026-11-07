@@ -20,8 +20,8 @@ Restricciones: test-first; los campos nuevos del backend son opcionales y van en
 
 ## Tasks
 
-- [ ] T1 · S1, S2 · ruta: inline · Aceptación: lista de proveedores con todas las columnas y el guion parejo · Evidencia: — · Risk: —
-- [ ] T2 · S3 · ruta: inline · Aceptación: selector de archivo compartido, secciones y botón principal en Nueva compra · Evidencia: — · Risk: —
+- [x] T1 · S1, S2 · ruta: inline · Aceptación: lista de proveedores con todas las columnas y el guion parejo · Evidencia: RED 2 de 52 en `proveedores.spec.ts` → GREEN 52/52; columnas Nombre, CUIT, Contacto, Teléfono, WhatsApp y Correo, «—» si falta; `td.mono` solo con CUIT cargado; sale `contactoDe` · commit `d9ed690` · Risk: none
+- [x] T2 · S3 · ruta: inline · Aceptación: selector de archivo compartido, secciones y botón principal en Nueva compra · Evidencia: RED 2 de 5 en `shared/selector-archivo.spec.ts` (nuevo) y 14 de 35 en `nueva-compra.spec.ts` → GREEN 241/241 junto con `importaciones.spec.ts`; `SelectorArchivo` pasa a `shared/` con `rotulo`, `acepta`, `ayuda` y `entradaId` (los valores por defecto son los de la lista de precios, así que Importar lista no cambia) y un id de rótulo único por instancia; Nueva compra lo usa como «Leer factura en PDF» (solo PDF), muestra el nombre del PDF leído y vuelve a «Ningún archivo elegido» al registrar; secciones `section.paso.panel` «Comprobante», «Artículos» y «Recargos del costo» sin `fieldset`; «Ver vista previa» `primario` · commit (ver T2 en git log) · Risk: item 3 (`SelectorArchivo` lo usa Importar lista: sus 201 tests siguen en verde) → `odd-verifier` en T8
 - [ ] T3 · S7 · ruta: inline · Aceptación: renglones leídos con código interno y moneda del artículo (backend + front) · Evidencia: — · Risk: —
 - [ ] T4 · S5 · ruta: inline · Aceptación: búsqueda alineada, con teclado, aviso de cantidad y orden por prefijo (backend + front) · Evidencia: — · Risk: —
 - [ ] T5 · S6 · ruta: inline · Aceptación: importes con dos decimales y signo de moneda en todos los campos de plata · Evidencia: — · Risk: —

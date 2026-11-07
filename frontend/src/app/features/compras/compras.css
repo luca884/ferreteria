@@ -18,10 +18,23 @@
   margin-bottom: 1rem;
 }
 
+/* Cada parte de Nueva compra es una sección con su título, como los pasos de Importar lista. */
+.paso {
+  margin-bottom: var(--e-4);
+}
+
+.paso > h2 {
+  padding-bottom: var(--e-2);
+  border-bottom: 1px solid var(--borde);
+}
+
+.factura-pdf {
+  max-width: 640px;
+  margin-bottom: 0.75rem;
+}
+
 .encabezado {
-  border: 1px solid var(--borde, #d8dee8);
-  border-radius: 8px;
-  padding: 0.75rem 1rem 1rem;
+  margin-bottom: 0;
 }
 
 .encabezado input[name='puntoVenta'] {
@@ -89,10 +102,6 @@ tr.advertencia td {
   background: var(--exito-fondo, #e7f6ec);
 }
 
-.factura-pdf {
-  margin-bottom: 0.75rem;
-}
-
 .control-factura {
   padding: 0.5rem 0.75rem;
   border-radius: 6px;
@@ -128,10 +137,6 @@ tr.advertencia td {
 .recargos-costo {
   display: grid;
   gap: 0.75rem;
-  margin: 0 0 1rem;
-  border: 1px solid var(--borde, #d8dee8);
-  border-radius: 8px;
-  padding: 0.75rem 1rem 1rem;
 }
 
 .recargos-costo .ayuda {

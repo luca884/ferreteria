@@ -18,189 +18,192 @@
     </p>
   }
 
-  <div class="factura-pdf">
-    <label>
-      Leer factura en PDF
-      <input
-        name="facturaPdf"
-        type="file"
-        accept=".pdf,application/pdf"
-        [disabled]="leyendo()"
-        (change)="leerFactura($event)"
-      />
-    </label>
+  <section class="paso panel">
+    <h2>Comprobante</h2>
+    <app-selector-archivo
+      class="factura-pdf"
+      rotulo="Leer factura en PDF"
+      acepta=".pdf,application/pdf"
+      entradaId="factura-pdf"
+      ayuda="Completa el comprobante y los renglones con lo que lee de la factura. También podés arrastrarla hasta acá."
+      [archivo]="archivoFactura()"
+      [deshabilitado]="leyendo()"
+      (elegido)="leerFactura($event)"
+    />
     @if (leyendo()) {
       <p class="ayuda" role="status">Leyendo la factura…</p>
     }
-  </div>
-  @if (lectura(); as l) {
-    @if (l.cuitsSinProveedor && proveedorId() === '') {
-      <p class="ayuda" role="status">
-        No encontramos un proveedor con el CUIT {{ l.cuitsSinProveedor.join(', ') }}. Elegilo de la lista.
+    @if (lectura(); as l) {
+      @if (l.cuitsSinProveedor && proveedorId() === '') {
+        <p class="ayuda" role="status">
+          No encontramos un proveedor con el CUIT {{ l.cuitsSinProveedor.join(', ') }}. Elegilo de la lista.
+        </p>
+      }
+      <p class="control-factura" [class.exito]="l.control === 'CUADRA'" [class.advertencia-lectura]="l.control !== 'CUADRA'" role="status">
+        @if (l.control === 'CUADRA') {
+          La lectura cuadra con el total de la factura ({{ l.sumaNetos | monto }} + recargos).
+        } @else {
+          No pudimos comprobar el total de la factura: revisá los renglones antes de confirmar.
+        }
       </p>
     }
-    <p class="control-factura" [class.exito]="l.control === 'CUADRA'" [class.advertencia-lectura]="l.control !== 'CUADRA'" role="status">
-      @if (l.control === 'CUADRA') {
-        La lectura cuadra con el total de la factura ({{ l.sumaNetos | monto }} + recargos).
-      } @else {
-        No pudimos comprobar el total de la factura: revisá los renglones antes de confirmar.
-      }
-    </p>
-  }
 
-  <fieldset class="encabezado">
-    <legend>Comprobante</legend>
-    <label>
-      Proveedor
-      <select name="proveedor" [value]="proveedorId()" (change)="cambiar(proveedorId, $any($event.target).value)">
-        <option value="">Elegí…</option>
-        @for (p of proveedores(); track p.id) {
-          <option [value]="p.id">{{ p.nombre }}</option>
+    <div class="encabezado">
+      <label>
+        Proveedor
+        <select name="proveedor" [value]="proveedorId()" (change)="cambiar(proveedorId, $any($event.target).value)">
+          <option value="">Elegí…</option>
+          @for (p of proveedores(); track p.id) {
+            <option [value]="p.id">{{ p.nombre }}</option>
+          }
+        </select>
+      </label>
+      <label>
+        Tipo
+        <select name="tipo" [value]="tipo()" (change)="cambiar(tipo, $any($event.target).value)">
+          @for (t of tipos; track t) {
+            <option [value]="t">{{ etiqueta[t] }}</option>
+          }
+        </select>
+      </label>
+      <label>
+        Punto de venta
+        <input
+          name="puntoVenta"
+          type="text"
+          inputmode="numeric"
+          autocomplete="off"
+          [value]="puntoVenta()"
+          (input)="cambiar(puntoVenta, $any($event.target).value)"
+        />
+      </label>
+      <label>
+        Número
+        <input
+          name="numero"
+          type="text"
+          inputmode="numeric"
+          autocomplete="off"
+          [value]="numero()"
+          (input)="cambiar(numero, $any($event.target).value)"
+        />
+      </label>
+      <label>
+        Fecha
+        <input name="fecha" type="date" [value]="fecha()" (input)="cambiar(fecha, $any($event.target).value)" />
+      </label>
+    </div>
+  </section>
+
+  <section class="paso panel">
+    <h2>Artículos</h2>
+    <form class="buscador" (submit)="buscar($event)">
+      <label>
+        Agregar artículo
+        <input
+          name="busqueda"
+          type="search"
+          autocomplete="off"
+          placeholder="Código o descripción"
+          [value]="busqueda()"
+          (input)="busqueda.set($any($event.target).value)"
+        />
+      </label>
+      <button type="submit" class="secundario" [disabled]="buscando()">Buscar</button>
+    </form>
+    @if (resultados().length > 0) {
+      <ul class="resultados" aria-label="Artículos encontrados">
+        @for (a of resultados(); track a.id) {
+          <li>
+            <button type="button" class="enlace" (click)="agregar(a)">
+              {{ a.codigoInterno }} · {{ a.descripcion }}
+            </button>
+            <span class="ayuda">Costo {{ a.costo | monto }}{{ a.moneda === 'USD' ? ' (USD)' : '' }}</span>
+          </li>
         }
-      </select>
-    </label>
-    <label>
-      Tipo
-      <select name="tipo" [value]="tipo()" (change)="cambiar(tipo, $any($event.target).value)">
-        @for (t of tipos; track t) {
-          <option [value]="t">{{ etiqueta[t] }}</option>
-        }
-      </select>
-    </label>
-    <label>
-      Punto de venta
-      <input
-        name="puntoVenta"
-        type="text"
-        inputmode="numeric"
-        autocomplete="off"
-        [value]="puntoVenta()"
-        (input)="cambiar(puntoVenta, $any($event.target).value)"
-      />
-    </label>
-    <label>
-      Número
-      <input
-        name="numero"
-        type="text"
-        inputmode="numeric"
-        autocomplete="off"
-        [value]="numero()"
-        (input)="cambiar(numero, $any($event.target).value)"
-      />
-    </label>
-    <label>
-      Fecha
-      <input name="fecha" type="date" [value]="fecha()" (input)="cambiar(fecha, $any($event.target).value)" />
-    </label>
-  </fieldset>
+      </ul>
+    }
+    @if (aviso(); as texto) {
+      <p class="ayuda" role="status">{{ texto }}</p>
+    }
 
-  <form class="buscador" (submit)="buscar($event)">
-    <label>
-      Agregar artículo
-      <input
-        name="busqueda"
-        type="search"
-        autocomplete="off"
-        placeholder="Código o descripción"
-        [value]="busqueda()"
-        (input)="busqueda.set($any($event.target).value)"
-      />
-    </label>
-    <button type="submit" class="secundario" [disabled]="buscando()">Buscar</button>
-  </form>
-  @if (resultados().length > 0) {
-    <ul class="resultados" aria-label="Artículos encontrados">
-      @for (a of resultados(); track a.id) {
-        <li>
-          <button type="button" class="enlace" (click)="agregar(a)">
-            {{ a.codigoInterno }} · {{ a.descripcion }}
-          </button>
-          <span class="ayuda">Costo {{ a.costo | monto }}{{ a.moneda === 'USD' ? ' (USD)' : '' }}</span>
-        </li>
-      }
-    </ul>
-  }
-  @if (aviso(); as texto) {
-    <p class="ayuda" role="status">{{ texto }}</p>
-  }
-
-  <table class="renglones">
-    <caption class="sr-only">Renglones de la compra</caption>
-    <thead>
-      <tr>
-        <th scope="col">Artículo</th>
-        <th scope="col" class="num">Cantidad</th>
-        <th scope="col" class="num">Costo unitario sin IVA</th>
-        <th scope="col"><span class="sr-only">Quitar</span></th>
-      </tr>
-    </thead>
-    <tbody>
-      @for (r of renglones(); track r.articuloId; let i = $index) {
+    <table class="renglones">
+      <caption class="sr-only">Renglones de la compra</caption>
+      <thead>
         <tr>
-          <td>
-            {{ r.codigoInterno }} · {{ r.descripcion }}{{ r.moneda === 'USD' ? ' (USD)' : '' }}
-            @if (r.aviso; as texto) {
-              <span class="aviso-fila">{{ texto }}</span>
-            }
-          </td>
-          <td class="num">
-            <input
-              [name]="'cantidad-' + i"
-              type="text"
-              inputmode="decimal"
-              autocomplete="off"
-              [attr.aria-label]="'Cantidad de ' + r.descripcion"
-              [value]="r.cantidad"
-              (input)="editar(i, 'cantidad', $any($event.target).value)"
-            />
-          </td>
-          <td class="num">
-            <input
-              [name]="'costo-' + i"
-              appImporte
-              [attr.aria-label]="'Costo de ' + r.descripcion"
-              [value]="r.costo"
-              (input)="editar(i, 'costo', $any($event.target).value)"
-            />
-          </td>
-          <td>
-            <button type="button" class="secundario chico" (click)="quitar(i)">Quitar</button>
-          </td>
+          <th scope="col">Artículo</th>
+          <th scope="col" class="num">Cantidad</th>
+          <th scope="col" class="num">Costo unitario sin IVA</th>
+          <th scope="col"><span class="sr-only">Quitar</span></th>
         </tr>
-      }
-    </tbody>
-  </table>
-  @if (renglones().length === 0 && sinArticulo().length === 0) {
-    <p class="ayuda estado-vacio">Todavía no agregaste artículos.</p>
-  }
+      </thead>
+      <tbody>
+        @for (r of renglones(); track r.articuloId; let i = $index) {
+          <tr>
+            <td>
+              {{ r.codigoInterno }} · {{ r.descripcion }}{{ r.moneda === 'USD' ? ' (USD)' : '' }}
+              @if (r.aviso; as texto) {
+                <span class="aviso-fila">{{ texto }}</span>
+              }
+            </td>
+            <td class="num">
+              <input
+                [name]="'cantidad-' + i"
+                type="text"
+                inputmode="decimal"
+                autocomplete="off"
+                [attr.aria-label]="'Cantidad de ' + r.descripcion"
+                [value]="r.cantidad"
+                (input)="editar(i, 'cantidad', $any($event.target).value)"
+              />
+            </td>
+            <td class="num">
+              <input
+                [name]="'costo-' + i"
+                appImporte
+                [attr.aria-label]="'Costo de ' + r.descripcion"
+                [value]="r.costo"
+                (input)="editar(i, 'costo', $any($event.target).value)"
+              />
+            </td>
+            <td>
+              <button type="button" class="secundario chico" (click)="quitar(i)">Quitar</button>
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+    @if (renglones().length === 0 && sinArticulo().length === 0) {
+      <p class="ayuda estado-vacio">Todavía no agregaste artículos.</p>
+    }
 
-  @if (sinArticulo().length > 0) {
-    <ul class="sin-articulo" aria-label="Renglones sin artículo">
-      @for (r of sinArticulo(); track r) {
-        <li [class.resolviendo]="resolviendo() === r">
-          <span>
-            Sin artículo: {{ r.codigo }} — {{ r.descripcion }} ({{ r.cantidad | number: '1.0-3' }} × {{ r.costoUnitario | monto }})
-            @if (r.cantidadNoEntera) {
-              <span class="aviso-fila">La cantidad no es entera: revisala contra la factura.</span>
-            }
-          </span>
-          <button type="button" class="secundario chico" (click)="elegirArticulo(r)">Elegir artículo</button>
-          <button
-            type="button"
-            class="secundario chico"
-            [attr.aria-label]="'Quitar sin artículo ' + r.codigo"
-            (click)="quitarSinArticulo(r)"
-          >
-            Quitar
-          </button>
-        </li>
-      }
-    </ul>
-  }
+    @if (sinArticulo().length > 0) {
+      <ul class="sin-articulo" aria-label="Renglones sin artículo">
+        @for (r of sinArticulo(); track r) {
+          <li [class.resolviendo]="resolviendo() === r">
+            <span>
+              Sin artículo: {{ r.codigo }} — {{ r.descripcion }} ({{ r.cantidad | number: '1.0-3' }} × {{ r.costoUnitario | monto }})
+              @if (r.cantidadNoEntera) {
+                <span class="aviso-fila">La cantidad no es entera: revisala contra la factura.</span>
+              }
+            </span>
+            <button type="button" class="secundario chico" (click)="elegirArticulo(r)">Elegir artículo</button>
+            <button
+              type="button"
+              class="secundario chico"
+              [attr.aria-label]="'Quitar sin artículo ' + r.codigo"
+              (click)="quitarSinArticulo(r)"
+            >
+              Quitar
+            </button>
+          </li>
+        }
+      </ul>
+    }
+  </section>
 
-  <fieldset class="recargos-costo">
-    <legend>Recargos del costo</legend>
+  <section class="paso panel recargos-costo">
+    <h2>Recargos del costo</h2>
     <p class="ayuda">
       Se suman al costo de cada artículo de la compra antes del margen (por ejemplo «Embalaje y carga» 4,44 %). Negativo
       descuenta. Hasta {{ maximoRecargos }}.
@@ -244,7 +247,7 @@
     <button type="button" class="secundario chico" [disabled]="recargos().length >= maximoRecargos" (click)="agregarRecargo()">
       Agregar recargo
     </button>
-  </fieldset>
+  </section>
 
   @if (errores().length > 0) {
     <div class="error" role="alert">
@@ -257,7 +260,7 @@
   }
 
   <div class="acciones">
-    <button type="button" class="secundario" [disabled]="trabajando()" (click)="verVistaPrevia()">Ver vista previa</button>
+    <button type="button" class="primario" [disabled]="trabajando()" (click)="verVistaPrevia()">Ver vista previa</button>
   </div>
 
   @if (plan(); as p) {

@@ -7,6 +7,7 @@ import { centavosDeImporte, textoDeImporte } from '../../core/formato/importe';
 import { MontoPipe } from '../../core/formato/monto';
 import { BarraAcciones } from '../../shared/barra-acciones';
 import { ImporteInput } from '../../shared/importe-input';
+import { SelectorArchivo } from '../../shared/selector-archivo';
 import { Articulo } from '../articulos/articulo.models';
 import { ArticulosService } from '../articulos/articulos.service';
 import { hoyEnBuenosAires } from '../clientes/cuenta/cobranza.models';
@@ -76,7 +77,7 @@ interface LecturaDeFactura {
  */
 @Component({
   selector: 'app-nueva-compra',
-  imports: [BarraAcciones, DecimalPipe, ImporteInput, MontoPipe, RouterLink],
+  imports: [BarraAcciones, DecimalPipe, ImporteInput, MontoPipe, RouterLink, SelectorArchivo],
   templateUrl: './nueva-compra.html',
   styleUrl: './compras.css',
 })
@@ -107,6 +108,8 @@ export class NuevaCompra implements OnInit {
   protected readonly maximoRecargos = MAXIMO_RECARGOS;
 
   protected readonly leyendo = signal(false);
+  /** El PDF elegido, para que el selector diga cuál se leyó. */
+  protected readonly archivoFactura = signal<File | null>(null);
   protected readonly lectura = signal<LecturaDeFactura | null>(null);
   protected readonly sinArticulo = signal<RenglonSinArticulo[]>([]);
   /** El renglón sin artículo para el que se está buscando uno: el próximo artículo elegido lo resuelve. */
@@ -188,11 +191,9 @@ export class NuevaCompra implements OnInit {
   }
 
   /** Lee la factura del proveedor en PDF y completa el formulario con el borrador; después se revisa y se sigue de siempre. */
-  protected leerFactura(evento: Event): void {
-    const campoArchivo = evento.target as HTMLInputElement;
-    const archivo = campoArchivo.files?.[0];
+  protected leerFactura(archivo: File | null): void {
     if (!archivo || this.leyendo()) return;
-    campoArchivo.value = '';
+    this.archivoFactura.set(archivo);
     this.leyendo.set(true);
     this.errores.set([]);
     this.api.leerFactura(archivo).subscribe({
@@ -370,6 +371,7 @@ export class NuevaCompra implements OnInit {
     this.sinArticulo.set([]);
     this.resolviendo.set(null);
     this.lectura.set(null);
+    this.archivoFactura.set(null);
   }
 
   /** Lo que se vio en la vista previa deja de valer: para confirmar hay que volver a verla (y nace otra clave). */

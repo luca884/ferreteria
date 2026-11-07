@@ -36,7 +36,7 @@ import {
   mapeoVacio,
   precargarMapeo,
 } from './mapeo-lista';
-import { SelectorArchivo } from './selector-archivo';
+import { SelectorArchivo } from '../../shared/selector-archivo';
 import {
   FilaDeVista,
   Seleccion,
