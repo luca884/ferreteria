@@ -98,3 +98,10 @@ Restricciones: los arreglos de CSS no se pueden medir con Vitest (jsdom no calcu
   - S23: tras buscar queda marcado el primero y Enter lo suma; si el texto cambió, Enter vuelve a buscar (con «llave» no sumó nada).
   - S3, revisado de paso: la caja del Vendedor dice «Ingresos y gastos» y no nombra retiros.
   - Próximo paso: suites completas, `ng build` y `odd-verifier`.
+- L7 (2026-11-07) Cierre. Commits: T1 `5cda162f`, T2 `503c03d6`, T3 `6eb46bf2`, T4 `32bde027` (S19–S20) y `c54177a6` (S18, S21–S24).
+  - Suites completas en `c54177a6`: backend 6391/6391 (`./mvnw test`), frontend 162 archivos, 4362/4362 (`npx ng test --watch=false`). `npx ng build` OK, con solo el aviso de presupuesto del CSS de `dialogo-cobro.ts`, que ya estaba en la base (5373 caracteres; T1 sumó unos 160).
+  - `odd-verifier` (Opus), contra la base `9b49ef61`: pass, sin blockers. S4: para todo positivo, `formatearRestado` da el «-» + monto de antes con U+2212, y lo mismo que el `restado()` de la caja. S15: sin token, otros estados, el 401 del login y dos 401 a la vez se portan como en la base. S19: con `enOferta=true` el CSV trae los mismos códigos y en el mismo orden que el listado; bordes de vigencia, aislamiento y 403 del Vendedor.
+  - Advertencias del verificador, sin cambios: S23 cambia a propósito que Enter, con el texto cambiado, ya no sume el resultado viejo marcado (como el Mostrador); `enOferta=talvez` da 400, cuando antes se ignoraba (valor fuera de dominio, el front solo manda `true`); el desglose escribe «− $» con espacio, como sus recargos (S21 pide «como los recargos»). Una cuarta, el comentario de `saldoTexto` corrido en `clientes.ts`, se arregló.
+  - Las sondas quedaron como regresión: `monto-restado.spec.ts`, `auth.interceptor.bordes.spec.ts` y `ExportacionEnOfertaIntegrationTest` (sin el caso que solo imprimía el estado de `enOferta=talvez`). Front 3 archivos, 110/110; backend 3/3.
+  - Risk: item 3 (S4 helper de formato de 8 hojas, S15 interceptor de todos los pedidos, S19 parámetro del export), verificado.
+  - Falta: push, PR y merge (Luca), después de mergear `feat/para-decidir-caja-y-margen`, que esta rama tiene debajo.
