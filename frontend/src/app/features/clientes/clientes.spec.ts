@@ -181,9 +181,10 @@ describe('Clientes', () => {
       expect(getComputedStyle(saldo).whiteSpace).toBe('normal');
       expect(getComputedStyle(contacto).overflowWrap).toBe('anywhere');
       expect(getComputedStyle(encabezado).whiteSpace).toBe('normal');
+      // Con 10 px quedaban 25 px de Contacto detrás del scroll a 1280 px; con 8 px la tabla entra (661 de 663).
       for (const celdaDeLaTabla of [encabezado, saldo]) {
-        expect(getComputedStyle(celdaDeLaTabla).paddingLeft).toBe('10px');
-        expect(getComputedStyle(celdaDeLaTabla).paddingRight).toBe('10px');
+        expect(getComputedStyle(celdaDeLaTabla).paddingLeft).toBe('8px');
+        expect(getComputedStyle(celdaDeLaTabla).paddingRight).toBe('8px');
       }
     });
 
