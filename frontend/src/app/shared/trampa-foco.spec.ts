@@ -149,3 +149,90 @@ describe('TrampaFoco', () => {
     expect(tab().defaultPrevented).toBe(false);
   });
 });
+
+/** Un diálogo abierto desde otro (el detalle de una venta y, encima, Imprimir adentro o Anular al lado). */
+@Component({
+  imports: [TrampaFoco],
+  template: `
+    <div role="dialog" aria-modal="true" appTrampaFoco>
+      <button id="detalle-primero" type="button">Cerrar</button>
+      @if (adentro()) {
+        <div role="dialog" aria-modal="true" appTrampaFoco>
+          <button id="adentro-primero" type="button">Cerrar</button>
+          <button id="adentro-ultimo" type="button">Imprimir</button>
+        </div>
+      }
+      <button id="detalle-ultimo" type="button">Anular</button>
+    </div>
+    @if (alLado()) {
+      <div role="dialog" aria-modal="true" appTrampaFoco>
+        <button id="al-lado-primero" type="button">Cancelar</button>
+        <button id="al-lado-ultimo" type="button">Anular</button>
+      </div>
+    }
+  `,
+})
+class AnfitrionAnidado {
+  readonly adentro = signal(false);
+  readonly alLado = signal(false);
+}
+
+describe('TrampaFoco con un diálogo encima de otro', () => {
+  let fixture: ComponentFixture<AnfitrionAnidado>;
+  const porId = (id: string) => (fixture.nativeElement as HTMLElement).querySelector(`#${id}`) as HTMLElement;
+
+  function tab(shift = false): KeyboardEvent {
+    const evento = new KeyboardEvent('keydown', { key: 'Tab', shiftKey: shift, bubbles: true, cancelable: true });
+    (document.activeElement ?? document.body).dispatchEvent(evento);
+    return evento;
+  }
+
+  async function mostrar(cual: 'adentro' | 'alLado', visible: boolean): Promise<void> {
+    fixture.componentInstance[cual].set(visible);
+    fixture.detectChanges();
+    await fixture.whenStable();
+  }
+
+  beforeEach(async () => {
+    await TestBed.configureTestingModule({ imports: [AnfitrionAnidado] }).compileComponents();
+    fixture = TestBed.createComponent(AnfitrionAnidado);
+    document.body.appendChild(fixture.nativeElement);
+    fixture.detectChanges();
+    porId('detalle-primero').focus();
+  });
+
+  afterEach(() => fixture.nativeElement.remove());
+
+  it('con uno abierto adentro, Tab cicla solo en el de arriba', async () => {
+    await mostrar('adentro', true);
+    porId('adentro-ultimo').focus();
+
+    tab();
+    expect(document.activeElement).toBe(porId('adentro-primero'));
+
+    tab(true);
+    expect(document.activeElement).toBe(porId('adentro-ultimo'));
+  });
+
+  it('con uno abierto al lado, Tab cicla solo en el de arriba', async () => {
+    await mostrar('alLado', true);
+    porId('al-lado-ultimo').focus();
+
+    tab();
+    expect(document.activeElement).toBe(porId('al-lado-primero'));
+
+    tab(true);
+    expect(document.activeElement).toBe(porId('al-lado-ultimo'));
+  });
+
+  it('cuando se cierra el de arriba, el de abajo vuelve a atrapar el foco', async () => {
+    porId('detalle-ultimo').focus();
+    await mostrar('alLado', true);
+    await mostrar('alLado', false);
+    expect(document.activeElement).toBe(porId('detalle-ultimo'));
+
+    tab();
+
+    expect(document.activeElement).toBe(porId('detalle-primero'));
+  });
+});

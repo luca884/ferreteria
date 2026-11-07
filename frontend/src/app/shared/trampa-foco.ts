@@ -13,10 +13,14 @@ const ENFOCABLES = [
   .map((selector) => `${selector}:not([tabindex="-1"])`)
   .join(', ');
 
+/** Las trampas abiertas, en orden de apertura: solo la última (el diálogo de arriba) atiende el Tab. */
+const abiertas: TrampaFoco[] = [];
+
 /**
  * Trampa de foco para los diálogos modales (`role="dialog"` o `"alertdialog"` con `aria-modal`): Tab y
  * Shift+Tab ciclan entre los controles del diálogo y, al cerrarse, el foco vuelve a lo que lo tenía al
- * abrirse. No toca Esc ni Enter: cada diálogo los sigue manejando como antes.
+ * abrirse. No toca Esc ni Enter: cada diálogo los sigue manejando como antes. Con un diálogo abierto encima de otro
+ * (Imprimir o Anular desde el detalle de una venta), adentro o al lado, el Tab lo atiende solo el de arriba.
  *
  * Es propia y no un `<dialog>` con `showModal()` porque el mostrador decide a dónde va el foco al cerrar (el
  * buscador, para el lector de código de barras) y jsdom no implementa `showModal()`.
@@ -31,8 +35,13 @@ export class TrampaFoco implements OnDestroy {
   /** Lo que tenía el foco al abrirse el diálogo (el botón o el campo desde el que se abrió). */
   private readonly previo = this.documento.activeElement;
 
+  constructor() {
+    abiertas.push(this);
+  }
+
   protected alTeclear(evento: KeyboardEvent): void {
     if (evento.key !== 'Tab' || evento.defaultPrevented) return;
+    if (abiertas[abiertas.length - 1] !== this) return;
     const controles = Array.from(this.host.querySelectorAll<HTMLElement>(ENFOCABLES));
     if (controles.length === 0) {
       evento.preventDefault();
@@ -52,6 +61,7 @@ export class TrampaFoco implements OnDestroy {
   }
 
   ngOnDestroy(): void {
+    abiertas.splice(abiertas.indexOf(this), 1);
     // Si al cerrar alguien ya movió el foco afuera (el mostrador lo manda al buscador), se respeta.
     const activo = this.documento.activeElement;
     const sinDuenio = !activo || activo === this.documento.body || this.host.contains(activo);
