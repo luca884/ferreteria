@@ -155,6 +155,27 @@ class CompraControllerIntegrationTest extends IntegrationTestBase {
     }
 
     @Test
+    @DisplayName("otra ferreteria no puede pedir la vista previa con el proveedor ni el articulo ajenos: 404, y no se escribe nada (sonda del verificador)")
+    void vistaPreviaAislada() throws Exception {
+        Tienda otra = tienda();
+        String duenoOtra = login(otra.emailDueno());
+        long proveedorOtra = proveedor(otra.id(), "Otro proveedor");
+        long articuloOtra = articulo(otra.id(), "TOR-1", "Tornillo otra", "100.00", "157.30");
+
+        postJson("/api/compras/vista-previa", duenoOtra, cuerpo(null, proveedor, 7, articuloOtra, "1", "1"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.message").value("Proveedor no encontrado"));
+        postJson("/api/compras/vista-previa", duenoOtra, cuerpo(null, proveedorOtra, 7, tornillo, "1", "1"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.message").value("Artículo no encontrado"));
+        assertThat(jdbc.queryForMap("select stock_actual, costo from articulo where id = ?", tornillo))
+                .containsEntry("stock_actual", new java.math.BigDecimal("0.000"))
+                .containsEntry("costo", new java.math.BigDecimal("100.00"));
+        assertThat(jdbc.queryForObject("select count(*) from compra where ferreteria_id in (?, ?)", Integer.class,
+                tienda.id(), otra.id())).isZero();
+    }
+
+    @Test
     @DisplayName("la forma del pedido se valida campo por campo: 400")
     void validacionDeForma() throws Exception {
         postJson("/api/compras", dueno, cuerpo(null, 1, tornillo, "1", "100.00"))

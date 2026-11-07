@@ -67,6 +67,20 @@ describe('CampoMoneda (arreglos-compras, S6)', () => {
     expect(cambios).toEqual([]);
   });
 
+  it('el blur de un control sin tocar no lo ensucia ni avisa cambio, solo lo marca tocado', () => {
+    const control = fixture.componentInstance.costo;
+    const cambios: unknown[] = [];
+    control.valueChanges.subscribe((v) => cambios.push(v));
+
+    campo('costo').dispatchEvent(new Event('blur'));
+
+    expect(campo('costo').value).toBe('578.378,00');
+    expect(control.value).toBe(578378);
+    expect(control.dirty).toBe(false);
+    expect(control.touched).toBe(true);
+    expect(cambios).toEqual([]);
+  });
+
   it('suelto (con [value]), también completa los decimales al salir; vacío queda vacío', () => {
     teclear(campo('suelto'), '1500,5');
     campo('suelto').dispatchEvent(new Event('blur'));

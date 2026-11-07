@@ -49,3 +49,15 @@ Restricciones: test-first; los campos nuevos del backend son opcionales y van en
   - No se probaron en vivo «Efectivo inicial» ni el «Importe» de un movimiento de Caja, porque la caja del 06/11 está abierta y el formulario de movimientos no aparece. Los cubre `caja.spec.ts`.
   - Después de agregar un artículo, la lista de resultados queda abierta para seguir agregando. Así era antes con el clic; no se cambia.
   - Fuera de alcance: el placeholder de WhatsApp del formulario de Clientes se corta.
+- L9 (2026-11-07) Verificador (`odd-verifier`, opus, sobre `583644a` y `8379544`): **fail** por un blocker. S1–S5, S7 y S8 pasan. Sin búsqueda, el orden de `GET /api/articulos` y de la exportación es idéntico a `82a8fb3` con cinco `Sort` distintos. La vista previa da la cuenta a mano con alícuotas 0, 10,5, 21 y 27, y otra ferretería recibe 404.
+  - **B1 (S6):** quedaron campos de plata sin `app-campo-moneda`. Son «Recibido» y los montos del pago Mixto del diálogo de cobro del Mostrador (`features/mostrador/dialogo-cobro.ts`, template dentro del `.ts`, por eso el mapeo de L2 no lo vio) y «Descuento ($)» y «Precio de oferta ($)» de la oferta del artículo (`features/articulos/oferta-articulo.html`, `type="number"`).
+  - **Advisory 1, se corrige:** con «9.500,00» a la vista, un dígito tecleado al final se descartaba, porque ya hay dos decimales. Antes, «9.500» más «0» daba «95.000». Decisión: al entrar en un campo de plata, si termina en «,00» se le saca (sin avisar cambio). Al salir vuelve. Así se edita como antes.
+  - **Advisory 6, se corrige:** el JSDoc huérfano de `contactoDe` en `proveedores.ts`.
+  - Los otros advisories quedan anotados:
+    - 2: al pasar un ajuste de $ a %, lo que ya se veía queda «10,00» hasta reescribirlo.
+    - 3: la suma de las bases por alícuota puede diferir un centavo del subtotal. El front no la muestra.
+    - 4: los totales de una compra en dólares usan `| monto` («$»), como el Neto de antes.
+    - 5: un artículo exento da la línea «IVA 0 % $ 0,00».
+    - 7: si la lectura del PDF falla, el selector igual muestra el nombre del archivo.
+  - Probes que se commitean como regresión: totales de FB con alícuotas mixtas y recargos ±, HALF_UP en el límite, la vista previa desde otra ferretería, el orden sin búsqueda en pantalla y exportación, y el blur sin modificar el control.
+  - El lote de corrección va a un `odd-implementer` (sonnet). Después, recheck del verificador solo sobre B1 y el advisory 1.

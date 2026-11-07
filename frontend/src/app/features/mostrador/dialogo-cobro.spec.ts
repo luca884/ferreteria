@@ -104,8 +104,18 @@ describe('DialogoCobro', () => {
     expect(el().querySelector('[role="dialog"]')!.getAttribute('aria-modal')).toBe('true');
     expect(el().querySelector('.total')!.textContent!.trim()).toBe(`$${NBSP}3.630,00`);
     expect(elegidos()).toEqual(['Efectivo']);
-    expect(importe().value).toBe('3.630,00');
+    // El foco entra y le saca el «,00» para seguir tecleando (arreglos-compras, advisory 1).
+    expect(importe().value).toBe('3.630');
     expect(document.activeElement).toBe(importe());
+  });
+
+  it('«Recibido» es un campo de plata: lleva el «$» adentro y completa los decimales al salir (arreglos-compras, S6)', async () => {
+    await abrir();
+
+    expect(importe().closest('app-campo-moneda')?.querySelector('.signo')?.textContent?.trim()).toBe('$');
+    escribir('5000');
+    importe().dispatchEvent(new Event('blur'));
+    expect(importe().value).toBe('5.000,00');
   });
 
   it('la cabecera dice cuántos renglones se cobran', async () => {
@@ -749,6 +759,16 @@ describe('DialogoCobro', () => {
       await estabilizar();
     }
 
+    it('cada monto del mixto es un campo de plata: lleva el «$» adentro y completa los decimales al salir', async () => {
+      await abrirMixto();
+
+      expect(monto(1).closest('app-campo-moneda')?.querySelector('.signo')?.textContent?.trim()).toBe('$');
+      escribirMonto(1, '1500');
+      monto(1).dispatchEvent(new Event('blur'));
+      expect(monto(1).value).toBe('1.500,00');
+      expect(resumen()).toBe('Falta $ 2.130,00');
+    });
+
     it('«Mixto» muestra una fila por forma, sin el recibido, con el foco en efectivo y todo por cobrar', async () => {
       await abrirMixto();
 
@@ -924,7 +944,7 @@ describe('DialogoCobro', () => {
       expect(total()).toBe(`$${NBSP}90,00`);
       expect(descuento()).toBe(`Descuento por forma de pago (10 %) −$${NBSP}10,00`);
       expect(recargo()).toBeNull();
-      expect(importe().value).toBe('90,00');
+      expect(importe().value).toBe('90');
       escribir('100');
       expect(vuelto()).toBe(`Vuelto $${NBSP}10,00`);
     });
@@ -1043,7 +1063,7 @@ describe('DialogoCobro', () => {
     it('una forma en efectivo con recargo: el recibido arranca en el total a cobrar y el vuelto sale de ahi', async () => {
       await abrir(10000, [forma(1, 'Efectivo', 'EFECTIVO', 5)]);
 
-      expect(importe().value).toBe('105,00');
+      expect(importe().value).toBe('105');
       escribir('200');
       expect(vuelto()).toBe(`Vuelto $${NBSP}95,00`);
       tecla('Enter');

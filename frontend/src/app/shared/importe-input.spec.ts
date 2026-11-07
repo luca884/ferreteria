@@ -1,21 +1,24 @@
 import { Component, signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { FormControl, ReactiveFormsModule } from '@angular/forms';
+import { CampoMoneda } from './campo-moneda';
 import { ImporteInput } from './importe-input';
 
 @Component({
-  imports: [ImporteInput, ReactiveFormsModule],
+  imports: [CampoMoneda, ImporteInput, ReactiveFormsModule],
   template: `
     <input id="suelto" appImporte [value]="texto()" (input)="texto.set($any($event.target).value)" />
     <input id="con-control" appImporte [formControl]="control" />
     <input id="entero" appImporte [decimales]="0" />
     <input id="con-signo" appImporte negativos [formControl]="conSigno" />
+    <app-campo-moneda><input id="plata" appImporte [formControl]="plata" /></app-campo-moneda>
   `,
 })
 class Anfitrion {
   readonly texto = signal('');
   readonly control = new FormControl<number | null>(null);
   readonly conSigno = new FormControl<number | null>(null);
+  readonly plata = new FormControl<number | null>(9500);
 }
 
 describe('ImporteInput', () => {
@@ -123,5 +126,46 @@ describe('ImporteInput', () => {
   it('con 0 decimales la coma no entra', () => {
     teclear(campo('entero'), '12,5');
     expect(campo('entero').value).toBe('125');
+  });
+
+  describe('al entrar a un campo de plata (arreglos-compras, S6, advisory 1)', () => {
+    const enfocar = (input: HTMLInputElement) => input.dispatchEvent(new Event('focus'));
+
+    it('saca el «,00» del final, sin avisar cambio, y un dígito tecleado al final sigue la máscara de siempre', () => {
+      const control = fixture.componentInstance.plata;
+      const cambios: unknown[] = [];
+      control.valueChanges.subscribe((v) => cambios.push(v));
+      expect(campo('plata').value).toBe('9.500,00');
+
+      enfocar(campo('plata'));
+
+      expect(campo('plata').value).toBe('9.500');
+      expect(control.value).toBe(9500);
+      expect(control.dirty).toBe(false);
+      expect(cambios).toEqual([]);
+
+      campo('plata').setSelectionRange(5, 5);
+      teclear(campo('plata'), '0');
+      expect(campo('plata').value).toBe('95.000');
+      expect(control.value).toBe(95000);
+      campo('plata').dispatchEvent(new Event('blur'));
+      expect(campo('plata').value).toBe('95.000,00');
+    });
+
+    it('con centavos distintos de cero no cambia', () => {
+      fixture.componentInstance.plata.setValue(1234.5);
+
+      enfocar(campo('plata'));
+
+      expect(campo('plata').value).toBe('1.234,50');
+    });
+
+    it('un campo que no es de plata no cambia', () => {
+      campo('con-control').value = '9.500,00';
+
+      enfocar(campo('con-control'));
+
+      expect(campo('con-control').value).toBe('9.500,00');
+    });
   });
 });

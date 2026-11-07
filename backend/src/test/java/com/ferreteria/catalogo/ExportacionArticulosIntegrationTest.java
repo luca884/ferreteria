@@ -106,6 +106,23 @@ class ExportacionArticulosIntegrationTest extends AjustesTestBase {
     }
 
     @Test
+    @DisplayName("sin busqueda (ausente, vacia o en blanco) el orden es el de siempre: descripcion y id, sin prioridad de prefijo (sonda del verificador)")
+    void sinBusquedaElOrdenDeSiempre() throws Exception {
+        cargar(a, "K-1", "Barreta sacaclavos", "UNIDAD", "ARS", "1.00", "2.00", "0.000", "0.000");
+        cargar(a, "K-2", "Clavo 2 pulgadas", "UNIDAD", "ARS", "1.00", "2.00", "0.000", "0.000");
+        cargar(a, "K-3", "Clavo 1 pulgada", "UNIDAD", "ARS", "1.00", "2.00", "0.000", "0.000");
+        cargar(a, "K-4", "Clavo 1 pulgada", "UNIDAD", "ARS", "1.00", "2.00", "0.000", "0.000");
+
+        for (String consulta : new String[] {"", "?q=", "?q=   "}) {
+            String[] lineas = csv(exportar(consulta, duenoA)).split("\r\n");
+
+            assertThat(Arrays.stream(lineas).skip(1).map(l -> l.split(";")[0].replace("=", "").replace("\"", "")).toList())
+                    .as("consulta [%s]", consulta)
+                    .containsExactly("K-1", "A-001", "K-3", "K-4", "K-2", "B-002");
+        }
+    }
+
+    @Test
     @DisplayName("respeta la busqueda y los inactivos de la pantalla; el texto que parece formula lleva apostrofo")
     void respetaElFiltro() throws Exception {
         assertThat(csv(exportar("?q=tuerca", duenoA))).isEqualTo(ENCABEZADO + "\r\n"

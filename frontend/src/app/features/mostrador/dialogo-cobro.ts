@@ -12,6 +12,7 @@ import {
 } from '@angular/core';
 import { centavosDeImporte, normalizarImporte } from '../../core/formato/importe';
 import { MontoPipe, formatearMonto } from '../../core/formato/monto';
+import { CampoMoneda } from '../../shared/campo-moneda';
 import { ImporteInput } from '../../shared/importe-input';
 import { TrampaFoco } from '../../shared/trampa-foco';
 import { CuentaCliente } from '../clientes/cliente.models';
@@ -84,7 +85,7 @@ const centavosATexto = (c: number) => `${normalizarImporte(String(Math.floor(c /
  */
 @Component({
   selector: 'app-dialogo-cobro',
-  imports: [ImporteInput, MontoPipe, TrampaFoco],
+  imports: [CampoMoneda, ImporteInput, MontoPipe, TrampaFoco],
   template: `
     <!-- El mousedown sobre el fondo no mueve el foco al body: si no, Esc y Enter (que escucha el diálogo) dejarían de andar. -->
     <div class="dialogo-fondo" (mousedown)="retenerFoco($event)">
@@ -173,15 +174,17 @@ const centavosATexto = (c: number) => `${normalizarImporte(String(Math.floor(c /
             @for (f of formas(); track f.id) {
               <label class="fila-pago">
                 {{ f.nombre }}
-                <input
-                  #filaMonto
-                  appImporte
-                  [attr.data-forma]="f.id"
-                  [disabled]="razonesMixto()[f.id] !== null"
-                  [attr.aria-describedby]="razonesMixto()[f.id] ? 'razon-fila-' + f.id : null"
-                  [value]="montos()[f.id] ?? ''"
-                  (input)="escribirMonto(f.id, $any($event.target).value)"
-                />
+                <app-campo-moneda>
+                  <input
+                    #filaMonto
+                    appImporte
+                    [attr.data-forma]="f.id"
+                    [disabled]="razonesMixto()[f.id] !== null"
+                    [attr.aria-describedby]="razonesMixto()[f.id] ? 'razon-fila-' + f.id : null"
+                    [value]="montos()[f.id] ?? ''"
+                    (input)="escribirMonto(f.id, $any($event.target).value)"
+                  />
+                </app-campo-moneda>
               </label>
               @if (razonesMixto()[f.id]; as razon) {
                 <small class="razon-fila" [id]="'razon-fila-' + f.id">{{ razon }}</small>
@@ -204,14 +207,16 @@ const centavosATexto = (c: number) => `${normalizarImporte(String(Math.floor(c /
           <div class="efectivo">
             <label class="recibido">
               Recibido
-              <input
-                #importe
-                appImporte
-                [attr.aria-invalid]="errorRecibido() ? 'true' : null"
-                [attr.aria-describedby]="errorRecibido() ? 'dialogo-cobro-error' : null"
-                [value]="textoRecibido()"
-                (input)="escrito.set($any($event.target).value)"
-              />
+              <app-campo-moneda>
+                <input
+                  #importe
+                  appImporte
+                  [attr.aria-invalid]="errorRecibido() ? 'true' : null"
+                  [attr.aria-describedby]="errorRecibido() ? 'dialogo-cobro-error' : null"
+                  [value]="textoRecibido()"
+                  (input)="escrito.set($any($event.target).value)"
+                />
+              </app-campo-moneda>
             </label>
             @if (faltaCentavos() > 0) {
               <!-- Sin role="status": ese rol es atómico y re-leería todo el renglón en cada tecla. -->
@@ -434,6 +439,14 @@ const centavosATexto = (c: number) => `${normalizarImporte(String(Math.floor(c /
     }
     .no-facturable small {
       color: var(--texto-suave);
+    }
+    .recibido app-campo-moneda,
+    .fila-pago app-campo-moneda {
+      display: flex;
+    }
+    .recibido input,
+    .fila-pago input {
+      flex: 1;
     }
     .recibido input {
       width: 100%;

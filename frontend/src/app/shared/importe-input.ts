@@ -25,6 +25,7 @@ import { CampoMoneda } from './campo-moneda';
     inputmode: 'decimal',
     autocomplete: 'off',
     spellcheck: 'false',
+    '(focus)': 'alEntrar()',
     '(blur)': 'alSalir()',
   },
   providers: [{ provide: NG_VALUE_ACCESSOR, useExisting: forwardRef(() => ImporteInput), multi: true }],
@@ -50,6 +51,22 @@ export class ImporteInput implements ControlValueAccessor {
 
   writeValue(valor: number | null | undefined): void {
     this.campo.value = this.esPlata() ? textoDePlata(valor) : textoDeImporte(valor);
+  }
+
+  /**
+   * Al entrar a un campo de plata, un texto que termina en «,00» lo pierde («9.500,00» → «9.500»): así un dígito tecleado
+   * al final sigue la máscara de siempre («9.500» + «0» = «95.000») y no se descarta por tener ya dos decimales. Solo
+   * cambia lo que se ve: no se avisa ningún cambio, y al salir el blur vuelve a poner los decimales.
+   */
+  protected alEntrar(): void {
+    if (!this.esPlata() || !this.campo.value.endsWith(',00')) return;
+    const inicio = this.campo.selectionStart;
+    const fin = this.campo.selectionEnd;
+    this.campo.value = this.campo.value.slice(0, -3);
+    if (inicio !== null && fin !== null) {
+      const largo = this.campo.value.length;
+      this.campo.setSelectionRange(Math.min(inicio, largo), Math.min(fin, largo));
+    }
   }
 
   /**
