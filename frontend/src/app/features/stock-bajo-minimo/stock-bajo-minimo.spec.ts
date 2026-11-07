@@ -117,6 +117,18 @@ describe('StockBajoMinimo', () => {
     ]);
   });
 
+  // Bugs de la guía, S11: «12/10/2026 · Proveedor» iba entero en un renglón y, a 1280 px, desbordaba sobre A REPONER.
+  it('en la última compra la fecha no se parte y el proveedor puede bajar de renglón', async () => {
+    await crear();
+
+    const celda = filasTabla()[1].querySelector<HTMLElement>('td.ultima-compra')!;
+    const fecha = celda.querySelector<HTMLElement>('.fecha')!;
+
+    expect(fecha.textContent).toBe('12/10/2026');
+    expect(getComputedStyle(fecha).whiteSpace).toBe('nowrap');
+    expect(getComputedStyle(celda).whiteSpace).not.toBe('nowrap');
+  });
+
   it('el impreso lleva el título de GDS, la ferretería, el orden y la fecha en que se emitió', async () => {
     await crear();
 

@@ -41,14 +41,16 @@ describe('authInterceptor', () => {
     req.flush({});
   });
 
-  it('con 401 cierra la sesión y manda al login con la URL actual como returnUrl', () => {
+  // Bugs de la guía, S15: con la sesión abierta, un 401 es que el servidor la cerró (suspendieron la ferretería, dieron
+  // de baja al usuario, le cambiaron el rol o venció): el login lo avisa con sesion=cerrada.
+  it('con 401 cierra la sesión y manda al login con la URL actual como returnUrl y el aviso de sesión cerrada', () => {
     router.url = '/mostrador?q=tornillo';
 
     dar401();
 
     expect(auth.logout).toHaveBeenCalled();
     expect(router.navigate).toHaveBeenCalledWith(['/login'], {
-      queryParams: { returnUrl: '/mostrador?q=tornillo' },
+      queryParams: { returnUrl: '/mostrador?q=tornillo', sesion: 'cerrada' },
     });
   });
 
@@ -57,7 +59,7 @@ describe('authInterceptor', () => {
 
     dar401();
 
-    expect(router.navigate).toHaveBeenCalledWith(['/login']);
+    expect(router.navigate).toHaveBeenCalledWith(['/login'], { queryParams: { sesion: 'cerrada' } });
   });
 
   it('una URL que no es ruta propia no se manda como returnUrl', () => {
@@ -65,7 +67,16 @@ describe('authInterceptor', () => {
 
     dar401();
 
-    expect(router.navigate).toHaveBeenCalledWith(['/login']);
+    expect(router.navigate).toHaveBeenCalledWith(['/login'], { queryParams: { sesion: 'cerrada' } });
+  });
+
+  it('sin sesión (sin token), un 401 manda al login sin decir que se cerró: no había ninguna abierta', () => {
+    auth.token = () => null;
+    router.url = '/mostrador';
+
+    dar401();
+
+    expect(router.navigate).toHaveBeenCalledWith(['/login'], { queryParams: { returnUrl: '/mostrador' } });
   });
 
   it('hallazgo 5: un 403 por contraseña por cambiar refresca la sesión y lleva a «Mi contraseña»', () => {

@@ -25,6 +25,7 @@ export function documentoDePrueba(cambios: Partial<DocumentoNoFiscal> = {}): Doc
       {
         renglon: 1,
         descripcion: 'Martillo',
+        unidad: 'UNIDAD',
         cantidad: 2,
         precioUnitario: 1000,
         descuentoPorcentaje: 10,
@@ -33,6 +34,7 @@ export function documentoDePrueba(cambios: Partial<DocumentoNoFiscal> = {}): Doc
       {
         renglon: 2,
         descripcion: 'Clavos',
+        unidad: 'KILO',
         cantidad: 1.5,
         precioUnitario: 400,
         descuentoPorcentaje: 0,

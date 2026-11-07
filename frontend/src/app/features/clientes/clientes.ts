@@ -218,6 +218,7 @@ export class Clientes implements OnInit {
     if (this.auth.esDueno()) this.errorLimite.set(this.validarLimite());
     if (this.form.invalid || this.errorTipo() || this.errorNumero() || this.errorDomicilio() || this.errorLimite()) {
       this.form.markAllAsTouched();
+      this.form.markAllAsDirty();
       this.enfocar('form.alta [aria-invalid="true"]');
       return;
     }
@@ -358,6 +359,14 @@ export class Clientes implements OnInit {
     if (cliente) void this.router.navigate(['/clientes', cliente.id, 'cuenta']);
   }
 
+  /** El documento en dos partes: el renglón se parte entre el tipo y el número, nunca dentro del número. */
+  protected partesDocumento(cliente: Cliente): { tipo: string; numero: string } | null {
+    const texto = documentoLegible(cliente);
+    if (!texto) return null;
+    const espacio = texto.indexOf(' ');
+    return { tipo: texto.slice(0, espacio), numero: texto.slice(espacio + 1) };
+  }
+
   /** El saldo del Dueño: lo que debe; «a favor» si es negativo; vacío si el servidor no lo mandó. */
   protected saldoTexto(cliente: Cliente): string {
     if (cliente.saldo === undefined) return '';
@@ -375,7 +384,8 @@ export class Clientes implements OnInit {
 
   protected invalido(campo: 'razonSocial' | 'email'): boolean {
     const control = this.form.controls[campo];
-    return control.touched && control.invalid;
+    // Sin escribir nada, avisa recién al intentar guardar, que lo marca modificado (bugs de la guía, S14).
+    return control.touched && control.dirty && control.invalid;
   }
 
   /** Lo que se manda: solo lo cargado y sin espacios de más. El documento lo valida y normaliza el servidor. */

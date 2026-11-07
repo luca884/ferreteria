@@ -124,6 +124,18 @@ describe('CotizacionLateral', () => {
       expect(resaltados).toEqual(['950,00']);
     });
 
+    // Bugs de la guía, S7: sin margen entre las dos columnas, compra y venta se leían pegadas («1.520,001.570,00»).
+    it('la compra deja un margen antes de la venta, y la columna del nombre cede lugar para que entre', async () => {
+      const el = await crear(cotizacion({ visibles: [oficial, euro] }));
+
+      const [compra, venta] = Array.from(el.querySelectorAll<HTMLElement>('table.cotizaciones tbody tr:first-child td'));
+      const nombre = el.querySelector<HTMLElement>('table.cotizaciones thead th')!;
+
+      expect(getComputedStyle(compra).paddingRight).toBe('var(--e-2)');
+      expect(getComputedStyle(venta).paddingRight).not.toBe('var(--e-2)');
+      expect(getComputedStyle(nombre).width).toBe('32%');
+    });
+
     it('muestra euro y real si son visibles, sin resaltarlos', async () => {
       const real: TipoCotizacion = { ...euro, codigo: 'BRL:oficial', nombre: 'Real', compra: 190, venta: 200 };
       const el = await crear(cotizacion({ visibles: [oficial, euro, real] }));

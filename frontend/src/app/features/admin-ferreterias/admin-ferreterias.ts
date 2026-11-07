@@ -88,6 +88,12 @@ export class AdminFerreterias implements OnInit {
   protected readonly etiquetaAmbiente = AMBIENTE_ARCA_LABELS;
   protected readonly fechaDeAlta = fechaDeAlta;
 
+  /** El email en dos partes, para que el renglón se parta después de la arroba: «dueno@» / «tornillo.demo». */
+  protected partesEmail(email: string): { usuario: string; dominio: string } {
+    const arroba = email.indexOf('@');
+    return arroba < 0 ? { usuario: email, dominio: '' } : { usuario: email.slice(0, arroba + 1), dominio: email.slice(arroba + 1) };
+  }
+
   protected readonly ferreterias = signal<FerreteriaAdmin[]>([]);
   protected readonly activas = computed(() => this.ferreterias().filter((f) => f.estado === 'ACTIVA').length);
   protected readonly suspendidas = computed(() => this.ferreterias().length - this.activas());

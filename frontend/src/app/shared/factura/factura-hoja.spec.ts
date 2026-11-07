@@ -96,7 +96,7 @@ describe('FacturaHoja (CU-07 paso 5, S5, S6, S12, S13)', () => {
   it('B con descuento y recargo: muestra el subtotal, el descuento y el recargo de la venta, y el total del documento', async () => {
     await crear(documentoB(), ventaParaFactura({ subtotal: 1300, descuento: 130, recargo: 40 }));
 
-    expect(lineas('.totales')).toEqual(['Subtotal $ 1.300,00', 'Descuento -$ 130,00', 'Recargo $ 40,00', 'Total $ 1.210,00']);
+    expect(lineas('.totales')).toEqual(['Subtotal $ 1.300,00', 'Descuento −$ 130,00', 'Recargo $ 40,00', 'Total $ 1.210,00']);
   });
 
   it('B con descuento global (QA B-2): el importe del renglón es precio × cantidad y abajo subtotal, descuento y total suman a la vista', async () => {
@@ -112,7 +112,7 @@ describe('FacturaHoja (CU-07 paso 5, S5, S6, S12, S13)', () => {
     );
 
     expect(filas('.renglones')).toEqual([['10', 'Martillo', '$ 56,87', '$ 568,70']]);
-    expect(lineas('.totales')).toEqual(['Subtotal $ 568,70', 'Descuento -$ 56,87', 'Total $ 511,83']);
+    expect(lineas('.totales')).toEqual(['Subtotal $ 568,70', 'Descuento −$ 56,87', 'Total $ 511,83']);
   });
 
   it('B con recargo solo: el importe del renglón no lleva el recargo, que va abajo después del subtotal', async () => {
@@ -136,7 +136,7 @@ describe('FacturaHoja (CU-07 paso 5, S5, S6, S12, S13)', () => {
 
     expect(lineas('.totales')).toEqual([
       'Subtotal $ 1.300,00',
-      'Descuento por forma de pago -$ 90,00',
+      'Descuento por forma de pago −$ 90,00',
       'Total $ 1.210,00',
     ]);
   });
@@ -234,7 +234,7 @@ describe('FacturaHoja (CU-07 paso 5, S5, S6, S12, S13)', () => {
       ['2', 'Martillo', '$ 605,00', '$ 1.210,00'],
       ['1', 'Clavo', '$ 121,00', '$ 121,00'],
     ]);
-    expect(lineas('.totales')).toEqual(['Subtotal $ 1.331,00', 'Descuento -$ 133,10', 'Total $ 1.197,90']);
+    expect(lineas('.totales')).toEqual(['Subtotal $ 1.331,00', 'Descuento −$ 133,10', 'Total $ 1.197,90']);
   });
 
   it('C: sin IVA en los renglones ni en el pie', async () => {

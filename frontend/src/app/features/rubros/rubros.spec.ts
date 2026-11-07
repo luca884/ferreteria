@@ -314,6 +314,19 @@ describe('Rubros', () => {
   });
 
   describe('validaciones', () => {
+    // Bugs de la guía, S14: el alta vacía no avisa por pasar por el campo; avisa al intentar guardar.
+    it('pasar por el nombre vacío no avisa; intentar guardar sí', async () => {
+      await crear([], true);
+
+      input('nombre').dispatchEvent(new Event('focus'));
+      input('nombre').dispatchEvent(new Event('blur'));
+      await refrescar();
+      expect(el().querySelector('#nombre-error')).toBeNull();
+
+      await enviar();
+      expect(el().querySelector('#nombre-error')?.textContent).toContain('obligatorio');
+    });
+
     it('nombre vacío y margen negativo: cada mensaje junto a su campo, con punto final, y no manda nada', async () => {
       await crear([], true);
       await escribir('nombre', '   ');

@@ -100,7 +100,14 @@
                   <td>{{ fechaDeAlta(ferreteria.creadoEn) }}</td>
                   <td class="numero">{{ ferreteria.duenosActivos }}</td>
                   <td class="numero">{{ ferreteria.vendedoresActivos }}</td>
-                  <td>{{ ferreteria.emailDueno ?? '—' }}</td>
+                  <td class="email">
+                    @if (ferreteria.emailDueno; as email) {
+                      @let partes = partesEmail(email);
+                      {{ partes.usuario }}<wbr />{{ partes.dominio }}
+                    } @else {
+                      —
+                    }
+                  </td>
                   <td class="de-prueba">{{ ferreteria.dePrueba ? 'Sí' : 'No' }}</td>
                   <td class="ambiente">{{ ferreteria.ambiente ? etiquetaAmbiente[ferreteria.ambiente] : '—' }}</td>
                   <td class="factura">{{ ferreteria.facturacionHabilitada ? 'Sí' : 'No' }}</td>

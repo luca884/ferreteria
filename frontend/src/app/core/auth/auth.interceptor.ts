@@ -28,10 +28,15 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
       }
       if (err instanceof HttpErrorResponse && err.status === 401 && !req.url.endsWith('/auth/login')) {
         auth.logout();
+        const queryParams: Record<string, string> = {};
         // Vuelve a donde estaba (solo rutas propias) una vez que se loguee de nuevo.
         const actual = router.url;
-        if (esRutaPropia(actual)) {
-          void router.navigate(['/login'], { queryParams: { returnUrl: actual } });
+        if (esRutaPropia(actual)) queryParams['returnUrl'] = actual;
+        // Con la sesión abierta, el 401 es que el servidor la cerró (ferretería suspendida, usuario dado de baja, rol
+        // cambiado o vencida): el login lo avisa (bugs de la guía, S15). Sin token no había sesión que cerrar.
+        if (token) queryParams['sesion'] = 'cerrada';
+        if (Object.keys(queryParams).length > 0) {
+          void router.navigate(['/login'], { queryParams });
         } else {
           void router.navigate(['/login']);
         }

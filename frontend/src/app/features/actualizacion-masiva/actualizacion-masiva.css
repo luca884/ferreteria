@@ -24,6 +24,10 @@
   flex: 1;
   min-width: 180px;
 }
+/* «2. Qué cambio»: el Valor lleva la pista (o el error) abajo; alineada por abajo, «Operación» quedaba más bajo. */
+.fila-cambio {
+  align-items: flex-start;
+}
 /* «Ver vista previa» y, si está apagado, qué falta para pedirla. */
 .fila-generar {
   display: flex;

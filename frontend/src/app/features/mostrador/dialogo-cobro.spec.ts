@@ -397,6 +397,47 @@ describe('DialogoCobro', () => {
     });
   });
 
+  describe('el diálogo entra en la ventana (bugs de la guía, S1 y S2)', () => {
+    it('con muchas formas en el Mixto, el diálogo no pasa el alto de la ventana y scrollea: sin esto se cortaban «COBRAR» y Cancelar', async () => {
+      await abrir();
+
+      const estilo = getComputedStyle(el().querySelector<HTMLElement>('.cobro')!);
+
+      expect(estilo.maxHeight).toBe('calc(100vh - var(--e-8))');
+      expect(estilo.overflowY).toBe('auto');
+    });
+
+    it('los botones de facturar o no comparten la fila si entran y, si no, cada uno baja a su renglón: «Autorizar exceso y cobrar sin factura» se salía del diálogo', async () => {
+      await abrirEligiendo();
+
+      const fila = el().querySelector<HTMLElement>('.elige-factura .formas-de-cobrar')!;
+      const botones = Array.from(fila.querySelectorAll<HTMLElement>('.sin-factura, .facturar'));
+
+      expect(getComputedStyle(fila).display).toBe('flex');
+      expect(getComputedStyle(fila).flexWrap).toBe('wrap');
+      expect(botones).toHaveLength(2);
+      for (const boton of botones) {
+        const estilo = getComputedStyle(boton);
+        expect(estilo.flexGrow).toBe('1');
+        expect(estilo.flexBasis).toBe('auto');
+        // Si un texto no entra ni solo en su renglón, se parte en vez de salirse.
+        expect(estilo.whiteSpace).toBe('normal');
+      }
+      // Cancelar sigue abajo, fuera de la fila de las dos formas.
+      expect(el().querySelector('.elige-factura > .cancelar')).not.toBeNull();
+    });
+  });
+
+  // Bugs de la guía, S5: con la transición del botón global (150 ms), al cambiar de forma la anterior tardaba en apagarse
+  // y por un momento se veían dos marcadas. La elegida cambia de golpe.
+  it('la forma elegida se marca sin transición: nunca se ven dos marcadas a la vez', async () => {
+    await abrir();
+
+    for (const boton of el().querySelectorAll<HTMLElement>('.medio')) {
+      expect(getComputedStyle(boton).transition).toBe('none');
+    }
+  });
+
   describe('qué comprobante sale (CU-07 paso 5, S3, S4)', () => {
     const casilla = () => el().querySelector('input[type="checkbox"]') as HTMLInputElement;
     const normal = (t: string | null | undefined) => (t ?? '').replace(/\s+/g, ' ').trim();

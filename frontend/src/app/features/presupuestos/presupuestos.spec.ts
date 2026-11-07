@@ -384,7 +384,7 @@ describe('Presupuestos', () => {
 
       await abrirDetalle(0);
 
-      expect(normal(detalle()!.querySelector('.totales')?.textContent)).toContain('Descuento (10 %) -$ 300,00');
+      expect(normal(detalle()!.querySelector('.totales')?.textContent)).toContain('Descuento (10 %) −$ 300,00');
     });
 
     it('con descuento por renglón no muestra un porcentaje general que no es el del importe', async () => {
@@ -402,7 +402,7 @@ describe('Presupuestos', () => {
       await abrirDetalle(0);
 
       const totales = normal(detalle()!.querySelector('.totales')?.textContent);
-      expect(totales).toContain('Descuento -$ 300,00');
+      expect(totales).toContain('Descuento −$ 300,00');
       expect(totales).not.toContain('%');
     });
 

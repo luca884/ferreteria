@@ -37,8 +37,8 @@ describe('VentaImprimible con descuento de la forma (regresiones del verificador
     await abrir(ventaDePrueba({ subtotal: 300, descuento: 30, descuentoPorcentaje: 10, recargo: -27, total: 243 }));
     expect(lineas()).toEqual([
       'Subtotal $ 300,00',
-      'Descuento (10 %) -$ 30,00',
-      'Descuento por forma de pago -$ 27,00',
+      'Descuento (10 %) −$ 30,00',
+      'Descuento por forma de pago −$ 27,00',
       'Total $ 243,00',
     ]);
   });

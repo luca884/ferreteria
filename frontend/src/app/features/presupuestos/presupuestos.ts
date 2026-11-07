@@ -16,7 +16,7 @@ import { HttpErrorResponse } from '@angular/common/http';
 import { mensajeDe } from '../../core/api/api-error';
 import { PageResponse } from '../../core/api/page.models';
 import { AuthService } from '../../core/auth/auth.service';
-import { MontoPipe } from '../../core/formato/monto';
+import { MontoPipe, RestadoPipe } from '../../core/formato/monto';
 import { cantidadConUnidad } from '../../core/formato/unidad';
 import { BarraAcciones } from '../../shared/barra-acciones';
 import { porcentajeDescuentoGeneral } from '../../shared/descuento-general';
@@ -62,7 +62,7 @@ const MENSAJE_NUMERO = 'El número tiene que ser un entero.';
  */
 @Component({
   selector: 'app-presupuestos',
-  imports: [BarraAcciones, DecimalPipe, DialogoDetalle, DocumentoNoFiscalImprimible, MontoPipe, RouterLink],
+  imports: [BarraAcciones, DecimalPipe, DialogoDetalle, DocumentoNoFiscalImprimible, MontoPipe, RestadoPipe, RouterLink],
   templateUrl: './presupuestos.html',
   styleUrl: './presupuestos.css',
 })

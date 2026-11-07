@@ -2913,7 +2913,7 @@ describe('Mostrador', () => {
       await descuentoDelDialogo('10');
       expect(dialogo()).toBeNull();
       expect(totalGrande()).toBe('$ 1.350,00');
-      expect(normal(el().querySelector('app-totales-ticket .descuento')?.textContent)).toBe('Descuento -$ 150,00');
+      expect(normal(el().querySelector('app-totales-ticket .descuento')?.textContent)).toBe('Descuento −$ 150,00');
     });
 
     it('CU-07: con tope, el diálogo no deja pasarlo y lo avisa', async () => {

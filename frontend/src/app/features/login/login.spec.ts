@@ -10,7 +10,7 @@ describe('Login', () => {
   let fixture: ComponentFixture<Login>;
   let navegarA: ReturnType<typeof vi.spyOn>;
 
-  async function crear(returnUrl?: string) {
+  async function crear(returnUrl?: string, otros: Record<string, string> = {}) {
     await TestBed.configureTestingModule({
       imports: [Login],
       providers: [
@@ -19,7 +19,7 @@ describe('Login', () => {
         {
           provide: ActivatedRoute,
           useValue: {
-            snapshot: { queryParamMap: convertToParamMap(returnUrl === undefined ? {} : { returnUrl }) },
+            snapshot: { queryParamMap: convertToParamMap({ ...(returnUrl === undefined ? {} : { returnUrl }), ...otros }) },
           },
         },
       ],
@@ -149,6 +149,32 @@ describe('Login', () => {
 
       expect(descripciones(campo('email'))).toEqual([mensaje]);
       expect(descripciones(campo('password'))).toEqual([mensaje]);
+    });
+  });
+
+  // Bugs de la guía, S15: al suspender la ferretería, la sesión abierta del Dueño volvía al ingreso sin decir nada.
+  describe('la sesión que cerró el servidor', () => {
+    const aviso = () => (fixture.nativeElement as HTMLElement).querySelector('.sesion-cerrada');
+
+    it('con sesion=cerrada avisa «Tu sesión se cerró. Ingresá de nuevo.»', async () => {
+      await crear('/mostrador', { sesion: 'cerrada' });
+
+      expect(aviso()?.textContent?.trim()).toBe('Tu sesión se cerró. Ingresá de nuevo.');
+      expect(aviso()?.getAttribute('role')).toBe('status');
+    });
+
+    it('al entrar sin ese parámetro no dice nada', async () => {
+      await crear('/mostrador');
+
+      expect(aviso()).toBeNull();
+    });
+
+    it('el aviso no cambia a dónde vuelve después de ingresar', async () => {
+      await crear('/caja', { sesion: 'cerrada' });
+
+      await ingresar();
+
+      expect(navegarA).toHaveBeenCalledWith('/caja');
     });
   });
 

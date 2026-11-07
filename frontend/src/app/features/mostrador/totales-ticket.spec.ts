@@ -62,14 +62,14 @@ describe('TotalesTicket', () => {
     await crear([renglon({ precioCentavos: 10000, cantidadMilesimas: 1000, descuentoBp: 1000 })]);
 
     expect(texto('.subtotal')).toBe('Subtotal $ 100,00');
-    expect(texto('.descuento')).toBe('Descuento -$ 10,00');
+    expect(texto('.descuento')).toBe('Descuento −$ 10,00');
     expect(el().querySelector('.total')!.textContent!.trim()).toBe(`$${NBSP}90,00`);
   });
 
   it('con el descuento global aplica el porcentaje a cada renglón y lo dice', async () => {
     await crear([renglon({ precioCentavos: 10000, cantidadMilesimas: 1000 })], 1000);
 
-    expect(texto('.descuento')).toBe('Descuento -$ 10,00');
+    expect(texto('.descuento')).toBe('Descuento −$ 10,00');
     expect(el().querySelector('.total')!.textContent!.trim()).toBe(`$${NBSP}90,00`);
   });
 

@@ -135,6 +135,31 @@ class ExportacionArticulosIntegrationTest extends AjustesTestBase {
     }
 
     @Test
+    @DisplayName("con enOferta baja solo los que hoy tienen una oferta que baja el precio, como el listado; sin el parametro, todos; nada de otra ferreteria (bugs de la guia, S19)")
+    void respetaSoloEnOferta() throws Exception {
+        jdbc.update("update articulo set oferta_tipo = 'PRECIO_FIJO', oferta_valor = 150.00"
+                + " where ferreteria_id = ? and codigo_interno = 'B-002'", a);
+        jdbc.update("update articulo set oferta_tipo = 'DESCUENTO_PORCENTAJE', oferta_valor = 10.00, oferta_hasta = ?"
+                + " where ferreteria_id = ? and codigo_interno = 'A-001'", HoraArgentina.hoy().minusDays(1), a);
+        jdbc.update("update articulo set oferta_tipo = 'PRECIO_FIJO', oferta_valor = 1.50"
+                + " where ferreteria_id = ? and codigo_interno = 'Z-009'", b);
+        String duenoB = login("dueno-exporta-b@test.local");
+
+        assertThat(codigos(exportar("?enOferta=true", duenoA))).containsExactly("B-002");
+        assertThat(codigos(exportar("?enOferta=true&q=tuerca", duenoA))).containsExactly("B-002");
+        assertThat(codigos(exportar("?enOferta=true&q=cable", duenoA))).isEmpty();
+        assertThat(codigos(exportar("", duenoA))).containsExactly("A-001", "B-002");
+        assertThat(codigos(exportar("?enOferta=false", duenoA))).containsExactly("A-001", "B-002");
+        assertThat(codigos(exportar("?enOferta=true", duenoB))).containsExactly("Z-009");
+    }
+
+    /** Los codigos internos de las filas del CSV, en su orden y sin el formato de texto de Excel. */
+    private static java.util.List<String> codigos(MockHttpServletResponse respuesta) {
+        return Arrays.stream(csv(respuesta).split("\r\n")).skip(1)
+                .map(l -> l.split(";")[0].replace("=", "").replace("\"", "")).toList();
+    }
+
+    @Test
     @DisplayName("otra ferreteria solo baja lo suyo; el Vendedor y el admin reciben 403")
     void aislamientoYPermisos() throws Exception {
         assertThat(csv(exportar("", login("dueno-exporta-b@test.local")))).isEqualTo(ENCABEZADO + "\r\n"

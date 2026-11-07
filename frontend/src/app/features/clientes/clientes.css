@@ -25,9 +25,25 @@
 .nombre {
   font-weight: 600;
 }
+/* A 1280 px, con el alta al costado, la tabla tiene que entrar entera (Saldo y Límite quedaban detrás del scroll de
+   costado): se parte entre el tipo y el número del documento, el saldo («a favor»), el contacto y los encabezados, y
+   las celdas tienen un poco menos de margen. El número del documento y los importes no se parten. */
+.grilla-marco th,
+.grilla-marco td {
+  padding-left: 10px;
+  padding-right: 10px;
+}
+.grilla-marco th {
+  white-space: normal;
+}
 .documento {
-  white-space: nowrap;
   font-variant-numeric: tabular-nums;
+}
+.numero-documento {
+  white-space: nowrap;
+}
+.contacto {
+  overflow-wrap: anywhere;
 }
 tr.inactivo td {
   color: var(--texto-suave);
@@ -50,9 +66,10 @@ tr.inactivo td {
   gap: var(--e-3);
   margin-bottom: var(--e-3);
 }
+/* «a favor» puede bajar de renglón; el importe no se parte (el «$» va pegado con un espacio duro). */
 .num {
   text-align: right;
-  white-space: nowrap;
+  white-space: normal;
   font-variant-numeric: tabular-nums;
 }
 td.debe {

@@ -6,10 +6,11 @@
   max-width: var(--ancho-pantalla);
   margin-inline: auto;
 }
-/* Los códigos y la fecha no se parten entre renglones. */
+/* Los códigos y la fecha de la última compra no se parten entre renglones; el proveedor de esa compra sí (entero, a
+   1280 px desbordaba sobre A REPONER). */
 .codigo,
 .codigo-proveedor,
-.ultima-compra {
+.ultima-compra .fecha {
   white-space: nowrap;
 }
 

@@ -284,6 +284,32 @@ describe('Usuarios', () => {
     expect(el().querySelector('#password')).toBeNull();
   });
 
+  // Bugs de la guía, S14: como en Formas de pago, el alta vacía no avisa por pasar por el campo.
+  describe('el aviso de nombre obligatorio', () => {
+    it('no sale por pasar por el campo vacío: sale al intentar guardar', async () => {
+      await crear([dueno, vendedor]);
+
+      input('nombre').dispatchEvent(new Event('focus'));
+      input('nombre').dispatchEvent(new Event('blur'));
+      await refrescar();
+      expect(el().querySelector('#nombre-error')).toBeNull();
+
+      await enviar();
+      expect(el().querySelector('#nombre-error')?.textContent).toContain('obligatorio');
+    });
+
+    it('si se escribió y se borró, sale al dejar el campo, como siempre', async () => {
+      await crear([dueno, vendedor]);
+
+      await escribir('nombre', 'A');
+      await escribir('nombre', '');
+      input('nombre').dispatchEvent(new Event('blur'));
+      await refrescar();
+
+      expect(el().querySelector('#nombre-error')?.textContent).toContain('obligatorio');
+    });
+  });
+
   describe('teléfono (mejoras-ferreteros-bloque-1, S5)', () => {
     it('el alta manda el teléfono sin espacios sobrantes y la lista lo muestra', async () => {
       await crear([dueno, vendedor]);

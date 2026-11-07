@@ -6,6 +6,7 @@ import com.ferreteria.catalogo.model.Rubro;
 import com.ferreteria.catalogo.repository.ArticuloRepository;
 import com.ferreteria.catalogo.repository.ProveedorRepository;
 import com.ferreteria.catalogo.repository.RubroRepository;
+import com.ferreteria.common.HoraArgentina;
 import com.ferreteria.common.csv.EscritorCsv;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -38,14 +39,21 @@ public class ExportacionArticulosService {
         this.proveedorRepository = proveedorRepository;
     }
 
+    /**
+     * Con {@code enOferta}, solo los que tienen hoy una oferta que baja el precio normal, como el listado con «Solo en
+     * oferta» (bugs de la guia, S19).
+     */
     @Transactional(readOnly = true)
-    public byte[] exportar(String q, boolean incluirInactivos) {
+    public byte[] exportar(String q, boolean incluirInactivos, boolean enOferta) {
         // Solo los de la ferreteria: un id de rubro o proveedor ajeno no encuentra nombre y queda vacio.
         Map<Long, String> rubros = rubroRepository.findAllScoped().stream()
                 .collect(Collectors.toMap(Rubro::getId, Rubro::getNombre));
         Map<Long, String> proveedores = proveedorRepository.findAllScoped().stream()
                 .collect(Collectors.toMap(Proveedor::getId, Proveedor::getNombre));
-        List<List<Object>> filas = articuloRepository.paraExportarScoped(q, incluirInactivos).stream()
+        List<Articulo> articulos = enOferta
+                ? articuloRepository.paraExportarEnOfertaScoped(q, incluirInactivos, HoraArgentina.hoy())
+                : articuloRepository.paraExportarScoped(q, incluirInactivos);
+        List<List<Object>> filas = articulos.stream()
                 .map(a -> fila(a, rubros, proveedores))
                 .toList();
         return EscritorCsv.escribir(ENCABEZADO, filas);

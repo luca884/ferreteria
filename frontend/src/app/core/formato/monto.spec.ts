@@ -1,4 +1,12 @@
-import { formatearCosto, formatearCotizacion, formatearMonto, formatearTexto, MontoPipe } from './monto';
+import {
+  formatearCosto,
+  formatearCotizacion,
+  formatearMonto,
+  formatearRestado,
+  formatearTexto,
+  MontoPipe,
+  RestadoPipe,
+} from './monto';
 
 const NBSP = ' ';
 
@@ -46,6 +54,31 @@ describe('MontoPipe', () => {
 
   it('es puro', () => {
     const metadatos = (MontoPipe as unknown as { ɵpipe: { pure: boolean } }).ɵpipe;
+    expect(metadatos.pure).toBe(true);
+  });
+});
+
+// Un descuento, un gasto o un retiro restan: el mismo signo menos (U+2212) en el ticket, las hojas y la caja (bugs de la
+// guía, S4). Un negativo de formatearMonto sigue con su guion.
+describe('formatearRestado', () => {
+  it('antepone el signo menos a un importe positivo', () => {
+    expect(formatearRestado(130)).toBe(`−$${NBSP}130,00`);
+    expect(formatearRestado(1234.5)).toBe(`−$${NBSP}1.234,50`);
+  });
+
+  it('en 0 no lleva signo', () => {
+    expect(formatearRestado(0)).toBe(`$${NBSP}0,00`);
+  });
+
+  it('devuelve vacío con null o undefined', () => {
+    expect(formatearRestado(null)).toBe('');
+    expect(formatearRestado(undefined)).toBe('');
+  });
+
+  it('el pipe transforma igual y es puro', () => {
+    expect(new RestadoPipe().transform(56.87)).toBe(`−$${NBSP}56,87`);
+    const metadatos = (RestadoPipe as unknown as { ɵpipe: { name: string; pure: boolean } }).ɵpipe;
+    expect(metadatos.name).toBe('restado');
     expect(metadatos.pure).toBe(true);
   });
 });

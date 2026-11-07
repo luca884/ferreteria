@@ -4,6 +4,16 @@
 .nombre {
   font-weight: 600;
 }
+/* El CUIT se partía en sus guiones y el teléfono en su espacio: van en un renglón. Para que la tabla siga entrando a
+   1280 px, el correo (sin espacios) se puede partir en cualquier lado. */
+.cuit,
+.telefono,
+.whatsapp {
+  white-space: nowrap;
+}
+.correo {
+  overflow-wrap: anywhere;
+}
 .buscar {
   width: 220px;
   max-width: 100%;

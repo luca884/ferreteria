@@ -40,9 +40,27 @@ export function formatearCotizacion(valor: number | null | undefined): string {
   return valor === null || valor === undefined ? '' : FORMATO_COTIZACION.format(valor);
 }
 
+/**
+ * Un importe que resta (un descuento, un gasto, un retiro, una anulación): `−$ 700,00`, con el signo menos (U+2212) y
+ * no con el guion, igual en el ticket, las hojas y la caja. En 0 no lleva signo. Un negativo de verdad sigue con
+ * `formatearMonto`.
+ */
+export function formatearRestado(valor: number | null | undefined): string {
+  if (valor === null || valor === undefined) return '';
+  return valor > 0 ? `−${formatearMonto(valor)}` : formatearMonto(valor);
+}
+
 @Pipe({ name: 'monto', pure: true })
 export class MontoPipe implements PipeTransform {
   transform(valor: number | null | undefined): string {
     return formatearMonto(valor);
+  }
+}
+
+/** `{{ descuento | restado }}`: lo mismo que `formatearRestado`. */
+@Pipe({ name: 'restado', pure: true })
+export class RestadoPipe implements PipeTransform {
+  transform(valor: number | null | undefined): string {
+    return formatearRestado(valor);
   }
 }

@@ -14,7 +14,7 @@ import {
   viewChildren,
 } from '@angular/core';
 import { centavosDeImporte, normalizarImporte } from '../../core/formato/importe';
-import { MontoPipe, formatearMonto } from '../../core/formato/monto';
+import { MontoPipe, RestadoPipe, formatearMonto } from '../../core/formato/monto';
 import { CampoMoneda } from '../../shared/campo-moneda';
 import { ImporteInput } from '../../shared/importe-input';
 import { TrampaFoco } from '../../shared/trampa-foco';
@@ -88,7 +88,7 @@ const centavosATexto = (c: number) => `${normalizarImporte(String(Math.floor(c /
  */
 @Component({
   selector: 'app-dialogo-cobro',
-  imports: [CampoMoneda, ImporteInput, MontoPipe, TrampaFoco],
+  imports: [CampoMoneda, ImporteInput, MontoPipe, RestadoPipe, TrampaFoco],
   template: `
     <!-- El mousedown sobre el fondo no mueve el foco al body: si no, Esc y Enter (que escucha el diálogo) dejarían de andar. -->
     <div class="dialogo-fondo" (mousedown)="retenerFoco($event)">
@@ -129,7 +129,7 @@ const centavosATexto = (c: number) => `${normalizarImporte(String(Math.floor(c /
         } @else if (recargoCentavos() < 0) {
           <p class="descuento-forma">
             Descuento por forma de pago{{ porcentajeDeLaForma() }}
-            <strong>−{{ -recargoCentavos() / 100 | monto }}</strong>
+            <strong>{{ -recargoCentavos() / 100 | restado }}</strong>
           </p>
         }
         @if (aviso(); as texto) {
@@ -239,12 +239,14 @@ const centavosATexto = (c: number) => `${normalizarImporte(String(Math.floor(c /
           <!-- Bloque 2, S4: facturar o no se elige con un clic; Enter no cobra, para que nadie facture sin querer. -->
           <p class="pista-factura">Elegí con un clic si la venta se factura.</p>
           <div class="dialogo-acciones elige-factura">
-            <button type="button" class="sin-factura secundario" (click)="confirmarCobro(true)">
-              {{ autoriza() ? 'Autorizar exceso y cobrar sin factura' : 'Cobrar sin factura' }}
-            </button>
-            <button type="button" class="facturar primario" (click)="confirmarCobro(false)">
-              {{ autoriza() ? 'Autorizar exceso, cobrar y facturar' : 'Cobrar y facturar con ARCA' }}
-            </button>
+            <div class="formas-de-cobrar">
+              <button type="button" class="sin-factura secundario" (click)="confirmarCobro(true)">
+                {{ autoriza() ? 'Autorizar exceso y cobrar sin factura' : 'Cobrar sin factura' }}
+              </button>
+              <button type="button" class="facturar primario" (click)="confirmarCobro(false)">
+                {{ autoriza() ? 'Autorizar exceso, cobrar y facturar' : 'Cobrar y facturar con ARCA' }}
+              </button>
+            </div>
             <button type="button" class="cancelar" data-tecla="Esc" aria-keyshortcuts="Escape" (click)="cancelar.emit()">
               Cancelar
             </button>
@@ -269,10 +271,13 @@ const centavosATexto = (c: number) => `${normalizarImporte(String(Math.floor(c /
     </div>
   `,
   styles: `
+    /* Con muchas formas en el Mixto pasa el alto de la ventana: scrollea, como los otros diálogos, en vez de cortar las acciones. */
     .cobro {
       width: min(540px, 100%);
+      max-height: calc(100vh - var(--e-8));
       gap: 18px;
-      overflow: hidden;
+      overflow-x: hidden;
+      overflow-y: auto;
     }
     /* El diálogo recibe el foco con un clic en una zona sin controles: no necesita el aro. */
     .cobro:focus {
@@ -345,6 +350,8 @@ const centavosATexto = (c: number) => `${normalizarImporte(String(Math.floor(c /
       color: var(--texto);
       font-size: var(--texto-sm);
       font-weight: 500;
+      /* La elegida cambia de golpe: con la transición del botón global la anterior tardaba en apagarse y se veían dos. */
+      transition: none;
     }
     .medio:hover:not(:disabled) {
       border-color: var(--borde-fuerte);
@@ -544,14 +551,21 @@ const centavosATexto = (c: number) => `${normalizarImporte(String(Math.floor(c /
     .dialogo-acciones .cobrar {
       padding-inline: var(--e-6);
     }
-    /* Las dos formas de cobrar, lado a lado y del mismo ancho; Cancelar abajo. */
+    /* Las dos formas de cobrar, lado a lado si entran y, si no, cada una en su renglón; Cancelar abajo. Con el exceso
+       («Autorizar exceso y cobrar sin factura») no entran juntas: antes se salían del diálogo y lo cortaban. */
     .elige-factura {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
+      flex-direction: column;
+      align-items: flex-start;
     }
-    .elige-factura .cancelar {
-      grid-column: 1 / -1;
-      justify-self: start;
+    .formas-de-cobrar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-self: stretch;
+    }
+    .formas-de-cobrar button {
+      flex: 1 1 auto;
+      white-space: normal;
     }
     .pista-factura,
     .sin-arca {

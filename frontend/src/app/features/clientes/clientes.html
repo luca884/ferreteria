@@ -117,12 +117,13 @@
               <th>Razón social</th>
               <th>Documento</th>
               <th>Condición de IVA</th>
-              <th>Contacto</th>
               <th>Estado</th>
+              <!-- Saldo y Límite antes que Contacto: si a 1280 px algo queda detrás del scroll de costado, es el contacto. -->
               @if (auth.esDueno()) {
                 <th class="num">Saldo</th>
                 <th class="num">Límite</th>
               }
+              <th>Contacto</th>
             </tr>
           </thead>
           <tbody>
@@ -139,14 +140,16 @@
                 (keydown)="filas.alTeclear($event, cliente, i)"
               >
                 <td class="nombre">{{ cliente.razonSocial }}</td>
-                <td class="documento">{{ documentoLegible(cliente) }}</td>
+                <td class="documento">
+                  @if (partesDocumento(cliente); as doc) {{{ doc.tipo }}&ngsp;<span class="numero-documento">{{ doc.numero }}</span>}
+                </td>
                 <td>{{ etiquetaCondicion[cliente.condicionIva] }}</td>
-                <td>{{ contacto(cliente) }}</td>
                 <td class="estado">{{ cliente.activo ? 'Activo' : 'Inactivo' }}</td>
                 @if (auth.esDueno()) {
                   <td class="num" [class.debe]="(cliente.saldo ?? 0) > 0">{{ saldoTexto(cliente) }}</td>
                   <td class="num">{{ limiteTexto(cliente) }}</td>
                 }
+                <td class="contacto">{{ contacto(cliente) }}</td>
               </tr>
             }
           </tbody>

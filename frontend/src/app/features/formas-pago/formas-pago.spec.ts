@@ -320,6 +320,32 @@ describe('FormasPago', () => {
     expect(input('nombre').value).toBe('Débito');
   });
 
+  // Bugs de la guía, S14: el alta vacía mostraba «El nombre es obligatorio.» con solo pasar por el campo (cancelar
+  // una confirmación, tocar una fila de la lista).
+  it('el alta vacía no avisa que falta el nombre por pasar por el campo: avisa al intentar guardar', async () => {
+    await crear([efectivo]);
+
+    input('nombre').dispatchEvent(new Event('focus'));
+    input('nombre').dispatchEvent(new Event('blur'));
+    await refrescar();
+    expect(el().querySelector('#nombre-error')).toBeNull();
+    expect(input('nombre').getAttribute('aria-invalid')).toBeNull();
+
+    await enviar();
+    expect(el().querySelector('#nombre-error')?.textContent).toContain('El nombre es obligatorio.');
+  });
+
+  it('si se escribió el nombre y se borró, avisa al salir del campo, como siempre', async () => {
+    await crear([efectivo]);
+
+    await escribir('nombre', 'D');
+    await escribir('nombre', '');
+    input('nombre').dispatchEvent(new Event('blur'));
+    await refrescar();
+
+    expect(el().querySelector('#nombre-error')?.textContent).toContain('El nombre es obligatorio.');
+  });
+
   it('no envía un nombre vacío y lo avisa en el campo', async () => {
     await crear([efectivo]);
 

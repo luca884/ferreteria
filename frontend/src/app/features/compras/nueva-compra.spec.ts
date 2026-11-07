@@ -282,7 +282,8 @@ describe('NuevaCompra', () => {
       await buscarClavo();
       articulos.buscar.mockClear();
 
-      expect(opciones().map((o) => o.getAttribute('aria-selected'))).toEqual(['false', 'false']);
+      // Bugs de la guía, S23: tras buscar queda marcada la primera, como en el Mostrador.
+      expect(opciones().map((o) => o.getAttribute('aria-selected'))).toEqual(['true', 'false']);
       await tecla('ArrowDown');
       await tecla('ArrowDown');
       expect(opciones().map((o) => o.getAttribute('aria-selected'))).toEqual(['false', 'true']);
@@ -297,9 +298,30 @@ describe('NuevaCompra', () => {
       expect(el().querySelector('table.renglones tbody tr')?.textContent).toContain('CLA-1 · Clavo 1 pulgada');
     });
 
-    it('sin opción activa, Enter busca como siempre', async () => {
+    // Bugs de la guía, S23: antes Enter volvía a buscar hasta apretar ↓; ahora, con los resultados de la búsqueda
+    // actual, Enter agrega el primero, como en el Mostrador.
+    it('con resultados, Enter agrega el primero sin apretar ↓ y sin buscar de nuevo', async () => {
       await crear();
       await buscarClavo();
+      articulos.buscar.mockClear();
+
+      expect(caja().getAttribute('aria-activedescendant')).toBe(opciones()[0].id);
+      const enter = await tecla('Enter');
+
+      expect(enter.defaultPrevented).toBe(true);
+      expect(articulos.buscar).not.toHaveBeenCalled();
+      const renglones = el().querySelectorAll('table.renglones tbody tr');
+      expect(renglones).toHaveLength(1);
+      expect(renglones[0].textContent).toContain('CLA-1 · Clavo 1 pulgada');
+    });
+
+    // Bugs de la guía, S23: si el texto cambió desde la última búsqueda, los resultados a la vista son de otra
+    // cosa: Enter busca lo nuevo, aunque se haya marcado una opción con las flechas.
+    it('si el texto cambió desde la última búsqueda, Enter busca en vez de agregar', async () => {
+      await crear();
+      await buscarClavo();
+      await escribir('input[name=busqueda]', 'clavos');
+      await tecla('ArrowDown');
 
       const enter = await tecla('Enter');
 

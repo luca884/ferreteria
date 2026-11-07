@@ -505,6 +505,94 @@ describe('Importaciones', () => {
         expect(el().querySelectorAll('.visor-fila').length).toBeLessThan(200);
       });
 
+      describe('filas vacías', () => {
+        /** Una hoja con las filas que manda el servidor: solo las que tienen datos, con su número original. */
+        const hojaConNumeros = (columnas: number, filas: [numero: number, celdas: string[]][]): HojaDeMuestra => ({
+          indice: 0,
+          nombre: 'Lista',
+          columnas,
+          filaEncabezado: null,
+          filas: filas.map(([numero, celdas]) => ({ numero, celdas })),
+        });
+        const filasDelVisor = () =>
+          Array.from(el().querySelectorAll('.visor-fila')).map((fila) =>
+            Array.from(fila.children).map((c) => c.textContent?.trim()),
+          );
+
+        // Bugs de la guía, S22: el servidor no manda las filas vacías y la grilla las ocultaba; la planilla del
+        // Dueño sí las tiene.
+        it('muestra las filas vacías entre las que tienen datos, con su número, y el marco las cuenta', async () => {
+          await conMuestra(
+            muestraDeUnaHoja(
+              hojaConNumeros(3, [
+                [1, encabezado],
+                [2, ['A-1', 'Tornillo', '1.234,56']],
+                [5, ['A-2', 'Tuerca', '10']],
+              ]),
+            ),
+          );
+          await asentar(); // el scroll virtual mide el marco un ciclo después
+
+          expect(filasDelVisor()).toEqual([
+            ['1', 'Codigo', 'Descripcion', 'Precio'],
+            ['2', 'A-1', 'Tornillo', '1.234,56'],
+            ['3', '', '', ''],
+            ['4', '', '', ''],
+            ['5', 'A-2', 'Tuerca', '10'],
+          ]);
+          expect(q('.visor').getAttribute('aria-rowcount')).toBe('6');
+          expect(q('.visor').style.getPropertyValue('--alto-marco')).toBe(`${5 * 30 + 18}px`);
+        });
+
+        // Bugs de la guía, S24: una celda suelta muy abajo no arma cientos de miles de filas vacías, y «N filas»
+        // sigue contando solo las que tienen datos.
+        it('cada hueco muestra hasta 20 filas vacías y el conteo sigue siendo el de las filas con datos', async () => {
+          await conMuestra(
+            muestraDeUnaHoja(
+              hojaConNumeros(1, [
+                [1, ['Lista']],
+                [900_000, ['suelta']],
+                [900_002, ['otra']],
+              ]),
+            ),
+          );
+          await asentar(); // el scroll virtual mide el marco un ciclo después
+
+          // 1, las 20 vacías del 2 al 21, 900.000, la vacía 900.001 y 900.002: 24 filas más el encabezado.
+          expect(q('.visor').getAttribute('aria-rowcount')).toBe('25');
+          expect(filasDelVisor().slice(0, 3)).toEqual([['1', 'Lista'], ['2', ''], ['3', '']]);
+          expect(q('.visor-conteo').textContent?.trim()).toBe('3 filas · 1 columna');
+        });
+
+        it('los rótulos salen de la fila de encabezado por su número, aunque haya filas vacías antes', async () => {
+          await crearComponente();
+          servicio.muestra.mockReturnValue(
+            of({
+              hojas: [
+                {
+                  ...hojaConNumeros(3, [
+                    [1, ['Lista de precios', '', '']],
+                    [4, ['Código', 'Descripción', 'Precio']],
+                    [5, ['A-1', 'x', '1']],
+                  ]),
+                  filaEncabezado: 4,
+                },
+              ],
+              propuesta: SIN_PROPUESTA,
+            }),
+          );
+
+          await elegirArchivo(lista());
+
+          expect(textosDe('#columnaCodigo')).toEqual([
+            'Elegí la columna',
+            'A · Código',
+            'B · Descripción',
+            'C · Precio',
+          ]);
+        });
+      });
+
       it('las letras siguen más allá de la Z: AA, AB…', async () => {
         await conMuestra(muestraGrande(1, 30));
 

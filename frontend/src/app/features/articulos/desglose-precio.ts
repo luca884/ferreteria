@@ -3,8 +3,8 @@ import { FormControl, FormGroup, ReactiveFormsModule } from '@angular/forms';
 import { CadenaDePrecio, Paso, cadenaDePrecio, costoDeLista } from '../../core/formato/cadena-de-precio';
 import { formatearFechaHora } from '../../core/formato/fecha-hora';
 import { formatearCotizacion, formatearTexto } from '../../core/formato/monto';
-import { Decimal, exacto } from '../../core/formato/precio-final';
-import { DesglosePrecio, Moneda, textoDeAjustePrecio } from './articulo.models';
+import { Decimal, Exacto, exacto } from '../../core/formato/precio-final';
+import { AjustePrecio, DesglosePrecio, Moneda, textoDeAjustePrecio } from './articulo.models';
 
 /** Los tres ajustes que escribe el Dueño: su propio grupo, fuera del formulario del artículo (decisión 43). */
 export type GrupoAjustes = FormGroup<{
@@ -108,10 +108,29 @@ function unirConY(items: string[]): string {
     : `${items.slice(0, -1).join(', ')} y ${items.at(-1)}`;
 }
 
+/** Un decimal exacto como texto («-46.2870»), para formatearlo sin pasar por Number. */
+function textoDecimal({ entero, escala }: Exacto): string {
+  const negativo = entero < 0n;
+  const digitos = (negativo ? -entero : entero).toString().padStart(escala + 1, '0');
+  const parteEntera = digitos.slice(0, digitos.length - escala);
+  const decimales = escala > 0 ? `.${digitos.slice(digitos.length - escala)}` : '';
+  return `${negativo ? '-' : ''}${parteEntera}${decimales}`;
+}
+
+/** Lo que un paso suma o resta, con su signo: «+ $ 10.477,14» o «− $ 25,00». */
+function conSigno(importe: string, moneda: Moneda): string {
+  const negativo = importe.startsWith('-');
+  const magnitud = negativo ? importe.slice(1) : importe;
+  return `${negativo ? '\u2212' : '+'} ${formatearTexto(magnitud, moneda)}`;
+}
+
 interface PasoMostrado {
   tipo: string;
   nombre: string;
-  /** null en el redondeo y en los ajustes sobre el precio final: la cuenta la hace el backend. */
+  /**
+   * null en el redondeo, y en un ajuste sobre el precio final con precio manual o sin precio calculado: ahí no se
+   * aplica, así que no se inventa un monto.
+   */
   importe: string | null;
   /** Una aclaración debajo del nombre (los ajustes de un precio manual, el % de un recargo del costo). */
   aclaracion?: string;
@@ -162,11 +181,11 @@ export class DesglosePrecioVista {
       const importe = paso.tipo === 'REDONDEO' ? null : formatearTexto(paso.importe, moneda);
       return { tipo: paso.tipo, nombre: this.nombreDe(paso.tipo, pct, paso.importe), importe };
     });
-    // Los ajustes sobre el precio final van entre el redondeo y el precio final; el importe lo calcula el backend.
+    // Los ajustes sobre el precio final van entre el redondeo y el precio final, cada uno con lo que suma o resta.
     const ajustes: PasoMostrado[] = (d.ajustesPrecio ?? []).map((ajuste) => ({
       tipo: 'AJUSTE_PRECIO',
       nombre: textoDeAjustePrecio(ajuste),
-      importe: null,
+      importe: this.importeDeAjuste(ajuste),
       ...(this.precioManual() ? { aclaracion: ACLARACION_AJUSTES_CON_PRECIO_MANUAL } : {}),
     }));
     const final = mostrados.findIndex((p) => p.tipo === 'PRECIO_FINAL');
@@ -234,14 +253,28 @@ export class DesglosePrecioVista {
 
   /** Un recargo del costo (CU-13): el nombre, su % debajo y lo que suma al costo con su signo («+ $ 10.477,14»). */
   private recargoMostrado(paso: Paso, moneda: Moneda): PasoMostrado {
-    const negativo = paso.importe.startsWith('-');
-    const magnitud = negativo ? paso.importe.slice(1) : paso.importe;
     return {
       tipo: paso.tipo,
       nombre: paso.nombre || 'Recargo',
       aclaracion: `${porcentaje(Number(paso.porcentaje))} %`,
-      importe: `${negativo ? '\u2212' : '+'} ${formatearTexto(magnitud, moneda)}`,
+      importe: conSigno(paso.importe, moneda),
     };
+  }
+
+  /**
+   * Lo que un ajuste sobre el precio final suma o resta, en pesos y con su signo (CU-14): el % es sobre el precio
+   * calculado y el $ va tal cual. El precio final se redondea otra vez, así que la suma de los montos puede no dar el
+   * precio final. null con precio manual (no se aplica) o sin precio calculado.
+   */
+  private importeDeAjuste(ajuste: AjustePrecio): string | null {
+    const precio = exacto(this.cadena().precio);
+    const valor = exacto(ajuste.valor);
+    if (this.precioManual() || !precio || !valor) return null;
+    const monto: Exacto =
+      ajuste.tipo === 'PORCENTAJE'
+        ? { entero: precio.entero * valor.entero, escala: precio.escala + valor.escala + 2 }
+        : valor;
+    return conSigno(textoDecimal(monto), 'ARS');
   }
 
   private nombreDe(tipo: string, pct: number | null, importe: string): string {

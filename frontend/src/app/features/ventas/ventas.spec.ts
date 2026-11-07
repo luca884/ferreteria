@@ -335,7 +335,7 @@ describe('Ventas (consulta y reimpresión, G60)', () => {
     expect(d).toContain('Venta N.º 5');
     expect(d).toContain('Martillo');
     expect(d).toContain('Subtotal $ 3.000,00');
-    expect(d).toContain('Descuento (10 %) -$ 300,00');
+    expect(d).toContain('Descuento (10 %) −$ 300,00');
     expect(d).toContain('Recargo $ 270,00');
     expect(d).toContain('Total $ 2.970,00');
     expect(d).toContain('Crédito 1 pago $ 2.970,00');
@@ -438,7 +438,7 @@ describe('Ventas (consulta y reimpresión, G60)', () => {
     await refrescar();
 
     const totales = normal(detalle()!.querySelector('.totales')?.textContent);
-    expect(totales).toContain('Descuento -$ 300,00');
+    expect(totales).toContain('Descuento −$ 300,00');
     expect(totales).not.toContain('(0 %)');
   });
 
@@ -451,7 +451,7 @@ describe('Ventas (consulta y reimpresión, G60)', () => {
     await refrescar();
 
     const totales = normal(detalle()!.querySelector('.totales')?.textContent);
-    expect(totales).toContain('Descuento -$ 300,00');
+    expect(totales).toContain('Descuento −$ 300,00');
     expect(totales).not.toContain('(10 %)');
   });
 
@@ -1108,6 +1108,8 @@ describe('Ventas (consulta y reimpresión, G60)', () => {
       ]);
       expect(celdas(filas()[1])[0]).toBe('14 Nota de crédito · Venta N.º 7');
       expect(celdas(filas()[1])[1]).toBe('B 00001-00000003');
+      // Bugs de la guía, S10: «Venta N.º 7» no se parte entre renglones (espacios duros).
+      expect(filas()[1].querySelector('.marca.nota')!.textContent).toContain('Venta N.º 7');
     });
 
     it('la anulación interna no lleva la marca «No facturable»: esa es una decisión del cobro, no de la nota (QA 05/11)', async () => {

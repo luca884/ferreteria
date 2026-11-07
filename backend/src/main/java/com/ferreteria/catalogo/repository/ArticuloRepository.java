@@ -115,8 +115,11 @@ public interface ArticuloRepository extends TenantScopedRepository<Articulo, Lon
             @Param("q") String q,
             @Param("incluirInactivos") boolean incluirInactivos);
 
+    /** El orden del listado sin paginar: los que empiezan con lo buscado, descripcion e id (GDS-19). */
+    String ORDEN_DEL_LISTADO = PRIMERO_LOS_QUE_EMPIEZAN + ", a.descripcion, a.id";
+
     /** Los articulos del filtro, todos y en el orden del listado: los que empiezan con lo buscado, descripcion e id (GDS-19). */
-    @Query("select a " + FILTRO_ARTICULOS + PRIMERO_LOS_QUE_EMPIEZAN + ", a.descripcion, a.id")
+    @Query("select a " + FILTRO_ARTICULOS + ORDEN_DEL_LISTADO)
     List<Articulo> paraExportar(
             @Param("fid") Long ferreteriaId,
             @Param("proveedorId") Long proveedorId,
@@ -125,6 +128,18 @@ public interface ArticuloRepository extends TenantScopedRepository<Articulo, Lon
             @Param("q") String q,
             @Param("prefijo") String prefijo,
             @Param("incluirInactivos") boolean incluirInactivos);
+
+    /** Los de {@link #paraExportar} con una oferta vigente ese dia que baja el precio normal ({@link #FILTRO_EN_OFERTA}). */
+    @Query("select a " + FILTRO_EN_OFERTA + ORDEN_DEL_LISTADO)
+    List<Articulo> paraExportarEnOferta(
+            @Param("fid") Long ferreteriaId,
+            @Param("proveedorId") Long proveedorId,
+            @Param("rubroId") Long rubroId,
+            @Param("importacionId") Long importacionId,
+            @Param("q") String q,
+            @Param("prefijo") String prefijo,
+            @Param("incluirInactivos") boolean incluirInactivos,
+            @Param("hoy") LocalDate hoy);
 
     @Query("select count(a) " + FILTRO_ARTICULOS)
     long contar(
@@ -339,6 +354,12 @@ public interface ArticuloRepository extends TenantScopedRepository<Articulo, Lon
     default List<Articulo> paraExportarScoped(String q, boolean incluirInactivos) {
         return paraExportar(TenantContext.requireFerreteriaId(), null, null, null,
                 FiltroArticulos.patronDeBusqueda(q), FiltroArticulos.prefijoDeBusqueda(q), incluirInactivos);
+    }
+
+    /** Los de {@link #paraExportarScoped} que tienen hoy una oferta que baja el precio: el listado con «Solo en oferta». */
+    default List<Articulo> paraExportarEnOfertaScoped(String q, boolean incluirInactivos, LocalDate hoy) {
+        return paraExportarEnOferta(TenantContext.requireFerreteriaId(), null, null, null,
+                FiltroArticulos.patronDeBusqueda(q), FiltroArticulos.prefijoDeBusqueda(q), incluirInactivos, hoy);
     }
 
     /** Cuantos articulos de la ferreteria cumplen el filtro, sin cargarlos (CU-05). */

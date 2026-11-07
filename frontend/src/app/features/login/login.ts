@@ -34,6 +34,12 @@ export class Login {
 
   protected readonly enviando = signal(false);
   protected readonly error = signal<string | null>(null);
+  /**
+   * El servidor cerró la sesión abierta (ferretería suspendida, usuario dado de baja, rol cambiado o vencida): el
+   * interceptor manda acá con `sesion=cerrada` (bugs de la guía, S15). El motivo, si es la suspensión, lo dice el
+   * login al volver a ingresar.
+   */
+  protected readonly sesionCerrada = this.route.snapshot.queryParamMap.get('sesion') === 'cerrada';
 
   /**
    * La URL que pidió antes de loguearse (returnUrl), solo si es una ruta propia: empieza con una sola «/» y
