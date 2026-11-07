@@ -385,6 +385,24 @@ describe('PaginaFacturacion', () => {
   });
 
   describe('subir el certificado', () => {
+    it('se ve siempre: sin pedido, deshabilitado con «Primero generá el pedido de certificado.»', async () => {
+      await crear();
+
+      expect(texto('button.subir-certificado')).toBe('Subir certificado (.crt)');
+      expect(boton('button.subir-certificado')!.disabled).toBe(true);
+      expect(texto('#certificado-motivo')).toBe('Primero generá el pedido de certificado.');
+    });
+
+    it('al generar el pedido se habilita y el motivo se va', async () => {
+      await crear();
+      api.configuracion.mockReturnValue(of(config({ pedido: PEDIDO })));
+
+      await click('button.generar-pedido');
+
+      expect(boton('button.subir-certificado')!.disabled).toBe(false);
+      expect(el().querySelector('#certificado-motivo')).toBeNull();
+    });
+
     it('lee el .crt y lo manda como texto; muestra la credencial nueva y los avisos de la respuesta', async () => {
       await crear(config({ pedido: PEDIDO }));
       const aviso = 'El certificado es de otra CUIT (20123456789): sirve solo para homologación.';
@@ -487,14 +505,18 @@ describe('PaginaFacturacion', () => {
   });
 
   describe('simulador', () => {
-    it('no muestra los pasos de ARCA ni el CUIT de homologación: dice que alcanza con firmar con el simulador', async () => {
+    it('muestra sus propios pasos, no los de ARCA, ni el CUIT de homologación', async () => {
       await crear(config({ ambiente: 'SIMULADOR', simulador: true }));
 
-      expect(el().querySelector('ol.guia')).toBeNull();
-      expect(el().querySelector('[name="cuitPedido"]')).toBeNull();
-      expect(texto('.guia-simulador')).toBe(
-        'En el simulador no hace falta ir a ARCA: generá el pedido y firmalo con «Firmar con el simulador».',
+      const pasos = Array.from(el().querySelectorAll('ol.guia.guia-simulador li')).map((li) =>
+        (li.textContent ?? '').replace(/\s+/g, ' ').trim(),
       );
+      expect(pasos).toEqual([
+        'Generá el pedido de certificado acá abajo.',
+        'Firmalo con «Firmar con el simulador»: el certificado queda activo enseguida. En el simulador no hace falta ir a ARCA.',
+      ]);
+      expect(texto('ol.guia')).not.toContain('clave fiscal');
+      expect(el().querySelector('[name="cuitPedido"]')).toBeNull();
       expect(boton('button.generar-pedido')).not.toBeNull();
     });
 
@@ -517,15 +539,20 @@ describe('PaginaFacturacion', () => {
       expect(texto('.credencial')).toContain('CA del simulador');
     });
 
-    it('sin pedido pendiente no ofrece subir ni firmar; fuera del simulador no ofrece firmar', async () => {
+    it('sin pedido pendiente, subir y firmar se ven deshabilitados con el motivo; fuera del simulador no ofrece firmar', async () => {
       await crear(config({ ambiente: 'SIMULADOR', simulador: true }));
-      expect(boton('button.firmar-simulador')).toBeNull();
-      expect(boton('button.subir-certificado')).toBeNull();
+      expect(boton('button.firmar-simulador')!.disabled).toBe(true);
+      expect(boton('button.subir-certificado')!.disabled).toBe(true);
+      expect(texto('#certificado-motivo')).toBe('Primero generá el pedido de certificado.');
+      expect(boton('button.subir-certificado')!.getAttribute('aria-describedby')).toContain('certificado-motivo');
+      expect(boton('button.firmar-simulador')!.getAttribute('aria-describedby')).toContain('certificado-motivo');
 
       TestBed.resetTestingModule();
       await crear(config({ pedido: PEDIDO }));
       expect(boton('button.firmar-simulador')).toBeNull();
-      expect(boton('button.subir-certificado')).not.toBeNull();
+      expect(boton('button.subir-certificado')!.disabled).toBe(false);
+      expect(el().querySelector('#certificado-motivo')).toBeNull();
+      expect(boton('button.subir-certificado')!.getAttribute('aria-describedby')).not.toContain('certificado-motivo');
     });
   });
 
