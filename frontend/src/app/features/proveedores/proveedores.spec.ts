@@ -895,12 +895,18 @@ describe('Proveedores', () => {
       );
     });
 
-    it('un proveedor sin lista importada lo dice', async () => {
-      await crearComponente(true);
+    it('un proveedor sin lista importada lo dice, y muestra el IVA y las bonificaciones que tenga', async () => {
+      await crearComponente(true, [sinteplast, { ...tersuave, listaIncluyeIva: true, bonificacion1: 40, bonificacion2: 10 }]);
 
       await enBarra(0, 'editar');
+      expect(dato('La lista incluye IVA')).toBe('No');
+      expect(dato('Bonificaciones')).toBe('Sin bonificaciones');
 
-      expect(seccion()?.querySelector('dl')).toBeNull();
+      await enBarra(1, 'editar');
+      expect(dato('La lista incluye IVA')).toBe('Sí');
+      expect(dato('Bonificaciones')).toBe('40 % + 10 % (en cascada)');
+      expect(dato('Columnas')).toBeUndefined();
+      expect(dato('Datos desde la fila')).toBeUndefined();
       expect(seccion()?.querySelector('.sin-lista')?.textContent?.trim()).toBe(
         'Todavía no se importó ninguna lista de este proveedor.',
       );

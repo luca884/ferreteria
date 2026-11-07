@@ -64,7 +64,7 @@ export class Proveedores implements OnInit {
   protected readonly guardando = signal(false);
   /** Id del proveedor que se está editando; null mientras se da de alta uno nuevo. */
   protected readonly editandoId = signal<number | null>(null);
-  /** Los datos de la lista del proveedor que se edita (#44); undefined en el alta, null si no tiene lista. */
+  /** Los datos de la lista del proveedor que se edita (#44); undefined en el alta. */
   protected readonly listaDelEditado = computed(() => {
     const id = this.editandoId();
     const proveedor = id === null ? undefined : this.proveedores().find((p) => p.id === id);

@@ -2,11 +2,19 @@ import { EncabezadosGuardados } from '../importaciones/importacion.models';
 import { CAMPOS_DE_COLUMNA, CampoDeColumna, TITULO_DE_COLUMNA, letraDeColumna } from '../importaciones/mapeo-lista';
 import { Proveedor } from './proveedor.models';
 
-/** Lo que la ficha del proveedor muestra de su lista (#44), de solo lectura: lo fija la importación (CU-04). */
+/**
+ * Lo que la ficha del proveedor muestra de su lista (#44), de solo lectura: lo fija la importación (CU-04). El IVA y las
+ * bonificaciones van siempre (sin importación quedan en «No» y «Sin bonificaciones»); lo del mapeo, solo si lo tiene.
+ */
 export interface ResumenDeLista {
   incluyeIva: boolean;
   /** «10 % + 2,5 % (en cascada)», o «Sin bonificaciones». */
   bonificaciones: string;
+  /** null si todavía no se importó ninguna lista. */
+  mapeo: ResumenDeMapeo | null;
+}
+
+export interface ResumenDeMapeo {
   /** «USD para toda la lista» si la lista no trae columna de moneda; null si no tiene moneda fija. */
   moneda: string | null;
   filaDesde: number;
@@ -14,8 +22,15 @@ export interface ResumenDeLista {
   columnas: string[];
 }
 
-/** null si el proveedor todavía no tiene una lista importada. */
-export function resumenDeLista(proveedor: Proveedor): ResumenDeLista | null {
+export function resumenDeLista(proveedor: Proveedor): ResumenDeLista {
+  return {
+    incluyeIva: proveedor.listaIncluyeIva === true,
+    bonificaciones: textoDeBonificaciones([proveedor.bonificacion1, proveedor.bonificacion2, proveedor.bonificacion3]),
+    mapeo: resumenDeMapeo(proveedor),
+  };
+}
+
+function resumenDeMapeo(proveedor: Proveedor): ResumenDeMapeo | null {
   const mapeo = proveedor.mapeoLista;
   if (!mapeo) return null;
   const columnas = CAMPOS_DE_COLUMNA.flatMap((campo) => {
@@ -26,8 +41,6 @@ export function resumenDeLista(proveedor: Proveedor): ResumenDeLista | null {
     return [`${nombreDelDato(campo)}: ${columna}`];
   });
   return {
-    incluyeIva: proveedor.listaIncluyeIva === true,
-    bonificaciones: textoDeBonificaciones([proveedor.bonificacion1, proveedor.bonificacion2, proveedor.bonificacion3]),
     moneda: mapeo.monedaFija ? `${mapeo.monedaFija} para toda la lista` : null,
     filaDesde: mapeo.filaDesde,
     columnas,
