@@ -232,7 +232,9 @@ nav a:focus-visible {
 
 /*
  * La pantalla scrollea acá; su barra de acciones anula este padding a los costados y queda fija arriba. El filete de
- * arriba lleva el tono de la sección abierta (bloque 2, S2).
+ * arriba lleva el tono de la sección abierta (bloque 2, S2). Va posicionado para que los `position: absolute` de adentro
+ * (el `caption.sr-only` de las tablas) no se escapen del overflow y estiren el documento: el menú lateral dejaría de
+ * llegar abajo (arreglos-confusos, S1).
  */
 .contenido {
   border-top: 3px solid var(--tono);
@@ -241,5 +243,6 @@ nav a:focus-visible {
   min-width: 0;
   min-height: 0;
   overflow: auto;
+  position: relative;
   padding: 0 var(--pantalla-x) var(--pantalla-y);
 }

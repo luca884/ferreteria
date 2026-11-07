@@ -37,6 +37,8 @@ function esRenglon(r: unknown): r is RenglonTicket {
     typeof x['stockActual'] === 'number' &&
     typeof x['stockMinimo'] === 'number' &&
     (x['descuentoBp'] === undefined || descuentoGuardadoValido(x['descuentoBp'])) &&
+    // Opcional: un ticket guardado antes de arreglos-confusos (S7) no lo tiene y sigue cargando.
+    (x['remitidoMilesimas'] === undefined || esPositivo(x['remitidoMilesimas'])) &&
     (x['problema'] === undefined || typeof x['problema'] === 'string') &&
     (x['problemaDeDescuento'] === undefined || x['problemaDeDescuento'] === true)
   );

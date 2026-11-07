@@ -67,8 +67,9 @@ public class ReporteVentas {
 
     public record PorMedioPago(String formaPago, MedioPago medio, long cantidad, BigDecimal monto) {}
 
+    /** {@code unidad}: el nombre de la unidad del renglon vendido (UNIDAD, METRO...), para escribir la cantidad. */
     public record PorArticulo(Long articuloId, String descripcion, BigDecimal cantidad, BigDecimal total,
-            BigDecimal ganancia, int renglonesSinCosto, int renglones) {}
+            BigDecimal ganancia, int renglonesSinCosto, int renglones, String unidad) {}
 
     public record PorRubro(String rubro, int renglones, BigDecimal total, BigDecimal ganancia, int renglonesSinCosto) {}
 
@@ -195,7 +196,7 @@ public class ReporteVentas {
     public List<PorArticulo> porArticulo(Rango rango) {
         return comprobantes.articulosDelRangoScoped(inicio(rango), fin(rango)).stream()
                 .map(f -> new PorArticulo((Long) f[0], (String) f[1], (BigDecimal) f[2], (BigDecimal) f[3],
-                        (BigDecimal) f[4], entero(f[5]), entero(f[6])))
+                        (BigDecimal) f[4], entero(f[5]), entero(f[6]), (String) f[7]))
                 .toList();
     }
 

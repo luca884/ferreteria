@@ -21,7 +21,7 @@ describe('CajaService', () => {
     service.actual().subscribe();
     const req = http.expectOne((r) => r.url.endsWith('/cajas/actual'));
     expect(req.request.method).toBe('GET');
-    req.flush({ estado: 'SIN_CAJA', caja: null, efectivoPropuesto: 0 });
+    req.flush({ estado: 'SIN_CAJA', caja: null, efectivoPropuesto: 0, hayCierreAnterior: false });
   });
 
   it('abre con POST /cajas y el efectivo inicial', () => {

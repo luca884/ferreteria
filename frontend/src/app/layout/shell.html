@@ -51,7 +51,8 @@
     }
   </nav>
 
-  @if (!auth.esSuperAdmin()) {
+  <!-- Con la contraseña por cambiar no se pide (el servidor da 403): mostrar «Sin datos» confundiría. -->
+  @if (!auth.esSuperAdmin() && !auth.debeCambiarContrasena()) {
     <app-cotizacion-lateral [cotizacion]="cotizacion()" [esDueno]="auth.esDueno()" />
   }
 
@@ -70,5 +71,8 @@
   </div>
 </aside>
 <main #contenido id="contenido" class="contenido" tabindex="-1">
+  @if (avisoAlLlegar(); as aviso) {
+    <p class="alerta exito aviso-al-llegar" role="status">{{ aviso }}</p>
+  }
   <router-outlet />
 </main>

@@ -12,7 +12,7 @@ describe('presupuesto.models', () => {
     expect(fechaDia(undefined)).toBe('');
   });
 
-  it('cada estado tiene su etiqueta', () => {
-    expect(ESTADOS_PRESUPUESTO.map((e) => ETIQUETA_ESTADO[e])).toEqual(['Pendiente', 'Aceptado', 'Rechazado', 'Facturado']);
+  it('cada estado tiene su etiqueta; el pasado a venta (FACTURADO por dentro) se ve «Vendido», porque puede no tener factura (arreglos-confusos, S5)', () => {
+    expect(ESTADOS_PRESUPUESTO.map((e) => ETIQUETA_ESTADO[e])).toEqual(['Pendiente', 'Aceptado', 'Rechazado', 'Vendido']);
   });
 });

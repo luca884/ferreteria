@@ -173,7 +173,16 @@
       </div>
 
       @if (p.estado === 'FACTURADO') {
-        <p class="nota-estado">Ya se facturó.</p>
+        <p class="nota-estado">
+          @if (p.facturadoPor; as f) {
+            Vendido en la venta N.º {{ f.numero }}
+            @if (f.factura; as factura) {
+              · {{ factura }}
+            }
+          } @else {
+            Ya se vendió.
+          }
+        </p>
       }
 
       @if (reemplazo(); as renglones) {

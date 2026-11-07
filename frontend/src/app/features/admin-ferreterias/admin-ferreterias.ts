@@ -23,6 +23,8 @@ import {
 /** Los campos del formulario, con la misma clave que usa el servidor en sus errores (`dueno.email`, etc.). */
 export type CampoFerreteria = 'razonSocial' | 'cuit' | 'dueno.nombre' | 'dueno.email' | 'dueno.password';
 
+const CAMPOS: readonly CampoFerreteria[] = ['razonSocial', 'cuit', 'dueno.nombre', 'dueno.email', 'dueno.password'];
+
 /**
  * Lo que la barra cambia sobre la fila elegida, siempre con confirmación: suspender o reactivar, y la configuración de
  * ARCA (marca «de prueba», simulador y facturación habilitada). Cada una invierte lo que la fila tiene hoy.
@@ -196,6 +198,19 @@ export class AdminFerreterias implements OnInit {
         return control.hasError('soloEspacios')
           ? CONTRASENA_SOLO_ESPACIOS
           : 'La contraseña tiene que tener entre 8 y 72 caracteres.';
+    }
+  }
+
+  /**
+   * Sacar el foco de un campo en el que no escribiste no lo da por tocado, mientras no hayas intentado crear. Si no,
+   * `ng-touched` + `ng-invalid` lo pintan de rojo en todos lados (`styles.css`) aunque `mensaje()` se calle: pasaba con
+   * la razón social que recibe el foco después de cada alta, apenas abrías un diálogo o hacías clic afuera. QA 06/11.
+   */
+  protected alSalirDeUnCampo(): void {
+    if (this.intentoCrear()) return;
+    for (const campo of CAMPOS) {
+      const control = this.form.get(campo);
+      if (control && !control.dirty) control.markAsUntouched();
     }
   }
 

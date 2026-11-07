@@ -1,7 +1,7 @@
 import { Component, ElementRef, afterNextRender, computed, input, output, signal, viewChild } from '@angular/core';
 import { TrampaFoco } from '../../shared/trampa-foco';
 import { GuardaLector } from './guarda-lector';
-import { parsearDescuento } from './ticket';
+import { descuentoEfectivoBp, parsearDescuento } from './ticket';
 
 const DESCUENTO_MAXIMO_BP = 9999;
 
@@ -76,6 +76,13 @@ export class DialogoDescuento {
   readonly descuentoBp = input.required<number>();
   /** CU-07: el tope del usuario en centésimas; null = sin tope (el servidor igual lo controla). */
   readonly topeBp = input<number | null>(null);
+  /**
+   * El otro descuento que se suma a este, en centésimas: en F6 el mayor de los renglones; en F7 el general. Con tope, se
+   * avisa si la combinación lo pasa, como el servidor. 0 = no combina (por ejemplo, un ticket de un presupuesto).
+   */
+  readonly otroDescuentoBp = input(0);
+  /** De dónde es el otro descuento, para el texto del aviso. */
+  readonly otroDescuentoEs = input<'renglon' | 'general'>('general');
 
   readonly confirmar = output<number>();
   readonly cancelar = output<void>();
@@ -142,6 +149,11 @@ export class DialogoDescuento {
     const tope = this.topeBp();
     if (tope !== null && bp > tope) {
       this.rechazar(`Tu tope de descuento es ${this.topeTexto()} %.`);
+      return;
+    }
+    if (tope !== null && bp > 0 && descuentoEfectivoBp(bp, this.otroDescuentoBp()) > tope) {
+      const otro = this.otroDescuentoEs() === 'renglon' ? 'del renglón' : 'general';
+      this.rechazar(`Sumado al descuento ${otro}, pasa tu tope de descuento de ${this.topeTexto()} %.`);
       return;
     }
     this.error.set(null);

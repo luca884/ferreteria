@@ -137,6 +137,18 @@ describe('TicketLista', () => {
     expect(filas()[1].querySelector('.sin-stock')).toBeNull();
   });
 
+  it('en un ticket de un remito mira solo lo que sale en la venta: los 300 remitidos ya salieron (arreglos-confusos, S7)', async () => {
+    await crear([
+      renglon({ articuloId: 1, cantidadMilesimas: 300000, remitidoMilesimas: 300000, stockActual: 0 }),
+      renglon({ articuloId: 2, cantidadMilesimas: 305000, remitidoMilesimas: 300000, stockActual: 4 }),
+    ]);
+
+    expect(filas()[0].querySelector('.sin-stock')).toBeNull();
+    expect(filas()[0].classList.contains('con-faltante')).toBe(false);
+    expect(filas()[1].querySelector('.sin-stock')!.textContent!.trim()).toBe('Sin stock suficiente');
+    expect(filas()[1].classList.contains('con-faltante')).toBe(true);
+  });
+
   it('muestra el problema que marcó el servidor', async () => {
     await crear([renglon({ problema: '"Martillo" fue dado de baja. Sacalo del ticket para seguir.' })]);
 

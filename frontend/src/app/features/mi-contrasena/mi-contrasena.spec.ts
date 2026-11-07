@@ -5,6 +5,7 @@ import { Router } from '@angular/router';
 import { of, throwError } from 'rxjs';
 import { vi } from 'vitest';
 import { AuthService } from '../../core/auth/auth.service';
+import { Avisos } from '../../core/avisos/avisos';
 import { MiContrasena } from './mi-contrasena';
 
 describe('MiContrasena', () => {
@@ -100,6 +101,32 @@ describe('MiContrasena', () => {
     expect(auth.logout).not.toHaveBeenCalled();
   });
 
+  describe('al editar cualquier campo se borran los errores del servidor (arreglos-confusos, S8b)', () => {
+    it('el de la actual incorrecta se va al corregir la actual', async () => {
+      await abrir();
+      auth.cambiarContrasena.mockReturnValue(
+        throwError(() => errorHttp(400, 'Datos inválidos', { passwordActual: 'La contraseña actual no es correcta.' })),
+      );
+      await enviar();
+      expect(el().querySelector('#actual-error')?.textContent).toContain('La contraseña actual no es correcta.');
+
+      await escribir('actual', 'otra1234');
+
+      expect(el().textContent).not.toContain('La contraseña actual no es correcta.');
+    });
+
+    it('el general se va al editar la nueva', async () => {
+      await abrir();
+      auth.cambiarContrasena.mockReturnValue(throwError(() => errorHttp(500, 'Se cayó el servidor.')));
+      await enviar();
+      expect(el().querySelector('[role="alert"]')?.textContent).toContain('Se cayó el servidor.');
+
+      await escribir('nueva', 'nueva12345');
+
+      expect(el().querySelector('[role="alert"]')).toBeNull();
+    });
+  });
+
   it('otro error de campo (nueva corta en el servidor) se muestra como error del formulario', async () => {
     await abrir();
     auth.cambiarContrasena.mockReturnValue(
@@ -177,6 +204,14 @@ describe('MiContrasena', () => {
       expect(navegar).toHaveBeenCalledWith('/');
     });
 
+    it('al cambiarla deja «Cambiaste tu contraseña.» para la pantalla a la que llega (arreglos-confusos, S8a)', async () => {
+      await abrir(true);
+
+      await enviar();
+
+      expect(TestBed.inject(Avisos).tomar()).toBe('Cambiaste tu contraseña.');
+    });
+
     it('si el cambio falla no navega y el aviso sigue', async () => {
       await abrir(true);
       auth.cambiarContrasena.mockReturnValue(
@@ -196,6 +231,8 @@ describe('MiContrasena', () => {
 
       expect(el().querySelector('.alerta.advertencia')).toBeNull();
       expect(navegar).not.toHaveBeenCalled();
+      expect(el().querySelector('.alerta.exito')?.textContent?.trim()).toBe('Contraseña actualizada.');
+      expect(TestBed.inject(Avisos).tomar()).toBeNull();
     });
   });
 });

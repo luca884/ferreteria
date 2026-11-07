@@ -75,10 +75,13 @@ public class CajaService {
     /** La caja abierta (de hoy o de otro dia) o ninguna, y el efectivo que se propone para abrir. Sin totales. */
     @Transactional(readOnly = true)
     public CajaVigente vigente() {
-        BigDecimal propuesto = cajaRepository.ultimoContadoScoped().orElse(BigDecimal.ZERO);
+        Optional<BigDecimal> ultimoContado = cajaRepository.ultimoContadoScoped();
+        BigDecimal propuesto = ultimoContado.orElse(BigDecimal.ZERO);
+        boolean hayCierreAnterior = ultimoContado.isPresent();
         return cajaRepository.abiertaScoped()
-                .map(caja -> new CajaVigente(caja, caja.estado(hoy()), nombre(caja.getUsuarioAperturaId()), propuesto))
-                .orElseGet(() -> new CajaVigente(null, null, null, propuesto));
+                .map(caja -> new CajaVigente(caja, caja.estado(hoy()), nombre(caja.getUsuarioAperturaId()), propuesto,
+                        hayCierreAnterior))
+                .orElseGet(() -> new CajaVigente(null, null, null, propuesto, hayCierreAnterior));
     }
 
     /**
@@ -103,7 +106,7 @@ public class CajaService {
             }
             throw e;
         }
-        return new CajaVigente(caja, caja.estado(hoy()), nombre(usuarioId), contadoAnterior);
+        return new CajaVigente(caja, caja.estado(hoy()), nombre(usuarioId), contadoAnterior, contadoAnterior != null);
     }
 
     /**

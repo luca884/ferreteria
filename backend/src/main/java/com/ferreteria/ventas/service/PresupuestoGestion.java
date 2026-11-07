@@ -3,8 +3,12 @@ package com.ferreteria.ventas.service;
 import com.ferreteria.common.exception.ConflictException;
 import com.ferreteria.common.exception.DatosInvalidosException;
 import com.ferreteria.common.exception.ResourceNotFoundException;
+import com.ferreteria.facturacion.api.FacturacionParaVenta;
+import com.ferreteria.facturacion.api.FacturacionParaVenta.ResumenFiscal;
+import com.ferreteria.ventas.model.Comprobante;
 import com.ferreteria.ventas.model.EstadoPresupuesto;
 import com.ferreteria.ventas.model.Presupuesto;
+import com.ferreteria.ventas.repository.ComprobanteRepository;
 import com.ferreteria.ventas.repository.ItemPresupuestoRepository;
 import com.ferreteria.ventas.repository.PresupuestoRepository;
 import org.springframework.data.domain.Page;
@@ -14,6 +18,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -36,10 +41,15 @@ public class PresupuestoGestion {
 
     private final PresupuestoRepository presupuestoRepository;
     private final ItemPresupuestoRepository itemRepository;
+    private final ComprobanteRepository comprobanteRepository;
+    private final FacturacionParaVenta facturacion;
 
-    public PresupuestoGestion(PresupuestoRepository presupuestoRepository, ItemPresupuestoRepository itemRepository) {
+    public PresupuestoGestion(PresupuestoRepository presupuestoRepository, ItemPresupuestoRepository itemRepository,
+            ComprobanteRepository comprobanteRepository, FacturacionParaVenta facturacion) {
         this.presupuestoRepository = presupuestoRepository;
         this.itemRepository = itemRepository;
+        this.comprobanteRepository = comprobanteRepository;
+        this.facturacion = facturacion;
     }
 
     /** Los mas nuevos primero. {@code desde} y {@code hasta} son dias, ambos inclusive; un filtro nulo no filtra. */
@@ -52,11 +62,33 @@ public class PresupuestoGestion {
                 PageRequest.of(Math.max(page, 0), Math.min(Math.max(size, 1), TAMANO_MAXIMO)));
     }
 
+    /** El presupuesto con sus renglones y, si esta FACTURADO (pasado a venta), la venta que lo cobro. */
     @Transactional(readOnly = true)
     public DetallePresupuesto detalle(Long id) {
         Presupuesto presupuesto = presupuestoRepository.findScoped(id)
                 .orElseThrow(() -> new ResourceNotFoundException(MENSAJE_NO_ENCONTRADO));
-        return new DetallePresupuesto(presupuesto, itemRepository.dePresupuestoScoped(id));
+        DetallePresupuesto.FacturadoPor facturadoPor =
+                presupuesto.getEstado() == EstadoPresupuesto.FACTURADO ? facturadoPor(id) : null;
+        return new DetallePresupuesto(presupuesto, itemRepository.dePresupuestoScoped(id), facturadoPor);
+    }
+
+    /**
+     * La venta que cobro el presupuesto, de la ferreteria del request (nunca la nota de credito). La factura sale solo de
+     * {@code facturacion.resumenes}: un resumen que no es valido como factura (un X, un registro sin numero o una nota) no
+     * muestra letra ni numero fiscal. Misma regla que {@code RemitoGestion}.
+     */
+    private DetallePresupuesto.FacturadoPor facturadoPor(Long presupuestoId) {
+        List<Comprobante> ventas = comprobanteRepository.ventasDelPresupuestoScoped(presupuestoId);
+        if (ventas.isEmpty()) {
+            return null;
+        }
+        Comprobante venta = ventas.get(0);
+        ResumenFiscal fiscal = facturacion.resumenes(List.of(venta.getId())).get(venta.getId());
+        String factura = fiscal != null && fiscal.validoComoFactura() && fiscal.numero() != null
+                && "FACTURA".equals(fiscal.clase())
+                ? String.format("Factura %s %05d-%08d", fiscal.letra(), fiscal.puntoVenta(), fiscal.numero())
+                : null;
+        return new DetallePresupuesto.FacturadoPor(venta.getId(), venta.getNumero(), factura);
     }
 
     /**

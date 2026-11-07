@@ -90,6 +90,8 @@ export class Caja implements OnInit {
     return contado === null ? null : `¿Cerrar la caja con ${formatearMonto(contado)} contados?`;
   });
   protected readonly caja = computed(() => this.vigente()?.caja ?? null);
+  /** Nunca se cerró una caja: no hay «último cierre» que proponer, se cuenta lo que hay. */
+  protected readonly primeraApertura = computed(() => this.vigente()?.hayCierreAnterior === false);
   protected readonly esDeOtroDia = computed(() => this.vigente()?.estado === 'DE_OTRO_DIA');
   protected readonly avisoOtroDia = computed(() => {
     const vigente = this.vigente();
@@ -155,7 +157,12 @@ export class Caja implements OnInit {
         this.trabajando.set(false);
         this.cierre.set(null);
         this.mensaje.set('Abriste la caja.');
-        this.vigente.set({ estado: 'ABIERTA', caja: abierta, efectivoPropuesto: 0 });
+        this.vigente.set({
+          estado: 'ABIERTA',
+          caja: abierta,
+          efectivoPropuesto: 0,
+          hayCierreAnterior: this.vigente()?.hayCierreAnterior ?? false,
+        });
         this.cargarEnVivo();
       },
       error: (err: unknown) => {
@@ -253,7 +260,7 @@ export class Caja implements OnInit {
         this.enVivo.set(null);
         this.contado.set('');
         this.mensaje.set('Cerraste la caja.');
-        this.vigente.set({ estado: 'SIN_CAJA', caja: null, efectivoPropuesto: contado });
+        this.vigente.set({ estado: 'SIN_CAJA', caja: null, efectivoPropuesto: contado, hayCierreAnterior: true });
         this.efectivoInicial.set(textoDeImporte(contado));
       },
       error: (err: unknown) => {

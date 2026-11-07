@@ -15,6 +15,7 @@ import {
   actualizarPrecios,
   cambiarCantidad,
   descontarVendido,
+  descuentoEfectivoBp,
   marcarProblemas,
   aplicarDescuentoGlobal,
   aplicarDescuentoRenglon,
@@ -223,6 +224,27 @@ describe('ticket (puro)', () => {
       const t = agregar(ticketVacio('k'), art({ unidad: 'KILO', stockActual: 0.3 }));
       const r = cambiarCantidad(t, 0, 300).ticket!;
       expect(sinStock(r.renglones[0])).toBe(false);
+    });
+
+    describe('renglón de un remito: mira solo lo que sale en la venta, como el servidor (arreglos-confusos, S7)', () => {
+      const delRemito = (cantidadMilesimas: number, stockActual: number) => ({
+        ...agregar(ticketVacio('k'), art({ stockActual })).renglones[0],
+        cantidadMilesimas,
+        remitidoMilesimas: 300000,
+      });
+
+      it('lo que el remito ya entregó no cuenta: 300 remitidos y 0 en stock no avisa', () => {
+        expect(sinStock(delRemito(300000, 0))).toBe(false);
+      });
+
+      it('vender menos de lo remitido no avisa ni con stock negativo', () => {
+        expect(sinStock(delRemito(200000, -5))).toBe(false);
+      });
+
+      it('la diferencia sí: 305 con 300 remitidos sale 5 y avisa con 4 en stock, no con 5', () => {
+        expect(sinStock(delRemito(305000, 4))).toBe(true);
+        expect(sinStock(delRemito(305000, 5))).toBe(false);
+      });
     });
   });
 
@@ -738,12 +760,41 @@ describe('ticket (puro)', () => {
             unidad: 'UNIDAD',
             precioCentavos: 12000,
             cantidadMilesimas: 2500,
+            remitidoMilesimas: 2500,
             descuentoBp: 1050,
             stockActual: 7,
             stockMinimo: 2,
           },
         ],
       });
+    });
+
+    it('cada renglón recuerda lo que entregó el remito; el del presupuesto no (arreglos-confusos, S7)', () => {
+      const actuales = new Map([[1, art()]]);
+
+      expect(ticketDeRemito(remito([renglon({ cantidad: 300 })]), actuales, 'c').renglones[0].remitidoMilesimas).toBe(
+        300000,
+      );
+      const p = { ...remito([renglon()]), presupuestoId: 3, vence: '2026-11-20', vencido: false } as unknown as PresupuestoResponse;
+      expect('remitidoMilesimas' in ticketDePresupuesto(p, actuales, 'c').renglones[0]).toBe(false);
+    });
+
+    it('agregar más del mismo artículo conserva lo remitido', () => {
+      const t = ticketDeRemito(remito([renglon({ cantidad: 2 })]), new Map([[1, art()]]), 'c');
+
+      expect(agregar(t, art()).renglones[0]).toMatchObject({ cantidadMilesimas: 3000, remitidoMilesimas: 2000 });
+    });
+
+    it('soltarRemito también olvida lo remitido: la venta pasa a ser común y mueve todo', () => {
+      const t = ticketDeRemito(remito([renglon()]), new Map([[1, art()]]), 'c');
+
+      expect('remitidoMilesimas' in soltarRemito(t).renglones[0]).toBe(false);
+    });
+
+    it('lo remitido no viaja en el pedido de la venta', () => {
+      const t = ticketDeRemito(remito([renglon()]), new Map([[1, art()]]), 'c');
+
+      expect('remitidoMilesimas' in aRequest(t, 1).renglones[0]).toBe(false);
     });
 
     it('un artículo dado de baja, sin precio o que ya no existe queda marcado, con el precio del remito', () => {
@@ -774,6 +825,13 @@ describe('ticket (puro)', () => {
   });
 
   describe('descuentos (GDS-12)', () => {
+    it('descuentoEfectivoBp combina el del renglón y el general como el servidor: 100 − (100 − r)(100 − g)/100 (arreglos-confusos, S6)', () => {
+      expect(descuentoEfectivoBp(1000, 500)).toBe(1450);
+      expect(descuentoEfectivoBp(1000, 0)).toBe(1000);
+      expect(descuentoEfectivoBp(0, 0)).toBe(0);
+      expect(descuentoEfectivoBp(500, 526)).toBeCloseTo(999.7, 6);
+    });
+
     it('parsearDescuento lee el % con coma o punto y hasta 2 decimales, en centésimas de punto', () => {
       expect(parsearDescuento('10')).toBe(1000);
       expect(parsearDescuento('10,5')).toBe(1050);
@@ -896,6 +954,23 @@ describe('ticket (puro)', () => {
       expect(r.renglones.map((x) => x.articuloId)).toEqual([3]);
       expect(r.renglones[0].cantidadMilesimas).toBe(1000);
       expect(r.elegido).toBe(0);
+    });
+
+    it('lo que sobra de un ticket de remito es una venta común: no se lleva lo remitido (arreglos-confusos, S7; verificador A1)', () => {
+      const t = ticketDeRemito(
+        { ...({} as RemitoResponse), remitoId: 8, numero: 5, descuentoPorcentaje: 0, renglones: [{ articuloId: 1, descripcion: 'Tornillo', unidad: 'UNIDAD', cantidad: 2, descuentoPorcentaje: 0, precioUnitario: 100 }] } as unknown as RemitoResponse,
+        new Map([[1, art({ stockActual: 0 })]]),
+        'k',
+      );
+      const pedido = aRequest(t, 1);
+      const conEscaneo = agregar(t, art({ stockActual: 0 }));
+
+      const r = descontarVendido(conEscaneo, pedido, nueva);
+
+      expect(r.remitoId).toBeUndefined();
+      expect(r.renglones[0].cantidadMilesimas).toBe(1000);
+      expect('remitidoMilesimas' in r.renglones[0]).toBe(false);
+      expect(sinStock(r.renglones[0])).toBe(true);
     });
 
     it('si a un renglón enviado se le sumó cantidad, queda la diferencia', () => {
