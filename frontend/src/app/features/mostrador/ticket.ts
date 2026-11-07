@@ -106,6 +106,14 @@ export function parsearDescuento(texto: string): number | null {
   }
 }
 
+/**
+ * El descuento que termina teniendo un renglón con su descuento propio y el general, en centésimas de punto: la misma
+ * cuenta del servidor (`TopeDeDescuento.efectivo`), 100 − (100 − r)(100 − g)/100. Puede tener decimales.
+ */
+export function descuentoEfectivoBp(renglonBp: number, generalBp: number): number {
+  return 10000 - ((10000 - renglonBp) * (10000 - generalBp)) / 10000;
+}
+
 /** Pone (o saca, con 0) el descuento propio de un renglón. */
 export function aplicarDescuentoRenglon(t: Ticket, indice: number, bp: number): ResultadoCantidad {
   if (!t.renglones[indice]) return { error: 'Ese renglón no existe.' };

@@ -160,6 +160,70 @@ describe('DialogoDescuento', () => {
       expect(error()).toBe('Tu tope de descuento es 10 %.');
       expect(document.activeElement).toBe(campo());
     });
+
+    describe('sumado al otro descuento (arreglos-confusos, S6)', () => {
+      function conOtro(bp: number, es: 'renglon' | 'general') {
+        fixture.componentRef.setInput('otroDescuentoBp', bp);
+        fixture.componentRef.setInput('otroDescuentoEs', es);
+        fixture.detectChanges();
+      }
+
+      it('F6: 5 % general con 10 % en un renglón pasa el tope de 10 % (14,5 % efectivo): avisa y no aplica', async () => {
+        await abrir(0, 'Descuento de todo el ticket', 1000);
+        conOtro(1000, 'renglon');
+        escribir('5');
+
+        tecla('Enter');
+        fixture.detectChanges();
+
+        expect(confirmados).toEqual([]);
+        expect(error()).toBe('Sumado al descuento del renglón, pasa tu tope de descuento de 10 %.');
+        expect(document.activeElement).toBe(campo());
+      });
+
+      it('F7: 6 % en el renglón con 5 % general pasa el tope de 10 %: avisa con el texto del servidor', async () => {
+        await abrir(0, 'Descuento de Martillo', 1000);
+        conOtro(500, 'general');
+        escribir('6');
+
+        tecla('Enter');
+        fixture.detectChanges();
+
+        expect(confirmados).toEqual([]);
+        expect(error()).toBe('Sumado al descuento general, pasa tu tope de descuento de 10 %.');
+      });
+
+      it('con el otro en 10 % y este en 0 % pasa: 0 lo saca', async () => {
+        await abrir(500, 'Descuento de todo el ticket', 1000);
+        conOtro(1000, 'renglon');
+        escribir('0');
+
+        tecla('Enter');
+
+        expect(confirmados).toEqual([0]);
+      });
+
+      it('si la combinación queda igual al tope, pasa', async () => {
+        await abrir(0, 'Descuento de todo el ticket', 1000);
+        conOtro(500, 'renglon');
+        // 100 − 95 × 94,74 / 100 = 9,997 %: no llega al 10 %.
+        escribir('5,26');
+
+        tecla('Enter');
+
+        expect(confirmados).toEqual([526]);
+      });
+
+      it('sin tope (el Dueño) no avisa nada', async () => {
+        await abrir(0, 'Descuento de todo el ticket', null);
+        conOtro(5000, 'renglon');
+        escribir('50');
+
+        tecla('Enter');
+
+        expect(confirmados).toEqual([5000]);
+      });
+    });
   });
 
   it('99,99 es el máximo y se confirma', async () => {

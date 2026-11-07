@@ -217,6 +217,22 @@ export class Mostrador {
   private readonly caja = viewChild.required(CajaBusqueda);
 
   /**
+   * Lo que el diálogo de descuento suma al que se escribe para avisar el tope combinado (arreglos-confusos, S6): en F6 el
+   * mayor descuento de renglón, en F7 el general. Un ticket que sale de un presupuesto o de un remito no combina: sus
+   * descuentos ya están autorizados y solo el servidor sabe hasta dónde (TopeDeDescuento.Autorizados).
+   */
+  private readonly combinaDescuentos = computed(() => {
+    const t = this.ticket.ticket();
+    return t.presupuestoId == null && t.remitoId == null;
+  });
+  protected readonly mayorDescuentoDeRenglonBp = computed(() =>
+    this.combinaDescuentos() ? Math.max(0, ...this.ticket.ticket().renglones.map((r) => r.descuentoBp ?? 0)) : 0,
+  );
+  protected readonly descuentoGeneralParaCombinarBp = computed(() =>
+    this.combinaDescuentos() ? (this.ticket.ticket().descuentoGlobalBp ?? 0) : 0,
+  );
+
+  /**
    * Qué comprobante sale al cobrar (C3), leído al abrir el mostrador. null mientras se lee o si no se pudo: el cobro no
    * anticipa nada y la venta la factura (o no) el servidor igual.
    */

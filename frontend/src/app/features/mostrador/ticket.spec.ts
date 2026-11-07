@@ -15,6 +15,7 @@ import {
   actualizarPrecios,
   cambiarCantidad,
   descontarVendido,
+  descuentoEfectivoBp,
   marcarProblemas,
   aplicarDescuentoGlobal,
   aplicarDescuentoRenglon,
@@ -774,6 +775,13 @@ describe('ticket (puro)', () => {
   });
 
   describe('descuentos (GDS-12)', () => {
+    it('descuentoEfectivoBp combina el del renglón y el general como el servidor: 100 − (100 − r)(100 − g)/100 (arreglos-confusos, S6)', () => {
+      expect(descuentoEfectivoBp(1000, 500)).toBe(1450);
+      expect(descuentoEfectivoBp(1000, 0)).toBe(1000);
+      expect(descuentoEfectivoBp(0, 0)).toBe(0);
+      expect(descuentoEfectivoBp(500, 526)).toBeCloseTo(999.7, 6);
+    });
+
     it('parsearDescuento lee el % con coma o punto y hasta 2 decimales, en centésimas de punto', () => {
       expect(parsearDescuento('10')).toBe(1000);
       expect(parsearDescuento('10,5')).toBe(1050);

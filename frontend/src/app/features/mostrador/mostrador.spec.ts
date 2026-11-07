@@ -159,6 +159,7 @@ describe('Mostrador', () => {
     estado: 'ABIERTA',
     caja: { id: 4, estado: 'ABIERTA', fechaApertura: '2026-10-16T08:00:00', abiertaPor: 'Ana', efectivoInicial: 0 },
     efectivoPropuesto: 0,
+    hayCierreAnterior: true,
   };
 
   async function crear(
@@ -2923,6 +2924,77 @@ describe('Mostrador', () => {
       expect(totalGrande()).toBe('$ 1.500,00');
     });
 
+    describe('con tope, el diálogo mira el descuento combinado (arreglos-confusos, S6)', () => {
+      async function vendedorConTopeDe10() {
+        await crear(cajaAbierta, FORMAS_BASE, 'VENDEDOR', 10);
+        await escribir('M');
+        await enter();
+        await responder(llamadas.length - 1, exacto(articulo(1, { precioFinal: 1500 })));
+      }
+
+      it('F6: con 10 % en el renglón, 5 % general avisa en el diálogo y no aplica', async () => {
+        await vendedorConTopeDe10();
+        await tecla('F7');
+        await descuentoDelDialogo('10');
+
+        await tecla('F6');
+        await descuentoDelDialogo('5');
+
+        expect(normal(dialogo()?.querySelector('.error')?.textContent)).toBe(
+          'Sumado al descuento del renglón, pasa tu tope de descuento de 10 %.',
+        );
+        expect(totalGrande()).toBe('$ 1.350,00');
+      });
+
+      it('F7: con 5 % general, 6 % en el renglón avisa en el diálogo y no aplica', async () => {
+        await vendedorConTopeDe10();
+        await tecla('F6');
+        await descuentoDelDialogo('5');
+
+        await tecla('F7');
+        await descuentoDelDialogo('6');
+
+        expect(normal(dialogo()?.querySelector('.error')?.textContent)).toBe(
+          'Sumado al descuento general, pasa tu tope de descuento de 10 %.',
+        );
+        expect(totalGrande()).toBe('$ 1.425,00');
+      });
+
+      it('en un ticket que sale de un presupuesto no combina: sus descuentos ya están autorizados y el servidor decide', async () => {
+        localStorage.setItem(
+          'ticket:3:7',
+          JSON.stringify({
+            v: 1,
+            clave: 'clave-p',
+            elegido: 0,
+            presupuestoId: 8,
+            presupuestoNumero: 12,
+            descuentoGlobalBp: 500,
+            renglones: [
+              {
+                articuloId: 1,
+                codigoInterno: 'COD-1',
+                descripcion: 'Martillo',
+                unidad: 'UNIDAD',
+                precioCentavos: 150000,
+                cantidadMilesimas: 1000,
+                descuentoBp: 1000,
+                stockActual: 10,
+                stockMinimo: 5,
+              },
+            ],
+          }),
+        );
+        await crear(cajaAbierta, FORMAS_BASE, 'VENDEDOR', 10);
+
+        // 10 % y 5 % dan 14,5 %: lo autorizó quien emitió el presupuesto, y el servidor lo acepta.
+        await tecla('F6');
+        await descuentoDelDialogo('5');
+
+        expect(dialogo()).toBeNull();
+      });
+    });
+
     it('Esc cierra el diálogo sin aplicar nada', async () => {
       await conUnArticulo();
       await tecla('F7');
@@ -3043,11 +3115,12 @@ describe('Mostrador', () => {
     const normal = (t: string | null | undefined) => (t ?? '').replace(/\s+/g, ' ').trim();
     const avisoCaja = () => el().querySelector<HTMLElement>('.aviso-caja');
     const dialogo = () => el().querySelector<HTMLElement>('[role="dialog"], [role="alertdialog"]');
-    const sinCaja: CajaVigente = { estado: 'SIN_CAJA', caja: null, efectivoPropuesto: 0 };
+    const sinCaja: CajaVigente = { estado: 'SIN_CAJA', caja: null, efectivoPropuesto: 0, hayCierreAnterior: false };
     const deAyer: CajaVigente = {
       estado: 'DE_OTRO_DIA',
       caja: { id: 3, estado: 'DE_OTRO_DIA', fechaApertura: '2026-10-15T08:00:00', abiertaPor: 'Ana', efectivoInicial: 0 },
       efectivoPropuesto: 0,
+      hayCierreAnterior: true,
     };
 
     async function tecla(key: string) {
@@ -3140,7 +3213,7 @@ describe('Mostrador', () => {
     const dialogoPresupuesto = () => el().querySelector<HTMLElement>('app-dialogo-presupuesto [role="dialog"]');
     const aviso = () => normal(el().querySelector('.aviso')?.textContent);
     const totalGrande = () => normal(el().querySelector('app-totales-ticket .total')?.textContent);
-    const sinCaja: CajaVigente = { estado: 'SIN_CAJA', caja: null, efectivoPropuesto: 0 };
+    const sinCaja: CajaVigente = { estado: 'SIN_CAJA', caja: null, efectivoPropuesto: 0, hayCierreAnterior: false };
 
     async function tecla(key: string, destino: HTMLElement = document.activeElement as HTMLElement) {
       const evento = new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true });
@@ -3453,7 +3526,7 @@ describe('Mostrador', () => {
     const aviso = () => normal(el().querySelector('.aviso')?.textContent);
     const advertencia = () => normal(el().querySelector('.aviso.advertencia')?.textContent);
     const totalGrande = () => normal(el().querySelector('app-totales-ticket .total')?.textContent);
-    const sinCaja: CajaVigente = { estado: 'SIN_CAJA', caja: null, efectivoPropuesto: 0 };
+    const sinCaja: CajaVigente = { estado: 'SIN_CAJA', caja: null, efectivoPropuesto: 0, hayCierreAnterior: false };
     const botonRemito = () =>
       Array.from(el().querySelectorAll<HTMLButtonElement>('app-botonera button')).find((b) =>
         normal(b.textContent).includes('Remito'),
@@ -5094,7 +5167,7 @@ describe('Mostrador', () => {
 
     it('sin caja abierta no pregunta por el CAE; con la caja abierta de otro día, sí', async () => {
       provisorias = [venta12];
-      await crear({ estado: 'SIN_CAJA', caja: null, efectivoPropuesto: 0 });
+      await crear({ estado: 'SIN_CAJA', caja: null, efectivoPropuesto: 0, hayCierreAnterior: false });
       await avanzar(INTERVALO_AVISOS_MS);
       expect(leerProvisorias).not.toHaveBeenCalled();
       expect(avisosCae()).toHaveLength(0);
