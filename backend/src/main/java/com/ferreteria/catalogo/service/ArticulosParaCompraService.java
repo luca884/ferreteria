@@ -70,7 +70,7 @@ public class ArticulosParaCompraService implements ArticulosParaCompra {
         }
         return articuloRepository.activosDeProveedorPorCodigoScoped(proveedorId, codigos).stream()
                 .map(a -> new ArticuloPorCodigo(a.getCodigoProveedor(), a.getId(), a.getDescripcion(),
-                        a.getUnidad().name()))
+                        a.getUnidad().name(), a.getCodigoInterno(), a.getMoneda().name()))
                 .toList();
     }
 

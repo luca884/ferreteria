@@ -13,8 +13,9 @@ import java.util.Map;
  */
 public interface ArticulosParaCompra {
 
-    /** Un articulo de la ferreteria hallado por el codigo que le puso su proveedor. */
-    record ArticuloPorCodigo(String codigoProveedor, Long id, String descripcion, String unidad) {
+    /** Un articulo de la ferreteria hallado por el codigo que le puso su proveedor; la moneda es la del costo. */
+    record ArticuloPorCodigo(String codigoProveedor, Long id, String descripcion, String unidad, String codigoInterno,
+                             String moneda) {
     }
 
     /**

@@ -83,6 +83,8 @@ describe('NuevaCompra', () => {
         neto: 2526,
         articuloId: 1,
         articuloDescripcion: 'Tornillo 1/4',
+        articuloCodigoInterno: 'TOR-1',
+        articuloMoneda: 'ARS',
         cantidadNoEntera: false,
       },
       {
@@ -93,6 +95,8 @@ describe('NuevaCompra', () => {
         neto: 4500,
         articuloId: null,
         articuloDescripcion: null,
+        articuloCodigoInterno: null,
+        articuloMoneda: null,
         cantidadNoEntera: false,
       },
     ],
@@ -568,6 +572,58 @@ describe('NuevaCompra', () => {
       expect(el().querySelector('.sin-articulo')).toBeNull();
       expect(campo<HTMLInputElement>('input[name="cantidad-1"]').value).toBe('3');
       expect(campo<HTMLInputElement>('input[name="costo-1"]').value).toBe('1.500');
+      // El renglón resuelto muestra el código de la factura, para cotejar con el papel.
+      const resuelto = el().querySelectorAll('table.renglones tbody tr')[1];
+      expect(resuelto.querySelector('.codigo-proveedor')?.textContent?.trim()).toBe('Cód. proveedor X-99');
+    });
+
+    describe('códigos de los renglones (arreglos-compras, S7)', () => {
+      const articuloDe = (fila: number) => el().querySelectorAll('table.renglones tbody tr')[fila].querySelector('td')!;
+
+      it('un renglón leído muestra el código interno y, chico al lado, el del proveedor', async () => {
+        await crear();
+        await subirPdf();
+
+        expect(articuloDe(0).textContent).toContain('TOR-1 · Tornillo 1/4');
+        expect(articuloDe(0).textContent).not.toContain('TOR-P ·');
+        expect(articuloDe(0).querySelector('.codigo-proveedor')?.textContent?.trim()).toBe('Cód. proveedor TOR-P');
+      });
+
+      it('un artículo en dólares leído del PDF queda en dólares', async () => {
+        await crear();
+        api.leerFactura.mockReturnValue(
+          of({ ...borrador, renglones: [{ ...borrador.renglones[0], articuloMoneda: 'USD' }] }),
+        );
+        await subirPdf();
+
+        expect(articuloDe(0).textContent).toContain('(USD)');
+      });
+
+      it('agregado a mano: muestra el código del proveedor si es distinto del interno, y si es el mismo no lo repite', async () => {
+        await crear();
+        articulos.buscar.mockReturnValue(
+          of({
+            items: [
+              { ...tornillo, codigoProveedor: 'TOR-P' },
+              { ...tornillo, id: 2, codigoInterno: 'DBS-100', codigoProveedor: 'DBS-100', descripcion: 'Bulón' },
+            ],
+            page: 0,
+            size: 8,
+            totalElements: 2,
+            totalPages: 1,
+          }),
+        );
+        await escribir('input[name=busqueda]', 'tor');
+        campo<HTMLFormElement>('form.buscador').dispatchEvent(new Event('submit'));
+        await refrescar();
+        el().querySelectorAll<HTMLButtonElement>('.resultados button')[0].click();
+        await refrescar();
+        el().querySelectorAll<HTMLButtonElement>('.resultados button')[1].click();
+        await refrescar();
+
+        expect(articuloDe(0).querySelector('.codigo-proveedor')?.textContent?.trim()).toBe('Cód. proveedor TOR-P');
+        expect(articuloDe(1).querySelector('.codigo-proveedor')).toBeNull();
+      });
     });
 
     it('avisa si la lectura cuadra con el total de la factura', async () => {

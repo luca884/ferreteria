@@ -39,6 +39,8 @@ const MAXIMO_RECARGOS = 5;
 interface RenglonEnCarga {
   articuloId: number;
   codigoInterno: string;
+  /** El código con el que lo factura el proveedor; se muestra chico si no es el interno. */
+  codigoProveedor: string | null;
   descripcion: string;
   moneda: string;
   cantidad: string;
@@ -176,6 +178,8 @@ export class NuevaCompra implements OnInit {
       {
         articuloId: articulo.id,
         codigoInterno: articulo.codigoInterno,
+        // Un renglón de la factura muestra el código de la factura, para cotejarlo con el papel.
+        codigoProveedor: resuelto ? resuelto.codigo : (articulo.codigoProveedor ?? null),
         descripcion: articulo.descripcion,
         moneda: articulo.moneda,
         cantidad: resuelto ? String(resuelto.cantidad) : '1',
@@ -230,9 +234,10 @@ export class NuevaCompra implements OnInit {
       }
       encontrados.push({
         articuloId: r.articuloId,
-        codigoInterno: r.codigo,
+        codigoInterno: r.articuloCodigoInterno ?? r.codigo,
+        codigoProveedor: r.codigo,
         descripcion: r.articuloDescripcion ?? r.descripcion,
-        moneda: 'ARS',
+        moneda: r.articuloMoneda ?? 'ARS',
         cantidad: String(r.cantidad),
         costo: textoDeImporte(r.costoUnitario),
         ...(r.cantidadNoEntera ? { aviso: AVISO_CANTIDAD_NO_ENTERA } : {}),

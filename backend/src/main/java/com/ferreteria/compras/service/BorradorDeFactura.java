@@ -32,7 +32,10 @@ public record BorradorDeFactura(
     public record Recargo(String nombre, BigDecimal porcentaje, BigDecimal importe) {
     }
 
-    /** {@code articuloId} y {@code articuloDescripcion} son null si el codigo del proveedor no tiene articulo. */
+    /**
+     * {@code codigo} es el del proveedor. {@code articuloId}, {@code articuloDescripcion}, {@code articuloCodigoInterno}
+     * y {@code articuloMoneda} son null si el codigo del proveedor no tiene articulo.
+     */
     public record Renglon(
             String codigo,
             String descripcion,
@@ -41,6 +44,8 @@ public record BorradorDeFactura(
             BigDecimal neto,
             Long articuloId,
             String articuloDescripcion,
+            String articuloCodigoInterno,
+            String articuloMoneda,
             boolean cantidadNoEntera) {
     }
 }

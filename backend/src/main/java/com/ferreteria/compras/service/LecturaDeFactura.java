@@ -58,7 +58,9 @@ public class LecturaDeFactura {
             cantidadNoEntera |= noEntera;
             renglones.add(new BorradorDeFactura.Renglon(r.codigo(), r.descripcion(), r.cantidad(), r.costoUnitario(),
                     r.neto(), articulo == null ? null : articulo.id(),
-                    articulo == null ? null : articulo.descripcion(), noEntera));
+                    articulo == null ? null : articulo.descripcion(),
+                    articulo == null ? null : articulo.codigoInterno(),
+                    articulo == null ? null : articulo.moneda(), noEntera));
         }
         return new BorradorDeFactura(
                 proveedor.map(ProveedorDeCompra::id).orElse(null),

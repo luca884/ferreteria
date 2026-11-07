@@ -149,8 +149,11 @@ export interface RenglonDeFactura {
   cantidad: number;
   costoUnitario: number;
   neto: number;
-  /** Null si el código del proveedor no tiene artículo. */
+  /** Null si el código del proveedor no tiene artículo (como los dos que siguen). */
   articuloId: number | null;
   articuloDescripcion: string | null;
+  articuloCodigoInterno: string | null;
+  /** La moneda del costo del artículo. */
+  articuloMoneda: string | null;
   cantidadNoEntera: boolean;
 }

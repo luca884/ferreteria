@@ -142,6 +142,9 @@
           <tr>
             <td>
               {{ r.codigoInterno }} · {{ r.descripcion }}{{ r.moneda === 'USD' ? ' (USD)' : '' }}
+              @if (r.codigoProveedor && r.codigoProveedor !== r.codigoInterno) {
+                <span class="codigo-proveedor">Cód. proveedor {{ r.codigoProveedor }}</span>
+              }
               @if (r.aviso; as texto) {
                 <span class="aviso-fila">{{ texto }}</span>
               }

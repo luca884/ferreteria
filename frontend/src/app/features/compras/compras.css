@@ -76,6 +76,12 @@ tr.advertencia td {
   background: var(--advertencia-fondo, #fff7e0);
 }
 
+.codigo-proveedor {
+  margin-left: var(--e-2);
+  font-size: 0.85em;
+  color: var(--texto-suave);
+}
+
 .aviso-fila {
   display: block;
   font-size: 0.85em;
