@@ -1,7 +1,7 @@
 import { HttpErrorResponse } from '@angular/common/http';
 import { Component, DestroyRef, ElementRef, computed, inject, signal, viewChild } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { catchError, forkJoin, map, of, throwError } from 'rxjs';
+import { EMPTY, Subject, catchError, forkJoin, map, of, switchMap, throwError, timer } from 'rxjs';
 import { AuthService } from '../../core/auth/auth.service';
 import { BarraAcciones } from '../../shared/barra-acciones';
 import { ArticulosService } from '../articulos/articulos.service';
@@ -11,6 +11,9 @@ import { Barra, CodigoDeBarras, barras, codigoParaEtiqueta } from './codigo-barr
 import { claveDeEtiquetas, guardarEtiquetas, leerEtiquetas } from './etiquetas.storage';
 
 const MAX_COPIAS = 999;
+
+/** Como el mostrador: se busca solo cuando se deja de escribir este tiempo. */
+const ESPERA_MS = 250;
 
 /** Margen en blanco a cada lado de las barras, en módulos (el lector lo necesita para encontrar el código). */
 const ZONA_LIBRE = 10;
@@ -57,6 +60,10 @@ export class Etiquetas {
   protected readonly buscando = signal(false);
   protected readonly error = signal<string | null>(null);
   protected readonly items = signal<ItemEtiqueta[]>([]);
+  /** El resultado que suma el Enter (↑↓ lo mueven). */
+  protected readonly resaltado = signal(0);
+  /** Lo que se escribe; null cancela la búsqueda que estaba por salir. */
+  private readonly sugerencias = new Subject<string | null>();
   protected readonly columnas = signal<4 | 5>(4);
   protected readonly cargando = signal(false);
   protected readonly errorDeCarga = signal(false);
@@ -85,6 +92,54 @@ export class Etiquetas {
 
   constructor() {
     if (this.auth.esDueno()) this.cargarGuardada();
+    // Como el mostrador (#25): mientras escribís busca solo, la última búsqueda gana; un código exacto no se suma solo,
+    // queda resaltado para el Enter.
+    this.sugerencias
+      .pipe(
+        switchMap((q) =>
+          q === null
+            ? EMPTY
+            : timer(ESPERA_MS).pipe(
+                switchMap(() =>
+                  this.mostrador.buscar(q).pipe(
+                    map((respuesta) => ({ q, respuesta })),
+                    // El error se resuelve acá adentro para no cortar las sugerencias: la próxima tecla vuelve a buscar.
+                    catchError(() => {
+                      this.error.set('No se pudo buscar el artículo.');
+                      return EMPTY;
+                    }),
+                  ),
+                ),
+              ),
+        ),
+        takeUntilDestroyed(this.destroyRef),
+      )
+      .subscribe(({ q, respuesta }) => {
+        this.error.set(null);
+        this.resultados.set(respuesta.items);
+        this.buscado.set(q);
+        this.resaltado.set(0);
+      });
+  }
+
+  protected alEscribir(texto: string): void {
+    this.busqueda.set(texto);
+    const q = texto.trim();
+    if (q === '') {
+      this.resultados.set([]);
+      this.buscado.set(null);
+    }
+    this.sugerencias.next(q === '' ? null : q);
+  }
+
+  /** ↑↓ mueven el resaltado dentro de los resultados, sin salirse. */
+  protected alTeclear(evento: KeyboardEvent): void {
+    if (evento.key !== 'ArrowDown' && evento.key !== 'ArrowUp') return;
+    const n = this.resultados().length;
+    if (n === 0) return;
+    evento.preventDefault();
+    const paso = evento.key === 'ArrowDown' ? 1 : -1;
+    this.resaltado.update((i) => Math.min(Math.max(i + paso, 0), n - 1));
   }
 
   /**
@@ -149,6 +204,13 @@ export class Etiquetas {
     evento.preventDefault();
     const q = this.busqueda().trim();
     if (!q || this.buscando()) return;
+    // El Enter le gana a la sugerencia que estaba por salir: el lector tipea y manda Enter de una.
+    this.sugerencias.next(null);
+    const resultados = this.resultados();
+    if (q === this.buscado() && resultados.length > 0) {
+      this.agregar(resultados[Math.min(this.resaltado(), resultados.length - 1)]);
+      return;
+    }
     this.buscando.set(true);
     this.error.set(null);
     this.mostrador.buscar(q).subscribe({
@@ -164,6 +226,7 @@ export class Etiquetas {
         }
         this.resultados.set(respuesta.items);
         this.buscado.set(q);
+        this.resaltado.set(0);
         this.seleccionarBuscador();
       },
       error: () => {

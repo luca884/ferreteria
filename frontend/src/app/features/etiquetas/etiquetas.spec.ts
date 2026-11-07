@@ -435,4 +435,126 @@ describe('Etiquetas', () => {
       expect(guardado()).toEqual([{ id: 1, copias: 1 }]);
     });
   });
+
+  describe('sugiere mientras escribís (#25)', () => {
+    afterEach(() => vi.useRealTimers());
+
+    async function escribir(q: string) {
+      buscador().value = q;
+      buscador().dispatchEvent(new Event('input'));
+      fixture.detectChanges();
+    }
+    async function esperar(ms: number) {
+      await vi.advanceTimersByTimeAsync(ms);
+      fixture.detectChanges();
+    }
+    async function tecla(key: string) {
+      buscador().dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }));
+      fixture.detectChanges();
+    }
+    async function enter() {
+      buscador().form!.dispatchEvent(new Event('submit', { cancelable: true }));
+      fixture.detectChanges();
+    }
+    const descripciones = () =>
+      Array.from(el().querySelectorAll('.resultados li .descripcion')).map((d) => d.textContent?.trim());
+    const resaltado = () => el().querySelector('.resultados li.resaltado .descripcion')?.textContent?.trim();
+
+    it('250 ms después de la última tecla busca solo, sin tocar Buscar, y resalta el primero', async () => {
+      vi.useFakeTimers();
+      await crear(true, () => of(lista(tornillo, tuerca)));
+
+      await escribir('to');
+      await esperar(200);
+      await escribir('tor');
+      await esperar(249);
+      expect(buscar).not.toHaveBeenCalled();
+
+      await esperar(1);
+      expect(buscar).toHaveBeenCalledTimes(1);
+      expect(buscar).toHaveBeenCalledWith('tor');
+      expect(descripciones()).toEqual(['Tornillo hexagonal 1/4', 'Tuerca 1/4']);
+      expect(resaltado()).toBe('Tornillo hexagonal 1/4');
+      expect(filasLista()).toHaveLength(0);
+    });
+
+    it('↓ y ↑ mueven el resaltado sin salirse de la lista, y Enter suma el resaltado sin buscar otra vez', async () => {
+      vi.useFakeTimers();
+      await crear(true, () => of(lista(tornillo, tuerca)));
+      await escribir('tor');
+      await esperar(250);
+
+      await tecla('ArrowUp');
+      expect(resaltado()).toBe('Tornillo hexagonal 1/4');
+      await tecla('ArrowDown');
+      await tecla('ArrowDown');
+      expect(resaltado()).toBe('Tuerca 1/4');
+
+      await enter();
+
+      expect(buscar).toHaveBeenCalledTimes(1);
+      expect(filasLista()).toHaveLength(1);
+      expect(texto('.lista tbody tr .descripcion')).toBe('Tuerca 1/4');
+      await tecla('ArrowUp');
+      expect(resaltado()).toBe('Tornillo hexagonal 1/4');
+    });
+
+    it('un código exacto que llega como sugerencia no se suma solo: queda resaltado para el Enter', async () => {
+      vi.useFakeTimers();
+      await crear(true, () => of(exacto(tornillo)));
+
+      await escribir('4006381333931');
+      await esperar(250);
+
+      expect(filasLista()).toHaveLength(0);
+      expect(resaltado()).toBe('Tornillo hexagonal 1/4');
+      await enter();
+      expect(filasLista()).toHaveLength(1);
+    });
+
+    it('Enter antes de que lleguen las sugerencias (el lector) busca como antes: el código exacto se suma una sola vez', async () => {
+      vi.useFakeTimers();
+      await crear(true, () => of(exacto(tornillo)));
+
+      await escribir('4006381333931');
+      await enter();
+      await esperar(300);
+
+      expect(buscar).toHaveBeenCalledTimes(1);
+      expect(filasLista()).toHaveLength(1);
+      expect(filasLista()[0].querySelector<HTMLInputElement>('input.copias')!.value).toBe('1');
+      expect(buscador().value).toBe('');
+      expect(el().querySelector('.resultados')).toBeNull();
+    });
+
+    it('borrar el texto saca las sugerencias y no busca', async () => {
+      vi.useFakeTimers();
+      await crear(true, () => of(lista(tornillo, tuerca)));
+      await escribir('tor');
+      await esperar(250);
+
+      await escribir('');
+      await esperar(300);
+
+      expect(buscar).toHaveBeenCalledTimes(1);
+      expect(el().querySelector('.resultados')).toBeNull();
+      expect(el().querySelector('.resultados-vacio')).toBeNull();
+    });
+
+    it('si la sugerencia falla lo avisa y la próxima tecla vuelve a buscar', async () => {
+      vi.useFakeTimers();
+      let falla = true;
+      await crear(true, () => (falla ? throwError(() => new Error('caído')) : of(lista(tuerca))));
+
+      await escribir('tu');
+      await esperar(250);
+      expect(texto('.error')).toBe('No se pudo buscar el artículo.');
+
+      falla = false;
+      await escribir('tue');
+      await esperar(250);
+      expect(el().querySelector('.error')).toBeNull();
+      expect(descripciones()).toEqual(['Tuerca 1/4']);
+    });
+  });
 });
