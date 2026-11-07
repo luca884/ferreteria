@@ -238,6 +238,31 @@ class ArticuloRepositoryQueriesTest {
         assertThat(articuloRepository.heredanMargenDeRubroScoped(rubroB)).isEmpty();
     }
 
+    @Test
+    void losHerederosPorDescripcionSonLosMismosOrdenadosSinDistinguirMayusculasNiTildes() {
+        Long a = ferreteria("30-71000121-1");
+        Long b = ferreteria("30-71000122-2");
+        Long rubroA = rubro(a, "Buloneria");
+        Long rubroB = rubro(b, "Buloneria");
+        articulo(a, "CLAVO", "Clavo", null, null, null, rubroA, null, true);
+        articulo(a, "ACIDO", "Ácido muriático", null, null, null, rubroA, null, true);
+        Long manual = articulo(a, "BULON", "bulón", null, null, null, rubroA, null, true);
+        articulo(a, "ACERO", "acero", null, null, null, rubroA, null, true);
+        articulo(a, "PROPIO", "Margen propio", null, null, null, rubroA, "40.00", true);
+        articulo(a, "BAJA", "Dado de baja", null, null, null, rubroA, null, false);
+        articulo(b, "AJENO", "De otra ferreteria", null, null, null, rubroB, null, true);
+        // El de precio manual tambien hereda: la vista previa lo descarta porque su precio no cambia.
+        jdbc.update("update articulo set precio_manual = true where id = ?", manual);
+        TenantContext.setCurrentFerreteriaId(a);
+
+        List<Articulo> herederos = articuloRepository.heredanMargenDeRubroPorDescripcionScoped(rubroA);
+
+        // Por la coleccion de la base (ai_ci), no por el orden de Java, que pondria «Clavo» primero y «Ácido» al final.
+        assertThat(herederos).extracting(Articulo::getCodigoInterno)
+                .containsExactly("ACERO", "ACIDO", "BULON", "CLAVO");
+        assertThat(articuloRepository.heredanMargenDeRubroPorDescripcionScoped(rubroB)).isEmpty();
+    }
+
     // --- Importacion de listas (CU-04): artefactos de un proveedor y codigos internos ocupados ---
 
     @Test

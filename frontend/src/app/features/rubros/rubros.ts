@@ -13,26 +13,31 @@ import {
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { AuthService } from '../../core/auth/auth.service';
+import { MontoPipe } from '../../core/formato/monto';
 import { BarraAcciones } from '../../shared/barra-acciones';
 import { Confirmacion } from '../../shared/confirmacion';
 import { FilasElegibles } from '../../shared/filas-elegibles';
-import { Rubro, RubroRequest } from './rubro.models';
+import { Rubro, RubroRequest, VistaPreviaMargen } from './rubro.models';
 import { RubrosService } from './rubros.service';
 
 const MARGEN_INICIAL = 30;
+const ENTERO = new Intl.NumberFormat('es-AR');
 const porNombre = (a: Rubro, b: Rubro) => a.nombre.localeCompare(b.nombre);
 const porcentaje = (valor: number) => new Intl.NumberFormat('es-AR', { maximumFractionDigits: 2 }).format(valor);
 
-/** Cambio de margen pendiente de confirmar: cuántos artículos cambian de precio (null si no se pudo contar). */
+/**
+ * Cambio de margen pendiente de confirmar, con los artículos que cambian de precio (null si no se pudo traer la vista
+ * previa: igual se avisa, con un texto general).
+ */
 interface CambioDeMargen {
   rubro: Rubro;
   request: RubroRequest;
-  articulos: number | null;
+  vista: VistaPreviaMargen | null;
 }
 
 @Component({
   selector: 'app-rubros',
-  imports: [ReactiveFormsModule, DecimalPipe, Confirmacion, BarraAcciones],
+  imports: [ReactiveFormsModule, DecimalPipe, MontoPipe, Confirmacion, BarraAcciones],
   templateUrl: './rubros.html',
   styleUrl: './rubros.css',
 })
@@ -94,17 +99,22 @@ export class Rubros implements OnInit {
       this.enviar(this.service.actualizar(rubro.id, request), null);
       return;
     }
-    // Cambia el margen: se recalculan los precios de los artículos que lo heredan. Se avisa cuántos antes.
+    // Cambia el margen: se recalculan los precios de los artículos que lo heredan. Antes se muestran los que cambian.
     this.guardando.set(true);
-    this.service.articulosQueHeredan(rubro.id).subscribe({
-      next: (articulos) => {
+    this.service.vistaPreviaMargen(rubro.id, request.margenPorcentaje).subscribe({
+      next: (vista) => {
         this.guardando.set(false);
-        if (articulos === 0) this.enviar(this.service.actualizar(rubro.id, request), 0);
-        else this.cambioDeMargen.set({ rubro, request, articulos });
+        if (vista.cantidad === 0) this.enviar(this.service.actualizar(rubro.id, request), 0);
+        else this.cambioDeMargen.set({ rubro, request, vista });
       },
-      error: () => {
+      error: (err: unknown) => {
         this.guardando.set(false);
-        this.cambioDeMargen.set({ rubro, request, articulos: null });
+        // Sin cotización del dólar el guardado también daría 409: se muestra el motivo y no se ofrece guardar.
+        if (err instanceof HttpErrorResponse && err.status === 409 && err.error?.message) {
+          this.error.set(err.error.message);
+          return;
+        }
+        this.cambioDeMargen.set({ rubro, request, vista: null });
       },
     });
   }
@@ -112,7 +122,7 @@ export class Rubros implements OnInit {
   protected confirmarCambioDeMargen(): void {
     const cambio = this.cambioDeMargen();
     this.cambioDeMargen.set(null);
-    if (cambio) this.enviar(this.service.actualizar(cambio.rubro.id, cambio.request), cambio.articulos);
+    if (cambio) this.enviar(this.service.actualizar(cambio.rubro.id, cambio.request), cambio.vista?.cantidad ?? null);
   }
 
   protected tituloCambio(cambio: CambioDeMargen): string {
@@ -120,10 +130,14 @@ export class Rubros implements OnInit {
   }
 
   protected mensajeCambio(cambio: CambioDeMargen): string {
-    if (cambio.articulos === null) return 'Se recalcula el precio de los artículos que usan el margen del rubro.';
-    return cambio.articulos === 1
-      ? 'Se recalcula el precio de 1 artículo que usa el margen del rubro.'
-      : `Se recalcula el precio de ${cambio.articulos} artículos que usan el margen del rubro.`;
+    if (cambio.vista === null) return 'Se recalcula el precio de los artículos que usan el margen del rubro.';
+    const cantidad = cambio.vista.cantidad;
+    return cantidad === 1 ? '1 artículo cambia de precio.' : `${ENTERO.format(cantidad)} artículos cambian de precio.`;
+  }
+
+  /** La lista llega hasta 1.000: si hay más, se dice cuántos se ven de cuántos. */
+  protected avisoRecorte(vista: VistaPreviaMargen): string {
+    return `Se muestran los primeros ${ENTERO.format(vista.articulos.length)} de ${ENTERO.format(vista.cantidad)}.`;
   }
 
   /** Editar (barra, Enter o doble clic): precarga el rubro en el formulario de al lado. */

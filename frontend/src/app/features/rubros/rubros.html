@@ -169,5 +169,36 @@
     foco="confirmar"
     (confirmar)="confirmarCambioDeMargen()"
     (cancelar)="cambioDeMargen.set(null)"
-  />
+  >
+    @if (cambio.vista; as vista) {
+      @if (vista.articulos.length > 0) {
+        <!-- Hasta 1.000 filas: la tabla tiene su propio scroll y el encabezado queda fijo arriba. -->
+        <div class="grilla-marco precios-que-cambian">
+          <table class="ejemplos" aria-label="Precios que cambian">
+            <thead>
+              <tr>
+                <th scope="col">Código</th>
+                <th scope="col">Descripción</th>
+                <th scope="col" class="num">Precio de hoy</th>
+                <th scope="col" class="num">Precio nuevo</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (articulo of vista.articulos; track articulo.id) {
+                <tr>
+                  <td>{{ articulo.codigo }}</td>
+                  <td>{{ articulo.descripcion }}</td>
+                  <td class="num">{{ articulo.precioActual | monto }}</td>
+                  <td class="num">{{ articulo.precioNuevo | monto }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+      @if (vista.recortado) {
+        <p class="ayuda recorte">{{ avisoRecorte(vista) }}</p>
+      }
+    }
+  </app-confirmacion>
 }
