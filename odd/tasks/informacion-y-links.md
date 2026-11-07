@@ -24,7 +24,7 @@ Restricciones: multi-tenant (reglas 1 a 3 y 7 de CLAUDE.md: todo dato nuevo de u
 - [x] T4 · S2 S3 S4 · ruta: inline · Aceptación: links, unidades y datos que faltan en los tres detalles · Evidencia: backend `InformacionDeDocumentosIntegrationTest` RED 2 (`usuario` del remito, `presupuestoNumero` de la venta) → GREEN 3 con su caso de otra ferretería, más `RemitoFacturadoPor` y `PresupuestoVendidoEn` (10 ✔); frontend RED 14 (verificado guardando aparte la implementación) → GREEN 200 en `venta-hoja`, `ventas`, `remitos` y `presupuestos`, `venta-imprimible` 8 ✔. Marca de color (L7): RED 7 → GREEN 140 en `remitos.spec.ts` + `presupuestos.spec.ts` (pastilla en los dos, `.pastilla-*` en `styles.css`) · Risk: none (campos aditivos en el detalle, con su caso de otra ferretería)
 - [x] T5 · S5 · ruta: inline · Aceptación: remito facturado en parte · Evidencia: backend `InformacionDeDocumentosIntegrationTest#remitoFacturadoEnParte` RED (sin `diferencias`) → GREEN, con su caso de otra ferretería (404); `RemitoFacturadoPor` 3 ✔; frontend RED (no compilaba) → GREEN 70 en `remitos.spec.ts` · Risk: none (campo aditivo `facturadoPor.diferencias`, solo en el detalle)
 - [x] T6 · S6 · ruta: inline · Aceptación: fila de totales · Evidencia: RED 1 → GREEN 28 en `reportes.spec.ts` (suma en centavos; la coincidencia con el Resumen se corrobora en T7 con la app) · Risk: none
-- [ ] T7 · cierre · Aceptación: suite frontend; suite backend si hubo cambios de backend (Docker; nunca dos suites a la vez); `npx ng build`; ego-browser a 1920 en cada hallazgo (F8 → hoja → Esc → imprimir después desde Presupuestos; emitir remito → hoja; cada link abre su pop-up) con capturas para Luca; verificador si el Risk de alguna tarea nombra un ítem; Obsidian: `cambios/informacion-y-links.md`, marcar los hallazgos en la nota del recorrido y `estado-actual.md`; guía de uso: no se toca (pendiente) · Evidencia: — · Risk: —
+- [x] T7 · cierre · Aceptación: suite frontend; suite backend si hubo cambios de backend (Docker; nunca dos suites a la vez); `npx ng build`; ego-browser a 1920 en cada hallazgo (F8 → hoja → Esc → imprimir después desde Presupuestos; emitir remito → hoja; cada link abre su pop-up) con capturas para Luca; verificador si el Risk de alguna tarea nombra un ítem; Obsidian: `cambios/informacion-y-links.md`, marcar los hallazgos en la nota del recorrido y `estado-actual.md`; guía de uso: no se toca (pendiente) · Evidencia: L8 · Risk: none (ningún Risk nombra un ítem: sin verificador)
 
 ## Log
 
@@ -44,3 +44,20 @@ Restricciones: multi-tenant (reglas 1 a 3 y 7 de CLAUDE.md: todo dato nuevo de u
 - L7 (2026-11-07) Decisión de Luca sobre la marca de color (S4), textual:
   > dale, con la pastilla en los dos
   El estado del encabezado del detalle va en una pastilla de color en Remitos y en Presupuestos: pendiente o emitido en neutro, aceptado en el acento, vendido o facturado en verde, anulado o rechazado en rojo.
+- L8 (2026-11-07) T7, cierre:
+  - Suites: frontend 4073/4073; backend 6293/6293.
+  - `ng build` OK. Sacó un aviso nuevo: `mostrador.css` se pasaba por 56 bytes del presupuesto de 4 kB (en `main` ya estaba en 3,995 kB); se arregló con `.aviso :is(button, a)` (`f6edc09`). Queda solo el aviso de `dialogo-cobro`, que ya estaba antes.
+  - ego-browser a 1920 contra la rama levantada en 8081/4201. Las instancias de 8080/4200 eran de otra sesión: no se tocaron, y no se pudieron reiniciar. Se probó:
+    - F8 → hoja (Presupuesto N.º 6) → Esc, foco al buscador → «Ver el presupuesto» (`/presupuestos/12`), con la pastilla y «2 metros» → Imprimir desde el detalle → Esc → `/presupuestos`;
+    - remito → hoja (Remito N.º 5) → «Ver el remito», con «Emitió Dueño El Tornillo»;
+    - remito 2 → «se facturaron 250 de 300 unidades; 50 unidades volvieron al stock» → venta 20 («X 00001-00000011 · SIMULADO», «Salió del remito N.º 2») → `/remitos/6`;
+    - NC 22 («Renglones de la nota de crédito») → venta 21;
+    - presupuesto vendido → venta 19 («Salió del presupuesto N.º 5»);
+    - `/ventas/999999` → «No se encontró la venta.»;
+    - el Vendedor ve el texto sin link;
+    - «Por artículo», del 01/10 al 07/11: $ 219.991,40 y $ 40.876,54, igual que el Resumen.
+  - Capturas: Obsidian `evidencia/informacion-y-links/01-10`.
+  - Obsidian: `cambios/informacion-y-links.md`, filas del recorrido marcadas y `estado-actual.md` con su fila en Features activas.
+  - Sin verificador: todos los Risk son none, porque los campos nuevos de los detalles son aditivos y tienen su caso de otra ferretería.
+  - Observación fuera de alcance: la hoja imprimible no lleva la unidad.
+  - Próximo paso: push, PR y merge (Luca).
