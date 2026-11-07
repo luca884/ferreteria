@@ -93,10 +93,11 @@ describe('FichaArticulo', () => {
     expect(texto('.ubicacion')).toBe('—');
   });
 
-  it('no muestra costo ni margen: lo único de costo es la fecha «Costo al» (GDS-05)', async () => {
+  it('no muestra costo ni margen: lo único de costo es la fecha «Costo actualizado el» (GDS-05, #55)', async () => {
     await crear({ ...tornillo, costoAl: '2026-05-20' });
 
-    expect(el().textContent!.replace('Costo al', '')).not.toMatch(/costo|margen/i);
+    expect(el().textContent).toContain('Costo actualizado el');
+    expect(el().textContent!.replace('Costo actualizado el', '')).not.toMatch(/costo|margen/i);
   });
 
   it.each([

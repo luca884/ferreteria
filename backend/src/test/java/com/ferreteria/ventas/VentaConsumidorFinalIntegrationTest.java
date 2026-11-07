@@ -131,6 +131,23 @@ class VentaConsumidorFinalIntegrationTest extends VentasTestBase {
     }
 
     @Test
+    @DisplayName("GET /api/ventas/facturacion le dice al cobro el tope del Dueño, también al Vendedor y sin facturación (#57)")
+    void elCobroConoceElTope() throws Exception {
+        Tienda conTope = conTope("1000.00");
+        Tienda porDefecto = tienda();
+
+        JsonNode facturacion = getJson("/api/ventas/facturacion", login(conTope.emailVendedor()));
+
+        assertThat(facturacion.get("factura").asBoolean()).isFalse();
+        assertThat(facturacion.get("topeConsumidorFinal").decimalValue()).isEqualByComparingTo("1000");
+        assertThat(getJson("/api/ventas/facturacion", login(porDefecto.emailDueno())).get("topeConsumidorFinal")
+                .decimalValue()).isEqualByComparingTo("10000000");
+        // Sin factura no rige el de ARCA: un tope del Dueño más alto llega tal cual.
+        assertThat(getJson("/api/ventas/facturacion", login(conTope("20000000").emailVendedor()))
+                .get("topeConsumidorFinal").decimalValue()).isEqualByComparingTo("20000000");
+    }
+
+    @Test
     @DisplayName("con el tope por defecto de ARCA ($ 10.000.000) se vende sin cliente hasta un centavo menos")
     void topePorDefecto() throws Exception {
         Tienda t = tienda();

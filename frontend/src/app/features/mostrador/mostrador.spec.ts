@@ -4858,9 +4858,13 @@ describe('Mostrador', () => {
       return evento;
     }
 
-    /** Factura habilitada en el simulador, con las letras del servidor; y el ticket de 2 martillos ($ 3.000,00). */
-    async function conMartillos(ambiente: FacturacionDelMostrador['ambiente'] = 'SIMULADOR', factura = true) {
+    /**
+     * Factura habilitada en el simulador, con las letras del servidor; y el ticket de 2 martillos ($ 3.000,00). `tope` es el
+     * tope de Consumidor Final que manda el servidor (#57); sin él, no viene.
+     */
+    async function conMartillos(ambiente: FacturacionDelMostrador['ambiente'] = 'SIMULADOR', factura = true, tope?: number) {
       facturacionDelServidor = factura ? { factura: true, ambiente, letras: LETRAS } : { factura: false, ambiente: null, letras: null };
+      if (tope !== undefined) facturacionDelServidor = { ...facturacionDelServidor, topeConsumidorFinal: tope };
       await crear();
       for (let i = 0; i < 2; i++) {
         await escribir('M');
@@ -4986,6 +4990,24 @@ describe('Mostrador', () => {
         }),
       );
     }
+
+    it('el cobro avisa desde que abre que el ticket llega al tope de Consumidor Final que mandó el servidor (#57)', async () => {
+      await conMartillos('SIMULADOR', true, 3000);
+
+      await tecla('F4');
+
+      expect(normal(el().querySelector('app-dialogo-cobro .aviso-tope')?.textContent)).toBe(
+        'Desde $ 3.000,00 la venta a Consumidor Final necesita identificar al comprador: elegí un cliente con DNI, CUIT o CUIL (Esc y F9).',
+      );
+    });
+
+    it('con un tope más alto que el ticket, el cobro no avisa nada (#57)', async () => {
+      await conMartillos('SIMULADOR', true, 3000.01);
+
+      await tecla('F4');
+
+      expect(el().querySelector('app-dialogo-cobro .aviso-tope')).toBeNull();
+    });
 
     it('un ticket con cliente pero sin su condición (de un presupuesto o remito) la pide y dice «Factura A · <razón social>»', async () => {
       ticketSinCondicion();

@@ -52,6 +52,9 @@
   text-align: right;
   font-variant-numeric: tabular-nums;
 }
+.num.egreso {
+  color: var(--error);
+}
 
 /* Lo vendido o cobrado a cuenta corriente/transferencia que no es plata en la caja se marca como informativo. */
 .lineas .informativo {

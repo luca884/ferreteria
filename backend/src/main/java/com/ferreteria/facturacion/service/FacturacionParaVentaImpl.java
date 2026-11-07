@@ -267,7 +267,7 @@ public class FacturacionParaVentaImpl implements FacturacionParaVenta {
     @Override
     public Optional<FacturacionDelMostrador> paraElMostrador() {
         return pasos.emisionSinLock().map(emision -> new FacturacionDelMostrador(emision.ambiente().name(),
-                letras(emision.condicionEmisor())));
+                letras(emision.condicionEmisor()), topeIdentificacion));
     }
 
     // ---- La bandeja de Ventas, las acciones del Dueño y «llegó el CAE» (cu-07-contingencias C1 a C3 y C7) ----

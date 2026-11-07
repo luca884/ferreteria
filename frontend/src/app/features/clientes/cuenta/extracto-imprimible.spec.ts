@@ -153,6 +153,14 @@ describe('ExtractoImprimible (CC-099)', () => {
     expect(texto('.saldo-final')).toContain('$ 1.299,50');
   });
 
+  it('un saldo negativo se dice «a favor», como en la pantalla de la cuenta (#84)', async () => {
+    await abrir(extracto([linea(1)], { saldoInicial: -200, totalDebe: 0, totalHaber: 4800, saldoFinal: -5000 }));
+
+    expect(texto('.saldo-inicial')).toContain('$ 200,00 a favor');
+    expect(texto('.saldo-final')).toContain('$ 5.000,00 a favor');
+    expect(texto('.saldo-final')).not.toContain('-');
+  });
+
   it('la tabla lista fecha, tipo, comprobante, debe, haber y saldo real, en el mismo orden de columnas que la pantalla (CC-096) y más nuevo arriba', async () => {
     await abrir(
       extracto([

@@ -315,6 +315,20 @@ describe('Reportes de ventas', () => {
     );
   });
 
+  it('con descuento: una venta con solo descuento por renglón muestra «—» como descuento general (#87)', async () => {
+    await crear();
+    servicio['filas'].mockReturnValue(
+      of({
+        desde: '2026-10-22',
+        hasta: '2026-10-22',
+        filas: [{ ...(filas['con-descuento'][0] as object), numero: 16, descuentoPorcentaje: 0 }],
+      }),
+    );
+    await elegir('con-descuento');
+
+    expect(primeraFila()).toBe('16 22/10 10:30 Dueno Ventas Consumidor Final — $ 5,00 $ 45,00');
+  });
+
   it('sin filas dice que no hubo ventas en el rango', async () => {
     await crear();
     servicio['filas'].mockReturnValue(of({ desde: '2026-10-22', hasta: '2026-10-22', filas: [] }));

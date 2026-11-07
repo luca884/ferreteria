@@ -53,6 +53,8 @@ class DocumentoFiscalIntegrationTest extends MotorFiscalTestBase {
 
     private static final String CUIT_RECEPTOR = "30786013301";
     private static final String CAE = "70417054367476";
+    /** El tope de identificación de ARCA de application.yml (FACTURACION_TOPE_IDENTIFICACION por defecto). */
+    private static final BigDecimal TOPE_ARCA = new BigDecimal("10000000.00");
     private static final LocalDate CBTE_FCH = LocalDate.of(2026, 10, 27);
     private static final LocalDate VENCIMIENTO = LocalDate.of(2026, 11, 6);
     private static final String LEYENDA_LEY_27618 = "El crédito fiscal discriminado en el presente comprobante, sólo "
@@ -384,10 +386,10 @@ class DocumentoFiscalIntegrationTest extends MotorFiscalTestBase {
 
         assertThat(inscripto).contains(new FacturacionDelMostrador("SIMULADOR", Map.of(
                 CondicionIva.CONSUMIDOR_FINAL, "B", CondicionIva.RESPONSABLE_INSCRIPTO, "A",
-                CondicionIva.MONOTRIBUTISTA, "A", CondicionIva.EXENTO, "B")));
+                CondicionIva.MONOTRIBUTISTA, "A", CondicionIva.EXENTO, "B"), TOPE_ARCA));
         assertThat(monotributista).contains(new FacturacionDelMostrador("SIMULADOR", Map.of(
                 CondicionIva.CONSUMIDOR_FINAL, "C", CondicionIva.RESPONSABLE_INSCRIPTO, "C",
-                CondicionIva.MONOTRIBUTISTA, "C", CondicionIva.EXENTO, "C")));
+                CondicionIva.MONOTRIBUTISTA, "C", CondicionIva.EXENTO, "C"), TOPE_ARCA));
     }
 
     static Stream<Arguments> sinFacturacion() {

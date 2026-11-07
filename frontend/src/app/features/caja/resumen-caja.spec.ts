@@ -314,4 +314,29 @@ describe('ResumenCaja (CC-025)', () => {
       expect(limpio(linea('Diferencia')!.querySelector('strong'))).toBe('Sin diferencia');
     });
   });
+
+  describe('movimientos (#72)', () => {
+    const movimientos = [
+      { id: 3, fecha: '2026-10-16T12:05:00', tipo: 'RETIRO', motivo: 'Banco', usuario: 'Ana', importe: 100 },
+      { id: 2, fecha: '2026-10-16T11:40:00', tipo: 'GASTO', motivo: 'Cadete', usuario: 'Ana', importe: 150 },
+      { id: 1, fecha: '2026-10-16T09:15:00', tipo: 'INGRESO', motivo: 'Cambio', usuario: 'Ana', importe: 1000 },
+    ] as DetalleCaja['movimientos'];
+    const importes = () =>
+      Array.from(el().querySelectorAll<HTMLElement>('table tbody tr td.num')).map((td) => limpio(td));
+
+    it('los gastos y retiros salen restando («−$ 150,00») y en rojo; el ingreso, sin signo', async () => {
+      await crear(detalle({ ingresos: 1000, gastos: 150, retiros: 100, movimientos }));
+
+      expect(importes()).toEqual(['−$ 100,00', '−$ 150,00', '$ 1.000,00']);
+      const celdas = Array.from(el().querySelectorAll<HTMLElement>('table tbody tr td.num'));
+      expect(celdas.map((td) => td.classList.contains('egreso'))).toEqual([true, true, false]);
+    });
+
+    it('respeta el orden del servidor: el más nuevo arriba', async () => {
+      await crear(detalle({ ingresos: 1000, gastos: 150, retiros: 100, movimientos }));
+
+      const motivos = Array.from(el().querySelectorAll('table tbody tr')).map((tr) => limpio(tr.children[2]));
+      expect(motivos).toEqual(['Banco', 'Cadete', 'Cambio']);
+    });
+  });
 });

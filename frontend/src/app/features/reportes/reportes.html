@@ -258,7 +258,7 @@
                   <td>{{ fechaHora(f.fecha) }}</td>
                   <td>{{ f.usuario }}</td>
                   <td>{{ f.cliente ?? 'Consumidor Final' }}</td>
-                  <td class="num">{{ f.descuentoPorcentaje }} %</td>
+                  <td class="num">{{ f.descuentoPorcentaje > 0 ? f.descuentoPorcentaje + ' %' : '—' }}</td>
                   <td class="num">{{ f.descuento | monto }}</td>
                   <td class="num">{{ f.total | monto }}</td>
                 </tr>

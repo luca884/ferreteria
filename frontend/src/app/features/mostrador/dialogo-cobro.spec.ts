@@ -1692,4 +1692,104 @@ describe('DialogoCobro', () => {
       });
     });
   });
+
+  describe('tope de Consumidor Final desde que abre (#57)', () => {
+    const AVISO =
+      'Desde $ 1.000,00 la venta a Consumidor Final necesita identificar al comprador: elegí un cliente con DNI, CUIT o CUIL (Esc y F9).';
+    const avisoTope = () => el().querySelector('.aviso-tope')?.textContent?.replace(/\s+/g, ' ').trim() ?? null;
+
+    async function abrirConTope(totalCentavos: number, formas: FormaPago[] = FORMAS, tope: number | null = 1000) {
+      await abrir(totalCentavos, formas);
+      fixture.componentRef.setInput('topeConsumidorFinal', tope);
+      await estabilizar();
+    }
+
+    it('desde el tope justo y sin cliente lo avisa al abrir, antes de cobrar', async () => {
+      await abrirConTope(100000);
+
+      expect(avisoTope()).toBe(AVISO);
+      expect(confirmadas).toHaveLength(0);
+    });
+
+    it('un centavo debajo del tope no avisa', async () => {
+      await abrirConTope(99999);
+
+      expect(avisoTope()).toBeNull();
+    });
+
+    it('con un cliente elegido (F9) no avisa: el servidor revisa si tiene documento', async () => {
+      await abrirConTope(100000);
+      fixture.componentRef.setInput('clienteNombre', 'Ferretería Norte SRL');
+      await estabilizar();
+
+      expect(avisoTope()).toBeNull();
+    });
+
+    it('marcada «No facturable» no avisa: la venta sin factura no se controla', async () => {
+      await abrirConTope(100000);
+      (el().querySelector('input[type="checkbox"]') as HTMLInputElement).click();
+      await estabilizar();
+
+      expect(avisoTope()).toBeNull();
+    });
+
+    it('el recargo de la forma cuenta: 900 con 20 % llega al tope y el aviso aparece al elegirla', async () => {
+      await abrirConTope(90000, [...FORMAS, forma(7, 'Visa', 'CREDITO', 20)]);
+      expect(avisoTope()).toBeNull();
+
+      medio('Visa').click();
+      await estabilizar();
+
+      expect(avisoTope()).toBe(AVISO);
+    });
+
+    it('el descuento de la forma cuenta: con 10 % en efectivo baja del tope y no avisa; con Débito, sí', async () => {
+      await abrirConTope(100000, [forma(1, 'Efectivo', 'EFECTIVO', 0, 10), ...FORMAS.slice(1)]);
+      expect(avisoTope()).toBeNull();
+
+      medio('Débito').click();
+      await estabilizar();
+
+      expect(avisoTope()).toBe(AVISO);
+    });
+
+    it('en el mixto cuenta el recargo de cada parte: 900 en Visa +20 % llega al tope; en efectivo, no', async () => {
+      const escribirMonto = (id: number, texto: string) => {
+        const campo = el().querySelector<HTMLInputElement>(`input[data-forma="${id}"]`)!;
+        campo.value = texto;
+        campo.dispatchEvent(new Event('input', { bubbles: true }));
+        fixture.detectChanges();
+      };
+      await abrirConTope(90000, [...FORMAS, forma(7, 'Visa', 'CREDITO', 20)]);
+      medio('Mixto').click();
+      await estabilizar();
+      expect(avisoTope()).toBeNull();
+
+      escribirMonto(7, '900');
+      await estabilizar();
+      expect(avisoTope()).toBe(AVISO);
+
+      escribirMonto(7, '0');
+      escribirMonto(1, '900');
+      await estabilizar();
+      expect(avisoTope()).toBeNull();
+    });
+
+    it('sin el tope (todavía no se leyó) no avisa', async () => {
+      await abrirConTope(100000, FORMAS, null);
+
+      expect(avisoTope()).toBeNull();
+    });
+
+    it('si el servidor ya rechazó por el tope, no lo repite', async () => {
+      await abrirConTope(100000);
+      fixture.componentRef.setInput(
+        'aviso',
+        'Desde $ 1.000,00 la venta a Consumidor Final necesita identificar al comprador: elegí un cliente con DNI, CUIT o CUIL.',
+      );
+      await estabilizar();
+
+      expect(avisoTope()).toBeNull();
+    });
+  });
 });

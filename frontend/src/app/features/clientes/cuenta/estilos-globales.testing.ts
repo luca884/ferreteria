@@ -11,7 +11,7 @@ export function cargarEstilosGlobales(): void {
   hoja.dataset['estilosGlobales'] = '';
   hoja.textContent = `
     th, td { vertical-align: middle; }
-    th { position: sticky; top: 0; background: #f8fafc; text-transform: uppercase; letter-spacing: 0.04em; }
+    th { position: sticky; top: 0; background: #f8fafc; font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; }
   `;
   document.head.prepend(hoja);
 }

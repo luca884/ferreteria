@@ -135,6 +135,9 @@ const centavosATexto = (c: number) => `${normalizarImporte(String(Math.floor(c /
         @if (aviso(); as texto) {
           <p class="aviso" role="status">{{ texto }}</p>
         }
+        @if (avisoTope(); as texto) {
+          <p class="aviso aviso-tope" role="status">{{ texto }}</p>
+        }
         @if (autorizando()) {
           <p class="aviso" role="status">Autorizando con ARCA…</p>
         }
@@ -585,6 +588,11 @@ export class DialogoCobro {
    * queda «Cobrar» con Enter y la casilla «No facturable», como antes.
    */
   readonly eligeFactura = input(false);
+  /**
+   * El tope de Consumidor Final que rige, en pesos (GET /api/ventas/facturacion, GDS-32): desde ahí la venta facturable sin
+   * cliente identificado se rechaza. null mientras no se leyó: no se avisa nada y el servidor sigue controlando (#57).
+   */
+  readonly topeConsumidorFinal = input<number | null>(null);
 
   readonly confirmar = output<ConfirmacionCobro>();
   readonly cancelar = output<void>();
@@ -792,6 +800,22 @@ export class DialogoCobro {
 
   /** El total que se cobra: el del ticket más el recargo. */
   protected readonly aCobrarCentavos = computed(() => this.totalCentavos() + this.recargoCentavos());
+
+  /**
+   * El aviso del tope desde que abre el cobro (#57), con la misma regla del servidor: venta facturable, sin cliente y lo que
+   * se cobra (con el recargo) desde el tope. Con un cliente elegido no se avisa: si no tiene documento, lo dice el servidor.
+   * Si el servidor ya rechazó por el tope, su mensaje está en `aviso` y no se repite.
+   */
+  protected readonly avisoTope = computed(() => {
+    const tope = this.topeConsumidorFinal();
+    if (tope === null || this.clienteNombre() !== null || this.noFacturable()) return null;
+    if (this.aviso()?.includes('necesita identificar al comprador')) return null;
+    if (this.aCobrarCentavos() < Math.round(tope * 100)) return null;
+    return (
+      `Desde ${formatearMonto(tope)} la venta a Consumidor Final necesita identificar al comprador: ` +
+      'elegí un cliente con DNI, CUIT o CUIL (Esc y F9).'
+    );
+  });
 
   /** « (10 %)» al lado del recargo o del descuento de una forma única; nada en el mixto, donde cada parte tiene el suyo. */
   protected readonly porcentajeDeLaForma = computed(() => {

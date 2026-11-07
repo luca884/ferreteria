@@ -25,10 +25,6 @@
     <button type="button" class="secundario chico reintentar" (click)="cargar()">Reintentar</button>
   </div>
 } @else {
-  @if (cierre(); as cerrada) {
-    <app-resumen-caja [detalle]="cerrada" />
-  }
-
   @if (caja(); as abierta) {
     <section class="panel estado" aria-labelledby="estado-titulo">
       <h2 id="estado-titulo">Caja abierta</h2>
@@ -162,6 +158,11 @@
         <button type="submit" class="primario" [disabled]="trabajando()">Abrir caja</button>
       </div>
     </form>
+  }
+
+  <!-- El resumen del último cierre va debajo de la apertura: abrir la caja no obliga a bajar (#92). -->
+  @if (cierre(); as cerrada) {
+    <app-resumen-caja [detalle]="cerrada" />
   }
 }
 

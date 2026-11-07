@@ -246,7 +246,7 @@ export class Mostrador {
    * Qué comprobante sale al cobrar (C3), leído al abrir el mostrador. null mientras se lee o si no se pudo: el cobro no
    * anticipa nada y la venta la factura (o no) el servidor igual.
    */
-  private readonly facturacion = signal<FacturacionDelMostrador | null>(null);
+  protected readonly facturacion = signal<FacturacionDelMostrador | null>(null);
   /**
    * Bloque 2, S4: el cobro hace elegir con un clic entre facturar con ARCA o no, salvo que el servidor haya dicho que la
    * ferretería no factura. Mientras se lee, o si no se pudo leer, también: Enter nunca factura sin querer.

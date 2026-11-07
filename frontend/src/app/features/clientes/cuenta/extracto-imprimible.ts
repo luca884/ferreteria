@@ -2,6 +2,7 @@ import { Component, ElementRef, afterNextRender, computed, inject, input, output
 import { AuthService } from '../../../core/auth/auth.service';
 import { MontoPipe } from '../../../core/formato/monto';
 import { TrampaFoco } from '../../../shared/trampa-foco';
+import { textoDeSaldo } from './ajuste.models';
 import { fechaCompletaLocal } from './cobranza.models';
 import { Extracto, TIPO_MOVIMIENTO_LABELS, TOPE_IMPRESION, muestraMotivo, textoPeriodo } from './extracto.models';
 
@@ -48,6 +49,8 @@ export class ExtractoImprimible {
   protected readonly fecha = fechaCompletaLocal;
   protected readonly tipoLabels = TIPO_MOVIMIENTO_LABELS;
   protected readonly muestraMotivo = muestraMotivo;
+  /** El saldo como arriba en la cuenta: «$ 500,00 a favor» si es negativo (#84). */
+  protected readonly textoDeSaldo = textoDeSaldo;
   protected readonly emitido = emitidoEl(new Date());
 
   protected readonly ferreteria = computed(() => this.auth.sesion()?.ferreteriaNombre ?? null);

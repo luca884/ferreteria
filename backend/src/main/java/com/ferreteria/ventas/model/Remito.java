@@ -19,7 +19,7 @@ import java.time.LocalDateTime;
  * El remito (CU-07, G55): un documento de entrega que descuenta el stock al emitirlo, no toca la caja y despues se
  * puede pasar a venta (RM-001). Los importes son los de {@link TotalesVenta}, sin recargo (depende de la forma de pago,
  * que se elige al facturar). Sin relaciones JPA: los renglones guardan el id del remito, como el resto del proyecto. Lo
- * unico que cambia despues de emitirlo es el estado.
+ * unico que cambia despues de emitirlo es el estado y, al anularlo, quien y cuando (V47).
  */
 @Entity
 @Table(name = "remito")
@@ -76,6 +76,14 @@ public class Remito {
     @Column(nullable = false, updatable = false, precision = 15, scale = 2)
     private BigDecimal total;
 
+    /** Cuando se anulo (#81); null si no esta anulado o si se anulo antes de la V47. */
+    @Column(name = "fecha_anulacion")
+    private LocalDateTime fechaAnulacion;
+
+    /** Quien lo anulo (#81); null igual que la fecha. */
+    @Column(name = "usuario_anulacion_id")
+    private Long usuarioAnulacionId;
+
     protected Remito() {}
 
     /** Un remito nuevo: siempre EMITIDO. */
@@ -103,6 +111,13 @@ public class Remito {
         this.estado = nuevo;
     }
 
+    /** Lo anula y guarda quien y cuando (GDS G80, #81). */
+    public void anular(Long usuarioId) {
+        this.estado = EstadoRemito.ANULADO;
+        this.fechaAnulacion = HoraArgentina.ahora();
+        this.usuarioAnulacionId = usuarioId;
+    }
+
     public Long getId() { return id; }
     public Long getFerreteriaId() { return ferreteriaId; }
     public Long getNumero() { return numero; }
@@ -118,4 +133,6 @@ public class Remito {
     public BigDecimal getNeto() { return neto; }
     public BigDecimal getIva() { return iva; }
     public BigDecimal getTotal() { return total; }
+    public LocalDateTime getFechaAnulacion() { return fechaAnulacion; }
+    public Long getUsuarioAnulacionId() { return usuarioAnulacionId; }
 }

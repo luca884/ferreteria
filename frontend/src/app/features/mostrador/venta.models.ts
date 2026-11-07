@@ -137,11 +137,14 @@ export interface VentaResponse {
 /**
  * GET /api/ventas/facturacion (C3): si la venta que se cobra se factura y con qué letra según la condición del cliente
  * (la decide el servidor con su tabla). Sin facturación habilitada: `factura` false, sin ambiente ni letras.
+ * `topeConsumidorFinal` (pesos) es el tope que rige para la venta facturable sin cliente identificado (#57): el del Dueño
+ * o, con factura, el menor con el de ARCA; viene siempre.
  */
 export interface FacturacionDelMostrador {
   factura: boolean;
   ambiente: AmbienteFiscal | null;
   letras: Record<CondicionIva, LetraFactura> | null;
+  topeConsumidorFinal?: number;
 }
 
 /**

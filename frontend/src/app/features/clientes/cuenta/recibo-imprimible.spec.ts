@@ -157,6 +157,14 @@ describe('ReciboImprimible (CC-036, CC-043)', () => {
     expect(getComputedStyle(el().querySelector<HTMLElement>('thead th')!).position).toBe('sticky');
   });
 
+  it('la referencia («Venta N.º 7») va con la letra del resto de la fila, no la chica del encabezado (#77)', async () => {
+    await abrir();
+
+    const referencia = el().querySelector<HTMLElement>('tbody th')!;
+    const celda = referencia.closest('tr')!.querySelector<HTMLElement>('td')!;
+    expect(getComputedStyle(referencia).fontSize).toBe(getComputedStyle(celda).fontSize);
+  });
+
   it('muestra «A cuenta $X» cuando quedó algo sin imputar', async () => {
     await abrir();
 

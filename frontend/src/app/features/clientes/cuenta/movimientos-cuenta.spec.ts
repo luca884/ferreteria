@@ -171,6 +171,17 @@ describe('MovimientosCuenta (CC-074, CC-076, CC-078, CC-096)', () => {
       expect(texto('.encabezado-periodo .total-haber')).toContain('$ 600,50');
       expect(texto('.encabezado-periodo .saldo-final')).toContain('$ 1.299,50');
     });
+
+    it('un saldo negativo se dice «a favor», como arriba en la cuenta (#84)', async () => {
+      await crear({
+        extracto: () =>
+          of(extracto([linea(1)], { saldoInicial: -200, totalDebe: 0, totalHaber: 4800, saldoFinal: -5000 })),
+      });
+
+      expect(texto('.encabezado-periodo .saldo-inicial')).toContain('$ 200,00 a favor');
+      expect(texto('.encabezado-periodo .saldo-final')).toContain('$ 5.000,00 a favor');
+      expect(texto('.encabezado-periodo .saldo-final')).not.toContain('-');
+    });
   });
 
   describe('tabla', () => {

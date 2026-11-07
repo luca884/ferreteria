@@ -61,7 +61,7 @@
         <dl class="encabezado-periodo">
           <div class="saldo-inicial">
             <dt>Saldo inicial</dt>
-            <dd>{{ e.saldoInicial | monto }}</dd>
+            <dd>{{ textoDeSaldo(e.saldoInicial) }}</dd>
           </div>
           <div class="total-debe">
             <dt>Total debe</dt>
@@ -73,7 +73,7 @@
           </div>
           <div class="saldo-final">
             <dt>Saldo final</dt>
-            <dd>{{ e.saldoFinal | monto }}</dd>
+            <dd>{{ textoDeSaldo(e.saldoFinal) }}</dd>
           </div>
         </dl>
         @if (e.tipo) {

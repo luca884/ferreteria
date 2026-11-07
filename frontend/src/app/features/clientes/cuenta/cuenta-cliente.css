@@ -50,9 +50,10 @@
   width: 100%;
   margin-bottom: var(--e-4);
 }
-/* La referencia de la fila es un dato más: sin el fondo ni el sticky del encabezado de columna (styles.css). */
+/* La referencia de la fila es un dato más: sin el fondo, el sticky ni la letra chica del encabezado de columna (styles.css). */
 .pendientes tbody th {
   position: static;
+  font-size: inherit;
   background: transparent;
   font-weight: 600;
   letter-spacing: normal;

@@ -452,8 +452,10 @@ public interface FacturacionParaVenta {
      * @param ambiente SIMULADOR, HOMOLOGACION o PRODUCCION
      * @param letras la letra que saldría para cada condición frente al IVA del cliente (la venta sin cliente es la de
      *     Consumidor Final), armada con la misma función que el alta del registro
+     * @param topeIdentificacion el de {@link Decision#topeIdentificacion()}: desde este total la venta con factura y sin
+     *     cliente identificado no se factura (el cobro lo avisa de entrada, #57)
      */
-    record FacturacionDelMostrador(String ambiente, Map<CondicionIva, String> letras) {
+    record FacturacionDelMostrador(String ambiente, Map<CondicionIva, String> letras, BigDecimal topeIdentificacion) {
 
         public FacturacionDelMostrador {
             letras = Collections.unmodifiableMap(new LinkedHashMap<>(letras));

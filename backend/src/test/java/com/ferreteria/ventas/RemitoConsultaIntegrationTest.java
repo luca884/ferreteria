@@ -8,6 +8,7 @@ import org.springframework.test.web.servlet.ResultActions;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -157,6 +158,87 @@ class RemitoConsultaIntegrationTest extends VentasTestBase {
             assertThat(m.get("comprobante_id")).isNull();
         });
         assertThat(movimientos(t)).isEqualTo(4);
+    }
+
+    @Test
+    @DisplayName("el remito anulado dice quien lo anulo y cuando, en la anulacion y en el detalle; repetirla no lo cambia (#81)")
+    void anuladoDiceQuienYCuando() throws Exception {
+        Tienda t = tiendaSinCaja();
+        long a = articulo(t, "Tornillo", "UNIDAD", "100.00", "10");
+        String vendedor = login(t.emailVendedor());
+        String duenio = login(t.emailDueno());
+        long id = remito(vendedor, a, "2", "100.00", "200.00").get("remitoId").asLong();
+        assertThat(getJson("/api/remitos/" + id, duenio).has("anuladoPor")).isFalse();
+        assertThat(getJson("/api/remitos/" + id, duenio).has("fechaAnulacion")).isFalse();
+
+        LocalDateTime antes = HoraArgentina.ahora().minusSeconds(1);
+        JsonNode anulado = json(anular(duenio, id).andExpect(status().isOk()));
+        JsonNode detalle = getJson("/api/remitos/" + id, vendedor);
+        JsonNode repetida = json(anular(duenio, id).andExpect(status().isOk()));
+
+        for (JsonNode r : List.of(anulado, detalle, repetida)) {
+            assertThat(r.get("anuladoPor").asText()).isEqualTo("Dueno Ventas");
+            assertThat(r.get("usuario").asText()).isEqualTo("Vendedor Ventas");
+            assertThat(LocalDateTime.parse(r.get("fechaAnulacion").asText())).isAfter(antes);
+        }
+        assertThat(repetida.get("fechaAnulacion").asText()).isEqualTo(anulado.get("fechaAnulacion").asText());
+        assertThat(jdbc.queryForObject("select usuario_anulacion_id from remito where id = ?", Long.class, id))
+                .isNotNull();
+    }
+
+    @Test
+    @DisplayName("otro Dueno que repite la anulacion no pisa quien ni cuando la hizo (#81)")
+    void otroDuenoNoPisaQuienAnulo() throws Exception {
+        Tienda t = tiendaSinCaja();
+        long a = articulo(t, "Tornillo", "UNIDAD", "100.00", "10");
+        String duenio = login(t.emailDueno());
+        long id = remito(duenio, a, "2", "100.00", "200.00").get("remitoId").asLong();
+        String hash = jdbc.queryForObject("select password_hash from usuario where email = ?", String.class,
+                t.emailDueno());
+        String otro = "dueno2-" + t.id() + "@ventas.demo";
+        jdbc.update("insert into usuario (ferreteria_id, email, password_hash, nombre, rol) "
+                + "values (?, ?, ?, 'Otra Duena', 'DUENO')", t.id(), otro, hash);
+        long primerDueno = jdbc.queryForObject("select id from usuario where email = ?", Long.class, t.emailDueno());
+
+        JsonNode primera = json(anular(duenio, id).andExpect(status().isOk()));
+        JsonNode segunda = json(anular(login(otro), id).andExpect(status().isOk()));
+
+        assertThat(segunda.get("anuladoPor").asText()).isEqualTo("Dueno Ventas");
+        assertThat(segunda.get("fechaAnulacion").asText()).isEqualTo(primera.get("fechaAnulacion").asText());
+        assertThat(anulacion(id)).containsEntry("usuario_anulacion_id", primerDueno);
+        assertThat(stock(a)).isEqualByComparingTo("10");
+    }
+
+    @Test
+    @DisplayName("un facturado (409) o un remito de otra ferreteria (404) no guardan quien ni cuando (#81)")
+    void sinAnulacionNoGuardaQuienNiCuando() throws Exception {
+        Tienda t = tiendaSinCaja();
+        Tienda otra = tiendaSinCaja();
+        long a = articulo(t, "Tornillo", "UNIDAD", "100.00", "10");
+        String duenio = login(t.emailDueno());
+        long ajeno = remito(duenio, a, "2", "100.00", "200.00").get("remitoId").asLong();
+        long facturado = remito(duenio, a, "2", "100.00", "200.00").get("remitoId").asLong();
+        jdbc.update("update remito set estado = 'FACTURADO' where id = ?", facturado);
+
+        anular(login(otra.emailDueno()), ajeno).andExpect(status().isNotFound());
+        anular(duenio, facturado).andExpect(status().isConflict());
+
+        for (long id : new long[] {ajeno, facturado}) {
+            assertThat(anulacion(id)).containsEntry("fecha_anulacion", null).containsEntry("usuario_anulacion_id", null);
+        }
+        assertThat(estado(ajeno)).isEqualTo("EMITIDO");
+        anular(duenio, ajeno).andExpect(status().isOk());
+        getResult("/api/remitos/" + ajeno, login(otra.emailDueno())).andExpect(status().isNotFound());
+    }
+
+    /** Quien y cuando quedaron guardados en la fila del remito (V47). */
+    private Map<String, Object> anulacion(long id) {
+        Map<String, Object> fila = jdbc.queryForMap("select fecha_anulacion, usuario_anulacion_id from remito where id = ?", id);
+        Map<String, Object> normalizada = new java.util.HashMap<>(fila);
+        if (fila.get("usuario_anulacion_id") instanceof Number n) {
+            normalizada.put("usuario_anulacion_id", n.longValue());
+        }
+        return normalizada;
     }
 
     @Test

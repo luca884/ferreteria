@@ -143,6 +143,14 @@ describe('DialogoAjuste (GDS-20, G59: Recargo y Descuento de la cuenta del clien
       expect(filas().map((f) => f.value)).toEqual(['', '', '']);
     });
 
+    it('la referencia de cada pendiente va con la letra del resto de la fila, no la chica del encabezado (#77)', async () => {
+      await abrir('DESCUENTO');
+
+      const referencia = el().querySelector<HTMLElement>('tbody th')!;
+      const celda = referencia.closest('tr')!.querySelector<HTMLElement>('td')!;
+      expect(getComputedStyle(referencia).fontSize).toBe(getComputedStyle(celda).fontSize);
+    });
+
     it('cada campo de imputación sabe de qué partida es: data-comprobante en una venta, data-ajuste en un Recargo', async () => {
       await abrir('DESCUENTO');
 

@@ -7,7 +7,7 @@ let siguienteId = 0;
  * Diálogo de confirmación genérico (bajas, descartar cambios, avisos antes de guardar), con el estilo de los
  * diálogos de la app. Presentacional: el contenedor decide qué hacer. Esc cancela y Enter activa el botón
  * enfocado; por defecto el foco arranca en Cancelar (lo seguro) y `foco="confirmar"` lo pone en la acción. Lo que se
- * proyecta adentro (p. ej. una tabla de ejemplos) va debajo del mensaje.
+ * proyecta adentro (p. ej. una tabla de ejemplos) va debajo del mensaje. `enVuelo` lo congela mientras la acción corre.
  */
 @Component({
   selector: 'app-confirmacion',
@@ -35,6 +35,7 @@ let siguienteId = 0;
             class="cancelar secundario"
             data-tecla="Esc"
             aria-keyshortcuts="Escape"
+            [disabled]="enVuelo()"
             (click)="cancelar.emit()"
           >
             {{ textoCancelar() }}
@@ -45,6 +46,7 @@ let siguienteId = 0;
             class="confirmar"
             [class.peligro]="peligro()"
             [class.primario]="!peligro()"
+            [disabled]="enVuelo()"
             (click)="confirmar.emit()"
           >
             {{ textoConfirmar() }}
@@ -62,6 +64,8 @@ export class Confirmacion {
   /** Acción destructiva (baja, descartar): botón rojo. */
   readonly peligro = input(false);
   readonly foco = input<'confirmar' | 'cancelar'>('cancelar');
+  /** Mientras la acción confirmada está en curso: los botones se deshabilitan y Esc y Enter no hacen nada. */
+  readonly enVuelo = input(false);
 
   readonly confirmar = output<void>();
   readonly cancelar = output<void>();
@@ -77,6 +81,11 @@ export class Confirmacion {
   }
 
   protected alTeclear(evento: KeyboardEvent): void {
+    if (this.enVuelo() && (evento.key === 'Escape' || evento.key === 'Enter')) {
+      evento.preventDefault();
+      evento.stopPropagation();
+      return;
+    }
     if (evento.key === 'Escape') {
       evento.preventDefault();
       evento.stopPropagation();

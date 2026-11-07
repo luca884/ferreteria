@@ -81,8 +81,16 @@ public class RemitoGestion {
         List<ItemRemito> items = itemRepository.deRemitoScoped(id);
         DetalleRemito.FacturadoPor facturadoPor =
                 remito.getEstado() == EstadoRemito.FACTURADO ? facturadoPor(id, items) : null;
-        String usuario = cajaRepository.nombresScoped(List.of(remito.getUsuarioId())).get(remito.getUsuarioId());
-        return new DetalleRemito(remito, items, facturadoPor, usuario);
+        return conNombres(remito, items, facturadoPor);
+    }
+
+    /** El detalle con el nombre de quien lo emitio y, si se anulo desde la V47, el de quien lo anulo (#81). */
+    private DetalleRemito conNombres(Remito remito, List<ItemRemito> items, DetalleRemito.FacturadoPor facturadoPor) {
+        Long anulo = remito.getUsuarioAnulacionId();
+        Map<Long, String> nombres = cajaRepository.nombresScoped(
+                anulo == null ? List.of(remito.getUsuarioId()) : List.of(remito.getUsuarioId(), anulo));
+        return new DetalleRemito(remito, items, facturadoPor, nombres.get(remito.getUsuarioId()),
+                anulo == null ? null : nombres.get(anulo));
     }
 
     /**
@@ -129,6 +137,7 @@ public class RemitoGestion {
     /**
      * Anula un EMITIDO y devuelve al stock lo que salio, en la misma transaccion (RM-005). Con lock exclusivo, para
      * ordenarse con la venta que lo factura. Uno ya FACTURADO es 409; anular uno ANULADO no hace nada y devuelve el remito.
+     * Devuelve el detalle como {@link #detalle}: con quien lo emitio y quien lo anulo (#81).
      */
     @Transactional
     public DetalleRemito anular(Long id, Long usuarioId) {
@@ -141,8 +150,8 @@ public class RemitoGestion {
         if (remito.getEstado() == EstadoRemito.EMITIDO) {
             stockService.devolverRemito(remito.getId(), usuarioId,
                     items.stream().map(i -> new SalidaStock(i.getArticuloId(), i.getCantidad())).toList());
-            remito.cambiarEstado(EstadoRemito.ANULADO);
+            remito.anular(usuarioId);
         }
-        return new DetalleRemito(remito, items);
+        return conNombres(remito, items, null);
     }
 }

@@ -872,6 +872,14 @@ describe('CuentaCliente (CC-028, CC-033, CC-034, CC-038, CC-043)', () => {
       expect(getComputedStyle(el().querySelector<HTMLElement>('table.pendientes thead th')!).position).toBe('sticky');
     });
 
+    it('la referencia va con la letra del resto de la fila, no la chica del encabezado (#77)', async () => {
+      await crear();
+
+      const referencia = el().querySelector<HTMLElement>('table.pendientes tbody th')!;
+      const celda = referencia.closest('tr')!.querySelector<HTMLElement>('td')!;
+      expect(getComputedStyle(referencia).fontSize).toBe(getComputedStyle(celda).fontSize);
+    });
+
     it('un saldo negativo se dice «a favor» y se muestra lo que tiene a cuenta', async () => {
       await crear({ pendientes: () => of({ saldo: -500, aCuenta: 500, comprobantes: [] }) });
 

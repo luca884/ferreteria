@@ -32,13 +32,19 @@ public class ConsumidorFinal {
         if (!facturable || identificado) {
             return;
         }
-        BigDecimal tope = topes.tope();
-        if (topeIdentificacion != null && topeIdentificacion.compareTo(tope) < 0) {
-            tope = topeIdentificacion;
-        }
+        BigDecimal tope = topeVigente(topeIdentificacion);
         if (total.compareTo(tope) >= 0) {
             throw VentaRechazadaException.consumidorFinalSinDatos(importe(tope));
         }
+    }
+
+    /**
+     * El tope que rige: el del Dueño o, si la venta sale con factura ({@code topeIdentificacion} no null), el menor con el de
+     * ARCA. Lo usa también el cobro para avisar de entrada (#57).
+     */
+    public BigDecimal topeVigente(BigDecimal topeIdentificacion) {
+        BigDecimal tope = topes.tope();
+        return topeIdentificacion != null && topeIdentificacion.compareTo(tope) < 0 ? topeIdentificacion : tope;
     }
 
     /** «10.000.000,00», como se escriben los importes en Argentina. */
