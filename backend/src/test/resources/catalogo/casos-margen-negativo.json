@@ -1,0 +1,17 @@
+{
+  "descripcion": "Aviso de margen negativo de un precio manual (CU-14 punto 2): avisa si costo real x cotizacion x (100 + IVA) supera precio x 100; margen 0 no avisa. El costo real es el costo con sus recargos (CU-13), a 2 decimales HALF_UP; en el texto el costo en pesos y el precio sin IVA van a 2 decimales HALF_UP. Lo leen CasosCompartidosMargenNegativoTest (MargenNegativo.java) y margen-negativo.spec.ts (la ficha, #26). Importes como string; cotizacion vale 1 si falta; aviso null es que no avisa.",
+  "casos": [
+    { "nombre": "el de #26: $ 1.000 manual con costo $ 1.200", "costo": "1200", "alicuota": "IVA_21", "precio": "1000", "aviso": "Margen negativo: el costo ($ 1.200,00) supera el precio sin IVA ($ 826,45). Revisá el precio manual." },
+    { "nombre": "el precio que cubre justo el costo con IVA no avisa (margen 0)", "costo": "1200", "alicuota": "IVA_21", "precio": "1452", "aviso": null },
+    { "nombre": "un centavo menos que el costo con IVA avisa", "costo": "1200", "alicuota": "IVA_21", "precio": "1451.99", "aviso": "Margen negativo: el costo ($ 1.200,00) supera el precio sin IVA ($ 1.199,99). Revisá el precio manual." },
+    { "nombre": "sin recargos el precio cubre el costo", "costo": "1000", "alicuota": "IVA_21", "precio": "1250", "aviso": null },
+    { "nombre": "con recargos usa el costo real", "costo": "1000", "recargos": [{ "nombre": "EMBALAJE Y CARGA", "porcentaje": "4.44" }], "alicuota": "IVA_21", "precio": "1250", "aviso": "Margen negativo: el costo ($ 1.044,40) supera el precio sin IVA ($ 1.033,06). Revisá el precio manual." },
+    { "nombre": "en dolares multiplica por la cotizacion", "costo": "10", "cotizacion": "1570", "alicuota": "IVA_21", "precio": "15000", "aviso": "Margen negativo: el costo ($ 15.700,00) supera el precio sin IVA ($ 12.396,69). Revisá el precio manual." },
+    { "nombre": "en dolares con recargos", "costo": "10", "recargos": [{ "nombre": "Flete", "porcentaje": "10" }], "cotizacion": "1570", "alicuota": "IVA_21", "precio": "20000", "aviso": "Margen negativo: el costo ($ 17.270,00) supera el precio sin IVA ($ 16.528,93). Revisá el precio manual." },
+    { "nombre": "en dolares el precio que cubre el costo no avisa", "costo": "10", "cotizacion": "1570", "alicuota": "IVA_21", "precio": "19000", "aviso": null },
+    { "nombre": "el costo en pesos del texto redondea HALF_UP (1,665 es 1,67)", "costo": "1.11", "cotizacion": "1.5", "alicuota": "IVA_21", "precio": "2", "aviso": "Margen negativo: el costo ($ 1,67) supera el precio sin IVA ($ 1,65). Revisá el precio manual." },
+    { "nombre": "IVA 10,5", "costo": "100", "alicuota": "IVA_10_5", "precio": "110", "aviso": "Margen negativo: el costo ($ 100,00) supera el precio sin IVA ($ 99,55). Revisá el precio manual." },
+    { "nombre": "IVA 0", "costo": "100", "alicuota": "IVA_0", "precio": "99.99", "aviso": "Margen negativo: el costo ($ 100,00) supera el precio sin IVA ($ 99,99). Revisá el precio manual." },
+    { "nombre": "costo 0 no avisa", "costo": "0", "alicuota": "IVA_21", "precio": "1", "aviso": null }
+  ]
+}

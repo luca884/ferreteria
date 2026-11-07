@@ -1815,6 +1815,94 @@ describe('ArticuloForm', () => {
       });
     });
 
+    describe('margen negativo del precio manual (#26)', () => {
+      const NEGATIVO_1200 =
+        'Margen negativo: el costo ($ 1.200,00) supera el precio sin IVA ($ 826,45). Revisá el precio manual.';
+      const aviso = () => el().querySelector('#precioFinalManual-aviso');
+      const describePrecio = () => input('precioFinalManual').getAttribute('aria-describedby');
+
+      async function precioManual(costo: string, precio: string) {
+        await escribir('costo', costo);
+        await tildar('precioManual', true);
+        input('precioFinalManual').value = '';
+        await teclear('precioFinalManual', precio);
+      }
+
+      it('un precio manual por debajo del costo con IVA avisa debajo del precio, sin impedir guardar', async () => {
+        await crearComponente();
+        await completarMinimos();
+        await precioManual('1200', '1000');
+
+        expect(texto('#precioFinalManual-aviso')).toBe(NEGATIVO_1200);
+        expect(describePrecio()).toContain('precioFinalManual-aviso');
+        expect(input('precioFinalManual').getAttribute('aria-invalid')).toBeNull();
+        await enviar();
+
+        expect(enviadoAlta()).toMatchObject({ costo: 1200, precioManual: true, precioFinal: 1000 });
+      });
+
+      it('un precio que cubre justo el costo con IVA no avisa', async () => {
+        await crearComponente();
+        await precioManual('1200', '1452');
+
+        expect(aviso()).toBeNull();
+        expect(describePrecio()).toBeNull();
+      });
+
+      it('el aviso sigue al costo: con un costo que el precio cubre, se va', async () => {
+        await crearComponente();
+        await precioManual('1200', '1000');
+        expect(aviso()).not.toBeNull();
+
+        await escribir('costo', '800');
+
+        expect(aviso()).toBeNull();
+      });
+
+      it('usa el costo real, con los recargos del costo', async () => {
+        await crearComponente();
+        await precioManual('1000', '1250');
+        expect(aviso()).toBeNull();
+
+        el().querySelector<HTMLButtonElement>('button.agregar-recargo-costo')!.click();
+        await refrescar();
+        await escribir('recargo-costo-nombre-0', 'EMBALAJE Y CARGA');
+        await escribir('recargo-costo-porcentaje-0', '4,44');
+
+        expect(texto('#precioFinalManual-aviso')).toBe(
+          'Margen negativo: el costo ($ 1.044,40) supera el precio sin IVA ($ 1.033,06). Revisá el precio manual.',
+        );
+      });
+
+      it('en dólares compara el costo en pesos, con el dólar vigente', async () => {
+        await crearComponente();
+        await elegir('moneda', 'Dólares (USD)');
+        await precioManual('10', '10000');
+
+        expect(texto('#precioFinalManual-aviso')).toBe(
+          'Margen negativo: el costo ($ 10.000,00) supera el precio sin IVA ($ 8.264,46). Revisá el precio manual.',
+        );
+      });
+
+      it('en dólares sin dólar vigente no hay cuenta y no avisa', async () => {
+        await crearComponente({ cotizacion: cotizacionActiva({}, null) });
+        await elegir('moneda', 'Dólares (USD)');
+        await precioManual('10', '1');
+
+        expect(aviso()).toBeNull();
+      });
+
+      it('en la edición avisa con lo guardado, y destildar el precio manual lo saca', async () => {
+        await crearComponente({ id: '5', articulo: manual({ costo: 1200, alicuotaIva: 'IVA_21', precioFinal: 1000 }) });
+
+        expect(texto('#precioFinalManual-aviso')).toBe(NEGATIVO_1200);
+
+        await tildar('precioManual', false);
+
+        expect(aviso()).toBeNull();
+      });
+    });
+
     describe('ajustes sobre el precio final', () => {
       it('la sección dice que va sobre el precio final, después del margen', async () => {
         await crearComponente();

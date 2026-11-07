@@ -375,6 +375,9 @@
             @if (errorServidor('precioFinal'); as mensaje) {
               <span id="precioFinalManual-error-servidor" class="campo-error" data-error-de="precioFinal">{{ mensaje }}</span>
             }
+            @if (avisoDeMargen(); as mensaje) {
+              <span id="precioFinalManual-aviso" class="pista campo-aviso">{{ mensaje }}</span>
+            }
           </div>
         }
 
