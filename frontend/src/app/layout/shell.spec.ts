@@ -406,6 +406,13 @@ describe('Shell', () => {
     expect(evento.defaultPrevented).toBe(true);
   });
 
+  it('el contenido está posicionado: el `caption.sr-only` (position:absolute) no se escapa y estira el documento (arreglos-confusos, S1)', async () => {
+    const el = await render(true);
+
+    const main = el.querySelector('main') as HTMLElement;
+    expect(getComputedStyle(main).position).toBe('relative');
+  });
+
   it('muestra la ferretería, el usuario, sus iniciales y su rol', async () => {
     const el = await render(false, {
       userId: 2,
