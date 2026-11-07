@@ -3,8 +3,10 @@ package com.ferreteria.catalogo.model;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.math.BigDecimal;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Random;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -66,6 +68,42 @@ class CambioMasivoPrecioManualTest {
         CambioMasivo cambio = unico(articulo("163.35", false), new OperacionMasiva(ModoMasivo.COSTO_PORCENTAJE, bd("10")));
 
         assertThat(cambio.precioManual()).isFalse();
+    }
+
+    /** Sonda del odd-verifier, como regresion: en todos los modos, con planes al azar (semilla fija). */
+    @Test
+    void propiedadEnTodosLosModos() {
+        Random r = new Random(7);
+        int manuales = 0;
+        for (int i = 0; i < 2_000; i++) {
+            List<ArticuloVigente> articulos = new ArrayList<>();
+            for (long id = 1; id <= 5; id++) {
+                BigDecimal costo = BigDecimal.valueOf(1 + r.nextInt(1_000_000)).movePointLeft(2);
+                BigDecimal precio = BigDecimal.valueOf(1 + r.nextInt(2_000_000)).movePointLeft(2);
+                articulos.add(new ArticuloVigente(id, "INT-" + id, "P-" + id, "Articulo " + id, costo, precio,
+                    r.nextBoolean() ? null : BigDecimal.valueOf(r.nextInt(80)), r.nextBoolean() ? null : RUBRO_DESTINO,
+                    AlicuotaIva.values()[r.nextInt(AlicuotaIva.values().length)], true, Moneda.ARS, Ajustes.NINGUNO,
+                    r.nextBoolean(), AjustesDePrecio.NINGUNO, RecargosDeCosto.NINGUNO));
+            }
+            ModoMasivo modo = ModoMasivo.values()[r.nextInt(ModoMasivo.values().length)];
+            OperacionMasiva operacion = switch (modo) {
+                case CAMBIAR_RUBRO -> OperacionMasiva.cambiarRubro(RUBRO_DESTINO);
+                case MARGEN -> new OperacionMasiva(modo, BigDecimal.valueOf(r.nextInt(100)));
+                default -> new OperacionMasiva(modo, BigDecimal.valueOf(1 + r.nextInt(50)));
+            };
+            PlanMasivo plan = PlanificadorMasivo.planificar(articulos, FILTRO, operacion, contextos());
+
+            for (CambioMasivo cambio : plan.cambios()) {
+                ArticuloVigente articulo = articulos.get((int) (cambio.articuloId() - 1));
+                assertThat(cambio.precioManual()).as(modo + " " + articulo)
+                    .isEqualTo(articulo.precioManual() && !modo.esDePrecioFinal());
+                if (cambio.precioManual()) {
+                    assertThat(cambio.precioNuevo()).isEqualByComparingTo(articulo.precioFinal());
+                    manuales++;
+                }
+            }
+        }
+        assertThat(manuales).isPositive();
     }
 
     @Test

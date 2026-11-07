@@ -2664,6 +2664,56 @@ class PlanificadorImportacionTest {
         }
 
         @Test
+        @DisplayName("sonda del odd-verifier: en cambios, cambios de moneda y correcciones, el costo real sale de los recargos")
+        void propiedadConListasAlAzar() {
+            java.util.Random r = new java.util.Random(11);
+            int conRecargos = 0;
+            for (int i = 0; i < 300; i++) {
+                Escenario e = escenario().dolar("1000").mapeo(M.mapeo().moneda().iva().build());
+                Map<Long, RecargosDeCosto> recargosPorId = new HashMap<>();
+                for (long id = 1; id <= 4; id++) {
+                    List<RecargoCosto> lista = new ArrayList<>();
+                    if (r.nextBoolean()) {
+                        for (int k = 0; k <= r.nextInt(3); k++) {
+                            lista.add(new RecargoCosto("R" + k, BigDecimal.valueOf(1 + r.nextInt(3000)).movePointLeft(2)));
+                        }
+                    }
+                    Art art = Art.art(id, "C-" + id, String.valueOf(1 + r.nextInt(5000))).precio("99999.00")
+                        .recargos(lista.toArray(RecargoCosto[]::new));
+                    if (r.nextInt(4) == 0) {
+                        art.enDolares();
+                    }
+                    e.articulos(art);
+                    recargosPorId.put(id, new RecargosDeCosto(lista));
+                    String costo = String.valueOf(1 + r.nextInt(5000));
+                    String moneda = r.nextInt(4) == 0 ? "USD" : "ARS";
+                    String iva = r.nextInt(5) == 0 ? "10,5" : "21";
+                    e.filas(filaDe((int) id + 1, "C-" + id, "x", costo, moneda, "", "", iva));
+                }
+                PlanImportacion plan = e.planificar();
+
+                List<CambioPlaneado> todos = new ArrayList<>(plan.cambios());
+                todos.addAll(plan.cambiosDeMoneda());
+                todos.addAll(plan.correcciones());
+                for (CambioPlaneado cambio : todos) {
+                    RecargosDeCosto recargos = recargosPorId.get(cambio.articuloId());
+                    if (recargos.estaVacia()) {
+                        assertThat(cambio.recargosPorcentaje()).isNull();
+                        assertThat(cambio.costoRealAnterior()).isNull();
+                        assertThat(cambio.costoRealNuevo()).isNull();
+                    } else {
+                        assertThat(cambio.recargosPorcentaje()).isEqualByComparingTo(recargos.porcentajeTotal());
+                        assertThat(cambio.costoRealAnterior())
+                            .isEqualByComparingTo(recargos.aplicar(cambio.costoAnterior()));
+                        assertThat(cambio.costoRealNuevo()).isEqualByComparingTo(recargos.aplicar(cambio.costoNuevo()));
+                        conRecargos++;
+                    }
+                }
+            }
+            assertThat(conRecargos).isGreaterThan(100);
+        }
+
+        @Test
         @DisplayName("sin recargos los tres campos van en null")
         void sinRecargosVanEnNull() {
             PlanImportacion plan = escenario()

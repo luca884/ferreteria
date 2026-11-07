@@ -1,7 +1,7 @@
 # para-decidir-caja-y-margen
 
 Objetivo: aplicar las decisiones aprobadas de los «para decidir» de las sesiones 63 y 66 que llevan código · Por qué: quedaron anotados fuera de alcance al cerrar arreglos-mostrador-caja y recargos-y-margen-negativo; Luca aprobó las recomendaciones
-Rama: `feat/para-decidir-caja-y-margen` desde `d3d8e4aa` · Entrega: single-pr · Runner: backend `./mvnw test -Dtest=<Clase>` / `./mvnw test`; frontend `npx ng test --watch=false --include=<spec>` / `npx ng test --watch=false` · Mirror Engram: `odd/para-decidir-caja-y-margen/tasks` (ok) · Estado: ABIERTA · Modelo: Opus de punta a punta (como las sesiones anteriores; memoria «Ejecutar con Opus»)
+Rama: `feat/para-decidir-caja-y-margen` desde `d3d8e4aa` · Entrega: single-pr · Runner: backend `./mvnw test -Dtest=<Clase>` / `./mvnw test`; frontend `npx ng test --watch=false --include=<spec>` / `npx ng test --watch=false` · Mirror Engram: `odd/para-decidir-caja-y-margen/tasks` (ok) · Estado: CERRADA · Modelo: Opus de punta a punta (como las sesiones anteriores; memoria «Ejecutar con Opus»)
 Pronóstico: ~450 líneas cambiadas (agregadas + borradas, sin generados) · Heurística por tarea: ~400 (no es límite)
 
 ## Specs
@@ -64,3 +64,17 @@ Restricciones: mensajes al usuario en español rioplatense; los campos nuevos de
     - S7: una lista de una fila (DBS-100 a $ 200) da en «Detalle» «Costo real: $ 120,11 → $ 208,88 (recargos 4,44 %)». No se confirmó.
   - Base local: la fecha de la caja 22 y TOR-001 volvieron a como estaban (115,00 / 196,20, sin precio manual, sin historial nuevo). Se apagaron el backend, el front, `main` en 8081 (su worktree se borró) y `ferreteria-mysql`.
   - Próximo paso: el resultado del `odd-verifier`.
+- L8 (2026-11-07) `odd-verifier` (Opus): **pass, sin blockers**, sobre `7023e805` (HEAD `af8ac74a` solo suma L7).
+  - S4: 200.000 casos al azar. La rama avisa en un subconjunto de los casos de la base. Los 4.905 que dejan de avisar tienen los dos importes iguales, y con el mismo mensaje cuando avisan las dos. TS y Java dan lo mismo.
+  - S5: un catálogo al azar de 2.900 artículos en dos ferreterías coincide con un oráculo aparte (0 fallas). Los otros tres controles devuelven las mismas filas que la base; solo suman `costoReal`. Hay aislamiento y el Vendedor recibe 403.
+  - S6 y S7: 3.000 planes al azar dan lo mismo que la base más el `MargenNegativo` nuevo, salvo los campos nuevos.
+  - Advertencias (no son blockers):
+    1. La segunda consulta de recargos hace a «Sin rubro» 1,6 veces más lenta con 70.000 artículos (451 ms contra 286 ms).
+    2. El planificador del masivo lanza `IllegalStateException` con un artículo en USD sin dólar. Ya pasaba en la base.
+  - Sus sondas quedaron como regresión:
+    - `MargenNegativoPropiedadTest`: 20.000 casos con semilla fija; exige que haya casos de importes iguales.
+    - `propiedadEnTodosLosModos` en `CambioMasivoPrecioManualTest`: 2.000 planes.
+    - `propiedadConListasAlAzar` en `PlanificadorImportacionTest$CostoReal`: 300 listas.
+    - `ControlesDeDatosAleatorioIntegrationTest`: 360 artículos en dos ferreterías, oráculo en Java, con y sin dólar.
+    - Las cuatro pasan: 1/1, 5/5, 4/4 y 1/1 (más `ControlesDeDatosIntegrationTest` 10/10). No sumé la propiedad TS contra Java: los casos compartidos ya fijan el de los importes iguales y el verificador comparó los dos lados.
+  - Feature cerrada. Push, PR y merge los hace Luca.
