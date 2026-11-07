@@ -246,9 +246,13 @@ public final class PlanificadorImportacion {
     private static CambioPlaneado cambio(FilaDeDatos d, ArticuloVigente articulo, BigDecimal costoNuevo,
                                          BigDecimal precioNuevo, Moneda monedaFinal, AlicuotaIva alicuota,
                                          Ajustes ajustes, boolean variacionFuerte) {
+        boolean conRecargos = !articulo.recargosCosto().estaVacia();
         return new CambioPlaneado(d.numero(), articulo.id(), d.codigo(), articulo.descripcion(), d.precioLista(),
             articulo.costo(), costoNuevo, articulo.precioFinal(), precioNuevo, articulo.activo(), variacionFuerte,
-            d.hoja(), articulo.moneda(), monedaFinal, articulo.alicuotaIva(), alicuota, articulo.ajustes(), ajustes);
+            d.hoja(), articulo.moneda(), monedaFinal, articulo.alicuotaIva(), alicuota, articulo.ajustes(), ajustes,
+            conRecargos ? articulo.recargosCosto().porcentajeTotal() : null,
+            conRecargos ? articulo.costoReal(articulo.costo()) : null,
+            conRecargos ? articulo.costoReal(costoNuevo) : null);
     }
 
     /**

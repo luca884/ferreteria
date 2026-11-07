@@ -1,3 +1,4 @@
+import { formatearCosto } from '../../core/formato/monto';
 import { AltaPlaneada, Ajustes, CambioPlaneado } from './importacion.models';
 import { detalleDeFila, etiquetaDeTipo, textoAjuste, textoAjustes } from './detalle-fila';
 import { FilaDeVista } from './seleccion-filas';
@@ -135,6 +136,54 @@ describe('detalle-fila', () => {
 
     it('un cambio que no toca moneda, IVA ni ajustes no tiene detalle', () => {
       expect(detalleDeFila(fila('suben', { cambio: cambio({ costoNuevo: 120 }) }))).toEqual([]);
+    });
+
+    it('con recargos del costo muestra el costo real de antes y el de ahora, con la suma de los recargos', () => {
+      const f = fila('suben', {
+        cambio: cambio({ costoNuevo: 200, recargosPorcentaje: 10, costoRealAnterior: 110, costoRealNuevo: 220 }),
+      });
+
+      expect(detalleDeFila(f)).toEqual([
+        `Costo real: ${formatearCosto(110, 'ARS')} → ${formatearCosto(220, 'ARS')} (recargos 10 %)`,
+      ]);
+    });
+
+    it('el costo real va en la moneda de cada lado y, si no cambia, un solo importe', () => {
+      const deMoneda = fila('cambianMoneda', {
+        cambio: cambio({
+          monedaAnterior: 'ARS',
+          monedaNueva: 'USD',
+          costoNuevo: 10,
+          recargosPorcentaje: 4.44,
+          costoRealAnterior: 104.44,
+          costoRealNuevo: 10.44,
+        }),
+      });
+      const corrige = fila('corrigen', {
+        cambio: cambio({
+          alicuotaNueva: 'IVA_10_5',
+          recargosPorcentaje: 14.44,
+          costoRealAnterior: 114.44,
+          costoRealNuevo: 114.44,
+        }),
+      });
+
+      expect(detalleDeFila(deMoneda)).toEqual([
+        'Moneda: ARS → USD',
+        `Costo real: ${formatearCosto(104.44, 'ARS')} → ${formatearCosto(10.44, 'USD')} (recargos 4,44 %)`,
+      ]);
+      expect(detalleDeFila(corrige)).toEqual([
+        'IVA: 21 % → 10,5 %',
+        `Costo real: ${formatearCosto(114.44, 'ARS')} (recargos 14,44 %)`,
+      ]);
+    });
+
+    it('sin recargos (los campos en null) no hay línea de costo real', () => {
+      const f = fila('suben', {
+        cambio: cambio({ costoNuevo: 200, recargosPorcentaje: null, costoRealAnterior: null, costoRealNuevo: null }),
+      });
+
+      expect(detalleDeFila(f)).toEqual([]);
     });
 
     it('un cambio de un servidor sin los datos nuevos tampoco falla', () => {
