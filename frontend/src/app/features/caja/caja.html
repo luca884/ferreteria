@@ -5,6 +5,11 @@
   }
 </app-barra-acciones>
 
+<p class="ayuda">
+  Abrí la caja al empezar el día con el efectivo que hay. Durante el día cargá los ingresos, gastos y retiros. Al terminar,
+  cerrala contando el efectivo que quedó.
+</p>
+
 @if (mensaje(); as texto) {
   <p class="alerta exito" role="status">{{ texto }}</p>
 }
@@ -97,6 +102,10 @@
       </form>
     }
 
+    @if (enVivo(); as vivo) {
+      <app-resumen-caja [detalle]="vivo" />
+    }
+
     <form class="cierre panel" (submit)="pedirCierre($event)" novalidate>
       <h2>Cerrar la caja</h2>
       <p class="ayuda">Contá el efectivo y cargalo. Al cerrar se muestra el resumen del día.</p>
@@ -118,10 +127,6 @@
         <button type="submit" class="secundario" [disabled]="trabajando()">Cerrar caja</button>
       </div>
     </form>
-
-    @if (enVivo(); as vivo) {
-      <app-resumen-caja [detalle]="vivo" />
-    }
   } @else {
     <form class="apertura panel" (submit)="abrir($event)" novalidate>
       <h2>Abrir la caja</h2>
