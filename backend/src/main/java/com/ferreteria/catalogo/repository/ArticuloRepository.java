@@ -7,6 +7,8 @@ import com.ferreteria.catalogo.model.ControlDeDatos;
 import com.ferreteria.catalogo.model.ConsultaMostrador;
 import com.ferreteria.catalogo.model.FiltroArticulos;
 import com.ferreteria.catalogo.model.OrdenBajoMinimo;
+import com.ferreteria.catalogo.model.RecargoCosto;
+import com.ferreteria.catalogo.model.RecargosDeCosto;
 import com.ferreteria.tenant.TenantContext;
 import com.ferreteria.tenant.TenantScopedRepository;
 import org.springframework.data.domain.Page;
@@ -27,6 +29,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 public interface ArticuloRepository extends TenantScopedRepository<Articulo, Long> {
 
@@ -502,11 +505,13 @@ public interface ArticuloRepository extends TenantScopedRepository<Articulo, Lon
 
     /**
      * Los articulos activos que caen en un control de datos (GDS-18), por descripcion. Sin rubro es sin un rubro propio
-     * (uno de otra ferreteria cuenta como ninguno). Margen negativo es la cuenta de {@code MargenNegativo}: costo x
-     * cotizacion x (100 + IVA) mayor que precio x 100; sin cotizacion, los de USD no salen. El porcentaje de cada
-     * alicuota repite el de {@code AlicuotaIva} (lo cuida ControlesDeDatosIntegrationTest con cada alicuota). Rubro y
-     * proveedor se unen por la ferreteria del articulo. Filas (id, codigo, descripcion, rubro, proveedor, costo, moneda,
-     * alicuota, precio final, precio manual).
+     * (uno de otra ferreteria cuenta como ninguno). Margen negativo trae los candidatos y la decision final es de
+     * {@code MargenNegativo} (con el costo real), en el servicio: los que dan costo x cotizacion x (100 + IVA) mayor que
+     * precio x 100 con el costo base, y todos los que tienen recargos, porque un recargo cambia el costo para los dos
+     * lados. La regla redondeada no avisa en ningun caso en que esta cuenta exacta no avise, asi que no se pierde
+     * ninguno. El porcentaje de cada alicuota repite el de {@code AlicuotaIva} (lo cuida ControlesDeDatosIntegrationTest
+     * con cada alicuota). Rubro y proveedor se unen por la ferreteria del articulo. Filas (id, codigo, descripcion,
+     * rubro, proveedor, costo, moneda, alicuota, precio final, precio manual).
      */
     @Query(nativeQuery = true, value = """
             select a.id, a.codigo_interno, a.descripcion, r.nombre, p.nombre, a.costo, a.moneda, a.alicuota_iva,
@@ -519,22 +524,40 @@ public interface ArticuloRepository extends TenantScopedRepository<Articulo, Lon
                 or (:control = 'SIN_RUBRO' and r.id is null)
                 or (:control = 'IVA_CERO' and a.alicuota_iva = 'IVA_0')
                 or (:control = 'MARGEN_NEGATIVO'
-                    and a.costo * (case when a.moneda = 'USD' then :cotizacion else 1 end)
-                        * (100 + case a.alicuota_iva when 'IVA_0' then 0 when 'IVA_2_5' then 2.5 when 'IVA_5' then 5
-                                 when 'IVA_10_5' then 10.5 when 'IVA_21' then 21 when 'IVA_27' then 27 end)
-                        > a.precio_final * 100))
+                    and (json_length(a.recargos_costo) > 0
+                        or a.costo * (case when a.moneda = 'USD' then :cotizacion else 1 end)
+                            * (100 + case a.alicuota_iva when 'IVA_0' then 0 when 'IVA_2_5' then 2.5 when 'IVA_5' then 5
+                                     when 'IVA_10_5' then 10.5 when 'IVA_21' then 21 when 'IVA_27' then 27 end)
+                            > a.precio_final * 100)))
             order by a.descripcion, a.id
             """)
     List<Object[]> enControl(@Param("fid") Long ferreteriaId, @Param("control") String control,
                              @Param("cotizacion") BigDecimal cotizacion);
 
-    /** Los articulos de la ferreteria del request en ese control de datos (GDS-18); cotizacion null si no hay dolar. */
+    /**
+     * Los articulos de la ferreteria del request en ese control de datos (GDS-18), sin el costo real; en margen
+     * negativo, los candidatos (ver {@code enControl}). Cotizacion null si no hay dolar.
+     */
     default List<ArticuloEnControl> enControlScoped(ControlDeDatos control, BigDecimal cotizacion) {
         return enControl(TenantContext.requireFerreteriaId(), control.name(), cotizacion).stream()
                 .map(f -> new ArticuloEnControl((Long) f[0], (String) f[1], (String) f[2], (String) f[3],
                         (String) f[4], (BigDecimal) f[5], (String) f[6], (String) f[7], (BigDecimal) f[8],
-                        f[9] instanceof Boolean manual ? manual : ((Number) f[9]).intValue() != 0))
+                        f[9] instanceof Boolean manual ? manual : ((Number) f[9]).intValue() != 0, null))
                 .toList();
+    }
+
+    /** Pares (id, recargos del costo) de los articulos de la ferreteria con esos ids; los ajenos no vienen. */
+    @Query("select a.id, a.recargosCosto from Articulo a where a.ferreteriaId = :fid and a.id in :ids")
+    List<Object[]> recargosDe(@Param("fid") Long ferreteriaId, @Param("ids") Collection<Long> ids);
+
+    /** Los recargos del costo de esos articulos de la ferreteria del request, por id; los ajenos no vienen. */
+    @SuppressWarnings("unchecked")
+    default Map<Long, RecargosDeCosto> recargosDeScoped(Collection<Long> ids) {
+        if (ids.isEmpty()) {
+            return Map.of();
+        }
+        return recargosDe(TenantContext.requireFerreteriaId(), ids).stream()
+                .collect(Collectors.toMap(f -> (Long) f[0], f -> new RecargosDeCosto((List<RecargoCosto>) f[1])));
     }
 
     /**

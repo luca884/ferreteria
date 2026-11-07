@@ -39,7 +39,7 @@ export class ResumenCaja {
     window.print();
   }
 
-  /** Una anulación se muestra restando: «−$ 700,00»; en 0 no lleva signo. */
+  /** Una anulación, los gastos o los retiros se muestran restando: «−$ 700,00»; en 0 no lleva signo. */
   protected restado(importe: number): string {
     return importe > 0 ? `−${formatearMonto(importe)}` : formatearMonto(importe);
   }

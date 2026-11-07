@@ -1,3 +1,4 @@
+import { formatearCosto } from '../../core/formato/monto';
 import { ALICUOTA_IVA_LABELS, UNIDAD_LABELS } from '../articulos/articulo.models';
 import { Ajustes, CambioPlaneado } from './importacion.models';
 import { FilaDeVista, TipoFila } from './seleccion-filas';
@@ -53,7 +54,22 @@ function detalleDeCambio(cambio: CambioPlaneado): string[] {
       `Descuentos y recargos: ${textoAjustes(cambio.ajustesAnteriores)} → ${textoAjustes(cambio.ajustesNuevos)}`,
     );
   }
+  const costoReal = costoRealDe(cambio);
+  if (costoReal) detalle.push(costoReal);
   return detalle;
+}
+
+/**
+ * «Costo real: $ A → $ B (recargos N %)», como en la Actualización masiva (#97): el costo con los recargos del artículo
+ * (CU-13), cada lado en su moneda; un solo importe si no cambia; null sin recargos.
+ */
+function costoRealDe(cambio: CambioPlaneado): string | null {
+  const { recargosPorcentaje, costoRealAnterior, costoRealNuevo } = cambio;
+  if (recargosPorcentaje == null || costoRealAnterior == null || costoRealNuevo == null) return null;
+  const anterior = formatearCosto(costoRealAnterior, cambio.monedaAnterior);
+  const nuevo = formatearCosto(costoRealNuevo, cambio.monedaNueva);
+  const importes = anterior === nuevo ? nuevo : `${anterior} → ${nuevo}`;
+  return `Costo real: ${importes} (recargos ${PORCENTAJE.format(recargosPorcentaje)} %)`;
 }
 
 /** Lo que una fila tiene de particular además de sus costos y precios: moneda, IVA, ajustes, barras, unidad o el motivo del error. */

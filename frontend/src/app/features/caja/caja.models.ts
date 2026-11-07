@@ -155,6 +155,15 @@ export function avisoParaVender(vigente: CajaVigente): string | null {
   return null;
 }
 
+/**
+ * El aviso de la pantalla Caja con la caja de un día anterior abierta: no se vende ni se cargan movimientos hasta
+ * cerrarla (CU-10 punto 3), así que nombra las dos cosas; null con otro estado. El Mostrador usa `avisoParaVender`.
+ */
+export function avisoCajaDeOtroDia(vigente: CajaVigente): string | null {
+  if (vigente.estado !== 'DE_OTRO_DIA' || !vigente.caja) return null;
+  return `La caja del ${diaDeCaja(vigente.caja.fechaApertura)} sigue abierta. Cerrala antes de vender o cargar movimientos.`;
+}
+
 /** La diferencia del cierre (contado − esperado) dicha en palabras: «Faltan $ 50,00», «Sobran…» o «Sin diferencia». */
 export function textoDiferencia(diferencia: number): string {
   if (diferencia < 0) return `Faltan ${formatearMonto(-diferencia)}`;

@@ -17,17 +17,18 @@ public final class MargenNegativo {
     }
 
     /**
-     * El mensaje si costo x cotizacion es mayor que el precio final sin IVA, comparado en forma exacta (costo en pesos x
-     * (100 + iva) contra precio x 100); margen 0 no avisa. Quien lo llama decide si el articulo tiene precio manual.
+     * El mensaje si costo x cotizacion es mayor que el precio final sin IVA, comparando los dos importes que muestra el
+     * texto: el costo en pesos y el precio sin IVA (precio x 100 / (100 + iva)), cada uno a 2 decimales HALF_UP. Si se
+     * leen iguales no avisa, aunque la cuenta exacta de un poco menos (margen 0 tampoco avisa). Quien lo llama decide
+     * si el articulo tiene precio manual.
      */
     public static Optional<String> mensaje(BigDecimal costo, BigDecimal cotizacion, AlicuotaIva iva,
                                            BigDecimal precioFinal) {
-        BigDecimal costoEnPesos = costo.multiply(cotizacion);
-        BigDecimal conIva = CIEN.add(iva.porcentaje());
-        if (costoEnPesos.multiply(conIva).compareTo(precioFinal.multiply(CIEN)) <= 0) {
+        BigDecimal costoEnPesos = costo.multiply(cotizacion).setScale(2, RoundingMode.HALF_UP);
+        BigDecimal sinIva = precioFinal.multiply(CIEN).divide(CIEN.add(iva.porcentaje()), 2, RoundingMode.HALF_UP);
+        if (costoEnPesos.compareTo(sinIva) <= 0) {
             return Optional.empty();
         }
-        BigDecimal sinIva = precioFinal.multiply(CIEN).divide(conIva, 2, RoundingMode.HALF_UP);
         return Optional.of("Margen negativo: el costo (" + ImporteArgentino.formato(costoEnPesos, Moneda.ARS)
             + ") supera el precio sin IVA (" + ImporteArgentino.formato(sinIva, Moneda.ARS)
             + "). Revisá el precio manual.");

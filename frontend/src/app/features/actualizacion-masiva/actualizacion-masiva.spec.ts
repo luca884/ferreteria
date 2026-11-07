@@ -766,6 +766,17 @@ describe('ActualizacionMasiva', () => {
         expect(detalles(tds[2])).toEqual([]);
       });
 
+      it('con precio manual, el precio dice que no cambia (G17) aunque cambie el costo', async () => {
+        await conVistaPrevia({
+          cambios: [cambio({ precioAnterior: 500, precioNuevo: 500, precioManual: true }), cambio({ articuloId: 2, codigo: 'A2' })],
+        });
+
+        const [manual, calculado] = filasDeCambios();
+        expect(detalles(manual.querySelectorAll('td')[5])).toEqual(['Precio manual: no cambia']);
+        expect(celdas(manual)[5]).toBe('$ 500,00 Precio manual: no cambia');
+        expect(detalles(calculado.querySelectorAll('td')[5])).toEqual([]);
+      });
+
       it('sin recargos ni ajustes (los campos en null) la fila queda como antes', async () => {
         await conVistaPrevia({
           cambios: [

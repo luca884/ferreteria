@@ -1439,6 +1439,35 @@ class ImportacionIntegrationTest extends CotizacionTestBase {
         assertThat(previa.get("detalleRecortado").asBoolean()).isFalse();
     }
 
+    /** La fila trae los recargos del costo (CU-13) y el costo real antes y despues; sin recargos van en null. */
+    @Test
+    void laVistaPreviaTraeElCostoRealDeLosArticulosConRecargos() throws Exception {
+        sembrarAyB();
+        long proveedor = crearProveedor(dueA, unico("P"));
+        String s = unico("");
+        long conFlete = articuloDe(dueA, proveedor, "FLE" + s, "100");
+        jdbc.update("update articulo set recargos_costo = ? where id = ?",
+                "[{\"nombre\":\"Flete\",\"porcentaje\":10}]", conFlete);
+        articuloDe(dueA, proveedor, "SIN" + s, "100");
+        MockMultipartFile lista = archivo("lista.xlsx", ListasDePrueba.xlsx(List.of(
+                fila("Codigo", "Descripcion", "Costo"),
+                fila("FLE" + s, "x", n("200")),
+                fila("SIN" + s, "x", n("200")))));
+
+        JsonNode cambios = vistaPreviaDe(dueA, lista, datosCon(proveedor, mapeo())).get("cambios");
+
+        assertThat(cambios).hasSize(2);
+        JsonNode flete = cambios.get(0);
+        assertThat(flete.get("articuloId").asLong()).isEqualTo(conFlete);
+        assertThat(flete.get("recargosPorcentaje").decimalValue()).isEqualByComparingTo("10");
+        assertThat(flete.get("costoRealAnterior").decimalValue()).isEqualByComparingTo("110.00");
+        assertThat(flete.get("costoRealNuevo").decimalValue()).isEqualByComparingTo("220.00");
+        for (String campo : List.of("recargosPorcentaje", "costoRealAnterior", "costoRealNuevo")) {
+            assertThat(cambios.get(1).has(campo)).as(campo).isTrue();
+            assertThat(cambios.get(1).get(campo).isNull()).as(campo).isTrue();
+        }
+    }
+
     @Test
     void laVistaPreviaTraeLasListasNuevasConHojaYLosContadoresNuevos() throws Exception {
         sembrarAyB();

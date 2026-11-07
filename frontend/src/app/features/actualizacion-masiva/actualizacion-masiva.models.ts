@@ -84,6 +84,11 @@ export interface CambioMasivo {
   costoRealNuevo?: number | null;
   /** El precio calculado nuevo, antes de los ajustes (CU-14); null sin ajustes o con precio manual. */
   precioSinAjustes?: number | null;
+  /**
+   * true si el artículo tiene precio manual y la operación cambia el costo o el margen pero no el precio (CU-14 punto
+   * 1, G17); false en los modos de precio final.
+   */
+  precioManual?: boolean;
 }
 
 /** Un artículo del alcance que no se puede actualizar. */

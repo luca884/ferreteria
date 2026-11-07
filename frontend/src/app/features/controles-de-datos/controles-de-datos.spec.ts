@@ -103,6 +103,14 @@ describe('ControlesDeDatos', () => {
     ]);
   });
 
+  it('con recargos, el costo real va debajo del costo, en la moneda del artículo; sin recargos no hay línea', async () => {
+    await crear(true, vi.fn(() => of([{ ...filas[1], costo: 100, costoReal: 110 }, { ...filas[0], costoReal: null }])));
+
+    expect(celdas(0)[4]).toBe(`${formatearCosto(100, 'USD')} Costo real: ${formatearCosto(110, 'USD')}`);
+    expect(celdas(1)[4]).toBe(formatearCosto(0, 'ARS'));
+    expect(el().querySelectorAll('.costo-real')).toHaveLength(1);
+  });
+
   it('cada fila lleva a la ficha del artículo para corregirlo', async () => {
     await crear();
 

@@ -12,11 +12,11 @@ const enPesos = (centavos: bigint) =>
 
 /**
  * El aviso de margen negativo de un precio manual (CU-14 punto 2), como MargenNegativo.java: el costo real en pesos
- * (el costo con sus recargos, por la cotización) supera el precio sin IVA. Se compara en forma exacta, costo en pesos
- * × (100 + IVA) contra precio × 100, así que margen 0 no avisa. En el texto, el costo en pesos y el precio sin IVA van
- * a 2 decimales HALF_UP. Los casos son los de casos-margen-negativo.json (CasosCompartidosMargenNegativoTest).
- * `null` si no avisa o si falta un dato para la cuenta. Sin `cotizacion` vale 1 (artículo en pesos). Quien lo llama
- * decide si el artículo tiene precio manual.
+ * (el costo con sus recargos, por la cotización) supera el precio sin IVA. Se comparan los dos importes del texto, el
+ * costo en pesos y el precio sin IVA, cada uno a 2 decimales HALF_UP: si se leen iguales no avisa (margen 0 tampoco).
+ * Los casos son los de casos-margen-negativo.json (CasosCompartidosMargenNegativoTest). `null` si no avisa o si falta
+ * un dato para la cuenta. Sin `cotizacion` vale 1 (artículo en pesos). Quien lo llama decide si el artículo tiene
+ * precio manual.
  */
 export function avisoMargenNegativo(
   costo: Decimal,
@@ -35,14 +35,10 @@ export function avisoMargenNegativo(
   const costoEnPesos = c.entero * cot.entero;
   const escalaCosto = c.escala + cot.escala;
   const conIva = 100n * diez(iva.escala) + iva.entero;
-  // costo en pesos × (100 + IVA) contra precio × 100, todo llevado a enteros.
-  const izquierda = costoEnPesos * conIva * diez(p.escala);
-  const derecha = p.entero * 100n * diez(escalaCosto + iva.escala);
-  if (izquierda <= derecha) return null;
-
+  // Los dos importes del texto, en centavos HALF_UP: el costo en pesos y el precio sin IVA (precio × 100 / (100 + IVA)).
   const costoCentavos = mitadArriba(costoEnPesos * 100n, diez(escalaCosto));
-  // precio sin IVA = precio × 100 / (100 + IVA), en centavos.
   const sinIvaCentavos = mitadArriba(p.entero * 100n * 100n * diez(iva.escala), diez(p.escala) * conIva);
+  if (costoCentavos <= sinIvaCentavos) return null;
   return (
     `Margen negativo: el costo (${enPesos(costoCentavos)}) supera el precio sin IVA ` +
     `(${enPesos(sinIvaCentavos)}). Revisá el precio manual.`

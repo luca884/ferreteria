@@ -26,4 +26,6 @@ export interface ArticuloEnControl {
   alicuotaIva: AlicuotaIva;
   precioFinal: number;
   precioManual: boolean;
+  /** El costo con sus recargos (CU-13); null (o ausente) si el artículo no tiene recargos. */
+  costoReal?: number | null;
 }

@@ -155,6 +155,11 @@ export interface CambioPlaneado {
   alicuotaNueva: AlicuotaIva | null;
   ajustesAnteriores: Ajustes;
   ajustesNuevos: Ajustes;
+  /** La suma de los % de los recargos del costo (CU-13); null (o ausente) si el artículo no tiene recargos. */
+  recargosPorcentaje?: number | null;
+  /** El costo real (costo más recargos) de hoy, en la moneda de hoy, y el nuevo, en la moneda nueva; null sin recargos. */
+  costoRealAnterior?: number | null;
+  costoRealNuevo?: number | null;
 }
 
 export interface AltaPlaneada {

@@ -260,6 +260,9 @@
                       @if (c.precioSinAjustes != null) {
                         <p class="detalle-fila">Sin ajustes: {{ c.precioSinAjustes | monto }}</p>
                       }
+                      @if (c.precioManual) {
+                        <p class="detalle-fila">Precio manual: no cambia</p>
+                      }
                     </td>
                   </tr>
                 }

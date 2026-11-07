@@ -184,6 +184,24 @@ describe('MovimientosCuenta (CC-074, CC-076, CC-078, CC-096)', () => {
     });
   });
 
+  describe('columna «Saldo»', () => {
+    it('un saldo negativo de la línea se dice «a favor», como el saldo final; uno deudor queda igual', async () => {
+      await crear({
+        extracto: () =>
+          of(
+            extracto([
+              linea(2, { tipo: 'COBRO', referencia: 'Recibo N.º 14', debe: 0, haber: 6200, saldo: -5000, reciboId: 14, comprobanteId: null }),
+              linea(1, { debe: 1200, haber: 0, saldo: 1200 }),
+            ]),
+          ),
+      });
+
+      const [primera, segunda] = filas();
+      expect(celdas(primera)[5]).toBe('$ 5.000,00 a favor');
+      expect(celdas(segunda)[5]).toBe('$ 1.200,00');
+    });
+  });
+
   describe('tabla', () => {
     it('lista el más nuevo arriba con fecha, tipo, comprobante, debe, haber, saldo y usuario (CC-096)', async () => {
       await crear({

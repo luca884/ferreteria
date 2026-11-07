@@ -31,6 +31,7 @@ import {
   requiereDatosFiscales,
 } from '../clientes/cliente.models';
 import { ClientesService } from '../clientes/clientes.service';
+import { textoDeSaldo } from '../clientes/cuenta/ajuste.models';
 
 const RESULTADOS = 8;
 const ESPERA_MS = 250;
@@ -345,15 +346,16 @@ export class DialogoCliente {
   protected readonly documentoLegible = documentoLegible;
 
   /**
-   * «Saldo $ X · Límite $ Y» para el Dueño (CC-019). Con la cuenta deshabilitada y sin deuda no hay nada que decir; con la
-   * cuenta deshabilitada pero con saldo (se la sacaron a un cliente que debe) solo el saldo.
+   * «Saldo $ X · Límite $ Y» para el Dueño (CC-019); un saldo negativo es «$ X a favor», como en la cuenta del cliente.
+   * Con la cuenta deshabilitada y sin saldo no hay nada que decir; con la cuenta deshabilitada pero con saldo (se la
+   * sacaron a un cliente que debe o que tiene a favor) solo el saldo.
    */
   protected cifras(c: Cliente): string | null {
     if (c.saldo === undefined) return null;
     if (c.cuentaCorrienteHabilitada && c.limiteCuentaCorriente !== undefined) {
-      return `Saldo ${formatearMonto(c.saldo)} · Límite ${formatearMonto(c.limiteCuentaCorriente)}`;
+      return `Saldo ${textoDeSaldo(c.saldo)} · Límite ${formatearMonto(c.limiteCuentaCorriente)}`;
     }
-    return c.saldo !== 0 ? `Saldo ${formatearMonto(c.saldo)}` : null;
+    return c.saldo !== 0 ? `Saldo ${textoDeSaldo(c.saldo)}` : null;
   }
 
   protected readonly consulta = signal('');

@@ -155,6 +155,7 @@ class PlanificadorImportacionTest {
         private Ajustes ajustes = Ajustes.NINGUNO;
         private boolean precioManual;
         private AjustesDePrecio ajustesPrecio = AjustesDePrecio.NINGUNO;
+        private RecargosDeCosto recargos = RecargosDeCosto.NINGUNO;
 
         private Art(long id, String codigoProveedor, String costo) {
             this.id = id;
@@ -207,6 +208,12 @@ class PlanificadorImportacionTest {
             return this;
         }
 
+        /** Recargos del costo (CU-13): conviene darle tambien {@link #precio}, porque el precio al dia no los cuenta. */
+        Art recargos(RecargoCosto... valores) {
+            this.recargos = new RecargosDeCosto(List.of(valores));
+            return this;
+        }
+
         /** Ajustes sobre el precio final (CU-14). */
         Art ajustesPrecio(AjustePrecio... valores) {
             this.ajustesPrecio = new AjustesDePrecio(List.of(valores));
@@ -218,7 +225,7 @@ class PlanificadorImportacionTest {
             BigDecimal margenPropio = margen == null ? null : bd(margen);
             return new ArticuloVigente(id, "INT-" + id, codigoProveedor, "Articulo " + id, bd(costo),
                 precioFinal != null ? bd(precioFinal) : alDia(margenPropio, contextoPorRubro, contextoSinRubro),
-                margenPropio, rubroId, iva, activo, moneda, ajustes, precioManual, ajustesPrecio);
+                margenPropio, rubroId, iva, activo, moneda, ajustes, precioManual, ajustesPrecio, recargos);
         }
 
         private BigDecimal alDia(BigDecimal margenPropio, Map<Long, ContextoPrecio> contextoPorRubro,
@@ -2616,6 +2623,108 @@ class PlanificadorImportacionTest {
 
             assertThat(plan.cambios()).isEmpty();
             assertThat(mensajes(plan.errores())).containsExactly(AJUSTES_EN_CERO);
+        }
+    }
+
+    // ------------------------------------------------------------------ costo real en la vista previa (CU-13)
+
+    @Nested
+    @DisplayName("costo real en la vista previa: los recargos del costo, como en la actualizacion masiva")
+    class CostoReal {
+
+        @Test
+        @DisplayName("con un recargo de 10 %, costo 100 a 200: costo real 110 a 220 y la suma de los recargos")
+        void conRecargosTraeElCostoRealAntesYDespues() {
+            PlanImportacion plan = escenario()
+                .articulos(Art.art(1, "A-1", "100").precio("200.00").recargos(new RecargoCosto("Flete", bd("10"))))
+                .filas(fila(2, "A-1", "x", "200"))
+                .planificar();
+
+            assertThat(plan.cambios()).hasSize(1);
+            CambioPlaneado cambio = plan.cambios().get(0);
+            assertThat(cambio.recargosPorcentaje()).isEqualByComparingTo("10");
+            assertThat(cambio.costoRealAnterior()).isEqualByComparingTo("110.00");
+            assertThat(cambio.costoRealNuevo()).isEqualByComparingTo("220.00");
+        }
+
+        @Test
+        @DisplayName("varios recargos se suman; en una correccion de IVA el costo real queda igual")
+        void enUnaCorreccionElCostoRealQuedaIgual() {
+            PlanImportacion plan = escenario().mapeo(M.mapeo().iva().build())
+                .articulos(Art.art(1, "A-1", "100").precio("200.00")
+                    .recargos(new RecargoCosto("Embalaje", bd("4.44")), new RecargoCosto("Flete", bd("10"))))
+                .filas(filaDe(2, "A-1", "x", "100", null, null, null, "10,5"))
+                .planificar();
+
+            assertThat(plan.correcciones()).hasSize(1);
+            CambioPlaneado cambio = plan.correcciones().get(0);
+            assertThat(cambio.recargosPorcentaje()).isEqualByComparingTo("14.44");
+            assertThat(cambio.costoRealAnterior()).isEqualByComparingTo("114.44");
+            assertThat(cambio.costoRealNuevo()).isEqualByComparingTo("114.44");
+        }
+
+        @Test
+        @DisplayName("sonda del odd-verifier: en cambios, cambios de moneda y correcciones, el costo real sale de los recargos")
+        void propiedadConListasAlAzar() {
+            java.util.Random r = new java.util.Random(11);
+            int conRecargos = 0;
+            for (int i = 0; i < 300; i++) {
+                Escenario e = escenario().dolar("1000").mapeo(M.mapeo().moneda().iva().build());
+                Map<Long, RecargosDeCosto> recargosPorId = new HashMap<>();
+                for (long id = 1; id <= 4; id++) {
+                    List<RecargoCosto> lista = new ArrayList<>();
+                    if (r.nextBoolean()) {
+                        for (int k = 0; k <= r.nextInt(3); k++) {
+                            lista.add(new RecargoCosto("R" + k, BigDecimal.valueOf(1 + r.nextInt(3000)).movePointLeft(2)));
+                        }
+                    }
+                    Art art = Art.art(id, "C-" + id, String.valueOf(1 + r.nextInt(5000))).precio("99999.00")
+                        .recargos(lista.toArray(RecargoCosto[]::new));
+                    if (r.nextInt(4) == 0) {
+                        art.enDolares();
+                    }
+                    e.articulos(art);
+                    recargosPorId.put(id, new RecargosDeCosto(lista));
+                    String costo = String.valueOf(1 + r.nextInt(5000));
+                    String moneda = r.nextInt(4) == 0 ? "USD" : "ARS";
+                    String iva = r.nextInt(5) == 0 ? "10,5" : "21";
+                    e.filas(filaDe((int) id + 1, "C-" + id, "x", costo, moneda, "", "", iva));
+                }
+                PlanImportacion plan = e.planificar();
+
+                List<CambioPlaneado> todos = new ArrayList<>(plan.cambios());
+                todos.addAll(plan.cambiosDeMoneda());
+                todos.addAll(plan.correcciones());
+                for (CambioPlaneado cambio : todos) {
+                    RecargosDeCosto recargos = recargosPorId.get(cambio.articuloId());
+                    if (recargos.estaVacia()) {
+                        assertThat(cambio.recargosPorcentaje()).isNull();
+                        assertThat(cambio.costoRealAnterior()).isNull();
+                        assertThat(cambio.costoRealNuevo()).isNull();
+                    } else {
+                        assertThat(cambio.recargosPorcentaje()).isEqualByComparingTo(recargos.porcentajeTotal());
+                        assertThat(cambio.costoRealAnterior())
+                            .isEqualByComparingTo(recargos.aplicar(cambio.costoAnterior()));
+                        assertThat(cambio.costoRealNuevo()).isEqualByComparingTo(recargos.aplicar(cambio.costoNuevo()));
+                        conRecargos++;
+                    }
+                }
+            }
+            assertThat(conRecargos).isGreaterThan(100);
+        }
+
+        @Test
+        @DisplayName("sin recargos los tres campos van en null")
+        void sinRecargosVanEnNull() {
+            PlanImportacion plan = escenario()
+                .articulos(Art.art(1, "A-1", "100"))
+                .filas(fila(2, "A-1", "x", "110"))
+                .planificar();
+
+            CambioPlaneado cambio = plan.cambios().get(0);
+            assertThat(cambio.recargosPorcentaje()).isNull();
+            assertThat(cambio.costoRealAnterior()).isNull();
+            assertThat(cambio.costoRealNuevo()).isNull();
         }
     }
 }

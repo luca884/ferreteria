@@ -69,7 +69,12 @@
                 <td><a [routerLink]="['/articulos', f.articuloId]">{{ f.descripcion }}</a></td>
                 <td>{{ f.rubro ?? '—' }}</td>
                 <td>{{ f.proveedor ?? '—' }}</td>
-                <td class="num">{{ costo(f) }}</td>
+                <td class="num">
+                  {{ costo(f) }}
+                  @if (costoReal(f); as real) {
+                    <small class="costo-real">Costo real: {{ real }}</small>
+                  }
+                </td>
                 <td class="num">{{ iva(f) }}</td>
                 <td class="num">
                   {{ precio(f) }}

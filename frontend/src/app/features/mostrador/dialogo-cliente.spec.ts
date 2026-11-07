@@ -200,6 +200,20 @@ describe('DialogoCliente (F9)', () => {
       expect(dicho(fila('Corralón Sur'))).toContain('Saldo $ 1.500,00 · Límite $ 5.000,00');
     });
 
+    it('un saldo negativo se dice «a favor», como en la cuenta del cliente', async () => {
+      await abrirComo(true, [{ ...conCuenta, saldo: -5000 }]);
+
+      expect(dicho(fila('Corralón Sur'))).toContain('Saldo $ 5.000,00 a favor · Límite $ 5.000,00');
+      expect(dicho(fila('Corralón Sur'))).not.toContain('-');
+    });
+
+    it('con la cuenta deshabilitada y saldo a favor, solo el saldo «a favor»', async () => {
+      await abrirComo(true, [{ ...norte, saldo: -700 }]);
+
+      expect(dicho(fila('Ferretería Norte'))).toContain('Saldo $ 700,00 a favor');
+      expect(dicho(fila('Ferretería Norte'))).not.toContain('Límite');
+    });
+
     it('un límite 0 (habilitada sin crédito) se muestra como límite $ 0,00', async () => {
       await abrirComo(true, [{ ...conCuenta, limiteCuentaCorriente: 0, saldo: 0 }]);
 
