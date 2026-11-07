@@ -45,9 +45,23 @@ export const routes: Routes = [
         data: conRoles(DUENO_Y_VENDEDOR),
         loadComponent: () => import('./features/presupuestos/presupuestos').then((m) => m.Presupuestos),
       },
+      // Un presupuesto por su id (los links entre documentos y el aviso del mostrador): la misma pantalla con su pop-up.
+      {
+        path: 'presupuestos/:id',
+        title: titulo('Presupuestos'),
+        data: conRoles(DUENO_Y_VENDEDOR),
+        loadComponent: () => import('./features/presupuestos/presupuestos').then((m) => m.Presupuestos),
+      },
       // Anular un remito lo valida el servidor (solo Dueño).
       {
         path: 'remitos',
+        title: titulo('Remitos'),
+        data: conRoles(DUENO_Y_VENDEDOR),
+        loadComponent: () => import('./features/remitos/remitos').then((m) => m.Remitos),
+      },
+      // Un remito por su id (los links entre documentos y el aviso del mostrador): la misma pantalla con su pop-up.
+      {
+        path: 'remitos/:id',
         title: titulo('Remitos'),
         data: conRoles(DUENO_Y_VENDEDOR),
         loadComponent: () => import('./features/remitos/remitos').then((m) => m.Remitos),
@@ -143,6 +157,13 @@ export const routes: Routes = [
       },
       {
         path: 'ventas',
+        title: titulo('Ventas'),
+        data: conRoles(SOLO_DUENO),
+        loadComponent: () => import('./features/ventas/ventas').then((m) => m.Ventas),
+      },
+      // Una venta o nota de crédito por su id (los links entre documentos): la misma pantalla con su pop-up.
+      {
+        path: 'ventas/:id',
         title: titulo('Ventas'),
         data: conRoles(SOLO_DUENO),
         loadComponent: () => import('./features/ventas/ventas').then((m) => m.Ventas),

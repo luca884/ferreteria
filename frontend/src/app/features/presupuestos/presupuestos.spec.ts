@@ -3,8 +3,8 @@ import localeEsAr from '@angular/common/locales/es-AR';
 import { HttpErrorResponse } from '@angular/common/http';
 import { LOCALE_ID, signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { Router, provideRouter } from '@angular/router';
-import { Subject, of, throwError } from 'rxjs';
+import { ActivatedRoute, ParamMap, Router, convertToParamMap, provideRouter } from '@angular/router';
+import { BehaviorSubject, Subject, of, throwError } from 'rxjs';
 import { vi } from 'vitest';
 import { PageResponse } from '../../core/api/page.models';
 import { AuthService } from '../../core/auth/auth.service';
@@ -31,6 +31,8 @@ describe('Presupuestos', () => {
   let articulos: { obtener: ReturnType<typeof vi.fn> };
   let clientes: { obtener: ReturnType<typeof vi.fn> };
   let navegar: ReturnType<typeof vi.fn>;
+  /** El `:id` de `/presupuestos/:id`: emitir otro es navegar a otro con la pantalla ya abierta. */
+  let parametros: BehaviorSubject<ParamMap>;
   let emisor: { obtener: ReturnType<typeof vi.fn> };
 
   const resumen = (numero: number, cambios: Partial<PresupuestoResumen> = {}): PresupuestoResumen => ({
@@ -107,7 +109,8 @@ describe('Presupuestos', () => {
       ...cambios,
     }) as Articulo;
 
-  async function crear(items: PresupuestoResumen[] = [resumen(12), resumen(11)], rol = 'VENDEDOR') {
+  async function crear(items: PresupuestoResumen[] = [resumen(12), resumen(11)], rol = 'VENDEDOR', id: string | null = null) {
+    parametros = new BehaviorSubject<ParamMap>(convertToParamMap(id === null ? {} : { id }));
     api = {
       listar: vi.fn(() => of(pagina(items))),
       obtener: vi.fn((id: number) => of(detalleDe(id / 10))),
@@ -124,6 +127,7 @@ describe('Presupuestos', () => {
       imports: [Presupuestos],
       providers: [
         provideRouter([]),
+        { provide: ActivatedRoute, useValue: { paramMap: parametros } },
         { provide: LOCALE_ID, useValue: 'es-AR' },
         { provide: PresupuestosService, useValue: api },
         { provide: ArticulosService, useValue: articulos },
@@ -837,6 +841,61 @@ describe('Presupuestos', () => {
 
       expect(alerta()).toBe('No se pudieron leer los datos de la ferretería. Probá de nuevo.');
       expect(dialogo()).toBeNull();
+    });
+  });
+
+  describe('un presupuesto elegido desde la dirección (informacion-y-links, S2)', () => {
+    const esc = () =>
+      (document.activeElement ?? document.body).dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }),
+      );
+
+    it('`/presupuestos/:id` abre ese presupuesto aunque no esté en la página de la lista, y la lista no lo cierra', async () => {
+      await crear([resumen(12)], 'VENDEDOR', '90');
+
+      expect(api.obtener).toHaveBeenCalledWith(90);
+      expect(normal(detalle()!.querySelector('h2')!.textContent)).toBe('Presupuesto N.º 9');
+      expect(filas()).toHaveLength(1);
+    });
+
+    it('cerrarlo deja la lista sin el presupuesto en la dirección', async () => {
+      await crear([resumen(12)], 'VENDEDOR', '90');
+
+      esc();
+      await refrescar();
+
+      expect(detalle()).toBeNull();
+      expect(navegar).toHaveBeenCalledWith('/presupuestos');
+    });
+
+    it('abierto desde la lista, cerrarlo no cambia la dirección', async () => {
+      await crear();
+      filas()[0].click();
+      await refrescar();
+
+      esc();
+      await refrescar();
+
+      expect(detalle()).toBeNull();
+      expect(navegar).not.toHaveBeenCalled();
+    });
+
+    it('uno de otra ferretería o inexistente (404) da el aviso de siempre', async () => {
+      await crear([resumen(12)]);
+      api.obtener.mockReturnValue(throwError(() => new HttpErrorResponse({ status: 404 })));
+      parametros.next(convertToParamMap({ id: '77' }));
+      await refrescar();
+
+      expect(normal(detalle()!.querySelector('.error')!.textContent)).toBe('No se encontró el presupuesto.');
+    });
+
+    it('otro en la dirección con la pantalla abierta abre ese', async () => {
+      await crear([resumen(12)], 'VENDEDOR', '90');
+      parametros.next(convertToParamMap({ id: '120' }));
+      await refrescar();
+
+      expect(api.obtener).toHaveBeenLastCalledWith(120);
+      expect(normal(detalle()!.querySelector('h2')!.textContent)).toBe('Presupuesto N.º 12');
     });
   });
 });

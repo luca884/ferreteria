@@ -3,8 +3,8 @@ import localeEsAr from '@angular/common/locales/es-AR';
 import { LOCALE_ID, signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { HttpErrorResponse } from '@angular/common/http';
-import { ActivatedRoute, convertToParamMap } from '@angular/router';
-import { Subject, of, throwError } from 'rxjs';
+import { ActivatedRoute, ParamMap, Router, convertToParamMap, provideRouter } from '@angular/router';
+import { BehaviorSubject, Subject, of, throwError } from 'rxjs';
 import { vi } from 'vitest';
 import { PageResponse } from '../../core/api/page.models';
 import { AuthService } from '../../core/auth/auth.service';
@@ -26,6 +26,8 @@ describe('Ventas (consulta y reimpresión, G60)', () => {
     dejarSinFactura: ReturnType<typeof vi.fn>;
     anular: ReturnType<typeof vi.fn>;
   };
+  /** El `:id` de `/ventas/:id`: emitir otro es navegar a otra venta con la pantalla ya abierta. */
+  let parametros: BehaviorSubject<ParamMap>;
 
   const pagina = (
     items: VentaResumen[],
@@ -43,7 +45,9 @@ describe('Ventas (consulta y reimpresión, G60)', () => {
     items: VentaResumen[] = [resumenDePrueba(5), resumenDePrueba(4)],
     rol = 'DUENO',
     queryParams: Record<string, string> = {},
+    id: string | null = null,
   ) {
+    parametros = new BehaviorSubject<ParamMap>(convertToParamMap(id === null ? {} : { id }));
     api = {
       listar: vi.fn(() => of(pagina(items))),
       obtener: vi.fn((id: number) => of(ventaDePrueba({ ventaId: id, numero: id / 10 }))),
@@ -58,7 +62,11 @@ describe('Ventas (consulta y reimpresión, G60)', () => {
         { provide: LOCALE_ID, useValue: 'es-AR' },
         { provide: VentasService, useValue: api },
         { provide: AuthService, useValue: { sesion: sesion.asReadonly(), esDueno: () => rol === 'DUENO' } },
-        { provide: ActivatedRoute, useValue: { snapshot: { queryParamMap: convertToParamMap(queryParams) } } },
+        provideRouter([]),
+        {
+          provide: ActivatedRoute,
+          useValue: { snapshot: { queryParamMap: convertToParamMap(queryParams) }, paramMap: parametros },
+        },
       ],
     }).compileComponents();
     fixture = TestBed.createComponent(Ventas);
@@ -1153,6 +1161,60 @@ describe('Ventas (consulta y reimpresión, G60)', () => {
       boton('Reintentar', detalle()!)!.click();
       await refrescar();
       expect(api.reintentar).toHaveBeenCalledWith(140, false);
+    });
+  });
+
+  describe('una venta elegida desde la dirección (informacion-y-links, S2)', () => {
+    const navegar = () => vi.spyOn(TestBed.inject(Router), 'navigateByUrl').mockResolvedValue(true);
+
+    it('`/ventas/:id` abre esa venta aunque no esté en la página de la lista, y la lista no la cierra', async () => {
+      await crear([resumenDePrueba(5)], 'DUENO', {}, '90');
+
+      expect(api.obtener).toHaveBeenCalledWith(90);
+      expect(detalle()).not.toBeNull();
+      expect(normal(detalle()!.querySelector('h2')!.textContent)).toBe('Venta N.º 9');
+      expect(filas()).toHaveLength(1);
+    });
+
+    it('cerrarla deja la lista sin la venta en la dirección', async () => {
+      await crear([resumenDePrueba(5)], 'DUENO', {}, '90');
+      const espia = navegar();
+
+      escape();
+      await refrescar();
+
+      expect(detalle()).toBeNull();
+      expect(espia).toHaveBeenCalledWith('/ventas');
+    });
+
+    it('abierta desde la lista, cerrarla no cambia la dirección', async () => {
+      await crear();
+      const espia = navegar();
+      filas()[0].click();
+      await refrescar();
+
+      escape();
+      await refrescar();
+
+      expect(espia).not.toHaveBeenCalled();
+    });
+
+    it('una de otra ferretería o inexistente (404) da el aviso de siempre', async () => {
+      await crear([resumenDePrueba(5)], 'DUENO', {}, '90');
+      api.obtener.mockReturnValue(throwError(() => new HttpErrorResponse({ status: 404 })));
+      parametros.next(convertToParamMap({ id: '77' }));
+      await refrescar();
+
+      expect(normal(detalle()!.querySelector('.error')!.textContent)).toBe('No se encontró la venta.');
+    });
+
+    it('otra venta en la dirección con la pantalla abierta (un link entre documentos) abre esa', async () => {
+      await crear([resumenDePrueba(5)], 'DUENO', {}, '90');
+      parametros.next(convertToParamMap({ id: '120' }));
+      await refrescar();
+
+      expect(api.obtener).toHaveBeenLastCalledWith(120);
+      expect(normal(detalle()!.querySelector('h2')!.textContent)).toBe('Venta N.º 12');
     });
   });
 });

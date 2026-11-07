@@ -1,6 +1,7 @@
 import { HttpErrorResponse } from '@angular/common/http';
 import { Component, OnInit, computed, inject, signal } from '@angular/core';
-import { ActivatedRoute } from '@angular/router';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { ActivatedRoute, Router } from '@angular/router';
 import { erroresDeCampos, mensajeDe } from '../../core/api/api-error';
 import { PageResponse } from '../../core/api/page.models';
 import { AuthService } from '../../core/auth/auth.service';
@@ -8,6 +9,7 @@ import { MontoPipe } from '../../core/formato/monto';
 import { BarraAcciones } from '../../shared/barra-acciones';
 import { Confirmacion } from '../../shared/confirmacion';
 import { DialogoDetalle } from '../../shared/dialogo-detalle';
+import { idsDeLaRuta } from '../../shared/documento-por-ruta';
 import { FacturaImprimible } from '../../shared/factura/factura-imprimible';
 import {
   ESTADOS_EN_REVISION,
@@ -82,6 +84,7 @@ function motivoDelRechazo(err: unknown): string | null {
 export class Ventas implements OnInit {
   private readonly api = inject(VentasService);
   private readonly route = inject(ActivatedRoute);
+  private readonly router = inject(Router);
   protected readonly auth = inject(AuthService);
 
   protected readonly fecha = fechaCompletaLocal;
@@ -113,6 +116,8 @@ export class Ventas implements OnInit {
   protected readonly detalle = signal<VentaConsultada | null>(null);
   protected readonly errorDetalle = signal<string | null>(null);
   protected readonly imprimiendo = signal(false);
+  /** La venta se abrió por `/ventas/:id` (un link desde otro documento): la lista no la cierra y al cerrarla se vuelve a `/ventas`. */
+  private abiertaPorRuta = false;
   /** El título del pop-up: de la fila mientras el detalle carga, para que se sepa qué venta se abrió. */
   protected readonly tituloDetalle = computed(() => {
     const id = this.elegida();
@@ -184,6 +189,17 @@ export class Ventas implements OnInit {
   /** Lo que hizo la última acción: el detalle se puede cerrar si la venta sale de la bandeja. */
   protected readonly resultadoAccion = signal<string | null>(null);
 
+  constructor() {
+    // `/ventas/:id` abre esa venta, aunque no esté en la página de la lista (un id ajeno o inexistente da el aviso de siempre).
+    idsDeLaRuta(this.route)
+      .pipe(takeUntilDestroyed())
+      .subscribe((id) => {
+        if (!this.auth.esDueno()) return;
+        this.abiertaPorRuta = true;
+        this.abrir(id);
+      });
+  }
+
   ngOnInit(): void {
     if (!this.auth.esDueno()) return;
     // El aviso del mostrador trae la bandeja en la dirección (`?fiscal=RECHAZADAS`): se abre ya filtrada.
@@ -207,7 +223,9 @@ export class Ventas implements OnInit {
         this.vigentes = this.aplicados;
         // Un detalle abierto de una venta que la lista nueva ya no muestra confunde: se cierra.
         const elegida = this.elegida();
-        if (elegida !== null && !pagina.items.some((v) => v.ventaId === elegida)) this.cerrarDetalle();
+        if (elegida !== null && !this.abiertaPorRuta && !pagina.items.some((v) => v.ventaId === elegida)) {
+          this.cerrarDetalle();
+        }
       },
       error: (err: unknown) => {
         this.cargando.set(false);
@@ -291,6 +309,11 @@ export class Ventas implements OnInit {
     this.errorDetalle.set(null);
     this.imprimiendo.set(false);
     this.soltarAcciones();
+    // Abierta por `/ventas/:id`: la dirección deja de nombrar una venta que ya no se ve.
+    if (this.abiertaPorRuta) {
+      this.abiertaPorRuta = false;
+      void this.router.navigateByUrl('/ventas');
+    }
   }
 
   /** Lo de las acciones es de la venta elegida: otra venta (o ninguna) arranca sin diálogos ni mensajes. */
@@ -304,7 +327,10 @@ export class Ventas implements OnInit {
   }
 
   protected elegir(fila: VentaResumen): void {
-    const id = fila.ventaId;
+    this.abrir(fila.ventaId);
+  }
+
+  private abrir(id: number): void {
     this.elegida.set(id);
     this.detalle.set(null);
     this.errorDetalle.set(null);
