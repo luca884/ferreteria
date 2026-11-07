@@ -1,8 +1,10 @@
 import { TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
+import { vi } from 'vitest';
+import { AL_CERRAR_SESION } from './al-cerrar-sesion';
 import { AuthService } from './auth.service';
-import { LoginResponse } from './auth.models';
+import { LoginResponse, Sesion } from './auth.models';
 
 describe('AuthService', () => {
   let service: AuthService;
@@ -158,5 +160,69 @@ describe('AuthService', () => {
       expect(service.sesion()?.nombre).toBe('Dueno El Tornillo');
       expect(JSON.parse(localStorage.getItem('ferreteria.sesion')!).nombre).toBe('Dueno El Tornillo');
     });
+  });
+});
+
+describe('AuthService al cerrar la sesión', () => {
+  const sesion: Sesion = {
+    userId: 2,
+    nombre: 'Dueno El Tornillo',
+    email: 'dueno@tornillo.demo',
+    rol: 'DUENO',
+    ferreteriaId: 1,
+    ferreteriaNombre: 'Ferreteria El Tornillo',
+  };
+
+  function crear(...pasos: Array<(s: Sesion) => void>): AuthService {
+    localStorage.clear();
+    localStorage.setItem('ferreteria.token', 'jwt');
+    localStorage.setItem('ferreteria.sesion', JSON.stringify(sesion));
+    TestBed.configureTestingModule({
+      providers: [
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        ...pasos.map((paso) => ({ provide: AL_CERRAR_SESION, multi: true, useValue: paso })),
+      ],
+    });
+    return TestBed.inject(AuthService);
+  }
+
+  afterEach(() => localStorage.clear());
+
+  it('corre cada paso de AL_CERRAR_SESION con la sesión que se cierra, y después borra todo', () => {
+    const vistas: Array<Sesion | null> = [];
+    const otro = vi.fn();
+    const service = crear((s) => vistas.push({ ...s }), otro);
+
+    service.logout();
+
+    expect(vistas).toEqual([sesion]);
+    expect(otro).toHaveBeenCalledWith(sesion);
+    expect(service.sesion()).toBeNull();
+    expect(localStorage.getItem('ferreteria.token')).toBeNull();
+  });
+
+  it('sin sesión (un segundo 401) no corre los pasos', () => {
+    const paso = vi.fn();
+    const service = crear(paso);
+    service.logout();
+    paso.mockClear();
+
+    service.logout();
+
+    expect(paso).not.toHaveBeenCalled();
+  });
+
+  it('un paso que falla no frena el cierre de la sesión', () => {
+    const despues = vi.fn();
+    const service = crear(() => {
+      throw new Error('storage bloqueado');
+    }, despues);
+
+    service.logout();
+
+    expect(despues).toHaveBeenCalled();
+    expect(service.autenticado()).toBe(false);
+    expect(localStorage.getItem('ferreteria.sesion')).toBeNull();
   });
 });

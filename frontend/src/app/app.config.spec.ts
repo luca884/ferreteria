@@ -88,3 +88,28 @@ describe('appConfig: locale es-AR', () => {
     expect(fila.textContent).toContain(`32,5${NBSP}%`);
   });
 });
+
+describe('appConfig: al cerrar la sesión', () => {
+  afterEach(() => localStorage.clear());
+
+  it('la lista de Etiquetas del usuario se borra con la sesión; la de otro usuario queda', () => {
+    const sesion = {
+      userId: 7,
+      nombre: 'Dueño',
+      email: 'dueno@tornillo.demo',
+      rol: 'DUENO',
+      ferreteriaId: 1,
+      ferreteriaNombre: 'El Tornillo',
+    };
+    localStorage.setItem('ferreteria.token', 'jwt');
+    localStorage.setItem('ferreteria.sesion', JSON.stringify(sesion));
+    localStorage.setItem('etiquetas:1:7', JSON.stringify({ v: 1, items: [{ id: 5, copias: 2 }] }));
+    localStorage.setItem('etiquetas:1:8', JSON.stringify({ v: 1, items: [{ id: 6, copias: 1 }] }));
+    TestBed.configureTestingModule({ providers: appConfig.providers });
+
+    TestBed.inject(AuthService).logout();
+
+    expect(localStorage.getItem('etiquetas:1:7')).toBeNull();
+    expect(localStorage.getItem('etiquetas:1:8')).not.toBeNull();
+  });
+});

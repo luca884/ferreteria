@@ -1,9 +1,14 @@
-import { Component, ElementRef, computed, inject, signal, viewChild } from '@angular/core';
+import { HttpErrorResponse } from '@angular/common/http';
+import { Component, DestroyRef, ElementRef, computed, inject, signal, viewChild } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { catchError, forkJoin, map, of, throwError } from 'rxjs';
 import { AuthService } from '../../core/auth/auth.service';
 import { BarraAcciones } from '../../shared/barra-acciones';
-import { ArticuloMostrador } from '../mostrador/mostrador.models';
+import { ArticulosService } from '../articulos/articulos.service';
+import { ArticuloMostrador, comoArticuloMostrador } from '../mostrador/mostrador.models';
 import { MostradorService } from '../mostrador/mostrador.service';
 import { Barra, CodigoDeBarras, barras, codigoParaEtiqueta } from './codigo-barras';
+import { claveDeEtiquetas, guardarEtiquetas, leerEtiquetas } from './etiquetas.storage';
 
 const MAX_COPIAS = 999;
 
@@ -27,8 +32,9 @@ interface Etiqueta {
 
 /**
  * Etiquetas con código de barras (GDS-31), como las plantillas de GDS (G85): el Dueño busca artículos, los suma a la
- * lista con cuántas copias quiere y los imprime en hoja A4 de 4 o 5 columnas. La lista no se guarda. Al imprimir solo
- * sale `.etiquetas-imprimible` (reglas `@media print` en styles.css).
+ * lista con cuántas copias quiere y los imprime en hoja A4 de 4 o 5 columnas. La lista queda guardada para ese usuario
+ * (`etiquetas.storage.ts`) hasta «Vaciar» o el cierre de la sesión; al volver se traen los datos actuales de cada
+ * artículo. Al imprimir solo sale `.etiquetas-imprimible` (reglas `@media print` en styles.css).
  */
 @Component({
   selector: 'app-etiquetas',
@@ -38,7 +44,10 @@ interface Etiqueta {
 })
 export class Etiquetas {
   private readonly mostrador = inject(MostradorService);
+  private readonly articulos = inject(ArticulosService);
+  private readonly destroyRef = inject(DestroyRef);
   protected readonly auth = inject(AuthService);
+  private readonly clave = claveDeEtiquetas(this.auth.sesion());
 
   protected readonly zonaLibre = ZONA_LIBRE;
   protected readonly busqueda = signal('');
@@ -49,6 +58,12 @@ export class Etiquetas {
   protected readonly error = signal<string | null>(null);
   protected readonly items = signal<ItemEtiqueta[]>([]);
   protected readonly columnas = signal<4 | 5>(4);
+  protected readonly cargando = signal(false);
+  protected readonly errorDeCarga = signal(false);
+  /** Lo que salió de la lista guardada al traerla (dados de baja o que ya no existen). */
+  protected readonly avisoLista = signal<string | null>(null);
+  /** Mientras la lista guardada no se cargó, lo guardado no se pisa. */
+  private guardable = true;
   private readonly campo = viewChild<ElementRef<HTMLInputElement>>('campo');
 
   protected readonly etiquetas = computed<Etiqueta[]>(() =>
@@ -67,6 +82,68 @@ export class Etiquetas {
     const n = this.etiquetas().length;
     return n === 1 ? '1 etiqueta' : `${n} etiquetas`;
   });
+
+  constructor() {
+    if (this.auth.esDueno()) this.cargarGuardada();
+  }
+
+  /**
+   * Trae los datos actuales de cada artículo guardado. Uno dado de baja o que ya no existe (404) sale de la lista con un
+   * aviso. Si falla otra cosa, lo guardado queda como estaba y se puede reintentar; lo que se sume mientras tanto se
+   * junta al final cuando la lista carga.
+   */
+  protected cargarGuardada(): void {
+    if (!this.clave) return;
+    const guardadas = leerEtiquetas(this.clave);
+    if (guardadas.length === 0) return;
+    this.guardable = false;
+    this.cargando.set(true);
+    this.errorDeCarga.set(false);
+    forkJoin(
+      guardadas.map((g) =>
+        this.articulos.obtener(g.id).pipe(
+          map((a) => ({ copias: g.copias, articulo: comoArticuloMostrador(a) as ArticuloMostrador | null })),
+          catchError((err: unknown) =>
+            err instanceof HttpErrorResponse && err.status === 404
+              ? of({ copias: g.copias, articulo: null })
+              : throwError(() => err),
+          ),
+        ),
+      ),
+    )
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (cargados) => {
+          const bajas = cargados.flatMap((c) => (c.articulo && !c.articulo.activo ? [c.articulo.descripcion] : []));
+          const noExisten = cargados.filter((c) => !c.articulo).length;
+          const items = cargados.flatMap((c) =>
+            c.articulo?.activo ? [{ articulo: c.articulo, copias: c.copias, codigo: codigoParaEtiqueta(c.articulo) }] : [],
+          );
+          this.cargando.set(false);
+          this.guardable = true;
+          this.avisoLista.set(avisoDeLoQueSalio(bajas, noExisten));
+          this.cambiarItems((actuales) => [
+            ...items,
+            ...actuales.filter((a) => !items.some((i) => i.articulo.id === a.articulo.id)),
+          ]);
+        },
+        error: () => {
+          this.cargando.set(false);
+          this.errorDeCarga.set(true);
+        },
+      });
+  }
+
+  /** Cambia la lista y la guarda (si la guardada ya cargó). */
+  private cambiarItems(cambio: (lista: ItemEtiqueta[]) => ItemEtiqueta[]): void {
+    this.items.update(cambio);
+    if (this.clave && this.guardable) {
+      guardarEtiquetas(
+        this.clave,
+        this.items().map((i) => ({ id: i.articulo.id, copias: i.copias })),
+      );
+    }
+  }
 
   protected buscar(evento: Event): void {
     evento.preventDefault();
@@ -103,7 +180,7 @@ export class Etiquetas {
       return;
     }
     this.error.set(null);
-    this.items.update((lista) =>
+    this.cambiarItems((lista) =>
       lista.some((i) => i.articulo.id === articulo.id)
         ? lista.map((i) => (i.articulo.id === articulo.id ? { ...i, copias: Math.min(i.copias + 1, MAX_COPIAS) } : i))
         : [...lista, { articulo, copias: 1, codigo: codigoParaEtiqueta(articulo) }],
@@ -138,18 +215,47 @@ export class Etiquetas {
     const n = Math.trunc(Number(valor));
     const copias = Number.isFinite(n) && n >= 1 ? Math.min(n, MAX_COPIAS) : 1;
     input.value = String(copias);
-    this.items.update((lista) => lista.map((i) => (i.articulo.id === id ? { ...i, copias } : i)));
+    this.cambiarItems((lista) => lista.map((i) => (i.articulo.id === id ? { ...i, copias } : i)));
   }
 
   protected quitar(id: number): void {
-    this.items.update((lista) => lista.filter((i) => i.articulo.id !== id));
+    this.cambiarItems((lista) => lista.filter((i) => i.articulo.id !== id));
   }
 
   protected cambiarColumnas(valor: string): void {
     this.columnas.set(valor === '5' ? 5 : 4);
   }
 
+  /** Saca todo, también lo guardado (aunque la lista guardada no se haya podido cargar). */
+  protected vaciar(): void {
+    this.guardable = true;
+    this.errorDeCarga.set(false);
+    this.avisoLista.set(null);
+    this.cambiarItems(() => []);
+  }
+
+  /** Imprimir no vacía la lista: si la impresora se traba, se vuelve a imprimir. */
   protected imprimir(): void {
     window.print();
   }
+}
+
+function avisoDeLoQueSalio(bajas: string[], noExisten: number): string | null {
+  const partes: string[] = [];
+  if (bajas.length > 0) {
+    const nombres = bajas.map((d) => `«${d}»`).join(', ');
+    partes.push(
+      bajas.length === 1
+        ? `Salió de la lista por estar dado de baja: ${nombres}.`
+        : `Salieron de la lista por estar dados de baja: ${nombres}.`,
+    );
+  }
+  if (noExisten > 0) {
+    partes.push(
+      noExisten === 1
+        ? 'Salió de la lista 1 artículo que ya no existe.'
+        : `Salieron de la lista ${noExisten} artículos que ya no existen.`,
+    );
+  }
+  return partes.length > 0 ? partes.join(' ') : null;
 }

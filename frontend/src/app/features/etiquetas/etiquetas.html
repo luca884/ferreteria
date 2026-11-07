@@ -1,6 +1,7 @@
 <app-barra-acciones>
   <h1>Etiquetas</h1>
   @if (auth.esDueno()) {
+    <button type="button" class="accion-barra vaciar" [disabled]="items().length === 0" (click)="vaciar()">Vaciar</button>
     <button
       type="button"
       class="accion-barra primario imprimir"
@@ -46,6 +47,15 @@
   @if (error(); as texto) {
     <p class="error" role="alert">{{ texto }}</p>
   }
+  @if (errorDeCarga()) {
+    <p class="error error-lista" role="alert">
+      No se pudo cargar la lista guardada.
+      <button type="button" class="secundario chico" (click)="cargarGuardada()">Reintentar</button>
+    </p>
+  }
+  @if (avisoLista(); as texto) {
+    <p class="ayuda aviso-lista" role="status">{{ texto }}</p>
+  }
 
   @if (resultados().length > 0) {
     <ul class="resultados" aria-label="Artículos encontrados">
@@ -67,7 +77,11 @@
   }
 
   @if (items().length === 0) {
-    <p class="ayuda estado-vacio">Buscá o escaneá los artículos que querés etiquetar.</p>
+    @if (cargando()) {
+      <p class="ayuda cargando-lista" role="status">Cargando la lista guardada…</p>
+    } @else {
+      <p class="ayuda estado-vacio">Buscá o escaneá los artículos que querés etiquetar.</p>
+    }
   } @else {
     <table class="lista">
       <caption class="sr-only">Artículos a etiquetar y cuántas copias de cada uno</caption>
