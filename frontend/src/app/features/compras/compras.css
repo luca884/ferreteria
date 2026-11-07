@@ -1,3 +1,13 @@
+:host {
+  display: block;
+  width: 100%;
+}
+/* La barra de acciones va a todo el ancho; el resto, centrado y con margen a los costados en pantallas grandes. */
+:host > :not(app-barra-acciones) {
+  max-width: var(--ancho-pantalla);
+  margin-inline: auto;
+}
+
 .filtros,
 .encabezado,
 .buscador {
