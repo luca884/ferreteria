@@ -62,23 +62,11 @@
   margin-bottom: var(--e-4);
 }
 
-.detalle {
-  display: flex;
-  flex-direction: column;
-  gap: var(--e-3);
-  margin-bottom: var(--e-6);
-  padding: var(--e-4);
-  border: 1px solid var(--borde);
-  border-radius: var(--radio-lg);
-  background: var(--superficie);
-}
-.detalle header {
+/* El estado y «Vencido», al lado del título del pop-up. */
+.marcas {
   display: flex;
   align-items: baseline;
   gap: var(--e-3);
-}
-.detalle h2 {
-  margin: 0;
 }
 .estado {
   font-weight: 700;
@@ -108,6 +96,7 @@
   font-weight: 600;
   color: var(--texto-suave);
 }
+/* Los botones de la pregunta de reemplazar el ticket. */
 .acciones {
   display: flex;
   flex-wrap: wrap;

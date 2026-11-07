@@ -9,6 +9,7 @@ import { DialogoDetalle } from './dialogo-detalle';
     <button id="fila" type="button">Venta N.º 20</button>
     @if (abierto()) {
       <app-dialogo-detalle titulo="Venta N.º 20" (cerrar)="cerrar()">
+        <span cabecera id="estado">Pendiente</span>
         <p id="cuerpo">Juan Pérez · Contado</p>
         <input id="campo" />
         @if (anidado()) {
@@ -79,6 +80,9 @@ describe('DialogoDetalle', () => {
     const titulo = dialogo().querySelector('.dialogo-detalle-cabecera h2')!;
     expect(titulo.textContent!.trim()).toBe('Venta N.º 20');
     expect(dialogo().getAttribute('aria-labelledby')).toBe(titulo.id);
+    // Lo marcado `cabecera` (el estado de un presupuesto) va al lado del título, no en el cuerpo.
+    expect(titulo.nextElementSibling?.matches('.dialogo-detalle-marcas')).toBe(true);
+    expect(titulo.nextElementSibling!.querySelector('#estado')).not.toBeNull();
     expect(dialogo().querySelector('.dialogo-detalle-cuerpo #cuerpo')!.textContent).toContain('Juan Pérez');
 
     const pie = Array.from(dialogo().querySelectorAll('.dialogo-detalle-pie button')).map((b) => b.textContent!.trim());

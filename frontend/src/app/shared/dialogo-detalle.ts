@@ -5,7 +5,8 @@ let siguienteId = 0;
 
 /**
  * El pop-up grande donde se abre el detalle de una venta, presupuesto, remito, caja o compra (detalle-en-popup),
- * encima de la lista oscurecida. Presentacional: título y ✕ arriba, el contenido proyectado en un cuerpo con scroll
+ * encima de la lista oscurecida. Presentacional: título y ✕ arriba (con lo marcado `cabecera`, como el estado de un
+ * presupuesto, al lado del título), el contenido proyectado en un cuerpo con scroll
  * propio y un pie fijo con las acciones: la destructiva (`accion-peligro`, Anular) sola a la izquierda; a la derecha
  * Cerrar y las demás (`accion`, la principal en `primario`).
  *
@@ -32,6 +33,9 @@ let siguienteId = 0;
       >
         <header class="dialogo-detalle-cabecera">
           <h2 [id]="id">{{ titulo() }}</h2>
+          <div class="dialogo-detalle-marcas">
+            <ng-content select="[cabecera]" />
+          </div>
           <button #equis type="button" class="dialogo-detalle-equis" aria-label="Cerrar" (click)="cerrar.emit()">
             <span aria-hidden="true">✕</span>
           </button>

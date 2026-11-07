@@ -909,6 +909,14 @@ ul.error {
   padding: var(--e-4) var(--e-6);
   border-bottom: 1px solid var(--borde);
 }
+/* Lo que va al lado del título (el estado, «Vencido»): ocupa el resto y deja la ✕ contra el borde. */
+.dialogo-detalle-marcas {
+  display: flex;
+  flex: 1 1 auto;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--e-2);
+}
 .dialogo-detalle-equis {
   flex: none;
   width: 36px;

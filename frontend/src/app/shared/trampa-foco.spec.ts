@@ -154,7 +154,8 @@ describe('TrampaFoco', () => {
 @Component({
   imports: [TrampaFoco],
   template: `
-    <div role="dialog" aria-modal="true" appTrampaFoco>
+    <main id="contenido" tabindex="-1"></main>
+    <div id="detalle" role="dialog" aria-modal="true" tabindex="-1" appTrampaFoco>
       <button id="detalle-primero" type="button">Cerrar</button>
       @if (adentro()) {
         <div role="dialog" aria-modal="true" appTrampaFoco>
@@ -234,5 +235,15 @@ describe('TrampaFoco con un diálogo encima de otro', () => {
     tab();
 
     expect(document.activeElement).toBe(porId('detalle-primero'));
+  });
+
+  it('si el de arriba se abrió sin foco (el botón que lo abrió se deshabilitó), al cerrarse el foco vuelve al de abajo', async () => {
+    (document.activeElement as HTMLElement).blur();
+    await mostrar('alLado', true);
+    porId('al-lado-primero').focus();
+
+    await mostrar('alLado', false);
+
+    expect(document.activeElement).toBe(porId('detalle'));
   });
 });

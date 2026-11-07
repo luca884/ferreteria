@@ -72,12 +72,16 @@ export class TrampaFoco implements OnDestroy {
 
   /**
    * A dónde vuelve el foco: al elemento desde el que se abrió. Si se abrió con una tecla de atajo y no había nada
-   * enfocado (el `body`), o ese elemento ya no está, al contenido principal (`#contenido`, con `tabindex="-1"`) para
+   * enfocado (el `body`), o ese elemento ya no está, al diálogo de abajo si hay uno, y si no al contenido principal (`#contenido`, con `tabindex="-1"`) para
    * que el Tab siguiente siga desde ahí y no desde el principio de la página.
    */
   private destinoDelFoco(): HTMLElement | null {
     const previo = this.previo;
     if (previo instanceof HTMLElement && previo.isConnected && previo !== this.documento.body) return previo;
+    // Si se cerró encima de otro diálogo enfocable (la hoja de un remito sobre su detalle, abierta desde un «Imprimir»
+    // que se deshabilitó mientras leía), el foco vuelve a ese y no al fondo que el velo tapa.
+    const debajo = abiertas[abiertas.length - 1]?.host;
+    if (debajo?.isConnected && debajo.hasAttribute('tabindex')) return debajo;
     return this.documento.getElementById('contenido');
   }
 }

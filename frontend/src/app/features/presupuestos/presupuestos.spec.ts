@@ -148,7 +148,11 @@ describe('Presupuestos', () => {
   const normal = (t: string | null | undefined) => (t ?? '').replace(/\s+/g, ' ').trim();
   const filas = () => Array.from(el().querySelectorAll<HTMLElement>('table.presupuestos tbody tr'));
   const celdas = (fila: HTMLElement) => Array.from(fila.querySelectorAll('td')).map((c) => normal(c.textContent));
-  const detalle = () => el().querySelector<HTMLElement>('section.detalle');
+  /** El detalle del presupuesto elegido: el pop-up (detalle-en-popup). */
+  const detalle = () => el().querySelector<HTMLElement>('app-dialogo-detalle [role="dialog"]');
+  /** Las acciones del pie del pop-up, sin «Cerrar» (que tiene siempre). */
+  const acciones = () =>
+    Array.from(detalle()!.querySelectorAll<HTMLButtonElement>('.dialogo-detalle-pie .pie-acciones button:not(.cerrar)'));
   const boton = (texto: string, dentro: ParentNode = el()) =>
     Array.from(dentro.querySelectorAll<HTMLButtonElement>('button')).find((b) => normal(b.textContent) === texto);
   const alerta = () => normal(el().querySelector('[role="alert"]')?.textContent);
@@ -321,6 +325,55 @@ describe('Presupuestos', () => {
       expect(normal(d.querySelector('.totales')?.textContent)).toContain('Total $ 3.000,00');
     });
 
+    it('el detalle se abre en un pop-up encima de la lista, con el título y el estado arriba y «Pasar a venta» como principal (#59)', async () => {
+      await crear();
+      api.obtener.mockReturnValue(of(detalleDe(12, { vencido: true })));
+
+      await abrirDetalle(0);
+
+      const pop = detalle()!;
+      expect(pop.getAttribute('aria-modal')).toBe('true');
+      expect(pop.closest('.dialogo-fondo')).not.toBeNull();
+      const cabecera = pop.querySelector('.dialogo-detalle-cabecera')!;
+      expect(normal(cabecera.querySelector('h2')?.textContent)).toBe('Presupuesto N.º 12');
+      expect(normal(cabecera.querySelector('.estado')?.textContent)).toBe('Pendiente');
+      expect(normal(cabecera.querySelector('.vencido')?.textContent)).toBe('Vencido');
+      expect(pop.querySelector('.dialogo-detalle-cuerpo table.renglones')).not.toBeNull();
+      expect(pop.querySelector('.dialogo-detalle-pie .pie-peligro button')).toBeNull();
+      const pasar = boton('Pasar a venta', pop)!;
+      expect(pasar.closest('.pie-acciones')).not.toBeNull();
+      expect(pasar.classList).toContain('primario');
+      expect(filas()).toHaveLength(2);
+      expect(document.activeElement).toBe(pop.querySelector('button[aria-label="Cerrar"]'));
+    });
+
+    it('mientras el detalle carga, el pop-up ya se titula con el presupuesto de la fila', async () => {
+      await crear();
+      api.obtener.mockReturnValue(new Subject<PresupuestoResponse>());
+
+      await abrirDetalle(1);
+
+      expect(normal(detalle()!.querySelector('h2')?.textContent)).toBe('Presupuesto N.º 11');
+      expect(normal(detalle()!.querySelector('.dialogo-detalle-cuerpo')?.textContent)).toBe('Cargando…');
+    });
+
+    it('Esc y la ✕ cierran el pop-up; la lista queda como estaba', async () => {
+      await crear();
+      await abrirDetalle(0);
+
+      (document.activeElement ?? document.body).dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }),
+      );
+      await refrescar();
+      expect(detalle()).toBeNull();
+
+      await abrirDetalle(1);
+      await click(detalle()!.querySelector<HTMLButtonElement>('button[aria-label="Cerrar"]')!);
+      expect(detalle()).toBeNull();
+      expect(filas()).toHaveLength(2);
+      expect(api.listar).toHaveBeenCalledTimes(1);
+    });
+
     it('con descuento muestra cuánto se descontó', async () => {
       await crear();
       api.obtener.mockReturnValue(of(detalleDe(12, { subtotal: 3000, descuentoPorcentaje: 10, descuento: 300, total: 2700 })));
@@ -414,8 +467,7 @@ describe('Presupuestos', () => {
 
       await abrirDetalle(0);
 
-      const acciones = Array.from(detalle()!.querySelectorAll<HTMLButtonElement>('.acciones button')).map((b) => normal(b.textContent));
-      expect(acciones).toEqual(esperados);
+      expect(acciones().map((b) => normal(b.textContent))).toEqual(esperados);
     });
 
     it('al Dueño, un RECHAZADO le ofrece reactivarlo: un rechazado lo reactiva solo el Dueño', async () => {
@@ -424,8 +476,7 @@ describe('Presupuestos', () => {
 
       await abrirDetalle(0);
 
-      const acciones = Array.from(detalle()!.querySelectorAll<HTMLButtonElement>('.acciones button')).map((b) => normal(b.textContent));
-      expect(acciones).toEqual(['Imprimir', 'Aceptar', 'Volver a pendiente']);
+      expect(acciones().map((b) => normal(b.textContent))).toEqual(['Imprimir', 'Aceptar', 'Volver a pendiente']);
     });
 
     it('uno vencido se puede pasar a venta: el precio de hoy no depende del vencimiento', async () => {
@@ -522,7 +573,7 @@ describe('Presupuestos', () => {
       await click(boton('Aceptar', detalle()!));
 
       expect(alerta()).toContain('Ese presupuesto ya se facturó.');
-      expect(Array.from(detalle()!.querySelectorAll('.acciones button')).map((b) => normal(b.textContent))).toEqual(['Imprimir']);
+      expect(acciones().map((b) => normal(b.textContent))).toEqual(['Imprimir']);
     });
 
     it('con el cambio en curso los botones no se pueden apretar dos veces', async () => {
@@ -533,7 +584,7 @@ describe('Presupuestos', () => {
 
       await click(boton('Aceptar', detalle()!));
 
-      expect(Array.from(detalle()!.querySelectorAll<HTMLButtonElement>('.acciones button')).every((b) => b.disabled)).toBe(true);
+      expect(acciones().every((b) => b.disabled)).toBe(true);
     });
   });
 
@@ -696,9 +747,27 @@ describe('Presupuestos', () => {
         await pedirPasar();
 
         expect(normal(el().querySelector('.reemplazo')?.textContent)).toContain('El mostrador ya tiene un ticket con 1 renglón.');
+        // La pregunta va en el cuerpo del pop-up con el foco en Cancelar (así queda a la vista) y, mientras tanto, el pie
+        // no ofrece otras acciones.
+        const reemplazo = detalle()!.querySelector<HTMLElement>('.dialogo-detalle-cuerpo .reemplazo')!;
+        expect(document.activeElement).toBe(boton('Cancelar', reemplazo));
+        expect(acciones()).toEqual([]);
         expect(articulos.obtener).not.toHaveBeenCalled();
         expect(ticketGuardado().clave).toBe('clave-vieja');
         expect(navegar).not.toHaveBeenCalled();
+      });
+
+      it('Esc cancela la pregunta sin cerrar el detalle', async () => {
+        await pedirPasar();
+
+        (document.activeElement ?? document.body).dispatchEvent(
+          new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }),
+        );
+        await refrescar();
+
+        expect(el().querySelector('.reemplazo')).toBeNull();
+        expect(detalle()).not.toBeNull();
+        expect(ticketGuardado().clave).toBe('clave-vieja');
       });
 
       it('Cancelar lo deja como estaba', async () => {
