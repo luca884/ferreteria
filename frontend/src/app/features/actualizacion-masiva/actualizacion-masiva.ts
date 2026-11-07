@@ -50,6 +50,9 @@ const MODOS_DE_PRECIO: readonly ModoMasivo[] = ['PRECIO_PORCENTAJE', 'PRECIO_MON
 /** Lo que pasa con el precio al cambiar el costo (misma regla que el servidor: el precio manual no se toca). */
 const RECALCULA_CON_EL_MARGEN =
   'El precio se recalcula con el margen de cada artículo. Los de precio manual quedan con su precio.';
+/** Lo que pasa con el precio al cambiar el rubro (misma regla que el servidor: propio > rubro > ferretería). */
+const PISTA_RUBRO_DESTINO =
+  'El precio se recalcula con el margen del rubro destino. Los de margen propio o precio manual cambian de rubro, pero no de precio.';
 
 @Component({
   selector: 'app-actualizacion-masiva',
@@ -84,7 +87,10 @@ export class ActualizacionMasiva implements OnInit {
   /** Mensajes por campo de un 400 de validación del backend; si hay, se muestran en vez de `error`. */
   protected readonly erroresCampos = signal<string[]>([]);
 
-  /** Filtro, modo y valor. El valor lo escribe la máscara de importes (hasta 2 decimales y signo) y es un número o null. */
+  /**
+   * Filtro, modo y valor. El valor lo escribe la máscara de importes (hasta 2 decimales y signo) y es un número o null.
+   * Con «Cambiar el rubro» el valor no se usa y en su lugar va el rubro destino.
+   */
   protected readonly form = new FormGroup({
     proveedorId: new FormControl<number | null>(null),
     rubroId: new FormControl<number | null>(null),
@@ -93,7 +99,10 @@ export class ActualizacionMasiva implements OnInit {
     incluirInactivos: new FormControl(false, { nonNullable: true }),
     modo: new FormControl<ModoMasivo | null>(null),
     valor: new FormControl<number | null>(null),
+    rubroDestinoId: new FormControl<number | null>(null),
   });
+
+  protected readonly pistaRubroDestino = PISTA_RUBRO_DESTINO;
 
   /**
    * El formulario como signal. Se lee con `getRawValue()` y se actualiza a mano: soltar una selección con
@@ -157,16 +166,28 @@ export class ActualizacionMasiva implements OnInit {
     return modo !== null && modo !== undefined && MODOS_DE_PRECIO.includes(modo);
   });
 
-  /** Hace falta el modo y un valor numérico, y que no haya otra vista previa en camino ni se esté aplicando. */
+  /** «Cambiar el rubro» en el formulario: el campo del valor se cambia por el del rubro destino. */
+  protected readonly eligeRubroDestino = computed(() => this.formulario().modo === 'CAMBIAR_RUBRO');
+
+  /** La vista previa a la vista es de un cambio de rubro: suma la columna «Rubro». */
+  protected readonly vistaPreviaDeRubro = computed(() => this.pedidoVigente()?.modo === 'CAMBIAR_RUBRO');
+
+  /** El nombre del rubro destino de la vista previa a la vista, para la confirmación; null con los otros modos. */
+  protected readonly destinoVigente = computed(() => {
+    const destino = this.pedidoVigente()?.rubroDestinoId;
+    return destino === undefined ? null : this.nombreDeRubro(destino);
+  });
+
+  /**
+   * Hace falta el modo y un valor numérico (o, al cambiar el rubro, el destino), y que no haya otra vista previa en
+   * camino ni se esté aplicando.
+   */
   protected readonly puedeGenerar = computed(() => {
     const f = this.formulario();
-    return (
-      (f.modo ?? null) !== null &&
-      f.valor !== null &&
-      this.errorDelValor() === null &&
-      !this.generando() &&
-      !this.aplicando()
-    );
+    const completo = this.eligeRubroDestino()
+      ? (f.rubroDestinoId ?? null) !== null
+      : f.valor !== null && this.errorDelValor() === null;
+    return (f.modo ?? null) !== null && completo && !this.generando() && !this.aplicando();
   });
 
   /** Mensaje junto al campo cuando el número escrito está fuera de rango (lo mismo que valida el backend). */
@@ -174,6 +195,7 @@ export class ActualizacionMasiva implements OnInit {
     const f = this.formulario();
     const valor = f.valor;
     if (valor === null || f.modo === null || f.modo === undefined) return null;
+    if (f.modo === 'CAMBIAR_RUBRO') return null;
     if (f.modo === 'COSTO_MONTO' || f.modo === 'PRECIO_MONTO') return valor === 0 ? 'El monto no puede ser cero.' : null;
     if (f.modo === 'MARGEN') {
       return valor < 0 || valor > 1000 ? 'El margen tiene que estar entre 0 y 1.000.' : null;
@@ -188,6 +210,7 @@ export class ActualizacionMasiva implements OnInit {
     if (this.puedeGenerar() || this.generando() || this.aplicando()) return null;
     const f = this.formulario();
     if ((f.modo ?? null) === null) return 'Para ver la vista previa, elegí la operación.';
+    if (this.eligeRubroDestino()) return 'Para ver la vista previa, elegí el rubro destino.';
     const nombre =
       f.modo === 'MARGEN'
         ? 'el margen'
@@ -256,6 +279,12 @@ export class ActualizacionMasiva implements OnInit {
   /** Un costo en la moneda del artículo: `$ 100,00` o `US$ 10,00`. */
   protected costo(valor: number, moneda: Moneda | undefined): string {
     return formatearCosto(valor, moneda);
+  }
+
+  /** El nombre del rubro para la vista previa: «Sin rubro» si no tiene; «—» si ya no está en la lista. */
+  protected nombreDeRubro(id: number | null | undefined): string {
+    if (id === null || id === undefined) return 'Sin rubro';
+    return this.rubros().find((r) => r.id === id)?.nombre ?? '—';
   }
 
   /** Enter en el valor pide la vista previa (no hace nada si todavía falta algo). */
@@ -333,9 +362,9 @@ export class ActualizacionMasiva implements OnInit {
       next: (resultado) => {
         this.aplicando.set(false);
         this.descartarVistaPrevia();
-        // Operación y porcentaje se limpian (el filtro queda): no se puede aplicar dos veces por error.
+        // Operación, porcentaje y rubro destino se limpian (el filtro queda): no se puede aplicar dos veces por error.
         // El cambio del formulario limpia los mensajes; el resultado se muestra recién después.
-        this.form.patchValue({ modo: null, valor: null });
+        this.form.patchValue({ modo: null, valor: null, rubroDestinoId: null });
         this.resultado.set(resultado);
       },
       error: (err: unknown) => {
@@ -383,6 +412,7 @@ export class ActualizacionMasiva implements OnInit {
       next: (lista) => {
         this.rubros.set(lista);
         soltarSiNoExiste(this.form.controls.rubroId, lista);
+        soltarSiNoExiste(this.form.controls.rubroDestinoId, lista);
         this.sincronizarFormulario();
       },
       error: () => this.avisar('No se pudieron cargar los rubros.'),
@@ -418,20 +448,27 @@ export class ActualizacionMasiva implements OnInit {
     if (err instanceof HttpErrorResponse && err.status === 404) this.cargarSelectores();
   }
 
-  /** El pedido tal como lo escribió el Dueño; null si falta el modo o el valor no es un número. */
+  /**
+   * El pedido tal como lo escribió el Dueño; null si falta el modo o el valor no es un número. Con «Cambiar el rubro»
+   * va el destino y no el valor (aunque haya quedado uno escrito de otro modo); null si falta el destino.
+   */
   private armarPedido(): PedidoMasivo | null {
     const f = this.form.getRawValue();
-    const valor = f.valor;
-    if (f.modo === null || valor === null) return null;
-    return {
+    if (f.modo === null) return null;
+    const filtro = {
       proveedorId: f.proveedorId,
       rubroId: f.rubroId,
       importacionId: f.importacionId,
       q: f.q.trim() === '' ? null : f.q.trim(),
       incluirInactivos: f.incluirInactivos,
-      modo: f.modo,
-      valor,
     };
+    if (f.modo === 'CAMBIAR_RUBRO') {
+      const rubroDestinoId = f.rubroDestinoId;
+      return rubroDestinoId === null ? null : { ...filtro, modo: f.modo, rubroDestinoId };
+    }
+    const valor = f.valor;
+    if (valor === null) return null;
+    return { ...filtro, modo: f.modo, valor };
   }
 }
 

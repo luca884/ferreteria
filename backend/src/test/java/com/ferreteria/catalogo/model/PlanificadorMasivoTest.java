@@ -1359,4 +1359,104 @@ class PlanificadorMasivoTest {
                 .isEqualTo(plan(FILTRO, ModoMasivo.COSTO_PORCENTAJE, "10", a(1, "100.00", "30.00", "170.00")).huella());
         }
     }
+
+    // ------------------------------------------------------------------ cambiar el rubro (CU-05, #14)
+
+    /** Rubro 1 (origen) al 40 %, rubro 2 (destino) al 60 %, sin rubro al 30 % de la ferreteria; multiplo 10. */
+    private static ContextosDePrecio dosRubros() {
+        return new ContextosDePrecio(Map.of(
+            1L, new ContextoPrecio(bd("40.00"), bd("30.00"), bd("10")),
+            2L, new ContextoPrecio(bd("60.00"), bd("30.00"), bd("10"))),
+            new ContextoPrecio(null, bd("30.00"), bd("10")));
+    }
+
+    @Nested
+    @DisplayName("cambiar el rubro: el precio sale del margen del destino")
+    class CambiarRubro {
+
+        private PlanMasivo cambiarRubro(long destino, Art... articulos) {
+            List<ArticuloVigente> vigentes = java.util.Arrays.stream(articulos).map(Art::vigente).toList();
+            return PlanificadorMasivo.planificar(vigentes, FILTRO, OperacionMasiva.cambiarRubro(destino), dosRubros());
+        }
+
+        @Test
+        @DisplayName("heredado, margen propio y precio manual pasan al destino; solo el heredado cambia de precio (170 -> 200)")
+        void losTresPasanYSoloElHeredadoCambiaDePrecio() {
+            // 100 x 1,40 x 1,21 = 169,40 -> 170; con el 60 % del destino: 100 x 1,60 x 1,21 = 193,60 -> 200.
+            // Margen propio 50: 100 x 1,50 x 1,21 = 181,50 -> 190 en los dos rubros.
+            PlanMasivo plan = cambiarRubro(2,
+                Art.art(1, "100.00").rubro(1).precio("170.00"),
+                Art.art(2, "100.00").rubro(1).margen("50").precio("190.00"),
+                Art.art(3, "100.00").rubro(1).manual().precio("500.00"));
+
+            assertThat(plan.cambios()).extracting(CambioMasivo::articuloId).containsExactly(1L, 2L, 3L);
+            assertThat(plan.cambios()).extracting(CambioMasivo::rubroAnteriorId).containsOnly(1L);
+            assertThat(plan.cambios()).extracting(CambioMasivo::rubroNuevoId).containsOnly(2L);
+            assertThat(plan.cambios()).extracting(CambioMasivo::costoNuevo).containsOnly(bd("100.00"));
+            CambioMasivo heredado = plan.cambios().get(0);
+            assertThat(heredado.precioAnterior()).isEqualByComparingTo("170.00");
+            assertThat(heredado.precioNuevo()).isEqualTo(bd("200.00"));
+            assertThat(heredado.margenAnterior()).isEqualByComparingTo("40");
+            assertThat(heredado.margenNuevo()).isEqualByComparingTo("60");
+            assertThat(heredado.margenHeredado()).isTrue();
+            CambioMasivo propio = plan.cambios().get(1);
+            assertThat(propio.precioNuevo()).isEqualByComparingTo(propio.precioAnterior()).isEqualByComparingTo("190.00");
+            assertThat(propio.margenNuevo()).isEqualByComparingTo("50");
+            assertThat(propio.margenHeredado()).isFalse();
+            CambioMasivo manual = plan.cambios().get(2);
+            assertThat(manual.precioNuevo()).isEqualByComparingTo(manual.precioAnterior()).isEqualByComparingTo("500.00");
+            assertThat(plan.errores()).isEmpty();
+            assertThat(plan.conteos()).isEqualTo(new ConteosMasivos(3, 1, 0, 2, 0, 0, 0, 3));
+        }
+
+        @Test
+        @DisplayName("un articulo que ya esta en el destino queda sin cambio, aunque su precio este desactualizado")
+        void yaEnElDestinoQuedaSinCambio() {
+            PlanMasivo plan = cambiarRubro(2,
+                Art.art(1, "100.00").rubro(1).precio("170.00"),
+                Art.art(2, "100.00").rubro(2).precio("200.00"),
+                Art.art(3, "100.00").rubro(2).precio("999.00"));
+
+            assertThat(plan.cambios()).extracting(CambioMasivo::articuloId).containsExactly(1L);
+            assertThat(plan.conteos()).isEqualTo(new ConteosMasivos(3, 1, 0, 2, 0, 0, 0, 1));
+        }
+
+        @Test
+        @DisplayName("un articulo sin rubro se puede mover: del 30 % de la ferreteria al 60 % del destino (160 -> 200)")
+        void sinRubroSePuedeMover() {
+            PlanMasivo plan = cambiarRubro(2, Art.art(1, "100.00").precio("160.00"));
+
+            CambioMasivo cambio = plan.cambios().get(0);
+            assertThat(cambio.rubroAnteriorId()).isNull();
+            assertThat(cambio.rubroNuevoId()).isEqualTo(2L);
+            assertThat(cambio.margenAnterior()).isEqualByComparingTo("30");
+            assertThat(cambio.margenNuevo()).isEqualByComparingTo("60");
+            assertThat(cambio.precioNuevo()).isEqualTo(bd("200.00"));
+        }
+
+        @Test
+        @DisplayName("la huella lleva el destino, el rubro de hoy de cada articulo y el precio nuevo")
+        void huella() {
+            ArticuloVigente mueve = Art.art(1, "100.00").rubro(1).precio("170.00").vigente();
+            ArticuloVigente quieto = Art.art(2, "100.00").rubro(2).precio("200.00").vigente();
+            PlanMasivo plan = PlanificadorMasivo.planificar(
+                List.of(mueve, quieto), FILTRO, OperacionMasiva.cambiarRubro(2L), dosRubros());
+
+            HuellaMasiva esperada = new HuellaMasiva(OperacionMasiva.cambiarRubro(2L), FILTRO);
+            esperada.agregar(mueve, bd("100.00"), null, bd("200.00"));
+            esperada.agregar(quieto, bd("100.00"), null, bd("200.00"));
+
+            assertThat(plan.huella()).isEqualTo(esperada.calcular());
+        }
+
+        @Test
+        @DisplayName("en los otros modos cada cambio informa el mismo rubro antes y despues")
+        void otrosModosConservanElRubro() {
+            PlanMasivo plan = planificar(ModoMasivo.COSTO_PORCENTAJE, "10", dosRubros(),
+                Art.art(1, "100.00").rubro(1).precio("170.00"), Art.art(2, "100.00").precio("160.00"));
+
+            assertThat(plan.cambios()).extracting(CambioMasivo::rubroAnteriorId).containsExactly(1L, null);
+            assertThat(plan.cambios()).extracting(CambioMasivo::rubroNuevoId).containsExactly(1L, null);
+        }
+    }
 }

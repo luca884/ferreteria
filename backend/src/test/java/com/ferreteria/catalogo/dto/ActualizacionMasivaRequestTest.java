@@ -30,7 +30,7 @@ class ActualizacionMasivaRequestTest {
 
     private static final String MENSAJE_MODO =
             "Elegí qué querés hacer: cambiar el costo en porcentaje, sumarle un monto al costo, fijar el "
-                + "margen o cambiar el precio final en porcentaje o en monto.";
+                + "margen, cambiar el precio final en porcentaje o en monto, o cambiar el rubro.";
     private static final String MENSAJE_VALOR_AUSENTE = "Ingresá un valor.";
     private static final String MENSAJE_CERO = "El porcentaje no puede ser cero.";
     private static final String MENSAJE_MONTO_CERO = "El monto no puede ser cero.";
@@ -248,6 +248,66 @@ class ActualizacionMasivaRequestTest {
             assertThat(vistaPrevia("COSTO_MONTO", "100").toOperacion())
                     .isEqualTo(new OperacionMasiva(ModoMasivo.COSTO_MONTO, bd("100.00")));
             assertThat(aplicar("COSTO_MONTO", "-0.01", "abc").toOperacion().valor()).isEqualTo(bd("-0.01"));
+        }
+    }
+
+    @Nested
+    @DisplayName("modo CAMBIAR_RUBRO")
+    class CambiarRubro {
+
+        private static final String MENSAJE_SIN_DESTINO = "Elegí el rubro al que pasan los artículos.";
+        private static final String MENSAJE_SIN_VALOR = "Al cambiar el rubro no va un valor.";
+        private static final String MENSAJE_DESTINO_DE_MAS = "El rubro destino va solo al cambiar el rubro.";
+
+        private ActualizacionMasivaRequest vista(String modo, String valor, Long destino) {
+            return new ActualizacionMasivaRequest(null, null, null, null, false, modo, bd(valor), destino);
+        }
+
+        private AplicarActualizacionMasivaRequest aplicarA(String modo, String valor, Long destino) {
+            return new AplicarActualizacionMasivaRequest(null, null, null, null, false, modo, bd(valor), "abc", destino);
+        }
+
+        @Test
+        @DisplayName("con el destino y sin valor es valido, y toOperacion lleva el destino")
+        void valido() {
+            assertThat(errores(vista("CAMBIAR_RUBRO", null, 5L))).isEmpty();
+            assertThat(errores(aplicarA("CAMBIAR_RUBRO", null, 5L))).isEmpty();
+            assertThat(vista("CAMBIAR_RUBRO", null, 5L).toOperacion()).isEqualTo(OperacionMasiva.cambiarRubro(5L));
+            assertThat(aplicarA("CAMBIAR_RUBRO", null, 5L).toOperacion()).isEqualTo(OperacionMasiva.cambiarRubro(5L));
+        }
+
+        @Test
+        @DisplayName("sin destino: pide el rubro destino")
+        void sinDestino() {
+            assertThat(errores(vista("CAMBIAR_RUBRO", null, null)))
+                    .containsOnly(Map.entry("rubroDestinoElegido", MENSAJE_SIN_DESTINO));
+            assertThat(errores(aplicarA("CAMBIAR_RUBRO", null, null)))
+                    .containsOnly(Map.entry("rubroDestinoElegido", MENSAJE_SIN_DESTINO));
+        }
+
+        @Test
+        @DisplayName("con un valor: el valor no va")
+        void conValor() {
+            assertThat(errores(vista("CAMBIAR_RUBRO", "10", 5L)))
+                    .containsOnly(Map.entry("sinValorAlCambiarRubro", MENSAJE_SIN_VALOR));
+            assertThat(errores(aplicarA("CAMBIAR_RUBRO", "0", 5L)))
+                    .containsOnly(Map.entry("sinValorAlCambiarRubro", MENSAJE_SIN_VALOR));
+        }
+
+        @ParameterizedTest(name = "{0} con destino: el destino no va")
+        @ValueSource(strings = {"COSTO_PORCENTAJE", "COSTO_MONTO", "MARGEN", "PRECIO_PORCENTAJE", "PRECIO_MONTO"})
+        void destinoConOtroModo(String modo) {
+            assertThat(errores(vista(modo, "10", 5L)))
+                    .containsOnly(Map.entry("rubroDestinoSoloAlCambiarRubro", MENSAJE_DESTINO_DE_MAS));
+            assertThat(errores(aplicarA(modo, "10", 5L)))
+                    .containsOnly(Map.entry("rubroDestinoSoloAlCambiarRubro", MENSAJE_DESTINO_DE_MAS));
+            assertThat(errores(vista(modo, "10", null))).isEmpty();
+        }
+
+        @Test
+        @DisplayName("un modo desconocido con destino solo informa el modo")
+        void modoDesconocidoConDestino() {
+            assertThat(errores(vista("OTRO", "10", 5L))).containsOnly(Map.entry("modo", MENSAJE_MODO));
         }
     }
 

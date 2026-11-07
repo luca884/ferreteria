@@ -15,7 +15,7 @@ import java.util.Optional;
  *
  * <p>El precio nuevo se calcula con {@link PrecioCalculator}, igual que {@link Articulo#ajustarCosto} y
  * {@link Articulo#fijarMargen}; el servicio verifica que coincidan al aplicar. La variacion fuerte se
- * mide sobre el costo en los dos modos de costo y sobre el precio final en {@code MARGEN}.
+ * mide sobre el costo en los dos modos de costo y sobre el precio final en {@code MARGEN} y {@code CAMBIAR_RUBRO}.
  */
 public final class PlanificadorMasivo {
 
@@ -52,7 +52,11 @@ public final class PlanificadorMasivo {
             } else {
                 enPesos++;
             }
-            Fila fila = evaluar(articulo, operacion, contextos.de(articulo.rubroId()));
+            ContextoPrecio contexto = contextos.de(articulo.rubroId());
+            Fila fila = operacion.modo() == ModoMasivo.CAMBIAR_RUBRO
+                ? evaluarCambioDeRubro(articulo, operacion.rubroDestinoId(), contexto,
+                    contextos.de(operacion.rubroDestinoId()))
+                : evaluar(articulo, operacion, contexto);
             if (fila.motivoDeError() != null) {
                 errores.add(new ErrorMasivo(
                     articulo.id(), articulo.codigoInterno(), articulo.descripcion(), fila.motivoDeError()));
@@ -79,7 +83,8 @@ public final class PlanificadorMasivo {
                 cambios.add(new CambioMasivo(articulo.id(), articulo.codigoInterno(), articulo.descripcion(),
                     articulo.costo(), fila.costoNuevo(), fila.margenAnterior(), fila.margenNuevo(),
                     articulo.precioFinal(), fila.precioNuevo(), fila.margenPropioNuevo() == null, fila.advertencia(),
-                    articulo.moneda(), articulo.alicuotaIva().porcentaje()));
+                    articulo.moneda(), articulo.alicuotaIva().porcentaje(), articulo.rubroId(),
+                    operacion.rubroDespues(articulo.rubroId())));
             }
         }
 
@@ -181,10 +186,45 @@ public final class PlanificadorMasivo {
             precioNuevo, advertencia, modificado);
     }
 
+    /**
+     * Cambiar el rubro (CU-05): el articulo pasa al destino y su precio sale de la regla de siempre con el contexto del
+     * destino (margen propio, si no el del destino, si no el de la ferreteria; con precio manual queda el de hoy). El
+     * costo y el margen propio no cambian. Uno que ya esta en el destino queda sin cambio y no se escribe. La variacion
+     * fuerte se mide sobre el precio, como en {@code MARGEN}.
+     */
+    private static Fila evaluarCambioDeRubro(ArticuloVigente articulo, Long destinoId, ContextoPrecio actual,
+                                             ContextoPrecio destino) {
+        BigDecimal margenAnterior = PrecioCalculator.margenEfectivo(
+            articulo.margenPorcentaje(), actual.margenRubro(), actual.margenDefecto());
+        if (destinoId.equals(articulo.rubroId())) {
+            return new Fila(null, articulo.costo(), margenAnterior, margenAnterior, articulo.margenPorcentaje(),
+                articulo.precioFinal(), null, false);
+        }
+        BigDecimal margenNuevo = PrecioCalculator.margenEfectivo(
+            articulo.margenPorcentaje(), destino.margenRubro(), destino.margenDefecto());
+        BigDecimal cotizacion = destino.cotizacionPara(articulo.moneda());
+        BigDecimal precioNuevo = articulo.precioCon(
+            articulo.costo(), margenNuevo, articulo.alicuotaIva(), destino.redondeoMultiplo(), cotizacion);
+        if (!TopeDeImporte.entra(precioNuevo)) {
+            return Fila.conError(MOTIVO_DEMASIADO_GRANDE);
+        }
+        // Misma regla que Articulo: con costo 0 el calculado es 0 y un ajuste que lo deja en 0 no es error.
+        BigDecimal calculado = PrecioCalculator.precioFinal(articulo.costoReal(articulo.costo()), margenNuevo,
+            articulo.alicuotaIva(), destino.redondeoMultiplo(), cotizacion);
+        if (!articulo.precioManual() && AjustesDePrecio.dejanElPrecioEnCeroOMenos(calculado, precioNuevo)) {
+            return Fila.conError(MOTIVO_AJUSTES_EN_CERO);
+        }
+        String advertencia = MargenNegativo.junto(
+            VariacionFuerte.mensaje(Sujeto.PRECIO, articulo.precioFinal(), precioNuevo),
+            articulo.margenNegativo(articulo.costo(), articulo.alicuotaIva(), cotizacion));
+        return new Fila(null, articulo.costo(), margenAnterior, margenNuevo, articulo.margenPorcentaje(), precioNuevo,
+            advertencia, true);
+    }
+
     /** El costo despues de la operacion: sin cambios en MARGEN, porcentual o con un monto sumado en los otros dos. */
     private static BigDecimal costoNuevo(BigDecimal costo, OperacionMasiva operacion) {
         return switch (operacion.modo()) {
-            case MARGEN, PRECIO_PORCENTAJE, PRECIO_MONTO -> costo;
+            case MARGEN, PRECIO_PORCENTAJE, PRECIO_MONTO, CAMBIAR_RUBRO -> costo;
             case COSTO_PORCENTAJE -> costoConPorcentaje(costo, operacion.valor());
             case COSTO_MONTO -> costo.add(operacion.valor());
         };

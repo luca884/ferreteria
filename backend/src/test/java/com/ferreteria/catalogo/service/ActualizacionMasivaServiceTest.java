@@ -255,7 +255,7 @@ class ActualizacionMasivaServiceTest {
             assertThatThrownBy(() -> service.vistaPrevia(pedido(null, RUBRO, null, false, "OTRO", null)))
                     .isInstanceOfSatisfying(DatosInvalidosException.class, e -> assertThat(e.errors()).containsOnly(
                             Map.entry("modo", "Elegí qué querés hacer: cambiar el costo en porcentaje, sumarle un monto al costo, "
-                                    + "fijar el margen o cambiar el precio final en porcentaje o en monto."),
+                                    + "fijar el margen, cambiar el precio final en porcentaje o en monto, o cambiar el rubro."),
                             Map.entry("valor", "Ingresá un valor.")));
 
             verifyNoInteractions(articuloRepository, configuracionPreciosService);
@@ -1351,6 +1351,95 @@ class ActualizacionMasivaServiceTest {
                         aplicarPedido(null, null, null, false, modo, "10.555", "h"), USUARIO))
                         .isInstanceOf(BadRequestException.class);
             }
+        }
+    }
+
+    // ---- cambiar el rubro (CU-05, #14) ----
+
+    private static final Long DESTINO = 5L;
+    /** El destino al 50 %: costo 100 da 100 x 1,50 x 1,21 = 181,50 -> 190 (y en RUBRO, al 35 %, 170). */
+    private static final ContextoPrecio DEL_DESTINO =
+            new ContextoPrecio(new BigDecimal("50.00"), new BigDecimal("30.00"), new BigDecimal("10.00"));
+
+    private static Rubro destino() throws Exception {
+        Rubro rubro = new Rubro(FERRETERIA, "Herramientas", bd("50.00"));
+        fijar(rubro, "id", DESTINO);
+        return rubro;
+    }
+
+    private static ActualizacionMasivaRequest pedidoCambiarRubro(Long destino) {
+        return new ActualizacionMasivaRequest(null, null, null, null, false, "CAMBIAR_RUBRO", null, destino);
+    }
+
+    private static AplicarActualizacionMasivaRequest aplicarCambiarRubro(Long destino, String huella) {
+        return new AplicarActualizacionMasivaRequest(
+                null, null, null, null, false, "CAMBIAR_RUBRO", null, huella, destino);
+    }
+
+    @Nested
+    @DisplayName("cambiar el rubro: destino con findScoped, precio con el margen del destino")
+    class CambiarRubro {
+
+        private final FiltroArticulos vacio = new FiltroArticulos(null, null, null, false);
+
+        @Test
+        @DisplayName("destino ajeno o inexistente: 404 del rubro antes que el 400 del valor, sin leer articulos, en los dos")
+        void destinoAjeno() {
+            when(rubroRepository.findScoped(DESTINO)).thenReturn(Optional.empty());
+            ActualizacionMasivaRequest conValor =
+                    new ActualizacionMasivaRequest(null, null, null, null, false, "CAMBIAR_RUBRO", bd("10"), DESTINO);
+
+            assertThatThrownBy(() -> service.vistaPrevia(conValor))
+                    .isInstanceOf(ResourceNotFoundException.class)
+                    .hasMessage("Rubro no encontrado");
+            assertThatThrownBy(() -> service.aplicar(aplicarCambiarRubro(DESTINO, "abc"), USUARIO))
+                    .isInstanceOf(ResourceNotFoundException.class)
+                    .hasMessage("Rubro no encontrado");
+
+            verifyNoInteractions(articuloRepository, configuracionPreciosService, historialPrecioRepository);
+            verify(rubroRepository, never()).listarScoped();
+        }
+
+        @Test
+        @DisplayName("aplicar: cambiarRubro con el contexto del destino en los que se mueven; historial solo del que cambia de precio")
+        void aplicarMueveYSoloElHeredadoTieneHistorial() throws Exception {
+            Articulo heredado = spy(articulo(1, "100.00", RUBRO, null, true));
+            Articulo propio = spy(articulo(2, "100.00", RUBRO, "50.00", true));
+            Articulo yaEnElDestino = spy(articulo(3, "100.00", DESTINO, null, true));
+            when(rubroRepository.findScoped(DESTINO)).thenReturn(Optional.of(destino()));
+            alcance(vacio, List.of(heredado, propio, yaEnElDestino), rubro(), destino());
+            String huella = service.vistaPrevia(pedidoCambiarRubro(DESTINO)).huella();
+
+            ActualizacionMasivaResponse respuesta = service.aplicar(aplicarCambiarRubro(DESTINO, huella), USUARIO);
+
+            verify(heredado).cambiarRubro(eq(DESTINO), eq(DEL_DESTINO));
+            verify(propio).cambiarRubro(eq(DESTINO), eq(DEL_DESTINO));
+            verify(yaEnElDestino, never()).cambiarRubro(any(), any());
+            assertThat(heredado.getRubroId()).isEqualTo(DESTINO);
+            assertThat(heredado.getPrecioFinal()).isEqualByComparingTo("190.00");
+            assertThat(propio.getRubroId()).isEqualTo(DESTINO);
+            assertThat(propio.getPrecioFinal()).isEqualByComparingTo("190.00");
+            assertThat(yaEnElDestino.getPrecioFinal()).isEqualByComparingTo("170.00");
+            List<HistorialPrecio> historial = historialGuardado();
+            assertThat(historial).extracting(HistorialPrecio::getArticuloId).containsExactly(1L);
+            assertThat(historial.get(0).getOrigen()).isEqualTo(OrigenPrecio.MASIVO);
+            assertThat(historial.get(0).getPrecioAnterior()).isEqualByComparingTo("170.00");
+            assertThat(historial.get(0).getPrecioNuevo()).isEqualByComparingTo("190.00");
+            assertThat(respuesta.conteos()).isEqualTo(new ConteosMasivos(3, 1, 0, 2, 0, 0, 0, 2));
+            assertThat(respuesta.entradasDeHistorial()).isEqualTo(1);
+        }
+
+        @Test
+        @DisplayName("con un USD en el alcance y ninguna cotizacion guardada: 409, como en los demas modos")
+        void sinCotizacionDa409() throws Exception {
+            when(rubroRepository.findScoped(DESTINO)).thenReturn(Optional.of(destino()));
+            alcance(vacio, List.of(articuloEnDolares(1, "10.00", "1000")), destino());
+            when(dolarDePrecios.vigente()).thenReturn(Optional.empty());
+
+            assertThatThrownBy(() -> service.vistaPrevia(pedidoCambiarRubro(DESTINO)))
+                    .isInstanceOf(ConflictException.class)
+                    .hasMessage(DolarDePrecios.SIN_COTIZACION);
+            verificarSinEscrituras();
         }
     }
 }

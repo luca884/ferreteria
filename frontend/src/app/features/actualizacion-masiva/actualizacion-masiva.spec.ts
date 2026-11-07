@@ -267,7 +267,7 @@ describe('ActualizacionMasiva', () => {
       expect(boton().textContent).toContain('Ver vista previa');
     });
 
-    it('el selector de modo ofrece las cinco operaciones', async () => {
+    it('el selector de modo ofrece las seis operaciones', async () => {
       await crearComponente();
 
       expect(textosDe('#modo')).toEqual([
@@ -277,6 +277,7 @@ describe('ActualizacionMasiva', () => {
         'Sumar o restar un monto al costo',
         'Cambiar el precio final en %',
         'Sumar o restar un monto al precio final',
+        'Cambiar el rubro',
       ]);
       expect(seleccionado('#modo')).toBe('Elegí qué querés hacer');
     });
@@ -1927,6 +1928,7 @@ describe('ActualizacionMasiva', () => {
           MODO_MONTO,
           'Cambiar el precio final en %',
           'Sumar o restar un monto al precio final',
+          'Cambiar el rubro',
         ]);
       });
 
@@ -2317,6 +2319,177 @@ describe('ActualizacionMasiva', () => {
       );
     });
   });
+  describe('cambiar el rubro (CU-05, #14)', () => {
+    const MODO = 'Cambiar el rubro';
+    const PISTA =
+      'El precio se recalcula con el margen del rubro destino. Los de margen propio o precio manual cambian de rubro, pero no de precio.';
+
+    /** Pinturas → Herramientas: el heredado sube; el de margen propio cambia solo de rubro; el sin rubro también se mueve. */
+    const cambios: CambioMasivo[] = [
+      {
+        articuloId: 1,
+        codigo: 'P-1',
+        descripcion: 'Látex blanco',
+        costoAnterior: 100,
+        costoNuevo: 100,
+        margenAnterior: 30,
+        margenNuevo: 40,
+        precioAnterior: 160,
+        precioNuevo: 170,
+        margenHeredado: true,
+        advertencia: null,
+        ivaPorcentaje: 21,
+        rubroAnteriorId: 1,
+        rubroNuevoId: 2,
+      },
+      {
+        articuloId: 2,
+        codigo: 'P-2',
+        descripcion: 'Rodillo',
+        costoAnterior: 100,
+        costoNuevo: 100,
+        margenAnterior: 50,
+        margenNuevo: 50,
+        precioAnterior: 190,
+        precioNuevo: 190,
+        margenHeredado: false,
+        advertencia: null,
+        ivaPorcentaje: 21,
+        rubroAnteriorId: 1,
+        rubroNuevoId: 2,
+      },
+      {
+        articuloId: 3,
+        codigo: 'S-3',
+        descripcion: 'Lija',
+        costoAnterior: 10,
+        costoNuevo: 10,
+        margenAnterior: 30,
+        margenNuevo: 40,
+        precioAnterior: 20,
+        precioNuevo: 20,
+        margenHeredado: true,
+        advertencia: null,
+        ivaPorcentaje: 21,
+        rubroAnteriorId: null,
+        rubroNuevoId: 2,
+      },
+    ];
+    const vistaPreviaDelRubro: VistaPreviaMasiva = {
+      ...vistaPreviaBase,
+      conteos: { ...conteosBase, total: 3, modificados: 3, suben: 1, sinCambioDePrecio: 2, conError: 0 },
+      cambios,
+    };
+
+    const filas = () => Array.from(el().querySelectorAll('table.cambios tbody tr'));
+    const celdas = (fila: Element) =>
+      Array.from(fila.querySelectorAll('td')).map((c) => c.textContent?.replace(/\s+/g, ' ').trim());
+    const encabezados = () =>
+      Array.from(el().querySelectorAll('table.cambios thead th')).map((t) => t.textContent?.trim());
+
+    /** Proveedor Sinteplast, «Cambiar el rubro» a Herramientas, y la vista previa. */
+    async function conVistaPreviaDelRubro() {
+      await crearComponente();
+      servicio.vistaPrevia.mockReturnValue(of(vistaPreviaDelRubro));
+      await elegir('#proveedor', 'Sinteplast');
+      await elegir('#modo', MODO);
+      await elegir('#rubroDestino', 'Herramientas');
+      await generar();
+    }
+
+    it('cambia el campo del valor por «Rubro destino», con los rubros de la ferretería y su pista', async () => {
+      await crearComponente();
+      await elegir('#modo', MODO);
+
+      expect(el().querySelector('#valor')).toBeNull();
+      expect(texto('label[for="rubroDestino"]')).toBe('Rubro destino');
+      expect(textosDe('#rubroDestino')).toEqual(['Elegí el rubro', 'Pinturas', 'Herramientas']);
+      expect(texto('#rubro-destino-pista')).toBe(PISTA);
+      expect(q('#rubroDestino').getAttribute('aria-describedby')).toBe('rubro-destino-pista');
+      expect(boton().disabled).toBe(true);
+      expect(texto('#motivo-vista-previa')).toBe('Para ver la vista previa, elegí el rubro destino.');
+
+      await elegir('#rubroDestino', 'Herramientas');
+
+      expect(boton().disabled).toBe(false);
+      await elegir('#modo', 'Fijar el margen');
+      expect(el().querySelector('#rubroDestino')).toBeNull();
+      expect(el().querySelector('#valor')).not.toBeNull();
+    });
+
+    it('pide la vista previa con el rubro destino y sin valor, aunque antes se haya escrito uno', async () => {
+      await crearComponente();
+      await completar('Fijar el margen', '30');
+      await elegir('#modo', MODO);
+      await elegir('#rubroDestino', 'Herramientas');
+
+      await generar();
+
+      expect(servicio.vistaPrevia).toHaveBeenCalledTimes(1);
+      const pedido = servicio.vistaPrevia.mock.calls[0][0];
+      expect(pedido).toEqual({
+        proveedorId: null,
+        rubroId: null,
+        importacionId: null,
+        q: null,
+        incluirInactivos: false,
+        modo: 'CAMBIAR_RUBRO',
+        rubroDestinoId: 2,
+      });
+      expect('valor' in pedido).toBe(false);
+    });
+
+    it('la vista previa suma la columna «Rubro» con «anterior → nuevo», y «Solo cambia el rubro» si el precio no cambia', async () => {
+      await conVistaPreviaDelRubro();
+
+      expect(encabezados()).toEqual([
+        'Código',
+        'Descripción',
+        'Rubro',
+        'Costo (sin IVA)',
+        'Margen (%)',
+        'IVA (%)',
+        'Precio de venta (con IVA)',
+      ]);
+      expect(filas().map(celdas)).toEqual([
+        ['P-1', 'Látex blanco', 'Pinturas → Herramientas', '$ 100,00', '30 % → 40 %', '21 %', '$ 160,00 → $ 170,00'],
+        ['P-2', 'Rodillo', 'Pinturas → Herramientas', '$ 100,00', '50 %', '21 %', '$ 190,00 Solo cambia el rubro'],
+        ['S-3', 'Lija', 'Sin rubro → Herramientas', '$ 10,00', '30 % → 40 %', '21 %', '$ 20,00 Solo cambia el rubro'],
+      ]);
+      expect(el().querySelectorAll('table.cambios .solo-rubro')).toHaveLength(2);
+    });
+
+    it('la confirmación nombra el destino y aplicar manda el destino y la huella, sin valor', async () => {
+      await conVistaPreviaDelRubro();
+      servicio.aplicar.mockReturnValue(of({ conteos: vistaPreviaDelRubro.conteos, entradasDeHistorial: 1 }));
+
+      q<HTMLButtonElement>('button.confirmar').click();
+      await asentar();
+
+      expect(texto('.confirmacion h3')).toBe('Vas a modificar 3 artículos');
+      expect(texto('#detalle-confirmacion')).toBe(
+        'Los artículos pasan al rubro Herramientas. Revisá la vista previa antes de seguir. Esta acción no se puede deshacer.',
+      );
+
+      q<HTMLButtonElement>('.confirmar-si').click();
+      await asentar();
+
+      expect(servicio.aplicar).toHaveBeenCalledWith({
+        proveedorId: 1,
+        rubroId: null,
+        importacionId: null,
+        q: null,
+        incluirInactivos: false,
+        modo: 'CAMBIAR_RUBRO',
+        rubroDestinoId: 2,
+        huella: 'huella-1',
+      });
+      expect('valor' in servicio.aplicar.mock.calls[0][0]).toBe(false);
+      // Como con los demás modos, la operación se limpia: el destino también.
+      expect(seleccionado('#modo')).toBe('Elegí qué querés hacer');
+    });
+  });
+
   describe('selector de importación (R-202, R-203)', () => {
     const SIN_IMPORTACIONES = 'Todavía no importaste ninguna lista';
     const opciones = () => textosDe('#importacion');

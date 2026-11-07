@@ -211,6 +211,50 @@ class HuellaMasivaTest {
         assertThat(huella.calcular()).isEqualTo(esperado);
     }
 
+    private static ArticuloVigente conRubro(long id, Long rubroId, boolean precioManual) {
+        return new ArticuloVigente(id, "INT-" + id, null, "Articulo " + id, bd("100.00"), bd("160.00"), null, rubroId,
+            AlicuotaIva.IVA_21, true, Moneda.ARS, Ajustes.NINGUNO, precioManual, AjustesDePrecio.NINGUNO);
+    }
+
+    private static String huellaConRubro(OperacionMasiva operacion, Long rubroId) {
+        HuellaMasiva huella = new HuellaMasiva(operacion, FILTRO);
+        huella.agregar(conRubro(1, rubroId, false), bd("100.00"), null, bd("180.00"));
+        return huella.calcular();
+    }
+
+    @Test
+    @DisplayName("CAMBIAR_RUBRO: la linea op lleva ~ y el destino, y cada articulo su rubro de hoy (despues del precio)")
+    void formatoCambiarRubro() throws Exception {
+        String texto = "v2\n"
+            + "op|CAMBIAR_RUBRO|~|7\n"
+            + "filtro|~|~|~|false|~\n"
+            + "a|1|true|100.00|~|160.00|rubro:3|100.00|~|180.00\n"
+            + "a|2|true|100.00|~|160.00|rubro:~|true||100.00|~|160.00\n"
+            + "a|3|true|100.00|~|160.00|rubro:4|E\n";
+        String esperado = HexFormat.of().formatHex(
+            MessageDigest.getInstance("SHA-256").digest(texto.getBytes(StandardCharsets.UTF_8)));
+
+        HuellaMasiva huella = new HuellaMasiva(OperacionMasiva.cambiarRubro(7L), FILTRO);
+        huella.agregar(conRubro(1, 3L, false), bd("100.00"), null, bd("180.00"));
+        huella.agregar(conRubro(2, null, true), bd("100.00"), null, bd("160.00"));
+        huella.agregarError(conRubro(3, 4L, false));
+
+        assertThat(huella.calcular()).isEqualTo(esperado);
+    }
+
+    @Test
+    @DisplayName("el rubro de un articulo y el destino cambian la huella solo en CAMBIAR_RUBRO")
+    void rubroSoloEnCambiarRubro() {
+        String base = huellaConRubro(OperacionMasiva.cambiarRubro(7L), 3L);
+
+        assertThat(huellaConRubro(OperacionMasiva.cambiarRubro(7L), 4L)).isNotEqualTo(base);
+        assertThat(huellaConRubro(OperacionMasiva.cambiarRubro(7L), null)).isNotEqualTo(base);
+        assertThat(huellaConRubro(OperacionMasiva.cambiarRubro(8L), 3L)).isNotEqualTo(base);
+        assertThat(huellaConRubro(OperacionMasiva.cambiarRubro(7L), 3L)).isEqualTo(base);
+        assertThat(huellaConRubro(OPERACION, 3L)).isEqualTo(huellaConRubro(OPERACION, 4L))
+            .isEqualTo(huellaConRubro(OPERACION, null));
+    }
+
     @Test
     @DisplayName("la huella v1 real de este alcance (SHA-256 del texto v1) ya no coincide con la v2")
     void huellaV1YaNoCoincide() {

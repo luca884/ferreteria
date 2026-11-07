@@ -64,6 +64,12 @@ tr.fuerte td {
   font-size: var(--texto-sm);
   font-weight: 600;
 }
+/* Cambiar el rubro: la fila cuyo precio no cambia (margen propio o precio manual) lo aclara debajo del precio. */
+.solo-rubro {
+  margin: 2px 0 0;
+  color: var(--texto-suave);
+  font-size: var(--texto-sm);
+}
 .confirmacion {
   margin-top: var(--e-2);
   padding: var(--e-4);

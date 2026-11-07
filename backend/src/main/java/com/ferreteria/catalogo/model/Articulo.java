@@ -431,6 +431,21 @@ public class Articulo {
     }
 
     /**
+     * Actualizacion masiva (CU-05): pasa el articulo a otro rubro y recalcula el precio final con el contexto de ese
+     * rubro (margen propio, si no el del rubro, si no el de la ferreteria; con precio manual queda el de hoy). El costo
+     * y el margen propio no cambian. El precio se calcula antes de tocar nada: si no se puede, el articulo queda igual.
+     * Devuelve vacio si el precio no cambia (solo cambia el rubro: sin historial).
+     */
+    public Optional<CambioPrecio> cambiarRubro(Long rubroIdNuevo, ContextoPrecio ctxDelRubro) {
+        BigDecimal precioAnterior = this.precioFinal;
+        BigDecimal precioNuevo = precioConCosto(costo, ctxDelRubro);
+
+        this.rubroId = rubroIdNuevo;
+        this.precioFinal = precioNuevo;
+        return CambioPrecio.entre(this.costo, this.costo, precioAnterior, this.precioFinal);
+    }
+
+    /**
      * Fija solo el precio de lista del proveedor (filas "sin cambio" y altas). Se guarda a escala 2,
      * HALF_UP; no genera cambio de precio.
      */

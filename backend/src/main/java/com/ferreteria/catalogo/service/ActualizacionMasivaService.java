@@ -110,7 +110,8 @@ public class ActualizacionMasivaService {
      * Aplica la operacion en UNA transaccion. Primero lee y planifica; si la huella no coincide con la de
      * la vista previa (deriva) responde 409 SIN haber escrito nada. Recien despues cambia SOLO los
      * articulos modificados (ya administrados por JPA, se escriben al terminar la transaccion) y guarda
-     * una entrada de historial MASIVO por cada uno cuyo costo o precio cambia. Cualquier falla revierte todo.
+     * una entrada de historial MASIVO por cada uno cuyo costo o precio cambia (al cambiar el rubro, uno que solo cambia
+     * de rubro se escribe sin historial). Cualquier falla revierte todo.
      */
     @Transactional
     public ActualizacionMasivaResponse aplicar(AplicarActualizacionMasivaRequest request, Long usuarioId) {
@@ -135,6 +136,9 @@ public class ActualizacionMasivaService {
                 // CU-14: el precio de la vista previa queda escrito a mano.
                 case PRECIO_PORCENTAJE, PRECIO_MONTO -> articulo.fijarPrecioManual(cambio.precioNuevo());
                 case COSTO_PORCENTAJE, COSTO_MONTO -> articulo.ajustarCosto(cambio.costoNuevo(), contexto);
+                // El precio sale del contexto del destino; historial solo si cambia el precio.
+                case CAMBIAR_RUBRO -> articulo.cambiarRubro(
+                        operacion.rubroDestinoId(), preparacion.contextos().de(operacion.rubroDestinoId()));
             };
             // El planificador y la entidad calculan con el mismo PrecioCalculator: si difieren hay un bug
             // y se revierte todo (500) antes de que se escriba el historial.
@@ -169,8 +173,8 @@ public class ActualizacionMasivaService {
     // ---- preparar ----
 
     /**
-     * Resuelve y valida en el orden de R-002 (404 del proveedor, del rubro y de la importacion, 400 del modo y el valor, 400
-     * del tope contando ANTES de cargar, y al aplicar 400 si el alcance esta vacio), lee todo UNA vez
+     * Resuelve y valida en el orden de R-002 (404 del proveedor, del rubro, de la importacion y del rubro destino, 400 del
+     * modo y el valor, 400 del tope contando ANTES de cargar, y al aplicar 400 si el alcance esta vacio), lee todo UNA vez
      * (alcance, rubros, configuracion) y planifica.
      */
     private Preparacion preparar(PedidoMasivo pedido, boolean esAplicar) {
@@ -185,6 +189,11 @@ public class ActualizacionMasivaService {
         if (pedido.importacionId() != null) {
             importacionListaRepository.findScoped(pedido.importacionId())
                     .orElseThrow(() -> new ResourceNotFoundException("Importación no encontrada"));
+        }
+        // CAMBIAR_RUBRO: un destino de otra ferreteria da 404, igual que uno inexistente, antes de validar.
+        if (pedido.rubroDestinoId() != null) {
+            rubroRepository.findScoped(pedido.rubroDestinoId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Rubro no encontrado"));
         }
         validar(pedido);
         FiltroArticulos filtro = pedido.toFiltro();
