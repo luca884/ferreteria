@@ -33,12 +33,12 @@ describe('Compras', () => {
     ...cambios,
   });
 
-  const pagina = (items: CompraResumen[]): PageResponse<CompraResumen> => ({
+  const pagina = (items: CompraResumen[], totalPages = 1): PageResponse<CompraResumen> => ({
     items,
     page: 0,
     size: 20,
     totalElements: items.length,
-    totalPages: 1,
+    totalPages,
   });
 
   const detalle = (id: number): CompraResponse => ({
@@ -140,6 +140,17 @@ describe('Compras', () => {
     [...el().querySelectorAll('button')].find((b) => b.textContent?.trim() === 'Limpiar')!.click();
     await refrescar();
     expect(api.listar).toHaveBeenLastCalledWith({ page: 0 });
+  });
+
+  it('el paginador va arriba de la tabla: no hay que bajar hasta el final para pasar de página', async () => {
+    await crear();
+    api.listar.mockReturnValue(of(pagina([resumen(2), resumen(1)], 2)));
+    (el().querySelector('form.filtros') as HTMLFormElement).dispatchEvent(new Event('submit'));
+    await refrescar();
+
+    const paginador = el().querySelector('nav.paginas')!;
+    const tabla = el().querySelector('table.compras')!;
+    expect(paginador.compareDocumentPosition(tabla) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
   it('elegir una compra muestra sus renglones con el costo y el precio de antes y de después', async () => {

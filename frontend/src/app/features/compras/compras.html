@@ -43,6 +43,22 @@
         {{ filtrada() ? 'No hay compras con esos filtros.' : 'Todavía no hay compras.' }}
       </p>
     } @else {
+      @if (actual.totalPages > 1) {
+        <nav class="paginas" aria-label="Páginas de compras">
+          <button type="button" class="secundario chico" [disabled]="actual.page === 0" (click)="cargar(actual.page - 1)">
+            Anterior
+          </button>
+          <span>Página {{ actual.page + 1 }} de {{ actual.totalPages }}</span>
+          <button
+            type="button"
+            class="secundario chico"
+            [disabled]="actual.page + 1 >= actual.totalPages"
+            (click)="cargar(actual.page + 1)"
+          >
+            Siguiente
+          </button>
+        </nav>
+      }
       <table class="compras">
         <caption class="sr-only">
           Compras, las más nuevas primero. Elegí una para ver su detalle.
@@ -72,23 +88,6 @@
           }
         </tbody>
       </table>
-
-      @if (actual.totalPages > 1) {
-        <nav class="paginas" aria-label="Páginas de compras">
-          <button type="button" class="secundario chico" [disabled]="actual.page === 0" (click)="cargar(actual.page - 1)">
-            Anterior
-          </button>
-          <span>Página {{ actual.page + 1 }} de {{ actual.totalPages }}</span>
-          <button
-            type="button"
-            class="secundario chico"
-            [disabled]="actual.page + 1 >= actual.totalPages"
-            (click)="cargar(actual.page + 1)"
-          >
-            Siguiente
-          </button>
-        </nav>
-      }
     }
   } @else if (cargando()) {
     <p class="ayuda estado-vacio">Cargando…</p>

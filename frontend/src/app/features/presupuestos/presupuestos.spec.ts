@@ -231,6 +231,16 @@ describe('Presupuestos', () => {
       await click(boton('Anterior'));
       expect(api.listar).toHaveBeenLastCalledWith({ page: 0 });
     });
+
+    it('el paginador va arriba de la tabla: no hay que bajar hasta el final para pasar de página', async () => {
+      await crear();
+      api.listar.mockReturnValue(of(pagina([resumen(12)], { page: 0, totalPages: 2, totalElements: 21 })));
+      await buscar();
+
+      const paginador = el().querySelector('nav.paginas')!;
+      const tabla = el().querySelector('table.presupuestos')!;
+      expect(paginador.compareDocumentPosition(tabla) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    });
   });
 
   describe('filtros', () => {

@@ -284,6 +284,14 @@ describe('MovimientosCuenta (CC-074, CC-076, CC-078, CC-096)', () => {
       expect((boton('Siguiente') as HTMLButtonElement).disabled).toBe(false);
     });
 
+    it('el paginador va arriba de la tabla: no hay que bajar hasta el final para pasar de página', async () => {
+      await crear({ extracto: (_c, _f, page) => of(veinticinco(page)) });
+
+      const paginador = el().querySelector('nav.paginas')!;
+      const tabla = el().querySelector('table.movimientos')!;
+      expect(paginador.compareDocumentPosition(tabla) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    });
+
     it('«Siguiente» pide la página 1 y muestra los 5 restantes con su saldo real', async () => {
       await crear({ extracto: (_c, _f, page) => of(veinticinco(page)) });
 

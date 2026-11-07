@@ -239,6 +239,14 @@ describe('Clientes', () => {
       expect(boton('Anterior')!.disabled).toBe(true);
     });
 
+    it('el paginador va arriba de la tabla: no hay que bajar hasta el final para pasar de página', async () => {
+      await crear([], true, vi.fn(() => of(pagina([ana], 0, 3))));
+
+      const paginador = el().querySelector('nav.paginas')!;
+      const tabla = el().querySelector('table')!;
+      expect(paginador.compareDocumentPosition(tabla) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    });
+
     it('con una sola página no hay navegación', async () => {
       await crear();
 
