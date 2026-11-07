@@ -338,5 +338,20 @@ describe('ResumenCaja (CC-025)', () => {
       const motivos = Array.from(el().querySelectorAll('table tbody tr')).map((tr) => limpio(tr.children[2]));
       expect(motivos).toEqual(['Banco', 'Cadete', 'Cambio']);
     });
+
+    it('los totales «Gastos» y «Retiros» también salen restando, como las anulaciones; «Ingresos», sin signo', async () => {
+      await crear(detalle({ ingresos: 1000, gastos: 150, retiros: 100, movimientos }));
+
+      expect(limpio(linea('Gastos')?.querySelector('strong'))).toBe('−$ 150,00');
+      expect(limpio(linea('Retiros')?.querySelector('strong'))).toBe('−$ 100,00');
+      expect(limpio(linea('Ingresos')?.querySelector('strong'))).toBe('$ 1.000,00');
+    });
+
+    it('en 0 los totales de gastos y retiros van sin signo', async () => {
+      await crear(detalle());
+
+      expect(limpio(linea('Gastos')?.querySelector('strong'))).toBe('$ 0,00');
+      expect(limpio(linea('Retiros')?.querySelector('strong'))).toBe('$ 0,00');
+    });
   });
 });

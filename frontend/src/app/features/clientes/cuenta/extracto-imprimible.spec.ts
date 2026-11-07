@@ -161,6 +161,17 @@ describe('ExtractoImprimible (CC-099)', () => {
     expect(texto('.saldo-final')).not.toContain('-');
   });
 
+  it('en la columna «Saldo», un saldo negativo de la línea se dice «a favor»; uno deudor queda igual', async () => {
+    await abrir(
+      extracto([
+        linea(2, { tipo: 'COBRO', referencia: 'Recibo N.º 14', debe: 0, haber: 6200, saldo: -5000, reciboId: 14, comprobanteId: null }),
+        linea(1, { debe: 1200, haber: 0, saldo: 1200 }),
+      ]),
+    );
+
+    expect(filas().map((f) => celdas(f)[5])).toEqual(['$ 5.000,00 a favor', '$ 1.200,00']);
+  });
+
   it('la tabla lista fecha, tipo, comprobante, debe, haber y saldo real, en el mismo orden de columnas que la pantalla (CC-096) y más nuevo arriba', async () => {
     await abrir(
       extracto([

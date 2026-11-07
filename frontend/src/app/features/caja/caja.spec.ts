@@ -465,11 +465,11 @@ describe('Caja (CU-10)', () => {
       expect(el().querySelector('[role="alertdialog"]')).toBeNull();
     });
 
-    it('la caja de otro día avisa que hay que cerrarla y solo deja cerrarla', async () => {
+    it('la caja de otro día avisa que hay que cerrarla para vender o cargar movimientos, y solo deja cerrarla', async () => {
       await crear(conCaja(abierta({ estado: 'DE_OTRO_DIA', fechaApertura: '2026-10-15T08:00:00' })));
 
       expect(normal(el().querySelector('.alerta.advertencia')?.textContent)).toBe(
-        'La caja del 15/10 sigue abierta. Cerrala antes de vender.',
+        'La caja del 15/10 sigue abierta. Cerrala antes de vender o cargar movimientos.',
       );
       expect(el().querySelector('form.movimiento')).toBeNull();
       expect(el().querySelector('form.cierre')).not.toBeNull();

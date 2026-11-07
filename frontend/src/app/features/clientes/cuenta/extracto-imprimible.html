@@ -68,7 +68,7 @@
               </td>
               <td class="num">{{ linea.debe > 0 ? (linea.debe | monto) : '' }}</td>
               <td class="num">{{ linea.haber > 0 ? (linea.haber | monto) : '' }}</td>
-              <td class="num">{{ linea.saldo | monto }}</td>
+              <td class="num">{{ textoDeSaldo(linea.saldo) }}</td>
             </tr>
           }
         </tbody>

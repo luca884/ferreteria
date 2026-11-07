@@ -16,7 +16,7 @@ import {
   MovimientoCajaRequest,
   TIPO_MOVIMIENTO_LABELS,
   TipoMovimientoCaja,
-  avisoParaVender,
+  avisoCajaDeOtroDia,
   fechaHoraLocal,
   tiposPara,
 } from './caja.models';
@@ -97,7 +97,7 @@ export class Caja implements OnInit {
   protected readonly esDeOtroDia = computed(() => this.vigente()?.estado === 'DE_OTRO_DIA');
   protected readonly avisoOtroDia = computed(() => {
     const vigente = this.vigente();
-    return vigente?.estado === 'DE_OTRO_DIA' ? avisoParaVender(vigente) : null;
+    return vigente ? avisoCajaDeOtroDia(vigente) : null;
   });
   protected readonly fechaHora = fechaHoraLocal;
 

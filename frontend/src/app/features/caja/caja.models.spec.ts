@@ -3,6 +3,7 @@ import {
   CajaVigente,
   DetalleCaja,
   DetalleCajaRespuesta,
+  avisoCajaDeOtroDia,
   avisoParaVender,
   conCobranzas,
   diaDeCaja,
@@ -43,6 +44,14 @@ describe('caja.models', () => {
 
   it('con la caja abierta hoy no hay aviso', () => {
     expect(avisoParaVender(vigente('ABIERTA'))).toBeNull();
+  });
+
+  it('en la pantalla Caja, la de otro día avisa que hay que cerrarla para vender o cargar movimientos', () => {
+    expect(avisoCajaDeOtroDia(vigente('DE_OTRO_DIA', '2026-10-15T09:00:00'))).toBe(
+      'La caja del 15/10 sigue abierta. Cerrala antes de vender o cargar movimientos.',
+    );
+    expect(avisoCajaDeOtroDia(vigente('ABIERTA'))).toBeNull();
+    expect(avisoCajaDeOtroDia(vigente('SIN_CAJA'))).toBeNull();
   });
 
   it('el retiro solo lo ve el dueño', () => {

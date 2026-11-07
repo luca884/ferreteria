@@ -68,10 +68,10 @@
       <span>Ingresos</span>&ngsp;<strong>{{ detalle().ingresos | monto }}</strong>
     </li>
     <li>
-      <span>Gastos</span>&ngsp;<strong>{{ detalle().gastos | monto }}</strong>
+      <span>Gastos</span>&ngsp;<strong>{{ restado(detalle().gastos) }}</strong>
     </li>
     <li>
-      <span>Retiros</span>&ngsp;<strong>{{ detalle().retiros | monto }}</strong>
+      <span>Retiros</span>&ngsp;<strong>{{ restado(detalle().retiros) }}</strong>
     </li>
     <li class="subtotal">
       <span>Efectivo esperado</span>&ngsp;<strong>{{ detalle().efectivoEsperado | monto }}</strong>
