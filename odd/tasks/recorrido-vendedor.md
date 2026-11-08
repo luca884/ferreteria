@@ -32,7 +32,7 @@ Restricciones: se escribe solo en la Ferretería de Prueba, con lo que un vended
 
   Commit `6532eb65` · Risk: none
 - [x] T6 · S3 (H3, H4) · ruta: delegada (mismo writer) · Aceptación: S3 H3 y el texto de H4 en `docs/spec.md` · Evidencia: relectura. CU-03 p. 5 y CU-06 p. 2 («Última actualización» / «Costo actualizado el»); CU-07 con los botones de cobro y el texto de H4. Además, el 403 por ruta de H2 después de la tabla de roles y en CU-13 p. 6. Commit `44f7f16b` · Risk: none
-- [ ] T7 · S3 · ruta: inline + `odd-verifier` · Aceptación: suites de backend y frontend, `npx ng build`, prueba de punta a punta en local (antes con `main`, después con la rama) y `odd-verifier` por el item 2 · Evidencia: — · Risk: item 2
+- [x] T7 · S3 · ruta: inline + `odd-verifier` · Aceptación: suites de backend y frontend, `npx ng build`, prueba de punta a punta en local (antes con `main`, después con la rama) y `odd-verifier` por el item 2 · Evidencia: L5 (suites y punta a punta del writer), L6 (verificador: fail con 1 blocker en H4), L7 (corrección `b173997a`), L8 (recheck: pass) · Risk: item 2
 
 ## Log
 
@@ -95,3 +95,8 @@ Restricciones: se escribe solo en la Ferretería de Prueba, con lo que un vended
   - Test nuevo: RED con el código anterior («expected '' to be '2.630'») → GREEN 141/141.
   - Suite del front: 164/164 archivos. `ng build` OK, con el aviso de presupuesto de siempre (4.95 kB).
   - Próximo paso: recheck del Blocker 1 en el navegador.
+- L8 (2026-11-08) Recheck del Blocker 1 (`odd-verifier`, Opus) sobre `b173997a`: **pass**.
+  - En ego-browser, en local, con clics de 30, 80 y 150 ms en el nombre «Débito» y en la fila a 20 px del campo de Crédito, la sugerencia queda como con Enter: «240», selección `[0,3]`, «Completo».
+  - Lo que ya andaba sigue igual: Enter, el clic en el campo, no pisar una forma con monto, sin resto no sugiere, y Tab no sugiere.
+  - Advertencia: con un clic sintético de 0 ms queda «240,00», todo seleccionado. Escribir reemplaza la sugerencia; un clic humano sale bien.
+  - Feature cerrada. Queda push, PR y merge (Luca), y deployar para que llegue a producción.
