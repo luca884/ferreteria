@@ -19,6 +19,17 @@ Restricciones: la unidad ya se guarda por renglón (`ItemComprobante.unidad`, `I
 - S4a (supuesto): GDS no lo cubre (muestra la unidad en una columna aparte, L2).
 - S5: «la unidad en la compra y en Movimientos» — Aceptación: la cantidad lleva unidad en el detalle de la compra, en la vista previa de la compra nueva (cantidad y stock antes → después) y en el stock de la búsqueda de la compra; en Movimientos, la cantidad y el saldo llevan unidad. El renglón «Sin artículo» de la compra no tiene unidad y queda como está — Checks: specs de compras y movimientos
 - S5a (supuesto): GDS no lo cubre. El campo de cantidad de la carga queda sin unidad (L5).
+- S6: «suma lo que esta fuera de lo pedido» (L7). Lo que la sesión había listado: «los costos de la compra, el precio unitario de la factura y el precio en vivo del formulario». Aceptación: con `porUnidad`, el precio o costo lleva «/ kg», «/ m» o «/ l», y nada si es por pieza, en estos lugares:
+  - el costo de los resultados de búsqueda de la compra nueva;
+  - el costo anterior y nuevo, el costo real anterior y nuevo, y el precio anterior y nuevo de la vista previa de la compra;
+  - el costo anterior, el costo y el precio antes y después del detalle de la compra;
+  - el precio unitario de la factura (A y B/C/X);
+  - el precio en vivo del formulario del artículo, con la unidad elegida en el formulario.
+
+  Checks: specs de esos componentes.
+- S6a (supuesto): por la misma regla, el precio unitario de la hoja de venta (`venta-hoja`) y de la del remito y el presupuesto (`documento-no-fiscal-hoja`) también lleva el sufijo, para que las cuatro hojas queden iguales.
+- S6b (fuera): el «Precio nuevo» de la importación, porque `CambioPlaneado` no trae la unidad del artículo que ya existe (habría que cambiar el contrato del backend), y el artículo nuevo ya dice «Unidad: Kilo» en su detalle. El desglose «De dónde sale el precio» también queda afuera: es la cuenta paso a paso del precio de una unidad de venta.
+- S7: «tambien lo de sinprobar» — Aceptación: en la app local, una venta por kilo a un cliente Responsable Inscripto da la X con el formato de la A (IVA discriminado), y su renglón dice «1,5 kilos» y el precio sin IVA «/ kg». La A, B o C con CAE real necesita el certificado de homologación de ARCA (rama 11): queda cubierta por `factura-hoja.spec.ts` y no se prueba en la app.
 
 ## Tasks
 
@@ -27,6 +38,8 @@ Restricciones: la unidad ya se guarda por renglón (`ItemComprobante.unidad`, `I
 - [x] T3 · S4, S4a · ruta: inline · Aceptación: sufijo de precio compartido en `core/formato/unidad.ts` y usado en las cinco pantallas · Evidencia: RED 9 fallas (stub de `porUnidad`) → GREEN 6 specs; commit `64dd9775` · Risk: none
 - [x] T4 · S5, S5a · ruta: inline · Aceptación: compras y movimientos con unidad · Evidencia: RED 6 fallas → GREEN 3 specs; commit `a99ec5cd` · Risk: none
 - [x] T5 · S1-S5 · ruta: inline (recorrido delegado a un worker Opus con ego-browser) · Aceptación: suite backend, suite frontend, `npx ng build` y recorrido en la app local con ego-browser (importación con «Kg.» y con «x kg», factura, mostrador, compra y movimientos) · Evidencia: `./mvnw test` 6441/0 fallas, BUILD SUCCESS; `npx ng test --watch=false` 164/164 archivos; `npx ng build` OK (aviso de presupuesto de `dialogo-cobro`, previo); recorrido 5/5 PASA (L6) · Risk: none
+- [x] T6 · S6, S6a · ruta: delegada (Writer trigger: backstop de contexto ~150k de la sesión) · Aceptación: los lugares de S6 y S6a con `porUnidad`, con RED → GREEN por spec · Evidencia: RED 8 fallas de aserción en 6 specs → GREEN 339/339. Se ajustaron 5 expectativas viejas con artículos METRO o KILO. Suite frontend 164/164 archivos (4407 tests), build OK; spot-check del parent: `factura-hoja` y `nueva-compra` en verde; commit `d09a59e0`. El precio en vivo usa `unidadElegida` (la del formulario) en sus dos ramas · Risk: none
+- [x] T7 · S6, S7 · ruta: inline (recorrido delegado a un worker con ego-browser) · Aceptación: suite frontend, `npx ng build` y recorrido local (compra con costos «/ kg», hoja de la venta con precio «/ kg», X de A a un RI con «1,5 kilos») · Evidencia: suite y build en T6; recorrido 4/4 PASA (L8); spot-check del parent en la captura de la X de A · Risk: none
 
 ## Log
 
@@ -71,3 +84,19 @@ Restricciones: la unidad ya se guarda por renglón (`ItemComprobante.unidad`, `I
     - el precio nuevo de la importación.
   - Datos locales creados: U36-1 a U36-7, el remito 00036-00003601 y la venta 27.
   - App local apagada y MySQL detenido.
+- L7 (2026-11-08) Pedido nuevo, textual:
+  > dame los comandos y luego suma lo que esta fuera de lo pedido y tambien lo de sinprobar, o es mejor hacerlo ahroa y leugo hacer el merge
+
+  Respuesta: conviene ahora, en la misma rama, para tener un solo PR y un solo deploy; los comandos van al final. Se agregaron S6, S6a, S6b y S7, y las tareas T6 y T7. T6 se delega a un `odd-implementer` porque la sesión pasó el backstop de contexto.
+- L8 (2026-11-08) T7, recorrido local (worker Opus con ego-browser, Dueño de El Tornillo). Pasan los 4 pasos.
+  - **Compra.** Búsqueda: «$ 4.000,00 / kg», «$ 900,00 / m», y U36-5 sin sufijo. En la vista previa y el detalle, costos y precios de U36-1 con «/ kg»; el costo real, con un recargo de prueba, también. Los subtotales van sin sufijo.
+  - **Formulario.** Precio en vivo «$ 6.534,00 / kg». Al elegir Metro sin guardar pasa a «/ m», y el artículo no quedó cambiado.
+  - **Hojas.** En la factura X de la venta 28: «1,5 kilos | … | $ 6.534,00 / kg | $ 9.801,00», y U36-5 sin sufijo. La hoja interna de la venta 28 dice lo mismo.
+  - **X con formato de A (S7).** Venta 29 a un RI con CUIT 30-71111111-1: «1,5 kilos | Clavo punta París 2" x kg | $ 5.400,00 / kg | 21 % | $ 8.100,00» e «Importe neto gravado $ 8.100,00».
+  - **Rarezas.**
+    - En el detalle de la compra, el sufijo ensancha las columnas de plata y la de Artículo queda angosta (la descripción larga ocupa 4 o 5 líneas). No hay desborde.
+    - El contador «suben/bajan/iguales» de la vista previa no cuenta el recargo. Ya pasaba antes y no tiene que ver con esta feature.
+  - **Sin probar.**
+    - La hoja del presupuesto y la del remito en la app: la cubre `documento-no-fiscal-hoja.spec.ts`.
+    - La A, B o C con CAE real: hace falta homologación de ARCA (rama 11).
+  - **Datos locales.** El remito 00036-00003602, las ventas 28 y 29, y el cliente «RI Recorrido 36b SA». App local apagada y MySQL detenido.
