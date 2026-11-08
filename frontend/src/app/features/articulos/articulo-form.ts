@@ -432,6 +432,12 @@ export class ArticuloForm implements OnInit {
     return avisoMargenNegativo(v.costo, this.recargosEnVivo(), cotizacion, v.alicuotaIva, v.precioFinal);
   });
 
+  /**
+   * La unidad elegida en el formulario, para el « / kg» del precio en vivo (#36): el Dueño la puede cambiar antes de
+   * guardar, así que no sale del artículo guardado.
+   */
+  protected readonly unidadElegida = computed(() => this.valores().unidad);
+
   /** Precio final con lo que hay cargado, con la misma cuenta y redondeo que el backend. */
   protected readonly precioEnVivo = computed(() => {
     const config = this.configuracion();

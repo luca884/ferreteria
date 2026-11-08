@@ -3,7 +3,7 @@ import { Component, computed, input } from '@angular/core';
 import { cuitConGuiones } from '../../core/formato/cuit';
 import { formatearFecha } from '../../core/formato/fecha-hora';
 import { MontoPipe, RestadoPipe } from '../../core/formato/monto';
-import { cantidadConUnidad } from '../../core/formato/unidad';
+import { cantidadConUnidad, porUnidad } from '../../core/formato/unidad';
 import { CONDICION_IVA_FERRETERIA_LABELS } from '../../features/admin-ferreterias/ferreteria-admin.models';
 import { fechaCompletaLocal } from '../../features/clientes/cuenta/cobranza.models';
 import { DatosFiscales } from '../../features/datos-fiscales/datos-fiscales.service';
@@ -34,6 +34,8 @@ export class DocumentoNoFiscalHoja {
   protected readonly leyenda = LEYENDA_DOCUMENTO_NO_FISCAL;
   /** «26,5 metros», «1 unidad»: la cantidad con su unidad, como en el resto de la app. */
   protected readonly cantidadConUnidad = cantidadConUnidad;
+  /** « / m» después del precio unitario (#36), como en la factura; por pieza no lleva. */
+  protected readonly porUnidad = porUnidad;
   protected readonly fecha = computed(() => fechaCompletaLocal(this.documento().fecha));
   protected readonly validoHasta = computed(() => fechaDia(this.documento().validoHasta));
   protected readonly inicioActividades = computed(() =>

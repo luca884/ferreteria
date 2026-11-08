@@ -5,7 +5,7 @@ import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { PageResponse } from '../../core/api/page.models';
 import { AuthService } from '../../core/auth/auth.service';
 import { MontoPipe } from '../../core/formato/monto';
-import { cantidadConUnidad } from '../../core/formato/unidad';
+import { cantidadConUnidad, porUnidad } from '../../core/formato/unidad';
 import { BarraAcciones } from '../../shared/barra-acciones';
 import { DialogoDetalle } from '../../shared/dialogo-detalle';
 import { Proveedor } from '../proveedores/proveedor.models';
@@ -36,6 +36,7 @@ export function fechaDeCompra(fecha: string): string {
 })
 export class Compras implements OnInit {
   protected readonly cantidadConUnidad = cantidadConUnidad;
+  protected readonly porUnidad = porUnidad;
   private readonly api = inject(ComprasService);
   private readonly proveedoresApi = inject(ProveedoresService);
   private readonly route = inject(ActivatedRoute);

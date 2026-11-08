@@ -191,6 +191,40 @@ describe('Compras', () => {
     expect(cantidades).toEqual(['20 unidades', '20,5 kilos']);
   });
 
+  it('en el detalle, el costo y los precios dicen por qué unidad son; por pieza y el subtotal no llevan (#36)', async () => {
+    await crear();
+    const conKilos = detalle(2);
+    conKilos.renglones = [
+      conKilos.renglones[0],
+      {
+        ...conKilos.renglones[0],
+        renglon: 2,
+        articuloId: 9,
+        descripcion: 'Clavo punta París 2"',
+        unidad: 'KILO',
+        cantidad: 20.5,
+        costoAnterior: 3000,
+        costoUnitario: 3300,
+        precioAnterior: 4000,
+        precioNuevo: 4400,
+        subtotal: 67650,
+      },
+    ];
+    api.obtener.mockReturnValue(of(conKilos));
+
+    (el().querySelector('table.compras tbody tr button') as HTMLButtonElement).click();
+    await refrescar();
+
+    // Artículo, cantidad, costo antes, costo de la compra, precio antes, precio después y subtotal.
+    const filas = [...el().querySelectorAll('app-dialogo-detalle [role=dialog] tbody tr')].map((tr) =>
+      [...tr.querySelectorAll('td')].slice(2).map((td) => td.textContent!.replace(/\s+/g, ' ').trim()),
+    );
+    expect(filas).toEqual([
+      ['$ 100,00', '$ 110,00', '$ 157,30', '$ 173,03', '$ 2.200,00'],
+      ['$ 3.000,00 / kg', '$ 3.300,00 / kg', '$ 4.000,00 / kg', '$ 4.400,00 / kg', '$ 67.650,00'],
+    ]);
+  });
+
   it('sin compras avisa y si la carga falla ofrece reintentar', async () => {
     await crear([]);
     expect(el().textContent).toContain('Todavía no hay compras.');

@@ -74,7 +74,7 @@ describe('FacturaHoja (CU-07 paso 5, S5, S6, S12, S13)', () => {
 
     expect(filas('.renglones')).toEqual([
       ['2 unidades', 'Martillo', '$ 605,00', '$ 1.210,00'],
-      ['1,5 kilos', 'Clavo punta París 2"', '$ 4.000,00', '$ 6.000,00'],
+      ['1,5 kilos', 'Clavo punta París 2"', '$ 4.000,00 / kg', '$ 6.000,00'],
     ]);
   });
 
@@ -83,7 +83,25 @@ describe('FacturaHoja (CU-07 paso 5, S5, S6, S12, S13)', () => {
 
     expect(filas('.renglones')).toEqual([
       ['2 unidades', 'Martillo', '$ 500,00', '21 %', '$ 1.000,00'],
-      ['1,5 kilos', 'Clavo punta París 2"', '$ 3.305,79', '21 %', '$ 4.958,68'],
+      ['1,5 kilos', 'Clavo punta París 2"', '$ 3.305,79 / kg', '21 %', '$ 4.958,68'],
+    ]);
+  });
+
+  it('el precio unitario dice por qué unidad es: «/ kg»; por pieza y el importe no llevan (#36)', async () => {
+    await crear(documentoB(), ventaConKilos());
+
+    expect(filas('.renglones').map((f) => [f[2], f[3]])).toEqual([
+      ['$ 605,00', '$ 1.210,00'],
+      ['$ 4.000,00 / kg', '$ 6.000,00'],
+    ]);
+  });
+
+  it('en la A, el precio unitario sin IVA dice por qué unidad es; por pieza y el subtotal no llevan (#36)', async () => {
+    await crear(documentoARI(), ventaConKilos());
+
+    expect(filas('.renglones').map((f) => [f[2], f[4]])).toEqual([
+      ['$ 500,00', '$ 1.000,00'],
+      ['$ 3.305,79 / kg', '$ 4.958,68'],
     ]);
   });
 

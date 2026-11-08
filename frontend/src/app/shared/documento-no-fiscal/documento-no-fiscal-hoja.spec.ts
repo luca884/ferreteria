@@ -65,7 +65,7 @@ describe('DocumentoNoFiscalHoja', () => {
         .join(' '),
     );
     expect(filas[0]).toBe('2 unidades Martillo $ 1.000,00 10 % $ 1.800,00');
-    expect(filas[1]).toBe('1,5 kilos Clavos $ 400,00 $ 600,00');
+    expect(filas[1]).toBe('1,5 kilos Clavos $ 400,00 / kg $ 600,00');
     const totales = texto('.totales')!;
     expect(totales).toContain('Subtotal $ 2.600,00');
     expect(totales).toContain('Descuento −$ 200,00');
@@ -91,6 +91,30 @@ describe('DocumentoNoFiscalHoja', () => {
       limpio(f.querySelector('td')?.textContent),
     );
     expect(cantidades).toEqual(['26,5 metros', '1 unidad', '1.250 litros']);
+  });
+
+  it('el precio unitario dice por qué unidad es: «/ m», «/ l»; por pieza y el importe no llevan (#36)', async () => {
+    const renglon = documentoDePrueba().renglones[0];
+    await armar(
+      documentoDePrueba({
+        renglones: [
+          { ...renglon, renglon: 1, descripcion: 'Cable', unidad: 'METRO' },
+          { ...renglon, renglon: 2, descripcion: 'Martillo', unidad: 'UNIDAD' },
+          { ...renglon, renglon: 3, descripcion: 'Pintura', unidad: 'LITRO' },
+        ],
+      }),
+    );
+
+    // Cantidad, descripción, precio unitario, descuento e importe.
+    const precios = Array.from(el().querySelectorAll('tbody tr')).map((f) => {
+      const celdas = f.querySelectorAll('td');
+      return [limpio(celdas[2].textContent), limpio(celdas[4].textContent)];
+    });
+    expect(precios).toEqual([
+      ['$ 1.000,00 / m', '$ 1.800,00'],
+      ['$ 1.000,00', '$ 1.800,00'],
+      ['$ 1.000,00 / l', '$ 1.800,00'],
+    ]);
   });
 
   it('sin cliente, sin descuento y sin observaciones no muestra esas partes', async () => {

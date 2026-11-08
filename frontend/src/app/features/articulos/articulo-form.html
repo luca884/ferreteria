@@ -474,7 +474,7 @@
           <span class="precio-en-vivo-etiqueta">{{ hayAjustesPrecio() ? 'Precio calculado (sin ajustes)' : 'Precio final' }}</span>
           @if (vivoDeAjustes(); as vivo) {
             @if (vivo.precio !== null) {
-              <strong>{{ vivo.precio }}</strong>
+              <strong>{{ vivo.precio }}{{ porUnidad(unidadElegida()) }}</strong>
             } @else {
               <span class="pista">Todavía no hay cotización del dólar para calcular el precio.</span>
             }
@@ -482,7 +482,7 @@
               <span class="costo-en-vivo pista">Costo con los ajustes: {{ vivo.costo }}</span>
             }
           } @else if (precioEnVivo() !== null) {
-            <strong>{{ precioEnVivo() | monto }}</strong>
+            <strong>{{ precioEnVivo() | monto }}{{ porUnidad(unidadElegida()) }}</strong>
           } @else if (sinDolar()) {
             <span class="pista">Todavía no hay cotización del dólar para calcular el precio.</span>
           } @else {

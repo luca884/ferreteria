@@ -85,6 +85,22 @@ describe('VentaHoja: renglones (QA B-2 y C)', () => {
       expect(filas().map((f) => f[1])).toEqual(['25,5 metros', '1 unidad']);
     });
 
+    it('el precio dice por qué unidad es: «/ m»; por pieza y el total del renglón no llevan (#36)', async () => {
+      const base = ventaDePrueba();
+      await crear({
+        ...base,
+        renglones: [
+          { ...base.renglones[0], descripcion: 'Cable', unidad: 'METRO' },
+          { ...base.renglones[0], renglon: 2, descripcion: 'Martillo', unidad: 'UNIDAD' },
+        ],
+      });
+
+      expect(filas().map((f) => [f[2], f[4]])).toEqual([
+        ['$ 1.500,00 / m', '$ 2.700,00'],
+        ['$ 1.500,00', '$ 2.700,00'],
+      ]);
+    });
+
     it('dice de qué remito o presupuesto salió, con su número y un link a su pop-up', async () => {
       await crear(ventaDePrueba({ remitoId: 4, remitoNumero: 2 }), true);
 

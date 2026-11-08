@@ -263,6 +263,19 @@ describe('NuevaCompra', () => {
       expect(el().querySelector('.resultados [role=listbox]')).not.toBeNull();
     });
 
+    it('el costo dice por qué unidad es: «/ kg»; por pieza no lleva (#36)', async () => {
+      await crear();
+      articulos.buscar.mockReturnValue(
+        of({ items: [{ ...clavo, unidad: 'KILO' }, barreta], page: 0, size: 8, totalElements: 2, totalPages: 1 }),
+      );
+      await escribir('input[name=busqueda]', 'clavo');
+      campo<HTMLFormElement>('form.buscador').dispatchEvent(new Event('submit'));
+      await refrescar();
+
+      const costos = opciones().map((o) => o.querySelectorAll('span')[2].textContent!.replace(/\s+/g, ' ').trim());
+      expect(costos).toEqual(['$ 578.378,00 / kg', '$ 9.500,00']);
+    });
+
     it('con más resultados que los que se ven, dice cuántos hay: «8 de N: escribí más para achicar.»', async () => {
       await crear();
       await buscarClavo(27);
@@ -1002,6 +1015,46 @@ describe('NuevaCompra', () => {
       expect(el().querySelector('section.vista-previa tbody td.stock')!.textContent!.replace(/\s+/g, ' ').trim()).toBe(
         '0 → 20,5 kilos',
       );
+    });
+
+    it('en la vista previa los costos y los precios dicen por qué unidad son; por pieza y el subtotal no llevan (#36)', async () => {
+      await crear();
+      const porKilo = {
+        ...plan.renglones[0],
+        articuloId: 2,
+        codigoInterno: 'CLA-1',
+        descripcion: 'Clavo punta París 2"',
+        unidad: 'KILO' as const,
+        costoAnterior: 3000,
+        costoNuevo: 3300,
+        costoRealAnterior: 3100,
+        costoRealNuevo: 3400,
+        precioAnterior: 4000,
+        precioNuevo: 4400,
+        subtotal: 66000,
+      };
+      api.vistaPrevia.mockReturnValue(
+        of({ ...plan, recargos: [{ nombre: 'Flete', porcentaje: 10 }], renglones: [porKilo, plan.renglones[0]] }),
+      );
+      await cargarCompra();
+
+      boton('Ver vista previa')!.click();
+      await refrescar();
+
+      // Artículo, cantidad, costo antes y nuevo, costo real antes y nuevo, precio antes y nuevo, stock y subtotal.
+      const filas = [...el().querySelectorAll('section.vista-previa tbody tr')].map((tr) =>
+        [...tr.querySelectorAll('td')].map((td) => td.textContent!.replace(/\s+/g, ' ').trim()),
+      );
+      expect(filas[0].slice(2, 8)).toEqual([
+        '$ 3.000,00 / kg',
+        '$ 3.300,00 / kg',
+        '$ 3.100,00 / kg',
+        '$ 3.400,00 / kg',
+        '$ 4.000,00 / kg',
+        '$ 4.400,00 / kg',
+      ]);
+      expect(filas[0][9]).toBe('$ 66.000,00');
+      expect(filas[1].slice(2, 8)).toEqual(['$ 100,00', '$ 210,00', '$ 100,00', '$ 210,00', '$ 157,30', '$ 330,33']);
     });
 
     it('los totales muestran neto, recargos, subtotal sin IVA, el IVA de cada alícuota y el total', async () => {
