@@ -63,8 +63,8 @@ describe('appConfig: locale es-AR', () => {
     const el = fixture.nativeElement as HTMLElement;
     const celda = (selector: string) => (el.querySelector(selector)?.textContent ?? '').trim();
 
-    expect(celda('.precio')).toBe(`$${NBSP}170,00`);
-    expect(celda('.costo')).toBe(`$${NBSP}1.234,50`);
+    expect(celda('.precio')).toBe(`$${NBSP}170,00 / m`);
+    expect(celda('.costo')).toBe(`$${NBSP}1.234,50 / m`);
     expect(celda('.margen')).toBe(`35,5${NBSP}%`);
     expect(celda('.stock')).toBe('12,5 metros');
   });

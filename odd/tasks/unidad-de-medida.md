@@ -17,15 +17,15 @@ Restricciones: la unidad ya se guarda por renglón (`ItemComprobante.unidad`, `I
 - S3a (supuesto): GDS pega la unidad al final de la descripción del renglón (L2); acá va en la columna Cantidad, como ya la imprimen el remito y el presupuesto. ARCA no la exige ni la prohíbe (L2).
 - S4: ««/ kg» en los precios» — Aceptación: el precio unitario lleva «/ kg», «/ m» o «/ l» en el ticket del mostrador, la ficha del artículo, los resultados de búsqueda, la lista de Artículos (costo y precio) y el formulario del artículo; la unidad por pieza no lleva sufijo, como hoy en el ticket — Checks: specs de esos componentes
 - S4a (supuesto): GDS no lo cubre (muestra la unidad en una columna aparte, L2).
-- S5: «la unidad en la compra y en Movimientos» — Aceptación: la cantidad lleva unidad en el detalle de la compra, en la vista previa de la compra nueva (cantidad y stock antes → después), en el stock de la búsqueda de la compra y al lado del campo de cantidad; en Movimientos, la cantidad y el saldo llevan unidad. El renglón «Sin artículo» de la compra no tiene unidad y queda como está — Checks: specs de compras y movimientos
-- S5a (supuesto): GDS no lo cubre.
+- S5: «la unidad en la compra y en Movimientos» — Aceptación: la cantidad lleva unidad en el detalle de la compra, en la vista previa de la compra nueva (cantidad y stock antes → después) y en el stock de la búsqueda de la compra; en Movimientos, la cantidad y el saldo llevan unidad. El renglón «Sin artículo» de la compra no tiene unidad y queda como está — Checks: specs de compras y movimientos
+- S5a (supuesto): GDS no lo cubre. El campo de cantidad de la carga queda sin unidad (L5).
 
 ## Tasks
 
-- [ ] T1 · S1, S1a, S2, S2a · ruta: inline · Aceptación: `UnidadDeLista` acepta las variantes y lee la unidad de la descripción; `PlanificadorImportacion` usa la descripción cuando la columna no trae dato · Evidencia: — · Risk: none
-- [ ] T2 · S3, S3a · ruta: inline · Aceptación: `factura-hoja` imprime cantidad con unidad en A y en B/C · Evidencia: — · Risk: none
-- [ ] T3 · S4, S4a · ruta: inline · Aceptación: sufijo de precio compartido en `core/formato/unidad.ts` y usado en las cinco pantallas · Evidencia: — · Risk: none
-- [ ] T4 · S5, S5a · ruta: inline · Aceptación: compras y movimientos con unidad · Evidencia: — · Risk: none
+- [x] T1 · S1, S1a, S2, S2a · ruta: inline · Aceptación: `UnidadDeLista` acepta las variantes y lee la unidad de la descripción; `PlanificadorImportacion` usa la descripción cuando la columna no trae dato · Evidencia: RED 29 fallas en `UnidadDeListaTest` y 2 en `PlanificadorImportacionTest$AltasConCamposDeLaLista` (sin el cambio del planificador) → GREEN 59 + 169; commit `5f878c5c` · Risk: none
+- [x] T2 · S3, S3a · ruta: inline · Aceptación: `factura-hoja` imprime cantidad con unidad en A y en B/C · Evidencia: RED «2» y «1,5» sin unidad → GREEN `factura-hoja` + `factura-imprimible` 30/30; commit `14986dc3` · Risk: none
+- [x] T3 · S4, S4a · ruta: inline · Aceptación: sufijo de precio compartido en `core/formato/unidad.ts` y usado en las cinco pantallas · Evidencia: RED 9 fallas (stub de `porUnidad`) → GREEN 6 specs; commit `64dd9775` · Risk: none
+- [x] T4 · S5, S5a · ruta: inline · Aceptación: compras y movimientos con unidad · Evidencia: RED 6 fallas → GREEN 3 specs; commit `a99ec5cd` · Risk: none
 - [ ] T5 · S1-S5 · ruta: inline · Aceptación: suite backend, suite frontend, `npx ng build` y recorrido en la app local con ego-browser (importación con «Kg.» y con «x kg», factura, mostrador, compra y movimientos) · Evidencia: — · Risk: none
 
 ## Log
@@ -48,3 +48,9 @@ Restricciones: la unidad ya se guarda por renglón (`ItemComprobante.unidad`, `I
   - Movimientos: el componente ya carga el artículo completo (`movimientos-articulo.ts:46`).
   - Importación: `UnidadDeLista.java:29-41` es el único punto, llamado desde `PlanificadorImportacion.java:310`.
   - Próximo paso: T1.
+- L5 (2026-11-08) T1 a T4 hechas.
+  - **T1.** La columna de unidad saca los puntos finales y acepta plurales y abreviaturas (`deAbreviatura`). La descripción se lee con el patrón «x»/«por» + unidad, sin número en el medio (`UNIDAD_EN_DESCRIPCION`). La columna gana; una unidad no reconocida en la columna sigue siendo error aunque la descripción diga «x kg».
+  - **T2.** `RenglonParaFactura.unidad` (nuevo) sale del `RenglonVentaResponse`, que ya la traía. Las expectativas viejas de la hoja pasaron de «2» a «2 unidades».
+  - **T3.** `porUnidad` en `core/formato/unidad.ts`. En oferta, el sufijo va en el precio de oferta y no en el tachado.
+  - **T4.** El campo de cantidad de la carga queda sin unidad: la factura leída (`BorradorDeFacturaResponse.Renglon`) no trae la unidad del artículo, y agregarla cambia el contrato del backend. La unidad se ve en la vista previa antes de confirmar. Era un agregado mío, no del pedido, y se sacó de S5. `compra.models.ts` pasó `unidad` de `string` a `UnidadDeMedida`.
+  - Próximo paso: T5.
