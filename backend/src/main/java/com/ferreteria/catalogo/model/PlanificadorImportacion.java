@@ -340,9 +340,18 @@ public final class PlanificadorImportacion {
             acumulado.barrasEnUso.add(NormalizadorCodigo.clave(barras.codigo()));
         }
         acumulado.altas.add(new AltaPlaneada(d.numero(), d.codigo(), descripcion, d.precioLista(), costo, d.hoja(),
-            moneda, alicuota, ajustes, unidad.esValor() ? unidad.unidad() : Unidad.UNIDAD,
+            moneda, alicuota, ajustes, unidadDelAlta(unidad, d.descripcion()),
             barras.esValor() ? barras.codigo() : null, rubroId, precio));
         return true;
+    }
+
+    /** La unidad de la columna gana; si la fila no la trae, la que dice la descripcion («x kg»), y si no, UNIDAD. */
+    private static Unidad unidadDelAlta(UnidadDeLista.ResultadoUnidad deLaColumna, String descripcion) {
+        if (deLaColumna.esValor()) {
+            return deLaColumna.unidad();
+        }
+        Unidad deLaDescripcion = UnidadDeLista.deDescripcion(descripcion);
+        return deLaDescripcion != null ? deLaDescripcion : Unidad.UNIDAD;
     }
 
     /** Las claves de los codigos de barras de los articulos activos, para comparar sin distinguir mayusculas. */
