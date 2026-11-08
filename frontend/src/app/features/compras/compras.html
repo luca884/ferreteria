@@ -126,7 +126,7 @@
             @for (r of c.renglones; track r.renglon) {
               <tr>
                 <td>{{ r.codigoInterno }} · {{ r.descripcion }}</td>
-                <td class="num">{{ r.cantidad | number: '1.0-3' }}</td>
+                <td class="num">{{ cantidadConUnidad(r.cantidad, r.unidad) }}</td>
                 <td class="num">{{ r.costoAnterior | monto }}</td>
                 <td class="num">{{ r.costoUnitario | monto }}</td>
                 <td class="num">{{ r.precioAnterior | monto }}</td>

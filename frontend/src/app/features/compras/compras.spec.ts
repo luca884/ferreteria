@@ -173,6 +173,24 @@ describe('Compras', () => {
     expect(detalleTexto).toContain('173,03');
   });
 
+  it('el detalle de la compra dice la cantidad con su unidad: «20 unidades», «20,5 kilos» (#36)', async () => {
+    await crear();
+    const conKilos = detalle(2);
+    conKilos.renglones = [
+      conKilos.renglones[0],
+      { ...conKilos.renglones[0], renglon: 2, articuloId: 9, descripcion: 'Clavo punta París 2"', unidad: 'KILO', cantidad: 20.5 },
+    ];
+    api.obtener.mockReturnValue(of(conKilos));
+
+    (el().querySelector('table.compras tbody tr button') as HTMLButtonElement).click();
+    await refrescar();
+
+    const cantidades = [...el().querySelectorAll('app-dialogo-detalle [role=dialog] tbody tr')].map((tr) =>
+      tr.querySelectorAll('td')[1].textContent!.trim(),
+    );
+    expect(cantidades).toEqual(['20 unidades', '20,5 kilos']);
+  });
+
   it('sin compras avisa y si la carga falla ofrece reintentar', async () => {
     await crear([]);
     expect(el().textContent).toContain('Todavía no hay compras.');

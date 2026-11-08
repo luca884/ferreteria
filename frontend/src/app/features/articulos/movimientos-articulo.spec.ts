@@ -37,8 +37,12 @@ describe('MovimientosArticulo', () => {
   let fixture: ComponentFixture<MovimientosArticulo>;
   let servicio: { obtener: ReturnType<typeof vi.fn>; movimientos: ReturnType<typeof vi.fn> };
 
-  async function crear(dueno = true, listar = vi.fn(() => of(pagina(movimientos)))) {
-    servicio = { obtener: vi.fn(() => of(tornillo)), movimientos: listar };
+  async function crear(
+    dueno = true,
+    listar = vi.fn(() => of(pagina(movimientos))),
+    obtener: ReturnType<typeof vi.fn> = vi.fn(() => of(tornillo)),
+  ) {
+    servicio = { obtener, movimientos: listar };
     await TestBed.configureTestingModule({
       imports: [MovimientosArticulo],
       providers: [
@@ -83,10 +87,29 @@ describe('MovimientosArticulo', () => {
     await crear();
 
     expect(filas()).toHaveLength(4);
-    expect(celdas(0)).toEqual(['23/10/2026 10:15', 'Ajuste', '—', '-1', '11', 'Ana', 'Rotura']);
-    expect(celdas(1)).toEqual(['23/10/2026 09:00', 'Compra', 'FA 00003-00001234 · Bulonera Sur', '+5', '12', 'Ana', '—']);
+    expect(celdas(0)).toEqual(['23/10/2026 10:15', 'Ajuste', '—', '-1 unidad', '11 unidades', 'Ana', 'Rotura']);
+    expect(celdas(1)).toEqual(['23/10/2026 09:00', 'Compra', 'FA 00003-00001234 · Bulonera Sur', '+5 unidades', '12 unidades', 'Ana', '—']);
     expect(celdas(2)[1]).toBe('Anulación de remito');
-    expect(celdas(3)).toEqual(['22/10/2026 18:00', 'Venta', 'Venta N.º 12', '-2,5', '6', '—', '—']);
+    expect(celdas(3)).toEqual(['22/10/2026 18:00', 'Venta', 'Venta N.º 12', '-2,5 unidades', '6 unidades', '—', '—']);
+  });
+
+  it('la cantidad y el saldo llevan la unidad del artículo: «+20 kilos», «18,5 kilos» (#36)', async () => {
+    const clavo = { ...tornillo, descripcion: 'Clavo punta París 2"', unidad: 'KILO', stockActual: 18.5 } as Articulo;
+    const deKilos: MovimientoStock[] = [
+      { id: 2, fecha: '2026-11-08T12:10:00', tipo: 'VENTA', cantidad: -1.5, saldo: 18.5, comprobante: 'Venta N.º 29', usuario: 'Ana', motivo: null },
+      { id: 1, fecha: '2026-11-08T12:00:00', tipo: 'COMPRA', cantidad: 20, saldo: 20, comprobante: 'FA 00007-00009101', usuario: 'Ana', motivo: null },
+    ];
+    await crear(true, vi.fn(() => of(pagina(deKilos))), vi.fn(() => of(clavo)));
+
+    expect(celdas(0).slice(3, 5)).toEqual(['-1,5 kilos', '18,5 kilos']);
+    expect(celdas(1).slice(3, 5)).toEqual(['+20 kilos', '20 kilos']);
+  });
+
+  it('si el artículo no carga, la cantidad y el saldo van sin unidad, como antes', async () => {
+    await crear(true, undefined, vi.fn(() => throwError(() => new Error('red'))));
+
+    expect(celdas(0).slice(3, 5)).toEqual(['-1', '11']);
+    expect(celdas(1).slice(3, 5)).toEqual(['+5', '12']);
   });
 
   it('la nota de crédito y la anulación interna (CU-08) se nombran «Nota de crédito», con el comprobante del servidor', async () => {
@@ -95,7 +118,7 @@ describe('MovimientosArticulo', () => {
       { id: 5, fecha: '2026-10-24T10:00:00', tipo: 'NOTA_CREDITO', cantidad: 1, saldo: 11, comprobante: 'Anulación N.º 13', usuario: 'Ana', motivo: null },
     ]))));
 
-    expect(celdas(0)).toEqual(['24/10/2026 11:00', 'Nota de crédito', 'Nota de crédito N.º 14', '+2', '13', 'Ana', '—']);
+    expect(celdas(0)).toEqual(['24/10/2026 11:00', 'Nota de crédito', 'Nota de crédito N.º 14', '+2 unidades', '13 unidades', 'Ana', '—']);
     expect(celdas(1).slice(1, 3)).toEqual(['Nota de crédito', 'Anulación N.º 13']);
   });
 

@@ -258,8 +258,8 @@ describe('NuevaCompra', () => {
       ]);
       const celdas = (o: HTMLElement) =>
         [...o.querySelectorAll('span')].map((s) => s.textContent?.replace(/\s+/g, ' ').trim());
-      expect(celdas(opciones()[0])).toEqual(['CLA-1', 'Clavo 1 pulgada', '$ 578.378,00', '12']);
-      expect(celdas(opciones()[1])).toEqual(['BAR-1', 'Barreta sacaclavos', '$ 9.500,00', '0']);
+      expect(celdas(opciones()[0])).toEqual(['CLA-1', 'Clavo 1 pulgada', '$ 578.378,00', '12 unidades']);
+      expect(celdas(opciones()[1])).toEqual(['BAR-1', 'Barreta sacaclavos', '$ 9.500,00', '0 unidades']);
       expect(el().querySelector('.resultados [role=listbox]')).not.toBeNull();
     });
 
@@ -983,7 +983,25 @@ describe('NuevaCompra', () => {
 
       const vista = el().querySelector('section.vista-previa')!;
       expect(vista.querySelector('thead')!.textContent).toContain('Stock antes → después');
-      expect(vista.querySelector('tbody td.stock')!.textContent!.replace(/\s+/g, ' ').trim()).toBe('0 → 20');
+      expect(vista.querySelector('tbody td.stock')!.textContent!.replace(/\s+/g, ' ').trim()).toBe('0 → 20 unidades');
+    });
+
+    it('en la vista previa la cantidad y el stock llevan la unidad: «20,5 kilos», «0 → 20,5 kilos» (#36)', async () => {
+      await crear();
+      const porKilo = { ...plan.renglones[0], unidad: 'KILO' as const, cantidad: 20.5, stockAnterior: 0, stockNuevo: 20.5 };
+      api.vistaPrevia.mockReturnValue(of({ ...plan, renglones: [porKilo] }));
+      await cargarCompra();
+
+      boton('Ver vista previa')!.click();
+      await refrescar();
+
+      const celdas = [...el().querySelectorAll('section.vista-previa tbody tr td')].map((td) =>
+        td.textContent!.replace(/\s+/g, ' ').trim(),
+      );
+      expect(celdas[1]).toBe('20,5 kilos');
+      expect(el().querySelector('section.vista-previa tbody td.stock')!.textContent!.replace(/\s+/g, ' ').trim()).toBe(
+        '0 → 20,5 kilos',
+      );
     });
 
     it('los totales muestran neto, recargos, subtotal sin IVA, el IVA de cada alícuota y el total', async () => {
