@@ -15,9 +15,9 @@ Restricciones: la IP del cliente sale solo de lo que pone el borde de Railway: l
 
 ## Tasks
 
-- [ ] T1 · S1 · ruta: inline · Aceptación: con el Caddyfile de `main`, un proxy de confianza que manda `X-Real-IP: 203.0.113.7` llega al eco con la IP del proxy (RED). Con el nuevo llega `203.0.113.7`, y un cliente que no es de confianza llega con su dirección aunque mande `X-Real-IP` (GREEN) · Evidencia: — · Risk: item 2 (seguridad), item 6 (no hay test automático del Caddyfile)
-- [ ] T2 · S2 · ruta: inline · Aceptación: `railway up ./frontend` con «Deploy complete»; 21 logins falsos → el último da 429 y el WARN muestra la IP pública · Evidencia: — · Risk: item 2, item 5 (deploy)
-- [ ] T3 · S3 · ruta: inline · Aceptación: README → Deploy → Frontend al día · Evidencia: — · Risk: none
+- [x] T1 · S1 · ruta: inline · Aceptación: con el Caddyfile de `main`, un proxy de confianza que manda `X-Real-IP: 203.0.113.7` llega al eco con la IP del proxy (RED). Con el nuevo llega `203.0.113.7`, y un cliente que no es de confianza llega con su dirección aunque mande `X-Real-IP` (GREEN) · Evidencia: RED en `main`: A → `172.19.0.5` (el proxy), B → `198.51.100.9` (el `X-Forwarded-For`). GREEN: A y B → `203.0.113.7`, C (sin headers) → `172.19.0.5`, D (cliente que no es de confianza) → `172.19.0.5`. En una red `100.64.50.0/24` sin la variable, A → `203.0.113.7`. `caddy validate`: «Valid configuration». Commit `a521931a` · Risk: item 2 (seguridad), item 6 (no hay test automático del Caddyfile)
+- [x] T2 · S2 · ruta: inline · Aceptación: `railway up ./frontend` con «Deploy complete»; 21 logins falsos → el último da 429 y el WARN muestra la IP pública · Evidencia: se borró `PROXIES_DE_CONFIANZA` del frontend; deploy de `a521931a` con «Deploy complete» (SUCCESS 02:07:52Z). 21 logins con `X-Real-IP`/`X-Forwarded-For` `1.2.3.<n>` y emails distintos: 20×401 y el 21 da 429. WARN: «Login: la IP 152.171.225.85 llegó a 20 intentos en el minuto; se bloquea hasta que cierre», la IP pública de quien prueba (api.ipify.org) · Risk: item 2, item 5 (deploy)
+- [x] T3 · S3 · ruta: inline · Aceptación: README → Deploy → Frontend al día · Evidencia: párrafo reescrito (`X-Real-IP` del borde, `100.64.0.0/10` por defecto, chequeo con emails distintos, qué hacer si el WARN muestra el borde o una CDN) · Risk: none
 
 ## Log
 
