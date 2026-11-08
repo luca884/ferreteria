@@ -40,7 +40,6 @@ import com.ferreteria.ventas.repository.PresupuestoRepository;
 import com.ferreteria.ventas.repository.RemitoRepository;
 import com.ferreteria.ventas.service.ConfirmarVenta.Renglon;
 import com.ferreteria.ventas.service.VentaRechazadaException.Motivo;
-import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -298,6 +297,7 @@ public class RegistroVenta {
      * Decide si la venta a cuenta corriente entra: sin cuenta habilitada se rechaza siempre (CC-006); si pasa el limite, solo
      * entra con la autorizacion del Dueño (CC-005). Devuelve el Dueño que autorizo un exceso, o null si no hubo exceso (una
      * autorizacion sin exceso se ignora). Un Vendedor que manda la autorizacion ante un exceso es 403: pide algo que no puede.
+     * Es SoloDelDuenoException y no AccessDeniedException para que le llegue el mensaje de la spec y no el generico.
      */
     private Long verificarCupo(ClienteDelDocumento.Elegido cliente, BigDecimal importe, boolean autorizaExceso,
             Long usuarioId, boolean usuarioEsDueno) {
@@ -315,7 +315,7 @@ public class RegistroVenta {
                     : VentaRechazadaException.ExcesoLimite.sinCifras());
         }
         if (!usuarioEsDueno) {
-            throw new AccessDeniedException(MENSAJE_SOLO_EL_DUENO_AUTORIZA);
+            throw new SoloDelDuenoException(MENSAJE_SOLO_EL_DUENO_AUTORIZA);
         }
         return usuarioId;
     }

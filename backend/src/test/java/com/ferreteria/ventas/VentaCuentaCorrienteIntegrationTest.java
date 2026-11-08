@@ -274,7 +274,7 @@ class VentaCuentaCorrienteIntegrationTest extends VentasTestBase {
     }
 
     @Test
-    @DisplayName("el Vendedor que manda autorizaExceso con exceso recibe 403 y no queda nada: ni venta, ni movimiento, ni número consumido")
+    @DisplayName("el Vendedor que manda autorizaExceso con exceso recibe 403 «Autorizar el exceso es solo del Dueño» y no queda nada: ni venta, ni movimiento, ni número consumido")
     void vendedorConFlagYExceso() throws Exception {
         Escenario e = escenario();
         long c = cliente(e.tienda(), "5000.00");
@@ -282,8 +282,11 @@ class VentaCuentaCorrienteIntegrationTest extends VentasTestBase {
         long comprobantesAntes = comprobantes(e.tienda());
         long numeroAntes = ultimoNumero(e.tienda());
 
-        vender(e.vendedor(), aCuenta(e, clave(), 2500, c), true).andExpect(status().isForbidden());
+        JsonNode rechazo = json(vender(e.vendedor(), aCuenta(e, clave(), 2500, c), true).andExpect(status().isForbidden()));
 
+        // El mensaje de la spec (CU-07, CC-005), no el genérico de un permiso que falta (H1 del recorrido del Vendedor).
+        assertThat(rechazo.get("status").asInt()).isEqualTo(403);
+        assertThat(rechazo.get("message").asText()).isEqualTo("Autorizar el exceso es solo del Dueño");
         assertThat(comprobantes(e.tienda())).isEqualTo(comprobantesAntes);
         assertThat(ultimoNumero(e.tienda())).isEqualTo(numeroAntes);
         assertThat(movimientos(c)).isEqualTo(1);
