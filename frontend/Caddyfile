@@ -33,7 +33,8 @@
 		reverse_proxy {$BACKEND_HOST:backend.railway.internal:8080} {
 			header_up X-Real-IP {client_ip}
 			# El protocolo y el host son los que ve Caddy, no los del borde: si no, el RemoteIpValve toma el pedido como
-			# HTTPS, Spring Security agrega un segundo HSTS y el pedido del mismo origen deja de pasar por CORS.
+			# HTTPS, Spring Security agrega un segundo HSTS y el pedido del mismo origen deja de pasar por CORS. Al arrancar,
+			# Caddy avisa «Unnecessary header_up»: con el borde de confianza sí hacen falta.
 			header_up X-Forwarded-Proto {scheme}
 			header_up X-Forwarded-Host {hostport}
 		}
