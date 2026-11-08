@@ -22,10 +22,16 @@ Restricciones: se escribe solo en la Ferretería de Prueba, con lo que un vended
 
 - [x] T1 · S1, S2 · ruta: delegada (respaldo de contexto: la sesión ya pasó el deploy, el arreglo de la IP y su verificación) · Aceptación: recorrido completo con los dos vendedores, con la lista de qué se probó, qué pasó, los documentos creados y la caja cerrada · Evidencia: L3 (worker Opus, 42 capturas en el scratch de la sesión); spot check del parent: H1 en `RegistroVenta.java:318` y `GlobalExceptionHandler.java:92-95` · Risk: item 1 (escribe datos en producción, en la ferretería de prueba)
 - [x] T2 · S1 · ruta: inline · Aceptación: informe a Luca con los hallazgos y una recomendación por cada uno · Evidencia: L3; informe en el chat el 2026-11-08 · Risk: none
-- [ ] T3 · S3 (H1) · ruta: delegada (respaldo de contexto de ~150k: la sesión ya pasó el deploy, el arreglo de la IP y dos recorridos; un solo writer para T3 a T6) · Aceptación: S3 H1, con un test de integración que verifica el cuerpo del 403 · Evidencia: — · Risk: item 2 (seguridad)
-- [ ] T4 · S3 (H2) · ruta: delegada (mismo writer) · Aceptación: S3 H2, con tests: el Vendedor con un cuerpo inválido recibe 403 en cada ruta nueva; el Dueño con el mismo cuerpo recibe el 400 de antes; lo que el Vendedor ya hacía sigue en 200/201 · Evidencia: — · Risk: item 2 (seguridad), item 3 (cambia la respuesta de la API para el Vendedor; pedido)
-- [ ] T5 · S3 (H4) · ruta: delegada (mismo writer) · Aceptación: S3 H4, con un test en `dialogo-cobro.spec.ts` y una prueba en ego-browser en local · Evidencia: — · Risk: none
-- [ ] T6 · S3 (H3, H4) · ruta: delegada (mismo writer) · Aceptación: S3 H3 y el texto de H4 en `docs/spec.md` · Evidencia: — · Risk: none
+- [x] T3 · S3 (H1) · ruta: delegada (respaldo de contexto de ~150k: la sesión ya pasó el deploy, el arreglo de la IP y dos recorridos; un solo writer para T3 a T6) · Aceptación: S3 H1, con un test de integración que verifica el cuerpo del 403 · Evidencia: RED `VentaCuentaCorrienteIntegrationTest.vendedorConFlagYExceso` («No tenés permiso para hacer esto») y `RegistroVentaTest.vendedorAutorizaConExceso` → GREEN 21/21 y 82/82; el Dueño sigue autorizando (`duenoAutorizaElExceso`). Commit `01203527` · Risk: item 2 (seguridad)
+- [x] T4 · S3 (H2) · ruta: delegada (mismo writer) · Aceptación: S3 H2, con tests: el Vendedor con un cuerpo inválido recibe 403 en cada ruta nueva; el Dueño con el mismo cuerpo recibe el 400 de antes; lo que el Vendedor ya hacía sigue en 200/201 · Evidencia: RED `RutasDelDuenoSeguridadHttpIntegrationTest.vendedorEs403AunqueElPedidoSeaInvalido` (400 en `POST /api/compras/vista-previa {}`) → GREEN 4/4. En esa misma corrida RED ya pasaban: el 400 del Dueño en 25 pedidos, sin token 401, y el Vendedor leyendo catálogo y con alta y edición de clientes. Matchers nuevos: `/api/compras/**`; POST, PUT y DELETE en `/api/{articulos,rubros,proveedores,formas-pago}/**`; `/api/rubros/*/vista-previa-margen`. Commit `01203527` · Risk: item 2 (seguridad), item 3 (cambia la respuesta de la API para el Vendedor; pedido)
+- [x] T5 · S3 (H4) · ruta: delegada (mismo writer) · Aceptación: S3 H4, con un test en `dialogo-cobro.spec.ts` y una prueba en ego-browser en local · Evidencia: RED: esperaba `'2.630'` y recibió `''` → GREEN 140/140 (repetido por el parent: 140/140). En ego-browser en local, total $ 196,20:
+  - 100 en Efectivo y clic en Débito: sugiere `96,20`;
+  - clic en Efectivo: queda `100`;
+  - con el resto ya cubierto no sugiere nada;
+  - Enter sigue igual.
+
+  Commit `6532eb65` · Risk: none
+- [x] T6 · S3 (H3, H4) · ruta: delegada (mismo writer) · Aceptación: S3 H3 y el texto de H4 en `docs/spec.md` · Evidencia: relectura. CU-03 p. 5 y CU-06 p. 2 («Última actualización» / «Costo actualizado el»); CU-07 con los botones de cobro y el texto de H4. Además, el 403 por ruta de H2 después de la tabla de roles y en CU-13 p. 6. Commit `44f7f16b` · Risk: none
 - [ ] T7 · S3 · ruta: inline + `odd-verifier` · Aceptación: suites de backend y frontend, `npx ng build`, prueba de punta a punta en local (antes con `main`, después con la rama) y `odd-verifier` por el item 2 · Evidencia: — · Risk: item 2
 
 ## Log
@@ -63,3 +69,14 @@ Restricciones: se escribe solo en la Ferretería de Prueba, con lo que un vended
 
   Próximo paso: Luca decide qué hallazgos se arreglan.
 - L4 (2026-11-08) Luca: «dale todos» (a «¿Cuáles de H1 a H4 querés que arregle?»). S3 y T3 a T7. Pronóstico: ~250 líneas (backend ~150 con tests, frontend ~60, spec ~20). Un solo writer (Opus) por el respaldo de contexto de la sesión.
+- L5 (2026-11-08) Writer (Opus): T3 a T6 hechos.
+  - **Verificación:**
+    - backend: focalizados 107/107, suite 6398/6398 (9:09 min);
+    - frontend: suite 4386/4386 y `ng build` OK, con el aviso de presupuesto de `dialogo-cobro.ts` de siempre, que no creció.
+  - **De punta a punta en local, `main` contra la rama:** de 92 líneas cambian solo 26. Son los 25 pedidos inválidos del Vendedor de H2 (de 400 a 403) y H1 (el mensaje). El Dueño recibe el mismo 400 con el mismo cuerpo, sin token sigue 401, y lo que el Vendedor ya hacía sigue igual.
+  - **Para tener en cuenta:**
+    1. Para «vacía», el mouse mira que no haya texto y Enter mira que la forma nunca se haya tocado, como antes.
+    2. Los matchers de escritura son anchos: cualquier escritura futura en esas cuatro rutas es solo del Dueño.
+    3. Fuera de alcance, deducido del código y sin probar: otros GET solo del Dueño con parámetros tipados (`/api/articulos/{id}/movimientos-stock`, `GET /api/ventas`) le darían 400 al Vendedor con un parámetro inválido, por el mismo mecanismo.
+
+  Próximo paso: `odd-verifier` (T7).
