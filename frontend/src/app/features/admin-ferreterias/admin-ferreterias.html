@@ -40,9 +40,6 @@
   una ferretería marcada de prueba, y para habilitar la facturación hacen falta un ambiente y sus datos fiscales completos.
 </p>
 
-@if (aviso(); as mensaje) {
-  <p class="alerta exito" role="status">{{ mensaje }}</p>
-}
 @if (error(); as mensaje) {
   <div class="error con-accion" role="alert">
     <span>{{ mensaje }}</span>
@@ -150,6 +147,11 @@
         [attr.inert]="guardando() ? '' : null"
       >
         <h2>Nueva ferretería</h2>
+        <!-- Los avisos de éxito (alta y reseteo) van acá y no arriba de todo: entre 901 y 1640 px el formulario está
+             abajo de la tabla, donde queda el foco, y el aviso de arriba quedaba fuera de la vista (guía al día). -->
+        @if (aviso(); as mensaje) {
+          <p class="alerta exito" role="status">{{ mensaje }}</p>
+        }
         @if (errorForm(); as mensaje) {
           <p class="error" role="alert">{{ mensaje }}</p>
         }
