@@ -1783,7 +1783,7 @@ class RegistroVentaTest {
     }
 
     @Test
-    @DisplayName("un Vendedor que manda la autorización y excede recibe AccessDenied (403) y no se guarda nada")
+    @DisplayName("un Vendedor que manda la autorización y excede recibe SoloDelDueno (403 con su mensaje) y no se guarda nada")
     void vendedorAutorizaConExceso() {
         catalogoC1C3();
         when(comprobanteRepository.porClaveScoped(CLAVE)).thenReturn(Optional.empty());
@@ -1791,7 +1791,7 @@ class RegistroVentaTest {
         cupoDe("4463.33", "5000.00", "4000.00");
 
         assertThatThrownBy(() -> comoVendedor(autorizando(ventaCC()), USUARIO))
-                .isInstanceOf(org.springframework.security.access.AccessDeniedException.class)
+                .isInstanceOf(com.ferreteria.common.exception.SoloDelDuenoException.class)
                 .hasMessage("Autorizar el exceso es solo del Dueño");
         assertSinEscrituras();
         verify(cuentaCorriente, never()).asentarVenta(any());

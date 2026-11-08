@@ -61,6 +61,23 @@ public class SecurityConfig {
                         .requestMatchers("/api/cotizacion/recalculo/**").hasRole("DUENO")
                         // Editar los ajustes de un articulo es solo del Dueño; el 403 va antes de leer el cuerpo.
                         .requestMatchers(HttpMethod.PUT, "/api/articulos/*/ajustes").hasRole("DUENO")
+                        // Las compras (CU-13) son solo del Dueño: registrarlas, su vista previa, leer la factura en PDF y
+                        // listarlas. El Vendedor recibe 403 aunque el cuerpo o los parametros no validen (H2 del recorrido
+                        // del Vendedor: antes le llegaba el 400 de la validacion).
+                        .requestMatchers("/api/compras/**").hasRole("DUENO")
+                        // Escribir el catalogo es solo del Dueño: alta, edicion, baja y reactivacion de articulos, rubros y
+                        // proveedores, la oferta y el ajuste de stock de un articulo, y las formas de pago. El Vendedor
+                        // solo los lee (H07): los GET de estas rutas siguen siendo de todos, y el 403 va antes de leer el
+                        // cuerpo o el id de la ruta.
+                        .requestMatchers(HttpMethod.POST, "/api/articulos/**", "/api/rubros/**", "/api/proveedores/**",
+                                "/api/formas-pago/**").hasRole("DUENO")
+                        .requestMatchers(HttpMethod.PUT, "/api/articulos/**", "/api/rubros/**", "/api/proveedores/**",
+                                "/api/formas-pago/**").hasRole("DUENO")
+                        .requestMatchers(HttpMethod.DELETE, "/api/articulos/**", "/api/rubros/**", "/api/proveedores/**",
+                                "/api/formas-pago/**").hasRole("DUENO")
+                        // La vista previa del margen nuevo de un rubro tambien: el 403 va antes de leer el parametro. Sin
+                        // restriccion de metodo, como el extracto: con solo GET, un HEAD del Vendedor llegaria al binding.
+                        .requestMatchers("/api/rubros/*/vista-previa-margen").hasRole("DUENO")
                         // Cobrar la cuenta corriente, ver un recibo y los pendientes de cobro son solo del Dueño (CC-028): el
                         // Vendedor recibe 403 aunque el cuerpo no valide, y sin que se consuma un número de recibo.
                         .requestMatchers("/api/cobranzas/**").hasRole("DUENO")
