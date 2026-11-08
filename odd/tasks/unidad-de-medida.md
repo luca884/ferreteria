@@ -26,7 +26,7 @@ Restricciones: la unidad ya se guarda por renglón (`ItemComprobante.unidad`, `I
 - [x] T2 · S3, S3a · ruta: inline · Aceptación: `factura-hoja` imprime cantidad con unidad en A y en B/C · Evidencia: RED «2» y «1,5» sin unidad → GREEN `factura-hoja` + `factura-imprimible` 30/30; commit `14986dc3` · Risk: none
 - [x] T3 · S4, S4a · ruta: inline · Aceptación: sufijo de precio compartido en `core/formato/unidad.ts` y usado en las cinco pantallas · Evidencia: RED 9 fallas (stub de `porUnidad`) → GREEN 6 specs; commit `64dd9775` · Risk: none
 - [x] T4 · S5, S5a · ruta: inline · Aceptación: compras y movimientos con unidad · Evidencia: RED 6 fallas → GREEN 3 specs; commit `a99ec5cd` · Risk: none
-- [ ] T5 · S1-S5 · ruta: inline · Aceptación: suite backend, suite frontend, `npx ng build` y recorrido en la app local con ego-browser (importación con «Kg.» y con «x kg», factura, mostrador, compra y movimientos) · Evidencia: — · Risk: none
+- [x] T5 · S1-S5 · ruta: inline (recorrido delegado a un worker Opus con ego-browser) · Aceptación: suite backend, suite frontend, `npx ng build` y recorrido en la app local con ego-browser (importación con «Kg.» y con «x kg», factura, mostrador, compra y movimientos) · Evidencia: `./mvnw test` 6441/0 fallas, BUILD SUCCESS; `npx ng test --watch=false` 164/164 archivos; `npx ng build` OK (aviso de presupuesto de `dialogo-cobro`, previo); recorrido 5/5 PASA (L6) · Risk: none
 
 ## Log
 
@@ -54,3 +54,20 @@ Restricciones: la unidad ya se guarda por renglón (`ItemComprobante.unidad`, `I
   - **T3.** `porUnidad` en `core/formato/unidad.ts`. En oferta, el sufijo va en el precio de oferta y no en el tachado.
   - **T4.** El campo de cantidad de la carga queda sin unidad: la factura leída (`BorradorDeFacturaResponse.Renglon`) no trae la unidad del artículo, y agregarla cambia el contrato del backend. La unidad se ve en la vista previa antes de confirmar. Era un agregado mío, no del pedido, y se sacó de S5. `compra.models.ts` pasó `unidad` de `string` a `UnidadDeMedida`.
   - Próximo paso: T5.
+- L6 (2026-11-08) T5, cierre.
+  - **Suites.** La del frontend falló una vez en `app.config.spec.ts`: el artículo de ejemplo es por METRO y ahora el precio dice «/ m». Se ajustó (`dbf8eaae`). Después: backend 6441/0, frontend 164/164 y build OK.
+  - **Recorrido en la app local** (worker Opus con ego-browser, Dueño de El Tornillo). Pasan los 5 pasos:
+    - Importación de `lista-unidades-36.csv`: «Kg.», «KGS», «Kilos» y «x kg» dan Kilo; «por metro» da Metro; «x100m» y UN con «x kg» quedan por unidad; «caja» da «Unidad no reconocida: «caja»».
+    - Artículos «$ 6.534,00 / kg».
+    - Compra: vista previa «20,5 kilos» y «0 → 20,5 kilos», y el detalle dice «20,5 kilos».
+    - Mostrador: ticket «$ 6.534,00 / kg»; la hoja de la venta 27 dice «1,5 kilos».
+    - Movimientos: «+20,5 kilos» y «-1,5 kilos | 19 kilos».
+  - **No probado en la app.** La factura A, B o C real: el ambiente local es Simulador y sale la X, que usa la misma hoja. La A y la B quedan cubiertas por `factura-hoja.spec.ts`.
+  - **Fuera de alcance, visto en el recorrido.** Sin «/ kg» quedan:
+    - el precio en vivo y el desglose del formulario;
+    - el costo de la búsqueda de la compra;
+    - los costos y precios de la vista previa y del detalle de la compra;
+    - el precio unitario de la factura;
+    - el precio nuevo de la importación.
+  - Datos locales creados: U36-1 a U36-7, el remito 00036-00003601 y la venta 27.
+  - App local apagada y MySQL detenido.
