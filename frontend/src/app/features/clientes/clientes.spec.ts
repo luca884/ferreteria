@@ -181,9 +181,11 @@ describe('Clientes', () => {
       expect(getComputedStyle(saldo).whiteSpace).toBe('normal');
       expect(getComputedStyle(contacto).overflowWrap).toBe('anywhere');
       expect(getComputedStyle(encabezado).whiteSpace).toBe('normal');
+      // A 1280 px el marco mide 663 px. Con 10 px quedaban 25 px de Contacto detrás del scroll (El Tornillo); con 8 px,
+      // 9 px en El Faro (límite de $ 500.000,00); con 6 px entran las dos (633 y 644).
       for (const celdaDeLaTabla of [encabezado, saldo]) {
-        expect(getComputedStyle(celdaDeLaTabla).paddingLeft).toBe('10px');
-        expect(getComputedStyle(celdaDeLaTabla).paddingRight).toBe('10px');
+        expect(getComputedStyle(celdaDeLaTabla).paddingLeft).toBe('6px');
+        expect(getComputedStyle(celdaDeLaTabla).paddingRight).toBe('6px');
       }
     });
 
