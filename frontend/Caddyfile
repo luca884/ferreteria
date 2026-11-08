@@ -4,12 +4,14 @@
 	admin off
 	persist_config off
 	auto_https off
-	# La IP del cliente (límite de intentos del login, hallazgo 3 de la revisión del 2026-11-05). Si el pedido viene de
-	# un proxy de confianza (el borde de Railway), {client_ip} sale de X-Forwarded-For leído de derecha a izquierda: el
-	# primer salto que no es de confianza, el que agregó el borde. Lo que el cliente escriba en ese header queda a la
-	# izquierda y no cuenta. Si no viene de un proxy de confianza, es la dirección de la conexión.
+	# La IP del cliente (límite de intentos del login, hallazgo 3 de la revisión del 2026-11-05). El borde de Railway
+	# llega desde 100.64.0.0/10 y pone la IP del cliente en X-Real-IP (docs.railway.com, «Specs & Limits»). Si el pedido
+	# viene de un proxy de confianza, {client_ip} sale de ese X-Real-IP; si no, es la dirección de la conexión, y lo que
+	# el cliente escriba en X-Real-IP o X-Forwarded-For no cuenta. X-Forwarded-For no sirve: delante del borde hay una
+	# CDN que agrega su propia IP, y esa IP rota.
 	servers {
-		trusted_proxies static {$PROXIES_DE_CONFIANZA:private_ranges}
+		trusted_proxies static {$PROXIES_DE_CONFIANZA:private_ranges 100.64.0.0/10}
+		client_ip_headers X-Real-IP
 		trusted_proxies_strict
 	}
 }
@@ -30,6 +32,11 @@
 	handle /api/* {
 		reverse_proxy {$BACKEND_HOST:backend.railway.internal:8080} {
 			header_up X-Real-IP {client_ip}
+			# El protocolo y el host son los que ve Caddy, no los del borde: si no, el RemoteIpValve toma el pedido como
+			# HTTPS, Spring Security agrega un segundo HSTS y el pedido del mismo origen deja de pasar por CORS. Al arrancar,
+			# Caddy avisa «Unnecessary header_up»: con el borde de confianza sí hacen falta.
+			header_up X-Forwarded-Proto {scheme}
+			header_up X-Forwarded-Host {hostport}
 		}
 	}
 
