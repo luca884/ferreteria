@@ -8,7 +8,8 @@
       <h1>Ferretería</h1>
     </div>
     <p class="sub">Ingresá con tu usuario</p>
-    @if (sesionCerrada) {
+    <!-- Si el reintento falla, manda el error del ingreso: los dos avisos juntos se contradecían (guía al día). -->
+    @if (sesionCerrada && !error()) {
       <p class="alerta advertencia sesion-cerrada" role="status">Tu sesión se cerró. Ingresá de nuevo.</p>
     }
 

@@ -424,6 +424,19 @@ describe('AdminFerreterias', () => {
       expect(input('dueno-password').value).toBe('');
     });
 
+    // Guía al día: entre 901 y 1640 px el alta va abajo de la tabla y el foco baja hasta el formulario; el aviso, arriba
+    // de todo, quedaba fuera de la vista.
+    it('el aviso de la ferretería creada sale en el formulario de alta, donde queda el foco', async () => {
+      await crear();
+
+      await altaCompleta('30712345671');
+      await enviar();
+
+      const aviso = el().querySelector<HTMLElement>('.alerta.exito')!;
+      expect(aviso.textContent).toContain('Se creó «Nueva Ferretería SA».');
+      expect(aviso.closest('form.alta')).not.toBeNull();
+    });
+
     it('no envía un alta con datos malos y lo avisa en cada campo', async () => {
       await crear();
 
@@ -892,6 +905,24 @@ describe('AdminFerreterias', () => {
       expect(texto('#titulo-reset')).toContain('Arco SA');
       expect(el().querySelector('#actual')).toBeNull();
       expect(el().querySelector('#nueva')).not.toBeNull();
+    });
+
+    // Guía al día: entre 901 y 1640 px el formulario se abre abajo de la tabla y, sin el foco, parecía que no pasaba nada.
+    it('el foco va a la contraseña nueva, así la pantalla baja hasta el formulario', async () => {
+      await crear();
+
+      await abrirReset(0);
+
+      expect(document.activeElement).toBe(el().querySelector('#nueva'));
+    });
+
+    it('después de resetear, el aviso sale en el lugar del formulario', async () => {
+      await crear();
+      await abrirReset(0);
+
+      await cargarContrasenas('nueva-clave-1');
+
+      expect(el().querySelector('.alerta.exito')!.closest('form.alta')).not.toBeNull();
     });
 
     it('resetea la contraseña del Dueño de esa ferretería y avisa', async () => {

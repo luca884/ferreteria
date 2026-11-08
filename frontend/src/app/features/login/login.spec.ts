@@ -163,6 +163,20 @@ describe('Login', () => {
       expect(aviso()?.getAttribute('role')).toBe('status');
     });
 
+    // Guía al día: si el reintento fallaba (la ferretería sigue suspendida), quedaban los dos avisos a la vez.
+    it('si el reintento falla, queda solo el error del ingreso', async () => {
+      await crear('/mostrador', { sesion: 'cerrada' });
+      const auth = TestBed.inject(AuthService) as unknown as { login: ReturnType<typeof vi.fn> };
+      auth.login.mockReturnValue(throwError(() => new HttpErrorResponse({ status: 401 })));
+
+      await ingresar();
+
+      expect(aviso()).toBeNull();
+      expect((fixture.nativeElement as HTMLElement).querySelector('#login-error')?.textContent?.trim()).toBe(
+        'Email o contraseña incorrectos.',
+      );
+    });
+
     it('al entrar sin ese parámetro no dice nada', async () => {
       await crear('/mostrador');
 

@@ -320,6 +320,8 @@ export class AdminFerreterias implements OnInit {
     this.aviso.set(null);
     this.errorReset.set(null);
     this.reseteando.set(ferreteria);
+    // Entre 901 y 1640 px el formulario se abre abajo de la tabla: el foco lo trae a la vista (guía al día).
+    this.enfocar('#nueva');
   }
 
   protected cerrarReset(): void {
