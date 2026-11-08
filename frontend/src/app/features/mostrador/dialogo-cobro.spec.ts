@@ -889,6 +889,37 @@ describe('DialogoCobro', () => {
       await estabilizar();
     }
 
+    /**
+     * Un clic en el nombre de la forma (fuera del campo): la fila es un <label>, así que el navegador le da el foco al campo
+     * en el click aunque se haya frenado el mousedown; jsdom no lo hace solo. Entre el mousedown y el click pasa el render,
+     * como en el navegador.
+     */
+    async function clicEnNombre(campo: HTMLInputElement) {
+      const fila = campo.closest('label') as HTMLLabelElement;
+      fila.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, button: 0 }));
+      await estabilizar();
+      fila.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, button: 0 }));
+      fila.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, button: 0 }));
+      campo.focus();
+      await estabilizar();
+    }
+
+    it('el clic en el nombre de una forma vacía también sugiere el resto, seleccionado (H4, blocker del verificador)', async () => {
+      await abrirMixto();
+      escribirMonto(1, '1000');
+
+      await clicEnNombre(monto(2));
+
+      expect(document.activeElement).toBe(monto(2));
+      expect(monto(2).value).toBe('2.630');
+      expect([monto(2).selectionStart, monto(2).selectionEnd]).toEqual([0, 5]);
+      expect(resumen()).toBe('Completo');
+      // El nombre de una forma con monto no la pisa.
+      await clicEnNombre(monto(1));
+      expect(monto(1).value).toBe('1.000');
+      expect(confirmadas).toEqual([]);
+    });
+
     it('entrar con el mouse a una fila vacía le sugiere el resto, seleccionado, como Enter; una con monto no se pisa (H4)', async () => {
       await abrirMixto();
       // El clic en la fila donde ya está el foco (abre en efectivo) no es entrar: no sugiere nada.
