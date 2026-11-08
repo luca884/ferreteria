@@ -5,10 +5,11 @@
   font-weight: 600;
 }
 /* El CUIT se partía en sus guiones y el teléfono en su espacio: van en un renglón. Para que la tabla siga entrando a
-   1280 px, el correo (sin espacios) se puede partir en cualquier lado. */
-.cuit,
-.telefono,
-.whatsapp {
+   1280 px, el correo (sin espacios) se puede partir en cualquier lado. Solo las celdas: el campo CUIT del alta tiene
+   la misma clase y su error tiene que poder partirse. */
+td.cuit,
+td.telefono,
+td.whatsapp {
   white-space: nowrap;
 }
 .correo {

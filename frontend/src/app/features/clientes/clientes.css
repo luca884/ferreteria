@@ -27,12 +27,12 @@
 }
 /* A 1280 px, con el alta al costado, la tabla tiene que entrar entera (Saldo y Límite quedaban detrás del scroll de
    costado): se parte entre el tipo y el número del documento, el saldo («a favor»), el contacto y los encabezados, y
-   las celdas tienen 8 px de margen (con 10 px quedaban 25 px de Contacto detrás del scroll). El número del documento
-   y los importes no se parten. */
+   las celdas tienen 6 px de margen (con 10 px quedaban 25 px de Contacto detrás del scroll en El Tornillo; con 8 px,
+   9 px en El Faro). El número del documento y los importes no se parten. */
 .grilla-marco th,
 .grilla-marco td {
-  padding-left: 8px;
-  padding-right: 8px;
+  padding-left: 6px;
+  padding-right: 6px;
 }
 .grilla-marco th {
   white-space: normal;

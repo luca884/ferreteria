@@ -155,6 +155,16 @@ describe('Proveedores', () => {
     }
   });
 
+  // Guía al día, tanda A: el `nowrap` de la tabla agarraba también el campo CUIT del alta, y el error del CUIT no se partía.
+  it('el campo CUIT del alta sí se parte en renglones: el nowrap es solo de las celdas', async () => {
+    await crearComponente(true, [tersuave]);
+
+    const campo = el().querySelector<HTMLElement>('div.campo.cuit')!;
+
+    expect(campo).toBeTruthy();
+    expect(getComputedStyle(campo).whiteSpace).not.toBe('nowrap');
+  });
+
   it('el correo sí se puede partir: con el CUIT y el teléfono enteros, sin esto la tabla se corría de costado a 1280 px', async () => {
     await crearComponente(true, [{ ...tersuave, email: 'ventas@distribuidora-del-sur.com.ar' }]);
 
