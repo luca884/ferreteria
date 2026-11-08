@@ -80,3 +80,18 @@ Restricciones: se escribe solo en la Ferretería de Prueba, con lo que un vended
     3. Fuera de alcance, deducido del código y sin probar: otros GET solo del Dueño con parámetros tipados (`/api/articulos/{id}/movimientos-stock`, `GET /api/ventas`) le darían 400 al Vendedor con un parámetro inválido, por el mismo mecanismo.
 
   Próximo paso: `odd-verifier` (T7).
+- L6 (2026-11-08) `odd-verifier` (Opus) sobre `648cbc8d` contra `9570d058`: **fail**, con 1 blocker.
+  - **H1, H2 y H3: pass.**
+    - H1 de punta a punta: con el reenvío de la misma clave no se consume número, y sin la marca el 422 es el mismo.
+    - H2: 201 líneas de probe, de la baseline contra HEAD. Para el Dueño todo es idéntico. Lo que el Vendedor usa en el front no cambia, y el estado del Dueño da el mismo hash. Ninguna escritura que la spec le da al Vendedor queda atrapada: todos esos `@PostMapping`, `@PutMapping` y `@DeleteMapping` ya eran `@PreAuthorize DUENO`.
+    - H3: la spec coincide con `dialogo-cobro.ts:239-270` y con las pantallas.
+  - **Blocker 1 (H4):** el clic en el nombre de la forma, o en la fila fuera del campo, no sugiere el resto. La fila es un `<label>` y el `mousedown` estaba solo en el input.
+  - **Advertencias:**
+    1. El 403 de ruta responde `{status, message}`, sin `errors` ni `timestamp`, igual que los matchers que ya había.
+    2. Una ruta sin handler bajo esos prefijos le da 403 al Vendedor en vez de 404 o 405.
+    3. El super admin también recibe 403 antes de la validación.
+    4. Ya pasaba en la baseline: otros GET solo del Dueño con parámetros tipados le dan 400 al Vendedor.
+- L7 (2026-11-08) Corrección del Blocker 1 (inline, `b173997a`): el `mousedown` pasó a la fila (`<label>`).
+  - Test nuevo: RED con el código anterior («expected '' to be '2.630'») → GREEN 141/141.
+  - Suite del front: 164/164 archivos. `ng build` OK, con el aviso de presupuesto de siempre (4.95 kB).
+  - Próximo paso: recheck del Blocker 1 en el navegador.
