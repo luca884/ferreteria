@@ -8,7 +8,7 @@
 	# llega desde 100.64.0.0/10 y pone la IP del cliente en X-Real-IP (docs.railway.com, «Specs & Limits»). Si el pedido
 	# viene de un proxy de confianza, {client_ip} sale de ese X-Real-IP; si no, es la dirección de la conexión, y lo que
 	# el cliente escriba en X-Real-IP o X-Forwarded-For no cuenta. X-Forwarded-For no sirve: delante del borde hay una
-	# CDN que agrega su propia IP, distinta en cada pedido.
+	# CDN que agrega su propia IP, y esa IP rota.
 	servers {
 		trusted_proxies static {$PROXIES_DE_CONFIANZA:private_ranges 100.64.0.0/10}
 		client_ip_headers X-Real-IP
@@ -32,6 +32,10 @@
 	handle /api/* {
 		reverse_proxy {$BACKEND_HOST:backend.railway.internal:8080} {
 			header_up X-Real-IP {client_ip}
+			# El protocolo y el host son los que ve Caddy, no los del borde: si no, el RemoteIpValve toma el pedido como
+			# HTTPS, Spring Security agrega un segundo HSTS y el pedido del mismo origen deja de pasar por CORS.
+			header_up X-Forwarded-Proto {scheme}
+			header_up X-Forwarded-Host {hostport}
 		}
 	}
 
