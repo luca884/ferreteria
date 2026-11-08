@@ -80,7 +80,7 @@
       </div>
       <div class="dato precio-final">
         <dt>Precio final guardado</dt>
-        <dd>{{ actual.precioFinal | monto }}</dd>
+        <dd>{{ actual.precioFinal | monto }}{{ porUnidad(actual.unidad) }}</dd>
       </div>
     </dl>
   }

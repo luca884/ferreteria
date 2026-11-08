@@ -170,10 +170,10 @@ describe('Articulos', () => {
 
     expect(texto('.codigo')).toBe('TOR-001');
     expect(texto('.descripcion')).toBe('Tornillo hexagonal 1/4');
-    expect(texto('.costo')).toBe(`$${NBSP}100,00`);
+    expect(texto('.costo')).toBe(`$${NBSP}100,00 / m`);
     expect(texto('.margen')).toBe(`35${NBSP}%`);
     expect(texto('.iva')).toBe('10,5 %');
-    expect(texto('.precio')).toBe(`$${NBSP}170,00`);
+    expect(texto('.precio')).toBe(`$${NBSP}170,00 / m`);
     expect(texto('.stock')).toBe('12,5 metros');
   });
 

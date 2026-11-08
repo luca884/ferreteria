@@ -757,7 +757,7 @@ describe('ArticuloForm', () => {
       await crearComponente({ id: '5' });
 
       expect(el().querySelector('.stock-actual dd')?.textContent).toContain('12,5 metros');
-      expect(el().querySelector('.precio-final')?.textContent).toContain(`$${NBSP}1.234,50`);
+      expect(el().querySelector('.precio-final dd')?.textContent?.trim()).toBe(`$${NBSP}1.234,50 / m`);
       expect(el().querySelector('input#stockActual')).toBeNull();
       expect(el().querySelector('input#precioFinal')).toBeNull();
     });
@@ -2533,7 +2533,7 @@ describe('ArticuloForm', () => {
         expect(servicio.obtener).toHaveBeenCalledTimes(2);
         expect(servicio.desglose).toHaveBeenCalledTimes(2);
         expect(importes()).toContain('$ 860,00');
-        expect(limpio(el().querySelector('.precio-final dd')?.textContent)).toBe('$ 1.350,00');
+        expect(limpio(el().querySelector('.precio-final dd')?.textContent)).toBe('$ 1.350,00 / m');
         expect(banner()).toBe('Se guardaron los ajustes.');
       });
 

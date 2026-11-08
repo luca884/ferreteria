@@ -41,7 +41,7 @@
             <span class="problema">{{ r.problema }}</span>
           }
         </td>
-        <td class="num precio">{{ r.precioCentavos / 100 | monto }}</td>
+        <td class="num precio">{{ r.precioCentavos / 100 | monto }}{{ porUnidad(r.unidad) }}</td>
         <td class="num total-renglon">{{ totalRenglon(r.precioCentavos, r.cantidadMilesimas, r.descuentoBp ?? 0) / 100 | monto }}</td>
       </tr>
     } @empty {

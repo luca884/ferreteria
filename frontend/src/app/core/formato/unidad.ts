@@ -19,3 +19,11 @@ export function cantidadConUnidad(cantidad: number, unidad: UnidadDeMedida): str
   const [singular, plural] = NOMBRES[unidad];
   return `${texto} ${texto === '1' || texto === '-1' ? singular : plural}`;
 }
+
+const ABREVIATURAS: Record<UnidadDeMedida, string> = { UNIDAD: '', METRO: 'm', KILO: 'kg', LITRO: 'l' };
+
+/** Lo que va después de un precio para decir por qué unidad es: « / kg», « / m», « / l». Por pieza no lleva (#36). */
+export function porUnidad(unidad: UnidadDeMedida): string {
+  const abreviatura = ABREVIATURAS[unidad];
+  return abreviatura ? ` / ${abreviatura}` : '';
+}

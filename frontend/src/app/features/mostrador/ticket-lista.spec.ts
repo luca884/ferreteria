@@ -112,6 +112,19 @@ describe('TicketLista', () => {
     expect(texto('.cantidad', 1)).toBe('4 l');
   });
 
+  it('el precio unitario dice por qué unidad es: «/ kg», «/ m», «/ l»; el total no (#36)', async () => {
+    await crear([
+      renglon({ articuloId: 1, unidad: 'KILO', precioCentavos: 400000, cantidadMilesimas: 1500 }),
+      renglon({ articuloId: 2, unidad: 'METRO', precioCentavos: 90000, cantidadMilesimas: 2000 }),
+      renglon({ articuloId: 3, unidad: 'LITRO', precioCentavos: 520000, cantidadMilesimas: 1000 }),
+    ]);
+
+    expect(texto('.precio', 0)).toBe(`$${NBSP}4.000,00 / kg`);
+    expect(texto('.precio', 1)).toBe(`$${NBSP}900,00 / m`);
+    expect(texto('.precio', 2)).toBe(`$${NBSP}5.200,00 / l`);
+    expect(texto('.total-renglon', 0)).toBe(`$${NBSP}6.000,00`);
+  });
+
   it('el total del renglón redondea HALF_UP como el servidor (2,5 x 333,33 = 833,33)', async () => {
     await crear([renglon({ unidad: 'METRO', precioCentavos: 33333, cantidadMilesimas: 2500 })]);
 

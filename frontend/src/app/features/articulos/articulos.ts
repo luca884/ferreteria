@@ -9,7 +9,7 @@ import { descargar } from '../../core/archivos/descarga';
 import { formatearFecha } from '../../core/formato/fecha-hora';
 import { Avisos } from '../../core/avisos/avisos';
 import { MontoPipe, formatearCosto } from '../../core/formato/monto';
-import { cantidadConUnidad } from '../../core/formato/unidad';
+import { cantidadConUnidad, porUnidad } from '../../core/formato/unidad';
 import { BarraAcciones } from '../../shared/barra-acciones';
 import { Confirmacion } from '../../shared/confirmacion';
 import { FilasElegibles } from '../../shared/filas-elegibles';
@@ -42,6 +42,7 @@ export class Articulos implements OnInit {
 
   protected readonly alicuotaLabels = ALICUOTA_IVA_LABELS;
   protected readonly cantidadConUnidad = cantidadConUnidad;
+  protected readonly porUnidad = porUnidad;
   protected readonly formatearCosto = formatearCosto;
   protected readonly formatearFecha = formatearFecha;
 

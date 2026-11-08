@@ -8,7 +8,7 @@ import {
   viewChildren,
 } from '@angular/core';
 import { formatearFecha } from '../../core/formato/fecha-hora';
-import { cantidadConUnidad } from '../../core/formato/unidad';
+import { cantidadConUnidad, porUnidad } from '../../core/formato/unidad';
 import { ArticuloMostrador, estadoStock } from './mostrador.models';
 
 /** Ids que usa el campo de búsqueda para aria-controls y aria-activedescendant. */
@@ -31,6 +31,7 @@ export class ListaResultados {
   protected readonly listaId = LISTA_ID;
   protected readonly filaId = filaId;
   protected readonly cantidadConUnidad = cantidadConUnidad;
+  protected readonly porUnidad = porUnidad;
   protected readonly estadoStock = estadoStock;
   protected readonly formatearFecha = formatearFecha;
 

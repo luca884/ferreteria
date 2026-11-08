@@ -1,4 +1,15 @@
-import { cantidadConUnidad } from './unidad';
+import { cantidadConUnidad, porUnidad } from './unidad';
+
+describe('porUnidad', () => {
+  it.each([
+    ['KILO', ' / kg'],
+    ['METRO', ' / m'],
+    ['LITRO', ' / l'],
+    ['UNIDAD', ''],
+  ] as const)('%s → «%s» después del precio; la unidad por pieza no lleva (#36)', (unidad, esperado) => {
+    expect(porUnidad(unidad)).toBe(esperado);
+  });
+});
 
 describe('cantidadConUnidad', () => {
   it.each([
