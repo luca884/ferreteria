@@ -189,6 +189,7 @@ const centavosATexto = (c: number) => `${normalizarImporte(String(Math.floor(c /
                     [attr.aria-describedby]="razonesMixto()[f.id] ? 'razon-fila-' + f.id : null"
                     [value]="montos()[f.id] ?? ''"
                     (input)="escribirMonto(f.id, $any($event.target).value)"
+                    (mousedown)="entrarConMouse($event, f)"
                   />
                 </app-campo-moneda>
               </label>
@@ -984,12 +985,33 @@ export class DialogoCobro {
     if ((this.montos()[forma.id] ?? null) === null) {
       this.escribirMonto(forma.id, centavosATexto(this.restoCentavos()));
     }
-    // Después del render: al entrar, el campo le saca el «,00» a la sugerencia; si el binding la escribiera después del
-    // foco, el cursor iría al final y se perdería la selección (arreglos-compras, B2).
+    this.enfocarSeleccionado(siguiente);
+  }
+
+  /**
+   * Entrar con el mouse a una fila vacía del pago mixto le sugiere lo que falta, como Enter (H4 del recorrido del Vendedor).
+   * Solo al entrar: el clic en la fila que ya tiene el foco no sugiere nada, y Tab tampoco (G53). Una fila con monto no se
+   * pisa. El mousedown se frena para que el foco llegue después de escribir la sugerencia, igual que con Enter.
+   */
+  protected entrarConMouse(evento: MouseEvent, forma: FormaPago): void {
+    const campo = evento.currentTarget as HTMLInputElement;
+    if (evento.button !== 0 || campo.disabled || campo === document.activeElement) return;
+    if ((this.montos()[forma.id] ?? '').trim() !== '') return;
+    if (!this.importesMixtoValidos() || this.restoCentavos() <= 0) return;
+    evento.preventDefault();
+    this.escribirMonto(forma.id, centavosATexto(this.restoCentavos()));
+    this.enfocarSeleccionado(campo);
+  }
+
+  /**
+   * Foco y selección de una fila del mixto después del render: al entrar, el campo le saca el «,00» a la sugerencia; si el
+   * binding la escribiera después del foco, el cursor iría al final y se perdería la selección (arreglos-compras, B2).
+   */
+  private enfocarSeleccionado(campo: HTMLInputElement): void {
     afterNextRender(
       () => {
-        siguiente.focus();
-        siguiente.select();
+        campo.focus();
+        campo.select();
       },
       { injector: this.injector },
     );

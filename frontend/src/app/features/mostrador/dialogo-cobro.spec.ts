@@ -880,6 +880,41 @@ describe('DialogoCobro', () => {
       expect(confirmadas).toEqual([]);
     });
 
+    /** Un clic del mouse: mousedown y, si nadie lo frena, el foco que da el navegador (jsdom no lo da solo); después el click. */
+    async function clic(campo: HTMLInputElement) {
+      const abajo = new MouseEvent('mousedown', { bubbles: true, cancelable: true, button: 0 });
+      if (campo.dispatchEvent(abajo)) campo.focus();
+      campo.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, button: 0 }));
+      campo.dispatchEvent(new MouseEvent('click', { bubbles: true, button: 0 }));
+      await estabilizar();
+    }
+
+    it('entrar con el mouse a una fila vacía le sugiere el resto, seleccionado, como Enter; una con monto no se pisa (H4)', async () => {
+      await abrirMixto();
+      // El clic en la fila donde ya está el foco (abre en efectivo) no es entrar: no sugiere nada.
+      await clic(monto(1));
+      expect(monto(1).value).toBe('');
+      escribirMonto(1, '1000');
+
+      await clic(monto(2));
+
+      expect(document.activeElement).toBe(monto(2));
+      // Igual que con Enter: con el foco adentro se ve sin el «,00» y queda seleccionada entera.
+      expect(monto(2).value).toBe('2.630');
+      expect([monto(2).selectionStart, monto(2).selectionEnd]).toEqual([0, 5]);
+      expect(resumen()).toBe('Completo');
+
+      // Lo que ya se escribió no se pisa: volver a efectivo con el mouse deja sus $ 1.000.
+      await clic(monto(1));
+      expect(document.activeElement).toBe(monto(1));
+      expect(monto(1).value).toBe('1.000');
+      // Con todo cubierto, entrar a otra fila vacía no sugiere nada (no hay resto).
+      await clic(monto(3));
+      expect(monto(3).value).toBe('');
+      expect(resumen()).toBe('Completo');
+      expect(confirmadas).toEqual([]);
+    });
+
     it('con todo cubierto, Enter confirma los pagos en orden y sin forma única ni recibido', async () => {
       await abrirMixto();
       escribirMonto(1, '1000');
