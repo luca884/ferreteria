@@ -79,7 +79,7 @@
     <tbody>
       @for (r of renglonesSinIva(); track r.renglon) {
         <tr>
-          <td class="num">{{ r.cantidad | number: '1.0-3' }}</td>
+          <td class="num">{{ cantidadConUnidad(r.cantidad, r.unidad) }}</td>
           <td>{{ r.descripcion }}</td>
           <td class="num">{{ r.precioSinIva | monto }}</td>
           <td class="num">{{ r.alicuota }}</td>
@@ -100,7 +100,7 @@
       <!-- El importe es precio × cantidad: los descuentos y el recargo van abajo, así todo suma a la vista (QA B-2). -->
       @for (r of v.renglones; track r.renglon) {
         <tr>
-          <td class="num">{{ r.cantidad | number: '1.0-3' }}</td>
+          <td class="num">{{ cantidadConUnidad(r.cantidad, r.unidad) }}</td>
           <td>{{ r.descripcion }}</td>
           <td class="num">{{ r.precioUnitario | monto }}</td>
           <td class="num">{{ r.bruto | monto }}</td>

@@ -3,6 +3,7 @@
  * el resumen de cada fila de GET /api/ventas (C2). La apariencia la decide el servidor (`documento.validoComoFactura`):
  * la hoja pinta solo lo que trae `documento`, nunca `fiscal.letra` ni `fiscal.cae` ni la sesión.
  */
+import { UnidadDeMedida } from '../../core/formato/unidad';
 
 export type AmbienteFiscal = 'SIMULADOR' | 'HOMOLOGACION' | 'PRODUCCION';
 
@@ -134,6 +135,8 @@ export interface RenglonParaFactura {
   renglon: number;
   descripcion: string;
   cantidad: number;
+  /** La del renglón de la venta: la hoja imprime «1,5 kilos», como el remito y el presupuesto. */
+  unidad: UnidadDeMedida;
   /** Con IVA. */
   precioUnitario: number;
   alicuotaIva: string;

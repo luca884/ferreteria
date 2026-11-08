@@ -50,6 +50,43 @@ describe('FacturaHoja (CU-07 paso 5, S5, S6, S12, S13)', () => {
     await fixture.whenStable();
   }
 
+  /** 2 martillos por pieza y 1,5 kg de clavos a $ 4.000 el kilo (con IVA): neto 4.958,68. */
+  const ventaConKilos = (): VentaParaFactura =>
+    ventaParaFactura({
+      renglones: [
+        ventaParaFactura().renglones[0],
+        {
+          renglon: 2,
+          descripcion: 'Clavo punta París 2"',
+          cantidad: 1.5,
+          unidad: 'KILO',
+          precioUnitario: 4000,
+          alicuotaIva: 'IVA_21',
+          bruto: 6000,
+          total: 6000,
+          neto: 4958.68,
+        },
+      ],
+    });
+
+  it('la cantidad lleva su unidad, como el remito y el presupuesto: «1,5 kilos», «2 unidades» (#36)', async () => {
+    await crear(documentoB(), ventaConKilos());
+
+    expect(filas('.renglones')).toEqual([
+      ['2 unidades', 'Martillo', '$ 605,00', '$ 1.210,00'],
+      ['1,5 kilos', 'Clavo punta París 2"', '$ 4.000,00', '$ 6.000,00'],
+    ]);
+  });
+
+  it('la A, con el IVA discriminado, también imprime la cantidad con su unidad (#36)', async () => {
+    await crear(documentoARI(), ventaConKilos());
+
+    expect(filas('.renglones')).toEqual([
+      ['2 unidades', 'Martillo', '$ 500,00', '21 %', '$ 1.000,00'],
+      ['1,5 kilos', 'Clavo punta París 2"', '$ 3.305,79', '21 %', '$ 4.958,68'],
+    ]);
+  });
+
   /** Los datos del emisor que toda hoja lleva (RG 1415): razón social, domicilio, condición, CUIT, IIBB e inicio. */
   function esperarEmisor(condicion = 'IVA RESPONSABLE INSCRIPTO', razonSocial = 'El Tornillo SRL', cuit = '30-71234567-8') {
     const emisor = texto('.emisor')!;
@@ -82,7 +119,7 @@ describe('FacturaHoja (CU-07 paso 5, S5, S6, S12, S13)', () => {
     const receptor = texto('.receptor')!;
     expect(receptor).toContain('A CONSUMIDOR FINAL');
     expect(receptor).toContain('Condición frente al IVA: CONSUMIDOR FINAL');
-    expect(filas('.renglones')).toEqual([['2', 'Martillo', '$ 605,00', '$ 1.210,00']]);
+    expect(filas('.renglones')).toEqual([['2 unidades', 'Martillo', '$ 605,00', '$ 1.210,00']]);
     expect(lineas('.totales')).toEqual(['Total $ 1.210,00']);
     const transparencia = texto('.transparencia')!;
     expect(transparencia).toContain('Régimen de Transparencia Fiscal al Consumidor (Ley 27.743)');
@@ -111,7 +148,7 @@ describe('FacturaHoja (CU-07 paso 5, S5, S6, S12, S13)', () => {
       }),
     );
 
-    expect(filas('.renglones')).toEqual([['10', 'Martillo', '$ 56,87', '$ 568,70']]);
+    expect(filas('.renglones')).toEqual([['10 unidades', 'Martillo', '$ 56,87', '$ 568,70']]);
     expect(lineas('.totales')).toEqual(['Subtotal $ 568,70', 'Descuento −$ 56,87', 'Total $ 511,83']);
   });
 
@@ -127,7 +164,7 @@ describe('FacturaHoja (CU-07 paso 5, S5, S6, S12, S13)', () => {
       }),
     );
 
-    expect(filas('.renglones')).toEqual([['2', 'Martillo', '$ 550,00', '$ 1.100,00']]);
+    expect(filas('.renglones')).toEqual([['2 unidades', 'Martillo', '$ 550,00', '$ 1.100,00']]);
     expect(lineas('.totales')).toEqual(['Subtotal $ 1.100,00', 'Recargo $ 110,00', 'Total $ 1.210,00']);
   });
 
@@ -177,7 +214,7 @@ describe('FacturaHoja (CU-07 paso 5, S5, S6, S12, S13)', () => {
     expect(receptor).toContain('Condición frente al IVA: IVA RESPONSABLE INSCRIPTO');
     expect(receptor).toContain('Domicilio: Colón 2000, Mar del Plata');
     expect(receptor).not.toContain('A CONSUMIDOR FINAL');
-    expect(filas('.renglones')).toEqual([['2', 'Martillo', '$ 500,00', '21 %', '$ 1.000,00']]);
+    expect(filas('.renglones')).toEqual([['2 unidades', 'Martillo', '$ 500,00', '21 %', '$ 1.000,00']]);
     expect(lineas('.totales')).toEqual([
       'Importe neto gravado $ 1.000,00',
       'IVA 21 % $ 210,00',
@@ -220,8 +257,8 @@ describe('FacturaHoja (CU-07 paso 5, S5, S6, S12, S13)', () => {
     await crear(documentoARI({ neto: 990, total: 1197.9 }), conDescuentoGlobal());
 
     expect(filas('.renglones')).toEqual([
-      ['2', 'Martillo', '$ 450,00', '21 %', '$ 900,00'],
-      ['1', 'Clavo', '$ 90,00', '21 %', '$ 90,00'],
+      ['2 unidades', 'Martillo', '$ 450,00', '21 %', '$ 900,00'],
+      ['1 unidad', 'Clavo', '$ 90,00', '21 %', '$ 90,00'],
     ]);
     expect(lineas('.totales')[0]).toBe('Importe neto gravado $ 990,00');
     expect(lineas('.totales').join(' ')).not.toMatch(/Subtotal|Descuento/);
@@ -231,8 +268,8 @@ describe('FacturaHoja (CU-07 paso 5, S5, S6, S12, S13)', () => {
     await crear(documentoB({ codigo: 8, numero: 3, total: 1197.9 }), conDescuentoGlobal(), 'NOTA_CREDITO');
 
     expect(filas('.renglones')).toEqual([
-      ['2', 'Martillo', '$ 605,00', '$ 1.210,00'],
-      ['1', 'Clavo', '$ 121,00', '$ 121,00'],
+      ['2 unidades', 'Martillo', '$ 605,00', '$ 1.210,00'],
+      ['1 unidad', 'Clavo', '$ 121,00', '$ 121,00'],
     ]);
     expect(lineas('.totales')).toEqual(['Subtotal $ 1.331,00', 'Descuento −$ 133,10', 'Total $ 1.197,90']);
   });
@@ -243,7 +280,7 @@ describe('FacturaHoja (CU-07 paso 5, S5, S6, S12, S13)', () => {
     esperarEmisor('RESPONSABLE MONOTRIBUTO', 'Pinturería Sol', '20-33333333-4');
     expect(letra()).toEqual(['C', 'COD. 011']);
     expect(texto('.comprobante')).toContain('N.º 00001-00000003');
-    expect(filas('.renglones')).toEqual([['2', 'Martillo', '$ 605,00', '$ 1.210,00']]);
+    expect(filas('.renglones')).toEqual([['2 unidades', 'Martillo', '$ 605,00', '$ 1.210,00']]);
     expect(lineas('.totales')).toEqual(['Total $ 1.210,00']);
     expect(texto('.renglones')).not.toContain('%');
     expect(hoja()).not.toContain('IVA Contenido');
@@ -261,7 +298,7 @@ describe('FacturaHoja (CU-07 paso 5, S5, S6, S12, S13)', () => {
     expect(texto('.marca')).toBe('SIMULADO — sin validez fiscal');
     expect(comprobante).toContain('Venta N.º 7');
     expect(texto('.receptor')).toContain('A CONSUMIDOR FINAL');
-    expect(filas('.renglones')).toEqual([['2', 'Martillo', '$ 605,00', '$ 1.210,00']]);
+    expect(filas('.renglones')).toEqual([['2 unidades', 'Martillo', '$ 605,00', '$ 1.210,00']]);
     expect(el().querySelector('svg.qr')).toBeNull();
     expect(el().querySelector('.pie-fiscal')).toBeNull();
     expect(hoja()).not.toContain('Comprobante Autorizado');
@@ -331,7 +368,7 @@ describe('FacturaHoja (CU-07 paso 5, S5, S6, S12, S13)', () => {
     expect(texto('.marca')).toBe('SIMULADO — sin validez fiscal');
     expect(texto('.comprobante')).toContain('Venta N.º 7');
     expect(texto('.receptor')).toContain('Ferretería Norte SRL');
-    expect(filas('.renglones')).toEqual([['2', 'Martillo', '$ 500,00', '21 %', '$ 1.000,00']]);
+    expect(filas('.renglones')).toEqual([['2 unidades', 'Martillo', '$ 500,00', '21 %', '$ 1.000,00']]);
     expect(lineas('.totales')).toEqual([
       'Importe neto gravado $ 1.000,00',
       'IVA 21 % $ 210,00',
