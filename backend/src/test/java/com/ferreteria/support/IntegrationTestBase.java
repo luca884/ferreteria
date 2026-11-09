@@ -16,6 +16,8 @@ import org.springframework.test.web.servlet.request.MockMultipartHttpServletRequ
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders;
 import org.testcontainers.containers.MySQLContainer;
 
+import com.ferreteria.auth.repository.UsuarioRepository;
+import com.ferreteria.auth.service.SegundoFactorService;
 import com.ferreteria.common.HoraArgentina;
 
 import java.nio.charset.StandardCharsets;
@@ -68,6 +70,12 @@ public abstract class IntegrationTestBase {
     @Autowired
     protected JdbcTemplate jdbc;
 
+    @Autowired
+    private UsuarioRepository usuarioRepository;
+
+    @Autowired
+    private SegundoFactorService segundoFactor;
+
     /**
      * Un JdbcTemplate como root del MySQL del test (el usuario de la aplicación no tiene PROCESS): sirve para leer las métricas de
      * InnoDB, por ejemplo {@code lock_deadlocks}. La contraseña de root del contenedor es la misma que la del usuario de prueba.
@@ -77,14 +85,23 @@ public abstract class IntegrationTestBase {
                 MYSQL.getJdbcUrl(), "root", MYSQL.getPassword()));
     }
 
-    /** Devuelve el JWT del usuario demo (contrasena demo1234). */
+    /**
+     * Devuelve el JWT del usuario demo (contrasena demo1234). Un SUPER_ADMIN no recibe la sesión del login sino el segundo
+     * paso (totp-super-admin, S1): pasada la contraseña, su sesión sale de {@link SegundoFactorService#entrar}, el mismo
+     * método que la emite después de un código bueno (S9). El código de la app se prueba de punta a punta en
+     * {@code SegundoFactorIntegrationTest}.
+     */
     protected String login(String email) throws Exception {
         String body = mvc.perform(post("/api/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"email\":\"" + email + "\",\"password\":\"demo1234\"}"))
                 .andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString();
-        return objectMapper.readTree(body).get("token").asText();
+        JsonNode respuesta = objectMapper.readTree(body);
+        if (respuesta.hasNonNull("segundoPaso")) {
+            return segundoFactor.entrar(usuarioRepository.findByEmailIgnoreCase(email).orElseThrow()).token();
+        }
+        return respuesta.get("token").asText();
     }
 
     /** El id de la forma de pago de siempre de ese medio, de la ferreteria del token (la lista el servicio si hace falta). */

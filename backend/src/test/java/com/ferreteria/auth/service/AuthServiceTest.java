@@ -13,6 +13,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.ferreteria.auth.dto.LoginRequest;
+import com.ferreteria.auth.dto.LoginResponse;
+import com.ferreteria.auth.dto.SegundoPaso;
 import com.ferreteria.auth.model.Rol;
 import com.ferreteria.auth.model.Usuario;
 import com.ferreteria.auth.repository.UsuarioRepository;
@@ -247,17 +249,25 @@ class AuthServiceTest {
     }
 
     @Test
-    @DisplayName("el super admin, sin ferretería, entra y no se consulta ninguna")
-    void superAdminSinFerreteria() {
+    @DisplayName("S1: el super admin con la contraseña bien no recibe la sesión sino el segundo paso (ALTA sin el código de la "
+            + "app activado, CODIGO con él), y no se consulta ninguna ferretería")
+    void superAdminPasaAlSegundoPaso() {
         Usuario admin = mock(Usuario.class);
         when(admin.isActivo()).thenReturn(true);
         when(admin.getPasswordHash()).thenReturn("$2a$10$admin");
         when(admin.getFerreteriaId()).thenReturn(null);
+        when(admin.getRol()).thenReturn(Rol.SUPER_ADMIN);
         when(encoder.matches("demo1234", "$2a$10$admin")).thenReturn(true);
         when(usuarios.findByEmailIgnoreCase("admin@demo.local")).thenReturn(Optional.of(admin));
-        when(jwt.generarToken(admin)).thenReturn("token");
+        when(jwt.generarTokenTotp(admin)).thenReturn("token-totp");
 
-        assertThat(auth.login(new LoginRequest("admin@demo.local", "demo1234"), IP).token()).isEqualTo("token");
+        assertThat(auth.login(new LoginRequest("admin@demo.local", "demo1234"), IP))
+                .isEqualTo(new LoginResponse(null, null, SegundoPaso.ALTA, "token-totp"));
+        when(admin.isTotpActivado()).thenReturn(true);
+        assertThat(auth.login(new LoginRequest("admin@demo.local", "demo1234"), IP))
+                .isEqualTo(new LoginResponse(null, null, SegundoPaso.CODIGO, "token-totp"));
+        verify(jwt, never()).generarToken(any());
+        verify(jwt, never()).generarTokenConSegundoFactor(any());
         verify(ferreterias, never()).findById(any());
     }
 

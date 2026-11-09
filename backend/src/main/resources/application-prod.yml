@@ -9,3 +9,6 @@ app:
     allowed-origins: ${CORS_ORIGINS}
   facturacion:
     clave-maestra: ${ARCA_CLAVE_MAESTRA}
+  auth:
+    totp:
+      clave-maestra: ${TOTP_CLAVE_MAESTRA}

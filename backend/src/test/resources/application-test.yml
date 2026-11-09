@@ -15,6 +15,10 @@ app:
   facturacion:
     # Fija, sin variable: "solo-test-clave-maestra-arca-001" en Base64.
     clave-maestra: c29sby10ZXN0LWNsYXZlLW1hZXN0cmEtYXJjYS0wMDE=
+  auth:
+    totp:
+      # Fija, sin variable: "solo-test-clave-maestra-totp-001" en Base64.
+      clave-maestra: c29sby10ZXN0LWNsYXZlLW1hZXN0cmEtdG90cC0wMDE=
   # Todo MockMvc viene de 127.0.0.1 y el limitador es uno por contexto: sin esto la suite chocaría con el límite del login.
   # LimiteDeIntentosLoginIntegrationTest vuelve a los valores de producción.
   login:

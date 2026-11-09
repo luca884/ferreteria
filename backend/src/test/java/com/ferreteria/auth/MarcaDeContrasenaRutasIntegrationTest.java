@@ -91,6 +91,16 @@ class MarcaDeContrasenaRutasIntegrationTest extends UsuariosTestBase {
     }
 
     @Test
+    @DisplayName("totp-super-admin: con la marca, los dos pasos del código de la app llegan a su controlador, como el login (los "
+            + "autoriza el tokenTotp del cuerpo)")
+    void losPasosDelCodigoDeLaAppNoLosFrenaLaMarca() throws Exception {
+        assertThat(status("POST", "/api/auth/totp/alta", json("tokenTotp", "no-es-un-token"))).isEqualTo(401);
+        assertThat(status("POST", "/api/auth/totp/verificar", json("tokenTotp", "no-es-un-token", "codigo", "123456")))
+                .isEqualTo(401);
+        assertThat(status("POST", "/api/auth/login", json("email", email, "password", "demo1234"))).isEqualTo(200);
+    }
+
+    @Test
     @DisplayName("hallazgo 5: un usuario dado de baja con la marca recibe 401, no 403")
     void sesionCerradaSigueSiendo401() throws Exception {
         jdbc.update("update usuario set activo = false where email = ?", email);

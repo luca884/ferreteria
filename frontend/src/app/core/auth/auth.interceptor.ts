@@ -26,7 +26,7 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
           error: () => undefined,
         });
       }
-      if (err instanceof HttpErrorResponse && err.status === 401 && !req.url.endsWith('/auth/login')) {
+      if (err instanceof HttpErrorResponse && err.status === 401 && !esDelIngreso(req.url)) {
         auth.logout();
         const queryParams: Record<string, string> = {};
         // Vuelve a donde estaba (solo rutas propias) una vez que se loguee de nuevo.
@@ -45,3 +45,11 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
     }),
   );
 };
+
+/**
+ * El 401 del ingreso no cierra ninguna sesión: lo explica la pantalla del login. Eso vale para la contraseña y para el
+ * segundo paso del super admin (`/auth/totp/alta` y `/auth/totp/verificar`: código mal o `tokenTotp` vencido).
+ */
+function esDelIngreso(url: string): boolean {
+  return url.endsWith('/auth/login') || url.includes('/auth/totp/');
+}

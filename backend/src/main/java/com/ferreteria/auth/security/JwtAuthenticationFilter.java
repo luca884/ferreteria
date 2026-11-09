@@ -64,7 +64,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     /**
      * Hallazgo 5 de la revision de seguridad: con la contraseña que le dio otra persona (alta o reseteo), el usuario solo
      * puede ver su sesion, cambiarla o volver a entrar. El frontend ya lo lleva a «Mi contraseña» (contrasenaGuard); esto
-     * lo exige tambien a quien use la API directo con ese token.
+     * lo exige tambien a quien use la API directo con ese token. Volver a entrar incluye los dos pasos del código de la app
+     * del super admin (totp-super-admin): son públicos como el login y no los autoriza el token del header.
      */
     private static boolean permitidoSinCambiar(HttpServletRequest request) {
         // La ruta decodificada, la misma con la que Spring MVC elige el controlador: con la URI cruda, /%61pi/rubros
@@ -73,7 +74,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         String ruta = RUTAS.getPathWithinApplication(request);
         return ("GET".equals(metodo) && "/api/auth/me".equals(ruta))
                 || ("PUT".equals(metodo) && "/api/auth/password".equals(ruta))
-                || ("POST".equals(metodo) && "/api/auth/login".equals(ruta))
+                || ("POST".equals(metodo) && ("/api/auth/login".equals(ruta) || "/api/auth/totp/alta".equals(ruta)
+                        || "/api/auth/totp/verificar".equals(ruta)))
                 || "/actuator/health".equals(ruta);
     }
 

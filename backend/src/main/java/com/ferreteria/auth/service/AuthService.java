@@ -2,8 +2,10 @@ package com.ferreteria.auth.service;
 
 import com.ferreteria.auth.dto.LoginRequest;
 import com.ferreteria.auth.dto.LoginResponse;
+import com.ferreteria.auth.dto.SegundoPaso;
 import com.ferreteria.auth.dto.SesionResponse;
 import com.ferreteria.auth.model.PoliticaDeContrasena;
+import com.ferreteria.auth.model.Rol;
 import com.ferreteria.auth.model.Usuario;
 import com.ferreteria.auth.repository.UsuarioRepository;
 import com.ferreteria.auth.security.AuthUser;
@@ -48,7 +50,8 @@ public class AuthService {
     /**
      * Login con límite de intentos por email y por IP ({@link LimiteDeIntentos}): pasado el límite da 429 antes de buscar al
      * usuario y sin gastar el bcrypt. La contraseña correcta borra la racha del email desde esa IP (y al email le devuelve su
-     * intento), aunque la ferretería esté suspendida.
+     * intento), aunque la ferretería esté suspendida. Un SUPER_ADMIN con la contraseña correcta no recibe la sesión sino el
+     * segundo paso y su tokenTotp (totp-super-admin, S1).
      */
     @Transactional(readOnly = true)
     public LoginResponse login(LoginRequest request, String ip) {
@@ -76,7 +79,13 @@ public class AuthService {
                 throw new FerreteriaSuspendidaException();
             }
         }
-        return new LoginResponse(jwtService.generarToken(usuario), toSesion(usuario, ferreteria));
+        if (usuario.getRol() == Rol.SUPER_ADMIN) {
+            // totp-super-admin (S1): la contraseña sola no abre la cuenta que ve todas las ferreterías. Falta el código de la
+            // app (SegundoFactorService), con el alta si todavía no lo activó.
+            SegundoPaso falta = usuario.isTotpActivado() ? SegundoPaso.CODIGO : SegundoPaso.ALTA;
+            return LoginResponse.segundoPaso(falta, jwtService.generarTokenTotp(usuario));
+        }
+        return LoginResponse.sesion(jwtService.generarToken(usuario), toSesion(usuario, ferreteria));
     }
 
     @Transactional(readOnly = true)
@@ -114,7 +123,8 @@ public class AuthService {
         usuario.cambiarPropiaContrasena(passwordEncoder.encode(nueva));
     }
 
-    private SesionResponse toSesion(Usuario usuario, Ferreteria ferreteria) {
+    /** Lo que ve el front de la sesión; también la del super admin después del código de la app (SegundoFactorService). */
+    static SesionResponse toSesion(Usuario usuario, Ferreteria ferreteria) {
         return new SesionResponse(
                 usuario.getId(),
                 usuario.getNombre(),

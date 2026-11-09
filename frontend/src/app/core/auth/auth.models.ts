@@ -20,7 +20,30 @@ export interface Sesion {
   debeCambiarContrasena?: boolean;
 }
 
-export interface LoginResponse {
+/** El token y la sesión con los que se entra: el login de siempre y el `/auth/totp/verificar` del super admin. */
+export interface Ingreso {
   token: string;
   sesion: Sesion;
+}
+
+/** Lo que le falta al super admin después de la contraseña: activar el código de la app (con el QR) o escribirlo. */
+export type SegundoPaso = 'ALTA' | 'CODIGO';
+
+/** El super admin con la contraseña bien: sin token ni sesión hasta que pase el código (totp-super-admin, S1). */
+export interface SegundoPasoPendiente {
+  token: null;
+  sesion: null;
+  segundoPaso: SegundoPaso;
+  /** Autoriza solo `/auth/totp/alta` y `/auth/totp/verificar`, vence a los 5 minutos y nunca se guarda. */
+  tokenTotp: string;
+}
+
+/** Dueño y Vendedor entran directo (`segundoPaso` y `tokenTotp` en null o ausentes); el super admin, en dos pasos. */
+export type LoginResponse = (Ingreso & { segundoPaso?: null; tokenTotp?: null }) | SegundoPasoPendiente;
+
+/** El alta del código de la app: la clave en Base32, el `otpauth://` y su QR en filas de '0' y '1'. */
+export interface AltaTotp {
+  clave: string;
+  uri: string;
+  qr: string[];
 }

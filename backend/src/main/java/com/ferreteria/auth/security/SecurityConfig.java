@@ -38,6 +38,8 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/auth/login").permitAll()
+                        // El segundo paso del login del super admin (totp-super-admin): lo autoriza el tokenTotp del cuerpo.
+                        .requestMatchers(HttpMethod.POST, "/api/auth/totp/alta", "/api/auth/totp/verificar").permitAll()
                         .requestMatchers("/actuator/health").permitAll()
                         .requestMatchers("/error").permitAll()
                         // El rol se exige ANTES de leer el multipart o el cuerpo: un Vendedor recibe 403 aunque
