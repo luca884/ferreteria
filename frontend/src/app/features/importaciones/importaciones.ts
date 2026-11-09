@@ -414,6 +414,14 @@ export class Importaciones implements OnInit {
     });
   }
 
+  /**
+   * Si la importación aplicada cambió algún precio: suben, bajan, cambian de moneda o corrigen IVA o ajustes. Si fue
+   * todo nuevo, el resumen no dice «Los precios ya están actualizados» (bugs-relevamiento-celular, S10).
+   */
+  protected cambiaronPrecios(c: Conteos): boolean {
+    return c.suben + c.bajan + c.cambianMoneda + c.corrigen > 0;
+  }
+
   /** Las tarjetas de contadores. Con `totales`, lo elegido aclara «de N» cuando es menos que lo que trae el archivo. */
   protected tarjetasDe(valores: Conteos, totales?: Conteos): { etiqueta: string; valor: number; total: number | null }[] {
     return TARJETAS.map(({ etiqueta, clave }) => ({

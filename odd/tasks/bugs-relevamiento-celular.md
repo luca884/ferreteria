@@ -100,7 +100,7 @@ Orden (L6): T2, T5, T7, T8 → T0 → T1, T3, T4, T6 → T9.
 - [x] T5 · S5, S8, S12 · ruta: inline · Aceptación: S5, S8 (incluido el mensaje del super admin) y lo de S5 y S8 en S12 · Evidencia: `configuracion-ventas.spec.ts` RED («-5» quedaba «5,00») → GREEN 8/8, y `importe-input.spec.ts` sigue verde (22/22 entre los dos); `datos-fiscales.spec.ts` RED (sin avisos) → GREEN 13/13, incluido `:92-110`; `ConfigArcaTest` RED 2 → GREEN 31/31 y `ConfigArcaAdminIntegrationTest` 23/23 con el texto nuevo; ego-browser (L8) · commit: ver L8 · Risk: none
 - [ ] T6 · S7 · ruta: inline · Aceptación: S7 · Evidencia: — · Risk: none
 - [x] T7 · S9 · ruta: inline · Aceptación: S9 (primero confirmar la causa con la base) · Evidencia: causa confirmada en la base (L9); `DocumentoFiscalIntegrationTest#resumenes` RED (`letraFiscal` en null) → GREEN, 29/29, y `VentaFacturadaCerrojoIntegrationTest` 39/39 con `letraFiscal` en el JSON; `ventas.spec.ts` RED 5 → GREEN 63/63, con un caso nuevo de dos X con el mismo número; ego-browser (L9) · commit: ver L9 · Risk: none (campo nuevo en una respuesta que solo consume el front; `letra` no cambia)
-- [ ] T8 · S10 (importación) · ruta: inline · Aceptación: S10 en `importaciones.html:35` · Evidencia: — · Risk: none
+- [x] T8 · S10 (importación) · ruta: inline · Aceptación: S10 en `importaciones.html:35` · Evidencia: `importaciones.spec.ts` RED 3 (todo nuevo, un nuevo, mixto) → GREEN 208/208; el caso de solo cambios ya pasaba y queda fijado; ego-browser (L10) · commit: ver L10 · Risk: none
 - [ ] T9 · cierre · ruta: inline + `odd-verifier` (Opus) por T4 · Aceptación: suite backend (`./mvnw test`, sin otra suite corriendo), suite frontend y `npx ng build` verdes; cada bug probado en ego-browser, antes en `main` y después en la rama · Evidencia: — · Risk: item 3 (T4)
 
 ## Log
@@ -175,3 +175,11 @@ Orden (L6): T2, T5, T7, T8 → T0 → T1, T3, T4, T6 → T9.
   - Ego-browser (Perla): antes (4200), venta 7, venta 10, NC 18 y NC 20 decían «X 00001-00000002 Simulado». Después (8081/4201), «X (A)…», «X (B)…», «X (B)…» y «X (A)…», y el detalle de la venta 10 dice «X (B) 00001-00000002 · SIMULADO — sin validez fiscal».
 
   Próximo paso: T8.
+- L10 (2026-11-09) T8 hecha (el código en el commit «fix: el resumen de la importación dice cuántos artículos se crearon»). «Los precios ya están actualizados.» sale si algún precio cambió: suben, bajan, cambian de moneda o corrigen IVA o ajustes (`cambiaronPrecios`). «Se crearon N artículos nuevos.» (en singular, «Se creó 1 artículo nuevo.») sale de `conteos.nuevos` de la respuesta, que ya cuenta solo los creados (`ImportacionService.java:182`). Si no cambió ni se creó nada, queda «Archivo X.» y las tarjetas.
+
+  Ego-browser (Faro, Bulonera del Sur, una lista de 2 artículos nuevos con códigos `QAT8-*`):
+  - Antes (4200): «Archivo lista-t8-A.xlsx. Los precios ya están actualizados.» con Nuevos 2.
+  - Después (8081/4201): «Archivo lista-t8-B.xlsx. Se crearon 2 artículos nuevos.»
+  - Se borraron los 4 artículos de prueba, su historial y las importaciones 23 y 24, y se restauró el mapeo del proveedor 16, que la confirmación había pisado.
+
+  Próximo paso: T0, cuando `feat/responsive` esté mergeada en `main`.
