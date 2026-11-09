@@ -21,7 +21,7 @@ describe('MovimientosArticulo', () => {
 
   const movimientos: MovimientoStock[] = [
     { id: 4, fecha: '2026-10-23T10:15:00', tipo: 'AJUSTE', cantidad: -1, saldo: 11, comprobante: null, usuario: 'Ana', motivo: 'Rotura' },
-    { id: 3, fecha: '2026-10-23T09:00:00', tipo: 'COMPRA', cantidad: 5, saldo: 12, comprobante: 'FA 00003-00001234 · Bulonera Sur', usuario: 'Ana', motivo: null },
+    { id: 3, fecha: '2026-10-23T09:00:00', tipo: 'COMPRA', cantidad: 5, saldo: 12, comprobante: 'Factura A 00003-00001234 · Bulonera Sur', usuario: 'Ana', motivo: null },
     { id: 2, fecha: '2026-10-22T18:30:00', tipo: 'ANULACION_REMITO', cantidad: 1, saldo: 7, comprobante: 'Remito N.º 5', usuario: 'Beto', motivo: null },
     { id: 1, fecha: '2026-10-22T18:00:00', tipo: 'VENTA', cantidad: -2.5, saldo: 6, comprobante: 'Venta N.º 12', usuario: null, motivo: null },
   ];
@@ -88,7 +88,7 @@ describe('MovimientosArticulo', () => {
 
     expect(filas()).toHaveLength(4);
     expect(celdas(0)).toEqual(['23/10/2026 10:15', 'Ajuste', '—', '-1 unidad', '11 unidades', 'Ana', 'Rotura']);
-    expect(celdas(1)).toEqual(['23/10/2026 09:00', 'Compra', 'FA 00003-00001234 · Bulonera Sur', '+5 unidades', '12 unidades', 'Ana', '—']);
+    expect(celdas(1)).toEqual(['23/10/2026 09:00', 'Compra', 'Factura A 00003-00001234 · Bulonera Sur', '+5 unidades', '12 unidades', 'Ana', '—']);
     expect(celdas(2)[1]).toBe('Anulación de remito');
     expect(celdas(3)).toEqual(['22/10/2026 18:00', 'Venta', 'Venta N.º 12', '-2,5 unidades', '6 unidades', '—', '—']);
   });
@@ -97,7 +97,7 @@ describe('MovimientosArticulo', () => {
     const clavo = { ...tornillo, descripcion: 'Clavo punta París 2"', unidad: 'KILO', stockActual: 18.5 } as Articulo;
     const deKilos: MovimientoStock[] = [
       { id: 2, fecha: '2026-11-08T12:10:00', tipo: 'VENTA', cantidad: -1.5, saldo: 18.5, comprobante: 'Venta N.º 29', usuario: 'Ana', motivo: null },
-      { id: 1, fecha: '2026-11-08T12:00:00', tipo: 'COMPRA', cantidad: 20, saldo: 20, comprobante: 'FA 00007-00009101', usuario: 'Ana', motivo: null },
+      { id: 1, fecha: '2026-11-08T12:00:00', tipo: 'COMPRA', cantidad: 20, saldo: 20, comprobante: 'Factura A 00007-00009101', usuario: 'Ana', motivo: null },
     ];
     await crear(true, vi.fn(() => of(pagina(deKilos))), vi.fn(() => of(clavo)));
 

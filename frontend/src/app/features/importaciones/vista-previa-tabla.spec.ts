@@ -38,6 +38,7 @@ function cambio(hoja: number, fila: number, anterior = 100, nuevo = 120, parcial
     alicuotaNueva: 'IVA_21',
     ajustesAnteriores: NINGUNO,
     ajustesNuevos: NINGUNO,
+    unidad: 'UNIDAD',
     ...parcial,
   };
 }
@@ -283,6 +284,27 @@ describe('VistaPreviaTabla', () => {
 
       const fila = filasDeTabla()[0];
       expect(valores(fila, COSTOS)).toEqual(['$ 1.000,00', '$ 1.111,10', '$ 1.500,00', '$ 1.666,65']);
+    });
+
+    it('un artículo por kilo, metro o litro dice por qué unidad son sus costos y precios (#36)', async () => {
+      await crear(
+        unirFilas(
+          vistaPrevia({
+            cambios: [cambio(0, 2, 1000, 1111.1, { unidad: 'KILO' }), cambio(0, 3, 1000, 1111.1, { unidad: 'METRO' })],
+            nuevos: [alta(0, 4, { unidad: 'LITRO' })],
+          }),
+        ),
+      );
+
+      const [porKilo, porMetro, nuevo] = filasDeTabla();
+      expect(valores(porKilo, COSTOS)).toEqual([
+        '$ 1.000,00 / kg',
+        '$ 1.111,10 / kg',
+        '$ 1.500,00 / kg',
+        '$ 1.666,65 / kg',
+      ]);
+      expect(valores(porMetro, COSTOS)).toEqual(['$ 1.000,00 / m', '$ 1.111,10 / m', '$ 1.500,00 / m', '$ 1.666,65 / m']);
+      expect(valores(nuevo, COSTOS)).toEqual(['—', '$ 18,00 / l', '—', '$ 30,00 / l']);
     });
 
     it('«cambia de moneda» muestra ARS → USD con el costo en cada moneda y el precio en pesos', async () => {

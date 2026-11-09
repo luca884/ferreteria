@@ -1,6 +1,7 @@
 import { DecimalPipe } from '@angular/common';
 import { Component, computed, input, output, signal } from '@angular/core';
 import { formatearCosto } from '../../core/formato/monto';
+import { porUnidad } from '../../core/formato/unidad';
 import { detalleDeFila, etiquetaDeTipo } from './detalle-fila';
 import {
   FilaDeVista,
@@ -125,23 +126,23 @@ export class VistaPreviaTabla {
 
   protected costoAnterior(fila: FilaDeVista): string {
     const c = fila.cambio;
-    return c ? formatearCosto(c.costoAnterior, c.monedaAnterior) : SIN_DATO;
+    return c ? formatearCosto(c.costoAnterior, c.monedaAnterior) + porUnidad(c.unidad) : SIN_DATO;
   }
 
   protected costoNuevo(fila: FilaDeVista): string {
-    if (fila.cambio) return formatearCosto(fila.cambio.costoNuevo, fila.cambio.monedaNueva);
-    if (fila.alta) return formatearCosto(fila.alta.costo, fila.alta.moneda);
+    if (fila.cambio) return formatearCosto(fila.cambio.costoNuevo, fila.cambio.monedaNueva) + porUnidad(fila.cambio.unidad);
+    if (fila.alta) return formatearCosto(fila.alta.costo, fila.alta.moneda) + porUnidad(fila.alta.unidad);
     return SIN_DATO;
   }
 
   protected precioAnterior(fila: FilaDeVista): string {
-    return fila.cambio ? formatearCosto(fila.cambio.precioAnterior, 'ARS') : SIN_DATO;
+    return fila.cambio ? formatearCosto(fila.cambio.precioAnterior, 'ARS') + porUnidad(fila.cambio.unidad) : SIN_DATO;
   }
 
   protected precioNuevo(fila: FilaDeVista): string {
-    if (fila.cambio) return formatearCosto(fila.cambio.precioNuevo, 'ARS');
+    if (fila.cambio) return formatearCosto(fila.cambio.precioNuevo, 'ARS') + porUnidad(fila.cambio.unidad);
     if (fila.alta?.precioNuevo !== null && fila.alta?.precioNuevo !== undefined) {
-      return formatearCosto(fila.alta.precioNuevo, 'ARS');
+      return formatearCosto(fila.alta.precioNuevo, 'ARS') + porUnidad(fila.alta.unidad);
     }
     return SIN_DATO;
   }

@@ -160,6 +160,8 @@ export interface CambioPlaneado {
   /** El costo real (costo más recargos) de hoy, en la moneda de hoy, y el nuevo, en la moneda nueva; null sin recargos. */
   costoRealAnterior?: number | null;
   costoRealNuevo?: number | null;
+  /** La unidad de venta del artículo, para que costos y precios digan «/ kg» (#36). */
+  unidad: Unidad;
 }
 
 export interface AltaPlaneada {

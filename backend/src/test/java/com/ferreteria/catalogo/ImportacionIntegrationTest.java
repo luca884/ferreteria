@@ -1468,13 +1468,37 @@ class ImportacionIntegrationTest extends CotizacionTestBase {
         }
     }
 
+    /** El cambio trae la unidad del articulo que ya existe, para que la pantalla diga «/ kg» (#36). */
+    @Test
+    void laVistaPreviaTraeLaUnidadDeLosArticulosQueCambian() throws Exception {
+        sembrarAyB();
+        long proveedor = crearProveedor(dueA, unico("P"));
+        String s = unico("");
+        long porKilo = articuloDe(dueA, proveedor, "KG" + s, "100");
+        jdbc.update("update articulo set unidad = 'KILO' where id = ?", porKilo);
+        articuloDe(dueA, proveedor, "UN" + s, "100");
+        MockMultipartFile lista = archivo("lista.xlsx", ListasDePrueba.xlsx(List.of(
+                fila("Codigo", "Descripcion", "Costo"),
+                fila("KG" + s, "x", n("200")),
+                fila("UN" + s, "x", n("200")))));
+
+        JsonNode cambios = vistaPreviaDe(dueA, lista, datosCon(proveedor, mapeo())).get("cambios");
+
+        assertThat(cambios).hasSize(2);
+        assertThat(cambios.get(0).get("articuloId").asLong()).isEqualTo(porKilo);
+        assertThat(cambios.get(0).get("unidad").asText()).isEqualTo("KILO");
+        assertThat(cambios.get(1).get("unidad").asText()).isEqualTo("UNIDAD");
+    }
+
     @Test
     void laVistaPreviaTraeLasListasNuevasConHojaYLosContadoresNuevos() throws Exception {
         sembrarAyB();
         long proveedor = crearProveedor(dueA, unico("P"));
         String s = unico("");
-        articuloDe(dueA, proveedor, "MON" + s, "1000");
-        articuloDe(dueA, proveedor, "COR" + s, "10000");
+        long moneda = articuloDe(dueA, proveedor, "MON" + s, "1000");
+        long correccion = articuloDe(dueA, proveedor, "COR" + s, "10000");
+        jdbc.update("update articulo set unidad = 'KILO' where id = ?", moneda);
+        jdbc.update("update articulo set unidad = 'METRO' where id = ?", correccion);
         articuloDe(dueA, proveedor, "IGU" + s, "100");
         MockMultipartFile lista = archivo("lista.xlsx", ListasDePrueba.xlsx(List.of(
                 filaExtra("Codigo", "Descripcion", "Costo", "Moneda", "IVA"),
@@ -1496,10 +1520,12 @@ class ImportacionIntegrationTest extends CotizacionTestBase {
         assertThat(previa.get("cambiosDeMoneda").get(0).get("monedaAnterior").asText()).isEqualTo("ARS");
         assertThat(previa.get("cambiosDeMoneda").get(0).get("monedaNueva").asText()).isEqualTo("USD");
         assertThat(previa.get("cambiosDeMoneda").get(0).get("precioNuevo").decimalValue()).isEqualByComparingTo("15730");
+        assertThat(previa.get("cambiosDeMoneda").get(0).get("unidad").asText()).isEqualTo("KILO");
         assertThat(previa.get("correcciones")).hasSize(1);
         assertThat(previa.get("correcciones").get(0).get("alicuotaAnterior").asText()).isEqualTo("IVA_21");
         assertThat(previa.get("correcciones").get(0).get("alicuotaNueva").asText()).isEqualTo("IVA_10_5");
         assertThat(previa.get("correcciones").get(0).get("precioNuevo").decimalValue()).isEqualByComparingTo("14370");
+        assertThat(previa.get("correcciones").get(0).get("unidad").asText()).isEqualTo("METRO");
         assertThat(previa.get("sinCambio")).hasSize(1);
         assertThat(previa.get("sinCambio").get(0).get("fila").asInt()).isEqualTo(4);
         assertThat(previa.get("sinCambio").get(0).get("codigo").asText()).isEqualTo("IGU" + s);

@@ -25,6 +25,7 @@ function cambio(parcial: Partial<CambioPlaneado> = {}): CambioPlaneado {
     alicuotaNueva: 'IVA_21',
     ajustesAnteriores: NINGUNO,
     ajustesNuevos: NINGUNO,
+    unidad: 'UNIDAD',
     ...parcial,
   };
 }
@@ -145,6 +146,22 @@ describe('detalle-fila', () => {
 
       expect(detalleDeFila(f)).toEqual([
         `Costo real: ${formatearCosto(110, 'ARS')} → ${formatearCosto(220, 'ARS')} (recargos 10 %)`,
+      ]);
+    });
+
+    it('el costo real de un artículo por kilo dice «/ kg» (#36)', () => {
+      const f = fila('suben', {
+        cambio: cambio({
+          unidad: 'KILO',
+          costoNuevo: 200,
+          recargosPorcentaje: 10,
+          costoRealAnterior: 110,
+          costoRealNuevo: 220,
+        }),
+      });
+
+      expect(detalleDeFila(f)).toEqual([
+        `Costo real: ${formatearCosto(110, 'ARS')} / kg → ${formatearCosto(220, 'ARS')} / kg (recargos 10 %)`,
       ]);
     });
 

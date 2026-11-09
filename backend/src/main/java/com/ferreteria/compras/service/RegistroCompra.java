@@ -157,7 +157,7 @@ public class RegistroCompra {
             BigDecimal subtotal = ItemCompra.subtotal(renglon.cantidad(), renglon.costoUnitario());
             renglones.add(new RenglonPlaneado(costo, renglon.cantidad(), subtotal));
             neto = neto.add(subtotal);
-            int comparacion = costo.costoNuevo().compareTo(costo.costoAnterior());
+            int comparacion = costo.costoRealNuevo().compareTo(costo.costoRealAnterior());
             if (comparacion > 0) {
                 suben++;
             } else if (comparacion < 0) {
