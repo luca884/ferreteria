@@ -2,7 +2,7 @@
 
 Objetivo: la app se puede usar bien en celular, tablet y laptop, sin cambiar cómo se ve en escritorio · Por qué: el relevamiento a 390×844 del 2026-11-09 encontró que ninguna pantalla es usable hoy en el celular (L2).
 Rama: `feat/responsive` desde `c65fccf5` · Entrega: single-pr · Runner: frontend `npx ng test --watch=false --include=<spec>` / suite `npx ng test --watch=false` / `npx ng build` · Mirror Engram: `odd/responsive/tasks` (ok)
-Pronóstico: ~1.700 líneas (agregadas + borradas, sin generados) · Heurística por tarea: ~400 (no es límite) · Modelo: Opus escribió el doc; ejecuta una terminal con Opus (caso 4 + memoria «ejecutar con Opus»), aprobado por Luca (L6)
+Pronóstico: ~1.700 líneas (agregadas + borradas, sin generados) · Heurística por tarea: ~400 (no es límite) · Modelo: Opus escribió el doc; ejecuta una terminal con Opus (caso 4 + memoria «ejecutar con Opus»), aprobado por Luca (L6) · Arranca después del merge de `fix/bugs-relevamiento-celular`, rebaseando esta rama sobre `main` antes de T0 (L7)
 
 ## Specs
 
@@ -180,3 +180,11 @@ Usuarios locales (contraseña `demo1234`): `dueno@faro.qa`, `vendedor@faro.qa`, 
   > dale
 
   Próximo paso: la terminal con Opus arranca por T0 y T1. La app local queda levantada en 4200 y 8080, con MySQL en 3307.
+- L7 (2026-11-09) Cambio de orden. La terminal de esta feature nunca arrancó: la rama solo tiene los commits del doc. Mientras tanto, la de `fix/bugs-relevamiento-celular` terminó T2, T5, T7 y T8 y quedó esperando este merge. Se propone que los bugs vayan primero: la rama es más chica y ya va por la mitad, y como acá no hay código, no hay choques. Luca, textual (a «¿Le cambiamos el orden?»):
+  > dale
+
+  Próximo paso, cuando `fix/bugs-relevamiento-celular` esté mergeada en `main`:
+  1. Rebasear `feat/responsive` sobre `main`. Solo tiene commits de doc, así que no hay conflictos.
+  2. Arrancar por T0.
+
+  Las líneas citadas en L4 pueden haberse corrido en los archivos que tocó la rama de bugs: `nueva-compra`, `reportes`, `ventas`, `presupuestos`, `remitos`, `compras`, `configuracion-ventas`, `datos-fiscales`, `importaciones` y los listados con Desde/Hasta. Se releen antes de editar.
