@@ -2,7 +2,7 @@
 
 Objetivo: arreglar los bugs funcionales (no de responsive) que encontró el relevamiento en celular del 2026-11-09 · Por qué: Luca pidió tratarlos en una rama aparte del responsive (L1).
 Rama: `fix/bugs-relevamiento-celular` desde `c65fccf5` (worktree `../ferreteria-bugs-celular`) · Entrega: single-pr · Runner: backend `./mvnw test -Dtest=<Clase>` / suite `./mvnw test`; frontend `npx ng test --watch=false --include=<spec>` / suite `npx ng test --watch=false` / `npx ng build` · Mirror Engram: `odd/bugs-relevamiento-celular/tasks` (ok)
-Pronóstico: ~650 líneas · Heurística por tarea: ~400 (no es límite) · Modelo: una terminal con Opus, después del merge de `feat/responsive` (L1: «luego»)
+Pronóstico: ~650 líneas · Heurística por tarea: ~400 (no es límite) · Modelo: una terminal con Opus en el worktree. T2, T5, T7 y T8 arrancan ya; T1, T3, T4 y T6, después del merge de `feat/responsive` (L6)
 
 ## Specs
 
@@ -13,7 +13,10 @@ Fuera de alcance:
 - Los avisos del mostrador que se acumulan, el código anterior que queda seleccionado después de vender y «Salir» sin confirmación: no está claro que sean bugs.
 
 Restricciones:
-- Arrancar después del merge de `feat/responsive`, y rebasear esta rama sobre `main` antes de la primera escritura. El responsive toca los mismos archivos: `nueva-compra.html:28` (la pista de arrastrar), las tablas de `ventas.html` y `reportes.html`, y `presupuestos.html:6`.
+- Orden (L6): T2, T5, T7 y T8 arrancan ya desde `c65fccf5`, en paralelo con `feat/responsive`, porque casi no tocan lo mismo. T1, T3, T4 y T6 esperan el merge del responsive y el rebase de T0, porque cruzan con sus archivos: `nueva-compra.html:28`, las tablas y tarjetas de `reportes.html`, los filtros de los 5 listados, `presupuestos.html:6` y los specs de Ventas, Presupuestos y Remitos. Después va T9.
+- Mientras corran las dos terminales:
+  - Esta rama se prueba en 8081 y 4201 contra la misma MySQL (memoria «probar la rama en puertos aparte»): `./mvnw spring-boot:run -Dspring-boot.run.arguments=--server.port=8081` y `npx ng serve --port 4201` con un proxy de `/api` a 8081. La del responsive usa 8080 y 4200: no se tocan.
+  - Solo tests puntuales (`-Dtest=<Clase>`, `--include=<spec>`). Las suites completas van en T9, después del rebase («Nunca dos suites a la vez»).
 - Ninguna migración.
 - Si cambia un endpoint de datos de una ferretería, lleva su caso de aislamiento por tenant (regla 7 del `CLAUDE.md`).
 - Cada arreglo se prueba de punta a punta en la app levantada con ego-browser: antes en `main` y después en la rama (memorias «probar de punta a punta» y «verificar con ego-browser»).
@@ -87,7 +90,9 @@ Restricciones:
 
 ## Tasks
 
-- [ ] T0 · cierre del responsive · ruta: inline · Aceptación: `feat/responsive` mergeada en `main` y esta rama rebaseada sin conflictos sin resolver · Evidencia: — · Risk: none
+Orden (L6): T2, T5, T7, T8 → T0 → T1, T3, T4, T6 → T9.
+
+- [ ] T0 · rebase después del responsive · ruta: inline · Aceptación: antes de T1, T3, T4 y T6, `feat/responsive` está mergeada en `main` y esta rama queda rebaseada, con los conflictos resueltos. Los esperables están en la línea 14 de `configuracion-ventas.html` y `datos-fiscales.html` (T5), donde el responsive pone su directiva de avisos. Después se repiten los tests puntuales de T2, T5, T7 y T8 · Evidencia: — · Risk: none
 - [ ] T1 · S1, S10 (texto de Nueva compra), S12 · ruta: inline · Aceptación: S1, el texto de S10 en Nueva compra y lo de S1 en S12 · Evidencia: — · Risk: none
 - [ ] T2 · S2, S12 · ruta: inline · Aceptación: S2 y lo de S2 en S12 · Evidencia: — · Risk: none (cambio pedido, endpoint que solo consume el front)
 - [ ] T3 · S3, S6 · ruta: inline · Aceptación: S3 y S6 (los dos en `reportes/`) · Evidencia: — · Risk: none
@@ -134,3 +139,13 @@ Restricciones:
   > me parece bien ,lo unico si se le dice al usuario falta X nosotros le tenemos que dar la posibilidad de quelo puedo arreglar, por ejemplo los datos fiscales con el aviso ese el ususario debe poder arreglar essos datos y probar de nuevo, es lo mismo que en un formulario te diga pone tu email y no te de un lugar para ingresarlo
 
   La regla pasa a S12 y se aplica a los mensajes de esta rama. El único caso donde quien ve el aviso no puede arreglarlo es el super admin al habilitar la facturación (los datos los edita el Dueño, CU-01): ahí el mensaje dice dónde se completan. El aviso del Dueño pasa a «Completalo para poder facturar.». Próximo paso: la ejecución arranca por T0 después del merge del responsive.
+- L6 (2026-11-09) Luca pregunta: «¿Arranco ahora por T2, T5, T7 y T8, o esperamos a que se mergee el responsive como dice el doc?». Se revisó contra el plan del responsive (`odd/tasks/responsive.md`, rama `feat/responsive`, que todavía no tiene código commiteado):
+  - T2 es backend y `docs/spec.md`.
+  - T7 es `HojaFiscal.java` y la etiqueta en `ventas.ts`; el responsive toca `ventas.html`.
+  - T8 está en `importaciones.html:35`; el responsive toca el selector de hojas, en `:88`.
+  - T5 solo roza la línea 14 (`p.alerta`) de dos plantillas.
+
+  Las otras cuatro cruzan con el responsive. Se propone partir T0: rebase antes de T1, T3, T4 y T6, la app en 8081/4201 y solo tests puntuales hasta T9. Respuesta, textual:
+  > dale
+
+  Próximo paso: una terminal con Opus en `../ferreteria-bugs-celular` arranca por T2.
