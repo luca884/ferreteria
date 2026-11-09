@@ -17,7 +17,7 @@ class MargenNegativoTest {
     @DisplayName("costo 110 con precio 121 (100 sin IVA): avisa con los dos importes")
     void costoMayorQueElPrecioSinIva() {
         assertThat(MargenNegativo.mensaje(bd("110.00"), BigDecimal.ONE, AlicuotaIva.IVA_21, bd("121.00")))
-            .contains("Margen negativo: el costo ($ 110,00) supera el precio sin IVA ($ 100,00). "
+            .contains("Margen negativo: el costo ($\u00a0110,00) supera el precio sin IVA ($\u00a0100,00). "
                 + "Revisá el precio manual.");
     }
 
@@ -44,7 +44,7 @@ class MargenNegativoTest {
     void enDolaresUsaLaCotizacion() {
         assertThat(MargenNegativo.mensaje(bd("1.00"), bd("1000"), AlicuotaIva.IVA_21, bd("1210.00"))).isEmpty();
         assertThat(MargenNegativo.mensaje(bd("1.00"), bd("1000"), AlicuotaIva.IVA_21, bd("1200.00")))
-            .contains("Margen negativo: el costo ($ 1.000,00) supera el precio sin IVA ($ 991,74). "
+            .contains("Margen negativo: el costo ($\u00a01.000,00) supera el precio sin IVA ($\u00a0991,74). "
                 + "Revisá el precio manual.");
     }
 

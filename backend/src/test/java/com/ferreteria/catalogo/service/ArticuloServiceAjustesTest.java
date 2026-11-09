@@ -490,8 +490,8 @@ class ArticuloServiceAjustesTest {
 
         assertThatThrownBy(() -> service.editarAjustes(ID, pedido("-5", null, null), USUARIO))
                 .isInstanceOfSatisfying(ConflictException.class, e -> {
-                    assertThat(e.getMessage()).isEqualTo("El costo guardado ($ 950,00) no coincide con el que sale "
-                            + "de la lista ($ 900,00). Si guardás, el costo pasa a $ 855,00.");
+                    assertThat(e.getMessage()).isEqualTo("El costo guardado ($\u00a0950,00) no coincide con el que sale "
+                            + "de la lista ($\u00a0900,00). Si guardás, el costo pasa a $\u00a0855,00.");
                     assertThat(e.errors()).isEmpty();
                 });
         assertThat(articulo.getAjuste1()).isNull();
@@ -542,8 +542,8 @@ class ArticuloServiceAjustesTest {
 
         assertThatThrownBy(() -> service.editarAjustes(ID, pedido(null, null, null), USUARIO))
                 .isInstanceOf(ConflictException.class)
-                .hasMessage("El costo guardado ($ 990,00) no coincide con el que sale de la lista ($ 855,00). "
-                        + "Si guardás, el costo pasa a $ 900,00.");
+                .hasMessage("El costo guardado ($\u00a0990,00) no coincide con el que sale de la lista ($\u00a0855,00). "
+                        + "Si guardás, el costo pasa a $\u00a0900,00.");
     }
 
     @Test
@@ -555,8 +555,8 @@ class ArticuloServiceAjustesTest {
 
         assertThatThrownBy(() -> service.editarAjustes(ID, pedido("-10", null, null), USUARIO))
                 .isInstanceOf(ConflictException.class)
-                .hasMessage("El costo guardado (US$ 9,50) no coincide con el que sale de la lista (US$ 10,00). "
-                        + "Si guardás, el costo pasa a US$ 9,00.");
+                .hasMessage("El costo guardado (US$\u00a09,50) no coincide con el que sale de la lista (US$\u00a010,00). "
+                        + "Si guardás, el costo pasa a US$\u00a09,00.");
     }
 
     @Test

@@ -229,7 +229,7 @@ class PlanificadorMasivoTest {
             PlanMasivo plan = precioFinal(ModoMasivo.PRECIO_PORCENTAJE, "-10", Art.art(1, "100.00").precio("121.00"));
 
             assertThat(plan.cambios().get(0).advertencia()).isEqualTo(
-                "Margen negativo: el costo ($ 100,00) supera el precio sin IVA ($ 90,00). Revisá el precio manual.");
+                "Margen negativo: el costo ($\u00a0100,00) supera el precio sin IVA ($\u00a090,00). Revisá el precio manual.");
             assertThat(plan.conteos().conAdvertencia()).isEqualTo(1);
         }
 
@@ -239,7 +239,7 @@ class PlanificadorMasivoTest {
             PlanMasivo plan = precioFinal(ModoMasivo.PRECIO_PORCENTAJE, "60", Art.art(1, "10.00").precio("100.00"));
 
             assertThat(plan.cambios().get(0).advertencia())
-                .isEqualTo("El precio sube un 60 % (de $ 100,00 a $ 160,00). Revisá que sea correcto.");
+                .isEqualTo("El precio sube un 60 % (de $\u00a0100,00 a $\u00a0160,00). Revisá que sea correcto.");
         }
 
         @Test
@@ -260,7 +260,7 @@ class PlanificadorMasivoTest {
 
         private static final String AJUSTES_EN_CERO = "Con los ajustes del precio final, el precio queda en 0 o menos.";
         private static final String MARGEN_NEGATIVO_110 =
-            "Margen negativo: el costo ($ 110,00) supera el precio sin IVA ($ 100,00). Revisá el precio manual.";
+            "Margen negativo: el costo ($\u00a0110,00) supera el precio sin IVA ($\u00a0100,00). Revisá el precio manual.";
 
         @Test
         @DisplayName("costo +10 % con precio manual: cambia el costo y el precio queda el escrito")
@@ -305,8 +305,8 @@ class PlanificadorMasivoTest {
             PlanMasivo plan = costoPorcentaje("60", Art.art(1, "100.00").precio("121.00").manual());
 
             assertThat(plan.cambios().get(0).advertencia()).isEqualTo(
-                "El costo sube un 60 % (de $ 100,00 a $ 160,00). Revisá que sea correcto. Margen negativo: el costo "
-                    + "($ 160,00) supera el precio sin IVA ($ 100,00). Revisá el precio manual.");
+                "El costo sube un 60 % (de $\u00a0100,00 a $\u00a0160,00). Revisá que sea correcto. Margen negativo: el costo "
+                    + "($\u00a0160,00) supera el precio sin IVA ($\u00a0100,00). Revisá el precio manual.");
         }
 
         @Test
@@ -909,7 +909,7 @@ class PlanificadorMasivoTest {
             PlanMasivo plan = costoMonto("100", Art.art(1, "10.00").precio("16.00"));
 
             assertThat(plan.cambios().get(0).advertencia())
-                .isEqualTo("El costo sube un 1.000 % (de $ 10,00 a $ 110,00). Revisá que sea correcto.");
+                .isEqualTo("El costo sube un 1.000 % (de $\u00a010,00 a $\u00a0110,00). Revisá que sea correcto.");
         }
 
         @Test
@@ -938,7 +938,7 @@ class PlanificadorMasivoTest {
     // ------------------------------------------------------------------ monedas del alcance
 
     private static final String MEZCLA_100 = "La selección mezcla artículos en pesos y en dólares. "
-        + "El monto de 100 se suma tal cual a cada costo: $ 100 en los de pesos y US$ 100 en los de dólares.";
+        + "El monto de 100 se suma tal cual a cada costo: $\u00a0100 en los de pesos y US$\u00a0100 en los de dólares.";
 
     private static Art[] tresPesosYDosDolares() {
         return new Art[] {
@@ -966,10 +966,10 @@ class PlanificadorMasivoTest {
         @DisplayName("el monto con decimales se muestra tal cual: 100,50 y un monto negativo con el signo delante")
         void montoConDecimalesYNegativo() {
             assertThat(planificar(ModoMasivo.COSTO_MONTO, "100.50", contextosConDolar(), tresPesosYDosDolares())
-                .advertenciaMezcla()).contains("El monto de 100,50 se suma").contains("$ 100,50 en los de pesos")
-                .contains("US$ 100,50 en los de dólares");
+                .advertenciaMezcla()).contains("El monto de 100,50 se suma").contains("$\u00a0100,50 en los de pesos")
+                .contains("US$\u00a0100,50 en los de dólares");
             assertThat(planificar(ModoMasivo.COSTO_MONTO, "-5", contextosConDolar(), tresPesosYDosDolares())
-                .advertenciaMezcla()).contains("El monto de -5 se suma").contains("-$ 5 en los de pesos");
+                .advertenciaMezcla()).contains("El monto de -5 se suma").contains("-$\u00a05 en los de pesos");
         }
 
         @Test
@@ -1160,7 +1160,7 @@ class PlanificadorMasivoTest {
             PlanMasivo plan = costoPorcentaje("60", Art.art(1, "100.00").precio("160.00"));
 
             assertThat(plan.cambios().get(0).advertencia())
-                .isEqualTo("El costo sube un 60 % (de $ 100,00 a $ 160,00). Revisá que sea correcto.");
+                .isEqualTo("El costo sube un 60 % (de $\u00a0100,00 a $\u00a0160,00). Revisá que sea correcto.");
             assertThat(plan.conteos().conAdvertencia()).isEqualTo(1);
         }
 
@@ -1171,7 +1171,8 @@ class PlanificadorMasivoTest {
                 Art.art(1, "100.00").enDolares().unidad(Unidad.KILO).precio("157300.00"));
 
             assertThat(plan.cambios().get(0).advertencia()).isEqualTo(
-                "El costo sube un 60 % (de US$ 100,00 / kg a US$ 160,00 / kg). Revisá que sea correcto.");
+                "El costo sube un 60 % (de US$\u00a0100,00\u00a0/\u00a0kg a US$\u00a0160,00\u00a0/\u00a0kg). "
+                    + "Revisá que sea correcto.");
         }
 
         @Test
@@ -1182,7 +1183,8 @@ class PlanificadorMasivoTest {
 
             assertThat(plan.cambios().get(0).precioNuevo()).isEqualTo(bd("484000.00"));
             assertThat(plan.cambios().get(0).advertencia()).isEqualTo(
-                "El precio sube un 207,69 % (de $ 157.300,00 / kg a $ 484.000,00 / kg). Revisá que sea correcto.");
+                "El precio sube un 207,69 % (de $\u00a0157.300,00\u00a0/\u00a0kg a $\u00a0484.000,00\u00a0/\u00a0kg). "
+                    + "Revisá que sea correcto.");
         }
 
         @Test
@@ -1191,7 +1193,7 @@ class PlanificadorMasivoTest {
             PlanMasivo plan = costoPorcentaje("-60", Art.art(1, "100.00").precio("160.00"));
 
             assertThat(plan.cambios().get(0).advertencia())
-                .isEqualTo("El costo baja un 60 % (de $ 100,00 a $ 40,00). Revisá que sea correcto.");
+                .isEqualTo("El costo baja un 60 % (de $\u00a0100,00 a $\u00a040,00). Revisá que sea correcto.");
         }
 
         @ParameterizedTest(name = "COSTO {0} % sobre 100: advierte = {1}")
@@ -1216,7 +1218,7 @@ class PlanificadorMasivoTest {
 
             assertThat(plan.cambios().get(0).costoNuevo()).isEqualTo(bd("0.05"));
             assertThat(plan.cambios().get(0).advertencia())
-                .isEqualTo("El costo sube un 66,67 % (de $ 0,03 a $ 0,05). Revisá que sea correcto.");
+                .isEqualTo("El costo sube un 66,67 % (de $\u00a00,03 a $\u00a00,05). Revisá que sea correcto.");
         }
 
         @Test
@@ -1226,7 +1228,7 @@ class PlanificadorMasivoTest {
 
             assertThat(plan.cambios().get(0).precioNuevo()).isEqualTo(bd("490.00"));
             assertThat(plan.cambios().get(0).advertencia())
-                .isEqualTo("El precio sube un 206,25 % (de $ 160,00 a $ 490,00). Revisá que sea correcto.");
+                .isEqualTo("El precio sube un 206,25 % (de $\u00a0160,00 a $\u00a0490,00). Revisá que sea correcto.");
             assertThat(plan.conteos().conAdvertencia()).isEqualTo(1);
         }
 
@@ -1237,7 +1239,7 @@ class PlanificadorMasivoTest {
 
             assertThat(plan.cambios().get(0).precioNuevo()).isEqualTo(bd("130.00"));
             assertThat(plan.cambios().get(0).advertencia())
-                .isEqualTo("El precio baja un 73,47 % (de $ 490,00 a $ 130,00). Revisá que sea correcto.");
+                .isEqualTo("El precio baja un 73,47 % (de $\u00a0490,00 a $\u00a0130,00). Revisá que sea correcto.");
         }
 
         @Test
@@ -1250,7 +1252,7 @@ class PlanificadorMasivoTest {
             assertThat(exacto.cambios().get(0).advertencia()).isNull();
             assertThat(pasado.cambios().get(0).precioNuevo()).isEqualTo(bd("250.00"));
             assertThat(pasado.cambios().get(0).advertencia())
-                .isEqualTo("El precio sube un 56,25 % (de $ 160,00 a $ 250,00). Revisá que sea correcto.");
+                .isEqualTo("El precio sube un 56,25 % (de $\u00a0160,00 a $\u00a0250,00). Revisá que sea correcto.");
         }
 
         @Test
@@ -1484,7 +1486,8 @@ class PlanificadorMasivoTest {
 
             assertThat(plan.cambios().get(0).precioNuevo()).isEqualTo(bd("200.00"));
             assertThat(plan.cambios().get(0).advertencia())
-                .isEqualTo("El precio sube un 100 % (de $ 100,00 / l a $ 200,00 / l). Revisá que sea correcto.");
+                .isEqualTo("El precio sube un 100 % (de $\u00a0100,00\u00a0/\u00a0l a $\u00a0200,00\u00a0/\u00a0l). "
+                    + "Revisá que sea correcto.");
         }
 
         @Test

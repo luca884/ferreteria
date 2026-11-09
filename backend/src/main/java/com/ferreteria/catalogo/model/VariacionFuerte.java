@@ -47,13 +47,13 @@ public final class VariacionFuerte {
 
     /**
      * Igual que la de arriba, con los importes como los muestra la grilla: con su moneda («$ 769,50»,
-     * «US$ 10,00») y, si el articulo no va por unidad, por que unidad son («$ 769,50 / m»). Quien la
-     * llama elige la moneda: el costo va en la del articulo y el precio, siempre en pesos.
+     * «US$ 10,00») y, si el articulo no va por unidad, por que unidad son («$ 769,50 / m»), con los espacios
+     * duros de {@link ImporteArgentino}. Quien la llama elige la moneda: el costo va en la del articulo y el
+     * precio, siempre en pesos.
      */
     public static Optional<String> mensaje(Sujeto sujeto, BigDecimal anterior, BigDecimal nuevo, Moneda moneda,
                                            Unidad unidad) {
-        String porUnidad = unidad.abreviatura().isEmpty() ? "" : " / " + unidad.abreviatura();
-        return mensaje(sujeto, anterior, nuevo, valor -> ImporteArgentino.formato(valor, moneda) + porUnidad);
+        return mensaje(sujeto, anterior, nuevo, valor -> ImporteArgentino.formato(valor, moneda, unidad));
     }
 
     private static Optional<String> mensaje(Sujeto sujeto, BigDecimal anterior, BigDecimal nuevo,

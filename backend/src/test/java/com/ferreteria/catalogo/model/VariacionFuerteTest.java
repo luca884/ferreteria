@@ -90,28 +90,31 @@ class VariacionFuerteTest {
     @DisplayName("en pesos por metro: «$ 769,50 / m», el caso de la importacion en produccion")
     void enPesosPorMetro() {
         assertThat(VariacionFuerte.mensaje(Sujeto.COSTO, bd("769.50"), bd("1231.20"), Moneda.ARS, Unidad.METRO))
-            .contains("El costo sube un 60 % (de $ 769,50 / m a $ 1.231,20 / m). Revisá que sea correcto.");
+            .contains("El costo sube un 60 % (de $\u00a0769,50\u00a0/\u00a0m a $\u00a01.231,20\u00a0/\u00a0m). "
+                + "Revisá que sea correcto.");
     }
 
     @Test
     @DisplayName("en dolares: «US$», y por kilo «/ kg»")
     void enDolaresPorKilo() {
         assertThat(VariacionFuerte.mensaje(Sujeto.COSTO, bd("100.00"), bd("40.00"), Moneda.USD, Unidad.KILO))
-            .contains("El costo baja un 60 % (de US$ 100,00 / kg a US$ 40,00 / kg). Revisá que sea correcto.");
+            .contains("El costo baja un 60 % (de US$\u00a0100,00\u00a0/\u00a0kg a US$\u00a040,00\u00a0/\u00a0kg). "
+                + "Revisá que sea correcto.");
     }
 
     @Test
     @DisplayName("por litro: «/ l»")
     void porLitro() {
         assertThat(VariacionFuerte.mensaje(Sujeto.PRECIO, bd("160.00"), bd("490.00"), Moneda.ARS, Unidad.LITRO))
-            .contains("El precio sube un 206,25 % (de $ 160,00 / l a $ 490,00 / l). Revisá que sea correcto.");
+            .contains("El precio sube un 206,25 % (de $\u00a0160,00\u00a0/\u00a0l a $\u00a0490,00\u00a0/\u00a0l). "
+                + "Revisá que sea correcto.");
     }
 
     @Test
     @DisplayName("por unidad: sin sufijo")
     void porUnidadSinSufijo() {
         assertThat(VariacionFuerte.mensaje(Sujeto.COSTO, bd("100.00"), bd("160.00"), Moneda.ARS, Unidad.UNIDAD))
-            .contains("El costo sube un 60 % (de $ 100,00 a $ 160,00). Revisá que sea correcto.");
+            .contains("El costo sube un 60 % (de $\u00a0100,00 a $\u00a0160,00). Revisá que sea correcto.");
     }
 
     @Test
@@ -125,6 +128,6 @@ class VariacionFuerteTest {
     @DisplayName("el costo real (CU-13): «El costo real sube...»")
     void costoReal() {
         assertThat(VariacionFuerte.mensaje(Sujeto.COSTO_REAL, bd("100.00"), bd("160.00"), Moneda.ARS, Unidad.UNIDAD))
-            .contains("El costo real sube un 60 % (de $ 100,00 a $ 160,00). Revisá que sea correcto.");
+            .contains("El costo real sube un 60 % (de $\u00a0100,00 a $\u00a0160,00). Revisá que sea correcto.");
     }
 }

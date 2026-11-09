@@ -143,7 +143,7 @@ class ArticuloRecargosCostoTest {
         articulo.fijarRecargosDeCosto(EMBALAJE, CTX);
 
         assertThat(articulo.margenNegativoCon(bd("100"), CTX)).hasValueSatisfying(
-            m -> assertThat(m).contains("el costo ($ 110,00) supera el precio sin IVA ($ 100,00)"));
+            m -> assertThat(m).contains("el costo ($\u00a0110,00) supera el precio sin IVA ($\u00a0100,00)"));
     }
 
     @Test

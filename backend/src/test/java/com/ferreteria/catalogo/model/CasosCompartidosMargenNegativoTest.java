@@ -66,13 +66,22 @@ class CasosCompartidosMargenNegativoTest {
         assertThat(enDolares).isGreaterThanOrEqualTo(4);
     }
 
+    /**
+     * El JSON trae espacios comunes y la spec del front compara su texto con los espacios raros pasados a comunes
+     * (sinEspaciosRaros): aca igual. Los espacios duros del importe (U+00A0) los fija MargenNegativoTest.
+     */
+    private static String sinEspaciosDuros(String texto) {
+        return texto.replace('\u00a0', ' ');
+    }
+
     @Test
     @DisplayName("cada caso del JSON da el aviso esperado, o ninguno")
     void cadaCaso() {
         for (JsonNode caso : casos) {
             BigDecimal cotizacion = caso.has("cotizacion") ? bd(caso, "cotizacion") : BigDecimal.ONE;
             Optional<String> aviso = MargenNegativo.mensaje(bd(caso, "costo"), recargos(caso), cotizacion,
-                AlicuotaIva.valueOf(caso.get("alicuota").asText()), bd(caso, "precio"));
+                AlicuotaIva.valueOf(caso.get("alicuota").asText()), bd(caso, "precio"))
+                .map(CasosCompartidosMargenNegativoTest::sinEspaciosDuros);
 
             JsonNode esperado = caso.get("aviso");
             assertThat(aviso).as(caso.get("nombre").asText())

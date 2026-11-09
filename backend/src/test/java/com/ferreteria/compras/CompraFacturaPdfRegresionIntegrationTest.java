@@ -6,6 +6,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.ferreteria.support.ListasDePrueba;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -117,9 +118,9 @@ class CompraFacturaPdfRegresionIntegrationTest extends ComprasTestBase {
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.renglones[0].precioNuevo").value(140.00))
             .andExpect(jsonPath("$.renglones[0].costoRealNuevo").value(121.00))
-            .andReturn().getResponse().getContentAsString();
+            .andReturn().getResponse().getContentAsString(StandardCharsets.UTF_8);
         JsonNode renglonPrevia = objectMapper.readTree(previa).get("renglones").get(0);
-        assertThat(renglonPrevia.get("advertencia").asText()).startsWith("Margen negativo: el costo ($ 121,00)");
+        assertThat(renglonPrevia.get("advertencia").asText()).startsWith("Margen negativo: el costo ($\u00a0121,00)");
 
         String registrada = postJson("/api/compras", dueno, cuerpo(UUID.randomUUID().toString(), 1, "110.00",
                 "[{\"nombre\": \"Flete\", \"porcentaje\": 10}]"))
