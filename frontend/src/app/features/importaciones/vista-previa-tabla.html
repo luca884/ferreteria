@@ -81,15 +81,21 @@
           <td>
             <span class="etiqueta etiqueta-{{ f.tipo }}">{{ etiqueta(f.tipo) }}</span>
           </td>
-          <td class="num">{{ costoAnterior(f) }}</td>
           <td class="num">
-            {{ costoNuevo(f) }}
+            <ng-container *ngTemplateOutlet="conUnidad; context: { $implicit: costoAnterior(f) }" />
+          </td>
+          <td class="num">
+            <ng-container *ngTemplateOutlet="conUnidad; context: { $implicit: costoNuevo(f) }" />
             @if (f.cambio?.variacionFuerte) {
               <span class="etiqueta etiqueta-fuerte">Variación fuerte</span>
             }
           </td>
-          <td class="num">{{ precioAnterior(f) }}</td>
-          <td class="num">{{ precioNuevo(f) }}</td>
+          <td class="num">
+            <ng-container *ngTemplateOutlet="conUnidad; context: { $implicit: precioAnterior(f) }" />
+          </td>
+          <td class="num">
+            <ng-container *ngTemplateOutlet="conUnidad; context: { $implicit: precioNuevo(f) }" />
+          </td>
           <td class="detalle">
             @for (linea of detalle(f); track $index) {
               <div>{{ linea }}</div>
@@ -115,3 +121,11 @@
     </button>
   </nav>
 }
+
+<!-- El importe no se parte; su « / kg» va después de un punto de corte y puede bajar de renglón (#36). -->
+<ng-template #conUnidad let-importe>
+  <span class="importe">{{ importe.texto }}</span>
+  @if (importe.porUnidad) {
+    <wbr /><span class="por-unidad">{{ importe.porUnidad }}</span>
+  }
+</ng-template>

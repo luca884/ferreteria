@@ -307,6 +307,18 @@ describe('VistaPreviaTabla', () => {
       expect(valores(nuevo, COSTOS)).toEqual(['—', '$ 18,00 / l', '—', '$ 30,00 / l']);
     });
 
+    it('el «/ kg» va aparte del importe, después de un punto de corte, para que la tabla entre a 1280 px', async () => {
+      await crear(unirFilas(vistaPrevia({ cambios: [cambio(0, 2, 1000, 1111.1, { unidad: 'KILO' }), cambio(0, 3)] })));
+
+      const [porKilo, porPieza] = filasDeTabla();
+      const celda = (tr: Element, columna: string) => tr.querySelectorAll('td')[encabezados().indexOf(columna)];
+      for (const columna of COSTOS) {
+        expect(texto(celda(porKilo, columna).querySelector('.importe')), columna).toMatch(/^\$ \d/);
+        expect(texto(celda(porKilo, columna).querySelector('wbr + .por-unidad')), columna).toBe('/ kg');
+        expect(celda(porPieza, columna).querySelector('.por-unidad'), columna).toBeNull();
+      }
+    });
+
     it('«cambia de moneda» muestra ARS → USD con el costo en cada moneda y el precio en pesos', async () => {
       const filas = unirFilas(
         vistaPrevia({

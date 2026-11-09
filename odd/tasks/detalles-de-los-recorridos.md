@@ -17,9 +17,10 @@ Restricciones: sin migraciones. Mensajes y textos en español rioplatense.
 
 ## Tasks
 
-- [x] T1 · S1 · ruta: inline · Aceptación: comprobante de la compra con palabras en Movimientos; spec y cu-09 al día · Evidencia: RED `MovimientosArticuloTest` 8/8 fallan («FA 00036-03608111 · Bulonera Sur»); GREEN 8/8, `MovimientosArticuloIntegrationTest` 6/6, `ModulosArchTest` 50/50, `movimientos-articulo.spec.ts` 14/14 · commit: ver L5 · Risk: none
-- [x] T2 · S2, S2a · ruta: inline · Aceptación: contador por costo real, con test de recargos · Evidencia: RED `CompraRecargosIntegrationTest` 2/7 fallan (`$.suben` 0 en vez de 1; `$.bajan` 0 en vez de 1); GREEN 7/7, `CompraServiceIntegrationTest` 22/22, `CompraControllerIntegrationTest` 8/8 · commit: ver L6 · Risk: none
-- [x] T3 · S3, S3a · ruta: inline · Aceptación: `unidad` en `ArticuloVigente` y `CambioPlaneado`; sufijo en la vista previa de la importación · Evidencia: RED `ImportacionIntegrationTest#laVistaPreviaTraeLaUnidadDeLosArticulosQueCambian` (NPE: no hay `unidad`), `vista-previa-tabla.spec.ts` y `detalle-fila.spec.ts` 2 fallan («$ 1.000,00» sin « / kg»); GREEN backend 2/2, front `importaciones/**` 8 archivos 365/365 · commit: ver L7 · Risk: item 3 (`ArticuloVigente.de()` también lo usa Actualizar precios) → `odd-verifier`
+- [x] T1 · S1 · ruta: inline · Aceptación: comprobante de la compra con palabras en Movimientos; spec y cu-09 al día · Evidencia: RED `MovimientosArticuloTest` 8/8 fallan («FA 00036-03608111 · Bulonera Sur»); GREEN 8/8, `MovimientosArticuloIntegrationTest` 6/6, `ModulosArchTest` 50/50, `movimientos-articulo.spec.ts` 14/14 · commit `b144ab6b` · Risk: none
+- [x] T2 · S2, S2a · ruta: inline · Aceptación: contador por costo real, con test de recargos · Evidencia: RED `CompraRecargosIntegrationTest` 2/7 fallan (`$.suben` 0 en vez de 1; `$.bajan` 0 en vez de 1); GREEN 7/7, `CompraServiceIntegrationTest` 22/22, `CompraControllerIntegrationTest` 8/8 · commit `a0087293` · Risk: none
+- [x] T3 · S3, S3a · ruta: inline · Aceptación: `unidad` en `ArticuloVigente` y `CambioPlaneado`; sufijo en la vista previa de la importación · Evidencia: RED `ImportacionIntegrationTest#laVistaPreviaTraeLaUnidadDeLosArticulosQueCambian` (NPE: no hay `unidad`), `vista-previa-tabla.spec.ts` y `detalle-fila.spec.ts` 2 fallan («$ 1.000,00» sin « / kg»); GREEN backend 2/2, front `importaciones/**` 8 archivos 365/365 · commit `9daf1589` · Risk: item 3 (`ArticuloVigente.de()` también lo usa Actualizar precios) → `odd-verifier`
+- [ ] T4 · S3a · ruta: inline · Aceptación: con «/ kg» en las cuatro columnas, la tabla de la vista previa de la importación entra a 1280 px sin scroll horizontal (regresión de T3, L9) · Evidencia: RED `vista-previa-tabla.spec.ts` 1 falla (no hay `.por-unidad` después de un `<wbr>`); GREEN `importaciones/**` 8 archivos 366/366; navegador: pendiente · Risk: none
 
 ## Log
 
@@ -47,3 +48,18 @@ Restricciones: sin migraciones. Mensajes y textos en español rioplatense.
 - L7 (2026-11-08) T3 hecha.
   - **Backend.** `ArticuloVigente` y `CambioPlaneado` suman `unidad` al final (null da UNIDAD). Los constructores de antes delegan con UNIDAD, así que los tests y Actualizar precios no cambian. `ArticuloVigente.de()` toma `getUnidad()` y `PlanificadorImportacion.cambio(...)` la pasa al cambio.
   - **Front.** `CambioPlaneado.unidad` es obligatorio en el modelo, y se sumó a los 4 helpers de los specs. `vista-previa-tabla.ts` agrega `porUnidad` a los cuatro importes, de los cambios y de las altas, y `detalle-fila.ts` lo agrega al «Costo real». El «Unidad: Kilo» del detalle de un alta queda como estaba.
+- L8 (2026-11-08) Checks completos sobre `9daf1589`:
+  - backend `./mvnw test`: Tests run: 6452, Failures: 0, Errors: 0, Skipped: 0;
+  - frontend `npx ng test --watch=false`: 164 archivos, 4409 tests;
+  - `npx ng build`: OK, solo con el aviso de presupuesto de `dialogo-cobro.ts`, que ya estaba.
+  Se lanzaron en paralelo un `odd-verifier` (Opus), por el ítem 3 de T3, y un recorrido con ego-browser en la app local (worker Opus).
+- L9 (2026-11-08) Recorrido con ego-browser sobre `9daf1589`, Dueño de El Tornillo, a 1280×800. Pasan S1, S2 y S3.
+  - **S1.** «Factura A 00005-00001234 · Distribuidora Bulonera Sur» y «Remito 00036-00003602 · …». Ventas, remitos, anulaciones y ajustes, igual que antes.
+  - **S2.** Con el mismo costo y «Flete» al 10 % da «1 sube · 0 bajan · 0 iguales»; sin recargo, «1 igual».
+  - **S3.** U36-1: «$ 4.000,00 / kg … $ 7.350,75 / kg». U36-5, por unidad, sin sufijo. El nuevo «Alambre recocido x kg» dice «$ 3.800,00 / kg» y «$ 5.977,40 / kg».
+  - **Sin ver.** El «Costo real / kg»: ningún artículo por kilo tiene recargos en la base local. Lo cubre `detalle-fila.spec.ts`.
+  - **Regresión de T3.** `.num` lleva `white-space: nowrap` en toda la app. Con el sufijo en las cuatro columnas, `.grilla-contenedor` se desborda (977 contra 1015 px) y el Detalle queda cortado. Se abre T4: el importe va en un `<span>` que no se parte y el sufijo, después de un `<wbr>`, puede bajar de renglón; solo en esta tabla.
+  - **Fuera de alcance**, visto en el recorrido:
+    - la vista previa de Nueva compra con recargos (10 columnas) se desborda a 1280 px, con un artículo por unidad, así que no es por el sufijo;
+    - Actualizar precios no muestra «/ kg».
+  - **Base local.** No cambió nada; no se aplicó ni se registró nada.

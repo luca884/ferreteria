@@ -84,3 +84,11 @@ td .etiqueta-conError {
 .sin-filas {
   margin: var(--e-3) 0;
 }
+/* Las columnas de plata pueden bajar el « / kg» de renglón para que la tabla entre a 1280 px (#36). */
+td.num {
+  white-space: normal;
+}
+td.num .importe,
+td.num .por-unidad {
+  white-space: nowrap;
+}

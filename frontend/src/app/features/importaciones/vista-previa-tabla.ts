@@ -1,7 +1,7 @@
-import { DecimalPipe } from '@angular/common';
+import { DecimalPipe, NgTemplateOutlet } from '@angular/common';
 import { Component, computed, input, output, signal } from '@angular/core';
 import { formatearCosto } from '../../core/formato/monto';
-import { porUnidad } from '../../core/formato/unidad';
+import { porUnidad, UnidadDeMedida } from '../../core/formato/unidad';
 import { detalleDeFila, etiquetaDeTipo } from './detalle-fila';
 import {
   FilaDeVista,
@@ -35,13 +35,28 @@ const PLURALES: Record<TipoFila, string> = {
 const SIN_DATO = '—';
 
 /**
+ * Un importe de la tabla y, aparte, su « / kg» (#36): el importe no se parte, pero el sufijo puede bajar de renglón
+ * para que la tabla entre a 1280 px. Por unidad, el sufijo va vacío.
+ */
+interface Importe {
+  texto: string;
+  porUnidad: string;
+}
+
+const SIN_IMPORTE: Importe = { texto: SIN_DATO, porUnidad: '' };
+
+function importe(texto: string, unidad: UnidadDeMedida): Importe {
+  return { texto, porUnidad: porUnidad(unidad) };
+}
+
+/**
  * Las filas de la vista previa para revisarlas y elegirlas (presentacional): filtros por hoja y por tipo, páginas de
  * 100 y una casilla por fila. Las filas con error no tienen casilla. No guarda la selección: recibe la actual y emite
  * la nueva cada vez que cambia.
  */
 @Component({
   selector: 'app-vista-previa-tabla',
-  imports: [DecimalPipe],
+  imports: [DecimalPipe, NgTemplateOutlet],
   templateUrl: './vista-previa-tabla.html',
   styleUrl: './vista-previa-tabla.css',
 })
@@ -124,27 +139,27 @@ export class VistaPreviaTabla {
     return detalleDeFila(fila);
   }
 
-  protected costoAnterior(fila: FilaDeVista): string {
+  protected costoAnterior(fila: FilaDeVista): Importe {
     const c = fila.cambio;
-    return c ? formatearCosto(c.costoAnterior, c.monedaAnterior) + porUnidad(c.unidad) : SIN_DATO;
+    return c ? importe(formatearCosto(c.costoAnterior, c.monedaAnterior), c.unidad) : SIN_IMPORTE;
   }
 
-  protected costoNuevo(fila: FilaDeVista): string {
-    if (fila.cambio) return formatearCosto(fila.cambio.costoNuevo, fila.cambio.monedaNueva) + porUnidad(fila.cambio.unidad);
-    if (fila.alta) return formatearCosto(fila.alta.costo, fila.alta.moneda) + porUnidad(fila.alta.unidad);
-    return SIN_DATO;
+  protected costoNuevo(fila: FilaDeVista): Importe {
+    if (fila.cambio) return importe(formatearCosto(fila.cambio.costoNuevo, fila.cambio.monedaNueva), fila.cambio.unidad);
+    if (fila.alta) return importe(formatearCosto(fila.alta.costo, fila.alta.moneda), fila.alta.unidad);
+    return SIN_IMPORTE;
   }
 
-  protected precioAnterior(fila: FilaDeVista): string {
-    return fila.cambio ? formatearCosto(fila.cambio.precioAnterior, 'ARS') + porUnidad(fila.cambio.unidad) : SIN_DATO;
+  protected precioAnterior(fila: FilaDeVista): Importe {
+    return fila.cambio ? importe(formatearCosto(fila.cambio.precioAnterior, 'ARS'), fila.cambio.unidad) : SIN_IMPORTE;
   }
 
-  protected precioNuevo(fila: FilaDeVista): string {
-    if (fila.cambio) return formatearCosto(fila.cambio.precioNuevo, 'ARS') + porUnidad(fila.cambio.unidad);
+  protected precioNuevo(fila: FilaDeVista): Importe {
+    if (fila.cambio) return importe(formatearCosto(fila.cambio.precioNuevo, 'ARS'), fila.cambio.unidad);
     if (fila.alta?.precioNuevo !== null && fila.alta?.precioNuevo !== undefined) {
-      return formatearCosto(fila.alta.precioNuevo, 'ARS') + porUnidad(fila.alta.unidad);
+      return importe(formatearCosto(fila.alta.precioNuevo, 'ARS'), fila.alta.unidad);
     }
-    return SIN_DATO;
+    return SIN_IMPORTE;
   }
 
   protected filtrarPorHoja(valor: string): void {
