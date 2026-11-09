@@ -3,7 +3,7 @@ import { Injectable, computed, inject, signal } from '@angular/core';
 import { Observable, tap } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import { AL_CERRAR_SESION } from './al-cerrar-sesion';
-import { LoginResponse, Sesion } from './auth.models';
+import { AltaTotp, Ingreso, LoginResponse, Sesion } from './auth.models';
 
 const TOKEN_KEY = 'ferreteria.token';
 const SESION_KEY = 'ferreteria.sesion';
@@ -25,17 +25,37 @@ export class AuthService {
   /** La contraseña actual la eligió otra persona (alta o reseteo): hay que cambiarla antes de usar el resto. */
   readonly debeCambiarContrasena = computed(() => this._sesion()?.debeCambiarContrasena === true);
 
+  /**
+   * Con `segundoPaso` (el super admin) no guarda nada: la sesión recién se abre con {@link verificarTotp}. El
+   * `tokenTotp` lo guarda en memoria quien llama, nunca acá ni en localStorage.
+   */
   login(email: string, password: string): Observable<LoginResponse> {
     return this.http
       .post<LoginResponse>(`${environment.apiUrl}/auth/login`, { email, password })
       .pipe(
         tap((res) => {
-          this._token.set(res.token);
-          this._sesion.set(res.sesion);
-          escribir(TOKEN_KEY, res.token);
-          escribir(SESION_KEY, JSON.stringify(res.sesion));
+          if (!res.segundoPaso) this.guardarIngreso(res);
         }),
       );
+  }
+
+  /** Alta del código de la app (totp-super-admin, S2): la clave y su QR. Mientras no se active, el QR no cambia. */
+  altaTotp(tokenTotp: string): Observable<AltaTotp> {
+    return this.http.post<AltaTotp>(`${environment.apiUrl}/auth/totp/alta`, { tokenTotp });
+  }
+
+  /** El código de la app del super admin: si está bien, guarda el token y la sesión igual que el login. */
+  verificarTotp(tokenTotp: string, codigo: string): Observable<Ingreso> {
+    return this.http
+      .post<Ingreso>(`${environment.apiUrl}/auth/totp/verificar`, { tokenTotp, codigo })
+      .pipe(tap((res) => this.guardarIngreso(res)));
+  }
+
+  private guardarIngreso({ token, sesion }: Ingreso): void {
+    this._token.set(token);
+    this._sesion.set(sesion);
+    escribir(TOKEN_KEY, token);
+    escribir(SESION_KEY, JSON.stringify(sesion));
   }
 
   /**

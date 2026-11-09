@@ -50,3 +50,58 @@ button {
   margin-top: var(--e-2);
   font-size: 1rem;
 }
+
+/* ---------- El código de la app del super admin (totp-super-admin, S6) ---------- */
+
+h2 {
+  margin: calc(var(--e-2) * -1) 0 0;
+}
+/* Las indicaciones se leen como texto, no como el rótulo chico de un campo. */
+.indicacion {
+  margin: 0;
+  color: var(--texto);
+  font-size: 0.9375rem;
+  font-weight: 400;
+  line-height: 1.45;
+}
+#codigo {
+  font-family: var(--fuente-mono);
+  font-size: 1.25rem;
+  letter-spacing: 0.3em;
+  text-align: center;
+}
+/* El QR va sobre blanco aunque cambie el fondo: la cámara necesita el contraste y el margen. */
+.qr {
+  flex: none;
+  align-self: center;
+  background: #fff;
+  fill: #000;
+}
+.a-mano p {
+  margin: 0;
+  color: var(--texto-suave);
+  font-size: var(--texto-sm);
+}
+.a-mano .clave {
+  margin-top: var(--e-1);
+  color: var(--texto);
+  font-size: 1rem;
+  letter-spacing: 0.04em;
+  user-select: all;
+}
+.enlace {
+  align-self: center;
+  min-height: 0;
+  margin-top: calc(var(--e-2) * -1);
+  padding: var(--e-1) var(--e-2);
+  border: 0;
+  background: none;
+  color: var(--acento-fuerte);
+  font-size: var(--texto-sm);
+  font-weight: 600;
+  text-decoration: underline;
+}
+.enlace:hover:not(:disabled) {
+  background: none;
+  color: var(--acento-profundo);
+}

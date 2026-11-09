@@ -1,58 +1,127 @@
+<ng-template #marca>
+  <div class="marca">
+    <svg class="logo" viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M12 2.5 20.2 7.25v9.5L12 21.5l-8.2-4.75v-9.5z" />
+      <circle cx="12" cy="12" r="3.6" />
+    </svg>
+    <h1>Ferretería</h1>
+  </div>
+</ng-template>
+
 <main class="login">
-  <form class="card" [formGroup]="form" (ngSubmit)="ingresar()" novalidate>
-    <div class="marca">
-      <svg class="logo" viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M12 2.5 20.2 7.25v9.5L12 21.5l-8.2-4.75v-9.5z" />
-        <circle cx="12" cy="12" r="3.6" />
-      </svg>
-      <h1>Ferretería</h1>
-    </div>
-    <p class="sub">Ingresá con tu usuario</p>
-    <!-- Si el reintento falla, manda el error del ingreso: los dos avisos juntos se contradecían (guía al día). -->
-    @if (sesionCerrada && !error()) {
-      <p class="alerta advertencia sesion-cerrada" role="status">Tu sesión se cerró. Ingresá de nuevo.</p>
-    }
-
-    <div class="campo">
-      <label for="email">Email</label>
-      <input
-        id="email"
-        name="email"
-        type="email"
-        formControlName="email"
-        autocomplete="username"
-        spellcheck="false"
-        autofocus
-        [attr.aria-invalid]="invalido('email') ? 'true' : null"
-        [attr.aria-describedby]="descripcion('email')"
-      />
-      @if (invalido('email')) {
-        <span id="email-error" class="campo-error">Ingresá un email válido.</span>
+  @if (paso() === 'credenciales') {
+    <form class="card" [formGroup]="form" (ngSubmit)="ingresar()" novalidate>
+      <ng-container [ngTemplateOutlet]="marca" />
+      <p class="sub">Ingresá con tu usuario</p>
+      <!-- Si el reintento falla, manda el error del ingreso: los dos avisos juntos se contradecían (guía al día). -->
+      @if (sesionCerrada && !error()) {
+        <p class="alerta advertencia sesion-cerrada" role="status">Tu sesión se cerró. Ingresá de nuevo.</p>
       }
-    </div>
 
-    <div class="campo">
-      <label for="password">Contraseña</label>
-      <input
-        id="password"
-        name="password"
-        type="password"
-        formControlName="password"
-        autocomplete="current-password"
-        [attr.aria-invalid]="invalido('password') ? 'true' : null"
-        [attr.aria-describedby]="descripcion('password')"
-      />
-      @if (invalido('password')) {
-        <span id="password-error" class="campo-error">Ingresá tu contraseña.</span>
+      <div class="campo">
+        <label for="email">Email</label>
+        <input
+          id="email"
+          name="email"
+          type="email"
+          formControlName="email"
+          autocomplete="username"
+          spellcheck="false"
+          autofocus
+          [attr.aria-invalid]="invalido('email') ? 'true' : null"
+          [attr.aria-describedby]="descripcion('email')"
+        />
+        @if (invalido('email')) {
+          <span id="email-error" class="campo-error">Ingresá un email válido.</span>
+        }
+      </div>
+
+      <div class="campo">
+        <label for="password">Contraseña</label>
+        <input
+          id="password"
+          name="password"
+          type="password"
+          formControlName="password"
+          autocomplete="current-password"
+          [attr.aria-invalid]="invalido('password') ? 'true' : null"
+          [attr.aria-describedby]="descripcion('password')"
+        />
+        @if (invalido('password')) {
+          <span id="password-error" class="campo-error">Ingresá tu contraseña.</span>
+        }
+      </div>
+
+      @if (error(); as mensaje) {
+        <p id="login-error" class="error" role="alert">{{ mensaje }}</p>
       }
-    </div>
 
-    @if (error(); as mensaje) {
-      <p id="login-error" class="error" role="alert">{{ mensaje }}</p>
-    }
+      <button type="submit" [disabled]="enviando()">
+        {{ enviando() ? 'Ingresando…' : 'Ingresar' }}
+      </button>
+    </form>
+  } @else {
+    <!-- El segundo paso del super admin (totp-super-admin, S1, S2 y S6): activar el código de la app o escribirlo. -->
+    <form class="card" [formGroup]="formCodigo" (ngSubmit)="verificar()" novalidate>
+      <ng-container [ngTemplateOutlet]="marca" />
+      @if (paso() === 'ALTA') {
+        <h2>Activá el código de la app</h2>
+        <p class="indicacion">1. Escaneá este código QR con Google Authenticator. Se muestra solo esta vez.</p>
+        @if (qr(); as codigo) {
+          <svg
+            class="qr"
+            [attr.viewBox]="codigo.viewBox"
+            [attr.width]="codigo.tamano"
+            [attr.height]="codigo.tamano"
+            shape-rendering="crispEdges"
+            role="img"
+            aria-label="Código QR"
+          >
+            @for (m of codigo.modulos; track $index) {
+              <rect [attr.x]="m.x" [attr.y]="m.y" [attr.width]="m.ancho" height="1" />
+            }
+          </svg>
+          <div class="a-mano">
+            <p>¿No podés escanearlo? Cargá esta clave a mano:</p>
+            <p class="clave mono">{{ claveEnGrupos() }}</p>
+          </div>
+        }
+      } @else {
+        <h2>Código de la app</h2>
+      }
 
-    <button type="submit" [disabled]="enviando()">
-      {{ enviando() ? 'Ingresando…' : 'Ingresar' }}
-    </button>
-  </form>
+      <div class="campo">
+        <label for="codigo" class="indicacion">
+          {{
+            paso() === 'ALTA'
+              ? '2. Escribí el código de 6 números que te muestra la app.'
+              : 'Abrí Google Authenticator y escribí el código de 6 números que muestra para Ferretería.'
+          }}
+        </label>
+        <input
+          id="codigo"
+          name="codigo"
+          type="text"
+          formControlName="codigo"
+          inputmode="numeric"
+          autocomplete="one-time-code"
+          spellcheck="false"
+          [attr.aria-invalid]="invalido('codigo') ? 'true' : null"
+          [attr.aria-describedby]="descripcion('codigo')"
+        />
+        @if (invalido('codigo')) {
+          <span id="codigo-error" class="campo-error">El código tiene 6 números.</span>
+        }
+      </div>
+
+      @if (error(); as mensaje) {
+        <p id="login-error" class="error" role="alert">{{ mensaje }}</p>
+      }
+
+      <button type="submit" [disabled]="enviando()">
+        {{ enviando() ? 'Ingresando…' : paso() === 'ALTA' ? 'Activar e ingresar' : 'Ingresar' }}
+      </button>
+      <button type="button" class="enlace" (click)="volver()">Volver</button>
+    </form>
+  }
 </main>

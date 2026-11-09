@@ -109,4 +109,20 @@ describe('authInterceptor', () => {
     expect(router.navigate).not.toHaveBeenCalled();
     expect(auth.logout).not.toHaveBeenCalled();
   });
+
+  // totp-super-admin, S1: el código mal o el tokenTotp vencido los resuelve la pantalla del login, que sigue abierta.
+  it.each(['/api/auth/totp/alta', '/api/auth/totp/verificar'])(
+    'un 401 del segundo paso del login (%s) no cierra la sesión ni redirige, y llega al que pidió',
+    (url) => {
+      const errores: unknown[] = [];
+      http.post(url, {}).subscribe({ error: (e) => errores.push(e) });
+      ctrl
+        .expectOne(url)
+        .flush({ status: 401, errors: { motivo: 'CODIGO_INCORRECTO' } }, { status: 401, statusText: 'Unauthorized' });
+
+      expect(router.navigate).not.toHaveBeenCalled();
+      expect(auth.logout).not.toHaveBeenCalled();
+      expect(errores).toHaveLength(1);
+    },
+  );
 });
