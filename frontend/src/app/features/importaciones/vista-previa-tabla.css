@@ -25,8 +25,15 @@
   width: 1%;
   text-align: center;
 }
+/*
+ * Con « / kg» en las columnas de plata la tabla tiene que seguir entrando a 1280 px (#36): los encabezados pueden ir en
+ * dos renglones («COSTO⏎ANTERIOR») y el Detalle arranca más angosto. Los importes siguen sin partirse (.num).
+ */
+th {
+  white-space: normal;
+}
 .detalle div {
-  min-width: 160px;
+  min-width: 120px;
   font-size: var(--texto-sm);
 }
 tr.fuerte td {
@@ -83,12 +90,4 @@ td .etiqueta-conError {
 }
 .sin-filas {
   margin: var(--e-3) 0;
-}
-/* Las columnas de plata pueden bajar el « / kg» de renglón para que la tabla entre a 1280 px (#36). */
-td.num {
-  white-space: normal;
-}
-td.num .importe,
-td.num .por-unidad {
-  white-space: nowrap;
 }
