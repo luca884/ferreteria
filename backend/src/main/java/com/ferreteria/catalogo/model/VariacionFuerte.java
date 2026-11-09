@@ -6,10 +6,11 @@ import java.text.DecimalFormat;
 import java.text.DecimalFormatSymbols;
 import java.util.Locale;
 import java.util.Optional;
+import java.util.function.Function;
 
 /**
  * Advertencia por variacion fuerte de un valor (costo o precio). La comparten la importacion de
- * listas (CU-04) y la actualizacion masiva (CU-05). Dominio puro, sin estado.
+ * listas (CU-04), la actualizacion masiva (CU-05) y las compras (CU-13). Dominio puro, sin estado.
  */
 public final class VariacionFuerte {
 
@@ -21,7 +22,9 @@ public final class VariacionFuerte {
     /** Que valor cambio; da el principio del mensaje. */
     public enum Sujeto {
         COSTO("El costo"),
-        PRECIO("El precio");
+        PRECIO("El precio"),
+        /** El costo con sus recargos (CU-13): lo usa la compra cuando ella o el articulo tienen recargos. */
+        COSTO_REAL("El costo real");
 
         private final String texto;
 
@@ -39,6 +42,22 @@ public final class VariacionFuerte {
      * negativo no se puede medir la variacion.
      */
     public static Optional<String> mensaje(Sujeto sujeto, BigDecimal anterior, BigDecimal nuevo) {
+        return mensaje(sujeto, anterior, nuevo, VariacionFuerte::dinero);
+    }
+
+    /**
+     * Igual que la de arriba, con los importes como los muestra la grilla: con su moneda («$ 769,50»,
+     * «US$ 10,00») y, si el articulo no va por unidad, por que unidad son («$ 769,50 / m»). Quien la
+     * llama elige la moneda: el costo va en la del articulo y el precio, siempre en pesos.
+     */
+    public static Optional<String> mensaje(Sujeto sujeto, BigDecimal anterior, BigDecimal nuevo, Moneda moneda,
+                                           Unidad unidad) {
+        String porUnidad = unidad.abreviatura().isEmpty() ? "" : " / " + unidad.abreviatura();
+        return mensaje(sujeto, anterior, nuevo, valor -> ImporteArgentino.formato(valor, moneda) + porUnidad);
+    }
+
+    private static Optional<String> mensaje(Sujeto sujeto, BigDecimal anterior, BigDecimal nuevo,
+                                            Function<BigDecimal, String> importe) {
         if (anterior.signum() <= 0) {
             return Optional.empty();
         }
@@ -49,7 +68,7 @@ public final class VariacionFuerte {
         boolean sube = nuevo.compareTo(anterior) > 0;
         String porcentaje = formatoArgentino(diferenciaPorCien.divide(anterior, 2, RoundingMode.HALF_UP), "#,##0.##");
         return Optional.of(sujeto.texto + " " + (sube ? "sube" : "baja") + " un " + porcentaje + " % (de "
-            + dinero(anterior) + " a " + dinero(nuevo) + "). Revisá que sea correcto.");
+            + importe.apply(anterior) + " a " + importe.apply(nuevo) + "). Revisá que sea correcto.");
     }
 
     private static String dinero(BigDecimal valor) {

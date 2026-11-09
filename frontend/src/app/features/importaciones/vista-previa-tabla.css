@@ -97,3 +97,7 @@ td.num .etiqueta-fuerte {
 .sin-filas {
   margin: var(--e-3) 0;
 }
+/* El código no se parte en el guion («PR36-NUEVO1»). */
+td.codigo {
+  white-space: nowrap;
+}

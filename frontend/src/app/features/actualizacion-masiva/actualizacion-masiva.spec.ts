@@ -870,7 +870,7 @@ describe('ActualizacionMasiva', () => {
     });
 
     it('resalta la advertencia de la fila que la trae y solo de esa (MARGEN 300)', async () => {
-      const advertencia = 'El precio sube un 206,25 % (de 160,00 a 490,00). Revisá que sea correcto.';
+      const advertencia = 'El precio sube un 206,25 % (de $ 160,00 a $ 490,00). Revisá que sea correcto.';
       await conVistaPrevia({
         conteos: conteos({ conAdvertencia: 1 }),
         cambios: [
@@ -2307,7 +2307,7 @@ describe('ActualizacionMasiva', () => {
     const AVISO_MANUAL =
       'Los artículos quedan con precio manual: las listas, las compras y los cambios de costo no les van a cambiar el precio.';
     const PISTA_PRECIO = 'Positivo sube el precio final, negativo lo baja. Siempre en pesos.';
-    const FUERTE = 'El precio sube un 206,25 % (de 160,00 a 490,00). Revisá que sea correcto.';
+    const FUERTE = 'El precio sube un 206,25 % (de $ 160,00 a $ 490,00). Revisá que sea correcto.';
     const NEGATIVO =
       'Margen negativo: el costo ($ 120,00) supera el precio sin IVA ($ 99,17). Revisá el precio manual.';
 

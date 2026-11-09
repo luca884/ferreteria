@@ -221,7 +221,9 @@ public final class PlanificadorImportacion {
         }
         int comparacion = costoNuevo.compareTo(articulo.costo());
         if (comparacion != 0) {
-            Optional<String> variacion = VariacionFuerte.mensaje(Sujeto.COSTO, articulo.costo(), costoNuevo);
+            // La moneda no cambio (eso ya salio arriba): el costo va en la del articulo.
+            Optional<String> variacion = VariacionFuerte.mensaje(Sujeto.COSTO, articulo.costo(), costoNuevo,
+                articulo.moneda(), articulo.unidad());
             variacion.ifPresent(mensaje -> acumulado.advertencias.add(aviso(d, mensaje)));
             acumulado.cambios.add(cambio(d, articulo, costoNuevo, precioNuevo, monedaFinal, alicuota, ajustes,
                 variacion.isPresent()));

@@ -14,6 +14,7 @@ import com.ferreteria.catalogo.model.OrigenPrecio;
 import com.ferreteria.catalogo.model.PrecioPlaneado;
 import com.ferreteria.catalogo.model.RecargoCosto;
 import com.ferreteria.catalogo.model.RecargosDeCosto;
+import com.ferreteria.catalogo.model.Unidad;
 import com.ferreteria.catalogo.model.VariacionFuerte;
 import com.ferreteria.catalogo.repository.ArticuloRepository;
 import com.ferreteria.catalogo.repository.HistorialPrecioRepository;
@@ -91,9 +92,10 @@ public class ArticulosParaCompraService implements ArticulosParaCompra {
                     ? MargenNegativo.mensaje(costoNuevo, recargos, ctx.cotizacionPara(articulo.getMoneda()),
                             articulo.getAlicuotaIva(), articulo.getPrecioFinal())
                     : Optional.empty();
+            boolean conRecargos = !recargos.estaVacia() || !articulo.getRecargosCosto().estaVacia();
             return costoDeCompra(articulo, articulo.getCosto(), costoNuevo, articulo.getPrecioFinal(),
                     planeado.precio(), margenNegativo, planeado.aviso(),
-                    articulo.costoReal(), recargos.aplicar(costoNuevo));
+                    articulo.costoReal(), recargos.aplicar(costoNuevo), conRecargos);
         }).toList();
     }
 
@@ -122,6 +124,8 @@ public class ArticulosParaCompraService implements ArticulosParaCompra {
             BigDecimal costoAnterior = articulo.getCosto();
             BigDecimal precioAnterior = articulo.getPrecioFinal();
             BigDecimal costoRealAnterior = articulo.costoReal();
+            // Antes de pisarlos: los recargos que tenia el articulo tambien hacen que se hable del costo real.
+            boolean conRecargos = !recargos.estaVacia() || !articulo.getRecargosCosto().estaVacia();
             ContextoPrecio ctx = contextos.de(articulo.getRubroId());
             // El costo y los recargos de la compra (que pisan a los del articulo; vacios, los borran) en un solo calculo
             // del precio: si los ajustes no entran, queda el precio de antes con el aviso. El historial es un solo cambio
@@ -133,7 +137,7 @@ public class ArticulosParaCompraService implements ArticulosParaCompra {
             aplicados.add(costoDeCompra(
                     articulo, costoAnterior, articulo.getCosto(), precioAnterior, articulo.getPrecioFinal(),
                     articulo.margenNegativoCon(articulo.getCosto(), ctx), aviso,
-                    costoRealAnterior, articulo.costoReal()));
+                    costoRealAnterior, articulo.costoReal(), conRecargos));
         }
         if (!historial.isEmpty()) {
             historialPrecioRepository.saveAll(historial);
@@ -156,13 +160,23 @@ public class ArticulosParaCompraService implements ArticulosParaCompra {
                 configuracion.redondeoMultiplo(), dolar);
     }
 
+    /**
+     * La variacion fuerte del costo se mide sobre el costo real, como el contador de la compra: es el que mueve el
+     * precio. {@code conRecargos} (la compra o el articulo, antes de la compra, tienen recargos) hace que el aviso diga
+     * «El costo real»; sin recargos el costo real es el de la factura y dice «El costo», como siempre. El costo va en la
+     * moneda del articulo y el precio, en pesos; los dos por la unidad del articulo.
+     */
     private static CostoDeCompra costoDeCompra(Articulo articulo, BigDecimal costoAnterior, BigDecimal costoNuevo,
                                                BigDecimal precioAnterior, BigDecimal precioNuevo,
                                                Optional<String> margenNegativo, Optional<String> precioSalteado,
-                                               BigDecimal costoRealAnterior, BigDecimal costoRealNuevo) {
+                                               BigDecimal costoRealAnterior, BigDecimal costoRealNuevo,
+                                               boolean conRecargos) {
+        VariacionFuerte.Sujeto delCosto = conRecargos ? VariacionFuerte.Sujeto.COSTO_REAL : VariacionFuerte.Sujeto.COSTO;
+        Unidad unidad = articulo.getUnidad();
         String conMargen = MargenNegativo.junto(
-                VariacionFuerte.mensaje(VariacionFuerte.Sujeto.COSTO, costoAnterior, costoNuevo)
-                        .or(() -> VariacionFuerte.mensaje(VariacionFuerte.Sujeto.PRECIO, precioAnterior, precioNuevo)),
+                VariacionFuerte.mensaje(delCosto, costoRealAnterior, costoRealNuevo, articulo.getMoneda(), unidad)
+                        .or(() -> VariacionFuerte.mensaje(VariacionFuerte.Sujeto.PRECIO, precioAnterior, precioNuevo,
+                                Moneda.ARS, unidad)),
                 margenNegativo);
         // El aviso de que el precio no se cambia va al final, con el mismo patron de "junto".
         String advertencia = MargenNegativo.junto(Optional.ofNullable(conMargen), precioSalteado);

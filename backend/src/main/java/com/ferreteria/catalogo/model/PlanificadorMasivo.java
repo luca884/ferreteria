@@ -166,9 +166,10 @@ public final class PlanificadorMasivo {
             return Fila.conError(MOTIVO_AJUSTES_EN_CERO);
         }
 
+        // El precio siempre esta en pesos; el costo, en la moneda del articulo.
         Optional<String> advertencia = enMargen
-            ? VariacionFuerte.mensaje(Sujeto.PRECIO, articulo.precioFinal(), precioNuevo)
-            : VariacionFuerte.mensaje(Sujeto.COSTO, articulo.costo(), costoNuevo);
+            ? VariacionFuerte.mensaje(Sujeto.PRECIO, articulo.precioFinal(), precioNuevo, Moneda.ARS, articulo.unidad())
+            : VariacionFuerte.mensaje(Sujeto.COSTO, articulo.costo(), costoNuevo, articulo.moneda(), articulo.unidad());
         boolean modificado = distintos(articulo.costo(), costoNuevo)
             || distintos(articulo.precioFinal(), precioNuevo)
             || distintos(articulo.margenPorcentaje(), margenPropioNuevo);
@@ -197,7 +198,7 @@ public final class PlanificadorMasivo {
             return Fila.conError(MOTIVO_DEMASIADO_GRANDE);
         }
         String advertencia = MargenNegativo.junto(
-            VariacionFuerte.mensaje(Sujeto.PRECIO, articulo.precioFinal(), precioNuevo),
+            VariacionFuerte.mensaje(Sujeto.PRECIO, articulo.precioFinal(), precioNuevo, Moneda.ARS, articulo.unidad()),
             MargenNegativo.mensaje(articulo.costo(), articulo.recargosCosto(),
                 contexto.cotizacionPara(articulo.moneda()), articulo.alicuotaIva(), precioNuevo));
         boolean modificado = distintos(articulo.precioFinal(), precioNuevo) || !articulo.precioManual();
@@ -234,7 +235,7 @@ public final class PlanificadorMasivo {
             return Fila.conError(MOTIVO_AJUSTES_EN_CERO);
         }
         String advertencia = MargenNegativo.junto(
-            VariacionFuerte.mensaje(Sujeto.PRECIO, articulo.precioFinal(), precioNuevo),
+            VariacionFuerte.mensaje(Sujeto.PRECIO, articulo.precioFinal(), precioNuevo, Moneda.ARS, articulo.unidad()),
             articulo.margenNegativo(articulo.costo(), articulo.alicuotaIva(), cotizacion));
         return new Fila(null, articulo.costo(), margenAnterior, margenNuevo, articulo.margenPorcentaje(), precioNuevo,
             advertencia, true, sinAjustes(articulo, calculado));

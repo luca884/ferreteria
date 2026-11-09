@@ -156,6 +156,7 @@ class PlanificadorImportacionTest {
         private boolean precioManual;
         private AjustesDePrecio ajustesPrecio = AjustesDePrecio.NINGUNO;
         private RecargosDeCosto recargos = RecargosDeCosto.NINGUNO;
+        private Unidad unidad = Unidad.UNIDAD;
 
         private Art(long id, String codigoProveedor, String costo) {
             this.id = id;
@@ -220,12 +221,18 @@ class PlanificadorImportacionTest {
             return this;
         }
 
+        /** La unidad de venta (#36); sin llamarlo, por unidad. */
+        Art unidad(Unidad valor) {
+            this.unidad = valor;
+            return this;
+        }
+
         /** El articulo; sin precio explicito, el que corresponde a su costo con el contexto dado (el de su rubro). */
         ArticuloVigente vigente(Map<Long, ContextoPrecio> contextoPorRubro, ContextoPrecio contextoSinRubro) {
             BigDecimal margenPropio = margen == null ? null : bd(margen);
             return new ArticuloVigente(id, "INT-" + id, codigoProveedor, "Articulo " + id, bd(costo),
                 precioFinal != null ? bd(precioFinal) : alDia(margenPropio, contextoPorRubro, contextoSinRubro),
-                margenPropio, rubroId, iva, activo, moneda, ajustes, precioManual, ajustesPrecio, recargos);
+                margenPropio, rubroId, iva, activo, moneda, ajustes, precioManual, ajustesPrecio, recargos, unidad);
         }
 
         private BigDecimal alDia(BigDecimal margenPropio, Map<Long, ContextoPrecio> contextoPorRubro,
@@ -1985,7 +1992,7 @@ class PlanificadorImportacionTest {
                 .planificar();
 
             assertThat(plan.advertencias()).containsExactly(
-                new AvisoDeFila(null, 5, "A-1", "El costo sube un 60 % (de 100,00 a 160,00). Revisá que sea correcto.", "x"));
+                new AvisoDeFila(null, 5, "A-1", "El costo sube un 60 % (de $ 100,00 a $ 160,00). Revisá que sea correcto.", "x"));
             assertThat(plan.cambios().get(0).variacionFuerte()).isTrue();
             assertThat(plan.conteos()).isEqualTo(new ConteosImportacion(1, 0, 0, 0, 0, 0));
         }
@@ -1999,7 +2006,7 @@ class PlanificadorImportacionTest {
                 .planificar();
 
             assertThat(plan.advertencias()).containsExactly(
-                new AvisoDeFila(null, 5, "A-1", "El costo baja un 60 % (de 100,00 a 40,00). Revisá que sea correcto.", "x"));
+                new AvisoDeFila(null, 5, "A-1", "El costo baja un 60 % (de $ 100,00 a $ 40,00). Revisá que sea correcto.", "x"));
             assertThat(plan.cambios().get(0).variacionFuerte()).isTrue();
             assertThat(plan.conteos()).isEqualTo(new ConteosImportacion(0, 1, 0, 0, 0, 0));
         }
@@ -2025,8 +2032,8 @@ class PlanificadorImportacionTest {
                 .planificar();
 
             assertThat(mensajes(plan.advertencias())).containsExactly(
-                "El costo sube un 50,01 % (de 100,00 a 150,01). Revisá que sea correcto.",
-                "El costo baja un 50,01 % (de 100,00 a 49,99). Revisá que sea correcto.");
+                "El costo sube un 50,01 % (de $ 100,00 a $ 150,01). Revisá que sea correcto.",
+                "El costo baja un 50,01 % (de $ 100,00 a $ 49,99). Revisá que sea correcto.");
         }
 
         @Test
@@ -2040,7 +2047,7 @@ class PlanificadorImportacionTest {
 
             assertThat(plan.cambios().get(0).costoNuevo()).isEqualByComparingTo("200.00");
             assertThat(mensajes(plan.advertencias())).containsExactly(
-                "El costo sube un 100 % (de 100,00 a 200,00). Revisá que sea correcto.");
+                "El costo sube un 100 % (de $ 100,00 a $ 200,00). Revisá que sea correcto.");
         }
 
         @Test
@@ -2075,7 +2082,7 @@ class PlanificadorImportacionTest {
                 .planificar();
 
             assertThat(mensajes(plan.advertencias())).containsExactly(
-                "El costo baja un 66,67 % (de 100,00 a 33,33). Revisá que sea correcto.");
+                "El costo baja un 66,67 % (de $ 100,00 a $ 33,33). Revisá que sea correcto.");
         }
 
         @Test
@@ -2087,7 +2094,31 @@ class PlanificadorImportacionTest {
                 .planificar();
 
             assertThat(mensajes(plan.advertencias())).containsExactly(
-                "El costo sube un 150,05 % (de 1.000,00 a 2.500,50). Revisá que sea correcto.");
+                "El costo sube un 150,05 % (de $ 1.000,00 a $ 2.500,50). Revisá que sea correcto.");
+        }
+
+        @Test
+        @DisplayName("los importes llevan la moneda y la unidad del articulo: «de $ 769,50 / m a $ 1.231,20 / m»")
+        void importesConMonedaYUnidad() {
+            PlanImportacion plan = escenario()
+                .articulos(Art.art(1, "A-1", "769.50").unidad(Unidad.METRO))
+                .filas(fila(2, "A-1", "x", "1231,20"))
+                .planificar();
+
+            assertThat(mensajes(plan.advertencias())).containsExactly(
+                "El costo sube un 60 % (de $ 769,50 / m a $ 1.231,20 / m). Revisá que sea correcto.");
+        }
+
+        @Test
+        @DisplayName("un articulo en dolares advierte en dolares: «de US$ 10,00 a US$ 16,00»")
+        void importesEnDolares() {
+            PlanImportacion plan = escenario().dolar("1000")
+                .articulos(Art.art(1, "A-1", "10.00").enDolares())
+                .filas(fila(2, "A-1", "x", "16"))
+                .planificar();
+
+            assertThat(mensajes(plan.advertencias())).containsExactly(
+                "El costo sube un 60 % (de US$ 10,00 a US$ 16,00). Revisá que sea correcto.");
         }
 
         @Test

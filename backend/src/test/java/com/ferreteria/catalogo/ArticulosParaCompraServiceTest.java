@@ -78,7 +78,23 @@ class ArticulosParaCompraServiceTest extends IntegrationTestBase {
         CostoDeCompra c = articulosParaCompra.planear(Map.of(tornillo, new BigDecimal("200.00"))).get(0);
 
         assertThat(c.advertencia()).isEqualTo(
-                "El costo sube un 100 % (de 100,00 a 200,00). Revisá que sea correcto.");
+                "El costo sube un 100 % (de $ 100,00 a $ 200,00). Revisá que sea correcto.");
+    }
+
+    @Test
+    @DisplayName("la variacion fuerte dice el costo en la moneda del articulo y por su unidad: «US$ 10,00 / kg»")
+    void planearAdvierteEnSuMonedaYUnidad() {
+        Long f = ferreteria();
+        // 10 x 1000 x 1,3 x 1,21 = 15.730 pesos: el precio al dia.
+        Long clavo = articulo(f, "CLA-1", "Clavo", "10.00", "15730.00");
+        jdbc.update("update articulo set moneda = 'USD', unidad = 'KILO' where id = ?", clavo);
+        jdbc.update("insert into configuracion_cotizacion (ferreteria_id, vigente) values (?, 1000.0000)", f);
+        TenantContext.setCurrentFerreteriaId(f);
+
+        CostoDeCompra c = articulosParaCompra.planear(Map.of(clavo, new BigDecimal("16.00"))).get(0);
+
+        assertThat(c.advertencia()).isEqualTo(
+                "El costo sube un 60 % (de US$ 10,00 / kg a US$ 16,00 / kg). Revisá que sea correcto.");
     }
 
     @Test
@@ -95,7 +111,7 @@ class ArticulosParaCompraServiceTest extends IntegrationTestBase {
         assertThat(c.precioNuevo()).isEqualByComparingTo("121.00");
         assertThat(c.advertencia()).isEqualTo(
                 "Margen negativo: el costo ($ 110,00) supera el precio sin IVA ($ 100,00). Revisá el precio manual.");
-        assertThat(fuerte.advertencia()).isEqualTo("El costo sube un 100 % (de 100,00 a 200,00). Revisá que sea "
+        assertThat(fuerte.advertencia()).isEqualTo("El costo sube un 100 % (de $ 100,00 a $ 200,00). Revisá que sea "
                 + "correcto. Margen negativo: el costo ($ 200,00) supera el precio sin IVA ($ 100,00). "
                 + "Revisá el precio manual.");
     }
