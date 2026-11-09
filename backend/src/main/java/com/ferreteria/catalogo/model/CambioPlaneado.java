@@ -11,6 +11,7 @@ import java.math.BigDecimal;
  * @param recargosPorcentaje la suma de los % de los recargos del costo (CU-13); null si el articulo no tiene recargos
  * @param costoRealAnterior el costo real de hoy (el costo mas los recargos), en la moneda de hoy; null sin recargos
  * @param costoRealNuevo  el costo real con el costo de la lista, en la moneda nueva; null sin recargos
+ * @param unidad la unidad de venta del articulo, para que la vista previa diga «/ kg» (#36); UNIDAD si no se sabe
  */
 public record CambioPlaneado(
         int fila,
@@ -33,11 +34,26 @@ public record CambioPlaneado(
         Ajustes ajustesNuevos,
         BigDecimal recargosPorcentaje,
         BigDecimal costoRealAnterior,
-        BigDecimal costoRealNuevo) {
+        BigDecimal costoRealNuevo,
+        Unidad unidad) {
 
     public CambioPlaneado {
         ajustesAnteriores = ajustesAnteriores == null ? Ajustes.NINGUNO : ajustesAnteriores;
         ajustesNuevos = ajustesNuevos == null ? Ajustes.NINGUNO : ajustesNuevos;
+        unidad = unidad == null ? Unidad.UNIDAD : unidad;
+    }
+
+    /** El cambio de un articulo por unidad (#36). */
+    public CambioPlaneado(int fila, Long articuloId, String codigoProveedor, String descripcion,
+                          BigDecimal precioLista, BigDecimal costoAnterior, BigDecimal costoNuevo,
+                          BigDecimal precioAnterior, BigDecimal precioNuevo, boolean activo,
+                          boolean variacionFuerte, int hoja, Moneda monedaAnterior, Moneda monedaNueva,
+                          AlicuotaIva alicuotaAnterior, AlicuotaIva alicuotaNueva, Ajustes ajustesAnteriores,
+                          Ajustes ajustesNuevos, BigDecimal recargosPorcentaje, BigDecimal costoRealAnterior,
+                          BigDecimal costoRealNuevo) {
+        this(fila, articuloId, codigoProveedor, descripcion, precioLista, costoAnterior, costoNuevo, precioAnterior,
+            precioNuevo, activo, variacionFuerte, hoja, monedaAnterior, monedaNueva, alicuotaAnterior, alicuotaNueva,
+            ajustesAnteriores, ajustesNuevos, recargosPorcentaje, costoRealAnterior, costoRealNuevo, Unidad.UNIDAD);
     }
 
     /** El cambio sin recargos del costo: los tres campos del costo real en null. */

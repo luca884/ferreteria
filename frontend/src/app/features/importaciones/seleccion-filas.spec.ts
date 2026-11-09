@@ -48,6 +48,7 @@ function cambio(hoja: number, fila: number, anterior = 100, nuevo = 120): Cambio
     alicuotaNueva: 'IVA_21',
     ajustesAnteriores: SIN_AJUSTES,
     ajustesNuevos: SIN_AJUSTES,
+    unidad: 'UNIDAD',
   };
 }
 

@@ -252,7 +252,8 @@ public final class PlanificadorImportacion {
             d.hoja(), articulo.moneda(), monedaFinal, articulo.alicuotaIva(), alicuota, articulo.ajustes(), ajustes,
             conRecargos ? articulo.recargosCosto().porcentajeTotal() : null,
             conRecargos ? articulo.costoReal(articulo.costo()) : null,
-            conRecargos ? articulo.costoReal(costoNuevo) : null);
+            conRecargos ? articulo.costoReal(costoNuevo) : null,
+            articulo.unidad());
     }
 
     /**

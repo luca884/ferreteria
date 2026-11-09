@@ -8,7 +8,7 @@ import java.util.Optional;
  * {@code costo} esta en la {@code moneda} del articulo; {@code precioFinal} siempre en pesos. {@code alicuotaIva} y
  * {@code ajustes} son los que tiene hoy: la lista puede corregirlos. {@code precioManual} y {@code ajustesPrecio} son
  * los de CU-14 y {@code recargosCosto} los de CU-13 (el precio parte del costo real): con ellos {@link #precioCon} da lo
- * mismo que {@link Articulo#precioConCosto}.
+ * mismo que {@link Articulo#precioConCosto}. {@code unidad} es la de venta, para que la vista previa diga «/ kg» (#36).
  */
 public record ArticuloVigente(
         Long id,
@@ -25,12 +25,23 @@ public record ArticuloVigente(
         Ajustes ajustes,
         boolean precioManual,
         AjustesDePrecio ajustesPrecio,
-        RecargosDeCosto recargosCosto) {
+        RecargosDeCosto recargosCosto,
+        Unidad unidad) {
 
     public ArticuloVigente {
         ajustes = ajustes == null ? Ajustes.NINGUNO : ajustes;
         ajustesPrecio = ajustesPrecio == null ? AjustesDePrecio.NINGUNO : ajustesPrecio;
         recargosCosto = recargosCosto == null ? RecargosDeCosto.NINGUNO : recargosCosto;
+        unidad = unidad == null ? Unidad.UNIDAD : unidad;
+    }
+
+    /** Articulo por unidad (#36). */
+    public ArticuloVigente(Long id, String codigoInterno, String codigoProveedor, String descripcion,
+                           BigDecimal costo, BigDecimal precioFinal, BigDecimal margenPorcentaje, Long rubroId,
+                           AlicuotaIva alicuotaIva, boolean activo, Moneda moneda, Ajustes ajustes,
+                           boolean precioManual, AjustesDePrecio ajustesPrecio, RecargosDeCosto recargosCosto) {
+        this(id, codigoInterno, codigoProveedor, descripcion, costo, precioFinal, margenPorcentaje, rubroId,
+            alicuotaIva, activo, moneda, ajustes, precioManual, ajustesPrecio, recargosCosto, Unidad.UNIDAD);
     }
 
     /** Articulo sin recargos del costo (CU-13). */
@@ -109,6 +120,7 @@ public record ArticuloVigente(
             articulo.getAjustes(),
             articulo.isPrecioManual(),
             articulo.getAjustesPrecio(),
-            articulo.getRecargosCosto());
+            articulo.getRecargosCosto(),
+            articulo.getUnidad());
     }
 }

@@ -79,6 +79,7 @@ function cambioDe(parcial: Partial<CambioPlaneado>): CambioPlaneado {
     alicuotaNueva: 'IVA_21',
     ajustesAnteriores: SIN_AJUSTES,
     ajustesNuevos: SIN_AJUSTES,
+    unidad: 'UNIDAD',
     ...parcial,
   };
 }

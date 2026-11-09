@@ -1468,6 +1468,28 @@ class ImportacionIntegrationTest extends CotizacionTestBase {
         }
     }
 
+    /** El cambio trae la unidad del articulo que ya existe, para que la pantalla diga «/ kg» (#36). */
+    @Test
+    void laVistaPreviaTraeLaUnidadDeLosArticulosQueCambian() throws Exception {
+        sembrarAyB();
+        long proveedor = crearProveedor(dueA, unico("P"));
+        String s = unico("");
+        long porKilo = articuloDe(dueA, proveedor, "KG" + s, "100");
+        jdbc.update("update articulo set unidad = 'KILO' where id = ?", porKilo);
+        articuloDe(dueA, proveedor, "UN" + s, "100");
+        MockMultipartFile lista = archivo("lista.xlsx", ListasDePrueba.xlsx(List.of(
+                fila("Codigo", "Descripcion", "Costo"),
+                fila("KG" + s, "x", n("200")),
+                fila("UN" + s, "x", n("200")))));
+
+        JsonNode cambios = vistaPreviaDe(dueA, lista, datosCon(proveedor, mapeo())).get("cambios");
+
+        assertThat(cambios).hasSize(2);
+        assertThat(cambios.get(0).get("articuloId").asLong()).isEqualTo(porKilo);
+        assertThat(cambios.get(0).get("unidad").asText()).isEqualTo("KILO");
+        assertThat(cambios.get(1).get("unidad").asText()).isEqualTo("UNIDAD");
+    }
+
     @Test
     void laVistaPreviaTraeLasListasNuevasConHojaYLosContadoresNuevos() throws Exception {
         sembrarAyB();

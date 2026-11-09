@@ -1,4 +1,5 @@
 import { formatearCosto } from '../../core/formato/monto';
+import { porUnidad } from '../../core/formato/unidad';
 import { ALICUOTA_IVA_LABELS, UNIDAD_LABELS } from '../articulos/articulo.models';
 import { Ajustes, CambioPlaneado } from './importacion.models';
 import { FilaDeVista, TipoFila } from './seleccion-filas';
@@ -61,13 +62,13 @@ function detalleDeCambio(cambio: CambioPlaneado): string[] {
 
 /**
  * «Costo real: $ A → $ B (recargos N %)», como en la Actualización masiva (#97): el costo con los recargos del artículo
- * (CU-13), cada lado en su moneda; un solo importe si no cambia; null sin recargos.
+ * (CU-13), cada lado en su moneda y con «/ kg» si va por kilo (#36); un solo importe si no cambia; null sin recargos.
  */
 function costoRealDe(cambio: CambioPlaneado): string | null {
   const { recargosPorcentaje, costoRealAnterior, costoRealNuevo } = cambio;
   if (recargosPorcentaje == null || costoRealAnterior == null || costoRealNuevo == null) return null;
-  const anterior = formatearCosto(costoRealAnterior, cambio.monedaAnterior);
-  const nuevo = formatearCosto(costoRealNuevo, cambio.monedaNueva);
+  const anterior = formatearCosto(costoRealAnterior, cambio.monedaAnterior) + porUnidad(cambio.unidad);
+  const nuevo = formatearCosto(costoRealNuevo, cambio.monedaNueva) + porUnidad(cambio.unidad);
   const importes = anterior === nuevo ? nuevo : `${anterior} → ${nuevo}`;
   return `Costo real: ${importes} (recargos ${PORCENTAJE.format(recargosPorcentaje)} %)`;
 }

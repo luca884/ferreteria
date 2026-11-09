@@ -19,7 +19,7 @@ Restricciones: sin migraciones. Mensajes y textos en español rioplatense.
 
 - [x] T1 · S1 · ruta: inline · Aceptación: comprobante de la compra con palabras en Movimientos; spec y cu-09 al día · Evidencia: RED `MovimientosArticuloTest` 8/8 fallan («FA 00036-03608111 · Bulonera Sur»); GREEN 8/8, `MovimientosArticuloIntegrationTest` 6/6, `ModulosArchTest` 50/50, `movimientos-articulo.spec.ts` 14/14 · commit: ver L5 · Risk: none
 - [x] T2 · S2, S2a · ruta: inline · Aceptación: contador por costo real, con test de recargos · Evidencia: RED `CompraRecargosIntegrationTest` 2/7 fallan (`$.suben` 0 en vez de 1; `$.bajan` 0 en vez de 1); GREEN 7/7, `CompraServiceIntegrationTest` 22/22, `CompraControllerIntegrationTest` 8/8 · commit: ver L6 · Risk: none
-- [ ] T3 · S3, S3a · ruta: inline · Aceptación: `unidad` en `ArticuloVigente` y `CambioPlaneado`; sufijo en la vista previa de la importación · Evidencia: — · Risk: a evaluar al cerrar (campo nuevo en un JSON y `ArticuloVigente` compartido con Actualizar precios)
+- [x] T3 · S3, S3a · ruta: inline · Aceptación: `unidad` en `ArticuloVigente` y `CambioPlaneado`; sufijo en la vista previa de la importación · Evidencia: RED `ImportacionIntegrationTest#laVistaPreviaTraeLaUnidadDeLosArticulosQueCambian` (NPE: no hay `unidad`), `vista-previa-tabla.spec.ts` y `detalle-fila.spec.ts` 2 fallan («$ 1.000,00» sin « / kg»); GREEN backend 2/2, front `importaciones/**` 8 archivos 365/365 · commit: ver L7 · Risk: item 3 (`ArticuloVigente.de()` también lo usa Actualizar precios) → `odd-verifier`
 
 ## Log
 
@@ -44,3 +44,6 @@ Restricciones: sin migraciones. Mensajes y textos en español rioplatense.
   - sin recargos, igual queda igual y 110 sube;
   - sin recargos sobre un artículo que los tenía baja (S2a).
   La spec (CU-13 punto 3) y el comentario de `PlanCompra` quedaron al día. La advertencia de variación fuerte (±50 %) sigue comparando el costo de la factura: no entra en esta tanda.
+- L7 (2026-11-08) T3 hecha.
+  - **Backend.** `ArticuloVigente` y `CambioPlaneado` suman `unidad` al final (null da UNIDAD). Los constructores de antes delegan con UNIDAD, así que los tests y Actualizar precios no cambian. `ArticuloVigente.de()` toma `getUnidad()` y `PlanificadorImportacion.cambio(...)` la pasa al cambio.
+  - **Front.** `CambioPlaneado.unidad` es obligatorio en el modelo, y se sumó a los 4 helpers de los specs. `vista-previa-tabla.ts` agrega `porUnidad` a los cuatro importes, de los cambios y de las altas, y `detalle-fila.ts` lo agrega al «Costo real». El «Unidad: Kilo» del detalle de un alta queda como estaba.
