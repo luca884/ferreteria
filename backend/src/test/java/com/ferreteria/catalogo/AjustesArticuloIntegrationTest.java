@@ -352,8 +352,8 @@ class AjustesArticuloIntegrationTest extends AjustesTestBase {
         Map<String, Object> antes = filaDe(id);
 
         editar(duenoA, id, ajustes("-5", "null", "null")).andExpect(status().isConflict())
-                .andExpect(jsonPath("$.message", is("El costo guardado ($ 950,00) no coincide con el que sale de la "
-                        + "lista ($ 900,00). Si guardás, el costo pasa a $ 855,00.")))
+                .andExpect(jsonPath("$.message", is("El costo guardado ($\u00a0950,00) no coincide con el que sale de la "
+                        + "lista ($\u00a0900,00). Si guardás, el costo pasa a $\u00a0855,00.")))
                 .andExpect(jsonPath("$.errors").doesNotExist());
         assertThat(filaDe(id)).isEqualTo(antes);
         assertThat(historialDelArticulo(id)).isZero();
@@ -372,8 +372,8 @@ class AjustesArticuloIntegrationTest extends AjustesTestBase {
                 valores("-5", null, null), "990.00", "1560.00");
 
         editar(duenoA, id, ajustes("null", "null", "null")).andExpect(status().isConflict())
-                .andExpect(jsonPath("$.message", is("El costo guardado ($ 990,00) no coincide con el que sale de la "
-                        + "lista ($ 855,00). Si guardás, el costo pasa a $ 900,00.")));
+                .andExpect(jsonPath("$.message", is("El costo guardado ($\u00a0990,00) no coincide con el que sale de la "
+                        + "lista ($\u00a0855,00). Si guardás, el costo pasa a $\u00a0900,00.")));
     }
 
     @Test
@@ -385,8 +385,8 @@ class AjustesArticuloIntegrationTest extends AjustesTestBase {
         Map<String, Object> antes = filaDe(id);
 
         editar(duenoA, id, ajustes("-5", "null", "null")).andExpect(status().isConflict())
-                .andExpect(jsonPath("$.message", is("El costo guardado ($ 900,00) no coincide con el que sale de la "
-                        + "lista ($ 880,00). Si guardás, el costo pasa a $ 836,00.")))
+                .andExpect(jsonPath("$.message", is("El costo guardado ($\u00a0900,00) no coincide con el que sale de la "
+                        + "lista ($\u00a0880,00). Si guardás, el costo pasa a $\u00a0836,00.")))
                 .andExpect(jsonPath("$.errors").doesNotExist());
         assertThat(filaDe(id)).isEqualTo(antes);
         assertThat(historialDelArticulo(id)).isZero();
@@ -552,8 +552,8 @@ class AjustesArticuloIntegrationTest extends AjustesTestBase {
         masivoPorcentaje("10");
 
         editar(duenoA, id, ajustesConVersion("-5", 2L, false)).andExpect(status().isConflict())
-                .andExpect(jsonPath("$.message", is("El costo guardado ($ 1.100,00) no coincide con el que sale de la "
-                        + "lista ($ 1.000,00). Si guardás, el costo pasa a $ 950,00.")));
+                .andExpect(jsonPath("$.message", is("El costo guardado ($\u00a01.100,00) no coincide con el que sale de la "
+                        + "lista ($\u00a01.000,00). Si guardás, el costo pasa a $\u00a0950,00.")));
         assertThat(version(id)).isEqualTo(2);
 
         editar(duenoA, id, ajustesConVersion("-5", 2L, true)).andExpect(status().isOk())

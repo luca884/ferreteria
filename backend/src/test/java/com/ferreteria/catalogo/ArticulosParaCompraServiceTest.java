@@ -78,7 +78,7 @@ class ArticulosParaCompraServiceTest extends IntegrationTestBase {
         CostoDeCompra c = articulosParaCompra.planear(Map.of(tornillo, new BigDecimal("200.00"))).get(0);
 
         assertThat(c.advertencia()).isEqualTo(
-                "El costo sube un 100 % (de $ 100,00 a $ 200,00). Revisá que sea correcto.");
+                "El costo sube un 100 % (de $\u00a0100,00 a $\u00a0200,00). Revisá que sea correcto.");
     }
 
     @Test
@@ -94,7 +94,8 @@ class ArticulosParaCompraServiceTest extends IntegrationTestBase {
         CostoDeCompra c = articulosParaCompra.planear(Map.of(clavo, new BigDecimal("16.00"))).get(0);
 
         assertThat(c.advertencia()).isEqualTo(
-                "El costo sube un 60 % (de US$ 10,00 / kg a US$ 16,00 / kg). Revisá que sea correcto.");
+                "El costo sube un 60 % (de US$\u00a010,00\u00a0/\u00a0kg a US$\u00a016,00\u00a0/\u00a0kg). "
+                        + "Revisá que sea correcto.");
     }
 
     @Test
@@ -110,9 +111,9 @@ class ArticulosParaCompraServiceTest extends IntegrationTestBase {
 
         assertThat(c.precioNuevo()).isEqualByComparingTo("121.00");
         assertThat(c.advertencia()).isEqualTo(
-                "Margen negativo: el costo ($ 110,00) supera el precio sin IVA ($ 100,00). Revisá el precio manual.");
-        assertThat(fuerte.advertencia()).isEqualTo("El costo sube un 100 % (de $ 100,00 a $ 200,00). Revisá que sea "
-                + "correcto. Margen negativo: el costo ($ 200,00) supera el precio sin IVA ($ 100,00). "
+                "Margen negativo: el costo ($\u00a0110,00) supera el precio sin IVA ($\u00a0100,00). Revisá el precio manual.");
+        assertThat(fuerte.advertencia()).isEqualTo("El costo sube un 100 % (de $\u00a0100,00 a $\u00a0200,00). Revisá que sea "
+                + "correcto. Margen negativo: el costo ($\u00a0200,00) supera el precio sin IVA ($\u00a0100,00). "
                 + "Revisá el precio manual.");
     }
 

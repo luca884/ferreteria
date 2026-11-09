@@ -216,7 +216,7 @@ class CompraServiceIntegrationTest extends IntegrationTestBase {
         assertThat(plan.iguales()).isEqualTo(1);
         assertThat(plan.neto()).isEqualByComparingTo("4940.00");
         assertThat(plan.renglones().get(0).costo().advertencia())
-                .isEqualTo("El costo sube un 110 % (de $ 100,00 a $ 210,00). Revisá que sea correcto.");
+                .isEqualTo("El costo sube un 110 % (de $\u00a0100,00 a $\u00a0210,00). Revisá que sea correcto.");
         assertThat(plan.renglones().get(2).subtotal()).isEqualByComparingTo("500.00");
         assertThat(jdbc.queryForObject("select costo from articulo where id = ?", BigDecimal.class, tornillo))
                 .isEqualByComparingTo("100.00");

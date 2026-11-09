@@ -152,7 +152,7 @@ class CompraRecargosIntegrationTest extends ComprasTestBase {
                 .andExpect(jsonPath("$.renglones[0].costoRealAnterior").value(100.00))
                 .andExpect(jsonPath("$.renglones[0].costoRealNuevo").value(160.00))
                 .andExpect(jsonPath("$.renglones[0].advertencia")
-                        .value("El costo real sube un 60 % (de $ 100,00 a $ 160,00). Revisá que sea correcto."));
+                        .value("El costo real sube un 60 % (de $\u00a0100,00 a $\u00a0160,00). Revisá que sea correcto."));
     }
 
     @Test
@@ -176,7 +176,7 @@ class CompraRecargosIntegrationTest extends ComprasTestBase {
         postJson("/api/compras/vista-previa", dueno, cuerpo(null, 1, null, "160.00"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.renglones[0].advertencia")
-                        .value("El costo sube un 60 % (de $ 100,00 a $ 160,00). Revisá que sea correcto."));
+                        .value("El costo sube un 60 % (de $\u00a0100,00 a $\u00a0160,00). Revisá que sea correcto."));
     }
 
     // ---- helpers ----

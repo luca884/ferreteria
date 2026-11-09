@@ -1992,7 +1992,7 @@ class PlanificadorImportacionTest {
                 .planificar();
 
             assertThat(plan.advertencias()).containsExactly(
-                new AvisoDeFila(null, 5, "A-1", "El costo sube un 60 % (de $ 100,00 a $ 160,00). Revisá que sea correcto.", "x"));
+                new AvisoDeFila(null, 5, "A-1", "El costo sube un 60 % (de $\u00a0100,00 a $\u00a0160,00). Revisá que sea correcto.", "x"));
             assertThat(plan.cambios().get(0).variacionFuerte()).isTrue();
             assertThat(plan.conteos()).isEqualTo(new ConteosImportacion(1, 0, 0, 0, 0, 0));
         }
@@ -2006,7 +2006,7 @@ class PlanificadorImportacionTest {
                 .planificar();
 
             assertThat(plan.advertencias()).containsExactly(
-                new AvisoDeFila(null, 5, "A-1", "El costo baja un 60 % (de $ 100,00 a $ 40,00). Revisá que sea correcto.", "x"));
+                new AvisoDeFila(null, 5, "A-1", "El costo baja un 60 % (de $\u00a0100,00 a $\u00a040,00). Revisá que sea correcto.", "x"));
             assertThat(plan.cambios().get(0).variacionFuerte()).isTrue();
             assertThat(plan.conteos()).isEqualTo(new ConteosImportacion(0, 1, 0, 0, 0, 0));
         }
@@ -2032,8 +2032,8 @@ class PlanificadorImportacionTest {
                 .planificar();
 
             assertThat(mensajes(plan.advertencias())).containsExactly(
-                "El costo sube un 50,01 % (de $ 100,00 a $ 150,01). Revisá que sea correcto.",
-                "El costo baja un 50,01 % (de $ 100,00 a $ 49,99). Revisá que sea correcto.");
+                "El costo sube un 50,01 % (de $\u00a0100,00 a $\u00a0150,01). Revisá que sea correcto.",
+                "El costo baja un 50,01 % (de $\u00a0100,00 a $\u00a049,99). Revisá que sea correcto.");
         }
 
         @Test
@@ -2047,7 +2047,7 @@ class PlanificadorImportacionTest {
 
             assertThat(plan.cambios().get(0).costoNuevo()).isEqualByComparingTo("200.00");
             assertThat(mensajes(plan.advertencias())).containsExactly(
-                "El costo sube un 100 % (de $ 100,00 a $ 200,00). Revisá que sea correcto.");
+                "El costo sube un 100 % (de $\u00a0100,00 a $\u00a0200,00). Revisá que sea correcto.");
         }
 
         @Test
@@ -2082,7 +2082,7 @@ class PlanificadorImportacionTest {
                 .planificar();
 
             assertThat(mensajes(plan.advertencias())).containsExactly(
-                "El costo baja un 66,67 % (de $ 100,00 a $ 33,33). Revisá que sea correcto.");
+                "El costo baja un 66,67 % (de $\u00a0100,00 a $\u00a033,33). Revisá que sea correcto.");
         }
 
         @Test
@@ -2094,7 +2094,7 @@ class PlanificadorImportacionTest {
                 .planificar();
 
             assertThat(mensajes(plan.advertencias())).containsExactly(
-                "El costo sube un 150,05 % (de $ 1.000,00 a $ 2.500,50). Revisá que sea correcto.");
+                "El costo sube un 150,05 % (de $\u00a01.000,00 a $\u00a02.500,50). Revisá que sea correcto.");
         }
 
         @Test
@@ -2106,7 +2106,8 @@ class PlanificadorImportacionTest {
                 .planificar();
 
             assertThat(mensajes(plan.advertencias())).containsExactly(
-                "El costo sube un 60 % (de $ 769,50 / m a $ 1.231,20 / m). Revisá que sea correcto.");
+                "El costo sube un 60 % (de $\u00a0769,50\u00a0/\u00a0m a $\u00a01.231,20\u00a0/\u00a0m). "
+                    + "Revisá que sea correcto.");
         }
 
         @Test
@@ -2118,7 +2119,7 @@ class PlanificadorImportacionTest {
                 .planificar();
 
             assertThat(mensajes(plan.advertencias())).containsExactly(
-                "El costo sube un 60 % (de US$ 10,00 a US$ 16,00). Revisá que sea correcto.");
+                "El costo sube un 60 % (de US$\u00a010,00 a US$\u00a016,00). Revisá que sea correcto.");
         }
 
         @Test
@@ -2680,7 +2681,7 @@ class PlanificadorImportacionTest {
             assertThat(plan.cambios()).hasSize(2);
             assertThat(plan.advertencias()).extracting(AvisoDeFila::fila, AvisoDeFila::mensaje).containsExactly(
                 org.assertj.core.groups.Tuple.tuple(2,
-                    "Margen negativo: el costo ($ 110,00) supera el precio sin IVA ($ 100,00). Revisá el precio manual."));
+                    "Margen negativo: el costo ($\u00a0110,00) supera el precio sin IVA ($\u00a0100,00). Revisá el precio manual."));
         }
 
         @Test

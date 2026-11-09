@@ -5,6 +5,14 @@
   flex-direction: column;
   min-height: 0;
 }
+/*
+ * La barra no se achica: con su min-height explícito, en esta columna flexible se encogía a ese alto aunque sus
+ * casillas bajaran a un segundo renglón (a 1280 px), y «Mostrar dados de baja» y «Solo en oferta» quedaban encima de
+ * la paginación. Así crece con su contenido y la que cede alto es la grilla.
+ */
+app-barra-acciones {
+  flex-shrink: 0;
+}
 .grilla-marco {
   flex: 0 1 auto;
   min-height: 160px;

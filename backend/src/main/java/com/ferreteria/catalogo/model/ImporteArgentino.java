@@ -9,8 +9,14 @@ import java.util.Locale;
 /**
  * Importes en formato argentino (punto de miles y coma decimal) para los mensajes al usuario. Dominio puro,
  * sin estado. Mismo formato que {@link VariacionFuerte}, que no se toca para no mover sus tests.
+ *
+ * <p>Los espacios de adentro del importe (entre la moneda y el numero, y entre el numero y su unidad) son duros
+ * (U+00A0), como los del front: en una celda angosta el aviso corta antes o despues del importe, nunca en el medio.
  */
 public final class ImporteArgentino {
+
+    /** Espacio duro (U+00A0): une las partes del importe para que no queden en dos renglones. */
+    private static final String ESPACIO_DURO = "\u00a0";
 
     private ImporteArgentino() {
     }
@@ -19,14 +25,24 @@ public final class ImporteArgentino {
     public static String formato(BigDecimal valor, Moneda moneda) {
         String simbolo = moneda == Moneda.USD ? "US$" : "$";
         String signo = valor.signum() < 0 ? "-" : "";
-        return signo + simbolo + " " + formatear(valor.abs(), "#,##0.00");
+        return signo + simbolo + ESPACIO_DURO + formatear(valor.abs(), "#,##0.00");
+    }
+
+    /**
+     * Como {@link #formato} y, si el articulo no va por unidad, por que unidad es el importe: «$ 769,50 / m»,
+     * «US$ 10,00 / kg»; por unidad, sin sufijo. Los mismos textos que la grilla del front.
+     */
+    public static String formato(BigDecimal valor, Moneda moneda, Unidad unidad) {
+        String abreviatura = unidad.abreviatura();
+        String porUnidad = abreviatura.isEmpty() ? "" : ESPACIO_DURO + "/" + ESPACIO_DURO + abreviatura;
+        return formato(valor, moneda) + porUnidad;
     }
 
     /** Como {@link #formato} pero sin decimales que no significan nada: «$ 100», «US$ 100,50», «-US$ 50». */
     public static String formatoCompacto(BigDecimal valor, Moneda moneda) {
         String simbolo = moneda == Moneda.USD ? "US$" : "$";
         String signo = valor.signum() < 0 ? "-" : "";
-        return signo + simbolo + " " + montoCompacto(valor.abs());
+        return signo + simbolo + ESPACIO_DURO + montoCompacto(valor.abs());
     }
 
     /** El monto sin simbolo y sin decimales que no significan nada: 100 es «100» y 100,50 es «100,50». */

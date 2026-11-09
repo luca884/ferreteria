@@ -393,7 +393,7 @@ class ActualizacionMasivaImportacionIntegrationTest extends AjustesTestBase {
         assertThat(previa.get("enPesos").asInt()).isEqualTo(3);
         assertThat(previa.get("enDolares").asInt()).isEqualTo(2);
         assertThat(previa.get("advertenciaMezcla").asText()).isEqualTo("La selección mezcla artículos en pesos y en "
-                + "dólares. El monto de 100 se suma tal cual a cada costo: $ 100 en los de pesos y US$ 100 en los de dólares.");
+                + "dólares. El monto de 100 se suma tal cual a cada costo: $\u00a0100 en los de pesos y US$\u00a0100 en los de dólares.");
         aplicar(pedido, previa);
         assertThat(costoDe(d1)).isEqualByComparingTo("110.00");
     }
