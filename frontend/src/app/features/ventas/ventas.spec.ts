@@ -1250,6 +1250,22 @@ describe('Ventas (consulta y reimpresión, G60)', () => {
       expect(normal(detalle()!.querySelector('.error')!.textContent)).toBe('No se encontró la venta.');
     });
 
+    it('abierta desde el link de otro documento, cerrarla vuelve a ese documento (bugs-relevamiento-celular, S7)', async () => {
+      await crear();
+      const router = TestBed.inject(Router);
+      vi.spyOn(router, 'currentNavigation').mockReturnValue({ extras: { state: { origen: '/presupuestos/5' } } } as never);
+      parametros.next(convertToParamMap({ id: '120' }));
+      await refrescar();
+      vi.mocked(router.currentNavigation).mockReturnValue(null);
+      const espia = navegar();
+
+      escape();
+      await refrescar();
+
+      expect(detalle()).toBeNull();
+      expect(espia).toHaveBeenCalledWith('/presupuestos/5');
+    });
+
     it('otra venta en la dirección con la pantalla abierta (un link entre documentos) abre esa', async () => {
       await crear([resumenDePrueba(5)], 'DUENO', {}, '90');
       parametros.next(convertToParamMap({ id: '120' }));
@@ -1270,6 +1286,23 @@ describe('Ventas (consulta y reimpresión, G60)', () => {
       const link = detalle()!.querySelector<HTMLAnchorElement>('.venta-anulada a')!;
       expect(normal(detalle()!.querySelector('.venta-anulada')!.textContent)).toBe('Anula la venta N.º 7');
       expect(link.getAttribute('href')).toBe('/ventas/70');
+    });
+
+    it('los links a otro documento llevan la venta de origen, para volver al cerrarlo (bugs-relevamiento-celular, S7)', async () => {
+      await crear();
+      const espia = vi.spyOn(TestBed.inject(Router), 'navigateByUrl').mockResolvedValue(true);
+      api.obtener.mockReturnValue(of(ventaDePrueba({ ventaId: 140, numero: 14, tipo: 'NOTA_CREDITO', ventaAnulada: { id: 70, numero: 7 } })));
+      filas()[0].click();
+      await refrescar();
+      detalle()!.querySelector<HTMLAnchorElement>('.venta-anulada a')!.click();
+      expect(espia.mock.calls.at(-1)![1]).toMatchObject({ state: { origen: '/ventas/140' } });
+
+      api.obtener.mockReturnValue(of(ventaDePrueba({ ventaId: 90, presupuestoId: 5, presupuestoNumero: 3 })));
+      filas()[0].click();
+      await refrescar();
+      const alPresupuesto = detalle()!.querySelector<HTMLAnchorElement>('app-venta-hoja a[href="/presupuestos/5"]')!;
+      alPresupuesto.click();
+      expect(espia.mock.calls.at(-1)![1]).toMatchObject({ state: { origen: '/ventas/90' } });
     });
 
     it('una X con número dice su letra y su número, como la lista: «X (B) 00001-00000011 · <marca>»', async () => {

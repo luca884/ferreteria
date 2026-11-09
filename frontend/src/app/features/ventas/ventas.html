@@ -164,7 +164,7 @@
       }
       @if (detalle(); as v) {
         @if (v.ventaAnulada; as anulada) {
-          <p class="venta-anulada">Anula la <a [routerLink]="'/ventas/' + anulada.id">venta N.º {{ anulada.numero }}</a></p>
+          <p class="venta-anulada">Anula la <a [routerLink]="'/ventas/' + anulada.id" [state]="origenDe(v)">venta N.º {{ anulada.numero }}</a></p>
         }
         @if (v.anulacion; as a) {
           <p class="anulacion">{{ anulacion(a) }}</p>

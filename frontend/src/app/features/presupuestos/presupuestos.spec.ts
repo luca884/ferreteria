@@ -524,6 +524,16 @@ describe('Presupuestos', () => {
       expect(detalle()!.textContent).not.toContain('facturó');
     });
 
+    it('el link a la venta lleva el presupuesto de origen, para volver al cerrarla (bugs-relevamiento-celular, S7)', async () => {
+      await crear(undefined, 'DUENO');
+      api.obtener.mockReturnValue(of(detalleDe(12, { estado: 'FACTURADO', facturadoPor: { ventaId: 80, numero: 19 } })));
+      await abrirDetalle(0);
+
+      detalle()!.querySelector<HTMLAnchorElement>('.nota-estado a')!.click();
+
+      expect(navegar.mock.calls.at(-1)![1]).toMatchObject({ state: { origen: '/presupuestos/120' } });
+    });
+
     it('si la venta tiene una factura válida, la suma a la nota: «Vendido en la venta N.º 19 · Factura B 00001-00000012» (arreglos-confusos, S5)', async () => {
       await crear();
       api.obtener.mockReturnValue(
@@ -885,6 +895,21 @@ describe('Presupuestos', () => {
 
       expect(detalle()).toBeNull();
       expect(navegar).toHaveBeenCalledWith('/presupuestos');
+    });
+
+    it('abierto desde el link de otro documento, cerrarlo vuelve a ese documento (bugs-relevamiento-celular, S7)', async () => {
+      await crear([resumen(12)]);
+      const router = TestBed.inject(Router);
+      vi.spyOn(router, 'currentNavigation').mockReturnValue({ extras: { state: { origen: '/ventas/90' } } } as never);
+      parametros.next(convertToParamMap({ id: '5' }));
+      await refrescar();
+      vi.mocked(router.currentNavigation).mockReturnValue(null);
+
+      esc();
+      await refrescar();
+
+      expect(detalle()).toBeNull();
+      expect(navegar).toHaveBeenCalledWith('/ventas/90');
     });
 
     it('abierto desde la lista, cerrarlo no cambia la dirección', async () => {

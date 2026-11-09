@@ -4,6 +4,7 @@ import { RouterLink } from '@angular/router';
 import { cantidadConUnidad, porUnidad } from '../../core/formato/unidad';
 import { MontoPipe, RestadoPipe } from '../../core/formato/monto';
 import { porcentajeDescuentoGeneral } from '../../shared/descuento-general';
+import { conOrigen } from '../../shared/documento-por-ruta';
 import { fechaCompletaLocal } from '../clientes/cuenta/cobranza.models';
 import { VentaConsultada, clienteDeVenta, esNotaDeCredito } from './ventas.models';
 
@@ -25,6 +26,8 @@ export class VentaHoja {
   protected readonly cantidadConUnidad = cantidadConUnidad;
   protected readonly porUnidad = porUnidad;
 
+  /** El `state` del link al presupuesto o al remito: al cerrarlo se vuelve a esta venta (bugs-relevamiento-celular, S7). */
+  protected readonly estadoDelLink = computed(() => conOrigen(`/ventas/${this.venta().ventaId}`));
   protected readonly fecha = computed(() => fechaCompletaLocal(this.venta().fecha));
   protected readonly cliente = computed(() => clienteDeVenta(this.venta().clienteNombre));
   protected readonly pagos = computed(() => this.venta().pagos ?? []);

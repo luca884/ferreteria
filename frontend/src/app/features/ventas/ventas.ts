@@ -9,7 +9,7 @@ import { MontoPipe } from '../../core/formato/monto';
 import { BarraAcciones } from '../../shared/barra-acciones';
 import { Confirmacion } from '../../shared/confirmacion';
 import { DialogoDetalle } from '../../shared/dialogo-detalle';
-import { idsDeLaRuta } from '../../shared/documento-por-ruta';
+import { conOrigen, idsDeLaRuta, origenDeLaNavegacion } from '../../shared/documento-por-ruta';
 import { HASTA_ANTERIOR_A_DESDE, rangoAlReves } from '../../shared/rango-de-fechas';
 import { FacturaImprimible } from '../../shared/factura/factura-imprimible';
 import {
@@ -123,6 +123,10 @@ export class Ventas implements OnInit {
   protected readonly imprimiendo = signal(false);
   /** La venta se abrió por `/ventas/:id` (un link desde otro documento): la lista no la cierra y al cerrarla se vuelve a `/ventas`. */
   private abiertaPorRuta = false;
+  /** El documento desde cuyo link se abrió: al cerrar se vuelve ahí (bugs-relevamiento-celular, S7). */
+  private origen: string | null = null;
+  /** La dirección de esta venta, para que el link a la venta que anula sepa volver. */
+  protected readonly origenDe = (v: VentaConsultada) => conOrigen(`/ventas/${v.ventaId}`);
   /** El título del pop-up: de la fila mientras el detalle carga, para que se sepa qué venta se abrió. */
   protected readonly tituloDetalle = computed(() => {
     const id = this.elegida();
@@ -208,6 +212,7 @@ export class Ventas implements OnInit {
       .subscribe((id) => {
         if (!this.auth.esDueno()) return;
         this.abiertaPorRuta = true;
+        this.origen = origenDeLaNavegacion(this.router);
         this.abrir(id);
       });
   }
@@ -326,10 +331,12 @@ export class Ventas implements OnInit {
     this.errorDetalle.set(null);
     this.imprimiendo.set(false);
     this.soltarAcciones();
-    // Abierta por `/ventas/:id`: la dirección deja de nombrar una venta que ya no se ve.
+    // Abierta por `/ventas/:id`: la dirección deja de nombrar una venta que ya no se ve. Si vino del link de otro
+    // documento, vuelve a ese documento (bugs-relevamiento-celular, S7).
     if (this.abiertaPorRuta) {
       this.abiertaPorRuta = false;
-      void this.router.navigateByUrl('/ventas');
+      void this.router.navigateByUrl(this.origen ?? '/ventas');
+      this.origen = null;
     }
   }
 

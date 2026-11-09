@@ -958,6 +958,32 @@ describe('Remitos', () => {
       expect(navegar).toHaveBeenCalledWith('/remitos');
     });
 
+    it('abierto desde el link de otro documento, cerrarlo vuelve a ese documento (bugs-relevamiento-celular, S7)', async () => {
+      await crear([resumen(5)]);
+      const router = TestBed.inject(Router);
+      vi.spyOn(router, 'currentNavigation').mockReturnValue({ extras: { state: { origen: '/ventas/90' } } } as never);
+      parametros.next(convertToParamMap({ id: '7' }));
+      await refrescar();
+      vi.mocked(router.currentNavigation).mockReturnValue(null);
+
+      esc();
+      await refrescar();
+
+      expect(detalle()).toBeNull();
+      expect(navegar).toHaveBeenCalledWith('/ventas/90');
+    });
+
+    it('el link a la venta lleva el remito de origen, para volver al cerrarla (bugs-relevamiento-celular, S7)', async () => {
+      await crear(undefined, 'DUENO');
+      api.obtener.mockReturnValue(of(detalleDe(5, { estado: 'FACTURADO', facturadoPor: { ventaId: 40, numero: 33 } })));
+      filas()[0].click();
+      await refrescar();
+
+      detalle()!.querySelector<HTMLAnchorElement>('.nota-estado a')!.click();
+
+      expect(navegar.mock.calls.at(-1)![1]).toMatchObject({ state: { origen: '/remitos/50' } });
+    });
+
     it('abierto desde la lista, cerrarlo no cambia la dirección', async () => {
       await crear();
       filas()[0].click();

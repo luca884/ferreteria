@@ -22,7 +22,7 @@ import { BarraAcciones } from '../../shared/barra-acciones';
 import { Confirmacion } from '../../shared/confirmacion';
 import { porcentajeDescuentoGeneral } from '../../shared/descuento-general';
 import { DialogoDetalle } from '../../shared/dialogo-detalle';
-import { idsDeLaRuta } from '../../shared/documento-por-ruta';
+import { conOrigen, idsDeLaRuta, origenDeLaNavegacion } from '../../shared/documento-por-ruta';
 import { HASTA_ANTERIOR_A_DESDE, rangoAlReves } from '../../shared/rango-de-fechas';
 import { DocumentoNoFiscalImprimible } from '../../shared/documento-no-fiscal/documento-no-fiscal-imprimible';
 import { EmisorService } from '../../shared/documento-no-fiscal/emisor.service';
@@ -108,6 +108,10 @@ export class Remitos implements OnInit {
   protected readonly elegido = signal<number | null>(null);
   /** El remito se abrió por `/remitos/:id` (un link desde otro documento): la lista no lo cierra y al cerrarlo se vuelve a `/remitos`. */
   private abiertoPorRuta = false;
+  /** El documento desde cuyo link se abrió: al cerrar se vuelve ahí (bugs-relevamiento-celular, S7). */
+  private origen: string | null = null;
+  /** La dirección de este remito, para que el link a la venta sepa volver. */
+  protected readonly origenDe = (r: RemitoResponse) => conOrigen(`/remitos/${r.remitoId}`);
   protected readonly detalle = signal<RemitoResponse | null>(null);
   protected readonly errorAccion = signal<string | null>(null);
   protected readonly anulando = signal(false);
@@ -147,6 +151,7 @@ export class Remitos implements OnInit {
       .pipe(takeUntilDestroyed())
       .subscribe((id) => {
         this.abiertoPorRuta = true;
+        this.origen = origenDeLaNavegacion(this.router);
         this.elegido.set(id);
         this.abrir(id);
       });
@@ -225,10 +230,12 @@ export class Remitos implements OnInit {
     this.detalle.set(null);
     this.errorAccion.set(null);
     this.reemplazo.set(null);
-    // Abierto por `/remitos/:id`: la dirección deja de nombrar un remito que ya no se ve.
+    // Abierto por `/remitos/:id`: la dirección deja de nombrar un remito que ya no se ve. Si vino del link de otro
+    // documento, vuelve a ese documento (bugs-relevamiento-celular, S7).
     if (this.abiertoPorRuta) {
       this.abiertoPorRuta = false;
-      void this.router.navigateByUrl('/remitos');
+      void this.router.navigateByUrl(this.origen ?? '/remitos');
+      this.origen = null;
     }
     this.confirmandoAnulacion.set(false);
   }

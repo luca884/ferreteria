@@ -181,7 +181,7 @@
         <p class="nota-estado">
           @if (p.facturadoPor; as f) {
             Vendido en la
-            @if (esDueno()) {<a [routerLink]="'/ventas/' + f.ventaId">venta N.º {{ f.numero }}</a>} @else {venta N.º {{ f.numero }}}
+            @if (esDueno()) {<a [routerLink]="'/ventas/' + f.ventaId" [state]="origenDe(p)">venta N.º {{ f.numero }}</a>} @else {venta N.º {{ f.numero }}}
             @if (f.factura; as factura) {
               · {{ factura }}
             }

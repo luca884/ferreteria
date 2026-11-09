@@ -98,7 +98,7 @@ Orden (L11): T2, T5, T7, T8 → T1, T3, T4, T6 → T9. T0 no aplica.
 - [x] T3 · S3, S6 · ruta: inline · Aceptación: S3 y S6 (los dos en `reportes/`) · Evidencia: `reportes.spec.ts` RED 5 (3 de S3, 2 de S6) → GREEN 35/35, incluido `:358-381`; ego-browser (L13) · commit: ver L13 · Risk: none
 - [x] T4 · S4, S12 · ruta: inline · Aceptación: S4 y lo de S4 en S12 · Evidencia: back: los 5 tests de integración de los listados (Ventas, Compras, Presupuestos, Remitos y Movimientos del artículo) RED (200) → GREEN con el 400 y el texto en `hasta`; `ExtractoCuentaTest` y `ExtractoIntegrationTest` RED → GREEN con el texto nuevo; `RangoDeFechasTest` 2/2; `ReporteVentasIntegrationTest` 16/16 y las ArchTest verdes. Front: los 5 specs RED 1 → GREEN (64, 17, 68, 76 y 15); `reportes`, `movimientos-cuenta` y `extracto.service` verdes. Curl y ego-browser (L14) · commit: ver L14 · Risk: item 3 (5 endpoints `GET` de listados pasan de 200 vacío a 400 con rango invertido) → `odd-verifier` al cierre
 - [x] T5 · S5, S8, S12 · ruta: inline · Aceptación: S5, S8 (incluido el mensaje del super admin) y lo de S5 y S8 en S12 · Evidencia: `configuracion-ventas.spec.ts` RED («-5» quedaba «5,00») → GREEN 8/8, y `importe-input.spec.ts` sigue verde (22/22 entre los dos); `datos-fiscales.spec.ts` RED (sin avisos) → GREEN 13/13, incluido `:92-110`; `ConfigArcaTest` RED 2 → GREEN 31/31 y `ConfigArcaAdminIntegrationTest` 23/23 con el texto nuevo; ego-browser (L8) · commit: ver L8 · Risk: none
-- [ ] T6 · S7 · ruta: inline · Aceptación: S7 · Evidencia: — · Risk: none
+- [x] T6 · S7 · ruta: inline · Aceptación: S7 · Evidencia: RED 8 → GREEN: `ventas.spec.ts` 66/66, `presupuestos.spec.ts` 70/70, `remitos.spec.ts` 78/78, `compras.spec.ts` 18/18 y `articulo-form.spec.ts` 222/222 (vuelta al origen y `state` de cada link); los casos de URL directa siguen verdes. Ego-browser (L15), que además encontró un error en Compras que el test no veía (L15) · commit: ver L15 · Risk: none
 - [x] T7 · S9 · ruta: inline · Aceptación: S9 (primero confirmar la causa con la base) · Evidencia: causa confirmada en la base (L9); `DocumentoFiscalIntegrationTest#resumenes` RED (`letraFiscal` en null) → GREEN, 29/29, y `VentaFacturadaCerrojoIntegrationTest` 39/39 con `letraFiscal` en el JSON; `ventas.spec.ts` RED 5 → GREEN 63/63, con un caso nuevo de dos X con el mismo número; ego-browser (L9) · commit: ver L9 · Risk: none (campo nuevo en una respuesta que solo consume el front; `letra` no cambia)
 - [x] T8 · S10 (importación) · ruta: inline · Aceptación: S10 en `importaciones.html:35` · Evidencia: `importaciones.spec.ts` RED 3 (todo nuevo, un nuevo, mixto) → GREEN 208/208; el caso de solo cambios ya pasaba y queda fijado; ego-browser (L10) · commit: ver L10 · Risk: none
 - [ ] T9 · cierre · ruta: inline + `odd-verifier` (Opus) por T4 · Aceptación: suite backend (`./mvnw test`, sin otra suite corriendo), suite frontend y `npx ng build` verdes; cada bug probado en ego-browser, antes en `main` y después en la rama · Evidencia: — · Risk: item 3 (T4)
@@ -224,3 +224,16 @@ Orden (L11): T2, T5, T7, T8 → T1, T3, T4, T6 → T9. T0 no aplica.
   - Después (8081/4201): el aviso con el foco en «Hasta». Al corregir y buscar, el aviso se va y vienen las 22 ventas o las 4 compras.
 
   Próximo paso: T6.
+- L15 (2026-11-09) T6 hecha (el código en el commit «fix: el pop-up abierto desde el link de otro documento vuelve a ese documento al cerrarse»).
+  - Mecanismo, distinto del de S11e: el link lleva en el `state` la dirección del documento de origen (`conOrigen`, `shared/documento-por-ruta.ts`), y al cerrar se navega a esa dirección (`origenDeLaNavegacion`). `Location.back()` no alcanzaba: si la venta se abrió con un click en la lista, la dirección es `/ventas` y «atrás» vuelve a la lista sin la venta. El comportamiento es el de la aceptación de S7. El origen se abre «por ruta», así que al cerrarlo va a su lista, como siempre.
+  - Links con origen: «Salió del presupuesto/remito» (`venta-hoja`), «Anula la venta», «Vendido en la venta» (Presupuestos), «Facturado en la venta» (Remitos) y «Última compra» de la ficha del artículo, que vuelve a la ficha.
+  - Solo se acepta una dirección propia (`/…`, no `//…`). Abierto por URL directa o desde la lista, cierra como antes.
+  - Error que encontró ego-browser: en Compras el origen se leía en `ngOnInit`, cuando la navegación ya terminó, y volvía a `/compras`. El test no lo veía porque simulaba la navegación también durante `ngOnInit`. Se corrigió el test para que la simulación termine al crear la pantalla (RED) y Compras lee el origen al crearse (GREEN). Ventas, Presupuestos y Remitos lo leen al llegar el `:id` de la ruta, que es durante la navegación.
+
+  Ego-browser (Perla):
+  - Antes (4200): venta 7 (abierta desde la lista) → «presupuesto N.º 1» → Cerrar → `/presupuestos`, la lista.
+  - Después (8081/4201): el mismo recorrido → Cerrar → `/ventas/27` con la venta 7 abierta → Cerrar → `/ventas`.
+  - Remito 1 → «venta N.º 8» → Cerrar → `/remitos/3` con el remito abierto.
+  - Ficha del artículo 18 → «Última compra» → Cerrar → `/articulos/18`.
+
+  Próximo paso: T9.

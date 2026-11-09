@@ -21,7 +21,7 @@ import { cantidadConUnidad } from '../../core/formato/unidad';
 import { BarraAcciones } from '../../shared/barra-acciones';
 import { porcentajeDescuentoGeneral } from '../../shared/descuento-general';
 import { DialogoDetalle } from '../../shared/dialogo-detalle';
-import { idsDeLaRuta } from '../../shared/documento-por-ruta';
+import { conOrigen, idsDeLaRuta, origenDeLaNavegacion } from '../../shared/documento-por-ruta';
 import { HASTA_ANTERIOR_A_DESDE, rangoAlReves } from '../../shared/rango-de-fechas';
 import { DocumentoNoFiscalImprimible } from '../../shared/documento-no-fiscal/documento-no-fiscal-imprimible';
 import { EmisorService } from '../../shared/documento-no-fiscal/emisor.service';
@@ -105,6 +105,10 @@ export class Presupuestos implements OnInit {
   protected readonly elegido = signal<number | null>(null);
   /** El presupuesto se abrió por `/presupuestos/:id` (un link desde otro documento): la lista no lo cierra y al cerrarlo se vuelve a `/presupuestos`. */
   private abiertoPorRuta = false;
+  /** El documento desde cuyo link se abrió: al cerrar se vuelve ahí (bugs-relevamiento-celular, S7). */
+  private origen: string | null = null;
+  /** La dirección de este presupuesto, para que el link a la venta sepa volver. */
+  protected readonly origenDe = (p: PresupuestoResponse) => conOrigen(`/presupuestos/${p.presupuestoId}`);
   protected readonly detalle = signal<PresupuestoResponse | null>(null);
   protected readonly errorAccion = signal<string | null>(null);
   protected readonly cambiando = signal(false);
@@ -151,6 +155,7 @@ export class Presupuestos implements OnInit {
       .pipe(takeUntilDestroyed())
       .subscribe((id) => {
         this.abiertoPorRuta = true;
+        this.origen = origenDeLaNavegacion(this.router);
         this.elegido.set(id);
         this.abrir(id);
       });
@@ -220,10 +225,12 @@ export class Presupuestos implements OnInit {
     this.detalle.set(null);
     this.errorAccion.set(null);
     this.reemplazo.set(null);
-    // Abierto por `/presupuestos/:id`: la dirección deja de nombrar un presupuesto que ya no se ve.
+    // Abierto por `/presupuestos/:id`: la dirección deja de nombrar un presupuesto que ya no se ve. Si vino del link de
+    // otro documento, vuelve a ese documento (bugs-relevamiento-celular, S7).
     if (this.abiertoPorRuta) {
       this.abiertoPorRuta = false;
-      void this.router.navigateByUrl('/presupuestos');
+      void this.router.navigateByUrl(this.origen ?? '/presupuestos');
+      this.origen = null;
     }
   }
 

@@ -8,6 +8,7 @@ import { MontoPipe } from '../../core/formato/monto';
 import { cantidadConUnidad, porUnidad } from '../../core/formato/unidad';
 import { BarraAcciones } from '../../shared/barra-acciones';
 import { DialogoDetalle } from '../../shared/dialogo-detalle';
+import { origenDeLaNavegacion } from '../../shared/documento-por-ruta';
 import { HASTA_ANTERIOR_A_DESDE, rangoAlReves } from '../../shared/rango-de-fechas';
 import { Proveedor } from '../proveedores/proveedor.models';
 import { ProveedoresService } from '../proveedores/proveedores.service';
@@ -65,6 +66,11 @@ export class Compras implements OnInit {
   protected readonly errorDetalle = signal<string | null>(null);
   /** La compra se abrió por `/compras/:id` (la ficha del artículo): al cerrarla se vuelve a `/compras`. */
   private abiertaPorRuta = false;
+  /**
+   * El documento desde cuyo link se abrió (la ficha del artículo): al cerrar se vuelve ahí (bugs-relevamiento-celular,
+   * S7). Se lee al crear la pantalla, que es durante la navegación; en `ngOnInit` la navegación ya terminó.
+   */
+  private origen: string | null = origenDeLaNavegacion(inject(Router));
 
   /** El título del pop-up: de la fila mientras el detalle carga, para que se sepa qué compra se abrió. */
   protected readonly tituloDetalle = computed(() => {
@@ -132,10 +138,12 @@ export class Compras implements OnInit {
     this.elegida.set(null);
     this.detalle.set(null);
     this.errorDetalle.set(null);
-    // Abierta por `/compras/:id`: la dirección deja de nombrar una compra que ya no se ve.
+    // Abierta por `/compras/:id`: la dirección deja de nombrar una compra que ya no se ve. Si vino del link de la ficha
+    // del artículo, vuelve a la ficha (bugs-relevamiento-celular, S7).
     if (this.abiertaPorRuta) {
       this.abiertaPorRuta = false;
-      void this.router.navigateByUrl('/compras');
+      void this.router.navigateByUrl(this.origen ?? '/compras');
+      this.origen = null;
     }
   }
 

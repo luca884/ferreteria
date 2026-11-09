@@ -668,7 +668,7 @@
   @if (auth.esDueno() && ultimaCompra(); as compra) {
     <p class="ultima-compra">
       Última compra:
-      <a [routerLink]="['/compras', compra.compraId]">{{ compra.comprobante }}</a>
+      <a [routerLink]="['/compras', compra.compraId]" [state]="estadoDelLinkACompra">{{ compra.comprobante }}</a>
       del {{ fechaUltimaCompra() }}
     </p>
   }

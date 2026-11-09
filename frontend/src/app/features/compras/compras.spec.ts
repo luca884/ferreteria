@@ -71,7 +71,13 @@ describe('Compras', () => {
     ],
   });
 
-  async function crear(items: CompraResumen[] = [resumen(2), resumen(1)], rol = 'DUENO', id: string | null = null, falla: number | null = null) {
+  async function crear(
+    items: CompraResumen[] = [resumen(2), resumen(1)],
+    rol = 'DUENO',
+    id: string | null = null,
+    falla: number | null = null,
+    origen: string | null = null,
+  ) {
     api = {
       listar: vi.fn(() => of(pagina(items))),
       obtener: vi.fn((id: number) => (falla ? throwError(() => new HttpErrorResponse({ status: falla })) : of(detalle(id)))),
@@ -89,7 +95,13 @@ describe('Compras', () => {
         { provide: AuthService, useValue: { sesion: sesion.asReadonly(), esDueno: () => rol === 'DUENO' } },
       ],
     }).compileComponents();
+    // La navegación que abrió la pantalla desde el link de otro documento (bugs-relevamiento-celular, S7).
+    if (origen) {
+      vi.spyOn(TestBed.inject(Router), 'currentNavigation').mockReturnValue({ extras: { state: { origen } } } as never);
+    }
     fixture = TestBed.createComponent(Compras);
+    // Como en la app: cuando corre `ngOnInit` (el primer detectChanges), la navegación ya terminó.
+    if (origen) vi.mocked(TestBed.inject(Router).currentNavigation).mockReturnValue(null);
     await refrescar();
   }
 
@@ -352,6 +364,18 @@ describe('Compras', () => {
 
       expect(popup()).toBeNull();
       expect(navegar).toHaveBeenCalledWith('/compras');
+    });
+
+    it('abierta desde el link de la ficha del artículo, cerrarla vuelve a la ficha (bugs-relevamiento-celular, S7)', async () => {
+      await crear([resumen(2)], 'DUENO', '9', null, '/articulos/15');
+      const navegar = espiarNavegacion();
+      expect(popup()).not.toBeNull();
+
+      escape();
+      await refrescar();
+
+      expect(popup()).toBeNull();
+      expect(navegar).toHaveBeenCalledWith('/articulos/15');
     });
   });
 });
