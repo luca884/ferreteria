@@ -142,6 +142,8 @@ export class Reportes implements OnInit {
     const hasta = this.hasta();
     const invalido = errorDeRango(desde, hasta);
     if (invalido) {
+      // Un error no deja abajo el resultado de la consulta anterior, ni su hoja de caja (bugs-relevamiento-celular, S3).
+      this.resultado.set(null);
       this.error.set(invalido);
       return;
     }
@@ -155,6 +157,7 @@ export class Reportes implements OnInit {
       },
       error: (err: unknown) => {
         this.cargando.set(false);
+        this.resultado.set(null);
         this.error.set(erroresDeCampos(err)[0] ?? mensajeDe(err, 'No se pudo cargar el reporte.'));
       },
     });

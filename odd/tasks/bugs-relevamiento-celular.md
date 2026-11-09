@@ -95,7 +95,7 @@ Orden (L11): T2, T5, T7, T8 → T1, T3, T4, T6 → T9. T0 no aplica.
 - [x] T0 · no aplica (L11): esta rama se mergea primero y el rebase lo hace `feat/responsive` · rebase después del responsive · ruta: inline · Aceptación: antes de T1, T3, T4 y T6, `feat/responsive` está mergeada en `main` y esta rama queda rebaseada, con los conflictos resueltos. Los esperables están en la línea 14 de `configuracion-ventas.html` y `datos-fiscales.html` (T5), donde el responsive pone su directiva de avisos. Después se repiten los tests puntuales de T2, T5, T7 y T8 · Evidencia: — · Risk: none
 - [x] T1 · S1, S10 (texto de Nueva compra), S12 · ruta: inline · Aceptación: S1, el texto de S10 en Nueva compra y lo de S1 en S12 · Evidencia: `nueva-compra.spec.ts` RED 3 (sin CUIT, aviso junto al select con foco, texto de ayuda) → GREEN 62/62, y el caso de 2 CUIT sigue verde; ego-browser (L12) · commit: ver L12 · Risk: none
 - [x] T2 · S2, S12 · ruta: inline · Aceptación: S2 y lo de S2 en S12 · Evidencia: `LecturaDeFacturaTest` RED (501 renglones no lanzaba) → GREEN 2/2; `FacturaPdfIntegrationTest` 8/8 y `CompraFacturaPdfRegresionIntegrationTest` 6/6 verdes; `nueva-compra.spec.ts` 58/58 con el caso nuevo de S12 (verde de entrada: el front ya dejaba el formulario usable); `docs/spec.md` actualizado; ego-browser (L7) · commit 819f064f · Risk: none (cambio pedido, endpoint que solo consume el front)
-- [ ] T3 · S3, S6 · ruta: inline · Aceptación: S3 y S6 (los dos en `reportes/`) · Evidencia: — · Risk: none
+- [x] T3 · S3, S6 · ruta: inline · Aceptación: S3 y S6 (los dos en `reportes/`) · Evidencia: `reportes.spec.ts` RED 5 (3 de S3, 2 de S6) → GREEN 35/35, incluido `:358-381`; ego-browser (L13) · commit: ver L13 · Risk: none
 - [ ] T4 · S4, S12 · ruta: inline · Aceptación: S4 y lo de S4 en S12 · Evidencia: — · Risk: item 3 (5 endpoints `GET` de listados pasan de 200 vacío a 400 con rango invertido) → `odd-verifier` al cierre
 - [x] T5 · S5, S8, S12 · ruta: inline · Aceptación: S5, S8 (incluido el mensaje del super admin) y lo de S5 y S8 en S12 · Evidencia: `configuracion-ventas.spec.ts` RED («-5» quedaba «5,00») → GREEN 8/8, y `importe-input.spec.ts` sigue verde (22/22 entre los dos); `datos-fiscales.spec.ts` RED (sin avisos) → GREEN 13/13, incluido `:92-110`; `ConfigArcaTest` RED 2 → GREEN 31/31 y `ConfigArcaAdminIntegrationTest` 23/23 con el texto nuevo; ego-browser (L8) · commit: ver L8 · Risk: none
 - [ ] T6 · S7 · ruta: inline · Aceptación: S7 · Evidencia: — · Risk: none
@@ -201,3 +201,12 @@ Orden (L11): T2, T5, T7, T8 → T1, T3, T4, T6 → T9. T0 no aplica.
   - Con `Facturas/pdf (17).pdf` (2 CUIT sin proveedor en Perla): «No encontramos un proveedor con el CUIT 30657162163, 20231742353. Elegilo de la lista.», también con foco.
 
   Próximo paso: T3.
+- L13 (2026-11-09) T3 hecha (el código en el commit «fix: Reportes borra el resultado anterior ante un error y pinta en rojo la ganancia negativa»).
+  - S3: `cargar()` pone `resultado` en null con el rango al revés y con el error del servidor. Así se van el «No hubo…», el resumen y la hoja de caja con su «Imprimir».
+  - S6: «Ganancia sin NC» y «Ganancia con NC» llevan `.ganancia` y, si son negativas, `.negativo` (`--error`). S6 habla de «los importes de ganancia del resumen», así que «sin NC», que antes iba sin color, ahora va en verde si es 0 o más.
+
+  Ego-browser (Perla; hoy la ganancia con NC es −5.560,21):
+  - Antes (4200): «Ganancia con NC −$ 5.560,21» en verde. Con el rango al revés seguía abajo el «No hubo ventas entre esas fechas.». Con más de 366 días en la caja salía «El reporte admite hasta 366 días.» y seguían la hoja y el «Imprimir» de la consulta anterior.
+  - Después (8081/4201): la ganancia negativa en rojo (`rgb(185, 28, 28)`) y la de $ 0,00 en verde. Con el rango al revés, solo el aviso. Con el error del servidor, el aviso, sin hoja y sin «Imprimir».
+
+  Próximo paso: T4.

@@ -78,8 +78,14 @@
           <div><dt>Neto</dt><dd>{{ r.datos.neto | monto }}</dd></div>
           <div><dt>IVA</dt><dd>{{ r.datos.iva | monto }}</dd></div>
           <div><dt>Costo</dt><dd>{{ r.datos.costo | monto }}</dd></div>
-          <div><dt>Ganancia sin NC</dt><dd>{{ r.datos.gananciaSinNotas | monto }}</dd></div>
-          <div class="ganancia"><dt>Ganancia con NC</dt><dd>{{ r.datos.ganancia | monto }}</dd></div>
+          <div class="ganancia">
+            <dt>Ganancia sin NC</dt>
+            <dd [class.negativo]="r.datos.gananciaSinNotas < 0">{{ r.datos.gananciaSinNotas | monto }}</dd>
+          </div>
+          <div class="ganancia">
+            <dt>Ganancia con NC</dt>
+            <dd [class.negativo]="r.datos.ganancia < 0">{{ r.datos.ganancia | monto }}</dd>
+          </div>
           <div><dt>Comprobantes</dt><dd>{{ r.datos.cantidad }}</dd></div>
         </dl>
       }
