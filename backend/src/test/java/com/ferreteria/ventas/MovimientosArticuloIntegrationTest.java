@@ -133,6 +133,12 @@ class MovimientosArticuloIntegrationTest extends VentasTestBase {
         getResult(url(999_999_999L), dueno).andExpect(status().isNotFound());
         getResult(url(articulo), login(tienda.emailVendedor())).andExpect(status().isForbidden());
         getResult(url(articulo), login("admin@demo.local")).andExpect(status().isForbidden());
+        // Con el rango al revés, el ajeno y el inexistente reciben el mismo 400: no dice si el artículo existe
+        // (bugs-relevamiento-celular, S4); el Vendedor sigue con 403, que se decide antes.
+        String alReves = "?desde=" + LocalDate.now() + "&hasta=" + LocalDate.now().minusDays(1);
+        rangoAlRevesDa400(url(articulo) + alReves, login(otra.emailDueno()));
+        rangoAlRevesDa400(url(999_999_999L) + alReves, dueno);
+        getResult(url(articulo) + alReves, login(tienda.emailVendedor())).andExpect(status().isForbidden());
     }
 
     @Test
