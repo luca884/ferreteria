@@ -18,9 +18,9 @@ Restricciones: sin migraciones ni cambios de contrato JSON (solo cambia el texto
 
 ## Tasks
 
-- [ ] T1 · S1, S1a, S2, S2a · ruta: delegada (`odd-implementer` Opus, backstop de contexto) · Evidencia: — · Risk: item 3 (`VariacionFuerte` la comparten 3 módulos; se agrega una sobrecarga)
-- [ ] T2 · S3, S4 · ruta: inline (CSS) · Evidencia: — · Risk: none
-- [ ] T3 · S1–S4 · ruta: worker de ego-browser · Evidencia: — · Risk: none
+- [x] T1 · S1, S1a, S2, S2a · ruta: delegada (`odd-implementer` Opus, backstop de contexto) · Evidencia: RED 32/348; GREEN 567 + 29 tests, front 278/278 (L4) · commit `940153f4` · Risk: none. `VariacionFuerte` la comparten 3 módulos, pero el cambio de texto en los tres es S1a, la firma de 3 argumentos sigue, `Unidad` solo suma `abreviatura()` (su `name()` y el JSON no cambian) y los tres textos se vieron en la app (L5).
+- [x] T2 · S3, S4 · ruta: inline (CSS) · Evidencia: `ng build` OK; ancho en T3 · commits `940153f4` y `8f45f688` · Risk: none
+- [x] T3 · S1–S4 · ruta: worker de ego-browser · Evidencia: L5 y L7 · Risk: none
 
 ## Log
 
@@ -53,3 +53,24 @@ Restricciones: sin migraciones ni cambios de contrato JSON (solo cambia el texto
     - Front: 278/278.
     - Control del padre: `VariacionFuerteTest` 16/16 y `CompraRecargosIntegrationTest` 10/10.
   - **T2** (CSS: `td.codigo` con `nowrap` en las dos tablas de la importación, y la regla de `.accion-barra` sin íconos en `styles.css`). `ng build` OK. La prueba es T3.
+- L5 (2026-11-08) T3 en la app local, con ego-browser a 1280, sobre `940153f4`.
+  - **S1.** Pasa:
+    - importación: «El costo sube un 60 % (de $ 900,00 / m a $ 1.440,00 / m). Revisá que sea correcto.»;
+    - Actualizar precios: «/ kg», «/ m» y sin sufijo por unidad; la grilla mide 962/962.
+  - **S2.** Pasa. Con recargo nuevo dice «El costo real sube un 60 % (de $ 58.400,00 a $ 93.440,00)». Con recargos del artículo y compra sin recargos, no avisa por costo. El aviso de precio que salió se debió al SQL de la prueba, que no recalculó `precio_final`.
+  - **S4.** Pasa: barras sin íconos a 36 px y barras con íconos a 54 px.
+  - **S3.** Falla a medias: el código no se parte, pero la grilla quedó en 985/977. Se arregla con `padding-inline: 8px` solo en esa tabla (`8f45f688`); remedición pendiente.
+  - **Base local intacta.**
+  - **Pendientes nuevos, fuera de esta tanda:**
+    - En celdas angostas, el aviso corta entre «de $» y el importe: `ImporteArgentino` usa espacio común y el front usa NBSP.
+    - En Artículos a 1280, «Página 1 de 208 · 4149 artículos» se pisa con los checkboxes «Mostrar dados de baja» y «Solo en oferta».
+- L6 (2026-11-08) Prototipo de tarjetas en el celular (producción, solo DOM, sin guardar nada), en tres pestañas de ego-browser para Luca: la compra como está, la compra en tarjetas y Artículos en tarjetas. Capturas en el scratchpad de la sesión (`celular/`).
+- L7 (2026-11-08) S3 remedido sobre `8f45f688`: la grilla mide 977/977 a 1280 y 1137/1137 a 1440. «PR36-NUEVO1» va en una línea, cada importe con su sufijo en una línea, «Variación fuerte» debajo y el Detalle entero. Las columnas no quedan demasiado juntas.
+  Cierre:
+  - backend `./mvnw test` sobre `940153f4`: 6469 tests, 0 fallas;
+  - frontend `npx ng test --watch=false` sobre `8f45f688`: 164 archivos pasan;
+  - `ng build` OK.
+
+  Supuestos que Luca tiene que confirmar:
+  - S1a: el aviso nuevo también en Actualizar precios y en la compra;
+  - S2a: con recargos que se borran, se mide el costo real.
