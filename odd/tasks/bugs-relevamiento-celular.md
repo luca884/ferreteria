@@ -101,7 +101,7 @@ Orden (L11): T2, T5, T7, T8 → T1, T3, T4, T6 → T9. T0 no aplica.
 - [x] T6 · S7 · ruta: inline · Aceptación: S7 · Evidencia: RED 8 → GREEN: `ventas.spec.ts` 66/66, `presupuestos.spec.ts` 70/70, `remitos.spec.ts` 78/78, `compras.spec.ts` 18/18 y `articulo-form.spec.ts` 222/222 (vuelta al origen y `state` de cada link); los casos de URL directa siguen verdes. Ego-browser (L15), que además encontró un error en Compras que el test no veía (L15) · commit: ver L15 · Risk: none
 - [x] T7 · S9 · ruta: inline · Aceptación: S9 (primero confirmar la causa con la base) · Evidencia: causa confirmada en la base (L9); `DocumentoFiscalIntegrationTest#resumenes` RED (`letraFiscal` en null) → GREEN, 29/29, y `VentaFacturadaCerrojoIntegrationTest` 39/39 con `letraFiscal` en el JSON; `ventas.spec.ts` RED 5 → GREEN 63/63, con un caso nuevo de dos X con el mismo número; ego-browser (L9) · commit: ver L9 · Risk: none (campo nuevo en una respuesta que solo consume el front; `letra` no cambia)
 - [x] T8 · S10 (importación) · ruta: inline · Aceptación: S10 en `importaciones.html:35` · Evidencia: `importaciones.spec.ts` RED 3 (todo nuevo, un nuevo, mixto) → GREEN 208/208; el caso de solo cambios ya pasaba y queda fijado; ego-browser (L10) · commit: ver L10 · Risk: none
-- [ ] T9 · cierre · ruta: inline + `odd-verifier` (Opus) por T4 · Aceptación: suite backend (`./mvnw test`, sin otra suite corriendo), suite frontend y `npx ng build` verdes; cada bug probado en ego-browser, antes en `main` y después en la rama · Evidencia: — · Risk: item 3 (T4)
+- [x] T9 · cierre · ruta: inline + `odd-verifier` (Opus) por T4 · Aceptación: suite backend (`./mvnw test`, sin otra suite corriendo), suite frontend y `npx ng build` verdes; cada bug probado en ego-browser, antes en `main` y después en la rama · Evidencia: `./mvnw test` 6531/6531 (27 min 27 s); `npx ng test --watch=false` 164 archivos, 4461/4461; `npx ng build` OK, con un aviso de budget en `mostrador/dialogo-cobro.ts` que ya estaba (la rama no toca el mostrador); `odd-verifier` pass sin blockers; ego-browser de cada bug en L7 a L15 · commit: ver L16 · Risk: item 3 (T4), verificado (L16)
 
 ## Log
 
@@ -217,7 +217,7 @@ Orden (L11): T2, T5, T7, T8 → T1, T3, T4, T6 → T9. T0 no aplica.
   - «Al corregirlo, se busca de nuevo» (S12) se tomó como: se corrige «Hasta», se toca «Buscar», busca y el aviso se va. Estas pantallas no buscan solas al cambiar un filtro, y que esta lo hiciera sería distinto del resto.
   - Mientras el aviso está, la lista de abajo sigue con lo último que se buscó bien, igual que con el número inválido de hoy.
 
-  Curl (Perla, `desde=2026-11-09&hasta=2026-11-08`): en 8080 los 5 listados daban 200 con la lista; en 8081 dan 400 con el texto en `hasta`. El resumen de Reportes da el mismo 400 en los dos. El extracto pasa de «La fecha desde no puede ser posterior a hasta.» al texto único, con la misma clave `desde`.
+  Curl (Perla, `desde=2026-11-09&hasta=2026-11-08`): en 8080 los 5 listados daban 200 con la lista vacía (`items: []`); en 8081 dan 400 con el texto en `hasta`. El resumen de Reportes da el mismo 400 en los dos. El extracto pasa de «La fecha desde no puede ser posterior a hasta.» al texto único, con la misma clave `desde`.
 
   Ego-browser (Perla, del 09/11 al 05/11 y después del 05/11 al 09/11):
   - Ventas y Compras, antes (4200): sin aviso, «No hay ventas/compras con esos filtros.».
@@ -237,3 +237,27 @@ Orden (L11): T2, T5, T7, T8 → T1, T3, T4, T6 → T9. T0 no aplica.
   - Ficha del artículo 18 → «Última compra» → Cerrar → `/articulos/18`.
 
   Próximo paso: T9.
+- L16 (2026-11-09) T9 hecha (el commit «test: …» y la spec en «docs: …» de este cierre).
+  - Suites completas, sin coordinar (L11): backend 6531/6531 y frontend 4461/4461; `ng build` OK.
+  - `odd-verifier` (Opus), por el item 3 de T4: pass, sin blockers.
+    - Los 5 `listar` solo los llaman sus controllers, y cada endpoint solo lo consume su pantalla. Ningún link arma `desde`/`hasta`.
+    - Con una sola fecha, ninguna o dos iguales, 8080 y 8081 dan 200 y el mismo cuerpo, salvo `letraFiscal` de T7 en `/api/ventas`.
+    - El 400 no tapa el 404 de forma que filtre: con el rango al revés, el artículo ajeno y el inexistente reciben el mismo 400. El Vendedor sigue con 403 y sin token, 401.
+    - Los 96 tests focalizados del back y los 867 del front, verdes en una copia de HEAD.
+  - Advisories del verifier:
+    - Resueltos: `docs/spec.md` documentaba el texto viejo del extracto y no tenía el 400 de los listados; se actualizó (Ventas y Movimientos del artículo). L14 decía «200 con la lista»: era la lista vacía, se corrigió.
+    - Sin cambio: en Movimientos, el 400 gana sobre el 404, parejo para ajeno e inexistente, como en el extracto. Un año de 5 dígitos lo rechaza el back como parámetro inválido.
+  - Probes commiteados como tests: `MovimientosArticuloIntegrationTest#aislamientoYPermisos` (ajeno e inexistente con el rango al revés, mismo 400; Vendedor, 403), 6/6, y `shared/rango-de-fechas.spec.ts` (una fecha, iguales, cambio de año), 3/3. Los de una sola fecha ya estaban en los tests de integración.
+
+  Feature terminada. Para Luca:
+  - Decidir: el push, el PR y el merge (`CLAUDE.md`).
+  - Revisar:
+    - El mecanismo de T6 (L15).
+    - «Ganancia sin NC» en verde (L13).
+    - Cómo se interpretó «se busca de nuevo» (L14).
+  - Fuera de alcance:
+    - El error de lectura del PDF lejos del selector (L7).
+    - El primer toque de «Guardar» en el tope (L8).
+    - «Sin rubro» sin páginas (decisión de CU-03).
+
+  Después del merge, `feat/responsive` rebasea sobre `main` y arranca por su T0 (su L7).
