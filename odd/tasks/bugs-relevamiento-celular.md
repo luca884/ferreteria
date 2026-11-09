@@ -94,10 +94,10 @@ Orden (L6): T2, T5, T7, T8 → T0 → T1, T3, T4, T6 → T9.
 
 - [ ] T0 · rebase después del responsive · ruta: inline · Aceptación: antes de T1, T3, T4 y T6, `feat/responsive` está mergeada en `main` y esta rama queda rebaseada, con los conflictos resueltos. Los esperables están en la línea 14 de `configuracion-ventas.html` y `datos-fiscales.html` (T5), donde el responsive pone su directiva de avisos. Después se repiten los tests puntuales de T2, T5, T7 y T8 · Evidencia: — · Risk: none
 - [ ] T1 · S1, S10 (texto de Nueva compra), S12 · ruta: inline · Aceptación: S1, el texto de S10 en Nueva compra y lo de S1 en S12 · Evidencia: — · Risk: none
-- [x] T2 · S2, S12 · ruta: inline · Aceptación: S2 y lo de S2 en S12 · Evidencia: `LecturaDeFacturaTest` RED (501 renglones no lanzaba) → GREEN 2/2; `FacturaPdfIntegrationTest` 8/8 y `CompraFacturaPdfRegresionIntegrationTest` 6/6 verdes; `nueva-compra.spec.ts` 58/58 con el caso nuevo de S12 (verde de entrada: el front ya dejaba el formulario usable); `docs/spec.md` actualizado; ego-browser (L7) · commit: ver L7 · Risk: none (cambio pedido, endpoint que solo consume el front)
+- [x] T2 · S2, S12 · ruta: inline · Aceptación: S2 y lo de S2 en S12 · Evidencia: `LecturaDeFacturaTest` RED (501 renglones no lanzaba) → GREEN 2/2; `FacturaPdfIntegrationTest` 8/8 y `CompraFacturaPdfRegresionIntegrationTest` 6/6 verdes; `nueva-compra.spec.ts` 58/58 con el caso nuevo de S12 (verde de entrada: el front ya dejaba el formulario usable); `docs/spec.md` actualizado; ego-browser (L7) · commit 819f064f · Risk: none (cambio pedido, endpoint que solo consume el front)
 - [ ] T3 · S3, S6 · ruta: inline · Aceptación: S3 y S6 (los dos en `reportes/`) · Evidencia: — · Risk: none
 - [ ] T4 · S4, S12 · ruta: inline · Aceptación: S4 y lo de S4 en S12 · Evidencia: — · Risk: item 3 (5 endpoints `GET` de listados pasan de 200 vacío a 400 con rango invertido) → `odd-verifier` al cierre
-- [ ] T5 · S5, S8, S12 · ruta: inline · Aceptación: S5, S8 (incluido el mensaje del super admin) y lo de S5 y S8 en S12 · Evidencia: — · Risk: none
+- [x] T5 · S5, S8, S12 · ruta: inline · Aceptación: S5, S8 (incluido el mensaje del super admin) y lo de S5 y S8 en S12 · Evidencia: `configuracion-ventas.spec.ts` RED («-5» quedaba «5,00») → GREEN 8/8, y `importe-input.spec.ts` sigue verde (22/22 entre los dos); `datos-fiscales.spec.ts` RED (sin avisos) → GREEN 13/13, incluido `:92-110`; `ConfigArcaTest` RED 2 → GREEN 31/31 y `ConfigArcaAdminIntegrationTest` 23/23 con el texto nuevo; ego-browser (L8) · commit: ver L8 · Risk: none
 - [ ] T6 · S7 · ruta: inline · Aceptación: S7 · Evidencia: — · Risk: none
 - [ ] T7 · S9 · ruta: inline · Aceptación: S9 (primero confirmar la causa con la base) · Evidencia: — · Risk: none
 - [ ] T8 · S10 (importación) · ruta: inline · Aceptación: S10 en `importaciones.html:35` · Evidencia: — · Risk: none
@@ -149,9 +149,22 @@ Orden (L6): T2, T5, T7, T8 → T0 → T1, T3, T4, T6 → T9.
   > dale
 
   Próximo paso: una terminal con Opus en `../ferreteria-bugs-celular` arranca por T2.
-- L7 (2026-11-09) T2 hecha. El tope va en `LecturaDeFactura` (compras), después del chequeo de 0 renglones y antes de buscar proveedor y artículos. El front no cambió: con el 400 ya dejaba el formulario vacío y usable; el caso nuevo de `nueva-compra.spec.ts` lo fija. Ego-browser con `Lista/LISTA 336.pdf` en Nueva compra (Perla):
+- L7 (2026-11-09) T2 hecha (commit 819f064f). El tope va en `LecturaDeFactura` (compras), después del chequeo de 0 renglones y antes de buscar proveedor y artículos. El front no cambió: con el 400 ya dejaba el formulario vacío y usable; el caso nuevo de `nueva-compra.spec.ts` lo fija. Ego-browser con `Lista/LISTA 336.pdf` en Nueva compra (Perla):
   - Antes (4200, `feat/responsive`, igual a `main` en estos archivos): sin aviso y 1.157 renglones «Sin artículo».
   - Después (8081/4201): «La factura trae más de 500 renglones: no parece una factura. Cargá la compra a mano.», 0 renglones, «Todavía no agregaste artículos.», el proveedor se elige y el selector de PDF sigue habilitado. Reintento con `Facturas/pdf (17).pdf`: se lee, el aviso desaparece y la lectura cuadra.
   - Observación, fuera de alcance: los errores de lectura salen en la alerta de abajo, lejos del selector de PDF (igual que «parece escaneado»). En el celular puede quedar fuera de la vista; se le comenta a Luca.
 
   `npm ci` en `frontend/` ya corrido en este worktree. Próximo paso: T5.
+- L8 (2026-11-09) T5 hecha (el código en el commit «fix: el tope de Consumidor Final no se guarda negativo…»).
+  - S5: el campo del tope lleva `negativos` y, si el formulario no es válido al guardar, se enfoca el campo.
+  - S8: el aviso «Completalo para poder facturar.» sale de lo guardado, no de lo que se escribe: se va al completar y guardar. Si el campo tiene un error, se muestra el error. El aviso entra en el `aria-describedby`.
+  - Super admin: «Lo/Los carga el Dueño en «Datos de la ferretería».» pasa a «Lo/Los completa el Dueño en Configuración → Datos de la ferretería.» (`ConfigArca.faltanDatos`). Los textos de `PasosFiscales` (los ve el Dueño al facturar) no se tocan.
+
+  Ego-browser (Perla; el «antes» en 4200 y el «después» en 8081/4201, misma base):
+  - Antes: «-5» en el tope se guardó como 5,00 con «Se guardó el tope.»; con el domicilio vacío y guardado, ningún aviso.
+  - Después, S8: con el domicilio vacío, «Completalo para poder facturar.» debajo del campo; se completó, se guardó y el aviso se fue.
+  - Después, S5: con «-5» queda «-5,00», «El tope tiene que ser mayor que $ 0.» y no se guarda. Si se toca «Guardar» con el foco todavía en el campo, el primer toque no envía: el blur muestra el error, el botón baja entre el `mousedown` y el `mouseup` y el click cae en el `form` (registrado con los eventos). Igual el mensaje queda debajo del campo y nada se guarda; el segundo toque envía y enfoca el campo. Hoy pasa lo mismo con «0»: es el corrimiento de cualquier error que aparece al salir del campo. Se le comenta a Luca y no se toca.
+  - El mensaje del super admin no se probó en el browser porque su login pide TOTP. Lo cubre `ConfigArcaAdminIntegrationTest`.
+  - Se restauraron el tope (100.000,00) y el domicilio de Perla.
+
+  Próximo paso: T7.

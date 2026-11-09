@@ -42,9 +42,11 @@
           <label for="tope">Tope de venta a Consumidor Final ($)</label>
           <app-campo-moneda>
             <input
+              #tope
               id="tope"
               name="topeConsumidorFinal"
               appImporte
+              negativos
               formControlName="topeConsumidorFinal"
               [attr.aria-invalid]="invalido() ? 'true' : null"
               [attr.aria-describedby]="invalido() ? 'tope-pista tope-error' : 'tope-pista'"

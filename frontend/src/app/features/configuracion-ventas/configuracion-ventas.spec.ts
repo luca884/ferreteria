@@ -81,6 +81,21 @@ describe('PaginaConfiguracionVentas', () => {
     expect(guardar).not.toHaveBeenCalled();
   });
 
+  it('un tope negativo no se guarda: lo explica debajo del campo y lo enfoca (bugs-relevamiento-celular, S5 y S12)', async () => {
+    await crear();
+
+    await escribirYGuardar('-5');
+
+    expect(input().value).toBe('-5');
+    expect(texto('#tope-error')).toBe('El tope tiene que ser mayor que $ 0.');
+    expect(document.activeElement).toBe(input());
+    expect(guardar).not.toHaveBeenCalled();
+
+    await escribirYGuardar('5');
+
+    expect(guardar).toHaveBeenCalledWith({ topeConsumidorFinal: 5 });
+  });
+
   it('si el backend rechaza el tope muestra su mensaje', async () => {
     await crear();
     guardar.mockReturnValue(

@@ -76,13 +76,16 @@
             formControlName="ingresosBrutos"
             autocomplete="off"
             [attr.aria-invalid]="mensaje('ingresosBrutos') ? 'true' : null"
-            [attr.aria-describedby]="mensaje('ingresosBrutos') ? 'ingresosBrutos-pista ingresosBrutos-error' : 'ingresosBrutos-pista'"
+            [attr.aria-describedby]="descripcion('ingresosBrutos', true)"
           />
           <span id="ingresosBrutos-pista" class="pista">
             Número de inscripción, Convenio Multilateral, Exento o No contribuyente.
           </span>
           @if (mensaje('ingresosBrutos'); as texto) {
             <span id="ingresosBrutos-error" class="campo-error">{{ texto }}</span>
+          }
+          @if (faltaParaFacturar('ingresosBrutos')) {
+            <span id="ingresosBrutos-aviso" class="campo-aviso">Completalo para poder facturar.</span>
           }
         </div>
       </fieldset>
@@ -98,10 +101,13 @@
             formControlName="domicilioComercial"
             autocomplete="off"
             [attr.aria-invalid]="mensaje('domicilioComercial') ? 'true' : null"
-            [attr.aria-describedby]="mensaje('domicilioComercial') ? 'domicilioComercial-error' : null"
+            [attr.aria-describedby]="descripcion('domicilioComercial')"
           />
           @if (mensaje('domicilioComercial'); as texto) {
             <span id="domicilioComercial-error" class="campo-error">{{ texto }}</span>
+          }
+          @if (faltaParaFacturar('domicilioComercial')) {
+            <span id="domicilioComercial-aviso" class="campo-aviso">Completalo para poder facturar.</span>
           }
         </div>
 
@@ -115,10 +121,13 @@
             [max]="hoy"
             formControlName="inicioActividades"
             [attr.aria-invalid]="mensaje('inicioActividades') ? 'true' : null"
-            [attr.aria-describedby]="mensaje('inicioActividades') ? 'inicioActividades-error' : null"
+            [attr.aria-describedby]="descripcion('inicioActividades')"
           />
           @if (mensaje('inicioActividades'); as texto) {
             <span id="inicioActividades-error" class="campo-error">{{ texto }}</span>
+          }
+          @if (faltaParaFacturar('inicioActividades')) {
+            <span id="inicioActividades-aviso" class="campo-aviso">Completalo para poder facturar.</span>
           }
         </div>
       </fieldset>

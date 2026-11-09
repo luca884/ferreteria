@@ -223,10 +223,10 @@ class ConfigArcaTest {
         ConfigArca config = conSimulador();
 
         assertRegla(() -> config.habilitar(List.of("domicilio comercial"), AHORA), "Para habilitar la facturación "
-                + "falta un dato de la ferretería: domicilio comercial. Lo carga el Dueño en «Datos de la ferretería».");
+                + "falta un dato de la ferretería: domicilio comercial. Lo completa el Dueño en Configuración → Datos de la ferretería.");
         assertRegla(() -> config.habilitar(List.of("domicilio comercial", "inicio de actividades", "Ingresos Brutos"),
                 AHORA), "Para habilitar la facturación faltan datos de la ferretería: domicilio comercial, inicio de "
-                + "actividades e Ingresos Brutos. Los carga el Dueño en «Datos de la ferretería».");
+                + "actividades e Ingresos Brutos. Los completa el Dueño en Configuración → Datos de la ferretería.");
         assertThat(config.isFacturacionHabilitada()).isFalse();
         assertThat(config.getHabilitadaEn()).isNull();
     }
@@ -237,7 +237,7 @@ class ConfigArcaTest {
         ConfigArca config = conAmbienteDelCertificado(Ambiente.HOMOLOGACION);
 
         assertRegla(() -> config.habilitar(List.of("Ingresos Brutos"), AHORA), "Para habilitar la facturación falta un "
-                + "dato de la ferretería: Ingresos Brutos. Lo carga el Dueño en «Datos de la ferretería».");
+                + "dato de la ferretería: Ingresos Brutos. Lo completa el Dueño en Configuración → Datos de la ferretería.");
         assertThat(config.isFacturacionHabilitada()).isFalse();
 
         config.habilitar(List.of(), AHORA);
