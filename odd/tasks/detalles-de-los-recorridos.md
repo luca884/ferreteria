@@ -18,7 +18,7 @@ Restricciones: sin migraciones. Mensajes y textos en español rioplatense.
 ## Tasks
 
 - [x] T1 · S1 · ruta: inline · Aceptación: comprobante de la compra con palabras en Movimientos; spec y cu-09 al día · Evidencia: RED `MovimientosArticuloTest` 8/8 fallan («FA 00036-03608111 · Bulonera Sur»); GREEN 8/8, `MovimientosArticuloIntegrationTest` 6/6, `ModulosArchTest` 50/50, `movimientos-articulo.spec.ts` 14/14 · commit: ver L5 · Risk: none
-- [ ] T2 · S2, S2a · ruta: inline · Aceptación: contador por costo real, con test de recargos · Evidencia: — · Risk: none
+- [x] T2 · S2, S2a · ruta: inline · Aceptación: contador por costo real, con test de recargos · Evidencia: RED `CompraRecargosIntegrationTest` 2/7 fallan (`$.suben` 0 en vez de 1; `$.bajan` 0 en vez de 1); GREEN 7/7, `CompraServiceIntegrationTest` 22/22, `CompraControllerIntegrationTest` 8/8 · commit: ver L6 · Risk: none
 - [ ] T3 · S3, S3a · ruta: inline · Aceptación: `unidad` en `ArticuloVigente` y `CambioPlaneado`; sufijo en la vista previa de la importación · Evidencia: — · Risk: a evaluar al cerrar (campo nuevo en un JSON y `ArticuloVigente` compartido con Actualizar precios)
 
 ## Log
@@ -37,3 +37,10 @@ Restricciones: sin migraciones. Mensajes y textos en español rioplatense.
   - **Detalle 3.** `RegistroCompra.java:160` compara `costoNuevo` contra `costoAnterior`. `CostoDeCompra` ya trae `costoRealAnterior` y `costoRealNuevo` (`ArticulosParaCompraService.java:94-96`). Importar lista y Actualizar precios tienen contadores propios: ahí los recargos son los mismos antes y después.
   - **Detalle 4.** `CambioPlaneado` se arma solo en `PlanificadorImportacion.java:246-256`, desde `ArticuloVigente`, que no tiene la unidad. `ArticuloVigente.de()` también lo usa `ActualizacionMasivaService:217`. El front pinta en `vista-previa-tabla.ts:126-147` y `detalle-fila.ts:66-73`.
 - L5 (2026-11-08) T1 hecha. `stock` no puede usar `TipoCompra`: `ModulosArchTest.nadieDependeDeCompras` lo prohíbe. Por eso `MovimientosArticulo.tipoDeCompra` repite las cuatro etiquetas, y `MovimientosArticuloTest` las compara con el enum (si se agrega un tipo, el test falla). El S3 de `cu-09-movimientos-articulo.md` lleva una nota que apunta a este S1. Las fixtures de `movimientos-articulo.spec.ts` y el comentario de `articulo.models.ts` quedaron con «Factura A».
+- L6 (2026-11-08) T2 hecha. `RegistroCompra.plan` compara `costoRealNuevo` contra `costoRealAnterior`. Casos nuevos en `CompraRecargosIntegrationTest`:
+  - mismo costo con +10 % sube;
+  - costo 95 con +10 % sube;
+  - mismo costo con −10 % baja;
+  - sin recargos, igual queda igual y 110 sube;
+  - sin recargos sobre un artículo que los tenía baja (S2a).
+  La spec (CU-13 punto 3) y el comentario de `PlanCompra` quedaron al día. La advertencia de variación fuerte (±50 %) sigue comparando el costo de la factura: no entra en esta tanda.
