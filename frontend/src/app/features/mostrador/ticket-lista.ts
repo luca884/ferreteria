@@ -1,6 +1,7 @@
 import { DecimalPipe } from '@angular/common';
 import { Component, ElementRef, afterRenderEffect, input, output, viewChildren } from '@angular/core';
 import { MontoPipe } from '../../core/formato/monto';
+import { porUnidad } from '../../core/formato/unidad';
 import { Unidad } from '../articulos/articulo.models';
 import { totalRenglon } from './centavos';
 import { RenglonTicket, sinStock } from './ticket';
@@ -32,6 +33,7 @@ export class TicketLista {
   readonly elegir = output<number>();
 
   protected readonly sufijo = SUFIJO_UNIDAD;
+  protected readonly porUnidad = porUnidad;
   protected readonly sinStock = sinStock;
   protected readonly totalRenglon = totalRenglon;
 

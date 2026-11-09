@@ -42,10 +42,10 @@
       </div>
       <span class="precio">
         @if (articulo.enOferta && articulo.precioNormal) {
-          <span class="precio-oferta">{{ articulo.precioFinal | monto }}</span>
+          <span class="precio-oferta">{{ articulo.precioFinal | monto }}{{ porUnidad(articulo.unidad) }}</span>
           <s class="precio-normal" aria-label="Precio normal">{{ articulo.precioNormal | monto }}</s>
         } @else {
-          {{ articulo.precioFinal | monto }}
+          {{ articulo.precioFinal | monto }}{{ porUnidad(articulo.unidad) }}
         }
       </span>
       <span class="stock" [attr.data-stock]="estadoStock(articulo)">

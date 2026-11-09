@@ -1,7 +1,7 @@
 import { DecimalPipe } from '@angular/common';
 import { Component, computed, input } from '@angular/core';
 import { RouterLink } from '@angular/router';
-import { cantidadConUnidad } from '../../core/formato/unidad';
+import { cantidadConUnidad, porUnidad } from '../../core/formato/unidad';
 import { MontoPipe, RestadoPipe } from '../../core/formato/monto';
 import { porcentajeDescuentoGeneral } from '../../shared/descuento-general';
 import { fechaCompletaLocal } from '../clientes/cuenta/cobranza.models';
@@ -23,6 +23,7 @@ export class VentaHoja {
   readonly conLinks = input(false);
 
   protected readonly cantidadConUnidad = cantidadConUnidad;
+  protected readonly porUnidad = porUnidad;
 
   protected readonly fecha = computed(() => fechaCompletaLocal(this.venta().fecha));
   protected readonly cliente = computed(() => clienteDeVenta(this.venta().clienteNombre));

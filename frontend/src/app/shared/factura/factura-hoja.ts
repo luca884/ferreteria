@@ -1,8 +1,8 @@
-import { DecimalPipe } from '@angular/common';
 import { Component, computed, input } from '@angular/core';
 import { cuitConGuiones } from '../../core/formato/cuit';
 import { formatearFecha } from '../../core/formato/fecha-hora';
 import { MontoPipe, RestadoPipe } from '../../core/formato/monto';
+import { cantidadConUnidad, porUnidad } from '../../core/formato/unidad';
 import { ALICUOTA_IVA_LABELS, AlicuotaIva } from '../../features/articulos/articulo.models';
 import { documentoLegible } from '../../features/clientes/cliente.models';
 import { barras } from '../../features/etiquetas/codigo-barras';
@@ -22,7 +22,7 @@ const SILENCIO_QR = 4;
  */
 @Component({
   selector: 'app-factura-hoja',
-  imports: [DecimalPipe, MontoPipe, RestadoPipe],
+  imports: [MontoPipe, RestadoPipe],
   templateUrl: './factura-hoja.html',
   styleUrl: './factura-hoja.css',
 })
@@ -35,6 +35,10 @@ export class FacturaHoja {
   protected readonly esNota = computed(() => this.clase() === CLASE_NOTA_CREDITO);
 
   protected readonly fecha = formatearFecha;
+  /** «1,5 kilos», «2 unidades» (#36): como el remito y el presupuesto. ARCA pide la cantidad (RG 1415, anexo II, A.I.b). */
+  protected readonly cantidadConUnidad = cantidadConUnidad;
+  /** « / kg» después del precio unitario (#36); por pieza no lleva. El importe del renglón no lo lleva. */
+  protected readonly porUnidad = porUnidad;
 
   protected readonly valido = computed(() => this.documento().validoComoFactura);
   /**

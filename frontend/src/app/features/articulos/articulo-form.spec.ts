@@ -757,7 +757,7 @@ describe('ArticuloForm', () => {
       await crearComponente({ id: '5' });
 
       expect(el().querySelector('.stock-actual dd')?.textContent).toContain('12,5 metros');
-      expect(el().querySelector('.precio-final')?.textContent).toContain(`$${NBSP}1.234,50`);
+      expect(el().querySelector('.precio-final dd')?.textContent?.trim()).toBe(`$${NBSP}1.234,50 / m`);
       expect(el().querySelector('input#stockActual')).toBeNull();
       expect(el().querySelector('input#precioFinal')).toBeNull();
     });
@@ -1024,6 +1024,22 @@ describe('ArticuloForm', () => {
 
       expect(enVivo()).toContain(`$${NBSP}170,00`);
       expect(herencia()).toBe('Hereda 35 % de Bulonería');
+    });
+
+    it('dice por qué unidad es el precio con la unidad elegida en el formulario, no la guardada (#36)', async () => {
+      await crearComponente({ id: '5', articulo: articuloGuardado({ alicuotaIva: 'IVA_21', margenPorcentaje: null }) });
+      const precio = () => el().querySelector('.precio-en-vivo strong')?.textContent?.trim();
+
+      expect(precio()).toBe(`$${NBSP}170,00 / m`);
+
+      await elegir('unidad', 'Kilo');
+      expect(precio()).toBe(`$${NBSP}170,00 / kg`);
+
+      await elegir('unidad', 'Litro');
+      expect(precio()).toBe(`$${NBSP}170,00 / l`);
+
+      await elegir('unidad', 'Unidad');
+      expect(precio()).toBe(`$${NBSP}170,00`);
     });
 
     it('si no se pudo leer la configuración, el formulario funciona igual sin precio en vivo', async () => {
@@ -2533,7 +2549,7 @@ describe('ArticuloForm', () => {
         expect(servicio.obtener).toHaveBeenCalledTimes(2);
         expect(servicio.desglose).toHaveBeenCalledTimes(2);
         expect(importes()).toContain('$ 860,00');
-        expect(limpio(el().querySelector('.precio-final dd')?.textContent)).toBe('$ 1.350,00');
+        expect(limpio(el().querySelector('.precio-final dd')?.textContent)).toBe('$ 1.350,00 / m');
         expect(banner()).toBe('Se guardaron los ajustes.');
       });
 
@@ -3118,7 +3134,7 @@ describe('ArticuloForm', () => {
       it('sin ajustes cambiados muestra el precio del costo del formulario', async () => {
         await crearComponente(conLista());
 
-        expect(limpio(el().querySelector('.precio-en-vivo strong')?.textContent)).toBe('$ 1.390,00');
+        expect(limpio(el().querySelector('.precio-en-vivo strong')?.textContent)).toBe('$ 1.390,00 / m');
         expect(el().querySelector('.costo-en-vivo')).toBeNull();
       });
 
@@ -3127,7 +3143,7 @@ describe('ArticuloForm', () => {
 
         await escribir('ajuste2', '');
 
-        expect(limpio(el().querySelector('.precio-en-vivo strong')?.textContent)).toBe('$ 1.350,00');
+        expect(limpio(el().querySelector('.precio-en-vivo strong')?.textContent)).toBe('$ 1.350,00 / m');
         expect(limpio(el().querySelector('.costo-en-vivo')?.textContent)).toContain('$ 855,00');
       });
     });

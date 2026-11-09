@@ -1,3 +1,5 @@
+import { UnidadDeMedida } from '../../core/formato/unidad';
+
 /** Tipo del comprobante del proveedor (CU-13). */
 export type TipoCompra = 'FA' | 'FB' | 'FC' | 'REM';
 
@@ -41,7 +43,7 @@ export interface RenglonPlaneado {
   articuloId: number;
   codigoInterno: string;
   descripcion: string;
-  unidad: string;
+  unidad: UnidadDeMedida;
   cantidad: number;
   costoAnterior: number;
   costoNuevo: number;
@@ -91,7 +93,7 @@ export interface RenglonCompraResponse {
   articuloId: number;
   codigoInterno: string;
   descripcion: string;
-  unidad: string;
+  unidad: UnidadDeMedida;
   cantidad: number;
   costoUnitario: number;
   subtotal: number;

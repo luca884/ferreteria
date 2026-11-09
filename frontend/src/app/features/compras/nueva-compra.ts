@@ -5,6 +5,7 @@ import { erroresPorCampo, mensajeDe } from '../../core/api/api-error';
 import { AuthService } from '../../core/auth/auth.service';
 import { centavosDeImporte, textoDeImporte, textoDePlata } from '../../core/formato/importe';
 import { MontoPipe, formatearCosto } from '../../core/formato/monto';
+import { cantidadConUnidad, porUnidad } from '../../core/formato/unidad';
 import { BarraAcciones } from '../../shared/barra-acciones';
 import { CampoMoneda } from '../../shared/campo-moneda';
 import { ImporteInput } from '../../shared/importe-input';
@@ -86,6 +87,8 @@ interface LecturaDeFactura {
   styleUrl: './compras.css',
 })
 export class NuevaCompra implements OnInit {
+  protected readonly cantidadConUnidad = cantidadConUnidad;
+  protected readonly porUnidad = porUnidad;
   private readonly api = inject(ComprasService);
   private readonly articulos = inject(ArticulosService);
   private readonly proveedoresApi = inject(ProveedoresService);

@@ -40,8 +40,15 @@ export class MovimientosArticulo implements OnInit {
 
   protected readonly fecha = fechaCompletaLocal;
   protected readonly tipo = (t: TipoMovimientoStock) => TIPOS[t];
-  protected readonly numero = (n: number) => NUMERO.format(n);
-  protected readonly conSigno = (n: number) => (n > 0 ? `+${NUMERO.format(n)}` : NUMERO.format(n));
+  /** El saldo con la unidad del artículo («18,5 kilos»); si el artículo no cargó, el número solo. */
+  protected numero(n: number): string {
+    const articulo = this.articulo();
+    return articulo ? cantidadConUnidad(n, articulo.unidad) : NUMERO.format(n);
+  }
+  /** La cantidad con signo y unidad: «+20 kilos», «-1,5 kilos». */
+  protected conSigno(n: number): string {
+    return n > 0 ? `+${this.numero(n)}` : this.numero(n);
+  }
 
   protected readonly articulo = signal<Articulo | null>(null);
   protected readonly pagina = signal<PageResponse<MovimientoStock> | null>(null);

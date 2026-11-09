@@ -131,8 +131,8 @@
             <li role="option" [id]="'resultado-compra-' + i" [attr.aria-selected]="i === activo()" (click)="agregar(a)">
               <span class="codigo">{{ a.codigoInterno }}</span>
               <span class="descripcion">{{ a.descripcion }}</span>
-              <span class="num">{{ costoDe(a) }}</span>
-              <span class="num">{{ a.stockActual | number: '1.0-3' }}</span>
+              <span class="num">{{ costoDe(a) }}{{ porUnidad(a.unidad) }}</span>
+              <span class="num">{{ cantidadConUnidad(a.stockActual, a.unidad) }}</span>
             </li>
           }
         </ul>
@@ -323,17 +323,17 @@
                   <span class="aviso-fila">{{ r.advertencia }}</span>
                 }
               </td>
-              <td class="num">{{ r.cantidad | number: '1.0-3' }}</td>
-              <td class="num">{{ r.costoAnterior | monto }}</td>
-              <td class="num">{{ r.costoNuevo | monto }}</td>
+              <td class="num">{{ cantidadConUnidad(r.cantidad, r.unidad) }}</td>
+              <td class="num">{{ r.costoAnterior | monto }}{{ porUnidad(r.unidad) }}</td>
+              <td class="num">{{ r.costoNuevo | monto }}{{ porUnidad(r.unidad) }}</td>
               @if (p.recargos.length > 0) {
-                <td class="num">{{ r.costoRealAnterior | monto }}</td>
-                <td class="num">{{ r.costoRealNuevo | monto }}</td>
+                <td class="num">{{ r.costoRealAnterior | monto }}{{ porUnidad(r.unidad) }}</td>
+                <td class="num">{{ r.costoRealNuevo | monto }}{{ porUnidad(r.unidad) }}</td>
               }
-              <td class="num">{{ r.precioAnterior | monto }}</td>
-              <td class="num">{{ r.precioNuevo | monto }}</td>
+              <td class="num">{{ r.precioAnterior | monto }}{{ porUnidad(r.unidad) }}</td>
+              <td class="num">{{ r.precioNuevo | monto }}{{ porUnidad(r.unidad) }}</td>
               <td class="num stock">
-                {{ r.stockAnterior | number: '1.0-3' }} → {{ r.stockNuevo | number: '1.0-3' }}
+                {{ r.stockAnterior | number: '1.0-3' }} → {{ cantidadConUnidad(r.stockNuevo, r.unidad) }}
               </td>
               <td class="num">{{ r.subtotal | monto }}</td>
             </tr>

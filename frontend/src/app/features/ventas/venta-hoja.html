@@ -45,7 +45,7 @@
       <tr>
         <td>{{ r.descripcion }}</td>
         <td class="num">{{ cantidadConUnidad(r.cantidad, r.unidad) }}</td>
-        <td class="num">{{ r.precioUnitario | monto }}</td>
+        <td class="num">{{ r.precioUnitario | monto }}{{ porUnidad(r.unidad) }}</td>
         <td class="num">{{ r.descuentoEfectivo > 0 ? (r.descuentoEfectivo | number: '1.0-2') + ' %' : '' }}</td>
         <td class="num">{{ r.totalSinRecargo | monto }}</td>
       </tr>

@@ -1187,6 +1187,46 @@ class PlanificadorImportacionTest {
         }
 
         @Test
+        @DisplayName("sin columna de unidad, el alta toma la unidad de la descripción (x kg); una medida como x100m sigue siendo por unidad")
+        void unidadDesdeLaDescripcion() {
+            PlanImportacion plan = escenario()
+                .filas(filaDe(2, "N-1", "Clavo punta París 2\" x kg", "4000"),
+                    filaDe(3, "N-2", "Cable unipolar 2,5mm x100m", "58400"),
+                    filaDe(4, "N-3", "Manguera cristal 1/2\" por metro", "900"))
+                .planificar();
+
+            assertThat(plan.errores()).isEmpty();
+            assertThat(plan.altas()).extracting(AltaPlaneada::unidad)
+                .containsExactly(Unidad.KILO, Unidad.UNIDAD, Unidad.METRO);
+        }
+
+        @Test
+        @DisplayName("la columna de unidad gana sobre la descripción; con la celda vacía vale la descripción")
+        void laColumnaGanaSobreLaDescripcion() {
+            PlanImportacion plan = escenario().mapeo(M.mapeo().unidad().build())
+                .filas(filaDe(2, "N-1", "Clavo punta París 2\" x kg", "4000", "", "", "", "", "", "", "", "", "un"),
+                    filaDe(3, "N-2", "Clavo punta París 3\" x kg", "3980", "", "", "", "", "", "", "", "", ""),
+                    filaDe(4, "N-3", "Clavo punta París 1\"", "4100", "", "", "", "", "", "", "", "", "Kg."))
+                .planificar();
+
+            assertThat(plan.errores()).isEmpty();
+            assertThat(plan.altas()).extracting(AltaPlaneada::unidad)
+                .containsExactly(Unidad.UNIDAD, Unidad.KILO, Unidad.KILO);
+        }
+
+        @Test
+        @DisplayName("con una unidad no reconocida en la columna, la descripción no la salva: sigue siendo error")
+        void unidadInvalidaConDescripcion() {
+            PlanImportacion plan = escenario().mapeo(M.mapeo().unidad().build())
+                .filas(filaDe(2, "N-1", "Clavo punta París 2\" x kg", "4000", "", "", "", "", "", "", "", "", "caja"))
+                .planificar();
+
+            assertThat(plan.errores()).hasSize(1);
+            assertThat(plan.errores().get(0).mensaje()).contains("Unidad no reconocida").contains("caja");
+            assertThat(plan.altas()).isEmpty();
+        }
+
+        @Test
         @DisplayName("un codigo de barras de mas de 30 caracteres es un error de la fila")
         void barrasMuyLargo() {
             PlanImportacion plan = escenario().mapeo(M.mapeo().barras().build())

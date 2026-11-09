@@ -23,7 +23,7 @@ import { MontoPipe, formatearCotizacion, formatearTexto } from '../../core/forma
 import { igualesPorValor } from '../../core/formato/cadena-de-precio';
 import { avisoMargenNegativo } from '../../core/formato/margen-negativo';
 import { RecargoDeCosto, costoRealExacto, exacto, margenEfectivo, precioFinal } from '../../core/formato/precio-final';
-import { cantidadConUnidad } from '../../core/formato/unidad';
+import { cantidadConUnidad, porUnidad } from '../../core/formato/unidad';
 import { BarraAcciones } from '../../shared/barra-acciones';
 import { Confirmacion } from '../../shared/confirmacion';
 import { CampoMoneda } from '../../shared/campo-moneda';
@@ -229,6 +229,7 @@ export class ArticuloForm implements OnInit {
   protected readonly tiposAjuste = TIPOS_AJUSTE_PRECIO;
   protected readonly tipoAjusteLabels = TIPO_AJUSTE_PRECIO_LABELS;
   protected readonly cantidadConUnidad = cantidadConUnidad;
+  protected readonly porUnidad = porUnidad;
 
   protected readonly rubros = signal<Rubro[]>([]);
   protected readonly proveedores = signal<Proveedor[]>([]);
@@ -430,6 +431,12 @@ export class ArticuloForm implements OnInit {
     if (cotizacion === null) return null;
     return avisoMargenNegativo(v.costo, this.recargosEnVivo(), cotizacion, v.alicuotaIva, v.precioFinal);
   });
+
+  /**
+   * La unidad elegida en el formulario, para el « / kg» del precio en vivo (#36): el Dueño la puede cambiar antes de
+   * guardar, así que no sale del artículo guardado.
+   */
+  protected readonly unidadElegida = computed(() => this.valores().unidad);
 
   /** Precio final con lo que hay cargado, con la misma cuenta y redondeo que el backend. */
   protected readonly precioEnVivo = computed(() => {

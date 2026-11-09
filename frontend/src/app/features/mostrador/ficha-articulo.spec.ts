@@ -47,9 +47,19 @@ describe('FichaArticulo', () => {
     expect(texto('.descripcion')).toBe('Tornillo hexagonal 1/4');
     expect(texto('.codigo-interno')).toBe('TOR-001');
     expect(texto('.codigo-barras')).toBe('7790001');
-    expect(texto('.precio')).toBe(`$${NBSP}1.234,50`);
+    expect(texto('.precio')).toBe(`$${NBSP}1.234,50 / m`);
     expect(texto('.stock')).toBe('2,5 metros');
     expect(texto('.ubicacion')).toBe('Pasillo 2');
+  });
+
+  it('el precio de un artículo por pieza no lleva unidad; el de uno por kilo en oferta dice «/ kg» en el de oferta (#36)', async () => {
+    await crear({ ...tornillo, unidad: 'UNIDAD' });
+    expect(texto('.precio')).toBe(`$${NBSP}1.234,50`);
+
+    TestBed.resetTestingModule();
+    await crear({ ...tornillo, unidad: 'KILO', precioFinal: 3600, enOferta: true, precioNormal: 4000 });
+    expect(texto('.precio .precio-oferta')).toBe(`$${NBSP}3.600,00 / kg`);
+    expect(texto('.precio s')).toBe(`$${NBSP}4.000,00`);
   });
 
   it('dice desde cuándo está al día el costo (GDS-05), sin mostrar el costo', async () => {
@@ -74,7 +84,7 @@ describe('FichaArticulo', () => {
     await crear({ ...tornillo, precioFinal: 1000, enOferta: true, precioNormal: 1234.5 });
 
     expect(texto('.marca-oferta')).toBe('Oferta');
-    expect(texto('.precio .precio-oferta')).toBe(`$${NBSP}1.000,00`);
+    expect(texto('.precio .precio-oferta')).toBe(`$${NBSP}1.000,00 / m`);
     expect(texto('.precio s')).toBe(`$${NBSP}1.234,50`);
   });
 
@@ -82,7 +92,7 @@ describe('FichaArticulo', () => {
     await crear(tornillo);
 
     expect(el().querySelector('.marca-oferta')).toBeNull();
-    expect(texto('.precio')).toBe(`$${NBSP}1.234,50`);
+    expect(texto('.precio')).toBe(`$${NBSP}1.234,50 / m`);
   });
 
   it('sin código de barras, del proveedor ni ubicación muestra guiones', async () => {
