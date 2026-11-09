@@ -503,7 +503,7 @@ describe('MovimientosCuenta (CC-074, CC-076, CC-078, CC-096)', () => {
                 () =>
                   new HttpErrorResponse({
                     status: 400,
-                    error: { status: 400, message: 'Datos inválidos', errors: { desde: 'La fecha desde no puede ser posterior a hasta.' } },
+                    error: { status: 400, message: 'Datos inválidos', errors: { desde: 'La fecha «Hasta» no puede ser anterior a «Desde».' } },
                   }),
               )
             : of(extracto([linea(1), linea(2)])),
@@ -514,7 +514,7 @@ describe('MovimientosCuenta (CC-074, CC-076, CC-078, CC-096)', () => {
       boton('Filtrar')!.click();
       await refrescar();
 
-      expect(texto('.error-filtro')).toBe('La fecha desde no puede ser posterior a hasta.');
+      expect(texto('.error-filtro')).toBe('La fecha «Hasta» no puede ser anterior a «Desde».');
       expect(filas()).toHaveLength(2);
       expect(texto('.error.con-accion')).toBeNull();
 
@@ -534,7 +534,7 @@ describe('MovimientosCuenta (CC-074, CC-076, CC-078, CC-096)', () => {
                 () =>
                   new HttpErrorResponse({
                     status: 400,
-                    error: { status: 400, message: 'Datos inválidos', errors: { desde: 'La fecha desde no puede ser posterior a hasta.' } },
+                    error: { status: 400, message: 'Datos inválidos', errors: { desde: 'La fecha «Hasta» no puede ser anterior a «Desde».' } },
                   }),
               )
             : cae
@@ -548,7 +548,7 @@ describe('MovimientosCuenta (CC-074, CC-076, CC-078, CC-096)', () => {
       boton('Filtrar')!.click();
       await refrescar();
 
-      expect(texto('.error-filtro')).toBe('La fecha desde no puede ser posterior a hasta.');
+      expect(texto('.error-filtro')).toBe('La fecha «Hasta» no puede ser anterior a «Desde».');
       expect(servicio.extracto).toHaveBeenLastCalledWith(8, { desde: '2026-10-10', hasta: '2026-10-01', tipo: '' }, 0);
 
       cae = false;

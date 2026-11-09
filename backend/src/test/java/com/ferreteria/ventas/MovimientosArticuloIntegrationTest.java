@@ -94,6 +94,7 @@ class MovimientosArticuloIntegrationTest extends VentasTestBase {
                 .isZero();
         assertThat(getJson(url(articulo) + "?desde=" + hoy + "&hasta=" + hoy, dueno).get("totalElements").asLong())
                 .isEqualTo(4);
+        rangoAlRevesDa400(url(articulo) + "?desde=" + hoy + "&hasta=" + LocalDate.now().minusDays(1), dueno);
         jdbc.update("update movimiento_stock set fecha = fecha - interval 3 day where articulo_id = ? and tipo = 'VENTA'",
                 articulo);
         JsonNode viejos = getJson(url(articulo) + "?hasta=" + LocalDate.now().minusDays(1), dueno);

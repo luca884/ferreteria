@@ -146,6 +146,27 @@ describe('Compras', () => {
     expect(api.listar).toHaveBeenLastCalledWith({ page: 0 });
   });
 
+  it('con «Hasta» antes de «Desde» avisa, no busca y enfoca «Hasta»; corregido, busca (bugs-relevamiento-celular, S4)', async () => {
+    await crear();
+    api.listar.mockClear();
+    await escribir('input[name=desde]', '2026-10-22');
+    await escribir('input[name=hasta]', '2026-10-21');
+
+    (el().querySelector('form.filtros') as HTMLFormElement).dispatchEvent(new Event('submit'));
+    await refrescar();
+
+    expect(api.listar).not.toHaveBeenCalled();
+    expect(el().querySelector('[role="alert"]')?.textContent?.trim()).toBe('La fecha «Hasta» no puede ser anterior a «Desde».');
+    expect(document.activeElement).toBe(el().querySelector('input[name="hasta"]'));
+
+    await escribir('input[name=hasta]', '2026-10-22');
+    (el().querySelector('form.filtros') as HTMLFormElement).dispatchEvent(new Event('submit'));
+    await refrescar();
+
+    expect(api.listar).toHaveBeenLastCalledWith({ page: 0, desde: '2026-10-22', hasta: '2026-10-22' });
+    expect(el().textContent).not.toContain('no puede ser anterior');
+  });
+
   it('el paginador va arriba de la tabla: no hay que bajar hasta el final para pasar de página', async () => {
     await crear();
     api.listar.mockReturnValue(of(pagina([resumen(2), resumen(1)], 2)));

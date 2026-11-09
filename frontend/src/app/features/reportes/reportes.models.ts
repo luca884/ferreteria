@@ -1,4 +1,5 @@
 import { UnidadDeMedida } from '../../core/formato/unidad';
+import { HASTA_ANTERIOR_A_DESDE, rangoAlReves } from '../../shared/rango-de-fechas';
 import { TipoMovimientoCaja } from '../caja/caja.models';
 
 /**
@@ -169,7 +170,7 @@ const UN_DIA = 24 * 60 * 60 * 1000;
 /** El mismo control que el servidor, para avisar antes de pedir; null si el rango vale. */
 export function errorDeRango(desde: string, hasta: string): string | null {
   if (!desde || !hasta) return 'Elegí las dos fechas.';
-  if (hasta < desde) return 'La fecha «Hasta» no puede ser anterior a «Desde».';
+  if (rangoAlReves(desde, hasta)) return HASTA_ANTERIOR_A_DESDE;
   const dias = (Date.parse(`${hasta}T00:00:00Z`) - Date.parse(`${desde}T00:00:00Z`)) / UN_DIA + 1;
   return dias > DIAS_MAXIMOS ? 'El reporte admite hasta 366 días.' : null;
 }

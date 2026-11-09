@@ -1,5 +1,6 @@
 package com.ferreteria.compras.service;
 
+import com.ferreteria.common.RangoDeFechas;
 import com.ferreteria.common.exception.ResourceNotFoundException;
 import com.ferreteria.compras.model.Compra;
 import com.ferreteria.compras.repository.CompraRepository;
@@ -33,6 +34,7 @@ public class CompraConsulta {
     /** Mas nuevas primero. {@code desde} y {@code hasta} son dias, ambos inclusive; cada filtro nulo no filtra. */
     @Transactional(readOnly = true)
     public Page<ResumenCompra> listar(Long proveedorId, LocalDate desde, LocalDate hasta, int pagina, int tamano) {
+        RangoDeFechas.validar(desde, hasta);
         Page<Compra> compras = compraRepository.buscarScoped(proveedorId, desde, hasta,
                 PageRequest.of(Math.max(pagina, 0), Math.min(Math.max(tamano, 1), TAMANO_MAXIMO)));
         Map<Long, Long> renglones = itemRepository.renglonesPorCompraScoped(

@@ -1,5 +1,5 @@
 import { HttpErrorResponse } from '@angular/common/http';
-import { Component, OnInit, computed, inject, signal } from '@angular/core';
+import { Component, ElementRef, OnInit, computed, inject, signal, viewChild } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { erroresDeCampos, mensajeDe } from '../../core/api/api-error';
@@ -10,6 +10,7 @@ import { BarraAcciones } from '../../shared/barra-acciones';
 import { Confirmacion } from '../../shared/confirmacion';
 import { DialogoDetalle } from '../../shared/dialogo-detalle';
 import { idsDeLaRuta } from '../../shared/documento-por-ruta';
+import { HASTA_ANTERIOR_A_DESDE, rangoAlReves } from '../../shared/rango-de-fechas';
 import { FacturaImprimible } from '../../shared/factura/factura-imprimible';
 import {
   ESTADOS_EN_REVISION,
@@ -108,6 +109,8 @@ export class Ventas implements OnInit {
   /** La bandeja elegida: '' son todas. */
   protected readonly fiscal = signal<FiltroFiscal | ''>('');
   protected readonly errorFiltros = signal<string | null>(null);
+  /** El campo «Hasta»: con el rango al revés se enfoca para corregirlo (bugs-relevamiento-celular, S12). */
+  private readonly campoHasta = viewChild<ElementRef<HTMLInputElement>>('campoHasta');
   /** Los filtros aplicados a la lista que se ve (sin `page`). */
   private aplicados: Omit<FiltroVentas, 'page'> = {};
   /** Los de la última lista que cargó: si el servidor rechaza un filtro nuevo (400), se vuelve a estos. */
@@ -274,6 +277,11 @@ export class Ventas implements OnInit {
     const numero = this.numero().trim();
     if (numero !== '' && !/^[1-9]\d{0,17}$/.test(numero)) {
       this.errorFiltros.set(MENSAJE_NUMERO);
+      return;
+    }
+    if (rangoAlReves(this.desde(), this.hasta())) {
+      this.errorFiltros.set(HASTA_ANTERIOR_A_DESDE);
+      this.campoHasta()?.nativeElement.focus();
       return;
     }
     this.errorFiltros.set(null);

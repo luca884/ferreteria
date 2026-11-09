@@ -95,6 +95,8 @@ class ConsultaVentasIntegrationTest extends VentasTestBase {
                 .containsExactly(3L, 2L);
         assertThat(numeros(getJson("/api/ventas?desde=" + hoy.plusDays(1), dueno))).isEmpty();
         getResult("/api/ventas?desde=ayer", dueno).andExpect(status().isBadRequest());
+        rangoAlRevesDa400("/api/ventas?desde=" + hoy + "&hasta=" + hoy.minusDays(1), dueno);
+        assertThat(numeros(getJson("/api/ventas?desde=" + hoy + "&hasta=" + hoy, dueno))).containsExactly(3L, 2L);
     }
 
     @Test

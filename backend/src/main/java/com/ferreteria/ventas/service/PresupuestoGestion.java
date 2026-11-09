@@ -1,5 +1,6 @@
 package com.ferreteria.ventas.service;
 
+import com.ferreteria.common.RangoDeFechas;
 import com.ferreteria.common.exception.ConflictException;
 import com.ferreteria.common.exception.DatosInvalidosException;
 import com.ferreteria.common.exception.ResourceNotFoundException;
@@ -56,6 +57,7 @@ public class PresupuestoGestion {
     @Transactional(readOnly = true)
     public Page<Presupuesto> listar(
             EstadoPresupuesto estado, Long numero, LocalDate desde, LocalDate hasta, int page, int size) {
+        RangoDeFechas.validar(desde, hasta);
         return presupuestoRepository.buscarScoped(estado, numero,
                 desde == null ? null : desde.atStartOfDay(),
                 hasta == null ? null : hasta.plusDays(1).atStartOfDay(),

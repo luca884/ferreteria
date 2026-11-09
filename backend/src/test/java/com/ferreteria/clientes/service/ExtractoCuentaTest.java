@@ -126,7 +126,7 @@ class ExtractoCuentaTest {
         assertThatThrownBy(() -> extracto.extracto(7L, filtro(LocalDate.of(2026, 10, 10), LocalDate.of(2026, 10, 1), null, null, null)))
                 .isInstanceOfSatisfying(DatosInvalidosException.class, e -> {
                     assertThat(e.errors()).containsOnlyKeys("desde");
-                    assertThat(e.errors().get("desde")).isEqualTo("La fecha desde no puede ser posterior a hasta.");
+                    assertThat(e.errors().get("desde")).isEqualTo("La fecha «Hasta» no puede ser anterior a «Desde».");
                 });
 
         verifyNoInteractions(clientes, libro);

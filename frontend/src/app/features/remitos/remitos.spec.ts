@@ -289,6 +289,25 @@ describe('Remitos', () => {
       expect(opciones).toEqual(['Todos', 'Emitido', 'Facturado', 'Anulado']);
     });
 
+    it('con «Hasta» antes de «Desde» avisa, no busca y enfoca «Hasta»; corregido, busca (bugs-relevamiento-celular, S4)', async () => {
+      await crear();
+      api.listar.mockClear();
+      filtrar('desde', '2026-10-22');
+      filtrar('hasta', '2026-10-21');
+
+      await buscar();
+
+      expect(api.listar).not.toHaveBeenCalled();
+      expect(el().querySelector('[role="alert"]')?.textContent?.trim()).toBe('La fecha «Hasta» no puede ser anterior a «Desde».');
+      expect(document.activeElement).toBe(el().querySelector('input[name="hasta"]'));
+
+      filtrar('hasta', '2026-10-22');
+      await buscar();
+
+      expect(api.listar).toHaveBeenLastCalledWith({ page: 0, desde: '2026-10-22', hasta: '2026-10-22' });
+      expect(el().textContent).not.toContain('no puede ser anterior');
+    });
+
     it('un número que no es un entero positivo no se manda y avisa', async () => {
       await crear();
       filtrar('numero', 'abc');

@@ -394,7 +394,7 @@ class ExtractoIntegrationTest extends CuentaCorrienteTestBase {
     }
 
     @Test
-    @DisplayName("400 con clave desde: «La fecha desde no puede ser posterior a hasta.» — y va ANTES del 404 (un cliente ajeno con rango inválido da 400)")
+    @DisplayName("400 con clave desde: «La fecha «Hasta» no puede ser anterior a «Desde».» (el texto único, bugs-relevamiento-celular S4) — y va ANTES del 404 (un cliente ajeno con rango inválido da 400)")
     void desdePosteriorAHasta() throws Exception {
         Tienda t = tienda();
         Tienda otra = tienda();
@@ -402,7 +402,7 @@ class ExtractoIntegrationTest extends CuentaCorrienteTestBase {
         long ajeno = cliente(otra.f(), null);
 
         JsonNode error = json(getResult(url(cliente) + "?desde=2026-10-20&hasta=2026-10-19", t.dueno()).andExpect(status().isBadRequest()));
-        assertThat(error.get("errors").get("desde").asText()).isEqualTo("La fecha desde no puede ser posterior a hasta.");
+        assertThat(error.get("errors").get("desde").asText()).isEqualTo("La fecha «Hasta» no puede ser anterior a «Desde».");
         getResult(url(ajeno) + "?desde=2026-10-20&hasta=2026-10-19", t.dueno()).andExpect(status().isBadRequest());
         getResult(url(cliente) + "?desde=2026-10-19&hasta=2026-10-19", t.dueno()).andExpect(status().isOk());
     }

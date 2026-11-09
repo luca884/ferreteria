@@ -23,6 +23,7 @@ import { Confirmacion } from '../../shared/confirmacion';
 import { porcentajeDescuentoGeneral } from '../../shared/descuento-general';
 import { DialogoDetalle } from '../../shared/dialogo-detalle';
 import { idsDeLaRuta } from '../../shared/documento-por-ruta';
+import { HASTA_ANTERIOR_A_DESDE, rangoAlReves } from '../../shared/rango-de-fechas';
 import { DocumentoNoFiscalImprimible } from '../../shared/documento-no-fiscal/documento-no-fiscal-imprimible';
 import { EmisorService } from '../../shared/documento-no-fiscal/emisor.service';
 import { DatosFiscales } from '../datos-fiscales/datos-fiscales.service';
@@ -98,6 +99,8 @@ export class Remitos implements OnInit {
   protected readonly desde = signal('');
   protected readonly hasta = signal('');
   protected readonly errorFiltros = signal<string | null>(null);
+  /** El campo «Hasta»: con el rango al revés se enfoca para corregirlo (bugs-relevamiento-celular, S12). */
+  private readonly campoHasta = viewChild<ElementRef<HTMLInputElement>>('campoHasta');
   /** Los filtros aplicados a la lista que se ve (sin `page`). */
   private aplicados: Omit<FiltroRemitos, 'page'> = {};
   protected readonly filtrada = signal(false);
@@ -178,6 +181,11 @@ export class Remitos implements OnInit {
     const texto = this.numero().trim();
     if (texto !== '' && !/^[1-9]\d{0,17}$/.test(texto)) {
       this.errorFiltros.set(MENSAJE_NUMERO);
+      return;
+    }
+    if (rangoAlReves(this.desde(), this.hasta())) {
+      this.errorFiltros.set(HASTA_ANTERIOR_A_DESDE);
+      this.campoHasta()?.nativeElement.focus();
       return;
     }
     this.errorFiltros.set(null);

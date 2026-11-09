@@ -282,6 +282,25 @@ describe('Ventas (consulta y reimpresión, G60)', () => {
     expect(normal(el().querySelector('.estado-vacio')?.textContent)).toBe('Todavía no hay ventas.');
   });
 
+  it('con «Hasta» antes de «Desde» avisa, no busca y enfoca «Hasta»; corregido, busca (bugs-relevamiento-celular, S4)', async () => {
+    await crear();
+    api.listar.mockClear();
+    campo('desde', '2026-10-22');
+    campo('hasta', '2026-10-21');
+
+    await buscar();
+
+    expect(api.listar).not.toHaveBeenCalled();
+    expect(normal(el().querySelector('[role="alert"]')?.textContent)).toBe('La fecha «Hasta» no puede ser anterior a «Desde».');
+    expect(document.activeElement).toBe(el().querySelector('input[name="hasta"]'));
+
+    campo('hasta', '2026-10-22');
+    await buscar();
+
+    expect(api.listar).toHaveBeenLastCalledWith({ page: 0, desde: '2026-10-22', hasta: '2026-10-22' });
+    expect(el().textContent).not.toContain('no puede ser anterior');
+  });
+
   it('filtra por número, cliente y fechas; Limpiar vuelve a la lista completa', async () => {
     await crear();
     campo('numero', '15');

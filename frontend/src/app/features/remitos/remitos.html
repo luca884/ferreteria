@@ -34,7 +34,7 @@
   </label>
   <label>
     Hasta
-    <input name="hasta" type="date" [value]="hasta()" (input)="hasta.set($any($event.target).value)" />
+    <input #campoHasta name="hasta" type="date" [value]="hasta()" (input)="hasta.set($any($event.target).value)" />
   </label>
   <button type="submit" class="primario">Buscar</button>
   <button type="button" class="secundario" (click)="limpiar()">Limpiar</button>

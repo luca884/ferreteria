@@ -129,6 +129,27 @@ describe('MovimientosArticulo', () => {
     expect(filas()[1].querySelector('td.cantidad')!.classList).toContain('entrada');
   });
 
+  it('con «Hasta» antes de «Desde» avisa, no busca y enfoca «Hasta»; corregido, busca (bugs-relevamiento-celular, S4)', async () => {
+    await crear();
+    servicio.movimientos.mockClear();
+    await fecha('desde', '2026-10-22');
+    await fecha('hasta', '2026-10-21');
+
+    el().querySelector('form')!.dispatchEvent(new Event('submit'));
+    await refrescar();
+
+    expect(servicio.movimientos).not.toHaveBeenCalled();
+    expect(texto('[role="alert"]')).toBe('La fecha «Hasta» no puede ser anterior a «Desde».');
+    expect(document.activeElement).toBe(el().querySelector('input[name="hasta"]'));
+
+    await fecha('hasta', '2026-10-22');
+    el().querySelector('form')!.dispatchEvent(new Event('submit'));
+    await refrescar();
+
+    expect(servicio.movimientos).toHaveBeenLastCalledWith(7, { page: 0, desde: '2026-10-22', hasta: '2026-10-22' });
+    expect(el().textContent).not.toContain('no puede ser anterior');
+  });
+
   it('filtra por Desde y Hasta y vuelve a la primera página; Limpiar saca los filtros', async () => {
     await crear();
     await fecha('desde', '2026-10-01');
