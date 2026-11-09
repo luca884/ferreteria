@@ -52,9 +52,9 @@ Restricciones: reglas de `CLAUDE.md` (mensajes en español rioplatense, migracio
 
 - [x] T1 · S1–S5, S7–S9 (backend, README, spec) · ruta: delegada (Writer trigger: dos unidades independientes de 100+ líneas en paralelo, T1 y T2, con superficies disjuntas; backstop de contexto) · Evidencia (L6): RED con 46 fallas. GREEN: 231 focalizados; suite 6515/0; `-Pimagen` 12/0. El padre corrió `SegundoFactorIntegrationTest` y `TotpTest`: 19/0 · Risk: items 1 (V48 en `usuario`), 2 (seguridad), 3 (contrato del login), 4 (código usado con pedidos simultáneos) y 5 (variable nueva en el deploy)
 - [x] T2 · S1, S2, S6, S8 (frontend) · ruta: delegada (mismo trigger que T1) · Evidencia (L5): RED login 11/30, servicio 4/17, interceptor 2/10. GREEN `login.spec.ts` 30/30 (también lo corrió el padre), `auth.service.spec.ts` 17/17, interceptor 23/23, `ng build` OK. Superficie respetada · Risk: items 2 y 3 (van a T4)
-- [ ] T3 · S1–S8 · ruta: inline o worker de ego-browser · Aceptación: con la app local, el alta con QR, el código bien, mal y repetido, y Dueño y Vendedor sin cambios, a 1280 px · Evidencia: — · Risk: —
-- [ ] T4 · todo · ruta: `odd-verifier` (Opus) · Aceptación: sin blockers · Evidencia: — · Risk: items 1–5
-- [ ] T5 · cierre · ruta: inline · Aceptación: suite backend, `-Pimagen`, suite frontend y `ng build` verdes · Evidencia: — · Risk: —
+- [x] T3 · S1–S8 · ruta: worker de ego-browser (Opus) · Aceptación: con la app local, el alta con QR, el código bien, mal y repetido, y Dueño y Vendedor sin cambios, a 1280 px · Evidencia: L7, 6/6 PASS · Risk: —
+- [x] T4 · todo · ruta: `odd-verifier` (Opus) · Aceptación: sin blockers · Evidencia: L10, PASS sin blockers (218/0 focalizados y 12/0 de sondas) · Risk: items 1–5
+- [x] T5 · cierre · ruta: inline · Aceptación: suite backend, `-Pimagen`, suite frontend y `ng build` verdes · Evidencia: L6, L8 y L12. Commits `bfe8b42d`, `fe2a208c` y `45e20092` · Risk: —
 
 ## Log
 
@@ -95,3 +95,47 @@ Restricciones: reglas de `CLAUDE.md` (mensajes en español rioplatense, migracio
   - **Diferencias con lo pedido.** El 400 trae también `errors.codigo`. La respuesta del Dueño y el Vendedor suma `segundoPaso: null` y `tokenTotp: null`, que el contrato permite.
   - **Fuera de la lista de clases.** `MigracionV6Test` suma la 48.
   - **No se hizo.** El chequeo diferencial contra la base.
+- L7 (2026-11-09) T3 en la app local (`fe2a208c`, 1280x800, ego-browser). Pasan los 6 recorridos:
+  1. **Alta.** El QR en SVG coincide con las filas de `/alta` (641/641 módulos). Los textos de S6 salen tal cual. Sin scroll a 1280.
+  2. **Código mal y después bien.** El mal da `CODIGO_INCORRECTO`, el campo se vacía y el foco vuelve; el bien entra a `/admin/ferreterias`.
+  3. **Código repetido.** «Código de la app» sin QR. El código ya usado se rechaza, también dentro del mismo paso.
+  4. **«Volver».** Vuelve a las credenciales, que siguen cargadas.
+  5. **Dueño.** Un solo `/auth/login` y entra al mostrador.
+  6. **Reset por base.** El `UPDATE` del README vuelve a mostrar el QR. El secreto pendiente se repite al reingresar.
+
+  En el log del backend no aparece el secreto ni la URI.
+
+  Detalle menor, sin cambiar: con el aviso de error en el paso del alta, la tarjeta pasa 30 px del alto de 800, y la página hace scroll vertical, no horizontal. Capturas en el scratchpad de la sesión (`t3-totp/`).
+- L8 (2026-11-09) T5, frontend: `npx ng test --watch=false`, 164 archivos pasan. `npx ng build` OK, con el aviso de presupuesto de `dialogo-cobro.ts` que ya estaba en la base.
+- L9 (2026-11-09) Luca escaneó el QR con Google Authenticator en la app local y entró con el código. Textual: «listo ya lo porbe y anda bien». Prueba real de S2 y S3 con el celular.
+- L10 (2026-11-09) T4, `odd-verifier` (Opus), sobre una copia de `fe2a208c`: PASS, sin blockers. Corrió 218 tests focalizados, 0 fallas, y los specs del front (30, 17 y 10). Sus 12 sondas pasan:
+  - el `tokenTotp` como Bearer da 401 en todo;
+  - los tokens falsificados con la firma (`segundoFactor` como texto o con `tipo`) se rechazan;
+  - la ventana es ±1 paso; ±2 se rechaza;
+  - el 400, el 409 y los tokens inválidos no gastan intentos, y el límite es por usuario;
+  - un rechazo no cambia la fila;
+  - 5 verificaciones simultáneas dan un solo 200;
+  - 4 altas simultáneas dan una sola clave;
+  - el log no tiene secretos;
+  - el reset con alta pendiente funciona.
+
+  Advertencias, ninguna rompe algo de la base:
+  1. El login del Dueño y del Vendedor suma dos claves en null.
+  2. El `tokenTotp` se puede reusar durante sus 5 minutos y no lo corta un cambio de contraseña. Las sesiones ya emitidas siguen después de un reset por base. Nada de eso está en la spec.
+  3. El límite vive en memoria, como el del login.
+  4. Un código mal escrito con un token inválido da 400, el orden de L6.
+  5. Si cambia `TOTP_CLAVE_MAESTRA`, `verificar` da 500 después de gastar un intento; lo cubre el reset por base.
+
+  Las sondas pasan al repo como `SegundoFactorBordesIntegrationTest`.
+- L11 (2026-11-09) Luca cargó `TOTP_CLAVE_MAESTRA` en el servicio `backend` de Railway, con `openssl rand -base64 32 | railway variables --service backend --set-from-stdin TOTP_CLAVE_MAESTRA --skip-deploys`. Textual: «listo ya tire el comando de opcion 1». Control sin mostrar el valor: decodificada mide 32 bytes. No se disparó ningún deploy.
+- L12 (2026-11-09) Las sondas de L10 pasan al repo como `SegundoFactorBordesIntegrationTest`: 10 tests, de p01 a p10. Cada `println` se volvió una aserción o se sacó porque el dato ya estaba afirmado. Se sacaron enteras p11 y p12, que eran de depuración. 10/0, también corrido por el padre.
+
+  Observación, no es blocker: con 5 verificaciones simultáneas del mismo código, el intento se reserva antes de comparar. Por eso el log avisa «5 códigos incorrectos seguidos… se bloquea 1 min» aunque una de ellas entró. El test igual da un 200, cuatro 401 y ningún 429.
+
+  T5 cerrada:
+  - suite backend 6515/0 (L6; después solo se sumó este test);
+  - `-Pimagen` 12/0;
+  - suite frontend con 164 archivos que pasan;
+  - `ng build` OK.
+
+  Próximo paso: Luca hace push, PR, merge y deploy, y apenas sale el deploy entra a producción y escanea el QR (S2, README).
