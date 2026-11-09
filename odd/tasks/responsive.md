@@ -2,7 +2,7 @@
 
 Objetivo: la app se puede usar bien en celular, tablet y laptop, sin cambiar cómo se ve en escritorio · Por qué: el relevamiento a 390×844 del 2026-11-09 encontró que ninguna pantalla es usable hoy en el celular (L2).
 Rama: `feat/responsive` desde `c65fccf5` · Entrega: single-pr · Runner: frontend `npx ng test --watch=false --include=<spec>` / suite `npx ng test --watch=false` / `npx ng build` · Mirror Engram: `odd/responsive/tasks` (ok)
-Pronóstico: ~1.700 líneas (agregadas + borradas, sin generados) · Heurística por tarea: ~400 (no es límite) · Modelo: Opus escribió el doc; ejecuta una terminal con Opus (caso 4 + memoria «ejecutar con Opus»), pendiente del OK de Luca
+Pronóstico: ~1.700 líneas (agregadas + borradas, sin generados) · Heurística por tarea: ~400 (no es límite) · Modelo: Opus escribió el doc; ejecuta una terminal con Opus (caso 4 + memoria «ejecutar con Opus»), aprobado por Luca (L6)
 
 ## Specs
 
@@ -176,3 +176,7 @@ Usuarios locales (contraseña `demo1234`): `dueno@faro.qa`, `vendedor@faro.qa`, 
   - Ficha: `articulo-form.css:11-42,133`.
   - Riesgo: item 3 (estilos compartidos) e item 6 (Vitest no carga `styles.css`; ningún test atrapa regresiones de layout).
 - L5 (2026-11-09) Progreso: doc escrito y commiteado en `feat/responsive`. Ninguna tarea empezada. Próximo paso: Luca aprueba el ruteo (terminal con Opus) y el ejecutor arranca por T0 y T1.
+- L6 (2026-11-09) Luca aprueba el ruteo («¿Lo ejecutamos así?», terminal nueva con Opus), textual:
+  > dale
+
+  Próximo paso: la terminal con Opus arranca por T0 y T1. La app local queda levantada en 4200 y 8080, con MySQL en 3307.
