@@ -15,9 +15,9 @@ Restricciones: sin migraciones. Todo cambio visual se prueba en la app real con 
 
 ## Tasks
 
-- [x] T1 · S2, S2a · ruta: delegada (`odd-implementer` Opus; Writer trigger: backstop de contexto de ~150k de la sesión) · Aceptación: `unidad` en `CambioMasivo` y sufijo en la tabla · Evidencia: RED `ActualizacionMasivaIntegrationTest#laVistaPreviaTraeLaUnidadDeCadaArticuloQueCambia` (NPE, no hay `unidad`) y 2 de 221 en el spec del front; GREEN backend 241/241 (5 clases), front 221/221 (confirmado por el padre), `ng build` OK; ancho: en T3 · Risk: item 3 (`CambioMasivo` es el JSON de la vista previa; aditivo, solo lo consume este front)
-- [ ] T2 · S1 · ruta: inline (medición previa con un worker de ego-browser) · Aceptación: la vista previa de Nueva compra entra a 1280 px · Evidencia: — · Risk: none
-- [ ] T3 · S1, S2 · ruta: worker de ego-browser · Aceptación: las dos tablas medidas a 1280 y 1440 px en la app real, con capturas · Evidencia: — · Risk: none
+- [x] T1 · S2, S2a · ruta: delegada (`odd-implementer` Opus; Writer trigger: backstop de contexto de ~150k de la sesión) · Aceptación: `unidad` en `CambioMasivo` y sufijo en la tabla · Evidencia: RED `ActualizacionMasivaIntegrationTest#laVistaPreviaTraeLaUnidadDeCadaArticuloQueCambia` (NPE, no hay `unidad`) y 2 de 221 en el spec del front; GREEN backend 241/241 (5 clases), front 221/221 (confirmado por el padre), `ng build` OK; ancho: en T3 · commit `64726786` · Risk: none. El campo nuevo del JSON es lo que pide S2. `CambioMasivo` y `PlanificadorMasivo` solo los usa Actualizar precios; el constructor viejo sigue, y la huella la cubre `HuellaMasivaTest.laUnidadNoCambiaLaHuella`.
+- [x] T2 · S1, S2 · ruta: inline (medición previa con un worker de ego-browser) · Aceptación: la vista previa de Nueva compra entra a 1280 px; Actualizar precios vuelve a entrar con «/ kg» · Evidencia: V4a en `compras.css` y `.detalle-fila` en `actualizacion-masiva.css` (L4); specs 278/278 y `ng build` OK; el ancho no se prueba en jsdom · commit `b499300a` · Risk: none
+- [x] T3 · S1, S2 · ruta: worker de ego-browser · Aceptación: las dos tablas medidas a 1280 y 1440 px en la app real, con capturas · Evidencia: L5 (compra 1053/1053 y 1213/1213; masivo 962/962 y 1137/1137) · Risk: none
 
 ## Log
 
@@ -37,3 +37,32 @@ Restricciones: sin migraciones. Todo cambio visual se prueba en la app real con 
   - la advertencia del 60 % de la importación dice «de 769,50 a 1.231,20», sin «$» ni «/ m»;
   - «PR36-NUEVO1» se parte en el guion;
   - en Movimientos, los botones «Volver a la ficha» y «Ver compras» se ven altos.
+- L4 (2026-11-08) Medición con ego-browser sobre `64726786`, como Dueño de El Tornillo.
+  - **Nueva compra con «Flete» 10 %, a 1280.** La línea de base desborda 210 px: `main.contenido` 1263/1053. Sin recargo entra.
+    - V1 (encabezados en dos renglones) da 1183. V2 (V1 más el stock en dos renglones) da 1135. V3 (V2 más 8 px de margen) da 1055.
+    - **V4a** (V2 más `padding-inline: 6px`) entra: 1053/1053, con unos 22 px de sobra. Es la que se eligió.
+    - La descripción del artículo ocupa 5 renglones a 1280, como en la línea de base. Mejorarla pide sacar o fusionar columnas: es decisión de producto y queda afuera.
+  - **Actualizar precios con T1, a 1280.** `.grilla-contenedor` da 999/962. El renglón del «Costo real» es `nowrap` y, con los dos «/ kg», la columna Costo llega a 387 px. **Es una regresión de T1.** Con `table.cambios .detalle-fila { white-space: normal }` entra: 962/962. A 1440 entra igual.
+  - **Implementado** (`b499300a`):
+    - V4a en `compras.css`, acotada a `.vista-previa`;
+    - `.detalle-fila` con `white-space: normal` en `actualizacion-masiva.css`;
+    - `porUnidadDe` con espacios duros, para que el «kg» no quede solo cuando el renglón se parte.
+    Specs de los dos componentes: 278/278. `ng build` OK.
+- L5 (2026-11-08) Prueba final en la app real sobre `b499300a`, sin estilos inyectados.
+  - **Nueva compra con «Flete» 10 %.** `main.contenido` da 1053/1053 a 1280 y 1213/1213 a 1440. Sin recargo, a 1280, da 1053/1053. SUBTOTAL se ve y ningún importe se parte.
+  - **Lo que no cambió.** La tabla de renglones de Nueva compra y el detalle de la compra 8 siguen con `nowrap` y 12 px; el detalle entra (812 dentro de 860).
+  - **Actualizar precios.** `.grilla-contenedor` da 962/962 a 1280 y 1137/1137 a 1440.
+    - «Costo real: $ 4.400,00 / kg → $ 4.620,00 / kg» y, abajo, «(recargos 10 %)».
+    - El sufijo lleva U+00A0 y ningún «kg» queda solo.
+    - «/ kg» en U36-1, «/ m» en U36-6 y sin sufijo en U36-5.
+    - «Sin ajustes» no apareció con estos datos: lo cubre el spec.
+  - **Como ferretero.** Actualizar precios se lee bien. En Nueva compra a 1280, las columnas de plata van juntas y la descripción ocupa 5 renglones, como antes; a 1440 se lee cómoda.
+  - **Base local intacta.** `recargos_costo` de U36-1 volvió a `[]` y no se registró ni se aplicó nada.
+  - **Capturas.** En el scratchpad de la sesión, `tanda2/final-*.png`.
+- L6 (2026-11-08) Cierre sobre `b499300a`:
+  - backend `./mvnw test`: 6454 tests, 0 fallas, 0 errores;
+  - frontend `npx ng test --watch=false`: 164 archivos pasan;
+  - `ng build` OK, solo con el aviso de presupuesto de `dialogo-cobro.ts`, que ya estaba.
+
+  Sin `odd-verifier`: el Risk es none. El JSON nuevo es el pedido y el código que se tocó es solo de Actualizar precios.
+  Queda para Luca, como decisión de producto: en Nueva compra con recargos a 1280 px, la descripción del artículo va en 5 renglones. Ya pasaba antes; mejorarla pide fusionar o sacar columnas.
