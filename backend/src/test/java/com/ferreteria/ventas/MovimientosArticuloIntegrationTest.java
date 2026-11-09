@@ -66,7 +66,7 @@ class MovimientosArticuloIntegrationTest extends VentasTestBase {
                 .containsExactly(dec("11"), dec("12"), dec("7"), dec("8"));
         assertThat(items.get(0).get("comprobante").isNull()).isTrue();
         assertThat(items.get(0).get("motivo").asText()).isEqualTo("Rotura");
-        assertThat(items.get(1).get("comprobante").asText()).isEqualTo("FA 00003-00001234 · Bulonera Sur");
+        assertThat(items.get(1).get("comprobante").asText()).isEqualTo("Factura A 00003-00001234 · Bulonera Sur");
         assertThat(items.get(2).get("comprobante").asText()).isEqualTo("Remito N.º " + numeroRemito);
         assertThat(items.get(3).get("comprobante").asText()).isEqualTo("Venta N.º " + numeroVenta);
         assertThat(items.findValuesAsText("usuario")).containsOnly("Dueno Ventas");

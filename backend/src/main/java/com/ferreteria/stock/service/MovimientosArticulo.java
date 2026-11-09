@@ -70,8 +70,8 @@ public class MovimientosArticulo {
 
     /**
      * Como lo nombra cada pantalla: «Venta N.º 12», «Nota de crédito N.º 13» o «Anulación N.º 14» (CU-08: la anulación
-     * interna es la nota sin factura, con motivo), «Remito N.º 5» y la compra con el codigo de tipo de GDS y su proveedor
-     * («FA 00003-00001234 · Bulonera Sur»). El ajuste no tiene comprobante.
+     * interna es la nota sin factura, con motivo), «Remito N.º 5» y la compra como en Compras, con su proveedor
+     * («Factura A 00003-00001234 · Bulonera Sur»). El ajuste no tiene comprobante.
      */
     static String comprobante(MovimientoListado fila) {
         if (fila.getVentaNumero() != null) {
@@ -85,10 +85,24 @@ public class MovimientosArticulo {
             return "Remito N.º " + fila.getRemitoNumero();
         }
         if (fila.getCompraNumero() != null) {
-            String numero = "%s %05d-%08d".formatted(fila.getCompraTipo(), fila.getCompraPuntoVenta(),
+            String numero = "%s %05d-%08d".formatted(tipoDeCompra(fila.getCompraTipo()), fila.getCompraPuntoVenta(),
                     fila.getCompraNumero());
             return fila.getProveedor() == null ? numero : numero + " · " + fila.getProveedor();
         }
         return null;
+    }
+
+    /**
+     * Las etiquetas de {@code compras.model.TipoCompra}, repetidas aca porque {@code stock} no conoce a {@code compras}
+     * (ModulosArchTest). MovimientosArticuloTest las compara con las del enum.
+     */
+    private static String tipoDeCompra(String codigo) {
+        return switch (codigo) {
+            case "FA" -> "Factura A";
+            case "FB" -> "Factura B";
+            case "FC" -> "Factura C";
+            case "REM" -> "Remito";
+            default -> codigo;
+        };
     }
 }

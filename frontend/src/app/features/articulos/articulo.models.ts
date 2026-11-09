@@ -247,7 +247,7 @@ export type TipoMovimientoStock = 'VENTA' | 'AJUSTE' | 'REMITO' | 'ANULACION_REM
 
 /**
  * Un movimiento del artículo (G29): cantidad con signo (salida negativa) y el saldo que quedó después. El comprobante
- * viene armado del backend («Venta N.º 12», «FA 00003-00001234 · Proveedor»); un ajuste no tiene y muestra su motivo.
+ * viene armado del backend («Venta N.º 12», «Factura A 00003-00001234 · Proveedor»); un ajuste no tiene y muestra su motivo.
  */
 export interface MovimientoStock {
   id: number;
