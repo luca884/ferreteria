@@ -83,4 +83,48 @@ class VariacionFuerteTest {
     void igualesNoAdvierte() {
         assertThat(VariacionFuerte.mensaje(Sujeto.COSTO, bd("100.00"), bd("100.00"))).isEmpty();
     }
+
+    // ---- con moneda y unidad: los importes como los muestra la grilla
+
+    @Test
+    @DisplayName("en pesos por metro: «$ 769,50 / m», el caso de la importacion en produccion")
+    void enPesosPorMetro() {
+        assertThat(VariacionFuerte.mensaje(Sujeto.COSTO, bd("769.50"), bd("1231.20"), Moneda.ARS, Unidad.METRO))
+            .contains("El costo sube un 60 % (de $ 769,50 / m a $ 1.231,20 / m). Revisá que sea correcto.");
+    }
+
+    @Test
+    @DisplayName("en dolares: «US$», y por kilo «/ kg»")
+    void enDolaresPorKilo() {
+        assertThat(VariacionFuerte.mensaje(Sujeto.COSTO, bd("100.00"), bd("40.00"), Moneda.USD, Unidad.KILO))
+            .contains("El costo baja un 60 % (de US$ 100,00 / kg a US$ 40,00 / kg). Revisá que sea correcto.");
+    }
+
+    @Test
+    @DisplayName("por litro: «/ l»")
+    void porLitro() {
+        assertThat(VariacionFuerte.mensaje(Sujeto.PRECIO, bd("160.00"), bd("490.00"), Moneda.ARS, Unidad.LITRO))
+            .contains("El precio sube un 206,25 % (de $ 160,00 / l a $ 490,00 / l). Revisá que sea correcto.");
+    }
+
+    @Test
+    @DisplayName("por unidad: sin sufijo")
+    void porUnidadSinSufijo() {
+        assertThat(VariacionFuerte.mensaje(Sujeto.COSTO, bd("100.00"), bd("160.00"), Moneda.ARS, Unidad.UNIDAD))
+            .contains("El costo sube un 60 % (de $ 100,00 a $ 160,00). Revisá que sea correcto.");
+    }
+
+    @Test
+    @DisplayName("con moneda y unidad el umbral es el mismo: 50 % exacto no advierte")
+    void conMonedaYUnidadMismoUmbral() {
+        assertThat(VariacionFuerte.mensaje(Sujeto.COSTO, bd("100.00"), bd("150.00"), Moneda.ARS, Unidad.METRO))
+            .isEmpty();
+    }
+
+    @Test
+    @DisplayName("el costo real (CU-13): «El costo real sube...»")
+    void costoReal() {
+        assertThat(VariacionFuerte.mensaje(Sujeto.COSTO_REAL, bd("100.00"), bd("160.00"), Moneda.ARS, Unidad.UNIDAD))
+            .contains("El costo real sube un 60 % (de $ 100,00 a $ 160,00). Revisá que sea correcto.");
+    }
 }

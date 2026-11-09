@@ -493,6 +493,13 @@ app-barra-acciones h1 {
 .accion-barra:hover:not(:disabled) {
   border-color: var(--borde-fuerte);
 }
+/*
+ * En una barra sin íconos ni teclas («Ver compras», «Volver a la ficha») el botón es solo texto: con el alto del de
+ * ícono y nombre se veía como una caja alta al lado del título. Las barras con íconos (o mixtas) no cambian.
+ */
+app-barra-acciones:not(:has(svg, kbd)) .accion-barra {
+  min-height: var(--alto-control);
+}
 .accion-barra kbd {
   min-width: 0;
   padding: 0;

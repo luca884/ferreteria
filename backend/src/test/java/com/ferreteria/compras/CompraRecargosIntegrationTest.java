@@ -142,9 +142,47 @@ class CompraRecargosIntegrationTest extends ComprasTestBase {
                 .andExpect(jsonPath("$.iguales").value(0));
     }
 
+    // ---- variacion fuerte: se mide sobre el costo real, como el contador ----
+
+    @Test
+    @DisplayName("con la factura igual y un recargo del 60 %, avisa que el costo real sube un 60 %")
+    void variacionFuerteDelCostoReal() throws Exception {
+        postJson("/api/compras/vista-previa", dueno, cuerpo(null, 1, RECARGO_60, "100.00"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.renglones[0].costoRealAnterior").value(100.00))
+                .andExpect(jsonPath("$.renglones[0].costoRealNuevo").value(160.00))
+                .andExpect(jsonPath("$.renglones[0].advertencia")
+                        .value("El costo real sube un 60 % (de $ 100,00 a $ 160,00). Revisá que sea correcto."));
+    }
+
+    @Test
+    @DisplayName("una compra sin recargos sobre uno con 10 %: la factura sube 60 %, el costo real 45,45 % y no avisa")
+    void sinRecargosSobreUnoQueLosTeniaMideElCostoReal() throws Exception {
+        postJson("/api/compras", dueno, cuerpo(UUID.randomUUID().toString(), 1, RECARGO_10, "100.00"))
+                .andExpect(status().isCreated());
+
+        postJson("/api/compras/vista-previa", dueno, cuerpo(null, 2, null, "160.00"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.renglones[0].costoAnterior").value(100.00))
+                .andExpect(jsonPath("$.renglones[0].costoNuevo").value(160.00))
+                .andExpect(jsonPath("$.renglones[0].costoRealAnterior").value(110.00))
+                .andExpect(jsonPath("$.renglones[0].costoRealNuevo").value(160.00))
+                .andExpect(jsonPath("$.renglones[0].advertencia").doesNotExist());
+    }
+
+    @Test
+    @DisplayName("sin recargos en la compra ni en el articulo, avisa como siempre: «El costo sube...»")
+    void sinRecargosAvisaComoSiempre() throws Exception {
+        postJson("/api/compras/vista-previa", dueno, cuerpo(null, 1, null, "160.00"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.renglones[0].advertencia")
+                        .value("El costo sube un 60 % (de $ 100,00 a $ 160,00). Revisá que sea correcto."));
+    }
+
     // ---- helpers ----
 
     private static final String RECARGO_10 = "[{\"nombre\": \"Embalaje y carga\", \"porcentaje\": 10}]";
+    private static final String RECARGO_60 = "[{\"nombre\": \"Flete\", \"porcentaje\": 60}]";
 
     private void contador(String cuerpo, int suben, int bajan, int iguales) throws Exception {
         postJson("/api/compras/vista-previa", dueno, cuerpo)

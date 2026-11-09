@@ -97,3 +97,12 @@ td.num .etiqueta-fuerte {
 .sin-filas {
   margin: var(--e-3) 0;
 }
+/* El código no se parte en el guion («PR36-NUEVO1»). */
+td.codigo {
+  white-space: nowrap;
+}
+/* Con el código sin partir la tabla se pasaba 8 px a 1280: las celdas van un poco más juntas (#36). */
+th,
+td {
+  padding-inline: 8px;
+}

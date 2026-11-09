@@ -57,7 +57,7 @@ describe('NuevaCompra', () => {
         precioAnterior: 157.3,
         precioNuevo: 330.33,
         subtotal: 4200,
-        advertencia: 'El costo sube un 110 % (de 100,00 a 210,00). Revisá que sea correcto.',
+        advertencia: 'El costo sube un 110 % (de $ 100,00 a $ 210,00). Revisá que sea correcto.',
         costoRealAnterior: 100,
         costoRealNuevo: 210,
         stockAnterior: 0,

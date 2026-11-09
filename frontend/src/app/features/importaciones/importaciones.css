@@ -245,3 +245,8 @@ details.no-estan summary {
   color: var(--error);
   font-weight: 600;
 }
+
+/* El código de «No están en la lista» no se parte en el guion. */
+td.codigo {
+  white-space: nowrap;
+}
