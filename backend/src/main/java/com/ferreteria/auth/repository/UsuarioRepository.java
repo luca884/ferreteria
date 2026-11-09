@@ -5,16 +5,20 @@ import com.ferreteria.auth.model.Usuario;
 import com.ferreteria.ferreteria.model.EstadoFerreteria;
 import com.ferreteria.tenant.TenantContext;
 import com.ferreteria.tenant.TenantScopedRepository;
+import jakarta.persistence.LockModeType;
+import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
 /**
  * Repositorio de tenant: los usuarios de una ferreteria se leen con los metodos *Scoped. El login busca por email
  * antes de conocer la ferreteria (findByEmailIgnoreCase) y el super admin no tiene ferreteria: esos accesos sin scope
- * viven solo en clases con {@code @UnscopedTenantAccess} (AuthService, SesionVigente, EmailUnico).
+ * viven solo en clases con {@code @UnscopedTenantAccess} (AuthService, SesionVigente, EmailUnico, SegundoFactorService).
  */
 public interface UsuarioRepository extends TenantScopedRepository<Usuario, Long> {
 
@@ -92,4 +96,30 @@ public interface UsuarioRepository extends TenantScopedRepository<Usuario, Long>
             """)
     Optional<Boolean> sesionVigente(@Param("usuarioId") Long usuarioId, @Param("rol") Rol rol,
                           @Param("ferreteriaId") Long ferreteriaId, @Param("activa") EstadoFerreteria activa);
+
+    // ---- código de la app del super admin (totp-super-admin): solo SegundoFactorService ----
+
+    /** El usuario con su fila tomada hasta el fin de la transacción: dos altas a la vez guardan un solo secreto (S2). */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select u from Usuario u where u.id = :id")
+    Optional<Usuario> bloquearParaAltaTotp(@Param("id") Long id);
+
+    /** Guarda el secreto cifrado del alta pendiente, si el usuario todavía no tiene uno. Devuelve las filas cambiadas. */
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query(value = "update usuario set totp_secreto = :secreto where id = :id and totp_secreto is null", nativeQuery = true)
+    int guardarSecretoTotp(@Param("id") Long id, @Param("secreto") byte[] secreto);
+
+    /**
+     * Usa el paso de un código bueno (S5c): una sola sentencia condicional, nunca leer y después escribir. Cambia la fila
+     * solo si el secreto sigue siendo el que se comparó y ningún código de ese paso o de uno posterior se usó antes; de dos
+     * pedidos simultáneos con el mismo código, el segundo espera el candado de la fila y ya no la cambia. Si el alta estaba
+     * pendiente, queda activada. Devuelve 1 si el código vale, 0 si no.
+     */
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query(value = """
+            update usuario set totp_ultimo_paso = :paso, totp_activado_en = coalesce(totp_activado_en, :ahora)
+            where id = :id and totp_secreto = :secreto and (totp_ultimo_paso is null or totp_ultimo_paso < :paso)
+            """, nativeQuery = true)
+    int usarPasoTotp(@Param("id") Long id, @Param("secreto") byte[] secreto, @Param("paso") long paso,
+                     @Param("ahora") LocalDateTime ahora);
 }

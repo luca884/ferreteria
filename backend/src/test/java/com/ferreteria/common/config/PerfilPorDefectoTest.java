@@ -65,4 +65,30 @@ class PerfilPorDefectoTest {
         assertThat(Base64.getDecoder().decode(deTest)).hasSize(32);
         assertThat(deTest).isNotEqualTo(defaultDeDev);
     }
+
+    @Test
+    @DisplayName("S7 (totp-super-admin): la clave del código de la app no tiene default fuera de dev: sin TOTP_CLAVE_MAESTRA "
+            + "no arranca")
+    void claveDelTotpSinDefault() {
+        assertThat(yaml("application.yml").getProperty("app.auth.totp.clave-maestra")).isEqualTo("${TOTP_CLAVE_MAESTRA}");
+        assertThat(yaml("application-prod.yml").getProperty("app.auth.totp.clave-maestra"))
+                .isEqualTo("${TOTP_CLAVE_MAESTRA}");
+    }
+
+    @Test
+    @DisplayName("S7 (totp-super-admin): dev arranca sin TOTP_CLAVE_MAESTRA con su clave, y test con una fija; las dos de 32 "
+            + "bytes y distintas de las de ARCA")
+    void devYTestTienenSuClaveDelTotp() {
+        String dev = yaml("application-dev.yml").getProperty("app.auth.totp.clave-maestra");
+        assertThat(dev).startsWith("${TOTP_CLAVE_MAESTRA:").endsWith("}");
+        String defaultDeDev = dev.substring("${TOTP_CLAVE_MAESTRA:".length(), dev.length() - 1);
+        String deTest = yaml("application-test.yml").getProperty("app.auth.totp.clave-maestra");
+
+        assertThat(Base64.getDecoder().decode(defaultDeDev)).hasSize(32);
+        assertThat(deTest).doesNotContain("${");
+        assertThat(Base64.getDecoder().decode(deTest)).hasSize(32);
+        assertThat(deTest).isNotEqualTo(defaultDeDev)
+                .isNotEqualTo(yaml("application-test.yml").getProperty("app.facturacion.clave-maestra"));
+        assertThat(yaml("application-dev.yml").getProperty("app.facturacion.clave-maestra")).doesNotContain(defaultDeDev);
+    }
 }

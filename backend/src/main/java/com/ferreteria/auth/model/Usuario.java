@@ -62,6 +62,18 @@ public class Usuario {
     @Column(name = "creado_en", nullable = false, updatable = false)
     private LocalDateTime creadoEn = HoraArgentina.ahora();
 
+    /**
+     * El secreto del código de la app del super admin (totp-super-admin), cifrado con {@code CifradorTotp}; null sin alta.
+     * Solo lectura para JPA: lo escriben las consultas condicionales de {@code UsuarioRepository} (el alta y el código
+     * usado), así guardar la entidad nunca pisa un paso usado por otro pedido.
+     */
+    @Column(name = "totp_secreto", length = 64, insertable = false, updatable = false)
+    private byte[] totpSecreto;
+
+    /** Cuándo se confirmó el código de la app con el primer código bueno; null mientras el alta está pendiente. */
+    @Column(name = "totp_activado_en", insertable = false, updatable = false)
+    private LocalDateTime totpActivadoEn;
+
     protected Usuario() {}
 
     public Usuario(Long ferreteriaId, String email, String passwordHash, String nombre, Rol rol) {
@@ -137,4 +149,6 @@ public class Usuario {
     public BigDecimal getTopeDescuento() { return topeDescuento; }
     public String getTelefono() { return telefono; }
     public LocalDateTime getCreadoEn() { return creadoEn; }
+    public byte[] getTotpSecreto() { return totpSecreto == null ? null : totpSecreto.clone(); }
+    public boolean isTotpActivado() { return totpActivadoEn != null; }
 }

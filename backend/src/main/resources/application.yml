@@ -83,6 +83,13 @@ app:
     max-fallos-por-email-e-ip: 5
     max-fallos-por-email: 50
     max-intentos-por-ip: 20
+  auth:
+    totp:
+      # Clave maestra del cifrado AES-GCM del secreto del código de la app del super admin (32 bytes en Base64, «openssl
+      # rand -base64 32»), distinta de la de ARCA. Obligatoria y sin default: sin la variable, o con otro largo, la app no
+      # arranca. El default de dev esta en application-dev.yml. Si cambia, el secreto guardado ya no se descifra y el super
+      # admin se resetea por base (README, Deploy).
+      clave-maestra: ${TOTP_CLAVE_MAESTRA}
   cotizacion:
     # Fuente principal y respaldo de la cotizacion. Los tests apuntan las dos a 127.0.0.1:9 (application-test.yml).
     dolarapi:

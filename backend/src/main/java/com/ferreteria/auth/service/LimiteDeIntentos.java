@@ -31,6 +31,8 @@ import org.springframework.stereotype.Component;
  *       entra): solo devuelve su propio intento.</li>
  *   <li><b>Por IP:</b> {@code maxIntentosPorIp} intentos por ventana fija de 1 minuto, correctos o no.</li>
  *   <li><b>Cambiar mi contraseña:</b> la contraseña actual, por usuario, con las reglas del email + IP y su propia racha.</li>
+ *   <li><b>Código de la app del super admin</b> (totp-super-admin): por usuario, con las reglas del email + IP y su propia
+ *       racha.</li>
  * </ul>
  * Las rachas se olvidan tras 1 hora sin fallos.
  *
@@ -87,6 +89,8 @@ public class LimiteDeIntentos {
     private final ConcurrentHashMap<String, Racha> pares = new ConcurrentHashMap<>();
     /** Las rachas de «Cambiar mi contraseña», por id de usuario. */
     private final ConcurrentHashMap<Long, Racha> cambios = new ConcurrentHashMap<>();
+    /** Las rachas del código de la app del super admin, por id de usuario. */
+    private final ConcurrentHashMap<Long, Racha> codigos = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, VentanaDeIp> ips = new ConcurrentHashMap<>();
     private final AtomicReference<Instant> ultimaPurga;
 
@@ -157,9 +161,29 @@ public class LimiteDeIntentos {
         cambios.remove(usuarioId);
     }
 
-    /** Cuántos emails, pares email + IP, usuarios e IPs hay en memoria (para el test de la purga). */
+    /**
+     * Reserva un intento del código de la app del super admin (totp-super-admin, S5d), antes de compararlo, con las mismas
+     * reglas que el email + IP del login y una racha propia por usuario. Tira {@link DemasiadosIntentosException} si está
+     * bloqueado. El log lleva solo el id del usuario, nunca el código.
+     */
+    public void reservarCodigoDeLaApp(long usuarioId) {
+        Instant ahora = reloj.instant();
+        purgarSiToca(ahora);
+        Duration bloqueo = reservarRacha(codigos, usuarioId, ahora, maxFallosPorEmailEIp);
+        if (bloqueo != null) {
+            log.warn("Código de la app: {} códigos incorrectos seguidos del usuario {}; se bloquea {} min",
+                    maxFallosPorEmailEIp, usuarioId, bloqueo.toMinutes());
+        }
+    }
+
+    /** El código de la app era bueno: la racha se borra. */
+    public void exitoCodigoDeLaApp(long usuarioId) {
+        codigos.remove(usuarioId);
+    }
+
+    /** Cuántos emails, pares email + IP, usuarios (cambio de contraseña y código de la app) e IPs hay en memoria. */
     int entradas() {
-        return emails.size() + pares.size() + cambios.size() + ips.size();
+        return emails.size() + pares.size() + cambios.size() + codigos.size() + ips.size();
     }
 
     private static String par(String email, String claveIp) {
@@ -252,6 +276,7 @@ public class LimiteDeIntentos {
         emails.entrySet().removeIf(e -> e.getValue().olvidada(ahora));
         pares.entrySet().removeIf(e -> e.getValue().olvidada(ahora));
         cambios.entrySet().removeIf(e -> e.getValue().olvidada(ahora));
+        codigos.entrySet().removeIf(e -> e.getValue().olvidada(ahora));
         ips.entrySet().removeIf(e -> e.getValue().vencida(ahora));
     }
 

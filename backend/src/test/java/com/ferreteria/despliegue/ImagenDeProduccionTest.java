@@ -3,6 +3,8 @@ package com.ferreteria.despliegue;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.ferreteria.facturacion.documento.LectorQr;
+import com.ferreteria.support.CodigoDeLaApp;
 import com.ferreteria.support.ListasDePrueba;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
@@ -11,6 +13,8 @@ import org.junit.jupiter.api.Order;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestMethodOrder;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.MediaType;
@@ -37,6 +41,7 @@ import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.LinkedHashMap;
@@ -102,6 +107,7 @@ class ImagenDeProduccionTest {
             .withStartupTimeout(Duration.ofMinutes(3)));
 
     private static RestClient http;
+    private static String tokenDelAdmin;
     private static String tokenDelDueno;
     private static long idDeLaFerreteria;
 
@@ -109,7 +115,7 @@ class ImagenDeProduccionTest {
     static void levantarComoEnProduccion() throws Exception {
         construirImagen();
         MYSQL.start();
-        API.withEnv(entorno(true));
+        API.withEnv(entorno(null));
         API.start();
         http = RestClient.builder()
             .baseUrl("http://" + API.getHost() + ":" + API.getMappedPort(8080))
@@ -119,10 +125,10 @@ class ImagenDeProduccionTest {
     }
 
     /**
-     * Las variables de README.md (Deploy), con un JWT_SECRET y una ARCA_CLAVE_MAESTRA (32 bytes en Base64) nuevos por
-     * corrida. Sin {@code conClaveMaestra}, todas menos ARCA_CLAVE_MAESTRA.
+     * Las variables de README.md (Deploy), con un JWT_SECRET, una ARCA_CLAVE_MAESTRA y una TOTP_CLAVE_MAESTRA (32 bytes en
+     * Base64) nuevos por corrida. Con {@code sinVariable}, todas menos esa.
      */
-    private static Map<String, String> entorno(boolean conClaveMaestra) {
+    private static Map<String, String> entorno(String sinVariable) {
         Map<String, String> entorno = new LinkedHashMap<>();
         entorno.put("SPRING_PROFILES_ACTIVE", "prod");
         entorno.put("DB_URL", "jdbc:mysql://mysql:3306/" + MYSQL.getDatabaseName()
@@ -131,12 +137,17 @@ class ImagenDeProduccionTest {
         entorno.put("DB_PASSWORD", MYSQL.getPassword());
         entorno.put("JWT_SECRET", UUID.randomUUID() + "-" + UUID.randomUUID());
         entorno.put("CORS_ORIGINS", "http://localhost");
-        if (conClaveMaestra) {
-            byte[] clave = new byte[32];
-            new SecureRandom().nextBytes(clave);
-            entorno.put("ARCA_CLAVE_MAESTRA", Base64.getEncoder().encodeToString(clave));
-        }
+        entorno.put("ARCA_CLAVE_MAESTRA", claveMaestraNueva());
+        entorno.put("TOTP_CLAVE_MAESTRA", claveMaestraNueva());
+        entorno.remove(sinVariable);
         return entorno;
+    }
+
+    /** 32 bytes al azar en Base64, como «openssl rand -base64 32». */
+    private static String claveMaestraNueva() {
+        byte[] clave = new byte[32];
+        new SecureRandom().nextBytes(clave);
+        return Base64.getEncoder().encodeToString(clave);
     }
 
     @AfterAll
@@ -196,12 +207,21 @@ class ImagenDeProduccionTest {
         assertThat(API.execInContainer("uname", "-m").getStdout().strip()).isEqualTo("x86_64");
     }
 
+    /**
+     * El super admin creado con el INSERT del README entra como la primera vez después del deploy (totp-super-admin, S1 y
+     * S2): email y contraseña, el alta con el QR (ZXing desde el jar) y el primer código de la app ({@link #admin()}).
+     * Después el login pide el código y el QR no vuelve.
+     */
     @Test
-    void elSuperAdminCreadoConUnInsertIniciaSesion() throws Exception {
-        JsonNode login = login("admin@imagen.test", CLAVE_ADMIN);
+    void elSuperAdminCreadoConUnInsertActivaElCodigoDeLaAppYEntra() throws Exception {
+        assertThat(admin()).isNotBlank();
 
-        assertThat(login.path("sesion").path("rol").asText()).isEqualTo("SUPER_ADMIN");
-        assertThat(login.path("token").asText()).isNotBlank();
+        JsonNode otraVez = login("admin@imagen.test", CLAVE_ADMIN);
+
+        assertThat(otraVez.path("segundoPaso").asText()).isEqualTo("CODIGO");
+        assertThat(otraVez.path("token").isNull()).isTrue();
+        ResponseEntity<String> alta = postJson("/api/auth/totp/alta", Map.of("tokenTotp", otraVez.path("tokenTotp").asText()));
+        assertThat(alta.getStatusCode().value()).as(alta.getBody()).isEqualTo(409);
     }
 
     @Test
@@ -260,7 +280,7 @@ class ImagenDeProduccionTest {
         assertThat(IETFUtils.valueToString(csr.getSubject().getRDNs(BCStyle.SERIALNUMBER)[0].getFirst().getValue()))
             .isEqualTo("CUIT 30712345671");
 
-        String admin = login("admin@imagen.test", CLAVE_ADMIN).path("token").asText();
+        String admin = admin();
         for (Map.Entry<String, Map<String, Boolean>> cambio : List.of(Map.entry("de-prueba", Map.of("dePrueba", true)),
                 Map.entry("simulador", Map.of("simulador", true)))) {
             ResponseEntity<String> panel = http.patch().uri("/api/admin/ferreterias/" + idDeLaFerreteria + "/" + cambio.getKey())
@@ -310,25 +330,27 @@ class ImagenDeProduccionTest {
     }
 
     /**
-     * Sin ARCA_CLAVE_MAESTRA la imagen no arranca (S6, C2): la misma imagen, con las mismas variables menos esa y contra la
-     * misma base, sale sola con error y el log nombra la variable. Corre con docker run: el contenedor no llega a estar
-     * listo, y la espera de Testcontainers no sirve para eso. La salida queda en target/ para leer un error.
+     * Sin ARCA_CLAVE_MAESTRA (S6, C2) o sin TOTP_CLAVE_MAESTRA (totp-super-admin, S7) la imagen no arranca: la misma
+     * imagen, con las mismas variables menos esa y contra la misma base, sale sola con error y el log nombra la variable.
+     * Corre con docker run: el contenedor no llega a estar listo, y la espera de Testcontainers no sirve para eso. La salida
+     * queda en target/ para leer un error.
      */
-    @Test
-    void sinLaClaveMaestraLaImagenNoArranca() throws Exception {
-        String nombre = "ferreteria-sin-clave-maestra-" + UUID.randomUUID();
+    @ParameterizedTest
+    @ValueSource(strings = {"ARCA_CLAVE_MAESTRA", "TOTP_CLAVE_MAESTRA"})
+    void sinUnaClaveMaestraLaImagenNoArranca(String variable) throws Exception {
+        String nombre = "ferreteria-sin-" + variable.toLowerCase().replace('_', '-') + "-" + UUID.randomUUID();
         List<String> comando = new ArrayList<>(List.of("docker", "run", "--name", nombre, "--platform", PLATAFORMA,
             "--network", RED.getId()));
-        entorno(false).forEach((variable, valor) -> comando.addAll(List.of("-e", variable + "=" + valor)));
+        entorno(variable).forEach((nombreVariable, valor) -> comando.addAll(List.of("-e", nombreVariable + "=" + valor)));
         comando.add(IMAGEN);
-        Path salida = Path.of("target", "imagen-sin-clave-maestra.log").toAbsolutePath();
+        Path salida = Path.of("target", "imagen-sin-" + variable.toLowerCase() + ".log").toAbsolutePath();
         Process corrida = new ProcessBuilder(comando).redirectErrorStream(true).redirectOutput(salida.toFile()).start();
         try {
             boolean termino = corrida.waitFor(4, TimeUnit.MINUTES);
 
-            assertThat(termino).as("sin ARCA_CLAVE_MAESTRA tiene que salir sola; salida en " + salida).isTrue();
+            assertThat(termino).as("sin " + variable + " tiene que salir sola; salida en " + salida).isTrue();
             assertThat(corrida.exitValue()).as("codigo de salida, salida en " + salida).isNotZero();
-            assertThat(Files.readString(salida)).contains("Could not resolve placeholder 'ARCA_CLAVE_MAESTRA'")
+            assertThat(Files.readString(salida)).contains("Could not resolve placeholder '" + variable + "'")
                 .doesNotContain("Started FerreteriaApplication");
         } finally {
             corrida.destroyForcibly();
@@ -401,9 +423,52 @@ class ImagenDeProduccionTest {
         return tokenDelDueno;
     }
 
+    /**
+     * La sesión del super admin. La primera vez hace lo del primer login después del deploy (README, Deploy): email y
+     * contraseña, el alta con el QR y el primer código de la app. Una sola vez por corrida: un código usado no vale de nuevo.
+     */
+    private static String admin() throws Exception {
+        if (tokenDelAdmin == null) {
+            tokenDelAdmin = activarElCodigoDeLaApp();
+        }
+        return tokenDelAdmin;
+    }
+
+    private static String activarElCodigoDeLaApp() throws Exception {
+        JsonNode primerPaso = login("admin@imagen.test", CLAVE_ADMIN);
+        assertThat(primerPaso.path("segundoPaso").asText()).isEqualTo("ALTA");
+        assertThat(primerPaso.path("token").isNull()).isTrue();
+        String tokenTotp = primerPaso.path("tokenTotp").asText();
+
+        ResponseEntity<String> alta = postJson("/api/auth/totp/alta", Map.of("tokenTotp", tokenTotp));
+        assertThat(alta.getStatusCode().value()).as(alta.getBody()).isEqualTo(200);
+        JsonNode qr = JSON.readTree(alta.getBody());
+        String clave = qr.path("clave").asText();
+        String uri = qr.path("uri").asText();
+        assertThat(uri).startsWith("otpauth://totp/Ferreter%C3%ADa:admin@imagen.test?secret=" + clave + "&");
+        List<String> filas = new ArrayList<>();
+        qr.path("qr").forEach(fila -> filas.add(fila.asText()));
+        assertThat(LectorQr.leer(filas).texto()).isEqualTo(uri);
+
+        ResponseEntity<String> verificado = postJson("/api/auth/totp/verificar",
+            Map.of("tokenTotp", tokenTotp, "codigo", CodigoDeLaApp.para(clave, Instant.now())));
+        assertThat(verificado.getStatusCode().value()).as(verificado.getBody()).isEqualTo(200);
+        JsonNode entrada = JSON.readTree(verificado.getBody());
+        assertThat(entrada.path("sesion").path("rol").asText()).isEqualTo("SUPER_ADMIN");
+        assertThat(API.getLogs()).doesNotContain(clave).doesNotContain(uri);
+        return entrada.path("token").asText();
+    }
+
+    private static ResponseEntity<String> postJson(String ruta, Map<String, String> cuerpo) {
+        return http.post().uri(ruta)
+            .contentType(MediaType.APPLICATION_JSON)
+            .body(cuerpo)
+            .retrieve().toEntity(String.class);
+    }
+
     /** El alta que hace el SUPER_ADMIN desde el panel: la ferreteria con su primer Dueño. */
     private static String duenoDeUnaFerreteriaNueva() throws Exception {
-        String admin = login("admin@imagen.test", CLAVE_ADMIN).path("token").asText();
+        String admin = admin();
         ResponseEntity<String> alta = http.post().uri("/api/admin/ferreterias")
             .header("Authorization", "Bearer " + admin)
             .contentType(MediaType.APPLICATION_JSON)

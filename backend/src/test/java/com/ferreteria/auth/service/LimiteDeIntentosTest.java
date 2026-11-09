@@ -394,6 +394,63 @@ class LimiteDeIntentosTest {
     }
 
     @Nested
+    @DisplayName("el código de la app del super admin (totp-super-admin, S5d)")
+    class CodigoDeLaApp {
+
+        private void fallarCodigo(int veces, long usuario) {
+            for (int i = 0; i < veces; i++) {
+                limite.reservarCodigoDeLaApp(usuario);
+            }
+        }
+
+        @Test
+        @DisplayName("S5d: 5 códigos mal bloquean al usuario con la escalera del login: 1, 5, 15 y 30 minutos, con el mismo aviso")
+        void escaleraDelLogin() {
+            fallarCodigo(5, 7L);
+            assertThat(segundosDe(() -> limite.reservarCodigoDeLaApp(7L))).isEqualTo(60);
+            assertThatThrownBy(() -> limite.reservarCodigoDeLaApp(7L))
+                    .hasMessage("Demasiados intentos. Probá de nuevo en 1 minuto.");
+            reloj.avanzar(Duration.ofMinutes(1));
+            fallarCodigo(5, 7L);
+            assertThat(segundosDe(() -> limite.reservarCodigoDeLaApp(7L))).isEqualTo(300);
+            reloj.avanzar(Duration.ofMinutes(5));
+            fallarCodigo(5, 7L);
+            assertThat(segundosDe(() -> limite.reservarCodigoDeLaApp(7L))).isEqualTo(900);
+            reloj.avanzar(Duration.ofMinutes(15));
+            fallarCodigo(5, 7L);
+            assertThat(segundosDe(() -> limite.reservarCodigoDeLaApp(7L))).isEqualTo(1800);
+            reloj.avanzar(Duration.ofMinutes(30));
+            fallarCodigo(5, 7L);
+            assertThat(segundosDe(() -> limite.reservarCodigoDeLaApp(7L))).isEqualTo(1800);
+        }
+
+        @Test
+        @DisplayName("S5d: el código bien reinicia la racha")
+        void exitoResetea() {
+            fallarCodigo(4, 7L);
+            limite.exitoCodigoDeLaApp(7L);
+
+            fallarCodigo(4, 7L);
+            assertThatCode(() -> limite.reservarCodigoDeLaApp(7L)).doesNotThrowAnyException();
+        }
+
+        @Test
+        @DisplayName("S5d: la racha es del usuario y no se mezcla con la del login ni con la de cambiar la contraseña; vencida, se purga")
+        void rachaPropia() {
+            fallarCodigo(5, 7L);
+
+            assertThatCode(() -> limite.reservarCodigoDeLaApp(8L)).doesNotThrowAnyException();
+            assertThatCode(() -> limite.reservarCambioDeContrasena(7L)).doesNotThrowAnyException();
+            assertThatCode(() -> limite.reservar("7", IP)).doesNotThrowAnyException();
+            assertThat(limite.entradas()).as("los usuarios 7 y 8 del código, el 7 del cambio, el email, su par y la IP")
+                    .isEqualTo(6);
+            reloj.avanzar(Duration.ofHours(1).plusMinutes(1));
+            limite.reservar("nuevo@x.test", OTRA_IP);
+            assertThat(limite.entradas()).as("el email, su par con la IP y la IP del intento nuevo").isEqualTo(3);
+        }
+    }
+
+    @Nested
     @DisplayName("por IP")
     class PorIp {
 

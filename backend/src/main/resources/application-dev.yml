@@ -13,3 +13,7 @@ app:
   facturacion:
     # Solo para desarrollo local ("solo-dev-clave-maestra-arca-0001" en Base64): en prod ARCA_CLAVE_MAESTRA es obligatoria.
     clave-maestra: ${ARCA_CLAVE_MAESTRA:c29sby1kZXYtY2xhdmUtbWFlc3RyYS1hcmNhLTAwMDE=}
+  auth:
+    totp:
+      # Solo para desarrollo local ("solo-dev-clave-maestra-totp-0001" en Base64): en prod TOTP_CLAVE_MAESTRA es obligatoria.
+      clave-maestra: ${TOTP_CLAVE_MAESTRA:c29sby1kZXYtY2xhdmUtbWFlc3RyYS10b3RwLTAwMDE=}

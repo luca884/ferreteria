@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonMappingException;
 import com.fasterxml.jackson.databind.exc.InvalidFormatException;
 import com.ferreteria.auth.service.CredencialesInvalidasException;
 import com.ferreteria.auth.service.DemasiadosIntentosException;
+import com.ferreteria.auth.service.SegundoPasoRechazadoException;
 import com.ferreteria.common.ApiError;
 import com.ferreteria.tenant.MissingTenantException;
 import org.slf4j.Logger;
@@ -79,6 +80,15 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(CredencialesInvalidasException.class)
     public ResponseEntity<ApiError> credenciales(CredencialesInvalidasException ex) {
         return build(HttpStatus.UNAUTHORIZED, ex.getMessage());
+    }
+
+    /**
+     * El segundo paso del login del super admin rechazado (totp-super-admin): 401 con {@code errors.motivo} (tokenTotp vencido
+     * o código incorrecto) o 400 si el código no son 6 números.
+     */
+    @ExceptionHandler(SegundoPasoRechazadoException.class)
+    public ResponseEntity<ApiError> segundoPasoRechazado(SegundoPasoRechazadoException ex) {
+        return ResponseEntity.status(ex.status()).body(ApiError.of(ex.status(), ex.getMessage(), ex.errors()));
     }
 
     /** Login pasado de su límite de intentos: 429 con los segundos que faltan en Retry-After. */

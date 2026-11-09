@@ -259,17 +259,21 @@ class ModulosArchTest {
     }
 
     /**
-     * El QR de ARCA lo arma {@code facturacion} (cu-07-factura-mostrador S7): nadie mas usa ZXing, y {@code facturacion} si
-     * (la regla no queda vacia). Quien imprime solo dibuja la matriz que le llega por el puerto.
+     * El QR de ARCA lo arma {@code facturacion} (cu-07-factura-mostrador S7) y el del alta del código de la app del super
+     * admin, {@code auth} (totp-super-admin, S2): nadie mas usa ZXing, y los dos si (la regla no queda vacia). Quien dibuja
+     * solo recibe la matriz.
      */
     @Test
-    void soloFacturacionArmaElQrConZxing() {
-        noClasses().that().resideOutsideOfPackage("com.ferreteria.facturacion..")
+    void soloFacturacionYAuthArmanElQrConZxing() {
+        noClasses().that().resideOutsideOfPackages("com.ferreteria.facturacion..", "com.ferreteria.auth..")
                 .should().dependOnClassesThat(resideInAPackage("com.google.zxing.."))
                 .check(clases);
-        assertThat(clases.stream().filter(c -> c.getPackageName().startsWith("com.ferreteria.facturacion"))
-                .flatMap(c -> c.getDirectDependenciesFromSelf().stream()))
-                .anyMatch(d -> d.getTargetClass().getPackageName().startsWith("com.google.zxing"));
+        for (String modulo : List.of("com.ferreteria.facturacion", "com.ferreteria.auth")) {
+            assertThat(clases.stream().filter(c -> c.getPackageName().startsWith(modulo))
+                    .flatMap(c -> c.getDirectDependenciesFromSelf().stream()))
+                    .as(modulo + " usa ZXing")
+                    .anyMatch(d -> d.getTargetClass().getPackageName().startsWith("com.google.zxing"));
+        }
     }
 
     /**

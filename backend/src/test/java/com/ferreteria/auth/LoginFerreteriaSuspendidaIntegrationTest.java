@@ -1,6 +1,7 @@
 package com.ferreteria.auth;
 
 import static org.hamcrest.Matchers.is;
+import static org.hamcrest.Matchers.nullValue;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -68,8 +69,11 @@ class LoginFerreteriaSuspendidaIntegrationTest extends UsuariosTestBase {
     }
 
     @Test
-    @DisplayName("el super admin, sin ferretería, entra")
+    @DisplayName("el super admin, sin ferretería, pasa la contraseña y le piden el código de la app (totp-super-admin, S1)")
     void superAdmin() throws Exception {
-        intentarLogin("admin@demo.local", "demo1234").andExpect(status().isOk());
+        intentarLogin("admin@demo.local", "demo1234").andExpect(status().isOk())
+                .andExpect(jsonPath("$.token").value(nullValue()))
+                .andExpect(jsonPath("$.segundoPaso").isString())
+                .andExpect(jsonPath("$.tokenTotp").isString());
     }
 }
