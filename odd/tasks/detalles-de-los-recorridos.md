@@ -63,3 +63,11 @@ Restricciones: sin migraciones. Mensajes y textos en español rioplatense.
     - la vista previa de Nueva compra con recargos (10 columnas) se desborda a 1280 px, con un artículo por unidad, así que no es por el sufijo;
     - Actualizar precios no muestra «/ kg».
   - **Base local.** No cambió nada; no se aplicó ni se registró nada.
+- L10 (2026-11-08) `odd-verifier` (Opus) sobre `9daf1589` contra `33b2f7f6`: **pass, sin blockers**.
+  - **S1 a S3a.** Pasan. Los tests nuevos fallan en la baseline y pasan en HEAD.
+  - **Ítem 3, Actualizar precios.** Comparó la baseline con HEAD: las vistas previas de los 6 modos, con y sin inactivos, el 409 por huella vieja y dos aplicaciones. Dan lo mismo en las respuestas y en la base (`articulo`, `historial_precio`, `movimiento_stock`), y las huellas son iguales.
+  - **Vista previa de la importación.** Solo suma `unidad`. El registro de la compra no devuelve contadores.
+  - **Advertencias.** Son las mismas de S2a y L6: una compra sin recargos marca «baja» aunque las columnas de costo real no se muestren, y la variación fuerte compara el costo de factura. No probó un cambio con LITRO en el front.
+  - **Sondas que quedan como regresión:**
+    - `HuellaMasivaTest.laUnidadNoCambiaLaHuella`, 19/19;
+    - `unidad` en `cambiosDeMoneda` (KILO) y `correcciones` (METRO), en `ImportacionIntegrationTest#laVistaPreviaTraeLasListasNuevasConHojaYLosContadoresNuevos`, 1/1.

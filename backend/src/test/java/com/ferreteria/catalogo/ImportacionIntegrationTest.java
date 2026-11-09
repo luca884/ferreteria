@@ -1495,8 +1495,10 @@ class ImportacionIntegrationTest extends CotizacionTestBase {
         sembrarAyB();
         long proveedor = crearProveedor(dueA, unico("P"));
         String s = unico("");
-        articuloDe(dueA, proveedor, "MON" + s, "1000");
-        articuloDe(dueA, proveedor, "COR" + s, "10000");
+        long moneda = articuloDe(dueA, proveedor, "MON" + s, "1000");
+        long correccion = articuloDe(dueA, proveedor, "COR" + s, "10000");
+        jdbc.update("update articulo set unidad = 'KILO' where id = ?", moneda);
+        jdbc.update("update articulo set unidad = 'METRO' where id = ?", correccion);
         articuloDe(dueA, proveedor, "IGU" + s, "100");
         MockMultipartFile lista = archivo("lista.xlsx", ListasDePrueba.xlsx(List.of(
                 filaExtra("Codigo", "Descripcion", "Costo", "Moneda", "IVA"),
@@ -1518,10 +1520,12 @@ class ImportacionIntegrationTest extends CotizacionTestBase {
         assertThat(previa.get("cambiosDeMoneda").get(0).get("monedaAnterior").asText()).isEqualTo("ARS");
         assertThat(previa.get("cambiosDeMoneda").get(0).get("monedaNueva").asText()).isEqualTo("USD");
         assertThat(previa.get("cambiosDeMoneda").get(0).get("precioNuevo").decimalValue()).isEqualByComparingTo("15730");
+        assertThat(previa.get("cambiosDeMoneda").get(0).get("unidad").asText()).isEqualTo("KILO");
         assertThat(previa.get("correcciones")).hasSize(1);
         assertThat(previa.get("correcciones").get(0).get("alicuotaAnterior").asText()).isEqualTo("IVA_21");
         assertThat(previa.get("correcciones").get(0).get("alicuotaNueva").asText()).isEqualTo("IVA_10_5");
         assertThat(previa.get("correcciones").get(0).get("precioNuevo").decimalValue()).isEqualByComparingTo("14370");
+        assertThat(previa.get("correcciones").get(0).get("unidad").asText()).isEqualTo("METRO");
         assertThat(previa.get("sinCambio")).hasSize(1);
         assertThat(previa.get("sinCambio").get(0).get("fila").asInt()).isEqualTo(4);
         assertThat(previa.get("sinCambio").get(0).get("codigo").asText()).isEqualTo("IGU" + s);

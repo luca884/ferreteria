@@ -52,6 +52,19 @@ class HuellaMasivaTest {
     }
 
     @Test
+    @DisplayName("la unidad de venta no entra en la huella: un deploy no invalida las vistas previas abiertas (#36)")
+    void laUnidadNoCambiaLaHuella() {
+        ArticuloVigente porUnidad = a1();
+        ArticuloVigente porKilo = new ArticuloVigente(porUnidad.id(), porUnidad.codigoInterno(),
+            porUnidad.codigoProveedor(), porUnidad.descripcion(), porUnidad.costo(), porUnidad.precioFinal(),
+            porUnidad.margenPorcentaje(), porUnidad.rubroId(), porUnidad.alicuotaIva(), porUnidad.activo(),
+            porUnidad.moneda(), porUnidad.ajustes(), porUnidad.precioManual(), porUnidad.ajustesPrecio(),
+            porUnidad.recargosCosto(), Unidad.KILO);
+
+        assertThat(huellaDe(porKilo, "110.00", null, "180.00")).isEqualTo(huellaDe(porUnidad, "110.00", null, "180.00"));
+    }
+
+    @Test
     @DisplayName("el formato v2 es SHA-256 de las lineas op, filtro (con importacionId) y a (una por articulo)")
     void formatoV2() throws Exception {
         String texto = "v2\n"
