@@ -1,3 +1,4 @@
+import { UnidadDeMedida } from '../../core/formato/unidad';
 import { Moneda } from '../articulos/articulo.models';
 
 /**
@@ -89,6 +90,8 @@ export interface CambioMasivo {
    * 1, G17); false en los modos de precio final.
    */
   precioManual?: boolean;
+  /** La unidad de venta, para que los costos y los precios digan «/ kg» (#36). Por unidad si el servidor no la manda. */
+  unidad?: UnidadDeMedida;
 }
 
 /** Un artículo del alcance que no se puede actualizar. */

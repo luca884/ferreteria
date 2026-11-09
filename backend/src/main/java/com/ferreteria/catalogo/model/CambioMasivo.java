@@ -23,6 +23,7 @@ import java.math.BigDecimal;
  * @param precioManual  true si el articulo tiene precio manual y la operacion no es de precio final: el costo o el
  *                      margen cambian y el precio queda (CU-14 punto 1). false en los modos de precio final, donde
  *                      todos quedan con precio manual al precio nuevo
+ * @param unidad      la unidad de venta del articulo, para que la vista previa diga «/ kg» (#36); UNIDAD si no se sabe
  */
 public record CambioMasivo(
         Long articuloId,
@@ -44,5 +45,22 @@ public record CambioMasivo(
         BigDecimal costoRealAnterior,
         BigDecimal costoRealNuevo,
         BigDecimal precioSinAjustes,
-        boolean precioManual) {
+        boolean precioManual,
+        Unidad unidad) {
+
+    public CambioMasivo {
+        unidad = unidad == null ? Unidad.UNIDAD : unidad;
+    }
+
+    /** El cambio de un articulo por unidad (#36). */
+    public CambioMasivo(Long articuloId, String codigo, String descripcion, BigDecimal costoAnterior,
+                        BigDecimal costoNuevo, BigDecimal margenAnterior, BigDecimal margenNuevo,
+                        BigDecimal precioAnterior, BigDecimal precioNuevo, boolean margenHeredado, String advertencia,
+                        Moneda moneda, BigDecimal ivaPorcentaje, Long rubroAnteriorId, Long rubroNuevoId,
+                        BigDecimal recargosPorcentaje, BigDecimal costoRealAnterior, BigDecimal costoRealNuevo,
+                        BigDecimal precioSinAjustes, boolean precioManual) {
+        this(articuloId, codigo, descripcion, costoAnterior, costoNuevo, margenAnterior, margenNuevo, precioAnterior,
+            precioNuevo, margenHeredado, advertencia, moneda, ivaPorcentaje, rubroAnteriorId, rubroNuevoId,
+            recargosPorcentaje, costoRealAnterior, costoRealNuevo, precioSinAjustes, precioManual, Unidad.UNIDAD);
+    }
 }

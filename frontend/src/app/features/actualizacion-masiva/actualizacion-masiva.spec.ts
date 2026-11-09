@@ -806,6 +806,69 @@ describe('ActualizacionMasiva', () => {
       });
     });
 
+    describe('unidad de venta (#36)', () => {
+      it('el costo y el costo real dicen «/ kg» o «/ m» en cada importe, y nada por unidad', async () => {
+        await conVistaPrevia({
+          cambios: [
+            cambio({
+              unidad: 'KILO',
+              recargosPorcentaje: 10,
+              costoRealAnterior: 110,
+              costoRealNuevo: 121,
+            }),
+            cambio({
+              articuloId: 2,
+              codigo: 'A2',
+              unidad: 'METRO',
+              costoAnterior: 50,
+              costoNuevo: 50,
+              margenNuevo: 40,
+              recargosPorcentaje: 10,
+              costoRealAnterior: 55,
+              costoRealNuevo: 55,
+            }),
+            cambio({
+              articuloId: 3,
+              codigo: 'A3',
+              unidad: 'UNIDAD',
+              recargosPorcentaje: 10,
+              costoRealAnterior: 110,
+              costoRealNuevo: 121,
+            }),
+          ],
+        });
+
+        const [porKilo, porMetro, porUnidad] = filasDeCambios();
+        expect(celdas(porKilo)[2]).toBe(
+          '$ 100,00 / kg → $ 110,00 / kg Costo real: $ 110,00 / kg → $ 121,00 / kg (recargos 10 %)',
+        );
+        expect(celdas(porMetro)[2]).toBe('$ 50,00 / m Costo real: $ 55,00 / m (recargos 10 %)');
+        expect(celdas(porUnidad)[2]).toBe('$ 100,00 → $ 110,00 Costo real: $ 110,00 → $ 121,00 (recargos 10 %)');
+      });
+
+      it('el precio y el precio sin ajustes dicen «/ kg» o «/ m» en cada importe, y nada por unidad', async () => {
+        await conVistaPrevia({
+          cambios: [
+            cambio({ unidad: 'KILO', precioSinAjustes: 170 }),
+            cambio({
+              articuloId: 2,
+              codigo: 'A2',
+              unidad: 'METRO',
+              precioAnterior: 200,
+              precioNuevo: 200,
+              precioSinAjustes: 190,
+            }),
+            cambio({ articuloId: 3, codigo: 'A3', unidad: 'UNIDAD', precioSinAjustes: 170 }),
+          ],
+        });
+
+        const [porKilo, porMetro, porUnidad] = filasDeCambios();
+        expect(celdas(porKilo)[5]).toBe('$ 160,00 / kg → $ 180,00 / kg Sin ajustes: $ 170,00 / kg');
+        expect(celdas(porMetro)[5]).toBe('$ 200,00 / m Sin ajustes: $ 190,00 / m');
+        expect(celdas(porUnidad)[5]).toBe('$ 160,00 → $ 180,00 Sin ajustes: $ 170,00');
+      });
+    });
+
     it('resalta la advertencia de la fila que la trae y solo de esa (MARGEN 300)', async () => {
       const advertencia = 'El precio sube un 206,25 % (de 160,00 a 490,00). Revisá que sea correcto.';
       await conVistaPrevia({
