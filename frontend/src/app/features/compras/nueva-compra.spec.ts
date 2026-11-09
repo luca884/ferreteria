@@ -907,6 +907,26 @@ describe('NuevaCompra', () => {
 
       expect(el().querySelector('[role=alert]')!.textContent).toContain('El PDF no tiene texto para leer');
     });
+
+    it('con una lista leída como factura avisa, no carga renglones y deja cargar a mano o subir otro PDF (bugs-relevamiento-celular, S2 y S12)', async () => {
+      await crear();
+      api.leerFactura.mockReturnValueOnce(
+        throwError(() => new HttpErrorResponse({ status: 400, error: { message: 'La factura trae más de 500 renglones: no parece una factura. Cargá la compra a mano.' } })),
+      );
+      await subirPdf('LISTA 336.pdf');
+
+      expect(el().querySelector('[role=alert]')!.textContent).toContain('no parece una factura');
+      expect(el().querySelectorAll('table.renglones tbody tr')).toHaveLength(0);
+      expect(el().textContent).toContain('Todavía no agregaste artículos.');
+      expect(campo<HTMLSelectElement>('select[name=proveedor]').disabled).toBe(false);
+      expect(entradaPdf().disabled).toBe(false);
+
+      await subirPdf('factura.pdf');
+
+      expect(api.leerFactura).toHaveBeenCalledTimes(2);
+      expect(el().querySelector('[role=alert]')).toBeNull();
+      expect(el().querySelector('table.renglones')!.textContent).toContain('Tornillo 1/4');
+    });
   });
 
   describe('recargos del costo', () => {

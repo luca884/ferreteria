@@ -279,6 +279,7 @@ Son 12 casos de uso (CU-01 a CU-12), agrupados en cinco módulos: Configuración
    - **Control.** La suma de los netos más los recargos se compara con el subtotal impreso. Si coincide: «La lectura cuadra con el total de la factura…»; si no: «No pudimos comprobar el total de la factura: revisá los renglones antes de confirmar.».
    - **PDF escaneado.** Da «El PDF no tiene texto para leer (parece escaneado). Cargá la compra a mano.».
    - **Sin renglones.** Da «No se encontraron renglones en la factura. Cargá la compra a mano.».
+   - **Demasiados renglones.** La lectura admite hasta 500 renglones, el mismo tope que la compra. Con más (por ejemplo, una lista de precios subida como factura) da «La factura trae más de 500 renglones: no parece una factura. Cargá la compra a mano.» y no carga nada: el formulario queda para cargar a mano o subir otro PDF.
    - **El PDF no se guarda.** Guardar el original queda como un «tal vez» para el final.
 8. **Recargos del costo.**
    - **Qué son.** Un cargo de la factura sobre el total, como «EMBALAJE Y CARGA 4.44%», se lee como recargo si su importe es ese % de la suma de los netos. La compra lo lleva en `compra.recargos` y lo deja en cada artículo, pisando sus recargos como pisa el costo; una compra sin recargos los borra.

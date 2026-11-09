@@ -94,7 +94,7 @@ Orden (L6): T2, T5, T7, T8 → T0 → T1, T3, T4, T6 → T9.
 
 - [ ] T0 · rebase después del responsive · ruta: inline · Aceptación: antes de T1, T3, T4 y T6, `feat/responsive` está mergeada en `main` y esta rama queda rebaseada, con los conflictos resueltos. Los esperables están en la línea 14 de `configuracion-ventas.html` y `datos-fiscales.html` (T5), donde el responsive pone su directiva de avisos. Después se repiten los tests puntuales de T2, T5, T7 y T8 · Evidencia: — · Risk: none
 - [ ] T1 · S1, S10 (texto de Nueva compra), S12 · ruta: inline · Aceptación: S1, el texto de S10 en Nueva compra y lo de S1 en S12 · Evidencia: — · Risk: none
-- [ ] T2 · S2, S12 · ruta: inline · Aceptación: S2 y lo de S2 en S12 · Evidencia: — · Risk: none (cambio pedido, endpoint que solo consume el front)
+- [x] T2 · S2, S12 · ruta: inline · Aceptación: S2 y lo de S2 en S12 · Evidencia: `LecturaDeFacturaTest` RED (501 renglones no lanzaba) → GREEN 2/2; `FacturaPdfIntegrationTest` 8/8 y `CompraFacturaPdfRegresionIntegrationTest` 6/6 verdes; `nueva-compra.spec.ts` 58/58 con el caso nuevo de S12 (verde de entrada: el front ya dejaba el formulario usable); `docs/spec.md` actualizado; ego-browser (L7) · commit: ver L7 · Risk: none (cambio pedido, endpoint que solo consume el front)
 - [ ] T3 · S3, S6 · ruta: inline · Aceptación: S3 y S6 (los dos en `reportes/`) · Evidencia: — · Risk: none
 - [ ] T4 · S4, S12 · ruta: inline · Aceptación: S4 y lo de S4 en S12 · Evidencia: — · Risk: item 3 (5 endpoints `GET` de listados pasan de 200 vacío a 400 con rango invertido) → `odd-verifier` al cierre
 - [ ] T5 · S5, S8, S12 · ruta: inline · Aceptación: S5, S8 (incluido el mensaje del super admin) y lo de S5 y S8 en S12 · Evidencia: — · Risk: none
@@ -149,3 +149,9 @@ Orden (L6): T2, T5, T7, T8 → T0 → T1, T3, T4, T6 → T9.
   > dale
 
   Próximo paso: una terminal con Opus en `../ferreteria-bugs-celular` arranca por T2.
+- L7 (2026-11-09) T2 hecha. El tope va en `LecturaDeFactura` (compras), después del chequeo de 0 renglones y antes de buscar proveedor y artículos. El front no cambió: con el 400 ya dejaba el formulario vacío y usable; el caso nuevo de `nueva-compra.spec.ts` lo fija. Ego-browser con `Lista/LISTA 336.pdf` en Nueva compra (Perla):
+  - Antes (4200, `feat/responsive`, igual a `main` en estos archivos): sin aviso y 1.157 renglones «Sin artículo».
+  - Después (8081/4201): «La factura trae más de 500 renglones: no parece una factura. Cargá la compra a mano.», 0 renglones, «Todavía no agregaste artículos.», el proveedor se elige y el selector de PDF sigue habilitado. Reintento con `Facturas/pdf (17).pdf`: se lee, el aviso desaparece y la lectura cuadra.
+  - Observación, fuera de alcance: los errores de lectura salen en la alerta de abajo, lejos del selector de PDF (igual que «parece escaneado»). En el celular puede quedar fuera de la vista; se le comenta a Luca.
+
+  `npm ci` en `frontend/` ya corrido en este worktree. Próximo paso: T5.
