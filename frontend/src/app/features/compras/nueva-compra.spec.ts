@@ -888,6 +888,62 @@ describe('NuevaCompra', () => {
       expect(el().textContent).toContain('No encontramos un proveedor con el CUIT 30657162163, 20111111112. Elegilo de la lista.');
     });
 
+    describe('el aviso del proveedor no encontrado (bugs-relevamiento-celular, S1 y S12)', () => {
+      const select = () => campo<HTMLSelectElement>('select[name=proveedor]');
+      /** El aviso que describe al select y está pegado a la fila del proveedor (justo antes del encabezado). */
+      const avisoJuntoAlProveedor = () => {
+        const id = select().getAttribute('aria-describedby');
+        const aviso = id ? el().querySelector(`#${id}`) : null;
+        if (!aviso) return undefined;
+        expect(aviso.nextElementSibling).toBe(select().closest('.encabezado'));
+        return aviso.textContent?.trim();
+      };
+
+      it('sin ningún CUIT en la factura, no muestra un CUIT vacío', async () => {
+        await crear();
+        api.leerFactura.mockReturnValue(of({ ...borrador, proveedorId: null, proveedorNombre: null, cuits: [] }));
+        await subirPdf();
+
+        expect(avisoJuntoAlProveedor()).toBe('No encontramos el CUIT del proveedor en la factura. Elegilo de la lista.');
+        expect(el().textContent).not.toContain('con el CUIT .');
+      });
+
+      it('va junto al select de proveedor, que queda enfocado, y se va al elegirlo', async () => {
+        await crear();
+        api.leerFactura.mockReturnValue(of({ ...borrador, proveedorId: null, proveedorNombre: null, cuits: ['30657162163'] }));
+        await subirPdf();
+
+        expect(avisoJuntoAlProveedor()).toBe('No encontramos un proveedor con el CUIT 30657162163. Elegilo de la lista.');
+        expect(select().getAttribute('aria-describedby')).toBe('proveedor-aviso');
+        expect(document.activeElement).toBe(select());
+
+        select().value = select().options[1].value;
+        select().dispatchEvent(new Event('change'));
+        fixture.detectChanges();
+        await fixture.whenStable();
+
+        expect(avisoJuntoAlProveedor()).toBeUndefined();
+        expect(select().hasAttribute('aria-describedby')).toBe(false);
+      });
+
+      it('con el proveedor encontrado no avisa ni mueve el foco', async () => {
+        await crear();
+        api.leerFactura.mockReturnValue(of(borrador));
+        await subirPdf();
+
+        expect(avisoJuntoAlProveedor()).toBeUndefined();
+        expect(document.activeElement).not.toBe(select());
+      });
+    });
+
+    it('la ayuda del selector dice quién completa el comprobante (bugs-relevamiento-celular, S10)', async () => {
+      await crear();
+
+      expect(el().querySelector('.factura-pdf')!.textContent).toContain(
+        'Completamos el comprobante y los renglones con lo que leemos de la factura. También podés arrastrarla hasta acá.',
+      );
+    });
+
     it('marca el renglón con cantidad no entera', async () => {
       await crear();
       api.leerFactura.mockReturnValue(

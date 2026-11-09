@@ -25,7 +25,7 @@
       rotulo="Leer factura en PDF"
       acepta=".pdf,application/pdf"
       entradaId="factura-pdf"
-      ayuda="Completa el comprobante y los renglones con lo que lee de la factura. También podés arrastrarla hasta acá."
+      ayuda="Completamos el comprobante y los renglones con lo que leemos de la factura. También podés arrastrarla hasta acá."
       [archivo]="archivoFactura()"
       [deshabilitado]="leyendo()"
       (elegido)="leerFactura($event)"
@@ -34,11 +34,6 @@
       <p class="ayuda" role="status">Leyendo la factura…</p>
     }
     @if (lectura(); as l) {
-      @if (l.cuitsSinProveedor && proveedorId() === '') {
-        <p class="ayuda" role="status">
-          No encontramos un proveedor con el CUIT {{ l.cuitsSinProveedor.join(', ') }}. Elegilo de la lista.
-        </p>
-      }
       <p class="control-factura" [class.exito]="l.control === 'CUADRA'" [class.advertencia-lectura]="l.control !== 'CUADRA'" role="status">
         @if (l.control === 'CUADRA') {
           La lectura cuadra con el total de la factura ({{ l.sumaNetos | monto }} + recargos).
@@ -48,10 +43,19 @@
       </p>
     }
 
+    @if (avisoProveedor(); as aviso) {
+      <p id="proveedor-aviso" class="campo-aviso aviso-proveedor" role="status">{{ aviso }}</p>
+    }
     <div class="encabezado">
       <label>
         Proveedor
-        <select name="proveedor" [value]="proveedorId()" (change)="cambiar(proveedorId, $any($event.target).value)">
+        <select
+          #proveedorSelect
+          name="proveedor"
+          [value]="proveedorId()"
+          [attr.aria-describedby]="avisoProveedor() ? 'proveedor-aviso' : null"
+          (change)="cambiar(proveedorId, $any($event.target).value)"
+        >
           <option value="">Elegí…</option>
           @for (p of proveedores(); track p.id) {
             <option [value]="p.id">{{ p.nombre }}</option>

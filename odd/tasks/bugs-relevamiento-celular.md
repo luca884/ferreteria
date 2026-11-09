@@ -2,7 +2,7 @@
 
 Objetivo: arreglar los bugs funcionales (no de responsive) que encontró el relevamiento en celular del 2026-11-09 · Por qué: Luca pidió tratarlos en una rama aparte del responsive (L1).
 Rama: `fix/bugs-relevamiento-celular` desde `c65fccf5` (worktree `../ferreteria-bugs-celular`) · Entrega: single-pr · Runner: backend `./mvnw test -Dtest=<Clase>` / suite `./mvnw test`; frontend `npx ng test --watch=false --include=<spec>` / suite `npx ng test --watch=false` / `npx ng build` · Mirror Engram: `odd/bugs-relevamiento-celular/tasks` (ok)
-Pronóstico: ~650 líneas · Heurística por tarea: ~400 (no es límite) · Modelo: una terminal con Opus en el worktree. T2, T5, T7 y T8 arrancan ya; T1, T3, T4 y T6, después del merge de `feat/responsive` (L6)
+Pronóstico: ~650 líneas · Heurística por tarea: ~400 (no es límite) · Modelo: una terminal con Opus en el worktree. Esta rama va antes que `feat/responsive` (L11): T1, T3, T4 y T6 siguen sin esperar merge, y T0 no aplica
 
 ## Specs
 
@@ -13,7 +13,7 @@ Fuera de alcance:
 - Los avisos del mostrador que se acumulan, el código anterior que queda seleccionado después de vender y «Salir» sin confirmación: no está claro que sean bugs.
 
 Restricciones:
-- Orden (L6): T2, T5, T7 y T8 arrancan ya desde `c65fccf5`, en paralelo con `feat/responsive`, porque casi no tocan lo mismo. T1, T3, T4 y T6 esperan el merge del responsive y el rebase de T0, porque cruzan con sus archivos: `nueva-compra.html:28`, las tablas y tarjetas de `reportes.html`, los filtros de los 5 listados, `presupuestos.html:6` y los specs de Ventas, Presupuestos y Remitos. Después va T9.
+- Orden (L6, cambiado en L11: esta rama va primero, T0 no aplica y las suites de T9 se corren sin coordinar): T2, T5, T7 y T8 arrancan ya desde `c65fccf5`, en paralelo con `feat/responsive`, porque casi no tocan lo mismo. T1, T3, T4 y T6 esperan el merge del responsive y el rebase de T0, porque cruzan con sus archivos: `nueva-compra.html:28`, las tablas y tarjetas de `reportes.html`, los filtros de los 5 listados, `presupuestos.html:6` y los specs de Ventas, Presupuestos y Remitos. Después va T9.
 - Mientras corran las dos terminales:
   - Esta rama se prueba en 8081 y 4201 contra la misma MySQL (memoria «probar la rama en puertos aparte»): `./mvnw spring-boot:run -Dspring-boot.run.arguments=--server.port=8081` y `npx ng serve --port 4201` con un proxy de `/api` a 8081. La del responsive usa 8080 y 4200: no se tocan.
   - Solo tests puntuales (`-Dtest=<Clase>`, `--include=<spec>`). Las suites completas van en T9, después del rebase («Nunca dos suites a la vez»).
@@ -90,10 +90,10 @@ Restricciones:
 
 ## Tasks
 
-Orden (L6): T2, T5, T7, T8 → T0 → T1, T3, T4, T6 → T9.
+Orden (L11): T2, T5, T7, T8 → T1, T3, T4, T6 → T9. T0 no aplica.
 
-- [ ] T0 · rebase después del responsive · ruta: inline · Aceptación: antes de T1, T3, T4 y T6, `feat/responsive` está mergeada en `main` y esta rama queda rebaseada, con los conflictos resueltos. Los esperables están en la línea 14 de `configuracion-ventas.html` y `datos-fiscales.html` (T5), donde el responsive pone su directiva de avisos. Después se repiten los tests puntuales de T2, T5, T7 y T8 · Evidencia: — · Risk: none
-- [ ] T1 · S1, S10 (texto de Nueva compra), S12 · ruta: inline · Aceptación: S1, el texto de S10 en Nueva compra y lo de S1 en S12 · Evidencia: — · Risk: none
+- [x] T0 · no aplica (L11): esta rama se mergea primero y el rebase lo hace `feat/responsive` · rebase después del responsive · ruta: inline · Aceptación: antes de T1, T3, T4 y T6, `feat/responsive` está mergeada en `main` y esta rama queda rebaseada, con los conflictos resueltos. Los esperables están en la línea 14 de `configuracion-ventas.html` y `datos-fiscales.html` (T5), donde el responsive pone su directiva de avisos. Después se repiten los tests puntuales de T2, T5, T7 y T8 · Evidencia: — · Risk: none
+- [x] T1 · S1, S10 (texto de Nueva compra), S12 · ruta: inline · Aceptación: S1, el texto de S10 en Nueva compra y lo de S1 en S12 · Evidencia: `nueva-compra.spec.ts` RED 3 (sin CUIT, aviso junto al select con foco, texto de ayuda) → GREEN 62/62, y el caso de 2 CUIT sigue verde; ego-browser (L12) · commit: ver L12 · Risk: none
 - [x] T2 · S2, S12 · ruta: inline · Aceptación: S2 y lo de S2 en S12 · Evidencia: `LecturaDeFacturaTest` RED (501 renglones no lanzaba) → GREEN 2/2; `FacturaPdfIntegrationTest` 8/8 y `CompraFacturaPdfRegresionIntegrationTest` 6/6 verdes; `nueva-compra.spec.ts` 58/58 con el caso nuevo de S12 (verde de entrada: el front ya dejaba el formulario usable); `docs/spec.md` actualizado; ego-browser (L7) · commit 819f064f · Risk: none (cambio pedido, endpoint que solo consume el front)
 - [ ] T3 · S3, S6 · ruta: inline · Aceptación: S3 y S6 (los dos en `reportes/`) · Evidencia: — · Risk: none
 - [ ] T4 · S4, S12 · ruta: inline · Aceptación: S4 y lo de S4 en S12 · Evidencia: — · Risk: item 3 (5 endpoints `GET` de listados pasan de 200 vacío a 400 con rango invertido) → `odd-verifier` al cierre
@@ -183,3 +183,21 @@ Orden (L6): T2, T5, T7, T8 → T0 → T1, T3, T4, T6 → T9.
   - Se borraron los 4 artículos de prueba, su historial y las importaciones 23 y 24, y se restauró el mapeo del proveedor 16, que la confirmación había pisado.
 
   Próximo paso: T0, cuando `feat/responsive` esté mergeada en `main`.
+- L11 (2026-11-09) Cambio de orden, decidido por Luca. La terminal del responsive nunca arrancó: `feat/responsive` solo tiene los 3 commits del doc (verificado con `git log main..feat/responsive`; su doc lo registra en `odd/tasks/responsive.md`, L7). Indicación, textual:
+  > Cambio de orden, decidido por Luca el 2026-11-09. La terminal del responsive nunca arrancó: feat/responsive solo tiene los commits del doc. Por eso no hay merge que esperar y esta rama va primero. Seguí ya con T1, T3, T4 y T6, y después T9.
+  >
+  > T0 no aplica: el responsive arranca después del merge de esta rama y el rebase lo hace él (odd/tasks/responsive.md, L7, en la rama feat/responsive). Como no hay otra terminal corriendo suites, en T9 corré las suites completas sin coordinar.
+
+  `main` sigue en `c65fccf5`, la base de esta rama. La app de 4200/8080 corre desde `feat/responsive`, que en código es igual a `main`: sirve para los «antes». Próximo paso: T1.
+- L12 (2026-11-09) T1 hecha (el código en el commit «fix: Nueva compra no muestra un CUIT vacío y enfoca el proveedor que falta»).
+  - El aviso sale de `avisoProveedor` (`nueva-compra.ts`). Sin CUIT dice «No encontramos el CUIT del proveedor en la factura. Elegilo de la lista.»; con CUIT, el texto de siempre.
+  - Va en una línea propia justo arriba de la fila del proveedor, con `aria-describedby` en el select, que se enfoca. Se va al elegir el proveedor.
+  - Primero se probó adentro del `label`, pero ahí el aviso quedaba en la misma línea que el select y apretaba los otros campos (captura en ego-browser).
+  - La ayuda del selector dice «Completamos el comprobante y los renglones con lo que leemos de la factura. También podés arrastrarla hasta acá.»; la segunda frase no cambia, porque el responsive todavía no la tocó (L11).
+
+  Ego-browser (Perla, Nueva compra, sin confirmar nada). Para llegar al caso sin CUIT se usaron las 3 primeras páginas de `Lista/LISTA 336.pdf`, que dan 42 renglones y `cuits: []`; con el PDF entero ahora corta el tope de T2.
+  - Antes (4200): «No encontramos un proveedor con el CUIT . Elegilo de la lista.», arriba del todo, sin foco.
+  - Después (8081/4201): el aviso nuevo arriba del select, con el foco en el select. Al elegir un proveedor, el aviso se va.
+  - Con `Facturas/pdf (17).pdf` (2 CUIT sin proveedor en Perla): «No encontramos un proveedor con el CUIT 30657162163, 20231742353. Elegilo de la lista.», también con foco.
+
+  Próximo paso: T3.

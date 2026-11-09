@@ -1,5 +1,5 @@
 import { DecimalPipe } from '@angular/common';
-import { Component, OnInit, computed, inject, signal } from '@angular/core';
+import { Component, ElementRef, OnInit, computed, inject, signal, viewChild } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { erroresPorCampo, mensajeDe } from '../../core/api/api-error';
 import { AuthService } from '../../core/auth/auth.service';
@@ -127,6 +127,18 @@ export class NuevaCompra implements OnInit {
   /** El PDF elegido, para que el selector diga cuál se leyó. */
   protected readonly archivoFactura = signal<File | null>(null);
   protected readonly lectura = signal<LecturaDeFactura | null>(null);
+  /**
+   * La lectura no encontró al proveedor: el aviso va debajo del select, que se enfoca, y se va al elegirlo. Sin ningún
+   * CUIT en la factura no se muestra uno vacío (bugs-relevamiento-celular, S1 y S12).
+   */
+  protected readonly avisoProveedor = computed(() => {
+    const cuits = this.lectura()?.cuitsSinProveedor;
+    if (!cuits || this.proveedorId() !== '') return null;
+    return cuits.length === 0
+      ? 'No encontramos el CUIT del proveedor en la factura. Elegilo de la lista.'
+      : `No encontramos un proveedor con el CUIT ${cuits.join(', ')}. Elegilo de la lista.`;
+  });
+  private readonly proveedorSelect = viewChild<ElementRef<HTMLSelectElement>>('proveedorSelect');
   protected readonly sinArticulo = signal<RenglonSinArticulo[]>([]);
   /** El renglón sin artículo para el que se está buscando uno: el próximo artículo elegido lo resuelve. */
   protected readonly resolviendo = signal<RenglonSinArticulo | null>(null);
@@ -307,6 +319,7 @@ export class NuevaCompra implements OnInit {
       cuitsSinProveedor: borrador.proveedorId === null ? borrador.cuits : null,
     });
     this.descartarVistaPrevia();
+    if (borrador.proveedorId === null) this.proveedorSelect()?.nativeElement.focus();
   }
 
   /** Para este renglón de la factura se busca un artículo en el buscador de arriba. */
