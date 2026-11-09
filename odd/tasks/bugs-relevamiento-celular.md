@@ -54,9 +54,10 @@ Restricciones:
   - Aplica a Ventas, Presupuestos, Remitos y Compras (`presupuestos.ts:209-219`, `ventas.ts:312-323`, `remitos.ts:214-223` y `compras.ts`) y a los links de `venta-hoja.ts:50-60`, «Anula la venta», «Vendido en…» y «Facturado en…».
   - Checks: RED → GREEN en los specs de las 4 pantallas; `presupuestos.spec.ts:861-880`, `ventas.spec.ts:1186-1226` y `remitos.spec.ts:932-960` siguen verdes para la URL directa.
 - S8 (datos fiscales vacíos): misma cita de L1, sobre el hallazgo «Datos fiscales: domicilio vacío sin error visible» (L2). Hoy es correcto por spec: guardar vacío vale (`docs/spec.md:44`, D1 del 2026-10-28) y se exige recién al habilitar la facturación (`ConfigArcaParaPlataformaImpl.java:122-140`). Aceptación:
-  - Supuesto S11f: debajo de Domicilio, Inicio de actividades e Ingresos Brutos, cuando están vacíos, va un aviso no bloqueante «Hace falta para facturar.» con `.campo-aviso` (`styles.css:864`).
+  - S11f, confirmado: debajo de Domicilio, Inicio de actividades e Ingresos Brutos, cuando están vacíos, va un aviso no bloqueante «Completalo para poder facturar.» con `.campo-aviso` (`styles.css:864`). El campo está ahí mismo: el Dueño lo completa, guarda y el aviso desaparece (S12).
   - Se sigue pudiendo guardar vacío y no cambia el contrato.
-  - Checks: `datos-fiscales.spec.ts` RED → GREEN; `:92-110` sigue verde.
+  - S12: cuando el super admin intenta habilitar la facturación y faltan datos (`ConfigArcaParaPlataformaImpl.java:124-140`), el mensaje dice cuáles faltan y dónde se completan: «Los completa el Dueño en Configuración → Datos de la ferretería.». Los edita el Dueño (CU-01, `admin-ferreterias.ts:71`). Cuando están completos, el super admin vuelve a tocar «Habilitar».
+  - Checks: `datos-fiscales.spec.ts` RED → GREEN (aviso con el campo vacío, sin aviso con el campo completo); `:92-110` sigue verde; test del mensaje de habilitación RED → GREEN; ego-browser: vaciar el domicilio, ver el aviso, completarlo, guardar y que el aviso desaparezca.
 - S9 (numeración simulada repetida): misma cita de L1, sobre el hallazgo «En dos facturas simuladas se repite la numeración. Probablemente sea el simulador de desarrollo, pero no lo confirmé» (L2). Aceptación:
   - Primero se confirma con la base local: `cbte_tipo`, `ambiente` y `punto_venta` de las ventas 7 y 10 y de las NC 18 y 20 de Perla.
   - Si son series distintas (causa probable: fuera de producción la etiqueta lleva siempre «X» y oculta el tipo, `HojaFiscal.java:64-66,100-122`, `ventas.ts:256-268`), la etiqueta simulada muestra la letra real: «X (B) 00001-00000002». Supuesto S11g.
@@ -68,7 +69,14 @@ Restricciones:
   - Si hubo artículos creados, se agrega «Se crearon N artículos nuevos.». Si fue todo nuevo, va solo esa frase. Se usan `r.conteos` (`importacion.models.ts:54-64`).
   - El texto de ayuda de `nueva-compra.html:28` pasa a «Completamos el comprobante y los renglones con lo que leemos de la factura.». La segunda frase, la de arrastrar, queda como la deje el responsive.
   - Checks: `importaciones.spec.ts` RED → GREEN (solo nuevos, mixto, solo cambios); `nueva-compra.spec.ts` con el texto nuevo.
-- S11 (supuestos, sin cobertura de GDS; Luca los confirma o corrige):
+- S12 (que el usuario pueda arreglar lo que falta): «me parece bien ,lo unico si se le dice al usuario falta X nosotros le tenemos que dar la posibilidad de quelo puedo arreglar, por ejemplo los datos fiscales con el aviso ese el ususario debe poder arreglar essos datos y probar de nuevo, es lo mismo que en un formulario te diga pone tu email y no te de un lugar para ingresarlo» (L5). Aceptación: todo mensaje de esta rama que diga que falta algo, o que algo está mal, lleva al lugar donde se arregla, y después se puede reintentar:
+  - S1: el aviso del CUIT queda junto al select de proveedor, que se enfoca. Al elegir el proveedor, el aviso desaparece.
+  - S2: con el 400 de «no parece una factura», el formulario de Nueva compra queda vacío y usable para cargar a mano, y se puede subir otro PDF.
+  - S4: con el rango invertido se enfoca el campo «Hasta»; al corregirlo, se busca de nuevo.
+  - S5: el mensaje sale debajo del campo del tope, que se enfoca.
+  - S8: el aviso va debajo de cada campo vacío, en la misma pantalla. El mensaje del super admin dice dónde se completan.
+  - Checks: cada caso en su spec (el foco o la presencia del control junto al mensaje) y en ego-browser, arreglando y reintentando.
+- S11 (supuestos, sin cobertura de GDS; confirmados por Luca, L5):
   - (a) Texto de S1.
   - (b) Tope de 500 renglones en la lectura de factura.
   - (c) Validar el rango en todos los listados con Desde/Hasta, con un texto único.
@@ -80,11 +88,11 @@ Restricciones:
 ## Tasks
 
 - [ ] T0 · cierre del responsive · ruta: inline · Aceptación: `feat/responsive` mergeada en `main` y esta rama rebaseada sin conflictos sin resolver · Evidencia: — · Risk: none
-- [ ] T1 · S1, S10 (texto de Nueva compra) · ruta: inline · Aceptación: S1 y el texto de S10 en Nueva compra · Evidencia: — · Risk: none
-- [ ] T2 · S2 · ruta: inline · Aceptación: S2 · Evidencia: — · Risk: none (cambio pedido, endpoint que solo consume el front)
+- [ ] T1 · S1, S10 (texto de Nueva compra), S12 · ruta: inline · Aceptación: S1, el texto de S10 en Nueva compra y lo de S1 en S12 · Evidencia: — · Risk: none
+- [ ] T2 · S2, S12 · ruta: inline · Aceptación: S2 y lo de S2 en S12 · Evidencia: — · Risk: none (cambio pedido, endpoint que solo consume el front)
 - [ ] T3 · S3, S6 · ruta: inline · Aceptación: S3 y S6 (los dos en `reportes/`) · Evidencia: — · Risk: none
-- [ ] T4 · S4 · ruta: inline · Aceptación: S4 · Evidencia: — · Risk: item 3 (5 endpoints `GET` de listados pasan de 200 vacío a 400 con rango invertido) → `odd-verifier` al cierre
-- [ ] T5 · S5, S8 · ruta: inline · Aceptación: S5 y S8 (dos pantallas de configuración) · Evidencia: — · Risk: none
+- [ ] T4 · S4, S12 · ruta: inline · Aceptación: S4 y lo de S4 en S12 · Evidencia: — · Risk: item 3 (5 endpoints `GET` de listados pasan de 200 vacío a 400 con rango invertido) → `odd-verifier` al cierre
+- [ ] T5 · S5, S8, S12 · ruta: inline · Aceptación: S5, S8 (incluido el mensaje del super admin) y lo de S5 y S8 en S12 · Evidencia: — · Risk: none
 - [ ] T6 · S7 · ruta: inline · Aceptación: S7 · Evidencia: — · Risk: none
 - [ ] T7 · S9 · ruta: inline · Aceptación: S9 (primero confirmar la causa con la base) · Evidencia: — · Risk: none
 - [ ] T8 · S10 (importación) · ruta: inline · Aceptación: S10 en `importaciones.html:35` · Evidencia: — · Risk: none
@@ -122,3 +130,7 @@ Restricciones:
 
   GDS no cubre las decisiones abiertas, así que quedan como supuestos en S11 (memoria «dudas de producto como GDS»).
 - L4 (2026-11-09) Progreso: doc escrito y commiteado en `fix/bugs-relevamiento-celular`. Ninguna tarea empezada. Próximo paso: Luca confirma o corrige los supuestos de S11; la ejecución arranca por T0 después del merge del responsive.
+- L5 (2026-11-09) Luca confirma los 7 supuestos de S11 y agrega una regla («¿Te cierran los 7 supuestos o cambiás alguno?»), textual:
+  > me parece bien ,lo unico si se le dice al usuario falta X nosotros le tenemos que dar la posibilidad de quelo puedo arreglar, por ejemplo los datos fiscales con el aviso ese el ususario debe poder arreglar essos datos y probar de nuevo, es lo mismo que en un formulario te diga pone tu email y no te de un lugar para ingresarlo
+
+  La regla pasa a S12 y se aplica a los mensajes de esta rama. El único caso donde quien ve el aviso no puede arreglarlo es el super admin al habilitar la facturación (los datos los edita el Dueño, CU-01): ahí el mensaje dice dónde se completan. El aviso del Dueño pasa a «Completalo para poder facturar.». Próximo paso: la ejecución arranca por T0 después del merge del responsive.
