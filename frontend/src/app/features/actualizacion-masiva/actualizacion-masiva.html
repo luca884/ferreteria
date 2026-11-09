@@ -228,9 +228,9 @@
                     }
                     <td class="num">
                       @if (c.costoAnterior === c.costoNuevo) {
-                        {{ costo(c.costoNuevo, c.moneda) }}
+                        {{ costo(c.costoNuevo, c.moneda) }}{{ porUnidadDe(c) }}
                       } @else {
-                        {{ costo(c.costoAnterior, c.moneda) }}&nbsp;→ {{ costo(c.costoNuevo, c.moneda) }}
+                        {{ costo(c.costoAnterior, c.moneda) }}{{ porUnidadDe(c) }}&nbsp;→ {{ costo(c.costoNuevo, c.moneda) }}{{ porUnidadDe(c) }}
                       }
                       @if (costoRealDe(c); as real) {
                         <p class="detalle-fila">
@@ -250,15 +250,15 @@
                     <td class="num">{{ c.ivaPorcentaje | number: '1.0-2' }}&nbsp;%</td>
                     <td class="num">
                       @if (c.precioAnterior === c.precioNuevo) {
-                        {{ c.precioNuevo | monto }}
+                        {{ c.precioNuevo | monto }}{{ porUnidadDe(c) }}
                         @if (vistaPreviaDeRubro()) {
                           <p class="solo-rubro">Solo cambia el rubro</p>
                         }
                       } @else {
-                        {{ c.precioAnterior | monto }}&nbsp;→ {{ c.precioNuevo | monto }}
+                        {{ c.precioAnterior | monto }}{{ porUnidadDe(c) }}&nbsp;→ {{ c.precioNuevo | monto }}{{ porUnidadDe(c) }}
                       }
                       @if (c.precioSinAjustes != null) {
-                        <p class="detalle-fila">Sin ajustes: {{ c.precioSinAjustes | monto }}</p>
+                        <p class="detalle-fila">Sin ajustes: {{ c.precioSinAjustes | monto }}{{ porUnidadDe(c) }}</p>
                       }
                       @if (c.precioManual) {
                         <p class="detalle-fila">Precio manual: no cambia</p>

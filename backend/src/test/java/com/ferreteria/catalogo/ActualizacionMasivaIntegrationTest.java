@@ -390,6 +390,23 @@ class ActualizacionMasivaIntegrationTest extends IntegrationTestBase {
         assertThat(cambios.get(1).get("margenHeredado").asBoolean()).isFalse();
     }
 
+    /** Cada cambio trae la unidad del articulo, para que la pantalla diga «/ kg» (#36). */
+    @Test
+    void laVistaPreviaTraeLaUnidadDeCadaArticuloQueCambia() throws Exception {
+        Tenant t = crearTenant();
+        long porKilo = insertarArticulo(t, "100.00", "160.00");
+        jdbc.update("update articulo set unidad = 'KILO' where id = ?", porKilo);
+        long porUnidad = insertarArticulo(t, "100.00", "160.00");
+
+        JsonNode cambios = vistaPrevia(t.dueno(), pedido("COSTO_PORCENTAJE", "10")).get("cambios");
+
+        assertThat(cambios).hasSize(2);
+        assertThat(cambios.get(0).get("articuloId").asLong()).isEqualTo(porKilo);
+        assertThat(cambios.get(0).get("unidad").asText()).isEqualTo("KILO");
+        assertThat(cambios.get(1).get("articuloId").asLong()).isEqualTo(porUnidad);
+        assertThat(cambios.get(1).get("unidad").asText()).isEqualTo("UNIDAD");
+    }
+
     @Test
     void laVistaPreviaDelEscenarioA1AA5InformaTodoYNoEscribeNada() throws Exception {
         Tenant t = crearTenant();

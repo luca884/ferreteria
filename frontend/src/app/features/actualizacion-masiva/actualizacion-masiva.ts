@@ -2,6 +2,7 @@ import { HttpErrorResponse } from '@angular/common/http';
 import { DecimalPipe } from '@angular/common';
 import { formatearFechaHora } from '../../core/formato/fecha-hora';
 import { MontoPipe, formatearCosto } from '../../core/formato/monto';
+import { porUnidad } from '../../core/formato/unidad';
 import {
   Component,
   ElementRef,
@@ -283,14 +284,22 @@ export class ActualizacionMasiva implements OnInit {
   }
 
   /**
+   * Lo que va después de cada costo y precio de la fila: « / kg», « / m», « / l»; nada por unidad (#36). Con espacios
+   * duros, así el renglón del «Costo real», que puede partirse, nunca deja el «kg» solo.
+   */
+  protected porUnidadDe(c: CambioMasivo): string {
+    return porUnidad(c.unidad ?? 'UNIDAD').replaceAll(' ', ' ');
+  }
+
+  /**
    * #97: el costo real de la fila (el costo más los recargos), «$ A → $ B» o uno solo si no cambia; null sin
-   * recargos. Con él la cuenta costo × margen × IVA cierra en la vista previa.
+   * recargos. Con él la cuenta costo × margen × IVA cierra en la vista previa. Cada importe lleva su «/ kg» (#36).
    */
   protected costoRealDe(c: CambioMasivo): string | null {
     if (c.recargosPorcentaje == null || c.costoRealAnterior == null || c.costoRealNuevo == null) return null;
-    const nuevo = this.costo(c.costoRealNuevo, c.moneda);
+    const nuevo = this.costo(c.costoRealNuevo, c.moneda) + this.porUnidadDe(c);
     if (c.costoRealAnterior === c.costoRealNuevo) return nuevo;
-    return `${this.costo(c.costoRealAnterior, c.moneda)} → ${nuevo}`;
+    return `${this.costo(c.costoRealAnterior, c.moneda) + this.porUnidadDe(c)} → ${nuevo}`;
   }
 
   /** El nombre del rubro para la vista previa: «Sin rubro» si no tiene; «—» si ya no está en la lista. */

@@ -94,7 +94,8 @@ public final class PlanificadorMasivo {
                     conRecargos ? articulo.costoReal(articulo.costo()) : null,
                     conRecargos ? articulo.costoReal(fila.costoNuevo()) : null,
                     fila.precioSinAjustes(),
-                    articulo.precioManual() && !operacion.modo().esDePrecioFinal()));
+                    articulo.precioManual() && !operacion.modo().esDePrecioFinal(),
+                    articulo.unidad()));
             }
         }
 

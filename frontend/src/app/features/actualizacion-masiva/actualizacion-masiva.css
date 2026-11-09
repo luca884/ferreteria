@@ -107,3 +107,11 @@ tr.fuerte td {
   color: var(--advertencia);
   font-weight: 600;
 }
+
+/*
+ * El «Costo real» y el «Sin ajustes» pueden partirse en renglones para que la tabla entre a 1280 px con «/ kg» (#36).
+ * Los importes de arriba siguen sin partirse (.num), y el sufijo va con espacios duros.
+ */
+table.cambios .detalle-fila {
+  white-space: normal;
+}
