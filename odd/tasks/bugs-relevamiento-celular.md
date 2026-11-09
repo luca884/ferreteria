@@ -99,7 +99,7 @@ Orden (L6): T2, T5, T7, T8 → T0 → T1, T3, T4, T6 → T9.
 - [ ] T4 · S4, S12 · ruta: inline · Aceptación: S4 y lo de S4 en S12 · Evidencia: — · Risk: item 3 (5 endpoints `GET` de listados pasan de 200 vacío a 400 con rango invertido) → `odd-verifier` al cierre
 - [x] T5 · S5, S8, S12 · ruta: inline · Aceptación: S5, S8 (incluido el mensaje del super admin) y lo de S5 y S8 en S12 · Evidencia: `configuracion-ventas.spec.ts` RED («-5» quedaba «5,00») → GREEN 8/8, y `importe-input.spec.ts` sigue verde (22/22 entre los dos); `datos-fiscales.spec.ts` RED (sin avisos) → GREEN 13/13, incluido `:92-110`; `ConfigArcaTest` RED 2 → GREEN 31/31 y `ConfigArcaAdminIntegrationTest` 23/23 con el texto nuevo; ego-browser (L8) · commit: ver L8 · Risk: none
 - [ ] T6 · S7 · ruta: inline · Aceptación: S7 · Evidencia: — · Risk: none
-- [ ] T7 · S9 · ruta: inline · Aceptación: S9 (primero confirmar la causa con la base) · Evidencia: — · Risk: none
+- [x] T7 · S9 · ruta: inline · Aceptación: S9 (primero confirmar la causa con la base) · Evidencia: causa confirmada en la base (L9); `DocumentoFiscalIntegrationTest#resumenes` RED (`letraFiscal` en null) → GREEN, 29/29, y `VentaFacturadaCerrojoIntegrationTest` 39/39 con `letraFiscal` en el JSON; `ventas.spec.ts` RED 5 → GREEN 63/63, con un caso nuevo de dos X con el mismo número; ego-browser (L9) · commit: ver L9 · Risk: none (campo nuevo en una respuesta que solo consume el front; `letra` no cambia)
 - [ ] T8 · S10 (importación) · ruta: inline · Aceptación: S10 en `importaciones.html:35` · Evidencia: — · Risk: none
 - [ ] T9 · cierre · ruta: inline + `odd-verifier` (Opus) por T4 · Aceptación: suite backend (`./mvnw test`, sin otra suite corriendo), suite frontend y `npx ng build` verdes; cada bug probado en ego-browser, antes en `main` y después en la rama · Evidencia: — · Risk: item 3 (T4)
 
@@ -168,3 +168,10 @@ Orden (L6): T2, T5, T7, T8 → T0 → T1, T3, T4, T6 → T9.
   - Se restauraron el tope (100.000,00) y el domicilio de Perla.
 
   Próximo paso: T7.
+- L9 (2026-11-09) T7 hecha (el código en el commit «fix: la X de una factura no válida muestra la letra de su serie»). Causa confirmada en la base de Perla: son series distintas del simulador. Venta 7 = A (cbte 1) 00001-00000002, venta 10 = B (cbte 6) 00001-00000002, NC 18 = NC B (cbte 8) n.º 2 y NC 20 = NC A (cbte 3) n.º 2. No hay duplicados: la «X» oculta la letra.
+  - Back: `ResumenFiscal` y la respuesta del listado (`FiscalResumenResponse`) suman `letraFiscal`, la letra del registro. `letra` sigue siendo la de la hoja (X si no es válida), así que nada que la use cambia.
+  - Front: `letraEnPantalla` (`factura.models.ts`) arma «X (B)» en la columna «Factura» de Ventas y en la línea fiscal del detalle. La hoja impresa sigue con la X sola, sin número fiscal.
+  - Alcance: la regla vale para toda X en pantalla, también en producción (ticket provisorio, sin factura), porque es la misma etiqueta y los casos de `ventas.spec.ts:648-651` que nombra S9 son de producción.
+  - Ego-browser (Perla): antes (4200), venta 7, venta 10, NC 18 y NC 20 decían «X 00001-00000002 Simulado». Después (8081/4201), «X (A)…», «X (B)…», «X (B)…» y «X (A)…», y el detalle de la venta 10 dice «X (B) 00001-00000002 · SIMULADO — sin validez fiscal».
+
+  Próximo paso: T8.

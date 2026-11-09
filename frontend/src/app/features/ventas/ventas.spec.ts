@@ -127,29 +127,44 @@ describe('Ventas (consulta y reimpresión, G60)', () => {
     ]);
   });
 
-  it('la columna «Factura» dice la letra impresa y el número; el estado si no está autorizada y el ambiente si no es producción', async () => {
+  it('la columna «Factura» dice la letra impresa (la X con la del registro entre paréntesis) y el número; el estado si no está autorizada y el ambiente si no es producción', async () => {
     await crear([
       resumenDePrueba(9, {
         fiscal: { letra: 'B', puntoVenta: 1, numero: 12, estado: 'AUTORIZADO', ambiente: 'PRODUCCION', validoComoFactura: true },
       }),
       resumenDePrueba(8, {
-        fiscal: { letra: 'X', puntoVenta: 1, numero: 13, estado: 'AUTORIZADO', ambiente: 'SIMULADOR', validoComoFactura: false },
+        fiscal: { letra: 'X', letraFiscal: 'A', puntoVenta: 1, numero: 13, estado: 'AUTORIZADO', ambiente: 'SIMULADOR', validoComoFactura: false },
       }),
       resumenDePrueba(7, {
-        fiscal: { letra: 'X', puntoVenta: 2, numero: null, estado: 'PENDIENTE', ambiente: 'PRODUCCION', validoComoFactura: false },
+        fiscal: { letra: 'X', letraFiscal: 'B', puntoVenta: 2, numero: null, estado: 'PENDIENTE', ambiente: 'PRODUCCION', validoComoFactura: false },
       }),
       resumenDePrueba(6, {
-        fiscal: { letra: 'X', puntoVenta: 1, numero: 4, estado: 'RECHAZADO', ambiente: 'HOMOLOGACION', validoComoFactura: false },
+        fiscal: { letra: 'X', letraFiscal: 'B', puntoVenta: 1, numero: 4, estado: 'RECHAZADO', ambiente: 'HOMOLOGACION', validoComoFactura: false },
       }),
     ]);
 
     expect(filas().map((f) => celdas(f)[1])).toEqual([
       'B 00001-00000012',
-      'X 00001-00000013 Simulado',
-      'X Pendiente',
-      'X 00001-00000004 Rechazada · Homologación',
+      'X (A) 00001-00000013 Simulado',
+      'X (B) Pendiente',
+      'X (B) 00001-00000004 Rechazada · Homologación',
     ]);
     expect(normal(el().querySelector('table.ventas thead')?.textContent)).toContain('Factura');
+  });
+
+  it('dos X simuladas con el mismo número son de series distintas: la letra del registro las distingue (bugs-relevamiento-celular, S9)', async () => {
+    const simulada = (letraFiscal: 'A' | 'B'): ResumenFiscal => ({
+      letra: 'X',
+      letraFiscal,
+      puntoVenta: 1,
+      numero: 2,
+      estado: 'AUTORIZADO',
+      ambiente: 'SIMULADOR',
+      validoComoFactura: false,
+    });
+    await crear([resumenDePrueba(10, { fiscal: simulada('B') }), resumenDePrueba(7, { fiscal: simulada('A') })]);
+
+    expect(filas().map((f) => celdas(f)[1])).toEqual(['X (B) 00001-00000002 Simulado', 'X (A) 00001-00000002 Simulado']);
   });
 
   it('el paginador va arriba de la tabla: no hay que bajar hasta el final para pasar de página', async () => {
@@ -226,7 +241,7 @@ describe('Ventas (consulta y reimpresión, G60)', () => {
     expect(el().querySelector('app-factura-imprimible')).toBeNull();
   });
 
-  it('una venta con documento X: la línea fiscal dice «X» y la marca, y reimprime la X sin datos fiscales', async () => {
+  it('una venta con documento X: la línea fiscal dice «X (B)» y la marca, y reimprime la X sin datos fiscales', async () => {
     await crear();
     api.obtener.mockReturnValue(
       of(ventaDePrueba({ fiscal: fiscalDe(documentoX(MARCA_SIMULADO), { ambiente: 'SIMULADOR', cae: '70417054367476' }) })),
@@ -234,7 +249,7 @@ describe('Ventas (consulta y reimpresión, G60)', () => {
 
     filas()[0].click();
     await refrescar();
-    expect(normal(detalle()!.querySelector('.linea-fiscal')?.textContent)).toBe('X · SIMULADO — sin validez fiscal');
+    expect(normal(detalle()!.querySelector('.linea-fiscal')?.textContent)).toBe('X (B) · SIMULADO — sin validez fiscal');
     expect(normal(detalle()!.textContent)).not.toContain('70417054367476');
     boton('Imprimir', detalle()!)!.click();
     await refrescar();
@@ -625,6 +640,7 @@ describe('Ventas (consulta y reimpresión, G60)', () => {
     it('la lista dice el estado fiscal, «En revisión» para las alertas, «Sin factura» y la marca «Reimprimir factura»', async () => {
       const resumen = (estado: ResumenFiscal['estado'], cambios: Partial<ResumenFiscal> = {}): ResumenFiscal => ({
         letra: 'X',
+        letraFiscal: 'B',
         puntoVenta: 1,
         numero: null,
         estado,
@@ -645,10 +661,10 @@ describe('Ventas (consulta y reimpresión, G60)', () => {
 
       expect(filas().map((f) => celdas(f)[1])).toEqual([
         'B 00001-00000045 Reimprimir factura',
-        'X En revisión',
-        'X En revisión',
-        'X Sin factura',
-        'X Fuera de fecha',
+        'X (B) En revisión',
+        'X (B) En revisión',
+        'X (B) Sin factura',
+        'X (B) Fuera de fecha',
       ]);
     });
 
@@ -1237,7 +1253,7 @@ describe('Ventas (consulta y reimpresión, G60)', () => {
       expect(link.getAttribute('href')).toBe('/ventas/70');
     });
 
-    it('una X con número dice su número, como la lista: «X 00001-00000011 · <marca>»', async () => {
+    it('una X con número dice su letra y su número, como la lista: «X (B) 00001-00000011 · <marca>»', async () => {
       await crear();
       api.obtener.mockReturnValue(
         of(ventaDePrueba({ fiscal: fiscalDe(documentoX(MARCA_SIMULADO), { ambiente: 'SIMULADOR', numero: 11 }) })),
@@ -1246,7 +1262,7 @@ describe('Ventas (consulta y reimpresión, G60)', () => {
       await refrescar();
 
       expect(normal(detalle()!.querySelector('.linea-fiscal')?.textContent)).toBe(
-        'X 00001-00000011 · SIMULADO — sin validez fiscal',
+        'X (B) 00001-00000011 · SIMULADO — sin validez fiscal',
       );
     });
   });

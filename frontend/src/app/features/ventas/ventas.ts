@@ -16,6 +16,7 @@ import {
   ESTADO_FISCAL_LABELS,
   ResumenFiscal,
   VentaFacturada,
+  letraEnPantalla,
   numeroFiscal,
 } from '../../shared/factura/factura.models';
 import { fechaCompletaLocal } from '../clientes/cuenta/cobranza.models';
@@ -131,17 +132,19 @@ export class Ventas implements OnInit {
     return venta?.fiscal?.documento ? { ...venta, fiscal: venta.fiscal } : null;
   });
   /**
-   * La factura en una línea, arriba del detalle de siempre: «Factura B 00001-00000012 · Autorizada», o «X · <marca>» si
-   * no es válida como factura. Sale solo del documento, como la hoja.
+   * La factura en una línea, arriba del detalle de siempre: «Factura B 00001-00000012 · Autorizada», o «X (B) · <marca>»
+   * si no es válida como factura. Sale solo del documento, como la hoja.
    */
   protected readonly lineaFiscal = computed<string | null>(() => {
     const documento = this.facturada()?.fiscal.documento;
     if (!documento) return null;
     if (!documento.validoComoFactura) {
-      // El número de la X, como en la lista (informacion-y-links, S4): sale del registro, el documento no lo trae.
-      const { puntoVenta, numero } = this.facturada()!.fiscal;
-      const x = numero != null ? `X ${numeroFiscal(puntoVenta, numero)}` : 'X';
-      return documento.marca ? `${x} · ${documento.marca}` : x;
+      // La letra y el número de la X, como en la lista (informacion-y-links, S4; bugs-relevamiento-celular, S9): salen
+      // del registro, el documento no los trae.
+      const { letra, puntoVenta, numero } = this.facturada()!.fiscal;
+      const x = letraEnPantalla('X', letra);
+      const conNumero = numero != null ? `${x} ${numeroFiscal(puntoVenta, numero)}` : x;
+      return documento.marca ? `${conNumero} · ${documento.marca}` : conNumero;
     }
     const { letra, puntoVenta, numero } = documento;
     const fiscal = puntoVenta != null && numero != null ? ` ${numeroFiscal(puntoVenta, numero)}` : '';
@@ -250,7 +253,7 @@ export class Ventas implements OnInit {
   }
 
   /**
-   * «B 00001-00000012» y, aparte, el estado si no está autorizada y el ambiente si no es producción, y si hay que
+   * «B 00001-00000012» (o «X (B) 00001-00000012» si no es válida, S9) y, aparte, el estado si no está autorizada y el ambiente si no es producción, y si hay que
    * reimprimirla (salió con ticket provisorio y ya tiene CAE). Vacía sin factura.
    */
   protected factura(
@@ -262,7 +265,7 @@ export class Ventas implements OnInit {
       fiscal.estado === 'AUTORIZADO' ? null : ESTADO_FISCAL_LABELS[fiscal.estado],
       AMBIENTE_LABELS[fiscal.ambiente] ?? null,
     ].filter((m): m is string => m !== null);
-    return { texto: `${fiscal.letra}${numero}`, marcas: marcas.join(' · '), reimprimir: fiscal.reimprimir === true };
+    return { texto: `${letraEnPantalla(fiscal.letra, fiscal.letraFiscal)}${numero}`, marcas: marcas.join(' · '), reimprimir: fiscal.reimprimir === true };
   }
 
   /** Aplica los filtros y vuelve a la primera página. Un número que no es un entero positivo no se manda. */

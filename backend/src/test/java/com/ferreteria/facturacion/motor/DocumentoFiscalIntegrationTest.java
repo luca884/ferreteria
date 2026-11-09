@@ -305,7 +305,7 @@ class DocumentoFiscalIntegrationTest extends MotorFiscalTestBase {
     // ---- C2 y S15: el listado y la búsqueda por número fiscal ----
 
     @Test
-    @DisplayName("resumenes: la letra de la hoja, el punto de venta, el número, el estado y el ambiente de cada venta con registro")
+    @DisplayName("resumenes: la letra de la hoja, la letra real (S9 de bugs-relevamiento-celular), el punto de venta, el número, el estado y el ambiente de cada venta con registro")
     void resumenes() {
         long valida = venta(ferreteriaId);
         long simulada = venta(ferreteriaId);
@@ -322,11 +322,11 @@ class DocumentoFiscalIntegrationTest extends MotorFiscalTestBase {
 
         assertThat(resumenes).containsOnlyKeys(valida, simulada, pendiente);
         assertThat(resumenes.get(valida)).isEqualTo(
-                new ResumenFiscal("B", 3, 12L, "AUTORIZADO", "PRODUCCION", true, false, "FACTURA", 6, null));
+                new ResumenFiscal("B", 3, 12L, "AUTORIZADO", "PRODUCCION", true, false, "FACTURA", 6, null, "B"));
         assertThat(resumenes.get(simulada)).isEqualTo(
-                new ResumenFiscal("X", 1, 12L, "AUTORIZADO", "SIMULADOR", false, false, "FACTURA", null, null));
+                new ResumenFiscal("X", 1, 12L, "AUTORIZADO", "SIMULADOR", false, false, "FACTURA", null, null, "A"));
         assertThat(resumenes.get(pendiente)).isEqualTo(
-                new ResumenFiscal("X", 3, null, "PENDIENTE", "PRODUCCION", false, false, "FACTURA", null, null));
+                new ResumenFiscal("X", 3, null, "PENDIENTE", "PRODUCCION", false, false, "FACTURA", null, null, "B"));
         assertThat(facturacion.resumenes(List.of())).isEmpty();
     }
 
