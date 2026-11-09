@@ -239,3 +239,16 @@ tr.advertencia td {
   font-size: 1.25rem;
   font-weight: 700;
 }
+
+/*
+ * La vista previa con recargos tiene 10 columnas y tiene que entrar a 1280 px: los encabezados y el stock pueden ir en
+ * dos renglones y las celdas van más juntas. Los importes siguen sin partirse (.num). Medido con ego-browser.
+ */
+.vista-previa th,
+.vista-previa td.num.stock {
+  white-space: normal;
+}
+.vista-previa th,
+.vista-previa td {
+  padding-inline: 6px;
+}

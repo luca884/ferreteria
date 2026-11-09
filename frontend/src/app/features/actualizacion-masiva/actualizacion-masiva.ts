@@ -283,9 +283,12 @@ export class ActualizacionMasiva implements OnInit {
     return formatearCosto(valor, moneda);
   }
 
-  /** Lo que va después de cada costo y precio de la fila: « / kg», « / m», « / l»; nada por unidad (#36). */
+  /**
+   * Lo que va después de cada costo y precio de la fila: « / kg», « / m», « / l»; nada por unidad (#36). Con espacios
+   * duros, así el renglón del «Costo real», que puede partirse, nunca deja el «kg» solo.
+   */
   protected porUnidadDe(c: CambioMasivo): string {
-    return porUnidad(c.unidad ?? 'UNIDAD');
+    return porUnidad(c.unidad ?? 'UNIDAD').replaceAll(' ', ' ');
   }
 
   /**
