@@ -1,5 +1,5 @@
 import { HttpErrorResponse } from '@angular/common/http';
-import { Component, OnInit, computed, inject, signal } from '@angular/core';
+import { Component, ElementRef, OnInit, computed, inject, signal, viewChild } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { erroresDeCampos, mensajeDe } from '../../core/api/api-error';
@@ -9,13 +9,15 @@ import { MontoPipe } from '../../core/formato/monto';
 import { BarraAcciones } from '../../shared/barra-acciones';
 import { Confirmacion } from '../../shared/confirmacion';
 import { DialogoDetalle } from '../../shared/dialogo-detalle';
-import { idsDeLaRuta } from '../../shared/documento-por-ruta';
+import { conOrigen, idsDeLaRuta, origenDeLaNavegacion } from '../../shared/documento-por-ruta';
+import { HASTA_ANTERIOR_A_DESDE, rangoAlReves } from '../../shared/rango-de-fechas';
 import { FacturaImprimible } from '../../shared/factura/factura-imprimible';
 import {
   ESTADOS_EN_REVISION,
   ESTADO_FISCAL_LABELS,
   ResumenFiscal,
   VentaFacturada,
+  letraEnPantalla,
   numeroFiscal,
 } from '../../shared/factura/factura.models';
 import { fechaCompletaLocal } from '../clientes/cuenta/cobranza.models';
@@ -107,6 +109,8 @@ export class Ventas implements OnInit {
   /** La bandeja elegida: '' son todas. */
   protected readonly fiscal = signal<FiltroFiscal | ''>('');
   protected readonly errorFiltros = signal<string | null>(null);
+  /** El campo «Hasta»: con el rango al revés se enfoca para corregirlo (bugs-relevamiento-celular, S12). */
+  private readonly campoHasta = viewChild<ElementRef<HTMLInputElement>>('campoHasta');
   /** Los filtros aplicados a la lista que se ve (sin `page`). */
   private aplicados: Omit<FiltroVentas, 'page'> = {};
   /** Los de la última lista que cargó: si el servidor rechaza un filtro nuevo (400), se vuelve a estos. */
@@ -119,6 +123,10 @@ export class Ventas implements OnInit {
   protected readonly imprimiendo = signal(false);
   /** La venta se abrió por `/ventas/:id` (un link desde otro documento): la lista no la cierra y al cerrarla se vuelve a `/ventas`. */
   private abiertaPorRuta = false;
+  /** El documento desde cuyo link se abrió: al cerrar se vuelve ahí (bugs-relevamiento-celular, S7). */
+  private origen: string | null = null;
+  /** La dirección de esta venta, para que el link a la venta que anula sepa volver. */
+  protected readonly origenDe = (v: VentaConsultada) => conOrigen(`/ventas/${v.ventaId}`);
   /** El título del pop-up: de la fila mientras el detalle carga, para que se sepa qué venta se abrió. */
   protected readonly tituloDetalle = computed(() => {
     const id = this.elegida();
@@ -131,17 +139,19 @@ export class Ventas implements OnInit {
     return venta?.fiscal?.documento ? { ...venta, fiscal: venta.fiscal } : null;
   });
   /**
-   * La factura en una línea, arriba del detalle de siempre: «Factura B 00001-00000012 · Autorizada», o «X · <marca>» si
-   * no es válida como factura. Sale solo del documento, como la hoja.
+   * La factura en una línea, arriba del detalle de siempre: «Factura B 00001-00000012 · Autorizada», o «X (B) · <marca>»
+   * si no es válida como factura. Sale solo del documento, como la hoja.
    */
   protected readonly lineaFiscal = computed<string | null>(() => {
     const documento = this.facturada()?.fiscal.documento;
     if (!documento) return null;
     if (!documento.validoComoFactura) {
-      // El número de la X, como en la lista (informacion-y-links, S4): sale del registro, el documento no lo trae.
-      const { puntoVenta, numero } = this.facturada()!.fiscal;
-      const x = numero != null ? `X ${numeroFiscal(puntoVenta, numero)}` : 'X';
-      return documento.marca ? `${x} · ${documento.marca}` : x;
+      // La letra y el número de la X, como en la lista (informacion-y-links, S4; bugs-relevamiento-celular, S9): salen
+      // del registro, el documento no los trae.
+      const { letra, puntoVenta, numero } = this.facturada()!.fiscal;
+      const x = letraEnPantalla('X', letra);
+      const conNumero = numero != null ? `${x} ${numeroFiscal(puntoVenta, numero)}` : x;
+      return documento.marca ? `${conNumero} · ${documento.marca}` : conNumero;
     }
     const { letra, puntoVenta, numero } = documento;
     const fiscal = puntoVenta != null && numero != null ? ` ${numeroFiscal(puntoVenta, numero)}` : '';
@@ -202,6 +212,7 @@ export class Ventas implements OnInit {
       .subscribe((id) => {
         if (!this.auth.esDueno()) return;
         this.abiertaPorRuta = true;
+        this.origen = origenDeLaNavegacion(this.router);
         this.abrir(id);
       });
   }
@@ -250,7 +261,7 @@ export class Ventas implements OnInit {
   }
 
   /**
-   * «B 00001-00000012» y, aparte, el estado si no está autorizada y el ambiente si no es producción, y si hay que
+   * «B 00001-00000012» (o «X (B) 00001-00000012» si no es válida, S9) y, aparte, el estado si no está autorizada y el ambiente si no es producción, y si hay que
    * reimprimirla (salió con ticket provisorio y ya tiene CAE). Vacía sin factura.
    */
   protected factura(
@@ -262,7 +273,7 @@ export class Ventas implements OnInit {
       fiscal.estado === 'AUTORIZADO' ? null : ESTADO_FISCAL_LABELS[fiscal.estado],
       AMBIENTE_LABELS[fiscal.ambiente] ?? null,
     ].filter((m): m is string => m !== null);
-    return { texto: `${fiscal.letra}${numero}`, marcas: marcas.join(' · '), reimprimir: fiscal.reimprimir === true };
+    return { texto: `${letraEnPantalla(fiscal.letra, fiscal.letraFiscal)}${numero}`, marcas: marcas.join(' · '), reimprimir: fiscal.reimprimir === true };
   }
 
   /** Aplica los filtros y vuelve a la primera página. Un número que no es un entero positivo no se manda. */
@@ -271,6 +282,11 @@ export class Ventas implements OnInit {
     const numero = this.numero().trim();
     if (numero !== '' && !/^[1-9]\d{0,17}$/.test(numero)) {
       this.errorFiltros.set(MENSAJE_NUMERO);
+      return;
+    }
+    if (rangoAlReves(this.desde(), this.hasta())) {
+      this.errorFiltros.set(HASTA_ANTERIOR_A_DESDE);
+      this.campoHasta()?.nativeElement.focus();
       return;
     }
     this.errorFiltros.set(null);
@@ -315,10 +331,12 @@ export class Ventas implements OnInit {
     this.errorDetalle.set(null);
     this.imprimiendo.set(false);
     this.soltarAcciones();
-    // Abierta por `/ventas/:id`: la dirección deja de nombrar una venta que ya no se ve.
+    // Abierta por `/ventas/:id`: la dirección deja de nombrar una venta que ya no se ve. Si vino del link de otro
+    // documento, vuelve a ese documento (bugs-relevamiento-celular, S7).
     if (this.abiertaPorRuta) {
       this.abiertaPorRuta = false;
-      void this.router.navigateByUrl('/ventas');
+      void this.router.navigateByUrl(this.origen ?? '/ventas');
+      this.origen = null;
     }
   }
 

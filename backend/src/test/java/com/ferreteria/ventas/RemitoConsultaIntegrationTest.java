@@ -97,6 +97,7 @@ class RemitoConsultaIntegrationTest extends VentasTestBase {
         assertThat(numeros(getJson("/api/remitos?desde=" + hoy.minusDays(10) + "&hasta=" + hoy, token)))
                 .containsExactly(2L, 1L);
         assertThat(numeros(getJson("/api/remitos?desde=" + hoy.plusDays(1), token))).isEmpty();
+        rangoAlRevesDa400("/api/remitos?desde=" + hoy + "&hasta=" + hoy.minusDays(1), token);
     }
 
     @Test

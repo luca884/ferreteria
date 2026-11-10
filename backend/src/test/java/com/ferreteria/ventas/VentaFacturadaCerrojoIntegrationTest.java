@@ -108,6 +108,7 @@ class VentaFacturadaCerrojoIntegrationTest extends VentaFacturadaTestBase {
         }
         JsonNode resumen = fila.get("fiscal");
         assertThat(resumen.get("letra").asText()).isEqualTo(valido ? "B" : "X");
+        assertThat(resumen.get("letraFiscal").asText()).isEqualTo("B");
         assertThat(resumen.get("validoComoFactura").asBoolean()).isEqualTo(valido);
         assertThat(resumen.get("estado").asText()).isEqualTo(estado);
         assertThat(resumen.get("ambiente").asText()).isEqualTo(ambiente);

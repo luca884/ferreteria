@@ -123,6 +123,18 @@ public abstract class IntegrationTestBase {
         return objectMapper.readTree(body);
     }
 
+    /**
+     * Un listado con «Hasta» anterior a «Desde» da 400 con el texto unico de los rangos en la clave {@code hasta}
+     * (bugs-relevamiento-celular, S4).
+     */
+    protected void rangoAlRevesDa400(String url, String token) throws Exception {
+        String body = getResult(url, token)
+                .andExpect(status().isBadRequest())
+                .andReturn().getResponse().getContentAsString(StandardCharsets.UTF_8);
+        org.assertj.core.api.Assertions.assertThat(objectMapper.readTree(body).path("errors").path("hasta").asText())
+                .isEqualTo("La fecha «Hasta» no puede ser anterior a «Desde».");
+    }
+
     /** GET sin expectativas, para probar codigos de error. */
     protected ResultActions getResult(String url, String token) throws Exception {
         return mvc.perform(get(url).header("Authorization", "Bearer " + token));

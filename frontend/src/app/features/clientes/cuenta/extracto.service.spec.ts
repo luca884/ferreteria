@@ -137,10 +137,10 @@ describe('ExtractoService (CC-072, CC-099)', () => {
     http
       .expectOne((q) => q.url.endsWith('/extracto'))
       .flush(
-        { status: 400, message: 'Datos inválidos', errors: { desde: 'La fecha desde no puede ser posterior a hasta.' } },
+        { status: 400, message: 'Datos inválidos', errors: { desde: 'La fecha «Hasta» no puede ser anterior a «Desde».' } },
         { status: 400, statusText: 'x' },
       );
 
-    expect(err?.error.errors.desde).toBe('La fecha desde no puede ser posterior a hasta.');
+    expect(err?.error.errors.desde).toBe('La fecha «Hasta» no puede ser anterior a «Desde».');
   });
 });

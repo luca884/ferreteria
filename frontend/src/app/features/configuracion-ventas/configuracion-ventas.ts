@@ -1,4 +1,4 @@
-import { Component, OnInit, inject, signal } from '@angular/core';
+import { Component, ElementRef, OnInit, inject, signal, viewChild } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { erroresDeCampos, mensajeDe } from '../../core/api/api-error';
 import { AuthService } from '../../core/auth/auth.service';
@@ -32,6 +32,8 @@ export class PaginaConfiguracionVentas implements OnInit {
   /** Lo que el backend rechazó, un mensaje por campo (400 de validación). */
   protected readonly erroresGuardado = signal<string[]>([]);
   protected readonly errorGuardado = signal<string | null>(null);
+  /** El campo del tope acepta el menos para que un negativo se vea y se explique, en vez de guardarse sin signo. */
+  private readonly campoTope = viewChild<ElementRef<HTMLInputElement>>('tope');
 
   ngOnInit(): void {
     if (this.auth.esDueno()) this.cargar();
@@ -59,6 +61,7 @@ export class PaginaConfiguracionVentas implements OnInit {
     this.errorGuardado.set(null);
     if (this.form.invalid) {
       this.form.markAllAsTouched();
+      this.campoTope()?.nativeElement.focus();
       return;
     }
     this.guardando.set(true);

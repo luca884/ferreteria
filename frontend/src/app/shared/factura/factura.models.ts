@@ -121,6 +121,8 @@ export interface FiscalVenta {
 /** La factura de una fila del listado de ventas (C2). `letra` es la de la hoja: X si no es válida. */
 export interface ResumenFiscal {
   letra: LetraDocumento;
+  /** La letra del registro, también en la X: la lista la muestra entre paréntesis, «X (B)» (bugs-relevamiento-celular, S9). */
+  letraFiscal?: LetraFactura;
   puntoVenta: number;
   numero: number | null;
   estado: EstadoFiscal;
@@ -164,6 +166,15 @@ export type VentaFacturada = VentaParaFactura & { fiscal: FiscalVenta };
 /** «00001-00000012»: punto de venta de 5 dígitos y número de 8, como «Comprobantes en línea». */
 export function numeroFiscal(puntoVenta: number, numero: number): string {
   return `${String(puntoVenta).padStart(5, '0')}-${String(numero).padStart(8, '0')}`;
+}
+
+/**
+ * La letra para la pantalla: la X lleva la del registro entre paréntesis, «X (B)», porque la A y la B numeran cada una
+ * su serie y dos X con el mismo número no son el mismo comprobante (bugs-relevamiento-celular, S9). La hoja impresa
+ * sigue con la X sola.
+ */
+export function letraEnPantalla(letra: LetraDocumento, letraFiscal: LetraFactura | null | undefined): string {
+  return letra === 'X' && letraFiscal ? `X (${letraFiscal})` : letra;
 }
 
 export const ESTADO_FISCAL_LABELS: Record<EstadoFiscal, string> = {

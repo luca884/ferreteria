@@ -26,6 +26,7 @@ import { RecargoDeCosto, costoRealExacto, exacto, margenEfectivo, precioFinal } 
 import { cantidadConUnidad, porUnidad } from '../../core/formato/unidad';
 import { BarraAcciones } from '../../shared/barra-acciones';
 import { Confirmacion } from '../../shared/confirmacion';
+import { conOrigen } from '../../shared/documento-por-ruta';
 import { CampoMoneda } from '../../shared/campo-moneda';
 import { ImporteInput } from '../../shared/importe-input';
 import { Proveedor } from '../proveedores/proveedor.models';
@@ -471,6 +472,11 @@ export class ArticuloForm implements OnInit {
       }
     }
     this.cargar();
+  }
+
+  /** El `state` del link a la última compra: al cerrarla se vuelve a esta ficha (bugs-relevamiento-celular, S7). */
+  protected get estadoDelLinkACompra(): { origen: string } {
+    return conOrigen(`/articulos/${this.id}`);
   }
 
   protected get esEdicion(): boolean {

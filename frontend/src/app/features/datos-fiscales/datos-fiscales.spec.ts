@@ -191,6 +191,38 @@ describe('PaginaDatosFiscales', () => {
     expect(campo('razonSocial').value).toBe('Tornillo SA');
   });
 
+  describe('datos para facturar vacíos (bugs-relevamiento-celular, S8 y S12)', () => {
+    const avisos = () =>
+      [...el().querySelectorAll('.campo-aviso')].map((a) => ({ id: a.id, texto: a.textContent?.trim() }));
+    const sinDatos = { ...guardados, domicilioComercial: null, inicioActividades: null, ingresosBrutos: null };
+
+    it('con los datos completos no hay avisos', async () => {
+      await crear();
+
+      expect(avisos()).toEqual([]);
+    });
+
+    it('avisa debajo de cada campo vacío, sin bloquear el guardado, y el aviso se va al completarlo y guardar', async () => {
+      await crear(true, vi.fn(() => of(sinDatos)));
+
+      expect(avisos()).toEqual([
+        { id: 'ingresosBrutos-aviso', texto: 'Completalo para poder facturar.' },
+        { id: 'domicilioComercial-aviso', texto: 'Completalo para poder facturar.' },
+        { id: 'inicioActividades-aviso', texto: 'Completalo para poder facturar.' },
+      ]);
+      expect(campo('domicilioComercial').getAttribute('aria-describedby')).toBe('domicilioComercial-aviso');
+
+      await enviar();
+      expect(guardar).toHaveBeenCalledTimes(1);
+
+      await escribir('domicilioComercial', 'Av. Luro 3200');
+      await enviar();
+
+      expect(guardar).toHaveBeenLastCalledWith(expect.objectContaining({ domicilioComercial: 'Av. Luro 3200' }));
+      expect(avisos().map((a) => a.id)).toEqual(['ingresosBrutos-aviso', 'inicioActividades-aviso']);
+    });
+  });
+
   it('el Vendedor ve el aviso y no pide los datos', async () => {
     await crear(false);
 

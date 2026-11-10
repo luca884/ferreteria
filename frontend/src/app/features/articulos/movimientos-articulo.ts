@@ -1,10 +1,11 @@
 import { HttpErrorResponse } from '@angular/common/http';
-import { Component, OnInit, inject, signal } from '@angular/core';
+import { Component, ElementRef, OnInit, inject, signal, viewChild } from '@angular/core';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { PageResponse } from '../../core/api/page.models';
 import { AuthService } from '../../core/auth/auth.service';
 import { cantidadConUnidad } from '../../core/formato/unidad';
 import { BarraAcciones } from '../../shared/barra-acciones';
+import { HASTA_ANTERIOR_A_DESDE, rangoAlReves } from '../../shared/rango-de-fechas';
 import { fechaCompletaLocal } from '../clientes/cuenta/cobranza.models';
 import { Articulo, FiltroMovimientos, MovimientoStock, TipoMovimientoStock } from './articulo.models';
 import { ArticulosService } from './articulos.service';
@@ -60,6 +61,9 @@ export class MovimientosArticulo implements OnInit {
   /** Lo que escribió el usuario en los filtros (todavía sin aplicar). */
   protected readonly desde = signal('');
   protected readonly hasta = signal('');
+  /** El rango al revés: se avisa, no se busca y se enfoca «Hasta» (bugs-relevamiento-celular, S4 y S12). */
+  protected readonly errorFiltros = signal<string | null>(null);
+  private readonly campoHasta = viewChild<ElementRef<HTMLInputElement>>('campoHasta');
   /** Los filtros aplicados a la lista que se ve (sin `page`). */
   private aplicados: Omit<FiltroMovimientos, 'page'> = {};
   protected readonly filtrada = signal(false);
@@ -94,6 +98,12 @@ export class MovimientosArticulo implements OnInit {
   /** Aplica Desde y Hasta y vuelve a la primera página. */
   protected buscar(evento: Event): void {
     evento.preventDefault();
+    if (rangoAlReves(this.desde(), this.hasta())) {
+      this.errorFiltros.set(HASTA_ANTERIOR_A_DESDE);
+      this.campoHasta()?.nativeElement.focus();
+      return;
+    }
+    this.errorFiltros.set(null);
     this.aplicados = {
       ...(this.desde() ? { desde: this.desde() } : {}),
       ...(this.hasta() ? { hasta: this.hasta() } : {}),
@@ -105,6 +115,7 @@ export class MovimientosArticulo implements OnInit {
   protected limpiar(): void {
     this.desde.set('');
     this.hasta.set('');
+    this.errorFiltros.set(null);
     this.aplicados = {};
     this.filtrada.set(false);
     this.cargar(0);

@@ -37,6 +37,11 @@
   margin-bottom: 0;
 }
 
+/* El proveedor que la lectura no encontró: arriba del select, que queda enfocado (bugs-relevamiento-celular, S12). */
+.aviso-proveedor {
+  margin: 0 0 0.25rem;
+}
+
 .encabezado input[name='puntoVenta'] {
   width: 7rem;
 }

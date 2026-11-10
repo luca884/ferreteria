@@ -32,7 +32,15 @@
   @if (resumen(); as r) {
     <section #resumenEl class="resumen panel" role="status" tabindex="-1">
       <h2>Importación aplicada</h2>
-      <p class="ayuda">Archivo {{ r.archivo }}. Los precios ya están actualizados.</p>
+      <p class="ayuda">
+        Archivo {{ r.archivo }}.
+        @if (cambiaronPrecios(r.conteos)) {
+          Los precios ya están actualizados.
+        }
+        @if (r.conteos.nuevos; as n) {
+          {{ n === 1 ? 'Se creó 1 artículo nuevo.' : 'Se crearon ' + (n | number) + ' artículos nuevos.' }}
+        }
+      </p>
       @if (nuevosNoCreados(); as n) {
         <p class="aviso nuevos-no-creados">
           {{ n === 1 ? '1 artículo nuevo no se creó' : (n | number) + ' artículos nuevos no se crearon' }} porque

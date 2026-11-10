@@ -314,14 +314,14 @@ public class ConfigArca {
     private static String faltanDatos(List<String> faltantes) {
         if (faltantes.size() == 1) {
             return "Para habilitar la facturación falta un dato de la ferretería: " + faltantes.get(0)
-                    + ". Lo carga el Dueño en «Datos de la ferretería».";
+                    + ". Lo completa el Dueño en Configuración → Datos de la ferretería.";
         }
         String ultimo = faltantes.get(faltantes.size() - 1);
         // «inicio de actividades» e «Ingresos Brutos» van con «e»: «y» delante de «i» suena «ii».
         String conector = ultimo.toLowerCase(Locale.ROOT).startsWith("i") ? " e " : " y ";
         return "Para habilitar la facturación faltan datos de la ferretería: "
                 + String.join(", ", faltantes.subList(0, faltantes.size() - 1)) + conector + ultimo
-                + ". Los carga el Dueño en «Datos de la ferretería».";
+                + ". Los completa el Dueño en Configuración → Datos de la ferretería.";
     }
 
     public Long getId() { return id; }

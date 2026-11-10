@@ -110,6 +110,7 @@ class CompraControllerIntegrationTest extends IntegrationTestBase {
         assertThat(resumen.get("renglones").asInt()).isEqualTo(1);
         assertThat(getJson("/api/compras", dueno).get("totalElements").asLong()).isEqualTo(2);
         assertThat(getJson("/api/compras?desde=" + LocalDate.now(), dueno).get("totalElements").asLong()).isZero();
+        rangoAlRevesDa400("/api/compras?desde=" + AYER + "&hasta=" + LocalDate.now().minusDays(2), dueno);
 
         getResult("/api/compras/" + id, dueno)
                 .andExpect(status().isOk())

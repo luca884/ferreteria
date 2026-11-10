@@ -14,6 +14,9 @@ import { DatosFiscales, DatosFiscalesService } from './datos-fiscales.service';
 /** Los campos que se validan en la pantalla, con la misma clave que usa el servidor en sus errores. */
 type CampoFiscal = 'razonSocial' | 'domicilioComercial' | 'inicioActividades' | 'ingresosBrutos';
 
+/** Los datos que se pueden guardar vacíos pero hacen falta para facturar (los exige la habilitación de ARCA). */
+type CampoParaFacturar = Exclude<CampoFiscal, 'razonSocial'>;
+
 /** El inicio de actividades más viejo que se acepta; el servidor tiene el mismo piso. */
 const INICIO_ACTIVIDADES_MINIMO = '1900-01-01';
 
@@ -53,6 +56,8 @@ export class PaginaDatosFiscales implements OnInit {
   });
 
   protected readonly cuit = signal<string | null>(null);
+  /** Lo último que devolvió el servidor: los avisos de datos para facturar salen de acá, no de lo que se está escribiendo. */
+  private readonly guardados = signal<DatosFiscales | null>(null);
   protected readonly cargando = signal(true);
   protected readonly cargaFallida = signal(false);
   protected readonly guardando = signal(false);
@@ -136,7 +141,27 @@ export class PaginaDatosFiscales implements OnInit {
     }
   }
 
+  /**
+   * Un dato para facturar que está vacío en lo guardado: se avisa debajo del campo sin bloquear el guardado (se puede
+   * guardar vacío; la facturación lo exige al habilitarse). Si el campo tiene un error, se muestra el error.
+   */
+  protected faltaParaFacturar(campo: CampoParaFacturar): boolean {
+    const guardados = this.guardados();
+    return guardados !== null && !guardados[campo] && this.mensaje(campo) === null;
+  }
+
+  /** Los ids que describen al campo: su pista, si tiene, y después el error o el aviso. */
+  protected descripcion(campo: CampoFiscal, pista = false): string | null {
+    const ids = [
+      ...(pista ? [`${campo}-pista`] : []),
+      ...(this.mensaje(campo) ? [`${campo}-error`] : []),
+      ...(campo !== 'razonSocial' && this.faltaParaFacturar(campo) ? [`${campo}-aviso`] : []),
+    ];
+    return ids.length > 0 ? ids.join(' ') : null;
+  }
+
   private mostrar(datos: DatosFiscales): void {
+    this.guardados.set(datos);
     this.cuit.set(datos.cuit);
     this.form.reset({
       razonSocial: datos.razonSocial,

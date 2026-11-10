@@ -318,13 +318,13 @@ class ConfigArcaAdminIntegrationTest extends PlataformaTestBase {
             jdbc.update("update ferreteria set " + dato.getValue() + " = null where id = ?", f);
 
             regla(facturacion(f, true), "Para habilitar la facturación falta un dato de la ferretería: " + dato.getKey()
-                    + ". Lo carga el Dueño en «Datos de la ferretería».");
+                    + ". Lo completa el Dueño en Configuración → Datos de la ferretería.");
             assertThat(fila(f)).containsEntry("facturacion_habilitada", false).containsEntry("habilitada_en", null);
         }
 
         long f = conSimulador();
         regla(facturacion(f, true), "Para habilitar la facturación faltan datos de la ferretería: domicilio comercial, "
-                + "inicio de actividades e Ingresos Brutos. Los carga el Dueño en «Datos de la ferretería».");
+                + "inicio de actividades e Ingresos Brutos. Los completa el Dueño en Configuración → Datos de la ferretería.");
 
         datosCompletos(f);
         Instant antes = Instant.now();
@@ -527,7 +527,7 @@ class ConfigArcaAdminIntegrationTest extends PlataformaTestBase {
         jdbc.update("update ferreteria set razon_social = '   ' where id = ?", f);
         try {
             regla(facturacion(f, true), "Para habilitar la facturación falta un dato de la ferretería: razón social. "
-                    + "Lo carga el Dueño en «Datos de la ferretería».");
+                    + "Lo completa el Dueño en Configuración → Datos de la ferretería.");
             assertThat(fila(f)).containsEntry("facturacion_habilitada", false);
         } finally {
             jdbc.update("update ferreteria set razon_social = ? where id = ?", razonSocial, f);

@@ -26,6 +26,12 @@ public class LecturaDeFactura {
 
     static final String SIN_RENGLONES = "No se encontraron renglones en la factura. Cargá la compra a mano.";
 
+    /** El mismo tope de renglones que la compra ({@code CompraRequest}): una lista de precios leida como factura lo pasa. */
+    static final int MAXIMO_RENGLONES = 500;
+
+    static final String DEMASIADOS_RENGLONES =
+            "La factura trae más de 500 renglones: no parece una factura. Cargá la compra a mano.";
+
     private final LectorDeFacturas lector;
     private final ProveedoresParaCompra proveedores;
     private final ArticulosParaCompra articulos;
@@ -41,6 +47,9 @@ public class LecturaDeFactura {
         FacturaLeida factura = leerPdf(pdf);
         if (factura.renglones().isEmpty()) {
             throw new BadRequestException(SIN_RENGLONES);
+        }
+        if (factura.renglones().size() > MAXIMO_RENGLONES) {
+            throw new BadRequestException(DEMASIADOS_RENGLONES);
         }
         FacturaLeida.Encabezado encabezado = factura.encabezado();
         Optional<ProveedorDeCompra> proveedor = proveedores.buscarPorCuit(encabezado.cuits());

@@ -24,11 +24,14 @@
     </label>
     <label>
       Hasta
-      <input name="hasta" type="date" [value]="hasta()" (input)="hasta.set($any($event.target).value)" />
+      <input #campoHasta name="hasta" type="date" [value]="hasta()" (input)="hasta.set($any($event.target).value)" />
     </label>
     <button type="submit" class="primario">Buscar</button>
     <button type="button" class="secundario" (click)="limpiar()">Limpiar</button>
   </form>
+  @if (errorFiltros(); as texto) {
+    <p class="error" role="alert">{{ texto }}</p>
+  }
 
   @if (error(); as texto) {
     <div class="error con-accion" role="alert">

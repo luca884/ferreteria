@@ -2360,6 +2360,46 @@ describe('Importaciones', () => {
       expect(el().querySelector('button.confirmar')).toBeNull();
     });
 
+    describe('la frase del resumen dice lo que pasó (bugs-relevamiento-celular, S10)', () => {
+      const ceros: Conteos = {
+        suben: 0,
+        bajan: 0,
+        nuevos: 0,
+        sinCambio: 0,
+        noEstan: 0,
+        conError: 0,
+        cambianMoneda: 0,
+        corrigen: 0,
+        salteadas: 0,
+      };
+      const fraseCon = async (cambios: Partial<Conteos>) => {
+        await conVistaPrevia();
+        servicio.aplicar.mockReturnValue(of({ ...importacion, conteos: { ...ceros, ...cambios } }));
+        await confirmar();
+        return texto(q('.resumen .ayuda'));
+      };
+
+      it('todo nuevo: solo dice cuántos artículos se crearon', async () => {
+        expect(await fraseCon({ nuevos: 1200 })).toBe('Archivo lista.xlsx. Se crearon 1.200 artículos nuevos.');
+      });
+
+      it('un solo nuevo: en singular', async () => {
+        expect(await fraseCon({ nuevos: 1, sinCambio: 3 })).toBe('Archivo lista.xlsx. Se creó 1 artículo nuevo.');
+      });
+
+      it('cambios y nuevos: las dos frases', async () => {
+        expect(await fraseCon({ bajan: 2, nuevos: 5 })).toBe(
+          'Archivo lista.xlsx. Los precios ya están actualizados. Se crearon 5 artículos nuevos.',
+        );
+      });
+
+      it('solo cambios (también de moneda o de IVA y ajustes): como hasta ahora', async () => {
+        expect(await fraseCon({ cambianMoneda: 1, corrigen: 1 })).toBe(
+          'Archivo lista.xlsx. Los precios ya están actualizados.',
+        );
+      });
+    });
+
     it('el resumen muestra los contadores que devolvió el backend, no los de la pantalla', async () => {
       await conVistaPrevia();
       servicio.aplicar.mockReturnValue(

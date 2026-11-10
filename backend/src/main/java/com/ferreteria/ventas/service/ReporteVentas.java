@@ -1,6 +1,7 @@
 package com.ferreteria.ventas.service;
 
 import com.ferreteria.catalogo.api.ArticulosParaVenta;
+import com.ferreteria.common.RangoDeFechas;
 import com.ferreteria.common.exception.DatosInvalidosException;
 import com.ferreteria.ventas.model.Comprobante;
 import com.ferreteria.ventas.model.MedioPago;
@@ -121,9 +122,7 @@ public class ReporteVentas {
         LocalDate hoy = LocalDate.now(reloj);
         LocalDate d = desde != null ? desde : (hasta != null ? hasta : hoy);
         LocalDate h = hasta != null ? hasta : (desde != null ? desde : hoy);
-        if (h.isBefore(d)) {
-            throw new DatosInvalidosException(Map.of("hasta", "La fecha «Hasta» no puede ser anterior a «Desde»."));
-        }
+        RangoDeFechas.validar(d, h);
         if (ChronoUnit.DAYS.between(d, h) + 1 > DIAS_MAXIMOS) {
             throw new DatosInvalidosException(Map.of("desde", "El reporte admite hasta 366 días."));
         }

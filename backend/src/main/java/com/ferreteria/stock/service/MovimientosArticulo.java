@@ -1,6 +1,7 @@
 package com.ferreteria.stock.service;
 
 import com.ferreteria.catalogo.api.ArticulosParaVenta;
+import com.ferreteria.common.RangoDeFechas;
 import com.ferreteria.common.exception.ResourceNotFoundException;
 import com.ferreteria.stock.repository.MovimientoStockRepository;
 import com.ferreteria.stock.repository.MovimientoStockRepository.MovimientoListado;
@@ -46,6 +47,7 @@ public class MovimientosArticulo {
      */
     @Transactional(readOnly = true)
     public Page<Movimiento> listar(Long articuloId, LocalDate desde, LocalDate hasta, int page, int size) {
+        RangoDeFechas.validar(desde, hasta);
         BigDecimal stockActual = articulosParaVenta.stockActual(articuloId)
                 .orElseThrow(() -> new ResourceNotFoundException("Artículo no encontrado"));
         PageRequest pedido = PageRequest.of(Math.max(page, 0), Math.min(Math.max(size, 1), TAMANO_MAXIMO));

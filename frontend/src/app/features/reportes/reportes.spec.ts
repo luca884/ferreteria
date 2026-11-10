@@ -380,6 +380,79 @@ describe('Reportes de ventas', () => {
     expect(normal(el().querySelector('[role="alert"]')?.textContent)).toBe('El reporte admite hasta 366 días.');
   });
 
+  describe('un error no deja el resultado anterior debajo (bugs-relevamiento-celular, S3)', () => {
+    async function rangoAlReves() {
+      input('desde').value = '2026-10-22';
+      input('desde').dispatchEvent(new Event('input'));
+      input('hasta').value = '2026-10-21';
+      input('hasta').dispatchEvent(new Event('input'));
+    }
+
+    it('con el rango al revés se va el «No hubo ventas…» de la consulta anterior', async () => {
+      await crear();
+      servicio['filas'].mockReturnValue(of({ desde: '2026-10-22', hasta: '2026-10-22', filas: [] }));
+      await elegir('por-usuario');
+      expect(el().querySelector('.estado-vacio')).not.toBeNull();
+
+      await rangoAlReves();
+      await elegir('por-usuario');
+
+      expect(normal(el().querySelector('[role="alert"]')?.textContent)).toBe(
+        'La fecha «Hasta» no puede ser anterior a «Desde».',
+      );
+      expect(el().querySelector('.estado-vacio')).toBeNull();
+    });
+
+    it('con el rango al revés se va el resumen que se cargó al entrar', async () => {
+      await crear();
+      expect(el().querySelector('dl.resumen')).not.toBeNull();
+
+      await rangoAlReves();
+      await elegir('resumen');
+
+      expect(el().querySelector('dl.resumen')).toBeNull();
+    });
+
+    it('un error del servidor se lleva la hoja de la caja de la consulta anterior', async () => {
+      await crear();
+      await elegir('movimientos-caja');
+      expect(el().querySelector('section.caja-imprimible')).not.toBeNull();
+
+      servicio['movimientosCaja'].mockReturnValue(
+        throwError(() => new HttpErrorResponse({ status: 400, error: { message: 'Datos inválidos' } })),
+      );
+      await elegir('movimientos-caja');
+
+      expect(el().querySelector('section.caja-imprimible')).toBeNull();
+      expect(el().querySelector('app-barra-acciones button.imprimir')).toBeNull();
+    });
+  });
+
+  describe('la ganancia del resumen va en rojo si es negativa (bugs-relevamiento-celular, S6)', () => {
+    const ganancias = () =>
+      Array.from(el().querySelectorAll('dl.resumen .ganancia')).map((d) => ({
+        rotulo: normal(d.querySelector('dt')?.textContent),
+        negativo: d.querySelector('dd')!.classList.contains('negativo'),
+      }));
+
+    it('negativa: en rojo; positiva o cero: en verde', async () => {
+      await crear();
+      servicio['resumen'].mockReturnValue(of({ ...resumen, ganancia: -50.5, gananciaSinNotas: 0 }));
+      await elegir('resumen');
+
+      expect(ganancias()).toEqual([
+        { rotulo: 'Ganancia sin NC', negativo: false },
+        { rotulo: 'Ganancia con NC', negativo: true },
+      ]);
+    });
+
+    it('las dos positivas: ninguna en rojo', async () => {
+      await crear();
+
+      expect(ganancias().map((g) => g.negativo)).toEqual([false, false]);
+    });
+  });
+
   it('el vendedor ve que los reportes son del dueño y no se pide nada', async () => {
     await crear(false);
 

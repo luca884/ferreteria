@@ -7,6 +7,7 @@ import com.ferreteria.clientes.repository.ClienteRepository;
 import com.ferreteria.clientes.repository.MovimientoCuentaClienteRepository;
 import com.ferreteria.clientes.repository.MovimientoCuentaClienteRepository.LineaDeExtracto;
 import com.ferreteria.clientes.repository.MovimientoCuentaClienteRepository.TotalesDelPeriodo;
+import com.ferreteria.common.RangoDeFechas;
 import com.ferreteria.common.exception.DatosInvalidosException;
 import com.ferreteria.common.exception.ResourceNotFoundException;
 import java.math.BigDecimal;
@@ -70,7 +71,8 @@ public class ExtractoCuenta {
 
     public Extracto extracto(Long clienteId, FiltroExtracto filtro) {
         if (filtro.desde() != null && filtro.hasta() != null && filtro.desde().isAfter(filtro.hasta())) {
-            throw new DatosInvalidosException(Map.of("desde", "La fecha desde no puede ser posterior a hasta."));
+            // El texto único de los rangos (bugs-relevamiento-celular, S4); la clave sigue siendo «desde».
+            throw new DatosInvalidosException(Map.of("desde", RangoDeFechas.HASTA_ANTERIOR_A_DESDE));
         }
         // Las fechas se acotan al rango que la base y el cálculo de «hasta + 1 día» soportan (nunca un 500, CC-073)
         if (fueraDeRango(filtro.desde())) {

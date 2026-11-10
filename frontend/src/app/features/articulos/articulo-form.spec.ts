@@ -899,6 +899,15 @@ describe('ArticuloForm', () => {
       expect(link.getAttribute('href')).toBe('/compras/77');
     });
 
+    it('el link a la compra lleva la ficha de origen, para volver al cerrarla (bugs-relevamiento-celular, S7)', async () => {
+      await crearComponente({ id: '5', articulo: articuloGuardado({ ultimaCompra }) });
+      const navegar = vi.spyOn(TestBed.inject(Router), 'navigateByUrl').mockResolvedValue(true);
+
+      el().querySelector<HTMLAnchorElement>('.ultima-compra a')!.click();
+
+      expect(navegar.mock.calls.at(-1)![1]).toMatchObject({ state: { origen: '/articulos/5' } });
+    });
+
     it('sin compras no muestra nada', async () => {
       await crearComponente({ id: '5', articulo: articuloGuardado({ ultimaCompra: null }) });
 

@@ -42,8 +42,12 @@
   font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
+/* La ganancia en verde si es positiva o cero, y en rojo si es negativa (bugs-relevamiento-celular, S6). */
 .resumen .ganancia dd {
   color: var(--exito);
+}
+.resumen .ganancia dd.negativo {
+  color: var(--error);
 }
 
 table {

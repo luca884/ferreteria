@@ -442,9 +442,13 @@ public interface FacturacionParaVenta {
      *     factura
      * @param comprobanteAsociado el de {@link DocumentoFiscal#comprobanteAsociado()}: la factura que anula una nota de
      *     crédito; null en una factura
+     * @param letraFiscal la letra del registro (A, B o C), aunque no sea válido como factura: la lista la muestra junto a
+     *     la X, así el X A 00001-00000002 no se confunde con el X B 00001-00000002, que es otra serie
+     *     (bugs-relevamiento-celular, S9)
      */
     record ResumenFiscal(String letra, int puntoVenta, Long numero, String estado, String ambiente,
-            boolean validoComoFactura, boolean reimprimir, String clase, Integer codigo, String comprobanteAsociado) {}
+            boolean validoComoFactura, boolean reimprimir, String clase, Integer codigo, String comprobanteAsociado,
+            String letraFiscal) {}
 
     /**
      * La facturación de la ferretería, como la anticipa el cobro (C3).

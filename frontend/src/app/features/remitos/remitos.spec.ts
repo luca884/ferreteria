@@ -289,6 +289,25 @@ describe('Remitos', () => {
       expect(opciones).toEqual(['Todos', 'Emitido', 'Facturado', 'Anulado']);
     });
 
+    it('con «Hasta» antes de «Desde» avisa, no busca y enfoca «Hasta»; corregido, busca (bugs-relevamiento-celular, S4)', async () => {
+      await crear();
+      api.listar.mockClear();
+      filtrar('desde', '2026-10-22');
+      filtrar('hasta', '2026-10-21');
+
+      await buscar();
+
+      expect(api.listar).not.toHaveBeenCalled();
+      expect(el().querySelector('[role="alert"]')?.textContent?.trim()).toBe('La fecha «Hasta» no puede ser anterior a «Desde».');
+      expect(document.activeElement).toBe(el().querySelector('input[name="hasta"]'));
+
+      filtrar('hasta', '2026-10-22');
+      await buscar();
+
+      expect(api.listar).toHaveBeenLastCalledWith({ page: 0, desde: '2026-10-22', hasta: '2026-10-22' });
+      expect(el().textContent).not.toContain('no puede ser anterior');
+    });
+
     it('un número que no es un entero positivo no se manda y avisa', async () => {
       await crear();
       filtrar('numero', 'abc');
@@ -937,6 +956,32 @@ describe('Remitos', () => {
 
       expect(detalle()).toBeNull();
       expect(navegar).toHaveBeenCalledWith('/remitos');
+    });
+
+    it('abierto desde el link de otro documento, cerrarlo vuelve a ese documento (bugs-relevamiento-celular, S7)', async () => {
+      await crear([resumen(5)]);
+      const router = TestBed.inject(Router);
+      vi.spyOn(router, 'currentNavigation').mockReturnValue({ extras: { state: { origen: '/ventas/90' } } } as never);
+      parametros.next(convertToParamMap({ id: '7' }));
+      await refrescar();
+      vi.mocked(router.currentNavigation).mockReturnValue(null);
+
+      esc();
+      await refrescar();
+
+      expect(detalle()).toBeNull();
+      expect(navegar).toHaveBeenCalledWith('/ventas/90');
+    });
+
+    it('el link a la venta lleva el remito de origen, para volver al cerrarla (bugs-relevamiento-celular, S7)', async () => {
+      await crear(undefined, 'DUENO');
+      api.obtener.mockReturnValue(of(detalleDe(5, { estado: 'FACTURADO', facturadoPor: { ventaId: 40, numero: 33 } })));
+      filas()[0].click();
+      await refrescar();
+
+      detalle()!.querySelector<HTMLAnchorElement>('.nota-estado a')!.click();
+
+      expect(navegar.mock.calls.at(-1)![1]).toMatchObject({ state: { origen: '/remitos/50' } });
     });
 
     it('abierto desde la lista, cerrarlo no cambia la dirección', async () => {

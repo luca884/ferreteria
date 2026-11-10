@@ -34,7 +34,7 @@
   </label>
   <label>
     Hasta
-    <input name="hasta" type="date" [value]="hasta()" (input)="hasta.set($any($event.target).value)" />
+    <input #campoHasta name="hasta" type="date" [value]="hasta()" (input)="hasta.set($any($event.target).value)" />
   </label>
   <button type="submit" class="primario">Buscar</button>
   <button type="button" class="secundario" (click)="limpiar()">Limpiar</button>
@@ -181,7 +181,7 @@
         <p class="nota-estado">
           @if (p.facturadoPor; as f) {
             Vendido en la
-            @if (esDueno()) {<a [routerLink]="'/ventas/' + f.ventaId">venta N.º {{ f.numero }}</a>} @else {venta N.º {{ f.numero }}}
+            @if (esDueno()) {<a [routerLink]="'/ventas/' + f.ventaId" [state]="origenDe(p)">venta N.º {{ f.numero }}</a>} @else {venta N.º {{ f.numero }}}
             @if (f.factura; as factura) {
               · {{ factura }}
             }

@@ -1,6 +1,6 @@
 import { DecimalPipe } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
-import { Component, OnInit, computed, inject, signal } from '@angular/core';
+import { Component, ElementRef, OnInit, computed, inject, signal, viewChild } from '@angular/core';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { PageResponse } from '../../core/api/page.models';
 import { AuthService } from '../../core/auth/auth.service';
@@ -8,6 +8,8 @@ import { MontoPipe } from '../../core/formato/monto';
 import { cantidadConUnidad, porUnidad } from '../../core/formato/unidad';
 import { BarraAcciones } from '../../shared/barra-acciones';
 import { DialogoDetalle } from '../../shared/dialogo-detalle';
+import { origenDeLaNavegacion } from '../../shared/documento-por-ruta';
+import { HASTA_ANTERIOR_A_DESDE, rangoAlReves } from '../../shared/rango-de-fechas';
 import { Proveedor } from '../proveedores/proveedor.models';
 import { ProveedoresService } from '../proveedores/proveedores.service';
 import { CompraResponse, CompraResumen, FiltroCompras } from './compra.models';
@@ -53,6 +55,9 @@ export class Compras implements OnInit {
   protected readonly proveedorId = signal('');
   protected readonly desde = signal('');
   protected readonly hasta = signal('');
+  /** El rango al revés: se avisa, no se busca y se enfoca «Hasta» (bugs-relevamiento-celular, S4 y S12). */
+  protected readonly errorFiltros = signal<string | null>(null);
+  private readonly campoHasta = viewChild<ElementRef<HTMLInputElement>>('campoHasta');
   private aplicados: Omit<FiltroCompras, 'page'> = {};
   protected readonly filtrada = signal(false);
 
@@ -61,6 +66,11 @@ export class Compras implements OnInit {
   protected readonly errorDetalle = signal<string | null>(null);
   /** La compra se abrió por `/compras/:id` (la ficha del artículo): al cerrarla se vuelve a `/compras`. */
   private abiertaPorRuta = false;
+  /**
+   * El documento desde cuyo link se abrió (la ficha del artículo): al cerrar se vuelve ahí (bugs-relevamiento-celular,
+   * S7). Se lee al crear la pantalla, que es durante la navegación; en `ngOnInit` la navegación ya terminó.
+   */
+  private origen: string | null = origenDeLaNavegacion(inject(Router));
 
   /** El título del pop-up: de la fila mientras el detalle carga, para que se sepa qué compra se abrió. */
   protected readonly tituloDetalle = computed(() => {
@@ -99,6 +109,12 @@ export class Compras implements OnInit {
 
   protected buscar(evento: Event): void {
     evento.preventDefault();
+    if (rangoAlReves(this.desde(), this.hasta())) {
+      this.errorFiltros.set(HASTA_ANTERIOR_A_DESDE);
+      this.campoHasta()?.nativeElement.focus();
+      return;
+    }
+    this.errorFiltros.set(null);
     this.aplicados = {
       ...(this.proveedorId() ? { proveedorId: Number(this.proveedorId()) } : {}),
       ...(this.desde() ? { desde: this.desde() } : {}),
@@ -112,6 +128,7 @@ export class Compras implements OnInit {
     this.proveedorId.set('');
     this.desde.set('');
     this.hasta.set('');
+    this.errorFiltros.set(null);
     this.aplicados = {};
     this.filtrada.set(false);
     this.cargar(0);
@@ -121,10 +138,12 @@ export class Compras implements OnInit {
     this.elegida.set(null);
     this.detalle.set(null);
     this.errorDetalle.set(null);
-    // Abierta por `/compras/:id`: la dirección deja de nombrar una compra que ya no se ve.
+    // Abierta por `/compras/:id`: la dirección deja de nombrar una compra que ya no se ve. Si vino del link de la ficha
+    // del artículo, vuelve a la ficha (bugs-relevamiento-celular, S7).
     if (this.abiertaPorRuta) {
       this.abiertaPorRuta = false;
-      void this.router.navigateByUrl('/compras');
+      void this.router.navigateByUrl(this.origen ?? '/compras');
+      this.origen = null;
     }
   }
 

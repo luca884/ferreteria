@@ -1,5 +1,6 @@
 package com.ferreteria.ventas.service;
 
+import com.ferreteria.common.RangoDeFechas;
 import com.ferreteria.common.exception.ConflictException;
 import com.ferreteria.common.exception.ResourceNotFoundException;
 import com.ferreteria.facturacion.api.FacturacionParaVenta;
@@ -64,6 +65,7 @@ public class RemitoGestion {
     @Transactional(readOnly = true)
     public Page<Remito> listar(
             EstadoRemito estado, Long numero, LocalDate desde, LocalDate hasta, int page, int size) {
+        RangoDeFechas.validar(desde, hasta);
         return remitoRepository.buscarScoped(estado, numero,
                 desde == null ? null : desde.atStartOfDay(),
                 hasta == null ? null : hasta.plusDays(1).atStartOfDay(),

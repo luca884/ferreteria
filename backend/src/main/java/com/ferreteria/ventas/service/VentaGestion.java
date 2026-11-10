@@ -1,5 +1,6 @@
 package com.ferreteria.ventas.service;
 
+import com.ferreteria.common.RangoDeFechas;
 import com.ferreteria.common.exception.ResourceNotFoundException;
 import com.ferreteria.facturacion.api.FacturacionParaVenta;
 import com.ferreteria.facturacion.api.FacturacionParaVenta.AccionFiscal;
@@ -124,6 +125,7 @@ public class VentaGestion {
     @Transactional(readOnly = true)
     public Page<VentaListada> listar(Long numero, String cliente, String numeroFiscal, Bandeja bandeja, LocalDate desde,
             LocalDate hasta, int page, int size) {
+        RangoDeFechas.validar(desde, hasta);
         Optional<NumeroFiscal> fiscal = NumeroFiscal.de(numeroFiscal);
         String clienteLike = cliente == null || cliente.isBlank() ? null : "%" + escapar(cliente.strip()) + "%";
         LocalDateTime desdeHora = desde == null ? null : desde.atStartOfDay();

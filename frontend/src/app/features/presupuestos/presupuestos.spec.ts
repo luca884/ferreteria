@@ -279,6 +279,25 @@ describe('Presupuestos', () => {
       });
     });
 
+    it('con «Hasta» antes de «Desde» avisa, no busca y enfoca «Hasta»; corregido, busca (bugs-relevamiento-celular, S4)', async () => {
+      await crear();
+      api.listar.mockClear();
+      filtrar('desde', '2026-10-22');
+      filtrar('hasta', '2026-10-21');
+
+      await buscar();
+
+      expect(api.listar).not.toHaveBeenCalled();
+      expect(el().querySelector('[role="alert"]')?.textContent?.trim()).toBe('La fecha «Hasta» no puede ser anterior a «Desde».');
+      expect(document.activeElement).toBe(el().querySelector('input[name="hasta"]'));
+
+      filtrar('hasta', '2026-10-22');
+      await buscar();
+
+      expect(api.listar).toHaveBeenLastCalledWith({ page: 0, desde: '2026-10-22', hasta: '2026-10-22' });
+      expect(el().textContent).not.toContain('no puede ser anterior');
+    });
+
     it('un número que no es un entero positivo no se manda y avisa', async () => {
       await crear();
       filtrar('numero', 'abc');
@@ -503,6 +522,16 @@ describe('Presupuestos', () => {
       expect(normal(detalle()!.querySelector('.nota-estado')?.textContent)).toBe('Vendido en la venta N.º 19');
       expect(detalle()!.textContent).not.toContain('Facturado');
       expect(detalle()!.textContent).not.toContain('facturó');
+    });
+
+    it('el link a la venta lleva el presupuesto de origen, para volver al cerrarla (bugs-relevamiento-celular, S7)', async () => {
+      await crear(undefined, 'DUENO');
+      api.obtener.mockReturnValue(of(detalleDe(12, { estado: 'FACTURADO', facturadoPor: { ventaId: 80, numero: 19 } })));
+      await abrirDetalle(0);
+
+      detalle()!.querySelector<HTMLAnchorElement>('.nota-estado a')!.click();
+
+      expect(navegar.mock.calls.at(-1)![1]).toMatchObject({ state: { origen: '/presupuestos/120' } });
     });
 
     it('si la venta tiene una factura válida, la suma a la nota: «Vendido en la venta N.º 19 · Factura B 00001-00000012» (arreglos-confusos, S5)', async () => {
@@ -866,6 +895,21 @@ describe('Presupuestos', () => {
 
       expect(detalle()).toBeNull();
       expect(navegar).toHaveBeenCalledWith('/presupuestos');
+    });
+
+    it('abierto desde el link de otro documento, cerrarlo vuelve a ese documento (bugs-relevamiento-celular, S7)', async () => {
+      await crear([resumen(12)]);
+      const router = TestBed.inject(Router);
+      vi.spyOn(router, 'currentNavigation').mockReturnValue({ extras: { state: { origen: '/ventas/90' } } } as never);
+      parametros.next(convertToParamMap({ id: '5' }));
+      await refrescar();
+      vi.mocked(router.currentNavigation).mockReturnValue(null);
+
+      esc();
+      await refrescar();
+
+      expect(detalle()).toBeNull();
+      expect(navegar).toHaveBeenCalledWith('/ventas/90');
     });
 
     it('abierto desde la lista, cerrarlo no cambia la dirección', async () => {

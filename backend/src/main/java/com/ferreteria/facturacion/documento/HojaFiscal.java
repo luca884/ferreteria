@@ -96,7 +96,8 @@ public final class HojaFiscal {
         boolean valido = validoComoFactura(registro);
         return new ResumenFiscal(letra(registro), registro.getPuntoVenta(), registro.getNumero(),
                 registro.getEstado().name(), registro.getAmbiente().name(), valido, BandejaFiscal.reimprimir(registro),
-                registro.getClase().name(), valido ? registro.getCbteTipo() : null, comprobanteAsociado(registro));
+                registro.getClase().name(), valido ? registro.getCbteTipo() : null, comprobanteAsociado(registro),
+                registro.getLetra().name());
     }
 
     /**

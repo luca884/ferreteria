@@ -21,7 +21,7 @@
     }
     @if (origen(); as o) {
       <span
-        >{{ o.texto }}@if (o.numero; as numero) {@if (conLinks() && o.ruta) {<a [routerLink]="o.ruta">{{ numero }}</a>} @else {{{ numero }}}}</span
+        >{{ o.texto }}@if (o.numero; as numero) {@if (conLinks() && o.ruta) {<a [routerLink]="o.ruta" [state]="estadoDelLink()">{{ numero }}</a>} @else {{{ numero }}}}</span
       >
     }
   </p>
