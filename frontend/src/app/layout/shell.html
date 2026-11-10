@@ -1,5 +1,22 @@
 <a class="saltar" href="#contenido" (click)="saltarAlContenido($event, contenido)">Saltar al contenido</a>
-<aside class="lateral">
+<!-- Velo del cajón (S2): por debajo de 1024 px, tocarlo cierra el menú. En escritorio no se ve. -->
+<div class="velo" [class.abierto]="menuAbierto()" (click)="cerrarMenu()" aria-hidden="true"></div>
+<!-- Encabezado del cajón (S2): el botón «Menú» y el título de la pantalla. En escritorio no se ve. -->
+<header class="encabezado">
+  <button
+    #botonMenu
+    type="button"
+    class="abrir-menu"
+    [attr.aria-expanded]="menuAbierto()"
+    aria-controls="menu-lateral"
+    (click)="alternarMenu()"
+  >
+    <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 4h12M2 8h12M2 12h12" /></svg>
+    Menú
+  </button>
+  <span class="titulo-pantalla">{{ tituloPantalla() }}</span>
+</header>
+<aside #cajon class="lateral" id="menu-lateral" tabindex="-1" [class.abierto]="menuAbierto()">
   <div class="marca">
     <svg class="logo" viewBox="0 0 28 28" aria-hidden="true">
       <rect width="28" height="28" rx="7" />

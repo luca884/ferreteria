@@ -1,4 +1,4 @@
-import { Component, computed, inject, signal } from '@angular/core';
+import { Component, DestroyRef, ElementRef, computed, inject, signal, viewChild } from '@angular/core';
 import { takeUntilDestroyed, toObservable } from '@angular/core/rxjs-interop';
 import { NavigationEnd, NavigationSkipped, Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { EMPTY, catchError, filter, interval, merge, pairwise, startWith, switchMap } from 'rxjs';
@@ -32,13 +32,17 @@ export function iniciales(nombre: string): string {
  *
  * El menú: «Mostrador» fijo arriba y los grupos de `menu.ts`, que se abren y cierran con un clic; el de la pantalla
  * abierta se abre solo. El shell lleva en `data-seccion` la sección de la pantalla, que le da su tono (bloque 2, S1-S2).
+ *
+ * Por debajo de 1024 px (S2) el menú pasa a ser un cajón que se abre con el botón «Menú» de un encabezado nuevo, que
+ * además muestra el título de la pantalla. El corte y el cajón los resuelve el CSS: acá solo vive el estado abierto/cerrado
+ * y el teclado (Esc y el foco, que no se escapa del cajón mientras está abierto). Desde 1024 px nada de esto se ve.
  */
 @Component({
   selector: 'app-shell',
   imports: [RouterOutlet, RouterLink, RouterLinkActive, CotizacionLateral, IconoDelMenu, BuscadorMenu],
   templateUrl: './shell.html',
   styleUrl: './shell.css',
-  host: { '[attr.data-seccion]': 'seccion()' },
+  host: { '[attr.data-seccion]': 'seccion()', '(keydown)': 'alTeclear($event)' },
 })
 export class Shell {
   protected readonly auth = inject(AuthService);
@@ -61,7 +65,23 @@ export class Shell {
   protected readonly seccion = computed(() => seccionDe(this.url()));
   private readonly abiertos = signal<ReadonlySet<Seccion>>(new Set());
 
+  /** El cajón del menú (por debajo de 1024 px). Arranca cerrado y el corte lo resuelve el CSS. */
+  protected readonly menuAbierto = signal(false);
+  /** El título de la pantalla, leído del primer `h1` que ya pone cada una (en T6 queda solo para lectores de pantalla). */
+  protected readonly tituloPantalla = signal('');
+
+  private readonly host: ElementRef<HTMLElement> = inject(ElementRef);
+  private readonly destruccion = inject(DestroyRef);
+  private readonly cajon = viewChild<ElementRef<HTMLElement>>('cajon');
+  private readonly botonMenu = viewChild<ElementRef<HTMLButtonElement>>('botonMenu');
+
   constructor() {
+    // El encabezado del cajón muestra el título sin tocar las pantallas: sigue al primer `h1` del contenido.
+    const observador = new MutationObserver(() => this.leerTitulo());
+    observador.observe(this.host.nativeElement, { childList: true, subtree: true, characterData: true });
+    this.destruccion.onDestroy(() => observador.disconnect());
+    this.leerTitulo();
+
     this.abrirElDe(this.router.url);
     this.router.events
       .pipe(
@@ -71,6 +91,8 @@ export class Shell {
       .subscribe((evento) => {
         this.abrirElDe(evento.urlAfterRedirects);
         this.avisoAlLlegar.set(this.avisos.tomar());
+        // Al navegar el cajón se cierra (S2): la pantalla nueva se ve entera sin un paso de más.
+        if (this.menuAbierto()) this.cerrarMenu();
       });
     // Una redirección a la pantalla en la que ya se está (el Vendedor en el Mostrador que va a Ventas) no termina en
     // NavigationEnd: el aviso que dejó el guard se muestra acá mismo, en vez de quedar para la pantalla siguiente.
@@ -82,6 +104,8 @@ export class Shell {
       .subscribe(() => {
         const aviso = this.avisos.tomar();
         if (aviso) this.avisoAlLlegar.set(aviso);
+        // Tocar en el cajón la opción de la pantalla en la que ya se está no navega: el cajón se cierra igual.
+        if (this.menuAbierto()) this.cerrarMenu();
       });
 
     // Se lee al abrir, cada 5 minutos y cuando la configuración o un recálculo avisan que la cotización cambió.
@@ -126,6 +150,72 @@ export class Shell {
   protected saltarAlContenido(evento: Event, contenido: HTMLElement): void {
     evento.preventDefault();
     contenido.focus();
+  }
+
+  protected alternarMenu(): void {
+    if (this.menuAbierto()) {
+      this.cerrarMenu();
+      return;
+    }
+    this.menuAbierto.set(true);
+    // El foco entra al cajón (en el cajón, no en un campo: no abre el teclado del celular) y Tab sigue desde adentro.
+    this.cajon()?.nativeElement.focus();
+  }
+
+  /** Cierra el cajón y devuelve el foco al botón «Menú» (S2). */
+  protected cerrarMenu(): void {
+    this.menuAbierto.set(false);
+    this.botonMenu()?.nativeElement.focus();
+  }
+
+  /**
+   * Esc cierra y Tab da la vuelta dentro del cajón. Sin cajón abierto no se toca nada: en escritorio el menú es la columna
+   * del grid y el teclado se comporta como siempre.
+   */
+  protected alTeclear(evento: Event): void {
+    // Lo que un control de adentro ya resolvió (Esc en el buscador vacía la búsqueda) no se pisa desde acá.
+    if (!(evento instanceof KeyboardEvent) || evento.defaultPrevented || !this.menuAbierto()) return;
+
+    if (evento.key === 'Escape') {
+      evento.preventDefault();
+      this.cerrarMenu();
+      return;
+    }
+    if (evento.key !== 'Tab') return;
+
+    const controles = this.controlesDelCajon();
+    const primero = controles[0];
+    const ultimo = controles[controles.length - 1];
+    if (!primero || !ultimo) return;
+
+    const activo = document.activeElement as HTMLElement | null;
+    const adentro = activo !== null && !!this.cajon()?.nativeElement.contains(activo);
+    if (evento.shiftKey) {
+      if (!adentro || activo === primero) {
+        evento.preventDefault();
+        ultimo.focus();
+      }
+    } else if (!adentro || activo === ultimo) {
+      evento.preventDefault();
+      primero.focus();
+    }
+  }
+
+  /** Los controles del cajón en el orden en que los recorre Tab. */
+  private controlesDelCajon(): HTMLElement[] {
+    const cajon = this.cajon()?.nativeElement;
+    if (!cajon) return [];
+    return Array.from(
+      cajon.querySelectorAll<HTMLElement>(
+        'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+      ),
+    ).filter((control) => control.getAttribute('aria-hidden') !== 'true');
+  }
+
+  /** El título del encabezado es el del primer `h1` de la pantalla abierta; sin `h1` queda vacío. */
+  private leerTitulo(): void {
+    const titulo = this.host.nativeElement.querySelector('h1')?.textContent?.trim() ?? '';
+    if (titulo !== this.tituloPantalla()) this.tituloPantalla.set(titulo);
   }
 
   protected salir(): void {
