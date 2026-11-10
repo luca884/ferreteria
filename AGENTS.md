@@ -1,6 +1,8 @@
-# CLAUDE.md
+# AGENTS.md
 
 Guía para agentes que trabajan en este repo.
+
+Harness: **Gentle Shell + Gentle AI** (Pi). Memoria persistente en Engram con `project: "ferreteria"`.
 
 ## Qué es
 
@@ -8,7 +10,6 @@ SaaS multi-tenant de gestión para ferreterías de Mar del Plata: mostrador (ven
 
 - **Spec del MVP**: `docs/spec.md`. Los 10 casos de uso (CU-01 a CU-10) y las reglas de negocio salen de ahí. Si algo no está en la spec, no se implementa sin preguntar.
 - **Principio rector**: simple, práctico y que funcione. Si una ferretería real no lo pide, no entra.
-- **Documentación y avance**: vault de Obsidian en `~/Projects/Obsidian/Projects/Ferreteria/`. Al cerrar una sesión, actualizar `estado-actual.md` de esa carpeta.
 
 ## Stack
 
@@ -20,19 +21,22 @@ SaaS multi-tenant de gestión para ferreterías de Mar del Plata: mostrador (ven
 ## Comandos
 
 ```bash
-# Base de datos local (puerto 3307)
-docker compose up -d
+docker compose up -d                 # MySQL local (puerto 3307)
 
-# Backend (perfil dev: carga datos demo)
-cd backend && ./mvnw spring-boot:run
-cd backend && ./mvnw test            # incluye Testcontainers: necesita Docker corriendo
+cd backend && ./mvnw spring-boot:run                     # perfil dev, carga datos demo
+cd backend && ./mvnw test -Dtest=<Clase>#<metodo>        # focalizado
+cd backend && ./mvnw test                                # suite: 3 JVM en paralelo, MySQL propia (~9 min)
+cd backend && ./mvnw test -DforkCount=1                  # suite con una sola JVM
+cd backend && ./mvnw test -Pimagen                       # imagen real; obligatorio antes de deploy y si cambia backend/Dockerfile
 
-# Frontend
 cd frontend && npm install
-cd frontend && npm start             # http://localhost:4200
+cd frontend && npm start                                 # http://localhost:4200
+cd frontend && npx ng test --watch=false --include=<ruta/al/archivo.spec.ts>
 cd frontend && npx ng test --watch=false
-cd frontend && npx ng build
+cd frontend && npx ng build                              # si toca templates, rutas o configuración
 ```
+
+Necesita Docker corriendo. **Nunca dos suites a la vez**; borrar solo contenedores propios.
 
 Usuarios demo (perfil dev, contraseña `demo1234`): `dueno@tornillo.demo`, `vendedor@tornillo.demo`, `dueno@tuerca.demo`, `admin@demo.local`.
 
@@ -51,19 +55,10 @@ Usuarios demo (perfil dev, contraseña `demo1234`): `dueno@tornillo.demo`, `vend
 - Nombres del dominio en español (`Rubro`, `Articulo`, `Comprobante`), código técnico en inglés cuando es estándar (`Repository`, `Service`, `Controller`).
 - Mensajes de error al usuario en español rioplatense.
 - Commits en español: `tipo: descripción` (`feat`, `fix`, `refactor`, `test`, `docs`, `chore`).
-- Un caso de uso por rama (`feat/cu-04-importar-lista`): primero tests del dominio, después endpoint, después pantalla.
-
-## Estado
-
-Fase 2 (esqueleto) en curso: auth con JWT, multi-tenant, rubros como primer módulo con aislamiento probado. Próximo: fase 3, artículos y precios (CU-03, CU-04, CU-05). Ver `docs/spec.md` → Plan de implementación.
-
-## ODD
-
-- Test-first: aplica en `backend/` (JUnit 5 + Mockito + Testcontainers + ArchUnit) y `frontend/` (Vitest, builder `@angular/build:unit-test`). RED → GREEN → REFACTOR en cada cambio de comportamiento; el orden del caso de uso sigue siendo dominio → endpoint → pantalla.
-- `backend/` — focalizado: `./mvnw test -Dtest=<Clase>` (o `<Clase>#<metodo>`) · suite: `./mvnw test` (3 JVM en paralelo, cada una con su MySQL; ~9 min; `-DforkCount=1` para una sola). Necesita Docker corriendo. Antes de cada deploy, o si cambia `backend/Dockerfile`: `./mvnw test -Pimagen` (construye la imagen real y la prueba; la suite no lo corre, y `-Dtest=ImagenDeProduccionTest` sin `-Pimagen` falla con «No tests were executed!»).
-- `frontend/` — focalizado: `npx ng test --watch=false --include=<ruta/al/archivo.spec.ts>` · suite: `npx ng test --watch=false` · al cerrar, si toca templates, rutas o configuración: `npx ng build`.
-- **Nunca dos suites a la vez.** Borrar solo contenedores propios.
-- Ramas: una por caso de uso (`feat/cu-XX-<slug>`), gana sobre `feat/<feature>` de ODD.
+- Un caso de uso por rama (`feat/cu-04-importar-lista`): primero tests del dominio, después endpoint, después pantalla. Esta rama gana sobre `feat/<feature>`.
 - Feature docs: `odd/tasks/<feature>.md` en la raíz del repo, commiteados con la feature. Espejo Engram con `project: "ferreteria"`.
-- Gate de verificación propio: ninguno (niveles de ODD; `odd-verifier` solo para alto riesgo). Ejecutores propios: ninguno (`odd-implementer`).
-- Merge y push a `main`: los corre Luca.
+
+## Límites
+
+- **Push a `main`, merge y deploy los hace Luca.** El agente deja la rama y el PR listos.
+- **El estado del proyecto no vive en este archivo**: vive en el vault (`Projects/Ferreteria/estado-actual.md`) y en Engram. No lo dupliques acá.
