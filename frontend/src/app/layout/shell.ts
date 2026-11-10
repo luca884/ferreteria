@@ -189,7 +189,10 @@ export class Shell {
     if (!primero || !ultimo) return;
 
     const activo = document.activeElement as HTMLElement | null;
-    const adentro = activo !== null && !!this.cajon()?.nativeElement.contains(activo);
+    // El propio cajón no cuenta como «adentro»: al abrir el foco queda en el `aside` (tabindex=-1) y desde ahí
+    // Shift+Tab tiene que ir al último control, no salirse al botón «Menú», que queda detrás del velo (B1).
+    const cajon = this.cajon()?.nativeElement;
+    const adentro = !!cajon && activo !== cajon && cajon.contains(activo);
     if (evento.shiftKey) {
       if (!adentro || activo === primero) {
         evento.preventDefault();

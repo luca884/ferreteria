@@ -372,6 +372,12 @@ nav a:focus-visible {
 /*
  * S2 completa: desde 1024 px el encabezado del cajón y el velo no existen, y el menú vuelve a ser la columna del grid.
  * Va al final del archivo para que ninguna regla base le gane por orden de lectura (misma especificidad).
+ *
+ * Queda un hueco de 0,02 px entre las dos consultas (1023,98 < ancho < 1024): solo se alcanza con un ancho CSS
+ * fraccionario, y ahí ganaría el `:host` de escritorio con el encabezado suelto en el grid. Se acepta: la alternativa
+ * de esconder el encabezado en la regla base deja al botón «Menú» fuera del alcance de `focus()` en jsdom —que no
+ * evalúa media queries— y rompe los tests de Esc y velo, que es un problema todos los días y no una vez cada mil
+ * zooms.
  */
 @media (min-width: 1024px) {
   .encabezado,

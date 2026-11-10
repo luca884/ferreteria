@@ -918,5 +918,36 @@ describe('Shell', () => {
       await despuesDeObservar();
       expect(titulo()).toBe('Clientes');
     });
+
+    it('el título cubre sin h1, dos h1 y un cambio sin navegar', async () => {
+      const el = await render(true, null, CON_TITULO);
+      const titulo = () => el.querySelector('.encabezado .titulo-pantalla')?.textContent?.trim();
+
+      await irA('/configuracion/cotizacion');
+      await despuesDeObservar();
+      el.querySelector('h1')!.textContent = 'Cambiado';
+      await despuesDeObservar();
+      expect(titulo()).toBe('Cambiado');
+
+      await irA('/ventas');
+      await despuesDeObservar();
+      expect(titulo()).toBe('');
+    });
+
+    // Hallazgo B1 de la verificación independiente: al abrir, el foco queda en el propio cajón (no en un control),
+    // así que Shift+Tab tiene que ir al último control de adentro y no salirse al botón «Menú», que está tras el velo.
+    it('Shift+Tab con el foco en el cajón recién abierto lo manda al último control, no afuera', async () => {
+      const el = await render(true);
+      const { cajon } = await abrirElCajon(el);
+      const controles = focosables(cajon);
+      expect(document.activeElement).toBe(cajon);
+
+      const shiftTab = tecla('Tab', true);
+      cajon.dispatchEvent(shiftTab);
+      await estable();
+
+      expect(shiftTab.defaultPrevented).toBe(true);
+      expect(document.activeElement).toBe(controles[controles.length - 1]);
+    });
   });
 });
