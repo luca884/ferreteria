@@ -51,6 +51,9 @@ leerla entera costaba media ventana de contexto. Ahora se lee sólo lo que la ta
 
 Citado como `docs/spec.md:<línea>` en el SDD y en `odd/tasks` (59 referencias). El archivo original
 tenía 676 líneas y se partió el 2026-11-10 **sin editar una sola palabra**: cada bloque se copió verbatim.
+Única excepción, corregida el 2026-11-10 por decisión de Luca: el conteo de casos de uso de
+[`spec/02-casos-de-uso.md`](spec/02-casos-de-uso.md), que decía «12 casos de uso … cinco módulos» cuando la propia
+lista tiene 16 CU y seis módulos. Está marcada ahí con un comentario.
 Para resolver una cita histórica, buscá la línea en la tabla:
 
 | Rango original | Archivo nuevo |

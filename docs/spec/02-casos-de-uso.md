@@ -5,8 +5,13 @@
 <!-- spec payload: spec.md:35-39 -->
 ## Casos de uso del MVP
 
-Son 12 casos de uso (CU-01 a CU-12), agrupados en cinco módulos: Configuración, Artículos y precios, Venta, Stock y caja, y Clientes. Si algo no está en esta lista, no entra en el MVP.
+Son 16 casos de uso (CU-01 a CU-16), agrupados en seis módulos: Configuración, Artículos y precios, Venta, Stock y caja, Clientes y Reportes. Si algo no está en esta lista, no entra en el MVP.
 <!-- fin payload: spec.md:35-39 -->
+
+<!-- Única desviación de la copia verbatim de la partición del 2026-11-10, corregida ese mismo día por decisión de Luca: el
+     original decía «Son 12 casos de uso (CU-01 a CU-12), agrupados en cinco módulos: Configuración, Artículos y precios,
+     Venta, Stock y caja, y Clientes». La lista de abajo tiene 16 CU y seis módulos, así que el conteo del texto no
+     coincidía con su propio contenido: faltaban CU-13 a CU-16 y el módulo Reportes. El resto del documento sigue literal. -->
 
 <!-- Mapa de módulos. Los seis encabezados de abajo son las líneas 39, 65, 98, 168, 190 y 306 del spec.md original, verbatim. -->
 
