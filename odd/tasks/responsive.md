@@ -2,7 +2,7 @@
 
 Objetivo: la app se puede usar bien en celular, tablet y laptop, sin cambiar cómo se ve en escritorio · Por qué: el relevamiento a 390×844 del 2026-11-09 encontró que ninguna pantalla es usable hoy en el celular (L2).
 Rama: `feat/responsive` desde `c65fccf5` · Entrega: single-pr · Runner: frontend `npx ng test --watch=false --include=<spec>` / suite `npx ng test --watch=false` / `npx ng build` · Mirror Engram: `odd/responsive/tasks` (ok)
-Pronóstico: ~1.700 líneas (agregadas + borradas, sin generados) · Heurística por tarea: ~400 (no es límite) · Modelo: Opus escribió el doc; ejecuta una terminal con Opus (caso 4 + memoria «ejecutar con Opus»), aprobado por Luca (L6) · Arranca después del merge de `fix/bugs-relevamiento-celular`, rebaseando esta rama sobre `main` antes de T0 (L7)
+Pronóstico: ~1.700 líneas (agregadas + borradas, sin generados) · Heurística por tarea: ~400 (no es límite) · Modelo: Opus escribió el doc; lo ejecuta la sesión de trabajo inline (deepseek/glm), sin terminal aparte (L8, corrige L6) · Rebaseada sobre `main` (`56e45c7a`, el merge de los bugs) el 2026-11-10, sin conflictos (L8)
 
 ## Specs
 
@@ -110,7 +110,7 @@ Usuarios locales (contraseña `demo1234`): `dueno@faro.qa`, `vendedor@faro.qa`, 
 
 ## Tasks
 
-- [ ] T0 · S1 · ruta: inline · Aceptación: hay una línea base de la medición M en `main` (`c65fccf5`) a 1280 y 1440 en las 37 rutas, guardada en el scratch del ejecutor para comparar después. Las rutas con `:id` usan un id real de cada ferretería · Evidencia: — · Risk: none
+- [ ] T0 · S1 · ruta: inline · Aceptación: hay una línea base de la medición M en `main` (`56e45c7a`, el merge de los bugs; L8 corrige el `c65fccf5` del doc) a 1280 y 1440 en las 37 rutas, guardada en `.scratch/medicion-base/` para comparar después. Las rutas con `:id` usan un id real de cada ferretería · Evidencia: — · Risk: none
 - [ ] T1 · S2, S12a-b · ruta: inline · Aceptación: S2. Toca `layout/shell.{html,css,ts}`, `styles.css:94` (`--ancho-menu`) y `shell.spec.ts` · Evidencia: — · Risk: item 3 (el shell lo usan todas las pantallas) + item 6 (ningún test atrapa el layout) → medición M a 1280/1440 contra T0
 - [ ] T2 · S3, S12c, S12g · ruta: inline · Aceptación: S3. Toca `styles.css:872-990` (`.dialogo-fondo` con columna `minmax(0,1fr)`, `.dialogo` con `max-height` y `overflow`, pie con wrap, detalle a pantalla completa por debajo de 640 px), los anchos propios de cada diálogo (L4) y los contenedores de tablas dentro de pop-ups · Evidencia: — · Risk: item 3 + item 6 → medición M (c) de cada pop-up a 390 y 1280
 - [ ] T3 · S4, S11 (imprimibles) · ruta: inline · Aceptación: S4. Agrega una clase común para fijar la columna que identifica la fila (`position: sticky; left: 0` con fondo) en `styles.css:625-635`, envuelve las ~30 tablas sueltas (L4) y define anchos mínimos e importes `nowrap` · Evidencia: — · Risk: item 6 → medición M a 390 y 1280 en cada pantalla con tabla
@@ -120,7 +120,7 @@ Usuarios locales (contraseña `demo1234`): `dueno@faro.qa`, `vendedor@faro.qa`, 
 - [ ] T7 · S8, S11 (Clientes) · ruta: inline · Aceptación: S8. Una directiva o helper compartido en `shared/`, que reutiliza el patrón `scrollIntoView?.({block: 'nearest'})`, aplicado a los avisos de acción. RED: spec de la directiva y de una pantalla (Clientes) · Evidencia: — · Risk: none
 - [ ] T8 · S9, S10, S12f · ruta: inline · Aceptación: S9 y S10. Toca `styles.css:220-260` (controles), `321-404` (botones), `416-449` (`kbd`, `[data-tecla]`), la clase `.pista-teclado` en los ~12 textos sueltos (L4) y los ítems del menú · Evidencia: — · Risk: item 6 → medición M (d) a 390 y que nada cambie a 1280
 - [ ] T9 · S11 · ruta: inline · Aceptación: S11, menos lo que ya cubrieron T3 y T7 · Evidencia: — · Risk: none
-- [ ] T10 · S1, cierre · ruta: delegada (3 agentes en paralelo, uno por perfil de ego-browser, como en el relevamiento) + `odd-verifier` (Opus) por item 6 · Aceptación: medición M completa en las 37 rutas a los 6 anchos, sin desbordes ni controles tapados, y 1280/1440 igual que T0; suite frontend y `npx ng build` verdes; captura de cada pantalla a 390 para Luca · Evidencia: — · Risk: item 6 → `odd-verifier` una vez al final de la feature
+- [ ] T10 · S1, cierre · ruta: delegada (3 agentes en paralelo, uno por perfil de ego-browser, como en el relevamiento) + `odd-verifier` por item 6 · Aceptación: medición M completa en las 37 rutas a los 6 anchos, sin desbordes ni controles tapados, y 1280/1440 igual que T0; suite frontend y `npx ng build` verdes; captura de cada pantalla a 390 para Luca · Evidencia: — · Risk: item 6 → `odd-verifier` una vez al final de la feature
 
 ## Log
 
@@ -188,3 +188,7 @@ Usuarios locales (contraseña `demo1234`): `dueno@faro.qa`, `vendedor@faro.qa`, 
   2. Arrancar por T0.
 
   Las líneas citadas en L4 pueden haberse corrido en los archivos que tocó la rama de bugs: `nueva-compra`, `reportes`, `ventas`, `presupuestos`, `remitos`, `compras`, `configuracion-ventas`, `datos-fiscales`, `importaciones` y los listados con Desde/Hasta. Se releen antes de editar.
+- L8 (2026-11-10) Merge de los bugs y arranque de esta feature. `fix/bugs-relevamiento-celular` entró en `main` como PR #41 (`56e45c7a`), con la rama remota y el worktree ya borrados. `feat/responsive` se rebaseó sobre `main` sin conflictos (solo tenía los commits del doc): ahora es `bc29091e` sobre `56e45c7a`. Cambia el ejecutor: la feature la ejecuta la sesión de trabajo inline (deepseek/glm), no una terminal con Opus como decía L6. Luca, textual:
+  > recorda que estamos usando deepseek y glm ahora
+
+  Al preguntarle con qué modelo ejecutar T0–T10, eligió «Inline en esta sesión». Consecuencias: T10 ya no nombra un verificador Opus, y la línea base de T0 se mide sobre el `main` actual (`56e45c7a`) y no sobre `c65fccf5`, que es anterior a los arreglos de los bugs que cambiaron textos y avisos en `nueva-compra`, `reportes`, `ventas`, `presupuestos`, `remitos`, `compras`, `configuracion-ventas`, `datos-fiscales` e `importaciones`.

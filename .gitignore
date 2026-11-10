@@ -29,3 +29,6 @@ Lista/
 *.key
 *.pem
 *.p12
+
+# Scratch local de las sesiones
+.scratch/
