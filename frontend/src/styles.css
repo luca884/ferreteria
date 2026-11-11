@@ -874,6 +874,11 @@ ul.error {
   inset: 0;
   z-index: var(--z-dialogo);
   display: grid;
+  /*
+   * La columna no crece con el contenido: sin `minmax(0, 1fr)` la tabla del detalle de una compra ensanchaba el pop-up
+   * a 825 px y la ✕ y los botones del pie quedaban fuera de la pantalla del celular.
+   */
+  grid-template-columns: minmax(0, 1fr);
   place-items: center;
   padding: var(--e-4);
   background: var(--velo);
@@ -883,6 +888,11 @@ ul.error {
   flex-direction: column;
   gap: var(--e-4);
   width: min(440px, 100%);
+  /* El ancho de cada diálogo es un tope, no un ancho: nunca pasa la pantalla menos el margen del velo. */
+  max-width: 100%;
+  /* El alto lo pone la pantalla y el contenido scrollea adentro, con el pie pegado abajo. */
+  max-height: calc(100vh - var(--e-8));
+  overflow: auto;
   padding: var(--e-6);
   border-radius: var(--radio-xl);
   background: var(--superficie);
@@ -900,9 +910,22 @@ ul.error {
 }
 .dialogo-acciones {
   display: flex;
+  flex-wrap: wrap;
   justify-content: flex-end;
   gap: 10px;
   padding-top: var(--e-1);
+  /* El pie no se va con el scroll del diálogo: los botones se ven y se tocan siempre, y si no entran, hacen wrap. */
+  position: sticky;
+  bottom: 0;
+  background: var(--superficie);
+}
+/* Una tabla adentro de un pop-up: scrollea en horizontal en su contenedor en vez de ensanchar el diálogo. */
+.tabla-scroll {
+  max-width: 100%;
+  overflow-x: auto;
+  /* Es un ítem del flex del diálogo: sin esto, al scrollear el diálogo se encoge a alto 0 (el mínimo automático de un
+     contenedor con scroll es 0) y la tabla se sale. */
+  flex: none;
 }
 .dialogo-acciones button {
   min-height: 44px;
@@ -960,7 +983,8 @@ ul.error {
   gap: var(--e-3);
   min-height: 0;
   padding: var(--e-4) var(--e-6);
-  overflow-y: auto;
+  /* En los dos sentidos: la tabla de adentro (los renglones, la de una compra) scrollea en horizontal acá. */
+  overflow: auto;
 }
 .dialogo-detalle-pie {
   align-items: center;
@@ -971,7 +995,46 @@ ul.error {
 .dialogo-detalle-pie .pie-peligro,
 .dialogo-detalle-pie .pie-acciones {
   display: flex;
+  flex-wrap: wrap;
   gap: 10px;
+}
+
+/*
+ * La hoja de un imprimible scrollea adentro del pop-up (en el celular la hoja ocupa la pantalla): así la tabla de la
+ * factura scrollea en horizontal en vez de ensanchar el diálogo. Solo en pantalla: al imprimir sale la hoja entera.
+ */
+@media screen {
+  .dialogo > :is(.recibo-imprimible, .extracto-imprimible, .venta-imprimible, .factura-imprimible, .documento-imprimible) {
+    /* `flex: none` porque si no la hoja se encoge a alto 0 cuando el diálogo tiene que scrollear. */
+    flex: none;
+    overflow: auto;
+  }
+}
+
+/*
+ * En el celular los pop-ups de detalle (app-dialogo-detalle) y los imprimibles ocupan toda la pantalla (S12c), con la
+ * cabecera y el pie fijos y scrolleando lo de adentro. Desde 640 px se ven como en escritorio: los anchos propios de
+ * cada diálogo (860, 820, 640, 480…) son topes y nunca pasan la pantalla menos el margen.
+ */
+@media screen and (max-width: 639.98px) {
+  .dialogo-fondo:has(> .dialogo-detalle),
+  .dialogo-fondo:has(> .dialogo > :is(.recibo-imprimible, .extracto-imprimible, .venta-imprimible, .factura-imprimible, .documento-imprimible)) {
+    padding: 0;
+  }
+  .dialogo.dialogo-detalle,
+  .dialogo:has(> :is(.recibo-imprimible, .extracto-imprimible, .venta-imprimible, .factura-imprimible, .documento-imprimible)) {
+    width: 100%;
+    max-width: none;
+    height: 100dvh;
+    max-height: 100dvh;
+    border-radius: 0;
+    overflow: hidden;
+  }
+  /* La hoja ocupa el alto que queda y scrollea ahí; el pie de Imprimir o Cerrar queda fijo abajo. */
+  .dialogo > :is(.recibo-imprimible, .extracto-imprimible, .venta-imprimible, .factura-imprimible, .documento-imprimible) {
+    flex: 1 1 auto;
+    min-height: 0;
+  }
 }
 
 /* Estado del stock: rojo sin stock, amarillo bajo el mínimo (lo decide estadoStock). */
