@@ -219,6 +219,20 @@ describe('Reportes de ventas', () => {
     ]);
   });
 
+  // S4: cada reporte con tabla la pone adentro de un marco que scrollea en horizontal, no la página.
+  it('los reportes con tabla la ponen dentro de su marco de scroll (responsive, S4)', async () => {
+    await crear();
+
+    for (const tipo of ['por-usuario', 'por-medio-pago', 'por-periodo', 'por-articulo', 'por-rubro', 'con-descuento', 'movimientos-caja']) {
+      await elegir(tipo);
+      const tablas = Array.from(el().querySelectorAll('table'));
+      expect(tablas.length, tipo).toBeGreaterThan(0);
+      for (const tabla of tablas) {
+        expect(tabla.parentElement?.classList.contains('tabla-scroll'), tipo).toBe(true);
+      }
+    }
+  });
+
   it('por usuario muestra cada usuario con cantidad, total y ganancia', async () => {
     await crear();
     await elegir('por-usuario');
@@ -298,6 +312,34 @@ describe('Reportes de ventas', () => {
       '$ 3.050,00',
       '$ 1.025,29',
     ]);
+  });
+
+  /*
+   * Responsive, S5: por debajo de 640 px las tablas se leen como tarjetas «etiqueta: valor». Vitest no evalúa media
+   * queries, así que el spec vigila el contrato de datos que las dibuja: el nombre de la columna en cada celda.
+   */
+  it('S5: cada celda de cada reporte lleva el nombre de su columna en data-etiqueta, para la tarjeta del celular', async () => {
+    await crear();
+
+    const tipos = ['por-usuario', 'por-medio-pago', 'por-periodo', 'por-articulo', 'por-rubro', 'con-descuento', 'movimientos-caja'];
+    for (const tipo of tipos) {
+      await elegir(tipo);
+      const tabla = el().querySelector<HTMLTableElement>('table')!;
+      const encabezados = Array.from(tabla.querySelectorAll('thead th')).map((th) => normal(th.textContent));
+      expect(el().querySelector('table')!.classList, tipo).toContain('tabla-tarjetas');
+
+      // Cada renglón es una tarjeta y cada celda con dato dice su columna. El pie de «Por artículo» es la tarjeta de
+      // totales: el `th` es su rótulo y la celda del medio, que no tiene dato, queda marcada para no dibujarla.
+      for (const fila of Array.from(tabla.querySelectorAll('tbody tr, tfoot tr'))) {
+        Array.from(fila.children).forEach((celda, i) => {
+          if (celda.tagName !== 'TD') return;
+          const etiqueta = celda.getAttribute('data-etiqueta');
+          const vacia = normal(celda.textContent) === '';
+          expect(etiqueta, `${tipo}, celda ${i}: ${encabezados[i]}`).toBe(vacia ? null : encabezados[i]);
+          expect(celda.classList.contains('vacia'), `${tipo}, celda ${i} vacía`).toBe(vacia);
+        });
+      }
+    }
   });
 
   // Bugs de la guía, S9: el «Total» es un th y heredaba el fondo gris, las mayúsculas chicas y el sticky del encabezado.

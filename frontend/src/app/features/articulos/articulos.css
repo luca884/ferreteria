@@ -124,3 +124,32 @@ th.actualizacion {
   font-size: var(--texto-xs);
   line-height: 1.3;
 }
+
+/*
+ * responsive S11 (T9): a 390 px la cuenta de la página y «Anterior» entraban justo en el primer renglón y «Siguiente»
+ * caía solo al segundo, alineado a la izquierda (el paginador medía 108 px de alto). Debajo de 640 px: sin el
+ * separador elástico, la cuenta de la página va en su renglón y los dos botones quedan juntos abajo (86,8 px).
+ * En escritorio no cambia nada.
+ */
+@media screen and (max-width: 639.98px) {
+  .paginacion .separador {
+    display: none;
+  }
+  .paginacion > span:not(.separador) {
+    flex: 1 1 100%;
+    min-width: 0;
+  }
+  /*
+   * El buscador de la barra: el formulario se encogía a 0 (la barra no parte de renglón) y la caja, de 244 px, se
+   * derramaba encima de las dos casillas de al lado, con el placeholder cortado a los 194 px. Debajo de 640 px el
+   * buscador se queda con su ancho —la barra ya scrollea en horizontal— y la caja toma 286: el aviso se lee hasta
+   * «código» y no tapa nada. Entero no entra: son 366,8 px con la letra a 16 px y la pantalla tiene 390.
+   */
+  .busqueda {
+    flex: 0 0 auto;
+    width: max-content;
+  }
+  .caja-busqueda {
+    min-width: 286px;
+  }
+}

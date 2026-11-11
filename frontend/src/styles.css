@@ -545,6 +545,61 @@ app-barra-acciones .inactivos {
   font-size: var(--texto-sm);
 }
 
+/*
+ * Debajo de escritorio la barra ya no dice el nombre de la pantalla: lo dice el encabezado del shell (S2), que lo lee
+ * del mismo h1. Así el título no se repite a 768 px, donde se veía dos veces. El h1 queda para lectores de pantalla.
+ * Una barra sin acciones tampoco se muestra: solo quedaría una franja vacía con su filete.
+ */
+@media screen and (max-width: 1023.98px) {
+  app-barra-acciones h1 {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+    border: 0;
+  }
+  app-barra-acciones:not(:has(button, input, select, label)) {
+    display: none;
+  }
+}
+
+/*
+ * En celular (S7) la barra deja de comerse un tercio de la pantalla: una sola fila de 60 px, con los botones deslizando
+ * en horizontal cuando no entran. La barra sigue fija arriba: la pantalla se sigue usando con el modelo «elegir la fila
+ * y tocar la acción».
+ */
+@media screen and (max-width: 639.98px) {
+  app-barra-acciones {
+    height: 60px;
+    min-height: 0;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    padding: 0 var(--pantalla-x);
+  }
+  /*
+   * Los botones pasan a una sola línea (tecla o ícono al lado del nombre) y a 40 px de alto, que es lo que pide el dedo:
+   * con la tecla arriba y 54 px de alto entraban tres o cuatro por fila y la barra medía 130 a 280 px.
+   */
+  app-barra-acciones .accion-barra,
+  app-barra-acciones:not(:has(svg, kbd)) .accion-barra {
+    flex-shrink: 0;
+    flex-direction: row;
+    gap: 6px;
+    min-width: 0;
+    min-height: 40px;
+    padding: 0 10px;
+    font-size: var(--texto-base);
+  }
+  app-barra-acciones .accion-barra.primario {
+    width: auto;
+  }
+}
+
 /* ---------- Grillas ---------- */
 
 table {
@@ -632,6 +687,114 @@ tr.inactivo td {
 .grilla-contenedor {
   max-height: 420px;
   margin-bottom: var(--e-4);
+}
+
+/*
+ * La columna que identifica la fila no se va con el scroll de costado (S4): queda pegada a la izquierda con su propio
+ * fondo, así los datos que pasan por atrás no se le mezclan. `:where()` deja la especificidad en cero para que el
+ * hover de la fila y la elegida sigan pintando el fondo como siempre.
+ */
+:where(.grilla-marco, .grilla-contenedor, .tabla-contenedor, .tabla-scroll) :is(th, td):first-child {
+  position: sticky;
+  left: 0;
+}
+/* Las celdas del cuerpo necesitan fondo propio: si no, se les ve el dato que pasa por atrás al scrollear. */
+:where(.grilla-marco, .grilla-contenedor, .tabla-contenedor, .tabla-scroll) :where(tbody) :is(th, td):first-child {
+  background: var(--superficie);
+}
+/* La fila elegida pinta la fila entera de un color: la columna fija toma el mismo en vez de taparlo. */
+:where(.grilla-marco, .grilla-contenedor, .tabla-contenedor, .tabla-scroll) tbody :where(tr.elegida) > :first-child {
+  background: inherit;
+}
+/* La esquina: el encabezado de la columna fija va arriba del encabezado que scrollea en vertical. */
+:where(.grilla-marco, .grilla-contenedor, .tabla-contenedor, .tabla-scroll) th:first-child {
+  z-index: calc(var(--z-fijo) + 1);
+}
+/*
+ * Abajo de escritorio la grilla scrollea en vez de apretar el contenido (S4): un ancho mínimo por columna para que un
+ * importe con «/ kg» y una descripción no se partan, y los códigos tampoco. En escritorio y en papel no se aplica.
+ */
+@media screen and (max-width: 1023.98px) {
+  :where(.grilla-marco, .grilla-contenedor, .tabla-contenedor, .tabla-scroll) :is(th, td) {
+    min-width: 120px;
+  }
+  /* La columna que identifica la fila, con aire para que la descripción y el código se lean. La casilla de elegir no. */
+  :where(.grilla-marco, .grilla-contenedor, .tabla-contenedor, .tabla-scroll) :is(th, td):first-child:not(.casilla-columna) {
+    min-width: 180px;
+  }
+  :where(.grilla-marco, .grilla-contenedor, .tabla-contenedor, .tabla-scroll) :is(.codigo, .mono) {
+    white-space: nowrap;
+  }
+  /*
+   * Los renglones que se identifican con un `th` transparente (la imputación de un cobro, los pendientes, el chequeo)
+   * necesitan fondo opaco recién cuando la columna se queda fija: en escritorio no se scrollea y el hover del renglón
+   * tiene que seguir pintando como siempre.
+   */
+  :where(.grilla-marco, .grilla-contenedor, .tabla-contenedor, .tabla-scroll) tbody > tr > th:first-child {
+    background: var(--superficie);
+  }
+}
+
+/*
+ * En el celular las listas de consulta (Artículos, Ventas y Reportes) son tarjetas «etiqueta: valor» en vez de grilla
+ * (S5): cada celda lleva su columna en `data-etiqueta` y la muestra adelante del valor. En papel y desde 640 px sigue
+ * siendo la grilla de siempre.
+ */
+@media screen and (max-width: 639.98px) {
+  /* La tarjeta ocupa el ancho: el marco deja de scrollear y de dibujar borde, y la columna fija ya no tiene sentido. */
+  :is(.grilla-marco, .tabla-scroll):has(> table.tabla-tarjetas) {
+    overflow: visible;
+    border: 0;
+    background: none;
+  }
+  .tabla-tarjetas,
+  .tabla-tarjetas > :is(tbody, tfoot),
+  .tabla-tarjetas > :is(tbody, tfoot) > tr {
+    display: block;
+  }
+  /* La fila, con su borde y su fondo, es la tarjeta. */
+  .tabla-tarjetas > :is(tbody, tfoot) > tr {
+    padding: var(--e-2) var(--e-3);
+    border: 1px solid var(--borde);
+    border-radius: var(--radio-lg);
+    background: var(--superficie);
+  }
+  .tabla-tarjetas > :is(tbody, tfoot) > tr + tr {
+    margin-top: var(--e-2);
+  }
+  /*
+   * Un renglón por dato, a la izquierda como una etiqueta: el valor puede partirse en vez de desbordar. La primera
+   * celda repite las reglas porque en tablet se queda fija, con 180 px de ancho mínimo, y acá no hay scroll que seguir.
+   */
+  .tabla-tarjetas :is(td, th),
+  .tabla-tarjetas :is(td, th):first-child {
+    display: block;
+    position: static;
+    min-width: 0;
+    padding: 1px 0;
+    border: 0;
+    text-align: left;
+    white-space: normal;
+  }
+  /* El encabezado de las columnas no se ve (cada celda ya dice la suya) pero sigue para lectores de pantalla. */
+  .tabla-tarjetas > thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  .tabla-tarjetas [data-etiqueta]::before {
+    content: attr(data-etiqueta) ': ';
+    color: var(--texto-suave);
+    font-size: var(--texto-sm);
+    font-weight: 600;
+  }
+  /* La celda que quedó sin dato (una venta sin factura, el hueco del total) no deja el renglón con la etiqueta sola. */
+  .tabla-tarjetas .vacia {
+    display: none;
+  }
 }
 
 /* ---------- Páginas ---------- */
@@ -874,6 +1037,11 @@ ul.error {
   inset: 0;
   z-index: var(--z-dialogo);
   display: grid;
+  /*
+   * La columna no crece con el contenido: sin `minmax(0, 1fr)` la tabla del detalle de una compra ensanchaba el pop-up
+   * a 825 px y la ✕ y los botones del pie quedaban fuera de la pantalla del celular.
+   */
+  grid-template-columns: minmax(0, 1fr);
   place-items: center;
   padding: var(--e-4);
   background: var(--velo);
@@ -883,6 +1051,11 @@ ul.error {
   flex-direction: column;
   gap: var(--e-4);
   width: min(440px, 100%);
+  /* El ancho de cada diálogo es un tope, no un ancho: nunca pasa la pantalla menos el margen del velo. */
+  max-width: 100%;
+  /* El alto lo pone la pantalla y el contenido scrollea adentro, con el pie pegado abajo. */
+  max-height: calc(100vh - var(--e-8));
+  overflow: auto;
   padding: var(--e-6);
   border-radius: var(--radio-xl);
   background: var(--superficie);
@@ -900,9 +1073,27 @@ ul.error {
 }
 .dialogo-acciones {
   display: flex;
+  flex-wrap: wrap;
   justify-content: flex-end;
   gap: 10px;
   padding-top: var(--e-1);
+  /* El pie no se va con el scroll del diálogo: los botones se ven y se tocan siempre, y si no entran, hacen wrap. */
+  position: sticky;
+  bottom: 0;
+  background: var(--superficie);
+}
+/*
+ * Marco de una tabla que scrollea en horizontal en su contenedor en vez de ensanchar la página o el diálogo (S4): los
+ * filtros, los totales y los botones de arriba y abajo se quedan quietos. No dibuja borde: es solo el scroll.
+ */
+.tabla-scroll {
+  max-width: 100%;
+  overflow-x: auto;
+}
+/* Adentro de un pop-up es un ítem del flex del diálogo: sin esto, al scrollear el diálogo se encoge a alto 0 (el mínimo
+   automático de un contenedor con scroll es 0) y la tabla se sale. */
+.dialogo .tabla-scroll {
+  flex: none;
 }
 .dialogo-acciones button {
   min-height: 44px;
@@ -960,7 +1151,8 @@ ul.error {
   gap: var(--e-3);
   min-height: 0;
   padding: var(--e-4) var(--e-6);
-  overflow-y: auto;
+  /* En los dos sentidos: la tabla de adentro (los renglones, la de una compra) scrollea en horizontal acá. */
+  overflow: auto;
 }
 .dialogo-detalle-pie {
   align-items: center;
@@ -971,7 +1163,46 @@ ul.error {
 .dialogo-detalle-pie .pie-peligro,
 .dialogo-detalle-pie .pie-acciones {
   display: flex;
+  flex-wrap: wrap;
   gap: 10px;
+}
+
+/*
+ * La hoja de un imprimible scrollea adentro del pop-up (en el celular la hoja ocupa la pantalla): así la tabla de la
+ * factura scrollea en horizontal en vez de ensanchar el diálogo. Solo en pantalla: al imprimir sale la hoja entera.
+ */
+@media screen {
+  .dialogo > :is(.recibo-imprimible, .extracto-imprimible, .venta-imprimible, .factura-imprimible, .documento-imprimible) {
+    /* `flex: none` porque si no la hoja se encoge a alto 0 cuando el diálogo tiene que scrollear. */
+    flex: none;
+    overflow: auto;
+  }
+}
+
+/*
+ * En el celular los pop-ups de detalle (app-dialogo-detalle) y los imprimibles ocupan toda la pantalla (S12c), con la
+ * cabecera y el pie fijos y scrolleando lo de adentro. Desde 640 px se ven como en escritorio: los anchos propios de
+ * cada diálogo (860, 820, 640, 480…) son topes y nunca pasan la pantalla menos el margen.
+ */
+@media screen and (max-width: 639.98px) {
+  .dialogo-fondo:has(> .dialogo-detalle),
+  .dialogo-fondo:has(> .dialogo > :is(.recibo-imprimible, .extracto-imprimible, .venta-imprimible, .factura-imprimible, .documento-imprimible)) {
+    padding: 0;
+  }
+  .dialogo.dialogo-detalle,
+  .dialogo:has(> :is(.recibo-imprimible, .extracto-imprimible, .venta-imprimible, .factura-imprimible, .documento-imprimible)) {
+    width: 100%;
+    max-width: none;
+    height: 100dvh;
+    max-height: 100dvh;
+    border-radius: 0;
+    overflow: hidden;
+  }
+  /* La hoja ocupa el alto que queda y scrollea ahí; el pie de Imprimir o Cerrar queda fijo abajo. */
+  .dialogo > :is(.recibo-imprimible, .extracto-imprimible, .venta-imprimible, .factura-imprimible, .documento-imprimible) {
+    flex: 1 1 auto;
+    min-height: 0;
+  }
 }
 
 /* Estado del stock: rojo sin stock, amarillo bajo el mínimo (lo decide estadoStock). */
@@ -998,6 +1229,92 @@ ul.error {
   clip: rect(0 0 0 0);
   white-space: nowrap;
   border: 0;
+}
+
+/* ---------- Controles y pistas de teclado en táctil (responsive, S9 y S10) ---------- */
+
+/*
+ * S9 (controles): por debajo de escritorio los controles son para el dedo. La letra de los campos va a 16 px como
+ * mínimo (con 13 o 14 px, iOS hace zoom al tocarlos) y todos los controles miden 44 px de alto; el chico, 40. Los campos,
+ * los botones y la casilla del filtro de importaciones ya se miden con --alto-control, así que alcanza con subir el
+ * token de densidad. Desde 1024 px no se aplica: en escritorio todo queda como hoy.
+ */
+@media screen and (max-width: 1023.98px) {
+  :root {
+    --alto-control: 44px;
+  }
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+  }
+  /*
+   * Los campos que fijan su propio alto o viven adentro de una caja más chica se escapan de la regla de arriba: el
+   * buscador de Artículos, por ejemplo, medía 20 px de alto y 14 px de letra porque la pantalla le pone su alto y su
+   * `min-height: 0`. Con esta especificidad le ganamos a cualquier regla de componente, así todo campo que se toca mide
+   * 44 px y su letra no dispara el zoom de iOS.
+   */
+  input:not([type='checkbox']):not([type='radio']):not([type='file']):not([type='hidden']),
+  select,
+  textarea {
+    font-size: 16px;
+    min-height: 44px;
+  }
+  /* La ✕ del detalle y los links a documentos que van adentro del detalle: se tocan con el dedo. */
+  .dialogo-detalle-equis {
+    min-height: 44px;
+  }
+  .dialogo-detalle-cuerpo a,
+  p.ultima-compra a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 40px;
+  }
+  /*
+   * Casilla y radio: el control sigue chico, pero lo que se toca es la etiqueta con su control, y mide 40 px o más. El
+   * `display` y el `gap` solo cambian en las etiquetas que no traían estilo propio; las de los formularios ya son flex
+   * y solo toman el alto.
+   */
+  label:has(input[type='checkbox'], input[type='radio']),
+  .casilla {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--e-2);
+    min-height: 40px;
+  }
+  /* La casilla de una hoja de la lista: la etiqueta va al lado del control y es lo que se toca. */
+  .hojas label {
+    display: inline-flex;
+    align-items: center;
+    min-height: 40px;
+  }
+  /* El botón chico (paginar, acciones de una fila) queda chico de ancho pero igual se toca. */
+  button.chico,
+  .btn.chico {
+    min-height: 40px;
+  }
+  /* El «N.º» de los listados y los links a documentos, 40 px de alto: son los que se tocan para abrir una ficha. */
+  table :is(button.enlace, a),
+  a.ver-documento {
+    display: inline-flex;
+    align-items: center;
+    min-height: 40px;
+  }
+}
+
+/*
+ * S10 (pistas de teclado): en una pantalla táctil (sin hover y con puntero grueso) las teclas no existen y las pistas no
+ * se muestran. Va por `hover`/`pointer` y no por ancho: una tablet con mouse o una notebook con pantalla táctil las sigue
+ * viendo. El texto suelto que no es `kbd` ni `[data-tecla]` lleva la clase común .pista-teclado, que acá se esconde.
+ */
+@media (hover: none) and (pointer: coarse) {
+  [data-tecla]::after,
+  kbd,
+  .pista-codigo,
+  .pista-medios,
+  .pista-teclado {
+    display: none;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -1064,6 +1381,14 @@ ul.error {
     display: block !important;
     padding: 0 !important;
     overflow: visible !important;
+  }
+  /* El marco de scroll que agregó S3 para las tablas de un pop-up: en papel la tabla sale entera. */
+  .tabla-scroll {
+    overflow: visible !important;
+  }
+  /* La columna fija de S4: en papel la tabla sale entera, sin una columna pegada a la izquierda. */
+  .tabla-scroll :is(th, td):first-child {
+    position: static;
   }
   .recibo-imprimible,
   .extracto-imprimible,

@@ -250,3 +250,27 @@ details.no-estan summary {
 td.codigo {
   white-space: nowrap;
 }
+
+/*
+ * responsive S11 (T9): en el celular la fila de herramientas medía 558 px adentro de una columna de 316 (nombres de
+ * hoja largos + el select «Ver la hoja»), así que el select se iba fuera de la pantalla. Debajo de 640 px la fila de
+ * hojas parte en tres renglones —las flechas con el nombre de la hoja, el rótulo y el select a todo el ancho— y el
+ * nombre de la hoja deja de reservar 200 px fijos. En escritorio no cambia nada.
+ */
+@media screen and (max-width: 639.98px) {
+  .navegacion-hojas {
+    flex-wrap: wrap;
+  }
+  .navegacion-hojas .hoja-actual {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+  /* El rótulo y el select van cada uno en su renglón: el nombre de la hoja entra entero en el select. */
+  .navegacion-hojas label {
+    flex: 1 1 100%;
+  }
+  .navegacion-hojas select {
+    flex: 1 1 100%;
+    min-width: 0;
+  }
+}

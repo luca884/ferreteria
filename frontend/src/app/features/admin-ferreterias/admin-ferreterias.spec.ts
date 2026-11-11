@@ -194,6 +194,15 @@ describe('AdminFerreterias', () => {
     expect(filas()[1].classList.contains('inactivo')).toBe(true);
   });
 
+  // S4: la grilla ya scrollea dentro de .grilla-marco; no lleva un segundo marco adentro.
+  it('la tabla de ferreterías scrollea en su marco, sin un segundo contenedor (responsive, S4)', async () => {
+    await crear();
+
+    const tabla = el().querySelector('table[aria-label="Ferreterías"]')!;
+    expect(tabla.parentElement?.classList.contains('grilla-marco')).toBe(true);
+    expect(el().querySelector('.grilla-marco .tabla-scroll')).toBeNull();
+  });
+
   it('no muestra ningún dato de ventas, stock, caja ni importes', async () => {
     await crear();
 

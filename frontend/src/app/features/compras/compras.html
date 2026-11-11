@@ -62,35 +62,37 @@
           </button>
         </nav>
       }
-      <table class="compras">
-        <caption class="sr-only">
-          Compras, las más nuevas primero. Elegí una para ver su detalle.
-        </caption>
-        <thead>
-          <tr>
-            <th scope="col">Fecha</th>
-            <th scope="col">Comprobante</th>
-            <th scope="col">Proveedor</th>
-            <th scope="col" class="num">Renglones</th>
-            <th scope="col" class="num">Neto</th>
-          </tr>
-        </thead>
-        <tbody>
-          @for (fila of actual.items; track fila.id) {
-            <tr [class.elegida]="elegida() === fila.id" (click)="elegir(fila)">
-              <td>{{ fecha(fila.fecha) }}</td>
-              <td>
-                <button type="button" class="enlace" [attr.aria-pressed]="elegida() === fila.id">
-                  {{ fila.comprobante }}
-                </button>
-              </td>
-              <td>{{ fila.proveedorNombre }}</td>
-              <td class="num">{{ fila.renglones }}</td>
-              <td class="num">{{ fila.neto | monto }}{{ fila.moneda === 'USD' ? ' (USD)' : '' }}</td>
+      <div class="tabla-scroll">
+        <table class="compras">
+          <caption class="sr-only">
+            Compras, las más nuevas primero. Elegí una para ver su detalle.
+          </caption>
+          <thead>
+            <tr>
+              <th scope="col">Fecha</th>
+              <th scope="col">Comprobante</th>
+              <th scope="col">Proveedor</th>
+              <th scope="col" class="num">Renglones</th>
+              <th scope="col" class="num">Neto</th>
             </tr>
-          }
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            @for (fila of actual.items; track fila.id) {
+              <tr [class.elegida]="elegida() === fila.id" (click)="elegir(fila)">
+                <td>{{ fecha(fila.fecha) }}</td>
+                <td>
+                  <button type="button" class="enlace" [attr.aria-pressed]="elegida() === fila.id">
+                    {{ fila.comprobante }}
+                  </button>
+                </td>
+                <td>{{ fila.proveedorNombre }}</td>
+                <td class="num">{{ fila.renglones }}</td>
+                <td class="num">{{ fila.neto | monto }}{{ fila.moneda === 'USD' ? ' (USD)' : '' }}</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
     }
   } @else if (cargando()) {
     <p class="ayuda estado-vacio">Cargando…</p>
@@ -113,32 +115,34 @@
             }
           </ul>
         }
-        <table>
-          <thead>
-            <tr>
-              <th scope="col">Artículo</th>
-              <th scope="col" class="num">Cantidad</th>
-              <th scope="col" class="num">Costo antes</th>
-              <th scope="col" class="num">Costo de la compra</th>
-              <th scope="col" class="num">Precio antes</th>
-              <th scope="col" class="num">Precio después</th>
-              <th scope="col" class="num">Subtotal</th>
-            </tr>
-          </thead>
-          <tbody>
-            @for (r of c.renglones; track r.renglon) {
+        <div class="tabla-scroll">
+          <table>
+            <thead>
               <tr>
-                <td>{{ r.codigoInterno }} · {{ r.descripcion }}</td>
-                <td class="num">{{ cantidadConUnidad(r.cantidad, r.unidad) }}</td>
-                <td class="num">{{ r.costoAnterior | monto }}{{ porUnidad(r.unidad) }}</td>
-                <td class="num">{{ r.costoUnitario | monto }}{{ porUnidad(r.unidad) }}</td>
-                <td class="num">{{ r.precioAnterior | monto }}{{ porUnidad(r.unidad) }}</td>
-                <td class="num">{{ r.precioNuevo | monto }}{{ porUnidad(r.unidad) }}</td>
-                <td class="num">{{ r.subtotal | monto }}</td>
+                <th scope="col">Artículo</th>
+                <th scope="col" class="num">Cantidad</th>
+                <th scope="col" class="num">Costo antes</th>
+                <th scope="col" class="num">Costo de la compra</th>
+                <th scope="col" class="num">Precio antes</th>
+                <th scope="col" class="num">Precio después</th>
+                <th scope="col" class="num">Subtotal</th>
               </tr>
-            }
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              @for (r of c.renglones; track r.renglon) {
+                <tr>
+                  <td>{{ r.codigoInterno }} · {{ r.descripcion }}</td>
+                  <td class="num">{{ cantidadConUnidad(r.cantidad, r.unidad) }}</td>
+                  <td class="num">{{ r.costoAnterior | monto }}{{ porUnidad(r.unidad) }}</td>
+                  <td class="num">{{ r.costoUnitario | monto }}{{ porUnidad(r.unidad) }}</td>
+                  <td class="num">{{ r.precioAnterior | monto }}{{ porUnidad(r.unidad) }}</td>
+                  <td class="num">{{ r.precioNuevo | monto }}{{ porUnidad(r.unidad) }}</td>
+                  <td class="num">{{ r.subtotal | monto }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
       } @else if (!errorDetalle()) {
         <p class="ayuda">Cargando…</p>
       }

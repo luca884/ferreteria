@@ -1,0 +1,12 @@
+# CU-09 · Consultar y ajustar stock
+
+> Parte de la especificación del MVP de Ferretería SaaS. Índice: [../spec.md](../spec.md) · caso de uso extracto de `spec.md:170-176` en la partición del 2026-11-10.
+
+<!-- spec payload: spec.md:170-176 -->
+**CU-09 Consultar y ajustar stock** (Dueño)
+
+1. Ve el stock actual y los artículos bajo el mínimo. **Stock bajo mínimo** (menú lateral, solo el Dueño) es el «Listado de Artículos bajo Stock Mínimo» de GDS (G72): todos los artículos activos con stock menor al mínimo (los de mínimo 0 no tienen mínimo cargado y no salen), sin páginas, con código, descripción, rubro, proveedor, costo en su moneda, stock, mínimo y **a reponer** (mínimo − stock). Se ordena por descripción (por defecto), código, rubro o proveedor; sin rubro o proveedor van al final. «Imprimir» saca solo el listado, con la ferretería, el orden y la fecha de emisión.
+2. Hace un ajuste manual (ingreso de mercadería, rotura, conteo) con un motivo; queda registrado el movimiento.
+3. Consulta los **movimientos de stock de un artículo** («Movimientos» en la barra del listado o «Ver movimientos» en la ficha, también de uno dado de baja), como «Movimientos del Artículo» de GDS (G29): el más nuevo primero (orden por `id`, el orden en que cada movimiento se aplicó al stock, como el extracto de cuenta corriente: sin filtros, una fecha corrida no rompe el saldo), de a 20 por página y filtrable por Desde y Hasta (días inclusive). Cada movimiento muestra la fecha, el tipo (venta, remito, anulación de remito, compra o ajuste), la cantidad con signo (las salidas en negativo), el **saldo** que quedó después, el comprobante («Venta N.º 12», «Remito N.º 5», compra «Factura A 00003-00001234 · Proveedor»), el usuario y el motivo del ajuste. El saldo se calcula hacia atrás desde el stock actual, así el último movimiento siempre muestra el stock de hoy aunque falte el stock inicial. Desde y Hasta filtran por fecha, pero el saldo se encadena por orden de alta. Si un movimiento quedó con la fecha fuera de ese orden (por ejemplo, una venta y una nota de crédito del mismo artículo hechas al mismo tiempo, con la medianoche entre las dos) y el filtro lo deja afuera, los saldos de las filas de abajo quedan corridos: está aceptado. Solo el Dueño; el artículo de otra ferretería da 404. «Hasta» antes de «Desde» es 400 en `hasta` («La fecha «Hasta» no puede ser anterior a «Desde».»), y se evalúa antes de buscar el artículo: uno ajeno y uno inexistente reciben el mismo 400.
+<!-- fin payload: spec.md:170-176 -->
+

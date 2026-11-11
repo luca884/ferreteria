@@ -3,7 +3,7 @@
 </app-barra-acciones>
 
 <p class="ayuda">
-  Los presupuestos se arman en el Mostrador con F8. Acá los consultás, los imprimís, los marcás como aceptados o rechazados y
+  Los presupuestos se arman en el Mostrador <span class="pista-teclado">con F8</span>. Acá los consultás, los imprimís, los marcás como aceptados o rechazados y
   los pasás a venta con los precios de hoy.
 </p>
 
@@ -72,42 +72,44 @@
         </button>
       </nav>
     }
-    <table class="presupuestos">
-      <caption class="sr-only">
-        Presupuestos, los más nuevos primero. Elegí uno para ver su detalle.
-      </caption>
-      <thead>
-        <tr>
-          <th scope="col">N.º</th>
-          <th scope="col">Fecha</th>
-          <th scope="col">Cliente</th>
-          <th scope="col" class="num">Total</th>
-          <th scope="col">Vence</th>
-          <th scope="col">Estado</th>
-        </tr>
-      </thead>
-      <tbody>
-        @for (fila of actual.items; track fila.presupuestoId) {
-          <tr [class.elegida]="elegido() === fila.presupuestoId" (click)="elegir(fila)">
-            <td>
-              <button type="button" class="enlace" [attr.aria-pressed]="elegido() === fila.presupuestoId">
-                {{ fila.numero }}
-              </button>
-            </td>
-            <td class="fecha">{{ fechaHora(fila.fecha) }}</td>
-            <td>{{ fila.clienteNombre ?? '—' }}</td>
-            <td class="num">{{ fila.total | monto }}</td>
-            <td class="fecha">{{ dia(fila.vence) }}</td>
-            <td>
-              {{ etiqueta[fila.estado] }}
-              @if (fila.vencido) {
-                <span class="vencido">· Vencido</span>
-              }
-            </td>
+    <div class="tabla-scroll">
+      <table class="presupuestos">
+        <caption class="sr-only">
+          Presupuestos, los más nuevos primero. Elegí uno para ver su detalle.
+        </caption>
+        <thead>
+          <tr>
+            <th scope="col">N.º</th>
+            <th scope="col">Fecha</th>
+            <th scope="col">Cliente</th>
+            <th scope="col" class="num">Total</th>
+            <th scope="col">Vence</th>
+            <th scope="col">Estado</th>
           </tr>
-        }
-      </tbody>
-    </table>
+        </thead>
+        <tbody>
+          @for (fila of actual.items; track fila.presupuestoId) {
+            <tr [class.elegida]="elegido() === fila.presupuestoId" (click)="elegir(fila)">
+              <td>
+                <button type="button" class="enlace" [attr.aria-pressed]="elegido() === fila.presupuestoId">
+                  {{ fila.numero }}
+                </button>
+              </td>
+              <td class="fecha">{{ fechaHora(fila.fecha) }}</td>
+              <td>{{ fila.clienteNombre ?? '—' }}</td>
+              <td class="num">{{ fila.total | monto }}</td>
+              <td class="fecha">{{ dia(fila.vence) }}</td>
+              <td>
+                {{ etiqueta[fila.estado] }}
+                @if (fila.vencido) {
+                  <span class="vencido">· Vencido</span>
+                }
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
   }
 } @else if (cargando()) {
   <p class="ayuda estado-vacio">Cargando…</p>
@@ -137,31 +139,33 @@
         <p class="observaciones">{{ p.observaciones }}</p>
       }
 
-      <table class="renglones">
-        <caption class="sr-only">
-          Renglones del presupuesto
-        </caption>
-        <thead>
-          <tr>
-            <th scope="col">Artículo</th>
-            <th scope="col" class="num">Cantidad</th>
-            <th scope="col" class="num">Precio</th>
-            <th scope="col" class="num">Dto.</th>
-            <th scope="col" class="num">Total</th>
-          </tr>
-        </thead>
-        <tbody>
-          @for (r of p.renglones; track r.renglon) {
+      <div class="tabla-scroll">
+        <table class="renglones">
+          <caption class="sr-only">
+            Renglones del presupuesto
+          </caption>
+          <thead>
             <tr>
-              <td>{{ r.descripcion }}</td>
-              <td class="num">{{ cantidadConUnidad(r.cantidad, r.unidad) }}</td>
-              <td class="num">{{ r.precioUnitario | monto }}</td>
-              <td class="num">{{ r.descuentoPorcentaje > 0 ? (r.descuentoPorcentaje | number: '1.0-2') + ' %' : '' }}</td>
-              <td class="num">{{ r.total | monto }}</td>
+              <th scope="col">Artículo</th>
+              <th scope="col" class="num">Cantidad</th>
+              <th scope="col" class="num">Precio</th>
+              <th scope="col" class="num">Dto.</th>
+              <th scope="col" class="num">Total</th>
             </tr>
-          }
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            @for (r of p.renglones; track r.renglon) {
+              <tr>
+                <td>{{ r.descripcion }}</td>
+                <td class="num">{{ cantidadConUnidad(r.cantidad, r.unidad) }}</td>
+                <td class="num">{{ r.precioUnitario | monto }}</td>
+                <td class="num">{{ r.descuentoPorcentaje > 0 ? (r.descuentoPorcentaje | number: '1.0-2') + ' %' : '' }}</td>
+                <td class="num">{{ r.total | monto }}</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
 
       <div class="totales">
         @if (p.descuento > 0) {

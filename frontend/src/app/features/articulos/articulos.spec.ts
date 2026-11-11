@@ -298,14 +298,17 @@ describe('Articulos', () => {
     expect(servicio.buscar).toHaveBeenLastCalledWith('torni', 0, 20, false, false);
   });
 
-  it('el buscador no autocompleta ni corrige y su ejemplo termina en «…»', async () => {
+  it('el buscador no autocompleta ni corrige y su ejemplo es el de Artículos', async () => {
     await crearComponente(true);
 
     const input = el().querySelector<HTMLInputElement>('#q')!;
     expect(input.name).toBe('q');
     expect(input.getAttribute('autocomplete')).toBe('off');
     expect(input.getAttribute('spellcheck')).toBe('false');
-    expect(input.placeholder.endsWith('…')).toBe(true);
+    // Literal a propósito: el texto es una decisión de producto y tiene que mostrar un ejemplo (hay precedente en
+    // formulario-cotizacion.spec.ts con «08:00»). La aserción anterior sólo miraba el «…» del final, así que un
+    // placeholder que se quedaba sin ejemplo —lo que pasó en S11— pasaba igual.
+    expect(input.placeholder).toBe('Buscar: tornillo o TOR-001…');
   });
 
   it('pagina hacia adelante y hacia atrás conservando la búsqueda', async () => {
@@ -1057,6 +1060,35 @@ describe('Articulos', () => {
 
     expect(el().querySelector('.error')?.textContent).toContain('Error interno');
     expect(el().querySelector('table')).toBeNull();
+  });
+
+  /*
+   * Responsive, S5: por debajo de 640 px la fila se lee como una tarjeta «etiqueta: valor». Vitest no evalúa media
+   * queries, así que el spec vigila el contrato de datos que la dibuja: el nombre de la columna en cada celda.
+   */
+  it('S5: cada celda lleva el nombre de su columna en data-etiqueta, para la tarjeta del celular', async () => {
+    const primera = pagina([articulo(1, { codigoProveedor: 'BS-4471' }), articulo(2)]);
+    await crearComponente(true, primera);
+
+    for (const fila of filas()) {
+      expect(Array.from(fila.querySelectorAll('td')).map((celda) => celda.getAttribute('data-etiqueta'))).toEqual(
+        Array.from(el().querySelectorAll('thead th')).map((th) => th.textContent!.trim()),
+      );
+    }
+    expect(el().querySelector('table')!.classList).toContain('tabla-tarjetas');
+
+    // El Vendedor no ve costo ni margen: sus columnas son otras y tienen que seguir coincidiendo con sus celdas.
+    TestBed.resetTestingModule();
+    await crearComponente(false, primera);
+
+    const encabezados = Array.from(el().querySelectorAll('thead th')).map((th) => th.textContent!.trim());
+    expect(encabezados).not.toContain('Costo');
+    for (const fila of filas()) {
+      expect(Array.from(fila.querySelectorAll('td')).map((celda) => celda.getAttribute('data-etiqueta'))).toEqual(
+        encabezados,
+      );
+    }
+    expect(el().querySelector('table')!.classList).toContain('tabla-tarjetas');
   });
 
   it('usa un mensaje genérico si la carga falla sin mensaje del backend', async () => {

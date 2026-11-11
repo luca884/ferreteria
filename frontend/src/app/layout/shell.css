@@ -39,6 +39,11 @@
   background: var(--superficie);
 }
 
+/* El cajón recibe el foco al abrirse, pero no se marca: no es un control. */
+.lateral:focus {
+  outline: none;
+}
+
 .marca {
   display: flex;
   align-items: center;
@@ -255,4 +260,148 @@ nav a:focus-visible {
   overflow: auto;
   position: relative;
   padding: 0 var(--pantalla-x) var(--pantalla-y);
+}
+
+/* Encabezado del cajón (S2): el botón «Menú» y el título de la pantalla. */
+.encabezado {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  grid-area: encabezado;
+  padding: 8px var(--pantalla-x);
+  border-top: 4px solid var(--tono);
+  border-bottom: 1px solid var(--borde);
+  background: var(--superficie);
+}
+.abrir-menu {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid var(--borde);
+  border-radius: var(--radio);
+  background: var(--superficie);
+  color: var(--texto);
+  font-size: var(--texto-sm);
+  font-weight: 600;
+  cursor: pointer;
+}
+.abrir-menu:hover {
+  background: var(--superficie-3);
+}
+.abrir-menu svg {
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+}
+/* Una línea con puntos suspensivos: el título no empuja al botón ni desborda el encabezado. */
+.titulo-pantalla {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--texto);
+  font-size: var(--texto-base);
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Velo del cajón: solo se ve con el cajón abierto, por debajo de 1024 px. */
+.velo {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  background: var(--velo);
+}
+
+/*
+ * Celular y tablet (S2): el menú lateral pasa a ser un cajón sobre la pantalla, que ocupa todo el ancho. El cajón
+ * cerrado queda fuera del orden de tabulación (`visibility: hidden`), y el bloque de usuario vuelve al final del scroll
+ * (fijo abajo tapaba «Configurar» y «Ocultar las cotizaciones»).
+ */
+@media (max-width: 1023.98px) {
+  :host {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
+    grid-template-areas:
+      'encabezado'
+      'contenido';
+  }
+
+  /* El filete del tono pasa al encabezado: la pantalla arranca en el encabezado, no en su filete. */
+  .contenido {
+    grid-area: contenido;
+    border-top: 0;
+  }
+
+  .lateral {
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 40;
+    width: min(86vw, 320px);
+    box-shadow: var(--sombra-2);
+    overscroll-behavior: contain;
+    transform: translateX(-100%);
+    visibility: hidden;
+    transition:
+      transform var(--transicion),
+      visibility var(--transicion);
+  }
+  .lateral.abierto {
+    visibility: visible;
+    transform: none;
+  }
+  .velo.abierto {
+    display: block;
+  }
+
+  .usuario {
+    position: static;
+    margin-bottom: 0;
+  }
+
+  /*
+   * S9 (menú en el cajón): las opciones y las cabeceras de grupo miden 44 px de alto para el dedo, como el botón
+   * «Menú». «Salir» y «Cambiar mi contraseña» también: se tocan con el pulgar, no con el mouse. En escritorio el menú
+   * queda como hoy.
+   */
+  nav a {
+    min-height: 44px;
+  }
+  .grupo {
+    min-height: 44px;
+  }
+  .salir {
+    min-height: 44px;
+  }
+  .cambiar-contrasena {
+    display: flex;
+    align-items: center;
+    min-height: 44px;
+  }
+}
+
+/*
+ * S2 completa: desde 1024 px el encabezado del cajón y el velo no existen, y el menú vuelve a ser la columna del grid.
+ * Va al final del archivo para que ninguna regla base le gane por orden de lectura (misma especificidad).
+ *
+ * Queda un hueco de 0,02 px entre las dos consultas (1023,98 < ancho < 1024): solo se alcanza con un ancho CSS
+ * fraccionario, y ahí ganaría el `:host` de escritorio con el encabezado suelto en el grid. Se acepta: la alternativa
+ * de esconder el encabezado en la regla base deja al botón «Menú» fuera del alcance de `focus()` en jsdom —que no
+ * evalúa media queries— y rompe los tests de Esc y velo, que es un problema todos los días y no una vez cada mil
+ * zooms.
+ */
+@media (min-width: 1024px) {
+  .encabezado,
+  .velo {
+    display: none;
+  }
 }

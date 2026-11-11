@@ -80,6 +80,19 @@ describe('TicketLista', () => {
     expect(el().querySelectorAll('thead th').length).toBe(5);
   });
 
+  it('S6: cada celda lleva el nombre de su columna en data-etiqueta, para la tarjeta del celular', async () => {
+    await crear([renglon({ descuentoBp: 1050 })]);
+
+    expect(Array.from(filas()[0].querySelectorAll('td')).map((celda) => celda.getAttribute('data-etiqueta'))).toEqual([
+      'Cant.',
+      'Código',
+      'Descripción',
+      'P. unit.',
+      'Total',
+    ]);
+    expect(el().querySelector('table')!.classList).toContain('tabla-tarjetas');
+  });
+
   it('muestra el código interno de cada renglón', async () => {
     await crear([renglon(), renglon({ articuloId: 2, codigoInterno: 'PIN-002', descripcion: 'Pinza' })]);
 

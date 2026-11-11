@@ -85,7 +85,7 @@
         formControlName="q"
         autocomplete="off"
         spellcheck="false"
-        placeholder="Descripción o cualquier código: tornillo, TOR-001…"
+        placeholder="Buscar: tornillo o TOR-001…"
         (input)="alEscribirBusqueda($any($event.target).value)"
       />
     </label>
@@ -135,9 +135,9 @@
         <span class="elegido">
           Elegido: <strong>{{ actual.descripcion }}</strong>
           @if (!auth.esDueno()) {
-            · Enter abre la ficha
+            <span class="pista-teclado"> · Enter abre la ficha</span>
           } @else if (actual.activo) {
-            · Enter edita
+            <span class="pista-teclado"> · Enter edita</span>
           }
         </span>
       }
@@ -169,7 +169,7 @@
       }
     </p>
     <div class="grilla-marco">
-      <table role="grid" aria-label="Artículos">
+      <table role="grid" aria-label="Artículos" class="tabla-tarjetas">
         <thead>
           <tr>
             <th>Código</th>
@@ -198,17 +198,17 @@
               (dblclick)="abrirFicha(articulo)"
               (keydown)="filas.alTeclear($event, articulo, i)"
             >
-              <td class="codigo">{{ articulo.codigoInterno }}</td>
-              <td class="codigo-proveedor">{{ articulo.codigoProveedor ?? '—' }}</td>
-              <td class="descripcion">
+              <td class="codigo" data-etiqueta="Código">{{ articulo.codigoInterno }}</td>
+              <td class="codigo-proveedor" data-etiqueta="Cód. proveedor">{{ articulo.codigoProveedor ?? '—' }}</td>
+              <td class="descripcion" data-etiqueta="Descripción">
                 {{ articulo.descripcion }}
                 @if (articulo.oferta?.vigente) {
                   <span class="marca-oferta">Oferta</span>
                 }
               </td>
               @if (auth.esDueno()) {
-                <td class="num costo">{{ formatearCosto(articulo.costo, articulo.moneda) }}{{ porUnidad(articulo.unidad) }}</td>
-                <td class="num margen">
+                <td class="num costo" data-etiqueta="Costo">{{ formatearCosto(articulo.costo, articulo.moneda) }}{{ porUnidad(articulo.unidad) }}</td>
+                <td class="num margen" data-etiqueta="Margen">
                   @if (articulo.margenPorcentaje === null) {
                     <span class="heredado">Heredado</span>
                   } @else {
@@ -216,8 +216,8 @@
                   }
                 </td>
               }
-              <td class="iva">{{ alicuotaLabels[articulo.alicuotaIva] }}</td>
-              <td class="num precio">
+              <td class="iva" data-etiqueta="IVA">{{ alicuotaLabels[articulo.alicuotaIva] }}</td>
+              <td class="num precio" data-etiqueta="Precio final">
                 @if (articulo.oferta?.precioOferta; as precioOferta) {
                   <span class="precio-oferta">{{ precioOferta | monto }}{{ porUnidad(articulo.unidad) }}</span>
                   <s class="precio-normal" aria-label="Precio normal">{{ articulo.precioFinal | monto }}</s>
@@ -225,11 +225,11 @@
                   {{ articulo.precioFinal | monto }}{{ porUnidad(articulo.unidad) }}
                 }
               </td>
-              <td class="num stock" [class.negativo]="articulo.stockActual < 0">
+              <td class="num stock" data-etiqueta="Stock" [class.negativo]="articulo.stockActual < 0">
                 {{ cantidadConUnidad(articulo.stockActual, articulo.unidad) }}
               </td>
-              <td class="costo-al">{{ formatearFecha(articulo.costoAl) || '—' }}</td>
-              <td class="estado">
+              <td class="costo-al" data-etiqueta="Última actualización">{{ formatearFecha(articulo.costoAl) || '—' }}</td>
+              <td class="estado" data-etiqueta="Estado">
                 <span class="etiqueta" [class.de-baja]="!articulo.activo">{{
                   articulo.activo ? 'Activo' : 'De baja'
                 }}</span>

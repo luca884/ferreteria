@@ -84,56 +84,58 @@
       <p class="ayuda estado-vacio">Buscá o escaneá los artículos que querés etiquetar.</p>
     }
   } @else {
-    <table class="lista">
-      <caption class="sr-only">Artículos a etiquetar y cuántas copias de cada uno</caption>
-      <thead>
-        <tr>
-          <th scope="col">Código</th>
-          <th scope="col">Descripción</th>
-          <th scope="col">En las barras</th>
-          <th scope="col" class="num">Copias</th>
-          <th scope="col"><span class="sr-only">Quitar</span></th>
-        </tr>
-      </thead>
-      <tbody>
-        @for (item of items(); track item.articulo.id) {
+    <div class="tabla-scroll">
+      <table class="lista">
+        <caption class="sr-only">Artículos a etiquetar y cuántas copias de cada uno</caption>
+        <thead>
           <tr>
-            <td>{{ item.articulo.codigoInterno }}</td>
-            <td class="descripcion">{{ item.articulo.descripcion }}</td>
-            <td class="barras">
-              @if (item.codigo; as codigo) {
-                {{ codigo.texto }} <span class="ayuda">({{ codigo.simbologia }})</span>
-              } @else {
-                <span class="aviso-barras">Sin barras: el código tiene caracteres que no se pueden dibujar</span>
-              }
-            </td>
-            <td class="num">
-              <input
-                #input
-                class="copias"
-                type="number"
-                min="1"
-                max="999"
-                step="1"
-                [attr.aria-label]="'Copias de ' + item.articulo.descripcion"
-                [value]="item.copias"
-                (change)="cambiarCopias(item.articulo.id, input.value, input)"
-              />
-            </td>
-            <td>
-              <button
-                type="button"
-                class="secundario chico quitar"
-                [attr.aria-label]="'Quitar ' + item.articulo.descripcion"
-                (click)="quitar(item.articulo.id)"
-              >
-                Quitar
-              </button>
-            </td>
+            <th scope="col">Código</th>
+            <th scope="col">Descripción</th>
+            <th scope="col">En las barras</th>
+            <th scope="col" class="num">Copias</th>
+            <th scope="col"><span class="sr-only">Quitar</span></th>
           </tr>
-        }
-      </tbody>
-    </table>
+        </thead>
+        <tbody>
+          @for (item of items(); track item.articulo.id) {
+            <tr>
+              <td>{{ item.articulo.codigoInterno }}</td>
+              <td class="descripcion">{{ item.articulo.descripcion }}</td>
+              <td class="barras">
+                @if (item.codigo; as codigo) {
+                  {{ codigo.texto }} <span class="ayuda">({{ codigo.simbologia }})</span>
+                } @else {
+                  <span class="aviso-barras">Sin barras: el código tiene caracteres que no se pueden dibujar</span>
+                }
+              </td>
+              <td class="num">
+                <input
+                  #input
+                  class="copias"
+                  type="number"
+                  min="1"
+                  max="999"
+                  step="1"
+                  [attr.aria-label]="'Copias de ' + item.articulo.descripcion"
+                  [value]="item.copias"
+                  (change)="cambiarCopias(item.articulo.id, input.value, input)"
+                />
+              </td>
+              <td>
+                <button
+                  type="button"
+                  class="secundario chico quitar"
+                  [attr.aria-label]="'Quitar ' + item.articulo.descripcion"
+                  (click)="quitar(item.articulo.id)"
+                >
+                  Quitar
+                </button>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
     <p class="total">{{ total() }}</p>
 
     <section class="etiquetas-imprimible" [attr.data-columnas]="columnas()" aria-label="Vista previa de la hoja">

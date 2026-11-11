@@ -105,3 +105,15 @@ h2 {
   background: none;
   color: var(--acento-profundo);
 }
+
+/*
+ * responsive S11 (T9): la banda del fondo terminaba en 38vh y, con la tarjeta centrada, el corte caía dentro del
+ * formulario (a 390×844 el corte quedaba en y = 321, entre el título y el botón, con la tarjeta de 241 a 603).
+ * En el celular el fondo va de un solo degradé hasta el pie: no hay corte en ningún alto.
+ */
+@media screen and (max-width: 639.98px) {
+  .login {
+    min-height: 100dvh;
+    background: linear-gradient(180deg, var(--acento-profundo), var(--fondo));
+  }
+}

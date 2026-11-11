@@ -111,7 +111,7 @@
         <p class="barra-estado">
           <span>{{ usuarios().length }} {{ usuarios().length === 1 ? 'usuario' : 'usuarios' }}</span>
           @if (filas.elegido(); as actual) {
-            <span class="elegido">· Elegido: <strong>{{ actual.nombre }}</strong> · Enter edita</span>
+            <span class="elegido">· Elegido: <strong>{{ actual.nombre }}</strong><span class="pista-teclado"> · Enter edita</span></span>
           }
         </p>
       }

@@ -124,3 +124,65 @@ td {
   font-size: var(--texto-md);
   text-align: center;
 }
+
+/*
+ * Una columna en la pantalla no son los 33rem fijos de las columnas de escritorio: las de números se achican y la
+ * descripción se queda con el resto, que antes era 0 px. La descripción se lee entera y parte en dos renglones.
+ */
+@media screen and (max-width: 1023.98px) {
+  .grilla-ticket {
+    table-layout: auto;
+  }
+  .col-cantidad {
+    width: 4.5rem;
+  }
+  .col-codigo {
+    width: 7rem;
+  }
+  .col-precio {
+    width: 6.5rem;
+  }
+  .col-total {
+    width: 7rem;
+  }
+  .detalle {
+    overflow: visible;
+  }
+  .descripcion {
+    overflow: visible;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+}
+
+/*
+ * En el celular cada renglón del ticket es una tarjeta «etiqueta: valor», con el patrón de `.tabla-tarjetas` que ya usan
+ * Artículos, Ventas y Reportes (styles.css): cada celda lleva su `data-etiqueta` y la tabla deja de ser grilla.
+ */
+@media screen and (max-width: 639.98px) {
+  .grilla-ticket {
+    display: block;
+  }
+  /* Los anchos de las columnas no se usan cuando cada celda es un renglón de la tarjeta. */
+  colgroup {
+    display: none;
+  }
+  /* La tarjeta no lleva el relleno de los bordes de la grilla. */
+  th:first-child,
+  td:first-child,
+  th:last-child,
+  td:last-child {
+    padding-inline: 0;
+  }
+  /* La descripción sigue a su etiqueta en el mismo renglón: es el dato principal de la tarjeta y así no gasta uno. */
+  .descripcion {
+    display: inline;
+  }
+  /* La marca del renglón elegido va en la tarjeta entera y no en su primera celda, que ahora es un renglón de texto. */
+  .renglon.elegido td:first-child {
+    box-shadow: none;
+  }
+  .renglon.elegido {
+    box-shadow: inset 3px 0 0 var(--acento);
+  }
+}

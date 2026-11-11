@@ -73,6 +73,37 @@ import { RenglonTicket } from './ticket';
       text-align: right;
       white-space: nowrap;
     }
+    /*
+     * Debajo de escritorio el TOTAL es una barra fija abajo (S6, S12d), con el Cobrar de la botonera fijado a su derecha:
+     * cobrar deja de depender de llegar al pie del panel. El alto y el ancho del botón los define el mostrador.
+     */
+    @media screen and (max-width: 1023.98px) {
+      .totales {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: var(--e-3);
+        height: var(--alto-barra-total, 64px);
+        padding: 0 calc(var(--ancho-cobrar, 132px) + var(--e-3)) 0 var(--e-3);
+        border-radius: 0;
+        box-shadow: 0 -2px 12px rgb(15 23 42 / 0.28);
+      }
+      /* «Total» y el conteo en columna: entran en el alto de la barra. */
+      .cabecera {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0;
+      }
+      .total {
+        margin: 0;
+        /* Un total largo entra igual en el medio de la barra que le queda al lado de Cobrar. */
+        font-size: clamp(1.375rem, 5.5vw, 1.75rem);
+      }
+      /* Subtotal y descuento no entran en la barra: el descuento se ve en cada renglón y el TOTAL ya viene con él. */
+      .linea {
+        display: none;
+      }
+    }
   `,
 })
 export class TotalesTicket {

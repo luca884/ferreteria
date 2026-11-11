@@ -227,3 +227,27 @@ legend {
 .ultima-compra {
   margin-top: var(--e-3);
 }
+
+/*
+ * responsive S11 (T9): en el celular las dos tarjetas de solo lectura no entran una al lado de la otra (180 + 12 + 180
+ * = 372 px en una columna de 358) y, como el `flex` no parte, la de «Precio final guardado» se montaba encima de
+ * «Ajustar stock» y lo tapaba. Debajo de 640 px se apilan, cada una a todo el ancho, y la de stock pone el número,
+ * «Ajustar stock» y «Ver movimientos» en renglones propios. En escritorio no cambia nada.
+ */
+@media screen and (max-width: 639.98px) {
+  .solo-lectura {
+    flex-wrap: wrap;
+  }
+  .dato {
+    flex: 1 1 100%;
+    min-width: 0;
+  }
+  .dato.stock-actual {
+    grid-template-columns: minmax(0, 1fr);
+    row-gap: var(--e-2);
+  }
+  .dato.stock-actual .ajustar-stock,
+  .dato.stock-actual .ver-movimientos {
+    justify-self: start;
+  }
+}

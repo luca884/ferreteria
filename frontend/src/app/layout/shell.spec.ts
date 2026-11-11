@@ -38,6 +38,20 @@ class Vacia {}
 /** Cualquier ruta abre una pantalla vacía: alcanza para que el shell sepa en qué sección está. */
 const TODAS: Routes = [{ path: '**', component: Vacia }];
 
+/** Pantallas de prueba con el `h1` que tienen todas las pantallas reales: el shell lee de ahí el título. */
+@Component({ template: '<h1>Cotización</h1><p>Oficial venta 1.000,00</p>' })
+class PantallaCotizacion {}
+
+@Component({ template: '<h1>Clientes</h1>' })
+class PantallaClientes {}
+
+/** Rutas con pantallas que tienen `h1`: sirven para el título del encabezado y para navegar entre dos títulos. */
+const CON_TITULO: Routes = [
+  { path: 'configuracion/cotizacion', component: PantallaCotizacion },
+  { path: 'clientes', component: PantallaClientes },
+  { path: '**', component: Vacia },
+];
+
 describe('Shell', () => {
   let fixture: ComponentFixture<Shell>;
 
@@ -407,6 +421,28 @@ describe('Shell', () => {
     expect(evento.defaultPrevented).toBe(true);
   });
 
+  it('un aviso de acción que aparece en el contenido se trae a la vista (responsive, S8)', async () => {
+    // jsdom no implementa scrollIntoView: se reemplaza por un espía para ver a quién se lo llama y con qué opciones.
+    const scroll = vi.fn<(opciones?: ScrollIntoViewOptions) => void>();
+    const prototipo = Element.prototype as unknown as { scrollIntoView?: () => void };
+    Object.defineProperty(Element.prototype, 'scrollIntoView', { value: scroll, configurable: true, writable: true });
+    try {
+      const el = await render(true, null, TODAS);
+      const contenido = el.querySelector('main') as HTMLElement;
+      const aviso = document.createElement('p');
+      aviso.className = 'alerta exito';
+      aviso.setAttribute('role', 'status');
+      aviso.textContent = 'Se guardó «Corralón Sur».';
+
+      contenido.appendChild(aviso);
+
+      await vi.waitFor(() => expect(scroll.mock.contexts).toEqual([aviso]));
+      expect(scroll).toHaveBeenCalledWith({ block: 'nearest' });
+    } finally {
+      delete prototipo.scrollIntoView;
+    }
+  });
+
   it('muestra arriba del contenido el aviso que dejó la pantalla anterior, y lo saca en la navegación siguiente (arreglos-confusos, S8a)', async () => {
     const el = await render(true, null, TODAS);
     TestBed.inject(Avisos).dejar('Cambiaste tu contraseña.');
@@ -725,6 +761,215 @@ describe('Shell', () => {
       await mostrar(el);
 
       expect(texto(el.querySelector('app-cotizacion-lateral'))).toContain('Oficial venta 1.300,00');
+    });
+  });
+
+  describe('menú en cajón (responsive, S2)', () => {
+    /** Los controles que pueden recibir el foco, en el orden en que los recorre Tab. */
+    const focosables = (raiz: Element): HTMLElement[] =>
+      Array.from(
+        raiz.querySelectorAll<HTMLElement>(
+          'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+        ),
+      );
+
+    const botonMenu = (el: HTMLElement) => el.querySelector<HTMLButtonElement>('header .abrir-menu');
+
+    const cajonDe = (el: HTMLElement, boton: HTMLButtonElement) =>
+      el.querySelector<HTMLElement>(`#${boton.getAttribute('aria-controls')}`);
+
+    const tecla = (key: string, shiftKey = false) =>
+      new KeyboardEvent('keydown', { key, shiftKey, bubbles: true, cancelable: true });
+
+    /** Abre el cajón con el botón del encabezado y devuelve las dos piezas. */
+    async function abrirElCajon(el: HTMLElement): Promise<{ boton: HTMLButtonElement; cajon: HTMLElement }> {
+      const boton = botonMenu(el);
+      expect(boton, 'el encabezado con el botón «Menú»').not.toBeNull();
+      const cajon = cajonDe(el, boton!);
+      expect(cajon, 'el cajón que controla el botón').not.toBeNull();
+      boton!.click();
+      await estable();
+      return { boton: boton!, cajon: cajon! };
+    }
+
+    /** Deja correr el `MutationObserver` del título (microtarea) y vuelve a estabilizar la vista. */
+    async function despuesDeObservar(): Promise<void> {
+      await new Promise((resolver) => setTimeout(resolver, 0));
+      await estable();
+    }
+
+    it('el botón «Menú» del encabezado abre y cierra el cajón', async () => {
+      const el = await render(true);
+      const boton = botonMenu(el)!;
+
+      expect(boton.textContent?.trim()).toBe('Menú');
+      expect(boton.getAttribute('aria-expanded')).toBe('false');
+      const cajon = cajonDe(el, boton)!;
+      expect(cajon.classList.contains('abierto')).toBe(false);
+
+      const { boton: abierto, cajon: panel } = await abrirElCajon(el);
+
+      expect(abierto.getAttribute('aria-expanded')).toBe('true');
+      expect(panel.classList.contains('abierto')).toBe(true);
+
+      abierto.click();
+      await estable();
+
+      expect(abierto.getAttribute('aria-expanded')).toBe('false');
+      expect(panel.classList.contains('abierto')).toBe(false);
+    });
+
+    it('el buscador, los grupos, la cotización y el bloque de usuario siguen dentro del cajón', async () => {
+      const el = await render(true);
+      const { cajon } = await abrirElCajon(el);
+
+      expect(cajon.querySelector('app-buscador-menu')).not.toBeNull();
+      expect(cajon.querySelector('nav[aria-label="Secciones"]')).not.toBeNull();
+      expect(cajon.querySelector('app-cotizacion-lateral')).not.toBeNull();
+      expect(cajon.querySelector('.usuario')).not.toBeNull();
+      expect(cajon.querySelector('.usuario a[href="/mi-contrasena"]')).not.toBeNull();
+      // La pantalla queda fuera del cajón: no se mueve con él.
+      expect(el.querySelector('main')!.contains(cajon)).toBe(false);
+    });
+
+    it('el cajón se cierra al navegar a otra pantalla', async () => {
+      const el = await render(true, null, TODAS);
+      const { boton, cajon } = await abrirElCajon(el);
+
+      expect(cajon.classList.contains('abierto')).toBe(true);
+
+      await irA('/ventas');
+
+      expect(boton.getAttribute('aria-expanded')).toBe('false');
+      expect(cajon.classList.contains('abierto')).toBe(false);
+    });
+
+    it('el cajón se cierra al tocar la opción de la pantalla en la que ya se está', async () => {
+      const el = await render(true, null, TODAS);
+      await irA('/ventas');
+      const { boton, cajon } = await abrirElCajon(el);
+
+      cajon.querySelector<HTMLAnchorElement>('nav a[href="/ventas"]')!.click();
+      await estable();
+
+      expect(boton.getAttribute('aria-expanded')).toBe('false');
+      expect(cajon.classList.contains('abierto')).toBe(false);
+    });
+
+    it('Esc cierra el cajón y devuelve el foco al botón «Menú»', async () => {
+      const el = await render(true);
+      const { boton, cajon } = await abrirElCajon(el);
+      expect(cajon.contains(document.activeElement)).toBe(true);
+
+      (document.activeElement as HTMLElement).dispatchEvent(tecla('Escape'));
+      await estable();
+
+      expect(boton.getAttribute('aria-expanded')).toBe('false');
+      expect(cajon.classList.contains('abierto')).toBe(false);
+      expect(document.activeElement).toBe(boton);
+    });
+
+    it('tocar el velo cierra el cajón y devuelve el foco al botón «Menú»', async () => {
+      const el = await render(true);
+      const { boton, cajon } = await abrirElCajon(el);
+      const velo = el.querySelector<HTMLElement>('.velo')!;
+
+      expect(velo, 'el velo detrás del cajón').not.toBeNull();
+      expect(velo.classList.contains('abierto')).toBe(true);
+
+      velo.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await estable();
+
+      expect(boton.getAttribute('aria-expanded')).toBe('false');
+      expect(cajon.classList.contains('abierto')).toBe(false);
+      expect(velo.classList.contains('abierto')).toBe(false);
+      expect(document.activeElement).toBe(boton);
+    });
+
+    it('al abrirse el foco queda dentro del cajón', async () => {
+      const el = await render(true);
+      const { cajon } = await abrirElCajon(el);
+
+      expect(cajon.contains(document.activeElement)).toBe(true);
+    });
+
+    it('Tab no se escapa del cajón: del último control vuelve al primero, y con Shift+Tab al revés', async () => {
+      const el = await render(true);
+      const { cajon } = await abrirElCajon(el);
+      const controles = focosables(cajon);
+      const primero = controles[0];
+      const ultimo = controles[controles.length - 1];
+      expect(controles.length).toBeGreaterThan(1);
+
+      ultimo.focus();
+      const tab = tecla('Tab');
+      ultimo.dispatchEvent(tab);
+      await estable();
+
+      expect(tab.defaultPrevented).toBe(true);
+      expect(document.activeElement).toBe(primero);
+
+      primero.focus();
+      const shiftTab = tecla('Tab', true);
+      primero.dispatchEvent(shiftTab);
+      await estable();
+
+      expect(shiftTab.defaultPrevented).toBe(true);
+      expect(document.activeElement).toBe(ultimo);
+    });
+
+    it('con el cajón cerrado Tab no se intercepta', async () => {
+      const el = await render(true);
+      const controles = focosables(el.querySelector('aside.lateral')!);
+      controles[controles.length - 1].focus();
+      const tab = tecla('Tab');
+      controles[controles.length - 1].dispatchEvent(tab);
+
+      expect(tab.defaultPrevented).toBe(false);
+    });
+
+    it('el encabezado muestra el título de la pantalla y lo cambia al navegar', async () => {
+      const el = await render(true, null, CON_TITULO);
+      const titulo = () => el.querySelector('.encabezado .titulo-pantalla')?.textContent?.trim();
+
+      await irA('/configuracion/cotizacion');
+      await despuesDeObservar();
+      expect(titulo()).toBe('Cotización');
+
+      await irA('/clientes');
+      await despuesDeObservar();
+      expect(titulo()).toBe('Clientes');
+    });
+
+    it('el título cubre sin h1, dos h1 y un cambio sin navegar', async () => {
+      const el = await render(true, null, CON_TITULO);
+      const titulo = () => el.querySelector('.encabezado .titulo-pantalla')?.textContent?.trim();
+
+      await irA('/configuracion/cotizacion');
+      await despuesDeObservar();
+      el.querySelector('h1')!.textContent = 'Cambiado';
+      await despuesDeObservar();
+      expect(titulo()).toBe('Cambiado');
+
+      await irA('/ventas');
+      await despuesDeObservar();
+      expect(titulo()).toBe('');
+    });
+
+    // Hallazgo B1 de la verificación independiente: al abrir, el foco queda en el propio cajón (no en un control),
+    // así que Shift+Tab tiene que ir al último control de adentro y no salirse al botón «Menú», que está tras el velo.
+    it('Shift+Tab con el foco en el cajón recién abierto lo manda al último control, no afuera', async () => {
+      const el = await render(true);
+      const { cajon } = await abrirElCajon(el);
+      const controles = focosables(cajon);
+      expect(document.activeElement).toBe(cajon);
+
+      const shiftTab = tecla('Tab', true);
+      cajon.dispatchEvent(shiftTab);
+      await estable();
+
+      expect(shiftTab.defaultPrevented).toBe(true);
+      expect(document.activeElement).toBe(controles[controles.length - 1]);
     });
   });
 });

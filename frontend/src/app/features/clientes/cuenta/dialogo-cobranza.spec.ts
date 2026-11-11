@@ -934,5 +934,16 @@ describe('DialogoCobranza (CC-032, CC-033, CC-034, CC-043, CC-051)', () => {
       expect(filaRecargo().getAttribute('aria-invalid')).toBe('true');
       expect(texto('#error-fila-a3')).toBe('No puede superar lo pendiente ($ 200,00).');
     });
+
+    it('la tabla de imputación va dentro de .tabla-scroll: en el celular scrollea en horizontal sin ensanchar el pop-up (S3)', async () => {
+      await abrir();
+
+      const tabla = el().querySelector('table.imputacion')!;
+      const marco = tabla.parentElement!;
+
+      expect(marco.tagName).toBe('DIV');
+      expect(marco.classList.contains('tabla-scroll')).toBe(true);
+      expect(Array.from(marco.children)).toEqual([tabla]);
+    });
   });
 });

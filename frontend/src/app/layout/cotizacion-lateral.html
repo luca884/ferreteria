@@ -41,33 +41,35 @@
 
     <div class="cuerpo" [id]="idCuerpo">
       @if (abierta()) {
-        <table class="cotizaciones">
-          <thead>
-            <tr>
-              <th scope="col"><span class="sr-only">Moneda</span></th>
-              <th scope="col" class="num">Compra</th>
-              <th scope="col" class="num">Venta</th>
-            </tr>
-          </thead>
-          <tbody>
-            @for (fila of filas(); track fila.codigo) {
-              <tr class="tipo" [attr.title]="fila.titulo || null">
-                <th scope="row">{{ fila.nombre }}</th>
-                @if (fila.conDatos) {
-                  <td class="num" [class.de-precios]="fila.ladoDePrecios === 'COMPRA'"><span>{{ fila.compra }}</span></td>
-                  <td class="num" [class.de-precios]="fila.ladoDePrecios === 'VENTA'"><span>{{ fila.venta }}</span></td>
-                } @else {
-                  <td colspan="2" class="sin-datos">Todavía no hay datos</td>
-                }
+        <div class="tabla-scroll">
+          <table class="cotizaciones">
+            <thead>
+              <tr>
+                <th scope="col"><span class="sr-only">Moneda</span></th>
+                <th scope="col" class="num">Compra</th>
+                <th scope="col" class="num">Venta</th>
               </tr>
-              @if (fila.sinRenovarDesde) {
-                <tr class="aviso-tipo">
-                  <td colspan="3" class="vieja">No se renueva desde el {{ fila.sinRenovarDesde }}</td>
+            </thead>
+            <tbody>
+              @for (fila of filas(); track fila.codigo) {
+                <tr class="tipo" [attr.title]="fila.titulo || null">
+                  <th scope="row">{{ fila.nombre }}</th>
+                  @if (fila.conDatos) {
+                    <td class="num" [class.de-precios]="fila.ladoDePrecios === 'COMPRA'"><span>{{ fila.compra }}</span></td>
+                    <td class="num" [class.de-precios]="fila.ladoDePrecios === 'VENTA'"><span>{{ fila.venta }}</span></td>
+                  } @else {
+                    <td colspan="2" class="sin-datos">Todavía no hay datos</td>
+                  }
                 </tr>
+                @if (fila.sinRenovarDesde) {
+                  <tr class="aviso-tipo">
+                    <td colspan="3" class="vieja">No se renueva desde el {{ fila.sinRenovarDesde }}</td>
+                  </tr>
+                }
               }
-            }
-          </tbody>
-        </table>
+            </tbody>
+          </table>
+        </div>
         @if (fecha(); as f) {
           <p class="fecha">Cotización del {{ f }}</p>
         }

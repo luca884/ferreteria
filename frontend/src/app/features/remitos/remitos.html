@@ -72,35 +72,37 @@
         </button>
       </nav>
     }
-    <table class="remitos">
-      <caption class="sr-only">
-        Remitos, los más nuevos primero. Elegí uno para ver su detalle.
-      </caption>
-      <thead>
-        <tr>
-          <th scope="col">N.º</th>
-          <th scope="col">Fecha</th>
-          <th scope="col">Cliente</th>
-          <th scope="col" class="num">Total</th>
-          <th scope="col">Estado</th>
-        </tr>
-      </thead>
-      <tbody>
-        @for (fila of actual.items; track fila.remitoId) {
-          <tr [class.elegida]="elegido() === fila.remitoId" (click)="elegir(fila)">
-            <td>
-              <button type="button" class="enlace" [attr.aria-pressed]="elegido() === fila.remitoId">
-                {{ fila.numero }}
-              </button>
-            </td>
-            <td class="fecha">{{ fechaHora(fila.fecha) }}</td>
-            <td>{{ fila.clienteNombre ?? '—' }}</td>
-            <td class="num">{{ fila.total | monto }}</td>
-            <td>{{ etiqueta[fila.estado] }}</td>
+    <div class="tabla-scroll">
+      <table class="remitos">
+        <caption class="sr-only">
+          Remitos, los más nuevos primero. Elegí uno para ver su detalle.
+        </caption>
+        <thead>
+          <tr>
+            <th scope="col">N.º</th>
+            <th scope="col">Fecha</th>
+            <th scope="col">Cliente</th>
+            <th scope="col" class="num">Total</th>
+            <th scope="col">Estado</th>
           </tr>
-        }
-      </tbody>
-    </table>
+        </thead>
+        <tbody>
+          @for (fila of actual.items; track fila.remitoId) {
+            <tr [class.elegida]="elegido() === fila.remitoId" (click)="elegir(fila)">
+              <td>
+                <button type="button" class="enlace" [attr.aria-pressed]="elegido() === fila.remitoId">
+                  {{ fila.numero }}
+                </button>
+              </td>
+              <td class="fecha">{{ fechaHora(fila.fecha) }}</td>
+              <td>{{ fila.clienteNombre ?? '—' }}</td>
+              <td class="num">{{ fila.total | monto }}</td>
+              <td>{{ etiqueta[fila.estado] }}</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
   }
 } @else if (cargando()) {
   <p class="ayuda estado-vacio">Cargando…</p>
@@ -128,31 +130,33 @@
         <p class="observaciones">{{ r.observaciones }}</p>
       }
 
-      <table class="renglones">
-        <caption class="sr-only">
-          Renglones del remito
-        </caption>
-        <thead>
-          <tr>
-            <th scope="col">Artículo</th>
-            <th scope="col" class="num">Cantidad</th>
-            <th scope="col" class="num">Precio</th>
-            <th scope="col" class="num">Dto.</th>
-            <th scope="col" class="num">Total</th>
-          </tr>
-        </thead>
-        <tbody>
-          @for (x of r.renglones; track x.renglon) {
+      <div class="tabla-scroll">
+        <table class="renglones">
+          <caption class="sr-only">
+            Renglones del remito
+          </caption>
+          <thead>
             <tr>
-              <td>{{ x.descripcion }}</td>
-              <td class="num">{{ cantidadConUnidad(x.cantidad, x.unidad) }}</td>
-              <td class="num">{{ x.precioUnitario | monto }}</td>
-              <td class="num">{{ x.descuentoPorcentaje > 0 ? (x.descuentoPorcentaje | number: '1.0-2') + ' %' : '' }}</td>
-              <td class="num">{{ x.total | monto }}</td>
+              <th scope="col">Artículo</th>
+              <th scope="col" class="num">Cantidad</th>
+              <th scope="col" class="num">Precio</th>
+              <th scope="col" class="num">Dto.</th>
+              <th scope="col" class="num">Total</th>
             </tr>
-          }
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            @for (x of r.renglones; track x.renglon) {
+              <tr>
+                <td>{{ x.descripcion }}</td>
+                <td class="num">{{ cantidadConUnidad(x.cantidad, x.unidad) }}</td>
+                <td class="num">{{ x.precioUnitario | monto }}</td>
+                <td class="num">{{ x.descuentoPorcentaje > 0 ? (x.descuentoPorcentaje | number: '1.0-2') + ' %' : '' }}</td>
+                <td class="num">{{ x.total | monto }}</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
 
       <div class="totales">
         @if (r.descuento > 0) {

@@ -25,7 +25,7 @@
       [disabled]="estado() !== 'listo'"
       (click)="abrirCobro()"
     >
-      Cobrar (F4)
+      <span>Cobrar <span class="pista-teclado">(F4)</span></span>
     </button>
   }
 </app-barra-acciones>
@@ -103,31 +103,33 @@
         @if (p.comprobantes.length === 0) {
           <p class="ayuda sin-pendientes">No tiene comprobantes con deuda.</p>
         } @else {
-          <table class="pendientes">
-            <caption class="sr-only">
-              Comprobantes y Recargos con deuda, del más viejo al más nuevo
-            </caption>
-            <thead>
-              <tr>
-                <th scope="col">Comprobante</th>
-                <th scope="col">Fecha</th>
-                <th scope="col" class="num">Importe</th>
-                <th scope="col" class="num">Imputado</th>
-                <th scope="col" class="num">Pendiente</th>
-              </tr>
-            </thead>
-            <tbody>
-              @for (comprobante of p.comprobantes; track clavePartida(comprobante)) {
+          <div class="tabla-scroll">
+            <table class="pendientes">
+              <caption class="sr-only">
+                Comprobantes y Recargos con deuda, del más viejo al más nuevo
+              </caption>
+              <thead>
                 <tr>
-                  <th scope="row">{{ comprobante.referencia }}</th>
-                  <td>{{ fecha(comprobante.fecha) }}</td>
-                  <td class="num">{{ comprobante.importe | monto }}</td>
-                  <td class="num">{{ comprobante.imputado | monto }}</td>
-                  <td class="num">{{ comprobante.pendiente | monto }}</td>
+                  <th scope="col">Comprobante</th>
+                  <th scope="col">Fecha</th>
+                  <th scope="col" class="num">Importe</th>
+                  <th scope="col" class="num">Imputado</th>
+                  <th scope="col" class="num">Pendiente</th>
                 </tr>
-              }
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                @for (comprobante of p.comprobantes; track clavePartida(comprobante)) {
+                  <tr>
+                    <th scope="row">{{ comprobante.referencia }}</th>
+                    <td>{{ fecha(comprobante.fecha) }}</td>
+                    <td class="num">{{ comprobante.importe | monto }}</td>
+                    <td class="num">{{ comprobante.imputado | monto }}</td>
+                    <td class="num">{{ comprobante.pendiente | monto }}</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
         }
 
         <app-movimientos-cuenta

@@ -505,5 +505,16 @@ describe('DialogoAjuste (GDS-20, G59: Recargo y Descuento de la cuenta del clien
       expect(filas().every((f) => f.readOnly)).toBe(true);
       expect(boton('Imputar en orden').disabled).toBe(true);
     });
+
+    it('la tabla de imputación del Descuento va dentro de .tabla-scroll (S3)', async () => {
+      await abrir('DESCUENTO');
+
+      const tabla = el().querySelector('table.imputacion')!;
+      const marco = tabla.parentElement!;
+
+      expect(marco.tagName).toBe('DIV');
+      expect(marco.classList.contains('tabla-scroll')).toBe(true);
+      expect(Array.from(marco.children)).toEqual([tabla]);
+    });
   });
 });

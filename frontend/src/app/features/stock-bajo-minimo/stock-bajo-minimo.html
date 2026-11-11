@@ -47,43 +47,45 @@
       @if (lista.length === 0) {
         <p class="ayuda estado-vacio" role="status">No hay artículos bajo el stock mínimo.</p>
       } @else {
-        <table>
-          <caption class="sr-only">
-            Artículos activos con stock menor al mínimo y cuánto reponer de cada uno.
-          </caption>
-          <thead>
-            <tr>
-              <th scope="col">Código</th>
-              <th scope="col">Cód. proveedor</th>
-              <th scope="col">Descripción</th>
-              <th scope="col">Rubro</th>
-              <th scope="col">Proveedor</th>
-              <th scope="col">Última compra</th>
-              <th scope="col" class="num">Costo</th>
-              <th scope="col" class="num">Stock</th>
-              <th scope="col" class="num">Mínimo</th>
-              <th scope="col" class="num">A reponer</th>
-            </tr>
-          </thead>
-          <tbody>
-            @for (f of lista; track f.articuloId) {
+        <div class="tabla-scroll">
+          <table>
+            <caption class="sr-only">
+              Artículos activos con stock menor al mínimo y cuánto reponer de cada uno.
+            </caption>
+            <thead>
               <tr>
-                <td class="codigo">{{ f.codigoInterno }}</td>
-                <td class="codigo-proveedor">{{ f.codigoProveedor ?? '—' }}</td>
-                <td>{{ f.descripcion }}</td>
-                <td>{{ f.rubro ?? '—' }}</td>
-                <td>{{ f.proveedor ?? '—' }}</td>
-                <td class="ultima-compra">
-                  @if (ultimaCompra(f); as u) {<span class="fecha">{{ u.fecha }}</span> · {{ u.proveedor }}} @else {—}
-                </td>
-                <td class="num">{{ costo(f) }}</td>
-                <td class="num" [class.negativo]="f.stockActual < 0">{{ numero(f.stockActual) }}</td>
-                <td class="num">{{ numero(f.stockMinimo) }}</td>
-                <td class="num reponer">{{ numero(f.aReponer) }}</td>
+                <th scope="col">Código</th>
+                <th scope="col">Cód. proveedor</th>
+                <th scope="col">Descripción</th>
+                <th scope="col">Rubro</th>
+                <th scope="col">Proveedor</th>
+                <th scope="col">Última compra</th>
+                <th scope="col" class="num">Costo</th>
+                <th scope="col" class="num">Stock</th>
+                <th scope="col" class="num">Mínimo</th>
+                <th scope="col" class="num">A reponer</th>
               </tr>
-            }
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              @for (f of lista; track f.articuloId) {
+                <tr>
+                  <td class="codigo">{{ f.codigoInterno }}</td>
+                  <td class="codigo-proveedor">{{ f.codigoProveedor ?? '—' }}</td>
+                  <td>{{ f.descripcion }}</td>
+                  <td>{{ f.rubro ?? '—' }}</td>
+                  <td>{{ f.proveedor ?? '—' }}</td>
+                  <td class="ultima-compra">
+                    @if (ultimaCompra(f); as u) {<span class="fecha">{{ u.fecha }}</span> · {{ u.proveedor }}} @else {—}
+                  </td>
+                  <td class="num">{{ costo(f) }}</td>
+                  <td class="num" [class.negativo]="f.stockActual < 0">{{ numero(f.stockActual) }}</td>
+                  <td class="num">{{ numero(f.stockMinimo) }}</td>
+                  <td class="num reponer">{{ numero(f.aReponer) }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
       }
     </section>
   } @else if (cargando()) {

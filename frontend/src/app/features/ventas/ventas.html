@@ -97,58 +97,60 @@
           </button>
         </nav>
       }
-      <table class="ventas">
-        <caption class="sr-only">
-          Ventas, las más nuevas primero. Elegí una para ver su detalle y reimprimirla.
-        </caption>
-        <thead>
-          <tr>
-            <th scope="col">N.º</th>
-            <th scope="col">Factura</th>
-            <th scope="col">Fecha</th>
-            <th scope="col">Cliente</th>
-            <th scope="col">Usuario</th>
-            <th scope="col" class="num">Total</th>
-          </tr>
-        </thead>
-        <tbody>
-          @for (fila of actual.items; track fila.ventaId) {
-            <tr [class.elegida]="elegida() === fila.ventaId" (click)="elegir(fila)">
-              <td>
-                <button type="button" class="enlace" [attr.aria-pressed]="elegida() === fila.ventaId">
-                  {{ fila.numero }}
-                </button>
-                @if (!fila.facturable && !esNota(fila)) {
-                  <span class="marca">No facturable</span>
-                }
-                @if (esNota(fila)) {
-                  <span class="marca nota">
-                    {{ fila.fiscal ? 'Nota de crédito' : 'Anulación' }}@if (fila.ventaAnulada; as anulada) {&ngsp;· Venta&nbsp;N.º&nbsp;{{ anulada.numero }}}
-                  </span>
-                }
-                @if (fila.anulacion) {
-                  <span class="marca anulada">Anulada</span>
-                }
-              </td>
-              <td class="factura">
-                @if (factura(fila.fiscal); as f) {
-                  {{ f.texto }}
-                  @if (f.marcas) {
-                    <span class="marca">{{ f.marcas }}</span>
-                  }
-                  @if (f.reimprimir) {
-                    <span class="marca reimprimir">Reimprimir factura</span>
-                  }
-                }
-              </td>
-              <td class="fecha">{{ fecha(fila.fecha) }}</td>
-              <td>{{ cliente(fila.clienteNombre) }}</td>
-              <td>{{ fila.usuario ?? '—' }}</td>
-              <td class="num">{{ (esNota(fila) ? -fila.total : fila.total) | monto }}</td>
+      <div class="tabla-scroll">
+        <table class="ventas tabla-tarjetas">
+          <caption class="sr-only">
+            Ventas, las más nuevas primero. Elegí una para ver su detalle y reimprimirla.
+          </caption>
+          <thead>
+            <tr>
+              <th scope="col">N.º</th>
+              <th scope="col">Factura</th>
+              <th scope="col">Fecha</th>
+              <th scope="col">Cliente</th>
+              <th scope="col">Usuario</th>
+              <th scope="col" class="num">Total</th>
             </tr>
-          }
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            @for (fila of actual.items; track fila.ventaId) {
+              <tr [class.elegida]="elegida() === fila.ventaId" (click)="elegir(fila)">
+                <td data-etiqueta="N.º">
+                  <button type="button" class="enlace" [attr.aria-pressed]="elegida() === fila.ventaId">
+                    {{ fila.numero }}
+                  </button>
+                  @if (!fila.facturable && !esNota(fila)) {
+                    <span class="marca">No facturable</span>
+                  }
+                  @if (esNota(fila)) {
+                    <span class="marca nota">
+                      {{ fila.fiscal ? 'Nota de crédito' : 'Anulación' }}@if (fila.ventaAnulada; as anulada) {&ngsp;· Venta&nbsp;N.º&nbsp;{{ anulada.numero }}}
+                    </span>
+                  }
+                  @if (fila.anulacion) {
+                    <span class="marca anulada">Anulada</span>
+                  }
+                </td>
+                <td class="factura" data-etiqueta="Factura" [class.vacia]="!factura(fila.fiscal)">
+                  @if (factura(fila.fiscal); as f) {
+                    {{ f.texto }}
+                    @if (f.marcas) {
+                      <span class="marca">{{ f.marcas }}</span>
+                    }
+                    @if (f.reimprimir) {
+                      <span class="marca reimprimir">Reimprimir factura</span>
+                    }
+                  }
+                </td>
+                <td class="fecha" data-etiqueta="Fecha">{{ fecha(fila.fecha) }}</td>
+                <td data-etiqueta="Cliente">{{ cliente(fila.clienteNombre) }}</td>
+                <td data-etiqueta="Usuario">{{ fila.usuario ?? '—' }}</td>
+                <td class="num" data-etiqueta="Total">{{ (esNota(fila) ? -fila.total : fila.total) | monto }}</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
     }
   } @else if (cargando()) {
     <p class="ayuda estado-vacio">Cargando…</p>

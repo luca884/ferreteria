@@ -190,6 +190,19 @@ describe('Compras', () => {
     expect(paginador.compareDocumentPosition(tabla) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
+  // S4: la lista y el detalle ponen la tabla adentro de un marco que scrollea en horizontal, no la página.
+  it('la lista y el detalle de la compra ponen la tabla dentro de su marco de scroll (responsive, S4)', async () => {
+    await crear();
+
+    expect(el().querySelector('table.compras')?.parentElement?.classList.contains('tabla-scroll')).toBe(true);
+
+    (el().querySelector('table.compras tbody tr button') as HTMLButtonElement).click();
+    await refrescar();
+
+    const tablaDelDetalle = el().querySelector('app-dialogo-detalle table')!;
+    expect(tablaDelDetalle.parentElement?.classList.contains('tabla-scroll')).toBe(true);
+  });
+
   it('elegir una compra muestra sus renglones con el costo y el precio de antes y de después', async () => {
     await crear();
 

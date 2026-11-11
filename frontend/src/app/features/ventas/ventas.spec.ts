@@ -111,6 +111,42 @@ describe('Ventas (consulta y reimpresión, G60)', () => {
     expect(el().querySelector('form.filtros')).toBeNull();
   });
 
+  // S4: en el celular la grilla scrollea adentro de su marco y la página no se corre de costado.
+  it('la tabla de ventas va dentro de su marco de scroll (responsive, S4)', async () => {
+    await crear();
+
+    expect(el().querySelector('table.ventas')?.parentElement?.classList.contains('tabla-scroll')).toBe(true);
+  });
+
+  /*
+   * Responsive, S5: por debajo de 640 px la fila se lee como una tarjeta «etiqueta: valor». Vitest no evalúa media
+   * queries, así que el spec vigila el contrato de datos que la dibuja: el nombre de la columna en cada celda.
+   */
+  it('S5: cada celda de la lista lleva el nombre de su columna en data-etiqueta, para la tarjeta del celular', async () => {
+    await crear([
+      resumenDePrueba(5, {
+        fiscal: { letra: 'B', puntoVenta: 1, numero: 12, estado: 'AUTORIZADO', ambiente: 'PRODUCCION', validoComoFactura: true },
+      }),
+      resumenDePrueba(4, { clienteNombre: undefined, facturable: false }),
+    ]);
+
+    const encabezados = Array.from(el().querySelectorAll('table.ventas thead th')).map((th) => normal(th.textContent));
+    expect(encabezados).toEqual(['N.º', 'Factura', 'Fecha', 'Cliente', 'Usuario', 'Total']);
+    expect(filas()).toHaveLength(2);
+    for (const fila of filas()) {
+      expect(Array.from(fila.querySelectorAll('td')).map((celda) => celda.getAttribute('data-etiqueta'))).toEqual(
+        encabezados,
+      );
+    }
+    expect(el().querySelector('table.ventas')!.classList).toContain('tabla-tarjetas');
+
+    // La venta sin factura no deja el renglón «Factura:» solo: la celda queda marcada para que el modo tarjeta la
+    // esconda (el nodo de Angular en la celda hace que `:empty` no la encuentre).
+    const facturas = filas().map((fila) => fila.querySelector('td.factura')!);
+    expect(facturas[0].classList).not.toContain('vacia');
+    expect(facturas[1].classList).toContain('vacia');
+  });
+
   it('lista las ventas con número, factura, fecha y hora, cliente, usuario y total; sin registro fiscal la factura va vacía', async () => {
     await crear([resumenDePrueba(5), resumenDePrueba(4, { clienteNombre: undefined, facturable: false })]);
 
