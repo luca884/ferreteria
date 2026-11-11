@@ -47,45 +47,47 @@
       @if (lista.length === 0) {
         <p class="ayuda estado-vacio" role="status">Ningún artículo cae en este control.</p>
       } @else {
-        <table>
-          <caption class="sr-only">
-            Artículos activos que caen en el control elegido, con los datos para corregirlos.
-          </caption>
-          <thead>
-            <tr>
-              <th scope="col">Código</th>
-              <th scope="col">Descripción</th>
-              <th scope="col">Rubro</th>
-              <th scope="col">Proveedor</th>
-              <th scope="col" class="num">Costo</th>
-              <th scope="col" class="num">IVA</th>
-              <th scope="col" class="num">Precio</th>
-            </tr>
-          </thead>
-          <tbody>
-            @for (f of lista; track f.articuloId) {
+        <div class="tabla-scroll">
+          <table>
+            <caption class="sr-only">
+              Artículos activos que caen en el control elegido, con los datos para corregirlos.
+            </caption>
+            <thead>
               <tr>
-                <td class="codigo">{{ f.codigoInterno }}</td>
-                <td><a [routerLink]="['/articulos', f.articuloId]">{{ f.descripcion }}</a></td>
-                <td>{{ f.rubro ?? '—' }}</td>
-                <td>{{ f.proveedor ?? '—' }}</td>
-                <td class="num">
-                  {{ costo(f) }}
-                  @if (costoReal(f); as real) {
-                    <small class="costo-real">Costo real: {{ real }}</small>
-                  }
-                </td>
-                <td class="num">{{ iva(f) }}</td>
-                <td class="num">
-                  {{ precio(f) }}
-                  @if (f.precioManual) {
-                    <span class="manual">manual</span>
-                  }
-                </td>
+                <th scope="col">Código</th>
+                <th scope="col">Descripción</th>
+                <th scope="col">Rubro</th>
+                <th scope="col">Proveedor</th>
+                <th scope="col" class="num">Costo</th>
+                <th scope="col" class="num">IVA</th>
+                <th scope="col" class="num">Precio</th>
               </tr>
-            }
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              @for (f of lista; track f.articuloId) {
+                <tr>
+                  <td class="codigo">{{ f.codigoInterno }}</td>
+                  <td><a [routerLink]="['/articulos', f.articuloId]">{{ f.descripcion }}</a></td>
+                  <td>{{ f.rubro ?? '—' }}</td>
+                  <td>{{ f.proveedor ?? '—' }}</td>
+                  <td class="num">
+                    {{ costo(f) }}
+                    @if (costoReal(f); as real) {
+                      <small class="costo-real">Costo real: {{ real }}</small>
+                    }
+                  </td>
+                  <td class="num">{{ iva(f) }}</td>
+                  <td class="num">
+                    {{ precio(f) }}
+                    @if (f.precioManual) {
+                      <span class="manual">manual</span>
+                    }
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
       }
     </section>
   } @else if (cargando()) {

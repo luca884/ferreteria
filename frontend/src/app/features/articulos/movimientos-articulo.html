@@ -61,37 +61,39 @@
           </button>
         </nav>
       }
-      <table class="movimientos">
-        <caption class="sr-only">
-          Movimientos de stock del artículo, los más nuevos primero, con el saldo que quedó después de cada uno.
-        </caption>
-        <thead>
-          <tr>
-            <th scope="col">Fecha</th>
-            <th scope="col">Tipo</th>
-            <th scope="col">Comprobante</th>
-            <th scope="col" class="num">Cantidad</th>
-            <th scope="col" class="num">Saldo</th>
-            <th scope="col">Usuario</th>
-            <th scope="col">Motivo</th>
-          </tr>
-        </thead>
-        <tbody>
-          @for (m of actual.items; track m.id) {
+      <div class="tabla-scroll">
+        <table class="movimientos">
+          <caption class="sr-only">
+            Movimientos de stock del artículo, los más nuevos primero, con el saldo que quedó después de cada uno.
+          </caption>
+          <thead>
             <tr>
-              <td>{{ fecha(m.fecha) }}</td>
-              <td>{{ tipo(m.tipo) }}</td>
-              <td>{{ m.comprobante ?? '—' }}</td>
-              <td class="num cantidad" [class.salida]="m.cantidad < 0" [class.entrada]="m.cantidad > 0">
-                {{ conSigno(m.cantidad) }}
-              </td>
-              <td class="num">{{ numero(m.saldo) }}</td>
-              <td>{{ m.usuario ?? '—' }}</td>
-              <td>{{ m.motivo ?? '—' }}</td>
+              <th scope="col">Fecha</th>
+              <th scope="col">Tipo</th>
+              <th scope="col">Comprobante</th>
+              <th scope="col" class="num">Cantidad</th>
+              <th scope="col" class="num">Saldo</th>
+              <th scope="col">Usuario</th>
+              <th scope="col">Motivo</th>
             </tr>
-          }
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            @for (m of actual.items; track m.id) {
+              <tr>
+                <td>{{ fecha(m.fecha) }}</td>
+                <td>{{ tipo(m.tipo) }}</td>
+                <td>{{ m.comprobante ?? '—' }}</td>
+                <td class="num cantidad" [class.salida]="m.cantidad < 0" [class.entrada]="m.cantidad > 0">
+                  {{ conSigno(m.cantidad) }}
+                </td>
+                <td class="num">{{ numero(m.saldo) }}</td>
+                <td>{{ m.usuario ?? '—' }}</td>
+                <td>{{ m.motivo ?? '—' }}</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
     }
   } @else if (cargando()) {
     <p class="ayuda estado-vacio">Cargando…</p>

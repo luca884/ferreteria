@@ -102,68 +102,70 @@
               </button>
             </nav>
           }
-          <table class="movimientos">
-            <caption class="sr-only">
-              Movimientos de la cuenta, del más nuevo al más viejo
-            </caption>
-            <thead>
-              <tr>
-                <th scope="col">Fecha</th>
-                <th scope="col">Tipo</th>
-                <th scope="col">Comprobante</th>
-                <th scope="col" class="num">Debe</th>
-                <th scope="col" class="num">Haber</th>
-                <th scope="col" class="num">Saldo</th>
-                <th scope="col">Usuario</th>
-                <th scope="col"><span class="sr-only">Acciones</span></th>
-              </tr>
-            </thead>
-            <tbody>
-              @for (linea of e.movimientos.items; track linea.id) {
-                <tr [class.anulacion]="linea.tipo === 'ANULACION'">
-                  <td>{{ fecha(linea.fecha) }}</td>
-                  <td>{{ tipoLabels[linea.tipo] }}</td>
-                  <td>
-                    {{ linea.referencia }}
-                    @if (linea.anulado) {
-                      <span class="etiqueta etiqueta-anulado">ANULADO</span>
-                    }
-                    @if (muestraMotivo(linea)) {
-                      <small class="motivo">Motivo: {{ linea.motivo }}</small>
-                    }
-                  </td>
-                  <td class="num">{{ linea.debe > 0 ? (linea.debe | monto) : '' }}</td>
-                  <td class="num">{{ linea.haber > 0 ? (linea.haber | monto) : '' }}</td>
-                  <td class="num">{{ textoDeSaldo(linea.saldo) }}</td>
-                  <td>{{ linea.usuario ?? '—' }}</td>
-                  <td class="acciones">
-                    @if (puedeAnular(linea)) {
-                      <button
-                        type="button"
-                        class="peligro chico anular"
-                        [disabled]="!clienteActivo()"
-                        [attr.aria-describedby]="!clienteActivo() ? 'aviso-inactivo' : null"
-                        [attr.aria-label]="'Anular ' + linea.referencia"
-                        (click)="anular.emit(linea)"
-                      >
-                        Anular
-                      </button>
-                    }
-                    @if (puedeVerRecibo(linea)) {
-                      <button
-                        type="button"
-                        class="secundario chico reimprimir"
-                        [attr.aria-label]="'Reimprimir ' + linea.referencia"
-                        (click)="verRecibo.emit(linea.reciboId!)"
-                      >
-                        Reimprimir
-                      </button>
-                    }
-                  </td>
+          <div class="tabla-scroll">
+            <table class="movimientos">
+              <caption class="sr-only">
+                Movimientos de la cuenta, del más nuevo al más viejo
+              </caption>
+              <thead>
+                <tr>
+                  <th scope="col">Fecha</th>
+                  <th scope="col">Tipo</th>
+                  <th scope="col">Comprobante</th>
+                  <th scope="col" class="num">Debe</th>
+                  <th scope="col" class="num">Haber</th>
+                  <th scope="col" class="num">Saldo</th>
+                  <th scope="col">Usuario</th>
+                  <th scope="col"><span class="sr-only">Acciones</span></th>
                 </tr>
-              }
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                @for (linea of e.movimientos.items; track linea.id) {
+                  <tr [class.anulacion]="linea.tipo === 'ANULACION'">
+                    <td>{{ fecha(linea.fecha) }}</td>
+                    <td>{{ tipoLabels[linea.tipo] }}</td>
+                    <td>
+                      {{ linea.referencia }}
+                      @if (linea.anulado) {
+                        <span class="etiqueta etiqueta-anulado">ANULADO</span>
+                      }
+                      @if (muestraMotivo(linea)) {
+                        <small class="motivo">Motivo: {{ linea.motivo }}</small>
+                      }
+                    </td>
+                    <td class="num">{{ linea.debe > 0 ? (linea.debe | monto) : '' }}</td>
+                    <td class="num">{{ linea.haber > 0 ? (linea.haber | monto) : '' }}</td>
+                    <td class="num">{{ textoDeSaldo(linea.saldo) }}</td>
+                    <td>{{ linea.usuario ?? '—' }}</td>
+                    <td class="acciones">
+                      @if (puedeAnular(linea)) {
+                        <button
+                          type="button"
+                          class="peligro chico anular"
+                          [disabled]="!clienteActivo()"
+                          [attr.aria-describedby]="!clienteActivo() ? 'aviso-inactivo' : null"
+                          [attr.aria-label]="'Anular ' + linea.referencia"
+                          (click)="anular.emit(linea)"
+                        >
+                          Anular
+                        </button>
+                      }
+                      @if (puedeVerRecibo(linea)) {
+                        <button
+                          type="button"
+                          class="secundario chico reimprimir"
+                          [attr.aria-label]="'Reimprimir ' + linea.referencia"
+                          (click)="verRecibo.emit(linea.reciboId!)"
+                        >
+                          Reimprimir
+                        </button>
+                      }
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
         }
       }
     }

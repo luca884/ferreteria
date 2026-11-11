@@ -186,25 +186,27 @@
                   }
                 </ol>
                 @if (p.ultimos.length > 0) {
-                  <table class="ultimos">
-                    <caption class="sr-only">
-                      Último número autorizado en ARCA de cada tipo de factura.
-                    </caption>
-                    <thead>
-                      <tr>
-                        <th scope="col">Comprobante</th>
-                        <th scope="col" class="num">Último número</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      @for (ultimo of p.ultimos; track ultimo.cbteTipo) {
+                  <div class="tabla-scroll">
+                    <table class="ultimos">
+                      <caption class="sr-only">
+                        Último número autorizado en ARCA de cada tipo de factura.
+                      </caption>
+                      <thead>
                         <tr>
-                          <td>{{ ultimo.comprobante }}</td>
-                          <td class="num">{{ ultimo.numero }}</td>
+                          <th scope="col">Comprobante</th>
+                          <th scope="col" class="num">Último número</th>
                         </tr>
-                      }
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody>
+                        @for (ultimo of p.ultimos; track ultimo.cbteTipo) {
+                          <tr>
+                            <td>{{ ultimo.comprobante }}</td>
+                            <td class="num">{{ ultimo.numero }}</td>
+                          </tr>
+                        }
+                      </tbody>
+                    </table>
+                  </div>
                 }
               }
             </div>

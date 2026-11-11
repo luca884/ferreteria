@@ -268,45 +268,47 @@
       <p class="error error-chequeo">{{ mensaje }}</p>
     }
     @if (filasChequeo().length > 0) {
-      <table class="chequeo">
-        <caption class="sr-only">
-          Lo que contestó FEDummy de ARCA desde el servidor, por ambiente.
-        </caption>
-        <thead>
-          <tr>
-            <th scope="col">Ambiente</th>
-            <th scope="col">Resultado</th>
-            <th scope="col">AppServer</th>
-            <th scope="col">DbServer</th>
-            <th scope="col">AuthServer</th>
-            <th scope="col">Tiempo o error</th>
-          </tr>
-        </thead>
-        <tbody>
-          @for (fila of filasChequeo(); track fila.ambiente) {
+      <div class="tabla-scroll">
+        <table class="chequeo">
+          <caption class="sr-only">
+            Lo que contestó FEDummy de ARCA desde el servidor, por ambiente.
+          </caption>
+          <thead>
             <tr>
-              <th scope="row">{{ fila.ambiente }}</th>
-              <td>
-                <span class="etiqueta resultado" [attr.data-ok]="fila.resultado.ok">
-                  {{ fila.resultado.ok ? 'OK' : 'Falló' }}
-                </span>
-              </td>
-              <td>{{ fila.resultado.appServer ?? '—' }}</td>
-              <td>{{ fila.resultado.dbServer ?? '—' }}</td>
-              <td>{{ fila.resultado.authServer ?? '—' }}</td>
-              <td class="detalle">
-                @if (fila.resultado.error; as error) {
-                  {{ error }}
-                } @else if (fila.resultado.milisegundos !== null) {
-                  {{ fila.resultado.milisegundos }} ms
-                } @else {
-                  —
-                }
-              </td>
+              <th scope="col">Ambiente</th>
+              <th scope="col">Resultado</th>
+              <th scope="col">AppServer</th>
+              <th scope="col">DbServer</th>
+              <th scope="col">AuthServer</th>
+              <th scope="col">Tiempo o error</th>
             </tr>
-          }
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            @for (fila of filasChequeo(); track fila.ambiente) {
+              <tr>
+                <th scope="row">{{ fila.ambiente }}</th>
+                <td>
+                  <span class="etiqueta resultado" [attr.data-ok]="fila.resultado.ok">
+                    {{ fila.resultado.ok ? 'OK' : 'Falló' }}
+                  </span>
+                </td>
+                <td>{{ fila.resultado.appServer ?? '—' }}</td>
+                <td>{{ fila.resultado.dbServer ?? '—' }}</td>
+                <td>{{ fila.resultado.authServer ?? '—' }}</td>
+                <td class="detalle">
+                  @if (fila.resultado.error; as error) {
+                    {{ error }}
+                  } @else if (fila.resultado.milisegundos !== null) {
+                    {{ fila.resultado.milisegundos }} ms
+                  } @else {
+                    —
+                  }
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
     }
   </div>
 </section>

@@ -111,6 +111,13 @@ describe('Ventas (consulta y reimpresión, G60)', () => {
     expect(el().querySelector('form.filtros')).toBeNull();
   });
 
+  // S4: en el celular la grilla scrollea adentro de su marco y la página no se corre de costado.
+  it('la tabla de ventas va dentro de su marco de scroll (responsive, S4)', async () => {
+    await crear();
+
+    expect(el().querySelector('table.ventas')?.parentElement?.classList.contains('tabla-scroll')).toBe(true);
+  });
+
   it('lista las ventas con número, factura, fecha y hora, cliente, usuario y total; sin registro fiscal la factura va vacía', async () => {
     await crear([resumenDePrueba(5), resumenDePrueba(4, { clienteNombre: undefined, facturable: false })]);
 

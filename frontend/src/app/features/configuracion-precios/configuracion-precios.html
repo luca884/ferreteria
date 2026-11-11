@@ -133,27 +133,29 @@
     (cancelar)="cambioPendiente.set(null)"
   >
     @if (cambio.ejemplos.length > 0) {
-      <table class="ejemplos">
-        <caption>Por ejemplo</caption>
-        <thead>
-          <tr>
-            <th scope="col">Código</th>
-            <th scope="col">Descripción</th>
-            <th scope="col" class="num">Precio de hoy</th>
-            <th scope="col" class="num">Precio nuevo</th>
-          </tr>
-        </thead>
-        <tbody>
-          @for (e of cambio.ejemplos; track e.codigo) {
+      <div class="tabla-scroll">
+        <table class="ejemplos">
+          <caption>Por ejemplo</caption>
+          <thead>
             <tr>
-              <td>{{ e.codigo }}</td>
-              <td>{{ e.descripcion }}</td>
-              <td class="num">{{ e.precioActual | monto }}</td>
-              <td class="num">{{ e.precioNuevo | monto }}</td>
+              <th scope="col">Código</th>
+              <th scope="col">Descripción</th>
+              <th scope="col" class="num">Precio de hoy</th>
+              <th scope="col" class="num">Precio nuevo</th>
             </tr>
-          }
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            @for (e of cambio.ejemplos; track e.codigo) {
+              <tr>
+                <td>{{ e.codigo }}</td>
+                <td>{{ e.descripcion }}</td>
+                <td class="num">{{ e.precioActual | monto }}</td>
+                <td class="num">{{ e.precioNuevo | monto }}</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
     }
   </app-confirmacion>
 }

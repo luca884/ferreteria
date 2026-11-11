@@ -634,6 +634,52 @@ tr.inactivo td {
   margin-bottom: var(--e-4);
 }
 
+/*
+ * La columna que identifica la fila no se va con el scroll de costado (S4): queda pegada a la izquierda con su propio
+ * fondo, así los datos que pasan por atrás no se le mezclan. `:where()` deja la especificidad en cero para que el
+ * hover de la fila y la elegida sigan pintando el fondo como siempre.
+ */
+:where(.grilla-marco, .grilla-contenedor, .tabla-contenedor, .tabla-scroll) :is(th, td):first-child {
+  position: sticky;
+  left: 0;
+}
+/* Las celdas del cuerpo necesitan fondo propio: si no, se les ve el dato que pasa por atrás al scrollear. */
+:where(.grilla-marco, .grilla-contenedor, .tabla-contenedor, .tabla-scroll) :where(tbody) :is(th, td):first-child {
+  background: var(--superficie);
+}
+/* La fila elegida pinta la fila entera de un color: la columna fija toma el mismo en vez de taparlo. */
+:where(.grilla-marco, .grilla-contenedor, .tabla-contenedor, .tabla-scroll) tbody :where(tr.elegida) > :first-child {
+  background: inherit;
+}
+/* La esquina: el encabezado de la columna fija va arriba del encabezado que scrollea en vertical. */
+:where(.grilla-marco, .grilla-contenedor, .tabla-contenedor, .tabla-scroll) th:first-child {
+  z-index: calc(var(--z-fijo) + 1);
+}
+/*
+ * Abajo de escritorio la grilla scrollea en vez de apretar el contenido (S4): un ancho mínimo por columna para que un
+ * importe con «/ kg» y una descripción no se partan, y los códigos tampoco. En escritorio y en papel no se aplica.
+ */
+@media screen and (max-width: 1023.98px) {
+  :where(.grilla-marco, .grilla-contenedor, .tabla-contenedor, .tabla-scroll) :is(th, td) {
+    min-width: 120px;
+  }
+  /* La columna que identifica la fila, con aire para que la descripción y el código se lean. La casilla de elegir no. */
+  :where(.grilla-marco, .grilla-contenedor, .tabla-contenedor, .tabla-scroll) :is(th, td):first-child:not(.casilla-columna) {
+    min-width: 180px;
+  }
+  :where(.grilla-marco, .grilla-contenedor, .tabla-contenedor, .tabla-scroll) :is(.codigo, .mono) {
+    white-space: nowrap;
+  }
+  /*
+   * Los renglones que se identifican con un `th` transparente (la imputación de un cobro, los pendientes, el chequeo)
+   * necesitan fondo opaco recién cuando la columna se queda fija: en escritorio no se scrollea y el hover del renglón
+   * tiene que seguir pintando como siempre.
+   */
+  :where(.grilla-marco, .grilla-contenedor, .tabla-contenedor, .tabla-scroll) tbody > tr > th:first-child {
+    background: var(--superficie);
+  }
+}
+
 /* ---------- Páginas ---------- */
 
 .pagina-encabezado {
@@ -919,12 +965,17 @@ ul.error {
   bottom: 0;
   background: var(--superficie);
 }
-/* Una tabla adentro de un pop-up: scrollea en horizontal en su contenedor en vez de ensanchar el diálogo. */
+/*
+ * Marco de una tabla que scrollea en horizontal en su contenedor en vez de ensanchar la página o el diálogo (S4): los
+ * filtros, los totales y los botones de arriba y abajo se quedan quietos. No dibuja borde: es solo el scroll.
+ */
 .tabla-scroll {
   max-width: 100%;
   overflow-x: auto;
-  /* Es un ítem del flex del diálogo: sin esto, al scrollear el diálogo se encoge a alto 0 (el mínimo automático de un
-     contenedor con scroll es 0) y la tabla se sale. */
+}
+/* Adentro de un pop-up es un ítem del flex del diálogo: sin esto, al scrollear el diálogo se encoge a alto 0 (el mínimo
+   automático de un contenedor con scroll es 0) y la tabla se sale. */
+.dialogo .tabla-scroll {
   flex: none;
 }
 .dialogo-acciones button {
@@ -1131,6 +1182,10 @@ ul.error {
   /* El marco de scroll que agregó S3 para las tablas de un pop-up: en papel la tabla sale entera. */
   .tabla-scroll {
     overflow: visible !important;
+  }
+  /* La columna fija de S4: en papel la tabla sale entera, sin una columna pegada a la izquierda. */
+  .tabla-scroll :is(th, td):first-child {
+    position: static;
   }
   .recibo-imprimible,
   .extracto-imprimible,

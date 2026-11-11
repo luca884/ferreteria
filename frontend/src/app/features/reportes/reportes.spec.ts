@@ -219,6 +219,20 @@ describe('Reportes de ventas', () => {
     ]);
   });
 
+  // S4: cada reporte con tabla la pone adentro de un marco que scrollea en horizontal, no la página.
+  it('los reportes con tabla la ponen dentro de su marco de scroll (responsive, S4)', async () => {
+    await crear();
+
+    for (const tipo of ['por-usuario', 'por-medio-pago', 'por-periodo', 'por-articulo', 'por-rubro', 'con-descuento', 'movimientos-caja']) {
+      await elegir(tipo);
+      const tablas = Array.from(el().querySelectorAll('table'));
+      expect(tablas.length, tipo).toBeGreaterThan(0);
+      for (const tabla of tablas) {
+        expect(tabla.parentElement?.classList.contains('tabla-scroll'), tipo).toBe(true);
+      }
+    }
+  });
+
   it('por usuario muestra cada usuario con cantidad, total y ganancia', async () => {
     await crear();
     await elegir('por-usuario');

@@ -151,57 +151,59 @@
       <p class="ayuda" role="status">{{ texto }}</p>
     }
 
-    <table class="renglones">
-      <caption class="sr-only">Renglones de la compra</caption>
-      <thead>
-        <tr>
-          <th scope="col">Artículo</th>
-          <th scope="col" class="num">Cantidad</th>
-          <th scope="col" class="num">Costo unitario sin IVA</th>
-          <th scope="col"><span class="sr-only">Quitar</span></th>
-        </tr>
-      </thead>
-      <tbody>
-        @for (r of renglones(); track r.articuloId; let i = $index) {
+    <div class="tabla-scroll">
+      <table class="renglones">
+        <caption class="sr-only">Renglones de la compra</caption>
+        <thead>
           <tr>
-            <td>
-              {{ r.codigoInterno }} · {{ r.descripcion }}{{ r.moneda === 'USD' ? ' (USD)' : '' }}
-              @if (r.codigoProveedor && r.codigoProveedor !== r.codigoInterno) {
-                <span class="codigo-proveedor">Cód. proveedor {{ r.codigoProveedor }}</span>
-              }
-              @if (r.aviso; as texto) {
-                <span class="aviso-fila">{{ texto }}</span>
-              }
-            </td>
-            <td class="num">
-              <input
-                [name]="'cantidad-' + i"
-                type="text"
-                inputmode="decimal"
-                autocomplete="off"
-                [attr.aria-label]="'Cantidad de ' + r.descripcion"
-                [value]="r.cantidad"
-                (input)="editar(i, 'cantidad', $any($event.target).value)"
-              />
-            </td>
-            <td class="num">
-              <app-campo-moneda [moneda]="r.moneda === 'USD' ? 'USD' : 'ARS'">
-                <input
-                  [name]="'costo-' + i"
-                  appImporte
-                  [attr.aria-label]="'Costo de ' + r.descripcion"
-                  [value]="r.costo"
-                  (input)="editar(i, 'costo', $any($event.target).value)"
-                />
-              </app-campo-moneda>
-            </td>
-            <td>
-              <button type="button" class="secundario chico" (click)="quitar(i)">Quitar</button>
-            </td>
+            <th scope="col">Artículo</th>
+            <th scope="col" class="num">Cantidad</th>
+            <th scope="col" class="num">Costo unitario sin IVA</th>
+            <th scope="col"><span class="sr-only">Quitar</span></th>
           </tr>
-        }
-      </tbody>
-    </table>
+        </thead>
+        <tbody>
+          @for (r of renglones(); track r.articuloId; let i = $index) {
+            <tr>
+              <td>
+                {{ r.codigoInterno }} · {{ r.descripcion }}{{ r.moneda === 'USD' ? ' (USD)' : '' }}
+                @if (r.codigoProveedor && r.codigoProveedor !== r.codigoInterno) {
+                  <span class="codigo-proveedor">Cód. proveedor {{ r.codigoProveedor }}</span>
+                }
+                @if (r.aviso; as texto) {
+                  <span class="aviso-fila">{{ texto }}</span>
+                }
+              </td>
+              <td class="num">
+                <input
+                  [name]="'cantidad-' + i"
+                  type="text"
+                  inputmode="decimal"
+                  autocomplete="off"
+                  [attr.aria-label]="'Cantidad de ' + r.descripcion"
+                  [value]="r.cantidad"
+                  (input)="editar(i, 'cantidad', $any($event.target).value)"
+                />
+              </td>
+              <td class="num">
+                <app-campo-moneda [moneda]="r.moneda === 'USD' ? 'USD' : 'ARS'">
+                  <input
+                    [name]="'costo-' + i"
+                    appImporte
+                    [attr.aria-label]="'Costo de ' + r.descripcion"
+                    [value]="r.costo"
+                    (input)="editar(i, 'costo', $any($event.target).value)"
+                  />
+                </app-campo-moneda>
+              </td>
+              <td>
+                <button type="button" class="secundario chico" (click)="quitar(i)">Quitar</button>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
     @if (renglones().length === 0 && sinArticulo().length === 0) {
       <p class="ayuda estado-vacio">Todavía no agregaste artículos.</p>
     }
@@ -301,49 +303,51 @@
         {{ p.suben }} {{ p.suben === 1 ? 'sube' : 'suben' }} · {{ p.bajan }} {{ p.bajan === 1 ? 'baja' : 'bajan' }} ·
         {{ p.iguales }} {{ p.iguales === 1 ? 'igual' : 'iguales' }}
       </p>
-      <table>
-        <thead>
-          <tr>
-            <th scope="col">Artículo</th>
-            <th scope="col" class="num">Cantidad</th>
-            <th scope="col" class="num">Costo antes</th>
-            <th scope="col" class="num">Costo nuevo</th>
-            @if (p.recargos.length > 0) {
-              <th scope="col" class="num">Costo real antes</th>
-              <th scope="col" class="num">Costo real nuevo</th>
-            }
-            <th scope="col" class="num">Precio antes</th>
-            <th scope="col" class="num">Precio nuevo</th>
-            <th scope="col" class="num">Stock antes → después</th>
-            <th scope="col" class="num">Subtotal</th>
-          </tr>
-        </thead>
-        <tbody>
-          @for (r of p.renglones; track r.articuloId) {
-            <tr [class.advertencia]="r.advertencia">
-              <td>
-                {{ r.codigoInterno }} · {{ r.descripcion }}
-                @if (r.advertencia) {
-                  <span class="aviso-fila">{{ r.advertencia }}</span>
-                }
-              </td>
-              <td class="num">{{ cantidadConUnidad(r.cantidad, r.unidad) }}</td>
-              <td class="num">{{ r.costoAnterior | monto }}{{ porUnidad(r.unidad) }}</td>
-              <td class="num">{{ r.costoNuevo | monto }}{{ porUnidad(r.unidad) }}</td>
+      <div class="tabla-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th scope="col">Artículo</th>
+              <th scope="col" class="num">Cantidad</th>
+              <th scope="col" class="num">Costo antes</th>
+              <th scope="col" class="num">Costo nuevo</th>
               @if (p.recargos.length > 0) {
-                <td class="num">{{ r.costoRealAnterior | monto }}{{ porUnidad(r.unidad) }}</td>
-                <td class="num">{{ r.costoRealNuevo | monto }}{{ porUnidad(r.unidad) }}</td>
+                <th scope="col" class="num">Costo real antes</th>
+                <th scope="col" class="num">Costo real nuevo</th>
               }
-              <td class="num">{{ r.precioAnterior | monto }}{{ porUnidad(r.unidad) }}</td>
-              <td class="num">{{ r.precioNuevo | monto }}{{ porUnidad(r.unidad) }}</td>
-              <td class="num stock">
-                {{ r.stockAnterior | number: '1.0-3' }} → {{ cantidadConUnidad(r.stockNuevo, r.unidad) }}
-              </td>
-              <td class="num">{{ r.subtotal | monto }}</td>
+              <th scope="col" class="num">Precio antes</th>
+              <th scope="col" class="num">Precio nuevo</th>
+              <th scope="col" class="num">Stock antes → después</th>
+              <th scope="col" class="num">Subtotal</th>
             </tr>
-          }
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            @for (r of p.renglones; track r.articuloId) {
+              <tr [class.advertencia]="r.advertencia">
+                <td>
+                  {{ r.codigoInterno }} · {{ r.descripcion }}
+                  @if (r.advertencia) {
+                    <span class="aviso-fila">{{ r.advertencia }}</span>
+                  }
+                </td>
+                <td class="num">{{ cantidadConUnidad(r.cantidad, r.unidad) }}</td>
+                <td class="num">{{ r.costoAnterior | monto }}{{ porUnidad(r.unidad) }}</td>
+                <td class="num">{{ r.costoNuevo | monto }}{{ porUnidad(r.unidad) }}</td>
+                @if (p.recargos.length > 0) {
+                  <td class="num">{{ r.costoRealAnterior | monto }}{{ porUnidad(r.unidad) }}</td>
+                  <td class="num">{{ r.costoRealNuevo | monto }}{{ porUnidad(r.unidad) }}</td>
+                }
+                <td class="num">{{ r.precioAnterior | monto }}{{ porUnidad(r.unidad) }}</td>
+                <td class="num">{{ r.precioNuevo | monto }}{{ porUnidad(r.unidad) }}</td>
+                <td class="num stock">
+                  {{ r.stockAnterior | number: '1.0-3' }} → {{ cantidadConUnidad(r.stockNuevo, r.unidad) }}
+                </td>
+                <td class="num">{{ r.subtotal | monto }}</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
       <div class="totales">
         <p>
           <span>Neto</span><span>{{ p.neto | monto }}</span>

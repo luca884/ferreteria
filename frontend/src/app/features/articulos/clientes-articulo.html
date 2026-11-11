@@ -41,34 +41,36 @@
           </button>
         </nav>
       }
-      <table class="clientes">
-        <caption class="sr-only">
-          Clientes que compraron el artículo, la compra más nueva primero.
-        </caption>
-        <thead>
-          <tr>
-            <th scope="col">Cliente</th>
-            <th scope="col" class="num">Compras</th>
-            <th scope="col" class="num">Cantidad</th>
-            <th scope="col">Última compra</th>
-          </tr>
-        </thead>
-        <tbody>
-          @for (c of actual.items; track c.clienteId) {
+      <div class="tabla-scroll">
+        <table class="clientes">
+          <caption class="sr-only">
+            Clientes que compraron el artículo, la compra más nueva primero.
+          </caption>
+          <thead>
             <tr>
-              <td>
-                {{ c.razonSocial }}
-                @if (!c.activo) {
-                  <span class="etiqueta">Desactivado</span>
-                }
-              </td>
-              <td class="num">{{ c.compras }}</td>
-              <td class="num">{{ cantidad(c.cantidad) }}</td>
-              <td>{{ fecha(c.ultimaCompra) }}</td>
+              <th scope="col">Cliente</th>
+              <th scope="col" class="num">Compras</th>
+              <th scope="col" class="num">Cantidad</th>
+              <th scope="col">Última compra</th>
             </tr>
-          }
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            @for (c of actual.items; track c.clienteId) {
+              <tr>
+                <td>
+                  {{ c.razonSocial }}
+                  @if (!c.activo) {
+                    <span class="etiqueta">Desactivado</span>
+                  }
+                </td>
+                <td class="num">{{ c.compras }}</td>
+                <td class="num">{{ cantidad(c.cantidad) }}</td>
+                <td>{{ fecha(c.ultimaCompra) }}</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
     }
     @if (actual.ventasSinCliente > 0) {
       <p class="ayuda sin-cliente">{{ sinCliente(actual.ventasSinCliente) }}</p>
