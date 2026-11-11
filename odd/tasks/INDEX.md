@@ -5,9 +5,9 @@
 >
 > Leé esta página primero y después **un solo** archivo, el de la tarea que te toca.
 >
-> Tamaño: este índice pesa ~21 KB; los 86 documentos suman 1,3 MB. Leerlos todos no entra en contexto.
+> Tamaño: este índice pesa ~21 KB; los 86 documentos suman 1,4 MB. Leerlos todos no entra en contexto.
 
-- **81 cerradas · 5 abiertas**
+- **82 cerradas · 4 abiertas**
 
 ## Abiertas
 
@@ -17,7 +17,6 @@
 | [`guia-de-uso-al-dia.md`](guia-de-uso-al-dia.md) | abierta (7✓/1✗) | 2026-11-07 | que la guía de uso vuelva a coincidir con la app después de los PR #29 y #30, y cerrar el residuo de Clientes a 1280 px. | `fix/clientes-1280` | 8 |
 | [`hallazgos-ferreteria-de-prueba.md`](hallazgos-ferreteria-de-prueba.md) | sin §Tasks (15✓/0✗) | — | corregir los hallazgos de la carga de la Ferretería de Prueba del 2026-10-30 (vault wiki/datos-ferreteria-de-prueba.md → ## Hallazgos), empezando por  | `fix/hallazgos-ferreteria-de-prueba` | 22 |
 | [`recorrido-dueno.md`](recorrido-dueno.md) | abierta (11✓/1✗) | 2026-10-27 | un Dueño dado de alta por el super admin usa todo el sistema desde la web, de punta a punta, sin errores ni pasos confusos (todo menos ARCA) | `chore/recorrido-dueno` | 22 |
-| [`responsive.md`](responsive.md) | abierta (8✓/3✗) | 2026-11-09 | la app se puede usar bien en celular, tablet y laptop, sin cambiar cómo se ve en escritorio | `feat/responsive` | 55 |
 
 ## Cerradas
 
@@ -27,6 +26,7 @@ Ordenadas por fecha del pedido, la más reciente arriba.
 |---|---|---|---|
 | [`aviso-y-paginacion.md`](aviso-y-paginacion.md) | 2026-11-09 | los avisos con importes ya no cortan el importe en dos renglones, y en Artículos a 1280 px la paginación no se pisa con los filtros | 5 |
 | [`bugs-relevamiento-celular.md`](bugs-relevamiento-celular.md) | 2026-11-09 | arreglar los bugs funcionales (no de responsive) que encontró el relevamiento en celular del 2026-11-09 | 36 |
+| [`responsive.md`](responsive.md) | 2026-11-09 | la app se puede usar bien en celular, tablet y laptop, sin cambiar cómo se ve en escritorio | 68 |
 | [`detalles-chicos-de-hoy.md`](detalles-chicos-de-hoy.md) | 2026-11-08 | arreglar los cuatro detalles chicos vistos hoy en producción | 9 |
 | [`detalles-de-los-recorridos.md`](detalles-de-los-recorridos.md) | 2026-11-08 | corregir tres detalles vistos en los recorridos de la unidad de medida (sesión 70) | 14 |
 | [`detalles-visuales-compra-y-masivo.md`](detalles-visuales-compra-y-masivo.md) | 2026-11-08 | que la vista previa de Nueva compra con recargos entre a 1280 px y que Actualizar precios diga «/ kg» | 9 |
