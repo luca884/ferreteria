@@ -203,3 +203,7 @@ Usuarios locales (contraseña `demo1234`): `dueno@faro.qa`, `vendedor@faro.qa`, 
   > me parece bien lo dejamos como esta, ese pop up solamente sirve para verlo en general y te da la opcion de imprimirlo, mientras se pueda ver todo el documento ya se en fromato completo o si no se puede con scroll esta mas que bien
 
   Consecuencia: ningún imprimible se envuelve ni se escala; la hoja es el contenedor con scroll horizontal y el documento entero se alcanza arrastrando. Lo que el relevamiento marcaba («la columna Importe sale cortada») queda resuelto porque el importe se alcanza y entra entero.
+- L16 (2026-11-10) Cierre de T3. La verificación independiente (`gentle-ai-verify`, item 6 escalado) **no produjo veredicto**: se colgó 30 minutos en un `bash` y el harness la cortó por timeout, así que es un verificador no disponible y no se reintenta. Se limpió lo que dejó (un Chrome headless huérfano de 814 MB en un temporal). Luca decide aceptar T3 con la verificación del ejecutor. Textual (a la opción 1 de dos):
+  > vamos con la opcion uno
+
+  Riesgo residual aceptado y anotado, sin verificar por fuera: los fondos de la columna fija en los estados de fila (zebra, fila elegida y `:hover`), con el caso borde que admitió el writer —`.cotizaciones tbody tr:hover td { background: none }` deja translúcida la primera celda en hover sobre la cotización lateral, visible solo con mouse sobre esa tabla ya scrolleada— y que ningún `nowrap` haya partido distinto una descripción a 1280.
