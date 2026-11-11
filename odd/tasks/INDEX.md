@@ -17,7 +17,7 @@
 | [`guia-de-uso-al-dia.md`](guia-de-uso-al-dia.md) | abierta (7✓/1✗) | 2026-11-07 | que la guía de uso vuelva a coincidir con la app después de los PR #29 y #30, y cerrar el residuo de Clientes a 1280 px. | `fix/clientes-1280` | 8 |
 | [`hallazgos-ferreteria-de-prueba.md`](hallazgos-ferreteria-de-prueba.md) | sin §Tasks (15✓/0✗) | — | corregir los hallazgos de la carga de la Ferretería de Prueba del 2026-10-30 (vault wiki/datos-ferreteria-de-prueba.md → ## Hallazgos), empezando por  | `fix/hallazgos-ferreteria-de-prueba` | 22 |
 | [`recorrido-dueno.md`](recorrido-dueno.md) | abierta (11✓/1✗) | 2026-10-27 | un Dueño dado de alta por el super admin usa todo el sistema desde la web, de punta a punta, sin errores ni pasos confusos (todo menos ARCA) | `chore/recorrido-dueno` | 22 |
-| [`responsive.md`](responsive.md) | abierta (2✓/9✗) | 2026-11-09 | la app se puede usar bien en celular, tablet y laptop, sin cambiar cómo se ve en escritorio | `feat/responsive` | 27 |
+| [`responsive.md`](responsive.md) | abierta (2✓/9✗) | 2026-11-09 | la app se puede usar bien en celular, tablet y laptop, sin cambiar cómo se ve en escritorio | `feat/responsive` | 29 |
 
 ## Cerradas
 
@@ -76,11 +76,11 @@ Ordenadas por fecha del pedido, la más reciente arriba.
 | [`tope-descuento-documento.md`](tope-descuento-documento.md) | 2026-11-02 | un Vendedor ya no usa el descuento de un presupuesto o remito del Dueño para saltear su tope | 7 |
 | [`cu-12-numeracion-ajustes.md`](cu-12-numeracion-ajustes.md) | 2026-11-01 | los Recargos y los Descuentos de la cuenta corriente se numeran cada uno con su propio numerador, como GDS (G95). Por qué: hoy comparten un solo numer | 5 |
 | [`cu-01-conexion-arca.md`](cu-01-conexion-arca.md) | 2026-10-29 | dejar terminado el cliente real de ARCA (WSAA y WSFEv1, con XML armado a mano), probado sin CUIT, y que desde acá el simulador reciba el mismo XML y l | 41 |
+| [`cu-07-contingencias.md`](cu-07-contingencias.md) | 2026-10-29 | que ninguna venta facturable quede sin resolver. Un job reintenta los pendientes de CAE en orden; Ventas del Dueño tiene una bandeja de pendientes y r | 36 |
 | [`cu-08-nc-cuenta-corriente.md`](cu-08-nc-cuenta-corriente.md) | 2026-10-29 | que la NC (o la anulación interna) de una venta cobrada a cuenta corriente baje la deuda del cliente: acredita solo lo que la venta cargó a cuenta cor | 18 |
 | [`cu-08-nota-de-credito.md`](cu-08-nota-de-credito.md) | 2026-10-29 | que el Dueño anule una venta. Si la venta tiene una factura autorizada, la anula con una nota de crédito (NC) total de la misma letra y con CAE propio | 31 |
 | [`cu-01-certificado-arca.md`](cu-01-certificado-arca.md) | 2026-10-28 | cada ferretería obtiene una credencial de ARCA sin que la clave privada salga nunca del servidor: el sistema genera la clave y el pedido de certificad | 24 |
 | [`cu-01-datos-fiscales.md`](cu-01-datos-fiscales.md) | 2026-10-28 | el Dueño carga y edita los datos del emisor que va a imprimir la factura (razón social, condición de IVA, domicilio comercial, inicio de actividades e | 11 |
-| [`cu-07-contingencias.md`](cu-07-contingencias.md) | 2026-10-28 | que ninguna venta facturable quede sin resolver. Un job reintenta los pendientes de CAE en orden; Ventas del Dueño tiene una bandeja de pendientes y r | 36 |
 | [`cu-07-factura-mostrador.md`](cu-07-factura-mostrador.md) | 2026-10-28 | después de cobrar, el mostrador abre la factura imprimible (A, B, C o X) con el QR de ARCA solo cuando es válida como factura; el cobro anticipa qué c | 32 |
 | [`cu-07-motor-fiscal.md`](cu-07-motor-fiscal.md) | 2026-10-28 | el módulo facturacion arma y numera la factura como ARCA la autoriza (letra A/B/C, desglose del IVA por alícuota, número por serie con recuperación de | 40 |
 | [`cu-07-venta-facturada.md`](cu-07-venta-facturada.md) | 2026-10-28 | la venta facturable de una ferretería con la facturación habilitada crea su registro fiscal dentro de la transacción de la venta y pide el CAE después | 23 |
@@ -132,4 +132,10 @@ Para ir de una sección de la spec (`docs/spec/cu-NN-*.md`) a las tareas que ya 
 ## Regenerar
 
 Este índice se deriva de los headings de cada documento (`Objetivo:`, `Rama:`, `Pedido (fecha)`, `- [x]` en `## Tasks`).
-Si una tarea cambia de estado, editá su archivo y volvé a correr el generador; no edites el índice a mano.
+Si una tarea cambia de estado, editá su archivo y volvé a correr el generador; no edites el índice a mano:
+
+```bash
+node odd/indice-tareas.mjs
+```
+
+Sale de `odd/indice-tareas.mjs`, sin dependencias. Verificación: `git diff --stat odd/tasks/INDEX.md` tiene que mostrar solo la línea de «Generado el …».
