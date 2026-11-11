@@ -55,14 +55,27 @@ export type AccionBotonera = Exclude<AccionMostrador, 'cerrar'>;
       background: var(--borde);
     }
     /*
-     * Debajo de escritorio los diez botones no entran en una fila de 390 px: la fila se desliza en horizontal adentro de
-     * la barra, así se llega a todos sin que la pantalla desborde.
+     * Los diez botones miden 1.018 px y en una fila entran recién a 1.280 px: entre 1.024 y 1.279 son la única parte del
+     * mostrador que no entra en el ancho del contenido. Antes se salían de main y la pantalla desbordaba a 1.024
+     * (1.034 px de contenido en 812 px); ahora la fila se desliza adentro de su marco y los diez botones se alcanzan.
+     * Desde 1.280 px la fila entra entera y no hay scroll.
+     */
+    @media screen and (max-width: 1279.98px) {
+      /* El host es el ítem de la grilla: sin min-width 0 su ancho mínimo es el contenido y el desborde pasa igual. */
+      :host {
+        min-width: 0;
+      }
+      .botonera {
+        overflow-x: auto;
+        overscroll-behavior-x: contain;
+      }
+    }
+    /*
+     * Debajo de escritorio los diez botones no entran en una fila de 390 px: además del scroll, la fila no hace wrap.
      */
     @media screen and (max-width: 1023.98px) {
       .botonera {
         flex-wrap: nowrap;
-        overflow-x: auto;
-        overscroll-behavior-x: contain;
       }
       /*
        * Cobrar sale de la fila y se fija abajo a la derecha, pegado al TOTAL que el mostrador también fija (S6, S12d):
