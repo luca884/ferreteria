@@ -298,14 +298,17 @@ describe('Articulos', () => {
     expect(servicio.buscar).toHaveBeenLastCalledWith('torni', 0, 20, false, false);
   });
 
-  it('el buscador no autocompleta ni corrige y su ejemplo termina en «…»', async () => {
+  it('el buscador no autocompleta ni corrige y su ejemplo es el de Artículos', async () => {
     await crearComponente(true);
 
     const input = el().querySelector<HTMLInputElement>('#q')!;
     expect(input.name).toBe('q');
     expect(input.getAttribute('autocomplete')).toBe('off');
     expect(input.getAttribute('spellcheck')).toBe('false');
-    expect(input.placeholder.endsWith('…')).toBe(true);
+    // Literal a propósito: el texto es una decisión de producto y tiene que mostrar un ejemplo (hay precedente en
+    // formulario-cotizacion.spec.ts con «08:00»). La aserción anterior sólo miraba el «…» del final, así que un
+    // placeholder que se quedaba sin ejemplo —lo que pasó en S11— pasaba igual.
+    expect(input.placeholder).toBe('Buscar: tornillo o TOR-001…');
   });
 
   it('pagina hacia adelante y hacia atrás conservando la búsqueda', async () => {
