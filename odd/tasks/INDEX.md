@@ -26,7 +26,7 @@ Ordenadas por fecha del pedido, la más reciente arriba.
 |---|---|---|---|
 | [`aviso-y-paginacion.md`](aviso-y-paginacion.md) | 2026-11-09 | los avisos con importes ya no cortan el importe en dos renglones, y en Artículos a 1280 px la paginación no se pisa con los filtros | 5 |
 | [`bugs-relevamiento-celular.md`](bugs-relevamiento-celular.md) | 2026-11-09 | arreglar los bugs funcionales (no de responsive) que encontró el relevamiento en celular del 2026-11-09 | 36 |
-| [`responsive.md`](responsive.md) | 2026-11-09 | la app se puede usar bien en celular, tablet y laptop, sin cambiar cómo se ve en escritorio | 72 |
+| [`responsive.md`](responsive.md) | 2026-11-09 | la app se puede usar bien en celular, tablet y laptop, sin cambiar cómo se ve en escritorio | 73 |
 | [`detalles-chicos-de-hoy.md`](detalles-chicos-de-hoy.md) | 2026-11-08 | arreglar los cuatro detalles chicos vistos hoy en producción | 9 |
 | [`detalles-de-los-recorridos.md`](detalles-de-los-recorridos.md) | 2026-11-08 | corregir tres detalles vistos en los recorridos de la unidad de medida (sesión 70) | 14 |
 | [`detalles-visuales-compra-y-masivo.md`](detalles-visuales-compra-y-masivo.md) | 2026-11-08 | que la vista previa de Nueva compra con recargos entre a 1280 px y que Actualizar precios diga «/ kg» | 9 |
