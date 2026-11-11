@@ -104,7 +104,7 @@
         <p class="barra-estado">
           <span>{{ formas().length }} {{ formas().length === 1 ? 'forma de pago' : 'formas de pago' }}</span>
           @if (filas.elegido(); as actual) {
-            <span class="elegido">· Elegida: <strong>{{ actual.nombre }}</strong> · Enter edita</span>
+            <span class="elegido">· Elegida: <strong>{{ actual.nombre }}</strong><span class="pista-teclado"> · Enter edita</span></span>
           }
         </p>
       }

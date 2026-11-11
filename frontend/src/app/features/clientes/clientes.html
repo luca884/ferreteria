@@ -158,7 +158,7 @@
       <p class="barra-estado">
         <span>{{ pagina().totalElements }} {{ pagina().totalElements === 1 ? 'cliente' : 'clientes' }}</span>
         @if (filas.elegido(); as actual) {
-          <span class="elegido">· Elegido: <strong>{{ actual.razonSocial }}</strong> · Enter edita</span>
+          <span class="elegido">· Elegido: <strong>{{ actual.razonSocial }}</strong><span class="pista-teclado"> · Enter edita</span></span>
         }
       </p>
     }

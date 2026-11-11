@@ -17,7 +17,7 @@
 | [`guia-de-uso-al-dia.md`](guia-de-uso-al-dia.md) | abierta (7✓/1✗) | 2026-11-07 | que la guía de uso vuelva a coincidir con la app después de los PR #29 y #30, y cerrar el residuo de Clientes a 1280 px. | `fix/clientes-1280` | 8 |
 | [`hallazgos-ferreteria-de-prueba.md`](hallazgos-ferreteria-de-prueba.md) | sin §Tasks (15✓/0✗) | — | corregir los hallazgos de la carga de la Ferretería de Prueba del 2026-10-30 (vault wiki/datos-ferreteria-de-prueba.md → ## Hallazgos), empezando por  | `fix/hallazgos-ferreteria-de-prueba` | 22 |
 | [`recorrido-dueno.md`](recorrido-dueno.md) | abierta (11✓/1✗) | 2026-10-27 | un Dueño dado de alta por el super admin usa todo el sistema desde la web, de punta a punta, sin errores ni pasos confusos (todo menos ARCA) | `chore/recorrido-dueno` | 22 |
-| [`responsive.md`](responsive.md) | abierta (7✓/4✗) | 2026-11-09 | la app se puede usar bien en celular, tablet y laptop, sin cambiar cómo se ve en escritorio | `feat/responsive` | 50 |
+| [`responsive.md`](responsive.md) | abierta (8✓/3✗) | 2026-11-09 | la app se puede usar bien en celular, tablet y laptop, sin cambiar cómo se ve en escritorio | `feat/responsive` | 55 |
 
 ## Cerradas
 

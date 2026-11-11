@@ -1231,6 +1231,92 @@ ul.error {
   border: 0;
 }
 
+/* ---------- Controles y pistas de teclado en táctil (responsive, S9 y S10) ---------- */
+
+/*
+ * S9 (controles): por debajo de escritorio los controles son para el dedo. La letra de los campos va a 16 px como
+ * mínimo (con 13 o 14 px, iOS hace zoom al tocarlos) y todos los controles miden 44 px de alto; el chico, 40. Los campos,
+ * los botones y la casilla del filtro de importaciones ya se miden con --alto-control, así que alcanza con subir el
+ * token de densidad. Desde 1024 px no se aplica: en escritorio todo queda como hoy.
+ */
+@media screen and (max-width: 1023.98px) {
+  :root {
+    --alto-control: 44px;
+  }
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+  }
+  /*
+   * Los campos que fijan su propio alto o viven adentro de una caja más chica se escapan de la regla de arriba: el
+   * buscador de Artículos, por ejemplo, medía 20 px de alto y 14 px de letra porque la pantalla le pone su alto y su
+   * `min-height: 0`. Con esta especificidad le ganamos a cualquier regla de componente, así todo campo que se toca mide
+   * 44 px y su letra no dispara el zoom de iOS.
+   */
+  input:not([type='checkbox']):not([type='radio']):not([type='file']):not([type='hidden']),
+  select,
+  textarea {
+    font-size: 16px;
+    min-height: 44px;
+  }
+  /* La ✕ del detalle y los links a documentos que van adentro del detalle: se tocan con el dedo. */
+  .dialogo-detalle-equis {
+    min-height: 44px;
+  }
+  .dialogo-detalle-cuerpo a,
+  p.ultima-compra a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 40px;
+  }
+  /*
+   * Casilla y radio: el control sigue chico, pero lo que se toca es la etiqueta con su control, y mide 40 px o más. El
+   * `display` y el `gap` solo cambian en las etiquetas que no traían estilo propio; las de los formularios ya son flex
+   * y solo toman el alto.
+   */
+  label:has(input[type='checkbox'], input[type='radio']),
+  .casilla {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--e-2);
+    min-height: 40px;
+  }
+  /* La casilla de una hoja de la lista: la etiqueta va al lado del control y es lo que se toca. */
+  .hojas label {
+    display: inline-flex;
+    align-items: center;
+    min-height: 40px;
+  }
+  /* El botón chico (paginar, acciones de una fila) queda chico de ancho pero igual se toca. */
+  button.chico,
+  .btn.chico {
+    min-height: 40px;
+  }
+  /* El «N.º» de los listados y los links a documentos, 40 px de alto: son los que se tocan para abrir una ficha. */
+  table :is(button.enlace, a),
+  a.ver-documento {
+    display: inline-flex;
+    align-items: center;
+    min-height: 40px;
+  }
+}
+
+/*
+ * S10 (pistas de teclado): en una pantalla táctil (sin hover y con puntero grueso) las teclas no existen y las pistas no
+ * se muestran. Va por `hover`/`pointer` y no por ancho: una tablet con mouse o una notebook con pantalla táctil las sigue
+ * viendo. El texto suelto que no es `kbd` ni `[data-tecla]` lleva la clase común .pista-teclado, que acá se esconde.
+ */
+@media (hover: none) and (pointer: coarse) {
+  [data-tecla]::after,
+  kbd,
+  .pista-codigo,
+  .pista-medios,
+  .pista-teclado {
+    display: none;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   * {
     transition: none !important;

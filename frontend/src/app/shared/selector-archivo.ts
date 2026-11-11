@@ -1,6 +1,12 @@
-import { Component, ElementRef, input, output, signal, viewChild } from '@angular/core';
+import { Component, ElementRef, computed, input, output, signal, viewChild } from '@angular/core';
 
 let siguienteId = 0;
+
+/**
+ * La pista de arrastre del final de la ayuda. Se separa para que se pueda esconder en una pantalla táctil, donde
+ * arrastrar un archivo no existe (responsive, S10). El texto no cambia: la ayuda y la pista se leen seguidas.
+ */
+const PISTA_ARRASTRE = /También podés arrastrar\w+ hasta acá\.$/;
 
 /**
  * Elegir un archivo sin el input nativo (que sale en inglés): botón «Elegir archivo…», nombre del archivo y zona para
@@ -42,7 +48,7 @@ let siguienteId = 0;
         (change)="elegir()"
       />
     </div>
-    <span class="ayuda">{{ ayuda() }}</span>
+    <span class="ayuda">{{ ayudaBase() }}<span class="pista-teclado">{{ pista() }}</span></span>
   `,
   styles: `
     :host {
@@ -94,6 +100,11 @@ export class SelectorArchivo {
     'Excel (.xlsx, .xls), CSV o PDF, hasta 25 MB. También podés arrastrarlo hasta acá.',
   );
   readonly entradaId = input('archivo');
+
+  /** La ayuda sin la pista de arrastre, con el espacio que las separa: las dos juntas dicen lo mismo que `ayuda`. */
+  protected readonly ayudaBase = computed(() => this.ayuda().replace(PISTA_ARRASTRE, ''));
+  /** La pista de arrastre, si la ayuda la trae: se esconde en táctil por la clase `.pista-teclado` de styles.css. */
+  protected readonly pista = computed(() => PISTA_ARRASTRE.exec(this.ayuda())?.[0] ?? '');
 
   protected readonly rotuloId = `selector-archivo-${++siguienteId}`;
   protected readonly arrastrando = signal(false);

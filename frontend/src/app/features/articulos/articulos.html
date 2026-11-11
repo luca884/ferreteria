@@ -135,9 +135,9 @@
         <span class="elegido">
           Elegido: <strong>{{ actual.descripcion }}</strong>
           @if (!auth.esDueno()) {
-            · Enter abre la ficha
+            <span class="pista-teclado"> · Enter abre la ficha</span>
           } @else if (actual.activo) {
-            · Enter edita
+            <span class="pista-teclado"> · Enter edita</span>
           }
         </span>
       }

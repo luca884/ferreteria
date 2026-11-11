@@ -367,6 +367,26 @@ nav a:focus-visible {
     position: static;
     margin-bottom: 0;
   }
+
+  /*
+   * S9 (menú en el cajón): las opciones y las cabeceras de grupo miden 44 px de alto para el dedo, como el botón
+   * «Menú». «Salir» y «Cambiar mi contraseña» también: se tocan con el pulgar, no con el mouse. En escritorio el menú
+   * queda como hoy.
+   */
+  nav a {
+    min-height: 44px;
+  }
+  .grupo {
+    min-height: 44px;
+  }
+  .salir {
+    min-height: 44px;
+  }
+  .cambiar-contrasena {
+    display: flex;
+    align-items: center;
+    min-height: 44px;
+  }
 }
 
 /*
