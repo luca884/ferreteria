@@ -314,6 +314,34 @@ describe('Reportes de ventas', () => {
     ]);
   });
 
+  /*
+   * Responsive, S5: por debajo de 640 px las tablas se leen como tarjetas «etiqueta: valor». Vitest no evalúa media
+   * queries, así que el spec vigila el contrato de datos que las dibuja: el nombre de la columna en cada celda.
+   */
+  it('S5: cada celda de cada reporte lleva el nombre de su columna en data-etiqueta, para la tarjeta del celular', async () => {
+    await crear();
+
+    const tipos = ['por-usuario', 'por-medio-pago', 'por-periodo', 'por-articulo', 'por-rubro', 'con-descuento', 'movimientos-caja'];
+    for (const tipo of tipos) {
+      await elegir(tipo);
+      const tabla = el().querySelector<HTMLTableElement>('table')!;
+      const encabezados = Array.from(tabla.querySelectorAll('thead th')).map((th) => normal(th.textContent));
+      expect(el().querySelector('table')!.classList, tipo).toContain('tabla-tarjetas');
+
+      // Cada renglón es una tarjeta y cada celda con dato dice su columna. El pie de «Por artículo» es la tarjeta de
+      // totales: el `th` es su rótulo y la celda del medio, que no tiene dato, queda marcada para no dibujarla.
+      for (const fila of Array.from(tabla.querySelectorAll('tbody tr, tfoot tr'))) {
+        Array.from(fila.children).forEach((celda, i) => {
+          if (celda.tagName !== 'TD') return;
+          const etiqueta = celda.getAttribute('data-etiqueta');
+          const vacia = normal(celda.textContent) === '';
+          expect(etiqueta, `${tipo}, celda ${i}: ${encabezados[i]}`).toBe(vacia ? null : encabezados[i]);
+          expect(celda.classList.contains('vacia'), `${tipo}, celda ${i} vacía`).toBe(vacia);
+        });
+      }
+    }
+  });
+
   // Bugs de la guía, S9: el «Total» es un th y heredaba el fondo gris, las mayúsculas chicas y el sticky del encabezado.
   it('la celda «Total» del pie va con el fondo y la letra de su fila, no con los del encabezado de columna', async () => {
     cargarEstilosGlobales();

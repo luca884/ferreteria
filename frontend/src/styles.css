@@ -680,6 +680,68 @@ tr.inactivo td {
   }
 }
 
+/*
+ * En el celular las listas de consulta (Artículos, Ventas y Reportes) son tarjetas «etiqueta: valor» en vez de grilla
+ * (S5): cada celda lleva su columna en `data-etiqueta` y la muestra adelante del valor. En papel y desde 640 px sigue
+ * siendo la grilla de siempre.
+ */
+@media screen and (max-width: 639.98px) {
+  /* La tarjeta ocupa el ancho: el marco deja de scrollear y de dibujar borde, y la columna fija ya no tiene sentido. */
+  :is(.grilla-marco, .tabla-scroll):has(> table.tabla-tarjetas) {
+    overflow: visible;
+    border: 0;
+    background: none;
+  }
+  .tabla-tarjetas,
+  .tabla-tarjetas > :is(tbody, tfoot),
+  .tabla-tarjetas > :is(tbody, tfoot) > tr {
+    display: block;
+  }
+  /* La fila, con su borde y su fondo, es la tarjeta. */
+  .tabla-tarjetas > :is(tbody, tfoot) > tr {
+    padding: var(--e-2) var(--e-3);
+    border: 1px solid var(--borde);
+    border-radius: var(--radio-lg);
+    background: var(--superficie);
+  }
+  .tabla-tarjetas > :is(tbody, tfoot) > tr + tr {
+    margin-top: var(--e-2);
+  }
+  /*
+   * Un renglón por dato, a la izquierda como una etiqueta: el valor puede partirse en vez de desbordar. La primera
+   * celda repite las reglas porque en tablet se queda fija, con 180 px de ancho mínimo, y acá no hay scroll que seguir.
+   */
+  .tabla-tarjetas :is(td, th),
+  .tabla-tarjetas :is(td, th):first-child {
+    display: block;
+    position: static;
+    min-width: 0;
+    padding: 1px 0;
+    border: 0;
+    text-align: left;
+    white-space: normal;
+  }
+  /* El encabezado de las columnas no se ve (cada celda ya dice la suya) pero sigue para lectores de pantalla. */
+  .tabla-tarjetas > thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  .tabla-tarjetas [data-etiqueta]::before {
+    content: attr(data-etiqueta) ': ';
+    color: var(--texto-suave);
+    font-size: var(--texto-sm);
+    font-weight: 600;
+  }
+  /* La celda que quedó sin dato (una venta sin factura, el hueco del total) no deja el renglón con la etiqueta sola. */
+  .tabla-tarjetas .vacia {
+    display: none;
+  }
+}
+
 /* ---------- Páginas ---------- */
 
 .pagina-encabezado {

@@ -114,6 +114,19 @@ table {
   border-top: 2px solid var(--borde);
   font-weight: 700;
 }
+
+/*
+ * Por debajo de 640 px la fila es una tarjeta (S5): el dato va a la izquierda, con el nombre de su columna adelante, y la
+ * tarjeta de totales no repite el borde de arriba de cada renglón.
+ */
+@media screen and (max-width: 639.98px) {
+  table .num {
+    text-align: left;
+  }
+  table.tabla-tarjetas .fila-total :is(th, td) {
+    border-top: 0;
+  }
+}
 /* «Total» es un th de fila: sin el fondo gris, las mayúsculas chicas ni el sticky del encabezado de columna (bugs de
    la guía, S9), con la letra de las otras celdas del pie. */
 .fila-total th {

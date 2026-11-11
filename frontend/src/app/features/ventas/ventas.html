@@ -98,7 +98,7 @@
         </nav>
       }
       <div class="tabla-scroll">
-        <table class="ventas">
+        <table class="ventas tabla-tarjetas">
           <caption class="sr-only">
             Ventas, las más nuevas primero. Elegí una para ver su detalle y reimprimirla.
           </caption>
@@ -115,7 +115,7 @@
           <tbody>
             @for (fila of actual.items; track fila.ventaId) {
               <tr [class.elegida]="elegida() === fila.ventaId" (click)="elegir(fila)">
-                <td>
+                <td data-etiqueta="N.º">
                   <button type="button" class="enlace" [attr.aria-pressed]="elegida() === fila.ventaId">
                     {{ fila.numero }}
                   </button>
@@ -131,7 +131,7 @@
                     <span class="marca anulada">Anulada</span>
                   }
                 </td>
-                <td class="factura">
+                <td class="factura" data-etiqueta="Factura" [class.vacia]="!factura(fila.fiscal)">
                   @if (factura(fila.fiscal); as f) {
                     {{ f.texto }}
                     @if (f.marcas) {
@@ -142,10 +142,10 @@
                     }
                   }
                 </td>
-                <td class="fecha">{{ fecha(fila.fecha) }}</td>
-                <td>{{ cliente(fila.clienteNombre) }}</td>
-                <td>{{ fila.usuario ?? '—' }}</td>
-                <td class="num">{{ (esNota(fila) ? -fila.total : fila.total) | monto }}</td>
+                <td class="fecha" data-etiqueta="Fecha">{{ fecha(fila.fecha) }}</td>
+                <td data-etiqueta="Cliente">{{ cliente(fila.clienteNombre) }}</td>
+                <td data-etiqueta="Usuario">{{ fila.usuario ?? '—' }}</td>
+                <td class="num" data-etiqueta="Total">{{ (esNota(fila) ? -fila.total : fila.total) | monto }}</td>
               </tr>
             }
           </tbody>

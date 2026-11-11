@@ -98,7 +98,7 @@
             notas de crédito.
           </p>
           <div class="tabla-scroll">
-            <table>
+            <table class="tabla-tarjetas">
               <caption class="sr-only">Ventas por usuario, de mayor a menor total.</caption>
               <thead>
                 <tr>
@@ -111,10 +111,10 @@
               <tbody>
                 @for (f of r.datos.filas; track f.usuarioId) {
                   <tr>
-                    <td>{{ f.nombre }}</td>
-                    <td class="num">{{ f.cantidad }}</td>
-                    <td class="num">{{ f.total | monto }}</td>
-                    <td class="num">{{ f.ganancia | monto }}</td>
+                    <td data-etiqueta="Usuario">{{ f.nombre }}</td>
+                    <td class="num" data-etiqueta="Ventas">{{ f.cantidad }}</td>
+                    <td class="num" data-etiqueta="Total">{{ f.total | monto }}</td>
+                    <td class="num" data-etiqueta="Ganancia">{{ f.ganancia | monto }}</td>
                   </tr>
                 }
               </tbody>
@@ -131,7 +131,7 @@
             las notas restadas está en «Resumen».
           </p>
           <div class="tabla-scroll">
-            <table>
+            <table class="tabla-tarjetas">
               <caption class="sr-only">Ventas por forma de pago, de mayor a menor monto.</caption>
               <thead>
                 <tr>
@@ -143,9 +143,9 @@
               <tbody>
                 @for (f of r.datos.filas; track f.formaPago + f.medio) {
                   <tr>
-                    <td>{{ f.formaPago }}</td>
-                    <td class="num">{{ f.cantidad }}</td>
-                    <td class="num">{{ f.monto | monto }}</td>
+                    <td data-etiqueta="Forma de pago">{{ f.formaPago }}</td>
+                    <td class="num" data-etiqueta="Pagos">{{ f.cantidad }}</td>
+                    <td class="num" data-etiqueta="Monto">{{ f.monto | monto }}</td>
                   </tr>
                 }
               </tbody>
@@ -158,7 +158,7 @@
           <p class="ayuda estado-vacio" role="status">No hubo ventas entre esas fechas.</p>
         } @else {
           <div class="tabla-scroll">
-            <table>
+            <table class="tabla-tarjetas">
               <caption class="sr-only">Ventas por período, en orden.</caption>
               <thead>
                 <tr>
@@ -171,10 +171,10 @@
               <tbody>
                 @for (f of r.datos.filas; track f.periodo) {
                   <tr>
-                    <td>{{ textoPeriodo(f.periodo) }}</td>
-                    <td class="num">{{ f.cantidad }}</td>
-                    <td class="num">{{ f.total | monto }}</td>
-                    <td class="num">{{ f.ganancia | monto }}</td>
+                    <td data-etiqueta="Período">{{ textoPeriodo(f.periodo) }}</td>
+                    <td class="num" data-etiqueta="Ventas">{{ f.cantidad }}</td>
+                    <td class="num" data-etiqueta="Total">{{ f.total | monto }}</td>
+                    <td class="num" data-etiqueta="Ganancia">{{ f.ganancia | monto }}</td>
                   </tr>
                 }
               </tbody>
@@ -187,7 +187,7 @@
           <p class="ayuda estado-vacio" role="status">No hubo ventas entre esas fechas.</p>
         } @else {
           <div class="tabla-scroll">
-            <table>
+            <table class="tabla-tarjetas">
               <caption class="sr-only">Ventas por artículo, de mayor a menor total.</caption>
               <thead>
                 <tr>
@@ -200,10 +200,10 @@
               <tbody>
                 @for (f of r.datos.filas; track f.articuloId) {
                   <tr>
-                    <td>{{ f.descripcion }}</td>
-                    <td class="num">{{ cantidadConUnidad(f.cantidad, f.unidad) }}</td>
-                    <td class="num">{{ f.total | monto }}</td>
-                    <td class="num">{{ f.ganancia | monto }}</td>
+                    <td data-etiqueta="Artículo">{{ f.descripcion }}</td>
+                    <td class="num" data-etiqueta="Cantidad">{{ cantidadConUnidad(f.cantidad, f.unidad) }}</td>
+                    <td class="num" data-etiqueta="Total">{{ f.total | monto }}</td>
+                    <td class="num" data-etiqueta="Ganancia">{{ f.ganancia | monto }}</td>
                   </tr>
                 }
               </tbody>
@@ -211,9 +211,9 @@
                 <tfoot>
                   <tr class="fila-total">
                     <th scope="row">Total</th>
-                    <td></td>
-                    <td class="num">{{ t.total | monto }}</td>
-                    <td class="num">{{ t.ganancia | monto }}</td>
+                    <td class="vacia"></td>
+                    <td class="num" data-etiqueta="Total">{{ t.total | monto }}</td>
+                    <td class="num" data-etiqueta="Ganancia">{{ t.ganancia | monto }}</td>
                   </tr>
                 </tfoot>
               }
@@ -226,7 +226,7 @@
           <p class="ayuda estado-vacio" role="status">No hubo ventas entre esas fechas.</p>
         } @else {
           <div class="tabla-scroll">
-            <table>
+            <table class="tabla-tarjetas">
               <caption class="sr-only">Ventas por rubro (el rubro de hoy de cada artículo), de mayor a menor total.</caption>
               <thead>
                 <tr>
@@ -239,10 +239,10 @@
               <tbody>
                 @for (f of r.datos.filas; track f.rubro) {
                   <tr>
-                    <td>{{ f.rubro }}</td>
-                    <td class="num">{{ f.renglones }}</td>
-                    <td class="num">{{ f.total | monto }}</td>
-                    <td class="num">{{ f.ganancia | monto }}</td>
+                    <td data-etiqueta="Rubro">{{ f.rubro }}</td>
+                    <td class="num" data-etiqueta="Renglones">{{ f.renglones }}</td>
+                    <td class="num" data-etiqueta="Total">{{ f.total | monto }}</td>
+                    <td class="num" data-etiqueta="Ganancia">{{ f.ganancia | monto }}</td>
                   </tr>
                 }
               </tbody>
@@ -255,7 +255,7 @@
           <p class="ayuda estado-vacio" role="status">No hubo ventas entre esas fechas.</p>
         } @else {
           <div class="tabla-scroll">
-            <table>
+            <table class="tabla-tarjetas">
               <caption class="sr-only">Ventas con descuento, por fecha.</caption>
               <thead>
                 <tr>
@@ -271,13 +271,13 @@
               <tbody>
                 @for (f of r.datos.filas; track f.ventaId) {
                   <tr>
-                    <td>{{ f.numero }}</td>
-                    <td>{{ fechaHora(f.fecha) }}</td>
-                    <td>{{ f.usuario }}</td>
-                    <td>{{ f.cliente ?? 'Consumidor Final' }}</td>
-                    <td class="num">{{ f.descuentoPorcentaje > 0 ? f.descuentoPorcentaje + ' %' : '—' }}</td>
-                    <td class="num">{{ f.descuento | monto }}</td>
-                    <td class="num">{{ f.total | monto }}</td>
+                    <td data-etiqueta="N.º">{{ f.numero }}</td>
+                    <td data-etiqueta="Fecha">{{ fechaHora(f.fecha) }}</td>
+                    <td data-etiqueta="Usuario">{{ f.usuario }}</td>
+                    <td data-etiqueta="Cliente">{{ f.cliente ?? 'Consumidor Final' }}</td>
+                    <td class="num" data-etiqueta="Desc. general">{{ f.descuentoPorcentaje > 0 ? f.descuentoPorcentaje + ' %' : '—' }}</td>
+                    <td class="num" data-etiqueta="Descuento">{{ f.descuento | monto }}</td>
+                    <td class="num" data-etiqueta="Total">{{ f.total | monto }}</td>
                   </tr>
                 }
               </tbody>
@@ -305,7 +305,7 @@
             <p class="ayuda estado-vacio" role="status">No hubo movimientos en esas fechas.</p>
           } @else {
             <div class="tabla-scroll">
-              <table>
+              <table class="tabla-tarjetas">
                 <caption class="sr-only">Ingresos, gastos y retiros de la caja, del más viejo al más nuevo.</caption>
                 <thead>
                   <tr>
@@ -319,11 +319,11 @@
                 <tbody>
                   @for (f of r.datos.filas; track f.id) {
                     <tr>
-                      <td>{{ fechaCompleta(f.fecha) }}</td>
-                      <td>{{ tipoLabels[f.tipo] }}</td>
-                      <td>{{ f.motivo }}</td>
-                      <td>{{ f.usuario }}</td>
-                      <td class="num">{{ f.importe | monto }}</td>
+                      <td data-etiqueta="Fecha y hora">{{ fechaCompleta(f.fecha) }}</td>
+                      <td data-etiqueta="Tipo">{{ tipoLabels[f.tipo] }}</td>
+                      <td data-etiqueta="Motivo">{{ f.motivo }}</td>
+                      <td data-etiqueta="Usuario">{{ f.usuario }}</td>
+                      <td class="num" data-etiqueta="Importe">{{ f.importe | monto }}</td>
                     </tr>
                   }
                 </tbody>
