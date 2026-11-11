@@ -573,6 +573,16 @@ const centavosATexto = (c: number) => `${normalizarImporte(String(Math.floor(c /
       color: var(--texto-suave);
       font-size: var(--texto-sm);
     }
+    /*
+     * En el celular, dos formas por renglón como mínimo: con tres columnas de ~106 px, un nombre como «Transferencia»
+     * se partía a mitad de palabra. El corte en cualquier punto de overflow-wrap queda solo como red para un nombre
+     * larguísimo.
+     */
+    @media screen and (max-width: 639.98px) {
+      .medios {
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      }
+    }
   `,
 })
 export class DialogoCobro {

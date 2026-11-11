@@ -121,3 +121,42 @@
   color: var(--texto-tenue);
   font-size: var(--texto-sm);
 }
+
+/*
+ * De una columna, la fila de 26rem de columnas fijas no entra: cada resultado es un bloque con la descripción a la
+ * izquierda y el precio y el stock a la derecha, y la ubicación abajo a lo ancho. La descripción se lee entera (S6).
+ */
+@media screen and (max-width: 1023.98px) {
+  /* El encabezado de columnas no dice nada cuando cada resultado es un bloque. */
+  .encabezado {
+    display: none;
+  }
+  .fila {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      'datos precio'
+      'datos stock'
+      'ubicacion ubicacion';
+    gap: 0 var(--e-3);
+    align-items: start;
+  }
+  .datos {
+    grid-area: datos;
+    align-self: center;
+  }
+  .precio {
+    grid-area: precio;
+  }
+  .stock {
+    grid-area: stock;
+    align-self: start;
+  }
+  .ubicacion {
+    grid-area: ubicacion;
+  }
+  .descripcion {
+    overflow: visible;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+}

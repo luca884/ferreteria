@@ -243,3 +243,86 @@ app-totales-ticket {
   max-width: 26ch;
   text-wrap: balance;
 }
+
+/*
+ * Debajo de escritorio el mostrador va en una columna (S6): botonera, buscador, ficha del artículo y ticket. El TOTAL y
+ * Cobrar salen del flujo y se fijan abajo (S12d), para cobrar con el ticket cargado sin buscarlos scrolleando. Desde
+ * 1024 px no se aplica nada de esto: el mostrador de escritorio, con lector y teclado, queda igual.
+ */
+@media screen and (max-width: 1023.98px) {
+  :host {
+    /*
+     * Medidas de la barra de cobro. Las comparten el TOTAL (totales-ticket), el botón Cobrar (botonera) y el aire que se
+     * les deja libre al final del contenido: por eso se definen acá, en el ancestro común.
+     */
+    --alto-barra-total: 64px;
+    --ancho-cobrar: 132px;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto auto auto auto;
+    grid-template-areas:
+      'barra'
+      'busqueda'
+      'panel'
+      'ticket';
+    /* Crece con el contenido (`flex-shrink: 0`): scrollea el main, no la grilla, así el ticket no tiene scroll propio. */
+    flex: 1 0 auto;
+    /* El aire que sobra en una pantalla alta queda al final: sin esto el `stretch` reparte el alto entre las filas auto
+       y la barra de la botonera se estira a 144 px. */
+    align-content: start;
+    padding-bottom: calc(var(--alto-barra-total) + var(--e-2));
+  }
+  /* La botonera se desliza adentro de su fila en vez de estirar la barra y con ella la pantalla. */
+  app-barra-acciones {
+    min-width: 0;
+    margin-bottom: 0;
+  }
+  app-botonera {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+  /* Los resultados van arriba del ticket y en el flujo: el desplegable encima del ticket no entra en el celular. */
+  .zona-ticket {
+    flex-direction: column;
+    gap: var(--e-2);
+  }
+  .resultados {
+    position: static;
+    order: -1;
+    max-height: none;
+  }
+  app-ticket-lista {
+    flex: 0 1 auto;
+  }
+  /* Muchos resultados: scrollean adentro de la lista y no empujan el ticket ni la barra de cobro fuera de la pantalla. */
+  app-lista-resultados {
+    max-height: 50vh;
+  }
+  app-ficha-articulo {
+    flex: 0 0 auto;
+  }
+  .ficha-vacia {
+    min-height: 0;
+    padding: var(--e-4);
+  }
+  /*
+   * El TOTAL queda pegado abajo, a la izquierda del Cobrar que la botonera fija al lado en la misma barra. Va por debajo
+   * de la capa de la barra de acciones (--z-barra): Cobrar se fija desde adentro de ella, y esa capa encierra a sus
+   * descendientes, así que si el TOTAL pintara arriba lo taparía.
+   */
+  app-totales-ticket {
+    position: fixed;
+    inset: auto 0 0;
+    z-index: calc(var(--z-barra) - 1);
+  }
+}
+
+/*
+ * En el celular el rótulo «Código» y la pista de teclas le roban el ancho al campo, que es donde escribe el lector de
+ * código de barras: se van y el campo se queda con la fila entera.
+ */
+@media screen and (max-width: 639.98px) {
+  .fila-codigo .rotulo,
+  .fila-codigo .pista-codigo {
+    display: none;
+  }
+}

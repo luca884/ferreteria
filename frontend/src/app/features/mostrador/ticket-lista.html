@@ -1,4 +1,4 @@
-<table class="grilla-ticket" aria-label="Ticket">
+<table class="grilla-ticket tabla-tarjetas" aria-label="Ticket">
   <colgroup>
     <col class="col-cantidad" />
     <col class="col-codigo" />
@@ -26,9 +26,9 @@
         [attr.aria-current]="i === elegido() ? 'true' : null"
         (click)="elegir.emit(i)"
       >
-        <td class="num cantidad">{{ r.cantidadMilesimas / 1000 | number: '1.0-3' }}{{ sufijo[r.unidad] }}</td>
-        <td class="codigo">{{ r.codigoInterno }}</td>
-        <td class="detalle">
+        <td class="num cantidad" data-etiqueta="Cant.">{{ r.cantidadMilesimas / 1000 | number: '1.0-3' }}{{ sufijo[r.unidad] }}</td>
+        <td class="codigo" data-etiqueta="Código">{{ r.codigoInterno }}</td>
+        <td class="detalle" data-etiqueta="Descripción">
           <span class="descripcion" [attr.title]="r.descripcion">{{ r.descripcion }}</span>
           @if (sinStock(r)) {
             <span class="sin-stock">Sin stock suficiente</span>
@@ -41,8 +41,8 @@
             <span class="problema">{{ r.problema }}</span>
           }
         </td>
-        <td class="num precio">{{ r.precioCentavos / 100 | monto }}{{ porUnidad(r.unidad) }}</td>
-        <td class="num total-renglon">{{ totalRenglon(r.precioCentavos, r.cantidadMilesimas, r.descuentoBp ?? 0) / 100 | monto }}</td>
+        <td class="num precio" data-etiqueta="P. unit.">{{ r.precioCentavos / 100 | monto }}{{ porUnidad(r.unidad) }}</td>
+        <td class="num total-renglon" data-etiqueta="Total">{{ totalRenglon(r.precioCentavos, r.cantidadMilesimas, r.descuentoBp ?? 0) / 100 | monto }}</td>
       </tr>
     } @empty {
       @if (conMensajeVacio()) {

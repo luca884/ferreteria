@@ -54,12 +54,40 @@ export type AccionBotonera = Exclude<AccionMostrador, 'cerrar'>;
       width: 1px;
       background: var(--borde);
     }
+    /*
+     * Debajo de escritorio los diez botones no entran en una fila de 390 px: la fila se desliza en horizontal adentro de
+     * la barra, así se llega a todos sin que la pantalla desborde.
+     */
+    @media screen and (max-width: 1023.98px) {
+      .botonera {
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        overscroll-behavior-x: contain;
+      }
+      /*
+       * Cobrar sale de la fila y se fija abajo a la derecha, pegado al TOTAL que el mostrador también fija (S6, S12d):
+       * la acción principal del mostrador queda siempre a la vista y a un toque. El alto y el ancho salen de los tokens
+       * que define el mostrador, para que las dos mitades de la barra midan lo mismo.
+       */
+      .accion-barra.cobrar-fijo {
+        position: fixed;
+        right: 0;
+        bottom: 0;
+        z-index: 1;
+        width: var(--ancho-cobrar, 132px);
+        height: var(--alto-barra-total, 64px);
+        min-height: 0;
+        border-radius: 0;
+        font-size: var(--texto-md);
+        font-weight: 700;
+      }
+    }
   `,
 })
 export class Botonera {
   /** Cobrar es la acción principal (como «Aceptar» en GDS); Vaciar se marca como peligrosa. */
   protected readonly variantes: Partial<Record<AccionMostrador, string>> = {
-    cobrar: 'primario',
+    cobrar: 'primario cobrar-fijo',
     vaciar: 'peligro',
   };
   readonly atajos = input<readonly Atajo[]>(atajosDeBotonera());

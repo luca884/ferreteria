@@ -41,6 +41,11 @@ describe('Botonera', () => {
     expect(boton('F4').getAttribute('aria-keyshortcuts')).toBe('F4');
   });
 
+  it('S6: solo Cobrar lleva la clase que lo fija en la barra de abajo en el celular', () => {
+    expect(boton('F4').classList).toContain('cobrar-fijo');
+    expect(botones().filter((b) => b.classList.contains('cobrar-fijo'))).toHaveLength(1);
+  });
+
   it('F9 Cliente va en la botonera con su tecla en aria-keyshortcuts', () => {
     expect(boton('F9').textContent).toContain('Cliente');
     expect(boton('F9').getAttribute('aria-keyshortcuts')).toBe('F9');
