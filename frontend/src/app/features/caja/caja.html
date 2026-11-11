@@ -28,8 +28,10 @@
   @if (caja(); as abierta) {
     <section class="panel estado" aria-labelledby="estado-titulo">
       <h2 id="estado-titulo">Caja abierta</h2>
+      <!-- Los «·» van pegados con espacios duros a las palabras de al lado: en el celular, con espacios comunes, el
+           separador quedaba suelto al partir el renglón (responsive S11, T9). -->
       <p class="quien">
-        Abrió {{ abierta.abiertaPor }} · {{ fechaHora(abierta.fechaApertura) }} · Efectivo inicial
+        Abrió {{ abierta.abiertaPor }}&nbsp;·&nbsp;{{ fechaHora(abierta.fechaApertura) }}&nbsp;·&nbsp;Efectivo inicial
         <strong>{{ abierta.efectivoInicial | monto }}</strong>
       </p>
       @if (avisoOtroDia(); as aviso) {

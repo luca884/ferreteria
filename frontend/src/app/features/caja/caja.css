@@ -44,3 +44,18 @@ h2 {
   flex-wrap: wrap;
   gap: var(--e-2);
 }
+
+/*
+ * responsive S11 (T9): en el celular el campo de plata medía lo que mide un `input` por defecto (234 px) dentro de
+ * una columna de 316, así que el efectivo se veía más angosto que los demás campos. Debajo de 640 px cada campo de la
+ * fila ocupa su renglón y el envoltorio del importe estira el input. En escritorio y en tablet no cambia nada.
+ */
+@media screen and (max-width: 639.98px) {
+  .fila-campos .campo {
+    flex: 1 1 100%;
+    min-width: 0;
+  }
+  .fila-campos app-campo-moneda {
+    width: 100%;
+  }
+}
