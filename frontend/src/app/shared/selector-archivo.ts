@@ -3,10 +3,12 @@ import { Component, ElementRef, computed, input, output, signal, viewChild } fro
 let siguienteId = 0;
 
 /**
- * La pista de arrastre del final de la ayuda. Se separa para que se pueda esconder en una pantalla táctil, donde
- * arrastrar un archivo no existe (responsive, S10). El texto no cambia: la ayuda y la pista se leen seguidas.
+ * Dónde empieza la pista de arrastre dentro de la ayuda. Se separa para que se pueda esconder en una pantalla táctil,
+ * donde arrastrar un archivo no existe (responsive, S10). El texto no cambia: la ayuda y la pista se leen seguidas.
+ * Es una marca y no un patrón: la redacción de la pista puede cambiar sin que la separación deje de encontrarla.
+ * La marca abre la última oración de la ayuda; lo que sigue, si está, es la pista.
  */
-const PISTA_ARRASTRE = /También podés arrastrar\w+ hasta acá\.$/;
+const MARCA_ARRASTRE = 'También podés arrastrar';
 
 /**
  * Elegir un archivo sin el input nativo (que sale en inglés): botón «Elegir archivo…», nombre del archivo y zona para
@@ -101,10 +103,25 @@ export class SelectorArchivo {
   );
   readonly entradaId = input('archivo');
 
-  /** La ayuda sin la pista de arrastre, con el espacio que las separa: las dos juntas dicen lo mismo que `ayuda`. */
-  protected readonly ayudaBase = computed(() => this.ayuda().replace(PISTA_ARRASTRE, ''));
+  /**
+   * Dónde empieza la pista dentro de la ayuda, o -1 si la ayuda no la trae. Se busca la **última** marca: si alguna
+   * ayuda nombrara el arrastre dos veces, la mención de antes queda a la vista en la base y sólo se esconde la pista.
+   */
+  private readonly desdeLaPista = computed(() => this.ayuda().lastIndexOf(MARCA_ARRASTRE));
+  /**
+   * La ayuda sin la pista de arrastre, con el espacio que las separa: las dos juntas dicen lo mismo que `ayuda`. El
+   * espacio queda al final de la base a propósito, porque el HTML colapsa el que sobra y así la ayuda se lee corrida
+   * aunque la pista esté escondida en táctil.
+   */
+  protected readonly ayudaBase = computed(() => {
+    const desde = this.desdeLaPista();
+    return desde < 0 ? this.ayuda() : this.ayuda().slice(0, desde);
+  });
   /** La pista de arrastre, si la ayuda la trae: se esconde en táctil por la clase `.pista-teclado` de styles.css. */
-  protected readonly pista = computed(() => PISTA_ARRASTRE.exec(this.ayuda())?.[0] ?? '');
+  protected readonly pista = computed(() => {
+    const desde = this.desdeLaPista();
+    return desde < 0 ? '' : this.ayuda().slice(desde);
+  });
 
   protected readonly rotuloId = `selector-archivo-${++siguienteId}`;
   protected readonly arrastrando = signal(false);
