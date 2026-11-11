@@ -1128,6 +1128,10 @@ ul.error {
     padding: 0 !important;
     overflow: visible !important;
   }
+  /* El marco de scroll que agregó S3 para las tablas de un pop-up: en papel la tabla sale entera. */
+  .tabla-scroll {
+    overflow: visible !important;
+  }
   .recibo-imprimible,
   .extracto-imprimible,
   .venta-imprimible,
