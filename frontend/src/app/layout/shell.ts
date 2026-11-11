@@ -1,4 +1,4 @@
-import { Component, DestroyRef, ElementRef, computed, inject, signal, viewChild } from '@angular/core';
+import { Component, DestroyRef, ElementRef, afterNextRender, computed, inject, signal, viewChild } from '@angular/core';
 import { takeUntilDestroyed, toObservable } from '@angular/core/rxjs-interop';
 import { NavigationEnd, NavigationSkipped, Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { EMPTY, catchError, filter, interval, merge, pairwise, startWith, switchMap } from 'rxjs';
@@ -7,6 +7,7 @@ import { AuthService } from '../core/auth/auth.service';
 import { Aviso, Avisos } from '../core/avisos/avisos';
 import { Cotizacion } from '../core/cotizacion/cotizacion.models';
 import { CotizacionService } from '../core/cotizacion/cotizacion.service';
+import { AvisosALaVista } from '../shared/avisos-a-la-vista';
 import { BuscadorMenu } from './buscador-menu';
 import { CotizacionLateral } from './cotizacion-lateral';
 import { IconoDelMenu } from './icono-menu';
@@ -36,6 +37,9 @@ export function iniciales(nombre: string): string {
  * Por debajo de 1024 px (S2) el menú pasa a ser un cajón que se abre con el botón «Menú» de un encabezado nuevo, que
  * además muestra el título de la pantalla. El corte y el cajón los resuelve el CSS: acá solo vive el estado abierto/cerrado
  * y el teclado (Esc y el foco, que no se escapa del cajón mientras está abierto). Desde 1024 px nada de esto se ve.
+ *
+ * También es donde se engancha el único observer de los avisos (S8): el que trae a la vista el aviso de una acción que
+ * aparece dentro del contenido.
  */
 @Component({
   selector: 'app-shell',
@@ -74,6 +78,9 @@ export class Shell {
   private readonly destruccion = inject(DestroyRef);
   private readonly cajon = viewChild<ElementRef<HTMLElement>>('cajon');
   private readonly botonMenu = viewChild<ElementRef<HTMLButtonElement>>('botonMenu');
+  /** El `main.contenido`: lo que scrollea y el contenedor de los avisos de todas las pantallas (S8). */
+  private readonly contenido = viewChild<ElementRef<HTMLElement>>('contenido');
+  private readonly avisosALaVista = new AvisosALaVista();
 
   constructor() {
     // El encabezado del cajón muestra el título sin tocar las pantallas: sigue al primer `h1` del contenido.
@@ -81,6 +88,14 @@ export class Shell {
     observador.observe(this.host.nativeElement, { childList: true, subtree: true, characterData: true });
     this.destruccion.onDestroy(() => observador.disconnect());
     this.leerTitulo();
+
+    // Los avisos de acción se traen a la vista cuando aparecen dentro del contenido, sea cual sea la pantalla (S8). Se
+    // engancha después de pintar y se suelta al destruir el shell, para no dejar el observer vivo.
+    afterNextRender(() => {
+      const contenido = this.contenido()?.nativeElement;
+      if (contenido) this.avisosALaVista.conectar(contenido);
+    });
+    this.destruccion.onDestroy(() => this.avisosALaVista.desconectar());
 
     this.abrirElDe(this.router.url);
     this.router.events

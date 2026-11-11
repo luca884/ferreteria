@@ -421,6 +421,28 @@ describe('Shell', () => {
     expect(evento.defaultPrevented).toBe(true);
   });
 
+  it('un aviso de acción que aparece en el contenido se trae a la vista (responsive, S8)', async () => {
+    // jsdom no implementa scrollIntoView: se reemplaza por un espía para ver a quién se lo llama y con qué opciones.
+    const scroll = vi.fn<(opciones?: ScrollIntoViewOptions) => void>();
+    const prototipo = Element.prototype as unknown as { scrollIntoView?: () => void };
+    Object.defineProperty(Element.prototype, 'scrollIntoView', { value: scroll, configurable: true, writable: true });
+    try {
+      const el = await render(true, null, TODAS);
+      const contenido = el.querySelector('main') as HTMLElement;
+      const aviso = document.createElement('p');
+      aviso.className = 'alerta exito';
+      aviso.setAttribute('role', 'status');
+      aviso.textContent = 'Se guardó «Corralón Sur».';
+
+      contenido.appendChild(aviso);
+
+      await vi.waitFor(() => expect(scroll.mock.contexts).toEqual([aviso]));
+      expect(scroll).toHaveBeenCalledWith({ block: 'nearest' });
+    } finally {
+      delete prototipo.scrollIntoView;
+    }
+  });
+
   it('muestra arriba del contenido el aviso que dejó la pantalla anterior, y lo saca en la navegación siguiente (arreglos-confusos, S8a)', async () => {
     const el = await render(true, null, TODAS);
     TestBed.inject(Avisos).dejar('Cambiaste tu contraseña.');
