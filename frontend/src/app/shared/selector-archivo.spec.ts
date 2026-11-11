@@ -86,3 +86,52 @@ describe('SelectorArchivo (arreglos-compras, S3)', () => {
     expect(entrada('factura').disabled).toBe(true);
   });
 });
+
+@Component({
+  imports: [SelectorArchivo],
+  template: `
+    <app-selector-archivo
+      id="larga"
+      ayuda="Importá el Excel del proveedor. También podés arrastrar la lista completa hasta acá."
+    />
+    <app-selector-archivo id="sin-pista" ayuda="El remito del proveedor en PDF." />
+    <app-selector-archivo id="por-defecto" />
+  `,
+})
+class AnfitrionPista {}
+
+describe('SelectorArchivo · la pista de arrastre se separa sin depender de la redacción (S10)', () => {
+  let fixture: ComponentFixture<AnfitrionPista>;
+
+  beforeEach(async () => {
+    await TestBed.configureTestingModule({ imports: [AnfitrionPista] }).compileComponents();
+    fixture = TestBed.createComponent(AnfitrionPista);
+    fixture.detectChanges();
+  });
+
+  const selector = (id: string) => fixture.nativeElement.querySelector(`#${id}`) as HTMLElement;
+  const texto = (id: string, clase: string) =>
+    selector(id).querySelector(clase)?.textContent?.replace(/\s+/g, ' ').trim();
+
+  it('una pista de varias palabras se separa entera y la ayuda se sigue leyendo completa', () => {
+    const ayuda =
+      'Importá el Excel del proveedor. También podés arrastrar la lista completa hasta acá.';
+
+    expect(texto('larga', '.pista-teclado')).toBe(
+      'También podés arrastrar la lista completa hasta acá.',
+    );
+    expect(texto('larga', '.ayuda')).toBe(ayuda);
+  });
+
+  it('la ayuda de siempre sigue separando su pista', () => {
+    expect(texto('por-defecto', '.pista-teclado')).toBe('También podés arrastrarlo hasta acá.');
+    expect(texto('por-defecto', '.ayuda')).toBe(
+      'Excel (.xlsx, .xls), CSV o PDF, hasta 25 MB. También podés arrastrarlo hasta acá.',
+    );
+  });
+
+  it('sin pista, la ayuda queda entera y no hay nada que esconder en táctil', () => {
+    expect(texto('sin-pista', '.pista-teclado')).toBe('');
+    expect(texto('sin-pista', '.ayuda')).toBe('El remito del proveedor en PDF.');
+  });
+});
