@@ -31,7 +31,8 @@ const coincide = (grupo: AbstractControl): ValidationErrors | null =>
 /**
  * Formulario de contraseña nueva (con la actual si `pedirActual`), compartido por «Cambiar mi contraseña» y por los
  * resets del Dueño y del super admin. Presentacional: valida el largo (8 a 72) y la confirmación sin llamar al API, y
- * emite `enviar`; el contenedor hace la llamada y devuelve los errores del servidor por `errorServidor` y `errorActual`.
+ * emite `enviar`; el contenedor hace la llamada y devuelve los errores del servidor por `errorServidor` y, si el 400
+ * nombra un campo de contraseña concreto, por `errorActual` o `errorNueva` (van junto a su campo).
  */
 @Component({
   selector: 'app-contrasena-form',
@@ -71,7 +72,9 @@ const coincide = (grupo: AbstractControl): ValidationErrors | null =>
           [attr.aria-invalid]="nuevaInvalida() ? 'true' : null"
           [attr.aria-describedby]="nuevaInvalida() ? 'nueva-error' : 'nueva-pista'"
         />
-        @if (nuevaInvalida()) {
+        @if (errorNueva(); as mensaje) {
+          <span id="nueva-error" class="campo-error">{{ mensaje }}</span>
+        } @else if (nuevaInvalida()) {
           <span id="nueva-error" class="campo-error">
             @if (form.controls.nueva.hasError('soloEspacios')) {
               {{ soloEspacios }}
@@ -117,6 +120,8 @@ export class ContrasenaForm {
   readonly errorServidor = input<string | null>(null);
   /** Error de la contraseña actual (400 con la clave `passwordActual`): va junto a su campo. */
   readonly errorActual = input<string | null>(null);
+  /** Error de la contraseña nueva (400 con la clave `password` del reseteo): va junto a su campo. */
+  readonly errorNueva = input<string | null>(null);
   readonly enviando = input(false);
   readonly textoEnviar = input('Guardar contraseña');
 
@@ -149,7 +154,7 @@ export class ContrasenaForm {
 
   protected nuevaInvalida(): boolean {
     const nueva = this.form.controls.nueva;
-    return nueva.touched && nueva.invalid;
+    return this.errorNueva() !== null || (nueva.touched && nueva.invalid);
   }
 
   protected confirmacionInvalida(): boolean {

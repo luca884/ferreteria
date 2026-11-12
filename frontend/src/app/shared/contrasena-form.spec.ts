@@ -152,6 +152,17 @@ describe('ContrasenaForm', () => {
     expect(input('actual')!.getAttribute('aria-invalid')).toBe('true');
   });
 
+  it('muestra el error de la contraseña nueva junto a su campo', async () => {
+    await abrir({ errorNueva: 'Elegí una contraseña distinta de la que te dieron.' });
+
+    expect(el().querySelector('#nueva-error')?.textContent).toContain(
+      'Elegí una contraseña distinta de la que te dieron.',
+    );
+    expect(input('nueva')!.getAttribute('aria-invalid')).toBe('true');
+    expect(input('nueva')!.getAttribute('aria-describedby')).toBe('nueva-error');
+    expect(el().querySelector('[role="alert"]')).toBeNull();
+  });
+
   it('mientras envía deshabilita el botón', async () => {
     await abrir({ enviando: true });
 
