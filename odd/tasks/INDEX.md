@@ -1,18 +1,19 @@
 # Índice de tareas (`odd/tasks`)
 
-> Generado el 2026-11-11 desde los 86 documentos de esta carpeta. Es un **mapa**, no la fuente de verdad:
+> Generado el 2026-11-11 desde los 87 documentos de esta carpeta. Es un **mapa**, no la fuente de verdad:
 > el detalle, los specs `S#` y la evidencia de cada tarea viven en su archivo.
 >
 > Leé esta página primero y después **un solo** archivo, el de la tarea que te toca.
 >
-> Tamaño: este índice pesa ~21 KB; los 86 documentos suman 1,4 MB. Leerlos todos no entra en contexto.
+> Tamaño: este índice pesa ~21 KB; los 87 documentos suman 1,4 MB. Leerlos todos no entra en contexto.
 
-- **84 cerradas · 2 abiertas**
+- **84 cerradas · 3 abiertas**
 
 ## Abiertas
 
 | Tarea | Estado | Fecha | Objetivo | Rama | KB |
 |---|---|---|---|---|---|
+| [`advertencias-recorrido-dueno.md`](advertencias-recorrido-dueno.md) | abierta (0✓/5✗) | 2026-11-12 | cerrar las tres advertencias que el odd-verifier dejó abiertas al aprobar recorrido-dueno (A2, A4 y A6), más dos cabos sueltos que aparecieron al audi | `chore/advertencias-recorrido-dueno` | 6 |
 | [`cu-07-remito-presupuesto-imprimible.md`](cu-07-remito-presupuesto-imprimible.md) | abierta (6✓/1✗) | 2026-10-29 | que el Vendedor y el Dueño impriman el remito y el presupuesto como documentos no fiscales, con la misma base que la factura (emisor, letra X, «DOCUME | `feat/cu-07-remito-presupuesto-imprimible` | 9 |
 | [`guia-de-uso-al-dia.md`](guia-de-uso-al-dia.md) | abierta (7✓/1✗) | 2026-11-07 | que la guía de uso vuelva a coincidir con la app después de los PR #29 y #30, y cerrar el residuo de Clientes a 1280 px. | `fix/clientes-1280` | 8 |
 
