@@ -1,5 +1,5 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { Botonera, AccionBotonera } from './botonera';
+import { AVISO_BOTONERA_ID, Botonera, AccionBotonera } from './botonera';
 import { ATAJOS } from './mostrador.atajos';
 
 describe('Botonera', () => {
@@ -91,14 +91,48 @@ describe('Botonera', () => {
     expect(evento.defaultPrevented).toBe(true);
   });
 
-  it('un botón deshabilitado no emite', () => {
-    fixture.componentRef.setInput('habilitadas', { cobrar: false, quitar: false });
+  it('S4: una acción sin motivo se puede usar; con motivo queda aria-disabled y nunca disabled', () => {
+    fixture.componentRef.setInput('motivos', { cobrar: 'Abrí la caja para cobrar.' });
     fixture.detectChanges();
 
-    expect(boton('Cobrar').disabled).toBe(true);
-    expect(boton('Quitar').disabled).toBe(true);
-    expect(boton('Cantidad').disabled).toBe(false);
+    expect(boton('Cobrar').getAttribute('aria-disabled')).toBe('true');
+    expect(boton('Cobrar').hasAttribute('disabled')).toBe(false);
+    expect(boton('Cantidad').hasAttribute('aria-disabled')).toBe(false);
+    expect(boton('Cantidad').hasAttribute('disabled')).toBe(false);
+  });
+
+  it('S4: el botón apagado igual emite, para que el mostrador explique por qué', () => {
+    fixture.componentRef.setInput('motivos', {
+      cobrar: 'Abrí la caja para cobrar.',
+      quitar: 'Agregá un renglón para usar esta acción.',
+    });
+    fixture.detectChanges();
+
     boton('Cobrar').click();
-    expect(emitidas).toEqual([]);
+    boton('Quitar').click();
+    boton('Buscar').click();
+
+    expect(emitidas).toEqual(['cobrar', 'quitar', 'buscar']);
+  });
+
+  it('S4: el botón apagado se ve apagado con su propia regla, sin el disabled global', () => {
+    fixture.componentRef.setInput('motivos', { cobrar: 'Abrí la caja para cobrar.' });
+    fixture.detectChanges();
+
+    expect(getComputedStyle(boton('Cobrar')).cursor).toBe('not-allowed');
+    expect(getComputedStyle(boton('Cantidad')).cursor).not.toBe('not-allowed');
+  });
+
+  it('S4: el botón que se está explicando se enlaza con el aviso por aria-describedby', () => {
+    fixture.componentRef.setInput('motivos', { cobrar: 'Abrí la caja para cobrar.' });
+    fixture.componentRef.setInput('explicada', 'cobrar');
+    fixture.detectChanges();
+
+    expect(boton('Cobrar').getAttribute('aria-describedby')).toBe(AVISO_BOTONERA_ID);
+    expect(boton('Cantidad').hasAttribute('aria-describedby')).toBe(false);
+  });
+
+  it('S4: sin motivo a la vista ningún botón enlaza un aviso', () => {
+    expect(botones().some((b) => b.hasAttribute('aria-describedby'))).toBe(false);
   });
 });
