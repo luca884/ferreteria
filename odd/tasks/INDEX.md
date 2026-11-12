@@ -1,19 +1,18 @@
 # Índice de tareas (`odd/tasks`)
 
-> Generado el 2026-11-11 desde los 87 documentos de esta carpeta. Es un **mapa**, no la fuente de verdad:
+> Generado el 2026-11-12 desde los 87 documentos de esta carpeta. Es un **mapa**, no la fuente de verdad:
 > el detalle, los specs `S#` y la evidencia de cada tarea viven en su archivo.
 >
 > Leé esta página primero y después **un solo** archivo, el de la tarea que te toca.
 >
 > Tamaño: este índice pesa ~21 KB; los 87 documentos suman 1,4 MB. Leerlos todos no entra en contexto.
 
-- **84 cerradas · 3 abiertas**
+- **85 cerradas · 2 abiertas**
 
 ## Abiertas
 
 | Tarea | Estado | Fecha | Objetivo | Rama | KB |
 |---|---|---|---|---|---|
-| [`advertencias-recorrido-dueno.md`](advertencias-recorrido-dueno.md) | abierta (4✓/1✗) | 2026-11-12 | cerrar las tres advertencias que el odd-verifier dejó abiertas al aprobar recorrido-dueno (A2, A4 y A6), más dos cabos sueltos que aparecieron al audi | `chore/advertencias-recorrido-dueno` | 12 |
 | [`cu-07-remito-presupuesto-imprimible.md`](cu-07-remito-presupuesto-imprimible.md) | abierta (6✓/1✗) | 2026-10-29 | que el Vendedor y el Dueño impriman el remito y el presupuesto como documentos no fiscales, con la misma base que la factura (emisor, letra X, «DOCUME | `feat/cu-07-remito-presupuesto-imprimible` | 9 |
 | [`guia-de-uso-al-dia.md`](guia-de-uso-al-dia.md) | abierta (7✓/1✗) | 2026-11-07 | que la guía de uso vuelva a coincidir con la app después de los PR #29 y #30, y cerrar el residuo de Clientes a 1280 px. | `fix/clientes-1280` | 8 |
 
@@ -23,6 +22,7 @@ Ordenadas por fecha del pedido, la más reciente arriba.
 
 | Tarea | Fecha | Objetivo | KB |
 |---|---|---|---|
+| [`advertencias-recorrido-dueno.md`](advertencias-recorrido-dueno.md) | 2026-11-12 | cerrar las tres advertencias que el odd-verifier dejó abiertas al aprobar recorrido-dueno (A2, A4 y A6), más dos cabos sueltos que aparecieron al audi | 13 |
 | [`aviso-y-paginacion.md`](aviso-y-paginacion.md) | 2026-11-09 | los avisos con importes ya no cortan el importe en dos renglones, y en Artículos a 1280 px la paginación no se pisa con los filtros | 5 |
 | [`bugs-relevamiento-celular.md`](bugs-relevamiento-celular.md) | 2026-11-09 | arreglar los bugs funcionales (no de responsive) que encontró el relevamiento en celular del 2026-11-09 | 36 |
 | [`responsive.md`](responsive.md) | 2026-11-09 | la app se puede usar bien en celular, tablet y laptop, sin cambiar cómo se ve en escritorio | 90 |
