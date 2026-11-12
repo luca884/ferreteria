@@ -25,7 +25,7 @@ Objetivo: corregir los hallazgos de la carga de la Ferretería de Prueba del 202
 - Cierre de caja: la NC no mueve la caja (`docs/spec.md:176`, aviso «La caja no cambia: si devolvés plata, cargá un egreso»), por eso el total incluye las ventas después anuladas. Falta mostrarlo.
 - Letra «X» en el simulador: por diseño (`HojaFiscal.java:121`). No entra.
 
-## Tareas
+## Tasks
 
 Cada tarea que agrega algo fuera de la spec espera el OK de Luca antes de implementarse (CLAUDE.md del proyecto).
 
@@ -77,3 +77,4 @@ Fuera del plan (a decidir aparte): «Crear los artículos nuevos» apagado por d
 - 2026-11-01: T11 (S10). `mostrador.ts`: `completarCondicionDelCliente()` en el constructor; con la respuesta, `ticket.elegirCliente(cliente)` solo si el ticket sigue con ese cliente y sin condición. Sin backend. RED: 1 spec (no se pedía el cliente); se sumaron el de la falla (sigue «Factura» y el cobro abre) y el de F9 (no vuelve a pedir); el viejo «ticket guardado… dice solo Factura» ahora fija el 404. GREEN 288/288. Suite frontend 3496/3496, `ng build` ok. ego-browser local (El Tornillo, Simulador): se crearon por API el cliente «Constructora Punta Mogotes SRL» (RI, CUIT 30-71234567-1) y el presupuesto N.º 1 (10 × TOR-001); Presupuestos → «Pasar a venta» (reemplazó un ticket viejo de 1 renglón de la base local) → F4: «Factura A · Constructora Punta Mogotes SRL SIMULADO». El remito usa el mismo camino del mostrador; quedó probado con specs.
 - 2026-11-01: T12 en el vault (`wiki/datos-ferreteria-de-prueba.md`): la Descripción de ELE-006, HER-005, JAR-003, FER-004, FER-005 y FER-006 queda sin la anotación; una línea arriba de «Particularidades» aclara que la descripción se carga tal cual y lo distinto va abajo (se sumó «FER-004: es un libro»). `/articulos/:id/clientes` usa PIN-001 (Hotel Mirador del Faro SA, Constructora Punta Mogotes SRL y Ana Morales) y explica por qué no PLO-001. `/ventas` aclara las 3 filas de anulación con importe negativo (21 filas en total). Los 3 hallazgos quedan marcados «Corregido en el guion». Pendiente: la fila BUL-005 sigue con «(margen 60 %)»; la edición fue denegada por permisos.
 - 2026-11-01: cierre del tramo 3 (T10, T11, T12): frontend 3496/3496 y `ng build` ok sobre T11; el backend no cambió desde la suite de T9 (5864/0).
+- 2026-11-11: la sección pasa de `## Tareas` a `## Tasks` (el nombre que lee `odd/indice-tareas.mjs`); sin ese encabezado el índice la mostraba abierta y no podía cerrarla. No queda ninguna `- [ ]`: T2 y T4 se descartaron el 2026-10-31 y el 2026-11-01, y T12 quedó cerrada con la única edición denegada (BUL-005). Sin cambios de código.
