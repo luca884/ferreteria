@@ -7,7 +7,7 @@
 >
 > Tamaño: este índice pesa ~21 KB; los 86 documentos suman 1,4 MB. Leerlos todos no entra en contexto.
 
-- **82 cerradas · 4 abiertas**
+- **84 cerradas · 2 abiertas**
 
 ## Abiertas
 
@@ -15,8 +15,6 @@
 |---|---|---|---|---|---|
 | [`cu-07-remito-presupuesto-imprimible.md`](cu-07-remito-presupuesto-imprimible.md) | abierta (6✓/1✗) | 2026-10-29 | que el Vendedor y el Dueño impriman el remito y el presupuesto como documentos no fiscales, con la misma base que la factura (emisor, letra X, «DOCUME | `feat/cu-07-remito-presupuesto-imprimible` | 9 |
 | [`guia-de-uso-al-dia.md`](guia-de-uso-al-dia.md) | abierta (7✓/1✗) | 2026-11-07 | que la guía de uso vuelva a coincidir con la app después de los PR #29 y #30, y cerrar el residuo de Clientes a 1280 px. | `fix/clientes-1280` | 8 |
-| [`hallazgos-ferreteria-de-prueba.md`](hallazgos-ferreteria-de-prueba.md) | sin §Tasks (15✓/0✗) | — | corregir los hallazgos de la carga de la Ferretería de Prueba del 2026-10-30 (vault wiki/datos-ferreteria-de-prueba.md → ## Hallazgos), empezando por  | `fix/hallazgos-ferreteria-de-prueba` | 22 |
-| [`recorrido-dueno.md`](recorrido-dueno.md) | abierta (11✓/1✗) | 2026-10-27 | un Dueño dado de alta por el super admin usa todo el sistema desde la web, de punta a punta, sin errores ni pasos confusos (todo menos ARCA) | `chore/recorrido-dueno` | 22 |
 
 ## Cerradas
 
@@ -86,6 +84,7 @@ Ordenadas por fecha del pedido, la más reciente arriba.
 | [`cu-07-venta-facturada.md`](cu-07-venta-facturada.md) | 2026-10-28 | la venta facturable de una ferretería con la facturación habilitada crea su registro fiscal dentro de la transacción de la venta y pide el CAE después | 23 |
 | [`commons-lang3.md`](commons-lang3.md) | 2026-10-27 | commons-lang3 3.18.0 en el backend (lo que pide commons-compress 1.28.0 y cierra CVE-2025-48924) sin que el MySQL de los tests cambie de configuración | 8 |
 | [`deploy.md`](deploy.md) | 2026-10-27 | dejar la app andando en producción, con el backend, MySQL y el frontend en Railway (el frontend pasó de Vercel a Railway, ver L9) | 16 |
+| [`recorrido-dueno.md`](recorrido-dueno.md) | 2026-10-27 | un Dueño dado de alta por el super admin usa todo el sistema desde la web, de punta a punta, sin errores ni pasos confusos (todo menos ARCA) | 22 |
 | [`test-imagen-produccion.md`](test-imagen-produccion.md) | 2026-10-27 | un test que construye la imagen real del backend con backend/Dockerfile, la levanta contra mysql:8.4 y prueba lo que la suite no ve (jar empaquetado,  | 11 |
 | [`cu-04-listas-pdf.md`](cu-04-listas-pdf.md) | 2026-10-26 | el Dueño importa una lista de proveedor en PDF (con texto) igual que un Excel: el PDF se lee como una tabla y pasa por la misma muestra, mapeo y vista | 24 |
 | [`cu-10-reportes-de-caja.md`](cu-10-reportes-de-caja.md) | 2026-10-26 | el resumen de cada caja se imprime y el Dueño saca un reporte de ingresos, gastos y retiros entre fechas | 14 |
@@ -106,6 +105,7 @@ Ordenadas por fecha del pedido, la más reciente arriba.
 | [`reportes-ventas.md`](reportes-ventas.md) | 2026-10-22 | el Dueño consulta las ventas de un día o de un rango de fechas en reportes separados, como el menú Ventas de GDS, con la ganancia calculada sobre el c | 10 |
 | [`cu-13-compras.md`](cu-13-compras.md) | 2026-10-21 | registrar una compra (factura o remito del proveedor) que sume el stock y actualice el costo y el precio de los artículos | 8 |
 | [`cu-14-precio-manual.md`](cu-14-precio-manual.md) | 2026-10-21 | precio manual por artículo, ajustes sin límite sobre el precio final y actualización masiva del precio final | 22 |
+| [`hallazgos-ferreteria-de-prueba.md`](hallazgos-ferreteria-de-prueba.md) | — | corregir los hallazgos de la carga de la Ferretería de Prueba del 2026-10-30 (vault wiki/datos-ferreteria-de-prueba.md → ## Hallazgos), empezando por  | 22 |
 
 ## Tareas por caso de uso
 
