@@ -22,7 +22,7 @@ Ordenadas por fecha del pedido, la más reciente arriba.
 
 | Tarea | Fecha | Objetivo | KB |
 |---|---|---|---|
-| [`advertencias-recorrido-dueno.md`](advertencias-recorrido-dueno.md) | 2026-11-12 | cerrar las tres advertencias que el odd-verifier dejó abiertas al aprobar recorrido-dueno (A2, A4 y A6), más dos cabos sueltos que aparecieron al audi | 13 |
+| [`advertencias-recorrido-dueno.md`](advertencias-recorrido-dueno.md) | 2026-11-12 | cerrar las tres advertencias que el odd-verifier dejó abiertas al aprobar recorrido-dueno (A2, A4 y A6), más dos cabos sueltos que aparecieron al audi | 14 |
 | [`aviso-y-paginacion.md`](aviso-y-paginacion.md) | 2026-11-09 | los avisos con importes ya no cortan el importe en dos renglones, y en Artículos a 1280 px la paginación no se pisa con los filtros | 5 |
 | [`bugs-relevamiento-celular.md`](bugs-relevamiento-celular.md) | 2026-11-09 | arreglar los bugs funcionales (no de responsive) que encontró el relevamiento en celular del 2026-11-09 | 36 |
 | [`responsive.md`](responsive.md) | 2026-11-09 | la app se puede usar bien en celular, tablet y laptop, sin cambiar cómo se ve en escritorio | 90 |
