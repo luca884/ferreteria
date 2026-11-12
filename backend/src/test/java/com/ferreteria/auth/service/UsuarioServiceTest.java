@@ -408,6 +408,68 @@ class UsuarioServiceTest {
     }
 
     @Test
+    @DisplayName("A6: resetearse la propia con la misma contraseña da 400 en password y no toca ni el hash ni la marca")
+    void resetearLaPropiaConLaMisma() {
+        Usuario u = usuario(Rol.DUENO, true);
+        u.cambiarPropiaContrasena("hash-viejo");
+        existe(7, u);
+        when(encoder.matches("demo1234", "hash-viejo")).thenReturn(true);
+
+        assertThatThrownBy(() -> servicio.resetearContrasena(7L, "demo1234", 7L))
+                .isInstanceOfSatisfying(DatosInvalidosException.class, e -> assertThat(e.errors())
+                        .containsEntry("password", "Elegí una contraseña distinta de la que te dieron."));
+
+        assertThat(u.getPasswordHash()).isEqualTo("hash-viejo");
+        assertThat(u.isDebeCambiarContrasena()).isFalse();
+        verify(encoder, never()).encode(anyString());
+        verify(usuarios, never()).saveAndFlush(any(Usuario.class));
+    }
+
+    @Test
+    @DisplayName("A6: con la marca puesta, la misma contraseña sobre uno mismo da 400 y la marca sigue prendida")
+    void resetearLaPropiaConLaMismaConMarca() {
+        Usuario u = usuario(Rol.DUENO, true);
+        existe(7, u);
+        when(encoder.matches("demo1234", "hash")).thenReturn(true);
+
+        assertThatThrownBy(() -> servicio.resetearContrasena(7L, "demo1234", 7L))
+                .isInstanceOfSatisfying(DatosInvalidosException.class, e -> assertThat(e.errors())
+                        .containsEntry("password", "Elegí una contraseña distinta de la que te dieron."));
+
+        assertThat(u.getPasswordHash()).isEqualTo("hash");
+        assertThat(u.isDebeCambiarContrasena()).isTrue();
+        verify(usuarios, never()).saveAndFlush(any(Usuario.class));
+    }
+
+    @Test
+    @DisplayName("A6: con la marca puesta, otra contraseña sobre uno mismo la apaga, como antes")
+    void resetearLaPropiaConOtraConMarca() {
+        Usuario u = usuario(Rol.DUENO, true);
+        existe(7, u);
+
+        servicio.resetearContrasena(7L, "otraclave99", 7L);
+
+        assertThat(u.getPasswordHash()).isEqualTo("hash-nuevo");
+        assertThat(u.isDebeCambiarContrasena()).isFalse();
+        verify(usuarios).saveAndFlush(u);
+    }
+
+    @Test
+    @DisplayName("A6: la misma contraseña sobre otro usuario sigue permitida: la elige el Dueño y lo marca")
+    void resetearAOtroConLaMisma() {
+        Usuario u = usuario(Rol.VENDEDOR, true);
+        u.cambiarPropiaContrasena("hash-viejo");
+        existe(7, u);
+
+        servicio.resetearContrasena(7L, "demo1234", ACTOR);
+
+        assertThat(u.getPasswordHash()).isEqualTo("hash-nuevo");
+        assertThat(u.isDebeCambiarContrasena()).isTrue();
+        verify(encoder, never()).matches(anyString(), anyString());
+        verify(usuarios).saveAndFlush(u);
+    }
+
+    @Test
     @DisplayName("resetear la contraseña de un usuario ajeno responde 404 sin hashear")
     void resetearAjeno() {
         when(usuarios.findScoped(99L)).thenReturn(Optional.empty());
