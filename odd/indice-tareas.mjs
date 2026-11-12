@@ -21,7 +21,10 @@
  * - KB: tamaño en disco redondeado a KiB (1024 bytes).
  * - Total de la carpeta: bytes ocupados en bloques de 4 KiB, redondeado a 1 decimal
  *   en MiB, igual que `du -sh`.
- * - Tareas por caso de uso: los documentos cuyo texto menciona `CU-NN`, de CU-01 a CU-16.
+ * - Tareas por caso de uso: los documentos cuyo texto menciona `CU-NN`, de CU-01 al último
+ *   caso de uso que tenga sección en `docs/spec/cu-NN-*.md`, que es lo que dice cuáles
+ *   existen: un CU-17 entra solo cuando llega su archivo, y un documento que lo nombre de
+ *   paso no inventa la fila.
  *
  * Orden: las abiertas alfabéticas por archivo; las cerradas por fecha del pedido
  * (la más reciente arriba) y, a igual fecha, alfabéticas.
@@ -32,6 +35,7 @@ import { fileURLToPath } from 'node:url';
 
 const AQUI = dirname(fileURLToPath(import.meta.url));
 const DIR_TAREAS = join(AQUI, 'tasks');
+const DIR_SPEC = join(AQUI, '..', 'docs', 'spec');
 const RUTA_INDICE = join(DIR_TAREAS, 'INDEX.md');
 const NOMBRE_INDICE = 'INDEX.md';
 
@@ -40,9 +44,6 @@ const LARGO_OBJETIVO = 150;
 
 /** Bloque de asignación en disco con el que se cuenta el total (`du -sh`). */
 const BLOQUE = 4096;
-
-/** Último caso de uso de la spec: CU-01 a CU-16. */
-const CASOS_DE_USO = 16;
 
 const SIN_FECHA = '—';
 
@@ -156,9 +157,37 @@ function porFechaDelPedido(a, b) {
   return a.archivo.localeCompare(b.archivo, 'es');
 }
 
+/**
+ * Último caso de uso que tiene sección en la spec (`docs/spec/cu-NN-*.md`).
+ *
+ * Sale de la spec y no de una constante: con un 16 fijo, el día que aparezca un CU-17 su
+ * documento entraría en las filas de tareas y se perdería de la tabla por CU, sin que nada
+ * fallara. Tampoco sirve el caso más alto *mencionado* en `odd/tasks/`: un documento que
+ * nombre un CU que todavía no existe inventaría su fila. Si la carpeta no está (una copia
+ * parcial del repo), cae al caso más alto mencionado, para no perder la tabla entera.
+ */
+function ultimoCasoDeUso(documentos) {
+  let ultimo = 0;
+  try {
+    for (const archivo of readdirSync(DIR_SPEC)) {
+      const encontrado = /^cu-(\d+)-/i.exec(archivo);
+      if (encontrado) ultimo = Math.max(ultimo, Number(encontrado[1]));
+    }
+  } catch {
+    ultimo = 0;
+  }
+  if (ultimo > 0) return ultimo;
+  for (const documento of documentos) {
+    for (const [, numero] of documento.texto.matchAll(/CU-(\d+)/g)) {
+      ultimo = Math.max(ultimo, Number(numero));
+    }
+  }
+  return ultimo;
+}
+
 function tablaDeCasosDeUso(documentos) {
   const filas = [];
-  for (let numero = 1; numero <= CASOS_DE_USO; numero += 1) {
+  for (let numero = 1; numero <= ultimoCasoDeUso(documentos); numero += 1) {
     const caso = `CU-${String(numero).padStart(2, '0')}`;
     const nombres = documentos
       .filter((documento) => documento.texto.includes(caso))
