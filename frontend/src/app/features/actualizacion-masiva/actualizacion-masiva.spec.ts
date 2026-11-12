@@ -1147,9 +1147,11 @@ describe('ActualizacionMasiva', () => {
       cambios: [unCambio],
       huella: 'huella-1',
     });
-    const resultado = (modificados: number): ResultadoMasivo => ({
+    const resultado = (modificados: number, cambios: CambioMasivo[] = []): ResultadoMasivo => ({
       conteos: { ...conteosBase, modificados },
       entradasDeHistorial: modificados,
+      cambios,
+      detalleRecortado: false,
     });
     const pedidoConProveedor = {
       proveedorId: 1,
@@ -1319,6 +1321,8 @@ describe('ActualizacionMasiva', () => {
 
         expect(texto('.resumen')).toBe(mensaje);
         expect(q('.resumen').getAttribute('role')).toBe('status');
+        // T3: el resultado sale en un pop-up, no apilado después del formulario y la vista previa.
+        expect(q('.resumen').closest('[role="dialog"]')).not.toBeNull();
         expect(el().querySelector('.vista-previa')).toBeNull();
         expect(el().querySelector('button.confirmar')).toBeNull();
       });
@@ -1330,6 +1334,53 @@ describe('ActualizacionMasiva', () => {
         await confirmar();
 
         expect(texto('.resumen')).toBe('Se actualizaron 2 artículos.');
+      });
+
+      it('el pop-up del resultado muestra qué cambió en cada artículo', async () => {
+        await conVistaPrevia(vistaPrevia(3));
+        servicio.aplicar.mockReturnValue(
+          of(
+            resultado(2, [
+              unCambio,
+              { ...unCambio, articuloId: 2, codigo: 'A2', descripcion: 'Clavo', precioAnterior: 90, precioNuevo: 99 },
+            ]),
+          ),
+        );
+
+        await confirmar();
+
+        const filas = Array.from(el().querySelectorAll('.resultado-cambios tbody tr')).map((fila) =>
+          Array.from(fila.querySelectorAll('td')).map((c) => c.textContent?.replace(/\s+/g, ' ').trim() ?? ''),
+        );
+        expect(filas).toHaveLength(2);
+        expect(filas[0][0]).toBe('A1');
+        expect(filas[0][1]).toBe('Tornillo');
+        expect(filas[0][2]).toContain('160');
+        expect(filas[0][3]).toContain('180');
+        expect(filas[1][0]).toBe('A2');
+      });
+
+      it('si el detalle viene recortado lo avisa', async () => {
+        await conVistaPrevia(vistaPrevia(3));
+        servicio.aplicar.mockReturnValue(of({ ...resultado(1500, [unCambio]), detalleRecortado: true }));
+
+        await confirmar();
+
+        expect(texto('.resultado-recortado')).toContain('los primeros');
+      });
+
+      it('Esc cierra el pop-up del resultado', async () => {
+        await conVistaPrevia(vistaPrevia(3));
+        servicio.aplicar.mockReturnValue(of(resultado(2)));
+
+        await confirmar();
+        expect(el().querySelector('[role="dialog"]')).not.toBeNull();
+
+        document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+        await asentar();
+
+        expect(el().querySelector('[role="dialog"]')).toBeNull();
+        expect(el().querySelector('.resumen')).toBeNull();
       });
 
       it('cambiar el formulario después de aplicar borra el mensaje de éxito', async () => {
@@ -1810,7 +1861,7 @@ describe('ActualizacionMasiva', () => {
         await conVistaPrevia();
         await aplicarConError(errorHttp(409, MENSAJE_409));
         await generar();
-        servicio.aplicar.mockReturnValue(of({ conteos: vistaPrevia.conteos, entradasDeHistorial: 3 }));
+        servicio.aplicar.mockReturnValue(of({ conteos: vistaPrevia.conteos, entradasDeHistorial: 3, cambios: [], detalleRecortado: false }));
 
         botonConfirmar().click();
         await asentar();
@@ -1914,6 +1965,8 @@ describe('ActualizacionMasiva', () => {
     const resultado: ResultadoMasivo = {
       conteos: { ...conteosBase, modificados: 3 },
       entradasDeHistorial: 3,
+      cambios: [cambioBase],
+      detalleRecortado: false,
     };
     const despues = (a: Element, b: Element) =>
       Boolean(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
@@ -1943,15 +1996,19 @@ describe('ActualizacionMasiva', () => {
       expect(texto('.resumen')).toBe('Se actualizaron 3 artículos.');
     });
 
-    it('el resultado recibe el foco para que se vea', async () => {
+    it('el pop-up del resultado recibe el foco para que se vea', async () => {
       await aplicado();
 
-      expect(document.activeElement).toBe(q('.resumen'));
+      const dialogo = el().querySelector('[role="dialog"]');
+      expect(dialogo).not.toBeNull();
+      expect(dialogo!.contains(document.activeElement)).toBe(true);
     });
 
-    it('los avisos van debajo del botón, para que no muevan el formulario', async () => {
+    it('el resultado no se apila abajo del formulario; los errores sí van debajo del botón', async () => {
       await aplicado();
-      expect(despues(boton(), q('.resumen'))).toBe(true);
+      // T3: el resultado vive en un pop-up, así que no hay nada empujando el formulario ni la vista previa.
+      expect(el().querySelector('.resumen')?.closest('[role="dialog"]')).not.toBeNull();
+      expect(el().querySelector('.vista-previa')).toBeNull();
 
       servicio.vistaPrevia.mockReturnValue(throwError(() => errorHttp(400, 'Mal pedido')));
       await completar('Cambiar el costo en %', '10');
@@ -2268,7 +2325,7 @@ describe('ActualizacionMasiva', () => {
 
       it('aplicar manda el modo y el monto de la vista previa, con su huella', async () => {
         await conVistaPreviaDeMonto();
-        servicio.aplicar.mockReturnValue(of({ conteos: conteosBase, entradasDeHistorial: 3 }));
+        servicio.aplicar.mockReturnValue(of({ conteos: conteosBase, entradasDeHistorial: 3, cambios: [], detalleRecortado: false }));
 
         q<HTMLButtonElement>('button.confirmar').click();
         await asentar();
@@ -2483,7 +2540,7 @@ describe('ActualizacionMasiva', () => {
       await elegir('#proveedor', 'Sinteplast');
       await completar(MODO_PORCENTAJE, '12');
       await generar();
-      servicio.aplicar.mockReturnValue(of({ conteos: conteosBase, entradasDeHistorial: 3 }));
+      servicio.aplicar.mockReturnValue(of({ conteos: conteosBase, entradasDeHistorial: 3, cambios: [], detalleRecortado: false }));
 
       q<HTMLButtonElement>('button.confirmar').click();
       await asentar();
@@ -2716,7 +2773,7 @@ describe('ActualizacionMasiva', () => {
 
     it('la confirmación nombra el destino y aplicar manda el destino y la huella, sin valor', async () => {
       await conVistaPreviaDelRubro();
-      servicio.aplicar.mockReturnValue(of({ conteos: vistaPreviaDelRubro.conteos, entradasDeHistorial: 1 }));
+      servicio.aplicar.mockReturnValue(of({ conteos: vistaPreviaDelRubro.conteos, entradasDeHistorial: 1, cambios: [], detalleRecortado: false }));
 
       q<HTMLButtonElement>('button.confirmar').click();
       await asentar();
@@ -2881,7 +2938,7 @@ describe('ActualizacionMasiva', () => {
       await elegir('#importacion', 'Tersuave · tersuave.csv · 14/10 15:45');
       await completar('Cambiar el costo en %', '10');
       await generar();
-      servicio.aplicar.mockReturnValue(of({ conteos: conteosBase, entradasDeHistorial: 3 }));
+      servicio.aplicar.mockReturnValue(of({ conteos: conteosBase, entradasDeHistorial: 3, cambios: [], detalleRecortado: false }));
 
       q<HTMLButtonElement>('button.confirmar').click();
       await asentar();

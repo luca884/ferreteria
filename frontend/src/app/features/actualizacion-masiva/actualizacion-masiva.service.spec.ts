@@ -107,13 +107,13 @@ describe('ActualizacionMasivaService', () => {
       expect(previa.request.body).toEqual(expect.objectContaining({ modo, valor: -250 }));
       expect(aplicada.request.body).toEqual(expect.objectContaining({ modo, valor: -250, huella: 'h' }));
       previa.flush({ conteos, cambios: [], errores: [], detalleRecortado: false, huella: 'h' });
-      aplicada.flush({ conteos, entradasDeHistorial: 0 });
+      aplicada.flush({ conteos, entradasDeHistorial: 0, cambios: [], detalleRecortado: false });
     }
   });
 
   it('aplicar: POST JSON a /actualizacion-masiva con el pedido y la huella', () => {
     const aplicar: AplicarPedidoMasivo = { ...pedido, valor: -20, huella: 'h-64' };
-    const respuesta: ResultadoMasivo = { conteos, entradasDeHistorial: 3 };
+    const respuesta: ResultadoMasivo = { conteos, entradasDeHistorial: 3, cambios: [], detalleRecortado: false };
     let recibida: ResultadoMasivo | undefined;
     service.aplicar(aplicar).subscribe((r) => (recibida = r));
 
@@ -143,6 +143,6 @@ describe('ActualizacionMasivaService', () => {
     expect(previa.request.body).not.toHaveProperty('huella');
     expect(aplicada.request.body).toHaveProperty('huella', 'h');
     previa.flush({ conteos, cambios: [], errores: [], detalleRecortado: false, huella: 'h' });
-    aplicada.flush({ conteos, entradasDeHistorial: 0 });
+    aplicada.flush({ conteos, entradasDeHistorial: 0, cambios: [], detalleRecortado: false });
   });
 });

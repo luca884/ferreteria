@@ -7,6 +7,6 @@
 
 1. Filtra por proveedor, rubro o búsqueda.
 2. Aplica un porcentaje de aumento al costo, cambia el margen o cambia el precio final en % o en $ (este último deja los artículos con precio manual, CU-14), o **cambia el rubro**: pasa los artículos del filtro a otro rubro de la ferretería. Con el rubro nuevo cambia el margen heredado y por eso el precio; los que tienen margen propio o precio manual cambian de rubro sin cambiar de precio («Solo cambia el rubro»), y los que ya están en ese rubro quedan sin cambio. La vista previa cuenta aparte unos y otros: «Ya en el destino» y «Solo cambia el rubro», en lugar de «Sin cambio de precio». El historial de precios registra solo los artículos cuyo precio cambió. GDS cambia el rubro de a uno (G11); este cambio en bloque es propio.
-3. Ve la vista previa y confirma.
+3. Ve la vista previa y confirma. El resultado se muestra en un **pop-up**, no apilado abajo del formulario: el resumen («Se actualizaron N artículos») y el detalle de qué cambió en cada artículo, con código, descripción y precio anterior → precio nuevo, hasta 1.000 filas (si hay más, el pop-up avisa que muestra solo las primeras). «Cerrar» o Esc lo cierran y el foco vuelve al botón que genera la vista previa.
 <!-- fin payload: spec.md:92-98 -->
 
