@@ -117,7 +117,7 @@ public class AuthService {
         limiteDeIntentos.exitoCambioDeContrasena(authUser.userId());
         // Con la marca, repetir la que eligió otra persona no es cambiarla: la marca seguiría apagándose sin rotar nada.
         if (usuario.isDebeCambiarContrasena() && nueva.equals(actual)) {
-            throw new DatosInvalidosException(Map.of("passwordNueva", "Elegí una contraseña distinta de la que te dieron."));
+            throw new DatosInvalidosException(Map.of("passwordNueva", PoliticaDeContrasena.MISMA_CONTRASENA));
         }
         PoliticaDeContrasena.validar("passwordNueva", nueva);
         usuario.cambiarPropiaContrasena(passwordEncoder.encode(nueva));

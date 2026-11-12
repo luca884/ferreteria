@@ -2,7 +2,7 @@ import { HttpErrorResponse } from '@angular/common/http';
 import { Component, DestroyRef, ElementRef, Injector, OnInit, afterNextRender, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { AbstractControl, FormBuilder, ReactiveFormsModule, ValidationErrors, Validators } from '@angular/forms';
-import { erroresDeCampos, mensajeDe } from '../../core/api/api-error';
+import { erroresDeCampos, erroresPorCampo, mensajeDe } from '../../core/api/api-error';
 import { AuthService } from '../../core/auth/auth.service';
 import { BarraAcciones } from '../../shared/barra-acciones';
 import { Confirmacion } from '../../shared/confirmacion';
@@ -67,7 +67,10 @@ export class Usuarios implements OnInit {
   protected readonly editando = signal<Usuario | null>(null);
   /** El usuario al que se le está reseteando la contraseña; null si no hay reset abierto. */
   protected readonly reseteando = signal<Usuario | null>(null);
+  /** Error del reseteo que no es de un campo (403, caída de red…). */
   protected readonly errorReset = signal<string | null>(null);
+  /** El 400 del reseteo: el DTO llama `password` al campo y va debajo de «Contraseña nueva». */
+  protected readonly errorNueva = signal<string | null>(null);
   protected readonly enviandoReset = signal(false);
 
   protected readonly contrasenaSoloEspacios = CONTRASENA_SOLO_ESPACIOS;
@@ -247,18 +250,21 @@ export class Usuarios implements OnInit {
     if (!usuario) return;
     this.aviso.set(null);
     this.errorReset.set(null);
+    this.errorNueva.set(null);
     this.reseteando.set(usuario);
   }
 
   protected cerrarReset(): void {
     this.reseteando.set(null);
     this.errorReset.set(null);
+    this.errorNueva.set(null);
   }
 
   protected resetear(nueva: NuevaContrasena): void {
     const usuario = this.reseteando();
     if (!usuario) return;
     this.errorReset.set(null);
+    this.errorNueva.set(null);
     this.enviandoReset.set(true);
     this.service.resetearContrasena(usuario.id, nueva.nueva).subscribe({
       next: () => {
@@ -268,6 +274,12 @@ export class Usuarios implements OnInit {
       },
       error: (err: unknown) => {
         this.enviandoReset.set(false);
+        // El endpoint de reseteo llama `password` al campo: su 400 va debajo de «Contraseña nueva».
+        const nuevaRechazada = erroresPorCampo(err)['password'];
+        if (nuevaRechazada !== undefined) {
+          this.errorNueva.set(nuevaRechazada);
+          return;
+        }
         const porCampo = erroresDeCampos(err);
         this.errorReset.set(
           porCampo.length > 0 ? porCampo.join(' ') : mensajeDe(err, 'No se pudo cambiar la contraseña.'),

@@ -123,6 +123,7 @@
         <p class="ayuda">No hace falta la contraseña actual. Decísela en persona.</p>
         <app-contrasena-form
           [errorServidor]="errorReset()"
+          [errorNueva]="errorNueva()"
           [enviando]="enviandoReset()"
           textoEnviar="Cambiar contraseña"
           (enviar)="resetear($event)"

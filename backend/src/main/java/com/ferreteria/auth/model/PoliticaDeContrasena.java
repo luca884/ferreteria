@@ -27,6 +27,13 @@ public final class PoliticaDeContrasena {
 
     static final String MENSAJE_COMUN = "Esa contraseña es muy común. Elegí otra más difícil de adivinar.";
 
+    /**
+     * Repetir la contraseña que ya se tiene no rota nada. Lo usan los dos endpoints que cambian una contraseña
+     * (AuthService para el cambio propio con la marca puesta y UsuarioService para el reseteo propio), cada uno con la
+     * clave del campo de su DTO; el texto sale de acá para que no derive entre los dos.
+     */
+    public static final String MISMA_CONTRASENA = "Elegí una contraseña distinta de la que te dieron.";
+
     /** Contraseñas comunes (S1c): se rechazan al crear o cambiar una; las ya guardadas siguen sirviendo para entrar. */
     static final String LISTA_COMUNES = "/seguridad/contrasenas-comunes.txt";
 

@@ -647,6 +647,41 @@ describe('Usuarios', () => {
       expect(el().querySelector('app-contrasena-form .error')?.textContent).toContain('Usuario no encontrado.');
     });
 
+    it('un 400 con la clave `password` se muestra debajo de la contraseña nueva, no como línea general', async () => {
+      await crear([dueno, vendedor]);
+      servicio.resetearContrasena.mockReturnValue(
+        throwError(() =>
+          errorHttp(400, 'Datos inválidos', { password: 'Elegí una contraseña distinta de la que te dieron.' }),
+        ),
+      );
+
+      await abrirReset(1);
+      await llenar('nueva1234');
+
+      expect(el().querySelector('#nueva-error')?.textContent).toContain(
+        'Elegí una contraseña distinta de la que te dieron.',
+      );
+      expect(el().querySelector('app-contrasena-form [role="alert"]')).toBeNull();
+      expect(el().textContent).toContain('Resetear contraseña de Vendedor Uno');
+    });
+
+    it('el error de la contraseña nueva no queda al cerrar y volver a abrir el reset', async () => {
+      await crear([dueno, vendedor]);
+      servicio.resetearContrasena.mockReturnValue(
+        throwError(() => errorHttp(400, 'Datos inválidos', { password: 'La contraseña no puede ser solo espacios.' })),
+      );
+      await abrirReset(1);
+      await llenar('nueva1234');
+      expect(el().querySelector('#nueva-error')).not.toBeNull();
+
+      el().querySelector<HTMLButtonElement>('button.cancelar-reset')!.click();
+      await refrescar();
+      await abrirReset(1);
+
+      expect(el().querySelector('#nueva-error')).toBeNull();
+      expect(el().querySelector('app-contrasena-form [role="alert"]')).toBeNull();
+    });
+
     it('cancelar vuelve al formulario de usuario', async () => {
       await crear([dueno, vendedor]);
 

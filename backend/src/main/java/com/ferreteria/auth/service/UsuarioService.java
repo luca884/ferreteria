@@ -31,8 +31,6 @@ public class UsuarioService {
     private static final String DESACTIVARSE = "No podés desactivar tu propio usuario.";
     private static final String CAMBIARSE_EL_ROL = "No podés cambiar tu propio rol.";
     private static final String ULTIMO_DUENO = "Tiene que quedar al menos un Dueño activo.";
-    /** La misma que AuthService.cambiarContrasena: repetir la que ya tiene no rota nada. */
-    private static final String MISMA_CONTRASENA = "Elegí una contraseña distinta de la que te dieron.";
 
     private final UsuarioRepository usuarios;
     private final EmailUnico emailUnico;
@@ -114,7 +112,7 @@ public class UsuarioService {
             // ya tiene no rota nada y, con la marca puesta, la apagaba sin cambiar la contraseña: se frena con la misma
             // regla y el mismo mensaje que AuthService.cambiarContrasena.
             if (passwordEncoder.matches(nueva, usuario.getPasswordHash())) {
-                throw new DatosInvalidosException(Map.of("password", MISMA_CONTRASENA));
+                throw new DatosInvalidosException(Map.of("password", PoliticaDeContrasena.MISMA_CONTRASENA));
             }
             usuario.cambiarPropiaContrasena(passwordEncoder.encode(nueva));
         } else {
