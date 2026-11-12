@@ -437,22 +437,22 @@ describe('Mostrador', () => {
       expect(document.activeElement).toBe(campo());
     });
 
-    it('muestra la botonera con los atajos en lugar de la pista fija (R-038)', async () => {
+    it('muestra la botonera con las etiquetas a la vista y las teclas solo en aria-keyshortcuts (R-038)', async () => {
       await crear();
 
       const botones = Array.from(el().querySelectorAll('app-botonera button')).map((b) =>
         b.textContent!.replace(/\s+/g, ' ').trim(),
       );
       expect(botones).toEqual([
-        'F2 Buscar',
-        'F3 Cantidad',
-        'F7 Descuento',
-        'F6 Dto. total',
-        'F4 Cobrar',
-        'F8 Presupuesto',
+        'Buscar',
+        'Cantidad',
+        'Descuento',
+        'Dto. total',
+        'Cobrar',
+        'Presupuesto',
         'Remito',
-        'F9 Cliente',
-        'F10 Quitar',
+        'Cliente',
+        'Quitar',
         'Vaciar',
       ]);
       expect(el().textContent).not.toContain('F2 buscar · Esc limpiar');
@@ -1429,30 +1429,30 @@ describe('Mostrador', () => {
     it('la botonera dispara lo mismo que la tecla', async () => {
       await conTicket();
 
-      botonera('F3').click();
+      botonera('Cantidad').click();
       await refrescar();
       expect(dialogo()!.textContent).toContain('Cantidad de Artículo 2');
       await tecla('Escape');
 
-      botonera('F10').click();
+      botonera('Quitar').click();
       await refrescar();
       expect(dialogo()!.textContent).toContain('¿Quitar «Artículo 2» del ticket?');
       await tecla('Escape');
 
-      botonera('F4').click();
+      botonera('Cobrar').click();
       await refrescar();
       expect(dialogo()!.textContent).toContain('Cobrar');
       await tecla('Escape');
 
-      botonera('F2').click();
+      botonera('Buscar').click();
       await refrescar();
       expect(document.activeElement).toBe(campo());
     });
 
     it('con un diálogo abierto Tab no sale de él, y al cerrarlo el foco vuelve al código y no al botón que lo abrió', async () => {
       await conTicket();
-      botonera('F4').focus();
-      botonera('F4').click();
+      botonera('Cobrar').focus();
+      botonera('Cobrar').click();
       await refrescar();
 
       const cobrar = botonDelDialogo('Cobrar');
@@ -1469,11 +1469,11 @@ describe('Mostrador', () => {
     it('con el ticket vacío la botonera deshabilita cantidad, cobrar, quitar y vaciar', async () => {
       await crear();
 
-      expect(botonera('F3').disabled).toBe(true);
-      expect(botonera('F4').disabled).toBe(true);
-      expect(botonera('F10').disabled).toBe(true);
+      expect(botonera('Cantidad').disabled).toBe(true);
+      expect(botonera('Cobrar').disabled).toBe(true);
+      expect(botonera('Quitar').disabled).toBe(true);
       expect(botonera('Vaciar').disabled).toBe(true);
-      expect(botonera('F2').disabled).toBe(false);
+      expect(botonera('Buscar').disabled).toBe(false);
     });
   });
 
@@ -4531,7 +4531,7 @@ describe('Mostrador', () => {
         await tecla('F4');
 
         expect(clientesApi.cuenta).not.toHaveBeenCalled();
-        expect(razon()).toBe('Elegí un cliente (F9) para vender a cuenta corriente.');
+        expect(razon()).toBe('Elegí un cliente para vender a cuenta corriente.');
       });
 
       it('mientras llega la respuesta la opción dice «Verificando…» y al llegar queda disponible', async () => {
@@ -4997,7 +4997,7 @@ describe('Mostrador', () => {
       await tecla('F4');
 
       expect(normal(el().querySelector('app-dialogo-cobro .aviso-tope')?.textContent)).toBe(
-        'Desde $ 3.000,00 la venta a Consumidor Final necesita identificar al comprador: elegí un cliente con DNI, CUIT o CUIL (Esc y F9).',
+        'Desde $ 3.000,00 la venta a Consumidor Final necesita identificar al comprador: elegí un cliente con DNI, CUIT o CUIL.',
       );
     });
 

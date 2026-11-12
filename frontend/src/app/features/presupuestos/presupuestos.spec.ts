@@ -191,7 +191,7 @@ describe('Presupuestos', () => {
 
       const ayudas = Array.from(el().querySelectorAll('p.ayuda')).map((p) => normal(p.textContent));
       expect(ayudas).toContain(
-        'Los presupuestos se arman en el Mostrador con F8. Acá los consultás, los imprimís, los marcás como aceptados o rechazados y los pasás a venta con los precios de hoy.',
+        'Los presupuestos se arman en el Mostrador. Acá los consultás, los imprimís, los marcás como aceptados o rechazados y los pasás a venta con los precios de hoy.',
       );
     });
 

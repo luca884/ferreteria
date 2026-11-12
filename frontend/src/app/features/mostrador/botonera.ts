@@ -5,8 +5,8 @@ import { AccionMostrador, Atajo, atajosDeBotonera } from './mostrador.atajos';
 export type AccionBotonera = Exclude<AccionMostrador, 'cerrar'>;
 
 /**
- * Botonera del mostrador. Presentacional: las teclas y etiquetas salen de `ATAJOS` y emite la misma acción
- * que la tecla. Los botones no le sacan el foco a la caja de búsqueda.
+ * Botonera del mostrador. Presentacional: las etiquetas salen de `ATAJOS` y la tecla va en `aria-keyshortcuts`, sin
+ * mostrarse (S2). Emite la misma acción que la tecla. Los botones no le sacan el foco a la caja de búsqueda.
  */
 @Component({
   selector: 'app-botonera',
@@ -22,9 +22,6 @@ export type AccionBotonera = Exclude<AccionMostrador, 'cerrar'>;
           (mousedown)="$event.preventDefault()"
           (click)="emitir(atajo.accion)"
         >
-          @if (atajo.tecla) {
-            <kbd aria-hidden="true">{{ atajo.tecla }}</kbd>
-          }
           {{ atajo.etiqueta }}
         </button>
       }
