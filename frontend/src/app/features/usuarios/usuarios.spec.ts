@@ -665,6 +665,24 @@ describe('Usuarios', () => {
       expect(el().textContent).toContain('Resetear contraseña de Vendedor Uno');
     });
 
+    it('tipear en la contraseña nueva limpia el 400 que dejó el servidor', async () => {
+      await crear([dueno, vendedor]);
+      servicio.resetearContrasena.mockReturnValue(
+        throwError(() =>
+          errorHttp(400, 'Datos inválidos', { password: 'Elegí una contraseña distinta de la que te dieron.' }),
+        ),
+      );
+      await abrirReset(1);
+      await llenar('nueva1234');
+      expect(el().querySelector('#nueva-error')).not.toBeNull();
+
+      // El mensaje describe la contraseña anterior: si el usuario escribe otra cosa, ya no corresponde mostrarlo.
+      await escribir('nueva', 'otra-clave-99');
+      await refrescar();
+
+      expect(el().querySelector('#nueva-error')).toBeNull();
+    });
+
     it('el error de la contraseña nueva no queda al cerrar y volver a abrir el reset', async () => {
       await crear([dueno, vendedor]);
       servicio.resetearContrasena.mockReturnValue(
