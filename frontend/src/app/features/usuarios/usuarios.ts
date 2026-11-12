@@ -249,18 +249,19 @@ export class Usuarios implements OnInit {
     const usuario = this.filas.elegido();
     if (!usuario) return;
     this.aviso.set(null);
-    this.errorReset.set(null);
-    this.errorNueva.set(null);
+    this.limpiarErroresDeReset();
     this.reseteando.set(usuario);
   }
 
   protected cerrarReset(): void {
     this.reseteando.set(null);
-    this.errorReset.set(null);
-    this.errorNueva.set(null);
+    this.limpiarErroresDeReset();
   }
 
-  /** Tipear en el reset limpia lo que dijo el servidor: ya no describe lo que hay en pantalla. */
+  /**
+   * Los dos errores del reset (el general y el del campo) se limpian juntos: al abrir, al cerrar, al reenviar y cuando
+   * el usuario tipea, porque en los cuatro casos ya no describen lo que hay en pantalla.
+   */
   protected limpiarErroresDeReset(): void {
     this.errorReset.set(null);
     this.errorNueva.set(null);
@@ -269,8 +270,7 @@ export class Usuarios implements OnInit {
   protected resetear(nueva: NuevaContrasena): void {
     const usuario = this.reseteando();
     if (!usuario) return;
-    this.errorReset.set(null);
-    this.errorNueva.set(null);
+    this.limpiarErroresDeReset();
     this.enviandoReset.set(true);
     this.service.resetearContrasena(usuario.id, nueva.nueva).subscribe({
       next: () => {
