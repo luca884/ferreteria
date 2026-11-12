@@ -260,6 +260,12 @@ export class Usuarios implements OnInit {
     this.errorNueva.set(null);
   }
 
+  /** Tipear en el reset limpia lo que dijo el servidor: ya no describe lo que hay en pantalla. */
+  protected limpiarErroresDeReset(): void {
+    this.errorReset.set(null);
+    this.errorNueva.set(null);
+  }
+
   protected resetear(nueva: NuevaContrasena): void {
     const usuario = this.reseteando();
     if (!usuario) return;

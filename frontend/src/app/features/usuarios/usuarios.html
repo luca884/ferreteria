@@ -127,6 +127,7 @@
           [enviando]="enviandoReset()"
           textoEnviar="Cambiar contraseña"
           (enviar)="resetear($event)"
+          (editado)="limpiarErroresDeReset()"
         />
         <div class="acciones-reset">
           <button type="button" class="secundario cancelar-reset" (click)="cerrarReset()">Cancelar</button>
