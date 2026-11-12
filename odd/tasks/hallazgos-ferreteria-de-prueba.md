@@ -48,7 +48,7 @@ Cada tarea que agrega algo fuera de la spec espera el OK de Luca antes de implem
 - [x] T11 · «Pasar a venta» desde presupuesto o remito: el cobro muestra la letra (A/B) del cliente (S10).
 - [~] T12 · Guion: sacar anotaciones de las descripciones, cambiar PLO-001 por PIN-001 en Artículos › Clientes y aclarar las filas de anulación en /ventas (sin código). Hecho salvo la fila BUL-005, que sigue con «(margen 60 %)»: el permiso para esa edición fue denegado.
 
-Fuera del plan (a decidir aparte): «Crear los artículos nuevos» apagado por defecto en la importación, numeración compartida de recargos y descuentos, rueda del mouse en campos de precio.
+Fuera del plan (a decidir aparte): queda **sólo** «Crear los artículos nuevos» apagado por defecto en la importación — hoy la casilla arranca tildada (`importaciones.ts:210`, `crearNuevos = signal(true)`), así que no está hecho. La numeración compartida de recargos y descuentos se resolvió en `cu-12-numeracion-ajustes` y la rueda del mouse en campos de precio en `decisiones-pendientes`; se sacan de esta línea (2026-11-12).
 
 ## Log
 
@@ -78,3 +78,4 @@ Fuera del plan (a decidir aparte): «Crear los artículos nuevos» apagado por d
 - 2026-11-01: T12 en el vault (`wiki/datos-ferreteria-de-prueba.md`): la Descripción de ELE-006, HER-005, JAR-003, FER-004, FER-005 y FER-006 queda sin la anotación; una línea arriba de «Particularidades» aclara que la descripción se carga tal cual y lo distinto va abajo (se sumó «FER-004: es un libro»). `/articulos/:id/clientes` usa PIN-001 (Hotel Mirador del Faro SA, Constructora Punta Mogotes SRL y Ana Morales) y explica por qué no PLO-001. `/ventas` aclara las 3 filas de anulación con importe negativo (21 filas en total). Los 3 hallazgos quedan marcados «Corregido en el guion». Pendiente: la fila BUL-005 sigue con «(margen 60 %)»; la edición fue denegada por permisos.
 - 2026-11-01: cierre del tramo 3 (T10, T11, T12): frontend 3496/3496 y `ng build` ok sobre T11; el backend no cambió desde la suite de T9 (5864/0).
 - 2026-11-11: la sección pasa de `## Tareas` a `## Tasks` (el nombre que lee `odd/indice-tareas.mjs`); sin ese encabezado el índice la mostraba abierta y no podía cerrarla. No queda ninguna `- [ ]`: T2 y T4 se descartaron el 2026-10-31 y el 2026-11-01, y T12 quedó cerrada con la única edición denegada (BUL-005). Sin cambios de código.
+- 2026-11-12: se auditó el vault y esta línea de «Fuera del plan»: de sus tres ítems, dos ya tenían tarea cerrada y se sacaron; queda sólo el de «Crear los artículos nuevos» apagado por defecto, que se comprobó que **no** está hecho (`importaciones.ts:210`).

@@ -397,6 +397,55 @@ class UsuariosIntegrationTest extends UsuariosTestBase {
         return jdbc.queryForObject("select debe_cambiar_contrasena from usuario where id = ?", Boolean.class, id);
     }
 
+    private String hashDe(long id) {
+        return jdbc.queryForObject("select password_hash from usuario where id = ?", String.class, id);
+    }
+
+    // ---- A6: la misma contraseña sobre uno mismo no rota nada ----
+
+    @Test
+    @DisplayName("A6: sin marca, el Dueño que se resetea la propia con la misma contraseña recibe 400 en password")
+    void resetearLaPropiaConLaMismaSinMarca() throws Exception {
+        String hashAntes = hashDe(duenoId);
+
+        putJson("/api/usuarios/" + duenoId + "/password", dueno, json("password", "demo1234"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors.password", is("Elegí una contraseña distinta de la que te dieron.")));
+
+        assertThat(hashDe(duenoId)).isEqualTo(hashAntes);
+        assertThat(marcaDe(duenoId)).isFalse();
+        intentarLogin(emailDueno, "demo1234").andExpect(status().isOk());
+    }
+
+    @Test
+    @DisplayName("A6: con la marca, el filtro ya frena el reseteo propio (403), con la misma o con otra, y la marca sigue")
+    void conLaMarcaElReseteoPropioNoLlegaAlServicio() throws Exception {
+        jdbc.update("update usuario set debe_cambiar_contrasena = true where id = ?", duenoId);
+        String hashAntes = hashDe(duenoId);
+
+        for (String password : new String[] {"demo1234", "clave-propia-99"}) {
+            putJson("/api/usuarios/" + duenoId + "/password", dueno, json("password", password))
+                    .andExpect(status().isForbidden())
+                    .andExpect(jsonPath("$.motivo", is("CONTRASENA_POR_CAMBIAR")));
+        }
+
+        assertThat(marcaDe(duenoId)).isTrue();
+        assertThat(hashDe(duenoId)).isEqualTo(hashAntes);
+    }
+
+    @Test
+    @DisplayName("A6: resetear a otro usuario con la contraseña que ya tiene sigue dando 204 y lo marca")
+    void resetearAOtroConLaMismaSiguePermitido() throws Exception {
+        String email = unico("v") + "@usuarios.test";
+        long id = crearUsuario(ferreteria, email, "Vendedor Prueba", "VENDEDOR");
+
+        putJson("/api/usuarios/" + id + "/password", dueno, json("password", "demo1234"))
+                .andExpect(status().isNoContent());
+
+        assertThat(marcaDe(id)).isTrue();
+        intentarLogin(email, "demo1234").andExpect(jsonPath("$.sesion.debeCambiarContrasena", is(true)));
+    }
+
     @Test
     @DisplayName("resetear con una contraseña inválida da 400 en password")
     void resetearInvalida() throws Exception {
@@ -410,7 +459,7 @@ class UsuariosIntegrationTest extends UsuariosTestBase {
     @DisplayName("resetear con una contraseña común da 400 en password con el mensaje exacto y no cambia el hash (S1c)")
     void resetearComun() throws Exception {
         long id = crearVendedor(unico("v") + "@usuarios.test");
-        String hashAntes = jdbc.queryForObject("select password_hash from usuario where id = ?", String.class, id);
+        String hashAntes = hashDe(id);
 
         putJson("/api/usuarios/" + id + "/password", dueno, json("password", "ferreteria123"))
                 .andExpect(status().isBadRequest())

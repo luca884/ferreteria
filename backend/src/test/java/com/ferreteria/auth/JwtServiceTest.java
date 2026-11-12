@@ -127,9 +127,31 @@ class JwtServiceTest {
                 .isInstanceOf(IllegalArgumentException.class);
     }
 
+    /**
+     * Un Dueño o un Vendedor salen de la fábrica. Un SUPER_ADMIN no se crea por Java (es el dato semilla), así que acá se
+     * arma como lo lee Hibernate: sin pasar por los setters ni por el constructor de alta.
+     */
     private static Usuario usuario(Long id, Long ferreteriaId, Rol rol) {
-        Usuario usuario = new Usuario(ferreteriaId, "x@demo.local", "hash", "X", rol);
+        Usuario usuario = rol == Rol.SUPER_ADMIN
+                ? superAdminDeSemilla()
+                : Usuario.nuevo(ferreteriaId, "x@demo.local", "hash", "X", rol);
         ReflectionTestUtils.setField(usuario, "id", id);
         return usuario;
+    }
+
+    private static Usuario superAdminDeSemilla() {
+        Usuario admin = new UsuarioDeSemilla();
+        ReflectionTestUtils.setField(admin, "email", "x@demo.local");
+        ReflectionTestUtils.setField(admin, "passwordHash", "hash");
+        ReflectionTestUtils.setField(admin, "nombre", "X");
+        ReflectionTestUtils.setField(admin, "rol", Rol.SUPER_ADMIN);
+        return admin;
+    }
+
+    /** Llega al constructor sin argumentos de la entidad, el mismo que usa Hibernate al leer el dato semilla. */
+    private static final class UsuarioDeSemilla extends Usuario {
+        private UsuarioDeSemilla() {
+            super();
+        }
     }
 }
