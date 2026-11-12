@@ -76,7 +76,11 @@ public class Usuario {
 
     protected Usuario() {}
 
-    public Usuario(Long ferreteriaId, String email, String passwordHash, String nombre, Rol rol) {
+    /**
+     * Solo para {@link #nuevo}: un usuario de una ferreteria arranca con la marca de cambiar la contrasena, y el
+     * SUPER_ADMIN no se crea por Java (es el dato semilla). Privado para que nadie pueda dejar la marca en {@code false}.
+     */
+    private Usuario(Long ferreteriaId, String email, String passwordHash, String nombre, Rol rol) {
         this.ferreteriaId = ferreteriaId;
         this.email = email;
         this.passwordHash = passwordHash;

@@ -13,7 +13,7 @@
 
 | Tarea | Estado | Fecha | Objetivo | Rama | KB |
 |---|---|---|---|---|---|
-| [`advertencias-recorrido-dueno.md`](advertencias-recorrido-dueno.md) | abierta (0✓/5✗) | 2026-11-12 | cerrar las tres advertencias que el odd-verifier dejó abiertas al aprobar recorrido-dueno (A2, A4 y A6), más dos cabos sueltos que aparecieron al audi | `chore/advertencias-recorrido-dueno` | 6 |
+| [`advertencias-recorrido-dueno.md`](advertencias-recorrido-dueno.md) | abierta (2✓/3✗) | 2026-11-12 | cerrar las tres advertencias que el odd-verifier dejó abiertas al aprobar recorrido-dueno (A2, A4 y A6), más dos cabos sueltos que aparecieron al audi | `chore/advertencias-recorrido-dueno` | 8 |
 | [`cu-07-remito-presupuesto-imprimible.md`](cu-07-remito-presupuesto-imprimible.md) | abierta (6✓/1✗) | 2026-10-29 | que el Vendedor y el Dueño impriman el remito y el presupuesto como documentos no fiscales, con la misma base que la factura (emisor, letra X, «DOCUME | `feat/cu-07-remito-presupuesto-imprimible` | 9 |
 | [`guia-de-uso-al-dia.md`](guia-de-uso-al-dia.md) | abierta (7✓/1✗) | 2026-11-07 | que la guía de uso vuelva a coincidir con la app después de los PR #29 y #30, y cerrar el residuo de Clientes a 1280 px. | `fix/clientes-1280` | 8 |
 
