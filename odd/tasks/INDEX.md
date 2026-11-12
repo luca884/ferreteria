@@ -13,8 +13,8 @@
 
 | Tarea | Estado | Fecha | Objetivo | Rama | KB |
 |---|---|---|---|---|---|
-| [`avisos-y-accesos.md`](avisos-y-accesos.md) | abierta (4✓/2✗) | 2026-11-12 | que la app muestre los resultados en un pop-up en vez de apilarlos abajo de todo, que el alta de artículo no quede con celdas vacías, y que un botón q | `fix/avisos-y-accesos` | 14 |
-| [`cu-07-remito-presupuesto-imprimible.md`](cu-07-remito-presupuesto-imprimible.md) | abierta (6✓/1✗) | 2026-10-29 | que el Vendedor y el Dueño impriman el remito y el presupuesto como documentos no fiscales, con la misma base que la factura (emisor, letra X, «DOCUME | `feat/cu-07-remito-presupuesto-imprimible` | 9 |
+| [`avisos-y-accesos.md`](avisos-y-accesos.md) | abierta (5✓/1✗) | 2026-11-12 | que la app muestre los resultados en un pop-up en vez de apilarlos abajo de todo, que el alta de artículo no quede con celdas vacías, y que un botón q | `fix/avisos-y-accesos` | 15 |
+| [`cu-07-remito-presupuesto-imprimible.md`](cu-07-remito-presupuesto-imprimible.md) | abierta (6✓/1✗) | 2026-10-29 | que el Vendedor y el Dueño impriman el remito y el presupuesto como documentos no fiscales, con la misma base que la factura (emisor, letra X, «DOCUME | `feat/cu-07-remito-presupuesto-imprimible` | 10 |
 | [`guia-de-uso-al-dia.md`](guia-de-uso-al-dia.md) | abierta (7✓/1✗) | 2026-11-07 | que la guía de uso vuelva a coincidir con la app después de los PR #29 y #30, y cerrar el residuo de Clientes a 1280 px. | `fix/clientes-1280` | 8 |
 
 ## Cerradas
