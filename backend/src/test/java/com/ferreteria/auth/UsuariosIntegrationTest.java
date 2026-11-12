@@ -447,6 +447,46 @@ class UsuariosIntegrationTest extends UsuariosTestBase {
     }
 
     @Test
+    @DisplayName("A6: la comparación es exacta, no por capitalización: la misma en mayúsculas sí rota la contraseña")
+    void laMismaEnOtraCapitalizacionNoEsLaMisma() throws Exception {
+        putJson("/api/usuarios/" + duenoId + "/password", dueno, json("password", "clave-propia-99"))
+                .andExpect(status().isNoContent());
+
+        putJson("/api/usuarios/" + duenoId + "/password", dueno, json("password", "CLAVE-PROPIA-99"))
+                .andExpect(status().isNoContent());
+
+        intentarLogin(emailDueno, "CLAVE-PROPIA-99").andExpect(status().isOk());
+        intentarLogin(emailDueno, "clave-propia-99").andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    @DisplayName("A6: el cambio propio responde en passwordNueva, no en password, y sin la clave del otro endpoint")
+    void elCambioPropioRespondeEnPasswordNueva() throws Exception {
+        jdbc.update("update usuario set debe_cambiar_contrasena = true where id = ?", duenoId);
+
+        putJson("/api/auth/password", dueno, json("passwordActual", "demo1234", "passwordNueva", "demo1234"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors.passwordNueva", is("Elegí una contraseña distinta de la que te dieron.")))
+                .andExpect(jsonPath("$.errors.password").doesNotExist());
+    }
+
+    @Test
+    @DisplayName("A6: dos 400 seguidos no tocan ni el hash ni la marca, y la contraseña vieja sigue entrando")
+    void dosRechazosSeguidosNoTocanNada() throws Exception {
+        String hashAntes = hashDe(duenoId);
+
+        for (int intento = 0; intento < 2; intento++) {
+            putJson("/api/usuarios/" + duenoId + "/password", dueno, json("password", "demo1234"))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.errors.password", is("Elegí una contraseña distinta de la que te dieron.")));
+        }
+
+        assertThat(hashDe(duenoId)).isEqualTo(hashAntes);
+        assertThat(marcaDe(duenoId)).isFalse();
+        intentarLogin(emailDueno, "demo1234").andExpect(status().isOk());
+    }
+
+    @Test
     @DisplayName("resetear con una contraseña inválida da 400 en password")
     void resetearInvalida() throws Exception {
         long id = crearVendedor(unico("v") + "@usuarios.test");

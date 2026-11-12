@@ -128,23 +128,42 @@ class JwtServiceTest {
     }
 
     /**
-     * Un Dueño o un Vendedor salen de la fábrica. Un SUPER_ADMIN no se crea por Java (es el dato semilla), así que acá se
-     * arma como lo lee Hibernate: sin pasar por los setters ni por el constructor de alta.
+     * Los campos que no tienen setter: la entidad solo los expone por getter, así que el fixture los escribe por reflejo.
+     * Van como constantes para que un renombre se cambie en un solo lugar y no rompa el test en silencio.
+     */
+    private static final String CAMPO_ID = "id";
+    private static final String CAMPO_EMAIL = "email";
+    private static final String CAMPO_HASH = "passwordHash";
+    private static final String CAMPO_NOMBRE = "nombre";
+    private static final String CAMPO_ROL = "rol";
+
+    /**
+     * Un Dueño o un Vendedor salen de la fábrica {@code Usuario.nuevo}: con la ferretería que se les pasa y la marca de
+     * cambiar la contraseña <b>puesta</b>. Un SUPER_ADMIN no se crea por Java, es el dato semilla: no pertenece a ninguna
+     * ferretería (por eso {@code ferreteriaId} se ignora en esa rama) y su marca queda en {@code false}, el valor por
+     * defecto del campo, que la semilla SQL nunca toca.
+     *
+     * <p>Estos tests miran los claims del token (id y rol), no el aislamiento por ferretería: la ferretería y el usuario
+     * quedan ligados por el {@code ferreteriaId} que se pasa, y el resto del vínculo es de los tests de integración.
      */
     private static Usuario usuario(Long id, Long ferreteriaId, Rol rol) {
-        Usuario usuario = rol == Rol.SUPER_ADMIN
-                ? superAdminDeSemilla()
-                : Usuario.nuevo(ferreteriaId, "x@demo.local", "hash", "X", rol);
-        ReflectionTestUtils.setField(usuario, "id", id);
+        Usuario usuario;
+        if (rol == Rol.SUPER_ADMIN) {
+            assertThat(ferreteriaId).isNull();
+            usuario = superAdminDeSemilla();
+        } else {
+            usuario = Usuario.nuevo(ferreteriaId, "x@demo.local", "hash", "X", rol);
+        }
+        ReflectionTestUtils.setField(usuario, CAMPO_ID, id);
         return usuario;
     }
 
     private static Usuario superAdminDeSemilla() {
         Usuario admin = new UsuarioDeSemilla();
-        ReflectionTestUtils.setField(admin, "email", "x@demo.local");
-        ReflectionTestUtils.setField(admin, "passwordHash", "hash");
-        ReflectionTestUtils.setField(admin, "nombre", "X");
-        ReflectionTestUtils.setField(admin, "rol", Rol.SUPER_ADMIN);
+        ReflectionTestUtils.setField(admin, CAMPO_EMAIL, "x@demo.local");
+        ReflectionTestUtils.setField(admin, CAMPO_HASH, "hash");
+        ReflectionTestUtils.setField(admin, CAMPO_NOMBRE, "X");
+        ReflectionTestUtils.setField(admin, CAMPO_ROL, Rol.SUPER_ADMIN);
         return admin;
     }
 
